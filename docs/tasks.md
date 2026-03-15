@@ -1,5 +1,17 @@
 # Resovo（流光） — 任务看板
 
+---
+✅ PHASE COMPLETE — Phase 1 MVP 已完成，等待确认开始 Phase 2
+- **完成时间**：2026-03-15
+- **本 Phase 完成任务数**：33 个（INFRA-01~06、AUTH-01~03、VIDEO-01~02、BROWSE-01、SEARCH-01~02、PLAYER-01~08、DETAIL-01、SUBTITLE-01、CRAWLER-01~04、ADMIN-01~05）
+- **已合并到 main**：是（commit: feat: complete Phase 1 MVP）
+- **测试情况**：260 个 unit 测试全部通过；E2E 测试文件已就绪（admin.spec.ts、auth.spec.ts 等）
+- **需要你做的事**：
+  - [ ] 验收测试（运行 `npm run test` 和 `npm run test:e2e`）
+  - [ ] 部署到测试环境（如有）
+  - [ ] 确认开始 Phase 2（删除此块即可）
+---
+
 > **AI 工作规则**：
 >
 > - 全自动模式：完成一个任务后立即开始下一个，无需等待确认
