@@ -248,3 +248,95 @@ test('提交创建表单触发 POST 请求', async ({ context, page }) => {
   await page.waitForTimeout(500)
   expect(postCalled).toBe(true)
 })
+
+// ── ADMIN-03: 投稿审核通过/拒绝流程 ───────────────────────────────
+
+const MOCK_SUBMISSION = {
+  id: 'sub-uuid-1',
+  video_id: 'vid-uuid-1',
+  video_title: '测试电影',
+  source_url: 'http://example.com/video.m3u8',
+  source_name: '用户投稿',
+  type: 'hls',
+  submitted_by: 'user-uuid-1',
+  submitted_by_username: 'testuser',
+  created_at: '2026-03-15T00:00:00Z',
+}
+
+test('投稿审核页面显示待审列表', async ({ context, page }) => {
+  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'moderator' })
+
+  await page.route(`${API_BASE}/admin/submissions*`, (route) => {
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: [MOCK_SUBMISSION], total: 1, page: 1, limit: 20 }),
+    })
+  })
+
+  await page.goto(`${BASE_URL}/en/admin/submissions`)
+  await expect(page.locator('[data-testid="admin-submissions-page"]')).toBeVisible()
+  await expect(page.locator('[data-testid="admin-submission-list"]')).toBeVisible()
+  await expect(page.locator(`[data-testid="admin-submission-row-sub-uuid-1"]`)).toBeVisible()
+})
+
+test('点击通过触发 approve 请求', async ({ context, page }) => {
+  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'moderator' })
+
+  await page.route(`${API_BASE}/admin/submissions*`, (route) => {
+    if (route.request().url().includes('/approve')) {
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { approved: true } }),
+      })
+    } else {
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ data: [MOCK_SUBMISSION], total: 1, page: 1, limit: 20 }),
+      })
+    }
+  })
+
+  let approveCalled = false
+  await page.route(`${API_BASE}/admin/submissions/sub-uuid-1/approve`, (route) => {
+    approveCalled = true
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { approved: true } }),
+    })
+  })
+
+  await page.goto(`${BASE_URL}/en/admin/submissions`)
+  await page.locator('[data-testid="admin-submission-approve-sub-uuid-1"]').click()
+  await page.waitForTimeout(300)
+  expect(approveCalled).toBe(true)
+})
+
+test('字幕审核页面显示待审列表', async ({ context, page }) => {
+  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'moderator' })
+
+  await page.route(`${API_BASE}/admin/subtitles*`, (route) => {
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [{
+          id: 'subtitle-uuid-1',
+          video_id: 'vid-uuid-1',
+          video_title: '测试电影',
+          language: 'zh-CN',
+          label: '中文简体',
+          format: 'vtt',
+          file_url: 'https://r2.resovo.dev/subtitles/vid-1/zh-CN.vtt',
+          is_verified: false,
+          created_at: '2026-03-15T00:00:00Z',
+        }],
+        total: 1,
+        page: 1,
+        limit: 20,
+      }),
+    })
+  })
+
+  await page.goto(`${BASE_URL}/en/admin/subtitles`)
+  await expect(page.locator('[data-testid="admin-subtitles-page"]')).toBeVisible()
+  await expect(page.locator('[data-testid="admin-subtitle-row-subtitle-uuid-1"]')).toBeVisible()
+})
