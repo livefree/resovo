@@ -134,3 +134,75 @@ describe('ControlBar', () => {
     expect(theaterBtn.className).toContain('lg:flex')
   })
 })
+
+// ── PLAYER-05: 键盘状态机优先级测试 ──────────────────────────────
+
+import { usePlayerShortcuts } from '@/components/player/usePlayerShortcuts'
+
+function ShortcutsHarness({ player }: { player: typeof mockPlayer | null }) {
+  usePlayerShortcuts({ player: player as never })
+  return <div data-testid="shortcut-harness" />
+}
+
+describe('usePlayerShortcuts 键盘状态机', () => {
+  beforeEach(() => {
+    usePlayerStore.setState({
+      isPlaying: false,
+      isEpisodePanelOpen: false,
+      isSpeedPanelOpen: false,
+      isCCPanelOpen: false,
+      isSettingsPanelOpen: false,
+      volume: 0.8,
+      isMuted: false,
+      currentTime: 30,
+      duration: 3600,
+    })
+    vi.clearAllMocks()
+  })
+
+  it('正常模式：Space 触发播放', () => {
+    render(<ShortcutsHarness player={mockPlayer} />)
+    mockPlayer.play.mockResolvedValue(undefined)
+    mockPlayer.paused = vi.fn().mockReturnValue(true)
+    fireEvent.keyDown(window, { key: ' ' })
+    expect(mockPlayer.play).toHaveBeenCalledTimes(1)
+  })
+
+  it('正常模式：← 后退 5 秒', () => {
+    render(<ShortcutsHarness player={mockPlayer} />)
+    mockPlayer.currentTime.mockReturnValue(30)
+    fireEvent.keyDown(window, { key: 'ArrowLeft' })
+    expect(mockPlayer.currentTime).toHaveBeenCalledWith(25)
+  })
+
+  it('正常模式：→ 前进 5 秒', () => {
+    render(<ShortcutsHarness player={mockPlayer} />)
+    mockPlayer.currentTime.mockReturnValue(30)
+    fireEvent.keyDown(window, { key: 'ArrowRight' })
+    expect(mockPlayer.currentTime).toHaveBeenCalledWith(35)
+  })
+
+  it('正常模式：M 切换静音', () => {
+    const setMuted = vi.fn()
+    usePlayerStore.setState({ setMuted } as never)
+    render(<ShortcutsHarness player={mockPlayer} />)
+    fireEvent.keyDown(window, { key: 'm' })
+    expect(setMuted).toHaveBeenCalledWith(true)
+  })
+
+  it('选集浮层打开时：非 Esc 键不触发播放快捷键', () => {
+    usePlayerStore.setState({ isEpisodePanelOpen: true })
+    mockPlayer.paused = vi.fn().mockReturnValue(true)
+    render(<ShortcutsHarness player={mockPlayer} />)
+    fireEvent.keyDown(window, { key: ' ' })
+    expect(mockPlayer.play).not.toHaveBeenCalled()
+  })
+
+  it('倍速面板打开时：正常播放快捷键不触发', () => {
+    usePlayerStore.setState({ isSpeedPanelOpen: true })
+    mockPlayer.paused = vi.fn().mockReturnValue(true)
+    render(<ShortcutsHarness player={mockPlayer} />)
+    fireEvent.keyDown(window, { key: ' ' })
+    expect(mockPlayer.play).not.toHaveBeenCalled()
+  })
+})
