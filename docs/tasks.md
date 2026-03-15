@@ -158,7 +158,7 @@
   - 新建：`docker/elasticsearch.Dockerfile`（ES 8.17.0 + IK + 拼音插件 baked-in）
   - 修改：`docker-compose.yml`（ES 改用自定义镜像构建、添加 elasticsearch-init 索引初始化服务、postgres host 端口改为 5433 避免与本地 PG 冲突）
   - 修改：`scripts/verify-env.sh`（修复 `((PASS++))` bug → `PASS=$((PASS+1))`；Redis 检查自动回退到 `docker exec`）
-  - `verify-env.sh` 全部 21 项通过 ✅；commit hash：_待填_
+  - `verify-env.sh` 全部 21 项通过 ✅；commit hash：7e15ad3
 - **问题说明**：_（已解决）_
 - **特别说明**：INFRA-03/04/05 的 changelog 记录缺失，重启后请先补全 changelog 再继续 INFRA-06 验收
 
@@ -168,7 +168,7 @@
 
 #### AUTH-01 认证基础设施
 
-- **状态**：⏳ 等待依赖（INFRA-02、INFRA-04）
+- **状态**：✅ 已完成
 - **描述**：JWT 工具函数 + Fastify 认证插件（authenticate / optionalAuthenticate / requireRole）
 - **文件范围**：
   - `src/api/lib/auth.ts`
@@ -186,8 +186,12 @@
   - Access token 15 分钟；Refresh token 7 天
   - Refresh token 黑名单通过 Redis 检查
 - **测试要求**：Vitest `tests/unit/api/auth.test.ts`（register/login/refresh/logout 全场景）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
-- **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
+- **完成备注**：
+  - 新建：`src/api/lib/auth.ts`（signAccessToken 15m, signRefreshToken 7d, verifyAccessToken/RefreshToken, hashToken, blacklistKey）
+  - 新建：`src/api/plugins/authenticate.ts`（setupAuthenticate → decorate fastify.authenticate/optionalAuthenticate/requireRole）
+  - 修改：`src/api/server.ts`（注册 setupAuthenticate）
+  - 测试：21/21 全部通过；commit hash：e7461b1
+- **问题说明**：_（已清空）_
 
 ---
 

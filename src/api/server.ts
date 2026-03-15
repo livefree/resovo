@@ -3,6 +3,7 @@ import cors from '@fastify/cors'
 import cookie from '@fastify/cookie'
 
 import { setupAuthenticate } from '@/api/plugins/authenticate'
+import { authRoutes } from '@/api/routes/auth'
 
 async function start() {
   const fastify = Fastify({
@@ -19,6 +20,8 @@ async function start() {
   })
 
   setupAuthenticate(fastify)
+
+  await fastify.register(authRoutes, { prefix: '/v1' })
 
   fastify.get('/v1/health', async (_request, reply) => {
     return reply.send({ status: 'ok', timestamp: new Date().toISOString() })
