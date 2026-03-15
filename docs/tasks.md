@@ -438,7 +438,7 @@
 
 #### DETAIL-01 视频详情页（SSR）
 
-- **状态**：⏳ 等待依赖（VIDEO-01、SEARCH-02）
+- **状态**：✅ 已完成
 - **描述**：`/movie/[slug]`、`/anime/[slug]` 等视频详情页，SSR 渲染，含完整视频信息但不含播放器
 - **文件范围**：
   - `src/app/[locale]/movie/[slug]/page.tsx`
@@ -465,7 +465,15 @@
 - **测试要求**：
   - Vitest `tests/unit/api/videos.test.ts`（补充：slug 解析逻辑、invalid shortId → null）
   - Playwright `tests/e2e/player.spec.ts`（补充：详情页→立即观看→播放页 跳转链路）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建：`src/lib/video-detail.ts`（`extractShortId` + `fetchVideoDetail` 服务端 fetch 工具）
+  - 新建：`src/components/video/VideoDetailHero.tsx`（SSR 封面 Banner + 基础信息，立即观看按钮）
+  - 新建：`src/components/video/VideoDetailMeta.tsx`（导演/演员/编剧 MetaChip 行，复用 MetaChip）
+  - 新建：`src/components/video/EpisodeGrid.tsx`（选集网格，episodeCount > 1 才渲染）
+  - 新建：4 个类型详情页（movie/anime/series/variety）共享组件，generateMetadata 含 OG 标签
+  - 测试：videos.test.ts 补充 4 个 extractShortId 单元测试（共 20/20 通过）
+  - E2E：tests/e2e/player.spec.ts（详情页加载、MetaChip 跳转、立即观看、选集网格）
+  - 100/100 单元测试通过；commit hash：b8b32b1
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---

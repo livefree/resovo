@@ -203,3 +203,25 @@
   - ResultCard 使用 dangerouslySetInnerHTML 渲染 ES highlight（已用 CSS 处理 <em> 样式）
   - ActiveFilterStrip 在无激活筛选时返回 null，不占位
   - 搜索页至少有一个参数时才发起 API 请求，避免空请求
+
+---
+
+## [DETAIL-01] 视频详情页（SSR）
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/lib/video-detail.ts` — `extractShortId` slug 解析 + `fetchVideoDetail` 服务端 fetch
+  - `src/components/video/VideoDetailHero.tsx` — 封面 Banner + 基础信息 + 立即观看按钮
+  - `src/components/video/VideoDetailMeta.tsx` — 导演/演员/编剧 MetaChip 行
+  - `src/components/video/EpisodeGrid.tsx` — 选集网格（episodeCount > 1 才渲染）
+  - `src/app/[locale]/movie/[slug]/page.tsx` — 电影详情页（仅 Hero + Meta）
+  - `src/app/[locale]/anime/[slug]/page.tsx` — 动漫详情页（Hero + Meta + EpisodeGrid）
+  - `src/app/[locale]/series/[slug]/page.tsx` — 剧集详情页（Hero + Meta + EpisodeGrid）
+  - `src/app/[locale]/variety/[slug]/page.tsx` — 综艺详情页（Hero + Meta + EpisodeGrid）
+  - `tests/unit/api/videos.test.ts` — 补充 4 个 extractShortId 单元测试
+  - `tests/e2e/player.spec.ts` — 详情页 E2E（加载/MetaChip/立即观看/选集）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - SSR 使用直接 fetch 而不是 apiClient（apiClient 依赖 Zustand，服务端无法使用）
+  - generateMetadata 在每个页面单独实现，复用 fetchVideoDetail
+  - slug 解析：取最后一个 `-` 后的字符串作为 shortId，不做长度校验（由 API 返回 404 处理）

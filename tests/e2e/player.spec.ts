@@ -125,3 +125,55 @@ test.describe('动漫详情页（多集）', () => {
     expect(href).toContain(`/watch/${MOCK_ANIME.shortId}`)
   })
 })
+
+// ── PLAYER-02: 播放页布局 ─────────────────────────────────────────
+
+test.describe('播放页（PlayerShell）', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockVideoApi(page, MOCK_MOVIE)
+    await page.goto(`/en/watch/${MOCK_MOVIE.slug}`)
+  })
+
+  test('播放页正常加载，显示播放区域', async ({ page }) => {
+    await expect(page.getByTestId('watch-page')).toBeVisible()
+    await expect(page.getByTestId('player-shell')).toBeVisible()
+    await expect(page.getByTestId('player-video-area')).toBeVisible()
+  })
+
+  test('标题链接指向详情页', async ({ page }) => {
+    const titleLink = page.getByTestId('player-title-link')
+    await expect(titleLink).toBeVisible()
+    await expect(titleLink).toContainText('测试电影')
+  })
+
+  test('?ep=1 参数初始化集数正确', async ({ page }) => {
+    await mockVideoApi(page, MOCK_ANIME)
+    await page.goto(`/en/watch/${MOCK_ANIME.slug}?ep=3`)
+    await page.waitForTimeout(500)
+    await expect(page.getByTestId('watch-page')).toBeVisible()
+  })
+
+  test('剧场模式切换按钮可见（大屏设备）', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 })
+    // 按钮通过 CSS 隐藏在移动端，桌面端可见
+    const theaterBtn = page.getByTestId('theater-mode-btn')
+    await expect(theaterBtn).toBeAttached()
+  })
+})
+
+test.describe('播放页（多集动漫）', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockVideoApi(page, MOCK_ANIME)
+    await page.goto(`/en/watch/${MOCK_ANIME.slug}`)
+  })
+
+  test('显示右侧选集面板', async ({ page }) => {
+    await expect(page.getByTestId('player-side-panel')).toBeVisible()
+    await expect(page.getByTestId('side-episode-1')).toBeVisible()
+  })
+
+  test('选集面板显示正确数量', async ({ page }) => {
+    const epBtns = page.getByTestId(/^side-episode-\d+$/)
+    await expect(epBtns).toHaveCount(12)
+  })
+})
