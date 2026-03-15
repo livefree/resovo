@@ -20,6 +20,19 @@
 
 ---
 
+## [INFRA-02] PostgreSQL 数据库初始化
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/api/db/migrations/001_init_tables.sql` — 14 张表：users/videos/video_sources/subtitles/tags/video_tags/lists/list_items/list_likes/danmaku/comments/watch_history/user_favorites/crawler_tasks
+  - `src/api/db/migrations/002_indexes.sql` — 30+ 个 IF NOT EXISTS 索引，含 GIN 索引
+  - `src/api/lib/postgres.ts` — pg.Pool 连接池，max=20
+- **新增依赖**：无（pg 已在 package.json）
+- **数据库变更**：创建所有核心表和索引（本地 resovo_dev 数据库）
+- **注意事项**：
+  - `cast` 是 PostgreSQL 保留字，列名和 GIN 索引均已加引号 `"cast"`
+  - `verify-env.sh` 有 `((PASS++))` bug，PG 验证通过手动 psql 命令确认
+  - `postgres.ts` 目前直接读 process.env.DATABASE_URL，INFRA-05 完成后改为走 config
+
 ## [INFRA-01] 项目初始化
 - **完成时间**：2026-03-15
 - **修改文件**：
