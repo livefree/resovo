@@ -19,13 +19,10 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
-import { VerifyService } from '@/api/services/VerifyService'
-
 // ── 路由注册 ──────────────────────────────────────────────────────
 
 export async function adminContentRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['moderator', 'admin'])]
-  const verifyService = new VerifyService(db)
 
   // ════════════════════════════════════════════════════════════════
   // 播放源管理
@@ -120,22 +117,6 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
       ids
     )
     return reply.send({ data: { deleted: result.rowCount ?? 0 } })
-  })
-
-  fastify.post('/admin/sources/:id/verify', { preHandler: auth }, async (request, reply) => {
-    const { id } = request.params as { id: string }
-    // Look up source URL then verify
-    const srcRow = await db.query<{ source_url: string }>(
-      `SELECT source_url FROM video_sources WHERE id = $1 AND deleted_at IS NULL`,
-      [id]
-    )
-    if (srcRow.rowCount === 0) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: '播放源不存在', status: 404 },
-      })
-    }
-    await verifyService.verifySourceNow(id, srcRow.rows[0].source_url)
-    return reply.send({ data: { queued: true } })
   })
 
   // ════════════════════════════════════════════════════════════════

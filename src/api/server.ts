@@ -1,11 +1,19 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import cookie from '@fastify/cookie'
+import multipart from '@fastify/multipart'
 
 import { setupAuthenticate } from '@/api/plugins/authenticate'
 import { authRoutes } from '@/api/routes/auth'
 import { videoRoutes } from '@/api/routes/videos'
 import { sourceRoutes } from '@/api/routes/sources'
+import { searchRoutes } from '@/api/routes/search'
+import { subtitleRoutes } from '@/api/routes/subtitles'
+import { adminVideoRoutes } from '@/api/routes/admin/videos'
+import { adminContentRoutes } from '@/api/routes/admin/content'
+import { adminUserRoutes } from '@/api/routes/admin/users'
+import { adminAnalyticsRoutes } from '@/api/routes/admin/analytics'
+import { adminCrawlerRoutes } from '@/api/routes/admin/crawler'
 
 async function start() {
   const fastify = Fastify({
@@ -21,11 +29,20 @@ async function start() {
     secret: process.env.COOKIE_SECRET ?? 'dev-cookie-secret-replace-in-production',
   })
 
+  await fastify.register(multipart, { limits: { fileSize: 2 * 1024 * 1024 } })
+
   setupAuthenticate(fastify)
 
   await fastify.register(authRoutes, { prefix: '/v1' })
   await fastify.register(videoRoutes, { prefix: '/v1' })
   await fastify.register(sourceRoutes, { prefix: '/v1' })
+  await fastify.register(searchRoutes, { prefix: '/v1' })
+  await fastify.register(subtitleRoutes, { prefix: '/v1' })
+  await fastify.register(adminVideoRoutes, { prefix: '/v1' })
+  await fastify.register(adminContentRoutes, { prefix: '/v1' })
+  await fastify.register(adminUserRoutes, { prefix: '/v1' })
+  await fastify.register(adminAnalyticsRoutes, { prefix: '/v1' })
+  await fastify.register(adminCrawlerRoutes, { prefix: '/v1' })
 
   fastify.get('/v1/health', async (_request, reply) => {
     return reply.send({ status: 'ok', timestamp: new Date().toISOString() })
