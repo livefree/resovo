@@ -719,7 +719,7 @@
 
 #### CRAWLER-02 苹果CMS采集服务
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **描述**：实现苹果CMS标准接口的采集、解析、字段映射和写库逻辑
 - **文件范围**：
   - `src/api/services/CrawlerService.ts`
@@ -753,14 +753,20 @@
     - 字段映射：type_name="动漫" → type="anime"，area="日本" → country="JP"
     - 去重：相同 title+year 的第二次采集只新增 source，不覆盖 title
     - 播放源解析：电影（episode_count=1）的 episode_number 为 NULL
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建：`src/api/services/SourceParserService.ts`（XML/JSON 解析 + 字段映射）
+  - 新建：`src/api/services/CrawlerService.ts`（采集主服务，upsert 去重，ES 索引触发）
+  - 新建：`src/api/db/queries/crawlerTasks.ts`（任务记录 CRUD）
+  - 修改：`src/api/db/queries/sources.ts`（新增 upsertSource/upsertSources）
+  - 测试：`tests/unit/api/crawler.test.ts` 扩展 45 个 CRAWLER-02 测试
+  - 225 个测试全部通过；commit hash：4e28dfb
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---
 
 #### CRAWLER-03 链接验证服务
 
-- **状态**：⏳ 等待依赖（CRAWLER-01）
+- **状态**：🔄 进行中
 - **描述**：实现播放源 URL 的可用性检测逻辑，定时维护 is_active 状态
 - **文件范围**：
   - `src/api/services/VerifyService.ts`
