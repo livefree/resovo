@@ -629,7 +629,7 @@
 
 #### PLAYER-07 弹幕条
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **描述**：Bilibili 风格弹幕条（播放器下方独立一行）
 - **文件范围**：`src/components/player/DanmakuBar.tsx`
 - **依赖**：PLAYER-03
@@ -638,14 +638,18 @@
   - 输入框 + 发送按钮（未登录时 disabled）
   - CommentCoreLibrary 初始化，弹幕能飞过播放器
 - **测试要求**：Vitest `tests/unit/components/player/DanmakuBar.test.tsx`（开关状态、颜色切换）+ Playwright `tests/e2e/player.spec.ts`（弹幕开关可用性）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建文件：`src/components/player/DanmakuBar.tsx`、`tests/unit/components/player/DanmakuBar.test.tsx`
+  - UI：弹幕开关、透明度/字号滑条、6 种预设颜色选择、输入框（未登录 disabled）、发送按钮
+  - CCL 初始化：检查 `window.CommentManager`，graceful degradation（JSDOM/测试环境不影响）
+  - 22 个 Vitest 测试全部通过（共 164 tests）；commit hash：89d84e8
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---
 
 #### PLAYER-08 视频信息区与 Meta Chip
 
-- **状态**：⏳ 等待依赖（PLAYER-02、SEARCH-02）
+- **状态**：🔄 进行中
 - **描述**：播放页视频信息区，含可点击导演/演员/编剧 chip
 - **文件范围**：`src/components/video/VideoMeta.tsx`
 - **依赖**：PLAYER-02、SEARCH-02
