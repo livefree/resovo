@@ -52,5 +52,39 @@
     "trendingSeries": "Popular Series",
     "disclaimer": "Resovo indexes publicly available streaming links and does not host any video content. All rights belong to their respective owners.",
     "viewAll": "View All"
+  },
+  "browse": {
+    "title": "Browse",
+    "results": "{count} results",
+    "noResults": "No results found",
+    "sort": {
+      "label": "Sort by",
+      "relevance": "Relevance",
+      "rating": "Rating",
+      "latest": "Latest"
+    },
+    "filter": {
+      "all": "All",
+      "type": "Type",
+      "country": "Region",
+      "lang": "Subtitle",
+      "year": "Year",
+      "rating": "Rating",
+      "status": "Status",
+      "expand": "More filters",
+      "collapse": "Collapse",
+      "typeAll": "All types",
+      "countryAll": "All regions",
+      "langAll": "All subtitles",
+      "yearAll": "All years",
+      "ratingAll": "Any rating",
+      "statusAll": "All status",
+      "ongoing": "Airing",
+      "completed": "Completed",
+      "rating9": "9+",
+      "rating8": "8+",
+      "rating7": "7+",
+      "rating6": "6+"
+    }
   }
 }

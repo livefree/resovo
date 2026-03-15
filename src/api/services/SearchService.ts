@@ -26,6 +26,8 @@ export interface SearchFilters {
   year?: number
   ratingMin?: number
   lang?: string
+  country?: string
+  status?: 'ongoing' | 'completed'
   director?: string
   actor?: string
   writer?: string
@@ -64,6 +66,10 @@ export class SearchService {
     if (filters.ratingMin !== undefined) {
       filter.push({ range: { rating: { gte: filters.ratingMin } } })
     }
+
+    // 额外过滤：国家/状态
+    if (filters.country) filter.push({ term: { country: filters.country } })
+    if (filters.status) filter.push({ term: { status: filters.status } })
 
     // ADR-004: director/actor/writer 用 .keyword 精确匹配
     if (filters.director) filter.push({ term: { 'director.keyword': filters.director } })

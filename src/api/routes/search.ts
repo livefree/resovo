@@ -43,6 +43,8 @@ export async function searchRoutes(fastify: FastifyInstance) {
 
   // ── GET /search ──────────────────────────────────────────────
   fastify.get('/search', async (request, reply) => {
+    const StatusEnum = z.enum(['ongoing', 'completed'])
+
     const QuerySchema = z.object({
       q: z.string().max(200).optional(),
       type: VideoTypeEnum.optional(),
@@ -50,6 +52,8 @@ export async function searchRoutes(fastify: FastifyInstance) {
       year: z.coerce.number().int().min(1900).max(2100).optional(),
       rating_min: z.coerce.number().min(0).max(10).optional(),
       lang: z.string().optional(),
+      country: z.string().optional(),
+      status: StatusEnum.optional(),
       director: z.string().optional(),
       actor: z.string().optional(),
       writer: z.string().optional(),

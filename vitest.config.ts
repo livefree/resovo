@@ -4,7 +4,7 @@ import path from 'path'
 export default defineConfig({
   test: {
     globals: true,
-    include: ['tests/unit/**/*.{test,spec}.ts'],  // 只运行 unit 测试，排除 e2e
+    include: ['tests/unit/**/*.{test,spec}.{ts,tsx}'],  // 只运行 unit 测试，排除 e2e
     environment: 'node',          // API 测试用 node 环境
     environmentMatchGlobs: [
       ['tests/unit/components/**', 'jsdom'],  // 组件测试用 jsdom
@@ -34,5 +34,9 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
+  },
+  // 自动 JSX 转换（React 17+ automatic runtime，组件测试不需要 import React）
+  esbuild: {
+    jsx: 'automatic',
   },
 })
