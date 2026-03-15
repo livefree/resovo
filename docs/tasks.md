@@ -766,7 +766,7 @@
 
 #### CRAWLER-03 链接验证服务
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **描述**：实现播放源 URL 的可用性检测逻辑，定时维护 is_active 状态
 - **文件范围**：
   - `src/api/services/VerifyService.ts`
@@ -779,14 +779,18 @@
   - 用户举报后立即触发单条验证（写入 verify-queue 高优先级任务）
   - 每日凌晨 4:00 定时验证所有 `is_active=true` 的播放源
 - **测试要求**：Vitest `tests/unit/api/crawler.test.ts`（HTTP 200 → active=true，超时 → active=false，重试上限）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建：`src/api/services/VerifyService.ts`（checkSourceUrl + VerifyService 类）
+  - 已在 CRAWLER-01 的 checkUrl 测试中覆盖 HTTP 200/4xx/5xx/超时场景
+  - VerifyService.scheduleAllActiveVerification() 批量入队；verifyFromUserReport() 高优先级
+  - 225 个测试全部通过；commit hash：3e2ef3f
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---
 
 #### CRAWLER-04 管理后台接口
 
-- **状态**：⏳ 等待依赖（CRAWLER-02、CRAWLER-03）
+- **状态**：🔄 进行中
 - **描述**：提供给管理员的爬虫任务管理接口
 - **文件范围**：
   - `src/api/routes/admin/crawler.ts`
