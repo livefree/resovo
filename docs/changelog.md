@@ -101,3 +101,105 @@
   - `list.types.ts` 存在 bug（错误导入 `utility-types.Pick`），通过类型声明文件绕过，不修改原文件
   - `tests/` 目录已从 tsconfig include 中排除（factories.ts 缺少 `bannedAt` 字段导致类型错误）
   - `next-env.d.ts` 在 .gitignore 中，首次 clone 后需运行 `npm run dev` 生成
+
+---
+
+## [SEARCH-01] 搜索接口
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/api/services/SearchService.ts` — ES 全文搜索 + suggest 联想，使用 `Record<string,unknown>` 避免 any，makeSearchParams() 辅助函数
+  - `src/api/routes/search.ts` — GET /search、GET /search/suggest（suggest 先注册避免路由冲突），Zod 验证
+  - `tests/unit/api/search.test.ts` — 13 个单元测试（ES body 断言、highlight、.keyword 精确匹配、空 q 场景）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - ADR-004：SearchService 只调用 ES，禁止查询 PG
+  - director/actor/writer 使用 `.keyword` 字段精确匹配（term query）
+  - /search/suggest 必须在 /search 之前注册（Fastify 路由顺序）
+  - ES body 类型用 `Record<string,unknown>` + `makeSearchParams()` 类型断言，避免 SDK overload 问题
+
+---
+
+## [AUTH-03] 前端登录/注册页面
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/i18n/routing.ts` + `src/i18n/request.ts` + `src/middleware.ts` — next-intl 国际化基础设施，支持 en/zh-CN
+  - `messages/en.json` + `messages/zh-CN.json` — 英中双语翻译文件
+  - `src/lib/utils.ts` — cn() 工具函数（clsx + tailwind-merge）
+  - `src/app/[locale]/layout.tsx` + `page.tsx` — locale 布局和首页占位
+  - `src/components/auth/LoginForm.tsx` — 登录表单，Zod 实时验证，API 调用，authStore 更新
+  - `src/components/auth/RegisterForm.tsx` — 注册表单，含用户名/邮箱/密码三字段验证
+  - `src/components/layout/Header.tsx` — 顶部导航栏，显示登录状态和用户名
+  - `next.config.ts` — 添加 withNextIntl 插件
+  - `playwright.config.ts` — 改用端口 3001（避免与其他应用冲突）
+  - `vitest.config.ts` — 添加 include 模式排除 e2e 目录
+- **新增依赖**：无（使用已有 next-intl、clsx、tailwind-merge）
+- **数据库变更**：无
+- **注意事项**：
+  - access_token 只存 Zustand 内存（authStore），不存 localStorage（ADR-003）
+  - E2E 测试使用 page.route() mock API 调用，不依赖真实后端
+  - Playwright 端口改为 3001，通过 PLAYWRIGHT_PORT 环境变量可覆盖
+  - authStore 已预先实现，AUTH-03 仅补充了单元测试
+
+---
+
+## [VIDEO-02] 首页布局与导航
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/stores/themeStore.ts` — 主题 Zustand store (light/dark/system)，localStorage 持久化
+  - `src/components/ui/ThemeToggle.tsx` — 三态主题切换按钮，监听系统主题
+  - `src/components/layout/Nav.tsx` — sticky 顶部导航（Logo、分类标签、主题切换、语言切换、用户状态）
+  - `src/components/video/VideoCard.tsx` — 竖版 2:3 视频卡（评分标签、悬停效果）
+  - `src/components/video/VideoCardWide.tsx` — 横版 16:9 视频卡（状态标签）
+  - `src/components/video/HeroBanner.tsx` — 首页 Hero，客户端获取热门数据
+  - `src/components/video/VideoGrid.tsx` — 通用视频网格，加载骨架动画
+  - `src/app/[locale]/(home)/page.tsx` — 首页（热门电影+热播剧集+底部免责声明）
+  - `messages/en.json` + `messages/zh-CN.json` — 新增 nav 和 home 命名空间翻译
+  - `tests/e2e/homepage.spec.ts` — 14 项 E2E 测试
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - HeroBanner 和 VideoGrid 使用客户端 fetch（page.route() mock 友好）
+  - Nav 中语言切换通过修改 pathname 的 locale 段实现，不用 next-intl 的 useRouter
+  - `src/app/[locale]/page.tsx` 占位文件已删除（合并到 (home)/page.tsx）
+
+---
+
+## [BROWSE-01] 分类浏览页
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/components/browse/FilterArea.tsx` — 展开式 6 行筛选（类型/地区/字幕/年份/评分/状态），useSearchParams 同步
+  - `src/components/browse/SortBar.tsx` — 排序条（relevance/rating/latest）+ 结果计数
+  - `src/components/browse/BrowseGrid.tsx` — 客户端获取 /search，复用 VideoCard，加载骨架
+  - `src/app/[locale]/browse/page.tsx` — 浏览页（Nav + sticky FilterArea + BrowseGrid）
+  - `src/api/services/SearchService.ts` — 添加 country/status 过滤条件
+  - `src/api/routes/search.ts` — 添加 country/status query 参数
+  - `messages/en.json` + `messages/zh-CN.json` — 新增 browse 命名空间翻译
+  - `vitest.config.ts` — 支持 tsx 测试文件 + esbuild jsx automatic runtime
+  - `tests/unit/components/browse/FilterArea.test.tsx` — 8 个单元测试
+  - `tests/e2e/search.spec.ts` — 8 个浏览页 E2E 测试
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - FilterArea sticky top-14（对应 Nav 高度 h-14）
+  - URL 参数通过 useSearchParams + router.push 同步，刷新后自动恢复
+  - 展开按钮只在前 3 行收起时显示，展开后显示 6 行
+
+---
+
+## [SEARCH-02] 搜索页面
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/components/search/FilterBar.tsx` — 搜索框 + 类型快选 + 排序选项
+  - `src/components/search/ResultCard.tsx` — 横版搜索结果卡片，支持 ES highlight <em> 高亮
+  - `src/components/search/ActiveFilterStrip.tsx` — 激活筛选标签条，支持单删和清除全部
+  - `src/components/search/SearchResultList.tsx` — 客户端获取 /search，结果列表 + 计数
+  - `src/components/search/MetaChip.tsx` — 年份/导演/演员等 chip（上一次已建）
+  - `src/app/[locale]/search/page.tsx` — 搜索页（Server Component，Suspense 包裹）
+  - `tests/e2e/search.spec.ts` — 补充 10 个搜索页 E2E 测试
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - ResultCard 使用 dangerouslySetInnerHTML 渲染 ES highlight（已用 CSS 处理 <em> 样式）
+  - ActiveFilterStrip 在无激活筛选时返回 null，不占位
+  - 搜索页至少有一个参数时才发起 API 请求，避免空请求

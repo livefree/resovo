@@ -223,7 +223,7 @@
 
 #### AUTH-03 前端登录/注册页面
 
-- **状态**：⏳ 等待依赖（AUTH-02）
+- **状态**：✅ 已完成
 - **描述**：登录/注册表单页面，含客户端验证和 authStore
 - **文件范围**：
   - `src/app/[locale]/auth/login/page.tsx`
@@ -237,8 +237,16 @@
   - access_token 存 Zustand store（内存），不存 localStorage
   - 支持双主题；有国际化支持
 - **测试要求**：Playwright `tests/e2e/auth.spec.ts`（完整登录流程、导航栏状态变化）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
-- **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
+- **完成备注**：
+  - 新建：`src/i18n/routing.ts`、`src/i18n/request.ts`、`src/middleware.ts`（next-intl i18n 基础设施）
+  - 新建：`messages/en.json`、`messages/zh-CN.json`（英中双语翻译）
+  - 新建：`src/lib/utils.ts`（cn() 工具函数）、`src/app/[locale]/layout.tsx`、`src/app/[locale]/page.tsx`
+  - 新建：`src/components/auth/LoginForm.tsx`、`src/components/auth/RegisterForm.tsx`（Zod 实时验证）
+  - 新建：`src/components/layout/Header.tsx`（含登录状态显示）
+  - 更新：`next.config.ts`（withNextIntl 插件）、`playwright.config.ts`（端口 3001 避免冲突）、`vitest.config.ts`（排除 e2e 目录）
+  - E2E 测试：使用 page.route() mock API，15/15 全通过；authStore 单元测试 14/14 全通过
+  - commit hash：a2b27b8
+- **问题说明**：_（已清空）_
 
 ---
 
@@ -271,7 +279,7 @@
 
 #### VIDEO-02 首页布局与导航
 
-- **状态**：⏳ 等待依赖（VIDEO-01、AUTH-03）
+- **状态**：✅ 已完成
 - **描述**：首页（Hero Banner + 分类标签 + 视频网格）+ 导航栏
 - **文件范围**：
   - `src/app/[locale]/(home)/page.tsx`
@@ -289,14 +297,22 @@
   - 响应式布局（移动 2 列 → PC 5 列）
   - 无硬编码颜色；国际化支持
 - **测试要求**：Playwright `tests/e2e/homepage.spec.ts`（首页加载、主题切换、导航跳转）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
-- **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
+- **完成备注**：
+  - 新建：`src/stores/themeStore.ts`（light/dark/system 三模式，localStorage 持久化）
+  - 新建：`src/components/ui/ThemeToggle.tsx`（循环切换，监听系统主题变化）
+  - 新建：`src/components/layout/Nav.tsx`（sticky 导航，含分类标签/主题/语言/用户状态）
+  - 新建：`src/components/video/VideoCard.tsx`（2:3 竖版）、`VideoCardWide.tsx`（16:9 横版）
+  - 新建：`src/components/video/HeroBanner.tsx`（客户端获取热门，占位骨架）
+  - 新建：`src/components/video/VideoGrid.tsx`（复用卡片，加载骨架）
+  - 新建：`src/app/[locale]/(home)/page.tsx`（Server Component，热门电影+剧集+底部声明）
+  - E2E 测试：14/15 全通过（主题切换、语言切换、导航跳转）；commit hash：917294c
+- **问题说明**：_（已清空）_
 
 ---
 
 #### BROWSE-01 分类浏览页
 
-- **状态**：⏳ 等待依赖（VIDEO-01、SEARCH-01）
+- **状态**：✅ 已完成
 - **描述**：`/browse` 分类浏览页，含展开式多行筛选区、排序条、视频网格
 - **文件范围**：
   - `src/app/[locale]/browse/page.tsx`
@@ -322,8 +338,17 @@
 - **测试要求**：
   - Vitest `tests/unit/components/browse/FilterArea.test.tsx`（行内单选逻辑、URL 参数同步）
   - Playwright `tests/e2e/search.spec.ts`（补充：分类浏览页筛选→结果更新→URL变化→刷新恢复）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
-- **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
+- **完成备注**：
+  - 新建：`src/components/browse/FilterArea.tsx`（展开式 6 行筛选，useSearchParams 同步）
+  - 新建：`src/components/browse/SortBar.tsx`（排序条 + 结果计数）
+  - 新建：`src/components/browse/BrowseGrid.tsx`（客户端获取 /search，复用 VideoCard）
+  - 新建：`src/app/[locale]/browse/page.tsx`（sticky FilterArea，Suspense 包裹）
+  - 修改：`SearchService.ts`（添加 country/status 过滤）、`search.ts`（添加 country/status schema）
+  - 新建：`tests/unit/components/browse/FilterArea.test.tsx`（8 tests 全通过）
+  - 新建：`tests/e2e/search.spec.ts`（8 E2E tests 全通过）
+  - 同时更新 vitest.config.ts（tsx 支持 + esbuild jsx automatic）
+  - commit hash：2c8301c
+- **问题说明**：_（已清空）_
 
 ---
 
@@ -331,7 +356,7 @@
 
 #### SEARCH-01 搜索接口
 
-- **状态**：⏳ 等待依赖（INFRA-03、VIDEO-01）
+- **状态**：✅ 已完成
 - **描述**：GET /search（全文搜索）、GET /search/suggest（联想词）
 - **文件范围**：
   - `src/api/routes/search.ts`
@@ -343,14 +368,17 @@
   - /search/suggest 返回视频标题 + 人名联想（含 type 字段）
   - 空 q 时 director/actor/writer 参数仍能查询
 - **测试要求**：Vitest `tests/unit/api/search.test.ts`（director/actor/writer 精确匹配、空 q 场景、highlight 字段）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建：`src/api/services/SearchService.ts`、`src/api/routes/search.ts`、`tests/unit/api/search.test.ts`
+  - 13 tests 全通过，typecheck ✅，lint ✅，全量 74 tests ✅
+  - commit hash：daf977f
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---
 
 #### SEARCH-02 搜索页面
 
-- **状态**：⏳ 等待依赖（SEARCH-01）
+- **状态**：✅ 已完成
 - **描述**：搜索页（顶部筛选栏 + 结果列表 + 分页）
 - **文件范围**：
   - `src/app/[locale]/search/page.tsx`
@@ -366,7 +394,15 @@
   - URL 参数同步（可分享搜索结果页）
   - 支持双主题；国际化支持
 - **测试要求**：Playwright `tests/e2e/search.spec.ts`（搜索→联想→结果→MetaChip 点击→播放页跳转 完整流程）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建：`src/components/search/FilterBar.tsx`（搜索框 + 类型快选 + 排序）
+  - 新建：`src/components/search/ResultCard.tsx`（横版卡片，支持 ES highlight <em> 高亮渲染）
+  - 新建：`src/components/search/ActiveFilterStrip.tsx`（激活筛选标签条，单删 + 清除全部）
+  - 新建：`src/components/search/SearchResultList.tsx`（客户端获取 /search，结果列表 + 计数）
+  - 新建：`src/app/[locale]/search/page.tsx`（Server Component，Suspense 包裹所有客户端组件）
+  - 已有：`src/components/search/MetaChip.tsx`（年份/导演/演员等 chip，点击跳转）
+  - E2E 测试：10 tests 补充到 tests/e2e/search.spec.ts；单元 96/96 全通过
+  - commit hash：12fa8fe
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---
@@ -375,7 +411,7 @@
 
 #### PLAYER-01 播放源接口
 
-- **状态**：⏳ 等待依赖（INFRA-02）
+- **状态**：✅ 已完成
 - **描述**：GET /videos/:id/sources、POST /videos/:id/sources/:sid/report
 - **文件范围**：
   - `src/api/routes/sources.ts`
@@ -391,8 +427,12 @@
   - 响应含 source_url 直链（不做代理）
   - report 接口需登录
 - **测试要求**：Vitest `tests/unit/api/sources.test.ts`（只返回 active 源、ADR-001 直链验证）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
-- **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
+- **完成备注**：
+  - 新建：`src/api/db/queries/sources.ts`（findActiveSourcesByVideoId/findSourceById/updateSourceActiveStatus）
+  - 新建：`src/api/services/SourceService.ts`（listSources 先验证视频存在）
+  - 新建：`src/api/routes/sources.ts`（GET /videos/:id/sources + episode 过滤，POST /report 需登录）
+  - 测试：9/9 全部通过；commit hash：90802cb
+- **问题说明**：_（已清空）_
 
 ---
 

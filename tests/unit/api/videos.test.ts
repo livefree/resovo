@@ -232,3 +232,25 @@ describe('GET /v1/videos/:id', () => {
     expect(res.statusCode).toBe(404)
   })
 })
+
+// ── DETAIL-01: slug 解析逻辑单元测试 ────────────────────────────
+
+import { extractShortId } from '@/lib/video-detail'
+
+describe('extractShortId', () => {
+  it('从标准 slug 提取最后 8 位 shortId', () => {
+    expect(extractShortId('attack-on-titan-aB3kR9x1')).toBe('aB3kR9x1')
+  })
+
+  it('只有 shortId 时直接返回', () => {
+    expect(extractShortId('aB3kR9x1')).toBe('aB3kR9x1')
+  })
+
+  it('多个横线时取最后一段', () => {
+    expect(extractShortId('some-long-title-with-many-parts-abCD1234')).toBe('abCD1234')
+  })
+
+  it('空字符串返回空字符串', () => {
+    expect(extractShortId('')).toBe('')
+  })
+})
