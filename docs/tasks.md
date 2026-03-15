@@ -246,7 +246,7 @@
 
 #### VIDEO-01 视频列表与详情接口
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **描述**：GET /videos、GET /videos/:id、GET /videos/trending
 - **文件范围**：
   - `src/api/routes/videos.ts`
@@ -259,8 +259,13 @@
   - /videos/trending 支持 period=today|week|month
   - 响应格式符合 `docs/rules/api-rules.md`
 - **测试要求**：Vitest `tests/unit/api/videos.test.ts`（过滤、分页、404 场景）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
-- **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
+- **完成备注**：
+  - 新建：`src/api/db/queries/videos.ts`（listVideos 含 6 种过滤, findVideoByShortId, listTrendingVideos，subquery 计算 source_count 和 subtitle_langs）
+  - 新建：`src/api/services/VideoService.ts`（list/findByShortId/trending 含分页）
+  - 新建：`src/api/routes/videos.ts`（GET /videos、/videos/trending、/videos/:id，Zod 验证，trending 在 :id 之前注册）
+  - 修改：`src/api/server.ts`（注册 videoRoutes）
+  - 测试：16/16 全部通过；commit hash：3d45280
+- **问题说明**：_（已清空）_
 
 ---
 
