@@ -153,3 +153,98 @@ test('admin 侧边栏显示系统管理区', async ({ context, page }) => {
   await expect(sidebar.getByText('爬虫管理')).toBeVisible()
   await expect(sidebar.getByText('数据看板')).toBeVisible()
 })
+
+// ── ADMIN-02: 视频列表上下架操作 ──────────────────────────────────
+
+const API_BASE = 'http://localhost:4000/v1'
+
+const MOCK_VIDEOS = [
+  {
+    id: 'vid-uuid-1',
+    short_id: 'aB3kR9x',
+    title: '测试电影',
+    title_en: 'Test Movie',
+    type: 'movie',
+    year: 2024,
+    is_published: false,
+    source_count: 2,
+    created_at: '2026-03-15T00:00:00Z',
+  },
+]
+
+test('视频列表页渲染并显示状态筛选器', async ({ context, page }) => {
+  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
+
+  await page.route(`${API_BASE}/admin/videos*`, (route) => {
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: MOCK_VIDEOS, total: 1, page: 1, limit: 20 }),
+    })
+  })
+
+  await page.goto(`${BASE_URL}/en/admin/videos`)
+  await expect(page.locator('[data-testid="admin-videos-page"]')).toBeVisible()
+  await expect(page.locator('[data-testid="admin-videos-filter-all"]')).toBeVisible()
+  await expect(page.locator('[data-testid="admin-videos-filter-pending"]')).toBeVisible()
+  await expect(page.locator('[data-testid="admin-videos-filter-published"]')).toBeVisible()
+})
+
+test('点击上架触发 PATCH 请求', async ({ context, page }) => {
+  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
+
+  await page.route(`${API_BASE}/admin/videos*`, (route) => {
+    if (route.request().method() === 'GET') {
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ data: MOCK_VIDEOS, total: 1, page: 1, limit: 20 }),
+      })
+    } else {
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: {} }) })
+    }
+  })
+
+  let patchCalled = false
+  await page.route(`${API_BASE}/admin/videos/vid-uuid-1/publish`, (route) => {
+    patchCalled = true
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { id: 'vid-uuid-1', is_published: true } }),
+    })
+  })
+
+  await page.goto(`${BASE_URL}/en/admin/videos`)
+  await page.locator('[data-testid="admin-video-toggle-vid-uuid-1"]').click()
+  expect(patchCalled).toBe(true)
+})
+
+test('手动添加视频页面渲染表单', async ({ context, page }) => {
+  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
+  await page.goto(`${BASE_URL}/en/admin/videos/new`)
+  await expect(page.locator('[data-testid="admin-videos-new-page"]')).toBeVisible()
+  await expect(page.locator('[data-testid="admin-video-form"]')).toBeVisible()
+  await expect(page.locator('[data-testid="admin-video-form-submit"]')).toHaveText('创建视频')
+})
+
+test('提交创建表单触发 POST 请求', async ({ context, page }) => {
+  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
+
+  let postCalled = false
+  await page.route(`${API_BASE}/admin/videos`, (route) => {
+    if (route.request().method() === 'POST') {
+      postCalled = true
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { id: 'new-vid', is_published: false } }),
+      })
+    } else {
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify({ data: [], total: 0 }) })
+    }
+  })
+
+  await page.goto(`${BASE_URL}/en/admin/videos/new`)
+  await page.locator('[data-testid="admin-video-form"] input[name="title"]').fill('新测试电影')
+  await page.locator('[data-testid="admin-video-form-submit"]').click()
+  // 等待 API 被调用（导航可能会跳回列表页）
+  await page.waitForTimeout(500)
+  expect(postCalled).toBe(true)
+})
