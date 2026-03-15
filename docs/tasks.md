@@ -197,7 +197,7 @@
 
 #### AUTH-02 注册/登录/刷新/登出接口
 
-- **状态**：⏳ 等待依赖（AUTH-01）
+- **状态**：✅ 已完成
 - **描述**：POST /auth/register、/auth/login、/auth/refresh、/auth/logout
 - **文件范围**：
   - `src/api/routes/auth.ts`
@@ -211,8 +211,13 @@
   - 登出：refresh_token 加入 Redis 黑名单，清除 Cookie
   - 全部接口有 Zod 参数验证
 - **测试要求**：Vitest `tests/unit/api/auth.test.ts` + Playwright `tests/e2e/auth.spec.ts`
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
-- **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
+- **完成备注**：
+  - 新建：`src/api/db/queries/users.ts`（findByEmail/Username/Id, createUser 参数化查询）
+  - 新建：`src/api/services/UserService.ts`（register/login/refresh/logout 业务逻辑，bcrypt cost=4 in test）
+  - 新建：`src/api/routes/auth.ts`（POST /auth/register|login|refresh|logout，Zod 验证，HttpOnly Cookie）
+  - 修改：`src/api/server.ts`（注册 authRoutes 在 /v1 前缀下）
+  - 测试：36/36 全部通过（含重复 email/username 422、错误密码 401、黑名单 401、幂等登出）；commit hash：b8dcd73
+- **问题说明**：_（已清空）_
 
 ---
 
@@ -241,7 +246,7 @@
 
 #### VIDEO-01 视频列表与详情接口
 
-- **状态**：⏳ 等待依赖（INFRA-02）
+- **状态**：🔄 进行中
 - **描述**：GET /videos、GET /videos/:id、GET /videos/trending
 - **文件范围**：
   - `src/api/routes/videos.ts`

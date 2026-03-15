@@ -4,6 +4,7 @@ import cookie from '@fastify/cookie'
 
 import { setupAuthenticate } from '@/api/plugins/authenticate'
 import { authRoutes } from '@/api/routes/auth'
+import { videoRoutes } from '@/api/routes/videos'
 
 async function start() {
   const fastify = Fastify({
@@ -22,6 +23,7 @@ async function start() {
   setupAuthenticate(fastify)
 
   await fastify.register(authRoutes, { prefix: '/v1' })
+  await fastify.register(videoRoutes, { prefix: '/v1' })
 
   fastify.get('/v1/health', async (_request, reply) => {
     return reply.send({ status: 'ok', timestamp: new Date().toISOString() })
