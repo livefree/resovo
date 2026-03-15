@@ -536,7 +536,7 @@
 
 #### PLAYER-04 控制栏组件
 
-- **状态**：⏳ 等待依赖（PLAYER-03）
+- **状态**：✅ 已完成
 - **描述**：播放器控制栏 + 线路选择栏 + CC面板 + 倍速面板 + 设置面板
 - **文件范围**：
   - `src/components/player/ControlBar.tsx`（控制栏，不含线路/画质）
@@ -566,14 +566,22 @@
   - Vitest `tests/unit/components/player/SpeedPanel.test.tsx`（4预设、数字键映射、←→拦截）
   - Vitest `tests/unit/components/player/SettingsPanel.test.tsx`（设置项localStorage持久化）
   - Playwright `tests/e2e/player.spec.ts`（线路切换保留进度、断点续播提示条、倍速面板键盘操作）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建：`ControlBar.tsx`（播放/暂停/音量/时间/CC/速度/设置/剧场/全屏，音量滑条 hover 展开）
+  - 新建：`SourceBar.tsx`（线路选择，≤3全显/>3折叠，切换保留进度）
+  - 新建：`CCPanel.tsx`（字幕语言切换）
+  - 新建：`SpeedPanel.tsx`（4预设+滑条，数字键1-4，←→拦截 ADR-011）
+  - 新建：`SettingsPanel.tsx`（字幕样式+自动播放+断点续播，localStorage持久化）
+  - 新建：`ResumePrompt.tsx`（ADR-012 断点续播提示，8s倒计时自动继续）
+  - 单元测试：ControlBar 12 tests + SpeedPanel 6 tests + SettingsPanel 10 tests（128/128 通过）
+  - commit hash：5ed53d1
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---
 
 #### PLAYER-05 快捷键系统
 
-- **状态**：⏳ 等待依赖（PLAYER-04）
+- **状态**：✅ 已完成
 - **描述**：播放器键盘状态机，根据面板焦点模式分发不同行为
 - **文件范围**：`src/components/player/usePlayerShortcuts.ts`
 - **依赖**：PLAYER-04
@@ -589,14 +597,18 @@
   - 倍速面板打开：←→调滑条(stopPropagation)，1/2/3/4选预设，S/Esc关闭
   - 输入框聚焦：所有快捷键不触发
 - **测试要求**：Vitest `tests/unit/components/player/ControlBar.test.tsx`（四种模式的键盘分发）+ Playwright `tests/e2e/player.spec.ts`（快捷键完整流程）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建文件：`src/components/player/usePlayerShortcuts.ts`
+  - 扩展测试：`tests/unit/components/player/ControlBar.test.tsx`（新增 6 个键盘状态机测试）
+  - ADR-011 优先级：输入框聚焦 → 选集浮层 → 倍速面板 → 正常模式
+  - 所有测试通过（142 tests）；commit hash：fec6fec
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---
 
 #### PLAYER-06 选集浮层
 
-- **状态**：⏳ 等待依赖（PLAYER-04）
+- **状态**：✅ 已完成
 - **描述**：从播放器左下角向上滑出的选集矩阵浮层
 - **文件范围**：`src/components/player/EpisodeOverlay.tsx`
 - **依赖**：PLAYER-04
@@ -606,14 +618,18 @@
   - 8 列网格；方向键导航；Enter 确认；Esc/外部点击关闭
   - 当前集数金色标识
 - **测试要求**：Vitest `tests/unit/components/player/EpisodeOverlay.test.tsx`（方向键导航、Enter/Esc）+ Playwright `tests/e2e/player.spec.ts`（选集切换）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建文件：`src/components/player/EpisodeOverlay.tsx`、`tests/unit/components/player/EpisodeOverlay.test.tsx`
+  - 8 列网格，translateY 滑入动画，backdrop-filter blur，当前集金色标识
+  - capture 阶段键盘监听（ADR-011 最高优先级）
+  - 8 个 Vitest 测试全部通过；commit hash：fec6fec
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---
 
 #### PLAYER-07 弹幕条
 
-- **状态**：⏳ 等待依赖（PLAYER-03）
+- **状态**：🔄 进行中
 - **描述**：Bilibili 风格弹幕条（播放器下方独立一行）
 - **文件范围**：`src/components/player/DanmakuBar.tsx`
 - **依赖**：PLAYER-03

@@ -33,6 +33,29 @@
   - `docker compose run --rm elasticsearch-init` 会自动创建 ES 索引（已在 docker compose up 后手动运行一次）
   - verify-env.sh 全部 21 项通过 ✅
 
+## [PLAYER-05] 快捷键系统
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/components/player/usePlayerShortcuts.ts` — 新建，ADR-011 键盘状态机
+  - `tests/unit/components/player/ControlBar.test.tsx` — 扩展：新增 6 个键盘状态机测试
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 优先级：输入框聚焦 → 选集浮层打开 → 倍速面板打开 → 正常模式
+  - 快进/后退步进为 5 秒，倍速快捷键为 S 键，剧场模式 T 键仅桌面端（≥1024px）
+
+## [PLAYER-06] 选集浮层
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/components/player/EpisodeOverlay.tsx` — 新建，8 列网格浮层
+  - `tests/unit/components/player/EpisodeOverlay.test.tsx` — 新建，8 个测试
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - capture 阶段键盘监听确保最高优先级（ADR-011）
+  - 当前集金色背景使用 CSS 变量 `--gold`，聚焦态 ring-1 ring-white/50
+  - commit hash：fec6fec
+
 ## [INFRA-05] 环境变量管理
 - **完成时间**：2026-03-15
 - **修改文件**：
@@ -256,3 +279,21 @@
   - VideoPlayer 使用 Video.js 内置 VHS 处理 HLS，不需要手动调用 hls.js
   - `controls: false` 隐藏 Video.js 原生控制栏（使用 PLAYER-04 自定义控制栏）
   - Safari 使用原生 HLS，其他浏览器用 VHS（`overrideNative: !IS_SAFARI`）
+
+---
+
+## [PLAYER-03] Video.js 播放器集成 + [PLAYER-04] 控制栏组件
+- **完成时间**：2026-03-15
+- **修改文件（PLAYER-03）**：
+  - `src/components/player/VideoPlayer.tsx` — Video.js 8 VHS HLS/MP4 支持，组件卸载 dispose
+  - `src/components/player/PlayerShell.tsx` — 集成 VideoPlayer + 获取 /videos/:id/sources
+- **修改文件（PLAYER-04）**：
+  - `src/components/player/ControlBar.tsx` — 全功能控制栏（音量 hover 滑条/时间/CC/倍速/设置/剧场/全屏）
+  - `src/components/player/SourceBar.tsx` — 线路切换（≤3全显/>3折叠，保留进度）
+  - `src/components/player/CCPanel.tsx` — 字幕语言切换
+  - `src/components/player/SpeedPanel.tsx` — 倍速面板（ADR-011 键盘拦截）
+  - `src/components/player/SettingsPanel.tsx` — 设置面板（localStorage 持久化）
+  - `src/components/player/ResumePrompt.tsx` — 断点续播提示（ADR-012）
+  - 单元测试：128/128 全通过
+- **新增依赖**：无（video.js + hls.js 已在 package.json）
+- **数据库变更**：无
