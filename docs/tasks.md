@@ -30,7 +30,7 @@
 ### ── 基础设施 ──
 
 #### INFRA-01 项目初始化
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **描述**：搭建 Next.js 15 + Fastify monorepo，含 TypeScript 配置、ESLint、Prettier、路径别名
 - **文件范围**：
   - `package.json`、`tsconfig.json`、`.eslintrc.json`、`.prettierrc`、`.gitignore`
@@ -42,13 +42,16 @@
   - `npm run api` 后端正常启动（端口 4000）
   - `tsc --noEmit` 无报错，路径别名 `@/` 正常解析
 - **测试要求**：`npm run typecheck` + `npm run lint` 通过
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
-- **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
+- **完成备注**：
+  - 新建文件：`package.json`、`tsconfig.json`、`.eslintrc.json`、`.prettierrc`、`.gitignore`、`next.config.ts`、`postcss.config.mjs`、`tailwind.config.ts`、`next-env.d.ts`、`src/app/layout.tsx`、`src/app/page.tsx`、`src/app/globals.css`、`src/api/server.ts`、`src/types/utility-types-augment.d.ts`（修复 list.types.ts 中错误的 utility-types 导入）
+  - `npm run typecheck` ✅ 通过；`npm run lint` ✅ 通过；API server 在 4000 端口正常启动
+  - commit hash：087efbb
+- **问题说明**：`list.types.ts` 错误地从 `utility-types` 导入 `Pick`（该包不导出此类型）。通过新建 `utility-types-augment.d.ts` 声明文件补充缺失导出，不修改原文件。
 
 ---
 
 #### INFRA-02 PostgreSQL 数据库初始化
-- **状态**：⏳ 等待依赖（INFRA-01）
+- **状态**：⬜ 待开始
 - **描述**：创建所有核心表和索引，迁移文件管理，连接池配置
 - **文件范围**：
   - `src/api/db/migrations/001_init_tables.sql`
@@ -72,7 +75,7 @@
 ---
 
 #### INFRA-03 Elasticsearch 初始化
-- **状态**：⏳ 等待依赖（INFRA-01）
+- **状态**：⬜ 待开始
 - **描述**：创建 `resovo_videos` 索引，IK 分词 + 拼音插件 mapping
 - **文件范围**：
   - `src/api/lib/elasticsearch.ts`
@@ -93,7 +96,7 @@
 ---
 
 #### INFRA-04 Redis + Bull 初始化
-- **状态**：⏳ 等待依赖（INFRA-01）
+- **状态**：⬜ 待开始
 - **描述**：Redis 客户端 + Bull 队列基础配置
 - **文件范围**：
   - `src/api/lib/redis.ts`
@@ -107,7 +110,7 @@
 ---
 
 #### INFRA-05 环境变量管理
-- **状态**：⏳ 等待依赖（INFRA-01）
+- **状态**：⬜ 待开始
 - **描述**：类型安全的环境变量，缺少必要变量时 fail-fast
 - **文件范围**：
   - `.env.example`（提交到仓库）
