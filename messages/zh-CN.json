@@ -39,6 +39,18 @@
   },
   "nav": {
     "logout": "退出登录",
-    "profile": "个人主页"
+    "profile": "个人主页",
+    "signIn": "登录",
+    "catAll": "全部",
+    "catMovie": "电影",
+    "catSeries": "剧集",
+    "catAnime": "动漫",
+    "catVariety": "综艺"
+  },
+  "home": {
+    "trendingMovies": "热门电影",
+    "trendingSeries": "热播剧集",
+    "disclaimer": "流光仅索引公开可访问的视频链接，不托管任何视频内容。所有版权归原作者所有。",
+    "viewAll": "查看全部"
   }
 }
