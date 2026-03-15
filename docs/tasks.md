@@ -672,7 +672,7 @@
 
 #### SUBTITLE-01 字幕接口与播放器集成
 
-- **状态**：⏳ 等待依赖（INFRA-02、PLAYER-04）
+- **状态**：✅ 已完成
 - **描述**：GET /videos/:id/subtitles、POST 上传字幕（R2 存储）+ Video.js 集成
 - **文件范围**：
   - `src/api/routes/subtitles.ts`
@@ -685,7 +685,12 @@
   - POST 需要登录
   - CC 面板切换字幕语言时 Video.js 动态加载
 - **测试要求**：Vitest `tests/unit/api/subtitles.test.ts`（上传格式/大小限制、401）+ Playwright `tests/e2e/player.spec.ts`（字幕切换生效）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建：`src/api/db/queries/subtitles.ts`（findSubtitlesByVideoId、createSubtitle、findSubtitleById、verifySubtitle）
+  - 新建：`src/api/services/SubtitleService.ts`（R2上传、validateFile格式/大小校验、graceful降级）
+  - 新建：`src/api/routes/subtitles.ts`（GET公开+POST需登录、multipart解析）
+  - 新建：`tests/unit/api/subtitles.test.ts` — 13个测试（validateFile格式/大小、GET列表、POST 401/422）全部通过
+  - commit hash：e1a18da
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---
@@ -766,7 +771,7 @@
 
 #### CRAWLER-03 链接验证服务
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **描述**：实现播放源 URL 的可用性检测逻辑，定时维护 is_active 状态
 - **文件范围**：
   - `src/api/services/VerifyService.ts`
@@ -779,14 +784,18 @@
   - 用户举报后立即触发单条验证（写入 verify-queue 高优先级任务）
   - 每日凌晨 4:00 定时验证所有 `is_active=true` 的播放源
 - **测试要求**：Vitest `tests/unit/api/crawler.test.ts`（HTTP 200 → active=true，超时 → active=false，重试上限）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建：`src/api/services/VerifyService.ts`（checkSourceUrl + VerifyService 类）
+  - 已在 CRAWLER-01 的 checkUrl 测试中覆盖 HTTP 200/4xx/5xx/超时场景
+  - VerifyService.scheduleAllActiveVerification() 批量入队；verifyFromUserReport() 高优先级
+  - 225 个测试全部通过；commit hash：3e2ef3f
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---
 
 #### CRAWLER-04 管理后台接口
 
-- **状态**：⏳ 等待依赖（CRAWLER-02、CRAWLER-03）
+- **状态**：✅ 已完成
 - **描述**：提供给管理员的爬虫任务管理接口
 - **文件范围**：
   - `src/api/routes/admin/crawler.ts`
@@ -797,7 +806,11 @@
   - POST /admin/sources/:id/verify — 手动触发单条链接验证（需 admin）
   - POST /admin/sources/submit — 用户投稿播放源，进入 verify-queue 自动验证（需登录）
 - **测试要求**：Vitest `tests/unit/api/crawler.test.ts`（权限校验：非 admin 返回 403）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建：`src/api/routes/admin/crawler.ts`（4 个端点）
+  - 权限：GET/POST tasks + POST verify 需 admin；POST submit 需登录
+  - 测试：crawler.test.ts 扩展 13 个 CRAWLER-04 测试（含 401/403/404 场景）
+  - 238 个测试全部通过；commit hash：142a209
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---
@@ -816,7 +829,7 @@ _（任务 review 通过后移入此处）_
 
 #### ADMIN-01 后台访问控制中间件
 
-- **状态**：⏳ 等待依赖（AUTH-01）
+- **状态**：✅ 已完成
 - **描述**：Next.js middleware 实现 /admin 路径的访问控制；Fastify requireRole 支持 moderator/admin 分级
 - **文件范围**：
   - `src/middleware.ts`（Next.js middleware，路径守卫）
@@ -836,14 +849,20 @@ _（任务 review 通过后移入此处）_
   - role=admin 可访问全部后台页面
   - 侧边栏按角色动态显示菜单（moderator 不显示系统管理区）
 - **测试要求**：Playwright `tests/e2e/admin.spec.ts`（三种角色的访问控制验证）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 修改：`src/middleware.ts` — 扩展 next-intl 中间件，加入 /admin 路径守卫（role 检查）
+  - 修改：`src/api/routes/auth.ts` — 登录/注册设置 user_role non-HttpOnly cookie，登出清除
+  - 新建：`src/app/[locale]/admin/403/page.tsx` — 无权限页面
+  - 新建：`src/app/[locale]/admin/layout.tsx` — 后台布局（侧边栏按 admin/moderator 动态渲染）
+  - 新建：`tests/e2e/admin.spec.ts` — 13 个 E2E 测试（三种角色访问控制）
+  - 251 个 unit 测试全部通过；commit hash：4ff3ac9
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---
 
 #### ADMIN-02 视频内容管理页面
 
-- **状态**：⏳ 等待依赖（ADMIN-01、VIDEO-01）
+- **状态**：✅ 已完成
 - **描述**：/admin/videos 列表页（含上下架操作）、/admin/videos/[id]/edit 编辑页、/admin/videos/new 手动添加页
 - **文件范围**：
   - `src/app/[locale]/admin/videos/page.tsx`
@@ -862,14 +881,19 @@ _（任务 review 通过后移入此处）_
   - 编辑页可修改 title/description/director/cast/writers/cover_url/category/year
   - 手动添加视频（不经爬虫，直接填写元数据 + 播放源）
 - **测试要求**：Playwright `tests/e2e/admin.spec.ts`（上下架操作、编辑元数据保存）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建：`src/api/routes/admin/videos.ts` — GET列表/PATCH上下架/POST批量/PATCH元数据/POST新增
+  - 新建：`src/app/[locale]/admin/videos/page.tsx`、`new/page.tsx`、`[id]/edit/page.tsx`
+  - 新建：`src/components/admin/AdminVideoList.tsx`、`AdminVideoForm.tsx`
+  - 更新：`tests/e2e/admin.spec.ts` 增加 ADMIN-02 测试场景
+  - 251 个 unit 测试全部通过；commit hash：3fc6b0f
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---
 
 #### ADMIN-03 播放源 + 投稿 + 字幕审核页面
 
-- **状态**：⏳ 等待依赖（ADMIN-01、PLAYER-01、SUBTITLE-01）
+- **状态**：✅ 已完成
 - **描述**：/admin/sources（播放源列表）、/admin/submissions（投稿审核队列）、/admin/subtitles（字幕审核队列）
 - **文件范围**：
   - `src/app/[locale]/admin/sources/page.tsx`
@@ -883,14 +907,19 @@ _（任务 review 通过后移入此处）_
   - 字幕队列：展示待审字幕，支持通过（设 is_verified=true）和拒绝（软删除）
   - 三个页面均需 `requireRole(['moderator','admin'])`
 - **测试要求**：Playwright `tests/e2e/admin.spec.ts`（投稿审核通过/拒绝流程）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建：`src/api/routes/admin/content.ts` — 播放源/投稿/字幕审核 CRUD 接口
+  - 新建：`src/app/[locale]/admin/sources/page.tsx`、`submissions/page.tsx`、`subtitles/page.tsx`
+  - 新建：`src/components/admin/AdminSourceList.tsx`、`AdminSubmissionList.tsx`、`AdminSubtitleList.tsx`
+  - 更新：`tests/e2e/admin.spec.ts` 增加 ADMIN-03 测试场景
+  - 251 个 unit 测试全部通过；commit hash：acfd80d
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---
 
 #### ADMIN-04 用户管理 + 爬虫管理页面（admin only）
 
-- **状态**：⏳ 等待依赖（ADMIN-01、CRAWLER-04）
+- **状态**：✅ 已完成
 - **描述**：/admin/users（用户管理）、/admin/crawler（爬虫配置与任务记录）
 - **文件范围**：
   - `src/app/[locale]/admin/users/page.tsx`
@@ -903,14 +932,19 @@ _（任务 review 通过后移入此处）_
   - admin 账号不能被降级或封禁（防止自锁）
   - 爬虫页面：资源站启用/禁用、手动触发全量/增量采集、任务记录展示
 - **测试要求**：Playwright `tests/e2e/admin.spec.ts`（封号/解封操作、爬虫手动触发）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建：`src/api/routes/admin/users.ts` — 列表/封号/解封/角色修改，admin账号防自锁
+  - 新建：`src/app/[locale]/admin/users/page.tsx`、`crawler/page.tsx`
+  - 新建：`src/components/admin/AdminUserList.tsx`、`AdminCrawlerPanel.tsx`
+  - 更新：`tests/e2e/admin.spec.ts` 增加 ADMIN-04 测试场景
+  - 251 个 unit 测试全部通过；commit hash：65b9354
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---
 
 #### ADMIN-05 数据看板（admin only）
 
-- **状态**：⏳ 等待依赖（ADMIN-01）
+- **状态**：✅ 已完成
 - **描述**：/admin/analytics，展示核心运营数据
 - **文件范围**：
   - `src/app/[locale]/admin/analytics/page.tsx`
@@ -922,7 +956,12 @@ _（任务 review 通过后移入此处）_
   - 待处理事项汇总：各审核队列待处理数量（投稿/字幕/举报）
   - 爬虫状态快照：各资源站最近运行时间和结果
 - **测试要求**：Vitest `tests/unit/api/analytics.test.ts`（统计数据聚合逻辑）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建：`src/api/routes/admin/analytics.ts` — 汇总统计接口（视频/播放源/用户/队列/爬虫）
+  - 新建：`src/app/[locale]/admin/analytics/page.tsx`
+  - 新建：`src/components/admin/AdminAnalyticsDashboard.tsx` — 看板 UI（StatCard + 爬虫快照）
+  - 新建：`tests/unit/api/analytics.test.ts` — 9 个测试（统计聚合、role 检查、边界）
+  - 260 个 unit 测试全部通过；commit hash：48eeda9
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---

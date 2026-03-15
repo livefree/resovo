@@ -44,6 +44,42 @@
   - 优先级：输入框聚焦 → 选集浮层打开 → 倍速面板打开 → 正常模式
   - 快进/后退步进为 5 秒，倍速快捷键为 S 键，剧场模式 T 键仅桌面端（≥1024px）
 
+## [PLAYER-07] 弹幕条
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/components/player/DanmakuBar.tsx` — 新建，弹幕控制栏 UI + CCL 初始化（graceful degradation）
+  - `tests/unit/components/player/DanmakuBar.test.tsx` — 新建，22 个测试
+- **新增依赖**：无（CCL 已安装）
+- **数据库变更**：无
+- **注意事项**：
+  - CCL (`comment-core-library`) 是浏览器全局变量库，通过 `window.CommentManager` 访问
+  - 未加载 CCL 时静默降级（UI 控件仍可用，弹幕飞屏不可用）
+  - commit hash：89d84e8
+
+## [PLAYER-08] 视频信息区与 Meta Chip
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/components/video/VideoMeta.tsx` — 新建，播放页视频信息区
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 复用 `MetaChip`（SEARCH-02 实现）、类型/年份/地区标签可点击搜索
+  - 收藏/追剧按钮未登录时 disabled；分享使用 Web Share API
+  - commit hash：964d3ce
+
+## [CRAWLER-01] Bull 队列基础设施
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/api/workers/crawlerWorker.ts` — 新建，爬虫队列 Worker 骨架
+  - `src/api/workers/verifyWorker.ts` — 新建，链接验证队列 Worker + checkUrl()
+  - `tests/unit/api/crawler.test.ts` — 新建，16 个测试
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - `queue.ts` 已在 INFRA-04 中实现，CRAWLER-01 只新增 Worker 注册骨架
+  - checkUrl() 用 HEAD 请求 + 10s AbortController 超时；4xx/5xx/超时 → inactive
+  - commit hash：8a03857
+
 ## [PLAYER-06] 选集浮层
 - **完成时间**：2026-03-15
 - **修改文件**：
@@ -297,3 +333,35 @@
   - 单元测试：128/128 全通过
 - **新增依赖**：无（video.js + hls.js 已在 package.json）
 - **数据库变更**：无
+
+---
+
+## [SUBTITLE-01] 字幕接口与播放器集成
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/api/db/queries/subtitles.ts` — 字幕 DB 查询（findSubtitlesByVideoId、createSubtitle、findSubtitleById、verifySubtitle）
+  - `src/api/services/SubtitleService.ts` — R2 上传、validateFile 格式/大小校验（.srt/.ass/.vtt，2MB上限），R2未配置时降级用占位URL
+  - `src/api/routes/subtitles.ts` — GET /videos/:id/subtitles（公开）、POST /videos/:id/subtitles（需登录，multipart）
+  - `tests/unit/api/subtitles.test.ts` — 13个测试（格式/大小校验、GET列表、POST 401/422）全部通过
+- **新增依赖**：无（@aws-sdk/client-s3 已在 package.json）
+- **数据库变更**：无（subtitles 表在 INFRA-02 migration 中已建）
+- **注意事项**：
+  - R2 需配置 R2_ENDPOINT/R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY，未配置时写警告日志并使用占位URL
+  - multipart 文件读取通过 @fastify/multipart 注册后自动添加 request.file() 方法
+
+---
+
+## [ADMIN-01] 后台访问控制中间件
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/middleware.ts` — 扩展为 next-intl + /admin 路径守卫链（ADR-010）
+  - `src/api/routes/auth.ts` — login/register 时设置 user_role 非 HttpOnly cookie，logout 清除
+  - `src/app/[locale]/admin/403/page.tsx` — 403 无权访问页
+  - `src/app/[locale]/admin/layout.tsx` — 后台布局，侧边栏按 admin/moderator 动态渲染
+  - `tests/e2e/admin.spec.ts` — 三种角色访问控制 E2E 测试（13 个测试用例）
+  - `tests/unit/api/auth.test.ts` — 修复 set-cookie 数组场景断言
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 依赖 user_role cookie（非 HttpOnly）供 Next.js middleware 读取；实际 API 调用仍由 JWT 鉴权
+  - moderator 无法访问 /admin/users、/admin/crawler、/admin/analytics

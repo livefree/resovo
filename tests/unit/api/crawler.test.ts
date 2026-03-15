@@ -3,9 +3,46 @@
  * CRAWLER-01: 队列入队/消费、重试机制
  * CRAWLER-02: XML/JSON 解析、字段映射、去重逻辑
  * CRAWLER-03: HTTP 200 → active, 超时 → inactive
+ * CRAWLER-04: 管理后台接口权限校验
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+
+// ── Mock 基础依赖 ─────────────────────────────────────────────────
+
+vi.mock('@/api/lib/postgres', () => ({ db: { query: vi.fn() } }))
+vi.mock('@/api/lib/elasticsearch', () => ({ es: {} }))
+vi.mock('@/api/lib/redis', () => ({
+  redis: { get: vi.fn().mockResolvedValue(null) },
+}))
+vi.mock('@/api/lib/auth', () => ({
+  verifyAccessToken: vi.fn(),
+  blacklistKey: (t: string) => `blacklist:${t}`,
+}))
+
+vi.mock('@/api/db/queries/crawlerTasks', () => ({
+  listTasks: vi.fn(),
+  createTask: vi.fn(),
+  updateTaskStatus: vi.fn(),
+}))
+
+vi.mock('@/api/db/queries/sources', () => ({
+  findSourceById: vi.fn(),
+  upsertSource: vi.fn(),
+  upsertSources: vi.fn(),
+  updateSourceActiveStatus: vi.fn(),
+}))
+
+vi.mock('@/api/services/CrawlerService', () => ({
+  CrawlerService: vi.fn().mockImplementation(() => ({})),
+  parseCrawlerSources: vi.fn().mockReturnValue([]),
+}))
+
+vi.mock('@/api/services/VerifyService', () => ({
+  VerifyService: vi.fn().mockImplementation(() => ({
+    verifyFromUserReport: vi.fn().mockResolvedValue(undefined),
+  })),
+}))
 
 // ── Mock Bull 队列（不需要真实 Redis）──────────────────────────────
 
@@ -485,5 +522,199 @@ describe('stripTags', () => {
 
   it('undefined → null', () => {
     expect(stripTags(undefined)).toBeNull()
+  })
+})
+
+// ── CRAWLER-04: 管理后台接口权限校验 ─────────────────────────────
+
+import Fastify from 'fastify'
+import cookie from '@fastify/cookie'
+import { setupAuthenticate } from '@/api/plugins/authenticate'
+import * as authLib from '@/api/lib/auth'
+import * as crawlerTasksQueriesModule from '@/api/db/queries/crawlerTasks'
+import * as sourcesQueriesModule from '@/api/db/queries/sources'
+
+const mockListTasks = crawlerTasksQueriesModule.listTasks as ReturnType<typeof vi.fn>
+const mockFindSourceById = sourcesQueriesModule.findSourceById as ReturnType<typeof vi.fn>
+
+async function buildCrawlerAdminApp() {
+  const { adminCrawlerRoutes } = await import('@/api/routes/admin/crawler')
+  const app = Fastify({ logger: false })
+  await app.register(cookie, { secret: 'test-secret' })
+  setupAuthenticate(app)
+  await app.register(adminCrawlerRoutes)
+  await app.ready()
+  return app
+}
+
+/** 构造 Bearer token header（mock verifyAccessToken 返回指定 role） */
+function authHeader(role: 'admin' | 'moderator' | 'user') {
+  const mockVerify = authLib.verifyAccessToken as ReturnType<typeof vi.fn>
+  mockVerify.mockReturnValue({ userId: 'user-1', role })
+  return { Authorization: 'Bearer test-token' }
+}
+
+describe('CRAWLER-04: 管理后台接口', () => {
+  let app: Awaited<ReturnType<typeof buildCrawlerAdminApp>>
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockJobAdd.mockResolvedValue({ id: 'job-42' })
+    mockListTasks.mockResolvedValue({ rows: [], total: 0 })
+    mockFindSourceById.mockResolvedValue(null)
+    app = await buildCrawlerAdminApp()
+  })
+
+  afterEach(() => app.close())
+
+  // ── GET /admin/crawler/tasks ────────────────────────────────
+
+  it('GET /admin/crawler/tasks：未登录返回 401', async () => {
+    const res = await app.inject({ method: 'GET', url: '/admin/crawler/tasks' })
+    expect(res.statusCode).toBe(401)
+  })
+
+  it('GET /admin/crawler/tasks：user 角色返回 403', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/crawler/tasks',
+      headers: authHeader('user'),
+    })
+    expect(res.statusCode).toBe(403)
+  })
+
+  it('GET /admin/crawler/tasks：moderator 角色返回 403', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/crawler/tasks',
+      headers: authHeader('moderator'),
+    })
+    expect(res.statusCode).toBe(403)
+  })
+
+  it('GET /admin/crawler/tasks：admin 角色成功（200）', async () => {
+    mockListTasks.mockResolvedValueOnce({ rows: [], total: 0 })
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/crawler/tasks',
+      headers: authHeader('admin'),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ data: [], pagination: { total: 0 } })
+  })
+
+  it('GET /admin/crawler/tasks：支持 status 过滤参数', async () => {
+    mockListTasks.mockResolvedValueOnce({ rows: [], total: 0 })
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/crawler/tasks?status=running',
+      headers: authHeader('admin'),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockListTasks).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'running' })
+    )
+  })
+
+  // ── POST /admin/crawler/tasks ───────────────────────────────
+
+  it('POST /admin/crawler/tasks：非 admin 返回 403', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/crawler/tasks',
+      headers: { ...authHeader('user'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'full-crawl' }),
+    })
+    expect(res.statusCode).toBe(403)
+  })
+
+  it('POST /admin/crawler/tasks：admin 触发 full-crawl 返回 202', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/crawler/tasks',
+      headers: { ...authHeader('admin'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'full-crawl' }),
+    })
+    expect(res.statusCode).toBe(202)
+    expect(res.json().data).toMatchObject({ type: 'full-crawl', jobId: 'job-42' })
+  })
+
+  it('POST /admin/crawler/tasks：admin 触发 incremental-crawl 返回 202', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/crawler/tasks',
+      headers: { ...authHeader('admin'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'incremental-crawl', hoursAgo: 6 }),
+    })
+    expect(res.statusCode).toBe(202)
+    expect(mockJobAdd).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'incremental-crawl', hoursAgo: 6 })
+    )
+  })
+
+  // ── POST /admin/sources/:id/verify ─────────────────────────
+
+  it('POST /admin/sources/:id/verify：非 admin 返回 403', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/sources/src-123/verify',
+      headers: authHeader('user'),
+    })
+    expect(res.statusCode).toBe(403)
+  })
+
+  it('POST /admin/sources/:id/verify：source 不存在返回 404', async () => {
+    mockFindSourceById.mockResolvedValueOnce(null)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/sources/nonexistent/verify',
+      headers: authHeader('admin'),
+    })
+    expect(res.statusCode).toBe(404)
+  })
+
+  it('POST /admin/sources/:id/verify：source 存在时返回 202 并入队', async () => {
+    mockFindSourceById.mockResolvedValueOnce({
+      id: 'src-1',
+      sourceUrl: 'https://cdn.example.com/video.m3u8',
+    })
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/sources/src-1/verify',
+      headers: authHeader('admin'),
+    })
+    expect(res.statusCode).toBe(202)
+    expect(res.json().data).toMatchObject({ sourceId: 'src-1' })
+  })
+
+  // ── POST /admin/sources/submit ──────────────────────────────
+
+  it('POST /admin/sources/submit：未登录返回 401', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/sources/submit',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoId: '11111111-0000-0000-0000-000000000000', sourceUrl: 'https://cdn.example.com/v.m3u8' }),
+    })
+    expect(res.statusCode).toBe(401)
+  })
+
+  it('POST /admin/sources/submit：普通用户（已登录）可以投稿（202）', async () => {
+    const { db: mockDb } = await import('@/api/lib/postgres')
+    const dbMock = mockDb as { query: ReturnType<typeof vi.fn> }
+    dbMock.query
+      .mockResolvedValueOnce({ rows: [] })  // INSERT ON CONFLICT DO NOTHING
+      .mockResolvedValueOnce({ rows: [{ id: 'src-new' }] })  // SELECT id
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/sources/submit',
+      headers: { ...authHeader('user'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        videoId: '11111111-0000-0000-0000-000000000000',
+        sourceUrl: 'https://cdn.example.com/video.m3u8',
+      }),
+    })
+    expect(res.statusCode).toBe(202)
   })
 })

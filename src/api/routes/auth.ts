@@ -17,6 +17,8 @@ import { UserService, ConflictError, UnauthorizedError } from '@/api/services/Us
 
 // Cookie 名称（统一管理）
 const REFRESH_COOKIE = 'refresh_token'
+// user_role 非 HttpOnly，供 Next.js middleware 读取角色（ADR-010）
+const ROLE_COOKIE = 'user_role'
 
 // Cookie 选项（ADR-003）
 const COOKIE_OPTIONS = {
@@ -24,6 +26,15 @@ const COOKIE_OPTIONS = {
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'strict' as const,
   maxAge: 7 * 24 * 60 * 60, // 7 天，单位秒
+  path: '/',
+}
+
+// user_role cookie 与 refresh_token 同寿命，非 HttpOnly
+const ROLE_COOKIE_OPTIONS = {
+  httpOnly: false,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict' as const,
+  maxAge: 7 * 24 * 60 * 60,
   path: '/',
 }
 
@@ -62,6 +73,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     try {
       const { user, accessToken, refreshToken } = await userService.register(parsed.data)
       reply.setCookie(REFRESH_COOKIE, refreshToken, COOKIE_OPTIONS)
+      reply.setCookie(ROLE_COOKIE, user.role, ROLE_COOKIE_OPTIONS)
       return reply.code(201).send({ data: { user, accessToken } })
     } catch (error) {
       if (error instanceof ConflictError) {
@@ -95,6 +107,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         parsed.data.password
       )
       reply.setCookie(REFRESH_COOKIE, refreshToken, COOKIE_OPTIONS)
+      reply.setCookie(ROLE_COOKIE, user.role, ROLE_COOKIE_OPTIONS)
       return reply.send({ data: { user, accessToken } })
     } catch (error) {
       if (error instanceof UnauthorizedError) {
@@ -148,6 +161,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 
     // 无论如何都清除 Cookie
     reply.clearCookie(REFRESH_COOKIE, { path: '/' })
+    reply.clearCookie(ROLE_COOKIE, { path: '/' })
     return reply.code(204).send()
   })
 }

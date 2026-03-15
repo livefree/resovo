@@ -325,9 +325,10 @@ describe('POST /v1/auth/register', () => {
     expect(body.data.accessToken).toBeTruthy()
     expect(body.data.user.passwordHash).toBeUndefined() // passwordHash 不能暴露
     expect(body.data.user.email).toBe('test@example.com')
-    const setCookie = res.headers['set-cookie'] as string
-    expect(setCookie).toContain('refresh_token=')
-    expect(setCookie).toContain('HttpOnly')
+    const sc = res.headers['set-cookie']
+    const setCookies = Array.isArray(sc) ? sc.join('\n') : String(sc)
+    expect(setCookies).toContain('refresh_token=')
+    expect(setCookies).toContain('HttpOnly')
   })
 
   it('重复 email → 422 CONFLICT', async () => {
@@ -396,9 +397,10 @@ describe('POST /v1/auth/login', () => {
     })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.accessToken).toBeTruthy()
-    const setCookie = res.headers['set-cookie'] as string
-    expect(setCookie).toContain('refresh_token=')
-    expect(setCookie).toContain('HttpOnly')
+    const sc2 = res.headers['set-cookie']
+    const setCookies2 = Array.isArray(sc2) ? sc2.join('\n') : String(sc2)
+    expect(setCookies2).toContain('refresh_token=')
+    expect(setCookies2).toContain('HttpOnly')
   })
 
   it('access_token payload 包含 userId 和 role', async () => {
@@ -454,9 +456,10 @@ describe('POST /v1/auth/login', () => {
       url: '/v1/auth/login',
       payload: { email: 'test@example.com', password: 'correctpassword' },
     })
-    const setCookie = res.headers['set-cookie'] as string
-    expect(setCookie).toContain('HttpOnly')
-    expect(setCookie).toContain('SameSite=Strict')
+    const sc3 = res.headers['set-cookie']
+    const setCookies3 = Array.isArray(sc3) ? sc3.join('\n') : String(sc3)
+    expect(setCookies3).toContain('HttpOnly')
+    expect(setCookies3).toContain('SameSite=Strict')
   })
 })
 
@@ -533,9 +536,10 @@ describe('POST /v1/auth/logout', () => {
       cookies: { refresh_token: refreshToken },
     })
     expect(res.statusCode).toBe(204)
-    const setCookie = res.headers['set-cookie'] as string
+    const setCookieHeader = res.headers['set-cookie']
+    const setCookies = Array.isArray(setCookieHeader) ? setCookieHeader.join('; ') : String(setCookieHeader)
     // clearCookie 设置 expires 为过去时间或 max-age=0
-    expect(setCookie).toContain('refresh_token=')
+    expect(setCookies).toContain('refresh_token=')
   })
 
   it('无 cookie 时登出也返回 204（幂等）', async () => {
