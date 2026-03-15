@@ -2,6 +2,8 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import cookie from '@fastify/cookie'
 
+import { setupAuthenticate } from '@/api/plugins/authenticate'
+
 async function start() {
   const fastify = Fastify({
     logger: { level: process.env.NODE_ENV === 'test' ? 'silent' : 'info' },
@@ -15,6 +17,8 @@ async function start() {
   await fastify.register(cookie, {
     secret: process.env.COOKIE_SECRET ?? 'dev-cookie-secret-replace-in-production',
   })
+
+  setupAuthenticate(fastify)
 
   fastify.get('/v1/health', async (_request, reply) => {
     return reply.send({ status: 'ok', timestamp: new Date().toISOString() })
