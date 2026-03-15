@@ -649,7 +649,7 @@
 
 #### PLAYER-08 视频信息区与 Meta Chip
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **描述**：播放页视频信息区，含可点击导演/演员/编剧 chip
 - **文件范围**：`src/components/video/VideoMeta.tsx`
 - **依赖**：PLAYER-02、SEARCH-02
@@ -659,7 +659,11 @@
   - 收藏/分享/举报失效/追剧记录按钮
   - 支持双主题
 - **测试要求**：Playwright `tests/e2e/search.spec.ts`（MetaChip 点击跳转搜索）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建文件：`src/components/video/VideoMeta.tsx`
+  - 功能：标题/英文名、类型/年份/地区/评分标签、收藏/追剧/分享/举报按钮、导演/演员/编剧 MetaChip、简介
+  - MetaChip 点击搜索功能复用 `SEARCH-02` 已有实现
+  - 164 个 Vitest 测试全部通过；commit hash：964d3ce
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---
