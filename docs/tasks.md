@@ -480,7 +480,7 @@
 
 #### PLAYER-02 播放页布局（CSR）
 
-- **状态**：⏳ 等待依赖（DETAIL-01、PLAYER-01）
+- **状态**：✅ 已完成
 - **描述**：`/watch/[slug]` 播放页，CSR 渲染，专注播放体验，不重复详情页完整内容
 - **文件范围**：
   - `src/app/[locale]/watch/[slug]/page.tsx`
@@ -501,14 +501,20 @@
   - playerStore 初始化正确
   - 页面标题显示视频名（CSR 后更新，不依赖 SSR）
 - **测试要求**：Playwright `tests/e2e/player.spec.ts`（Default/Theater Mode 切换）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建：`src/stores/playerStore.ts`（ADR-011 面板状态机 + 播放状态 + 布局模式）
+  - 新建：`src/components/player/PlayerShell.tsx`（客户端获取视频数据，两种布局模式，选集面板）
+  - 新建：`src/app/[locale]/watch/[slug]/page.tsx`（dynamic import ssr:false，播放器骨架加载）
+  - 重构：WatchPage 不做 SSR 视频获取，PlayerShell 客户端调用 apiClient 获取（便于 E2E mock）
+  - E2E 测试：补充 6 个播放页测试到 player.spec.ts
+  - 100/100 单元测试通过；commit hash：2bb3d6c
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---
 
 #### PLAYER-03 Video.js 播放器集成
 
-- **状态**：⏳ 等待依赖（PLAYER-02）
+- **状态**：✅ 已完成
 - **描述**：Video.js + HLS.js 集成，基础播放功能
 - **文件范围**：`src/components/player/VideoPlayer.tsx`
 - **依赖**：PLAYER-02
@@ -517,7 +523,13 @@
   - 组件卸载时正确销毁实例（无内存泄漏）
   - `dynamic import` with `ssr: false`
 - **测试要求**：Playwright `tests/e2e/player.spec.ts`（视频加载、HLS 播放可用性）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - 新建：`src/components/player/VideoPlayer.tsx`（Video.js 8 + HLS.js，支持 HLS/MP4/DASH）
+  - 修改：`PlayerShell.tsx`（集成 VideoPlayer via dynamic import ssr:false，同时获取播放源）
+  - VideoPlayer 在 useEffect 中初始化，return 函数中调用 player.dispose() 防内存泄漏
+  - VHS overrideNative 在非 Safari 浏览器启用，Safari 使用原生 HLS
+  - E2E 测试：2 个 VideoPlayer 集成测试（播放区域存在、video-player 元素挂载）
+  - 100/100 单元测试通过；commit hash：85f1e8a
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---

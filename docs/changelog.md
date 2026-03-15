@@ -225,3 +225,34 @@
   - SSR 使用直接 fetch 而不是 apiClient（apiClient 依赖 Zustand，服务端无法使用）
   - generateMetadata 在每个页面单独实现，复用 fetchVideoDetail
   - slug 解析：取最后一个 `-` 后的字符串作为 shortId，不做长度校验（由 API 返回 404 处理）
+
+---
+
+## [PLAYER-02] 播放页布局（CSR）
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/stores/playerStore.ts` — ADR-011 键盘状态机面板焦点 + 播放状态 + 布局模式 (default/theater)
+  - `src/components/player/PlayerShell.tsx` — 播放器外壳，客户端获取视频，两种布局模式，选集面板
+  - `src/app/[locale]/watch/[slug]/page.tsx` — 播放页（dynamic import ssr:false，Nav + Suspense）
+  - `tests/e2e/player.spec.ts` — 补充 6 个播放页布局 E2E 测试
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - WatchPage 不做 SSR 视频获取，PlayerShell 用 apiClient 客户端获取（page.route() 可拦截）
+  - 剧场模式切换按钮通过 `hidden lg:flex` 在移动端隐藏
+  - 右侧面板在剧场模式下通过 `lg:w-0 lg:opacity-0` 收起（CSS transition 动画）
+
+---
+
+## [PLAYER-03] Video.js 播放器集成
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/components/player/VideoPlayer.tsx` — Video.js 8 + VHS HLS 支持，组件卸载时 dispose
+  - `src/components/player/PlayerShell.tsx` — 集成 VideoPlayer (dynamic import ssr:false)，获取 /videos/:id/sources
+  - `tests/e2e/player.spec.ts` — 补充 2 个 VideoPlayer 集成 E2E 测试
+- **新增依赖**：无（video.js + hls.js 已在 package.json）
+- **数据库变更**：无
+- **注意事项**：
+  - VideoPlayer 使用 Video.js 内置 VHS 处理 HLS，不需要手动调用 hls.js
+  - `controls: false` 隐藏 Video.js 原生控制栏（使用 PLAYER-04 自定义控制栏）
+  - Safari 使用原生 HLS，其他浏览器用 VHS（`overrideNative: !IS_SAFARI`）
