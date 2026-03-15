@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
 
+const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 3001)
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? `http://localhost:${PORT}`
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
@@ -9,7 +12,7 @@ export default defineConfig({
   reporter: [['html', { open: 'never' }], ['line']],
 
   use: {
-    baseURL: process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
+    baseURL: BASE_URL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -21,8 +24,8 @@ export default defineConfig({
 
   // 运行 E2E 前自动启动开发服务器
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
+    command: `npm run dev -- -p ${PORT}`,
+    url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 60000,
   },

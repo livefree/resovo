@@ -4,6 +4,7 @@ import path from 'path'
 export default defineConfig({
   test: {
     globals: true,
+    include: ['tests/unit/**/*.{test,spec}.ts'],  // 只运行 unit 测试，排除 e2e
     environment: 'node',          // API 测试用 node 环境
     environmentMatchGlobs: [
       ['tests/unit/components/**', 'jsdom'],  // 组件测试用 jsdom

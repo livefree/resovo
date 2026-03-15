@@ -1,0 +1,44 @@
+{
+  "auth": {
+    "login": {
+      "title": "登录",
+      "subtitle": "欢迎回到流光",
+      "email": "邮箱",
+      "emailPlaceholder": "your@email.com",
+      "password": "密码",
+      "passwordPlaceholder": "••••••••",
+      "submit": "登录",
+      "submitting": "登录中...",
+      "noAccount": "还没有账号？",
+      "registerLink": "立即注册"
+    },
+    "register": {
+      "title": "创建账号",
+      "subtitle": "加入流光",
+      "username": "用户名",
+      "usernamePlaceholder": "your_username",
+      "email": "邮箱",
+      "emailPlaceholder": "your@email.com",
+      "password": "密码",
+      "passwordPlaceholder": "至少 8 位字符",
+      "submit": "创建账号",
+      "submitting": "创建中...",
+      "hasAccount": "已有账号？",
+      "loginLink": "立即登录"
+    },
+    "errors": {
+      "emailRequired": "请输入邮箱",
+      "emailInvalid": "请输入有效的邮箱地址",
+      "passwordRequired": "请输入密码",
+      "passwordMin": "密码至少需要 8 位字符",
+      "usernameRequired": "请输入用户名",
+      "usernameMin": "用户名至少需要 3 位字符",
+      "usernameMax": "用户名最多 20 位字符",
+      "usernamePattern": "用户名只能包含字母、数字和下划线"
+    }
+  },
+  "nav": {
+    "logout": "退出登录",
+    "profile": "个人主页"
+  }
+}
