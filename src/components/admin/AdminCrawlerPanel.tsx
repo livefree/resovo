@@ -1,0 +1,195 @@
+/**
+ * AdminCrawlerPanel.tsx — 爬虫管理面板
+ * ADMIN-04: 手动触发采集、任务记录展示（admin only）
+ */
+
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { apiClient } from '@/lib/api-client'
+
+interface CrawlerTask {
+  id: string
+  type: string
+  status: 'pending' | 'running' | 'done' | 'failed'
+  source_url: string | null
+  error: string | null
+  started_at: string | null
+  finished_at: string | null
+  created_at: string
+}
+
+type TaskStatusFilter = 'pending' | 'running' | 'done' | 'failed' | ''
+
+function StatusBadge({ status }: { status: CrawlerTask['status'] }) {
+  const map: Record<CrawlerTask['status'], string> = {
+    pending: 'bg-yellow-900/30 text-yellow-400',
+    running: 'bg-blue-900/30 text-blue-400',
+    done: 'bg-green-900/30 text-green-400',
+    failed: 'bg-red-900/30 text-red-400',
+  }
+  const labels: Record<CrawlerTask['status'], string> = {
+    pending: '等待中',
+    running: '运行中',
+    done: '已完成',
+    failed: '失败',
+  }
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs ${map[status]}`}>
+      {labels[status]}
+    </span>
+  )
+}
+
+export function AdminCrawlerPanel() {
+  const [tasks, setTasks] = useState<CrawlerTask[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [statusFilter, setStatusFilter] = useState<TaskStatusFilter>('')
+  const [triggering, setTriggering] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const limit = 20
+
+  const fetchTasks = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const params = new URLSearchParams({ page: String(page), limit: String(limit) })
+      if (statusFilter) params.set('status', statusFilter)
+      const res = await apiClient.get<{ data: CrawlerTask[]; total: number }>(
+        `/admin/crawler/tasks?${params}`
+      )
+      setTasks(res.data)
+      setTotal(res.total)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载失败')
+    } finally {
+      setLoading(false)
+    }
+  }, [page, statusFilter])
+
+  useEffect(() => { fetchTasks() }, [fetchTasks])
+
+  async function handleTrigger(type: 'full-crawl' | 'incremental-crawl') {
+    setTriggering(true)
+    try {
+      await apiClient.post('/admin/crawler/tasks', { type })
+      fetchTasks()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '触发失败')
+    } finally {
+      setTriggering(false)
+    }
+  }
+
+  const totalPages = Math.ceil(total / limit)
+
+  return (
+    <div data-testid="admin-crawler-panel">
+      {/* ── 触发区 ─────────────────────────────────────────────── */}
+      <div className="mb-6 flex gap-3">
+        <button
+          onClick={() => handleTrigger('full-crawl')}
+          disabled={triggering}
+          className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-black hover:opacity-90 disabled:opacity-60"
+          data-testid="admin-crawler-trigger-full"
+        >
+          {triggering ? '触发中…' : '全量采集'}
+        </button>
+        <button
+          onClick={() => handleTrigger('incremental-crawl')}
+          disabled={triggering}
+          className="rounded-md border border-[var(--border)] px-4 py-2 text-sm text-[var(--text)] hover:bg-[var(--bg2)] disabled:opacity-60"
+          data-testid="admin-crawler-trigger-incremental"
+        >
+          {triggering ? '触发中…' : '增量采集'}
+        </button>
+        <button
+          onClick={fetchTasks}
+          className="rounded-md border border-[var(--border)] px-4 py-2 text-sm text-[var(--muted)] hover:text-[var(--text)]"
+          data-testid="admin-crawler-refresh"
+        >
+          刷新
+        </button>
+      </div>
+
+      {/* ── 状态筛选 ─────────────────────────────────────────────── */}
+      <div className="mb-4 flex gap-1 rounded-md border border-[var(--border)] p-0.5 w-fit">
+        {([
+          { value: '', label: '全部' },
+          { value: 'pending', label: '等待中' },
+          { value: 'running', label: '运行中' },
+          { value: 'done', label: '已完成' },
+          { value: 'failed', label: '失败' },
+        ] as { value: TaskStatusFilter; label: string }[]).map(({ value, label }) => (
+          <button
+            key={value}
+            onClick={() => { setPage(1); setStatusFilter(value) }}
+            className={`rounded px-3 py-1 text-sm transition-colors ${
+              statusFilter === value
+                ? 'bg-[var(--accent)] text-black'
+                : 'text-[var(--muted)] hover:text-[var(--text)]'
+            }`}
+            data-testid={`admin-crawler-filter-${value || 'all'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {error && (
+        <p className="mb-4 rounded-md bg-red-900/30 px-4 py-2 text-sm text-red-400">{error}</p>
+      )}
+
+      <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
+        <table className="w-full text-sm">
+          <thead className="bg-[var(--bg2)] text-[var(--muted)]">
+            <tr>
+              <th className="px-4 py-3 text-left">类型</th>
+              <th className="px-4 py-3 text-left">状态</th>
+              <th className="px-4 py-3 text-left">开始时间</th>
+              <th className="px-4 py-3 text-left">结束时间</th>
+              <th className="px-4 py-3 text-left">错误信息</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--subtle)]">
+            {loading && (
+              <tr><td colSpan={5} className="py-8 text-center text-[var(--muted)]">加载中…</td></tr>
+            )}
+            {!loading && tasks.length === 0 && (
+              <tr><td colSpan={5} className="py-8 text-center text-[var(--muted)]">暂无任务记录</td></tr>
+            )}
+            {!loading && tasks.map((task) => (
+              <tr key={task.id} className="bg-[var(--bg)] hover:bg-[var(--bg2)]" data-testid={`admin-crawler-task-${task.id}`}>
+                <td className="px-4 py-3 text-[var(--text)]">{task.type}</td>
+                <td className="px-4 py-3"><StatusBadge status={task.status} /></td>
+                <td className="px-4 py-3 text-[var(--muted)] text-xs">
+                  {task.started_at ? new Date(task.started_at).toLocaleString() : '—'}
+                </td>
+                <td className="px-4 py-3 text-[var(--muted)] text-xs">
+                  {task.finished_at ? new Date(task.finished_at).toLocaleString() : '—'}
+                </td>
+                <td className="max-w-xs truncate px-4 py-3 text-xs text-red-400">
+                  {task.error ?? '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-between text-sm text-[var(--muted)]">
+          <span>共 {total} 条</span>
+          <div className="flex gap-1">
+            <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded px-3 py-1 hover:bg-[var(--bg2)] disabled:opacity-40">上一页</button>
+            <span className="px-2 py-1">{page} / {totalPages}</span>
+            <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="rounded px-3 py-1 hover:bg-[var(--bg2)] disabled:opacity-40">下一页</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

@@ -340,3 +340,117 @@ test('字幕审核页面显示待审列表', async ({ context, page }) => {
   await expect(page.locator('[data-testid="admin-subtitles-page"]')).toBeVisible()
   await expect(page.locator('[data-testid="admin-subtitle-row-subtitle-uuid-1"]')).toBeVisible()
 })
+
+// ── ADMIN-04: 用户封号/解封、爬虫手动触发 ────────────────────────
+
+const MOCK_USERS = [
+  {
+    id: 'user-uuid-1',
+    username: 'regularuser',
+    email: 'user@example.com',
+    role: 'user',
+    banned_at: null,
+    created_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'user-uuid-2',
+    username: 'banneduser',
+    email: 'banned@example.com',
+    role: 'user',
+    banned_at: '2026-02-01T00:00:00Z',
+    created_at: '2026-01-01T00:00:00Z',
+  },
+]
+
+test('用户管理页面显示用户列表', async ({ context, page }) => {
+  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
+
+  await page.route(`${API_BASE}/admin/users*`, (route) => {
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: MOCK_USERS, total: 2, page: 1, limit: 20 }),
+    })
+  })
+
+  await page.goto(`${BASE_URL}/en/admin/users`)
+  await expect(page.locator('[data-testid="admin-users-page"]')).toBeVisible()
+  await expect(page.locator('[data-testid="admin-user-list"]')).toBeVisible()
+  await expect(page.locator('[data-testid="admin-user-row-user-uuid-1"]')).toBeVisible()
+})
+
+test('点击封号触发 ban 请求', async ({ context, page }) => {
+  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
+
+  await page.route(`${API_BASE}/admin/users*`, (route) => {
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: MOCK_USERS, total: 2, page: 1, limit: 20 }),
+    })
+  })
+
+  let banCalled = false
+  await page.route(`${API_BASE}/admin/users/user-uuid-1/ban`, (route) => {
+    banCalled = true
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { id: 'user-uuid-1', banned_at: '2026-03-15T00:00:00Z' } }),
+    })
+  })
+
+  await page.goto(`${BASE_URL}/en/admin/users`)
+  // 模拟 confirm 对话框
+  page.on('dialog', (dialog) => dialog.accept())
+  await page.locator('[data-testid="admin-user-ban-user-uuid-1"]').click()
+  await page.waitForTimeout(300)
+  expect(banCalled).toBe(true)
+})
+
+test('爬虫页面显示任务触发按钮', async ({ context, page }) => {
+  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
+
+  await page.route(`${API_BASE}/admin/crawler/tasks*`, (route) => {
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: [], total: 0, page: 1, limit: 20 }),
+    })
+  })
+
+  await page.goto(`${BASE_URL}/en/admin/crawler`)
+  await expect(page.locator('[data-testid="admin-crawler-page"]')).toBeVisible()
+  await expect(page.locator('[data-testid="admin-crawler-trigger-full"]')).toBeVisible()
+  await expect(page.locator('[data-testid="admin-crawler-trigger-incremental"]')).toBeVisible()
+})
+
+test('点击全量采集触发 POST 请求', async ({ context, page }) => {
+  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
+
+  await page.route(`${API_BASE}/admin/crawler/tasks*`, (route) => {
+    if (route.request().method() === 'GET') {
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ data: [], total: 0, page: 1, limit: 20 }),
+      })
+    } else {
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { queued: true } }),
+      })
+    }
+  })
+
+  let postCalled = false
+  await page.route(`${API_BASE}/admin/crawler/tasks`, (route) => {
+    if (route.request().method() === 'POST') {
+      postCalled = true
+    }
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { queued: true } }),
+    })
+  })
+
+  await page.goto(`${BASE_URL}/en/admin/crawler`)
+  await page.locator('[data-testid="admin-crawler-trigger-full"]').click()
+  await page.waitForTimeout(300)
+  expect(postCalled).toBe(true)
+})
