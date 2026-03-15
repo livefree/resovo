@@ -177,3 +177,47 @@ test.describe('播放页（多集动漫）', () => {
     await expect(epBtns).toHaveCount(12)
   })
 })
+
+// ── PLAYER-03: VideoPlayer 集成 ───────────────────────────────────
+
+const MOCK_HLS_SOURCE = {
+  id: 'src-uuid-1',
+  videoId: 'uuid-1',
+  episodeNumber: null,
+  sourceUrl: 'https://example.com/test.m3u8',
+  sourceName: '线路1',
+  quality: '1080P',
+  type: 'hls',
+  isActive: true,
+  lastChecked: null,
+}
+
+test.describe('播放页（VideoPlayer 集成）', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockVideoApi(page, MOCK_MOVIE)
+    // Mock sources API
+    await page.route(`${API_BASE}/videos/${MOCK_MOVIE.shortId}/sources*`, (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [MOCK_HLS_SOURCE],
+          pagination: { total: 1, page: 1, limit: 20, hasNext: false },
+        }),
+      })
+    })
+    await page.goto(`/en/watch/${MOCK_MOVIE.slug}`)
+    await page.waitForTimeout(800)
+  })
+
+  test('播放区域存在', async ({ page }) => {
+    await expect(page.getByTestId('player-video-area')).toBeVisible()
+  })
+
+  test('有播放源时渲染 VideoPlayer', async ({ page }) => {
+    // VideoPlayer 初始化后 video-player 元素存在
+    const playerEl = page.getByTestId('video-player')
+    // 可能 video-js 初始化需要时间
+    await expect(playerEl).toBeAttached({ timeout: 5000 })
+  })
+})

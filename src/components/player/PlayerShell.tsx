@@ -8,13 +8,21 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { usePlayerStore } from '@/stores/playerStore'
 import { apiClient } from '@/lib/api-client'
 import { extractShortId } from '@/lib/video-detail'
-import type { Video, ApiResponse } from '@/types'
+import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@/types'
+import type { VideoSource as PlayerSource } from './VideoPlayer'
+
+// VideoPlayer 动态导入，ssr: false（Video.js 依赖 DOM API）
+const VideoPlayer = dynamic(
+  () => import('./VideoPlayer').then((m) => ({ default: m.VideoPlayer })),
+  { ssr: false }
+)
 
 interface PlayerShellProps {
   slug: string
@@ -22,8 +30,9 @@ interface PlayerShellProps {
 
 export function PlayerShell({ slug }: PlayerShellProps) {
   const searchParams = useSearchParams()
-  const { mode, toggleMode, initPlayer, currentEpisode, setEpisode } = usePlayerStore()
+  const { mode, toggleMode, initPlayer, currentEpisode, setEpisode, setPlaying, setCurrentTime } = usePlayerStore()
   const [video, setVideo] = useState<Video | null>(null)
+  const [sources, setSources] = useState<PlayerSource[]>([])
   const [loading, setLoading] = useState(true)
 
   const shortId = extractShortId(slug)
@@ -37,6 +46,19 @@ export function PlayerShell({ slug }: PlayerShellProps) {
       .then((res) => {
         setVideo(res.data)
         initPlayer(shortId, ep)
+        // 同时获取播放源
+        return apiClient.get<ApiListResponse<VideoSource>>(
+          `/videos/${shortId}/sources?episode=${ep}`,
+          { skipAuth: true }
+        )
+      })
+      .then((res) => {
+        const mapped: PlayerSource[] = res.data.map((s) => ({
+          src: s.sourceUrl,
+          type: s.type,
+          label: s.sourceName,
+        }))
+        setSources(mapped)
       })
       .catch(() => setVideo(null))
       .finally(() => setLoading(false))
@@ -97,22 +119,34 @@ export function PlayerShell({ slug }: PlayerShellProps) {
             )}
             data-testid="player-main"
           >
-            {/* 播放器占位（VideoPlayer 在 PLAYER-03 中接入） */}
+            {/* 播放器 */}
             <div
               className="w-full relative rounded-lg overflow-hidden"
               style={{ aspectRatio: '16/9', background: '#000' }}
               data-testid="player-video-area"
             >
-              <div
-                className="absolute inset-0 flex flex-col items-center justify-center gap-2"
-                style={{ color: 'rgba(255,255,255,0.5)' }}
-              >
-                <span className="text-4xl">▶</span>
-                <span className="text-sm">{video.title}</span>
-                {video.episodeCount > 1 && (
-                  <span className="text-xs">第 {currentEpisode} 集</span>
-                )}
-              </div>
+              {sources.length > 0 ? (
+                <VideoPlayer
+                  sources={sources}
+                  episode={currentEpisode}
+                  onPlay={() => setPlaying(true)}
+                  onPause={() => setPlaying(false)}
+                  onTimeUpdate={setCurrentTime}
+                  className="absolute inset-0"
+                />
+              ) : (
+                <div
+                  className="absolute inset-0 flex flex-col items-center justify-center gap-2"
+                  style={{ color: 'rgba(255,255,255,0.5)' }}
+                  data-testid="player-no-source"
+                >
+                  <span className="text-4xl">▶</span>
+                  <span className="text-sm">{video.title}</span>
+                  {video.episodeCount > 1 && (
+                    <span className="text-xs">第 {currentEpisode} 集</span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* 标题行 + 模式切换按钮 */}
