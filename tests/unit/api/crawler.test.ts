@@ -1,6 +1,7 @@
 /**
  * tests/unit/api/crawler.test.ts
  * CRAWLER-01: 队列入队/消费、重试机制
+ * CRAWLER-02: XML/JSON 解析、字段映射、去重逻辑
  * CRAWLER-03: HTTP 200 → active, 超时 → inactive
  */
 
@@ -174,5 +175,315 @@ describe('重试配置（queue.ts）', () => {
     const job = await enqueueFullCrawl()
     // 任务成功入队即可（重试配置在 queue.ts defaultJobOptions 中）
     expect(job).toBeTruthy()
+  })
+})
+
+// ── CRAWLER-02: SourceParserService 单元测试 ──────────────────────
+
+import {
+  splitNames,
+  parseType,
+  parseCountry,
+  parseYear,
+  parseStatus,
+  parseSourceType,
+  parsePlayUrl,
+  parseVodItem,
+  parseXmlResponse,
+  parseJsonResponse,
+  stripTags,
+} from '@/api/services/SourceParserService'
+
+describe('splitNames', () => {
+  it('按中文逗号拆分', () => {
+    expect(splitNames('张三，李四，王五')).toEqual(['张三', '李四', '王五'])
+  })
+
+  it('按英文逗号拆分', () => {
+    expect(splitNames('John,Jane,Bob')).toEqual(['John', 'Jane', 'Bob'])
+  })
+
+  it('按顿号拆分', () => {
+    expect(splitNames('张三、李四')).toEqual(['张三', '李四'])
+  })
+
+  it('空字符串返回空数组', () => {
+    expect(splitNames('')).toEqual([])
+  })
+
+  it('undefined 返回空数组', () => {
+    expect(splitNames(undefined)).toEqual([])
+  })
+
+  it('trim 每个名字的空白', () => {
+    expect(splitNames(' 张三 , 李四 ')).toEqual(['张三', '李四'])
+  })
+})
+
+describe('parseType', () => {
+  it('"动漫" → "anime"', () => {
+    expect(parseType('动漫')).toBe('anime')
+  })
+
+  it('"电影" → "movie"', () => {
+    expect(parseType('电影')).toBe('movie')
+  })
+
+  it('"电视剧" → "series"', () => {
+    expect(parseType('电视剧')).toBe('series')
+  })
+
+  it('"综艺" → "variety"', () => {
+    expect(parseType('综艺')).toBe('variety')
+  })
+
+  it('未知类型 → "movie"（默认）', () => {
+    expect(parseType('其他')).toBe('movie')
+  })
+})
+
+describe('parseCountry', () => {
+  it('"日本" → "JP"', () => {
+    expect(parseCountry('日本')).toBe('JP')
+  })
+
+  it('"中国大陆" → "CN"', () => {
+    expect(parseCountry('中国大陆')).toBe('CN')
+  })
+
+  it('"美国" → "US"', () => {
+    expect(parseCountry('美国')).toBe('US')
+  })
+
+  it('未知地区 → null', () => {
+    expect(parseCountry('火星')).toBeNull()
+  })
+
+  it('undefined → null', () => {
+    expect(parseCountry(undefined)).toBeNull()
+  })
+})
+
+describe('parseYear', () => {
+  it('有效年份字符串 → number', () => {
+    expect(parseYear('2023')).toBe(2023)
+  })
+
+  it('数字输入', () => {
+    expect(parseYear(2024)).toBe(2024)
+  })
+
+  it('非数字字符串 → null', () => {
+    expect(parseYear('abc')).toBeNull()
+  })
+
+  it('超出范围 → null', () => {
+    expect(parseYear('1800')).toBeNull()
+    expect(parseYear('2200')).toBeNull()
+  })
+
+  it('undefined → null', () => {
+    expect(parseYear(undefined)).toBeNull()
+  })
+})
+
+describe('parseStatus', () => {
+  it('含"完结"→ completed', () => {
+    expect(parseStatus('已完结')).toBe('completed')
+  })
+
+  it('不含"完结"→ ongoing', () => {
+    expect(parseStatus('更新至第10集')).toBe('ongoing')
+  })
+
+  it('undefined → ongoing', () => {
+    expect(parseStatus(undefined)).toBe('ongoing')
+  })
+})
+
+describe('parseSourceType', () => {
+  it('.m3u8 URL → hls', () => {
+    expect(parseSourceType('https://cdn.example.com/video.m3u8')).toBe('hls')
+  })
+
+  it('.mp4 URL → mp4', () => {
+    expect(parseSourceType('https://cdn.example.com/video.mp4')).toBe('mp4')
+  })
+
+  it('未知格式 → hls（默认）', () => {
+    expect(parseSourceType('https://cdn.example.com/stream')).toBe('hls')
+  })
+})
+
+describe('parsePlayUrl', () => {
+  it('单集播放源解析', () => {
+    const sources = parsePlayUrl(
+      '第01集$https://cdn.example.com/ep01.m3u8',
+      '线路1',
+      false
+    )
+    expect(sources).toHaveLength(1)
+    expect(sources[0]).toMatchObject({
+      sourceName: '线路1',
+      episodeNumber: 1,
+      sourceUrl: 'https://cdn.example.com/ep01.m3u8',
+      type: 'hls',
+    })
+  })
+
+  it('多集播放源按 # 拆分', () => {
+    const raw = '第01集$https://cdn.example.com/ep01.m3u8#第02集$https://cdn.example.com/ep02.m3u8'
+    const sources = parsePlayUrl(raw, 'jsm3u8', false)
+    expect(sources).toHaveLength(2)
+    expect(sources[0].episodeNumber).toBe(1)
+    expect(sources[1].episodeNumber).toBe(2)
+  })
+
+  it('电影（isMovie=true）→ episodeNumber 为 null', () => {
+    const sources = parsePlayUrl(
+      '正片$https://cdn.example.com/movie.mp4',
+      '线路1',
+      true
+    )
+    expect(sources[0].episodeNumber).toBeNull()
+  })
+
+  it('空字符串 → 空数组', () => {
+    expect(parsePlayUrl('', '线路1', false)).toHaveLength(0)
+  })
+})
+
+describe('parseVodItem', () => {
+  it('vod_actor 按逗号拆分为 cast 数组', () => {
+    const result = parseVodItem({
+      vod_id: '1',
+      vod_name: '测试片',
+      vod_actor: '张三,李四,王五',
+    })
+    expect(result.video.cast).toEqual(['张三', '李四', '王五'])
+  })
+
+  it('type_name="动漫" → type="anime"', () => {
+    const result = parseVodItem({
+      vod_id: '2',
+      vod_name: '动漫测试',
+      type_name: '动漫',
+    })
+    expect(result.video.type).toBe('anime')
+  })
+
+  it('vod_area="日本" → country="JP"', () => {
+    const result = parseVodItem({
+      vod_id: '3',
+      vod_name: '日本剧',
+      vod_area: '日本',
+    })
+    expect(result.video.country).toBe('JP')
+  })
+
+  it('vod_play_url 按 # 和 $ 拆分为集数列表', () => {
+    const result = parseVodItem({
+      vod_id: '4',
+      vod_name: '剧集',
+      type_name: '电视剧',
+      vod_play_from: 'jsm3u8',
+      vod_play_url: '第01集$https://cdn.example.com/ep01.m3u8#第02集$https://cdn.example.com/ep02.m3u8',
+    })
+    expect(result.sources).toHaveLength(2)
+    expect(result.sources[0].episodeNumber).toBe(1)
+    expect(result.sources[1].episodeNumber).toBe(2)
+  })
+
+  it('电影（type=movie）播放源 episode_number 为 null', () => {
+    const result = parseVodItem({
+      vod_id: '5',
+      vod_name: '电影测试',
+      type_name: '电影',
+      vod_play_from: '线路1',
+      vod_play_url: '正片$https://cdn.example.com/movie.mp4',
+    })
+    expect(result.sources[0].episodeNumber).toBeNull()
+  })
+
+  it('cover_url 直接存外链（ADR-009）', () => {
+    const result = parseVodItem({
+      vod_id: '6',
+      vod_name: '封面测试',
+      vod_pic: 'https://img.external.com/cover.jpg',
+    })
+    expect(result.video.coverUrl).toBe('https://img.external.com/cover.jpg')
+  })
+})
+
+describe('parseXmlResponse', () => {
+  it('解析标准苹果CMS XML 格式', () => {
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0"><list>
+<video>
+  <vod_id><![CDATA[1]]></vod_id>
+  <vod_name><![CDATA[进击的巨人]]></vod_name>
+  <type_name><![CDATA[动漫]]></type_name>
+  <vod_area><![CDATA[日本]]></vod_area>
+  <vod_actor><![CDATA[神谷浩史,井上麻里奈]]></vod_actor>
+  <vod_play_from><![CDATA[jsm3u8]]></vod_play_from>
+  <vod_play_url><![CDATA[第01集$https://cdn.example.com/ep01.m3u8#第02集$https://cdn.example.com/ep02.m3u8]]></vod_play_url>
+</video>
+</list></rss>`
+
+    const items = parseXmlResponse(xml)
+    expect(items).toHaveLength(1)
+    expect(items[0].vod_name).toBe('进击的巨人')
+    expect(items[0].type_name).toBe('动漫')
+    expect(items[0].vod_area).toBe('日本')
+    expect(items[0].vod_actor).toBe('神谷浩史,井上麻里奈')
+  })
+
+  it('空 XML 返回空数组', () => {
+    expect(parseXmlResponse('<rss></rss>')).toHaveLength(0)
+  })
+})
+
+describe('parseJsonResponse', () => {
+  it('解析标准 JSON 格式（list 字段）', () => {
+    const json = JSON.stringify({
+      code: 1,
+      list: [
+        {
+          vod_id: 1,
+          vod_name: '测试电影',
+          type_name: '电影',
+          vod_play_url: '正片$https://cdn.example.com/movie.mp4',
+        },
+      ],
+    })
+    const items = parseJsonResponse(json)
+    expect(items).toHaveLength(1)
+    expect(items[0].vod_name).toBe('测试电影')
+  })
+
+  it('解析 data 字段（备选格式）', () => {
+    const json = JSON.stringify({
+      data: [{ vod_id: 2, vod_name: '备选格式测试' }],
+    })
+    const items = parseJsonResponse(json)
+    expect(items).toHaveLength(1)
+  })
+
+  it('无效 JSON → 空数组', () => {
+    expect(parseJsonResponse('not json')).toHaveLength(0)
+  })
+})
+
+describe('stripTags', () => {
+  it('清除 HTML 标签', () => {
+    expect(stripTags('<p>描述<br/>内容</p>')).toBe('描述内容')
+  })
+
+  it('纯文本不受影响', () => {
+    expect(stripTags('纯文本描述')).toBe('纯文本描述')
+  })
+
+  it('undefined → null', () => {
+    expect(stripTags(undefined)).toBeNull()
   })
 })

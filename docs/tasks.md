@@ -694,7 +694,7 @@
 
 #### CRAWLER-01 Bull 队列基础设施
 
-- **状态**：⏳ 等待依赖（INFRA-04）
+- **状态**：✅ 已完成
 - **描述**：定义并初始化爬虫相关的 Bull 队列，配置 worker 处理逻辑骨架
 - **文件范围**：
   - `src/api/lib/queue.ts`（队列定义，补充 crawler-queue 和 verify-queue）
@@ -707,14 +707,19 @@
   - 失败自动重试（最多 3 次，指数退避：1分钟、5分钟、30分钟）
   - 任务状态正确流转：`pending → active → completed/failed`
 - **测试要求**：Vitest `tests/unit/api/crawler.test.ts`（队列入队/消费、重试机制）
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
+- **完成备注**：
+  - `src/api/lib/queue.ts` — 已包含 crawler-queue + verify-queue（INFRA-04 已实现）
+  - 新建：`src/api/workers/crawlerWorker.ts`、`src/api/workers/verifyWorker.ts`
+  - 新建：`tests/unit/api/crawler.test.ts` — 16 个测试（队列入队、重试、checkUrl HTTP 状态）
+  - 重试配置：attempts=3, backoff=exponential/60s（在 queue.ts defaultJobOptions）
+  - 180 个测试全部通过；commit hash：8a03857
 - **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
 
 ---
 
 #### CRAWLER-02 苹果CMS采集服务
 
-- **状态**：⏳ 等待依赖（CRAWLER-01、INFRA-02、INFRA-03）
+- **状态**：🔄 进行中
 - **描述**：实现苹果CMS标准接口的采集、解析、字段映射和写库逻辑
 - **文件范围**：
   - `src/api/services/CrawlerService.ts`
