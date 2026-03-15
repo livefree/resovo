@@ -50,4 +50,5 @@ function attachQueueLogger(queue: Bull.Queue, name: string) {
 attachQueueLogger(crawlerQueue, 'crawler-queue')
 attachQueueLogger(verifyQueue, 'verify-queue')
 
-export default { crawlerQueue, verifyQueue }
+const queues = { crawlerQueue, verifyQueue }
+export default queues
