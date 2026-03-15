@@ -1,0 +1,7 @@
+{
+  "extends": ["next/core-web-vitals", "prettier"],
+  "ignorePatterns": ["src/**/templates/**", ".next/**", "node_modules/**"],
+  "rules": {
+    "no-console": "error"
+  }
+}
