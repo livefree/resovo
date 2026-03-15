@@ -74,7 +74,7 @@ export function Nav() {
         </Link>
 
         {/* 分类标签 */}
-        <nav className="hidden sm:flex items-center gap-1 flex-1 overflow-x-auto scrollbar-none">
+        <nav className="flex items-center gap-1 flex-1 overflow-x-auto scrollbar-none">
           {CATEGORIES.map((cat) => (
             <Link
               key={cat.key}
@@ -123,7 +123,7 @@ export function Nav() {
             <div className="flex items-center gap-3">
               <span
                 data-testid="nav-username"
-                className="text-sm font-medium hidden sm:block"
+                className="text-sm font-medium"
                 style={{ color: 'var(--foreground)' }}
               >
                 {user.username}

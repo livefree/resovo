@@ -36,9 +36,13 @@ export function FilterBar({ className }: FilterBarProps) {
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault()
+    // Read from DOM to handle cases where controlled state is out of sync (e.g. Playwright mobile)
+    const form = e.currentTarget as HTMLFormElement
+    const domQ = (form.querySelector('[data-testid="search-input"]') as HTMLInputElement)?.value ?? inputValue
+    const q = (domQ || inputValue).trim()
     const params = new URLSearchParams(searchParams.toString())
-    if (inputValue.trim()) {
-      params.set('q', inputValue.trim())
+    if (q) {
+      params.set('q', q)
     } else {
       params.delete('q')
     }

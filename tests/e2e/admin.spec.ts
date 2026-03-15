@@ -8,7 +8,7 @@
 
 import { test, expect } from '@playwright/test'
 
-const BASE_URL = 'http://localhost:3000'
+const BASE_URL = ''  // 使用相对路径，Playwright 自动拼接 baseURL
 
 // ── Cookie 辅助 ───────────────────────────────────────────────────
 
@@ -213,7 +213,9 @@ test('点击上架触发 PATCH 请求', async ({ context, page }) => {
   })
 
   await page.goto(`${BASE_URL}/en/admin/videos`)
+  const patchReq = page.waitForRequest(`${API_BASE}/admin/videos/vid-uuid-1/publish`)
   await page.locator('[data-testid="admin-video-toggle-vid-uuid-1"]').click()
+  await patchReq
   expect(patchCalled).toBe(true)
 })
 
@@ -243,9 +245,9 @@ test('提交创建表单触发 POST 请求', async ({ context, page }) => {
 
   await page.goto(`${BASE_URL}/en/admin/videos/new`)
   await page.locator('[data-testid="admin-video-form"] input[name="title"]').fill('新测试电影')
+  const postReq = page.waitForRequest(`${API_BASE}/admin/videos`)
   await page.locator('[data-testid="admin-video-form-submit"]').click()
-  // 等待 API 被调用（导航可能会跳回列表页）
-  await page.waitForTimeout(500)
+  await postReq
   expect(postCalled).toBe(true)
 })
 
@@ -306,8 +308,9 @@ test('点击通过触发 approve 请求', async ({ context, page }) => {
   })
 
   await page.goto(`${BASE_URL}/en/admin/submissions`)
+  const approveReq = page.waitForRequest(`${API_BASE}/admin/submissions/sub-uuid-1/approve`)
   await page.locator('[data-testid="admin-submission-approve-sub-uuid-1"]').click()
-  await page.waitForTimeout(300)
+  await approveReq
   expect(approveCalled).toBe(true)
 })
 
@@ -400,8 +403,9 @@ test('点击封号触发 ban 请求', async ({ context, page }) => {
   await page.goto(`${BASE_URL}/en/admin/users`)
   // 模拟 confirm 对话框
   page.on('dialog', (dialog) => dialog.accept())
+  const banReq = page.waitForRequest(`${API_BASE}/admin/users/user-uuid-1/ban`)
   await page.locator('[data-testid="admin-user-ban-user-uuid-1"]').click()
-  await page.waitForTimeout(300)
+  await banReq
   expect(banCalled).toBe(true)
 })
 
@@ -450,7 +454,8 @@ test('点击全量采集触发 POST 请求', async ({ context, page }) => {
   })
 
   await page.goto(`${BASE_URL}/en/admin/crawler`)
+  const crawlerReq = page.waitForRequest(`${API_BASE}/admin/crawler/tasks`)
   await page.locator('[data-testid="admin-crawler-trigger-full"]').click()
-  await page.waitForTimeout(300)
+  await crawlerReq
   expect(postCalled).toBe(true)
 })

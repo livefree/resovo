@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import { useRouter } from 'next/navigation'
 import { z } from 'zod'
@@ -42,11 +42,9 @@ export function RegisterForm() {
   const registerSchema = useRegisterSchema()
   const login = useAuthStore((s) => s.login)
 
-  const [values, setValues] = useState<RegisterFields>({
-    username: '',
-    email: '',
-    password: '',
-  })
+  const usernameRef = useRef<HTMLInputElement>(null)
+  const emailRef = useRef<HTMLInputElement>(null)
+  const passwordRef = useRef<HTMLInputElement>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [serverError, setServerError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -66,26 +64,24 @@ export function RegisterForm() {
     return false
   }
 
-  function handleChange(field: keyof RegisterFields, value: string) {
-    const next = { ...values, [field]: value }
-    setValues(next)
-    if (fieldErrors[field]) {
-      const result = registerSchema.shape[field].safeParse(value)
-      if (result.success) setFieldErrors((prev) => ({ ...prev, [field]: undefined }))
-    }
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setServerError(null)
 
-    if (!validate(values)) return
+    // All inputs are uncontrolled — read values from refs
+    const domValues: RegisterFields = {
+      username: usernameRef.current?.value ?? '',
+      email: emailRef.current?.value ?? '',
+      password: passwordRef.current?.value ?? '',
+    }
+
+    if (!validate(domValues)) return
 
     setIsSubmitting(true)
     try {
       const response = await apiClient.post<{ data: { user: User; accessToken: string } }>(
         '/auth/register',
-        values,
+        domValues,
         { skipAuth: true }
       )
       login(response.data.user, response.data.accessToken)
@@ -127,12 +123,12 @@ export function RegisterForm() {
           {t('username')}
         </label>
         <input
+          ref={usernameRef}
           id="register-username"
           type="text"
           autoComplete="username"
           placeholder={t('usernamePlaceholder')}
-          value={values.username}
-          onChange={(e) => handleChange('username', e.target.value)}
+          defaultValue=""
           aria-invalid={!!fieldErrors.username}
           aria-describedby={fieldErrors.username ? 'register-username-error' : undefined}
           className={cn(
@@ -161,12 +157,13 @@ export function RegisterForm() {
           {t('email')}
         </label>
         <input
+          ref={emailRef}
           id="register-email"
-          type="email"
+          type="text"
+          inputMode="email"
           autoComplete="email"
           placeholder={t('emailPlaceholder')}
-          value={values.email}
-          onChange={(e) => handleChange('email', e.target.value)}
+          defaultValue=""
           aria-invalid={!!fieldErrors.email}
           aria-describedby={fieldErrors.email ? 'register-email-error' : undefined}
           className={cn(
@@ -199,8 +196,8 @@ export function RegisterForm() {
           type="password"
           autoComplete="new-password"
           placeholder={t('passwordPlaceholder')}
-          value={values.password}
-          onChange={(e) => handleChange('password', e.target.value)}
+          ref={passwordRef}
+          defaultValue=""
           aria-invalid={!!fieldErrors.password}
           aria-describedby={fieldErrors.password ? 'register-password-error' : undefined}
           className={cn(

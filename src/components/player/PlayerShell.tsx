@@ -46,19 +46,21 @@ export function PlayerShell({ slug }: PlayerShellProps) {
       .then((res) => {
         setVideo(res.data)
         initPlayer(shortId, ep)
-        // 同时获取播放源
-        return apiClient.get<ApiListResponse<VideoSource>>(
-          `/videos/${shortId}/sources?episode=${ep}`,
-          { skipAuth: true }
-        )
-      })
-      .then((res) => {
-        const mapped: PlayerSource[] = res.data.map((s) => ({
-          src: s.sourceUrl,
-          type: s.type,
-          label: s.sourceName,
-        }))
-        setSources(mapped)
+        // 播放源获取失败不影响视频展示，独立处理
+        apiClient
+          .get<ApiListResponse<VideoSource>>(
+            `/videos/${shortId}/sources?episode=${ep}`,
+            { skipAuth: true }
+          )
+          .then((r) => {
+            const mapped: PlayerSource[] = r.data.map((s) => ({
+              src: s.sourceUrl,
+              type: s.type,
+              label: s.sourceName,
+            }))
+            setSources(mapped)
+          })
+          .catch(() => setSources([]))
       })
       .catch(() => setVideo(null))
       .finally(() => setLoading(false))

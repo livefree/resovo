@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 import { useRouter } from 'next/navigation'
 import { z } from 'zod'
@@ -36,6 +36,7 @@ export function LoginForm() {
   const loginSchema = useLoginSchema()
   const login = useAuthStore((s) => s.login)
 
+  const emailRef = useRef<HTMLInputElement>(null)
   const [values, setValues] = useState<LoginFields>({ email: '', password: '' })
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [serverError, setServerError] = useState<string | null>(null)
@@ -70,13 +71,23 @@ export function LoginForm() {
     e.preventDefault()
     setServerError(null)
 
-    if (!validate(values)) return
+    // Read from DOM — email is uncontrolled (ref), password reads DOM fallback
+    const form = e.currentTarget as HTMLFormElement
+    const domValues: LoginFields = {
+      email: emailRef.current?.value ?? '',
+      password: (form.querySelector('#login-password') as HTMLInputElement)?.value ?? values.password,
+    }
+    if (domValues.password !== values.password) {
+      setValues((prev) => ({ ...prev, password: domValues.password }))
+    }
+
+    if (!validate(domValues)) return
 
     setIsSubmitting(true)
     try {
       const response = await apiClient.post<{ data: { user: User; accessToken: string } }>(
         '/auth/login',
-        values,
+        domValues,
         { skipAuth: true }
       )
       login(response.data.user, response.data.accessToken)
@@ -118,12 +129,13 @@ export function LoginForm() {
           {t('email')}
         </label>
         <input
+          ref={emailRef}
           id="login-email"
-          type="email"
+          type="text"
+          inputMode="email"
           autoComplete="email"
           placeholder={t('emailPlaceholder')}
-          value={values.email}
-          onChange={(e) => handleChange('email', e.target.value)}
+          defaultValue=""
           aria-invalid={!!fieldErrors.email}
           aria-describedby={fieldErrors.email ? 'login-email-error' : undefined}
           className={cn(
