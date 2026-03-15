@@ -1,20 +1,7 @@
----
-🚨 BLOCKER — 需要人工处理后才能继续
-- **任务**：INFRA-06 Docker Compose 本地环境
-- **时间**：2026-03-15 09:30
-- **问题描述**：INFRA-06 的验收条件无法满足，存在两个独立问题：
-- **已尝试**：
-  1. **Docker 未安装**：运行 `docker compose up -d` 时提示 `command not found: docker`。无法启动 PostgreSQL/Elasticsearch/Redis 服务。
-  2. **verify-env.sh `((PASS++))` bug**：脚本中 `check()` 函数内的 `((PASS++))` 当 PASS=0 时返回 exit code 1，触发 `set -euo pipefail` 导致脚本在第一个检查通过后立即退出（确认：`bash -c 'set -euo pipefail; PASS=0; check(){ if true; then ((PASS++)); fi; }; check test; echo OK'` 输出 exit code 1）。
-- **需要决策**：
-  - [ ] 安装 Docker Desktop（https://www.docker.com/products/docker-desktop/）
-  - [ ] 修复 `scripts/verify-env.sh`：将所有 `((PASS++))` 改为 `PASS=$((PASS + 1))`，将所有 `((FAIL++))` 改为 `FAIL=$((FAIL + 1))`
-  - 解决后删除此 BLOCKER 块，AI 重新启动会继续从 INFRA-06 验收
----
-
 # Resovo（流光） — 任务看板
 
 > **AI 工作规则**：
+>
 > - 全自动模式：完成一个任务后立即开始下一个，无需等待确认
 > - 优先级：🚨 BLOCKER > ❌ 有问题 > CHG-xx 变更任务 > ⬜ 待开始
 > - 每个任务完成后必须：写测试 → 跑测试（全通过）→ git commit → 标 ✅ 已完成
@@ -26,14 +13,14 @@
 
 ## 状态说明
 
-| 标记 | 含义 |
-|------|------|
-| ⬜ 待开始 | 依赖已满足，可以开始 |
-| ⏳ 等待依赖 | 依赖任务未完成，不可开始 |
-| 🔄 进行中 | AI 当前正在处理 |
-| ✅ 已完成 | AI 完成并自检通过，代码已提交 |
-| ❌ 有问题 | git review 发现问题，需要处理 |
-| 🚫 已取消 | 不再需要 |
+| 标记        | 含义                          |
+| ----------- | ----------------------------- |
+| ⬜ 待开始   | 依赖已满足，可以开始          |
+| ⏳ 等待依赖 | 依赖任务未完成，不可开始      |
+| 🔄 进行中   | AI 当前正在处理               |
+| ✅ 已完成   | AI 完成并自检通过，代码已提交 |
+| ❌ 有问题   | git review 发现问题，需要处理 |
+| 🚫 已取消   | 不再需要                      |
 
 ---
 
@@ -44,6 +31,7 @@
 ### ── 基础设施 ──
 
 #### INFRA-01 项目初始化
+
 - **状态**：✅ 已完成
 - **描述**：搭建 Next.js 15 + Fastify monorepo，含 TypeScript 配置、ESLint、Prettier、路径别名
 - **文件范围**：
@@ -65,6 +53,7 @@
 ---
 
 #### INFRA-02 PostgreSQL 数据库初始化
+
 - **状态**：✅ 已完成
 - **描述**：创建所有核心表和索引，迁移文件管理，连接池配置
 - **文件范围**：
@@ -85,13 +74,14 @@
 - **测试要求**：`bash scripts/verify-env.sh` PG 部分通过
 - **完成备注**：
   - 新建：`src/api/db/migrations/001_init_tables.sql`（14 张表）、`002_indexes.sql`（30+ 索引）、`src/api/lib/postgres.ts`（pg.Pool）
-  - `.env.local` 创建（不提交），本地 resovo_dev 数据库已建立  - PG 手动验证通过：连接 ✓、10 张核心表 ✓、videos_short_id_key 索引 ✓
+  - `.env.local` 创建（不提交），本地 resovo_dev 数据库已建立 - PG 手动验证通过：连接 ✓、10 张核心表 ✓、videos_short_id_key 索引 ✓
   - commit hash：6470ccc
 - **问题说明**：`verify-env.sh` 存在 `((PASS++))` bug（PASS=0 时返回 exit code 1 触发 `set -e`），将在 INFRA-06 修复。PG 部分通过手动验证确认。
 
 ---
 
 #### INFRA-03 Elasticsearch 初始化
+
 - **状态**：✅ 已完成
 - **描述**：创建 `resovo_videos` 索引，IK 分词 + 拼音插件 mapping
 - **文件范围**：
@@ -116,6 +106,7 @@
 ---
 
 #### INFRA-04 Redis + Bull 初始化
+
 - **状态**：✅ 已完成
 - **描述**：Redis 客户端 + Bull 队列基础配置
 - **文件范围**：
@@ -133,6 +124,7 @@
 ---
 
 #### INFRA-05 环境变量管理
+
 - **状态**：✅ 已完成
 - **描述**：类型安全的环境变量，缺少必要变量时 fail-fast
 - **文件范围**：
@@ -145,14 +137,15 @@
 - **测试要求**：`bash scripts/verify-env.sh` 全部通过
 - **完成备注**：
   - 新建：`.env.example`（提交到仓库）、`src/api/lib/config.ts`（Zod 校验，fail-fast）
-  - config 对象覆盖：DATABASE_URL、ELASTICSEARCH_URL、REDIS_URL、JWT_SECRET、COOKIE_SECRET、NEXT_PUBLIC_*、PORT、CRAWLER_SOURCES、R2_*
+  - config 对象覆盖：DATABASE*URL、ELASTICSEARCH_URL、REDIS_URL、JWT_SECRET、COOKIE_SECRET、NEXT_PUBLIC*_、PORT、CRAWLER*SOURCES、R2*_
   - typecheck ✅ lint ✅；commit hash：3ec75c0
 - **问题说明**：postgres.ts/redis.ts/elasticsearch.ts 仍直接读 process.env，待 INFRA-06 后统一迁移到 config
 
 ---
 
 #### INFRA-06 Docker Compose 本地环境
-- **状态**：⏳ 等待依赖（INFRA-02、INFRA-03、INFRA-04）
+
+- **状态**：✅ 已完成
 - **描述**：一键启动 PostgreSQL、Elasticsearch、Redis
 - **文件范围**：`docker-compose.yml`
 - **依赖**：INFRA-02、INFRA-03、INFRA-04
@@ -161,14 +154,20 @@
   - 数据卷持久化（重启不丢数据）
   - `bash scripts/verify-env.sh` 全部通过（这是 INFRA 系列的统一验收命令）
 - **测试要求**：`bash scripts/verify-env.sh` 全部通过
-- **完成备注**：_（AI 填写：修改文件列表 + 测试结果 + commit hash）_
-- **问题说明**：_（git review 发现问题时填写，AI 修复后清空）_
+- **完成备注**：
+  - 新建：`docker/elasticsearch.Dockerfile`（ES 8.17.0 + IK + 拼音插件 baked-in）
+  - 修改：`docker-compose.yml`（ES 改用自定义镜像构建、添加 elasticsearch-init 索引初始化服务、postgres host 端口改为 5433 避免与本地 PG 冲突）
+  - 修改：`scripts/verify-env.sh`（修复 `((PASS++))` bug → `PASS=$((PASS+1))`；Redis 检查自动回退到 `docker exec`）
+  - `verify-env.sh` 全部 21 项通过 ✅；commit hash：_待填_
+- **问题说明**：_（已解决）_
+- **特别说明**：INFRA-03/04/05 的 changelog 记录缺失，重启后请先补全 changelog 再继续 INFRA-06 验收
 
 ---
 
 ### ── 认证模块 ──
 
 #### AUTH-01 认证基础设施
+
 - **状态**：⏳ 等待依赖（INFRA-02、INFRA-04）
 - **描述**：JWT 工具函数 + Fastify 认证插件（authenticate / optionalAuthenticate / requireRole）
 - **文件范围**：
@@ -193,6 +192,7 @@
 ---
 
 #### AUTH-02 注册/登录/刷新/登出接口
+
 - **状态**：⏳ 等待依赖（AUTH-01）
 - **描述**：POST /auth/register、/auth/login、/auth/refresh、/auth/logout
 - **文件范围**：
@@ -213,6 +213,7 @@
 ---
 
 #### AUTH-03 前端登录/注册页面
+
 - **状态**：⏳ 等待依赖（AUTH-02）
 - **描述**：登录/注册表单页面，含客户端验证和 authStore
 - **文件范围**：
@@ -235,6 +236,7 @@
 ### ── 视频内容模块 ──
 
 #### VIDEO-01 视频列表与详情接口
+
 - **状态**：⏳ 等待依赖（INFRA-02）
 - **描述**：GET /videos、GET /videos/:id、GET /videos/trending
 - **文件范围**：
@@ -254,6 +256,7 @@
 ---
 
 #### VIDEO-02 首页布局与导航
+
 - **状态**：⏳ 等待依赖（VIDEO-01、AUTH-03）
 - **描述**：首页（Hero Banner + 分类标签 + 视频网格）+ 导航栏
 - **文件范围**：
@@ -278,6 +281,7 @@
 ---
 
 #### BROWSE-01 分类浏览页
+
 - **状态**：⏳ 等待依赖（VIDEO-01、SEARCH-01）
 - **描述**：`/browse` 分类浏览页，含展开式多行筛选区、排序条、视频网格
 - **文件范围**：
@@ -312,6 +316,7 @@
 ### ── 搜索模块 ──
 
 #### SEARCH-01 搜索接口
+
 - **状态**：⏳ 等待依赖（INFRA-03、VIDEO-01）
 - **描述**：GET /search（全文搜索）、GET /search/suggest（联想词）
 - **文件范围**：
@@ -330,6 +335,7 @@
 ---
 
 #### SEARCH-02 搜索页面
+
 - **状态**：⏳ 等待依赖（SEARCH-01）
 - **描述**：搜索页（顶部筛选栏 + 结果列表 + 分页）
 - **文件范围**：
@@ -354,6 +360,7 @@
 ### ── 播放器模块 ──
 
 #### PLAYER-01 播放源接口
+
 - **状态**：⏳ 等待依赖（INFRA-02）
 - **描述**：GET /videos/:id/sources、POST /videos/:id/sources/:sid/report
 - **文件范围**：
@@ -376,6 +383,7 @@
 ---
 
 #### DETAIL-01 视频详情页（SSR）
+
 - **状态**：⏳ 等待依赖（VIDEO-01、SEARCH-02）
 - **描述**：`/movie/[slug]`、`/anime/[slug]` 等视频详情页，SSR 渲染，含完整视频信息但不含播放器
 - **文件范围**：
@@ -409,6 +417,7 @@
 ---
 
 #### PLAYER-02 播放页布局（CSR）
+
 - **状态**：⏳ 等待依赖（DETAIL-01、PLAYER-01）
 - **描述**：`/watch/[slug]` 播放页，CSR 渲染，专注播放体验，不重复详情页完整内容
 - **文件范围**：
@@ -436,6 +445,7 @@
 ---
 
 #### PLAYER-03 Video.js 播放器集成
+
 - **状态**：⏳ 等待依赖（PLAYER-02）
 - **描述**：Video.js + HLS.js 集成，基础播放功能
 - **文件范围**：`src/components/player/VideoPlayer.tsx`
@@ -451,6 +461,7 @@
 ---
 
 #### PLAYER-04 控制栏组件
+
 - **状态**：⏳ 等待依赖（PLAYER-03）
 - **描述**：播放器控制栏 + 线路选择栏 + CC面板 + 倍速面板 + 设置面板
 - **文件范围**：
@@ -487,6 +498,7 @@
 ---
 
 #### PLAYER-05 快捷键系统
+
 - **状态**：⏳ 等待依赖（PLAYER-04）
 - **描述**：播放器键盘状态机，根据面板焦点模式分发不同行为
 - **文件范围**：`src/components/player/usePlayerShortcuts.ts`
@@ -509,6 +521,7 @@
 ---
 
 #### PLAYER-06 选集浮层
+
 - **状态**：⏳ 等待依赖（PLAYER-04）
 - **描述**：从播放器左下角向上滑出的选集矩阵浮层
 - **文件范围**：`src/components/player/EpisodeOverlay.tsx`
@@ -525,6 +538,7 @@
 ---
 
 #### PLAYER-07 弹幕条
+
 - **状态**：⏳ 等待依赖（PLAYER-03）
 - **描述**：Bilibili 风格弹幕条（播放器下方独立一行）
 - **文件范围**：`src/components/player/DanmakuBar.tsx`
@@ -540,6 +554,7 @@
 ---
 
 #### PLAYER-08 视频信息区与 Meta Chip
+
 - **状态**：⏳ 等待依赖（PLAYER-02、SEARCH-02）
 - **描述**：播放页视频信息区，含可点击导演/演员/编剧 chip
 - **文件范围**：`src/components/video/VideoMeta.tsx`
@@ -558,6 +573,7 @@
 ### ── 字幕模块 ──
 
 #### SUBTITLE-01 字幕接口与播放器集成
+
 - **状态**：⏳ 等待依赖（INFRA-02、PLAYER-04）
 - **描述**：GET /videos/:id/subtitles、POST 上传字幕（R2 存储）+ Video.js 集成
 - **文件范围**：
@@ -579,6 +595,7 @@
 ### ── 爬虫基础 ──
 
 #### CRAWLER-01 Bull 队列基础设施
+
 - **状态**：⏳ 等待依赖（INFRA-04）
 - **描述**：定义并初始化爬虫相关的 Bull 队列，配置 worker 处理逻辑骨架
 - **文件范围**：
@@ -598,6 +615,7 @@
 ---
 
 #### CRAWLER-02 苹果CMS采集服务
+
 - **状态**：⏳ 等待依赖（CRAWLER-01、INFRA-02、INFRA-03）
 - **描述**：实现苹果CMS标准接口的采集、解析、字段映射和写库逻辑
 - **文件范围**：
@@ -638,6 +656,7 @@
 ---
 
 #### CRAWLER-03 链接验证服务
+
 - **状态**：⏳ 等待依赖（CRAWLER-01）
 - **描述**：实现播放源 URL 的可用性检测逻辑，定时维护 is_active 状态
 - **文件范围**：
@@ -657,6 +676,7 @@
 ---
 
 #### CRAWLER-04 管理后台接口
+
 - **状态**：⏳ 等待依赖（CRAWLER-02、CRAWLER-03）
 - **描述**：提供给管理员的爬虫任务管理接口
 - **文件范围**：
@@ -677,7 +697,6 @@
 
 _（任务 review 通过后移入此处）_
 
-
 ---
 
 ## Phase 2 管理后台（ADMIN 模块）
@@ -687,6 +706,7 @@ _（任务 review 通过后移入此处）_
 ---
 
 #### ADMIN-01 后台访问控制中间件
+
 - **状态**：⏳ 等待依赖（AUTH-01）
 - **描述**：Next.js middleware 实现 /admin 路径的访问控制；Fastify requireRole 支持 moderator/admin 分级
 - **文件范围**：
@@ -701,8 +721,8 @@ _（任务 review 通过后移入此处）_
   - `/admin/users`、`/admin/crawler`、`/admin/analytics` 额外检查 role=admin
   - moderator 登录后只看到内容管理区菜单，系统管理区菜单不渲染
 - **验收**：
-  - 未登录访问 /admin/* 重定向登录页
-  - role=user 访问 /admin/* 返回 403 页面
+  - 未登录访问 /admin/\* 重定向登录页
+  - role=user 访问 /admin/\* 返回 403 页面
   - role=moderator 访问 /admin/users 返回 403
   - role=admin 可访问全部后台页面
   - 侧边栏按角色动态显示菜单（moderator 不显示系统管理区）
@@ -713,6 +733,7 @@ _（任务 review 通过后移入此处）_
 ---
 
 #### ADMIN-02 视频内容管理页面
+
 - **状态**：⏳ 等待依赖（ADMIN-01、VIDEO-01）
 - **描述**：/admin/videos 列表页（含上下架操作）、/admin/videos/[id]/edit 编辑页、/admin/videos/new 手动添加页
 - **文件范围**：
@@ -738,6 +759,7 @@ _（任务 review 通过后移入此处）_
 ---
 
 #### ADMIN-03 播放源 + 投稿 + 字幕审核页面
+
 - **状态**：⏳ 等待依赖（ADMIN-01、PLAYER-01、SUBTITLE-01）
 - **描述**：/admin/sources（播放源列表）、/admin/submissions（投稿审核队列）、/admin/subtitles（字幕审核队列）
 - **文件范围**：
@@ -758,6 +780,7 @@ _（任务 review 通过后移入此处）_
 ---
 
 #### ADMIN-04 用户管理 + 爬虫管理页面（admin only）
+
 - **状态**：⏳ 等待依赖（ADMIN-01、CRAWLER-04）
 - **描述**：/admin/users（用户管理）、/admin/crawler（爬虫配置与任务记录）
 - **文件范围**：
@@ -777,6 +800,7 @@ _（任务 review 通过后移入此处）_
 ---
 
 #### ADMIN-05 数据看板（admin only）
+
 - **状态**：⏳ 等待依赖（ADMIN-01）
 - **描述**：/admin/analytics，展示核心运营数据
 - **文件范围**：

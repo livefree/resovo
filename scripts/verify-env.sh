@@ -19,10 +19,10 @@ check() {
   printf "  %-40s" "$name"
   if eval "$cmd" &>/dev/null; then
     echo -e "${GREEN}✓${NC}"
-    ((PASS++))
+    PASS=$((PASS + 1))
   else
     echo -e "${RED}✗ 失败${NC}"
-    ((FAIL++))
+    FAIL=$((FAIL + 1))
   fi
 }
 
@@ -66,8 +66,14 @@ echo ""
 
 # ── Redis ────────────────────────────────────────────────────────
 echo "[ Redis ]"
-check "连接可用 (PING)"       'redis-cli -u "${REDIS_URL}" PING | grep -q PONG'
-check "读写正常"              'redis-cli -u "${REDIS_URL}" SET __verify__ ok EX 5 && redis-cli -u "${REDIS_URL}" GET __verify__ | grep -q ok'
+# 优先使用 redis-cli；若未安装则通过 Docker 容器验证
+if command -v redis-cli &>/dev/null; then
+  check "连接可用 (PING)"  'redis-cli -u "${REDIS_URL}" PING | grep -q PONG'
+  check "读写正常"         'redis-cli -u "${REDIS_URL}" SET __verify__ ok EX 5 && redis-cli -u "${REDIS_URL}" GET __verify__ | grep -q ok'
+else
+  check "连接可用 (PING)"  'docker exec resovo_redis redis-cli PING | grep -q PONG'
+  check "读写正常"         'docker exec resovo_redis redis-cli SET __verify__ ok EX 5 && docker exec resovo_redis redis-cli GET __verify__ | grep -q ok'
+fi
 echo ""
 
 # ── Node.js 环境 ─────────────────────────────────────────────────

@@ -11,7 +11,7 @@ services:
       POSTGRES_PASSWORD: resovo_dev
       POSTGRES_DB: resovo_dev
     ports:
-      - '5432:5432'
+      - '5433:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./src/api/db/migrations/001_init_tables.sql:/docker-entrypoint-initdb.d/001_init_tables.sql:ro
@@ -23,9 +23,12 @@ services:
       retries: 5
       start_period: 10s
 
-  # ── Elasticsearch 8.x + IK + 拼音插件 ──────────────────────────────
+  # ── Elasticsearch 8.x + IK + 拼音插件（自定义镜像）──────────────────
   elasticsearch:
-    image: elasticsearch:8.17.0
+    build:
+      context: .
+      dockerfile: docker/elasticsearch.Dockerfile
+    image: resovo_elasticsearch:8.17.0
     container_name: resovo_elasticsearch
     restart: unless-stopped
     environment:
@@ -47,26 +50,26 @@ services:
       retries: 10
       start_period: 60s
 
-  # ── Elasticsearch 插件安装（一次性任务）─────────────────────────────
-  elasticsearch-setup:
-    image: elasticsearch:8.17.0
-    container_name: resovo_elasticsearch_setup
+  # ── Elasticsearch 索引初始化（ES 健康后自动创建 resovo_videos 索引）──
+  elasticsearch-init:
+    image: curlimages/curl:latest
+    container_name: resovo_elasticsearch_init
     restart: 'no'
     depends_on:
       elasticsearch:
         condition: service_healthy
     volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
       - ./src/api/db/migrations/es_mapping.json:/tmp/es_mapping.json:ro
-    entrypoint: >
-      bash -c "
-        echo 'Installing IK analyzer plugin...' &&
-        elasticsearch-plugin install --batch https://release.infinilabs.com/analysis-ik/stable/elasticsearch-analysis-ik-8.17.0.zip &&
-        echo 'Installing Pinyin plugin...' &&
-        elasticsearch-plugin install --batch https://release.infinilabs.com/analysis-pinyin/stable/elasticsearch-analysis-pinyin-8.17.0.zip &&
-        echo 'Plugins installed. Restarting Elasticsearch...' ||
-        echo 'Plugins may already be installed, skipping...'
-      "
+    entrypoint:
+      - sh
+      - -c
+      - |
+        echo 'Creating resovo_videos index...' &&
+        curl -sf -X PUT http://elasticsearch:9200/resovo_videos \
+          -H 'Content-Type: application/json' \
+          -d @/tmp/es_mapping.json &&
+        echo 'Index created successfully.' ||
+        echo 'Index may already exist, skipping.'
 
   # ── Redis 7 ────────────────────────────────────────────────────────
   redis:

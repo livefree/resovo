@@ -20,6 +20,52 @@
 
 ---
 
+## [INFRA-06] Docker Compose 本地环境
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `docker/elasticsearch.Dockerfile` — ES 8.17.0 自定义镜像，bake-in IK 分析插件和拼音插件
+  - `docker-compose.yml` — 重写：ES 改用 Dockerfile 构建、添加 elasticsearch-init 索引初始化服务、postgres host 端口改为 5433 避免与本地 PG 冲突
+  - `scripts/verify-env.sh` — 修复 `((PASS++))` 在 set -e 下 exit 1 的 bug；Redis 检查自动回退到 docker exec（宿主机未安装 redis-cli 时）
+- **新增依赖**：无
+- **数据库变更**：创建 Elasticsearch `resovo_videos` 索引（含 IK + 拼音分析器 mapping）
+- **注意事项**：
+  - 本地 postgres 已在 5432，Docker postgres 映射到 5433，verify-env.sh 用 DATABASE_URL 指向本地 PG（livefree@5432）
+  - `docker compose run --rm elasticsearch-init` 会自动创建 ES 索引（已在 docker compose up 后手动运行一次）
+  - verify-env.sh 全部 21 项通过 ✅
+
+## [INFRA-05] 环境变量管理
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `.env.example` — 所有必要环境变量示例（提交到仓库）
+  - `src/api/lib/config.ts` — Zod 校验所有必要变量，缺少时 fail-fast 并打印哪个变量缺失
+- **新增依赖**：zod（已在 package.json）
+- **数据库变更**：无
+- **注意事项**：
+  - config 对象覆盖：DATABASE_URL、ELASTICSEARCH_URL、REDIS_URL、JWT_SECRET、COOKIE_SECRET、NEXT_PUBLIC_*、PORT、CRAWLER_SOURCES、R2_*
+  - postgres.ts/redis.ts/elasticsearch.ts 仍直接读 process.env（未迁移到 config），可在后续任务中统一处理
+
+## [INFRA-04] Redis + Bull 初始化
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/api/lib/redis.ts` — ioredis 客户端，lazyConnect=true，断线自动重连（maxRetriesPerRequest=null）
+  - `src/api/lib/queue.ts` — Bull 队列：crawler-queue + verify-queue，3 次重试指数退避（1min/5min/30min）
+- **新增依赖**：ioredis、bull（已在 package.json）
+- **数据库变更**：无
+- **注意事项**：
+  - Redis 使用 lazyConnect，服务启动时不立即连接，第一次操作时才建立连接
+  - Bull 队列 defaultJobOptions: attempts=3, backoff={type:exponential, delay:60000}
+
+## [INFRA-03] Elasticsearch 初始化
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/api/db/migrations/es_mapping.json` — IK + 拼音分析器配置，director/cast/writers 含 .keyword 子字段，title/description 用 ik_max_word 分析器
+  - `src/api/lib/elasticsearch.ts` — @elastic/elasticsearch 8.x 客户端 + ensureIndex()（幂等，索引不存在时创建）
+- **新增依赖**：@elastic/elasticsearch（已在 package.json）
+- **数据库变更**：Elasticsearch resovo_videos 索引（含完整 mapping）
+- **注意事项**：
+  - ensureIndex() 在 API server 启动时调用，幂等安全
+  - ADR-004：SearchService 只调用 Elasticsearch，禁止查询 PostgreSQL
+
 ## [INFRA-02] PostgreSQL 数据库初始化
 - **完成时间**：2026-03-15
 - **修改文件**：
