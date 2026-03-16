@@ -541,10 +541,12 @@ const mockFindSourceById = sourcesQueriesModule.findSourceById as ReturnType<typ
 
 async function buildCrawlerAdminApp() {
   const { adminCrawlerRoutes } = await import('@/api/routes/admin/crawler')
+  const { sourceRoutes } = await import('@/api/routes/sources')
   const app = Fastify({ logger: false })
   await app.register(cookie, { secret: 'test-secret' })
   setupAuthenticate(app)
   await app.register(adminCrawlerRoutes)
+  await app.register(sourceRoutes)
   await app.ready()
   return app
 }
@@ -690,19 +692,19 @@ describe('CRAWLER-04: 管理后台接口', () => {
     expect(res.json().data).toMatchObject({ sourceId: 'src-1' })
   })
 
-  // ── POST /admin/sources/submit ──────────────────────────────
+  // ── POST /sources/submit ──────────────────────────────
 
-  it('POST /admin/sources/submit：未登录返回 401', async () => {
+  it('POST /sources/submit：未登录返回 401', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/admin/sources/submit',
+      url: '/sources/submit',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ videoId: '11111111-0000-0000-0000-000000000000', sourceUrl: 'https://cdn.example.com/v.m3u8' }),
     })
     expect(res.statusCode).toBe(401)
   })
 
-  it('POST /admin/sources/submit：普通用户（已登录）可以投稿（202）', async () => {
+  it('POST /sources/submit：普通用户（已登录）可以投稿（202）', async () => {
     const { db: mockDb } = await import('@/api/lib/postgres')
     const dbMock = mockDb as { query: ReturnType<typeof vi.fn> }
     dbMock.query
@@ -710,7 +712,7 @@ describe('CRAWLER-04: 管理后台接口', () => {
       .mockResolvedValueOnce({ rows: [{ id: 'src-new' }] })  // SELECT id
     const res = await app.inject({
       method: 'POST',
-      url: '/admin/sources/submit',
+      url: '/sources/submit',
       headers: { ...authHeader('user'), 'Content-Type': 'application/json' },
       body: JSON.stringify({
         videoId: '11111111-0000-0000-0000-000000000000',
