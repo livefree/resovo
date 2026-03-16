@@ -71,7 +71,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     >
       {/* ── 侧边栏 ─────────────────────────────────────────────── */}
       <aside
-        className="w-56 shrink-0 border-r border-[var(--border)] bg-[var(--bg2)] px-3 py-6"
+        className="w-56 shrink-0 flex flex-col border-r border-[var(--border)] bg-[var(--bg2)] px-3 py-6"
         data-testid="admin-sidebar"
       >
         <Link
@@ -90,6 +90,18 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             items={SYSTEM_MENU}
           />
         )}
+
+        {/* 返回前台 */}
+        <div className="mt-auto pt-4 border-t border-[var(--border)]">
+          <Link
+            href="/"
+            data-testid="admin-back-to-site"
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-[var(--bg3)] hover:text-[var(--text)]"
+            style={{ color: 'var(--muted-foreground)' }}
+          >
+            ← 返回前台
+          </Link>
+        </div>
       </aside>
 
       {/* ── 主内容区 ─────────────────────────────────────────────── */}

@@ -234,7 +234,7 @@ CHG-06（类型标签联动）       ← 最后处理
 
 #### CHG-09 管理后台缺少返回前台入口
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **问题**：进入管理后台（`/admin/*`）后，侧边栏或顶栏没有「返回前台」或「退出管理后台」的入口，用户只能手动修改地址栏或退出登录才能回到前台，体验极差。
 - **文件范围**：
   - `src/app/[locale]/admin/layout.tsx`（在侧边栏底部或顶栏右侧新增「返回前台」链接，指向 `/`）
@@ -247,14 +247,18 @@ CHG-06（类型标签联动）       ← 最后处理
   - 点击后跳转到网站首页，用户仍保持登录状态
   - 前台导航栏仍显示「管理后台」入口（admin/moderator 角色）
 - **测试要求**：补充 Playwright `tests/e2e/admin.spec.ts`（admin 用户在后台能点击返回前台）
-- **完成备注**：_（AI 填写）_
-- **问题说明**：_（若有问题）_
+- **完成备注**：
+  - 修改：`src/app/[locale]/admin/layout.tsx`（aside 加 flex-col；底部加「← 返回前台」Link，href="/"，data-testid="admin-back-to-site"）
+  - 新增 E2E 测试：admin/moderator 两种角色均可见该链接
+  - 262 个 unit 测试全部通过
+  - commit hash：见下次提交
+- **问题说明**：_（无）_
 
 ---
 
 #### CHG-10 非首页视频卡片封面图不显示
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **问题**：首页视频卡片封面图正常显示，但分类浏览页、搜索结果页的视频卡片封面图不能正常加载，显示为灰色占位块。
 - **可能原因**：
   1. 分类浏览页（`BrowseGrid`）和搜索页（`SearchResultList`）调用的 API 端点与首页不同，返回的 `coverUrl` 字段为 `null` 或字段名不一致
@@ -273,8 +277,14 @@ CHG-06（类型标签联动）       ← 最后处理
   - 搜索结果页（`/search?q=xxx`）搜索结果卡片显示封面图
   - `coverUrl` 为 `null` 时显示 🎬 占位图，不显示破损图标
 - **测试要求**：手动验收；排查过程中记录根本原因到完成备注
-- **完成备注**：_（AI 填写）_
-- **问题说明**：_（若有问题）_
+- **完成备注**：
+  - **根本原因**：`CrawlerService.indexToES()` 的 SQL SELECT 语句缺少 `cover_url`、`slug`、`country`、`episode_count` 字段，导致写入 ES 的文档不含封面 URL；浏览页/搜索页从 ES 取数，首页从 PG 直接取数，因此首页正常而其他页面不显示封面图
+  - 修改：`src/api/services/CrawlerService.ts`（`indexToES` 补全 SELECT 字段，ES document 补全对应字段；新增 `reindexAll()` 公开方法）
+  - 修改：`src/api/routes/admin/crawler.ts`（新增 `POST /admin/crawler/reindex` 端点，admin 权限，调用 `reindexAll()`）
+  - ⚠️ **已有数据需重建索引**：ES 现有文档仍缺少 `cover_url`，需在 API 服务器启动后执行一次：`curl -X POST http://localhost:4000/v1/admin/crawler/reindex -H "Authorization: Bearer <admin_token>"`
+  - 新增单元测试 2 个（/admin/crawler/reindex 权限 + 返回值）；262 个 unit 测试全部通过
+  - commit hash：见下次提交
+- **问题说明**：_（无）_
 
 ---
 

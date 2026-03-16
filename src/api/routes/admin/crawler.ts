@@ -161,6 +161,15 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     }
   )
 
-  // suppress unused warning for crawlerService (used in integration)
-  void crawlerService
+  // ── POST /admin/crawler/reindex — 重建 ES 索引 ───────────────
+  // 用于修复 ES 文档缺失字段（如 cover_url）时全量重新索引
+
+  fastify.post(
+    '/admin/crawler/reindex',
+    { preHandler: [fastify.authenticate, fastify.requireRole(['admin'])] },
+    async (_request, reply) => {
+      const result = await crawlerService.reindexAll()
+      return reply.send({ data: result })
+    }
+  )
 }

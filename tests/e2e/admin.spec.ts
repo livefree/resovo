@@ -154,6 +154,26 @@ test('admin 侧边栏显示系统管理区', async ({ context, page }) => {
   await expect(sidebar.getByText('数据看板')).toBeVisible()
 })
 
+// ── CHG-09: 侧边栏「返回前台」入口 ───────────────────────────────
+
+test('admin 侧边栏有「返回前台」链接', async ({ context, page }) => {
+  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
+  await page.goto(`${BASE_URL}/en/admin/videos`)
+  await expect(page).not.toHaveURL(/\/admin\/403/)
+  const backLink = page.locator('[data-testid="admin-back-to-site"]')
+  await expect(backLink).toBeVisible()
+  await expect(backLink).toHaveAttribute('href', '/')
+})
+
+test('moderator 侧边栏同样有「返回前台」链接', async ({ context, page }) => {
+  await setCookies(context, { refreshToken: 'mock-rt', userRole: 'moderator' })
+  await page.goto(`${BASE_URL}/en/admin/videos`)
+  await expect(page).not.toHaveURL(/\/admin\/403/)
+  const backLink = page.locator('[data-testid="admin-back-to-site"]')
+  await expect(backLink).toBeVisible()
+  await expect(backLink).toHaveAttribute('href', '/')
+})
+
 // ── ADMIN-02: 视频列表上下架操作 ──────────────────────────────────
 
 const API_BASE = 'http://localhost:4000/v1'

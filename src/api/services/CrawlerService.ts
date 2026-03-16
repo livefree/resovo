@@ -202,11 +202,16 @@ export class CrawlerService {
   private async indexToES(videoId: string): Promise<void> {
     try {
       const result = await this.db.query<{
-        id: string; short_id: string; title: string; title_en: string | null
+        id: string; short_id: string; slug: string | null
+        title: string; title_en: string | null; cover_url: string | null
         type: string; category: string | null; year: number | null
+        country: string | null; episode_count: number
         rating: number | null; status: string; is_published: boolean
       }>(
-        'SELECT id, short_id, title, title_en, type, category, year, rating, status, is_published FROM videos WHERE id = $1',
+        `SELECT id, short_id, slug, title, title_en, cover_url,
+                type, category, year, country, episode_count,
+                rating, status, is_published
+         FROM videos WHERE id = $1`,
         [videoId]
       )
       if (!result.rows[0]) return
@@ -218,11 +223,15 @@ export class CrawlerService {
         document: {
           id: row.id,
           short_id: row.short_id,
+          slug: row.slug,
           title: row.title,
           title_en: row.title_en,
+          cover_url: row.cover_url,
           type: row.type,
           category: row.category,
           year: row.year,
+          country: row.country,
+          episode_count: row.episode_count,
           rating: row.rating,
           status: row.status,
           is_published: row.is_published,
@@ -233,6 +242,26 @@ export class CrawlerService {
       const message = err instanceof Error ? err.message : String(err)
       process.stderr.write(`[CrawlerService] ES index failed for ${videoId}: ${message}\n`)
     }
+  }
+
+  /**
+   * 重新索引所有已发布视频（修复 ES 文档字段缺失时使用）
+   */
+  async reindexAll(): Promise<{ indexed: number; errors: number }> {
+    const result = await this.db.query<{ id: string }>(
+      `SELECT id FROM videos WHERE deleted_at IS NULL ORDER BY created_at DESC`
+    )
+    let indexed = 0
+    let errors = 0
+    for (const row of result.rows) {
+      try {
+        await this.indexToES(row.id)
+        indexed++
+      } catch {
+        errors++
+      }
+    }
+    return { indexed, errors }
   }
 
   /**

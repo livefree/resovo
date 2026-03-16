@@ -34,7 +34,9 @@ vi.mock('@/api/db/queries/sources', () => ({
 }))
 
 vi.mock('@/api/services/CrawlerService', () => ({
-  CrawlerService: vi.fn().mockImplementation(() => ({})),
+  CrawlerService: vi.fn().mockImplementation(() => ({
+    reindexAll: vi.fn().mockResolvedValue({ indexed: 0, errors: 0 }),
+  })),
   parseCrawlerSources: vi.fn().mockReturnValue([]),
 }))
 
@@ -716,5 +718,34 @@ describe('CRAWLER-04: 管理后台接口', () => {
       }),
     })
     expect(res.statusCode).toBe(202)
+  })
+
+  // ── CHG-10: POST /admin/crawler/reindex ───────────────────────
+
+  it('POST /admin/crawler/reindex：非 admin 返回 403', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/crawler/reindex',
+      headers: authHeader('moderator'),
+    })
+    expect(res.statusCode).toBe(403)
+  })
+
+  it('POST /admin/crawler/reindex：admin 触发全量重建索引（200）', async () => {
+    const { CrawlerService } = await import('@/api/services/CrawlerService')
+    const mockInstance = (CrawlerService as ReturnType<typeof vi.fn>).mock.results.at(-1)?.value as {
+      reindexAll: ReturnType<typeof vi.fn>
+    }
+    mockInstance.reindexAll.mockResolvedValueOnce({ indexed: 20, errors: 0 })
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/crawler/reindex',
+      headers: authHeader('admin'),
+    })
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.body) as { data: { indexed: number; errors: number } }
+    expect(body.data.indexed).toBe(20)
+    expect(body.data.errors).toBe(0)
   })
 })
