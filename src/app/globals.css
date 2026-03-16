@@ -4,41 +4,51 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --gold: 43 96% 56%;
+    --background: #ffffff;
+    --foreground: #0f172a;
+    --primary: #3b82f6;
+    --primary-foreground: #f8fafc;
+    --secondary: #f1f5f9;
+    --secondary-foreground: #1e293b;
+    --muted: #f1f5f9;
+    --muted-foreground: #64748b;
+    --accent: #e8b84b;
+    --accent-foreground: #0f172a;
+    --card: #ffffff;
+    --card-foreground: #0f172a;
+    --border: #e2e8f0;
+    --input: #e2e8f0;
+    --ring: #3b82f6;
+    --gold: #e8b84b;
+    /* aliases used by admin layout and component style props */
+    --bg:   #ffffff;
+    --bg2:  #f8fafc;
+    --bg3:  #f1f5f9;
+    --text: #0f172a;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
-    --gold: 43 96% 56%;
+    --background: #0c1221;
+    --foreground: #e2e8f0;
+    --primary: #60a5fa;
+    --primary-foreground: #1e293b;
+    --secondary: #1e2d3d;
+    --secondary-foreground: #e2e8f0;
+    --muted: #1e2d3d;
+    --muted-foreground: #94a3b8;
+    --accent: #e8b84b;
+    --accent-foreground: #0f172a;
+    --card: #111827;
+    --card-foreground: #e2e8f0;
+    --border: #1e2d3d;
+    --input: #1e2d3d;
+    --ring: #3b82f6;
+    --gold: #e8b84b;
+    /* aliases used by admin layout and component style props */
+    --bg:   #0c1221;
+    --bg2:  #111827;
+    --bg3:  #1e2d3d;
+    --text: #e2e8f0;
   }
 }
 
