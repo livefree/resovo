@@ -11,6 +11,7 @@ import { parseXmlResponse, parseJsonResponse, parseVodItem } from './SourceParse
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
 import * as sourcesQueries from '@/api/db/queries/sources'
 import { nanoid } from 'nanoid'
+import { config } from '@/api/lib/config'
 
 // ── 资源站配置 ────────────────────────────────────────────────────
 
@@ -147,13 +148,14 @@ export class CrawlerService {
     } else {
       // 新建视频记录
       const shortId = nanoid(8)
+      const autoPublish = config.AUTO_PUBLISH_CRAWLED === 'true'
       const inserted = await this.db.query<{ id: string }>(
         `INSERT INTO videos
            (short_id, title, title_en, cover_url, type, category, year, country,
             "cast", director, writers, description, status, episode_count,
             is_published)
          VALUES
-           ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,true)
+           ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
          RETURNING id`,
         [
           shortId,
@@ -170,6 +172,7 @@ export class CrawlerService {
           video.description,
           video.status,
           sources.length > 0 ? Math.max(...sources.map((s) => s.episodeNumber ?? 1)) : 1,
+          autoPublish,
         ]
       )
       videoId = inserted.rows[0].id

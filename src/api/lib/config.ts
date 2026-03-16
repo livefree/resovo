@@ -34,6 +34,9 @@ const configSchema = z.object({
   // 爬虫资源站（可选，留空则不采集）
   CRAWLER_SOURCES: z.string().optional(),
 
+  // 采集后自动上架（开发/测试环境用，生产环境保持 false）
+  AUTO_PUBLISH_CRAWLED: z.enum(['true', 'false']).default('false'),
+
   // Cloudflare R2（字幕存储，可选）
   R2_ENDPOINT: z.string().url().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),

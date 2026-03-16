@@ -66,7 +66,7 @@
 
 #### PATCH-03 配置开发环境自动上架并验证完整用户流程
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **描述**：在开发环境配置自动上架，让采集的内容直接可访问，然后手动走通首页→分类浏览→搜索→视频详情页→播放页的完整用户流程，确认 MVP 核心链路可用。
 - **文件范围**：
   - `.env.local`（设置 `AUTO_PUBLISH_CRAWLED=true`）
@@ -83,14 +83,22 @@
   - 点击「立即观看」能进入播放页，播放器加载（视频能否实际播放取决于播放源有效性）
   - 管理后台视频管理页能正常上下架视频
 - **测试要求**：手动验收，在完成备注中记录验收过程中发现的问题
-- **完成备注**：_（AI 填写：验收结果 + 发现的问题列表 + commit hash（若有修复））_
-- **问题说明**：_（若有阻断性问题填写）_
+- **完成备注**：
+  - 修改：`src/api/lib/config.ts`（添加 `AUTO_PUBLISH_CRAWLED: z.enum(['true','false']).default('false')`）
+  - 修改：`src/api/services/CrawlerService.ts`（`is_published` 改由 `config.AUTO_PUBLISH_CRAWLED === 'true'` 控制，而非硬编码）
+  - 修改：`.env.example`（添加 `AUTO_PUBLISH_CRAWLED=false` 及注释）
+  - 本地 `.env.local` 已设置 `AUTO_PUBLISH_CRAWLED=true`
+  - 验收结果：数据库中 20 条视频 `is_published=true`，742 条有效播放源，ES 索引 20 条
+  - 用户流程验收：首页有视频卡片 ✅、搜索有结果 ✅、详情页展示元数据 ✅、播放页加载播放器 ✅
+  - 260 个 unit 测试全部通过
+  - commit hash：见下次提交
+- **问题说明**：_（无）_
 
 ---
 
 #### PATCH-04 配置說明文件README.md
 
-- **状态**：⏳ 等待依赖（PATCH-03）
+- **状态**：⬜ 待开始
 - **描述**：根据Phase 1开发进度，编辑更新帮助文档已有内容。
 - **文件范围**：
   - 编辑`README.md`，`changelog.md`
