@@ -12,6 +12,7 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
+import * as usersQueries from '@/api/db/queries/users'
 
 export async function adminUserRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
@@ -34,65 +35,20 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
     }
 
     const { q, role, banned, page, limit } = parsed.data
-    const conditions = ['deleted_at IS NULL']
-    const params: unknown[] = []
-    let idx = 1
-
-    if (q) {
-      conditions.push(`(username ILIKE $${idx} OR email ILIKE $${idx})`)
-      params.push(`%${q}%`)
-      idx++
-    }
-    if (role) {
-      conditions.push(`role = $${idx++}`)
-      params.push(role)
-    }
-    if (banned === 'true') {
-      conditions.push('banned_at IS NOT NULL')
-    } else if (banned === 'false') {
-      conditions.push('banned_at IS NULL')
-    }
-
-    const where = conditions.join(' AND ')
-    const offset = (page - 1) * limit
-
-    const [rows, countResult] = await Promise.all([
-      db.query(
-        `SELECT id, username, email, role, avatar_url, banned_at, created_at
-         FROM users
-         WHERE ${where}
-         ORDER BY created_at DESC
-         LIMIT $${idx} OFFSET $${idx + 1}`,
-        [...params, limit, offset]
-      ),
-      db.query<{ count: string }>(
-        `SELECT COUNT(*) FROM users WHERE ${where}`,
-        params
-      ),
-    ])
-
-    return reply.send({
-      data: rows.rows,
-      total: parseInt(countResult.rows[0]?.count ?? '0'),
-      page,
-      limit,
-    })
+    const { rows, total } = await usersQueries.listAdminUsers(db, { q, role, banned, page, limit })
+    return reply.send({ data: rows, total, page, limit })
   })
 
   // ── GET /admin/users/:id ─────────────────────────────────────
   fastify.get('/admin/users/:id', { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const result = await db.query(
-      `SELECT id, username, email, role, avatar_url, locale, banned_at, created_at
-       FROM users WHERE id = $1 AND deleted_at IS NULL`,
-      [id]
-    )
-    if (!result.rows[0]) {
+    const user = await usersQueries.findAdminUserById(db, id)
+    if (!user) {
       return reply.code(404).send({
         error: { code: 'NOT_FOUND', message: '用户不存在', status: 404 },
       })
     }
-    return reply.send({ data: result.rows[0] })
+    return reply.send({ data: user })
   })
 
   // ── PATCH /admin/users/:id/ban ────────────────────────────────
@@ -100,41 +56,32 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
     const { id } = request.params as { id: string }
 
     // 不能封禁 admin 账号
-    const userResult = await db.query(
-      `SELECT role FROM users WHERE id = $1 AND deleted_at IS NULL`,
-      [id]
-    )
-    if (!userResult.rows[0]) {
+    const user = await usersQueries.findAdminUserById(db, id)
+    if (!user) {
       return reply.code(404).send({
         error: { code: 'NOT_FOUND', message: '用户不存在', status: 404 },
       })
     }
-    if (userResult.rows[0].role === 'admin') {
+    if (user.role === 'admin') {
       return reply.code(403).send({
         error: { code: 'FORBIDDEN', message: '不能封禁 admin 账号', status: 403 },
       })
     }
 
-    const result = await db.query(
-      `UPDATE users SET banned_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id, banned_at`,
-      [id]
-    )
-    return reply.send({ data: result.rows[0] })
+    const result = await usersQueries.banUser(db, id)
+    return reply.send({ data: result })
   })
 
   // ── PATCH /admin/users/:id/unban ──────────────────────────────
   fastify.patch('/admin/users/:id/unban', { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const result = await db.query(
-      `UPDATE users SET banned_at = NULL WHERE id = $1 AND deleted_at IS NULL RETURNING id, banned_at`,
-      [id]
-    )
-    if (result.rowCount === 0) {
+    const result = await usersQueries.unbanUser(db, id)
+    if (!result) {
       return reply.code(404).send({
         error: { code: 'NOT_FOUND', message: '用户不存在', status: 404 },
       })
     }
-    return reply.send({ data: result.rows[0] })
+    return reply.send({ data: result })
   })
 
   // ── PATCH /admin/users/:id/role ───────────────────────────────
@@ -151,25 +98,19 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
     }
 
     // 防止修改 admin 账号
-    const userResult = await db.query(
-      `SELECT role FROM users WHERE id = $1 AND deleted_at IS NULL`,
-      [id]
-    )
-    if (!userResult.rows[0]) {
+    const user = await usersQueries.findAdminUserById(db, id)
+    if (!user) {
       return reply.code(404).send({
         error: { code: 'NOT_FOUND', message: '用户不存在', status: 404 },
       })
     }
-    if (userResult.rows[0].role === 'admin') {
+    if (user.role === 'admin') {
       return reply.code(403).send({
         error: { code: 'FORBIDDEN', message: '不能修改 admin 账号的角色', status: 403 },
       })
     }
 
-    const result = await db.query(
-      `UPDATE users SET role = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING id, role`,
-      [parsed.data.role, id]
-    )
-    return reply.send({ data: result.rows[0] })
+    const result = await usersQueries.updateUserRole(db, id, parsed.data.role)
+    return reply.send({ data: result })
   })
 }
