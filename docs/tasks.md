@@ -306,7 +306,7 @@ CHG-06（类型标签联动）       ← 最后处理
   - 全面校验两套主题所有前景/背景组合，均满足 WCAG AA
 - **验收**：深色/浅色主题下所有文字清晰可辨，表格、标签、次级说明文字均可正常阅读
 - **测试要求**：typecheck + lint 通过；视觉验收
-- **完成备注**：仅修改 `src/app/globals.css`（无组件改动）；浅色主题 `--muted` 改为 `#4b5563`（7.6:1 on white ✅），深色主题 `--muted` 改为 `#a8b4c4`（4.9:1 on bg3 ✅）；浅色 accent 改为 `#b8720a` 符合 ui-rules.md 规定；深色 border/bg3 改为 `#334155` 与背景拉开层次；typecheck ✅ lint ✅ 262 tests ✅；commit hash：见本次提交
+- **完成备注**：仅修改 `src/app/globals.css`（无组件改动）；浅色主题 `--muted` 改为 `#4b5563`（7.6:1 on white ✅），深色主题 `--muted` 改为 `#a8b4c4`（4.9:1 on bg3 ✅）；浅色 accent 改为 `#b8720a` 符合 ui-rules.md 规定；深色 border/bg3 改为 `#334155` 与背景拉开层次；typecheck ✅ lint ✅ 262 tests ✅；commit hash：6e9fa69
 - **问题说明**：_（无）_
 
 ---
