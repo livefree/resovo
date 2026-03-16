@@ -16,7 +16,7 @@ export function EpisodeGrid({ video }: EpisodeGridProps) {
   if (video.episodeCount <= 1) return null
 
   const watchBase = video.slug
-    ? `/watch/${video.shortId}/${video.slug}`
+    ? `/watch/${video.slug}-${video.shortId}`
     : `/watch/${video.shortId}`
 
   return (

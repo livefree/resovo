@@ -20,8 +20,8 @@ const STATUS_LABELS: Record<string, string> = {
 
 export function VideoCardWide({ video, className }: VideoCardWideProps) {
   const href = video.slug
-    ? `/watch/${video.shortId}/${video.slug}`
-    : `/watch/${video.shortId}`
+    ? `/${video.type}/${video.slug}-${video.shortId}`
+    : `/${video.type}/${video.shortId}`
 
   return (
     <Link

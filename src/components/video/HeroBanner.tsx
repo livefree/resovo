@@ -40,8 +40,8 @@ export function HeroBanner() {
   }
 
   const href = featured.slug
-    ? `/watch/${featured.shortId}/${featured.slug}`
-    : `/watch/${featured.shortId}`
+    ? `/watch/${featured.slug}-${featured.shortId}?ep=1`
+    : `/watch/${featured.shortId}?ep=1`
 
   return (
     <div
