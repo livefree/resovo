@@ -14,6 +14,7 @@ import { adminContentRoutes } from '@/api/routes/admin/content'
 import { adminUserRoutes } from '@/api/routes/admin/users'
 import { adminAnalyticsRoutes } from '@/api/routes/admin/analytics'
 import { adminCrawlerRoutes } from '@/api/routes/admin/crawler'
+import { registerVerifyWorker } from '@/api/workers/verifyWorker'
 
 async function start() {
   const fastify = Fastify({
@@ -43,6 +44,8 @@ async function start() {
   await fastify.register(adminUserRoutes, { prefix: '/v1' })
   await fastify.register(adminAnalyticsRoutes, { prefix: '/v1' })
   await fastify.register(adminCrawlerRoutes, { prefix: '/v1' })
+
+  registerVerifyWorker()
 
   fastify.get('/v1/health', async (_request, reply) => {
     return reply.send({ status: 'ok', timestamp: new Date().toISOString() })
