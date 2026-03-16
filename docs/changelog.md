@@ -404,3 +404,22 @@
 - **注意事项**：
   - `.env.local`（未提交）中设置 `AUTO_PUBLISH_CRAWLED=true`，生产环境保持 false
   - 现有 20 条视频已全部设置 `is_published=true`，前台首页可直接访问内容
+
+---
+
+## [Phase 1 用户反馈修复] CHG-01 ~ CHG-08
+
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/app/[locale]/admin/page.tsx` — 新建，redirect 到 /admin/videos（CHG-01）
+  - `src/app/globals.css` — CSS 变量从 HSL 裸值改为直接颜色值，--accent/--gold 设为 #e8b84b，新增 --bg/--bg2/--bg3/--text（CHG-03）
+  - `tailwind.config.ts` — 移除 hsl() 包装，改用 var(--xxx)（CHG-03）
+  - `src/components/search/MetaChip.tsx` — 新建缺失组件，修复预存 typecheck 错误
+  - `src/components/layout/Nav.tsx` — 新增管理后台链接（CHG-02）、搜索框（CHG-04）、精确分类高亮（CHG-06）
+  - `src/components/video/VideoGrid.tsx` — 新增 layout='scroll' 横向滚动模式（CHG-05）
+  - `src/app/[locale]/(home)/page.tsx` — 首页改用 layout="scroll"（CHG-05）
+  - `src/components/video/VideoCard.tsx` — href 改为 /{type}/{slug}-{shortId}（CHG-07）
+  - `src/components/video/VideoDetailHero.tsx` — watchHref 改为 /watch/{slug}-{shortId}?ep=1（CHG-07）
+  - `src/components/player/PlayerShell.tsx` — 集成 ControlBar+SourceBar，修正 detailHref（CHG-07/08）
+  - `messages/en.json`、`messages/zh-CN.json` — 新增 nav.search、nav.admin 键
+- **测试**：typecheck ✅ lint ✅ 260 单元测试全部通过

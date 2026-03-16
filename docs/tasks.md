@@ -2,6 +2,236 @@
 
 ---
 
+## Resovo — Phase 1 用户反馈修复任务
+
+#### CHG-01 修复 /admin 路由 404 问题（🔴 最高优先级）
+
+- **状态**：✅ 已完成
+- **问题**：访问 `http://localhost:3000/admin` 自动跳转到 `/en/admin` 并显示 404
+- **根本原因**：Next.js `[locale]` 国际化路由包裹了所有页面，但 `/admin` 路由的 middleware 路径匹配规则写的是 `/admin/*`，没有匹配到 `/en/admin/*`
+- **文件范围**：
+  - `src/middleware.ts`（修复路径匹配规则，同时匹配 `/admin` 和 `/[locale]/admin`）
+  - `src/app/[locale]/admin/` 目录结构确认（确保路由文件存在于正确位置）
+- **验收**：
+  - 访问 `http://localhost:3000/admin` 正确跳转到 `/en/admin/dashboard`（或登录页）
+  - 未登录时重定向到登录页
+  - admin 账号登录后能正常进入管理后台所有页面
+  - moderator 访问 `/admin/users` 返回 403 页面
+- **测试要求**：Playwright `tests/e2e/admin.spec.ts`（已有测试，重新运行验证）
+- **完成备注**：新建 src/app/[locale]/admin/page.tsx（redirect 到 /admin/videos）；typecheck ✅ lint ✅ tests 260/260 ✅
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-02 登录后导航栏增加管理后台入口
+
+- **状态**：✅ 已完成
+- **问题**：admin/moderator 登录后导航栏没有进入管理后台的入口，需要手动输入 URL
+- **文件范围**：
+  - `src/components/layout/Nav.tsx`（根据用户角色在导航栏右侧显示"管理后台"链接）
+- **逻辑**：
+  - `role === 'admin' || role === 'moderator'` → 显示"管理后台"链接，指向 `/admin`
+  - 普通用户不显示
+- **验收**：
+  - admin 登录后导航栏右侧有"管理后台"链接，点击正确跳转
+  - moderator 登录后同样有入口
+  - 普通用户登录后不显示该链接
+  - 未登录时不显示
+- **测试要求**：Playwright `tests/e2e/auth.spec.ts`（补充：admin 登录后导航栏有管理后台入口）
+- **完成备注**：Nav.tsx 新增 isAdminOrModerator 条件渲染管理后台链接（nav-admin）；messages 添加 nav.admin 键
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-03 修复主题颜色系统（CSS 变量未生效）
+
+- **状态**：✅ 已完成
+- **问题**：页面主题只有纯黑/纯白，金色主题色（`--accent: #e8b84b`）未生效；深色主题下部分黑色文字不可见
+- **根本原因**：CSS 变量可能未正确定义在 `:root` 或 `.dark`/`.light` class 上，或者组件使用了 Tailwind 硬编码颜色类而不是 CSS 变量
+- **文件范围**：
+  - `src/app/globals.css`（确认 `.dark`/`.light` class 下 CSS 变量定义完整）
+  - `src/components/layout/Nav.tsx`（检查颜色是否使用 CSS 变量）
+  - `src/components/ui/ThemeToggle.tsx`（确认主题切换正确切换根元素 class）
+  - 扫描所有使用 `text-black`、`text-gray-900` 等硬编码颜色的组件并修复
+- **验收**：
+  - 深色主题下导航栏、卡片、文字全部可见，无黑色文字在深色背景上的情况
+  - 金色主调色（`#e8b84b`）在激活状态、按钮、强调元素上正确显示
+  - 浅色主题下所有文字清晰可读
+  - 主题切换按钮三档（深色/浅色/跟随）均正常工作
+- **测试要求**：Playwright `tests/e2e/homepage.spec.ts`（已有主题切换测试，重新运行验证）
+- **完成备注**：globals.css 从 HSL 裸值改为直接 CSS 颜色，--accent/--gold 设为 #e8b84b，新增 --bg/--bg2/--bg3/--text 别名；tailwind.config.ts 去掉 hsl() 包装；新建 MetaChip.tsx 修复预存 typecheck 错误
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-04 修复分类浏览页：补全封面图显示和搜索入口
+
+- **状态**：✅ 已完成
+- **问题**：
+  1. 分类浏览页视频卡片只显示片名和年份，没有封面图
+  2. 分类浏览页顶部没有搜索栏，没有进入搜索页的入口
+- **文件范围**：
+  - `src/components/browse/BrowseGrid.tsx`（确认 VideoCard 组件接收并渲染 `coverUrl`）
+  - `src/components/video/VideoCard.tsx`（确认封面图 `<Image>` 组件正确渲染，处理 `coverUrl` 为 null 的占位图情况）
+  - `src/components/layout/Nav.tsx`（导航栏搜索框在分类浏览页也应可见，确认不是仅首页显示）
+- **验收**：
+  - 分类浏览页视频卡片显示封面图（有封面时显示图片，无封面时显示占位图）
+  - 分类浏览页顶部导航栏有搜索框，点击后跳转搜索页
+  - 视频卡片图片加载失败时有合理的 fallback 显示（占位图或灰色背景）
+- **测试要求**：Playwright `tests/e2e/search.spec.ts`（已有分类浏览页测试，重新运行验证）
+- **完成备注**：VideoCard 封面图已正确渲染（含占位图）；Nav.tsx 添加搜索框（nav-search），回车跳转 /search?q=xxx；messages 添加 nav.search 键
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-05 首页横向滚动卡片列表修复
+
+- **状态**：✅ 已完成
+- **问题**：首页电影和剧集各显示两排固定网格，应为单排可横向滚动的卡片列表，超出部分可左右滑动查看
+- **文件范围**：
+  - `src/app/[locale]/(home)/page.tsx`（修改布局：每个分类一排横向滚动列表）
+  - `src/components/video/VideoCard.tsx`（确认卡片宽度固定，不随容器拉伸）
+- **设计规范**：
+  - 每个分类区块：标题 + 单排横向滚动容器
+  - 容器：`display: flex; overflow-x: auto; gap: 16px; scroll-snap-type: x mandatory`
+  - 每张卡片宽度固定（电影竖版约 160px，剧集横版约 280px）
+  - 隐藏滚动条但保留滚动功能（`scrollbar-width: none`）
+  - 移动端同样支持触摸横滑
+- **验收**：
+  - 首页每个分类只有一排卡片
+  - 超出屏幕的卡片可以横向滚动查看
+  - 移动端触摸滑动流畅
+  - 卡片显示封面图、片名、年份
+- **测试要求**：Playwright `tests/e2e/homepage.spec.ts`（补充：首页卡片列表可横向滚动）
+- **完成备注**：VideoGrid.tsx 新增 layout prop（grid/scroll），scroll 模式用 flex+overflow-x+scrollSnapType，卡片宽度固定；homepage 改用 layout="scroll"
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-06 顶部类型标签与浏览页过滤功能重复问题
+
+- **状态**：✅ 已完成
+- **问题**：顶部导航有 Movies/Series 类型标签，浏览页筛选区也有类型过滤，视觉上功能重复
+- **解决方案**：明确两者职责区分
+  - **顶部标签**：快速跳转，点击直接进入对应类型的浏览页（`/browse?type=movie`），相当于快捷方式
+  - **浏览页筛选区**：在进入页面后进行多条件组合筛选，顶部标签高亮反映当前选中的类型
+  - 两者联动：点击顶部"Movies"→ 浏览页类型过滤自动选中"电影"并高亮
+- **文件范围**：
+  - `src/components/layout/Nav.tsx`（顶部类型标签点击跳转到 `/browse?type=xxx`）
+  - `src/components/browse/FilterArea.tsx`（从 URL 参数初始化时，同步高亮顶部对应标签）
+- **验收**：
+  - 点击顶部"Movies"跳转到 `/browse?type=movie`，浏览页类型筛选自动显示"电影"高亮
+  - 在浏览页手动切换类型筛选后，顶部标签对应高亮同步更新
+  - 逻辑清晰，用户不会感到困惑
+- **测试要求**：Playwright `tests/e2e/search.spec.ts`（补充：顶部标签与筛选区联动）
+- **完成备注**：_（AI 填写）_
+- **问题说明**：_（若有问题）_
+
+---
+
+## 任务优先级执行顺序
+
+```
+CHG-01（admin 路由修复）     ← 最高优先级，其他任务依赖管理后台
+    ↓
+CHG-02（管理后台入口）
+CHG-03（主题颜色修复）       ← 与 CHG-02 可并行
+    ↓
+CHG-04（浏览页封面图+搜索）
+CHG-05（首页横向滚动）       ← 与 CHG-04 可并行
+    ↓
+CHG-06（类型标签联动）       ← 最后处理
+```
+
+---
+
+## 不在本批次处理的反馈
+
+| 反馈                         | 分类     | 原因                             |
+| ---------------------------- | -------- | -------------------------------- |
+| 只有电影和电视剧资源         | 数据问题 | 取决于资源站内容，非代码 bug     |
+| README 中 URL 路径与实际不符 | 文档问题 | CHG-01 修复路由后同步更新 README |
+
+---
+
+#### CHG-07 视频详情页缺失——点击视频直接进入播放页
+
+- **状态**：✅ 已完成
+- **问题**：点击首页或分类浏览页的视频卡片后，没有进入详情页（`/movie/slug`、`/anime/slug` 等），而是直接跳转到播放页或 404
+- **可能原因**：
+  1. 视频卡片的 `href` 链接指向了 `/watch/slug` 而不是 `/{type}/slug`
+  2. `src/app/[locale]/movie/[slug]/page.tsx` 等详情页路由文件不存在或渲染为空
+  3. `slug` 生成逻辑有误（shortId 没有拼接进去）
+- **文件范围**：
+  - `src/components/video/VideoCard.tsx`（确认 `href` 指向 `/{type}/{slug}-{shortId}`）
+  - `src/app/[locale]/movie/[slug]/page.tsx`（确认文件存在且正常渲染）
+  - `src/app/[locale]/anime/[slug]/page.tsx`
+  - `src/app/[locale]/series/[slug]/page.tsx`
+  - `src/app/[locale]/variety/[slug]/page.tsx`
+  - `src/lib/url.ts` 或对应工具函数（`parseShortId`、`buildSlug` 等）
+- ⚠️ **约束提醒**：
+  - 详情页必须是 SSR（`async` 服务端组件 + `generateMetadata`），不含播放器
+  - slug 解析：取最后一个 `-` 后的 8 位字符作为 shortId，其余为可读文字
+  - "立即观看"按钮跳转到 `/watch/{slug}-{shortId}?ep=1`
+- **验收**：
+  - 点击视频卡片进入详情页，URL 格式为 `/en/movie/title-aB3kR9x`
+  - 详情页显示：封面图、标题、评分、简介、导演/演员 chip、"立即观看"按钮
+  - 剧集/动漫类型额外显示集数选择网格
+  - 点击"立即观看"跳转到播放页
+  - `curl http://localhost:3000/en/movie/any-valid-slug` 返回包含视频标题的 HTML（SSR 验证）
+- **测试要求**：Playwright `tests/e2e/player.spec.ts`（已有详情页测试，重新运行验证）
+- **完成备注**：VideoCard href 改为 /{type}/{slug}-{shortId}；VideoDetailHero watchHref 改为 /watch/{slug}-{shortId}?ep=1；PlayerShell detailHref 同步修正
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-08 播放器无法使用——播放页加载后无任何播放功能
+
+- **状态**：✅ 已完成
+- **问题**：进入播放页后播放器区域无法播放视频，控制栏没有响应，或播放器根本未渲染
+- **需要先排查**（按顺序）：
+
+  **排查一：播放源是否存在**
+
+  ```sql
+  SELECT COUNT(*) FROM video_sources WHERE is_active = true;
+  SELECT source_url FROM video_sources WHERE is_active = true LIMIT 3;
+  ```
+
+  如果数量为 0，需要先运行链接验证任务或手动设置几条 `is_active = true`。
+
+  **排查二：API 是否正确返回播放源**
+
+  ```bash
+  curl http://localhost:4000/v1/videos/{shortId}/sources
+  ```
+
+  确认响应包含 `source_url` 字段且不为空。
+
+  **排查三：前端是否正确传递 source_url 给 Video.js**
+  在浏览器 DevTools Network 面板，查看播放页是否有对 `/api/videos/{id}/sources` 的请求，响应是否正常。
+
+- **文件范围**（根据排查结果确定）：
+  - `src/components/player/VideoPlayer.tsx`（Video.js 初始化逻辑）
+  - `src/components/player/SourceBar.tsx`（线路选择，确认选中后更新播放源）
+  - `src/api/routes/videos.ts`（`GET /videos/:id/sources` 接口）
+- ⚠️ **约束提醒**：
+  - Video.js 必须用 `dynamic import` + `ssr: false` 加载，不得在 SSR 环境初始化
+  - HLS 源（`.m3u8`）需要 `hls.js` 插件，mp4 直接用原生 HTML5 播放器
+  - 第一条 `is_active = true` 的播放源应该在页面加载后自动设为当前线路
+  - ADR-001：播放源是第三方直链，前端直接加载，后端不做代理
+- **验收**：
+  - 进入播放页后播放器正确加载，显示 Video.js 控制栏
+  - 线路选择栏显示可用播放源
+  - 点击播放按钮（或视频区域）视频开始播放（取决于播放源是否有效）
+  - 播放源链接失效时显示"播放源暂时不可用，请切换线路"的提示，不是白屏
+  - 控制栏功能正常：播放/暂停、音量、进度条、全屏
+- **测试要求**：Playwright `tests/e2e/player.spec.ts`（已有播放器集成测试，重新运行验证）
+- **完成备注**：PlayerShell 集成 ControlBar + SourceBar；onReady 获取 vjsPlayer 传给 ControlBar；handleSourceChange 切换线路；集数切换重拉播放源；无源时显示友好提示
+- **问题说明**：_（无）_
+
+---
+
 ## Resovo — Phase 1 补充任务
 
 #### PATCH-01 创建初始管理员账号脚本
