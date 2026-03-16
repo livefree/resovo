@@ -365,3 +365,42 @@
 - **注意事项**：
   - 依赖 user_role cookie（非 HttpOnly）供 Next.js middleware 读取；实际 API 调用仍由 JWT 鉴权
   - moderator 无法访问 /admin/users、/admin/crawler、/admin/analytics
+
+---
+
+## [PATCH-01] 创建初始管理员账号脚本
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `scripts/create-admin.ts` — 新建，交互式命令行（readline），bcrypt cost=10，检查邮箱/用户名重复，写入 role='admin'
+  - `package.json` — 新增 `"create:admin": "node --env-file=.env.local --import tsx scripts/create-admin.ts"`
+- **新增依赖**：无
+- **数据库变更**：无（写入 users 表，非 schema 变更）
+- **注意事项**：
+  - 脚本仅供本地开发使用，不得暴露为 API
+  - 重复邮箱/用户名时友好提示并退出，不抛错
+
+## [PATCH-02] 验证爬虫完整采集链路
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/api/services/CrawlerService.ts` — 修复 4 个 Bug：① `cast` 未加引号 ② INSERT 引用不存在的 `source_count` 列 ③ `fetchPage` 只调 listing API 不含 `vod_play_url`（改为两步：listing 取 IDs → `ac=detail&ids=...` 取完整数据）④ 新增私有 `fetchText()` 辅助方法
+  - `src/api/routes/admin/videos.ts` — 修复 INSERT/UPDATE 中 `cast` 未加引号
+  - `src/api/db/migrations/002_indexes.sql` — 添加幂等唯一约束 `uq_sources_video_url (video_id, source_url)`，供 upsertSource ON CONFLICT 使用
+  - `scripts/verify-crawler.ts` — 新建，直连 CrawlerService 验证管道，`npm run verify:crawler`
+  - `package.json` — 新增 `"verify:crawler"` 脚本
+- **新增依赖**：无
+- **数据库变更**：新增 `video_sources(video_id, source_url)` 唯一约束
+- **注意事项**：
+  - 苹果CMS listing API（`?h=N`）不含 `vod_play_url`，必须二次调用 `?ac=detail&ids=...`
+  - 验证结果：20 条视频、742 条播放源、ES 20 条，错误 0
+
+## [PATCH-03] 配置开发环境自动上架
+- **完成时间**：2026-03-15
+- **修改文件**：
+  - `src/api/lib/config.ts` — 新增 `AUTO_PUBLISH_CRAWLED: z.enum(['true','false']).default('false')`
+  - `src/api/services/CrawlerService.ts` — `is_published` 改由 `config.AUTO_PUBLISH_CRAWLED === 'true'` 控制（原为硬编码 true）
+  - `.env.example` — 新增 `AUTO_PUBLISH_CRAWLED=false`，注释说明开发/生产差异
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - `.env.local`（未提交）中设置 `AUTO_PUBLISH_CRAWLED=true`，生产环境保持 false
+  - 现有 20 条视频已全部设置 `is_published=true`，前台首页可直接访问内容

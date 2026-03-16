@@ -140,6 +140,47 @@ VALUES (
 AUTO_PUBLISH_CRAWLED=true
 ```
 
+### 验证采集链路
+
+```bash
+npm run verify:crawler
+```
+
+连接 PostgreSQL 和 Elasticsearch，执行一次增量采集（最近 24 小时），并输出视频数、播放源数、ES 索引文档数及样本数据。退出码 0 表示链路正常。
+
+---
+
+## 数据库结构
+
+### 核心表
+
+| 表名 | 说明 |
+|------|------|
+| `users` | 用户（三级角色：user / moderator / admin） |
+| `videos` | 视频元数据（标题/封面/类型/年份/评分等） |
+| `video_sources` | 播放源（第三方直链，支持多线路多集数） |
+| `subtitles` | 字幕文件（R2 存储，用户上传） |
+| `lists` | 用户收藏列表 |
+| `list_items` | 收藏列表条目 |
+| `danmaku` | 弹幕（按视频ID + 集数 + 时间轴索引） |
+| `watch_history` | 观看历史（用于断点续播） |
+| `crawler_tasks` | 采集任务记录（状态/耗时/数量统计） |
+
+### 关键约束
+
+- `videos(short_id)` — URL 唯一标识（8 位 nanoid），是对外的主要查询键
+- `video_sources(video_id, source_url)` — 唯一约束，防止重复写入同一播放源
+- `videos.deleted_at` — 软删除，所有查询自动过滤 `deleted_at IS NULL`
+- `cast` 是 PostgreSQL 保留字，schema 中已加双引号处理
+
+### 迁移执行顺序
+
+```
+001_init_tables.sql  →  002_indexes.sql
+```
+
+两个文件均为**幂等**（`IF NOT EXISTS`），可安全重复执行。
+
 ---
 
 ## 运行测试
@@ -208,10 +249,10 @@ npm run lint
 
 ## 已知问题（Phase 2 修复）
 
-- E2E 测试有 2 个 flaky（时序问题，不影响功能）
 - 移动端播放器控制栏体验待优化
 - 推荐系统尚未实现（详情页/播放页推荐区为静态占位）
 - 用户收藏/历史/播放列表功能在 Phase 2 实现
+- 播放源有效性取决于第三方资源站，不保证所有链接可用
 
 ---
 
