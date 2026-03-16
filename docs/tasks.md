@@ -283,7 +283,23 @@ CHG-06（类型标签联动）       ← 最后处理
   - 修改：`src/api/routes/admin/crawler.ts`（新增 `POST /admin/crawler/reindex` 端点，admin 权限，调用 `reindexAll()`）
   - ⚠️ **已有数据需重建索引**：ES 现有文档仍缺少 `cover_url`，需在 API 服务器启动后执行一次：`curl -X POST http://localhost:4000/v1/admin/crawler/reindex -H "Authorization: Bearer <admin_token>"`
   - 新增单元测试 2 个（/admin/crawler/reindex 权限 + 返回值）；262 个 unit 测试全部通过
-  - commit hash：见下次提交
+  - commit hash：308818e
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-11 后台播放源管理页显示"请求失败，请稍后重试"
+
+- **状态**：✅ 已完成
+- **问题**：管理后台「播放源管理」页面显示"请求失败，请稍后重试"，无法加载播放源列表。
+- **根本原因**：`GET /admin/sources` SQL 中 `WHERE` 子句使用了未限定表名的 `deleted_at IS NULL` 和 `submitted_by IS NULL`，`video_sources JOIN videos` 两表均含 `deleted_at` 列，PostgreSQL 报 `column reference "deleted_at" is ambiguous` 错误。
+- **文件范围**：
+  - `src/api/routes/admin/content.ts`（`GET /admin/sources` handler 中 conditions 数组）
+- **变更内容**：
+  - `'deleted_at IS NULL'` → `'s.deleted_at IS NULL'`
+  - `'submitted_by IS NULL'` → `'s.submitted_by IS NULL'`
+- **验收**：管理后台「播放源管理」页面正常加载，显示播放源列表（数据库中现有 742 条活跃播放源）
+- **完成备注**：修改 `src/api/routes/admin/content.ts` 第 47 行 conditions 数组；经 psql 验证修复后查询正常返回结果；commit hash：见本次提交
 - **问题说明**：_（无）_
 
 ---

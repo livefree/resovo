@@ -44,7 +44,7 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
     }
 
     const { active, page, limit, videoId } = parsed.data
-    const conditions = ['deleted_at IS NULL', 'submitted_by IS NULL']
+    const conditions = ['s.deleted_at IS NULL', 's.submitted_by IS NULL']
     const params: unknown[] = []
     let idx = 1
 
