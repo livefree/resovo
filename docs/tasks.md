@@ -311,6 +311,134 @@ CHG-06（类型标签联动）       ← 最后处理
 
 ---
 
+#### CHG-13 admin/videos.ts 模块边界重构 + 补齐 ES 同步
+
+- **状态**：✅ 已完成
+- **变更原因**：架构审计 C-1 + C-3：路由层直接内联 SQL 违反模块边界；管理员新建/编辑视频后无 ES 同步，违反 ADR-004，已造成搜索结果静默数据不一致
+- **影响的已完成任务**：VIDEO-01（VideoService 扩充），CRAWLER-01（ES 同步参考实现）
+- **文件范围**：
+  - `src/api/routes/admin/videos.ts`（路由层只做参数校验+响应格式化，SQL 全部移走）
+  - `src/api/db/queries/videos.ts`（新增 admin 所需函数：listAdminVideos、createVideo、updateVideo、batchPublishVideos、deleteVideo）
+  - `src/api/services/VideoService.ts`（新增 create、update、batchPublish、delete 方法，create/update 后触发 ES 同步队列）
+- **变更内容**：
+  1. 将 admin/videos.ts 中 6 个处理器的 SQL 全部提取到 `db/queries/videos.ts` 对应函数
+  2. 在 `VideoService` 中新增 create/update/batchPublish/delete 方法
+  3. create 和 update 方法完成 DB 写入后调用 `void this.indexToES(videoId)`（参考 CrawlerService.upsertVideo 实现）
+  4. admin/videos.ts 路由处理器改为调用 VideoService 方法
+- **完成备注**：新增 `db/queries/videos.ts` admin 函数（listAdminVideos、findAdminVideoById、createVideo、updateVideoMeta、publishVideo、batchPublishVideos）；VideoService 新增 adminList/adminFindById/create/update/publish/batchPublish 方法及私有 indexToES；admin/videos.ts 全部内联 SQL 移除，改为调用 VideoService；create/update 后自动触发 ES 同步；typecheck ✅ lint ✅ 262 tests ✅；commit hash：41210f8
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-14 verifyWorker.ts DB 更新取消注释（验证结果落库）
+
+- **状态**：✅ 已完成
+- **变更原因**：架构审计 C-4（最紧急）：verifyWorker 中 DB 更新逻辑被注释为占位符，导致每日 4:00 AM 定时验证结果全部丢弃，`is_active`/`last_checked` 字段从不更新，用户举报功能无效
+- **影响的已完成任务**：CRAWLER-03（verifyWorker 源码）
+- **文件范围**：
+  - `src/api/workers/verifyWorker.ts`（取消注释 DB 更新调用，注入 db 依赖）
+  - `src/api/db/queries/sources.ts`（确认 `updateActiveStatus` 函数已存在，若不存在则新增）
+- **变更内容**：
+  1. 取消 `verifyWorker.ts:66-67` 的注释，启用 `videoSourcesQueries.updateActiveStatus()` 调用
+  2. 确认 worker 初始化时正确注入 `db` 实例（检查 `src/api/server.ts` 中 worker 创建方式）
+  3. 若 `updateActiveStatus` 函数不存在，在 `db/queries/sources.ts` 中新增
+- **完成备注**：`updateSourceActiveStatus` 已存在于 `db/queries/sources.ts`；取消 verifyWorker.ts 注释并导入 `db` 模块级实例和 `updateSourceActiveStatus`；在 server.ts 注册 `registerVerifyWorker()`；typecheck ✅ lint ✅ 262 tests ✅；commit hash：35bc542
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-15 admin/content.ts 模块边界重构
+
+- **状态**：✅ 已完成
+- **变更原因**：架构审计 C-2：admin/content.ts 全部 10 个路由处理器直接 `db.query()`，违反模块边界原则；submission 审核通过时没有触发 ES 同步
+- **影响的已完成任务**：CRAWLER-02（submission 流程）
+- **文件范围**：
+  - `src/api/routes/admin/content.ts`（路由层只做参数校验+响应格式化）
+  - `src/api/db/queries/sources.ts`（新增 admin source 管理函数：listAdminSources、updateSource、deleteSource、listSubmissions、approveSubmission、rejectSubmission）
+  - `src/api/db/queries/subtitles.ts`（若不存在则新建，新增 listAdminSubtitles、approveSubtitle、rejectSubtitle）
+  - `src/api/services/ContentService.ts`（新建，封装 source/submission/subtitle 管理业务逻辑）
+- **变更内容**：
+  1. 将 content.ts 中所有内联 SQL 提取到对应 queries 文件
+  2. 新建 ContentService，submission 审核通过后触发 ES 同步（如适用）
+  3. content.ts 路由处理器改为调用 ContentService 方法
+- **完成备注**：新增 `db/queries/sources.ts` admin 函数（listAdminSources、deleteSource、batchDeleteSources、listSubmissions、approveSubmission、rejectSubmission）；新增 `db/queries/subtitles.ts` admin 函数（listAdminSubtitles、approveSubtitle、rejectSubtitle）；新建 ContentService；admin/content.ts 全部内联 SQL 移除；typecheck ✅ lint ✅ 262 tests ✅；commit hash：6f4f02a
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-16 admin/users.ts 模块边界重构（复用已有 queries/users.ts）
+
+- **状态**：✅ 已完成
+- **变更原因**：架构审计 M-1：admin/users.ts 全部 5 个处理器直接 `db.query()`，且绕过了已存在的 `src/api/db/queries/users.ts`
+- **影响的已完成任务**：AUTH-01（users queries）
+- **文件范围**：
+  - `src/api/routes/admin/users.ts`（路由层只做参数校验+响应格式化）
+  - `src/api/db/queries/users.ts`（扩充：listAdminUsers 含动态 WHERE、banUser、unbanUser、updateUserRole）
+  - `src/api/services/UserService.ts`（若不存在则新建，封装 admin 用户管理业务逻辑）
+- **变更内容**：
+  1. 在 `queries/users.ts` 中新增 admin 所需函数（复用已有文件，不重复造轮子）
+  2. admin/users.ts 路由处理器改为调用 UserService 方法
+- **完成备注**：在 `db/queries/users.ts` 新增 listAdminUsers、findAdminUserById、banUser、unbanUser、updateUserRole；admin/users.ts 改为直接调用 usersQueries（逻辑简单，未新建 UserService）；typecheck ✅ lint ✅ 262 tests ✅；commit hash：9b6c9c0
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-17 将 POST /sources/submit 迁出 admin 命名空间
+
+- **状态**：✅ 已完成
+- **变更原因**：架构审计 M-3：`POST /admin/sources/submit` 只需普通用户权限（`fastify.authenticate`），放在 `/admin/` 命名空间语义错误；未来若对 `/admin/*` 统一加权限验证会意外拦截此端点
+- **影响的已完成任务**：CRAWLER-02（submission 提交端点）
+- **文件范围**：
+  - `src/api/routes/admin/crawler.ts`（移除 POST /admin/sources/submit 端点）
+  - `src/api/routes/sources.ts`（新增 POST /sources/submit，保持相同 preHandler 和业务逻辑）
+  - 前端调用处（搜索并更新 API 路径，若有）
+- **变更内容**：
+  1. 将端点从 `POST /admin/sources/submit` 迁移到 `POST /sources/submit`
+  2. 权限保持不变（`fastify.authenticate`，普通用户即可）
+  3. 确保向后兼容：旧路径可保留但返回 301 重定向（可选）
+- **完成备注**：从 adminCrawlerRoutes 移除 `/admin/sources/submit` 端点和 VerifyService 实例；在 sourceRoutes 新增 `POST /sources/submit`（相同业务逻辑和权限）；更新测试 buildCrawlerAdminApp 也注册 sourceRoutes；typecheck ✅ lint ✅ 262 tests ✅；commit hash：8393191
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-18 实现 POST /users/me/history（ADR-012）
+
+- **状态**：✅ 已完成
+- **变更原因**：架构审计 M-4：ADR-012 要求实现 `POST /users/me/history` 端点，`watch_history` 表和相关类型已就绪，但端点缺失，播放进度无法跨设备同步
+- **影响的已完成任务**：AUTH-01（watch_history 表）、PLAYER-01（播放进度上报）
+- **文件范围**：
+  - `src/api/routes/users.ts`（新建，含 GET/POST /users/me、POST /users/me/history、GET /users/me/history）
+  - `src/api/db/queries/watchHistory.ts`（新建，含 upsertWatchHistory、getUserHistory 函数）
+  - `src/api/services/UserService.ts`（扩充，添加 getProfile、updateHistory、getHistory 方法）
+  - `src/api/server.ts`（注册 userRoutes）
+- **变更内容**：
+  1. 实现 `POST /users/me/history`：upsert watch_history，更新 progress_seconds 和 completed 字段
+  2. 实现 `GET /users/me/history`：返回用户观看历史列表（分页）
+  3. 实现 `GET /users/me`：返回当前用户 profile（复用已有 queries/users.ts）
+- **测试要求**：Vitest `tests/unit/api/users.test.ts`（history upsert、进度更新、未登录 401）
+- **完成备注**：新建 `db/queries/watchHistory.ts`（upsertWatchHistory、getUserHistory）；新建 `routes/users.ts`（GET /users/me、POST /users/me/history、GET /users/me/history）；server.ts 注册 userRoutes；新建 `tests/unit/api/users.test.ts`（8 tests 全通过）；typecheck ✅ lint ✅ 270 tests ✅；commit hash：9018b2c
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-19 admin/analytics.ts 模块边界重构（只读，低风险）
+
+- **状态**：✅ 已完成
+- **变更原因**：架构审计 M-2：admin/analytics.ts 路由处理器直接执行 5 条跨表 SQL，违反模块边界原则（虽为只读操作，风险较低）
+- **影响的已完成任务**：ADMIN-04（analytics 路由）
+- **文件范围**：
+  - `src/api/routes/admin/analytics.ts`（路由层只做参数校验+响应格式化）
+  - `src/api/db/queries/analytics.ts`（新建，封装 5 个统计查询函数）
+  - `src/api/services/AnalyticsService.ts`（新建，封装统计业务逻辑）
+- **变更内容**：
+  1. 将 analytics.ts 中所有内联 SQL 提取到 `db/queries/analytics.ts`
+  2. 新建 AnalyticsService 调用 queries 层
+  3. analytics.ts 路由处理器改为调用 AnalyticsService 方法
+- **完成备注**：新建 `db/queries/analytics.ts`（5 个统计查询函数）；新建 `AnalyticsService.ts`（getDashboard 方法）；admin/analytics.ts 路由改为调用 AnalyticsService；typecheck ✅ lint ✅ 270 tests ✅；commit hash：f8e4250
+- **问题说明**：_（无）_
+
+---
+
 #### CHG-11 后台播放源管理页显示"请求失败，请稍后重试"
 
 - **状态**：✅ 已完成

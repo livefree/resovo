@@ -423,3 +423,34 @@
   - `src/components/player/PlayerShell.tsx` — 集成 ControlBar+SourceBar，修正 detailHref（CHG-07/08）
   - `messages/en.json`、`messages/zh-CN.json` — 新增 nav.search、nav.admin 键
 - **测试**：typecheck ✅ lint ✅ 260 单元测试全部通过
+
+---
+
+## [架构一致性修复] CHG-13 ~ CHG-19
+
+- **完成时间**：2026-03-16
+- **修改文件**：
+  - `src/api/workers/verifyWorker.ts` — 取消 DB 更新注释，导入 db 和 updateSourceActiveStatus（CHG-14）
+  - `src/api/server.ts` — 注册 registerVerifyWorker() 和 userRoutes（CHG-14/CHG-18）
+  - `src/api/db/queries/videos.ts` — 新增 admin 查询函数（listAdminVideos、findAdminVideoById、createVideo、updateVideoMeta、publishVideo、batchPublishVideos）（CHG-13）
+  - `src/api/services/VideoService.ts` — 新增 adminList/adminFindById/create/update/publish/batchPublish 方法及私有 indexToES（CHG-13）
+  - `src/api/routes/admin/videos.ts` — 移除内联 SQL，改为调用 VideoService（CHG-13）
+  - `src/api/db/queries/sources.ts` — 新增 admin 函数（listAdminSources、deleteSource、batchDeleteSources、listSubmissions、approveSubmission、rejectSubmission）（CHG-15/17）
+  - `src/api/db/queries/subtitles.ts` — 新增 admin 函数（listAdminSubtitles、approveSubtitle、rejectSubtitle）（CHG-15）
+  - `src/api/services/ContentService.ts` — 新建（CHG-15）
+  - `src/api/routes/admin/content.ts` — 移除内联 SQL，改为调用 ContentService（CHG-15）
+  - `src/api/db/queries/users.ts` — 新增 admin 函数（listAdminUsers、findAdminUserById、banUser、unbanUser、updateUserRole）（CHG-16）
+  - `src/api/routes/admin/users.ts` — 移除内联 SQL，改为调用 usersQueries（CHG-16）
+  - `src/api/routes/admin/crawler.ts` — 移除 POST /admin/sources/submit 端点（CHG-17）
+  - `src/api/routes/sources.ts` — 新增 POST /sources/submit（CHG-17）
+  - `src/api/db/queries/watchHistory.ts` — 新建（CHG-18）
+  - `src/api/routes/users.ts` — 新建，GET /users/me、POST/GET /users/me/history（CHG-18）
+  - `src/api/db/queries/analytics.ts` — 新建（CHG-19）
+  - `src/api/services/AnalyticsService.ts` — 新建（CHG-19）
+  - `src/api/routes/admin/analytics.ts` — 移除内联 SQL，改为调用 AnalyticsService（CHG-19）
+  - `tests/unit/api/users.test.ts` — 新建（CHG-18，8 tests）
+  - `tests/unit/api/crawler.test.ts` — 更新测试路径和 app 注册（CHG-17）
+- **新增依赖**：无
+- **数据库变更**：无（watch_history 表已在 migration 001 中存在）
+- **注意事项**：管理员新建/编辑视频后会自动触发 ES 同步（异步）；verifyWorker 已正式启用 DB 更新；POST /sources/submit 路径已从 /admin/ 迁移，前端如有调用需同步更新
+- **测试**：typecheck ✅ lint ✅ 270 单元测试全部通过
