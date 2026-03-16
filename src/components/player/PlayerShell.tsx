@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -17,6 +17,9 @@ import { apiClient } from '@/lib/api-client'
 import { extractShortId } from '@/lib/video-detail'
 import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@/types'
 import type { VideoSource as PlayerSource } from './VideoPlayer'
+import { ControlBar } from './ControlBar'
+import { SourceBar } from './SourceBar'
+import type Player from 'video.js/dist/types/player'
 
 // VideoPlayer 动态导入，ssr: false（Video.js 依赖 DOM API）
 const VideoPlayer = dynamic(
@@ -24,16 +27,24 @@ const VideoPlayer = dynamic(
   { ssr: false }
 )
 
+const MIME_MAP: Record<string, string> = {
+  hls:  'application/x-mpegURL',
+  mp4:  'video/mp4',
+  dash: 'application/dash+xml',
+}
+
 interface PlayerShellProps {
   slug: string
 }
 
 export function PlayerShell({ slug }: PlayerShellProps) {
   const searchParams = useSearchParams()
-  const { mode, toggleMode, initPlayer, currentEpisode, setEpisode, setPlaying, setCurrentTime } = usePlayerStore()
+  const { mode, toggleMode, initPlayer, currentEpisode, setEpisode, setPlaying, setCurrentTime, setDuration } = usePlayerStore()
   const [video, setVideo] = useState<Video | null>(null)
   const [sources, setSources] = useState<PlayerSource[]>([])
   const [loading, setLoading] = useState(true)
+  const [vjsPlayer, setVjsPlayer] = useState<Player | null>(null)
+  const [activeSourceIndex, setActiveSourceIndex] = useState(0)
 
   const shortId = extractShortId(slug)
 
@@ -59,11 +70,52 @@ export function PlayerShell({ slug }: PlayerShellProps) {
           label: s.sourceName,
         }))
         setSources(mapped)
+        setActiveSourceIndex(0)
       })
       .catch(() => setVideo(null))
       .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shortId])
+
+  // 集数切换时重新获取播放源
+  useEffect(() => {
+    if (!shortId || !video) return
+    apiClient
+      .get<ApiListResponse<VideoSource>>(
+        `/videos/${shortId}/sources?episode=${currentEpisode}`,
+        { skipAuth: true }
+      )
+      .then((res) => {
+        const mapped: PlayerSource[] = res.data.map((s) => ({
+          src: s.sourceUrl,
+          type: s.type,
+          label: s.sourceName,
+        }))
+        setSources(mapped)
+        setActiveSourceIndex(0)
+      })
+      .catch(() => {/* 集数无源时不清除已有源 */})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentEpisode])
+
+  const handlePlayerReady = useCallback((player: Player) => {
+    setVjsPlayer(player)
+    player.on('loadedmetadata', () => {
+      setDuration(player.duration() ?? 0)
+    })
+  }, [setDuration])
+
+  function handleSourceChange(index: number) {
+    setActiveSourceIndex(index)
+    if (vjsPlayer && !vjsPlayer.isDisposed()) {
+      const src = sources[index]
+      const currentTime = vjsPlayer.currentTime() ?? 0
+      vjsPlayer.src({ src: src.src, type: MIME_MAP[src.type] ?? 'video/mp4' })
+      setTimeout(() => {
+        vjsPlayer.currentTime(currentTime)
+      }, 500)
+    }
+  }
 
   const isTheater = mode === 'theater'
 
@@ -91,7 +143,9 @@ export function PlayerShell({ slug }: PlayerShellProps) {
   }
 
   // 详情页链接
-  const detailHref = `/${video.type}/${video.slug ?? video.shortId}`
+  const detailHref = video.slug
+    ? `/${video.type}/${video.slug}-${video.shortId}`
+    : `/${video.type}/${video.shortId}`
 
   return (
     <div
@@ -119,9 +173,9 @@ export function PlayerShell({ slug }: PlayerShellProps) {
             )}
             data-testid="player-main"
           >
-            {/* 播放器 */}
+            {/* 播放器容器 */}
             <div
-              className="w-full relative rounded-lg overflow-hidden"
+              className="w-full relative rounded-t-lg overflow-hidden"
               style={{ aspectRatio: '16/9', background: '#000' }}
               data-testid="player-video-area"
             >
@@ -129,6 +183,7 @@ export function PlayerShell({ slug }: PlayerShellProps) {
                 <VideoPlayer
                   sources={sources}
                   episode={currentEpisode}
+                  onReady={handlePlayerReady}
                   onPlay={() => setPlaying(true)}
                   onPause={() => setPlaying(false)}
                   onTimeUpdate={setCurrentTime}
@@ -145,8 +200,33 @@ export function PlayerShell({ slug }: PlayerShellProps) {
                   {video.episodeCount > 1 && (
                     <span className="text-xs">第 {currentEpisode} 集</span>
                   )}
+                  <span className="text-xs mt-1">播放源暂时不可用，请切换线路</span>
                 </div>
               )}
+            </div>
+
+            {/* 线路选择栏 */}
+            {sources.length > 0 && (
+              <div className="rounded-none" style={{ background: '#111' }}>
+                <SourceBar
+                  sources={sources}
+                  activeIndex={activeSourceIndex}
+                  player={vjsPlayer}
+                  onSourceChange={handleSourceChange}
+                />
+              </div>
+            )}
+
+            {/* 自定义控制栏 */}
+            <div className="rounded-b-lg" style={{ background: '#111' }}>
+              <ControlBar
+                player={vjsPlayer}
+                onNextEpisode={
+                  video.episodeCount > 1 && currentEpisode < video.episodeCount
+                    ? () => setEpisode(currentEpisode + 1)
+                    : undefined
+                }
+              />
             </div>
 
             {/* 标题行 + 模式切换按钮 */}

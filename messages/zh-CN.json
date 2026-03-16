@@ -45,7 +45,9 @@
     "catMovie": "电影",
     "catSeries": "剧集",
     "catAnime": "动漫",
-    "catVariety": "综艺"
+    "catVariety": "综艺",
+    "search": "搜索...",
+    "admin": "管理后台"
   },
   "home": {
     "trendingMovies": "热门电影",

@@ -45,7 +45,9 @@
     "catMovie": "Movies",
     "catSeries": "Series",
     "catAnime": "Anime",
-    "catVariety": "Variety"
+    "catVariety": "Variety",
+    "search": "Search...",
+    "admin": "Admin"
   },
   "home": {
     "trendingMovies": "Trending Movies",

@@ -40,7 +40,7 @@ export default function HomePage() {
           <VideoGrid
             query="type=movie&period=week&limit=10"
             variant="portrait"
-            gridCols="grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+            layout="scroll"
             data-testid="movie-grid"
           />
         </section>
@@ -62,7 +62,7 @@ export default function HomePage() {
           <VideoGrid
             query="type=series&period=week&limit=8"
             variant="landscape"
-            gridCols="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+            layout="scroll"
             data-testid="series-grid"
           />
         </section>
