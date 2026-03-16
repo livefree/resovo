@@ -109,3 +109,55 @@ export async function findSubtitleById(
 export async function verifySubtitle(db: Pool, id: string): Promise<void> {
   await db.query('UPDATE subtitles SET is_verified = true WHERE id = $1', [id])
 }
+
+// ── Admin 查询 ────────────────────────────────────────────────────
+
+export async function listAdminSubtitles(
+  db: Pool,
+  page: number,
+  limit: number
+): Promise<{ rows: unknown[]; total: number }> {
+  const offset = (page - 1) * limit
+
+  const [rows, countResult] = await Promise.all([
+    db.query(
+      `SELECT s.*, v.title AS video_title
+       FROM subtitles s
+       LEFT JOIN videos v ON s.video_id = v.id
+       WHERE s.is_verified = false AND s.deleted_at IS NULL
+       ORDER BY s.created_at ASC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    ),
+    db.query<{ count: string }>(
+      `SELECT COUNT(*) FROM subtitles WHERE is_verified = false AND deleted_at IS NULL`
+    ),
+  ])
+
+  return {
+    rows: rows.rows,
+    total: parseInt(countResult.rows[0]?.count ?? '0'),
+  }
+}
+
+export async function approveSubtitle(
+  db: Pool,
+  id: string
+): Promise<boolean> {
+  const result = await db.query(
+    `UPDATE subtitles SET is_verified = true WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
+    [id]
+  )
+  return (result.rowCount ?? 0) > 0
+}
+
+export async function rejectSubtitle(
+  db: Pool,
+  id: string
+): Promise<boolean> {
+  const result = await db.query(
+    `UPDATE subtitles SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
+    [id]
+  )
+  return (result.rowCount ?? 0) > 0
+}

@@ -142,3 +142,134 @@ export async function upsertSources(
   }
   return count
 }
+
+// ── Admin 查询 ────────────────────────────────────────────────────
+
+export interface AdminSourceListFilters {
+  active?: 'true' | 'false' | 'all'
+  videoId?: string
+  page: number
+  limit: number
+}
+
+export async function listAdminSources(
+  db: Pool,
+  filters: AdminSourceListFilters
+): Promise<{ rows: unknown[]; total: number }> {
+  const conditions = ['s.deleted_at IS NULL', 's.submitted_by IS NULL']
+  const params: unknown[] = []
+  let idx = 1
+
+  if (filters.active === 'true') {
+    conditions.push('s.is_active = true')
+  } else if (filters.active === 'false') {
+    conditions.push('s.is_active = false')
+  }
+  if (filters.videoId) {
+    conditions.push(`s.video_id = $${idx++}`)
+    params.push(filters.videoId)
+  }
+
+  const where = conditions.join(' AND ')
+  const offset = (filters.page - 1) * filters.limit
+
+  const [rows, countResult] = await Promise.all([
+    db.query(
+      `SELECT s.*, v.title AS video_title
+       FROM video_sources s
+       LEFT JOIN videos v ON s.video_id = v.id
+       WHERE ${where}
+       ORDER BY s.created_at DESC
+       LIMIT $${idx} OFFSET $${idx + 1}`,
+      [...params, filters.limit, offset]
+    ),
+    db.query<{ count: string }>(
+      `SELECT COUNT(*) FROM video_sources s WHERE ${where}`,
+      params
+    ),
+  ])
+
+  return {
+    rows: rows.rows,
+    total: parseInt(countResult.rows[0]?.count ?? '0'),
+  }
+}
+
+export async function deleteSource(
+  db: Pool,
+  id: string
+): Promise<boolean> {
+  const result = await db.query(
+    `UPDATE video_sources SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
+    [id]
+  )
+  return (result.rowCount ?? 0) > 0
+}
+
+export async function batchDeleteSources(
+  db: Pool,
+  ids: string[]
+): Promise<number> {
+  if (ids.length === 0) return 0
+  const placeholders = ids.map((_, i) => `$${i + 1}`).join(', ')
+  const result = await db.query(
+    `UPDATE video_sources SET deleted_at = NOW() WHERE id IN (${placeholders}) AND deleted_at IS NULL`,
+    ids
+  )
+  return result.rowCount ?? 0
+}
+
+export async function listSubmissions(
+  db: Pool,
+  page: number,
+  limit: number
+): Promise<{ rows: unknown[]; total: number }> {
+  const offset = (page - 1) * limit
+
+  const [rows, countResult] = await Promise.all([
+    db.query(
+      `SELECT s.*, v.title AS video_title, u.username AS submitted_by_username
+       FROM video_sources s
+       LEFT JOIN videos v ON s.video_id = v.id
+       LEFT JOIN users u ON s.submitted_by = u.id::text
+       WHERE s.is_active = false AND s.submitted_by IS NOT NULL AND s.deleted_at IS NULL
+       ORDER BY s.created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    ),
+    db.query<{ count: string }>(
+      `SELECT COUNT(*) FROM video_sources WHERE is_active = false AND submitted_by IS NOT NULL AND deleted_at IS NULL`
+    ),
+  ])
+
+  return {
+    rows: rows.rows,
+    total: parseInt(countResult.rows[0]?.count ?? '0'),
+  }
+}
+
+export async function approveSubmission(
+  db: Pool,
+  id: string
+): Promise<boolean> {
+  const result = await db.query(
+    `UPDATE video_sources SET is_active = true, last_checked = NOW()
+     WHERE id = $1 AND is_active = false AND deleted_at IS NULL
+     RETURNING id`,
+    [id]
+  )
+  return (result.rowCount ?? 0) > 0
+}
+
+export async function rejectSubmission(
+  db: Pool,
+  id: string
+): Promise<boolean> {
+  const result = await db.query(
+    `UPDATE video_sources SET deleted_at = NOW()
+     WHERE id = $1 AND is_active = false AND deleted_at IS NULL
+     RETURNING id`,
+    [id]
+  )
+  return (result.rowCount ?? 0) > 0
+}
