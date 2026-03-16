@@ -232,6 +232,52 @@ CHG-06（类型标签联动）       ← 最后处理
 
 ---
 
+#### CHG-09 管理后台缺少返回前台入口
+
+- **状态**：⬜ 待开始
+- **问题**：进入管理后台（`/admin/*`）后，侧边栏或顶栏没有「返回前台」或「退出管理后台」的入口，用户只能手动修改地址栏或退出登录才能回到前台，体验极差。
+- **文件范围**：
+  - `src/app/[locale]/admin/layout.tsx`（在侧边栏底部或顶栏右侧新增「返回前台」链接，指向 `/`）
+- **逻辑**：
+  - 侧边栏底部固定区域新增一个「← 返回前台」链接，所有角色可见
+  - 点击跳转到 `/`（首页），不清除登录状态
+  - 样式与侧边栏现有菜单项一致，用 `var(--muted-foreground)` 颜色，hover 时变亮
+- **验收**：
+  - 进入任意 `/admin/*` 页面，侧边栏底部有「返回前台」链接
+  - 点击后跳转到网站首页，用户仍保持登录状态
+  - 前台导航栏仍显示「管理后台」入口（admin/moderator 角色）
+- **测试要求**：补充 Playwright `tests/e2e/admin.spec.ts`（admin 用户在后台能点击返回前台）
+- **完成备注**：_（AI 填写）_
+- **问题说明**：_（若有问题）_
+
+---
+
+#### CHG-10 非首页视频卡片封面图不显示
+
+- **状态**：⬜ 待开始
+- **问题**：首页视频卡片封面图正常显示，但分类浏览页、搜索结果页的视频卡片封面图不能正常加载，显示为灰色占位块。
+- **可能原因**：
+  1. 分类浏览页（`BrowseGrid`）和搜索页（`SearchResultList`）调用的 API 端点与首页不同，返回的 `coverUrl` 字段为 `null` 或字段名不一致
+  2. `next/image` 的 `remotePatterns` 配置仅对部分域名生效（已通过 `**` 通配符修复，可排除此原因）
+  3. API 搜索接口（`/search`）返回的字段未包含 `cover_url` → `coverUrl` 映射
+- **文件范围**：
+  - `src/api/services/SearchService.ts`（确认 ES 查询结果包含 `cover_url` 字段并正确映射为 `coverUrl`）
+  - `src/api/routes/search.ts`（确认响应字段与 `SearchResult` 类型一致）
+  - `src/components/browse/BrowseGrid.tsx`（确认传给 `VideoCard` 的数据包含 `coverUrl`）
+  - `src/api/services/VideoService.ts` 的 `list()` 方法（确认浏览页 API 返回 `cover_url`）
+- ⚠️ **约束提醒**：
+  - 不得修改数据库 schema，`cover_url` 列已存在于 `videos` 表
+  - `next/image` 已配置 `remotePatterns: [{protocol:'https',hostname:'**'}]`，若图片仍不加载，检查 `src` 是否为空而非域名问题
+- **验收**：
+  - 分类浏览页（`/browse`）视频卡片显示封面图
+  - 搜索结果页（`/search?q=xxx`）搜索结果卡片显示封面图
+  - `coverUrl` 为 `null` 时显示 🎬 占位图，不显示破损图标
+- **测试要求**：手动验收；排查过程中记录根本原因到完成备注
+- **完成备注**：_（AI 填写）_
+- **问题说明**：_（若有问题）_
+
+---
+
 ## Resovo — Phase 1 补充任务
 
 #### PATCH-01 创建初始管理员账号脚本
