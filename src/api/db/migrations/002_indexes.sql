@@ -72,6 +72,17 @@ CREATE INDEX IF NOT EXISTS idx_sources_active
 CREATE INDEX IF NOT EXISTS idx_sources_last_checked
   ON video_sources(last_checked);
 
+-- 去重约束：同一视频不重复插入相同 source_url（upsert 用）
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'uq_sources_video_url' AND conrelid = 'video_sources'::regclass
+  ) THEN
+    ALTER TABLE video_sources ADD CONSTRAINT uq_sources_video_url
+      UNIQUE (video_id, source_url);
+  END IF;
+END $$;
+
 -- ── subtitles 索引 ───────────────────────────────────────────────────
 
 CREATE INDEX IF NOT EXISTS idx_subtitles_video_id

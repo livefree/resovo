@@ -54,20 +54,25 @@ export class CrawlerService {
   buildApiUrl(
     base: string,
     format: 'xml' | 'json',
-    options: { page?: number; hoursAgo?: number; keyword?: string } = {}
+    options: { page?: number; hoursAgo?: number; keyword?: string; ids?: string } = {}
   ): string {
     const fmt = format === 'xml' ? 'xml' : 'json'
     let url = `${base}/api.php/provide/vod/at/${fmt}`
     const params: string[] = []
 
-    if (options.page && options.page > 1) {
-      params.push(`pg=${options.page}`)
-    }
-    if (options.hoursAgo) {
-      params.push(`h=${options.hoursAgo}`)
-    }
-    if (options.keyword) {
-      params.push(`wd=${encodeURIComponent(options.keyword)}`)
+    if (options.ids) {
+      params.push(`ac=detail`)
+      params.push(`ids=${options.ids}`)
+    } else {
+      if (options.page && options.page > 1) {
+        params.push(`pg=${options.page}`)
+      }
+      if (options.hoursAgo) {
+        params.push(`h=${options.hoursAgo}`)
+      }
+      if (options.keyword) {
+        params.push(`wd=${encodeURIComponent(options.keyword)}`)
+      }
     }
     if (params.length > 0) {
       url += `?${params.join('&')}`
@@ -75,28 +80,45 @@ export class CrawlerService {
     return url
   }
 
+  /** 通用 HTTP 取文本 */
+  private async fetchText(url: string): Promise<string> {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Resovo-Crawler/1.0' },
+      signal: AbortSignal.timeout(30_000),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`)
+    return res.text()
+  }
+
   /**
    * 拉取并解析单页数据
+   * 苹果CMS listing 接口不含 vod_play_url，需二次调用 ac=detail 获取播放源
    */
   async fetchPage(
     source: CrawlerSource,
     options: { page?: number; hoursAgo?: number } = {}
   ): Promise<ReturnType<typeof parseVodItem>[]> {
-    const url = this.buildApiUrl(source.base, source.format, options)
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Resovo-Crawler/1.0' },
-      signal: AbortSignal.timeout(30_000),
+    // Step 1: 获取列表，拿到 vod_id 列表
+    const listUrl = this.buildApiUrl(source.base, source.format, options)
+    const listBody = await this.fetchText(listUrl)
+    const listItems =
+      source.format === 'xml' ? parseXmlResponse(listBody) : parseJsonResponse(listBody)
+
+    if (listItems.length === 0) return []
+
+    // Step 2: 批量获取详情（含 vod_play_url）
+    const ids = listItems.map((item) => String(item.vod_id)).join(',')
+    const detailUrl = this.buildApiUrl(source.base, source.format, { ids })
+    const detailBody = await this.fetchText(detailUrl)
+    const detailItems =
+      source.format === 'xml' ? parseXmlResponse(detailBody) : parseJsonResponse(detailBody)
+
+    // 优先使用详情数据，回退到列表数据（保持兼容性）
+    const detailMap = new Map(detailItems.map((item) => [String(item.vod_id), item]))
+    return listItems.map((listItem) => {
+      const detail = detailMap.get(String(listItem.vod_id)) ?? listItem
+      return parseVodItem(detail)
     })
-
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status} from ${url}`)
-    }
-
-    const body = await res.text()
-    const rawItems =
-      source.format === 'xml' ? parseXmlResponse(body) : parseJsonResponse(body)
-
-    return rawItems.map((item) => parseVodItem(item))
   }
 
   /**
@@ -128,11 +150,10 @@ export class CrawlerService {
       const inserted = await this.db.query<{ id: string }>(
         `INSERT INTO videos
            (short_id, title, title_en, cover_url, type, category, year, country,
-            cast, director, writers, description, status, episode_count,
-            is_published, source_count)
+            "cast", director, writers, description, status, episode_count,
+            is_published)
          VALUES
-           ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,
-            $14, true, 0)
+           ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,true)
          RETURNING id`,
         [
           shortId,
@@ -167,15 +188,6 @@ export class CrawlerService {
         sourceName: s.sourceName,
         type: s.type,
       }))
-    )
-
-    // 3. 更新 source_count 冗余字段
-    await this.db.query(
-      `UPDATE videos SET source_count = (
-         SELECT COUNT(*) FROM video_sources
-         WHERE video_id = $1 AND is_active = true AND deleted_at IS NULL
-       ) WHERE id = $1`,
-      [videoId]
     )
 
     return { videoId, sourcesUpserted }

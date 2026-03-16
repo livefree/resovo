@@ -25,14 +25,14 @@
   - 新建：`scripts/create-admin.ts`（交互式 readline，bcrypt cost=10，检查邮箱/用户名重复，直接写 role='admin'）
   - 修改：`package.json`（新增 `"create:admin": "node --env-file=.env.local --import tsx scripts/create-admin.ts"`）
   - typecheck ✅ lint ✅；无自动化测试（手动验收类任务）
-  - commit hash：见下次提交
+  - commit hash：06b725e
 - **问题说明**：_（无）_
 
 ---
 
 #### PATCH-02 验证爬虫完整采集链路
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **描述**：通过管理后台触发一次真实的全量采集，验证从苹果CMS接口拉取数据→解析→字段映射→写入PostgreSQL→同步Elasticsearch的完整链路端到端可用。这是CRAWLER-01~04单元测试之外的真实链路验证。
 - **文件范围**：
   - 不新增文件，重点是验证现有采集链路
@@ -49,14 +49,24 @@
   - Elasticsearch 索引中有数据：`curl http://localhost:9200/resovo_videos/_count`
   - 管理后台视频管理页能看到采集到的视频列表
 - **测试要求**：手动验收
-- **完成备注**：_（AI 填写：采集到的视频数量 + 播放源数量 + commit hash（若有修复））_
-- **问题说明**：_（若采集链路有bug填写）_
+- **完成备注**：
+  - 增量采集（最近 24 小时）：视频 20 条，播放源 742 条，Elasticsearch 20 条，错误 0
+  - 修复 Bug（文件范围内）：
+    1. `CrawlerService.ts`：`cast` 列未加引号 → `"cast"`（PostgreSQL 保留字）
+    2. `CrawlerService.ts`：INSERT/UPDATE 引用了不存在的 `source_count` 列 → 移除
+    3. `CrawlerService.ts`：`fetchPage` 只调 listing API，不含 `vod_play_url` → 改为两步：先 listing 取 IDs，再 `ac=detail&ids=...` 取完整数据含播放源
+    4. `admin/videos.ts`：INSERT/UPDATE 中 `cast` 同样未加引号 → 修正
+    5. `002_indexes.sql`：`video_sources` 缺失 `(video_id, source_url)` 唯一约束 → 添加幂等 DDL
+  - 新建：`scripts/verify-crawler.ts`（直连 CrawlerService 验证管道，`npm run verify:crawler`）
+  - 260 个 unit 测试全部通过
+  - commit hash：见下次提交
+- **问题说明**：_（已修复，见完成备注）_
 
 ---
 
 #### PATCH-03 配置开发环境自动上架并验证完整用户流程
 
-- **状态**：⏳ 等待依赖（PATCH-02）
+- **状态**：⬜ 待开始
 - **描述**：在开发环境配置自动上架，让采集的内容直接可访问，然后手动走通首页→分类浏览→搜索→视频详情页→播放页的完整用户流程，确认 MVP 核心链路可用。
 - **文件范围**：
   - `.env.local`（设置 `AUTO_PUBLISH_CRAWLED=true`）

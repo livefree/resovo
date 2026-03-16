@@ -218,7 +218,7 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       status: 'status',
       rating: 'rating',
       director: 'director',
-      cast: 'cast',
+      cast: '"cast"',
       writers: 'writers',
     }
 
@@ -263,7 +263,7 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
     const result = await db.query(
       `INSERT INTO videos
          (title, title_en, description, cover_url, type, category, year, country,
-          episode_count, status, rating, director, cast, writers, is_published)
+          episode_count, status, rating, director, "cast", writers, is_published)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
        RETURNING *`,
       [
