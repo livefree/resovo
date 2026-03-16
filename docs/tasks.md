@@ -299,7 +299,7 @@ CHG-06（类型标签联动）       ← 最后处理
   - `'deleted_at IS NULL'` → `'s.deleted_at IS NULL'`
   - `'submitted_by IS NULL'` → `'s.submitted_by IS NULL'`
 - **验收**：管理后台「播放源管理」页面正常加载，显示播放源列表（数据库中现有 742 条活跃播放源）
-- **完成备注**：修改 `src/api/routes/admin/content.ts` 第 47 行 conditions 数组；经 psql 验证修复后查询正常返回结果；commit hash：见本次提交
+- **完成备注**：修改 `src/api/routes/admin/content.ts` 第 47 行 conditions 数组；经 psql 验证修复后查询正常返回结果；commit hash：acdf335
 - **问题说明**：_（无）_
 
 ---
