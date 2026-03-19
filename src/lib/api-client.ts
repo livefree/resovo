@@ -150,6 +150,19 @@ export const apiClient = {
     return request<T>(path, { ...options, method: 'DELETE' })
   },
 
+  /** 获取弹幕列表（公开，带 sessionStorage 缓存见 useDanmaku） */
+  getDanmaku(shortId: string, ep = 1): Promise<{ data: Array<{ time: number; type: 0 | 1 | 2; color: string; text: string }> }> {
+    return request(`/videos/${shortId}/danmaku?ep=${ep}`, { method: 'GET', skipAuth: true })
+  },
+
+  /** 发送一条弹幕（需登录） */
+  postDanmaku(
+    shortId: string,
+    body: { ep: number; time: number; type: 0 | 1 | 2; color: string; text: string }
+  ): Promise<{ data: { time: number; type: 0 | 1 | 2; color: string; text: string } }> {
+    return request(`/videos/${shortId}/danmaku`, { method: 'POST', body })
+  },
+
   /** 上传文件（multipart/form-data，不设 Content-Type 让浏览器自动处理 boundary） */
   upload<T>(path: string, formData: FormData, options?: Omit<RequestOptions, 'method' | 'body'>): Promise<T> {
     const { headers = {}, ...rest } = options ?? {}

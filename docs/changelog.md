@@ -484,3 +484,23 @@
   - GET 响应格式与 comment-core-library CommentData 兼容：`{ time, type(0/1/2), color, text }`
   - POST body 包含 `ep`（集数，默认 1）、`time`（整数秒）、`type`、`color`（#rrggbb）、`text`（1-100字，经 striptags 过滤）
   - CHG-22 可基于此 API 接入 CCL 渲染
+
+---
+
+## [CHG-22] 接入 comment-core-library 渲染弹幕
+- **完成时间**：2026-03-18
+- **修改文件**：
+  - `src/hooks/useDanmaku.ts`（新建）— 弹幕数据获取，sessionStorage 30min 缓存，支持集数切换
+  - `src/components/player/DanmakuBar.tsx`（更新）— 集成 useDanmaku，CCL.load 渲染，ResizeObserver，postDanmaku 持久化
+  - `src/lib/api-client.ts`（更新）— 新增 getDanmaku/postDanmaku 类型化方法
+  - `vitest.config.ts`（更新）— 添加 tests/unit/hooks/** jsdom 环境
+  - `tests/unit/hooks/useDanmaku.test.ts`（新建）— 6 个测试：缓存命中、失败降级、集数切换
+  - `tests/unit/components/player/DanmakuBar.test.tsx`（更新）— 添加 CHG-22 集成测试组，mock ResizeObserver
+  - `docs/tasks.md` — CHG-22 标记完成
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - DanmakuBar 从 playerStore 自动读取 shortId 和 currentEpisode，无需 PlayerShell 传参
+  - type 映射：0(scroll)→CCL mode 1，1(top)→mode 5，2(bottom)→mode 4
+  - sendDanmaku 发送时同步 POST 到后端（fire-and-forget，不影响 UI 响应）
+  - ResizeObserver 在 JSDOM 不存在，测试需在全局 mock

@@ -690,7 +690,7 @@ CHG-06（类型标签联动）       ← 最后处理
 
 #### CHG-22 接入 comment-core-library 渲染弹幕（播放页）
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **依赖**：CHG-20（yt-player 已替换）、CHG-21（弹幕 API 已实现）
 - **变更原因**：`comment-core-library` 已在 `package.json` 引入但仅作占位，`DanmakuBar.tsx` 中 CCL 初始化逻辑为 graceful degradation（静默降级），未真正接入数据
 - **影响的已完成任务**：PLAYER-07（DanmakuBar）
@@ -722,8 +722,8 @@ CHG-06（类型标签联动）       ← 最后处理
 - **测试要求**：
   - Vitest `tests/unit/components/player/DanmakuBar.test.tsx`（更新：mock useDanmaku，验证 CommentManager.load 被调用）
   - Vitest `tests/unit/hooks/useDanmaku.test.ts`（新建：缓存命中、重试、空数据）
-- **完成备注**：_（AI 填写）_
-- **问题说明**：_（若有问题）_
+- **完成备注**：新建 `src/hooks/useDanmaku.ts`（sessionStorage 30min 缓存）；更新 `DanmakuBar.tsx`（playerStore 集成、CCL.load、ResizeObserver、postDanmaku）；api-client.ts 新增 getDanmaku/postDanmaku；vitest.config.ts 补充 hooks jsdom 环境；typecheck ✅ lint ✅ tests 249/249 ✅
+- **问题说明**：_（无）_
 
 ---
 
