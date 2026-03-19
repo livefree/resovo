@@ -129,6 +129,7 @@ resovo/
 | director | TEXT[] | 导演列表 |
 | cast | TEXT[] | 演员/声优列表 |
 | writers | TEXT[] | 编剧列表 |
+| douban_id | VARCHAR(20) | 豆瓣 ID，nullable；CHG-23 migration 003 |
 | created_at | TIMESTAMPTZ | |
 
 ### video_sources

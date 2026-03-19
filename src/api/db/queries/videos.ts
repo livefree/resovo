@@ -18,6 +18,7 @@ interface DbVideoRow {
   description: string | null
   cover_url: string | null
   type: VideoType
+  douban_id: string | null
   category: string | null
   rating: number | null
   year: number | null
@@ -449,4 +450,52 @@ export async function batchPublishVideos(
   } finally {
     client.release()
   }
+}
+
+// ── 更新：豆瓣元数据（CHG-23）────────────────────────────────────
+
+export interface UpdateDoubanInput {
+  doubanId: string
+  rating?: number | null
+  description?: string | null
+  coverUrl?: string | null
+  director?: string[]
+  cast?: string[]
+}
+
+export async function updateDoubanData(
+  db: Pool,
+  videoId: string,
+  input: UpdateDoubanInput
+): Promise<boolean> {
+  const sets: string[] = ['douban_id = $1', 'updated_at = NOW()']
+  const params: unknown[] = [input.doubanId]
+
+  if (input.rating !== undefined) {
+    params.push(input.rating)
+    sets.push(`rating = $${params.length}`)
+  }
+  if (input.description !== undefined) {
+    params.push(input.description)
+    sets.push(`description = $${params.length}`)
+  }
+  if (input.coverUrl !== undefined) {
+    params.push(input.coverUrl)
+    sets.push(`cover_url = $${params.length}`)
+  }
+  if (input.director !== undefined) {
+    params.push(input.director)
+    sets.push(`director = $${params.length}`)
+  }
+  if (input.cast !== undefined) {
+    params.push(input.cast)
+    sets.push(`"cast" = $${params.length}`)
+  }
+
+  params.push(videoId)
+  const result = await db.query(
+    `UPDATE videos SET ${sets.join(', ')} WHERE id = $${params.length} AND deleted_at IS NULL`,
+    params
+  )
+  return (result.rowCount ?? 0) > 0
 }

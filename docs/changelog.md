@@ -504,3 +504,23 @@
   - type 映射：0(scroll)→CCL mode 1，1(top)→mode 5，2(bottom)→mode 4
   - sendDanmaku 发送时同步 POST 到后端（fire-and-forget，不影响 UI 响应）
   - ResizeObserver 在 JSDOM 不存在，测试需在全局 mock
+
+---
+
+## [CHG-23] Douban 元数据同步
+- **完成时间**：2026-03-18
+- **修改文件**：
+  - `src/api/lib/douban.ts`（新建）— searchDouban（JSON API）、getDoubanDetail（JSON-LD 解析），UA 轮换，随机 200-500ms 延迟
+  - `src/api/services/DoubanService.ts`（新建）— syncVideo：相似度 >80% 匹配，跳过已有 douban_id，抓取失败降级
+  - `src/api/db/queries/videos.ts`（更新）— 新增 updateDoubanData + douban_id 字段到 DbVideoRow
+  - `src/api/routes/admin/videos.ts`（更新）— 新增 POST /admin/videos/:id/douban-sync（admin only）
+  - `src/api/db/migrations/003_add_douban_id.sql`（新建）— ALTER TABLE videos ADD COLUMN douban_id
+  - `docs/architecture.md`（更新）— videos 表新增 douban_id 列说明
+  - `tests/unit/api/douban.test.ts`（新建）— 12 个测试全通过
+  - `docs/tasks.md` — CHG-23 标记完成
+- **新增依赖**：无（使用 node 原生 fetch + 正则）
+- **数据库变更**：videos 表新增 douban_id VARCHAR(20)（migration 003）
+- **注意事项**：
+  - 此功能依赖豆瓣非官方接口，不稳定；抓取失败时降级而非 500
+  - 已有 douban_id 的视频不会覆盖（防止重复同步）
+  - 只能 admin 手动触发，不可批量自动执行

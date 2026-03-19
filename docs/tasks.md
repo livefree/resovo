@@ -729,7 +729,7 @@ CHG-06（类型标签联动）       ← 最后处理
 
 #### CHG-23 Douban 元数据同步（管理员手动触发）
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **变更原因**：视频元数据（评分、演员、导演、简介、封面）来源于爬虫采集，质量参差不齐；豆瓣有较完整的中文影视元数据，管理员可按需触发同步以补全数据
 - **影响的已完成任务**：VIDEO-01（videos 表），ADMIN-01（admin 视频管理）
 - **文件范围**：
@@ -759,8 +759,8 @@ CHG-06（类型标签联动）       ← 最后处理
   - 抓取失败时返回 `{ updated: false }` 而非 500
 - **数据库变更**：`videos` 表新增 `douban_id VARCHAR(20)` 列（nullable）；同步更新 `docs/architecture.md`
 - **测试要求**：Vitest `tests/unit/api/douban.test.ts`（mock HTTP，验证权限、匹配成功时更新 DB、抓取失败时降级）
-- **完成备注**：_（AI 填写）_
-- **问题说明**：_（若有问题）_
+- **完成备注**：新建 `src/api/lib/douban.ts`（searchDouban/getDoubanDetail，UA 轮换，JSON-LD 解析）；`src/api/services/DoubanService.ts`（Jaccard 相似度 >80% 匹配）；`src/api/db/queries/videos.ts` 新增 `updateDoubanData`；`src/api/routes/admin/videos.ts` 新增 adminOnly 端点；migration `003_add_douban_id.sql`；`docs/architecture.md` 更新；typecheck ✅ lint ✅ tests 12/12 ✅（261 total ✅）
+- **问题说明**：_（无）_
 
 ---
 

@@ -15,6 +15,7 @@ import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { es } from '@/api/lib/elasticsearch'
 import { VideoService } from '@/api/services/VideoService'
+import { DoubanService } from '@/api/services/DoubanService'
 import type { VideoType, VideoStatus, VideoCategory } from '@/types'
 
 // ── Zod Schema ────────────────────────────────────────────────────
@@ -58,7 +59,9 @@ const ListQuerySchema = z.object({
 
 export async function adminVideoRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['moderator', 'admin'])]
+  const adminOnly = [fastify.authenticate, fastify.requireRole(['admin'])]
   const videoService = new VideoService(db, es)
+  const doubanService = new DoubanService(db)
 
   // ── GET /admin/videos ────────────────────────────────────────
   fastify.get('/admin/videos', { preHandler: auth }, async (request, reply) => {
@@ -159,6 +162,21 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
 
     const result = await videoService.create(parsed.data)
     return reply.code(201).send({ data: result })
+  })
+
+  // ── POST /admin/videos/:id/douban-sync ───────────────────────
+  // CHG-23: admin only，手动触发豆瓣元数据同步
+  fastify.post('/admin/videos/:id/douban-sync', { preHandler: adminOnly }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+
+    if (!/^[0-9a-f-]{36}$/.test(id)) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
+      })
+    }
+
+    const result = await doubanService.syncVideo(id)
+    return reply.send({ data: result })
   })
 }
 
