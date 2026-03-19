@@ -774,3 +774,16 @@
 - **注意事项**：
   - 未来配置同步与手工新增均以 API 地址为唯一标识
   - 同 API 不同 key 的情况会被视为同一站点
+
+## [CHG-41] 配置文件页新增“本地上传”Tab（JSON 源站导入）
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 15:22
+- **修改文件**：
+  - `src/components/admin/system/ConfigFileEditor.tsx` — 配置源区域改为 Tab 结构，新增“本地上传”模式与文件解析逻辑
+  - `tests/unit/components/admin/system/ConfigFileEditor.test.tsx`（新建）— 覆盖 Tab 切换、上传成功与上传失败提示
+  - `docs/tasks.md` — 追加 CHG-41 任务闭环记录
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本地上传仅填充编辑器，不自动保存，仍需点击“保存并同步”
+  - 接受 `.json` / `application/json` 文件

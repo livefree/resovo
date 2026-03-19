@@ -31,13 +31,18 @@ interface ConfigFileData {
   subscriptionUrl: string
 }
 
+type SourceTab = 'remote' | 'local'
+
 export function ConfigFileEditor() {
   const [data, setData] = useState<ConfigFileData>({ configFile: '', subscriptionUrl: '' })
+  const [sourceTab, setSourceTab] = useState<SourceTab>('remote')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [fetching, setFetching] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [jsonError, setJsonError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+  const [selectedFileName, setSelectedFileName] = useState('')
 
   const showToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok })
@@ -48,7 +53,10 @@ export function ConfigFileEditor() {
     setLoading(true)
     try {
       const res = await apiClient.get<{ data: ConfigFileData }>('/admin/system/config')
-      setData(res.data)
+      setData({
+        configFile: res.data?.configFile ?? '',
+        subscriptionUrl: res.data?.subscriptionUrl ?? '',
+      })
     } catch {
       // 静默
     } finally {
@@ -93,6 +101,23 @@ export function ConfigFileEditor() {
       showToast(e instanceof Error ? `拉取失败：${e.message}` : '拉取失败', false)
     } finally {
       setFetching(false)
+    }
+  }
+
+  async function handleLocalFileChange(file: File | null) {
+    if (!file) return
+    setSelectedFileName(file.name)
+    setUploading(true)
+    try {
+      const text = await file.text()
+      const parsed = JSON.parse(text) as unknown
+      setData((prev) => ({ ...prev, configFile: JSON.stringify(parsed, null, 2) }))
+      setJsonError(null)
+      showToast('本地文件加载成功', true)
+    } catch (e) {
+      showToast(e instanceof Error ? `本地文件解析失败：${e.message}` : '本地文件解析失败', false)
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -152,26 +177,81 @@ export function ConfigFileEditor() {
     <div className="space-y-5">
       {/* ── 订阅 URL ───────────────────────────────────────── */}
       <div className="rounded-lg border border-[var(--border)] bg-[var(--bg2)] p-5">
-        <h2 className="text-sm font-semibold text-[var(--muted)] uppercase tracking-wider mb-4">订阅 URL</h2>
-        <p className="text-xs text-[var(--muted)] mb-3">
-          填写远程 JSON 配置文件地址，点击拉取后内容将填入下方编辑器
-        </p>
-        <div className="flex gap-2">
-          <input
-            type="url"
-            value={data.subscriptionUrl}
-            onChange={(e) => setData((prev) => ({ ...prev, subscriptionUrl: e.target.value }))}
-            placeholder="https://example.com/config.json"
-            className="flex-1 rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-          />
-          <button
-            onClick={handleFetch}
-            disabled={fetching}
-            className="shrink-0 rounded-md px-4 py-2 text-sm font-medium border border-[var(--border)] bg-[var(--bg3)] text-[var(--text)] hover:bg-[var(--bg4)] disabled:opacity-50 transition-colors"
-          >
-            {fetching ? '拉取中…' : '远程拉取'}
-          </button>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-[var(--muted)] uppercase tracking-wider">配置源</h2>
+          <div className="inline-flex rounded-md border border-[var(--border)] bg-[var(--bg3)] p-1">
+            <button
+              type="button"
+              data-testid="config-tab-remote"
+              onClick={() => setSourceTab('remote')}
+              className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
+                sourceTab === 'remote'
+                  ? 'bg-[var(--accent)] text-black'
+                  : 'text-[var(--muted)] hover:text-[var(--text)]'
+              }`}
+            >
+              订阅 URL
+            </button>
+            <button
+              type="button"
+              data-testid="config-tab-local"
+              onClick={() => setSourceTab('local')}
+              className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
+                sourceTab === 'local'
+                  ? 'bg-[var(--accent)] text-black'
+                  : 'text-[var(--muted)] hover:text-[var(--text)]'
+              }`}
+            >
+              本地上传
+            </button>
+          </div>
         </div>
+
+        {sourceTab === 'remote' ? (
+          <>
+            <p className="text-xs text-[var(--muted)] mb-3">
+              填写远程 JSON 配置文件地址，点击拉取后内容将填入下方编辑器
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={data.subscriptionUrl}
+                onChange={(e) => setData((prev) => ({ ...prev, subscriptionUrl: e.target.value }))}
+                placeholder="https://example.com/config.json"
+                className="flex-1 rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+              />
+              <button
+                type="button"
+                onClick={handleFetch}
+                disabled={fetching}
+                className="shrink-0 rounded-md px-4 py-2 text-sm font-medium border border-[var(--border)] bg-[var(--bg3)] text-[var(--text)] hover:bg-[var(--bg4)] disabled:opacity-50 transition-colors"
+              >
+                {fetching ? '拉取中…' : '远程拉取'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-[var(--muted)] mb-3">
+              选择本地 JSON 文件后自动解析并填充到下方编辑器
+            </p>
+            <div className="flex items-center gap-3">
+              <input
+                data-testid="config-local-file-input"
+                type="file"
+                accept=".json,application/json"
+                onChange={(e) => { void handleLocalFileChange(e.target.files?.[0] ?? null) }}
+                className="block w-full rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--text)] file:mr-3 file:rounded file:border-0 file:bg-[var(--accent)] file:px-3 file:py-1 file:text-xs file:font-semibold file:text-black"
+              />
+              {uploading && <span className="text-xs text-[var(--muted)]">解析中…</span>}
+            </div>
+            {selectedFileName && (
+              <p className="mt-2 text-xs text-[var(--muted)]">
+                已选择：{selectedFileName}
+              </p>
+            )}
+          </>
+        )}
       </div>
 
       {/* ── JSON 编辑器 ────────────────────────────────────── */}

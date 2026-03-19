@@ -2283,3 +2283,29 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - system-config 定向测试 20/20 通过，typecheck/lint 通过
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-41 配置文件页新增“本地上传”Tab（JSON 源站导入）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-19 15:18
+- **计划开始时间**：2026-03-19 15:20
+- **实际开始时间**：2026-03-19 15:20
+- **完成时间**：2026-03-19 15:22
+- **问题**：配置文件区域只有“订阅 URL”拉取方式，缺少本地 JSON 上传入口。
+- **影响的已完成任务**：CHG-35 / CHG-39
+- **文件范围**：
+  - `src/components/admin/system/ConfigFileEditor.tsx`
+  - `tests/unit/components/admin/system/ConfigFileEditor.test.tsx`
+- **修复内容**：
+  - 在配置源区域新增双 Tab：`订阅 URL` / `本地上传`
+  - 本地上传支持选择 `.json` 文件并自动解析填充到 JSON 编辑器
+  - 解析失败展示错误提示，解析成功展示成功提示与已选文件名
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/ConfigFileEditor.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 新增组件单测 3 个，全部通过
+- **问题说明**：_（无）_
