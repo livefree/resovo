@@ -28,7 +28,15 @@ async function start() {
   })
 
   await fastify.register(cors, {
-    origin: process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
+    origin: (origin, cb) => {
+      // 生产环境：只允许配置的 APP_URL
+      // 开发环境：允许所有 localhost（任意端口）
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL
+      if (!origin) return cb(null, true)          // 非浏览器请求（curl 等）
+      if (appUrl && origin === appUrl) return cb(null, true)
+      if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return cb(null, true)
+      cb(new Error('Not allowed by CORS'), false)
+    },
     credentials: true,
   })
 
