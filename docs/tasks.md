@@ -2399,3 +2399,36 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 单测 57/57 通过，typecheck/lint 通过
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-45 统一页视频源列表二次优化（采集集成 + 列头筛选 + 侧栏收窄）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-19 16:20
+- **计划开始时间**：2026-03-19 16:25
+- **实际开始时间**：2026-03-19 16:31
+- **完成时间**：2026-03-19 16:38
+- **问题**：
+  1. 采集触发仍分散在独立区域，视频源配置列表缺少站点级采集操作闭环。
+  2. 筛选控件与列头分离，列表管理时上下视线切换成本高。
+  3. 后台侧栏缺少收窄能力，页面工作区可用宽度不足。
+- **影响的已完成任务**：CHG-42 / CHG-43
+- **文件范围**：
+  - `src/components/admin/system/CrawlerSiteManager.tsx`
+  - `src/components/admin/AdminSidebar.tsx`
+  - `src/app/[locale]/admin/layout.tsx`
+  - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+- **修复内容**：
+  - 视频源列表新增采集集成：支持全站增量/全量触发，支持行级增量/全量触发。
+  - 列表重构为“列头排序 + 列头筛选”双层表头，筛选控件嵌入列标题区域。
+  - 新增行内可编辑项：类型、格式、权重、成人标记、启停状态（配置文件来源行禁用行内编辑并提示）。
+  - 增加最近采集列，展示最近采集时间与状态。
+  - 后台侧栏新增收窄/展开切换，收窄时显示图标并保留 tooltip；菜单顺序按工作流重排。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 组件单测通过（3/3），typecheck/lint 通过。
+- **问题说明**：_（无）_

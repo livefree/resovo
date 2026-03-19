@@ -214,6 +214,8 @@ export function CrawlerSiteManager() {
   const [editTarget, setEditTarget] = useState<CrawlerSite | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [validateStates, setValidateStates] = useState<Record<string, ValidateStatus>>({})
+  const [rowSaving, setRowSaving] = useState<Record<string, boolean>>({})
+  const [crawlTriggering, setCrawlTriggering] = useState<Record<string, boolean>>({})
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const [sortBy, setSortBy] = useState<SortField>('weight')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -340,11 +342,36 @@ export function CrawlerSiteManager() {
   // ── 快速切换启用状态 ─────────────────────────────────────────
 
   async function handleToggleDisabled(site: CrawlerSite) {
+    await handleInlineUpdate(site, { disabled: !site.disabled }, false)
+  }
+
+  async function handleInlineUpdate(site: CrawlerSite, patch: UpdateCrawlerSiteInput, showSuccess = true) {
+    setRowSaving((prev) => ({ ...prev, [site.key]: true }))
     try {
-      await apiClient.patch(`/admin/crawler/sites/${site.key}`, { disabled: !site.disabled })
+      await apiClient.patch(`/admin/crawler/sites/${site.key}`, patch)
+      await fetchSites()
+      if (showSuccess) showToast(`已更新 ${site.name}`, true)
+    } catch {
+      showToast(`更新 ${site.name} 失败`, false)
+    } finally {
+      setRowSaving((prev) => ({ ...prev, [site.key]: false }))
+    }
+  }
+
+  async function handleTriggerCrawl(type: 'full-crawl' | 'incremental-crawl', site?: CrawlerSite) {
+    const taskKey = site ? `${site.key}:${type}` : `all:${type}`
+    setCrawlTriggering((prev) => ({ ...prev, [taskKey]: true }))
+    try {
+      await apiClient.post('/admin/crawler/tasks', {
+        type,
+        siteKey: site?.key,
+      })
+      showToast(site ? `已触发 ${site.name} 采集` : '已触发全站采集', true)
       await fetchSites()
     } catch {
-      showToast('操作失败', false)
+      showToast(site ? `${site.name} 采集触发失败` : '全站采集触发失败', false)
+    } finally {
+      setCrawlTriggering((prev) => ({ ...prev, [taskKey]: false }))
     }
   }
 
@@ -475,6 +502,20 @@ export function CrawlerSiteManager() {
         <button onClick={() => setShowAdd(true)} className="rounded-md px-4 py-2 text-sm font-medium bg-[var(--accent)] text-black hover:opacity-90">
           + 添加源站
         </button>
+        <button
+          onClick={() => handleTriggerCrawl('incremental-crawl')}
+          disabled={crawlTriggering['all:incremental-crawl'] === true}
+          className="rounded-md px-3 py-2 text-sm border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-50"
+        >
+          全站增量采集
+        </button>
+        <button
+          onClick={() => handleTriggerCrawl('full-crawl')}
+          disabled={crawlTriggering['all:full-crawl'] === true}
+          className="rounded-md px-3 py-2 text-sm border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-50"
+        >
+          全站全量采集
+        </button>
         <button onClick={handleExport} className="rounded-md px-3 py-2 text-sm border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)]">
           导出 JSON
         </button>
@@ -490,6 +531,27 @@ export function CrawlerSiteManager() {
             <button onClick={() => handleBatch('delete')} className="rounded-md px-3 py-2 text-xs border border-red-500/30 text-red-400 hover:bg-red-500/10">批量删除</button>
           </>
         )}
+        <button
+          type="button"
+          onClick={() => {
+            setFilters({
+              keyOrName: '',
+              apiUrl: '',
+              sourceType: 'all',
+              format: 'all',
+              isAdult: 'all',
+              disabled: 'all',
+              fromConfig: 'all',
+              weightMin: '',
+              weightMax: '',
+            })
+            setSortBy('weight')
+            setSortDir('desc')
+          }}
+          className="rounded-md border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] hover:bg-[var(--bg3)]"
+        >
+          清空筛选
+        </button>
         {toast && (
           <span className={`ml-auto text-sm ${toast.ok ? 'text-green-500' : 'text-red-500'}`}>{toast.msg}</span>
         )}
@@ -497,97 +559,6 @@ export function CrawlerSiteManager() {
 
       {/* 表格 */}
       <div className="rounded-lg border border-[var(--border)] overflow-hidden">
-        <div className="grid grid-cols-1 gap-2 border-b border-[var(--border)] bg-[var(--bg2)] p-3 md:grid-cols-2 lg:grid-cols-5">
-          <Input
-            value={filters.keyOrName}
-            onChange={(v) => setFilters((prev) => ({ ...prev, keyOrName: v }))}
-            placeholder="筛选 名称 / key"
-          />
-          <Input
-            value={filters.apiUrl}
-            onChange={(v) => setFilters((prev) => ({ ...prev, apiUrl: v }))}
-            placeholder="筛选 API 地址"
-          />
-          <select
-            value={filters.sourceType}
-            onChange={(e) => setFilters((prev) => ({ ...prev, sourceType: e.target.value as typeof prev.sourceType }))}
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--text)]"
-          >
-            <option value="all">类型：全部</option>
-            <option value="vod">类型：长片</option>
-            <option value="shortdrama">类型：短剧</option>
-          </select>
-          <select
-            value={filters.format}
-            onChange={(e) => setFilters((prev) => ({ ...prev, format: e.target.value as typeof prev.format }))}
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--text)]"
-          >
-            <option value="all">格式：全部</option>
-            <option value="json">格式：JSON</option>
-            <option value="xml">格式：XML</option>
-          </select>
-          <select
-            value={filters.disabled}
-            onChange={(e) => setFilters((prev) => ({ ...prev, disabled: e.target.value as typeof prev.disabled }))}
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--text)]"
-          >
-            <option value="all">状态：全部</option>
-            <option value="enabled">状态：运行中</option>
-            <option value="disabled">状态：已停用</option>
-          </select>
-          <select
-            value={filters.isAdult}
-            onChange={(e) => setFilters((prev) => ({ ...prev, isAdult: e.target.value as typeof prev.isAdult }))}
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--text)]"
-          >
-            <option value="all">成人：全部</option>
-            <option value="yes">成人：是</option>
-            <option value="no">成人：否</option>
-          </select>
-          <select
-            value={filters.fromConfig}
-            onChange={(e) => setFilters((prev) => ({ ...prev, fromConfig: e.target.value as typeof prev.fromConfig }))}
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--text)]"
-          >
-            <option value="all">来源：全部</option>
-            <option value="config">来源：配置文件</option>
-            <option value="manual">来源：手工添加</option>
-          </select>
-          <Input
-            value={filters.weightMin}
-            onChange={(v) => setFilters((prev) => ({ ...prev, weightMin: v }))}
-            placeholder="权重最小值"
-            type="number"
-          />
-          <Input
-            value={filters.weightMax}
-            onChange={(v) => setFilters((prev) => ({ ...prev, weightMax: v }))}
-            placeholder="权重最大值"
-            type="number"
-          />
-          <button
-            type="button"
-            onClick={() => {
-              setFilters({
-                keyOrName: '',
-                apiUrl: '',
-                sourceType: 'all',
-                format: 'all',
-                isAdult: 'all',
-                disabled: 'all',
-                fromConfig: 'all',
-                weightMin: '',
-                weightMax: '',
-              })
-              setSortBy('weight')
-              setSortDir('desc')
-            }}
-            className="rounded-md border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] hover:bg-[var(--bg3)]"
-          >
-            清空筛选
-          </button>
-        </div>
-
         <div data-testid="crawler-sites-scroll-container" className="max-h-[60vh] overflow-y-auto overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -600,8 +571,7 @@ export function CrawlerSiteManager() {
                   className="accent-[var(--accent)]"
                 />
               </th>
-              <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('name')}>名称 {sortBy === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('key')}>Key {sortBy === 'key' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className="min-w-[220px] px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('name')}>名称 / Key {sortBy === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
               <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('apiUrl')}>API 地址 {sortBy === 'apiUrl' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
               <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('sourceType')}>类型 {sortBy === 'sourceType' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
               <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('format')}>格式 {sortBy === 'format' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
@@ -609,19 +579,118 @@ export function CrawlerSiteManager() {
               <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('isAdult')}>成人 {sortBy === 'isAdult' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
               <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('fromConfig')}>来源 {sortBy === 'fromConfig' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
               <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('disabled')}>状态 {sortBy === 'disabled' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th className="px-3 py-3 text-left font-medium text-[var(--muted)]">操作</th>
+              <th className="px-3 py-3 text-left font-medium text-[var(--muted)]">最近采集</th>
+              <th className="px-3 py-3 text-left font-medium text-[var(--muted)]">采集操作</th>
+              <th className="px-3 py-3 text-left font-medium text-[var(--muted)]">管理操作</th>
+            </tr>
+            <tr className="sticky top-[45px] z-10 border-b border-[var(--border)] bg-[var(--bg2)] align-top">
+              <th className="px-2 py-2" />
+              <th className="px-2 py-2">
+                <input
+                  value={filters.keyOrName}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, keyOrName: e.target.value }))}
+                  placeholder="筛选 名称 / key"
+                  className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]"
+                />
+              </th>
+              <th className="px-2 py-2">
+                <input
+                  value={filters.apiUrl}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, apiUrl: e.target.value }))}
+                  placeholder="筛选 API 地址"
+                  className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]"
+                />
+              </th>
+              <th className="px-2 py-2">
+                <select
+                  value={filters.sourceType}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, sourceType: e.target.value as typeof prev.sourceType }))}
+                  className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]"
+                >
+                  <option value="all">全部</option>
+                  <option value="vod">长片</option>
+                  <option value="shortdrama">短剧</option>
+                </select>
+              </th>
+              <th className="px-2 py-2">
+                <select
+                  value={filters.format}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, format: e.target.value as typeof prev.format }))}
+                  className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]"
+                >
+                  <option value="all">全部</option>
+                  <option value="json">JSON</option>
+                  <option value="xml">XML</option>
+                </select>
+              </th>
+              <th className="px-2 py-2">
+                <div className="flex gap-1">
+                  <input
+                    value={filters.weightMin}
+                    onChange={(e) => setFilters((prev) => ({ ...prev, weightMin: e.target.value }))}
+                    placeholder="最小"
+                    className="w-16 rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-1 text-xs text-[var(--text)]"
+                  />
+                  <input
+                    value={filters.weightMax}
+                    onChange={(e) => setFilters((prev) => ({ ...prev, weightMax: e.target.value }))}
+                    placeholder="最大"
+                    className="w-16 rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-1 text-xs text-[var(--text)]"
+                  />
+                </div>
+              </th>
+              <th className="px-2 py-2">
+                <select
+                  value={filters.isAdult}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, isAdult: e.target.value as typeof prev.isAdult }))}
+                  className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]"
+                >
+                  <option value="all">全部</option>
+                  <option value="yes">是</option>
+                  <option value="no">否</option>
+                </select>
+              </th>
+              <th className="px-2 py-2">
+                <select
+                  value={filters.fromConfig}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, fromConfig: e.target.value as typeof prev.fromConfig }))}
+                  className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]"
+                >
+                  <option value="all">全部</option>
+                  <option value="config">配置</option>
+                  <option value="manual">手工</option>
+                </select>
+              </th>
+              <th className="px-2 py-2">
+                <select
+                  value={filters.disabled}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, disabled: e.target.value as typeof prev.disabled }))}
+                  className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]"
+                >
+                  <option value="all">全部</option>
+                  <option value="enabled">运行中</option>
+                  <option value="disabled">停用</option>
+                </select>
+              </th>
+              <th className="px-2 py-2" />
+              <th className="px-2 py-2" />
+              <th className="px-2 py-2" />
             </tr>
           </thead>
           <tbody>
             {displaySites.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-3 py-10 text-center text-[var(--muted)] text-sm">
+                <td colSpan={12} className="px-3 py-10 text-center text-[var(--muted)] text-sm">
                   没有符合当前筛选条件的源站
                 </td>
               </tr>
             )}
             {displaySites.map((site) => {
               const vs = validateStates[site.key] ?? 'idle'
+              const rowBusy = rowSaving[site.key] === true
+              const canInlineEdit = !site.fromConfig
+              const incrementalKey = `${site.key}:incremental-crawl`
+              const fullKey = `${site.key}:full-crawl`
               return (
                 <tr key={site.key} className="border-b border-[var(--border)] hover:bg-[var(--bg2)] transition-colors">
                   <td className="px-3 py-3">
@@ -629,31 +698,78 @@ export function CrawlerSiteManager() {
                   </td>
                   <td className="px-3 py-3">
                     <div className="font-medium text-[var(--text)]">{site.name}</div>
+                    <div className="mt-0.5 text-xs text-[var(--muted)]">{site.key}</div>
                   </td>
-                  <td className="px-3 py-3 text-xs text-[var(--muted)]">{site.key}</td>
                   <td className="px-3 py-3 max-w-xs">
                     <span className="block truncate text-xs text-[var(--muted)]">{site.apiUrl}</span>
                   </td>
                   <td className="px-3 py-3">
-                    <Badge color={site.sourceType === 'shortdrama' ? 'blue' : 'gray'}>
-                      {site.sourceType === 'shortdrama' ? '短剧' : '长片'}
-                    </Badge>
+                    <select
+                      value={site.sourceType}
+                      disabled={!canInlineEdit || rowBusy}
+                      onChange={(e) => handleInlineUpdate(site, { sourceType: e.target.value as 'vod' | 'shortdrama' })}
+                      className="w-24 rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] disabled:opacity-50"
+                    >
+                      <option value="vod">长片</option>
+                      <option value="shortdrama">短剧</option>
+                    </select>
                   </td>
-                  <td className="px-3 py-3"><Badge color="gray">{site.format.toUpperCase()}</Badge></td>
-                  <td className="px-3 py-3"><Badge color="gray">w:{site.weight}</Badge></td>
-                  <td className="px-3 py-3">{site.isAdult ? <Badge color="red">成人</Badge> : <span className="text-xs text-[var(--muted)]">否</span>}</td>
+                  <td className="px-3 py-3">
+                    <select
+                      value={site.format}
+                      disabled={!canInlineEdit || rowBusy}
+                      onChange={(e) => handleInlineUpdate(site, { format: e.target.value as 'json' | 'xml' })}
+                      className="w-20 rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] disabled:opacity-50"
+                    >
+                      <option value="json">JSON</option>
+                      <option value="xml">XML</option>
+                    </select>
+                  </td>
+                  <td className="px-3 py-3">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      defaultValue={site.weight}
+                      disabled={!canInlineEdit || rowBusy}
+                      onBlur={(e) => {
+                        const next = Number(e.target.value)
+                        if (Number.isNaN(next) || next < 0 || next > 100) {
+                          e.target.value = String(site.weight)
+                          showToast('权重必须是 0-100', false)
+                          return
+                        }
+                        if (next !== site.weight) void handleInlineUpdate(site, { weight: next })
+                      }}
+                      className="w-16 rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] disabled:opacity-50"
+                    />
+                  </td>
+                  <td className="px-3 py-3">
+                    <label className="inline-flex items-center gap-1 text-xs text-[var(--text)]">
+                      <input
+                        type="checkbox"
+                        checked={site.isAdult}
+                        disabled={!canInlineEdit || rowBusy}
+                        onChange={(e) => handleInlineUpdate(site, { isAdult: e.target.checked })}
+                        className="accent-[var(--accent)]"
+                      />
+                      成人
+                    </label>
+                  </td>
                   <td className="px-3 py-3">{site.fromConfig ? <Badge color="blue">配置文件</Badge> : <span className="text-xs text-[var(--muted)]">手工</span>}</td>
                   <td className="px-3 py-3">
                     <button
                       onClick={() => handleToggleDisabled(site)}
+                      disabled={!canInlineEdit || rowBusy}
                       className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
                         site.disabled
                           ? 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20'
                           : 'bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20'
-                      }`}
+                      } disabled:opacity-50`}
                     >
                       {site.disabled ? '已停用' : '运行中'}
                     </button>
+                    {!canInlineEdit && <div className="mt-1 text-[11px] text-[var(--muted)]">配置文件维护</div>}
                     {vs !== 'idle' && (
                       <div className="mt-1">
                         {vs === 'checking' && <span className="text-xs text-[var(--muted)]">检测中…</span>}
@@ -662,6 +778,38 @@ export function CrawlerSiteManager() {
                         {vs === 'timeout' && <Badge color="yellow">超时</Badge>}
                       </div>
                     )}
+                  </td>
+                  <td className="px-3 py-3">
+                    {site.lastCrawledAt ? (
+                      <div className="text-xs text-[var(--muted)] whitespace-nowrap">
+                        {new Date(site.lastCrawledAt).toLocaleString()}
+                        <div className="mt-1">
+                          {site.lastCrawlStatus === 'ok' && <Badge color="green">成功</Badge>}
+                          {site.lastCrawlStatus === 'failed' && <Badge color="red">失败</Badge>}
+                          {site.lastCrawlStatus === 'running' && <Badge color="yellow">采集中</Badge>}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-[var(--muted)]">未采集</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => handleTriggerCrawl('incremental-crawl', site)}
+                        disabled={crawlTriggering[incrementalKey] === true}
+                        className="rounded px-2 py-1 text-xs border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-50"
+                      >
+                        增量
+                      </button>
+                      <button
+                        onClick={() => handleTriggerCrawl('full-crawl', site)}
+                        disabled={crawlTriggering[fullKey] === true}
+                        className="rounded px-2 py-1 text-xs border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-50"
+                      >
+                        全量
+                      </button>
+                    </div>
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex gap-1.5">

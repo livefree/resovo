@@ -832,3 +832,17 @@
 - **注意事项**：
   - `/auth/dev-login` 在生产环境不可用
   - 开发快捷登录按钮默认关闭，需显式设置 `NEXT_PUBLIC_ENABLE_DEV_LOGIN=true`
+
+## [CHG-45] 统一页视频源列表二次优化（采集集成 + 列头筛选 + 侧栏收窄）
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 16:38
+- **修改文件**：
+  - `src/components/admin/system/CrawlerSiteManager.tsx` — 重构列表为列头筛选+排序，新增行内可编辑列、最近采集列与行级采集触发
+  - `src/components/admin/AdminSidebar.tsx` — 新增侧栏收窄/展开能力，收窄态显示图标+tooltip，按工作流重排菜单
+  - `src/app/[locale]/admin/layout.tsx` — 接入新版 AdminSidebar
+  - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx` — 复用并验证列表容器/筛选/排序行为
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 配置文件来源的源站在列表中显示“配置文件维护”，行内编辑受限，需到“配置文件”页修改
+  - 采集触发已支持全站与单站操作，任务追踪仍在统一页上方爬虫区查看
