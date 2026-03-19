@@ -58,6 +58,8 @@ export interface CrawlerSite {
   isAdult: boolean
   disabled: boolean
   fromConfig: boolean
+  lastCrawledAt: string | null
+  lastCrawlStatus: 'ok' | 'failed' | 'running' | null
   createdAt: string
   updatedAt: string
 }

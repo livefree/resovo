@@ -22,24 +22,28 @@ interface DbRow {
   is_adult: boolean
   disabled: boolean
   from_config: boolean
+  last_crawled_at: string | null
+  last_crawl_status: string | null
   created_at: string
   updated_at: string
 }
 
 function rowToSite(row: DbRow): CrawlerSite {
   return {
-    key:        row.key,
-    name:       row.name,
-    apiUrl:     row.api_url,
-    detail:     row.detail,
-    sourceType: row.source_type as CrawlerSite['sourceType'],
-    format:     row.format as CrawlerSite['format'],
-    weight:     row.weight,
-    isAdult:    row.is_adult,
-    disabled:   row.disabled,
-    fromConfig: row.from_config,
-    createdAt:  row.created_at,
-    updatedAt:  row.updated_at,
+    key:             row.key,
+    name:            row.name,
+    apiUrl:          row.api_url,
+    detail:          row.detail,
+    sourceType:      row.source_type as CrawlerSite['sourceType'],
+    format:          row.format as CrawlerSite['format'],
+    weight:          row.weight,
+    isAdult:         row.is_adult,
+    disabled:        row.disabled,
+    fromConfig:      row.from_config,
+    lastCrawledAt:   row.last_crawled_at,
+    lastCrawlStatus: row.last_crawl_status as CrawlerSite['lastCrawlStatus'],
+    createdAt:       row.created_at,
+    updatedAt:       row.updated_at,
   }
 }
 
@@ -140,6 +144,23 @@ export async function deleteCrawlerSite(db: Pool, key: string): Promise<boolean>
     [key],
   )
   return (result.rowCount ?? 0) > 0
+}
+
+// ── 采集状态 ──────────────────────────────────────────────────
+
+export async function updateCrawlStatus(
+  db: Pool,
+  key: string,
+  status: 'ok' | 'failed' | 'running',
+): Promise<void> {
+  await db.query(
+    `UPDATE crawler_sites
+     SET last_crawl_status = $1,
+         last_crawled_at   = CASE WHEN $1 != 'running' THEN NOW() ELSE last_crawled_at END,
+         updated_at        = NOW()
+     WHERE key = $2`,
+    [status, key],
+  )
 }
 
 // ── 批量操作 ──────────────────────────────────────────────────

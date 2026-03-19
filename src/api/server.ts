@@ -23,6 +23,8 @@ import { setupMetrics } from '@/api/plugins/metrics'
 import { userRoutes } from '@/api/routes/users'
 import { danmakuRoutes } from '@/api/routes/danmaku'
 import { registerVerifyWorker } from '@/api/workers/verifyWorker'
+import { registerCrawlerWorker } from '@/api/workers/crawlerWorker'
+import { registerCrawlerScheduler } from '@/api/workers/crawlerScheduler'
 
 async function start() {
   const fastify = Fastify({
@@ -70,6 +72,8 @@ async function start() {
   await fastify.register(adminCrawlerSitesRoutes, { prefix: '/v1' })
 
   registerVerifyWorker()
+  registerCrawlerWorker()
+  registerCrawlerScheduler()
 
   fastify.get('/v1/health', async (_request, reply) => {
     return reply.send({ status: 'ok', timestamp: new Date().toISOString() })

@@ -1,11 +1,14 @@
 /**
  * crawlerWorker.ts — 爬虫采集队列消费者
- * CRAWLER-01: 处理 crawler-queue 任务（full-crawl / incremental-crawl）
- * 具体采集逻辑由 CRAWLER-02 的 CrawlerService 实现
+ * CHG-36: 从 crawler_sites 表读取源站；支持 siteKey 单站触发；更新采集状态
  */
 
 import type Bull from 'bull'
 import { crawlerQueue } from '@/api/lib/queue'
+import { db } from '@/api/lib/postgres'
+import { es } from '@/api/lib/elasticsearch'
+import { CrawlerService, getEnabledSources } from '@/api/services/CrawlerService'
+import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 
 // ── 任务类型 ──────────────────────────────────────────────────────
 
@@ -13,15 +16,15 @@ export type CrawlJobType = 'full-crawl' | 'incremental-crawl'
 
 export interface CrawlJobData {
   type: CrawlJobType
-  /** 资源站地址，留空时从 CRAWLER_SOURCES 环境变量读取 */
-  sourceUrl?: string
+  /** 指定单站 key；留空时采集全部启用站 */
+  siteKey?: string
   /** 增量模式：只采集最近 N 小时更新的内容 */
   hoursAgo?: number
 }
 
 export interface CrawlJobResult {
   type: CrawlJobType
-  sourceUrl: string
+  sites: string[]
   videosUpserted: number
   sourcesUpserted: number
   errors: number
@@ -30,52 +33,63 @@ export interface CrawlJobResult {
 
 // ── Worker 处理函数 ───────────────────────────────────────────────
 
-/**
- * 处理单个爬虫任务。
- * 真正的采集逻辑在 CRAWLER-02 CrawlerService 中实现，
- * 此处为 Worker 注册骨架，保证队列基础设施可工作。
- */
 async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobResult> {
-  const { type, sourceUrl, hoursAgo } = job.data
+  const { type, siteKey, hoursAgo } = job.data
   const start = Date.now()
+  const crawlerService = new CrawlerService(db, es)
 
-  const sources = (sourceUrl ? [sourceUrl] : (process.env.CRAWLER_SOURCES ?? '').split(','))
-    .map((s) => s.trim())
-    .filter(Boolean)
-
-  if (sources.length === 0) {
-    throw new Error('No crawler sources configured. Set CRAWLER_SOURCES env variable.')
+  // 获取待采集源站列表
+  let allSources = await getEnabledSources(db)
+  if (siteKey) {
+    allSources = allSources.filter((s) => s.name === siteKey)
+    if (allSources.length === 0) {
+      throw new Error(`源站 "${siteKey}" 不存在或已禁用`)
+    }
   }
 
-  // 进度上报：任务开始
+  if (allSources.length === 0) {
+    throw new Error('没有可用的采集源站，请在"视频源配置"中添加并启用源站')
+  }
+
   await job.progress(0)
 
   let videosUpserted = 0
   let sourcesUpserted = 0
   let errors = 0
+  const siteNames: string[] = []
 
-  for (let i = 0; i < sources.length; i++) {
-    const src = sources[i]
+  for (let i = 0; i < allSources.length; i++) {
+    const source = allSources[i]
+    siteNames.push(source.name)
+
+    // 标记为运行中
+    await crawlerSitesQueries.updateCrawlStatus(db, source.name, 'running')
+
     try {
-      // CrawlerService（CRAWLER-02 实现后注入）
-      // const result = await crawlerService.crawl(src, { hoursAgo })
-      // videosUpserted += result.videosUpserted
-      // sourcesUpserted += result.sourcesUpserted
+      process.stderr.write(
+        `[crawler-worker] crawling ${source.name} (${source.base}, ${type}${hoursAgo ? `, last ${hoursAgo}h` : ''})\n`
+      )
+      const result = await crawlerService.crawl(source, {
+        hoursAgo: type === 'incremental-crawl' ? (hoursAgo ?? 24) : undefined,
+      })
+      videosUpserted += result.videosUpserted
+      sourcesUpserted += result.sourcesUpserted
+      if (result.errors > 0) errors += result.errors
 
-      // 占位：记录日志
-      process.stderr.write(`[crawler-worker] crawling ${src} (${type}${hoursAgo ? `, last ${hoursAgo}h` : ''})\n`)
+      await crawlerSitesQueries.updateCrawlStatus(db, source.name, result.errors > 0 ? 'failed' : 'ok')
     } catch (err) {
       errors++
       const message = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`[crawler-worker] error crawling ${src}: ${message}\n`)
+      process.stderr.write(`[crawler-worker] error crawling ${source.name}: ${message}\n`)
+      await crawlerSitesQueries.updateCrawlStatus(db, source.name, 'failed')
     }
 
-    await job.progress(Math.round(((i + 1) / sources.length) * 100))
+    await job.progress(Math.round(((i + 1) / allSources.length) * 100))
   }
 
   return {
     type,
-    sourceUrl: sources.join(','),
+    sites: siteNames,
     videosUpserted,
     sourcesUpserted,
     errors,
@@ -85,10 +99,6 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
 
 // ── Worker 注册 ───────────────────────────────────────────────────
 
-/**
- * 注册爬虫 Worker 到 crawlerQueue。
- * 在 Fastify 服务启动后调用一次。
- */
 export function registerCrawlerWorker(concurrency = 1): void {
   crawlerQueue.process(concurrency, processCrawlJob)
 
@@ -103,15 +113,15 @@ export function registerCrawlerWorker(concurrency = 1): void {
 
 // ── 便捷入队函数 ──────────────────────────────────────────────────
 
-/** 添加全量采集任务到队列 */
-export async function enqueueFullCrawl(sourceUrl?: string): Promise<Bull.Job<CrawlJobData>> {
-  return crawlerQueue.add({ type: 'full-crawl', sourceUrl })
+/** 添加全量采集任务到队列（可选指定单站 key） */
+export async function enqueueFullCrawl(siteKey?: string): Promise<Bull.Job<CrawlJobData>> {
+  return crawlerQueue.add({ type: 'full-crawl', siteKey })
 }
 
-/** 添加增量采集任务到队列（默认最近 24 小时） */
+/** 添加增量采集任务到队列（默认最近 24 小时，可选指定单站 key） */
 export async function enqueueIncrementalCrawl(
-  sourceUrl?: string,
+  siteKey?: string,
   hoursAgo = 24
 ): Promise<Bull.Job<CrawlJobData>> {
-  return crawlerQueue.add({ type: 'incremental-crawl', sourceUrl, hoursAgo })
+  return crawlerQueue.add({ type: 'incremental-crawl', siteKey, hoursAgo })
 }
