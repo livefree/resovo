@@ -1,7 +1,7 @@
 /**
  * auth.ts — JWT 工具函数
  * Access Token: 15 分钟，存前端内存
- * Refresh Token: 7 天，通过 HttpOnly Cookie 传递
+ * Refresh Token: 30 天，通过 HttpOnly Cookie 传递（CHG-37）
  * 黑名单 key: blacklist:rt:<token_hash>（ADR-003）
  */
 
@@ -13,8 +13,8 @@ import type { UserRole } from '@/types'
 // ── Token TTL 常量 ───────────────────────────────────────────────
 
 export const ACCESS_TOKEN_EXPIRES_IN = '15m'
-export const REFRESH_TOKEN_EXPIRES_IN = '7d'
-export const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60 // 604800 秒
+export const REFRESH_TOKEN_EXPIRES_IN = '30d' // CHG-37: 7d → 30d
+export const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60 // 2592000 秒
 
 // ── Token Payload 类型 ───────────────────────────────────────────
 

@@ -25,7 +25,7 @@ const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'strict' as const,
-  maxAge: 7 * 24 * 60 * 60, // 7 天，单位秒
+  maxAge: 30 * 24 * 60 * 60, // 30 天，单位秒（CHG-37）
   path: '/',
 }
 
@@ -34,7 +34,7 @@ const ROLE_COOKIE_OPTIONS = {
   httpOnly: false,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'strict' as const,
-  maxAge: 7 * 24 * 60 * 60,
+  maxAge: 30 * 24 * 60 * 60, // 30 天（CHG-37）
   path: '/',
 }
 

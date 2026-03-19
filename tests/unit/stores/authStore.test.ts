@@ -1,9 +1,9 @@
 /**
  * tests/unit/stores/authStore.test.ts
- * AUTH-03: authStore 状态机测试
+ * AUTH-03 + CHG-37: authStore 状态机测试 + tryRestoreSession 三场景
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useAuthStore, selectIsLoggedIn, selectIsAdmin, selectIsModerator } from '@/stores/authStore'
 import type { User } from '@/types'
 
@@ -28,26 +28,28 @@ const MOCK_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.test.token'
 
 describe('authStore', () => {
   beforeEach(() => {
+    vi.restoreAllMocks()
     // 每次测试前重置 store 到初始状态
-    useAuthStore.setState({ user: null, accessToken: null, isLoading: false })
+    useAuthStore.setState({ user: null, accessToken: null, isLoggedIn: false, isRestoring: false })
   })
 
   // ── 初始状态 ─────────────────────────────────────────────────────
 
-  it('初始状态：user 为 null，accessToken 为 null', () => {
+  it('初始状态：user 为 null，accessToken 为 null，isLoggedIn 为 false', () => {
     const state = useAuthStore.getState()
     expect(state.user).toBeNull()
     expect(state.accessToken).toBeNull()
-    expect(state.isLoading).toBe(false)
+    expect(state.isLoggedIn).toBe(false)
   })
 
   // ── login ────────────────────────────────────────────────────────
 
-  it('login：同时更新 user 和 accessToken', () => {
+  it('login：同时更新 user、accessToken 和 isLoggedIn', () => {
     useAuthStore.getState().login(MOCK_USER, MOCK_TOKEN)
     const state = useAuthStore.getState()
     expect(state.user).toEqual(MOCK_USER)
     expect(state.accessToken).toBe(MOCK_TOKEN)
+    expect(state.isLoggedIn).toBe(true)
   })
 
   it('login 后 selectIsLoggedIn 返回 true', () => {
@@ -57,12 +59,13 @@ describe('authStore', () => {
 
   // ── logout ───────────────────────────────────────────────────────
 
-  it('logout：清除 user 和 accessToken', () => {
+  it('logout：清除 user、accessToken 和 isLoggedIn', () => {
     useAuthStore.getState().login(MOCK_USER, MOCK_TOKEN)
     useAuthStore.getState().logout()
     const state = useAuthStore.getState()
     expect(state.user).toBeNull()
     expect(state.accessToken).toBeNull()
+    expect(state.isLoggedIn).toBe(false)
   })
 
   it('logout 后 selectIsLoggedIn 返回 false', () => {
@@ -128,5 +131,60 @@ describe('authStore', () => {
 
   it('未登录时 selectIsModerator 返回 false（不崩溃）', () => {
     expect(selectIsModerator(useAuthStore.getState())).toBe(false)
+  })
+
+  // ── tryRestoreSession ────────────────────────────────────────────
+
+  describe('tryRestoreSession', () => {
+    it('场景1：不需要恢复（无 user / isLoggedIn=false），直接返回', async () => {
+      const mockFetch = vi.spyOn(globalThis, 'fetch')
+      useAuthStore.setState({ user: null, isLoggedIn: false, accessToken: null })
+      await useAuthStore.getState().tryRestoreSession()
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
+    it('场景2：已有 accessToken，不重复刷新', async () => {
+      const mockFetch = vi.spyOn(globalThis, 'fetch')
+      useAuthStore.setState({ user: MOCK_USER, isLoggedIn: true, accessToken: MOCK_TOKEN })
+      await useAuthStore.getState().tryRestoreSession()
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
+    it('场景3：refresh 成功 → 写入 accessToken', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ accessToken: 'new-token-123' }),
+      } as Response)
+      useAuthStore.setState({ user: MOCK_USER, isLoggedIn: true, accessToken: null })
+      await useAuthStore.getState().tryRestoreSession()
+      expect(useAuthStore.getState().accessToken).toBe('new-token-123')
+      expect(useAuthStore.getState().isLoggedIn).toBe(true)
+      expect(useAuthStore.getState().isRestoring).toBe(false)
+    })
+
+    it('场景4：refresh 失败（HTTP 401）→ 清除登录状态', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: async () => ({}),
+      } as Response)
+      useAuthStore.setState({ user: MOCK_USER, isLoggedIn: true, accessToken: null })
+      await useAuthStore.getState().tryRestoreSession()
+      const state = useAuthStore.getState()
+      expect(state.user).toBeNull()
+      expect(state.isLoggedIn).toBe(false)
+      expect(state.accessToken).toBeNull()
+      expect(state.isRestoring).toBe(false)
+    })
+
+    it('场景5：fetch 网络异常 → 清除登录状态', async () => {
+      vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Network error'))
+      useAuthStore.setState({ user: MOCK_USER, isLoggedIn: true, accessToken: null })
+      await useAuthStore.getState().tryRestoreSession()
+      const state = useAuthStore.getState()
+      expect(state.user).toBeNull()
+      expect(state.isLoggedIn).toBe(false)
+      expect(state.isRestoring).toBe(false)
+    })
   })
 })

@@ -136,8 +136,8 @@ describe('signRefreshToken / verifyRefreshToken', () => {
     expect(() => verifyRefreshToken(accessToken)).toThrow()
   })
 
-  it('REFRESH_TOKEN_TTL_SECONDS 为 7 天（604800 秒）', () => {
-    expect(REFRESH_TOKEN_TTL_SECONDS).toBe(604800)
+  it('REFRESH_TOKEN_TTL_SECONDS 为 30 天（2592000 秒）（CHG-37）', () => {
+    expect(REFRESH_TOKEN_TTL_SECONDS).toBe(2592000)
   })
 })
 
