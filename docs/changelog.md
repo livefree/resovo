@@ -666,3 +666,35 @@
   - `tests/unit/plugins/metrics.test.ts`（新建）— 12 个测试，392 total passed
 - **新增依赖**：无
 - **数据库变更**：无
+
+---
+
+## [CHG-36] 爬虫管理完整功能
+- **完成时间**：2026-03-19
+- **修改文件**：
+  - `src/api/db/migrations/006_crawler_sites_status.sql`（新建）— crawler_sites 加 last_crawled_at / last_crawl_status
+  - `src/api/db/queries/crawlerSites.ts` — 新增 updateCrawlStatus()；DbRow/rowToSite 扩展新字段
+  - `src/api/workers/crawlerWorker.ts` — 从 getEnabledSources(db) 读取源站，支持 siteKey 单站触发，采集后更新状态
+  - `src/api/workers/crawlerScheduler.ts`（新建）— Bull cron `0 3 * * *`，读 auto_crawl_enabled 决定跳过
+  - `src/api/routes/admin/crawler.ts` — POST tasks 增加 siteKey 参数，新增 GET /admin/crawler/sites-status
+  - `src/api/server.ts` — 注册 crawlerWorker + crawlerScheduler
+  - `src/components/admin/AdminCrawlerPanel.tsx` — 源站状态卡片，单站触发按钮，自动采集开关
+  - `tests/unit/api/crawler-worker.test.ts`（新建）— 7 个测试
+  - `tests/unit/api/crawler.test.ts` — 更新 sourceUrl→siteKey，修复 CrawlerService mock
+- **新增依赖**：无
+- **数据库变更**：ALTER TABLE crawler_sites ADD last_crawled_at / last_crawl_status（migration 006）
+
+---
+
+## [CHG-37] 登录会话长期有效
+- **完成时间**：2026-03-19
+- **修改文件**：
+  - `src/api/lib/auth.ts` — REFRESH_TOKEN_EXPIRES_IN 7d→30d，TTL 604800→2592000
+  - `src/api/routes/auth.ts` — maxAge cookie 7d→30d
+  - `src/stores/authStore.ts` — zustand persist（只存 user+isLoggedIn），新增 tryRestoreSession/isRestoring
+  - `src/components/SessionRestorer.tsx`（新建）— mount 时触发 tryRestoreSession
+  - `src/app/[locale]/layout.tsx` — 挂载 SessionRestorer
+  - `tests/unit/stores/authStore.test.ts` — 更新 isLoading→isRestoring，新增 5 个 tryRestoreSession 场景
+  - `tests/unit/api/auth.test.ts` — 更新 TTL_SECONDS 断言 7d→30d
+- **新增依赖**：无
+- **数据库变更**：无

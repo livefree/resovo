@@ -2147,7 +2147,7 @@ _（任务 review 通过后移入此处）_
 
 #### CHG-36 爬虫管理完整功能
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **优先级**：P1
 - **变更原因**：crawlerWorker 未接入 crawler_sites 表；无定时自动采集；前端无法选择源站触发；缺少每站采集状态展示
 - **文件范围**：
@@ -2166,13 +2166,13 @@ _（任务 review 通过后移入此处）_
   - **API**：POST /admin/crawler/tasks 增加可选 siteKey；GET /admin/crawler/sites-status
   - **前端**：源站卡片列表（上次采集时间/状态/单站触发）；全量/增量全局按钮；自动采集开关
 - **测试**：Vitest `tests/unit/api/crawler-worker.test.ts`（job dispatch 逻辑）
-- **完成备注**：_（AI 填写）_
+- **完成备注**：`006_crawler_sites_status.sql` + `crawlerSites.ts`(updateCrawlStatus) + `crawlerWorker.ts`(siteKey+DB接入) + `crawlerScheduler.ts`(cron) + `crawler.ts`(siteKey+sites-status) + `AdminCrawlerPanel.tsx`(源站卡片+自动采集开关) + `server.ts`。419 tests ✅ commit 807b46d
 
 ---
 
 #### CHG-37 登录会话长期有效
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **优先级**：P1
 - **变更原因**：access token 存内存，刷新页面即登出；refresh token 有效期过短；不符合视频网站使用习惯
 - **文件范围**：
@@ -2186,8 +2186,8 @@ _（任务 review 通过后移入此处）_
   - authStore persist：`{ name: 'resovo-auth', storage: localStorage }`，只存 user + isLoggedIn
   - tryRestoreSession：isLoggedIn && !accessToken → POST /auth/refresh → 成功写 token / 失败 logout
   - SessionRestorer：`'use client'`，useEffect 触发一次，放在 root layout
-- **测试**：authStore restore 成功/失败/无 user 三种场景
-- **完成备注**：_（AI 填写）_
+- **测试**：authStore restore 成功/失败/无 user 三种场景（5 scenarios）
+- **完成备注**：`auth.ts`(7d→30d cookie) + `lib/auth.ts`(30d JWT TTL) + `authStore.ts`(persist+tryRestoreSession) + `SessionRestorer.tsx`(新建) + `layout.tsx`(挂载)。419 tests ✅ commit 4bc3be4
 
 ---
 
