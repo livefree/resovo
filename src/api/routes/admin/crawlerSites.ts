@@ -20,7 +20,7 @@ const SourceTypeSchema = z.enum(['vod', 'shortdrama'])
 const FormatSchema = z.enum(['json', 'xml'])
 
 const CreateSiteSchema = z.object({
-  key:        z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/, 'key 只能含字母数字下划线短横线'),
+  key:        z.string().min(1).max(100).regex(/^[a-zA-Z0-9_.\-]+$/, 'key 只能含字母数字下划线点短横线'),
   name:       z.string().min(1).max(200),
   apiUrl:     z.string().url(),
   detail:     z.string().max(500).optional(),
