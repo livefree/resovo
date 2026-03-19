@@ -21,6 +21,7 @@ import { extractShortId } from '@/lib/video-detail'
 import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@/types'
 import { SourceBar } from './SourceBar'
 import { DanmakuBar } from './DanmakuBar'
+import { ResumePrompt, saveProgress, loadProgress } from './ResumePrompt'
 
 // VideoPlayer 动态导入，ssr: false（YTPlayer 依赖 DOM API）
 const VideoPlayer = dynamic(
@@ -50,6 +51,7 @@ export function PlayerShell({ slug }: PlayerShellProps) {
   const [sources, setSources] = useState<Array<{ src: string; type: string; label?: string }>>([])
   const [loading, setLoading] = useState(true)
   const [activeSourceIndex, setActiveSourceIndex] = useState(0)
+  const [startTime, setStartTime] = useState<number | undefined>(undefined)
 
   // 播放器容器 ref，用于 DanmakuBar CCL overlay 挂载
   const playerContainerRef = useRef<HTMLDivElement>(null)
@@ -104,7 +106,8 @@ export function PlayerShell({ slug }: PlayerShellProps) {
   const handleTimeUpdate = useCallback((t: number, d: number) => {
     setCurrentTime(t)
     setDuration(d)
-  }, [setCurrentTime, setDuration])
+    if (t > 0 && shortId) saveProgress(shortId, currentEpisode, t)
+  }, [setCurrentTime, setDuration, shortId, currentEpisode])
 
   const handleTheaterChange = useCallback((isTheater: boolean) => {
     setMode(isTheater ? 'theater' : 'default')
@@ -190,18 +193,27 @@ export function PlayerShell({ slug }: PlayerShellProps) {
               data-testid="player-video-area"
             >
               {activeSrc ? (
-                <VideoPlayer
-                  src={activeSrc}
-                  title={video.title}
-                  episodes={ytEpisodes}
-                  activeEpisodeIndex={currentEpisode - 1}
-                  onEpisodeChange={handleEpisodeChange}
-                  onNext={hasNext ? () => setEpisode(currentEpisode + 1) : undefined}
-                  onTimeUpdate={handleTimeUpdate}
-                  onEnded={() => setPlaying(false)}
-                  onTheaterChange={handleTheaterChange}
-                  className="absolute inset-0"
-                />
+                <>
+                  <VideoPlayer
+                    src={activeSrc}
+                    title={video.title}
+                    episodes={ytEpisodes}
+                    activeEpisodeIndex={currentEpisode - 1}
+                    onEpisodeChange={handleEpisodeChange}
+                    onNext={hasNext ? () => setEpisode(currentEpisode + 1) : undefined}
+                    onTimeUpdate={handleTimeUpdate}
+                    onEnded={() => setPlaying(false)}
+                    onTheaterChange={handleTheaterChange}
+                    startTime={startTime}
+                    className="absolute inset-0"
+                  />
+                  <ResumePrompt
+                    shortId={shortId}
+                    episode={currentEpisode}
+                    onResume={(t) => setStartTime(t)}
+                    onRestart={() => setStartTime(0)}
+                  />
+                </>
               ) : (
                 <div
                   className="absolute inset-0 flex flex-col items-center justify-center gap-2"

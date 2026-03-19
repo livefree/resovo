@@ -1,24 +1,27 @@
 /**
  * ResumePrompt.tsx — 断点续播提示条
  * ADR-012: 检测到上次进度 > 30s 时显示，8s 后自动继续
+ * CHG-20: 去除 video.js 依赖，改为回调驱动
  */
 
 'use client'
 
 import { useEffect, useState } from 'react'
-import type Player from 'video.js/dist/types/player'
 
 interface ResumePromptProps {
-  player: Player | null
   shortId: string
   episode: number
+  /** 用户选择续播时调用，参数为跳转秒数 */
+  onResume: (time: number) => void
+  /** 用户选择从头播放时调用 */
+  onRestart: () => void
 }
 
 function getProgressKey(shortId: string, episode: number): string {
   return `rv-progress-${shortId}-${episode === 0 ? 'movie' : episode}`
 }
 
-function loadProgress(shortId: string, episode: number): number {
+export function loadProgress(shortId: string, episode: number): number {
   try {
     const raw = localStorage.getItem(getProgressKey(shortId, episode))
     return raw ? Number(raw) : 0
@@ -41,7 +44,7 @@ function formatTime(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-export function ResumePrompt({ player, shortId, episode }: ResumePromptProps) {
+export function ResumePrompt({ shortId, episode, onResume, onRestart }: ResumePromptProps) {
   const [savedTime, setSavedTime] = useState<number>(0)
   const [visible, setVisible] = useState(false)
   const [countdown, setCountdown] = useState(8)
@@ -55,7 +58,6 @@ export function ResumePrompt({ player, shortId, episode }: ResumePromptProps) {
     }
   }, [shortId, episode])
 
-  // 倒计时后自动续播
   useEffect(() => {
     if (!visible) return
     if (countdown <= 0) {
@@ -68,15 +70,13 @@ export function ResumePrompt({ player, shortId, episode }: ResumePromptProps) {
   }, [visible, countdown])
 
   function handleResume() {
-    player?.currentTime(savedTime)
-    void player?.play()
     setVisible(false)
+    onResume(savedTime)
   }
 
   function handleFromStart() {
-    player?.currentTime(0)
-    void player?.play()
     setVisible(false)
+    onRestart()
   }
 
   if (!visible) return null

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3001",
+    "dev": "next dev -p 3000",
     "api": "node --env-file=.env.local --import tsx --watch src/api/server.ts",
     "build": "next build",
     "start": "next start",
