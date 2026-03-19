@@ -602,3 +602,67 @@
   - `tests/unit/api/sources-verify.test.ts`（新建）— 8 个测试，344 total passed
 - **新增依赖**：无
 - **数据库变更**：无
+
+---
+
+## [CHG-29] Admin 投稿审核 + 字幕审核页完善
+- **完成时间**：2026-03-18
+- **修改文件**：
+  - `src/api/db/migrations/004_add_rejection_reason.sql`（新建）— video_sources/subtitles 新增 rejection_reason VARCHAR(200)
+  - `src/api/db/queries/sources.ts`（更新）— `rejectSubmission` 补充 rejection_reason 更新
+  - `src/api/db/queries/subtitles.ts`（更新）— `rejectSubtitle` 补充 rejection_reason 更新
+  - `src/api/services/ContentService.ts`（更新）— reject 方法转发 reason 参数
+  - `src/api/routes/admin/content.ts`（更新）— reject 端点接受 body.reason（1-200字）
+  - `src/components/admin/content/ReviewModal.tsx`（新建）— Tab 式通过/驳回 + 驳回理由必填校验
+  - `src/components/admin/content/SubmissionTable.tsx`（新建）— 投稿列表 + 分页 + 审核通过 Toast
+  - `src/components/admin/content/SubtitleTable.tsx`（新建）— 字幕列表 + 分页
+  - `src/app/[locale]/admin/content/page.tsx`（新建）— Tab 切换投稿/字幕审核
+  - `tests/unit/components/admin/content/ReviewModal.test.tsx`（新建）— 7 个测试，352 total passed
+- **新增依赖**：无
+- **数据库变更**：migration 004 — video_sources.rejection_reason, subtitles.rejection_reason
+
+---
+
+## [CHG-30] Admin 缓存管理（后端 API + 前端 UI）
+- **完成时间**：2026-03-18
+- **修改文件**：
+  - `src/api/services/CacheService.ts`（新建）— SCAN+UNLINK+pipeline 内存估算，4 个业务前缀
+  - `src/api/routes/admin/cache.ts`（新建）— GET /admin/cache/stats, DELETE /admin/cache/:type（admin only）
+  - `src/api/server.ts`（更新）— 注册 adminCacheRoutes
+  - `src/lib/api-client.ts`（更新）— getCacheStats/clearCache 方法
+  - `src/components/admin/system/CacheManager.tsx`（新建）— 统计表格 + 清除按钮 + ConfirmDialog
+  - `src/app/[locale]/admin/system/cache/page.tsx`（新建）— Server Component 壳
+  - `tests/unit/api/cache.test.ts`（新建）— 11 个测试，363 total passed
+- **新增依赖**：无
+- **数据库变更**：无
+
+---
+
+## [CHG-31] Admin 数据导入导出（播放源 JSON 批量操作）
+- **完成时间**：2026-03-18
+- **修改文件**：
+  - `src/api/db/queries/videos.ts`（更新）— 新增 `findVideoIdByShortId`（含未发布视频）
+  - `src/api/db/queries/sources.ts`（更新）— 新增 `exportAllSources`（非删除、非投稿的播放源）
+  - `src/api/services/MigrationService.ts`（新建）— exportSources/importSources with Zod 逐条校验
+  - `src/api/routes/admin/migration.ts`（新建）— GET /admin/export/sources（Content-Disposition 附件）, POST /admin/import/sources（multipart）
+  - `src/api/server.ts`（更新）— 注册 adminMigrationRoutes
+  - `src/components/admin/system/DataMigration.tsx`（新建）— 导出按钮 + 文件上传 + 结果 Modal
+  - `src/app/[locale]/admin/system/migration/page.tsx`（新建）— Server Component 壳
+  - `tests/unit/api/migration.test.ts`（新建）— 12 个测试，375 total passed
+- **新增依赖**：无
+- **数据库变更**：无
+
+---
+
+## [CHG-32] Admin 性能监控（Fastify 指标收集 + 监控页）
+- **完成时间**：2026-03-18
+- **修改文件**：
+  - `src/api/plugins/metrics.ts`（新建）— onRequest/onResponse hooks，内存滑动窗口 MAX 50k 条，fastify.metrics 装饰器
+  - `src/api/routes/admin/performance.ts`（新建）— GET /admin/performance/stats（requests/latency/memory/uptime/slowRequests）
+  - `src/api/server.ts`（更新）— 注册 setupMetrics + adminPerformanceRoutes
+  - `src/components/admin/system/PerformanceMonitor.tsx`（新建）— 10s setInterval 刷新，4 张指标卡片 + 慢请求列表
+  - `src/app/[locale]/admin/system/monitor/page.tsx`（新建）— Server Component 壳
+  - `tests/unit/api/performance.test.ts`（新建）— 5 个测试
+  - `tests/unit/plugins/metrics.test.ts`（新建）— 12 个测试，392 total passed
+- **新增依赖**：无
+- **数据库变更**：无

@@ -2,6 +2,17 @@
 
 ---
 
+✅ PHASE COMPLETE — Phase 2 已完成，等待确认开始 Phase 3
+- **完成时间**：2026-03-18
+- **本 Phase 完成任务数**：13 个（CHG-20~32）
+- **已合并到 main**：否（待确认后合并）
+- **测试情况**：392 个 unit 测试全部通过（30 个测试文件）
+- **需要你做的事**：
+  - [ ] 验收测试（运行 `npm run test` 和 `npm run test:e2e`）
+  - [ ] 确认 Phase 2 完成（删除此块后即可让 AI 继续或合并到 main）
+
+---
+
 ## Resovo — Phase 1 用户反馈修复任务
 
 #### CHG-01 修复 /admin 路由 404 问题（🔴 最高优先级）
@@ -620,7 +631,7 @@ CHG-06（类型标签联动）       ← 最后处理
 
 #### CHG-20 将 video.js 替换为 @livefree/yt-player
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **变更原因**：video.js 8.x 体积重、定制成本高；`@livefree/yt-player`（`~/projects/yt-player`）是项目自有组件库，零运行时依赖、CSS Modules 隔离、HLS.js 动态加载，已是完整 npm 包结构，可直接本地安装
 - **影响的已完成任务**：PLAYER-01~08（播放器相关所有任务）
 - **文件范围**：
@@ -945,7 +956,7 @@ CHG-06（类型标签联动）       ← 最后处理
 
 #### CHG-29 Admin 投稿审核 + 字幕审核页完善
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **依赖**：CHG-24（Admin 基础组件库）
 - **变更原因**：现有投稿/字幕审核页功能基本可用，但缺少：① 审核通过/驳回时输入驳回理由；② 审核列表无分页；③ 投稿审核通过后应提示触发 ES 同步
 - **影响的已完成任务**：ADMIN-02（content 审核路由）、CHG-15（ContentService）
@@ -969,14 +980,14 @@ CHG-06（类型标签联动）       ← 最后处理
   - 列表超过 20 条时出现分页
   - 审核通过后顶部 Toast 显示"ES 同步已加入队列"
 - **测试要求**：Vitest（ReviewModal：通过/驳回按钮状态、驳回理由必填校验）；Playwright `admin.spec.ts` 补充审核流程
-- **完成备注**：_（AI 填写）_
-- **问题说明**：_（若有问题）_
+- **完成备注**：migration 004 添加 rejection_reason 字段到 video_sources/subtitles；sources.ts/subtitles.ts queries 更新支持 reason；ContentService 转发 reason；admin/content.ts reject 端点接受并校验 reason（1-200字）；新建 ReviewModal.tsx、SubmissionTable.tsx（Toast）、SubtitleTable.tsx、content/page.tsx；7 个测试，352 total passed；commit 22b1bd3
+- **问题说明**：_（无）_
 
 ---
 
 #### CHG-30 Admin 缓存管理（后端 API + 前端 UI）
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **变更原因**：Resovo 使用 Redis 缓存搜索结果、视频详情等热点数据，但无任何管理界面，开发/运维无法查看缓存占用或清除特定类型缓存。参考 LunaTV `CacheManager.tsx`（407L）实现
 - **影响的已完成任务**：INFRA-05（Redis 基础设施）
 - **文件范围**：
@@ -1005,14 +1016,14 @@ CHG-06（类型标签联动）       ← 最后处理
   - `DELETE /admin/cache/all` 需要二次确认，不误删 Bull 队列 key
   - 非 admin 访问返回 403
 - **测试要求**：Vitest `tests/unit/api/cache.test.ts`（mock Redis，验证 SCAN 调用、UNLINK 调用、权限、all 类型不删除队列 key）
-- **完成备注**：_（AI 填写）_
-- **问题说明**：_（若有问题）_
+- **完成备注**：CacheService（SCAN+UNLINK+pipeline 内存估算）；adminCacheRoutes（GET /admin/cache/stats、DELETE /admin/cache/:type，admin only，4 个前缀 search/video/danmaku/analytics，all 清除业务 key 不触碰 bull:/blacklist:）；server.ts 注册；CacheManager.tsx（统计表格+单独清除+清除全部 ConfirmDialog）；11 个测试，363 total passed；commit 7cc540f
+- **问题说明**：_（无）_
 
 ---
 
 #### CHG-31 Admin 数据导入导出（播放源 JSON 批量操作）
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **变更原因**：管理员需要在环境迁移、备份、批量添加资源站时导入/导出播放源配置。当前无任何导入导出功能，参考 LunaTV `DataMigration.tsx`（504L）实现
 - **影响的已完成任务**：ADMIN-02（sources 管理）、CHG-15（ContentService）
 - **文件范围**：
@@ -1037,14 +1048,14 @@ CHG-06（类型标签联动）       ← 最后处理
   - 上传格式错误的文件时，显示具体的校验错误信息，不崩溃
   - 导入的播放源在播放源管理页可见
 - **测试要求**：Vitest `tests/unit/api/migration.test.ts`（导出 Content-Disposition 头、导入 Zod 校验、单条失败不中断、权限检查）
-- **完成备注**：_（AI 填写）_
-- **问题说明**：_（若有问题）_
+- **完成备注**：exportAllSources 查询（sources+video join，不含 submitted_by）；findVideoIdByShortId 查询（含未发布视频）；MigrationService（exportSources/importSources with Zod 逐条校验）；admin/migration.ts（GET /admin/export/sources 返回 Content-Disposition 附件、POST /admin/import/sources multipart）；server.ts 注册；DataMigration.tsx（导出按钮+文件选择+结果 Modal）；12 个测试，375 total passed；commit 6a691e1
+- **问题说明**：_（无）_
 
 ---
 
 #### CHG-32 Admin 性能监控（Fastify 指标收集 + 监控页）
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **变更原因**：Resovo 无任何运行时监控，问题定位依赖日志。参考 LunaTV PerformanceMonitor（跟踪请求速率/响应时间/内存/CPU），在 Fastify 层实现轻量指标收集，为后续稳定性优化提供数据支撑
 - **影响的已完成任务**：INFRA-01（Fastify server）
 - **文件范围**：
@@ -1074,8 +1085,8 @@ CHG-06（类型标签联动）       ← 最后处理
   - 监控页每 10 秒刷新，数字变化可见
   - 非 admin 访问返回 403
 - **测试要求**：Vitest `tests/unit/api/performance.test.ts`（新建：mock metrics 装饰器，验证 stats 响应结构、权限）；Vitest `tests/unit/plugins/metrics.test.ts`（新建：验证 requestsPerMinute 计数逻辑）
-- **完成备注**：_（AI 填写）_
-- **问题说明**：_（若有问题）_
+- **完成备注**：metrics.ts 插件（onRequest 记录开始时间、onResponse 写入内存滑动窗口 MAX 50k 条、24h/5min/1min 三个时间窗口，expose fastify.metrics 装饰器）；performance.ts 路由（GET /admin/performance/stats 返回 requests/latency/memory/uptime/slowRequests）；setupMetrics 在 server.ts 注册；PerformanceMonitor.tsx（10s setInterval 刷新、4 张卡片 + 慢请求表格）；17 个测试（metrics 12 + performance 5），392 total passed；commit c41bc79
+- **问题说明**：_（无）_
 
 ---
 
