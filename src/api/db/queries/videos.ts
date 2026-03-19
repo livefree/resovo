@@ -232,6 +232,7 @@ export async function listTrendingVideos(
 
 export interface AdminVideoListFilters {
   status?: 'pending' | 'published' | 'unpublished' | 'all'
+  type?: VideoType
   q?: string
   page: number
   limit: number
@@ -251,6 +252,11 @@ export async function listAdminVideos(
     conditions.push('v.is_published = true')
   }
   // 'all' → no filter
+
+  if (filters.type) {
+    conditions.push(`v.type = $${idx++}`)
+    params.push(filters.type)
+  }
 
   if (filters.q) {
     conditions.push(`(v.title ILIKE $${idx} OR v.title_en ILIKE $${idx})`)
@@ -450,6 +456,10 @@ export async function batchPublishVideos(
   } finally {
     client.release()
   }
+}
+
+export async function batchUnpublishVideos(db: Pool, ids: string[]): Promise<number> {
+  return batchPublishVideos(db, ids, false)
 }
 
 // ── 更新：豆瓣元数据（CHG-23）────────────────────────────────────

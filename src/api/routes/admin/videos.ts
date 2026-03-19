@@ -50,6 +50,7 @@ const CreateVideoSchema = VideoMetaSchema.required({ title: true, type: true })
 
 const ListQuerySchema = z.object({
   status: z.enum(['pending', 'published', 'unpublished', 'all']).optional().default('all'),
+  type: z.enum(['movie', 'series', 'anime', 'variety'] as const).optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   q: z.string().max(100).optional(),
@@ -72,8 +73,8 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const { status, page, limit, q } = parsed.data
-    const result = await videoService.adminList({ status, page, limit, q })
+    const { status, type, page, limit, q } = parsed.data
+    const result = await videoService.adminList({ status, type, page, limit, q })
     return reply.send(result)
   })
 
@@ -124,6 +125,29 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       request.log.error({ err }, 'batch-publish failed')
       return reply.code(500).send({
         error: { code: 'INTERNAL_ERROR', message: '批量操作失败', status: 500 },
+      })
+    }
+  })
+
+  // ── POST /admin/videos/batch-unpublish ──────────────────────
+  fastify.post('/admin/videos/batch-unpublish', { preHandler: auth }, async (request, reply) => {
+    const BatchSchema = z.object({
+      ids: z.array(z.string().uuid()).min(1).max(50),
+    })
+    const parsed = BatchSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误，ids 最多 50 条', status: 422 },
+      })
+    }
+
+    try {
+      const updated = await videoService.batchUnpublish(parsed.data.ids)
+      return reply.send({ data: { updated } })
+    } catch (err) {
+      request.log.error({ err }, 'batch-unpublish failed')
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: '批量下架失败', status: 500 },
       })
     }
   })

@@ -1,10 +1,12 @@
 /**
- * /admin/videos — 视频列表页
- * ADMIN-02: 按 is_published 状态筛选，支持上下架操作
+ * /admin/videos — 视频管理页（Server Component）
+ * CHG-27: 使用 VideoFilters + VideoTable Client Components
  */
 
 import Link from 'next/link'
-import { AdminVideoList } from '@/components/admin/AdminVideoList'
+import { Suspense } from 'react'
+import { VideoFilters } from '@/components/admin/videos/VideoFilters'
+import { VideoTable } from '@/components/admin/videos/VideoTable'
 
 export default function AdminVideosPage() {
   return (
@@ -19,7 +21,10 @@ export default function AdminVideosPage() {
           手动添加视频
         </Link>
       </div>
-      <AdminVideoList />
+      <Suspense>
+        <VideoFilters />
+        <VideoTable />
+      </Suspense>
     </div>
   )
 }

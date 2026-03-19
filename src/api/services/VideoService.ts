@@ -68,6 +68,7 @@ export class VideoService {
 
   async adminList(params: {
     status?: 'pending' | 'published' | 'unpublished' | 'all'
+    type?: import('@/types').VideoType
     q?: string
     page?: number
     limit?: number
@@ -77,6 +78,7 @@ export class VideoService {
 
     const { rows, total } = await videoQueries.listAdminVideos(this.db, {
       status: params.status ?? 'all',
+      type: params.type,
       q: params.q,
       page,
       limit,
@@ -107,6 +109,10 @@ export class VideoService {
 
   async batchPublish(ids: string[], isPublished: boolean): Promise<number> {
     return videoQueries.batchPublishVideos(this.db, ids, isPublished)
+  }
+
+  async batchUnpublish(ids: string[]): Promise<number> {
+    return videoQueries.batchUnpublishVideos(this.db, ids)
   }
 
   // ── ES 同步（异步，不阻塞响应）──────────────────────────────────
