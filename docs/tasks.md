@@ -809,7 +809,7 @@ CHG-06（类型标签联动）       ← 最后处理
 
 #### CHG-25 Admin 仪表盘页增强（图表 + 实时刷新）
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **依赖**：CHG-24（Admin 基础组件库）
 - **变更原因**：现有仪表盘（`/admin`）仅展示静态数字（视频数/用户数/待处理队列）。参考 LunaTV 管理后台，应增加趋势展示、待处理事项高亮和 30 秒自动刷新，提升管理员感知度
 - **影响的已完成任务**：ADMIN-04（analytics 数据看板）
@@ -832,7 +832,7 @@ CHG-06（类型标签联动）       ← 最后处理
   - 30 秒后数据自动刷新（开发者工具可见网络请求）
   - 爬虫任务状态以 StatusBadge 显示（running/done/failed 颜色不同）
 - **测试要求**：Vitest `tests/unit/components/admin/dashboard/`（QueueAlerts 有/无队列时渲染差异；AnalyticsCards 数据正确渲染）
-- **完成备注**：_（AI 填写）_
+- **完成备注**：修改 `src/app/[locale]/admin/page.tsx`（SSR，调用 AnalyticsService）；新建 `src/components/admin/dashboard/AnalyticsCards.tsx`（Client，6 卡片 + 30s 刷新 + 爬虫表格 5 条 + StatusBadge 状态映射）；新建 `src/components/admin/dashboard/QueueAlerts.tsx`（橙色横幅 + 审核页快捷链接）；`src/lib/api-client.ts` 新增 `getAnalytics()`；测试 13 个，313 passed；commit dbe86e6
 - **问题说明**：_（若有问题）_
 
 ---

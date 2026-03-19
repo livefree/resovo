@@ -541,3 +541,17 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：CHG-25~29 可直接从 @/components/admin 导入这些组件
+
+---
+
+## [CHG-25] Admin 仪表盘 SSR + 30s 自动刷新 + 队列警示
+- **完成时间**：2026-03-18
+- **修改文件**：
+  - `src/app/[locale]/admin/page.tsx`（改写）— Server Component，调用 AnalyticsService.getDashboard() 获取初始数据，消除 loading 闪烁
+  - `src/components/admin/dashboard/AnalyticsCards.tsx`（新建）— Client Component，6 张核心统计卡片 + 爬虫任务表（最近 5 条，StatusBadge 状态映射）+ setInterval 每 30s 刷新
+  - `src/components/admin/dashboard/QueueAlerts.tsx`（新建）— 橙色警示横幅，submissions/subtitles > 0 时显示，附快捷审核链接
+  - `src/lib/api-client.ts`（更新）— 新增 `getAnalytics()` 方法
+  - `tests/unit/components/admin/dashboard/*.test.tsx`（新建，2 个文件）— 13 个测试全通过，313 total
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：爬虫任务状态映射：running→active(绿)，done→published(绿)，failed→banned(红)，pending→pending(黄)
