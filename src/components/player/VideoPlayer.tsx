@@ -1,13 +1,12 @@
 /**
- * VideoPlayer.tsx — @livefree/yt-player 封装
- * CHG-20: 替换 video.js，使用项目自有播放器组件
+ * VideoPlayer.tsx — YTPlayer 封装
+ * 播放器源码内嵌于 src/components/player/core/，无 npm 包依赖
  * 必须通过 dynamic import + ssr: false 使用，不可 SSR
  */
 
 'use client'
 
-import { YTPlayer } from '@livefree/yt-player'
-import '@livefree/yt-player/dist/index.css'
+import { YTPlayer } from './core/Player'
 
 export interface VideoPlayerProps {
   /** HLS .m3u8 或 MP4 直链 */
