@@ -1,13 +1,16 @@
 /**
  * PlayerShell.tsx — 播放器外壳 + 布局模式切换
- * Default Mode: 播放器居左，右侧面板（选集 + 推荐）
+ * CHG-20: 替换 video.js 为 @livefree/yt-player
+ *   - 剧场模式由 YTPlayer onTheaterChange 回调驱动
+ *   - 选集由 YTPlayer episodes 面板 + SourceBar 共同管理
+ *   - DanmakuBar 挂载在播放器容器上（CCL overlay 附加）
+ * Default Mode: 播放器居左，右侧面板（推荐）
  * Theater Mode: 全宽，右侧面板收起，下方推荐
- * Client Component（视频播放依赖 DOM，视频数据客户端获取）
  */
 
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -16,22 +19,14 @@ import { usePlayerStore } from '@/stores/playerStore'
 import { apiClient } from '@/lib/api-client'
 import { extractShortId } from '@/lib/video-detail'
 import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@/types'
-import type { VideoSource as PlayerSource } from './VideoPlayer'
-import { ControlBar } from './ControlBar'
 import { SourceBar } from './SourceBar'
-import type Player from 'video.js/dist/types/player'
+import { DanmakuBar } from './DanmakuBar'
 
-// VideoPlayer 动态导入，ssr: false（Video.js 依赖 DOM API）
+// VideoPlayer 动态导入，ssr: false（YTPlayer 依赖 DOM API）
 const VideoPlayer = dynamic(
   () => import('./VideoPlayer').then((m) => ({ default: m.VideoPlayer })),
   { ssr: false }
 )
-
-const MIME_MAP: Record<string, string> = {
-  hls:  'application/x-mpegURL',
-  mp4:  'video/mp4',
-  dash: 'application/dash+xml',
-}
 
 interface PlayerShellProps {
   slug: string
@@ -39,16 +34,30 @@ interface PlayerShellProps {
 
 export function PlayerShell({ slug }: PlayerShellProps) {
   const searchParams = useSearchParams()
-  const { mode, toggleMode, initPlayer, currentEpisode, setEpisode, setPlaying, setCurrentTime, setDuration } = usePlayerStore()
+  const {
+    mode,
+    setMode,
+    initPlayer,
+    currentEpisode,
+    setEpisode,
+    setPlaying,
+    setCurrentTime,
+    setDuration,
+    currentTime,
+  } = usePlayerStore()
+
   const [video, setVideo] = useState<Video | null>(null)
-  const [sources, setSources] = useState<PlayerSource[]>([])
+  const [sources, setSources] = useState<Array<{ src: string; type: string; label?: string }>>([])
   const [loading, setLoading] = useState(true)
-  const [vjsPlayer, setVjsPlayer] = useState<Player | null>(null)
   const [activeSourceIndex, setActiveSourceIndex] = useState(0)
+
+  // 播放器容器 ref，用于 DanmakuBar CCL overlay 挂载
+  const playerContainerRef = useRef<HTMLDivElement>(null)
 
   const shortId = extractShortId(slug)
 
-  // 客户端获取视频数据
+  // ── 初始加载视频信息 + 播放源 ─────────────────────────────────
+
   useEffect(() => {
     const ep = Number(searchParams.get('ep') ?? '1') || 1
     setLoading(true)
@@ -57,19 +66,13 @@ export function PlayerShell({ slug }: PlayerShellProps) {
       .then((res) => {
         setVideo(res.data)
         initPlayer(shortId, ep)
-        // 播放源获取失败不影响视频展示，独立处理
         apiClient
           .get<ApiListResponse<VideoSource>>(
             `/videos/${shortId}/sources?episode=${ep}`,
             { skipAuth: true }
           )
           .then((r) => {
-            const mapped: PlayerSource[] = r.data.map((s) => ({
-              src: s.sourceUrl,
-              type: s.type,
-              label: s.sourceName,
-            }))
-            setSources(mapped)
+            setSources(r.data.map((s) => ({ src: s.sourceUrl, type: s.type, label: s.sourceName })))
             setActiveSourceIndex(0)
           })
           .catch(() => setSources([]))
@@ -79,7 +82,8 @@ export function PlayerShell({ slug }: PlayerShellProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shortId])
 
-  // 集数切换时重新获取播放源
+  // ── 集数切换时重新获取播放源 ──────────────────────────────────
+
   useEffect(() => {
     if (!shortId || !video) return
     apiClient
@@ -88,38 +92,42 @@ export function PlayerShell({ slug }: PlayerShellProps) {
         { skipAuth: true }
       )
       .then((res) => {
-        const mapped: PlayerSource[] = res.data.map((s) => ({
-          src: s.sourceUrl,
-          type: s.type,
-          label: s.sourceName,
-        }))
-        setSources(mapped)
+        setSources(res.data.map((s) => ({ src: s.sourceUrl, type: s.type, label: s.sourceName })))
         setActiveSourceIndex(0)
       })
-      .catch(() => {/* 集数无源时不清除已有源 */})
+      .catch(() => {/* 无源时保留已有源 */})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentEpisode])
 
-  const handlePlayerReady = useCallback((player: Player) => {
-    setVjsPlayer(player)
-    player.on('loadedmetadata', () => {
-      setDuration(player.duration() ?? 0)
-    })
-  }, [setDuration])
+  // ── 回调 ──────────────────────────────────────────────────────
 
-  function handleSourceChange(index: number) {
-    setActiveSourceIndex(index)
-    if (vjsPlayer && !vjsPlayer.isDisposed()) {
-      const src = sources[index]
-      const currentTime = vjsPlayer.currentTime() ?? 0
-      vjsPlayer.src({ src: src.src, type: MIME_MAP[src.type] ?? 'video/mp4' })
-      setTimeout(() => {
-        vjsPlayer.currentTime(currentTime)
-      }, 500)
-    }
-  }
+  const handleTimeUpdate = useCallback((t: number, d: number) => {
+    setCurrentTime(t)
+    setDuration(d)
+  }, [setCurrentTime, setDuration])
+
+  const handleTheaterChange = useCallback((isTheater: boolean) => {
+    setMode(isTheater ? 'theater' : 'default')
+  }, [setMode])
+
+  const handleEpisodeChange = useCallback((index: number) => {
+    setEpisode(index + 1) // YTPlayer 0-based → Resovo 1-based
+  }, [setEpisode])
+
+  // ── 派生数据 ──────────────────────────────────────────────────
 
   const isTheater = mode === 'theater'
+  const activeSrc = sources[activeSourceIndex]?.src ?? ''
+
+  // episodes 数组传给 YTPlayer 启用选集面板
+  const ytEpisodes =
+    video && video.episodeCount > 1
+      ? Array.from({ length: video.episodeCount }, (_, i) => ({ title: `第${i + 1}集` }))
+      : undefined
+
+  const hasNext = !!video && video.episodeCount > 1 && currentEpisode < video.episodeCount
+
+  // ── Loading / Error ───────────────────────────────────────────
 
   if (loading) {
     return (
@@ -144,7 +152,6 @@ export function PlayerShell({ slug }: PlayerShellProps) {
     )
   }
 
-  // 详情页链接
   const detailHref = video.slug
     ? `/${video.type}/${video.slug}-${video.shortId}`
     : `/${video.type}/${video.shortId}`
@@ -167,7 +174,7 @@ export function PlayerShell({ slug }: PlayerShellProps) {
             isTheater ? 'flex-col' : 'lg:flex-row flex-col'
           )}
         >
-          {/* ── 播放器区域 ────────────────────────────────── */}
+          {/* ── 播放器区域 ─────────────────────────────────── */}
           <div
             className={cn(
               'flex-1 min-w-0 transition-all duration-300',
@@ -175,20 +182,24 @@ export function PlayerShell({ slug }: PlayerShellProps) {
             )}
             data-testid="player-main"
           >
-            {/* 播放器容器 */}
+            {/* 播放器容器（CCL overlay 挂载于此） */}
             <div
+              ref={playerContainerRef}
               className="w-full relative rounded-t-lg overflow-hidden"
               style={{ aspectRatio: '16/9', background: '#000' }}
               data-testid="player-video-area"
             >
-              {sources.length > 0 ? (
+              {activeSrc ? (
                 <VideoPlayer
-                  sources={sources}
-                  episode={currentEpisode}
-                  onReady={handlePlayerReady}
-                  onPlay={() => setPlaying(true)}
-                  onPause={() => setPlaying(false)}
-                  onTimeUpdate={setCurrentTime}
+                  src={activeSrc}
+                  title={video.title}
+                  episodes={ytEpisodes}
+                  activeEpisodeIndex={currentEpisode - 1}
+                  onEpisodeChange={handleEpisodeChange}
+                  onNext={hasNext ? () => setEpisode(currentEpisode + 1) : undefined}
+                  onTimeUpdate={handleTimeUpdate}
+                  onEnded={() => setPlaying(false)}
+                  onTheaterChange={handleTheaterChange}
                   className="absolute inset-0"
                 />
               ) : (
@@ -213,25 +224,18 @@ export function PlayerShell({ slug }: PlayerShellProps) {
                 <SourceBar
                   sources={sources}
                   activeIndex={activeSourceIndex}
-                  player={vjsPlayer}
-                  onSourceChange={handleSourceChange}
+                  onSourceChange={setActiveSourceIndex}
                 />
               </div>
             )}
 
-            {/* 自定义控制栏 */}
-            <div className="rounded-b-lg" style={{ background: '#111' }}>
-              <ControlBar
-                player={vjsPlayer}
-                onNextEpisode={
-                  video.episodeCount > 1 && currentEpisode < video.episodeCount
-                    ? () => setEpisode(currentEpisode + 1)
-                    : undefined
-                }
-              />
-            </div>
+            {/* 弹幕控制栏（CHG-22 接入弹幕数据） */}
+            <DanmakuBar
+              stageRef={playerContainerRef}
+              currentTime={currentTime}
+            />
 
-            {/* 标题行 + 模式切换按钮 */}
+            {/* 标题行 */}
             <div className="flex items-start justify-between mt-3 gap-2">
               <div className="flex-1 min-w-0">
                 <Link
@@ -249,20 +253,6 @@ export function PlayerShell({ slug }: PlayerShellProps) {
                   </p>
                 )}
               </div>
-
-              {/* 剧场模式切换（仅桌面端） */}
-              <button
-                onClick={toggleMode}
-                className={cn(
-                  'hidden lg:flex items-center gap-1 px-3 py-1.5 rounded text-xs transition-colors',
-                  'hover:bg-[var(--secondary)] shrink-0'
-                )}
-                style={{ color: 'var(--muted-foreground)', border: '1px solid var(--border)' }}
-                data-testid="theater-mode-btn"
-                aria-label={isTheater ? 'Exit theater mode' : 'Enter theater mode'}
-              >
-                {isTheater ? '⊡ 默认' : '⊞ 剧场'}
-              </button>
             </div>
           </div>
 
@@ -276,38 +266,6 @@ export function PlayerShell({ slug }: PlayerShellProps) {
             )}
             data-testid="player-side-panel"
           >
-            {/* 选集列表 */}
-            {video.episodeCount > 1 && (
-              <div className="mb-4">
-                <h3
-                  className="text-sm font-semibold mb-2"
-                  style={{ color: 'var(--foreground)' }}
-                >
-                  选集
-                </h3>
-                <div className="grid grid-cols-5 gap-1.5 max-h-48 overflow-y-auto">
-                  {Array.from({ length: video.episodeCount }, (_, i) => i + 1).map((ep) => (
-                    <button
-                      key={ep}
-                      onClick={() => setEpisode(ep)}
-                      className={cn(
-                        'h-8 rounded text-xs font-medium transition-colors border'
-                      )}
-                      style={
-                        currentEpisode === ep
-                          ? { background: 'var(--gold)', color: 'black', borderColor: 'transparent' }
-                          : { color: 'var(--foreground)', borderColor: 'var(--border)', background: 'var(--secondary)' }
-                      }
-                      data-testid={`side-episode-${ep}`}
-                    >
-                      {ep}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* 推荐占位 */}
             <div
               className="p-3 rounded-lg text-xs text-center"
               style={{ background: 'var(--secondary)', color: 'var(--muted-foreground)' }}
