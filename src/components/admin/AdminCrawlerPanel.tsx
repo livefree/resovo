@@ -1,12 +1,11 @@
 /**
  * AdminCrawlerPanel.tsx — 爬虫管理面板
- * CHG-36: 源站卡片 + 单站触发 + 自动采集开关 + 任务记录展示
+ * CHG-36: 全局触发 + 自动采集开关 + 任务记录展示
  */
 
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
 
 // ── 类型 ─────────────────────────────────────────────────────────
@@ -20,16 +19,6 @@ interface CrawlerTask {
   started_at: string | null
   finished_at: string | null
   created_at: string
-}
-
-interface SiteStatus {
-  key: string
-  name: string
-  apiUrl: string
-  disabled: boolean
-  weight: number
-  lastCrawledAt: string | null
-  lastCrawlStatus: 'ok' | 'failed' | 'running' | null
 }
 
 type TaskStatusFilter = 'pending' | 'running' | 'done' | 'failed' | ''
@@ -56,21 +45,6 @@ function StatusBadge({ status }: { status: CrawlerTask['status'] }) {
   )
 }
 
-function CrawlStatusDot({ status }: { status: SiteStatus['lastCrawlStatus'] }) {
-  if (!status) return <span className="inline-block h-2 w-2 rounded-full bg-[var(--muted)]" title="从未采集" />
-  const map: Record<NonNullable<SiteStatus['lastCrawlStatus']>, string> = {
-    ok:      'bg-green-500',
-    failed:  'bg-red-500',
-    running: 'bg-blue-400 animate-pulse',
-  }
-  const labels: Record<NonNullable<SiteStatus['lastCrawlStatus']>, string> = {
-    ok:      '上次采集成功',
-    failed:  '上次采集失败',
-    running: '采集中',
-  }
-  return <span className={`inline-block h-2 w-2 rounded-full ${map[status]}`} title={labels[status]} />
-}
-
 // ── 主组件 ───────────────────────────────────────────────────────
 
 export function AdminCrawlerPanel() {
@@ -82,8 +56,6 @@ export function AdminCrawlerPanel() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [sites, setSites] = useState<SiteStatus[]>([])
-  const [sitesLoading, setSitesLoading] = useState(false)
   const [autoCrawlEnabled, setAutoCrawlEnabled] = useState<boolean | null>(null)
   const [autoCrawlSaving, setAutoCrawlSaving] = useState(false)
 
@@ -108,19 +80,6 @@ export function AdminCrawlerPanel() {
     }
   }, [page, statusFilter])
 
-  // 加载源站状态
-  const fetchSites = useCallback(async () => {
-    setSitesLoading(true)
-    try {
-      const res = await apiClient.get<{ data: SiteStatus[] }>('/admin/crawler/sites-status')
-      setSites(res.data)
-    } catch {
-      // 非阻塞
-    } finally {
-      setSitesLoading(false)
-    }
-  }, [])
-
   // 加载自动采集开关
   const fetchAutoCrawl = useCallback(async () => {
     try {
@@ -132,16 +91,14 @@ export function AdminCrawlerPanel() {
   }, [])
 
   useEffect(() => { fetchTasks() }, [fetchTasks])
-  useEffect(() => { fetchSites() }, [fetchSites])
   useEffect(() => { fetchAutoCrawl() }, [fetchAutoCrawl])
 
-  // 触发采集（全局或单站）
-  async function handleTrigger(type: 'full-crawl' | 'incremental-crawl', siteKey?: string) {
-    const key = siteKey ?? 'all'
-    setTriggering(key)
+  // 触发采集（全局）
+  async function handleTrigger(type: 'full-crawl' | 'incremental-crawl') {
+    setTriggering('all')
     try {
-      await apiClient.post('/admin/crawler/tasks', { type, siteKey })
-      await Promise.all([fetchTasks(), fetchSites()])
+      await apiClient.post('/admin/crawler/tasks', { type })
+      await fetchTasks()
     } catch (err) {
       alert(err instanceof Error ? err.message : '触发失败')
     } finally {
@@ -189,7 +146,7 @@ export function AdminCrawlerPanel() {
           {globalTriggering ? '触发中…' : '增量采集（近 24h）'}
         </button>
         <button
-          onClick={() => { fetchTasks(); fetchSites() }}
+          onClick={() => { fetchTasks() }}
           className="rounded-md border border-[var(--border)] px-4 py-2 text-sm text-[var(--muted)] hover:text-[var(--text)]"
           data-testid="admin-crawler-refresh"
         >
@@ -217,72 +174,6 @@ export function AdminCrawlerPanel() {
           </button>
         </label>
       </div>
-
-      {/* ── 源站状态卡片 ────────────────────────────────────────── */}
-      <section>
-        <h2 className="mb-3 text-sm font-medium text-[var(--muted)]">
-          源站状态（{sites.filter((s) => !s.disabled).length} 个启用，{sites.length} 个共计）
-        </h2>
-        {sitesLoading ? (
-          <p className="text-sm text-[var(--muted)]">加载中…</p>
-        ) : sites.length === 0 ? (
-          <p className="text-sm text-[var(--muted)]">
-            暂无源站。请前往
-            <Link href="/admin/crawler#site-manager" className="ml-1 text-[var(--accent)] underline">视频源配置</Link>
-            添加采集源站。
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {sites.map((site) => (
-              <div
-                key={site.key}
-                className={`rounded-lg border p-3 text-sm ${
-                  site.disabled
-                    ? 'border-[var(--subtle)] opacity-50'
-                    : 'border-[var(--border)] bg-[var(--bg)]'
-                }`}
-                data-testid={`admin-crawler-site-${site.key}`}
-              >
-                <div className="mb-1 flex items-center gap-2">
-                  <CrawlStatusDot status={site.lastCrawlStatus} />
-                  <span className="truncate font-medium text-[var(--text)]" title={site.name}>
-                    {site.name}
-                  </span>
-                  {site.disabled && (
-                    <span className="ml-auto shrink-0 rounded bg-[var(--subtle)] px-1.5 py-0.5 text-xs text-[var(--muted)]">
-                      已禁用
-                    </span>
-                  )}
-                </div>
-                <p className="mb-2 truncate text-xs text-[var(--muted)]">{site.apiUrl}</p>
-                {site.lastCrawledAt && (
-                  <p className="mb-2 text-xs text-[var(--muted)]">
-                    上次：{new Date(site.lastCrawledAt).toLocaleString()}
-                  </p>
-                )}
-                {!site.disabled && (
-                  <div className="flex gap-1.5">
-                    <button
-                      onClick={() => handleTrigger('incremental-crawl', site.key)}
-                      disabled={triggering !== null}
-                      className="rounded bg-[var(--bg2)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--border)] disabled:opacity-50"
-                    >
-                      {triggering === site.key ? '触发中…' : '增量'}
-                    </button>
-                    <button
-                      onClick={() => handleTrigger('full-crawl', site.key)}
-                      disabled={triggering !== null}
-                      className="rounded bg-[var(--bg2)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--border)] disabled:opacity-50"
-                    >
-                      {triggering === site.key ? '触发中…' : '全量'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
 
       {/* ── 状态筛选 ─────────────────────────────────────────────── */}
       <section>

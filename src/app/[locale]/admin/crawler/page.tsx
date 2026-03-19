@@ -12,7 +12,7 @@ export default function AdminCrawlerPage() {
       <section>
         <h1 className="mb-2 text-2xl font-bold">源站与爬虫管理</h1>
         <p className="mb-6 text-sm text-[var(--muted)]">
-          统一管理采集源站配置与采集任务。你可以在同一页面完成源站维护、单站触发、全量/增量采集与任务追踪。
+          统一管理采集源站配置与采集任务。你可以在同一页面完成源站维护、列表内单站触发、全站全量/增量采集与任务追踪。
         </p>
         <AdminCrawlerPanel />
       </section>
