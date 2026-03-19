@@ -570,3 +570,20 @@
 - **新增依赖**：无（bcryptjs 已存在）
 - **数据库变更**：无
 - **注意事项**：密码重置仅返回一次明文密码；admin 账号无论封号还是重置密码均返回 403
+
+---
+
+## [CHG-27] Admin 视频管理页完善（批量操作 + 筛选栏）
+- **完成时间**：2026-03-18
+- **修改文件**：
+  - `src/api/db/queries/videos.ts`（更新）— `AdminVideoListFilters` 新增 `type` 字段；新增 `batchUnpublishVideos` 函数
+  - `src/api/services/VideoService.ts`（更新）— `adminList` 支持 `type` 参数；新增 `batchUnpublish` 方法
+  - `src/api/routes/admin/videos.ts`（更新）— `ListQuerySchema` 加 `type`；新增 `POST /admin/videos/batch-unpublish`
+  - `src/components/admin/videos/VideoFilters.tsx`（新建）— 类型/状态/关键词筛选，写入 URL searchParams
+  - `src/components/admin/videos/VideoTable.tsx`（新建）— 复选框全选、StatusBadge 状态、单条上架/下架
+  - `src/components/admin/videos/BatchPublishBar.tsx`（新建）— 底部浮动批量操作栏，上限 50 条
+  - `src/app/[locale]/admin/videos/page.tsx`（改写）— Server Component，Suspense 包裹 VideoFilters + VideoTable
+  - `tests/unit/components/admin/videos/BatchPublishBar.test.tsx`（新建）— 6 个测试
+  - `tests/unit/components/admin/videos/VideoFilters.test.tsx`（新建）— 5 个测试
+- **新增依赖**：无
+- **数据库变更**：无

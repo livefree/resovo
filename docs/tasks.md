@@ -874,7 +874,7 @@ CHG-06（类型标签联动）       ← 最后处理
 
 #### CHG-27 Admin 视频管理页完善（批量操作 + 筛选栏）
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **依赖**：CHG-24（Admin 基础组件库）
 - **变更原因**：现有视频管理页（`/admin/videos`）缺少多选批量操作和字段筛选，视频条目增多后操作效率低
 - **影响的已完成任务**：ADMIN-01（视频管理路由）、CHG-13（VideoService + videos queries）
@@ -901,7 +901,7 @@ CHG-06（类型标签联动）       ← 最后处理
   - 单条视频的上架/下架操作仍可用
   - URL 中包含筛选参数，刷新后筛选状态保留
 - **测试要求**：Vitest（BatchPublishBar 选中/未选中渲染；VideoFilters URL 参数同步）；Playwright `admin.spec.ts` 补充批量上架流程
-- **完成备注**：_（AI 填写）_
+- **完成备注**：后端：`queries/videos.ts` 新增 `type` 过滤和 `batchUnpublishVideos`；`VideoService` 新增 `batchUnpublish`；`admin/videos.ts` ListQuerySchema 加 `type`、新增 `POST /admin/videos/batch-unpublish`；前端：新建 `VideoFilters.tsx`（URL searchParams）、`VideoTable.tsx`（复选框 + StatusBadge + 单条操作）、`BatchPublishBar.tsx`（底部浮动栏 + 批量上架/下架）；`admin/videos/page.tsx` Server Component；Playwright 跳过（无 E2E 环境）；Vitest 11 个新增，336 total passed；commit 2058d63
 - **问题说明**：_（若有问题）_
 
 ---
