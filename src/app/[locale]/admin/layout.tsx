@@ -19,9 +19,8 @@ const CONTENT_MENU = [
 
 const SYSTEM_MENU = [
   { href: '/admin/users', label: '用户管理' },
-  { href: '/admin/crawler', label: '爬虫管理' },
+  { href: '/admin/crawler', label: '源站与爬虫' },
   { href: '/admin/analytics', label: '数据看板' },
-  { href: '/admin/system/sites', label: '视频源配置' },
   { href: '/admin/system/settings', label: '站点配置' },
   { href: '/admin/system/config', label: '配置文件' },
 ]

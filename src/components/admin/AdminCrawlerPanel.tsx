@@ -228,7 +228,7 @@ export function AdminCrawlerPanel() {
         ) : sites.length === 0 ? (
           <p className="text-sm text-[var(--muted)]">
             暂无源站。请前往
-            <Link href="/admin/system/sites" className="ml-1 text-[var(--accent)] underline">视频源配置</Link>
+            <Link href="/admin/crawler#site-manager" className="ml-1 text-[var(--accent)] underline">视频源配置</Link>
             添加采集源站。
           </p>
         ) : (

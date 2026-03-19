@@ -2309,3 +2309,32 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 新增组件单测 3 个，全部通过
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-42 合并“视频源配置”与“爬虫管理”页面
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-19 15:28
+- **计划开始时间**：2026-03-19 15:30
+- **实际开始时间**：2026-03-19 15:30
+- **完成时间**：2026-03-19 15:36
+- **问题**：后台“视频源配置”与“爬虫管理”分散在两个页面，操作链路割裂，维护成本高。
+- **影响的已完成任务**：CHG-35 / CHG-36
+- **文件范围**：
+  - `src/app/[locale]/admin/crawler/page.tsx`
+  - `src/app/[locale]/admin/system/sites/page.tsx`
+  - `src/app/[locale]/admin/layout.tsx`
+  - `src/components/admin/AdminCrawlerPanel.tsx`
+  - `tests/e2e/admin.spec.ts`
+- **修复内容**：
+  - `/admin/crawler` 升级为统一管理页，包含“爬虫管理 + 视频源配置”两块
+  - `/admin/system/sites` 作为旧入口重定向至 `/admin/crawler`
+  - 侧栏入口统一为“源站与爬虫”
+  - 空状态引导链接改为跳转同页视频源配置区锚点
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - typecheck/lint 通过
+- **问题说明**：_（无）_

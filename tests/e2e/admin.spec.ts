@@ -139,7 +139,7 @@ test('moderator 侧边栏不显示系统管理区', async ({ context, page }) =>
   const sidebar = page.locator('[data-testid="admin-sidebar"]')
   await expect(sidebar).toBeVisible()
   await expect(sidebar.getByText('用户管理')).not.toBeVisible()
-  await expect(sidebar.getByText('爬虫管理')).not.toBeVisible()
+  await expect(sidebar.getByText('源站与爬虫')).not.toBeVisible()
   await expect(sidebar.getByText('数据看板')).not.toBeVisible()
 })
 
@@ -150,7 +150,7 @@ test('admin 侧边栏显示系统管理区', async ({ context, page }) => {
   const sidebar = page.locator('[data-testid="admin-sidebar"]')
   await expect(sidebar).toBeVisible()
   await expect(sidebar.getByText('用户管理')).toBeVisible()
-  await expect(sidebar.getByText('爬虫管理')).toBeVisible()
+  await expect(sidebar.getByText('源站与爬虫')).toBeVisible()
   await expect(sidebar.getByText('数据看板')).toBeVisible()
 })
 

@@ -787,3 +787,18 @@
 - **注意事项**：
   - 本地上传仅填充编辑器，不自动保存，仍需点击“保存并同步”
   - 接受 `.json` / `application/json` 文件
+
+## [CHG-42] 合并“视频源配置”与“爬虫管理”页面
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 15:37
+- **修改文件**：
+  - `src/app/[locale]/admin/crawler/page.tsx` — 升级为统一管理页，整合爬虫任务与视频源配置两个区块
+  - `src/app/[locale]/admin/system/sites/page.tsx` — 旧入口改为重定向到 `/admin/crawler`
+  - `src/app/[locale]/admin/layout.tsx` — 系统菜单入口统一命名为“源站与爬虫”
+  - `src/components/admin/AdminCrawlerPanel.tsx` — 空状态引导链接改为同页锚点
+  - `tests/e2e/admin.spec.ts` — 更新侧栏文案断言
+  - `docs/tasks.md` — 追加 CHG-42 任务闭环记录
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 统一入口后，`/admin/system/sites` 仍可访问但会重定向，避免旧链接失效
