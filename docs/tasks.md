@@ -2193,7 +2193,7 @@ _（任务 review 通过后移入此处）_
 
 #### CHG-38 视频归并策略（标题标准化 + 别名表 + 元数据优先级）
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **优先级**：P2
 - **依赖**：CHG-36
 - **变更原因**：upsertVideo 用 (title+year) 去重过于简单；无标题标准化；播放地址有覆盖风险；无元数据来源追踪
@@ -2212,4 +2212,4 @@ _（任务 review 通过后移入此处）_
   - **规则 D**：metadata_source 优先级 tmdb(4) > douban(3) > manual(2) > crawler(1)；低优先级不覆盖高优先级的 metadata 字段
   - **规则 E**：video_sources 改为 `ON CONFLICT (video_id, episode_number, source_url) DO NOTHING`
 - **测试**：TitleNormalizer 30+ 用例；upsertVideo 归并场景（同标题不同装饰、跨类型不合并、播放源 append）
-- **完成备注**：_（AI 填写）_
+- **完成备注**：`007_video_merge.sql`(title_normalized+metadata_source+video_aliases表+uq_sources_video_episode_url约束) + `TitleNormalizer.ts`(normalizeTitle+buildMatchKey) + `CrawlerService.ts`(upsertVideo归并策略A-E) + `queries/videos.ts`(findVideoByNormalizedKey+insertCrawledVideo+upsertVideoAliases) + `queries/sources.ts`(ON CONFLICT DO NOTHING)。457 tests ✅ commit 1d34c48

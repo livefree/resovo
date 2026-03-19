@@ -698,3 +698,18 @@
   - `tests/unit/api/auth.test.ts` — 更新 TTL_SECONDS 断言 7d→30d
 - **新增依赖**：无
 - **数据库变更**：无
+
+---
+
+## CHG-38 视频归并策略（标题标准化 + 别名表 + 元数据优先级）
+- **日期**：2026-03-19
+- **commit**：1d34c48
+- **变更文件**：
+  - `src/api/db/migrations/007_video_merge.sql` — videos 加 title_normalized/metadata_source；新建 video_aliases 表；更换 video_sources 唯一约束为 uq_sources_video_episode_url (NULLS NOT DISTINCT)
+  - `src/api/services/TitleNormalizer.ts` — 新建，normalizeTitle() + buildMatchKey()
+  - `src/api/services/CrawlerService.ts` — upsertVideo 重构，实现归并规则 A-E
+  - `src/api/db/queries/videos.ts` — 新增 findVideoByNormalizedKey / insertCrawledVideo / upsertVideoAliases / METADATA_SOURCE_PRIORITY
+  - `src/api/db/queries/sources.ts` — upsertSource 改为 ON CONFLICT DO NOTHING
+  - `tests/unit/api/title-normalizer.test.ts` — 新建，38 个测试用例
+- **新增依赖**：无
+- **数据库变更**：videos 新增 title_normalized TEXT、metadata_source VARCHAR(10)；新表 video_aliases；video_sources 唯一约束由 (video_id, source_url) 改为 (video_id, episode_number, source_url) NULLS NOT DISTINCT
