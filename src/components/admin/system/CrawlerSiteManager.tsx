@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
 import type { CrawlerSite, CreateCrawlerSiteInput, UpdateCrawlerSiteInput, CrawlerSiteBatchAction } from '@/types'
 
@@ -18,6 +18,9 @@ interface ValidateResult {
   httpStatus: number | null
   latencyMs: number | null
 }
+
+type SortField = 'name' | 'key' | 'apiUrl' | 'sourceType' | 'format' | 'weight' | 'isAdult' | 'disabled' | 'fromConfig'
+type SortDir = 'asc' | 'desc'
 
 // ── 子组件 ────────────────────────────────────────────────────
 
@@ -212,6 +215,19 @@ export function CrawlerSiteManager() {
   const [showAdd, setShowAdd] = useState(false)
   const [validateStates, setValidateStates] = useState<Record<string, ValidateStatus>>({})
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+  const [sortBy, setSortBy] = useState<SortField>('weight')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const [filters, setFilters] = useState({
+    keyOrName: '',
+    apiUrl: '',
+    sourceType: 'all' as 'all' | 'vod' | 'shortdrama',
+    format: 'all' as 'all' | 'json' | 'xml',
+    isAdult: 'all' as 'all' | 'yes' | 'no',
+    disabled: 'all' as 'all' | 'enabled' | 'disabled',
+    fromConfig: 'all' as 'all' | 'config' | 'manual',
+    weightMin: '',
+    weightMax: '',
+  })
 
   const showToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok })
@@ -232,6 +248,55 @@ export function CrawlerSiteManager() {
 
   useEffect(() => { fetchSites() }, [fetchSites])
 
+  const displaySites = useMemo(() => {
+    const keyOrName = filters.keyOrName.trim().toLowerCase()
+    const apiUrl = filters.apiUrl.trim().toLowerCase()
+    const min = filters.weightMin.trim() === '' ? null : Number(filters.weightMin)
+    const max = filters.weightMax.trim() === '' ? null : Number(filters.weightMax)
+
+    const filtered = sites.filter((site) => {
+      if (keyOrName && !`${site.name} ${site.key}`.toLowerCase().includes(keyOrName)) return false
+      if (apiUrl && !site.apiUrl.toLowerCase().includes(apiUrl)) return false
+      if (filters.sourceType !== 'all' && site.sourceType !== filters.sourceType) return false
+      if (filters.format !== 'all' && site.format !== filters.format) return false
+      if (filters.isAdult === 'yes' && !site.isAdult) return false
+      if (filters.isAdult === 'no' && site.isAdult) return false
+      if (filters.disabled === 'enabled' && site.disabled) return false
+      if (filters.disabled === 'disabled' && !site.disabled) return false
+      if (filters.fromConfig === 'config' && !site.fromConfig) return false
+      if (filters.fromConfig === 'manual' && site.fromConfig) return false
+      if (min !== null && !Number.isNaN(min) && site.weight < min) return false
+      if (max !== null && !Number.isNaN(max) && site.weight > max) return false
+      return true
+    })
+
+    const dir = sortDir === 'asc' ? 1 : -1
+    return filtered.sort((a, b) => {
+      const compareString = (x: string, y: string) => x.localeCompare(y, 'zh-CN', { sensitivity: 'base' })
+      switch (sortBy) {
+        case 'name': return dir * compareString(a.name, b.name)
+        case 'key': return dir * compareString(a.key, b.key)
+        case 'apiUrl': return dir * compareString(a.apiUrl, b.apiUrl)
+        case 'sourceType': return dir * compareString(a.sourceType, b.sourceType)
+        case 'format': return dir * compareString(a.format, b.format)
+        case 'weight': return dir * (a.weight - b.weight)
+        case 'isAdult': return dir * (Number(a.isAdult) - Number(b.isAdult))
+        case 'disabled': return dir * (Number(a.disabled) - Number(b.disabled))
+        case 'fromConfig': return dir * (Number(a.fromConfig) - Number(b.fromConfig))
+        default: return 0
+      }
+    })
+  }, [sites, filters, sortBy, sortDir])
+
+  function handleSort(field: SortField) {
+    if (sortBy === field) {
+      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    setSortBy(field)
+    setSortDir('asc')
+  }
+
   // ── 选择 ───────────────────────────────────────────────────
 
   function toggleSelect(key: string) {
@@ -243,11 +308,21 @@ export function CrawlerSiteManager() {
   }
 
   function toggleAll() {
-    if (selected.size === sites.length) {
-      setSelected(new Set())
-    } else {
-      setSelected(new Set(sites.map((s) => s.key)))
+    const visibleKeys = displaySites.map((s) => s.key)
+    const allVisibleSelected = visibleKeys.every((k) => selected.has(k))
+    if (allVisibleSelected) {
+      setSelected((prev) => {
+        const next = new Set(prev)
+        for (const k of visibleKeys) next.delete(k)
+        return next
+      })
+      return
     }
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const k of visibleKeys) next.add(k)
+      return next
+    })
   }
 
   // ── 验证 ───────────────────────────────────────────────────
@@ -422,33 +497,130 @@ export function CrawlerSiteManager() {
 
       {/* 表格 */}
       <div className="rounded-lg border border-[var(--border)] overflow-hidden">
+        <div className="grid grid-cols-1 gap-2 border-b border-[var(--border)] bg-[var(--bg2)] p-3 md:grid-cols-2 lg:grid-cols-5">
+          <Input
+            value={filters.keyOrName}
+            onChange={(v) => setFilters((prev) => ({ ...prev, keyOrName: v }))}
+            placeholder="筛选 名称 / key"
+          />
+          <Input
+            value={filters.apiUrl}
+            onChange={(v) => setFilters((prev) => ({ ...prev, apiUrl: v }))}
+            placeholder="筛选 API 地址"
+          />
+          <select
+            value={filters.sourceType}
+            onChange={(e) => setFilters((prev) => ({ ...prev, sourceType: e.target.value as typeof prev.sourceType }))}
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--text)]"
+          >
+            <option value="all">类型：全部</option>
+            <option value="vod">类型：长片</option>
+            <option value="shortdrama">类型：短剧</option>
+          </select>
+          <select
+            value={filters.format}
+            onChange={(e) => setFilters((prev) => ({ ...prev, format: e.target.value as typeof prev.format }))}
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--text)]"
+          >
+            <option value="all">格式：全部</option>
+            <option value="json">格式：JSON</option>
+            <option value="xml">格式：XML</option>
+          </select>
+          <select
+            value={filters.disabled}
+            onChange={(e) => setFilters((prev) => ({ ...prev, disabled: e.target.value as typeof prev.disabled }))}
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--text)]"
+          >
+            <option value="all">状态：全部</option>
+            <option value="enabled">状态：运行中</option>
+            <option value="disabled">状态：已停用</option>
+          </select>
+          <select
+            value={filters.isAdult}
+            onChange={(e) => setFilters((prev) => ({ ...prev, isAdult: e.target.value as typeof prev.isAdult }))}
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--text)]"
+          >
+            <option value="all">成人：全部</option>
+            <option value="yes">成人：是</option>
+            <option value="no">成人：否</option>
+          </select>
+          <select
+            value={filters.fromConfig}
+            onChange={(e) => setFilters((prev) => ({ ...prev, fromConfig: e.target.value as typeof prev.fromConfig }))}
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--text)]"
+          >
+            <option value="all">来源：全部</option>
+            <option value="config">来源：配置文件</option>
+            <option value="manual">来源：手工添加</option>
+          </select>
+          <Input
+            value={filters.weightMin}
+            onChange={(v) => setFilters((prev) => ({ ...prev, weightMin: v }))}
+            placeholder="权重最小值"
+            type="number"
+          />
+          <Input
+            value={filters.weightMax}
+            onChange={(v) => setFilters((prev) => ({ ...prev, weightMax: v }))}
+            placeholder="权重最大值"
+            type="number"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setFilters({
+                keyOrName: '',
+                apiUrl: '',
+                sourceType: 'all',
+                format: 'all',
+                isAdult: 'all',
+                disabled: 'all',
+                fromConfig: 'all',
+                weightMin: '',
+                weightMax: '',
+              })
+              setSortBy('weight')
+              setSortDir('desc')
+            }}
+            className="rounded-md border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] hover:bg-[var(--bg3)]"
+          >
+            清空筛选
+          </button>
+        </div>
+
+        <div data-testid="crawler-sites-scroll-container" className="max-h-[60vh] overflow-y-auto overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-[var(--border)] bg-[var(--bg2)]">
+            <tr className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg2)]">
               <th className="w-8 px-3 py-3 text-left">
                 <input
                   type="checkbox"
-                  checked={sites.length > 0 && selected.size === sites.length}
+                  checked={displaySites.length > 0 && displaySites.every((s) => selected.has(s.key))}
                   onChange={toggleAll}
                   className="accent-[var(--accent)]"
                 />
               </th>
-              <th className="px-3 py-3 text-left font-medium text-[var(--muted)]">名称 / Key</th>
-              <th className="px-3 py-3 text-left font-medium text-[var(--muted)]">API 地址</th>
-              <th className="px-3 py-3 text-left font-medium text-[var(--muted)]">属性</th>
-              <th className="px-3 py-3 text-left font-medium text-[var(--muted)]">状态</th>
+              <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('name')}>名称 {sortBy === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('key')}>Key {sortBy === 'key' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('apiUrl')}>API 地址 {sortBy === 'apiUrl' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('sourceType')}>类型 {sortBy === 'sourceType' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('format')}>格式 {sortBy === 'format' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('weight')}>权重 {sortBy === 'weight' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('isAdult')}>成人 {sortBy === 'isAdult' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('fromConfig')}>来源 {sortBy === 'fromConfig' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('disabled')}>状态 {sortBy === 'disabled' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
               <th className="px-3 py-3 text-left font-medium text-[var(--muted)]">操作</th>
             </tr>
           </thead>
           <tbody>
-            {sites.length === 0 && (
+            {displaySites.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-10 text-center text-[var(--muted)] text-sm">
-                  暂无源站，点击「添加源站」或从配置文件同步
+                <td colSpan={11} className="px-3 py-10 text-center text-[var(--muted)] text-sm">
+                  没有符合当前筛选条件的源站
                 </td>
               </tr>
             )}
-            {sites.map((site) => {
+            {displaySites.map((site) => {
               const vs = validateStates[site.key] ?? 'idle'
               return (
                 <tr key={site.key} className="border-b border-[var(--border)] hover:bg-[var(--bg2)] transition-colors">
@@ -457,22 +629,20 @@ export function CrawlerSiteManager() {
                   </td>
                   <td className="px-3 py-3">
                     <div className="font-medium text-[var(--text)]">{site.name}</div>
-                    <div className="text-xs text-[var(--muted)]">{site.key}</div>
-                    {site.fromConfig && <Badge color="blue">配置文件</Badge>}
                   </td>
+                  <td className="px-3 py-3 text-xs text-[var(--muted)]">{site.key}</td>
                   <td className="px-3 py-3 max-w-xs">
                     <span className="block truncate text-xs text-[var(--muted)]">{site.apiUrl}</span>
                   </td>
                   <td className="px-3 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      <Badge color={site.sourceType === 'shortdrama' ? 'blue' : 'gray'}>
-                        {site.sourceType === 'shortdrama' ? '短剧' : '长片'}
-                      </Badge>
-                      <Badge color="gray">{site.format.toUpperCase()}</Badge>
-                      <Badge color="gray">w:{site.weight}</Badge>
-                      {site.isAdult && <Badge color="red">成人</Badge>}
-                    </div>
+                    <Badge color={site.sourceType === 'shortdrama' ? 'blue' : 'gray'}>
+                      {site.sourceType === 'shortdrama' ? '短剧' : '长片'}
+                    </Badge>
                   </td>
+                  <td className="px-3 py-3"><Badge color="gray">{site.format.toUpperCase()}</Badge></td>
+                  <td className="px-3 py-3"><Badge color="gray">w:{site.weight}</Badge></td>
+                  <td className="px-3 py-3">{site.isAdult ? <Badge color="red">成人</Badge> : <span className="text-xs text-[var(--muted)]">否</span>}</td>
+                  <td className="px-3 py-3">{site.fromConfig ? <Badge color="blue">配置文件</Badge> : <span className="text-xs text-[var(--muted)]">手工</span>}</td>
                   <td className="px-3 py-3">
                     <button
                       onClick={() => handleToggleDisabled(site)}
@@ -523,6 +693,7 @@ export function CrawlerSiteManager() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* 添加 Modal */}

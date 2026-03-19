@@ -2338,3 +2338,31 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - typecheck/lint 通过
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-43 统一页视频源列表优化（内部滚动 + 全列筛选排序）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-19 15:40
+- **计划开始时间**：2026-03-19 15:44
+- **实际开始时间**：2026-03-19 15:44
+- **完成时间**：2026-03-19 15:50
+- **问题**：
+  1. 视频源列表过多时页面整体滚动，操作区不稳定。
+  2. 视频源列表缺少按列管理能力，定位与批量维护效率低。
+- **影响的已完成任务**：CHG-35 / CHG-42
+- **文件范围**：
+  - `src/components/admin/system/CrawlerSiteManager.tsx`
+  - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+- **修复内容**：
+  - 列表区增加固定高度滚动容器（`max-h + overflow-y-auto`），避免整页滚动
+  - 增加全列筛选与排序能力：名称、key、API、类型、格式、权重、成人、来源、状态
+  - 增加筛选器面板与“清空筛选”；表头支持升降序切换
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/system/ConfigFileEditor.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 组件单测通过（6/6），typecheck/lint 通过
+- **问题说明**：_（无）_
