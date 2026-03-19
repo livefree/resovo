@@ -10,6 +10,7 @@ import type { Client as ESClient } from '@elastic/elasticsearch'
 import { parseXmlResponse, parseJsonResponse, parseVodItem } from './SourceParserService'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
 import * as sourcesQueries from '@/api/db/queries/sources'
+import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import { nanoid } from 'nanoid'
 import { config } from '@/api/lib/config'
 
@@ -21,7 +22,7 @@ export interface CrawlerSource {
   format: 'xml' | 'json'
 }
 
-/** 从 CRAWLER_SOURCES 环境变量解析资源站配置 */
+/** 从 CRAWLER_SOURCES 环境变量解析资源站配置（降级用） */
 export function parseCrawlerSources(env?: string): CrawlerSource[] {
   if (!env) return []
   try {
@@ -29,6 +30,22 @@ export function parseCrawlerSources(env?: string): CrawlerSource[] {
   } catch {
     return []
   }
+}
+
+/**
+ * 获取启用的资源站列表：
+ * 优先从 crawler_sites 表读取，若表为空则降级到 CRAWLER_SOURCES 环境变量
+ */
+export async function getEnabledSources(db: Pool): Promise<CrawlerSource[]> {
+  const dbSites = await crawlerSitesQueries.listEnabledCrawlerSites(db)
+  if (dbSites.length > 0) {
+    return dbSites.map((s) => ({
+      name:   s.key,
+      base:   s.apiUrl,
+      format: s.format,
+    }))
+  }
+  return parseCrawlerSources(process.env.CRAWLER_SOURCES)
 }
 
 // ── 采集结果 ──────────────────────────────────────────────────────
