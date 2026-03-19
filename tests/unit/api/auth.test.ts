@@ -393,7 +393,7 @@ describe('POST /v1/auth/login', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/auth/login',
-      payload: { email: 'test@example.com', password: 'correctpassword' },
+      payload: { identifier: 'test@example.com', password: 'correctpassword' },
     })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.accessToken).toBeTruthy()
@@ -411,7 +411,7 @@ describe('POST /v1/auth/login', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/auth/login',
-      payload: { email: 'test@example.com', password: 'correctpassword' },
+      payload: { identifier: 'test@example.com', password: 'correctpassword' },
     })
     const { accessToken } = res.json().data
     const payload = verifyAccessToken(accessToken)
@@ -427,11 +427,11 @@ describe('POST /v1/auth/login', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/auth/login',
-      payload: { email: 'test@example.com', password: 'wrongpassword' },
+      payload: { identifier: 'test@example.com', password: 'wrongpassword' },
     })
     expect(res.statusCode).toBe(401)
     // 统一错误信息，不区分原因
-    expect(res.json().error.message).toBe('邮箱或密码错误')
+    expect(res.json().error.message).toBe('账号或密码错误')
   })
 
   it('用户不存在 → 401，错误信息与密码错误相同', async () => {
@@ -440,10 +440,10 @@ describe('POST /v1/auth/login', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/auth/login',
-      payload: { email: 'notexist@example.com', password: 'anypassword' },
+      payload: { identifier: 'notexist@example.com', password: 'anypassword' },
     })
     expect(res.statusCode).toBe(401)
-    expect(res.json().error.message).toBe('邮箱或密码错误')
+    expect(res.json().error.message).toBe('账号或密码错误')
   })
 
   it('refresh_token cookie 是 HttpOnly', async () => {
@@ -454,7 +454,7 @@ describe('POST /v1/auth/login', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/auth/login',
-      payload: { email: 'test@example.com', password: 'correctpassword' },
+      payload: { identifier: 'test@example.com', password: 'correctpassword' },
     })
     const sc3 = res.headers['set-cookie']
     const setCookies3 = Array.isArray(sc3) ? sc3.join('\n') : String(sc3)

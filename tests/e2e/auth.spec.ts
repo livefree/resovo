@@ -75,33 +75,33 @@ test.describe('登录页', () => {
     await page.goto('/en/auth/login')
   })
 
-  test('登录页正常加载，显示邮箱和密码输入框', async ({ page }) => {
-    await expect(page.locator('#login-email')).toBeVisible()
+  test('登录页正常加载，显示账号和密码输入框', async ({ page }) => {
+    await expect(page.locator('#login-identifier')).toBeVisible()
     await expect(page.locator('#login-password')).toBeVisible()
     await expect(page.getByTestId('login-submit')).toBeVisible()
   })
 
   test('空表单提交：显示必填验证错误', async ({ page }) => {
     await page.getByTestId('login-submit').click()
-    await expect(page.locator('#login-email-error')).toBeVisible()
+    await expect(page.locator('#login-identifier-error')).toBeVisible()
   })
 
-  test('无效邮箱格式：显示邮箱格式错误', async ({ page }) => {
-    await page.locator('#login-email').fill('not-an-email')
+  test('空账号提交：显示账号必填错误', async ({ page }) => {
+    await page.locator('#login-identifier').fill('')
     await page.locator('#login-password').fill('somepassword')
     await page.getByTestId('login-submit').click()
-    await expect(page.locator('#login-email-error')).toBeVisible()
+    await expect(page.locator('#login-identifier-error')).toBeVisible()
   })
 
   test('用户完成登录后跳转到首页', async ({ page }) => {
-    await page.locator('#login-email').fill('test@example.com')
+    await page.locator('#login-identifier').fill('test@example.com')
     await page.locator('#login-password').fill('password123')
     await page.getByTestId('login-submit').click()
     await expect(page).toHaveURL('/en')
   })
 
   test('登录后导航栏显示用户名', async ({ page }) => {
-    await page.locator('#login-email').fill('test@example.com')
+    await page.locator('#login-identifier').fill('test@example.com')
     await page.locator('#login-password').fill('password123')
     await page.getByTestId('login-submit').click()
     await expect(page.getByTestId('nav-username')).toHaveText(MOCK_USER.username)
@@ -114,12 +114,12 @@ test.describe('登录页', () => {
         status: 401,
         contentType: 'application/json',
         body: JSON.stringify({
-          error: { code: 'UNAUTHORIZED', message: '邮箱或密码错误', status: 401 },
+          error: { code: 'UNAUTHORIZED', message: '账号或密码错误', status: 401 },
         }),
       })
     })
 
-    await page.locator('#login-email').fill('test@example.com')
+    await page.locator('#login-identifier').fill('test@example.com')
     await page.locator('#login-password').fill('wrongpassword')
     await page.getByTestId('login-submit').click()
     await expect(page.getByTestId('login-error')).toBeVisible()
@@ -202,7 +202,7 @@ test.describe('登出流程', () => {
 
     // 先登录
     await page.goto('/en/auth/login')
-    await page.locator('#login-email').fill('test@example.com')
+    await page.locator('#login-identifier').fill('test@example.com')
     await page.locator('#login-password').fill('password123')
     await page.getByTestId('login-submit').click()
     await expect(page.getByTestId('nav-username')).toBeVisible()

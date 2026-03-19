@@ -85,17 +85,20 @@ export class UserService {
     return { user: safeUser, accessToken, refreshToken }
   }
 
-  async login(email: string, password: string): Promise<AuthResult> {
-    const user = await userQueries.findUserByEmail(this.db, email)
+  async login(identifier: string, password: string): Promise<AuthResult> {
+    // 包含 @ 则视为邮箱，否则视为用户名
+    const user = identifier.includes('@')
+      ? await userQueries.findUserByEmail(this.db, identifier)
+      : await userQueries.findUserByUsername(this.db, identifier)
 
-    // 统一错误信息，不区分"邮箱不存在"和"密码错误"，防止用户枚举
+    // 统一错误信息，不区分"账号不存在"和"密码错误"，防止用户枚举
     if (!user) {
       await bcrypt.compare(password, '$2b$12$invalidsaltthatisnotrealanddoesntmatch')
-      throw new UnauthorizedError('邮箱或密码错误')
+      throw new UnauthorizedError('账号或密码错误')
     }
 
     const valid = await bcrypt.compare(password, user.passwordHash)
-    if (!valid) throw new UnauthorizedError('邮箱或密码错误')
+    if (!valid) throw new UnauthorizedError('账号或密码错误')
 
     const { passwordHash: _ph, ...safeUser } = user
     const accessToken = signAccessToken({ userId: user.id, role: user.role })

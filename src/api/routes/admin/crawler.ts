@@ -93,7 +93,7 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
 
   fastify.post(
     '/admin/sources/:id/verify',
-    { preHandler: [fastify.authenticate, fastify.requireRole(['admin'])] },
+    { preHandler: [fastify.authenticate, fastify.requireRole(['moderator', 'admin'])] },
     async (request, reply) => {
       const { id } = request.params as { id: string }
       const source = await findSourceById(db, id)

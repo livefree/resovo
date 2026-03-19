@@ -48,7 +48,7 @@ const RegisterSchema = z.object({
 })
 
 const LoginSchema = z.object({
-  email: z.string().email(),
+  identifier: z.string().min(1),
   password: z.string().min(1),
 })
 
@@ -103,7 +103,7 @@ export async function authRoutes(fastify: FastifyInstance) {
 
     try {
       const { user, accessToken, refreshToken } = await userService.login(
-        parsed.data.email,
+        parsed.data.identifier,
         parsed.data.password
       )
       reply.setCookie(REFRESH_COOKIE, refreshToken, COOKIE_OPTIONS)

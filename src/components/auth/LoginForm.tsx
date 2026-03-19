@@ -20,12 +20,12 @@ import type { User } from '@/types'
 function useLoginSchema() {
   const t = useTranslations('auth.errors')
   return z.object({
-    email: z.string().min(1, t('emailRequired')).email(t('emailInvalid')),
+    identifier: z.string().min(1, t('identifierRequired')),
     password: z.string().min(1, t('passwordRequired')),
   })
 }
 
-type LoginFields = { email: string; password: string }
+type LoginFields = { identifier: string; password: string }
 type FieldErrors = Partial<Record<keyof LoginFields, string>>
 
 // ── 组件 ──────────────────────────────────────────────────────────
@@ -36,8 +36,8 @@ export function LoginForm() {
   const loginSchema = useLoginSchema()
   const login = useAuthStore((s) => s.login)
 
-  const emailRef = useRef<HTMLInputElement>(null)
-  const [values, setValues] = useState<LoginFields>({ email: '', password: '' })
+  const identifierRef = useRef<HTMLInputElement>(null)
+  const [values, setValues] = useState<LoginFields>({ identifier: '', password: '' })
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [serverError, setServerError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -71,10 +71,10 @@ export function LoginForm() {
     e.preventDefault()
     setServerError(null)
 
-    // Read from DOM — email is uncontrolled (ref), password reads DOM fallback
+    // Read from DOM — identifier is uncontrolled (ref), password reads DOM fallback
     const form = e.currentTarget as HTMLFormElement
     const domValues: LoginFields = {
-      email: emailRef.current?.value ?? '',
+      identifier: identifierRef.current?.value ?? '',
       password: (form.querySelector('#login-password') as HTMLInputElement)?.value ?? values.password,
     }
     if (domValues.password !== values.password) {
@@ -119,37 +119,36 @@ export function LoginForm() {
         </div>
       )}
 
-      {/* Email */}
+      {/* Identifier (email or username) */}
       <div className="mb-4">
         <label
-          htmlFor="login-email"
+          htmlFor="login-identifier"
           className="block text-sm font-medium mb-1"
           style={{ color: 'var(--foreground)' }}
         >
-          {t('email')}
+          {t('identifier')}
         </label>
         <input
-          ref={emailRef}
-          id="login-email"
+          ref={identifierRef}
+          id="login-identifier"
           type="text"
-          inputMode="email"
-          autoComplete="email"
-          placeholder={t('emailPlaceholder')}
+          autoComplete="username"
+          placeholder={t('identifierPlaceholder')}
           defaultValue=""
-          aria-invalid={!!fieldErrors.email}
-          aria-describedby={fieldErrors.email ? 'login-email-error' : undefined}
+          aria-invalid={!!fieldErrors.identifier}
+          aria-describedby={fieldErrors.identifier ? 'login-identifier-error' : undefined}
           className={cn(
             'w-full rounded-md px-3 py-2 text-sm outline-none transition-colors',
             'border focus:ring-2 focus:ring-[var(--gold)]',
             'bg-[var(--input)] text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]',
-            fieldErrors.email
+            fieldErrors.identifier
               ? 'border-red-500 focus:ring-red-400'
               : 'border-[var(--border)]'
           )}
         />
-        {fieldErrors.email && (
-          <p id="login-email-error" role="alert" className="mt-1 text-xs text-red-500">
-            {fieldErrors.email}
+        {fieldErrors.identifier && (
+          <p id="login-identifier-error" role="alert" className="mt-1 text-xs text-red-500">
+            {fieldErrors.identifier}
           </p>
         )}
       </div>

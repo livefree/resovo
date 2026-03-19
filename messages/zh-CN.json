@@ -3,8 +3,8 @@
     "login": {
       "title": "登录",
       "subtitle": "欢迎回到流光",
-      "email": "邮箱",
-      "emailPlaceholder": "your@email.com",
+      "identifier": "邮箱或用户名",
+      "identifierPlaceholder": "邮箱或用户名",
       "password": "密码",
       "passwordPlaceholder": "••••••••",
       "submit": "登录",
@@ -29,6 +29,7 @@
     "errors": {
       "emailRequired": "请输入邮箱",
       "emailInvalid": "请输入有效的邮箱地址",
+      "identifierRequired": "请输入邮箱或用户名",
       "passwordRequired": "请输入密码",
       "passwordMin": "密码至少需要 8 位字符",
       "usernameRequired": "请输入用户名",
