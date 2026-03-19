@@ -191,3 +191,15 @@ export async function updateUserRole(
   )
   return result.rows[0] ?? null
 }
+
+export async function resetUserPassword(
+  db: Pool,
+  id: string,
+  newPasswordHash: string
+): Promise<{ id: string } | null> {
+  const result = await db.query<{ id: string }>(
+    `UPDATE users SET password_hash = $1 WHERE id = $2 AND deleted_at IS NULL RETURNING id`,
+    [newPasswordHash, id]
+  )
+  return result.rows[0] ?? null
+}

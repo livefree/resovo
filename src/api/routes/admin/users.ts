@@ -11,6 +11,8 @@
 
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import crypto from 'crypto'
+import bcrypt from 'bcryptjs'
 import { db } from '@/api/lib/postgres'
 import * as usersQueries from '@/api/db/queries/users'
 
@@ -112,5 +114,36 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
 
     const result = await usersQueries.updateUserRole(db, id, parsed.data.role)
     return reply.send({ data: result })
+  })
+
+  // ── POST /admin/users/:id/reset-password ──────────────────────
+  fastify.post('/admin/users/:id/reset-password', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+
+    const user = await usersQueries.findAdminUserById(db, id)
+    if (!user) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '用户不存在', status: 404 },
+      })
+    }
+    if (user.role === 'admin') {
+      return reply.code(403).send({
+        error: { code: 'FORBIDDEN', message: '不能重置 admin 账号密码', status: 403 },
+      })
+    }
+
+    // 生成随机 12 位密码（大小写字母 + 数字）
+    const newPassword = crypto.randomBytes(9).toString('base64url').slice(0, 12)
+    const newPasswordHash = await bcrypt.hash(newPassword, 10)
+
+    const result = await usersQueries.resetUserPassword(db, id, newPasswordHash)
+    if (!result) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '用户不存在', status: 404 },
+      })
+    }
+
+    // 明文密码一次性返回，不记录日志
+    return reply.send({ data: { newPassword } })
   })
 }
