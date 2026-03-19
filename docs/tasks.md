@@ -2366,3 +2366,36 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 组件单测通过（6/6），typecheck/lint 通过
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-44 开发期登录效率优化（无感恢复 + dev 快捷登录）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-19 15:56
+- **计划开始时间**：2026-03-19 16:00
+- **实际开始时间**：2026-03-19 16:00
+- **完成时间**：2026-03-19 16:05
+- **问题**：开发阶段频繁丢失登录态，需要反复输入账号密码进入后台。
+- **影响的已完成任务**：CHG-37
+- **文件范围**：
+  - `.env.example`
+  - `src/stores/authStore.ts`
+  - `src/api/routes/auth.ts`
+  - `src/api/services/UserService.ts`
+  - `src/components/auth/LoginForm.tsx`
+  - `tests/unit/stores/authStore.test.ts`
+  - `tests/unit/api/auth.test.ts`
+- **修复内容**：
+  - `tryRestoreSession` 改为“只要 accessToken 为空就尝试 refresh”，不再依赖 `isLoggedIn`
+  - refresh 成功后补拉 `/users/me`（若本地 user 缺失）
+  - 新增 `POST /auth/dev-login`（非生产环境可用，需 `X-Dev-Auth` 与 `DEV_LOGIN_SECRET` 匹配）
+  - 登录页新增“开发快速登录（仅本地）”按钮（受 `NEXT_PUBLIC_ENABLE_DEV_LOGIN` 控制）
+  - `.env.example` 增加 dev-login 相关环境变量示例
+- **测试要求**：
+  - `npm run test:run -- tests/unit/stores/authStore.test.ts tests/unit/api/auth.test.ts`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 单测 57/57 通过，typecheck/lint 通过
+- **问题说明**：_（无）_

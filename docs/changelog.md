@@ -814,3 +814,21 @@
 - **数据库变更**：无
 - **注意事项**：
   - 当前筛选和排序在前端内存中执行，适用于当前管理页数据规模
+
+## [CHG-44] 开发期登录效率优化（无感恢复 + dev 快捷登录）
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 16:06
+- **修改文件**：
+  - `.env.example` — 新增 dev-login 开关与密钥示例（`NEXT_PUBLIC_ENABLE_DEV_LOGIN`、`NEXT_PUBLIC_DEV_LOGIN_SECRET`、`DEV_LOGIN_SECRET`、`DEV_LOGIN_IDENTIFIER`）
+  - `src/stores/authStore.ts` — `tryRestoreSession` 改为无 token 即尝试 refresh，成功后可补拉 `/users/me`
+  - `src/api/routes/auth.ts` — 新增 `POST /auth/dev-login`（非生产 + header 密钥校验）
+  - `src/api/services/UserService.ts` — 新增 `devLogin()` 复用 token 颁发流程
+  - `src/components/auth/LoginForm.tsx` — 新增开发快速登录按钮与调用逻辑
+  - `tests/unit/stores/authStore.test.ts` — 更新会话恢复测试场景
+  - `tests/unit/api/auth.test.ts` — 新增 `/auth/dev-login` 接口测试
+  - `docs/tasks.md` — 追加 CHG-44 任务闭环记录
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - `/auth/dev-login` 在生产环境不可用
+  - 开发快捷登录按钮默认关闭，需显式设置 `NEXT_PUBLIC_ENABLE_DEV_LOGIN=true`
