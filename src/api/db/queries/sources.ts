@@ -107,29 +107,27 @@ export interface UpsertSourceInput {
 
 /**
  * 播放源去重 upsert：
- * 同一 (video_id, source_url) 已存在时更新 source_name 和 last_checked，
- * 不存在时插入新记录（is_active=true）。
+ * 同一 (video_id, episode_number, source_url) 已存在时跳过（DO NOTHING）。
+ * 规则 E(CHG-38): 不覆盖已有播放源，避免误清除 is_active=false 状态。
+ * NULL episode_number 视为相同（NULLS NOT DISTINCT 约束）。
  */
 export async function upsertSource(
   db: Pool,
   input: UpsertSourceInput
-): Promise<VideoSource> {
+): Promise<VideoSource | null> {
   const result = await db.query<DbSourceRow>(
     `INSERT INTO video_sources
        (video_id, episode_number, source_url, source_name, type, is_active)
      VALUES ($1, $2, $3, $4, $5, true)
-     ON CONFLICT (video_id, source_url)
-     DO UPDATE SET
-       source_name = EXCLUDED.source_name,
-       is_active = true,
-       last_checked = NOW()
+     ON CONFLICT ON CONSTRAINT uq_sources_video_episode_url
+     DO NOTHING
      RETURNING *`,
     [input.videoId, input.episodeNumber, input.sourceUrl, input.sourceName, input.type]
   )
-  return mapSource(result.rows[0])
+  return result.rows[0] ? mapSource(result.rows[0]) : null
 }
 
-/** 批量 upsert 播放源（爬虫采集后批量写入） */
+/** 批量 upsert 播放源（爬虫采集后批量写入）。返回实际插入数量（跳过的不计入）。 */
 export async function upsertSources(
   db: Pool,
   inputs: UpsertSourceInput[]
@@ -137,8 +135,8 @@ export async function upsertSources(
   if (inputs.length === 0) return 0
   let count = 0
   for (const input of inputs) {
-    await upsertSource(db, input)
-    count++
+    const inserted = await upsertSource(db, input)
+    if (inserted !== null) count++
   }
   return count
 }

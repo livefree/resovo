@@ -33,6 +33,8 @@ interface DbVideoRow {
   updated_at: string
   source_count: string  // COUNT() 返回字符串
   subtitle_langs: string[] | null
+  title_normalized: string | null
+  metadata_source: string | null
 }
 
 function mapVideoRow(row: DbVideoRow): Video {
@@ -524,4 +526,118 @@ export async function findVideoIdByShortId(
     [shortId]
   )
   return result.rows[0]?.id ?? null
+}
+
+// ── CHG-38: 视频归并策略 ──────────────────────────────────────────
+
+/** metadata_source 优先级（越大越高）*/
+export const METADATA_SOURCE_PRIORITY: Record<string, number> = {
+  tmdb:    4,
+  douban:  3,
+  manual:  2,
+  crawler: 1,
+}
+
+export type MetadataSource = 'tmdb' | 'douban' | 'manual' | 'crawler'
+
+/**
+ * 按归并 match_key 查找已有视频。
+ * 规则 A: (title_normalized, year, type) 三元组完全相同才认为是同一视频。
+ */
+export async function findVideoByNormalizedKey(
+  db: Pool,
+  titleNormalized: string,
+  year: number | null,
+  type: VideoType
+): Promise<{ id: string; metadataSource: string } | null> {
+  const result = await db.query<{ id: string; metadata_source: string }>(
+    `SELECT id, metadata_source FROM videos
+     WHERE title_normalized = $1
+       AND year IS NOT DISTINCT FROM $2
+       AND type = $3
+       AND deleted_at IS NULL
+     LIMIT 1`,
+    [titleNormalized, year, type]
+  )
+  if (!result.rows[0]) return null
+  return { id: result.rows[0].id, metadataSource: result.rows[0].metadata_source }
+}
+
+export interface CrawlerInsertInput {
+  shortId: string
+  title: string
+  titleNormalized: string
+  titleEn: string | null
+  coverUrl: string | null
+  type: VideoType
+  category: string | null
+  year: number | null
+  country: string | null
+  cast: string[]
+  director: string[]
+  writers: string[]
+  description: string | null
+  status: VideoStatus
+  episodeCount: number
+  isPublished: boolean
+  metadataSource: MetadataSource
+}
+
+/**
+ * 新建视频记录（爬虫采集专用）。
+ * 含 title_normalized 和 metadata_source。
+ */
+export async function insertCrawledVideo(
+  db: Pool,
+  input: CrawlerInsertInput
+): Promise<{ id: string }> {
+  const result = await db.query<{ id: string }>(
+    `INSERT INTO videos
+       (short_id, title, title_normalized, title_en, cover_url, type, category, year, country,
+        "cast", director, writers, description, status, episode_count,
+        is_published, metadata_source)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+     RETURNING id`,
+    [
+      input.shortId,
+      input.title,
+      input.titleNormalized,
+      input.titleEn,
+      input.coverUrl,
+      input.type,
+      input.category,
+      input.year,
+      input.country,
+      input.cast,
+      input.director,
+      input.writers,
+      input.description,
+      input.status,
+      input.episodeCount,
+      input.isPublished,
+      input.metadataSource,
+    ]
+  )
+  return result.rows[0]
+}
+
+/**
+ * 向 video_aliases 表写入别名（INSERT IGNORE）。
+ * 规则 C: 将 vod_name / vod_en 写入别名表，便于跨站标题匹配。
+ */
+export async function upsertVideoAliases(
+  db: Pool,
+  videoId: string,
+  aliases: string[]
+): Promise<void> {
+  const filtered = aliases.filter((a) => a.trim().length > 0)
+  if (filtered.length === 0) return
+  for (const alias of filtered) {
+    await db.query(
+      `INSERT INTO video_aliases (video_id, alias)
+       VALUES ($1, $2)
+       ON CONFLICT (video_id, alias) DO NOTHING`,
+      [videoId, alias.trim()]
+    )
+  }
 }

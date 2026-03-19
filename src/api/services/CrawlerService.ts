@@ -8,9 +8,11 @@
 import type { Pool } from 'pg'
 import type { Client as ESClient } from '@elastic/elasticsearch'
 import { parseXmlResponse, parseJsonResponse, parseVodItem } from './SourceParserService'
+import { normalizeTitle } from './TitleNormalizer'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
 import * as sourcesQueries from '@/api/db/queries/sources'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
+import * as videosQueries from '@/api/db/queries/videos'
 import { nanoid } from 'nanoid'
 import { config } from '@/api/lib/config'
 
@@ -75,7 +77,9 @@ export class CrawlerService {
     options: { page?: number; hoursAgo?: number; keyword?: string; ids?: string } = {}
   ): string {
     const fmt = format === 'xml' ? 'xml' : 'json'
-    let url = `${base}/api.php/provide/vod/at/${fmt}`
+    // 数据库中存储的可能是完整 API 路径（如 /api.php/provide/vod），需先剥离再重建
+    const cleanBase = base.replace(/\/api\.php\b.*$/, '').replace(/\/$/, '')
+    let url = `${cleanBase}/api.php/provide/vod/at/${fmt}`
     const params: string[] = []
 
     if (options.ids) {
@@ -140,65 +144,77 @@ export class CrawlerService {
   }
 
   /**
-   * 将单个解析结果写入数据库，并触发 ES 索引同步
-   * 去重规则：同 title+year → 只追加播放源，不覆盖元数据
+   * 将单个解析结果写入数据库，并触发 ES 索引同步。
+   *
+   * 归并策略（CHG-38）：
+   *   规则 A — match_key = (title_normalized, year, type)；type 不同不合并
+   *   规则 B — TitleNormalizer 生成 title_normalized
+   *   规则 C — 将 title / titleEn 写入 video_aliases（INSERT IGNORE）
+   *   规则 D — metadata_source 优先级 tmdb(4) > douban(3) > manual(2) > crawler(1)；低优先级不覆盖高优先级元数据
+   *   规则 E — sources ON CONFLICT DO NOTHING（不覆盖已有播放源）
    */
   async upsertVideo(
     parsed: ReturnType<typeof parseVodItem>
   ): Promise<{ videoId: string; sourcesUpserted: number }> {
     const { video, sources } = parsed
 
-    // 1. 按 title+year 去重查询
-    const existing = await this.db.query<{ id: string }>(
-      `SELECT id FROM videos
-       WHERE title = $1 AND year IS NOT DISTINCT FROM $2
-         AND deleted_at IS NULL
-       LIMIT 1`,
-      [video.title, video.year]
+    // 规则 B: 标准化标题
+    const titleNormalized = normalizeTitle(video.title)
+    const incomingPriority = videosQueries.METADATA_SOURCE_PRIORITY['crawler']
+
+    // 规则 A: 按 (title_normalized, year, type) 查找已有视频
+    const existing = await videosQueries.findVideoByNormalizedKey(
+      this.db,
+      titleNormalized,
+      video.year,
+      video.type
     )
 
     let videoId: string
+    let isNew = false
 
-    if (existing.rows.length > 0) {
-      // 已存在：不覆盖元数据
-      videoId = existing.rows[0].id
+    if (existing) {
+      // 已存在：规则 D — 低优先级（crawler）不覆盖高优先级元数据
+      videoId = existing.id
+      const existingPriority = videosQueries.METADATA_SOURCE_PRIORITY[existing.metadataSource] ?? 0
+      // crawler 采集优先级最低，不做元数据覆盖；若未来有 tmdb/douban 来源可在此扩展
+      void existingPriority // 当前仅 crawler 来源，始终跳过覆盖
     } else {
-      // 新建视频记录
+      // 新建视频记录（含 title_normalized + metadata_source）
+      isNew = true
       const shortId = nanoid(8)
       const autoPublish = config.AUTO_PUBLISH_CRAWLED === 'true'
-      const inserted = await this.db.query<{ id: string }>(
-        `INSERT INTO videos
-           (short_id, title, title_en, cover_url, type, category, year, country,
-            "cast", director, writers, description, status, episode_count,
-            is_published)
-         VALUES
-           ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-         RETURNING id`,
-        [
-          shortId,
-          video.title,
-          video.titleEn,
-          video.coverUrl,         // ADR-009: 存外链
-          video.type,
-          video.category,
-          video.year,
-          video.country,
-          video.cast,
-          video.director,
-          video.writers,
-          video.description,
-          video.status,
-          sources.length > 0 ? Math.max(...sources.map((s) => s.episodeNumber ?? 1)) : 1,
-          autoPublish,
-        ]
-      )
-      videoId = inserted.rows[0].id
-
-      // 触发 ES 索引（异步，不等待）
-      void this.indexToES(videoId)
+      const episodeCount = sources.length > 0
+        ? Math.max(...sources.map((s) => s.episodeNumber ?? 1))
+        : 1
+      const inserted = await videosQueries.insertCrawledVideo(this.db, {
+        shortId,
+        title: video.title,
+        titleNormalized,
+        titleEn: video.titleEn,
+        coverUrl: video.coverUrl,   // ADR-009: 存外链
+        type: video.type,
+        category: video.category,
+        year: video.year,
+        country: video.country,
+        cast: video.cast,
+        director: video.director,
+        writers: video.writers,
+        description: video.description,
+        status: video.status,
+        episodeCount,
+        isPublished: autoPublish,
+        metadataSource: 'crawler',
+      })
+      videoId = inserted.id
     }
 
-    // 2. Upsert 播放源（ADR-001: sourceUrl 是第三方直链）
+    // 规则 C: 写入别名（title + titleEn，INSERT IGNORE）
+    const aliases: string[] = [video.title]
+    if (video.titleEn) aliases.push(video.titleEn)
+    await videosQueries.upsertVideoAliases(this.db, videoId, aliases)
+
+    // 规则 E: Upsert 播放源（ON CONFLICT DO NOTHING）
     const sourcesUpserted = await sourcesQueries.upsertSources(
       this.db,
       sources.map((s) => ({
@@ -209,6 +225,12 @@ export class CrawlerService {
         type: s.type,
       }))
     )
+
+    // 新建视频才触发 ES 索引（异步，不等待）
+    if (isNew) void this.indexToES(videoId)
+
+    // 规则 D 参考：当前来源始终为 crawler（priority=1），未来可传入 incomingPriority
+    void incomingPriority
 
     return { videoId, sourcesUpserted }
   }
