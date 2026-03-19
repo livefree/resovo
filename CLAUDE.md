@@ -210,7 +210,7 @@ git checkout dev
 
 ## 暂停条件与通知格式
 
-以下情况必须立即停止工作，在 `docs/tasks.md` 顶部写入通知，等待人工处理。
+以下情况必须立即停止工作，在 `docs/tasks.md` 统一通知区写入通知（文件尾部追加），等待人工处理。
 
 ### BLOCKER（立即暂停，不执行 commit）
 
@@ -220,7 +220,7 @@ git checkout dev
 - 发现已有数据库 schema 与 `docs/architecture.md` 存在冲突
 - 任务描述不清晰或存在歧义，无法确定正确实现方向
 
-**BLOCKER 写入位置：`docs/tasks.md` 文件顶部（现有内容保留）**
+**BLOCKER 写入位置：`docs/tasks.md` 文件尾部统一通知区（仅追加，不头插）**
 
 ```markdown
 ---
@@ -243,7 +243,7 @@ git checkout dev
 
 触发条件：某个 Phase 的所有任务全部标记 `✅ 已完成`，且已合并到 main。
 
-**写入位置：`docs/tasks.md` 文件顶部**
+**写入位置：`docs/tasks.md` 文件尾部统一通知区（仅追加，不头插）**
 
 ```markdown
 ---
@@ -270,6 +270,16 @@ git checkout dev
    - commit hash（`git rev-parse --short HEAD`）
 3. `docs/changelog.md` 末尾追加一条记录
 4. 如有新架构决策，在 `docs/decisions.md` 追加 ADR
+
+---
+
+## 任务与记录一致性补充（2026-03-19）
+
+1. 多任务规划统一写入 `docs/task-queue.md`，不得临时“走一步看一步”。
+2. `docs/tasks.md` 可保留全量任务，但同一时刻最多 1 个任务为 `🔄 进行中`。
+3. 新任务编号必须遵循现有前缀格式：`<PREFIX>-NN`，同前缀按最大编号递增（如 `CHG-39`）。
+4. 新任务必须带时间戳字段：`创建时间`、`计划开始时间`、`实际开始时间`、`完成时间`（按状态填写）。
+5. 记录写入统一规则：`tasks.md` / `changelog.md` / `task-queue.md` 新记录一律尾部追加，禁止头部插入。
 
 ---
 

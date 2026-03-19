@@ -47,13 +47,13 @@ npm install
 ### 第四步：初始化数据库
 
 ```bash
-npm run db:migrate
+npm run migrate
 ```
 
 ### 第五步：启动服务
 
 ```bash
-# 终端 1：前端（Next.js，端口 3001）
+# 终端 1：前端（Next.js，端口 3000）
 npm run dev
 
 # 终端 2：后端 API（Fastify，端口 4000）
@@ -67,7 +67,21 @@ npm run api
 或直接用命令行触发：
 
 ```bash
-npm run crawler:full
+npm run verify:crawler
+```
+
+### 第七步（推荐）：开发前稳态检查
+
+在 AI 持续开发前，建议先执行一轮 preflight，保证环境、迁移、类型、lint、测试基线稳定。
+
+```bash
+npm run preflight
+```
+
+若本轮改动涉及关键页面流程，再执行带 E2E 的版本：
+
+```bash
+npm run preflight:e2e
 ```
 
 ---
@@ -76,10 +90,10 @@ npm run crawler:full
 
 | 入口 | 地址 | 说明 |
 |------|------|------|
-| 前台首页 | http://localhost:3001 | 主站，需有视频数据 |
-| 分类浏览 | http://localhost:3001/browse | 按类型/地区/年份筛选 |
-| 搜索 | http://localhost:3001/search | 全文搜索 |
-| 管理后台 | http://localhost:3001/admin | 需要 admin 账号 |
+| 前台首页 | http://localhost:3000 | 主站，需有视频数据 |
+| 分类浏览 | http://localhost:3000/browse | 按类型/地区/年份筛选 |
+| 搜索 | http://localhost:3000/search | 全文搜索 |
+| 管理后台 | http://localhost:3000/admin | 需要 admin 账号 |
 | API 文档 | http://localhost:4000/docs | Fastify Swagger |
 
 ---
@@ -112,7 +126,7 @@ VALUES (
 
 ### 登录管理后台
 
-1. 访问 http://localhost:3001/admin
+1. 访问 http://localhost:3000/admin
 2. 未登录时自动跳转登录页
 3. 用 admin 账号登录后进入管理后台
 
