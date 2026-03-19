@@ -509,3 +509,19 @@ export async function updateDoubanData(
   )
   return (result.rowCount ?? 0) > 0
 }
+
+// ── Admin 工具查询 ────────────────────────────────────────────────
+
+/**
+ * 按 short_id 查找视频 ID（含未发布视频，用于 admin 导入场景）
+ */
+export async function findVideoIdByShortId(
+  db: Pool,
+  shortId: string
+): Promise<string | null> {
+  const result = await db.query<{ id: string }>(
+    `SELECT id FROM videos WHERE short_id = $1 AND deleted_at IS NULL`,
+    [shortId]
+  )
+  return result.rows[0]?.id ?? null
+}

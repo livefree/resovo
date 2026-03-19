@@ -274,3 +274,45 @@ export async function rejectSubmission(
   )
   return (result.rowCount ?? 0) > 0
 }
+
+// ── Admin 导出 ────────────────────────────────────────────────────
+
+export interface ExportedSource {
+  shortId: string
+  sourceName: string
+  sourceUrl: string
+  isActive: boolean
+  type: string
+  episodeNumber: number | null
+}
+
+/**
+ * 导出所有非删除的播放源（不含用户投稿，只含爬虫抓取/手动添加的源）
+ */
+export async function exportAllSources(db: Pool): Promise<ExportedSource[]> {
+  const result = await db.query<{
+    short_id: string
+    source_name: string
+    source_url: string
+    is_active: boolean
+    type: string
+    episode_number: number | null
+  }>(
+    `SELECT v.short_id, s.source_name, s.source_url, s.is_active, s.type, s.episode_number
+     FROM video_sources s
+     JOIN videos v ON s.video_id = v.id
+     WHERE s.deleted_at IS NULL
+       AND s.submitted_by IS NULL
+       AND v.deleted_at IS NULL
+     ORDER BY s.created_at DESC`
+  )
+
+  return result.rows.map((row) => ({
+    shortId: row.short_id,
+    sourceName: row.source_name,
+    sourceUrl: row.source_url,
+    isActive: row.is_active,
+    type: row.type,
+    episodeNumber: row.episode_number,
+  }))
+}
