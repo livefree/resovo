@@ -263,13 +263,14 @@ export async function approveSubmission(
 
 export async function rejectSubmission(
   db: Pool,
-  id: string
+  id: string,
+  reason?: string
 ): Promise<boolean> {
   const result = await db.query(
-    `UPDATE video_sources SET deleted_at = NOW()
+    `UPDATE video_sources SET deleted_at = NOW(), rejection_reason = $2
      WHERE id = $1 AND is_active = false AND deleted_at IS NULL
      RETURNING id`,
-    [id]
+    [id, reason ?? null]
   )
   return (result.rowCount ?? 0) > 0
 }

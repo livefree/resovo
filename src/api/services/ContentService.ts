@@ -54,8 +54,8 @@ export class ContentService {
     return sourcesQueries.approveSubmission(this.db, id)
   }
 
-  async rejectSubmission(id: string): Promise<boolean> {
-    return sourcesQueries.rejectSubmission(this.db, id)
+  async rejectSubmission(id: string, reason?: string): Promise<boolean> {
+    return sourcesQueries.rejectSubmission(this.db, id, reason)
   }
 
   // ── 字幕审核 ────────────────────────────────────────────────────
@@ -69,7 +69,7 @@ export class ContentService {
     return subtitleQueries.approveSubtitle(this.db, id)
   }
 
-  async rejectSubtitle(id: string): Promise<boolean> {
-    return subtitleQueries.rejectSubtitle(this.db, id)
+  async rejectSubtitle(id: string, reason?: string): Promise<boolean> {
+    return subtitleQueries.rejectSubtitle(this.db, id, reason)
   }
 }

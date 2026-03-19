@@ -153,11 +153,12 @@ export async function approveSubtitle(
 
 export async function rejectSubtitle(
   db: Pool,
-  id: string
+  id: string,
+  reason?: string
 ): Promise<boolean> {
   const result = await db.query(
-    `UPDATE subtitles SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
-    [id]
+    `UPDATE subtitles SET deleted_at = NOW(), rejection_reason = $2 WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
+    [id, reason ?? null]
   )
   return (result.rowCount ?? 0) > 0
 }

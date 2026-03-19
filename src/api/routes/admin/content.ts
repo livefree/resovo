@@ -130,7 +130,10 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
 
   fastify.post('/admin/submissions/:id/reject', { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const rejected = await contentService.rejectSubmission(id)
+    const RejectSchema = z.object({ reason: z.string().min(1).max(200).optional() })
+    const parsed = RejectSchema.safeParse(request.body)
+    const reason = parsed.success ? parsed.data.reason : undefined
+    const rejected = await contentService.rejectSubmission(id, reason)
     if (!rejected) {
       return reply.code(404).send({
         error: { code: 'NOT_FOUND', message: '投稿记录不存在或已处理', status: 404 },
@@ -169,7 +172,10 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
 
   fastify.post('/admin/subtitles/:id/reject', { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const rejected = await contentService.rejectSubtitle(id)
+    const RejectSchema = z.object({ reason: z.string().min(1).max(200).optional() })
+    const parsed = RejectSchema.safeParse(request.body)
+    const reason = parsed.success ? parsed.data.reason : undefined
+    const rejected = await contentService.rejectSubtitle(id, reason)
     if (!rejected) {
       return reply.code(404).send({
         error: { code: 'NOT_FOUND', message: '字幕记录不存在', status: 404 },
