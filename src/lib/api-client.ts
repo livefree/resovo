@@ -168,6 +168,16 @@ export const apiClient = {
     return request('/admin/analytics', { method: 'GET' })
   },
 
+  /** 获取缓存统计（admin only） */
+  getCacheStats(): Promise<{ data: import('@/api/services/CacheService').CacheStat[] }> {
+    return request('/admin/cache/stats', { method: 'GET' })
+  },
+
+  /** 清除指定类型缓存（admin only） */
+  clearCache(type: import('@/api/services/CacheService').CacheType): Promise<{ data: { deleted: number } }> {
+    return request(`/admin/cache/${type}`, { method: 'DELETE' })
+  },
+
   /** 上传文件（multipart/form-data，不设 Content-Type 让浏览器自动处理 boundary） */
   upload<T>(path: string, formData: FormData, options?: Omit<RequestOptions, 'method' | 'body'>): Promise<T> {
     const { headers = {}, ...rest } = options ?? {}
