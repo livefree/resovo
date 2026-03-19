@@ -31,7 +31,10 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
   // ════════════════════════════════════════════════════════════════
 
   const SourceListSchema = z.object({
-    active: z.enum(['true', 'false', 'all']).optional().default('all'),
+    /** active=true/false/all（旧参数保留向后兼容） */
+    active: z.enum(['true', 'false', 'all']).optional(),
+    /** status=active|inactive|all（新参数，与 active 取值映射） */
+    status: z.enum(['active', 'inactive', 'all']).optional(),
     page: z.coerce.number().int().min(1).optional().default(1),
     limit: z.coerce.number().int().min(1).max(100).optional().default(20),
     videoId: z.string().uuid().optional(),
@@ -45,8 +48,12 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const { active, page, limit, videoId } = parsed.data
-    const result = await contentService.listSources({ active, page, limit, videoId })
+    const { active, status, page, limit, videoId } = parsed.data
+    // status 参数优先；向后兼容 active 参数
+    const resolvedActive = status
+      ? (status === 'active' ? 'true' : status === 'inactive' ? 'false' : 'all')
+      : (active ?? 'all')
+    const result = await contentService.listSources({ active: resolvedActive, page, limit, videoId })
     return reply.send(result)
   })
 
@@ -74,6 +81,18 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
 
     const deleted = await contentService.batchDeleteSources(parsed.data.ids)
     return reply.send({ data: { deleted } })
+  })
+
+  // ── POST /admin/sources/:id/verify ───────────────────────────
+  fastify.post('/admin/sources/:id/verify', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const result = await contentService.verifySource(id)
+    if (!result) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '播放源不存在', status: 404 },
+      })
+    }
+    return reply.send({ data: result })
   })
 
   // ════════════════════════════════════════════════════════════════

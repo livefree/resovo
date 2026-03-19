@@ -6,6 +6,7 @@
 import type { Pool } from 'pg'
 import * as sourcesQueries from '@/api/db/queries/sources'
 import * as subtitleQueries from '@/api/db/queries/subtitles'
+import { checkUrl } from '@/api/workers/verifyWorker'
 
 export class ContentService {
   constructor(private db: Pool) {}
@@ -23,6 +24,23 @@ export class ContentService {
 
   async batchDeleteSources(ids: string[]): Promise<number> {
     return sourcesQueries.batchDeleteSources(this.db, ids)
+  }
+
+  async verifySource(sourceId: string): Promise<{
+    isActive: boolean
+    responseMs: number
+    statusCode: number | null
+  } | null> {
+    const source = await sourcesQueries.findSourceById(this.db, sourceId)
+    if (!source) return null
+
+    const start = Date.now()
+    const { isActive, statusCode } = await checkUrl(source.sourceUrl)
+    const responseMs = Date.now() - start
+
+    await sourcesQueries.updateSourceActiveStatus(this.db, sourceId, isActive)
+
+    return { isActive, responseMs, statusCode }
   }
 
   // ── 投稿队列 ────────────────────────────────────────────────────
