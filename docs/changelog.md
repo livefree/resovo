@@ -587,3 +587,18 @@
   - `tests/unit/components/admin/videos/VideoFilters.test.tsx`（新建）— 5 个测试
 - **新增依赖**：无
 - **数据库变更**：无
+
+---
+
+## [CHG-28] Admin 播放源管理页（实时验证 UI）
+- **完成时间**：2026-03-18
+- **修改文件**：
+  - `src/api/services/ContentService.ts`（更新）— 新增 `verifySource(sourceId)` 方法，调用 `checkUrl` + `updateSourceActiveStatus`
+  - `src/api/routes/admin/content.ts`（更新）— 新增 `POST /admin/sources/:id/verify`（moderator+）；`GET /admin/sources` 新增 `?status=active|inactive|all` 参数
+  - `src/components/admin/sources/SourceVerifyButton.tsx`（新建）— 验证按钮 + 行内结果显示
+  - `src/components/admin/sources/SourceTable.tsx`（新建）— 状态筛选 + 复选框 + StatusBadge + 验证/删除操作
+  - `src/components/admin/sources/BatchDeleteBar.tsx`（新建）— 底部浮动栏 + ConfirmDialog 批量删除
+  - `src/app/[locale]/admin/sources/page.tsx`（改写）— Server Component 壳
+  - `tests/unit/api/sources-verify.test.ts`（新建）— 8 个测试，344 total passed
+- **新增依赖**：无
+- **数据库变更**：无

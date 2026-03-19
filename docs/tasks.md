@@ -908,7 +908,7 @@ CHG-06（类型标签联动）       ← 最后处理
 
 #### CHG-28 Admin 视频源管理页（实时验证测试 UI）
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **依赖**：CHG-24（Admin 基础组件库）
 - **变更原因**：现有播放源管理页（`/admin/sources`）只有列表和删除，缺乏：① 手动触发单条链接验证并即时查看结果的 UI；② 批量删除失效源的操作。参考 LunaTV SourceTestModule（965L）的设计
 - **影响的已完成任务**：ADMIN-02（content 路由）、CHG-14（verifyWorker）、CHG-15（ContentService）
@@ -938,7 +938,7 @@ CHG-06（类型标签联动）       ← 最后处理
   - 筛选"失效源"后显示所有 `is_active = false` 的源，批量选中后可批量删除（二次确认）
   - 验证请求超时时 UI 显示"超时"而非页面报错
 - **测试要求**：Vitest `tests/unit/api/sources-verify.test.ts`（新建：mock HEAD 请求，验证 isActive 判断逻辑、超时处理、权限检查）
-- **完成备注**：_（AI 填写）_
+- **完成备注**：后端：`ContentService.verifySource` 调用 `checkUrl`+`updateSourceActiveStatus`；`admin/content.ts` 新增 `POST /admin/sources/:id/verify`（moderator+）；`GET /admin/sources` 新增 `?status=active|inactive|all`；前端：`SourceVerifyButton.tsx`（行内验证结果）、`SourceTable.tsx`（复选框+StatusBadge+分页）、`BatchDeleteBar.tsx`（ConfirmDialog 批量删除）；测试 8 个，344 total passed；commit 3802916
 - **问题说明**：_（若有问题）_
 
 ---
