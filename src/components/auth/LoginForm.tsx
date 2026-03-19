@@ -7,7 +7,7 @@
 
 import { useState, useRef } from 'react'
 import { useTranslations } from 'next-intl'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { z } from 'zod'
 
 import { apiClient, ApiClientError } from '@/lib/api-client'
@@ -36,6 +36,7 @@ export function LoginForm() {
   const loginSchema = useLoginSchema()
   const login = useAuthStore((s) => s.login)
 
+  const searchParams = useSearchParams()
   const identifierRef = useRef<HTMLInputElement>(null)
   const [values, setValues] = useState<LoginFields>({ identifier: '', password: '' })
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
@@ -91,7 +92,8 @@ export function LoginForm() {
         { skipAuth: true }
       )
       login(response.data.user, response.data.accessToken)
-      router.push('/')
+      const callbackUrl = searchParams.get('callbackUrl') ?? '/'
+      router.push(callbackUrl)
     } catch (error) {
       if (error instanceof ApiClientError) {
         setServerError(error.message)
