@@ -19,6 +19,7 @@ export type SystemSettingKey =
   | 'auto_crawl_recent_only'
   | 'auto_crawl_recent_days'
   | 'config_file'
+  | 'config_file_url'
 
 export interface SystemSetting {
   key: SystemSettingKey

@@ -2,6 +2,18 @@
 
 ---
 
+## 记录治理规范（2026-03-19 起生效）
+
+1. `docs/tasks.md` 保留全量任务清单，但同一时间只允许 1 个任务为 `🔄 进行中`。
+2. 多任务提前规划放在 `docs/task-queue.md`，禁止无规划地临时插入任务执行。
+3. 新增任务编号必须沿用现有前缀规范：`<PREFIX>-NN`（如 `CHG-39`），同前缀按最大编号递增，禁止复用/跳号。
+4. 新增任务必须带时间戳字段：`创建时间`（必填）、`计划开始时间`（建议）、`实际开始时间`（启动后填写）、`完成时间`（完成后填写）。
+5. 新纪录统一追加到文件尾部，禁止头部插入；已有历史内容保持原样不回溯重排。
+6. 任务完成后必须同步在 `docs/changelog.md` 追加记录，并引用对应任务 ID。
+7. 运行过程事件（BLOCKER/恢复/异常）统一记录在 `docs/run-logs.md`，并按尾部追加。
+
+---
+
 ✅ PHASE COMPLETE — Phase 2 已完成，等待确认开始 Phase 3
 - **完成时间**：2026-03-18
 - **本 Phase 完成任务数**：13 个（CHG-20~32）
@@ -2213,3 +2225,32 @@ _（任务 review 通过后移入此处）_
   - **规则 E**：video_sources 改为 `ON CONFLICT (video_id, episode_number, source_url) DO NOTHING`
 - **测试**：TitleNormalizer 30+ 用例；upsertVideo 归并场景（同标题不同装饰、跨类型不合并、播放源 append）
 - **完成备注**：`007_video_merge.sql`(title_normalized+metadata_source+video_aliases表+uq_sources_video_episode_url约束) + `TitleNormalizer.ts`(normalizeTitle+buildMatchKey) + `CrawlerService.ts`(upsertVideo归并策略A-E) + `queries/videos.ts`(findVideoByNormalizedKey+insertCrawledVideo+upsertVideoAliases) + `queries/sources.ts`(ON CONFLICT DO NOTHING)。457 tests ✅ commit 1d34c48
+
+---
+
+#### CHG-39 修复配置文件 JSON textarea 保存失败（CHG-35 回归修复）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-19 14:45
+- **计划开始时间**：2026-03-19 14:50
+- **实际开始时间**：2026-03-19 14:50
+- **完成时间**：2026-03-19 14:58
+- **问题**：`/admin/system/config` 页面粘贴大体量 `api_site` JSON 后点击保存失败，前端仅提示通用失败信息，无法定位。
+- **影响的已完成任务**：CHG-35
+- **文件范围**：
+  - `src/components/admin/system/ConfigFileEditor.tsx`
+  - `src/api/routes/admin/siteConfig.ts`
+  - `src/types/system.types.ts`
+  - `tests/unit/api/system-config.test.ts`
+- **修复内容**：
+  - 后端保存接口兼容 `api/api_url/url` 字段；返回 `synced/skipped` 统计
+  - 订阅 URL 校验改为保存时校验，支持“仅保存 JSON”场景
+  - 前端显示具体错误信息，不再只显示通用失败
+  - 新增单测覆盖 `api_site + api_url` 兼容与非法订阅 URL
+- **测试要求**：
+  - `npm run test:run -- tests/unit/api/system-config.test.ts`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向测试 19/19 通过，typecheck/lint 通过
+- **问题说明**：_（无）_

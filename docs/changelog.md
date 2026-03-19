@@ -2,6 +2,7 @@
 
 > 每次任务完成后，AI 在此追加一条记录。
 > 格式固定，便于追踪变更历史和排查问题。
+> 追加规则：新记录统一追加到文件尾部，不做头部插入。
 
 ---
 
@@ -10,6 +11,7 @@
 ```
 ## [TASK-ID] 任务标题
 - **完成时间**：YYYY-MM-DD
+- **记录时间**：YYYY-MM-DD HH:mm
 - **修改文件**：
   - `path/to/file.ts` — 说明做了什么
   - `path/to/another.ts` — 说明做了什么
@@ -19,6 +21,20 @@
 ```
 
 ---
+
+## [CHORE-CODEX-01] 接手前稳态化（preflight）
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 14:12
+- **修改文件**：
+  - `scripts/preflight.sh` — 新增一键 preflight 流程（docker compose、verify-env、migrate、typecheck、lint、unit，可选 e2e）
+  - `package.json` — 新增 `preflight`、`preflight:e2e` scripts 入口
+  - `.nvmrc` — 固定 Node 主版本为 22，降低多机环境漂移
+  - `README.md` — 增加“第七步：开发前稳态检查”，并修正文档中的命令/端口不一致
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 推荐在 AI 连续开发开始前运行 `npm run preflight`
+  - 涉及关键用户流程的改动，再补跑 `npm run preflight:e2e`
 
 ## [INFRA-06] Docker Compose 本地环境
 - **完成时间**：2026-03-15
@@ -713,3 +729,33 @@
   - `tests/unit/api/title-normalizer.test.ts` — 新建，38 个测试用例
 - **新增依赖**：无
 - **数据库变更**：videos 新增 title_normalized TEXT、metadata_source VARCHAR(10)；新表 video_aliases；video_sources 唯一约束由 (video_id, source_url) 改为 (video_id, episode_number, source_url) NULLS NOT DISTINCT
+
+## [CHORE-CODEX-02] 任务序列与记录一致性规范
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 14:34
+- **修改文件**：
+  - `docs/task-queue.md` — 新增任务序列池，定义序列命名、任务编号递增、时间戳字段与尾部追加规则
+  - `docs/tasks.md` — 新增记录治理规范（单进行中、编号机制、时间戳、日志落点）
+  - `docs/changelog.md` — 模板新增记录时间字段，明确统一尾部追加
+  - `CLAUDE.md` — 同步更新 BLOCKER/PHASE 通知写入位置与记录一致性补充
+  - `docs/run-logs.md` — 新增运行日志文件与统一模板
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 未来新增任务编号必须沿用既有前缀并按最大编号递增
+  - 所有新增记录统一文件尾部追加，禁止头部插入
+
+## [CHG-39] 修复配置文件 JSON 保存失败（CHG-35 回归）
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 14:59
+- **修改文件**：
+  - `src/api/routes/admin/siteConfig.ts` — 放宽订阅 URL 入参并在保存阶段校验；兼容 `api/api_url/url` 字段；返回 `synced/skipped`
+  - `src/components/admin/system/ConfigFileEditor.tsx` — 保存前 URL 校验与 payload 规范化；展示后端具体错误；成功提示显示同步/跳过数量
+  - `src/types/system.types.ts` — `SystemSettingKey` 补充 `config_file_url`
+  - `tests/unit/api/system-config.test.ts` — 新增 `api_site + api_url` 兼容测试与非法订阅 URL 测试
+  - `docs/tasks.md` — 追加 CHG-39 任务闭环记录
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 配置文件编辑页现在支持仅保存 JSON，不会被无效订阅 URL 阻塞
+  - 如果 JSON 里个别站点缺关键字段，会计入 `skipped`，不会导致整次保存失败

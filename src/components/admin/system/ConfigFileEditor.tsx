@@ -6,7 +6,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { apiClient } from '@/lib/api-client'
+import { apiClient, ApiClientError } from '@/lib/api-client'
 
 const PLACEHOLDER = JSON.stringify(
   {
@@ -98,15 +98,43 @@ export function ConfigFileEditor() {
 
   async function handleSave() {
     if (!validateJson(data.configFile)) return
+
+    const payload: { configFile: string; subscriptionUrl?: string } = {
+      configFile: data.configFile,
+    }
+    const normalizedSubscriptionUrl = data.subscriptionUrl.trim()
+    if (normalizedSubscriptionUrl.length > 0) {
+      try {
+        const parsed = new URL(normalizedSubscriptionUrl)
+        if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('invalid protocol')
+        payload.subscriptionUrl = normalizedSubscriptionUrl
+      } catch {
+        showToast('订阅 URL 格式错误（可先清空后仅保存 JSON）', false)
+        return
+      }
+    } else if (data.subscriptionUrl.length > 0) {
+      payload.subscriptionUrl = ''
+    }
+
     setSaving(true)
     try {
-      const res = await apiClient.post<{ data: { ok: boolean; synced: number } }>(
+      const res = await apiClient.post<{ data: { ok: boolean; synced: number; skipped: number } }>(
         '/admin/system/config',
-        data,
+        payload,
       )
-      showToast(`保存成功，已同步 ${res.data.synced} 个源站到视频源配置`, true)
-    } catch {
-      showToast('保存失败，请重试', false)
+      const { synced, skipped } = res.data
+      showToast(
+        skipped > 0
+          ? `保存成功：已同步 ${synced} 个源站，跳过 ${skipped} 个无效项`
+          : `保存成功，已同步 ${synced} 个源站到视频源配置`,
+        true,
+      )
+    } catch (e) {
+      if (e instanceof ApiClientError) {
+        showToast(`保存失败：${e.message}`, false)
+      } else {
+        showToast('保存失败，请重试', false)
+      }
     } finally {
       setSaving(false)
     }
