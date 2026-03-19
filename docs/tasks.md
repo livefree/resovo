@@ -657,7 +657,7 @@ CHG-06（类型标签联动）       ← 最后处理
 
 #### CHG-21 弹幕后端 API（GET /videos/:id/danmaku）
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **变更原因**：Resovo 已有 `danmaku` 表（migration 001）和 `comment-core-library` 依赖，但无任何弹幕 API 端点。播放页弹幕条（DanmakuBar）当前无数据源，实际弹幕功能不可用
 - **影响的已完成任务**：PLAYER-07（弹幕条 UI 已实现，需接入数据）
 - **文件范围**：
@@ -683,8 +683,8 @@ CHG-06（类型标签联动）       ← 最后处理
   - `POST /v1/videos/{id}/danmaku` 未登录时返回 401，缺少 `text` 时返回 422
   - `POST /v1/videos/{id}/danmaku` 登录后提交成功，再次 GET 能查到该弹幕
 - **测试要求**：Vitest `tests/unit/api/danmaku.test.ts`（GET 返回空列表、POST 401、POST 422、POST 成功写入后 GET 查到）
-- **完成备注**：_（AI 填写）_
-- **问题说明**：_（若有问题）_
+- **完成备注**：新建 `src/api/db/queries/danmaku.ts`、`src/api/routes/danmaku.ts`，注册至 `src/api/server.ts`；striptags 过滤弹幕文本；typecheck ✅ lint ✅ tests 12/12 ✅（240 total ✅）
+- **问题说明**：_（无）_
 
 ---
 

@@ -467,3 +467,20 @@
   - CHG-20（yt-player）需在 `next.config.ts` 中配置 `transpilePackages`，yt-player 包路径为 `file:../yt-player`
   - CHG-24（Admin UI 组件库）是 CHG-25~29 的强前置依赖，不可跳过
   - CHG-32（性能监控）工作量最大，排在 Phase 2 最后
+
+---
+
+## [CHG-21] 弹幕后端 API
+- **完成时间**：2026-03-18
+- **修改文件**：
+  - `src/api/db/queries/danmaku.ts`（新建）— getDanmaku / insertDanmaku，CCL 兼容格式（type 0/1/2）
+  - `src/api/routes/danmaku.ts`（新建）— GET /videos/:id/danmaku（公开）、POST /videos/:id/danmaku（需登录）
+  - `src/api/server.ts` — 注册 danmakuRoutes 至 /v1
+  - `tests/unit/api/danmaku.test.ts`（新建）— 12 个测试全通过
+  - `docs/tasks.md` — CHG-21 标记完成
+- **新增依赖**：无（striptags 已在 dependencies）
+- **数据库变更**：无（danmaku 表在 migration 001 已存在）
+- **注意事项**：
+  - GET 响应格式与 comment-core-library CommentData 兼容：`{ time, type(0/1/2), color, text }`
+  - POST body 包含 `ep`（集数，默认 1）、`time`（整数秒）、`type`、`color`（#rrggbb）、`text`（1-100字，经 striptags 过滤）
+  - CHG-22 可基于此 API 接入 CCL 渲染

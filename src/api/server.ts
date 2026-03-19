@@ -15,6 +15,7 @@ import { adminUserRoutes } from '@/api/routes/admin/users'
 import { adminAnalyticsRoutes } from '@/api/routes/admin/analytics'
 import { adminCrawlerRoutes } from '@/api/routes/admin/crawler'
 import { userRoutes } from '@/api/routes/users'
+import { danmakuRoutes } from '@/api/routes/danmaku'
 import { registerVerifyWorker } from '@/api/workers/verifyWorker'
 
 async function start() {
@@ -46,6 +47,7 @@ async function start() {
   await fastify.register(adminAnalyticsRoutes, { prefix: '/v1' })
   await fastify.register(adminCrawlerRoutes, { prefix: '/v1' })
   await fastify.register(userRoutes, { prefix: '/v1' })
+  await fastify.register(danmakuRoutes, { prefix: '/v1' })
 
   registerVerifyWorker()
 
