@@ -306,6 +306,28 @@ describe('POST /admin/crawler/sites', () => {
     })
     expect(res.statusCode).toBe(409)
   })
+
+  it('returns 409 for duplicate apiUrl', async () => {
+    mockDbQuery
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 }) // find by key
+      .mockResolvedValueOnce({
+        rows: [{
+          key: 'existing', name: '已有源', api_url: 'https://api.test.com', detail: null,
+          source_type: 'vod', format: 'json', weight: 50, is_adult: false,
+          disabled: false, from_config: false, created_at: '', updated_at: '',
+        }],
+        rowCount: 1,
+      }) // find by api_url
+
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST', url: '/admin/crawler/sites',
+      headers: { ...authHeader('admin'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'new-key', name: '新源', apiUrl: 'https://api.test.com' }),
+    })
+    expect(res.statusCode).toBe(409)
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('DUPLICATE_API_URL')
+  })
 })
 
 describe('DELETE /admin/crawler/sites/:key', () => {

@@ -2254,3 +2254,32 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向测试 19/19 通过，typecheck/lint 通过
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-40 以 API 地址作为唯一标识重构视频源配置
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-19 15:05
+- **计划开始时间**：2026-03-19 15:10
+- **实际开始时间**：2026-03-19 15:11
+- **完成时间**：2026-03-19 15:17
+- **问题**：视频源配置在 key 维度唯一，导致同一 API 地址可被重复录入（key 不同），配置同步与人工维护会产生重复站点。
+- **影响的已完成任务**：CHG-33 / CHG-34 / CHG-35 / CHG-39
+- **文件范围**：
+  - `src/api/db/migrations/008_crawler_sites_api_unique.sql`
+  - `src/api/db/queries/crawlerSites.ts`
+  - `src/api/routes/admin/crawlerSites.ts`
+  - `tests/unit/api/system-config.test.ts`
+- **修复内容**：
+  - crawler_sites 增加 API 地址唯一约束迁移（归一化 + 去重 + unique index）
+  - upsert 逻辑改为“优先按 api_url 更新”（API 作为唯一标识）
+  - 新增/更新接口增加 API 重复校验并返回 `DUPLICATE_API_URL`
+  - 新增单测覆盖重复 API 创建冲突
+- **测试要求**：
+  - `npm run test:run -- tests/unit/api/system-config.test.ts`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - system-config 定向测试 20/20 通过，typecheck/lint 通过
+- **问题说明**：_（无）_

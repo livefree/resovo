@@ -77,6 +77,13 @@ export async function adminCrawlerSitesRoutes(fastify: FastifyInstance) {
       })
     }
 
+    const existingApi = await crawlerSitesQueries.findCrawlerSiteByApiUrl(db, parsed.data.apiUrl)
+    if (existingApi) {
+      return reply.code(409).send({
+        error: { code: 'DUPLICATE_API_URL', message: `API 地址已存在（key: ${existingApi.key}）`, status: 409 },
+      })
+    }
+
     const site = await crawlerSitesQueries.upsertCrawlerSite(db, {
       ...parsed.data,
       fromConfig: false,
@@ -93,6 +100,15 @@ export async function adminCrawlerSitesRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({
         error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 400 },
       })
+    }
+
+    if (parsed.data.apiUrl) {
+      const sameApi = await crawlerSitesQueries.findCrawlerSiteByApiUrl(db, parsed.data.apiUrl)
+      if (sameApi && sameApi.key !== key) {
+        return reply.code(409).send({
+          error: { code: 'DUPLICATE_API_URL', message: `API 地址已存在（key: ${sameApi.key}）`, status: 409 },
+        })
+      }
     }
 
     const site = await crawlerSitesQueries.updateCrawlerSite(db, key, parsed.data)

@@ -28,6 +28,10 @@ interface DbRow {
   updated_at: string
 }
 
+export function normalizeApiUrl(apiUrl: string): string {
+  return apiUrl.trim().replace(/\/+$/, '')
+}
+
 function rowToSite(row: DbRow): CrawlerSite {
   return {
     key:             row.key,
@@ -74,12 +78,56 @@ export async function findCrawlerSite(
   return result.rows[0] ? rowToSite(result.rows[0]) : null
 }
 
+export async function findCrawlerSiteByApiUrl(
+  db: Pool,
+  apiUrl: string,
+): Promise<CrawlerSite | null> {
+  const normalized = normalizeApiUrl(apiUrl)
+  const result = await db.query<DbRow>(
+    'SELECT * FROM crawler_sites WHERE api_url = $1',
+    [normalized],
+  )
+  return result.rows[0] ? rowToSite(result.rows[0]) : null
+}
+
 // ── 写入 ──────────────────────────────────────────────────────
 
 export async function upsertCrawlerSite(
   db: Pool,
   input: CreateCrawlerSiteInput & { fromConfig?: boolean },
 ): Promise<CrawlerSite> {
+  const normalizedApiUrl = normalizeApiUrl(input.apiUrl)
+
+  // API 地址是唯一标识：优先按 api_url 更新，允许 key 重命名
+  const updateByApi = await db.query<DbRow>(
+    `UPDATE crawler_sites
+     SET key         = $1,
+         name        = $2,
+         detail      = $3,
+         source_type = $4,
+         format      = $5,
+         weight      = $6,
+         is_adult    = $7,
+         from_config = $8,
+         updated_at  = NOW()
+     WHERE api_url = $9
+     RETURNING *`,
+    [
+      input.key,
+      input.name,
+      input.detail ?? null,
+      input.sourceType ?? 'vod',
+      input.format ?? 'json',
+      input.weight ?? 50,
+      input.isAdult ?? false,
+      input.fromConfig ?? false,
+      normalizedApiUrl,
+    ],
+  )
+  if (updateByApi.rows[0]) {
+    return rowToSite(updateByApi.rows[0])
+  }
+
   const result = await db.query<DbRow>(
     `INSERT INTO crawler_sites
        (key, name, api_url, detail, source_type, format, weight, is_adult, from_config, updated_at)
@@ -98,7 +146,7 @@ export async function upsertCrawlerSite(
     [
       input.key,
       input.name,
-      input.apiUrl,
+      normalizedApiUrl,
       input.detail ?? null,
       input.sourceType ?? 'vod',
       input.format ?? 'json',
@@ -120,7 +168,7 @@ export async function updateCrawlerSite(
   let idx = 1
 
   if (updates.name !== undefined)       { setClauses.push(`name = $${idx++}`);        values.push(updates.name) }
-  if (updates.apiUrl !== undefined)     { setClauses.push(`api_url = $${idx++}`);     values.push(updates.apiUrl) }
+  if (updates.apiUrl !== undefined)     { setClauses.push(`api_url = $${idx++}`);     values.push(normalizeApiUrl(updates.apiUrl)) }
   if (updates.detail !== undefined)     { setClauses.push(`detail = $${idx++}`);      values.push(updates.detail) }
   if (updates.sourceType !== undefined) { setClauses.push(`source_type = $${idx++}`); values.push(updates.sourceType) }
   if (updates.format !== undefined)     { setClauses.push(`format = $${idx++}`);      values.push(updates.format) }

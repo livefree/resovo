@@ -759,3 +759,18 @@
 - **注意事项**：
   - 配置文件编辑页现在支持仅保存 JSON，不会被无效订阅 URL 阻塞
   - 如果 JSON 里个别站点缺关键字段，会计入 `skipped`，不会导致整次保存失败
+
+## [CHG-40] 以 API 地址作为唯一标识重构视频源配置
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 15:18
+- **修改文件**：
+  - `src/api/db/migrations/008_crawler_sites_api_unique.sql` — 归一化 api_url、清理重复记录、新增 `uq_crawler_sites_api_url` 唯一索引
+  - `src/api/db/queries/crawlerSites.ts` — 新增 `normalizeApiUrl/findCrawlerSiteByApiUrl`，upsert 改为优先按 `api_url` 更新
+  - `src/api/routes/admin/crawlerSites.ts` — 新增/更新接口增加 API 地址重复校验，返回 `DUPLICATE_API_URL`
+  - `tests/unit/api/system-config.test.ts` — 新增重复 `apiUrl` 返回 409 的测试
+  - `docs/tasks.md` — 追加 CHG-40 任务闭环记录
+- **新增依赖**：无
+- **数据库变更**：新增 `crawler_sites(api_url)` 唯一索引；迁移中自动归一化并去重旧数据
+- **注意事项**：
+  - 未来配置同步与手工新增均以 API 地址为唯一标识
+  - 同 API 不同 key 的情况会被视为同一站点
