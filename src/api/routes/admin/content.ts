@@ -83,18 +83,6 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
     return reply.send({ data: { deleted } })
   })
 
-  // ── POST /admin/sources/:id/verify ───────────────────────────
-  fastify.post('/admin/sources/:id/verify', { preHandler: auth }, async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const result = await contentService.verifySource(id)
-    if (!result) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: '播放源不存在', status: 404 },
-      })
-    }
-    return reply.send({ data: result })
-  })
-
   // ════════════════════════════════════════════════════════════════
   // 投稿队列（is_active=false && submitted_by IS NOT NULL）
   // ════════════════════════════════════════════════════════════════
