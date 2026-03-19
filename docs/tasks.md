@@ -2081,4 +2081,135 @@ _（任务 review 通过后移入此处）_
 > 变更任务优先级高于普通功能任务，AI 启动时在正常任务之前处理。
 > 格式说明见 `CLAUDE.md` — 设计变更处理规则。
 
-_（暂无变更任务）_
+#### CHG-33 DB 基础层：system_settings + crawler_sites 表
+
+- **状态**：✅ 已完成
+- **变更原因**：移植 LunaTV 站点配置/配置文件/视频源配置功能，需新增两张表存储站点参数和爬虫源站信息
+- **影响的已完成任务**：CRAWLER-01~04（CrawlerSource 由环境变量改为数据库管理）
+- **文件范围**：
+  - `src/api/db/migrations/005_system_settings.sql`（新建）
+  - `src/api/db/queries/systemSettings.ts`（新建）
+  - `src/api/db/queries/crawlerSites.ts`（新建）
+  - `src/types/system.types.ts`（新建）
+  - `src/types/index.ts`（追加 export）
+- **变更内容**：
+  - `system_settings(key PK, value TEXT, updated_at)` — 键值对站点参数表
+  - `crawler_sites(key PK, name, api_url, detail, source_type, format, weight, is_adult, disabled, from_config, created_at, updated_at)` — 爬虫源站配置表
+  - queries: get/set/list settings；list/upsert/update/delete/batch crawlerSites
+- **完成备注**：_（AI 填写）_
+
+---
+
+#### CHG-34 后端 API：站点配置 + 配置文件 + 视频源配置
+
+- **状态**：✅ 已完成
+- **依赖**：CHG-33
+- **变更原因**：同上，为三个后台页面提供 REST API
+- **文件范围**：
+  - `src/api/routes/admin/siteConfig.ts`（新建）— GET/POST /admin/system/settings
+  - `src/api/routes/admin/configFile.ts`（新建）— GET/POST /admin/system/config（含 JSON 解析后同步到 crawler_sites）
+  - `src/api/routes/admin/crawlerSites.ts`（新建）— CRUD + batch + validate
+  - `src/api/server.ts`（注册三个新路由）
+  - `src/api/services/CrawlerService.ts`（getEnabledSites 方法：优先读 DB，降级到 env var）
+- **变更内容**：
+  - `GET /v1/admin/system/settings` → 返回所有键值对对象
+  - `POST /v1/admin/system/settings` → 批量写入设置
+  - `GET /v1/admin/system/config` → 返回配置文件 JSON 字符串
+  - `POST /v1/admin/system/config` → 保存配置文件 + 解析 crawler_sites 字段写入 crawler_sites 表（from_config=true）
+  - `GET /v1/admin/crawler/sites` → 列表（支持 ?disabled=true 过滤）
+  - `POST /v1/admin/crawler/sites` → 新增
+  - `PATCH /v1/admin/crawler/sites/:key` → 更新
+  - `DELETE /v1/admin/crawler/sites/:key` → 删除（from_config=true 的不可删）
+  - `POST /v1/admin/crawler/sites/batch` → 批量 enable/disable/delete
+  - `POST /v1/admin/crawler/sites/validate` → 测试 API 可达性（HEAD/GET + 超时）
+- **完成备注**：_（AI 填写）_
+
+---
+
+#### CHG-35 前端：站点配置 + 配置文件 + 视频源配置三个管理页面
+
+- **状态**：✅ 已完成
+- **依赖**：CHG-34
+- **变更原因**：同上
+- **文件范围**：
+  - `src/app/[locale]/admin/system/settings/page.tsx`（新建）
+  - `src/app/[locale]/admin/system/config/page.tsx`（新建）
+  - `src/app/[locale]/admin/system/sites/page.tsx`（新建）
+  - `src/app/[locale]/admin/layout.tsx`（SYSTEM_MENU 新增三项）
+- **变更内容**：
+  - **站点配置**：分组表单（基础/Douban/内容过滤/视频代理/自动采集），保存调 POST /system/settings
+  - **配置文件**：JSON textarea + 订阅 URL 输入 + 远程拉取按钮 + 保存（保存时同步到 crawler_sites）
+  - **视频源配置**：表格列表（key/name/api_url/type/weight/adult/status），单行编辑/删除/验证，顶部批量操作栏，导入导出 JSON
+  - 布局侧边栏增加：站点配置、配置文件、视频源配置入口（admin-only）
+- **完成备注**：_（AI 填写）_
+
+---
+
+#### CHG-36 爬虫管理完整功能
+
+- **状态**：⬜ 待开始
+- **优先级**：P1
+- **变更原因**：crawlerWorker 未接入 crawler_sites 表；无定时自动采集；前端无法选择源站触发；缺少每站采集状态展示
+- **文件范围**：
+  - `src/api/db/migrations/006_crawler_sites_status.sql`（新建）
+  - `src/api/db/queries/crawlerSites.ts`（更新）— updateCrawlStatus()
+  - `src/api/workers/crawlerWorker.ts`（更新）— 读 getEnabledSources(db)，支持 job.data.siteKey 单站触发
+  - `src/api/workers/crawlerScheduler.ts`（新建）— Bull cron job
+  - `src/api/routes/admin/crawler.ts`（更新）— siteKey 参数；GET /admin/crawler/sites-status
+  - `src/api/server.ts`（更新）
+  - `src/app/[locale]/admin/crawler/page.tsx`（更新）
+  - `src/components/admin/AdminCrawlerPanel.tsx`（更新）
+- **变更内容**：
+  - **DB**：crawler_sites 加 `last_crawled_at TIMESTAMPTZ`、`last_crawl_status VARCHAR(20)`
+  - **Worker**：job.data = `{ type, siteKey?, hoursAgo? }`；siteKey 有值→单站，否则→全部启用站
+  - **Scheduler**：Bull cron `0 3 * * *`；读 auto_crawl_enabled/auto_crawl_max_per_run；false 则跳过
+  - **API**：POST /admin/crawler/tasks 增加可选 siteKey；GET /admin/crawler/sites-status
+  - **前端**：源站卡片列表（上次采集时间/状态/单站触发）；全量/增量全局按钮；自动采集开关
+- **测试**：Vitest `tests/unit/api/crawler-worker.test.ts`（job dispatch 逻辑）
+- **完成备注**：_（AI 填写）_
+
+---
+
+#### CHG-37 登录会话长期有效
+
+- **状态**：⬜ 待开始
+- **优先级**：P1
+- **变更原因**：access token 存内存，刷新页面即登出；refresh token 有效期过短；不符合视频网站使用习惯
+- **文件范围**：
+  - `src/api/routes/auth.ts`（更新）— refresh token 有效期 7d → 30d
+  - `src/stores/authStore.ts`（更新）— zustand persist（只持久化 user + isLoggedIn）；tryRestoreSession()
+  - `src/components/SessionRestorer.tsx`（新建）— mount 时触发 tryRestoreSession
+  - `src/app/[locale]/layout.tsx`（更新）— 挂载 SessionRestorer
+  - `tests/unit/stores/authStore.test.ts`（更新）
+- **变更内容**：
+  - 后端：refresh token 有效期 `'7d'` → `'30d'`
+  - authStore persist：`{ name: 'resovo-auth', storage: localStorage }`，只存 user + isLoggedIn
+  - tryRestoreSession：isLoggedIn && !accessToken → POST /auth/refresh → 成功写 token / 失败 logout
+  - SessionRestorer：`'use client'`，useEffect 触发一次，放在 root layout
+- **测试**：authStore restore 成功/失败/无 user 三种场景
+- **完成备注**：_（AI 填写）_
+
+---
+
+#### CHG-38 视频归并策略（标题标准化 + 别名表 + 元数据优先级）
+
+- **状态**：⬜ 待开始
+- **优先级**：P2
+- **依赖**：CHG-36
+- **变更原因**：upsertVideo 用 (title+year) 去重过于简单；无标题标准化；播放地址有覆盖风险；无元数据来源追踪
+- **文件范围**：
+  - `src/api/db/migrations/007_video_merge.sql`（新建）
+  - `src/api/db/queries/videos.ts`（更新）
+  - `src/api/db/queries/sources.ts`（更新）
+  - `src/api/services/TitleNormalizer.ts`（新建）
+  - `src/api/services/CrawlerService.ts`（更新）
+  - `tests/unit/api/title-normalizer.test.ts`（新建）
+- **变更内容**：
+  - Migration 007：videos 加 title_normalized / metadata_source；新建 video_aliases 表
+  - **规则 A**：match_key = (title_normalized, year, type)，type 不同不合并
+  - **规则 B**：TitleNormalizer — 去 HTML/装饰括号/年份/季数词/画质标签，Unicode 小写
+  - **规则 C**：upsertVideo 时将 vod_name/vod_en 写入 video_aliases（INSERT IGNORE）
+  - **规则 D**：metadata_source 优先级 tmdb(4) > douban(3) > manual(2) > crawler(1)；低优先级不覆盖高优先级的 metadata 字段
+  - **规则 E**：video_sources 改为 `ON CONFLICT (video_id, episode_number, source_url) DO NOTHING`
+- **测试**：TitleNormalizer 30+ 用例；upsertVideo 归并场景（同标题不同装饰、跨类型不合并、播放源 append）
+- **完成备注**：_（AI 填写）_
