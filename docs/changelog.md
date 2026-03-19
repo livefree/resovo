@@ -524,3 +524,20 @@
   - 此功能依赖豆瓣非官方接口，不稳定；抓取失败时降级而非 500
   - 已有 douban_id 的视频不会覆盖（防止重复同步）
   - 只能 admin 手动触发，不可批量自动执行
+
+---
+
+## [CHG-24] Admin 基础 UI 组件库
+- **完成时间**：2026-03-18
+- **修改文件**：
+  - `src/components/admin/DataTable.tsx`（新建）— 泛型表格，isLoading 骨架屏，排序回调，自定义 render
+  - `src/components/admin/Modal.tsx`（新建）— 受控模态框，ESC/遮罩关闭，sm/md/lg 三种尺寸
+  - `src/components/admin/StatusBadge.tsx`（新建）— 6 种状态圆点标签，CSS 变量颜色
+  - `src/components/admin/ConfirmDialog.tsx`（新建）— 基于 Modal，loading 禁用，danger 红色按钮
+  - `src/components/admin/Pagination.tsx`（新建）— 分页控件，前后翻页，页数信息
+  - `src/components/admin/index.ts`（新建）— 统一导出入口
+  - `tests/unit/components/admin/*.test.tsx`（新建，5 个文件）— 37 个测试全通过
+  - `docs/tasks.md` — CHG-24 标记完成
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：CHG-25~29 可直接从 @/components/admin 导入这些组件

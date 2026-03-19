@@ -774,7 +774,7 @@ CHG-06（类型标签联动）       ← 最后处理
 
 #### CHG-24 Admin 基础 UI 组件库（供管理后台各页面复用）
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **变更原因**：CHG-25~29 均需要 DataTable、Modal、StatusBadge、ConfirmDialog 等通用组件。若在每个页面中各自实现，将产生大量重复代码，且 UI 一致性无法保证。本任务作为后续所有管理页面增强任务的前置。
 - **影响的已完成任务**：ADMIN-01~05（管理后台现有页面）
 - **文件范围**：
@@ -802,8 +802,8 @@ CHG-06（类型标签联动）       ← 最后处理
   - Modal 的 ESC 和遮罩关闭可用
   - ConfirmDialog 的 `loading` 状态禁用确认按钮
 - **测试要求**：Vitest + jsdom，`tests/unit/components/admin/` 下各组件测试（DataTable 渲染列、Modal open/close、StatusBadge 颜色类、ConfirmDialog loading 状态）
-- **完成备注**：_（AI 填写）_
-- **问题说明**：_（若有问题）_
+- **完成备注**：新建 DataTable/Modal/StatusBadge/ConfirmDialog/Pagination + index.ts 统一导出；全部使用 CSS 变量、无硬编码颜色、无外部 UI 库；typecheck ✅ lint ✅ tests 37/37 ✅（298 total ✅）
+- **问题说明**：_（无）_
 
 ---
 
