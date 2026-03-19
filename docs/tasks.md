@@ -2457,3 +2457,28 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-47 统一页改为双 Tab 视图（视频源配置 / 采集任务记录）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-19 16:44
+- **计划开始时间**：2026-03-19 16:45
+- **实际开始时间**：2026-03-19 16:45
+- **完成时间**：2026-03-19 16:46
+- **问题**：视频源配置与采集任务记录虽已合并到同一页面，但仍上下分段，不符合“同一位置分列为两个 Tab”的操作预期。
+- **影响的已完成任务**：CHG-42 / CHG-46
+- **文件范围**：
+  - `src/components/admin/AdminCrawlerTabs.tsx`
+  - `src/app/[locale]/admin/crawler/page.tsx`
+- **修复内容**：
+  - 新增 `AdminCrawlerTabs` 客户端容器组件，提供“视频源配置 / 采集任务记录”双 Tab。
+  - Tab 1 承载 `CrawlerSiteManager`，Tab 2 承载 `AdminCrawlerPanel`。
+  - `/admin/crawler` 页面改为统一头部 + Tab 内容区，不再上下分段展示两块内容。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - typecheck/lint 通过。
+- **问题说明**：_（无）_
