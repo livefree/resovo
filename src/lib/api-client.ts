@@ -163,6 +163,11 @@ export const apiClient = {
     return request(`/videos/${shortId}/danmaku`, { method: 'POST', body })
   },
 
+  /** 获取数据看板统计数据（admin only） */
+  getAnalytics(): Promise<{ data: import('@/api/routes/admin/analytics').AnalyticsData }> {
+    return request('/admin/analytics', { method: 'GET' })
+  },
+
   /** 上传文件（multipart/form-data，不设 Content-Type 让浏览器自动处理 boundary） */
   upload<T>(path: string, formData: FormData, options?: Omit<RequestOptions, 'method' | 'body'>): Promise<T> {
     const { headers = {}, ...rest } = options ?? {}
