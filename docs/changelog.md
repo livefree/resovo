@@ -555,3 +555,18 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：爬虫任务状态映射：running→active(绿)，done→published(绿)，failed→banned(红)，pending→pending(黄)
+
+---
+
+## [CHG-26] Admin 用户管理页完善（搜索/分页/密码重置）
+- **完成时间**：2026-03-18
+- **修改文件**：
+  - `src/api/db/queries/users.ts`（更新）— 新增 `resetUserPassword(db, id, newHash)` 函数
+  - `src/api/routes/admin/users.ts`（更新）— 新增 `POST /admin/users/:id/reset-password`，crypto.randomBytes 生成 12 位随机密码，bcrypt 哈希存储，admin 账号不可重置
+  - `src/components/admin/users/UserActions.tsx`（新建）— 封号/解封 ConfirmDialog、角色切换、重置密码一次性 Modal
+  - `src/components/admin/users/UserTable.tsx`（新建）— DataTable + StatusBadge + Pagination + 300ms 防抖搜索
+  - `src/app/[locale]/admin/users/page.tsx`（改写）— Server Component 壳，渲染 UserTable
+  - `tests/unit/api/admin-users.test.ts`（新建）— 12 个测试，325 total passed
+- **新增依赖**：无（bcryptjs 已存在）
+- **数据库变更**：无
+- **注意事项**：密码重置仅返回一次明文密码；admin 账号无论封号还是重置密码均返回 403

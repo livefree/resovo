@@ -839,7 +839,7 @@ CHG-06（类型标签联动）       ← 最后处理
 
 #### CHG-26 Admin 用户管理页完善（搜索/分页/密码重置）
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **依赖**：CHG-24（Admin 基础组件库）
 - **变更原因**：现有用户管理页（`/admin/users`）缺乏搜索和分页功能，用户数量增多后无法使用；缺少密码重置功能，admin 无法协助用户找回账号
 - **影响的已完成任务**：ADMIN-03（admin/users 路由）、CHG-16（users 模块边界重构）
@@ -867,7 +867,7 @@ CHG-06（类型标签联动）       ← 最后处理
   - 密码重置 Modal 显示一次性密码，关闭后不可再查看
   - admin 尝试封禁另一个 admin 时返回 403
 - **测试要求**：Vitest `tests/unit/api/admin-users.test.ts`（补充：搜索过滤、分页、密码重置权限、admin 不可封 admin）
-- **完成备注**：_（AI 填写）_
+- **完成备注**：后端：`queries/users.ts` 新增 `resetUserPassword`；`admin/users.ts` 新增 `POST /admin/users/:id/reset-password`（admin only，随机 12 位密码，bcrypt 哈希，admin 不可重置）；前端：新建 `src/components/admin/users/UserActions.tsx`（ban/unban ConfirmDialog + 角色切换 + 重置密码一次性 Modal）和 `UserTable.tsx`（DataTable + StatusBadge + Pagination + 防抖搜索）；`admin/users/page.tsx` 改为 Server Component；测试 12 个，325 passed；commit b26e99f
 - **问题说明**：_（若有问题）_
 
 ---
