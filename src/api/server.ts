@@ -16,6 +16,8 @@ import { adminAnalyticsRoutes } from '@/api/routes/admin/analytics'
 import { adminCrawlerRoutes } from '@/api/routes/admin/crawler'
 import { adminCacheRoutes } from '@/api/routes/admin/cache'
 import { adminMigrationRoutes } from '@/api/routes/admin/migration'
+import { adminPerformanceRoutes } from '@/api/routes/admin/performance'
+import { setupMetrics } from '@/api/plugins/metrics'
 import { userRoutes } from '@/api/routes/users'
 import { danmakuRoutes } from '@/api/routes/danmaku'
 import { registerVerifyWorker } from '@/api/workers/verifyWorker'
@@ -37,6 +39,7 @@ async function start() {
   await fastify.register(multipart, { limits: { fileSize: 2 * 1024 * 1024 } })
 
   setupAuthenticate(fastify)
+  setupMetrics(fastify)
 
   await fastify.register(authRoutes, { prefix: '/v1' })
   await fastify.register(videoRoutes, { prefix: '/v1' })
@@ -52,6 +55,7 @@ async function start() {
   await fastify.register(danmakuRoutes, { prefix: '/v1' })
   await fastify.register(adminCacheRoutes, { prefix: '/v1' })
   await fastify.register(adminMigrationRoutes, { prefix: '/v1' })
+  await fastify.register(adminPerformanceRoutes, { prefix: '/v1' })
 
   registerVerifyWorker()
 
