@@ -2,7 +2,7 @@
 
 国际化视频资源聚合索引平台。平台本身不托管视频，只提供第三方视频链接的索引、搜索和播放引导服务。
 
-**域名**：resovo.tv &nbsp;|&nbsp; **当前版本**：Phase 1 MVP
+**域名**：resovo.tv &nbsp;|&nbsp; **当前版本**：Phase 2 开发中（Phase 1 MVP 已完成）
 
 ---
 
@@ -53,7 +53,7 @@ npm run db:migrate
 ### 第五步：启动服务
 
 ```bash
-# 终端 1：前端（Next.js，端口 3000）
+# 终端 1：前端（Next.js，端口 3001）
 npm run dev
 
 # 终端 2：后端 API（Fastify，端口 4000）
@@ -76,10 +76,10 @@ npm run crawler:full
 
 | 入口 | 地址 | 说明 |
 |------|------|------|
-| 前台首页 | http://localhost:3000 | 主站，需有视频数据 |
-| 分类浏览 | http://localhost:3000/browse | 按类型/地区/年份筛选 |
-| 搜索 | http://localhost:3000/search | 全文搜索 |
-| 管理后台 | http://localhost:3000/admin | 需要 admin 账号 |
+| 前台首页 | http://localhost:3001 | 主站，需有视频数据 |
+| 分类浏览 | http://localhost:3001/browse | 按类型/地区/年份筛选 |
+| 搜索 | http://localhost:3001/search | 全文搜索 |
+| 管理后台 | http://localhost:3001/admin | 需要 admin 账号 |
 | API 文档 | http://localhost:4000/docs | Fastify Swagger |
 
 ---
@@ -112,7 +112,7 @@ VALUES (
 
 ### 登录管理后台
 
-1. 访问 http://localhost:3000/admin
+1. 访问 http://localhost:3001/admin
 2. 未登录时自动跳转登录页
 3. 用 admin 账号登录后进入管理后台
 
@@ -247,11 +247,38 @@ npm run lint
 
 ---
 
-## 已知问题（Phase 2 修复）
+## Phase 2 规划功能
 
-- 移动端播放器控制栏体验待优化
-- 推荐系统尚未实现（详情页/播放页推荐区为静态占位）
-- 用户收藏/历史/播放列表功能在 Phase 2 实现
+> 详细任务说明见 `docs/tasks.md`（CHG-20~32）；迁移分析见 `docs/migration-analysis.md`
+
+### 播放器升级
+
+- **CHG-20** 将 video.js 替换为 `@livefree/yt-player`（项目自有播放器组件库，零依赖、CSS Modules 隔离）
+- **CHG-21/22** 接入自有弹幕 API + comment-core-library 渲染层（当前弹幕条无数据源）
+- **CHG-23** Douban 元数据同步（管理员手动触发，补全评分/演员/封面）
+
+### 管理后台增强
+
+- **CHG-24** Admin 基础 UI 组件库（DataTable、Modal、StatusBadge、Pagination，供所有管理页面复用）
+- **CHG-25~29** 仪表盘/用户/视频/源/审核各页面完善（搜索、分页、批量操作、实时验证 UI）
+- **CHG-30** 缓存管理（Redis key 统计 + 分类清除）
+- **CHG-31** 数据导入导出（播放源 JSON 批量操作）
+- **CHG-32** 性能监控（Fastify 请求指标收集 + 监控页面）
+
+### 外部参考项目
+
+| 项目 | 路径 | 用途 |
+|------|------|------|
+| `yt-player` | `~/projects/yt-player` | 直接安装为本地 npm 包替换 video.js |
+| `LunaTV-enhanced` | `~/projects/LunaTV-enhanced` | 管理后台 UI 设计参考（不直接迁移代码） |
+
+---
+
+## 已知问题
+
+- 移动端播放器控制栏体验待优化（Phase 2 播放器替换时一并处理）
+- 弹幕功能：UI 已实现（DanmakuBar），数据 API 尚未接入（CHG-21/22）
+- 推荐系统尚未实现（详情页/播放页推荐区为静态占位，Phase 3+）
 - 播放源有效性取决于第三方资源站，不保证所有链接可用
 
 ---

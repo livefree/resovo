@@ -593,7 +593,7 @@ CHG-06（类型标签联动）       ← 最后处理
 - **需要你做的事**：
   - [ ] 验收测试（运行 `npm run test` 和 `npm run test:e2e`）
   - [ ] 部署到测试环境（如有）
-  - [ ] 确认开始 Phase 2（删除此块即可）
+  <!-- - [ ] 确认开始 Phase 2（删除此块即可） -->
 
 ---
 
@@ -602,6 +602,507 @@ CHG-06（类型标签联动）       ← 最后处理
 > - 全自动模式：完成一个任务后立即开始下一个，无需等待确认
 > - 优先级：🚨 BLOCKER > ❌ 有问题 > CHG-xx 变更任务 > ⬜ 待开始
 > - 每个任务完成后必须：写测试 → 跑测试（全通过）→ git commit → 标 ✅ 已完成
+
+---
+
+## Phase 2 — 播放器升级 & 管理后台增强
+
+> 本阶段目标：以 `@livefree/yt-player` 替换 video.js、完成弹幕接入、以 LunaTV-enhanced 管理后台为参考补齐缓存管理/数据导出/性能监控等后台增强功能。
+> 参考文档：`docs/migration-analysis.md`
+>
+> **依赖顺序**：CHG-20 → CHG-22（播放器先于弹幕渲染层）；CHG-24 → CHG-25~29（Admin UI 组件层先于各功能页）；CHG-30~32 可独立进行
+
+---
+
+### 播放器 & 播放功能
+
+---
+
+#### CHG-20 将 video.js 替换为 @livefree/yt-player
+
+- **状态**：⬜ 待开始
+- **变更原因**：video.js 8.x 体积重、定制成本高；`@livefree/yt-player`（`~/projects/yt-player`）是项目自有组件库，零运行时依赖、CSS Modules 隔离、HLS.js 动态加载，已是完整 npm 包结构，可直接本地安装
+- **影响的已完成任务**：PLAYER-01~08（播放器相关所有任务）
+- **文件范围**：
+  - `package.json`（新增本地包引用，移除 `video.js`、`@types/video.js`）
+  - `next.config.ts`（确认 `transpilePackages` 包含 `@livefree/yt-player`）
+  - `src/components/player/VideoPlayer.tsx`（用 `<Player />` 替换 Video.js 初始化逻辑）
+  - `src/components/player/ControlBar.tsx`（评估是否并入 Player 或保留为 overlay）
+  - `src/components/player/DanmakuBar.tsx`（弹幕层与播放器容器的挂载点调整）
+  - `tests/unit/components/player/` 下相关测试文件（更新 mock）
+- **变更内容**：
+  1. 执行 `npm install file:../yt-player`，在 `package.json` 写入 `"@livefree/yt-player": "file:../yt-player"`
+  2. 在 `next.config.ts` 的 `transpilePackages` 数组中追加 `'@livefree/yt-player'`（Next.js 需要转译本地包）
+  3. 将 `VideoPlayer.tsx` 中 `dynamic(() => import('video.js'), { ssr: false })` 替换为 `dynamic(() => import('@livefree/yt-player').then(m => ({ default: m.Player })), { ssr: false })`
+  4. 将播放源 URL、HLS 配置、字幕轨等映射到 yt-player 的 Props API（需阅读 `~/projects/yt-player/src/player/Player.tsx` 确认接口）
+  5. 弹幕覆盖层挂载至 yt-player 容器内合适的 DOM 节点（通过 `ref` 获取）
+  6. 从 `package.json` 移除 `video.js`、`@types/video.js`；运行 `npm install` 确认无残留引用
+- **⚠️ 约束**：
+  - yt-player 必须以 `dynamic import + ssr: false` 加载，不得在 SSR 环境初始化
+  - CSS Modules 样式与 Resovo Tailwind 全局样式不得冲突，验收时检查播放器区域外是否有样式泄漏
+  - 播放器 Props API 以 yt-player 实际导出为准，不得假设接口
+- **验收**：
+  - 播放页正常加载 yt-player，控制栏可用（播放/暂停/进度/音量/全屏）
+  - HLS 流正常播放
+  - 弹幕层位置正确，不被播放器控制栏遮挡
+  - `import videojs` 相关代码全部消失，typecheck 无报错
+  - `bundle-analyzer`（可选）确认 video.js 不再出现在产物中
+- **测试要求**：
+  - 更新 `tests/unit/components/player/` 下受影响的测试文件，将 video.js mock 替换为 yt-player mock
+  - Playwright `tests/e2e/player.spec.ts` 全部通过
+- **完成备注**：_（AI 填写）_
+- **问题说明**：_（若有问题）_
+
+---
+
+#### CHG-21 弹幕后端 API（GET /videos/:id/danmaku）
+
+- **状态**：⬜ 待开始
+- **变更原因**：Resovo 已有 `danmaku` 表（migration 001）和 `comment-core-library` 依赖，但无任何弹幕 API 端点。播放页弹幕条（DanmakuBar）当前无数据源，实际弹幕功能不可用
+- **影响的已完成任务**：PLAYER-07（弹幕条 UI 已实现，需接入数据）
+- **文件范围**：
+  - `src/api/db/queries/danmaku.ts`（新建，封装弹幕查询和写入 SQL）
+  - `src/api/routes/danmaku.ts`（新建，`GET /videos/:id/danmaku`、`POST /videos/:id/danmaku`）
+  - `src/api/server.ts`（注册 danmakuRoutes）
+  - `tests/unit/api/danmaku.test.ts`（新建）
+- **变更内容**：
+  1. 新建 `db/queries/danmaku.ts`，实现：
+     - `getDanmaku(db, videoId, episodeNumber?)` — 按 video_id + episode_number 查弹幕，返回 `{ time, type, color, text }[]`
+     - `insertDanmaku(db, input)` — 插入一条弹幕（鉴权后）
+  2. 新建 `routes/danmaku.ts`，实现：
+     - `GET /videos/:videoId/danmaku?ep=1` — 公开（无需登录），返回弹幕列表（按时间排序）
+     - `POST /videos/:videoId/danmaku` — 需登录，提交一条弹幕；Zod 验证：`time`（0~duration，`number`）、`type`（滚动/顶部/底部，`0|1|2`）、`color`（`#rrggbb`）、`text`（1~100 字）
+  3. 在 `server.ts` 注册 `danmakuRoutes` 至 `/v1` 前缀
+  4. **暂不接入第三方弹幕 API**（LunaTV smonedanmu 方案留至后续任务），本任务仅实现 Resovo 自有弹幕的存取
+- **⚠️ 约束**：
+  - `danmaku` 表结构已存在（migration 001），不得修改 schema
+  - 查询结果单次最多返回 5000 条，超出时截取前 5000 条（避免 OOM）
+  - 弹幕文本需 `striptags` 过滤（已在 dependencies 中）
+- **验收**：
+  - `GET /v1/videos/{id}/danmaku` 返回该视频的弹幕列表，格式符合 comment-core-library 的 CommentData 结构
+  - `POST /v1/videos/{id}/danmaku` 未登录时返回 401，缺少 `text` 时返回 422
+  - `POST /v1/videos/{id}/danmaku` 登录后提交成功，再次 GET 能查到该弹幕
+- **测试要求**：Vitest `tests/unit/api/danmaku.test.ts`（GET 返回空列表、POST 401、POST 422、POST 成功写入后 GET 查到）
+- **完成备注**：_（AI 填写）_
+- **问题说明**：_（若有问题）_
+
+---
+
+#### CHG-22 接入 comment-core-library 渲染弹幕（播放页）
+
+- **状态**：⬜ 待开始
+- **依赖**：CHG-20（yt-player 已替换）、CHG-21（弹幕 API 已实现）
+- **变更原因**：`comment-core-library` 已在 `package.json` 引入但仅作占位，`DanmakuBar.tsx` 中 CCL 初始化逻辑为 graceful degradation（静默降级），未真正接入数据
+- **影响的已完成任务**：PLAYER-07（DanmakuBar）
+- **文件范围**：
+  - `src/components/player/DanmakuBar.tsx`（接入真实数据，替换静态 mock）
+  - `src/hooks/useDanmaku.ts`（新建，参考 LunaTV useDanmu.ts 的缓存/重试策略）
+  - `src/lib/api-client.ts`（确认 danmaku 相关 API 方法已添加）
+- **变更内容**：
+  1. 新建 `src/hooks/useDanmaku.ts`：
+     - 接收 `videoId`、`episodeNumber` 参数
+     - 调用 `GET /videos/:id/danmaku?ep=N` 获取弹幕数据
+     - 缓存策略：sessionStorage 30 分钟（同一视频/集数不重复请求），参考 LunaTV useDanmu.ts
+     - 返回 `{ comments, isLoading, error, refetch }`
+  2. 更新 `DanmakuBar.tsx`：
+     - 调用 `useDanmaku(videoId, episodeNumber)` 获取弹幕数据
+     - 播放器 `currentTime` 更新时调用 `CommentManager.time(currentTime * 100)`（CCL 时间单位为 cs）
+     - 弹幕数据加载完成后调用 `CommentManager.load(comments)` + `CommentManager.start()`
+     - 切集时调用 `CommentManager.clear()` 清除当前弹幕，重新加载
+  3. 在 `api-client.ts` 新增 `getDanmaku(videoId, ep?)` 和 `postDanmaku(videoId, data)` 方法
+- **⚠️ 约束**：
+  - CCL 为浏览器全局库（`window.CommentManager`），必须在 `useEffect` 内访问，不得在模块顶层引用
+  - CCL 容器的 `width`/`height` 需与播放器尺寸同步（ResizeObserver）
+  - 弹幕开关（enable/disable）通过 DanmakuBar 的已有 UI 控件控制，不新增 UI
+- **验收**：
+  - 播放视频时，已提交的弹幕在对应时间点飞过播放器画面
+  - 弹幕开关控件可正常启用/禁用弹幕飞屏
+  - 切换集数时弹幕正确清除并重新加载
+  - 播放器窗口大小变化时弹幕轨道宽度自动调整
+- **测试要求**：
+  - Vitest `tests/unit/components/player/DanmakuBar.test.tsx`（更新：mock useDanmaku，验证 CommentManager.load 被调用）
+  - Vitest `tests/unit/hooks/useDanmaku.test.ts`（新建：缓存命中、重试、空数据）
+- **完成备注**：_（AI 填写）_
+- **问题说明**：_（若有问题）_
+
+---
+
+#### CHG-23 Douban 元数据同步（管理员手动触发）
+
+- **状态**：⬜ 待开始
+- **变更原因**：视频元数据（评分、演员、导演、简介、封面）来源于爬虫采集，质量参差不齐；豆瓣有较完整的中文影视元数据，管理员可按需触发同步以补全数据
+- **影响的已完成任务**：VIDEO-01（videos 表），ADMIN-01（admin 视频管理）
+- **文件范围**：
+  - `src/api/lib/douban.ts`（新建，封装豆瓣搜索 + 详情抓取逻辑，参考 LunaTV `app/api/douban-*/`）
+  - `src/api/services/DoubanService.ts`（新建，业务逻辑：搜索匹配 + 字段映射 + 写库）
+  - `src/api/routes/admin/videos.ts`（新增 `POST /admin/videos/:id/douban-sync` 端点）
+  - `tests/unit/api/douban.test.ts`（新建）
+- **变更内容**：
+  1. 新建 `lib/douban.ts`，实现：
+     - `searchDouban(title, year?)` — 搜索豆瓣（HTTP GET，UA 轮换，随机 200~500ms 延迟）
+     - `getDoubanDetail(doubanId)` — 获取详情（评分、简介、演员、海报）
+     - 返回类型定义：`DoubanSubject { id, title, year, rating, summary, directors[], casts[], posterUrl }`
+  2. 新建 `DoubanService.ts`，实现：
+     - `syncVideo(videoId)` — 根据视频标题+年份搜索豆瓣，匹配度 >80% 时更新 DB；跳过已设置 `douban_id` 的视频（不覆盖）
+     - `syncVideo` 在 `videos` 表记录 `douban_id`，防止重复同步
+  3. 在 `admin/videos.ts` 新增：`POST /admin/videos/:id/douban-sync`（admin only）
+     - 成功：返回 `200 { data: { updated: true, fields: [...] } }`
+     - 未匹配：返回 `200 { data: { updated: false, reason: 'no_match' } }`
+- **⚠️ 约束**：
+  - 豆瓣无官方 API，本功能依赖 HTML 解析，**非核心功能**，抓取失败时降级返回 `{ updated: false, reason: 'fetch_failed' }`，不抛出 500
+  - 不引入 `cheerio`/`puppeteer`（新依赖需确认）；优先使用 `node:html` 或正则提取，或利用豆瓣的 JSON-LD 结构
+  - `douban_id` 列尚未在 `videos` 表中，需在 migration 或 `ALTER TABLE` 中添加（写入 `docs/architecture.md`）
+  - 此端点抓取频率受豆瓣反爬限制，**只能管理员手动触发，不可批量自动执行**
+- **验收**：
+  - `POST /admin/videos/:id/douban-sync` 未登录返回 401，非 admin 返回 403
+  - 对存在豆瓣数据的视频调用后，`videos` 表对应行 `rating`、`overview`、`cover_url` 等字段已更新
+  - 抓取失败时返回 `{ updated: false }` 而非 500
+- **数据库变更**：`videos` 表新增 `douban_id VARCHAR(20)` 列（nullable）；同步更新 `docs/architecture.md`
+- **测试要求**：Vitest `tests/unit/api/douban.test.ts`（mock HTTP，验证权限、匹配成功时更新 DB、抓取失败时降级）
+- **完成备注**：_（AI 填写）_
+- **问题说明**：_（若有问题）_
+
+---
+
+### 管理后台增强
+
+> Phase 1 已实现管理后台基础功能（视频/源/用户/爬虫/数据看板）。本阶段在此基础上新增缺失的系统管理功能，并以 LunaTV-enhanced 管理后台为参考完善现有页面体验。
+>
+> **架构原则**：Admin list 页面优先使用 React Server Components（服务端获取初始数据，消除初始 loading spinner）；交互部分（Modal、表单、操作按钮）提取为独立 Client Components；布局/权限守卫在 `middleware.ts` 层处理。
+
+---
+
+#### CHG-24 Admin 基础 UI 组件库（供管理后台各页面复用）
+
+- **状态**：⬜ 待开始
+- **变更原因**：CHG-25~29 均需要 DataTable、Modal、StatusBadge、ConfirmDialog 等通用组件。若在每个页面中各自实现，将产生大量重复代码，且 UI 一致性无法保证。本任务作为后续所有管理页面增强任务的前置。
+- **影响的已完成任务**：ADMIN-01~05（管理后台现有页面）
+- **文件范围**：
+  - `src/components/admin/DataTable.tsx`（新建）
+  - `src/components/admin/Modal.tsx`（新建）
+  - `src/components/admin/StatusBadge.tsx`（新建）
+  - `src/components/admin/ConfirmDialog.tsx`（新建）
+  - `src/components/admin/Pagination.tsx`（新建）
+  - `src/components/admin/index.ts`（统一导出入口）
+  - `tests/unit/components/admin/`（对应测试文件）
+- **变更内容**：
+  1. **DataTable**：泛型组件，接收 `columns: Column<T>[]`、`data: T[]`、`isLoading?`、`emptyText?`。每列支持 `render?: (row: T) => ReactNode`，支持 `sortKey?` 的点击排序回调。样式：Tailwind，深浅主题均可读。
+  2. **Modal**：受控组件，Props：`open`、`onClose`、`title`、`children`、`size?: 'sm'|'md'|'lg'`。支持 ESC 关闭和遮罩点击关闭。
+  3. **StatusBadge**：Props：`status: 'active'|'inactive'|'pending'|'banned'|'published'|'draft'`，渲染对应颜色圆点 + 文字。颜色使用 CSS 变量，深浅主题通用。
+  4. **ConfirmDialog**：基于 Modal，Props：`title`、`description`、`confirmText`、`onConfirm`、`loading?`，用于删除/封号等危险操作的二次确认。
+  5. **Pagination**：Props：`page`、`total`、`pageSize`、`onChange`。显示"第 N 页 / 共 M 页"及前后翻页按钮。
+  6. **不引入任何 UI 库（MUI/shadcn 等）**，全部使用 Tailwind + CSS 变量
+- **⚠️ 约束**：
+  - 所有组件使用 `'use client'` 指令（交互组件）
+  - 不使用 `any` 类型；泛型定义要足够具体
+  - 颜色全部使用 `var(--xxx)` CSS 变量，不硬编码
+- **验收**：
+  - 各组件在深色/浅色主题下视觉正确，文字对比度达标
+  - DataTable 在 `isLoading` 时显示骨架屏占位
+  - Modal 的 ESC 和遮罩关闭可用
+  - ConfirmDialog 的 `loading` 状态禁用确认按钮
+- **测试要求**：Vitest + jsdom，`tests/unit/components/admin/` 下各组件测试（DataTable 渲染列、Modal open/close、StatusBadge 颜色类、ConfirmDialog loading 状态）
+- **完成备注**：_（AI 填写）_
+- **问题说明**：_（若有问题）_
+
+---
+
+#### CHG-25 Admin 仪表盘页增强（图表 + 实时刷新）
+
+- **状态**：⬜ 待开始
+- **依赖**：CHG-24（Admin 基础组件库）
+- **变更原因**：现有仪表盘（`/admin`）仅展示静态数字（视频数/用户数/待处理队列）。参考 LunaTV 管理后台，应增加趋势展示、待处理事项高亮和 30 秒自动刷新，提升管理员感知度
+- **影响的已完成任务**：ADMIN-04（analytics 数据看板）
+- **文件范围**：
+  - `src/app/[locale]/admin/page.tsx`（Server Component，获取初始 analytics 数据）
+  - `src/components/admin/dashboard/AnalyticsCards.tsx`（新建 Client Component，处理自动刷新）
+  - `src/components/admin/dashboard/QueueAlerts.tsx`（新建，待处理队列高亮提示）
+  - `src/lib/api-client.ts`（确认 admin analytics 方法）
+- **变更内容**：
+  1. 将 `admin/page.tsx` 改为 React Server Component，服务端直接调用 Fastify API 获取 analytics 初始数据，消除客户端 loading 闪烁
+  2. 新建 `AnalyticsCards.tsx`（Client Component）：展示 6 张数据卡片（视频总数/已发布/待审/用户总数/今日新增/待处理事项）；每 30 秒调用 `GET /admin/analytics` 刷新数据
+  3. 新建 `QueueAlerts.tsx`：当 `queues.submissions > 0` 或 `queues.subtitles > 0` 时，在页面顶部展示橙色警示横幅，附跳转到对应审核页的快捷链接
+  4. 爬虫任务表格改为只显示最近 5 条，用 `StatusBadge` 显示任务状态
+- **⚠️ 约束**：
+  - **不引入图表库**（ECharts/Recharts 等）——当前数据量不需要，用数字 + 颜色卡片即可；趋势数据（7 日折线）留待后续任务
+  - Server Component 与 Client Component 边界要清晰：初始数据服务端获取，刷新逻辑仅在 Client Component 内
+- **验收**：
+  - 仪表盘页面初始加载无 loading spinner（SSR 直出数据）
+  - 待处理投稿 > 0 时页面顶部出现橙色警示横幅
+  - 30 秒后数据自动刷新（开发者工具可见网络请求）
+  - 爬虫任务状态以 StatusBadge 显示（running/done/failed 颜色不同）
+- **测试要求**：Vitest `tests/unit/components/admin/dashboard/`（QueueAlerts 有/无队列时渲染差异；AnalyticsCards 数据正确渲染）
+- **完成备注**：_（AI 填写）_
+- **问题说明**：_（若有问题）_
+
+---
+
+#### CHG-26 Admin 用户管理页完善（搜索/分页/密码重置）
+
+- **状态**：⬜ 待开始
+- **依赖**：CHG-24（Admin 基础组件库）
+- **变更原因**：现有用户管理页（`/admin/users`）缺乏搜索和分页功能，用户数量增多后无法使用；缺少密码重置功能，admin 无法协助用户找回账号
+- **影响的已完成任务**：ADMIN-03（admin/users 路由）、CHG-16（users 模块边界重构）
+- **文件范围**：
+  - `src/app/[locale]/admin/users/page.tsx`（重构为 Server Component）
+  - `src/components/admin/users/UserTable.tsx`（新建 Client Component）
+  - `src/components/admin/users/UserActions.tsx`（新建，ban/unban/role/reset-password 操作列）
+  - `src/api/routes/admin/users.ts`（新增 `POST /admin/users/:id/reset-password`）
+  - `src/api/db/queries/users.ts`（新增 `resetUserPassword` 函数）
+  - `tests/unit/api/admin-users.test.ts`（更新/新增）
+- **变更内容**：
+  1. `GET /admin/users` 端点补充支持 `?q=<keyword>` 搜索（按 username/email 模糊匹配）和 `?page=&pageSize=` 分页（`listAdminUsers` 函数已有动态 WHERE，补充 OFFSET/LIMIT）
+  2. 新增 `POST /admin/users/:id/reset-password`（admin only）：生成随机 12 位新密码，bcrypt 哈希后更新 DB，返回明文新密码一次性展示（下次登录后提示修改）
+  3. `UserTable.tsx` 使用 `DataTable` 组件，列：用户名、邮箱、角色（StatusBadge）、注册时间、封号状态、操作列
+  4. `UserActions.tsx`：操作按钮 + ConfirmDialog（封号/解封）、角色选择下拉、密码重置按钮（显示一次性密码 Modal）
+  5. 搜索框 + 分页组件复用 CHG-24 的 Pagination
+- **⚠️ 约束**：
+  - 密码重置仅生成随机密码，**不允许 admin 设置指定密码**（避免 admin 知道用户密码）
+  - 重置密码返回的明文密码仅在当次 Modal 中展示，不记录到日志
+  - admin 不可封禁其他 admin，`banUser` 函数需加 role 校验
+- **验收**：
+  - 搜索框输入关键词后表格过滤用户（防抖 300ms）
+  - 超过 20 个用户时分页控件出现，翻页正常
+  - 封号 + 解封操作有 ConfirmDialog 二次确认
+  - 密码重置 Modal 显示一次性密码，关闭后不可再查看
+  - admin 尝试封禁另一个 admin 时返回 403
+- **测试要求**：Vitest `tests/unit/api/admin-users.test.ts`（补充：搜索过滤、分页、密码重置权限、admin 不可封 admin）
+- **完成备注**：_（AI 填写）_
+- **问题说明**：_（若有问题）_
+
+---
+
+#### CHG-27 Admin 视频管理页完善（批量操作 + 筛选栏）
+
+- **状态**：⬜ 待开始
+- **依赖**：CHG-24（Admin 基础组件库）
+- **变更原因**：现有视频管理页（`/admin/videos`）缺少多选批量操作和字段筛选，视频条目增多后操作效率低
+- **影响的已完成任务**：ADMIN-01（视频管理路由）、CHG-13（VideoService + videos queries）
+- **文件范围**：
+  - `src/app/[locale]/admin/videos/page.tsx`（重构为 Server Component）
+  - `src/components/admin/videos/VideoTable.tsx`（新建 Client Component）
+  - `src/components/admin/videos/VideoFilters.tsx`（新建，筛选栏）
+  - `src/components/admin/videos/BatchPublishBar.tsx`（新建，底部浮动批量操作栏）
+  - `src/api/routes/admin/videos.ts`（确认批量上架端点存在，补充批量下架）
+  - `src/api/db/queries/videos.ts`（新增 `batchUnpublishVideos`）
+- **变更内容**：
+  1. `VideoFilters.tsx`：类型（movie/series/anime/variety）、上架状态（全部/已上架/待审）、关键词搜索，参数写入 URL searchParams（用 `useRouter` + `useSearchParams`）
+  2. `VideoTable.tsx` 使用 `DataTable`，首列为复选框，支持全选当页；columns：封面缩略图、标题、类型、年份、发布状态（StatusBadge）、播放源数量、操作（编辑/上架/下架）
+  3. `BatchPublishBar.tsx`：当有选中行时从底部滑入，显示"已选 N 条 | 批量上架 | 批量下架"
+  4. 新增 `POST /admin/videos/batch-unpublish`（admin only），对应 `batchUnpublishVideos` 查询函数
+  5. `GET /admin/videos` 端点补充 `?type=&status=&q=` 筛选参数（`listAdminVideos` 函数补充 WHERE 条件）
+- **⚠️ 约束**：
+  - 批量操作上限 50 条（一次请求），超出时提示分批操作
+  - 批量上架/下架不触发 ES 同步（单次更新触发；批量同步留待后续 reindex 机制）
+  - 封面缩略图使用 `next/image`，设置合理的 `sizes` 避免加载过大图片
+- **验收**：
+  - 筛选栏选择"待审"后，表格只显示 `is_published = false` 的视频
+  - 选中多条视频后底部批量操作栏滑入，批量上架后选中视频状态变为"已发布"
+  - 单条视频的上架/下架操作仍可用
+  - URL 中包含筛选参数，刷新后筛选状态保留
+- **测试要求**：Vitest（BatchPublishBar 选中/未选中渲染；VideoFilters URL 参数同步）；Playwright `admin.spec.ts` 补充批量上架流程
+- **完成备注**：_（AI 填写）_
+- **问题说明**：_（若有问题）_
+
+---
+
+#### CHG-28 Admin 视频源管理页（实时验证测试 UI）
+
+- **状态**：⬜ 待开始
+- **依赖**：CHG-24（Admin 基础组件库）
+- **变更原因**：现有播放源管理页（`/admin/sources`）只有列表和删除，缺乏：① 手动触发单条链接验证并即时查看结果的 UI；② 批量删除失效源的操作。参考 LunaTV SourceTestModule（965L）的设计
+- **影响的已完成任务**：ADMIN-02（content 路由）、CHG-14（verifyWorker）、CHG-15（ContentService）
+- **文件范围**：
+  - `src/app/[locale]/admin/sources/page.tsx`（重构为 Server Component）
+  - `src/components/admin/sources/SourceTable.tsx`（新建 Client Component）
+  - `src/components/admin/sources/SourceVerifyButton.tsx`（新建，单条验证触发 + 结果展示）
+  - `src/components/admin/sources/BatchDeleteBar.tsx`（新建，批量删除失效源）
+  - `src/api/routes/admin/content.ts`（新增 `POST /admin/sources/:id/verify` 端点）
+  - `src/api/services/ContentService.ts`（新增 `verifySource(sourceId)` 方法）
+- **变更内容**：
+  1. 新增 `POST /admin/sources/:id/verify`（moderator+ 权限）：
+     - 对该 source_url 发起 HEAD 请求（10s timeout），记录响应时间
+     - 更新 `is_active` 和 `last_checked` 字段
+     - 返回 `{ isActive: boolean, responseMs: number, statusCode: number | null }`
+  2. `SourceVerifyButton.tsx`：点击后显示 loading，请求完成后在行内显示验证结果（绿色✓ N ms / 红色✗ 超时）
+  3. `SourceTable.tsx`：columns：视频标题、源 URL（截断显示）、活跃状态（StatusBadge）、最后验证时间、响应时间、操作（验证/删除）
+  4. `BatchDeleteBar.tsx`：多选失效源 → 底部操作栏 → ConfirmDialog → 批量删除
+  5. `GET /admin/sources` 补充 `?status=active|inactive|all` 筛选
+- **⚠️ 约束**：
+  - `POST /admin/sources/:id/verify` 是**同步 HTTP 请求**（不走 Bull 队列），专用于 admin 即时验证；不影响 verifyWorker 定时队列逻辑
+  - 验证请求必须有 10 秒超时，防止管理员等待过长
+  - URL 在表格中最多显示 60 字符，超出省略号 + tooltip 展示完整 URL
+- **验收**：
+  - 点击"验证"按钮后，约 1~10 秒内行内显示验证结果（响应时间 / 超时）
+  - `is_active` 和 `last_checked` 已更新（刷新页面可见）
+  - 筛选"失效源"后显示所有 `is_active = false` 的源，批量选中后可批量删除（二次确认）
+  - 验证请求超时时 UI 显示"超时"而非页面报错
+- **测试要求**：Vitest `tests/unit/api/sources-verify.test.ts`（新建：mock HEAD 请求，验证 isActive 判断逻辑、超时处理、权限检查）
+- **完成备注**：_（AI 填写）_
+- **问题说明**：_（若有问题）_
+
+---
+
+#### CHG-29 Admin 投稿审核 + 字幕审核页完善
+
+- **状态**：⬜ 待开始
+- **依赖**：CHG-24（Admin 基础组件库）
+- **变更原因**：现有投稿/字幕审核页功能基本可用，但缺少：① 审核通过/驳回时输入驳回理由；② 审核列表无分页；③ 投稿审核通过后应提示触发 ES 同步
+- **影响的已完成任务**：ADMIN-02（content 审核路由）、CHG-15（ContentService）
+- **文件范围**：
+  - `src/app/[locale]/admin/content/page.tsx`（Tabs：投稿 / 字幕）
+  - `src/components/admin/content/SubmissionTable.tsx`（新建）
+  - `src/components/admin/content/SubtitleTable.tsx`（新建）
+  - `src/components/admin/content/ReviewModal.tsx`（新建，通过/驳回 + 驳回理由输入）
+  - `src/api/routes/admin/content.ts`（`approve/reject` 端点补充 `reason` 字段支持）
+  - `src/api/db/queries/sources.ts`（`rejectSubmission` 补充 `rejection_reason` 更新）
+- **变更内容**：
+  1. `ReviewModal.tsx`：分两个 Tab（投稿/字幕），点击"通过"直接提交；点击"驳回"展开文本框输入驳回理由（必填，1~200 字），确认后提交
+  2. `POST /admin/content/submissions/:id/reject` 和 `POST /admin/content/subtitles/:id/reject` 补充接受 `body.reason: string`，更新到 `rejection_reason` 字段（需确认该字段是否存在，若无则 ALTER TABLE）
+  3. `SubmissionTable.tsx` / `SubtitleTable.tsx` 使用 `DataTable` + `Pagination`，默认 pageSize=20
+  4. 投稿审核通过后，在 UI 顶部显示一条 Toast：`"已通过，ES 索引已加入同步队列"`（提示运营知晓）
+- **⚠️ 约束**：
+  - `rejection_reason` 字段若不存在需 ALTER TABLE（写入 `docs/architecture.md` 数据库变更记录）
+  - 投稿审核通过触发的 ES 同步走现有 `VideoService.indexToES()` 路径，不新增逻辑
+- **验收**：
+  - 驳回投稿时必须填写驳回理由，否则提交按钮不可用
+  - 列表超过 20 条时出现分页
+  - 审核通过后顶部 Toast 显示"ES 同步已加入队列"
+- **测试要求**：Vitest（ReviewModal：通过/驳回按钮状态、驳回理由必填校验）；Playwright `admin.spec.ts` 补充审核流程
+- **完成备注**：_（AI 填写）_
+- **问题说明**：_（若有问题）_
+
+---
+
+#### CHG-30 Admin 缓存管理（后端 API + 前端 UI）
+
+- **状态**：⬜ 待开始
+- **变更原因**：Resovo 使用 Redis 缓存搜索结果、视频详情等热点数据，但无任何管理界面，开发/运维无法查看缓存占用或清除特定类型缓存。参考 LunaTV `CacheManager.tsx`（407L）实现
+- **影响的已完成任务**：INFRA-05（Redis 基础设施）
+- **文件范围**：
+  - `src/api/routes/admin/cache.ts`（新建，`GET /admin/cache/stats`、`DELETE /admin/cache/:type`）
+  - `src/api/services/CacheService.ts`（新建，封装 Redis key 统计和清理逻辑）
+  - `src/app/[locale]/admin/system/cache/page.tsx`（新建，Server Component）
+  - `src/components/admin/system/CacheManager.tsx`（新建，Client Component）
+  - `src/api/server.ts`（注册 cacheRoutes）
+  - `tests/unit/api/cache.test.ts`（新建）
+- **变更内容**：
+  1. 定义 Redis key 前缀规范（在 `CacheService.ts` 中集中管理）：
+     - `search:*` — 搜索缓存
+     - `video:*` — 视频详情缓存
+     - `danmaku:*` — 弹幕缓存（CHG-22 引入）
+     - `analytics:*` — 统计缓存（如有）
+  2. `GET /admin/cache/stats`（admin only）：对每个前缀调用 `SCAN` + `OBJECT ENCODING` 统计 key 数量和大致内存占用，返回 `{ type, count, sizeKb }[]`
+  3. `DELETE /admin/cache/:type`（admin only）：对指定前缀的所有 key 执行 `UNLINK`（非阻塞删除），`:type` 为 `search|video|danmaku|analytics|all`
+  4. `CacheManager.tsx`：表格展示各类型缓存数量和大小，每行有"清除"按钮，底部有"清除全部"按钮（ConfirmDialog 确认）；清除后自动刷新统计
+- **⚠️ 约束**：
+  - 使用 `SCAN` 而非 `KEYS`（生产环境 KEYS 会阻塞 Redis）
+  - `DELETE /admin/cache/all` 需要 ConfirmDialog 二次确认，且仅清除业务缓存 key（不清除 Bull 队列 key、session key 等）
+  - 统计接口非实时精确值，允许有秒级延迟
+- **验收**：
+  - `GET /admin/cache/stats` 返回各类型缓存的 key 数量
+  - 清除搜索缓存后，再次搜索相同词能看到 Redis 重新写入（Redis CLI 可验证）
+  - `DELETE /admin/cache/all` 需要二次确认，不误删 Bull 队列 key
+  - 非 admin 访问返回 403
+- **测试要求**：Vitest `tests/unit/api/cache.test.ts`（mock Redis，验证 SCAN 调用、UNLINK 调用、权限、all 类型不删除队列 key）
+- **完成备注**：_（AI 填写）_
+- **问题说明**：_（若有问题）_
+
+---
+
+#### CHG-31 Admin 数据导入导出（播放源 JSON 批量操作）
+
+- **状态**：⬜ 待开始
+- **变更原因**：管理员需要在环境迁移、备份、批量添加资源站时导入/导出播放源配置。当前无任何导入导出功能，参考 LunaTV `DataMigration.tsx`（504L）实现
+- **影响的已完成任务**：ADMIN-02（sources 管理）、CHG-15（ContentService）
+- **文件范围**：
+  - `src/api/routes/admin/migration.ts`（新建，导入/导出端点）
+  - `src/api/services/MigrationService.ts`（新建，导入校验和写库逻辑）
+  - `src/app/[locale]/admin/system/migration/page.tsx`（新建，Server Component）
+  - `src/components/admin/system/DataMigration.tsx`（新建，Client Component）
+  - `src/api/server.ts`（注册 migrationRoutes）
+  - `tests/unit/api/migration.test.ts`（新建）
+- **变更内容**：
+  1. `GET /admin/export/sources`（admin only）：查询所有非删除的 `video_sources` 行，以 JSON 格式下载（`Content-Disposition: attachment; filename=sources-{date}.json`）；导出字段：`source_name`、`source_url`、`is_active`、关联 `video.short_id`（用于重新关联）
+  2. `POST /admin/import/sources`（admin only，multipart）：上传 JSON 文件 → Zod 校验每条记录 → 按 `video.short_id` 查找视频 → upsert `video_sources`；返回 `{ imported, skipped, errors[] }`
+  3. `DataMigration.tsx`：导出区域（按钮下载 JSON）+ 导入区域（文件上传 + 进度条 + 结果摘要 Modal）
+  4. **仅实现播放源导入导出**（用户数据不导出，避免隐私问题；视频元数据通过爬虫维护）
+- **⚠️ 约束**：
+  - 导入文件大小限制 5MB（`@fastify/multipart` 已有此配置，确认限制合理）
+  - 导入时对每条记录 Zod 校验，单条失败不中断整批（收集 errors，最终汇总返回）
+  - 不得导出密码、token 等敏感字段；导出的 JSON 不含用户个人信息
+- **验收**：
+  - 点击"导出播放源"下载 `sources-2026-03-18.json`，包含所有有效播放源
+  - 上传格式正确的 JSON 文件后，显示"导入 42 条，跳过 3 条（已存在），失败 0 条"
+  - 上传格式错误的文件时，显示具体的校验错误信息，不崩溃
+  - 导入的播放源在播放源管理页可见
+- **测试要求**：Vitest `tests/unit/api/migration.test.ts`（导出 Content-Disposition 头、导入 Zod 校验、单条失败不中断、权限检查）
+- **完成备注**：_（AI 填写）_
+- **问题说明**：_（若有问题）_
+
+---
+
+#### CHG-32 Admin 性能监控（Fastify 指标收集 + 监控页）
+
+- **状态**：⬜ 待开始
+- **变更原因**：Resovo 无任何运行时监控，问题定位依赖日志。参考 LunaTV PerformanceMonitor（跟踪请求速率/响应时间/内存/CPU），在 Fastify 层实现轻量指标收集，为后续稳定性优化提供数据支撑
+- **影响的已完成任务**：INFRA-01（Fastify server）
+- **文件范围**：
+  - `src/api/plugins/metrics.ts`（新建，Fastify 插件，收集请求指标）
+  - `src/api/routes/admin/performance.ts`（新建，`GET /admin/performance/stats`）
+  - `src/app/[locale]/admin/system/monitor/page.tsx`（新建）
+  - `src/components/admin/system/PerformanceMonitor.tsx`（新建，Client Component，10s 自动刷新）
+  - `src/api/server.ts`（注册 metrics 插件和 performanceRoutes）
+- **变更内容**：
+  1. `plugins/metrics.ts`（Fastify plugin）：
+     - `onRequest` hook：记录请求开始时间戳
+     - `onResponse` hook：计算响应时间，累积到内存滑动窗口（最近 5 分钟）
+     - 暴露 `fastify.metrics` 装饰器，包含：`requestsPerMinute`、`avgResponseMs`、`p95ResponseMs`、`recentErrors`
+  2. `GET /admin/performance/stats`（admin only）：返回：
+     - `requests`: `{ perMinute, total24h }`
+     - `latency`: `{ avgMs, p95Ms }`
+     - `memory`: `{ heapUsedMb, heapTotalMb, rssMb }` — `process.memoryUsage()`
+     - `uptime`: `process.uptime()` 秒数
+  3. `PerformanceMonitor.tsx`：每 10 秒刷新，展示 4 张指标卡片 + 最近 10 条慢请求列表（>500ms）
+- **⚠️ 约束**：
+  - 指标数据存在**内存**中（滑动窗口），不写入 Redis 或 DB（避免引入新依赖）
+  - 服务重启后指标清零（非持久化监控，为轻量实现）
+  - metrics 插件的 hook 逻辑必须极轻量（不可阻塞请求路径），不使用 `await`
+- **验收**：
+  - `GET /admin/performance/stats` 在服务运行 1 分钟后返回非零的 `requestsPerMinute`
+  - 内存指标与 `process.memoryUsage()` 数据一致
+  - 监控页每 10 秒刷新，数字变化可见
+  - 非 admin 访问返回 403
+- **测试要求**：Vitest `tests/unit/api/performance.test.ts`（新建：mock metrics 装饰器，验证 stats 响应结构、权限）；Vitest `tests/unit/plugins/metrics.test.ts`（新建：验证 requestsPerMinute 计数逻辑）
+- **完成备注**：_（AI 填写）_
+- **问题说明**：_（若有问题）_
+
+---
+
+### Phase 2 任务执行顺序
+
+```
+播放器升级：
+  CHG-20（yt-player 替换）
+    → CHG-21（弹幕后端 API）
+    → CHG-22（弹幕渲染层接入，依赖 CHG-20+21）
+
+元数据：
+  CHG-23（Douban 同步，独立，可并行）
+
+管理后台增强：
+  CHG-24（Admin 基础 UI 组件库）          ← 所有 Admin 页面的前置
+    → CHG-25（仪表盘增强）
+    → CHG-26（用户管理完善）              ← 可与 CHG-27 并行
+    → CHG-27（视频管理完善）              ← 可与 CHG-26 并行
+    → CHG-28（视频源验证 UI）
+    → CHG-29（审核页完善）
+
+系统管理（独立，可在管理页面任务完成后并行）：
+  CHG-30（缓存管理）
+  CHG-31（数据导入导出）
+  CHG-32（性能监控）← 工作量最大，最后执行
+```
 > - 测试连续失败 2 次无法修复 → 写入 BLOCKER，暂停等待
 > - Phase 全部完成 → 写入 PHASE COMPLETE，暂停等待确认
 > - 详细规则见 `CLAUDE.md`

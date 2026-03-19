@@ -454,3 +454,16 @@
 - **数据库变更**：无（watch_history 表已在 migration 001 中存在）
 - **注意事项**：管理员新建/编辑视频后会自动触发 ES 同步（异步）；verifyWorker 已正式启用 DB 更新；POST /sources/submit 路径已从 /admin/ 迁移，前端如有调用需同步更新
 - **测试**：typecheck ✅ lint ✅ 270 单元测试全部通过
+
+## [PLANNING] Phase 2 迁移可行性分析 & 任务规划
+- **完成时间**：2026-03-18
+- **修改文件**：
+  - `docs/migration-analysis.md` — 新建，对 LunaTV-enhanced 和 yt-player 两个外部项目进行技术/架构/模块化分析，评估迁移至 Resovo 的可行性与复杂度
+  - `docs/tasks.md` — 新增 Phase 2 任务区（CHG-20~32），涵盖播放器升级、弹幕接入、Douban 元数据、Admin UI 组件库、Admin 后台功能增强
+  - `README.md` — 更新 Phase 2 规划说明、修正开发端口（3001）、补充外部项目关系说明
+- **新增依赖**：无（本批次为规划文档，不涉及代码）
+- **数据库变更**：CHG-23 将新增 `videos.douban_id VARCHAR(20)` 列（执行时更新）；CHG-29 可能新增 `rejection_reason` 列（执行时确认）
+- **注意事项**：
+  - CHG-20（yt-player）需在 `next.config.ts` 中配置 `transpilePackages`，yt-player 包路径为 `file:../yt-player`
+  - CHG-24（Admin UI 组件库）是 CHG-25~29 的强前置依赖，不可跳过
+  - CHG-32（性能监控）工作量最大，排在 Phase 2 最后
