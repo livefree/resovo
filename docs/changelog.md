@@ -1398,3 +1398,13 @@
 - **注意事项**：
   - 当前环境 `REDIS_URL=redis://localhost:6379` 且 6379 未监听时，接口会明确返回 `503 CRAWLER_QUEUE_UNAVAILABLE`，不再留下 pending 脏任务。
   - 已执行一次性数据补偿：历史 pending 超时任务 `2` 条已自动转为 failed。
+
+## [CHG-90] 修复采集触发参数类型冲突（$1 推断错误）
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 03:13
+- **修改文件**：
+  - `src/api/db/queries/crawlerTasks.ts` — 将 `markStalePendingTasks` 的 SQL 拆分为“有 siteKey / 无 siteKey”两条语句，避免可空参数在不同上下文复用导致的 `$1` 类型推断冲突。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅修复 SQL 参数绑定方式，不改变 pending 清理策略与阈值。

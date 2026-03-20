@@ -3664,3 +3664,28 @@ _（任务 review 通过后移入此处）_
   - 定向单测 5/5 通过；typecheck/lint 通过。
   - 数据库已一次性补偿历史卡住任务：`pending -> failed` 共 2 条。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-90 修复采集触发报错：inconsistent types deduced for parameter $1
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 03:11
+- **计划开始时间**：2026-03-20 03:12
+- **实际开始时间**：2026-03-20 03:12
+- **完成时间**：2026-03-20 03:13
+- **问题**：触发单站采集时，后端清理陈旧 pending 的 SQL 在部分执行路径下报 PostgreSQL 参数类型推断冲突（`inconsistent types deduced for parameter $1`）。
+- **影响的已完成任务**：CHG-89
+- **文件范围**：
+  - `src/api/db/queries/crawlerTasks.ts`
+- **修复内容**：
+  - `markStalePendingTasks` 改为两条独立 SQL：
+    - 有 `siteKey`：使用 `$2` 作为站点过滤参数
+    - 无 `siteKey`：不拼接站点过滤条件
+  - 移除“同一可空参数在多个类型上下文复用”的写法，避免参数类型推断冲突。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+- **完成备注**：
+  - typecheck 通过；定向单测 5/5 通过。
+- **问题说明**：_（无）_
