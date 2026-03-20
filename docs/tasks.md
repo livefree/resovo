@@ -2975,11 +2975,11 @@ _（任务 review 通过后移入此处）_
 
 #### CHG-66 v1.2 T4/T6/T7：模板约束落地 + 阶段验收
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-20 10:30
 - **计划开始时间**：2026-03-20 16:00
 - **实际开始时间**：2026-03-20 11:42
-- **完成时间**：
+- **完成时间**：2026-03-20 11:56
 - **问题**：需固化模块模板规范并完成阶段验收闭环。
 - **影响的已完成任务**：CHG-65
 - **文件范围**：
@@ -2989,11 +2989,14 @@ _（任务 review 通过后移入此处）_
   - `docs/changelog.md`
   - `docs/run-logs.md`
 - **修复内容**：
-  - 进行中：新增模板规范文档并执行阶段验收命令，补齐 v1.2 收口记录。
+  - 新增 `docs/rules/admin-module-template.md`，固化 admin 模块目录模板与约束。
+  - 执行阶段验收命令，补齐 v1.2 收口记录。
+  - 更新序列与任务文档状态为完成。
 - **测试要求**：
   - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/system/ConfigFileEditor.test.tsx tests/unit/components/admin/system/config-file/utils.test.ts`
   - `npm run typecheck`
   - `npm run lint`
 - **完成备注**：
-  - _（进行中）_
+  - 定向单测 11/11 通过；typecheck/lint 通过。
+  - 仍存在既有测试告警：`ConfigFileEditor` 在测试环境触发一次 controlled/uncontrolled 警告（不影响通过，后续可单独清理）。
 - **问题说明**：_（无）_
