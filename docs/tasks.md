@@ -3726,3 +3726,29 @@ _（任务 review 通过后移入此处）_
   - typecheck/lint 通过。
   - 当前沙箱无法直连本机 DB，`migrate` 与实采脚本无法在此环境完成联调，需你在本机执行上述两条命令验证。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-92 修复 worker 采集状态更新 SQL 类型冲突（text vs varchar）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 03:56
+- **计划开始时间**：2026-03-20 03:57
+- **实际开始时间**：2026-03-20 03:58
+- **完成时间**：2026-03-20 04:00
+- **问题**：队列路径中任务进入 worker 后立刻失败，报错 `inconsistent types deduced for parameter $1`。
+- **影响的已完成任务**：CHG-91
+- **文件范围**：
+  - `src/api/db/queries/crawlerSites.ts`
+- **修复内容**：
+  - 将 `updateCrawlStatus` SQL 中 `$1` 显式转换为 `varchar`：
+    - `last_crawl_status = $1::varchar`
+    - `CASE WHEN $1::varchar != 'running' ...`
+  - 消除 PostgreSQL 在同一参数跨上下文推断时的 `text vs varchar` 冲突。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - typecheck/lint 通过。
+  - 复现实验（psql PREPARE）已确认冲突根因来自该 SQL。
+- **问题说明**：_（无）_

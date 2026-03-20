@@ -1426,3 +1426,13 @@
   - 需先执行 `npm run migrate` 创建日志表。
   - 诊断命令：`npm run test:crawler-site -- --site=<siteKey> --hours=24`。
   - 当前任务重点是“定位能力建设”，不改变原有采集业务语义。
+
+## [CHG-92] 修复 worker 采集状态更新 SQL 参数类型冲突
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 04:00
+- **修改文件**：
+  - `src/api/db/queries/crawlerSites.ts` — `updateCrawlStatus` 中状态参数改为显式 `::varchar`，避免 `$1` 在赋值与比较上下文中出现 `text vs varchar` 推断冲突。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次修复的是 worker 路径首段状态更新 SQL；不改变采集业务逻辑。

@@ -203,8 +203,8 @@ export async function updateCrawlStatus(
 ): Promise<void> {
   await db.query(
     `UPDATE crawler_sites
-     SET last_crawl_status = $1,
-         last_crawled_at   = CASE WHEN $1 != 'running' THEN NOW() ELSE last_crawled_at END,
+     SET last_crawl_status = $1::varchar,
+         last_crawled_at   = CASE WHEN $1::varchar != 'running' THEN NOW() ELSE last_crawled_at END,
          updated_at        = NOW()
      WHERE key = $2`,
     [status, key],

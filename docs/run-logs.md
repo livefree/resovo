@@ -458,3 +458,11 @@
 - **内容**：完成采集任务详细日志体系（DB 持久化 + API 查询 + 诊断脚本），用于定位入队失败/worker失败/抓取失败/入库失败。
 - **处理动作**：新增 `crawler_task_logs` 迁移与查询；在 API/worker/crawl 关键阶段埋点；新增 `test:crawler-site` 实采诊断脚本。
 - **后续**：在本机执行 `npm run migrate` 后，用 `npm run test:crawler-site -- --site=<siteKey>` 做首轮联调验证。
+
+## [LOG-20260320-0400-01] CHG-92 队列路径 SQL 类型冲突根因修复
+- **时间**：2026-03-20 04:00
+- **类型**：INFO
+- **关联任务**：CHG-92
+- **内容**：定位并修复 worker 进入源站采集前的 SQL 参数推断冲突（text vs varchar）。
+- **处理动作**：`updateCrawlStatus` 的 `$1` 参数改为 `::varchar` 显式类型，消除 PREPARE 路径冲突。
+- **后续**：重启 API 后重新触发单站增量，验证日志进入 `worker.source.start` 与 `crawl.*` 阶段。
