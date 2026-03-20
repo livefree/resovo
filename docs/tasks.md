@@ -4064,3 +4064,34 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 仅增强任务观测能力，不改 run/task 执行路径与 API 语义。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-104 采集任务记录 run 维度筛选与字段对齐（Phase C-4）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 16:26
+- **计划开始时间**：2026-03-20 16:26
+- **实际开始时间**：2026-03-20 16:26
+- **完成时间**：2026-03-20 16:31
+- **问题**：任务记录页虽有来源筛选，但缺少 run 维度筛选与 runId 展示，无法快速定位同一批次任务；前端字段与后端返回口径存在偏差。
+- **影响的已完成任务**：CHG-102、CHG-103
+- **文件范围**：
+  - `src/api/db/queries/crawlerTasks.ts`
+  - `src/api/routes/admin/crawler.ts`
+  - `src/components/admin/AdminCrawlerPanel.tsx`
+  - `tests/unit/api/crawler.test.ts`
+- **修复内容**：
+  - 任务列表查询新增 `runId` 过滤参数并下推 DB 条件。
+  - `GET /admin/crawler/tasks` 新增 `runId` 查询参数校验与透传。
+  - 任务记录页新增 `runId` 过滤输入区与 `Run ID` 列，支持点击 runId 快速反筛选当前批次。
+  - 任务记录页字段兼容 camelCase/snake_case，新增站点列与错误消息回退逻辑，修复展示口径偏差。
+  - 补充 API 单测覆盖 `runId` 过滤参数透传行为。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/api/crawler.test.ts`
+  - `npm run test:run`
+- **完成备注**：
+  - 不改任务执行链路，仅增强任务追踪与展示一致性。
+- **问题说明**：_（无）_

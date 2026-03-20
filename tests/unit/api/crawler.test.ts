@@ -638,6 +638,21 @@ describe('CRAWLER-04: 管理后台接口', () => {
     )
   })
 
+  it('GET /admin/crawler/tasks：支持 runId 过滤参数', async () => {
+    mockListTasks.mockResolvedValueOnce({ rows: [], total: 0 })
+    const runId = '11111111-1111-4111-8111-111111111111'
+    const res = await app.inject({
+      method: 'GET',
+      url: `/admin/crawler/tasks?runId=${runId}`,
+      headers: authHeader('admin'),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockListTasks).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ runId })
+    )
+  })
+
   // ── POST /admin/crawler/tasks ───────────────────────────────
 
   it('POST /admin/crawler/tasks：非 admin 返回 403', async () => {

@@ -1579,3 +1579,17 @@
 - **注意事项**：
   - 本次改动只补充排障可观测性，不改任务执行、筛选排序与表格持久化行为。
   - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run test:run` 通过。
+
+## [CHG-104] 采集任务记录 runId 筛选与字段口径对齐（Phase C-4）
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 16:31
+- **修改文件**：
+  - `src/api/db/queries/crawlerTasks.ts` — `listTasks` 新增 `runId` 过滤参数。
+  - `src/api/routes/admin/crawler.ts` — `GET /admin/crawler/tasks` 支持 `runId` 查询参数并透传到查询层。
+  - `src/components/admin/AdminCrawlerPanel.tsx` — 任务记录页新增 runId 过滤输入、Run ID 列、站点列；兼容 camelCase/snake_case 字段映射与错误信息回退。
+  - `tests/unit/api/crawler.test.ts` — 新增 runId 过滤参数透传测试。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅增强任务追踪维度，不改变采集执行链路。
+  - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler.test.ts`、`npm run test:run` 通过（37 files / 477 tests）。

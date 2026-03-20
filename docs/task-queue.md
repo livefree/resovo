@@ -714,3 +714,19 @@
    - 实际开始：2026-03-20 16:22
    - 完成时间：2026-03-20 16:25
    - 验收要点：任务行可打开日志面板；可展示最近日志列表；不影响现有筛选与分页；typecheck/lint/test:run 通过
+
+## [SEQ-20260320-21] 采集控制台 Phase C-4（run 维度追踪补齐）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 16:26
+- **最后更新时间**：2026-03-20 16:31
+- **目标**：打通任务记录 run 维度追踪，支持按 runId 定位批次任务并对齐前后端字段展示口径
+- **范围**：`src/api/db/queries/crawlerTasks.ts`、`src/api/routes/admin/crawler.ts`、`src/components/admin/AdminCrawlerPanel.tsx`、`tests/unit/api/crawler.test.ts`
+- **依赖**：`CHG-102`、`CHG-103` 已完成
+
+### 任务列表（按执行顺序）
+1. CHG-104 — 任务记录 runId 筛选与字段对齐（状态：✅ 已完成）
+   - 创建时间：2026-03-20 16:26
+   - 计划开始：2026-03-20 16:26
+   - 实际开始：2026-03-20 16:26
+   - 完成时间：2026-03-20 16:31
+   - 验收要点：后端支持 runId 过滤；前端任务表展示 runId 并可快速反筛选；API 测试覆盖 runId 参数；typecheck/lint/test:run 通过

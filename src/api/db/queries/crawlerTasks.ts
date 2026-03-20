@@ -209,6 +209,7 @@ export async function listTasks(
   params: {
     status?: CrawlerTaskStatus
     triggerType?: 'single' | 'batch' | 'all' | 'schedule'
+    runId?: string
     limit?: number
     offset?: number
   }
@@ -224,6 +225,10 @@ export async function listTasks(
   if (params.triggerType) {
     conditions.push(`trigger_type = $${idx++}`)
     values.push(params.triggerType)
+  }
+  if (params.runId) {
+    conditions.push(`run_id = $${idx++}`)
+    values.push(params.runId)
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''

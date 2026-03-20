@@ -13,9 +13,19 @@ import { apiClient } from '@/lib/api-client'
 interface CrawlerTask {
   id: string
   type: string
-  status: 'pending' | 'running' | 'done' | 'failed'
+  status: 'pending' | 'running' | 'done' | 'failed' | 'cancelled' | 'timeout'
   triggerType: 'single' | 'batch' | 'all' | 'schedule' | null
+  runId?: string | null
+  run_id?: string | null
+  sourceSite?: string
   source_url: string | null
+  result?: {
+    error?: string
+    [key: string]: unknown
+  } | null
+  scheduledAt?: string | null
+  finishedAt?: string | null
+  startedAt?: string | null
   error: string | null
   started_at: string | null
   finished_at: string | null
@@ -41,12 +51,16 @@ function StatusBadge({ status }: { status: CrawlerTask['status'] }) {
     running: 'bg-blue-900/30 text-blue-400',
     done:    'bg-green-900/30 text-green-400',
     failed:  'bg-red-900/30 text-red-400',
+    cancelled: 'bg-zinc-700/40 text-zinc-300',
+    timeout: 'bg-orange-900/30 text-orange-400',
   }
   const labels: Record<CrawlerTask['status'], string> = {
     pending: '等待中',
     running: '运行中',
     done:    '已完成',
     failed:  '失败',
+    cancelled: '已取消',
+    timeout: '超时',
   }
   return (
     <span className={`rounded-full px-2 py-0.5 text-xs ${map[status]}`}>
@@ -78,6 +92,8 @@ export function AdminCrawlerPanel() {
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<TaskStatusFilter>('')
   const [triggerFilter, setTriggerFilter] = useState<TaskTriggerFilter>('')
+  const [runIdFilterInput, setRunIdFilterInput] = useState('')
+  const [runIdFilter, setRunIdFilter] = useState('')
   const [triggering, setTriggering] = useState<string | null>(null) // null = idle, 'all' = global, siteKey = single
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -95,6 +111,7 @@ export function AdminCrawlerPanel() {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) })
       if (statusFilter) params.set('status', statusFilter)
       if (triggerFilter) params.set('triggerType', triggerFilter)
+      if (runIdFilter) params.set('runId', runIdFilter)
       const res = await apiClient.get<{ data: CrawlerTask[]; pagination: { total: number } }>(
         `/admin/crawler/tasks?${params}`
       )
@@ -105,7 +122,7 @@ export function AdminCrawlerPanel() {
     } finally {
       setLoading(false)
     }
-  }, [page, statusFilter, triggerFilter])
+  }, [page, statusFilter, triggerFilter, runIdFilter])
 
   useEffect(() => { fetchTasks() }, [fetchTasks])
 
@@ -136,6 +153,23 @@ export function AdminCrawlerPanel() {
     } finally {
       setLogLoading(false)
     }
+  }
+
+  function parseTime(value: string | null | undefined) {
+    return value ? new Date(value).toLocaleString() : '—'
+  }
+
+  function getRunId(task: CrawlerTask) {
+    return task.runId ?? task.run_id ?? null
+  }
+
+  function getSiteKey(task: CrawlerTask) {
+    return task.sourceSite ?? task.source_url ?? '—'
+  }
+
+  function getErrorMessage(task: CrawlerTask) {
+    const resultError = typeof task.result?.error === 'string' ? task.result.error : null
+    return task.error ?? resultError ?? '—'
   }
 
   const totalPages = Math.ceil(total / limit)
@@ -218,6 +252,39 @@ export function AdminCrawlerPanel() {
             </button>
           ))}
         </div>
+        <div className="mb-4 flex items-center gap-2">
+          <input
+            type="text"
+            value={runIdFilterInput}
+            onChange={(e) => setRunIdFilterInput(e.target.value)}
+            placeholder="按 Run ID 过滤（完整 UUID）"
+            className="w-[320px] rounded border border-[var(--border)] bg-[var(--bg)] px-3 py-1.5 text-sm text-[var(--text)] outline-none focus:border-[var(--accent)]"
+            data-testid="admin-crawler-runid-input"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              setPage(1)
+              setRunIdFilter(runIdFilterInput.trim())
+            }}
+            className="rounded border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text)] hover:bg-[var(--bg2)]"
+            data-testid="admin-crawler-runid-apply"
+          >
+            应用
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPage(1)
+              setRunIdFilter('')
+              setRunIdFilterInput('')
+            }}
+            className="rounded border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--muted)] hover:text-[var(--text)]"
+            data-testid="admin-crawler-runid-clear"
+          >
+            清除
+          </button>
+        </div>
 
         {error && (
           <p className="mb-4 rounded-md bg-red-900/30 px-4 py-2 text-sm text-red-400">{error}</p>
@@ -227,7 +294,9 @@ export function AdminCrawlerPanel() {
           <table className="w-full text-sm">
             <thead className="bg-[var(--bg2)] text-[var(--muted)]">
               <tr>
+                <th className="px-4 py-3 text-left">Run ID</th>
                 <th className="px-4 py-3 text-left">类型</th>
+                <th className="px-4 py-3 text-left">站点</th>
                 <th className="px-4 py-3 text-left">触发来源</th>
                 <th className="px-4 py-3 text-left">状态</th>
                 <th className="px-4 py-3 text-left">开始时间</th>
@@ -238,24 +307,44 @@ export function AdminCrawlerPanel() {
             </thead>
             <tbody className="divide-y divide-[var(--subtle)]">
               {loading && (
-                <tr><td colSpan={7} className="py-8 text-center text-[var(--muted)]">加载中…</td></tr>
+                <tr><td colSpan={9} className="py-8 text-center text-[var(--muted)]">加载中…</td></tr>
               )}
               {!loading && tasks.length === 0 && (
-                <tr><td colSpan={7} className="py-8 text-center text-[var(--muted)]">暂无任务记录</td></tr>
+                <tr><td colSpan={9} className="py-8 text-center text-[var(--muted)]">暂无任务记录</td></tr>
               )}
               {!loading && tasks.map((task) => (
                 <tr key={task.id} className="bg-[var(--bg)] hover:bg-[var(--bg2)]" data-testid={`admin-crawler-task-${task.id}`}>
+                  <td className="px-4 py-3 text-xs text-[var(--muted)]">
+                    {getRunId(task) ? (
+                      <button
+                        type="button"
+                        className="rounded bg-[var(--bg3)] px-2 py-1 text-left hover:text-[var(--text)]"
+                        onClick={() => {
+                          const runId = getRunId(task)
+                          if (runId) {
+                            setRunIdFilterInput(runId)
+                            setRunIdFilter(runId)
+                            setPage(1)
+                          }
+                        }}
+                        data-testid={`admin-crawler-runid-pill-${task.id}`}
+                      >
+                        {getRunId(task)!.slice(0, 8)}
+                      </button>
+                    ) : '—'}
+                  </td>
                   <td className="px-4 py-3 text-[var(--text)]">{task.type}</td>
+                  <td className="max-w-xs truncate px-4 py-3 text-xs text-[var(--muted)]">{getSiteKey(task)}</td>
                   <td className="px-4 py-3"><TriggerBadge triggerType={task.triggerType} /></td>
                   <td className="px-4 py-3"><StatusBadge status={task.status} /></td>
                   <td className="px-4 py-3 text-[var(--muted)] text-xs">
-                    {task.started_at ? new Date(task.started_at).toLocaleString() : '—'}
+                    {parseTime(task.startedAt ?? task.started_at ?? task.scheduledAt)}
                   </td>
                   <td className="px-4 py-3 text-[var(--muted)] text-xs">
-                    {task.finished_at ? new Date(task.finished_at).toLocaleString() : '—'}
+                    {parseTime(task.finishedAt ?? task.finished_at)}
                   </td>
                   <td className="max-w-xs truncate px-4 py-3 text-xs text-red-400">
-                    {task.error ?? '—'}
+                    {getErrorMessage(task)}
                   </td>
                   <td className="px-4 py-3">
                     <button
