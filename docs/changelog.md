@@ -1135,3 +1135,15 @@
 - **注意事项**：
   - 本次仅 shared 抽离，不改动数据结构、字段、API 调用顺序、异步流程、权限逻辑
   - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
+
+## [CHG-71] Phase1：抽离 useAdminToast
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 23:22
+- **修改文件**：
+  - `src/components/admin/shared/feedback/useAdminToast.ts` — 新建 shared toast hook，统一状态管理、覆盖计时与卸载清理
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx` — 接入 `useAdminToast`，移除内联 toast 状态与 setTimeout
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅 shared 抽离，不改动提示文案、触发时机、异步流程与权限逻辑
+  - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`

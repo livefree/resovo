@@ -5,9 +5,10 @@
 
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
 import type { CrawlerSite, CreateCrawlerSiteInput, UpdateCrawlerSiteInput, CrawlerSiteBatchAction } from '@/types'
+import { useAdminToast } from '@/components/admin/shared/feedback/useAdminToast'
 import { useCrawlerSiteColumns } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns'
 import { useCrawlerSiteSelection } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteSelection'
 import { useCrawlerSites } from '@/components/admin/system/crawler-site/hooks/useCrawlerSites'
@@ -38,7 +39,7 @@ export function CrawlerSiteManager() {
   const [validateStates, setValidateStates] = useState<Record<string, ValidateStatus>>({})
   const [rowSaving, setRowSaving] = useState<Record<string, boolean>>({})
   const [crawlTriggering, setCrawlTriggering] = useState<Record<string, boolean>>({})
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+  const { toast, showToast } = useAdminToast({ durationMs: 3500 })
   const {
     sortBy,
     sortDir,
@@ -58,11 +59,6 @@ export function CrawlerSiteManager() {
     requiredColumns,
   } = useCrawlerSiteColumns()
   const { sites, loading, fetchSites } = useCrawlerSites()
-
-  const showToast = (msg: string, ok: boolean) => {
-    setToast({ msg, ok })
-    setTimeout(() => setToast(null), 3500)
-  }
 
   const displaySites = useMemo(() => {
     const keyOrName = filters.keyOrName.trim().toLowerCase()

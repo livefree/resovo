@@ -3103,3 +3103,29 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测 5/5 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-71 Phase1：抽离 useAdminToast
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 12:24
+- **计划开始时间**：2026-03-20 13:40
+- **实际开始时间**：2026-03-19 23:21
+- **完成时间**：2026-03-19 23:22
+- **问题**：多个 admin 模块重复维护 toast 状态与自动消失计时逻辑。
+- **影响的已完成任务**：CHG-70
+- **文件范围**：
+  - `src/components/admin/shared/feedback/useAdminToast.ts`（新增）
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+- **修复内容**：
+  - 新增 `useAdminToast`，统一封装 toast 状态、覆盖式计时和卸载清理。
+  - `CrawlerSiteManager` 删除内联 toast 逻辑，改为消费 shared hook（保持 3500ms 时序）。
+  - 提示文案、触发位置与业务流程保持不变。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_
