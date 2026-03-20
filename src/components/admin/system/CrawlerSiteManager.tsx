@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
 import type { CrawlerSite, CreateCrawlerSiteInput, UpdateCrawlerSiteInput, CrawlerSiteBatchAction } from '@/types'
 
@@ -88,6 +88,34 @@ const COLUMN_META: Array<{ id: ColumnId; label: string }> = [
   { id: 'manageOps', label: '管理操作' },
 ]
 const REQUIRED_COLUMNS: ColumnId[] = ['name', 'manageOps']
+
+function readPersistedState() {
+  const defaults = {
+    sortBy: 'weight' as SortField,
+    sortDir: 'desc' as SortDir,
+    filters: DEFAULT_FILTERS,
+    columns: DEFAULT_COLUMNS,
+  }
+  if (typeof window === 'undefined') return defaults
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY)
+    if (!raw) return defaults
+    const parsed = JSON.parse(raw) as {
+      sortBy?: SortField
+      sortDir?: SortDir
+      filters?: Partial<FilterState>
+      columns?: Partial<ColumnVisibility>
+    }
+    return {
+      sortBy: parsed.sortBy ?? defaults.sortBy,
+      sortDir: parsed.sortDir ?? defaults.sortDir,
+      filters: { ...defaults.filters, ...(parsed.filters ?? {}) },
+      columns: { ...defaults.columns, ...(parsed.columns ?? {}) },
+    }
+  } catch {
+    return defaults
+  }
+}
 
 // ── 子组件 ────────────────────────────────────────────────────
 
@@ -275,7 +303,7 @@ function SiteForm({
 // ── 主组件 ────────────────────────────────────────────────────
 
 export function CrawlerSiteManager() {
-  const storageReadyRef = useRef(false)
+  const [initialState] = useState(readPersistedState)
   const [sites, setSites] = useState<CrawlerSite[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -285,10 +313,10 @@ export function CrawlerSiteManager() {
   const [rowSaving, setRowSaving] = useState<Record<string, boolean>>({})
   const [crawlTriggering, setCrawlTriggering] = useState<Record<string, boolean>>({})
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
-  const [sortBy, setSortBy] = useState<SortField>('weight')
-  const [sortDir, setSortDir] = useState<SortDir>('desc')
-  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
-  const [columns, setColumns] = useState<ColumnVisibility>(DEFAULT_COLUMNS)
+  const [sortBy, setSortBy] = useState<SortField>(initialState.sortBy)
+  const [sortDir, setSortDir] = useState<SortDir>(initialState.sortDir)
+  const [filters, setFilters] = useState<FilterState>(initialState.filters)
+  const [columns, setColumns] = useState<ColumnVisibility>(initialState.columns)
   const [showColumnsPanel, setShowColumnsPanel] = useState(false)
 
   const showToast = (msg: string, ok: boolean) => {
@@ -311,30 +339,6 @@ export function CrawlerSiteManager() {
   useEffect(() => { fetchSites() }, [fetchSites])
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw) as {
-          sortBy?: SortField
-          sortDir?: SortDir
-          filters?: Partial<FilterState>
-          columns?: Partial<ColumnVisibility>
-        }
-        if (parsed.sortBy) setSortBy(parsed.sortBy)
-        if (parsed.sortDir) setSortDir(parsed.sortDir)
-        if (parsed.filters) setFilters((prev) => ({ ...prev, ...parsed.filters }))
-        if (parsed.columns) setColumns((prev) => ({ ...prev, ...parsed.columns }))
-      }
-    } catch {
-      // 忽略损坏缓存
-    } finally {
-      // 仅在恢复完成后允许写入，避免初始默认值覆盖已有偏好
-      storageReadyRef.current = true
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!storageReadyRef.current) return
     try {
       localStorage.setItem(
         STORAGE_KEY,
@@ -397,12 +401,6 @@ export function CrawlerSiteManager() {
     }
     setSortBy(field)
     setSortDir('asc')
-  }
-
-  function clearFiltersAndSort() {
-    setFilters(DEFAULT_FILTERS)
-    setSortBy('weight')
-    setSortDir('desc')
   }
 
   function toggleColumn(columnId: ColumnId) {
@@ -788,13 +786,6 @@ export function CrawlerSiteManager() {
             <button onClick={() => handleBatch('delete')} className="rounded-md px-3 py-2 text-xs border border-red-500/30 text-red-400 hover:bg-red-500/10">批量删除</button>
           </>
         )}
-        <button
-          type="button"
-          onClick={clearFiltersAndSort}
-          className="rounded-md border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] hover:bg-[var(--bg3)]"
-        >
-          清空筛选
-        </button>
         {toast && (
           <span className={`ml-auto text-sm ${toast.ok ? 'text-green-500' : 'text-red-500'}`}>{toast.msg}</span>
         )}

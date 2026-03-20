@@ -2540,3 +2540,29 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测 4/4 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-50 状态记忆二次修复（初始化恢复）+ 删除“清空筛选”按钮
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-19 17:10
+- **计划开始时间**：2026-03-19 17:11
+- **实际开始时间**：2026-03-19 17:12
+- **完成时间**：2026-03-19 17:14
+- **问题**：CHG-49 后仍出现离页状态丢失，说明状态恢复仍存在初始化覆盖窗口；同时需要移除“清空筛选”按钮。
+- **影响的已完成任务**：CHG-49
+- **文件范围**：
+  - `src/components/admin/system/CrawlerSiteManager.tsx`
+  - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+- **修复内容**：
+  - 持久化改为“useState 懒初始化直接读取 localStorage”，不再依赖挂载后异步恢复。
+  - 移除恢复门闩方案，避免恢复前写入窗口导致覆盖。
+  - 删除操作栏中的“清空筛选”按钮。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 4/4 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_
