@@ -1016,3 +1016,14 @@
 - **数据库变更**：无
 - **注意事项**：
   - 本次仅结构拆分，不改动操作栏可见行为
+
+## [CHG-61] v1.2 T1-2：抽离 CrawlerSiteFilters 组件
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 10:55
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteFilters.tsx` — 新建，承载筛选行渲染与筛选输入绑定
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx` — 改为组合 `CrawlerSiteFilters`，移除内联筛选行
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅做结构重排，筛选交互与持久化行为保持不变

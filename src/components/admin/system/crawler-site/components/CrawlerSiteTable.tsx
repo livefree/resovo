@@ -7,6 +7,7 @@ import type {
   SortDir,
   SortField,
 } from "@/components/admin/system/crawler-site/tableState"
+import { CrawlerSiteFilters } from "@/components/admin/system/crawler-site/components/CrawlerSiteFilters"
 
 type ValidateStatus = "idle" | "checking" | "ok" | "error" | "timeout"
 
@@ -135,59 +136,7 @@ export function CrawlerSiteTable({
                 <span data-testid="resize-handle-manageOps" onMouseDown={(e) => { e.stopPropagation(); startResize("manageOps", e.clientX) }} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-[var(--border)]" />
               </th>
             </tr>
-            <tr className="sticky top-[45px] z-10 border-b border-[var(--border)] bg-[var(--bg2)] align-top">
-              <th className="px-2 py-2" />
-              <th className={`${colClass("name")} px-2 py-2`}>
-                <input value={filters.keyOrName} onChange={(e) => setFilters((prev) => ({ ...prev, keyOrName: e.target.value }))} placeholder="筛选 名称 / key" className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]" />
-              </th>
-              <th className={`${colClass("apiUrl")} px-2 py-2`}>
-                <input value={filters.apiUrl} onChange={(e) => setFilters((prev) => ({ ...prev, apiUrl: e.target.value }))} placeholder="筛选 API 地址" className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]" />
-              </th>
-              <th className={`${colClass("sourceType")} px-2 py-2`}>
-                <select value={filters.sourceType} onChange={(e) => setFilters((prev) => ({ ...prev, sourceType: e.target.value as typeof prev.sourceType }))} className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]">
-                  <option value="all">全部</option>
-                  <option value="vod">长片</option>
-                  <option value="shortdrama">短剧</option>
-                </select>
-              </th>
-              <th className={`${colClass("format")} px-2 py-2`}>
-                <select value={filters.format} onChange={(e) => setFilters((prev) => ({ ...prev, format: e.target.value as typeof prev.format }))} className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]">
-                  <option value="all">全部</option>
-                  <option value="json">JSON</option>
-                  <option value="xml">XML</option>
-                </select>
-              </th>
-              <th className={`${colClass("weight")} px-2 py-2`}>
-                <div className="flex gap-1">
-                  <input value={filters.weightMin} onChange={(e) => setFilters((prev) => ({ ...prev, weightMin: e.target.value }))} placeholder="最小" className="w-16 rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-1 text-xs text-[var(--text)]" />
-                  <input value={filters.weightMax} onChange={(e) => setFilters((prev) => ({ ...prev, weightMax: e.target.value }))} placeholder="最大" className="w-16 rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-1 text-xs text-[var(--text)]" />
-                </div>
-              </th>
-              <th className={`${colClass("isAdult")} px-2 py-2`}>
-                <select value={filters.isAdult} onChange={(e) => setFilters((prev) => ({ ...prev, isAdult: e.target.value as typeof prev.isAdult }))} className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]">
-                  <option value="all">全部</option>
-                  <option value="yes">是</option>
-                  <option value="no">否</option>
-                </select>
-              </th>
-              <th className={`${colClass("fromConfig")} px-2 py-2`}>
-                <select value={filters.fromConfig} onChange={(e) => setFilters((prev) => ({ ...prev, fromConfig: e.target.value as typeof prev.fromConfig }))} className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]">
-                  <option value="all">全部</option>
-                  <option value="config">配置</option>
-                  <option value="manual">手工</option>
-                </select>
-              </th>
-              <th className={`${colClass("disabled")} px-2 py-2`}>
-                <select value={filters.disabled} onChange={(e) => setFilters((prev) => ({ ...prev, disabled: e.target.value as typeof prev.disabled }))} className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]">
-                  <option value="all">全部</option>
-                  <option value="enabled">运行中</option>
-                  <option value="disabled">停用</option>
-                </select>
-              </th>
-              <th className={`${colClass("lastCrawl")} px-2 py-2`} />
-              <th className={`${colClass("crawlOps")} px-2 py-2`} />
-              <th className={`${colClass("manageOps")} px-2 py-2`} />
-            </tr>
+            <CrawlerSiteFilters filters={filters} colClass={colClass} setFilters={setFilters} />
           </thead>
           <tbody>
             {displaySites.length === 0 && (

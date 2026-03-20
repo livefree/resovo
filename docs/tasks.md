@@ -2835,18 +2835,44 @@ _（任务 review 通过后移入此处）_
 
 #### CHG-61 v1.2 T1-2：抽离 CrawlerSiteFilters 组件
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-20 10:30
 - **计划开始时间**：2026-03-20 11:00
 - **实际开始时间**：2026-03-20 10:45
-- **完成时间**：
+- **完成时间**：2026-03-20 10:55
 - **问题**：筛选区仍位于 `CrawlerSiteTable` 内部，难以单独演进和复用。
 - **影响的已完成任务**：CHG-60
 - **文件范围**：
   - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`
   - `src/components/admin/system/crawler-site/components/CrawlerSiteFilters.tsx`
 - **修复内容**：
-  - 进行中：将筛选行渲染抽离为 `CrawlerSiteFilters`，表格组件仅保留组装职责。
+  - 新建 `CrawlerSiteFilters`，承载筛选行渲染与筛选字段绑定。
+  - `CrawlerSiteTable` 删除内联筛选行 JSX，改为组合式渲染。
+  - 行为保持不变：筛选输入联动与筛选状态持久化路径保持一致。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-62 v1.2 T1-3：抽离 CrawlerSiteFormDialog 组件
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-03-20 10:30
+- **计划开始时间**：2026-03-20 11:30
+- **实际开始时间**：2026-03-20 10:55
+- **完成时间**：
+- **问题**：新增/编辑弹窗表单仍在 `CrawlerSiteManager`，容器与表单细节耦合较高。
+- **影响的已完成任务**：CHG-61
+- **文件范围**：
+  - `src/components/admin/system/CrawlerSiteManager.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteFormDialog.tsx`
+- **修复内容**：
+  - 进行中：将新增/编辑表单弹窗抽离为 `CrawlerSiteFormDialog`，主组件仅保留提交回调。
 - **测试要求**：
   - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
   - `npm run typecheck`
