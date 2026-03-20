@@ -1293,3 +1293,15 @@
 - **注意事项**：
   - 本次为设计系统 modal/form 规范代码化，不改动业务字段与提交逻辑
   - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
+
+## [CHG-83] Phase3：落地 AdminTable 规范
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 01:29
+- **修改文件**：
+  - `src/components/admin/videos/VideoTable.tsx` — 接入 `AdminTableFrame` 与 `AdminTableState`，统一表格壳与 loading/empty 状态行
+  - `src/components/admin/sources/SourceTable.tsx` — 接入 `AdminTableFrame` 与 `AdminTableState`，统一表格壳与 loading/empty 状态行
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次为 design system table 规范落地，不改动数据结构、字段、API 调用顺序、异步流程与权限逻辑
+  - 已通过：`npm run test:run -- tests/unit/components/admin/videos/VideoFilters.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`

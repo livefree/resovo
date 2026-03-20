@@ -3431,3 +3431,30 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测 5/5 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-83 Phase3：落地 AdminTable 规范
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 12:24
+- **计划开始时间**：2026-03-22 11:30
+- **实际开始时间**：2026-03-20 01:26
+- **完成时间**：2026-03-20 01:29
+- **问题**：表格规范虽已在 crawler-site 落地，但 videos/sources 仍有重复壳层实现，设计系统 table 规范未形成跨模块统一。
+- **影响的已完成任务**：CHG-82
+- **文件范围**：
+  - `src/components/admin/videos/VideoTable.tsx`
+  - `src/components/admin/sources/SourceTable.tsx`
+- **修复内容**：
+  - `VideoTable` 切换到 `AdminTableFrame + AdminTableState`，统一 loading/empty 行渲染口径。
+  - `SourceTable` 切换到 `AdminTableFrame + AdminTableState`，统一表格壳与状态行语义。
+  - 保持字段、API 路径、请求顺序、权限逻辑和分页/批量行为不变。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/videos/VideoFilters.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 10/10 通过；typecheck/lint 通过。
+  - 满足“至少 2 模块完成 AdminTable 规范接入”的阶段目标。
+- **问题说明**：_（无）_

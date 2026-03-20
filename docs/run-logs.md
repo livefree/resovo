@@ -386,3 +386,11 @@
 - **内容**：完成 admin modal 与 form actions 的 shared 规范代码化并在 crawler-site 首批接入。
 - **处理动作**：新增 AdminModal 与 AdminFormActions，替换 CrawlerSiteFormDialog 组合结构；回归验证通过。
 - **后续**：进入 CHG-83，落地 AdminTable 规范到多模块。
+
+## [LOG-20260320-0129-01] CHG-83 AdminTable 规范跨模块落地完成
+- **时间**：2026-03-20 01:29
+- **类型**：INFO
+- **关联任务**：CHG-83
+- **内容**：完成 AdminTable 规范在 `videos`、`sources` 两个模块的接入，满足 Phase3 复用验收基线。
+- **处理动作**：`VideoTable` 与 `SourceTable` 接入 `AdminTableFrame + AdminTableState`；执行定向单测、typecheck、lint 均通过。
+- **后续**：进入 CHG-84，落地交互规则代码门禁。

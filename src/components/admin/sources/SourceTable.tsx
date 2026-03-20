@@ -11,6 +11,8 @@ import { StatusBadge } from '@/components/admin/StatusBadge'
 import { Pagination } from '@/components/admin/Pagination'
 import { SourceVerifyButton } from '@/components/admin/sources/SourceVerifyButton'
 import { BatchDeleteBar } from '@/components/admin/sources/BatchDeleteBar'
+import { AdminTableState } from '@/components/admin/shared/feedback/AdminTableState'
+import { AdminTableFrame } from '@/components/admin/shared/table/AdminTableFrame'
 import { AdminToolbar } from '@/components/admin/shared/toolbar/AdminToolbar'
 
 const PAGE_SIZE = 20
@@ -113,93 +115,82 @@ export function SourceTable() {
       />
 
       {/* 表格 */}
-      <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
-        <table className="w-full text-sm">
-          <thead className="bg-[var(--bg2)] text-[var(--muted)]">
-            <tr>
-              <th className="px-4 py-3">
+      <AdminTableFrame minWidth={860}>
+        <thead className="bg-[var(--bg2)] text-[var(--muted)]">
+          <tr>
+            <th className="px-4 py-3">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={(e) => handleSelectAll(e.target.checked)}
+                className="accent-[var(--accent)]"
+                data-testid="source-select-all"
+              />
+            </th>
+            <th className="px-4 py-3 text-left">视频标题</th>
+            <th className="px-4 py-3 text-left">源 URL</th>
+            <th className="px-4 py-3 text-left">状态</th>
+            <th className="px-4 py-3 text-left">最后验证</th>
+            <th className="px-4 py-3 text-left">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <AdminTableState isLoading={loading} isEmpty={!loading && sources.length === 0} colSpan={6} emptyText="暂无数据" />
+          {!loading && sources.map((row) => (
+            <tr
+              key={row.id}
+              className="bg-[var(--bg)] hover:bg-[var(--bg2)]"
+              style={{ borderBottom: '1px solid var(--subtle, var(--border))' }}
+              data-testid={`source-row-${row.id}`}
+            >
+              <td className="px-4 py-3">
                 <input
                   type="checkbox"
-                  checked={allSelected}
-                  onChange={(e) => handleSelectAll(e.target.checked)}
+                  checked={selectedIds.includes(row.id)}
+                  onChange={(e) => handleCheck(row.id, e.target.checked)}
                   className="accent-[var(--accent)]"
-                  data-testid="source-select-all"
+                  data-testid={`source-checkbox-${row.id}`}
                 />
-              </th>
-              <th className="px-4 py-3 text-left">视频标题</th>
-              <th className="px-4 py-3 text-left">源 URL</th>
-              <th className="px-4 py-3 text-left">状态</th>
-              <th className="px-4 py-3 text-left">最后验证</th>
-              <th className="px-4 py-3 text-left">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr>
-                <td colSpan={6} className="py-8 text-center text-[var(--muted)]">加载中…</td>
-              </tr>
-            )}
-            {!loading && sources.length === 0 && (
-              <tr>
-                <td colSpan={6} className="py-8 text-center text-[var(--muted)]">暂无数据</td>
-              </tr>
-            )}
-            {!loading && sources.map((row) => (
-              <tr
-                key={row.id}
-                className="bg-[var(--bg)] hover:bg-[var(--bg2)]"
-                style={{ borderBottom: '1px solid var(--subtle, var(--border))' }}
-                data-testid={`source-row-${row.id}`}
-              >
-                <td className="px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(row.id)}
-                    onChange={(e) => handleCheck(row.id, e.target.checked)}
-                    className="accent-[var(--accent)]"
-                    data-testid={`source-checkbox-${row.id}`}
+              </td>
+              <td className="px-4 py-3 text-[var(--text)]">
+                {row.video_title ?? '—'}
+              </td>
+              <td className="px-4 py-3">
+                <span
+                  title={row.source_url}
+                  className="font-mono text-xs text-[var(--muted)]"
+                  data-testid={`source-url-${row.id}`}
+                >
+                  {truncateUrl(row.source_url)}
+                </span>
+              </td>
+              <td className="px-4 py-3">
+                <StatusBadge status={row.is_active ? 'active' : 'inactive'} />
+              </td>
+              <td className="px-4 py-3 text-xs text-[var(--muted)]">
+                {row.last_checked
+                  ? new Date(row.last_checked).toLocaleString()
+                  : '—'}
+              </td>
+              <td className="px-4 py-3">
+                <div className="flex flex-wrap items-center gap-1">
+                  <SourceVerifyButton
+                    sourceId={row.id}
+                    onVerified={() => fetchSources(page, status)}
                   />
-                </td>
-                <td className="px-4 py-3 text-[var(--text)]">
-                  {row.video_title ?? '—'}
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    title={row.source_url}
-                    className="font-mono text-xs text-[var(--muted)]"
-                    data-testid={`source-url-${row.id}`}
+                  <button
+                    onClick={() => handleDelete(row.id)}
+                    className="rounded px-2 py-0.5 text-xs bg-red-900/30 text-red-400 hover:bg-red-900/60"
+                    data-testid={`source-delete-btn-${row.id}`}
                   >
-                    {truncateUrl(row.source_url)}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={row.is_active ? 'active' : 'inactive'} />
-                </td>
-                <td className="px-4 py-3 text-xs text-[var(--muted)]">
-                  {row.last_checked
-                    ? new Date(row.last_checked).toLocaleString()
-                    : '—'}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap items-center gap-1">
-                    <SourceVerifyButton
-                      sourceId={row.id}
-                      onVerified={() => fetchSources(page, status)}
-                    />
-                    <button
-                      onClick={() => handleDelete(row.id)}
-                      className="rounded px-2 py-0.5 text-xs bg-red-900/30 text-red-400 hover:bg-red-900/60"
-                      data-testid={`source-delete-btn-${row.id}`}
-                    >
-                      删除
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                    删除
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </AdminTableFrame>
 
       {total > PAGE_SIZE && (
         <div className="mt-4">

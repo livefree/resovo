@@ -14,6 +14,8 @@ import { apiClient } from '@/lib/api-client'
 import { StatusBadge } from '@/components/admin/StatusBadge'
 import { Pagination } from '@/components/admin/Pagination'
 import { BatchPublishBar } from '@/components/admin/videos/BatchPublishBar'
+import { AdminTableFrame } from '@/components/admin/shared/table/AdminTableFrame'
+import { AdminTableState } from '@/components/admin/shared/feedback/AdminTableState'
 import type { BadgeStatus } from '@/components/admin/StatusBadge'
 
 const PAGE_SIZE = 20
@@ -191,56 +193,41 @@ export function VideoTable() {
 
   return (
     <div data-testid="video-table">
-      <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
-        <table className="w-full text-sm">
-          <thead className="bg-[var(--bg2)] text-[var(--muted)]">
-            <tr>
-              <th className="px-4 py-3">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={(e) => handleSelectAll(e.target.checked)}
-                  className="accent-[var(--accent)]"
-                  data-testid="video-select-all"
-                />
-              </th>
-              <th className="px-4 py-3 text-left">封面</th>
-              <th className="px-4 py-3 text-left">标题</th>
-              <th className="px-4 py-3 text-left">类型</th>
-              <th className="px-4 py-3 text-left">年份</th>
-              <th className="px-4 py-3 text-left">状态</th>
-              <th className="px-4 py-3 text-left">播放源</th>
-              <th className="px-4 py-3 text-left">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr>
-                <td colSpan={8} className="py-8 text-center text-[var(--muted)]">
-                  加载中…
-                </td>
-              </tr>
-            )}
-            {!loading && videos.length === 0 && (
-              <tr>
-                <td colSpan={8} className="py-8 text-center text-[var(--muted)]">
-                  暂无数据
-                </td>
-              </tr>
-            )}
-            {!loading &&
-              videos.map((row) => (
-                <VideoRow
-                  key={row.id}
-                  row={row}
-                  checked={selectedIds.includes(row.id)}
-                  onCheck={handleCheck}
-                  onRefresh={() => fetchVideos(page)}
-                />
-              ))}
-          </tbody>
-        </table>
-      </div>
+      <AdminTableFrame minWidth={980}>
+        <thead className="bg-[var(--bg2)] text-[var(--muted)]">
+          <tr>
+            <th className="px-4 py-3">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={(e) => handleSelectAll(e.target.checked)}
+                className="accent-[var(--accent)]"
+                data-testid="video-select-all"
+              />
+            </th>
+            <th className="px-4 py-3 text-left">封面</th>
+            <th className="px-4 py-3 text-left">标题</th>
+            <th className="px-4 py-3 text-left">类型</th>
+            <th className="px-4 py-3 text-left">年份</th>
+            <th className="px-4 py-3 text-left">状态</th>
+            <th className="px-4 py-3 text-left">播放源</th>
+            <th className="px-4 py-3 text-left">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <AdminTableState isLoading={loading} isEmpty={!loading && videos.length === 0} colSpan={8} emptyText="暂无数据" />
+          {!loading &&
+            videos.map((row) => (
+              <VideoRow
+                key={row.id}
+                row={row}
+                checked={selectedIds.includes(row.id)}
+                onCheck={handleCheck}
+                onRefresh={() => fetchVideos(page)}
+              />
+            ))}
+        </tbody>
+      </AdminTableFrame>
 
       {total > PAGE_SIZE && (
         <div className="mt-4">
