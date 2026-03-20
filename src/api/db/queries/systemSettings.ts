@@ -4,7 +4,7 @@
  */
 
 import type { Pool } from 'pg'
-import type { SystemSettingKey, SiteSettings } from '@/types'
+import type { AutoCrawlConfig, AutoCrawlSiteOverride, SystemSettingKey, SiteSettings } from '@/types'
 
 interface DbRow {
   key: SystemSettingKey
@@ -93,4 +93,71 @@ export function deserializeSiteSettings(raw: Record<string, string>): SiteSettin
     autoCrawlRecentOnly:   raw.auto_crawl_recent_only === 'true',
     autoCrawlRecentDays:   Number(raw.auto_crawl_recent_days ?? 30),
   }
+}
+
+function parseDailyTime(input: string | undefined): string {
+  const value = (input ?? '').trim()
+  if (!/^\d{2}:\d{2}$/.test(value)) return '03:00'
+  const [h, m] = value.split(':').map(Number)
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return '03:00'
+  if (h < 0 || h > 23 || m < 0 || m > 59) return '03:00'
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+function parsePerSiteOverrides(input: string | undefined): Record<string, AutoCrawlSiteOverride> {
+  if (!input) return {}
+  try {
+    const parsed = JSON.parse(input) as Record<string, { enabled?: unknown; mode?: unknown }>
+    const result: Record<string, AutoCrawlSiteOverride> = {}
+    for (const [siteKey, override] of Object.entries(parsed ?? {})) {
+      if (!siteKey) continue
+      const enabled = override?.enabled === true
+      const mode = override?.mode === 'full' || override?.mode === 'incremental' ? override.mode : 'inherit'
+      result[siteKey] = { enabled, mode }
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
+export function deserializeAutoCrawlConfig(raw: Record<string, string>): AutoCrawlConfig {
+  const legacyRecentOnly = raw.auto_crawl_recent_only !== 'false'
+  const defaultMode = raw.auto_crawl_default_mode === 'full' || raw.auto_crawl_default_mode === 'incremental'
+    ? raw.auto_crawl_default_mode
+    : (legacyRecentOnly ? 'incremental' : 'full')
+
+  const conflictPolicy = raw.auto_crawl_conflict_policy === 'queue_after_running'
+    ? 'queue_after_running'
+    : 'skip_running'
+
+  return {
+    globalEnabled: raw.auto_crawl_enabled === 'true',
+    scheduleType: 'daily',
+    dailyTime: parseDailyTime(raw.auto_crawl_daily_time),
+    defaultMode,
+    onlyEnabledSites: raw.auto_crawl_only_enabled_sites !== 'false',
+    conflictPolicy,
+    perSiteOverrides: parsePerSiteOverrides(raw.auto_crawl_per_site_overrides),
+  }
+}
+
+export async function getAutoCrawlConfig(db: Pool): Promise<AutoCrawlConfig> {
+  const raw = await getAllSettings(db)
+  return deserializeAutoCrawlConfig(raw)
+}
+
+export async function setAutoCrawlConfig(db: Pool, config: AutoCrawlConfig): Promise<void> {
+  const pairs: Partial<Record<SystemSettingKey, string>> = {
+    auto_crawl_enabled: String(config.globalEnabled),
+    auto_crawl_schedule_type: 'daily',
+    auto_crawl_daily_time: parseDailyTime(config.dailyTime),
+    auto_crawl_default_mode: config.defaultMode,
+    auto_crawl_only_enabled_sites: String(config.onlyEnabledSites),
+    auto_crawl_conflict_policy: config.conflictPolicy,
+    auto_crawl_per_site_overrides: JSON.stringify(config.perSiteOverrides ?? {}),
+    // 兼容旧逻辑，直到 scheduler/run 全量切换完成
+    auto_crawl_recent_only: String(config.defaultMode !== 'full'),
+  }
+  await setManySettings(db, pairs)
 }

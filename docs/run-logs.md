@@ -506,3 +506,11 @@
 - **内容**：完成采集控制台命名迁移、旧入口兼容提示、自动采集配置入口单点化收口。
 - **处理动作**：新增方案文档；导航/页面/Tab 改名为“采集控制台”；任务记录与站点配置页移除自动采集编辑入口并改为只读跳转提示。
 - **后续**：进入 Phase B，落地统一自动采集配置模型（global/per-site/schedule/conflictPolicy）。
+
+## [LOG-20260320-1615-01] CHG-100 统一自动采集配置模型落地完成
+- **时间**：2026-03-20 16:15
+- **类型**：INFO
+- **关联任务**：CHG-100
+- **内容**：完成自动采集配置统一化：控制台新增配置面板，后端新增统一配置 API，scheduler 与 run service 改读统一配置源。
+- **处理动作**：新增 `AutoCrawlConfig` 类型与系统配置键；新增 `GET/POST /admin/crawler/auto-config`；控制台接入 `AutoCrawlSettingsPanel`；scheduler 切换为 dailyTime 命中触发并按日去重。
+- **后续**：进入 Phase C，按模块补强“自动采集状态”在列表与任务记录间的联动可视化。

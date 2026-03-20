@@ -18,6 +18,13 @@ export type SystemSettingKey =
   | 'auto_crawl_max_per_run'
   | 'auto_crawl_recent_only'
   | 'auto_crawl_recent_days'
+  | 'auto_crawl_schedule_type'
+  | 'auto_crawl_daily_time'
+  | 'auto_crawl_default_mode'
+  | 'auto_crawl_only_enabled_sites'
+  | 'auto_crawl_conflict_policy'
+  | 'auto_crawl_per_site_overrides'
+  | 'auto_crawl_last_trigger_date'
   | 'config_file'
   | 'config_file_url'
 
@@ -41,6 +48,24 @@ export interface SiteSettings {
   autoCrawlMaxPerRun: number
   autoCrawlRecentOnly: boolean
   autoCrawlRecentDays: number
+}
+
+export type AutoCrawlMode = 'incremental' | 'full'
+export type AutoCrawlConflictPolicy = 'skip_running' | 'queue_after_running'
+
+export interface AutoCrawlSiteOverride {
+  enabled: boolean
+  mode: 'inherit' | AutoCrawlMode
+}
+
+export interface AutoCrawlConfig {
+  globalEnabled: boolean
+  scheduleType: 'daily'
+  dailyTime: string
+  defaultMode: AutoCrawlMode
+  onlyEnabledSites: boolean
+  conflictPolicy: AutoCrawlConflictPolicy
+  perSiteOverrides: Record<string, AutoCrawlSiteOverride>
 }
 
 // ── 爬虫源站 ──────────────────────────────────────────────────

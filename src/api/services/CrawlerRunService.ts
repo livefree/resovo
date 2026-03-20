@@ -5,6 +5,7 @@ import * as crawlerRunsQueries from '@/api/db/queries/crawlerRuns'
 import { createCrawlerTaskLog } from '@/api/db/queries/crawlerTaskLogs'
 import { ensureCrawlerQueueReady } from '@/api/lib/queue'
 import { enqueueFullCrawl, enqueueIncrementalCrawl } from '@/api/workers/crawlerWorker'
+import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 
 type TriggerType = 'single' | 'batch' | 'all' | 'schedule'
 type Mode = 'incremental' | 'full'
@@ -39,9 +40,18 @@ export class CrawlerRunService {
 
     await ensureCrawlerQueueReady()
 
+    const autoConfig = input.triggerType === 'schedule'
+      ? await systemSettingsQueries.getAutoCrawlConfig(this.db)
+      : null
+
     let targetSiteKeys: string[] = []
-    if (input.triggerType === 'all' || input.triggerType === 'schedule') {
+    if (input.triggerType === 'all') {
       const sites = await crawlerSitesQueries.listEnabledCrawlerSites(this.db)
+      targetSiteKeys = sites.map((s) => s.key)
+    } else if (input.triggerType === 'schedule') {
+      const sites = autoConfig?.onlyEnabledSites
+        ? await crawlerSitesQueries.listEnabledCrawlerSites(this.db)
+        : await crawlerSitesQueries.listCrawlerSites(this.db)
       targetSiteKeys = sites.map((s) => s.key)
     } else {
       targetSiteKeys = Array.from(new Set((input.siteKeys ?? []).map((s) => s.trim()).filter(Boolean)))
@@ -63,19 +73,35 @@ export class CrawlerRunService {
 
     for (const siteKey of targetSiteKeys) {
       const site = await crawlerSitesQueries.findCrawlerSite(this.db, siteKey)
-      if (!site || site.disabled) {
+      if (!site) {
+        skippedSiteKeys.push(siteKey)
+        continue
+      }
+
+      const siteOverride = autoConfig?.perSiteOverrides?.[siteKey]
+      if (input.triggerType === 'schedule' && siteOverride && !siteOverride.enabled) {
+        skippedSiteKeys.push(siteKey)
+        continue
+      }
+
+      if (site.disabled && (input.triggerType !== 'schedule' || autoConfig?.onlyEnabledSites !== false)) {
         skippedSiteKeys.push(siteKey)
         continue
       }
 
       const active = await crawlerTasksQueries.findActiveTaskBySite(this.db, siteKey)
       if (active) {
+        // NOTE: queue_after_running 当前阶段先保守跳过，避免并发采集冲突。
         skippedSiteKeys.push(siteKey)
         continue
       }
 
+      const taskMode = input.triggerType === 'schedule' && siteOverride && siteOverride.mode !== 'inherit'
+        ? siteOverride.mode
+        : input.mode
+
       const task = await crawlerTasksQueries.createTask(this.db, {
-        type: input.mode === 'full' ? 'full-crawl' : 'incremental-crawl',
+        type: taskMode === 'full' ? 'full-crawl' : 'incremental-crawl',
         sourceSite: siteKey,
         targetUrl: site.apiUrl,
         runId: run.id,
@@ -85,7 +111,7 @@ export class CrawlerRunService {
       taskIds.push(task.id)
 
       try {
-        if (input.mode === 'full') {
+        if (taskMode === 'full') {
           await enqueueFullCrawl(siteKey, task.id, run.id)
         } else {
           await enqueueIncrementalCrawl(siteKey, hoursAgo, task.id, run.id)

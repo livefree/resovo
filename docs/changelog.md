@@ -1524,3 +1524,21 @@
 - **数据库变更**：无
 - **注意事项**：
   - 采集执行链路（run/task/worker）未改动，仍独立于页面生命周期。
+
+## [CHG-100] 统一自动采集配置模型与控制台配置入口（Phase B）
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 16:15
+- **修改文件**：
+  - `src/types/system.types.ts` — 新增 `AutoCrawlConfig`/`AutoCrawlSiteOverride` 类型及扩展 `SystemSettingKey`。
+  - `src/api/db/queries/systemSettings.ts` — 新增自动采集配置反序列化与 `getAutoCrawlConfig/setAutoCrawlConfig`。
+  - `src/api/routes/admin/crawler.ts` — 新增 `GET/POST /admin/crawler/auto-config`。
+  - `src/api/services/CrawlerRunService.ts` — `schedule` 触发读取统一配置并应用 `onlyEnabledSites` 与 `perSiteOverrides`。
+  - `src/api/workers/crawlerScheduler.ts` — 调度改为 minute tick + `dailyTime` 命中触发，按日去重 `auto_crawl_last_trigger_date`。
+  - `src/components/admin/system/crawler-site/components/AutoCrawlSettingsPanel.tsx` — 新增控制台自动采集配置面板。
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx` — 接入自动采集配置面板。
+- **新增依赖**：无
+- **数据库变更**：无（复用 `system_settings` 键值对表）
+- **注意事项**：
+  - 为兼容历史逻辑，保存新配置时仍回写 `auto_crawl_recent_only`。
+  - `conflictPolicy=queue_after_running` 当前阶段为预留选项，执行策略仍保守跳过运行中站点，后续 Phase C 细化。
+  - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run` 全通过（37 files / 476 tests）。

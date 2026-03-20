@@ -17,6 +17,7 @@ import { CrawlerSiteTable } from '@/components/admin/system/crawler-site/compone
 import { CrawlerSiteTopToolbar } from '@/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar'
 import { ActiveFilterChipsBar } from '@/components/admin/system/crawler-site/components/ActiveFilterChipsBar'
 import { CrawlerSiteOverviewStats } from '@/components/admin/system/crawler-site/components/CrawlerSiteOverviewStats'
+import { AutoCrawlSettingsPanel } from '@/components/admin/system/crawler-site/components/AutoCrawlSettingsPanel'
 import { CrawlerRunPanel } from '@/components/admin/system/crawler-site/components/CrawlerRunPanel'
 import {
   CrawlerSiteFormDialog,
@@ -403,6 +404,7 @@ export function CrawlerSiteManager() {
   return (
     <div>
       <CrawlerSiteOverviewStats data={overview} />
+      <AutoCrawlSettingsPanel sites={sites} showToast={showToast} />
       <CrawlerRunPanel
         runs={recentRuns}
         onCancel={(runId) => {

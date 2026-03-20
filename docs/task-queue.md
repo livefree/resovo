@@ -650,3 +650,19 @@
    - 实际开始：2026-03-20 15:58
    - 完成时间：2026-03-20 16:03
    - 验收要点：自动采集编辑入口从“站点配置/任务记录”移出，仅保留控制台与跳转提示
+
+## [SEQ-20260320-17] 采集控制台 Phase B（统一自动采集配置）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 16:06
+- **最后更新时间**：2026-03-20 16:15
+- **目标**：落地统一自动采集配置模型与控制台配置入口，调度与批次服务改读统一配置源
+- **范围**：`src/types/system.types.ts`、`src/api/db/queries/systemSettings.ts`、`src/api/routes/admin/crawler.ts`、`src/api/services/CrawlerRunService.ts`、`src/api/workers/crawlerScheduler.ts`、`src/components/admin/system/crawler-site/*`
+- **依赖**：`CHG-99` 已完成
+
+### 任务列表（按执行顺序）
+1. CHG-100 — 统一自动采集配置模型与 API（状态：✅ 已完成）
+   - 创建时间：2026-03-20 16:06
+   - 计划开始：2026-03-20 16:07
+   - 实际开始：2026-03-20 16:07
+   - 完成时间：2026-03-20 16:15
+   - 验收要点：`/admin/crawler/auto-config` 可读写；控制台可编辑并保存；scheduler/run service 读取统一配置；typecheck/lint/test:run 通过

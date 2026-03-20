@@ -3950,3 +3950,37 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 采集执行链路（run/task/worker）未改动，保持与页面生命周期解耦。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-100 统一自动采集配置模型与控制台配置入口（Phase B）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 16:06
+- **计划开始时间**：2026-03-20 16:07
+- **实际开始时间**：2026-03-20 16:07
+- **完成时间**：2026-03-20 16:15
+- **问题**：自动采集配置虽已完成入口收口，但尚无统一配置模型与专属 API；scheduler/run service 仍依赖旧分散字段。
+- **影响的已完成任务**：CHG-99
+- **文件范围**：
+  - `src/types/system.types.ts`
+  - `src/api/db/queries/systemSettings.ts`
+  - `src/api/routes/admin/crawler.ts`
+  - `src/api/services/CrawlerRunService.ts`
+  - `src/api/workers/crawlerScheduler.ts`
+  - `src/components/admin/system/crawler-site/components/AutoCrawlSettingsPanel.tsx`（新增）
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+- **修复内容**：
+  - 新增统一 `AutoCrawlConfig` 模型与系统配置键（dailyTime/defaultMode/onlyEnabledSites/conflictPolicy/perSiteOverrides）。
+  - 新增 API：`GET/POST /admin/crawler/auto-config`。
+  - 控制台新增 `AutoCrawlSettingsPanel`，支持全局开关、每日时间、默认模式、冲突策略、单站覆盖配置。
+  - scheduler 改为分钟 tick + dailyTime 命中触发，按日去重（`auto_crawl_last_trigger_date`）。
+  - run service 在 `schedule` 触发时读取统一配置并应用 `onlyEnabledSites`、`perSiteOverrides.mode`。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run`
+- **完成备注**：
+  - 兼容旧字段：保存新配置时仍回写 `auto_crawl_recent_only` 供遗留逻辑使用。
+  - 全量测试通过（37 files / 476 tests）。
+- **问题说明**：_（无）_

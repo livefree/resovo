@@ -1,11 +1,10 @@
 /**
  * crawlerScheduler.ts — 定时自动采集调度器
- * CHG-36: Bull cron job，每日 03:00 执行增量采集
+ * CHG-36: Bull cron job，按配置执行每日自动采集
  *
  * 调度规则：
- *   - cron: '0 3 * * *'（每天凌晨 3:00）
- *   - 读 system_settings.auto_crawl_enabled；false 则跳过
- *   - 读 system_settings.auto_crawl_recent_only / auto_crawl_recent_days 决定模式
+ *   - cron: '* * * * *'（每分钟 tick）
+ *   - 读取统一 auto-crawl 配置，命中 dailyTime 且当日未触发时创建一次批次
  */
 
 import { crawlerQueue } from '@/api/lib/queue'
@@ -21,35 +20,47 @@ export function registerCrawlerScheduler(): void {
     // 占位 job data — scheduler 每次触发时由 processor 决定实际行为
     { type: 'incremental-crawl', hoursAgo: 24 },
     {
-      repeat: { cron: '0 3 * * *' },
-      jobId: 'auto-crawl-daily',
+      repeat: { cron: '* * * * *' },
+      jobId: 'auto-crawl-tick',
       removeOnComplete: 5,
       removeOnFail: 5,
     },
   ).then(() => {
-    process.stderr.write('[crawler-scheduler] daily cron job registered (0 3 * * *)\n')
+    process.stderr.write('[crawler-scheduler] tick cron job registered (* * * * *)\n')
   }).catch((err: unknown) => {
     const msg = err instanceof Error ? err.message : String(err)
     process.stderr.write(`[crawler-scheduler] failed to register cron: ${msg}\n`)
   })
 
-  // 在任务实际执行前读取 auto_crawl_enabled 决定是否跳过
+  // 在任务执行前读取统一 auto-crawl 配置，命中时间窗时创建 run
   crawlerQueue.on('active', async (job) => {
-    if (job.opts.jobId !== 'auto-crawl-daily') return
+    if (job.opts.jobId !== 'auto-crawl-tick') return
     try {
-      const enabled = await systemSettingsQueries.getSetting(db, 'auto_crawl_enabled')
-      if (enabled !== 'true') {
-        // 自动采集已关闭，移动到完成状态（不做任何工作）
+      const config = await systemSettingsQueries.getAutoCrawlConfig(db)
+      if (!config.globalEnabled) {
         await job.moveToCompleted('auto_crawl_disabled', true)
         process.stderr.write('[crawler-scheduler] auto_crawl_enabled=false, skipped\n')
         return
       }
 
-      const recentOnly = await systemSettingsQueries.getSetting(db, 'auto_crawl_recent_only')
-      const recentDaysRaw = await systemSettingsQueries.getSetting(db, 'auto_crawl_recent_days')
-      const recentDays = Number(recentDaysRaw ?? '1')
-      const mode = recentOnly === 'false' ? 'full' : 'incremental'
-      const hoursAgo = Math.max(1, Math.min((Number.isFinite(recentDays) ? recentDays : 1) * 24, 720))
+      const now = new Date()
+      const hh = String(now.getHours()).padStart(2, '0')
+      const mm = String(now.getMinutes()).padStart(2, '0')
+      const current = `${hh}:${mm}`
+      if (current !== config.dailyTime) {
+        await job.moveToCompleted('auto_crawl_not_time', true)
+        return
+      }
+
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      const lastTriggeredDate = await systemSettingsQueries.getSetting(db, 'auto_crawl_last_trigger_date')
+      if (lastTriggeredDate === today) {
+        await job.moveToCompleted('auto_crawl_already_triggered_today', true)
+        return
+      }
+
+      const mode = config.defaultMode
+      const hoursAgo = mode === 'incremental' ? 24 : undefined
 
       await runService.createAndEnqueueRun({
         triggerType: 'schedule',
@@ -58,8 +69,9 @@ export function registerCrawlerScheduler(): void {
         timeoutSeconds: 1200,
         scheduleId: 'auto-crawl-daily',
       })
+      await systemSettingsQueries.setSetting(db, 'auto_crawl_last_trigger_date', today)
       await job.moveToCompleted('auto_crawl_run_created', true)
-      process.stderr.write(`[crawler-scheduler] scheduled run created (${mode}, hoursAgo=${hoursAgo})\n`)
+      process.stderr.write(`[crawler-scheduler] scheduled run created (${mode}, dailyTime=${config.dailyTime})\n`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       process.stderr.write(`[crawler-scheduler] failed to read settings: ${msg}\n`)

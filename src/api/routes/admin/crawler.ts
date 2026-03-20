@@ -35,6 +35,7 @@ import { es } from '@/api/lib/elasticsearch'
 import { ensureCrawlerQueueReady } from '@/api/lib/queue'
 import { createCrawlerTaskLog, listCrawlerTaskLogs } from '@/api/db/queries/crawlerTaskLogs'
 import { CrawlerRunService } from '@/api/services/CrawlerRunService'
+import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 
 function mapTaskDto(task: CrawlerTask) {
   const mode = task.type === 'incremental-crawl' ? 'incremental' : 'full'
@@ -89,6 +90,40 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
       fastify.log.warn({ err: message, input }, 'failed to persist crawler task log')
     }
   }
+
+  const AutoCrawlConfigSchema = z.object({
+    globalEnabled: z.boolean(),
+    scheduleType: z.literal('daily').default('daily'),
+    dailyTime: z.string().regex(/^\d{2}:\d{2}$/),
+    defaultMode: z.enum(['incremental', 'full']),
+    onlyEnabledSites: z.boolean(),
+    conflictPolicy: z.enum(['skip_running', 'queue_after_running']),
+    perSiteOverrides: z.record(
+      z.string().min(1),
+      z.object({
+        enabled: z.boolean(),
+        mode: z.enum(['inherit', 'incremental', 'full']),
+      }),
+    ).default({}),
+  })
+
+  // ── GET /admin/crawler/auto-config ─────────────────────────
+  fastify.get('/admin/crawler/auto-config', { preHandler: auth }, async (_request, reply) => {
+    const config = await systemSettingsQueries.getAutoCrawlConfig(db)
+    return reply.send({ data: config })
+  })
+
+  // ── POST /admin/crawler/auto-config ────────────────────────
+  fastify.post('/admin/crawler/auto-config', { preHandler: auth }, async (request, reply) => {
+    const parsed = AutoCrawlConfigSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+      })
+    }
+    await systemSettingsQueries.setAutoCrawlConfig(db, parsed.data)
+    return reply.send({ data: { ok: true } })
+  })
 
   // ── GET /admin/crawler/tasks ──────────────────────────────────
 
