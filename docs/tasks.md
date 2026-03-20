@@ -3077,3 +3077,29 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测 5/5 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-70 Phase1：抽离 AdminToolbar
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 12:24
+- **计划开始时间**：2026-03-20 13:10
+- **实际开始时间**：2026-03-19 23:19
+- **完成时间**：2026-03-19 23:21
+- **问题**：`crawler-site` 的工具栏布局壳与业务按钮混写，不利于 shared 复用。
+- **影响的已完成任务**：CHG-69
+- **文件范围**：
+  - `src/components/admin/shared/toolbar/AdminToolbar.tsx`（新增）
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteToolbar.tsx`
+- **修复内容**：
+  - 新增 `AdminToolbar`，统一提供 actions + feedback 的工具栏布局壳。
+  - `CrawlerSiteToolbar` 改为组合 `AdminToolbar`，保留现有按钮、列面板、批量区、toast 行为。
+  - 不改动数据结构、接口调用、权限逻辑与异步流程。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_

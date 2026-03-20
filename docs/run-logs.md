@@ -274,3 +274,11 @@
 - **内容**：完成 crawler-site 表格外壳与空态渲染的 shared 抽离，保持行为不变。
 - **处理动作**：新增 `AdminTableFrame`、`AdminTableState` 并接入 `CrawlerSiteTable`；执行定向单测、typecheck、lint 均通过。
 - **后续**：进入 CHG-70，抽离 AdminToolbar。
+
+## [LOG-20260319-2321-01] CHG-70 AdminToolbar 抽离完成
+- **时间**：2026-03-19 23:21
+- **类型**：INFO
+- **关联任务**：CHG-70
+- **内容**：完成 crawler-site 工具栏 shared 布局壳抽离，保持行为不变。
+- **处理动作**：新增 `AdminToolbar` 并接入 `CrawlerSiteToolbar`；执行定向单测、typecheck、lint 均通过。
+- **后续**：进入 CHG-71，抽离 useAdminToast。
