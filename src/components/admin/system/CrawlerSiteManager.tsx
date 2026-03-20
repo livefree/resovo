@@ -48,6 +48,7 @@ type ColumnId =
   | 'manageOps'
 
 type ColumnVisibility = Record<ColumnId, boolean>
+type ColumnWidthState = Record<ColumnId, number>
 
 const STORAGE_KEY = 'crawler-site-manager:v2'
 const DEFAULT_FILTERS: FilterState = {
@@ -88,7 +89,7 @@ const COLUMN_META: Array<{ id: ColumnId; label: string }> = [
   { id: 'manageOps', label: '管理操作' },
 ]
 const REQUIRED_COLUMNS: ColumnId[] = ['name', 'manageOps']
-const COLUMN_WIDTH: Record<ColumnId, number> = {
+const DEFAULT_COLUMN_WIDTH: ColumnWidthState = {
   name: 220,
   apiUrl: 260,
   sourceType: 88,
@@ -108,6 +109,7 @@ function readPersistedState() {
     sortDir: 'desc' as SortDir,
     filters: DEFAULT_FILTERS,
     columns: DEFAULT_COLUMNS,
+    columnWidths: DEFAULT_COLUMN_WIDTH,
   }
   if (typeof window === 'undefined') return defaults
   try {
@@ -118,12 +120,14 @@ function readPersistedState() {
       sortDir?: SortDir
       filters?: Partial<FilterState>
       columns?: Partial<ColumnVisibility>
+      columnWidths?: Partial<ColumnWidthState>
     }
     return {
       sortBy: parsed.sortBy ?? defaults.sortBy,
       sortDir: parsed.sortDir ?? defaults.sortDir,
       filters: { ...defaults.filters, ...(parsed.filters ?? {}) },
       columns: { ...defaults.columns, ...(parsed.columns ?? {}) },
+      columnWidths: { ...defaults.columnWidths, ...(parsed.columnWidths ?? {}) },
     }
   } catch {
     return defaults
@@ -330,6 +334,7 @@ export function CrawlerSiteManager() {
   const [sortDir, setSortDir] = useState<SortDir>(initialState.sortDir)
   const [filters, setFilters] = useState<FilterState>(initialState.filters)
   const [columns, setColumns] = useState<ColumnVisibility>(initialState.columns)
+  const [columnWidths, setColumnWidths] = useState<ColumnWidthState>(initialState.columnWidths)
   const [showColumnsPanel, setShowColumnsPanel] = useState(false)
 
   const showToast = (msg: string, ok: boolean) => {
@@ -360,12 +365,13 @@ export function CrawlerSiteManager() {
           sortDir,
           filters,
           columns,
+          columnWidths,
         }),
       )
     } catch {
       // 忽略 localStorage 异常
     }
-  }, [sortBy, sortDir, filters, columns])
+  }, [sortBy, sortDir, filters, columns, columnWidths])
 
   const displaySites = useMemo(() => {
     const keyOrName = filters.keyOrName.trim().toLowerCase()
@@ -419,6 +425,11 @@ export function CrawlerSiteManager() {
   function toggleColumn(columnId: ColumnId) {
     if (REQUIRED_COLUMNS.includes(columnId)) return
     setColumns((prev) => ({ ...prev, [columnId]: !prev[columnId] }))
+  }
+
+  function setColumnWidth(columnId: ColumnId, width: number) {
+    const next = Math.max(72, Math.min(560, width))
+    setColumnWidths((prev) => ({ ...prev, [columnId]: next }))
   }
 
   // ── 选择 ───────────────────────────────────────────────────
@@ -731,7 +742,7 @@ export function CrawlerSiteManager() {
   const visibleColumnCount = COLUMN_META.filter((column) => columns[column.id]).length
   const colClass = (id: ColumnId) => (columns[id] ? '' : 'hidden')
   const visibleTableMinWidth = COLUMN_META.reduce((sum, column) => (
-    columns[column.id] ? sum + COLUMN_WIDTH[column.id] : sum
+    columns[column.id] ? sum + columnWidths[column.id] : sum
   ), 44)
 
   if (loading) {
@@ -778,16 +789,30 @@ export function CrawlerSiteManager() {
               <p className="mb-2 text-xs text-[var(--muted)]">勾选显示列（名称/管理操作为必显）</p>
               <div className="space-y-1">
                 {COLUMN_META.map((column) => (
-                  <label key={column.id} className="flex items-center gap-2 rounded px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg3)]">
-                    <input
-                      type="checkbox"
-                      checked={columns[column.id]}
-                      disabled={REQUIRED_COLUMNS.includes(column.id)}
-                      onChange={() => toggleColumn(column.id)}
-                      className="accent-[var(--accent)]"
-                    />
-                    <span>{column.label}</span>
-                  </label>
+                  <div key={column.id} className="rounded px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg3)]">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={columns[column.id]}
+                        disabled={REQUIRED_COLUMNS.includes(column.id)}
+                        onChange={() => toggleColumn(column.id)}
+                        className="accent-[var(--accent)]"
+                      />
+                      <span className="flex-1">{column.label}</span>
+                    </label>
+                    <div className="mt-1 flex items-center gap-1">
+                      <span className="text-[10px] text-[var(--muted)]">宽</span>
+                      <input
+                        type="number"
+                        min={72}
+                        max={560}
+                        value={columnWidths[column.id]}
+                        onChange={(e) => setColumnWidth(column.id, Number(e.target.value))}
+                        className="w-16 rounded border border-[var(--border)] bg-[var(--bg3)] px-1 py-0.5 text-[10px] text-[var(--text)]"
+                      />
+                      <span className="text-[10px] text-[var(--muted)]">px</span>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
@@ -821,17 +846,17 @@ export function CrawlerSiteManager() {
                   className="accent-[var(--accent)]"
                 />
               </th>
-              <th className={`${colClass('name')} w-[220px] px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} onClick={() => handleSort('name')}>名称 / Key {sortBy === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th className={`${colClass('apiUrl')} w-[260px] px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} onClick={() => handleSort('apiUrl')}>API 地址 {sortBy === 'apiUrl' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th className={`${colClass('sourceType')} w-[88px] px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} onClick={() => handleSort('sourceType')}>类型 {sortBy === 'sourceType' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th className={`${colClass('format')} w-[88px] px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} onClick={() => handleSort('format')}>格式 {sortBy === 'format' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th className={`${colClass('weight')} w-[88px] px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} onClick={() => handleSort('weight')}>权重 {sortBy === 'weight' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th className={`${colClass('isAdult')} w-[88px] px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} onClick={() => handleSort('isAdult')}>成人 {sortBy === 'isAdult' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th className={`${colClass('fromConfig')} w-[92px] px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} onClick={() => handleSort('fromConfig')}>来源 {sortBy === 'fromConfig' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th className={`${colClass('disabled')} w-[106px] px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} onClick={() => handleSort('disabled')}>状态 {sortBy === 'disabled' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th className={`${colClass('lastCrawl')} w-[180px] px-3 py-3 text-left font-medium text-[var(--muted)]`}>最近采集</th>
-              <th className={`${colClass('crawlOps')} w-[130px] px-3 py-3 text-left font-medium text-[var(--muted)]`}>采集操作</th>
-              <th className={`${colClass('manageOps')} w-[180px] px-3 py-3 text-left font-medium text-[var(--muted)]`}>管理操作</th>
+              <th className={`${colClass('name')} px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} style={{ width: columnWidths.name, minWidth: columnWidths.name }} onClick={() => handleSort('name')}>名称 / Key {sortBy === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className={`${colClass('apiUrl')} px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} style={{ width: columnWidths.apiUrl, minWidth: columnWidths.apiUrl }} onClick={() => handleSort('apiUrl')}>API 地址 {sortBy === 'apiUrl' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className={`${colClass('sourceType')} px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} style={{ width: columnWidths.sourceType, minWidth: columnWidths.sourceType }} onClick={() => handleSort('sourceType')}>类型 {sortBy === 'sourceType' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className={`${colClass('format')} px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} style={{ width: columnWidths.format, minWidth: columnWidths.format }} onClick={() => handleSort('format')}>格式 {sortBy === 'format' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className={`${colClass('weight')} px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} style={{ width: columnWidths.weight, minWidth: columnWidths.weight }} onClick={() => handleSort('weight')}>权重 {sortBy === 'weight' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className={`${colClass('isAdult')} px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} style={{ width: columnWidths.isAdult, minWidth: columnWidths.isAdult }} onClick={() => handleSort('isAdult')}>成人 {sortBy === 'isAdult' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className={`${colClass('fromConfig')} px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} style={{ width: columnWidths.fromConfig, minWidth: columnWidths.fromConfig }} onClick={() => handleSort('fromConfig')}>来源 {sortBy === 'fromConfig' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className={`${colClass('disabled')} px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} style={{ width: columnWidths.disabled, minWidth: columnWidths.disabled }} onClick={() => handleSort('disabled')}>状态 {sortBy === 'disabled' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className={`${colClass('lastCrawl')} px-3 py-3 text-left font-medium text-[var(--muted)]`} style={{ width: columnWidths.lastCrawl, minWidth: columnWidths.lastCrawl }}>最近采集</th>
+              <th className={`${colClass('crawlOps')} px-3 py-3 text-left font-medium text-[var(--muted)]`} style={{ width: columnWidths.crawlOps, minWidth: columnWidths.crawlOps }}>采集操作</th>
+              <th className={`${colClass('manageOps')} px-3 py-3 text-left font-medium text-[var(--muted)]`} style={{ width: columnWidths.manageOps, minWidth: columnWidths.manageOps }}>管理操作</th>
             </tr>
             <tr className="sticky top-[45px] z-10 border-b border-[var(--border)] bg-[var(--bg2)] align-top">
               <th className="px-2 py-2" />
