@@ -16,16 +16,19 @@ import { findSourceById } from '@/api/db/queries/sources'
 import {
   listTasks,
   createTask,
+  updateTaskStatus,
   findActiveTaskBySite,
   getLatestTaskBySite,
   getLatestTasksBySites,
   getCrawlerOverview,
+  markStalePendingTasks,
   type CrawlerTask,
 } from '@/api/db/queries/crawlerTasks'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import { enqueueVerifySingle } from '@/api/workers/verifyWorker'
 import { enqueueFullCrawl, enqueueIncrementalCrawl } from '@/api/workers/crawlerWorker'
 import { es } from '@/api/lib/elasticsearch'
+import { ensureCrawlerQueueReady } from '@/api/lib/queue'
 
 function mapTaskDto(task: CrawlerTask) {
   const mode = task.type === 'incremental-crawl' ? 'incremental' : 'full'
@@ -116,6 +119,8 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     const { type, siteKey, hoursAgo } = parsed.data
 
     if (siteKey) {
+      await markStalePendingTasks(db, { siteKey, staleMinutes: 10 })
+
       const site = await crawlerSitesQueries.findCrawlerSite(db, siteKey)
       if (!site || site.disabled) {
         return reply.code(404).send({
@@ -143,19 +148,58 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
         })
       }
 
+      try {
+        await ensureCrawlerQueueReady()
+      } catch (err) {
+        return reply.code(503).send({
+          error: {
+            code: 'CRAWLER_QUEUE_UNAVAILABLE',
+            message: err instanceof Error ? err.message : 'crawler queue unavailable',
+            status: 503,
+          },
+        })
+      }
+
       const task = await createTask(db, {
         type,
         sourceSite: siteKey,
         targetUrl: site.apiUrl,
       })
 
-      if (type === 'full-crawl') {
-        const job = await enqueueFullCrawl(siteKey, task.id)
-        return reply.code(202).send({ data: { jobId: job.id, taskId: task.id, type, siteKey } })
-      } else {
-        const job = await enqueueIncrementalCrawl(siteKey, hoursAgo ?? 24, task.id)
-        return reply.code(202).send({ data: { jobId: job.id, taskId: task.id, type, siteKey } })
+      try {
+        if (type === 'full-crawl') {
+          const job = await enqueueFullCrawl(siteKey, task.id)
+          return reply.code(202).send({ data: { jobId: job.id, taskId: task.id, type, siteKey } })
+        } else {
+          const job = await enqueueIncrementalCrawl(siteKey, hoursAgo ?? 24, task.id)
+          return reply.code(202).send({ data: { jobId: job.id, taskId: task.id, type, siteKey } })
+        }
+      } catch (err) {
+        await updateTaskStatus(db, task.id, 'failed', {
+          error: 'QUEUE_ENQUEUE_FAILED',
+          message: err instanceof Error ? err.message : String(err),
+        })
+        return reply.code(503).send({
+          error: {
+            code: 'CRAWLER_QUEUE_UNAVAILABLE',
+            message: '任务入队失败，请检查 Redis/worker',
+            status: 503,
+          },
+          data: { taskId: task.id },
+        })
       }
+    }
+
+    try {
+      await ensureCrawlerQueueReady()
+    } catch (err) {
+      return reply.code(503).send({
+        error: {
+          code: 'CRAWLER_QUEUE_UNAVAILABLE',
+          message: err instanceof Error ? err.message : 'crawler queue unavailable',
+          status: 503,
+        },
+      })
     }
 
     if (type === 'full-crawl') {

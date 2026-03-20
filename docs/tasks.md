@@ -3633,3 +3633,34 @@ _（任务 review 通过后移入此处）_
   - 定向单测 5/5 通过；typecheck/lint 通过。
   - 修复后运行中长任务不再长期显示 0，概览数据随任务推进变化。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-89 采集任务 pending 卡死修复（队列可用性 + 失败补偿）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 03:02
+- **计划开始时间**：2026-03-20 03:05
+- **实际开始时间**：2026-03-20 03:06
+- **完成时间**：2026-03-20 03:08
+- **问题**：单站增量任务在 Redis/queue 异常场景下会长期停留 `pending`，导致页面持续显示“采集中”且阻塞后续触发。
+- **影响的已完成任务**：CHG-87、CHG-88
+- **文件范围**：
+  - `src/api/lib/queue.ts`
+  - `src/api/db/queries/crawlerTasks.ts`
+  - `src/api/routes/admin/crawler.ts`
+  - `src/api/workers/crawlerWorker.ts`
+- **修复内容**：
+  - 新增 `ensureCrawlerQueueReady`：触发前先做队列可用性检查，队列不可用直接返回 `503`。
+  - 单站触发改为“先检查队列可用，再创建任务”，避免“先写 pending 再入队失败”。
+  - 入队异常增加补偿：若任务已创建但入队失败，立即将该任务回写为 `failed`（记录 `QUEUE_ENQUEUE_FAILED`）。
+  - 新增 `markStalePendingTasks`：触发前自动清理超时 `pending`，防止历史脏任务持续占用活跃态。
+  - worker 增加早期失败兜底：在进入 crawl 前异常时，带 `taskId` 的任务会被回写 `failed`，不再永久 `pending`。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+  - 数据库已一次性补偿历史卡住任务：`pending -> failed` 共 2 条。
+- **问题说明**：_（无）_

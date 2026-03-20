@@ -1384,3 +1384,17 @@
   - “今日采集视频数”不再仅依赖已完成任务，运行中的任务会逐步反映实时值
   - “采集时长”在运行中按 `NOW - scheduled_at` 实时累计，完成后沿用 `durationMs`
   - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
+
+## [CHG-89] 采集任务 pending 卡死修复（队列可用性 + 失败补偿）
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 03:08
+- **修改文件**：
+  - `src/api/lib/queue.ts` — 新增 `ensureCrawlerQueueReady`，触发任务前做队列可用性检查并设置超时兜底。
+  - `src/api/routes/admin/crawler.ts` — 单站触发改为“先校验队列可用，再创建任务”；入队失败时将预创建任务回写为 `failed` 并返回 `503`；触发前清理同站陈旧 pending。
+  - `src/api/db/queries/crawlerTasks.ts` — 新增 `markStalePendingTasks`，用于将长时间 pending 的历史任务补偿为 failed。
+  - `src/api/workers/crawlerWorker.ts` — worker 在早期异常（进入 crawl 前失败）场景回写 `taskId` 对应任务为 `failed`，避免永久 pending。
+- **新增依赖**：无
+- **数据库变更**：无（复用现有 `crawler_tasks` 字段）
+- **注意事项**：
+  - 当前环境 `REDIS_URL=redis://localhost:6379` 且 6379 未监听时，接口会明确返回 `503 CRAWLER_QUEUE_UNAVAILABLE`，不再留下 pending 脏任务。
+  - 已执行一次性数据补偿：历史 pending 超时任务 `2` 条已自动转为 failed。

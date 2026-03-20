@@ -174,6 +174,39 @@ export async function findActiveTaskBySite(
   return result.rows[0] ? mapTask(result.rows[0]) : null
 }
 
+// ── 陈旧 pending 任务清理（入队失败补偿）───────────────────────────
+
+export async function markStalePendingTasks(
+  db: Pool,
+  params: { siteKey?: string; staleMinutes?: number } = {},
+): Promise<number> {
+  const staleMinutes = params.staleMinutes ?? 10
+  const result = await db.query<{ count: string }>(
+    `WITH stale AS (
+       UPDATE crawler_tasks
+       SET status = 'failed',
+           finished_at = NOW(),
+           retry_count = retry_count + 1,
+           result = COALESCE(result, '{}'::jsonb) || jsonb_build_object(
+             'error',
+             'QUEUE_ENQUEUE_TIMEOUT',
+             'message',
+             '任务长时间处于 pending，已自动标记失败，请检查 Redis/worker',
+             'staleMinutes',
+             $2::int
+           )
+       WHERE status = 'pending'
+         AND scheduled_at < NOW() - ($2::int * INTERVAL '1 minute')
+         AND ($1::text IS NULL OR source_site = $1::text)
+       RETURNING id
+     )
+     SELECT COUNT(*)::text AS count FROM stale`,
+    [params.siteKey ?? null, staleMinutes],
+  )
+
+  return parseInt(result.rows[0]?.count ?? '0', 10) || 0
+}
+
 // ── 最新任务查询（单站/批量）─────────────────────────────────────
 
 export async function getLatestTaskBySite(
