@@ -1198,3 +1198,14 @@
 - **注意事项**：
   - 本次为 shared 复用验证，不改动筛选参数、请求时序与业务逻辑
   - 已通过：`npm run test:run -- tests/unit/components/admin/videos/VideoFilters.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
+
+## [CHG-76] Phase2：crawler-site toolbar 局部优化
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 23:32
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteToolbar.tsx` — 调整工具栏 DOM 分组与视觉层级（主动作/配置动作/批量动作）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅 UI 层布局重排，不改动数据结构、字段、API 调用顺序、异步流程与权限逻辑
+  - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`

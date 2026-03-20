@@ -3236,3 +3236,28 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测 10/10 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-76 Phase2：crawler-site toolbar 局部优化
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 12:24
+- **计划开始时间**：2026-03-21 10:00
+- **实际开始时间**：2026-03-19 23:30
+- **完成时间**：2026-03-19 23:32
+- **问题**：crawler-site 工具栏在动作密集时分区不清晰，主要动作与配置动作可读性不足。
+- **影响的已完成任务**：CHG-75
+- **文件范围**：
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteToolbar.tsx`
+- **修复内容**：
+  - 将工具栏重排为“主要动作组（添加/采集）+ 配置动作组（导入/导出/显示列）+ 批量动作组”三段结构。
+  - 在主要动作与配置动作之间新增视觉分隔，提高高频动作辨识度。
+  - 保持按钮文案、触发回调、批量参数与接口调用顺序不变。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_
