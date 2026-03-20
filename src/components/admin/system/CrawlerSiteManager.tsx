@@ -5,11 +5,12 @@
 
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
 import type { CrawlerSite, CreateCrawlerSiteInput, UpdateCrawlerSiteInput, CrawlerSiteBatchAction } from '@/types'
 import { useCrawlerSiteColumns } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns'
 import { useCrawlerSiteSelection } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteSelection'
+import { useCrawlerSites } from '@/components/admin/system/crawler-site/hooks/useCrawlerSites'
 import { CrawlerSiteTable } from '@/components/admin/system/crawler-site/components/CrawlerSiteTable'
 import { CrawlerSiteToolbar } from '@/components/admin/system/crawler-site/components/CrawlerSiteToolbar'
 import {
@@ -32,8 +33,6 @@ interface ValidateResult {
 // ── 主组件 ────────────────────────────────────────────────────
 
 export function CrawlerSiteManager() {
-  const [sites, setSites] = useState<CrawlerSite[]>([])
-  const [loading, setLoading] = useState(true)
   const [editTarget, setEditTarget] = useState<CrawlerSite | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [validateStates, setValidateStates] = useState<Record<string, ValidateStatus>>({})
@@ -58,25 +57,12 @@ export function CrawlerSiteManager() {
     columnMeta,
     requiredColumns,
   } = useCrawlerSiteColumns()
+  const { sites, loading, fetchSites } = useCrawlerSites()
 
   const showToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok })
     setTimeout(() => setToast(null), 3500)
   }
-
-  const fetchSites = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await apiClient.get<{ data: CrawlerSite[] }>('/admin/crawler/sites')
-      setSites(res.data)
-    } catch {
-      // 静默
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { fetchSites() }, [fetchSites])
 
   const displaySites = useMemo(() => {
     const keyOrName = filters.keyOrName.trim().toLowerCase()

@@ -2887,20 +2887,50 @@ _（任务 review 通过后移入此处）_
 
 #### CHG-63 v1.2 T1-4：抽离 useCrawlerSites hook
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-20 10:30
 - **计划开始时间**：2026-03-20 12:00
 - **实际开始时间**：2026-03-20 11:08
-- **完成时间**：
+- **完成时间**：2026-03-20 11:18
 - **问题**：列表加载与刷新状态管理仍在 `CrawlerSiteManager`，数据层与容器耦合。
 - **影响的已完成任务**：CHG-62
 - **文件范围**：
   - `src/components/admin/system/CrawlerSiteManager.tsx`
   - `src/components/admin/system/crawler-site/hooks/useCrawlerSites.ts`
 - **修复内容**：
-  - 进行中：抽离 `sites/loading/fetchSites` 到 `useCrawlerSites`，保持请求路径与失败处理口径不变。
+  - 新建 `useCrawlerSites`，统一管理 `sites/loading/fetchSites`。
+  - `CrawlerSiteManager` 删除对应内联数据加载逻辑，改为消费 hook。
+  - 保持请求路径与静默失败处理口径不变。
 - **测试要求**：
   - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-64 v1.2 T2：system 目录业务归组
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-03-20 10:30
+- **计划开始时间**：2026-03-20 14:00
+- **实际开始时间**：2026-03-20 11:18
+- **完成时间**：
+- **问题**：`system` 根目录仍有平铺业务组件，目录语义不统一。
+- **影响的已完成任务**：CHG-63
+- **文件范围**：
+  - `src/components/admin/system/CacheManager.tsx`
+  - `src/components/admin/system/PerformanceMonitor.tsx`
+  - `src/components/admin/system/DataMigration.tsx`
+  - `src/components/admin/system/SiteSettings.tsx`
+  - `src/components/admin/system/{monitoring,migration,site-settings}/*`
+  - 受影响的 import 引用文件
+- **修复内容**：
+  - 进行中：按业务目录迁移文件并更新 import 路径，不改业务逻辑。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/*.test.tsx`
   - `npm run typecheck`
   - `npm run lint`
 - **完成备注**：

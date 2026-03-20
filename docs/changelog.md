@@ -1038,3 +1038,14 @@
 - **数据库变更**：无
 - **注意事项**：
   - 本次为结构拆分，不修改字段、校验规则和保存流程
+
+## [CHG-63] v1.2 T1-4：抽离 useCrawlerSites hook
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 11:18
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSites.ts` — 新建，承载列表加载/刷新状态
+  - `src/components/admin/system/CrawlerSiteManager.tsx` — 改为消费 `useCrawlerSites`
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 请求路径、错误处理和加载行为与原逻辑一致
