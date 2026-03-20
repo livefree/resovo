@@ -3573,3 +3573,34 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测 5/5 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-87 单站采集预创建任务 + 重进恢复运行态
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 02:36
+- **计划开始时间**：2026-03-20 02:38
+- **实际开始时间**：2026-03-20 02:39
+- **完成时间**：2026-03-20 02:42
+- **问题**：单站采集触发后若离开页面，行内“采集中/增量中”丢失；配置页概览在长任务运行期间无变化，表现为任务似乎依赖前端生命周期。
+- **影响的已完成任务**：CHG-86
+- **文件范围**：
+  - `src/api/routes/admin/crawler.ts`
+  - `src/api/workers/crawlerWorker.ts`
+  - `src/api/services/CrawlerService.ts`
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteCrawlTasks.ts`
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+- **修复内容**：
+  - 单站触发改为 API 先创建 `pending` 任务再入队（返回 `jobId + taskId`），避免任务记录延迟到 worker 执行阶段才出现。
+  - worker 支持接收 `taskId`，优先更新预创建任务状态为 `running -> done/failed`。
+  - `CrawlerService.crawl` 支持复用外部 `taskId`，避免重复创建任务记录。
+  - 页面加载后基于 `latest` 批量接口恢复 running/queued 站点状态，并持续轮询更新。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+  - 修复后满足：离开页面任务不中断；重进页面可恢复运行态；概览可反映运行中任务。
+- **问题说明**：_（无）_

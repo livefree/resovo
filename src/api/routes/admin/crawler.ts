@@ -15,6 +15,7 @@ import { CrawlerService } from '@/api/services/CrawlerService'
 import { findSourceById } from '@/api/db/queries/sources'
 import {
   listTasks,
+  createTask,
   findActiveTaskBySite,
   getLatestTaskBySite,
   getLatestTasksBySites,
@@ -115,6 +116,17 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     const { type, siteKey, hoursAgo } = parsed.data
 
     if (siteKey) {
+      const site = await crawlerSitesQueries.findCrawlerSite(db, siteKey)
+      if (!site || site.disabled) {
+        return reply.code(404).send({
+          error: {
+            code: 'SITE_NOT_FOUND',
+            message: `源站 ${siteKey} 不存在或已停用`,
+            status: 404,
+          },
+        })
+      }
+
       const active = await findActiveTaskBySite(db, siteKey)
       if (active) {
         return reply.code(409).send({
@@ -129,6 +141,20 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
             activeTaskStatus: active.status,
           },
         })
+      }
+
+      const task = await createTask(db, {
+        type,
+        sourceSite: siteKey,
+        targetUrl: site.apiUrl,
+      })
+
+      if (type === 'full-crawl') {
+        const job = await enqueueFullCrawl(siteKey, task.id)
+        return reply.code(202).send({ data: { jobId: job.id, taskId: task.id, type, siteKey } })
+      } else {
+        const job = await enqueueIncrementalCrawl(siteKey, hoursAgo ?? 24, task.id)
+        return reply.code(202).send({ data: { jobId: job.id, taskId: task.id, type, siteKey } })
       }
     }
 

@@ -19,6 +19,7 @@ interface UseCrawlerSiteCrawlTasksResult {
   runningBySite: Record<string, boolean>
   runningModeBySite: Record<string, CrawlMode | null>
   latestTaskBySite: Record<string, CrawlTaskDTO | null>
+  hydrateRunningFromSites: (siteKeys: string[]) => Promise<void>
   triggerSiteCrawl: (siteKey: string, mode: CrawlMode, siteName?: string) => Promise<void>
 }
 
@@ -133,10 +134,50 @@ export function useCrawlerSiteCrawlTasks({
     [runningBySite, showToast, syncLatestTasks]
   )
 
+  const hydrateRunningFromSites = useCallback(async (siteKeys: string[]) => {
+    if (siteKeys.length === 0) return
+    try {
+      const tasks = await getLatestCrawlTasksBySites(siteKeys)
+      const taskBySite = new Map(tasks.map((task) => [task.siteKey, task]))
+
+      setLatestTaskBySite((prev) => {
+        const next = { ...prev }
+        for (const siteKey of siteKeys) {
+          next[siteKey] = taskBySite.get(siteKey) ?? null
+        }
+        return next
+      })
+
+      setRunningBySite((prev) => {
+        const next = { ...prev }
+        for (const siteKey of siteKeys) {
+          const task = taskBySite.get(siteKey)
+          const isRunning = task?.status === 'queued' || task?.status === 'running'
+          next[siteKey] = Boolean(isRunning)
+          if (isRunning) activeSitesRef.current.add(siteKey)
+          else activeSitesRef.current.delete(siteKey)
+        }
+        return next
+      })
+
+      setRunningModeBySite((prev) => {
+        const next = { ...prev }
+        for (const siteKey of siteKeys) {
+          const task = taskBySite.get(siteKey)
+          next[siteKey] = task && (task.status === 'queued' || task.status === 'running') ? task.mode : null
+        }
+        return next
+      })
+    } catch {
+      // 首次恢复失败不阻塞页面
+    }
+  }, [])
+
   return {
     runningBySite,
     runningModeBySite,
     latestTaskBySite,
+    hydrateRunningFromSites,
     triggerSiteCrawl,
   }
 }

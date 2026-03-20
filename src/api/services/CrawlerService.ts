@@ -308,13 +308,17 @@ export class CrawlerService {
    */
   async crawl(
     source: CrawlerSource,
-    options: { hoursAgo?: number; taskType?: 'full-crawl' | 'incremental-crawl' } = {}
+    options: { hoursAgo?: number; taskType?: 'full-crawl' | 'incremental-crawl'; taskId?: string } = {}
   ): Promise<CrawlResult> {
-    const taskRow = await crawlerTasksQueries.createTask(this.db, {
-      type: options.taskType ?? (options.hoursAgo ? 'incremental-crawl' : 'full-crawl'),
-      sourceSite: source.name,
-      targetUrl: source.base,
-    })
+    const taskId =
+      options.taskId ??
+      (
+        await crawlerTasksQueries.createTask(this.db, {
+          type: options.taskType ?? (options.hoursAgo ? 'incremental-crawl' : 'full-crawl'),
+          sourceSite: source.name,
+          targetUrl: source.base,
+        })
+      ).id
 
     let videosUpserted = 0
     let sourcesUpserted = 0
@@ -322,7 +326,7 @@ export class CrawlerService {
     let page = 1
 
     try {
-      await crawlerTasksQueries.updateTaskStatus(this.db, taskRow.id, 'running')
+      await crawlerTasksQueries.updateTaskStatus(this.db, taskId, 'running')
 
       while (true) {
         const items = await this.fetchPage(source, { page, hoursAgo: options.hoursAgo })
@@ -347,7 +351,7 @@ export class CrawlerService {
         if (options.hoursAgo) break
       }
 
-      await crawlerTasksQueries.updateTaskStatus(this.db, taskRow.id, 'done', {
+      await crawlerTasksQueries.updateTaskStatus(this.db, taskId, 'done', {
         videosUpserted,
         sourcesUpserted,
         errors,
@@ -355,7 +359,7 @@ export class CrawlerService {
       })
     } catch (err) {
       errors++
-      await crawlerTasksQueries.updateTaskStatus(this.db, taskRow.id, 'failed', {
+      await crawlerTasksQueries.updateTaskStatus(this.db, taskId, 'failed', {
         error: err instanceof Error ? err.message : String(err),
       })
     }

@@ -18,6 +18,8 @@ export interface CrawlJobData {
   type: CrawlJobType
   /** 指定单站 key；留空时采集全部启用站 */
   siteKey?: string
+  /** 已创建的任务 ID（单站触发时由 API 预创建） */
+  taskId?: string
   /** 增量模式：只采集最近 N 小时更新的内容 */
   hoursAgo?: number
 }
@@ -34,7 +36,7 @@ export interface CrawlJobResult {
 // ── Worker 处理函数 ───────────────────────────────────────────────
 
 async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobResult> {
-  const { type, siteKey, hoursAgo } = job.data
+  const { type, siteKey, taskId, hoursAgo } = job.data
   const start = Date.now()
   const crawlerService = new CrawlerService(db, es)
 
@@ -71,6 +73,7 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
       )
       const result = await crawlerService.crawl(source, {
         taskType: type,
+        taskId: siteKey ? taskId : undefined,
         hoursAgo: type === 'incremental-crawl' ? (hoursAgo ?? 24) : undefined,
       })
       videosUpserted += result.videosUpserted
@@ -115,14 +118,15 @@ export function registerCrawlerWorker(concurrency = 1): void {
 // ── 便捷入队函数 ──────────────────────────────────────────────────
 
 /** 添加全量采集任务到队列（可选指定单站 key） */
-export async function enqueueFullCrawl(siteKey?: string): Promise<Bull.Job<CrawlJobData>> {
-  return crawlerQueue.add({ type: 'full-crawl', siteKey })
+export async function enqueueFullCrawl(siteKey?: string, taskId?: string): Promise<Bull.Job<CrawlJobData>> {
+  return crawlerQueue.add({ type: 'full-crawl', siteKey, taskId })
 }
 
 /** 添加增量采集任务到队列（默认最近 24 小时，可选指定单站 key） */
 export async function enqueueIncrementalCrawl(
   siteKey?: string,
-  hoursAgo = 24
+  hoursAgo = 24,
+  taskId?: string,
 ): Promise<Bull.Job<CrawlJobData>> {
-  return crawlerQueue.add({ type: 'incremental-crawl', siteKey, hoursAgo })
+  return crawlerQueue.add({ type: 'incremental-crawl', siteKey, taskId, hoursAgo })
 }

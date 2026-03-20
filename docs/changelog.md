@@ -1356,3 +1356,18 @@
 - **注意事项**：
   - 本次仅增加“配置页顶部概览”，不扩充列表列信息，不改表格行为
   - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
+
+## [CHG-87] 单站采集预创建任务 + 重进恢复运行态
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 02:42
+- **修改文件**：
+  - `src/api/routes/admin/crawler.ts` — 单站触发时预创建 `pending` 任务并返回 `taskId`，再入队
+  - `src/api/workers/crawlerWorker.ts` — job data 增加 `taskId`，worker 优先更新预创建任务状态
+  - `src/api/services/CrawlerService.ts` — 支持复用外部 `taskId`，避免重复建任务
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteCrawlTasks.ts` — 新增页面重进后的 running/queued 状态恢复
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx` — 站点列表加载后触发任务状态恢复
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次修复确保任务状态在离页后可持续，并能在重进页面时恢复显示
+  - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`

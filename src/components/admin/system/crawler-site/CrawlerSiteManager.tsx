@@ -80,6 +80,7 @@ export function CrawlerSiteManager() {
     runningBySite,
     runningModeBySite,
     latestTaskBySite,
+    hydrateRunningFromSites,
     triggerSiteCrawl,
   } = useCrawlerSiteCrawlTasks({
     fetchSites,
@@ -154,6 +155,10 @@ export function CrawlerSiteManager() {
     }, 5000)
     return () => window.clearInterval(timer)
   }, [fetchOverview])
+
+  useEffect(() => {
+    void hydrateRunningFromSites(sites.map((site) => site.key))
+  }, [sites, hydrateRunningFromSites])
 
   // ── 验证 ───────────────────────────────────────────────────
 
