@@ -22,6 +22,14 @@ interface CrawlerTask {
   created_at: string
 }
 
+interface CrawlerTaskLogItem {
+  id: string
+  level: 'info' | 'warn' | 'error'
+  stage: string
+  message: string
+  createdAt: string
+}
+
 type TaskStatusFilter = 'pending' | 'running' | 'done' | 'failed' | ''
 type TaskTriggerFilter = 'single' | 'batch' | 'all' | 'schedule' | ''
 
@@ -73,6 +81,9 @@ export function AdminCrawlerPanel() {
   const [triggering, setTriggering] = useState<string | null>(null) // null = idle, 'all' = global, siteKey = single
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [logTaskId, setLogTaskId] = useState<string | null>(null)
+  const [logLoading, setLogLoading] = useState(false)
+  const [taskLogs, setTaskLogs] = useState<CrawlerTaskLogItem[]>([])
 
   const limit = 20
 
@@ -108,6 +119,22 @@ export function AdminCrawlerPanel() {
       alert(err instanceof Error ? err.message : '触发失败')
     } finally {
       setTriggering(null)
+    }
+  }
+
+  async function handleViewLogs(taskId: string) {
+    setLogTaskId(taskId)
+    setLogLoading(true)
+    try {
+      const res = await apiClient.get<{ data: { logs: CrawlerTaskLogItem[] } }>(
+        `/admin/crawler/tasks/${taskId}/logs?limit=50`
+      )
+      setTaskLogs(res.data.logs ?? [])
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '日志加载失败')
+      setTaskLogs([])
+    } finally {
+      setLogLoading(false)
     }
   }
 
@@ -206,14 +233,15 @@ export function AdminCrawlerPanel() {
                 <th className="px-4 py-3 text-left">开始时间</th>
                 <th className="px-4 py-3 text-left">结束时间</th>
                 <th className="px-4 py-3 text-left">错误信息</th>
+                <th className="px-4 py-3 text-left">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--subtle)]">
               {loading && (
-                <tr><td colSpan={6} className="py-8 text-center text-[var(--muted)]">加载中…</td></tr>
+                <tr><td colSpan={7} className="py-8 text-center text-[var(--muted)]">加载中…</td></tr>
               )}
               {!loading && tasks.length === 0 && (
-                <tr><td colSpan={6} className="py-8 text-center text-[var(--muted)]">暂无任务记录</td></tr>
+                <tr><td colSpan={7} className="py-8 text-center text-[var(--muted)]">暂无任务记录</td></tr>
               )}
               {!loading && tasks.map((task) => (
                 <tr key={task.id} className="bg-[var(--bg)] hover:bg-[var(--bg2)]" data-testid={`admin-crawler-task-${task.id}`}>
@@ -228,6 +256,16 @@ export function AdminCrawlerPanel() {
                   </td>
                   <td className="max-w-xs truncate px-4 py-3 text-xs text-red-400">
                     {task.error ?? '—'}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => { void handleViewLogs(task.id) }}
+                      className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg2)]"
+                      data-testid={`admin-crawler-task-logs-${task.id}`}
+                    >
+                      查看日志
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -246,6 +284,46 @@ export function AdminCrawlerPanel() {
           </div>
         )}
       </section>
+
+      {logTaskId && (
+        <section className="rounded-lg border border-[var(--border)] bg-[var(--bg2)] p-4" data-testid="admin-crawler-task-logs-panel">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-[var(--text)]">任务日志：{logTaskId}</h3>
+            <button
+              type="button"
+              onClick={() => {
+                setLogTaskId(null)
+                setTaskLogs([])
+              }}
+              className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+            >
+              关闭
+            </button>
+          </div>
+          {logLoading ? (
+            <p className="text-sm text-[var(--muted)]">日志加载中…</p>
+          ) : taskLogs.length === 0 ? (
+            <p className="text-sm text-[var(--muted)]">暂无日志</p>
+          ) : (
+            <div className="max-h-64 overflow-y-auto rounded border border-[var(--border)] bg-[var(--bg)]">
+              <ul className="divide-y divide-[var(--subtle)]">
+                {taskLogs.map((log) => (
+                  <li key={log.id} className="px-3 py-2 text-xs">
+                    <div className="mb-1 flex items-center gap-2 text-[var(--muted)]">
+                      <span>{new Date(log.createdAt).toLocaleString()}</span>
+                      <span>{log.level.toUpperCase()}</span>
+                      <span>{log.stage}</span>
+                    </div>
+                    <div className={log.level === 'error' ? 'text-red-400' : 'text-[var(--text)]'}>
+                      {log.message}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   )
 }

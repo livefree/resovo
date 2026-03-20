@@ -4038,3 +4038,29 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 不改任务执行链路，仅增强任务记录可观测维度。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-103 采集任务记录日志面板（Phase C-3）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 16:22
+- **计划开始时间**：2026-03-20 16:22
+- **实际开始时间**：2026-03-20 16:22
+- **完成时间**：2026-03-20 16:25
+- **问题**：任务记录页缺少日志查看入口，出现失败时需手工拼接接口 URL 才能定位问题，排障链路不完整。
+- **影响的已完成任务**：CHG-91、CHG-102
+- **文件范围**：
+  - `src/components/admin/AdminCrawlerPanel.tsx`
+- **修复内容**：
+  - 任务记录表新增“操作”列，每条任务提供“查看日志”按钮。
+  - 新增任务日志面板，调用 `GET /admin/crawler/tasks/:id/logs?limit=50` 拉取最近日志并展示时间/级别/阶段/消息。
+  - 新增日志面板关闭与空态、加载态处理，不改变原有任务列表筛选逻辑。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run test:run`
+- **完成备注**：
+  - 仅增强任务观测能力，不改 run/task 执行路径与 API 语义。
+- **问题说明**：_（无）_

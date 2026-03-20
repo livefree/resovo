@@ -1568,3 +1568,14 @@
 - **注意事项**：
   - 本次改动仅增强任务记录可观测性，不改变 run/task 执行语义。
   - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx` 通过。
+
+## [CHG-103] 采集任务记录日志面板（Phase C-3）
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 16:25
+- **修改文件**：
+  - `src/components/admin/AdminCrawlerPanel.tsx` — 任务记录表新增“操作”列与“查看日志”按钮；新增任务日志面板，接入 `/admin/crawler/tasks/:id/logs?limit=50` 展示最近日志。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次改动只补充排障可观测性，不改任务执行、筛选排序与表格持久化行为。
+  - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run test:run` 通过。
