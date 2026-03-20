@@ -1280,3 +1280,16 @@
 - **注意事项**：
   - 本次为设计系统按钮规范代码化，不改动业务逻辑与接口调用
   - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/system/ConfigFileEditor.test.tsx tests/unit/components/admin/videos/VideoFilters.test.tsx`、`npm run typecheck`、`npm run lint`
+
+## [CHG-82] Phase3：落地 AdminModal + 表单规范
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 01:25
+- **修改文件**：
+  - `src/components/admin/shared/modal/AdminModal.tsx` — 新建 modal 规范包装组件
+  - `src/components/admin/shared/form/AdminFormActions.tsx` — 新建表单动作区布局组件
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteFormDialog.tsx` — 接入 `AdminModal` 与 `AdminFormActions`
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次为设计系统 modal/form 规范代码化，不改动业务字段与提交逻辑
+  - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`

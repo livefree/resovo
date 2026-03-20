@@ -378,3 +378,11 @@
 - **内容**：完成按钮设计规范第一批代码化，统一按钮变体语义。
 - **处理动作**：新增 shared AdminButton，并接入 crawler/config/videos 关键按钮；定向测试与静态检查通过。
 - **后续**：进入 CHG-82，落地 AdminModal + 表单规范。
+
+## [LOG-20260320-0125-01] CHG-82 Modal/Form 规范落地完成
+- **时间**：2026-03-20 01:25
+- **类型**：INFO
+- **关联任务**：CHG-82
+- **内容**：完成 admin modal 与 form actions 的 shared 规范代码化并在 crawler-site 首批接入。
+- **处理动作**：新增 AdminModal 与 AdminFormActions，替换 CrawlerSiteFormDialog 组合结构；回归验证通过。
+- **后续**：进入 CHG-83，落地 AdminTable 规范到多模块。

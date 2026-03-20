@@ -3403,3 +3403,31 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测 13/13 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-82 Phase3：落地 AdminModal + 表单规范
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 12:24
+- **计划开始时间**：2026-03-22 10:40
+- **实际开始时间**：2026-03-20 01:24
+- **完成时间**：2026-03-20 01:25
+- **问题**：弹窗与表单动作区在不同模块实现分散，规范尚未统一到 shared 代码。
+- **影响的已完成任务**：CHG-81
+- **文件范围**：
+  - `src/components/admin/shared/modal/AdminModal.tsx`（新增）
+  - `src/components/admin/shared/form/AdminFormActions.tsx`（新增）
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteFormDialog.tsx`
+- **修复内容**：
+  - 新增 `AdminModal`，基于现有 `Modal` 提供统一 modal 语义包装。
+  - 新增 `AdminFormActions`，统一表单底部动作区布局。
+  - `CrawlerSiteFormDialog` 切换为 `AdminModal + AdminFormActions + AdminButton` 组合。
+  - 保持字段、校验、提交流程与关闭行为不变。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_

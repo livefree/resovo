@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import { AdminDialogShell } from '@/components/admin/shared/dialog/AdminDialogShell'
+import { AdminButton } from '@/components/admin/shared/button/AdminButton'
 import { AdminFormField } from '@/components/admin/shared/form/AdminFormField'
+import { AdminFormActions } from '@/components/admin/shared/form/AdminFormActions'
 import { AdminInput } from '@/components/admin/shared/form/AdminInput'
 import { AdminSelect } from '@/components/admin/shared/form/AdminSelect'
+import { AdminModal } from '@/components/admin/shared/modal/AdminModal'
 
 export interface SiteFormData {
   key: string
@@ -61,7 +63,7 @@ export function CrawlerSiteFormDialog({ title, initial, isEdit, onClose, onSave 
   }
 
   return (
-    <AdminDialogShell title={title} onClose={onClose}>
+    <AdminModal open onClose={onClose} title={title} size="md">
       <form onSubmit={handleSubmit}>
         {!isEdit && (
           <AdminFormField label="Key（唯一标识，字母数字下划线）">
@@ -121,15 +123,15 @@ export function CrawlerSiteFormDialog({ title, initial, isEdit, onClose, onSave 
           <span className="text-sm text-[var(--text)]">成人内容源</span>
         </label>
         {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
-        <div className="flex gap-3 justify-end">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-md border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)]">
+        <AdminFormActions>
+          <AdminButton type="button" onClick={onClose}>
             取消
-          </button>
-          <button type="submit" disabled={saving} className="px-4 py-2 text-sm font-semibold rounded-md bg-[var(--accent)] text-black hover:opacity-90 disabled:opacity-50">
+          </AdminButton>
+          <AdminButton type="submit" disabled={saving} variant="primary" className="font-semibold">
             {saving ? '保存中…' : '保存'}
-          </button>
-        </div>
+          </AdminButton>
+        </AdminFormActions>
       </form>
-    </AdminDialogShell>
+    </AdminModal>
   )
 }
