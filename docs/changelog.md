@@ -1477,3 +1477,15 @@
 - **注意事项**：
   - 需执行 `npm run migrate` 应用 `010` 迁移。
   - 旧接口 `POST /admin/crawler/tasks` 仍可用，保证 CHG-87 兼容。
+
+## [CHG-96] 后台登录态稳定性修复（admin 鉴权状态流）
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 15:44
+- **修改文件**：
+  - `src/lib/api-client.ts` — 修复 refresh 响应解析兼容性（`accessToken` / `data.accessToken`）；新增统一未授权处理与 admin 路径登录跳转（携带 `callbackUrl`）。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次只改认证流，不改业务页面逻辑。
+  - 仅在 admin 路径下触发 401 重定向登录；非 admin 页面保持原行为。
+  - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run` 全通过（37 files / 476 tests）。
