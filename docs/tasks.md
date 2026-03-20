@@ -2670,3 +2670,54 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测 5/5 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-55 Phase A2：抽离 CrawlerSiteManager 导入解析逻辑（v1.1）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-19 18:50
+- **计划开始时间**：2026-03-19 19:05
+- **实际开始时间**：2026-03-19 18:58
+- **完成时间**：2026-03-19 19:04
+- **问题**：导入解析逻辑内联在组件中，复杂度高且难以针对兼容规则独立测试。
+- **影响的已完成任务**：CHG-54
+- **文件范围**：
+  - `src/components/admin/system/crawler-site/importParser.ts`
+  - `src/components/admin/system/CrawlerSiteManager.tsx`
+  - `tests/unit/components/admin/system/crawler-site/importParser.test.ts`
+- **修复内容**：
+  - 新建 `importParser.ts`，抽离并导出 `parseSitesFromJson`。
+  - 组件改为调用解析模块，保留导入流程行为不变。
+  - 新增解析器单测，覆盖 map/array/字段别名/去重等场景。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/system/crawler-site/importParser.test.ts`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 8/8 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-56 Phase A3：抽离列表列管理/拖拽宽度 hooks（v1.1）
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-03-19 18:50
+- **计划开始时间**：2026-03-19 19:30
+- **实际开始时间**：2026-03-19 19:04
+- **完成时间**：
+- **问题**：列显隐、排序、筛选、拖拽调宽和持久化逻辑仍集中在主组件。
+- **影响的已完成任务**：CHG-55
+- **文件范围**：
+  - `src/components/admin/system/CrawlerSiteManager.tsx`
+  - `src/components/admin/system/crawler-site/hooks/*`
+- **修复内容**：
+  - 进行中：准备抽离 `useCrawlerSiteColumns` 等 hooks，保持交互行为不变。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - _（进行中）_
+- **问题说明**：_（无）_

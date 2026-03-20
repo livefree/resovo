@@ -947,3 +947,15 @@
 - **数据库变更**：无
 - **注意事项**：
   - 本次为结构性切片，保证行为与交互不变，作为 v1.1 后续拆分基础
+
+## [CHG-55] Phase A2：抽离 CrawlerSiteManager 导入解析逻辑（v1.1）
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 19:04
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/importParser.ts` — 新建，导入 JSON 兼容解析与去重逻辑
+  - `src/components/admin/system/CrawlerSiteManager.tsx` — 删除内联解析函数，改为调用 importParser
+  - `tests/unit/components/admin/system/crawler-site/importParser.test.ts` — 新增解析器单测
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 解析器行为保持与原逻辑一致（兼容字段别名、按 API 去重）
