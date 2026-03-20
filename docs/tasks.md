@@ -2514,3 +2514,29 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测通过（3/3）；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-49 列表状态持久化回归修复（离页后丢失）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-19 17:00
+- **计划开始时间**：2026-03-19 17:02
+- **实际开始时间**：2026-03-19 17:04
+- **完成时间**：2026-03-19 17:07
+- **问题**：视频源配置列表离开页面后，隐藏列与排序状态仍可能丢失。
+- **影响的已完成任务**：CHG-48
+- **文件范围**：
+  - `src/components/admin/system/CrawlerSiteManager.tsx`
+  - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+- **修复内容**：
+  - 增加本地状态恢复写入门闩：仅在恢复 localStorage 完成后才允许写回。
+  - 避免初始默认状态在挂载早期覆盖已有持久化数据。
+  - 新增“重挂载后恢复排序与隐藏列”回归测试。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 4/4 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_

@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { apiClient } from '@/lib/api-client'
 import type { CrawlerSite, CreateCrawlerSiteInput, UpdateCrawlerSiteInput, CrawlerSiteBatchAction } from '@/types'
 
@@ -275,6 +275,7 @@ function SiteForm({
 // ── 主组件 ────────────────────────────────────────────────────
 
 export function CrawlerSiteManager() {
+  const storageReadyRef = useRef(false)
   const [sites, setSites] = useState<CrawlerSite[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -312,23 +313,28 @@ export function CrawlerSiteManager() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
-      if (!raw) return
-      const parsed = JSON.parse(raw) as {
-        sortBy?: SortField
-        sortDir?: SortDir
-        filters?: Partial<FilterState>
-        columns?: Partial<ColumnVisibility>
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          sortBy?: SortField
+          sortDir?: SortDir
+          filters?: Partial<FilterState>
+          columns?: Partial<ColumnVisibility>
+        }
+        if (parsed.sortBy) setSortBy(parsed.sortBy)
+        if (parsed.sortDir) setSortDir(parsed.sortDir)
+        if (parsed.filters) setFilters((prev) => ({ ...prev, ...parsed.filters }))
+        if (parsed.columns) setColumns((prev) => ({ ...prev, ...parsed.columns }))
       }
-      if (parsed.sortBy) setSortBy(parsed.sortBy)
-      if (parsed.sortDir) setSortDir(parsed.sortDir)
-      if (parsed.filters) setFilters((prev) => ({ ...prev, ...parsed.filters }))
-      if (parsed.columns) setColumns((prev) => ({ ...prev, ...parsed.columns }))
     } catch {
       // 忽略损坏缓存
+    } finally {
+      // 仅在恢复完成后允许写入，避免初始默认值覆盖已有偏好
+      storageReadyRef.current = true
     }
   }, [])
 
   useEffect(() => {
+    if (!storageReadyRef.current) return
     try {
       localStorage.setItem(
         STORAGE_KEY,

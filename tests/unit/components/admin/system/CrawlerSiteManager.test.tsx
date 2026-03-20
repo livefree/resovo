@@ -92,4 +92,22 @@ describe('CrawlerSiteManager', () => {
       expect(rows.length).toBeGreaterThan(2)
     })
   })
+
+  it('restores sort and column visibility from localStorage after remount', async () => {
+    const { unmount } = render(<CrawlerSiteManager />)
+    await screen.findByText('Alpha 源')
+
+    fireEvent.click(screen.getByText('名称 / Key'))
+    fireEvent.click(screen.getByText('显示列'))
+    fireEvent.click(screen.getByLabelText('API 地址'))
+
+    unmount()
+
+    render(<CrawlerSiteManager />)
+    await screen.findByText('Alpha 源')
+
+    expect(screen.getByText('名称 / Key ↑')).not.toBeNull()
+    const apiHeader = screen.getAllByText('API 地址')[0]?.closest('th')
+    expect(apiHeader?.className).toContain('hidden')
+  })
 })

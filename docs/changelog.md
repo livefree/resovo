@@ -882,3 +882,14 @@
 - **注意事项**：
   - 列表状态持久化 key：`crawler-site-manager:v2`
   - 导入逻辑优先按 API 匹配现有源站并更新，避免重复 API 造成冲突
+
+## [CHG-49] 列表状态持久化回归修复（离页后丢失）
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 17:07
+- **修改文件**：
+  - `src/components/admin/system/CrawlerSiteManager.tsx` — 增加 localStorage 恢复完成门闩，避免初始默认值覆盖已保存状态
+  - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx` — 新增重挂载恢复测试（排序与隐藏列）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 该修复针对页面切换/重挂载场景下状态覆盖问题
