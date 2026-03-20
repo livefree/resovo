@@ -2728,20 +2728,46 @@ _（任务 review 通过后移入此处）_
 
 #### CHG-57 Phase A4：抽离选择/批量操作 hooks（v1.1）
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-19 18:50
 - **计划开始时间**：2026-03-19 20:00
 - **实际开始时间**：2026-03-19 19:06
-- **完成时间**：
+- **完成时间**：2026-03-19 19:11
 - **问题**：源站选择/全选/批量操作耦合在主组件，影响后续容器化拆分。
 - **影响的已完成任务**：CHG-56
 - **文件范围**：
   - `src/components/admin/system/CrawlerSiteManager.tsx`
-  - `src/components/admin/system/crawler-site/hooks/*`
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteSelection.ts`
 - **修复内容**：
-  - 进行中：抽离 `useCrawlerSiteSelection`，封装选择状态与批量选择逻辑。
+  - 新建 `useCrawlerSiteSelection`，封装 `selected/toggleSelect/toggleAll/clearSelection`。
+  - 主组件删除内联选择逻辑，改为按 `displaySites` 派生可见 key 并消费 hook。
+  - 保持原有行为：全选仅作用于当前可见列表，批量成功后清空选择。
 - **测试要求**：
-  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/system/crawler-site/importParser.test.ts`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 8/8 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-58 Phase A5：容器+表格组件拆分落地（v1.1）
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-03-19 18:50
+- **计划开始时间**：2026-03-19 20:30
+- **实际开始时间**：2026-03-19 19:11
+- **完成时间**：
+- **问题**：`CrawlerSiteManager` 仍承载大量表格渲染与行交互细节，容器职责不清晰。
+- **影响的已完成任务**：CHG-57
+- **文件范围**：
+  - `src/components/admin/system/CrawlerSiteManager.tsx`
+  - `src/components/admin/system/crawler-site/components/*`
+- **修复内容**：
+  - 进行中：拆出列表表格视图组件，容器仅保留数据获取与业务动作编排。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/system/crawler-site/importParser.test.ts`
   - `npm run typecheck`
   - `npm run lint`
 - **完成备注**：

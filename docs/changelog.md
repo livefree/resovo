@@ -970,3 +970,14 @@
 - **数据库变更**：无
 - **注意事项**：
   - 本次为结构切片，交互行为保持不变
+
+## [CHG-57] Phase A4：抽离选择/批量操作 hooks（v1.1）
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 19:11
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteSelection.ts` — 新建，集中选择状态与全选逻辑
+  - `src/components/admin/system/CrawlerSiteManager.tsx` — 删除内联选择逻辑，改为调用 `useCrawlerSiteSelection`
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 全选行为维持“仅作用当前筛选后的可见列表”；批量成功后自动清空选择

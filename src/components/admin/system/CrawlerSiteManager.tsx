@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
 import type { CrawlerSite, CreateCrawlerSiteInput, UpdateCrawlerSiteInput, CrawlerSiteBatchAction } from '@/types'
 import { useCrawlerSiteColumns } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns'
+import { useCrawlerSiteSelection } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteSelection'
 import { parseSitesFromJson } from '@/components/admin/system/crawler-site/importParser'
 
 // ── 类型 ──────────────────────────────────────────────────────
@@ -210,7 +211,6 @@ function SiteForm({
 export function CrawlerSiteManager() {
   const [sites, setSites] = useState<CrawlerSite[]>([])
   const [loading, setLoading] = useState(true)
-  const [selected, setSelected] = useState<Set<string>>(new Set())
   const [editTarget, setEditTarget] = useState<CrawlerSite | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [validateStates, setValidateStates] = useState<Record<string, ValidateStatus>>({})
@@ -295,33 +295,17 @@ export function CrawlerSiteManager() {
     })
   }, [sites, filters, sortBy, sortDir])
 
-  // ── 选择 ───────────────────────────────────────────────────
-
-  function toggleSelect(key: string) {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
-      return next
-    })
-  }
-
-  function toggleAll() {
-    const visibleKeys = displaySites.map((s) => s.key)
-    const allVisibleSelected = visibleKeys.every((k) => selected.has(k))
-    if (allVisibleSelected) {
-      setSelected((prev) => {
-        const next = new Set(prev)
-        for (const k of visibleKeys) next.delete(k)
-        return next
-      })
-      return
-    }
-    setSelected((prev) => {
-      const next = new Set(prev)
-      for (const k of visibleKeys) next.add(k)
-      return next
-    })
-  }
+  const visibleKeys = useMemo(
+    () => displaySites.map((site) => site.key),
+    [displaySites],
+  )
+  const {
+    selected,
+    allVisibleSelected,
+    toggleSelect,
+    toggleAll,
+    clearSelection,
+  } = useCrawlerSiteSelection(visibleKeys)
 
   // ── 验证 ───────────────────────────────────────────────────
 
@@ -396,7 +380,7 @@ export function CrawlerSiteManager() {
         action,
       })
       await fetchSites()
-      setSelected(new Set())
+      clearSelection()
       showToast(`批量${label}成功，影响 ${res.data.affected} 条`, true)
     } catch {
       showToast('批量操作失败', false)
@@ -587,7 +571,7 @@ export function CrawlerSiteManager() {
               <th className="w-8 px-3 py-3 text-left">
                 <input
                   type="checkbox"
-                  checked={displaySites.length > 0 && displaySites.every((s) => selected.has(s.key))}
+                  checked={allVisibleSelected}
                   onChange={toggleAll}
                   className="accent-[var(--accent)]"
                 />
