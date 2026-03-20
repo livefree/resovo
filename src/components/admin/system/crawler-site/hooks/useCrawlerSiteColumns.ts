@@ -52,6 +52,11 @@ export function useCrawlerSiteColumns() {
     setSortDir('asc')
   }
 
+  function setSort(field: SortField, dir: SortDir) {
+    setSortBy(field)
+    setSortDir(dir)
+  }
+
   function toggleColumn(columnId: ColumnId) {
     if (REQUIRED_COLUMNS.includes(columnId)) return
     setColumns((prev) => ({ ...prev, [columnId]: !prev[columnId] }))
@@ -110,6 +115,7 @@ export function useCrawlerSiteColumns() {
     setFilters,
     setShowColumnsPanel,
     handleSort,
+    setSort,
     toggleColumn,
     startResize,
     visibleColumnCount,

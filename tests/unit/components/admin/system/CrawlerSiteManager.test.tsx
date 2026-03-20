@@ -86,7 +86,7 @@ describe('CrawlerSiteManager', () => {
     render(<CrawlerSiteManager />)
     await screen.findByText('Alpha 源')
 
-    fireEvent.click(screen.getByText('权重 ↓'))
+    fireEvent.click(screen.getAllByRole('button', { name: /权重/i })[0])
     await waitFor(() => {
       const rows = screen.getAllByRole('row')
       expect(rows.length).toBeGreaterThan(2)
@@ -97,8 +97,8 @@ describe('CrawlerSiteManager', () => {
     const { unmount } = render(<CrawlerSiteManager />)
     await screen.findByText('Alpha 源')
 
-    fireEvent.click(screen.getByText('名称 / Key'))
-    fireEvent.click(screen.getByText('显示列'))
+    fireEvent.click(screen.getAllByRole('button', { name: /名称 \/ Key/i })[0])
+    fireEvent.click(screen.getByText('列设置'))
     fireEvent.click(screen.getByLabelText('API 地址'))
 
     unmount()
@@ -106,7 +106,7 @@ describe('CrawlerSiteManager', () => {
     render(<CrawlerSiteManager />)
     await screen.findByText('Alpha 源')
 
-    expect(screen.getByText('名称 / Key ↑')).not.toBeNull()
+    expect(screen.getAllByRole('button', { name: /名称 \/ Key/i })[0]?.textContent).toContain('↑')
     const apiHeader = screen.getAllByText('API 地址')[0]?.closest('th')
     expect(apiHeader?.className).toContain('hidden')
   })

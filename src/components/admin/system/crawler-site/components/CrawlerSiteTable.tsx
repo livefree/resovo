@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { CrawlerSite, UpdateCrawlerSiteInput } from "@/types"
 import type {
   ColumnId,
@@ -7,9 +8,10 @@ import type {
   SortDir,
   SortField,
 } from "@/components/admin/system/crawler-site/tableState"
-import { CrawlerSiteFilters } from "@/components/admin/system/crawler-site/components/CrawlerSiteFilters"
+import { DEFAULT_FILTERS } from "@/components/admin/system/crawler-site/tableState"
 import { AdminTableState } from "@/components/admin/shared/feedback/AdminTableState"
 import { AdminTableFrame } from "@/components/admin/shared/table/AdminTableFrame"
+import { CrawlerSiteTableLiteHeader } from "@/components/admin/system/crawler-site/components/CrawlerSiteTableLiteHeader"
 
 type ValidateStatus = "idle" | "checking" | "ok" | "error" | "timeout"
 
@@ -43,6 +45,9 @@ interface CrawlerSiteTableProps {
   rowSaving: Record<string, boolean>
   crawlTriggering: Record<string, boolean>
   setFilters: Dispatch<SetStateAction<FilterState>>
+  setSort: (field: SortField, dir: SortDir) => void
+  toggleColumn: (columnId: ColumnId) => void
+  requiredColumns: ColumnId[]
   colClass: (id: ColumnId) => string
   handleSort: (field: SortField) => void
   startResize: (columnId: ColumnId, clientX: number) => void
@@ -71,6 +76,9 @@ export function CrawlerSiteTable({
   rowSaving,
   crawlTriggering,
   setFilters,
+  setSort,
+  toggleColumn,
+  requiredColumns,
   colClass,
   handleSort,
   startResize,
@@ -84,59 +92,73 @@ export function CrawlerSiteTable({
   setEditTarget,
   showToast,
 }: CrawlerSiteTableProps) {
+  const [openMenuColumn, setOpenMenuColumn] = useState<ColumnId | null>(null)
+  const wrapperRef = useRef<HTMLTableSectionElement | null>(null)
+
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      if (!wrapperRef.current) return
+      if (wrapperRef.current.contains(event.target as Node)) return
+      setOpenMenuColumn(null)
+    }
+    window.addEventListener("mousedown", onPointerDown)
+    return () => window.removeEventListener("mousedown", onPointerDown)
+  }, [])
+
+  const clearColumnFilter = useMemo(() => (
+    (columnId: ColumnId) => {
+      switch (columnId) {
+        case "name":
+          setFilters((prev) => ({ ...prev, keyOrName: DEFAULT_FILTERS.keyOrName }))
+          break
+        case "apiUrl":
+          setFilters((prev) => ({ ...prev, apiUrl: DEFAULT_FILTERS.apiUrl }))
+          break
+        case "sourceType":
+          setFilters((prev) => ({ ...prev, sourceType: DEFAULT_FILTERS.sourceType }))
+          break
+        case "format":
+          setFilters((prev) => ({ ...prev, format: DEFAULT_FILTERS.format }))
+          break
+        case "weight":
+          setFilters((prev) => ({ ...prev, weightMin: DEFAULT_FILTERS.weightMin, weightMax: DEFAULT_FILTERS.weightMax }))
+          break
+        case "isAdult":
+          setFilters((prev) => ({ ...prev, isAdult: DEFAULT_FILTERS.isAdult }))
+          break
+        case "fromConfig":
+          setFilters((prev) => ({ ...prev, fromConfig: DEFAULT_FILTERS.fromConfig }))
+          break
+        case "disabled":
+          setFilters((prev) => ({ ...prev, disabled: DEFAULT_FILTERS.disabled }))
+          break
+        default:
+          break
+      }
+    }
+  ), [setFilters])
+
   return (
     <AdminTableFrame minWidth={visibleTableMinWidth} scrollTestId="crawler-sites-scroll-container">
-      <thead>
-            <tr className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg2)]">
-              <th className="w-8 px-3 py-3 text-left">
-                <input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} className="accent-[var(--accent)]" />
-              </th>
-              <th className={`${colClass("name")} relative px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} style={{ width: columnWidths.name, minWidth: columnWidths.name }} onClick={() => handleSort("name")}>
-                名称 / Key {sortBy === "name" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                <span data-testid="resize-handle-name" onMouseDown={(e) => { e.stopPropagation(); startResize("name", e.clientX) }} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-[var(--border)]" />
-              </th>
-              <th className={`${colClass("apiUrl")} relative px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} style={{ width: columnWidths.apiUrl, minWidth: columnWidths.apiUrl }} onClick={() => handleSort("apiUrl")}>
-                API 地址 {sortBy === "apiUrl" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                <span data-testid="resize-handle-apiUrl" onMouseDown={(e) => { e.stopPropagation(); startResize("apiUrl", e.clientX) }} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-[var(--border)]" />
-              </th>
-              <th className={`${colClass("sourceType")} relative px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} style={{ width: columnWidths.sourceType, minWidth: columnWidths.sourceType }} onClick={() => handleSort("sourceType")}>
-                类型 {sortBy === "sourceType" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                <span data-testid="resize-handle-sourceType" onMouseDown={(e) => { e.stopPropagation(); startResize("sourceType", e.clientX) }} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-[var(--border)]" />
-              </th>
-              <th className={`${colClass("format")} relative px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} style={{ width: columnWidths.format, minWidth: columnWidths.format }} onClick={() => handleSort("format")}>
-                格式 {sortBy === "format" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                <span data-testid="resize-handle-format" onMouseDown={(e) => { e.stopPropagation(); startResize("format", e.clientX) }} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-[var(--border)]" />
-              </th>
-              <th className={`${colClass("weight")} relative px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} style={{ width: columnWidths.weight, minWidth: columnWidths.weight }} onClick={() => handleSort("weight")}>
-                权重 {sortBy === "weight" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                <span data-testid="resize-handle-weight" onMouseDown={(e) => { e.stopPropagation(); startResize("weight", e.clientX) }} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-[var(--border)]" />
-              </th>
-              <th className={`${colClass("isAdult")} relative px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} style={{ width: columnWidths.isAdult, minWidth: columnWidths.isAdult }} onClick={() => handleSort("isAdult")}>
-                成人 {sortBy === "isAdult" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                <span data-testid="resize-handle-isAdult" onMouseDown={(e) => { e.stopPropagation(); startResize("isAdult", e.clientX) }} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-[var(--border)]" />
-              </th>
-              <th className={`${colClass("fromConfig")} relative px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} style={{ width: columnWidths.fromConfig, minWidth: columnWidths.fromConfig }} onClick={() => handleSort("fromConfig")}>
-                来源 {sortBy === "fromConfig" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                <span data-testid="resize-handle-fromConfig" onMouseDown={(e) => { e.stopPropagation(); startResize("fromConfig", e.clientX) }} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-[var(--border)]" />
-              </th>
-              <th className={`${colClass("disabled")} relative px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} style={{ width: columnWidths.disabled, minWidth: columnWidths.disabled }} onClick={() => handleSort("disabled")}>
-                状态 {sortBy === "disabled" ? (sortDir === "asc" ? "↑" : "↓") : ""}
-                <span data-testid="resize-handle-disabled" onMouseDown={(e) => { e.stopPropagation(); startResize("disabled", e.clientX) }} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-[var(--border)]" />
-              </th>
-              <th className={`${colClass("lastCrawl")} relative px-3 py-3 text-left font-medium text-[var(--muted)]`} style={{ width: columnWidths.lastCrawl, minWidth: columnWidths.lastCrawl }}>
-                最近采集
-                <span data-testid="resize-handle-lastCrawl" onMouseDown={(e) => { e.stopPropagation(); startResize("lastCrawl", e.clientX) }} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-[var(--border)]" />
-              </th>
-              <th className={`${colClass("crawlOps")} relative px-3 py-3 text-left font-medium text-[var(--muted)]`} style={{ width: columnWidths.crawlOps, minWidth: columnWidths.crawlOps }}>
-                采集操作
-                <span data-testid="resize-handle-crawlOps" onMouseDown={(e) => { e.stopPropagation(); startResize("crawlOps", e.clientX) }} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-[var(--border)]" />
-              </th>
-              <th className={`${colClass("manageOps")} relative px-3 py-3 text-left font-medium text-[var(--muted)]`} style={{ width: columnWidths.manageOps, minWidth: columnWidths.manageOps }}>
-                管理操作
-                <span data-testid="resize-handle-manageOps" onMouseDown={(e) => { e.stopPropagation(); startResize("manageOps", e.clientX) }} className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-[var(--border)]" />
-              </th>
-            </tr>
-            <CrawlerSiteFilters filters={filters} colClass={colClass} setFilters={setFilters} />
+      <thead ref={wrapperRef}>
+        <CrawlerSiteTableLiteHeader
+          sortBy={sortBy}
+          sortDir={sortDir}
+          filters={filters}
+          columnWidths={columnWidths}
+          colClass={colClass}
+          allVisibleSelected={allVisibleSelected}
+          toggleAll={toggleAll}
+          startResize={startResize}
+          onSort={handleSort}
+          onSetSort={setSort}
+          onPatchFilter={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
+          onClearColumnFilter={clearColumnFilter}
+          onToggleColumn={toggleColumn}
+          requiredColumns={requiredColumns}
+          openMenuColumn={openMenuColumn}
+          setOpenMenuColumn={setOpenMenuColumn}
+        />
       </thead>
       <tbody>
         <AdminTableState

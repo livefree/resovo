@@ -13,7 +13,8 @@ import { useCrawlerSiteColumns } from '@/components/admin/system/crawler-site/ho
 import { useCrawlerSiteSelection } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteSelection'
 import { useCrawlerSites } from '@/components/admin/system/crawler-site/hooks/useCrawlerSites'
 import { CrawlerSiteTable } from '@/components/admin/system/crawler-site/components/CrawlerSiteTable'
-import { CrawlerSiteToolbar } from '@/components/admin/system/crawler-site/components/CrawlerSiteToolbar'
+import { CrawlerSiteTopToolbar } from '@/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar'
+import { ActiveFilterChipsBar } from '@/components/admin/system/crawler-site/components/ActiveFilterChipsBar'
 import {
   CrawlerSiteFormDialog,
   EMPTY_SITE_FORM,
@@ -50,6 +51,7 @@ export function CrawlerSiteManager() {
     setFilters,
     setShowColumnsPanel,
     handleSort,
+    setSort,
     toggleColumn,
     startResize,
     visibleColumnCount,
@@ -297,7 +299,9 @@ export function CrawlerSiteManager() {
 
   return (
     <div>
-      <CrawlerSiteToolbar
+      <CrawlerSiteTopToolbar
+        filters={filters}
+        setFilters={setFilters}
         showColumnsPanel={showColumnsPanel}
         columns={columns}
         requiredColumns={requiredColumns}
@@ -322,6 +326,8 @@ export function CrawlerSiteManager() {
         }}
       />
 
+      <ActiveFilterChipsBar filters={filters} setFilters={setFilters} />
+
       <CrawlerSiteTable
         displaySites={displaySites}
         selected={selected}
@@ -338,6 +344,9 @@ export function CrawlerSiteManager() {
         setFilters={setFilters}
         colClass={colClass}
         handleSort={handleSort}
+        setSort={setSort}
+        toggleColumn={toggleColumn}
+        requiredColumns={requiredColumns}
         startResize={startResize}
         toggleSelect={toggleSelect}
         toggleAll={toggleAll}

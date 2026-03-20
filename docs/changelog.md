@@ -1220,3 +1220,23 @@
 - **注意事项**：
   - 本次仅 UI 样式与按钮顺序调整，不改动回调、参数、API 顺序、异步流程与权限逻辑
   - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
+
+## [CHG-78] Phase2：crawler-site 筛选可视化
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 01:14
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx` — 接入 TopToolbar + ActiveFilterChipsBar，透传列菜单所需排序/筛选控制
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns.ts` — 新增 `setSort(field, dir)` 以支持列菜单定向排序
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx` — 替换重表头筛选行为为轻表头 + 列菜单
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar.tsx` — 新建，承载主操作、快速筛选、列设置、高级筛选入口
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteAdvancedFilters.tsx` — 新建，承载 API/格式/成人/权重等低频筛选
+  - `src/components/admin/system/crawler-site/components/ActiveFilterChipsBar.tsx` — 新建，展示生效筛选并支持单项移除/清空
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTableLiteHeader.tsx` — 新建，轻量表头与列菜单入口
+  - `src/components/admin/system/crawler-site/components/ColumnMenu.tsx` — 新建，列级排序/筛选/清除/隐藏操作
+  - `src/components/admin/system/crawler-site/components/ColumnFilterPanel.tsx` — 新建，列级筛选控件
+  - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx` — 更新断言以适配轻表头和列设置入口
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 保持 API、字段结构、筛选语义、列宽拖拽、列显隐持久化、排序持久化不变
+  - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`

@@ -346,3 +346,11 @@
 - **内容**：完成 crawler-site 行操作按钮层级优化，提升高频动作可见性。
 - **处理动作**：调整采集与管理列按钮视觉优先级和顺序；执行定向单测、typecheck、lint 均通过。
 - **后续**：进入 CHG-78，优化筛选可视化。
+
+## [LOG-20260320-0114-01] CHG-78 轻表头+列菜单重构完成
+- **时间**：2026-03-20 01:14
+- **类型**：INFO
+- **关联任务**：CHG-78
+- **内容**：完成 crawler-site 列表页由“重表头筛选”向“轻表头 + 按需列菜单 + 筛选状态条”迁移。
+- **处理动作**：新增 TopToolbar/AdvancedFilters/ChipsBar/ColumnMenu/ColumnFilterPanel/LiteHeader，并保留筛选语义、排序/列宽/列显隐持久化行为；回归测试通过。
+- **后续**：可继续 CHG-79（config-file 粘性保存区）或按需补充 column menu 交互单测。

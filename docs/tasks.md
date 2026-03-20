@@ -3286,3 +3286,38 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测 5/5 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-78 Phase2：crawler-site 筛选可视化
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 12:24
+- **计划开始时间**：2026-03-21 11:20
+- **实际开始时间**：2026-03-20 00:55
+- **完成时间**：2026-03-20 01:14
+- **问题**：表头承载筛选控件导致噪音过高，筛选状态感知弱，列操作入口分散。
+- **影响的已完成任务**：CHG-77
+- **文件范围**：
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns.ts`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar.tsx`（新增）
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteAdvancedFilters.tsx`（新增）
+  - `src/components/admin/system/crawler-site/components/ActiveFilterChipsBar.tsx`（新增）
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTableLiteHeader.tsx`（新增）
+  - `src/components/admin/system/crawler-site/components/ColumnMenu.tsx`（新增）
+  - `src/components/admin/system/crawler-site/components/ColumnFilterPanel.tsx`（新增）
+  - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+- **修复内容**：
+  - 迁移表头筛选行到顶部工具栏与高级筛选面板，表头降级为“列名+排序+筛选态+列菜单”。
+  - 新增筛选状态 Chips 条，支持单项移除与清空筛选。
+  - 新增列菜单，支持列级排序、列级筛选、清除当前列筛选与隐藏列。
+  - 保持筛选语义、排序持久化、列显隐持久化与列宽拖拽逻辑不变。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_
