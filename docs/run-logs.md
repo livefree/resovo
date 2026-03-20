@@ -266,3 +266,11 @@
 - **内容**：按更新后的 admin v2 方案启动工程实施序列（SEQ-20260320-03）。
 - **处理动作**：写入 CHG-69~84 任务编排，将 CHG-69 置为进行中并绑定强 DoD 验收。
 - **后续**：进入 CHG-69 代码实施：提取 `AdminTableFrame` 与 `AdminTableState`。
+
+## [LOG-20260319-2318-01] CHG-69 shared 表壳抽离完成
+- **时间**：2026-03-19 23:18
+- **类型**：INFO
+- **关联任务**：CHG-69
+- **内容**：完成 crawler-site 表格外壳与空态渲染的 shared 抽离，保持行为不变。
+- **处理动作**：新增 `AdminTableFrame`、`AdminTableState` 并接入 `CrawlerSiteTable`；执行定向单测、typecheck、lint 均通过。
+- **后续**：进入 CHG-70，抽离 AdminToolbar。

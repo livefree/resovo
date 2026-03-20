@@ -313,17 +313,17 @@
 ## [SEQ-20260320-03] Admin v2 工程实施（执行序列）
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-20 12:24
-- **最后更新时间**：2026-03-20 12:26
+- **最后更新时间**：2026-03-19 23:18
 - **目标**：按 v2 方案推进 shared 抽象、局部 UI 优化和设计系统代码化落地
 - **范围**：`src/components/admin/shared/*` + `crawler-site/videos/users/sources` + 对应 docs/rules
 - **依赖**：`docs/admin_v2_refactor_plan.md`、`docs/admin_design_system_v1.md`
 
 ### 任务列表（按执行顺序）
-1. CHG-69 — Phase1：抽离 AdminTableFrame/AdminTableState（状态：🔄 进行中）
+1. CHG-69 — Phase1：抽离 AdminTableFrame/AdminTableState（状态：✅ 已完成）
    - 创建时间：2026-03-20 12:24
    - 计划开始：2026-03-20 12:28
    - 实际开始：2026-03-20 12:26
-   - 完成时间：
+   - 完成时间：2026-03-19 23:18
    - 验收要点：表格强 DoD 四条满足；crawler-site 行为不变
 
 2. CHG-70 — Phase1：抽离 AdminToolbar（状态：⬜ 待开始）

@@ -8,6 +8,8 @@ import type {
   SortField,
 } from "@/components/admin/system/crawler-site/tableState"
 import { CrawlerSiteFilters } from "@/components/admin/system/crawler-site/components/CrawlerSiteFilters"
+import { AdminTableState } from "@/components/admin/shared/feedback/AdminTableState"
+import { AdminTableFrame } from "@/components/admin/shared/table/AdminTableFrame"
 
 type ValidateStatus = "idle" | "checking" | "ok" | "error" | "timeout"
 
@@ -83,10 +85,8 @@ export function CrawlerSiteTable({
   showToast,
 }: CrawlerSiteTableProps) {
   return (
-    <div className="rounded-lg border border-[var(--border)] overflow-hidden">
-      <div data-testid="crawler-sites-scroll-container" className="h-[60vh] min-h-[420px] max-h-[720px] overflow-y-auto overflow-x-auto">
-        <table className="w-full table-fixed text-sm" style={{ minWidth: `${visibleTableMinWidth}px` }}>
-          <thead>
+    <AdminTableFrame minWidth={visibleTableMinWidth} scrollTestId="crawler-sites-scroll-container">
+      <thead>
             <tr className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg2)]">
               <th className="w-8 px-3 py-3 text-left">
                 <input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} className="accent-[var(--accent)]" />
@@ -137,14 +137,14 @@ export function CrawlerSiteTable({
               </th>
             </tr>
             <CrawlerSiteFilters filters={filters} colClass={colClass} setFilters={setFilters} />
-          </thead>
-          <tbody>
-            {displaySites.length === 0 && (
-              <tr>
-                <td colSpan={visibleColumnCount + 1} className="px-3 py-10 text-center text-[var(--muted)] text-sm">没有符合当前筛选条件的源站</td>
-              </tr>
-            )}
-            {displaySites.map((site) => {
+      </thead>
+      <tbody>
+        <AdminTableState
+          isEmpty={displaySites.length === 0}
+          colSpan={visibleColumnCount + 1}
+          emptyText="没有符合当前筛选条件的源站"
+        />
+        {displaySites.map((site) => {
               const vs = validateStates[site.key] ?? "idle"
               const rowBusy = rowSaving[site.key] === true
               const canInlineEdit = !site.fromConfig
@@ -237,10 +237,8 @@ export function CrawlerSiteTable({
                   </td>
                 </tr>
               )
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
+        })}
+      </tbody>
+    </AdminTableFrame>
   )
 }

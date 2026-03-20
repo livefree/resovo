@@ -3054,11 +3054,11 @@ _（任务 review 通过后移入此处）_
 
 #### CHG-69 Phase1：抽离 AdminTableFrame/AdminTableState
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-20 12:24
 - **计划开始时间**：2026-03-20 12:28
 - **实际开始时间**：2026-03-20 12:26
-- **完成时间**：
+- **完成时间**：2026-03-19 23:18
 - **问题**：`crawler-site` 仍在业务组件内维护表格外壳与状态渲染，阻塞 shared 抽象第一步。
 - **影响的已完成任务**：CHG-68
 - **文件范围**：
@@ -3066,12 +3066,14 @@ _（任务 review 通过后移入此处）_
   - `src/components/admin/shared/feedback/AdminTableState.tsx`（新增）
   - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`
 - **修复内容**：
-  - 进行中：从 `CrawlerSiteTable` 提取表格壳与 loading/empty 状态块到 shared，保持业务列与行渲染不变。
+  - 新增 `AdminTableFrame`，承载 crawler-site 当前表格外壳、滚动容器和 table 基础结构。
+  - 新增 `AdminTableState`，统一空态/加载态占位行渲染（本任务先接入空态，加载态保持可选）。
+  - `CrawlerSiteTable` 改为组合 shared 组件，保持列定义、排序、筛选、拖拽、行内操作行为不变。
 - **测试要求**：
   - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
   - `npm run typecheck`
   - `npm run lint`
   - 手动验证：列宽拖拽 ±1px、刷新后滚动保持、sticky header 无抖动、selection 不丢失
 - **完成备注**：
-  - _（进行中）_
+  - 定向单测 5/5 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_

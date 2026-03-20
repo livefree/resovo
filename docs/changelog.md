@@ -1110,3 +1110,16 @@
 - **数据库变更**：无
 - **注意事项**：
   - 后续 PR 必须遵守“单维度提交”与 UI 阶段硬边界，不允许混提
+
+## [CHG-69] Phase1：抽离 AdminTableFrame/AdminTableState
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 23:18
+- **修改文件**：
+  - `src/components/admin/shared/table/AdminTableFrame.tsx` — 新建 shared 表格壳组件，统一滚动容器与 table 框架
+  - `src/components/admin/shared/feedback/AdminTableState.tsx` — 新建 shared 空态/加载态行组件
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx` — 接入 shared 表壳与空态渲染，移除内联重复结构
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅 shared 抽离，不改动数据结构、API 调用顺序、异步流程与权限逻辑
+  - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
