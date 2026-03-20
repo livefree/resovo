@@ -97,6 +97,26 @@ export async function updateTaskStatus(
   )
 }
 
+export async function updateTaskProgress(
+  db: Pool,
+  id: string,
+  progress: {
+    videosUpserted: number
+    sourcesUpserted: number
+    errors: number
+    pages: number
+    durationMs: number
+  }
+): Promise<void> {
+  await db.query(
+    `UPDATE crawler_tasks
+     SET status = 'running',
+         result = COALESCE(result, '{}'::jsonb) || $2::jsonb
+     WHERE id = $1`,
+    [id, JSON.stringify(progress)],
+  )
+}
+
 // ── 查询任务列表 ──────────────────────────────────────────────────
 
 export async function listTasks(
@@ -220,14 +240,18 @@ export async function getCrawlerOverview(db: Pool): Promise<CrawlerOverview> {
        SELECT
          SUM(
            CASE
-             WHEN (result ->> 'videosUpserted') ~ '^[0-9]+$'
+             WHEN status IN ('running', 'done')
+              AND (result ->> 'videosUpserted') ~ '^[0-9]+$'
                THEN (result ->> 'videosUpserted')::bigint
              ELSE 0
            END
          )::text AS today_videos,
          SUM(
            CASE
-             WHEN (result ->> 'durationMs') ~ '^[0-9]+$'
+             WHEN status = 'running'
+               THEN GREATEST((EXTRACT(EPOCH FROM (NOW() - scheduled_at)) * 1000)::bigint, 0)
+             WHEN status = 'done'
+              AND (result ->> 'durationMs') ~ '^[0-9]+$'
                THEN (result ->> 'durationMs')::bigint
              ELSE 0
            END

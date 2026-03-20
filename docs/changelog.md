@@ -1371,3 +1371,16 @@
 - **注意事项**：
   - 本次修复确保任务状态在离页后可持续，并能在重进页面时恢复显示
   - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
+
+## [CHG-88] 采集概览实时进度与时长修复
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 02:51
+- **修改文件**：
+  - `src/api/db/queries/crawlerTasks.ts` — 新增 `updateTaskProgress` 并调整 overview 统计口径为 `running + done` 实时汇总
+  - `src/api/services/CrawlerService.ts` — 采集过程中周期回写进度，提供运行中实时数据源
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - “今日采集视频数”不再仅依赖已完成任务，运行中的任务会逐步反映实时值
+  - “采集时长”在运行中按 `NOW - scheduled_at` 实时累计，完成后沿用 `durationMs`
+  - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`

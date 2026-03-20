@@ -3604,3 +3604,32 @@ _（任务 review 通过后移入此处）_
   - 定向单测 5/5 通过；typecheck/lint 通过。
   - 修复后满足：离开页面任务不中断；重进页面可恢复运行态；概览可反映运行中任务。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-88 采集概览实时进度与时长修复
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 02:48
+- **计划开始时间**：2026-03-20 02:49
+- **实际开始时间**：2026-03-20 02:49
+- **完成时间**：2026-03-20 02:51
+- **问题**：`配置页采集状态概览` 的“今日采集视频数/采集时长”仅统计已完成任务，导致长时间运行中的采集任务长期显示 0。
+- **影响的已完成任务**：CHG-87
+- **文件范围**：
+  - `src/api/db/queries/crawlerTasks.ts`
+  - `src/api/services/CrawlerService.ts`
+- **修复内容**：
+  - 新增任务运行中进度回写（`videosUpserted/sourcesUpserted/errors/pages/durationMs`），采集过程中周期更新 `crawler_tasks.result`。
+  - `overview` 统计口径调整：
+    - 今日采集视频数：统计 `running + done` 任务中的 `videosUpserted`
+    - 采集时长：`running` 按 `NOW - scheduled_at` 实时计算，`done` 取 `result.durationMs`
+  - 保持路由与前端展示结构不变，仅修正数据语义。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+  - 修复后运行中长任务不再长期显示 0，概览数据随任务推进变化。
+- **问题说明**：_（无）_

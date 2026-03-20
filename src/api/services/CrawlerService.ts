@@ -324,6 +324,22 @@ export class CrawlerService {
     let sourcesUpserted = 0
     let errors = 0
     let page = 1
+    let processed = 0
+    let lastProgressAt = 0
+
+    const pushProgress = async () => {
+      const now = Date.now()
+      if (now - lastProgressAt < 2000 && processed % 20 !== 0) return
+      lastProgressAt = now
+      await crawlerTasksQueries.updateTaskProgress(this.db, taskId, {
+        videosUpserted,
+        sourcesUpserted,
+        errors,
+        pages: Math.max(page - 1, 0),
+        durationMs: Math.max(now - startAt, 0),
+      })
+    }
+    const startAt = Date.now()
 
     try {
       await crawlerTasksQueries.updateTaskStatus(this.db, taskId, 'running')
@@ -337,16 +353,21 @@ export class CrawlerService {
             const { sourcesUpserted: s } = await this.upsertVideo(parsed)
             videosUpserted++
             sourcesUpserted += s
+            processed++
+            await pushProgress()
           } catch (err) {
             errors++
+            processed++
             const message = err instanceof Error ? err.message : String(err)
             process.stderr.write(
               `[CrawlerService] upsert failed for "${parsed.video.title}": ${message}\n`
             )
+            await pushProgress()
           }
         }
 
         page++
+        await pushProgress()
         // 增量模式单页即可（仅最近更新）
         if (options.hoursAgo) break
       }
