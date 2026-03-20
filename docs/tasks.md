@@ -2861,18 +2861,44 @@ _（任务 review 通过后移入此处）_
 
 #### CHG-62 v1.2 T1-3：抽离 CrawlerSiteFormDialog 组件
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-20 10:30
 - **计划开始时间**：2026-03-20 11:30
 - **实际开始时间**：2026-03-20 10:55
-- **完成时间**：
+- **完成时间**：2026-03-20 11:08
 - **问题**：新增/编辑弹窗表单仍在 `CrawlerSiteManager`，容器与表单细节耦合较高。
 - **影响的已完成任务**：CHG-61
 - **文件范围**：
   - `src/components/admin/system/CrawlerSiteManager.tsx`
   - `src/components/admin/system/crawler-site/components/CrawlerSiteFormDialog.tsx`
 - **修复内容**：
-  - 进行中：将新增/编辑表单弹窗抽离为 `CrawlerSiteFormDialog`，主组件仅保留提交回调。
+  - 新建 `CrawlerSiteFormDialog`，完整承载 Modal 与新增/编辑表单渲染和校验。
+  - `CrawlerSiteManager` 删除内联表单实现，改为传入 `initial` 与 `onSave` 回调。
+  - 保持原有行为不变：必填校验、权重滑块、保存成功关闭弹窗。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-63 v1.2 T1-4：抽离 useCrawlerSites hook
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-03-20 10:30
+- **计划开始时间**：2026-03-20 12:00
+- **实际开始时间**：2026-03-20 11:08
+- **完成时间**：
+- **问题**：列表加载与刷新状态管理仍在 `CrawlerSiteManager`，数据层与容器耦合。
+- **影响的已完成任务**：CHG-62
+- **文件范围**：
+  - `src/components/admin/system/CrawlerSiteManager.tsx`
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSites.ts`
+- **修复内容**：
+  - 进行中：抽离 `sites/loading/fetchSites` 到 `useCrawlerSites`，保持请求路径与失败处理口径不变。
 - **测试要求**：
   - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
   - `npm run typecheck`

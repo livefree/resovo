@@ -1027,3 +1027,14 @@
 - **数据库变更**：无
 - **注意事项**：
   - 本次仅做结构重排，筛选交互与持久化行为保持不变
+
+## [CHG-62] v1.2 T1-3：抽离 CrawlerSiteFormDialog 组件
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 11:08
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteFormDialog.tsx` — 新建，承载新增/编辑弹窗与表单校验
+  - `src/components/admin/system/CrawlerSiteManager.tsx` — 改为组合 `CrawlerSiteFormDialog`，移除内联表单实现
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次为结构拆分，不修改字段、校验规则和保存流程
