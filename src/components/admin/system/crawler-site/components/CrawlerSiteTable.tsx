@@ -47,6 +47,11 @@ interface CrawlerSiteTableProps {
   runningBySite: Record<string, boolean>
   runningModeBySite: Record<string, CrawlMode | null>
   latestTaskBySite: Record<string, CrawlTaskDTO | null>
+  autoConfig: {
+    globalEnabled: boolean
+    defaultMode: 'incremental' | 'full'
+    perSiteOverrides: Record<string, { enabled: boolean; mode: 'inherit' | 'incremental' | 'full' }>
+  } | null
   setFilters: Dispatch<SetStateAction<FilterState>>
   setSort: (field: SortField, dir: SortDir) => void
   toggleColumn: (columnId: ColumnId) => void
@@ -80,6 +85,7 @@ export function CrawlerSiteTable({
   runningBySite,
   runningModeBySite,
   latestTaskBySite,
+  autoConfig,
   setFilters,
   setSort,
   toggleColumn,
@@ -178,6 +184,13 @@ export function CrawlerSiteTable({
               const siteRunning = runningBySite[site.key] === true
               const siteRunningMode = runningModeBySite[site.key]
               const latestTask = latestTaskBySite[site.key]
+              const siteAutoOverride = autoConfig?.perSiteOverrides?.[site.key]
+              const siteAutoEnabled = autoConfig?.globalEnabled === true && (
+                siteAutoOverride ? siteAutoOverride.enabled : true
+              )
+              const siteAutoMode = siteAutoOverride?.mode === 'inherit' || !siteAutoOverride
+                ? autoConfig?.defaultMode ?? 'incremental'
+                : siteAutoOverride.mode
               return (
                 <tr key={site.key} className="border-b border-[var(--border)] hover:bg-[var(--bg2)] transition-colors">
                   <td className="px-3 py-3"><input type="checkbox" checked={selected.has(site.key)} onChange={() => toggleSelect(site.key)} className="accent-[var(--accent)]" /></td>
@@ -221,7 +234,21 @@ export function CrawlerSiteTable({
                       <input type="checkbox" checked={site.isAdult} disabled={!canInlineEdit || rowBusy} onChange={(e) => handleInlineUpdate(site, { isAdult: e.target.checked })} className="accent-[var(--accent)]" />成人
                     </label>
                   </td>
-                  <td className={`${colClass("fromConfig")} px-3 py-3`}>{site.fromConfig ? <Badge color="blue">配置文件</Badge> : <span className="text-xs text-[var(--muted)]">手工</span>}</td>
+                  <td className={`${colClass("fromConfig")} px-3 py-3`}>
+                    {site.fromConfig ? <Badge color="blue">配置文件</Badge> : <span className="text-xs text-[var(--muted)]">手工</span>}
+                    <div className="mt-1 text-[11px] text-[var(--muted)]">
+                      自动：
+                      {autoConfig == null ? (
+                        <span className="ml-1">加载中…</span>
+                      ) : siteAutoEnabled ? (
+                        <span className="ml-1 text-green-400">
+                          开启({siteAutoMode === 'full' ? '全量' : '增量'})
+                        </span>
+                      ) : (
+                        <span className="ml-1 text-red-400">关闭</span>
+                      )}
+                    </div>
+                  </td>
                   <td className={`${colClass("disabled")} px-3 py-3`}>
                     <button onClick={() => handleToggleDisabled(site)} disabled={!canInlineEdit || rowBusy} className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${site.disabled ? "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20" : "bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500/20"} disabled:opacity-50`}>
                       {site.disabled ? "已停用" : "运行中"}

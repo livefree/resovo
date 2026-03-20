@@ -1542,3 +1542,16 @@
   - 为兼容历史逻辑，保存新配置时仍回写 `auto_crawl_recent_only`。
   - `conflictPolicy=queue_after_running` 当前阶段为预留选项，执行策略仍保守跳过运行中站点，后续 Phase C 细化。
   - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run` 全通过（37 files / 476 tests）。
+
+## [CHG-101] 自动采集状态行内可视化（Phase C-1）
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 16:18
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/components/AutoCrawlSettingsPanel.tsx` — 新增 `onConfigChange` 回调，加载/保存后回传配置快照。
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx` — 新增自动采集配置快照状态并传入列表。
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx` — 在“来源”列新增自动采集状态展示（开启/关闭 + 模式）。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次只做可视化映射，不改现有表格筛选/排序/列宽/持久化逻辑。
+  - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx` 通过。

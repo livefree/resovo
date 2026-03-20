@@ -3984,3 +3984,30 @@ _（任务 review 通过后移入此处）_
   - 兼容旧字段：保存新配置时仍回写 `auto_crawl_recent_only` 供遗留逻辑使用。
   - 全量测试通过（37 files / 476 tests）。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-101 自动采集状态行内可视化（Phase C-1）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 16:15
+- **计划开始时间**：2026-03-20 16:16
+- **实际开始时间**：2026-03-20 16:16
+- **完成时间**：2026-03-20 16:18
+- **问题**：统一自动采集配置已落地，但站点列表缺少自动采集状态映射，用户无法在同屏确认配置生效范围。
+- **影响的已完成任务**：CHG-100
+- **文件范围**：
+  - `src/components/admin/system/crawler-site/components/AutoCrawlSettingsPanel.tsx`
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`
+- **修复内容**：
+  - 自动采集配置面板新增 `onConfigChange` 回调，配置加载/保存后将最新配置回传页面容器。
+  - `CrawlerSiteManager` 持有自动采集配置快照，并下传给站点列表。
+  - 站点列表在“来源”列下新增自动采集状态展示（开启/关闭 + 模式），支持继承默认模式显示。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+- **完成备注**：
+  - 未新增表格筛选/排序/列宽逻辑，保持交互稳定。
+- **问题说明**：_（无）_

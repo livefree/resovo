@@ -55,6 +55,12 @@ interface CrawlerRunSummary {
   createdAt: string
 }
 
+interface AutoCrawlConfigSnapshot {
+  globalEnabled: boolean
+  defaultMode: 'incremental' | 'full'
+  perSiteOverrides: Record<string, { enabled: boolean; mode: 'inherit' | 'incremental' | 'full' }>
+}
+
 // ── 主组件 ────────────────────────────────────────────────────
 
 export function CrawlerSiteManager() {
@@ -68,6 +74,7 @@ export function CrawlerSiteManager() {
     'incremental-crawl': false,
     'full-crawl': false,
   })
+  const [autoConfig, setAutoConfig] = useState<AutoCrawlConfigSnapshot | null>(null)
   const { toast, showToast } = useAdminToast({ durationMs: 3500 })
   const {
     sortBy,
@@ -404,7 +411,7 @@ export function CrawlerSiteManager() {
   return (
     <div>
       <CrawlerSiteOverviewStats data={overview} />
-      <AutoCrawlSettingsPanel sites={sites} showToast={showToast} />
+      <AutoCrawlSettingsPanel sites={sites} showToast={showToast} onConfigChange={setAutoConfig} />
       <CrawlerRunPanel
         runs={recentRuns}
         onCancel={(runId) => {
@@ -462,6 +469,7 @@ export function CrawlerSiteManager() {
         runningBySite={runningBySite}
         runningModeBySite={runningModeBySite}
         latestTaskBySite={latestTaskBySite}
+        autoConfig={autoConfig}
         setFilters={setFilters}
         colClass={colClass}
         handleSort={handleSort}
