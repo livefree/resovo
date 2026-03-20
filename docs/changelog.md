@@ -1489,3 +1489,38 @@
   - 本次只改认证流，不改业务页面逻辑。
   - 仅在 admin 路径下触发 401 重定向登录；非 admin 页面保持原行为。
   - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run` 全通过（37 files / 476 tests）。
+
+## [CHG-97] 采集功能集中管理方案落盘（CHG-96 基线）
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 15:52
+- **修改文件**：
+  - `docs/admin_crawl_control_center_plan.md` — 新增“采集控制台”信息架构、职责拆分、自动采集配置模型、run/task 统一流程、Phase A-D 落地计划与回滚策略。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 固定原则已明确：自动采集配置唯一入口为“采集控制台”。
+  - 旧入口兼容期与生效范围说明已写入方案。
+
+## [CHG-98] 采集控制台命名迁移（含旧语义兼容）
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 15:58
+- **修改文件**：
+  - `src/components/admin/AdminSidebar.tsx` — 系统菜单改名为“采集控制台（原视频源配置）”。
+  - `src/app/[locale]/admin/crawler/page.tsx` — 页面标题与导语改为“采集控制台”定位。
+  - `src/components/admin/AdminCrawlerTabs.tsx` — Tab 名从“视频源配置”改为“采集控制台”，并优化职责说明文案。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅命名与信息架构层调整，不改路由与表格行为。
+
+## [CHG-99] 自动采集入口收口（任务记录/站点配置去编辑化）
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 16:03
+- **修改文件**：
+  - `src/components/admin/AdminCrawlerPanel.tsx` — 移除“每日自动采集”开关，任务记录页仅保留任务查看与手动触发。
+  - `src/components/admin/AdminCrawlerTabs.tsx` — 在任务记录 Tab 增加“自动采集配置已迁移”提示与回到控制台入口。
+  - `src/components/admin/system/site-settings/SiteSettings.tsx` — 移除自动采集编辑区，改为只读迁移说明与“前往采集控制台”跳转。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 采集执行链路（run/task/worker）未改动，仍独立于页面生命周期。

@@ -17,7 +17,7 @@ const CONTENT_MENU: MenuItem[] = [
 ]
 
 const SYSTEM_MENU: MenuItem[] = [
-  { href: '/admin/crawler', label: '源站与爬虫', icon: '🕷️' },
+  { href: '/admin/crawler', label: '采集控制台（原视频源配置）', icon: '🕷️' },
   { href: '/admin/system/config', label: '配置文件', icon: '🧩' },
   { href: '/admin/system/settings', label: '站点配置', icon: '⚙️' },
   { href: '/admin/users', label: '用户管理', icon: '👤' },

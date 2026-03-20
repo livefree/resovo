@@ -1,6 +1,6 @@
 /**
  * AdminCrawlerPanel.tsx — 爬虫管理面板
- * CHG-36: 全局触发 + 自动采集开关 + 任务记录展示
+ * CHG-36: 全局触发 + 任务记录展示
  */
 
 'use client'
@@ -56,9 +56,6 @@ export function AdminCrawlerPanel() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [autoCrawlEnabled, setAutoCrawlEnabled] = useState<boolean | null>(null)
-  const [autoCrawlSaving, setAutoCrawlSaving] = useState(false)
-
   const limit = 20
 
   // 加载任务列表
@@ -80,18 +77,7 @@ export function AdminCrawlerPanel() {
     }
   }, [page, statusFilter])
 
-  // 加载自动采集开关
-  const fetchAutoCrawl = useCallback(async () => {
-    try {
-      const res = await apiClient.get<{ data: Record<string, unknown> }>('/admin/system/settings')
-      setAutoCrawlEnabled(res.data.autoCrawlEnabled === true || res.data.autoCrawlEnabled === 'true')
-    } catch {
-      // 非阻塞
-    }
-  }, [])
-
   useEffect(() => { fetchTasks() }, [fetchTasks])
-  useEffect(() => { fetchAutoCrawl() }, [fetchAutoCrawl])
 
   // 触发采集（全局）
   async function handleTrigger(type: 'full-crawl' | 'incremental-crawl') {
@@ -103,21 +89,6 @@ export function AdminCrawlerPanel() {
       alert(err instanceof Error ? err.message : '触发失败')
     } finally {
       setTriggering(null)
-    }
-  }
-
-  // 切换自动采集开关
-  async function handleAutoCrawlToggle() {
-    if (autoCrawlEnabled === null) return
-    const next = !autoCrawlEnabled
-    setAutoCrawlSaving(true)
-    try {
-      await apiClient.post('/admin/system/settings', { auto_crawl_enabled: String(next) })
-      setAutoCrawlEnabled(next)
-    } catch (err) {
-      alert(err instanceof Error ? err.message : '保存失败')
-    } finally {
-      setAutoCrawlSaving(false)
     }
   }
 
@@ -152,27 +123,6 @@ export function AdminCrawlerPanel() {
         >
           刷新
         </button>
-
-        {/* 自动采集开关 */}
-        <label className="ml-auto flex cursor-pointer items-center gap-2 text-sm text-[var(--muted)]">
-          <span>每日自动采集</span>
-          <button
-            onClick={handleAutoCrawlToggle}
-            disabled={autoCrawlSaving || autoCrawlEnabled === null}
-            className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${
-              autoCrawlEnabled ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'
-            } disabled:opacity-60`}
-            data-testid="admin-crawler-auto-toggle"
-            role="switch"
-            aria-checked={autoCrawlEnabled ?? false}
-          >
-            <span
-              className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-                autoCrawlEnabled ? 'translate-x-4' : 'translate-x-0'
-              }`}
-            />
-          </button>
-        </label>
       </div>
 
       {/* ── 状态筛选 ─────────────────────────────────────────────── */}

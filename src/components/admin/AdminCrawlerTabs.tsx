@@ -22,7 +22,7 @@ export function AdminCrawlerTabs() {
               : 'text-[var(--muted)] hover:text-[var(--text)]'
           }`}
         >
-          视频源配置
+          采集控制台
         </button>
         <button
           type="button"
@@ -42,7 +42,7 @@ export function AdminCrawlerTabs() {
         {tab === 'sites' && (
           <div data-testid="admin-crawler-tab-panel-sites">
             <p className="mb-4 text-sm text-[var(--muted)]">
-              管理爬虫使用的外部苹果CMS源站，并在列表内执行单站采集。配置文件来源的源站需在「配置文件」页面中修改。
+              管理爬虫使用的外部苹果CMS源站，统一执行单站/批量/全站采集，并维护自动采集配置。配置文件来源的源站需在「配置文件」页面中修改。
             </p>
             <CrawlerSiteManager />
           </div>
@@ -50,8 +50,19 @@ export function AdminCrawlerTabs() {
         {tab === 'tasks' && (
           <div data-testid="admin-crawler-tab-panel-tasks">
             <p className="mb-4 text-sm text-[var(--muted)]">
-              查看采集任务执行记录，并执行全站全量/增量采集。
+              查看采集任务执行记录、日志与失败原因。自动采集配置已迁移至「采集控制台」Tab。
             </p>
+            <div className="mb-4 rounded-md border border-[var(--border)] bg-[var(--bg2)] px-3 py-2 text-sm text-[var(--muted)]">
+              自动采集配置唯一入口为「采集控制台」。
+              <button
+                type="button"
+                onClick={() => setTab('sites')}
+                className="ml-2 text-[var(--accent)] hover:underline"
+                data-testid="admin-crawler-go-control-center"
+              >
+                前往配置
+              </button>
+            </div>
             <AdminCrawlerPanel />
           </div>
         )}
