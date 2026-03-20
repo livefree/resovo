@@ -1555,3 +1555,16 @@
 - **注意事项**：
   - 本次只做可视化映射，不改现有表格筛选/排序/列宽/持久化逻辑。
   - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx` 通过。
+
+## [CHG-102] 采集任务记录触发来源筛选（Phase C-2）
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 16:21
+- **修改文件**：
+  - `src/api/db/queries/crawlerTasks.ts` — `listTasks` 新增 `triggerType` 过滤参数。
+  - `src/api/routes/admin/crawler.ts` — `GET /admin/crawler/tasks` 支持 `triggerType` 查询参数。
+  - `src/components/admin/AdminCrawlerPanel.tsx` — 新增“触发来源”筛选与来源标签列。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次改动仅增强任务记录可观测性，不改变 run/task 执行语义。
+  - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx` 通过。

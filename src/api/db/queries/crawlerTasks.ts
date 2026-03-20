@@ -206,7 +206,12 @@ export async function markTimedOutRunningTasks(db: Pool): Promise<number> {
 
 export async function listTasks(
   db: Pool,
-  params: { status?: CrawlerTaskStatus; limit?: number; offset?: number }
+  params: {
+    status?: CrawlerTaskStatus
+    triggerType?: 'single' | 'batch' | 'all' | 'schedule'
+    limit?: number
+    offset?: number
+  }
 ): Promise<{ rows: CrawlerTask[]; total: number }> {
   const conditions: string[] = []
   const values: unknown[] = []
@@ -215,6 +220,10 @@ export async function listTasks(
   if (params.status) {
     conditions.push(`status = $${idx++}`)
     values.push(params.status)
+  }
+  if (params.triggerType) {
+    conditions.push(`trigger_type = $${idx++}`)
+    values.push(params.triggerType)
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''

@@ -130,6 +130,7 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
   fastify.get('/admin/crawler/tasks', { preHandler: auth }, async (request, reply) => {
     const QuerySchema = z.object({
       status: z.enum(['pending', 'running', 'done', 'failed']).optional(),
+      triggerType: z.enum(['single', 'batch', 'all', 'schedule']).optional(),
       page:   z.coerce.number().int().min(1).default(1),
       limit:  z.coerce.number().int().min(1).max(100).default(20),
     })
@@ -141,9 +142,10 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const { status, page, limit } = parsed.data
+    const { status, triggerType, page, limit } = parsed.data
     const { rows, total } = await listTasks(db, {
       status,
+      triggerType,
       limit,
       offset: (page - 1) * limit,
     })

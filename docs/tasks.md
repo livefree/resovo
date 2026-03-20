@@ -4011,3 +4011,30 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 未新增表格筛选/排序/列宽逻辑，保持交互稳定。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-102 采集任务记录触发来源筛选（Phase C-2）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 16:19
+- **计划开始时间**：2026-03-20 16:19
+- **实际开始时间**：2026-03-20 16:19
+- **完成时间**：2026-03-20 16:21
+- **问题**：任务记录页仅支持状态筛选，无法区分单站/批量/全站/定时触发来源，难以追踪批次执行口径。
+- **影响的已完成任务**：CHG-100、CHG-101
+- **文件范围**：
+  - `src/api/db/queries/crawlerTasks.ts`
+  - `src/api/routes/admin/crawler.ts`
+  - `src/components/admin/AdminCrawlerPanel.tsx`
+- **修复内容**：
+  - `listTasks` 新增 `triggerType` 过滤参数。
+  - `GET /admin/crawler/tasks` 支持 `triggerType` 查询参数并下推到 DB 查询。
+  - 任务记录页新增“触发来源”筛选（全部/单站/批量/全站/定时）与来源列展示。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+- **完成备注**：
+  - 不改任务执行链路，仅增强任务记录可观测维度。
+- **问题说明**：_（无）_

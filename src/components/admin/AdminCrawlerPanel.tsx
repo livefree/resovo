@@ -14,6 +14,7 @@ interface CrawlerTask {
   id: string
   type: string
   status: 'pending' | 'running' | 'done' | 'failed'
+  triggerType: 'single' | 'batch' | 'all' | 'schedule' | null
   source_url: string | null
   error: string | null
   started_at: string | null
@@ -22,6 +23,7 @@ interface CrawlerTask {
 }
 
 type TaskStatusFilter = 'pending' | 'running' | 'done' | 'failed' | ''
+type TaskTriggerFilter = 'single' | 'batch' | 'all' | 'schedule' | ''
 
 // ── 小组件 ───────────────────────────────────────────────────────
 
@@ -45,6 +47,21 @@ function StatusBadge({ status }: { status: CrawlerTask['status'] }) {
   )
 }
 
+function TriggerBadge({ triggerType }: { triggerType: CrawlerTask['triggerType'] }) {
+  const labels: Record<Exclude<CrawlerTask['triggerType'], null>, string> = {
+    single: '单站',
+    batch: '批量',
+    all: '全站',
+    schedule: '定时',
+  }
+  if (!triggerType) return <span className="text-xs text-[var(--muted)]">—</span>
+  return (
+    <span className="rounded-full bg-[var(--bg3)] px-2 py-0.5 text-xs text-[var(--muted)]">
+      {labels[triggerType]}
+    </span>
+  )
+}
+
 // ── 主组件 ───────────────────────────────────────────────────────
 
 export function AdminCrawlerPanel() {
@@ -52,6 +69,7 @@ export function AdminCrawlerPanel() {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<TaskStatusFilter>('')
+  const [triggerFilter, setTriggerFilter] = useState<TaskTriggerFilter>('')
   const [triggering, setTriggering] = useState<string | null>(null) // null = idle, 'all' = global, siteKey = single
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -65,6 +83,7 @@ export function AdminCrawlerPanel() {
     try {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) })
       if (statusFilter) params.set('status', statusFilter)
+      if (triggerFilter) params.set('triggerType', triggerFilter)
       const res = await apiClient.get<{ data: CrawlerTask[]; pagination: { total: number } }>(
         `/admin/crawler/tasks?${params}`
       )
@@ -75,7 +94,7 @@ export function AdminCrawlerPanel() {
     } finally {
       setLoading(false)
     }
-  }, [page, statusFilter])
+  }, [page, statusFilter, triggerFilter])
 
   useEffect(() => { fetchTasks() }, [fetchTasks])
 
@@ -128,7 +147,7 @@ export function AdminCrawlerPanel() {
       {/* ── 状态筛选 ─────────────────────────────────────────────── */}
       <section>
         <h2 className="mb-3 text-sm font-medium text-[var(--muted)]">采集任务记录</h2>
-        <div className="mb-4 flex gap-1 rounded-md border border-[var(--border)] p-0.5 w-fit">
+        <div className="mb-3 flex gap-1 rounded-md border border-[var(--border)] p-0.5 w-fit">
           {([
             { value: '', label: '全部' },
             { value: 'pending', label: '等待中' },
@@ -150,6 +169,28 @@ export function AdminCrawlerPanel() {
             </button>
           ))}
         </div>
+        <div className="mb-4 flex gap-1 rounded-md border border-[var(--border)] p-0.5 w-fit">
+          {([
+            { value: '', label: '全部来源' },
+            { value: 'single', label: '单站' },
+            { value: 'batch', label: '批量' },
+            { value: 'all', label: '全站' },
+            { value: 'schedule', label: '定时' },
+          ] as { value: TaskTriggerFilter; label: string }[]).map(({ value, label }) => (
+            <button
+              key={value}
+              onClick={() => { setPage(1); setTriggerFilter(value) }}
+              className={`rounded px-3 py-1 text-sm transition-colors ${
+                triggerFilter === value
+                  ? 'bg-[var(--accent)] text-black'
+                  : 'text-[var(--muted)] hover:text-[var(--text)]'
+              }`}
+              data-testid={`admin-crawler-trigger-filter-${value || 'all'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         {error && (
           <p className="mb-4 rounded-md bg-red-900/30 px-4 py-2 text-sm text-red-400">{error}</p>
@@ -160,6 +201,7 @@ export function AdminCrawlerPanel() {
             <thead className="bg-[var(--bg2)] text-[var(--muted)]">
               <tr>
                 <th className="px-4 py-3 text-left">类型</th>
+                <th className="px-4 py-3 text-left">触发来源</th>
                 <th className="px-4 py-3 text-left">状态</th>
                 <th className="px-4 py-3 text-left">开始时间</th>
                 <th className="px-4 py-3 text-left">结束时间</th>
@@ -168,14 +210,15 @@ export function AdminCrawlerPanel() {
             </thead>
             <tbody className="divide-y divide-[var(--subtle)]">
               {loading && (
-                <tr><td colSpan={5} className="py-8 text-center text-[var(--muted)]">加载中…</td></tr>
+                <tr><td colSpan={6} className="py-8 text-center text-[var(--muted)]">加载中…</td></tr>
               )}
               {!loading && tasks.length === 0 && (
-                <tr><td colSpan={5} className="py-8 text-center text-[var(--muted)]">暂无任务记录</td></tr>
+                <tr><td colSpan={6} className="py-8 text-center text-[var(--muted)]">暂无任务记录</td></tr>
               )}
               {!loading && tasks.map((task) => (
                 <tr key={task.id} className="bg-[var(--bg)] hover:bg-[var(--bg2)]" data-testid={`admin-crawler-task-${task.id}`}>
                   <td className="px-4 py-3 text-[var(--text)]">{task.type}</td>
+                  <td className="px-4 py-3"><TriggerBadge triggerType={task.triggerType} /></td>
                   <td className="px-4 py-3"><StatusBadge status={task.status} /></td>
                   <td className="px-4 py-3 text-[var(--muted)] text-xs">
                     {task.started_at ? new Date(task.started_at).toLocaleString() : '—'}
