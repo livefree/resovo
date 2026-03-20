@@ -86,7 +86,11 @@ function TriggerBadge({ triggerType }: { triggerType: CrawlerTask['triggerType']
 
 // ── 主组件 ───────────────────────────────────────────────────────
 
-export function AdminCrawlerPanel() {
+interface AdminCrawlerPanelProps {
+  initialRunId?: string
+}
+
+export function AdminCrawlerPanel({ initialRunId = '' }: AdminCrawlerPanelProps) {
   const [tasks, setTasks] = useState<CrawlerTask[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -125,6 +129,14 @@ export function AdminCrawlerPanel() {
   }, [page, statusFilter, triggerFilter, runIdFilter])
 
   useEffect(() => { fetchTasks() }, [fetchTasks])
+
+  useEffect(() => {
+    const nextRunId = initialRunId.trim()
+    if (!nextRunId) return
+    setRunIdFilterInput(nextRunId)
+    setRunIdFilter(nextRunId)
+    setPage(1)
+  }, [initialRunId])
 
   // 触发采集（全局）
   async function handleTrigger(type: 'full-crawl' | 'incremental-crawl') {

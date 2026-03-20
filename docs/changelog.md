@@ -1593,3 +1593,16 @@
 - **注意事项**：
   - 本次仅增强任务追踪维度，不改变采集执行链路。
   - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler.test.ts`、`npm run test:run` 通过（37 files / 477 tests）。
+
+## [CHG-105] 采集控制台 run→task 深链联动（Phase C-5）
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 16:33
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/components/CrawlerRunPanel.tsx` — 新增“查看任务”深链按钮（`?tab=tasks&runId=...`）。
+  - `src/components/admin/AdminCrawlerTabs.tsx` — 新增 tab 与 URL 查询参数同步逻辑，支持 `tab=tasks` 与 `runId` 透传。
+  - `src/components/admin/AdminCrawlerPanel.tsx` — 新增 `initialRunId` 参数消费，进入任务页后自动应用 runId 筛选。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次改动仅为页面联动，不改任务执行与队列逻辑。
+  - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run test:run` 通过（37 files / 477 tests）。

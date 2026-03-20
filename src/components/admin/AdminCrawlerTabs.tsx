@@ -1,20 +1,49 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { AdminCrawlerPanel } from '@/components/admin/AdminCrawlerPanel'
 import { CrawlerSiteManager } from '@/components/admin/system/crawler-site/CrawlerSiteManager'
 
 type CrawlerTab = 'sites' | 'tasks'
 
 export function AdminCrawlerTabs() {
-  const [tab, setTab] = useState<CrawlerTab>('sites')
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const queryTab = searchParams.get('tab')
+  const queryRunId = searchParams.get('runId')
+  const initialTab: CrawlerTab = queryTab === 'tasks' ? 'tasks' : 'sites'
+  const [tab, setTab] = useState<CrawlerTab>(initialTab)
+
+  const taskRunId = useMemo(() => {
+    if (!queryRunId) return ''
+    return queryRunId.trim()
+  }, [queryRunId])
+
+  useEffect(() => {
+    setTab(queryTab === 'tasks' ? 'tasks' : 'sites')
+  }, [queryTab])
+
+  function switchTab(nextTab: CrawlerTab) {
+    setTab(nextTab)
+    const next = new URLSearchParams(searchParams.toString())
+    if (nextTab === 'tasks') {
+      next.set('tab', 'tasks')
+    } else {
+      next.delete('tab')
+      next.delete('runId')
+    }
+    const query = next.toString()
+    router.replace(query ? `${pathname}?${query}` : pathname)
+  }
 
   return (
     <section className="space-y-4" data-testid="admin-crawler-tabs">
       <div className="flex gap-1 rounded-md border border-[var(--border)] bg-[var(--bg2)] p-1 w-fit">
         <button
           type="button"
-          onClick={() => setTab('sites')}
+          onClick={() => switchTab('sites')}
           data-testid="admin-crawler-tab-sites"
           className={`rounded px-4 py-2 text-sm transition-colors ${
             tab === 'sites'
@@ -26,7 +55,7 @@ export function AdminCrawlerTabs() {
         </button>
         <button
           type="button"
-          onClick={() => setTab('tasks')}
+          onClick={() => switchTab('tasks')}
           data-testid="admin-crawler-tab-tasks"
           className={`rounded px-4 py-2 text-sm transition-colors ${
             tab === 'tasks'
@@ -56,14 +85,14 @@ export function AdminCrawlerTabs() {
               自动采集配置唯一入口为「采集控制台」。
               <button
                 type="button"
-                onClick={() => setTab('sites')}
+                onClick={() => switchTab('sites')}
                 className="ml-2 text-[var(--accent)] hover:underline"
                 data-testid="admin-crawler-go-control-center"
               >
                 前往配置
               </button>
             </div>
-            <AdminCrawlerPanel />
+            <AdminCrawlerPanel initialRunId={taskRunId} />
           </div>
         )}
       </div>

@@ -4095,3 +4095,31 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 不改任务执行链路，仅增强任务追踪与展示一致性。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-105 run 面板到任务记录的深链联动（Phase C-5）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 16:31
+- **计划开始时间**：2026-03-20 16:31
+- **实际开始时间**：2026-03-20 16:31
+- **完成时间**：2026-03-20 16:33
+- **问题**：采集控制台的批次面板与任务记录页尚未打通，用户无法从 run 直接跳到对应 tasks 视图。
+- **影响的已完成任务**：CHG-103、CHG-104
+- **文件范围**：
+  - `src/components/admin/AdminCrawlerTabs.tsx`
+  - `src/components/admin/AdminCrawlerPanel.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerRunPanel.tsx`
+- **修复内容**：
+  - `CrawlerRunPanel` 新增“查看任务”深链，跳转 `?tab=tasks&runId=<id>`。
+  - `AdminCrawlerTabs` 增加 URL 查询参数同步：支持 `tab=tasks` 与 `runId` 初始化，并在切 tab 时回写 URL。
+  - `AdminCrawlerPanel` 支持接收 `initialRunId`，进入任务页后自动应用 runId 过滤。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run test:run`
+- **完成备注**：
+  - 不改采集执行逻辑，只补 UI 联动与追踪路径。
+- **问题说明**：_（无）_

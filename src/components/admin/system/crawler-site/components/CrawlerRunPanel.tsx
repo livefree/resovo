@@ -56,6 +56,12 @@ export function CrawlerRunPanel({ runs, onCancel }: CrawlerRunPanelProps) {
                   <span className="text-[var(--muted)]">#{runId.slice(0, 8)}</span>
                 </div>
                 <div className="flex items-center gap-2">
+                  <a
+                    href={`?tab=tasks&runId=${encodeURIComponent(runId)}`}
+                    className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--muted)] hover:text-[var(--text)]"
+                  >
+                    查看任务
+                  </a>
                   <span className="rounded bg-[var(--bg3)] px-2 py-0.5 text-[var(--text)]">{labelForStatus(run.status)}</span>
                   {(run.status === 'queued' || run.status === 'running') && run.controlStatus !== 'cancelling' ? (
                     <button

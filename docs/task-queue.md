@@ -730,3 +730,19 @@
    - 实际开始：2026-03-20 16:26
    - 完成时间：2026-03-20 16:31
    - 验收要点：后端支持 runId 过滤；前端任务表展示 runId 并可快速反筛选；API 测试覆盖 runId 参数；typecheck/lint/test:run 通过
+
+## [SEQ-20260320-22] 采集控制台 Phase C-5（run→task 深链联动）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 16:31
+- **最后更新时间**：2026-03-20 16:33
+- **目标**：打通控制台 run 面板到任务记录页的 runId 深链跳转，减少人工筛选步骤
+- **范围**：`src/components/admin/AdminCrawlerTabs.tsx`、`src/components/admin/AdminCrawlerPanel.tsx`、`src/components/admin/system/crawler-site/components/CrawlerRunPanel.tsx`
+- **依赖**：`CHG-104` 已完成
+
+### 任务列表（按执行顺序）
+1. CHG-105 — run 到 task 的 URL 参数联动（状态：✅ 已完成）
+   - 创建时间：2026-03-20 16:31
+   - 计划开始：2026-03-20 16:31
+   - 实际开始：2026-03-20 16:31
+   - 完成时间：2026-03-20 16:33
+   - 验收要点：run 面板可一键跳任务页；任务页自动套用 runId 过滤；tab 状态与 URL 同步；typecheck/lint/test:run 通过
