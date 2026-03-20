@@ -11,6 +11,7 @@ import { StatusBadge } from '@/components/admin/StatusBadge'
 import { Pagination } from '@/components/admin/Pagination'
 import { SourceVerifyButton } from '@/components/admin/sources/SourceVerifyButton'
 import { BatchDeleteBar } from '@/components/admin/sources/BatchDeleteBar'
+import { AdminToolbar } from '@/components/admin/shared/toolbar/AdminToolbar'
 
 const PAGE_SIZE = 20
 const URL_MAX_LEN = 60
@@ -92,21 +93,24 @@ export function SourceTable() {
   return (
     <div data-testid="source-table">
       {/* 状态筛选 */}
-      <div className="mb-4 flex items-center gap-3">
-        <select
-          value={status}
-          onChange={(e) => {
-            setPage(1)
-            setStatus(e.target.value as typeof status)
-          }}
-          className="rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-1.5 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-          data-testid="source-status-filter"
-        >
-          <option value="all">全部状态</option>
-          <option value="active">有效源</option>
-          <option value="inactive">失效源</option>
-        </select>
-      </div>
+      <AdminToolbar
+        className="gap-3"
+        actions={(
+          <select
+            value={status}
+            onChange={(e) => {
+              setPage(1)
+              setStatus(e.target.value as typeof status)
+            }}
+            className="rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-1.5 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+            data-testid="source-status-filter"
+          >
+            <option value="all">全部状态</option>
+            <option value="active">有效源</option>
+            <option value="inactive">失效源</option>
+          </select>
+        )}
+      />
 
       {/* 表格 */}
       <div className="overflow-x-auto rounded-lg border border-[var(--border)]">

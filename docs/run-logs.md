@@ -314,3 +314,11 @@
 - **内容**：完成 crawler-site 批量操作区 shared 化，批量行为保持不变。
 - **处理动作**：新增 `AdminBatchBar` 并接入 `CrawlerSiteToolbar`；执行定向单测、typecheck、lint 均通过。
 - **后续**：进入 CHG-75，执行 shared 跨模块复用验证。
+
+## [LOG-20260319-2329-01] CHG-75 shared 跨模块复用验证完成
+- **时间**：2026-03-19 23:29
+- **类型**：INFO
+- **关联任务**：CHG-75
+- **内容**：完成 shared Toolbar 在 `videos/sources` 模块的复用接入验证。
+- **处理动作**：`VideoFilters` 与 `SourceTable` 接入 `AdminToolbar`，并补齐 `dataTestId` 兼容测试；执行定向单测、typecheck、lint 均通过。
+- **后续**：Phase 1 结束，进入 CHG-76（Phase 2 UI 局部优化）。

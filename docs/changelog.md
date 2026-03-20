@@ -1185,3 +1185,16 @@
 - **注意事项**：
   - 本次仅 shared 抽离，不改动批量动作参数、调用顺序、权限逻辑
   - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
+
+## [CHG-75] Phase1：shared 复用验证（videos/sources）
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 23:29
+- **修改文件**：
+  - `src/components/admin/shared/toolbar/AdminToolbar.tsx` — 增加 `dataTestId` 以兼容现有测试与调用方
+  - `src/components/admin/videos/VideoFilters.tsx` — 顶部筛选栏改为组合 `AdminToolbar`
+  - `src/components/admin/sources/SourceTable.tsx` — 状态筛选栏改为组合 `AdminToolbar`
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次为 shared 复用验证，不改动筛选参数、请求时序与业务逻辑
+  - 已通过：`npm run test:run -- tests/unit/components/admin/videos/VideoFilters.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`

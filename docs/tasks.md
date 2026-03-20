@@ -3209,3 +3209,30 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测 5/5 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-75 Phase1：shared 复用验证（videos/sources）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 12:24
+- **计划开始时间**：2026-03-20 15:40
+- **实际开始时间**：2026-03-19 23:28
+- **完成时间**：2026-03-19 23:29
+- **问题**：需验证 shared 组件不只服务 crawler-site，能在其他 admin 模块平滑复用。
+- **影响的已完成任务**：CHG-74
+- **文件范围**：
+  - `src/components/admin/shared/toolbar/AdminToolbar.tsx`
+  - `src/components/admin/videos/VideoFilters.tsx`
+  - `src/components/admin/sources/SourceTable.tsx`
+- **修复内容**：
+  - 为 `AdminToolbar` 增加 `dataTestId`，兼容既有测试选择器。
+  - `VideoFilters` 顶部筛选栏改为组合 `AdminToolbar`。
+  - `SourceTable` 状态筛选栏改为组合 `AdminToolbar`。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/videos/VideoFilters.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 10/10 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_
