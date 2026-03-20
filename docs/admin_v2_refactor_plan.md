@@ -1,6 +1,6 @@
 # Admin v2 Refactor Plan
 
-更新时间：2026-03-20 12:05
+更新时间：2026-03-20 12:18
 
 ## 目标与约束
 
@@ -13,6 +13,7 @@
   - 不做大规模重写
   - 每步可回滚
   - 基于现有代码提炼，不另起一套框架
+  - UI 阶段不允许修改数据结构/字段/API 调用顺序/异步流程/权限逻辑
 
 ## 一、Shared 抽象方案
 
@@ -58,11 +59,13 @@ src/components/admin/shared/
 
 ### 4. 抽象顺序（分阶段）
 
-1. feedback（最小风险）
-2. dialog/form（壳层替换）
-3. toolbar（壳层替换）
-4. table frame/state（壳层替换）
-5. row actions / batch bar（布局替换）
+1. table frame/state（先稳住最复杂模块的表格壳）
+2. toolbar（统一顶部动作层）
+3. feedback（统一提示反馈）
+4. dialog（统一弹层壳）
+5. form（统一表单控件壳）
+6. batch bar（统一批量栏）
+7. 跨模块复用验证
 
 ### 5. 抽象边界规则
 
@@ -108,6 +111,20 @@ src/components/admin/shared/
    - 替换为 shared 的 toolbar/filter/table 壳
    - 保留现有接口与业务行为
 
+### 2.1 UI 改动硬边界（强约束）
+
+禁止：
+- 修改数据结构
+- 新增字段
+- 改变 API 调用顺序
+- 增加异步流程
+- 修改权限逻辑
+
+仅允许：
+- DOM 结构调整
+- 按钮位置调整
+- 样式与视觉层级调整
+
 ### 3. before / after 结构
 
 before：
@@ -134,16 +151,22 @@ after：
 ### Phase 1：shared 抽象（从 crawler-site 开始）
 
 子任务：
-1. CHG-67 `useAdminToast` 抽离并接入 `crawler-site`
-2. CHG-68 `AdminDialogShell + AdminForm*` 抽离并替换 `CrawlerSiteFormDialog`
-3. CHG-69 `AdminToolbar` 抽离并替换 `CrawlerSiteToolbar`
-4. CHG-70 `AdminTableFrame + AdminTableState` 抽离并替换 `CrawlerSiteTable` 外壳
-5. CHG-71 在 `sources/videos` 验证 `AdminBatchBar` 复用
+1. CHG-67 `AdminTableFrame + AdminTableState` 抽离并替换 `CrawlerSiteTable` 外壳
+2. CHG-68 `AdminToolbar` 抽离并替换 `CrawlerSiteToolbar`
+3. CHG-69 `useAdminToast` 抽离并接入 `crawler-site`
+4. CHG-70 `AdminDialogShell` 抽离并替换 `CrawlerSiteFormDialog` 外壳
+5. CHG-71 `AdminFormField/Input/Select` 抽离并替换 `CrawlerSiteFormDialog` 内控件
+6. CHG-72 `AdminBatchBar` 从 `videos/sources` 提取并回接
+7. CHG-73 在 `sources/videos` 完成 shared 复用验证
 
 DoD：
 - 行为零回归
 - 受影响测试通过
 - 每任务单 commit
+- 列宽拖拽像素级一致（允许 ±1px）
+- 数据刷新后滚动位置保持
+- sticky header 无抖动
+- selection 勾选状态不丢失
 
 回滚策略：
 - 每个 CHG 独立提交
@@ -152,16 +175,17 @@ DoD：
 ### Phase 2：UI 优化（按模块推进）
 
 子任务：
-1. CHG-72 `crawler-site` toolbar 分组与按钮层级优化
-2. CHG-73 `crawler-site` 行操作分层（主按钮 + 更多）
-3. CHG-74 `crawler-site` 外置筛选条与筛选状态可视化
-4. CHG-75 `config-file` 粘性保存区与状态提示
-5. CHG-76 `videos/users/sources` 结构对齐
+1. CHG-74 `crawler-site` toolbar 分组与按钮层级优化
+2. CHG-75 `crawler-site` 行操作分层（主按钮 + 更多）
+3. CHG-76 `crawler-site` 外置筛选条与筛选状态可视化
+4. CHG-77 `config-file` 粘性保存区与状态提示
+5. CHG-78 `videos/users/sources` 结构对齐
 
 DoD：
 - 核心操作路径更短或不变
 - UI 结构一致性提升
 - 无功能回退
+- 不触碰数据结构/字段/API 调用顺序/异步流程/权限逻辑
 
 回滚策略：
 - 每模块独立提交
@@ -170,10 +194,10 @@ DoD：
 ### Phase 3：设计系统固化
 
 子任务：
-1. CHG-77 落地 `docs/admin_design_system_v1.md`
-2. CHG-78 token 映射（button/table/form/modal）
-3. CHG-79 交互规范并入 `docs/rules`
-4. CHG-80 新增模块模板检查规则
+1. CHG-79 token 映射（button/table/form/modal）
+2. CHG-80 交互规范并入 `docs/rules`
+3. CHG-81 新增模块模板检查规则
+4. CHG-82 至少 2 个模块完成设计系统代码落地验证
 
 DoD：
 - 文档可用于评审与开发
@@ -183,3 +207,15 @@ DoD：
 回滚策略：
 - 文档与规则独立提交
 - 组件映射保留兼容层
+
+## 四、执行规则（PR 维度控制）
+
+1. 任一 PR 仅允许一个维度：
+   - shared 抽象
+   - UI 调整
+   - 逻辑修复
+2. 不允许在同一 PR 混入 `shared + UI + 逻辑`。
+3. 每个 PR 必须附：
+   - 影响范围清单
+   - DoD 对照结果
+   - 回滚说明

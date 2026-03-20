@@ -250,3 +250,11 @@
 - **内容**：完成 admin v2 重构方案与设计系统 v1 文档固化。
 - **处理动作**：新增 `docs/admin_v2_refactor_plan.md` 与 `docs/admin_design_system_v1.md`，并纳入任务与变更记录。
 - **后续**：可按文档 Phase 1 直接拆分 CHG 执行 shared 抽象。
+
+## [LOG-20260320-1220-01] CHG-68 执行规则与顺序约束更新完成
+- **时间**：2026-03-20 12:20
+- **类型**：INFO
+- **关联任务**：CHG-68
+- **内容**：完成 admin v2 执行顺序重排与工程约束强化。
+- **处理动作**：更新 `admin_v2_refactor_plan.md` 与 `admin-module-template.md`，新增强 DoD、UI 硬边界、PR 单维度规则。
+- **后续**：按新顺序启动 shared Phase 1（先 `AdminTableFrame/AdminTableState`）。
