@@ -3321,3 +3321,29 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测 5/5 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-79 Phase2：config-file 粘性保存区
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 12:24
+- **计划开始时间**：2026-03-21 12:00
+- **实际开始时间**：2026-03-20 01:16
+- **完成时间**：2026-03-20 01:20
+- **问题**：配置文件页面在长 JSON 场景下，保存按钮滚出视口，保存动作可达性下降。
+- **影响的已完成任务**：CHG-78
+- **文件范围**：
+  - `src/components/admin/system/config-file/ConfigFileEditor.tsx`
+- **修复内容**：
+  - 将底部操作栏改为粘性保存区（`sticky bottom`），滚动时保持“保存并同步”可见。
+  - 为粘性区增加半透明背景与边框，避免覆盖内容时可读性下降。
+  - 保存逻辑、接口路径、请求顺序与提示文案保持不变。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/ConfigFileEditor.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 3/3 通过；typecheck/lint 通过。
+  - 保留既有 warning：ConfigFileEditor 测试中的 controlled/uncontrolled 提示（历史问题，未在本任务处理）。
+- **问题说明**：_（无）_

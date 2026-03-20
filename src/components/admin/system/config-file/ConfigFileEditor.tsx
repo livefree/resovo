@@ -254,20 +254,22 @@ export function ConfigFileEditor() {
         />
       </div>
 
-      {/* ── 操作栏 ─────────────────────────────────────────── */}
-      <div className="flex items-center gap-4">
-        <button
-          onClick={handleSave}
-          disabled={saving || !!jsonError}
-          className="rounded-md px-5 py-2 text-sm font-semibold bg-[var(--accent)] text-black hover:opacity-90 disabled:opacity-50 transition-opacity"
-        >
-          {saving ? '保存中…' : '保存并同步'}
-        </button>
-        {toast && (
-          <span className={`text-sm ${toast.ok ? 'text-green-500' : 'text-red-500'}`}>
-            {toast.msg}
-          </span>
-        )}
+      {/* ── 粘性保存区 ─────────────────────────────────────── */}
+      <div className="sticky bottom-3 z-20">
+        <div className="flex items-center gap-4 rounded-lg border border-[var(--border)] bg-[var(--bg2)]/95 px-4 py-3 backdrop-blur">
+          <button
+            onClick={handleSave}
+            disabled={saving || !!jsonError}
+            className="rounded-md bg-[var(--accent)] px-5 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {saving ? '保存中…' : '保存并同步'}
+          </button>
+          {toast && (
+            <span className={`text-sm ${toast.ok ? 'text-green-500' : 'text-red-500'}`}>
+              {toast.msg}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   )

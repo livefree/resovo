@@ -1240,3 +1240,15 @@
 - **注意事项**：
   - 保持 API、字段结构、筛选语义、列宽拖拽、列显隐持久化、排序持久化不变
   - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
+
+## [CHG-79] Phase2：config-file 粘性保存区
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 01:20
+- **修改文件**：
+  - `src/components/admin/system/config-file/ConfigFileEditor.tsx` — 将底部操作栏改为 sticky 粘性保存区，保持保存动作常驻可达
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅 UI 布局调整，不改动保存接口、payload、调用顺序与提示逻辑
+  - 已通过：`npm run test:run -- tests/unit/components/admin/system/ConfigFileEditor.test.tsx`、`npm run typecheck`、`npm run lint`
+  - 仍存在既有测试 warning：ConfigFileEditor controlled/uncontrolled（历史问题）

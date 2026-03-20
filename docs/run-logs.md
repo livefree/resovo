@@ -354,3 +354,11 @@
 - **内容**：完成 crawler-site 列表页由“重表头筛选”向“轻表头 + 按需列菜单 + 筛选状态条”迁移。
 - **处理动作**：新增 TopToolbar/AdvancedFilters/ChipsBar/ColumnMenu/ColumnFilterPanel/LiteHeader，并保留筛选语义、排序/列宽/列显隐持久化行为；回归测试通过。
 - **后续**：可继续 CHG-79（config-file 粘性保存区）或按需补充 column menu 交互单测。
+
+## [LOG-20260320-0120-01] CHG-79 配置页粘性保存区完成
+- **时间**：2026-03-20 01:20
+- **类型**：INFO
+- **关联任务**：CHG-79
+- **内容**：配置文件页面已增加 sticky 保存区，长内容滚动场景下保存入口保持可见。
+- **处理动作**：改造 ConfigFileEditor 底部操作栏样式与定位；验证单测、typecheck、lint 通过。
+- **后续**：进入 CHG-80，执行 videos/users/sources 布局对齐。
