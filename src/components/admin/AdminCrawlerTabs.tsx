@@ -38,6 +38,18 @@ export function AdminCrawlerTabs() {
     router.replace(query ? `${pathname}?${query}` : pathname)
   }
 
+  function syncRunId(runId: string) {
+    const next = new URLSearchParams(searchParams.toString())
+    next.set('tab', 'tasks')
+    if (runId) {
+      next.set('runId', runId)
+    } else {
+      next.delete('runId')
+    }
+    const query = next.toString()
+    router.replace(query ? `${pathname}?${query}` : pathname)
+  }
+
   return (
     <section className="space-y-4" data-testid="admin-crawler-tabs">
       <div className="flex gap-1 rounded-md border border-[var(--border)] bg-[var(--bg2)] p-1 w-fit">
@@ -92,7 +104,7 @@ export function AdminCrawlerTabs() {
                 前往配置
               </button>
             </div>
-            <AdminCrawlerPanel initialRunId={taskRunId} />
+            <AdminCrawlerPanel initialRunId={taskRunId} onRunIdChange={syncRunId} />
           </div>
         )}
       </div>

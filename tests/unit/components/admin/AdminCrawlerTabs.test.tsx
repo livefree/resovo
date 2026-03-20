@@ -15,8 +15,18 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('@/components/admin/AdminCrawlerPanel', () => ({
-  AdminCrawlerPanel: ({ initialRunId }: { initialRunId?: string }) => (
-    <div data-testid="mock-admin-crawler-panel">{initialRunId ?? ''}</div>
+  AdminCrawlerPanel: ({
+    initialRunId,
+    onRunIdChange,
+  }: {
+    initialRunId?: string
+    onRunIdChange?: (runId: string) => void
+  }) => (
+    <div>
+      <div data-testid="mock-admin-crawler-panel">{initialRunId ?? ''}</div>
+      <button type="button" data-testid="mock-set-runid" onClick={() => onRunIdChange?.('22222222-2222-4222-8222-222222222222')}>set-runid</button>
+      <button type="button" data-testid="mock-clear-runid" onClick={() => onRunIdChange?.('')}>clear-runid</button>
+    </div>
   ),
 }))
 
@@ -62,5 +72,16 @@ describe('AdminCrawlerTabs', () => {
     await userEvent.click(screen.getByTestId('admin-crawler-tab-sites'))
 
     expect(mockReplace).toHaveBeenCalledWith('/zh/admin/crawler')
+  })
+
+  it('任务页修改 runId 过滤会同步到 URL 参数', async () => {
+    mockSearchParams = new URLSearchParams({ tab: 'tasks' })
+    render(<AdminCrawlerTabs />)
+
+    await userEvent.click(screen.getByTestId('mock-set-runid'))
+    expect(mockReplace).toHaveBeenCalledWith('/zh/admin/crawler?tab=tasks&runId=22222222-2222-4222-8222-222222222222')
+
+    await userEvent.click(screen.getByTestId('mock-clear-runid'))
+    expect(mockReplace).toHaveBeenCalledWith('/zh/admin/crawler?tab=tasks')
   })
 })

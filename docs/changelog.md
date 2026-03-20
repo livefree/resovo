@@ -1617,3 +1617,16 @@
 - **注意事项**：
   - 本次仅新增测试保护，不改业务逻辑。
   - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/AdminCrawlerTabs.test.tsx tests/unit/api/crawler.test.ts`、`npm run test:run` 通过（38 files / 480 tests）。
+
+## [CHG-107] runId 过滤与 URL 双向同步（Phase D-2）
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 16:40
+- **修改文件**：
+  - `src/components/admin/AdminCrawlerPanel.tsx` — runId 应用/清空/反筛选时通过回调同步 URL 状态。
+  - `src/components/admin/AdminCrawlerTabs.tsx` — 新增 `syncRunId`，确保任务页 runId 过滤回写查询参数。
+  - `tests/unit/components/admin/AdminCrawlerTabs.test.tsx` — 新增 runId URL 同步测试用例。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅修正页面状态同步，不改采集执行链路。
+  - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/AdminCrawlerTabs.test.tsx tests/unit/api/crawler.test.ts`、`npm run test:run` 通过（38 files / 481 tests）。

@@ -88,9 +88,10 @@ function TriggerBadge({ triggerType }: { triggerType: CrawlerTask['triggerType']
 
 interface AdminCrawlerPanelProps {
   initialRunId?: string
+  onRunIdChange?: (runId: string) => void
 }
 
-export function AdminCrawlerPanel({ initialRunId = '' }: AdminCrawlerPanelProps) {
+export function AdminCrawlerPanel({ initialRunId = '', onRunIdChange }: AdminCrawlerPanelProps) {
   const [tasks, setTasks] = useState<CrawlerTask[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -277,7 +278,9 @@ export function AdminCrawlerPanel({ initialRunId = '' }: AdminCrawlerPanelProps)
             type="button"
             onClick={() => {
               setPage(1)
-              setRunIdFilter(runIdFilterInput.trim())
+              const nextRunId = runIdFilterInput.trim()
+              setRunIdFilter(nextRunId)
+              onRunIdChange?.(nextRunId)
             }}
             className="rounded border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text)] hover:bg-[var(--bg2)]"
             data-testid="admin-crawler-runid-apply"
@@ -290,6 +293,7 @@ export function AdminCrawlerPanel({ initialRunId = '' }: AdminCrawlerPanelProps)
               setPage(1)
               setRunIdFilter('')
               setRunIdFilterInput('')
+              onRunIdChange?.('')
             }}
             className="rounded border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--muted)] hover:text-[var(--text)]"
             data-testid="admin-crawler-runid-clear"
@@ -337,6 +341,7 @@ export function AdminCrawlerPanel({ initialRunId = '' }: AdminCrawlerPanelProps)
                             setRunIdFilterInput(runId)
                             setRunIdFilter(runId)
                             setPage(1)
+                            onRunIdChange?.(runId)
                           }
                         }}
                         data-testid={`admin-crawler-runid-pill-${task.id}`}

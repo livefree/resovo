@@ -4150,3 +4150,31 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 仅新增测试，不改业务逻辑。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-107 runId 过滤与 URL 双向同步（Phase D-2）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 16:37
+- **计划开始时间**：2026-03-20 16:37
+- **实际开始时间**：2026-03-20 16:37
+- **完成时间**：2026-03-20 16:40
+- **问题**：任务页 runId 过滤仅支持 URL → 页面单向同步；清空/修改过滤后 URL 不更新，刷新后状态可能回跳。
+- **影响的已完成任务**：CHG-105、CHG-106
+- **文件范围**：
+  - `src/components/admin/AdminCrawlerPanel.tsx`
+  - `src/components/admin/AdminCrawlerTabs.tsx`
+  - `tests/unit/components/admin/AdminCrawlerTabs.test.tsx`
+- **修复内容**：
+  - `AdminCrawlerPanel` 新增 `onRunIdChange` 回调，在应用/清空/点击 runId 反筛选时同步上报。
+  - `AdminCrawlerTabs` 新增 `syncRunId`，将 runId 过滤状态回写 URL（保留 `tab=tasks`）。
+  - 扩展 `AdminCrawlerTabs` 单测，覆盖任务页修改 runId 时 URL 参数同步更新与清理。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/components/admin/AdminCrawlerTabs.test.tsx tests/unit/api/crawler.test.ts`
+  - `npm run test:run`
+- **完成备注**：
+  - 不改采集执行逻辑，仅修正任务页状态持久化体验。
+- **问题说明**：_（无）_

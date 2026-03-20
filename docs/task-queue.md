@@ -762,3 +762,19 @@
    - 实际开始：2026-03-20 16:34
    - 完成时间：2026-03-20 16:37
    - 验收要点：tab/runId URL 读写行为具备单测覆盖；typecheck/lint/定向与全量测试通过
+
+## [SEQ-20260320-24] 采集控制台 Phase D-2（runId 状态双向同步）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 16:37
+- **最后更新时间**：2026-03-20 16:40
+- **目标**：确保 runId 过滤与 URL 双向同步，避免刷新回跳与状态不一致
+- **范围**：`src/components/admin/AdminCrawlerPanel.tsx`、`src/components/admin/AdminCrawlerTabs.tsx`、`tests/unit/components/admin/AdminCrawlerTabs.test.tsx`
+- **依赖**：`CHG-106` 已完成
+
+### 任务列表（按执行顺序）
+1. CHG-107 — runId 过滤 URL 双向同步（状态：✅ 已完成）
+   - 创建时间：2026-03-20 16:37
+   - 计划开始：2026-03-20 16:37
+   - 实际开始：2026-03-20 16:37
+   - 完成时间：2026-03-20 16:40
+   - 验收要点：任务页应用/清空 runId 过滤可回写 URL；相关行为具备单测覆盖；typecheck/lint/test:run 通过
