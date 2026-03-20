@@ -242,3 +242,11 @@
 - **内容**：完成 v1.2 模板规范落地与阶段验收收口。
 - **处理动作**：新增 `docs/rules/admin-module-template.md`；执行 test/typecheck/lint 全通过；更新任务与序列状态为完成。
 - **后续**：进入下一阶段（v1.3）前，可先单独清理 `ConfigFileEditor` 相关测试 warning。
+
+## [LOG-20260320-1208-01] CHG-67 Admin v2 文档方案落地
+- **时间**：2026-03-20 12:08
+- **类型**：INFO
+- **关联任务**：CHG-67
+- **内容**：完成 admin v2 重构方案与设计系统 v1 文档固化。
+- **处理动作**：新增 `docs/admin_v2_refactor_plan.md` 与 `docs/admin_design_system_v1.md`，并纳入任务与变更记录。
+- **后续**：可按文档 Phase 1 直接拆分 CHG 执行 shared 抽象。
