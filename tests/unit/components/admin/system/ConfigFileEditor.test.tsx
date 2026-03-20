@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { ConfigFileEditor } from '@/components/admin/system/ConfigFileEditor'
+import { ConfigFileEditor } from '@/components/admin/system/config-file/ConfigFileEditor'
 
 const getMock = vi.fn()
 const postMock = vi.fn()

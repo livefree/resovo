@@ -3,7 +3,7 @@
  * CHG-35
  */
 
-import { SiteSettings } from '@/components/admin/system/SiteSettings'
+import { SiteSettings } from '@/components/admin/system/site-settings/SiteSettings'
 
 export default function AdminSiteSettingsPage() {
   return (

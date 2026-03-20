@@ -3,7 +3,7 @@
  * CHG-35
  */
 
-import { ConfigFileEditor } from '@/components/admin/system/ConfigFileEditor'
+import { ConfigFileEditor } from '@/components/admin/system/config-file/ConfigFileEditor'
 
 export default function AdminConfigFilePage() {
   return (

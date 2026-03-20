@@ -3,7 +3,7 @@
  * CHG-32
  */
 
-import { PerformanceMonitor } from '@/components/admin/system/PerformanceMonitor'
+import { PerformanceMonitor } from '@/components/admin/system/monitoring/PerformanceMonitor'
 
 export default function AdminMonitorPage() {
   return (

@@ -3,7 +3,7 @@
  * CHG-30
  */
 
-import { CacheManager } from '@/components/admin/system/CacheManager'
+import { CacheManager } from '@/components/admin/system/monitoring/CacheManager'
 
 export default function AdminCachePage() {
   return (

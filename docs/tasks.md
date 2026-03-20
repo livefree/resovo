@@ -2913,11 +2913,11 @@ _（任务 review 通过后移入此处）_
 
 #### CHG-64 v1.2 T2：system 目录业务归组
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-20 10:30
 - **计划开始时间**：2026-03-20 14:00
 - **实际开始时间**：2026-03-20 11:18
-- **完成时间**：
+- **完成时间**：2026-03-20 11:30
 - **问题**：`system` 根目录仍有平铺业务组件，目录语义不统一。
 - **影响的已完成任务**：CHG-63
 - **文件范围**：
@@ -2928,7 +2928,39 @@ _（任务 review 通过后移入此处）_
   - `src/components/admin/system/{monitoring,migration,site-settings}/*`
   - 受影响的 import 引用文件
 - **修复内容**：
-  - 进行中：按业务目录迁移文件并更新 import 路径，不改业务逻辑。
+  - 将平铺组件迁移到业务目录：
+    - `CrawlerSiteManager` -> `crawler-site/CrawlerSiteManager.tsx`
+    - `ConfigFileEditor` -> `config-file/ConfigFileEditor.tsx`
+    - `CacheManager`/`PerformanceMonitor` -> `monitoring/*`
+    - `DataMigration` -> `migration/DataMigration.tsx`
+    - `SiteSettings` -> `site-settings/SiteSettings.tsx`
+  - 同步更新页面、Tabs、单测中的 import 路径。
+  - 仅路径与结构调整，不改业务逻辑。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/*.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 11/11 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-65 v1.2 T3：页面入口与业务模块分离
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-03-20 10:30
+- **计划开始时间**：2026-03-20 15:00
+- **实际开始时间**：2026-03-20 11:30
+- **完成时间**：
+- **问题**：需确认 admin 页面入口仅承担装配职责，业务逻辑已下沉到模块目录。
+- **影响的已完成任务**：CHG-64
+- **文件范围**：
+  - `src/app/[locale]/admin/system/*/page.tsx`
+  - `src/components/admin/AdminCrawlerTabs.tsx`
+  - 相关 system 子模块组件
+- **修复内容**：
+  - 进行中：清理入口层残留业务逻辑，保持页面仅负责模块装配。
 - **测试要求**：
   - `npm run test:run -- tests/unit/components/admin/system/*.test.tsx`
   - `npm run typecheck`

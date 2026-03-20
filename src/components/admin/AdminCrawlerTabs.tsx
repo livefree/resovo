@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { AdminCrawlerPanel } from '@/components/admin/AdminCrawlerPanel'
-import { CrawlerSiteManager } from '@/components/admin/system/CrawlerSiteManager'
+import { CrawlerSiteManager } from '@/components/admin/system/crawler-site/CrawlerSiteManager'
 
 type CrawlerTab = 'sites' | 'tasks'
 

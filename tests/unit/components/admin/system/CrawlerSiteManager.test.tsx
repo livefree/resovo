@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
-import { CrawlerSiteManager } from '@/components/admin/system/CrawlerSiteManager'
+import { CrawlerSiteManager } from '@/components/admin/system/crawler-site/CrawlerSiteManager'
 
 const getMock = vi.fn()
 const postMock = vi.fn()

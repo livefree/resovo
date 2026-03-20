@@ -1049,3 +1049,20 @@
 - **数据库变更**：无
 - **注意事项**：
   - 请求路径、错误处理和加载行为与原逻辑一致
+
+## [CHG-64] v1.2 T2：system 目录业务归组
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 11:30
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+  - `src/components/admin/system/config-file/ConfigFileEditor.tsx`
+  - `src/components/admin/system/monitoring/{CacheManager.tsx,PerformanceMonitor.tsx}`
+  - `src/components/admin/system/migration/DataMigration.tsx`
+  - `src/components/admin/system/site-settings/SiteSettings.tsx`
+  - `src/components/admin/AdminCrawlerTabs.tsx`
+  - `src/app/[locale]/admin/system/*/page.tsx`
+  - `tests/unit/components/admin/system/{CrawlerSiteManager.test.tsx,ConfigFileEditor.test.tsx}`
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅目录迁移和 import 更新，不涉及业务逻辑改动

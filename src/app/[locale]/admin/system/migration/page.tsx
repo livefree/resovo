@@ -3,7 +3,7 @@
  * CHG-31
  */
 
-import { DataMigration } from '@/components/admin/system/DataMigration'
+import { DataMigration } from '@/components/admin/system/migration/DataMigration'
 
 export default function AdminMigrationPage() {
   return (
