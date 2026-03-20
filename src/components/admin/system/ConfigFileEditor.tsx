@@ -7,24 +7,12 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { apiClient, ApiClientError } from '@/lib/api-client'
-
-const PLACEHOLDER = JSON.stringify(
-  {
-    crawler_sites: {
-      example: {
-        name: '示例资源站',
-        api: 'https://api.example.com/api.php/provide/vod',
-        detail: '可选备注',
-        type: 'vod',
-        format: 'json',
-        weight: 50,
-        is_adult: false,
-      },
-    },
-  },
-  null,
-  2,
-)
+import { CONFIG_FILE_PLACEHOLDER } from '@/components/admin/system/config-file/constants'
+import {
+  normalizeSubscriptionUrl,
+  parseJsonToPrettyText,
+  validateJsonText,
+} from '@/components/admin/system/config-file/utils'
 
 interface ConfigFileData {
   configFile: string
@@ -67,15 +55,9 @@ export function ConfigFileEditor() {
   useEffect(() => { fetchCurrent() }, [fetchCurrent])
 
   function validateJson(raw: string): boolean {
-    if (!raw.trim()) { setJsonError(null); return true }
-    try {
-      JSON.parse(raw)
-      setJsonError(null)
-      return true
-    } catch (e) {
-      setJsonError(e instanceof Error ? e.message : 'JSON 格式错误')
-      return false
-    }
+    const result = validateJsonText(raw)
+    setJsonError(result.error)
+    return result.ok
   }
 
   function handleContentChange(v: string) {
@@ -93,8 +75,8 @@ export function ConfigFileEditor() {
       const res = await fetch(data.subscriptionUrl)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const text = await res.text()
-      JSON.parse(text) // validate
-      setData((prev) => ({ ...prev, configFile: text }))
+      const prettyText = parseJsonToPrettyText(text)
+      setData((prev) => ({ ...prev, configFile: prettyText }))
       setJsonError(null)
       showToast('拉取成功', true)
     } catch (e) {
@@ -110,8 +92,8 @@ export function ConfigFileEditor() {
     setUploading(true)
     try {
       const text = await file.text()
-      const parsed = JSON.parse(text) as unknown
-      setData((prev) => ({ ...prev, configFile: JSON.stringify(parsed, null, 2) }))
+      const prettyText = parseJsonToPrettyText(text)
+      setData((prev) => ({ ...prev, configFile: prettyText }))
       setJsonError(null)
       showToast('本地文件加载成功', true)
     } catch (e) {
@@ -124,20 +106,15 @@ export function ConfigFileEditor() {
   async function handleSave() {
     if (!validateJson(data.configFile)) return
 
-    const payload: { configFile: string; subscriptionUrl?: string } = {
-      configFile: data.configFile,
+    const payload: { configFile: string; subscriptionUrl?: string } = { configFile: data.configFile }
+    const normalizedSubscription = normalizeSubscriptionUrl(data.subscriptionUrl)
+    if (!normalizedSubscription.ok) {
+      showToast(normalizedSubscription.error ?? '订阅 URL 格式错误', false)
+      return
     }
-    const normalizedSubscriptionUrl = data.subscriptionUrl.trim()
-    if (normalizedSubscriptionUrl.length > 0) {
-      try {
-        const parsed = new URL(normalizedSubscriptionUrl)
-        if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('invalid protocol')
-        payload.subscriptionUrl = normalizedSubscriptionUrl
-      } catch {
-        showToast('订阅 URL 格式错误（可先清空后仅保存 JSON）', false)
-        return
-      }
-    } else if (data.subscriptionUrl.length > 0) {
+    if (normalizedSubscription.value) {
+      payload.subscriptionUrl = normalizedSubscription.value
+    } else if (normalizedSubscription.shouldClear) {
       payload.subscriptionUrl = ''
     }
 
@@ -268,7 +245,7 @@ export function ConfigFileEditor() {
         <textarea
           value={data.configFile}
           onChange={(e) => handleContentChange(e.target.value)}
-          placeholder={PLACEHOLDER}
+          placeholder={CONFIG_FILE_PLACEHOLDER}
           rows={22}
           spellCheck={false}
           className={`w-full rounded-md border bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] resize-y font-mono ${

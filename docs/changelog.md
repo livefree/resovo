@@ -992,3 +992,16 @@
 - **数据库变更**：无
 - **注意事项**：
   - 本次仅做结构拆分，不改动用户可见行为与接口调用路径
+
+## [CHG-59] Phase B：ConfigFileEditor 结构拆分（v1.1）
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 19:21
+- **修改文件**：
+  - `src/components/admin/system/config-file/constants.ts` — 新建，承载配置示例 placeholder
+  - `src/components/admin/system/config-file/utils.ts` — 新建，承载 JSON 校验/格式化与订阅 URL 归一化逻辑
+  - `src/components/admin/system/ConfigFileEditor.tsx` — 改为消费 `config-file` 子模块工具，收敛主组件复杂度
+  - `tests/unit/components/admin/system/config-file/utils.test.ts` — 新增工具函数单测
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 保持“保存并同步”行为和提示文案不变，属于结构性重构

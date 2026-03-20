@@ -178,3 +178,11 @@
 - **内容**：完成 CrawlerSiteManager 的容器化拆分，表格视图独立模块化。
 - **处理动作**：新增 `CrawlerSiteTable.tsx`，主组件替换为容器传参；回归测试/类型检查/lint 全部通过。
 - **后续**：进入 CHG-59，拆分 ConfigFileEditor 结构。
+
+## [LOG-20260319-1921-01] CHG-59 ConfigFileEditor 结构拆分完成
+- **时间**：2026-03-19 19:21
+- **类型**：INFO
+- **关联任务**：CHG-59
+- **内容**：完成配置文件编辑器第一阶段结构拆分并补齐工具层测试。
+- **处理动作**：新增 `config-file/constants.ts` 与 `config-file/utils.ts`，主组件切换为工具函数复用；新增 `utils` 单测并通过。
+- **后续**：v1.1 序列收尾完成，可按新结构继续做后续功能迭代。

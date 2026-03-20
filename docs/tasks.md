@@ -2780,22 +2780,27 @@ _（任务 review 通过后移入此处）_
 
 #### CHG-59 Phase B：ConfigFileEditor 结构拆分（v1.1）
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-19 18:50
 - **计划开始时间**：2026-03-19 21:00
 - **实际开始时间**：2026-03-19 19:18
-- **完成时间**：
+- **完成时间**：2026-03-19 19:21
 - **问题**：配置文件编辑器聚合了解析、映射、同步与 UI，变更风险高且测试颗粒粗。
 - **影响的已完成任务**：CHG-58
 - **文件范围**：
   - `src/components/admin/system/ConfigFileEditor.tsx`
-  - `src/components/admin/system/config-file/*`
+  - `src/components/admin/system/config-file/constants.ts`
+  - `src/components/admin/system/config-file/utils.ts`
+  - `tests/unit/components/admin/system/config-file/utils.test.ts`
 - **修复内容**：
-  - 进行中：拆分配置解析/同步逻辑与视图层，保持“保存并同步”行为和提示文案一致。
+  - 新增 `config-file/constants.ts` 承载 JSON placeholder，减少主组件常量噪音。
+  - 新增 `config-file/utils.ts`，抽离 JSON 校验、JSON 格式化、订阅 URL 归一化逻辑。
+  - `ConfigFileEditor` 改为复用工具函数，保持“保存并同步”流程和错误文案不变。
+  - 新增 `utils` 单测，覆盖核心规则并提升后续重构安全性。
 - **测试要求**：
-  - `npm run test:run -- tests/unit/components/admin/system/ConfigFileEditor*.test.ts*`
+  - `npm run test:run -- tests/unit/components/admin/system/ConfigFileEditor.test.tsx tests/unit/components/admin/system/config-file/utils.test.ts`
   - `npm run typecheck`
   - `npm run lint`
 - **完成备注**：
-  - _（进行中）_
+  - 定向单测 6/6 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
