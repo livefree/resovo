@@ -4123,3 +4123,30 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 不改采集执行逻辑，只补 UI 联动与追踪路径。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-106 run→task 深链联动单测补齐（Phase D-1）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 16:34
+- **计划开始时间**：2026-03-20 16:34
+- **实际开始时间**：2026-03-20 16:34
+- **完成时间**：2026-03-20 16:37
+- **问题**：run→task URL 联动已上线，但缺少自动化回归保护，后续重构可能无感回退。
+- **影响的已完成任务**：CHG-105
+- **文件范围**：
+  - `tests/unit/components/admin/AdminCrawlerTabs.test.tsx`（新增）
+- **修复内容**：
+  - 新增 AdminCrawlerTabs 单测，覆盖：
+    - `tab=tasks&runId` 启动即进入任务页并透传 runId。
+    - 从控制台切换任务页会写入 `?tab=tasks`。
+    - 从任务页切回控制台会清理 `tab/runId` 查询参数。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/components/admin/AdminCrawlerTabs.test.tsx tests/unit/api/crawler.test.ts`
+  - `npm run test:run`
+- **完成备注**：
+  - 仅新增测试，不改业务逻辑。
+- **问题说明**：_（无）_
