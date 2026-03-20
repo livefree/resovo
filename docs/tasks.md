@@ -2754,20 +2754,46 @@ _（任务 review 通过后移入此处）_
 
 #### CHG-58 Phase A5：容器+表格组件拆分落地（v1.1）
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-19 18:50
 - **计划开始时间**：2026-03-19 20:30
 - **实际开始时间**：2026-03-19 19:11
-- **完成时间**：
+- **完成时间**：2026-03-19 19:18
 - **问题**：`CrawlerSiteManager` 仍承载大量表格渲染与行交互细节，容器职责不清晰。
 - **影响的已完成任务**：CHG-57
 - **文件范围**：
   - `src/components/admin/system/CrawlerSiteManager.tsx`
-  - `src/components/admin/system/crawler-site/components/*`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`
 - **修复内容**：
-  - 进行中：拆出列表表格视图组件，容器仅保留数据获取与业务动作编排。
+  - 新建 `CrawlerSiteTable` 组件，承载列表表头筛选、排序、列宽拖拽与行级操作渲染。
+  - `CrawlerSiteManager` 删除大段表格 JSX，改为容器式传参编排业务动作。
+  - 行为保持不变：测试断言的滚动容器、筛选、排序、状态恢复路径均通过回归。
 - **测试要求**：
   - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/system/crawler-site/importParser.test.ts`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 8/8 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-59 Phase B：ConfigFileEditor 结构拆分（v1.1）
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-03-19 18:50
+- **计划开始时间**：2026-03-19 21:00
+- **实际开始时间**：2026-03-19 19:18
+- **完成时间**：
+- **问题**：配置文件编辑器聚合了解析、映射、同步与 UI，变更风险高且测试颗粒粗。
+- **影响的已完成任务**：CHG-58
+- **文件范围**：
+  - `src/components/admin/system/ConfigFileEditor.tsx`
+  - `src/components/admin/system/config-file/*`
+- **修复内容**：
+  - 进行中：拆分配置解析/同步逻辑与视图层，保持“保存并同步”行为和提示文案一致。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/ConfigFileEditor*.test.ts*`
   - `npm run typecheck`
   - `npm run lint`
 - **完成备注**：

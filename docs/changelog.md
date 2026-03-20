@@ -981,3 +981,14 @@
 - **数据库变更**：无
 - **注意事项**：
   - 全选行为维持“仅作用当前筛选后的可见列表”；批量成功后自动清空选择
+
+## [CHG-58] Phase A5：容器+表格组件拆分落地（v1.1）
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 19:18
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx` — 新建，承载源站列表表格视图与行交互渲染
+  - `src/components/admin/system/CrawlerSiteManager.tsx` — 改为容器编排，表格渲染切换为 `CrawlerSiteTable`
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅做结构拆分，不改动用户可见行为与接口调用路径
