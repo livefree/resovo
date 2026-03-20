@@ -2948,11 +2948,11 @@ _（任务 review 通过后移入此处）_
 
 #### CHG-65 v1.2 T3：页面入口与业务模块分离
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-20 10:30
 - **计划开始时间**：2026-03-20 15:00
 - **实际开始时间**：2026-03-20 11:30
-- **完成时间**：
+- **完成时间**：2026-03-20 11:42
 - **问题**：需确认 admin 页面入口仅承担装配职责，业务逻辑已下沉到模块目录。
 - **影响的已完成任务**：CHG-64
 - **文件范围**：
@@ -2960,9 +2960,38 @@ _（任务 review 通过后移入此处）_
   - `src/components/admin/AdminCrawlerTabs.tsx`
   - 相关 system 子模块组件
 - **修复内容**：
-  - 进行中：清理入口层残留业务逻辑，保持页面仅负责模块装配。
+  - 审计并确认 system 入口页面仅包含标题/说明与模块装配，无业务逻辑内联。
+  - `AdminCrawlerTabs` 保留 Tab 切换状态与模块装配，业务处理下沉至 `crawler-site` 子模块。
+  - 路由入口与业务目录边界达到 v1.2 目标。
 - **测试要求**：
   - `npm run test:run -- tests/unit/components/admin/system/*.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 复用 CHG-64 验证结果：定向单测 11/11 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-66 v1.2 T4/T6/T7：模板约束落地 + 阶段验收
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-03-20 10:30
+- **计划开始时间**：2026-03-20 16:00
+- **实际开始时间**：2026-03-20 11:42
+- **完成时间**：
+- **问题**：需固化模块模板规范并完成阶段验收闭环。
+- **影响的已完成任务**：CHG-65
+- **文件范围**：
+  - `docs/rules/*`
+  - `docs/task-queue.md`
+  - `docs/tasks.md`
+  - `docs/changelog.md`
+  - `docs/run-logs.md`
+- **修复内容**：
+  - 进行中：新增模板规范文档并执行阶段验收命令，补齐 v1.2 收口记录。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/system/ConfigFileEditor.test.tsx tests/unit/components/admin/system/config-file/utils.test.ts`
   - `npm run typecheck`
   - `npm run lint`
 - **完成备注**：
