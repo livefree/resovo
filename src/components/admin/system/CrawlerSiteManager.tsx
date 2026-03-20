@@ -88,6 +88,19 @@ const COLUMN_META: Array<{ id: ColumnId; label: string }> = [
   { id: 'manageOps', label: '管理操作' },
 ]
 const REQUIRED_COLUMNS: ColumnId[] = ['name', 'manageOps']
+const COLUMN_WIDTH: Record<ColumnId, number> = {
+  name: 220,
+  apiUrl: 260,
+  sourceType: 88,
+  format: 88,
+  weight: 88,
+  isAdult: 88,
+  fromConfig: 92,
+  disabled: 106,
+  lastCrawl: 180,
+  crawlOps: 130,
+  manageOps: 180,
+}
 
 function readPersistedState() {
   const defaults = {
@@ -717,6 +730,9 @@ export function CrawlerSiteManager() {
 
   const visibleColumnCount = COLUMN_META.filter((column) => columns[column.id]).length
   const colClass = (id: ColumnId) => (columns[id] ? '' : 'hidden')
+  const visibleTableMinWidth = COLUMN_META.reduce((sum, column) => (
+    columns[column.id] ? sum + COLUMN_WIDTH[column.id] : sum
+  ), 44)
 
   if (loading) {
     return <div className="flex items-center justify-center py-20 text-sm text-[var(--muted)]">加载中…</div>
@@ -794,7 +810,7 @@ export function CrawlerSiteManager() {
       {/* 表格 */}
       <div className="rounded-lg border border-[var(--border)] overflow-hidden">
         <div data-testid="crawler-sites-scroll-container" className="h-[60vh] min-h-[420px] max-h-[720px] overflow-y-auto overflow-x-auto">
-        <table className="w-full min-w-[1480px] table-fixed text-sm">
+        <table className="w-full table-fixed text-sm" style={{ minWidth: `${visibleTableMinWidth}px` }}>
           <thead>
             <tr className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg2)]">
               <th className="w-8 px-3 py-3 text-left">
