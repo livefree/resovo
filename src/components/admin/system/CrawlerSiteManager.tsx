@@ -5,26 +5,10 @@
 
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
 import type { CrawlerSite, CreateCrawlerSiteInput, UpdateCrawlerSiteInput, CrawlerSiteBatchAction } from '@/types'
-import {
-  COLUMN_META,
-  DEFAULT_FILTERS,
-  DEFAULT_COLUMNS,
-  REQUIRED_COLUMNS,
-  DEFAULT_COLUMN_WIDTH,
-  STORAGE_KEY,
-  readPersistedState,
-} from '@/components/admin/system/crawler-site/tableState'
-import type {
-  SortField,
-  SortDir,
-  FilterState,
-  ColumnId,
-  ColumnVisibility,
-  ColumnWidthState,
-} from '@/components/admin/system/crawler-site/tableState'
+import { useCrawlerSiteColumns } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns'
 import { parseSitesFromJson } from '@/components/admin/system/crawler-site/importParser'
 
 // ── 类型 ──────────────────────────────────────────────────────
@@ -224,7 +208,6 @@ function SiteForm({
 // ── 主组件 ────────────────────────────────────────────────────
 
 export function CrawlerSiteManager() {
-  const [initialState] = useState(readPersistedState)
   const [sites, setSites] = useState<CrawlerSite[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -234,13 +217,24 @@ export function CrawlerSiteManager() {
   const [rowSaving, setRowSaving] = useState<Record<string, boolean>>({})
   const [crawlTriggering, setCrawlTriggering] = useState<Record<string, boolean>>({})
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
-  const [sortBy, setSortBy] = useState<SortField>(initialState.sortBy)
-  const [sortDir, setSortDir] = useState<SortDir>(initialState.sortDir)
-  const [filters, setFilters] = useState<FilterState>(initialState.filters)
-  const [columns, setColumns] = useState<ColumnVisibility>(initialState.columns)
-  const [columnWidths, setColumnWidths] = useState<ColumnWidthState>(initialState.columnWidths)
-  const [showColumnsPanel, setShowColumnsPanel] = useState(false)
-  const resizeRef = useRef<{ id: ColumnId; startX: number; startWidth: number } | null>(null)
+  const {
+    sortBy,
+    sortDir,
+    filters,
+    columns,
+    columnWidths,
+    showColumnsPanel,
+    setFilters,
+    setShowColumnsPanel,
+    handleSort,
+    toggleColumn,
+    startResize,
+    visibleColumnCount,
+    colClass,
+    visibleTableMinWidth,
+    columnMeta,
+    requiredColumns,
+  } = useCrawlerSiteColumns()
 
   const showToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok })
@@ -260,23 +254,6 @@ export function CrawlerSiteManager() {
   }, [])
 
   useEffect(() => { fetchSites() }, [fetchSites])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          sortBy,
-          sortDir,
-          filters,
-          columns,
-          columnWidths,
-        }),
-      )
-    } catch {
-      // 忽略 localStorage 异常
-    }
-  }, [sortBy, sortDir, filters, columns, columnWidths])
 
   const displaySites = useMemo(() => {
     const keyOrName = filters.keyOrName.trim().toLowerCase()
@@ -317,51 +294,6 @@ export function CrawlerSiteManager() {
       }
     })
   }, [sites, filters, sortBy, sortDir])
-
-  function handleSort(field: SortField) {
-    if (sortBy === field) {
-      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))
-      return
-    }
-    setSortBy(field)
-    setSortDir('asc')
-  }
-
-  function toggleColumn(columnId: ColumnId) {
-    if (REQUIRED_COLUMNS.includes(columnId)) return
-    setColumns((prev) => ({ ...prev, [columnId]: !prev[columnId] }))
-  }
-
-  function setColumnWidth(columnId: ColumnId, width: number) {
-    const next = Math.max(72, Math.min(560, width))
-    setColumnWidths((prev) => ({ ...prev, [columnId]: next }))
-  }
-
-  function startResize(columnId: ColumnId, clientX: number) {
-    resizeRef.current = {
-      id: columnId,
-      startX: clientX,
-      startWidth: columnWidths[columnId],
-    }
-  }
-
-  useEffect(() => {
-    const onMouseMove = (event: MouseEvent) => {
-      if (!resizeRef.current) return
-      const { id, startX, startWidth } = resizeRef.current
-      const delta = event.clientX - startX
-      setColumnWidth(id, startWidth + delta)
-    }
-    const onMouseUp = () => {
-      resizeRef.current = null
-    }
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup', onMouseUp)
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mouseup', onMouseUp)
-    }
-  }, [columnWidths])
 
   // ── 选择 ───────────────────────────────────────────────────
 
@@ -570,12 +502,6 @@ export function CrawlerSiteManager() {
 
   // ── 渲染 ──────────────────────────────────────────────────
 
-  const visibleColumnCount = COLUMN_META.filter((column) => columns[column.id]).length
-  const colClass = (id: ColumnId) => (columns[id] ? '' : 'hidden')
-  const visibleTableMinWidth = COLUMN_META.reduce((sum, column) => (
-    columns[column.id] ? sum + columnWidths[column.id] : sum
-  ), 44)
-
   if (loading) {
     return <div className="flex items-center justify-center py-20 text-sm text-[var(--muted)]">加载中…</div>
   }
@@ -619,12 +545,12 @@ export function CrawlerSiteManager() {
             <div className="absolute left-0 z-20 mt-1 w-56 rounded-md border border-[var(--border)] bg-[var(--bg2)] p-2 shadow-lg">
               <p className="mb-2 text-xs text-[var(--muted)]">勾选显示列（名称/管理操作为必显）</p>
               <div className="space-y-1">
-                {COLUMN_META.map((column) => (
+                {columnMeta.map((column) => (
                   <label key={column.id} className="flex items-center gap-2 rounded px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg3)]">
                     <input
                       type="checkbox"
                       checked={columns[column.id]}
-                      disabled={REQUIRED_COLUMNS.includes(column.id)}
+                      disabled={requiredColumns.includes(column.id)}
                       onChange={() => toggleColumn(column.id)}
                       className="accent-[var(--accent)]"
                     />

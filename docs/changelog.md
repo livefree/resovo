@@ -959,3 +959,14 @@
 - **数据库变更**：无
 - **注意事项**：
   - 解析器行为保持与原逻辑一致（兼容字段别名、按 API 去重）
+
+## [CHG-56] Phase A3：抽离列表列管理/拖拽宽度 hooks（v1.1）
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 19:06
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns.ts` — 新建，承载排序/筛选/显隐/拖拽/持久化逻辑
+  - `src/components/admin/system/CrawlerSiteManager.tsx` — 改为消费 `useCrawlerSiteColumns`，删除对应内联逻辑
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次为结构切片，交互行为保持不变

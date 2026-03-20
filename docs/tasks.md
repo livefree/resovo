@@ -2702,18 +2702,44 @@ _（任务 review 通过后移入此处）_
 
 #### CHG-56 Phase A3：抽离列表列管理/拖拽宽度 hooks（v1.1）
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-19 18:50
 - **计划开始时间**：2026-03-19 19:30
 - **实际开始时间**：2026-03-19 19:04
-- **完成时间**：
+- **完成时间**：2026-03-19 19:06
 - **问题**：列显隐、排序、筛选、拖拽调宽和持久化逻辑仍集中在主组件。
 - **影响的已完成任务**：CHG-55
 - **文件范围**：
   - `src/components/admin/system/CrawlerSiteManager.tsx`
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns.ts`
+- **修复内容**：
+  - 新建 `useCrawlerSiteColumns`，统一管理排序/筛选/列显隐/列宽拖拽/本地持久化。
+  - `CrawlerSiteManager` 删除对应内联状态与拖拽监听逻辑，改为消费 hook 返回值。
+  - 行为保持不变（列拖拽、排序、筛选、状态记忆）。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/system/crawler-site/importParser.test.ts`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 8/8 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-57 Phase A4：抽离选择/批量操作 hooks（v1.1）
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-03-19 18:50
+- **计划开始时间**：2026-03-19 20:00
+- **实际开始时间**：2026-03-19 19:06
+- **完成时间**：
+- **问题**：源站选择/全选/批量操作耦合在主组件，影响后续容器化拆分。
+- **影响的已完成任务**：CHG-56
+- **文件范围**：
+  - `src/components/admin/system/CrawlerSiteManager.tsx`
   - `src/components/admin/system/crawler-site/hooks/*`
 - **修复内容**：
-  - 进行中：准备抽离 `useCrawlerSiteColumns` 等 hooks，保持交互行为不变。
+  - 进行中：抽离 `useCrawlerSiteSelection`，封装选择状态与批量选择逻辑。
 - **测试要求**：
   - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
   - `npm run typecheck`
