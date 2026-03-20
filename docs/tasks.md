@@ -3347,3 +3347,31 @@ _（任务 review 通过后移入此处）_
   - 定向单测 3/3 通过；typecheck/lint 通过。
   - 保留既有 warning：ConfigFileEditor 测试中的 controlled/uncontrolled 提示（历史问题，未在本任务处理）。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-80 Phase2：videos/users/sources 布局对齐
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 12:24
+- **计划开始时间**：2026-03-21 13:00
+- **实际开始时间**：2026-03-20 01:20
+- **完成时间**：2026-03-20 01:22
+- **问题**：`videos/users/sources` 页面标题区与筛选区布局风格不一致，跨页面体验割裂。
+- **影响的已完成任务**：CHG-79
+- **文件范围**：
+  - `src/app/[locale]/admin/videos/page.tsx`
+  - `src/app/[locale]/admin/users/page.tsx`
+  - `src/app/[locale]/admin/sources/page.tsx`
+  - `src/components/admin/users/UserTable.tsx`
+- **修复内容**：
+  - 三个页面统一为“信息头卡片 + 内容区”布局结构。
+  - users 搜索栏接入 `AdminToolbar` 布局壳，与 videos/sources 筛选区节奏对齐。
+  - 不改 API、字段、异步流程与权限逻辑。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/videos/VideoFilters.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 10/10 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_

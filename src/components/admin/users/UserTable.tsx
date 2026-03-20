@@ -12,6 +12,7 @@ import { DataTable } from '@/components/admin/DataTable'
 import { StatusBadge } from '@/components/admin/StatusBadge'
 import { Pagination } from '@/components/admin/Pagination'
 import { UserActions, type UserRow } from '@/components/admin/users/UserActions'
+import { AdminToolbar } from '@/components/admin/shared/toolbar/AdminToolbar'
 import type { BadgeStatus } from '@/components/admin/StatusBadge'
 import type { Column } from '@/components/admin/DataTable'
 
@@ -122,15 +123,18 @@ export function UserTable() {
 
   return (
     <div data-testid="user-table">
-      <div className="mb-4">
-        <input
-          type="text"
-          placeholder="搜索用户名或邮箱…"
-          onChange={handleSearchChange}
-          className="rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-1.5 text-sm text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-          data-testid="user-table-search"
-        />
-      </div>
+      <AdminToolbar
+        className="gap-3"
+        actions={(
+          <input
+            type="text"
+            placeholder="搜索用户名或邮箱…"
+            onChange={handleSearchChange}
+            className="rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-1.5 text-sm text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+            data-testid="user-table-search"
+          />
+        )}
+      />
 
       <DataTable<UserTableRow>
         columns={columns}

@@ -1252,3 +1252,17 @@
   - 本次仅 UI 布局调整，不改动保存接口、payload、调用顺序与提示逻辑
   - 已通过：`npm run test:run -- tests/unit/components/admin/system/ConfigFileEditor.test.tsx`、`npm run typecheck`、`npm run lint`
   - 仍存在既有测试 warning：ConfigFileEditor controlled/uncontrolled（历史问题）
+
+## [CHG-80] Phase2：videos/users/sources 布局对齐
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 01:22
+- **修改文件**：
+  - `src/app/[locale]/admin/videos/page.tsx` — 统一标题区为信息头卡片布局，保留原操作入口
+  - `src/app/[locale]/admin/users/page.tsx` — 统一标题区与说明层级
+  - `src/app/[locale]/admin/sources/page.tsx` — 统一标题区与说明层级
+  - `src/components/admin/users/UserTable.tsx` — 搜索区接入 `AdminToolbar` 布局壳
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅 DOM/样式布局对齐，不改动数据结构、API 顺序、异步流程、权限逻辑
+  - 已通过：`npm run test:run -- tests/unit/components/admin/videos/VideoFilters.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
