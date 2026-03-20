@@ -3458,3 +3458,38 @@ _（任务 review 通过后移入此处）_
   - 定向单测 10/10 通过；typecheck/lint 通过。
   - 满足“至少 2 模块完成 AdminTable 规范接入”的阶段目标。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-84 Phase3：交互规则代码门禁
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 12:24
+- **计划开始时间**：2026-03-22 12:10
+- **实际开始时间**：2026-03-20 01:29
+- **完成时间**：2026-03-20 01:33
+- **问题**：删除确认/loading/toast/单维度 PR 等规则目前依赖人工执行，缺少自动化门禁。
+- **影响的已完成任务**：CHG-83
+- **文件范围**：
+  - `scripts/verify-admin-guardrails.mjs`（新增）
+  - `package.json`
+  - `docs/rules/admin-module-template.md`
+  - `docs/admin_v2_refactor_plan.md`
+  - `src/components/admin/sources/SourceTable.tsx`
+- **修复内容**：
+  - 新增 `verify-admin-guardrails` 门禁脚本，校验 v2 范围内：
+    - 单个变更集仅允许一个维度（shared/ui/logic）
+    - 禁止直接 `confirm()`
+    - 删除接口调用必须配套 `ConfirmDialog`
+    - `toast + setTimeout` 必须迁移为 `useAdminToast`
+  - 新增 npm 命令：`verify:admin-guardrails`（staged）与 `verify:admin-guardrails:all`（审计）。
+  - `SourceTable` 单条删除改为 `ConfirmDialog` 二次确认，补齐删除交互规范。
+  - 将门禁命令并入执行规则文档，形成可执行约束。
+- **测试要求**：
+  - `npm run verify:admin-guardrails`
+  - `npm run test:run -- tests/unit/components/admin/videos/VideoFilters.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 门禁命令通过；定向单测 10/10 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_

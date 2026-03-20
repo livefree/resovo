@@ -1305,3 +1305,18 @@
 - **注意事项**：
   - 本次为 design system table 规范落地，不改动数据结构、字段、API 调用顺序、异步流程与权限逻辑
   - 已通过：`npm run test:run -- tests/unit/components/admin/videos/VideoFilters.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
+
+## [CHG-84] Phase3：交互规则代码门禁
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 01:33
+- **修改文件**：
+  - `scripts/verify-admin-guardrails.mjs` — 新增 admin v2 规则门禁脚本（单维度变更集 + confirm/delete/toast 规则）
+  - `package.json` — 新增 `verify:admin-guardrails` 与 `verify:admin-guardrails:all` 命令
+  - `docs/rules/admin-module-template.md` — 增加交互规则硬约束并纳入门禁命令
+  - `docs/admin_v2_refactor_plan.md` — 执行规则补充门禁命令要求
+  - `src/components/admin/sources/SourceTable.tsx` — 单条删除接入 `ConfirmDialog` 二次确认
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 门禁命令默认校验 staged 变更，适配“单任务单提交”执行流
+  - 已通过：`npm run verify:admin-guardrails`、`npm run test:run -- tests/unit/components/admin/videos/VideoFilters.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`

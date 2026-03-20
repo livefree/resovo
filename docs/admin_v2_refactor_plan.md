@@ -1,6 +1,6 @@
 # Admin v2 Refactor Plan
 
-更新时间：2026-03-20 12:18
+更新时间：2026-03-20 01:33
 
 ## 目标与约束
 
@@ -219,3 +219,4 @@ DoD：
    - 影响范围清单
    - DoD 对照结果
    - 回滚说明
+4. 所有 admin v2 相关 PR 必跑：`npm run verify:admin-guardrails`（门禁校验单维度与交互规则）。

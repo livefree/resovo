@@ -15,6 +15,8 @@
     "test:e2e:ui": "playwright test --ui",
     "preflight": "bash scripts/preflight.sh",
     "preflight:e2e": "bash scripts/preflight.sh --with-e2e",
+    "verify:admin-guardrails": "node scripts/verify-admin-guardrails.mjs --staged",
+    "verify:admin-guardrails:all": "node scripts/verify-admin-guardrails.mjs --all",
     "migrate": "node --env-file=.env.local --import tsx scripts/migrate.ts",
     "import:sources": "node --env-file=.env.local --import tsx scripts/import-sources.ts",
     "create:admin": "node --env-file=.env.local --import tsx scripts/create-admin.ts",

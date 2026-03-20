@@ -1,6 +1,6 @@
 # Admin Module Template Rule
 
-更新时间：2026-03-20 12:18
+更新时间：2026-03-20 01:33
 
 ## 适用范围
 
@@ -39,11 +39,14 @@ module/
 6. UI 改动禁止触碰：数据结构、字段、API 调用顺序、异步流程、权限逻辑。
 7. UI 改动仅允许：DOM 结构调整、按钮位置调整、样式与视觉层级调整。
 8. 任一 PR 仅允许一个维度（shared / UI / 逻辑），禁止混提。
+9. v2 范围内禁止直接使用 `confirm()`，删除类操作必须使用 `ConfirmDialog`。
+10. v2 范围内 toast 计时关闭必须使用 `useAdminToast`，禁止 `toast + setTimeout` 自管。
 
 ## 验收清单
 
 - `npm run typecheck`
 - `npm run lint`
+- `npm run verify:admin-guardrails`
 - `npm run test:run -- <受影响测试>`
 - 手动回归关键交互（按任务定义）
 - 对表格类改动，必须补充：

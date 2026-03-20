@@ -11,6 +11,7 @@ import { StatusBadge } from '@/components/admin/StatusBadge'
 import { Pagination } from '@/components/admin/Pagination'
 import { SourceVerifyButton } from '@/components/admin/sources/SourceVerifyButton'
 import { BatchDeleteBar } from '@/components/admin/sources/BatchDeleteBar'
+import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
 import { AdminTableState } from '@/components/admin/shared/feedback/AdminTableState'
 import { AdminTableFrame } from '@/components/admin/shared/table/AdminTableFrame'
 import { AdminToolbar } from '@/components/admin/shared/toolbar/AdminToolbar'
@@ -42,6 +43,8 @@ export function SourceTable() {
   const [status, setStatus] = useState<'all' | 'active' | 'inactive'>('all')
   const [loading, setLoading] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [deleteTarget, setDeleteTarget] = useState<SourceRow | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   const fetchSources = useCallback(
     async (pageVal: number, statusVal: string) => {
@@ -83,12 +86,17 @@ export function SourceTable() {
 
   const allSelected = sources.length > 0 && selectedIds.length === sources.length
 
-  async function handleDelete(id: string) {
+  async function handleDelete() {
+    if (!deleteTarget) return
+    setDeleteLoading(true)
     try {
-      await apiClient.delete(`/admin/sources/${id}`)
+      await apiClient.delete(`/admin/sources/${deleteTarget.id}`)
       fetchSources(page, status)
+      setDeleteTarget(null)
     } catch {
       // silent
+    } finally {
+      setDeleteLoading(false)
     }
   }
 
@@ -179,7 +187,7 @@ export function SourceTable() {
                     onVerified={() => fetchSources(page, status)}
                   />
                   <button
-                    onClick={() => handleDelete(row.id)}
+                    onClick={() => setDeleteTarget(row)}
                     className="rounded px-2 py-0.5 text-xs bg-red-900/30 text-red-400 hover:bg-red-900/60"
                     data-testid={`source-delete-btn-${row.id}`}
                   >
@@ -210,6 +218,23 @@ export function SourceTable() {
         selectedIds={selectedIds}
         onSuccess={() => fetchSources(page, status)}
         onClear={() => setSelectedIds([])}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onClose={() => {
+          if (!deleteLoading) setDeleteTarget(null)
+        }}
+        title="确认删除播放源"
+        description={
+          deleteTarget
+            ? `确定要删除播放源「${deleteTarget.source_name || deleteTarget.source_url}」吗？此操作不可撤销。`
+            : '确定要删除该播放源吗？此操作不可撤销。'
+        }
+        confirmText="删除"
+        onConfirm={handleDelete}
+        loading={deleteLoading}
+        danger
       />
     </div>
   )
