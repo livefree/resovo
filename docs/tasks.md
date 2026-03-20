@@ -2645,3 +2645,28 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 新增拖拽调宽单测；定向单测 5/5 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-54 Phase A1：抽离 CrawlerSiteManager 表格状态模型（v1.1 首任务）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-19 18:50
+- **计划开始时间**：2026-03-19 18:52
+- **实际开始时间**：2026-03-19 18:53
+- **完成时间**：2026-03-19 18:55
+- **问题**：`CrawlerSiteManager.tsx` 状态模型与常量定义过度集中，阻塞后续按 v1.1 进行纵向切片。
+- **影响的已完成任务**：CHG-53
+- **文件范围**：
+  - `src/components/admin/system/CrawlerSiteManager.tsx`
+  - `src/components/admin/system/crawler-site/tableState.ts`
+- **修复内容**：
+  - 将排序/筛选/列显隐/列宽相关类型、默认值、持久化读取逻辑抽离至 `crawler-site/tableState.ts`。
+  - 主组件改为消费模块化状态定义，保持行为与 UI 不变。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_

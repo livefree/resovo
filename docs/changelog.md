@@ -936,3 +936,14 @@
 - **注意事项**：
   - 列宽范围限制为 72–560 px
   - 拖拽手柄位于每列表头右侧
+
+## [CHG-54] Phase A1：抽离 CrawlerSiteManager 表格状态模型（v1.1）
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 18:55
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/tableState.ts` — 新建，集中管理列表状态类型、默认值、持久化读取
+  - `src/components/admin/system/CrawlerSiteManager.tsx` — 改为引用 tableState 模块，减少内联状态定义
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次为结构性切片，保证行为与交互不变，作为 v1.1 后续拆分基础
