@@ -1209,3 +1209,14 @@
 - **注意事项**：
   - 本次仅 UI 层布局重排，不改动数据结构、字段、API 调用顺序、异步流程与权限逻辑
   - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
+
+## [CHG-77] Phase2：crawler-site 行操作分层
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 23:33
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx` — 调整行操作按钮视觉层级与顺序（采集/管理列）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅 UI 样式与按钮顺序调整，不改动回调、参数、API 顺序、异步流程与权限逻辑
+  - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`

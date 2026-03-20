@@ -224,14 +224,37 @@ export function CrawlerSiteTable({
                   </td>
                   <td className={`${colClass("crawlOps")} px-3 py-3`}>
                     <div className="flex gap-1.5">
-                      <button onClick={() => handleTriggerCrawl("incremental-crawl", site)} disabled={crawlTriggering[incrementalKey] === true} className="rounded px-2 py-1 text-xs border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-50">增量</button>
-                      <button onClick={() => handleTriggerCrawl("full-crawl", site)} disabled={crawlTriggering[fullKey] === true} className="rounded px-2 py-1 text-xs border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-50">全量</button>
+                      <button
+                        onClick={() => handleTriggerCrawl("incremental-crawl", site)}
+                        disabled={crawlTriggering[incrementalKey] === true}
+                        className="rounded border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--accent)]/20 disabled:opacity-50"
+                      >
+                        增量
+                      </button>
+                      <button
+                        onClick={() => handleTriggerCrawl("full-crawl", site)}
+                        disabled={crawlTriggering[fullKey] === true}
+                        className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-50"
+                      >
+                        全量
+                      </button>
                     </div>
                   </td>
                   <td className={`${colClass("manageOps")} px-3 py-3`}>
                     <div className="flex gap-1.5">
-                      <button onClick={() => handleValidate(site)} disabled={vs === "checking"} className="rounded px-2 py-1 text-xs border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-50">检测</button>
-                      <button onClick={() => setEditTarget(site)} className="rounded px-2 py-1 text-xs border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)]">编辑</button>
+                      <button
+                        onClick={() => setEditTarget(site)}
+                        className="rounded border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--accent)]/20"
+                      >
+                        编辑
+                      </button>
+                      <button
+                        onClick={() => handleValidate(site)}
+                        disabled={vs === "checking"}
+                        className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-50"
+                      >
+                        检测
+                      </button>
                       {!site.fromConfig && <button onClick={() => handleDelete(site)} className="rounded px-2 py-1 text-xs border border-red-500/30 text-red-400 hover:bg-red-500/10">删除</button>}
                     </div>
                   </td>

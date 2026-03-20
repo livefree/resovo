@@ -3261,3 +3261,28 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测 5/5 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-77 Phase2：crawler-site 行操作分层
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 12:24
+- **计划开始时间**：2026-03-21 10:40
+- **实际开始时间**：2026-03-19 23:32
+- **完成时间**：2026-03-19 23:33
+- **问题**：列表行内“采集/管理”动作视觉优先级不清晰，高频编辑路径辨识度偏弱。
+- **影响的已完成任务**：CHG-76
+- **文件范围**：
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`
+- **修复内容**：
+  - 采集操作列中将“增量”提升为强调按钮，“全量”保留次级样式。
+  - 管理操作列中将“编辑”提升为强调按钮，并调整为优先展示。
+  - 保持按钮回调、参数与列结构不变。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_
