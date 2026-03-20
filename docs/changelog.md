@@ -870,3 +870,15 @@
 - **注意事项**：
   - 默认打开“视频源配置”Tab
   - 采集任务记录和全站触发操作迁移到“采集任务记录”Tab 中
+
+## [CHG-48] 视频源配置 Tab 稳态化修复（列管理 + 状态记忆 + 布局稳定 + 导入一致性）
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 16:59
+- **修改文件**：
+  - `src/components/admin/system/CrawlerSiteManager.tsx` — 新增列显示管理、localStorage 状态持久化、固定列宽布局、导入 JSON 多格式兼容解析
+  - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx` — 增加 `localStorage.clear()`，消除持久化状态导致的测试串扰
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 列表状态持久化 key：`crawler-site-manager:v2`
+  - 导入逻辑优先按 API 匹配现有源站并更新，避免重复 API 造成冲突

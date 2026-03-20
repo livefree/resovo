@@ -2482,3 +2482,35 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-48 视频源配置 Tab 稳态化修复（列管理 + 状态记忆 + 布局稳定 + 导入一致性）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-19 16:48
+- **计划开始时间**：2026-03-19 16:50
+- **实际开始时间**：2026-03-19 16:51
+- **完成时间**：2026-03-19 16:59
+- **问题**：
+  1. 列表不支持编辑显示/隐藏列。
+  2. 列表排序筛选状态在返回页面后丢失。
+  3. 列表布局随页面变化不稳定。
+  4. 导入 JSON 与配置文件导入字段兼容性不一致。
+- **影响的已完成任务**：CHG-43 / CHG-45 / CHG-47
+- **文件范围**：
+  - `src/components/admin/system/CrawlerSiteManager.tsx`
+  - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+- **修复内容**：
+  - 新增“显示列”面板，支持列级显示/隐藏（名称、管理操作列保持必显）。
+  - 排序、筛选、列可见性持久化到 localStorage，返回页面自动恢复。
+  - 表格改为 `table-fixed + min-width` 固定列宽，滚动容器采用稳定高度区间，降低布局跳变。
+  - 导入 JSON 解析升级：兼容 `crawler_sites` / `api_site` / 根对象 / `sites[]`，兼容 `api|api_url|url|apiUrl`、`type|source_type`、`is_adult|isAdult`。
+  - 导入逻辑按 API 地址对齐现有站点（命中则更新，未命中则新增），与配置文件同步规则保持一致。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测通过（3/3）；typecheck/lint 通过。
+- **问题说明**：_（无）_

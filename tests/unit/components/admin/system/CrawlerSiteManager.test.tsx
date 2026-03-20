@@ -54,6 +54,7 @@ const MOCK_SITES = [
 describe('CrawlerSiteManager', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
     getMock.mockResolvedValue({ data: MOCK_SITES })
     postMock.mockResolvedValue({ data: {} })
     patchMock.mockResolvedValue({ data: {} })

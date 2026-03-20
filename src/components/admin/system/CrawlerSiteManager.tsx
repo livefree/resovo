@@ -22,6 +22,73 @@ interface ValidateResult {
 type SortField = 'name' | 'key' | 'apiUrl' | 'sourceType' | 'format' | 'weight' | 'isAdult' | 'disabled' | 'fromConfig'
 type SortDir = 'asc' | 'desc'
 
+type FilterState = {
+  keyOrName: string
+  apiUrl: string
+  sourceType: 'all' | 'vod' | 'shortdrama'
+  format: 'all' | 'json' | 'xml'
+  isAdult: 'all' | 'yes' | 'no'
+  disabled: 'all' | 'enabled' | 'disabled'
+  fromConfig: 'all' | 'config' | 'manual'
+  weightMin: string
+  weightMax: string
+}
+
+type ColumnId =
+  | 'name'
+  | 'apiUrl'
+  | 'sourceType'
+  | 'format'
+  | 'weight'
+  | 'isAdult'
+  | 'fromConfig'
+  | 'disabled'
+  | 'lastCrawl'
+  | 'crawlOps'
+  | 'manageOps'
+
+type ColumnVisibility = Record<ColumnId, boolean>
+
+const STORAGE_KEY = 'crawler-site-manager:v2'
+const DEFAULT_FILTERS: FilterState = {
+  keyOrName: '',
+  apiUrl: '',
+  sourceType: 'all',
+  format: 'all',
+  isAdult: 'all',
+  disabled: 'all',
+  fromConfig: 'all',
+  weightMin: '',
+  weightMax: '',
+}
+const DEFAULT_COLUMNS: ColumnVisibility = {
+  name: true,
+  apiUrl: true,
+  sourceType: true,
+  format: true,
+  weight: true,
+  isAdult: true,
+  fromConfig: true,
+  disabled: true,
+  lastCrawl: true,
+  crawlOps: true,
+  manageOps: true,
+}
+const COLUMN_META: Array<{ id: ColumnId; label: string }> = [
+  { id: 'name', label: '名称/Key' },
+  { id: 'apiUrl', label: 'API 地址' },
+  { id: 'sourceType', label: '类型' },
+  { id: 'format', label: '格式' },
+  { id: 'weight', label: '权重' },
+  { id: 'isAdult', label: '成人' },
+  { id: 'fromConfig', label: '来源' },
+  { id: 'disabled', label: '状态' },
+  { id: 'lastCrawl', label: '最近采集' },
+  { id: 'crawlOps', label: '采集操作' },
+  { id: 'manageOps', label: '管理操作' },
+]
+const REQUIRED_COLUMNS: ColumnId[] = ['name', 'manageOps']
+
 // ── 子组件 ────────────────────────────────────────────────────
 
 function Badge({ children, color }: { children: React.ReactNode; color: 'green' | 'red' | 'yellow' | 'gray' | 'blue' }) {
@@ -219,17 +286,9 @@ export function CrawlerSiteManager() {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const [sortBy, setSortBy] = useState<SortField>('weight')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
-  const [filters, setFilters] = useState({
-    keyOrName: '',
-    apiUrl: '',
-    sourceType: 'all' as 'all' | 'vod' | 'shortdrama',
-    format: 'all' as 'all' | 'json' | 'xml',
-    isAdult: 'all' as 'all' | 'yes' | 'no',
-    disabled: 'all' as 'all' | 'enabled' | 'disabled',
-    fromConfig: 'all' as 'all' | 'config' | 'manual',
-    weightMin: '',
-    weightMax: '',
-  })
+  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
+  const [columns, setColumns] = useState<ColumnVisibility>(DEFAULT_COLUMNS)
+  const [showColumnsPanel, setShowColumnsPanel] = useState(false)
 
   const showToast = (msg: string, ok: boolean) => {
     setToast({ msg, ok })
@@ -249,6 +308,41 @@ export function CrawlerSiteManager() {
   }, [])
 
   useEffect(() => { fetchSites() }, [fetchSites])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as {
+        sortBy?: SortField
+        sortDir?: SortDir
+        filters?: Partial<FilterState>
+        columns?: Partial<ColumnVisibility>
+      }
+      if (parsed.sortBy) setSortBy(parsed.sortBy)
+      if (parsed.sortDir) setSortDir(parsed.sortDir)
+      if (parsed.filters) setFilters((prev) => ({ ...prev, ...parsed.filters }))
+      if (parsed.columns) setColumns((prev) => ({ ...prev, ...parsed.columns }))
+    } catch {
+      // 忽略损坏缓存
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          sortBy,
+          sortDir,
+          filters,
+          columns,
+        }),
+      )
+    } catch {
+      // 忽略 localStorage 异常
+    }
+  }, [sortBy, sortDir, filters, columns])
 
   const displaySites = useMemo(() => {
     const keyOrName = filters.keyOrName.trim().toLowerCase()
@@ -297,6 +391,17 @@ export function CrawlerSiteManager() {
     }
     setSortBy(field)
     setSortDir('asc')
+  }
+
+  function clearFiltersAndSort() {
+    setFilters(DEFAULT_FILTERS)
+    setSortBy('weight')
+    setSortDir('desc')
+  }
+
+  function toggleColumn(columnId: ColumnId) {
+    if (REQUIRED_COLUMNS.includes(columnId)) return
+    setColumns((prev) => ({ ...prev, [columnId]: !prev[columnId] }))
   }
 
   // ── 选择 ───────────────────────────────────────────────────
@@ -461,6 +566,106 @@ export function CrawlerSiteManager() {
   // ── 导入 ───────────────────────────────────────────────────
 
   function handleImport() {
+    function parseBool(value: unknown): boolean {
+      if (typeof value === 'boolean') return value
+      if (typeof value === 'number') return value !== 0
+      if (typeof value === 'string') return ['true', '1', 'yes'].includes(value.toLowerCase())
+      return false
+    }
+
+    function sanitizeKey(input: string) {
+      return input
+        .toLowerCase()
+        .replace(/[^a-z0-9_]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 60) || `site_${Date.now()}`
+    }
+
+    function parseSitesFromJson(payload: unknown): Array<{
+      key: string
+      name: string
+      apiUrl: string
+      detail?: string
+      sourceType: 'vod' | 'shortdrama'
+      format: 'json' | 'xml'
+      weight: number
+      isAdult: boolean
+    }> {
+      const candidates: Array<{ keyHint: string; raw: Record<string, unknown> }> = []
+      const root = (payload && typeof payload === 'object') ? payload as Record<string, unknown> : null
+      const fromMap = (map: unknown) => {
+        if (!map || typeof map !== 'object' || Array.isArray(map)) return
+        for (const [key, val] of Object.entries(map as Record<string, unknown>)) {
+          if (!val || typeof val !== 'object' || Array.isArray(val)) continue
+          candidates.push({ keyHint: key, raw: val as Record<string, unknown> })
+        }
+      }
+      if (root) {
+        fromMap(root.crawler_sites)
+        fromMap(root.api_site)
+        if (candidates.length === 0 && Array.isArray(root.sites)) {
+          for (const item of root.sites) {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+            const row = item as Record<string, unknown>
+            const keyHint = typeof row.key === 'string' ? row.key : ''
+            candidates.push({ keyHint, raw: row })
+          }
+        }
+        if (candidates.length === 0 && Array.isArray(payload)) {
+          for (const item of payload) {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+            const row = item as Record<string, unknown>
+            const keyHint = typeof row.key === 'string' ? row.key : ''
+            candidates.push({ keyHint, raw: row })
+          }
+        }
+        if (candidates.length === 0) {
+          fromMap(root)
+        }
+      }
+
+      const list: Array<{
+        key: string
+        name: string
+        apiUrl: string
+        detail?: string
+        sourceType: 'vod' | 'shortdrama'
+        format: 'json' | 'xml'
+        weight: number
+        isAdult: boolean
+      }> = []
+      const seenApi = new Set<string>()
+
+      for (const item of candidates) {
+        const apiRaw = item.raw.api ?? item.raw.api_url ?? item.raw.url ?? item.raw.apiUrl
+        const nameRaw = item.raw.name ?? item.raw.title
+        if (typeof apiRaw !== 'string' || typeof nameRaw !== 'string') continue
+        const apiUrl = apiRaw.trim()
+        const name = nameRaw.trim()
+        if (!apiUrl || !name || seenApi.has(apiUrl)) continue
+
+        const detail = typeof item.raw.detail === 'string' ? item.raw.detail : undefined
+        const typeRaw = item.raw.type ?? item.raw.source_type ?? item.raw.sourceType
+        const formatRaw = item.raw.format
+        const weightRaw = item.raw.weight
+        const isAdultRaw = item.raw.is_adult ?? item.raw.isAdult
+        const keyRaw = (typeof item.raw.key === 'string' ? item.raw.key : item.keyHint).trim()
+
+        list.push({
+          key: sanitizeKey(keyRaw || apiUrl),
+          name,
+          apiUrl,
+          detail,
+          sourceType: typeRaw === 'shortdrama' ? 'shortdrama' : 'vod',
+          format: formatRaw === 'xml' ? 'xml' : 'json',
+          weight: typeof weightRaw === 'number' && Number.isFinite(weightRaw) ? Math.min(100, Math.max(0, weightRaw)) : 50,
+          isAdult: parseBool(isAdultRaw),
+        })
+        seenApi.add(apiUrl)
+      }
+      return list
+    }
+
     const input = document.createElement('input')
     input.type = 'file'; input.accept = '.json'
     input.onchange = async (e) => {
@@ -469,14 +674,29 @@ export function CrawlerSiteManager() {
       const text = await file.text()
       try {
         const json = JSON.parse(text)
-        const sites_map = json.crawler_sites ?? json.api_site ?? json
+        const parsedSites = parseSitesFromJson(json)
+        if (parsedSites.length === 0) {
+          showToast('未识别到可导入源站（需包含 name + api/api_url/url）', false)
+          return
+        }
+        const existingByApi = new Map(sites.map((site) => [site.apiUrl, site]))
         let ok = 0, fail = 0
-        for (const [key, val] of Object.entries(sites_map as Record<string, { name?: string; api?: string }>)) {
-          if (!val.name || !val.api) { fail++; continue }
+        for (const site of parsedSites) {
           try {
-            await apiClient.post('/admin/crawler/sites', { key, name: val.name, apiUrl: val.api }).catch(async () => {
-              await apiClient.patch(`/admin/crawler/sites/${key}`, { name: val.name, apiUrl: val.api })
-            })
+            const existing = existingByApi.get(site.apiUrl)
+            if (existing) {
+              await apiClient.patch(`/admin/crawler/sites/${existing.key}`, {
+                name: site.name,
+                apiUrl: site.apiUrl,
+                detail: site.detail,
+                sourceType: site.sourceType,
+                format: site.format,
+                weight: site.weight,
+                isAdult: site.isAdult,
+              })
+            } else {
+              await apiClient.post('/admin/crawler/sites', site)
+            }
             ok++
           } catch { fail++ }
         }
@@ -490,6 +710,9 @@ export function CrawlerSiteManager() {
   }
 
   // ── 渲染 ──────────────────────────────────────────────────
+
+  const visibleColumnCount = COLUMN_META.filter((column) => columns[column.id]).length
+  const colClass = (id: ColumnId) => (columns[id] ? '' : 'hidden')
 
   if (loading) {
     return <div className="flex items-center justify-center py-20 text-sm text-[var(--muted)]">加载中…</div>
@@ -522,6 +745,34 @@ export function CrawlerSiteManager() {
         <button onClick={handleImport} className="rounded-md px-3 py-2 text-sm border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)]">
           导入 JSON
         </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowColumnsPanel((prev) => !prev)}
+            className="rounded-md border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] hover:bg-[var(--bg3)]"
+          >
+            显示列
+          </button>
+          {showColumnsPanel && (
+            <div className="absolute left-0 z-20 mt-1 w-56 rounded-md border border-[var(--border)] bg-[var(--bg2)] p-2 shadow-lg">
+              <p className="mb-2 text-xs text-[var(--muted)]">勾选显示列（名称/管理操作为必显）</p>
+              <div className="space-y-1">
+                {COLUMN_META.map((column) => (
+                  <label key={column.id} className="flex items-center gap-2 rounded px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg3)]">
+                    <input
+                      type="checkbox"
+                      checked={columns[column.id]}
+                      disabled={REQUIRED_COLUMNS.includes(column.id)}
+                      onChange={() => toggleColumn(column.id)}
+                      className="accent-[var(--accent)]"
+                    />
+                    <span>{column.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
         {selected.size > 0 && (
           <>
             <span className="text-xs text-[var(--muted)] ml-1">已选 {selected.size} 项</span>
@@ -533,21 +784,7 @@ export function CrawlerSiteManager() {
         )}
         <button
           type="button"
-          onClick={() => {
-            setFilters({
-              keyOrName: '',
-              apiUrl: '',
-              sourceType: 'all',
-              format: 'all',
-              isAdult: 'all',
-              disabled: 'all',
-              fromConfig: 'all',
-              weightMin: '',
-              weightMax: '',
-            })
-            setSortBy('weight')
-            setSortDir('desc')
-          }}
+          onClick={clearFiltersAndSort}
           className="rounded-md border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] hover:bg-[var(--bg3)]"
         >
           清空筛选
@@ -559,8 +796,8 @@ export function CrawlerSiteManager() {
 
       {/* 表格 */}
       <div className="rounded-lg border border-[var(--border)] overflow-hidden">
-        <div data-testid="crawler-sites-scroll-container" className="max-h-[60vh] overflow-y-auto overflow-x-auto">
-        <table className="w-full text-sm">
+        <div data-testid="crawler-sites-scroll-container" className="h-[60vh] min-h-[420px] max-h-[720px] overflow-y-auto overflow-x-auto">
+        <table className="w-full min-w-[1480px] table-fixed text-sm">
           <thead>
             <tr className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg2)]">
               <th className="w-8 px-3 py-3 text-left">
@@ -571,21 +808,21 @@ export function CrawlerSiteManager() {
                   className="accent-[var(--accent)]"
                 />
               </th>
-              <th className="min-w-[220px] px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('name')}>名称 / Key {sortBy === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('apiUrl')}>API 地址 {sortBy === 'apiUrl' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('sourceType')}>类型 {sortBy === 'sourceType' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('format')}>格式 {sortBy === 'format' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('weight')}>权重 {sortBy === 'weight' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('isAdult')}>成人 {sortBy === 'isAdult' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('fromConfig')}>来源 {sortBy === 'fromConfig' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th className="px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer" onClick={() => handleSort('disabled')}>状态 {sortBy === 'disabled' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
-              <th className="px-3 py-3 text-left font-medium text-[var(--muted)]">最近采集</th>
-              <th className="px-3 py-3 text-left font-medium text-[var(--muted)]">采集操作</th>
-              <th className="px-3 py-3 text-left font-medium text-[var(--muted)]">管理操作</th>
+              <th className={`${colClass('name')} w-[220px] px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} onClick={() => handleSort('name')}>名称 / Key {sortBy === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className={`${colClass('apiUrl')} w-[260px] px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} onClick={() => handleSort('apiUrl')}>API 地址 {sortBy === 'apiUrl' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className={`${colClass('sourceType')} w-[88px] px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} onClick={() => handleSort('sourceType')}>类型 {sortBy === 'sourceType' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className={`${colClass('format')} w-[88px] px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} onClick={() => handleSort('format')}>格式 {sortBy === 'format' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className={`${colClass('weight')} w-[88px] px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} onClick={() => handleSort('weight')}>权重 {sortBy === 'weight' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className={`${colClass('isAdult')} w-[88px] px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} onClick={() => handleSort('isAdult')}>成人 {sortBy === 'isAdult' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className={`${colClass('fromConfig')} w-[92px] px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} onClick={() => handleSort('fromConfig')}>来源 {sortBy === 'fromConfig' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className={`${colClass('disabled')} w-[106px] px-3 py-3 text-left font-medium text-[var(--muted)] cursor-pointer`} onClick={() => handleSort('disabled')}>状态 {sortBy === 'disabled' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</th>
+              <th className={`${colClass('lastCrawl')} w-[180px] px-3 py-3 text-left font-medium text-[var(--muted)]`}>最近采集</th>
+              <th className={`${colClass('crawlOps')} w-[130px] px-3 py-3 text-left font-medium text-[var(--muted)]`}>采集操作</th>
+              <th className={`${colClass('manageOps')} w-[180px] px-3 py-3 text-left font-medium text-[var(--muted)]`}>管理操作</th>
             </tr>
             <tr className="sticky top-[45px] z-10 border-b border-[var(--border)] bg-[var(--bg2)] align-top">
               <th className="px-2 py-2" />
-              <th className="px-2 py-2">
+              <th className={`${colClass('name')} px-2 py-2`}>
                 <input
                   value={filters.keyOrName}
                   onChange={(e) => setFilters((prev) => ({ ...prev, keyOrName: e.target.value }))}
@@ -593,7 +830,7 @@ export function CrawlerSiteManager() {
                   className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]"
                 />
               </th>
-              <th className="px-2 py-2">
+              <th className={`${colClass('apiUrl')} px-2 py-2`}>
                 <input
                   value={filters.apiUrl}
                   onChange={(e) => setFilters((prev) => ({ ...prev, apiUrl: e.target.value }))}
@@ -601,7 +838,7 @@ export function CrawlerSiteManager() {
                   className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]"
                 />
               </th>
-              <th className="px-2 py-2">
+              <th className={`${colClass('sourceType')} px-2 py-2`}>
                 <select
                   value={filters.sourceType}
                   onChange={(e) => setFilters((prev) => ({ ...prev, sourceType: e.target.value as typeof prev.sourceType }))}
@@ -612,7 +849,7 @@ export function CrawlerSiteManager() {
                   <option value="shortdrama">短剧</option>
                 </select>
               </th>
-              <th className="px-2 py-2">
+              <th className={`${colClass('format')} px-2 py-2`}>
                 <select
                   value={filters.format}
                   onChange={(e) => setFilters((prev) => ({ ...prev, format: e.target.value as typeof prev.format }))}
@@ -623,7 +860,7 @@ export function CrawlerSiteManager() {
                   <option value="xml">XML</option>
                 </select>
               </th>
-              <th className="px-2 py-2">
+              <th className={`${colClass('weight')} px-2 py-2`}>
                 <div className="flex gap-1">
                   <input
                     value={filters.weightMin}
@@ -639,7 +876,7 @@ export function CrawlerSiteManager() {
                   />
                 </div>
               </th>
-              <th className="px-2 py-2">
+              <th className={`${colClass('isAdult')} px-2 py-2`}>
                 <select
                   value={filters.isAdult}
                   onChange={(e) => setFilters((prev) => ({ ...prev, isAdult: e.target.value as typeof prev.isAdult }))}
@@ -650,7 +887,7 @@ export function CrawlerSiteManager() {
                   <option value="no">否</option>
                 </select>
               </th>
-              <th className="px-2 py-2">
+              <th className={`${colClass('fromConfig')} px-2 py-2`}>
                 <select
                   value={filters.fromConfig}
                   onChange={(e) => setFilters((prev) => ({ ...prev, fromConfig: e.target.value as typeof prev.fromConfig }))}
@@ -661,7 +898,7 @@ export function CrawlerSiteManager() {
                   <option value="manual">手工</option>
                 </select>
               </th>
-              <th className="px-2 py-2">
+              <th className={`${colClass('disabled')} px-2 py-2`}>
                 <select
                   value={filters.disabled}
                   onChange={(e) => setFilters((prev) => ({ ...prev, disabled: e.target.value as typeof prev.disabled }))}
@@ -672,15 +909,15 @@ export function CrawlerSiteManager() {
                   <option value="disabled">停用</option>
                 </select>
               </th>
-              <th className="px-2 py-2" />
-              <th className="px-2 py-2" />
-              <th className="px-2 py-2" />
+              <th className={`${colClass('lastCrawl')} px-2 py-2`} />
+              <th className={`${colClass('crawlOps')} px-2 py-2`} />
+              <th className={`${colClass('manageOps')} px-2 py-2`} />
             </tr>
           </thead>
           <tbody>
             {displaySites.length === 0 && (
               <tr>
-                <td colSpan={12} className="px-3 py-10 text-center text-[var(--muted)] text-sm">
+                <td colSpan={visibleColumnCount + 1} className="px-3 py-10 text-center text-[var(--muted)] text-sm">
                   没有符合当前筛选条件的源站
                 </td>
               </tr>
@@ -696,14 +933,14 @@ export function CrawlerSiteManager() {
                   <td className="px-3 py-3">
                     <input type="checkbox" checked={selected.has(site.key)} onChange={() => toggleSelect(site.key)} className="accent-[var(--accent)]" />
                   </td>
-                  <td className="px-3 py-3">
+                  <td className={`${colClass('name')} px-3 py-3`}>
                     <div className="font-medium text-[var(--text)]">{site.name}</div>
                     <div className="mt-0.5 text-xs text-[var(--muted)]">{site.key}</div>
                   </td>
-                  <td className="px-3 py-3 max-w-xs">
+                  <td className={`${colClass('apiUrl')} px-3 py-3`}>
                     <span className="block truncate text-xs text-[var(--muted)]">{site.apiUrl}</span>
                   </td>
-                  <td className="px-3 py-3">
+                  <td className={`${colClass('sourceType')} px-3 py-3`}>
                     <select
                       value={site.sourceType}
                       disabled={!canInlineEdit || rowBusy}
@@ -714,7 +951,7 @@ export function CrawlerSiteManager() {
                       <option value="shortdrama">短剧</option>
                     </select>
                   </td>
-                  <td className="px-3 py-3">
+                  <td className={`${colClass('format')} px-3 py-3`}>
                     <select
                       value={site.format}
                       disabled={!canInlineEdit || rowBusy}
@@ -725,7 +962,7 @@ export function CrawlerSiteManager() {
                       <option value="xml">XML</option>
                     </select>
                   </td>
-                  <td className="px-3 py-3">
+                  <td className={`${colClass('weight')} px-3 py-3`}>
                     <input
                       type="number"
                       min={0}
@@ -744,7 +981,7 @@ export function CrawlerSiteManager() {
                       className="w-16 rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] disabled:opacity-50"
                     />
                   </td>
-                  <td className="px-3 py-3">
+                  <td className={`${colClass('isAdult')} px-3 py-3`}>
                     <label className="inline-flex items-center gap-1 text-xs text-[var(--text)]">
                       <input
                         type="checkbox"
@@ -756,8 +993,8 @@ export function CrawlerSiteManager() {
                       成人
                     </label>
                   </td>
-                  <td className="px-3 py-3">{site.fromConfig ? <Badge color="blue">配置文件</Badge> : <span className="text-xs text-[var(--muted)]">手工</span>}</td>
-                  <td className="px-3 py-3">
+                  <td className={`${colClass('fromConfig')} px-3 py-3`}>{site.fromConfig ? <Badge color="blue">配置文件</Badge> : <span className="text-xs text-[var(--muted)]">手工</span>}</td>
+                  <td className={`${colClass('disabled')} px-3 py-3`}>
                     <button
                       onClick={() => handleToggleDisabled(site)}
                       disabled={!canInlineEdit || rowBusy}
@@ -779,7 +1016,7 @@ export function CrawlerSiteManager() {
                       </div>
                     )}
                   </td>
-                  <td className="px-3 py-3">
+                  <td className={`${colClass('lastCrawl')} px-3 py-3`}>
                     {site.lastCrawledAt ? (
                       <div className="text-xs text-[var(--muted)] whitespace-nowrap">
                         {new Date(site.lastCrawledAt).toLocaleString()}
@@ -793,7 +1030,7 @@ export function CrawlerSiteManager() {
                       <span className="text-xs text-[var(--muted)]">未采集</span>
                     )}
                   </td>
-                  <td className="px-3 py-3">
+                  <td className={`${colClass('crawlOps')} px-3 py-3`}>
                     <div className="flex gap-1.5">
                       <button
                         onClick={() => handleTriggerCrawl('incremental-crawl', site)}
@@ -811,7 +1048,7 @@ export function CrawlerSiteManager() {
                       </button>
                     </div>
                   </td>
-                  <td className="px-3 py-3">
+                  <td className={`${colClass('manageOps')} px-3 py-3`}>
                     <div className="flex gap-1.5">
                       <button
                         onClick={() => handleValidate(site)}
