@@ -3493,3 +3493,48 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 门禁命令通过；定向单测 10/10 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-85 crawler-site 单站采集闭环（Step1-6）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 01:36
+- **计划开始时间**：2026-03-20 01:40
+- **实际开始时间**：2026-03-20 01:41
+- **完成时间**：2026-03-20 02:01
+- **问题**：`视频源配置` 页虽有“采集操作”列，但缺少完整的任务状态消费、同站互斥防重、结果刷新与可复用任务模型。
+- **影响的已完成任务**：CHG-84
+- **文件范围**：
+  - `src/api/db/queries/crawlerTasks.ts`
+  - `src/api/routes/admin/crawler.ts`
+  - `src/api/services/CrawlerService.ts`
+  - `src/api/workers/crawlerWorker.ts`
+  - `src/components/admin/system/crawler-site/crawlTask.types.ts`（新增）
+  - `src/components/admin/system/crawler-site/services/crawlTaskService.ts`（新增）
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteCrawlTasks.ts`（新增）
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`
+- **修复内容**：
+  - Step 1：补齐任务类型与服务层
+    - `crawler_tasks.createTask` 增加 `type` 入参，避免增量/全量语义丢失。
+    - 新增 latest 任务查询能力（单站/批量）与活跃任务查询能力。
+    - 新增 `crawlTask.types` 与 `crawlTaskService`，统一前端任务模型与接口消费。
+  - Step 2 + Step 3：接入单站增量/全量采集
+    - 行内“增量/全量”按钮接入统一触发服务。
+  - Step 4：运行中状态、toast、错误处理、防重复提交
+    - 互斥规则改为“同站点任一活跃任务互斥”。
+    - 后端 `POST /admin/crawler/tasks` 对单站活跃任务返回 `409` 冲突。
+    - 前端按钮禁用与 toast 反馈保持行级隔离，避免多行状态污染。
+  - Step 5：最近采集状态刷新
+    - 新增批量 latest 轮询接口消费，任务 `success/failed` 后执行一次 `fetchSites()` 刷新列表，并清理本地 running 状态。
+  - Step 6：抽出可复用 hook
+    - 新增 `useCrawlerSiteCrawlTasks`，可复用到后续“任务记录”Tab/批量采集能力。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+  - 已满足：同站互斥防重、批量 latest 优先轮询、任务完成后刷新列表并清理 running 状态。
+- **问题说明**：_（无）_

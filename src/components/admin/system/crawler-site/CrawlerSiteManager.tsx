@@ -12,6 +12,7 @@ import { useAdminToast } from '@/components/admin/shared/feedback/useAdminToast'
 import { useCrawlerSiteColumns } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns'
 import { useCrawlerSiteSelection } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteSelection'
 import { useCrawlerSites } from '@/components/admin/system/crawler-site/hooks/useCrawlerSites'
+import { useCrawlerSiteCrawlTasks } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteCrawlTasks'
 import { CrawlerSiteTable } from '@/components/admin/system/crawler-site/components/CrawlerSiteTable'
 import { CrawlerSiteTopToolbar } from '@/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar'
 import { ActiveFilterChipsBar } from '@/components/admin/system/crawler-site/components/ActiveFilterChipsBar'
@@ -39,7 +40,10 @@ export function CrawlerSiteManager() {
   const [showAdd, setShowAdd] = useState(false)
   const [validateStates, setValidateStates] = useState<Record<string, ValidateStatus>>({})
   const [rowSaving, setRowSaving] = useState<Record<string, boolean>>({})
-  const [crawlTriggering, setCrawlTriggering] = useState<Record<string, boolean>>({})
+  const [allCrawlTriggering, setAllCrawlTriggering] = useState<Record<'incremental-crawl' | 'full-crawl', boolean>>({
+    'incremental-crawl': false,
+    'full-crawl': false,
+  })
   const { toast, showToast } = useAdminToast({ durationMs: 3500 })
   const {
     sortBy,
@@ -61,6 +65,15 @@ export function CrawlerSiteManager() {
     requiredColumns,
   } = useCrawlerSiteColumns()
   const { sites, loading, fetchSites } = useCrawlerSites()
+  const {
+    runningBySite,
+    runningModeBySite,
+    latestTaskBySite,
+    triggerSiteCrawl,
+  } = useCrawlerSiteCrawlTasks({
+    fetchSites,
+    showToast,
+  })
 
   const displaySites = useMemo(() => {
     const keyOrName = filters.keyOrName.trim().toLowerCase()
@@ -146,19 +159,22 @@ export function CrawlerSiteManager() {
   }
 
   async function handleTriggerCrawl(type: 'full-crawl' | 'incremental-crawl', site?: CrawlerSite) {
-    const taskKey = site ? `${site.key}:${type}` : `all:${type}`
-    setCrawlTriggering((prev) => ({ ...prev, [taskKey]: true }))
+    if (site) {
+      await triggerSiteCrawl(site.key, type === 'full-crawl' ? 'full' : 'incremental', site.name)
+      return
+    }
+
+    setAllCrawlTriggering((prev) => ({ ...prev, [type]: true }))
     try {
       await apiClient.post('/admin/crawler/tasks', {
         type,
-        siteKey: site?.key,
       })
-      showToast(site ? `已触发 ${site.name} 采集` : '已触发全站采集', true)
+      showToast(type === 'full-crawl' ? '已触发全站全量采集' : '已触发全站增量采集', true)
       await fetchSites()
     } catch {
-      showToast(site ? `${site.name} 采集触发失败` : '全站采集触发失败', false)
+      showToast(type === 'full-crawl' ? '全站全量采集触发失败' : '全站增量采集触发失败', false)
     } finally {
-      setCrawlTriggering((prev) => ({ ...prev, [taskKey]: false }))
+      setAllCrawlTriggering((prev) => ({ ...prev, [type]: false }))
     }
   }
 
@@ -306,8 +322,8 @@ export function CrawlerSiteManager() {
         columns={columns}
         requiredColumns={requiredColumns}
         selectedCount={selected.size}
-        isAllIncrementalTriggering={crawlTriggering['all:incremental-crawl'] === true}
-        isAllFullTriggering={crawlTriggering['all:full-crawl'] === true}
+        isAllIncrementalTriggering={allCrawlTriggering['incremental-crawl']}
+        isAllFullTriggering={allCrawlTriggering['full-crawl']}
         toast={toast}
         columnMeta={columnMeta}
         setShowColumnsPanel={setShowColumnsPanel}
@@ -340,7 +356,9 @@ export function CrawlerSiteManager() {
         visibleTableMinWidth={visibleTableMinWidth}
         validateStates={validateStates}
         rowSaving={rowSaving}
-        crawlTriggering={crawlTriggering}
+        runningBySite={runningBySite}
+        runningModeBySite={runningModeBySite}
+        latestTaskBySite={latestTaskBySite}
         setFilters={setFilters}
         colClass={colClass}
         handleSort={handleSort}

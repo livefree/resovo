@@ -70,6 +70,7 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
         `[crawler-worker] crawling ${source.name} (${source.base}, ${type}${hoursAgo ? `, last ${hoursAgo}h` : ''})\n`
       )
       const result = await crawlerService.crawl(source, {
+        taskType: type,
         hoursAgo: type === 'incremental-crawl' ? (hoursAgo ?? 24) : undefined,
       })
       videosUpserted += result.videosUpserted

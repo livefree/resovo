@@ -8,9 +8,11 @@ import type { Pool } from 'pg'
 // ── 类型 ──────────────────────────────────────────────────────────
 
 export type CrawlerTaskStatus = 'pending' | 'running' | 'done' | 'failed'
+export type CrawlerTaskType = 'full-crawl' | 'incremental-crawl' | 'verify-source' | 'verify-single'
 
 export interface CrawlerTask {
   id: string
+  type: CrawlerTaskType
   sourceSite: string
   targetUrl: string
   status: CrawlerTaskStatus
@@ -22,6 +24,7 @@ export interface CrawlerTask {
 
 interface DbCrawlerTaskRow {
   id: string
+  type: CrawlerTaskType
   source_site: string
   target_url: string
   status: CrawlerTaskStatus
@@ -34,6 +37,7 @@ interface DbCrawlerTaskRow {
 function mapTask(row: DbCrawlerTaskRow): CrawlerTask {
   return {
     id: row.id,
+    type: row.type,
     sourceSite: row.source_site,
     targetUrl: row.target_url,
     status: row.status,
@@ -49,16 +53,17 @@ function mapTask(row: DbCrawlerTaskRow): CrawlerTask {
 export async function createTask(
   db: Pool,
   input: {
+    type: CrawlerTaskType
     sourceSite: string
     targetUrl: string
     scheduledAt?: Date
   }
 ): Promise<CrawlerTask> {
   const result = await db.query<DbCrawlerTaskRow>(
-    `INSERT INTO crawler_tasks (source_site, target_url, status, retry_count, scheduled_at)
-     VALUES ($1, $2, 'pending', 0, COALESCE($3, NOW()))
+    `INSERT INTO crawler_tasks (type, source_site, target_url, status, retry_count, scheduled_at)
+     VALUES ($1, $2, $3, 'pending', 0, COALESCE($4, NOW()))
      RETURNING *`,
-    [input.sourceSite, input.targetUrl, input.scheduledAt ?? null]
+    [input.type, input.sourceSite, input.targetUrl, input.scheduledAt ?? null]
   )
   return mapTask(result.rows[0])
 }
@@ -119,4 +124,58 @@ export async function listTasks(
     rows: dataResult.rows.map(mapTask),
     total: parseInt(countResult.rows[0].total, 10),
   }
+}
+
+// ── 活跃任务查询（互斥控制）───────────────────────────────────────
+
+export async function findActiveTaskBySite(
+  db: Pool,
+  siteKey: string,
+): Promise<CrawlerTask | null> {
+  const result = await db.query<DbCrawlerTaskRow>(
+    `SELECT *
+     FROM crawler_tasks
+     WHERE source_site = $1
+       AND status IN ('pending', 'running')
+     ORDER BY scheduled_at DESC
+     LIMIT 1`,
+    [siteKey],
+  )
+
+  return result.rows[0] ? mapTask(result.rows[0]) : null
+}
+
+// ── 最新任务查询（单站/批量）─────────────────────────────────────
+
+export async function getLatestTaskBySite(
+  db: Pool,
+  siteKey: string,
+): Promise<CrawlerTask | null> {
+  const result = await db.query<DbCrawlerTaskRow>(
+    `SELECT *
+     FROM crawler_tasks
+     WHERE source_site = $1
+     ORDER BY scheduled_at DESC
+     LIMIT 1`,
+    [siteKey],
+  )
+
+  return result.rows[0] ? mapTask(result.rows[0]) : null
+}
+
+export async function getLatestTasksBySites(
+  db: Pool,
+  siteKeys: string[],
+): Promise<CrawlerTask[]> {
+  if (siteKeys.length === 0) return []
+
+  const result = await db.query<DbCrawlerTaskRow>(
+    `SELECT DISTINCT ON (source_site) *
+     FROM crawler_tasks
+     WHERE source_site = ANY($1::text[])
+     ORDER BY source_site, scheduled_at DESC`,
+    [siteKeys],
+  )
+
+  return result.rows.map(mapTask)
 }

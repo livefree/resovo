@@ -402,3 +402,11 @@
 - **内容**：完成 admin v2 交互规则自动化门禁，覆盖单维度提交、删除确认与 toast 规范约束。
 - **处理动作**：新增 `verify-admin-guardrails` 脚本与 npm 命令；`SourceTable` 单条删除接入 `ConfirmDialog`；更新执行规则文档。
 - **后续**：SEQ-20260320-03 全任务完成，可进入下一序列规划。
+
+## [LOG-20260320-0201-01] CHG-85 crawler-site 采集操作闭环完成
+- **时间**：2026-03-20 02:01
+- **类型**：INFO
+- **关联任务**：CHG-85
+- **内容**：完成视频源配置页单站增量/全量采集闭环，并沉淀可复用任务模型与轮询 hook。
+- **处理动作**：后端补齐同站互斥与 latest 查询接口；前端新增 task service + hook，落地行级运行态、防重复、成功/失败反馈与完成后列表刷新。
+- **后续**：可在“采集任务记录”Tab 复用 `crawlTaskService + useCrawlerSiteCrawlTasks` 扩展批量采集与任务详情。

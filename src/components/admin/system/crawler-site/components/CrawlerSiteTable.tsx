@@ -12,6 +12,7 @@ import { DEFAULT_FILTERS } from "@/components/admin/system/crawler-site/tableSta
 import { AdminTableState } from "@/components/admin/shared/feedback/AdminTableState"
 import { AdminTableFrame } from "@/components/admin/shared/table/AdminTableFrame"
 import { CrawlerSiteTableLiteHeader } from "@/components/admin/system/crawler-site/components/CrawlerSiteTableLiteHeader"
+import type { CrawlMode, CrawlTaskDTO } from "@/components/admin/system/crawler-site/crawlTask.types"
 
 type ValidateStatus = "idle" | "checking" | "ok" | "error" | "timeout"
 
@@ -43,7 +44,9 @@ interface CrawlerSiteTableProps {
   visibleTableMinWidth: number
   validateStates: Record<string, ValidateStatus>
   rowSaving: Record<string, boolean>
-  crawlTriggering: Record<string, boolean>
+  runningBySite: Record<string, boolean>
+  runningModeBySite: Record<string, CrawlMode | null>
+  latestTaskBySite: Record<string, CrawlTaskDTO | null>
   setFilters: Dispatch<SetStateAction<FilterState>>
   setSort: (field: SortField, dir: SortDir) => void
   toggleColumn: (columnId: ColumnId) => void
@@ -74,7 +77,9 @@ export function CrawlerSiteTable({
   visibleTableMinWidth,
   validateStates,
   rowSaving,
-  crawlTriggering,
+  runningBySite,
+  runningModeBySite,
+  latestTaskBySite,
   setFilters,
   setSort,
   toggleColumn,
@@ -170,8 +175,9 @@ export function CrawlerSiteTable({
               const vs = validateStates[site.key] ?? "idle"
               const rowBusy = rowSaving[site.key] === true
               const canInlineEdit = !site.fromConfig
-              const incrementalKey = `${site.key}:incremental-crawl`
-              const fullKey = `${site.key}:full-crawl`
+              const siteRunning = runningBySite[site.key] === true
+              const siteRunningMode = runningModeBySite[site.key]
+              const latestTask = latestTaskBySite[site.key]
               return (
                 <tr key={site.key} className="border-b border-[var(--border)] hover:bg-[var(--bg2)] transition-colors">
                   <td className="px-3 py-3"><input type="checkbox" checked={selected.has(site.key)} onChange={() => toggleSelect(site.key)} className="accent-[var(--accent)]" /></td>
@@ -235,30 +241,41 @@ export function CrawlerSiteTable({
                       <div className="text-xs text-[var(--muted)] whitespace-nowrap">
                         {new Date(site.lastCrawledAt).toLocaleString()}
                         <div className="mt-1">
-                          {site.lastCrawlStatus === "ok" && <Badge color="green">成功</Badge>}
-                          {site.lastCrawlStatus === "failed" && <Badge color="red">失败</Badge>}
-                          {site.lastCrawlStatus === "running" && <Badge color="yellow">采集中</Badge>}
+                          {siteRunning && <Badge color="yellow">采集中</Badge>}
+                          {!siteRunning && site.lastCrawlStatus === "ok" && <Badge color="green">成功</Badge>}
+                          {!siteRunning && site.lastCrawlStatus === "failed" && <Badge color="red">失败</Badge>}
+                          {!siteRunning && site.lastCrawlStatus === "running" && <Badge color="yellow">采集中</Badge>}
+                          {!siteRunning && latestTask?.status === "failed" && latestTask.message ? (
+                            <span className="ml-2 text-[11px] text-red-400">{latestTask.message}</span>
+                          ) : null}
                         </div>
                       </div>
                     ) : (
-                      <span className="text-xs text-[var(--muted)]">未采集</span>
+                      <div className="text-xs text-[var(--muted)]">
+                        <span>未采集</span>
+                        {siteRunning ? (
+                          <div className="mt-1">
+                            <Badge color="yellow">采集中</Badge>
+                          </div>
+                        ) : null}
+                      </div>
                     )}
                   </td>
                   <td className={`${colClass("crawlOps")} px-3 py-3`}>
                     <div className="flex gap-1.5">
                       <button
                         onClick={() => handleTriggerCrawl("incremental-crawl", site)}
-                        disabled={crawlTriggering[incrementalKey] === true}
+                        disabled={siteRunning}
                         className="rounded border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--accent)]/20 disabled:opacity-50"
                       >
-                        增量
+                        {siteRunning && siteRunningMode === "incremental" ? "增量中…" : "增量"}
                       </button>
                       <button
                         onClick={() => handleTriggerCrawl("full-crawl", site)}
-                        disabled={crawlTriggering[fullKey] === true}
+                        disabled={siteRunning}
                         className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-50"
                       >
-                        全量
+                        {siteRunning && siteRunningMode === "full" ? "全量中…" : "全量"}
                       </button>
                     </div>
                   </td>

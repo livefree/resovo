@@ -308,9 +308,10 @@ export class CrawlerService {
    */
   async crawl(
     source: CrawlerSource,
-    options: { hoursAgo?: number } = {}
+    options: { hoursAgo?: number; taskType?: 'full-crawl' | 'incremental-crawl' } = {}
   ): Promise<CrawlResult> {
     const taskRow = await crawlerTasksQueries.createTask(this.db, {
+      type: options.taskType ?? (options.hoursAgo ? 'incremental-crawl' : 'full-crawl'),
       sourceSite: source.name,
       targetUrl: source.base,
     })

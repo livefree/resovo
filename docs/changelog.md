@@ -1320,3 +1320,25 @@
 - **注意事项**：
   - 门禁命令默认校验 staged 变更，适配“单任务单提交”执行流
   - 已通过：`npm run verify:admin-guardrails`、`npm run test:run -- tests/unit/components/admin/videos/VideoFilters.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
+
+## [CHG-85] crawler-site 单站采集闭环（Step1-6）
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 02:01
+- **修改文件**：
+  - `src/api/db/queries/crawlerTasks.ts` — 增加任务 `type` 持久化、同站活跃任务查询、单站/批量 latest 查询
+  - `src/api/routes/admin/crawler.ts` — 增加同站活跃采集互斥（409），新增批量 latest 与单站 latest-task 接口
+  - `src/api/services/CrawlerService.ts` — 创建任务时写入正确采集类型
+  - `src/api/workers/crawlerWorker.ts` — 透传任务类型到采集服务
+  - `src/components/admin/system/crawler-site/crawlTask.types.ts` — 新增 crawler-site 任务 DTO 类型
+  - `src/components/admin/system/crawler-site/services/crawlTaskService.ts` — 新增采集任务触发/状态查询 service
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteCrawlTasks.ts` — 新增可复用任务 hook（触发、防重、轮询、完成刷新）
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx` — 接入任务 hook，拆分全站与单站触发状态
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx` — 行级采集按钮接入 running 态、互斥禁用、状态展示
+- **新增依赖**：无
+- **数据库变更**：无（复用既有 `crawler_tasks` / `crawler_sites` 字段）
+- **注意事项**：
+  - `startedAt` 在 DTO 中保持 `null`（不再用 `scheduled_at` 冒充）
+  - 防重复策略为“同站点任一活跃采集任务互斥”
+  - 轮询优先使用批量 latest 接口，单站 latest-task 仅作兼容降级
+  - 任务进入 success/failed 后会触发一次 `fetchSites()` 并清理本地 running 状态
+  - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`

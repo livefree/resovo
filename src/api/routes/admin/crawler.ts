@@ -13,7 +13,13 @@ import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { CrawlerService } from '@/api/services/CrawlerService'
 import { findSourceById } from '@/api/db/queries/sources'
-import { listTasks } from '@/api/db/queries/crawlerTasks'
+import {
+  listTasks,
+  findActiveTaskBySite,
+  getLatestTaskBySite,
+  getLatestTasksBySites,
+  type CrawlerTask,
+} from '@/api/db/queries/crawlerTasks'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import { enqueueVerifySingle } from '@/api/workers/verifyWorker'
 import { enqueueFullCrawl, enqueueIncrementalCrawl } from '@/api/workers/crawlerWorker'
@@ -70,6 +76,24 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
 
     const { type, siteKey, hoursAgo } = parsed.data
 
+    if (siteKey) {
+      const active = await findActiveTaskBySite(db, siteKey)
+      if (active) {
+        return reply.code(409).send({
+          error: {
+            code: 'CRAWL_TASK_CONFLICT',
+            message: `源站 ${siteKey} 已存在进行中的采集任务`,
+            status: 409,
+          },
+          data: {
+            activeTaskId: active.id,
+            activeTaskType: active.type,
+            activeTaskStatus: active.status,
+          },
+        })
+      }
+    }
+
     if (type === 'full-crawl') {
       const job = await enqueueFullCrawl(siteKey)
       return reply.code(202).send({ data: { jobId: job.id, type, siteKey } })
@@ -94,6 +118,41 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
         lastCrawlStatus: s.lastCrawlStatus,
       })),
     })
+  })
+
+  // ── GET /admin/crawler/tasks/latest?siteKeys=a,b ───────────
+
+  fastify.get('/admin/crawler/tasks/latest', { preHandler: auth }, async (request, reply) => {
+    const QuerySchema = z.object({
+      siteKeys: z.string().min(1),
+    })
+
+    const parsed = QuerySchema.safeParse(request.query)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+
+    const siteKeys = parsed.data.siteKeys
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+
+    if (siteKeys.length === 0) {
+      return reply.send({ data: { tasks: [] } })
+    }
+
+    const tasks = await getLatestTasksBySites(db, siteKeys)
+    return reply.send({ data: { tasks: tasks.map(mapTaskDto) } })
+  })
+
+  // ── GET /admin/crawler/sites/:key/latest-task ──────────────
+
+  fastify.get('/admin/crawler/sites/:key/latest-task', { preHandler: auth }, async (request, reply) => {
+    const { key } = request.params as { key: string }
+    const task = await getLatestTaskBySite(db, key)
+    return reply.send({ data: { task: task ? mapTaskDto(task) : null } })
   })
 
   // ── POST /admin/sources/:id/verify — 管理员触发单条验证 ──────
@@ -123,3 +182,39 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     return reply.send({ data: result })
   })
 }
+  function mapTaskDto(task: CrawlerTask) {
+    const mode = task.type === 'incremental-crawl' ? 'incremental' : 'full'
+    const status =
+      task.status === 'pending'
+        ? 'queued'
+        : task.status === 'running'
+          ? 'running'
+          : task.status === 'done'
+            ? 'success'
+            : 'failed'
+
+    const result = task.result ?? {}
+    const message =
+      typeof result.error === 'string'
+        ? result.error
+        : task.status === 'failed'
+          ? '任务执行失败'
+          : null
+    const itemCount =
+      typeof result.videosUpserted === 'number'
+        ? result.videosUpserted
+        : typeof result.sourcesUpserted === 'number'
+          ? result.sourcesUpserted
+          : null
+
+    return {
+      id: task.id,
+      siteKey: task.sourceSite,
+      mode,
+      status,
+      startedAt: null as string | null,
+      finishedAt: task.finishedAt,
+      message,
+      itemCount,
+    }
+  }
