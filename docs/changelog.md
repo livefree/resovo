@@ -1005,3 +1005,14 @@
 - **数据库变更**：无
 - **注意事项**：
   - 保持“保存并同步”行为和提示文案不变，属于结构性重构
+
+## [CHG-60] v1.2 T1-1：抽离 CrawlerSiteToolbar 组件
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 10:45
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteToolbar.tsx` — 新建，承载操作栏按钮、列面板与批量操作区
+  - `src/components/admin/system/CrawlerSiteManager.tsx` — 删除内联操作栏 JSX，改为消费 `CrawlerSiteToolbar`
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅结构拆分，不改动操作栏可见行为

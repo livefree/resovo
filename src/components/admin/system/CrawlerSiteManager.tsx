@@ -11,6 +11,7 @@ import type { CrawlerSite, CreateCrawlerSiteInput, UpdateCrawlerSiteInput, Crawl
 import { useCrawlerSiteColumns } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns'
 import { useCrawlerSiteSelection } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteSelection'
 import { CrawlerSiteTable } from '@/components/admin/system/crawler-site/components/CrawlerSiteTable'
+import { CrawlerSiteToolbar } from '@/components/admin/system/crawler-site/components/CrawlerSiteToolbar'
 import { parseSitesFromJson } from '@/components/admin/system/crawler-site/importParser'
 
 // ── 类型 ──────────────────────────────────────────────────────
@@ -478,75 +479,30 @@ export function CrawlerSiteManager() {
 
   return (
     <div>
-      {/* 操作栏 */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <button onClick={() => setShowAdd(true)} className="rounded-md px-4 py-2 text-sm font-medium bg-[var(--accent)] text-black hover:opacity-90">
-          + 添加源站
-        </button>
-        <button
-          onClick={() => handleTriggerCrawl('incremental-crawl')}
-          disabled={crawlTriggering['all:incremental-crawl'] === true}
-          className="rounded-md px-3 py-2 text-sm border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-50"
-        >
-          全站增量采集
-        </button>
-        <button
-          onClick={() => handleTriggerCrawl('full-crawl')}
-          disabled={crawlTriggering['all:full-crawl'] === true}
-          className="rounded-md px-3 py-2 text-sm border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-50"
-        >
-          全站全量采集
-        </button>
-        <button onClick={handleExport} className="rounded-md px-3 py-2 text-sm border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)]">
-          导出 JSON
-        </button>
-        <button onClick={handleImport} className="rounded-md px-3 py-2 text-sm border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)]">
-          导入 JSON
-        </button>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowColumnsPanel((prev) => !prev)}
-            className="rounded-md border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] hover:bg-[var(--bg3)]"
-          >
-            显示列
-          </button>
-          {showColumnsPanel && (
-            <div className="absolute left-0 z-20 mt-1 w-56 rounded-md border border-[var(--border)] bg-[var(--bg2)] p-2 shadow-lg">
-              <p className="mb-2 text-xs text-[var(--muted)]">勾选显示列（名称/管理操作为必显）</p>
-              <div className="space-y-1">
-                {columnMeta.map((column) => (
-                  <label key={column.id} className="flex items-center gap-2 rounded px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg3)]">
-                    <input
-                      type="checkbox"
-                      checked={columns[column.id]}
-                      disabled={requiredColumns.includes(column.id)}
-                      onChange={() => toggleColumn(column.id)}
-                      className="accent-[var(--accent)]"
-                    />
-                    <span>{column.label}</span>
-                  </label>
-                ))}
-              </div>
-              <p className="mt-2 text-[10px] text-[var(--muted)]">
-                列宽可在表头分隔线上拖拽调整
-              </p>
-            </div>
-          )}
-        </div>
-        {selected.size > 0 && (
-          <>
-            <span className="text-xs text-[var(--muted)] ml-1">已选 {selected.size} 项</span>
-            <button onClick={() => handleBatch('enable')} className="rounded-md px-3 py-2 text-xs border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)]">批量启用</button>
-            <button onClick={() => handleBatch('disable')} className="rounded-md px-3 py-2 text-xs border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)]">批量停用</button>
-            <button onClick={() => handleBatch('mark_adult')} className="rounded-md px-3 py-2 text-xs border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)]">标记成人</button>
-            <button onClick={() => handleBatch('delete')} className="rounded-md px-3 py-2 text-xs border border-red-500/30 text-red-400 hover:bg-red-500/10">批量删除</button>
-          </>
-        )}
-        {toast && (
-          <span className={`ml-auto text-sm ${toast.ok ? 'text-green-500' : 'text-red-500'}`}>{toast.msg}</span>
-        )}
-      </div>
+      <CrawlerSiteToolbar
+        showColumnsPanel={showColumnsPanel}
+        columns={columns}
+        requiredColumns={requiredColumns}
+        selectedCount={selected.size}
+        isAllIncrementalTriggering={crawlTriggering['all:incremental-crawl'] === true}
+        isAllFullTriggering={crawlTriggering['all:full-crawl'] === true}
+        toast={toast}
+        columnMeta={columnMeta}
+        setShowColumnsPanel={setShowColumnsPanel}
+        toggleColumn={toggleColumn}
+        onAdd={() => setShowAdd(true)}
+        onTriggerIncremental={() => {
+          void handleTriggerCrawl('incremental-crawl')
+        }}
+        onTriggerFull={() => {
+          void handleTriggerCrawl('full-crawl')
+        }}
+        onExport={handleExport}
+        onImport={handleImport}
+        onBatch={(action) => {
+          void handleBatch(action)
+        }}
+      />
 
       <CrawlerSiteTable
         displaySites={displaySites}

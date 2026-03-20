@@ -2804,3 +2804,53 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测 6/6 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-60 v1.2 T1-1：抽离 CrawlerSiteToolbar 组件
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 10:30
+- **计划开始时间**：2026-03-20 10:35
+- **实际开始时间**：2026-03-20 10:32
+- **完成时间**：2026-03-20 10:45
+- **问题**：`CrawlerSiteManager` 的操作栏仍包含大量按钮、列面板和批量操作渲染，容器职责不够收敛。
+- **影响的已完成任务**：CHG-58
+- **文件范围**：
+  - `src/components/admin/system/CrawlerSiteManager.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteToolbar.tsx`
+- **修复内容**：
+  - 新建 `CrawlerSiteToolbar`，承载操作栏按钮、显示列面板、批量操作入口与 toast 区。
+  - `CrawlerSiteManager` 删除内联操作栏 JSX，改为容器传参与回调编排。
+  - 保持现有行为不变（按钮启停、批量动作、列面板交互和提示文案）。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-61 v1.2 T1-2：抽离 CrawlerSiteFilters 组件
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-03-20 10:30
+- **计划开始时间**：2026-03-20 11:00
+- **实际开始时间**：2026-03-20 10:45
+- **完成时间**：
+- **问题**：筛选区仍位于 `CrawlerSiteTable` 内部，难以单独演进和复用。
+- **影响的已完成任务**：CHG-60
+- **文件范围**：
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteFilters.tsx`
+- **修复内容**：
+  - 进行中：将筛选行渲染抽离为 `CrawlerSiteFilters`，表格组件仅保留组装职责。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - _（进行中）_
+- **问题说明**：_（无）_
