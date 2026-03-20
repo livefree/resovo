@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { apiClient } from '@/lib/api-client'
 import type { CrawlerSite, CreateCrawlerSiteInput, UpdateCrawlerSiteInput, CrawlerSiteBatchAction } from '@/types'
 import { useAdminToast } from '@/components/admin/shared/feedback/useAdminToast'
@@ -16,6 +16,7 @@ import { useCrawlerSiteCrawlTasks } from '@/components/admin/system/crawler-site
 import { CrawlerSiteTable } from '@/components/admin/system/crawler-site/components/CrawlerSiteTable'
 import { CrawlerSiteTopToolbar } from '@/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar'
 import { ActiveFilterChipsBar } from '@/components/admin/system/crawler-site/components/ActiveFilterChipsBar'
+import { CrawlerSiteOverviewStats } from '@/components/admin/system/crawler-site/components/CrawlerSiteOverviewStats'
 import {
   CrawlerSiteFormDialog,
   EMPTY_SITE_FORM,
@@ -33,6 +34,15 @@ interface ValidateResult {
   latencyMs: number | null
 }
 
+interface CrawlerOverview {
+  siteTotal: number
+  connected: number
+  running: number
+  failed: number
+  todayVideos: number
+  todayDurationMs: number
+}
+
 // ── 主组件 ────────────────────────────────────────────────────
 
 export function CrawlerSiteManager() {
@@ -40,6 +50,7 @@ export function CrawlerSiteManager() {
   const [showAdd, setShowAdd] = useState(false)
   const [validateStates, setValidateStates] = useState<Record<string, ValidateStatus>>({})
   const [rowSaving, setRowSaving] = useState<Record<string, boolean>>({})
+  const [overview, setOverview] = useState<CrawlerOverview | null>(null)
   const [allCrawlTriggering, setAllCrawlTriggering] = useState<Record<'incremental-crawl' | 'full-crawl', boolean>>({
     'incremental-crawl': false,
     'full-crawl': false,
@@ -127,6 +138,23 @@ export function CrawlerSiteManager() {
     clearSelection,
   } = useCrawlerSiteSelection(visibleKeys)
 
+  const fetchOverview = useCallback(async () => {
+    try {
+      const res = await apiClient.get<{ data: CrawlerOverview }>('/admin/crawler/overview')
+      setOverview(res.data)
+    } catch {
+      // 非阻塞：概览失败不影响列表主流程
+    }
+  }, [])
+
+  useEffect(() => {
+    void fetchOverview()
+    const timer = window.setInterval(() => {
+      void fetchOverview()
+    }, 5000)
+    return () => window.clearInterval(timer)
+  }, [fetchOverview])
+
   // ── 验证 ───────────────────────────────────────────────────
 
   async function handleValidate(site: CrawlerSite) {
@@ -171,6 +199,7 @@ export function CrawlerSiteManager() {
       })
       showToast(type === 'full-crawl' ? '已触发全站全量采集' : '已触发全站增量采集', true)
       await fetchSites()
+      await fetchOverview()
     } catch {
       showToast(type === 'full-crawl' ? '全站全量采集触发失败' : '全站增量采集触发失败', false)
     } finally {
@@ -315,6 +344,8 @@ export function CrawlerSiteManager() {
 
   return (
     <div>
+      <CrawlerSiteOverviewStats data={overview} />
+
       <CrawlerSiteTopToolbar
         filters={filters}
         setFilters={setFilters}

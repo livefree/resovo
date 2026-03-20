@@ -3538,3 +3538,38 @@ _（任务 review 通过后移入此处）_
   - 定向单测 5/5 通过；typecheck/lint 通过。
   - 已满足：同站互斥防重、批量 latest 优先轮询、任务完成后刷新列表并清理 running 状态。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-86 crawler-site 配置页采集状态概览
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 02:10
+- **计划开始时间**：2026-03-20 02:15
+- **实际开始时间**：2026-03-20 02:16
+- **完成时间**：2026-03-20 02:32
+- **问题**：配置页缺少聚合态采集信息，用户无法快速判断整体运行状态（站点总量、运行中、失败、当日产出）。
+- **影响的已完成任务**：CHG-85
+- **文件范围**：
+  - `src/api/db/queries/crawlerTasks.ts`
+  - `src/api/routes/admin/crawler.ts`
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteOverviewStats.tsx`（新增）
+- **修复内容**：
+  - 新增后端概览查询，汇总：
+    - 站点总数
+    - 连接成功（`last_crawl_status = ok`）
+    - 运行中（基于 `crawler_tasks` 活跃任务去重站点）
+    - 失败（`last_crawl_status = failed`）
+    - 今日采集视频数（`result.videosUpserted` 聚合）
+    - 今日采集时长（`result.durationMs` 聚合）
+  - 新增 `GET /admin/crawler/overview` 接口。
+  - 配置页顶部新增状态概览条，5 秒轮询实时刷新。
+  - 不修改列表列结构，不增加列表信息密度，不影响筛选/排序/列宽/列显隐逻辑。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_

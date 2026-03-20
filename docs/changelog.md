@@ -1342,3 +1342,17 @@
   - 轮询优先使用批量 latest 接口，单站 latest-task 仅作兼容降级
   - 任务进入 success/failed 后会触发一次 `fetchSites()` 并清理本地 running 状态
   - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
+
+## [CHG-86] crawler-site 配置页采集状态概览
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 02:32
+- **修改文件**：
+  - `src/api/db/queries/crawlerTasks.ts` — 新增 `getCrawlerOverview` 汇总查询（总数/成功/运行中/失败/今日视频数/今日时长）
+  - `src/api/routes/admin/crawler.ts` — 新增 `GET /admin/crawler/overview`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteOverviewStats.tsx` — 新增配置页采集概览组件
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx` — 接入概览条并增加 5 秒轮询刷新
+- **新增依赖**：无
+- **数据库变更**：无（复用现有 `crawler_tasks` 与 `crawler_sites` 字段）
+- **注意事项**：
+  - 本次仅增加“配置页顶部概览”，不扩充列表列信息，不改表格行为
+  - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`

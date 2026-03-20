@@ -22,6 +22,15 @@ export interface CrawlerTask {
   finishedAt: string | null
 }
 
+export interface CrawlerOverview {
+  siteTotal: number
+  connected: number
+  running: number
+  failed: number
+  todayVideos: number
+  todayDurationMs: number
+}
+
 interface DbCrawlerTaskRow {
   id: string
   type: CrawlerTaskType
@@ -178,4 +187,73 @@ export async function getLatestTasksBySites(
   )
 
   return result.rows.map(mapTask)
+}
+
+// ── 采集概览汇总 ────────────────────────────────────────────────
+
+interface OverviewRow {
+  site_total: string
+  connected: string
+  running: string
+  failed: string
+  today_videos: string
+  today_duration_ms: string
+}
+
+export async function getCrawlerOverview(db: Pool): Promise<CrawlerOverview> {
+  const result = await db.query<OverviewRow>(
+    `WITH site_stats AS (
+       SELECT
+         COUNT(*)::text AS site_total,
+         SUM(CASE WHEN last_crawl_status = 'ok' THEN 1 ELSE 0 END)::text AS connected,
+         SUM(CASE WHEN last_crawl_status = 'failed' THEN 1 ELSE 0 END)::text AS failed
+       FROM crawler_sites
+     ),
+     running_stats AS (
+       SELECT
+         COUNT(DISTINCT source_site)::text AS running
+       FROM crawler_tasks
+       WHERE status IN ('pending', 'running')
+         AND type IN ('full-crawl', 'incremental-crawl')
+     ),
+     today_stats AS (
+       SELECT
+         SUM(
+           CASE
+             WHEN (result ->> 'videosUpserted') ~ '^[0-9]+$'
+               THEN (result ->> 'videosUpserted')::bigint
+             ELSE 0
+           END
+         )::text AS today_videos,
+         SUM(
+           CASE
+             WHEN (result ->> 'durationMs') ~ '^[0-9]+$'
+               THEN (result ->> 'durationMs')::bigint
+             ELSE 0
+           END
+         )::text AS today_duration_ms
+       FROM crawler_tasks
+       WHERE status = 'done'
+         AND type IN ('full-crawl', 'incremental-crawl')
+         AND scheduled_at >= date_trunc('day', NOW())
+     )
+     SELECT
+       COALESCE(site_stats.site_total, '0') AS site_total,
+       COALESCE(site_stats.connected, '0') AS connected,
+       COALESCE(running_stats.running, '0') AS running,
+       COALESCE(site_stats.failed, '0') AS failed,
+       COALESCE(today_stats.today_videos, '0') AS today_videos,
+       COALESCE(today_stats.today_duration_ms, '0') AS today_duration_ms
+     FROM site_stats, running_stats, today_stats`,
+  )
+
+  const row = result.rows[0]
+  return {
+    siteTotal: parseInt(row.site_total, 10) || 0,
+    connected: parseInt(row.connected, 10) || 0,
+    running: parseInt(row.running, 10) || 0,
+    failed: parseInt(row.failed, 10) || 0,
+    todayVideos: parseInt(row.today_videos, 10) || 0,
+    todayDurationMs: parseInt(row.today_duration_ms, 10) || 0,
+  }
 }

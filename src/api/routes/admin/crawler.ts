@@ -18,6 +18,7 @@ import {
   findActiveTaskBySite,
   getLatestTaskBySite,
   getLatestTasksBySites,
+  getCrawlerOverview,
   type CrawlerTask,
 } from '@/api/db/queries/crawlerTasks'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
@@ -155,6 +156,13 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
         lastCrawlStatus: s.lastCrawlStatus,
       })),
     })
+  })
+
+  // ── GET /admin/crawler/overview ──────────────────────────────
+
+  fastify.get('/admin/crawler/overview', { preHandler: auth }, async (_request, reply) => {
+    const data = await getCrawlerOverview(db)
+    return reply.send({ data })
   })
 
   // ── GET /admin/crawler/tasks/latest?siteKeys=a,b ───────────
