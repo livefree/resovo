@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AdminDialogShell } from '@/components/admin/shared/dialog/AdminDialogShell'
 
 export interface SiteFormData {
   key: string
@@ -28,23 +29,6 @@ interface CrawlerSiteFormDialogProps {
   isEdit: boolean
   onClose: () => void
   onSave: (data: SiteFormData) => Promise<void>
-}
-
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div
-        className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--bg2)] p-6 shadow-xl"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-base font-semibold text-[var(--text)]">{title}</h3>
-          <button onClick={onClose} className="text-[var(--muted)] hover:text-[var(--text)] text-xl leading-none">×</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  )
 }
 
 function FormField({ label, children }: { label: string; children: React.ReactNode }) {
@@ -108,7 +92,7 @@ export function CrawlerSiteFormDialog({ title, initial, isEdit, onClose, onSave 
   }
 
   return (
-    <Modal title={title} onClose={onClose}>
+    <AdminDialogShell title={title} onClose={onClose}>
       <form onSubmit={handleSubmit}>
         {!isEdit && (
           <FormField label="Key（唯一标识，字母数字下划线）">
@@ -177,6 +161,6 @@ export function CrawlerSiteFormDialog({ title, initial, isEdit, onClose, onSave 
           </button>
         </div>
       </form>
-    </Modal>
+    </AdminDialogShell>
   )
 }

@@ -3129,3 +3129,29 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测 5/5 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-72 Phase1：抽离 AdminDialogShell
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 12:24
+- **计划开始时间**：2026-03-20 14:10
+- **实际开始时间**：2026-03-19 23:23
+- **完成时间**：2026-03-19 23:24
+- **问题**：`CrawlerSiteFormDialog` 内联维护弹层遮罩与壳体结构，重复度高。
+- **影响的已完成任务**：CHG-71
+- **文件范围**：
+  - `src/components/admin/shared/dialog/AdminDialogShell.tsx`（新增）
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteFormDialog.tsx`
+- **修复内容**：
+  - 新增 `AdminDialogShell`，统一弹层遮罩、容器、标题栏与关闭交互。
+  - `CrawlerSiteFormDialog` 删除内联 `Modal`，改为组合 shared dialog 壳。
+  - 表单字段、校验、提交与关闭流程保持不变。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_

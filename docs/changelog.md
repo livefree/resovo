@@ -1147,3 +1147,15 @@
 - **注意事项**：
   - 本次仅 shared 抽离，不改动提示文案、触发时机、异步流程与权限逻辑
   - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
+
+## [CHG-72] Phase1：抽离 AdminDialogShell
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 23:24
+- **修改文件**：
+  - `src/components/admin/shared/dialog/AdminDialogShell.tsx` — 新建 shared 弹层壳组件，统一遮罩、容器和标题栏
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteFormDialog.tsx` — 替换内联 Modal 为 shared dialog 壳
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅 shared 抽离，不改动表单字段、校验、提交时序和权限逻辑
+  - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`

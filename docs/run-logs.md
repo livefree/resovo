@@ -290,3 +290,11 @@
 - **内容**：完成 crawler-site toast 管理逻辑 shared 化，提示时序保持不变。
 - **处理动作**：新增 `useAdminToast` 并接入 `CrawlerSiteManager`；执行定向单测、typecheck、lint 均通过。
 - **后续**：进入 CHG-72，抽离 AdminDialogShell。
+
+## [LOG-20260319-2324-01] CHG-72 AdminDialogShell 抽离完成
+- **时间**：2026-03-19 23:24
+- **类型**：INFO
+- **关联任务**：CHG-72
+- **内容**：完成 crawler-site 弹层壳 shared 化，表单行为保持不变。
+- **处理动作**：新增 `AdminDialogShell` 并接入 `CrawlerSiteFormDialog`；执行定向单测、typecheck、lint 均通过。
+- **后续**：进入 CHG-73，抽离 AdminFormField/Input/Select。

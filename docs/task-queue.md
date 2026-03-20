@@ -313,7 +313,7 @@
 ## [SEQ-20260320-03] Admin v2 工程实施（执行序列）
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-20 12:24
-- **最后更新时间**：2026-03-19 23:22
+- **最后更新时间**：2026-03-19 23:24
 - **目标**：按 v2 方案推进 shared 抽象、局部 UI 优化和设计系统代码化落地
 - **范围**：`src/components/admin/shared/*` + `crawler-site/videos/users/sources` + 对应 docs/rules
 - **依赖**：`docs/admin_v2_refactor_plan.md`、`docs/admin_design_system_v1.md`
@@ -340,11 +340,11 @@
    - 完成时间：2026-03-19 23:22
    - 验收要点：提示文案/时序一致；无新增异步流程
 
-4. CHG-72 — Phase1：抽离 AdminDialogShell（状态：⬜ 待开始）
+4. CHG-72 — Phase1：抽离 AdminDialogShell（状态：✅ 已完成）
    - 创建时间：2026-03-20 12:24
    - 计划开始：2026-03-20 14:10
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-19 23:23
+   - 完成时间：2026-03-19 23:24
    - 验收要点：弹层开关与提交行为一致
 
 5. CHG-73 — Phase1：抽离 AdminFormField/Input/Select（状态：⬜ 待开始）
