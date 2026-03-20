@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { apiClient, ApiClientError } from '@/lib/api-client'
+import { AdminButton } from '@/components/admin/shared/button/AdminButton'
 import { CONFIG_FILE_PLACEHOLDER } from '@/components/admin/system/config-file/constants'
 import {
   normalizeSubscriptionUrl,
@@ -197,14 +198,14 @@ export function ConfigFileEditor() {
                 placeholder="https://example.com/config.json"
                 className="flex-1 rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
               />
-              <button
+              <AdminButton
                 type="button"
                 onClick={handleFetch}
                 disabled={fetching}
-                className="shrink-0 rounded-md px-4 py-2 text-sm font-medium border border-[var(--border)] bg-[var(--bg3)] text-[var(--text)] hover:bg-[var(--bg4)] disabled:opacity-50 transition-colors"
+                className="shrink-0 px-4 font-medium"
               >
                 {fetching ? '拉取中…' : '远程拉取'}
-              </button>
+              </AdminButton>
             </div>
           </>
         ) : (
@@ -257,13 +258,14 @@ export function ConfigFileEditor() {
       {/* ── 粘性保存区 ─────────────────────────────────────── */}
       <div className="sticky bottom-3 z-20">
         <div className="flex items-center gap-4 rounded-lg border border-[var(--border)] bg-[var(--bg2)]/95 px-4 py-3 backdrop-blur">
-          <button
+          <AdminButton
             onClick={handleSave}
             disabled={saving || !!jsonError}
-            className="rounded-md bg-[var(--accent)] px-5 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-50"
+            variant="primary"
+            className="px-5 font-semibold"
           >
             {saving ? '保存中…' : '保存并同步'}
-          </button>
+          </AdminButton>
           {toast && (
             <span className={`text-sm ${toast.ok ? 'text-green-500' : 'text-red-500'}`}>
               {toast.msg}

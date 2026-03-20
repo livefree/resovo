@@ -370,3 +370,11 @@
 - **内容**：完成 videos/users/sources 页面头部与筛选区的布局风格统一。
 - **处理动作**：页面头部统一为信息头卡片；users 搜索区接入 AdminToolbar；回归验证通过。
 - **后续**：进入 CHG-81，落地 AdminButton 组件规范。
+
+## [LOG-20260320-0124-01] CHG-81 AdminButton 规范落地完成
+- **时间**：2026-03-20 01:24
+- **类型**：INFO
+- **关联任务**：CHG-81
+- **内容**：完成按钮设计规范第一批代码化，统一按钮变体语义。
+- **处理动作**：新增 shared AdminButton，并接入 crawler/config/videos 关键按钮；定向测试与静态检查通过。
+- **后续**：进入 CHG-82，落地 AdminModal + 表单规范。

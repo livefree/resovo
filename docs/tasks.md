@@ -3375,3 +3375,31 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测 10/10 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-81 Phase3：落地 AdminButton
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 12:24
+- **计划开始时间**：2026-03-22 10:00
+- **实际开始时间**：2026-03-20 01:22
+- **完成时间**：2026-03-20 01:24
+- **问题**：后台按钮样式重复散落，primary/secondary/danger 语义未代码化统一。
+- **影响的已完成任务**：CHG-80
+- **文件范围**：
+  - `src/components/admin/shared/button/AdminButton.tsx`（新增）
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar.tsx`
+  - `src/components/admin/system/config-file/ConfigFileEditor.tsx`
+  - `src/app/[locale]/admin/videos/page.tsx`
+- **修复内容**：
+  - 新增 `AdminButton`，统一 `primary/secondary/danger/ghost` 变体和尺寸语义。
+  - crawler-site 顶部操作区、config-file 保存区、videos 新建入口首批接入 `AdminButton`。
+  - 保持所有按钮原有回调、禁用条件与交互时序不变。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/system/ConfigFileEditor.test.tsx tests/unit/components/admin/videos/VideoFilters.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 13/13 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_

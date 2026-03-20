@@ -1266,3 +1266,17 @@
 - **注意事项**：
   - 本次仅 DOM/样式布局对齐，不改动数据结构、API 顺序、异步流程、权限逻辑
   - 已通过：`npm run test:run -- tests/unit/components/admin/videos/VideoFilters.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
+
+## [CHG-81] Phase3：落地 AdminButton
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 01:24
+- **修改文件**：
+  - `src/components/admin/shared/button/AdminButton.tsx` — 新建统一按钮组件（variant/size 规范化）
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar.tsx` — 首批接入 AdminButton
+  - `src/components/admin/system/config-file/ConfigFileEditor.tsx` — 远程拉取与保存按钮接入 AdminButton
+  - `src/app/[locale]/admin/videos/page.tsx` — 新建视频入口按钮接入 AdminButton
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次为设计系统按钮规范代码化，不改动业务逻辑与接口调用
+  - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/system/ConfigFileEditor.test.tsx tests/unit/components/admin/videos/VideoFilters.test.tsx`、`npm run typecheck`、`npm run lint`

@@ -4,6 +4,7 @@ import type { CrawlerSiteBatchAction } from '@/types'
 import type { ColumnId, ColumnVisibility, FilterState } from '@/components/admin/system/crawler-site/tableState'
 import { AdminBatchBar } from '@/components/admin/shared/batch/AdminBatchBar'
 import { AdminToolbar } from '@/components/admin/shared/toolbar/AdminToolbar'
+import { AdminButton } from '@/components/admin/shared/button/AdminButton'
 import { CrawlerSiteAdvancedFilters } from '@/components/admin/system/crawler-site/components/CrawlerSiteAdvancedFilters'
 
 interface CrawlerSiteTopToolbarProps {
@@ -55,23 +56,21 @@ export function CrawlerSiteTopToolbar({
         className="gap-3"
         actions={(
           <>
-            <button onClick={onAdd} className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-black hover:opacity-90">
+            <AdminButton onClick={onAdd} variant="primary" className="px-4 font-medium">
               + 添加源站
-            </button>
-            <button
+            </AdminButton>
+            <AdminButton
               onClick={onTriggerIncremental}
               disabled={isAllIncrementalTriggering}
-              className="rounded-md border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-50"
             >
               全站增量采集
-            </button>
-            <button
+            </AdminButton>
+            <AdminButton
               onClick={onTriggerFull}
               disabled={isAllFullTriggering}
-              className="rounded-md border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-50"
             >
               全站全量采集
-            </button>
+            </AdminButton>
 
             <input
               value={filters.keyOrName}
@@ -108,21 +107,20 @@ export function CrawlerSiteTopToolbar({
               <option value="manual">手工</option>
             </select>
 
-            <button onClick={onExport} className="rounded-md border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] hover:bg-[var(--bg3)]">
+            <AdminButton onClick={onExport}>
               导出 JSON
-            </button>
-            <button onClick={onImport} className="rounded-md border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] hover:bg-[var(--bg3)]">
+            </AdminButton>
+            <AdminButton onClick={onImport}>
               导入 JSON
-            </button>
+            </AdminButton>
 
             <div className="relative">
-              <button
+              <AdminButton
                 type="button"
                 onClick={() => setShowColumnsPanel((prev) => !prev)}
-                className="rounded-md border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] hover:bg-[var(--bg3)]"
               >
                 列设置
-              </button>
+              </AdminButton>
               {showColumnsPanel && (
                 <div className="absolute left-0 z-20 mt-1 w-56 rounded-md border border-[var(--border)] bg-[var(--bg2)] p-2 shadow-lg">
                   <p className="mb-2 text-xs text-[var(--muted)]">勾选显示列（名称/管理操作为必显）</p>
@@ -144,13 +142,13 @@ export function CrawlerSiteTopToolbar({
               )}
             </div>
 
-            <button
+            <AdminButton
               type="button"
               onClick={() => setShowAdvanced((prev) => !prev)}
-              className={`rounded-md border px-3 py-2 text-sm ${showAdvanced ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--text)]' : 'border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)]'}`}
+              className={showAdvanced ? 'border-[var(--accent)] bg-[var(--accent)]/10' : ''}
             >
               高级筛选
-            </button>
+            </AdminButton>
 
             <AdminBatchBar
               selectedCount={selectedCount}
