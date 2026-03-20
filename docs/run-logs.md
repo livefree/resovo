@@ -450,3 +450,11 @@
 - **内容**：修复触发采集时报错 `inconsistent types deduced for parameter $1`。
 - **处理动作**：`markStalePendingTasks` 改为有/无 `siteKey` 两条 SQL，消除可空参数复用导致的类型推断冲突。
 - **后续**：继续观察采集触发链路，若出现新错误直接在同序列追加热修复。
+
+## [LOG-20260320-0338-01] CHG-91 采集链路可观测性改造完成
+- **时间**：2026-03-20 03:38
+- **类型**：INFO
+- **关联任务**：CHG-91
+- **内容**：完成采集任务详细日志体系（DB 持久化 + API 查询 + 诊断脚本），用于定位入队失败/worker失败/抓取失败/入库失败。
+- **处理动作**：新增 `crawler_task_logs` 迁移与查询；在 API/worker/crawl 关键阶段埋点；新增 `test:crawler-site` 实采诊断脚本。
+- **后续**：在本机执行 `npm run migrate` 后，用 `npm run test:crawler-site -- --site=<siteKey>` 做首轮联调验证。

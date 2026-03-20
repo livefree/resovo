@@ -29,6 +29,7 @@ import { enqueueVerifySingle } from '@/api/workers/verifyWorker'
 import { enqueueFullCrawl, enqueueIncrementalCrawl } from '@/api/workers/crawlerWorker'
 import { es } from '@/api/lib/elasticsearch'
 import { ensureCrawlerQueueReady } from '@/api/lib/queue'
+import { createCrawlerTaskLog, listCrawlerTaskLogs } from '@/api/db/queries/crawlerTaskLogs'
 
 function mapTaskDto(task: CrawlerTask) {
   const mode = task.type === 'incremental-crawl' ? 'incremental' : 'full'
@@ -70,6 +71,14 @@ function mapTaskDto(task: CrawlerTask) {
 export async function adminCrawlerRoutes(fastify: FastifyInstance) {
   const crawlerService = new CrawlerService(db, es)
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
+  const logTask = async (input: Parameters<typeof createCrawlerTaskLog>[1]) => {
+    try {
+      await createCrawlerTaskLog(db, input)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      fastify.log.warn({ err: message, input }, 'failed to persist crawler task log')
+    }
+  }
 
   // ── GET /admin/crawler/tasks ──────────────────────────────────
 
@@ -151,6 +160,13 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
       try {
         await ensureCrawlerQueueReady()
       } catch (err) {
+        await logTask({
+          sourceSite: siteKey,
+          level: 'error',
+          stage: 'api.queue.unavailable',
+          message: '队列不可用，拒绝触发任务',
+          details: { error: err instanceof Error ? err.message : String(err) },
+        })
         return reply.code(503).send({
           error: {
             code: 'CRAWLER_QUEUE_UNAVAILABLE',
@@ -165,19 +181,52 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
         sourceSite: siteKey,
         targetUrl: site.apiUrl,
       })
+      await logTask({
+        taskId: task.id,
+        sourceSite: siteKey,
+        level: 'info',
+        stage: 'api.task.created',
+        message: '任务已创建，准备入队',
+        details: { type, hoursAgo: hoursAgo ?? null },
+      })
 
       try {
         if (type === 'full-crawl') {
           const job = await enqueueFullCrawl(siteKey, task.id)
+          await logTask({
+            taskId: task.id,
+            sourceSite: siteKey,
+            level: 'info',
+            stage: 'api.task.enqueued',
+            message: '任务入队成功',
+            details: { jobId: String(job.id) },
+          })
           return reply.code(202).send({ data: { jobId: job.id, taskId: task.id, type, siteKey } })
         } else {
           const job = await enqueueIncrementalCrawl(siteKey, hoursAgo ?? 24, task.id)
+          await logTask({
+            taskId: task.id,
+            sourceSite: siteKey,
+            level: 'info',
+            stage: 'api.task.enqueued',
+            message: '任务入队成功',
+            details: { jobId: String(job.id), hoursAgo: hoursAgo ?? 24 },
+          })
           return reply.code(202).send({ data: { jobId: job.id, taskId: task.id, type, siteKey } })
         }
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
         await updateTaskStatus(db, task.id, 'failed', {
           error: 'QUEUE_ENQUEUE_FAILED',
-          message: err instanceof Error ? err.message : String(err),
+          message,
+        })
+        await logTask({
+          taskId: task.id,
+          sourceSite: siteKey,
+          level: 'error',
+          stage: 'api.task.enqueue_failed',
+          message: '任务入队失败',
+          details: { error: message },
         })
         return reply.code(503).send({
           error: {
@@ -209,6 +258,24 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
       const job = await enqueueIncrementalCrawl(siteKey, hoursAgo ?? 24)
       return reply.code(202).send({ data: { jobId: job.id, type, siteKey } })
     }
+  })
+
+  // ── GET /admin/crawler/tasks/:id/logs ───────────────────────
+
+  fastify.get('/admin/crawler/tasks/:id/logs', { preHandler: auth }, async (request, reply) => {
+    const ParamsSchema = z.object({ id: z.string().uuid() })
+    const QuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(500).default(200) })
+
+    const p = ParamsSchema.safeParse(request.params)
+    const q = QuerySchema.safeParse(request.query)
+    if (!p.success || !q.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+
+    const logs = await listCrawlerTaskLogs(db, { taskId: p.data.id, limit: q.data.limit })
+    return reply.send({ data: { logs } })
   })
 
   // ── GET /admin/crawler/sites-status ──────────────────────────

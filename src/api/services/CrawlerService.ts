@@ -308,7 +308,19 @@ export class CrawlerService {
    */
   async crawl(
     source: CrawlerSource,
-    options: { hoursAgo?: number; taskType?: 'full-crawl' | 'incremental-crawl'; taskId?: string } = {}
+    options: {
+      hoursAgo?: number
+      taskType?: 'full-crawl' | 'incremental-crawl'
+      taskId?: string
+      onLog?: (
+        input: {
+          level?: 'info' | 'warn' | 'error'
+          stage: string
+          message: string
+          details?: Record<string, unknown>
+        }
+      ) => void | Promise<void>
+    } = {}
   ): Promise<CrawlResult> {
     const taskId =
       options.taskId ??
@@ -326,6 +338,16 @@ export class CrawlerService {
     let page = 1
     let processed = 0
     let lastProgressAt = 0
+    let loggedUpsertErrors = 0
+    const emit = async (
+      level: 'info' | 'warn' | 'error',
+      stage: string,
+      message: string,
+      details?: Record<string, unknown>,
+    ) => {
+      if (!options.onLog) return
+      await options.onLog({ level, stage, message, details })
+    }
 
     const pushProgress = async () => {
       const now = Date.now()
@@ -342,10 +364,17 @@ export class CrawlerService {
     const startAt = Date.now()
 
     try {
+      await emit('info', 'crawl.start', '开始采集', {
+        source: source.name,
+        type: options.taskType ?? (options.hoursAgo ? 'incremental-crawl' : 'full-crawl'),
+        hoursAgo: options.hoursAgo ?? null,
+      })
       await crawlerTasksQueries.updateTaskStatus(this.db, taskId, 'running')
 
       while (true) {
+        await emit('info', 'crawl.page.fetch.start', '开始拉取分页', { page })
         const items = await this.fetchPage(source, { page, hoursAgo: options.hoursAgo })
+        await emit('info', 'crawl.page.fetch.done', '分页拉取完成', { page, items: items.length })
         if (items.length === 0) break
 
         for (const parsed of items) {
@@ -362,6 +391,14 @@ export class CrawlerService {
             process.stderr.write(
               `[CrawlerService] upsert failed for "${parsed.video.title}": ${message}\n`
             )
+            if (loggedUpsertErrors < 20) {
+              loggedUpsertErrors++
+              await emit('warn', 'crawl.upsert.failed', '视频入库失败', {
+                page,
+                title: parsed.video.title,
+                error: message,
+              })
+            }
             await pushProgress()
           }
         }
@@ -378,10 +415,23 @@ export class CrawlerService {
         errors,
         pages: page - 1,
       })
+      await emit('info', 'crawl.done', '采集完成', {
+        videosUpserted,
+        sourcesUpserted,
+        errors,
+        pages: page - 1,
+        durationMs: Date.now() - startAt,
+      })
     } catch (err) {
       errors++
+      const message = err instanceof Error ? err.message : String(err)
       await crawlerTasksQueries.updateTaskStatus(this.db, taskId, 'failed', {
-        error: err instanceof Error ? err.message : String(err),
+        error: message,
+      })
+      await emit('error', 'crawl.failed', '采集失败', {
+        error: message,
+        page,
+        processed,
       })
     }
 

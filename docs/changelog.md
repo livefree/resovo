@@ -1408,3 +1408,21 @@
 - **数据库变更**：无
 - **注意事项**：
   - 本次仅修复 SQL 参数绑定方式，不改变 pending 清理策略与阈值。
+
+## [CHG-91] 采集链路可观测性重构（详细任务日志 + 诊断脚本）
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 03:38
+- **修改文件**：
+  - `src/api/db/migrations/009_crawler_task_logs.sql` — 新增采集任务日志表及索引。
+  - `src/api/db/queries/crawlerTaskLogs.ts` — 新增日志写入/查询函数。
+  - `src/api/routes/admin/crawler.ts` — 增加 API 层日志埋点；新增 `GET /admin/crawler/tasks/:id/logs`。
+  - `src/api/workers/crawlerWorker.ts` — 增加 worker 层日志埋点（任务接收、源站开始/完成/失败、任务失败）。
+  - `src/api/services/CrawlerService.ts` — 增加 crawl 过程日志回调与分页/入库失败日志埋点。
+  - `scripts/test-crawler-site.ts` — 新增单站增量采集诊断脚本（基于已有源站直接执行）。
+  - `package.json` — 新增 `test:crawler-site` script。
+- **新增依赖**：无
+- **数据库变更**：新增 `crawler_task_logs` 表（迁移 `009_crawler_task_logs.sql`）
+- **注意事项**：
+  - 需先执行 `npm run migrate` 创建日志表。
+  - 诊断命令：`npm run test:crawler-site -- --site=<siteKey> --hours=24`。
+  - 当前任务重点是“定位能力建设”，不改变原有采集业务语义。

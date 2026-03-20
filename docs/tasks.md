@@ -3689,3 +3689,40 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - typecheck 通过；定向单测 5/5 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-91 采集链路可观测性重构（详细任务日志 + 诊断脚本）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 03:20
+- **计划开始时间**：2026-03-20 03:22
+- **实际开始时间**：2026-03-20 03:23
+- **完成时间**：2026-03-20 03:38
+- **问题**：仅靠终端请求日志无法定位采集失败根因；需要可按 taskId 回溯的阶段化采集日志，并提供复现脚本。
+- **影响的已完成任务**：CHG-89、CHG-90
+- **文件范围**：
+  - `src/api/db/migrations/009_crawler_task_logs.sql`（新增）
+  - `src/api/db/queries/crawlerTaskLogs.ts`（新增）
+  - `src/api/routes/admin/crawler.ts`
+  - `src/api/workers/crawlerWorker.ts`
+  - `src/api/services/CrawlerService.ts`
+  - `scripts/test-crawler-site.ts`（新增）
+  - `package.json`
+- **修复内容**：
+  - 新增 `crawler_task_logs` 表与索引，记录采集任务阶段日志（api/worker/crawl）。
+  - 新增日志查询接口：`GET /v1/admin/crawler/tasks/:id/logs?limit=200`。
+  - 采集链路埋点：
+    - API：任务创建、入队成功、入队失败、队列不可用
+    - Worker：任务接收、源站开始/完成/失败、任务失败
+    - Crawl：分页拉取开始/完成、入库失败（限流记录）、任务完成/失败
+  - 新增诊断脚本 `npm run test:crawler-site`：使用已有源站执行一次单站增量采集并打印最近日志（不依赖 Redis）。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run migrate`
+  - `npm run test:crawler-site -- --site=<siteKey> --hours=24`
+- **完成备注**：
+  - typecheck/lint 通过。
+  - 当前沙箱无法直连本机 DB，`migrate` 与实采脚本无法在此环境完成联调，需你在本机执行上述两条命令验证。
+- **问题说明**：_（无）_

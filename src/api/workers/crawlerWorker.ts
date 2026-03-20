@@ -10,6 +10,7 @@ import { es } from '@/api/lib/elasticsearch'
 import { CrawlerService, getEnabledSources } from '@/api/services/CrawlerService'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
+import { createCrawlerTaskLog } from '@/api/db/queries/crawlerTaskLogs'
 
 // ── 任务类型 ──────────────────────────────────────────────────────
 
@@ -41,10 +42,41 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
   const start = Date.now()
   const crawlerService = new CrawlerService(db, es)
 
+  const logTask = async (
+    level: 'info' | 'warn' | 'error',
+    stage: string,
+    message: string,
+    details?: Record<string, unknown>,
+  ) => {
+    try {
+      await createCrawlerTaskLog(db, {
+        taskId: taskId ?? null,
+        sourceSite: siteKey ?? null,
+        level,
+        stage,
+        message,
+        details: {
+          ...(details ?? {}),
+          jobId: String(job.id),
+          mode: type,
+        },
+      })
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[crawler-worker] failed to persist task log: ${reason}\n`)
+    }
+  }
+
+  await logTask('info', 'worker.job.received', 'Worker 接收到采集任务', {
+    siteKey: siteKey ?? null,
+    hoursAgo: hoursAgo ?? null,
+  })
+
   if (taskId) {
     await crawlerTasksQueries.updateTaskStatus(db, taskId, 'running', {
       queueJobId: String(job.id),
     })
+    await logTask('info', 'worker.task.running', '任务状态切换为 running')
   }
 
   try {
@@ -53,11 +85,13 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
     if (siteKey) {
       allSources = allSources.filter((s) => s.name === siteKey)
       if (allSources.length === 0) {
+        await logTask('error', 'worker.source.not_found', '指定源站不存在或已禁用', { siteKey })
         throw new Error(`源站 "${siteKey}" 不存在或已禁用`)
       }
     }
 
     if (allSources.length === 0) {
+      await logTask('error', 'worker.source.empty', '没有可用采集源站')
       throw new Error('没有可用的采集源站，请在"视频源配置"中添加并启用源站')
     }
 
@@ -74,6 +108,7 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
 
       // 标记为运行中
       await crawlerSitesQueries.updateCrawlStatus(db, source.name, 'running')
+      await logTask('info', 'worker.source.start', '开始采集源站', { source: source.name, base: source.base })
 
       try {
         process.stderr.write(
@@ -83,17 +118,33 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
           taskType: type,
           taskId: siteKey ? taskId : undefined,
           hoursAgo: type === 'incremental-crawl' ? (hoursAgo ?? 24) : undefined,
+          onLog: async (input) => {
+            await logTask(input.level ?? 'info', input.stage, input.message, {
+              source: source.name,
+              ...(input.details ?? {}),
+            })
+          },
         })
         videosUpserted += result.videosUpserted
         sourcesUpserted += result.sourcesUpserted
         if (result.errors > 0) errors += result.errors
 
         await crawlerSitesQueries.updateCrawlStatus(db, source.name, result.errors > 0 ? 'failed' : 'ok')
+        await logTask('info', 'worker.source.done', '源站采集完成', {
+          source: source.name,
+          videosUpserted: result.videosUpserted,
+          sourcesUpserted: result.sourcesUpserted,
+          errors: result.errors,
+        })
       } catch (err) {
         errors++
         const message = err instanceof Error ? err.message : String(err)
         process.stderr.write(`[crawler-worker] error crawling ${source.name}: ${message}\n`)
         await crawlerSitesQueries.updateCrawlStatus(db, source.name, 'failed')
+        await logTask('error', 'worker.source.failed', '源站采集失败', {
+          source: source.name,
+          error: message,
+        })
       }
 
       await job.progress(Math.round(((i + 1) / allSources.length) * 100))
@@ -108,9 +159,11 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
       durationMs: Date.now() - start,
     }
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    await logTask('error', 'worker.job.failed', '采集任务执行失败', { error: message })
     if (taskId) {
       await crawlerTasksQueries.updateTaskStatus(db, taskId, 'failed', {
-        error: err instanceof Error ? err.message : String(err),
+        error: message,
       })
     }
     throw err
