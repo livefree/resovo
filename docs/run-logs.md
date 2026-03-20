@@ -466,3 +466,11 @@
 - **内容**：定位并修复 worker 进入源站采集前的 SQL 参数推断冲突（text vs varchar）。
 - **处理动作**：`updateCrawlStatus` 的 `$1` 参数改为 `::varchar` 显式类型，消除 PREPARE 路径冲突。
 - **后续**：重启 API 后重新触发单站增量，验证日志进入 `worker.source.start` 与 `crawl.*` 阶段。
+
+## [LOG-20260320-1248-01] CHG-93 Python 工具链规范方案落盘完成
+- **时间**：2026-03-20 12:48
+- **类型**：INFO
+- **关联任务**：CHG-93
+- **内容**：将用户要求的 Python 开发规范（uv/ruff/ty）形成文档化执行基线。
+- **处理动作**：新增 `docs/python_tooling_adoption_plan.md`，并同步任务/变更/队列记录。
+- **后续**：当首次出现 Python 实改任务时，按该方案执行最小侵入接入与检查命令。
