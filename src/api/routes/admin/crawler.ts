@@ -25,6 +25,43 @@ import { enqueueVerifySingle } from '@/api/workers/verifyWorker'
 import { enqueueFullCrawl, enqueueIncrementalCrawl } from '@/api/workers/crawlerWorker'
 import { es } from '@/api/lib/elasticsearch'
 
+function mapTaskDto(task: CrawlerTask) {
+  const mode = task.type === 'incremental-crawl' ? 'incremental' : 'full'
+  const status =
+    task.status === 'pending'
+      ? 'queued'
+      : task.status === 'running'
+        ? 'running'
+        : task.status === 'done'
+          ? 'success'
+          : 'failed'
+
+  const result = task.result ?? {}
+  const message =
+    typeof result.error === 'string'
+      ? result.error
+      : task.status === 'failed'
+        ? '任务执行失败'
+        : null
+  const itemCount =
+    typeof result.videosUpserted === 'number'
+      ? result.videosUpserted
+      : typeof result.sourcesUpserted === 'number'
+        ? result.sourcesUpserted
+        : null
+
+  return {
+    id: task.id,
+    siteKey: task.sourceSite,
+    mode,
+    status,
+    startedAt: null as string | null,
+    finishedAt: task.finishedAt,
+    message,
+    itemCount,
+  }
+}
+
 export async function adminCrawlerRoutes(fastify: FastifyInstance) {
   const crawlerService = new CrawlerService(db, es)
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
@@ -182,39 +219,3 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     return reply.send({ data: result })
   })
 }
-  function mapTaskDto(task: CrawlerTask) {
-    const mode = task.type === 'incremental-crawl' ? 'incremental' : 'full'
-    const status =
-      task.status === 'pending'
-        ? 'queued'
-        : task.status === 'running'
-          ? 'running'
-          : task.status === 'done'
-            ? 'success'
-            : 'failed'
-
-    const result = task.result ?? {}
-    const message =
-      typeof result.error === 'string'
-        ? result.error
-        : task.status === 'failed'
-          ? '任务执行失败'
-          : null
-    const itemCount =
-      typeof result.videosUpserted === 'number'
-        ? result.videosUpserted
-        : typeof result.sourcesUpserted === 'number'
-          ? result.sourcesUpserted
-          : null
-
-    return {
-      id: task.id,
-      siteKey: task.sourceSite,
-      mode,
-      status,
-      startedAt: null as string | null,
-      finishedAt: task.finishedAt,
-      message,
-      itemCount,
-    }
-  }
