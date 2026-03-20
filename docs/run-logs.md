@@ -298,3 +298,11 @@
 - **内容**：完成 crawler-site 弹层壳 shared 化，表单行为保持不变。
 - **处理动作**：新增 `AdminDialogShell` 并接入 `CrawlerSiteFormDialog`；执行定向单测、typecheck、lint 均通过。
 - **后续**：进入 CHG-73，抽离 AdminFormField/Input/Select。
+
+## [LOG-20260319-2325-01] CHG-73 表单基础组件抽离完成
+- **时间**：2026-03-19 23:25
+- **类型**：INFO
+- **关联任务**：CHG-73
+- **内容**：完成 crawler-site 表单基础组件 shared 化，业务字段行为保持不变。
+- **处理动作**：新增 `AdminFormField` / `AdminInput` / `AdminSelect` 并接入 `CrawlerSiteFormDialog`；执行定向单测、typecheck、lint 均通过。
+- **后续**：进入 CHG-74，抽离 AdminBatchBar。

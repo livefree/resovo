@@ -1159,3 +1159,17 @@
 - **注意事项**：
   - 本次仅 shared 抽离，不改动表单字段、校验、提交时序和权限逻辑
   - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
+
+## [CHG-73] Phase1：抽离 AdminFormField/Input/Select
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 23:25
+- **修改文件**：
+  - `src/components/admin/shared/form/AdminFormField.tsx` — 新建 shared 表单字段容器组件
+  - `src/components/admin/shared/form/AdminInput.tsx` — 新建 shared 输入框组件
+  - `src/components/admin/shared/form/AdminSelect.tsx` — 新建 shared 下拉组件
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteFormDialog.tsx` — 替换内联表单基础组件为 shared 组件
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅 shared 抽离，不改动表单校验、提交 payload 与接口顺序
+  - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`

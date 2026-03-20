@@ -3155,3 +3155,31 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测 5/5 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-73 Phase1：抽离 AdminFormField/Input/Select
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 12:24
+- **计划开始时间**：2026-03-20 14:40
+- **实际开始时间**：2026-03-19 23:24
+- **完成时间**：2026-03-19 23:25
+- **问题**：`CrawlerSiteFormDialog` 内联维护基础表单组件，复用边界不清晰。
+- **影响的已完成任务**：CHG-72
+- **文件范围**：
+  - `src/components/admin/shared/form/AdminFormField.tsx`（新增）
+  - `src/components/admin/shared/form/AdminInput.tsx`（新增）
+  - `src/components/admin/shared/form/AdminSelect.tsx`（新增）
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteFormDialog.tsx`
+- **修复内容**：
+  - 新增 shared `AdminFormField`、`AdminInput`、`AdminSelect` 组件。
+  - `CrawlerSiteFormDialog` 删除内联 FormField/Input/select 实现，改为组合 shared 组件。
+  - 保持表单校验规则、提交 payload 和字段映射不变。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_
