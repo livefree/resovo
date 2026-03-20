@@ -3183,3 +3183,29 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测 5/5 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-74 Phase1：抽离 AdminBatchBar
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 12:24
+- **计划开始时间**：2026-03-20 15:10
+- **实际开始时间**：2026-03-19 23:26
+- **完成时间**：2026-03-19 23:27
+- **问题**：`CrawlerSiteToolbar` 批量区（已选计数 + 批量按钮）与工具栏其它逻辑耦合。
+- **影响的已完成任务**：CHG-73
+- **文件范围**：
+  - `src/components/admin/shared/batch/AdminBatchBar.tsx`（新增）
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteToolbar.tsx`
+- **修复内容**：
+  - 新增 `AdminBatchBar`，统一承载“已选计数 + 批量动作按钮”渲染。
+  - `CrawlerSiteToolbar` 改为通过 `actions` 配置组合 `AdminBatchBar`。
+  - 批量操作触发参数与后端接口调用保持不变。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 定向单测 5/5 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_

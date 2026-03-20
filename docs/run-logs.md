@@ -306,3 +306,11 @@
 - **内容**：完成 crawler-site 表单基础组件 shared 化，业务字段行为保持不变。
 - **处理动作**：新增 `AdminFormField` / `AdminInput` / `AdminSelect` 并接入 `CrawlerSiteFormDialog`；执行定向单测、typecheck、lint 均通过。
 - **后续**：进入 CHG-74，抽离 AdminBatchBar。
+
+## [LOG-20260319-2327-01] CHG-74 AdminBatchBar 抽离完成
+- **时间**：2026-03-19 23:27
+- **类型**：INFO
+- **关联任务**：CHG-74
+- **内容**：完成 crawler-site 批量操作区 shared 化，批量行为保持不变。
+- **处理动作**：新增 `AdminBatchBar` 并接入 `CrawlerSiteToolbar`；执行定向单测、typecheck、lint 均通过。
+- **后续**：进入 CHG-75，执行 shared 跨模块复用验证。

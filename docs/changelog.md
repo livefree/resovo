@@ -1173,3 +1173,15 @@
 - **注意事项**：
   - 本次仅 shared 抽离，不改动表单校验、提交 payload 与接口顺序
   - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`
+
+## [CHG-74] Phase1：抽离 AdminBatchBar
+- **完成时间**：2026-03-19
+- **记录时间**：2026-03-19 23:27
+- **修改文件**：
+  - `src/components/admin/shared/batch/AdminBatchBar.tsx` — 新建 shared 批量操作条组件
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteToolbar.tsx` — 批量区改为组合 `AdminBatchBar`
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅 shared 抽离，不改动批量动作参数、调用顺序、权限逻辑
+  - 已通过：`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`npm run typecheck`、`npm run lint`

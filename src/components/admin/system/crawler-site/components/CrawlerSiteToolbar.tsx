@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
+import { AdminBatchBar } from '@/components/admin/shared/batch/AdminBatchBar'
 import { AdminToolbar } from '@/components/admin/shared/toolbar/AdminToolbar'
 import type { ColumnId, ColumnVisibility } from '@/components/admin/system/crawler-site/tableState'
 import type { CrawlerSiteBatchAction } from '@/types'
@@ -96,15 +97,15 @@ export function CrawlerSiteToolbar({
               </div>
             )}
           </div>
-          {selectedCount > 0 && (
-            <>
-              <span className="text-xs text-[var(--muted)] ml-1">已选 {selectedCount} 项</span>
-              <button onClick={() => onBatch('enable')} className="rounded-md px-3 py-2 text-xs border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)]">批量启用</button>
-              <button onClick={() => onBatch('disable')} className="rounded-md px-3 py-2 text-xs border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)]">批量停用</button>
-              <button onClick={() => onBatch('mark_adult')} className="rounded-md px-3 py-2 text-xs border border-[var(--border)] text-[var(--text)] hover:bg-[var(--bg3)]">标记成人</button>
-              <button onClick={() => onBatch('delete')} className="rounded-md px-3 py-2 text-xs border border-red-500/30 text-red-400 hover:bg-red-500/10">批量删除</button>
-            </>
-          )}
+          <AdminBatchBar
+            selectedCount={selectedCount}
+            actions={[
+              { key: 'enable', label: '批量启用', onClick: () => onBatch('enable') },
+              { key: 'disable', label: '批量停用', onClick: () => onBatch('disable') },
+              { key: 'mark_adult', label: '标记成人', onClick: () => onBatch('mark_adult') },
+              { key: 'delete', label: '批量删除', onClick: () => onBatch('delete'), danger: true },
+            ]}
+          />
         </>
       )}
       feedback={toast ? <span className={`text-sm ${toast.ok ? 'text-green-500' : 'text-red-500'}`}>{toast.msg}</span> : null}
