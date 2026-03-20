@@ -1456,3 +1456,24 @@
 - **数据库变更**：无
 - **注意事项**：
   - 触发前不做空接入；触发后在当次任务内完成最小接入与检查链路。
+
+## [CHG-95] 采集系统 Phase A：批量/全站/批次控制与超时兜底
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 14:09
+- **修改文件**：
+  - `src/api/db/migrations/010_crawler_runs_and_task_control.sql` — 新增批次表与任务控制字段迁移。
+  - `src/api/db/queries/crawlerRuns.ts` — 新增批次查询/状态聚合能力。
+  - `src/api/db/queries/crawlerTasks.ts` — 扩展任务状态与控制字段，新增按 run 查询、取消/超时处理函数。
+  - `src/api/services/CrawlerRunService.ts` — 新增统一触发服务（single/batch/all/schedule）。
+  - `src/api/routes/admin/crawler.ts` — 新增 run 系列接口与取消/暂停/恢复控制；保留 `/admin/crawler/tasks` 兼容路径。
+  - `src/api/workers/crawlerWorker.ts` — 增加 run 控制状态消费（cancel/pause/timeout）与 run 状态同步。
+  - `src/api/workers/crawlerScheduler.ts` — 定时采集改为走 run service；新增每分钟超时 watchdog。
+  - `src/api/services/CrawlerService.ts` — 增加任务中断回调，支持取消/超时中止。
+  - `src/components/admin/system/crawler-site/components/CrawlerRunPanel.tsx` — 新增批次状态面板与中止入口。
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar.tsx` — 新增批量增量/全量触发按钮。
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx` — 接入 run 触发、轮询与中止。
+- **新增依赖**：无
+- **数据库变更**：新增 `crawler_runs`，扩展 `crawler_tasks`（`run_id/trigger_type/timeout_at/heartbeat_at/cancel_requested`）
+- **注意事项**：
+  - 需执行 `npm run migrate` 应用 `010` 迁移。
+  - 旧接口 `POST /admin/crawler/tasks` 仍可用，保证 CHG-87 兼容。

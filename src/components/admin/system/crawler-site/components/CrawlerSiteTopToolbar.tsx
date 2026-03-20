@@ -23,6 +23,8 @@ interface CrawlerSiteTopToolbarProps {
   onAdd: () => void
   onTriggerIncremental: () => void
   onTriggerFull: () => void
+  onTriggerBatchIncremental: () => void
+  onTriggerBatchFull: () => void
   onExport: () => void
   onImport: () => void
   onBatch: (action: CrawlerSiteBatchAction) => void
@@ -44,6 +46,8 @@ export function CrawlerSiteTopToolbar({
   onAdd,
   onTriggerIncremental,
   onTriggerFull,
+  onTriggerBatchIncremental,
+  onTriggerBatchFull,
   onExport,
   onImport,
   onBatch,
@@ -70,6 +74,18 @@ export function CrawlerSiteTopToolbar({
               disabled={isAllFullTriggering}
             >
               全站全量采集
+            </AdminButton>
+            <AdminButton
+              onClick={onTriggerBatchIncremental}
+              disabled={selectedCount === 0}
+            >
+              批量增量采集
+            </AdminButton>
+            <AdminButton
+              onClick={onTriggerBatchFull}
+              disabled={selectedCount === 0}
+            >
+              批量全量采集
             </AdminButton>
 
             <input

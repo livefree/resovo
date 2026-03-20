@@ -17,6 +17,7 @@ import { CrawlerSiteTable } from '@/components/admin/system/crawler-site/compone
 import { CrawlerSiteTopToolbar } from '@/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar'
 import { ActiveFilterChipsBar } from '@/components/admin/system/crawler-site/components/ActiveFilterChipsBar'
 import { CrawlerSiteOverviewStats } from '@/components/admin/system/crawler-site/components/CrawlerSiteOverviewStats'
+import { CrawlerRunPanel } from '@/components/admin/system/crawler-site/components/CrawlerRunPanel'
 import {
   CrawlerSiteFormDialog,
   EMPTY_SITE_FORM,
@@ -43,6 +44,16 @@ interface CrawlerOverview {
   todayDurationMs: number
 }
 
+interface CrawlerRunSummary {
+  id: string
+  triggerType: 'single' | 'batch' | 'all' | 'schedule'
+  mode: 'incremental' | 'full'
+  status: 'queued' | 'running' | 'success' | 'partial_failed' | 'failed' | 'cancelled'
+  controlStatus: 'active' | 'pausing' | 'paused' | 'cancelling' | 'cancelled'
+  summary: Record<string, unknown> | null
+  createdAt: string
+}
+
 // ── 主组件 ────────────────────────────────────────────────────
 
 export function CrawlerSiteManager() {
@@ -51,6 +62,7 @@ export function CrawlerSiteManager() {
   const [validateStates, setValidateStates] = useState<Record<string, ValidateStatus>>({})
   const [rowSaving, setRowSaving] = useState<Record<string, boolean>>({})
   const [overview, setOverview] = useState<CrawlerOverview | null>(null)
+  const [recentRuns, setRecentRuns] = useState<CrawlerRunSummary[]>([])
   const [allCrawlTriggering, setAllCrawlTriggering] = useState<Record<'incremental-crawl' | 'full-crawl', boolean>>({
     'incremental-crawl': false,
     'full-crawl': false,
@@ -148,13 +160,24 @@ export function CrawlerSiteManager() {
     }
   }, [])
 
+  const fetchRuns = useCallback(async () => {
+    try {
+      const res = await apiClient.get<{ data: CrawlerRunSummary[] }>('/admin/crawler/runs?limit=8')
+      setRecentRuns(res.data)
+    } catch {
+      // 非阻塞
+    }
+  }, [])
+
   useEffect(() => {
     void fetchOverview()
+    void fetchRuns()
     const timer = window.setInterval(() => {
       void fetchOverview()
+      void fetchRuns()
     }, 5000)
     return () => window.clearInterval(timer)
-  }, [fetchOverview])
+  }, [fetchOverview, fetchRuns])
 
   useEffect(() => {
     void hydrateRunningFromSites(sites.map((site) => site.key))
@@ -199,16 +222,46 @@ export function CrawlerSiteManager() {
 
     setAllCrawlTriggering((prev) => ({ ...prev, [type]: true }))
     try {
-      await apiClient.post('/admin/crawler/tasks', {
-        type,
+      await apiClient.post('/admin/crawler/runs', {
+        triggerType: 'all',
+        mode: type === 'full-crawl' ? 'full' : 'incremental',
       })
       showToast(type === 'full-crawl' ? '已触发全站全量采集' : '已触发全站增量采集', true)
       await fetchSites()
       await fetchOverview()
+      await fetchRuns()
     } catch {
       showToast(type === 'full-crawl' ? '全站全量采集触发失败' : '全站增量采集触发失败', false)
     } finally {
       setAllCrawlTriggering((prev) => ({ ...prev, [type]: false }))
+    }
+  }
+
+  async function handleTriggerBatchCrawl(type: 'full-crawl' | 'incremental-crawl') {
+    if (selected.size === 0) {
+      showToast('请先勾选要采集的源站', false)
+      return
+    }
+    try {
+      await apiClient.post('/admin/crawler/runs', {
+        triggerType: selected.size === 1 ? 'single' : 'batch',
+        mode: type === 'full-crawl' ? 'full' : 'incremental',
+        siteKeys: Array.from(selected),
+      })
+      showToast(type === 'full-crawl' ? '已触发批量全量采集' : '已触发批量增量采集', true)
+      await fetchRuns()
+    } catch {
+      showToast(type === 'full-crawl' ? '批量全量采集触发失败' : '批量增量采集触发失败', false)
+    }
+  }
+
+  async function handleCancelRun(runId: string) {
+    try {
+      await apiClient.post(`/admin/crawler/runs/${runId}/cancel`)
+      showToast('已发送中止请求', true)
+      await fetchRuns()
+    } catch {
+      showToast('中止批次失败', false)
     }
   }
 
@@ -350,6 +403,12 @@ export function CrawlerSiteManager() {
   return (
     <div>
       <CrawlerSiteOverviewStats data={overview} />
+      <CrawlerRunPanel
+        runs={recentRuns}
+        onCancel={(runId) => {
+          void handleCancelRun(runId)
+        }}
+      />
 
       <CrawlerSiteTopToolbar
         filters={filters}
@@ -370,6 +429,12 @@ export function CrawlerSiteManager() {
         }}
         onTriggerFull={() => {
           void handleTriggerCrawl('full-crawl')
+        }}
+        onTriggerBatchIncremental={() => {
+          void handleTriggerBatchCrawl('incremental-crawl')
+        }}
+        onTriggerBatchFull={() => {
+          void handleTriggerBatchCrawl('full-crawl')
         }}
         onExport={handleExport}
         onImport={handleImport}

@@ -3800,3 +3800,50 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 已同步更新治理记录文件。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-95 采集系统 Phase A（批量/全站/批次控制+超时兜底）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 13:40
+- **计划开始时间**：2026-03-20 13:45
+- **实际开始时间**：2026-03-20 13:47
+- **完成时间**：2026-03-20 14:09
+- **问题**：CHG-87 已支持单站采集，但缺少统一批次模型、批量/全站触发入口、任务中止控制与超时防卡死能力。
+- **影响的已完成任务**：CHG-87、CHG-91、CHG-92
+- **文件范围**：
+  - `src/api/db/migrations/010_crawler_runs_and_task_control.sql`（新增）
+  - `src/api/db/queries/crawlerRuns.ts`（新增）
+  - `src/api/db/queries/crawlerTasks.ts`
+  - `src/api/services/CrawlerRunService.ts`（新增）
+  - `src/api/routes/admin/crawler.ts`
+  - `src/api/workers/crawlerWorker.ts`
+  - `src/api/workers/crawlerScheduler.ts`
+  - `src/api/services/CrawlerService.ts`
+  - `src/components/admin/system/crawler-site/components/CrawlerRunPanel.tsx`（新增）
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar.tsx`
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+- **修复内容**：
+  - 新增 `crawler_runs` 批次模型，扩展 `crawler_tasks` 控制字段（`run_id/trigger_type/timeout_at/heartbeat_at/cancel_requested`）。
+  - 新增统一触发服务 `CrawlerRunService`，支持 `single/batch/all/schedule` 统一创建与入队。
+  - 新增批次接口：
+    - `POST /admin/crawler/runs`
+    - `GET /admin/crawler/runs`
+    - `GET /admin/crawler/runs/:id`
+    - `GET /admin/crawler/runs/:id/tasks`
+    - `POST /admin/crawler/runs/:id/cancel`
+    - `POST /admin/crawler/runs/:id/pause`
+    - `POST /admin/crawler/runs/:id/resume`
+  - 保持 CHG-87 兼容：`POST /admin/crawler/tasks` 仍可用；全站老返回结构不破坏。
+  - worker 增加 run 级控制处理：支持取消请求、暂停延迟重排队、任务状态回写 `cancelled/timeout`。
+  - scheduler 增加 timeout watchdog（每分钟标记超时任务），并将定时采集统一走 run service。
+  - 前端新增“批次状态面板”、批量增量/全量触发按钮、批次中止操作；不改原表格筛选/排序/列宽/持久化逻辑。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/api/crawler.test.ts`
+- **完成备注**：
+  - typecheck/lint 通过；定向单测 81/81 通过。
+  - 迁移 `010` 需在本机执行 `npm run migrate` 后生效（当前会话未直连本机 DB 执行迁移）。
+- **问题说明**：_（无）_

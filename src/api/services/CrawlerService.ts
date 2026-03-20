@@ -312,6 +312,7 @@ export class CrawlerService {
       hoursAgo?: number
       taskType?: 'full-crawl' | 'incremental-crawl'
       taskId?: string
+      shouldStop?: () => false | 'cancel' | 'timeout' | Promise<false | 'cancel' | 'timeout'>
       onLog?: (
         input: {
           level?: 'info' | 'warn' | 'error'
@@ -372,12 +373,24 @@ export class CrawlerService {
       await crawlerTasksQueries.updateTaskStatus(this.db, taskId, 'running')
 
       while (true) {
+        const stopReasonBeforePage = options.shouldStop ? await options.shouldStop() : false
+        if (stopReasonBeforePage === 'cancel') throw new Error('TASK_CANCELLED')
+        if (stopReasonBeforePage === 'timeout') throw new Error('TASK_TIMEOUT')
+        if (stopReasonBeforePage) {
+          throw new Error('TASK_CANCELLED')
+        }
         await emit('info', 'crawl.page.fetch.start', '开始拉取分页', { page })
         const items = await this.fetchPage(source, { page, hoursAgo: options.hoursAgo })
         await emit('info', 'crawl.page.fetch.done', '分页拉取完成', { page, items: items.length })
         if (items.length === 0) break
 
         for (const parsed of items) {
+          const stopReasonBeforeItem = options.shouldStop ? await options.shouldStop() : false
+          if (stopReasonBeforeItem === 'cancel') throw new Error('TASK_CANCELLED')
+          if (stopReasonBeforeItem === 'timeout') throw new Error('TASK_TIMEOUT')
+          if (stopReasonBeforeItem) {
+            throw new Error('TASK_CANCELLED')
+          }
           try {
             const { sourcesUpserted: s } = await this.upsertVideo(parsed)
             videosUpserted++

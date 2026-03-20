@@ -11,6 +11,7 @@ import { CrawlerService, getEnabledSources } from '@/api/services/CrawlerService
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
 import { createCrawlerTaskLog } from '@/api/db/queries/crawlerTaskLogs'
+import * as crawlerRunsQueries from '@/api/db/queries/crawlerRuns'
 
 // ── 任务类型 ──────────────────────────────────────────────────────
 
@@ -22,6 +23,8 @@ export interface CrawlJobData {
   siteKey?: string
   /** 已创建的任务 ID（单站触发时由 API 预创建） */
   taskId?: string
+  /** 批次 ID（批量/全部/定时触发） */
+  runId?: string
   /** 增量模式：只采集最近 N 小时更新的内容 */
   hoursAgo?: number
 }
@@ -38,7 +41,7 @@ export interface CrawlJobResult {
 // ── Worker 处理函数 ───────────────────────────────────────────────
 
 async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobResult> {
-  const { type, siteKey, taskId, hoursAgo } = job.data
+  const { type, siteKey, taskId, runId, hoursAgo } = job.data
   const start = Date.now()
   const crawlerService = new CrawlerService(db, es)
 
@@ -59,6 +62,7 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
           ...(details ?? {}),
           jobId: String(job.id),
           mode: type,
+          runId: runId ?? null,
         },
       })
     } catch (err) {
@@ -72,7 +76,38 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
     hoursAgo: hoursAgo ?? null,
   })
 
+  if (runId) {
+    const run = await crawlerRunsQueries.getRunById(db, runId)
+    if (run?.controlStatus === 'cancelling' || run?.controlStatus === 'cancelled') {
+      if (taskId) {
+        await crawlerTasksQueries.updateTaskStatus(db, taskId, 'cancelled', { reason: 'RUN_CANCELLED' })
+      }
+      await logTask('warn', 'worker.run.cancelled', '批次已取消，跳过任务执行')
+      await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
+      return { type, sites: siteKey ? [siteKey] : [], videosUpserted: 0, sourcesUpserted: 0, errors: 0, durationMs: 0 }
+    }
+
+    if (run?.controlStatus === 'pausing' || run?.controlStatus === 'paused') {
+      if (taskId) {
+        await crawlerTasksQueries.updateTaskStatus(db, taskId, 'pending', { reason: 'RUN_PAUSED_REQUEUE' })
+      }
+      await crawlerQueue.add(job.data, { delay: 30_000 })
+      await logTask('info', 'worker.run.paused', '批次已暂停，任务已延迟重排队', { delayMs: 30_000 })
+      return { type, sites: siteKey ? [siteKey] : [], videosUpserted: 0, sourcesUpserted: 0, errors: 0, durationMs: 0 }
+    }
+  }
+
   if (taskId) {
+    const task = await crawlerTasksQueries.getTaskById(db, taskId)
+    if (task?.cancelRequested) {
+      await crawlerTasksQueries.updateTaskStatus(db, taskId, 'cancelled', {
+        reason: 'CANCEL_REQUESTED',
+      })
+      if (runId) await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
+      await logTask('warn', 'worker.task.cancelled_before_start', '任务在启动前被取消')
+      return { type, sites: siteKey ? [siteKey] : [], videosUpserted: 0, sourcesUpserted: 0, errors: 0, durationMs: 0 }
+    }
+
     await crawlerTasksQueries.updateTaskStatus(db, taskId, 'running', {
       queueJobId: String(job.id),
     })
@@ -118,6 +153,18 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
           taskType: type,
           taskId: siteKey ? taskId : undefined,
           hoursAgo: type === 'incremental-crawl' ? (hoursAgo ?? 24) : undefined,
+          shouldStop: async () => {
+            if (!taskId) return false
+            const taskRow = await db.query<{ cancel_requested: boolean; timeout_at: string | null; status: string }>(
+              `SELECT cancel_requested, timeout_at, status FROM crawler_tasks WHERE id = $1`,
+              [taskId],
+            )
+            const row = taskRow.rows[0]
+            if (!row) return false
+            if (row.status === 'cancelled' || row.cancel_requested) return 'cancel'
+            if (row.timeout_at && new Date(row.timeout_at).getTime() < Date.now()) return 'timeout'
+            return false
+          },
           onLog: async (input) => {
             await logTask(input.level ?? 'info', input.stage, input.message, {
               source: source.name,
@@ -160,13 +207,26 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+    const cancelled = message.includes('TASK_CANCELLED')
+    const timedOut = message.includes('TASK_TIMEOUT')
     await logTask('error', 'worker.job.failed', '采集任务执行失败', { error: message })
     if (taskId) {
-      await crawlerTasksQueries.updateTaskStatus(db, taskId, 'failed', {
-        error: message,
-      })
+      if (cancelled) {
+        await crawlerTasksQueries.updateTaskStatus(db, taskId, 'cancelled', { error: message })
+      } else if (timedOut) {
+        await crawlerTasksQueries.updateTaskStatus(db, taskId, 'timeout', { error: message })
+      } else {
+        await crawlerTasksQueries.updateTaskStatus(db, taskId, 'failed', { error: message })
+      }
+    }
+    if (runId) {
+      await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
     }
     throw err
+  } finally {
+    if (runId) {
+      await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
+    }
   }
 }
 
@@ -187,8 +247,8 @@ export function registerCrawlerWorker(concurrency = 1): void {
 // ── 便捷入队函数 ──────────────────────────────────────────────────
 
 /** 添加全量采集任务到队列（可选指定单站 key） */
-export async function enqueueFullCrawl(siteKey?: string, taskId?: string): Promise<Bull.Job<CrawlJobData>> {
-  return crawlerQueue.add({ type: 'full-crawl', siteKey, taskId })
+export async function enqueueFullCrawl(siteKey?: string, taskId?: string, runId?: string): Promise<Bull.Job<CrawlJobData>> {
+  return crawlerQueue.add({ type: 'full-crawl', siteKey, taskId, runId })
 }
 
 /** 添加增量采集任务到队列（默认最近 24 小时，可选指定单站 key） */
@@ -196,6 +256,7 @@ export async function enqueueIncrementalCrawl(
   siteKey?: string,
   hoursAgo = 24,
   taskId?: string,
+  runId?: string,
 ): Promise<Bull.Job<CrawlJobData>> {
-  return crawlerQueue.add({ type: 'incremental-crawl', siteKey, taskId, hoursAgo })
+  return crawlerQueue.add({ type: 'incremental-crawl', siteKey, taskId, runId, hoursAgo })
 }

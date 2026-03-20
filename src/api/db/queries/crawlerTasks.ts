@@ -7,7 +7,7 @@ import type { Pool } from 'pg'
 
 // ── 类型 ──────────────────────────────────────────────────────────
 
-export type CrawlerTaskStatus = 'pending' | 'running' | 'done' | 'failed'
+export type CrawlerTaskStatus = 'pending' | 'running' | 'done' | 'failed' | 'cancelled' | 'timeout'
 export type CrawlerTaskType = 'full-crawl' | 'incremental-crawl' | 'verify-source' | 'verify-single'
 
 export interface CrawlerTask {
@@ -17,6 +17,11 @@ export interface CrawlerTask {
   targetUrl: string
   status: CrawlerTaskStatus
   retryCount: number
+  runId: string | null
+  triggerType: 'single' | 'batch' | 'all' | 'schedule' | null
+  timeoutAt: string | null
+  heartbeatAt: string | null
+  cancelRequested: boolean
   result: Record<string, unknown> | null
   scheduledAt: string
   finishedAt: string | null
@@ -38,6 +43,11 @@ interface DbCrawlerTaskRow {
   target_url: string
   status: CrawlerTaskStatus
   retry_count: number
+  run_id: string | null
+  trigger_type: 'single' | 'batch' | 'all' | 'schedule' | null
+  timeout_at: string | null
+  heartbeat_at: string | null
+  cancel_requested: boolean
   result: Record<string, unknown> | null
   scheduled_at: string
   finished_at: string | null
@@ -51,6 +61,11 @@ function mapTask(row: DbCrawlerTaskRow): CrawlerTask {
     targetUrl: row.target_url,
     status: row.status,
     retryCount: row.retry_count,
+    runId: row.run_id,
+    triggerType: row.trigger_type,
+    timeoutAt: row.timeout_at,
+    heartbeatAt: row.heartbeat_at,
+    cancelRequested: row.cancel_requested,
     result: row.result,
     scheduledAt: row.scheduled_at,
     finishedAt: row.finished_at,
@@ -66,13 +81,33 @@ export async function createTask(
     sourceSite: string
     targetUrl: string
     scheduledAt?: Date
+    runId?: string | null
+    triggerType?: 'single' | 'batch' | 'all' | 'schedule' | null
+    timeoutSeconds?: number | null
   }
 ): Promise<CrawlerTask> {
   const result = await db.query<DbCrawlerTaskRow>(
-    `INSERT INTO crawler_tasks (type, source_site, target_url, status, retry_count, scheduled_at)
-     VALUES ($1, $2, $3, 'pending', 0, COALESCE($4, NOW()))
+    `INSERT INTO crawler_tasks (
+       type, source_site, target_url, status, retry_count, scheduled_at,
+       run_id, trigger_type, timeout_at, heartbeat_at, cancel_requested
+     )
+     VALUES (
+       $1, $2, $3, 'pending', 0, COALESCE($4, NOW()),
+       $5, $6,
+       CASE WHEN $7::int IS NULL THEN NULL ELSE COALESCE($4, NOW()) + ($7::int * INTERVAL '1 second') END,
+       NULL,
+       false
+     )
      RETURNING *`,
-    [input.type, input.sourceSite, input.targetUrl, input.scheduledAt ?? null]
+    [
+      input.type,
+      input.sourceSite,
+      input.targetUrl,
+      input.scheduledAt ?? null,
+      input.runId ?? null,
+      input.triggerType ?? null,
+      input.timeoutSeconds ?? null,
+    ],
   )
   return mapTask(result.rows[0])
 }
@@ -85,13 +120,14 @@ export async function updateTaskStatus(
   status: CrawlerTaskStatus,
   result?: Record<string, unknown>
 ): Promise<void> {
-  const finishedAt = (status === 'done' || status === 'failed') ? new Date() : null
+  const finishedAt = (status === 'done' || status === 'failed' || status === 'cancelled' || status === 'timeout') ? new Date() : null
   await db.query(
     `UPDATE crawler_tasks
-     SET status = $1,
+     SET status = $1::text,
          result = COALESCE($2::jsonb, result),
          finished_at = $3,
-         retry_count = CASE WHEN $1 = 'failed' THEN retry_count + 1 ELSE retry_count END
+         heartbeat_at = CASE WHEN $1::text = 'running' THEN NOW() ELSE heartbeat_at END,
+         retry_count = CASE WHEN $1::text IN ('failed', 'timeout') THEN retry_count + 1 ELSE retry_count END
      WHERE id = $4`,
     [status, result ? JSON.stringify(result) : null, finishedAt, id]
   )
@@ -111,10 +147,59 @@ export async function updateTaskProgress(
   await db.query(
     `UPDATE crawler_tasks
      SET status = 'running',
+         heartbeat_at = NOW(),
          result = COALESCE(result, '{}'::jsonb) || $2::jsonb
      WHERE id = $1`,
     [id, JSON.stringify(progress)],
   )
+}
+
+export async function requestTaskCancel(db: Pool, id: string): Promise<void> {
+  await db.query(
+    `UPDATE crawler_tasks
+     SET cancel_requested = true
+     WHERE id = $1`,
+    [id],
+  )
+}
+
+export async function cancelPendingTasksByRun(db: Pool, runId: string): Promise<number> {
+  const result = await db.query(
+    `UPDATE crawler_tasks
+     SET status = 'cancelled',
+         finished_at = NOW(),
+         cancel_requested = true,
+         result = COALESCE(result, '{}'::jsonb) || jsonb_build_object('reason', 'run_cancelled')
+     WHERE run_id = $1
+       AND status = 'pending'`,
+    [runId],
+  )
+  return result.rowCount ?? 0
+}
+
+export async function requestCancelRunningTasksByRun(db: Pool, runId: string): Promise<number> {
+  const result = await db.query(
+    `UPDATE crawler_tasks
+     SET cancel_requested = true,
+         result = COALESCE(result, '{}'::jsonb) || jsonb_build_object('cancelRequestedAt', NOW())
+     WHERE run_id = $1
+       AND status = 'running'`,
+    [runId],
+  )
+  return result.rowCount ?? 0
+}
+
+export async function markTimedOutRunningTasks(db: Pool): Promise<number> {
+  const result = await db.query(
+    `UPDATE crawler_tasks
+     SET status = 'timeout',
+         finished_at = NOW(),
+         result = COALESCE(result, '{}'::jsonb) || jsonb_build_object('error', 'TASK_TIMEOUT')
+     WHERE status IN ('pending', 'running')
+       AND timeout_at IS NOT NULL
+       AND timeout_at < NOW()`,
+  )
+  return result.rowCount ?? 0
 }
 
 // ── 查询任务列表 ──────────────────────────────────────────────────
@@ -152,6 +237,35 @@ export async function listTasks(
   return {
     rows: dataResult.rows.map(mapTask),
     total: parseInt(countResult.rows[0].total, 10),
+  }
+}
+
+export async function listTasksByRunId(
+  db: Pool,
+  runId: string,
+  params: { limit?: number; offset?: number } = {},
+): Promise<{ rows: CrawlerTask[]; total: number }> {
+  const limit = params.limit ?? 200
+  const offset = params.offset ?? 0
+  const [dataResult, countResult] = await Promise.all([
+    db.query<DbCrawlerTaskRow>(
+      `SELECT *
+       FROM crawler_tasks
+       WHERE run_id = $1
+       ORDER BY scheduled_at DESC
+       LIMIT $2 OFFSET $3`,
+      [runId, limit, offset],
+    ),
+    db.query<{ total: string }>(
+      `SELECT COUNT(*)::text AS total
+       FROM crawler_tasks
+       WHERE run_id = $1`,
+      [runId],
+    ),
+  ])
+  return {
+    rows: dataResult.rows.map(mapTask),
+    total: parseInt(countResult.rows[0]?.total ?? '0', 10) || 0,
   }
 }
 
@@ -229,6 +343,17 @@ export async function getLatestTaskBySite(
     [siteKey],
   )
 
+  return result.rows[0] ? mapTask(result.rows[0]) : null
+}
+
+export async function getTaskById(
+  db: Pool,
+  taskId: string,
+): Promise<CrawlerTask | null> {
+  const result = await db.query<DbCrawlerTaskRow>(
+    `SELECT * FROM crawler_tasks WHERE id = $1`,
+    [taskId],
+  )
   return result.rows[0] ? mapTask(result.rows[0]) : null
 }
 
