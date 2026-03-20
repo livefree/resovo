@@ -2618,3 +2618,30 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 定向单测 4/4 通过；typecheck/lint 通过。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-53 列宽交互重构：表头分隔拖拽调节
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-19 18:00
+- **计划开始时间**：2026-03-19 18:01
+- **实际开始时间**：2026-03-19 18:02
+- **完成时间**：2026-03-19 18:05
+- **问题**：列宽调节应遵循数据表通用人机交互，不应在“显示列”面板通过数字输入配置。
+- **影响的已完成任务**：CHG-52
+- **文件范围**：
+  - `src/components/admin/system/CrawlerSiteManager.tsx`
+  - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+- **修复内容**：
+  - 表头每列右侧新增拖拽分隔条（`cursor-col-resize`），按鼠标拖拽实时调整列宽。
+  - 拖拽时阻断排序点击冒泡，避免误触排序。
+  - “显示列”面板移除宽度输入，仅保留列显隐，并提示“可拖拽调宽”。
+  - 列宽继续持久化，重进页面恢复。
+- **测试要求**：
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run typecheck`
+  - `npm run lint`
+- **完成备注**：
+  - 新增拖拽调宽单测；定向单测 5/5 通过；typecheck/lint 通过。
+- **问题说明**：_（无）_

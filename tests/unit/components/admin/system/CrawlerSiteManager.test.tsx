@@ -110,4 +110,18 @@ describe('CrawlerSiteManager', () => {
     const apiHeader = screen.getAllByText('API 地址')[0]?.closest('th')
     expect(apiHeader?.className).toContain('hidden')
   })
+
+  it('resizes column width by dragging header separator', async () => {
+    render(<CrawlerSiteManager />)
+    await screen.findByText('Alpha 源')
+
+    const nameHeader = screen.getByText('名称 / Key').closest('th')
+    expect(nameHeader?.getAttribute('style') ?? '').toContain('width: 220px')
+
+    fireEvent.mouseDown(screen.getByTestId('resize-handle-name'), { clientX: 100 })
+    fireEvent.mouseMove(window, { clientX: 160 })
+    fireEvent.mouseUp(window)
+
+    expect(nameHeader?.getAttribute('style') ?? '').toContain('width: 280px')
+  })
 })
