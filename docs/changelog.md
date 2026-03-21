@@ -1776,3 +1776,14 @@
 - **数据库变更**：无
 - **注意事项**：
   - 控制台已可直接执行 freeze/stop-all，执行后只做局部监控刷新，不触发表格上下文重置。
+
+## [CHG-118] B1 控制台容器拆分与 query model 收拢
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 02:10
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/components/CrawlerConsoleMonitorSection.tsx` — 新增监控容器组件，独立承载监控轮询与任务控制 UI。
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx` — 站点管理容器移除 monitor 状态，保留表格与操作状态。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 监控区轮询与表格状态已容器级解耦，减少高频刷新对筛选/排序/列宽上下文的影响风险。

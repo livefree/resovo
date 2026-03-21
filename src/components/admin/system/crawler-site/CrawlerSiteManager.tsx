@@ -13,14 +13,10 @@ import { useCrawlerSiteColumns } from '@/components/admin/system/crawler-site/ho
 import { useCrawlerSiteSelection } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteSelection'
 import { useCrawlerSites } from '@/components/admin/system/crawler-site/hooks/useCrawlerSites'
 import { useCrawlerSiteCrawlTasks } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteCrawlTasks'
-import { useCrawlerMonitor } from '@/components/admin/system/crawler-site/hooks/useCrawlerMonitor'
 import { CrawlerSiteTable } from '@/components/admin/system/crawler-site/components/CrawlerSiteTable'
 import { CrawlerSiteTopToolbar } from '@/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar'
 import { ActiveFilterChipsBar } from '@/components/admin/system/crawler-site/components/ActiveFilterChipsBar'
-import { CrawlerSiteOverviewStats } from '@/components/admin/system/crawler-site/components/CrawlerSiteOverviewStats'
-import { CrawlerSystemStatusStrip } from '@/components/admin/system/crawler-site/components/CrawlerSystemStatusStrip'
-import { AutoCrawlSettingsPanel } from '@/components/admin/system/crawler-site/components/AutoCrawlSettingsPanel'
-import { CrawlerRunPanel } from '@/components/admin/system/crawler-site/components/CrawlerRunPanel'
+import { CrawlerConsoleMonitorSection } from '@/components/admin/system/crawler-site/components/CrawlerConsoleMonitorSection'
 import {
   CrawlerSiteFormDialog,
   EMPTY_SITE_FORM,
@@ -78,20 +74,6 @@ export function CrawlerSiteManager() {
   } = useCrawlerSiteColumns()
   const { sites, loading, fetchSites } = useCrawlerSites()
   const {
-    overview,
-    systemStatus,
-    runningRuns,
-    recentRuns,
-    refreshMonitor,
-    pauseRun,
-    resumeRun,
-    cancelRun,
-    stopAll,
-    setFreezeEnabled,
-    stopAllPending,
-    freezeSwitchPending,
-  } = useCrawlerMonitor({ showToast })
-  const {
     runningBySite,
     runningModeBySite,
     latestTaskBySite,
@@ -99,9 +81,6 @@ export function CrawlerSiteManager() {
     triggerSiteCrawl,
   } = useCrawlerSiteCrawlTasks({
     refreshSitesSilently: () => fetchSites({ silent: true }),
-    onTaskSettled: async () => {
-      await refreshMonitor()
-    },
     showToast,
   })
 
@@ -205,7 +184,6 @@ export function CrawlerSiteManager() {
         mode: type === 'full-crawl' ? 'full' : 'incremental',
       })
       showToast(type === 'full-crawl' ? '已触发全站全量采集' : '已触发全站增量采集', true)
-      await refreshMonitor()
     } catch {
       showToast(type === 'full-crawl' ? '全站全量采集触发失败' : '全站增量采集触发失败', false)
     } finally {
@@ -225,7 +203,6 @@ export function CrawlerSiteManager() {
         siteKeys: Array.from(selected),
       })
       showToast(type === 'full-crawl' ? '已触发批量全量采集' : '已触发批量增量采集', true)
-      await refreshMonitor()
     } catch {
       showToast(type === 'full-crawl' ? '批量全量采集触发失败' : '批量增量采集触发失败', false)
     }
@@ -368,34 +345,10 @@ export function CrawlerSiteManager() {
 
   return (
     <div>
-      <CrawlerSiteOverviewStats data={overview} />
-      <CrawlerSystemStatusStrip
-        data={systemStatus}
-        stopAllPending={stopAllPending}
-        freezeSwitchPending={freezeSwitchPending}
-        onStopAll={() => { void stopAll() }}
-        onSetFreezeEnabled={(enabled) => { void setFreezeEnabled(enabled) }}
-      />
-      <AutoCrawlSettingsPanel sites={sites} showToast={showToast} onConfigChange={setAutoConfig} />
-      <section className="mb-2 rounded-lg border border-[var(--border)] bg-[var(--bg2)] px-3 py-2" data-testid="crawler-run-monitor-header">
-        <h3 className="text-sm font-semibold text-[var(--text)]">采集批次状态</h3>
-        <p className="mt-1 text-xs text-[var(--muted)]">任务运行中的监控与控制区域（暂停 / 恢复 / 中止）。</p>
-      </section>
-      <CrawlerRunPanel
-        title="当前任务（运行/排队/暂停）"
-        emptyText="当前没有运行中的采集任务"
-        runs={runningRuns}
-        onCancel={(runId) => { void cancelRun(runId) }}
-        onPause={(runId) => { void pauseRun(runId) }}
-        onResume={(runId) => { void resumeRun(runId) }}
-      />
-      <CrawlerRunPanel
-        title="最近结果"
-        emptyText="暂无最近完成任务"
-        runs={recentRuns.slice(0, 8)}
-        onCancel={(runId) => { void cancelRun(runId) }}
-        onPause={(runId) => { void pauseRun(runId) }}
-        onResume={(runId) => { void resumeRun(runId) }}
+      <CrawlerConsoleMonitorSection
+        sites={sites}
+        onAutoConfigChange={setAutoConfig}
+        showToast={showToast}
       />
 
       <CrawlerSiteTopToolbar

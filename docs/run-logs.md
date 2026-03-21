@@ -655,3 +655,15 @@
   - README 补充 freeze API 与控制台操作说明。
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
 - **后续**：进入 CHG-118（监控区/表格区 query model 解耦）。
+
+## [LOG-20260321-0210-01] CHG-118 监控区/表格区 query model 解耦完成
+- **时间**：2026-03-21 02:10
+- **类型**：INFO
+- **关联任务**：CHG-118
+- **内容**：控制台容器拆分完成，监控轮询不再直接驱动站点表格容器状态。
+- **处理动作**：
+  - 新增 `CrawlerConsoleMonitorSection` 承载概览/系统状态/运行批次监控。
+  - `CrawlerSiteManager` 移除 `useCrawlerMonitor` 直接依赖，仅保留站点管理与表格交互状态。
+  - 全站/批量触发改为依赖监控区独立轮询回收任务状态。
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/AdminCrawlerTabs.test.tsx tests/unit/api/crawler.test.ts`
+- **后续**：进入 CHG-119（健康状态条 + 深链完善）。

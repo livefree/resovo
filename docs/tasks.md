@@ -4489,25 +4489,52 @@ _（任务 review 通过后移入此处）_
 
 #### CHG-118 B1 控制台容器拆分与 query model 收拢
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-21 09:10
 - **计划开始时间**：2026-03-21 13:30
 - **实际开始时间**：2026-03-21 02:15
-- **完成时间**：待定
+- **完成时间**：2026-03-21 02:10
 - **问题**：监控状态与表格状态仍由同一页面容器承载，重渲染边界不够清晰，后续扩展风险高。
 - **影响的已完成任务**：CHG-117
-- **文件范围（计划）**：
+- **文件范围**：
   - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerConsoleMonitorSection.tsx`
   - `src/components/admin/system/crawler-site/hooks/useCrawlerMonitor.ts`
-  - `src/components/admin/system/crawler-site/hooks/useCrawlerSites.ts`
-  - `src/components/admin/system/crawler-site/components/*`（按需拆分）
+  - `src/components/admin/system/crawler-site/services/*`（调用链保持不变）
+- **修复内容**：
+  - 新增 `CrawlerConsoleMonitorSection` 承载 overview/system-status/run-panels 轮询逻辑。
+  - `CrawlerSiteManager` 移除 `useCrawlerMonitor` 直接依赖，监控轮询不再驱动表格容器重渲染。
+  - 全站/批量触发后改为依赖监控区独立轮询回收状态，不触发表格上下文重置。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/AdminCrawlerTabs.test.tsx tests/unit/api/crawler.test.ts`
+- **完成备注**：
+  - 已完成“监控区独立轮询、表格按需刷新”的容器级解耦。
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-119 D1 健康状态条 + 深链完善
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-03-21 09:10
+- **计划开始时间**：2026-03-21 15:00
+- **实际开始时间**：2026-03-21 02:20
+- **完成时间**：待定
+- **问题**：需要收敛最后一批可观测性细节，保证健康状态条、任务深链、最近结果口径统一可用。
+- **影响的已完成任务**：CHG-118
+- **文件范围（计划）**：
+  - `src/components/admin/system/crawler-site/components/CrawlerRunPanel.tsx`
+  - `src/components/admin/AdminCrawlerTabs.tsx`
+  - `src/components/admin/AdminCrawlerPanel.tsx`
+  - `docs/admin_crawl_control_center_plan.md`（必要时）
 - **修复内容（计划）**：
-  - 拆分控制台容器状态边界：监控区 query model 与站点表格 query model 解耦。
-  - 明确“监控高频轮询仅更新监控区，表格仅按需刷新”的调用路径。
-  - 通过 memo/回调稳定引用，减少监控轮询对表格交互状态的干扰风险。
+  - 校准健康状态条与任务深链文案，补齐“从运行卡片到任务审计”的操作一致性。
+  - 细化最近结果区展示与可追踪入口。
 - **测试要求（计划）**：
   - `npm run typecheck`
   - `npm run lint`
-  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `npm run test:run -- tests/unit/components/admin/AdminCrawlerTabs.test.tsx`
 - **完成备注**：待实施
 - **问题说明**：_（无）_
