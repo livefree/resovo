@@ -4274,3 +4274,42 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 仅文档更新，不涉及业务逻辑变更。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-111 采集失控止血（调度-执行解耦 + 全局 stop-all）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 18:05
+- **计划开始时间**：2026-03-20 18:06
+- **实际开始时间**：2026-03-20 18:06
+- **完成时间**：2026-03-20 18:40
+- **问题**：后台出现“面板显示无运行任务，但 worker 持续采集”失控，来源疑似 scheduler/queue 遗留链路。
+- **影响的已完成任务**：CHG-109、CHG-110
+- **文件范围**：
+  - `src/api/workers/crawlerScheduler.ts`
+  - `src/api/server.ts`
+  - `src/api/routes/admin/crawler.ts`
+  - `src/api/workers/crawlerWorker.ts`
+  - `src/api/db/queries/crawlerTasks.ts`
+  - `src/api/db/queries/crawlerRuns.ts`
+  - `src/types/system.types.ts`
+  - `scripts/stop-all-crawls.ts`
+  - `package.json`
+  - `README.md`
+  - `tests/unit/api/crawler.test.ts`
+- **修复内容**：
+  - scheduler 改为独立 60s tick，仅创建 run，不再向 crawler queue 写可被 worker 误执行的占位 crawl job。
+  - API server 默认关闭 scheduler（需显式 `CRAWLER_SCHEDULER_ENABLED=true` 才开启）。
+  - `POST /admin/crawler/tasks` 全站触发路径改为统一 run/task 模型。
+  - 新增 `POST /admin/crawler/stop-all`（全局冻结 + 取消活跃任务 + 清理 repeatable tick）。
+  - worker 新增全局冻结检查（启动前/执行安全点）。
+  - 新增 `npm run crawler:stop-all` 管理命令。
+  - README 增加 stop-all 与 scheduler 开关说明。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/api/crawler-worker.test.ts`
+- **完成备注**：
+  - 受本地沙箱权限限制（Postgres/Redis 连接 EPERM），`npm run crawler:stop-all` 在当前环境无法实际连库执行；已通过单元测试验证代码链路。
+- **问题说明**：_（无）_

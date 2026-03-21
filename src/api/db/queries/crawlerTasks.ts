@@ -190,6 +190,39 @@ export async function requestCancelRunningTasksByRun(db: Pool, runId: string): P
   return result.rowCount ?? 0
 }
 
+export async function cancelAllActiveTasks(db: Pool): Promise<{ cancelledPending: number; cancelledPaused: number; signaledRunning: number }> {
+  const cancelledPendingResult = await db.query(
+    `UPDATE crawler_tasks
+     SET status = 'cancelled',
+         finished_at = NOW(),
+         cancel_requested = true,
+         result = COALESCE(result, '{}'::jsonb) || jsonb_build_object('reason', 'stop_all_pending_cancelled')
+     WHERE status = 'pending'`,
+  )
+
+  const cancelledPausedResult = await db.query(
+    `UPDATE crawler_tasks
+     SET status = 'cancelled',
+         finished_at = NOW(),
+         cancel_requested = true,
+         result = COALESCE(result, '{}'::jsonb) || jsonb_build_object('reason', 'stop_all_paused_cancelled')
+     WHERE status = 'paused'`,
+  )
+
+  const signaledRunningResult = await db.query(
+    `UPDATE crawler_tasks
+     SET cancel_requested = true,
+         result = COALESCE(result, '{}'::jsonb) || jsonb_build_object('cancelRequestedAt', NOW(), 'reason', 'stop_all_running_signal')
+     WHERE status = 'running'`,
+  )
+
+  return {
+    cancelledPending: cancelledPendingResult.rowCount ?? 0,
+    cancelledPaused: cancelledPausedResult.rowCount ?? 0,
+    signaledRunning: signaledRunningResult.rowCount ?? 0,
+  }
+}
+
 export async function markTimedOutRunningTasks(db: Pool): Promise<number> {
   const result = await db.query(
     `UPDATE crawler_tasks

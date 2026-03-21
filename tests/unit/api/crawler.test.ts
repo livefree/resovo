@@ -58,6 +58,17 @@ vi.mock('@/api/services/VerifyService', () => ({
   })),
 }))
 
+vi.mock('@/api/services/CrawlerRunService', () => ({
+  CrawlerRunService: vi.fn().mockImplementation(() => ({
+    createAndEnqueueRun: vi.fn().mockResolvedValue({
+      runId: 'run-42',
+      taskIds: ['task-1'],
+      enqueuedSiteKeys: ['site-a'],
+      skippedSiteKeys: [],
+    }),
+  })),
+}))
+
 // ── Mock Bull 队列（不需要真实 Redis）──────────────────────────────
 
 const mockJobAdd = vi.fn()
@@ -673,7 +684,12 @@ describe('CRAWLER-04: 管理后台接口', () => {
       body: JSON.stringify({ type: 'full-crawl' }),
     })
     expect(res.statusCode).toBe(202)
-    expect(res.json().data).toMatchObject({ type: 'full-crawl', jobId: 'job-42' })
+    expect(res.json().data).toMatchObject({
+      type: 'full-crawl',
+      runId: 'run-42',
+      siteKey: null,
+      enqueuedSiteKeys: ['site-a'],
+    })
   })
 
   it('POST /admin/crawler/tasks：admin 触发 incremental-crawl 返回 202', async () => {
@@ -684,8 +700,11 @@ describe('CRAWLER-04: 管理后台接口', () => {
       body: JSON.stringify({ type: 'incremental-crawl', hoursAgo: 6 }),
     })
     expect(res.statusCode).toBe(202)
-    expect(mockJobAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'incremental-crawl', hoursAgo: 6 })
+    expect(res.json().data).toMatchObject(
+      expect.objectContaining({
+        type: 'incremental-crawl',
+        runId: 'run-42',
+      })
     )
   })
 

@@ -25,6 +25,7 @@ export type SystemSettingKey =
   | 'auto_crawl_conflict_policy'
   | 'auto_crawl_per_site_overrides'
   | 'auto_crawl_last_trigger_date'
+  | 'crawler_global_freeze'
   | 'config_file'
   | 'config_file_url'
 

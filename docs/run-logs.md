@@ -594,3 +594,11 @@
 - **内容**：README 已补充采集控制台入口、暂停/恢复/中止位置与操作说明。
 - **处理动作**：更新后台模块命名描述；新增“触发与控制采集任务”章节及 run 控制 API 调试示例。
 - **后续**：可按文档直接执行 run 级控制联调。
+
+## [LOG-20260320-1840-01] CHG-111 采集失控止血完成
+- **时间**：2026-03-20 18:40
+- **类型**：INFO
+- **关联任务**：CHG-111
+- **内容**：定位并修复“scheduler 占位任务被 crawler worker 误执行”导致的持续自动采集与监控失真问题。
+- **处理动作**：scheduler 改为独立 tick（不再写 crawler queue 占位 crawl job）；`/admin/crawler/tasks` 全站触发收口到 run 模型；新增 `POST /admin/crawler/stop-all` 与 `npm run crawler:stop-all`；worker 增加全局冻结检查。
+- **后续**：上线后先执行一次 stop-all 并确认 `crawler_runs` 与 `crawler_tasks` 活跃状态归零，再按需手动开启 `CRAWLER_SCHEDULER_ENABLED=true`。

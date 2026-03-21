@@ -73,7 +73,12 @@ async function start() {
 
   registerVerifyWorker()
   registerCrawlerWorker()
-  registerCrawlerScheduler()
+  const schedulerEnabled = process.env.CRAWLER_SCHEDULER_ENABLED === 'true'
+  if (schedulerEnabled) {
+    registerCrawlerScheduler()
+  } else {
+    process.stderr.write('[crawler-scheduler] disabled (set CRAWLER_SCHEDULER_ENABLED=true to enable)\n')
+  }
 
   fastify.get('/v1/health', async (_request, reply) => {
     return reply.send({ status: 'ok', timestamp: new Date().toISOString() })

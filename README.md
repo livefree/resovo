@@ -152,6 +152,7 @@ VALUES (
    - `暂停`：暂停后不再继续后续步骤，进入 `paused`。
    - `恢复`：从暂停状态恢复执行。
    - `中止`：停止该批次后续执行，进入 `cancelled`（已完成结果保留）。
+4. 全局止血：如发生任务失控，可调用 `stop-all`（开启全局冻结 + 取消活跃任务）。
 
 手动触发方式：
 1. 全站触发：在工具栏点击「全站增量采集」或「全站全量采集」。
@@ -195,6 +196,25 @@ curl -X POST 'http://localhost:4000/v1/admin/crawler/runs/<runId>/resume' \
 # 中止批次
 curl -X POST 'http://localhost:4000/v1/admin/crawler/runs/<runId>/cancel' \
   -H 'Authorization: Bearer <admin_access_token>'
+
+# 立即停止所有采集（开启全局冻结 + 取消活跃任务 + 清理自动 tick）
+curl -X POST 'http://localhost:4000/v1/admin/crawler/stop-all' \
+  -H 'Authorization: Bearer <admin_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"freeze":true,"removeRepeatableTick":true}'
+```
+
+命令行止血（本地开发）：
+
+```bash
+npm run crawler:stop-all
+```
+
+调度器默认关闭（避免开发阶段误触发自动采集），仅在显式开启时运行：
+
+```bash
+# .env.local
+CRAWLER_SCHEDULER_ENABLED=true
 ```
 
 ### 一键清空已抓取数据（测试用）

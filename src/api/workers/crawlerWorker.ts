@@ -12,6 +12,7 @@ import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
 import { createCrawlerTaskLog } from '@/api/db/queries/crawlerTaskLogs'
 import * as crawlerRunsQueries from '@/api/db/queries/crawlerRuns'
+import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 
 // ── 任务类型 ──────────────────────────────────────────────────────
 
@@ -44,6 +45,18 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
   const { type, siteKey, taskId, runId, hoursAgo } = job.data
   const start = Date.now()
   const crawlerService = new CrawlerService(db, es)
+  let freezeCache: { value: boolean; checkedAt: number } = { value: false, checkedAt: 0 }
+
+  const isGlobalFreezeEnabled = async () => {
+    const now = Date.now()
+    if (now - freezeCache.checkedAt < 3000) return freezeCache.value
+    const freeze = await systemSettingsQueries.getSetting(db, 'crawler_global_freeze')
+    freezeCache = {
+      value: freeze === 'true',
+      checkedAt: now,
+    }
+    return freezeCache.value
+  }
 
   const logTask = async (
     level: 'info' | 'warn' | 'error',
@@ -75,6 +88,15 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
     siteKey: siteKey ?? null,
     hoursAgo: hoursAgo ?? null,
   })
+
+  if (await isGlobalFreezeEnabled()) {
+    if (taskId) {
+      await crawlerTasksQueries.updateTaskStatus(db, taskId, 'cancelled', { reason: 'GLOBAL_FREEZE' })
+    }
+    await logTask('warn', 'worker.global.freeze', '全局采集冻结已开启，跳过任务执行')
+    if (runId) await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
+    return { type, sites: siteKey ? [siteKey] : [], videosUpserted: 0, sourcesUpserted: 0, errors: 0, durationMs: 0 }
+  }
 
   if (runId) {
     const run = await crawlerRunsQueries.getRunById(db, runId)
@@ -154,6 +176,7 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
           taskId: siteKey ? taskId : undefined,
           hoursAgo: type === 'incremental-crawl' ? (hoursAgo ?? 24) : undefined,
           shouldStop: async () => {
+            if (await isGlobalFreezeEnabled()) return 'cancel'
             if (!taskId) return false
             const taskRow = await db.query<{ cancel_requested: boolean; timeout_at: string | null; status: string }>(
               `SELECT cancel_requested, timeout_at, status FROM crawler_tasks WHERE id = $1`,

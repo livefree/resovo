@@ -18,8 +18,7 @@ import {
   listTasksByRunId,
   cancelPendingTasksByRun,
   requestCancelRunningTasksByRun,
-  createTask,
-  updateTaskStatus,
+  cancelAllActiveTasks,
   findActiveTaskBySite,
   getLatestTaskBySite,
   getLatestTasksBySites,
@@ -30,9 +29,8 @@ import {
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import * as crawlerRunsQueries from '@/api/db/queries/crawlerRuns'
 import { enqueueVerifySingle } from '@/api/workers/verifyWorker'
-import { enqueueFullCrawl, enqueueIncrementalCrawl } from '@/api/workers/crawlerWorker'
 import { es } from '@/api/lib/elasticsearch'
-import { ensureCrawlerQueueReady } from '@/api/lib/queue'
+import { crawlerQueue } from '@/api/lib/queue'
 import { createCrawlerTaskLog, listCrawlerTaskLogs } from '@/api/db/queries/crawlerTaskLogs'
 import { CrawlerRunService } from '@/api/services/CrawlerRunService'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
@@ -248,12 +246,23 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      if (type === 'full-crawl') {
-        const job = await enqueueFullCrawl(siteKey)
-        return reply.code(202).send({ data: { jobId: job.id, type, siteKey } })
-      }
-      const job = await enqueueIncrementalCrawl(siteKey, hoursAgo ?? 24)
-      return reply.code(202).send({ data: { jobId: job.id, type, siteKey } })
+      const createdBy = (request.user as { userId?: string } | undefined)?.userId ?? null
+      const result = await runService.createAndEnqueueRun({
+        triggerType: 'all',
+        mode: type === 'full-crawl' ? 'full' : 'incremental',
+        hoursAgo: hoursAgo ?? 24,
+        createdBy,
+      })
+      return reply.code(202).send({
+        data: {
+          runId: result.runId,
+          taskIds: result.taskIds,
+          type,
+          siteKey: null,
+          enqueuedSiteKeys: result.enqueuedSiteKeys,
+          skippedSiteKeys: result.skippedSiteKeys,
+        },
+      })
     } catch (err) {
       return reply.code(503).send({
         error: {
@@ -263,6 +272,47 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
         },
       })
     }
+  })
+
+  // ── POST /admin/crawler/stop-all — 全局止血 ────────────────
+  fastify.post('/admin/crawler/stop-all', { preHandler: auth }, async (request, reply) => {
+    const BodySchema = z.object({
+      freeze: z.boolean().default(true),
+      removeRepeatableTick: z.boolean().default(true),
+    })
+    const parsed = BodySchema.safeParse(request.body ?? {})
+    if (!parsed.success) {
+      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
+    }
+    const { freeze, removeRepeatableTick } = parsed.data
+
+    if (freeze) {
+      await systemSettingsQueries.setSetting(db, 'crawler_global_freeze', 'true')
+    }
+
+    const runMarked = await crawlerRunsQueries.requestCancelAllActiveRuns(db)
+    const taskChanges = await cancelAllActiveTasks(db)
+
+    if (removeRepeatableTick) {
+      try {
+        const repeatables = await crawlerQueue.getRepeatableJobs()
+        for (const repeat of repeatables) {
+          if (repeat.id === 'auto-crawl-tick' || repeat.key.includes('auto-crawl-tick')) {
+            await crawlerQueue.removeRepeatableByKey(repeat.key)
+          }
+        }
+      } catch (err) {
+        fastify.log.warn({ err }, 'failed to remove crawler repeatable tick')
+      }
+    }
+
+    return reply.send({
+      data: {
+        freezeEnabled: freeze,
+        markedRuns: runMarked,
+        ...taskChanges,
+      },
+    })
   })
 
   // ── POST /admin/crawler/runs — 统一触发入口 ────────────────

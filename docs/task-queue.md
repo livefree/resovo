@@ -826,3 +826,19 @@
    - 实际开始：2026-03-20 17:53
    - 完成时间：2026-03-20 17:54
    - 验收要点：后台入口、按钮语义、触发方式、API 调试示例齐全
+
+## [SEQ-20260320-28] 采集失控止血（调度与执行解耦）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 18:05
+- **最后更新时间**：2026-03-20 18:40
+- **目标**：停止“面板空闲但 worker 持续跑任务”的失控态，先止血再恢复可控
+- **范围**：`src/api/workers/crawlerScheduler.ts`、`src/api/routes/admin/crawler.ts`、`src/api/workers/crawlerWorker.ts`、`src/api/db/queries/*`、`scripts/stop-all-crawls.ts`
+- **依赖**：`CHG-109`、`CHG-110` 已完成
+
+### 任务列表（按执行顺序）
+1. CHG-111 — 调度-执行解耦 + stop-all（状态：✅ 已完成）
+   - 创建时间：2026-03-20 18:05
+   - 计划开始：2026-03-20 18:06
+   - 实际开始：2026-03-20 18:06
+   - 完成时间：2026-03-20 18:40
+   - 验收要点：scheduler 不再向 crawler queue 投占位 crawl job；`/admin/crawler/tasks` 全站触发走 run 模型；新增 stop-all（API + 命令）；typecheck/lint/关键单测通过

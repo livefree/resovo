@@ -364,6 +364,10 @@ export function CrawlerSiteManager() {
     <div>
       <CrawlerSiteOverviewStats data={overview} />
       <AutoCrawlSettingsPanel sites={sites} showToast={showToast} onConfigChange={setAutoConfig} />
+      <section className="mb-2 rounded-lg border border-[var(--border)] bg-[var(--bg2)] px-3 py-2" data-testid="crawler-run-monitor-header">
+        <h3 className="text-sm font-semibold text-[var(--text)]">采集批次状态</h3>
+        <p className="mt-1 text-xs text-[var(--muted)]">任务运行中的监控与控制区域（暂停 / 恢复 / 中止）。</p>
+      </section>
       <CrawlerRunPanel
         title="当前任务（运行/排队/暂停）"
         emptyText="当前没有运行中的采集任务"

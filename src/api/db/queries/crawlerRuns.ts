@@ -176,6 +176,17 @@ export async function updateRunControlStatus(
   )
 }
 
+export async function requestCancelAllActiveRuns(db: Pool): Promise<number> {
+  const result = await db.query(
+    `UPDATE crawler_runs
+     SET control_status = 'cancelling',
+         updated_at = NOW()
+     WHERE status IN ('queued', 'running', 'paused')
+       AND control_status NOT IN ('cancelling', 'cancelled')`,
+  )
+  return result.rowCount ?? 0
+}
+
 export async function syncRunStatusFromTasks(db: Pool, runId: string): Promise<void> {
   await db.query(
     `WITH agg AS (

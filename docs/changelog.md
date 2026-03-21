@@ -1678,3 +1678,22 @@
 - **数据库变更**：无
 - **注意事项**：
   - 本次仅文档更新，不涉及代码逻辑变更。
+
+## [CHG-111] 采集失控止血：调度与执行解耦 + stop-all
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 18:30
+- **修改文件**：
+  - `src/api/workers/crawlerScheduler.ts` — 重写调度器为进程内 tick（60s），仅创建 run，不再向 `crawler-queue` 写入可执行占位 job。
+  - `src/api/server.ts` — 调度器改为显式开关（`CRAWLER_SCHEDULER_ENABLED=true` 才注册）。
+  - `src/api/routes/admin/crawler.ts` — `/admin/crawler/tasks` 全量触发改走 `runService` 统一模型；新增 `POST /admin/crawler/stop-all`（全局冻结 + 取消活跃任务 + 清理 repeat tick）。
+  - `src/api/workers/crawlerWorker.ts` — 增加全局冻结检查（启动前/执行安全点），冻结时跳过或取消执行。
+  - `src/api/db/queries/crawlerTasks.ts` — 新增 `cancelAllActiveTasks()`。
+  - `src/api/db/queries/crawlerRuns.ts` — 新增 `requestCancelAllActiveRuns()`。
+  - `src/types/system.types.ts` — 新增系统设置键 `crawler_global_freeze`。
+  - `scripts/stop-all-crawls.ts`、`package.json` — 新增命令 `npm run crawler:stop-all`。
+  - `README.md` — 补充 stop-all 接口、命令与 scheduler 开关说明。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次优先“先止血”，不涉及 UI 重构。
+  - 如果线上正在跑旧遗留任务，先执行 `npm run crawler:stop-all` 再重启服务。
