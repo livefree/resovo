@@ -1067,11 +1067,11 @@
      - 后端分页优先策略生效
    - 回滚方式：回退 submissions 迁移 commit
 
-8. CHG-129 — subtitles 列表迁移到 shared table 基线（状态：🔄 进行中）
+8. CHG-129 — subtitles 列表迁移到 shared table 基线（状态：✅ 已完成）
    - 创建时间：2026-03-21 11:20
    - 计划开始：2026-03-22 09:30
    - 实际开始：2026-03-21 15:57
-   - 完成时间：
+   - 完成时间：2026-03-21 16:00
    - 目标：字幕审核列表对齐统一表格能力
    - 范围：`src/components/admin/content/SubtitleTable.tsx`、`AdminSubtitleList.tsx`
    - 依赖：CHG-128
@@ -1081,10 +1081,10 @@
      - 保持现有审核动作与权限逻辑不变
    - 回滚方式：回退 subtitles 迁移 commit
 
-9. CHG-130 — dashboard 列表迁移与低风险表格收口（状态：⬜ 待开始）
+9. CHG-130 — dashboard 列表迁移与低风险表格收口（状态：🔄 进行中）
    - 创建时间：2026-03-21 11:20
    - 计划开始：2026-03-22 11:00
-   - 实际开始：
+   - 实际开始：2026-03-21 16:00
    - 完成时间：
    - 目标：对低风险列表完成统一基线收口，形成全后台一致行为
    - 范围：`src/components/admin/system/DataTable.tsx`、其余低风险列表

@@ -1908,3 +1908,16 @@
 - **数据库变更**：无
 - **注意事项**：
   - 仅迁移 submissions 列表能力，不改 API 调用顺序、权限逻辑与审核语义。
+
+## [CHG-129] subtitles 列表迁移到 shared table 基线
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 16:00
+- **修改文件**：
+  - `src/components/admin/content/SubtitleTable.tsx` — 接入 shared 列状态与排序能力；新增列设置、列显隐、列宽拖拽、排序持久化；保留字幕审核弹窗与后端分页流程。
+  - `src/components/admin/AdminSubtitleList.tsx` — 接入 shared 列状态与排序能力；新增列设置、列显隐、列宽拖拽、排序持久化；保持通过/拒绝业务动作与分页逻辑不变。
+  - `tests/unit/components/admin/content/SubtitleTable.test.tsx` — 覆盖默认排序与切换、列显隐、列宽持久化回挂。
+  - `tests/unit/components/admin/AdminSubtitleList.test.tsx` — 覆盖默认排序与切换、列显隐、列宽持久化回挂。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 仅迁移 subtitles 列表能力，不改 API 调用顺序、权限逻辑与审核语义。
