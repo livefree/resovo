@@ -10,7 +10,8 @@ import {
 } from '@/components/admin/system/crawler-site/services/crawlTaskService'
 
 interface UseCrawlerSiteCrawlTasksOptions {
-  fetchSites: () => Promise<void>
+  refreshSitesSilently?: () => Promise<void>
+  onTaskSettled?: (siteKeys: string[]) => Promise<void> | void
   showToast: (message: string, ok: boolean) => void
   pollIntervalMs?: number
 }
@@ -24,7 +25,8 @@ interface UseCrawlerSiteCrawlTasksResult {
 }
 
 export function useCrawlerSiteCrawlTasks({
-  fetchSites,
+  refreshSitesSilently,
+  onTaskSettled,
   showToast,
   pollIntervalMs = 3000,
 }: UseCrawlerSiteCrawlTasksOptions): UseCrawlerSiteCrawlTasksResult {
@@ -61,7 +63,7 @@ export function useCrawlerSiteCrawlTasks({
         const latest = taskBySite.get(siteKey)
         if (!latest) continue
 
-        if (latest.status === 'queued' || latest.status === 'running') {
+        if (latest.status === 'queued' || latest.status === 'running' || latest.status === 'paused') {
           setRunningBySite((prev) => ({ ...prev, [siteKey]: true }))
           setRunningModeBySite((prev) => ({ ...prev, [siteKey]: latest.mode }))
           continue
@@ -81,19 +83,24 @@ export function useCrawlerSiteCrawlTasks({
                 : '采集完成',
               true
             )
-          } else {
+          } else if (latest.status === 'failed') {
             showToast(latest.message ? `采集失败：${latest.message}` : '采集失败', false)
           }
         }
       }
 
       if (completedSites.length > 0) {
-        await fetchSites()
+        if (refreshSitesSilently) {
+          await refreshSitesSilently()
+        }
+        if (onTaskSettled) {
+          await onTaskSettled(completedSites)
+        }
       }
     } catch {
       // 轮询失败不中断 UI，可等待下一轮重试
     }
-  }, [fetchSites, showToast])
+  }, [onTaskSettled, refreshSitesSilently, showToast])
 
   useEffect(() => {
     if (activeSitesRef.current.size === 0) return
@@ -101,7 +108,7 @@ export function useCrawlerSiteCrawlTasks({
       void syncLatestTasks()
     }, pollIntervalMs)
     return () => window.clearInterval(timer)
-  }, [pollIntervalMs, syncLatestTasks, runningBySite])
+  }, [pollIntervalMs, syncLatestTasks])
 
   const triggerSiteCrawl = useCallback(
     async (siteKey: string, mode: CrawlMode, siteName?: string) => {
@@ -152,7 +159,7 @@ export function useCrawlerSiteCrawlTasks({
         const next = { ...prev }
         for (const siteKey of siteKeys) {
           const task = taskBySite.get(siteKey)
-          const isRunning = task?.status === 'queued' || task?.status === 'running'
+          const isRunning = task?.status === 'queued' || task?.status === 'running' || task?.status === 'paused'
           next[siteKey] = Boolean(isRunning)
           if (isRunning) activeSitesRef.current.add(siteKey)
           else activeSitesRef.current.delete(siteKey)
@@ -164,7 +171,7 @@ export function useCrawlerSiteCrawlTasks({
         const next = { ...prev }
         for (const siteKey of siteKeys) {
           const task = taskBySite.get(siteKey)
-          next[siteKey] = task && (task.status === 'queued' || task.status === 'running') ? task.mode : null
+          next[siteKey] = task && (task.status === 'queued' || task.status === 'running' || task.status === 'paused') ? task.mode : null
         }
         return next
       })

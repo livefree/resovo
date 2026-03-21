@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { apiClient } from '@/lib/api-client'
 import type { CrawlerSite, CreateCrawlerSiteInput, UpdateCrawlerSiteInput, CrawlerSiteBatchAction } from '@/types'
 import { useAdminToast } from '@/components/admin/shared/feedback/useAdminToast'
@@ -13,6 +13,7 @@ import { useCrawlerSiteColumns } from '@/components/admin/system/crawler-site/ho
 import { useCrawlerSiteSelection } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteSelection'
 import { useCrawlerSites } from '@/components/admin/system/crawler-site/hooks/useCrawlerSites'
 import { useCrawlerSiteCrawlTasks } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteCrawlTasks'
+import { useCrawlerMonitor } from '@/components/admin/system/crawler-site/hooks/useCrawlerMonitor'
 import { CrawlerSiteTable } from '@/components/admin/system/crawler-site/components/CrawlerSiteTable'
 import { CrawlerSiteTopToolbar } from '@/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar'
 import { ActiveFilterChipsBar } from '@/components/admin/system/crawler-site/components/ActiveFilterChipsBar'
@@ -36,25 +37,6 @@ interface ValidateResult {
   latencyMs: number | null
 }
 
-interface CrawlerOverview {
-  siteTotal: number
-  connected: number
-  running: number
-  failed: number
-  todayVideos: number
-  todayDurationMs: number
-}
-
-interface CrawlerRunSummary {
-  id: string
-  triggerType: 'single' | 'batch' | 'all' | 'schedule'
-  mode: 'incremental' | 'full'
-  status: 'queued' | 'running' | 'success' | 'partial_failed' | 'failed' | 'cancelled'
-  controlStatus: 'active' | 'pausing' | 'paused' | 'cancelling' | 'cancelled'
-  summary: Record<string, unknown> | null
-  createdAt: string
-}
-
 interface AutoCrawlConfigSnapshot {
   globalEnabled: boolean
   defaultMode: 'incremental' | 'full'
@@ -68,8 +50,6 @@ export function CrawlerSiteManager() {
   const [showAdd, setShowAdd] = useState(false)
   const [validateStates, setValidateStates] = useState<Record<string, ValidateStatus>>({})
   const [rowSaving, setRowSaving] = useState<Record<string, boolean>>({})
-  const [overview, setOverview] = useState<CrawlerOverview | null>(null)
-  const [recentRuns, setRecentRuns] = useState<CrawlerRunSummary[]>([])
   const [allCrawlTriggering, setAllCrawlTriggering] = useState<Record<'incremental-crawl' | 'full-crawl', boolean>>({
     'incremental-crawl': false,
     'full-crawl': false,
@@ -97,13 +77,25 @@ export function CrawlerSiteManager() {
   } = useCrawlerSiteColumns()
   const { sites, loading, fetchSites } = useCrawlerSites()
   const {
+    overview,
+    runningRuns,
+    recentRuns,
+    refreshMonitor,
+    pauseRun,
+    resumeRun,
+    cancelRun,
+  } = useCrawlerMonitor({ showToast })
+  const {
     runningBySite,
     runningModeBySite,
     latestTaskBySite,
     hydrateRunningFromSites,
     triggerSiteCrawl,
   } = useCrawlerSiteCrawlTasks({
-    fetchSites,
+    refreshSitesSilently: () => fetchSites({ silent: true }),
+    onTaskSettled: async () => {
+      await refreshMonitor()
+    },
     showToast,
   })
 
@@ -159,34 +151,6 @@ export function CrawlerSiteManager() {
     clearSelection,
   } = useCrawlerSiteSelection(visibleKeys)
 
-  const fetchOverview = useCallback(async () => {
-    try {
-      const res = await apiClient.get<{ data: CrawlerOverview }>('/admin/crawler/overview')
-      setOverview(res.data)
-    } catch {
-      // 非阻塞：概览失败不影响列表主流程
-    }
-  }, [])
-
-  const fetchRuns = useCallback(async () => {
-    try {
-      const res = await apiClient.get<{ data: CrawlerRunSummary[] }>('/admin/crawler/runs?limit=8')
-      setRecentRuns(res.data)
-    } catch {
-      // 非阻塞
-    }
-  }, [])
-
-  useEffect(() => {
-    void fetchOverview()
-    void fetchRuns()
-    const timer = window.setInterval(() => {
-      void fetchOverview()
-      void fetchRuns()
-    }, 5000)
-    return () => window.clearInterval(timer)
-  }, [fetchOverview, fetchRuns])
-
   useEffect(() => {
     void hydrateRunningFromSites(sites.map((site) => site.key))
   }, [sites, hydrateRunningFromSites])
@@ -235,9 +199,7 @@ export function CrawlerSiteManager() {
         mode: type === 'full-crawl' ? 'full' : 'incremental',
       })
       showToast(type === 'full-crawl' ? '已触发全站全量采集' : '已触发全站增量采集', true)
-      await fetchSites()
-      await fetchOverview()
-      await fetchRuns()
+      await refreshMonitor()
     } catch {
       showToast(type === 'full-crawl' ? '全站全量采集触发失败' : '全站增量采集触发失败', false)
     } finally {
@@ -257,19 +219,9 @@ export function CrawlerSiteManager() {
         siteKeys: Array.from(selected),
       })
       showToast(type === 'full-crawl' ? '已触发批量全量采集' : '已触发批量增量采集', true)
-      await fetchRuns()
+      await refreshMonitor()
     } catch {
       showToast(type === 'full-crawl' ? '批量全量采集触发失败' : '批量增量采集触发失败', false)
-    }
-  }
-
-  async function handleCancelRun(runId: string) {
-    try {
-      await apiClient.post(`/admin/crawler/runs/${runId}/cancel`)
-      showToast('已发送中止请求', true)
-      await fetchRuns()
-    } catch {
-      showToast('中止批次失败', false)
     }
   }
 
@@ -413,10 +365,20 @@ export function CrawlerSiteManager() {
       <CrawlerSiteOverviewStats data={overview} />
       <AutoCrawlSettingsPanel sites={sites} showToast={showToast} onConfigChange={setAutoConfig} />
       <CrawlerRunPanel
-        runs={recentRuns}
-        onCancel={(runId) => {
-          void handleCancelRun(runId)
-        }}
+        title="当前任务（运行/排队/暂停）"
+        emptyText="当前没有运行中的采集任务"
+        runs={runningRuns}
+        onCancel={(runId) => { void cancelRun(runId) }}
+        onPause={(runId) => { void pauseRun(runId) }}
+        onResume={(runId) => { void resumeRun(runId) }}
+      />
+      <CrawlerRunPanel
+        title="最近结果"
+        emptyText="暂无最近完成任务"
+        runs={recentRuns.slice(0, 8)}
+        onCancel={(runId) => { void cancelRun(runId) }}
+        onPause={(runId) => { void pauseRun(runId) }}
+        onResume={(runId) => { void resumeRun(runId) }}
       />
 
       <CrawlerSiteTopToolbar

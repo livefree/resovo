@@ -578,3 +578,11 @@
 - **内容**：新增测试支撑脚本，可一键清空已抓取视频数据与采集任务数据。
 - **处理动作**：新增 `scripts/clear-crawled-data.ts`；新增 npm 命令 `clear:crawled-data`；README 补充使用说明。
 - **后续**：建议你在测试前执行一次该命令，再触发增量/全量采集做回归验证。
+
+## [LOG-20260320-1750-01] CHG-109 采集控制台局部监控更新与任务控制增强完成
+- **时间**：2026-03-20 17:50
+- **类型**：INFO
+- **关联任务**：CHG-109
+- **内容**：完成采集控制台“监控局部更新”改造，避免整页刷新感；补齐 run 级暂停/恢复/中止最小可用链路。
+- **处理动作**：新增 `useCrawlerMonitor` 抽离轮询；站点刷新改为 silent；run/task 状态扩展 `paused` 并补 DB 迁移；worker/crawl 增强协作式 pause/cancel/timeout 检查与状态落盘。
+- **后续**：部署前需执行 `npm run migrate` 应用 `011_add_paused_statuses.sql`，并在真实任务上手测 pause/resume/cancel。

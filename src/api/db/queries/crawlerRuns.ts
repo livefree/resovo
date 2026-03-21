@@ -2,7 +2,7 @@ import type { Pool } from 'pg'
 
 export type CrawlerRunTriggerType = 'single' | 'batch' | 'all' | 'schedule'
 export type CrawlerRunMode = 'incremental' | 'full'
-export type CrawlerRunStatus = 'queued' | 'running' | 'success' | 'partial_failed' | 'failed' | 'cancelled'
+export type CrawlerRunStatus = 'queued' | 'running' | 'paused' | 'success' | 'partial_failed' | 'failed' | 'cancelled'
 export type CrawlerRunControlStatus = 'active' | 'pausing' | 'paused' | 'cancelling' | 'cancelled'
 
 export interface CrawlerRun {
@@ -183,6 +183,7 @@ export async function syncRunStatusFromTasks(db: Pool, runId: string): Promise<v
          COUNT(*)::int AS total,
          SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END)::int AS pending,
          SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END)::int AS running,
+         SUM(CASE WHEN status = 'paused' THEN 1 ELSE 0 END)::int AS paused,
          SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END)::int AS done,
          SUM(CASE WHEN status IN ('failed', 'timeout') THEN 1 ELSE 0 END)::int AS failed,
          SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END)::int AS cancelled
@@ -192,6 +193,7 @@ export async function syncRunStatusFromTasks(db: Pool, runId: string): Promise<v
      UPDATE crawler_runs r
      SET status = CASE
            WHEN a.total = 0 THEN r.status
+           WHEN r.control_status IN ('pausing', 'paused') AND a.running = 0 AND (a.pending > 0 OR a.paused > 0) THEN 'paused'
            WHEN a.running > 0 THEN 'running'
            WHEN a.pending > 0 THEN 'queued'
            WHEN a.cancelled = a.total THEN 'cancelled'
@@ -200,11 +202,11 @@ export async function syncRunStatusFromTasks(db: Pool, runId: string): Promise<v
            ELSE 'success'
          END,
          started_at = CASE
-           WHEN r.started_at IS NULL AND (a.running > 0 OR a.done > 0 OR a.failed > 0 OR a.cancelled > 0) THEN NOW()
+           WHEN r.started_at IS NULL AND (a.running > 0 OR a.paused > 0 OR a.done > 0 OR a.failed > 0 OR a.cancelled > 0) THEN NOW()
            ELSE r.started_at
          END,
          finished_at = CASE
-           WHEN a.pending = 0 AND a.running = 0 THEN NOW()
+           WHEN a.pending = 0 AND a.running = 0 AND a.paused = 0 THEN NOW()
            ELSE NULL
          END,
          updated_at = NOW(),
@@ -212,6 +214,7 @@ export async function syncRunStatusFromTasks(db: Pool, runId: string): Promise<v
            'total', a.total,
            'pending', a.pending,
            'running', a.running,
+           'paused', a.paused,
            'done', a.done,
            'failed', a.failed,
            'cancelled', a.cancelled

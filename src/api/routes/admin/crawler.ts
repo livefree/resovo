@@ -44,6 +44,8 @@ function mapTaskDto(task: CrawlerTask) {
       ? 'queued'
       : task.status === 'running'
         ? 'running'
+        : task.status === 'paused'
+          ? 'paused'
         : task.status === 'done'
           ? 'success'
           : task.status === 'cancelled'
@@ -129,7 +131,7 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
 
   fastify.get('/admin/crawler/tasks', { preHandler: auth }, async (request, reply) => {
     const QuerySchema = z.object({
-      status: z.enum(['pending', 'running', 'done', 'failed']).optional(),
+      status: z.enum(['pending', 'running', 'paused', 'done', 'failed']).optional(),
       triggerType: z.enum(['single', 'batch', 'all', 'schedule']).optional(),
       runId: z.string().uuid().optional(),
       page:   z.coerce.number().int().min(1).default(1),
@@ -305,7 +307,7 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
   // ── GET /admin/crawler/runs ────────────────────────────────
   fastify.get('/admin/crawler/runs', { preHandler: auth }, async (request, reply) => {
     const QuerySchema = z.object({
-      status: z.enum(['queued', 'running', 'success', 'partial_failed', 'failed', 'cancelled']).optional(),
+      status: z.enum(['queued', 'running', 'paused', 'success', 'partial_failed', 'failed', 'cancelled']).optional(),
       triggerType: z.enum(['single', 'batch', 'all', 'schedule']).optional(),
       page: z.coerce.number().int().min(1).default(1),
       limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -386,8 +388,10 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     if (!run) {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '批次不存在', status: 404 } })
     }
-    await crawlerRunsQueries.updateRunControlStatus(db, id, 'paused')
-    return reply.send({ data: { runId: id, controlStatus: 'paused' } })
+    const nextControlStatus = run.status === 'running' ? 'pausing' : 'paused'
+    await crawlerRunsQueries.updateRunControlStatus(db, id, nextControlStatus)
+    await crawlerRunsQueries.syncRunStatusFromTasks(db, id)
+    return reply.send({ data: { runId: id, controlStatus: nextControlStatus } })
   })
 
   // ── POST /admin/crawler/runs/:id/resume ────────────────────
@@ -398,6 +402,7 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '批次不存在', status: 404 } })
     }
     await crawlerRunsQueries.updateRunControlStatus(db, id, 'active')
+    await crawlerRunsQueries.syncRunStatusFromTasks(db, id)
     return reply.send({ data: { runId: id, controlStatus: 'active' } })
   })
 

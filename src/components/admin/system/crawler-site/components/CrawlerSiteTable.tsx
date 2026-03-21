@@ -269,6 +269,7 @@ export function CrawlerSiteTable({
                         {new Date(site.lastCrawledAt).toLocaleString()}
                         <div className="mt-1">
                           {siteRunning && <Badge color="yellow">采集中</Badge>}
+                          {latestTask?.status === "paused" && <Badge color="gray">已暂停</Badge>}
                           {!siteRunning && site.lastCrawlStatus === "ok" && <Badge color="green">成功</Badge>}
                           {!siteRunning && site.lastCrawlStatus === "failed" && <Badge color="red">失败</Badge>}
                           {!siteRunning && site.lastCrawlStatus === "running" && <Badge color="yellow">采集中</Badge>}
@@ -295,14 +296,14 @@ export function CrawlerSiteTable({
                         disabled={siteRunning}
                         className="rounded border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--accent)]/20 disabled:opacity-50"
                       >
-                        {siteRunning && siteRunningMode === "incremental" ? "增量中…" : "增量"}
+                        {latestTask?.status === "paused" && siteRunningMode === "incremental" ? "增量已暂停" : siteRunning && siteRunningMode === "incremental" ? "增量中…" : "增量"}
                       </button>
                       <button
                         onClick={() => handleTriggerCrawl("full-crawl", site)}
                         disabled={siteRunning}
                         className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-50"
                       >
-                        {siteRunning && siteRunningMode === "full" ? "全量中…" : "全量"}
+                        {latestTask?.status === "paused" && siteRunningMode === "full" ? "全量已暂停" : siteRunning && siteRunningMode === "full" ? "全量中…" : "全量"}
                       </button>
                     </div>
                   </td>

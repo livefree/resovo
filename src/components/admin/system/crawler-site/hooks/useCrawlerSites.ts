@@ -6,15 +6,16 @@ export function useCrawlerSites() {
   const [sites, setSites] = useState<CrawlerSite[]>([])
   const [loading, setLoading] = useState(true)
 
-  const fetchSites = useCallback(async () => {
-    setLoading(true)
+  const fetchSites = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true
+    if (!silent) setLoading(true)
     try {
       const res = await apiClient.get<{ data: CrawlerSite[] }>('/admin/crawler/sites')
       setSites(res.data)
     } catch {
       // 静默
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [])
 

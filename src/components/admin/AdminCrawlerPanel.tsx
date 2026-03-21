@@ -13,7 +13,7 @@ import { apiClient } from '@/lib/api-client'
 interface CrawlerTask {
   id: string
   type: string
-  status: 'pending' | 'running' | 'done' | 'failed' | 'cancelled' | 'timeout'
+  status: 'pending' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled' | 'timeout'
   triggerType: 'single' | 'batch' | 'all' | 'schedule' | null
   runId?: string | null
   run_id?: string | null
@@ -40,7 +40,7 @@ interface CrawlerTaskLogItem {
   createdAt: string
 }
 
-type TaskStatusFilter = 'pending' | 'running' | 'done' | 'failed' | ''
+type TaskStatusFilter = 'pending' | 'running' | 'paused' | 'done' | 'failed' | ''
 type TaskTriggerFilter = 'single' | 'batch' | 'all' | 'schedule' | ''
 
 // ── 小组件 ───────────────────────────────────────────────────────
@@ -49,6 +49,7 @@ function StatusBadge({ status }: { status: CrawlerTask['status'] }) {
   const map: Record<CrawlerTask['status'], string> = {
     pending: 'bg-yellow-900/30 text-yellow-400',
     running: 'bg-blue-900/30 text-blue-400',
+    paused: 'bg-zinc-700/40 text-zinc-300',
     done:    'bg-green-900/30 text-green-400',
     failed:  'bg-red-900/30 text-red-400',
     cancelled: 'bg-zinc-700/40 text-zinc-300',
@@ -57,6 +58,7 @@ function StatusBadge({ status }: { status: CrawlerTask['status'] }) {
   const labels: Record<CrawlerTask['status'], string> = {
     pending: '等待中',
     running: '运行中',
+    paused: '已暂停',
     done:    '已完成',
     failed:  '失败',
     cancelled: '已取消',
@@ -226,6 +228,7 @@ export function AdminCrawlerPanel({ initialRunId = '', onRunIdChange }: AdminCra
             { value: '', label: '全部' },
             { value: 'pending', label: '等待中' },
             { value: 'running', label: '运行中' },
+            { value: 'paused', label: '已暂停' },
             { value: 'done', label: '已完成' },
             { value: 'failed', label: '失败' },
           ] as { value: TaskStatusFilter; label: string }[]).map(({ value, label }) => (

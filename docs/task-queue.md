@@ -794,3 +794,19 @@
    - 实际开始：2026-03-20 17:13
    - 完成时间：2026-03-20 17:18
    - 验收要点：`npm run clear:crawled-data` 可执行；清理范围明确；文档补齐；typecheck/lint/关键测试通过
+
+## [SEQ-20260320-26] 采集控制台稳定化（局部监控更新 + 任务控制增强）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 17:22
+- **最后更新时间**：2026-03-20 17:50
+- **目标**：消除采集运行时页面刷新感，建立监控区局部轮询更新，并补齐暂停/恢复/中止最小可用链路
+- **范围**：`src/components/admin/system/crawler-site/*`、`src/api/routes/admin/crawler.ts`、`src/api/workers/crawlerWorker.ts`、`src/api/services/CrawlerService.ts`、`src/api/db/queries/*`、`src/api/db/migrations/011_*`
+- **依赖**：`CHG-95`、`CHG-107`、`CHG-108` 已完成
+
+### 任务列表（按执行顺序）
+1. CHG-109 — 监控局部更新与任务控制增强（状态：✅ 已完成）
+   - 创建时间：2026-03-20 17:22
+   - 计划开始：2026-03-20 17:23
+   - 实际开始：2026-03-20 17:23
+   - 完成时间：2026-03-20 17:50
+   - 验收要点：轮询仅更新监控区；表格上下文不因轮询重置；run/task 支持 paused；pause/resume/cancel 按 run 级可用；typecheck/lint/test:run 通过

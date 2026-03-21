@@ -312,7 +312,7 @@ export class CrawlerService {
       hoursAgo?: number
       taskType?: 'full-crawl' | 'incremental-crawl'
       taskId?: string
-      shouldStop?: () => false | 'cancel' | 'timeout' | Promise<false | 'cancel' | 'timeout'>
+      shouldStop?: () => false | 'cancel' | 'timeout' | 'pause' | Promise<false | 'cancel' | 'timeout' | 'pause'>
       onLog?: (
         input: {
           level?: 'info' | 'warn' | 'error'
@@ -376,6 +376,7 @@ export class CrawlerService {
         const stopReasonBeforePage = options.shouldStop ? await options.shouldStop() : false
         if (stopReasonBeforePage === 'cancel') throw new Error('TASK_CANCELLED')
         if (stopReasonBeforePage === 'timeout') throw new Error('TASK_TIMEOUT')
+        if (stopReasonBeforePage === 'pause') throw new Error('TASK_PAUSED')
         if (stopReasonBeforePage) {
           throw new Error('TASK_CANCELLED')
         }
@@ -388,6 +389,7 @@ export class CrawlerService {
           const stopReasonBeforeItem = options.shouldStop ? await options.shouldStop() : false
           if (stopReasonBeforeItem === 'cancel') throw new Error('TASK_CANCELLED')
           if (stopReasonBeforeItem === 'timeout') throw new Error('TASK_TIMEOUT')
+          if (stopReasonBeforeItem === 'pause') throw new Error('TASK_PAUSED')
           if (stopReasonBeforeItem) {
             throw new Error('TASK_CANCELLED')
           }
@@ -436,8 +438,20 @@ export class CrawlerService {
         durationMs: Date.now() - startAt,
       })
     } catch (err) {
-      errors++
       const message = err instanceof Error ? err.message : String(err)
+      if (message.includes('TASK_CANCELLED')) {
+        await emit('warn', 'crawl.cancelled', '采集已取消', { page, processed })
+        throw err
+      }
+      if (message.includes('TASK_TIMEOUT')) {
+        await emit('warn', 'crawl.timeout', '采集已超时', { page, processed })
+        throw err
+      }
+      if (message.includes('TASK_PAUSED')) {
+        await emit('info', 'crawl.paused', '采集已暂停，等待恢复', { page, processed })
+        throw err
+      }
+      errors++
       await crawlerTasksQueries.updateTaskStatus(this.db, taskId, 'failed', {
         error: message,
       })

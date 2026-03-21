@@ -7,7 +7,7 @@ import type { Pool } from 'pg'
 
 // ── 类型 ──────────────────────────────────────────────────────────
 
-export type CrawlerTaskStatus = 'pending' | 'running' | 'done' | 'failed' | 'cancelled' | 'timeout'
+export type CrawlerTaskStatus = 'pending' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled' | 'timeout'
 export type CrawlerTaskType = 'full-crawl' | 'incremental-crawl' | 'verify-source' | 'verify-single'
 
 export interface CrawlerTask {
@@ -31,6 +31,7 @@ export interface CrawlerOverview {
   siteTotal: number
   connected: number
   running: number
+  paused: number
   failed: number
   todayVideos: number
   todayDurationMs: number
@@ -293,7 +294,7 @@ export async function findActiveTaskBySite(
     `SELECT *
      FROM crawler_tasks
      WHERE source_site = $1
-       AND status IN ('pending', 'running')
+       AND status IN ('pending', 'running', 'paused')
      ORDER BY scheduled_at DESC
      LIMIT 1`,
     [siteKey],
@@ -394,6 +395,7 @@ interface OverviewRow {
   site_total: string
   connected: string
   running: string
+  paused: string
   failed: string
   today_videos: string
   today_duration_ms: string
@@ -410,9 +412,10 @@ export async function getCrawlerOverview(db: Pool): Promise<CrawlerOverview> {
      ),
      running_stats AS (
        SELECT
-         COUNT(DISTINCT source_site)::text AS running
+         COUNT(DISTINCT CASE WHEN status IN ('pending', 'running') THEN source_site END)::text AS running,
+         COUNT(DISTINCT CASE WHEN status = 'paused' THEN source_site END)::text AS paused
        FROM crawler_tasks
-       WHERE status IN ('pending', 'running')
+       WHERE status IN ('pending', 'running', 'paused')
          AND type IN ('full-crawl', 'incremental-crawl')
      ),
      today_stats AS (
@@ -436,7 +439,7 @@ export async function getCrawlerOverview(db: Pool): Promise<CrawlerOverview> {
            END
          )::text AS today_duration_ms
        FROM crawler_tasks
-       WHERE status = 'done'
+       WHERE status IN ('running', 'done')
          AND type IN ('full-crawl', 'incremental-crawl')
          AND scheduled_at >= date_trunc('day', NOW())
      )
@@ -444,6 +447,7 @@ export async function getCrawlerOverview(db: Pool): Promise<CrawlerOverview> {
        COALESCE(site_stats.site_total, '0') AS site_total,
        COALESCE(site_stats.connected, '0') AS connected,
        COALESCE(running_stats.running, '0') AS running,
+       COALESCE(running_stats.paused, '0') AS paused,
        COALESCE(site_stats.failed, '0') AS failed,
        COALESCE(today_stats.today_videos, '0') AS today_videos,
        COALESCE(today_stats.today_duration_ms, '0') AS today_duration_ms
@@ -455,6 +459,7 @@ export async function getCrawlerOverview(db: Pool): Promise<CrawlerOverview> {
     siteTotal: parseInt(row.site_total, 10) || 0,
     connected: parseInt(row.connected, 10) || 0,
     running: parseInt(row.running, 10) || 0,
+    paused: parseInt(row.paused, 10) || 0,
     failed: parseInt(row.failed, 10) || 0,
     todayVideos: parseInt(row.today_videos, 10) || 0,
     todayDurationMs: parseInt(row.today_duration_ms, 10) || 0,

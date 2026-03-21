@@ -4205,3 +4205,49 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 为避免误删，未在本次开发过程中直接执行清库命令。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-109 采集控制台监控局部更新与任务控制增强（暂停/恢复/中止）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 17:22
+- **计划开始时间**：2026-03-20 17:23
+- **实际开始时间**：2026-03-20 17:23
+- **完成时间**：2026-03-20 17:50
+- **问题**：采集运行期间页面存在明显“自动刷新感”；监控更新与表格数据链路耦合，影响用户上下文稳定；暂停/恢复语义不完整。
+- **影响的已完成任务**：CHG-95、CHG-107、CHG-108
+- **文件范围**：
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerMonitor.ts`（新增）
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteCrawlTasks.ts`
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSites.ts`
+  - `src/components/admin/system/crawler-site/components/CrawlerRunPanel.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteOverviewStats.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`
+  - `src/api/db/migrations/011_add_paused_statuses.sql`（新增）
+  - `src/api/db/queries/crawlerRuns.ts`
+  - `src/api/db/queries/crawlerTasks.ts`
+  - `src/api/routes/admin/crawler.ts`
+  - `src/api/services/CrawlerService.ts`
+  - `src/api/workers/crawlerWorker.ts`
+  - `src/components/admin/system/crawler-site/crawlTask.types.ts`
+  - `src/components/admin/AdminCrawlerPanel.tsx`
+  - `.gitignore`
+- **修复内容**：
+  - 新增 `useCrawlerMonitor`，将 overview/runs 轮询从页面主容器抽离为监控区局部更新（可见性检测降频）。
+  - 任务完成后的站点刷新改为 `fetchSites({ silent: true })`，避免表格 loading 重置和“整页刷新感”。
+  - 监控面板拆分“当前任务/最近结果”，并补充暂停/恢复/中止操作按钮。
+  - 扩展 run/task 状态模型支持 `paused`，新增迁移 `011_add_paused_statuses.sql` 更新 DB 约束。
+  - 后端 pause 接口改为 `running -> pausing`，并同步 run 状态；resume/cancel 保持 run 级控制。
+  - worker 与 crawl service 增强协作式停止检查：支持 `pause/cancel/timeout` 检查点处理与状态落盘。
+  - 概览卡片新增“已暂停”，任务记录页状态筛选补 `paused`。
+  - 将 `docs/crawler_sites_updated.json` 加入 `.gitignore`，按用户要求保持忽略。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/api/crawler-worker.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/AdminCrawlerTabs.test.tsx`
+  - `npm run test:run`
+- **完成备注**：
+  - 本轮完成最小可用“局部实时 + run级任务控制”，未引入整页刷新方案。
+- **问题说明**：_（无）_

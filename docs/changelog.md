@@ -1643,3 +1643,28 @@
 - **注意事项**：
   - 为避免误删，本次未自动执行清库脚本。
   - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler.test.ts` 通过。
+
+## [CHG-109] 采集控制台局部监控更新与任务控制增强（暂停/恢复/中止）
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 17:50
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerMonitor.ts` — 新增监控数据源 hook，独立轮询 overview/runs，仅更新监控区。
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx` — 监控区与表格区解耦；run 面板拆分“当前任务/最近结果”；接入 pause/resume/cancel。
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteCrawlTasks.ts` — 任务完成后改为 silent 站点刷新 + 监控回调，不触发表格 loading 重置。
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSites.ts` — `fetchSites` 支持 `silent` 模式。
+  - `src/components/admin/system/crawler-site/components/CrawlerRunPanel.tsx` — 增加暂停/恢复按钮、控制状态与运行时长展示。
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteOverviewStats.tsx` — 新增“已暂停”概览指标。
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx` — 行级轻状态增加 paused 展示。
+  - `src/components/admin/system/crawler-site/crawlTask.types.ts`、`src/components/admin/AdminCrawlerPanel.tsx` — 前端状态模型补 `paused`。
+  - `src/api/db/migrations/011_add_paused_statuses.sql` — 新增迁移，扩展 `crawler_runs/crawler_tasks` 状态约束。
+  - `src/api/db/queries/crawlerRuns.ts`、`src/api/db/queries/crawlerTasks.ts` — 查询聚合口径补 `paused`。
+  - `src/api/routes/admin/crawler.ts` — runs/tasks 筛选支持 paused；pause/resume/cancel 状态流转强化。
+  - `src/api/services/CrawlerService.ts`、`src/api/workers/crawlerWorker.ts` — 协作式 pause/cancel/timeout 检查与状态处理。
+  - `.gitignore` — 增加 `docs/crawler_sites_updated.json` 忽略规则。
+- **新增依赖**：无
+- **数据库变更**：
+  - 新增迁移：`011_add_paused_statuses.sql`
+- **注意事项**：
+  - 部署前必须执行 `npm run migrate`。
+  - 本次为最小可用控制链路，pause/resume 采用协作式检查点机制（非硬中断）。
+  - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/api/crawler-worker.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/AdminCrawlerTabs.test.tsx`、`npm run test:run` 通过（38 files / 481 tests）。

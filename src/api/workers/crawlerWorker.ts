@@ -89,7 +89,7 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
 
     if (run?.controlStatus === 'pausing' || run?.controlStatus === 'paused') {
       if (taskId) {
-        await crawlerTasksQueries.updateTaskStatus(db, taskId, 'pending', { reason: 'RUN_PAUSED_REQUEUE' })
+        await crawlerTasksQueries.updateTaskStatus(db, taskId, 'paused', { reason: 'RUN_PAUSED_REQUEUE' })
       }
       await crawlerQueue.add(job.data, { delay: 30_000 })
       await logTask('info', 'worker.run.paused', '批次已暂停，任务已延迟重排队', { delayMs: 30_000 })
@@ -163,6 +163,11 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
             if (!row) return false
             if (row.status === 'cancelled' || row.cancel_requested) return 'cancel'
             if (row.timeout_at && new Date(row.timeout_at).getTime() < Date.now()) return 'timeout'
+            if (runId) {
+              const run = await crawlerRunsQueries.getRunById(db, runId)
+              if (run?.controlStatus === 'paused' || run?.controlStatus === 'pausing') return 'pause'
+              if (run?.controlStatus === 'cancelling' || run?.controlStatus === 'cancelled') return 'cancel'
+            }
             return false
           },
           onLog: async (input) => {
@@ -184,8 +189,57 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
           errors: result.errors,
         })
       } catch (err) {
-        errors++
         const message = err instanceof Error ? err.message : String(err)
+        if (message.includes('TASK_PAUSED')) {
+          if (taskId) {
+            await crawlerTasksQueries.updateTaskStatus(db, taskId, 'paused', { reason: 'RUN_PAUSED' })
+          }
+          if (runId) {
+            await crawlerRunsQueries.updateRunControlStatus(db, runId, 'paused')
+            await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
+          }
+          await crawlerQueue.add(job.data, { delay: 30_000 })
+          await logTask('info', 'worker.task.paused', '任务已暂停，延迟重排队', { delayMs: 30000, source: source.name })
+          return {
+            type,
+            sites: siteNames,
+            videosUpserted,
+            sourcesUpserted,
+            errors,
+            durationMs: Date.now() - start,
+          }
+        }
+        if (message.includes('TASK_CANCELLED')) {
+          if (taskId) {
+            await crawlerTasksQueries.updateTaskStatus(db, taskId, 'cancelled', { reason: 'RUN_CANCELLED' })
+          }
+          await crawlerSitesQueries.updateCrawlStatus(db, source.name, 'failed')
+          await logTask('warn', 'worker.task.cancelled', '任务已取消并停止后续采集', { source: source.name })
+          return {
+            type,
+            sites: siteNames,
+            videosUpserted,
+            sourcesUpserted,
+            errors,
+            durationMs: Date.now() - start,
+          }
+        }
+        if (message.includes('TASK_TIMEOUT')) {
+          if (taskId) {
+            await crawlerTasksQueries.updateTaskStatus(db, taskId, 'timeout', { reason: 'TASK_TIMEOUT' })
+          }
+          await crawlerSitesQueries.updateCrawlStatus(db, source.name, 'failed')
+          await logTask('error', 'worker.task.timeout', '任务超时并停止后续采集', { source: source.name })
+          return {
+            type,
+            sites: siteNames,
+            videosUpserted,
+            sourcesUpserted,
+            errors: errors + 1,
+            durationMs: Date.now() - start,
+          }
+        }
+        errors++
         process.stderr.write(`[crawler-worker] error crawling ${source.name}: ${message}\n`)
         await crawlerSitesQueries.updateCrawlStatus(db, source.name, 'failed')
         await logTask('error', 'worker.source.failed', '源站采集失败', {

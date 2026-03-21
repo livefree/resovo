@@ -2,6 +2,7 @@ interface CrawlerOverview {
   siteTotal: number
   connected: number
   running: number
+  paused: number
   failed: number
   todayVideos: number
   todayDurationMs: number
@@ -29,6 +30,7 @@ export function CrawlerSiteOverviewStats({ data }: CrawlerSiteOverviewStatsProps
     { label: '站点总数', value: data ? formatNumber(data.siteTotal) : '—' },
     { label: '连接成功', value: data ? formatNumber(data.connected) : '—' },
     { label: '运行中', value: data ? formatNumber(data.running) : '—' },
+    { label: '已暂停', value: data ? formatNumber(data.paused) : '—' },
     { label: '失败', value: data ? formatNumber(data.failed) : '—' },
     { label: '今日采集视频数', value: data ? formatNumber(data.todayVideos) : '—' },
     { label: '采集时长', value: data ? formatDuration(data.todayDurationMs) : '—' },

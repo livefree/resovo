@@ -2,15 +2,19 @@ interface CrawlerRunSummary {
   id: string
   triggerType: 'single' | 'batch' | 'all' | 'schedule'
   mode: 'incremental' | 'full'
-  status: 'queued' | 'running' | 'success' | 'partial_failed' | 'failed' | 'cancelled'
+  status: 'queued' | 'running' | 'paused' | 'success' | 'partial_failed' | 'failed' | 'cancelled'
   controlStatus: 'active' | 'pausing' | 'paused' | 'cancelling' | 'cancelled'
   summary: Record<string, unknown> | null
   createdAt: string
 }
 
 interface CrawlerRunPanelProps {
+  title: string
+  emptyText: string
   runs: CrawlerRunSummary[]
   onCancel: (runId: string) => void
+  onPause: (runId: string) => void
+  onResume: (runId: string) => void
 }
 
 function labelForTrigger(triggerType: CrawlerRunSummary['triggerType']): string {
@@ -23,21 +27,44 @@ function labelForTrigger(triggerType: CrawlerRunSummary['triggerType']): string 
 function labelForStatus(status: CrawlerRunSummary['status']): string {
   if (status === 'queued') return '排队中'
   if (status === 'running') return '运行中'
+  if (status === 'paused') return '已暂停'
   if (status === 'success') return '成功'
   if (status === 'partial_failed') return '部分失败'
   if (status === 'cancelled') return '已取消'
   return '失败'
 }
 
-export function CrawlerRunPanel({ runs, onCancel }: CrawlerRunPanelProps) {
-  if (!runs.length) return null
+function labelForControlStatus(controlStatus: CrawlerRunSummary['controlStatus']): string {
+  if (controlStatus === 'active') return '活跃'
+  if (controlStatus === 'pausing') return '暂停中'
+  if (controlStatus === 'paused') return '已暂停'
+  if (controlStatus === 'cancelling') return '中止中'
+  return '已取消'
+}
 
+function formatRunDuration(createdAt: string): string {
+  const start = new Date(createdAt).getTime()
+  if (!Number.isFinite(start)) return '—'
+  const elapsedMs = Math.max(Date.now() - start, 0)
+  const totalSec = Math.floor(elapsedMs / 1000)
+  const hours = Math.floor(totalSec / 3600)
+  const minutes = Math.floor((totalSec % 3600) / 60)
+  const seconds = totalSec % 60
+  if (hours > 0) return `${hours}h ${minutes}m`
+  if (minutes > 0) return `${minutes}m ${seconds}s`
+  return `${seconds}s`
+}
+
+export function CrawlerRunPanel({ title, emptyText, runs, onCancel, onPause, onResume }: CrawlerRunPanelProps) {
   return (
     <div className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--bg2)] p-3">
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-[var(--text)]">采集批次状态（最近）</h3>
-        <p className="text-xs text-[var(--muted)]">支持手动中止，避免长时间无响应占用</p>
+        <h3 className="text-sm font-semibold text-[var(--text)]">{title}</h3>
+        <p className="text-xs text-[var(--muted)]">监控数据局部轮询更新，不刷新表格和配置区域</p>
       </div>
+      {!runs.length ? (
+        <p className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs text-[var(--muted)]">{emptyText}</p>
+      ) : null}
       <div className="space-y-2">
         {runs.map((run, index) => {
           const runId = typeof run.id === 'string' ? run.id : 'unknown'
@@ -62,6 +89,24 @@ export function CrawlerRunPanel({ runs, onCancel }: CrawlerRunPanelProps) {
                   >
                     查看任务
                   </a>
+                  {run.controlStatus === 'active' && (run.status === 'queued' || run.status === 'running') ? (
+                    <button
+                      type="button"
+                      className="rounded border border-amber-400/60 px-2 py-0.5 text-amber-300 hover:bg-amber-500/10"
+                      onClick={() => onPause(runId)}
+                    >
+                      暂停
+                    </button>
+                  ) : null}
+                  {(run.controlStatus === 'paused' || run.controlStatus === 'pausing' || run.status === 'paused') ? (
+                    <button
+                      type="button"
+                      className="rounded border border-green-400/60 px-2 py-0.5 text-green-300 hover:bg-green-500/10"
+                      onClick={() => onResume(runId)}
+                    >
+                      恢复
+                    </button>
+                  ) : null}
                   <span className="rounded bg-[var(--bg3)] px-2 py-0.5 text-[var(--text)]">{labelForStatus(run.status)}</span>
                   {(run.status === 'queued' || run.status === 'running') && run.controlStatus !== 'cancelling' ? (
                     <button
@@ -76,6 +121,12 @@ export function CrawlerRunPanel({ runs, onCancel }: CrawlerRunPanelProps) {
               </div>
               <div className="mt-1 text-[var(--muted)]">
                 进度：总 {total} / 运行中 {running} / 完成 {done} / 失败 {failed} / 取消 {cancelled}
+              </div>
+              <div className="mt-1 text-[var(--muted)]">
+                控制状态：{labelForControlStatus(run.controlStatus)}
+              </div>
+              <div className="mt-1 text-[var(--muted)]">
+                已运行时长：{formatRunDuration(run.createdAt)}
               </div>
             </div>
           )
