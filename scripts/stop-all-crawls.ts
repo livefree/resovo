@@ -39,7 +39,7 @@ async function main() {
     `  markedRuns=${markedRuns}`,
     `  cancelledPending=${taskChanges.cancelledPending}`,
     `  cancelledPaused=${taskChanges.cancelledPaused}`,
-    `  signaledRunning=${taskChanges.signaledRunning}`,
+    `  cancelledRunning=${taskChanges.cancelledRunning}`,
   ].join('\n') + '\n')
 }
 

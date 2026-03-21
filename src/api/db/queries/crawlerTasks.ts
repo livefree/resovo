@@ -190,7 +190,7 @@ export async function requestCancelRunningTasksByRun(db: Pool, runId: string): P
   return result.rowCount ?? 0
 }
 
-export async function cancelAllActiveTasks(db: Pool): Promise<{ cancelledPending: number; cancelledPaused: number; signaledRunning: number }> {
+export async function cancelAllActiveTasks(db: Pool): Promise<{ cancelledPending: number; cancelledPaused: number; cancelledRunning: number }> {
   const cancelledPendingResult = await db.query(
     `UPDATE crawler_tasks
      SET status = 'cancelled',
@@ -209,17 +209,19 @@ export async function cancelAllActiveTasks(db: Pool): Promise<{ cancelledPending
      WHERE status = 'paused'`,
   )
 
-  const signaledRunningResult = await db.query(
+  const cancelledRunningResult = await db.query(
     `UPDATE crawler_tasks
-     SET cancel_requested = true,
-         result = COALESCE(result, '{}'::jsonb) || jsonb_build_object('cancelRequestedAt', NOW(), 'reason', 'stop_all_running_signal')
+     SET status = 'cancelled',
+         finished_at = NOW(),
+         cancel_requested = true,
+         result = COALESCE(result, '{}'::jsonb) || jsonb_build_object('cancelledAt', NOW(), 'reason', 'stop_all_running_cancelled')
      WHERE status = 'running'`,
   )
 
   return {
     cancelledPending: cancelledPendingResult.rowCount ?? 0,
     cancelledPaused: cancelledPausedResult.rowCount ?? 0,
-    signaledRunning: signaledRunningResult.rowCount ?? 0,
+    cancelledRunning: cancelledRunningResult.rowCount ?? 0,
   }
 }
 
@@ -232,6 +234,27 @@ export async function markTimedOutRunningTasks(db: Pool): Promise<number> {
      WHERE status IN ('pending', 'running')
        AND timeout_at IS NOT NULL
        AND timeout_at < NOW()`,
+  )
+  return result.rowCount ?? 0
+}
+
+export async function markStaleHeartbeatRunningTasks(
+  db: Pool,
+  staleMinutes = 15,
+): Promise<number> {
+  const result = await db.query(
+    `UPDATE crawler_tasks
+     SET status = CASE WHEN cancel_requested THEN 'cancelled' ELSE 'timeout' END,
+         finished_at = NOW(),
+         result = COALESCE(result, '{}'::jsonb) || jsonb_build_object(
+           'error',
+           CASE WHEN cancel_requested THEN 'TASK_CANCELLED_STALE_HEARTBEAT' ELSE 'TASK_STALE_HEARTBEAT_TIMEOUT' END,
+           'staleMinutes',
+           $1::int
+         )
+     WHERE status = 'running'
+       AND COALESCE(heartbeat_at, scheduled_at) < NOW() - ($1::int * INTERVAL '1 minute')`,
+    [staleMinutes],
   )
   return result.rowCount ?? 0
 }
@@ -445,7 +468,13 @@ export async function getCrawlerOverview(db: Pool): Promise<CrawlerOverview> {
      ),
      running_stats AS (
        SELECT
-         COUNT(DISTINCT CASE WHEN status IN ('pending', 'running') THEN source_site END)::text AS running,
+         COUNT(
+           DISTINCT CASE
+             WHEN status = 'pending' AND scheduled_at >= NOW() - INTERVAL '10 minute' THEN source_site
+             WHEN status = 'running' AND COALESCE(heartbeat_at, scheduled_at) >= NOW() - INTERVAL '5 minute' THEN source_site
+             ELSE NULL
+           END
+         )::text AS running,
          COUNT(DISTINCT CASE WHEN status = 'paused' THEN source_site END)::text AS paused
        FROM crawler_tasks
        WHERE status IN ('pending', 'running', 'paused')

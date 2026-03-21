@@ -60,8 +60,12 @@ async function runSchedulerTick(): Promise<void> {
 async function runTimeoutWatchdogTick(): Promise<void> {
   try {
     const timedOut = await crawlerTasksQueries.markTimedOutRunningTasks(db)
+    const stale = await crawlerTasksQueries.markStaleHeartbeatRunningTasks(db)
     if (timedOut > 0) {
       process.stderr.write(`[crawler-scheduler] timeout watchdog marked ${timedOut} tasks as timeout\n`)
+    }
+    if (stale > 0) {
+      process.stderr.write(`[crawler-scheduler] heartbeat watchdog marked ${stale} stale running tasks\n`)
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -78,4 +82,3 @@ export function registerCrawlerScheduler(): void {
   }, TICK_MS)
   process.stderr.write('[crawler-scheduler] interval scheduler registered (60s)\n')
 }
-

@@ -1697,3 +1697,16 @@
 - **注意事项**：
   - 本次优先“先止血”，不涉及 UI 重构。
   - 如果线上正在跑旧遗留任务，先执行 `npm run crawler:stop-all` 再重启服务。
+
+## [CHG-112] stop-all 强制收敛 + stale running 清理
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 18:47
+- **修改文件**：
+  - `src/api/db/queries/crawlerTasks.ts` — `cancelAllActiveTasks()` 改为直接取消 running；新增 `markStaleHeartbeatRunningTasks()`；overview running 口径增加心跳新鲜度过滤。
+  - `src/api/workers/crawlerScheduler.ts` — watchdog 增加 stale heartbeat 清理。
+  - `scripts/stop-all-crawls.ts` — 输出字段改为 `cancelledRunning`。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次修复针对“stop-all 后仍显示 running”的历史孤儿任务场景。
+  - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/api/crawler-worker.test.ts` 通过。

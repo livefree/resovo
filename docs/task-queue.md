@@ -842,3 +842,19 @@
    - 实际开始：2026-03-20 18:06
    - 完成时间：2026-03-20 18:40
    - 验收要点：scheduler 不再向 crawler queue 投占位 crawl job；`/admin/crawler/tasks` 全站触发走 run 模型；新增 stop-all（API + 命令）；typecheck/lint/关键单测通过
+
+## [SEQ-20260320-29] stop-all 收敛增强（running 强制取消 + 心跳过期清理）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 18:42
+- **最后更新时间**：2026-03-20 18:47
+- **目标**：消除 stop-all 后 running 长期残留，恢复监控面板可信度
+- **范围**：`src/api/db/queries/crawlerTasks.ts`、`src/api/workers/crawlerScheduler.ts`、`scripts/stop-all-crawls.ts`
+- **依赖**：`CHG-111` 已完成
+
+### 任务列表（按执行顺序）
+1. CHG-112 — stop-all 收敛增强（状态：✅ 已完成）
+   - 创建时间：2026-03-20 18:42
+   - 计划开始：2026-03-20 18:43
+   - 实际开始：2026-03-20 18:43
+   - 完成时间：2026-03-20 18:47
+   - 验收要点：running 任务可被强制收敛；心跳过期任务自动清理；overview 不再统计陈旧 running

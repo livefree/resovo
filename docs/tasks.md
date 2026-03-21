@@ -4313,3 +4313,31 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 受本地沙箱权限限制（Postgres/Redis 连接 EPERM），`npm run crawler:stop-all` 在当前环境无法实际连库执行；已通过单元测试验证代码链路。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-112 stop-all 强制收敛与 stale running 清理
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 18:42
+- **计划开始时间**：2026-03-20 18:43
+- **实际开始时间**：2026-03-20 18:43
+- **完成时间**：2026-03-20 18:47
+- **问题**：执行 stop-all 后仍有 running 任务长期存在，监控显示运行中与实际控制状态不一致。
+- **影响的已完成任务**：CHG-111
+- **文件范围**：
+  - `src/api/db/queries/crawlerTasks.ts`
+  - `src/api/workers/crawlerScheduler.ts`
+  - `scripts/stop-all-crawls.ts`
+- **修复内容**：
+  - `cancelAllActiveTasks()` 改为直接将 `running` 任务落盘为 `cancelled`（不再仅打 cancel_requested 标记）。
+  - 新增 `markStaleHeartbeatRunningTasks()`，定时将心跳过期 running 任务收敛为 `cancelled/timeout`。
+  - `getCrawlerOverview()` 的 running 统计增加新鲜度过滤，避免陈旧 running 长期污染面板。
+  - `crawler:stop-all` 输出字段调整为 `cancelledRunning`。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/api/crawler-worker.test.ts`
+- **完成备注**：
+  - 本地验证通过；请在你的运行环境重启 API 后执行 `npm run crawler:stop-all` 使历史 running 收敛。
+- **问题说明**：_（无）_

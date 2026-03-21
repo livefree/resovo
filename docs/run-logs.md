@@ -602,3 +602,11 @@
 - **内容**：定位并修复“scheduler 占位任务被 crawler worker 误执行”导致的持续自动采集与监控失真问题。
 - **处理动作**：scheduler 改为独立 tick（不再写 crawler queue 占位 crawl job）；`/admin/crawler/tasks` 全站触发收口到 run 模型；新增 `POST /admin/crawler/stop-all` 与 `npm run crawler:stop-all`；worker 增加全局冻结检查。
 - **后续**：上线后先执行一次 stop-all 并确认 `crawler_runs` 与 `crawler_tasks` 活跃状态归零，再按需手动开启 `CRAWLER_SCHEDULER_ENABLED=true`。
+
+## [LOG-20260320-1847-01] CHG-112 stop-all 收敛增强完成
+- **时间**：2026-03-20 18:47
+- **类型**：INFO
+- **关联任务**：CHG-112
+- **内容**：针对 stop-all 后仍显示 running 的问题，补上强制收敛与心跳过期清理。
+- **处理动作**：`cancelAllActiveTasks` 改为直接取消 running；新增 `markStaleHeartbeatRunningTasks`；overview running 统计加心跳新鲜度过滤。
+- **后续**：重启 API 后执行一次 `npm run crawler:stop-all`，再核对 `crawler_tasks` running 数量与面板一致性。
