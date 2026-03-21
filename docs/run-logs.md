@@ -706,3 +706,42 @@
   - 权重展示改为仅“高/中/低”，点击可循环切换。
   - 成人、启用状态移除 fromConfig 禁用，恢复可点击更新。
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/AdminCrawlerTabs.test.tsx`。
+
+---
+
+## 偏离检测记录模板（补充）
+
+> 用于任务完成后的结构健康记录；与功能完成日志并行记录。
+
+```markdown
+## [LOG-YYYYMMDD-HHMM-XX] <TASK-ID> 偏离检测
+- **时间**：YYYY-MM-DD HH:MM
+- **模块**：<module-name>
+- **命中项**：
+  - [ ] 补丁替代结构修复
+  - [ ] 兼容旧逻辑导致复杂度增加
+  - [ ] 状态/数据流不清晰（多来源/重复）
+  - [ ] 组件职责膨胀
+  - [ ] 修改触及无关代码
+- **判定**：是否“结构开始劣化”（是/否）
+- **劣化点**：<file/module>
+- **本次仍最小修复原因**：<reason>
+- **是否建议重构**：是/否（理由）
+- **污染连续计数（streak）**：<n>
+```
+
+## 连续污染升级模板（补充）
+
+```markdown
+## [LOG-YYYYMMDD-HHMM-XX] 模块高风险预警（连续污染>=3）
+- **时间**：YYYY-MM-DD HH:MM
+- **模块**：<module-name>
+- **触发原因**：重复逻辑增加 / 状态复杂度上升 / 额外补丁维持功能（连续 3 次）
+- **建议**：暂停功能开发，先进行小规模重构
+- **最小重构范围**：<scope>
+- **不影响功能的拆分方案**：
+  1. 页面层：
+  2. hooks 层：
+  3. services/api 层：
+  4. utils/types 层：
+```
