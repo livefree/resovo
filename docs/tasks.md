@@ -4178,3 +4178,30 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 不改采集执行逻辑，仅修正任务页状态持久化体验。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-108 一键清空抓取数据脚本
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-20 17:12
+- **计划开始时间**：2026-03-20 17:13
+- **实际开始时间**：2026-03-20 17:13
+- **完成时间**：2026-03-20 17:18
+- **问题**：抓取数据量已较大，后续采集联调/回归测试需要可重复的一键清库能力。
+- **影响的已完成任务**：CHG-87、CHG-95、CHG-107
+- **文件范围**：
+  - `scripts/clear-crawled-data.ts`（新增）
+  - `package.json`
+  - `README.md`
+- **修复内容**：
+  - 新增 `clear-crawled-data` 脚本，事务内清空 `videos` 及其级联数据、`crawler_runs/crawler_tasks/crawler_task_logs`，并重置 `crawler_sites` 最近采集状态字段。
+  - 新增 npm 命令：`npm run clear:crawled-data`。
+  - README 增加“测试用一键清空已抓取数据”说明。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/api/crawler.test.ts`
+- **完成备注**：
+  - 为避免误删，未在本次开发过程中直接执行清库命令。
+- **问题说明**：_（无）_

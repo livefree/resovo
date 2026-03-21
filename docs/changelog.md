@@ -1630,3 +1630,16 @@
 - **注意事项**：
   - 本次仅修正页面状态同步，不改采集执行链路。
   - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/AdminCrawlerTabs.test.tsx tests/unit/api/crawler.test.ts`、`npm run test:run` 通过（38 files / 481 tests）。
+
+## [CHG-108] 一键清空抓取数据脚本
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 17:18
+- **修改文件**：
+  - `scripts/clear-crawled-data.ts` — 新增清理脚本：事务内清空 `videos`（级联关联数据）、`crawler_runs/crawler_tasks/crawler_task_logs`，并重置 `crawler_sites` 最近采集状态。
+  - `package.json` — 新增命令 `npm run clear:crawled-data`。
+  - `README.md` — 新增测试场景下的一键清理命令说明。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 为避免误删，本次未自动执行清库脚本。
+  - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler.test.ts` 通过。

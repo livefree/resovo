@@ -18,6 +18,7 @@
     "verify:admin-guardrails": "node scripts/verify-admin-guardrails.mjs --staged",
     "verify:admin-guardrails:all": "node scripts/verify-admin-guardrails.mjs --all",
     "migrate": "node --env-file=.env.local --import tsx scripts/migrate.ts",
+    "clear:crawled-data": "node --env-file=.env.local --import tsx scripts/clear-crawled-data.ts",
     "import:sources": "node --env-file=.env.local --import tsx scripts/import-sources.ts",
     "create:admin": "node --env-file=.env.local --import tsx scripts/create-admin.ts",
     "verify:crawler": "node --env-file=.env.local --import tsx scripts/verify-crawler.ts",
