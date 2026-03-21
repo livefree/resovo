@@ -1053,11 +1053,11 @@
      - 操作列保持业务行为不变
    - 回滚方式：回退 users 迁移 commit，恢复原 users 列表
 
-7. CHG-128 — submissions 列表迁移到 shared table 基线（状态：🔄 进行中）
+7. CHG-128 — submissions 列表迁移到 shared table 基线（状态：✅ 已完成）
    - 创建时间：2026-03-21 11:20
    - 计划开始：2026-03-21 21:00
    - 实际开始：2026-03-21 15:50
-   - 完成时间：
+   - 完成时间：2026-03-21 15:57
    - 目标：投稿审核列表对齐统一表格能力并保持审核流程不回退
    - 范围：`src/components/admin/content/SubmissionTable.tsx`、`AdminSubmissionList.tsx`
    - 依赖：CHG-127
@@ -1067,10 +1067,10 @@
      - 后端分页优先策略生效
    - 回滚方式：回退 submissions 迁移 commit
 
-8. CHG-129 — subtitles 列表迁移到 shared table 基线（状态：⬜ 待开始）
+8. CHG-129 — subtitles 列表迁移到 shared table 基线（状态：🔄 进行中）
    - 创建时间：2026-03-21 11:20
    - 计划开始：2026-03-22 09:30
-   - 实际开始：
+   - 实际开始：2026-03-21 15:57
    - 完成时间：
    - 目标：字幕审核列表对齐统一表格能力
    - 范围：`src/components/admin/content/SubtitleTable.tsx`、`AdminSubtitleList.tsx`
