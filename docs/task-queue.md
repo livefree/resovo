@@ -955,3 +955,172 @@
    - 实际开始：2026-03-21 03:31
    - 完成时间：2026-03-21 03:41
    - 验收要点：权重档位编辑位置修正；Key hover/copy 修正；权重/成人/启用点击生效
+
+## [SEQ-20260321-33] Admin 列表能力统一（矩阵落地到迁移执行）
+- **状态**：🔄 执行中
+- **创建时间**：2026-03-21 11:20
+- **最后更新时间**：2026-03-21 11:20
+- **目标**：基于能力矩阵，按原子任务将 admin 全部列表收敛到统一表格能力基线
+- **范围**：`admin/*` 列表页（crawler/videos/sources/users/submissions/subtitles/dashboard）与 shared table 能力
+- **依赖**：`docs/admin_list_matrix.md`、`docs/admin_table_baseline.md`
+
+### 序列约束（本序列强制）
+1. `/admin/crawler` 的采集配置表作为 shared table 样板，仅抽离“表格通用能力”，不反向抽象采集控制台业务逻辑。
+2. 所有列表页默认采用“后端分页优先”；仅数据量明确较小的页面允许前端排序作为过渡。
+
+### 任务列表（按执行顺序）
+1. CHG-122 — 建立 shared table state schema 与 storage key 规范（状态：🔄 进行中）
+   - 创建时间：2026-03-21 11:20
+   - 计划开始：2026-03-21 11:30
+   - 实际开始：2026-03-21 11:30
+   - 完成时间：
+   - 目标：统一 `useAdminTableState` 的状态结构与持久化 key 规则，作为后续迁移基线
+   - 范围：`src/components/admin/shared/table/*`、`src/components/admin/system/crawler-site/tableState.ts`（仅通用层抽象）
+   - 依赖：无
+   - DoD：
+     - 输出统一 schema（sorting/filters/hiddenColumns/columnWidths/pagination/scrollTop）
+     - 输出 key 规则（`admin.table.<pageId>.v1`）并完成兼容迁移策略
+     - 保持 crawler-site 现有排序/显隐/列宽/持久化行为不回退
+   - 回滚方式：回退本任务 commit，恢复旧 state hook 与旧 key 读写逻辑
+
+2. CHG-123 — 抽离 shared 列宽拖拽与列显隐能力（状态：⬜ 待开始）
+   - 创建时间：2026-03-21 11:20
+   - 计划开始：2026-03-21 13:00
+   - 实际开始：
+   - 完成时间：
+   - 目标：把可复用的列宽拖拽、列显隐、列元数据持久化下沉到 shared
+   - 范围：`src/components/admin/shared/table/*`、`crawler-site` 列定义适配层
+   - 依赖：CHG-122
+   - DoD：
+     - 形成 shared `column model`（default/min/max/hidden/resizable）
+     - crawler-site 接入 shared 能力后交互与像素结果一致（允许 ±1px）
+     - sticky header 与横向滚动无抖动
+   - 回滚方式：回退 shared 接入 commit，恢复 crawler-site 本地列逻辑
+
+3. CHG-124 — 抽离 shared 表头排序/筛选框架（状态：⬜ 待开始）
+   - 创建时间：2026-03-21 11:20
+   - 计划开始：2026-03-21 15:00
+   - 实际开始：
+   - 完成时间：
+   - 目标：提供统一表头排序状态、列筛选容器与筛选 chips 适配接口
+   - 范围：`src/components/admin/shared/table/*`、`crawler-site` 适配层
+   - 依赖：CHG-123
+   - DoD：
+     - shared 层支持文本/枚举/范围三类筛选 UI 容器
+     - crawler-site 迁移后筛选语义保持一致
+     - selection 勾选状态在筛选切换后不丢失
+   - 回滚方式：回退 shared header/filter 接入 commit，恢复 crawler-site 旧 header/filter 实现
+
+4. CHG-125 — videos 列表迁移到 shared table 基线（状态：⬜ 待开始）
+   - 创建时间：2026-03-21 11:20
+   - 计划开始：2026-03-21 16:30
+   - 实际开始：
+   - 完成时间：
+   - 目标：将视频管理列表接入统一列能力与状态持久化
+   - 范围：`src/components/admin/content/VideoTable.tsx`、相关 hooks/services
+   - 依赖：CHG-124
+   - DoD：
+     - 支持列排序、列显隐、列宽拖拽、单行截断 + hover tooltip
+     - 状态离页返回后保持（排序/显隐/列宽/分页）
+     - 采用后端分页优先，不新增前端全量排序
+   - 回滚方式：回退 videos 接入 commit，恢复原表格实现
+
+5. CHG-126 — sources 列表迁移到 shared table 基线（状态：⬜ 待开始）
+   - 创建时间：2026-03-21 11:20
+   - 计划开始：2026-03-21 18:00
+   - 实际开始：
+   - 完成时间：
+   - 目标：将播放源管理列表对齐统一表格能力
+   - 范围：`src/components/admin/content/SourceTable.tsx`、相关 hooks/services
+   - 依赖：CHG-125
+   - DoD：
+     - 列能力与持久化与 baseline 对齐
+     - 长文本截断不撑开列宽，hover 显示完整信息
+     - 容器独立滚动，不触发整页滚动
+   - 回滚方式：回退 sources 迁移 commit，恢复旧列表组件
+
+6. CHG-127 — users 列表迁移到 shared table 基线（状态：⬜ 待开始）
+   - 创建时间：2026-03-21 11:20
+   - 计划开始：2026-03-21 19:30
+   - 实际开始：
+   - 完成时间：
+   - 目标：将用户管理列表迁移并补齐可操作列规范
+   - 范围：`src/components/admin/system/UserTable.tsx`、相关 hooks/services
+   - 依赖：CHG-126
+   - DoD：
+     - 支持统一排序/显隐/列宽/分页/持久化
+     - 行高固定，不因内容变化抖动
+     - 操作列保持业务行为不变
+   - 回滚方式：回退 users 迁移 commit，恢复原 users 列表
+
+7. CHG-128 — submissions 列表迁移到 shared table 基线（状态：⬜ 待开始）
+   - 创建时间：2026-03-21 11:20
+   - 计划开始：2026-03-21 21:00
+   - 实际开始：
+   - 完成时间：
+   - 目标：投稿审核列表对齐统一表格能力并保持审核流程不回退
+   - 范围：`src/components/admin/content/SubmissionTable.tsx`、`AdminSubmissionList.tsx`
+   - 依赖：CHG-127
+   - DoD：
+     - 保持审核操作路径不变
+     - 表格能力对齐 baseline（含状态持久化）
+     - 后端分页优先策略生效
+   - 回滚方式：回退 submissions 迁移 commit
+
+8. CHG-129 — subtitles 列表迁移到 shared table 基线（状态：⬜ 待开始）
+   - 创建时间：2026-03-21 11:20
+   - 计划开始：2026-03-22 09:30
+   - 实际开始：
+   - 完成时间：
+   - 目标：字幕审核列表对齐统一表格能力
+   - 范围：`src/components/admin/content/SubtitleTable.tsx`、`AdminSubtitleList.tsx`
+   - 依赖：CHG-128
+   - DoD：
+     - 支持排序/显隐/列宽/持久化
+     - 长文本截断 + tooltip 统一
+     - 保持现有审核动作与权限逻辑不变
+   - 回滚方式：回退 subtitles 迁移 commit
+
+9. CHG-130 — dashboard 列表迁移与低风险表格收口（状态：⬜ 待开始）
+   - 创建时间：2026-03-21 11:20
+   - 计划开始：2026-03-22 11:00
+   - 实际开始：
+   - 完成时间：
+   - 目标：对低风险列表完成统一基线收口，形成全后台一致行为
+   - 范围：`src/components/admin/system/DataTable.tsx`、其余低风险列表
+   - 依赖：CHG-129
+   - DoD：
+     - 低风险列表全部接入 shared 基线
+     - 默认分页、固定容器高度、单行截断 + tooltip 生效
+     - 无新增临时字段或调试入口
+   - 回滚方式：回退 dashboard/低风险列表迁移 commit
+
+10. CHG-131 — 全量回归与性能压测（状态：⬜ 待开始）
+   - 创建时间：2026-03-21 11:20
+   - 计划开始：2026-03-22 13:30
+   - 实际开始：
+   - 完成时间：
+   - 目标：验证迁移后行为一致性与性能稳定性
+   - 范围：admin 列表页全量回归、单测/e2e/性能手测
+   - 依赖：CHG-130
+   - DoD：
+     - 列宽拖拽像素级一致（±1px）
+     - 数据刷新后滚动位置保持
+     - sticky header 无抖动
+     - selection 勾选状态不丢失
+     - `npm run typecheck`、`npm run lint`、`npm run test:run` 通过
+   - 回滚方式：按页面粒度回退最近迁移 commit，恢复上一稳定版本
+
+11. CHG-132 — 文档与基线固化（状态：⬜ 待开始）
+   - 创建时间：2026-03-21 11:20
+   - 计划开始：2026-03-22 16:00
+   - 实际开始：
+   - 完成时间：
+   - 目标：将统一表格能力、迁移结果与运维约束沉淀到文档
+   - 范围：`docs/admin_list_matrix.md`、`docs/admin_table_baseline.md`、`docs/changelog.md`、`docs/run-logs.md`
+   - 依赖：CHG-131
+   - DoD：
+     - 能力矩阵状态更新为“已迁移”版本
+     - baseline 文档补齐例外场景与回滚手册
+     - changelog/run-logs 记录与任务编号一致
+   - 回滚方式：回退文档提交，恢复至迁移前文档状态
