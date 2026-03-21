@@ -1762,3 +1762,17 @@
 - **数据库变更**：无
 - **注意事项**：
   - 此变更会拒绝旧形态孤儿 crawl job，避免 worker 再次“脱离 run/task 控制口径”。
+
+## [CHG-117] C2 stop-all/freeze 正式化
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 02:08
+- **修改文件**：
+  - `src/api/routes/admin/crawler.ts` — 新增 `POST /admin/crawler/freeze`；`stop-all` 返回真实 freeze 状态。
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerMonitor.ts` — 新增 `stopAll/setFreezeEnabled` 控制动作与 pending 状态。
+  - `src/components/admin/system/crawler-site/components/CrawlerSystemStatusStrip.tsx` — 增加冻结开关与 stop-all 按钮。
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx` — 状态条动作接线。
+  - `README.md` — 补充控制台状态条操作与 freeze 调试接口。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 控制台已可直接执行 freeze/stop-all，执行后只做局部监控刷新，不触发表格上下文重置。

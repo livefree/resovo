@@ -153,6 +153,9 @@ VALUES (
    - `恢复`：从暂停状态恢复执行。
    - `中止`：停止该批次后续执行，进入 `cancelled`（已完成结果保留）。
 4. 全局止血：如发生任务失控，可调用 `stop-all`（开启全局冻结 + 取消活跃任务）。
+5. 控制台状态条（scheduler/freeze/orphan）可直接执行：
+   - `开启冻结/关闭冻结`：切换全局采集冻结状态。
+   - `stop-all`：一键取消活跃任务并冻结系统。
 
 手动触发方式：
 1. 全站触发：在工具栏点击「全站增量采集」或「全站全量采集」。
@@ -202,6 +205,12 @@ curl -X POST 'http://localhost:4000/v1/admin/crawler/stop-all' \
   -H 'Authorization: Bearer <admin_access_token>' \
   -H 'Content-Type: application/json' \
   -d '{"freeze":true,"removeRepeatableTick":true}'
+
+# 显式切换全局冻结（enabled=true 开启，false 关闭）
+curl -X POST 'http://localhost:4000/v1/admin/crawler/freeze' \
+  -H 'Authorization: Bearer <admin_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"enabled":false}'
 ```
 
 命令行止血（本地开发）：

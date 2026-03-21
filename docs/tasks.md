@@ -4459,27 +4459,55 @@ _（任务 review 通过后移入此处）_
 
 #### CHG-117 C2 stop-all/freeze 正式化
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-21 09:10
 - **计划开始时间**：2026-03-21 11:30
 - **实际开始时间**：2026-03-21 02:10
-- **完成时间**：待定
+- **完成时间**：2026-03-21 02:08
 - **问题**：当前已有 stop-all/freeze 能力，但控制台缺少统一可操作入口与状态联动。
 - **影响的已完成任务**：CHG-116
-- **文件范围（计划）**：
+- **文件范围**：
   - `src/api/routes/admin/crawler.ts`
   - `src/components/admin/system/crawler-site/hooks/useCrawlerMonitor.ts`
   - `src/components/admin/system/crawler-site/components/CrawlerSystemStatusStrip.tsx`
   - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
   - `README.md`
-  - `tests/unit/api/crawler-worker.test.ts`
-- **修复内容（计划）**：
-  - 增加 freeze 开关专用接口，支持后台显式冻结/解冻。
-  - 控制台状态条增加 stop-all 与 freeze 控制按钮，动作后自动刷新状态与运行面板。
-  - README 补充正式化控制说明与调用示例。
-- **测试要求（计划）**：
+- **修复内容**：
+  - 新增 `POST /admin/crawler/freeze`，支持显式冻结/解冻并返回系统状态。
+  - `stop-all` 响应改为返回数据库真实 freeze 状态，避免口径漂移。
+  - 控制台系统状态条增加「开启/关闭冻结」与「stop-all」按钮，并接入动作反馈与局部刷新。
+  - README 补充 freeze API 与控制台状态条操作说明。
+- **测试要求**：
   - `npm run typecheck`
   - `npm run lint`
   - `npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+- **完成备注**：
+  - stop-all/freeze 已形成“后端接口 + 控制台入口 + 文档说明”的最小闭环。
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-118 B1 控制台容器拆分与 query model 收拢
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-03-21 09:10
+- **计划开始时间**：2026-03-21 13:30
+- **实际开始时间**：2026-03-21 02:15
+- **完成时间**：待定
+- **问题**：监控状态与表格状态仍由同一页面容器承载，重渲染边界不够清晰，后续扩展风险高。
+- **影响的已完成任务**：CHG-117
+- **文件范围（计划）**：
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerMonitor.ts`
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSites.ts`
+  - `src/components/admin/system/crawler-site/components/*`（按需拆分）
+- **修复内容（计划）**：
+  - 拆分控制台容器状态边界：监控区 query model 与站点表格 query model 解耦。
+  - 明确“监控高频轮询仅更新监控区，表格仅按需刷新”的调用路径。
+  - 通过 memo/回调稳定引用，减少监控轮询对表格交互状态的干扰风险。
+- **测试要求（计划）**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
 - **完成备注**：待实施
 - **问题说明**：_（无）_

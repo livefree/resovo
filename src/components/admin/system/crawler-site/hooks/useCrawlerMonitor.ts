@@ -41,6 +41,8 @@ export function useCrawlerMonitor({
   const [overview, setOverview] = useState<CrawlerOverview | null>(null)
   const [runs, setRuns] = useState<CrawlerRunSummary[]>([])
   const [systemStatus, setSystemStatus] = useState<CrawlerSystemStatus | null>(null)
+  const [stopAllPending, setStopAllPending] = useState(false)
+  const [freezeSwitchPending, setFreezeSwitchPending] = useState(false)
 
   const fetchOverview = useCallback(async () => {
     try {
@@ -138,6 +140,35 @@ export function useCrawlerMonitor({
     [fetchRuns, showToast],
   )
 
+  const stopAll = useCallback(async () => {
+    setStopAllPending(true)
+    try {
+      await apiClient.post('/admin/crawler/stop-all', {
+        freeze: true,
+        removeRepeatableTick: true,
+      })
+      showToast('已执行 stop-all（冻结 + 取消活跃任务）', true)
+      await refreshMonitor()
+    } catch {
+      showToast('执行 stop-all 失败', false)
+    } finally {
+      setStopAllPending(false)
+    }
+  }, [refreshMonitor, showToast])
+
+  const setFreezeEnabled = useCallback(async (enabled: boolean) => {
+    setFreezeSwitchPending(true)
+    try {
+      await apiClient.post('/admin/crawler/freeze', { enabled })
+      showToast(enabled ? '已开启全局冻结' : '已关闭全局冻结', true)
+      await refreshMonitor()
+    } catch {
+      showToast(enabled ? '开启全局冻结失败' : '关闭全局冻结失败', false)
+    } finally {
+      setFreezeSwitchPending(false)
+    }
+  }, [refreshMonitor, showToast])
+
   return {
     overview,
     runs,
@@ -151,5 +182,9 @@ export function useCrawlerMonitor({
     pauseRun,
     resumeRun,
     cancelRun,
+    stopAll,
+    setFreezeEnabled,
+    stopAllPending,
+    freezeSwitchPending,
   }
 }

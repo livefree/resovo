@@ -642,3 +642,16 @@
   - 更新 worker 与 API 相关单测，覆盖 contract 缺失拒绝路径。
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler-worker.test.ts tests/unit/api/crawler.test.ts`
 - **后续**：进入 CHG-117（stop-all/freeze 正式化）。
+
+## [LOG-20260321-0208-01] CHG-117 stop-all/freeze 正式化完成
+- **时间**：2026-03-21 02:08
+- **类型**：INFO
+- **关联任务**：CHG-117
+- **内容**：完成 stop-all/freeze 的控制台入口与后端开关正式化。
+- **处理动作**：
+  - 新增 `POST /admin/crawler/freeze` 接口（支持冻结/解冻）。
+  - `stop-all` 响应改为返回数据库真实 freeze 状态。
+  - 系统状态条接入“开启/关闭冻结 + stop-all”操作按钮与动作中状态。
+  - README 补充 freeze API 与控制台操作说明。
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+- **后续**：进入 CHG-118（监控区/表格区 query model 解耦）。

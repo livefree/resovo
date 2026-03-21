@@ -6,6 +6,10 @@ interface CrawlerSystemStatus {
 
 interface CrawlerSystemStatusStripProps {
   data: CrawlerSystemStatus | null
+  stopAllPending?: boolean
+  freezeSwitchPending?: boolean
+  onStopAll?: () => void
+  onSetFreezeEnabled?: (enabled: boolean) => void
 }
 
 function pillClass(ok: boolean): string {
@@ -14,7 +18,13 @@ function pillClass(ok: boolean): string {
     : 'border-red-400/30 bg-red-500/10 text-red-300'
 }
 
-export function CrawlerSystemStatusStrip({ data }: CrawlerSystemStatusStripProps) {
+export function CrawlerSystemStatusStrip({
+  data,
+  stopAllPending = false,
+  freezeSwitchPending = false,
+  onStopAll,
+  onSetFreezeEnabled,
+}: CrawlerSystemStatusStripProps) {
   const schedulerEnabled = data?.schedulerEnabled === true
   const freezeEnabled = data?.freezeEnabled === true
   const orphanTaskCount = data?.orphanTaskCount ?? 0
@@ -41,6 +51,22 @@ export function CrawlerSystemStatusStrip({ data }: CrawlerSystemStatusStripProps
         >
           orphan task：{orphanTaskCount}
         </span>
+        <button
+          type="button"
+          disabled={freezeSwitchPending}
+          onClick={() => onSetFreezeEnabled?.(!freezeEnabled)}
+          className="rounded border border-[var(--border)] px-2 py-1 text-[var(--text)] hover:bg-[var(--bg3)] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {freezeSwitchPending ? '处理中…' : freezeEnabled ? '关闭冻结' : '开启冻结'}
+        </button>
+        <button
+          type="button"
+          disabled={stopAllPending}
+          onClick={() => onStopAll?.()}
+          className="rounded border border-red-400/60 px-2 py-1 text-red-300 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {stopAllPending ? '执行中…' : 'stop-all'}
+        </button>
       </div>
     </section>
   )

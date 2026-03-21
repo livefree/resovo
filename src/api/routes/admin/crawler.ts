@@ -307,11 +307,37 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
       }
     }
 
+    const freezeSetting = await systemSettingsQueries.getSetting(db, 'crawler_global_freeze')
+
     return reply.send({
       data: {
-        freezeEnabled: freeze,
+        freezeEnabled: freezeSetting === 'true',
         markedRuns: runMarked,
         ...taskChanges,
+      },
+    })
+  })
+
+  // ── POST /admin/crawler/freeze — 全局冻结开关 ───────────────
+  fastify.post('/admin/crawler/freeze', { preHandler: auth }, async (request, reply) => {
+    const BodySchema = z.object({
+      enabled: z.boolean(),
+    })
+    const parsed = BodySchema.safeParse(request.body ?? {})
+    if (!parsed.success) {
+      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
+    }
+
+    await systemSettingsQueries.setSetting(db, 'crawler_global_freeze', parsed.data.enabled ? 'true' : 'false')
+    const freeze = await systemSettingsQueries.getSetting(db, 'crawler_global_freeze')
+    const orphanTaskCount = await countOrphanActiveTasks(db)
+    const schedulerEnabled = process.env.CRAWLER_SCHEDULER_ENABLED === 'true'
+
+    return reply.send({
+      data: {
+        schedulerEnabled,
+        freezeEnabled: freeze === 'true',
+        orphanTaskCount,
       },
     })
   })

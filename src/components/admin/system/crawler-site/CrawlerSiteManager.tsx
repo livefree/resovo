@@ -86,6 +86,10 @@ export function CrawlerSiteManager() {
     pauseRun,
     resumeRun,
     cancelRun,
+    stopAll,
+    setFreezeEnabled,
+    stopAllPending,
+    freezeSwitchPending,
   } = useCrawlerMonitor({ showToast })
   const {
     runningBySite,
@@ -365,7 +369,13 @@ export function CrawlerSiteManager() {
   return (
     <div>
       <CrawlerSiteOverviewStats data={overview} />
-      <CrawlerSystemStatusStrip data={systemStatus} />
+      <CrawlerSystemStatusStrip
+        data={systemStatus}
+        stopAllPending={stopAllPending}
+        freezeSwitchPending={freezeSwitchPending}
+        onStopAll={() => { void stopAll() }}
+        onSetFreezeEnabled={(enabled) => { void setFreezeEnabled(enabled) }}
+      />
       <AutoCrawlSettingsPanel sites={sites} showToast={showToast} onConfigChange={setAutoConfig} />
       <section className="mb-2 rounded-lg border border-[var(--border)] bg-[var(--bg2)] px-3 py-2" data-testid="crawler-run-monitor-header">
         <h3 className="text-sm font-semibold text-[var(--text)]">采集批次状态</h3>
