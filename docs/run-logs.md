@@ -610,3 +610,11 @@
 - **内容**：针对 stop-all 后仍显示 running 的问题，补上强制收敛与心跳过期清理。
 - **处理动作**：`cancelAllActiveTasks` 改为直接取消 running；新增 `markStaleHeartbeatRunningTasks`；overview running 统计加心跳新鲜度过滤。
 - **后续**：重启 API 后执行一次 `npm run crawler:stop-all`，再核对 `crawler_tasks` running 数量与面板一致性。
+
+## [LOG-20260321-0912-01] 采集控制台 v1.1 计划约束落盘
+- **时间**：2026-03-21 09:12
+- **类型**：INFO
+- **关联任务**：CHG-113（进行中）
+- **内容**：按评审意见将执行约束升级为硬规则，并固定后续执行顺序。
+- **处理动作**：更新 `admin_crawl_control_center_plan.md` 到 v1.1；任务序列改为 `A1 -> A2 -> A3 -> C1 -> C2 -> B1 -> D1`；在 task-queue / tasks 中建立新序列并标记 CHG-113 进行中。
+- **后续**：严格按序推进，不跨阶段并行。

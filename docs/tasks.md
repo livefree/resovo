@@ -4341,3 +4341,31 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 本地验证通过；请在你的运行环境重启 API 后执行 `npm run crawler:stop-all` 使历史 running 收敛。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-113 A1 契约统一（runId/taskId，移除 jobId 旧口径）
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-03-21 09:10
+- **计划开始时间**：2026-03-21 09:20
+- **实际开始时间**：2026-03-21 09:20
+- **完成时间**：待定
+- **问题**：前后端仍存在 `jobId` 旧口径残留，run/task 契约不稳定，影响监控与控制可靠性。
+- **影响的已完成任务**：CHG-109、CHG-111、CHG-112
+- **文件范围（计划）**：
+  - `src/components/admin/system/crawler-site/services/crawlTaskService.ts`
+  - `src/components/admin/system/crawler-site/crawlTask.types.ts`
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteCrawlTasks.ts`
+  - `src/api/routes/admin/crawler.ts`
+  - `src/types/*`（必要范围）
+- **修复内容（计划）**：
+  - 统一触发接口返回字段：`runId/taskId/taskIds/enqueuedSiteKeys/skippedSiteKeys`。
+  - 移除前端 `jobId` 依赖与旧解析路径。
+  - 对齐 run/task 类型与状态定义，减少重复与漂移。
+- **测试要求（计划）**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/api/crawler-worker.test.ts`
+- **完成备注**：待实施
+- **问题说明**：_（无）_
