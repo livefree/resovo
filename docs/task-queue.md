@@ -1039,11 +1039,11 @@
      - 容器独立滚动，不触发整页滚动
    - 回滚方式：回退 sources 迁移 commit，恢复旧列表组件
 
-6. CHG-127 — users 列表迁移到 shared table 基线（状态：🔄 进行中）
+6. CHG-127 — users 列表迁移到 shared table 基线（状态：✅ 已完成）
    - 创建时间：2026-03-21 11:20
    - 计划开始：2026-03-21 19:30
    - 实际开始：2026-03-21 15:48
-   - 完成时间：
+   - 完成时间：2026-03-21 15:50
    - 目标：将用户管理列表迁移并补齐可操作列规范
    - 范围：`src/components/admin/system/UserTable.tsx`、相关 hooks/services
    - 依赖：CHG-126
@@ -1053,10 +1053,10 @@
      - 操作列保持业务行为不变
    - 回滚方式：回退 users 迁移 commit，恢复原 users 列表
 
-7. CHG-128 — submissions 列表迁移到 shared table 基线（状态：⬜ 待开始）
+7. CHG-128 — submissions 列表迁移到 shared table 基线（状态：🔄 进行中）
    - 创建时间：2026-03-21 11:20
    - 计划开始：2026-03-21 21:00
-   - 实际开始：
+   - 实际开始：2026-03-21 15:50
    - 完成时间：
    - 目标：投稿审核列表对齐统一表格能力并保持审核流程不回退
    - 范围：`src/components/admin/content/SubmissionTable.tsx`、`AdminSubmissionList.tsx`
