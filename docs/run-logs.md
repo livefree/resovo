@@ -259,6 +259,14 @@
 - **处理动作**：更新 `admin_v2_refactor_plan.md` 与 `admin-module-template.md`，新增强 DoD、UI 硬边界、PR 单维度规则。
 - **后续**：按新顺序启动 shared Phase 1（先 `AdminTableFrame/AdminTableState`）。
 
+## [LOG-20260321-1645-01] CHG-131 全量回归完成
+- **时间**：2026-03-21 16:45
+- **类型**：RESOLVED
+- **关联任务**：CHG-131
+- **内容**：完成 shared table 迁移阶段的全量门禁回归与稳定性验证。
+- **处理动作**：执行 `npm run typecheck`、`npm run lint`、`npm run test:run`，结果 `53 files / 526 tests` 全通过。
+- **后续**：进入 CHG-132，更新能力矩阵与 baseline 文档，固化最终迁移结果。
+
 ## [LOG-20260320-1226-01] CHG-69 任务序列启动
 - **时间**：2026-03-20 12:26
 - **类型**：INFO
