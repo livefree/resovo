@@ -4580,3 +4580,32 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - 全量单测通过（`38 files / 483 tests`）。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-121 CrawlerSiteTable 回归修复（CHG-120）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-21 03:30
+- **计划开始时间**：2026-03-21 03:31
+- **实际开始时间**：2026-03-21 03:31
+- **完成时间**：2026-03-21 03:41
+- **问题**：CHG-120 存在 5 项回归：权重编辑位置不符、Key hover/copy 体验偏差、权重切换不可用、成人与启用点击无效。
+- **影响的已完成任务**：CHG-120
+- **文件范围**：
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTableLiteHeader.tsx`
+  - `src/components/admin/system/crawler-site/components/ColumnMenu.tsx`
+  - `src/components/admin/system/crawler-site/components/ColumnFilterPanel.tsx`
+- **修复内容**：
+  - 权重档位编辑迁移到“权重列筛选面板”，与最小/最大筛选同处。
+  - Key 列补充 hover tooltip（完整 API），copy 改为图标按钮并加入复制 fallback。
+  - 权重列仅显示“高/中/低”，点击按档位循环切换并持久更新。
+  - 移除成人/启用切换对 `fromConfig` 的禁用，修复点击无效。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/AdminCrawlerTabs.test.tsx`
+- **完成备注**：
+  - 回归缺陷 5/5 修复完成。
+- **问题说明**：_（无）_

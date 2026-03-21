@@ -85,8 +85,9 @@ function getWeightLevelLabel(weight: number, preset: WeightPreset): string {
 }
 
 function nextWeight(weight: number, preset: WeightPreset): number {
-  if (weight === preset.high) return preset.medium
-  if (weight === preset.medium) return preset.low
+  const level = getWeightLevelLabel(weight, preset)
+  if (level === '高') return preset.medium
+  if (level === '中') return preset.low
   return preset.high
 }
 
@@ -176,7 +177,20 @@ export function CrawlerSiteTable({
       await navigator.clipboard.writeText(apiUrl)
       showToast('已复制 API 地址', true)
     } catch {
-      showToast('复制失败', false)
+      try {
+        const input = document.createElement('textarea')
+        input.value = apiUrl
+        input.style.position = 'fixed'
+        input.style.opacity = '0'
+        document.body.appendChild(input)
+        input.focus()
+        input.select()
+        document.execCommand('copy')
+        document.body.removeChild(input)
+        showToast('已复制 API 地址', true)
+      } catch {
+        showToast('复制失败', false)
+      }
     }
   }
 
@@ -210,37 +224,9 @@ export function CrawlerSiteTable({
           requiredColumns={requiredColumns}
           openMenuColumn={openMenuColumn}
           setOpenMenuColumn={setOpenMenuColumn}
+          weightPresets={weightPresets}
+          onPatchWeightPreset={updateWeightPreset}
         />
-        <tr className="border-b border-[var(--border)] bg-[var(--bg)]">
-          <th className={`${colClass('weight')} px-3 py-2`} style={{ width: columnWidths.weight, minWidth: columnWidths.weight }}>
-            <div className="flex items-center gap-1 text-[11px] text-[var(--muted)]">
-              <span>高</span>
-              <input
-                type="number"
-                className="w-10 rounded border border-[var(--border)] bg-[var(--bg3)] px-1 py-0.5 text-[11px] text-[var(--text)]"
-                value={weightPresets.high}
-                onChange={(event) => updateWeightPreset('high', event.target.value)}
-              />
-              <span>中</span>
-              <input
-                type="number"
-                className="w-10 rounded border border-[var(--border)] bg-[var(--bg3)] px-1 py-0.5 text-[11px] text-[var(--text)]"
-                value={weightPresets.medium}
-                onChange={(event) => updateWeightPreset('medium', event.target.value)}
-              />
-              <span>低</span>
-              <input
-                type="number"
-                className="w-10 rounded border border-[var(--border)] bg-[var(--bg3)] px-1 py-0.5 text-[11px] text-[var(--text)]"
-                value={weightPresets.low}
-                onChange={(event) => updateWeightPreset('low', event.target.value)}
-              />
-            </div>
-          </th>
-          <th colSpan={visibleColumnCount + 1} className="px-3 py-2 text-left text-[11px] text-[var(--muted)]">
-            权重档位可编辑，行内点击“高/中/低”循环切换并保存。
-          </th>
-        </tr>
       </thead>
       <tbody>
         <AdminTableState
@@ -250,7 +236,6 @@ export function CrawlerSiteTable({
         />
         {displaySites.map((site) => {
           const rowBusy = rowSaving[site.key] === true
-          const canInlineEdit = !site.fromConfig
           const siteRunning = runningBySite[site.key] === true
           const domainLabel = site.key
 
@@ -270,14 +255,18 @@ export function CrawlerSiteTable({
               </td>
 
               <td className={`${colClass('key')} px-3 py-3`}>
-                <div className="flex items-center gap-1">
+                <div className="group relative flex items-center gap-1">
                   <span className="max-w-[160px] truncate text-xs text-[var(--muted)]" title={site.apiUrl}>{domainLabel}</span>
+                  <span className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden max-w-[360px] rounded border border-[var(--border)] bg-[var(--bg2)] px-2 py-1 text-[11px] text-[var(--text)] group-hover:block">
+                    {site.apiUrl}
+                  </span>
                   <button
                     type="button"
                     onClick={() => { void handleCopyApi(site.apiUrl) }}
+                    aria-label="复制 API 地址"
                     className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[11px] text-[var(--muted)] hover:text-[var(--text)]"
                   >
-                    复制
+                    ⧉
                   </button>
                 </div>
               </td>
@@ -291,21 +280,21 @@ export function CrawlerSiteTable({
               <td className={`${colClass('weight')} px-3 py-3`}>
                 <button
                   type="button"
-                  disabled={!canInlineEdit || rowBusy}
+                  disabled={rowBusy}
                   onClick={() => {
                     const value = nextWeight(site.weight, weightPresets)
                     void handleInlineUpdate(site, { weight: value })
                   }}
                   className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] disabled:opacity-50"
                 >
-                  {getWeightLevelLabel(site.weight, weightPresets)} · {site.weight}
+                  {getWeightLevelLabel(site.weight, weightPresets)}
                 </button>
               </td>
 
               <td className={`${colClass('isAdult')} px-3 py-3`}>
                 <button
                   type="button"
-                  disabled={!canInlineEdit || rowBusy}
+                  disabled={rowBusy}
                   onClick={() => { void handleInlineUpdate(site, { isAdult: !site.isAdult }) }}
                   className={`text-base ${site.isAdult ? 'text-red-400' : 'text-[var(--muted)]'} disabled:opacity-50`}
                   title={site.isAdult ? '成人源' : '非成人源'}
@@ -324,7 +313,7 @@ export function CrawlerSiteTable({
                 <button
                   type="button"
                   onClick={() => { void handleToggleDisabled(site) }}
-                  disabled={!canInlineEdit || rowBusy}
+                  disabled={rowBusy}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full border transition-colors disabled:opacity-50 ${
                     site.disabled ? 'border-[var(--border)] bg-[var(--bg3)]' : 'border-green-500/30 bg-green-500/30'
                   }`}

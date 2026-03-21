@@ -1817,3 +1817,16 @@
 - **注意事项**：
   - 需求中“固定列标准”与“默认列含 API 地址”冲突，执行时以固定列标准为准，将 API 信息并入 Key 列 hover/copy。
   - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run`（38 files / 483 tests）。
+
+## [CHG-121] CrawlerSiteTable 回归修复（交互）
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 03:41
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx` — 修复 Key tooltip/copy、权重切换、成人/启用点击。
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTableLiteHeader.tsx` — 透传权重档位编辑事件。
+  - `src/components/admin/system/crawler-site/components/ColumnMenu.tsx` — 透传权重档位编辑参数。
+  - `src/components/admin/system/crawler-site/components/ColumnFilterPanel.tsx` — 权重筛选面板新增“高/中/低”编辑行。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次为 CHG-120 回归修复，不改变 API 与数据结构。

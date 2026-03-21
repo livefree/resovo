@@ -694,3 +694,15 @@
   - 更新相关列筛选映射、排序字段与单测。
 - **冲突处理**：固定列标准与“默认列含 API 地址”冲突，按固定列标准执行。
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run`。
+
+## [LOG-20260321-0341-01] CHG-121 表格回归缺陷修复完成
+- **时间**：2026-03-21 03:41
+- **类型**：INFO
+- **关联任务**：CHG-121
+- **内容**：修复 CHG-120 上线后的 5 项交互回归。
+- **处理动作**：
+  - 权重档位编辑从表头迁移到权重列筛选面板。
+  - Key 列补充 hover 完整 API，copy 改图标并加入复制 fallback。
+  - 权重展示改为仅“高/中/低”，点击可循环切换。
+  - 成人、启用状态移除 fromConfig 禁用，恢复可点击更新。
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/AdminCrawlerTabs.test.tsx`。

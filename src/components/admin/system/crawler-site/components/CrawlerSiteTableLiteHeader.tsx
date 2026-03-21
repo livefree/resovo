@@ -18,6 +18,8 @@ interface CrawlerSiteTableLiteHeaderProps {
   requiredColumns: ColumnId[]
   openMenuColumn: ColumnId | null
   setOpenMenuColumn: (columnId: ColumnId | null) => void
+  weightPresets: { high: number; medium: number; low: number }
+  onPatchWeightPreset: (level: 'high' | 'medium' | 'low', value: string) => void
 }
 
 const HEADER_COLUMNS: Array<{ id: ColumnId; label: string; sortField?: SortField; canFilter?: boolean }> = [
@@ -63,6 +65,8 @@ export function CrawlerSiteTableLiteHeader({
   requiredColumns,
   openMenuColumn,
   setOpenMenuColumn,
+  weightPresets,
+  onPatchWeightPreset,
 }: CrawlerSiteTableLiteHeaderProps) {
   return (
     <tr className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg2)]">
@@ -127,6 +131,8 @@ export function CrawlerSiteTableLiteHeader({
                   setOpenMenuColumn(null)
                 }}
                 onPatchFilter={onPatchFilter}
+                weightPresets={weightPresets}
+                onPatchWeightPreset={onPatchWeightPreset}
               />
             )}
 

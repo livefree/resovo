@@ -5,9 +5,17 @@ interface ColumnFilterPanelProps {
   columnId: ColumnId
   filters: FilterState
   onPatch: (patch: Partial<FilterState>) => void
+  weightPresets?: { high: number; medium: number; low: number }
+  onPatchWeightPreset?: (level: 'high' | 'medium' | 'low', value: string) => void
 }
 
-export function ColumnFilterPanel({ columnId, filters, onPatch }: ColumnFilterPanelProps) {
+export function ColumnFilterPanel({
+  columnId,
+  filters,
+  onPatch,
+  weightPresets,
+  onPatchWeightPreset,
+}: ColumnFilterPanelProps) {
   if (columnId === 'name') {
     return (
       <input
@@ -93,19 +101,41 @@ export function ColumnFilterPanel({ columnId, filters, onPatch }: ColumnFilterPa
   }
   if (columnId === 'weight') {
     return (
-      <div className="flex gap-1">
-        <input
-          value={filters.weightMin}
-          onChange={(event) => onPatch({ weightMin: event.target.value })}
-          placeholder="最小"
-          className="w-16 rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-1 text-xs text-[var(--text)]"
-        />
-        <input
-          value={filters.weightMax}
-          onChange={(event) => onPatch({ weightMax: event.target.value })}
-          placeholder="最大"
-          className="w-16 rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-1 text-xs text-[var(--text)]"
-        />
+      <div className="space-y-1">
+        <div className="flex items-center gap-1 text-[11px] text-[var(--muted)]">
+          <span>高</span>
+          <input
+            value={String(weightPresets?.high ?? 80)}
+            onChange={(event) => onPatchWeightPreset?.('high', event.target.value)}
+            className="w-10 rounded border border-[var(--border)] bg-[var(--bg3)] px-1 py-0.5 text-[11px] text-[var(--text)]"
+          />
+          <span>中</span>
+          <input
+            value={String(weightPresets?.medium ?? 50)}
+            onChange={(event) => onPatchWeightPreset?.('medium', event.target.value)}
+            className="w-10 rounded border border-[var(--border)] bg-[var(--bg3)] px-1 py-0.5 text-[11px] text-[var(--text)]"
+          />
+          <span>低</span>
+          <input
+            value={String(weightPresets?.low ?? 20)}
+            onChange={(event) => onPatchWeightPreset?.('low', event.target.value)}
+            className="w-10 rounded border border-[var(--border)] bg-[var(--bg3)] px-1 py-0.5 text-[11px] text-[var(--text)]"
+          />
+        </div>
+        <div className="flex gap-1">
+          <input
+            value={filters.weightMin}
+            onChange={(event) => onPatch({ weightMin: event.target.value })}
+            placeholder="最小"
+            className="w-16 rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-1 text-xs text-[var(--text)]"
+          />
+          <input
+            value={filters.weightMax}
+            onChange={(event) => onPatch({ weightMax: event.target.value })}
+            placeholder="最大"
+            className="w-16 rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-1 text-xs text-[var(--text)]"
+          />
+        </div>
       </div>
     )
   }

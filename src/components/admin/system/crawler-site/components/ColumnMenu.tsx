@@ -14,6 +14,8 @@ interface ColumnMenuProps {
   onClearFilter: () => void
   onHideColumn: () => void
   onPatchFilter: (patch: Partial<FilterState>) => void
+  weightPresets?: { high: number; medium: number; low: number }
+  onPatchWeightPreset?: (level: 'high' | 'medium' | 'low', value: string) => void
 }
 
 export function ColumnMenu({
@@ -29,6 +31,8 @@ export function ColumnMenu({
   onClearFilter,
   onHideColumn,
   onPatchFilter,
+  weightPresets,
+  onPatchWeightPreset,
 }: ColumnMenuProps) {
   return (
     <div className="absolute right-2 top-full z-30 mt-1 w-52 rounded-md border border-[var(--border)] bg-[var(--bg2)] p-2 shadow-lg">
@@ -53,7 +57,13 @@ export function ColumnMenu({
 
       {canFilter && (
         <div className="mb-2 space-y-2">
-          <ColumnFilterPanel columnId={columnId} filters={filters} onPatch={onPatchFilter} />
+          <ColumnFilterPanel
+            columnId={columnId}
+            filters={filters}
+            onPatch={onPatchFilter}
+            weightPresets={weightPresets}
+            onPatchWeightPreset={onPatchWeightPreset}
+          />
           <button
             type="button"
             onClick={onClearFilter}
