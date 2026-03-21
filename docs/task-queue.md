@@ -957,9 +957,9 @@
    - 验收要点：权重档位编辑位置修正；Key hover/copy 修正；权重/成人/启用点击生效
 
 ## [SEQ-20260321-33] Admin 列表能力统一（矩阵落地到迁移执行）
-- **状态**：🔄 执行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-21 11:20
-- **最后更新时间**：2026-03-21 15:48
+- **最后更新时间**：2026-03-21 16:47
 - **目标**：基于能力矩阵，按原子任务将 admin 全部列表收敛到统一表格能力基线
 - **范围**：`admin/*` 列表页（crawler/videos/sources/users/submissions/subtitles/dashboard）与 shared table 能力
 - **依赖**：`docs/admin_list_matrix.md`、`docs/admin_table_baseline.md`
@@ -1111,11 +1111,11 @@
      - `npm run typecheck`、`npm run lint`、`npm run test:run` 通过
    - 回滚方式：按页面粒度回退最近迁移 commit，恢复上一稳定版本
 
-11. CHG-132 — 文档与基线固化（状态：🔄 进行中）
+11. CHG-132 — 文档与基线固化（状态：✅ 已完成）
    - 创建时间：2026-03-21 11:20
    - 计划开始：2026-03-22 16:00
    - 实际开始：2026-03-21 16:45
-   - 完成时间：
+   - 完成时间：2026-03-21 16:47
    - 目标：将统一表格能力、迁移结果与运维约束沉淀到文档
    - 范围：`docs/admin_list_matrix.md`、`docs/admin_table_baseline.md`、`docs/changelog.md`、`docs/run-logs.md`
    - 依赖：CHG-131

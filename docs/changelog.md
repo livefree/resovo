@@ -1950,3 +1950,15 @@
   - `npm run test:run` ✅（`53 files / 526 tests`）
 - **注意事项**：
   - `ReviewModal`/`ConfigFileEditor`/`authStore` 的测试 stderr 为历史遗留 warning，不影响当前任务通过。
+
+## [CHG-132] 文档与基线固化
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 16:47
+- **修改文件**：
+  - `docs/admin_list_matrix.md` — 更新后台列表能力矩阵为迁移后状态，标注兼容入口与剩余未统一页面。
+  - `docs/admin_table_baseline.md` — 新增例外场景与回滚手册，补齐基线执行边界。
+  - `docs/tasks.md`、`docs/task-queue.md`、`docs/run-logs.md` — 同步任务状态与序列收口记录。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 当前序列 CHG-122 ~ CHG-132 已全部完成，`tasks.md` 进入待分配状态。

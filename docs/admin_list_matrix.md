@@ -27,18 +27,21 @@
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `/admin/crawler`（采集配置） | `CrawlerSiteTable` | ✅ | ✅ | ✅ | ✅ | △ | ✅ | ❌ | ✅ | 排序前端 / 无分页 | 高 | P0（样板） |
 | `/admin/crawler?tab=tasks`（任务记录） | `AdminCrawlerPanel` | ❌ | ❌ | ❌ | ✅ | △ | △（仅横向） | ✅ | △（runId URL） | 排序无 / 分页后端 | 高 | P1 |
-| `/admin/videos` | `VideoTable` | ❌ | ❌ | ❌ | △ | ❌ | ✅ | ✅ | ❌ | 排序无 / 分页后端 | 高 | P1 |
-| `/admin/sources` | `SourceTable` | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ | ❌ | 排序无 / 分页后端 | 高 | P1 |
-| `/admin/users` | `UserTable` | ❌ | ❌ | ❌ | △ | ❌ | ❌ | ✅ | ❌ | 排序无 / 分页后端 | 中 | P1 |
-| `/admin/content`（投稿审核 Tab） | `SubmissionTable` | ❌ | ❌ | ❌ | ✅ | ❌ | △（仅横向） | ✅ | ❌ | 排序无 / 分页后端 | 中 | P2 |
-| `/admin/content`（字幕审核 Tab） | `SubtitleTable` | ❌ | ❌ | ❌ | △ | ❌ | △（仅横向） | ✅ | ❌ | 排序无 / 分页后端 | 中 | P2 |
-| `/admin/submissions`（旧） | `AdminSubmissionList` | ❌ | ❌ | ❌ | ✅ | ❌ | △（仅横向） | ✅ | ❌ | 排序无 / 分页后端 | 中 | P3（收敛） |
-| `/admin/subtitles`（旧） | `AdminSubtitleList` | ❌ | ❌ | ❌ | ✅ | ❌ | △（仅横向） | ✅ | ❌ | 排序无 / 分页后端 | 中 | P3（收敛） |
+| `/admin/videos` | `VideoTable` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 排序前端 / 分页后端 | 高 | ✅ 已迁移 |
+| `/admin/sources` | `SourceTable` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 排序前端 / 分页后端 | 高 | ✅ 已迁移 |
+| `/admin/users` | `UserTable` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 排序前端 / 分页后端 | 中 | ✅ 已迁移 |
+| `/admin/content`（投稿审核 Tab） | `SubmissionTable` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 排序前端 / 分页后端 | 中 | ✅ 已迁移 |
+| `/admin/content`（字幕审核 Tab） | `SubtitleTable` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 排序前端 / 分页后端 | 中 | ✅ 已迁移 |
+| `/admin/submissions`（旧） | `AdminSubmissionList` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 排序前端 / 分页后端 | 中 | ✅ 已迁移（兼容入口） |
+| `/admin/subtitles`（旧） | `AdminSubtitleList` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 排序前端 / 分页后端 | 中 | ✅ 已迁移（兼容入口） |
+| `/admin/analytics`（爬虫最近任务） | `AdminAnalyticsDashboard` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | 排序前端 / 无分页 | 低 | ✅ 已迁移 |
+| `/admin/system/cache` | `CacheManager` | ✅ | ✅ | ✅ | △（字段短） | ✅ | ✅ | ❌ | ✅ | 排序前端 / 无分页 | 低 | ✅ 已迁移 |
+| `/admin/system/monitor`（慢请求） | `PerformanceMonitor` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | 排序前端 / 无分页 | 低 | ✅ 已迁移 |
 
 ---
 
 ## 结论
 
-1. 当前仅 `CrawlerSiteTable` 具备完整列能力（排序/列显隐/列宽拖拽/持久化）。
-2. 其余列表页大多只有分页，缺少统一的列能力与状态记忆。
-3. 迁移优先建议：`users/sources/videos` 先落地统一能力，再处理 `content` 与旧入口收敛。
+1. 高/中/低风险列表页已完成 shared 基线迁移，形成一致交互能力。
+2. 仍未纳入 shared 的是 `crawler tasks` 任务记录页（按业务口径单独管理）。
+3. 后续新增列表默认复用 shared 基线，不再新增独立 localStorage 或表格状态实现。

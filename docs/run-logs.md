@@ -267,6 +267,14 @@
 - **处理动作**：执行 `npm run typecheck`、`npm run lint`、`npm run test:run`，结果 `53 files / 526 tests` 全通过。
 - **后续**：进入 CHG-132，更新能力矩阵与 baseline 文档，固化最终迁移结果。
 
+## [LOG-20260321-1647-01] CHG-132 文档基线固化完成
+- **时间**：2026-03-21 16:47
+- **类型**：RESOLVED
+- **关联任务**：CHG-132
+- **内容**：完成列表能力矩阵与统一基线文档固化，迁移序列正式收口。
+- **处理动作**：更新 `admin_list_matrix.md`、`admin_table_baseline.md`，并同步 `tasks/task-queue/changelog` 状态。
+- **后续**：等待下一阶段任务队列（N/A）。
+
 ## [LOG-20260320-1226-01] CHG-69 任务序列启动
 - **时间**：2026-03-20 12:26
 - **类型**：INFO
