@@ -17,7 +17,7 @@ const CONTENT_MENU: MenuItem[] = [
 ]
 
 const SYSTEM_MENU: MenuItem[] = [
-  { href: '/admin/crawler', label: '采集控制台（原视频源配置）', icon: '🕷️' },
+  { href: '/admin/crawler', label: '采集控制台', icon: '🕷️' },
   { href: '/admin/system/config', label: '配置文件', icon: '🧩' },
   { href: '/admin/system/settings', label: '站点配置', icon: '⚙️' },
   { href: '/admin/users', label: '用户管理', icon: '👤' },
@@ -83,39 +83,44 @@ export function AdminSidebar({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <aside
-      className={`${collapsed ? 'w-16' : 'w-56'} shrink-0 flex flex-col border-r border-[var(--border)] bg-[var(--bg2)] px-3 py-6 transition-[width] duration-200`}
+      className={`${collapsed ? 'w-16' : 'w-56'} relative flex h-screen shrink-0 flex-col border-r border-[var(--border)] bg-[var(--bg2)] px-3 py-6 transition-[width] duration-200`}
       data-testid="admin-sidebar"
     >
-      <div className="mb-6 flex items-center justify-between gap-2 px-1">
+      <div className="mb-6 px-1">
         <Link href="/admin" className="text-lg font-bold text-[var(--accent)]">
           {collapsed ? '流' : '流光后台'}
         </Link>
-        <button
-          type="button"
-          onClick={toggleCollapsed}
-          className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-          data-testid="admin-sidebar-collapse-toggle"
-          aria-label={collapsed ? '展开侧栏' : '收窄侧栏'}
-          title={collapsed ? '展开侧栏' : '收窄侧栏'}
-        >
-          {collapsed ? '»' : '«'}
-        </button>
       </div>
 
-      <SidebarSection title="内容管理" items={CONTENT_MENU} collapsed={collapsed} />
-      {isAdmin && <SidebarSection title="系统管理" items={SYSTEM_MENU} collapsed={collapsed} />}
+      <button
+        type="button"
+        onClick={toggleCollapsed}
+        className="absolute right-0 top-16 z-20 h-8 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[var(--border)] bg-[var(--bg2)] text-xs text-[var(--muted)] shadow-sm transition-colors hover:text-[var(--text)]"
+        data-testid="admin-sidebar-collapse-toggle"
+        aria-label={collapsed ? '展开侧栏' : '收窄侧栏'}
+        title={collapsed ? '展开侧栏' : '收窄侧栏'}
+      >
+        {collapsed ? '»' : '«'}
+      </button>
 
-      <div className="mt-auto pt-4 border-t border-[var(--border)]">
-        <Link
-          href="/"
-          data-testid="admin-back-to-site"
-          title={collapsed ? '返回前台' : undefined}
-          className="flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-[var(--bg3)] hover:text-[var(--text)]"
-          style={{ color: 'var(--muted-foreground)' }}
-        >
-          <span aria-hidden>←</span>
-          {!collapsed && <span>返回前台</span>}
-        </Link>
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="flex min-h-full flex-col">
+          <SidebarSection title="内容管理" items={CONTENT_MENU} collapsed={collapsed} />
+          {isAdmin && <SidebarSection title="系统管理" items={SYSTEM_MENU} collapsed={collapsed} />}
+
+          <div className="mt-auto pt-4 border-t border-[var(--border)]">
+            <Link
+              href="/"
+              data-testid="admin-back-to-site"
+              title={collapsed ? '返回前台' : undefined}
+              className="flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-[var(--bg3)] hover:text-[var(--text)]"
+              style={{ color: 'var(--muted-foreground)' }}
+            >
+              <span aria-hidden>←</span>
+              {!collapsed && <span>返回前台</span>}
+            </Link>
+          </div>
+        </div>
       </div>
     </aside>
   )

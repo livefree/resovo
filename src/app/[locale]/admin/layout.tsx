@@ -17,13 +17,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div
-      className="flex min-h-screen bg-[var(--bg)] text-[var(--text)]"
+      className="flex h-screen overflow-hidden bg-[var(--bg)] text-[var(--text)]"
       data-testid="admin-layout"
     >
       <AdminSidebar isAdmin={isAdmin} />
 
       {/* ── 主内容区 ─────────────────────────────────────────────── */}
-      <main className="flex-1 overflow-auto p-8">{children}</main>
+      <main className="min-w-0 flex-1 overflow-y-auto p-8">{children}</main>
     </div>
   )
 }

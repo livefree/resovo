@@ -15,6 +15,7 @@ interface CrawlerRunPanelProps {
   onCancel: (runId: string) => void
   onPause: (runId: string) => void
   onResume: (runId: string) => void
+  enableControls?: boolean
 }
 
 function labelForTrigger(triggerType: CrawlerRunSummary['triggerType']): string {
@@ -63,12 +64,20 @@ function buildTaskLink(runId: string, status?: 'failed' | 'cancelled'): string {
   return `?${params.toString()}`
 }
 
-export function CrawlerRunPanel({ title, emptyText, runs, onCancel, onPause, onResume }: CrawlerRunPanelProps) {
+export function CrawlerRunPanel({
+  title,
+  emptyText,
+  runs,
+  onCancel,
+  onPause,
+  onResume,
+  enableControls = true,
+}: CrawlerRunPanelProps) {
   return (
     <div className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--bg2)] p-3">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-[var(--text)]">{title}</h3>
-        <p className="text-xs text-[var(--muted)]">监控数据局部轮询更新，不刷新表格和配置区域</p>
+        <p className="text-xs text-[var(--muted)]">监控数据局部轮询更新，不触发整页刷新</p>
       </div>
       {!runs.length ? (
         <p className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs text-[var(--muted)]">{emptyText}</p>
@@ -105,7 +114,7 @@ export function CrawlerRunPanel({ title, emptyText, runs, onCancel, onPause, onR
                       查看日志
                     </a>
                   ) : null}
-                  {run.controlStatus === 'active' && (run.status === 'queued' || run.status === 'running') ? (
+                  {enableControls && run.controlStatus === 'active' && (run.status === 'queued' || run.status === 'running') ? (
                     <button
                       type="button"
                       className="rounded border border-amber-400/60 px-2 py-0.5 text-amber-300 hover:bg-amber-500/10"
@@ -114,7 +123,7 @@ export function CrawlerRunPanel({ title, emptyText, runs, onCancel, onPause, onR
                       暂停
                     </button>
                   ) : null}
-                  {(run.controlStatus === 'paused' || run.controlStatus === 'pausing' || run.status === 'paused') ? (
+                  {enableControls && (run.controlStatus === 'paused' || run.controlStatus === 'pausing' || run.status === 'paused') ? (
                     <button
                       type="button"
                       className="rounded border border-green-400/60 px-2 py-0.5 text-green-300 hover:bg-green-500/10"
@@ -124,7 +133,7 @@ export function CrawlerRunPanel({ title, emptyText, runs, onCancel, onPause, onR
                     </button>
                   ) : null}
                   <span className="rounded bg-[var(--bg3)] px-2 py-0.5 text-[var(--text)]">{labelForStatus(run.status)}</span>
-                  {(run.status === 'queued' || run.status === 'running') && run.controlStatus !== 'cancelling' ? (
+                  {enableControls && (run.status === 'queued' || run.status === 'running') && run.controlStatus !== 'cancelling' ? (
                     <button
                       type="button"
                       className="rounded border border-red-400/60 px-2 py-0.5 text-red-300 hover:bg-red-500/10"

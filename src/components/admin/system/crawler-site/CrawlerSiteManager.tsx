@@ -16,7 +16,6 @@ import { useCrawlerSiteCrawlTasks } from '@/components/admin/system/crawler-site
 import { CrawlerSiteTable } from '@/components/admin/system/crawler-site/components/CrawlerSiteTable'
 import { CrawlerSiteTopToolbar } from '@/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar'
 import { ActiveFilterChipsBar } from '@/components/admin/system/crawler-site/components/ActiveFilterChipsBar'
-import { CrawlerConsoleMonitorSection } from '@/components/admin/system/crawler-site/components/CrawlerConsoleMonitorSection'
 import {
   CrawlerSiteFormDialog,
   EMPTY_SITE_FORM,
@@ -34,12 +33,6 @@ interface ValidateResult {
   latencyMs: number | null
 }
 
-interface AutoCrawlConfigSnapshot {
-  globalEnabled: boolean
-  defaultMode: 'incremental' | 'full'
-  perSiteOverrides: Record<string, { enabled: boolean; mode: 'inherit' | 'incremental' | 'full' }>
-}
-
 // ── 主组件 ────────────────────────────────────────────────────
 
 export function CrawlerSiteManager() {
@@ -51,7 +44,6 @@ export function CrawlerSiteManager() {
     'incremental-crawl': false,
     'full-crawl': false,
   })
-  const [autoConfig, setAutoConfig] = useState<AutoCrawlConfigSnapshot | null>(null)
   const { toast, showToast } = useAdminToast({ durationMs: 3500 })
   const {
     sortBy,
@@ -341,12 +333,6 @@ export function CrawlerSiteManager() {
 
   return (
     <div>
-      <CrawlerConsoleMonitorSection
-        sites={sites}
-        onAutoConfigChange={setAutoConfig}
-        showToast={showToast}
-      />
-
       <CrawlerSiteTopToolbar
         filters={filters}
         setFilters={setFilters}
