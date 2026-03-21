@@ -23,6 +23,12 @@ export interface CrawlerRunSummary {
   createdAt: string
 }
 
+export interface CrawlerSystemStatus {
+  schedulerEnabled: boolean
+  freezeEnabled: boolean
+  orphanTaskCount: number
+}
+
 interface UseCrawlerMonitorOptions {
   pollIntervalMs?: number
   showToast: (message: string, ok: boolean) => void
@@ -34,6 +40,7 @@ export function useCrawlerMonitor({
 }: UseCrawlerMonitorOptions) {
   const [overview, setOverview] = useState<CrawlerOverview | null>(null)
   const [runs, setRuns] = useState<CrawlerRunSummary[]>([])
+  const [systemStatus, setSystemStatus] = useState<CrawlerSystemStatus | null>(null)
 
   const fetchOverview = useCallback(async () => {
     try {
@@ -53,9 +60,18 @@ export function useCrawlerMonitor({
     }
   }, [])
 
+  const fetchSystemStatus = useCallback(async () => {
+    try {
+      const res = await apiClient.get<{ data: CrawlerSystemStatus }>('/admin/crawler/system-status')
+      setSystemStatus(res.data)
+    } catch {
+      // 非阻塞
+    }
+  }, [])
+
   const refreshMonitor = useCallback(async () => {
-    await Promise.all([fetchOverview(), fetchRuns()])
-  }, [fetchOverview, fetchRuns])
+    await Promise.all([fetchOverview(), fetchRuns(), fetchSystemStatus()])
+  }, [fetchOverview, fetchRuns, fetchSystemStatus])
 
   useEffect(() => {
     void refreshMonitor()
@@ -125,10 +141,12 @@ export function useCrawlerMonitor({
   return {
     overview,
     runs,
+    systemStatus,
     runningRuns,
     recentRuns,
     fetchOverview,
     fetchRuns,
+    fetchSystemStatus,
     refreshMonitor,
     pauseRun,
     resumeRun,

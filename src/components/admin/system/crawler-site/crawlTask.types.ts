@@ -1,6 +1,13 @@
 export type CrawlMode = 'incremental' | 'full'
 
-export type CrawlTaskStatus = 'queued' | 'running' | 'paused' | 'success' | 'failed'
+export type CrawlTaskStatus =
+  | 'queued'
+  | 'running'
+  | 'paused'
+  | 'success'
+  | 'failed'
+  | 'cancelled'
+  | 'timeout'
 
 export interface CrawlTaskDTO {
   id: string

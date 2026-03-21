@@ -527,3 +527,14 @@ export async function getCrawlerOverview(db: Pool): Promise<CrawlerOverview> {
     todayDurationMs: parseInt(row.today_duration_ms, 10) || 0,
   }
 }
+
+export async function countOrphanActiveTasks(db: Pool): Promise<number> {
+  const result = await db.query<{ total: string }>(
+    `SELECT COUNT(*)::text AS total
+     FROM crawler_tasks
+     WHERE run_id IS NULL
+       AND status IN ('pending', 'running', 'paused')
+       AND type IN ('full-crawl', 'incremental-crawl')`,
+  )
+  return parseInt(result.rows[0]?.total ?? '0', 10) || 0
+}

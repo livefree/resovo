@@ -270,6 +270,8 @@ export function CrawlerSiteTable({
                         <div className="mt-1">
                           {siteRunning && <Badge color="yellow">采集中</Badge>}
                           {latestTask?.status === "paused" && <Badge color="gray">已暂停</Badge>}
+                          {latestTask?.status === "cancelled" && <Badge color="gray">已取消</Badge>}
+                          {latestTask?.status === "timeout" && <Badge color="yellow">超时</Badge>}
                           {!siteRunning && site.lastCrawlStatus === "ok" && <Badge color="green">成功</Badge>}
                           {!siteRunning && site.lastCrawlStatus === "failed" && <Badge color="red">失败</Badge>}
                           {!siteRunning && site.lastCrawlStatus === "running" && <Badge color="yellow">采集中</Badge>}

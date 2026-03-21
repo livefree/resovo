@@ -1710,3 +1710,43 @@
 - **注意事项**：
   - 本次修复针对“stop-all 后仍显示 running”的历史孤儿任务场景。
   - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/api/crawler-worker.test.ts` 通过。
+
+## [CHG-113] A1 契约统一（runId/taskId，移除 jobId 旧口径）
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 01:46
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/services/crawlTaskService.ts` — 触发响应契约统一为 run/task 字段。
+  - `src/components/admin/system/crawler-site/crawlTask.types.ts` — 任务状态补齐 `cancelled/timeout`。
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteCrawlTasks.ts` — 终态反馈覆盖 `cancelled/timeout`。
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx` — 行内轻状态补齐“已取消/超时”。
+  - `src/api/routes/admin/crawler.ts` — DTO 与 tasks 状态过滤对齐新口径。
+  - `src/types/crawler.types.ts` — 共享状态枚举同步。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 已移除 crawler-site 前端对 `jobId` 的依赖，统一使用 run/task 契约。
+
+## [CHG-114] A2 入口单点化（任务记录页只读）
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 01:54
+- **修改文件**：
+  - `src/components/admin/AdminCrawlerPanel.tsx` — 移除任务记录页触发按钮，改为只读审计入口。
+  - `tests/e2e/admin.spec.ts` — 更新断言：任务页无触发按钮，触发能力只在控制台 Tab。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 采集触发入口已收敛到“采集控制台”，任务记录页仅保留查询/日志。
+
+## [CHG-115] A3 orphan task 显式可见
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 02:00
+- **修改文件**：
+  - `src/api/db/queries/crawlerTasks.ts` — 新增 orphan 活跃任务计数查询。
+  - `src/api/routes/admin/crawler.ts` — 新增 `GET /admin/crawler/system-status`。
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerMonitor.ts` — 接入 system-status 数据源。
+  - `src/components/admin/system/crawler-site/components/CrawlerSystemStatusStrip.tsx` — 新增系统状态条（scheduler/freeze/orphan）。
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx` — 控制台挂载状态条。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 系统级状态条固定展示 scheduler/freeze/orphan，补齐运维可见性。

@@ -85,6 +85,10 @@ export function useCrawlerSiteCrawlTasks({
             )
           } else if (latest.status === 'failed') {
             showToast(latest.message ? `采集失败：${latest.message}` : '采集失败', false)
+          } else if (latest.status === 'cancelled') {
+            showToast('采集已取消', false)
+          } else if (latest.status === 'timeout') {
+            showToast('采集超时', false)
           }
         }
       }

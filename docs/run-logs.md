@@ -618,3 +618,15 @@
 - **内容**：按评审意见将执行约束升级为硬规则，并固定后续执行顺序。
 - **处理动作**：更新 `admin_crawl_control_center_plan.md` 到 v1.1；任务序列改为 `A1 -> A2 -> A3 -> C1 -> C2 -> B1 -> D1`；在 task-queue / tasks 中建立新序列并标记 CHG-113 进行中。
 - **后续**：严格按序推进，不跨阶段并行。
+
+## [LOG-20260321-0200-01] CHG-113~115 首段序列完成（A1/A2/A3）
+- **时间**：2026-03-21 02:00
+- **类型**：INFO
+- **关联任务**：CHG-113、CHG-114、CHG-115
+- **内容**：完成 run/task 契约统一、触发入口单点化、orphan 可观测性补齐。
+- **处理动作**：
+  - A1：统一触发返回为 `runId/taskId/taskIds/...`，移除前端 `jobId` 依赖，补齐 `cancelled/timeout` 状态口径。
+  - A2：任务记录页改为只读，移除触发按钮并更新 E2E 断言。
+  - A3：新增 `GET /admin/crawler/system-status` 与控制台系统状态条（scheduler/freeze/orphan）。
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/AdminCrawlerTabs.test.tsx`
+- **后续**：继续执行 CHG-116（worker 硬约束：无 runId/taskId 不执行）。

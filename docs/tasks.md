@@ -4346,26 +4346,109 @@ _（任务 review 通过后移入此处）_
 
 #### CHG-113 A1 契约统一（runId/taskId，移除 jobId 旧口径）
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-21 09:10
 - **计划开始时间**：2026-03-21 09:20
 - **实际开始时间**：2026-03-21 09:20
-- **完成时间**：待定
+- **完成时间**：2026-03-21 01:46
 - **问题**：前后端仍存在 `jobId` 旧口径残留，run/task 契约不稳定，影响监控与控制可靠性。
 - **影响的已完成任务**：CHG-109、CHG-111、CHG-112
-- **文件范围（计划）**：
+- **文件范围**：
   - `src/components/admin/system/crawler-site/services/crawlTaskService.ts`
   - `src/components/admin/system/crawler-site/crawlTask.types.ts`
   - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteCrawlTasks.ts`
   - `src/api/routes/admin/crawler.ts`
-  - `src/types/*`（必要范围）
-- **修复内容（计划）**：
+  - `src/types/crawler.types.ts`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`
+  - `src/components/admin/AdminCrawlerPanel.tsx`
+- **修复内容**：
   - 统一触发接口返回字段：`runId/taskId/taskIds/enqueuedSiteKeys/skippedSiteKeys`。
   - 移除前端 `jobId` 依赖与旧解析路径。
-  - 对齐 run/task 类型与状态定义，减少重复与漂移。
+  - 对齐 run/task 类型与状态定义，补齐 `cancelled/timeout` 前后端口径。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/AdminCrawlerTabs.test.tsx`
+- **完成备注**：
+  - 已统一站点采集触发返回契约与任务状态枚举，前端不再依赖 `jobId`。
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-114 A2 入口单点化（任务记录页去触发）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-21 09:10
+- **计划开始时间**：2026-03-21 10:00
+- **实际开始时间**：2026-03-21 01:47
+- **完成时间**：2026-03-21 01:54
+- **问题**：采集触发入口分散，任务记录页保留触发会导致职责混乱，违反“控制台单点触发”规则。
+- **影响的已完成任务**：CHG-113
+- **文件范围**：
+  - `src/components/admin/AdminCrawlerPanel.tsx`
+  - `tests/e2e/admin.spec.ts`
+- **修复内容**：
+  - 任务记录页移除触发按钮，仅保留查询/筛选/日志查看与手动刷新。
+  - 增加只读提示文案，明确“采集触发统一在采集控制台执行”。
+  - 更新 E2E 断言：任务记录页无触发按钮、触发入口位于控制台 tab。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/components/admin/AdminCrawlerTabs.test.tsx tests/e2e/admin.spec.ts`
+- **完成备注**：
+  - 入口单点化完成，任务记录页职责收口为只读审计。
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-115 A3 orphan task 显式可见
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-21 09:10
+- **计划开始时间**：2026-03-21 10:30
+- **实际开始时间**：2026-03-21 01:55
+- **完成时间**：2026-03-21 02:00
+- **问题**：历史遗留孤儿任务不可见，导致“后台显示空闲但实际占用资源”的可观测性缺口。
+- **影响的已完成任务**：CHG-113、CHG-114
+- **文件范围**：
+  - `src/api/db/queries/crawlerTasks.ts`
+  - `src/api/routes/admin/crawler.ts`
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerMonitor.ts`
+  - `src/components/admin/system/crawler-site/components/CrawlerSystemStatusStrip.tsx`
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+- **修复内容**：
+  - 新增 `/admin/crawler/system-status`，统一返回 `schedulerEnabled/freezeEnabled/orphanTaskCount`。
+  - 新增 orphan 活跃任务计数查询（`run_id IS NULL` 且状态为活跃）。
+  - 控制台新增系统状态条，固定显示 scheduler、freeze、orphan 三个系统级指标。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+- **完成备注**：
+  - 监控可见性补齐，满足 v1.1 约束中的“3 个系统状态条”。
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-116 C1 worker 硬约束（无 runId/taskId 不执行）
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-03-21 09:10
+- **计划开始时间**：2026-03-21 11:00
+- **实际开始时间**：2026-03-21 02:05
+- **完成时间**：待定
+- **问题**：只要 worker 仍可执行无 runId/taskId 的孤儿任务，监控口径就可能再次失真。
+- **影响的已完成任务**：CHG-115
+- **文件范围（计划）**：
+  - `src/api/workers/crawlerWorker.ts`
+  - `src/api/routes/admin/crawler.ts`（必要兼容）
+  - `tests/unit/api/crawler-worker.test.ts`
+- **修复内容（计划）**：
+  - worker 执行前强校验 `runId/taskId`，无契约任务直接拒绝执行并记录日志。
+  - 对 reject 场景补齐可审计日志，避免“静默跳过”。
 - **测试要求（计划）**：
   - `npm run typecheck`
   - `npm run lint`
-  - `npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/api/crawler-worker.test.ts`
+  - `npm run test:run -- tests/unit/api/crawler-worker.test.ts tests/unit/api/crawler.test.ts`
 - **完成备注**：待实施
 - **问题说明**：_（无）_

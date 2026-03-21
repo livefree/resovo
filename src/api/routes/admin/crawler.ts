@@ -23,6 +23,7 @@ import {
   getLatestTaskBySite,
   getLatestTasksBySites,
   getCrawlerOverview,
+  countOrphanActiveTasks,
   markStalePendingTasks,
   type CrawlerTask,
 } from '@/api/db/queries/crawlerTasks'
@@ -47,9 +48,9 @@ function mapTaskDto(task: CrawlerTask) {
         : task.status === 'done'
           ? 'success'
           : task.status === 'cancelled'
-            ? 'failed'
+            ? 'cancelled'
             : task.status === 'timeout'
-              ? 'failed'
+              ? 'timeout'
           : 'failed'
 
   const result = task.result ?? {}
@@ -129,7 +130,7 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
 
   fastify.get('/admin/crawler/tasks', { preHandler: auth }, async (request, reply) => {
     const QuerySchema = z.object({
-      status: z.enum(['pending', 'running', 'paused', 'done', 'failed']).optional(),
+      status: z.enum(['pending', 'running', 'paused', 'done', 'failed', 'cancelled', 'timeout']).optional(),
       triggerType: z.enum(['single', 'batch', 'all', 'schedule']).optional(),
       runId: z.string().uuid().optional(),
       page:   z.coerce.number().int().min(1).default(1),
@@ -496,6 +497,20 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
   fastify.get('/admin/crawler/overview', { preHandler: auth }, async (_request, reply) => {
     const data = await getCrawlerOverview(db)
     return reply.send({ data })
+  })
+
+  // ── GET /admin/crawler/system-status ─────────────────────────
+  fastify.get('/admin/crawler/system-status', { preHandler: auth }, async (_request, reply) => {
+    const freeze = await systemSettingsQueries.getSetting(db, 'crawler_global_freeze')
+    const orphanTaskCount = await countOrphanActiveTasks(db)
+    const schedulerEnabled = process.env.CRAWLER_SCHEDULER_ENABLED === 'true'
+    return reply.send({
+      data: {
+        schedulerEnabled,
+        freezeEnabled: freeze === 'true',
+        orphanTaskCount,
+      },
+    })
   })
 
   // ── GET /admin/crawler/tasks/latest?siteKeys=a,b ───────────

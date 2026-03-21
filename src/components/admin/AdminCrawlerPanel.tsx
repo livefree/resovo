@@ -40,7 +40,7 @@ interface CrawlerTaskLogItem {
   createdAt: string
 }
 
-type TaskStatusFilter = 'pending' | 'running' | 'paused' | 'done' | 'failed' | ''
+type TaskStatusFilter = 'pending' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled' | 'timeout' | ''
 type TaskTriggerFilter = 'single' | 'batch' | 'all' | 'schedule' | ''
 
 // ── 小组件 ───────────────────────────────────────────────────────
@@ -101,7 +101,6 @@ export function AdminCrawlerPanel({ initialRunId = '', onRunIdChange }: AdminCra
   const [triggerFilter, setTriggerFilter] = useState<TaskTriggerFilter>('')
   const [runIdFilterInput, setRunIdFilterInput] = useState('')
   const [runIdFilter, setRunIdFilter] = useState('')
-  const [triggering, setTriggering] = useState<string | null>(null) // null = idle, 'all' = global, siteKey = single
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [logTaskId, setLogTaskId] = useState<string | null>(null)
@@ -141,19 +140,6 @@ export function AdminCrawlerPanel({ initialRunId = '', onRunIdChange }: AdminCra
     setPage(1)
   }, [initialRunId])
 
-  // 触发采集（全局）
-  async function handleTrigger(type: 'full-crawl' | 'incremental-crawl') {
-    setTriggering('all')
-    try {
-      await apiClient.post('/admin/crawler/tasks', { type })
-      await fetchTasks()
-    } catch (err) {
-      alert(err instanceof Error ? err.message : '触发失败')
-    } finally {
-      setTriggering(null)
-    }
-  }
-
   async function handleViewLogs(taskId: string) {
     setLogTaskId(taskId)
     setLogLoading(true)
@@ -188,41 +174,25 @@ export function AdminCrawlerPanel({ initialRunId = '', onRunIdChange }: AdminCra
   }
 
   const totalPages = Math.ceil(total / limit)
-  const globalTriggering = triggering === 'all'
-
   return (
     <div data-testid="admin-crawler-panel" className="space-y-6">
-
-      {/* ── 全局操作区 ──────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          onClick={() => handleTrigger('full-crawl')}
-          disabled={triggering !== null}
-          className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-black hover:opacity-90 disabled:opacity-60"
-          data-testid="admin-crawler-trigger-full"
-        >
-          {globalTriggering ? '触发中…' : '全量采集（全部源站）'}
-        </button>
-        <button
-          onClick={() => handleTrigger('incremental-crawl')}
-          disabled={triggering !== null}
-          className="rounded-md border border-[var(--border)] px-4 py-2 text-sm text-[var(--text)] hover:bg-[var(--bg2)] disabled:opacity-60"
-          data-testid="admin-crawler-trigger-incremental"
-        >
-          {globalTriggering ? '触发中…' : '增量采集（近 24h）'}
-        </button>
-        <button
-          onClick={() => { fetchTasks() }}
-          className="rounded-md border border-[var(--border)] px-4 py-2 text-sm text-[var(--muted)] hover:text-[var(--text)]"
-          data-testid="admin-crawler-refresh"
-        >
-          刷新
-        </button>
+      <div className="rounded-md border border-[var(--border)] bg-[var(--bg2)] px-3 py-2 text-sm text-[var(--muted)]">
+        本页仅用于任务查询与日志审计。采集触发统一在「采集控制台」执行。
       </div>
 
       {/* ── 状态筛选 ─────────────────────────────────────────────── */}
       <section>
-        <h2 className="mb-3 text-sm font-medium text-[var(--muted)]">采集任务记录</h2>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-medium text-[var(--muted)]">采集任务记录</h2>
+          <button
+            type="button"
+            onClick={() => { void fetchTasks() }}
+            className="rounded-md border border-[var(--border)] px-3 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+            data-testid="admin-crawler-refresh"
+          >
+            刷新
+          </button>
+        </div>
         <div className="mb-3 flex gap-1 rounded-md border border-[var(--border)] p-0.5 w-fit">
           {([
             { value: '', label: '全部' },
@@ -231,6 +201,8 @@ export function AdminCrawlerPanel({ initialRunId = '', onRunIdChange }: AdminCra
             { value: 'paused', label: '已暂停' },
             { value: 'done', label: '已完成' },
             { value: 'failed', label: '失败' },
+            { value: 'cancelled', label: '已取消' },
+            { value: 'timeout', label: '超时' },
           ] as { value: TaskStatusFilter; label: string }[]).map(({ value, label }) => (
             <button
               key={value}

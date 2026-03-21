@@ -429,9 +429,39 @@ test('点击封号触发 ban 请求', async ({ context, page }) => {
   expect(banCalled).toBe(true)
 })
 
-test('爬虫页面显示任务触发按钮', async ({ context, page }) => {
+test('采集任务记录页为只读模式（无触发按钮）', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
 
+  await page.route(`${API_BASE}/admin/crawler/overview*`, (route) => {
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { siteTotal: 0, connected: 0, running: 0, paused: 0, failed: 0, todayVideos: 0, todayDurationMs: 0 } }),
+    })
+  })
+  await page.route(`${API_BASE}/admin/crawler/runs*`, (route) => {
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: [] }),
+    })
+  })
+  await page.route(`${API_BASE}/admin/crawler/auto-config*`, (route) => {
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { globalEnabled: false, scheduleType: 'daily', dailyTime: '03:00', defaultMode: 'incremental', onlyEnabledSites: true, conflictPolicy: 'skip_running', perSiteOverrides: {} } }),
+    })
+  })
+  await page.route(`${API_BASE}/admin/crawler/sites*`, (route) => {
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: [] }),
+    })
+  })
+  await page.route(`${API_BASE}/admin/crawler/tasks/latest*`, (route) => {
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { tasks: [] } }),
+    })
+  })
   await page.route(`${API_BASE}/admin/crawler/tasks*`, (route) => {
     route.fulfill({
       contentType: 'application/json',
@@ -440,42 +470,41 @@ test('爬虫页面显示任务触发按钮', async ({ context, page }) => {
   })
 
   await page.goto(`${BASE_URL}/en/admin/crawler`)
+  await page.locator('[data-testid="admin-crawler-tab-tasks"]').click()
   await expect(page.locator('[data-testid="admin-crawler-page"]')).toBeVisible()
-  await expect(page.locator('[data-testid="admin-crawler-trigger-full"]')).toBeVisible()
-  await expect(page.locator('[data-testid="admin-crawler-trigger-incremental"]')).toBeVisible()
+  await expect(page.locator('[data-testid="admin-crawler-trigger-full"]')).toHaveCount(0)
+  await expect(page.locator('[data-testid="admin-crawler-trigger-incremental"]')).toHaveCount(0)
 })
 
-test('点击全量采集触发 POST 请求', async ({ context, page }) => {
+test('采集控制台触发入口位于 sites tab', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
 
-  await page.route(`${API_BASE}/admin/crawler/tasks*`, (route) => {
-    if (route.request().method() === 'GET') {
-      route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({ data: [], total: 0, page: 1, limit: 20 }),
-      })
-    } else {
-      route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({ data: { queued: true } }),
-      })
-    }
-  })
-
-  let postCalled = false
-  await page.route(`${API_BASE}/admin/crawler/tasks`, (route) => {
-    if (route.request().method() === 'POST') {
-      postCalled = true
-    }
+  await page.route(`${API_BASE}/admin/crawler/overview*`, (route) => {
     route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({ data: { queued: true } }),
+      body: JSON.stringify({ data: { siteTotal: 0, connected: 0, running: 0, paused: 0, failed: 0, todayVideos: 0, todayDurationMs: 0 } }),
+    })
+  })
+  await page.route(`${API_BASE}/admin/crawler/runs*`, (route) => {
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: [] }),
+    })
+  })
+  await page.route(`${API_BASE}/admin/crawler/auto-config*`, (route) => {
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { globalEnabled: false, scheduleType: 'daily', dailyTime: '03:00', defaultMode: 'incremental', onlyEnabledSites: true, conflictPolicy: 'skip_running', perSiteOverrides: {} } }),
+    })
+  })
+  await page.route(`${API_BASE}/admin/crawler/sites*`, (route) => {
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: [] }),
     })
   })
 
   await page.goto(`${BASE_URL}/en/admin/crawler`)
-  const crawlerReq = page.waitForRequest(`${API_BASE}/admin/crawler/tasks`)
-  await page.locator('[data-testid="admin-crawler-trigger-full"]').click()
-  await crawlerReq
-  expect(postCalled).toBe(true)
+  await expect(page.locator('button:has-text("全站增量采集")')).toBeVisible()
+  await expect(page.locator('button:has-text("全站全量采集")')).toBeVisible()
 })

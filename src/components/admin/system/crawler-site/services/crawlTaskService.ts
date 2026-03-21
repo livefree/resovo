@@ -5,9 +5,13 @@ import type { CrawlMode, CrawlTaskDTO } from '@/components/admin/system/crawler-
 
 interface TriggerCrawlTaskResponse {
   data: {
-    jobId: string | number
+    runId: string
+    taskId: string | null
+    taskIds?: string[]
     type: 'full-crawl' | 'incremental-crawl'
-    siteKey?: string
+    siteKey: string | null
+    enqueuedSiteKeys: string[]
+    skippedSiteKeys: string[]
   }
 }
 
@@ -27,12 +31,12 @@ function toTaskType(mode: CrawlMode): 'full-crawl' | 'incremental-crawl' {
   return mode === 'full' ? 'full-crawl' : 'incremental-crawl'
 }
 
-export async function triggerSiteCrawlTask(siteKey: string, mode: CrawlMode): Promise<string | number> {
+export async function triggerSiteCrawlTask(siteKey: string, mode: CrawlMode): Promise<TriggerCrawlTaskResponse['data']> {
   const res = await apiClient.post<TriggerCrawlTaskResponse>('/admin/crawler/tasks', {
     type: toTaskType(mode),
     siteKey,
   })
-  return res.data.jobId
+  return res.data
 }
 
 export async function getLatestCrawlTasksBySites(siteKeys: string[]): Promise<CrawlTaskDTO[]> {
