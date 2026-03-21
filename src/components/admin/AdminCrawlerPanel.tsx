@@ -90,10 +90,11 @@ function TriggerBadge({ triggerType }: { triggerType: CrawlerTask['triggerType']
 
 interface AdminCrawlerPanelProps {
   initialRunId?: string
+  initialStatusFilter?: TaskStatusFilter
   onRunIdChange?: (runId: string) => void
 }
 
-export function AdminCrawlerPanel({ initialRunId = '', onRunIdChange }: AdminCrawlerPanelProps) {
+export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '', onRunIdChange }: AdminCrawlerPanelProps) {
   const [tasks, setTasks] = useState<CrawlerTask[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -139,6 +140,12 @@ export function AdminCrawlerPanel({ initialRunId = '', onRunIdChange }: AdminCra
     setRunIdFilter(nextRunId)
     setPage(1)
   }, [initialRunId])
+
+  useEffect(() => {
+    if (!initialStatusFilter) return
+    setStatusFilter(initialStatusFilter)
+    setPage(1)
+  }, [initialStatusFilter])
 
   async function handleViewLogs(taskId: string) {
     setLogTaskId(taskId)

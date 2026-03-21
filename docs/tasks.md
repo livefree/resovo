@@ -4517,24 +4517,26 @@ _（任务 review 通过后移入此处）_
 
 #### CHG-119 D1 健康状态条 + 深链完善
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-21 09:10
 - **计划开始时间**：2026-03-21 15:00
 - **实际开始时间**：2026-03-21 02:20
-- **完成时间**：待定
+- **完成时间**：2026-03-21 02:13
 - **问题**：需要收敛最后一批可观测性细节，保证健康状态条、任务深链、最近结果口径统一可用。
 - **影响的已完成任务**：CHG-118
-- **文件范围（计划）**：
+- **文件范围**：
   - `src/components/admin/system/crawler-site/components/CrawlerRunPanel.tsx`
   - `src/components/admin/AdminCrawlerTabs.tsx`
   - `src/components/admin/AdminCrawlerPanel.tsx`
-  - `docs/admin_crawl_control_center_plan.md`（必要时）
-- **修复内容（计划）**：
-  - 校准健康状态条与任务深链文案，补齐“从运行卡片到任务审计”的操作一致性。
-  - 细化最近结果区展示与可追踪入口。
-- **测试要求（计划）**：
+  - `tests/unit/components/admin/AdminCrawlerTabs.test.tsx`
+- **修复内容**：
+  - `AdminCrawlerTabs` 新增 `taskStatus` 查询参数透传，任务页可按 URL 初始化状态筛选。
+  - `AdminCrawlerPanel` 支持 `initialStatusFilter`，用于深链直达失败/取消任务视图。
+  - `CrawlerRunPanel` 新增“查看日志”深链（按 runId + taskStatus），缩短监控到审计路径。
+- **测试要求**：
   - `npm run typecheck`
   - `npm run lint`
-  - `npm run test:run -- tests/unit/components/admin/AdminCrawlerTabs.test.tsx`
-- **完成备注**：待实施
+  - `npm run test:run -- tests/unit/components/admin/AdminCrawlerTabs.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+- **完成备注**：
+  - v1.1 序列（CHG-113~119）已全部完成并落盘。
 - **问题说明**：_（无）_

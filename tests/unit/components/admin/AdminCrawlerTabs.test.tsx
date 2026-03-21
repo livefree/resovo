@@ -17,13 +17,16 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/components/admin/AdminCrawlerPanel', () => ({
   AdminCrawlerPanel: ({
     initialRunId,
+    initialStatusFilter,
     onRunIdChange,
   }: {
     initialRunId?: string
+    initialStatusFilter?: string
     onRunIdChange?: (runId: string) => void
   }) => (
     <div>
       <div data-testid="mock-admin-crawler-panel">{initialRunId ?? ''}</div>
+      <div data-testid="mock-admin-crawler-panel-status">{initialStatusFilter ?? ''}</div>
       <button type="button" data-testid="mock-set-runid" onClick={() => onRunIdChange?.('22222222-2222-4222-8222-222222222222')}>set-runid</button>
       <button type="button" data-testid="mock-clear-runid" onClick={() => onRunIdChange?.('')}>clear-runid</button>
     </div>
@@ -53,6 +56,18 @@ describe('AdminCrawlerTabs', () => {
     expect(screen.getByTestId('mock-admin-crawler-panel').textContent).toContain(
       '11111111-1111-4111-8111-111111111111',
     )
+  })
+
+  it('读取 taskStatus=failed 会透传到任务页初始状态筛选', () => {
+    mockSearchParams = new URLSearchParams({
+      tab: 'tasks',
+      runId: '11111111-1111-4111-8111-111111111111',
+      taskStatus: 'failed',
+    })
+
+    render(<AdminCrawlerTabs />)
+
+    expect(screen.getByTestId('mock-admin-crawler-panel-status').textContent).toBe('failed')
   })
 
   it('从控制台切到任务记录会写入 tab=tasks 查询参数', async () => {

@@ -1787,3 +1787,16 @@
 - **数据库变更**：无
 - **注意事项**：
   - 监控区轮询与表格状态已容器级解耦，减少高频刷新对筛选/排序/列宽上下文的影响风险。
+
+## [CHG-119] D1 健康状态条 + 深链完善
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 02:13
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/components/CrawlerRunPanel.tsx` — 新增“查看日志”深链入口（runId + taskStatus）。
+  - `src/components/admin/AdminCrawlerTabs.tsx` — 支持 `taskStatus` 查询参数解析与透传。
+  - `src/components/admin/AdminCrawlerPanel.tsx` — 支持 `initialStatusFilter` 初始化状态筛选。
+  - `tests/unit/components/admin/AdminCrawlerTabs.test.tsx` — 补充 taskStatus 透传测试。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 该改动不改变任务执行链路，仅增强监控到任务审计的跳转效率。

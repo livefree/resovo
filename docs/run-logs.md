@@ -667,3 +667,16 @@
   - 全站/批量触发改为依赖监控区独立轮询回收任务状态。
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/AdminCrawlerTabs.test.tsx tests/unit/api/crawler.test.ts`
 - **后续**：进入 CHG-119（健康状态条 + 深链完善）。
+
+## [LOG-20260321-0213-01] CHG-119 健康条与任务深链完善完成
+- **时间**：2026-03-21 02:13
+- **类型**：INFO
+- **关联任务**：CHG-119
+- **内容**：完成监控区到任务记录的状态深链闭环，缩短故障定位路径。
+- **处理动作**：
+  - `CrawlerRunPanel` 增加“查看日志”深链（`runId + taskStatus`）。
+  - `AdminCrawlerTabs` 支持读取并透传 `taskStatus` 查询参数。
+  - `AdminCrawlerPanel` 支持初始状态筛选参数，打开任务页即可落在失败/取消视图。
+  - `AdminCrawlerTabs` 单测补充 `taskStatus` 透传用例。
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/AdminCrawlerTabs.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+- **后续**：v1.1 序列 CHG-113~119 已完成。

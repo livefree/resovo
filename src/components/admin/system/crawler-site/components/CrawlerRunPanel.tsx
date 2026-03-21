@@ -55,6 +55,14 @@ function formatRunDuration(createdAt: string): string {
   return `${seconds}s`
 }
 
+function buildTaskLink(runId: string, status?: 'failed' | 'cancelled'): string {
+  const params = new URLSearchParams()
+  params.set('tab', 'tasks')
+  params.set('runId', runId)
+  if (status) params.set('taskStatus', status)
+  return `?${params.toString()}`
+}
+
 export function CrawlerRunPanel({ title, emptyText, runs, onCancel, onPause, onResume }: CrawlerRunPanelProps) {
   return (
     <div className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--bg2)] p-3">
@@ -84,11 +92,19 @@ export function CrawlerRunPanel({ title, emptyText, runs, onCancel, onPause, onR
                 </div>
                 <div className="flex items-center gap-2">
                   <a
-                    href={`?tab=tasks&runId=${encodeURIComponent(runId)}`}
+                    href={buildTaskLink(runId)}
                     className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--muted)] hover:text-[var(--text)]"
                   >
                     查看任务
                   </a>
+                  {run.status === 'failed' || run.status === 'partial_failed' || run.status === 'cancelled' ? (
+                    <a
+                      href={buildTaskLink(runId, run.status === 'cancelled' ? 'cancelled' : 'failed')}
+                      className="rounded border border-[var(--border)] px-2 py-0.5 text-[var(--muted)] hover:text-[var(--text)]"
+                    >
+                      查看日志
+                    </a>
+                  ) : null}
                   {run.controlStatus === 'active' && (run.status === 'queued' || run.status === 'running') ? (
                     <button
                       type="button"

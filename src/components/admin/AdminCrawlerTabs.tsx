@@ -6,6 +6,22 @@ import { AdminCrawlerPanel } from '@/components/admin/AdminCrawlerPanel'
 import { CrawlerSiteManager } from '@/components/admin/system/crawler-site/CrawlerSiteManager'
 
 type CrawlerTab = 'sites' | 'tasks'
+type TaskStatusFilter = 'pending' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled' | 'timeout' | ''
+
+function parseTaskStatusFilter(input: string | null): TaskStatusFilter {
+  if (
+    input === 'pending' ||
+    input === 'running' ||
+    input === 'paused' ||
+    input === 'done' ||
+    input === 'failed' ||
+    input === 'cancelled' ||
+    input === 'timeout'
+  ) {
+    return input
+  }
+  return ''
+}
 
 export function AdminCrawlerTabs() {
   const router = useRouter()
@@ -13,6 +29,7 @@ export function AdminCrawlerTabs() {
   const searchParams = useSearchParams()
   const queryTab = searchParams.get('tab')
   const queryRunId = searchParams.get('runId')
+  const queryTaskStatus = searchParams.get('taskStatus')
   const initialTab: CrawlerTab = queryTab === 'tasks' ? 'tasks' : 'sites'
   const [tab, setTab] = useState<CrawlerTab>(initialTab)
 
@@ -20,6 +37,11 @@ export function AdminCrawlerTabs() {
     if (!queryRunId) return ''
     return queryRunId.trim()
   }, [queryRunId])
+
+  const taskStatusFilter = useMemo(
+    () => parseTaskStatusFilter(queryTaskStatus),
+    [queryTaskStatus],
+  )
 
   useEffect(() => {
     setTab(queryTab === 'tasks' ? 'tasks' : 'sites')
@@ -33,6 +55,7 @@ export function AdminCrawlerTabs() {
     } else {
       next.delete('tab')
       next.delete('runId')
+      next.delete('taskStatus')
     }
     const query = next.toString()
     router.replace(query ? `${pathname}?${query}` : pathname)
@@ -104,7 +127,7 @@ export function AdminCrawlerTabs() {
                 前往配置
               </button>
             </div>
-            <AdminCrawlerPanel initialRunId={taskRunId} onRunIdChange={syncRunId} />
+            <AdminCrawlerPanel initialRunId={taskRunId} initialStatusFilter={taskStatusFilter} onRunIdChange={syncRunId} />
           </div>
         )}
       </div>
