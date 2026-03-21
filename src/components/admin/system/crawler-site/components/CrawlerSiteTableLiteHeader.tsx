@@ -21,29 +21,27 @@ interface CrawlerSiteTableLiteHeaderProps {
 }
 
 const HEADER_COLUMNS: Array<{ id: ColumnId; label: string; sortField?: SortField; canFilter?: boolean }> = [
-  { id: 'name', label: '名称 / Key', sortField: 'name', canFilter: true },
-  { id: 'apiUrl', label: 'API 地址', sortField: 'apiUrl', canFilter: true },
-  { id: 'sourceType', label: '类型', sortField: 'sourceType', canFilter: true },
-  { id: 'format', label: '格式', sortField: 'format', canFilter: true },
+  { id: 'name', label: '名称', sortField: 'name', canFilter: true },
+  { id: 'key', label: 'Key', sortField: 'key', canFilter: true },
+  { id: 'typeFormat', label: '类型 · 格式', sortField: 'typeFormat', canFilter: true },
   { id: 'weight', label: '权重', sortField: 'weight', canFilter: true },
   { id: 'isAdult', label: '成人', sortField: 'isAdult', canFilter: true },
   { id: 'fromConfig', label: '来源', sortField: 'fromConfig', canFilter: true },
-  { id: 'disabled', label: '状态', sortField: 'disabled', canFilter: true },
+  { id: 'enabled', label: '启用状态', sortField: 'enabled', canFilter: true },
   { id: 'lastCrawl', label: '最近采集' },
   { id: 'crawlOps', label: '采集操作' },
-  { id: 'manageOps', label: '管理操作' },
+  { id: 'manageOps', label: '操作' },
 ]
 
 function isColumnFiltered(columnId: ColumnId, filters: FilterState) {
   switch (columnId) {
     case 'name': return filters.keyOrName.trim() !== ''
-    case 'apiUrl': return filters.apiUrl.trim() !== ''
-    case 'sourceType': return filters.sourceType !== 'all'
-    case 'format': return filters.format !== 'all'
+    case 'key': return filters.apiUrl.trim() !== ''
+    case 'typeFormat': return filters.sourceType !== 'all' || filters.format !== 'all'
     case 'weight': return filters.weightMin.trim() !== '' || filters.weightMax.trim() !== ''
     case 'isAdult': return filters.isAdult !== 'all'
     case 'fromConfig': return filters.fromConfig !== 'all'
-    case 'disabled': return filters.disabled !== 'all'
+    case 'enabled': return filters.disabled !== 'all'
     default: return false
   }
 }

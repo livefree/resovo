@@ -75,8 +75,6 @@ export function CrawlerSiteManager() {
   const { sites, loading, fetchSites } = useCrawlerSites()
   const {
     runningBySite,
-    runningModeBySite,
-    latestTaskBySite,
     hydrateRunningFromSites,
     triggerSiteCrawl,
   } = useCrawlerSiteCrawlTasks({
@@ -112,12 +110,10 @@ export function CrawlerSiteManager() {
       switch (sortBy) {
         case 'name': return dir * compareString(a.name, b.name)
         case 'key': return dir * compareString(a.key, b.key)
-        case 'apiUrl': return dir * compareString(a.apiUrl, b.apiUrl)
-        case 'sourceType': return dir * compareString(a.sourceType, b.sourceType)
-        case 'format': return dir * compareString(a.format, b.format)
+        case 'typeFormat': return dir * compareString(`${a.sourceType}-${a.format}`, `${b.sourceType}-${b.format}`)
         case 'weight': return dir * (a.weight - b.weight)
         case 'isAdult': return dir * (Number(a.isAdult) - Number(b.isAdult))
-        case 'disabled': return dir * (Number(a.disabled) - Number(b.disabled))
+        case 'enabled': return dir * (Number(!a.disabled) - Number(!b.disabled))
         case 'fromConfig': return dir * (Number(a.fromConfig) - Number(b.fromConfig))
         default: return 0
       }
@@ -399,9 +395,6 @@ export function CrawlerSiteManager() {
         validateStates={validateStates}
         rowSaving={rowSaving}
         runningBySite={runningBySite}
-        runningModeBySite={runningModeBySite}
-        latestTaskBySite={latestTaskBySite}
-        autoConfig={autoConfig}
         setFilters={setFilters}
         colClass={colClass}
         handleSort={handleSort}

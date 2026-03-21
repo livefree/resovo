@@ -4540,3 +4540,43 @@ _（任务 review 通过后移入此处）_
 - **完成备注**：
   - v1.1 序列（CHG-113~119）已全部完成并落盘。
 - **问题说明**：_（无）_
+
+---
+
+#### CHG-120 CrawlerSiteTable 结构规范化重构（控制台表格语义收口）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-21 02:30
+- **计划开始时间**：2026-03-21 02:35
+- **实际开始时间**：2026-03-21 02:35
+- **完成时间**：2026-03-21 03:19
+- **问题**：站点表格列职责混杂（配置、监控、任务状态混排），信息密度过高，不符合控制台表格语义。
+- **影响的已完成任务**：CHG-119
+- **文件范围**：
+  - `src/components/admin/system/crawler-site/tableState.ts`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTableLiteHeader.tsx`
+  - `src/components/admin/system/crawler-site/components/ColumnFilterPanel.tsx`
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+  - `src/components/admin/AdminCrawlerPanel.tsx`
+  - `src/components/admin/AdminCrawlerTabs.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerRunPanel.tsx`
+  - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `tests/unit/components/admin/AdminCrawlerTabs.test.tsx`
+- **修复内容**：
+  - 表格列固定为：名称 / Key / 类型·格式 / 权重 / 成人 / 来源 / 启用状态 / 最近采集 / 采集操作 / 操作。
+  - `Key` 列改为域名展示 + hover 完整 API + copy API 按钮；不再保留独立 API 列。
+  - `类型+格式` 合并列；`成人` 改为 🔞 图标 toggle；`启用状态` 改为 switch；`管理操作` 改为 dropdown。
+  - `最近采集` 改为相对时间（hover 绝对时间），移除 success/failed/running 等任务级文案。
+  - `采集操作` 收敛为增量/全量双按钮，运行中统一 disabled。
+  - 权重改为高/中/低语义切换，并在表头提供档位值编辑区（高/中/低数值可调）。
+  - 表格内移除 run 级状态与批次进度展示，监控语义留在控制台监控区。
+- **规则冲突处理**：
+  - 需求文本存在冲突：固定列标准不包含“API 地址”列，但默认列清单包含“API 地址”。本次以“固定列标准”为准执行，API 信息并入 `Key` 列 hover/copy。
+- **测试要求**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run`
+- **完成备注**：
+  - 全量单测通过（`38 files / 483 tests`）。
+- **问题说明**：_（无）_

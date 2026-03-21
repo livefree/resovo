@@ -1800,3 +1800,20 @@
 - **数据库变更**：无
 - **注意事项**：
   - 该改动不改变任务执行链路，仅增强监控到任务审计的跳转效率。
+
+## [CHG-120] crawler-site 站点表格结构规范化重构
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 03:19
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/tableState.ts` — 重定义列 ID / 顺序 / 默认可见列 / 排序字段。
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx` — 重写行渲染：Key+copy、类型·格式合列、权重档位、🔞 toggle、启用 switch、轻量最近采集、dropdown 操作。
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTableLiteHeader.tsx` — 表头列映射同步新结构。
+  - `src/components/admin/system/crawler-site/components/ColumnFilterPanel.tsx` — 列筛选映射同步新列 ID。
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx` — 排序字段映射与表格传参对齐。
+  - `src/components/admin/AdminCrawlerPanel.tsx`、`src/components/admin/AdminCrawlerTabs.tsx`、`src/components/admin/system/crawler-site/components/CrawlerRunPanel.tsx` — 任务页深链状态透传补强。
+  - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`、`tests/unit/components/admin/AdminCrawlerTabs.test.tsx` — 同步新列结构与深链断言。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 需求中“固定列标准”与“默认列含 API 地址”冲突，执行时以固定列标准为准，将 API 信息并入 Key 列 hover/copy。
+  - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run`（38 files / 483 tests）。

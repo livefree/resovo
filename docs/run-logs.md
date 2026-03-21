@@ -680,3 +680,17 @@
   - `AdminCrawlerTabs` 单测补充 `taskStatus` 透传用例。
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/AdminCrawlerTabs.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
 - **后续**：v1.1 序列 CHG-113~119 已完成。
+
+## [LOG-20260321-0319-01] CHG-120 crawler-site 表格结构规范化完成
+- **时间**：2026-03-21 03:19
+- **类型**：INFO
+- **关联任务**：CHG-120
+- **内容**：完成站点表格语义收口，表格回归“配置 + 轻状态 + 快速操作”。
+- **处理动作**：
+  - 重构列结构与列定义：名称/Key/类型·格式/权重/成人/来源/启用状态/最近采集/采集操作/操作。
+  - 移除表格内 run 级监控文案与任务进度展示。
+  - `Key` 列接管 API 信息（hover + copy）。
+  - 管理操作改为 dropdown，配置文件来源删除禁用。
+  - 更新相关列筛选映射、排序字段与单测。
+- **冲突处理**：固定列标准与“默认列含 API 地址”冲突，按固定列标准执行。
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run`。

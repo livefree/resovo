@@ -1,12 +1,10 @@
 export type SortField =
   | 'name'
   | 'key'
-  | 'apiUrl'
-  | 'sourceType'
-  | 'format'
+  | 'typeFormat'
   | 'weight'
   | 'isAdult'
-  | 'disabled'
+  | 'enabled'
   | 'fromConfig'
 
 export type SortDir = 'asc' | 'desc'
@@ -25,13 +23,12 @@ export type FilterState = {
 
 export type ColumnId =
   | 'name'
-  | 'apiUrl'
-  | 'sourceType'
-  | 'format'
+  | 'key'
+  | 'typeFormat'
   | 'weight'
   | 'isAdult'
   | 'fromConfig'
-  | 'disabled'
+  | 'enabled'
   | 'lastCrawl'
   | 'crawlOps'
   | 'manageOps'
@@ -55,52 +52,49 @@ export const DEFAULT_FILTERS: FilterState = {
 
 export const DEFAULT_COLUMNS: ColumnVisibility = {
   name: true,
-  apiUrl: true,
-  sourceType: true,
-  format: true,
+  key: true,
+  typeFormat: true,
   weight: true,
-  isAdult: true,
-  fromConfig: true,
-  disabled: true,
+  isAdult: false,
+  fromConfig: false,
+  enabled: true,
   lastCrawl: true,
   crawlOps: true,
   manageOps: true,
 }
 
 export const COLUMN_META: Array<{ id: ColumnId; label: string }> = [
-  { id: 'name', label: '名称/Key' },
-  { id: 'apiUrl', label: 'API 地址' },
-  { id: 'sourceType', label: '类型' },
-  { id: 'format', label: '格式' },
+  { id: 'name', label: '名称' },
+  { id: 'key', label: 'Key' },
+  { id: 'typeFormat', label: '类型 · 格式' },
   { id: 'weight', label: '权重' },
   { id: 'isAdult', label: '成人' },
   { id: 'fromConfig', label: '来源' },
-  { id: 'disabled', label: '状态' },
+  { id: 'enabled', label: '启用状态' },
   { id: 'lastCrawl', label: '最近采集' },
   { id: 'crawlOps', label: '采集操作' },
-  { id: 'manageOps', label: '管理操作' },
+  { id: 'manageOps', label: '操作' },
 ]
 
-export const REQUIRED_COLUMNS: ColumnId[] = ['name', 'manageOps']
+export const REQUIRED_COLUMNS: ColumnId[] = []
 
 export const DEFAULT_COLUMN_WIDTH: ColumnWidthState = {
-  name: 220,
-  apiUrl: 260,
-  sourceType: 88,
-  format: 88,
-  weight: 88,
-  isAdult: 88,
-  fromConfig: 92,
-  disabled: 106,
-  lastCrawl: 180,
+  name: 180,
+  key: 220,
+  typeFormat: 140,
+  weight: 110,
+  isAdult: 80,
+  fromConfig: 100,
+  enabled: 110,
+  lastCrawl: 120,
   crawlOps: 130,
-  manageOps: 180,
+  manageOps: 120,
 }
 
 export function readPersistedState() {
   const defaults = {
-    sortBy: 'weight' as SortField,
-    sortDir: 'desc' as SortDir,
+    sortBy: 'name' as SortField,
+    sortDir: 'asc' as SortDir,
     filters: DEFAULT_FILTERS,
     columns: DEFAULT_COLUMNS,
     columnWidths: DEFAULT_COLUMN_WIDTH,

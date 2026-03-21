@@ -18,40 +18,38 @@ export function ColumnFilterPanel({ columnId, filters, onPatch }: ColumnFilterPa
       />
     )
   }
-  if (columnId === 'apiUrl') {
+  if (columnId === 'key') {
     return (
       <input
         value={filters.apiUrl}
         onChange={(event) => onPatch({ apiUrl: event.target.value })}
-        placeholder="筛选 API 地址"
+        placeholder="筛选 Key / API 地址"
         className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]"
       />
     )
   }
-  if (columnId === 'sourceType') {
+  if (columnId === 'typeFormat') {
     return (
-      <select
-        value={filters.sourceType}
-        onChange={(event) => onPatch({ sourceType: event.target.value as FilterState['sourceType'] })}
-        className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]"
-      >
-        <option value="all">全部</option>
-        <option value="vod">长片</option>
-        <option value="shortdrama">短剧</option>
-      </select>
-    )
-  }
-  if (columnId === 'format') {
-    return (
-      <select
-        value={filters.format}
-        onChange={(event) => onPatch({ format: event.target.value as FilterState['format'] })}
-        className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]"
-      >
-        <option value="all">全部</option>
-        <option value="json">JSON</option>
-        <option value="xml">XML</option>
-      </select>
+      <div className="space-y-1">
+        <select
+          value={filters.sourceType}
+          onChange={(event) => onPatch({ sourceType: event.target.value as FilterState['sourceType'] })}
+          className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]"
+        >
+          <option value="all">全部类型</option>
+          <option value="vod">长片</option>
+          <option value="shortdrama">短剧</option>
+        </select>
+        <select
+          value={filters.format}
+          onChange={(event) => onPatch({ format: event.target.value as FilterState['format'] })}
+          className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]"
+        >
+          <option value="all">全部格式</option>
+          <option value="json">JSON</option>
+          <option value="xml">XML</option>
+        </select>
+      </div>
     )
   }
   if (columnId === 'isAdult') {
@@ -80,7 +78,7 @@ export function ColumnFilterPanel({ columnId, filters, onPatch }: ColumnFilterPa
       </select>
     )
   }
-  if (columnId === 'disabled') {
+  if (columnId === 'enabled') {
     return (
       <select
         value={filters.disabled}
@@ -88,7 +86,7 @@ export function ColumnFilterPanel({ columnId, filters, onPatch }: ColumnFilterPa
         className="w-full rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)]"
       >
         <option value="all">全部</option>
-        <option value="enabled">运行中</option>
+        <option value="enabled">启用</option>
         <option value="disabled">停用</option>
       </select>
     )
