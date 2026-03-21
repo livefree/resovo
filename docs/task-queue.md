@@ -959,7 +959,7 @@
 ## [SEQ-20260321-33] Admin 列表能力统一（矩阵落地到迁移执行）
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-21 11:20
-- **最后更新时间**：2026-03-21 11:20
+- **最后更新时间**：2026-03-21 15:45
 - **目标**：基于能力矩阵，按原子任务将 admin 全部列表收敛到统一表格能力基线
 - **范围**：`admin/*` 列表页（crawler/videos/sources/users/submissions/subtitles/dashboard）与 shared table 能力
 - **依赖**：`docs/admin_list_matrix.md`、`docs/admin_table_baseline.md`
@@ -969,11 +969,11 @@
 2. 所有列表页默认采用“后端分页优先”；仅数据量明确较小的页面允许前端排序作为过渡。
 
 ### 任务列表（按执行顺序）
-1. CHG-122 — 建立 shared table state schema 与 storage key 规范（状态：🔄 进行中）
+1. CHG-122 — 建立 shared table state schema 与 storage key 规范（状态：✅ 已完成）
    - 创建时间：2026-03-21 11:20
    - 计划开始：2026-03-21 11:30
    - 实际开始：2026-03-21 11:30
-   - 完成时间：
+   - 完成时间：2026-03-21 14:58
    - 目标：统一 `useAdminTableState` 的状态结构与持久化 key 规则，作为后续迁移基线
    - 范围：`src/components/admin/shared/table/*`、`src/components/admin/system/crawler-site/tableState.ts`（仅通用层抽象）
    - 依赖：无
@@ -983,11 +983,11 @@
      - 保持 crawler-site 现有排序/显隐/列宽/持久化行为不回退
    - 回滚方式：回退本任务 commit，恢复旧 state hook 与旧 key 读写逻辑
 
-2. CHG-123 — 抽离 shared 列宽拖拽与列显隐能力（状态：⬜ 待开始）
+2. CHG-123 — 抽离 shared 列宽拖拽与列显隐能力（状态：✅ 已完成）
    - 创建时间：2026-03-21 11:20
    - 计划开始：2026-03-21 13:00
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-21 15:00
+   - 完成时间：2026-03-21 15:11
    - 目标：把可复用的列宽拖拽、列显隐、列元数据持久化下沉到 shared
    - 范围：`src/components/admin/shared/table/*`、`crawler-site` 列定义适配层
    - 依赖：CHG-122
@@ -997,11 +997,11 @@
      - sticky header 与横向滚动无抖动
    - 回滚方式：回退 shared 接入 commit，恢复 crawler-site 本地列逻辑
 
-3. CHG-124 — 抽离 shared 表头排序/筛选框架（状态：⬜ 待开始）
+3. CHG-124 — 抽离 shared 表头排序/筛选框架（状态：✅ 已完成）
    - 创建时间：2026-03-21 11:20
    - 计划开始：2026-03-21 15:00
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-21 15:12
+   - 完成时间：2026-03-21 15:25
    - 目标：提供统一表头排序状态、列筛选容器与筛选 chips 适配接口
    - 范围：`src/components/admin/shared/table/*`、`crawler-site` 适配层
    - 依赖：CHG-123
@@ -1011,13 +1011,13 @@
      - selection 勾选状态在筛选切换后不丢失
    - 回滚方式：回退 shared header/filter 接入 commit，恢复 crawler-site 旧 header/filter 实现
 
-4. CHG-125 — videos 列表迁移到 shared table 基线（状态：⬜ 待开始）
+4. CHG-125 — videos 列表迁移到 shared table 基线（状态：✅ 已完成）
    - 创建时间：2026-03-21 11:20
    - 计划开始：2026-03-21 16:30
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-21 15:29
+   - 完成时间：2026-03-21 15:42
    - 目标：将视频管理列表接入统一列能力与状态持久化
-   - 范围：`src/components/admin/content/VideoTable.tsx`、相关 hooks/services
+   - 范围：`src/components/admin/videos/VideoTable.tsx`、相关 hooks/services
    - 依赖：CHG-124
    - DoD：
      - 支持列排序、列显隐、列宽拖拽、单行截断 + hover tooltip
@@ -1025,10 +1025,10 @@
      - 采用后端分页优先，不新增前端全量排序
    - 回滚方式：回退 videos 接入 commit，恢复原表格实现
 
-5. CHG-126 — sources 列表迁移到 shared table 基线（状态：⬜ 待开始）
+5. CHG-126 — sources 列表迁移到 shared table 基线（状态：🔄 进行中）
    - 创建时间：2026-03-21 11:20
    - 计划开始：2026-03-21 18:00
-   - 实际开始：
+   - 实际开始：2026-03-21 15:45
    - 完成时间：
    - 目标：将播放源管理列表对齐统一表格能力
    - 范围：`src/components/admin/content/SourceTable.tsx`、相关 hooks/services

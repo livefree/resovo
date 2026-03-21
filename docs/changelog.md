@@ -1830,3 +1830,46 @@
 - **数据库变更**：无
 - **注意事项**：
   - 本次为 CHG-120 回归修复，不改变 API 与数据结构。
+
+## [CHG-122] shared useAdminTableState 基线落地
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 14:58
+- **修改文件**：
+  - `src/components/admin/shared/table/useAdminTableState.ts` — 新增统一表格状态 schema、v1 序列化/反序列化、SSR 安全读写、`getState/setState/updatePartial/reset`。
+  - `src/components/admin/shared/table/useAdminTableState.demo.tsx` — 新增最小 usage 示例（不接入业务页）。
+  - `tests/unit/components/admin/shared/table/useAdminTableState.test.tsx` — 覆盖读写、默认 merge、version 失效、update/reset。
+- **新增依赖**：无
+- **数据库变更**：无
+
+## [CHG-123] shared 列元数据与列宽拖拽能力落地
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 15:11
+- **修改文件**：
+  - `src/components/admin/shared/table/useAdminTableColumns.ts` — 新增列元数据模型（visible/width/min/max/resizable）、拖拽 handler、显隐切换、reset 与持久化适配。
+  - `src/components/admin/shared/table/useAdminTableColumns.demo.tsx` — 新增最小 usage 示例（不接入业务页）。
+  - `tests/unit/components/admin/shared/table/useAdminTableColumns.test.tsx` — 覆盖列宽更新、不可拖拽拦截、显隐切换、reset、默认值 merge。
+- **新增依赖**：无
+- **数据库变更**：无
+
+## [CHG-124] shared 排序与列筛选容器框架落地
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 15:25
+- **修改文件**：
+  - `src/components/admin/shared/table/useAdminTableSort.ts` — 新增统一排序协议：`setSort/toggleSort/clearSort`，支持默认排序与不可排序列拦截。
+  - `src/components/admin/shared/table/useAdminColumnFilter.ts` — 新增列筛选状态容器协议：open/close/toggle、clear、active 判断与 render context。
+  - `src/components/admin/shared/table/AdminColumnFilterContainer.tsx` — 新增 render-prop 容器（仅承载协议，不承载业务筛选 UI）。
+  - `src/components/admin/shared/table/useAdminTableSort.demo.tsx`、`src/components/admin/shared/table/useAdminColumnFilter.demo.tsx` — 最小 usage 示例。
+  - `tests/unit/components/admin/shared/table/useAdminTableSort.test.tsx`、`tests/unit/components/admin/shared/table/useAdminColumnFilter.test.tsx` — 覆盖排序与筛选容器核心行为。
+- **新增依赖**：无
+- **数据库变更**：无
+
+## [CHG-125] videos 列表迁移到 shared table 基线
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 15:42
+- **修改文件**：
+  - `src/components/admin/videos/VideoTable.tsx` — 接入 shared 列状态与排序能力；新增列设置面板、列显隐、列宽拖拽、排序持久化；保持后端分页与现有业务操作不变。
+  - `tests/unit/components/admin/videos/VideoTable.test.tsx` — 覆盖默认排序与切换、列显隐、列宽持久化回挂。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 仅迁移 `videos` 页面表格能力，不改 API 调用顺序、权限逻辑与业务字段结构。
