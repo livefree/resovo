@@ -1921,3 +1921,18 @@
 - **数据库变更**：无
 - **注意事项**：
   - 仅迁移 subtitles 列表能力，不改 API 调用顺序、权限逻辑与审核语义。
+
+## [CHG-130] dashboard/monitor 低风险表格收口到 shared 基线
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 16:37
+- **修改文件**：
+  - `src/components/admin/AdminAnalyticsDashboard.tsx` — “爬虫最近任务”表格接入 shared 列状态与排序能力，新增列设置、列显隐、列宽拖拽、排序持久化。
+  - `src/components/admin/system/monitoring/CacheManager.tsx` — 缓存统计表格接入 shared 列状态与排序能力，保持清理动作与确认流程不变。
+  - `src/components/admin/system/monitoring/PerformanceMonitor.tsx` — 慢请求列表接入 shared 列状态与排序能力，保持 10 秒轮询监控逻辑不变。
+  - `tests/unit/components/admin/AdminAnalyticsDashboard.test.tsx` — 覆盖默认排序与列显隐。
+  - `tests/unit/components/admin/system/monitoring/CacheManager.test.tsx` — 覆盖默认排序与列显隐。
+  - `tests/unit/components/admin/system/monitoring/PerformanceMonitor.test.tsx` — 覆盖默认排序与列显隐。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本任务仅收口低风险运营/监控表格，不改后端 API、权限逻辑与业务动作语义。

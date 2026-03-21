@@ -5,8 +5,14 @@
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
+import { AdminToolbar } from '@/components/admin/shared/toolbar/AdminToolbar'
+import { AdminTableFrame } from '@/components/admin/shared/table/AdminTableFrame'
+import { AdminTableState } from '@/components/admin/shared/feedback/AdminTableState'
+import { useAdminTableColumns, type AdminColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
+import { useAdminTableSort } from '@/components/admin/shared/table/useAdminTableSort'
+import type { AdminTableState as SharedAdminTableState } from '@/components/admin/shared/table/useAdminTableState'
 
 interface PerformanceStats {
   requests: { perMinute: number; total24h: number }
@@ -20,6 +26,54 @@ interface PerformanceStats {
     url: string
     statusCode: number
   }>
+}
+
+type SlowRequestRow = PerformanceStats['slowRequests'][number]
+type SlowRequestColumnId = 'timestamp' | 'method' | 'url' | 'statusCode' | 'durationMs'
+
+const SLOW_REQUEST_COLUMNS: AdminColumnMeta[] = [
+  { id: 'timestamp', visible: true, width: 130, minWidth: 100, maxWidth: 220, resizable: true },
+  { id: 'method', visible: true, width: 100, minWidth: 80, maxWidth: 160, resizable: true },
+  { id: 'url', visible: true, width: 320, minWidth: 220, maxWidth: 520, resizable: true },
+  { id: 'statusCode', visible: true, width: 110, minWidth: 90, maxWidth: 180, resizable: true },
+  { id: 'durationMs', visible: true, width: 120, minWidth: 100, maxWidth: 200, resizable: true },
+]
+
+const SLOW_REQUEST_DEFAULT_STATE: Omit<SharedAdminTableState, 'columns'> = {
+  sort: { field: 'durationMs', dir: 'desc' },
+}
+
+const SLOW_REQUEST_LABELS: Record<SlowRequestColumnId, string> = {
+  timestamp: '时间',
+  method: '方法',
+  url: 'URL',
+  statusCode: '状态码',
+  durationMs: '耗时',
+}
+
+const SLOW_REQUEST_SORTABLE: Record<SlowRequestColumnId, boolean> = {
+  timestamp: true,
+  method: true,
+  url: true,
+  statusCode: true,
+  durationMs: true,
+}
+
+function toComparableValue(row: SlowRequestRow, field: string): string | number {
+  switch (field) {
+    case 'timestamp':
+      return row.timestamp
+    case 'method':
+      return row.method
+    case 'url':
+      return row.url
+    case 'statusCode':
+      return row.statusCode
+    case 'durationMs':
+      return row.durationMs
+    default:
+      return ''
+  }
 }
 
 function formatUptime(seconds: number): string {
@@ -48,6 +102,29 @@ export function PerformanceMonitor() {
   const [stats, setStats] = useState<PerformanceStats | null>(null)
   const [loading, setLoading] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [showColumnsPanel, setShowColumnsPanel] = useState(false)
+
+  const columnsState = useAdminTableColumns({
+    route: '/admin/system/monitor',
+    tableId: 'performance-slow-request-table',
+    columns: SLOW_REQUEST_COLUMNS,
+    defaultState: SLOW_REQUEST_DEFAULT_STATE,
+  })
+
+  const sortState = useAdminTableSort({
+    tableState: columnsState,
+    columnsById: columnsState.columnsById,
+    defaultSort: SLOW_REQUEST_DEFAULT_STATE.sort,
+    sortable: SLOW_REQUEST_SORTABLE,
+  })
+
+  const visibleColumnIds = useMemo(
+    () =>
+      columnsState.columns
+        .filter((column) => column.visible)
+        .map((column) => column.id as SlowRequestColumnId),
+    [columnsState.columns],
+  )
 
   const fetchStats = useCallback(async () => {
     setLoading(true)
@@ -67,6 +144,29 @@ export function PerformanceMonitor() {
     const timer = setInterval(fetchStats, 10_000)
     return () => clearInterval(timer)
   }, [fetchStats])
+
+  const sortedSlowRequests = useMemo(() => {
+    const source = stats?.slowRequests ?? []
+    if (!sortState.sort) return source
+    const next = [...source]
+    next.sort((a, b) => {
+      const va = toComparableValue(a, sortState.sort?.field ?? '')
+      const vb = toComparableValue(b, sortState.sort?.field ?? '')
+      if (va === vb) return 0
+      if (typeof va === 'number' && typeof vb === 'number') {
+        return sortState.sort?.dir === 'asc' ? va - vb : vb - va
+      }
+      const sa = String(va)
+      const sb = String(vb)
+      return sortState.sort?.dir === 'asc' ? sa.localeCompare(sb) : sb.localeCompare(sa)
+    })
+    return next
+  }, [stats?.slowRequests, sortState.sort])
+
+  function renderSortIndicator(columnId: SlowRequestColumnId): string {
+    if (!sortState.isSortedBy(columnId)) return ''
+    return sortState.sort?.dir === 'asc' ? ' ↑' : ' ↓'
+  }
 
   return (
     <div data-testid="performance-monitor">
@@ -108,45 +208,117 @@ export function PerformanceMonitor() {
             <h2 className="mb-3 text-sm font-semibold text-[var(--text)]">
               最近慢请求（&gt;500ms）
             </h2>
-            {stats.slowRequests.length === 0 ? (
-              <p className="text-sm text-[var(--muted)]" data-testid="no-slow-requests">
-                暂无慢请求
-              </p>
-            ) : (
-              <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
-                <table className="w-full text-xs">
-                  <thead className="bg-[var(--bg2)] text-[var(--muted)]">
-                    <tr>
-                      <th className="px-3 py-2 text-left">时间</th>
-                      <th className="px-3 py-2 text-left">方法</th>
-                      <th className="px-3 py-2 text-left">URL</th>
-                      <th className="px-3 py-2 text-left">状态码</th>
-                      <th className="px-3 py-2 text-left">耗时</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {stats.slowRequests.map((req, i) => (
-                      <tr
-                        key={i}
-                        className="bg-[var(--bg)] hover:bg-[var(--bg2)]"
-                        style={{ borderBottom: '1px solid var(--subtle, var(--border))' }}
-                        data-testid={`slow-request-row-${i}`}
-                      >
-                        <td className="px-3 py-2 text-[var(--muted)]">
-                          {new Date(req.timestamp).toLocaleTimeString()}
-                        </td>
-                        <td className="px-3 py-2 font-mono text-[var(--text)]">{req.method}</td>
-                        <td className="px-3 py-2 font-mono text-[var(--muted)] max-w-48 truncate">
-                          {req.url}
-                        </td>
-                        <td className="px-3 py-2 text-[var(--muted)]">{req.statusCode}</td>
-                        <td className="px-3 py-2 text-yellow-400 font-medium">{req.durationMs} ms</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <AdminToolbar
+              className="mb-2 gap-3"
+              actions={(
+                <button
+                  type="button"
+                  className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                  onClick={() => setShowColumnsPanel((prev) => !prev)}
+                  data-testid="slow-request-columns-toggle"
+                >
+                  列设置
+                </button>
+              )}
+            />
+            {showColumnsPanel && (
+              <div className="mb-2 rounded border border-[var(--border)] bg-[var(--bg2)] p-2" data-testid="slow-request-columns-panel">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-xs text-[var(--muted)]">显示列</span>
+                  <button
+                    type="button"
+                    className="text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                    onClick={() => columnsState.resetColumnsMeta()}
+                    data-testid="slow-request-columns-reset"
+                  >
+                    重置
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-1">
+                  {columnsState.columns.map((column) => (
+                    <label key={column.id} className="flex items-center gap-2 text-xs text-[var(--text)]">
+                      <input
+                        type="checkbox"
+                        checked={column.visible}
+                        onChange={() => columnsState.toggleColumnVisibility(column.id)}
+                        className="accent-[var(--accent)]"
+                        data-testid={`slow-request-column-toggle-${column.id}`}
+                      />
+                      {SLOW_REQUEST_LABELS[column.id as SlowRequestColumnId]}
+                    </label>
+                  ))}
+                </div>
               </div>
             )}
+            <AdminTableFrame minWidth={860}>
+              <thead className="bg-[var(--bg2)] text-[var(--muted)]">
+                <tr>
+                  {visibleColumnIds.map((columnId) => {
+                    const meta = columnsState.columnsById[columnId]
+                    return (
+                      <th key={columnId} className="relative px-3 py-2 text-left text-xs" style={{ width: `${meta.width}px` }}>
+                        <button
+                          type="button"
+                          className="text-left hover:text-[var(--text)]"
+                          onClick={() => sortState.toggleSort(columnId)}
+                          data-testid={`slow-request-sort-${columnId}`}
+                        >
+                          {SLOW_REQUEST_LABELS[columnId]}
+                          {renderSortIndicator(columnId)}
+                        </button>
+                        {meta.resizable && (
+                          <button
+                            type="button"
+                            aria-label={`${SLOW_REQUEST_LABELS[columnId]}列宽拖拽`}
+                            data-testid={`slow-request-resize-${columnId}`}
+                            onMouseDown={(event) => columnsState.startResize(columnId, event.clientX)}
+                            className="absolute right-0 top-0 h-full w-2 cursor-col-resize"
+                          />
+                        )}
+                      </th>
+                    )
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                <AdminTableState
+                  isLoading={false}
+                  isEmpty={sortedSlowRequests.length === 0}
+                  colSpan={visibleColumnIds.length}
+                  emptyText="暂无慢请求"
+                />
+                {sortedSlowRequests.map((req, i) => (
+                  <tr
+                    key={`${req.timestamp}-${req.url}-${i}`}
+                    className="h-[52px] bg-[var(--bg)] hover:bg-[var(--bg2)]"
+                    style={{ borderBottom: '1px solid var(--subtle, var(--border))' }}
+                    data-testid={`slow-request-row-${i}`}
+                  >
+                    {visibleColumnIds.includes('timestamp') && (
+                      <td className="px-3 py-2 align-middle text-[var(--muted)]">
+                        {new Date(req.timestamp).toLocaleTimeString()}
+                      </td>
+                    )}
+                    {visibleColumnIds.includes('method') && (
+                      <td className="px-3 py-2 align-middle font-mono text-[var(--text)]">{req.method}</td>
+                    )}
+                    {visibleColumnIds.includes('url') && (
+                      <td className="px-3 py-2 align-middle font-mono text-[var(--muted)]">
+                        <span className="inline-block max-w-[320px] truncate" title={req.url}>
+                          {req.url}
+                        </span>
+                      </td>
+                    )}
+                    {visibleColumnIds.includes('statusCode') && (
+                      <td className="px-3 py-2 align-middle text-[var(--muted)]">{req.statusCode}</td>
+                    )}
+                    {visibleColumnIds.includes('durationMs') && (
+                      <td className="px-3 py-2 align-middle font-medium text-yellow-400">{req.durationMs} ms</td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </AdminTableFrame>
           </div>
         </>
       )}
