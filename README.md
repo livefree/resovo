@@ -141,11 +141,22 @@ VALUES (
 **系统管理区**（仅 admin 可见）：
 - **数据看板**：视频数/播放量/用户数/待处理事项
 - **用户管理**：查看用户、封号/解封、角色管理
-- **爬虫管理**：配置资源站、手动触发全量/增量采集
+- **采集控制台**：配置源站、手动触发采集、查看运行任务、暂停/恢复/中止
 
-### 触发内容采集
+### 触发与控制采集任务
 
-登录管理后台 → 爬虫管理 → 点击「全量采集」，等待采集完成后刷新首页即可看到视频内容。
+入口位置：
+1. 登录后台后进入「系统管理」→「采集控制台（原视频源配置）」。
+2. 页面上方「采集批次状态」区域可看到当前任务与最近结果。
+3. 每个运行中的任务卡片提供按钮：
+   - `暂停`：暂停后不再继续后续步骤，进入 `paused`。
+   - `恢复`：从暂停状态恢复执行。
+   - `中止`：停止该批次后续执行，进入 `cancelled`（已完成结果保留）。
+
+手动触发方式：
+1. 全站触发：在工具栏点击「全站增量采集」或「全站全量采集」。
+2. 批量触发：先在表格勾选多个源站，再点击「批量增量采集」或「批量全量采集」。
+3. 单站触发：在表格行内点击「增量」或「全量」。
 
 采集完成的视频默认处于**待审状态**（`is_published = false`），需要在视频管理页批量上架，或修改环境变量跳过审核：
 
@@ -161,6 +172,30 @@ npm run verify:crawler
 ```
 
 连接 PostgreSQL 和 Elasticsearch，执行一次增量采集（最近 24 小时），并输出视频数、播放源数、ES 索引文档数及样本数据。退出码 0 表示链路正常。
+
+### 采集控制接口（调试）
+
+如需用 API 调试 run 级控制：
+
+```bash
+# 触发批次（示例：全站增量）
+curl -X POST 'http://localhost:4000/v1/admin/crawler/runs' \
+  -H 'Authorization: Bearer <admin_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"triggerType":"all","mode":"incremental"}'
+
+# 暂停批次
+curl -X POST 'http://localhost:4000/v1/admin/crawler/runs/<runId>/pause' \
+  -H 'Authorization: Bearer <admin_access_token>'
+
+# 恢复批次
+curl -X POST 'http://localhost:4000/v1/admin/crawler/runs/<runId>/resume' \
+  -H 'Authorization: Bearer <admin_access_token>'
+
+# 中止批次
+curl -X POST 'http://localhost:4000/v1/admin/crawler/runs/<runId>/cancel' \
+  -H 'Authorization: Bearer <admin_access_token>'
+```
 
 ### 一键清空已抓取数据（测试用）
 

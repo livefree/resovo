@@ -1668,3 +1668,13 @@
   - 部署前必须执行 `npm run migrate`。
   - 本次为最小可用控制链路，pause/resume 采用协作式检查点机制（非硬中断）。
   - 已验证：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/api/crawler-worker.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/AdminCrawlerTabs.test.tsx`、`npm run test:run` 通过（38 files / 481 tests）。
+
+## [CHG-110] README 补充采集控制操作说明
+- **完成时间**：2026-03-20
+- **记录时间**：2026-03-20 17:54
+- **修改文件**：
+  - `README.md` — 补充“采集控制台”入口说明、暂停/恢复/中止按钮位置与语义、单站/批量/全站触发方式、run 控制 API 调试示例。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅文档更新，不涉及代码逻辑变更。
