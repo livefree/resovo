@@ -1750,3 +1750,15 @@
 - **数据库变更**：无
 - **注意事项**：
   - 系统级状态条固定展示 scheduler/freeze/orphan，补齐运维可见性。
+
+## [CHG-116] C1 worker 硬约束（无 runId/taskId 不执行）
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 02:06
+- **修改文件**：
+  - `src/api/workers/crawlerWorker.ts` — 执行前 contract guard：缺失 `runId/taskId` 直接拒绝并写审计日志；enqueue 参数强制化。
+  - `tests/unit/api/crawler-worker.test.ts` — 补充 contract 缺失拒绝测试，更新 enqueue 断言。
+  - `tests/unit/api/crawler.test.ts` — 同步 worker 入队测试到强制 contract 签名。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 此变更会拒绝旧形态孤儿 crawl job，避免 worker 再次“脱离 run/task 控制口径”。

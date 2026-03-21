@@ -630,3 +630,15 @@
   - A3：新增 `GET /admin/crawler/system-status` 与控制台系统状态条（scheduler/freeze/orphan）。
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/AdminCrawlerTabs.test.tsx`
 - **后续**：继续执行 CHG-116（worker 硬约束：无 runId/taskId 不执行）。
+
+## [LOG-20260321-0206-01] CHG-116 worker contract guard 落地
+- **时间**：2026-03-21 02:06
+- **类型**：INFO
+- **关联任务**：CHG-116
+- **内容**：完成 worker 执行入口硬约束，拒绝无 runId/taskId 的 crawl job。
+- **处理动作**：
+  - `crawlerWorker` 新增 contract guard：无 runId/taskId 直接写审计日志并拒绝执行。
+  - `enqueueFullCrawl/enqueueIncrementalCrawl` 改为强制 contract 参数。
+  - 更新 worker 与 API 相关单测，覆盖 contract 缺失拒绝路径。
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler-worker.test.ts tests/unit/api/crawler.test.ts`
+- **后续**：进入 CHG-117（stop-all/freeze 正式化）。

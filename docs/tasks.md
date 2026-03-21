@@ -4432,23 +4432,54 @@ _（任务 review 通过后移入此处）_
 
 #### CHG-116 C1 worker 硬约束（无 runId/taskId 不执行）
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-21 09:10
 - **计划开始时间**：2026-03-21 11:00
 - **实际开始时间**：2026-03-21 02:05
-- **完成时间**：待定
+- **完成时间**：2026-03-21 02:06
 - **问题**：只要 worker 仍可执行无 runId/taskId 的孤儿任务，监控口径就可能再次失真。
 - **影响的已完成任务**：CHG-115
-- **文件范围（计划）**：
+- **文件范围**：
   - `src/api/workers/crawlerWorker.ts`
-  - `src/api/routes/admin/crawler.ts`（必要兼容）
   - `tests/unit/api/crawler-worker.test.ts`
-- **修复内容（计划）**：
-  - worker 执行前强校验 `runId/taskId`，无契约任务直接拒绝执行并记录日志。
-  - 对 reject 场景补齐可审计日志，避免“静默跳过”。
-- **测试要求（计划）**：
+  - `tests/unit/api/crawler.test.ts`
+- **修复内容**：
+  - worker 在执行前强校验 `runId/taskId`，缺失时写入 `worker.job.rejected.no_contract` 审计日志并直接拒绝执行。
+  - `enqueueFullCrawl/enqueueIncrementalCrawl` 强制要求 `siteKey/taskId/runId`，缺失字段直接抛错。
+  - 调整相关单测，覆盖缺失 contract 的拒绝路径。
+- **测试要求**：
   - `npm run typecheck`
   - `npm run lint`
   - `npm run test:run -- tests/unit/api/crawler-worker.test.ts tests/unit/api/crawler.test.ts`
+- **完成备注**：
+  - 已从执行入口封堵孤儿 crawl job，监控口径与执行口径进一步一致。
+- **问题说明**：_（无）_
+
+---
+
+#### CHG-117 C2 stop-all/freeze 正式化
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-03-21 09:10
+- **计划开始时间**：2026-03-21 11:30
+- **实际开始时间**：2026-03-21 02:10
+- **完成时间**：待定
+- **问题**：当前已有 stop-all/freeze 能力，但控制台缺少统一可操作入口与状态联动。
+- **影响的已完成任务**：CHG-116
+- **文件范围（计划）**：
+  - `src/api/routes/admin/crawler.ts`
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerMonitor.ts`
+  - `src/components/admin/system/crawler-site/components/CrawlerSystemStatusStrip.tsx`
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+  - `README.md`
+  - `tests/unit/api/crawler-worker.test.ts`
+- **修复内容（计划）**：
+  - 增加 freeze 开关专用接口，支持后台显式冻结/解冻。
+  - 控制台状态条增加 stop-all 与 freeze 控制按钮，动作后自动刷新状态与运行面板。
+  - README 补充正式化控制说明与调用示例。
+- **测试要求（计划）**：
+  - `npm run typecheck`
+  - `npm run lint`
+  - `npm run test:run -- tests/unit/api/crawler.test.ts tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
 - **完成备注**：待实施
 - **问题说明**：_（无）_

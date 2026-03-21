@@ -106,30 +106,27 @@ describe('crawlerWorker', () => {
   })
 
   it('enqueueFullCrawl 调用 crawlerQueue.add 并传入 full-crawl 类型', async () => {
-    await enqueueFullCrawl()
+    await enqueueFullCrawl('site-a', 'task-1', 'run-1')
     expect(mockJobAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'full-crawl' })
+      expect.objectContaining({ type: 'full-crawl', siteKey: 'site-a', taskId: 'task-1', runId: 'run-1' })
     )
   })
 
-  it('enqueueFullCrawl 可传入 siteKey', async () => {
-    await enqueueFullCrawl('site-a')
-    expect(mockJobAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'full-crawl', siteKey: 'site-a' })
-    )
+  it('enqueueFullCrawl 缺少 contract 字段时抛错', async () => {
+    await expect(enqueueFullCrawl('site-a', '', 'run-1')).rejects.toThrow('CRAWL_JOB_CONTRACT_INVALID')
   })
 
   it('enqueueIncrementalCrawl 调用 crawlerQueue.add 并传入 incremental-crawl 类型', async () => {
-    await enqueueIncrementalCrawl()
+    await enqueueIncrementalCrawl('site-a', 24, 'task-2', 'run-2')
     expect(mockJobAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'incremental-crawl', hoursAgo: 24 })
+      expect.objectContaining({ type: 'incremental-crawl', siteKey: 'site-a', hoursAgo: 24, taskId: 'task-2', runId: 'run-2' })
     )
   })
 
   it('enqueueIncrementalCrawl 可自定义 hoursAgo', async () => {
-    await enqueueIncrementalCrawl(undefined, 6)
+    await enqueueIncrementalCrawl('site-a', 6, 'task-3', 'run-3')
     expect(mockJobAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ hoursAgo: 6 })
+      expect.objectContaining({ siteKey: 'site-a', hoursAgo: 6, taskId: 'task-3', runId: 'run-3' })
     )
   })
 
@@ -234,7 +231,7 @@ describe('重试配置（queue.ts）', () => {
     // queue.ts 中已配置 attempts: 3, backoff: { type: exponential, delay: 60000 }
     // 此测试验证 enqueueFullCrawl 传入的选项不会覆盖默认重试配置
     mockJobAdd.mockResolvedValueOnce({ id: 'job-retry-test', opts: { attempts: 3 } })
-    const job = await enqueueFullCrawl()
+    const job = await enqueueFullCrawl('site-a', 'task-retry', 'run-retry')
     // 任务成功入队即可（重试配置在 queue.ts defaultJobOptions 中）
     expect(job).toBeTruthy()
   })

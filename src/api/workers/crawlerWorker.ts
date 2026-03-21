@@ -20,12 +20,12 @@ export type CrawlJobType = 'full-crawl' | 'incremental-crawl'
 
 export interface CrawlJobData {
   type: CrawlJobType
-  /** 指定单站 key；留空时采集全部启用站 */
-  siteKey?: string
-  /** 已创建的任务 ID（单站触发时由 API 预创建） */
-  taskId?: string
-  /** 批次 ID（批量/全部/定时触发） */
-  runId?: string
+  /** 单站任务对应的源站 key（run/task 模型下必填） */
+  siteKey: string
+  /** 已创建的任务 ID（run/task 模型下必填） */
+  taskId: string
+  /** 批次 ID（run/task 模型下必填） */
+  runId: string
   /** 增量模式：只采集最近 N 小时更新的内容 */
   hoursAgo?: number
 }
@@ -82,6 +82,24 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
       const reason = err instanceof Error ? err.message : String(err)
       process.stderr.write(`[crawler-worker] failed to persist task log: ${reason}\n`)
     }
+  }
+
+  if (!runId || !taskId) {
+    await createCrawlerTaskLog(db, {
+      taskId: taskId ?? null,
+      sourceSite: siteKey ?? null,
+      level: 'error',
+      stage: 'worker.job.rejected.no_contract',
+      message: '拒绝执行缺少 runId/taskId 的采集任务',
+      details: {
+        jobId: String(job.id),
+        mode: type,
+        runId: runId ?? null,
+        taskId: taskId ?? null,
+        siteKey: siteKey ?? null,
+      },
+    })
+    throw new Error('CRAWL_JOB_CONTRACT_INVALID: runId/taskId required')
   }
 
   await logTask('info', 'worker.job.received', 'Worker 接收到采集任务', {
@@ -324,16 +342,22 @@ export function registerCrawlerWorker(concurrency = 1): void {
 // ── 便捷入队函数 ──────────────────────────────────────────────────
 
 /** 添加全量采集任务到队列（可选指定单站 key） */
-export async function enqueueFullCrawl(siteKey?: string, taskId?: string, runId?: string): Promise<Bull.Job<CrawlJobData>> {
+export async function enqueueFullCrawl(siteKey: string, taskId: string, runId: string): Promise<Bull.Job<CrawlJobData>> {
+  if (!siteKey || !taskId || !runId) {
+    throw new Error('CRAWL_JOB_CONTRACT_INVALID: enqueueFullCrawl requires siteKey/taskId/runId')
+  }
   return crawlerQueue.add({ type: 'full-crawl', siteKey, taskId, runId })
 }
 
 /** 添加增量采集任务到队列（默认最近 24 小时，可选指定单站 key） */
 export async function enqueueIncrementalCrawl(
-  siteKey?: string,
+  siteKey: string,
   hoursAgo = 24,
-  taskId?: string,
-  runId?: string,
+  taskId: string,
+  runId: string,
 ): Promise<Bull.Job<CrawlJobData>> {
+  if (!siteKey || !taskId || !runId) {
+    throw new Error('CRAWL_JOB_CONTRACT_INVALID: enqueueIncrementalCrawl requires siteKey/taskId/runId')
+  }
   return crawlerQueue.add({ type: 'incremental-crawl', siteKey, taskId, runId, hoursAgo })
 }
