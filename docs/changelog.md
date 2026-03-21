@@ -1873,3 +1873,14 @@
 - **数据库变更**：无
 - **注意事项**：
   - 仅迁移 `videos` 页面表格能力，不改 API 调用顺序、权限逻辑与业务字段结构。
+
+## [CHG-126] sources 列表迁移到 shared table 基线
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 15:47
+- **修改文件**：
+  - `src/components/admin/sources/SourceTable.tsx` — 接入 shared 列状态与排序能力；新增列设置、列显隐、列宽拖拽、排序持久化；保留后端分页、验证与删除流程。
+  - `tests/unit/components/admin/sources/SourceTable.test.tsx` — 覆盖默认排序与切换、列显隐、列宽持久化回挂。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 仅迁移 `sources` 页面表格能力，不改 API 调用顺序、权限逻辑与业务字段结构。

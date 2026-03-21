@@ -959,7 +959,7 @@
 ## [SEQ-20260321-33] Admin 列表能力统一（矩阵落地到迁移执行）
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-21 11:20
-- **最后更新时间**：2026-03-21 15:45
+- **最后更新时间**：2026-03-21 15:48
 - **目标**：基于能力矩阵，按原子任务将 admin 全部列表收敛到统一表格能力基线
 - **范围**：`admin/*` 列表页（crawler/videos/sources/users/submissions/subtitles/dashboard）与 shared table 能力
 - **依赖**：`docs/admin_list_matrix.md`、`docs/admin_table_baseline.md`
@@ -1025,11 +1025,11 @@
      - 采用后端分页优先，不新增前端全量排序
    - 回滚方式：回退 videos 接入 commit，恢复原表格实现
 
-5. CHG-126 — sources 列表迁移到 shared table 基线（状态：🔄 进行中）
+5. CHG-126 — sources 列表迁移到 shared table 基线（状态：✅ 已完成）
    - 创建时间：2026-03-21 11:20
    - 计划开始：2026-03-21 18:00
    - 实际开始：2026-03-21 15:45
-   - 完成时间：
+   - 完成时间：2026-03-21 15:47
    - 目标：将播放源管理列表对齐统一表格能力
    - 范围：`src/components/admin/content/SourceTable.tsx`、相关 hooks/services
    - 依赖：CHG-125
@@ -1039,10 +1039,10 @@
      - 容器独立滚动，不触发整页滚动
    - 回滚方式：回退 sources 迁移 commit，恢复旧列表组件
 
-6. CHG-127 — users 列表迁移到 shared table 基线（状态：⬜ 待开始）
+6. CHG-127 — users 列表迁移到 shared table 基线（状态：🔄 进行中）
    - 创建时间：2026-03-21 11:20
    - 计划开始：2026-03-21 19:30
-   - 实际开始：
+   - 实际开始：2026-03-21 15:48
    - 完成时间：
    - 目标：将用户管理列表迁移并补齐可操作列规范
    - 范围：`src/components/admin/system/UserTable.tsx`、相关 hooks/services

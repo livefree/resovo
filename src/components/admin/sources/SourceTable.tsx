@@ -1,11 +1,11 @@
 /**
  * SourceTable.tsx — 播放源管理表格（Client Component）
- * CHG-28: StatusBadge + SourceVerifyButton + 批量删除 + 状态筛选
+ * CHG-126: 接入 shared table 基线能力（排序/列显隐/列宽/持久化）
  */
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { StatusBadge } from '@/components/admin/StatusBadge'
 import { Pagination } from '@/components/admin/Pagination'
@@ -15,9 +15,14 @@ import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
 import { AdminTableState } from '@/components/admin/shared/feedback/AdminTableState'
 import { AdminTableFrame } from '@/components/admin/shared/table/AdminTableFrame'
 import { AdminToolbar } from '@/components/admin/shared/toolbar/AdminToolbar'
+import { useAdminTableColumns, type AdminColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
+import { useAdminTableSort } from '@/components/admin/shared/table/useAdminTableSort'
+import type { AdminTableState as SharedAdminTableState } from '@/components/admin/shared/table/useAdminTableState'
 
 const PAGE_SIZE = 20
 const URL_MAX_LEN = 60
+
+type SourceColumnId = 'video_title' | 'source_url' | 'status' | 'last_checked' | 'actions'
 
 interface SourceRow {
   id: string
@@ -32,8 +37,51 @@ interface SourceRow {
   video_title?: string
 }
 
+const SOURCE_COLUMNS: AdminColumnMeta[] = [
+  { id: 'video_title', visible: true, width: 220, minWidth: 160, maxWidth: 400, resizable: true },
+  { id: 'source_url', visible: true, width: 340, minWidth: 220, maxWidth: 560, resizable: true },
+  { id: 'status', visible: true, width: 120, minWidth: 100, maxWidth: 180, resizable: true },
+  { id: 'last_checked', visible: true, width: 170, minWidth: 130, maxWidth: 280, resizable: true },
+  { id: 'actions', visible: true, width: 180, minWidth: 150, maxWidth: 260, resizable: false },
+]
+
+const SOURCE_DEFAULT_TABLE_STATE: Omit<SharedAdminTableState, 'columns'> = {
+  sort: { field: 'last_checked', dir: 'desc' },
+}
+
+const SOURCE_COLUMN_LABELS: Record<SourceColumnId, string> = {
+  video_title: '视频标题',
+  source_url: '源 URL',
+  status: '状态',
+  last_checked: '最后验证',
+  actions: '操作',
+}
+
+const SOURCE_SORTABLE_MAP: Record<SourceColumnId, boolean> = {
+  video_title: true,
+  source_url: true,
+  status: true,
+  last_checked: true,
+  actions: false,
+}
+
 function truncateUrl(url: string): string {
-  return url.length > URL_MAX_LEN ? url.slice(0, URL_MAX_LEN) + '…' : url
+  return url.length > URL_MAX_LEN ? `${url.slice(0, URL_MAX_LEN)}…` : url
+}
+
+function toComparableValue(row: SourceRow, field: string): string | number {
+  switch (field) {
+    case 'video_title':
+      return (row.video_title ?? '').toLowerCase()
+    case 'source_url':
+      return row.source_url.toLowerCase()
+    case 'status':
+      return row.is_active ? 1 : 0
+    case 'last_checked':
+      return row.last_checked ? new Date(row.last_checked).getTime() : 0
+    default:
+      return ''
+  }
 }
 
 export function SourceTable() {
@@ -45,6 +93,43 @@ export function SourceTable() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [deleteTarget, setDeleteTarget] = useState<SourceRow | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [showColumnsPanel, setShowColumnsPanel] = useState(false)
+
+  const columnsState = useAdminTableColumns({
+    route: '/admin/sources',
+    tableId: 'source-table',
+    columns: SOURCE_COLUMNS,
+    defaultState: SOURCE_DEFAULT_TABLE_STATE,
+  })
+
+  const sortState = useAdminTableSort({
+    tableState: columnsState,
+    columnsById: columnsState.columnsById,
+    defaultSort: SOURCE_DEFAULT_TABLE_STATE.sort,
+    sortable: SOURCE_SORTABLE_MAP,
+  })
+
+  const visibleColumnIds = useMemo(
+    () => columnsState.columns.filter((column) => column.visible).map((column) => column.id as SourceColumnId),
+    [columnsState.columns],
+  )
+
+  const sortedSources = useMemo(() => {
+    if (!sortState.sort) return sources
+    const next = [...sources]
+    next.sort((a, b) => {
+      const va = toComparableValue(a, sortState.sort?.field ?? '')
+      const vb = toComparableValue(b, sortState.sort?.field ?? '')
+      if (va === vb) return 0
+      if (typeof va === 'number' && typeof vb === 'number') {
+        return sortState.sort?.dir === 'asc' ? va - vb : vb - va
+      }
+      const sa = String(va)
+      const sb = String(vb)
+      return sortState.sort?.dir === 'asc' ? sa.localeCompare(sb) : sb.localeCompare(sa)
+    })
+    return next
+  }, [sources, sortState.sort])
 
   const fetchSources = useCallback(
     async (pageVal: number, statusVal: string) => {
@@ -56,9 +141,7 @@ export function SourceTable() {
           limit: String(PAGE_SIZE),
           status: statusVal,
         })
-        const res = await apiClient.get<{ data: SourceRow[]; total: number }>(
-          `/admin/sources?${params}`
-        )
+        const res = await apiClient.get<{ data: SourceRow[]; total: number }>(`/admin/sources?${params}`)
         setSources(res.data)
         setTotal(res.total)
       } catch {
@@ -67,7 +150,7 @@ export function SourceTable() {
         setLoading(false)
       }
     },
-    []
+    [],
   )
 
   useEffect(() => {
@@ -75,16 +158,14 @@ export function SourceTable() {
   }, [fetchSources, page, status])
 
   function handleCheck(id: string, checked: boolean) {
-    setSelectedIds((prev) =>
-      checked ? [...prev, id] : prev.filter((x) => x !== id)
-    )
+    setSelectedIds((prev) => (checked ? [...prev, id] : prev.filter((x) => x !== id)))
   }
 
   function handleSelectAll(checked: boolean) {
-    setSelectedIds(checked ? sources.map((s) => s.id) : [])
+    setSelectedIds(checked ? sortedSources.map((s) => s.id) : [])
   }
 
-  const allSelected = sources.length > 0 && selectedIds.length === sources.length
+  const allSelected = sortedSources.length > 0 && selectedIds.length === sortedSources.length
 
   async function handleDelete() {
     if (!deleteTarget) return
@@ -100,30 +181,74 @@ export function SourceTable() {
     }
   }
 
+  function renderSortIndicator(columnId: SourceColumnId): string {
+    if (!sortState.isSortedBy(columnId)) return ''
+    return sortState.sort?.dir === 'asc' ? ' ↑' : ' ↓'
+  }
+
   return (
-    <div data-testid="source-table">
-      {/* 状态筛选 */}
+    <div data-testid="source-table" className="space-y-2">
       <AdminToolbar
         className="gap-3"
         actions={(
-          <select
-            value={status}
-            onChange={(e) => {
-              setPage(1)
-              setStatus(e.target.value as typeof status)
-            }}
-            className="rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-1.5 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-            data-testid="source-status-filter"
-          >
-            <option value="all">全部状态</option>
-            <option value="active">有效源</option>
-            <option value="inactive">失效源</option>
-          </select>
+          <div className="flex items-center gap-2">
+            <select
+              value={status}
+              onChange={(e) => {
+                setPage(1)
+                setStatus(e.target.value as typeof status)
+              }}
+              className="rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-1.5 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+              data-testid="source-status-filter"
+            >
+              <option value="all">全部状态</option>
+              <option value="active">有效源</option>
+              <option value="inactive">失效源</option>
+            </select>
+
+            <button
+              type="button"
+              className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+              onClick={() => setShowColumnsPanel((prev) => !prev)}
+              data-testid="source-columns-toggle"
+            >
+              列设置
+            </button>
+          </div>
         )}
       />
 
-      {/* 表格 */}
-      <AdminTableFrame minWidth={860}>
+      {showColumnsPanel && (
+        <div className="rounded border border-[var(--border)] bg-[var(--bg2)] p-2" data-testid="source-columns-panel">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-xs text-[var(--muted)]">显示列</span>
+            <button
+              type="button"
+              className="text-xs text-[var(--muted)] hover:text-[var(--text)]"
+              onClick={() => columnsState.resetColumnsMeta()}
+              data-testid="source-columns-reset"
+            >
+              重置
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-1">
+            {columnsState.columns.map((column) => (
+              <label key={column.id} className="flex items-center gap-2 text-xs text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={column.visible}
+                  onChange={() => columnsState.toggleColumnVisibility(column.id)}
+                  className="accent-[var(--accent)]"
+                  data-testid={`source-column-toggle-${column.id}`}
+                />
+                {SOURCE_COLUMN_LABELS[column.id as SourceColumnId]}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <AdminTableFrame minWidth={960}>
         <thead className="bg-[var(--bg2)] text-[var(--muted)]">
           <tr>
             <th className="px-4 py-3">
@@ -135,68 +260,113 @@ export function SourceTable() {
                 data-testid="source-select-all"
               />
             </th>
-            <th className="px-4 py-3 text-left">视频标题</th>
-            <th className="px-4 py-3 text-left">源 URL</th>
-            <th className="px-4 py-3 text-left">状态</th>
-            <th className="px-4 py-3 text-left">最后验证</th>
-            <th className="px-4 py-3 text-left">操作</th>
+
+            {visibleColumnIds.map((columnId) => {
+              const meta = columnsState.columnsById[columnId]
+              const sortable = sortState.isSortable(columnId)
+              return (
+                <th key={columnId} className="relative px-4 py-3 text-left" style={{ width: `${meta.width}px` }}>
+                  {sortable ? (
+                    <button
+                      type="button"
+                      className="text-left text-sm hover:text-[var(--text)]"
+                      onClick={() => sortState.toggleSort(columnId)}
+                      data-testid={`source-sort-${columnId}`}
+                    >
+                      {SOURCE_COLUMN_LABELS[columnId]}
+                      {renderSortIndicator(columnId)}
+                    </button>
+                  ) : (
+                    <span className="text-sm">{SOURCE_COLUMN_LABELS[columnId]}</span>
+                  )}
+
+                  {meta.resizable && (
+                    <button
+                      type="button"
+                      aria-label={`${SOURCE_COLUMN_LABELS[columnId]}列宽拖拽`}
+                      data-testid={`source-resize-${columnId}`}
+                      onMouseDown={(event) => columnsState.startResize(columnId, event.clientX)}
+                      className="absolute right-0 top-0 h-full w-2 cursor-col-resize"
+                    />
+                  )}
+                </th>
+              )
+            })}
           </tr>
         </thead>
+
         <tbody>
-          <AdminTableState isLoading={loading} isEmpty={!loading && sources.length === 0} colSpan={6} emptyText="暂无数据" />
-          {!loading && sources.map((row) => (
-            <tr
-              key={row.id}
-              className="bg-[var(--bg)] hover:bg-[var(--bg2)]"
-              style={{ borderBottom: '1px solid var(--subtle, var(--border))' }}
-              data-testid={`source-row-${row.id}`}
-            >
-              <td className="px-4 py-3">
-                <input
-                  type="checkbox"
-                  checked={selectedIds.includes(row.id)}
-                  onChange={(e) => handleCheck(row.id, e.target.checked)}
-                  className="accent-[var(--accent)]"
-                  data-testid={`source-checkbox-${row.id}`}
-                />
-              </td>
-              <td className="px-4 py-3 text-[var(--text)]">
-                {row.video_title ?? '—'}
-              </td>
-              <td className="px-4 py-3">
-                <span
-                  title={row.source_url}
-                  className="font-mono text-xs text-[var(--muted)]"
-                  data-testid={`source-url-${row.id}`}
-                >
-                  {truncateUrl(row.source_url)}
-                </span>
-              </td>
-              <td className="px-4 py-3">
-                <StatusBadge status={row.is_active ? 'active' : 'inactive'} />
-              </td>
-              <td className="px-4 py-3 text-xs text-[var(--muted)]">
-                {row.last_checked
-                  ? new Date(row.last_checked).toLocaleString()
-                  : '—'}
-              </td>
-              <td className="px-4 py-3">
-                <div className="flex flex-wrap items-center gap-1">
-                  <SourceVerifyButton
-                    sourceId={row.id}
-                    onVerified={() => fetchSources(page, status)}
+          <AdminTableState
+            isLoading={loading}
+            isEmpty={!loading && sortedSources.length === 0}
+            colSpan={visibleColumnIds.length + 1}
+            emptyText="暂无数据"
+          />
+
+          {!loading &&
+            sortedSources.map((row) => (
+              <tr
+                key={row.id}
+                className="h-[68px] bg-[var(--bg)] hover:bg-[var(--bg2)]"
+                style={{ borderBottom: '1px solid var(--subtle, var(--border))' }}
+                data-testid={`source-row-${row.id}`}
+              >
+                <td className="px-4 py-3 align-middle">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(row.id)}
+                    onChange={(e) => handleCheck(row.id, e.target.checked)}
+                    className="accent-[var(--accent)]"
+                    data-testid={`source-checkbox-${row.id}`}
                   />
-                  <button
-                    onClick={() => setDeleteTarget(row)}
-                    className="rounded px-2 py-0.5 text-xs bg-red-900/30 text-red-400 hover:bg-red-900/60"
-                    data-testid={`source-delete-btn-${row.id}`}
-                  >
-                    删除
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
+                </td>
+
+                {visibleColumnIds.includes('video_title') && (
+                  <td className="px-4 py-3 align-middle text-[var(--text)]" title={row.video_title ?? '—'}>
+                    <span className="inline-block max-w-[220px] truncate">{row.video_title ?? '—'}</span>
+                  </td>
+                )}
+
+                {visibleColumnIds.includes('source_url') && (
+                  <td className="px-4 py-3 align-middle">
+                    <span
+                      title={row.source_url}
+                      className="inline-block max-w-[360px] truncate font-mono text-xs text-[var(--muted)]"
+                      data-testid={`source-url-${row.id}`}
+                    >
+                      {truncateUrl(row.source_url)}
+                    </span>
+                  </td>
+                )}
+
+                {visibleColumnIds.includes('status') && (
+                  <td className="px-4 py-3 align-middle">
+                    <StatusBadge status={row.is_active ? 'active' : 'inactive'} />
+                  </td>
+                )}
+
+                {visibleColumnIds.includes('last_checked') && (
+                  <td className="px-4 py-3 align-middle text-xs text-[var(--muted)]">
+                    {row.last_checked ? new Date(row.last_checked).toLocaleString() : '—'}
+                  </td>
+                )}
+
+                {visibleColumnIds.includes('actions') && (
+                  <td className="px-4 py-3 align-middle">
+                    <div className="flex flex-wrap items-center gap-1">
+                      <SourceVerifyButton sourceId={row.id} onVerified={() => fetchSources(page, status)} />
+                      <button
+                        onClick={() => setDeleteTarget(row)}
+                        className="rounded bg-red-900/30 px-2 py-0.5 text-xs text-red-400 hover:bg-red-900/60"
+                        data-testid={`source-delete-btn-${row.id}`}
+                      >
+                        删除
+                      </button>
+                    </div>
+                  </td>
+                )}
+              </tr>
+            ))}
         </tbody>
       </AdminTableFrame>
 
