@@ -827,6 +827,18 @@
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/videos/VideoTable.test.tsx tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/users/UserTable.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`。
 - **后续**：执行 CHG-145（任务记录页接入统一表格规范）。
 
+## [LOG-20260322-0030-01] CHG-145 任务记录页统一表格规范完成
+- **时间**：2026-03-22 00:30
+- **类型**：INFO
+- **关联任务**：CHG-145
+- **内容**：采集控制台任务记录页已接入 shared 表格能力，交互口径与其他列表对齐。
+- **处理动作**：
+  - `AdminCrawlerPanel` 接入 `useAdminTableColumns`（列显隐/列宽持久化）与 `useAdminTableSort`。
+  - 表格容器切换到 `AdminTableFrame`，继承 sticky 表头与统一滚动容器。
+  - 保留原有筛选、RunID 过滤、分页与日志查看流程。
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/AdminCrawlerTabs.test.tsx tests/unit/api/crawler.test.ts`。
+- **后续**：执行 CHG-146（采集配置拖拽实现 shared 化）。
+
 ---
 
 ## 偏离检测记录模板（补充）

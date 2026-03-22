@@ -4,23 +4,24 @@
 
 ## 当前进行中（仅保留一条）
 
-#### CHG-145 — 任务记录页接入统一表格规范
+#### CHG-146 — 采集配置拖拽实现 shared 化
 
 - **状态**：🔄 进行中
 - **创建时间**：2026-03-22 00:10
-- **计划开始时间**：2026-03-22 01:20
-- **实际开始时间**：2026-03-22 00:27
+- **计划开始时间**：2026-03-22 02:10
+- **实际开始时间**：2026-03-22 00:30
 - **完成时间**：
-- **目标**：将采集控制台任务记录表迁移到 shared 表格规范。
+- **目标**：将 crawler-site 专用拖拽实现提炼进 shared 并复用。
 - **范围**：
-  - `src/components/admin/AdminCrawlerPanel.tsx`
-  - shared table 能力（列显隐/列宽/排序/持久化）
-- **依赖**：CHG-144
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns.ts`
+  - `src/components/admin/shared/table/useAdminTableColumns.ts`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTableLiteHeader.tsx`
+- **依赖**：CHG-145
 - **DoD**：
-  - 任务记录表接入统一列宽拖拽与列设置能力
-  - 保持现有筛选、日志查看、分页行为
-  - 与其他列表页交互一致
+  - crawler-site 不再依赖专用拖拽状态管理
+  - shared 拖拽体验与 crawler 现有基线一致
+  - 不影响列宽持久化与筛选排序
 - **回滚方式**：
-  - 回退 CHG-145 提交
+  - 回退 CHG-146 提交
 - **备注**：
-  - CHG-144 已完成并通过回归检查，继续下一原子任务。
+  - CHG-145 已完成并通过回归检查，继续下一原子任务。

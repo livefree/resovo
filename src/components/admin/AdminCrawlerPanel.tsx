@@ -5,8 +5,12 @@
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
+import { AdminTableState } from '@/components/admin/shared/feedback/AdminTableState'
+import { AdminTableFrame } from '@/components/admin/shared/table/AdminTableFrame'
+import { useAdminTableColumns, type AdminColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
+import { useAdminTableSort } from '@/components/admin/shared/table/useAdminTableSort'
 
 // ── 类型 ─────────────────────────────────────────────────────────
 
@@ -42,6 +46,41 @@ interface CrawlerTaskLogItem {
 
 type TaskStatusFilter = 'pending' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled' | 'timeout' | ''
 type TaskTriggerFilter = 'single' | 'batch' | 'all' | 'schedule' | ''
+
+type CrawlerTaskColumnId =
+  | 'runId'
+  | 'type'
+  | 'site'
+  | 'triggerType'
+  | 'status'
+  | 'startedAt'
+  | 'finishedAt'
+  | 'error'
+  | 'actions'
+
+const CRAWLER_TASK_COLUMN_LABELS: Record<CrawlerTaskColumnId, string> = {
+  runId: 'Run ID',
+  type: '类型',
+  site: '站点',
+  triggerType: '触发来源',
+  status: '状态',
+  startedAt: '开始时间',
+  finishedAt: '结束时间',
+  error: '错误信息',
+  actions: '操作',
+}
+
+const CRAWLER_TASK_COLUMNS: AdminColumnMeta[] = [
+  { id: 'runId', visible: true, width: 120, minWidth: 100, maxWidth: 220, resizable: true },
+  { id: 'type', visible: true, width: 120, minWidth: 96, maxWidth: 220, resizable: true },
+  { id: 'site', visible: true, width: 220, minWidth: 150, maxWidth: 420, resizable: true },
+  { id: 'triggerType', visible: true, width: 120, minWidth: 96, maxWidth: 200, resizable: true },
+  { id: 'status', visible: true, width: 110, minWidth: 90, maxWidth: 180, resizable: true },
+  { id: 'startedAt', visible: true, width: 180, minWidth: 140, maxWidth: 280, resizable: true },
+  { id: 'finishedAt', visible: true, width: 180, minWidth: 140, maxWidth: 280, resizable: true },
+  { id: 'error', visible: true, width: 260, minWidth: 180, maxWidth: 520, resizable: true },
+  { id: 'actions', visible: true, width: 120, minWidth: 100, maxWidth: 180, resizable: false },
+]
 
 // ── 小组件 ───────────────────────────────────────────────────────
 
@@ -102,6 +141,7 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
   const [triggerFilter, setTriggerFilter] = useState<TaskTriggerFilter>('')
   const [runIdFilterInput, setRunIdFilterInput] = useState('')
   const [runIdFilter, setRunIdFilter] = useState('')
+  const [showColumnsPanel, setShowColumnsPanel] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [logTaskId, setLogTaskId] = useState<string | null>(null)
@@ -109,6 +149,26 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
   const [taskLogs, setTaskLogs] = useState<CrawlerTaskLogItem[]>([])
 
   const limit = 20
+  const columnsState = useAdminTableColumns({
+    route: '/admin/crawler',
+    tableId: 'task-records',
+    columns: CRAWLER_TASK_COLUMNS,
+  })
+  const sortState = useAdminTableSort({
+    tableState: columnsState,
+    sortable: {
+      runId: true,
+      type: true,
+      site: true,
+      triggerType: true,
+      status: true,
+      startedAt: true,
+      finishedAt: true,
+      error: true,
+      actions: false,
+    },
+    columnsById: columnsState.columnsById,
+  })
 
   // 加载任务列表
   const fetchTasks = useCallback(async () => {
@@ -180,6 +240,47 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
     return task.error ?? resultError ?? '—'
   }
 
+  function getSortValue(task: CrawlerTask, field: string) {
+    switch (field as CrawlerTaskColumnId) {
+      case 'runId':
+        return getRunId(task) ?? ''
+      case 'type':
+        return task.type ?? ''
+      case 'site':
+        return getSiteKey(task)
+      case 'triggerType':
+        return task.triggerType ?? ''
+      case 'status':
+        return task.status
+      case 'startedAt':
+        return new Date(task.startedAt ?? task.started_at ?? task.scheduledAt ?? 0).getTime()
+      case 'finishedAt':
+        return new Date(task.finishedAt ?? task.finished_at ?? 0).getTime()
+      case 'error':
+        return getErrorMessage(task)
+      default:
+        return ''
+    }
+  }
+
+  const visibleColumnIds = useMemo(
+    () => columnsState.columns.filter((column) => column.visible).map((column) => column.id as CrawlerTaskColumnId),
+    [columnsState.columns],
+  )
+
+  const sort = sortState.sort
+  const sortedTasks = !sort
+    ? tasks
+    : [...tasks].sort((a, b) => {
+        const factor = sort.dir === 'asc' ? 1 : -1
+        const left = getSortValue(a, sort.field)
+        const right = getSortValue(b, sort.field)
+        if (typeof left === 'number' && typeof right === 'number') {
+          return (left - right) * factor
+        }
+        return String(left).localeCompare(String(right), 'zh-Hans-CN') * factor
+      })
+
   const totalPages = Math.ceil(total / limit)
   return (
     <div data-testid="admin-crawler-panel" className="space-y-6">
@@ -191,15 +292,52 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
       <section>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-medium text-[var(--muted)]">采集任务记录</h2>
-          <button
-            type="button"
-            onClick={() => { void fetchTasks() }}
-            className="rounded-md border border-[var(--border)] px-3 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-            data-testid="admin-crawler-refresh"
-          >
-            刷新
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowColumnsPanel((prev) => !prev)}
+              className="rounded-md border border-[var(--border)] px-3 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+              data-testid="admin-crawler-columns"
+            >
+              显示列
+            </button>
+            <button
+              type="button"
+              onClick={() => { void fetchTasks() }}
+              className="rounded-md border border-[var(--border)] px-3 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+              data-testid="admin-crawler-refresh"
+            >
+              刷新
+            </button>
+          </div>
         </div>
+        {showColumnsPanel && (
+          <div className="mb-3 rounded-md border border-[var(--border)] bg-[var(--bg2)] p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs text-[var(--muted)]">列显示</span>
+              <button
+                type="button"
+                className="text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                onClick={() => columnsState.resetColumnsMeta()}
+              >
+                重置
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {columnsState.columns.map((column) => (
+                <label key={column.id} className="flex items-center gap-2 text-xs text-[var(--text)]">
+                  <input
+                    type="checkbox"
+                    checked={column.visible}
+                    onChange={() => columnsState.toggleColumnVisibility(column.id)}
+                    className="accent-[var(--accent)]"
+                  />
+                  {CRAWLER_TASK_COLUMN_LABELS[column.id as CrawlerTaskColumnId]}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="mb-3 flex gap-1 rounded-md border border-[var(--border)] p-0.5 w-fit">
           {([
             { value: '', label: '全部' },
@@ -288,30 +426,50 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
           <p className="mb-4 rounded-md bg-red-900/30 px-4 py-2 text-sm text-red-400">{error}</p>
         )}
 
-        <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
-          <table className="w-full text-sm">
-            <thead className="bg-[var(--bg2)] text-[var(--muted)]">
-              <tr>
-                <th className="px-4 py-3 text-left">Run ID</th>
-                <th className="px-4 py-3 text-left">类型</th>
-                <th className="px-4 py-3 text-left">站点</th>
-                <th className="px-4 py-3 text-left">触发来源</th>
-                <th className="px-4 py-3 text-left">状态</th>
-                <th className="px-4 py-3 text-left">开始时间</th>
-                <th className="px-4 py-3 text-left">结束时间</th>
-                <th className="px-4 py-3 text-left">错误信息</th>
-                <th className="px-4 py-3 text-left">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--subtle)]">
-              {loading && (
-                <tr><td colSpan={9} className="py-8 text-center text-[var(--muted)]">加载中…</td></tr>
-              )}
-              {!loading && tasks.length === 0 && (
-                <tr><td colSpan={9} className="py-8 text-center text-[var(--muted)]">暂无任务记录</td></tr>
-              )}
-              {!loading && tasks.map((task) => (
-                <tr key={task.id} className="bg-[var(--bg)] hover:bg-[var(--bg2)]" data-testid={`admin-crawler-task-${task.id}`}>
+        <AdminTableFrame minWidth={1450}>
+          <thead className="bg-[var(--bg2)] text-[var(--muted)]">
+            <tr>
+              {visibleColumnIds.map((columnId) => {
+                const meta = columnsState.columnsById[columnId]
+                const sortable = sortState.isSortable(columnId)
+                const sorted = sortState.isSortedBy(columnId)
+                return (
+                  <th key={columnId} className="relative px-4 py-3 text-left" style={{ width: `${meta.width}px` }}>
+                    {sortable ? (
+                      <button
+                        type="button"
+                        className="text-left text-xs hover:text-[var(--text)]"
+                        onClick={() => sortState.toggleSort(columnId)}
+                      >
+                        {CRAWLER_TASK_COLUMN_LABELS[columnId]}
+                        {sorted ? (sortState.sort?.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                      </button>
+                    ) : (
+                      <span className="text-xs">{CRAWLER_TASK_COLUMN_LABELS[columnId]}</span>
+                    )}
+                    {meta.resizable && (
+                      <button
+                        type="button"
+                        onMouseDown={(event) => columnsState.startResize(columnId, event.clientX)}
+                        className="absolute right-0 top-0 h-full w-2 cursor-col-resize before:absolute before:right-0 before:top-0 before:h-full before:w-px before:bg-[var(--border)] hover:bg-[var(--bg3)]/40"
+                        aria-label={`${CRAWLER_TASK_COLUMN_LABELS[columnId]}列宽拖拽`}
+                      />
+                    )}
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--subtle)]">
+            <AdminTableState
+              isLoading={loading}
+              isEmpty={!loading && sortedTasks.length === 0}
+              colSpan={visibleColumnIds.length}
+              emptyText="暂无任务记录"
+            />
+            {!loading && sortedTasks.map((task) => (
+              <tr key={task.id} className="bg-[var(--bg)] hover:bg-[var(--bg2)]" data-testid={`admin-crawler-task-${task.id}`}>
+                {visibleColumnIds.includes('runId') && (
                   <td className="px-4 py-3 text-xs text-[var(--muted)]">
                     {getRunId(task) ? (
                       <button
@@ -332,19 +490,35 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
                       </button>
                     ) : '—'}
                   </td>
+                )}
+                {visibleColumnIds.includes('type') && (
                   <td className="px-4 py-3 text-[var(--text)]">{task.type}</td>
+                )}
+                {visibleColumnIds.includes('site') && (
                   <td className="max-w-xs truncate px-4 py-3 text-xs text-[var(--muted)]">{getSiteKey(task)}</td>
+                )}
+                {visibleColumnIds.includes('triggerType') && (
                   <td className="px-4 py-3"><TriggerBadge triggerType={task.triggerType} /></td>
+                )}
+                {visibleColumnIds.includes('status') && (
                   <td className="px-4 py-3"><StatusBadge status={task.status} /></td>
-                  <td className="px-4 py-3 text-[var(--muted)] text-xs">
+                )}
+                {visibleColumnIds.includes('startedAt') && (
+                  <td className="px-4 py-3 text-xs text-[var(--muted)]">
                     {parseTime(task.startedAt ?? task.started_at ?? task.scheduledAt)}
                   </td>
-                  <td className="px-4 py-3 text-[var(--muted)] text-xs">
+                )}
+                {visibleColumnIds.includes('finishedAt') && (
+                  <td className="px-4 py-3 text-xs text-[var(--muted)]">
                     {parseTime(task.finishedAt ?? task.finished_at)}
                   </td>
+                )}
+                {visibleColumnIds.includes('error') && (
                   <td className="max-w-xs truncate px-4 py-3 text-xs text-red-400">
                     {getErrorMessage(task)}
                   </td>
+                )}
+                {visibleColumnIds.includes('actions') && (
                   <td className="px-4 py-3">
                     <button
                       type="button"
@@ -355,11 +529,11 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
                       查看日志
                     </button>
                   </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </AdminTableFrame>
 
         {totalPages > 1 && (
           <div className="mt-4 flex items-center justify-between text-sm text-[var(--muted)]">

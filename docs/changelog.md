@@ -2139,3 +2139,18 @@
   - `npm run test:run -- tests/unit/components/admin/videos/VideoTable.test.tsx tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/users/UserTable.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx` ✅
 - **注意事项**：
   - 本任务仅统一 shared 表头固定可见能力，不改变筛选、排序、分页与数据请求行为。
+
+## [CHG-145] 任务记录页接入统一表格规范
+- **完成时间**：2026-03-22
+- **记录时间**：2026-03-22 00:30
+- **修改文件**：
+  - `src/components/admin/AdminCrawlerPanel.tsx` — 任务记录表接入 `useAdminTableColumns/useAdminTableSort/AdminTableFrame`，新增列宽拖拽、列显隐、排序与持久化。
+  - `docs/task-queue.md`、`docs/tasks.md` — 同步 CHG-145 完成并切换 CHG-146 进行中。
+- **新增依赖**：无
+- **数据库变更**：无
+- **执行检查**：
+  - `npm run typecheck` ✅
+  - `npm run lint` ✅
+  - `npm run test:run -- tests/unit/components/admin/AdminCrawlerTabs.test.tsx tests/unit/api/crawler.test.ts` ✅
+- **注意事项**：
+  - 本任务保持既有筛选、分页、日志查看行为，不调整任务接口与查询语义。
