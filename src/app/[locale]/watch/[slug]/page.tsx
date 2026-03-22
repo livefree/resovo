@@ -4,28 +4,9 @@
  * 视频数据在客户端获取，不做 SSR（确保 page.route() 可拦截）
  */
 
-import dynamic from 'next/dynamic'
 import { Suspense } from 'react'
 import { Nav } from '@/components/layout/Nav'
-
-// PlayerShell 动态导入，关闭 SSR（Video.js 依赖 DOM；视频数据客户端获取）
-const PlayerShell = dynamic(
-  () => import('@/components/player/PlayerShell').then((m) => ({ default: m.PlayerShell })),
-  {
-    ssr: false,
-    loading: () => (
-      <div
-        className="max-w-screen-xl mx-auto px-4 py-4"
-        style={{ color: 'var(--muted-foreground)' }}
-      >
-        <div
-          className="w-full rounded-lg animate-pulse"
-          style={{ aspectRatio: '16/9', background: 'var(--secondary)' }}
-        />
-      </div>
-    ),
-  }
-)
+import { PlayerLoader } from './PlayerLoader'
 
 interface Props {
   params: Promise<{ locale: string; slug: string }>
@@ -42,7 +23,7 @@ export default async function WatchPage({ params }: Props) {
     >
       <Nav />
       <Suspense>
-        <PlayerShell slug={slug} />
+        <PlayerLoader slug={slug} />
       </Suspense>
     </div>
   )

@@ -84,7 +84,7 @@ export interface ParsedSource {
 
 // ── 爬虫任务 ─────────────────────────────────────────────────
 
-export type CrawlerTaskStatus = 'pending' | 'running' | 'done' | 'failed'
+export type CrawlerTaskStatus = 'pending' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled' | 'timeout'
 export type CrawlerTaskType   = 'full-crawl' | 'incremental-crawl' | 'verify-source' | 'verify-single'
 
 export interface CrawlerTask {

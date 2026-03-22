@@ -107,29 +107,27 @@ export interface UpsertSourceInput {
 
 /**
  * 播放源去重 upsert：
- * 同一 (video_id, source_url) 已存在时更新 source_name 和 last_checked，
- * 不存在时插入新记录（is_active=true）。
+ * 同一 (video_id, episode_number, source_url) 已存在时跳过（DO NOTHING）。
+ * 规则 E(CHG-38): 不覆盖已有播放源，避免误清除 is_active=false 状态。
+ * NULL episode_number 视为相同（NULLS NOT DISTINCT 约束）。
  */
 export async function upsertSource(
   db: Pool,
   input: UpsertSourceInput
-): Promise<VideoSource> {
+): Promise<VideoSource | null> {
   const result = await db.query<DbSourceRow>(
     `INSERT INTO video_sources
        (video_id, episode_number, source_url, source_name, type, is_active)
      VALUES ($1, $2, $3, $4, $5, true)
-     ON CONFLICT (video_id, source_url)
-     DO UPDATE SET
-       source_name = EXCLUDED.source_name,
-       is_active = true,
-       last_checked = NOW()
+     ON CONFLICT ON CONSTRAINT uq_sources_video_episode_url
+     DO NOTHING
      RETURNING *`,
     [input.videoId, input.episodeNumber, input.sourceUrl, input.sourceName, input.type]
   )
-  return mapSource(result.rows[0])
+  return result.rows[0] ? mapSource(result.rows[0]) : null
 }
 
-/** 批量 upsert 播放源（爬虫采集后批量写入） */
+/** 批量 upsert 播放源（爬虫采集后批量写入）。返回实际插入数量（跳过的不计入）。 */
 export async function upsertSources(
   db: Pool,
   inputs: UpsertSourceInput[]
@@ -137,8 +135,182 @@ export async function upsertSources(
   if (inputs.length === 0) return 0
   let count = 0
   for (const input of inputs) {
-    await upsertSource(db, input)
-    count++
+    const inserted = await upsertSource(db, input)
+    if (inserted !== null) count++
   }
   return count
+}
+
+// ── Admin 查询 ────────────────────────────────────────────────────
+
+export interface AdminSourceListFilters {
+  active?: 'true' | 'false' | 'all'
+  videoId?: string
+  page: number
+  limit: number
+}
+
+export async function listAdminSources(
+  db: Pool,
+  filters: AdminSourceListFilters
+): Promise<{ rows: unknown[]; total: number }> {
+  const conditions = ['s.deleted_at IS NULL', 's.submitted_by IS NULL']
+  const params: unknown[] = []
+  let idx = 1
+
+  if (filters.active === 'true') {
+    conditions.push('s.is_active = true')
+  } else if (filters.active === 'false') {
+    conditions.push('s.is_active = false')
+  }
+  if (filters.videoId) {
+    conditions.push(`s.video_id = $${idx++}`)
+    params.push(filters.videoId)
+  }
+
+  const where = conditions.join(' AND ')
+  const offset = (filters.page - 1) * filters.limit
+
+  const [rows, countResult] = await Promise.all([
+    db.query(
+      `SELECT s.*, v.title AS video_title
+       FROM video_sources s
+       LEFT JOIN videos v ON s.video_id = v.id
+       WHERE ${where}
+       ORDER BY s.created_at DESC
+       LIMIT $${idx} OFFSET $${idx + 1}`,
+      [...params, filters.limit, offset]
+    ),
+    db.query<{ count: string }>(
+      `SELECT COUNT(*) FROM video_sources s WHERE ${where}`,
+      params
+    ),
+  ])
+
+  return {
+    rows: rows.rows,
+    total: parseInt(countResult.rows[0]?.count ?? '0'),
+  }
+}
+
+export async function deleteSource(
+  db: Pool,
+  id: string
+): Promise<boolean> {
+  const result = await db.query(
+    `UPDATE video_sources SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
+    [id]
+  )
+  return (result.rowCount ?? 0) > 0
+}
+
+export async function batchDeleteSources(
+  db: Pool,
+  ids: string[]
+): Promise<number> {
+  if (ids.length === 0) return 0
+  const placeholders = ids.map((_, i) => `$${i + 1}`).join(', ')
+  const result = await db.query(
+    `UPDATE video_sources SET deleted_at = NOW() WHERE id IN (${placeholders}) AND deleted_at IS NULL`,
+    ids
+  )
+  return result.rowCount ?? 0
+}
+
+export async function listSubmissions(
+  db: Pool,
+  page: number,
+  limit: number
+): Promise<{ rows: unknown[]; total: number }> {
+  const offset = (page - 1) * limit
+
+  const [rows, countResult] = await Promise.all([
+    db.query(
+      `SELECT s.*, v.title AS video_title, u.username AS submitted_by_username
+       FROM video_sources s
+       LEFT JOIN videos v ON s.video_id = v.id
+       LEFT JOIN users u ON s.submitted_by = u.id::text
+       WHERE s.is_active = false AND s.submitted_by IS NOT NULL AND s.deleted_at IS NULL
+       ORDER BY s.created_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    ),
+    db.query<{ count: string }>(
+      `SELECT COUNT(*) FROM video_sources WHERE is_active = false AND submitted_by IS NOT NULL AND deleted_at IS NULL`
+    ),
+  ])
+
+  return {
+    rows: rows.rows,
+    total: parseInt(countResult.rows[0]?.count ?? '0'),
+  }
+}
+
+export async function approveSubmission(
+  db: Pool,
+  id: string
+): Promise<boolean> {
+  const result = await db.query(
+    `UPDATE video_sources SET is_active = true, last_checked = NOW()
+     WHERE id = $1 AND is_active = false AND deleted_at IS NULL
+     RETURNING id`,
+    [id]
+  )
+  return (result.rowCount ?? 0) > 0
+}
+
+export async function rejectSubmission(
+  db: Pool,
+  id: string,
+  reason?: string
+): Promise<boolean> {
+  const result = await db.query(
+    `UPDATE video_sources SET deleted_at = NOW(), rejection_reason = $2
+     WHERE id = $1 AND is_active = false AND deleted_at IS NULL
+     RETURNING id`,
+    [id, reason ?? null]
+  )
+  return (result.rowCount ?? 0) > 0
+}
+
+// ── Admin 导出 ────────────────────────────────────────────────────
+
+export interface ExportedSource {
+  shortId: string
+  sourceName: string
+  sourceUrl: string
+  isActive: boolean
+  type: string
+  episodeNumber: number | null
+}
+
+/**
+ * 导出所有非删除的播放源（不含用户投稿，只含爬虫抓取/手动添加的源）
+ */
+export async function exportAllSources(db: Pool): Promise<ExportedSource[]> {
+  const result = await db.query<{
+    short_id: string
+    source_name: string
+    source_url: string
+    is_active: boolean
+    type: string
+    episode_number: number | null
+  }>(
+    `SELECT v.short_id, s.source_name, s.source_url, s.is_active, s.type, s.episode_number
+     FROM video_sources s
+     JOIN videos v ON s.video_id = v.id
+     WHERE s.deleted_at IS NULL
+       AND s.submitted_by IS NULL
+       AND v.deleted_at IS NULL
+     ORDER BY s.created_at DESC`
+  )
+
+  return result.rows.map((row) => ({
+    shortId: row.short_id,
+    sourceName: row.source_name,
+    sourceUrl: row.source_url,
+    isActive: row.is_active,
+    type: row.type,
+    episodeNumber: row.episode_number,
+  }))
 }

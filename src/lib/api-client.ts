@@ -47,6 +47,38 @@ interface RequestOptions {
   _isRetry?: boolean
 }
 
+interface RefreshResponse {
+  accessToken?: string
+  data?: {
+    accessToken?: string
+  }
+}
+
+function getLoginRedirectPath(): string | null {
+  if (typeof window === 'undefined') return null
+
+  const { pathname, search } = window.location
+  if (pathname.includes('/auth/login')) return null
+
+  const segments = pathname.split('/').filter(Boolean)
+  const locale = segments[0] === 'en' || segments[0] === 'zh-CN' ? segments[0] : 'zh-CN'
+  const adminPrefix = `/${locale}/admin`
+  const isAdminPath = pathname === adminPrefix || pathname.startsWith(`${adminPrefix}/`)
+  if (!isAdminPath) return null
+
+  const callbackUrl = `${pathname}${search}`
+  return `/${locale}/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`
+}
+
+function handleUnauthorized(): void {
+  useAuthStore.getState().logout()
+
+  const redirectPath = getLoginRedirectPath()
+  if (redirectPath && typeof window !== 'undefined') {
+    window.location.assign(redirectPath)
+  }
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, headers = {}, skipAuth = false, _isRetry = false } = options
 
@@ -77,7 +109,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       return request<T>(path, { ...options, _isRetry: true })
     } else {
       // 刷新失败，强制登出
-      useAuthStore.getState().logout()
+      handleUnauthorized()
       throw new ApiClientError('UNAUTHORIZED', '登录已过期，请重新登录', 401)
     }
   }
@@ -93,6 +125,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   if (!response.ok) {
     // 统一错误格式：{ error: { code, message, status } }
     const err = data as ApiError
+    if (response.status === 401 && !skipAuth) {
+      handleUnauthorized()
+    }
     throw new ApiClientError(
       err.error?.code ?? 'INTERNAL_ERROR',
       err.error?.message ?? '请求失败，请稍后重试',
@@ -118,8 +153,10 @@ async function tryRefreshToken(): Promise<boolean> {
         credentials: 'include',  // refresh token 在 HttpOnly Cookie 里
       })
       if (!response.ok) return false
-      const data = await response.json() as { accessToken: string }
-      useAuthStore.getState().setAccessToken(data.accessToken)
+      const data = await response.json() as RefreshResponse
+      const accessToken = data.accessToken ?? data.data?.accessToken
+      if (!accessToken) return false
+      useAuthStore.getState().setAccessToken(accessToken)
       return true
     } catch {
       return false
@@ -148,6 +185,34 @@ export const apiClient = {
 
   delete<T = void>(path: string, options?: Omit<RequestOptions, 'method' | 'body'>): Promise<T> {
     return request<T>(path, { ...options, method: 'DELETE' })
+  },
+
+  /** 获取弹幕列表（公开，带 sessionStorage 缓存见 useDanmaku） */
+  getDanmaku(shortId: string, ep = 1): Promise<{ data: Array<{ time: number; type: 0 | 1 | 2; color: string; text: string }> }> {
+    return request(`/videos/${shortId}/danmaku?ep=${ep}`, { method: 'GET', skipAuth: true })
+  },
+
+  /** 发送一条弹幕（需登录） */
+  postDanmaku(
+    shortId: string,
+    body: { ep: number; time: number; type: 0 | 1 | 2; color: string; text: string }
+  ): Promise<{ data: { time: number; type: 0 | 1 | 2; color: string; text: string } }> {
+    return request(`/videos/${shortId}/danmaku`, { method: 'POST', body })
+  },
+
+  /** 获取数据看板统计数据（admin only） */
+  getAnalytics(): Promise<{ data: import('@/api/routes/admin/analytics').AnalyticsData }> {
+    return request('/admin/analytics', { method: 'GET' })
+  },
+
+  /** 获取缓存统计（admin only） */
+  getCacheStats(): Promise<{ data: import('@/api/services/CacheService').CacheStat[] }> {
+    return request('/admin/cache/stats', { method: 'GET' })
+  },
+
+  /** 清除指定类型缓存（admin only） */
+  clearCache(type: import('@/api/services/CacheService').CacheType): Promise<{ data: { deleted: number } }> {
+    return request(`/admin/cache/${type}`, { method: 'DELETE' })
   },
 
   /** 上传文件（multipart/form-data，不设 Content-Type 让浏览器自动处理 boundary） */

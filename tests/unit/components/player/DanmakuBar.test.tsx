@@ -1,14 +1,43 @@
 /**
  * tests/unit/components/player/DanmakuBar.test.tsx
  * PLAYER-07: DanmakuBar 开关状态、颜色切换
+ * CHG-22: 接入真实弹幕数据（useDanmaku mock + CCL.load 验证）
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { DanmakuBar, hexToInt } from '@/components/player/DanmakuBar'
 
 // CCL 不支持 JSDOM，mock 掉 require
 vi.mock('comment-core-library/dist/CommentCoreLibrary', () => ({}))
+
+// ResizeObserver 在 JSDOM 中不存在，提供空实现
+;(global as typeof global & { ResizeObserver: unknown }).ResizeObserver = class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+// Mock playerStore — 提供 shortId 和 currentEpisode
+vi.mock('@/stores/playerStore', () => ({
+  usePlayerStore: vi.fn((selector: (s: { shortId: string | null; currentEpisode: number }) => unknown) =>
+    selector({ shortId: 'abCD1234', currentEpisode: 1 })
+  ),
+}))
+
+// Mock useDanmaku — 控制返回数据
+const mockUseDanmaku = vi.fn(() => ({ comments: [], isLoading: false, error: null, refetch: vi.fn() }))
+vi.mock('@/hooks/useDanmaku', () => ({
+  useDanmaku: (...args: unknown[]) => mockUseDanmaku(...args),
+}))
+
+// Mock apiClient（postDanmaku）
+vi.mock('@/lib/api-client', () => ({
+  apiClient: {
+    getDanmaku: vi.fn(),
+    postDanmaku: vi.fn().mockResolvedValue({ data: {} }),
+  },
+}))
 
 describe('DanmakuBar', () => {
   beforeEach(() => {
@@ -137,6 +166,67 @@ describe('DanmakuBar', () => {
     render(<DanmakuBar isLoggedIn={true} />)
     const input = screen.getByTestId('danmaku-input') as HTMLInputElement
     expect(input.placeholder).toContain('弹幕')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════
+// CHG-22: useDanmaku 集成（mock 数据 + CCL.load 调用验证）
+// ═══════════════════════════════════════════════════════════════
+
+describe('DanmakuBar CHG-22 弹幕数据集成', () => {
+  const MOCK_COMMENTS = [
+    { time: 10, type: 0 as const, color: '#ffffff', text: '好看' },
+    { time: 30, type: 1 as const, color: '#ff0000', text: '顶部' },
+  ]
+
+  const mockLoad = vi.fn()
+  const mockStart = vi.fn()
+  const mockStop = vi.fn()
+  const mockClear = vi.fn()
+  const MockCM = vi.fn(() => ({
+    init: vi.fn(),
+    load: mockLoad,
+    start: mockStart,
+    stop: mockStop,
+    clear: mockClear,
+    time: vi.fn(),
+    setBounds: vi.fn(),
+    send: vi.fn(),
+  }))
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // 注入 window.CommentManager
+    ;(window as Window & { CommentManager?: unknown }).CommentManager = MockCM
+    mockUseDanmaku.mockReturnValue({ comments: MOCK_COMMENTS, isLoading: false, error: null, refetch: vi.fn() })
+  })
+
+  afterEach(() => {
+    delete (window as Window & { CommentManager?: unknown }).CommentManager
+  })
+
+  it('弹幕加载后 CommentManager.load 被调用', () => {
+    const ref = { current: document.createElement('div') }
+    render(<DanmakuBar stageRef={ref} />)
+    expect(mockLoad).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ text: '好看', stime: 10000 }),
+        expect.objectContaining({ text: '顶部', mode: 5 }),
+      ])
+    )
+  })
+
+  it('无弹幕数据时 load 不被调用', () => {
+    mockUseDanmaku.mockReturnValue({ comments: [], isLoading: false, error: null, refetch: vi.fn() })
+    const ref = { current: document.createElement('div') }
+    render(<DanmakuBar stageRef={ref} />)
+    expect(mockLoad).not.toHaveBeenCalled()
+  })
+
+  it('useDanmaku 以 shortId 和 episodeNumber 调用', () => {
+    const ref = { current: document.createElement('div') }
+    render(<DanmakuBar stageRef={ref} />)
+    expect(mockUseDanmaku).toHaveBeenCalledWith('abCD1234', 1)
   })
 })
 

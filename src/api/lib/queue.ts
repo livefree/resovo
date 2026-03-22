@@ -52,3 +52,22 @@ attachQueueLogger(verifyQueue, 'verify-queue')
 
 const queues = { crawlerQueue, verifyQueue }
 export default queues
+
+/** 确认 crawler 队列可用，避免创建任务后因入队失败留下 pending 脏状态 */
+export async function ensureCrawlerQueueReady(timeoutMs = 1500): Promise<void> {
+  let timer: NodeJS.Timeout | null = null
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`crawler queue readiness timeout (${timeoutMs}ms)`))
+    }, timeoutMs)
+  })
+
+  try {
+    await Promise.race([crawlerQueue.isReady(), timeoutPromise])
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    throw new Error(`crawler queue unavailable: ${message}`)
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}

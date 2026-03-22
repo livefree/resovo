@@ -10,11 +10,13 @@ import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { SourceService, NotFoundError } from '@/api/services/SourceService'
 import * as sourceQueries from '@/api/db/queries/sources'
+import { VerifyService } from '@/api/services/VerifyService'
 
 const ReportReasonEnum = z.enum(['broken', 'low_quality', 'wrong_episode', 'other'])
 
 export async function sourceRoutes(fastify: FastifyInstance) {
   const sourceService = new SourceService(db)
+  const verifyService = new VerifyService(db)
 
   // ── GET /videos/:id/sources ──────────────────────────────────
   fastify.get('/videos/:id/sources', async (request, reply) => {
@@ -45,6 +47,50 @@ export async function sourceRoutes(fastify: FastifyInstance) {
       })
     }
   })
+
+  // ── POST /sources/submit — 用户投稿播放源 ────────────────────
+  fastify.post(
+    '/sources/submit',
+    { preHandler: [fastify.authenticate] },
+    async (request, reply) => {
+      const BodySchema = z.object({
+        videoId: z.string().uuid(),
+        sourceUrl: z.string().url().max(2000),
+        sourceName: z.string().max(100).default('用户投稿'),
+        episodeNumber: z.number().int().positive().nullable().default(null),
+      })
+
+      const parsed = BodySchema.safeParse(request.body)
+      if (!parsed.success) {
+        return reply.code(422).send({
+          error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+        })
+      }
+
+      const { videoId, sourceUrl, sourceName, episodeNumber } = parsed.data
+
+      await db.query(
+        `INSERT INTO video_sources
+           (video_id, episode_number, source_url, source_name, type, is_active, submitted_by)
+         VALUES ($1, $2, $3, $4, 'hls', false, $5)
+         ON CONFLICT (video_id, source_url) DO NOTHING`,
+        [videoId, episodeNumber, sourceUrl, sourceName, request.user!.userId]
+      )
+
+      const result = await db.query<{ id: string }>(
+        `SELECT id FROM video_sources WHERE video_id = $1 AND source_url = $2`,
+        [videoId, sourceUrl]
+      )
+
+      if (result.rows[0]) {
+        await verifyService.verifyFromUserReport(result.rows[0].id, sourceUrl)
+      }
+
+      return reply.code(202).send({
+        data: { message: '投稿已接收，正在验证可用性' },
+      })
+    }
+  )
 
   // ── POST /videos/:id/sources/:sid/report ─────────────────────
   fastify.post(

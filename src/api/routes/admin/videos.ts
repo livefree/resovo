@@ -6,13 +6,16 @@
  * PATCH  /admin/videos/:id/publish  上下架（单条，需 moderator+）
  * POST   /admin/videos/batch-publish 批量上下架（需 moderator+，事务）
  * GET    /admin/videos/:id          获取单条详情（含未发布，需 moderator+）
- * PUT    /admin/videos/:id          编辑元数据（需 moderator+）
+ * PATCH  /admin/videos/:id          编辑元数据（需 moderator+）
  * POST   /admin/videos              手动新增视频（需 moderator+）
  */
 
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
+import { es } from '@/api/lib/elasticsearch'
+import { VideoService } from '@/api/services/VideoService'
+import { DoubanService } from '@/api/services/DoubanService'
 import type { VideoType, VideoStatus, VideoCategory } from '@/types'
 
 // ── Zod Schema ────────────────────────────────────────────────────
@@ -47,6 +50,7 @@ const CreateVideoSchema = VideoMetaSchema.required({ title: true, type: true })
 
 const ListQuerySchema = z.object({
   status: z.enum(['pending', 'published', 'unpublished', 'all']).optional().default('all'),
+  type: z.enum(['movie', 'series', 'anime', 'variety'] as const).optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   q: z.string().max(100).optional(),
@@ -56,6 +60,9 @@ const ListQuerySchema = z.object({
 
 export async function adminVideoRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['moderator', 'admin'])]
+  const adminOnly = [fastify.authenticate, fastify.requireRole(['admin'])]
+  const videoService = new VideoService(db, es)
+  const doubanService = new DoubanService(db)
 
   // ── GET /admin/videos ────────────────────────────────────────
   fastify.get('/admin/videos', { preHandler: auth }, async (request, reply) => {
@@ -66,66 +73,15 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const { status, page, limit, q } = parsed.data
-    const conditions: string[] = ['v.deleted_at IS NULL']
-    const params: unknown[] = []
-    let idx = 1
-
-    if (status === 'pending') {
-      conditions.push(`v.is_published = false`)
-    } else if (status === 'published') {
-      conditions.push(`v.is_published = true`)
-    } else if (status === 'unpublished') {
-      // 包括 is_published=false（已审未发和已下架，此处不区分）
-      conditions.push(`v.is_published = false`)
-    }
-    // 'all' → 不过滤
-
-    if (q) {
-      conditions.push(`(v.title ILIKE $${idx} OR v.title_en ILIKE $${idx})`)
-      params.push(`%${q}%`)
-      idx++
-    }
-
-    const where = conditions.join(' AND ')
-    const offset = (page - 1) * limit
-
-    const [rows, countResult] = await Promise.all([
-      db.query(
-        `SELECT v.id, v.short_id, v.title, v.title_en, v.cover_url, v.type,
-                v.year, v.is_published, v.created_at, v.updated_at,
-                (SELECT COUNT(*) FROM video_sources WHERE video_id = v.id AND is_active = true AND deleted_at IS NULL)::int AS source_count
-         FROM videos v
-         WHERE ${where}
-         ORDER BY v.created_at DESC
-         LIMIT $${idx} OFFSET $${idx + 1}`,
-        [...params, limit, offset]
-      ),
-      db.query<{ count: string }>(
-        `SELECT COUNT(*) FROM videos v WHERE ${where}`,
-        params
-      ),
-    ])
-
-    return reply.send({
-      data: rows.rows,
-      total: parseInt(countResult.rows[0]?.count ?? '0'),
-      page,
-      limit,
-    })
+    const { status, type, page, limit, q } = parsed.data
+    const result = await videoService.adminList({ status, type, page, limit, q })
+    return reply.send(result)
   })
 
   // ── GET /admin/videos/:id ────────────────────────────────────
   fastify.get('/admin/videos/:id', { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string }
-    const result = await db.query(
-      `SELECT v.*,
-        (SELECT COUNT(*) FROM video_sources WHERE video_id = v.id AND is_active = true AND deleted_at IS NULL)::int AS source_count
-       FROM videos v
-       WHERE v.id = $1 AND v.deleted_at IS NULL`,
-      [id]
-    )
-    const video = result.rows[0]
+    const video = await videoService.adminFindById(id)
     if (!video) {
       return reply.code(404).send({
         error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
@@ -144,18 +100,13 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const result = await db.query(
-      `UPDATE videos SET is_published = $1, updated_at = NOW()
-       WHERE id = $2 AND deleted_at IS NULL
-       RETURNING id, is_published`,
-      [parsed.data.isPublished, id]
-    )
-    if (result.rowCount === 0) {
+    const result = await videoService.publish(id, parsed.data.isPublished)
+    if (!result) {
       return reply.code(404).send({
         error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
       })
     }
-    return reply.send({ data: result.rows[0] })
+    return reply.send({ data: result })
   })
 
   // ── POST /admin/videos/batch-publish ────────────────────────
@@ -167,26 +118,37 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const { ids, isPublished } = parsed.data
-    const client = await db.connect()
     try {
-      await client.query('BEGIN')
-      const placeholders = ids.map((_, i) => `$${i + 2}`).join(', ')
-      const result = await client.query(
-        `UPDATE videos SET is_published = $1, updated_at = NOW()
-         WHERE id IN (${placeholders}) AND deleted_at IS NULL`,
-        [isPublished, ...ids]
-      )
-      await client.query('COMMIT')
-      return reply.send({ data: { updated: result.rowCount ?? 0 } })
+      const updated = await videoService.batchPublish(parsed.data.ids, parsed.data.isPublished)
+      return reply.send({ data: { updated } })
     } catch (err) {
-      await client.query('ROLLBACK')
       request.log.error({ err }, 'batch-publish failed')
       return reply.code(500).send({
         error: { code: 'INTERNAL_ERROR', message: '批量操作失败', status: 500 },
       })
-    } finally {
-      client.release()
+    }
+  })
+
+  // ── POST /admin/videos/batch-unpublish ──────────────────────
+  fastify.post('/admin/videos/batch-unpublish', { preHandler: auth }, async (request, reply) => {
+    const BatchSchema = z.object({
+      ids: z.array(z.string().uuid()).min(1).max(50),
+    })
+    const parsed = BatchSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误，ids 最多 50 条', status: 422 },
+      })
+    }
+
+    try {
+      const updated = await videoService.batchUnpublish(parsed.data.ids)
+      return reply.send({ data: { updated } })
+    } catch (err) {
+      request.log.error({ err }, 'batch-unpublish failed')
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: '批量下架失败', status: 500 },
+      })
     }
   })
 
@@ -200,50 +162,13 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const data = parsed.data
-    const sets: string[] = ['updated_at = NOW()']
-    const params: unknown[] = []
-    let idx = 1
-
-    const fieldMap: Record<string, string> = {
-      title: 'title',
-      titleEn: 'title_en',
-      description: 'description',
-      coverUrl: 'cover_url',
-      type: 'type',
-      category: 'category',
-      year: 'year',
-      country: 'country',
-      episodeCount: 'episode_count',
-      status: 'status',
-      rating: 'rating',
-      director: 'director',
-      cast: 'cast',
-      writers: 'writers',
-    }
-
-    for (const [key, col] of Object.entries(fieldMap)) {
-      if (key in data && data[key as keyof typeof data] !== undefined) {
-        sets.push(`${col} = $${idx++}`)
-        const val = data[key as keyof typeof data]
-        // Arrays stored as JSON in Postgres
-        params.push(Array.isArray(val) ? JSON.stringify(val) : val)
-      }
-    }
-
-    params.push(id)
-    const result = await db.query(
-      `UPDATE videos SET ${sets.join(', ')}
-       WHERE id = $${idx} AND deleted_at IS NULL
-       RETURNING *`,
-      params
-    )
-    if (result.rowCount === 0) {
+    const result = await videoService.update(id, parsed.data)
+    if (!result) {
       return reply.code(404).send({
         error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
       })
     }
-    return reply.send({ data: result.rows[0] })
+    return reply.send({ data: result })
   })
 
   // ── POST /admin/videos ───────────────────────────────────────
@@ -259,32 +184,23 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const d = parsed.data
-    const result = await db.query(
-      `INSERT INTO videos
-         (title, title_en, description, cover_url, type, category, year, country,
-          episode_count, status, rating, director, cast, writers, is_published)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-       RETURNING *`,
-      [
-        d.title,
-        d.titleEn ?? null,
-        d.description ?? null,
-        d.coverUrl ?? null,
-        d.type,
-        d.category ?? null,
-        d.year ?? null,
-        d.country ?? null,
-        d.episodeCount ?? 1,
-        d.status ?? 'completed',
-        d.rating ?? null,
-        JSON.stringify(d.director ?? []),
-        JSON.stringify(d.cast ?? []),
-        JSON.stringify(d.writers ?? []),
-        false, // is_published default false (ADR-010)
-      ]
-    )
-    return reply.code(201).send({ data: result.rows[0] })
+    const result = await videoService.create(parsed.data)
+    return reply.code(201).send({ data: result })
+  })
+
+  // ── POST /admin/videos/:id/douban-sync ───────────────────────
+  // CHG-23: admin only，手动触发豆瓣元数据同步
+  fastify.post('/admin/videos/:id/douban-sync', { preHandler: adminOnly }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+
+    if (!/^[0-9a-f-]{36}$/.test(id)) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
+      })
+    }
+
+    const result = await doubanService.syncVideo(id)
+    return reply.send({ data: result })
   })
 }
 

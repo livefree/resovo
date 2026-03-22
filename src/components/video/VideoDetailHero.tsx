@@ -25,7 +25,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 export function VideoDetailHero({ video }: VideoDetailHeroProps) {
   const watchHref = video.slug
-    ? `/watch/${video.shortId}/${video.slug}?ep=1`
+    ? `/watch/${video.slug}-${video.shortId}?ep=1`
     : `/watch/${video.shortId}?ep=1`
 
   return (

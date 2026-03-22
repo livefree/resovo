@@ -22,8 +22,8 @@ const TYPE_LABELS: Record<string, string> = {
 
 export function VideoCard({ video, className }: VideoCardProps) {
   const href = video.slug
-    ? `/watch/${video.shortId}/${video.slug}`
-    : `/watch/${video.shortId}`
+    ? `/${video.type}/${video.slug}-${video.shortId}`
+    : `/${video.type}/${video.shortId}`
 
   return (
     <Link

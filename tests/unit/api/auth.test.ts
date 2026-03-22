@@ -136,8 +136,8 @@ describe('signRefreshToken / verifyRefreshToken', () => {
     expect(() => verifyRefreshToken(accessToken)).toThrow()
   })
 
-  it('REFRESH_TOKEN_TTL_SECONDS 为 7 天（604800 秒）', () => {
-    expect(REFRESH_TOKEN_TTL_SECONDS).toBe(604800)
+  it('REFRESH_TOKEN_TTL_SECONDS 为 30 天（2592000 秒）（CHG-37）', () => {
+    expect(REFRESH_TOKEN_TTL_SECONDS).toBe(2592000)
   })
 })
 
@@ -393,7 +393,7 @@ describe('POST /v1/auth/login', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/auth/login',
-      payload: { email: 'test@example.com', password: 'correctpassword' },
+      payload: { identifier: 'test@example.com', password: 'correctpassword' },
     })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.accessToken).toBeTruthy()
@@ -411,7 +411,7 @@ describe('POST /v1/auth/login', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/auth/login',
-      payload: { email: 'test@example.com', password: 'correctpassword' },
+      payload: { identifier: 'test@example.com', password: 'correctpassword' },
     })
     const { accessToken } = res.json().data
     const payload = verifyAccessToken(accessToken)
@@ -427,11 +427,11 @@ describe('POST /v1/auth/login', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/auth/login',
-      payload: { email: 'test@example.com', password: 'wrongpassword' },
+      payload: { identifier: 'test@example.com', password: 'wrongpassword' },
     })
     expect(res.statusCode).toBe(401)
     // 统一错误信息，不区分原因
-    expect(res.json().error.message).toBe('邮箱或密码错误')
+    expect(res.json().error.message).toBe('账号或密码错误')
   })
 
   it('用户不存在 → 401，错误信息与密码错误相同', async () => {
@@ -440,10 +440,10 @@ describe('POST /v1/auth/login', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/auth/login',
-      payload: { email: 'notexist@example.com', password: 'anypassword' },
+      payload: { identifier: 'notexist@example.com', password: 'anypassword' },
     })
     expect(res.statusCode).toBe(401)
-    expect(res.json().error.message).toBe('邮箱或密码错误')
+    expect(res.json().error.message).toBe('账号或密码错误')
   })
 
   it('refresh_token cookie 是 HttpOnly', async () => {
@@ -454,12 +454,69 @@ describe('POST /v1/auth/login', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/auth/login',
-      payload: { email: 'test@example.com', password: 'correctpassword' },
+      payload: { identifier: 'test@example.com', password: 'correctpassword' },
     })
     const sc3 = res.headers['set-cookie']
     const setCookies3 = Array.isArray(sc3) ? sc3.join('\n') : String(sc3)
     expect(setCookies3).toContain('HttpOnly')
     expect(setCookies3).toContain('SameSite=Strict')
+  })
+})
+
+describe('POST /v1/auth/dev-login', () => {
+  let app: Awaited<ReturnType<typeof buildAuthApp>>
+  let originalNodeEnv: string | undefined
+  let originalDevSecret: string | undefined
+  let originalDevIdentifier: string | undefined
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockRedis.get.mockResolvedValue(null)
+    mockRedis.set.mockResolvedValue('OK')
+    mockQueries.findUserByUsername.mockResolvedValue(MOCK_USER)
+    originalNodeEnv = process.env.NODE_ENV
+    originalDevSecret = process.env.DEV_LOGIN_SECRET
+    originalDevIdentifier = process.env.DEV_LOGIN_IDENTIFIER
+    process.env.NODE_ENV = 'development'
+    process.env.DEV_LOGIN_SECRET = 'dev-secret'
+    process.env.DEV_LOGIN_IDENTIFIER = 'admin'
+    app = await buildAuthApp()
+  })
+
+  afterEach(() => {
+    process.env.NODE_ENV = originalNodeEnv
+    process.env.DEV_LOGIN_SECRET = originalDevSecret
+    process.env.DEV_LOGIN_IDENTIFIER = originalDevIdentifier
+    app.close()
+  })
+
+  it('无 X-Dev-Auth 头返回 401', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/dev-login',
+      body: {},
+    })
+    expect(res.statusCode).toBe(401)
+    expect(res.json().error.code).toBe('UNAUTHORIZED')
+  })
+
+  it('鉴权成功时返回 user + accessToken 并设置 cookie', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/dev-login',
+      headers: {
+        'content-type': 'application/json',
+        'x-dev-auth': 'dev-secret',
+      },
+      body: JSON.stringify({ identifier: 'admin' }),
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json<{ data: { user: { id: string }; accessToken: string } }>()
+    expect(body.data.user.id).toBe(MOCK_USER.id)
+    expect(body.data.accessToken).toMatch(/^eyJ/)
+    const setCookie = String(res.headers['set-cookie'] ?? '')
+    expect(setCookie).toContain('refresh_token=')
+    expect(setCookie).toContain('user_role=')
   })
 })
 

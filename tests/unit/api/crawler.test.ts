@@ -34,13 +34,38 @@ vi.mock('@/api/db/queries/sources', () => ({
 }))
 
 vi.mock('@/api/services/CrawlerService', () => ({
-  CrawlerService: vi.fn().mockImplementation(() => ({})),
+  CrawlerService: vi.fn().mockImplementation(() => ({
+    reindexAll: vi.fn().mockResolvedValue({ indexed: 0, errors: 0 }),
+  })),
   parseCrawlerSources: vi.fn().mockReturnValue([]),
+  getEnabledSources: vi.fn().mockResolvedValue([]),
+}))
+
+vi.mock('@/api/db/queries/crawlerSites', () => ({
+  listCrawlerSites: vi.fn().mockResolvedValue([]),
+  listEnabledCrawlerSites: vi.fn().mockResolvedValue([]),
+  findCrawlerSite: vi.fn().mockResolvedValue(null),
+  upsertCrawlerSite: vi.fn().mockResolvedValue(null),
+  updateCrawlerSite: vi.fn().mockResolvedValue(null),
+  deleteCrawlerSite: vi.fn().mockResolvedValue(false),
+  batchUpdateCrawlerSites: vi.fn().mockResolvedValue(0),
+  updateCrawlStatus: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/api/services/VerifyService', () => ({
   VerifyService: vi.fn().mockImplementation(() => ({
     verifyFromUserReport: vi.fn().mockResolvedValue(undefined),
+  })),
+}))
+
+vi.mock('@/api/services/CrawlerRunService', () => ({
+  CrawlerRunService: vi.fn().mockImplementation(() => ({
+    createAndEnqueueRun: vi.fn().mockResolvedValue({
+      runId: 'run-42',
+      taskIds: ['task-1'],
+      enqueuedSiteKeys: ['site-a'],
+      skippedSiteKeys: [],
+    }),
   })),
 }))
 
@@ -81,30 +106,27 @@ describe('crawlerWorker', () => {
   })
 
   it('enqueueFullCrawl 调用 crawlerQueue.add 并传入 full-crawl 类型', async () => {
-    await enqueueFullCrawl()
+    await enqueueFullCrawl('site-a', 'task-1', 'run-1')
     expect(mockJobAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'full-crawl' })
+      expect.objectContaining({ type: 'full-crawl', siteKey: 'site-a', taskId: 'task-1', runId: 'run-1' })
     )
   })
 
-  it('enqueueFullCrawl 可传入 sourceUrl', async () => {
-    await enqueueFullCrawl('https://example.com/api')
-    expect(mockJobAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'full-crawl', sourceUrl: 'https://example.com/api' })
-    )
+  it('enqueueFullCrawl 缺少 contract 字段时抛错', async () => {
+    await expect(enqueueFullCrawl('site-a', '', 'run-1')).rejects.toThrow('CRAWL_JOB_CONTRACT_INVALID')
   })
 
   it('enqueueIncrementalCrawl 调用 crawlerQueue.add 并传入 incremental-crawl 类型', async () => {
-    await enqueueIncrementalCrawl()
+    await enqueueIncrementalCrawl('site-a', 24, 'task-2', 'run-2')
     expect(mockJobAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'incremental-crawl', hoursAgo: 24 })
+      expect.objectContaining({ type: 'incremental-crawl', siteKey: 'site-a', hoursAgo: 24, taskId: 'task-2', runId: 'run-2' })
     )
   })
 
   it('enqueueIncrementalCrawl 可自定义 hoursAgo', async () => {
-    await enqueueIncrementalCrawl(undefined, 6)
+    await enqueueIncrementalCrawl('site-a', 6, 'task-3', 'run-3')
     expect(mockJobAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ hoursAgo: 6 })
+      expect.objectContaining({ siteKey: 'site-a', hoursAgo: 6, taskId: 'task-3', runId: 'run-3' })
     )
   })
 
@@ -209,7 +231,7 @@ describe('重试配置（queue.ts）', () => {
     // queue.ts 中已配置 attempts: 3, backoff: { type: exponential, delay: 60000 }
     // 此测试验证 enqueueFullCrawl 传入的选项不会覆盖默认重试配置
     mockJobAdd.mockResolvedValueOnce({ id: 'job-retry-test', opts: { attempts: 3 } })
-    const job = await enqueueFullCrawl()
+    const job = await enqueueFullCrawl('site-a', 'task-retry', 'run-retry')
     // 任务成功入队即可（重试配置在 queue.ts defaultJobOptions 中）
     expect(job).toBeTruthy()
   })
@@ -539,10 +561,12 @@ const mockFindSourceById = sourcesQueriesModule.findSourceById as ReturnType<typ
 
 async function buildCrawlerAdminApp() {
   const { adminCrawlerRoutes } = await import('@/api/routes/admin/crawler')
+  const { sourceRoutes } = await import('@/api/routes/sources')
   const app = Fastify({ logger: false })
   await app.register(cookie, { secret: 'test-secret' })
   setupAuthenticate(app)
   await app.register(adminCrawlerRoutes)
+  await app.register(sourceRoutes)
   await app.ready()
   return app
 }
@@ -562,6 +586,11 @@ describe('CRAWLER-04: 管理后台接口', () => {
     mockJobAdd.mockResolvedValue({ id: 'job-42' })
     mockListTasks.mockResolvedValue({ rows: [], total: 0 })
     mockFindSourceById.mockResolvedValue(null)
+    // 重置 CrawlerService mock（vi.clearAllMocks 会清除 mockImplementation）
+    const { CrawlerService } = await import('@/api/services/CrawlerService')
+    ;(CrawlerService as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+      reindexAll: vi.fn().mockResolvedValue({ indexed: 0, errors: 0 }),
+    }))
     app = await buildCrawlerAdminApp()
   })
 
@@ -617,6 +646,21 @@ describe('CRAWLER-04: 管理后台接口', () => {
     )
   })
 
+  it('GET /admin/crawler/tasks：支持 runId 过滤参数', async () => {
+    mockListTasks.mockResolvedValueOnce({ rows: [], total: 0 })
+    const runId = '11111111-1111-4111-8111-111111111111'
+    const res = await app.inject({
+      method: 'GET',
+      url: `/admin/crawler/tasks?runId=${runId}`,
+      headers: authHeader('admin'),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(mockListTasks).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ runId })
+    )
+  })
+
   // ── POST /admin/crawler/tasks ───────────────────────────────
 
   it('POST /admin/crawler/tasks：非 admin 返回 403', async () => {
@@ -637,7 +681,12 @@ describe('CRAWLER-04: 管理后台接口', () => {
       body: JSON.stringify({ type: 'full-crawl' }),
     })
     expect(res.statusCode).toBe(202)
-    expect(res.json().data).toMatchObject({ type: 'full-crawl', jobId: 'job-42' })
+    expect(res.json().data).toMatchObject({
+      type: 'full-crawl',
+      runId: 'run-42',
+      siteKey: null,
+      enqueuedSiteKeys: ['site-a'],
+    })
   })
 
   it('POST /admin/crawler/tasks：admin 触发 incremental-crawl 返回 202', async () => {
@@ -648,8 +697,11 @@ describe('CRAWLER-04: 管理后台接口', () => {
       body: JSON.stringify({ type: 'incremental-crawl', hoursAgo: 6 }),
     })
     expect(res.statusCode).toBe(202)
-    expect(mockJobAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'incremental-crawl', hoursAgo: 6 })
+    expect(res.json().data).toMatchObject(
+      expect.objectContaining({
+        type: 'incremental-crawl',
+        runId: 'run-42',
+      })
     )
   })
 
@@ -688,19 +740,19 @@ describe('CRAWLER-04: 管理后台接口', () => {
     expect(res.json().data).toMatchObject({ sourceId: 'src-1' })
   })
 
-  // ── POST /admin/sources/submit ──────────────────────────────
+  // ── POST /sources/submit ──────────────────────────────
 
-  it('POST /admin/sources/submit：未登录返回 401', async () => {
+  it('POST /sources/submit：未登录返回 401', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/admin/sources/submit',
+      url: '/sources/submit',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ videoId: '11111111-0000-0000-0000-000000000000', sourceUrl: 'https://cdn.example.com/v.m3u8' }),
     })
     expect(res.statusCode).toBe(401)
   })
 
-  it('POST /admin/sources/submit：普通用户（已登录）可以投稿（202）', async () => {
+  it('POST /sources/submit：普通用户（已登录）可以投稿（202）', async () => {
     const { db: mockDb } = await import('@/api/lib/postgres')
     const dbMock = mockDb as { query: ReturnType<typeof vi.fn> }
     dbMock.query
@@ -708,7 +760,7 @@ describe('CRAWLER-04: 管理后台接口', () => {
       .mockResolvedValueOnce({ rows: [{ id: 'src-new' }] })  // SELECT id
     const res = await app.inject({
       method: 'POST',
-      url: '/admin/sources/submit',
+      url: '/sources/submit',
       headers: { ...authHeader('user'), 'Content-Type': 'application/json' },
       body: JSON.stringify({
         videoId: '11111111-0000-0000-0000-000000000000',
@@ -716,5 +768,29 @@ describe('CRAWLER-04: 管理后台接口', () => {
       }),
     })
     expect(res.statusCode).toBe(202)
+  })
+
+  // ── CHG-10: POST /admin/crawler/reindex ───────────────────────
+
+  it('POST /admin/crawler/reindex：非 admin 返回 403', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/crawler/reindex',
+      headers: authHeader('moderator'),
+    })
+    expect(res.statusCode).toBe(403)
+  })
+
+  it('POST /admin/crawler/reindex：admin 触发全量重建索引（200）', async () => {
+    // 使用默认 mock 返回值（indexed: 0, errors: 0），只验证状态码
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/crawler/reindex',
+      headers: authHeader('admin'),
+    })
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.body) as { data: { indexed: number; errors: number } }
+    expect(typeof body.data.indexed).toBe('number')
+    expect(typeof body.data.errors).toBe('number')
   })
 })

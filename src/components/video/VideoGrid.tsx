@@ -1,6 +1,6 @@
 /**
- * VideoGrid.tsx — 视频网格（客户端组件）
- * 复用 VideoCard / VideoCardWide，支持分页加载
+ * VideoGrid.tsx — 视频网格或横向滚动行（客户端组件）
+ * 复用 VideoCard / VideoCardWide，支持 grid 和 scroll 两种布局
  */
 
 'use client'
@@ -16,8 +16,10 @@ interface VideoGridProps {
   query: string
   /** 'portrait'=竖版2:3  'landscape'=横版16:9 */
   variant?: 'portrait' | 'landscape'
-  /** 列数 Tailwind class，如 "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" */
+  /** 列数 Tailwind class（仅 layout='grid' 时生效） */
   gridCols?: string
+  /** 'grid'=固定网格  'scroll'=单排横向滚动 */
+  layout?: 'grid' | 'scroll'
   'data-testid'?: string
 }
 
@@ -25,6 +27,7 @@ export function VideoGrid({
   query,
   variant = 'portrait',
   gridCols = 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
+  layout = 'grid',
   'data-testid': testId,
 }: VideoGridProps) {
   const [videos, setVideos] = useState<VideoCardType[]>([])
@@ -39,7 +42,38 @@ export function VideoGrid({
       .finally(() => setLoading(false))
   }, [query])
 
+  // 横向滚动行样式
+  const scrollContainerStyle: React.CSSProperties = {
+    display: 'flex',
+    overflowX: 'auto',
+    gap: '16px',
+    scrollSnapType: 'x mandatory',
+    scrollbarWidth: 'none',
+    paddingBottom: '4px',
+  }
+
+  const cardWidth = variant === 'portrait' ? '160px' : '280px'
+
   if (loading) {
+    if (layout === 'scroll') {
+      return (
+        <div style={scrollContainerStyle} data-testid={testId}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={i}
+              className="rounded-lg animate-pulse shrink-0"
+              style={{
+                width: cardWidth,
+                aspectRatio: variant === 'portrait' ? '2/3' : '16/9',
+                background: 'var(--secondary)',
+                scrollSnapAlign: 'start',
+              }}
+            />
+          ))}
+        </div>
+      )
+    }
+
     return (
       <div className={`grid gap-4 ${gridCols}`} data-testid={testId}>
         {Array.from({ length: 10 }).map((_, i) => (
@@ -60,6 +94,26 @@ export function VideoGrid({
     return (
       <div data-testid={testId} className="py-8 text-center" style={{ color: 'var(--muted-foreground)' }}>
         暂无数据
+      </div>
+    )
+  }
+
+  if (layout === 'scroll') {
+    return (
+      <div style={scrollContainerStyle} data-testid={testId}>
+        {videos.map((video) => (
+          <div
+            key={video.id}
+            className="shrink-0"
+            style={{ width: cardWidth, scrollSnapAlign: 'start' }}
+          >
+            {variant === 'portrait' ? (
+              <VideoCard video={video} />
+            ) : (
+              <VideoCardWide video={video} />
+            )}
+          </div>
+        ))}
       </div>
     )
   }

@@ -6,6 +6,8 @@
 
 import type Bull from 'bull'
 import { verifyQueue } from '@/api/lib/queue'
+import { db } from '@/api/lib/postgres'
+import { updateSourceActiveStatus } from '@/api/db/queries/sources'
 
 // ── 任务类型 ──────────────────────────────────────────────────────
 
@@ -63,8 +65,7 @@ async function processVerifyJob(job: Bull.Job<VerifyJobData>): Promise<VerifyJob
 
   const { isActive, statusCode } = await checkUrl(url)
 
-  // 更新数据库（CRAWLER-03 实装，此处为占位）
-  // await videoSourcesQueries.updateActiveStatus(db, sourceId, { isActive, lastChecked: new Date() })
+  await updateSourceActiveStatus(db, sourceId, isActive)
 
   process.stderr.write(
     `[verify-worker] source ${sourceId}: ${url} → ${isActive ? 'active' : 'inactive'} (${statusCode ?? 'timeout'})\n`

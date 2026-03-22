@@ -5,9 +5,9 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useTranslations } from 'next-intl'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { z } from 'zod'
 
 import { apiClient, ApiClientError } from '@/lib/api-client'
@@ -20,12 +20,12 @@ import type { User } from '@/types'
 function useLoginSchema() {
   const t = useTranslations('auth.errors')
   return z.object({
-    email: z.string().min(1, t('emailRequired')).email(t('emailInvalid')),
+    identifier: z.string().min(1, t('identifierRequired')),
     password: z.string().min(1, t('passwordRequired')),
   })
 }
 
-type LoginFields = { email: string; password: string }
+type LoginFields = { identifier: string; password: string }
 type FieldErrors = Partial<Record<keyof LoginFields, string>>
 
 // ── 组件 ──────────────────────────────────────────────────────────
@@ -36,10 +36,15 @@ export function LoginForm() {
   const loginSchema = useLoginSchema()
   const login = useAuthStore((s) => s.login)
 
-  const [values, setValues] = useState<LoginFields>({ email: '', password: '' })
+  const searchParams = useSearchParams()
+  const identifierRef = useRef<HTMLInputElement>(null)
+  const [values, setValues] = useState<LoginFields>({ identifier: '', password: '' })
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [serverError, setServerError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDevSubmitting, setIsDevSubmitting] = useState(false)
+  const enableDevLogin = process.env.NEXT_PUBLIC_ENABLE_DEV_LOGIN === 'true'
+  const devLoginSecret = process.env.NEXT_PUBLIC_DEV_LOGIN_SECRET
 
   function validate(data: LoginFields): boolean {
     const result = loginSchema.safeParse(data)
@@ -70,17 +75,28 @@ export function LoginForm() {
     e.preventDefault()
     setServerError(null)
 
-    if (!validate(values)) return
+    // Read from DOM — identifier is uncontrolled (ref), password reads DOM fallback
+    const form = e.currentTarget as HTMLFormElement
+    const domValues: LoginFields = {
+      identifier: identifierRef.current?.value ?? '',
+      password: (form.querySelector('#login-password') as HTMLInputElement)?.value ?? values.password,
+    }
+    if (domValues.password !== values.password) {
+      setValues((prev) => ({ ...prev, password: domValues.password }))
+    }
+
+    if (!validate(domValues)) return
 
     setIsSubmitting(true)
     try {
       const response = await apiClient.post<{ data: { user: User; accessToken: string } }>(
         '/auth/login',
-        values,
+        domValues,
         { skipAuth: true }
       )
       login(response.data.user, response.data.accessToken)
-      router.push('/')
+      const callbackUrl = searchParams.get('callbackUrl') ?? '/'
+      router.push(callbackUrl)
     } catch (error) {
       if (error instanceof ApiClientError) {
         setServerError(error.message)
@@ -89,6 +105,33 @@ export function LoginForm() {
       }
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  async function handleDevLogin() {
+    if (!enableDevLogin) return
+    setServerError(null)
+    setIsDevSubmitting(true)
+    try {
+      const response = await apiClient.post<{ data: { user: User; accessToken: string } }>(
+        '/auth/dev-login',
+        {},
+        {
+          skipAuth: true,
+          headers: devLoginSecret ? { 'X-Dev-Auth': devLoginSecret } : {},
+        },
+      )
+      login(response.data.user, response.data.accessToken)
+      const callbackUrl = searchParams.get('callbackUrl') ?? '/admin'
+      router.push(callbackUrl)
+    } catch (error) {
+      if (error instanceof ApiClientError) {
+        setServerError(error.message)
+      } else {
+        setServerError('开发快捷登录失败，请稍后重试')
+      }
+    } finally {
+      setIsDevSubmitting(false)
     }
   }
 
@@ -108,36 +151,36 @@ export function LoginForm() {
         </div>
       )}
 
-      {/* Email */}
+      {/* Identifier (email or username) */}
       <div className="mb-4">
         <label
-          htmlFor="login-email"
+          htmlFor="login-identifier"
           className="block text-sm font-medium mb-1"
           style={{ color: 'var(--foreground)' }}
         >
-          {t('email')}
+          {t('identifier')}
         </label>
         <input
-          id="login-email"
-          type="email"
-          autoComplete="email"
-          placeholder={t('emailPlaceholder')}
-          value={values.email}
-          onChange={(e) => handleChange('email', e.target.value)}
-          aria-invalid={!!fieldErrors.email}
-          aria-describedby={fieldErrors.email ? 'login-email-error' : undefined}
+          ref={identifierRef}
+          id="login-identifier"
+          type="text"
+          autoComplete="username"
+          placeholder={t('identifierPlaceholder')}
+          defaultValue=""
+          aria-invalid={!!fieldErrors.identifier}
+          aria-describedby={fieldErrors.identifier ? 'login-identifier-error' : undefined}
           className={cn(
             'w-full rounded-md px-3 py-2 text-sm outline-none transition-colors',
             'border focus:ring-2 focus:ring-[var(--gold)]',
             'bg-[var(--input)] text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]',
-            fieldErrors.email
+            fieldErrors.identifier
               ? 'border-red-500 focus:ring-red-400'
               : 'border-[var(--border)]'
           )}
         />
-        {fieldErrors.email && (
-          <p id="login-email-error" role="alert" className="mt-1 text-xs text-red-500">
-            {fieldErrors.email}
+        {fieldErrors.identifier && (
+          <p id="login-identifier-error" role="alert" className="mt-1 text-xs text-red-500">
+            {fieldErrors.identifier}
           </p>
         )}
       </div>
@@ -189,6 +232,22 @@ export function LoginForm() {
       >
         {isSubmitting ? t('submitting') : t('submit')}
       </button>
+
+      {enableDevLogin && (
+        <button
+          type="button"
+          disabled={isDevSubmitting}
+          onClick={handleDevLogin}
+          data-testid="dev-login-submit"
+          className={cn(
+            'mt-3 w-full rounded-md py-2 text-sm font-medium transition-opacity',
+            'border border-[var(--border)] text-[var(--text)] bg-[var(--bg2)]',
+            isDevSubmitting ? 'opacity-60 cursor-not-allowed' : 'hover:bg-[var(--bg3)]'
+          )}
+        >
+          {isDevSubmitting ? '开发登录中…' : '开发快速登录（仅本地）'}
+        </button>
+      )}
     </form>
   )
 }

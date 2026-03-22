@@ -1,24 +1,28 @@
 /**
- * SourceBar.tsx — 线路选择栏（位于进度条上方）
- * ≤3 条全显，>3 条折叠；切换线路保留播放进度
+ * SourceBar.tsx — 线路选择栏（播放器下方）
+ * Resovo 特有：同一视频的多个 CDN 提供商/线路切换
+ * CHG-20: 移除 video.js Player 依赖，由 PlayerShell 通过 src prop 控制播放源
  */
 
 'use client'
 
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
-import type Player from 'video.js/dist/types/player'
-import type { VideoSource as PlayerSource } from './VideoPlayer'
+
+export interface SourceItem {
+  src: string
+  type: string
+  label?: string
+}
 
 interface SourceBarProps {
-  sources: PlayerSource[]
+  sources: SourceItem[]
   activeIndex: number
-  player: Player | null
   onSourceChange: (index: number) => void
   className?: string
 }
 
-export function SourceBar({ sources, activeIndex, player, onSourceChange, className }: SourceBarProps) {
+export function SourceBar({ sources, activeIndex, onSourceChange, className }: SourceBarProps) {
   const [isExpanded, setIsExpanded] = useState(false)
 
   if (sources.length === 0) return null
@@ -26,15 +30,6 @@ export function SourceBar({ sources, activeIndex, player, onSourceChange, classN
   const SHOW_LIMIT = 3
   const showAll = sources.length <= SHOW_LIMIT
   const displaySources = showAll || isExpanded ? sources : sources.slice(0, SHOW_LIMIT - 1)
-
-  function handleSelect(index: number) {
-    const currentTime = player?.currentTime() ?? 0
-    onSourceChange(index)
-    // 切换源后恢复播放进度
-    setTimeout(() => {
-      player?.currentTime(currentTime)
-    }, 500)
-  }
 
   return (
     <div
@@ -47,7 +42,7 @@ export function SourceBar({ sources, activeIndex, player, onSourceChange, classN
         {displaySources.map((src, i) => (
           <button
             key={i}
-            onClick={() => handleSelect(i)}
+            onClick={() => onSourceChange(i)}
             className={cn(
               'px-2.5 py-0.5 rounded text-xs transition-colors',
               i === activeIndex
@@ -61,7 +56,6 @@ export function SourceBar({ sources, activeIndex, player, onSourceChange, classN
           </button>
         ))}
 
-        {/* 展开/收起按钮 */}
         {!showAll && (
           <button
             onClick={() => setIsExpanded((v) => !v)}

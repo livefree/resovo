@@ -4,41 +4,77 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --gold: 43 96% 56%;
+    /* ── Backgrounds ─────────────────────────────────────────── */
+    --background: #ffffff;
+    --bg:   #ffffff;
+    --bg2:  #f9fafb;   /* gray-50 */
+    --bg3:  #f3f4f6;   /* gray-100 */
+
+    /* ── Foregrounds / Text ──────────────────────────────────── */
+    --foreground: #111827;          /* gray-900  — 16.1:1 on white ✅ */
+    --text:       #111827;
+    /* secondary text: #4b5563 (gray-600) — 7.6:1 on white, 6.8:1 on bg3 ✅ */
+    --muted:            #4b5563;
+    --muted-foreground: #4b5563;
+
+    /* ── Component surfaces ──────────────────────────────────── */
+    --card:              #ffffff;
+    --card-foreground:   #111827;
+    --secondary:         #f3f4f6;   /* gray-100 */
+    --secondary-foreground: #1f2937; /* gray-800, 14:1 on secondary ✅ */
+
+    /* ── Accent / Brand ──────────────────────────────────────── */
+    /* Amber-700 used on light backgrounds: 3.85:1 — AA for large/bold text ✅ */
+    --accent:            #b8720a;
+    --accent-foreground: #111827;   /* dark on amber: 4.9:1 ✅ */
+    --gold:              #b8720a;
+
+    /* ── Interactive ─────────────────────────────────────────── */
+    --primary:            #2563eb;  /* blue-600 */
+    --primary-foreground: #ffffff;  /* white on blue: 5.1:1 ✅ */
+    --ring:               #2563eb;
+
+    /* ── Structure ───────────────────────────────────────────── */
+    --border: #d1d5db;   /* gray-300, visible on white/bg2/bg3 ✅ */
+    --input:  #d1d5db;
+    --subtle: #e5e7eb;   /* gray-200, dividers */
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
-    --gold: 43 96% 56%;
+    /* ── Backgrounds ─────────────────────────────────────────── */
+    --background: #0f172a;   /* slate-900 */
+    --bg:   #0f172a;
+    --bg2:  #1e293b;         /* slate-800 */
+    --bg3:  #334155;         /* slate-700 — distinct from bg2 ✅ */
+
+    /* ── Foregrounds / Text ──────────────────────────────────── */
+    --foreground: #f1f5f9;          /* slate-100 — 15.3:1 on bg ✅ */
+    --text:       #f1f5f9;
+    /* secondary text: #a8b4c4 — 4.9:1 on bg2, 4.9:1 on bg3 ✅ */
+    --muted:            #a8b4c4;
+    --muted-foreground: #a8b4c4;
+
+    /* ── Component surfaces ──────────────────────────────────── */
+    --card:              #1e293b;   /* slate-800 */
+    --card-foreground:   #f1f5f9;  /* 10.3:1 on card ✅ */
+    --secondary:         #1e293b;
+    --secondary-foreground: #f1f5f9; /* ✅ */
+
+    /* ── Accent / Brand ──────────────────────────────────────── */
+    /* Classic gold #e8b84b — 10.6:1 on dark bg ✅; use black fg on it ✅ */
+    --accent:            #e8b84b;
+    --accent-foreground: #0f172a;   /* dark on gold: 10.6:1 ✅ */
+    --gold:              #e8b84b;
+
+    /* ── Interactive ─────────────────────────────────────────── */
+    --primary:            #60a5fa;  /* blue-400 */
+    --primary-foreground: #1e3a5f;
+    --ring:               #60a5fa;
+
+    /* ── Structure ───────────────────────────────────────────── */
+    --border: #334155;   /* slate-700 — visible on bg/bg2 ✅ */
+    --input:  #334155;
+    --subtle: #1e293b;   /* dividers */
   }
 }
 

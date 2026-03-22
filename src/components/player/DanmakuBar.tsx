@@ -1,13 +1,20 @@
 /**
  * DanmakuBar.tsx — 弹幕条（播放器下方独立一行）
  * PLAYER-07: Bilibili 风格弹幕控制栏
- * CommentCoreLibrary 初始化，弹幕飞过播放器区域
+ * CHG-22: 接入 comment-core-library 渲染真实弹幕数据
+ *   - useDanmaku 获取数据（sessionStorage 30min 缓存）
+ *   - CommentManager.load → 渲染飞弹幕
+ *   - ResizeObserver → 追踪播放器尺寸
+ *   - sendDanmaku → 本地预览 + POST 持久化
  */
 
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { cn } from '@/lib/utils'
+import { usePlayerStore } from '@/stores/playerStore'
+import { useDanmaku } from '@/hooks/useDanmaku'
+import { apiClient } from '@/lib/api-client'
 
 // ── CCL 类型声明 ──────────────────────────────────────────────────
 
@@ -68,6 +75,20 @@ interface DanmakuBarProps {
   className?: string
 }
 
+// ── CCL 辅助：API 弹幕 → CCLComment ─────────────────────────────
+
+function toCCLComment(item: { time: number; type: 0 | 1 | 2; color: string; text: string }, size: number): CCLComment {
+  const MODE_MAP: Record<0 | 1 | 2, number> = { 0: 1, 1: 5, 2: 4 }
+  return {
+    mode: MODE_MAP[item.type],
+    text: item.text,
+    stime: item.time * 1000,
+    dur: 4000,
+    color: hexToInt(item.color),
+    size,
+  }
+}
+
 // ── Component ─────────────────────────────────────────────────────
 
 export function DanmakuBar({
@@ -81,9 +102,19 @@ export function DanmakuBar({
   const [fontSize, setFontSize] = useState(25)
   const [color, setColor] = useState('#ffffff')
   const [inputText, setInputText] = useState('')
+  const [cclReady, setCclReady] = useState(false)
 
   const managerRef = useRef<CCLManager | null>(null)
   const overlayRef = useRef<HTMLDivElement | null>(null)
+
+  // ── 从 playerStore 获取 shortId + 集数 ────────────────────────
+
+  const shortId = usePlayerStore((s) => s.shortId)
+  const currentEpisode = usePlayerStore((s) => s.currentEpisode)
+
+  // ── 获取弹幕数据 ───────────────────────────────────────────────
+
+  const { comments } = useDanmaku(shortId, currentEpisode)
 
   // ── CCL 初始化 ─────────────────────────────────────────────────
 
@@ -95,8 +126,6 @@ export function DanmakuBar({
     let overlay: HTMLDivElement | null = null
 
     try {
-      // CCL 通过外部 <Script> 标签加载后挂在 window.CommentManager
-      // 也支持 webpack require（如 CCL 导出了模块，则优先使用）
       const CM = window.CommentManager
       if (!CM) return  // CCL 未加载，优雅降级
 
@@ -111,6 +140,7 @@ export function DanmakuBar({
       manager.init('css')
       managerRef.current = manager
       if (enabled) manager.start()
+      setCclReady(true)
     } catch {
       // CCL 加载失败，弹幕功能不可用（UI 仍可正常使用）
     }
@@ -121,9 +151,40 @@ export function DanmakuBar({
       overlay?.remove()
       managerRef.current = null
       overlayRef.current = null
+      setCclReady(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stageRef])
+
+  // ── ResizeObserver：播放器尺寸变化时更新 CCL 轨道宽度 ─────────
+
+  useEffect(() => {
+    const stage = stageRef?.current
+    if (!stage) return
+
+    const observer = new ResizeObserver(() => {
+      managerRef.current?.setBounds()
+    })
+    observer.observe(stage)
+
+    return () => observer.disconnect()
+  }, [stageRef])
+
+  // ── 弹幕数据加载完成后渲染到 CCL ──────────────────────────────
+
+  useEffect(() => {
+    const cm = managerRef.current
+    if (!cclReady || !cm) return
+    cm.stop()
+    cm.clear()
+    if (comments.length > 0) {
+      cm.load(comments.map((c) => toCCLComment(c, fontSize)))
+      if (enabled) cm.start()
+    } else if (enabled) {
+      cm.start()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comments, cclReady])
 
   // ── 开关控制 ────────────────────────────────────────────────────
 
@@ -154,9 +215,10 @@ export function DanmakuBar({
 
   // ── 发送弹幕 ─────────────────────────────────────────────────────
 
-  function sendDanmaku() {
+  const sendDanmaku = useCallback(() => {
     const text = inputText.trim()
     if (!text) return
+
     const comment: CCLComment = {
       mode: 1,
       text,
@@ -167,7 +229,18 @@ export function DanmakuBar({
     }
     managerRef.current?.send(comment)
     setInputText('')
-  }
+
+    // 已登录时同步持久化到服务端（fire-and-forget）
+    if (isLoggedIn && shortId) {
+      void apiClient.postDanmaku(shortId, {
+        ep: currentEpisode,
+        time: Math.floor(currentTime),
+        type: 0,
+        color,
+        text,
+      })
+    }
+  }, [inputText, currentTime, color, fontSize, isLoggedIn, shortId, currentEpisode])
 
   // ── Render ────────────────────────────────────────────────────────
 

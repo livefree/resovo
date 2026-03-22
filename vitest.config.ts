@@ -8,6 +8,7 @@ export default defineConfig({
     environment: 'node',          // API 测试用 node 环境
     environmentMatchGlobs: [
       ['tests/unit/components/**', 'jsdom'],  // 组件测试用 jsdom
+      ['tests/unit/hooks/**', 'jsdom'],        // hook 测试用 jsdom（依赖 window/sessionStorage）
     ],
     setupFiles: ['./tests/helpers/setup.ts'],
     coverage: {

@@ -22,8 +22,8 @@ const TYPE_LABELS: Record<string, string> = {
 
 export function ResultCard({ result, className }: ResultCardProps) {
   const href = result.slug
-    ? `/watch/${result.shortId}/${result.slug}`
-    : `/watch/${result.shortId}`
+    ? `/${result.type}/${result.slug}-${result.shortId}`
+    : `/${result.type}/${result.shortId}`
 
   const highlightTitle = result.highlight?.title
 

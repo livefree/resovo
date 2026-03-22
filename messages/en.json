@@ -3,8 +3,8 @@
     "login": {
       "title": "Sign In",
       "subtitle": "Welcome back to Resovo",
-      "email": "Email",
-      "emailPlaceholder": "you@example.com",
+      "identifier": "Email or Username",
+      "identifierPlaceholder": "Email or username",
       "password": "Password",
       "passwordPlaceholder": "••••••••",
       "submit": "Sign In",
@@ -29,6 +29,7 @@
     "errors": {
       "emailRequired": "Email is required",
       "emailInvalid": "Please enter a valid email address",
+      "identifierRequired": "Email or username is required",
       "passwordRequired": "Password is required",
       "passwordMin": "Password must be at least 8 characters",
       "usernameRequired": "Username is required",
@@ -45,7 +46,9 @@
     "catMovie": "Movies",
     "catSeries": "Series",
     "catAnime": "Anime",
-    "catVariety": "Variety"
+    "catVariety": "Variety",
+    "search": "Search...",
+    "admin": "Admin"
   },
   "home": {
     "trendingMovies": "Trending Movies",
