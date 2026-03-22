@@ -1591,11 +1591,11 @@
      - 不影响现有功能，typecheck/lint/test 通过
    - 回滚方式：回退 CHG-160 提交
 
-2. CHG-161 — 新增 GET /admin/crawler/monitor-snapshot 聚合接口并迁移前端（状态：⬜ 待开始）
+2. CHG-161 — 新增 GET /admin/crawler/monitor-snapshot 聚合接口并迁移前端（状态：✅ 已完成）
    - 创建时间：2026-03-22 16:00
    - 计划开始：CHG-160 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 16:06
+   - 完成时间：2026-03-22 16:10
    - 目标：将 `/admin/crawler/overview` + `/admin/crawler/runs?limit=20` + `/admin/crawler/system-status` 的内容合并为单一聚合接口，前端 `useCrawlerMonitor` 改为单请求轮询，将每轮 3 个并行请求降为 1 个
    - 范围：
      - `src/api/routes/admin/crawler.ts`（新增 `GET /admin/crawler/monitor-snapshot`）

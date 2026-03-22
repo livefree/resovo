@@ -546,6 +546,32 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     })
   })
 
+  // ── GET /admin/crawler/monitor-snapshot ──────────────────────
+  // 聚合接口：一次返回 overview + runs（最近 20 条）+ systemStatus
+  // 供 useCrawlerMonitor 使用，将 3 个独立轮询请求合并为 1 个
+  fastify.get('/admin/crawler/monitor-snapshot', { preHandler: auth }, async (_request, reply) => {
+    const [overview, runsResult, systemStatusData] = await Promise.all([
+      getCrawlerOverview(db),
+      crawlerRunsQueries.listRuns(db, { limit: 20, offset: 0 }),
+      (async () => {
+        const freeze = await systemSettingsQueries.getSetting(db, 'crawler_global_freeze')
+        const orphanTaskCount = await countOrphanActiveTasks(db)
+        return {
+          schedulerEnabled: process.env.CRAWLER_SCHEDULER_ENABLED === 'true',
+          freezeEnabled: freeze === 'true',
+          orphanTaskCount,
+        }
+      })(),
+    ])
+    return reply.send({
+      data: {
+        overview,
+        runs: runsResult.rows,
+        systemStatus: systemStatusData,
+      },
+    })
+  })
+
   // ── GET /admin/crawler/tasks/latest?siteKeys=a,b ───────────
 
   fastify.get('/admin/crawler/tasks/latest', { preHandler: auth }, async (request, reply) => {

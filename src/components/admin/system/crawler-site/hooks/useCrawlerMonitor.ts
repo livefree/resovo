@@ -72,7 +72,21 @@ export function useCrawlerMonitor({
   }, [])
 
   const refreshMonitor = useCallback(async () => {
-    await Promise.all([fetchOverview(), fetchRuns(), fetchSystemStatus()])
+    try {
+      const res = await apiClient.get<{
+        data: {
+          overview: CrawlerOverview
+          runs: CrawlerRunSummary[]
+          systemStatus: CrawlerSystemStatus
+        }
+      }>('/admin/crawler/monitor-snapshot')
+      setOverview(res.data.overview)
+      setRuns(res.data.runs)
+      setSystemStatus(res.data.systemStatus)
+    } catch {
+      // 聚合接口失败时降级为 3 个独立请求
+      await Promise.all([fetchOverview(), fetchRuns(), fetchSystemStatus()])
+    }
   }, [fetchOverview, fetchRuns, fetchSystemStatus])
 
   useEffect(() => {

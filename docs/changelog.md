@@ -2356,3 +2356,15 @@
 - **变更内容**：为 `POST /admin/crawler/tasks` 增加 `Deprecation: true`、`Sunset: Thu, 01 May 2026 00:00:00 GMT`、`Link: </admin/crawler/runs>; rel="successor-version"` 响应头；路由注释补充 sunset 日期与下线 CHG 编号（CHG-163）
 - **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
 - **关联**：SEQ-20260322-07 CHG-160，解决 merge review 维护问题 3（双接口时代）
+
+---
+
+### [CHG-161] 新增 GET /admin/crawler/monitor-snapshot 聚合接口并迁移前端
+- **时间**：2026-03-22 16:10
+- **类型**：chg（维护 P2 — 轮询合并）
+- **修改文件**：
+  - `src/api/routes/admin/crawler.ts`（新增聚合路由）
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerMonitor.ts`（改为单请求 + 降级逻辑）
+- **变更内容**：新增 `GET /admin/crawler/monitor-snapshot` 返回 `{ overview, runs, systemStatus }`；`refreshMonitor` 改为单次请求该接口，聚合接口失败时自动降级为原 3 个独立请求；原 3 个接口保留
+- **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
+- **关联**：SEQ-20260322-07 CHG-161，解决 merge review 维护问题 1 阶段 A（轮询开销）
