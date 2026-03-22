@@ -2445,3 +2445,13 @@
   - 审计矩阵更新为全绿
 - **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
 - **关联**：SEQ-20260322-09 CHG-167
+
+---
+
+### CHORE-01 — 文档规范落地检查脚本
+- **时间**：2026-03-22
+- **类型**：chore（文档规范工具）
+- **修改文件**：`scripts/check-docs-format.sh`（新建）
+- **变更内容**：创建 `scripts/check-docs-format.sh`，执行 3 项规范检查：(1) task-queue.md 已填写时间字段格式验证（YYYY-MM-DD HH:mm），(2) changelog.md **时间** 字段格式验证（YYYY-MM-DD），(3) SEQ 序列 ID 文件顺序验证（尾部追加规则）；兼容 macOS BSD grep
+- **测试覆盖**：脚本运行通过，3/3 checks ✅
+- **关联**：SEQ-20260319-01 CHORE-01
