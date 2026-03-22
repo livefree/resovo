@@ -1569,9 +1569,9 @@
 ---
 
 ## [SEQ-20260322-07] 维护 P1/P2 — deprecated 接口退场 + 轮询合并 + Bull 层超时保障
-- **状态**：🔄 执行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-22 16:00
-- **最后更新时间**：2026-03-22 16:05
+- **最后更新时间**：2026-03-22 16:20
 - **目标**：解决 merge review 维护问题中风险最高、改动最小的三项：deprecated 接口正式退场流程、监控轮询从 3 接口合并为 1、Bull per-job timeout 硬性超时保障
 - **范围**：`src/api/routes/admin/crawler.ts`、`useCrawlerMonitor.ts`、`src/api/lib/queue.ts`
 - **依赖**：SEQ-20260322-06 已完成
@@ -1624,11 +1624,11 @@
      - typecheck/lint/test 通过
    - 回滚方式：回退 CHG-162 提交
 
-4. CHG-163 — 维护 P1/P2 回归与文档收口（状态：⬜ 待开始）
+4. CHG-163 — 维护 P1/P2 回归与文档收口（状态：✅ 已完成）
    - 创建时间：2026-03-22 16:00
    - 计划开始：CHG-162 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 16:15
+   - 完成时间：2026-03-22 16:20
    - 目标：全量验收 SEQ-20260322-07，闭环文档，在 decisions.md 记录 endpoint sunset ADR
    - 范围：`docs/changelog.md`、`docs/task-queue.md`、`docs/decisions.md`
    - 依赖：CHG-162

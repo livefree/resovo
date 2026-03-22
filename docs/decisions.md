@@ -239,3 +239,20 @@
 - **影响文件**：`src/components/player/VideoPlayer.tsx`、`src/stores/playerStore.ts`、`src/api/routes/users.ts`
 
 _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
+
+---
+
+## ADR-XXX: POST /admin/crawler/tasks Endpoint Sunset Decision
+
+- **日期**：2026-03-22
+- **状态**：已决定（Decided）
+- **背景**：NB-02 修复（CHG-154）已将前端所有触发路径迁移至 `POST /admin/crawler/runs`（triggerType: single）。`POST /admin/crawler/tasks` 为旧触发路径，仅保留用于向后兼容，无已知活跃调用方。
+- **决策**：
+  - 立即：在该路由响应中加入 `Deprecation: true`、`Sunset: 2026-05-01`、`Link` 响应头（CHG-160，已完成）
+  - 计划下线：CHG-163 序列完成后，在下一个 Phase 开始时执行 CHG-163（路由删除任务）将该路由从代码库移除
+  - Sunset 日期：2026-05-01
+- **原因**：
+  - 双触发路径（`/tasks` + `/runs`）增加维护负担，调用方可能混用两条路径
+  - `/runs` 模型更完整（支持 batch/all/single/schedule），是长期正确路径
+  - `/tasks` POST 已无前端调用方，零风险移除
+- **影响文件**：`src/api/routes/admin/crawler.ts`

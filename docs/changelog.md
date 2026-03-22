@@ -2382,3 +2382,13 @@
 - **变更内容**：队列初始化增加 stalled 检测（60s 间隔，最多 1 次重试后 failed）；所有 job 入队时加 30 分钟硬超时，与心跳 watchdog 软超时互补
 - **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
 - **关联**：SEQ-20260322-07 CHG-162，解决 merge review 维护问题 2（协作控制无硬止）
+
+---
+
+### [CHG-163] 维护 P1/P2 回归与文档收口
+- **时间**：2026-03-22 16:20
+- **类型**：docs（SEQ-20260322-07 收口）
+- **修改文件**：`docs/decisions.md`、`docs/task-queue.md`、`docs/changelog.md`
+- **变更内容**：新增 ADR（POST /admin/crawler/tasks sunset 决策）；SEQ-20260322-07 序列状态改为 ✅ 已完成
+- **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
+- **关联**：SEQ-20260322-07 全量完成（CHG-160~163）
