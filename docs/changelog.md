@@ -2055,3 +2055,21 @@
   - `npm run test:run` ✅（`53 files / 526 tests`）
 - **注意事项**：
   - 兼容入口仍保留可访问能力，但导航主入口已收敛为 `/admin/content`。
+
+## [CHG-139] Phase 4：控制台类页面结构收口
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 23:51
+- **修改文件**：
+  - `src/components/admin/shared/feedback/AdminHoverHint.tsx` — 新增统一 hover 说明组件。
+  - `src/components/admin/system/crawler-site/components/CrawlerConfigTab.tsx` — 实时监控区常驻说明改为 hover。
+  - `src/components/admin/system/crawler-site/components/CrawlerConsoleMonitorSection.tsx` — 批次状态区常驻说明改为 hover。
+  - `src/components/admin/system/crawler-site/components/CrawlerRunPanel.tsx` — 面板顶部轮询说明改为 hover。
+  - `docs/task-queue.md`、`docs/tasks.md` — 同步 CHG-139 完成并切换 CHG-140 为进行中。
+- **新增依赖**：无
+- **数据库变更**：无
+- **执行检查**：
+  - `npm run typecheck` ✅
+  - `npm run lint` ✅
+  - `npm run test:run` ✅（`53 files / 526 tests`）
+- **注意事项**：
+  - 本任务只收口控制台文案展示层，不改采集任务执行、监控数据来源与控制逻辑。

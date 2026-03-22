@@ -1,3 +1,5 @@
+import { AdminHoverHint } from '@/components/admin/shared/feedback/AdminHoverHint'
+
 interface CrawlerRunSummary {
   id: string
   triggerType: 'single' | 'batch' | 'all' | 'schedule'
@@ -76,8 +78,10 @@ export function CrawlerRunPanel({
   return (
     <div className="mb-4 rounded-lg border border-[var(--border)] bg-[var(--bg2)] p-3">
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-[var(--text)]">{title}</h3>
-        <p className="text-xs text-[var(--muted)]">监控数据局部轮询更新，不触发整页刷新</p>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-[var(--text)]">{title}</h3>
+          <AdminHoverHint text="监控数据局部轮询更新，不触发整页刷新。" />
+        </div>
       </div>
       {!runs.length ? (
         <p className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-xs text-[var(--muted)]">{emptyText}</p>
