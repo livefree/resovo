@@ -1,19 +1,10 @@
 /**
- * /admin/subtitles — 字幕审核页
- * ADMIN-03: 待审字幕队列，支持通过/拒绝（软删除）
+ * /admin/subtitles — 兼容旧入口，重定向到统一内容审核页
+ * CHG-138
  */
 
-import { AdminSubtitleList } from '@/components/admin/AdminSubtitleList'
-import { AdminPageShell } from '@/components/admin/shared/layout/AdminPageShell'
+import { redirect } from 'next/navigation'
 
 export default function AdminSubtitlesPage() {
-  return (
-    <AdminPageShell
-      title="字幕审核"
-      description="审核用户上传字幕，支持通过与拒绝。"
-      testId="admin-subtitles-page"
-    >
-      <AdminSubtitleList />
-    </AdminPageShell>
-  )
+  redirect('/admin/content?tab=subtitles')
 }

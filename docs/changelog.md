@@ -2038,3 +2038,20 @@
   - `npm run test:run` ✅（`53 files / 526 tests`）
 - **注意事项**：
   - 本任务聚焦页面级说明收敛，不改业务组件内部提示语与操作流程。
+
+## [CHG-138] Phase 3：收敛重复页面入口与命名
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 23:49
+- **修改文件**：
+  - `src/components/admin/AdminSidebar.tsx` — 内容管理侧栏收敛为单一入口 `内容审核`（`/admin/content`）。
+  - `src/app/[locale]/admin/submissions/page.tsx` — 旧入口改为兼容重定向到 `/admin/content?tab=submissions`。
+  - `src/app/[locale]/admin/subtitles/page.tsx` — 旧入口改为兼容重定向到 `/admin/content?tab=subtitles`。
+  - `docs/task-queue.md`、`docs/tasks.md` — 同步 CHG-138 完成并切换 CHG-139 为进行中。
+- **新增依赖**：无
+- **数据库变更**：无
+- **执行检查**：
+  - `npm run typecheck` ✅
+  - `npm run lint` ✅
+  - `npm run test:run` ✅（`53 files / 526 tests`）
+- **注意事项**：
+  - 兼容入口仍保留可访问能力，但导航主入口已收敛为 `/admin/content`。
