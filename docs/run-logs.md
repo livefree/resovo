@@ -896,6 +896,18 @@
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler-scheduler.test.ts tests/unit/api/crawler-worker.test.ts tests/unit/api/crawler.test.ts`。
 - **后续**：执行 CHG-150（worker 显式心跳保活）。
 
+## [LOG-20260322-1445-01] CHG-150 worker 显式心跳保活完成
+- **时间**：2026-03-22 14:45
+- **类型**：RESOLVED
+- **关联任务**：CHG-150
+- **内容**：worker 增加显式 heartbeat 触达路径，降低长任务被 watchdog 误判 stale 的风险。
+- **处理动作**：
+  - 新增 `touchTaskHeartbeat` 查询能力（仅刷新 `heartbeat_at`）。
+  - `crawlerWorker` 引入节流心跳触达：任务进入 running 后、`shouldStop` 检查点、`onLog` 回调均会保活。
+  - 新增 `crawler-tasks` 查询层单测，覆盖 heartbeat touch 与 runId 去重返回行为。
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler-tasks.test.ts tests/unit/api/crawler-worker.test.ts tests/unit/api/crawler-scheduler.test.ts tests/unit/api/crawler.test.ts`。
+- **后续**：执行 CHG-151（全量回归与文档收口）。
+
 ---
 
 ## 偏离检测记录模板（补充）

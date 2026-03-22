@@ -155,6 +155,18 @@ export async function updateTaskProgress(
   )
 }
 
+export async function touchTaskHeartbeat(
+  db: Pool,
+  id: string,
+): Promise<void> {
+  await db.query(
+    `UPDATE crawler_tasks
+     SET heartbeat_at = NOW()
+     WHERE id = $1`,
+    [id],
+  )
+}
+
 export async function requestTaskCancel(db: Pool, id: string): Promise<void> {
   await db.query(
     `UPDATE crawler_tasks

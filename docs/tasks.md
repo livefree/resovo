@@ -4,25 +4,23 @@
 
 ## 当前进行中（仅保留一条）
 
-#### CHG-150 — 增加 worker 显式心跳保活（BLOCK-02）
+#### CHG-151 — 全量回归与文档收口（BLOCK 修复序列）
 
 - **状态**：🔄 进行中
 - **创建时间**：2026-03-22 14:41
-- **计划开始时间**：2026-03-22 14:44
-- **实际开始时间**：2026-03-22 14:44
+- **计划开始时间**：2026-03-22 14:46
+- **实际开始时间**：2026-03-22 14:46
 - **完成时间**：
-- **目标**：在 worker 层增加显式 heartbeat 保活，避免长任务被 stale-heartbeat watchdog 误判超时。
+- **目标**：完成 CHG-149/150 全量验收并闭环文档记录，结束本阻断修复序列。
 - **范围**：
-  - `src/api/workers/crawlerWorker.ts`
-  - `src/api/db/queries/crawlerTasks.ts`
-  - 相关单测与文档记录
-- **依赖**：CHG-149
+  - 全量 `typecheck/lint/test:run`
+  - `docs/changelog.md`、`docs/run-logs.md`、`docs/tasks.md`、`docs/task-queue.md`
+- **依赖**：CHG-150
 - **DoD**：
-  - 新增轻量 heartbeat touch 能力
-  - worker 在长任务执行期按节流刷新 heartbeat
-  - 不改变任务状态语义与现有触发接口
-  - typecheck/lint/test 通过
+  - 全量检查通过
+  - `SEQ-20260322-03` 状态与任务时间戳完整
+  - 文档记录与代码提交一致
 - **回滚方式**：
-  - 回退 CHG-150 提交（worker/query 心跳逻辑）
+  - 回退 CHG-151 文档提交
 - **备注**：
-  - CHG-149 已完成；后续执行 CHG-151 做全量回归与收口。
+  - CHG-149、CHG-150 已完成，当前仅做收口与交付校验。

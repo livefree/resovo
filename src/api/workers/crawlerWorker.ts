@@ -46,6 +46,7 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
   const start = Date.now()
   const crawlerService = new CrawlerService(db, es)
   let freezeCache: { value: boolean; checkedAt: number } = { value: false, checkedAt: 0 }
+  let lastHeartbeatTouchAt = 0
 
   const isGlobalFreezeEnabled = async () => {
     const now = Date.now()
@@ -82,6 +83,14 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
       const reason = err instanceof Error ? err.message : String(err)
       process.stderr.write(`[crawler-worker] failed to persist task log: ${reason}\n`)
     }
+  }
+
+  const touchHeartbeat = async () => {
+    if (!taskId) return
+    const now = Date.now()
+    if (now - lastHeartbeatTouchAt < 5000) return
+    lastHeartbeatTouchAt = now
+    await crawlerTasksQueries.touchTaskHeartbeat(db, taskId)
   }
 
   if (!runId || !taskId) {
@@ -151,6 +160,7 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
     await crawlerTasksQueries.updateTaskStatus(db, taskId, 'running', {
       queueJobId: String(job.id),
     })
+    await touchHeartbeat()
     await logTask('info', 'worker.task.running', '任务状态切换为 running')
   }
 
@@ -191,9 +201,14 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
         )
         const result = await crawlerService.crawl(source, {
           taskType: type,
-          taskId: siteKey ? taskId : undefined,
+          taskId,
           hoursAgo: type === 'incremental-crawl' ? (hoursAgo ?? 24) : undefined,
           shouldStop: async () => {
+            try {
+              await touchHeartbeat()
+            } catch {
+              // 心跳刷新失败不阻断采集主流程
+            }
             if (await isGlobalFreezeEnabled()) return 'cancel'
             if (!taskId) return false
             const taskRow = await db.query<{ cancel_requested: boolean; timeout_at: string | null; status: string }>(
@@ -216,6 +231,11 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
               source: source.name,
               ...(input.details ?? {}),
             })
+            try {
+              await touchHeartbeat()
+            } catch {
+              // 心跳刷新失败不阻断采集主流程
+            }
           },
         })
         videosUpserted += result.videosUpserted

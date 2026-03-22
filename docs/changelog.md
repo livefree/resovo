@@ -2226,3 +2226,20 @@
   - `npm run test:run -- tests/unit/api/crawler-scheduler.test.ts tests/unit/api/crawler-worker.test.ts tests/unit/api/crawler.test.ts` ✅
 - **注意事项**：
   - 本任务只修复 scheduler 与 run 状态同步链路，不涉及 heartbeat 保活逻辑（由 CHG-150 处理）。
+
+## [CHG-150] 增加 worker 显式心跳保活（BLOCK-02）
+- **完成时间**：2026-03-22
+- **记录时间**：2026-03-22 14:45
+- **修改文件**：
+  - `src/api/db/queries/crawlerTasks.ts` — 新增 `touchTaskHeartbeat`，补充 worker 显式保活支撑。
+  - `src/api/workers/crawlerWorker.ts` — 新增节流心跳触达逻辑，并在运行启动/shouldStop/onLog 路径刷新 heartbeat。
+  - `tests/unit/api/crawler-tasks.test.ts` — 新增查询层单测（heartbeat touch + runId 去重）。
+  - `docs/task-queue.md`、`docs/tasks.md`、`docs/run-logs.md` — 同步任务状态与执行记录。
+- **新增依赖**：无
+- **数据库变更**：无
+- **执行检查**：
+  - `npm run typecheck` ✅
+  - `npm run lint` ✅
+  - `npm run test:run -- tests/unit/api/crawler-tasks.test.ts tests/unit/api/crawler-worker.test.ts tests/unit/api/crawler-scheduler.test.ts tests/unit/api/crawler.test.ts` ✅
+- **注意事项**：
+  - 本任务未改变任务状态机，仅增强 heartbeat 保活路径，避免后续因实现演进导致隐式心跳丢失。
