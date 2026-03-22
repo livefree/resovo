@@ -234,7 +234,7 @@ export function SubtitleTable() {
                       aria-label={`${SUBTITLE_COLUMN_LABELS[columnId]}列宽拖拽`}
                       data-testid={`subtitle-resize-${columnId}`}
                       onMouseDown={(event) => columnsState.startResize(columnId, event.clientX)}
-                      className="absolute right-0 top-0 h-full w-2 cursor-col-resize"
+                      className="absolute right-0 top-0 h-full w-2 cursor-col-resize before:absolute before:right-0 before:top-0 before:h-full before:w-px before:bg-[var(--border)] hover:bg-[var(--bg3)]/40"
                     />
                   )}
                 </th>

@@ -142,7 +142,7 @@ export function CrawlerSiteTableLiteHeader({
                 event.stopPropagation()
                 startResize(column.id, event.clientX)
               }}
-              className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-[var(--border)]"
+              className="absolute right-0 top-0 h-full w-2 cursor-col-resize before:absolute before:right-0 before:top-0 before:h-full before:w-px before:bg-[var(--border)] hover:bg-[var(--bg3)]/40"
             />
           </th>
         )

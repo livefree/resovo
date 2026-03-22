@@ -803,6 +803,18 @@
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run`。
 - **后续**：等待下一阶段任务分配（保持一任务一提交执行节奏）。
 
+## [LOG-20260322-0026-01] CHG-143 表头拖拽分隔线可视反馈统一
+- **时间**：2026-03-22 00:26
+- **类型**：INFO
+- **关联任务**：CHG-143
+- **内容**：统一后台列表页拖拽句柄的可见分隔线与 hover 反馈样式。
+- **处理动作**：
+  - 将 shared 列表页及 crawler-site 表头拖拽句柄 class 统一为“默认可见分隔线 + hover 高亮”。
+  - 保持原有拖拽事件、列宽持久化与排序筛选逻辑不变。
+  - 同步 `tasks/task-queue/changelog`，切换 CHG-144 为进行中。
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/videos/VideoTable.test.tsx tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/users/UserTable.test.tsx tests/unit/components/admin/content/SubmissionTable.test.tsx tests/unit/components/admin/content/SubtitleTable.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/system/monitoring/CacheManager.test.tsx tests/unit/components/admin/system/monitoring/PerformanceMonitor.test.tsx`。
+- **后续**：执行 CHG-144（统一 sticky 表头能力）。
+
 ---
 
 ## 偏离检测记录模板（补充）

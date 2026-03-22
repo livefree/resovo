@@ -2105,3 +2105,22 @@
   - `npm run test:run` ✅（`53 files / 526 tests`）
 - **注意事项**：
   - 本任务仅做阶段验收与文档闭环，不新增功能或调整 UI 行为。
+
+## [CHG-143] 统一表头拖拽分隔线可视反馈
+- **完成时间**：2026-03-22
+- **记录时间**：2026-03-22 00:26
+- **修改文件**：
+  - `src/components/admin/videos/VideoTable.tsx`、`src/components/admin/sources/SourceTable.tsx`、`src/components/admin/users/UserTable.tsx`
+  - `src/components/admin/content/SubmissionTable.tsx`、`src/components/admin/content/SubtitleTable.tsx`
+  - `src/components/admin/AdminSubmissionList.tsx`、`src/components/admin/AdminSubtitleList.tsx`、`src/components/admin/AdminAnalyticsDashboard.tsx`
+  - `src/components/admin/system/monitoring/CacheManager.tsx`、`src/components/admin/system/monitoring/PerformanceMonitor.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTableLiteHeader.tsx`
+  - `docs/task-queue.md`、`docs/tasks.md`
+- **新增依赖**：无
+- **数据库变更**：无
+- **执行检查**：
+  - `npm run typecheck` ✅
+  - `npm run lint` ✅
+  - `npm run test:run -- tests/unit/components/admin/videos/VideoTable.test.tsx tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/users/UserTable.test.tsx tests/unit/components/admin/content/SubmissionTable.test.tsx tests/unit/components/admin/content/SubtitleTable.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/system/monitoring/CacheManager.test.tsx tests/unit/components/admin/system/monitoring/PerformanceMonitor.test.tsx` ✅
+- **注意事项**：
+  - 本任务只统一拖拽句柄视觉反馈，不涉及排序、筛选、持久化与数据接口逻辑。
