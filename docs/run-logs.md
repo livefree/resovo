@@ -969,3 +969,17 @@
 - **新增测试**：
   - `crawler-scheduler.test.ts` +2 个用例（active-run periodic sync、空场景下不调用 sync）
 - **合并验证**：main 上 typecheck + test 全绿（31e3734）
+
+---
+
+## SEQ-20260322-06 验证记录
+- **日期**：2026-03-22 15:12
+- **执行环境**：macOS Darwin 25.3.0，Node.js 22，branch `codex-takeover-20260319`
+- **命令与结果**：
+  - `npm run typecheck` → ✅ 无错误
+  - `npm run lint` → ✅ No ESLint warnings or errors
+  - `npm run test -- --run` → ✅ 55 files / 533 tests passed
+- **变更摘要**：
+  - CHG-156：migration 012 + started_at 全链路
+  - CHG-157：useAdminTableState defaultState ref 防御
+  - CHG-158：CLAUDE.md docs 追踪规范

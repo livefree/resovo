@@ -2307,3 +2307,42 @@
   - `src/api/routes/admin/crawler.ts`（`POST /admin/crawler/tasks` 加 `@deprecated` 注释）
 - **测试覆盖**：55 files / 533 tests ✅
 - **关联**：NB-02 修复，单站触发路径统一
+
+---
+
+## CHG-155 — 批次 A 回归与文档收口
+- **完成时间**：2026-03-22 15:08
+- **commit**：`e600e78`
+- **修改文件**：`docs/changelog.md`、`docs/run-logs.md`、`docs/tasks.md`
+- **测试覆盖**：55 files / 533 tests ✅
+- **关联**：SEQ-20260322-05 完成
+
+---
+
+## CHG-156 — migration 012: crawler_tasks.started_at
+- **完成时间**：2026-03-22 15:10
+- **commit**：`4c5d560`
+- **修改文件**：
+  - `src/api/db/migrations/012_add_task_started_at.sql`（新增，幂等 additive migration）
+  - `src/api/db/queries/crawlerTasks.ts`（CrawlerTask/DbRow/mapTask 增加 startedAt；updateTaskStatus 写入 started_at）
+  - `src/api/routes/admin/crawler.ts`（mapTaskDto.startedAt 改为 task.startedAt）
+- **测试覆盖**：55 files / 533 tests ✅
+- **关联**：NB-04 修复
+
+---
+
+## CHG-157 — useAdminTableState defaultState ref 稳定化
+- **完成时间**：2026-03-22 15:11
+- **commit**：`8290f48`
+- **修改文件**：`src/components/admin/shared/table/useAdminTableState.ts`
+- **测试覆盖**：55 files / 533 tests ✅
+- **关联**：NB-06 修复，防御性修复
+
+---
+
+## CHG-158 — docs 追踪规范补充
+- **完成时间**：2026-03-22 15:12
+- **commit**：`07dcbf5`
+- **修改文件**：`CLAUDE.md`（绝对禁止清单新增 docs 追踪规则）
+- **测试覆盖**：无代码变更
+- **关联**：NB-05 修复，流程规范
