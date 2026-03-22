@@ -72,7 +72,7 @@ function mapTaskDto(task: CrawlerTask) {
     siteKey: task.sourceSite,
     mode,
     status,
-    startedAt: null as string | null,
+    startedAt: task.startedAt,
     finishedAt: task.finishedAt,
     message,
     itemCount,

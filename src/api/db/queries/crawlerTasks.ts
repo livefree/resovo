@@ -24,6 +24,7 @@ export interface CrawlerTask {
   cancelRequested: boolean
   result: Record<string, unknown> | null
   scheduledAt: string
+  startedAt: string | null
   finishedAt: string | null
 }
 
@@ -51,6 +52,7 @@ interface DbCrawlerTaskRow {
   cancel_requested: boolean
   result: Record<string, unknown> | null
   scheduled_at: string
+  started_at: string | null
   finished_at: string | null
 }
 
@@ -69,6 +71,7 @@ function mapTask(row: DbCrawlerTaskRow): CrawlerTask {
     cancelRequested: row.cancel_requested,
     result: row.result,
     scheduledAt: row.scheduled_at,
+    startedAt: row.started_at,
     finishedAt: row.finished_at,
   }
 }
@@ -127,6 +130,7 @@ export async function updateTaskStatus(
      SET status = $1::text,
          result = COALESCE($2::jsonb, result),
          finished_at = $3,
+         started_at = CASE WHEN $1::text = 'running' AND started_at IS NULL THEN NOW() ELSE started_at END,
          heartbeat_at = CASE WHEN $1::text = 'running' THEN NOW() ELSE heartbeat_at END,
          retry_count = CASE WHEN $1::text IN ('failed', 'timeout') THEN retry_count + 1 ELSE retry_count END
      WHERE id = $4`,
