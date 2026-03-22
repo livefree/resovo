@@ -2368,3 +2368,17 @@
 - **变更内容**：新增 `GET /admin/crawler/monitor-snapshot` 返回 `{ overview, runs, systemStatus }`；`refreshMonitor` 改为单次请求该接口，聚合接口失败时自动降级为原 3 个独立请求；原 3 个接口保留
 - **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
 - **关联**：SEQ-20260322-07 CHG-161，解决 merge review 维护问题 1 阶段 A（轮询开销）
+
+---
+
+### [CHG-162] crawlerQueue per-job timeout 30min + Bull stalled 保护
+- **时间**：2026-03-22 16:15
+- **类型**：chg（维护 P2 — 控制硬性超时保障）
+- **修改文件**：
+  - `src/api/lib/queue.ts`（stalledInterval: 60s, maxStalledCount: 1）
+  - `src/api/workers/crawlerWorker.ts`（enqueue 传入 timeout: 30min）
+  - `tests/unit/api/crawler-worker.test.ts`（断言更新，期望 timeout 参数）
+  - `tests/unit/api/crawler.test.ts`（断言更新，期望 timeout 参数）
+- **变更内容**：队列初始化增加 stalled 检测（60s 间隔，最多 1 次重试后 failed）；所有 job 入队时加 30 分钟硬超时，与心跳 watchdog 软超时互补
+- **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
+- **关联**：SEQ-20260322-07 CHG-162，解决 merge review 维护问题 2（协作控制无硬止）

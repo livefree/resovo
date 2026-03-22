@@ -49,7 +49,10 @@ describe('crawlerWorker — enqueue functions', () => {
   it('enqueueFullCrawl dispatches full-crawl job with contract ids', async () => {
     const { enqueueFullCrawl } = await import('@/api/workers/crawlerWorker')
     const job = await enqueueFullCrawl('site-a', 'task-1', 'run-1')
-    expect(mockAdd).toHaveBeenCalledWith({ type: 'full-crawl', siteKey: 'site-a', taskId: 'task-1', runId: 'run-1' })
+    expect(mockAdd).toHaveBeenCalledWith(
+      { type: 'full-crawl', siteKey: 'site-a', taskId: 'task-1', runId: 'run-1' },
+      expect.objectContaining({ timeout: 30 * 60 * 1000 }),
+    )
     expect(job.id).toBe('job-1')
   })
 
@@ -62,25 +65,19 @@ describe('crawlerWorker — enqueue functions', () => {
   it('enqueueIncrementalCrawl uses default hoursAgo=24', async () => {
     const { enqueueIncrementalCrawl } = await import('@/api/workers/crawlerWorker')
     await enqueueIncrementalCrawl('site-b', 24, 'task-2', 'run-2')
-    expect(mockAdd).toHaveBeenCalledWith({
-      type: 'incremental-crawl',
-      siteKey: 'site-b',
-      hoursAgo: 24,
-      taskId: 'task-2',
-      runId: 'run-2',
-    })
+    expect(mockAdd).toHaveBeenCalledWith(
+      { type: 'incremental-crawl', siteKey: 'site-b', hoursAgo: 24, taskId: 'task-2', runId: 'run-2' },
+      expect.objectContaining({ timeout: 30 * 60 * 1000 }),
+    )
   })
 
   it('enqueueIncrementalCrawl with custom siteKey and hoursAgo', async () => {
     const { enqueueIncrementalCrawl } = await import('@/api/workers/crawlerWorker')
     await enqueueIncrementalCrawl('site-b', 48, 'task-3', 'run-3')
-    expect(mockAdd).toHaveBeenCalledWith({
-      type: 'incremental-crawl',
-      siteKey: 'site-b',
-      hoursAgo: 48,
-      taskId: 'task-3',
-      runId: 'run-3',
-    })
+    expect(mockAdd).toHaveBeenCalledWith(
+      { type: 'incremental-crawl', siteKey: 'site-b', hoursAgo: 48, taskId: 'task-3', runId: 'run-3' },
+      expect.objectContaining({ timeout: 30 * 60 * 1000 }),
+    )
   })
 
   it('enqueueIncrementalCrawl missing contract ids throws error', async () => {

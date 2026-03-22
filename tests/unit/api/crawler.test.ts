@@ -108,7 +108,8 @@ describe('crawlerWorker', () => {
   it('enqueueFullCrawl 调用 crawlerQueue.add 并传入 full-crawl 类型', async () => {
     await enqueueFullCrawl('site-a', 'task-1', 'run-1')
     expect(mockJobAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'full-crawl', siteKey: 'site-a', taskId: 'task-1', runId: 'run-1' })
+      expect.objectContaining({ type: 'full-crawl', siteKey: 'site-a', taskId: 'task-1', runId: 'run-1' }),
+      expect.objectContaining({ timeout: 30 * 60 * 1000 }),
     )
   })
 
@@ -119,14 +120,16 @@ describe('crawlerWorker', () => {
   it('enqueueIncrementalCrawl 调用 crawlerQueue.add 并传入 incremental-crawl 类型', async () => {
     await enqueueIncrementalCrawl('site-a', 24, 'task-2', 'run-2')
     expect(mockJobAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'incremental-crawl', siteKey: 'site-a', hoursAgo: 24, taskId: 'task-2', runId: 'run-2' })
+      expect.objectContaining({ type: 'incremental-crawl', siteKey: 'site-a', hoursAgo: 24, taskId: 'task-2', runId: 'run-2' }),
+      expect.objectContaining({ timeout: 30 * 60 * 1000 }),
     )
   })
 
   it('enqueueIncrementalCrawl 可自定义 hoursAgo', async () => {
     await enqueueIncrementalCrawl('site-a', 6, 'task-3', 'run-3')
     expect(mockJobAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ siteKey: 'site-a', hoursAgo: 6, taskId: 'task-3', runId: 'run-3' })
+      expect.objectContaining({ siteKey: 'site-a', hoursAgo: 6, taskId: 'task-3', runId: 'run-3' }),
+      expect.objectContaining({ timeout: 30 * 60 * 1000 }),
     )
   })
 

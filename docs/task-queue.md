@@ -1608,11 +1608,11 @@
      - 页面功能无回归，typecheck/lint/test 通过
    - 回滚方式：回退 CHG-161 提交
 
-3. CHG-162 — 为 crawlerQueue.add 增加 per-job timeout 并配置 Bull stalled 保护（状态：⬜ 待开始）
+3. CHG-162 — 为 crawlerQueue.add 增加 per-job timeout 并配置 Bull stalled 保护（状态：✅ 已完成）
    - 创建时间：2026-03-22 16:00
    - 计划开始：CHG-161 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 16:11
+   - 完成时间：2026-03-22 16:15
    - 目标：(a) 在 `CrawlerRunService` 和 worker 的 `crawlerQueue.add()` 调用中增加 `timeout: 30 * 60 * 1000`（30 min），Bull 超时后自动 move-to-failed；(b) 队列初始化增加 `stalledInterval: 60_000`、`maxStalledCount: 1`，worker 进程崩溃时 60s 内恢复，不再等待 15 min watchdog
    - 范围：
      - `src/api/lib/queue.ts`（Bull 队列 settings）
