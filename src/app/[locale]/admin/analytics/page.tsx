@@ -3,13 +3,17 @@
  * ADMIN-05: admin only，运营统计数据
  */
 
+import { AdminPageShell } from '@/components/admin/shared/layout/AdminPageShell'
 import { AdminAnalyticsDashboard } from '@/components/admin/AdminAnalyticsDashboard'
 
 export default function AdminAnalyticsPage() {
   return (
-    <div data-testid="admin-analytics-page">
-      <h1 className="mb-6 text-2xl font-bold">数据看板</h1>
+    <AdminPageShell
+      title="数据看板"
+      description="查看运营统计、任务趋势与关键告警数据。"
+      testId="admin-analytics-page"
+    >
       <AdminAnalyticsDashboard />
-    </div>
+    </AdminPageShell>
   )
 }

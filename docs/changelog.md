@@ -2020,3 +2020,21 @@
   - `npm run test:run` ✅（二次复跑后 `53 files / 526 tests`）
 - **注意事项**：
   - 首次全量测试出现 `AdminSubtitleList` 用例时序波动，复跑与单测复检均通过，判定为历史测试不稳定而非本次改动回归。
+
+## [CHG-137] Phase 2：统一说明文案与 hover 化
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 23:46
+- **修改文件**：
+  - `src/app/[locale]/admin/page.tsx`、`src/app/[locale]/admin/analytics/page.tsx` — 看板页统一为 `AdminPageShell`，页面说明改 hover。
+  - `src/app/[locale]/admin/system/cache/page.tsx`、`src/app/[locale]/admin/system/monitor/page.tsx` — 系统监控页接入统一壳层并补 hover 说明。
+  - `src/app/[locale]/admin/system/config/page.tsx` — 移除顶部常驻长说明，改为标题 hover 描述。
+  - `src/app/[locale]/admin/system/settings/page.tsx`、`src/app/[locale]/admin/system/migration/page.tsx` — 接入统一壳层与 hover 描述。
+  - `docs/task-queue.md`、`docs/tasks.md` — 同步 CHG-137 完成并切换 CHG-138 为进行中。
+- **新增依赖**：无
+- **数据库变更**：无
+- **执行检查**：
+  - `npm run typecheck` ✅
+  - `npm run lint` ✅
+  - `npm run test:run` ✅（`53 files / 526 tests`）
+- **注意事项**：
+  - 本任务聚焦页面级说明收敛，不改业务组件内部提示语与操作流程。
