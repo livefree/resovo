@@ -2407,3 +2407,13 @@
   - `crawlerWorker` 增加 `controlCheckTimer`（15s）独立检测 cancel/pause/timeout；触发时调用 `abortController.abort(reason)` 中断正在进行的 HTTP 请求；finally 中 clearInterval + abort cleanup
 - **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
 - **关联**：SEQ-20260322-08 CHG-164，解决 merge review 维护问题 2（协作控制无硬中断）
+
+---
+
+### [CHG-165] 维护 P3 回归与文档收口
+- **时间**：2026-03-22 16:27
+- **类型**：docs（SEQ-20260322-08 收口）
+- **修改文件**：`docs/task-queue.md`、`docs/changelog.md`
+- **变更内容**：SEQ-20260322-08 序列状态改为 ✅ 已完成
+- **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
+- **关联**：SEQ-20260322-08 全量完成（CHG-164~165）
