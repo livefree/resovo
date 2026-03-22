@@ -72,7 +72,7 @@ function mapTaskDto(task: CrawlerTask) {
     siteKey: task.sourceSite,
     mode,
     status,
-    startedAt: null as string | null,
+    startedAt: task.startedAt,
     finishedAt: task.finishedAt,
     message,
     itemCount,
@@ -160,6 +160,8 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
   })
 
   // ── POST /admin/crawler/tasks — 手动触发采集 ─────────────────
+  // @deprecated 使用 POST /admin/crawler/runs 替代（triggerType: 'single' | 'all'）
+  // 保留此路由以向后兼容，计划在下一个 Phase 删除
 
   fastify.post('/admin/crawler/tasks', { preHandler: auth }, async (request, reply) => {
     const BodySchema = z.object({

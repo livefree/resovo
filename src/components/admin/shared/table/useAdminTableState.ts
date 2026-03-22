@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 export const ADMIN_TABLE_STATE_VERSION = 'v1' as const
 
@@ -138,19 +138,31 @@ function readStateFromStorage(
   }
 }
 
+/**
+ * useAdminTableState — 管理员表格状态持久化 hook
+ *
+ * @param options.route     路由标识（用于存储 key 前缀）
+ * @param options.tableId   表格唯一 ID
+ * @param options.defaultState  默认状态。**调用方无需 memoize**：hook 内部在 mount 时
+ *   快照初始值，后续 prop 引用变化不会触发 storage 重读或状态重置。
+ * @param options.storage   可选的自定义 Storage 实现（测试/SSR 场景传 null 禁用持久化）
+ */
 export function useAdminTableState(options: UseAdminTableStateOptions) {
   const { route, tableId, defaultState = {}, storage: storageOverride } = options
+
+  // 快照 defaultState 初始值，避免调用方传入非 memoize 对象时触发无限 re-render
+  const defaultStateRef = useRef<AdminTableState>(defaultState)
 
   const storage = useMemo(() => resolveStorage(storageOverride), [storageOverride])
   const storageKey = useMemo(() => buildAdminTableStorageKey(route, tableId), [route, tableId])
 
   const [state, setInternalState] = useState<AdminTableState>(() => (
-    readStateFromStorage(storage, storageKey, defaultState)
+    readStateFromStorage(storage, storageKey, defaultStateRef.current)
   ))
 
   useEffect(() => {
-    setInternalState(readStateFromStorage(storage, storageKey, defaultState))
-  }, [storage, storageKey, defaultState])
+    setInternalState(readStateFromStorage(storage, storageKey, defaultStateRef.current))
+  }, [storage, storageKey])
 
   useEffect(() => {
     if (!storage) return
@@ -174,7 +186,7 @@ export function useAdminTableState(options: UseAdminTableStateOptions) {
   }
 
   function reset() {
-    setInternalState(defaultState)
+    setInternalState(defaultStateRef.current)
     if (!storage) return
     try {
       storage.removeItem(storageKey)

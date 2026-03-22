@@ -15,6 +15,15 @@ interface TriggerCrawlTaskResponse {
   }
 }
 
+interface TriggerRunResponse {
+  data: {
+    runId: string
+    taskIds: string[]
+    enqueuedSiteKeys: string[]
+    skippedSiteKeys: string[]
+  }
+}
+
 interface LatestTasksResponse {
   data: {
     tasks: CrawlTaskDTO[]
@@ -27,16 +36,21 @@ interface LatestTaskResponse {
   }
 }
 
-function toTaskType(mode: CrawlMode): 'full-crawl' | 'incremental-crawl' {
-  return mode === 'full' ? 'full-crawl' : 'incremental-crawl'
-}
-
 export async function triggerSiteCrawlTask(siteKey: string, mode: CrawlMode): Promise<TriggerCrawlTaskResponse['data']> {
-  const res = await apiClient.post<TriggerCrawlTaskResponse>('/admin/crawler/tasks', {
-    type: toTaskType(mode),
-    siteKey,
+  const res = await apiClient.post<TriggerRunResponse>('/admin/crawler/runs', {
+    triggerType: 'single',
+    mode,
+    siteKeys: [siteKey],
   })
-  return res.data
+  return {
+    runId: res.data.runId,
+    taskId: res.data.taskIds[0] ?? null,
+    taskIds: res.data.taskIds,
+    type: mode === 'full' ? 'full-crawl' : 'incremental-crawl',
+    siteKey,
+    enqueuedSiteKeys: res.data.enqueuedSiteKeys,
+    skippedSiteKeys: res.data.skippedSiteKeys,
+  }
 }
 
 export async function getLatestCrawlTasksBySites(siteKeys: string[]): Promise<CrawlTaskDTO[]> {

@@ -75,6 +75,15 @@ export async function runTimeoutWatchdogTick(): Promise<void> {
     if (affectedRunIds.length > 0) {
       process.stderr.write(`[crawler-scheduler] watchdog synced ${affectedRunIds.length} affected runs\n`)
     }
+
+    // 对所有活跃 run 执行周期性状态同步，消除监控列表滞后（最大 60s）
+    const activeRunIds = await crawlerRunsQueries.listActiveRunIds(db)
+    for (const runId of activeRunIds) {
+      await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
+    }
+    if (activeRunIds.length > 0) {
+      process.stderr.write(`[crawler-scheduler] periodic sync applied to ${activeRunIds.length} active runs\n`)
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     process.stderr.write(`[crawler-scheduler] timeout watchdog failed: ${msg}\n`)

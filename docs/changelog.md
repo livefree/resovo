@@ -2258,3 +2258,91 @@
   - `npm run test:run` ✅（`55 files / 531 tests`）
 - **注意事项**：
   - 全量测试仍包含历史 warning（`act` 与 zustand persist storage unavailable），本次无新增失败用例。
+
+---
+
+## CHG-152 — 提交未追踪文档
+- **完成时间**：2026-03-22 15:00
+- **commit**：`abe809a`
+- **修改文件**：
+  - `docs/branch_handoff_report.md`（新增，纳入版本控制）
+  - `docs/admin_ui_unification_plan.md`（新增，纳入版本控制）
+  - `docs/architecture-current.md`（新增，纳入版本控制）
+  - `docs/task-queue.md`（追加 SEQ-20260322-04/05/06 及对应任务规划）
+  - `docs/tasks.md`（追加 CHG-152 ~ CHG-159 任务卡片）
+- **测试覆盖**：无代码变更，跳过
+- **关联**：NB-05 文档追踪遗留项修复，merge 前置清理
+
+---
+
+## CHORE-02 — 执行 codex-takeover-20260319 → main --no-ff merge
+- **完成时间**：2026-03-22 15:02
+- **commit**：`31e3734`（main 上 merge commit）
+- **修改文件**：298 files changed（完整分支历史并入 main）
+- **测试覆盖**：
+  - `npm run typecheck` ✅（main 上验证）
+  - `npm run test:run` ✅（55 files / 531 tests，main 上验证）
+- **关联**：SEQ-20260322-04 完成，分支正式合并
+
+---
+
+## CHG-153 — watchdog 周期 sync 活跃 run + 独立心跳定时器
+- **完成时间**：2026-03-22 15:05
+- **commit**：`1688242`
+- **修改文件**：
+  - `src/api/db/queries/crawlerRuns.ts`（新增 `listActiveRunIds`）
+  - `src/api/workers/crawlerScheduler.ts`（watchdog tick 追加 active run 周期 sync）
+  - `src/api/workers/crawlerWorker.ts`（新增 3min 独立心跳 timer + finally 清理）
+  - `tests/unit/api/crawler-scheduler.test.ts`（新增 4 个测试覆盖 active-run sync 逻辑）
+- **测试覆盖**：55 files / 533 tests ✅
+- **关联**：NB-01 修复；merge review 风险提示 A 修复
+
+---
+
+## CHG-154 — triggerSiteCrawlTask 迁移到 /runs 触发路径
+- **完成时间**：2026-03-22 15:07
+- **commit**：`a2a9923`
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/services/crawlTaskService.ts`（`triggerSiteCrawlTask` 改调 `/admin/crawler/runs`，返回值兼容适配）
+  - `src/api/routes/admin/crawler.ts`（`POST /admin/crawler/tasks` 加 `@deprecated` 注释）
+- **测试覆盖**：55 files / 533 tests ✅
+- **关联**：NB-02 修复，单站触发路径统一
+
+---
+
+## CHG-155 — 批次 A 回归与文档收口
+- **完成时间**：2026-03-22 15:08
+- **commit**：`e600e78`
+- **修改文件**：`docs/changelog.md`、`docs/run-logs.md`、`docs/tasks.md`
+- **测试覆盖**：55 files / 533 tests ✅
+- **关联**：SEQ-20260322-05 完成
+
+---
+
+## CHG-156 — migration 012: crawler_tasks.started_at
+- **完成时间**：2026-03-22 15:10
+- **commit**：`4c5d560`
+- **修改文件**：
+  - `src/api/db/migrations/012_add_task_started_at.sql`（新增，幂等 additive migration）
+  - `src/api/db/queries/crawlerTasks.ts`（CrawlerTask/DbRow/mapTask 增加 startedAt；updateTaskStatus 写入 started_at）
+  - `src/api/routes/admin/crawler.ts`（mapTaskDto.startedAt 改为 task.startedAt）
+- **测试覆盖**：55 files / 533 tests ✅
+- **关联**：NB-04 修复
+
+---
+
+## CHG-157 — useAdminTableState defaultState ref 稳定化
+- **完成时间**：2026-03-22 15:11
+- **commit**：`8290f48`
+- **修改文件**：`src/components/admin/shared/table/useAdminTableState.ts`
+- **测试覆盖**：55 files / 533 tests ✅
+- **关联**：NB-06 修复，防御性修复
+
+---
+
+## CHG-158 — docs 追踪规范补充
+- **完成时间**：2026-03-22 15:12
+- **commit**：`07dcbf5`
+- **修改文件**：`CLAUDE.md`（绝对禁止清单新增 docs 追踪规则）
+- **测试覆盖**：无代码变更
+- **关联**：NB-05 修复，流程规范
