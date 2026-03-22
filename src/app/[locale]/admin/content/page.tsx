@@ -6,6 +6,7 @@
 'use client'
 
 import { useState } from 'react'
+import { AdminPageShell } from '@/components/admin/shared/layout/AdminPageShell'
 import { SubmissionTable } from '@/components/admin/content/SubmissionTable'
 import { SubtitleTable } from '@/components/admin/content/SubtitleTable'
 
@@ -13,13 +14,14 @@ export default function AdminContentPage() {
   const [tab, setTab] = useState<'submissions' | 'subtitles'>('submissions')
 
   return (
-    <div data-testid="admin-content-page">
-      <h1 className="mb-6 text-2xl font-bold">内容审核</h1>
-
-      {/* Tab 切换 */}
+    <AdminPageShell
+      title="内容审核"
+      description="统一处理投稿审核与字幕审核，按审核对象切换视图。"
+      testId="admin-content-page"
+    >
       <div className="mb-6 flex border-b border-[var(--border)]" data-testid="content-tabs">
         <button
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+          className={`border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
             tab === 'submissions'
               ? 'border-[var(--accent)] text-[var(--accent)]'
               : 'border-transparent text-[var(--muted)] hover:text-[var(--text)]'
@@ -30,7 +32,7 @@ export default function AdminContentPage() {
           投稿审核
         </button>
         <button
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+          className={`border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
             tab === 'subtitles'
               ? 'border-[var(--accent)] text-[var(--accent)]'
               : 'border-transparent text-[var(--muted)] hover:text-[var(--text)]'
@@ -44,6 +46,6 @@ export default function AdminContentPage() {
 
       {tab === 'submissions' && <SubmissionTable />}
       {tab === 'subtitles' && <SubtitleTable />}
-    </div>
+    </AdminPageShell>
   )
 }

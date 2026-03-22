@@ -4,12 +4,16 @@
  */
 
 import { AdminSubtitleList } from '@/components/admin/AdminSubtitleList'
+import { AdminPageShell } from '@/components/admin/shared/layout/AdminPageShell'
 
 export default function AdminSubtitlesPage() {
   return (
-    <div data-testid="admin-subtitles-page">
-      <h1 className="mb-6 text-2xl font-bold">字幕审核</h1>
+    <AdminPageShell
+      title="字幕审核"
+      description="审核用户上传字幕，支持通过与拒绝。"
+      testId="admin-subtitles-page"
+    >
       <AdminSubtitleList />
-    </div>
+    </AdminPageShell>
   )
 }

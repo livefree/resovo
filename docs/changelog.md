@@ -2003,3 +2003,20 @@
   - `npm run test:run` ✅（`53 files / 526 tests`）
 - **注意事项**：
   - 本任务仅统一页面壳层，不改表格能力、权限逻辑与 API 调用顺序。
+
+## [CHG-136] Phase 1：统一审核类页面骨架
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 23:43
+- **修改文件**：
+  - `src/app/[locale]/admin/content/page.tsx` — 接入统一页面壳层，保留原有审核 Tab 交互与表格逻辑。
+  - `src/app/[locale]/admin/submissions/page.tsx` — 接入统一页面壳层，描述文案改为 hover。
+  - `src/app/[locale]/admin/subtitles/page.tsx` — 接入统一页面壳层，描述文案改为 hover。
+  - `docs/task-queue.md`、`docs/tasks.md` — 同步 CHG-136 完成并切换 CHG-137 为进行中。
+- **新增依赖**：无
+- **数据库变更**：无
+- **执行检查**：
+  - `npm run typecheck` ✅
+  - `npm run lint` ✅
+  - `npm run test:run` ✅（二次复跑后 `53 files / 526 tests`）
+- **注意事项**：
+  - 首次全量测试出现 `AdminSubtitleList` 用例时序波动，复跑与单测复检均通过，判定为历史测试不稳定而非本次改动回归。

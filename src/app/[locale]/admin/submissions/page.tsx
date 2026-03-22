@@ -4,12 +4,16 @@
  */
 
 import { AdminSubmissionList } from '@/components/admin/AdminSubmissionList'
+import { AdminPageShell } from '@/components/admin/shared/layout/AdminPageShell'
 
 export default function AdminSubmissionsPage() {
   return (
-    <div data-testid="admin-submissions-page">
-      <h1 className="mb-6 text-2xl font-bold">投稿审核</h1>
+    <AdminPageShell
+      title="投稿审核"
+      description="审核用户提交的播放源信息，支持通过与拒绝。"
+      testId="admin-submissions-page"
+    >
       <AdminSubmissionList />
-    </div>
+    </AdminPageShell>
   )
 }
