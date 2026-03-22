@@ -2073,3 +2073,20 @@
   - `npm run test:run` ✅（`53 files / 526 tests`）
 - **注意事项**：
   - 本任务只收口控制台文案展示层，不改采集任务执行、监控数据来源与控制逻辑。
+
+## [CHG-140] Phase 4：看板与系统页结构收口
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 23:58
+- **修改文件**：
+  - `src/app/[locale]/admin/page.tsx`、`src/app/[locale]/admin/analytics/page.tsx` — 看板页统一使用页面壳层与 hover 说明。
+  - `src/app/[locale]/admin/system/cache/page.tsx`、`src/app/[locale]/admin/system/monitor/page.tsx` — 系统监控页沿用统一骨架并收口说明层级。
+  - `src/app/[locale]/admin/system/config/page.tsx`、`src/app/[locale]/admin/system/settings/page.tsx`、`src/app/[locale]/admin/system/migration/page.tsx` — 系统配置页统一壳层与说明策略。
+  - `docs/task-queue.md`、`docs/tasks.md` — 同步 CHG-140 完成并切换 CHG-141 为进行中。
+- **新增依赖**：无
+- **数据库变更**：无
+- **执行检查**：
+  - `npm run typecheck` ✅
+  - `npm run lint` ✅
+  - `npm run test:run` ✅（`53 files / 526 tests`）
+- **注意事项**：
+  - 本任务收口的是页面结构与说明层，不涉及业务接口、权限与数据流调整。

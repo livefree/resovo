@@ -779,6 +779,18 @@
   - 成人、启用状态移除 fromConfig 禁用，恢复可点击更新。
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/AdminCrawlerTabs.test.tsx`。
 
+## [LOG-20260321-2358-01] CHG-140 看板与系统页结构收口完成
+- **时间**：2026-03-21 23:58
+- **类型**：INFO
+- **关联任务**：CHG-140
+- **内容**：看板页与系统页已统一收口到 AdminPageShell 骨架与 hover 说明策略。
+- **处理动作**：
+  - 校验 `/admin`、`/admin/analytics`、`/admin/system/{cache,monitor,config,settings,migration}` 页面结构一致性。
+  - 执行全量检查并记录结果，确认无业务逻辑与 API 行为变更。
+  - 更新 `task-queue/tasks/changelog`，切换 CHG-141 为进行中。
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run`。
+- **后续**：执行 CHG-141（全量回归与文档收口）。
+
 ---
 
 ## 偏离检测记录模板（补充）
