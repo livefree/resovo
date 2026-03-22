@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { apiClient } from '@/lib/api-client'
 import type { CrawlerSite, CreateCrawlerSiteInput, UpdateCrawlerSiteInput, CrawlerSiteBatchAction } from '@/types'
 import { useAdminToast } from '@/components/admin/shared/feedback/useAdminToast'
@@ -22,6 +22,9 @@ import {
   type SiteFormData,
 } from '@/components/admin/system/crawler-site/components/CrawlerSiteFormDialog'
 import { parseSitesFromJson } from '@/components/admin/system/crawler-site/importParser'
+import { Pagination } from '@/components/admin/Pagination'
+
+const PAGE_SIZE = 20
 
 // ── 类型 ──────────────────────────────────────────────────────
 
@@ -38,6 +41,7 @@ interface ValidateResult {
 export function CrawlerSiteManager() {
   const [editTarget, setEditTarget] = useState<CrawlerSite | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [page, setPage] = useState(1)
   const [validateStates, setValidateStates] = useState<Record<string, ValidateStatus>>({})
   const [rowSaving, setRowSaving] = useState<Record<string, boolean>>({})
   const [allCrawlTriggering, setAllCrawlTriggering] = useState<Record<'incremental-crawl' | 'full-crawl', boolean>>({
@@ -112,9 +116,22 @@ export function CrawlerSiteManager() {
     })
   }, [sites, filters, sortBy, sortDir])
 
+  // Reset to page 1 whenever filter/sort parameters change.
+  // Use a ref to skip the initial mount trigger.
+  const isFirstRender = useRef(true)
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return }
+    setPage(1)
+  }, [filters, sortBy, sortDir])
+
+  const pagedSites = useMemo(
+    () => displaySites.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [displaySites, page],
+  )
+
   const visibleKeys = useMemo(
-    () => displaySites.map((site) => site.key),
-    [displaySites],
+    () => pagedSites.map((site) => site.key),
+    [pagedSites],
   )
   const {
     selected,
@@ -363,7 +380,7 @@ export function CrawlerSiteManager() {
       <ActiveFilterChipsBar filters={filters} setFilters={setFilters} />
 
       <CrawlerSiteTable
-        displaySites={displaySites}
+        displaySites={pagedSites}
         selected={selected}
         allVisibleSelected={allVisibleSelected}
         sortBy={sortBy}
@@ -396,6 +413,16 @@ export function CrawlerSiteManager() {
         setEditTarget={setEditTarget}
         showToast={showToast}
       />
+
+      {displaySites.length > PAGE_SIZE && (
+        <Pagination
+          page={page}
+          total={displaySites.length}
+          pageSize={PAGE_SIZE}
+          onChange={setPage}
+          className="mt-3 px-1"
+        />
+      )}
 
       {/* 添加 Modal */}
       {showAdd && (

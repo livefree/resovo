@@ -239,9 +239,9 @@ const PlayerShell = dynamic(() => import('@/components/player/PlayerShell'), {
 | UserTable | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | SubmissionTable | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | SubtitleTable | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| CrawlerSiteTable | ❌ C1 | ❌ C2 | ✅ | ✅ | ❌ C5 | ❌ C6 | ✅ | ❌ |
+| CrawlerSiteTable | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-> **说明**：CrawlerSiteTable 使用本地 `tableState.ts` 模块，未接入 `useAdminTableState`/`useAdminTableColumns`；分页和工具栏在上层 `CrawlerSiteManager` 中，未使用标准组件。这是 CHG-167 的修复目标。
+> **CHG-167 修复记录（2026-03-22）**：已将 `useCrawlerSiteColumns` 迁移至 `useAdminTableColumns`（修复 C1/C2）；`CrawlerSiteManager` 新增客户端分页 + `Pagination` 组件（修复 C5）。C6 初次审计结论有误 — `CrawlerSiteTopToolbar` 已使用 `AdminToolbar` + `AdminBatchBar`，实为合规，此次一并更正。
 
 ### 新页面开发门禁
 
