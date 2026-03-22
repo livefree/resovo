@@ -2171,3 +2171,26 @@
   - `npm run test:run -- tests/unit/components/admin/shared/table/useAdminTableColumns.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/videos/VideoTable.test.tsx` ✅
 - **注意事项**：
   - 本任务聚焦拖拽交互内核复用，不调整业务列定义与表格功能语义。
+
+## [CHG-147] 列设置入口统一到表头右端图标
+- **完成时间**：2026-03-22
+- **记录时间**：2026-03-22 00:45
+- **修改文件**：
+  - `src/components/admin/videos/VideoTable.tsx`、`src/components/admin/sources/SourceTable.tsx`、`src/components/admin/users/UserTable.tsx`
+  - `src/components/admin/content/SubmissionTable.tsx`、`src/components/admin/content/SubtitleTable.tsx`
+  - `src/components/admin/AdminSubmissionList.tsx`、`src/components/admin/AdminSubtitleList.tsx`、`src/components/admin/AdminAnalyticsDashboard.tsx`
+  - `src/components/admin/system/monitoring/CacheManager.tsx`、`src/components/admin/system/monitoring/PerformanceMonitor.tsx`
+  - `src/components/admin/AdminCrawlerPanel.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTableLiteHeader.tsx`
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+  - `docs/task-queue.md`、`docs/tasks.md`
+- **新增依赖**：无
+- **数据库变更**：无
+- **执行检查**：
+  - `npm run typecheck` ✅
+  - `npm run lint` ✅
+  - `npm run test:run -- tests/unit/components/admin/videos/VideoTable.test.tsx tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/users/UserTable.test.tsx tests/unit/components/admin/content/SubmissionTable.test.tsx tests/unit/components/admin/content/SubtitleTable.test.tsx tests/unit/components/admin/AdminSubmissionList.test.tsx tests/unit/components/admin/AdminSubtitleList.test.tsx tests/unit/components/admin/AdminAnalyticsDashboard.test.tsx tests/unit/components/admin/system/monitoring/CacheManager.test.tsx tests/unit/components/admin/system/monitoring/PerformanceMonitor.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/AdminCrawlerTabs.test.tsx` ✅
+- **注意事项**：
+  - 统一入口为表头右端图标；保留原测试 `data-testid` 兼容，避免回归。

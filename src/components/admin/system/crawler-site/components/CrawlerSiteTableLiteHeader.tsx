@@ -1,3 +1,4 @@
+import type { Dispatch, SetStateAction } from 'react'
 import type { ColumnId, ColumnWidthState, FilterState, SortDir, SortField } from '@/components/admin/system/crawler-site/tableState'
 import { ColumnMenu } from '@/components/admin/system/crawler-site/components/ColumnMenu'
 
@@ -15,6 +16,10 @@ interface CrawlerSiteTableLiteHeaderProps {
   onPatchFilter: (patch: Partial<FilterState>) => void
   onClearColumnFilter: (columnId: ColumnId) => void
   onToggleColumn: (columnId: ColumnId) => void
+  showColumnsPanel: boolean
+  setShowColumnsPanel: Dispatch<SetStateAction<boolean>>
+  columns: Record<ColumnId, boolean>
+  columnMeta: Array<{ id: ColumnId; label: string }>
   requiredColumns: ColumnId[]
   openMenuColumn: ColumnId | null
   setOpenMenuColumn: (columnId: ColumnId | null) => void
@@ -62,6 +67,10 @@ export function CrawlerSiteTableLiteHeader({
   onPatchFilter,
   onClearColumnFilter,
   onToggleColumn,
+  showColumnsPanel,
+  setShowColumnsPanel,
+  columns,
+  columnMeta,
   requiredColumns,
   openMenuColumn,
   setOpenMenuColumn,
@@ -73,11 +82,12 @@ export function CrawlerSiteTableLiteHeader({
       <th className="w-8 px-3 py-2.5 text-left">
         <input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} className="accent-[var(--accent)]" />
       </th>
-      {HEADER_COLUMNS.map((column) => {
+      {HEADER_COLUMNS.map((column, index) => {
         const isSorted = column.sortField != null && sortBy === column.sortField
         const sortable = column.sortField != null
         const filtered = isColumnFiltered(column.id, filters)
         const canHide = !requiredColumns.includes(column.id)
+        const isLastColumn = index === HEADER_COLUMNS.length - 1
 
         return (
           <th
@@ -107,6 +117,41 @@ export function CrawlerSiteTableLiteHeader({
                 ⋮
               </button>
             </div>
+
+            {isLastColumn && (
+              <div className="absolute right-3 top-1/2 z-30 -translate-y-1/2">
+                <button
+                  type="button"
+                  onClick={() => setShowColumnsPanel((prev) => !prev)}
+                  className="rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                  data-testid="crawler-columns-toggle"
+                  aria-label="列设置"
+                  title="列设置"
+                >
+                  <span aria-hidden>⚙</span>
+                  <span className="sr-only">列设置</span>
+                </button>
+                {showColumnsPanel && (
+                  <div className="absolute right-0 mt-2 w-56 rounded-md border border-[var(--border)] bg-[var(--bg2)] p-2 shadow-lg">
+                    <p className="mb-2 text-xs text-[var(--muted)]">勾选显示列（名称/管理操作为必显）</p>
+                    <div className="space-y-1">
+                      {columnMeta.map((item) => (
+                        <label key={item.id} className="flex items-center gap-2 rounded px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg3)]">
+                          <input
+                            type="checkbox"
+                            checked={columns[item.id]}
+                            disabled={requiredColumns.includes(item.id)}
+                            onChange={() => onToggleColumn(item.id)}
+                            className="accent-[var(--accent)]"
+                          />
+                          <span>{item.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {openMenuColumn === column.id && (
               <ColumnMenu

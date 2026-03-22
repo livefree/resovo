@@ -31,6 +31,10 @@ interface CrawlerSiteTableProps {
   setFilters: Dispatch<SetStateAction<FilterState>>
   setSort: (field: SortField, dir: SortDir) => void
   toggleColumn: (columnId: ColumnId) => void
+  showColumnsPanel: boolean
+  setShowColumnsPanel: Dispatch<SetStateAction<boolean>>
+  columns: Record<ColumnId, boolean>
+  columnMeta: Array<{ id: ColumnId; label: string }>
   requiredColumns: ColumnId[]
   colClass: (id: ColumnId) => string
   handleSort: (field: SortField) => void
@@ -113,6 +117,10 @@ export function CrawlerSiteTable({
   setFilters,
   setSort,
   toggleColumn,
+  showColumnsPanel,
+  setShowColumnsPanel,
+  columns,
+  columnMeta,
   requiredColumns,
   colClass,
   handleSort,
@@ -221,6 +229,10 @@ export function CrawlerSiteTable({
           onPatchFilter={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
           onClearColumnFilter={clearColumnFilter}
           onToggleColumn={toggleColumn}
+          showColumnsPanel={showColumnsPanel}
+          setShowColumnsPanel={setShowColumnsPanel}
+          columns={columns}
+          columnMeta={columnMeta}
           requiredColumns={requiredColumns}
           openMenuColumn={openMenuColumn}
           setOpenMenuColumn={setOpenMenuColumn}

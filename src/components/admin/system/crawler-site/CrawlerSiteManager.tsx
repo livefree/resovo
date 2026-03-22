@@ -336,16 +336,10 @@ export function CrawlerSiteManager() {
       <CrawlerSiteTopToolbar
         filters={filters}
         setFilters={setFilters}
-        showColumnsPanel={showColumnsPanel}
-        columns={columns}
-        requiredColumns={requiredColumns}
         selectedCount={selected.size}
         isAllIncrementalTriggering={allCrawlTriggering['incremental-crawl']}
         isAllFullTriggering={allCrawlTriggering['full-crawl']}
         toast={toast}
-        columnMeta={columnMeta}
-        setShowColumnsPanel={setShowColumnsPanel}
-        toggleColumn={toggleColumn}
         onAdd={() => setShowAdd(true)}
         onTriggerIncremental={() => {
           void handleTriggerCrawl('incremental-crawl')
@@ -387,6 +381,10 @@ export function CrawlerSiteManager() {
         setSort={setSort}
         toggleColumn={toggleColumn}
         requiredColumns={requiredColumns}
+        showColumnsPanel={showColumnsPanel}
+        setShowColumnsPanel={setShowColumnsPanel}
+        columns={columns}
+        columnMeta={columnMeta}
         startResize={startResize}
         toggleSelect={toggleSelect}
         toggleAll={toggleAll}

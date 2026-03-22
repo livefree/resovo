@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { CrawlerSiteBatchAction } from '@/types'
-import type { ColumnId, ColumnVisibility, FilterState } from '@/components/admin/system/crawler-site/tableState'
+import type { FilterState } from '@/components/admin/system/crawler-site/tableState'
 import { AdminBatchBar } from '@/components/admin/shared/batch/AdminBatchBar'
 import { AdminToolbar } from '@/components/admin/shared/toolbar/AdminToolbar'
 import { AdminButton } from '@/components/admin/shared/button/AdminButton'
@@ -10,16 +10,10 @@ import { CrawlerSiteAdvancedFilters } from '@/components/admin/system/crawler-si
 interface CrawlerSiteTopToolbarProps {
   filters: FilterState
   setFilters: Dispatch<SetStateAction<FilterState>>
-  showColumnsPanel: boolean
-  columns: ColumnVisibility
-  requiredColumns: ColumnId[]
   selectedCount: number
   isAllIncrementalTriggering: boolean
   isAllFullTriggering: boolean
   toast: { msg: string; ok: boolean } | null
-  columnMeta: Array<{ id: ColumnId; label: string }>
-  setShowColumnsPanel: Dispatch<SetStateAction<boolean>>
-  toggleColumn: (columnId: ColumnId) => void
   onAdd: () => void
   onTriggerIncremental: () => void
   onTriggerFull: () => void
@@ -33,16 +27,10 @@ interface CrawlerSiteTopToolbarProps {
 export function CrawlerSiteTopToolbar({
   filters,
   setFilters,
-  showColumnsPanel,
-  columns,
-  requiredColumns,
   selectedCount,
   isAllIncrementalTriggering,
   isAllFullTriggering,
   toast,
-  columnMeta,
-  setShowColumnsPanel,
-  toggleColumn,
   onAdd,
   onTriggerIncremental,
   onTriggerFull,
@@ -129,34 +117,6 @@ export function CrawlerSiteTopToolbar({
             <AdminButton onClick={onImport}>
               导入 JSON
             </AdminButton>
-
-            <div className="relative">
-              <AdminButton
-                type="button"
-                onClick={() => setShowColumnsPanel((prev) => !prev)}
-              >
-                列设置
-              </AdminButton>
-              {showColumnsPanel && (
-                <div className="absolute left-0 z-20 mt-1 w-56 rounded-md border border-[var(--border)] bg-[var(--bg2)] p-2 shadow-lg">
-                  <p className="mb-2 text-xs text-[var(--muted)]">勾选显示列（名称/管理操作为必显）</p>
-                  <div className="space-y-1">
-                    {columnMeta.map((column) => (
-                      <label key={column.id} className="flex items-center gap-2 rounded px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg3)]">
-                        <input
-                          type="checkbox"
-                          checked={columns[column.id]}
-                          disabled={requiredColumns.includes(column.id)}
-                          onChange={() => toggleColumn(column.id)}
-                          className="accent-[var(--accent)]"
-                        />
-                        <span>{column.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
 
             <AdminButton
               type="button"

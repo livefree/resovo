@@ -295,14 +295,6 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setShowColumnsPanel((prev) => !prev)}
-              className="rounded-md border border-[var(--border)] px-3 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-              data-testid="admin-crawler-columns"
-            >
-              显示列
-            </button>
-            <button
-              type="button"
               onClick={() => { void fetchTasks() }}
               className="rounded-md border border-[var(--border)] px-3 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
               data-testid="admin-crawler-refresh"
@@ -433,6 +425,7 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
                 const meta = columnsState.columnsById[columnId]
                 const sortable = sortState.isSortable(columnId)
                 const sorted = sortState.isSortedBy(columnId)
+                const isLastVisible = columnId === visibleColumnIds[visibleColumnIds.length - 1]
                 return (
                   <th key={columnId} className="relative px-4 py-3 text-left" style={{ width: `${meta.width}px` }}>
                     {sortable ? (
@@ -446,6 +439,18 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
                       </button>
                     ) : (
                       <span className="text-xs">{CRAWLER_TASK_COLUMN_LABELS[columnId]}</span>
+                    )}
+                    {isLastVisible && (
+                      <button
+                        type="button"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                        onClick={() => setShowColumnsPanel((prev) => !prev)}
+                        data-testid="admin-crawler-columns"
+                        aria-label="列设置"
+                        title="列设置"
+                      >
+                        ⚙
+                      </button>
                     )}
                     {meta.resizable && (
                       <button

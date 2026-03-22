@@ -851,6 +851,18 @@
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/shared/table/useAdminTableColumns.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/videos/VideoTable.test.tsx`。
 - **后续**：执行 CHG-147（列设置入口统一到表头右端图标）。
 
+## [LOG-20260322-0045-01] CHG-147 列设置入口统一完成
+- **时间**：2026-03-22 00:45
+- **类型**：INFO
+- **关联任务**：CHG-147
+- **内容**：列表页列设置入口从工具栏统一迁移到表头最右端图标，交互口径收敛。
+- **处理动作**：
+  - 多个 shared 列表页移除 toolbar “列设置”按钮，改为表头最后一列内图标入口。
+  - crawler 任务记录与 crawler-site 配置表同步改为表头图标入口。
+  - 保留原 `data-testid` 命名兼容测试，避免断言回归。
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/videos/VideoTable.test.tsx tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/users/UserTable.test.tsx tests/unit/components/admin/content/SubmissionTable.test.tsx tests/unit/components/admin/content/SubtitleTable.test.tsx tests/unit/components/admin/AdminSubmissionList.test.tsx tests/unit/components/admin/AdminSubtitleList.test.tsx tests/unit/components/admin/AdminAnalyticsDashboard.test.tsx tests/unit/components/admin/system/monitoring/CacheManager.test.tsx tests/unit/components/admin/system/monitoring/PerformanceMonitor.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/AdminCrawlerTabs.test.tsx`。
+- **后续**：执行 CHG-148（全量回归与文档收口）。
+
 ---
 
 ## 偏离检测记录模板（补充）

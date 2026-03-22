@@ -198,48 +198,38 @@ export function VideoTable() {
 
   return (
     <div data-testid="video-table" className="space-y-2">
-      <div className="flex items-center justify-end gap-2">
-        <button
-          type="button"
-          className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-          onClick={() => setShowColumnsPanel((prev) => !prev)}
-          data-testid="video-columns-toggle"
+      {showColumnsPanel && (
+        <div
+          className="rounded border border-[var(--border)] bg-[var(--bg2)] p-2"
+          data-testid="video-columns-panel"
         >
-          列设置
-        </button>
-        {showColumnsPanel && (
-          <div
-            className="rounded border border-[var(--border)] bg-[var(--bg2)] p-2"
-            data-testid="video-columns-panel"
-          >
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-xs text-[var(--muted)]">显示列</span>
-              <button
-                type="button"
-                className="text-xs text-[var(--muted)] hover:text-[var(--text)]"
-                onClick={() => columnsState.resetColumnsMeta()}
-                data-testid="video-columns-reset"
-              >
-                重置
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-1">
-              {columnsState.columns.map((column) => (
-                <label key={column.id} className="flex items-center gap-2 text-xs text-[var(--text)]">
-                  <input
-                    type="checkbox"
-                    checked={column.visible}
-                    onChange={() => columnsState.toggleColumnVisibility(column.id)}
-                    className="accent-[var(--accent)]"
-                    data-testid={`video-column-toggle-${column.id}`}
-                  />
-                  {COLUMN_LABELS[column.id as VideoColumnId]}
-                </label>
-              ))}
-            </div>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-xs text-[var(--muted)]">显示列</span>
+            <button
+              type="button"
+              className="text-xs text-[var(--muted)] hover:text-[var(--text)]"
+              onClick={() => columnsState.resetColumnsMeta()}
+              data-testid="video-columns-reset"
+            >
+              重置
+            </button>
           </div>
-        )}
-      </div>
+          <div className="grid grid-cols-2 gap-1">
+            {columnsState.columns.map((column) => (
+              <label key={column.id} className="flex items-center gap-2 text-xs text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={column.visible}
+                  onChange={() => columnsState.toggleColumnVisibility(column.id)}
+                  className="accent-[var(--accent)]"
+                  data-testid={`video-column-toggle-${column.id}`}
+                />
+                {COLUMN_LABELS[column.id as VideoColumnId]}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       <AdminTableFrame minWidth={1100}>
         <thead className="bg-[var(--bg2)] text-[var(--muted)]">
@@ -257,6 +247,7 @@ export function VideoTable() {
             {visibleColumnIds.map((columnId) => {
               const meta = columnsState.columnsById[columnId]
               const sortable = sortState.isSortable(columnId)
+              const isLastVisible = columnId === visibleColumnIds[visibleColumnIds.length - 1]
               return (
                 <th
                   key={columnId}
@@ -275,6 +266,19 @@ export function VideoTable() {
                     </button>
                   ) : (
                     <span className="text-sm">{COLUMN_LABELS[columnId]}</span>
+                  )}
+
+                  {isLastVisible && (
+                    <button
+                      type="button"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                      onClick={() => setShowColumnsPanel((prev) => !prev)}
+                      data-testid="video-columns-toggle"
+                      aria-label="列设置"
+                      title="列设置"
+                    >
+                      ⚙
+                    </button>
                   )}
 
                   {meta.resizable && (

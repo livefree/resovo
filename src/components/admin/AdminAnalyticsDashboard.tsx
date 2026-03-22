@@ -226,16 +226,7 @@ export function AdminAnalyticsDashboard() {
         </h2>
         <AdminToolbar
           className="mb-2 gap-3"
-          actions={(
-            <button
-              type="button"
-              className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-              onClick={() => setShowColumnsPanel((prev) => !prev)}
-              data-testid="analytics-task-columns-toggle"
-            >
-              列设置
-            </button>
-          )}
+          actions={null}
         />
         {showColumnsPanel && (
           <div className="mb-2 rounded border border-[var(--border)] bg-[var(--bg2)] p-2" data-testid="analytics-task-columns-panel">
@@ -272,6 +263,7 @@ export function AdminAnalyticsDashboard() {
             <tr>
               {visibleColumnIds.map((columnId) => {
                 const meta = columnsState.columnsById[columnId]
+                const isLastVisible = columnId === visibleColumnIds[visibleColumnIds.length - 1]
                 return (
                   <th key={columnId} className="relative px-4 py-3 text-left" style={{ width: `${meta.width}px` }}>
                     <button
@@ -283,6 +275,18 @@ export function AdminAnalyticsDashboard() {
                       {CRAWLER_TASK_LABELS[columnId]}
                       {renderSortIndicator(columnId)}
                     </button>
+                    {isLastVisible && (
+                      <button
+                        type="button"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                        onClick={() => setShowColumnsPanel((prev) => !prev)}
+                        data-testid="analytics-task-columns-toggle"
+                        aria-label="列设置"
+                        title="列设置"
+                      >
+                        ⚙
+                      </button>
+                    )}
                     {meta.resizable && (
                       <button
                         type="button"
