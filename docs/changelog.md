@@ -2427,3 +2427,21 @@
 - **变更内容**：新增"Admin Table 合规清单"章节，包含 7 项检查点（C1~C7）和首次审计矩阵（6 个页面）；CrawlerSiteTable 标记为 C1/C2/C5/C6 不合规，作为 CHG-167 修复输入
 - **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
 - **关联**：SEQ-20260322-09 CHG-166
+
+---
+
+### CHG-167 — CrawlerSiteTable shared table 合规修复
+- **时间**：2026-03-22
+- **commit**：b60aa39
+- **类型**：chg（维护 P3 — shared table 合规迁移）
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns.ts`
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+  - `docs/rules/ui-rules.md`
+- **变更内容**：
+  - C1/C2 修复：`useCrawlerSiteColumns` 内部迁移至 `useAdminTableColumns`，列状态/宽度/排序通过 `useAdminTableState` 持久化，废弃本地 localStorage 手动管理
+  - C5 修复：`CrawlerSiteManager` 新增客户端分页（PAGE_SIZE=20）和 `Pagination` 组件，filter/sort 变化时自动重置至第 1 页
+  - C6 更正：初次审计结论有误，`CrawlerSiteTopToolbar` 已使用 `AdminToolbar` + `AdminBatchBar`，标记为合规
+  - 审计矩阵更新为全绿
+- **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
+- **关联**：SEQ-20260322-09 CHG-167
