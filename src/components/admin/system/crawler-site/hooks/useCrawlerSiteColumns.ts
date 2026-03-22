@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useAdminColumnResize } from '@/components/admin/shared/table/useAdminColumnResize'
 import {
   COLUMN_META,
   DEFAULT_COLUMN_WIDTH,
@@ -23,8 +24,6 @@ export function useCrawlerSiteColumns() {
   const [columns, setColumns] = useState<ColumnVisibility>(initialState.columns)
   const [columnWidths, setColumnWidths] = useState<ColumnWidthState>(initialState.columnWidths)
   const [showColumnsPanel, setShowColumnsPanel] = useState(false)
-
-  const resizeRef = useRef<{ id: ColumnId; startX: number; startWidth: number } | null>(null)
 
   useEffect(() => {
     try {
@@ -62,36 +61,20 @@ export function useCrawlerSiteColumns() {
     setColumns((prev) => ({ ...prev, [columnId]: !prev[columnId] }))
   }
 
-  function setColumnWidth(columnId: ColumnId, width: number) {
+  const setColumnWidth = useCallback((columnId: ColumnId, width: number) => {
     const next = Math.max(72, Math.min(560, width))
     setColumnWidths((prev) => ({ ...prev, [columnId]: next }))
-  }
+  }, [])
 
-  function startResize(columnId: ColumnId, clientX: number) {
-    resizeRef.current = {
-      id: columnId,
-      startX: clientX,
-      startWidth: columnWidths[columnId],
-    }
-  }
-
-  useEffect(() => {
-    const onMouseMove = (event: MouseEvent) => {
-      if (!resizeRef.current) return
-      const { id, startX, startWidth } = resizeRef.current
-      const delta = event.clientX - startX
-      setColumnWidth(id, startWidth + delta)
-    }
-    const onMouseUp = () => {
-      resizeRef.current = null
-    }
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup', onMouseUp)
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mouseup', onMouseUp)
-    }
-  }, [columnWidths])
+  const { startResize } = useAdminColumnResize({
+    getMeta: () => ({
+      minWidth: 72,
+      maxWidth: 560,
+      resizable: true,
+    }),
+    getCurrentWidth: (columnId) => columnWidths[columnId as ColumnId] ?? 160,
+    onWidthChange: (columnId, width) => setColumnWidth(columnId as ColumnId, width),
+  })
 
   const visibleColumnCount = useMemo(
     () => COLUMN_META.filter((column) => columns[column.id]).length,

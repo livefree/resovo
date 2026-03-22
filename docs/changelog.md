@@ -2154,3 +2154,20 @@
   - `npm run test:run -- tests/unit/components/admin/AdminCrawlerTabs.test.tsx tests/unit/api/crawler.test.ts` ✅
 - **注意事项**：
   - 本任务保持既有筛选、分页、日志查看行为，不调整任务接口与查询语义。
+
+## [CHG-146] 采集配置拖拽实现 shared 化
+- **完成时间**：2026-03-22
+- **记录时间**：2026-03-22 00:32
+- **修改文件**：
+  - `src/components/admin/shared/table/useAdminColumnResize.ts` — 新增 shared 列宽拖拽控制 hook。
+  - `src/components/admin/shared/table/useAdminTableColumns.ts` — 复用 shared 拖拽 hook，移除本地重复拖拽实现。
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns.ts` — crawler-site 拖拽逻辑改为复用 shared hook。
+  - `docs/task-queue.md`、`docs/tasks.md` — 同步 CHG-146 完成并切换 CHG-147 进行中。
+- **新增依赖**：无
+- **数据库变更**：无
+- **执行检查**：
+  - `npm run typecheck` ✅
+  - `npm run lint` ✅
+  - `npm run test:run -- tests/unit/components/admin/shared/table/useAdminTableColumns.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/videos/VideoTable.test.tsx` ✅
+- **注意事项**：
+  - 本任务聚焦拖拽交互内核复用，不调整业务列定义与表格功能语义。

@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useMemo } from 'react'
 import {
   useAdminTableState,
   type AdminTableColumnState,
   type AdminTableState,
 } from '@/components/admin/shared/table/useAdminTableState'
+import { useAdminColumnResize } from '@/components/admin/shared/table/useAdminColumnResize'
 
 const DEFAULT_COLUMN_WIDTH = 160
 const DEFAULT_MIN_WIDTH = 72
@@ -33,12 +34,6 @@ type UseAdminTableColumnsOptions = {
   columns: AdminColumnMeta[]
   defaultState?: Omit<AdminTableState, 'columns'>
   storage?: Storage | null
-}
-
-type ResizeDraft = {
-  columnId: string
-  startX: number
-  startWidth: number
 }
 
 function clampWidth(width: number, minWidth: number, maxWidth: number): number {
@@ -135,9 +130,7 @@ export function useAdminTableColumns(options: UseAdminTableColumnsOptions) {
     [resolvedColumns],
   )
 
-  const resizeDraftRef = useRef<ResizeDraft | null>(null)
-
-  function setColumnWidth(columnId: string, nextWidth: number) {
+  const setColumnWidth = useCallback((columnId: string, nextWidth: number) => {
     const column = columnsById[columnId]
     if (!column || !column.resizable) return
 
@@ -150,7 +143,7 @@ export function useAdminTableColumns(options: UseAdminTableColumnsOptions) {
         },
       },
     })
-  }
+  }, [columnsById, updatePartial])
 
   function setColumnVisible(columnId: string, visible: boolean) {
     const column = columnsById[columnId]
@@ -178,58 +171,19 @@ export function useAdminTableColumns(options: UseAdminTableColumnsOptions) {
     })
   }
 
-  function startResize(columnId: string, clientX: number) {
-    const column = columnsById[columnId]
-    if (!column || !column.resizable) return
-
-    resizeDraftRef.current = {
-      columnId,
-      startX: clientX,
-      startWidth: column.width,
-    }
-  }
-
-  function stopResize() {
-    resizeDraftRef.current = null
-  }
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined
-
-    const onMouseMove = (event: MouseEvent) => {
-      if (!resizeDraftRef.current) return
-      const { columnId, startX, startWidth } = resizeDraftRef.current
+  const { startResize, stopResize } = useAdminColumnResize({
+    getMeta: (columnId) => {
       const column = columnsById[columnId]
-      if (!column || !column.resizable) return
-
-      const width = clampWidth(
-        startWidth + (event.clientX - startX),
-        column.minWidth,
-        column.maxWidth,
-      )
-
-      updatePartial({
-        columns: {
-          [columnId]: {
-            visible: column.visible,
-            width,
-          },
-        },
-      })
-    }
-
-    const onMouseUp = () => {
-      stopResize()
-    }
-
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup', onMouseUp)
-
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mouseup', onMouseUp)
-    }
-  }, [columnsById, updatePartial])
+      if (!column) return null
+      return {
+        minWidth: column.minWidth,
+        maxWidth: column.maxWidth,
+        resizable: column.resizable,
+      }
+    },
+    getCurrentWidth: (columnId) => columnsById[columnId]?.width ?? DEFAULT_COLUMN_WIDTH,
+    onWidthChange: setColumnWidth,
+  })
 
   return {
     ...tableState,

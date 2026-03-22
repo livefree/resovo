@@ -839,6 +839,18 @@
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/AdminCrawlerTabs.test.tsx tests/unit/api/crawler.test.ts`。
 - **后续**：执行 CHG-146（采集配置拖拽实现 shared 化）。
 
+## [LOG-20260322-0032-01] CHG-146 拖拽内核 shared 化完成
+- **时间**：2026-03-22 00:32
+- **类型**：INFO
+- **关联任务**：CHG-146
+- **内容**：将 crawler-site 与 shared 列表的列宽拖拽控制合并到同一实现。
+- **处理动作**：
+  - 新增 `useAdminColumnResize`，统一 startResize/mousemove/mouseup 逻辑。
+  - `useAdminTableColumns` 与 `useCrawlerSiteColumns` 共同改为调用 shared 拖拽 hook。
+  - 保留各自列元数据与持久化策略，避免行为回退。
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/shared/table/useAdminTableColumns.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/videos/VideoTable.test.tsx`。
+- **后续**：执行 CHG-147（列设置入口统一到表头右端图标）。
+
 ---
 
 ## 偏离检测记录模板（补充）
