@@ -1347,3 +1347,53 @@
      - typecheck/lint/test:run 通过
      - 任务状态与变更记录一致
    - 回滚方式：回退 CHG-148 提交
+
+## [SEQ-20260322-03] crawler 运行态一致性阻断修复（BLOCK-01/02）
+- **状态**：🔄 执行中
+- **创建时间**：2026-03-22 14:41
+- **最后更新时间**：2026-03-22 14:43
+- **目标**：修复 watchdog 与 worker 心跳契约冲突，消除 run/task 监控口径偏差
+- **范围**：`crawlerScheduler`、`crawlerWorker`、`crawlerTasks queries`、对应单测与文档
+- **依赖**：`CHG-148` 已完成
+
+### 任务列表（按执行顺序）
+1. CHG-149 — 修复 watchdog 后 run 状态不同步（状态：✅ 已完成）
+   - 创建时间：2026-03-22 14:41
+   - 计划开始：2026-03-22 14:45
+   - 实际开始：2026-03-22 14:41
+   - 完成时间：2026-03-22 14:43
+   - 目标：watchdog 标记 stale/timeout 后，同步受影响 run 状态，避免 run 列表僵尸 running
+   - 范围：`src/api/db/queries/crawlerTasks.ts`、`src/api/workers/crawlerScheduler.ts`、相关测试
+   - 依赖：无
+   - DoD：
+     - watchdog 标记接口能返回受影响 `run_id` 集合
+     - scheduler 对受影响 run 执行 `syncRunStatusFromTasks`
+     - 回归测试覆盖新同步逻辑
+   - 回滚方式：回退 CHG-149 提交
+
+2. CHG-150 — 增加 worker 显式心跳保活（状态：🔄 进行中）
+   - 创建时间：2026-03-22 14:41
+   - 计划开始：2026-03-22 15:20
+   - 实际开始：2026-03-22 14:44
+   - 完成时间：
+   - 目标：在 worker 层显式刷新 heartbeat，避免长任务被 watchdog 误判 stale
+   - 范围：`src/api/db/queries/crawlerTasks.ts`、`src/api/workers/crawlerWorker.ts`、相关测试
+   - 依赖：CHG-149
+   - DoD：
+     - 新增轻量 heartbeat touch 能力
+     - worker 在长任务执行期按节流刷新 heartbeat
+     - 不改变既有 run/task 语义
+   - 回滚方式：回退 CHG-150 提交
+
+3. CHG-151 — 回归验证与文档收口（状态：⬜ 待开始）
+   - 创建时间：2026-03-22 14:41
+   - 计划开始：2026-03-22 16:00
+   - 实际开始：
+   - 完成时间：
+   - 目标：完成本序列验收并闭环文档记录
+   - 范围：`docs/changelog.md`、`docs/run-logs.md`、`docs/tasks.md`、`docs/task-queue.md`
+   - 依赖：CHG-150
+   - DoD：
+     - `npm run typecheck`、`npm run lint`、`npm run test:run` 通过
+     - 任务状态、变更记录与验证结果一致
+   - 回滚方式：回退 CHG-151 文档提交

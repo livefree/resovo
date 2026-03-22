@@ -874,6 +874,28 @@
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run`（`53 files / 526 tests`）。
 - **后续**：等待下一阶段任务分配。
 
+## [LOG-20260322-1441-01] 启动 BLOCK-01/02 阻断修复序列
+- **时间**：2026-03-22 14:41
+- **类型**：INFO
+- **关联任务**：CHG-149、CHG-150、CHG-151
+- **内容**：根据 reviewer 阻断结论，启动 crawler 运行态一致性修复序列，优先修复 run 同步与 heartbeat 保活。
+- **处理动作**：
+  - 新建 `SEQ-20260322-03`，按 CHG-149→CHG-150→CHG-151 原子顺序执行。
+  - `docs/tasks.md` 切换当前进行中任务为 CHG-149。
+- **后续**：执行 CHG-149 代码修复与回归测试。
+
+## [LOG-20260322-1443-01] CHG-149 watchdog→run 同步修复完成
+- **时间**：2026-03-22 14:43
+- **类型**：RESOLVED
+- **关联任务**：CHG-149
+- **内容**：watchdog 标记 stale/timeout 后，现已同步父级 run 状态，修复 run 列表“僵尸 running”风险。
+- **处理动作**：
+  - `crawlerTasks` 新增返回受影响 `run_id` 的 watchdog 标记接口。
+  - `crawlerScheduler.runTimeoutWatchdogTick` 改为对受影响 run 去重并执行 `syncRunStatusFromTasks`。
+  - 新增 `crawler-scheduler` 单测覆盖 run 同步逻辑。
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler-scheduler.test.ts tests/unit/api/crawler-worker.test.ts tests/unit/api/crawler.test.ts`。
+- **后续**：执行 CHG-150（worker 显式心跳保活）。
+
 ---
 
 ## 偏离检测记录模板（补充）

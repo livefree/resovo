@@ -226,23 +226,51 @@ export async function cancelAllActiveTasks(db: Pool): Promise<{ cancelledPending
 }
 
 export async function markTimedOutRunningTasks(db: Pool): Promise<number> {
-  const result = await db.query(
+  const { count } = await markTimedOutRunningTasksWithRunIds(db)
+  return count
+}
+
+export async function markTimedOutRunningTasksWithRunIds(
+  db: Pool,
+): Promise<{ count: number; runIds: string[] }> {
+  const result = await db.query<{ run_id: string | null }>(
     `UPDATE crawler_tasks
      SET status = 'timeout',
          finished_at = NOW(),
          result = COALESCE(result, '{}'::jsonb) || jsonb_build_object('error', 'TASK_TIMEOUT')
      WHERE status IN ('pending', 'running')
        AND timeout_at IS NOT NULL
-       AND timeout_at < NOW()`,
+       AND timeout_at < NOW()
+     RETURNING run_id`,
   )
-  return result.rowCount ?? 0
+
+  const runIds = Array.from(
+    new Set(
+      result.rows
+        .map((row) => row.run_id)
+        .filter((runId): runId is string => typeof runId === 'string' && runId.length > 0),
+    ),
+  )
+
+  return {
+    count: result.rowCount ?? 0,
+    runIds,
+  }
 }
 
 export async function markStaleHeartbeatRunningTasks(
   db: Pool,
   staleMinutes = 15,
 ): Promise<number> {
-  const result = await db.query(
+  const { count } = await markStaleHeartbeatRunningTasksWithRunIds(db, staleMinutes)
+  return count
+}
+
+export async function markStaleHeartbeatRunningTasksWithRunIds(
+  db: Pool,
+  staleMinutes = 15,
+): Promise<{ count: number; runIds: string[] }> {
+  const result = await db.query<{ run_id: string | null }>(
     `UPDATE crawler_tasks
      SET status = CASE WHEN cancel_requested THEN 'cancelled' ELSE 'timeout' END,
          finished_at = NOW(),
@@ -253,10 +281,23 @@ export async function markStaleHeartbeatRunningTasks(
            $1::int
          )
      WHERE status = 'running'
-       AND COALESCE(heartbeat_at, scheduled_at) < NOW() - ($1::int * INTERVAL '1 minute')`,
+       AND COALESCE(heartbeat_at, scheduled_at) < NOW() - ($1::int * INTERVAL '1 minute')
+     RETURNING run_id`,
     [staleMinutes],
   )
-  return result.rowCount ?? 0
+
+  const runIds = Array.from(
+    new Set(
+      result.rows
+        .map((row) => row.run_id)
+        .filter((runId): runId is string => typeof runId === 'string' && runId.length > 0),
+    ),
+  )
+
+  return {
+    count: result.rowCount ?? 0,
+    runIds,
+  }
 }
 
 // ── 查询任务列表 ──────────────────────────────────────────────────

@@ -9,6 +9,7 @@
 import { db } from '@/api/lib/postgres'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
+import * as crawlerRunsQueries from '@/api/db/queries/crawlerRuns'
 import { CrawlerRunService } from '@/api/services/CrawlerRunService'
 
 const TICK_MS = 60_000
@@ -57,15 +58,22 @@ async function runSchedulerTick(): Promise<void> {
   }
 }
 
-async function runTimeoutWatchdogTick(): Promise<void> {
+export async function runTimeoutWatchdogTick(): Promise<void> {
   try {
-    const timedOut = await crawlerTasksQueries.markTimedOutRunningTasks(db)
-    const stale = await crawlerTasksQueries.markStaleHeartbeatRunningTasks(db)
-    if (timedOut > 0) {
-      process.stderr.write(`[crawler-scheduler] timeout watchdog marked ${timedOut} tasks as timeout\n`)
+    const timedOut = await crawlerTasksQueries.markTimedOutRunningTasksWithRunIds(db)
+    const stale = await crawlerTasksQueries.markStaleHeartbeatRunningTasksWithRunIds(db)
+    const affectedRunIds = Array.from(new Set([...timedOut.runIds, ...stale.runIds]))
+    for (const runId of affectedRunIds) {
+      await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
     }
-    if (stale > 0) {
-      process.stderr.write(`[crawler-scheduler] heartbeat watchdog marked ${stale} stale running tasks\n`)
+    if (timedOut.count > 0) {
+      process.stderr.write(`[crawler-scheduler] timeout watchdog marked ${timedOut.count} tasks as timeout\n`)
+    }
+    if (stale.count > 0) {
+      process.stderr.write(`[crawler-scheduler] heartbeat watchdog marked ${stale.count} stale running tasks\n`)
+    }
+    if (affectedRunIds.length > 0) {
+      process.stderr.write(`[crawler-scheduler] watchdog synced ${affectedRunIds.length} affected runs\n`)
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

@@ -2209,3 +2209,20 @@
   - `npm run test:run` ✅（`53 files / 526 tests`）
 - **注意事项**：
   - 全量测试包含历史 warning（act/persist），本次无新增失败用例，判定为既有遗留噪音。
+
+## [CHG-149] 修复 watchdog 后 run 状态不同步（BLOCK-01）
+- **完成时间**：2026-03-22
+- **记录时间**：2026-03-22 14:43
+- **修改文件**：
+  - `src/api/db/queries/crawlerTasks.ts` — 新增 `markTimedOutRunningTasksWithRunIds` / `markStaleHeartbeatRunningTasksWithRunIds`，并保留旧计数接口兼容。
+  - `src/api/workers/crawlerScheduler.ts` — watchdog 改为基于受影响 `run_id` 去重后执行 `syncRunStatusFromTasks`。
+  - `tests/unit/api/crawler-scheduler.test.ts` — 新增 watchdog 同步 run 的单测覆盖。
+  - `docs/task-queue.md`、`docs/tasks.md`、`docs/run-logs.md` — 同步任务序列与执行记录。
+- **新增依赖**：无
+- **数据库变更**：无
+- **执行检查**：
+  - `npm run typecheck` ✅
+  - `npm run lint` ✅
+  - `npm run test:run -- tests/unit/api/crawler-scheduler.test.ts tests/unit/api/crawler-worker.test.ts tests/unit/api/crawler.test.ts` ✅
+- **注意事项**：
+  - 本任务只修复 scheduler 与 run 状态同步链路，不涉及 heartbeat 保活逻辑（由 CHG-150 处理）。
