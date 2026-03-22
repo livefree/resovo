@@ -863,6 +863,17 @@
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/videos/VideoTable.test.tsx tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/users/UserTable.test.tsx tests/unit/components/admin/content/SubmissionTable.test.tsx tests/unit/components/admin/content/SubtitleTable.test.tsx tests/unit/components/admin/AdminSubmissionList.test.tsx tests/unit/components/admin/AdminSubtitleList.test.tsx tests/unit/components/admin/AdminAnalyticsDashboard.test.tsx tests/unit/components/admin/system/monitoring/CacheManager.test.tsx tests/unit/components/admin/system/monitoring/PerformanceMonitor.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/AdminCrawlerTabs.test.tsx`。
 - **后续**：执行 CHG-148（全量回归与文档收口）。
 
+## [LOG-20260322-0047-01] CHG-148 全量回归与文档收口完成
+- **时间**：2026-03-22 00:47
+- **类型**：INFO
+- **关联任务**：CHG-148
+- **内容**：完成 SEQ-20260322-02 的全量验证与文档闭环，序列收口。
+- **处理动作**：
+  - 执行全量 `typecheck/lint/test:run`，确认通过。
+  - 同步更新 `tasks/task-queue/changelog/run-logs` 状态，标记序列完成。
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run`（`53 files / 526 tests`）。
+- **后续**：等待下一阶段任务分配。
+
 ---
 
 ## 偏离检测记录模板（补充）

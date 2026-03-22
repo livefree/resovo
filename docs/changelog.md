@@ -2194,3 +2194,18 @@
   - `npm run test:run -- tests/unit/components/admin/videos/VideoTable.test.tsx tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/users/UserTable.test.tsx tests/unit/components/admin/content/SubmissionTable.test.tsx tests/unit/components/admin/content/SubtitleTable.test.tsx tests/unit/components/admin/AdminSubmissionList.test.tsx tests/unit/components/admin/AdminSubtitleList.test.tsx tests/unit/components/admin/AdminAnalyticsDashboard.test.tsx tests/unit/components/admin/system/monitoring/CacheManager.test.tsx tests/unit/components/admin/system/monitoring/PerformanceMonitor.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/AdminCrawlerTabs.test.tsx` ✅
 - **注意事项**：
   - 统一入口为表头右端图标；保留原测试 `data-testid` 兼容，避免回归。
+
+## [CHG-148] 全量回归与文档收口
+- **完成时间**：2026-03-22
+- **记录时间**：2026-03-22 00:47
+- **修改文件**：
+  - `docs/task-queue.md`、`docs/tasks.md` — 同步 CHG-148 与 `SEQ-20260322-02` 完成状态。
+  - `docs/changelog.md`、`docs/run-logs.md` — 追加全量回归结果与收口日志。
+- **新增依赖**：无
+- **数据库变更**：无
+- **执行检查**：
+  - `npm run typecheck` ✅
+  - `npm run lint` ✅
+  - `npm run test:run` ✅（`53 files / 526 tests`）
+- **注意事项**：
+  - 全量测试包含历史 warning（act/persist），本次无新增失败用例，判定为既有遗留噪音。
