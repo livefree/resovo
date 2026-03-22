@@ -187,6 +187,13 @@ export async function requestCancelAllActiveRuns(db: Pool): Promise<number> {
   return result.rowCount ?? 0
 }
 
+export async function listActiveRunIds(db: Pool): Promise<string[]> {
+  const result = await db.query<{ id: string }>(
+    `SELECT id FROM crawler_runs WHERE status IN ('queued', 'running', 'paused')`,
+  )
+  return result.rows.map((row) => row.id)
+}
+
 export async function syncRunStatusFromTasks(db: Pool, runId: string): Promise<void> {
   await db.query(
     `WITH agg AS (

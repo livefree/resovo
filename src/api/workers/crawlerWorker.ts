@@ -47,6 +47,7 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
   const crawlerService = new CrawlerService(db, es)
   let freezeCache: { value: boolean; checkedAt: number } = { value: false, checkedAt: 0 }
   let lastHeartbeatTouchAt = 0
+  let heartbeatTimer: NodeJS.Timeout | null = null
 
   const isGlobalFreezeEnabled = async () => {
     const now = Date.now()
@@ -161,7 +162,18 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
       queueJobId: String(job.id),
     })
     await touchHeartbeat()
+    // 独立心跳定时器：作为 onLog 触发之外的保底机制，防止无日志输出时被 watchdog 误杀
+    heartbeatTimer = setInterval(() => {
+      void touchHeartbeat()
+    }, 3 * 60 * 1000)
     await logTask('info', 'worker.task.running', '任务状态切换为 running')
+  }
+
+  const clearHeartbeatTimer = () => {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer)
+      heartbeatTimer = null
+    }
   }
 
   try {
@@ -339,6 +351,7 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
     }
     throw err
   } finally {
+    clearHeartbeatTimer()
     if (runId) {
       await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
     }
