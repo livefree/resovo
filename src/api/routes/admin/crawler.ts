@@ -161,9 +161,14 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
 
   // ── POST /admin/crawler/tasks — 手动触发采集 ─────────────────
   // @deprecated 使用 POST /admin/crawler/runs 替代（triggerType: 'single' | 'all'）
-  // 保留此路由以向后兼容，计划在下一个 Phase 删除
+  // 保留此路由以向后兼容；计划在 CHG-163 正式删除（sunset: 2026-05-01）
+  // 所有新调用方请迁移到 POST /admin/crawler/runs
 
   fastify.post('/admin/crawler/tasks', { preHandler: auth }, async (request, reply) => {
+    void reply.header('Deprecation', 'true')
+    void reply.header('Sunset', 'Thu, 01 May 2026 00:00:00 GMT')
+    void reply.header('Link', '</admin/crawler/runs>; rel="successor-version"')
+
     const BodySchema = z.object({
       type:    z.enum(['full-crawl', 'incremental-crawl']).default('incremental-crawl'),
       siteKey: z.string().min(1).optional(),

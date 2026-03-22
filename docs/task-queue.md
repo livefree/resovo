@@ -1565,3 +1565,164 @@
      - typecheck/lint/test:run 通过
      - 任务状态与文档记录一致
    - 回滚方式：回退 CHG-159 文档提交
+
+---
+
+## [SEQ-20260322-07] 维护 P1/P2 — deprecated 接口退场 + 轮询合并 + Bull 层超时保障
+- **状态**：🔄 执行中
+- **创建时间**：2026-03-22 16:00
+- **最后更新时间**：2026-03-22 16:05
+- **目标**：解决 merge review 维护问题中风险最高、改动最小的三项：deprecated 接口正式退场流程、监控轮询从 3 接口合并为 1、Bull per-job timeout 硬性超时保障
+- **范围**：`src/api/routes/admin/crawler.ts`、`useCrawlerMonitor.ts`、`src/api/lib/queue.ts`
+- **依赖**：SEQ-20260322-06 已完成
+
+### 任务列表（按执行顺序）
+1. CHG-160 — POST /admin/crawler/tasks 增加 Deprecation 响应头并设定 sunset（状态：✅ 已完成）
+   - 创建时间：2026-03-22 16:00
+   - 计划开始：2026-03-22 16:00
+   - 实际开始：2026-03-22 16:00
+   - 完成时间：2026-03-22 16:05
+   - 目标：为 deprecated 的 `POST /admin/crawler/tasks` 路由增加标准 HTTP `Deprecation: true`、`Sunset` 和 `Link` 响应头，使调用方在网络面板中可见警告，并在路由注释中记录计划下线的 CHG 编号
+   - 范围：`src/api/routes/admin/crawler.ts`
+   - 依赖：无
+   - DoD：
+     - 调用 `POST /admin/crawler/tasks` 响应头包含 `Deprecation: true` 和 `Sunset` 字段
+     - 路由注释明确记录"将在 CHG-163 删除"
+     - 不影响现有功能，typecheck/lint/test 通过
+   - 回滚方式：回退 CHG-160 提交
+
+2. CHG-161 — 新增 GET /admin/crawler/monitor-snapshot 聚合接口并迁移前端（状态：⬜ 待开始）
+   - 创建时间：2026-03-22 16:00
+   - 计划开始：CHG-160 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 目标：将 `/admin/crawler/overview` + `/admin/crawler/runs?limit=20` + `/admin/crawler/system-status` 的内容合并为单一聚合接口，前端 `useCrawlerMonitor` 改为单请求轮询，将每轮 3 个并行请求降为 1 个
+   - 范围：
+     - `src/api/routes/admin/crawler.ts`（新增 `GET /admin/crawler/monitor-snapshot`）
+     - `src/components/admin/system/crawler-site/hooks/useCrawlerMonitor.ts`（改为单请求）
+   - 依赖：CHG-160
+   - DoD：
+     - `GET /admin/crawler/monitor-snapshot` 返回 `{ overview, runs, systemStatus }`
+     - `useCrawlerMonitor` 单次 poll 只发 1 个请求
+     - 原有 3 个独立接口保留（向后兼容），不删除
+     - 页面功能无回归，typecheck/lint/test 通过
+   - 回滚方式：回退 CHG-161 提交
+
+3. CHG-162 — 为 crawlerQueue.add 增加 per-job timeout 并配置 Bull stalled 保护（状态：⬜ 待开始）
+   - 创建时间：2026-03-22 16:00
+   - 计划开始：CHG-161 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 目标：(a) 在 `CrawlerRunService` 和 worker 的 `crawlerQueue.add()` 调用中增加 `timeout: 30 * 60 * 1000`（30 min），Bull 超时后自动 move-to-failed；(b) 队列初始化增加 `stalledInterval: 60_000`、`maxStalledCount: 1`，worker 进程崩溃时 60s 内恢复，不再等待 15 min watchdog
+   - 范围：
+     - `src/api/lib/queue.ts`（Bull 队列 settings）
+     - `src/api/services/CrawlerRunService.ts`（add job 时增加 timeout 选项）
+   - 依赖：CHG-161
+   - DoD：
+     - 队列配置包含 `stalledInterval` 和 `maxStalledCount`
+     - `CrawlerRunService.createAndEnqueueRun` 传入 `timeout` 选项
+     - typecheck/lint/test 通过
+   - 回滚方式：回退 CHG-162 提交
+
+4. CHG-163 — 维护 P1/P2 回归与文档收口（状态：⬜ 待开始）
+   - 创建时间：2026-03-22 16:00
+   - 计划开始：CHG-162 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 目标：全量验收 SEQ-20260322-07，闭环文档，在 decisions.md 记录 endpoint sunset ADR
+   - 范围：`docs/changelog.md`、`docs/task-queue.md`、`docs/decisions.md`
+   - 依赖：CHG-162
+   - DoD：
+     - typecheck/lint/test:run 通过
+     - decisions.md 新增 ADR：`POST /admin/crawler/tasks` sunset 决策
+   - 回滚方式：回退 CHG-163 文档提交
+
+---
+
+## [SEQ-20260322-08] 维护 P3 — 控制响应时间上界保障（独立控制检查定时器 + AbortController）
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-22 16:00
+- **最后更新时间**：2026-03-22 16:00
+- **目标**：将 cancel/pause 响应延迟从"采集迭代周期"收紧到 ≤15s，解决 crawlerWorker 中 shouldStop 仅在迭代间被动调用、HTTP 挂住时无法中断的问题
+- **范围**：`src/api/workers/crawlerWorker.ts`、`src/api/services/CrawlerService.ts`（传 AbortSignal）
+- **依赖**：SEQ-20260322-07 已完成
+- **备注**：本序列涉及 CrawlerService 修改，中等风险，建议 P1/P2 序列全量回归通过后启动
+
+### 任务列表（按执行顺序）
+1. CHG-164 — crawlerWorker 增加独立控制检查定时器（AbortController 模式）（状态：⬜ 待开始）
+   - 创建时间：2026-03-22 16:00
+   - 计划开始：SEQ-20260322-07 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 目标：在 `processCrawlJob` 中新增 `controlCheckTimer`（间隔 15s），独立于采集迭代检查 controlStatus；检测到 cancel/pause 时通过 `AbortController.abort()` 中断当前 HTTP 请求，响应延迟从"迭代周期"降至 ≤15s；CrawlerService 的 crawl 方法接收 `AbortSignal`，在 HTTP 请求时传入
+   - 范围：
+     - `src/api/workers/crawlerWorker.ts`（controlCheckTimer + AbortController）
+     - `src/api/services/CrawlerService.ts`（crawl 方法增加 signal 参数）
+   - 依赖：SEQ-20260322-07
+   - DoD：
+     - cancel 操作在 15s 内被 worker 识别并中断当前 HTTP 请求
+     - `finally` 中 `clearInterval(controlCheckTimer)`，无资源泄漏
+     - 现有 cancel/pause/timeout 路径回归通过
+     - typecheck/lint/test 通过
+   - 回滚方式：回退 CHG-164 提交
+
+2. CHG-165 — 维护 P3 回归与文档收口（状态：⬜ 待开始）
+   - 创建时间：2026-03-22 16:00
+   - 计划开始：CHG-164 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 目标：全量验收 SEQ-20260322-08，闭环文档
+   - 范围：`docs/changelog.md`、`docs/task-queue.md`
+   - 依赖：CHG-164
+   - DoD：typecheck/lint/test:run 通过，文档记录一致
+   - 回滚方式：回退 CHG-165 文档提交
+
+---
+
+## [SEQ-20260322-09] 维护 P3 — Shared table 合规清单定义与审计修复
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-22 16:00
+- **最后更新时间**：2026-03-22 16:00
+- **目标**：定义 shared table 合规清单，逐页审计并修复不合规项，消除 handoff report 提及的行为漂移风险
+- **范围**：`docs/rules/ui-rules.md`（清单章节）、各 admin 列表页组件
+- **依赖**：SEQ-20260322-07 已完成（可与 SEQ-20260322-08 并行规划）
+- **备注**：本序列改动多个页面，建议独立执行，每页一个子任务，可分批提交
+
+### 任务列表（按执行顺序）
+1. CHG-166 — 定义 shared table 合规清单并发布到 ui-rules.md（状态：⬜ 待开始）
+   - 创建时间：2026-03-22 16:00
+   - 计划开始：SEQ-20260322-07 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 目标：在 `docs/rules/ui-rules.md` 中新增"Admin Table 合规清单"章节，包含 7 项检查点（useAdminTableState、列宽 resize、列显隐入口、sticky 表头、分页组件、工具栏规范、空态组件），并按清单对所有 admin 列表页进行一次全量审计，输出审计矩阵（页面 × 检查点）
+   - 范围：`docs/rules/ui-rules.md`
+   - 依赖：SEQ-20260322-07
+   - DoD：
+     - ui-rules.md 新增合规清单章节
+     - 审计矩阵记录在 ui-rules.md 或独立附录中
+     - 不合规项列表作为后续 CHG-167 的输入
+   - 回滚方式：回退 CHG-166 文档提交
+
+2. CHG-167 — 修复审计发现的 shared table 不合规项（状态：⬜ 待开始）
+   - 创建时间：2026-03-22 16:00
+   - 计划开始：CHG-166 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 目标：按 CHG-166 审计矩阵中的不合规项逐一修复，每页改动独立提交（若不合规项跨多页，可拆分为 CHG-167a/b/c）
+   - 范围：CHG-166 审计矩阵中标记不合规的页面组件
+   - 依赖：CHG-166
+   - DoD：
+     - 所有已知不合规项修复完毕，审计矩阵全绿
+     - 每页改动均通过 typecheck/lint/test
+   - 回滚方式：按页面回退各子提交
+
+3. CHG-168 — 维护 P3 shared table 回归与文档收口（状态：⬜ 待开始）
+   - 创建时间：2026-03-22 16:00
+   - 计划开始：CHG-167 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 目标：全量验收 SEQ-20260322-09，闭环文档
+   - 范围：`docs/changelog.md`、`docs/task-queue.md`
+   - 依赖：CHG-167
+   - DoD：typecheck/lint/test:run 通过，文档记录一致
+   - 回滚方式：回退 CHG-168 文档提交

@@ -2346,3 +2346,13 @@
 - **修改文件**：`CLAUDE.md`（绝对禁止清单新增 docs 追踪规则）
 - **测试覆盖**：无代码变更
 - **关联**：NB-05 修复，流程规范
+
+---
+
+### [CHG-160] POST /admin/crawler/tasks 增加 Deprecation 响应头并设定 sunset
+- **时间**：2026-03-22 16:05
+- **类型**：chg（维护 P1 — deprecated 接口退场）
+- **修改文件**：`src/api/routes/admin/crawler.ts`
+- **变更内容**：为 `POST /admin/crawler/tasks` 增加 `Deprecation: true`、`Sunset: Thu, 01 May 2026 00:00:00 GMT`、`Link: </admin/crawler/runs>; rel="successor-version"` 响应头；路由注释补充 sunset 日期与下线 CHG 编号（CHG-163）
+- **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
+- **关联**：SEQ-20260322-07 CHG-160，解决 merge review 维护问题 3（双接口时代）
