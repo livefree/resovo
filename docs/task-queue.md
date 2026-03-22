@@ -1401,19 +1401,19 @@
 ---
 
 ## [SEQ-20260322-04] Merge 前置清理与执行
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-22 15:00
-- **最后更新时间**：2026-03-22 15:00
+- **最后更新时间**：2026-03-22 15:13
 - **目标**：在 merge review 通过后，完成最后前置清理并将 codex-takeover-20260319 合并入 main
 - **范围**：未追踪文档提交、merge 操作、dev 分支切回
 - **依赖**：SEQ-20260322-03 已完成
 
 ### 任务列表（按执行顺序）
-1. CHG-152 — 提交未追踪文档（状态：⬜ 待开始）
+1. CHG-152 — 提交未追踪文档（状态：✅ 已完成）
    - 创建时间：2026-03-22 15:00
    - 计划开始：2026-03-22 15:00
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 15:00
+   - 完成时间：2026-03-22 15:02
    - 目标：将 docs/branch_handoff_report.md、docs/admin_ui_unification_plan.md、docs/architecture-current.md 纳入版本控制
    - 范围：上述三个文件
    - 依赖：无
@@ -1422,11 +1422,11 @@
      - `git status` 无 `??` 未追踪文件
    - 回滚方式：`git revert` 该 commit
 
-2. CHORE-02 — 执行 codex-takeover-20260319 → main --no-ff merge（状态：⬜ 待开始）
+2. CHORE-02 — 执行 codex-takeover-20260319 → main --no-ff merge（状态：✅ 已完成）
    - 创建时间：2026-03-22 15:00
    - 计划开始：2026-03-22 15:05
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 15:05
+   - 完成时间：2026-03-22 15:13
    - 目标：将本分支合并入 main，保留完整 commit 历史
    - 范围：git merge 操作
    - 依赖：CHG-152
@@ -1439,19 +1439,19 @@
 ---
 
 ## [SEQ-20260322-05] 批次 A — 合并后运营可观测性修复
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-22 15:00
-- **最后更新时间**：2026-03-22 15:00
+- **最后更新时间**：2026-03-22 15:13
 - **目标**：修复 NB-01（run 列表滞后）和 NB-02（双触发路径）；补充独立心跳定时器（风险提示 A）
 - **范围**：crawlerScheduler、crawlerRuns queries、crawlTaskService、crawler route
 - **依赖**：SEQ-20260322-04 已完成（merge 到 main 后在 dev 分支执行）
 
 ### 任务列表（按执行顺序）
-1. CHG-153 — watchdog 周期 sync 活跃 run + 独立心跳定时器（状态：⬜ 待开始）
+1. CHG-153 — watchdog 周期 sync 活跃 run + 独立心跳定时器（状态：✅ 已完成）
    - 创建时间：2026-03-22 15:00
    - 计划开始：合并后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 15:05
+   - 完成时间：2026-03-22 15:08
    - 目标：(a) 在 watchdog tick 中对所有活跃 run 执行周期 syncRunStatusFromTasks；(b) 在 worker 中增加独立 setInterval 心跳定时器，作为 onLog 触发之外的保底机制
    - 范围：
      - `src/api/db/queries/crawlerRuns.ts`（新增 `listActiveRunIds`）
@@ -1465,11 +1465,11 @@
      - 测试覆盖：watchdog sync 活跃 run 逻辑、timer 清理逻辑
    - 回滚方式：回退 CHG-153 提交
 
-2. CHG-154 — triggerSiteCrawlTask 迁移到 /runs 触发路径（状态：⬜ 待开始）
+2. CHG-154 — triggerSiteCrawlTask 迁移到 /runs 触发路径（状态：✅ 已完成）
    - 创建时间：2026-03-22 15:00
    - 计划开始：合并后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 15:08
+   - 完成时间：2026-03-22 15:09
    - 目标：将 crawlTaskService 中的单站触发改为调用 POST /admin/crawler/runs（triggerType: single），统一触发路径，消除 /tasks 的 POST 冗余逻辑
    - 范围：
      - `src/components/admin/system/crawler-site/services/crawlTaskService.ts`
@@ -1481,11 +1481,11 @@
      - 现有单测通过，无回归
    - 回滚方式：回退 CHG-154 提交
 
-3. CHG-155 — 批次 A 回归与文档收口（状态：⬜ 待开始）
+3. CHG-155 — 批次 A 回归与文档收口（状态：✅ 已完成）
    - 创建时间：2026-03-22 15:00
    - 计划开始：合并后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 15:09
+   - 完成时间：2026-03-22 15:10
    - 目标：完成批次 A 全量验收并闭环文档
    - 范围：`docs/changelog.md`、`docs/run-logs.md`、`docs/tasks.md`、`docs/task-queue.md`
    - 依赖：CHG-154
@@ -1497,20 +1497,20 @@
 ---
 
 ## [SEQ-20260322-06] 批次 B — 技术债清理（下一 Phase）
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-22 15:00
-- **最后更新时间**：2026-03-22 15:00
+- **最后更新时间**：2026-03-22 15:13
 - **目标**：处理 NB-04（startedAt null）、NB-06（defaultState 稳定性）、NB-05（文档追踪规范）
 - **范围**：DB migration、shared table hook、CLAUDE.md
 - **依赖**：SEQ-20260322-05 已完成（或人工确认可独立启动）
 - **备注**：本序列可在 SEQ-20260322-05 进行中并行规划，但建议等批次 A 全量回归通过后启动
 
 ### 任务列表（按执行顺序）
-1. CHG-156 — migration 012: crawler_tasks.started_at（状态：⬜ 待开始）
+1. CHG-156 — migration 012: crawler_tasks.started_at（状态：✅ 已完成）
    - 创建时间：2026-03-22 15:00
    - 计划开始：批次 A 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 15:10
+   - 完成时间：2026-03-22 15:11
    - 目标：向 crawler_tasks 增加 started_at 字段，在 worker 启动任务时写入，mapTaskDto 暴露该字段
    - 范围：
      - `src/api/db/migrations/012_add_task_started_at.sql`
@@ -1524,11 +1524,11 @@
      - 现有测试通过，migration 文件命名规范
    - 回滚方式：回退 CHG-156 提交；rollback migration 删除列
 
-2. CHG-157 — useAdminTableState defaultState ref 稳定化（状态：⬜ 待开始）
+2. CHG-157 — useAdminTableState defaultState ref 稳定化（状态：✅ 已完成）
    - 创建时间：2026-03-22 15:00
    - 计划开始：批次 A 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 15:11
+   - 完成时间：2026-03-22 15:11
    - 目标：防止调用方传入非 memoize defaultState 时触发无限 re-render；补充 JSDoc 说明
    - 范围：
      - `src/components/admin/shared/table/useAdminTableState.ts`
@@ -1539,11 +1539,11 @@
      - 现有测试通过
    - 回滚方式：回退 CHG-157 提交
 
-3. CHG-158 — docs 追踪规范补充（状态：⬜ 待开始）
+3. CHG-158 — docs 追踪规范补充（状态：✅ 已完成）
    - 创建时间：2026-03-22 15:00
    - 计划开始：批次 A 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 15:11
+   - 完成时间：2026-03-22 15:12
    - 目标：在 CLAUDE.md 补充规则：docs/ 文档创建时必须立即 git add；handoff report 视为 audit artifact 必须提交
    - 范围：`CLAUDE.md`
    - 依赖：CHG-157
@@ -1551,11 +1551,11 @@
      - CLAUDE.md 绝对禁止清单或 Git 规范章节新增对应条目
    - 回滚方式：回退 CHG-158 提交
 
-4. CHG-159 — 批次 B 回归与文档收口（状态：⬜ 待开始）
+4. CHG-159 — 批次 B 回归与文档收口（状态：✅ 已完成）
    - 创建时间：2026-03-22 15:00
    - 计划开始：批次 A 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 15:12
+   - 完成时间：2026-03-22 15:13
    - 目标：完成批次 B 全量验收并闭环文档
    - 范围：`docs/changelog.md`、`docs/run-logs.md`、`docs/tasks.md`、`docs/task-queue.md`
    - 依赖：CHG-158
