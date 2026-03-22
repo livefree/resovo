@@ -119,6 +119,7 @@ import { apiClient } from '@/lib/api-client'
 - ❌ 使用 `any` 类型
 - ❌ 留下空的 catch 块：`catch (e) {}`
 - ❌ 测试未通过时执行 git commit
+- ❌ 在 `docs/` 下创建新文档后不执行 `git add`：所有文档文件在创建当天必须纳入版本控制；handoff report / architecture snapshot 等审计类文档视为必须提交的 artifact，不得遗留为未追踪文件
 
 ---
 
