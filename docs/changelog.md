@@ -2105,3 +2105,19 @@
   - `npm run test:run` ✅（`53 files / 526 tests`）
 - **注意事项**：
   - 本任务仅做阶段验收与文档闭环，不新增功能或调整 UI 行为。
+
+## [CHG-142] 修复字幕审核入口与 tab 跳转
+- **完成时间**：2026-03-22
+- **记录时间**：2026-03-22 00:11
+- **修改文件**：
+  - `src/components/admin/AdminSidebar.tsx` — 内容管理侧栏新增“字幕审核”入口（`/admin/content?tab=subtitles`）。
+  - `src/app/[locale]/admin/content/page.tsx` — 新增 query `tab` 同步逻辑，兼容 `submissions/subtitles` 直达。
+  - `docs/task-queue.md`、`docs/tasks.md`、`docs/run-logs.md` — 同步任务与日志记录。
+- **新增依赖**：无
+- **数据库变更**：无
+- **执行检查**：
+  - `npm run typecheck` ✅
+  - `npm run lint` ✅
+  - `npm run test:run -- tests/unit/components/admin/AdminCrawlerTabs.test.tsx tests/unit/components/admin/content/SubmissionTable.test.tsx tests/unit/components/admin/content/SubtitleTable.test.tsx` ✅
+- **注意事项**：
+  - 本次为入口与导航热修复，不恢复独立字幕管理页面，仍保持统一内容审核页架构。

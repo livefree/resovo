@@ -803,6 +803,17 @@
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run`。
 - **后续**：等待下一阶段任务分配（保持一任务一提交执行节奏）。
 
+## [LOG-20260322-0011-01] CHG-142 字幕审核入口热修复完成
+- **时间**：2026-03-22 00:11
+- **类型**：INFO
+- **关联任务**：CHG-142
+- **内容**：修复后台“字幕审核页面消失”问题，恢复可见入口并修复 query tab 同步。
+- **处理动作**：
+  - 侧栏内容管理新增 `字幕审核` 入口，指向 `/admin/content?tab=subtitles`。
+  - 内容审核页接入 `useSearchParams`，当 `tab` 为 `subtitles/submissions` 时同步当前 Tab。
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/AdminCrawlerTabs.test.tsx tests/unit/components/admin/content/SubmissionTable.test.tsx tests/unit/components/admin/content/SubtitleTable.test.tsx`。
+- **后续**：等待你确认是否同时恢复“投稿审核”的独立导航入口（当前仍通过“内容审核”入口进入）。
+
 ---
 
 ## 偏离检测记录模板（补充）

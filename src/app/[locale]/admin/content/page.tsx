@@ -5,13 +5,22 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { AdminPageShell } from '@/components/admin/shared/layout/AdminPageShell'
 import { SubmissionTable } from '@/components/admin/content/SubmissionTable'
 import { SubtitleTable } from '@/components/admin/content/SubtitleTable'
 
 export default function AdminContentPage() {
+  const searchParams = useSearchParams()
   const [tab, setTab] = useState<'submissions' | 'subtitles'>('submissions')
+  const tabParam = searchParams.get('tab')
+
+  useEffect(() => {
+    if (tabParam === 'subtitles' || tabParam === 'submissions') {
+      setTab(tabParam)
+    }
+  }, [tabParam])
 
   return (
     <AdminPageShell
