@@ -1962,3 +1962,44 @@
 - **数据库变更**：无
 - **注意事项**：
   - 当前序列 CHG-122 ~ CHG-132 已全部完成，`tasks.md` 进入待分配状态。
+
+## [CHG-133] 后台界面统一重构总计划落档
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 20:30
+- **修改文件**：
+  - `docs/admin_ui_unification_plan.md` — 新增后台界面统一重构总纲，覆盖目标、页面分类方案、骨架规范、文案策略、命名规则、阶段计划与最终蓝图。
+  - `docs/task-queue.md` — 新增 `SEQ-20260321-34`，进入“统一重构任务规划阶段”。
+  - `docs/tasks.md` — 当前进行中任务切换为 `CHG-134`（任务序列规划）。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本次仅文档落档与任务规划，不包含业务代码改动。
+
+## [CHG-134] 统一重构任务序列规划完成
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 20:48
+- **修改文件**：
+  - `docs/task-queue.md` — 在 `SEQ-20260321-34` 中完成分阶段任务序列拆分（CHG-135 ~ CHG-141），补齐目标、范围、依赖、DoD、回滚方式。
+  - `docs/tasks.md` — 当前进行中任务切换为 `CHG-135`（Phase 1 CRUD 页面骨架统一）。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本任务仅完成规划，不包含代码实现。
+
+## [CHG-135] Phase 1：统一 CRUD 列表页页面骨架
+- **完成时间**：2026-03-21
+- **记录时间**：2026-03-21 23:39
+- **修改文件**：
+  - `src/components/admin/shared/layout/AdminPageShell.tsx` — 新增统一页面壳层组件，支持标题、hover 描述、右侧 actions 槽位。
+  - `src/app/[locale]/admin/videos/page.tsx` — 接入 `AdminPageShell`，保持原按钮与列表组件不变。
+  - `src/app/[locale]/admin/sources/page.tsx` — 接入 `AdminPageShell`，页面描述改为 hover。
+  - `src/app/[locale]/admin/users/page.tsx` — 接入 `AdminPageShell`，页面描述改为 hover。
+  - `docs/task-queue.md`、`docs/tasks.md` — 同步 CHG-135 完成并切换 CHG-136 为进行中。
+- **新增依赖**：无
+- **数据库变更**：无
+- **执行检查**：
+  - `npm run typecheck` ✅
+  - `npm run lint` ✅
+  - `npm run test:run` ✅（`53 files / 526 tests`）
+- **注意事项**：
+  - 本任务仅统一页面壳层，不改表格能力、权限逻辑与 API 调用顺序。
