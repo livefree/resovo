@@ -1640,20 +1640,20 @@
 ---
 
 ## [SEQ-20260322-08] 维护 P3 — 控制响应时间上界保障（独立控制检查定时器 + AbortController）
-- **状态**：⬜ 待开始
+- **状态**：🔄 执行中
 - **创建时间**：2026-03-22 16:00
-- **最后更新时间**：2026-03-22 16:00
+- **最后更新时间**：2026-03-22 16:25
 - **目标**：将 cancel/pause 响应延迟从"采集迭代周期"收紧到 ≤15s，解决 crawlerWorker 中 shouldStop 仅在迭代间被动调用、HTTP 挂住时无法中断的问题
 - **范围**：`src/api/workers/crawlerWorker.ts`、`src/api/services/CrawlerService.ts`（传 AbortSignal）
 - **依赖**：SEQ-20260322-07 已完成
 - **备注**：本序列涉及 CrawlerService 修改，中等风险，建议 P1/P2 序列全量回归通过后启动
 
 ### 任务列表（按执行顺序）
-1. CHG-164 — crawlerWorker 增加独立控制检查定时器（AbortController 模式）（状态：⬜ 待开始）
+1. CHG-164 — crawlerWorker 增加独立控制检查定时器（AbortController 模式）（状态：✅ 已完成）
    - 创建时间：2026-03-22 16:00
    - 计划开始：SEQ-20260322-07 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 16:20
+   - 完成时间：2026-03-22 16:25
    - 目标：在 `processCrawlJob` 中新增 `controlCheckTimer`（间隔 15s），独立于采集迭代检查 controlStatus；检测到 cancel/pause 时通过 `AbortController.abort()` 中断当前 HTTP 请求，响应延迟从"迭代周期"降至 ≤15s；CrawlerService 的 crawl 方法接收 `AbortSignal`，在 HTTP 请求时传入
    - 范围：
      - `src/api/workers/crawlerWorker.ts`（controlCheckTimer + AbortController）

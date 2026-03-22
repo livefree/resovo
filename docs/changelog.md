@@ -2392,3 +2392,18 @@
 - **变更内容**：新增 ADR（POST /admin/crawler/tasks sunset 决策）；SEQ-20260322-07 序列状态改为 ✅ 已完成
 - **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
 - **关联**：SEQ-20260322-07 全量完成（CHG-160~163）
+
+---
+
+### [CHG-164] crawlerWorker 独立控制检查定时器 + AbortController 信号透传
+- **时间**：2026-03-22 16:25
+- **类型**：chg（维护 P3 — 控制响应时间上界保障）
+- **修改文件**：
+  - `src/api/services/CrawlerService.ts`（fetchText/fetchPage/crawl 支持 AbortSignal；catch 处理 AbortError）
+  - `src/api/workers/crawlerWorker.ts`（AbortController + controlCheckTimer 15s；透传 signal；finally 清理）
+- **变更内容**：
+  - `CrawlerService.fetchText` 支持外部 signal，与 30s timeout 合并（`AbortSignal.any`）
+  - `CrawlerService.crawl` 新增 `signal?` 参数，透传给 fetchPage → fetchText；catch 块将 AbortError 转换为 TASK_CANCELLED/TASK_PAUSED/TASK_TIMEOUT
+  - `crawlerWorker` 增加 `controlCheckTimer`（15s）独立检测 cancel/pause/timeout；触发时调用 `abortController.abort(reason)` 中断正在进行的 HTTP 请求；finally 中 clearInterval + abort cleanup
+- **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
+- **关联**：SEQ-20260322-08 CHG-164，解决 merge review 维护问题 2（协作控制无硬中断）
