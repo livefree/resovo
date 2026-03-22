@@ -815,6 +815,18 @@
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/videos/VideoTable.test.tsx tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/users/UserTable.test.tsx tests/unit/components/admin/content/SubmissionTable.test.tsx tests/unit/components/admin/content/SubtitleTable.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/system/monitoring/CacheManager.test.tsx tests/unit/components/admin/system/monitoring/PerformanceMonitor.test.tsx`。
 - **后续**：执行 CHG-144（统一 sticky 表头能力）。
 
+## [LOG-20260322-0027-01] CHG-144 sticky 表头能力统一完成
+- **时间**：2026-03-22 00:27
+- **类型**：INFO
+- **关联任务**：CHG-144
+- **内容**：为 shared 表格容器统一启用 `thead` sticky，列表滚动时列名行保持可见。
+- **处理动作**：
+  - 更新 `AdminTableFrame` table class，统一设置 `thead sticky top-0 z-20`。
+  - 保持业务表格结构与交互逻辑不变。
+  - 同步 `tasks/task-queue/changelog`，切换 CHG-145 为进行中。
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/components/admin/videos/VideoTable.test.tsx tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/users/UserTable.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`。
+- **后续**：执行 CHG-145（任务记录页接入统一表格规范）。
+
 ---
 
 ## 偏离检测记录模板（补充）

@@ -2124,3 +2124,18 @@
   - `npm run test:run -- tests/unit/components/admin/videos/VideoTable.test.tsx tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/users/UserTable.test.tsx tests/unit/components/admin/content/SubmissionTable.test.tsx tests/unit/components/admin/content/SubtitleTable.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx tests/unit/components/admin/system/monitoring/CacheManager.test.tsx tests/unit/components/admin/system/monitoring/PerformanceMonitor.test.tsx` ✅
 - **注意事项**：
   - 本任务只统一拖拽句柄视觉反馈，不涉及排序、筛选、持久化与数据接口逻辑。
+
+## [CHG-144] 统一 sticky 表头能力
+- **完成时间**：2026-03-22
+- **记录时间**：2026-03-22 00:27
+- **修改文件**：
+  - `src/components/admin/shared/table/AdminTableFrame.tsx` — 为 shared 表格容器统一增加 `thead` sticky 行为。
+  - `docs/task-queue.md`、`docs/tasks.md` — 同步 CHG-144 完成并切换 CHG-145 进行中。
+- **新增依赖**：无
+- **数据库变更**：无
+- **执行检查**：
+  - `npm run typecheck` ✅
+  - `npm run lint` ✅
+  - `npm run test:run -- tests/unit/components/admin/videos/VideoTable.test.tsx tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/users/UserTable.test.tsx tests/unit/components/admin/system/CrawlerSiteManager.test.tsx` ✅
+- **注意事项**：
+  - 本任务仅统一 shared 表头固定可见能力，不改变筛选、排序、分页与数据请求行为。
