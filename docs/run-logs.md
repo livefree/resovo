@@ -908,6 +908,16 @@
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run -- tests/unit/api/crawler-tasks.test.ts tests/unit/api/crawler-worker.test.ts tests/unit/api/crawler-scheduler.test.ts tests/unit/api/crawler.test.ts`。
 - **后续**：执行 CHG-151（全量回归与文档收口）。
 
+## [LOG-20260322-1447-01] CHG-151 全量回归与序列收口完成
+- **时间**：2026-03-22 14:47
+- **类型**：INFO
+- **关联任务**：CHG-151
+- **内容**：完成 BLOCK 修复序列全量门禁验证与文档闭环，`SEQ-20260322-03` 标记完成。
+- **处理动作**：
+  - 全量执行 `typecheck/lint/test:run`，确认 `55 files / 531 tests` 全通过。
+  - 同步更新 `tasks/task-queue/changelog/run-logs` 的状态与时间戳。
+- **后续**：等待下一任务分配。
+
 ---
 
 ## 偏离检测记录模板（补充）

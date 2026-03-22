@@ -2243,3 +2243,18 @@
   - `npm run test:run -- tests/unit/api/crawler-tasks.test.ts tests/unit/api/crawler-worker.test.ts tests/unit/api/crawler-scheduler.test.ts tests/unit/api/crawler.test.ts` ✅
 - **注意事项**：
   - 本任务未改变任务状态机，仅增强 heartbeat 保活路径，避免后续因实现演进导致隐式心跳丢失。
+
+## [CHG-151] 全量回归与文档收口（BLOCK 修复序列）
+- **完成时间**：2026-03-22
+- **记录时间**：2026-03-22 14:47
+- **修改文件**：
+  - `docs/tasks.md`、`docs/task-queue.md` — 同步 CHG-151 与 `SEQ-20260322-03` 完成状态。
+  - `docs/changelog.md`、`docs/run-logs.md` — 追加全量门禁结果与收口日志。
+- **新增依赖**：无
+- **数据库变更**：无
+- **执行检查**：
+  - `npm run typecheck` ✅
+  - `npm run lint` ✅
+  - `npm run test:run` ✅（`55 files / 531 tests`）
+- **注意事项**：
+  - 全量测试仍包含历史 warning（`act` 与 zustand persist storage unavailable），本次无新增失败用例。
