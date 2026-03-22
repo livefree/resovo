@@ -13,7 +13,6 @@ const CONTENT_MENU: MenuItem[] = [
   { href: '/admin/videos', label: '视频管理', icon: '🎬' },
   { href: '/admin/sources', label: '播放源管理', icon: '🔗' },
   { href: '/admin/content', label: '内容审核', icon: '📝' },
-  { href: '/admin/content?tab=subtitles', label: '字幕审核', icon: '💬' },
 ]
 
 const SYSTEM_MENU: MenuItem[] = [
