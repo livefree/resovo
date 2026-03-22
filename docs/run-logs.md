@@ -791,6 +791,18 @@
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run`。
 - **后续**：执行 CHG-141（全量回归与文档收口）。
 
+## [LOG-20260322-0004-01] CHG-141 全量回归与文档收口完成
+- **时间**：2026-03-22 00:04
+- **类型**：INFO
+- **关联任务**：CHG-141
+- **内容**：完成后台界面统一重构序列（CHG-133 ~ CHG-141）最终验收与文档闭环。
+- **处理动作**：
+  - 全量执行 typecheck/lint/test:run 并确认通过。
+  - 校验任务序列状态一致性，收口 `task-queue/tasks/changelog/run-logs`。
+  - 将 `SEQ-20260321-34` 标记为已完成。
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run test:run`。
+- **后续**：等待下一阶段任务分配（保持一任务一提交执行节奏）。
+
 ---
 
 ## 偏离检测记录模板（补充）
