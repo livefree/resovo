@@ -386,3 +386,95 @@ type AdminTableState = {
 - 止血停止采集：`npm run crawler:stop-all`
 - 单站脚本采集验证：`npm run test:crawler-site -- --site=<key> --hours=24`
 
+
+---
+
+## 后台管理开发现状快照（2026-03-22）
+
+> 本节记录后台 Admin 系统截至 CHG-174 的完成状态，作为结构重组前的基线。
+
+### 已完成任务序列
+
+| 序列 | 主题 | 包含任务 |
+|------|------|----------|
+| SEQ-...-01~04 | 用户/视频/播放源/搜索基础 API | AUTH-xx、VIDEO-xx、SEARCH-xx |
+| SEQ-...-05 | 批次 A：爬虫控制台大重构 | CHG-140 ~ CHG-155 |
+| SEQ-...-06 | 批次 B：技术债清理 | CHG-156 ~ CHG-159 |
+| SEQ-...-07 | 维护 P1/P2：接口退场 + 轮询合并 + Bull 超时 | CHG-160 ~ CHG-163 |
+| SEQ-...-08 | 维护 P3：AbortController 独立控制定时器 | CHG-164 ~ CHG-165 |
+| SEQ-...-09 | 维护 P3：Shared table 合规清单 + 审计修复 | CHG-166 ~ CHG-168 |
+| SEQ-...-10 | Crawler 域导航收归（4-tab 合并） | CHG-169 |
+| SEQ-...-11 | DB Schema Phase 1：类型扩展 + S/E 统一模型 | CHG-170 ~ CHG-172 |
+| SEQ-...-12 | DB Schema Phase 2：内容治理基础层 | CHG-173 ~ CHG-174 |
+
+**当前无待执行任务，无 BLOCKER。**
+
+---
+
+### 已落地 Migration 列表
+
+| 文件 | 内容 | 状态 |
+|------|------|------|
+| `011_add_paused_statuses.sql` | crawler_tasks 状态扩展 | ✅ |
+| `012_add_task_started_at.sql` | crawler_tasks.started_at | ✅ |
+| `013_type_expansion.sql` | videos.type 枚举 4→12 种；series→drama 数据迁移；新增 source_content_type / normalized_type / content_format / episode_pattern | ✅ |
+| `014_season_episode.sql` | video_sources + watch_history 新增 season_number NOT NULL；episode_number NOT NULL DEFAULT 1 | ✅ |
+| `015_content_format_backfill.sql` | 存量 content_format / episode_pattern 按 type+episode_count+status 规则回填 | ✅ |
+| `016_review_visibility.sql` | videos 新增 review_status / visibility_status / review_reason / review_source / reviewed_by / reviewed_at / needs_manual_review | ✅ |
+| `018_partial_ingest_policy.sql` | crawler_sites.ingest_policy JSONB（站点级采集策略，allow_auto_publish 等） | ✅ |
+
+---
+
+### 后台 UI 模块接入状况
+
+#### 已完整接入（API + UI + 单元测试）
+
+| 模块 | 前端路由 | API 前缀 | 备注 |
+|------|----------|----------|------|
+| 视频管理 | `/admin/videos` | `/admin/videos` | 列表/搜索/上下架/批量/元数据编辑/豆瓣同步 |
+| 播放源管理 | `/admin/sources` | `/admin/sources` | CRUD/软删除/批量 |
+| 爬虫控制台 | `/admin/crawler`（4-tab） | `/admin/crawler/*` | 站点/控制台/日志/设置；站点含 ingest_policy toggle |
+| 用户管理 | `/admin/users` | `/admin/users` | 列表/封禁/解封/角色 |
+| 数据看板 | `/admin/analytics` | `/admin/analytics` | 系统统计/队列告警 |
+| 数据导入导出 | `/admin/system/migration` | `/admin/import` `/admin/export` | JSON 批量导入播放源 |
+| 缓存管理 | `/admin/system/cache` | `/admin/cache` | Redis 清理 |
+| 站点配置 | `/admin/system/settings` | `/admin/system/settings` | 全局参数 |
+| 配置文件编辑 | Crawler Settings tab | `/admin/system/config` | 已归入 /admin/crawler?tab=settings |
+
+#### Schema 已落地但 UI 尚未接入（已知缺口）
+
+| 字段/功能 | 所在表 | 缺少的 UI |
+|-----------|--------|-----------|
+| `review_status` / `visibility_status` | videos | 审核队列页面（待 pending_review 视频列表 + approve/reject 操作） |
+| `content_format` / `episode_pattern` | videos | 视频编辑表单中的判定字段展示/编辑 |
+| `review_reason` / `reviewed_by` / `reviewed_at` | videos | 审核记录详情 |
+| `ingest_policy` 完整字段（search_index 等） | crawler_sites | 当前只暴露 allow_auto_publish |
+| `/admin/submissions` | — | 路由存在，投稿列表 UI 为空壳 |
+| `/admin/content` | — | 路由存在，内容审核 UI 为空壳 |
+
+---
+
+### 当前后台导航结构（基线）
+
+```
+AdminSidebar
+├── 内容管理
+│   ├── 视频管理         /admin/videos
+│   ├── 播放源管理       /admin/sources
+│   └── 内容审核（空壳） /admin/content
+└── 系统管理（admin only）
+    ├── 采集控制台       /admin/crawler
+    ├── 站点配置         /admin/system/settings
+    ├── 用户管理         /admin/users
+    └── 数据看板         /admin/analytics
+```
+
+**问题**：字幕管理、投稿管理、数据导入/导出、缓存管理等已有 API 的模块均未挂载到侧边栏；审核类功能和运营类功能混放在"内容管理"下缺少层次；"用户管理"与"数据看板"放在"系统管理"下语义不准确。
+
+---
+
+### 单元测试状态
+
+- 测试文件：55 个
+- 通过用例：542 / 542
+- 覆盖范围：API 路由、DB 查询层、核心 Service（SourceParserService / CrawlerService / MigrationService）、前端组件（DataTable / AdminVideoList / shared table hooks）
