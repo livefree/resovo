@@ -1769,9 +1769,11 @@
    - 完成时间：_
    - 验收要点：
      - `type CHECK` 枚举扩展为 12 种（movie/drama/anime/variety/short_drama/sports/music/documentary/game_show/news/children/other）
+     - 数据迁移：`type='series'` → `type='drama'`（同一事务内）
      - 新增 `source_content_type TEXT`、`normalized_type TEXT`、`content_format TEXT CHECK(...)`、`episode_pattern TEXT CHECK(...)`
-     - `CrawlerService` 添加 source → type 映射表，未覆盖原始类型默认 `other`，`source_content_type` 保留原始值
-     - 现有数据不破坏（旧 4 种 type 值在新枚举内）
+     - `CrawlerService` 添加 source → type 映射表（见 architecture.md 类型映射表），未覆盖原始类型默认 `other`，`source_content_type` 保留原始值
+     - 路由层兼容：`/series/[slug]` 内部查询改为 `WHERE type='drama'`（不改 URL）；`/browse?type=series` 兼容旧参数，服务端将 `series` 映射为 `drama` 再查询
+     - `/others/[slug]` 路由文件新建，处理 `type IN (short_drama,documentary,music,sports,news,children,game_show,other)` 的内容详情
      - typecheck/lint/test:run 通过
 
 2. CHG-171 — Migration 014：Season/Episode 统一模型（状态：⬜ 待开始）
