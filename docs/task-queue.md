@@ -1726,3 +1726,115 @@
    - 依赖：CHG-167
    - DoD：typecheck/lint/test:run 通过，文档记录一致
    - 回滚方式：回退 CHG-168 文档提交
+
+## [SEQ-20260322-10] Crawler 域导航收归
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-22 18:00
+- **最后更新时间**：2026-03-22 18:00
+- **目标**：将 crawler_sites 管理从 /admin/system 归入 /admin/crawler，消除采集域跨区操作问题（ADR-014）
+- **范围**：`src/app/[locale]/admin/system/sites/page.tsx`（redirect），`src/app/[locale]/admin/crawler/page.tsx`（Sites tab），admin 导航组件，`src/app/[locale]/admin/system/config/page.tsx`（剥离爬虫段）
+- **依赖**：无
+
+### 任务列表（按执行顺序）
+1. CHG-169 — Crawler 域导航合并（状态：⬜ 待开始）
+   - 创建时间：2026-03-22 18:00
+   - 计划开始：2026-03-22 18:30
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：
+     - `/admin/crawler` 新增 Sites tab，内容与原 `/admin/system/sites` 完全一致
+     - `/admin/system/sites` 返回 HTTP 307 redirect 至 `/admin/crawler?tab=sites`
+     - `/admin/system/config` 页面移除爬虫配置段（api_site JSON 编辑移入 `/admin/crawler?tab=settings`）
+     - admin 侧边栏导航：system 区不再显示"站点"入口，crawler 区显示四 tab（Sites/Console/Logs/Settings）
+     - typecheck/lint/test:run 通过，无行为回退
+
+## [SEQ-20260322-11] DB Schema Phase 1 — 类型与集数结构化
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-22 18:00
+- **最后更新时间**：2026-03-22 18:00
+- **目标**：完成视频类型扩展（12种）和 S/E 统一坐标系两项基础 migration，为前台 MVP 开发提供正确的 schema（ADR-016、ADR-017）
+- **范围**：`src/api/db/migrations/013_*`、`src/api/db/migrations/014_*`、`src/api/db/migrations/015_*`、`src/api/services/CrawlerService.ts`、`src/api/db/queries/videoSources.ts`、`src/api/db/queries/watchHistory.ts`、`src/types/video.types.ts`
+- **依赖**：CHG-169 可并行；本序列内部任务必须按顺序执行
+
+### 序列约束
+1. 三个 migration 必须按 013 → 014 → 015 顺序执行，不得跳号或合并
+2. 每个 migration 使用 `ADD COLUMN IF NOT EXISTS`，幂等可重跑
+3. 数据迁移 SQL 必须在同一事务内完成 ALTER + UPDATE
+
+### 任务列表（按执行顺序）
+1. CHG-170 — Migration 013：videos.type 枚举扩展（12种）+ 类型判定字段（状态：⬜ 待开始）
+   - 创建时间：2026-03-22 18:00
+   - 计划开始：CHG-169 完成后或并行
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：
+     - `type CHECK` 枚举扩展为 12 种（movie/drama/anime/variety/short_drama/sports/music/documentary/game_show/news/children/other）
+     - 新增 `source_content_type TEXT`、`normalized_type TEXT`、`content_format TEXT CHECK(...)`、`episode_pattern TEXT CHECK(...)`
+     - `CrawlerService` 添加 source → type 映射表，未覆盖原始类型默认 `other`，`source_content_type` 保留原始值
+     - 现有数据不破坏（旧 4 种 type 值在新枚举内）
+     - typecheck/lint/test:run 通过
+
+2. CHG-171 — Migration 014：Season/Episode 统一模型（状态：⬜ 待开始）
+   - 创建时间：2026-03-22 18:00
+   - 计划开始：CHG-170 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：
+     - `video_sources` 新增 `season_number INT NOT NULL DEFAULT 1`
+     - `video_sources.episode_number` NULL → NOT NULL DEFAULT 1（数据迁移：现有 NULL 填为 1）
+     - `watch_history` 新增 `season_number INT NOT NULL DEFAULT 1`
+     - `watch_history.episode_number` NULL → NOT NULL DEFAULT 1（数据迁移同上）
+     - 所有引用 `episode_number IS NULL` 的查询代码改为业务语义 `season_number = 1 AND episode_number = 1`
+     - typecheck/lint/test:run 通过
+
+3. CHG-172 — Migration 015 & 类型判定字段写入逻辑（状态：⬜ 待开始）
+   - 创建时间：2026-03-22 18:00
+   - 计划开始：CHG-171 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：
+     - `content_format` 和 `episode_pattern` 字段已在 CHG-170 migration 中建立，本任务补全写入逻辑
+     - `CrawlerService` 根据 `type` + `episode_count` 自动推断 `content_format` 和 `episode_pattern` 并写入
+     - 推断规则：`episode_count = 1` → `content_format='movie'`/`episode_pattern='single'`；`episode_count > 1 AND status='completed'` → `episodic`/`multi`；`status='ongoing'` → `episodic`/`ongoing`
+     - typecheck/lint/test:run 通过
+
+## [SEQ-20260322-12] DB Schema Phase 2 — 内容治理基础层
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-22 18:00
+- **最后更新时间**：2026-03-22 18:00
+- **目标**：落地审核状态/可见性字段 + is_published 迁移，以及站点级 ingest_policy，为内容发布工作流和 moderator 审核队列提供 schema 基础（ADR-018、ADR-019）
+- **范围**：`src/api/db/migrations/016_*`、`src/api/db/migrations/018_*`、`src/api/services/VideoService.ts`、`src/api/services/CrawlerService.ts`、`src/api/db/queries/videos.ts`、`src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+- **依赖**：SEQ-20260322-11 全部完成
+
+### 序列约束
+1. CHG-173 必须在 CHG-174 之前完成（ingest_policy 的 `allow_auto_publish` 逻辑依赖 `visibility_status` 字段已存在）
+2. CHG-173 migration 的 ALTER + 数据迁移 UPDATE 必须在同一事务内执行
+3. CHG-173 完成后，立即验证：所有 `is_published=true` 的行均有 `visibility_status='public'`
+
+### 任务列表（按执行顺序）
+1. CHG-173 — Migration 016：审核状态/可见性 + is_published 迁移策略（状态：⬜ 待开始）
+   - 创建时间：2026-03-22 18:00
+   - 计划开始：SEQ-20260322-11 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：
+     - `videos` 新增 `review_status TEXT NOT NULL DEFAULT 'pending_review' CHECK(...)`
+     - `videos` 新增 `visibility_status TEXT NOT NULL DEFAULT 'internal' CHECK(...)`
+     - `videos` 新增 `review_reason TEXT`、`review_source TEXT CHECK(...)`、`reviewed_by UUID`、`reviewed_at TIMESTAMPTZ`、`needs_manual_review BOOLEAN NOT NULL DEFAULT false`
+     - 数据迁移：现有 `is_published=true` 的行 → `visibility_status='public'`、`review_status='approved'`
+     - 数据迁移：现有 `is_published=false` 的行 → `visibility_status='internal'`、`review_status='pending_review'`
+     - `VideoService` 和 `CrawlerService` 写入路径：写 `visibility_status` 时同步写 `is_published`（方案 B 同步点）
+     - 所有前台视频查询 `WHERE is_published = true` 改为 `WHERE visibility_status = 'public'`
+     - typecheck/lint/test:run 通过
+
+2. CHG-174 — Migration 018-partial：crawler_sites.ingest_policy（状态：⬜ 待开始）
+   - 创建时间：2026-03-22 18:00
+   - 计划开始：CHG-173 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：
+     - `crawler_sites` 新增 `ingest_policy JSONB NOT NULL DEFAULT '{"allow_auto_publish":false,"allow_search_index":true,"allow_recommendation":true,"allow_public_detail":true,"allow_playback":true,"require_review_before_publish":true}'`
+     - `CrawlerService` 写入视频时读取来源站点的 `ingest_policy`：`allow_auto_publish=true` 时初始 `visibility_status='public'`/`review_status='approved'`，否则 `visibility_status='internal'`/`review_status='pending_review'`
+     - 全局 `AUTO_PUBLISH` 环境变量作为兜底保留（当 `ingest_policy` 字段不存在时回退），优先级低于站点级配置
+     - Admin Sites tab 新增 `ingest_policy` 可视化编辑入口（允许 toggle auto_publish 开关）
+     - typecheck/lint/test:run 通过
