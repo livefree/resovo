@@ -102,14 +102,14 @@ resovo/
 ### 用户与内容核心
 
 - `users`
-- `videos`
-- `video_sources`
+- `videos`（详见 `docs/architecture.md` videos 表；治理层字段见 ADR-017/018，待 Migration 013/016 落地）
+- `video_sources`（`season_number` 字段待 Migration 014 落地，当前 `episode_number` 仍可为 NULL）
 - `subtitles`
 - `tags` / `video_tags`
 - `lists` / `list_items` / `list_likes`
 - `danmaku`
 - `comments`
-- `watch_history`
+- `watch_history`（`season_number` 字段待 Migration 014 落地）
 - `user_favorites`
 
 ### 系统配置
@@ -136,6 +136,7 @@ resovo/
 | from_config | BOOLEAN | 是否来自配置文件 |
 | last_crawled_at | TIMESTAMPTZ | 最近采集时间 |
 | last_crawl_status | VARCHAR(20) | `ok` / `failed` / `running` |
+| ingest_policy | JSONB | 站点级采集策略（Migration 018-partial，见 ADR-019）；默认值：`{"allow_auto_publish":false,"allow_search_index":true,"allow_recommendation":true,"allow_public_detail":true,"allow_playback":true,"require_review_before_publish":true}` |
 | created_at | TIMESTAMPTZ | 创建时间 |
 | updated_at | TIMESTAMPTZ | 更新时间 |
 
@@ -346,22 +347,25 @@ type AdminTableState = {
 /admin/content                  # 投稿/字幕审核双 Tab
 /admin/submissions              # 兼容入口
 /admin/subtitles                # 兼容入口
-/admin/crawler                  # 采集控制台（3 Tab）
+/admin/crawler                  # 采集域统一入口（目标 4 Tab，见 ADR-014 / CHG-169）
 /admin/analytics
 /admin/system/cache
-/admin/system/config
-/admin/system/monitor
+/admin/system/config            # 系统参数（爬虫配置段待迁移至 /admin/crawler?tab=settings）
+/admin/system/monitor           # 应用级监控（采集面板待迁移至 /admin/crawler）
 /admin/system/settings
 /admin/system/migration
-/admin/system/sites             # 重定向到 /admin/crawler
+/admin/system/sites             # 307 redirect → /admin/crawler?tab=sites
 /admin/403
 ```
 
-### 采集控制台三 Tab（当前命名）
+### 采集控制台 Tab 目标结构（CHG-169 完成后）
 
-1. 采集配置
-2. 任务记录
-3. 高级设置
+| Tab | 内容 | 来源 |
+|-----|------|------|
+| Sites（站点） | crawler_sites 管理、ingest_policy 配置、单站触发 | 原 `/admin/system/sites` |
+| Console（控制台） | crawler_runs 批次、crawler_tasks 任务、stop-all/freeze | 原有控制台内容 |
+| Logs（日志） | crawler_task_logs 查询 | 当前内嵌于 Console，独立为 tab |
+| Settings（设置） | 自动采集 auto-config、调度设置、爬虫 API 配置 | 原 `/admin/system/config` 爬虫段 |
 
 ---
 
