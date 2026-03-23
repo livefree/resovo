@@ -197,8 +197,10 @@ export class CrawlerService {
         title: video.title,
         titleNormalized,
         titleEn: video.titleEn,
-        coverUrl: video.coverUrl,   // ADR-009: 存外链
+        coverUrl: video.coverUrl,         // ADR-009: 存外链
         type: video.type,
+        sourceContentType: video.sourceContentType,  // ADR-017
+        normalizedType: video.normalizedType,         // ADR-017
         category: video.category,
         year: video.year,
         country: video.country,

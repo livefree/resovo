@@ -1749,9 +1749,9 @@
      - typecheck/lint/test:run 通过，无行为回退
 
 ## [SEQ-20260322-11] DB Schema Phase 1 — 类型与集数结构化
-- **状态**：⬜ 待开始
+- **状态**：🔄 进行中
 - **创建时间**：2026-03-22 18:00
-- **最后更新时间**：2026-03-22 18:00
+- **最后更新时间**：2026-03-22 19:30
 - **目标**：完成视频类型扩展（12种）和 S/E 统一坐标系两项基础 migration，为前台 MVP 开发提供正确的 schema（ADR-016、ADR-017）
 - **范围**：`src/api/db/migrations/013_*`、`src/api/db/migrations/014_*`、`src/api/db/migrations/015_*`、`src/api/services/CrawlerService.ts`、`src/api/db/queries/videoSources.ts`、`src/api/db/queries/watchHistory.ts`、`src/types/video.types.ts`
 - **依赖**：CHG-169 可并行；本序列内部任务必须按顺序执行
@@ -1762,11 +1762,11 @@
 3. 数据迁移 SQL 必须在同一事务内完成 ALTER + UPDATE
 
 ### 任务列表（按执行顺序）
-1. CHG-170 — Migration 013：videos.type 枚举扩展（12种）+ 类型判定字段（状态：⬜ 待开始）
+1. CHG-170 — Migration 013：videos.type 枚举扩展（12种）+ 类型判定字段（状态：✅ 已完成）
    - 创建时间：2026-03-22 18:00
    - 计划开始：CHG-169 完成后或并行
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 19:30
+   - 完成时间：2026-03-22 19:45
    - 验收要点：
      - `type CHECK` 枚举扩展为 12 种（movie/drama/anime/variety/short_drama/sports/music/documentary/game_show/news/children/other）
      - 数据迁移：`type='series'` → `type='drama'`（同一事务内）

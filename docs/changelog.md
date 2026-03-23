@@ -2497,3 +2497,29 @@
   - /admin/system/config 和 /admin/system/sites 均改为重定向入口
   - AdminSidebar SYSTEM_MENU 移除「配置文件」，采集域统一从「采集控制台」入口访问
 - **测试覆盖**：typecheck ✓，lint ✓，unit tests 533/533 通过（含 AdminCrawlerTabs.test.tsx 全部用例）
+
+---
+
+### CHG-170 — Migration 013：videos.type 枚举扩展（12种）+ 类型判定字段
+- **时间**：2026-03-22
+- **任务**：CHG-170（SEQ-20260322-11）
+- **类型**：chg
+- **修改文件**：
+  - `src/api/db/migrations/013_type_expansion.sql`（新建）
+  - `src/types/video.types.ts`（VideoType 扩展12种，新增 ContentFormat/EpisodePattern）
+  - `src/api/services/SourceParserService.ts`（TYPE_MAP 扩展，ParsedVideo 新增类型判定字段）
+  - `src/api/db/queries/videos.ts`（DbVideoRow/mapVideoRow/CrawlerInsertInput/insertCrawledVideo 更新）
+  - `src/api/services/CrawlerService.ts`（upsertVideo 传入 sourceContentType/normalizedType）
+  - `src/api/routes/search.ts`（VideoTypeEnum 扩展12种 + series 向后兼容）
+  - `src/api/routes/videos.ts`（同上 + series→drama 映射）
+  - `src/api/routes/admin/videos.ts`（VideoMetaSchema/ListQuerySchema 更新为12种类型）
+  - `src/app/[locale]/others/[slug]/page.tsx`（新建）
+  - `tests/unit/api/crawler.test.ts`（更新测试：series→drama, 新增 short_drama/other 用例）
+  - `tests/unit/api/title-normalizer.test.ts`（series→drama）
+- **变更内容**：
+  - Migration 013: DROP+ADD type CHECK（12种），UPDATE series→drama，ADD 4 新列
+  - TYPE_MAP 新增 short_drama/sports/music/documentary/children/news/game_show，默认兜底改为 other
+  - parseVodItem 保留 sourceContentType（原始类型字符串），写入 normalizedType
+  - 路由层向后兼容：type=series 自动映射为 drama，旧 URL 不失效
+  - /others/[slug] 路由新增，适用于8种新类型内容详情
+- **测试覆盖**：typecheck ✓，lint ✓，unit tests 534/534 通过

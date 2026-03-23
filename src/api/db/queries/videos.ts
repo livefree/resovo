@@ -35,6 +35,11 @@ interface DbVideoRow {
   subtitle_langs: string[] | null
   title_normalized: string | null
   metadata_source: string | null
+  // Migration 013 字段
+  source_content_type: string | null
+  normalized_type: string | null
+  content_format: string | null
+  episode_pattern: string | null
 }
 
 function mapVideoRow(row: DbVideoRow): Video {
@@ -58,6 +63,10 @@ function mapVideoRow(row: DbVideoRow): Video {
     writers: row.writers ?? [],
     sourceCount: parseInt(row.source_count ?? '0'),
     subtitleLangs: row.subtitle_langs ?? [],
+    sourceContentType: row.source_content_type ?? null,
+    normalizedType: row.normalized_type ?? null,
+    contentFormat: (row.content_format as import('@/types').ContentFormat) ?? null,
+    episodePattern: (row.episode_pattern as import('@/types').EpisodePattern) ?? null,
     createdAt: row.created_at,
   }
 }
@@ -570,6 +579,8 @@ export interface CrawlerInsertInput {
   titleEn: string | null
   coverUrl: string | null
   type: VideoType
+  sourceContentType: string | null  // ADR-017
+  normalizedType: string | null     // ADR-017
   category: string | null
   year: number | null
   country: string | null
@@ -593,10 +604,12 @@ export async function insertCrawledVideo(
 ): Promise<{ id: string }> {
   const result = await db.query<{ id: string }>(
     `INSERT INTO videos
-       (short_id, title, title_normalized, title_en, cover_url, type, category, year, country,
+       (short_id, title, title_normalized, title_en, cover_url, type,
+        source_content_type, normalized_type,
+        category, year, country,
         "cast", director, writers, description, status, episode_count,
         is_published, metadata_source)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
      RETURNING id`,
     [
       input.shortId,
@@ -605,6 +618,8 @@ export async function insertCrawledVideo(
       input.titleEn,
       input.coverUrl,
       input.type,
+      input.sourceContentType,
+      input.normalizedType,
       input.category,
       input.year,
       input.country,

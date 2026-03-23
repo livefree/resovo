@@ -33,6 +33,8 @@ export interface ParsedVideo {
   titleEn: string | null
   coverUrl: string | null   // ADR-009: 直接存外链
   type: VideoType
+  sourceContentType: string | null  // 爬虫原始类型字符串（ADR-017）
+  normalizedType: string | null     // 平台规范化分类（ADR-017）
   category: string | null
   year: number | null
   country: string | null
@@ -51,14 +53,33 @@ export interface ParsedSource {
   type: SourceType              // 根据 URL 后缀判断
 }
 
-// ── 类型映射表 ────────────────────────────────────────────────────
+// ── 类型映射表（ADR-017）─────────────────────────────────────────
 
 const TYPE_MAP: Record<string, VideoType> = {
-  '电影': 'movie', 'movie': 'movie',
-  '电视剧': 'series', '连续剧': 'series', '国产剧': 'series',
-  '美剧': 'series', '韩剧': 'series', '日剧': 'series',
-  '动漫': 'anime', '卡通': 'anime', '动画': 'anime',
-  '综艺': 'variety', '真人秀': 'variety', '晚会': 'variety',
+  // 电影
+  '电影': 'movie', 'movie': 'movie', 'Movie': 'movie',
+  // 电视剧（内部类型为 drama，URL 保持 /series/）
+  '电视剧': 'drama', '连续剧': 'drama', '国产剧': 'drama', '剧集': 'drama',
+  '美剧': 'drama', '韩剧': 'drama', '日剧': 'drama',
+  'series': 'drama', 'drama': 'drama',
+  // 动漫
+  '动漫': 'anime', '卡通': 'anime', '动画': 'anime', 'anime': 'anime',
+  // 综艺
+  '综艺': 'variety', '真人秀': 'variety', '晚会': 'variety', '综艺节目': 'variety',
+  // 短剧
+  '短剧': 'short_drama', '微剧': 'short_drama', 'short_drama': 'short_drama',
+  // 体育
+  '体育': 'sports', 'sports': 'sports',
+  // 音乐
+  '音乐': 'music', 'MV': 'music', 'music': 'music',
+  // 纪录片
+  '纪录片': 'documentary', 'documentary': 'documentary',
+  // 少儿
+  '少儿': 'children', '儿童': 'children', 'children': 'children',
+  // 新闻
+  '新闻': 'news', 'news': 'news',
+  // 游戏
+  '游戏': 'game_show', 'game_show': 'game_show',
 }
 
 const COUNTRY_MAP: Record<string, string> = {
@@ -89,10 +110,10 @@ export function stripTags(html: string | undefined): string | null {
   return html.replace(/<[^>]+>/g, '').trim() || null
 }
 
-/** 解析 VideoType */
+/** 解析 VideoType（未匹配返回 'other'，ADR-017） */
 export function parseType(typeName: string | undefined): VideoType {
-  if (!typeName) return 'movie'
-  return TYPE_MAP[typeName.trim()] ?? 'movie'
+  if (!typeName) return 'other'
+  return TYPE_MAP[typeName.trim()] ?? 'other'
 }
 
 /** 解析国家/地区 → ISO 代码 */
@@ -172,15 +193,21 @@ export function parseVodItem(item: RawVodItem): {
   video: ParsedVideo
   sources: ParsedSource[]
 } {
-  const typeName = item.type_name ?? ''
+  const typeName = (item.type_name ?? '').trim()
   const type = parseType(typeName)
+  // 保留原始类型字符串；未知类型时 sourceContentType 记录原始值以便溯源
+  const sourceContentType = typeName || null
+  // 当前 normalizedType 与 type 保持一致；未来可做更细粒度映射
+  const normalizedType: string = type
 
   const video: ParsedVideo = {
     title: (item.vod_name ?? '').trim(),
     titleEn: item.vod_en?.trim() || null,
     coverUrl: item.vod_pic?.trim() || null,  // ADR-009: 存外链
     type,
-    category: typeName.trim() || null,
+    sourceContentType,
+    normalizedType,
+    category: typeName || null,
     year: parseYear(item.vod_year),
     country: parseCountry(item.vod_area),
     cast: splitNames(item.vod_actor),
