@@ -2560,3 +2560,20 @@
   - 新增推断函数：movie/episodeCount≤1 → movie/single；多集已完结 → episodic/multi；多集连载 → episodic/ongoing
   - CrawlerService 在新建视频时自动写入两个判定字段，存量回填由 migration 覆盖
 - **测试覆盖**：typecheck ✓，lint ✓，unit tests 542/542 通过（新增 8 条）
+
+---
+
+## CHG-173 — Migration 016：审核状态/可见性 + is_published 迁移策略
+- **完成时间**：2026-03-22 20:18
+- **来源序列**：SEQ-20260322-12
+- **修改文件**：
+  - `src/api/db/migrations/016_review_visibility.sql`（新建）
+  - `src/types/video.types.ts`（新增 ReviewStatus/VisibilityStatus 类型；Video 接口增加 reviewStatus/visibilityStatus/needsManualReview 字段）
+  - `src/api/db/queries/videos.ts`（DbVideoRow 新字段；mapVideoRow 映射；3 个前台查询改为 visibility_status='public'；publishVideo/batchPublishVideos 方案 B 同步点；CrawlerInsertInput 增加 visibilityStatus/reviewStatus；insertCrawledVideo SQL 扩展至 23 参数）
+  - `src/api/services/CrawlerService.ts`（按 autoPublish 推断 visibilityStatus/reviewStatus 并写入）
+- **变更摘要**：
+  - Migration 016 建立内容治理基础 schema：review_status（pending_review/approved/rejected）+ visibility_status（public/internal/hidden）+ 5 个审核元数据字段
+  - 数据迁移：is_published=true → visibility_status='public'/review_status='approved'（方案 B：is_published 保留为同步字段）
+  - 前台公共查询（listVideos/findVideoByShortId/listTrendingVideos）改为 WHERE visibility_status='public'
+  - 方案 B 同步点：publishVideo/batchPublishVideos 同时写 is_published + visibility_status + review_status，保持 ES 索引兼容
+- **测试覆盖**：typecheck ✓，lint ✓，unit tests 542/542 通过

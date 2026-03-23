@@ -22,6 +22,10 @@ export type ContentFormat = 'movie' | 'episodic' | 'collection' | 'clip'
 export type EpisodePattern = 'single' | 'multi' | 'ongoing' | 'unknown'
 
 export type VideoStatus   = 'ongoing' | 'completed'
+
+// ── 内容治理（Migration 016）────────────────────────────────────
+export type ReviewStatus     = 'pending_review' | 'approved' | 'rejected'
+export type VisibilityStatus = 'public' | 'internal' | 'hidden'
 export type VideoCategory =
   | 'action' | 'comedy' | 'drama' | 'sci-fi' | 'horror'
   | 'romance' | 'thriller' | 'documentary' | 'animation'
@@ -57,6 +61,10 @@ export interface Video {
   normalizedType: string | null     // 平台规范化分类
   contentFormat: ContentFormat | null
   episodePattern: EpisodePattern | null
+  // 内容治理字段（Migration 016）
+  reviewStatus: ReviewStatus
+  visibilityStatus: VisibilityStatus
+  needsManualReview: boolean
   createdAt: string
 }
 

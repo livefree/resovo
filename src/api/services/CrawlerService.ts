@@ -194,6 +194,9 @@ export class CrawlerService {
         : 1
       const contentFormat = inferContentFormat(video.type, episodeCount)
       const episodePattern = inferEpisodePattern(episodeCount, video.status)
+      // ADR-018: visibility_status 与 is_published 同步（方案 B 同步点）
+      const visibilityStatus = autoPublish ? 'public' as const : 'internal' as const
+      const reviewStatus = autoPublish ? 'approved' as const : 'pending_review' as const
       const inserted = await videosQueries.insertCrawledVideo(this.db, {
         shortId,
         title: video.title,
@@ -212,8 +215,10 @@ export class CrawlerService {
         description: video.description,
         status: video.status,
         episodeCount,
-        contentFormat,   // ADR-017
-        episodePattern,  // ADR-017
+        contentFormat,      // ADR-017
+        episodePattern,     // ADR-017
+        visibilityStatus,   // ADR-018
+        reviewStatus,       // ADR-018
         isPublished: autoPublish,
         metadataSource: 'crawler',
       })

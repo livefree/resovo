@@ -1749,7 +1749,7 @@
      - typecheck/lint/test:run 通过，无行为回退
 
 ## [SEQ-20260322-11] DB Schema Phase 1 — 类型与集数结构化
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-22 18:00
 - **最后更新时间**：2026-03-22 20:05
 - **目标**：完成视频类型扩展（12种）和 S/E 统一坐标系两项基础 migration，为前台 MVP 开发提供正确的 schema（ADR-016、ADR-017）
@@ -1801,9 +1801,9 @@
      - typecheck/lint/test:run 通过
 
 ## [SEQ-20260322-12] DB Schema Phase 2 — 内容治理基础层
-- **状态**：⬜ 待开始
+- **状态**：🔄 进行中
 - **创建时间**：2026-03-22 18:00
-- **最后更新时间**：2026-03-22 18:00
+- **最后更新时间**：2026-03-22 20:18
 - **目标**：落地审核状态/可见性字段 + is_published 迁移，以及站点级 ingest_policy，为内容发布工作流和 moderator 审核队列提供 schema 基础（ADR-018、ADR-019）
 - **范围**：`src/api/db/migrations/016_*`、`src/api/db/migrations/018_*`、`src/api/services/VideoService.ts`、`src/api/services/CrawlerService.ts`、`src/api/db/queries/videos.ts`、`src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
 - **依赖**：SEQ-20260322-11 全部完成
@@ -1814,11 +1814,11 @@
 3. CHG-173 完成后，立即验证：所有 `is_published=true` 的行均有 `visibility_status='public'`
 
 ### 任务列表（按执行顺序）
-1. CHG-173 — Migration 016：审核状态/可见性 + is_published 迁移策略（状态：⬜ 待开始）
+1. CHG-173 — Migration 016：审核状态/可见性 + is_published 迁移策略（状态：✅ 已完成）
    - 创建时间：2026-03-22 18:00
    - 计划开始：SEQ-20260322-11 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 20:08
+   - 完成时间：2026-03-22 20:18
    - 验收要点：
      - `videos` 新增 `review_status TEXT NOT NULL DEFAULT 'pending_review' CHECK(...)`
      - `videos` 新增 `visibility_status TEXT NOT NULL DEFAULT 'internal' CHECK(...)`
