@@ -6,7 +6,7 @@ import { AdminCrawlerPanel } from '@/components/admin/AdminCrawlerPanel'
 import { CrawlerConfigTab } from '@/components/admin/system/crawler-site/components/CrawlerConfigTab'
 import { CrawlerAdvancedTab } from '@/components/admin/system/crawler-site/components/CrawlerAdvancedTab'
 
-type CrawlerTab = 'config' | 'tasks' | 'advanced'
+type CrawlerTab = 'sites' | 'tasks' | 'settings' | 'logs'
 type TaskStatusFilter = 'pending' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled' | 'timeout' | ''
 
 function parseTaskStatusFilter(input: string | null): TaskStatusFilter {
@@ -26,13 +26,14 @@ function parseTaskStatusFilter(input: string | null): TaskStatusFilter {
 
 function parseCrawlerTab(input: string | null): CrawlerTab {
   if (input === 'tasks') return 'tasks'
-  if (input === 'advanced') return 'advanced'
-  // 兼容旧 query：tab=sites
-  return 'config'
+  if (input === 'settings' || input === 'advanced') return 'settings'
+  if (input === 'logs') return 'logs'
+  // 兼容旧 query：tab=config / tab=sites → 默认 sites
+  return 'sites'
 }
 
 const PAGE_TITLE_TOOLTIP =
-  '统一管理采集源站配置、任务审计与高级策略。当前页面采用三 Tab 结构，按工作流切换「采集配置」「任务记录」「高级设置」。'
+  '统一管理采集源站配置、控制台任务审计、日志与设置。按工作流切换「站点」「控制台」「日志」「设置」。'
 
 export function AdminCrawlerTabs() {
   const router = useRouter()
@@ -63,11 +64,16 @@ export function AdminCrawlerTabs() {
     const next = new URLSearchParams(searchParams.toString())
     if (nextTab === 'tasks') {
       next.set('tab', 'tasks')
-    } else if (nextTab === 'advanced') {
-      next.set('tab', 'advanced')
+    } else if (nextTab === 'settings') {
+      next.set('tab', 'settings')
+      next.delete('runId')
+      next.delete('taskStatus')
+    } else if (nextTab === 'logs') {
+      next.set('tab', 'logs')
       next.delete('runId')
       next.delete('taskStatus')
     } else {
+      // 'sites' — 默认 tab，清空所有 query
       next.delete('tab')
       next.delete('runId')
       next.delete('taskStatus')
@@ -107,52 +113,64 @@ export function AdminCrawlerTabs() {
           </div>
         </div>
         <div className="flex gap-1 rounded-md border border-[var(--border)] bg-[var(--bg2)] p-1 w-fit">
-        <button
-          type="button"
-          onClick={() => switchTab('config')}
-          data-testid="admin-crawler-tab-sites"
-          data-tab-id="admin-crawler-tab-config"
-          title="采集源站配置与实时进度面板"
-          className={`rounded px-4 py-2 text-sm transition-colors ${
-            tab === 'config'
-              ? 'bg-[var(--accent)] text-black'
-              : 'text-[var(--muted)] hover:text-[var(--text)]'
-          }`}
-        >
-          采集配置
-        </button>
-        <button
-          type="button"
-          onClick={() => switchTab('tasks')}
-          data-testid="admin-crawler-tab-tasks"
-          title="历史采集任务与日志审计"
-          className={`rounded px-4 py-2 text-sm transition-colors ${
-            tab === 'tasks'
-              ? 'bg-[var(--accent)] text-black'
-              : 'text-[var(--muted)] hover:text-[var(--text)]'
-          }`}
-        >
-          任务记录
-        </button>
-        <button
-          type="button"
-          onClick={() => switchTab('advanced')}
-          data-testid="admin-crawler-tab-advanced"
-          title="自动采集策略与自定义任务设置"
-          className={`rounded px-4 py-2 text-sm transition-colors ${
-            tab === 'advanced'
-              ? 'bg-[var(--accent)] text-black'
-              : 'text-[var(--muted)] hover:text-[var(--text)]'
-          }`}
-        >
-          高级设置
-        </button>
+          <button
+            type="button"
+            onClick={() => switchTab('sites')}
+            data-testid="admin-crawler-tab-sites"
+            title="采集源站管理与单站触发"
+            className={`rounded px-4 py-2 text-sm transition-colors ${
+              tab === 'sites'
+                ? 'bg-[var(--accent)] text-black'
+                : 'text-[var(--muted)] hover:text-[var(--text)]'
+            }`}
+          >
+            站点
+          </button>
+          <button
+            type="button"
+            onClick={() => switchTab('tasks')}
+            data-testid="admin-crawler-tab-tasks"
+            title="采集批次与任务审计"
+            className={`rounded px-4 py-2 text-sm transition-colors ${
+              tab === 'tasks'
+                ? 'bg-[var(--accent)] text-black'
+                : 'text-[var(--muted)] hover:text-[var(--text)]'
+            }`}
+          >
+            控制台
+          </button>
+          <button
+            type="button"
+            onClick={() => switchTab('logs')}
+            data-testid="admin-crawler-tab-logs"
+            title="采集任务日志"
+            className={`rounded px-4 py-2 text-sm transition-colors ${
+              tab === 'logs'
+                ? 'bg-[var(--accent)] text-black'
+                : 'text-[var(--muted)] hover:text-[var(--text)]'
+            }`}
+          >
+            日志
+          </button>
+          <button
+            type="button"
+            onClick={() => switchTab('settings')}
+            data-testid="admin-crawler-tab-settings"
+            title="自动采集策略与爬虫 API 配置"
+            className={`rounded px-4 py-2 text-sm transition-colors ${
+              tab === 'settings'
+                ? 'bg-[var(--accent)] text-black'
+                : 'text-[var(--muted)] hover:text-[var(--text)]'
+            }`}
+          >
+            设置
+          </button>
         </div>
       </div>
 
       <div>
-        {tab === 'config' && (
-          <div data-testid="admin-crawler-tab-panel-sites" data-tab-panel-id="admin-crawler-tab-panel-config">
+        {tab === 'sites' && (
+          <div data-testid="admin-crawler-tab-panel-sites">
             <CrawlerConfigTab />
           </div>
         )}
@@ -161,8 +179,13 @@ export function AdminCrawlerTabs() {
             <AdminCrawlerPanel initialRunId={taskRunId} initialStatusFilter={taskStatusFilter} onRunIdChange={syncRunId} />
           </div>
         )}
-        {tab === 'advanced' && (
-          <div data-testid="admin-crawler-tab-panel-advanced">
+        {tab === 'logs' && (
+          <div data-testid="admin-crawler-tab-panel-logs">
+            <p className="py-10 text-center text-sm text-[var(--muted)]">日志面板（即将上线）</p>
+          </div>
+        )}
+        {tab === 'settings' && (
+          <div data-testid="admin-crawler-tab-panel-settings">
             <CrawlerAdvancedTab />
           </div>
         )}

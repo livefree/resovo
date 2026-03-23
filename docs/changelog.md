@@ -2477,3 +2477,23 @@
   - 漏洞γ：提交前门禁第7条明确 tasks.md 应为空稳定态
 - **测试覆盖**：N/A（纯文档修改）
 - **关联**：人工审核 2026-03-22
+
+---
+
+### CHG-169 — Crawler 域导航合并
+- **时间**：2026-03-22
+- **任务**：CHG-169（SEQ-20260322-10）
+- **类型**：chg
+- **修改文件**：
+  - `src/components/admin/AdminCrawlerTabs.tsx`（tab 重命名：config→sites, advanced→settings, 新增 logs placeholder）
+  - `src/components/admin/system/crawler-site/components/CrawlerAdvancedTab.tsx`（集成 ConfigFileEditor）
+  - `src/app/[locale]/admin/system/config/page.tsx`（改为 307 redirect → /admin/crawler?tab=settings）
+  - `src/app/[locale]/admin/system/sites/page.tsx`（redirect 更新为 /admin/crawler?tab=sites）
+  - `src/components/admin/AdminSidebar.tsx`（移除「配置文件」菜单项）
+- **变更内容**：
+  - AdminCrawlerTabs 从 3-tab（config/tasks/advanced）改为 4-tab（sites/tasks/logs/settings）
+  - 向后兼容：旧 URL tab=config → sites，tab=advanced → settings
+  - ConfigFileEditor（爬虫源站 JSON 配置）整合进 Settings tab
+  - /admin/system/config 和 /admin/system/sites 均改为重定向入口
+  - AdminSidebar SYSTEM_MENU 移除「配置文件」，采集域统一从「采集控制台」入口访问
+- **测试覆盖**：typecheck ✓，lint ✓，unit tests 533/533 通过（含 AdminCrawlerTabs.test.tsx 全部用例）

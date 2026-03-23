@@ -1728,19 +1728,19 @@
    - 回滚方式：回退 CHG-168 文档提交
 
 ## [SEQ-20260322-10] Crawler 域导航收归
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-22 18:00
-- **最后更新时间**：2026-03-22 18:00
+- **最后更新时间**：2026-03-22 19:25
 - **目标**：将 crawler_sites 管理从 /admin/system 归入 /admin/crawler，消除采集域跨区操作问题（ADR-014）
 - **范围**：`src/app/[locale]/admin/system/sites/page.tsx`（redirect），`src/app/[locale]/admin/crawler/page.tsx`（Sites tab），admin 导航组件，`src/app/[locale]/admin/system/config/page.tsx`（剥离爬虫段）
 - **依赖**：无
 
 ### 任务列表（按执行顺序）
-1. CHG-169 — Crawler 域导航合并（状态：⬜ 待开始）
+1. CHG-169 — Crawler 域导航合并（状态：✅ 已完成）
    - 创建时间：2026-03-22 18:00
    - 计划开始：2026-03-22 18:30
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 18:30
+   - 完成时间：2026-03-22 19:25
    - 验收要点：
      - `/admin/crawler` 新增 Sites tab，内容与原 `/admin/system/sites` 完全一致
      - `/admin/system/sites` 返回 HTTP 307 redirect 至 `/admin/crawler?tab=sites`

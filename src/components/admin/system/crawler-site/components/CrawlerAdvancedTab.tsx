@@ -8,6 +8,7 @@ import { useCrawlerSites } from '@/components/admin/system/crawler-site/hooks/us
 import { CrawlerSystemStatusStrip } from '@/components/admin/system/crawler-site/components/CrawlerSystemStatusStrip'
 import { AutoCrawlSettingsPanel } from '@/components/admin/system/crawler-site/components/AutoCrawlSettingsPanel'
 import { CrawlerRunPanel } from '@/components/admin/system/crawler-site/components/CrawlerRunPanel'
+import { ConfigFileEditor } from '@/components/admin/system/config-file/ConfigFileEditor'
 
 type TriggerType = 'single' | 'batch' | 'all'
 type CrawlMode = 'incremental' | 'full'
@@ -332,6 +333,11 @@ export function CrawlerAdvancedTab() {
             <span className={`text-xs ${toast.ok ? 'text-green-400' : 'text-red-400'}`}>{toast.msg}</span>
           ) : null}
         </div>
+      </section>
+
+      <section className="rounded-lg border border-[var(--border)] bg-[var(--bg2)] p-4" data-testid="crawler-settings-config-file">
+        <h2 className="mb-4 text-sm font-semibold text-[var(--text)]">爬虫源站配置文件</h2>
+        <ConfigFileEditor />
       </section>
     </div>
   )
