@@ -6,10 +6,16 @@
 
 BEGIN;
 
--- ── 1. 扩展 type 枚举约束 ─────────────────────────────────────────
+-- ── 1. 删除旧约束 ─────────────────────────────────────────────────
 
 ALTER TABLE videos
   DROP CONSTRAINT IF EXISTS videos_type_check;
+
+-- ── 2. 数据迁移：series → drama（必须在添加新约束之前）────────────
+
+UPDATE videos SET type = 'drama' WHERE type = 'series';
+
+-- ── 3. 添加新约束（此时 series 行已迁移完毕）─────────────────────
 
 ALTER TABLE videos
   ADD CONSTRAINT videos_type_check
@@ -28,11 +34,7 @@ ALTER TABLE videos
       'other'
     ));
 
--- ── 2. 数据迁移：series → drama ───────────────────────────────────
-
-UPDATE videos SET type = 'drama' WHERE type = 'series';
-
--- ── 3. 新增类型判定辅助字段 ───────────────────────────────────────
+-- ── 4. 新增类型判定辅助字段 ───────────────────────────────────────
 
 ALTER TABLE videos
   ADD COLUMN IF NOT EXISTS source_content_type TEXT,
