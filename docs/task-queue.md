@@ -1751,7 +1751,7 @@
 ## [SEQ-20260322-11] DB Schema Phase 1 — 类型与集数结构化
 - **状态**：🔄 进行中
 - **创建时间**：2026-03-22 18:00
-- **最后更新时间**：2026-03-22 19:55
+- **最后更新时间**：2026-03-22 20:05
 - **目标**：完成视频类型扩展（12种）和 S/E 统一坐标系两项基础 migration，为前台 MVP 开发提供正确的 schema（ADR-016、ADR-017）
 - **范围**：`src/api/db/migrations/013_*`、`src/api/db/migrations/014_*`、`src/api/db/migrations/015_*`、`src/api/services/CrawlerService.ts`、`src/api/db/queries/videoSources.ts`、`src/api/db/queries/watchHistory.ts`、`src/types/video.types.ts`
 - **依赖**：CHG-169 可并行；本序列内部任务必须按顺序执行
@@ -1789,11 +1789,11 @@
      - 所有引用 `episode_number IS NULL` 的查询代码改为业务语义 `season_number = 1 AND episode_number = 1`
      - typecheck/lint/test:run 通过
 
-3. CHG-172 — Migration 015 & 类型判定字段写入逻辑（状态：⬜ 待开始）
+3. CHG-172 — Migration 015 & 类型判定字段写入逻辑（状态：✅ 已完成）
    - 创建时间：2026-03-22 18:00
    - 计划开始：CHG-171 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 19:58
+   - 完成时间：2026-03-22 20:05
    - 验收要点：
      - `content_format` 和 `episode_pattern` 字段已在 CHG-170 migration 中建立，本任务补全写入逻辑
      - `CrawlerService` 根据 `type` + `episode_count` 自动推断 `content_format` 和 `episode_pattern` 并写入

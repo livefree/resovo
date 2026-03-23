@@ -2543,3 +2543,20 @@
   - 所有写入路径（SourceParserService、MigrationService、users 路由）更新为 NOT NULL 语义，电影/单集统一使用 episode_number=1
   - VideoSource.episodeNumber（读取路径）保持 number | null 以避免 player 组件级联变更
 - **测试覆盖**：typecheck ✓，lint ✓，unit tests 534/534 通过
+
+---
+
+## CHG-172 — Migration 015 & 类型判定字段写入逻辑
+- **完成时间**：2026-03-22 20:05
+- **来源序列**：SEQ-20260322-11
+- **修改文件**：
+  - `src/api/db/migrations/015_content_format_backfill.sql`（新建）
+  - `src/api/services/SourceParserService.ts`（新增 inferContentFormat + inferEpisodePattern 函数；导入 ContentFormat/EpisodePattern 类型）
+  - `src/api/services/CrawlerService.ts`（调用推断函数；insertCrawledVideo 传入 contentFormat/episodePattern）
+  - `src/api/db/queries/videos.ts`（CrawlerInsertInput 增加 contentFormat/episodePattern；insertCrawledVideo SQL 扩展至 21 参数）
+  - `tests/unit/api/crawler.test.ts`（新增 inferContentFormat × 4 + inferEpisodePattern × 4 共 8 条测试）
+- **变更摘要**：
+  - Migration 015 回填存量视频的 content_format 和 episode_pattern：按 type/episode_count/status 推断
+  - 新增推断函数：movie/episodeCount≤1 → movie/single；多集已完结 → episodic/multi；多集连载 → episodic/ongoing
+  - CrawlerService 在新建视频时自动写入两个判定字段，存量回填由 migration 覆盖
+- **测试覆盖**：typecheck ✓，lint ✓，unit tests 542/542 通过（新增 8 条）

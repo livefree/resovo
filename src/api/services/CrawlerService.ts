@@ -7,7 +7,7 @@
 
 import type { Pool } from 'pg'
 import type { Client as ESClient } from '@elastic/elasticsearch'
-import { parseXmlResponse, parseJsonResponse, parseVodItem } from './SourceParserService'
+import { parseXmlResponse, parseJsonResponse, parseVodItem, inferContentFormat, inferEpisodePattern } from './SourceParserService'
 import { normalizeTitle } from './TitleNormalizer'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
 import * as sourcesQueries from '@/api/db/queries/sources'
@@ -192,6 +192,8 @@ export class CrawlerService {
       const episodeCount = sources.length > 0
         ? Math.max(...sources.map((s) => s.episodeNumber ?? 1))
         : 1
+      const contentFormat = inferContentFormat(video.type, episodeCount)
+      const episodePattern = inferEpisodePattern(episodeCount, video.status)
       const inserted = await videosQueries.insertCrawledVideo(this.db, {
         shortId,
         title: video.title,
@@ -210,6 +212,8 @@ export class CrawlerService {
         description: video.description,
         status: video.status,
         episodeCount,
+        contentFormat,   // ADR-017
+        episodePattern,  // ADR-017
         isPublished: autoPublish,
         metadataSource: 'crawler',
       })

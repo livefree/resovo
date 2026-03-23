@@ -254,6 +254,8 @@ import {
   parseXmlResponse,
   parseJsonResponse,
   stripTags,
+  inferContentFormat,
+  inferEpisodePattern,
 } from '@/api/services/SourceParserService'
 
 describe('splitNames', () => {
@@ -551,6 +553,44 @@ describe('stripTags', () => {
 
   it('undefined → null', () => {
     expect(stripTags(undefined)).toBeNull()
+  })
+})
+
+// ── CHG-172: inferContentFormat / inferEpisodePattern（ADR-017）──
+
+describe('inferContentFormat', () => {
+  it('type=movie → movie', () => {
+    expect(inferContentFormat('movie', 5)).toBe('movie')
+  })
+
+  it('episodeCount=1（非电影类型）→ movie', () => {
+    expect(inferContentFormat('drama', 1)).toBe('movie')
+  })
+
+  it('episodeCount>1（非电影）→ episodic', () => {
+    expect(inferContentFormat('drama', 12)).toBe('episodic')
+  })
+
+  it('episodeCount=0 → movie（兜底）', () => {
+    expect(inferContentFormat('anime', 0)).toBe('movie')
+  })
+})
+
+describe('inferEpisodePattern', () => {
+  it('episodeCount=1 → single', () => {
+    expect(inferEpisodePattern(1, 'completed')).toBe('single')
+  })
+
+  it('episodeCount>1 + completed → multi', () => {
+    expect(inferEpisodePattern(24, 'completed')).toBe('multi')
+  })
+
+  it('episodeCount>1 + ongoing → ongoing', () => {
+    expect(inferEpisodePattern(12, 'ongoing')).toBe('ongoing')
+  })
+
+  it('episodeCount=0 → single（兜底）', () => {
+    expect(inferEpisodePattern(0, 'ongoing')).toBe('single')
   })
 })
 

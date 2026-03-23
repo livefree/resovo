@@ -5,7 +5,7 @@
  * ADR-009: cover_url 存外链，不下载
  */
 
-import type { VideoType, VideoStatus, SourceType } from '@/types'
+import type { VideoType, VideoStatus, SourceType, ContentFormat, EpisodePattern } from '@/types'
 
 // ── 接口原始数据类型 ───────────────────────────────────────────────
 
@@ -239,6 +239,38 @@ export function parseVodItem(item: RawVodItem): {
   }
 
   return { video, sources }
+}
+
+// ── 类型判定推断（ADR-017）────────────────────────────────────────
+
+/**
+ * 根据 type + episodeCount 推断 ContentFormat
+ * - movie 类型或 episodeCount=1 → 'movie'
+ * - 否则 → 'episodic'
+ */
+export function inferContentFormat(
+  type: VideoType,
+  episodeCount: number
+): ContentFormat {
+  if (type === 'movie' || episodeCount <= 1) return 'movie'
+  return 'episodic'
+}
+
+/**
+ * 根据 episodeCount + status 推断 EpisodePattern
+ * - episodeCount=1 → 'single'
+ * - episodeCount>1 + completed → 'multi'
+ * - episodeCount>1 + ongoing → 'ongoing'
+ * - 其他 → 'unknown'
+ */
+export function inferEpisodePattern(
+  episodeCount: number,
+  status: VideoStatus
+): EpisodePattern {
+  if (episodeCount <= 1) return 'single'
+  if (status === 'completed') return 'multi'
+  if (status === 'ongoing') return 'ongoing'
+  return 'unknown'
 }
 
 // ── XML 解析 ──────────────────────────────────────────────────────

@@ -5,7 +5,7 @@
  */
 
 import type { Pool, PoolClient } from 'pg'
-import type { Video, VideoCard, VideoType, VideoStatus, VideoCategory } from '@/types'
+import type { Video, VideoCard, VideoType, VideoStatus, VideoCategory, ContentFormat, EpisodePattern } from '@/types'
 
 // ── 内部 DB 行类型 ────────────────────────────────────────────────
 
@@ -590,6 +590,8 @@ export interface CrawlerInsertInput {
   description: string | null
   status: VideoStatus
   episodeCount: number
+  contentFormat: ContentFormat   // ADR-017
+  episodePattern: EpisodePattern // ADR-017
   isPublished: boolean
   metadataSource: MetadataSource
 }
@@ -608,8 +610,9 @@ export async function insertCrawledVideo(
         source_content_type, normalized_type,
         category, year, country,
         "cast", director, writers, description, status, episode_count,
+        content_format, episode_pattern,
         is_published, metadata_source)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
      RETURNING id`,
     [
       input.shortId,
@@ -629,6 +632,8 @@ export async function insertCrawledVideo(
       input.description,
       input.status,
       input.episodeCount,
+      input.contentFormat,
+      input.episodePattern,
       input.isPublished,
       input.metadataSource,
     ]
