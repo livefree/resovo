@@ -157,9 +157,12 @@ export class CrawlerService {
    *   规则 C — 将 title / titleEn 写入 video_aliases（INSERT IGNORE）
    *   规则 D — metadata_source 优先级 tmdb(4) > douban(3) > manual(2) > crawler(1)；低优先级不覆盖高优先级元数据
    *   规则 E — sources ON CONFLICT DO NOTHING（不覆盖已有播放源）
+   *
+   * @param siteKey 来源站点 key，用于读取站点级 ingest_policy（ADR-018）
    */
   async upsertVideo(
-    parsed: ReturnType<typeof parseVodItem>
+    parsed: ReturnType<typeof parseVodItem>,
+    siteKey?: string
   ): Promise<{ videoId: string; sourcesUpserted: number }> {
     const { video, sources } = parsed
 
@@ -188,7 +191,12 @@ export class CrawlerService {
       // 新建视频记录（含 title_normalized + metadata_source）
       isNew = true
       const shortId = nanoid(8)
-      const autoPublish = config.AUTO_PUBLISH_CRAWLED === 'true'
+      // ADR-018: 站点级 ingest_policy 优先，无配置时回退全局 AUTO_PUBLISH_CRAWLED
+      let autoPublish = config.AUTO_PUBLISH_CRAWLED === 'true'
+      if (siteKey) {
+        const site = await crawlerSitesQueries.findCrawlerSite(this.db, siteKey)
+        if (site) autoPublish = site.ingestPolicy.allow_auto_publish
+      }
       const episodeCount = sources.length > 0
         ? Math.max(...sources.map((s) => s.episodeNumber ?? 1))
         : 1
@@ -412,7 +420,7 @@ export class CrawlerService {
             throw new Error('TASK_CANCELLED')
           }
           try {
-            const { sourcesUpserted: s } = await this.upsertVideo(parsed)
+            const { sourcesUpserted: s } = await this.upsertVideo(parsed, source.name)
             videosUpserted++
             sourcesUpserted += s
             processed++

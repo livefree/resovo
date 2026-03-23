@@ -31,14 +31,15 @@ const CreateSiteSchema = z.object({
 })
 
 const UpdateSiteSchema = z.object({
-  name:       z.string().min(1).max(200).optional(),
-  apiUrl:     z.string().url().optional(),
-  detail:     z.string().max(500).optional(),
-  sourceType: SourceTypeSchema.optional(),
-  format:     FormatSchema.optional(),
-  weight:     z.number().int().min(0).max(100).optional(),
-  isAdult:    z.boolean().optional(),
-  disabled:   z.boolean().optional(),
+  name:             z.string().min(1).max(200).optional(),
+  apiUrl:           z.string().url().optional(),
+  detail:           z.string().max(500).optional(),
+  sourceType:       SourceTypeSchema.optional(),
+  format:           FormatSchema.optional(),
+  weight:           z.number().int().min(0).max(100).optional(),
+  isAdult:          z.boolean().optional(),
+  disabled:         z.boolean().optional(),
+  allowAutoPublish: z.boolean().optional(),
 })
 
 const BatchSchema = z.object({

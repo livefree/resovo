@@ -4,11 +4,13 @@
  */
 
 import type { Pool } from 'pg'
+import { DEFAULT_INGEST_POLICY } from '@/types/system.types'
 import type {
   CrawlerSite,
   CreateCrawlerSiteInput,
   UpdateCrawlerSiteInput,
   CrawlerSiteBatchAction,
+  IngestPolicy,
 } from '@/types'
 
 interface DbRow {
@@ -24,6 +26,7 @@ interface DbRow {
   from_config: boolean
   last_crawled_at: string | null
   last_crawl_status: string | null
+  ingest_policy: IngestPolicy | null
   created_at: string
   updated_at: string
 }
@@ -46,6 +49,7 @@ function rowToSite(row: DbRow): CrawlerSite {
     fromConfig:      row.from_config,
     lastCrawledAt:   row.last_crawled_at,
     lastCrawlStatus: row.last_crawl_status as CrawlerSite['lastCrawlStatus'],
+    ingestPolicy:    row.ingest_policy ?? DEFAULT_INGEST_POLICY,
     createdAt:       row.created_at,
     updatedAt:       row.updated_at,
   }
@@ -167,14 +171,18 @@ export async function updateCrawlerSite(
   const values: unknown[] = []
   let idx = 1
 
-  if (updates.name !== undefined)       { setClauses.push(`name = $${idx++}`);        values.push(updates.name) }
-  if (updates.apiUrl !== undefined)     { setClauses.push(`api_url = $${idx++}`);     values.push(normalizeApiUrl(updates.apiUrl)) }
-  if (updates.detail !== undefined)     { setClauses.push(`detail = $${idx++}`);      values.push(updates.detail) }
-  if (updates.sourceType !== undefined) { setClauses.push(`source_type = $${idx++}`); values.push(updates.sourceType) }
-  if (updates.format !== undefined)     { setClauses.push(`format = $${idx++}`);      values.push(updates.format) }
-  if (updates.weight !== undefined)     { setClauses.push(`weight = $${idx++}`);      values.push(updates.weight) }
-  if (updates.isAdult !== undefined)    { setClauses.push(`is_adult = $${idx++}`);    values.push(updates.isAdult) }
-  if (updates.disabled !== undefined)   { setClauses.push(`disabled = $${idx++}`);    values.push(updates.disabled) }
+  if (updates.name !== undefined)              { setClauses.push(`name = $${idx++}`);        values.push(updates.name) }
+  if (updates.apiUrl !== undefined)            { setClauses.push(`api_url = $${idx++}`);     values.push(normalizeApiUrl(updates.apiUrl)) }
+  if (updates.detail !== undefined)            { setClauses.push(`detail = $${idx++}`);      values.push(updates.detail) }
+  if (updates.sourceType !== undefined)        { setClauses.push(`source_type = $${idx++}`); values.push(updates.sourceType) }
+  if (updates.format !== undefined)            { setClauses.push(`format = $${idx++}`);      values.push(updates.format) }
+  if (updates.weight !== undefined)            { setClauses.push(`weight = $${idx++}`);      values.push(updates.weight) }
+  if (updates.isAdult !== undefined)           { setClauses.push(`is_adult = $${idx++}`);    values.push(updates.isAdult) }
+  if (updates.disabled !== undefined)          { setClauses.push(`disabled = $${idx++}`);    values.push(updates.disabled) }
+  if (updates.allowAutoPublish !== undefined)  {
+    setClauses.push(`ingest_policy = jsonb_set(COALESCE(ingest_policy, '{}'::jsonb), '{allow_auto_publish}', $${idx++}::jsonb)`)
+    values.push(updates.allowAutoPublish ? 'true' : 'false')
+  }
 
   if (setClauses.length === 1) return findCrawlerSite(db, key)
 

@@ -15,6 +15,7 @@ export interface SiteFormData {
   format: 'json' | 'xml'
   weight: number
   isAdult: boolean
+  allowAutoPublish: boolean
 }
 
 export const EMPTY_SITE_FORM: SiteFormData = {
@@ -26,6 +27,7 @@ export const EMPTY_SITE_FORM: SiteFormData = {
   format: 'json',
   weight: 50,
   isAdult: false,
+  allowAutoPublish: false,
 }
 
 interface CrawlerSiteFormDialogProps {
@@ -113,7 +115,7 @@ export function CrawlerSiteFormDialog({ title, initial, isEdit, onClose, onSave 
             className="w-full accent-[var(--accent)]"
           />
         </AdminFormField>
-        <label className="flex items-center gap-2 mb-5 cursor-pointer">
+        <label className="flex items-center gap-2 mb-3 cursor-pointer">
           <input
             type="checkbox"
             checked={form.isAdult}
@@ -121,6 +123,15 @@ export function CrawlerSiteFormDialog({ title, initial, isEdit, onClose, onSave 
             className="accent-[var(--accent)]"
           />
           <span className="text-sm text-[var(--text)]">成人内容源</span>
+        </label>
+        <label className="flex items-center gap-2 mb-5 cursor-pointer" data-testid="site-form-allow-auto-publish">
+          <input
+            type="checkbox"
+            checked={form.allowAutoPublish}
+            onChange={(event) => set('allowAutoPublish', event.target.checked)}
+            className="accent-[var(--accent)]"
+          />
+          <span className="text-sm text-[var(--text)]">采集后自动发布（ingest_policy.allow_auto_publish）</span>
         </label>
         {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
         <AdminFormActions>

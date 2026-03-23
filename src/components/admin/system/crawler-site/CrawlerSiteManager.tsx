@@ -259,6 +259,10 @@ export function CrawlerSiteManager() {
       isAdult:    form.isAdult,
     }
     await apiClient.post('/admin/crawler/sites', input)
+    // 新建后若指定 allowAutoPublish=true，追加一次 PATCH 更新 ingest_policy
+    if (form.allowAutoPublish) {
+      await apiClient.patch(`/admin/crawler/sites/${form.key}`, { allowAutoPublish: true })
+    }
     await fetchSites()
     showToast('添加成功', true)
   }
@@ -268,13 +272,14 @@ export function CrawlerSiteManager() {
   async function handleEdit(form: SiteFormData) {
     if (!editTarget) return
     const input: UpdateCrawlerSiteInput = {
-      name:       form.name,
-      apiUrl:     form.apiUrl,
-      detail:     form.detail || undefined,
-      sourceType: form.sourceType,
-      format:     form.format,
-      weight:     form.weight,
-      isAdult:    form.isAdult,
+      name:             form.name,
+      apiUrl:           form.apiUrl,
+      detail:           form.detail || undefined,
+      sourceType:       form.sourceType,
+      format:           form.format,
+      weight:           form.weight,
+      isAdult:          form.isAdult,
+      allowAutoPublish: form.allowAutoPublish,
     }
     await apiClient.patch(`/admin/crawler/sites/${editTarget.key}`, input)
     await fetchSites()
@@ -440,14 +445,15 @@ export function CrawlerSiteManager() {
         <CrawlerSiteFormDialog
           title={`编辑：${editTarget.name}`}
           initial={{
-            key:        editTarget.key,
-            name:       editTarget.name,
-            apiUrl:     editTarget.apiUrl,
-            detail:     editTarget.detail ?? '',
-            sourceType: editTarget.sourceType,
-            format:     editTarget.format,
-            weight:     editTarget.weight,
-            isAdult:    editTarget.isAdult,
+            key:              editTarget.key,
+            name:             editTarget.name,
+            apiUrl:           editTarget.apiUrl,
+            detail:           editTarget.detail ?? '',
+            sourceType:       editTarget.sourceType,
+            format:           editTarget.format,
+            weight:           editTarget.weight,
+            isAdult:          editTarget.isAdult,
+            allowAutoPublish: editTarget.ingestPolicy.allow_auto_publish,
           }}
           onSave={handleEdit}
           onClose={() => setEditTarget(null)}

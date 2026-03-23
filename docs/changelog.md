@@ -2577,3 +2577,23 @@
   - 前台公共查询（listVideos/findVideoByShortId/listTrendingVideos）改为 WHERE visibility_status='public'
   - 方案 B 同步点：publishVideo/batchPublishVideos 同时写 is_published + visibility_status + review_status，保持 ES 索引兼容
 - **测试覆盖**：typecheck ✓，lint ✓，unit tests 542/542 通过
+
+---
+
+## CHG-174 — Migration 018-partial：crawler_sites.ingest_policy
+- **完成时间**：2026-03-22 20:32
+- **来源序列**：SEQ-20260322-12
+- **修改文件**：
+  - `src/api/db/migrations/018_partial_ingest_policy.sql`（新建）
+  - `src/types/system.types.ts`（新增 IngestPolicy 接口、DEFAULT_INGEST_POLICY 常量；CrawlerSite 增加 ingestPolicy；UpdateCrawlerSiteInput 增加 allowAutoPublish）
+  - `src/api/db/queries/crawlerSites.ts`（DbRow/rowToSite 含 ingest_policy；updateCrawlerSite 支持 jsonb_set 更新 allow_auto_publish）
+  - `src/api/routes/admin/crawlerSites.ts`（UpdateSiteSchema 增加 allowAutoPublish 字段）
+  - `src/api/services/CrawlerService.ts`（upsertVideo 增加 siteKey 参数；读取站点级 ingest_policy.allow_auto_publish，优先于全局 AUTO_PUBLISH_CRAWLED；crawl() 传入 source.name）
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteFormDialog.tsx`（SiteFormData/EMPTY_SITE_FORM 增加 allowAutoPublish；新增 checkbox UI）
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`（handleAdd 支持 allowAutoPublish 双请求；handleEdit 传入 allowAutoPublish；editTarget 初始化读取 ingestPolicy）
+- **变更摘要**：
+  - Migration 018-partial 给 crawler_sites 增加 ingest_policy JSONB，默认 allow_auto_publish=false
+  - CrawlerService 采集新视频时优先读取站点级策略决定是否自动发布，无站点配置时回退全局环境变量
+  - Admin Sites 编辑表单新增"采集后自动发布"开关，允许 per-site 差异化配置
+- **已知技术债**：handleAdd 中 allowAutoPublish=true 时有 POST+PATCH 双请求（轻微 UX 窗口期），可在未来扩展 POST endpoint 时统一
+- **测试覆盖**：typecheck ✓，lint ✓，unit tests 542/542 通过

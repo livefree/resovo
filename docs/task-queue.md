@@ -1801,9 +1801,9 @@
      - typecheck/lint/test:run 通过
 
 ## [SEQ-20260322-12] DB Schema Phase 2 — 内容治理基础层
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-22 18:00
-- **最后更新时间**：2026-03-22 20:18
+- **最后更新时间**：2026-03-22 20:32
 - **目标**：落地审核状态/可见性字段 + is_published 迁移，以及站点级 ingest_policy，为内容发布工作流和 moderator 审核队列提供 schema 基础（ADR-018、ADR-019）
 - **范围**：`src/api/db/migrations/016_*`、`src/api/db/migrations/018_*`、`src/api/services/VideoService.ts`、`src/api/services/CrawlerService.ts`、`src/api/db/queries/videos.ts`、`src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
 - **依赖**：SEQ-20260322-11 全部完成
@@ -1829,11 +1829,11 @@
      - 所有前台视频查询 `WHERE is_published = true` 改为 `WHERE visibility_status = 'public'`
      - typecheck/lint/test:run 通过
 
-2. CHG-174 — Migration 018-partial：crawler_sites.ingest_policy（状态：⬜ 待开始）
+2. CHG-174 — Migration 018-partial：crawler_sites.ingest_policy（状态：✅ 已完成）
    - 创建时间：2026-03-22 18:00
    - 计划开始：CHG-173 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 20:22
+   - 完成时间：2026-03-22 20:32
    - 验收要点：
      - `crawler_sites` 新增 `ingest_policy JSONB NOT NULL DEFAULT '{"allow_auto_publish":false,"allow_search_index":true,"allow_recommendation":true,"allow_public_detail":true,"allow_playback":true,"require_review_before_publish":true}'`
      - `CrawlerService` 写入视频时读取来源站点的 `ingest_policy`：`allow_auto_publish=true` 时初始 `visibility_status='public'`/`review_status='approved'`，否则 `visibility_status='internal'`/`review_status='pending_review'`

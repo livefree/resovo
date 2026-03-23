@@ -74,6 +74,25 @@ export interface AutoCrawlConfig {
 export type CrawlerSiteType = 'vod' | 'shortdrama'
 export type CrawlerSiteFormat = 'json' | 'xml'
 
+/** 站点级采集策略（Migration 018） */
+export interface IngestPolicy {
+  allow_auto_publish: boolean
+  allow_search_index: boolean
+  allow_recommendation: boolean
+  allow_public_detail: boolean
+  allow_playback: boolean
+  require_review_before_publish: boolean
+}
+
+export const DEFAULT_INGEST_POLICY: IngestPolicy = {
+  allow_auto_publish: false,
+  allow_search_index: true,
+  allow_recommendation: true,
+  allow_public_detail: true,
+  allow_playback: true,
+  require_review_before_publish: true,
+}
+
 export interface CrawlerSite {
   key: string
   name: string
@@ -87,6 +106,7 @@ export interface CrawlerSite {
   fromConfig: boolean
   lastCrawledAt: string | null
   lastCrawlStatus: 'ok' | 'failed' | 'running' | null
+  ingestPolicy: IngestPolicy
   createdAt: string
   updatedAt: string
 }
@@ -111,6 +131,7 @@ export interface UpdateCrawlerSiteInput {
   weight?: number
   isAdult?: boolean
   disabled?: boolean
+  allowAutoPublish?: boolean  // 更新 ingest_policy.allow_auto_publish
 }
 
 /** 批量操作 */
