@@ -11,7 +11,8 @@ import type { VideoSource, VideoQuality, SourceType } from '@/types'
 interface DbSourceRow {
   id: string
   video_id: string
-  episode_number: number | null
+  season_number: number
+  episode_number: number
   source_url: string
   source_name: string
   quality: string | null
@@ -99,8 +100,9 @@ export async function updateSourceActiveStatus(
 
 export interface UpsertSourceInput {
   videoId: string
-  episodeNumber: number | null
-  sourceUrl: string              // ADR-001: 第三方直链，不做代理
+  episodeNumber: number  // ADR-016: 统一坐标系，单集/电影为 1
+  seasonNumber?: number  // 默认 1
+  sourceUrl: string      // ADR-001: 第三方直链，不做代理
   sourceName: string
   type: SourceType
 }
@@ -109,7 +111,7 @@ export interface UpsertSourceInput {
  * 播放源去重 upsert：
  * 同一 (video_id, episode_number, source_url) 已存在时跳过（DO NOTHING）。
  * 规则 E(CHG-38): 不覆盖已有播放源，避免误清除 is_active=false 状态。
- * NULL episode_number 视为相同（NULLS NOT DISTINCT 约束）。
+ * ADR-016: episode_number 统一坐标系，单集/电影为 1（NOT NULL）。
  */
 export async function upsertSource(
   db: Pool,
@@ -117,12 +119,12 @@ export async function upsertSource(
 ): Promise<VideoSource | null> {
   const result = await db.query<DbSourceRow>(
     `INSERT INTO video_sources
-       (video_id, episode_number, source_url, source_name, type, is_active)
-     VALUES ($1, $2, $3, $4, $5, true)
+       (video_id, season_number, episode_number, source_url, source_name, type, is_active)
+     VALUES ($1, $2, $3, $4, $5, $6, true)
      ON CONFLICT ON CONSTRAINT uq_sources_video_episode_url
      DO NOTHING
      RETURNING *`,
-    [input.videoId, input.episodeNumber, input.sourceUrl, input.sourceName, input.type]
+    [input.videoId, input.seasonNumber ?? 1, input.episodeNumber, input.sourceUrl, input.sourceName, input.type]
   )
   return result.rows[0] ? mapSource(result.rows[0]) : null
 }

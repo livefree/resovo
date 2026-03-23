@@ -1751,7 +1751,7 @@
 ## [SEQ-20260322-11] DB Schema Phase 1 — 类型与集数结构化
 - **状态**：🔄 进行中
 - **创建时间**：2026-03-22 18:00
-- **最后更新时间**：2026-03-22 19:30
+- **最后更新时间**：2026-03-22 19:55
 - **目标**：完成视频类型扩展（12种）和 S/E 统一坐标系两项基础 migration，为前台 MVP 开发提供正确的 schema（ADR-016、ADR-017）
 - **范围**：`src/api/db/migrations/013_*`、`src/api/db/migrations/014_*`、`src/api/db/migrations/015_*`、`src/api/services/CrawlerService.ts`、`src/api/db/queries/videoSources.ts`、`src/api/db/queries/watchHistory.ts`、`src/types/video.types.ts`
 - **依赖**：CHG-169 可并行；本序列内部任务必须按顺序执行
@@ -1776,11 +1776,11 @@
      - `/others/[slug]` 路由文件新建，处理 `type IN (short_drama,documentary,music,sports,news,children,game_show,other)` 的内容详情
      - typecheck/lint/test:run 通过
 
-2. CHG-171 — Migration 014：Season/Episode 统一模型（状态：⬜ 待开始）
+2. CHG-171 — Migration 014：Season/Episode 统一模型（状态：✅ 已完成）
    - 创建时间：2026-03-22 18:00
    - 计划开始：CHG-170 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 19:50
+   - 完成时间：2026-03-22 19:55
    - 验收要点：
      - `video_sources` 新增 `season_number INT NOT NULL DEFAULT 1`
      - `video_sources.episode_number` NULL → NOT NULL DEFAULT 1（数据迁移：现有 NULL 填为 1）

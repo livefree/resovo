@@ -48,9 +48,9 @@ export interface ParsedVideo {
 
 export interface ParsedSource {
   sourceName: string
-  episodeNumber: number | null  // 电影为 NULL
-  sourceUrl: string             // ADR-001: 第三方直链
-  type: SourceType              // 根据 URL 后缀判断
+  episodeNumber: number  // 统一坐标系（ADR-016）：单集/电影为 1
+  sourceUrl: string      // ADR-001: 第三方直链
+  type: SourceType       // 根据 URL 后缀判断
 }
 
 // ── 类型映射表（ADR-017）─────────────────────────────────────────
@@ -150,7 +150,7 @@ export function parseSourceType(url: string): SourceType {
  *
  * @param playUrl   vod_play_url 单个线路的字符串
  * @param sourceName 线路名称
- * @param isMovie    是否为电影（episode_number 存 NULL）
+ * @param isMovie    是否为电影（ADR-016: 电影 episode_number 存 1）
  */
 export function parsePlayUrl(
   playUrl: string,
@@ -171,9 +171,9 @@ export function parsePlayUrl(
 
     if (!url) continue
 
-    // 从集名提取集数
+    // 从集名提取集数；电影/单集统一为 1（ADR-016）
     const numMatch = epLabel.match(/(\d+)/)
-    const episodeNumber = isMovie ? null : (numMatch ? parseInt(numMatch[1], 10) : null)
+    const episodeNumber = isMovie ? 1 : (numMatch ? parseInt(numMatch[1], 10) : 1)
 
     results.push({
       sourceName,

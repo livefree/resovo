@@ -2523,3 +2523,23 @@
   - 路由层向后兼容：type=series 自动映射为 drama，旧 URL 不失效
   - /others/[slug] 路由新增，适用于8种新类型内容详情
 - **测试覆盖**：typecheck ✓，lint ✓，unit tests 534/534 通过
+
+---
+
+## CHG-171 — Migration 014：Season/Episode 统一模型
+- **完成时间**：2026-03-22 19:55
+- **来源序列**：SEQ-20260322-11
+- **修改文件**：
+  - `src/api/db/migrations/014_season_episode.sql`（新建）
+  - `src/api/db/queries/sources.ts`（UpsertSourceInput.episodeNumber: number | null → number；新增 seasonNumber；SQL 含 season_number）
+  - `src/api/db/queries/watchHistory.ts`（UpsertWatchHistoryInput.episodeNumber: number | undefined；新增 seasonNumber；WatchHistoryRow 加 season_number；SELECT 包含 wh.season_number）
+  - `src/api/services/SourceParserService.ts`（ParsedSource.episodeNumber: number | null → number；parsePlayUrl 电影返回 1 而非 null）
+  - `src/api/services/MigrationService.ts`（episodeNumber ?? null → episodeNumber ?? 1）
+  - `src/api/routes/users.ts`（episode ?? null → episode ?? undefined）
+  - `tests/unit/api/crawler.test.ts`（2 个测试：期望 null → 期望 1）
+  - `tests/unit/api/users.test.ts`（1 个测试：期望 null → 期望 undefined；更新标题注明 ADR-016）
+- **变更摘要**：
+  - Migration 014 确立 S/E 统一坐标系：video_sources 和 watch_history 的 episode_number 改为 NOT NULL DEFAULT 1，新增 season_number NOT NULL DEFAULT 1
+  - 所有写入路径（SourceParserService、MigrationService、users 路由）更新为 NOT NULL 语义，电影/单集统一使用 episode_number=1
+  - VideoSource.episodeNumber（读取路径）保持 number | null 以避免 player 组件级联变更
+- **测试覆盖**：typecheck ✓，lint ✓，unit tests 534/534 通过

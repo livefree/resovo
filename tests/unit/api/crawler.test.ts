@@ -405,13 +405,13 @@ describe('parsePlayUrl', () => {
     expect(sources[1].episodeNumber).toBe(2)
   })
 
-  it('电影（isMovie=true）→ episodeNumber 为 null', () => {
+  it('电影（isMovie=true）→ episodeNumber 为 1（ADR-016 统一坐标系）', () => {
     const sources = parsePlayUrl(
       '正片$https://cdn.example.com/movie.mp4',
       '线路1',
       true
     )
-    expect(sources[0].episodeNumber).toBeNull()
+    expect(sources[0].episodeNumber).toBe(1)
   })
 
   it('空字符串 → 空数组', () => {
@@ -460,7 +460,7 @@ describe('parseVodItem', () => {
     expect(result.sources[1].episodeNumber).toBe(2)
   })
 
-  it('电影（type=movie）播放源 episode_number 为 null', () => {
+  it('电影（type=movie）播放源 episode_number 为 1（ADR-016 统一坐标系）', () => {
     const result = parseVodItem({
       vod_id: '5',
       vod_name: '电影测试',
@@ -468,7 +468,7 @@ describe('parseVodItem', () => {
       vod_play_from: '线路1',
       vod_play_url: '正片$https://cdn.example.com/movie.mp4',
     })
-    expect(result.sources[0].episodeNumber).toBeNull()
+    expect(result.sources[0].episodeNumber).toBe(1)
   })
 
   it('cover_url 直接存外链（ADR-009）', () => {
