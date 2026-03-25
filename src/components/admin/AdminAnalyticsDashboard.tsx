@@ -14,6 +14,7 @@ import { useAdminTableColumns, type AdminColumnMeta } from '@/components/admin/s
 import { useAdminTableSort } from '@/components/admin/shared/table/useAdminTableSort'
 import type { AnalyticsData } from '@/api/routes/admin/analytics'
 import type { AdminTableState as SharedAdminTableState } from '@/components/admin/shared/table/useAdminTableState'
+import { ContentQualityTable } from '@/components/admin/dashboard/ContentQualityTable'
 
 type CrawlerTaskRow = AnalyticsData['crawlerTasks']['recent'][number]
 type CrawlerTaskColumnId = 'type' | 'status' | 'created_at' | 'finished_at'
@@ -353,6 +354,14 @@ export function AdminAnalyticsDashboard() {
           </tbody>
           </AdminTableFrame>
         </div>
+      </section>
+
+      {/* 内容质量统计（ADMIN-06）*/}
+      <section className="space-y-3" data-testid="content-quality-section">
+        <h2 className="text-base font-semibold" style={{ color: 'var(--foreground)' }}>
+          内容质量（按来源站点）
+        </h2>
+        <ContentQualityTable />
       </section>
     </div>
   )

@@ -14,31 +14,36 @@ describe('AdminAnalyticsDashboard (CHG-130)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
-    getMock.mockResolvedValue({
-      data: {
-        videos: { total: 10, published: 8, pending: 2 },
-        sources: { total: 30, active: 24, inactive: 6, failRate: 0.2 },
-        users: { total: 50, todayNew: 3, banned: 1 },
-        queues: { submissions: 2, subtitles: 1 },
-        crawlerTasks: {
-          recent: [
-            {
-              id: 't1',
-              type: 'site-a',
-              status: 'done',
-              created_at: '2026-03-20T00:00:00Z',
-              finished_at: '2026-03-20T00:10:00Z',
-            },
-            {
-              id: 't2',
-              type: 'site-b',
-              status: 'running',
-              created_at: '2026-03-21T00:00:00Z',
-              finished_at: null,
-            },
-          ],
+    getMock.mockImplementation((url: string) => {
+      if (url === '/admin/analytics/content-quality') {
+        return Promise.resolve({ data: [] })
+      }
+      return Promise.resolve({
+        data: {
+          videos: { total: 10, published: 8, pending: 2 },
+          sources: { total: 30, active: 24, inactive: 6, failRate: 0.2 },
+          users: { total: 50, todayNew: 3, banned: 1 },
+          queues: { submissions: 2, subtitles: 1 },
+          crawlerTasks: {
+            recent: [
+              {
+                id: 't1',
+                type: 'site-a',
+                status: 'done',
+                created_at: '2026-03-20T00:00:00Z',
+                finished_at: '2026-03-20T00:10:00Z',
+              },
+              {
+                id: 't2',
+                type: 'site-b',
+                status: 'running',
+                created_at: '2026-03-21T00:00:00Z',
+                finished_at: null,
+              },
+            ],
+          },
         },
-      },
+      })
     })
   })
 
