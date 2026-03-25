@@ -208,7 +208,10 @@ export async function syncRunStatusFromTasks(db: Pool, runId: string): Promise<v
          SUM(CASE WHEN status = 'paused' THEN 1 ELSE 0 END)::int AS paused,
          SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END)::int AS done,
          SUM(CASE WHEN status IN ('failed', 'timeout') THEN 1 ELSE 0 END)::int AS failed,
-         SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END)::int AS cancelled
+         SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END)::int AS cancelled,
+         SUM(CASE WHEN (result ->> 'videosUpserted') ~ '^[0-9]+$' THEN (result ->> 'videosUpserted')::int ELSE 0 END)::int AS videos_upserted,
+         SUM(CASE WHEN (result ->> 'sourcesUpserted') ~ '^[0-9]+$' THEN (result ->> 'sourcesUpserted')::int ELSE 0 END)::int AS sources_upserted,
+         SUM(CASE WHEN (result ->> 'errors') ~ '^[0-9]+$' THEN (result ->> 'errors')::int ELSE 0 END)::int AS errors
        FROM crawler_tasks
        WHERE run_id = $1
      )
@@ -243,7 +246,10 @@ export async function syncRunStatusFromTasks(db: Pool, runId: string): Promise<v
            'paused', a.paused,
            'done', a.done,
            'failed', a.failed,
-           'cancelled', a.cancelled
+           'cancelled', a.cancelled,
+           'videosUpserted', a.videos_upserted,
+           'sourcesUpserted', a.sources_upserted,
+           'errors', a.errors
          )
      FROM agg a
      WHERE r.id = $1`,

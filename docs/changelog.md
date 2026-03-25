@@ -2925,3 +2925,20 @@
   - 附状态枚举快速参考表和关键源文件索引
 - **根因**：用户要求将所有已实现采集功能汇总并配流程图说明，便于后续维护和功能扩展
 - **测试覆盖**：文档类任务，无需运行测试
+
+---
+
+### CHG-195 — monitor-snapshot 实时同步 + 批次面板采集数据统计
+- **完成时间**：2026-03-25 19:20
+- **修改文件**：
+  - `src/api/db/queries/crawlerRuns.ts`
+  - `src/api/routes/admin/crawler.ts`
+  - `src/components/admin/system/crawler-site/components/CrawlerRunPanel.tsx`
+- **变更内容**：
+  - `syncRunStatusFromTasks` SQL `WITH agg AS` 新增三列聚合：从 task.result jsonb 中提取 `videosUpserted`、`sourcesUpserted`、`errors` 并累加，写入 run.summary
+  - `monitor-snapshot` 接口：在返回数据前主动调用 `listActiveRunIds` + `syncRunStatusFromTasks`，将状态刷新延迟从 ~60s（watchdog 周期）降至 ~1-2s（每次轮询）
+  - `CrawlerRunPanel`：新增数据采集统计行，当 `videosUpserted > 0 || sourcesUpserted > 0 || errors > 0` 时显示"数据采集：N 视频 / N 播放源 / N 错误"
+- **根因**：
+  1. monitor-snapshot 直接读 crawler_runs，不触发 sync，导致状态最长滞后 60s（watchdog 间隔）
+  2. syncRunStatusFromTasks 只聚合站点级计数，未透传 task.result 中的 item 级统计到 run.summary
+- **测试覆盖**：typecheck ✅ lint ✅ unit tests 599/599 ✅

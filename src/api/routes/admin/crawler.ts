@@ -556,6 +556,12 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
   // 聚合接口：一次返回 overview + runs（最近 20 条）+ systemStatus
   // 供 useCrawlerMonitor 使用，将 3 个独立轮询请求合并为 1 个
   fastify.get('/admin/crawler/monitor-snapshot', { preHandler: auth }, async (_request, reply) => {
+    // 实时同步所有活跃状态的任务批次数据，确保前台能准确实时获取到 item-level 数据(包含进度和统计信息)
+    const activeRunIds = await crawlerRunsQueries.listActiveRunIds(db)
+    for (const runId of activeRunIds) {
+      await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
+    }
+
     const [overview, runsResult, systemStatusData] = await Promise.all([
       getCrawlerOverview(db),
       crawlerRunsQueries.listRuns(db, { limit: 20, offset: 0 }),

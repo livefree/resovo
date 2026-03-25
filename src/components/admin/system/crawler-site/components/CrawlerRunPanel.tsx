@@ -95,6 +95,9 @@ export function CrawlerRunPanel({
           const failed = typeof summary.failed === 'number' ? summary.failed : 0
           const cancelled = typeof summary.cancelled === 'number' ? summary.cancelled : 0
           const running = typeof summary.running === 'number' ? summary.running : 0
+          const videosUpserted = typeof summary.videosUpserted === 'number' ? summary.videosUpserted : 0
+          const sourcesUpserted = typeof summary.sourcesUpserted === 'number' ? summary.sourcesUpserted : 0
+          const errors = typeof summary.errors === 'number' ? summary.errors : 0
           return (
             <div key={`${runId}-${index}`} className="rounded-md border border-[var(--border)] bg-[var(--bg)] p-2 text-xs">
               <div className="flex items-center justify-between gap-2">
@@ -148,8 +151,11 @@ export function CrawlerRunPanel({
                   ) : null}
                 </div>
               </div>
-              <div className="mt-1 text-[var(--muted)]">
-                进度：总 {total} / 运行中 {running} / 完成 {done} / 失败 {failed} / 取消 {cancelled}
+              <div className="mt-1 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
+                <span className="text-[var(--muted)]">任务进度：总 {total} / 运行 {running} / 完成 {done} / 失败 {failed} / 取消 {cancelled}</span>
+                {(videosUpserted > 0 || sourcesUpserted > 0 || errors > 0) && (
+                  <span className="font-medium text-[var(--text)]">数据采集：{videosUpserted} 视频 / {sourcesUpserted} 播放源 / {errors} 错误</span>
+                )}
               </div>
               <div className="mt-1 text-[var(--muted)]">
                 控制状态：{labelForControlStatus(run.controlStatus)}
