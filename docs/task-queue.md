@@ -2012,9 +2012,9 @@
 ---
 
 ## [SEQ-20260325-03] P3 — 数据质量补全：类型修正 + Genre 映射 + 成人内容隔离
-- **状态**：🟡 规划中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-25 14:00
-- **最后更新时间**：2026-03-25 14:00
+- **最后更新时间**：2026-03-25 15:30
 - **目标**：修复历史数据中约 320 条 type 误分类；为成人内容打标并隔离；建立 genre 自动映射与人工审核双轨机制；补全链接验证定时任务
 - **范围**：DB migrations、SourceParserService、VerifyService、管理后台 VideoMetaForm
 - **依赖**：SEQ-20260325-02 已完成（genre 列已就绪）
@@ -2056,9 +2056,10 @@
    - 完成时间：2026-03-25 15:10
    - 验收要点：server.ts 注册每 24h 定时任务；批量入队 is_active=true 的 sources；不阻塞主进程；测试覆盖调度逻辑
 
-5. CHG-186 — 管理后台 genre 字段编辑（状态：⬜ 待开始）
+5. CHG-186 — 管理后台 genre 字段编辑（状态：✅ 已完成）
    - 创建时间：2026-03-25 14:00
    - 计划开始：CHG-185 完成后
-   - 实际开始：_
-   - 完成时间：_
-   - 验收要点：VideoMetaForm 增加 genre 下拉（15 种 + 空值）；保存写入 genre_source='manual'；typecheck/lint/test 通过
+   - 实际开始：2026-03-25 15:15
+   - 完成时间：2026-03-25 15:30
+   - 验收要点：AdminVideoForm 增加 genre 下拉（15 种 + 空值）；保存写入 genre_source='manual'；typecheck/lint/test 通过
+   - 备注：任务规划中文件路径写的是 VideoMetaForm.tsx，实际对应组件为 AdminVideoForm.tsx

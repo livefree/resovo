@@ -8,7 +8,25 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
-import type { VideoType, VideoStatus } from '@/types'
+import type { VideoType, VideoStatus, VideoGenre } from '@/types'
+
+const GENRE_OPTIONS: { value: VideoGenre; label: string }[] = [
+  { value: 'action',       label: '动作' },
+  { value: 'comedy',       label: '喜剧' },
+  { value: 'romance',      label: '爱情' },
+  { value: 'thriller',     label: '惊悚' },
+  { value: 'horror',       label: '恐怖' },
+  { value: 'sci_fi',       label: '科幻' },
+  { value: 'fantasy',      label: '奇幻/魔幻' },
+  { value: 'history',      label: '历史/古装' },
+  { value: 'crime',        label: '犯罪' },
+  { value: 'mystery',      label: '悬疑' },
+  { value: 'war',          label: '战争' },
+  { value: 'family',       label: '家庭/亲情' },
+  { value: 'biography',    label: '传记/人物' },
+  { value: 'martial_arts', label: '武侠/功夫' },
+  { value: 'other',        label: '其他' },
+]
 
 // ── 类型 ──────────────────────────────────────────────────────────
 
@@ -18,6 +36,7 @@ interface FormData {
   description: string
   coverUrl: string
   type: VideoType
+  genre: VideoGenre | ''
   category: string
   year: string
   country: string
@@ -35,6 +54,7 @@ const DEFAULT_FORM: FormData = {
   description: '',
   coverUrl: '',
   type: 'movie',
+  genre: '',
   category: '',
   year: '',
   country: '',
@@ -120,6 +140,7 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
           description: String(v.description ?? ''),
           coverUrl: String(v.cover_url ?? ''),
           type: (v.type as VideoType) ?? 'movie',
+          genre: (v.genre as VideoGenre | null) ?? '',
           category: String(v.category ?? ''),
           year: v.year ? String(v.year) : '',
           country: String(v.country ?? ''),
@@ -161,6 +182,7 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
         description: form.description || null,
         coverUrl: form.coverUrl || null,
         type: form.type,
+        genre: form.genre || null,
         category: form.category || null,
         year: form.year ? parseInt(form.year) : null,
         country: form.country || null,
@@ -280,6 +302,22 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
           type="number"
           placeholder="1"
         />
+      </div>
+
+      {/* 题材 */}
+      <div>
+        <label className="mb-1 block text-sm font-medium text-[var(--text)]">题材</label>
+        <select
+          value={form.genre}
+          onChange={(e) => set('genre')(e.target.value)}
+          className="w-full rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          data-testid="admin-video-form-genre"
+        >
+          <option value="">— 未分类 —</option>
+          {GENRE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
       </div>
 
       <FormField

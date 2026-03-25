@@ -2797,3 +2797,17 @@
   - 调用已有 `VerifyService.scheduleAllActiveVerification()`，将 is_active=true 的 sources 批量入 verify-queue
   - 默认关闭（开发环境不发送大量 HEAD 请求）；生产部署时设置环境变量开启
 - **测试覆盖**：typecheck ✓ lint ✓ 599/599 unit tests 通过
+
+---
+
+### CHG-186 — 管理后台 genre 字段编辑
+- **完成时间**：2026-03-25 15:30
+- **修改文件**：
+  - `src/components/admin/AdminVideoForm.tsx`（新增 genre 下拉框 + GENRE_OPTIONS 常量 + FormData.genre 字段）
+  - `src/api/routes/admin/videos.ts`（PATCH handler 注入 genreSource='manual'，清空时传 null）
+- **变更说明**：
+  - AdminVideoForm 新增 genre 下拉框，含 15 个合法值（action/comedy/romance/thriller/horror/sci_fi/fantasy/history/crime/mystery/war/family/biography/martial_arts/other）+ 空选项（未分类）
+  - PATCH /admin/videos/:id：route 层根据请求体中 genre 字段自动注入 genreSource；genre 有值→'manual'，genre=null→null
+  - DB 层（UpdateVideoMetaInput + fieldMap）已在 CHG-182 准备好，本次无需改动
+  - 注：任务规划文件路径写的是 `src/components/admin/videos/VideoMetaForm.tsx`，实际组件为 `src/components/admin/AdminVideoForm.tsx`
+- **测试覆盖**：typecheck ✓ lint ✓ 599/599 unit tests 通过
