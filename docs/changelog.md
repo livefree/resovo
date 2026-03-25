@@ -2358,3 +2358,18 @@
   - 制定四级优先级：P1 内容流通管道 → P2 前端链路 → P3 数据质量 → P4 合并规则
   - P1 序列 SEQ-20260324-01 任务写入 task-queue.md 和 tasks.md
   - P1 包含：CHG-160、CHG-161、ADMIN-07、ADMIN-06、ADMIN-08（共 5 个任务）
+
+---
+
+## SEQ-20260324-01 — P1 内容流通管道修复与验证（全部完成）
+
+- **完成时间**：2026-03-25
+- **序列包含任务**：CHG-160、CHG-161、ADMIN-07、ADMIN-06、ADMIN-08
+- **测试覆盖**：58 files / 550 unit tests ✅；4 E2E specs 新增
+- **关键修复**：
+  - BUG-001：publish/batchPublish/batchUnpublish 现在触发 ES 同步（CHG-160）
+  - BUG-002：爬虫 upsertVideo 对新旧视频均触发 ES 索引（CHG-161）
+- **新功能**：
+  - 管理后台视频列表支持按来源站点筛选（ADMIN-07）
+  - 管理后台数据看板增加内容质量统计表格（ADMIN-06）
+  - E2E 测试覆盖完整发布流（ADMIN-08）
