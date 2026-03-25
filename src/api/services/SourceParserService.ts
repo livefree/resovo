@@ -5,7 +5,7 @@
  * ADR-009: cover_url 存外链，不下载
  */
 
-import type { VideoType, VideoStatus, SourceType, ContentFormat, EpisodePattern } from '@/types'
+import type { VideoType, VideoGenre, VideoStatus, SourceType, ContentFormat, EpisodePattern } from '@/types'
 
 // ── 接口原始数据类型 ───────────────────────────────────────────────
 
@@ -36,6 +36,8 @@ export interface ParsedVideo {
   sourceContentType: string | null  // 爬虫原始类型字符串（ADR-017）
   normalizedType: string | null     // 平台规范化分类（ADR-017）
   category: string | null
+  genre: VideoGenre | null          // 从 source_category 自动推断（Migration 020）
+  contentRating: 'general' | 'adult' // 内容分级（Migration 020）
   year: number | null
   country: string | null
   cast: string[]
@@ -81,6 +83,44 @@ const TYPE_MAP: Record<string, VideoType> = {
   '新闻': 'news', 'news': 'news',
 }
 
+// ── 题材映射表（source_category → VideoGenre）────────────────────
+// 仅映射 source_category 中能明确推断题材的类目；
+// 大多数类目（短剧/少儿/动漫/综艺等）描述的是内容形式，不映射到 genre。
+
+const GENRE_MAP: Record<string, VideoGenre> = {
+  // 爱情 / 都市
+  '爽文短剧': 'romance', '女频恋爱': 'romance', '现代都市': 'romance',
+  // 犯罪
+  '犯罪片': 'crime',
+  // 战争
+  '战争片': 'war',
+  // 悬疑
+  '悬疑片': 'mystery', '脑洞悬疑': 'mystery',
+  // 动作
+  '功夫片': 'action', '武侠片': 'martial_arts',
+  // 其他（有明确含义但不在上述具体分类）
+  '剧情片': 'other',
+}
+
+// ── 成人内容类目列表（source_category → content_rating='adult'）────
+// 这些类目的内容设为 visibility_status='hidden'（Migration 021 回填）；
+// 未来开辟成人专区时，可通过 content_rating='adult' 查询并切换可见性。
+
+export const ADULT_CATEGORIES = new Set<string>([
+  '亚洲情色', '亚洲有码', '日本有码', '日本无码', '无码专区',
+  '国产自拍', '国产主播', '国产直播', '国产盗摄', '国产SM',
+  '欧美性爱', '欧美精品',
+  '中文字幕',
+  '门事件', '强奸乱伦', '伦理三级', '倫理片',
+  '抖阴视频', '自拍偷拍', '重口调教',
+  '性感人妻', '主播视讯', '主播秀色',
+  '口爆颜射', '换脸明星', '美乳巨乳', '巨乳美乳',
+  '黑丝诱惑', '制服丝袜',
+  '素人搭讪', '童颜巨乳', '群交淫乱', '多人群交',
+  '大象传媒', '探花系列', '传媒原创',
+  '女优系列',
+])
+
 const COUNTRY_MAP: Record<string, string> = {
   '中国大陆': 'CN', '大陆': 'CN', '国产': 'CN', '华语': 'CN',
   '香港': 'HK', '港剧': 'HK',
@@ -113,6 +153,18 @@ export function stripTags(html: string | undefined): string | null {
 export function parseType(typeName: string | undefined): VideoType {
   if (!typeName) return 'other'
   return TYPE_MAP[typeName.trim()] ?? 'other'
+}
+
+/** 从 source_category 推断 VideoGenre；无匹配返回 null（等待人工核验） */
+export function parseGenre(sourceCategory: string | null | undefined): VideoGenre | null {
+  if (!sourceCategory) return null
+  return GENRE_MAP[sourceCategory.trim()] ?? null
+}
+
+/** 从 source_category 判断内容分级；成人内容返回 'adult'，其余返回 'general' */
+export function parseContentRating(sourceCategory: string | null | undefined): 'general' | 'adult' {
+  if (!sourceCategory) return 'general'
+  return ADULT_CATEGORIES.has(sourceCategory.trim()) ? 'adult' : 'general'
 }
 
 /** 解析国家/地区 → ISO 代码 */
@@ -199,6 +251,7 @@ export function parseVodItem(item: RawVodItem): {
   // 当前 normalizedType 与 type 保持一致；未来可做更细粒度映射
   const normalizedType: string = type
 
+  const rawCategory = typeName || null
   const video: ParsedVideo = {
     title: (item.vod_name ?? '').trim(),
     titleEn: item.vod_en?.trim() || null,
@@ -206,7 +259,9 @@ export function parseVodItem(item: RawVodItem): {
     type,
     sourceContentType,
     normalizedType,
-    category: typeName || null,
+    category: rawCategory,
+    genre: parseGenre(rawCategory),
+    contentRating: parseContentRating(rawCategory),
     year: parseYear(item.vod_year),
     country: parseCountry(item.vod_area),
     cast: splitNames(item.vod_actor),

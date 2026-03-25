@@ -2753,3 +2753,21 @@
   - `idx_videos_content_rating` 索引（前台查询默认过滤成人内容，高频条件）
   - migration 幂等（DO $$ IF NOT EXISTS）
 - **测试覆盖**：typecheck ✓ lint ✓ 587/587 unit tests 通过
+
+---
+
+## CHG-183 — SourceParserService：GENRE_MAP + ADULT_CATEGORIES
+
+- **完成时间**：2026-03-25 14:35
+- **修改文件**：
+  - `src/api/services/SourceParserService.ts`（GENRE_MAP、ADULT_CATEGORIES、parseGenre、parseContentRating；ParsedVideo 扩展两字段）
+  - `src/api/db/queries/videos.ts`（CrawlerInsertInput 新增 genre/genreSource/contentRating；INSERT SQL 同步）
+  - `src/api/services/CrawlerService.ts`（insertCrawledVideo 调用传入新字段）
+  - `tests/unit/api/crawler.test.ts`（parseGenre 6 tests + parseContentRating 6 tests）
+- **变更说明**：
+  - GENRE_MAP：11 种 source_category → VideoGenre 映射（romance/crime/war/mystery/action/martial_arts/other）
+  - ADULT_CATEGORIES：31 个已知成人 source_category 类目
+  - parseGenre：无法识别时返回 null（等待人工核验）
+  - parseContentRating：命中 ADULT_CATEGORIES 返回 'adult'，否则 'general'
+  - 新爬取视频在 INSERT 时自动写入 genre、genre_source='auto'、content_rating
+- **测试覆盖**：typecheck ✓ lint ✓ 599/599 unit tests 通过（新增 12 个）

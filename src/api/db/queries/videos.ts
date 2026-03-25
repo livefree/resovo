@@ -602,6 +602,9 @@ export interface CrawlerInsertInput {
   coverUrl: string | null
   type: VideoType
   sourceCategory: string | null  // 爬虫原始分类字符串（写入 source_category 列）
+  genre: VideoGenre | null       // 系统自动推断的题材
+  genreSource: 'auto' | null     // 爬虫写入时来源固定为 'auto'
+  contentRating: 'general' | 'adult'
   year: number | null
   country: string | null
   cast: string[]
@@ -624,10 +627,11 @@ export async function insertCrawledVideo(
 ): Promise<{ id: string }> {
   const result = await db.query<{ id: string }>(
     `INSERT INTO videos
-       (short_id, title, title_normalized, title_en, cover_url, type, source_category, year, country,
-        "cast", director, writers, description, status, episode_count,
+       (short_id, title, title_normalized, title_en, cover_url, type, source_category,
+        genre, genre_source, content_rating,
+        year, country, "cast", director, writers, description, status, episode_count,
         is_published, metadata_source)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
      RETURNING id`,
     [
       input.shortId,
@@ -637,6 +641,9 @@ export async function insertCrawledVideo(
       input.coverUrl,
       input.type,
       input.sourceCategory,
+      input.genre,
+      input.genreSource,
+      input.contentRating,
       input.year,
       input.country,
       input.cast,

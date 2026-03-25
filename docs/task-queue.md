@@ -2032,11 +2032,11 @@
    - 完成时间：2026-03-25 14:15
    - 验收要点：migration 幂等可重跑；两列存在于 videos 表；CHECK 约束正确；idx_videos_content_rating 索引建立
 
-2. CHG-183 — SourceParserService：GENRE_MAP + ADULT_CATEGORIES（状态：⬜ 待开始）
+2. CHG-183 — SourceParserService：GENRE_MAP + ADULT_CATEGORIES（状态：✅ 已完成）
    - 创建时间：2026-03-25 14:00
    - 计划开始：CHG-182 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-25 14:20
+   - 完成时间：2026-03-25 14:35
    - 验收要点：新爬取视频自动填充 genre + content_rating；ADULT_CATEGORIES 列表覆盖已知成人 source_category；单元测试覆盖
 
 3. CHG-184 — Migration 021：历史数据批量回填（状态：⬜ 待开始）

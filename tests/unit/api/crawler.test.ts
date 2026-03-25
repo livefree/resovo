@@ -256,6 +256,9 @@ import {
   stripTags,
   inferContentFormat,
   inferEpisodePattern,
+  parseGenre,
+  parseContentRating,
+  ADULT_CATEGORIES,
 } from '@/api/services/SourceParserService'
 
 describe('splitNames', () => {
@@ -591,6 +594,68 @@ describe('inferEpisodePattern', () => {
 
   it('episodeCount=0 → single（兜底）', () => {
     expect(inferEpisodePattern(0, 'ongoing')).toBe('single')
+  })
+})
+
+// ── CHG-183: parseGenre / parseContentRating ──────────────────────
+
+describe('parseGenre', () => {
+  it('爽文短剧 → romance', () => {
+    expect(parseGenre('爽文短剧')).toBe('romance')
+  })
+
+  it('犯罪片 → crime', () => {
+    expect(parseGenre('犯罪片')).toBe('crime')
+  })
+
+  it('战争片 → war', () => {
+    expect(parseGenre('战争片')).toBe('war')
+  })
+
+  it('悬疑片 → mystery', () => {
+    expect(parseGenre('悬疑片')).toBe('mystery')
+  })
+
+  it('无法识别的类目返回 null', () => {
+    expect(parseGenre('短剧')).toBeNull()
+    expect(parseGenre('少儿')).toBeNull()
+    expect(parseGenre('日韩动漫')).toBeNull()
+  })
+
+  it('null / undefined 返回 null', () => {
+    expect(parseGenre(null)).toBeNull()
+    expect(parseGenre(undefined)).toBeNull()
+    expect(parseGenre('')).toBeNull()
+  })
+})
+
+describe('parseContentRating', () => {
+  it('亚洲情色 → adult', () => {
+    expect(parseContentRating('亚洲情色')).toBe('adult')
+  })
+
+  it('国产自拍 → adult', () => {
+    expect(parseContentRating('国产自拍')).toBe('adult')
+  })
+
+  it('短剧 → general', () => {
+    expect(parseContentRating('短剧')).toBe('general')
+  })
+
+  it('少儿 → general', () => {
+    expect(parseContentRating('少儿')).toBe('general')
+  })
+
+  it('null / undefined → general', () => {
+    expect(parseContentRating(null)).toBe('general')
+    expect(parseContentRating(undefined)).toBe('general')
+  })
+
+  it('ADULT_CATEGORIES 集合非空且包含已知成人类目', () => {
+    expect(ADULT_CATEGORIES.size).toBeGreaterThan(0)
+    expect(ADULT_CATEGORIES.has('亚洲情色')).toBe(true)
+    expect(ADULT_CATEGORIES.has('中文字幕')).toBe(true)
+    expect(ADULT_CATEGORIES.has('短剧')).toBe(false)
   })
 })
 
