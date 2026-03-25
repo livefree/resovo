@@ -1967,11 +1967,11 @@
    - 完成时间：2026-03-25 10:30
    - 验收要点：VideoCategory 删除；VideoGenre 导出正常；typecheck 零报错
 
-2. CHG-176 — Migration 019：category→genre + type 值域重建（状态：⬜ 待开始）
+2. CHG-176 — Migration 019：category→source_category + genre 新列 + type 值域重建（状态：✅ 已完成）
    - 创建时间：2026-03-25 10:00
    - 计划开始：CHG-175 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-25 10:35
+   - 完成时间：2026-03-25 11:00
    - 验收要点：migration 幂等可重跑；DB schema CHECK 约束与新类型一致
 
 3. CHG-177 — 后端查询层 + Zod schema 更新（状态：⬜ 待开始）

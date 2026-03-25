@@ -2668,3 +2668,17 @@
   - VideoType 严格表示内容形式（11种），VideoGenre 严格表示内容题材（15种），两个维度正交
   - 所有旧值通过 SourceParserService.TYPE_MAP 自动映射：drama→series，short_drama→short，children→kids，game_show→variety
 - **测试覆盖**：typecheck ✓，lint ✓，unit tests 587/587 通过
+
+## CHG-176 — Migration 019：category→source_category + genre 新列 + type 值域重建
+- **完成时间**：2026-03-25 11:00
+- **来源序列**：SEQ-20260325-02
+- **修改文件**：
+  - `src/api/db/migrations/019_rebuild_video_type_genre.sql`（新建）
+- **变更摘要**：
+  - `videos.category` 重命名为 `source_category`（保留爬虫原始分类字符串，不加 CHECK 约束）
+  - 新增 `videos.genre TEXT` 列（平台策展题材，初始 NULL）
+  - `videos.type` 数据迁移：drama→series，short_drama→short，children→kids，game_show→variety
+  - 重建 `videos_type_check`（11 种新值）
+  - 新增 `videos_genre_check`（15 种 VideoGenre 枚举值，允许 NULL）
+  - 迁移已在 resovo_dev 执行成功（COMMIT）
+- **测试覆盖**：migration 执行成功；typecheck ✓（migration 为纯 SQL 文件，不影响 TS 编译）
