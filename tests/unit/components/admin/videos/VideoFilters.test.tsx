@@ -1,10 +1,11 @@
 /**
  * tests/unit/components/admin/videos/VideoFilters.test.tsx
  * CHG-27: VideoFilters URL 参数同步
+ * ADMIN-07: 来源站点筛选
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { VideoFilters } from '@/components/admin/videos/VideoFilters'
 
 const mockPush = vi.fn()
@@ -16,11 +17,22 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => mockSearchParams,
 }))
 
+vi.mock('@/lib/api-client', () => ({
+  apiClient: {
+    get: vi.fn().mockResolvedValue({ data: [] }),
+  },
+}))
+
+import { apiClient } from '@/lib/api-client'
+const mockGet = apiClient.get as ReturnType<typeof vi.fn>
+
 beforeEach(() => {
   vi.clearAllMocks()
+  mockGet.mockResolvedValue({ data: [] })
   mockSearchParams.delete('q')
   mockSearchParams.delete('type')
   mockSearchParams.delete('status')
+  mockSearchParams.delete('site')
 })
 
 describe('VideoFilters', () => {
@@ -50,7 +62,6 @@ describe('VideoFilters', () => {
     render(<VideoFilters />)
     const select = screen.getByTestId('video-filters-type') as HTMLSelectElement
     fireEvent.change(select, { target: { value: '' } })
-    // empty value → param deleted from URL
     const calledWith = mockPush.mock.calls[0][0] as string
     expect(calledWith).not.toContain('type=')
   })
@@ -62,5 +73,27 @@ describe('VideoFilters', () => {
     fireEvent.change(select, { target: { value: 'anime' } })
     const calledWith = mockPush.mock.calls[0][0] as string
     expect(calledWith).not.toContain('page=3')
+  })
+
+  it('站点列表为空时不渲染来源站点下拉', () => {
+    mockGet.mockResolvedValue({ data: [] })
+    render(<VideoFilters />)
+    expect(screen.queryByTestId('video-filters-site')).toBeNull()
+  })
+
+  it('站点列表有数据时渲染来源站点下拉，选择后写入 site 参数', async () => {
+    mockGet.mockResolvedValue({
+      data: [
+        { key: 'site-a', name: '站点A' },
+        { key: 'site-b', name: '站点B' },
+      ],
+    })
+    render(<VideoFilters />)
+
+    const select = await waitFor(() => screen.getByTestId('video-filters-site'))
+    expect(select).toBeTruthy()
+
+    fireEvent.change(select, { target: { value: 'site-a' } })
+    expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('site=site-a'))
   })
 })

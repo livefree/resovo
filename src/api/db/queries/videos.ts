@@ -236,6 +236,8 @@ export interface AdminVideoListFilters {
   status?: 'pending' | 'published' | 'unpublished' | 'all'
   type?: VideoType
   q?: string
+  /** 按来源站点 key 筛选（video_sources.source_name） */
+  siteKey?: string
   page: number
   limit: number
 }
@@ -264,6 +266,13 @@ export async function listAdminVideos(
     conditions.push(`(v.title ILIKE $${idx} OR v.title_en ILIKE $${idx})`)
     params.push(`%${filters.q}%`)
     idx++
+  }
+
+  if (filters.siteKey) {
+    conditions.push(
+      `EXISTS (SELECT 1 FROM video_sources vs WHERE vs.video_id = v.id AND vs.source_name = $${idx++} AND vs.deleted_at IS NULL)`
+    )
+    params.push(filters.siteKey)
   }
 
   const where = conditions.join(' AND ')

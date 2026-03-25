@@ -70,6 +70,7 @@ export class VideoService {
     status?: 'pending' | 'published' | 'unpublished' | 'all'
     type?: import('@/types').VideoType
     q?: string
+    siteKey?: string
     page?: number
     limit?: number
   }): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
@@ -80,6 +81,7 @@ export class VideoService {
       status: params.status ?? 'all',
       type: params.type,
       q: params.q,
+      siteKey: params.siteKey,
       page,
       limit,
     })

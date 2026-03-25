@@ -54,6 +54,8 @@ const ListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   q: z.string().max(100).optional(),
+  /** 按来源站点 key 筛选 */
+  site: z.string().max(100).optional(),
 })
 
 // ── 路由注册 ──────────────────────────────────────────────────────
@@ -73,8 +75,8 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const { status, type, page, limit, q } = parsed.data
-    const result = await videoService.adminList({ status, type, page, limit, q })
+    const { status, type, page, limit, q, site } = parsed.data
+    const result = await videoService.adminList({ status, type, page, limit, q, siteKey: site })
     return reply.send(result)
   })
 
