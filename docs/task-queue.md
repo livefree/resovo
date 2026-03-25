@@ -2067,9 +2067,9 @@
 ---
 
 ## [SEQ-20260325-04] P3/P4/P5 收尾 — 合并率统计、ADR、SEO、ES 监控
-- **状态**：🔄 执行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-25 16:00
-- **最后更新时间**：2026-03-25 16:00
+- **最后更新时间**：2026-03-25 16:55
 - **目标**：补全 priority-plan-20260324 剩余 4 项缺口：video_aliases 合并率统计、合并规则 ADR、详情页 SEO metadata、ES 索引健康监控
 - **范围**：analytics 路由、decisions.md、5个详情页 page.tsx、lib/getVideoMeta.ts
 - **依赖**：SEQ-20260325-03 已完成
@@ -2097,9 +2097,9 @@
    - 完成时间：2026-03-25 16:45
    - 验收要点：GET /admin/analytics/es-health 返回 ES doc_count、DB doc_count、is_published 数量、索引健康状态；typecheck/lint/test 通过
 
-4. CHG-188 — 数据合并规则 ADR 文档（状态：⬜ 待开始）
+4. CHG-188 — 数据合并规则 ADR 文档（状态：✅ 已完成）
    - 创建时间：2026-03-25 16:00
    - 计划开始：CHG-190 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-25 16:47
+   - 完成时间：2026-03-25 16:55
    - 验收要点：docs/decisions.md 追加 ADR，记录 title_normalized+year+type 三元组匹配、metadata_source 优先级、video_aliases 追加规则；与 CrawlerService 实现一致

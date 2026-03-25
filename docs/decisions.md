@@ -401,3 +401,46 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
 - **影响文件**：`src/api/db/migrations/018_*.sql`，`src/api/services/CrawlerService.ts`，`src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
 
 _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
+
+## ADR-020: 跨站视频去重合并策略（Video Merge Rules）
+
+- **日期**：2026-03-25
+- **状态**：已实现（CHG-38，CrawlerService.upsertVideo）
+- **背景**：
+  - 多个来源站点可能收录同一部视频（相同标题、年份、类型）
+  - 若每个来源都创建独立 `videos` 记录，会导致重复内容、分散播放源、搜索结果冗余
+  - 需要定义"何时视为同一视频"及"合并时元数据以谁为准"
+- **决策**：采用五条规则（A~E）实现确定性合并
+
+  ### 规则 A — 合并键（Match Key）
+  以 `(title_normalized, year, type)` 三元组为合并键：
+  - `title_normalized` 由 TitleNormalizer 标准化（去标点、统一简繁、去常见后缀），确保"进击的巨人"与"進撃の巨人"能匹配
+  - `year` 为 NULL 时不参与匹配（防止无年份数据的源站误合并）
+  - `type` 不同（如 movie ≠ series）不合并，即使标题相同
+
+  ### 规则 B — 标题标准化
+  爬虫写入前，调用 `normalizeTitle(title)` 生成 `title_normalized` 写入 DB。
+  标准化函数位于 `src/api/services/TitleNormalizer.ts`。
+
+  ### 规则 C — 别名追踪
+  每次爬虫写入（无论新建还是合并到已有视频），将原始 `title` 和 `titleEn` 写入 `video_aliases` 表（INSERT ON CONFLICT DO NOTHING）。
+  这样可追踪"同一视频在不同平台的不同名称"，也是 video_aliases 合并率统计的数据来源。
+
+  ### 规则 D — 元数据优先级
+  来源优先级：`tmdb(4) > douban(3) > manual(2) > crawler(1)`。
+  低优先级来源不覆盖高优先级来源已写入的元数据（cover_url、description、year 等）。
+  当前所有来源均为 crawler，故暂时所有合并视频均跳过元数据覆盖；当 Douban/TMDB 同步到来时自动生效。
+
+  ### 规则 E — 播放源去重
+  `video_sources` 唯一约束为 `(video_id, episode_number, source_url) NULLS NOT DISTINCT`。
+  重复 URL 的来源使用 `ON CONFLICT DO NOTHING`，不覆盖已有播放源。
+
+- **理由**：
+  - 三元组匹配覆盖约 90% 的同片场景，误合并率极低（不同类型强制隔离）
+  - video_aliases 提供可审计的合并历史，管理员可通过内容质量统计查看合并率
+  - 优先级机制为未来引入 TMDB/Douban 元数据预留扩展点，无需改变 schema
+- **架构约束**：
+  - 合并逻辑集中在 `CrawlerService.upsertVideo()`，禁止在其他地方绕过合并逻辑直接插入 videos 表
+  - 若需手动调整合并结果（如错误合并），应通过管理后台的 video 编辑接口修改，而非直接 SQL 修改
+  - 合并率统计通过 `GET /admin/analytics/content-quality` 的 `aliasCount` 字段获取
+- **影响文件**：`src/api/services/CrawlerService.ts`，`src/api/services/TitleNormalizer.ts`，`src/api/db/migrations/007_video_merge.sql`

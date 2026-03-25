@@ -2852,3 +2852,14 @@
   - 返回 diff（DB - ES）用于发现同步滞后；ES 不可用时返回 -1 而非抛异常
   - 修复 analytics.test.ts 因新增 ES import 导致的 9 个测试失败
 - **测试覆盖**：typecheck ✓ lint ✓ 599/599 unit tests 通过
+
+---
+
+### CHG-188 — 数据合并规则 ADR 文档
+- **完成时间**：2026-03-25 16:55
+- **修改文件**：`docs/decisions.md`（追加 ADR-020）
+- **变更说明**：
+  - 记录跨站视频去重合并策略的五条规则（A-E）：match_key 三元组、标题标准化、video_aliases 别名追踪、metadata_source 优先级、播放源去重
+  - 与 CrawlerService.upsertVideo() 实现完全对应
+  - 补全了 priority-plan-20260324 P4 的文档收口
+- **测试覆盖**：typecheck ✓ 599/599 unit tests 通过（纯文档变更）
