@@ -168,3 +168,114 @@
 - **DoD**：typecheck/lint/test 通过，文档记录一致
 - **回滚方式**：回退 CHG-159 文档提交
 - **完成备注**：SEQ-20260322-06 全部完成；533/533 tests ✅
+
+---
+
+## P1 优先级序列 — 内容流通管道修复与验证
+
+> 决策依据：`docs/priority-plan-20260324.md`
+> 目标：修复 ES 同步断链，建立"爬虫→DB→ES→前端可见"完整通路
+
+---
+
+#### CHG-160 — 修复 publish/batchPublish 缺失 ES 同步
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-24 00:00
+- **计划开始时间**：2026-03-24
+- **实际开始时间**：_
+- **完成时间**：_
+- **目标**：`publish()`、`batchPublish()`、`batchUnpublish()` 在 DB 更新后触发 `indexToES()`，消除发布动作与 ES 的同步断点
+- **文件范围**：`src/api/services/VideoService.ts`
+- **变更内容**：
+  - `publish()` 在 DB 更新成功后调用 `void this.indexToES(id)`
+  - `batchPublish()` 对每个已更新的 id 触发 indexToES（批量，fire-and-forget）
+  - `batchUnpublish()` 同样触发（ES 需更新 `is_published: false`）
+- **DoD**：发布/批量发布/下架后，ES 对应文档 `is_published` 字段同步更新；单元测试覆盖
+- **依赖**：无
+- **回滚方式**：回退 CHG-160 提交
+- **完成备注**：_
+
+---
+
+#### CHG-161 — 爬虫写入 DB 后触发 ES 异步索引
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-24 00:00
+- **计划开始时间**：CHG-160 完成后
+- **实际开始时间**：_
+- **完成时间**：_
+- **目标**：爬虫 insertCrawledVideo/updateExistingVideo 成功后，通过现有 Bull 队列异步投递 ES 索引任务，不阻塞爬虫主流程
+- **文件范围**：`src/api/services/CrawlerService.ts`、`src/api/workers/crawlerWorker.ts`（或新建 es-sync Bull 队列处理器）
+- **变更内容**：
+  - 写入/更新视频后，向 Bull 队列投递 `{ type: 'index-video', videoId }` 任务
+  - Worker 端处理：调用 VideoService.indexToES()（或内联 ES index 调用）
+  - 注意：`is_published=false` 的视频也需索引（管理员搜索需要）；前台搜索 API 过滤 `is_published: true`
+- **DoD**：爬虫写入后，ES 中出现对应文档；现有测试通过
+- **依赖**：CHG-160
+- **回滚方式**：回退 CHG-161 提交
+- **完成备注**：_
+
+---
+
+#### ADMIN-07 — 管理后台视频列表增加来源站点筛选
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-24 00:00
+- **计划开始时间**：CHG-161 完成后
+- **实际开始时间**：_
+- **完成时间**：_
+- **目标**：VideoFilters 新增"来源站点"下拉，按爬虫站点查看该站贡献内容的质量，辅助人工审核决策
+- **文件范围**：
+  - `src/components/admin/videos/VideoFilters.tsx`
+  - `src/api/routes/admin/videos.ts`（GET /admin/videos 增加 `site_id` 参数）
+  - `src/api/db/queries/videos.ts`（listAdminVideos 增加 site_id 过滤）
+- **DoD**：站点筛选可用；后端 site_id 参数过滤正确；现有测试通过
+- **依赖**：CHG-161
+- **回滚方式**：回退 ADMIN-07 提交
+- **完成备注**：_
+
+---
+
+#### ADMIN-06 — 管理后台内容质量统计视图
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-24 00:00
+- **计划开始时间**：ADMIN-07 完成后
+- **实际开始时间**：_
+- **完成时间**：_
+- **目标**：提供按来源站点分组的数据质量统计，帮助管理员判断哪些站点内容可批量发布
+- **文件范围**：
+  - `src/api/routes/admin/analytics.ts`（新增 `GET /admin/analytics/content-quality` 端点）
+  - `src/app/[locale]/admin/analytics/`（新增 quality-stats tab 或独立页）
+- **统计维度**：
+  - 按站点分组：总视频数 / 已发布 / 待审核
+  - 字段覆盖率：有封面率、有简介率、有年份率
+  - 源存活率（is_active=true 比例）
+  - 合并命中数（video_aliases 条数）
+- **DoD**：管理员可访问质量统计页；数据准确；测试覆盖 API
+- **依赖**：ADMIN-07
+- **回滚方式**：回退 ADMIN-06 提交
+- **完成备注**：_
+
+---
+
+#### ADMIN-08 — 端对端内容流通 E2E 验证与收口
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-24 00:00
+- **计划开始时间**：ADMIN-06 完成后
+- **实际开始时间**：_
+- **完成时间**：_
+- **目标**：编写/补全 E2E 测试覆盖完整发布流，验收 P1 序列成果
+- **文件范围**：`tests/e2e/`（新增 publish-flow.spec.ts）
+- **E2E 覆盖流程**：
+  1. 管理员登录 → /admin/videos?status=pending → 看到待审核视频
+  2. 发布单条视频 → 确认状态变更
+  3. 前台搜索该视频 → 出现在结果中（验证 ES 同步）
+  4. 进入详情页 → 基本信息完整
+  5. 进入播放页 → 播放器组件正常加载
+- **DoD**：E2E 测试通过；或完成人工验收并记录报告；文档更新
+- **依赖**：ADMIN-06
+- **回滚方式**：回退 ADMIN-08 提交
+- **完成备注**：_
