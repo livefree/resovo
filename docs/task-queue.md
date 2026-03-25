@@ -2049,11 +2049,11 @@
      - 成人内容：423 条 content_rating='adult' + visibility_status='hidden' ✅
      - genre 回填：61 条（romance 40/other 16/crime 2/mystery 2/war 1）；1167 条 NULL 保留人工审核 ✅
 
-4. CHG-185 — VerifyService cron：定时链接存活扫描（状态：⬜ 待开始）
+4. CHG-185 — VerifyService cron：定时链接存活扫描（状态：✅ 已完成）
    - 创建时间：2026-03-25 14:00
    - 计划开始：CHG-184 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-25 15:00
+   - 完成时间：2026-03-25 15:10
    - 验收要点：server.ts 注册每 24h 定时任务；批量入队 is_active=true 的 sources；不阻塞主进程；测试覆盖调度逻辑
 
 5. CHG-186 — 管理后台 genre 字段编辑（状态：⬜ 待开始）

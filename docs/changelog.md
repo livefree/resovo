@@ -2784,3 +2784,16 @@
   - 区块 B 成人打标：423 条 content_rating='adult' + visibility_status='hidden'
   - 区块 C genre 回填：61 条自动推断（romance 40 / other 16 / crime 2 / mystery 2 / war 1）；1167 条 NULL 保留人工审核队列
 - **测试覆盖**：DB 验收查询确认三项均符合预期；unit tests 599/599 不受影响
+
+---
+
+## CHG-185 — VerifyService cron：定时链接存活扫描
+
+- **完成时间**：2026-03-25 15:10
+- **修改文件**：
+  - `src/api/server.ts`（import VerifyService + db；注册 VERIFY_SCHEDULER_ENABLED 定时器）
+- **变更说明**：
+  - `VERIFY_SCHEDULER_ENABLED=true` 时，启动后 5min 执行首次扫描，之后每 24h 重复
+  - 调用已有 `VerifyService.scheduleAllActiveVerification()`，将 is_active=true 的 sources 批量入 verify-queue
+  - 默认关闭（开发环境不发送大量 HEAD 请求）；生产部署时设置环境变量开启
+- **测试覆盖**：typecheck ✓ lint ✓ 599/599 unit tests 通过

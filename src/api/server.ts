@@ -25,6 +25,8 @@ import { danmakuRoutes } from '@/api/routes/danmaku'
 import { registerVerifyWorker } from '@/api/workers/verifyWorker'
 import { registerCrawlerWorker } from '@/api/workers/crawlerWorker'
 import { registerCrawlerScheduler } from '@/api/workers/crawlerScheduler'
+import { VerifyService } from '@/api/services/VerifyService'
+import { db } from '@/api/lib/postgres'
 
 async function start() {
   const fastify = Fastify({
@@ -73,11 +75,30 @@ async function start() {
 
   registerVerifyWorker()
   registerCrawlerWorker()
+
   const schedulerEnabled = process.env.CRAWLER_SCHEDULER_ENABLED === 'true'
   if (schedulerEnabled) {
     registerCrawlerScheduler()
   } else {
     process.stderr.write('[crawler-scheduler] disabled (set CRAWLER_SCHEDULER_ENABLED=true to enable)\n')
+  }
+
+  // 链接存活定时扫描：每 24h 将所有活跃 sources 批量入队 verify-queue
+  // 仅在 VERIFY_SCHEDULER_ENABLED=true 时启用（默认关闭，避免开发环境误发大量 HEAD 请求）
+  const verifySchedulerEnabled = process.env.VERIFY_SCHEDULER_ENABLED === 'true'
+  if (verifySchedulerEnabled) {
+    const verifyService = new VerifyService(db)
+    const VERIFY_INTERVAL_MS = 24 * 60 * 60 * 1000  // 24h
+    // 启动后延迟 5min 再执行首次扫描，避免与服务启动争抢资源
+    setTimeout(() => {
+      void verifyService.scheduleAllActiveVerification()
+      setInterval(() => {
+        void verifyService.scheduleAllActiveVerification()
+      }, VERIFY_INTERVAL_MS)
+    }, 5 * 60 * 1000)
+    process.stderr.write('[verify-scheduler] enabled — first scan in 5 min, then every 24h\n')
+  } else {
+    process.stderr.write('[verify-scheduler] disabled (set VERIFY_SCHEDULER_ENABLED=true to enable)\n')
   }
 
   fastify.get('/v1/health', async (_request, reply) => {
