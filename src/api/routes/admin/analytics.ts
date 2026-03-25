@@ -51,6 +51,7 @@ export interface ContentQualityRow {
   hasYear: number
   activeSources: number
   totalSources: number
+  aliasCount: number  // 该站点中有跨站合并记录的视频数
 }
 
 export async function adminAnalyticsRoutes(fastify: FastifyInstance) {
@@ -74,6 +75,7 @@ export async function adminAnalyticsRoutes(fastify: FastifyInstance) {
       has_year: string
       active_sources: string
       total_sources: string
+      alias_count: string
     }>(`
       SELECT
         vs.source_name                                                      AS site_key,
@@ -83,9 +85,11 @@ export async function adminAnalyticsRoutes(fastify: FastifyInstance) {
         COUNT(DISTINCT v.id) FILTER (WHERE v.description IS NOT NULL AND v.description != '')::text AS has_description,
         COUNT(DISTINCT v.id) FILTER (WHERE v.year IS NOT NULL)::text        AS has_year,
         COUNT(vs.id)         FILTER (WHERE vs.is_active = true)::text       AS active_sources,
-        COUNT(vs.id)::text                                                  AS total_sources
+        COUNT(vs.id)::text                                                  AS total_sources,
+        COUNT(DISTINCT va.video_id)::text                                   AS alias_count
       FROM video_sources vs
       JOIN videos v ON v.id = vs.video_id AND v.deleted_at IS NULL
+      LEFT JOIN video_aliases va ON va.video_id = v.id
       WHERE vs.deleted_at IS NULL
         AND vs.source_name IS NOT NULL
       GROUP BY vs.source_name
@@ -101,6 +105,7 @@ export async function adminAnalyticsRoutes(fastify: FastifyInstance) {
       hasYear:        parseInt(r.has_year),
       activeSources:  parseInt(r.active_sources),
       totalSources:   parseInt(r.total_sources),
+      aliasCount:     parseInt(r.alias_count),
     }))
 
     return reply.send({ data })

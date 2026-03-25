@@ -2828,3 +2828,14 @@
   - 视频不存在时 fallback title = '流光视频'，不抛异常
   - 与现有 `fetchVideoDetail` 共用同一 API base 和 revalidate=60 缓存策略
 - **测试覆盖**：typecheck ✓ lint ✓ 599/599 unit tests 通过
+
+---
+
+### CHG-187 — ADMIN-06 补充 video_aliases 合并率统计
+- **完成时间**：2026-03-25 16:30
+- **修改文件**：`src/api/routes/admin/analytics.ts`
+- **变更说明**：
+  - `ContentQualityRow` 新增 `aliasCount: number` 字段
+  - SQL 增加 `LEFT JOIN video_aliases va ON va.video_id = v.id`，统计各站点中有跨站合并记录的视频数
+  - 原 ADMIN-06 规范中已列出该统计维度，但初始实现遗漏
+- **测试覆盖**：typecheck ✓ lint ✓ 599/599 unit tests 通过
