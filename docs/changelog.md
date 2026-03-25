@@ -2889,3 +2889,17 @@
   - `<th>` 元素加 `suppressHydrationWarning`，消除 localStorage 用户自定义列宽与 SSR 默认列宽不一致导致的 React hydration mismatch 警告
 - **根因**：`useAdminTableState` 的 `useState` lazy initializer 在 client hydration 时读取 localStorage（server 端不可用），导致 server HTML 与 client 初次渲染的列宽不一致。`suppressHydrationWarning` 是 React 官方推荐的处理"仅 browser 可知的状态"导致 SSR/CSR 不一致的标准方案
 - **测试覆盖**：typecheck ✅ lint ✅ unit tests 599/599 ✅
+
+---
+
+### CHG-193 — 修复 stop-all 后 run controlStatus 卡在 cancelling
+- **完成时间**：2026-03-25 18:40
+- **修改文件**：
+  - `src/api/db/queries/crawlerRuns.ts`
+  - `src/api/routes/admin/crawler.ts`
+- **变更内容**：
+  - `requestCancelAllActiveRuns`：改为 `RETURNING id`，返回 `{ count, runIds }` 而非仅 count
+  - `syncRunStatusFromTasks` SQL：新增 `control_status = CASE WHEN a.total > 0 AND a.cancelled = a.total THEN 'cancelled' ELSE r.control_status END`，使全部任务 cancelled 时 run.control_status 同步更新
+  - `stop-all` endpoint：用返回的 runIds 立即调用 `syncRunStatusFromTasks`，不等 watchdog（最多 60s 延迟）
+- **根因**：`syncRunStatusFromTasks` 只更新 run.status，不更新 run.control_status；stop-all 也未主动 sync；导致 UI 的 runningRuns 过滤（`controlStatus === 'cancelling'`）永远命中，"中止中"无法变为"已中止"
+- **测试覆盖**：typecheck ✅ lint ✅ unit tests 599/599 ✅

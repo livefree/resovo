@@ -2135,3 +2135,19 @@
    - 实际开始：2026-03-25 17:30
    - 完成时间：2026-03-25 17:55
    - 验收要点：useAdminTableState useState 初始值改为 defaultStateRef.current，不在 hydration 期读取 localStorage；typecheck/lint/test 通过
+
+---
+
+## SEQ-20260325-07 — stop-all run 状态修复
+- **创建时间**：2026-03-25 18:20
+- **最后更新时间**：2026-03-25 18:40
+- **状态**：✅ 已完成
+
+### 任务列表（按执行顺序）
+
+1. CHG-193 — 修复 stop-all 后 run controlStatus 卡在 cancelling（状态：✅ 已完成）
+   - 创建时间：2026-03-25 18:20
+   - 计划开始：即刻
+   - 实际开始：2026-03-25 18:20
+   - 完成时间：2026-03-25 18:40
+   - 验收要点：syncRunStatusFromTasks 在全部 task cancelled 时同步 control_status='cancelled'；stop-all 立即 sync 受影响 run；typecheck/lint/test 通过

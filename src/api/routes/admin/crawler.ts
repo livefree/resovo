@@ -298,8 +298,14 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
       await systemSettingsQueries.setSetting(db, 'crawler_global_freeze', 'true')
     }
 
-    const runMarked = await crawlerRunsQueries.requestCancelAllActiveRuns(db)
+    const { count: runMarked, runIds: cancelledRunIds } = await crawlerRunsQueries.requestCancelAllActiveRuns(db)
     const taskChanges = await cancelAllActiveTasks(db)
+
+    // Sync run status immediately so control_status transitions from 'cancelling' → 'cancelled'
+    // without waiting for the next watchdog tick (up to 60 seconds).
+    for (const runId of cancelledRunIds) {
+      await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
+    }
 
     if (removeRepeatableTick) {
       try {

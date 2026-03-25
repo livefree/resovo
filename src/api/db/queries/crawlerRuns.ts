@@ -176,15 +176,19 @@ export async function updateRunControlStatus(
   )
 }
 
-export async function requestCancelAllActiveRuns(db: Pool): Promise<number> {
-  const result = await db.query(
+export async function requestCancelAllActiveRuns(db: Pool): Promise<{ count: number; runIds: string[] }> {
+  const result = await db.query<{ id: string }>(
     `UPDATE crawler_runs
      SET control_status = 'cancelling',
          updated_at = NOW()
      WHERE status IN ('queued', 'running', 'paused')
-       AND control_status NOT IN ('cancelling', 'cancelled')`,
+       AND control_status NOT IN ('cancelling', 'cancelled')
+     RETURNING id`,
   )
-  return result.rowCount ?? 0
+  return {
+    count: result.rowCount ?? 0,
+    runIds: result.rows.map((r) => r.id),
+  }
 }
 
 export async function listActiveRunIds(db: Pool): Promise<string[]> {
@@ -218,6 +222,10 @@ export async function syncRunStatusFromTasks(db: Pool, runId: string): Promise<v
            WHEN a.failed > 0 AND a.done > 0 THEN 'partial_failed'
            WHEN a.failed > 0 AND a.done = 0 THEN 'failed'
            ELSE 'success'
+         END,
+         control_status = CASE
+           WHEN a.total > 0 AND a.cancelled = a.total THEN 'cancelled'
+           ELSE r.control_status
          END,
          started_at = CASE
            WHEN r.started_at IS NULL AND (a.running > 0 OR a.paused > 0 OR a.done > 0 OR a.failed > 0 OR a.cancelled > 0) THEN NOW()
