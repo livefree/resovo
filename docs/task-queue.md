@@ -2039,15 +2039,15 @@
    - 完成时间：2026-03-25 14:35
    - 验收要点：新爬取视频自动填充 genre + content_rating；ADULT_CATEGORIES 列表覆盖已知成人 source_category；单元测试覆盖
 
-3. CHG-184 — Migration 021：历史数据批量回填（状态：⬜ 待开始）
+3. CHG-184 — Migration 021：历史数据批量回填（状态：✅ 已完成）
    - 创建时间：2026-03-25 14:00
    - 计划开始：CHG-183 完成后（CHG-183 定义的映射规则同步用于 migration SQL）
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-25 14:40
+   - 完成时间：2026-03-25 14:55
    - 验收要点：
-     - type 重分类：短剧/少儿/动漫/综艺/剧类 ~320 条修正后 grep type='movie' 数量下降
-     - 成人内容：content_rating='adult' + visibility_status='hidden' 覆盖所有 ADULT_CATEGORIES
-     - genre 回填：犯罪/战争/悬疑/爱情等可推断类目有值；migration 幂等
+     - type 重分类：392 条修正（short 164/kids 47/anime 62/variety 34/series 84/documentary 1），movie 占比 94%→62% ✅
+     - 成人内容：423 条 content_rating='adult' + visibility_status='hidden' ✅
+     - genre 回填：61 条（romance 40/other 16/crime 2/mystery 2/war 1）；1167 条 NULL 保留人工审核 ✅
 
 4. CHG-185 — VerifyService cron：定时链接存活扫描（状态：⬜ 待开始）
    - 创建时间：2026-03-25 14:00

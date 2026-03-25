@@ -2771,3 +2771,16 @@
   - parseContentRating：命中 ADULT_CATEGORIES 返回 'adult'，否则 'general'
   - 新爬取视频在 INSERT 时自动写入 genre、genre_source='auto'、content_rating
 - **测试覆盖**：typecheck ✓ lint ✓ 599/599 unit tests 通过（新增 12 个）
+
+---
+
+## CHG-184 — Migration 021：历史数据批量回填
+
+- **完成时间**：2026-03-25 14:55
+- **修改文件**：
+  - `src/api/db/migrations/021_backfill_type_genre_content_rating.sql`（新建，由用户执行）
+- **变更说明**：
+  - 区块 A type 重分类：392 条（movie→short 164 / kids 47 / anime 62 / variety 34 / series 84 / documentary 1）；movie 占比从 94% 降至 62%
+  - 区块 B 成人打标：423 条 content_rating='adult' + visibility_status='hidden'
+  - 区块 C genre 回填：61 条自动推断（romance 40 / other 16 / crime 2 / mystery 2 / war 1）；1167 条 NULL 保留人工审核队列
+- **测试覆盖**：DB 验收查询确认三项均符合预期；unit tests 599/599 不受影响
