@@ -2090,11 +2090,11 @@
    - 完成时间：2026-03-25 16:30
    - 验收要点：/admin/analytics/content-quality 返回含 aliasCount 字段；SQL 覆盖 video_aliases；typecheck/lint/test 通过
 
-3. CHG-190 — 管理后台 ES 索引健康监控端点（状态：⬜ 待开始）
+3. CHG-190 — 管理后台 ES 索引健康监控端点（状态：✅ 已完成）
    - 创建时间：2026-03-25 16:00
    - 计划开始：CHG-187 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-25 16:32
+   - 完成时间：2026-03-25 16:45
    - 验收要点：GET /admin/analytics/es-health 返回 ES doc_count、DB doc_count、is_published 数量、索引健康状态；typecheck/lint/test 通过
 
 4. CHG-188 — 数据合并规则 ADR 文档（状态：⬜ 待开始）

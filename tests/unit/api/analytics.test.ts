@@ -14,6 +14,10 @@ vi.mock('@/api/lib/postgres', () => ({ db: {} }))
 vi.mock('@/api/lib/redis', () => ({
   redis: { get: vi.fn().mockResolvedValue(null) },
 }))
+vi.mock('@/api/lib/elasticsearch', () => ({
+  es: { count: vi.fn().mockResolvedValue({ count: 0 }) },
+  ES_INDEX: 'resovo_videos',
+}))
 vi.mock('@/api/lib/auth', () => ({
   verifyAccessToken: vi.fn(),
   blacklistKey: (t: string) => `blacklist:${t}`,

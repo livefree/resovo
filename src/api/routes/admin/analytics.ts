@@ -7,6 +7,7 @@
 
 import type { FastifyInstance } from 'fastify'
 import { db } from '@/api/lib/postgres'
+import { es, ES_INDEX } from '@/api/lib/elasticsearch'
 import { AnalyticsService } from '@/api/services/AnalyticsService'
 
 export interface AnalyticsData {
@@ -109,5 +110,31 @@ export async function adminAnalyticsRoutes(fastify: FastifyInstance) {
     }))
 
     return reply.send({ data })
+  })
+
+  // ── GET /admin/analytics/es-health ──────────────────────────────
+  // ES 索引健康监控：对比 ES 与 DB 视频数量，暴露同步差异
+  fastify.get('/admin/analytics/es-health', { preHandler: auth }, async (_request, reply) => {
+    const [esCount, esPublishedCount, dbCount, dbPublishedCount] = await Promise.all([
+      es.count({ index: ES_INDEX }).then((r) => r.count).catch(() => -1),
+      es.count({ index: ES_INDEX, body: { query: { term: { is_published: true } } } })
+        .then((r) => r.count).catch(() => -1),
+      db.query<{ count: string }>('SELECT COUNT(*)::text AS count FROM videos WHERE deleted_at IS NULL')
+        .then((r) => parseInt(r.rows[0].count)),
+      db.query<{ count: string }>('SELECT COUNT(*)::text AS count FROM videos WHERE is_published = true AND deleted_at IS NULL')
+        .then((r) => parseInt(r.rows[0].count)),
+    ])
+
+    return reply.send({
+      data: {
+        es: { total: esCount, published: esPublishedCount },
+        db: { total: dbCount, published: dbPublishedCount },
+        diff: {
+          total: esCount >= 0 ? dbCount - esCount : null,
+          published: esPublishedCount >= 0 ? dbPublishedCount - esPublishedCount : null,
+        },
+        indexName: ES_INDEX,
+      },
+    })
   })
 }

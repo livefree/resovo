@@ -2839,3 +2839,16 @@
   - SQL 增加 `LEFT JOIN video_aliases va ON va.video_id = v.id`，统计各站点中有跨站合并记录的视频数
   - 原 ADMIN-06 规范中已列出该统计维度，但初始实现遗漏
 - **测试覆盖**：typecheck ✓ lint ✓ 599/599 unit tests 通过
+
+---
+
+### CHG-190 — 管理后台 ES 索引健康监控端点
+- **完成时间**：2026-03-25 16:45
+- **修改文件**：
+  - `src/api/routes/admin/analytics.ts`（新增 `GET /admin/analytics/es-health` + 导入 es/ES_INDEX）
+  - `tests/unit/api/analytics.test.ts`（新增 `vi.mock('@/api/lib/elasticsearch')` 避免环境变量依赖）
+- **变更说明**：
+  - 新端点并行查询 ES total/published count + DB total/published count
+  - 返回 diff（DB - ES）用于发现同步滞后；ES 不可用时返回 -1 而非抛异常
+  - 修复 analytics.test.ts 因新增 ES import 导致的 9 个测试失败
+- **测试覆盖**：typecheck ✓ lint ✓ 599/599 unit tests 通过
