@@ -1,6 +1,5 @@
 'use client'
 
-import { CrawlerSiteOverviewStats } from '@/components/admin/system/crawler-site/components/CrawlerSiteOverviewStats'
 import { CrawlerSiteManager } from '@/components/admin/system/crawler-site/CrawlerSiteManager'
 import { useCrawlerMonitor } from '@/components/admin/system/crawler-site/hooks/useCrawlerMonitor'
 import type { CrawlerRunSummary } from '@/components/admin/system/crawler-site/hooks/useCrawlerMonitor'
@@ -44,7 +43,7 @@ function statusColor(s: CrawlerRunSummary['status']) {
 }
 
 export function CrawlerConfigTab() {
-  const { overview, runs } = useCrawlerMonitor({ showToast: noop })
+  const { runs } = useCrawlerMonitor({ showToast: noop })
   const latestRun = runs[0] ?? null
 
   const total          = typeof latestRun?.summary?.total          === 'number' ? latestRun.summary.total          : 0
@@ -61,8 +60,6 @@ export function CrawlerConfigTab() {
           <AdminHoverHint text="统计数据与运行进度局部刷新，不影响下方源站表格的筛选、排序、列宽和滚动位置。" />
         </div>
       </section>
-      <CrawlerSiteOverviewStats data={overview} />
-
       {/* 最近一次采集摘要 */}
       {latestRun ? (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-[var(--border)] bg-[var(--bg2)] px-3 py-1.5 text-xs">

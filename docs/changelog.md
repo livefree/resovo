@@ -2956,3 +2956,16 @@
   - 替换为单行摘要条，仅显示 `runs[0]`（最近一次任务），字段：触发类型·模式、站点数、成功、失败、视频、时长(s)、状态
 - **根因**：站点 tab"当前运行批次"与设置 tab"运行中任务控制"展示同一数据，功能重复；原面板信息过密，用户要求紧凑化
 - **测试覆盖**：typecheck ✅ lint ✅ unit tests 599/599 ✅
+
+---
+
+### CHG-197 — 概览统计面板移至控制台标签
+- **完成时间**：2026-03-25 19:50
+- **修改文件**：
+  - `src/components/admin/AdminCrawlerTabs.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerConfigTab.tsx`
+- **变更内容**：
+  - `AdminCrawlerTabs`：新增 `TasksTabPanel` 子组件，内含 `useCrawlerMonitor` + `CrawlerSiteOverviewStats` + `AdminCrawlerPanel`；tasks tab 渲染改用此组件
+  - `CrawlerConfigTab`：移除 `CrawlerSiteOverviewStats` 及对应的 `overview` 解构
+- **根因**：用户要求将站点tab中监控标题与紧凑摘要之间的面板（CrawlerSiteOverviewStats）移到控制台tab
+- **测试覆盖**：typecheck ✅ lint ✅ unit tests 599/599 ✅

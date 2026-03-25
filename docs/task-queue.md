@@ -2199,3 +2199,19 @@
    - 实际开始：2026-03-25 19:30
    - 完成时间：2026-03-25 19:35
    - 验收要点：CrawlerConfigTab 删除 CrawlerRunPanel；新增单行摘要显示最近一次任务（站点数/成功/失败/视频/时长秒）；CrawlerRunSummary 增加 startedAt/finishedAt 字段；typecheck/lint/test 通过
+
+---
+
+## SEQ-20260325-11 — 概览统计面板移至控制台标签
+- **创建时间**：2026-03-25 19:45
+- **最后更新时间**：2026-03-25 19:50
+- **状态**：✅ 已完成
+
+### 任务列表（按执行顺序）
+
+1. CHG-197 — 将 CrawlerSiteOverviewStats 从站点tab移至控制台tab（状态：✅ 已完成）
+   - 创建时间：2026-03-25 19:45
+   - 计划开始：即刻
+   - 实际开始：2026-03-25 19:45
+   - 完成时间：2026-03-25 19:50
+   - 验收要点：控制台tab顶部显示 CrawlerSiteOverviewStats；站点tab不再显示；typecheck/lint/test 通过

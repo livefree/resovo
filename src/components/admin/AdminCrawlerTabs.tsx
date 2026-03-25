@@ -5,6 +5,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { AdminCrawlerPanel } from '@/components/admin/AdminCrawlerPanel'
 import { CrawlerConfigTab } from '@/components/admin/system/crawler-site/components/CrawlerConfigTab'
 import { CrawlerAdvancedTab } from '@/components/admin/system/crawler-site/components/CrawlerAdvancedTab'
+import { CrawlerSiteOverviewStats } from '@/components/admin/system/crawler-site/components/CrawlerSiteOverviewStats'
+import { useCrawlerMonitor } from '@/components/admin/system/crawler-site/hooks/useCrawlerMonitor'
 
 type CrawlerTab = 'sites' | 'tasks' | 'settings' | 'logs'
 type TaskStatusFilter = 'pending' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled' | 'timeout' | ''
@@ -30,6 +32,24 @@ function parseCrawlerTab(input: string | null): CrawlerTab {
   if (input === 'logs') return 'logs'
   // 兼容旧 query：tab=config / tab=sites → 默认 sites
   return 'sites'
+}
+
+function noop() {}
+
+interface TasksTabPanelProps {
+  runId: string
+  statusFilter: TaskStatusFilter
+  onRunIdChange: (id: string) => void
+}
+
+function TasksTabPanel({ runId, statusFilter, onRunIdChange }: TasksTabPanelProps) {
+  const { overview } = useCrawlerMonitor({ showToast: noop })
+  return (
+    <>
+      <CrawlerSiteOverviewStats data={overview} />
+      <AdminCrawlerPanel initialRunId={runId} initialStatusFilter={statusFilter} onRunIdChange={onRunIdChange} />
+    </>
+  )
 }
 
 const PAGE_TITLE_TOOLTIP =
@@ -176,7 +196,7 @@ export function AdminCrawlerTabs() {
         )}
         {tab === 'tasks' && (
           <div data-testid="admin-crawler-tab-panel-tasks">
-            <AdminCrawlerPanel initialRunId={taskRunId} initialStatusFilter={taskStatusFilter} onRunIdChange={syncRunId} />
+            <TasksTabPanel runId={taskRunId} statusFilter={taskStatusFilter} onRunIdChange={syncRunId} />
           </div>
         )}
         {tab === 'logs' && (
