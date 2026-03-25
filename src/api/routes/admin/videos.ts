@@ -34,11 +34,7 @@ const VideoMetaSchema = z.object({
   titleEn: z.string().max(200).optional().nullable(),
   description: z.string().max(5000).optional().nullable(),
   coverUrl: z.string().url().optional().nullable(),
-  type: z.enum([
-    'movie', 'drama', 'anime', 'variety',
-    'short_drama', 'sports', 'music', 'documentary',
-    'game_show', 'news', 'children', 'other',
-  ] as const).optional(),
+  type: z.enum(['movie', 'drama', 'anime', 'variety', 'short_drama', 'sports', 'music', 'documentary', 'game_show', 'news', 'children', 'other'] as const).optional(),
   category: z.string().max(50).optional().nullable(),
   year: z.number().int().min(1900).max(2100).optional().nullable(),
   country: z.string().max(10).optional().nullable(),
@@ -54,14 +50,12 @@ const CreateVideoSchema = VideoMetaSchema.required({ title: true, type: true })
 
 const ListQuerySchema = z.object({
   status: z.enum(['pending', 'published', 'unpublished', 'all']).optional().default('all'),
-  type: z.enum([
-    'movie', 'drama', 'anime', 'variety',
-    'short_drama', 'sports', 'music', 'documentary',
-    'game_show', 'news', 'children', 'other',
-  ] as const).optional(),
+  type: z.enum(['movie', 'drama', 'anime', 'variety', 'short_drama', 'sports', 'music', 'documentary', 'game_show', 'news', 'children', 'other'] as const).optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   q: z.string().max(100).optional(),
+  /** 按来源站点 key 筛选 */
+  site: z.string().max(100).optional(),
 })
 
 // ── 路由注册 ──────────────────────────────────────────────────────
@@ -81,8 +75,8 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const { status, type, page, limit, q } = parsed.data
-    const result = await videoService.adminList({ status, type, page, limit, q })
+    const { status, type, page, limit, q, site } = parsed.data
+    const result = await videoService.adminList({ status, type, page, limit, q, siteKey: site })
     return reply.send(result)
   })
 

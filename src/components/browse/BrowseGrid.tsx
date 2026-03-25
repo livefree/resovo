@@ -6,7 +6,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { VideoCard } from '@/components/video/VideoCard'
 import { SortBar } from './SortBar'
 import { apiClient } from '@/lib/api-client'
@@ -35,14 +35,31 @@ function buildSearchQuery(params: URLSearchParams): string {
   return parts.join('&')
 }
 
+const PAGE_SIZE = 24
+
 // ── 组件 ──────────────────────────────────────────────────────────
 
 export function BrowseGrid() {
   const t = useTranslations('browse')
+  const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const [videos, setVideos] = useState<VideoCardType[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+
+  const currentPage = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
+  const totalPages = Math.ceil(total / PAGE_SIZE)
+
+  function goToPage(page: number) {
+    const params = new URLSearchParams(searchParams.toString())
+    if (page <= 1) {
+      params.delete('page')
+    } else {
+      params.set('page', String(page))
+    }
+    router.push(`${pathname}?${params.toString()}`)
+  }
 
   const fetchData = useCallback(() => {
     setLoading(true)
@@ -97,6 +114,42 @@ export function BrowseGrid() {
           {videos.map((video) => (
             <VideoCard key={video.id} video={video} />
           ))}
+        </div>
+      )}
+
+      {/* 分页控件 */}
+      {totalPages > 1 && (
+        <div
+          className="flex items-center justify-center gap-3 mt-8"
+          data-testid="browse-pagination"
+        >
+          <button
+            onClick={() => goToPage(currentPage - 1)}
+            disabled={currentPage <= 1}
+            className="px-4 py-2 rounded text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{
+              background: 'var(--secondary)',
+              color: 'var(--foreground)',
+            }}
+            data-testid="pagination-prev"
+          >
+            ‹ 上一页
+          </button>
+          <span className="text-sm" style={{ color: 'var(--muted-foreground)' }}>
+            {currentPage} / {totalPages}
+          </span>
+          <button
+            onClick={() => goToPage(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+            className="px-4 py-2 rounded text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{
+              background: 'var(--secondary)',
+              color: 'var(--foreground)',
+            }}
+            data-testid="pagination-next"
+          >
+            下一页 ›
+          </button>
         </div>
       )}
     </div>

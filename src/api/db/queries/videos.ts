@@ -124,7 +124,7 @@ export async function listVideos(
   db: Pool,
   filters: VideoListFilters
 ): Promise<{ rows: VideoCard[]; total: number }> {
-  const conditions: string[] = ["v.visibility_status = 'public'", 'v.deleted_at IS NULL']
+  const conditions: string[] = ['v.is_published = true', 'v.deleted_at IS NULL']
   const params: unknown[] = []
   let idx = 1
 
@@ -194,7 +194,7 @@ export async function findVideoByShortId(
       ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs
      FROM videos v
      WHERE v.short_id = $1
-       AND v.visibility_status = 'public'
+       AND v.is_published = true
        AND v.deleted_at IS NULL`,
     [shortId]
   )
@@ -220,7 +220,7 @@ export async function listTrendingVideos(
   }
   const interval = periodMap[filters.period]
   const conditions: string[] = [
-    "v.visibility_status = 'public'",
+    'v.is_published = true',
     'v.deleted_at IS NULL',
     `v.updated_at >= NOW() - INTERVAL '${interval}'`,
   ]
@@ -252,6 +252,8 @@ export interface AdminVideoListFilters {
   status?: 'pending' | 'published' | 'unpublished' | 'all'
   type?: VideoType
   q?: string
+  /** 按来源站点 key 筛选（video_sources.source_name） */
+  siteKey?: string
   page: number
   limit: number
 }
@@ -280,6 +282,13 @@ export async function listAdminVideos(
     conditions.push(`(v.title ILIKE $${idx} OR v.title_en ILIKE $${idx})`)
     params.push(`%${filters.q}%`)
     idx++
+  }
+
+  if (filters.siteKey) {
+    conditions.push(
+      `EXISTS (SELECT 1 FROM video_sources vs WHERE vs.video_id = v.id AND vs.source_name = $${idx++} AND vs.deleted_at IS NULL)`
+    )
+    params.push(filters.siteKey)
   }
 
   const where = conditions.join(' AND ')
@@ -443,17 +452,11 @@ export async function publishVideo(
   id: string,
   isPublished: boolean
 ): Promise<{ id: string; is_published: boolean } | null> {
-  const visibilityStatus = isPublished ? 'public' : 'internal'
-  const reviewStatus = isPublished ? 'approved' : 'pending_review'
   const result = await db.query<{ id: string; is_published: boolean }>(
-    `UPDATE videos
-     SET is_published = $1,
-         visibility_status = $2,
-         review_status = $3,
-         updated_at = NOW()
-     WHERE id = $4 AND deleted_at IS NULL
+    `UPDATE videos SET is_published = $1, updated_at = NOW()
+     WHERE id = $2 AND deleted_at IS NULL
      RETURNING id, is_published`,
-    [isPublished, visibilityStatus, reviewStatus, id]
+    [isPublished, id]
   )
   return result.rows[0] ?? null
 }
@@ -463,20 +466,14 @@ export async function batchPublishVideos(
   ids: string[],
   isPublished: boolean
 ): Promise<number> {
-  const visibilityStatus = isPublished ? 'public' : 'internal'
-  const reviewStatus = isPublished ? 'approved' : 'pending_review'
   const client: PoolClient = await db.connect()
   try {
     await client.query('BEGIN')
-    const placeholders = ids.map((_, i) => `$${i + 4}`).join(', ')
+    const placeholders = ids.map((_, i) => `$${i + 2}`).join(', ')
     const result = await client.query(
-      `UPDATE videos
-       SET is_published = $1,
-           visibility_status = $2,
-           review_status = $3,
-           updated_at = NOW()
+      `UPDATE videos SET is_published = $1, updated_at = NOW()
        WHERE id IN (${placeholders}) AND deleted_at IS NULL`,
-      [isPublished, visibilityStatus, reviewStatus, ...ids]
+      [isPublished, ...ids]
     )
     await client.query('COMMIT')
     return result.rowCount ?? 0
@@ -598,8 +595,6 @@ export interface CrawlerInsertInput {
   titleEn: string | null
   coverUrl: string | null
   type: VideoType
-  sourceContentType: string | null  // ADR-017
-  normalizedType: string | null     // ADR-017
   category: string | null
   year: number | null
   country: string | null
@@ -609,10 +604,6 @@ export interface CrawlerInsertInput {
   description: string | null
   status: VideoStatus
   episodeCount: number
-  contentFormat: ContentFormat     // ADR-017
-  episodePattern: EpisodePattern   // ADR-017
-  visibilityStatus: VisibilityStatus  // ADR-018
-  reviewStatus: ReviewStatus          // ADR-018
   isPublished: boolean
   metadataSource: MetadataSource
 }
@@ -627,14 +618,10 @@ export async function insertCrawledVideo(
 ): Promise<{ id: string }> {
   const result = await db.query<{ id: string }>(
     `INSERT INTO videos
-       (short_id, title, title_normalized, title_en, cover_url, type,
-        source_content_type, normalized_type,
-        category, year, country,
+       (short_id, title, title_normalized, title_en, cover_url, type, category, year, country,
         "cast", director, writers, description, status, episode_count,
-        content_format, episode_pattern,
-        visibility_status, review_status,
         is_published, metadata_source)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
      RETURNING id`,
     [
       input.shortId,
@@ -643,8 +630,6 @@ export async function insertCrawledVideo(
       input.titleEn,
       input.coverUrl,
       input.type,
-      input.sourceContentType,
-      input.normalizedType,
       input.category,
       input.year,
       input.country,
@@ -654,10 +639,6 @@ export async function insertCrawledVideo(
       input.description,
       input.status,
       input.episodeCount,
-      input.contentFormat,
-      input.episodePattern,
-      input.visibilityStatus,
-      input.reviewStatus,
       input.isPublished,
       input.metadataSource,
     ]

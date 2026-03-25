@@ -70,6 +70,7 @@ export class VideoService {
     status?: 'pending' | 'published' | 'unpublished' | 'all'
     type?: import('@/types').VideoType
     q?: string
+    siteKey?: string
     page?: number
     limit?: number
   }): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
@@ -80,6 +81,7 @@ export class VideoService {
       status: params.status ?? 'all',
       type: params.type,
       q: params.q,
+      siteKey: params.siteKey,
       page,
       limit,
     })
@@ -104,15 +106,21 @@ export class VideoService {
   }
 
   async publish(id: string, isPublished: boolean): Promise<unknown | null> {
-    return videoQueries.publishVideo(this.db, id, isPublished)
+    const row = await videoQueries.publishVideo(this.db, id, isPublished)
+    if (row) void this.indexToES(id)
+    return row
   }
 
   async batchPublish(ids: string[], isPublished: boolean): Promise<number> {
-    return videoQueries.batchPublishVideos(this.db, ids, isPublished)
+    const count = await videoQueries.batchPublishVideos(this.db, ids, isPublished)
+    if (count > 0) ids.forEach((id) => void this.indexToES(id))
+    return count
   }
 
   async batchUnpublish(ids: string[]): Promise<number> {
-    return videoQueries.batchUnpublishVideos(this.db, ids)
+    const count = await videoQueries.batchUnpublishVideos(this.db, ids)
+    if (count > 0) ids.forEach((id) => void this.indexToES(id))
+    return count
   }
 
   // ── ES 同步（异步，不阻塞响应）──────────────────────────────────

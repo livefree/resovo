@@ -7,7 +7,7 @@
 
 import type { Pool } from 'pg'
 import type { Client as ESClient } from '@elastic/elasticsearch'
-import { parseXmlResponse, parseJsonResponse, parseVodItem, inferContentFormat, inferEpisodePattern } from './SourceParserService'
+import { parseXmlResponse, parseJsonResponse, parseVodItem } from './SourceParserService'
 import { normalizeTitle } from './TitleNormalizer'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
 import * as sourcesQueries from '@/api/db/queries/sources'
@@ -157,12 +157,9 @@ export class CrawlerService {
    *   规则 C — 将 title / titleEn 写入 video_aliases（INSERT IGNORE）
    *   规则 D — metadata_source 优先级 tmdb(4) > douban(3) > manual(2) > crawler(1)；低优先级不覆盖高优先级元数据
    *   规则 E — sources ON CONFLICT DO NOTHING（不覆盖已有播放源）
-   *
-   * @param siteKey 来源站点 key，用于读取站点级 ingest_policy（ADR-018）
    */
   async upsertVideo(
-    parsed: ReturnType<typeof parseVodItem>,
-    siteKey?: string
+    parsed: ReturnType<typeof parseVodItem>
   ): Promise<{ videoId: string; sourcesUpserted: number }> {
     const { video, sources } = parsed
 
@@ -191,29 +188,17 @@ export class CrawlerService {
       // 新建视频记录（含 title_normalized + metadata_source）
       isNew = true
       const shortId = nanoid(8)
-      // ADR-018: 站点级 ingest_policy 优先，无配置时回退全局 AUTO_PUBLISH_CRAWLED
-      let autoPublish = config.AUTO_PUBLISH_CRAWLED === 'true'
-      if (siteKey) {
-        const site = await crawlerSitesQueries.findCrawlerSite(this.db, siteKey)
-        if (site) autoPublish = site.ingestPolicy.allow_auto_publish
-      }
+      const autoPublish = config.AUTO_PUBLISH_CRAWLED === 'true'
       const episodeCount = sources.length > 0
         ? Math.max(...sources.map((s) => s.episodeNumber ?? 1))
         : 1
-      const contentFormat = inferContentFormat(video.type, episodeCount)
-      const episodePattern = inferEpisodePattern(episodeCount, video.status)
-      // ADR-018: visibility_status 与 is_published 同步（方案 B 同步点）
-      const visibilityStatus = autoPublish ? 'public' as const : 'internal' as const
-      const reviewStatus = autoPublish ? 'approved' as const : 'pending_review' as const
       const inserted = await videosQueries.insertCrawledVideo(this.db, {
         shortId,
         title: video.title,
         titleNormalized,
         titleEn: video.titleEn,
-        coverUrl: video.coverUrl,         // ADR-009: 存外链
+        coverUrl: video.coverUrl,   // ADR-009: 存外链
         type: video.type,
-        sourceContentType: video.sourceContentType,  // ADR-017
-        normalizedType: video.normalizedType,         // ADR-017
         category: video.category,
         year: video.year,
         country: video.country,
@@ -223,10 +208,6 @@ export class CrawlerService {
         description: video.description,
         status: video.status,
         episodeCount,
-        contentFormat,      // ADR-017
-        episodePattern,     // ADR-017
-        visibilityStatus,   // ADR-018
-        reviewStatus,       // ADR-018
         isPublished: autoPublish,
         metadataSource: 'crawler',
       })
@@ -250,8 +231,9 @@ export class CrawlerService {
       }))
     )
 
-    // 新建视频才触发 ES 索引（异步，不等待）
-    if (isNew) void this.indexToES(videoId)
+    // 每次 upsert 后触发 ES 索引（异步，不等待）
+    // 新视频：首次索引；已存在视频：补偿 ES 空缺（如 ES 停机期间入库的数据）
+    void this.indexToES(videoId)
 
     // 规则 D 参考：当前来源始终为 crawler（priority=1），未来可传入 incomingPriority
     void incomingPriority
@@ -336,7 +318,6 @@ export class CrawlerService {
       hoursAgo?: number
       taskType?: 'full-crawl' | 'incremental-crawl'
       taskId?: string
-      /** 外部中断信号：由 crawlerWorker 的 controlCheckTimer 触发，reason 为 'TASK_CANCELLED'/'TASK_PAUSED'/'TASK_TIMEOUT' */
       signal?: AbortSignal
       shouldStop?: () => false | 'cancel' | 'timeout' | 'pause' | Promise<false | 'cancel' | 'timeout' | 'pause'>
       onLog?: (
@@ -420,7 +401,7 @@ export class CrawlerService {
             throw new Error('TASK_CANCELLED')
           }
           try {
-            const { sourcesUpserted: s } = await this.upsertVideo(parsed, source.name)
+            const { sourcesUpserted: s } = await this.upsertVideo(parsed)
             videosUpserted++
             sourcesUpserted += s
             processed++
@@ -464,20 +445,6 @@ export class CrawlerService {
         durationMs: Date.now() - startAt,
       })
     } catch (err) {
-      // AbortError：由 controlCheckTimer 触发的外部中断信号，将 abort reason 转换为对应任务错误
-      if (err instanceof Error && err.name === 'AbortError' && options.signal?.aborted) {
-        const reason = typeof options.signal.reason === 'string' ? options.signal.reason : 'TASK_CANCELLED'
-        if (reason === 'TASK_PAUSED') {
-          await emit('info', 'crawl.paused', '采集已暂停（外部信号中断）', { page, processed })
-          throw new Error('TASK_PAUSED')
-        }
-        if (reason === 'TASK_TIMEOUT') {
-          await emit('warn', 'crawl.timeout', '采集已超时（外部信号中断）', { page, processed })
-          throw new Error('TASK_TIMEOUT')
-        }
-        await emit('warn', 'crawl.cancelled', '采集已取消（外部信号中断）', { page, processed })
-        throw new Error('TASK_CANCELLED')
-      }
       const message = err instanceof Error ? err.message : String(err)
       if (message.includes('TASK_CANCELLED')) {
         await emit('warn', 'crawl.cancelled', '采集已取消', { page, processed })
