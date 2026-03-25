@@ -44,7 +44,7 @@ export class SearchService {
     pagination: Pagination
   }> {
     const must: EsFilter[] = []
-    const filter: EsFilter[] = [{ term: { is_published: true } }]
+    const filter: EsFilter[] = [{ term: { is_published: true } }, { term: { content_rating: 'general' } }]
 
     // 全文搜索
     if (filters.q) {
@@ -168,7 +168,7 @@ export class SearchService {
               },
             },
           ],
-          filter: [{ term: { is_published: true } }],
+          filter: [{ term: { is_published: true } }, { term: { content_rating: 'general' } }],
         },
       },
       _source: ['title', 'title_en'],
@@ -183,7 +183,7 @@ export class SearchService {
 
     // 人名聚合联想（正则包含匹配）
     const peopleBody: EsBody = {
-      query: { bool: { filter: [{ term: { is_published: true } }] } },
+      query: { bool: { filter: [{ term: { is_published: true } }, { term: { content_rating: 'general' } }] } },
       aggs: {
         directors: { terms: { field: 'director.keyword', include: `.*${q}.*`, size: 2 } },
         cast: { terms: { field: 'cast.keyword', include: `.*${q}.*`, size: 2 } },

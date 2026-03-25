@@ -2863,3 +2863,18 @@
   - 与 CrawlerService.upsertVideo() 实现完全对应
   - 补全了 priority-plan-20260324 P4 的文档收口
 - **测试覆盖**：typecheck ✓ 599/599 unit tests 通过（纯文档变更）
+
+---
+
+### CHG-191 — 修复成人内容在浏览/搜索结果中出现
+- **完成时间**：2026-03-25 17:20
+- **修改文件**：
+  - `src/api/db/queries/videos.ts`
+  - `src/api/services/VideoService.ts`
+  - `src/api/services/SearchService.ts`
+- **变更内容**：
+  - `listVideos()` / `listTrendingVideos()` / `findVideoByShortId()` 追加 `visibility_status = 'public'` 过滤条件，阻止 Migration 021 标记为 hidden 的成人内容出现在浏览/详情页
+  - `indexToES()` SELECT 和 ES document 增加 `content_rating` 字段，使 ES 索引具备内容分级过滤能力
+  - `SearchService.search()` / `suggest()` 的 filter 追加 `{ term: { content_rating: 'general' } }`，确保搜索结果和联想词不含成人内容
+- **根因**：Migration 021 设置了 `visibility_status='hidden'`，但查询层从未消费该字段；ES 文档也缺少 content_rating，导致过滤失效
+- **测试覆盖**：typecheck ✅ lint ✅ unit tests 599/599 ✅

@@ -2103,3 +2103,19 @@
    - 实际开始：2026-03-25 16:47
    - 完成时间：2026-03-25 16:55
    - 验收要点：docs/decisions.md 追加 ADR，记录 title_normalized+year+type 三元组匹配、metadata_source 优先级、video_aliases 追加规则；与 CrawlerService 实现一致
+
+---
+
+## SEQ-20260325-05 — 成人内容过滤修复
+- **创建时间**：2026-03-25 17:00
+- **最后更新时间**：2026-03-25 17:20
+- **状态**：✅ 已完成
+
+### 任务列表（按执行顺序）
+
+1. CHG-191 — 修复成人内容在浏览/搜索结果中出现（状态：✅ 已完成）
+   - 创建时间：2026-03-25 17:00
+   - 计划开始：即刻
+   - 实际开始：2026-03-25 17:00
+   - 完成时间：2026-03-25 17:20
+   - 验收要点：listVideos/listTrendingVideos 追加 visibility_status='public' 过滤；indexToES 含 content_rating；SearchService filter 含 content_rating='general'；typecheck/lint/test 通过

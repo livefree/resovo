@@ -134,10 +134,11 @@ export class VideoService {
         type: string; genre: string | null; year: number | null
         country: string | null; episode_count: number
         rating: number | null; status: string; is_published: boolean
+        content_rating: string
       }>(
         `SELECT id, short_id, slug, title, title_en, cover_url,
                 type, genre, year, country, episode_count,
-                rating, status, is_published
+                rating, status, is_published, content_rating
          FROM videos WHERE id = $1`,
         [videoId]
       )
@@ -162,6 +163,7 @@ export class VideoService {
           rating: row.rating,
           status: row.status,
           is_published: row.is_published,
+          content_rating: row.content_rating,
           updated_at: new Date().toISOString(),
         },
       })

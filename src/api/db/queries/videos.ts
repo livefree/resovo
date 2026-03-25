@@ -130,7 +130,7 @@ export async function listVideos(
   db: Pool,
   filters: VideoListFilters
 ): Promise<{ rows: VideoCard[]; total: number }> {
-  const conditions: string[] = ['v.is_published = true', 'v.deleted_at IS NULL']
+  const conditions: string[] = ['v.is_published = true', 'v.deleted_at IS NULL', "v.visibility_status = 'public'"]
   const params: unknown[] = []
   let idx = 1
 
@@ -201,7 +201,8 @@ export async function findVideoByShortId(
      FROM videos v
      WHERE v.short_id = $1
        AND v.is_published = true
-       AND v.deleted_at IS NULL`,
+       AND v.deleted_at IS NULL
+       AND v.visibility_status = 'public'`,
     [shortId]
   )
   return result.rows[0] ? mapVideoRow(result.rows[0]) : null
@@ -228,6 +229,7 @@ export async function listTrendingVideos(
   const conditions: string[] = [
     'v.is_published = true',
     'v.deleted_at IS NULL',
+    "v.visibility_status = 'public'",
     `v.updated_at >= NOW() - INTERVAL '${interval}'`,
   ]
   const params: unknown[] = []
@@ -399,6 +401,7 @@ export interface UpdateVideoMetaInput {
   coverUrl?: string | null
   type?: VideoType
   genre?: string | null
+  genreSource?: 'auto' | 'manual' | null  // 管理员编辑时传 'manual'，清除时传 null
   year?: number | null
   country?: string | null
   episodeCount?: number
@@ -425,6 +428,7 @@ export async function updateVideoMeta(
     coverUrl: 'cover_url',
     type: 'type',
     genre: 'genre',
+    genreSource: 'genre_source',
     year: 'year',
     country: 'country',
     episodeCount: 'episode_count',
