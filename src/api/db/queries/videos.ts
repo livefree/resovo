@@ -19,7 +19,8 @@ interface DbVideoRow {
   cover_url: string | null
   type: VideoType
   douban_id: string | null
-  genre: string | null
+  source_category: string | null  // 爬虫原始分类字符串（Migration 019）
+  genre: string | null            // 平台策展题材（VideoGenre 枚举，初始 NULL）
   rating: number | null
   year: number | null
   country: string | null
@@ -111,7 +112,7 @@ const SUBTITLE_LANGS_SUBQUERY = `(
 
 export interface VideoListFilters {
   type?: VideoType
-  category?: string
+  genre?: string
   year?: number
   country?: string
   ratingMin?: number
@@ -132,9 +133,9 @@ export async function listVideos(
     conditions.push(`v.type = $${idx++}`)
     params.push(filters.type)
   }
-  if (filters.category) {
-    conditions.push(`v.category = $${idx++}`)
-    params.push(filters.category)
+  if (filters.genre) {
+    conditions.push(`v.genre = $${idx++}`)
+    params.push(filters.genre)
   }
   if (filters.year) {
     conditions.push(`v.year = $${idx++}`)
@@ -298,7 +299,7 @@ export async function listAdminVideos(
     db.query<DbVideoRow & { source_count: string }>(
       `SELECT v.id, v.short_id, v.title, v.title_en, v.cover_url, v.type,
               v.year, v.is_published, v.created_at, v.updated_at,
-              '' AS slug, '' AS description, '' AS category, '' AS country,
+              '' AS slug, '' AS description, NULL AS source_category, NULL AS genre, '' AS country,
               0 AS episode_count, 'completed' AS status, NULL AS rating,
               '[]'::json AS director, '[]'::json AS "cast", '[]'::json AS writers,
               NULL AS subtitle_langs,
@@ -344,7 +345,7 @@ export interface CreateVideoInput {
   description?: string | null
   coverUrl?: string | null
   type: VideoType
-  category?: string | null
+  genre?: string | null
   year?: number | null
   country?: string | null
   episodeCount?: number
@@ -361,7 +362,7 @@ export async function createVideo(
 ): Promise<DbVideoRow> {
   const result = await db.query<DbVideoRow>(
     `INSERT INTO videos
-       (title, title_en, description, cover_url, type, category, year, country,
+       (title, title_en, description, cover_url, type, genre, year, country,
         episode_count, status, rating, director, "cast", writers, is_published)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
      RETURNING *`,
@@ -371,7 +372,7 @@ export async function createVideo(
       input.description ?? null,
       input.coverUrl ?? null,
       input.type,
-      input.category ?? null,
+      input.genre ?? null,
       input.year ?? null,
       input.country ?? null,
       input.episodeCount ?? 1,
@@ -392,7 +393,7 @@ export interface UpdateVideoMetaInput {
   description?: string | null
   coverUrl?: string | null
   type?: VideoType
-  category?: string | null
+  genre?: string | null
   year?: number | null
   country?: string | null
   episodeCount?: number
@@ -418,7 +419,7 @@ export async function updateVideoMeta(
     description: 'description',
     coverUrl: 'cover_url',
     type: 'type',
-    category: 'category',
+    genre: 'genre',
     year: 'year',
     country: 'country',
     episodeCount: 'episode_count',
@@ -595,7 +596,7 @@ export interface CrawlerInsertInput {
   titleEn: string | null
   coverUrl: string | null
   type: VideoType
-  category: string | null
+  sourceCategory: string | null  // 爬虫原始分类字符串（写入 source_category 列）
   year: number | null
   country: string | null
   cast: string[]
@@ -618,7 +619,7 @@ export async function insertCrawledVideo(
 ): Promise<{ id: string }> {
   const result = await db.query<{ id: string }>(
     `INSERT INTO videos
-       (short_id, title, title_normalized, title_en, cover_url, type, category, year, country,
+       (short_id, title, title_normalized, title_en, cover_url, type, source_category, year, country,
         "cast", director, writers, description, status, episode_count,
         is_published, metadata_source)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
@@ -630,7 +631,7 @@ export async function insertCrawledVideo(
       input.titleEn,
       input.coverUrl,
       input.type,
-      input.category,
+      input.sourceCategory,
       input.year,
       input.country,
       input.cast,

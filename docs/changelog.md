@@ -2682,3 +2682,16 @@
   - 新增 `videos_genre_check`（15 种 VideoGenre 枚举值，允许 NULL）
   - 迁移已在 resovo_dev 执行成功（COMMIT）
 - **测试覆盖**：migration 执行成功；typecheck ✓（migration 为纯 SQL 文件，不影响 TS 编译）
+
+## CHG-177 — 后端查询层 + Zod schema 更新
+- **完成时间**：2026-03-25 11:25
+- **来源序列**：SEQ-20260325-02
+- **修改文件**：
+  - `src/api/db/queries/videos.ts`（DbVideoRow 新增 source_category；VideoListFilters/CreateVideoInput/UpdateVideoMetaInput/CrawlerInsertInput category→genre/sourceCategory；SQL 字符串全部同步）
+  - `src/api/services/CrawlerService.ts`（insertCrawledVideo 调用 category→sourceCategory）
+- **变更摘要**：
+  - `DbVideoRow` 新增 `source_category`（爬虫原始分类字符串）和 `genre`（VideoGenre）两列
+  - 爬虫写入路径：`CrawlerInsertInput.sourceCategory` → `source_category` 列
+  - Admin 写入路径：`CreateVideoInput.genre` / `UpdateVideoMetaInput.genre` → `genre` 列
+  - 列表筛选：`VideoListFilters.genre` → `WHERE v.genre = $N`
+- **测试覆盖**：typecheck ✓，lint ✓，587/587 通过

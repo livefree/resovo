@@ -199,7 +199,7 @@ export class CrawlerService {
         titleEn: video.titleEn,
         coverUrl: video.coverUrl,   // ADR-009: 存外链
         type: video.type,
-        category: video.category,
+        sourceCategory: video.category,
         year: video.year,
         country: video.country,
         cast: video.cast,

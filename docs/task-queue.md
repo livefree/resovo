@@ -1974,12 +1974,12 @@
    - 完成时间：2026-03-25 11:00
    - 验收要点：migration 幂等可重跑；DB schema CHECK 约束与新类型一致
 
-3. CHG-177 — 后端查询层 + Zod schema 更新（状态：⬜ 待开始）
+3. CHG-177 — 后端查询层 + Zod schema 更新（状态：✅ 已完成）
    - 创建时间：2026-03-25 10:00
    - 计划开始：CHG-176 完成后
-   - 实际开始：_
-   - 完成时间：_
-   - 验收要点：DbVideoRow.category→genre；admin/videos Zod enum 更新；typecheck/lint 通过
+   - 实际开始：2026-03-25 11:05
+   - 完成时间：2026-03-25 11:25
+   - 验收要点：DbVideoRow category→source_category/genre；SQL 字符串同步；typecheck/lint 通过
 
 4. CHG-178 — 服务层写入逻辑更新（状态：⬜ 待开始）
    - 创建时间：2026-03-25 10:00
