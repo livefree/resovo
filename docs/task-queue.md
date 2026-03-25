@@ -2063,3 +2063,43 @@
    - 完成时间：2026-03-25 15:30
    - 验收要点：AdminVideoForm 增加 genre 下拉（15 种 + 空值）；保存写入 genre_source='manual'；typecheck/lint/test 通过
    - 备注：任务规划中文件路径写的是 VideoMetaForm.tsx，实际对应组件为 AdminVideoForm.tsx
+
+---
+
+## [SEQ-20260325-04] P3/P4/P5 收尾 — 合并率统计、ADR、SEO、ES 监控
+- **状态**：🔄 执行中
+- **创建时间**：2026-03-25 16:00
+- **最后更新时间**：2026-03-25 16:00
+- **目标**：补全 priority-plan-20260324 剩余 4 项缺口：video_aliases 合并率统计、合并规则 ADR、详情页 SEO metadata、ES 索引健康监控
+- **范围**：analytics 路由、decisions.md、5个详情页 page.tsx、lib/getVideoMeta.ts
+- **依赖**：SEQ-20260325-03 已完成
+
+### 任务列表（按执行顺序）
+
+1. CHG-189 — SEO：5个详情页 generateMetadata（状态：✅ 已完成）
+   - 创建时间：2026-03-25 16:00
+   - 计划开始：即刻
+   - 实际开始：2026-03-25 16:05
+   - 完成时间：2026-03-25 16:20
+   - 验收要点：movie/series/anime/variety/others 5个详情页 generateMetadata 正确输出 title/description/og:image；typecheck/lint/test 通过
+
+2. CHG-187 — ADMIN-06 补充 video_aliases 合并率统计（状态：⬜ 待开始）
+   - 创建时间：2026-03-25 16:00
+   - 计划开始：CHG-189 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：/admin/analytics/content-quality 返回含 aliasCount 字段；SQL 覆盖 video_aliases；typecheck/lint/test 通过
+
+3. CHG-190 — 管理后台 ES 索引健康监控端点（状态：⬜ 待开始）
+   - 创建时间：2026-03-25 16:00
+   - 计划开始：CHG-187 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：GET /admin/analytics/es-health 返回 ES doc_count、DB doc_count、is_published 数量、索引健康状态；typecheck/lint/test 通过
+
+4. CHG-188 — 数据合并规则 ADR 文档（状态：⬜ 待开始）
+   - 创建时间：2026-03-25 16:00
+   - 计划开始：CHG-190 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：docs/decisions.md 追加 ADR，记录 title_normalized+year+type 三元组匹配、metadata_source 优先级、video_aliases 追加规则；与 CrawlerService 实现一致

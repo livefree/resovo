@@ -19,6 +19,20 @@ export function extractShortId(slug: string): string {
 }
 
 /**
+ * 服务端获取视频 meta（用于 generateMetadata）
+ * 资源不存在时返回 null，不触发 notFound()
+ */
+export async function fetchVideoMeta(slug: string): Promise<Video | null> {
+  const shortId = extractShortId(slug)
+  const res = await fetch(`${API_BASE}/videos/${shortId}`, {
+    next: { revalidate: 60 },
+  }).catch(() => null)
+  if (!res || !res.ok) return null
+  const body = (await res.json()) as ApiResponse<Video>
+  return body.data ?? null
+}
+
+/**
  * 服务端获取视频详情（直接 fetch，不通过 apiClient 避免 Zustand 依赖）
  * shortId 无效或资源不存在时触发 notFound()
  */

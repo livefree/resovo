@@ -2811,3 +2811,20 @@
   - DB 层（UpdateVideoMetaInput + fieldMap）已在 CHG-182 准备好，本次无需改动
   - 注：任务规划文件路径写的是 `src/components/admin/videos/VideoMetaForm.tsx`，实际组件为 `src/components/admin/AdminVideoForm.tsx`
 - **测试覆盖**：typecheck ✓ lint ✓ 599/599 unit tests 通过
+
+---
+
+### CHG-189 — SEO：5个详情页 generateMetadata
+- **完成时间**：2026-03-25 16:20
+- **修改文件**：
+  - `src/lib/video-detail.ts`（新增 `fetchVideoMeta` — 软失败版，返回 Video|null，不触发 notFound）
+  - `src/app/[locale]/movie/[slug]/page.tsx`（新增 generateMetadata）
+  - `src/app/[locale]/series/[slug]/page.tsx`（新增 generateMetadata）
+  - `src/app/[locale]/anime/[slug]/page.tsx`（新增 generateMetadata）
+  - `src/app/[locale]/variety/[slug]/page.tsx`（新增 generateMetadata）
+  - `src/app/[locale]/others/[slug]/page.tsx`（新增 generateMetadata）
+- **变更说明**：
+  - 复用 `extractShortId` + Fastify API fetch，title = `${video.title} - 流光`，description 截 150 字，og:image = cover_url
+  - 视频不存在时 fallback title = '流光视频'，不抛异常
+  - 与现有 `fetchVideoDetail` 共用同一 API base 和 revalidate=60 缓存策略
+- **测试覆盖**：typecheck ✓ lint ✓ 599/599 unit tests 通过
