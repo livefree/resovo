@@ -392,11 +392,11 @@
 
 #### PLAYER-10 — 播放页 E2E + DanmakuBar 联通验证
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-25 00:00
 - **计划开始时间**：VIDEO-07 完成后
-- **实际开始时间**：_
-- **完成时间**：_
+- **实际开始时间**：2026-03-25
+- **完成时间**：2026-03-25
 - **目标**：补充播放页 E2E 测试；核实 DanmakuBar 是否已接入 `/videos/:id/danmaku` API
 - **文件范围**：`tests/e2e/player.spec.ts`（追加场景）
 - **测试场景**：
@@ -406,4 +406,6 @@
 - **DoD**：E2E 场景通过；DanmakuBar 联通状态写入任务完成备注
 - **依赖**：VIDEO-07（可与 SEARCH-05 并行，但同序列顺序执行）
 - **回滚方式**：回退 PLAYER-10 提交
-- **完成备注**：_
+- **完成备注**：
+  - 追加 PLAYER-10 describe block（4 E2E tests）：shell 加载 / 多线路 SourceBar / 线路切换 / DanmakuBar 存在性
+  - **DanmakuBar 联通状态**：✅ 完全接入。`useDanmaku` hook 从 `GET /videos/:id/danmaku` 拉取数据（sessionStorage 30min 缓存），`apiClient.postDanmaku` 持久化发送弹幕到 `POST /videos/:id/danmaku`（fire-and-forget，已登录时触发）。CCL `CommentManager` 渲染飞弹幕，ResizeObserver 追踪播放器尺寸变化。

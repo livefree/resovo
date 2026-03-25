@@ -2392,3 +2392,9 @@
 - **VIDEO-07**：新增 VideoDetailClient.test.tsx（7 tests），覆盖 loading/404/正常渲染/showEpisodes/slug 提取
 - **SEARCH-05**：search.spec.ts 追加 SEARCH-05 describe block（3 E2E tests），覆盖关键词提交→结果渲染→卡片导航→MetaChip 链路
 - 全量单元测试：578 tests 通过（4 个任务累计新增 28 tests）
+
+## 2026-03-25 P2 执行（PLAYER-10）
+- **PLAYER-10**：player.spec.ts 追加 PLAYER-10 describe block（4 E2E tests）
+  - 场景：watch shell 加载、多线路 SourceBar 渲染、线路切换、DanmakuBar 存在性验证
+  - DanmakuBar 已完全接入 `/videos/:id/danmaku` API（GET 拉取 + POST 发送），CCL 渲染飞弹幕
+- P2 序列（SEQ-20260325-01）全部 6 个任务完成：CHG-162 / VIDEO-08 / VIDEO-06 / VIDEO-07 / SEARCH-05 / PLAYER-10
