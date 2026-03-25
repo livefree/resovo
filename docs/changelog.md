@@ -2705,3 +2705,14 @@
   - `src/api/services/SearchService.ts`（SearchFilters.category→genre；ES filter term 同步）
 - **变更摘要**：ES 索引写入和搜索过滤全部从 category 迁移到 genre 字段
 - **测试覆盖**：typecheck ✓，lint ✓，587/587 通过
+
+## CHG-179 — 前端类型标签与 Browse 筛选更新
+- **完成时间**：2026-03-25 12:00
+- **来源序列**：SEQ-20260325-02
+- **修改文件**：
+  - `src/components/video/VideoCard.tsx`（TYPE_LABELS 补全 11 种）
+  - `src/components/video/VideoDetailHero.tsx`（TYPE_LABELS 补全 11 种）
+  - `src/components/video/VideoMeta.tsx`（VIDEO_TYPE_LABEL 补全 11 种）
+  - `src/api/routes/search.ts`（VideoTypeEnum 更新为 11 种新值；移除 series→drama shim）
+- **变更摘要**：前端类型标签覆盖全部 11 种 VideoType；搜索路由不再接受旧值
+- **测试覆盖**：typecheck ✓，lint ✓，587/587 通过

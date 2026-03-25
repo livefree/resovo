@@ -12,12 +12,10 @@ import { z } from 'zod'
 import { es } from '@/api/lib/elasticsearch'
 import { SearchService } from '@/api/services/SearchService'
 
-// 接受全部 12 种类型 + 旧值 'series'（向后兼容：映射为 'drama'）
 const VideoTypeEnum = z.enum([
-  'movie', 'drama', 'anime', 'variety',
-  'short_drama', 'sports', 'music', 'documentary',
-  'game_show', 'news', 'children', 'other',
-  'series',  // 向后兼容，服务端映射为 drama
+  'movie', 'series', 'anime', 'variety',
+  'documentary', 'short', 'sports', 'music',
+  'news', 'kids', 'other',
 ])
 const SortEnum = z.enum(['relevance', 'rating', 'latest'])
 
@@ -75,10 +73,8 @@ export async function searchRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const { rating_min: ratingMin, type, ...rest } = parsed.data
-    // 向后兼容：旧 URL 参数 type=series 映射为 type=drama（ADR-017）
-    const resolvedType = type === 'series' ? 'drama' : type
-    const result = await searchService.search({ ...rest, type: resolvedType, ratingMin })
+    const { rating_min: ratingMin, ...rest } = parsed.data
+    const result = await searchService.search({ ...rest, ratingMin })
     return reply.send(result)
   })
 }

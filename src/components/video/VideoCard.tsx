@@ -14,10 +14,17 @@ interface VideoCardProps {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  movie:   '电影',
-  series:  '剧集',
-  anime:   '动漫',
-  variety: '综艺',
+  movie:       '电影',
+  series:      '剧集',
+  anime:       '动漫',
+  variety:     '综艺',
+  documentary: '纪录片',
+  short:       '短剧',
+  sports:      '体育',
+  music:       '音乐',
+  news:        '新闻',
+  kids:        '少儿',
+  other:       '其他',
 }
 
 export function VideoCard({ video, className }: VideoCardProps) {

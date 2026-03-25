@@ -1988,12 +1988,12 @@
    - 完成时间：2026-03-25 11:45
    - 验收要点：VideoService/CrawlerService category→genre；ES mapping 同步；typecheck 通过
 
-5. CHG-179 — 前端类型标签与 Browse 筛选更新（状态：⬜ 待开始）
+5. CHG-179 — 前端类型标签与 Browse 筛选更新（状态：✅ 已完成）
    - 创建时间：2026-03-25 10:00
    - 计划开始：CHG-178 完成后
-   - 实际开始：_
-   - 完成时间：_
-   - 验收要点：TYPE_LABELS/GENRE_LABELS 更新；Browse type/genre 筛选正常；E2E 通过
+   - 实际开始：2026-03-25 11:50
+   - 完成时间：2026-03-25 12:00
+   - 验收要点：TYPE_LABELS 11种补全；search.ts VideoTypeEnum 更新；typecheck/test 通过
 
 6. CHG-180 — 测试 fixtures + 测试用例更新（状态：⬜ 待开始）
    - 创建时间：2026-03-25 10:00
