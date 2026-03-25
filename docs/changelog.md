@@ -2903,3 +2903,25 @@
   - `stop-all` endpoint：用返回的 runIds 立即调用 `syncRunStatusFromTasks`，不等 watchdog（最多 60s 延迟）
 - **根因**：`syncRunStatusFromTasks` 只更新 run.status，不更新 run.control_status；stop-all 也未主动 sync；导致 UI 的 runningRuns 过滤（`controlStatus === 'cancelling'`）永远命中，"中止中"无法变为"已中止"
 - **测试覆盖**：typecheck ✅ lint ✅ unit tests 599/599 ✅
+
+---
+
+### CHG-194 — 采集系统功能汇总 Mermaid 流程图文档
+- **完成时间**：2026-03-25 19:05
+- **修改文件**：
+  - `docs/crawler-flows.md`（新建）
+- **变更内容**：
+  - 新建 `docs/crawler-flows.md`，包含 10 个 Mermaid flowchart 流程图：
+    1. 整体系统架构（graph LR）
+    2. 手动触发采集流程（POST /admin/crawler/runs）
+    3. Worker 任务处理流程（processCrawlJob 完整生命周期）
+    4. 核心采集执行流程（CrawlerService.crawl 分页+解析+upsert）
+    5. 数据解析与入库流程（SourceParserService → DB → ES）
+    6. 自动调度流程（Scheduler Tick 每 60s）
+    7. Watchdog 监控流程（超时/心跳检测+周期 sync）
+    8. Run 控制流程（Cancel / Pause / Resume 三分支）
+    9. Stop-All 紧急止血流程（完整 stop-all 序列）
+    10. 站点管理流程（CRUD + 批量 + 连通性验证）
+  - 附状态枚举快速参考表和关键源文件索引
+- **根因**：用户要求将所有已实现采集功能汇总并配流程图说明，便于后续维护和功能扩展
+- **测试覆盖**：文档类任务，无需运行测试
