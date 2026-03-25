@@ -52,31 +52,55 @@ export const useAuthStore = create<AuthStore>()(
       logout: () => set(initialState),
 
       /**
-       * 刷新页面后：isLoggedIn=true（来自 localStorage）但 accessToken=null（内存丢失）
-       * → 发起 POST /auth/refresh 静默恢复 accessToken
-       * 成功：写入 accessToken；失败：清除登录状态
+       * 刷新页面后：accessToken 仅存内存会丢失
+       * 只要 accessToken 为空就尝试一次 refresh（不依赖 isLoggedIn 标记）
+       * 成功后如 user 缺失，再拉取 /users/me 补全用户信息
        */
       tryRestoreSession: async () => {
-        const { isLoggedIn, accessToken } = get()
-        if (!isLoggedIn || accessToken) return // 不需要恢复
+        const { accessToken } = get()
+        if (accessToken) return // 不需要恢复
 
         set({ isRestoring: true })
         try {
-          const response = await fetch(`${BASE_URL}/auth/refresh`, {
+          const refreshResponse = await fetch(`${BASE_URL}/auth/refresh`, {
             method: 'POST',
             credentials: 'include',
           })
-          if (response.ok) {
-            const data = await response.json() as { accessToken: string; data?: { accessToken: string } }
-            const token = data.accessToken ?? (data.data as { accessToken: string } | undefined)?.accessToken
-            if (token) {
-              set({ accessToken: token })
-            } else {
-              set(initialState)
-            }
-          } else {
+          if (!refreshResponse.ok) {
             set(initialState)
+            return
           }
+
+          const refreshData = await refreshResponse.json() as { accessToken?: string; data?: { accessToken?: string } }
+          const token = refreshData.accessToken ?? refreshData.data?.accessToken
+          if (!token) {
+            set(initialState)
+            return
+          }
+
+          const prevUser = get().user
+          if (prevUser) {
+            set({ accessToken: token, isLoggedIn: true })
+            return
+          }
+
+          const meResponse = await fetch(`${BASE_URL}/users/me`, {
+            method: 'GET',
+            credentials: 'include',
+            headers: { Authorization: `Bearer ${token}` },
+          })
+
+          if (meResponse.ok) {
+            const meData = await meResponse.json() as { data?: User }
+            const user = meData.data
+            if (user) {
+              set({ user, accessToken: token, isLoggedIn: true })
+              return
+            }
+          }
+
+          // /users/me 获取失败时保留 token，避免已有效会话被误清空
+          set({ accessToken: token, isLoggedIn: true })
         } catch {
           set(initialState)
         } finally {

@@ -5,6 +5,7 @@
 
 import { AnalyticsService } from '@/api/services/AnalyticsService'
 import { db } from '@/api/lib/postgres'
+import { AdminPageShell } from '@/components/admin/shared/layout/AdminPageShell'
 import { AnalyticsCards } from '@/components/admin/dashboard/AnalyticsCards'
 import { QueueAlerts } from '@/components/admin/dashboard/QueueAlerts'
 import type { AnalyticsData } from '@/api/routes/admin/analytics'
@@ -23,18 +24,24 @@ export default async function AdminRootPage() {
 
   if (!data) {
     return (
-      <div data-testid="admin-page">
-        <h1 className="mb-6 text-2xl font-bold">数据看板</h1>
+      <AdminPageShell
+        title="数据看板"
+        description="查看运营统计、审核队列与采集任务概览。"
+        testId="admin-page"
+      >
         <p className="text-red-400">数据加载失败，请刷新页面重试</p>
-      </div>
+      </AdminPageShell>
     )
   }
 
   return (
-    <div data-testid="admin-page">
-      <h1 className="mb-6 text-2xl font-bold">数据看板</h1>
+    <AdminPageShell
+      title="数据看板"
+      description="查看运营统计、审核队列与采集任务概览。"
+      testId="admin-page"
+    >
       <QueueAlerts queues={data.queues} />
       <AnalyticsCards initialData={data} />
-    </div>
+    </AdminPageShell>
   )
 }

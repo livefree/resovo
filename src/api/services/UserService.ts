@@ -140,4 +140,22 @@ export class UserService {
 
     await this.redis.set(blacklistKey(refreshToken), '1', 'EX', ttl)
   }
+
+  async devLogin(identifier: string): Promise<AuthResult> {
+    const user = identifier.includes('@')
+      ? await userQueries.findUserByEmail(this.db, identifier)
+      : await userQueries.findUserByUsername(this.db, identifier)
+
+    if (!user) {
+      throw new UnauthorizedError(`开发账号不存在：${identifier}`)
+    }
+    if (user.bannedAt) {
+      throw new UnauthorizedError('该账号已被封禁，无法开发快捷登录')
+    }
+
+    const { passwordHash: _ph, ...safeUser } = user
+    const accessToken = signAccessToken({ userId: user.id, role: user.role })
+    const refreshToken = signRefreshToken(user.id)
+    return { user: safeUser, accessToken, refreshToken }
+  }
 }

@@ -176,6 +176,67 @@ describe('POST /admin/system/config', () => {
     const body = res.json<{ data: { synced: number } }>()
     expect(body.data.synced).toBe(1)
   })
+
+  it('accepts api_site format from sources file and supports api_url alias', async () => {
+    const mockRow = {
+      key: 'jszyapi.com',
+      name: '🎬极速资源',
+      api_url: 'https://jszyapi.com/api.php/provide/vod',
+      detail: 'https://jszyapi.com',
+      source_type: 'vod',
+      format: 'json',
+      weight: 50,
+      is_adult: false,
+      disabled: false,
+      from_config: true,
+      created_at: '',
+      updated_at: '',
+    }
+    const mockConnect = { query: vi.fn().mockResolvedValue({ rows: [mockRow], rowCount: 1 }), release: vi.fn() }
+    const db = await import('@/api/lib/postgres')
+    ;(db.db as unknown as { connect: ReturnType<typeof vi.fn> }).connect = vi.fn().mockResolvedValue(mockConnect)
+    mockDbQuery.mockResolvedValue({ rows: [mockRow], rowCount: 1 })
+
+    const config = JSON.stringify({
+      api_site: {
+        'jszyapi.com': {
+          name: '🎬极速资源',
+          api: 'https://jszyapi.com/api.php/provide/vod',
+          detail: 'https://jszyapi.com',
+        },
+        'alt.example.com': {
+          name: '别名字段站点',
+          api_url: 'https://alt.example.com/api.php/provide/vod',
+        },
+      },
+    })
+
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST', url: '/admin/system/config',
+      headers: { ...authHeader('admin'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ configFile: config }),
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json<{ data: { synced: number; skipped: number } }>()
+    expect(body.data.synced).toBe(2)
+    expect(body.data.skipped).toBe(0)
+  })
+
+  it('returns 400 for invalid subscription url', async () => {
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST', url: '/admin/system/config',
+      headers: { ...authHeader('admin'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        configFile: JSON.stringify({ api_site: {} }),
+        subscriptionUrl: 'not-a-url',
+      }),
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('INVALID_SUBSCRIPTION_URL')
+  })
 })
 
 // ── 爬虫源站 CRUD ─────────────────────────────────────────────────
@@ -244,6 +305,28 @@ describe('POST /admin/crawler/sites', () => {
       body: JSON.stringify({ key: 'jsm3u8', name: '晶石', apiUrl: 'https://api.test.com' }),
     })
     expect(res.statusCode).toBe(409)
+  })
+
+  it('returns 409 for duplicate apiUrl', async () => {
+    mockDbQuery
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 }) // find by key
+      .mockResolvedValueOnce({
+        rows: [{
+          key: 'existing', name: '已有源', api_url: 'https://api.test.com', detail: null,
+          source_type: 'vod', format: 'json', weight: 50, is_adult: false,
+          disabled: false, from_config: false, created_at: '', updated_at: '',
+        }],
+        rowCount: 1,
+      }) // find by api_url
+
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST', url: '/admin/crawler/sites',
+      headers: { ...authHeader('admin'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'new-key', name: '新源', apiUrl: 'https://api.test.com' }),
+    })
+    expect(res.statusCode).toBe(409)
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('DUPLICATE_API_URL')
   })
 })
 

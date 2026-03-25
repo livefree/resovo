@@ -7,7 +7,7 @@
 
 import type { Pool } from 'pg'
 import type { Client as ESClient } from '@elastic/elasticsearch'
-import { parseXmlResponse, parseJsonResponse, parseVodItem } from './SourceParserService'
+import { parseXmlResponse, parseJsonResponse, parseVodItem, inferContentFormat, inferEpisodePattern } from './SourceParserService'
 import { normalizeTitle } from './TitleNormalizer'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
 import * as sourcesQueries from '@/api/db/queries/sources'
@@ -102,11 +102,15 @@ export class CrawlerService {
     return url
   }
 
-  /** 通用 HTTP 取文本 */
-  private async fetchText(url: string): Promise<string> {
+  /** 通用 HTTP 取文本，可选外部 AbortSignal（与内置 30s 超时合并） */
+  private async fetchText(url: string, signal?: AbortSignal): Promise<string> {
+    const timeoutSignal = AbortSignal.timeout(30_000)
+    const combinedSignal = signal
+      ? AbortSignal.any([signal, timeoutSignal])
+      : timeoutSignal
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Resovo-Crawler/1.0' },
-      signal: AbortSignal.timeout(30_000),
+      signal: combinedSignal,
     })
     if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`)
     return res.text()
@@ -118,11 +122,12 @@ export class CrawlerService {
    */
   async fetchPage(
     source: CrawlerSource,
-    options: { page?: number; hoursAgo?: number } = {}
+    options: { page?: number; hoursAgo?: number; signal?: AbortSignal } = {}
   ): Promise<ReturnType<typeof parseVodItem>[]> {
+    const { signal, ...fetchOptions } = options
     // Step 1: 获取列表，拿到 vod_id 列表
-    const listUrl = this.buildApiUrl(source.base, source.format, options)
-    const listBody = await this.fetchText(listUrl)
+    const listUrl = this.buildApiUrl(source.base, source.format, fetchOptions)
+    const listBody = await this.fetchText(listUrl, signal)
     const listItems =
       source.format === 'xml' ? parseXmlResponse(listBody) : parseJsonResponse(listBody)
 
@@ -131,7 +136,7 @@ export class CrawlerService {
     // Step 2: 批量获取详情（含 vod_play_url）
     const ids = listItems.map((item) => String(item.vod_id)).join(',')
     const detailUrl = this.buildApiUrl(source.base, source.format, { ids })
-    const detailBody = await this.fetchText(detailUrl)
+    const detailBody = await this.fetchText(detailUrl, signal)
     const detailItems =
       source.format === 'xml' ? parseXmlResponse(detailBody) : parseJsonResponse(detailBody)
 
@@ -152,9 +157,12 @@ export class CrawlerService {
    *   规则 C — 将 title / titleEn 写入 video_aliases（INSERT IGNORE）
    *   规则 D — metadata_source 优先级 tmdb(4) > douban(3) > manual(2) > crawler(1)；低优先级不覆盖高优先级元数据
    *   规则 E — sources ON CONFLICT DO NOTHING（不覆盖已有播放源）
+   *
+   * @param siteKey 来源站点 key，用于读取站点级 ingest_policy（ADR-018）
    */
   async upsertVideo(
-    parsed: ReturnType<typeof parseVodItem>
+    parsed: ReturnType<typeof parseVodItem>,
+    siteKey?: string
   ): Promise<{ videoId: string; sourcesUpserted: number }> {
     const { video, sources } = parsed
 
@@ -183,17 +191,29 @@ export class CrawlerService {
       // 新建视频记录（含 title_normalized + metadata_source）
       isNew = true
       const shortId = nanoid(8)
-      const autoPublish = config.AUTO_PUBLISH_CRAWLED === 'true'
+      // ADR-018: 站点级 ingest_policy 优先，无配置时回退全局 AUTO_PUBLISH_CRAWLED
+      let autoPublish = config.AUTO_PUBLISH_CRAWLED === 'true'
+      if (siteKey) {
+        const site = await crawlerSitesQueries.findCrawlerSite(this.db, siteKey)
+        if (site) autoPublish = site.ingestPolicy.allow_auto_publish
+      }
       const episodeCount = sources.length > 0
         ? Math.max(...sources.map((s) => s.episodeNumber ?? 1))
         : 1
+      const contentFormat = inferContentFormat(video.type, episodeCount)
+      const episodePattern = inferEpisodePattern(episodeCount, video.status)
+      // ADR-018: visibility_status 与 is_published 同步（方案 B 同步点）
+      const visibilityStatus = autoPublish ? 'public' as const : 'internal' as const
+      const reviewStatus = autoPublish ? 'approved' as const : 'pending_review' as const
       const inserted = await videosQueries.insertCrawledVideo(this.db, {
         shortId,
         title: video.title,
         titleNormalized,
         titleEn: video.titleEn,
-        coverUrl: video.coverUrl,   // ADR-009: 存外链
+        coverUrl: video.coverUrl,         // ADR-009: 存外链
         type: video.type,
+        sourceContentType: video.sourceContentType,  // ADR-017
+        normalizedType: video.normalizedType,         // ADR-017
         category: video.category,
         year: video.year,
         country: video.country,
@@ -203,6 +223,10 @@ export class CrawlerService {
         description: video.description,
         status: video.status,
         episodeCount,
+        contentFormat,      // ADR-017
+        episodePattern,     // ADR-017
+        visibilityStatus,   // ADR-018
+        reviewStatus,       // ADR-018
         isPublished: autoPublish,
         metadataSource: 'crawler',
       })
@@ -308,54 +332,173 @@ export class CrawlerService {
    */
   async crawl(
     source: CrawlerSource,
-    options: { hoursAgo?: number } = {}
+    options: {
+      hoursAgo?: number
+      taskType?: 'full-crawl' | 'incremental-crawl'
+      taskId?: string
+      /** 外部中断信号：由 crawlerWorker 的 controlCheckTimer 触发，reason 为 'TASK_CANCELLED'/'TASK_PAUSED'/'TASK_TIMEOUT' */
+      signal?: AbortSignal
+      shouldStop?: () => false | 'cancel' | 'timeout' | 'pause' | Promise<false | 'cancel' | 'timeout' | 'pause'>
+      onLog?: (
+        input: {
+          level?: 'info' | 'warn' | 'error'
+          stage: string
+          message: string
+          details?: Record<string, unknown>
+        }
+      ) => void | Promise<void>
+    } = {}
   ): Promise<CrawlResult> {
-    const taskRow = await crawlerTasksQueries.createTask(this.db, {
-      sourceSite: source.name,
-      targetUrl: source.base,
-    })
+    const taskId =
+      options.taskId ??
+      (
+        await crawlerTasksQueries.createTask(this.db, {
+          type: options.taskType ?? (options.hoursAgo ? 'incremental-crawl' : 'full-crawl'),
+          sourceSite: source.name,
+          targetUrl: source.base,
+        })
+      ).id
 
     let videosUpserted = 0
     let sourcesUpserted = 0
     let errors = 0
     let page = 1
+    let processed = 0
+    let lastProgressAt = 0
+    let loggedUpsertErrors = 0
+    const emit = async (
+      level: 'info' | 'warn' | 'error',
+      stage: string,
+      message: string,
+      details?: Record<string, unknown>,
+    ) => {
+      if (!options.onLog) return
+      await options.onLog({ level, stage, message, details })
+    }
+
+    const pushProgress = async () => {
+      const now = Date.now()
+      if (now - lastProgressAt < 2000 && processed % 20 !== 0) return
+      lastProgressAt = now
+      await crawlerTasksQueries.updateTaskProgress(this.db, taskId, {
+        videosUpserted,
+        sourcesUpserted,
+        errors,
+        pages: Math.max(page - 1, 0),
+        durationMs: Math.max(now - startAt, 0),
+      })
+    }
+    const startAt = Date.now()
 
     try {
-      await crawlerTasksQueries.updateTaskStatus(this.db, taskRow.id, 'running')
+      await emit('info', 'crawl.start', '开始采集', {
+        source: source.name,
+        type: options.taskType ?? (options.hoursAgo ? 'incremental-crawl' : 'full-crawl'),
+        hoursAgo: options.hoursAgo ?? null,
+      })
+      await crawlerTasksQueries.updateTaskStatus(this.db, taskId, 'running')
 
       while (true) {
-        const items = await this.fetchPage(source, { page, hoursAgo: options.hoursAgo })
+        const stopReasonBeforePage = options.shouldStop ? await options.shouldStop() : false
+        if (stopReasonBeforePage === 'cancel') throw new Error('TASK_CANCELLED')
+        if (stopReasonBeforePage === 'timeout') throw new Error('TASK_TIMEOUT')
+        if (stopReasonBeforePage === 'pause') throw new Error('TASK_PAUSED')
+        if (stopReasonBeforePage) {
+          throw new Error('TASK_CANCELLED')
+        }
+        await emit('info', 'crawl.page.fetch.start', '开始拉取分页', { page })
+        const items = await this.fetchPage(source, { page, hoursAgo: options.hoursAgo, signal: options.signal })
+        await emit('info', 'crawl.page.fetch.done', '分页拉取完成', { page, items: items.length })
         if (items.length === 0) break
 
         for (const parsed of items) {
+          const stopReasonBeforeItem = options.shouldStop ? await options.shouldStop() : false
+          if (stopReasonBeforeItem === 'cancel') throw new Error('TASK_CANCELLED')
+          if (stopReasonBeforeItem === 'timeout') throw new Error('TASK_TIMEOUT')
+          if (stopReasonBeforeItem === 'pause') throw new Error('TASK_PAUSED')
+          if (stopReasonBeforeItem) {
+            throw new Error('TASK_CANCELLED')
+          }
           try {
-            const { sourcesUpserted: s } = await this.upsertVideo(parsed)
+            const { sourcesUpserted: s } = await this.upsertVideo(parsed, source.name)
             videosUpserted++
             sourcesUpserted += s
+            processed++
+            await pushProgress()
           } catch (err) {
             errors++
+            processed++
             const message = err instanceof Error ? err.message : String(err)
             process.stderr.write(
               `[CrawlerService] upsert failed for "${parsed.video.title}": ${message}\n`
             )
+            if (loggedUpsertErrors < 20) {
+              loggedUpsertErrors++
+              await emit('warn', 'crawl.upsert.failed', '视频入库失败', {
+                page,
+                title: parsed.video.title,
+                error: message,
+              })
+            }
+            await pushProgress()
           }
         }
 
         page++
+        await pushProgress()
         // 增量模式单页即可（仅最近更新）
         if (options.hoursAgo) break
       }
 
-      await crawlerTasksQueries.updateTaskStatus(this.db, taskRow.id, 'done', {
+      await crawlerTasksQueries.updateTaskStatus(this.db, taskId, 'done', {
         videosUpserted,
         sourcesUpserted,
         errors,
         pages: page - 1,
       })
+      await emit('info', 'crawl.done', '采集完成', {
+        videosUpserted,
+        sourcesUpserted,
+        errors,
+        pages: page - 1,
+        durationMs: Date.now() - startAt,
+      })
     } catch (err) {
+      // AbortError：由 controlCheckTimer 触发的外部中断信号，将 abort reason 转换为对应任务错误
+      if (err instanceof Error && err.name === 'AbortError' && options.signal?.aborted) {
+        const reason = typeof options.signal.reason === 'string' ? options.signal.reason : 'TASK_CANCELLED'
+        if (reason === 'TASK_PAUSED') {
+          await emit('info', 'crawl.paused', '采集已暂停（外部信号中断）', { page, processed })
+          throw new Error('TASK_PAUSED')
+        }
+        if (reason === 'TASK_TIMEOUT') {
+          await emit('warn', 'crawl.timeout', '采集已超时（外部信号中断）', { page, processed })
+          throw new Error('TASK_TIMEOUT')
+        }
+        await emit('warn', 'crawl.cancelled', '采集已取消（外部信号中断）', { page, processed })
+        throw new Error('TASK_CANCELLED')
+      }
+      const message = err instanceof Error ? err.message : String(err)
+      if (message.includes('TASK_CANCELLED')) {
+        await emit('warn', 'crawl.cancelled', '采集已取消', { page, processed })
+        throw err
+      }
+      if (message.includes('TASK_TIMEOUT')) {
+        await emit('warn', 'crawl.timeout', '采集已超时', { page, processed })
+        throw err
+      }
+      if (message.includes('TASK_PAUSED')) {
+        await emit('info', 'crawl.paused', '采集已暂停，等待恢复', { page, processed })
+        throw err
+      }
       errors++
-      await crawlerTasksQueries.updateTaskStatus(this.db, taskRow.id, 'failed', {
-        error: err instanceof Error ? err.message : String(err),
+      await crawlerTasksQueries.updateTaskStatus(this.db, taskId, 'failed', {
+        error: message,
+      })
+      await emit('error', 'crawl.failed', '采集失败', {
+        error: message,
+        page,
+        processed,
       })
     }
 

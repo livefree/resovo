@@ -6,6 +6,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
 import type { SiteSettings } from '@/types'
 
@@ -101,24 +102,6 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
   )
 }
 
-function NumberInput({ value, onChange, min, max }: {
-  value: number
-  onChange: (v: number) => void
-  min?: number
-  max?: number
-}) {
-  return (
-    <input
-      type="number"
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value))}
-      min={min}
-      max={max}
-      className="w-32 rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-    />
-  )
-}
-
 // ── 主组件 ────────────────────────────────────────────────────
 
 export function SiteSettings() {
@@ -149,7 +132,16 @@ export function SiteSettings() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      await apiClient.post('/admin/system/settings', settings)
+      await apiClient.post('/admin/system/settings', {
+        siteName: settings.siteName,
+        siteAnnouncement: settings.siteAnnouncement,
+        doubanProxy: settings.doubanProxy,
+        doubanCookie: settings.doubanCookie,
+        showAdultContent: settings.showAdultContent,
+        contentFilterEnabled: settings.contentFilterEnabled,
+        videoProxyEnabled: settings.videoProxyEnabled,
+        videoProxyUrl: settings.videoProxyUrl,
+      })
       showToast('保存成功', true)
     } catch {
       showToast('保存失败，请重试', false)
@@ -220,30 +212,23 @@ export function SiteSettings() {
         )}
       </Section>
 
-      {/* ── 自动采集 ──────────────────────────────────────── */}
-      <Section title="自动采集（定时爬虫）">
-        <Toggle
-          checked={settings.autoCrawlEnabled}
-          onChange={(v) => set('autoCrawlEnabled', v)}
-          label="启用定时自动采集（每日凌晨 3:00 增量采集）"
-        />
-        {settings.autoCrawlEnabled && (
-          <>
-            <Field label="单次最大采集条数（1–1000）">
-              <NumberInput value={settings.autoCrawlMaxPerRun} onChange={(v) => set('autoCrawlMaxPerRun', v)} min={1} max={1000} />
-            </Field>
-            <Toggle
-              checked={settings.autoCrawlRecentOnly}
-              onChange={(v) => set('autoCrawlRecentOnly', v)}
-              label="仅采集最近更新的记录"
-            />
-            {settings.autoCrawlRecentOnly && (
-              <Field label="最近天数范围（1–365）">
-                <NumberInput value={settings.autoCrawlRecentDays} onChange={(v) => set('autoCrawlRecentDays', v)} min={1} max={365} />
-              </Field>
-            )}
-          </>
-        )}
+      {/* ── 自动采集迁移说明（只读）──────────────────────────── */}
+      <Section title="自动采集配置（已迁移）">
+        <p className="text-sm text-[var(--muted)]">
+          自动采集开关与采集策略已迁移到「采集控制台」，当前页面不再提供编辑能力。
+        </p>
+        <div className="rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-xs text-[var(--muted)]">
+          配置入口唯一：采集控制台。采集任务记录页仅用于查看结果与日志。
+        </div>
+        <div>
+          <Link
+            href="/admin/crawler"
+            className="inline-flex items-center rounded-md border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)] hover:bg-[var(--bg3)]"
+            data-testid="site-settings-go-crawler-control-center"
+          >
+            前往采集控制台
+          </Link>
+        </div>
       </Section>
 
       {/* ── 保存按钮 ──────────────────────────────────────── */}

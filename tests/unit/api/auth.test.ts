@@ -463,6 +463,63 @@ describe('POST /v1/auth/login', () => {
   })
 })
 
+describe('POST /v1/auth/dev-login', () => {
+  let app: Awaited<ReturnType<typeof buildAuthApp>>
+  let originalNodeEnv: string | undefined
+  let originalDevSecret: string | undefined
+  let originalDevIdentifier: string | undefined
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockRedis.get.mockResolvedValue(null)
+    mockRedis.set.mockResolvedValue('OK')
+    mockQueries.findUserByUsername.mockResolvedValue(MOCK_USER)
+    originalNodeEnv = process.env.NODE_ENV
+    originalDevSecret = process.env.DEV_LOGIN_SECRET
+    originalDevIdentifier = process.env.DEV_LOGIN_IDENTIFIER
+    process.env.NODE_ENV = 'development'
+    process.env.DEV_LOGIN_SECRET = 'dev-secret'
+    process.env.DEV_LOGIN_IDENTIFIER = 'admin'
+    app = await buildAuthApp()
+  })
+
+  afterEach(() => {
+    process.env.NODE_ENV = originalNodeEnv
+    process.env.DEV_LOGIN_SECRET = originalDevSecret
+    process.env.DEV_LOGIN_IDENTIFIER = originalDevIdentifier
+    app.close()
+  })
+
+  it('无 X-Dev-Auth 头返回 401', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/dev-login',
+      body: {},
+    })
+    expect(res.statusCode).toBe(401)
+    expect(res.json().error.code).toBe('UNAUTHORIZED')
+  })
+
+  it('鉴权成功时返回 user + accessToken 并设置 cookie', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/auth/dev-login',
+      headers: {
+        'content-type': 'application/json',
+        'x-dev-auth': 'dev-secret',
+      },
+      body: JSON.stringify({ identifier: 'admin' }),
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json<{ data: { user: { id: string }; accessToken: string } }>()
+    expect(body.data.user.id).toBe(MOCK_USER.id)
+    expect(body.data.accessToken).toMatch(/^eyJ/)
+    const setCookie = String(res.headers['set-cookie'] ?? '')
+    expect(setCookie).toContain('refresh_token=')
+    expect(setCookie).toContain('user_role=')
+  })
+})
+
 describe('POST /v1/auth/refresh', () => {
   let app: Awaited<ReturnType<typeof buildAuthApp>>
 

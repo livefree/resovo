@@ -239,3 +239,165 @@
 - **影响文件**：`src/components/player/VideoPlayer.tsx`、`src/stores/playerStore.ts`、`src/api/routes/users.ts`
 
 _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
+
+---
+
+## ADR-013: POST /admin/crawler/tasks Endpoint Sunset Decision
+
+- **日期**：2026-03-22
+- **状态**：已决定（Decided）
+- **背景**：NB-02 修复（CHG-154）已将前端所有触发路径迁移至 `POST /admin/crawler/runs`（triggerType: single）。`POST /admin/crawler/tasks` 为旧触发路径，仅保留用于向后兼容，无已知活跃调用方。
+- **决策**：
+  - 立即：在该路由响应中加入 `Deprecation: true`、`Sunset: 2026-05-01`、`Link` 响应头（CHG-160，已完成）
+  - 计划下线：CHG-163 序列完成后，在下一个 Phase 开始时执行 CHG-163（路由删除任务）将该路由从代码库移除
+  - Sunset 日期：2026-05-01
+- **原因**：
+  - 双触发路径（`/tasks` + `/runs`）增加维护负担，调用方可能混用两条路径
+  - `/runs` 模型更完整（支持 batch/all/single/schedule），是长期正确路径
+  - `/tasks` POST 已无前端调用方，零风险移除
+- **影响文件**：`src/api/routes/admin/crawler.ts`
+
+---
+
+## ADR-014: 采集域 Admin 导航收归 /admin/crawler
+
+- **日期**：2026-03-22
+- **状态**：已采纳
+- **决策**：将 `/admin/system/sites`（crawler_sites 管理）并入 `/admin/crawler` 作为 Sites tab；从 `/admin/system/config` 剥离爬虫配置段移入 `/admin/crawler` 的 Settings tab；`/admin/system/monitor` 改为纯应用级监控，不含采集数据；`/admin/system/sites` 原路由保留为 redirect，不删除。
+- **理由**：
+  - 采集生命周期的全部数据（`crawler_sites / crawler_runs / crawler_tasks / crawler_task_logs`）属于同一业务域，但 admin 导航按"系统配置"/"采集控制台"分层时将 `crawler_sites` 错归 system 区，导致添加站点、触发采集、查日志必须跨两个导航区
+  - `CrawlerSiteManager` 组件已在 `system/crawler-site/` 下，改动主要为路由与导航，无业务逻辑移动
+  - 治理层 migration 将新增多个采集相关 admin 页面，在此之前完成导航收归可确保新页面从一开始放置正确
+- **架构约束**：
+  - `/admin/crawler` 是采集域唯一导航入口：Sites / Console / Logs / Settings 四个 tab
+  - `/admin/system` 仅保留纯系统配置：config（不含爬虫段）、monitor（应用级）、cache、migration
+  - 不得在 `/admin/system` 下新增任何采集相关页面
+  - `/admin/system/sites` redirect 长期保留，不设 sunset
+- **影响文件**：`src/app/[locale]/admin/system/sites/page.tsx`（改 redirect），`src/app/[locale]/admin/crawler/page.tsx`（新增 Sites tab），admin 导航组件，`src/app/[locale]/admin/system/config/page.tsx`（剥离爬虫段）
+
+---
+
+## ADR-015: 采集监控采用轮询，不使用 SSE
+
+- **日期**：2026-03-22
+- **状态**：已采纳
+- **决策**：采集控制台监控面板通过 `GET /admin/crawler/monitor-snapshot` 短轮询获取状态，不引入 SSE 或 WebSocket。
+- **理由**：
+  - 后台同时在线的管理员极少（通常 1–3 人），SSE 的连接管理成本不合比例
+  - `/monitor-snapshot` 聚合了 overview/runs/tasks 三层数据，单次 HTTP 请求足以刷新全局状态
+  - SSE 在 Fastify 下需要额外管理连接生命周期与心跳，增加运维复杂度
+- **架构约束**：
+  - 轮询间隔固定为 5 秒（空闲态可延长至 30 秒）
+  - 监控区数据与表格区数据必须解耦，轮询不触发表格重渲染
+  - 若未来管理员并发量超过 50，可评估迁移至 SSE，届时只需修改 `useCrawlerMonitor` hook，不影响其他模块
+- **影响文件**：`src/api/routes/admin/crawler.ts`（monitor-snapshot 端点），`src/components/admin/system/crawler-site/hooks/useCrawlerMonitor.ts`
+
+---
+
+## ADR-016: Season/Episode 统一坐标系（S/E 模型）
+
+- **日期**：2026-03-22
+- **状态**：已采纳
+- **决策**：所有视频资源统一到 (season_number, episode_number) 坐标系。电影 = S1E1，无分集内容不再以 NULL 表示，一律为 (1, 1)。
+- **理由**：
+  - 当前 `video_sources.episode_number` 为 nullable，电影与"第1集"无法区分，导致播放器逻辑需要特判
+  - `watch_history.episode_number NULL` 导致续播逻辑需要同样的特判
+  - 统一坐标系后，"从哪集继续播"的查询语义唯一，无歧义
+- **迁移策略**：
+  - `video_sources.season_number INT NOT NULL DEFAULT 1`（Migration 014 新增）
+  - `video_sources.episode_number` 保留，NULL → DEFAULT 1（Migration 014 数据迁移）
+  - `watch_history.season_number INT NOT NULL DEFAULT 1`（Migration 014 新增）
+  - `watch_history.episode_number` NULL → DEFAULT 1（Migration 014 数据迁移）
+  - `videos.episode_count` 保留，语义变为"总集数"，movie = 1
+- **架构约束**：
+  - 任何读取 `episode_number` 的代码，不得再使用 `IS NULL` 判断"不分集"，改用 `season_number = 1 AND episode_number = 1`
+  - 爬虫写入单集内容时，必须显式写入 `season_number = 1, episode_number = 1`
+  - 播放器 episode selector 逻辑以 (season, episode) 为主键，不再以 NULL 为特殊分支
+- **影响文件**：`src/api/db/migrations/014_*.sql`，`src/api/db/queries/videoSources.ts`，`src/api/db/queries/watchHistory.ts`，`src/api/services/CrawlerService.ts`，`src/components/player/*`
+
+---
+
+## ADR-017: 视频内容类型系统扩展
+
+- **日期**：2026-03-22
+- **状态**：已采纳
+- **决策**：将 `videos.type` 枚举从 4 种扩展为 12 种，并新增 `source_content_type`、`normalized_type`、`content_format`、`episode_pattern` 四个判定字段，实现爬虫原始数据与平台规范分类解耦。
+- **类型枚举（12 种）**：
+  `movie` / `drama` / `anime` / `variety` / `short_drama` / `sports` / `music` / `documentary` / `game_show` / `news` / `children` / `other`
+- **字段语义**：
+  - `type`：前台导航类型，决定 URL 前缀（`/movie/`、`/anime/` 等）和分类菜单，是用户可见的主分类
+  - `source_content_type TEXT`：爬虫原样写入的源站原始类型字符串，不做规范化，保留用于溯源
+  - `normalized_type TEXT`：平台规范化分类，可细于 `type`，供搜索聚合与推荐系统使用
+  - `content_format TEXT CHECK (IN ('movie','episodic','collection','clip'))`：内容形态
+  - `episode_pattern TEXT CHECK (IN ('single','multi','ongoing','unknown'))`：集数模式
+- **爬虫映射规则**：爬虫写入时，`source_content_type` 保存原始值，`type` 和 `normalized_type` 由映射表推断；映射表未覆盖的原始类型默认归入 `other`，`source_content_type` 保留原始值供后续重分类
+- **架构约束**：
+  - 前台路由（`/movie/`、`/drama/` 等）只使用 `type` 字段做路由分发，不使用 `normalized_type`
+  - 搜索和推荐系统可同时使用 `type` 和 `normalized_type` 做过滤聚合
+  - `type` CHECK 约束变更必须通过 migration，不得绕过约束直接写入
+- **影响文件**：`src/api/db/migrations/013_*.sql`，`src/api/services/CrawlerService.ts`（映射表），`src/types/video.types.ts`，`src/app/[locale]/(browse)/page.tsx`
+
+---
+
+## ADR-018: 内容治理层 — 审核状态与可见性模型
+
+- **日期**：2026-03-22
+- **状态**：已采纳
+- **决策**：引入 `review_status`（审核状态机）和 `visibility_status`（可见性控制）取代单一 `is_published` 布尔值，迁移策略采用方案 B：`is_published` 保留为服务层同步字段，新代码全部写 `visibility_status`，旧代码按模块逐步迁移。
+- **字段定义**：
+  ```
+  review_status    TEXT NOT NULL DEFAULT 'pending_review'
+                   CHECK (IN ('pending_review','approved','rejected','blocked'))
+  visibility_status TEXT NOT NULL DEFAULT 'internal'
+                   CHECK (IN ('public','hidden','internal','blocked'))
+  review_reason    TEXT
+  review_source    TEXT CHECK (IN ('system','ai','manual'))
+  reviewed_by      UUID REFERENCES users(id)
+  reviewed_at      TIMESTAMPTZ
+  needs_manual_review BOOLEAN NOT NULL DEFAULT false
+  ```
+- **is_published 迁移策略（方案 B）**：
+  - `is_published` 字段保留，不删除，标注 `@deprecated`
+  - 语义约定：`is_published = (visibility_status = 'public')`
+  - 同步点：`VideoService` 和 `CrawlerService` 的写入路径，写 `visibility_status` 时同步写 `is_published`
+  - 数据迁移：Migration 016 执行时，将现有 `is_published=true` 的行写入 `visibility_status='public'` / `review_status='approved'`
+  - 前台查询：所有 `WHERE is_published = true` 改为 `WHERE visibility_status = 'public'`（Migration 016 后统一切换）
+  - 不使用 DB trigger，同步逻辑在 service 层显式管理
+- **内容风险标志（Migration 016-ext，可延后）**：
+  `is_adult` / `is_suspected_adult` / `is_sensitive` / `is_violence` / `is_gore` / `is_gambling` / `is_illegal_source` / `is_low_quality_meta` / `is_spam`（全部 `BOOLEAN NOT NULL DEFAULT false`，独立列，支持过滤索引）
+- **架构约束**：
+  - 新编写的所有代码必须使用 `visibility_status`，禁止直接写 `is_published`
+  - Moderator 审核工作流操作 `review_status` 和 `visibility_status`，`is_published` 由 service 层跟随同步，不由 moderator 直接操作
+  - 前台 API 所有视频查询条件：`visibility_status = 'public'`（不再是 `is_published = true`）
+- **影响文件**：`src/api/db/migrations/016_*.sql`，`src/api/services/VideoService.ts`，`src/api/services/CrawlerService.ts`，`src/api/db/queries/videos.ts`，`src/app/[locale]/admin/videos/page.tsx`
+
+---
+
+## ADR-019: 采集策略按站点配置（Ingest Policy）
+
+- **日期**：2026-03-22
+- **状态**：已采纳
+- **决策**：在 `crawler_sites` 上添加 `ingest_policy JSONB` 字段，定义该站点采集内容的默认发布与可见性策略；单视频覆盖机制（`videos.ingest_policy_override`）延后实现。
+- **字段定义**：
+  ```json
+  {
+    "allow_auto_publish": false,
+    "allow_search_index": true,
+    "allow_recommendation": true,
+    "allow_public_detail": true,
+    "allow_playback": true,
+    "require_review_before_publish": true
+  }
+  ```
+- **理由**：
+  - 不同源站的内容质量与合规风险差异大，统一的 `AUTO_PUBLISH` 环境变量无法满足精细化管理
+  - 按站点配置可以"某源站全部内容不允许推荐"只需一行数据库写入，无需批量 UPDATE videos
+  - `require_review_before_publish=false` 时，爬虫写入后直接将 `visibility_status` 设为 `public`，绕过人工审核
+- **架构约束**：
+  - `CrawlerService` 写入视频时，读取来源站点的 `ingest_policy`，以此决定新内容的初始 `visibility_status` 和 `review_status`
+  - `allow_auto_publish` 替代全局 `AUTO_PUBLISH` 环境变量；环境变量作为全局兜底保留，但优先级低于站点级配置
+  - Admin Sites tab 提供 `ingest_policy` 的可视化编辑入口
+  - `videos.ingest_policy_override JSONB`（单视频级覆盖）属于 P2，不在本次 migration 实现
+- **影响文件**：`src/api/db/migrations/018_*.sql`，`src/api/services/CrawlerService.ts`，`src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+
+_新增 ADR 时，在此文件末尾追加，不修改已有条目。_

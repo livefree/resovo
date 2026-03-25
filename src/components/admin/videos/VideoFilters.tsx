@@ -7,6 +7,7 @@
 
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { useCallback, useRef } from 'react'
+import { AdminToolbar } from '@/components/admin/shared/toolbar/AdminToolbar'
 
 export function VideoFilters() {
   const router = useRouter()
@@ -36,7 +37,11 @@ export function VideoFilters() {
   )
 
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-3" data-testid="video-filters">
+    <AdminToolbar
+      className="gap-3"
+      dataTestId="video-filters"
+      actions={(
+        <>
       {/* 关键词搜索 */}
       <input
         type="text"
@@ -72,6 +77,8 @@ export function VideoFilters() {
         <option value="published">已上架</option>
         <option value="pending">待审核</option>
       </select>
-    </div>
+        </>
+      )}
+    />
   )
 }

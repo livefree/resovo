@@ -148,7 +148,7 @@ describe('users API (CHG-18)', () => {
     )
   })
 
-  it('POST /users/me/history：episode 缺省时 episodeNumber 为 null', async () => {
+  it('POST /users/me/history：episode 缺省时 episodeNumber 为 undefined（ADR-016 统一坐标系）', async () => {
     mockUpsertHistory.mockResolvedValueOnce(undefined)
 
     await app.inject({
@@ -163,7 +163,7 @@ describe('users API (CHG-18)', () => {
 
     expect(mockUpsertHistory).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ episodeNumber: null })
+      expect.objectContaining({ episodeNumber: undefined })
     )
   })
 

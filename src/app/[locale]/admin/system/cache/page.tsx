@@ -3,13 +3,17 @@
  * CHG-30
  */
 
-import { CacheManager } from '@/components/admin/system/CacheManager'
+import { AdminPageShell } from '@/components/admin/shared/layout/AdminPageShell'
+import { CacheManager } from '@/components/admin/system/monitoring/CacheManager'
 
 export default function AdminCachePage() {
   return (
-    <div data-testid="admin-cache-page">
-      <h1 className="mb-6 text-2xl font-bold">缓存管理</h1>
+    <AdminPageShell
+      title="缓存管理"
+      description="管理各类缓存命中与清理操作。"
+      testId="admin-cache-page"
+    >
       <CacheManager />
-    </div>
+    </AdminPageShell>
   )
 }

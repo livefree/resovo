@@ -42,6 +42,9 @@ export function LoginForm() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [serverError, setServerError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDevSubmitting, setIsDevSubmitting] = useState(false)
+  const enableDevLogin = process.env.NEXT_PUBLIC_ENABLE_DEV_LOGIN === 'true'
+  const devLoginSecret = process.env.NEXT_PUBLIC_DEV_LOGIN_SECRET
 
   function validate(data: LoginFields): boolean {
     const result = loginSchema.safeParse(data)
@@ -102,6 +105,33 @@ export function LoginForm() {
       }
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  async function handleDevLogin() {
+    if (!enableDevLogin) return
+    setServerError(null)
+    setIsDevSubmitting(true)
+    try {
+      const response = await apiClient.post<{ data: { user: User; accessToken: string } }>(
+        '/auth/dev-login',
+        {},
+        {
+          skipAuth: true,
+          headers: devLoginSecret ? { 'X-Dev-Auth': devLoginSecret } : {},
+        },
+      )
+      login(response.data.user, response.data.accessToken)
+      const callbackUrl = searchParams.get('callbackUrl') ?? '/admin'
+      router.push(callbackUrl)
+    } catch (error) {
+      if (error instanceof ApiClientError) {
+        setServerError(error.message)
+      } else {
+        setServerError('开发快捷登录失败，请稍后重试')
+      }
+    } finally {
+      setIsDevSubmitting(false)
     }
   }
 
@@ -202,6 +232,22 @@ export function LoginForm() {
       >
         {isSubmitting ? t('submitting') : t('submit')}
       </button>
+
+      {enableDevLogin && (
+        <button
+          type="button"
+          disabled={isDevSubmitting}
+          onClick={handleDevLogin}
+          data-testid="dev-login-submit"
+          className={cn(
+            'mt-3 w-full rounded-md py-2 text-sm font-medium transition-opacity',
+            'border border-[var(--border)] text-[var(--text)] bg-[var(--bg2)]',
+            isDevSubmitting ? 'opacity-60 cursor-not-allowed' : 'hover:bg-[var(--bg3)]'
+          )}
+        >
+          {isDevSubmitting ? '开发登录中…' : '开发快速登录（仅本地）'}
+        </button>
+      )}
     </form>
   )
 }

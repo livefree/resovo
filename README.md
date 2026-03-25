@@ -47,13 +47,13 @@ npm install
 ### 第四步：初始化数据库
 
 ```bash
-npm run db:migrate
+npm run migrate
 ```
 
 ### 第五步：启动服务
 
 ```bash
-# 终端 1：前端（Next.js，端口 3001）
+# 终端 1：前端（Next.js，端口 3000）
 npm run dev
 
 # 终端 2：后端 API（Fastify，端口 4000）
@@ -67,7 +67,21 @@ npm run api
 或直接用命令行触发：
 
 ```bash
-npm run crawler:full
+npm run verify:crawler
+```
+
+### 第七步（推荐）：开发前稳态检查
+
+在 AI 持续开发前，建议先执行一轮 preflight，保证环境、迁移、类型、lint、测试基线稳定。
+
+```bash
+npm run preflight
+```
+
+若本轮改动涉及关键页面流程，再执行带 E2E 的版本：
+
+```bash
+npm run preflight:e2e
 ```
 
 ---
@@ -76,10 +90,10 @@ npm run crawler:full
 
 | 入口 | 地址 | 说明 |
 |------|------|------|
-| 前台首页 | http://localhost:3001 | 主站，需有视频数据 |
-| 分类浏览 | http://localhost:3001/browse | 按类型/地区/年份筛选 |
-| 搜索 | http://localhost:3001/search | 全文搜索 |
-| 管理后台 | http://localhost:3001/admin | 需要 admin 账号 |
+| 前台首页 | http://localhost:3000 | 主站，需有视频数据 |
+| 分类浏览 | http://localhost:3000/browse | 按类型/地区/年份筛选 |
+| 搜索 | http://localhost:3000/search | 全文搜索 |
+| 管理后台 | http://localhost:3000/admin | 需要 admin 账号 |
 | API 文档 | http://localhost:4000/docs | Fastify Swagger |
 
 ---
@@ -112,7 +126,7 @@ VALUES (
 
 ### 登录管理后台
 
-1. 访问 http://localhost:3001/admin
+1. 访问 http://localhost:3000/admin
 2. 未登录时自动跳转登录页
 3. 用 admin 账号登录后进入管理后台
 
@@ -127,11 +141,26 @@ VALUES (
 **系统管理区**（仅 admin 可见）：
 - **数据看板**：视频数/播放量/用户数/待处理事项
 - **用户管理**：查看用户、封号/解封、角色管理
-- **爬虫管理**：配置资源站、手动触发全量/增量采集
+- **采集控制台**：配置源站、手动触发采集、查看运行任务、暂停/恢复/中止
 
-### 触发内容采集
+### 触发与控制采集任务
 
-登录管理后台 → 爬虫管理 → 点击「全量采集」，等待采集完成后刷新首页即可看到视频内容。
+入口位置：
+1. 登录后台后进入「系统管理」→「采集控制台（原视频源配置）」。
+2. 页面上方「采集批次状态」区域可看到当前任务与最近结果。
+3. 每个运行中的任务卡片提供按钮：
+   - `暂停`：暂停后不再继续后续步骤，进入 `paused`。
+   - `恢复`：从暂停状态恢复执行。
+   - `中止`：停止该批次后续执行，进入 `cancelled`（已完成结果保留）。
+4. 全局止血：如发生任务失控，可调用 `stop-all`（开启全局冻结 + 取消活跃任务）。
+5. 控制台状态条（scheduler/freeze/orphan）可直接执行：
+   - `开启冻结/关闭冻结`：切换全局采集冻结状态。
+   - `stop-all`：一键取消活跃任务并冻结系统。
+
+手动触发方式：
+1. 全站触发：在工具栏点击「全站增量采集」或「全站全量采集」。
+2. 批量触发：先在表格勾选多个源站，再点击「批量增量采集」或「批量全量采集」。
+3. 单站触发：在表格行内点击「增量」或「全量」。
 
 采集完成的视频默认处于**待审状态**（`is_published = false`），需要在视频管理页批量上架，或修改环境变量跳过审核：
 
@@ -147,6 +176,63 @@ npm run verify:crawler
 ```
 
 连接 PostgreSQL 和 Elasticsearch，执行一次增量采集（最近 24 小时），并输出视频数、播放源数、ES 索引文档数及样本数据。退出码 0 表示链路正常。
+
+### 采集控制接口（调试）
+
+如需用 API 调试 run 级控制：
+
+```bash
+# 触发批次（示例：全站增量）
+curl -X POST 'http://localhost:4000/v1/admin/crawler/runs' \
+  -H 'Authorization: Bearer <admin_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"triggerType":"all","mode":"incremental"}'
+
+# 暂停批次
+curl -X POST 'http://localhost:4000/v1/admin/crawler/runs/<runId>/pause' \
+  -H 'Authorization: Bearer <admin_access_token>'
+
+# 恢复批次
+curl -X POST 'http://localhost:4000/v1/admin/crawler/runs/<runId>/resume' \
+  -H 'Authorization: Bearer <admin_access_token>'
+
+# 中止批次
+curl -X POST 'http://localhost:4000/v1/admin/crawler/runs/<runId>/cancel' \
+  -H 'Authorization: Bearer <admin_access_token>'
+
+# 立即停止所有采集（开启全局冻结 + 取消活跃任务 + 清理自动 tick）
+curl -X POST 'http://localhost:4000/v1/admin/crawler/stop-all' \
+  -H 'Authorization: Bearer <admin_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"freeze":true,"removeRepeatableTick":true}'
+
+# 显式切换全局冻结（enabled=true 开启，false 关闭）
+curl -X POST 'http://localhost:4000/v1/admin/crawler/freeze' \
+  -H 'Authorization: Bearer <admin_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"enabled":false}'
+```
+
+命令行止血（本地开发）：
+
+```bash
+npm run crawler:stop-all
+```
+
+调度器默认关闭（避免开发阶段误触发自动采集），仅在显式开启时运行：
+
+```bash
+# .env.local
+CRAWLER_SCHEDULER_ENABLED=true
+```
+
+### 一键清空已抓取数据（测试用）
+
+当需要重复验证采集链路时，可使用以下命令一键清空抓取结果与采集任务记录（保留用户和站点配置）：
+
+```bash
+npm run clear:crawled-data
+```
 
 ---
 

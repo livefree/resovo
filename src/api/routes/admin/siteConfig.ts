@@ -32,14 +32,17 @@ const SiteSettingsBodySchema = z.object({
 
 const ConfigFileBodySchema = z.object({
   configFile:      z.string(),
-  subscriptionUrl: z.string().url().optional().or(z.literal('')),
+  subscriptionUrl: z.string().optional(),
 })
 
 // ── 配置文件格式（api_site 字段解析到 crawler_sites） ──────────
 
 interface ConfigFileSite {
   name: string
-  api: string
+  api?: string
+  /** 兼容部分配置使用 api_url/url 字段 */
+  api_url?: string
+  url?: string
   detail?: string
   is_adult?: boolean
   type?: 'vod' | 'shortdrama'
@@ -51,6 +54,15 @@ interface ConfigFileJson {
   crawler_sites?: Record<string, ConfigFileSite>
   /** 兼容 LunaTV 格式 */
   api_site?: Record<string, ConfigFileSite>
+}
+
+function isValidHttpUrl(input: string): boolean {
+  try {
+    const url = new URL(input)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
 }
 
 export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
@@ -97,7 +109,7 @@ export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
 
   fastify.get('/admin/system/config', { preHandler: auth }, async (_request, reply) => {
     const raw = await systemSettingsQueries.getSetting(db, 'config_file')
-    const subscriptionUrl = await systemSettingsQueries.getSetting(db, 'config_file_url' as SystemSettingKey)
+    const subscriptionUrl = await systemSettingsQueries.getSetting(db, 'config_file_url')
     return reply.send({
       data: {
         configFile: raw ?? '',
@@ -131,18 +143,29 @@ export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
     // 保存原始文件
     await systemSettingsQueries.setSetting(db, 'config_file', configFile)
     if (subscriptionUrl !== undefined) {
-      await systemSettingsQueries.setSetting(db, 'config_file_url' as SystemSettingKey, subscriptionUrl)
+      const normalized = subscriptionUrl.trim()
+      if (normalized.length > 0 && !isValidHttpUrl(normalized)) {
+        return reply.code(400).send({
+          error: { code: 'INVALID_SUBSCRIPTION_URL', message: '订阅 URL 必须是合法的 http/https 地址', status: 400 },
+        })
+      }
+      await systemSettingsQueries.setSetting(db, 'config_file_url', normalized)
     }
 
     // 同步 crawler_sites（兼容 crawler_sites 和 api_site 两个字段名）
     const sites: Record<string, ConfigFileSite> = configJson.crawler_sites ?? configJson.api_site ?? {}
     let synced = 0
+    let skipped = 0
     for (const [key, site] of Object.entries(sites)) {
-      if (!site.name || !site.api) continue
+      const apiUrl = site.api ?? site.api_url ?? site.url
+      if (!site.name || !apiUrl) {
+        skipped++
+        continue
+      }
       await crawlerSitesQueries.upsertCrawlerSite(db, {
         key,
         name:       site.name,
-        apiUrl:     site.api,
+        apiUrl,
         detail:     site.detail,
         sourceType: site.type ?? 'vod',
         format:     site.format ?? 'json',
@@ -153,6 +176,6 @@ export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
       synced++
     }
 
-    return reply.send({ data: { ok: true, synced } })
+    return reply.send({ data: { ok: true, synced, skipped } })
   })
 }

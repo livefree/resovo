@@ -118,8 +118,12 @@ resovo/
 | title | TEXT | 中文标题 |
 | title_en | TEXT | 英文原名 |
 | description | TEXT | |
-| cover_url | TEXT | R2 存储 URL |
-| type | TEXT | movie/series/anime/variety |
+| cover_url | TEXT | 外链 URL（爬虫采集的源站封面，不下载到 R2，见 ADR-009） |
+| type | TEXT | 前台导航类型，见下方枚举；URL `/series/` 内部映射到 `drama`（见 ADR-017） |
+| source_content_type | TEXT | 爬虫原样写入的源站类型字符串，用于溯源与重分类 |
+| normalized_type | TEXT | 平台规范化分类，可比 type 更细，供搜索/推荐使用 |
+| content_format | TEXT | `movie` / `episodic` / `collection` / `clip` |
+| episode_pattern | TEXT | `single` / `multi` / `ongoing` / `unknown` |
 | category | TEXT | action/sci-fi 等 |
 | rating | FLOAT | 0-10 |
 | year | INT | |
@@ -130,6 +134,14 @@ resovo/
 | cast | TEXT[] | 演员/声优列表 |
 | writers | TEXT[] | 编剧列表 |
 | douban_id | VARCHAR(20) | 豆瓣 ID，nullable；CHG-23 migration 003 |
+| is_published | BOOLEAN | **deprecated**，保留作兼容字段，由 service 层与 visibility_status 同步写入，见 ADR-018 |
+| review_status | TEXT | `pending_review` / `approved` / `rejected` / `blocked`；默认 `pending_review` |
+| visibility_status | TEXT | `public` / `hidden` / `internal` / `blocked`；主可见性控制字段，默认 `internal`；替代 `is_published` |
+| review_reason | TEXT | 审核备注（拒绝/封锁原因） |
+| review_source | TEXT | `system` / `ai` / `manual` |
+| reviewed_by | UUID FK → users | 审核操作人 |
+| reviewed_at | TIMESTAMPTZ | 审核时间 |
+| needs_manual_review | BOOLEAN | 是否需要人工复核，默认 false |
 | created_at | TIMESTAMPTZ | |
 
 ### video_sources
@@ -137,7 +149,8 @@ resovo/
 |------|------|------|
 | id | UUID PK | |
 | video_id | UUID FK → videos | |
-| episode_number | INT | NULL 表示电影 |
+| season_number | INT NOT NULL DEFAULT 1 | 季号；电影/单集内容 = 1，见 ADR-016 |
+| episode_number | INT NOT NULL DEFAULT 1 | 集号；电影/单集内容 = 1，不再使用 NULL（见 ADR-016） |
 | source_url | TEXT | 第三方直链 |
 | source_name | TEXT | 如"线路1" |
 | quality | TEXT | 1080P/720P 等 |
@@ -308,26 +321,39 @@ resovo/
 # 解析规则：
 1. 按 # 拆分得到每集字符串
 2. 按 $ 拆分得到 [集名, URL]
-3. 从集名提取集数（正则：/(\d+)/）
-4. 电影（episode_count=1）：episode_number 存 NULL
+3. 从集名提取集数（正则：/(\d+)/），未提取到时默认 1
+4. season_number 默认写 1（苹果CMS 接口无季字段）
+5. 电影/单集（episode_count=1）：season_number=1, episode_number=1（不再使用 NULL，见 ADR-016）
 ```
 
 | 解析结果 | 数据库字段 | 说明 |
 |---------|-----------|------|
 | 线路标识（flag 属性） | `source_name` | 如 "jsm3u8"、"heimuer" |
-| 集数（从集名解析） | `episode_number` | INT，电影为 NULL |
+| 季号（默认 1，苹果CMS 接口通常无季字段） | `season_number` | INT NOT NULL DEFAULT 1，见 ADR-016 |
+| 集数（从集名解析） | `episode_number` | INT NOT NULL DEFAULT 1；电影/单集写 1，不再使用 NULL，见 ADR-016 |
 | m3u8/mp4 URL | `source_url` | 第三方直链（ADR-001） |
 | URL 后缀判断 | `type` | `.m3u8`→`hls`，`.mp4`→`mp4` |
 
 ### 类型映射表（type_name → VideoType）
 
-| 接口值 | `videos.type` |
-|--------|--------------|
-| 电影、Movie | `movie` |
-| 电视剧、连续剧、国产剧、美剧、韩剧、日剧 | `series` |
-| 动漫、卡通、动画 | `anime` |
-| 综艺、真人秀、晚会 | `variety` |
-| 其他 / 未知 | `movie`（默认） |
+> `source_content_type` 存原始字符串；`type` 是前台导航枚举；`normalized_type` 可进一步细分（当前与 `type` 保持一致，后续扩展）。
+
+| 接口值（`vod_type_name` / `type_name`） | `videos.type` | `videos.source_content_type` |
+|----------------------------------------|--------------|------------------------------|
+| 电影、Movie、film | `movie` | 原样写入 |
+| 电视剧、连续剧、国产剧、美剧、韩剧、日剧、港剧、台剧 | `drama` | 原样写入 |
+| 动漫、卡通、动画、anime | `anime` | 原样写入 |
+| 综艺、真人秀、晚会、脱口秀 | `variety` | 原样写入 |
+| 短剧、微剧、竖屏剧 | `short_drama` | 原样写入 |
+| 纪录片、documentary | `documentary` | 原样写入 |
+| 音乐、MV、演唱会 | `music` | 原样写入 |
+| 体育、sports、赛事 | `sports` | 原样写入 |
+| 新闻、资讯 | `news` | 原样写入 |
+| 少儿、儿童节目 | `children` | 原样写入 |
+| 游戏、电竞 | `game_show` | 原样写入 |
+| 其他 / 未知 / 未匹配 | `other` | 原样写入 |
+
+**未匹配规则**：凡 `type_name` 不在上表中的，`type` 写 `other`，`source_content_type` 保留原始值，供后续重分类。
 
 ### 地区映射表（vod_area → country）
 
@@ -393,10 +419,11 @@ type UserRole = 'user' | 'moderator' | 'admin'
 /[locale]/browse?type=variety          ← 综艺
 
 # 视频详情页（SSR，按类型分路径，利于 SEO）
-/[locale]/movie/[slug]                 ← 电影详情
-/[locale]/anime/[slug]                 ← 动漫详情
-/[locale]/series/[slug]                ← 剧集详情
-/[locale]/variety/[slug]               ← 综艺详情
+/[locale]/movie/[slug]                 ← 电影详情（type=movie）
+/[locale]/anime/[slug]                 ← 动漫详情（type=anime）
+/[locale]/series/[slug]                ← 剧集详情（type=drama，URL 保留 /series/ 兼容 SEO，见 ADR-017）
+/[locale]/variety/[slug]               ← 综艺详情（type=variety）
+/[locale]/others/[slug]                ← 新增类型统一入口（type=short_drama/documentary/music/sports/news/children/game_show/other）
 
 # 视频播放页（CSR）
 /[locale]/watch/[slug]                 ← 播放页（?ep=N 指定集数）
@@ -421,13 +448,16 @@ type UserRole = 'user' | 'moderator' | 'admin'
 
 **URL 前缀 ↔ VideoType 映射**：
 
-| URL 路径前缀 | VideoType | 说明 |
-|-------------|-----------|------|
+| URL 路径前缀 | `videos.type` 值 | 说明 |
+|-------------|-----------------|------|
 | `/movie/` | `movie` | 电影 |
 | `/anime/` | `anime` | 动漫 |
-| `/series/` | `series` | 剧集 |
+| `/series/` | `drama` | 剧集；URL 路径保留 `/series/` 兼容 SEO，路由层内部查询 `type='drama'`（见 ADR-017） |
 | `/variety/` | `variety` | 综艺 |
+| `/others/` | `short_drama` / `documentary` / `music` / `sports` / `news` / `children` / `game_show` / `other` | 新增类型统一入口，路由层按 `type` 字段渲染对应页面 |
 | `/watch/` | 任意 | 播放页，不区分类型 |
+
+**browse 查询参数 ↔ type 映射**：`/browse?type=drama`（剧集）、`/browse?type=short_drama` 等，参数值与 `videos.type` 枚举值一致。
 
 ---
 
@@ -449,7 +479,7 @@ type UserRole = 'user' | 'moderator' | 'admin'
 
 # 系统管理区（admin only）
 /admin/users                    ← 用户列表（封号/解封/角色管理）
-/admin/crawler                  ← 爬虫资源站配置与任务记录
+/admin/crawler                  ← 采集域统一入口（4 tab：Sites/Console/Logs/Settings，见 ADR-014）
 /admin/analytics                ← 数据看板（流量/播放/搜索统计）
 /admin/reports/accounts         ← 举报处理（账号违规类）
 ```
@@ -462,18 +492,33 @@ type UserRole = 'user' | 'moderator' | 'admin'
 
 ## videos 表补充字段
 
-在原有字段基础上新增：
+### 治理层字段（Migration 013/016）
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `is_published` | BOOLEAN | `false` | 上架状态；爬虫采集默认 false，审核通过后设为 true |
+| `type` | TEXT | — | 扩展为 12 种：`movie`/`drama`/`anime`/`variety`/`short_drama`/`documentary`/`music`/`sports`/`news`/`children`/`game_show`/`other`；原 `series` 迁移为 `drama` |
+| `source_content_type` | TEXT | NULL | 爬虫原始类型字符串，不规范化 |
+| `normalized_type` | TEXT | NULL | 平台规范化分类，当前与 `type` 保持一致 |
+| `content_format` | TEXT | NULL | `movie`/`episodic`/`collection`/`clip` |
+| `episode_pattern` | TEXT | NULL | `single`/`multi`/`ongoing`/`unknown` |
+| `visibility_status` | TEXT | `internal` | **主可见性字段**；`public`/`hidden`/`internal`/`blocked`；替代 `is_published`（见 ADR-018） |
+| `review_status` | TEXT | `pending_review` | `pending_review`/`approved`/`rejected`/`blocked` |
+| `review_reason` | TEXT | NULL | 审核备注 |
+| `review_source` | TEXT | NULL | `system`/`ai`/`manual` |
+| `reviewed_by` | UUID | NULL | FK → users |
+| `reviewed_at` | TIMESTAMPTZ | NULL | 审核时间 |
+| `needs_manual_review` | BOOLEAN | `false` | 是否需要人工复核 |
+| `is_published` | BOOLEAN | `false` | **deprecated**；保留用于向后兼容，由 `VideoService`/`CrawlerService` 与 `visibility_status` 同步写入，不得在新代码中直接写入（见 ADR-018 方案 B） |
 
-**前台 API 约束**：所有面向用户的视频查询必须包含 `WHERE is_published = true`，已在 `db/queries/videos.ts` 的 `findById` 和 `list` 函数中强制过滤。
+**前台 API 约束（Migration 016 后）**：所有面向用户的视频查询使用 `WHERE visibility_status = 'public'`（旧代码逐步从 `is_published = true` 迁移）。
 
-**SQL 补充：**
+**索引补充：**
 ```sql
-ALTER TABLE videos ADD COLUMN IF NOT EXISTS is_published BOOLEAN NOT NULL DEFAULT false;
+-- 旧索引（保留兼容期）
 CREATE INDEX IF NOT EXISTS idx_videos_published ON videos(is_published) WHERE is_published = true;
+-- 新索引（Migration 016）
+CREATE INDEX IF NOT EXISTS idx_videos_visibility ON videos(visibility_status);
+CREATE INDEX IF NOT EXISTS idx_videos_review_status ON videos(review_status);
 ```
 
 ---

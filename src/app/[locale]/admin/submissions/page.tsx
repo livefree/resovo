@@ -1,15 +1,10 @@
 /**
- * /admin/submissions — 投稿审核页
- * ADMIN-03: 用户投稿的播放源待审队列，支持通过/拒绝
+ * /admin/submissions — 兼容旧入口，重定向到统一内容审核页
+ * CHG-138
  */
 
-import { AdminSubmissionList } from '@/components/admin/AdminSubmissionList'
+import { redirect } from 'next/navigation'
 
 export default function AdminSubmissionsPage() {
-  return (
-    <div data-testid="admin-submissions-page">
-      <h1 className="mb-6 text-2xl font-bold">投稿审核</h1>
-      <AdminSubmissionList />
-    </div>
-  )
+  redirect('/admin/content?tab=submissions')
 }

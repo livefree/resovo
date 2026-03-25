@@ -46,29 +46,44 @@ describe('crawlerWorker — enqueue functions', () => {
     mockAdd.mockResolvedValue({ id: 'job-1' })
   })
 
-  it('enqueueFullCrawl without siteKey dispatches full-crawl job', async () => {
+  it('enqueueFullCrawl dispatches full-crawl job with contract ids', async () => {
     const { enqueueFullCrawl } = await import('@/api/workers/crawlerWorker')
-    const job = await enqueueFullCrawl()
-    expect(mockAdd).toHaveBeenCalledWith({ type: 'full-crawl', siteKey: undefined })
+    const job = await enqueueFullCrawl('site-a', 'task-1', 'run-1')
+    expect(mockAdd).toHaveBeenCalledWith(
+      { type: 'full-crawl', siteKey: 'site-a', taskId: 'task-1', runId: 'run-1' },
+      expect.objectContaining({ timeout: 30 * 60 * 1000 }),
+    )
     expect(job.id).toBe('job-1')
   })
 
-  it('enqueueFullCrawl with siteKey dispatches job with siteKey', async () => {
+  it('enqueueFullCrawl missing contract ids throws error', async () => {
     const { enqueueFullCrawl } = await import('@/api/workers/crawlerWorker')
-    await enqueueFullCrawl('site-a')
-    expect(mockAdd).toHaveBeenCalledWith({ type: 'full-crawl', siteKey: 'site-a' })
+    await expect(enqueueFullCrawl('site-a', '', 'run-1')).rejects.toThrow('CRAWL_JOB_CONTRACT_INVALID')
+    expect(mockAdd).not.toHaveBeenCalled()
   })
 
   it('enqueueIncrementalCrawl uses default hoursAgo=24', async () => {
     const { enqueueIncrementalCrawl } = await import('@/api/workers/crawlerWorker')
-    await enqueueIncrementalCrawl()
-    expect(mockAdd).toHaveBeenCalledWith({ type: 'incremental-crawl', siteKey: undefined, hoursAgo: 24 })
+    await enqueueIncrementalCrawl('site-b', 24, 'task-2', 'run-2')
+    expect(mockAdd).toHaveBeenCalledWith(
+      { type: 'incremental-crawl', siteKey: 'site-b', hoursAgo: 24, taskId: 'task-2', runId: 'run-2' },
+      expect.objectContaining({ timeout: 30 * 60 * 1000 }),
+    )
   })
 
   it('enqueueIncrementalCrawl with custom siteKey and hoursAgo', async () => {
     const { enqueueIncrementalCrawl } = await import('@/api/workers/crawlerWorker')
-    await enqueueIncrementalCrawl('site-b', 48)
-    expect(mockAdd).toHaveBeenCalledWith({ type: 'incremental-crawl', siteKey: 'site-b', hoursAgo: 48 })
+    await enqueueIncrementalCrawl('site-b', 48, 'task-3', 'run-3')
+    expect(mockAdd).toHaveBeenCalledWith(
+      { type: 'incremental-crawl', siteKey: 'site-b', hoursAgo: 48, taskId: 'task-3', runId: 'run-3' },
+      expect.objectContaining({ timeout: 30 * 60 * 1000 }),
+    )
+  })
+
+  it('enqueueIncrementalCrawl missing contract ids throws error', async () => {
+    const { enqueueIncrementalCrawl } = await import('@/api/workers/crawlerWorker')
+    await expect(enqueueIncrementalCrawl('site-b', 24, '', 'run-3')).rejects.toThrow('CRAWL_JOB_CONTRACT_INVALID')
+    expect(mockAdd).not.toHaveBeenCalled()
   })
 
   it('registerCrawlerWorker registers processor and event listener', async () => {
@@ -82,13 +97,27 @@ describe('crawlerWorker — enqueue functions', () => {
 describe('crawlerWorker — CrawlJobData types', () => {
   it('CrawlJobData supports siteKey field', async () => {
     const { } = await import('@/api/workers/crawlerWorker')
-    const data = { type: 'full-crawl' as const, siteKey: 'my-site', hoursAgo: 12 }
+    const data = {
+      type: 'full-crawl' as const,
+      siteKey: 'my-site',
+      taskId: 'task-1',
+      runId: 'run-1',
+      hoursAgo: 12,
+    }
     expect(data.siteKey).toBe('my-site')
+    expect(data.taskId).toBe('task-1')
+    expect(data.runId).toBe('run-1')
     expect(data.hoursAgo).toBe(12)
   })
 
-  it('CrawlJobData works without optional fields', async () => {
-    const data = { type: 'incremental-crawl' as const }
+  it('CrawlJobData keeps only hoursAgo as optional field', async () => {
+    const data = {
+      type: 'incremental-crawl' as const,
+      siteKey: 'my-site',
+      taskId: 'task-2',
+      runId: 'run-2',
+    }
     expect(data.type).toBe('incremental-crawl')
+    expect(data.siteKey).toBe('my-site')
   })
 })

@@ -25,6 +25,13 @@ const redisOptions: Bull.QueueOptions['redis'] = REDIS_URL as string
 export const crawlerQueue = new Bull('crawler-queue', {
   redis: redisOptions,
   defaultJobOptions,
+  settings: {
+    // worker 进程崩溃后 60s 内将 stalled job 重新入队或标记失败，
+    // 避免等待心跳 watchdog（默认 15 分钟）才能恢复
+    stalledInterval: 60_000,
+    // stalled 次数达到上限后标记为 failed，而不是无限重排队
+    maxStalledCount: 1,
+  },
 })
 
 /** 播放源验证队列（verify-source / verify-single） */
@@ -52,3 +59,22 @@ attachQueueLogger(verifyQueue, 'verify-queue')
 
 const queues = { crawlerQueue, verifyQueue }
 export default queues
+
+/** 确认 crawler 队列可用，避免创建任务后因入队失败留下 pending 脏状态 */
+export async function ensureCrawlerQueueReady(timeoutMs = 1500): Promise<void> {
+  let timer: NodeJS.Timeout | null = null
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`crawler queue readiness timeout (${timeoutMs}ms)`))
+    }, timeoutMs)
+  })
+
+  try {
+    await Promise.race([crawlerQueue.isReady(), timeoutPromise])
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    throw new Error(`crawler queue unavailable: ${message}`)
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}

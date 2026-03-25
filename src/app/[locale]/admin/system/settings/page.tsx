@@ -3,13 +3,17 @@
  * CHG-35
  */
 
-import { SiteSettings } from '@/components/admin/system/SiteSettings'
+import { AdminPageShell } from '@/components/admin/shared/layout/AdminPageShell'
+import { SiteSettings } from '@/components/admin/system/site-settings/SiteSettings'
 
 export default function AdminSiteSettingsPage() {
   return (
-    <div data-testid="admin-site-settings-page">
-      <h1 className="mb-6 text-2xl font-bold">站点配置</h1>
+    <AdminPageShell
+      title="站点配置"
+      description="管理站点基础信息、展示文案与上传策略。"
+      testId="admin-site-settings-page"
+    >
       <SiteSettings />
-    </div>
+    </AdminPageShell>
   )
 }

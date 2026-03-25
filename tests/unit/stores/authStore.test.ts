@@ -136,11 +136,15 @@ describe('authStore', () => {
   // ── tryRestoreSession ────────────────────────────────────────────
 
   describe('tryRestoreSession', () => {
-    it('场景1：不需要恢复（无 user / isLoggedIn=false），直接返回', async () => {
-      const mockFetch = vi.spyOn(globalThis, 'fetch')
+    it('场景1：无 accessToken 时会尝试 refresh（不依赖 isLoggedIn）', async () => {
+      const mockFetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: async () => ({}),
+      } as Response)
       useAuthStore.setState({ user: null, isLoggedIn: false, accessToken: null })
       await useAuthStore.getState().tryRestoreSession()
-      expect(mockFetch).not.toHaveBeenCalled()
+      expect(mockFetch).toHaveBeenCalledOnce()
     })
 
     it('场景2：已有 accessToken，不重复刷新', async () => {
@@ -150,15 +154,21 @@ describe('authStore', () => {
       expect(mockFetch).not.toHaveBeenCalled()
     })
 
-    it('场景3：refresh 成功 → 写入 accessToken', async () => {
-      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ accessToken: 'new-token-123' }),
-      } as Response)
-      useAuthStore.setState({ user: MOCK_USER, isLoggedIn: true, accessToken: null })
+    it('场景3：refresh 成功 + /users/me 成功 → 写入 accessToken 和 user', async () => {
+      vi.spyOn(globalThis, 'fetch')
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ data: { accessToken: 'new-token-123' } }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ data: MOCK_USER }),
+        } as Response)
+      useAuthStore.setState({ user: null, isLoggedIn: false, accessToken: null })
       await useAuthStore.getState().tryRestoreSession()
       expect(useAuthStore.getState().accessToken).toBe('new-token-123')
       expect(useAuthStore.getState().isLoggedIn).toBe(true)
+      expect(useAuthStore.getState().user?.id).toBe(MOCK_USER.id)
       expect(useAuthStore.getState().isRestoring).toBe(false)
     })
 

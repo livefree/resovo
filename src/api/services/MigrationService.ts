@@ -79,7 +79,7 @@ export class MigrationService {
           sourceName,
           sourceUrl,
           type,
-          episodeNumber: episodeNumber ?? null,
+          episodeNumber: episodeNumber ?? 1,
         })
         imported++
       } catch (err) {
