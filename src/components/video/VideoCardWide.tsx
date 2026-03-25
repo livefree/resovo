@@ -58,7 +58,7 @@ export function VideoCardWide({ video, className }: VideoCardWideProps) {
           className="absolute top-2 left-2 text-xs px-1.5 py-0.5 rounded font-medium"
           style={{
             background: video.status === 'ongoing' ? 'var(--gold)' : 'rgba(0,0,0,0.6)',
-            color: video.status === 'ongoing' ? 'black' : '#a0a0a0',
+            color: video.status === 'ongoing' ? 'black' : 'var(--muted-foreground)',
           }}
         >
           {STATUS_LABELS[video.status] ?? video.status}
@@ -68,7 +68,7 @@ export function VideoCardWide({ video, className }: VideoCardWideProps) {
         {video.rating !== null && (
           <span
             className="absolute top-2 right-2 text-xs px-1.5 py-0.5 rounded font-medium"
-            style={{ background: 'rgba(0,0,0,0.7)', color: '#f5c518' }}
+            style={{ background: 'rgba(0,0,0,0.7)', color: 'var(--gold)' }}
           >
             ★ {video.rating.toFixed(1)}
           </span>

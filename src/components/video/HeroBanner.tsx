@@ -71,7 +71,7 @@ export function HeroBanner() {
       <div className="relative h-full max-w-screen-xl mx-auto px-4 flex flex-col justify-end pb-10">
         <div className="max-w-lg">
           {featured.rating !== null && (
-            <span className="text-sm font-medium" style={{ color: '#f5c518' }}>
+            <span className="text-sm font-medium" style={{ color: 'var(--gold)' }}>
               ★ {featured.rating.toFixed(1)} · {featured.year ?? ''}
             </span>
           )}

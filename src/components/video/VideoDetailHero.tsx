@@ -103,7 +103,7 @@ export function VideoDetailHero({ video }: VideoDetailHeroProps) {
             {video.rating !== null && (
               <span
                 className="px-2 py-0.5 rounded text-xs font-medium"
-                style={{ background: 'rgba(0,0,0,0.2)', color: '#f5c518' }}
+                style={{ background: 'rgba(0,0,0,0.2)', color: 'var(--gold)' }}
               >
                 ★ {video.rating.toFixed(1)}
               </span>

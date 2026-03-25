@@ -100,7 +100,7 @@ export function ResultCard({ result, className }: ResultCardProps) {
         {/* 元数据行 */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           {result.rating !== null && (
-            <span className="text-xs font-medium" style={{ color: '#f5c518' }}>
+            <span className="text-xs font-medium" style={{ color: 'var(--gold)' }}>
               ★ {result.rating.toFixed(1)}
             </span>
           )}
