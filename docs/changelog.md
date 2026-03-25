@@ -2942,3 +2942,17 @@
   1. monitor-snapshot 直接读 crawler_runs，不触发 sync，导致状态最长滞后 60s（watchdog 间隔）
   2. syncRunStatusFromTasks 只聚合站点级计数，未透传 task.result 中的 item 级统计到 run.summary
 - **测试覆盖**：typecheck ✅ lint ✅ unit tests 599/599 ✅
+
+---
+
+### CHG-196 — 站点 tab 监控面板精简
+- **完成时间**：2026-03-25 19:35
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerMonitor.ts`
+  - `src/components/admin/system/crawler-site/components/CrawlerConfigTab.tsx`
+- **变更内容**：
+  - `CrawlerRunSummary` 新增 `startedAt: string | null` 和 `finishedAt: string | null`（API 已返回，补充类型）
+  - `CrawlerConfigTab` 删除 `CrawlerRunPanel` "当前运行批次"（与设置 tab 的"运行中任务控制"重复）
+  - 替换为单行摘要条，仅显示 `runs[0]`（最近一次任务），字段：触发类型·模式、站点数、成功、失败、视频、时长(s)、状态
+- **根因**：站点 tab"当前运行批次"与设置 tab"运行中任务控制"展示同一数据，功能重复；原面板信息过密，用户要求紧凑化
+- **测试覆盖**：typecheck ✅ lint ✅ unit tests 599/599 ✅

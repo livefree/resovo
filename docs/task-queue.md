@@ -2183,3 +2183,19 @@
    - 实际开始：2026-03-25 19:15
    - 完成时间：2026-03-25 19:20
    - 验收要点：monitor-snapshot 每次调用主动 sync 活跃 run；syncRunStatusFromTasks 汇总 videosUpserted/sourcesUpserted/errors；CrawlerRunPanel 显示数据采集统计行；typecheck/lint/test 通过
+
+---
+
+## SEQ-20260325-10 — 站点tab监控面板精简
+- **创建时间**：2026-03-25 19:30
+- **最后更新时间**：2026-03-25 19:35
+- **状态**：✅ 已完成
+
+### 任务列表（按执行顺序）
+
+1. CHG-196 — 删除站点tab重复运行面板，监控区精简为单行摘要（状态：✅ 已完成）
+   - 创建时间：2026-03-25 19:30
+   - 计划开始：即刻
+   - 实际开始：2026-03-25 19:30
+   - 完成时间：2026-03-25 19:35
+   - 验收要点：CrawlerConfigTab 删除 CrawlerRunPanel；新增单行摘要显示最近一次任务（站点数/成功/失败/视频/时长秒）；CrawlerRunSummary 增加 startedAt/finishedAt 字段；typecheck/lint/test 通过

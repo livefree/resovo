@@ -20,6 +20,8 @@ export interface CrawlerRunSummary {
   status: 'queued' | 'running' | 'paused' | 'success' | 'partial_failed' | 'failed' | 'cancelled'
   controlStatus: 'active' | 'pausing' | 'paused' | 'cancelling' | 'cancelled'
   summary: Record<string, unknown> | null
+  startedAt: string | null
+  finishedAt: string | null
   createdAt: string
 }
 
