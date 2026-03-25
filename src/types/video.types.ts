@@ -77,6 +77,9 @@ export interface Video {
   reviewStatus: ReviewStatus
   visibilityStatus: VisibilityStatus
   needsManualReview: boolean
+  // 数据质量字段（Migration 020）
+  genreSource: 'auto' | 'manual' | null   // genre 来源：系统映射 / 管理员核验
+  contentRating: 'general' | 'adult'      // 内容分级（adult 为隐藏，未来专区门控）
   createdAt: string
 }
 

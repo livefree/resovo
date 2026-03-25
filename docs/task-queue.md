@@ -2008,3 +2008,57 @@
    - 实际开始：2026-03-25 12:05
    - 完成时间：2026-03-25 12:15
    - 验收要点：typecheck/lint/test 全通过；VideoCategory grep 零结果；architecture.md 更新完成
+
+---
+
+## [SEQ-20260325-03] P3 — 数据质量补全：类型修正 + Genre 映射 + 成人内容隔离
+- **状态**：🟡 规划中
+- **创建时间**：2026-03-25 14:00
+- **最后更新时间**：2026-03-25 14:00
+- **目标**：修复历史数据中约 320 条 type 误分类；为成人内容打标并隔离；建立 genre 自动映射与人工审核双轨机制；补全链接验证定时任务
+- **范围**：DB migrations、SourceParserService、VerifyService、管理后台 VideoMetaForm
+- **依赖**：SEQ-20260325-02 已完成（genre 列已就绪）
+- **决策依据**：
+  - 成人内容策略：content_rating='adult' + visibility_status='hidden'（选项 B），保留未来开辟专区的扩展能力
+  - type 误分类来源：旧爬虫逻辑将单集资源默认判定为 movie，source_category 保留了正确分类信息
+  - genre 字段策略：auto（系统映射）/ manual（管理员核验）双轨，通过 genre_source 列追踪来源
+
+### 任务列表（按执行顺序）
+
+1. CHG-182 — Migration 020：新增 genre_source + content_rating 两列（状态：✅ 已完成）
+   - 创建时间：2026-03-25 14:00
+   - 计划开始：2026-03-25
+   - 实际开始：2026-03-25 14:05
+   - 完成时间：2026-03-25 14:15
+   - 验收要点：migration 幂等可重跑；两列存在于 videos 表；CHECK 约束正确；idx_videos_content_rating 索引建立
+
+2. CHG-183 — SourceParserService：GENRE_MAP + ADULT_CATEGORIES（状态：⬜ 待开始）
+   - 创建时间：2026-03-25 14:00
+   - 计划开始：CHG-182 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：新爬取视频自动填充 genre + content_rating；ADULT_CATEGORIES 列表覆盖已知成人 source_category；单元测试覆盖
+
+3. CHG-184 — Migration 021：历史数据批量回填（状态：⬜ 待开始）
+   - 创建时间：2026-03-25 14:00
+   - 计划开始：CHG-183 完成后（CHG-183 定义的映射规则同步用于 migration SQL）
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：
+     - type 重分类：短剧/少儿/动漫/综艺/剧类 ~320 条修正后 grep type='movie' 数量下降
+     - 成人内容：content_rating='adult' + visibility_status='hidden' 覆盖所有 ADULT_CATEGORIES
+     - genre 回填：犯罪/战争/悬疑/爱情等可推断类目有值；migration 幂等
+
+4. CHG-185 — VerifyService cron：定时链接存活扫描（状态：⬜ 待开始）
+   - 创建时间：2026-03-25 14:00
+   - 计划开始：CHG-184 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：server.ts 注册每 24h 定时任务；批量入队 is_active=true 的 sources；不阻塞主进程；测试覆盖调度逻辑
+
+5. CHG-186 — 管理后台 genre 字段编辑（状态：⬜ 待开始）
+   - 创建时间：2026-03-25 14:00
+   - 计划开始：CHG-185 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：VideoMetaForm 增加 genre 下拉（15 种 + 空值）；保存写入 genre_source='manual'；typecheck/lint/test 通过

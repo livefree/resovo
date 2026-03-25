@@ -45,6 +45,9 @@ interface DbVideoRow {
   review_status: string
   visibility_status: string
   needs_manual_review: boolean
+  // Migration 020 字段
+  genre_source: 'auto' | 'manual' | null
+  content_rating: 'general' | 'adult'
 }
 
 function mapVideoRow(row: DbVideoRow): Video {
@@ -75,6 +78,8 @@ function mapVideoRow(row: DbVideoRow): Video {
     reviewStatus: (row.review_status as ReviewStatus) ?? 'pending_review',
     visibilityStatus: (row.visibility_status as VisibilityStatus) ?? 'internal',
     needsManualReview: row.needs_manual_review ?? false,
+    genreSource: row.genre_source ?? null,
+    contentRating: row.content_rating ?? 'general',
     createdAt: row.created_at,
   }
 }

@@ -2737,3 +2737,19 @@
   - 587/587 unit tests 通过
   - `grep -r "VideoCategory" src/ tests/` → 零结果 ✓
 - **序列 SEQ-20260325-02 完成**
+
+---
+
+## CHG-182 — Migration 020：新增 genre_source + content_rating 两列
+
+- **完成时间**：2026-03-25 14:15
+- **修改文件**：
+  - `src/api/db/migrations/020_add_genre_source_content_rating.sql`（新建）
+  - `src/api/db/queries/videos.ts`（DbVideoRow 新增两字段）
+  - `src/types/video.types.ts`（Video 类型新增两字段）
+- **变更说明**：
+  - `genre_source TEXT CHECK('auto','manual')` — 追踪 genre 来源（系统映射 vs 管理员核验）
+  - `content_rating TEXT NOT NULL DEFAULT 'general' CHECK('general','adult')` — 内容分级门控字段（adult 当前隐藏，保留未来成人专区扩展能力）
+  - `idx_videos_content_rating` 索引（前台查询默认过滤成人内容，高频条件）
+  - migration 幂等（DO $$ IF NOT EXISTS）
+- **测试覆盖**：typecheck ✓ lint ✓ 587/587 unit tests 通过
