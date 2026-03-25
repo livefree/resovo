@@ -1981,11 +1981,11 @@
    - 完成时间：2026-03-25 11:25
    - 验收要点：DbVideoRow category→source_category/genre；SQL 字符串同步；typecheck/lint 通过
 
-4. CHG-178 — 服务层写入逻辑更新（状态：⬜ 待开始）
+4. CHG-178 — 服务层写入逻辑更新（状态：✅ 已完成）
    - 创建时间：2026-03-25 10:00
    - 计划开始：CHG-177 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-25 11:30
+   - 完成时间：2026-03-25 11:45
    - 验收要点：VideoService/CrawlerService category→genre；ES mapping 同步；typecheck 通过
 
 5. CHG-179 — 前端类型标签与 Browse 筛选更新（状态：⬜ 待开始）

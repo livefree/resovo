@@ -131,12 +131,12 @@ export class VideoService {
       const result = await this.db.query<{
         id: string; short_id: string; slug: string | null
         title: string; title_en: string | null; cover_url: string | null
-        type: string; category: string | null; year: number | null
+        type: string; genre: string | null; year: number | null
         country: string | null; episode_count: number
         rating: number | null; status: string; is_published: boolean
       }>(
         `SELECT id, short_id, slug, title, title_en, cover_url,
-                type, category, year, country, episode_count,
+                type, genre, year, country, episode_count,
                 rating, status, is_published
          FROM videos WHERE id = $1`,
         [videoId]
@@ -155,7 +155,7 @@ export class VideoService {
           title_en: row.title_en,
           cover_url: row.cover_url,
           type: row.type,
-          category: row.category,
+          genre: row.genre,
           year: row.year,
           country: row.country,
           episode_count: row.episode_count,

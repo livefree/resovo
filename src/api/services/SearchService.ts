@@ -22,7 +22,7 @@ function makeSearchParams(index: string, body: EsBody): Parameters<Client['searc
 export interface SearchFilters {
   q?: string
   type?: string
-  category?: string
+  genre?: string
   year?: number
   ratingMin?: number
   lang?: string
@@ -60,7 +60,7 @@ export class SearchService {
 
     // 精确过滤
     if (filters.type) filter.push({ term: { type: filters.type } })
-    if (filters.category) filter.push({ term: { category: filters.category } })
+    if (filters.genre) filter.push({ term: { genre: filters.genre } })
     if (filters.year) filter.push({ term: { year: filters.year } })
     if (filters.lang) filter.push({ term: { subtitle_langs: filters.lang } })
     if (filters.ratingMin !== undefined) {

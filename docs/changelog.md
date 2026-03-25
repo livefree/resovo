@@ -2695,3 +2695,13 @@
   - Admin 写入路径：`CreateVideoInput.genre` / `UpdateVideoMetaInput.genre` → `genre` 列
   - 列表筛选：`VideoListFilters.genre` → `WHERE v.genre = $N`
 - **测试覆盖**：typecheck ✓，lint ✓，587/587 通过
+
+## CHG-178 — 服务层写入逻辑更新
+- **完成时间**：2026-03-25 11:45
+- **来源序列**：SEQ-20260325-02
+- **修改文件**：
+  - `src/api/services/VideoService.ts`（indexToES SQL + document: category→genre）
+  - `src/api/services/CrawlerService.ts`（indexToES SQL + document: category→genre）
+  - `src/api/services/SearchService.ts`（SearchFilters.category→genre；ES filter term 同步）
+- **变更摘要**：ES 索引写入和搜索过滤全部从 category 迁移到 genre 字段
+- **测试覆盖**：typecheck ✓，lint ✓，587/587 通过
