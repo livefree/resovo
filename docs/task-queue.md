@@ -2119,3 +2119,19 @@
    - 实际开始：2026-03-25 17:00
    - 完成时间：2026-03-25 17:20
    - 验收要点：listVideos/listTrendingVideos 追加 visibility_status='public' 过滤；indexToES 含 content_rating；SearchService filter 含 content_rating='general'；typecheck/lint/test 通过
+
+---
+
+## SEQ-20260325-06 — AdminCrawlerPanel hydration mismatch 修复
+- **创建时间**：2026-03-25 17:30
+- **最后更新时间**：2026-03-25 17:55
+- **状态**：✅ 已完成
+
+### 任务列表（按执行顺序）
+
+1. CHG-192 — 修复 AdminCrawlerPanel 列宽 hydration mismatch（状态：✅ 已完成）
+   - 创建时间：2026-03-25 17:30
+   - 计划开始：即刻
+   - 实际开始：2026-03-25 17:30
+   - 完成时间：2026-03-25 17:55
+   - 验收要点：useAdminTableState useState 初始值改为 defaultStateRef.current，不在 hydration 期读取 localStorage；typecheck/lint/test 通过

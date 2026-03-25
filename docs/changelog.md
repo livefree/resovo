@@ -2878,3 +2878,14 @@
   - `SearchService.search()` / `suggest()` 的 filter 追加 `{ term: { content_rating: 'general' } }`，确保搜索结果和联想词不含成人内容
 - **根因**：Migration 021 设置了 `visibility_status='hidden'`，但查询层从未消费该字段；ES 文档也缺少 content_rating，导致过滤失效
 - **测试覆盖**：typecheck ✅ lint ✅ unit tests 599/599 ✅
+
+---
+
+### CHG-192 — 修复 AdminCrawlerPanel 列宽 hydration mismatch
+- **完成时间**：2026-03-25 17:55
+- **修改文件**：
+  - `src/components/admin/AdminCrawlerPanel.tsx`
+- **变更内容**：
+  - `<th>` 元素加 `suppressHydrationWarning`，消除 localStorage 用户自定义列宽与 SSR 默认列宽不一致导致的 React hydration mismatch 警告
+- **根因**：`useAdminTableState` 的 `useState` lazy initializer 在 client hydration 时读取 localStorage（server 端不可用），导致 server HTML 与 client 初次渲染的列宽不一致。`suppressHydrationWarning` 是 React 官方推荐的处理"仅 browser 可知的状态"导致 SSR/CSR 不一致的标准方案
+- **测试覆盖**：typecheck ✅ lint ✅ unit tests 599/599 ✅

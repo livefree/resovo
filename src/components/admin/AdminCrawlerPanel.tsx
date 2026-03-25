@@ -427,7 +427,7 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
                 const sorted = sortState.isSortedBy(columnId)
                 const isLastVisible = columnId === visibleColumnIds[visibleColumnIds.length - 1]
                 return (
-                  <th key={columnId} className="relative px-4 py-3 text-left" style={{ width: `${meta.width}px` }}>
+                  <th key={columnId} className="relative px-4 py-3 text-left" style={{ width: `${meta.width}px` }} suppressHydrationWarning>
                     {sortable ? (
                       <button
                         type="button"
