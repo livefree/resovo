@@ -1944,9 +1944,9 @@
      - typecheck/lint/test:run 通过
 
 ## [SEQ-20260325-02] VideoType/VideoGenre 命名重建（执行序列）
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-25 10:00
-- **最后更新时间**：2026-03-25 10:00
+- **最后更新时间**：2026-03-25 12:15
 - **目标**：消除 VideoType 与 VideoCategory 的命名语义冲突，建立 VideoType（内容形式）与 VideoGenre（内容题材）的正交体系
 - **设计文档**：`docs/db-rebuild-naming-plan.md`
 - **范围**：`src/types/video.types.ts`、DB migrations、后端查询/路由/服务层、前端标签与筛选、测试 fixtures、`docs/architecture.md`
@@ -1995,16 +1995,16 @@
    - 完成时间：2026-03-25 12:00
    - 验收要点：TYPE_LABELS 11种补全；search.ts VideoTypeEnum 更新；typecheck/test 通过
 
-6. CHG-180 — 测试 fixtures + 测试用例更新（状态：⬜ 待开始）
+6. CHG-180 — 测试 fixtures + 测试用例更新（状态：✅ 已完成）
    - 创建时间：2026-03-25 10:00
    - 计划开始：CHG-179 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-25 12:05
+   - 完成时间：2026-03-25 12:10
    - 验收要点：factories.ts 使用新值域；VideoCategory import 零残留；test:run 全通过
 
-7. CHG-181 — 全量验收 + architecture.md 同步（状态：⬜ 待开始）
+7. CHG-181 — 全量验收 + architecture.md 同步（状态：✅ 已完成）
    - 创建时间：2026-03-25 10:00
    - 计划开始：CHG-180 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-25 12:05
+   - 完成时间：2026-03-25 12:15
    - 验收要点：typecheck/lint/test 全通过；VideoCategory grep 零结果；architecture.md 更新完成

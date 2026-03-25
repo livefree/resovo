@@ -119,12 +119,13 @@ resovo/
 | title_en | TEXT | 英文原名 |
 | description | TEXT | |
 | cover_url | TEXT | 外链 URL（爬虫采集的源站封面，不下载到 R2，见 ADR-009） |
-| type | TEXT | 前台导航类型，见下方枚举；URL `/series/` 内部映射到 `drama`（见 ADR-017） |
+| type | TEXT | 内容形式（VideoType 11种），见下方枚举；Migration 019（CHG-176）重建 |
 | source_content_type | TEXT | 爬虫原样写入的源站类型字符串，用于溯源与重分类 |
 | normalized_type | TEXT | 平台规范化分类，可比 type 更细，供搜索/推荐使用 |
 | content_format | TEXT | `movie` / `episodic` / `collection` / `clip` |
 | episode_pattern | TEXT | `single` / `multi` / `ongoing` / `unknown` |
-| category | TEXT | action/sci-fi 等 |
+| source_category | TEXT | 爬虫原始分类字符串（直接来自源站 type_name，不做枚举约束） |
+| genre | TEXT | 内容题材（VideoGenre 15种）：action/comedy/romance/thriller/horror/sci_fi/fantasy/history/crime/mystery/war/family/biography/martial_arts/other；初始 NULL，由管理员策展填写 |
 | rating | FLOAT | 0-10 |
 | year | INT | |
 | country | TEXT | JP/US/CN 等 |
@@ -334,23 +335,23 @@ resovo/
 | m3u8/mp4 URL | `source_url` | 第三方直链（ADR-001） |
 | URL 后缀判断 | `type` | `.m3u8`→`hls`，`.mp4`→`mp4` |
 
-### 类型映射表（type_name → VideoType）
+### 类型映射表（type_name → VideoType）— Migration 019 更新后
 
-> `source_content_type` 存原始字符串；`type` 是前台导航枚举；`normalized_type` 可进一步细分（当前与 `type` 保持一致，后续扩展）。
+> `source_content_type` 存爬虫原始字符串；`type` 是内容形式枚举（11种）；`source_category` 存爬虫原始分类字符串；`genre` 是平台策展题材（15种，初始 NULL）。
+> VideoType（内容形式）与 VideoGenre（内容题材）严格正交，同一词不同时出现在两个维度（见 `docs/db-rebuild-naming-plan.md`）。
 
 | 接口值（`vod_type_name` / `type_name`） | `videos.type` | `videos.source_content_type` |
 |----------------------------------------|--------------|------------------------------|
 | 电影、Movie、film | `movie` | 原样写入 |
-| 电视剧、连续剧、国产剧、美剧、韩剧、日剧、港剧、台剧 | `drama` | 原样写入 |
+| 电视剧、连续剧、国产剧、美剧、韩剧、日剧、港剧、台剧 | `series` | 原样写入 |
 | 动漫、卡通、动画、anime | `anime` | 原样写入 |
-| 综艺、真人秀、晚会、脱口秀 | `variety` | 原样写入 |
-| 短剧、微剧、竖屏剧 | `short_drama` | 原样写入 |
+| 综艺、真人秀、晚会、脱口秀、游戏、电竞 | `variety` | 原样写入 |
+| 短剧、微剧、竖屏剧 | `short` | 原样写入 |
 | 纪录片、documentary | `documentary` | 原样写入 |
 | 音乐、MV、演唱会 | `music` | 原样写入 |
 | 体育、sports、赛事 | `sports` | 原样写入 |
 | 新闻、资讯 | `news` | 原样写入 |
-| 少儿、儿童节目 | `children` | 原样写入 |
-| 游戏、电竞 | `game_show` | 原样写入 |
+| 少儿、儿童节目 | `kids` | 原样写入 |
 | 其他 / 未知 / 未匹配 | `other` | 原样写入 |
 
 **未匹配规则**：凡 `type_name` 不在上表中的，`type` 写 `other`，`source_content_type` 保留原始值，供后续重分类。
@@ -452,12 +453,12 @@ type UserRole = 'user' | 'moderator' | 'admin'
 |-------------|-----------------|------|
 | `/movie/` | `movie` | 电影 |
 | `/anime/` | `anime` | 动漫 |
-| `/series/` | `drama` | 剧集；URL 路径保留 `/series/` 兼容 SEO，路由层内部查询 `type='drama'`（见 ADR-017） |
+| `/series/` | `series` | 连续剧 / 剧集 |
 | `/variety/` | `variety` | 综艺 |
-| `/others/` | `short_drama` / `documentary` / `music` / `sports` / `news` / `children` / `game_show` / `other` | 新增类型统一入口，路由层按 `type` 字段渲染对应页面 |
+| `/others/` | `short` / `documentary` / `music` / `sports` / `news` / `kids` / `other` | 其他类型统一入口 |
 | `/watch/` | 任意 | 播放页，不区分类型 |
 
-**browse 查询参数 ↔ type 映射**：`/browse?type=drama`（剧集）、`/browse?type=short_drama` 等，参数值与 `videos.type` 枚举值一致。
+**browse 查询参数 ↔ type 映射**：`/browse?type=series`（剧集）、`/browse?type=short` 等，参数值与 `videos.type` 枚举值一致。
 
 ---
 
@@ -496,7 +497,7 @@ type UserRole = 'user' | 'moderator' | 'admin'
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `type` | TEXT | — | 扩展为 12 种：`movie`/`drama`/`anime`/`variety`/`short_drama`/`documentary`/`music`/`sports`/`news`/`children`/`game_show`/`other`；原 `series` 迁移为 `drama` |
+| `type` | TEXT | — | 内容形式，11 种：`movie`/`series`/`anime`/`variety`/`documentary`/`short`/`sports`/`music`/`news`/`kids`/`other`；Migration 019（CHG-176）从旧 12 种重建 |
 | `source_content_type` | TEXT | NULL | 爬虫原始类型字符串，不规范化 |
 | `normalized_type` | TEXT | NULL | 平台规范化分类，当前与 `type` 保持一致 |
 | `content_format` | TEXT | NULL | `movie`/`episodic`/`collection`/`clip` |

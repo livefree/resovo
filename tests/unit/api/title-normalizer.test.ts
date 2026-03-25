@@ -189,8 +189,8 @@ describe('buildMatchKey', () => {
   })
 
   it('相同标题 year=null → 相同 key', () => {
-    const a = buildMatchKey('无年份剧集', null, 'drama')
-    const b = buildMatchKey('无年份剧集', null, 'drama')
+    const a = buildMatchKey('无年份剧集', null, 'series')
+    const b = buildMatchKey('无年份剧集', null, 'series')
     expect(a).toBe(b)
   })
 })

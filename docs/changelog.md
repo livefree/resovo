@@ -2716,3 +2716,24 @@
   - `src/api/routes/search.ts`（VideoTypeEnum 更新为 11 种新值；移除 series→drama shim）
 - **变更摘要**：前端类型标签覆盖全部 11 种 VideoType；搜索路由不再接受旧值
 - **测试覆盖**：typecheck ✓，lint ✓，587/587 通过
+
+## CHG-180 — 测试 fixtures + 测试用例更新
+- **完成时间**：2026-03-25 12:05
+- **来源序列**：SEQ-20260325-02
+- **修改文件**：
+  - `tests/unit/api/title-normalizer.test.ts`（buildMatchKey 参数 'drama'→'series'）
+- **变更摘要**：清理测试中遗留的旧 VideoType 值引用；VideoCategory 引用已为零
+- **测试覆盖**：587/587 通过
+
+## CHG-181 — 全量验收 + architecture.md 同步
+- **完成时间**：2026-03-25 12:15
+- **来源序列**：SEQ-20260325-02
+- **修改文件**：
+  - `docs/architecture.md`（videos 表字段表：category→source_category+genre；type 枚举更新为 11 种；类型映射表更新；URL 路由映射更新；Migration 013 描述更新）
+  - `docs/db-rebuild-naming-plan.md`（状态更新为"已完成"）
+- **全量验证结果**：
+  - typecheck ✓
+  - lint ✓（零警告）
+  - 587/587 unit tests 通过
+  - `grep -r "VideoCategory" src/ tests/` → 零结果 ✓
+- **序列 SEQ-20260325-02 完成**
