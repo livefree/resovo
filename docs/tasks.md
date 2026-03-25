@@ -1,45 +1,15 @@
 # Resovo（流光） — 任务看板
 
+> 单任务工作台：同一时刻只保留 1 个进行中任务。任务完成后删除卡片，历史记录见 `docs/changelog.md`，任务规划见 `docs/task-queue.md`。
+
 ---
 
 ## 当前进行中（仅保留一条）
 
-#### CHG-151 — 全量回归与文档收口（BLOCK 修复序列）
 
-- **状态**：✅ 已完成
-- **创建时间**：2026-03-22 14:41
-- **计划开始时间**：2026-03-22 14:46
-- **实际开始时间**：2026-03-22 14:46
-- **完成时间**：2026-03-22 14:47
-- **目标**：完成 CHG-149/150 全量验收并闭环文档记录，结束本阻断修复序列。
-- **范围**：
-  - 全量 `typecheck/lint/test:run`
-  - `docs/changelog.md`、`docs/run-logs.md`、`docs/tasks.md`、`docs/task-queue.md`
-- **依赖**：CHG-150
-- **DoD**：
-  - 全量检查通过
-  - `SEQ-20260322-03` 状态与任务时间戳完整
-  - 文档记录与代码提交一致
-- **回滚方式**：
-  - 回退 CHG-151 文档提交
-- **备注**：
-  - `SEQ-20260322-03` 已完成，下一任务待分配。
 
----
 
-#### CHG-152 — 提交未追踪文档
 
-- **状态**：✅ 已完成
-- **创建时间**：2026-03-22 15:00
-- **计划开始时间**：2026-03-22 15:00
-- **实际开始时间**：2026-03-22 15:00
-- **完成时间**：2026-03-22 15:00
-- **目标**：将 branch_handoff_report.md、admin_ui_unification_plan.md、architecture-current.md 纳入版本控制
-- **范围**：`docs/branch_handoff_report.md`、`docs/admin_ui_unification_plan.md`、`docs/architecture-current.md`
-- **依赖**：CHG-151
-- **DoD**：三个文件已提交，`git status` 无 `??`
-- **回滚方式**：`git revert` 该 commit
-- **完成备注**：commit `abe809a`；5 files changed；工作区干净
 
 ---
 

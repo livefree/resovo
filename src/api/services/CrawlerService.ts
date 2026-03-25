@@ -102,11 +102,15 @@ export class CrawlerService {
     return url
   }
 
-  /** 通用 HTTP 取文本 */
-  private async fetchText(url: string): Promise<string> {
+  /** 通用 HTTP 取文本，可选外部 AbortSignal（与内置 30s 超时合并） */
+  private async fetchText(url: string, signal?: AbortSignal): Promise<string> {
+    const timeoutSignal = AbortSignal.timeout(30_000)
+    const combinedSignal = signal
+      ? AbortSignal.any([signal, timeoutSignal])
+      : timeoutSignal
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Resovo-Crawler/1.0' },
-      signal: AbortSignal.timeout(30_000),
+      signal: combinedSignal,
     })
     if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`)
     return res.text()
@@ -118,11 +122,12 @@ export class CrawlerService {
    */
   async fetchPage(
     source: CrawlerSource,
-    options: { page?: number; hoursAgo?: number } = {}
+    options: { page?: number; hoursAgo?: number; signal?: AbortSignal } = {}
   ): Promise<ReturnType<typeof parseVodItem>[]> {
+    const { signal, ...fetchOptions } = options
     // Step 1: 获取列表，拿到 vod_id 列表
-    const listUrl = this.buildApiUrl(source.base, source.format, options)
-    const listBody = await this.fetchText(listUrl)
+    const listUrl = this.buildApiUrl(source.base, source.format, fetchOptions)
+    const listBody = await this.fetchText(listUrl, signal)
     const listItems =
       source.format === 'xml' ? parseXmlResponse(listBody) : parseJsonResponse(listBody)
 
@@ -131,7 +136,7 @@ export class CrawlerService {
     // Step 2: 批量获取详情（含 vod_play_url）
     const ids = listItems.map((item) => String(item.vod_id)).join(',')
     const detailUrl = this.buildApiUrl(source.base, source.format, { ids })
-    const detailBody = await this.fetchText(detailUrl)
+    const detailBody = await this.fetchText(detailUrl, signal)
     const detailItems =
       source.format === 'xml' ? parseXmlResponse(detailBody) : parseJsonResponse(detailBody)
 
@@ -313,6 +318,7 @@ export class CrawlerService {
       hoursAgo?: number
       taskType?: 'full-crawl' | 'incremental-crawl'
       taskId?: string
+      signal?: AbortSignal
       shouldStop?: () => false | 'cancel' | 'timeout' | 'pause' | Promise<false | 'cancel' | 'timeout' | 'pause'>
       onLog?: (
         input: {
@@ -382,7 +388,7 @@ export class CrawlerService {
           throw new Error('TASK_CANCELLED')
         }
         await emit('info', 'crawl.page.fetch.start', '开始拉取分页', { page })
-        const items = await this.fetchPage(source, { page, hoursAgo: options.hoursAgo })
+        const items = await this.fetchPage(source, { page, hoursAgo: options.hoursAgo, signal: options.signal })
         await emit('info', 'crawl.page.fetch.done', '分页拉取完成', { page, items: items.length })
         if (items.length === 0) break
 

@@ -209,3 +209,40 @@ const PlayerShell = dynamic(() => import('@/components/player/PlayerShell'), {
 
 // ❌ 不在播放器组件中使用 SSR
 ```
+
+---
+
+## Admin Table 合规清单（2026-03-22）
+
+所有后台列表页必须满足以下 7 项检查点。用于迁移验收与日常维护审计。
+
+### 检查点定义
+
+| # | 检查项 | 说明 |
+|---|--------|------|
+| C1 | `useAdminTableState` | 排序/分页/列状态通过共用 hook 持久化，不使用本地 `useState` |
+| C2 | `useAdminTableColumns` resize | 列宽调整通过 shared resize handler，不自行实现 |
+| C3 | 列设置入口（header icon） | 列显隐通过表头右端图标触发（`aria-label="列设置"`），不使用独立按钮 |
+| C4 | `AdminTableFrame`（sticky 表头） | 使用 `AdminTableFrame` 容器，通过 `[&_thead]:sticky` 实现表头固定 |
+| C5 | 分页组件 | 使用统一 Pagination 组件，不自行实现分页 |
+| C6 | 工具栏规范 | 主操作使用 `AdminToolbar`/`CrawlerSiteTopToolbar`；批量操作走 `AdminBatchBar` |
+| C7 | 空态组件 | 无数据时展示统一 empty-state 提示，不留空白 |
+
+### 合规矩阵（初次审计 2026-03-22）
+
+> ✅ 合规 | ❌ 不合规 | N/A 不适用（如无批量操作场景）
+
+| 页面 | C1 状态 | C2 resize | C3 列设置 | C4 sticky | C5 分页 | C6 工具栏 | C7 空态 | 综合 |
+|------|---------|-----------|-----------|-----------|---------|-----------|---------|------|
+| VideoTable | ✅ | ✅ | ✅ | ✅ | ✅ | N/A（在父容器） | ✅ | ✅ |
+| SourceTable | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| UserTable | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SubmissionTable | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SubtitleTable | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| CrawlerSiteTable | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+> **CHG-167 修复记录（2026-03-22）**：已将 `useCrawlerSiteColumns` 迁移至 `useAdminTableColumns`（修复 C1/C2）；`CrawlerSiteManager` 新增客户端分页 + `Pagination` 组件（修复 C5）。C6 初次审计结论有误 — `CrawlerSiteTopToolbar` 已使用 `AdminToolbar` + `AdminBatchBar`，实为合规，此次一并更正。
+
+### 新页面开发门禁
+
+新建 admin 列表页时，必须在 PR 合并前对照本清单逐项检查，全部 ✅ 后方可合并。

@@ -48,6 +48,8 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
   let freezeCache: { value: boolean; checkedAt: number } = { value: false, checkedAt: 0 }
   let lastHeartbeatTouchAt = 0
   let heartbeatTimer: NodeJS.Timeout | null = null
+  let controlCheckTimer: NodeJS.Timeout | null = null
+  const abortController = new AbortController()
 
   const isGlobalFreezeEnabled = async () => {
     const now = Date.now()
@@ -166,6 +168,48 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
     heartbeatTimer = setInterval(() => {
       void touchHeartbeat()
     }, 3 * 60 * 1000)
+
+    // 独立控制检查定时器：每 15s 主动检测 cancel/pause/timeout，
+    // 即使 crawlerService 正阻塞在 HTTP 请求中也能及时中断，
+    // 将控制响应延迟从"迭代周期"收紧到 ≤15s
+    controlCheckTimer = setInterval(() => {
+      void (async () => {
+        try {
+          if (abortController.signal.aborted) return
+          if (await isGlobalFreezeEnabled()) {
+            abortController.abort('TASK_CANCELLED')
+            return
+          }
+          const taskRow = await db.query<{ cancel_requested: boolean; timeout_at: string | null; status: string }>(
+            `SELECT cancel_requested, timeout_at, status FROM crawler_tasks WHERE id = $1`,
+            [taskId],
+          )
+          const row = taskRow.rows[0]
+          if (!row) return
+          if (row.status === 'cancelled' || row.cancel_requested) {
+            abortController.abort('TASK_CANCELLED')
+            return
+          }
+          if (row.timeout_at && new Date(row.timeout_at).getTime() < Date.now()) {
+            abortController.abort('TASK_TIMEOUT')
+            return
+          }
+          if (runId) {
+            const run = await crawlerRunsQueries.getRunById(db, runId)
+            if (run?.controlStatus === 'paused' || run?.controlStatus === 'pausing') {
+              abortController.abort('TASK_PAUSED')
+              return
+            }
+            if (run?.controlStatus === 'cancelling' || run?.controlStatus === 'cancelled') {
+              abortController.abort('TASK_CANCELLED')
+            }
+          }
+        } catch {
+          // 控制检查失败不阻断采集主流程
+        }
+      })()
+    }, 15_000)
+
     await logTask('info', 'worker.task.running', '任务状态切换为 running')
   }
 
@@ -173,6 +217,13 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer)
       heartbeatTimer = null
+    }
+  }
+
+  const clearControlCheckTimer = () => {
+    if (controlCheckTimer) {
+      clearInterval(controlCheckTimer)
+      controlCheckTimer = null
     }
   }
 
@@ -214,6 +265,7 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
         const result = await crawlerService.crawl(source, {
           taskType: type,
           taskId,
+          signal: abortController.signal,
           hoursAgo: type === 'incremental-crawl' ? (hoursAgo ?? 24) : undefined,
           shouldStop: async () => {
             try {
@@ -352,6 +404,9 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
     throw err
   } finally {
     clearHeartbeatTimer()
+    clearControlCheckTimer()
+    // 确保 signal 已中止，释放可能持有该 signal 的资源
+    if (!abortController.signal.aborted) abortController.abort('JOB_DONE')
     if (runId) {
       await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
     }
@@ -374,12 +429,17 @@ export function registerCrawlerWorker(concurrency = 1): void {
 
 // ── 便捷入队函数 ──────────────────────────────────────────────────
 
+// Bull job 超时上界：单个采集任务最长允许运行 30 分钟。
+// 超时后 Bull 将 job 标记为 failed，worker 可在 failed 事件中更新 DB 状态。
+// 这是硬性保障层，与 crawler_tasks.timeout_at 的软性 watchdog 互补。
+const CRAWLER_JOB_TIMEOUT_MS = 30 * 60 * 1000
+
 /** 添加全量采集任务到队列（可选指定单站 key） */
 export async function enqueueFullCrawl(siteKey: string, taskId: string, runId: string): Promise<Bull.Job<CrawlJobData>> {
   if (!siteKey || !taskId || !runId) {
     throw new Error('CRAWL_JOB_CONTRACT_INVALID: enqueueFullCrawl requires siteKey/taskId/runId')
   }
-  return crawlerQueue.add({ type: 'full-crawl', siteKey, taskId, runId })
+  return crawlerQueue.add({ type: 'full-crawl', siteKey, taskId, runId }, { timeout: CRAWLER_JOB_TIMEOUT_MS })
 }
 
 /** 添加增量采集任务到队列（默认最近 24 小时，可选指定单站 key） */
@@ -392,5 +452,5 @@ export async function enqueueIncrementalCrawl(
   if (!siteKey || !taskId || !runId) {
     throw new Error('CRAWL_JOB_CONTRACT_INVALID: enqueueIncrementalCrawl requires siteKey/taskId/runId')
   }
-  return crawlerQueue.add({ type: 'incremental-crawl', siteKey, taskId, runId, hoursAgo })
+  return crawlerQueue.add({ type: 'incremental-crawl', siteKey, taskId, runId, hoursAgo }, { timeout: CRAWLER_JOB_TIMEOUT_MS })
 }

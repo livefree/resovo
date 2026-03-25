@@ -1,91 +1,92 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useAdminColumnResize } from '@/components/admin/shared/table/useAdminColumnResize'
+import { useCallback, useMemo, useState } from 'react'
+import {
+  useAdminTableColumns,
+  type AdminColumnMeta,
+} from '@/components/admin/shared/table/useAdminTableColumns'
 import {
   COLUMN_META,
   DEFAULT_COLUMN_WIDTH,
+  DEFAULT_COLUMNS,
+  DEFAULT_FILTERS,
   REQUIRED_COLUMNS,
-  STORAGE_KEY,
-  readPersistedState,
 } from '@/components/admin/system/crawler-site/tableState'
 import type {
   ColumnId,
-  ColumnWidthState,
-  ColumnVisibility,
   FilterState,
   SortDir,
   SortField,
 } from '@/components/admin/system/crawler-site/tableState'
 
+const COLUMNS_CONFIG: AdminColumnMeta[] = COLUMN_META.map((col) => ({
+  id: col.id,
+  visible: DEFAULT_COLUMNS[col.id as ColumnId],
+  width: DEFAULT_COLUMN_WIDTH[col.id as ColumnId],
+  minWidth: 72,
+  maxWidth: 560,
+  resizable: true,
+}))
+
 export function useCrawlerSiteColumns() {
-  const [initialState] = useState(readPersistedState)
-  const [sortBy, setSortBy] = useState<SortField>(initialState.sortBy)
-  const [sortDir, setSortDir] = useState<SortDir>(initialState.sortDir)
-  const [filters, setFilters] = useState<FilterState>(initialState.filters)
-  const [columns, setColumns] = useState<ColumnVisibility>(initialState.columns)
-  const [columnWidths, setColumnWidths] = useState<ColumnWidthState>(initialState.columnWidths)
+  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
   const [showColumnsPanel, setShowColumnsPanel] = useState(false)
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({
-          sortBy,
-          sortDir,
-          filters,
-          columns,
-          columnWidths,
-        }),
-      )
-    } catch {
-      // 忽略 localStorage 异常
-    }
-  }, [sortBy, sortDir, filters, columns, columnWidths])
+  const tableColumns = useAdminTableColumns({
+    route: '/admin/crawler-sites',
+    tableId: 'crawler-site-table',
+    columns: COLUMNS_CONFIG,
+    defaultState: {
+      sort: { field: 'name', dir: 'asc' },
+    },
+  })
+
+  const { state, updatePartial, columns: resolvedColumns, startResize, toggleColumnVisibility } = tableColumns
+
+  const sortBy = (state.sort?.field ?? 'name') as SortField
+  const sortDir = (state.sort?.dir ?? 'asc') as SortDir
 
   function handleSort(field: SortField) {
     if (sortBy === field) {
-      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+      updatePartial({ sort: { field, dir: sortDir === 'asc' ? 'desc' : 'asc' } })
       return
     }
-    setSortBy(field)
-    setSortDir('asc')
+    updatePartial({ sort: { field, dir: 'asc' } })
   }
 
   function setSort(field: SortField, dir: SortDir) {
-    setSortBy(field)
-    setSortDir(dir)
+    updatePartial({ sort: { field, dir } })
   }
 
   function toggleColumn(columnId: ColumnId) {
     if (REQUIRED_COLUMNS.includes(columnId)) return
-    setColumns((prev) => ({ ...prev, [columnId]: !prev[columnId] }))
+    toggleColumnVisibility(columnId)
   }
 
-  const setColumnWidth = useCallback((columnId: ColumnId, width: number) => {
-    const next = Math.max(72, Math.min(560, width))
-    setColumnWidths((prev) => ({ ...prev, [columnId]: next }))
-  }, [])
+  const columns = useMemo(() => {
+    const result = { ...DEFAULT_COLUMNS }
+    for (const col of resolvedColumns) {
+      result[col.id as ColumnId] = col.visible
+    }
+    return result
+  }, [resolvedColumns])
 
-  const { startResize } = useAdminColumnResize({
-    getMeta: () => ({
-      minWidth: 72,
-      maxWidth: 560,
-      resizable: true,
-    }),
-    getCurrentWidth: (columnId) => columnWidths[columnId as ColumnId] ?? 160,
-    onWidthChange: (columnId, width) => setColumnWidth(columnId as ColumnId, width),
-  })
+  const columnWidths = useMemo(() => {
+    const result = { ...DEFAULT_COLUMN_WIDTH }
+    for (const col of resolvedColumns) {
+      result[col.id as ColumnId] = col.width
+    }
+    return result
+  }, [resolvedColumns])
+
+  const colClass = useCallback((id: ColumnId) => (columns[id] ? '' : 'hidden'), [columns])
 
   const visibleColumnCount = useMemo(
-    () => COLUMN_META.filter((column) => columns[column.id]).length,
-    [columns],
+    () => resolvedColumns.filter((col) => col.visible).length,
+    [resolvedColumns],
   )
-  const colClass = (id: ColumnId) => (columns[id] ? '' : 'hidden')
+
   const visibleTableMinWidth = useMemo(
-    () => COLUMN_META.reduce((sum, column) => (
-      columns[column.id] ? sum + columnWidths[column.id] : sum
-    ), 44),
-    [columns, columnWidths],
+    () => resolvedColumns.reduce((sum, col) => (col.visible ? sum + col.width : sum), 44),
+    [resolvedColumns],
   )
 
   return {

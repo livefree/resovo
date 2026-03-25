@@ -2398,3 +2398,254 @@
   - 场景：watch shell 加载、多线路 SourceBar 渲染、线路切换、DanmakuBar 存在性验证
   - DanmakuBar 已完全接入 `/videos/:id/danmaku` API（GET 拉取 + POST 发送），CCL 渲染飞弹幕
 - P2 序列（SEQ-20260325-01）全部 6 个任务完成：CHG-162 / VIDEO-08 / VIDEO-06 / VIDEO-07 / SEARCH-05 / PLAYER-10
+
+---
+
+### [CHG-160] POST /admin/crawler/tasks 增加 Deprecation 响应头并设定 sunset
+- **时间**：2026-03-22 16:05
+- **类型**：chg（维护 P1 — deprecated 接口退场）
+- **修改文件**：`src/api/routes/admin/crawler.ts`
+- **变更内容**：为 `POST /admin/crawler/tasks` 增加 `Deprecation: true`、`Sunset: Thu, 01 May 2026 00:00:00 GMT`、`Link: </admin/crawler/runs>; rel="successor-version"` 响应头；路由注释补充 sunset 日期与下线 CHG 编号（CHG-163）
+- **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
+- **关联**：SEQ-20260322-07 CHG-160，解决 merge review 维护问题 3（双接口时代）
+
+---
+
+### [CHG-161] 新增 GET /admin/crawler/monitor-snapshot 聚合接口并迁移前端
+- **时间**：2026-03-22 16:10
+- **类型**：chg（维护 P2 — 轮询合并）
+- **修改文件**：
+  - `src/api/routes/admin/crawler.ts`（新增聚合路由）
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerMonitor.ts`（改为单请求 + 降级逻辑）
+- **变更内容**：新增 `GET /admin/crawler/monitor-snapshot` 返回 `{ overview, runs, systemStatus }`；`refreshMonitor` 改为单次请求该接口，聚合接口失败时自动降级为原 3 个独立请求；原 3 个接口保留
+- **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
+- **关联**：SEQ-20260322-07 CHG-161，解决 merge review 维护问题 1 阶段 A（轮询开销）
+
+---
+
+### [CHG-162] crawlerQueue per-job timeout 30min + Bull stalled 保护
+- **时间**：2026-03-22 16:15
+- **类型**：chg（维护 P2 — 控制硬性超时保障）
+- **修改文件**：
+  - `src/api/lib/queue.ts`（stalledInterval: 60s, maxStalledCount: 1）
+  - `src/api/workers/crawlerWorker.ts`（enqueue 传入 timeout: 30min）
+  - `tests/unit/api/crawler-worker.test.ts`（断言更新，期望 timeout 参数）
+  - `tests/unit/api/crawler.test.ts`（断言更新，期望 timeout 参数）
+- **变更内容**：队列初始化增加 stalled 检测（60s 间隔，最多 1 次重试后 failed）；所有 job 入队时加 30 分钟硬超时，与心跳 watchdog 软超时互补
+- **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
+- **关联**：SEQ-20260322-07 CHG-162，解决 merge review 维护问题 2（协作控制无硬止）
+
+---
+
+### [CHG-163] 维护 P1/P2 回归与文档收口
+- **时间**：2026-03-22 16:20
+- **类型**：docs（SEQ-20260322-07 收口）
+- **修改文件**：`docs/decisions.md`、`docs/task-queue.md`、`docs/changelog.md`
+- **变更内容**：新增 ADR（POST /admin/crawler/tasks sunset 决策）；SEQ-20260322-07 序列状态改为 ✅ 已完成
+- **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
+- **关联**：SEQ-20260322-07 全量完成（CHG-160~163）
+
+---
+
+### [CHG-164] crawlerWorker 独立控制检查定时器 + AbortController 信号透传
+- **时间**：2026-03-22 16:25
+- **类型**：chg（维护 P3 — 控制响应时间上界保障）
+- **修改文件**：
+  - `src/api/services/CrawlerService.ts`（fetchText/fetchPage/crawl 支持 AbortSignal；catch 处理 AbortError）
+  - `src/api/workers/crawlerWorker.ts`（AbortController + controlCheckTimer 15s；透传 signal；finally 清理）
+- **变更内容**：
+  - `CrawlerService.fetchText` 支持外部 signal，与 30s timeout 合并（`AbortSignal.any`）
+  - `CrawlerService.crawl` 新增 `signal?` 参数，透传给 fetchPage → fetchText；catch 块将 AbortError 转换为 TASK_CANCELLED/TASK_PAUSED/TASK_TIMEOUT
+  - `crawlerWorker` 增加 `controlCheckTimer`（15s）独立检测 cancel/pause/timeout；触发时调用 `abortController.abort(reason)` 中断正在进行的 HTTP 请求；finally 中 clearInterval + abort cleanup
+- **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
+- **关联**：SEQ-20260322-08 CHG-164，解决 merge review 维护问题 2（协作控制无硬中断）
+
+---
+
+### [CHG-165] 维护 P3 回归与文档收口
+- **时间**：2026-03-22 16:27
+- **类型**：docs（SEQ-20260322-08 收口）
+- **修改文件**：`docs/task-queue.md`、`docs/changelog.md`
+- **变更内容**：SEQ-20260322-08 序列状态改为 ✅ 已完成
+- **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
+- **关联**：SEQ-20260322-08 全量完成（CHG-164~165）
+
+---
+
+### [CHG-166] Admin Table 合规清单定义与首次审计
+- **时间**：2026-03-22 16:32
+- **类型**：docs（维护 P3 — shared table 行为漂移治理）
+- **修改文件**：`docs/rules/ui-rules.md`
+- **变更内容**：新增"Admin Table 合规清单"章节，包含 7 项检查点（C1~C7）和首次审计矩阵（6 个页面）；CrawlerSiteTable 标记为 C1/C2/C5/C6 不合规，作为 CHG-167 修复输入
+- **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
+- **关联**：SEQ-20260322-09 CHG-166
+
+---
+
+### CHG-167 — CrawlerSiteTable shared table 合规修复
+- **时间**：2026-03-22
+- **commit**：b60aa39
+- **类型**：chg（维护 P3 — shared table 合规迁移）
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns.ts`
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+  - `docs/rules/ui-rules.md`
+- **变更内容**：
+  - C1/C2 修复：`useCrawlerSiteColumns` 内部迁移至 `useAdminTableColumns`，列状态/宽度/排序通过 `useAdminTableState` 持久化，废弃本地 localStorage 手动管理
+  - C5 修复：`CrawlerSiteManager` 新增客户端分页（PAGE_SIZE=20）和 `Pagination` 组件，filter/sort 变化时自动重置至第 1 页
+  - C6 更正：初次审计结论有误，`CrawlerSiteTopToolbar` 已使用 `AdminToolbar` + `AdminBatchBar`，标记为合规
+  - 审计矩阵更新为全绿
+- **测试覆盖**：typecheck ✅ lint ✅ 533/533 tests ✅
+- **关联**：SEQ-20260322-09 CHG-167
+
+---
+
+### CHORE-01 — 文档规范落地检查脚本
+- **时间**：2026-03-22
+- **类型**：chore（文档规范工具）
+- **修改文件**：`scripts/check-docs-format.sh`（新建）
+- **变更内容**：创建 `scripts/check-docs-format.sh`，执行 3 项规范检查：(1) task-queue.md 已填写时间字段格式验证（YYYY-MM-DD HH:mm），(2) changelog.md **时间** 字段格式验证（YYYY-MM-DD），(3) SEQ 序列 ID 文件顺序验证（尾部追加规则）；兼容 macOS BSD grep
+- **测试覆盖**：脚本运行通过，3/3 checks ✅
+- **关联**：SEQ-20260319-01 CHORE-01
+
+---
+
+### CLAUDE.md 流程漏洞修复（三轮审核）
+- **时间**：2026-03-22
+- **任务**：CLAUDE.md 逻辑漏洞修复（人工审核指令）
+- **类型**：docs
+- **修改文件**：`CLAUDE.md`
+- **变更内容**：
+  - 漏洞1：BLOCKER 提升为第零步，优先于 tasks.md 读取
+  - 漏洞2：设计变更情况B改为写入 task-queue.md，不再直接写 tasks.md
+  - 漏洞3：第二步增加一致性检查（task-queue 有🔄但 tasks.md 为空时的恢复路径）
+  - 漏洞4：顶部闭环图补全 tasks.md 操作节点（步骤0→1→...→6→7）
+  - 漏洞5：任务完成后明确 commit 包含文件范围，禁止提交进行中状态的 tasks.md
+  - 漏洞A（方案B）：changelog 去掉 commit hash 要求，改为记录 task ID，通过 `git log --grep` 反查
+  - 漏洞B：测试流程第五步改为引用"任务完成后：必做事项"，不再重复定义 commit 时机
+  - 漏洞C：连续执行规则步骤2补充"执行任务完成后全部步骤"要求
+  - 漏洞α：Git 规范 commit 执行时机修正为文档收口后执行
+  - 漏洞β：连续执行规则步骤5最后一条缩进修正
+  - 漏洞γ：提交前门禁第7条明确 tasks.md 应为空稳定态
+- **测试覆盖**：N/A（纯文档修改）
+- **关联**：人工审核 2026-03-22
+
+---
+
+### CHG-169 — Crawler 域导航合并
+- **时间**：2026-03-22
+- **任务**：CHG-169（SEQ-20260322-10）
+- **类型**：chg
+- **修改文件**：
+  - `src/components/admin/AdminCrawlerTabs.tsx`（tab 重命名：config→sites, advanced→settings, 新增 logs placeholder）
+  - `src/components/admin/system/crawler-site/components/CrawlerAdvancedTab.tsx`（集成 ConfigFileEditor）
+  - `src/app/[locale]/admin/system/config/page.tsx`（改为 307 redirect → /admin/crawler?tab=settings）
+  - `src/app/[locale]/admin/system/sites/page.tsx`（redirect 更新为 /admin/crawler?tab=sites）
+  - `src/components/admin/AdminSidebar.tsx`（移除「配置文件」菜单项）
+- **变更内容**：
+  - AdminCrawlerTabs 从 3-tab（config/tasks/advanced）改为 4-tab（sites/tasks/logs/settings）
+  - 向后兼容：旧 URL tab=config → sites，tab=advanced → settings
+  - ConfigFileEditor（爬虫源站 JSON 配置）整合进 Settings tab
+  - /admin/system/config 和 /admin/system/sites 均改为重定向入口
+  - AdminSidebar SYSTEM_MENU 移除「配置文件」，采集域统一从「采集控制台」入口访问
+- **测试覆盖**：typecheck ✓，lint ✓，unit tests 533/533 通过（含 AdminCrawlerTabs.test.tsx 全部用例）
+
+---
+
+### CHG-170 — Migration 013：videos.type 枚举扩展（12种）+ 类型判定字段
+- **时间**：2026-03-22
+- **任务**：CHG-170（SEQ-20260322-11）
+- **类型**：chg
+- **修改文件**：
+  - `src/api/db/migrations/013_type_expansion.sql`（新建）
+  - `src/types/video.types.ts`（VideoType 扩展12种，新增 ContentFormat/EpisodePattern）
+  - `src/api/services/SourceParserService.ts`（TYPE_MAP 扩展，ParsedVideo 新增类型判定字段）
+  - `src/api/db/queries/videos.ts`（DbVideoRow/mapVideoRow/CrawlerInsertInput/insertCrawledVideo 更新）
+  - `src/api/services/CrawlerService.ts`（upsertVideo 传入 sourceContentType/normalizedType）
+  - `src/api/routes/search.ts`（VideoTypeEnum 扩展12种 + series 向后兼容）
+  - `src/api/routes/videos.ts`（同上 + series→drama 映射）
+  - `src/api/routes/admin/videos.ts`（VideoMetaSchema/ListQuerySchema 更新为12种类型）
+  - `src/app/[locale]/others/[slug]/page.tsx`（新建）
+  - `tests/unit/api/crawler.test.ts`（更新测试：series→drama, 新增 short_drama/other 用例）
+  - `tests/unit/api/title-normalizer.test.ts`（series→drama）
+- **变更内容**：
+  - Migration 013: DROP+ADD type CHECK（12种），UPDATE series→drama，ADD 4 新列
+  - TYPE_MAP 新增 short_drama/sports/music/documentary/children/news/game_show，默认兜底改为 other
+  - parseVodItem 保留 sourceContentType（原始类型字符串），写入 normalizedType
+  - 路由层向后兼容：type=series 自动映射为 drama，旧 URL 不失效
+  - /others/[slug] 路由新增，适用于8种新类型内容详情
+- **测试覆盖**：typecheck ✓，lint ✓，unit tests 534/534 通过
+
+---
+
+## CHG-171 — Migration 014：Season/Episode 统一模型
+- **完成时间**：2026-03-22 19:55
+- **来源序列**：SEQ-20260322-11
+- **修改文件**：
+  - `src/api/db/migrations/014_season_episode.sql`（新建）
+  - `src/api/db/queries/sources.ts`（UpsertSourceInput.episodeNumber: number | null → number；新增 seasonNumber；SQL 含 season_number）
+  - `src/api/db/queries/watchHistory.ts`（UpsertWatchHistoryInput.episodeNumber: number | undefined；新增 seasonNumber；WatchHistoryRow 加 season_number；SELECT 包含 wh.season_number）
+  - `src/api/services/SourceParserService.ts`（ParsedSource.episodeNumber: number | null → number；parsePlayUrl 电影返回 1 而非 null）
+  - `src/api/services/MigrationService.ts`（episodeNumber ?? null → episodeNumber ?? 1）
+  - `src/api/routes/users.ts`（episode ?? null → episode ?? undefined）
+  - `tests/unit/api/crawler.test.ts`（2 个测试：期望 null → 期望 1）
+  - `tests/unit/api/users.test.ts`（1 个测试：期望 null → 期望 undefined；更新标题注明 ADR-016）
+- **变更摘要**：
+  - Migration 014 确立 S/E 统一坐标系：video_sources 和 watch_history 的 episode_number 改为 NOT NULL DEFAULT 1，新增 season_number NOT NULL DEFAULT 1
+  - 所有写入路径（SourceParserService、MigrationService、users 路由）更新为 NOT NULL 语义，电影/单集统一使用 episode_number=1
+  - VideoSource.episodeNumber（读取路径）保持 number | null 以避免 player 组件级联变更
+- **测试覆盖**：typecheck ✓，lint ✓，unit tests 534/534 通过
+
+---
+
+## CHG-172 — Migration 015 & 类型判定字段写入逻辑
+- **完成时间**：2026-03-22 20:05
+- **来源序列**：SEQ-20260322-11
+- **修改文件**：
+  - `src/api/db/migrations/015_content_format_backfill.sql`（新建）
+  - `src/api/services/SourceParserService.ts`（新增 inferContentFormat + inferEpisodePattern 函数；导入 ContentFormat/EpisodePattern 类型）
+  - `src/api/services/CrawlerService.ts`（调用推断函数；insertCrawledVideo 传入 contentFormat/episodePattern）
+  - `src/api/db/queries/videos.ts`（CrawlerInsertInput 增加 contentFormat/episodePattern；insertCrawledVideo SQL 扩展至 21 参数）
+  - `tests/unit/api/crawler.test.ts`（新增 inferContentFormat × 4 + inferEpisodePattern × 4 共 8 条测试）
+- **变更摘要**：
+  - Migration 015 回填存量视频的 content_format 和 episode_pattern：按 type/episode_count/status 推断
+  - 新增推断函数：movie/episodeCount≤1 → movie/single；多集已完结 → episodic/multi；多集连载 → episodic/ongoing
+  - CrawlerService 在新建视频时自动写入两个判定字段，存量回填由 migration 覆盖
+- **测试覆盖**：typecheck ✓，lint ✓，unit tests 542/542 通过（新增 8 条）
+
+---
+
+## CHG-173 — Migration 016：审核状态/可见性 + is_published 迁移策略
+- **完成时间**：2026-03-22 20:18
+- **来源序列**：SEQ-20260322-12
+- **修改文件**：
+  - `src/api/db/migrations/016_review_visibility.sql`（新建）
+  - `src/types/video.types.ts`（新增 ReviewStatus/VisibilityStatus 类型；Video 接口增加 reviewStatus/visibilityStatus/needsManualReview 字段）
+  - `src/api/db/queries/videos.ts`（DbVideoRow 新字段；mapVideoRow 映射；3 个前台查询改为 visibility_status='public'；publishVideo/batchPublishVideos 方案 B 同步点；CrawlerInsertInput 增加 visibilityStatus/reviewStatus；insertCrawledVideo SQL 扩展至 23 参数）
+  - `src/api/services/CrawlerService.ts`（按 autoPublish 推断 visibilityStatus/reviewStatus 并写入）
+- **变更摘要**：
+  - Migration 016 建立内容治理基础 schema：review_status（pending_review/approved/rejected）+ visibility_status（public/internal/hidden）+ 5 个审核元数据字段
+  - 数据迁移：is_published=true → visibility_status='public'/review_status='approved'（方案 B：is_published 保留为同步字段）
+  - 前台公共查询（listVideos/findVideoByShortId/listTrendingVideos）改为 WHERE visibility_status='public'
+  - 方案 B 同步点：publishVideo/batchPublishVideos 同时写 is_published + visibility_status + review_status，保持 ES 索引兼容
+- **测试覆盖**：typecheck ✓，lint ✓，unit tests 542/542 通过
+
+---
+
+## CHG-174 — Migration 018-partial：crawler_sites.ingest_policy
+- **完成时间**：2026-03-22 20:32
+- **来源序列**：SEQ-20260322-12
+- **修改文件**：
+  - `src/api/db/migrations/018_partial_ingest_policy.sql`（新建）
+  - `src/types/system.types.ts`（新增 IngestPolicy 接口、DEFAULT_INGEST_POLICY 常量；CrawlerSite 增加 ingestPolicy；UpdateCrawlerSiteInput 增加 allowAutoPublish）
+  - `src/api/db/queries/crawlerSites.ts`（DbRow/rowToSite 含 ingest_policy；updateCrawlerSite 支持 jsonb_set 更新 allow_auto_publish）
+  - `src/api/routes/admin/crawlerSites.ts`（UpdateSiteSchema 增加 allowAutoPublish 字段）
+  - `src/api/services/CrawlerService.ts`（upsertVideo 增加 siteKey 参数；读取站点级 ingest_policy.allow_auto_publish，优先于全局 AUTO_PUBLISH_CRAWLED；crawl() 传入 source.name）
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteFormDialog.tsx`（SiteFormData/EMPTY_SITE_FORM 增加 allowAutoPublish；新增 checkbox UI）
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`（handleAdd 支持 allowAutoPublish 双请求；handleEdit 传入 allowAutoPublish；editTarget 初始化读取 ingestPolicy）
+- **变更摘要**：
+  - Migration 018-partial 给 crawler_sites 增加 ingest_policy JSONB，默认 allow_auto_publish=false
+  - CrawlerService 采集新视频时优先读取站点级策略决定是否自动发布，无站点配置时回退全局环境变量
+  - Admin Sites 编辑表单新增"采集后自动发布"开关，允许 per-site 差异化配置
+- **已知技术债**：handleAdd 中 allowAutoPublish=true 时有 POST+PATCH 双请求（轻微 UX 窗口期），可在未来扩展 POST endpoint 时统一
+- **测试覆盖**：typecheck ✓，lint ✓，unit tests 542/542 通过

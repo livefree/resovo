@@ -4,8 +4,28 @@
 
 // ── 枚举 ─────────────────────────────────────────────────────────
 
-export type VideoType     = 'movie' | 'series' | 'anime' | 'variety'
+export type VideoType =
+  | 'movie'
+  | 'drama'
+  | 'anime'
+  | 'variety'
+  | 'short_drama'
+  | 'sports'
+  | 'music'
+  | 'documentary'
+  | 'game_show'
+  | 'news'
+  | 'children'
+  | 'other'
+
+export type ContentFormat = 'movie' | 'episodic' | 'collection' | 'clip'
+export type EpisodePattern = 'single' | 'multi' | 'ongoing' | 'unknown'
+
 export type VideoStatus   = 'ongoing' | 'completed'
+
+// ── 内容治理（Migration 016）────────────────────────────────────
+export type ReviewStatus     = 'pending_review' | 'approved' | 'rejected'
+export type VisibilityStatus = 'public' | 'internal' | 'hidden'
 export type VideoCategory =
   | 'action' | 'comedy' | 'drama' | 'sci-fi' | 'horror'
   | 'romance' | 'thriller' | 'documentary' | 'animation'
@@ -36,6 +56,15 @@ export interface Video {
   writers: string[]        // 编剧列表
   sourceCount: number      // 可用播放源数量（冗余字段）
   subtitleLangs: string[]  // 已有字幕语言列表，BCP 47
+  // 类型判定辅助字段（Migration 013）
+  sourceContentType: string | null  // 爬虫原样写入的源站类型字符串
+  normalizedType: string | null     // 平台规范化分类
+  contentFormat: ContentFormat | null
+  episodePattern: EpisodePattern | null
+  // 内容治理字段（Migration 016）
+  reviewStatus: ReviewStatus
+  visibilityStatus: VisibilityStatus
+  needsManualReview: boolean
   createdAt: string
 }
 

@@ -1,7 +1,7 @@
 # Resovo（流光）— 任务序列池（Task Queue）
 
-> 用途：提前规划多个任务序列，避免“走一步看一步”。
-> 关系：本文件负责“未来任务规划”；`docs/tasks.md` 负责“执行看板”；`docs/changelog.md` 负责“完成日志”。
+> 用途：提前规划多个任务序列，避免”走一步看一步”；同时作为 BLOCKER/PHASE COMPLETE 通知的写入位置。
+> 关系：本文件负责”任务规划 + 状态追踪 + 通知”；`docs/tasks.md` 负责”当前单任务工作台（完成即清空）”；`docs/changelog.md` 负责”完成历史日志”。
 
 ---
 
@@ -30,8 +30,10 @@
 - 禁止“有时头插、有时尾插”
 
 5. 执行约束
-- `docs/tasks.md` 可保留全量任务，但同时只允许 1 个任务为 `🔄 进行中`
+- `docs/tasks.md` 是单任务工作台：同时只允许 1 个任务为 `🔄 进行中`；任务完成后立即从 tasks.md 删除该卡片（历史存于 changelog.md）
 - 任务进入执行前，必须已在本文件序列中定义（除紧急 hotfix）
+- 每完成一个任务，立即更新本文件对应任务状态与时间戳，并更新所属序列的 `最后更新时间`
+- BLOCKER 和 PHASE COMPLETE 通知写入本文件尾部（不写入 tasks.md）
 
 ---
 
@@ -80,11 +82,11 @@
    - 完成时间：2026-03-19 15:17
    - 验收要点：同一 `api_url` 不可重复，配置同步按 API 唯一标识合并
 
-3. CHORE-01 — 记录落地检查脚本（状态：⬜ 待开始）
+3. CHORE-01 — 记录落地检查脚本（状态：✅ 已完成）
    - 创建时间：2026-03-19 14:20
    - 计划开始：2026-03-19 15:30
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-22 17:00
+   - 完成时间：2026-03-22 17:05
    - 验收要点：检查 task/changelog 是否按“尾部追加”与时间格式规范
 
 4. CHG-41 — 配置文件页新增“本地上传”Tab（状态：✅ 已完成）
@@ -1401,19 +1403,19 @@
 ---
 
 ## [SEQ-20260322-04] Merge 前置清理与执行
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-22 15:00
-- **最后更新时间**：2026-03-22 15:00
+- **最后更新时间**：2026-03-22 15:13
 - **目标**：在 merge review 通过后，完成最后前置清理并将 codex-takeover-20260319 合并入 main
 - **范围**：未追踪文档提交、merge 操作、dev 分支切回
 - **依赖**：SEQ-20260322-03 已完成
 
 ### 任务列表（按执行顺序）
-1. CHG-152 — 提交未追踪文档（状态：⬜ 待开始）
+1. CHG-152 — 提交未追踪文档（状态：✅ 已完成）
    - 创建时间：2026-03-22 15:00
    - 计划开始：2026-03-22 15:00
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 15:00
+   - 完成时间：2026-03-22 15:02
    - 目标：将 docs/branch_handoff_report.md、docs/admin_ui_unification_plan.md、docs/architecture-current.md 纳入版本控制
    - 范围：上述三个文件
    - 依赖：无
@@ -1422,11 +1424,11 @@
      - `git status` 无 `??` 未追踪文件
    - 回滚方式：`git revert` 该 commit
 
-2. CHORE-02 — 执行 codex-takeover-20260319 → main --no-ff merge（状态：⬜ 待开始）
+2. CHORE-02 — 执行 codex-takeover-20260319 → main --no-ff merge（状态：✅ 已完成）
    - 创建时间：2026-03-22 15:00
    - 计划开始：2026-03-22 15:05
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 15:05
+   - 完成时间：2026-03-22 15:13
    - 目标：将本分支合并入 main，保留完整 commit 历史
    - 范围：git merge 操作
    - 依赖：CHG-152
@@ -1439,19 +1441,19 @@
 ---
 
 ## [SEQ-20260322-05] 批次 A — 合并后运营可观测性修复
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-22 15:00
-- **最后更新时间**：2026-03-22 15:00
+- **最后更新时间**：2026-03-22 15:13
 - **目标**：修复 NB-01（run 列表滞后）和 NB-02（双触发路径）；补充独立心跳定时器（风险提示 A）
 - **范围**：crawlerScheduler、crawlerRuns queries、crawlTaskService、crawler route
 - **依赖**：SEQ-20260322-04 已完成（merge 到 main 后在 dev 分支执行）
 
 ### 任务列表（按执行顺序）
-1. CHG-153 — watchdog 周期 sync 活跃 run + 独立心跳定时器（状态：⬜ 待开始）
+1. CHG-153 — watchdog 周期 sync 活跃 run + 独立心跳定时器（状态：✅ 已完成）
    - 创建时间：2026-03-22 15:00
    - 计划开始：合并后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 15:05
+   - 完成时间：2026-03-22 15:08
    - 目标：(a) 在 watchdog tick 中对所有活跃 run 执行周期 syncRunStatusFromTasks；(b) 在 worker 中增加独立 setInterval 心跳定时器，作为 onLog 触发之外的保底机制
    - 范围：
      - `src/api/db/queries/crawlerRuns.ts`（新增 `listActiveRunIds`）
@@ -1465,11 +1467,11 @@
      - 测试覆盖：watchdog sync 活跃 run 逻辑、timer 清理逻辑
    - 回滚方式：回退 CHG-153 提交
 
-2. CHG-154 — triggerSiteCrawlTask 迁移到 /runs 触发路径（状态：⬜ 待开始）
+2. CHG-154 — triggerSiteCrawlTask 迁移到 /runs 触发路径（状态：✅ 已完成）
    - 创建时间：2026-03-22 15:00
    - 计划开始：合并后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 15:08
+   - 完成时间：2026-03-22 15:09
    - 目标：将 crawlTaskService 中的单站触发改为调用 POST /admin/crawler/runs（triggerType: single），统一触发路径，消除 /tasks 的 POST 冗余逻辑
    - 范围：
      - `src/components/admin/system/crawler-site/services/crawlTaskService.ts`
@@ -1481,11 +1483,11 @@
      - 现有单测通过，无回归
    - 回滚方式：回退 CHG-154 提交
 
-3. CHG-155 — 批次 A 回归与文档收口（状态：⬜ 待开始）
+3. CHG-155 — 批次 A 回归与文档收口（状态：✅ 已完成）
    - 创建时间：2026-03-22 15:00
    - 计划开始：合并后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 15:09
+   - 完成时间：2026-03-22 15:10
    - 目标：完成批次 A 全量验收并闭环文档
    - 范围：`docs/changelog.md`、`docs/run-logs.md`、`docs/tasks.md`、`docs/task-queue.md`
    - 依赖：CHG-154
@@ -1497,20 +1499,20 @@
 ---
 
 ## [SEQ-20260322-06] 批次 B — 技术债清理（下一 Phase）
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-22 15:00
-- **最后更新时间**：2026-03-22 15:00
+- **最后更新时间**：2026-03-22 15:13
 - **目标**：处理 NB-04（startedAt null）、NB-06（defaultState 稳定性）、NB-05（文档追踪规范）
 - **范围**：DB migration、shared table hook、CLAUDE.md
 - **依赖**：SEQ-20260322-05 已完成（或人工确认可独立启动）
 - **备注**：本序列可在 SEQ-20260322-05 进行中并行规划，但建议等批次 A 全量回归通过后启动
 
 ### 任务列表（按执行顺序）
-1. CHG-156 — migration 012: crawler_tasks.started_at（状态：⬜ 待开始）
+1. CHG-156 — migration 012: crawler_tasks.started_at（状态：✅ 已完成）
    - 创建时间：2026-03-22 15:00
    - 计划开始：批次 A 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 15:10
+   - 完成时间：2026-03-22 15:11
    - 目标：向 crawler_tasks 增加 started_at 字段，在 worker 启动任务时写入，mapTaskDto 暴露该字段
    - 范围：
      - `src/api/db/migrations/012_add_task_started_at.sql`
@@ -1524,11 +1526,11 @@
      - 现有测试通过，migration 文件命名规范
    - 回滚方式：回退 CHG-156 提交；rollback migration 删除列
 
-2. CHG-157 — useAdminTableState defaultState ref 稳定化（状态：⬜ 待开始）
+2. CHG-157 — useAdminTableState defaultState ref 稳定化（状态：✅ 已完成）
    - 创建时间：2026-03-22 15:00
    - 计划开始：批次 A 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 15:11
+   - 完成时间：2026-03-22 15:11
    - 目标：防止调用方传入非 memoize defaultState 时触发无限 re-render；补充 JSDoc 说明
    - 范围：
      - `src/components/admin/shared/table/useAdminTableState.ts`
@@ -1539,11 +1541,11 @@
      - 现有测试通过
    - 回滚方式：回退 CHG-157 提交
 
-3. CHG-158 — docs 追踪规范补充（状态：⬜ 待开始）
+3. CHG-158 — docs 追踪规范补充（状态：✅ 已完成）
    - 创建时间：2026-03-22 15:00
    - 计划开始：批次 A 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 15:11
+   - 完成时间：2026-03-22 15:12
    - 目标：在 CLAUDE.md 补充规则：docs/ 文档创建时必须立即 git add；handoff report 视为 audit artifact 必须提交
    - 范围：`CLAUDE.md`
    - 依赖：CHG-157
@@ -1551,11 +1553,11 @@
      - CLAUDE.md 绝对禁止清单或 Git 规范章节新增对应条目
    - 回滚方式：回退 CHG-158 提交
 
-4. CHG-159 — 批次 B 回归与文档收口（状态：⬜ 待开始）
+4. CHG-159 — 批次 B 回归与文档收口（状态：✅ 已完成）
    - 创建时间：2026-03-22 15:00
    - 计划开始：批次 A 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-22 15:12
+   - 完成时间：2026-03-22 15:13
    - 目标：完成批次 B 全量验收并闭环文档
    - 范围：`docs/changelog.md`、`docs/run-logs.md`、`docs/tasks.md`、`docs/task-queue.md`
    - 依赖：CHG-158
@@ -1665,3 +1667,278 @@
    - 实际开始：_
    - 完成时间：_
    - 验收要点：E2E 场景通过；DanmakuBar 联通状态有结论
+
+---
+
+## [SEQ-20260322-07] 维护 P1/P2 — deprecated 接口退场 + 轮询合并 + Bull 层超时保障
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-22 16:00
+- **最后更新时间**：2026-03-22 16:20
+- **目标**：解决 merge review 维护问题中风险最高、改动最小的三项：deprecated 接口正式退场流程、监控轮询从 3 接口合并为 1、Bull per-job timeout 硬性超时保障
+- **范围**：`src/api/routes/admin/crawler.ts`、`useCrawlerMonitor.ts`、`src/api/lib/queue.ts`
+- **依赖**：SEQ-20260322-06 已完成
+
+### 任务列表（按执行顺序）
+1. CHG-160 — POST /admin/crawler/tasks 增加 Deprecation 响应头并设定 sunset（状态：✅ 已完成）
+   - 创建时间：2026-03-22 16:00
+   - 计划开始：2026-03-22 16:00
+   - 实际开始：2026-03-22 16:00
+   - 完成时间：2026-03-22 16:05
+   - 目标：为 deprecated 的 `POST /admin/crawler/tasks` 路由增加标准 HTTP `Deprecation: true`、`Sunset` 和 `Link` 响应头，使调用方在网络面板中可见警告，并在路由注释中记录计划下线的 CHG 编号
+   - 范围：`src/api/routes/admin/crawler.ts`
+   - 依赖：无
+   - DoD：
+     - 调用 `POST /admin/crawler/tasks` 响应头包含 `Deprecation: true` 和 `Sunset` 字段
+     - 路由注释明确记录"将在 CHG-163 删除"
+     - 不影响现有功能，typecheck/lint/test 通过
+   - 回滚方式：回退 CHG-160 提交
+
+2. CHG-161 — 新增 GET /admin/crawler/monitor-snapshot 聚合接口并迁移前端（状态：✅ 已完成）
+   - 创建时间：2026-03-22 16:00
+   - 计划开始：CHG-160 完成后
+   - 实际开始：2026-03-22 16:06
+   - 完成时间：2026-03-22 16:10
+   - 目标：将 `/admin/crawler/overview` + `/admin/crawler/runs?limit=20` + `/admin/crawler/system-status` 的内容合并为单一聚合接口，前端 `useCrawlerMonitor` 改为单请求轮询，将每轮 3 个并行请求降为 1 个
+   - 范围：
+     - `src/api/routes/admin/crawler.ts`（新增 `GET /admin/crawler/monitor-snapshot`）
+     - `src/components/admin/system/crawler-site/hooks/useCrawlerMonitor.ts`（改为单请求）
+   - 依赖：CHG-160
+   - DoD：
+     - `GET /admin/crawler/monitor-snapshot` 返回 `{ overview, runs, systemStatus }`
+     - `useCrawlerMonitor` 单次 poll 只发 1 个请求
+     - 原有 3 个独立接口保留（向后兼容），不删除
+     - 页面功能无回归，typecheck/lint/test 通过
+   - 回滚方式：回退 CHG-161 提交
+
+3. CHG-162 — 为 crawlerQueue.add 增加 per-job timeout 并配置 Bull stalled 保护（状态：✅ 已完成）
+   - 创建时间：2026-03-22 16:00
+   - 计划开始：CHG-161 完成后
+   - 实际开始：2026-03-22 16:11
+   - 完成时间：2026-03-22 16:15
+   - 目标：(a) 在 `CrawlerRunService` 和 worker 的 `crawlerQueue.add()` 调用中增加 `timeout: 30 * 60 * 1000`（30 min），Bull 超时后自动 move-to-failed；(b) 队列初始化增加 `stalledInterval: 60_000`、`maxStalledCount: 1`，worker 进程崩溃时 60s 内恢复，不再等待 15 min watchdog
+   - 范围：
+     - `src/api/lib/queue.ts`（Bull 队列 settings）
+     - `src/api/services/CrawlerRunService.ts`（add job 时增加 timeout 选项）
+   - 依赖：CHG-161
+   - DoD：
+     - 队列配置包含 `stalledInterval` 和 `maxStalledCount`
+     - `CrawlerRunService.createAndEnqueueRun` 传入 `timeout` 选项
+     - typecheck/lint/test 通过
+   - 回滚方式：回退 CHG-162 提交
+
+4. CHG-163 — 维护 P1/P2 回归与文档收口（状态：✅ 已完成）
+   - 创建时间：2026-03-22 16:00
+   - 计划开始：CHG-162 完成后
+   - 实际开始：2026-03-22 16:15
+   - 完成时间：2026-03-22 16:20
+   - 目标：全量验收 SEQ-20260322-07，闭环文档，在 decisions.md 记录 endpoint sunset ADR
+   - 范围：`docs/changelog.md`、`docs/task-queue.md`、`docs/decisions.md`
+   - 依赖：CHG-162
+   - DoD：
+     - typecheck/lint/test:run 通过
+     - decisions.md 新增 ADR：`POST /admin/crawler/tasks` sunset 决策
+   - 回滚方式：回退 CHG-163 文档提交
+
+---
+
+## [SEQ-20260322-08] 维护 P3 — 控制响应时间上界保障（独立控制检查定时器 + AbortController）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-22 16:00
+- **最后更新时间**：2026-03-22 16:27
+- **目标**：将 cancel/pause 响应延迟从"采集迭代周期"收紧到 ≤15s，解决 crawlerWorker 中 shouldStop 仅在迭代间被动调用、HTTP 挂住时无法中断的问题
+- **范围**：`src/api/workers/crawlerWorker.ts`、`src/api/services/CrawlerService.ts`（传 AbortSignal）
+- **依赖**：SEQ-20260322-07 已完成
+- **备注**：本序列涉及 CrawlerService 修改，中等风险，建议 P1/P2 序列全量回归通过后启动
+
+### 任务列表（按执行顺序）
+1. CHG-164 — crawlerWorker 增加独立控制检查定时器（AbortController 模式）（状态：✅ 已完成）
+   - 创建时间：2026-03-22 16:00
+   - 计划开始：SEQ-20260322-07 完成后
+   - 实际开始：2026-03-22 16:20
+   - 完成时间：2026-03-22 16:25
+   - 目标：在 `processCrawlJob` 中新增 `controlCheckTimer`（间隔 15s），独立于采集迭代检查 controlStatus；检测到 cancel/pause 时通过 `AbortController.abort()` 中断当前 HTTP 请求，响应延迟从"迭代周期"降至 ≤15s；CrawlerService 的 crawl 方法接收 `AbortSignal`，在 HTTP 请求时传入
+   - 范围：
+     - `src/api/workers/crawlerWorker.ts`（controlCheckTimer + AbortController）
+     - `src/api/services/CrawlerService.ts`（crawl 方法增加 signal 参数）
+   - 依赖：SEQ-20260322-07
+   - DoD：
+     - cancel 操作在 15s 内被 worker 识别并中断当前 HTTP 请求
+     - `finally` 中 `clearInterval(controlCheckTimer)`，无资源泄漏
+     - 现有 cancel/pause/timeout 路径回归通过
+     - typecheck/lint/test 通过
+   - 回滚方式：回退 CHG-164 提交
+
+2. CHG-165 — 维护 P3 回归与文档收口（状态：✅ 已完成）
+   - 创建时间：2026-03-22 16:00
+   - 计划开始：CHG-164 完成后
+   - 实际开始：2026-03-22 16:25
+   - 完成时间：2026-03-22 16:27
+   - 目标：全量验收 SEQ-20260322-08，闭环文档
+   - 范围：`docs/changelog.md`、`docs/task-queue.md`
+   - 依赖：CHG-164
+   - DoD：typecheck/lint/test:run 通过，文档记录一致
+   - 回滚方式：回退 CHG-165 文档提交
+
+---
+
+## [SEQ-20260322-09] 维护 P3 — Shared table 合规清单定义与审计修复
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-22 16:00
+- **最后更新时间**：2026-03-22 16:55
+- **目标**：定义 shared table 合规清单，逐页审计并修复不合规项，消除 handoff report 提及的行为漂移风险
+- **范围**：`docs/rules/ui-rules.md`（清单章节）、各 admin 列表页组件
+- **依赖**：SEQ-20260322-07 已完成（可与 SEQ-20260322-08 并行规划）
+- **备注**：本序列改动多个页面，建议独立执行，每页一个子任务，可分批提交
+
+### 任务列表（按执行顺序）
+1. CHG-166 — 定义 shared table 合规清单并发布到 ui-rules.md（状态：✅ 已完成）
+   - 创建时间：2026-03-22 16:00
+   - 计划开始：SEQ-20260322-07 完成后
+   - 实际开始：2026-03-22 16:27
+   - 完成时间：2026-03-22 16:32
+   - 目标：在 `docs/rules/ui-rules.md` 中新增"Admin Table 合规清单"章节，包含 7 项检查点（useAdminTableState、列宽 resize、列显隐入口、sticky 表头、分页组件、工具栏规范、空态组件），并按清单对所有 admin 列表页进行一次全量审计，输出审计矩阵（页面 × 检查点）
+   - 范围：`docs/rules/ui-rules.md`
+   - 依赖：SEQ-20260322-07
+   - DoD：
+     - ui-rules.md 新增合规清单章节
+     - 审计矩阵记录在 ui-rules.md 或独立附录中
+     - 不合规项列表作为后续 CHG-167 的输入
+   - 回滚方式：回退 CHG-166 文档提交
+
+2. CHG-167 — 修复审计发现的 shared table 不合规项（状态：✅ 已完成）
+   - 创建时间：2026-03-22 16:00
+   - 计划开始：CHG-166 完成后
+   - 实际开始：2026-03-22 16:40
+   - 完成时间：2026-03-22 16:50
+   - 目标：按 CHG-166 审计矩阵中的不合规项逐一修复，每页改动独立提交（若不合规项跨多页，可拆分为 CHG-167a/b/c）
+   - 范围：CHG-166 审计矩阵中标记不合规的页面组件
+   - 依赖：CHG-166
+   - DoD：
+     - 所有已知不合规项修复完毕，审计矩阵全绿
+     - 每页改动均通过 typecheck/lint/test
+   - 回滚方式：按页面回退各子提交
+
+3. CHG-168 — 维护 P3 shared table 回归与文档收口（状态：✅ 已完成）
+   - 创建时间：2026-03-22 16:00
+   - 计划开始：CHG-167 完成后
+   - 实际开始：2026-03-22 16:50
+   - 完成时间：2026-03-22 16:55
+   - 目标：全量验收 SEQ-20260322-09，闭环文档
+   - 范围：`docs/changelog.md`、`docs/task-queue.md`
+   - 依赖：CHG-167
+   - DoD：typecheck/lint/test:run 通过，文档记录一致
+   - 回滚方式：回退 CHG-168 文档提交
+
+## [SEQ-20260322-10] Crawler 域导航收归
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-22 18:00
+- **最后更新时间**：2026-03-22 19:25
+- **目标**：将 crawler_sites 管理从 /admin/system 归入 /admin/crawler，消除采集域跨区操作问题（ADR-014）
+- **范围**：`src/app/[locale]/admin/system/sites/page.tsx`（redirect），`src/app/[locale]/admin/crawler/page.tsx`（Sites tab），admin 导航组件，`src/app/[locale]/admin/system/config/page.tsx`（剥离爬虫段）
+- **依赖**：无
+
+### 任务列表（按执行顺序）
+1. CHG-169 — Crawler 域导航合并（状态：✅ 已完成）
+   - 创建时间：2026-03-22 18:00
+   - 计划开始：2026-03-22 18:30
+   - 实际开始：2026-03-22 18:30
+   - 完成时间：2026-03-22 19:25
+   - 验收要点：
+     - `/admin/crawler` 新增 Sites tab，内容与原 `/admin/system/sites` 完全一致
+     - `/admin/system/sites` 返回 HTTP 307 redirect 至 `/admin/crawler?tab=sites`
+     - `/admin/system/config` 页面移除爬虫配置段（api_site JSON 编辑移入 `/admin/crawler?tab=settings`）
+     - admin 侧边栏导航：system 区不再显示"站点"入口，crawler 区显示四 tab（Sites/Console/Logs/Settings）
+     - typecheck/lint/test:run 通过，无行为回退
+
+## [SEQ-20260322-11] DB Schema Phase 1 — 类型与集数结构化
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-22 18:00
+- **最后更新时间**：2026-03-22 20:05
+- **目标**：完成视频类型扩展（12种）和 S/E 统一坐标系两项基础 migration，为前台 MVP 开发提供正确的 schema（ADR-016、ADR-017）
+- **范围**：`src/api/db/migrations/013_*`、`src/api/db/migrations/014_*`、`src/api/db/migrations/015_*`、`src/api/services/CrawlerService.ts`、`src/api/db/queries/videoSources.ts`、`src/api/db/queries/watchHistory.ts`、`src/types/video.types.ts`
+- **依赖**：CHG-169 可并行；本序列内部任务必须按顺序执行
+
+### 序列约束
+1. 三个 migration 必须按 013 → 014 → 015 顺序执行，不得跳号或合并
+2. 每个 migration 使用 `ADD COLUMN IF NOT EXISTS`，幂等可重跑
+3. 数据迁移 SQL 必须在同一事务内完成 ALTER + UPDATE
+
+### 任务列表（按执行顺序）
+1. CHG-170 — Migration 013：videos.type 枚举扩展（12种）+ 类型判定字段（状态：✅ 已完成）
+   - 创建时间：2026-03-22 18:00
+   - 计划开始：CHG-169 完成后或并行
+   - 实际开始：2026-03-22 19:30
+   - 完成时间：2026-03-22 19:45
+   - 验收要点：
+     - `type CHECK` 枚举扩展为 12 种（movie/drama/anime/variety/short_drama/sports/music/documentary/game_show/news/children/other）
+     - 数据迁移：`type='series'` → `type='drama'`（同一事务内）
+     - 新增 `source_content_type TEXT`、`normalized_type TEXT`、`content_format TEXT CHECK(...)`、`episode_pattern TEXT CHECK(...)`
+     - `CrawlerService` 添加 source → type 映射表（见 architecture.md 类型映射表），未覆盖原始类型默认 `other`，`source_content_type` 保留原始值
+     - 路由层兼容：`/series/[slug]` 内部查询改为 `WHERE type='drama'`（不改 URL）；`/browse?type=series` 兼容旧参数，服务端将 `series` 映射为 `drama` 再查询
+     - `/others/[slug]` 路由文件新建，处理 `type IN (short_drama,documentary,music,sports,news,children,game_show,other)` 的内容详情
+     - typecheck/lint/test:run 通过
+
+2. CHG-171 — Migration 014：Season/Episode 统一模型（状态：✅ 已完成）
+   - 创建时间：2026-03-22 18:00
+   - 计划开始：CHG-170 完成后
+   - 实际开始：2026-03-22 19:50
+   - 完成时间：2026-03-22 19:55
+   - 验收要点：
+     - `video_sources` 新增 `season_number INT NOT NULL DEFAULT 1`
+     - `video_sources.episode_number` NULL → NOT NULL DEFAULT 1（数据迁移：现有 NULL 填为 1）
+     - `watch_history` 新增 `season_number INT NOT NULL DEFAULT 1`
+     - `watch_history.episode_number` NULL → NOT NULL DEFAULT 1（数据迁移同上）
+     - 所有引用 `episode_number IS NULL` 的查询代码改为业务语义 `season_number = 1 AND episode_number = 1`
+     - typecheck/lint/test:run 通过
+
+3. CHG-172 — Migration 015 & 类型判定字段写入逻辑（状态：✅ 已完成）
+   - 创建时间：2026-03-22 18:00
+   - 计划开始：CHG-171 完成后
+   - 实际开始：2026-03-22 19:58
+   - 完成时间：2026-03-22 20:05
+   - 验收要点：
+     - `content_format` 和 `episode_pattern` 字段已在 CHG-170 migration 中建立，本任务补全写入逻辑
+     - `CrawlerService` 根据 `type` + `episode_count` 自动推断 `content_format` 和 `episode_pattern` 并写入
+     - 推断规则：`episode_count = 1` → `content_format='movie'`/`episode_pattern='single'`；`episode_count > 1 AND status='completed'` → `episodic`/`multi`；`status='ongoing'` → `episodic`/`ongoing`
+     - typecheck/lint/test:run 通过
+
+## [SEQ-20260322-12] DB Schema Phase 2 — 内容治理基础层
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-22 18:00
+- **最后更新时间**：2026-03-22 20:32
+- **目标**：落地审核状态/可见性字段 + is_published 迁移，以及站点级 ingest_policy，为内容发布工作流和 moderator 审核队列提供 schema 基础（ADR-018、ADR-019）
+- **范围**：`src/api/db/migrations/016_*`、`src/api/db/migrations/018_*`、`src/api/services/VideoService.ts`、`src/api/services/CrawlerService.ts`、`src/api/db/queries/videos.ts`、`src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+- **依赖**：SEQ-20260322-11 全部完成
+
+### 序列约束
+1. CHG-173 必须在 CHG-174 之前完成（ingest_policy 的 `allow_auto_publish` 逻辑依赖 `visibility_status` 字段已存在）
+2. CHG-173 migration 的 ALTER + 数据迁移 UPDATE 必须在同一事务内执行
+3. CHG-173 完成后，立即验证：所有 `is_published=true` 的行均有 `visibility_status='public'`
+
+### 任务列表（按执行顺序）
+1. CHG-173 — Migration 016：审核状态/可见性 + is_published 迁移策略（状态：✅ 已完成）
+   - 创建时间：2026-03-22 18:00
+   - 计划开始：SEQ-20260322-11 完成后
+   - 实际开始：2026-03-22 20:08
+   - 完成时间：2026-03-22 20:18
+   - 验收要点：
+     - `videos` 新增 `review_status TEXT NOT NULL DEFAULT 'pending_review' CHECK(...)`
+     - `videos` 新增 `visibility_status TEXT NOT NULL DEFAULT 'internal' CHECK(...)`
+     - `videos` 新增 `review_reason TEXT`、`review_source TEXT CHECK(...)`、`reviewed_by UUID`、`reviewed_at TIMESTAMPTZ`、`needs_manual_review BOOLEAN NOT NULL DEFAULT false`
+     - 数据迁移：现有 `is_published=true` 的行 → `visibility_status='public'`、`review_status='approved'`
+     - 数据迁移：现有 `is_published=false` 的行 → `visibility_status='internal'`、`review_status='pending_review'`
+     - `VideoService` 和 `CrawlerService` 写入路径：写 `visibility_status` 时同步写 `is_published`（方案 B 同步点）
+     - 所有前台视频查询 `WHERE is_published = true` 改为 `WHERE visibility_status = 'public'`
+     - typecheck/lint/test:run 通过
+
+2. CHG-174 — Migration 018-partial：crawler_sites.ingest_policy（状态：✅ 已完成）
+   - 创建时间：2026-03-22 18:00
+   - 计划开始：CHG-173 完成后
+   - 实际开始：2026-03-22 20:22
+   - 完成时间：2026-03-22 20:32
+   - 验收要点：
+     - `crawler_sites` 新增 `ingest_policy JSONB NOT NULL DEFAULT '{"allow_auto_publish":false,"allow_search_index":true,"allow_recommendation":true,"allow_public_detail":true,"allow_playback":true,"require_review_before_publish":true}'`
+     - `CrawlerService` 写入视频时读取来源站点的 `ingest_policy`：`allow_auto_publish=true` 时初始 `visibility_status='public'`/`review_status='approved'`，否则 `visibility_status='internal'`/`review_status='pending_review'`
+     - 全局 `AUTO_PUBLISH` 环境变量作为兜底保留（当 `ingest_policy` 字段不存在时回退），优先级低于站点级配置
+     - Admin Sites tab 新增 `ingest_policy` 可视化编辑入口（允许 toggle auto_publish 开关）
+     - typecheck/lint/test:run 通过

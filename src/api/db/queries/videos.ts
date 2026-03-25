@@ -5,7 +5,7 @@
  */
 
 import type { Pool, PoolClient } from 'pg'
-import type { Video, VideoCard, VideoType, VideoStatus, VideoCategory } from '@/types'
+import type { Video, VideoCard, VideoType, VideoStatus, VideoCategory, ContentFormat, EpisodePattern, ReviewStatus, VisibilityStatus } from '@/types'
 
 // ── 内部 DB 行类型 ────────────────────────────────────────────────
 
@@ -35,6 +35,15 @@ interface DbVideoRow {
   subtitle_langs: string[] | null
   title_normalized: string | null
   metadata_source: string | null
+  // Migration 013 字段
+  source_content_type: string | null
+  normalized_type: string | null
+  content_format: string | null
+  episode_pattern: string | null
+  // Migration 016 字段
+  review_status: string
+  visibility_status: string
+  needs_manual_review: boolean
 }
 
 function mapVideoRow(row: DbVideoRow): Video {
@@ -58,6 +67,13 @@ function mapVideoRow(row: DbVideoRow): Video {
     writers: row.writers ?? [],
     sourceCount: parseInt(row.source_count ?? '0'),
     subtitleLangs: row.subtitle_langs ?? [],
+    sourceContentType: row.source_content_type ?? null,
+    normalizedType: row.normalized_type ?? null,
+    contentFormat: (row.content_format as ContentFormat) ?? null,
+    episodePattern: (row.episode_pattern as EpisodePattern) ?? null,
+    reviewStatus: (row.review_status as ReviewStatus) ?? 'pending_review',
+    visibilityStatus: (row.visibility_status as VisibilityStatus) ?? 'internal',
+    needsManualReview: row.needs_manual_review ?? false,
     createdAt: row.created_at,
   }
 }

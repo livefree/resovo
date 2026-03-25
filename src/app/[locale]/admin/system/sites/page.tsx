@@ -6,5 +6,5 @@
 import { redirect } from 'next/navigation'
 
 export default function AdminCrawlerSitesPage() {
-  redirect('/admin/crawler')
+  redirect('/admin/crawler?tab=sites')
 }

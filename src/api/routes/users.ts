@@ -49,7 +49,7 @@ export async function userRoutes(fastify: FastifyInstance) {
     await upsertWatchHistory(db, {
       userId: request.user!.userId,
       videoId,
-      episodeNumber: episode ?? null,
+      episodeNumber: episode ?? undefined,
       progressSeconds,
     })
 

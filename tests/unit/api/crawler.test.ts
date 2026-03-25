@@ -108,7 +108,8 @@ describe('crawlerWorker', () => {
   it('enqueueFullCrawl 调用 crawlerQueue.add 并传入 full-crawl 类型', async () => {
     await enqueueFullCrawl('site-a', 'task-1', 'run-1')
     expect(mockJobAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'full-crawl', siteKey: 'site-a', taskId: 'task-1', runId: 'run-1' })
+      expect.objectContaining({ type: 'full-crawl', siteKey: 'site-a', taskId: 'task-1', runId: 'run-1' }),
+      expect.objectContaining({ timeout: 30 * 60 * 1000 }),
     )
   })
 
@@ -119,14 +120,16 @@ describe('crawlerWorker', () => {
   it('enqueueIncrementalCrawl 调用 crawlerQueue.add 并传入 incremental-crawl 类型', async () => {
     await enqueueIncrementalCrawl('site-a', 24, 'task-2', 'run-2')
     expect(mockJobAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'incremental-crawl', siteKey: 'site-a', hoursAgo: 24, taskId: 'task-2', runId: 'run-2' })
+      expect.objectContaining({ type: 'incremental-crawl', siteKey: 'site-a', hoursAgo: 24, taskId: 'task-2', runId: 'run-2' }),
+      expect.objectContaining({ timeout: 30 * 60 * 1000 }),
     )
   })
 
   it('enqueueIncrementalCrawl 可自定义 hoursAgo', async () => {
     await enqueueIncrementalCrawl('site-a', 6, 'task-3', 'run-3')
     expect(mockJobAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ siteKey: 'site-a', hoursAgo: 6, taskId: 'task-3', runId: 'run-3' })
+      expect.objectContaining({ siteKey: 'site-a', hoursAgo: 6, taskId: 'task-3', runId: 'run-3' }),
+      expect.objectContaining({ timeout: 30 * 60 * 1000 }),
     )
   })
 
@@ -251,6 +254,8 @@ import {
   parseXmlResponse,
   parseJsonResponse,
   stripTags,
+  inferContentFormat,
+  inferEpisodePattern,
 } from '@/api/services/SourceParserService'
 
 describe('splitNames', () => {
@@ -288,16 +293,20 @@ describe('parseType', () => {
     expect(parseType('电影')).toBe('movie')
   })
 
-  it('"电视剧" → "series"', () => {
-    expect(parseType('电视剧')).toBe('series')
+  it('"电视剧" → "drama"（ADR-017: series 内部改名为 drama）', () => {
+    expect(parseType('电视剧')).toBe('drama')
   })
 
   it('"综艺" → "variety"', () => {
     expect(parseType('综艺')).toBe('variety')
   })
 
-  it('未知类型 → "movie"（默认）', () => {
-    expect(parseType('其他')).toBe('movie')
+  it('"短剧" → "short_drama"', () => {
+    expect(parseType('短剧')).toBe('short_drama')
+  })
+
+  it('未知类型 → "other"（ADR-017: 默认兜底改为 other）', () => {
+    expect(parseType('其他类型')).toBe('other')
   })
 })
 
@@ -398,13 +407,13 @@ describe('parsePlayUrl', () => {
     expect(sources[1].episodeNumber).toBe(2)
   })
 
-  it('电影（isMovie=true）→ episodeNumber 为 null', () => {
+  it('电影（isMovie=true）→ episodeNumber 为 1（ADR-016 统一坐标系）', () => {
     const sources = parsePlayUrl(
       '正片$https://cdn.example.com/movie.mp4',
       '线路1',
       true
     )
-    expect(sources[0].episodeNumber).toBeNull()
+    expect(sources[0].episodeNumber).toBe(1)
   })
 
   it('空字符串 → 空数组', () => {
@@ -453,7 +462,7 @@ describe('parseVodItem', () => {
     expect(result.sources[1].episodeNumber).toBe(2)
   })
 
-  it('电影（type=movie）播放源 episode_number 为 null', () => {
+  it('电影（type=movie）播放源 episode_number 为 1（ADR-016 统一坐标系）', () => {
     const result = parseVodItem({
       vod_id: '5',
       vod_name: '电影测试',
@@ -461,7 +470,7 @@ describe('parseVodItem', () => {
       vod_play_from: '线路1',
       vod_play_url: '正片$https://cdn.example.com/movie.mp4',
     })
-    expect(result.sources[0].episodeNumber).toBeNull()
+    expect(result.sources[0].episodeNumber).toBe(1)
   })
 
   it('cover_url 直接存外链（ADR-009）', () => {
@@ -544,6 +553,44 @@ describe('stripTags', () => {
 
   it('undefined → null', () => {
     expect(stripTags(undefined)).toBeNull()
+  })
+})
+
+// ── CHG-172: inferContentFormat / inferEpisodePattern（ADR-017）──
+
+describe('inferContentFormat', () => {
+  it('type=movie → movie', () => {
+    expect(inferContentFormat('movie', 5)).toBe('movie')
+  })
+
+  it('episodeCount=1（非电影类型）→ movie', () => {
+    expect(inferContentFormat('drama', 1)).toBe('movie')
+  })
+
+  it('episodeCount>1（非电影）→ episodic', () => {
+    expect(inferContentFormat('drama', 12)).toBe('episodic')
+  })
+
+  it('episodeCount=0 → movie（兜底）', () => {
+    expect(inferContentFormat('anime', 0)).toBe('movie')
+  })
+})
+
+describe('inferEpisodePattern', () => {
+  it('episodeCount=1 → single', () => {
+    expect(inferEpisodePattern(1, 'completed')).toBe('single')
+  })
+
+  it('episodeCount>1 + completed → multi', () => {
+    expect(inferEpisodePattern(24, 'completed')).toBe('multi')
+  })
+
+  it('episodeCount>1 + ongoing → ongoing', () => {
+    expect(inferEpisodePattern(12, 'ongoing')).toBe('ongoing')
+  })
+
+  it('episodeCount=0 → single（兜底）', () => {
+    expect(inferEpisodePattern(0, 'ongoing')).toBe('single')
   })
 })
 
