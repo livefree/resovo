@@ -279,3 +279,131 @@
 - **依赖**：ADMIN-06
 - **回滚方式**：回退 ADMIN-08 提交
 - **完成备注**：_
+
+---
+
+## P2 序列 — 前端用户体验质量补全
+
+> 决策依据：`docs/priority-plan-20260324.md` 第七章
+> 目标：修复颜色硬编码、补全浏览分页、补充前端测试覆盖
+
+---
+
+#### CHG-162 — 全站硬编码颜色修复
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 00:00
+- **计划开始时间**：2026-03-25
+- **实际开始时间**：_
+- **完成时间**：_
+- **目标**：将 `#f5c518`（金色）和 `#a0a0a0`（灰色）替换为对应 CSS 变量，消除深色模式兼容性风险
+- **文件范围**：
+  - `src/components/video/HeroBanner.tsx`
+  - `src/components/video/VideoCard.tsx`
+  - `src/components/video/VideoCardWide.tsx`
+  - `src/components/video/VideoDetailHero.tsx`
+  - `src/components/search/ResultCard.tsx`
+- **变更内容**：
+  - `#f5c518` → `var(--gold)`（5处）
+  - `#a0a0a0` → `var(--muted-foreground)`（1处，VideoCardWide 连载状态徽章）
+  - `rgba(0,0,0,0.7)` 半透明叠加层保留（非语义颜色）
+  - `VideoMeta.tsx` 的 `var(--gold, #e8b84b)` 降级写法保留不改
+- **DoD**：`grep -r "#f5c518\|#a0a0a0" src/components/video src/components/search` 无结果；现有测试通过
+- **依赖**：无
+- **回滚方式**：回退 CHG-162 提交
+- **完成备注**：_
+
+---
+
+#### VIDEO-08 — 浏览页分页 UI
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 00:00
+- **计划开始时间**：CHG-162 完成后
+- **实际开始时间**：_
+- **完成时间**：_
+- **目标**：在浏览页网格下方增加分页控件，使用户可以浏览第 2+ 页内容（当前每页 24 条）
+- **文件范围**：`src/components/browse/BrowseGrid.tsx`
+- **变更内容**：
+  - 读取 URL `?page=N`（`buildSearchQuery` 已支持）
+  - 在网格下方渲染分页区域：上一页 / 页码 / 下一页
+  - 参考 `src/components/admin/Pagination.tsx` 样式，或内联轻量分页（不引入新依赖）
+  - 点击翻页通过 `router.push()` 更新 `page` 参数，`FilterArea` 的筛选变化已会 `params.delete('page')` 重置
+- **DoD**：有数据且 total > 24 时显示分页；点击翻页 URL 正确；单元测试覆盖分页渲染
+- **依赖**：CHG-162
+- **回滚方式**：回退 VIDEO-08 提交
+- **完成备注**：_
+
+---
+
+#### VIDEO-06 — 首页组件单元测试
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 00:00
+- **计划开始时间**：VIDEO-08 完成后
+- **实际开始时间**：_
+- **完成时间**：_
+- **目标**：为 HeroBanner 和 VideoGrid 补充单元测试，覆盖 loading / 有数据 / 空数据三状态
+- **文件范围**：
+  - `tests/unit/components/video/HeroBanner.test.tsx`（新建）
+  - `tests/unit/components/video/VideoGrid.test.tsx`（新建）
+- **DoD**：测试覆盖三状态；现有 tests + 新增全通过
+- **依赖**：VIDEO-08
+- **回滚方式**：回退 VIDEO-06 提交
+- **完成备注**：_
+
+---
+
+#### VIDEO-07 — 详情页组件单元测试
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 00:00
+- **计划开始时间**：VIDEO-08 完成后
+- **实际开始时间**：_
+- **完成时间**：_
+- **目标**：为 VideoDetailClient 补充单元测试，覆盖 loading / notFound / 正常渲染三状态
+- **文件范围**：`tests/unit/components/video/VideoDetailClient.test.tsx`（新建）
+- **DoD**：测试三状态；通过 typecheck/lint/test
+- **依赖**：VIDEO-08（可与 VIDEO-06 并行，但同序列顺序执行）
+- **回滚方式**：回退 VIDEO-07 提交
+- **完成备注**：_
+
+---
+
+#### SEARCH-05 — 搜索页 E2E 补全
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 00:00
+- **计划开始时间**：VIDEO-07 完成后
+- **实际开始时间**：_
+- **完成时间**：_
+- **目标**：补充搜索页 E2E 测试，覆盖 FilterBar→结果渲染→点击进入详情页 完整用户流程
+- **文件范围**：`tests/e2e/search.spec.ts`（追加场景）
+- **测试场景**：
+  1. 输入关键词 submit → 结果列表渲染（mock `/search`）
+  2. 点击结果卡片 → 跳转到正确的 `/movie/slug-shortId` 路由
+  3. MetaChip 点击（导演/演员）→ URL `director=` 参数出现
+- **DoD**：三个场景 E2E 通过；覆盖 FilterBar→结果→导航链路
+- **依赖**：VIDEO-07
+- **回滚方式**：回退 SEARCH-05 提交
+- **完成备注**：_
+
+---
+
+#### PLAYER-10 — 播放页 E2E + DanmakuBar 联通验证
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 00:00
+- **计划开始时间**：VIDEO-07 完成后
+- **实际开始时间**：_
+- **完成时间**：_
+- **目标**：补充播放页 E2E 测试；核实 DanmakuBar 是否已接入 `/videos/:id/danmaku` API
+- **文件范围**：`tests/e2e/player.spec.ts`（追加场景）
+- **测试场景**：
+  1. 访问 `/watch/slug-shortId?ep=1` → 播放页 shell 加载
+  2. SourceBar 多线路时点击切换
+  3. 检查 DanmakuBar 实现状态（read code + 记录结论）
+- **DoD**：E2E 场景通过；DanmakuBar 联通状态写入任务完成备注
+- **依赖**：VIDEO-07（可与 SEARCH-05 并行，但同序列顺序执行）
+- **回滚方式**：回退 PLAYER-10 提交
+- **完成备注**：_

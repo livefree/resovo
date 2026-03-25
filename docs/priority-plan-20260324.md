@@ -227,3 +227,97 @@ ADMIN-06（质量统计）← ADMIN-07（站点筛选）
 ---
 
 *文件创建于 2026-03-24，由开发总监评审会议输出*
+
+---
+
+## 七、P2 任务拆解（2026-03-25 更新）
+
+> 基于前端代码现状审计（SEQ-20260325-01 规划前）
+
+### P2 总评估结论
+
+前端用户页面**功能实现 90% 以上完整**，主要页面（首页、搜索、详情、浏览、播放）均已存在，API 集成一致。  
+P2 的核心任务是**质量补全与功能缺口修复**，而非从零建页面。
+
+**关键发现：**
+
+| 类别 | 问题 | 文件 |
+|------|------|------|
+| 🔴 颜色硬编码 | `#f5c518`, `#a0a0a0` 共 8 处 | HeroBanner, VideoCard, VideoCardWide, VideoDetailHero, ResultCard |
+| 🟡 功能缺口 | 浏览页无分页 UI，`total` 已获取但无翻页组件 | BrowseGrid.tsx |
+| 🟡 测试缺失 | 首页（HeroBanner/VideoGrid）无单元测试 | 无 |
+| 🟡 测试缺失 | 详情页（VideoDetailClient）无单元测试 | 无 |
+| 🟡 测试缺失 | 搜索 E2E 缺失跨页面全流程验证 | search.spec.ts 不完整 |
+| 🟢 待验证 | 播放页 DanmakuBar API 联通状态未验证 | DanmakuBar.tsx |
+
+### P2 任务列表
+
+#### CHG-162 — 全站硬编码颜色修复
+- **类型**：Bug Fix / 规范合规
+- **文件**：`HeroBanner.tsx`、`VideoCard.tsx`、`VideoCardWide.tsx`、`VideoDetailHero.tsx`、`ResultCard.tsx`
+- **内容**：
+  - `#f5c518` → `var(--gold)`（5处）
+  - `#a0a0a0` → `var(--muted-foreground)`（1处，VideoCardWide 状态徽章）
+  - `rgba(0,0,0,0.7)` overlay → 保留（半透明叠加层，非颜色语义）
+  - `var(--gold, #e8b84b)` 降级值 → 保留（`VideoMeta` 有意为之的降级，不改）
+- **DoD**：grep `#f5c518\|#a0a0a0` 无结果；深色/浅色模式外观一致；现有测试通过
+
+#### VIDEO-06 — 首页组件单元测试
+- **类型**：Test
+- **文件**：`tests/unit/components/HeroBanner.test.tsx`、`tests/unit/components/VideoGrid.test.tsx`
+- **内容**：
+  - HeroBanner：mock `/videos/trending`，验证 loading/有数据/无数据 三状态
+  - VideoGrid：mock `/videos/trending?type=movie&...`，验证 loading 骨架屏 / 数据渲染 / 空状态
+- **DoD**：测试覆盖率三状态；现有 550 tests + 新增全通过
+
+#### VIDEO-07 — 详情页组件单元测试
+- **类型**：Test
+- **文件**：`tests/unit/components/VideoDetailClient.test.tsx`
+- **内容**：
+  - mock `GET /videos/${shortId}`，验证：loading 骨架 / notFound / 正常显示标题+类型+详情
+  - 验证 slug → shortId 提取正确（`extractShortId` 已有单元测试，重点测组件状态机）
+- **DoD**：测试三状态；通过 typecheck/lint/test
+
+#### VIDEO-08 — 浏览页分页 UI
+- **类型**：Feature（功能缺口补全）
+- **文件**：`src/components/browse/BrowseGrid.tsx`
+- **内容**：
+  - `BrowseGrid` 已有 `total` 状态、`buildSearchQuery` 支持 `page` 参数
+  - 在网格下方使用现有 `Pagination` 组件（`src/components/admin/Pagination.tsx` 可复用或参考）
+  - 分页逻辑：读取 URL `?page=N`（已支持），`hasNext` 由 `total > page * 24` 计算
+  - 点击翻页通过 `router.push()` 更新 URL `page` 参数（与 FilterArea 已有模式一致）
+- **DoD**：浏览页底部有分页控件；点击下一页/上一页 URL 更新；首页 page 参数正确传给 API
+
+#### SEARCH-05 — 搜索页 E2E 补全
+- **类型**：Test
+- **文件**：`tests/e2e/search.spec.ts`（补充）
+- **内容**：
+  - 测试场景 A：输入关键词 → 结果渲染（mock `/search`）
+  - 测试场景 B：点击结果卡片 → 跳转到正确的详情页路由（`/movie/slug-shortId`）
+  - 测试场景 C：MetaChip 点击（导演/演员）→ URL 参数更新
+- **DoD**：E2E 测试通过；覆盖 FilterBar→结果→详情 完整链路
+
+#### PLAYER-10 — 播放页 E2E + DanmakuBar 联通验证
+- **类型**：Test + Verification
+- **文件**：`tests/e2e/player.spec.ts`（补充）
+- **内容**：
+  - 场景 A：访问 `/watch/slug-shortId?ep=1` → 播放页正常加载（mock video + sources）
+  - 场景 B：SourceBar 显示多线路 → 点击切换线路
+  - 场景 C：验证 DanmakuBar 是否向 `/videos/:id/danmaku` 发起请求（或确认其实现状态）
+- **DoD**：E2E 通过；DanmakuBar 联通状态文档化（有结论即可）
+
+### P2 执行顺序
+
+```
+CHG-162（颜色修复，无依赖）
+    ↓
+VIDEO-06（首页测试）← VIDEO-07（详情页测试）[可并行]
+    ↓
+VIDEO-08（分页 UI）
+    ↓
+SEARCH-05（搜索 E2E）← PLAYER-10（播放 E2E）[可并行]
+```
+
+**建议顺序**：CHG-162 → VIDEO-08 → VIDEO-06 → VIDEO-07 → SEARCH-05 → PLAYER-10
+
+原因：先修 bug（颜色），再补功能缺口（分页），最后补测试。
