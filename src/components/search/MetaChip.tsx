@@ -8,7 +8,7 @@
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
-type MetaChipType = 'director' | 'actor' | 'writer' | 'category' | 'year' | 'country'
+type MetaChipType = 'director' | 'actor' | 'writer' | 'genre' | 'year' | 'country'
 
 interface MetaChipProps {
   label: string
@@ -20,7 +20,7 @@ const TYPE_PARAM_MAP: Record<MetaChipType, string> = {
   director: 'director',
   actor:    'actor',
   writer:   'writer',
-  category: 'category',
+  genre: 'genre',
   year:     'year',
   country:  'country',
 }

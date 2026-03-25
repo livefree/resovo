@@ -293,16 +293,16 @@ describe('parseType', () => {
     expect(parseType('电影')).toBe('movie')
   })
 
-  it('"电视剧" → "drama"（ADR-017: series 内部改名为 drama）', () => {
-    expect(parseType('电视剧')).toBe('drama')
+  it('"电视剧" → "series"', () => {
+    expect(parseType('电视剧')).toBe('series')
   })
 
   it('"综艺" → "variety"', () => {
     expect(parseType('综艺')).toBe('variety')
   })
 
-  it('"短剧" → "short_drama"', () => {
-    expect(parseType('短剧')).toBe('short_drama')
+  it('"短剧" → "short"', () => {
+    expect(parseType('短剧')).toBe('short')
   })
 
   it('未知类型 → "other"（ADR-017: 默认兜底改为 other）', () => {

@@ -58,16 +58,17 @@ export interface ParsedSource {
 const TYPE_MAP: Record<string, VideoType> = {
   // 电影
   '电影': 'movie', 'movie': 'movie', 'Movie': 'movie',
-  // 电视剧（内部类型为 drama，URL 保持 /series/）
-  '电视剧': 'drama', '连续剧': 'drama', '国产剧': 'drama', '剧集': 'drama',
-  '美剧': 'drama', '韩剧': 'drama', '日剧': 'drama',
-  'series': 'drama', 'drama': 'drama',
+  // 连续剧 / 电视剧
+  '电视剧': 'series', '连续剧': 'series', '国产剧': 'series', '剧集': 'series',
+  '美剧': 'series', '韩剧': 'series', '日剧': 'series',
+  'series': 'series', 'drama': 'series',
   // 动漫
   '动漫': 'anime', '卡通': 'anime', '动画': 'anime', 'anime': 'anime',
-  // 综艺
+  // 综艺（含游戏类综艺）
   '综艺': 'variety', '真人秀': 'variety', '晚会': 'variety', '综艺节目': 'variety',
-  // 短剧
-  '短剧': 'short_drama', '微剧': 'short_drama', 'short_drama': 'short_drama',
+  '游戏': 'variety', 'game_show': 'variety',
+  // 短剧 / 短片
+  '短剧': 'short', '微剧': 'short', 'short_drama': 'short', 'short': 'short',
   // 体育
   '体育': 'sports', 'sports': 'sports',
   // 音乐
@@ -75,11 +76,9 @@ const TYPE_MAP: Record<string, VideoType> = {
   // 纪录片
   '纪录片': 'documentary', 'documentary': 'documentary',
   // 少儿
-  '少儿': 'children', '儿童': 'children', 'children': 'children',
+  '少儿': 'kids', '儿童': 'kids', 'children': 'kids', 'kids': 'kids',
   // 新闻
   '新闻': 'news', 'news': 'news',
-  // 游戏
-  '游戏': 'game_show', 'game_show': 'game_show',
 }
 
 const COUNTRY_MAP: Record<string, string> = {

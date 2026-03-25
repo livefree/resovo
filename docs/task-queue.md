@@ -1960,11 +1960,11 @@
 5. CHG-181（验收）必须最后执行，输出零错误才可关闭序列
 
 ### 任务列表（按执行顺序）
-1. CHG-175 — TypeScript 类型层重写：VideoType 11种 + VideoGenre 15种（状态：⬜ 待开始）
+1. CHG-175 — TypeScript 类型层重写：VideoType 11种 + VideoGenre 15种（状态：✅ 已完成）
    - 创建时间：2026-03-25 10:00
    - 计划开始：序列启动后第一步
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-03-25 10:10
+   - 完成时间：2026-03-25 10:30
    - 验收要点：VideoCategory 删除；VideoGenre 导出正常；typecheck 零报错
 
 2. CHG-176 — Migration 019：category→genre + type 值域重建（状态：⬜ 待开始）

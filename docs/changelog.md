@@ -2649,3 +2649,22 @@
   - Admin Sites 编辑表单新增"采集后自动发布"开关，允许 per-site 差异化配置
 - **已知技术债**：handleAdd 中 allowAutoPublish=true 时有 POST+PATCH 双请求（轻微 UX 窗口期），可在未来扩展 POST endpoint 时统一
 - **测试覆盖**：typecheck ✓，lint ✓，unit tests 542/542 通过
+
+## CHG-175 — VideoType / VideoGenre 类型定义重写
+- **完成时间**：2026-03-25 10:30
+- **来源序列**：SEQ-20260325-02
+- **修改文件**：
+  - `src/types/video.types.ts`（VideoType 12种→11种：drama→series，short_drama→short，children→kids，game_show→variety合并；新增 VideoGenre 15种替代 VideoCategory；Video.category→genre；VideoListParams.category→genre）
+  - `src/types/search.types.ts`（VideoCategory→VideoGenre；SearchParams.category→genre；ActiveFilter.key 更新）
+  - `src/api/db/queries/videos.ts`（VideoCategory→VideoGenre；DbVideoRow.category→genre；mapVideoRow 字段更新）
+  - `src/api/routes/admin/videos.ts`（VideoCategory→VideoGenre 导出；Zod enum 更新；genre 字段替代 category）
+  - `src/api/routes/videos.ts`（VideoTypeEnum 更新为 11 种新值；移除 series→drama 向后兼容 shim）
+  - `src/api/services/SourceParserService.ts`（TYPE_MAP 值更新：drama→series，short_drama→short，children→kids，game_show→variety）
+  - `src/components/video/VideoMeta.tsx`（video.category→video.genre；typeLabel 由 MetaChip 改为静态 span）
+  - `src/components/search/MetaChip.tsx`（MetaChipType: category→genre；TYPE_PARAM_MAP 同步）
+  - `tests/unit/api/crawler.test.ts`（parseType 测试期望值更新：drama→series，short_drama→short）
+- **变更摘要**：
+  - 消除 VideoType（内容形式）与 VideoCategory（内容题材）的命名语义冲突
+  - VideoType 严格表示内容形式（11种），VideoGenre 严格表示内容题材（15种），两个维度正交
+  - 所有旧值通过 SourceParserService.TYPE_MAP 自动映射：drama→series，short_drama→short，children→kids，game_show→variety
+- **测试覆盖**：typecheck ✓，lint ✓，unit tests 587/587 通过

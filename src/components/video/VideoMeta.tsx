@@ -103,15 +103,21 @@ export function VideoMeta({ video, isLoggedIn = false, className }: VideoMetaPro
 
         {/* 标签行：类型 + 年份 + 地区 + 评分 */}
         <div className="flex flex-wrap gap-1.5 mt-2" data-testid="video-meta-tags">
-          <MetaChip label={typeLabel} type="category" data-testid="meta-chip-type" />
+          <span
+            data-testid="meta-chip-type"
+            className="inline-flex items-center px-2 py-0.5 rounded text-xs"
+            style={{ color: 'var(--muted-foreground)', border: '1px solid var(--border)' }}
+          >
+            {typeLabel}
+          </span>
           {video.year && (
             <MetaChip label={String(video.year)} type="year" />
           )}
           {video.country && (
             <MetaChip label={video.country} type="country" />
           )}
-          {video.category && (
-            <MetaChip label={video.category} type="category" />
+          {video.genre && (
+            <MetaChip label={video.genre} type="genre" />
           )}
           {video.rating && (
             <span

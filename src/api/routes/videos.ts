@@ -11,12 +11,10 @@ import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { VideoService } from '@/api/services/VideoService'
 
-// 接受全部 12 种类型 + 旧值 'series'（向后兼容，映射为 'drama'）
 const VideoTypeEnum = z.enum([
-  'movie', 'drama', 'anime', 'variety',
-  'short_drama', 'sports', 'music', 'documentary',
-  'game_show', 'news', 'children', 'other',
-  'series',
+  'movie', 'series', 'anime', 'variety',
+  'documentary', 'short', 'sports', 'music',
+  'news', 'kids', 'other',
 ])
 const SortEnum = z.enum(['hot', 'rating', 'latest', 'updated'])
 const PeriodEnum = z.enum(['today', 'week', 'month'])
@@ -40,9 +38,7 @@ export async function videoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const { type: trendType, ...trendRest } = parsed.data
-    const resolvedTrendType = trendType === 'series' ? 'drama' : trendType
-    const data = await videoService.trending({ ...trendRest, type: resolvedTrendType })
+    const data = await videoService.trending(parsed.data)
     return reply.send({ data })
   })
 
@@ -66,9 +62,8 @@ export async function videoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const { rating_min: ratingMin, type: listType, ...rest } = parsed.data
-    const resolvedListType = listType === 'series' ? 'drama' : listType
-    const result = await videoService.list({ ...rest, type: resolvedListType, ratingMin })
+    const { rating_min: ratingMin, ...rest } = parsed.data
+    const result = await videoService.list({ ...rest, ratingMin })
     return reply.send(result)
   })
 

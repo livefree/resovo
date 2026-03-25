@@ -5,18 +5,17 @@
 // ── 枚举 ─────────────────────────────────────────────────────────
 
 export type VideoType =
-  | 'movie'
-  | 'drama'
-  | 'anime'
-  | 'variety'
-  | 'short_drama'
-  | 'sports'
-  | 'music'
-  | 'documentary'
-  | 'game_show'
-  | 'news'
-  | 'children'
-  | 'other'
+  | 'movie'       // 电影
+  | 'series'      // 连续剧 / 电视剧
+  | 'anime'       // 动画
+  | 'variety'     // 综艺（含游戏类综艺）
+  | 'documentary' // 纪录片
+  | 'short'       // 短剧 / 短片
+  | 'sports'      // 体育赛事
+  | 'music'       // 音乐节目
+  | 'news'        // 新闻 / 时事
+  | 'kids'        // 儿童内容
+  | 'other'       // 其他
 
 export type ContentFormat = 'movie' | 'episodic' | 'collection' | 'clip'
 export type EpisodePattern = 'single' | 'multi' | 'ongoing' | 'unknown'
@@ -26,10 +25,23 @@ export type VideoStatus   = 'ongoing' | 'completed'
 // ── 内容治理（Migration 016）────────────────────────────────────
 export type ReviewStatus     = 'pending_review' | 'approved' | 'rejected'
 export type VisibilityStatus = 'public' | 'internal' | 'hidden'
-export type VideoCategory =
-  | 'action' | 'comedy' | 'drama' | 'sci-fi' | 'horror'
-  | 'romance' | 'thriller' | 'documentary' | 'animation'
-  | 'history' | 'fantasy' | 'crime' | 'mystery'
+/** VideoGenre — 内容题材（与 VideoType 内容形式严格正交）*/
+export type VideoGenre =
+  | 'action'       // 动作
+  | 'comedy'       // 喜剧
+  | 'romance'      // 爱情
+  | 'thriller'     // 惊悚
+  | 'horror'       // 恐怖
+  | 'sci_fi'       // 科幻
+  | 'fantasy'      // 奇幻 / 魔幻
+  | 'history'      // 历史 / 古装
+  | 'crime'        // 犯罪
+  | 'mystery'      // 悬疑
+  | 'war'          // 战争
+  | 'family'       // 家庭 / 亲情
+  | 'biography'    // 传记 / 人物
+  | 'martial_arts' // 武侠 / 功夫
+  | 'other'        // 其他
 
 export type VideoQuality  = '4K' | '1080P' | '720P' | '480P' | '360P'
 export type SourceType    = 'hls' | 'mp4' | 'dash'
@@ -45,7 +57,7 @@ export interface Video {
   description: string | null
   coverUrl: string | null  // Cloudflare R2 URL
   type: VideoType
-  category: VideoCategory | null
+  genre: VideoGenre | null
   rating: number | null    // 0-10
   year: number | null
   country: string | null   // ISO 3166-1 alpha-2，如 JP、US、CN
@@ -120,7 +132,7 @@ export interface Tag {
 
 export interface VideoListParams {
   type?: VideoType
-  category?: VideoCategory
+  genre?: VideoGenre
   year?: number
   country?: string
   ratingMin?: number

@@ -2,14 +2,14 @@
  * search.types.ts — 搜索类型
  */
 
-import type { VideoType, VideoCategory, VideoCard } from './video.types'
+import type { VideoType, VideoGenre, VideoCard } from './video.types'
 
 // ── 搜索请求参数 ─────────────────────────────────────────────────
 
 export interface SearchParams {
   q?: string               // 关键词（与 director/actor/writer 至少一个）
   type?: VideoType
-  category?: VideoCategory
+  genre?: VideoGenre
   year?: number
   ratingMin?: number
   lang?: string            // 字幕语言，BCP 47
@@ -50,7 +50,7 @@ export interface SuggestParams {
 // ── 激活的筛选条件（前端 UI 状态）───────────────────────────────
 
 export interface ActiveFilter {
-  key: keyof Pick<SearchParams, 'type' | 'category' | 'year' | 'ratingMin' | 'lang' | 'director' | 'actor' | 'writer'>
+  key: keyof Pick<SearchParams, 'type' | 'genre' | 'year' | 'ratingMin' | 'lang' | 'director' | 'actor' | 'writer'>
   value: string
   label: string            // 显示标签，如"导演：荒木哲郎"
 }

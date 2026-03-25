@@ -5,7 +5,7 @@
  */
 
 import type { Pool, PoolClient } from 'pg'
-import type { Video, VideoCard, VideoType, VideoStatus, VideoCategory, ContentFormat, EpisodePattern, ReviewStatus, VisibilityStatus } from '@/types'
+import type { Video, VideoCard, VideoType, VideoStatus, VideoGenre, ContentFormat, EpisodePattern, ReviewStatus, VisibilityStatus } from '@/types'
 
 // ── 内部 DB 行类型 ────────────────────────────────────────────────
 
@@ -19,7 +19,7 @@ interface DbVideoRow {
   cover_url: string | null
   type: VideoType
   douban_id: string | null
-  category: string | null
+  genre: string | null
   rating: number | null
   year: number | null
   country: string | null
@@ -56,7 +56,7 @@ function mapVideoRow(row: DbVideoRow): Video {
     description: row.description,
     coverUrl: row.cover_url,
     type: row.type,
-    category: (row.category as VideoCategory) ?? null,
+    genre: (row.genre as VideoGenre) ?? null,
     rating: row.rating,
     year: row.year,
     country: row.country,

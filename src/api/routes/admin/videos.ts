@@ -16,7 +16,7 @@ import { db } from '@/api/lib/postgres'
 import { es } from '@/api/lib/elasticsearch'
 import { VideoService } from '@/api/services/VideoService'
 import { DoubanService } from '@/api/services/DoubanService'
-import type { VideoType, VideoStatus, VideoCategory } from '@/types'
+import type { VideoType, VideoStatus, VideoGenre } from '@/types'
 
 // ── Zod Schema ────────────────────────────────────────────────────
 
@@ -34,8 +34,8 @@ const VideoMetaSchema = z.object({
   titleEn: z.string().max(200).optional().nullable(),
   description: z.string().max(5000).optional().nullable(),
   coverUrl: z.string().url().optional().nullable(),
-  type: z.enum(['movie', 'drama', 'anime', 'variety', 'short_drama', 'sports', 'music', 'documentary', 'game_show', 'news', 'children', 'other'] as const).optional(),
-  category: z.string().max(50).optional().nullable(),
+  type: z.enum(['movie', 'series', 'anime', 'variety', 'documentary', 'short', 'sports', 'music', 'news', 'kids', 'other'] as const).optional(),
+  genre: z.string().max(50).optional().nullable(),
   year: z.number().int().min(1900).max(2100).optional().nullable(),
   country: z.string().max(10).optional().nullable(),
   episodeCount: z.number().int().min(0).optional(),
@@ -50,7 +50,7 @@ const CreateVideoSchema = VideoMetaSchema.required({ title: true, type: true })
 
 const ListQuerySchema = z.object({
   status: z.enum(['pending', 'published', 'unpublished', 'all']).optional().default('all'),
-  type: z.enum(['movie', 'drama', 'anime', 'variety', 'short_drama', 'sports', 'music', 'documentary', 'game_show', 'news', 'children', 'other'] as const).optional(),
+  type: z.enum(['movie', 'series', 'anime', 'variety', 'documentary', 'short', 'sports', 'music', 'news', 'kids', 'other'] as const).optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   q: z.string().max(100).optional(),
@@ -208,4 +208,4 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
 
 // ── 类型导出（供其他模块使用） ─────────────────────────────────────
 
-export type { VideoType, VideoStatus, VideoCategory }
+export type { VideoType, VideoStatus, VideoGenre }
