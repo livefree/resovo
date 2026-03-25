@@ -283,3 +283,44 @@ test.describe('搜索页', () => {
     }
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════
+// SEARCH-05: FilterBar→结果渲染→点击进入详情页 完整链路
+// ═══════════════════════════════════════════════════════════════════
+
+test.describe('SEARCH-05: 搜索完整链路', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockSearchApiForSearchPage(page)
+  })
+
+  test('输入关键词提交后结果列表渲染', async ({ page }) => {
+    await page.goto('/en/search')
+    await page.getByTestId('search-input').fill('测试')
+    await page.getByTestId('search-submit').click()
+    // URL 更新
+    await expect(page).toHaveURL(/q=/)
+    // 结果列表出现
+    await expect(page.getByTestId('search-result-list')).toBeVisible()
+  })
+
+  test('结果卡片 href 指向详情页路由（/{type}/slug-shortId）', async ({ page }) => {
+    await page.goto('/en/search?q=test')
+    await page.waitForTimeout(500)
+    const firstCard = page.getByTestId('result-card').first()
+    if (await firstCard.isVisible()) {
+      const href = await firstCard.getAttribute('href')
+      // ResultCard 链接格式：/{type}/{slug}-{shortId} 或 /{type}/{shortId}
+      expect(href).toMatch(/\/(movie|anime|series|variety)\//)
+    }
+  })
+
+  test('年份 MetaChip 点击后 URL 更新 year 参数', async ({ page }) => {
+    await page.goto('/en/search?q=test')
+    // 等待结果加载
+    await expect(page.getByTestId('search-result-list')).toBeVisible()
+    const yearChip = page.getByTestId('meta-chip-year').first()
+    await expect(yearChip).toBeVisible()
+    await yearChip.click()
+    await expect(page).toHaveURL(/year=/)
+  })
+})

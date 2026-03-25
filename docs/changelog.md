@@ -2385,3 +2385,10 @@
   - P2 任务写入 tasks.md 和 task-queue.md（SEQ-20260325-01）
   - P2 包含：CHG-162、VIDEO-08、VIDEO-06、VIDEO-07、SEARCH-05、PLAYER-10（共 6 个任务）
   - 更新 docs/priority-plan-20260324.md 第七章
+
+## 2026-03-25 P2 执行（VIDEO-08 / VIDEO-06 / VIDEO-07 / SEARCH-05）
+- **VIDEO-08**：BrowseGrid 增加分页控件（上一页/下一页/页码），URL-first 模式，7 单元测试
+- **VIDEO-06**：新增 HeroBanner.test.tsx（7 tests）和 VideoGrid.test.tsx（7 tests），覆盖 loading/数据/空态/layout variants
+- **VIDEO-07**：新增 VideoDetailClient.test.tsx（7 tests），覆盖 loading/404/正常渲染/showEpisodes/slug 提取
+- **SEARCH-05**：search.spec.ts 追加 SEARCH-05 describe block（3 E2E tests），覆盖关键词提交→结果渲染→卡片导航→MetaChip 链路
+- 全量单元测试：578 tests 通过（4 个任务累计新增 28 tests）

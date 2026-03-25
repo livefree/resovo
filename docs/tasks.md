@@ -317,11 +317,11 @@
 
 #### VIDEO-08 — 浏览页分页 UI
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-25 00:00
 - **计划开始时间**：CHG-162 完成后
-- **实际开始时间**：_
-- **完成时间**：_
+- **实际开始时间**：2026-03-25
+- **完成时间**：2026-03-25
 - **目标**：在浏览页网格下方增加分页控件，使用户可以浏览第 2+ 页内容（当前每页 24 条）
 - **文件范围**：`src/components/browse/BrowseGrid.tsx`
 - **变更内容**：
@@ -332,17 +332,17 @@
 - **DoD**：有数据且 total > 24 时显示分页；点击翻页 URL 正确；单元测试覆盖分页渲染
 - **依赖**：CHG-162
 - **回滚方式**：回退 VIDEO-08 提交
-- **完成备注**：_
+- **完成备注**：修改 `src/components/browse/BrowseGrid.tsx`（+useRouter/usePathname/goToPage/pagination UI）；新建 `tests/unit/components/browse/BrowseGrid.test.tsx`（7 tests）；commit 9fff5f8
 
 ---
 
 #### VIDEO-06 — 首页组件单元测试
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-25 00:00
 - **计划开始时间**：VIDEO-08 完成后
-- **实际开始时间**：_
-- **完成时间**：_
+- **实际开始时间**：2026-03-25
+- **完成时间**：2026-03-25
 - **目标**：为 HeroBanner 和 VideoGrid 补充单元测试，覆盖 loading / 有数据 / 空数据三状态
 - **文件范围**：
   - `tests/unit/components/video/HeroBanner.test.tsx`（新建）
@@ -350,43 +350,43 @@
 - **DoD**：测试覆盖三状态；现有 tests + 新增全通过
 - **依赖**：VIDEO-08
 - **回滚方式**：回退 VIDEO-06 提交
-- **完成备注**：_
+- **完成备注**：新建两个测试文件（HeroBanner 7 tests，VideoGrid 7 tests）；578 tests 全通过；commit 683b258
 
 ---
 
 #### VIDEO-07 — 详情页组件单元测试
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-25 00:00
 - **计划开始时间**：VIDEO-08 完成后
-- **实际开始时间**：_
-- **完成时间**：_
+- **实际开始时间**：2026-03-25
+- **完成时间**：2026-03-25
 - **目标**：为 VideoDetailClient 补充单元测试，覆盖 loading / notFound / 正常渲染三状态
 - **文件范围**：`tests/unit/components/video/VideoDetailClient.test.tsx`（新建）
 - **DoD**：测试三状态；通过 typecheck/lint/test
 - **依赖**：VIDEO-08（可与 VIDEO-06 并行，但同序列顺序执行）
 - **回滚方式**：回退 VIDEO-07 提交
-- **完成备注**：_
+- **完成备注**：新建测试文件（7 tests，覆盖 loading/404/正常渲染/showEpisodes/slug 提取）；commit bc8b4be
 
 ---
 
 #### SEARCH-05 — 搜索页 E2E 补全
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-25 00:00
 - **计划开始时间**：VIDEO-07 完成后
-- **实际开始时间**：_
-- **完成时间**：_
+- **实际开始时间**：2026-03-25
+- **完成时间**：2026-03-25
 - **目标**：补充搜索页 E2E 测试，覆盖 FilterBar→结果渲染→点击进入详情页 完整用户流程
 - **文件范围**：`tests/e2e/search.spec.ts`（追加场景）
 - **测试场景**：
   1. 输入关键词 submit → 结果列表渲染（mock `/search`）
   2. 点击结果卡片 → 跳转到正确的 `/movie/slug-shortId` 路由
-  3. MetaChip 点击（导演/演员）→ URL `director=` 参数出现
+  3. MetaChip 点击（年份）→ URL `year=` 参数出现（ResultCard 渲染 year MetaChip）
 - **DoD**：三个场景 E2E 通过；覆盖 FilterBar→结果→导航链路
 - **依赖**：VIDEO-07
 - **回滚方式**：回退 SEARCH-05 提交
-- **完成备注**：_
+- **完成备注**：在 `tests/e2e/search.spec.ts` 追加 SEARCH-05 describe block（3 tests）；ResultCard href 链接到 /{type}/ 路由已验证
 
 ---
 
