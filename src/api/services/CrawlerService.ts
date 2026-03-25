@@ -226,8 +226,9 @@ export class CrawlerService {
       }))
     )
 
-    // 新建视频才触发 ES 索引（异步，不等待）
-    if (isNew) void this.indexToES(videoId)
+    // 每次 upsert 后触发 ES 索引（异步，不等待）
+    // 新视频：首次索引；已存在视频：补偿 ES 空缺（如 ES 停机期间入库的数据）
+    void this.indexToES(videoId)
 
     // 规则 D 参考：当前来源始终为 crawler（priority=1），未来可传入 incomingPriority
     void incomingPriority
