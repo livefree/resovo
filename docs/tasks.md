@@ -379,3 +379,140 @@
 - **完成备注**：
   - 追加 PLAYER-10 describe block（4 E2E tests）：shell 加载 / 多线路 SourceBar / 线路切换 / DanmakuBar 存在性
   - **DanmakuBar 联通状态**：✅ 完全接入。`useDanmaku` hook 从 `GET /videos/:id/danmaku` 拉取数据（sessionStorage 30min 缓存），`apiClient.postDanmaku` 持久化发送弹幕到 `POST /videos/:id/danmaku`（fire-and-forget，已登录时触发）。CCL `CommentManager` 渲染飞弹幕，ResizeObserver 追踪播放器尺寸变化。
+
+---
+
+#### CHG-175 — VideoType / VideoGenre 类型定义重写
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 10:00
+- **计划开始时间**：SEQ-20260325-02 启动后第一步
+- **实际开始时间**：_（AI 填写）_
+- **完成时间**：_（AI 填写）_
+- **变更原因**：`drama`/`documentary` 在 VideoType 和 VideoCategory 双重出现导致命名冲突，参见 `docs/db-rebuild-naming-plan.md`
+- **影响的已完成任务**：VIDEO-01、CHG-38、CHG-163
+- **文件范围**：`src/types/video.types.ts`
+- **变更内容**：
+  - VideoType：drama→series，short_drama→short，children→kids，game_show 并入 variety，共 11 种
+  - 删除 VideoCategory；新增 VideoGenre 15 种（含 romance/war/family/biography/martial_arts/other，sci-fi→sci_fi）
+  - 导出 VideoGenre 类型
+- **DoD**：typecheck 通过；VideoCategory 引用为零；VideoGenre 可正常导入
+- **完成备注**：_（AI 填写）_
+
+---
+
+#### CHG-176 — Migration 019：category→genre + type 值域重建
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 10:00
+- **计划开始时间**：CHG-175 完成后
+- **实际开始时间**：_（AI 填写）_
+- **完成时间**：_（AI 填写）_
+- **变更原因**：数据库字段名和 CHECK 约束需与新类型定义同步
+- **影响的已完成任务**：INFRA-01（schema 初始化）
+- **文件范围**：`src/api/db/migrations/019_rebuild_video_type_genre.sql`（新建）
+- **变更内容**：
+  - ALTER TABLE videos RENAME COLUMN category TO genre
+  - UPDATE type 值：drama→series，short_drama→short，children→kids，game_show→variety
+  - UPDATE genre 值：sci-fi→sci_fi，清空 drama/animation/documentary（题材迁移）
+  - 重建 CHECK 约束（videos_type_check、videos_genre_check）
+- **DoD**：migration 可幂等执行；执行后 DB schema 与新类型定义一致
+- **完成备注**：_（AI 填写）_
+
+---
+
+#### CHG-177 — 后端查询层 + Zod schema 更新
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 10:00
+- **计划开始时间**：CHG-176 完成后
+- **实际开始时间**：_（AI 填写）_
+- **完成时间**：_（AI 填写）_
+- **变更原因**：查询层 DbVideoRow 字段名、mapVideoRow 映射、Zod enum 需与 Migration 019 同步
+- **影响的已完成任务**：VIDEO-01、ADMIN-02
+- **文件范围**：`src/api/db/queries/videos.ts`、`src/api/routes/admin/videos.ts`、`src/api/routes/public/videos.ts`（如有 category 参数）
+- **变更内容**：
+  - DbVideoRow：`category` 字段改为 `genre`
+  - mapVideoRow：`category: row.category` 改为 `genre: row.genre`
+  - admin/videos.ts Zod enum：VideoType 更新为 11 种新值，VideoCategory 改为 VideoGenre 15 种
+  - 查询 SQL 中 `category` 列名全部改为 `genre`
+- **DoD**：typecheck 通过；lint 通过；相关 API 测试通过
+- **完成备注**：_（AI 填写）_
+
+---
+
+#### CHG-178 — 服务层写入逻辑更新
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 10:00
+- **计划开始时间**：CHG-177 完成后
+- **实际开始时间**：_（AI 填写）_
+- **完成时间**：_（AI 填写）_
+- **变更原因**：VideoService/CrawlerService 写入时使用旧字段名 category 和旧 type 值
+- **影响的已完成任务**：VIDEO-01、CRAWLER-01、CHG-161
+- **文件范围**：`src/api/services/VideoService.ts`、`src/api/services/CrawlerService.ts`、`src/api/services/SearchService.ts`（ES 索引字段）
+- **变更内容**：
+  - VideoService：create/update 路径中 category→genre，type 映射更新
+  - CrawlerService：爬虫写入 type 时的映射规则（旧值→新值）
+  - SearchService/ES mapping：category 字段名改为 genre
+- **DoD**：typecheck 通过；写入路径测试通过；ES 索引字段与 DB 一致
+- **完成备注**：_（AI 填写）_
+
+---
+
+#### CHG-179 — 前端类型标签与 Browse 筛选更新
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 10:00
+- **计划开始时间**：CHG-178 完成后
+- **实际开始时间**：_（AI 填写）_
+- **完成时间**：_（AI 填写）_
+- **变更原因**：前端 TYPE_LABELS、筛选下拉、Browse 页使用旧值域
+- **影响的已完成任务**：VIDEO-05、VIDEO-08
+- **文件范围**：`src/components/browse/BrowseFilters.tsx`、`src/components/admin/videos/`（type/genre 下拉）、`src/app/[locale]/browse/page.tsx`（参数解析）
+- **变更内容**：
+  - TYPE_LABELS：新增 series/short/kids/documentary，删除 drama/short_drama/children/game_show
+  - 新增 GENRE_LABELS（15 种）
+  - Browse 筛选参数：type enum、genre 筛选（替代 category）
+  - Admin video 表单：type/genre 下拉选项更新
+- **DoD**：typecheck 通过；Browse 页 type/genre 筛选正常工作；E2E BrowseGrid 测试通过
+- **完成备注**：_（AI 填写）_
+
+---
+
+#### CHG-180 — 测试 fixtures + 测试用例更新
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 10:00
+- **计划开始时间**：CHG-179 完成后
+- **实际开始时间**：_（AI 填写）_
+- **完成时间**：_（AI 填写）_
+- **变更原因**：现有 factories.ts 和单元测试中大量引用 VideoCategory / 旧 VideoType 值
+- **影响的已完成任务**：所有使用 factories.ts 的测试
+- **文件范围**：`tests/helpers/factories.ts`、`tests/unit/**`（批量替换 VideoCategory 引用）
+- **变更内容**：
+  - factories.ts：VideoType 默认值改为 `series`；VideoCategory→VideoGenre，默认值 `action`
+  - 单元测试：批量将 `drama` type 改为 `series`，`short_drama`→`short`，`children`→`kids`
+  - 所有 `VideoCategory` import 改为 `VideoGenre`
+- **DoD**：`npm run test -- --run` 全部通过；无 VideoCategory 导入残留
+- **完成备注**：_（AI 填写）_
+
+---
+
+#### CHG-181 — 全量验收 + architecture.md 同步
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 10:00
+- **计划开始时间**：CHG-180 完成后
+- **实际开始时间**：_（AI 填写）_
+- **完成时间**：_（AI 填写）_
+- **变更原因**：命名重建完成后需全面验证、更新架构文档，确保 docs 与代码一致
+- **影响的已完成任务**：全部 VideoType/VideoCategory 相关任务
+- **文件范围**：`docs/architecture.md`、全量 typecheck/lint/test
+- **变更内容**：
+  - 运行 `npm run typecheck && npm run lint && npm run test -- --run`
+  - 运行 `grep -r "VideoCategory" src/` 确认为零结果
+  - 运行 `grep -r '"drama"\|"short_drama"\|"game_show"\|"children"' src/types/` 确认为零结果
+  - 更新 `docs/architecture.md` 中 VideoType/VideoCategory 枚举表 → VideoType/VideoGenre
+- **DoD**：全量检查零错误；architecture.md 与代码一致；`docs/db-rebuild-naming-plan.md` 状态更新为"已完成"
+- **完成备注**：_（AI 填写）_

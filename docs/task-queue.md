@@ -1942,3 +1942,69 @@
      - 全局 `AUTO_PUBLISH` 环境变量作为兜底保留（当 `ingest_policy` 字段不存在时回退），优先级低于站点级配置
      - Admin Sites tab 新增 `ingest_policy` 可视化编辑入口（允许 toggle auto_publish 开关）
      - typecheck/lint/test:run 通过
+
+## [SEQ-20260325-02] VideoType/VideoGenre 命名重建（执行序列）
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 10:00
+- **最后更新时间**：2026-03-25 10:00
+- **目标**：消除 VideoType 与 VideoCategory 的命名语义冲突，建立 VideoType（内容形式）与 VideoGenre（内容题材）的正交体系
+- **设计文档**：`docs/db-rebuild-naming-plan.md`
+- **范围**：`src/types/video.types.ts`、DB migrations、后端查询/路由/服务层、前端标签与筛选、测试 fixtures、`docs/architecture.md`
+- **依赖**：SEQ-20260322-12 全部完成
+
+### 序列约束
+1. CHG-175（类型定义）必须最先执行，其他任务依赖新类型编译通过
+2. CHG-176（Migration 019）必须在 CHG-177（查询层）之前执行
+3. CHG-177~CHG-179 可在 CHG-176 完成后顺序执行
+4. CHG-180（测试更新）依赖 CHG-175~CHG-179 全部通过 typecheck
+5. CHG-181（验收）必须最后执行，输出零错误才可关闭序列
+
+### 任务列表（按执行顺序）
+1. CHG-175 — TypeScript 类型层重写：VideoType 11种 + VideoGenre 15种（状态：⬜ 待开始）
+   - 创建时间：2026-03-25 10:00
+   - 计划开始：序列启动后第一步
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：VideoCategory 删除；VideoGenre 导出正常；typecheck 零报错
+
+2. CHG-176 — Migration 019：category→genre + type 值域重建（状态：⬜ 待开始）
+   - 创建时间：2026-03-25 10:00
+   - 计划开始：CHG-175 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：migration 幂等可重跑；DB schema CHECK 约束与新类型一致
+
+3. CHG-177 — 后端查询层 + Zod schema 更新（状态：⬜ 待开始）
+   - 创建时间：2026-03-25 10:00
+   - 计划开始：CHG-176 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：DbVideoRow.category→genre；admin/videos Zod enum 更新；typecheck/lint 通过
+
+4. CHG-178 — 服务层写入逻辑更新（状态：⬜ 待开始）
+   - 创建时间：2026-03-25 10:00
+   - 计划开始：CHG-177 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：VideoService/CrawlerService category→genre；ES mapping 同步；typecheck 通过
+
+5. CHG-179 — 前端类型标签与 Browse 筛选更新（状态：⬜ 待开始）
+   - 创建时间：2026-03-25 10:00
+   - 计划开始：CHG-178 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：TYPE_LABELS/GENRE_LABELS 更新；Browse type/genre 筛选正常；E2E 通过
+
+6. CHG-180 — 测试 fixtures + 测试用例更新（状态：⬜ 待开始）
+   - 创建时间：2026-03-25 10:00
+   - 计划开始：CHG-179 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：factories.ts 使用新值域；VideoCategory import 零残留；test:run 全通过
+
+7. CHG-181 — 全量验收 + architecture.md 同步（状态：⬜ 待开始）
+   - 创建时间：2026-03-25 10:00
+   - 计划开始：CHG-180 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 验收要点：typecheck/lint/test 全通过；VideoCategory grep 零结果；architecture.md 更新完成
