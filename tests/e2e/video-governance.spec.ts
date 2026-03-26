@@ -221,6 +221,21 @@ async function installGovernanceMocks(page: Page, state: VideoState) {
   })
 }
 
+async function gotoWithReloadRetry(page: Page, url: string, retries = 3): Promise<void> {
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    try {
+      await page.goto(url, { waitUntil: 'load' })
+      return
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const interrupted = message.includes('interrupted by another navigation')
+      if (!interrupted || attempt === retries - 1) throw error
+      await page.waitForLoadState('domcontentloaded')
+      await page.waitForTimeout(250)
+    }
+  }
+}
+
 test('happy path: 入库后在审核台按快捷键通过，并在视频列表中显示为公开/已通过', async ({ context, page }) => {
   const state = createInitialState()
   await setAdminCookies(context)
@@ -242,7 +257,10 @@ test('happy path: 入库后在审核台按快捷键通过，并在视频列表�
 
   await expect(page.locator(`[data-testid="moderation-list-item-${VIDEO_ID}"]`)).toHaveCount(0)
 
-  await page.goto(`${BASE_URL}/en/admin/videos?visibilityStatus=public&reviewStatus=approved`)
+  await gotoWithReloadRetry(
+    page,
+    `${BASE_URL}/en/admin/videos?visibilityStatus=public&reviewStatus=approved`,
+  )
   await expect(page.locator('[data-testid="admin-videos-page"]')).toBeVisible()
   const row = page.locator(`[data-testid="modern-table-row-${VIDEO_ID}"]`)
   await expect(row).toBeVisible()
@@ -270,11 +288,14 @@ test('reject path: 入库后在审核台按快捷键拒绝，并且不会出现�
 
   await expect(page.locator(`[data-testid="moderation-list-item-${VIDEO_ID}"]`)).toHaveCount(0)
 
-  await page.goto(`${BASE_URL}/en/admin/videos?visibilityStatus=public`)
+  await gotoWithReloadRetry(page, `${BASE_URL}/en/admin/videos?visibilityStatus=public`)
   await expect(page.locator('[data-testid="admin-videos-page"]')).toBeVisible()
   await expect(page.locator(`[data-testid="modern-table-row-${VIDEO_ID}"]`)).toHaveCount(0)
 
-  await page.goto(`${BASE_URL}/en/admin/videos?visibilityStatus=hidden&reviewStatus=rejected`)
+  await gotoWithReloadRetry(
+    page,
+    `${BASE_URL}/en/admin/videos?visibilityStatus=hidden&reviewStatus=rejected`,
+  )
   const hiddenRow = page.locator(`[data-testid="modern-table-row-${VIDEO_ID}"]`)
   await expect(hiddenRow).toBeVisible()
   await expect(hiddenRow).toContainText('隐藏')
