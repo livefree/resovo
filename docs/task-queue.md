@@ -2430,7 +2430,7 @@
 ## SEQ-20260325-16 — Phase 1：界面二 — 全量视频治理库
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-25 22:00
-- **最后更新时间**：2026-03-26 00:09
+- **最后更新时间**：2026-03-26 00:14
 - **目标**：基于 ModernDataTable 重构 `/admin/videos` 页面，新增 visibility 切换、源健康度 badge、审核状态筛选、详情侧边栏
 - **范围**：视频管理前后端 + 现有 `src/components/admin/videos/` 重构
 - **依赖**：SEQ-20260325-14（Phase 0）+ SEQ-20260325-15（Phase 0.5）全部完成
@@ -2494,13 +2494,16 @@
    - **测试**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/videos/VideoTable.test.tsx`
 
 5. CHG-213 — 批量操作栏（批量上架/下架/审核）
-   - **状态**：⬜ 待开始
+   - **状态**：✅ 已完成
    - **创建时间**：2026-03-25 22:00
    - **计划开始**：CHG-212 之后
+   - **实际开始**：2026-03-26 00:10
+   - **完成时间**：2026-03-26 00:14
    - **依赖**：CHG-212
    - **文件范围**（重构）：
      - `src/components/admin/videos/BatchPublishBar.tsx` — 重构为支持批量 updateVisibility + 批量 review 操作
    - **验收要点**：可多选视频执行批量上架/下架；批量操作后列表数据刷新（保持滚动位置）
+   - **测试**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/videos/BatchPublishBar.test.tsx`
 
 6. CHG-214 — 视频详情侧边栏（编辑 + 源管理子面板）
    - **状态**：⬜ 待开始

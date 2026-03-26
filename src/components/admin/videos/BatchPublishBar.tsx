@@ -1,10 +1,11 @@
 /**
  * BatchPublishBar.tsx — 底部浮动批量操作栏
- * CHG-27: 有选中行时从底部滑入，提供批量上架/下架
+ * CHG-213: 支持批量可见性切换与批量审核
  */
 
 'use client'
 
+import { useState } from 'react'
 import { apiClient } from '@/lib/api-client'
 
 interface BatchPublishBarProps {
@@ -15,33 +16,42 @@ interface BatchPublishBarProps {
 
 export function BatchPublishBar({ selectedIds, onSuccess, onClear }: BatchPublishBarProps) {
   const count = selectedIds.length
+  const [busyAction, setBusyAction] = useState<string | null>(null)
 
   if (count === 0) return null
 
-  async function handleBatchPublish() {
+  async function runBatchAction(actionKey: string, runner: () => Promise<void>) {
     if (count > 50) {
       alert('批量操作上限 50 条，请分批操作')
       return
     }
+
+    setBusyAction(actionKey)
     try {
-      await apiClient.post('/admin/videos/batch-publish', { ids: selectedIds, isPublished: true })
+      await runner()
       onSuccess()
+      onClear()
     } catch {
       // silent
+    } finally {
+      setBusyAction(null)
     }
   }
 
-  async function handleBatchUnpublish() {
-    if (count > 50) {
-      alert('批量操作上限 50 条，请分批操作')
-      return
-    }
-    try {
-      await apiClient.post('/admin/videos/batch-unpublish', { ids: selectedIds })
-      onSuccess()
-    } catch {
-      // silent
-    }
+  async function handleBatchVisibility(visibility: 'public' | 'hidden') {
+    await runBatchAction(`visibility:${visibility}`, async () => {
+      await Promise.all(
+        selectedIds.map((id) => apiClient.patch(`/admin/videos/${id}/visibility`, { visibility })),
+      )
+    })
+  }
+
+  async function handleBatchReview(action: 'approve' | 'reject') {
+    await runBatchAction(`review:${action}`, async () => {
+      await Promise.all(
+        selectedIds.map((id) => apiClient.post(`/admin/videos/${id}/review`, { action })),
+      )
+    })
   }
 
   return (
@@ -59,26 +69,43 @@ export function BatchPublishBar({ selectedIds, onSuccess, onClear }: BatchPublis
       <div className="flex items-center gap-2">
         <button
           onClick={onClear}
+          disabled={busyAction !== null}
           className="rounded-md border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--muted)] hover:text-[var(--text)]"
           data-testid="batch-clear-btn"
         >
           取消
         </button>
         <button
-          onClick={handleBatchUnpublish}
-          disabled={count > 50}
+          onClick={() => void handleBatchVisibility('hidden')}
+          disabled={count > 50 || busyAction !== null}
           className="rounded-md border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--muted)] hover:text-[var(--text)] disabled:opacity-40"
-          data-testid="batch-unpublish-btn"
+          data-testid="batch-hide-btn"
         >
-          批量下架
+          批量隐藏
         </button>
         <button
-          onClick={handleBatchPublish}
-          disabled={count > 50}
+          onClick={() => void handleBatchVisibility('public')}
+          disabled={count > 50 || busyAction !== null}
           className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-black hover:opacity-90 disabled:opacity-40"
           data-testid="batch-publish-btn"
         >
-          批量上架
+          批量公开
+        </button>
+        <button
+          onClick={() => void handleBatchReview('approve')}
+          disabled={count > 50 || busyAction !== null}
+          className="rounded-md border border-green-500/40 bg-green-500/10 px-3 py-1.5 text-sm text-green-300 hover:bg-green-500/20 disabled:opacity-40"
+          data-testid="batch-approve-btn"
+        >
+          批量通过
+        </button>
+        <button
+          onClick={() => void handleBatchReview('reject')}
+          disabled={count > 50 || busyAction !== null}
+          className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-sm text-red-300 hover:bg-red-500/20 disabled:opacity-40"
+          data-testid="batch-reject-btn"
+        >
+          批量拒绝
         </button>
       </div>
     </div>

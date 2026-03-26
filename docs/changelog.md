@@ -3201,3 +3201,17 @@
   - 源健康度列按活跃源/总源数映射为 `🟢 N 活跃`、`🟡 N/M 活跃`、`🔴 全失效` 三种展示，并同步设置 `success / warning / danger` tone
   - 单测补充：可见性切换成功不重复请求列表、切换失败自动回滚
 - **测试覆盖**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/videos/VideoTable.test.tsx` ✅
+
+---
+
+### CHG-213 — 批量操作栏（批量上架/下架/审核）
+- **完成时间**：2026-03-26 00:14
+- **修改文件**：
+  - `src/components/admin/videos/BatchPublishBar.tsx`
+  - `tests/unit/components/admin/videos/BatchPublishBar.test.tsx`
+  - `docs/task-queue.md`
+- **变更内容**：
+  - `BatchPublishBar` 从旧的批量 publish/unpublish 按钮升级为批量公开、批量隐藏、批量通过、批量拒绝四种动作
+  - 批量可见性走单条 `/admin/videos/:id/visibility` 并发调用；批量审核走单条 `/admin/videos/:id/review` 并发调用
+  - 成功后统一触发列表刷新并清空勾选；忙碌中禁用按钮，维持 50 条批量上限
+- **测试覆盖**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/videos/BatchPublishBar.test.tsx` ✅

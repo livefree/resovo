@@ -1,19 +1,29 @@
 /**
  * tests/unit/components/admin/videos/BatchPublishBar.test.tsx
- * CHG-27: BatchPublishBar 选中/未选中渲染差异
+ * CHG-213: BatchPublishBar 批量可见性与审核操作
  */
 
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { BatchPublishBar } from '@/components/admin/videos/BatchPublishBar'
+
+const postMock = vi.fn()
+const patchMock = vi.fn()
 
 vi.mock('@/lib/api-client', () => ({
   apiClient: {
-    post: vi.fn().mockResolvedValue({}),
+    post: (...args: unknown[]) => postMock(...args),
+    patch: (...args: unknown[]) => patchMock(...args),
   },
 }))
 
 describe('BatchPublishBar', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    postMock.mockResolvedValue({})
+    patchMock.mockResolvedValue({})
+  })
+
   it('selectedIds 为空时不渲染', () => {
     render(
       <BatchPublishBar selectedIds={[]} onSuccess={vi.fn()} onClear={vi.fn()} />
@@ -50,9 +60,9 @@ describe('BatchPublishBar', () => {
       <BatchPublishBar selectedIds={ids} onSuccess={vi.fn()} onClear={vi.fn()} />
     )
     const publishBtn = screen.getByTestId('batch-publish-btn') as HTMLButtonElement
-    const unpublishBtn = screen.getByTestId('batch-unpublish-btn') as HTMLButtonElement
+    const hideBtn = screen.getByTestId('batch-hide-btn') as HTMLButtonElement
     expect(publishBtn.disabled).toBe(true)
-    expect(unpublishBtn.disabled).toBe(true)
+    expect(hideBtn.disabled).toBe(true)
   })
 
   it('50 条以内按钮可用', () => {
@@ -62,5 +72,35 @@ describe('BatchPublishBar', () => {
     )
     const publishBtn = screen.getByTestId('batch-publish-btn') as HTMLButtonElement
     expect(publishBtn.disabled).toBe(false)
+  })
+
+  it('批量公开调用 visibility 接口并在成功后清空选择', async () => {
+    const onSuccess = vi.fn()
+    const onClear = vi.fn()
+
+    render(
+      <BatchPublishBar selectedIds={['id-1', 'id-2']} onSuccess={onSuccess} onClear={onClear} />
+    )
+
+    fireEvent.click(screen.getByTestId('batch-publish-btn'))
+
+    await waitFor(() => {
+      expect(patchMock).toHaveBeenCalledWith('/admin/videos/id-1/visibility', { visibility: 'public' })
+      expect(patchMock).toHaveBeenCalledWith('/admin/videos/id-2/visibility', { visibility: 'public' })
+      expect(onSuccess).toHaveBeenCalledOnce()
+      expect(onClear).toHaveBeenCalledOnce()
+    })
+  })
+
+  it('批量通过调用 review 接口', async () => {
+    render(
+      <BatchPublishBar selectedIds={['id-1']} onSuccess={vi.fn()} onClear={vi.fn()} />
+    )
+
+    fireEvent.click(screen.getByTestId('batch-approve-btn'))
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith('/admin/videos/id-1/review', { action: 'approve' })
+    })
   })
 })
