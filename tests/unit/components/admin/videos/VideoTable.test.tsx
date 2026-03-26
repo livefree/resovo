@@ -4,6 +4,7 @@ import { VideoTable } from '@/components/admin/videos/VideoTable'
 
 const getMock = vi.fn()
 const patchMock = vi.fn()
+const mockSearchParams = new URLSearchParams()
 
 vi.mock('@/lib/api-client', () => ({
   apiClient: {
@@ -14,7 +15,7 @@ vi.mock('@/lib/api-client', () => ({
 
 vi.mock('next/navigation', () => ({
   useSearchParams: () => ({
-    get: (_key: string) => null,
+    get: (key: string) => mockSearchParams.get(key),
   }),
 }))
 
@@ -49,6 +50,7 @@ describe('VideoTable (CHG-125)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    mockSearchParams.forEach((_value, key) => mockSearchParams.delete(key))
     getMock.mockResolvedValue({ data: MOCK_ROWS, total: MOCK_ROWS.length })
     patchMock.mockResolvedValue({})
   })
@@ -103,5 +105,17 @@ describe('VideoTable (CHG-125)', () => {
 
     const remountTitleHeader = screen.getByTestId('video-sort-title').closest('th')
     expect(remountTitleHeader?.getAttribute('style')).toContain('width: 400px')
+  })
+
+  it('requests visibilityStatus and reviewStatus filters from search params', async () => {
+    mockSearchParams.set('visibilityStatus', 'internal')
+    mockSearchParams.set('reviewStatus', 'approved')
+
+    render(<VideoTable />)
+
+    await waitFor(() => {
+      expect(getMock).toHaveBeenCalledWith(expect.stringContaining('visibilityStatus=internal'))
+      expect(getMock).toHaveBeenCalledWith(expect.stringContaining('reviewStatus=approved'))
+    })
   })
 })

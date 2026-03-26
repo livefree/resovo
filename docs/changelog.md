@@ -3154,3 +3154,20 @@
   - 新增查询层单测，校验筛选 SQL 与聚合字段返回
 - **测试覆盖**：`npm run test -- --run tests/unit/api/admin-video-list.test.ts`
 - **备注**：当前环境执行时 `vitest` 命令不可用（`sh: vitest: command not found`），需安装依赖后复跑验证
+
+---
+
+### CHG-210 — 视频治理库页面骨架 + 筛选栏
+- **完成时间**：2026-03-25 23:47
+- **修改文件**：
+  - `src/components/admin/videos/VideoFilters.tsx`
+  - `src/components/admin/videos/VideoTable.tsx`
+  - `tests/unit/components/admin/videos/VideoFilters.test.tsx`
+  - `tests/unit/components/admin/videos/VideoTable.test.tsx`
+  - `docs/task-queue.md`
+- **变更内容**：
+  - `VideoFilters` 新增 `visibilityStatus` 与 `reviewStatus` 两个 URL 驱动筛选器
+  - `VideoTable` 同步读取新搜索参数，并在请求 `/admin/videos` 时透传
+  - 单测补充：筛选器 URL 写入、表格请求参数透传
+- **测试覆盖**：`npm run test -- --run tests/unit/components/admin/videos/VideoFilters.test.tsx tests/unit/components/admin/videos/VideoTable.test.tsx`
+- **备注**：当前环境执行时 `vitest` 命令不可用（`sh: vitest: command not found`），需安装依赖后复跑验证

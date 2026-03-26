@@ -107,6 +107,8 @@ export function VideoTable() {
   const q = searchParams.get('q') ?? ''
   const type = searchParams.get('type') ?? ''
   const status = searchParams.get('status') ?? ''
+  const visibilityStatus = searchParams.get('visibilityStatus') ?? ''
+  const reviewStatus = searchParams.get('reviewStatus') ?? ''
   const site = searchParams.get('site') ?? ''
 
   const columnsState = useAdminTableColumns({
@@ -154,6 +156,8 @@ export function VideoTable() {
         if (q) params.set('q', q)
         if (type) params.set('type', type)
         if (status) params.set('status', status)
+        if (visibilityStatus) params.set('visibilityStatus', visibilityStatus)
+        if (reviewStatus) params.set('reviewStatus', reviewStatus)
         if (site) params.set('site', site)
         const res = await apiClient.get<{ data: VideoAdminRow[]; total: number }>(
           `/admin/videos?${params}`,
@@ -166,13 +170,13 @@ export function VideoTable() {
         setLoading(false)
       }
     },
-    [q, type, status, site],
+    [q, type, status, visibilityStatus, reviewStatus, site],
   )
 
   useEffect(() => {
     setPage(1)
     fetchVideos(1)
-  }, [q, type, status, site, fetchVideos])
+  }, [q, type, status, visibilityStatus, reviewStatus, site, fetchVideos])
 
   async function handlePublish(row: VideoAdminRow, isPublished: boolean) {
     try {

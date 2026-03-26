@@ -93,6 +93,30 @@ export function VideoFilters() {
         <option value="pending">待审核</option>
       </select>
 
+      <select
+        value={searchParams.get('visibilityStatus') ?? ''}
+        onChange={(e) => updateParam('visibilityStatus', e.target.value)}
+        className="rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-1.5 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+        data-testid="video-filters-visibility"
+      >
+        <option value="">全部可见性</option>
+        <option value="public">公开</option>
+        <option value="internal">内部</option>
+        <option value="hidden">隐藏</option>
+      </select>
+
+      <select
+        value={searchParams.get('reviewStatus') ?? ''}
+        onChange={(e) => updateParam('reviewStatus', e.target.value)}
+        className="rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-1.5 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+        data-testid="video-filters-review"
+      >
+        <option value="">全部审核状态</option>
+        <option value="pending_review">待审核</option>
+        <option value="approved">已通过</option>
+        <option value="rejected">已拒绝</option>
+      </select>
+
       {/* 来源站点筛选（ADMIN-07） */}
       {sites.length > 0 && (
         <select

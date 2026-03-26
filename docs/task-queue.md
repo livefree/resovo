@@ -2430,7 +2430,7 @@
 ## SEQ-20260325-16 — Phase 1：界面二 — 全量视频治理库
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-25 22:00
-- **最后更新时间**：2026-03-25 23:46
+- **最后更新时间**：2026-03-25 23:47
 - **目标**：基于 ModernDataTable 重构 `/admin/videos` 页面，新增 visibility 切换、源健康度 badge、审核状态筛选、详情侧边栏
 - **范围**：视频管理前后端 + 现有 `src/components/admin/videos/` 重构
 - **依赖**：SEQ-20260325-14（Phase 0）+ SEQ-20260325-15（Phase 0.5）全部完成
@@ -2454,13 +2454,17 @@
    - **测试**：扩展现有视频列表测试
 
 2. CHG-210 — 视频治理库页面骨架 + 筛选栏
-   - **状态**：⬜ 待开始
+   - **状态**：✅ 已完成
    - **创建时间**：2026-03-25 22:00
    - **计划开始**：CHG-209 之后
+   - **实际开始**：2026-03-25 23:46
+   - **完成时间**：2026-03-25 23:47
    - **依赖**：CHG-209（API 就绪）
    - **文件范围**（重构）：
-     - `src/components/admin/videos/VideoFilters.tsx` — 重写：新增 visibility_status 下拉、review_status 下拉
-     - `src/components/admin/videos/VideoTable.tsx` — 外壳重构为使用 ModernDataTable
+      - `src/components/admin/videos/VideoFilters.tsx` — 重写：新增 visibility_status 下拉、review_status 下拉
+      - `src/components/admin/videos/VideoTable.tsx` — 读取新增 URL 参数并触发列表刷新
+      - `tests/unit/components/admin/videos/VideoFilters.test.tsx` — 补充新筛选器 URL 同步断言
+      - `tests/unit/components/admin/videos/VideoTable.test.tsx` — 覆盖新搜索参数透传
    - **验收要点**：筛选栏含搜索框 + 类型 + 可见性 + 审核状态 4 个筛选器；筛选变更触发列表刷新
 
 3. CHG-211 — 视频表格列定义 + ModernDataTable 接入
