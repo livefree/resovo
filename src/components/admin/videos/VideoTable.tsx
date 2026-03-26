@@ -6,11 +6,11 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
 import { Pagination } from '@/components/admin/Pagination'
 import { BatchPublishBar } from '@/components/admin/videos/BatchPublishBar'
+import { VideoDetailDrawer } from '@/components/admin/videos/VideoDetailDrawer'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import {
   TableBadgeCell,
@@ -190,6 +190,7 @@ export function VideoTable() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [showColumnsPanel, setShowColumnsPanel] = useState(false)
   const [visibilityPendingIds, setVisibilityPendingIds] = useState<string[]>([])
+  const [drawerVideoId, setDrawerVideoId] = useState<string | null>(null)
 
   const q = searchParams.get('q') ?? ''
   const type = searchParams.get('type') ?? ''
@@ -419,13 +420,14 @@ export function VideoTable() {
           baseColumn.accessor = (row) => row.id
           baseColumn.cell = ({ row }) => (
             <div className="flex flex-wrap gap-1.5">
-              <Link
-                href={`/admin/videos/${row.id}/edit`}
+              <button
+                type="button"
+                onClick={() => setDrawerVideoId(row.id)}
                 className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg2)]"
                 data-testid={`video-edit-btn-${row.id}`}
               >
                 编辑
-              </Link>
+              </button>
             </div>
           )
           break
@@ -528,6 +530,13 @@ export function VideoTable() {
         selectedIds={selectedIds}
         onSuccess={() => void fetchVideos(page)}
         onClear={() => setSelectedIds([])}
+      />
+
+      <VideoDetailDrawer
+        videoId={drawerVideoId}
+        open={drawerVideoId !== null}
+        onClose={() => setDrawerVideoId(null)}
+        onSaved={() => void fetchVideos(page)}
       />
     </div>
   )

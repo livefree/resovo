@@ -2430,7 +2430,7 @@
 ## SEQ-20260325-16 — Phase 1：界面二 — 全量视频治理库
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-25 22:00
-- **最后更新时间**：2026-03-26 00:14
+- **最后更新时间**：2026-03-26 00:15
 - **目标**：基于 ModernDataTable 重构 `/admin/videos` 页面，新增 visibility 切换、源健康度 badge、审核状态筛选、详情侧边栏
 - **范围**：视频管理前后端 + 现有 `src/components/admin/videos/` 重构
 - **依赖**：SEQ-20260325-14（Phase 0）+ SEQ-20260325-15（Phase 0.5）全部完成
@@ -2506,14 +2506,17 @@
    - **测试**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/videos/BatchPublishBar.test.tsx`
 
 6. CHG-214 — 视频详情侧边栏（编辑 + 源管理子面板）
-   - **状态**：⬜ 待开始
+   - **状态**：✅ 已完成
    - **创建时间**：2026-03-25 22:00
    - **计划开始**：CHG-213 之后
+   - **实际开始**：2026-03-26 00:14
+   - **完成时间**：2026-03-26 00:15
    - **依赖**：CHG-213
    - **文件范围**（新建 + 修改）：
      - `src/components/admin/videos/VideoDetailDrawer.tsx`（新建）— 侧边抽屉：元数据编辑表单 + 分集/源列表子面板
      - `src/components/admin/videos/VideoTable.tsx` — 操作列"编辑"按钮点击打开抽屉
    - **验收要点**：抽屉打开不影响列表滚动位置；可编辑元数据（标题/描述/年份/类型/国家）；可查看并管理该视频的所有 source
+   - **测试**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/videos/VideoTable.test.tsx`
 
 ---
 

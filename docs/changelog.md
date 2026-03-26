@@ -3215,3 +3215,19 @@
   - 批量可见性走单条 `/admin/videos/:id/visibility` 并发调用；批量审核走单条 `/admin/videos/:id/review` 并发调用
   - 成功后统一触发列表刷新并清空勾选；忙碌中禁用按钮，维持 50 条批量上限
 - **测试覆盖**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/videos/BatchPublishBar.test.tsx` ✅
+
+---
+
+### CHG-214 — 视频详情侧边栏（编辑 + 源管理子面板）
+- **完成时间**：2026-03-26 00:15
+- **修改文件**：
+  - `src/components/admin/videos/VideoDetailDrawer.tsx`
+  - `src/components/admin/videos/VideoTable.tsx`
+  - `tests/unit/components/admin/videos/VideoTable.test.tsx`
+  - `docs/task-queue.md`
+- **变更内容**：
+  - 新增 `VideoDetailDrawer`，在右侧抽屉内展示视频基础字段编辑表单和关联源列表
+  - `VideoTable` 操作列“编辑”从跳转改为打开抽屉，抽屉加载 `/admin/videos/:id` 与 `/admin/sources?videoId=...`
+  - 保存时调用 `PATCH /admin/videos/:id` 更新标题、描述、年份、类型、国家/地区，成功后刷新当前页列表
+  - 单测补充：打开抽屉时加载详情和源列表，保存时发送元数据更新请求
+- **测试覆盖**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/videos/VideoTable.test.tsx` ✅

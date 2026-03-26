@@ -60,7 +60,42 @@ describe('VideoTable (CHG-211/212)', () => {
     vi.clearAllMocks()
     localStorage.clear()
     mockSearchParams.forEach((_value, key) => mockSearchParams.delete(key))
-    getMock.mockResolvedValue({ data: MOCK_ROWS, total: MOCK_ROWS.length })
+    getMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/admin/videos?')) {
+        return { data: MOCK_ROWS, total: MOCK_ROWS.length }
+      }
+
+      if (url === '/admin/videos/v1') {
+        return {
+          data: {
+            id: 'v1',
+            title: 'Alpha Movie',
+            description: 'Old description',
+            year: 2025,
+            type: 'series',
+            country: 'JP',
+          },
+        }
+      }
+
+      if (url === '/admin/sources?videoId=v1&page=1&limit=20') {
+        return {
+          data: [
+            {
+              id: 'src-1',
+              source_url: 'https://cdn.example.com/v1.m3u8',
+              source_name: 'main',
+              is_active: true,
+              episode_number: 1,
+              season_number: 1,
+            },
+          ],
+          total: 1,
+        }
+      }
+
+      return { data: [], total: 0 }
+    })
     patchMock.mockResolvedValue({
       data: {
         visibility_status: 'hidden',
@@ -172,6 +207,32 @@ describe('VideoTable (CHG-211/212)', () => {
       const currentRow = screen.getByTestId('modern-table-row-v1')
       expect(within(currentRow).getByText('公开')).toBeTruthy()
       expect(within(currentRow).getByText('服务异常')).toBeTruthy()
+    })
+  })
+
+  it('opens detail drawer, loads video sources and saves metadata', async () => {
+    render(<VideoTable />)
+
+    await screen.findByText('Alpha Movie')
+    fireEvent.click(screen.getByTestId('video-edit-btn-v1'))
+
+    await screen.findByTestId('video-detail-drawer-title')
+    expect(getMock).toHaveBeenCalledWith('/admin/videos/v1')
+    expect(getMock).toHaveBeenCalledWith('/admin/sources?videoId=v1&page=1&limit=20')
+    expect(screen.getByText('https://cdn.example.com/v1.m3u8')).toBeTruthy()
+
+    fireEvent.change(screen.getByTestId('video-detail-title-input'), { target: { value: 'Alpha Movie Updated' } })
+    fireEvent.change(screen.getByTestId('video-detail-country-input'), { target: { value: 'US' } })
+    fireEvent.click(screen.getByTestId('video-detail-save'))
+
+    await waitFor(() => {
+      expect(patchMock).toHaveBeenCalledWith('/admin/videos/v1', {
+        title: 'Alpha Movie Updated',
+        description: 'Old description',
+        year: 2025,
+        type: 'series',
+        country: 'US',
+      })
     })
   })
 })
