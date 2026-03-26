@@ -2523,7 +2523,7 @@
 ## SEQ-20260325-17 — Phase 2：界面三 — 视频源健康度中心
 - **状态**：⬜ 待开始
 - **创建时间**：2026-03-25 22:00
-- **最后更新时间**：2026-03-26 00:17
+- **最后更新时间**：2026-03-26 00:33
 - **目标**：重构 `/admin/sources` 页面为双 Tab 健康度中心，新增告警横幅、URL 替换 UI、源健康检测轻量方案
 - **范围**：源管理前后端 + Bull 队列 + 新 API
 - **依赖**：SEQ-20260325-15（Phase 0.5）+ CHG-202（源 URL 替换 API）
@@ -2547,14 +2547,17 @@
    - **测试**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/sources/SourceHealthAlert.test.tsx`
 
 2. CHG-216 — 源健康中心页面骨架 + 双 Tab 布局
-   - **状态**：⬜ 待开始
+   - **状态**：✅ 已完成
    - **创建时间**：2026-03-25 22:00
    - **计划开始**：CHG-215 之后
    - **依赖**：CHG-215
+   - **实际开始**：2026-03-26 00:18
+   - **完成时间**：2026-03-26 00:33
    - **文件范围**（重构）：
      - `src/components/admin/sources/SourceTable.tsx` — 重构为双 Tab：失效源 (is_active=false) / 用户纠错 (submitted_by IS NOT NULL)
      - `src/components/admin/AdminSourceList.tsx` — 整合告警横幅 + 双 Tab 表格
    - **验收要点**：两个 Tab 独立筛选和分页；告警横幅在顶部
+   - **测试**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/sources/SourceHealthAlert.test.tsx`
 
 3. CHG-217 — Tab 1 失效源表格 + URL 替换 UI
    - **状态**：⬜ 待开始

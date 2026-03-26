@@ -51,18 +51,40 @@ const MOCK_ROWS = [
   },
 ]
 
-describe('SourceTable (CHG-126)', () => {
+const MOCK_SUBMISSIONS = [
+  {
+    id: 'sub-1',
+    video_id: 'v9',
+    source_url: 'https://fix.example.com/play.m3u8',
+    source_name: 'fix',
+    is_active: false,
+    submitted_by_username: 'alice',
+    created_at: '2026-03-21T00:00:00Z',
+    video_title: 'Fix Video',
+  },
+]
+
+describe('SourceTable (CHG-216)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
-    getMock.mockResolvedValue({ data: MOCK_ROWS, total: MOCK_ROWS.length })
+    getMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/admin/sources?')) {
+        return { data: MOCK_ROWS, total: MOCK_ROWS.length }
+      }
+      if (url.startsWith('/admin/submissions?')) {
+        return { data: MOCK_SUBMISSIONS, total: MOCK_SUBMISSIONS.length }
+      }
+      return { data: [], total: 0 }
+    })
     deleteMock.mockResolvedValue({})
   })
 
-  it('applies default sort and supports toggle sort', async () => {
+  it('loads inactive sources by default and supports toggle sort', async () => {
     render(<SourceTable />)
 
     await screen.findByText('Alpha Video')
+    expect(getMock).toHaveBeenCalledWith('/admin/sources?page=1&limit=20&status=inactive')
 
     const rowsDefault = Array.from(document.querySelectorAll('tr[data-testid^="source-row-"]'))
     expect(rowsDefault[0]?.getAttribute('data-testid')).toBe('source-row-s1')
@@ -85,6 +107,16 @@ describe('SourceTable (CHG-126)', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('source-sort-status')).toBeNull()
     })
+  })
+
+  it('switches to submissions tab with independent request', async () => {
+    render(<SourceTable />)
+
+    fireEvent.click(screen.getByTestId('source-tab-submissions'))
+
+    await screen.findByText('Fix Video')
+    expect(getMock).toHaveBeenCalledWith('/admin/submissions?page=1&limit=20')
+    expect(screen.getByText('alice')).toBeTruthy()
   })
 
   it('persists resized width after remount', async () => {

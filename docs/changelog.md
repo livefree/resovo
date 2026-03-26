@@ -3251,3 +3251,17 @@
   - 新增 `SourceHealthAlert` 横幅，并在 `/admin/sources` 页面壳中挂载；支持一键将空壳视频批量切换为 `hidden`
   - 页面入口切到 `AdminSourceList` 容器，为后续双 Tab 源健康中心预留组合位
 - **测试覆盖**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/sources/SourceHealthAlert.test.tsx` ✅
+
+---
+
+### CHG-216 — 源健康中心页面骨架 + 双 Tab 布局
+- **完成时间**：2026-03-26 00:33
+- **修改文件**：
+  - `src/components/admin/sources/SourceTable.tsx`
+  - `tests/unit/components/admin/sources/SourceTable.test.tsx`
+  - `docs/task-queue.md`
+- **变更内容**：
+  - `SourceTable` 改为双 Tab 结构，默认进入“失效源”列表，同时新增“用户纠错”列表请求 `/admin/submissions`
+  - 失效源 Tab 保留原有排序、列显隐、列宽持久化、批量删除和单条验证能力
+  - 用户纠错 Tab 先提供独立列表与分页骨架，和失效源 Tab 解耦，为后续 `CHG-218` 的审核动作预留位置
+- **测试覆盖**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/sources/SourceHealthAlert.test.tsx` ✅

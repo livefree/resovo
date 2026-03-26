@@ -21,6 +21,7 @@ import type { AdminTableState as SharedAdminTableState } from '@/components/admi
 
 const PAGE_SIZE = 20
 const URL_MAX_LEN = 60
+type SourceTab = 'inactive' | 'submissions'
 
 type SourceColumnId = 'video_title' | 'source_url' | 'status' | 'last_checked' | 'actions'
 
@@ -33,6 +34,17 @@ interface SourceRow {
   type: string
   is_active: boolean
   last_checked: string | null
+  created_at: string
+  video_title?: string
+}
+
+interface SubmissionRow {
+  id: string
+  video_id: string
+  source_url: string
+  source_name: string
+  is_active: boolean
+  submitted_by_username?: string | null
   created_at: string
   video_title?: string
 }
@@ -85,11 +97,15 @@ function toComparableValue(row: SourceRow, field: string): string | number {
 }
 
 export function SourceTable() {
+  const [activeTab, setActiveTab] = useState<SourceTab>('inactive')
   const [sources, setSources] = useState<SourceRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const [status, setStatus] = useState<'all' | 'active' | 'inactive'>('all')
+  const [submissions, setSubmissions] = useState<SubmissionRow[]>([])
+  const [submissionTotal, setSubmissionTotal] = useState(0)
+  const [submissionPage, setSubmissionPage] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [submissionLoading, setSubmissionLoading] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [deleteTarget, setDeleteTarget] = useState<SourceRow | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
@@ -132,14 +148,14 @@ export function SourceTable() {
   }, [sources, sortState.sort])
 
   const fetchSources = useCallback(
-    async (pageVal: number, statusVal: string) => {
+    async (pageVal: number) => {
       setLoading(true)
       setSelectedIds([])
       try {
         const params = new URLSearchParams({
           page: String(pageVal),
           limit: String(PAGE_SIZE),
-          status: statusVal,
+          status: 'inactive',
         })
         const res = await apiClient.get<{ data: SourceRow[]; total: number }>(`/admin/sources?${params}`)
         setSources(res.data)
@@ -153,9 +169,34 @@ export function SourceTable() {
     [],
   )
 
+  const fetchSubmissions = useCallback(
+    async (pageVal: number) => {
+      setSubmissionLoading(true)
+      try {
+        const params = new URLSearchParams({
+          page: String(pageVal),
+          limit: String(PAGE_SIZE),
+        })
+        const res = await apiClient.get<{ data: SubmissionRow[]; total: number }>(`/admin/submissions?${params}`)
+        setSubmissions(res.data)
+        setSubmissionTotal(res.total)
+      } catch {
+        // silent
+      } finally {
+        setSubmissionLoading(false)
+      }
+    },
+    [],
+  )
+
   useEffect(() => {
-    fetchSources(page, status)
-  }, [fetchSources, page, status])
+    if (activeTab === 'inactive') {
+      void fetchSources(page)
+      return
+    }
+
+    void fetchSubmissions(submissionPage)
+  }, [activeTab, fetchSources, fetchSubmissions, page, submissionPage])
 
   function handleCheck(id: string, checked: boolean) {
     setSelectedIds((prev) => (checked ? [...prev, id] : prev.filter((x) => x !== id)))
@@ -172,7 +213,7 @@ export function SourceTable() {
     setDeleteLoading(true)
     try {
       await apiClient.delete(`/admin/sources/${deleteTarget.id}`)
-      fetchSources(page, status)
+      void fetchSources(page)
       setDeleteTarget(null)
     } catch {
       // silent
@@ -192,24 +233,29 @@ export function SourceTable() {
         className="gap-3"
         actions={(
           <div className="flex items-center gap-2">
-            <select
-              value={status}
-              onChange={(e) => {
-                setPage(1)
-                setStatus(e.target.value as typeof status)
-              }}
-              className="rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-1.5 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-              data-testid="source-status-filter"
-            >
-              <option value="all">全部状态</option>
-              <option value="active">有效源</option>
-              <option value="inactive">失效源</option>
-            </select>
+            <div className="flex gap-1 rounded-md border border-[var(--border)] bg-[var(--bg3)] p-0.5">
+              <button
+                type="button"
+                onClick={() => setActiveTab('inactive')}
+                className={`rounded px-3 py-1 text-sm ${activeTab === 'inactive' ? 'bg-[var(--accent)] text-black' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
+                data-testid="source-tab-inactive"
+              >
+                失效源
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('submissions')}
+                className={`rounded px-3 py-1 text-sm ${activeTab === 'submissions' ? 'bg-[var(--accent)] text-black' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
+                data-testid="source-tab-submissions"
+              >
+                用户纠错
+              </button>
+            </div>
           </div>
         )}
       />
 
-      {showColumnsPanel && (
+      {activeTab === 'inactive' && showColumnsPanel && (
         <div className="rounded border border-[var(--border)] bg-[var(--bg2)] p-2" data-testid="source-columns-panel">
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="text-xs text-[var(--muted)]">显示列</span>
@@ -239,6 +285,7 @@ export function SourceTable() {
         </div>
       )}
 
+      {activeTab === 'inactive' ? (
       <AdminTableFrame minWidth={960}>
         <thead className="bg-[var(--bg2)] text-[var(--muted)]">
           <tr>
@@ -359,7 +406,7 @@ export function SourceTable() {
                 {visibleColumnIds.includes('actions') && (
                   <td className="px-4 py-3 align-middle">
                     <div className="flex flex-wrap items-center gap-1">
-                      <SourceVerifyButton sourceId={row.id} onVerified={() => fetchSources(page, status)} />
+                      <SourceVerifyButton sourceId={row.id} onVerified={() => void fetchSources(page)} />
                       <button
                         onClick={() => setDeleteTarget(row)}
                         className="rounded bg-red-900/30 px-2 py-0.5 text-xs text-red-400 hover:bg-red-900/60"
@@ -374,8 +421,48 @@ export function SourceTable() {
             ))}
         </tbody>
       </AdminTableFrame>
+      ) : (
+        <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg)]">
+          <table className="w-full text-sm">
+            <thead className="bg-[var(--bg2)] text-[var(--muted)]">
+              <tr>
+                <th className="px-4 py-3 text-left">视频标题</th>
+                <th className="px-4 py-3 text-left">来源 URL</th>
+                <th className="px-4 py-3 text-left">提交者</th>
+                <th className="px-4 py-3 text-left">提交时间</th>
+              </tr>
+            </thead>
+            <tbody>
+              {submissionLoading ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-sm text-[var(--muted)]">加载中…</td>
+                </tr>
+              ) : submissions.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-sm text-[var(--muted)]">暂无用户纠错数据</td>
+                </tr>
+              ) : (
+                submissions.map((row) => (
+                  <tr
+                    key={row.id}
+                    className="border-b border-[var(--subtle)] bg-[var(--bg)] hover:bg-[var(--bg2)]"
+                    data-testid={`submission-row-${row.id}`}
+                  >
+                    <td className="px-4 py-3 text-[var(--text)]">{row.video_title ?? '—'}</td>
+                    <td className="px-4 py-3 text-xs text-[var(--muted)]">
+                      <span className="inline-block max-w-[360px] truncate" title={row.source_url}>{truncateUrl(row.source_url)}</span>
+                    </td>
+                    <td className="px-4 py-3 text-[var(--muted)]">{row.submitted_by_username ?? '匿名'}</td>
+                    <td className="px-4 py-3 text-xs text-[var(--muted)]">{new Date(row.created_at).toLocaleString()}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      {total > PAGE_SIZE && (
+      {activeTab === 'inactive' && total > PAGE_SIZE && (
         <div className="mt-4">
           <Pagination
             page={page}
@@ -383,18 +470,35 @@ export function SourceTable() {
             pageSize={PAGE_SIZE}
             onChange={(p) => {
               setPage(p)
-              fetchSources(p, status)
+              void fetchSources(p)
             }}
           />
         </div>
       )}
 
+      {activeTab === 'submissions' && submissionTotal > PAGE_SIZE && (
+        <div className="mt-4">
+          <Pagination
+            page={submissionPage}
+            total={submissionTotal}
+            pageSize={PAGE_SIZE}
+            onChange={(p) => {
+              setSubmissionPage(p)
+              void fetchSubmissions(p)
+            }}
+          />
+        </div>
+      )}
+
+      {activeTab === 'inactive' ? (
       <BatchDeleteBar
         selectedIds={selectedIds}
-        onSuccess={() => fetchSources(page, status)}
+        onSuccess={() => void fetchSources(page)}
         onClear={() => setSelectedIds([])}
       />
+      ) : null}
 
+      {activeTab === 'inactive' ? (
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         onClose={() => {
@@ -411,6 +515,7 @@ export function SourceTable() {
         loading={deleteLoading}
         danger
       />
+      ) : null}
     </div>
   )
 }
