@@ -152,7 +152,10 @@ function getSourceCounts(row: VideoAdminRow): { active: number; total: number } 
 
 function getSourceHealthLabel(row: VideoAdminRow): string {
   const { active, total } = getSourceCounts(row)
-  return `${active}/${total} 活跃`
+  if (total <= 0) return '🟡 暂无源'
+  if (active <= 0) return '🔴 全失效'
+  if (active < total) return `🟡 ${active}/${total} 活跃`
+  return `🟢 ${active} 活跃`
 }
 
 function toComparableValue(row: VideoAdminRow, field: string): string | number {
@@ -186,6 +189,7 @@ export function VideoTable() {
   const [loading, setLoading] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [showColumnsPanel, setShowColumnsPanel] = useState(false)
+  const [visibilityPendingIds, setVisibilityPendingIds] = useState<string[]>([])
 
   const q = searchParams.get('q') ?? ''
   const type = searchParams.get('type') ?? ''
@@ -269,6 +273,55 @@ export function VideoTable() {
 
   const allSelected = sortedVideos.length > 0 && selectedIds.length === sortedVideos.length
 
+  async function handleVisibilityToggle(row: VideoAdminRow, nextValue: boolean) {
+    const nextVisibility = nextValue ? 'public' : 'hidden'
+    const previousState = {
+      visibility_status: row.visibility_status,
+      is_published: row.is_published,
+    }
+
+    setVisibilityPendingIds((prev) => [...prev, row.id])
+    setVideos((prev) => prev.map((item) => (
+      item.id === row.id
+        ? {
+          ...item,
+          visibility_status: nextVisibility,
+          is_published: nextValue,
+        }
+        : item
+    )))
+
+    try {
+      const res = await apiClient.patch<{ data: { visibility_status: VideoAdminRow['visibility_status']; is_published: boolean } }>(
+        `/admin/videos/${row.id}/visibility`,
+        { visibility: nextVisibility },
+      )
+      const result = res.data
+      setVideos((prev) => prev.map((item) => (
+        item.id === row.id
+          ? {
+            ...item,
+            visibility_status: result.visibility_status,
+            is_published: result.is_published,
+          }
+          : item
+      )))
+    } catch (error) {
+      setVideos((prev) => prev.map((item) => (
+        item.id === row.id
+          ? {
+            ...item,
+            visibility_status: previousState.visibility_status,
+            is_published: previousState.is_published,
+          }
+          : item
+      )))
+      throw error
+    } finally {
+      setVisibilityPendingIds((prev) => prev.filter((id) => id !== row.id))
+    }
+  }
+
   const tableColumns = useMemo<Array<TableColumn<VideoAdminRow>>>(() => {
     const result: Array<TableColumn<VideoAdminRow>> = [
       {
@@ -331,7 +384,16 @@ export function VideoTable() {
         case 'source_health':
           baseColumn.accessor = (row) => getSourceHealthLabel(row)
           baseColumn.cell = ({ row }) => (
-            <TableBadgeCell label={getSourceHealthLabel(row)} tone="neutral" />
+            <TableBadgeCell
+              label={getSourceHealthLabel(row)}
+              tone={(() => {
+                const { active, total } = getSourceCounts(row)
+                if (total <= 0) return 'warning'
+                if (active <= 0) return 'danger'
+                if (active < total) return 'warning'
+                return 'success'
+              })()}
+            />
           )
           break
         case 'visibility':
@@ -340,8 +402,8 @@ export function VideoTable() {
             <div className="flex items-center gap-2">
               <TableSwitchCell
                 value={getVisibilitySwitchValue(row)}
-                disabled
-                onToggle={() => undefined}
+                disabled={visibilityPendingIds.includes(row.id)}
+                onToggle={(nextValue) => handleVisibilityToggle(row, nextValue)}
               />
               <span className="text-xs text-[var(--muted)]">{getVisibilityLabel(row.visibility_status)}</span>
             </div>
@@ -373,7 +435,7 @@ export function VideoTable() {
     }
 
     return result
-  }, [allSelected, columnsState.columnsById, selectedIds, sortState, visibleColumnIds])
+  }, [allSelected, columnsState.columnsById, selectedIds, sortState, visibilityPendingIds, visibleColumnIds])
 
   const sort = useMemo<TableSortState | undefined>(() => {
     if (!sortState.sort) return undefined

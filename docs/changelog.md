@@ -3186,3 +3186,18 @@
   - 可见性列先以禁用态 `TableSwitchCell` 展示当前状态；源健康度先展示 `active/total` 聚合结果，为 `CHG-212` 的交互与颜色映射预留数据位
   - 单测同步迁移到 ModernDataTable DOM，覆盖默认排序、列显隐、列宽持久化、新筛选参数透传和新列渲染
 - **测试覆盖**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/videos/VideoTable.test.tsx` ✅
+
+---
+
+### CHG-212 — 可见性 Switch + 源健康 Badge 交互实现
+- **完成时间**：2026-03-26 00:09
+- **修改文件**：
+  - `src/components/admin/videos/VideoTable.tsx`
+  - `tests/unit/components/admin/videos/VideoTable.test.tsx`
+  - `docs/task-queue.md`
+- **变更内容**：
+  - 可见性列接入 `/admin/videos/:id/visibility`，在 `VideoTable` 内部执行行级乐观更新，不触发整表 refetch
+  - 切换失败时回滚 `visibility_status` 与 `is_published`，并沿用 `TableSwitchCell` 的错误提示展示
+  - 源健康度列按活跃源/总源数映射为 `🟢 N 活跃`、`🟡 N/M 活跃`、`🔴 全失效` 三种展示，并同步设置 `success / warning / danger` tone
+  - 单测补充：可见性切换成功不重复请求列表、切换失败自动回滚
+- **测试覆盖**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/videos/VideoTable.test.tsx` ✅

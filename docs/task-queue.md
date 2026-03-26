@@ -2430,7 +2430,7 @@
 ## SEQ-20260325-16 — Phase 1：界面二 — 全量视频治理库
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-25 22:00
-- **最后更新时间**：2026-03-26 00:05
+- **最后更新时间**：2026-03-26 00:09
 - **目标**：基于 ModernDataTable 重构 `/admin/videos` 页面，新增 visibility 切换、源健康度 badge、审核状态筛选、详情侧边栏
 - **范围**：视频管理前后端 + 现有 `src/components/admin/videos/` 重构
 - **依赖**：SEQ-20260325-14（Phase 0）+ SEQ-20260325-15（Phase 0.5）全部完成
@@ -2481,14 +2481,17 @@
    - **测试**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/videos/VideoTable.test.tsx`
 
 4. CHG-212 — 可见性 Switch + 源健康 Badge 交互实现
-   - **状态**：⬜ 待开始
+   - **状态**：✅ 已完成
    - **创建时间**：2026-03-25 22:00
    - **计划开始**：CHG-211 之后
+   - **实际开始**：2026-03-26 00:06
+   - **完成时间**：2026-03-26 00:09
    - **依赖**：CHG-211（列定义）+ CHG-200（updateVisibility API）
    - **文件范围**（修改）：
      - `src/components/admin/videos/VideoTable.tsx` — 可见性列使用 `TableSwitchCell`，`onToggle` 调 updateVisibility API（乐观更新，失败回滚）
      - 源健康度列使用 `TableBadgeCell`，显示 `🟢 N 活跃` / `🔴 全失效` / `🟡 部分失效`
    - **验收要点**：Switch 切换不触发整表 refetch；切换失败自动回滚 + 错误提示；Badge 颜色正确反映源状态
+   - **测试**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/videos/VideoTable.test.tsx`
 
 5. CHG-213 — 批量操作栏（批量上架/下架/审核）
    - **状态**：⬜ 待开始

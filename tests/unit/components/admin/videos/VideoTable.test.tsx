@@ -3,12 +3,13 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { VideoTable } from '@/components/admin/videos/VideoTable'
 
 const getMock = vi.fn()
+const patchMock = vi.fn()
 const mockSearchParams = new URLSearchParams()
 
 vi.mock('@/lib/api-client', () => ({
   apiClient: {
     get: (...args: unknown[]) => getMock(...args),
-    patch: vi.fn(),
+    patch: (...args: unknown[]) => patchMock(...args),
     post: vi.fn(),
   },
 }))
@@ -54,12 +55,18 @@ const MOCK_ROWS = [
   },
 ]
 
-describe('VideoTable (CHG-211)', () => {
+describe('VideoTable (CHG-211/212)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
     mockSearchParams.forEach((_value, key) => mockSearchParams.delete(key))
     getMock.mockResolvedValue({ data: MOCK_ROWS, total: MOCK_ROWS.length })
+    patchMock.mockResolvedValue({
+      data: {
+        visibility_status: 'hidden',
+        is_published: false,
+      },
+    })
   })
 
   it('applies default title sort and supports toggleSort', async () => {
@@ -132,11 +139,39 @@ describe('VideoTable (CHG-211)', () => {
     const row = await screen.findByTestId('modern-table-row-v1')
     expect(within(row).getByText('Alpha Movie')).toBeTruthy()
     expect(within(row).getByText('v1short')).toBeTruthy()
-    expect(within(row).getByText('8/9 活跃')).toBeTruthy()
+    expect(within(row).getByText('🟡 8/9 活跃')).toBeTruthy()
     expect(within(row).getByText('公开')).toBeTruthy()
     expect(within(row).getByText('已通过')).toBeTruthy()
+  })
 
-    const switchButton = within(row).getByTestId('table-switch-toggle') as HTMLButtonElement
-    expect(switchButton.disabled).toBe(true)
+  it('optimistically toggles visibility without refetching the table', async () => {
+    render(<VideoTable />)
+
+    const row = await screen.findByTestId('modern-table-row-v1')
+    const switchButton = within(row).getByTestId('table-switch-toggle')
+    expect(getMock).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(switchButton)
+
+    await waitFor(() => {
+      expect(patchMock).toHaveBeenCalledWith('/admin/videos/v1/visibility', { visibility: 'hidden' })
+      expect(within(screen.getByTestId('modern-table-row-v1')).getByText('隐藏')).toBeTruthy()
+    })
+
+    expect(getMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('rolls back visibility on toggle failure', async () => {
+    patchMock.mockRejectedValueOnce(new Error('服务异常'))
+    render(<VideoTable />)
+
+    const row = await screen.findByTestId('modern-table-row-v1')
+    fireEvent.click(within(row).getByTestId('table-switch-toggle'))
+
+    await waitFor(() => {
+      const currentRow = screen.getByTestId('modern-table-row-v1')
+      expect(within(currentRow).getByText('公开')).toBeTruthy()
+      expect(within(currentRow).getByText('服务异常')).toBeTruthy()
+    })
   })
 })
