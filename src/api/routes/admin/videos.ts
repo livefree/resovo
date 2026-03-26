@@ -16,12 +16,16 @@ import { db } from '@/api/lib/postgres'
 import { es } from '@/api/lib/elasticsearch'
 import { VideoService } from '@/api/services/VideoService'
 import { DoubanService } from '@/api/services/DoubanService'
-import type { VideoType, VideoStatus, VideoGenre } from '@/types'
+import type { VideoType, VideoStatus, VideoGenre, VisibilityStatus } from '@/types'
 
 // ── Zod Schema ────────────────────────────────────────────────────
 
 const PublishSchema = z.object({
   isPublished: z.boolean(),
+})
+
+const VisibilitySchema = z.object({
+  visibility: z.enum(['public', 'internal', 'hidden'] as const),
 })
 
 const BatchPublishSchema = z.object({
@@ -111,7 +115,27 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
     return reply.send({ data: result })
   })
 
-  // ── POST /admin/videos/batch-publish ────────────────────────
+  // ── PATCH /admin/videos/:id/visibility ─────────────────────
+  // CHG-200: 可见性切换（public ↔ hidden），同步 is_published
+  fastify.patch('/admin/videos/:id/visibility', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const parsed = VisibilitySchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+
+    const result = await videoService.updateVisibility(id, parsed.data.visibility as VisibilityStatus)
+    if (!result) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
+      })
+    }
+    return reply.send({ data: result })
+  })
+
+  // ── POST /admin/videos/batch-publish ──────────���─────────────
   fastify.post('/admin/videos/batch-publish', { preHandler: auth }, async (request, reply) => {
     const parsed = BatchPublishSchema.safeParse(request.body)
     if (!parsed.success) {

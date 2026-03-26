@@ -2247,3 +2247,378 @@
    - 实际开始：2026-03-25 20:25
    - 完成时间：2026-03-25 20:25
    - 验收要点：添加源站→"+"；全站/批量增量/全量去掉"采集"；导出/导入去掉"JSON"；typecheck/test 通过
+
+---
+
+## SEQ-20260325-14 — Phase 0：视频管理后端 API 修复
+- **状态**：🔄 执行中
+- **创建时间**：2026-03-25 22:00
+- **最后更新时间**：2026-03-25 22:30
+- **目标**：补齐视频管理业务工作流所需的全部后端能力（ES 索引字段补充、可见性切换、内容审核、源 URL 替换、采集入库路由）
+- **范围**：API 层 / Service 层 / DB queries 层 + 单元测试
+- **依赖**：无（Schema 已就绪）
+- **方案来源**：`docs/video_admin_unified_plan_20260325.md` Phase 0
+
+### 任务列表（按执行顺序）
+
+1. CHG-200 — ES indexToES 补充 review_status/visibility_status + updateVisibility 改造
+   - **状态**：✅ 已完成
+   - **实际开始**：2026-03-25 22:30
+   - **完成时间**：2026-03-25 22:45
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：Phase 0 首个任务
+   - **依赖**：无
+   - **文件范围**：
+     - `src/api/services/VideoService.ts` — `indexToES()` SELECT 补充 `review_status`、`visibility_status` 字段
+     - `src/api/services/CrawlerService.ts` — `indexToES()` SELECT 同步补充
+     - `src/api/db/queries/videos.ts` — 新增 `updateVisibility(db, videoId, visibility)` 函数，同步更新 `visibility_status` + `is_published`
+     - `src/api/services/VideoService.ts` — 新增 `updateVisibility()` Service 方法，DB 写入后调 `indexToES()`
+     - `src/api/routes/admin/videos.ts` — 改造 `PATCH /:id/publish` 端点调用新函数
+   - **验收要点**：indexToES 包含 review_status/visibility_status；updateVisibility 同时更新 is_published；API 调用后触发 ES 同步
+   - **测试**：`tests/unit/api/updateVisibility.test.ts`
+
+2. CHG-201 — 新建视频内容审核 API（approve/reject/block）+ ES 同步
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-200 之后
+   - **依赖**：CHG-200（ES 字段已补充）
+   - **文件范围**：
+     - `src/api/db/queries/videos.ts` — 新增 `reviewVideo(db, videoId, { action, reason, reviewedBy })` 函数
+     - `src/api/services/VideoService.ts` — 新增 `review()` Service 方法，DB 写入后调 `indexToES()`
+     - `src/api/routes/admin/videos.ts` — 新增 `POST /admin/videos/:id/review` 端点
+   - **状态转换表**：approve→(approved, public) / reject→(rejected, hidden) / block→(blocked, blocked)
+   - **验收要点**：API 正确转换 review_status + visibility_status；触发 ES 同步；填写 reviewed_by/reviewed_at/review_reason
+   - **测试**：`tests/unit/api/reviewVideo.test.ts`
+
+3. CHG-202 — 新建源 URL 替换 API
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：可与 CHG-201 并行
+   - **依赖**：无
+   - **文件范围**：
+     - `src/api/db/queries/sources.ts` — 新增 `updateSourceUrl(db, sourceId, newUrl)` 函数
+     - `src/api/services/ContentService.ts` — 新增 `updateSourceUrl()` Service 方法
+     - `src/api/routes/admin/content.ts` — 新增 `PATCH /admin/sources/:id` 端点，body: `{ source_url }`
+   - **验收要点**：API 正确更新 source_url；更新后同步设 `is_active=true`、`last_checked=NOW()`
+   - **测试**：`tests/unit/api/updateSourceUrl.test.ts`
+
+4. CHG-203 — 采集入库路由接入 ingest_policy（allow_auto_publish）
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-200 之后
+   - **依赖**：CHG-200（ES 字段已补充，auto-publish 入库后需正确索引）
+   - **文件范围**：
+     - `src/api/services/CrawlerService.ts` — `upsertVideo()` 读取 site 的 `ingest_policy.allow_auto_publish`；为 true 时设 `review_status='approved'`、`visibility_status='public'`；为 false 时保持 `pending_review`/`internal`
+     - `src/api/db/queries/videos.ts` — `insertCrawledVideo()` 接受可选的 `review_status`/`visibility_status` 参数
+   - **验收要点**：allow_auto_publish=true 的站点入库后视频直接为 approved/public；false 时仍为 pending_review/internal
+   - **测试**：`tests/unit/api/ingestPolicy.test.ts`
+
+---
+
+## SEQ-20260325-15 — Phase 0.5：ModernDataTable 表格基建
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 22:00
+- **最后更新时间**：2026-03-25 22:00
+- **目标**：交付可复用的 ModernDataTable 表格骨架 + Cell 组件库 + 状态管理 Hook + 列宽拖拽，为 Phase 1~3 所有表格提供底座
+- **范围**：`src/components/admin/shared/modern-table/` 全新目录
+- **依赖**：SEQ-20260325-14（Phase 0）全部完成
+- **方案来源**：`docs/video_admin_unified_plan_20260325.md` Phase 0.5 + `docs/admin_table_redesign_plan_20260325.md`
+
+### 任务列表（按执行顺序）
+
+1. CHG-204 — ModernDataTable 核心骨架 + 类型定义
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：Phase 0 完成后首个任务
+   - **依赖**：SEQ-20260325-14 全部完成
+   - **文件范围**（新建）：
+     - `src/components/admin/shared/modern-table/types.ts` — `TableColumn<T>` 接口（id, header, accessor, width, minWidth, enableResizing, enableSorting, cell）
+     - `src/components/admin/shared/modern-table/ModernDataTable.tsx` — 外层 `overflow-x-auto` 容器 + `<table>` 累加像素宽度 + 固定行高 `h-12`
+     - `src/components/admin/shared/modern-table/ModernTableHead.tsx` — 表头行 + 排序指示器
+     - `src/components/admin/shared/modern-table/ModernTableBody.tsx` — 数据行渲染，`whitespace-nowrap` + `overflow-hidden`
+   - **列宽机制**：每列绝对 `width` 像素值（内联 style），表格总宽 = 所有列 width 之和，默认档位 id=80/status=100/date=160/title=300
+   - **验收要点**：空表可渲染；列宽独立不互相挤压；行高固定 48px；typecheck 通过
+   - **测试**：`tests/unit/components/modern-table/ModernDataTable.test.tsx`
+
+2. CHG-205 — Cell 组件库（6 个标准 Cell）
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-204 之后
+   - **依赖**：CHG-204（类型定义）
+   - **文件范围**（新建）：
+     - `src/components/admin/shared/modern-table/cells/TableTextCell.tsx` — nowrap + 溢出 Tooltip
+     - `src/components/admin/shared/modern-table/cells/TableSwitchCell.tsx` — boolean 乐观切换（受控，loading 态，失败回滚）
+     - `src/components/admin/shared/modern-table/cells/TableUrlCell.tsx` — 截断 domain + hover 浮层展开 + click 复制
+     - `src/components/admin/shared/modern-table/cells/TableDateCell.tsx` — 短日期 / 相对时间
+     - `src/components/admin/shared/modern-table/cells/TableImageCell.tsx` — 固定尺寸缩略图（防撑行高）
+     - `src/components/admin/shared/modern-table/cells/TableBadgeCell.tsx` — 状态/标签 badge
+     - `src/components/admin/shared/modern-table/cells/TableCheckboxCell.tsx` — 行选择 checkbox（受控，支持表头全选/反选）
+     - `src/components/admin/shared/modern-table/cells/index.ts` — 统一导出
+   - **验收要点**：每个 Cell 独立渲染不影响行高；SwitchCell 乐观更新 + 失败回滚；UrlCell 复制功能正常；CheckboxCell 支持单选/全选
+   - **测试**：`tests/unit/components/modern-table/cells.test.tsx`
+
+3. CHG-206 — useModernTable Hook（排序/分页/列宽状态 + localStorage 持久化）
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-204 之后
+   - **依赖**：CHG-204（类型定义）
+   - **文件范围**（新建）：
+     - `src/components/admin/shared/modern-table/useModernTable.ts`
+   - **功能**：
+     - 排序状态（field + direction），URL 参数同步
+     - 列宽状态（Map<columnId, width>）+ localStorage 持久化（key 按 tableId 隔离）
+     - 分页状态（page + pageSize）
+     - 行选择状态（`selectedRowIds: Set<string>` + `toggleRow` / `toggleAll` / `clearSelection` 方法），供批量操作栏消费
+     - 滚动位置 ref 保持
+   - **参考**：`useAdminTableState` / `useAdminTableSort` 现有模式
+   - **验收要点**：排序/分页状态可控；列宽刷新后恢复；滚动位置在 state 更新后不丢失
+   - **测试**：`tests/unit/components/modern-table/useModernTable.test.ts`
+
+4. CHG-207 — 列宽拖拽 Resizer
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-206 之后
+   - **依赖**：CHG-204（骨架）+ CHG-206（列宽状态）
+   - **文件范围**（新建）：
+     - `src/components/admin/shared/modern-table/useColumnResize.ts` — 拖拽逻辑 Hook
+   - **文件范围**（修改）：
+     - `src/components/admin/shared/modern-table/ModernTableHead.tsx` — 表头右边缘拖拽把手 UI
+   - **逻辑**：mousedown → mousemove 计算 deltaX → 实时更新列宽 → mouseup 持久化 localStorage
+   - **验收要点**：拖拽 A 列不影响 B 列宽度；拖拽过程中有视觉反馈；松手后宽度持久化
+   - **测试策略**：单元测试仅覆盖 Hook 的状态逻辑（deltaX 计算、minWidth 约束、localStorage 读写），不测 DOM 几何布局。拖拽视觉效果依赖浏览器手工验收 + CHG-225 E2E Playwright 脚本顺带覆盖一次拖拽交互
+   - **测试**：`tests/unit/components/modern-table/useColumnResize.test.ts`（状态逻辑）
+
+5. CHG-208 — Pilot 验证：CrawlerSiteManager 接入 ModernDataTable
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-205/206/207 全部完成后
+   - **依赖**：CHG-204 ~ CHG-207
+   - **文件范围**（修改）：
+     - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx` — 替换 AdminTableFrame 为 ModernDataTable
+     - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx` — 用 `TableColumn<CrawlerSiteRow>` 重写列定义
+   - **验收标准**：
+     - 拖拽列宽独立不互相挤压
+     - 行高固定无换行
+     - 内联操作（启用/停用 Switch）不触发整页刷新
+     - 列宽刷新后恢复
+     - 现有功能（筛选、排序、批量操作）不回退
+   - **⚠️ 开始前需确认**：确认 CrawlerSiteManager 现有功能列表，防止遗漏
+
+---
+
+## SEQ-20260325-16 — Phase 1：界面二 — 全量视频治理库
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 22:00
+- **最后更新时间**：2026-03-25 22:00
+- **目标**：基于 ModernDataTable 重构 `/admin/videos` 页面，新增 visibility 切换、源健康度 badge、审核状态筛选、详情侧边栏
+- **范围**：视频管理前后端 + 现有 `src/components/admin/videos/` 重构
+- **依赖**：SEQ-20260325-14（Phase 0）+ SEQ-20260325-15（Phase 0.5）全部完成
+- **方案来源**：`docs/video_admin_unified_plan_20260325.md` Phase 1
+
+### 任务列表（按执行顺序）
+
+1. CHG-209 — listAdminVideos 筛选增强 + 源健康聚合查询
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：Phase 1 首个任务
+   - **依赖**：SEQ-20260325-15 全部完成
+   - **文件范围**：
+     - `src/api/db/queries/videos.ts` — `listAdminVideos()` 新增 `visibility_status`、`review_status` 筛选参数；新增子查询聚合每个视频的活跃源数/总源数
+     - `src/api/services/VideoService.ts` — `adminList()` 透传新筛选参数
+     - `src/api/routes/admin/videos.ts` — `GET /admin/videos` 接受新 query params
+   - **验收要点**：可按 visibility_status/review_status 筛选；返回数据含 active_source_count/total_source_count
+   - **测试**：扩展现有视频列表测试
+
+2. CHG-210 — 视频治理库页面骨架 + 筛选栏
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-209 之后
+   - **依赖**：CHG-209（API 就绪）
+   - **文件范围**（重构）：
+     - `src/components/admin/videos/VideoFilters.tsx` — 重写：新增 visibility_status 下拉、review_status 下拉
+     - `src/components/admin/videos/VideoTable.tsx` — 外壳重构为使用 ModernDataTable
+   - **验收要点**：筛选栏含搜索框 + 类型 + 可见性 + 审核状态 4 个筛选器；筛选变更触发列表刷新
+
+3. CHG-211 — 视频表格列定义 + ModernDataTable 接入
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-210 之后
+   - **依赖**：CHG-210（页面骨架）
+   - **文件范围**（修改）：
+     - `src/components/admin/videos/VideoTable.tsx` — 用 `TableColumn<VideoRow>` 定义列：封面(ImageCell 40×56)、标题+short_id(TextCell)、类型(BadgeCell)、源健康度(BadgeCell)、可见性(SwitchCell)、审核状态(BadgeCell)、操作(按钮组)
+   - **验收要点**：所有列使用 ModernDataTable Cell 组件；行高固定 48px；封面不撑行
+
+4. CHG-212 — 可见性 Switch + 源健康 Badge 交互实现
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-211 之后
+   - **依赖**：CHG-211（列定义）+ CHG-200（updateVisibility API）
+   - **文件范围**（修改）：
+     - `src/components/admin/videos/VideoTable.tsx` — 可见性列使用 `TableSwitchCell`，`onToggle` 调 updateVisibility API（乐观更新，失败回滚）
+     - 源健康度列使用 `TableBadgeCell`，显示 `🟢 N 活跃` / `🔴 全失效` / `🟡 部分失效`
+   - **验收要点**：Switch 切换不触发整表 refetch；切换失败自动回滚 + 错误提示；Badge 颜色正确反映源状态
+
+5. CHG-213 — 批量操作栏（批量上架/下架/审核）
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-212 之后
+   - **依赖**：CHG-212
+   - **文件范围**（重构）：
+     - `src/components/admin/videos/BatchPublishBar.tsx` — 重构为支持批量 updateVisibility + 批量 review 操作
+   - **验收要点**：可多选视频执行批量上架/下架；批量操作后列表数据刷新（保持滚动位置）
+
+6. CHG-214 — 视频详情侧边栏（编辑 + 源管理子面板）
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-213 之后
+   - **依赖**：CHG-213
+   - **文件范围**（新建 + 修改）：
+     - `src/components/admin/videos/VideoDetailDrawer.tsx`（新建）— 侧边抽屉：元数据编辑表单 + 分集/源列表子面板
+     - `src/components/admin/videos/VideoTable.tsx` — 操作列"编辑"按钮点击打开抽屉
+   - **验收要点**：抽屉打开不影响列表滚动位置；可编辑元数据（标题/描述/年份/类型/国家）；可查看并管理该视频的所有 source
+
+---
+
+## SEQ-20260325-17 — Phase 2：界面三 — 视频源健康度中心
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 22:00
+- **最后更新时间**：2026-03-25 22:00
+- **目标**：重构 `/admin/sources` 页面为双 Tab 健康度中心，新增告警横幅、URL 替换 UI、源健康检测轻量方案
+- **范围**：源管理前后端 + Bull 队列 + 新 API
+- **依赖**：SEQ-20260325-15（Phase 0.5）+ CHG-202（源 URL 替换 API）
+- **方案来源**：`docs/video_admin_unified_plan_20260325.md` Phase 2
+
+### 任务列表（按执行顺序）
+
+1. CHG-215 — 空壳视频聚合查询 + 告警横幅组件
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：Phase 2 首个任务
+   - **依赖**：SEQ-20260325-16 全部完成
+   - **文件范围**：
+     - `src/api/db/queries/sources.ts` — 新增 `countShellVideos(db)` 聚合查询（已上架 + 全部源 is_active=false 的视频数）
+     - `src/api/services/ContentService.ts` — 新增 `getShellVideoCount()` Service 方法
+     - `src/api/routes/admin/content.ts` — 新增 `GET /admin/sources/shell-count` 端点
+     - `src/components/admin/sources/SourceHealthAlert.tsx`（新建）— 告警横幅 + [批量下架] 按钮
+   - **验收要点**：横幅显示空壳视频数；批量下架调 updateVisibility API + ES 同步
+
+2. CHG-216 — 源健康中心页面骨架 + 双 Tab 布局
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-215 之后
+   - **依赖**：CHG-215
+   - **文件范围**（重构）：
+     - `src/components/admin/sources/SourceTable.tsx` — 重构为双 Tab：失效源 (is_active=false) / 用户纠错 (submitted_by IS NOT NULL)
+     - `src/components/admin/AdminSourceList.tsx` — 整合告警横幅 + 双 Tab 表格
+   - **验收要点**：两个 Tab 独立筛选和分页；告警横幅在顶部
+
+3. CHG-217 — Tab 1 失效源表格 + URL 替换 UI
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-216 之后
+   - **依赖**：CHG-216 + CHG-202（源 URL 替换 API）
+   - **文件范围**（修改）：
+     - `src/components/admin/sources/SourceTable.tsx` — Tab 1 列：视频标题、S/E 坐标(TextCell)、source_url(UrlCell)、last_checked(DateCell)、操作([重新检测] [替换URL] [删除])
+     - `src/components/admin/sources/SourceUrlReplaceModal.tsx`（新建）— URL 替换模态框
+   - **验收要点**：重新检测复用 SourceVerifyButton；替换 URL 调 CHG-202 API；删除走现有 soft delete
+
+4. CHG-218 — Tab 2 用户纠错表格
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-217 之后
+   - **依赖**：CHG-217
+   - **文件范围**（修改）：
+     - `src/components/admin/sources/SourceTable.tsx` — Tab 2 列：视频标题、source_url、提交者、操作([采纳] [忽略])
+   - **验收要点**：[采纳] 调 approveSubmission；[忽略] 调 rejectSubmission；操作完成后列表自动刷新
+
+5. CHG-219 — 源健康检测轻量方案（事件上报 + Bull 队列）
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-218 之后
+   - **依赖**：CHG-218
+   - **文件范围**：
+     - `src/api/db/queries/sources.ts` — 新增 `markSourceNeedsCheck(db, sourceId)` 函数
+     - `src/api/routes/api/sources.ts`（新建）— `POST /api/sources/:id/report-error`（公开端点，rate limit）
+     - `src/api/workers/sourceHealthWorker.ts`（新建）— Bull job handler：HTTP HEAD `source_url`，10s 超时 → 更新 `is_active` + `last_checked`
+     - `src/api/lib/queue.ts` — 注册 `source-health-check` job type
+   - **验收要点**：播放器调 report-error → 源进入检测队列 → Worker 更新 is_active；手动重检仍正常工作
+   - **测试**：`tests/unit/api/sourceHealthCheck.test.ts`
+
+---
+
+## SEQ-20260325-18 — Phase 3：界面一 — 内容审核台
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 22:00
+- **最后更新时间**：2026-03-25 22:00
+- **目标**：全新 `/admin/moderation` 审核台页面，含左右分栏、内嵌播放器、快捷键、统计板，以及 E2E 主干测试
+- **范围**：全新页面 + AdminSidebar 菜单调整
+- **依赖**：CHG-201（审核 API）+ SEQ-20260325-15（ModernDataTable）
+- **方案来源**：`docs/video_admin_unified_plan_20260325.md` Phase 3
+
+### 任务列表（按执行顺序）
+
+1. CHG-220 — 审核统计 API + 待审列表 API
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：Phase 3 首个任务
+   - **依赖**：SEQ-20260325-17 全部完成
+   - **文件范围**：
+     - `src/api/db/queries/videos.ts` — 新增 `getModerationStats(db)` 函数（待审数、今日已审数、拦截率）
+     - `src/api/db/queries/videos.ts` — 新增 `listPendingReviewVideos(db, { page, limit })` 仅返回 pending_review 视频（含首条活跃源 URL）
+     - `src/api/services/VideoService.ts` — 新增 `moderationStats()` + `pendingReviewList()` 方法
+     - `src/api/routes/admin/videos.ts` — 新增 `GET /admin/videos/moderation-stats` + `GET /admin/videos/pending-review`
+   - **验收要点**：统计数据准确；待审列表含首条源 URL；API 返回格式正确
+   - **测试**：`tests/unit/api/moderationStats.test.ts`
+
+2. CHG-221 — 审核台页面骨架 + 路由 + AdminSidebar 菜单
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-220 之后
+   - **依赖**：CHG-220
+   - **文件范围**（新建 + 修改）：
+     - `src/app/[locale]/admin/moderation/page.tsx`（新建）— 审核台页面入口
+     - `src/components/admin/moderation/ModerationDashboard.tsx`（新建）— 主容器：顶部统计 + 左右分栏
+     - `src/components/admin/moderation/ModerationStats.tsx`（新建）— 顶部统计板（待审/今日已审/拦截率）
+     - `src/components/admin/AdminSidebar.tsx`（修改）— 新增"内容管理"分组：审核台 + 视频库 + 源健康中心
+   - **验收要点**：路由可访问；Sidebar 菜单正确显示；页面骨架含统计板 + 左右分栏占位
+
+3. CHG-222 — 左侧待审列表面板
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-221 之后
+   - **依赖**：CHG-221
+   - **文件范围**（新建）：
+     - `src/components/admin/moderation/ModerationList.tsx` — 紧凑列表：海报缩略图 + 标题 + 来源站 + 时间 + 选中高亮
+   - **验收要点**：仅显示 pending_review 视频；点击切换选中项；列表可独立滚动
+
+4. CHG-223 — 右侧审核抽屉 + 内嵌播放器
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-222 之后
+   - **依赖**：CHG-222 + CHG-201（审核 API）
+   - **文件范围**（新建）：
+     - `src/components/admin/moderation/ModerationDetail.tsx` — 审核详情：标题/描述/元数据 + 操作按钮组
+     - `src/components/admin/moderation/ModerationPlayer.tsx` — 内嵌播放器（复用 Video.js + HLS.js，取第一条活跃源）
+   - **验收要点**：播放器可正常加载 HLS 流；[通过] [拒绝] [封禁] 按钮调审核 API；审核后自动定位到下一条
+
+5. CHG-224 — 快捷键支持 + 上下条切换
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-223 之后
+   - **依赖**：CHG-223
+   - **文件范围**（新建 + 修改）：
+     - `src/components/admin/moderation/useModerationHotkeys.ts`（新建）— `A`=approve, `R`=reject, `B`=block, `←`/`→`=切换
+     - `src/components/admin/moderation/ModerationDashboard.tsx`（修改）— 接入 hotkeys hook
+   - **验收要点**：快捷键在审核台激活；审核操作后自动跳转下一条；方向键可浏览列表
+
+6. CHG-225 — E2E 主干测试（入库 → 审核 → 可见性验证）
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 22:00
+   - **计划开始**：CHG-224 之后
+   - **依赖**：CHG-224（审核台完整功能）
+   - **文件范围**（新建）：
+     - `tests/e2e/video-governance.spec.ts` — 主干链路测试
+   - **测试路径**：
+     - Happy path：入库(internal/pending_review) → 审核通过(public/approved) → 视频列表可见性确认
+     - Reject path：入库 → 审核拒绝(hidden/rejected) → 列表不可见
+   - **验收要点**：至少 2 条完整路径通过；覆盖 review_status + visibility_status 全流转

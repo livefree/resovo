@@ -499,6 +499,32 @@ export async function batchUnpublishVideos(db: Pool, ids: string[]): Promise<num
   return batchPublishVideos(db, ids, false)
 }
 
+// ── 更新：可见性切换（CHG-200）────────────────────────────────────
+
+/**
+ * 切换视频可见性状态（public ↔ hidden），同步更新 is_published 向后兼容。
+ * 仅允许 approved 状态的视频切换到 public。
+ */
+export async function updateVisibility(
+  db: Pool,
+  id: string,
+  visibility: VisibilityStatus
+): Promise<{ id: string; visibility_status: string; is_published: boolean } | null> {
+  const isPublished = visibility === 'public'
+  const result = await db.query<{
+    id: string; visibility_status: string; is_published: boolean
+  }>(
+    `UPDATE videos
+     SET visibility_status = $1,
+         is_published = $2,
+         updated_at = NOW()
+     WHERE id = $3 AND deleted_at IS NULL
+     RETURNING id, visibility_status, is_published`,
+    [visibility, isPublished, id]
+  )
+  return result.rows[0] ?? null
+}
+
 // ── 更新：豆瓣元数据（CHG-23）────────────────────────────────────
 
 export interface UpdateDoubanInput {

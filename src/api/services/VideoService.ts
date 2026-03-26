@@ -5,7 +5,7 @@
 
 import type { Pool } from 'pg'
 import type { Client as ESClient } from '@elastic/elasticsearch'
-import type { Video, VideoCard, VideoType, Pagination } from '@/types'
+import type { Video, VideoCard, VideoType, VisibilityStatus, Pagination } from '@/types'
 import * as videoQueries from '@/api/db/queries/videos'
 import type { CreateVideoInput, UpdateVideoMetaInput } from '@/api/db/queries/videos'
 
@@ -111,6 +111,15 @@ export class VideoService {
     return row
   }
 
+  async updateVisibility(
+    id: string,
+    visibility: VisibilityStatus
+  ): Promise<{ id: string; visibility_status: string; is_published: boolean } | null> {
+    const row = await videoQueries.updateVisibility(this.db, id, visibility)
+    if (row) void this.indexToES(id)
+    return row
+  }
+
   async batchPublish(ids: string[], isPublished: boolean): Promise<number> {
     const count = await videoQueries.batchPublishVideos(this.db, ids, isPublished)
     if (count > 0) ids.forEach((id) => void this.indexToES(id))
@@ -135,10 +144,12 @@ export class VideoService {
         country: string | null; episode_count: number
         rating: number | null; status: string; is_published: boolean
         content_rating: string
+        review_status: string; visibility_status: string
       }>(
         `SELECT id, short_id, slug, title, title_en, cover_url,
                 type, genre, year, country, episode_count,
-                rating, status, is_published, content_rating
+                rating, status, is_published, content_rating,
+                review_status, visibility_status
          FROM videos WHERE id = $1`,
         [videoId]
       )
@@ -164,6 +175,8 @@ export class VideoService {
           status: row.status,
           is_published: row.is_published,
           content_rating: row.content_rating,
+          review_status: row.review_status,
+          visibility_status: row.visibility_status,
           updated_at: new Date().toISOString(),
         },
       })

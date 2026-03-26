@@ -2992,3 +2992,15 @@
 - **修改文件**：`src/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar.tsx`
 - **变更内容**：+ 添加源站→"+"；全站增量采集→"全站增量"；全站全量采集→"全站全量"；批量增量采集→"批量增量"；批量全量采集→"批量全量"；导出 JSON→"导出"；导入 JSON→"导入"
 - **测试覆盖**：typecheck ✅ unit tests 599/599 ✅
+
+---
+
+### CHG-200 — ES indexToES 补充 review_status/visibility_status + updateVisibility 改造
+- **完成时间**：2026-03-25 22:45
+- **修改文件**：
+  - `src/api/services/VideoService.ts` — indexToES SELECT 补充 review_status/visibility_status；新增 updateVisibility() Service 方法
+  - `src/api/services/CrawlerService.ts` — indexToES SELECT 同步补充 review_status/visibility_status/content_rating
+  - `src/api/db/queries/videos.ts` — 新增 updateVisibility() 查询函数（同步 visibility_status + is_published）
+  - `src/api/routes/admin/videos.ts` — 新增 PATCH /admin/videos/:id/visibility 端点 + VisibilitySchema
+  - `tests/unit/api/updateVisibility.test.ts`（新建）— 5 个测试
+- **测试覆盖**：typecheck ✅ lint ✅ unit tests 604/604 ✅
