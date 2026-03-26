@@ -1,0 +1,22 @@
+/**
+ * /admin/moderation — 内容审核台页面（CHG-221）
+ * 爬虫采集内容的人工审核工作台入口
+ */
+
+import { Suspense } from 'react'
+import { AdminPageShell } from '@/components/admin/shared/layout/AdminPageShell'
+import { ModerationDashboard } from '@/components/admin/moderation/ModerationDashboard'
+
+export default function AdminModerationPage() {
+  return (
+    <AdminPageShell
+      title="内容审核台"
+      description="审核爬虫采集内容，执行通过、拒绝或封禁操作。"
+      testId="admin-moderation-page"
+    >
+      <Suspense>
+        <ModerationDashboard />
+      </Suspense>
+    </AdminPageShell>
+  )
+}

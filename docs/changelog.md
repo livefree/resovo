@@ -3358,3 +3358,15 @@
   - `tests/unit/components/admin/sources/SourceTable.test.tsx` — 更新 3 个失效测试的 testid 以匹配 ModernDataTable（source-row-* → modern-table-row-*）
 - **设计偏差修复**：Tab 1/2 均迁移至 ModernDataTable + Cell 组件体系，替换原 AdminTableFrame + inline HTML table
 - **测试覆盖**：664/664 全部通过；lint 0 warning
+
+## CHG-221 — 审核台页面骨架 + 路由 + AdminSidebar 菜单
+- **完成时间**：2026-03-26
+- **记录时间**：2026-03-26 05:15
+- **修改文件**：
+  - `src/app/[locale]/admin/moderation/page.tsx`（新建）— Server Component 审核台页面入口，`AdminPageShell` 包裹 `ModerationDashboard`
+  - `src/components/admin/moderation/ModerationStats.tsx`（新建）— 顶部三格统计板（待审/今日已审/拦截率），调用 `/admin/videos/moderation-stats`；loading 时显示骨架占位
+  - `src/components/admin/moderation/ModerationDashboard.tsx`（新建）— 主容器：顶部 Stats + 左右分栏骨架（左侧列表面板占位 / 右侧详情面板占位）
+  - `src/components/admin/AdminSidebar.tsx` — CONTENT_MENU 首位新增 `{ href: '/admin/moderation', label: '内容审核台', icon: '🔍' }`
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：左右分栏骨架为占位，CHG-222（列表面板）和 CHG-223（详情面板）将填充实际内容；`setSelectedVideoId` 为后续 CHG-222 传入回调预留的状态钩子
