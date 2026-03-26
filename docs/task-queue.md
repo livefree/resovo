@@ -2603,9 +2603,9 @@
 ---
 
 ## SEQ-20260325-18 — Phase 3：界面一 — 内容审核台
-- **状态**：🔄 执行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-25 22:00
-- **最后更新时间**：2026-03-26 05:28
+- **最后更新时间**：2026-03-26 06:05
 - **目标**：全新 `/admin/moderation` 审核台页面，含左右分栏、内嵌播放器、快捷键、统计板，以及 E2E 主干测试
 - **范围**：全新页面 + AdminSidebar 菜单调整
 - **依赖**：CHG-201（审核 API）+ SEQ-20260325-15（ModernDataTable）
@@ -2775,3 +2775,37 @@
      - `src/components/admin/sources/InactiveSourceTable.tsx`（新建）— Tab 1：基于 ModernDataTable，列：视频标题、S/E、UrlCell、DateCell、操作
      - `src/components/admin/sources/SubmissionTable.tsx`（新建）— Tab 2：基于 ModernDataTable，列：视频标题、UrlCell、提交者、操作
    - **验收要点**：SourceTable.tsx < 150 行；子组件各 < 200 行；各函数 ≤ 80 行；Tab 1/2 均使用 ModernDataTable Cell 组件；现有测试全部通过
+
+---
+
+## SEQ-20260326-21 — P1 规范修复：设计偏离修正
+- **状态**：🔄 执行中
+- **创建时间**：2026-03-26 15:45
+- **最后更新时间**：2026-03-26 15:45
+- **目标**：修复 CHG-204~229 代码审核中识别的 P1 级设计偏离问题（P0 已在 SEQ-20260326-20 处理完毕）
+- **范围**：前端组件 InactiveSourceTable + 新建 moderation 组件的 catch 块规范化
+- **依赖**：SEQ-20260325-18（Phase 3）已完成
+
+### 任务列表（按执行顺序）
+
+1. CHG-230 — InactiveSourceTable P1 修复（selectedIds 参数 + delete button type）
+   - **状态**：✅ 已完成
+   - **完成时间**：2026-03-26 15:50
+   - **实际开始**：2026-03-26 15:47
+   - **创建时间**：2026-03-26 15:45
+   - **计划开始**：立即
+   - **依赖**：无
+   - **问题描述**：
+     1. `buildColumns()` 接收 `selectedIds: string[]` 参数但 `void selectedIds` 无操作，靠 lint 抑制掩盖问题；应将参数从 buildColumns 中移除（state + BatchDeleteBar 保留）
+     2. 删除按钮缺少 `type="button"`（第 88 行）
+   - **文件范围**：`src/components/admin/sources/InactiveSourceTable.tsx`
+   - **验收要点**：buildColumns 不再接收或使用 selectedIds；删除按钮有 type="button"；lint + tests 通过
+
+2. CHG-231 — Moderation 组件 catch 块规范化
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-26 15:45
+   - **计划开始**：CHG-230 之后
+   - **依赖**：CHG-230
+   - **问题描述**：ModerationDetail/ModerationList/ModerationStats/ModerationDashboard 的 `catch { /* silent */ }` 等同于空 catch，违反 CLAUDE.md 精神；应在 dev 环境 console.warn，或在适当位置设置 error state
+   - **文件范围**：`src/components/admin/moderation/ModerationDetail.tsx`、`ModerationList.tsx`、`ModerationStats.tsx`、`ModerationDashboard.tsx`
+   - **验收要点**：所有 catch 块均为非空（含真实副作用：console.warn 或 setError）；原有测试通过

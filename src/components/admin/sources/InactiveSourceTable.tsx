@@ -39,7 +39,6 @@ export interface SourceRow {
 }
 
 function buildColumns(
-  selectedIds: string[],
   page: number,
   onReplace: (row: SourceRow) => void,
   onDelete: (row: SourceRow) => void,
@@ -85,7 +84,7 @@ function buildColumns(
             className="rounded bg-[var(--bg3)] px-2 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
             data-testid={`source-replace-btn-${row.id}`}
           >替换URL</button>
-          <button onClick={() => onDelete(row)}
+          <button type="button" onClick={() => onDelete(row)}
             className="rounded bg-red-900/30 px-2 py-0.5 text-xs text-red-400 hover:bg-red-900/60"
             data-testid={`source-delete-btn-${row.id}`}
           >删除</button>
@@ -93,7 +92,6 @@ function buildColumns(
       ),
     },
   ]
-  void selectedIds // selectedIds currently unused but kept for future batch selection
 }
 
 export function InactiveSourceTable() {
@@ -130,8 +128,8 @@ export function InactiveSourceTable() {
   }, [deleteTarget, fetchSources, page])
 
   const tableColumns = useMemo(
-    () => buildColumns(selectedIds, page, setReplaceTarget, setDeleteTarget, fetchSources),
-    [selectedIds, page, fetchSources]
+    () => buildColumns(page, setReplaceTarget, setDeleteTarget, fetchSources),
+    [page, fetchSources]
   )
 
   return (

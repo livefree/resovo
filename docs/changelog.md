@@ -3420,3 +3420,12 @@
   - E2E 采用 `page.route()` mock API，不依赖真实后端/数据库
   - 单一状态机驱动 `/admin/videos/pending-review`、`/admin/videos/:id/review`、`/admin/videos` 等接口，确保审核动作与列表结果联动一致
   - 用快捷键而不是按钮触发审核，顺带覆盖 `CHG-224` 的主交互链路
+
+## CHG-230 — InactiveSourceTable P1 修复
+- **完成时间**：2026-03-26
+- **修改文件**：`src/components/admin/sources/InactiveSourceTable.tsx`
+- **改动**：
+  1. 移除 `buildColumns()` 中 `selectedIds: string[]` 参数及 `void selectedIds` 无操作语句（P1-A）
+  2. 删除按钮补 `type="button"` 属性（P1-B）
+  3. `useMemo` deps 同步移除 `selectedIds`（不再需要）
+- **测试**：664/664 全部通过
