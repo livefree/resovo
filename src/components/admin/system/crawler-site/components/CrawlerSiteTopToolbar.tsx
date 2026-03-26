@@ -13,7 +13,6 @@ interface CrawlerSiteTopToolbarProps {
   selectedCount: number
   isAllIncrementalTriggering: boolean
   isAllFullTriggering: boolean
-  toast: { msg: string; ok: boolean } | null
   onAdd: () => void
   onTriggerIncremental: () => void
   onTriggerFull: () => void
@@ -30,7 +29,6 @@ export function CrawlerSiteTopToolbar({
   selectedCount,
   isAllIncrementalTriggering,
   isAllFullTriggering,
-  toast,
   onAdd,
   onTriggerIncremental,
   onTriggerFull,
@@ -137,7 +135,7 @@ export function CrawlerSiteTopToolbar({
             />
           </>
         )}
-        feedback={toast ? <span className={`text-sm ${toast.ok ? 'text-green-500' : 'text-red-500'}`}>{toast.msg}</span> : null}
+        feedback={null}
       />
 
       {showAdvanced ? <CrawlerSiteAdvancedFilters filters={filters} setFilters={setFilters} /> : null}

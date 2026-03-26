@@ -361,7 +361,6 @@ export function CrawlerSiteManager() {
         selectedCount={selected.size}
         isAllIncrementalTriggering={allCrawlTriggering['incremental-crawl']}
         isAllFullTriggering={allCrawlTriggering['full-crawl']}
-        toast={toast}
         onAdd={() => setShowAdd(true)}
         onTriggerIncremental={() => {
           void handleTriggerCrawl('incremental-crawl')

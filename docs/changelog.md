@@ -2969,3 +2969,18 @@
   - `CrawlerConfigTab`：移除 `CrawlerSiteOverviewStats` 及对应的 `overview` 解构
 - **根因**：用户要求将站点tab中监控标题与紧凑摘要之间的面板（CrawlerSiteOverviewStats）移到控制台tab
 - **测试覆盖**：typecheck ✅ lint ✅ unit tests 599/599 ✅
+
+---
+
+### CHG-198 — 监控框合并、完成通知、删除列表反馈
+- **完成时间**：2026-03-25 20:15
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/components/CrawlerConfigTab.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar.tsx`
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+- **变更内容**：
+  - `CrawlerConfigTab`：将"实时采集监控"标题与紧凑摘要行合并到同一 `<section>` 框内；新增 `useAdminToast` + `useEffect`/`useRef` 采集完成检测，当 runs[0] 从活跃状态转为终态时触发 toast（采集完成/部分失败/已取消/失败）；toast 显示在标题行右侧
+  - `CrawlerSiteTopToolbar`：移除 `toast` prop 和 `feedback={...}` 渲染（改为 `feedback={null}`）
+  - `CrawlerSiteManager`：移除向 `CrawlerSiteTopToolbar` 传递的 `toast={toast}` prop
+- **根因**：用户要求三项调整：框合并、完成提示、删除列表角落反馈
+- **测试覆盖**：typecheck ✅ lint ✅ unit tests 599/599 ✅
