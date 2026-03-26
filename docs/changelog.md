@@ -3370,3 +3370,13 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：左右分栏骨架为占位，CHG-222（列表面板）和 CHG-223（详情面板）将填充实际内容；`setSelectedVideoId` 为后续 CHG-222 传入回调预留的状态钩子
+
+## CHG-222 — 左侧待审列表面板
+- **完成时间**：2026-03-26
+- **记录时间**：2026-03-26 05:20
+- **修改文件**：
+  - `src/components/admin/moderation/ModerationList.tsx`（新建）— 审核台左侧待审列表，163 行；调用 `/admin/videos/pending-review`；紧凑条目含 `TableImageCell` 封面（32×48）、标题、分类标签、来源站、日期；选中态高亮（ring + 背景色）；独立滚动区域；上一页/下一页分页
+  - `src/components/admin/moderation/ModerationDashboard.tsx` — 左侧面板由占位改为接入 `ModerationList`，传入 `selectedId` + `onSelect` 回调
+- **新增依赖**：无（复用 `TableImageCell` / `apiClient`）
+- **数据库变更**：无
+- **注意事项**：使用 `TableImageCell` 代替裸 `<img>` 以避免 next/no-img-element lint warning；封面图由爬虫入库时存入的 `cover_url` 提供

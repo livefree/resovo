@@ -1,13 +1,14 @@
 /**
- * ModerationDashboard.tsx — 审核台主容器（CHG-221）
+ * ModerationDashboard.tsx — 审核台主容器（CHG-221/CHG-222）
  * 布局：顶部统计板 + 左右分栏（左：待审列表，右：审核抽屉）
- * 左右面板内容由后续任务 CHG-222/223 填充
+ * 右侧详情面板由后续任务 CHG-223 填充
  */
 
 'use client'
 
 import { useState } from 'react'
 import { ModerationStats } from '@/components/admin/moderation/ModerationStats'
+import { ModerationList } from '@/components/admin/moderation/ModerationList'
 
 export function ModerationDashboard() {
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null)
@@ -19,21 +20,12 @@ export function ModerationDashboard() {
 
       {/* 左右分栏 */}
       <div className="flex min-h-[600px] gap-4">
-        {/* 左侧：待审列表面板（CHG-222 填充） */}
+        {/* 左侧：待审列表面板 */}
         <div
           className="flex w-[400px] shrink-0 flex-col rounded-lg border border-[var(--border)] bg-[var(--bg2)]"
           data-testid="moderation-list-panel"
         >
-          <div className="border-b border-[var(--border)] px-4 py-3">
-            <p className="text-sm font-medium text-[var(--text)]">待审核列表</p>
-          </div>
-          <div
-            className="flex flex-1 cursor-pointer items-center justify-center p-6"
-            onClick={() => setSelectedVideoId('demo-id')}
-            data-testid="moderation-list-placeholder"
-          >
-            <p className="text-sm text-[var(--muted)]">列表面板（CHG-222）</p>
-          </div>
+          <ModerationList selectedId={selectedVideoId} onSelect={setSelectedVideoId} />
         </div>
 
         {/* 右侧：审核详情抽屉（CHG-223 填充） */}
