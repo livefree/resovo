@@ -1,0 +1,7 @@
+export { TableTextCell } from '@/components/admin/shared/modern-table/cells/TableTextCell'
+export { TableSwitchCell } from '@/components/admin/shared/modern-table/cells/TableSwitchCell'
+export { TableUrlCell } from '@/components/admin/shared/modern-table/cells/TableUrlCell'
+export { TableDateCell } from '@/components/admin/shared/modern-table/cells/TableDateCell'
+export { TableImageCell } from '@/components/admin/shared/modern-table/cells/TableImageCell'
+export { TableBadgeCell } from '@/components/admin/shared/modern-table/cells/TableBadgeCell'
+export { TableCheckboxCell } from '@/components/admin/shared/modern-table/cells/TableCheckboxCell'

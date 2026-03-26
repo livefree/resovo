@@ -2324,7 +2324,7 @@
 ## SEQ-20260325-15 — Phase 0.5：ModernDataTable 表格基建
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-25 22:00
-- **最后更新时间**：2026-03-25 22:43
+- **最后更新时间**：2026-03-25 22:55
 - **目标**：交付可复用的 ModernDataTable 表格骨架 + Cell 组件库 + 状态管理 Hook + 列宽拖拽，为 Phase 1~3 所有表格提供底座
 - **范围**：`src/components/admin/shared/modern-table/` 全新目录
 - **依赖**：SEQ-20260325-14（Phase 0）全部完成
@@ -2349,9 +2349,11 @@
    - **测试**：`tests/unit/components/modern-table/ModernDataTable.test.tsx`
 
 2. CHG-205 — Cell 组件库（6 个标准 Cell）
-   - **状态**：⬜ 待开始
+   - **状态**：✅ 已完成
    - **创建时间**：2026-03-25 22:00
    - **计划开始**：CHG-204 之后
+   - **实际开始**：2026-03-25 22:48
+   - **完成时间**：2026-03-25 22:55
    - **依赖**：CHG-204（类型定义）
    - **文件范围**（新建）：
      - `src/components/admin/shared/modern-table/cells/TableTextCell.tsx` — nowrap + 溢出 Tooltip

@@ -3058,3 +3058,28 @@
   - 补齐 CHG-204 单测，覆盖空态、列宽、总宽、行高样式、排序指示器
 - **测试覆盖**：`npx tsc --noEmit --incremental false` ✅ `npx eslint ...modern-table...` ✅ `npm run test -- --run tests/unit/components/modern-table/ModernDataTable.test.tsx` ✅
 - **备注**：当前 worktree 权限限制会阻止 `npm run typecheck`/`npm run lint` 生成文件，已使用等价校验命令完成验证
+
+---
+
+### CHG-205 — Cell 组件库（6 个标准 Cell）
+- **完成时间**：2026-03-25 22:55
+- **修改文件**：
+  - `src/components/admin/shared/modern-table/cells/TableTextCell.tsx`
+  - `src/components/admin/shared/modern-table/cells/TableSwitchCell.tsx`
+  - `src/components/admin/shared/modern-table/cells/TableUrlCell.tsx`
+  - `src/components/admin/shared/modern-table/cells/TableDateCell.tsx`
+  - `src/components/admin/shared/modern-table/cells/TableImageCell.tsx`
+  - `src/components/admin/shared/modern-table/cells/TableBadgeCell.tsx`
+  - `src/components/admin/shared/modern-table/cells/TableCheckboxCell.tsx`
+  - `src/components/admin/shared/modern-table/cells/index.ts`
+  - `tests/unit/components/modern-table/cells.test.tsx`（新建）
+  - `docs/task-queue.md`
+- **变更内容**：
+  - 新建 7 个可复用 Cell：Text / Switch / Url / Date / Image / Badge / Checkbox
+  - `TableSwitchCell` 支持乐观切换与失败回滚
+  - `TableUrlCell` 支持截断展示、hover 展开、点击复制反馈
+  - `TableDateCell` 支持短日期与相对时间展示
+  - 新建 `cells/index.ts` 统一导出
+  - 新增单测覆盖 7 条核心行为
+- **测试覆盖**：`./node_modules/.bin/tsc --noEmit --incremental false` ✅ `./node_modules/.bin/eslint ...cells...` ✅ `npm run test -- --run tests/unit/components/modern-table/cells.test.tsx` ✅
+- **备注**：worktree 权限限制仍会阻止 `npm run typecheck`/`npm run lint` 写入生成文件，故使用等价离线校验命令
