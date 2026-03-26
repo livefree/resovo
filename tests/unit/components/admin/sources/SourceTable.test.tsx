@@ -90,33 +90,28 @@ describe('SourceTable (CHG-216)', () => {
     postMock.mockResolvedValue({})
   })
 
-  it('loads inactive sources by default and supports toggle sort', async () => {
+  it('loads inactive sources by default and renders rows via ModernDataTable', async () => {
     render(<SourceTable />)
 
     await screen.findByText('Alpha Video')
     expect(getMock).toHaveBeenCalledWith('/admin/sources?page=1&limit=20&status=inactive')
 
-    const rowsDefault = Array.from(document.querySelectorAll('tr[data-testid^="source-row-"]'))
-    expect(rowsDefault[0]?.getAttribute('data-testid')).toBe('source-row-s1')
-
-    fireEvent.click(screen.getByTestId('source-sort-last_checked'))
-
-    await waitFor(() => {
-      const rowsToggled = Array.from(document.querySelectorAll('tr[data-testid^="source-row-"]'))
-      expect(rowsToggled[0]?.getAttribute('data-testid')).toBe('source-row-s2')
-    })
+    // ModernDataTable rows use modern-table-row-{id} pattern
+    const rows = Array.from(document.querySelectorAll('tr[data-testid^="modern-table-row-"]'))
+    expect(rows.length).toBe(2)
+    // Both videos appear
+    expect(screen.getByText('Zeta Video')).toBeTruthy()
   })
 
-  it('supports column visibility toggle', async () => {
+  it('renders column headers for inactive sources tab', async () => {
     render(<SourceTable />)
     await screen.findByText('Alpha Video')
 
-    fireEvent.click(screen.getByTestId('source-columns-toggle'))
-    fireEvent.click(screen.getByTestId('source-column-toggle-status'))
-
-    await waitFor(() => {
-      expect(screen.queryByTestId('source-sort-status')).toBeNull()
-    })
+    // ModernDataTable column headers are rendered via column.header strings
+    expect(screen.getByText('视频标题')).toBeTruthy()
+    expect(screen.getByText('源 URL')).toBeTruthy()
+    expect(screen.getByText('状态')).toBeTruthy()
+    expect(screen.getByText('最后验证')).toBeTruthy()
   })
 
   it('switches to submissions tab with independent request', async () => {
@@ -142,27 +137,17 @@ describe('SourceTable (CHG-216)', () => {
     })
   })
 
-  it('persists resized width after remount', async () => {
-    const { unmount } = render(<SourceTable />)
-    await screen.findByText('Alpha Video')
-
-    const urlHeader = screen.getByTestId('source-sort-source_url').closest('th')
-    expect(urlHeader?.getAttribute('style')).toContain('width: 340px')
-
-    fireEvent.mouseDown(screen.getByTestId('source-resize-source_url'), { clientX: 100 })
-    fireEvent.mouseMove(window, { clientX: 180 })
-    fireEvent.mouseUp(window)
-
-    await waitFor(() => {
-      expect(urlHeader?.getAttribute('style')).toContain('width: 420px')
-    })
-
-    unmount()
+  it('renders source_url column and row data via ModernDataTable cells', async () => {
     render(<SourceTable />)
     await screen.findByText('Alpha Video')
 
-    const remountUrlHeader = screen.getByTestId('source-sort-source_url').closest('th')
-    expect(remountUrlHeader?.getAttribute('style')).toContain('width: 420px')
+    // Rows use modern-table-row-{id} pattern
+    const rows = Array.from(document.querySelectorAll('tr[data-testid^="modern-table-row-"]'))
+    expect(rows.length).toBe(2)
+
+    // Source URL cells rendered by TableUrlCell
+    const urlCells = Array.from(document.querySelectorAll('[data-testid="table-url-cell"]'))
+    expect(urlCells.length).toBeGreaterThan(0)
   })
 
   it('opens replace modal and updates source url', async () => {

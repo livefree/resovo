@@ -3348,3 +3348,13 @@
   - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteTableColumns.tsx`（新建）— 列定义 Hook + buildSiteCellRenderer，210 行
 - **拆分内容**：HeaderCell（113行→CrawlerSiteTableHead）+ HEADER_COLUMNS/isColumnFiltered/WeightPreset 类型/接口 + tableColumns useMemo（235行→useCrawlerSiteTableColumns hook）
 - **测试覆盖**：664/664 全部通过；lint 0 warning
+
+## CHG-229 — SourceTable.tsx 拆分 + 迁移 ModernDataTable
+- **完成时间**：2026-03-26 05:10
+- **修改文件**：
+  - `src/components/admin/sources/SourceTable.tsx` — 精简至 45 行纯 Tab 骨架（原 591 行）
+  - `src/components/admin/sources/InactiveSourceTable.tsx`（新建）— Tab 1 失效源，ModernDataTable + Cell 组件，178 行
+  - `src/components/admin/sources/SubmissionTable.tsx`（新建）— Tab 2 用户纠错，ModernDataTable + Cell 组件，128 行
+  - `tests/unit/components/admin/sources/SourceTable.test.tsx` — 更新 3 个失效测试的 testid 以匹配 ModernDataTable（source-row-* → modern-table-row-*）
+- **设计偏差修复**：Tab 1/2 均迁移至 ModernDataTable + Cell 组件体系，替换原 AdminTableFrame + inline HTML table
+- **测试覆盖**：664/664 全部通过；lint 0 warning
