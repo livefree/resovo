@@ -2428,9 +2428,9 @@
 ---
 
 ## SEQ-20260325-16 — Phase 1：界面二 — 全量视频治理库
-- **状态**：⬜ 待开始
+- **状态**：🔄 执行中
 - **创建时间**：2026-03-25 22:00
-- **最后更新时间**：2026-03-25 22:00
+- **最后更新时间**：2026-03-25 23:46
 - **目标**：基于 ModernDataTable 重构 `/admin/videos` 页面，新增 visibility 切换、源健康度 badge、审核状态筛选、详情侧边栏
 - **范围**：视频管理前后端 + 现有 `src/components/admin/videos/` 重构
 - **依赖**：SEQ-20260325-14（Phase 0）+ SEQ-20260325-15（Phase 0.5）全部完成
@@ -2439,14 +2439,17 @@
 ### 任务列表（按执行顺序）
 
 1. CHG-209 — listAdminVideos 筛选增强 + 源健康聚合查询
-   - **状态**：⬜ 待开始
+   - **状态**：✅ 已完成
    - **创建时间**：2026-03-25 22:00
    - **计划开始**：Phase 1 首个任务
+   - **实际开始**：2026-03-25 23:44
+   - **完成时间**：2026-03-25 23:46
    - **依赖**：SEQ-20260325-15 全部完成
    - **文件范围**：
-     - `src/api/db/queries/videos.ts` — `listAdminVideos()` 新增 `visibility_status`、`review_status` 筛选参数；新增子查询聚合每个视频的活跃源数/总源数
-     - `src/api/services/VideoService.ts` — `adminList()` 透传新筛选参数
-     - `src/api/routes/admin/videos.ts` — `GET /admin/videos` 接受新 query params
+      - `src/api/db/queries/videos.ts` — `listAdminVideos()` 新增 `visibility_status`、`review_status` 筛选参数；新增子查询聚合每个视频的活跃源数/总源数
+      - `src/api/services/VideoService.ts` — `adminList()` 透传新筛选参数
+      - `src/api/routes/admin/videos.ts` — `GET /admin/videos` 接受新 query params
+      - `tests/unit/api/admin-video-list.test.ts` — 覆盖新筛选参数与聚合字段返回
    - **验收要点**：可按 visibility_status/review_status 筛选；返回数据含 active_source_count/total_source_count
    - **测试**：扩展现有视频列表测试
 

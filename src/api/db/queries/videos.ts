@@ -262,6 +262,8 @@ export interface AdminVideoListFilters {
   q?: string
   /** 按来源站点 key 筛选（video_sources.source_name） */
   siteKey?: string
+  visibilityStatus?: VisibilityStatus
+  reviewStatus?: ReviewStatus
   page: number
   limit: number
 }
@@ -299,6 +301,16 @@ export async function listAdminVideos(
     params.push(filters.siteKey)
   }
 
+  if (filters.visibilityStatus) {
+    conditions.push(`v.visibility_status = $${idx++}`)
+    params.push(filters.visibilityStatus)
+  }
+
+  if (filters.reviewStatus) {
+    conditions.push(`v.review_status = $${idx++}`)
+    params.push(filters.reviewStatus)
+  }
+
   const where = conditions.join(' AND ')
   const offset = (filters.page - 1) * filters.limit
 
@@ -306,12 +318,17 @@ export async function listAdminVideos(
     db.query<DbVideoRow & { source_count: string }>(
       `SELECT v.id, v.short_id, v.title, v.title_en, v.cover_url, v.type,
               v.year, v.is_published, v.created_at, v.updated_at,
+              v.visibility_status, v.review_status,
               '' AS slug, '' AS description, NULL AS source_category, NULL AS genre, '' AS country,
               0 AS episode_count, 'completed' AS status, NULL AS rating,
               '[]'::json AS director, '[]'::json AS "cast", '[]'::json AS writers,
               NULL AS subtitle_langs,
               (SELECT COUNT(*) FROM video_sources
                WHERE video_id = v.id AND is_active = true AND deleted_at IS NULL)::text AS source_count
+              ,(SELECT COUNT(*) FROM video_sources
+                WHERE video_id = v.id AND is_active = true AND deleted_at IS NULL)::text AS active_source_count
+              ,(SELECT COUNT(*) FROM video_sources
+                WHERE video_id = v.id AND deleted_at IS NULL)::text AS total_source_count
        FROM videos v
        WHERE ${where}
        ORDER BY v.created_at DESC

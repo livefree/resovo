@@ -71,6 +71,8 @@ export class VideoService {
     type?: import('@/types').VideoType
     q?: string
     siteKey?: string
+    visibilityStatus?: import('@/types').VisibilityStatus
+    reviewStatus?: import('@/types').ReviewStatus
     page?: number
     limit?: number
   }): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
@@ -82,6 +84,8 @@ export class VideoService {
       type: params.type,
       q: params.q,
       siteKey: params.siteKey,
+      visibilityStatus: params.visibilityStatus,
+      reviewStatus: params.reviewStatus,
       page,
       limit,
     })

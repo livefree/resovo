@@ -3136,3 +3136,21 @@
   - `CrawlerSiteManager` 透传新的列宽更新能力，测试同步到 `modern-table-*` 选择器
 - **测试覆盖**：`npm run test -- --run tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
 - **备注**：当前环境执行时 `vitest` 命令不可用（`sh: vitest: command not found`），需安装依赖后复跑验证
+
+---
+
+### CHG-209 — listAdminVideos 筛选增强 + 源健康聚合查询
+- **完成时间**：2026-03-25 23:46
+- **修改文件**：
+  - `src/api/db/queries/videos.ts`
+  - `src/api/services/VideoService.ts`
+  - `src/api/routes/admin/videos.ts`
+  - `tests/unit/api/admin-video-list.test.ts`（新建）
+  - `docs/task-queue.md`
+- **变更内容**：
+  - `listAdminVideos()` 新增 `visibilityStatus`、`reviewStatus` 筛选
+  - 返回字段补充 `active_source_count` 与 `total_source_count`，为后续视频治理表格提供源健康聚合数据
+  - `VideoService.adminList()` 与 `GET /admin/videos` 同步透传新筛选参数
+  - 新增查询层单测，校验筛选 SQL 与聚合字段返回
+- **测试覆盖**：`npm run test -- --run tests/unit/api/admin-video-list.test.ts`
+- **备注**：当前环境执行时 `vitest` 命令不可用（`sh: vitest: command not found`），需安装依赖后复跑验证

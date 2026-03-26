@@ -60,6 +60,8 @@ const CreateVideoSchema = VideoMetaSchema.required({ title: true, type: true })
 const ListQuerySchema = z.object({
   status: z.enum(['pending', 'published', 'unpublished', 'all']).optional().default('all'),
   type: z.enum(['movie', 'series', 'anime', 'variety', 'documentary', 'short', 'sports', 'music', 'news', 'kids', 'other'] as const).optional(),
+  visibilityStatus: z.enum(['public', 'internal', 'hidden'] as const).optional(),
+  reviewStatus: z.enum(['pending_review', 'approved', 'rejected'] as const).optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   q: z.string().max(100).optional(),
@@ -84,8 +86,17 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const { status, type, page, limit, q, site } = parsed.data
-    const result = await videoService.adminList({ status, type, page, limit, q, siteKey: site })
+    const { status, type, visibilityStatus, reviewStatus, page, limit, q, site } = parsed.data
+    const result = await videoService.adminList({
+      status,
+      type,
+      visibilityStatus,
+      reviewStatus,
+      page,
+      limit,
+      q,
+      siteKey: site,
+    })
     return reply.send(result)
   })
 
