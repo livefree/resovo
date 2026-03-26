@@ -261,6 +261,30 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
     return reply.code(201).send({ data: result })
   })
 
+  // ── GET /admin/videos/moderation-stats ─────────────────────
+  // CHG-220: 审核台统计板数据
+  fastify.get('/admin/videos/moderation-stats', { preHandler: auth }, async (_request, reply) => {
+    const stats = await videoService.moderationStats()
+    return reply.send({ data: stats })
+  })
+
+  // ── GET /admin/videos/pending-review ───────────────────────
+  // CHG-220: 待审视频列表（含首条活跃源 URL）
+  fastify.get('/admin/videos/pending-review', { preHandler: auth }, async (request, reply) => {
+    const PendingQuerySchema = z.object({
+      page: z.coerce.number().int().min(1).optional().default(1),
+      limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+    })
+    const parsed = PendingQuerySchema.safeParse(request.query)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+    const result = await videoService.pendingReviewList(parsed.data)
+    return reply.send(result)
+  })
+
   // ── POST /admin/videos/:id/douban-sync ───────────────────────
   // CHG-23: admin only，手动触发豆瓣元数据同步
   fastify.post('/admin/videos/:id/douban-sync', { preHandler: adminOnly }, async (request, reply) => {

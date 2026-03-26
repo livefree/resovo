@@ -781,3 +781,108 @@ export async function upsertVideoAliases(
     )
   }
 }
+
+// ── 审核台：统计 + 待审列表（CHG-220）─────────────────────────────
+
+export interface ModerationStats {
+  pendingCount: number
+  todayReviewedCount: number
+  /** 最近 7 天拒绝数 / (通过+拒绝)数；无数据时为 null */
+  interceptRate: number | null
+}
+
+export async function getModerationStats(db: Pool): Promise<ModerationStats> {
+  const [pending, todayReviewed, recent] = await Promise.all([
+    db.query<{ count: string }>(
+      `SELECT COUNT(*) FROM videos
+       WHERE review_status = 'pending_review' AND deleted_at IS NULL`
+    ),
+    db.query<{ count: string }>(
+      `SELECT COUNT(*) FROM videos
+       WHERE review_status IN ('approved','rejected')
+         AND reviewed_at >= CURRENT_DATE
+         AND deleted_at IS NULL`
+    ),
+    db.query<{ approved: string; rejected: string }>(
+      `SELECT
+         COUNT(*) FILTER (WHERE review_status = 'approved') AS approved,
+         COUNT(*) FILTER (WHERE review_status = 'rejected') AS rejected
+       FROM videos
+       WHERE review_status IN ('approved','rejected')
+         AND reviewed_at >= NOW() - INTERVAL '7 days'
+         AND deleted_at IS NULL`
+    ),
+  ])
+
+  const approved = parseInt(recent.rows[0]?.approved ?? '0')
+  const rejected = parseInt(recent.rows[0]?.rejected ?? '0')
+  const total7d = approved + rejected
+
+  return {
+    pendingCount: parseInt(pending.rows[0]?.count ?? '0'),
+    todayReviewedCount: parseInt(todayReviewed.rows[0]?.count ?? '0'),
+    interceptRate: total7d > 0 ? Math.round((rejected / total7d) * 1000) / 10 : null,
+  }
+}
+
+export interface PendingReviewVideoRow {
+  id: string
+  shortId: string
+  title: string
+  type: string
+  coverUrl: string | null
+  year: number | null
+  siteKey: string | null
+  siteName: string | null
+  firstSourceUrl: string | null
+  createdAt: string
+}
+
+export async function listPendingReviewVideos(
+  db: Pool,
+  params: { page: number; limit: number }
+): Promise<{ rows: PendingReviewVideoRow[]; total: number }> {
+  const offset = (params.page - 1) * params.limit
+
+  const [rows, countResult] = await Promise.all([
+    db.query<{
+      id: string; short_id: string; title: string; type: string
+      cover_url: string | null; year: number | null
+      site_key: string | null; site_name: string | null
+      first_source_url: string | null; created_at: string
+    }>(
+      `SELECT v.id, v.short_id, v.title, v.type, v.cover_url, v.year,
+              cs.key AS site_key, cs.name AS site_name,
+              (SELECT s.source_url FROM video_sources s
+               WHERE s.video_id = v.id AND s.is_active = true AND s.deleted_at IS NULL
+               LIMIT 1) AS first_source_url,
+              v.created_at
+       FROM videos v
+       LEFT JOIN crawler_sites cs ON v.site_id = cs.id
+       WHERE v.review_status = 'pending_review' AND v.deleted_at IS NULL
+       ORDER BY v.created_at ASC
+       LIMIT $1 OFFSET $2`,
+      [params.limit, offset]
+    ),
+    db.query<{ count: string }>(
+      `SELECT COUNT(*) FROM videos
+       WHERE review_status = 'pending_review' AND deleted_at IS NULL`
+    ),
+  ])
+
+  return {
+    rows: rows.rows.map((r) => ({
+      id: r.id,
+      shortId: r.short_id,
+      title: r.title,
+      type: r.type,
+      coverUrl: r.cover_url,
+      year: r.year,
+      siteKey: r.site_key,
+      siteName: r.site_name,
+      firstSourceUrl: r.first_source_url,
+      createdAt: r.created_at,
+    })),
+    total: parseInt(countResult.rows[0]?.count ?? '0'),
+  }
+}

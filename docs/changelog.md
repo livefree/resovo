@@ -3319,3 +3319,14 @@
   - 冷却限速使用模块级 `Map<string, number>`（无需引入新依赖），同一源 5 分钟内只入队一次
   - 源不存在返回 404，冷却期内返回 429
 - **测试覆盖**：`tests/unit/api/sourceHealthCheck.test.ts` 5 个用例 ✅（657/657 全部通过）
+
+## CHG-220 — 审核统计 API + 待审列表 API
+- **完成时间**：2026-03-26 04:45
+- **修改文件**：
+  - `src/api/db/queries/videos.ts` — 新增 `getModerationStats()` + `listPendingReviewVideos()` + 对应接口类型
+  - `src/api/services/VideoService.ts` — 新增 `moderationStats()` + `pendingReviewList()` 方法
+  - `src/api/routes/admin/videos.ts` — 新增 `GET /admin/videos/moderation-stats` + `GET /admin/videos/pending-review`
+  - `tests/unit/api/moderationStats.test.ts`（新建）— 7 个用例
+- **统计逻辑**：pendingCount 直查 pending_review 行数；todayReviewedCount 以 reviewed_at >= CURRENT_DATE 查已审核；interceptRate 取最近 7 天 rejected/(approved+rejected)×100%，无数据时返回 null
+- **待审列表**：含 firstSourceUrl 子查询（取第一条 is_active=true 的源）；按 created_at ASC 排序（最早入库优先审核）
+- **测试覆盖**：`tests/unit/api/moderationStats.test.ts` 7 个用例 ✅（664/664 全部通过）

@@ -7,7 +7,12 @@ import type { Pool } from 'pg'
 import type { Client as ESClient } from '@elastic/elasticsearch'
 import type { Video, VideoCard, VideoType, VisibilityStatus, Pagination } from '@/types'
 import * as videoQueries from '@/api/db/queries/videos'
-import type { CreateVideoInput, UpdateVideoMetaInput } from '@/api/db/queries/videos'
+import type {
+  CreateVideoInput,
+  UpdateVideoMetaInput,
+  ModerationStats,
+  PendingReviewVideoRow,
+} from '@/api/db/queries/videos'
 
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 100
@@ -145,6 +150,22 @@ export class VideoService {
     const count = await videoQueries.batchUnpublishVideos(this.db, ids)
     if (count > 0) ids.forEach((id) => void this.indexToES(id))
     return count
+  }
+
+  // ── 审核台（CHG-220）────────────────────────────────────────────
+
+  async moderationStats(): Promise<ModerationStats> {
+    return videoQueries.getModerationStats(this.db)
+  }
+
+  async pendingReviewList(params: {
+    page: number
+    limit: number
+  }): Promise<{ data: PendingReviewVideoRow[]; total: number; page: number; limit: number }> {
+    const page = Math.max(1, params.page)
+    const limit = Math.min(MAX_LIMIT, Math.max(1, params.limit))
+    const { rows, total } = await videoQueries.listPendingReviewVideos(this.db, { page, limit })
+    return { data: rows, total, page, limit }
   }
 
   // ── ES 同步（异步，不阻塞响应）──────────────────────────────────
