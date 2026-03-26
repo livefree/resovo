@@ -3339,3 +3339,12 @@
 - **拆分内容**：VideoAdminRow 接口、VideoColumnId 类型、VIDEO_COLUMNS/COLUMN_LABELS/SORTABLE_MAP 常量、toComparableValue/getTypeLabel 等辅助函数、useVideoTableColumns hook（含 buildDataColumn switch）全部迁至新文件
 - **lint fix**：handleSelectAll 用 useCallback 包裹并加入 tableColumns useMemo 依赖数组，消除 react-hooks/exhaustive-deps warning
 - **测试覆盖**：664/664 全部通过；lint 0 warning
+
+## CHG-228 — CrawlerSiteTable.tsx 拆分
+- **完成时间**：2026-03-26 05:01
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx` — 精简至 122 行（原 599 行）
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTableHead.tsx`（新建）— HeaderCell 组件 + 辅助函数 + 常量，164 行
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteTableColumns.tsx`（新建）— 列定义 Hook + buildSiteCellRenderer，210 行
+- **拆分内容**：HeaderCell（113行→CrawlerSiteTableHead）+ HEADER_COLUMNS/isColumnFiltered/WeightPreset 类型/接口 + tableColumns useMemo（235行→useCrawlerSiteTableColumns hook）
+- **测试覆盖**：664/664 全部通过；lint 0 warning
