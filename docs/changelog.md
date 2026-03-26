@@ -3380,3 +3380,14 @@
 - **新增依赖**：无（复用 `TableImageCell` / `apiClient`）
 - **数据库变更**：无
 - **注意事项**：使用 `TableImageCell` 代替裸 `<img>` 以避免 next/no-img-element lint warning；封面图由爬虫入库时存入的 `cover_url` 提供
+
+## CHG-223 — 右侧审核抽屉 + 内嵌播放器
+- **完成时间**：2026-03-26
+- **记录时间**：2026-03-26 05:28
+- **修改文件**：
+  - `src/components/admin/moderation/ModerationPlayer.tsx`（新建）— dynamic import `YTPlayer`，接收 `sourceUrl/title/coverUrl`；无源时显示"暂无可用播放源"占位，44 行
+  - `src/components/admin/moderation/ModerationDetail.tsx`（新建）— 右侧详情面板，160 行；并发调用 `GET /admin/videos/:id` + `GET /admin/sources?videoId=...&status=active&limit=1`；含元数据展示 + ModerationPlayer + 通过/拒绝按钮（调 `POST /admin/videos/:id/review`）
+  - `src/components/admin/moderation/ModerationDashboard.tsx` — 接入 `ModerationDetail`；引入 `listRefreshKey` state，审核完成后 +1 强制 ModerationList 重新挂载刷新列表
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：YTPlayer 用 dynamic import 避免 SSR；Player 导出名为 `YTPlayer`（非 `Player`）；sources API 用 `status=active` 参数过滤活跃源
