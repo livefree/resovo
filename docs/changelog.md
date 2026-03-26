@@ -3171,3 +3171,18 @@
   - 单测补充：筛选器 URL 写入、表格请求参数透传
 - **测试覆盖**：`npm run test -- --run tests/unit/components/admin/videos/VideoFilters.test.tsx tests/unit/components/admin/videos/VideoTable.test.tsx`
 - **备注**：当前环境执行时 `vitest` 命令不可用（`sh: vitest: command not found`），需安装依赖后复跑验证
+
+---
+
+### CHG-211 — 视频表格列定义 + ModernDataTable 接入
+- **完成时间**：2026-03-26 00:05
+- **修改文件**：
+  - `src/components/admin/videos/VideoTable.tsx`
+  - `tests/unit/components/admin/videos/VideoTable.test.tsx`
+  - `docs/task-queue.md`
+- **变更内容**：
+  - `VideoTable` 改为 `ModernDataTable` 列定义渲染，保留分页、批量勾选、排序、列显隐和列宽持久化
+  - 视频表格列重组为封面、标题 + `short_id`、类型、源健康度、可见性、审核状态、操作，并全部落到 ModernTable Cell 组件
+  - 可见性列先以禁用态 `TableSwitchCell` 展示当前状态；源健康度先展示 `active/total` 聚合结果，为 `CHG-212` 的交互与颜色映射预留数据位
+  - 单测同步迁移到 ModernDataTable DOM，覆盖默认排序、列显隐、列宽持久化、新筛选参数透传和新列渲染
+- **测试覆盖**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/videos/VideoTable.test.tsx` ✅

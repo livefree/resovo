@@ -2430,7 +2430,7 @@
 ## SEQ-20260325-16 — Phase 1：界面二 — 全量视频治理库
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-25 22:00
-- **最后更新时间**：2026-03-25 23:47
+- **最后更新时间**：2026-03-26 00:05
 - **目标**：基于 ModernDataTable 重构 `/admin/videos` 页面，新增 visibility 切换、源健康度 badge、审核状态筛选、详情侧边栏
 - **范围**：视频管理前后端 + 现有 `src/components/admin/videos/` 重构
 - **依赖**：SEQ-20260325-14（Phase 0）+ SEQ-20260325-15（Phase 0.5）全部完成
@@ -2468,13 +2468,17 @@
    - **验收要点**：筛选栏含搜索框 + 类型 + 可见性 + 审核状态 4 个筛选器；筛选变更触发列表刷新
 
 3. CHG-211 — 视频表格列定义 + ModernDataTable 接入
-   - **状态**：⬜ 待开始
+   - **状态**：✅ 已完成
    - **创建时间**：2026-03-25 22:00
    - **计划开始**：CHG-210 之后
+   - **实际开始**：2026-03-25 23:55
+   - **完成时间**：2026-03-26 00:05
    - **依赖**：CHG-210（页面骨架）
    - **文件范围**（修改）：
      - `src/components/admin/videos/VideoTable.tsx` — 用 `TableColumn<VideoRow>` 定义列：封面(ImageCell 40×56)、标题+short_id(TextCell)、类型(BadgeCell)、源健康度(BadgeCell)、可见性(SwitchCell)、审核状态(BadgeCell)、操作(按钮组)
+     - `tests/unit/components/admin/videos/VideoTable.test.tsx` — 同步断言 ModernDataTable 排序、列显隐、列宽持久化与新列渲染
    - **验收要点**：所有列使用 ModernDataTable Cell 组件；行高固定 48px；封面不撑行
+   - **测试**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/videos/VideoTable.test.tsx`
 
 4. CHG-212 — 可见性 Switch + 源健康 Badge 交互实现
    - **状态**：⬜ 待开始
