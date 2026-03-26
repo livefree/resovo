@@ -4,11 +4,13 @@ import { SourceTable } from '@/components/admin/sources/SourceTable'
 
 const getMock = vi.fn()
 const deleteMock = vi.fn()
+const patchMock = vi.fn()
 
 vi.mock('@/lib/api-client', () => ({
   apiClient: {
     get: (...args: unknown[]) => getMock(...args),
     delete: (...args: unknown[]) => deleteMock(...args),
+    patch: (...args: unknown[]) => patchMock(...args),
   },
 }))
 
@@ -33,6 +35,8 @@ const MOCK_ROWS = [
     quality: null,
     type: 'm3u8',
     is_active: false,
+    season_number: 1,
+    episode_number: 2,
     last_checked: '2026-03-20T10:00:00Z',
     created_at: '2026-03-20T00:00:00Z',
     video_title: 'Zeta Video',
@@ -45,6 +49,8 @@ const MOCK_ROWS = [
     quality: null,
     type: 'm3u8',
     is_active: true,
+    season_number: 1,
+    episode_number: 1,
     last_checked: '2026-03-21T10:00:00Z',
     created_at: '2026-03-20T00:00:00Z',
     video_title: 'Alpha Video',
@@ -78,6 +84,7 @@ describe('SourceTable (CHG-216)', () => {
       return { data: [], total: 0 }
     })
     deleteMock.mockResolvedValue({})
+    patchMock.mockResolvedValue({})
   })
 
   it('loads inactive sources by default and supports toggle sort', async () => {
@@ -140,5 +147,22 @@ describe('SourceTable (CHG-216)', () => {
 
     const remountUrlHeader = screen.getByTestId('source-sort-source_url').closest('th')
     expect(remountUrlHeader?.getAttribute('style')).toContain('width: 420px')
+  })
+
+  it('opens replace modal and updates source url', async () => {
+    render(<SourceTable />)
+
+    await screen.findByText('Alpha Video')
+    fireEvent.click(screen.getByTestId('source-replace-btn-s1'))
+    fireEvent.change(screen.getByTestId('source-url-replace-input'), {
+      target: { value: 'https://new.example.com/updated.m3u8' },
+    })
+    fireEvent.click(screen.getByTestId('source-url-replace-save'))
+
+    await waitFor(() => {
+      expect(patchMock).toHaveBeenCalledWith('/admin/sources/s1', {
+        sourceUrl: 'https://new.example.com/updated.m3u8',
+      })
+    })
   })
 })

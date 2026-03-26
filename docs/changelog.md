@@ -3265,3 +3265,18 @@
   - 失效源 Tab 保留原有排序、列显隐、列宽持久化、批量删除和单条验证能力
   - 用户纠错 Tab 先提供独立列表与分页骨架，和失效源 Tab 解耦，为后续 `CHG-218` 的审核动作预留位置
 - **测试覆盖**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/sources/SourceHealthAlert.test.tsx` ✅
+
+---
+
+### CHG-217 — Tab 1 失效源表格 + URL 替换 UI
+- **完成时间**：2026-03-26 00:34
+- **修改文件**：
+  - `src/components/admin/sources/SourceTable.tsx`
+  - `src/components/admin/sources/SourceUrlReplaceModal.tsx`
+  - `tests/unit/components/admin/sources/SourceTable.test.tsx`
+  - `docs/task-queue.md`
+- **变更内容**：
+  - 失效源 Tab 增加 `S/E` 坐标展示，便于定位剧集来源
+  - 新增 `SourceUrlReplaceModal`，可直接调用 `PATCH /admin/sources/:id` 替换失效 URL
+  - Tab 1 操作区调整为“验证 / 替换URL / 删除”，保持现有验证与软删除流程不变
+- **测试覆盖**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/sources/SourceTable.test.tsx` ✅

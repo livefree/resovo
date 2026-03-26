@@ -2523,7 +2523,7 @@
 ## SEQ-20260325-17 — Phase 2：界面三 — 视频源健康度中心
 - **状态**：⬜ 待开始
 - **创建时间**：2026-03-25 22:00
-- **最后更新时间**：2026-03-26 00:33
+- **最后更新时间**：2026-03-26 00:34
 - **目标**：重构 `/admin/sources` 页面为双 Tab 健康度中心，新增告警横幅、URL 替换 UI、源健康检测轻量方案
 - **范围**：源管理前后端 + Bull 队列 + 新 API
 - **依赖**：SEQ-20260325-15（Phase 0.5）+ CHG-202（源 URL 替换 API）
@@ -2560,14 +2560,17 @@
    - **测试**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/sources/SourceHealthAlert.test.tsx`
 
 3. CHG-217 — Tab 1 失效源表格 + URL 替换 UI
-   - **状态**：⬜ 待开始
+   - **状态**：✅ 已完成
    - **创建时间**：2026-03-25 22:00
    - **计划开始**：CHG-216 之后
    - **依赖**：CHG-216 + CHG-202（源 URL 替换 API）
+   - **实际开始**：2026-03-26 00:33
+   - **完成时间**：2026-03-26 00:34
    - **文件范围**（修改）：
      - `src/components/admin/sources/SourceTable.tsx` — Tab 1 列：视频标题、S/E 坐标(TextCell)、source_url(UrlCell)、last_checked(DateCell)、操作([重新检测] [替换URL] [删除])
      - `src/components/admin/sources/SourceUrlReplaceModal.tsx`（新建）— URL 替换模态框
    - **验收要点**：重新检测复用 SourceVerifyButton；替换 URL 调 CHG-202 API；删除走现有 soft delete
+   - **测试**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/sources/SourceTable.test.tsx`
 
 4. CHG-218 — Tab 2 用户纠错表格
    - **状态**：⬜ 待开始

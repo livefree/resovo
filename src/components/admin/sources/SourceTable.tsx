@@ -10,6 +10,7 @@ import { apiClient } from '@/lib/api-client'
 import { StatusBadge } from '@/components/admin/StatusBadge'
 import { Pagination } from '@/components/admin/Pagination'
 import { SourceVerifyButton } from '@/components/admin/sources/SourceVerifyButton'
+import { SourceUrlReplaceModal } from '@/components/admin/sources/SourceUrlReplaceModal'
 import { BatchDeleteBar } from '@/components/admin/sources/BatchDeleteBar'
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
 import { AdminTableState } from '@/components/admin/shared/feedback/AdminTableState'
@@ -23,7 +24,7 @@ const PAGE_SIZE = 20
 const URL_MAX_LEN = 60
 type SourceTab = 'inactive' | 'submissions'
 
-type SourceColumnId = 'video_title' | 'source_url' | 'status' | 'last_checked' | 'actions'
+type SourceColumnId = 'video_title' | 'coordinate' | 'source_url' | 'status' | 'last_checked' | 'actions'
 
 interface SourceRow {
   id: string
@@ -33,6 +34,8 @@ interface SourceRow {
   quality: string | null
   type: string
   is_active: boolean
+  season_number?: number
+  episode_number?: number
   last_checked: string | null
   created_at: string
   video_title?: string
@@ -51,6 +54,7 @@ interface SubmissionRow {
 
 const SOURCE_COLUMNS: AdminColumnMeta[] = [
   { id: 'video_title', visible: true, width: 220, minWidth: 160, maxWidth: 400, resizable: true },
+  { id: 'coordinate', visible: true, width: 110, minWidth: 90, maxWidth: 160, resizable: true },
   { id: 'source_url', visible: true, width: 340, minWidth: 220, maxWidth: 560, resizable: true },
   { id: 'status', visible: true, width: 120, minWidth: 100, maxWidth: 180, resizable: true },
   { id: 'last_checked', visible: true, width: 170, minWidth: 130, maxWidth: 280, resizable: true },
@@ -63,6 +67,7 @@ const SOURCE_DEFAULT_TABLE_STATE: Omit<SharedAdminTableState, 'columns'> = {
 
 const SOURCE_COLUMN_LABELS: Record<SourceColumnId, string> = {
   video_title: '视频标题',
+  coordinate: 'S/E',
   source_url: '源 URL',
   status: '状态',
   last_checked: '最后验证',
@@ -71,6 +76,7 @@ const SOURCE_COLUMN_LABELS: Record<SourceColumnId, string> = {
 
 const SOURCE_SORTABLE_MAP: Record<SourceColumnId, boolean> = {
   video_title: true,
+  coordinate: true,
   source_url: true,
   status: true,
   last_checked: true,
@@ -87,6 +93,8 @@ function toComparableValue(row: SourceRow, field: string): string | number {
       return (row.video_title ?? '').toLowerCase()
     case 'source_url':
       return row.source_url.toLowerCase()
+    case 'coordinate':
+      return `${row.season_number ?? 1}-${row.episode_number ?? 1}`
     case 'status':
       return row.is_active ? 1 : 0
     case 'last_checked':
@@ -110,6 +118,7 @@ export function SourceTable() {
   const [deleteTarget, setDeleteTarget] = useState<SourceRow | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [showColumnsPanel, setShowColumnsPanel] = useState(false)
+  const [replaceTarget, setReplaceTarget] = useState<SourceRow | null>(null)
 
   const columnsState = useAdminTableColumns({
     route: '/admin/sources',
@@ -379,6 +388,12 @@ export function SourceTable() {
                   </td>
                 )}
 
+                {visibleColumnIds.includes('coordinate') && (
+                  <td className="px-4 py-3 align-middle text-xs text-[var(--muted)]">
+                    S{row.season_number ?? 1} / E{row.episode_number ?? 1}
+                  </td>
+                )}
+
                 {visibleColumnIds.includes('source_url') && (
                   <td className="px-4 py-3 align-middle">
                     <span
@@ -407,6 +422,14 @@ export function SourceTable() {
                   <td className="px-4 py-3 align-middle">
                     <div className="flex flex-wrap items-center gap-1">
                       <SourceVerifyButton sourceId={row.id} onVerified={() => void fetchSources(page)} />
+                      <button
+                        type="button"
+                        onClick={() => setReplaceTarget(row)}
+                        className="rounded bg-[var(--bg3)] px-2 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                        data-testid={`source-replace-btn-${row.id}`}
+                      >
+                        替换URL
+                      </button>
                       <button
                         onClick={() => setDeleteTarget(row)}
                         className="rounded bg-red-900/30 px-2 py-0.5 text-xs text-red-400 hover:bg-red-900/60"
@@ -516,6 +539,14 @@ export function SourceTable() {
         danger
       />
       ) : null}
+
+      <SourceUrlReplaceModal
+        sourceId={replaceTarget?.id ?? null}
+        currentUrl={replaceTarget?.source_url ?? ''}
+        open={replaceTarget !== null}
+        onClose={() => setReplaceTarget(null)}
+        onSuccess={() => void fetchSources(page)}
+      />
     </div>
   )
 }
