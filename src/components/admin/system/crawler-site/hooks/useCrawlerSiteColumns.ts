@@ -39,7 +39,7 @@ export function useCrawlerSiteColumns() {
     },
   })
 
-  const { state, updatePartial, columns: resolvedColumns, startResize, toggleColumnVisibility } = tableColumns
+  const { state, updatePartial, columns: resolvedColumns, setColumnWidth, startResize, toggleColumnVisibility } = tableColumns
 
   const sortBy = (state.sort?.field ?? 'name') as SortField
   const sortDir = (state.sort?.dir ?? 'asc') as SortDir
@@ -101,6 +101,7 @@ export function useCrawlerSiteColumns() {
     handleSort,
     setSort,
     toggleColumn,
+    setColumnWidth,
     startResize,
     visibleColumnCount,
     colClass,

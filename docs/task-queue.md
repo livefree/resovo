@@ -2324,7 +2324,7 @@
 ## SEQ-20260325-15 — Phase 0.5：ModernDataTable 表格基建
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-25 22:00
-- **最后更新时间**：2026-03-25 23:39
+- **最后更新时间**：2026-03-25 23:44
 - **目标**：交付可复用的 ModernDataTable 表格骨架 + Cell 组件库 + 状态管理 Hook + 列宽拖拽，为 Phase 1~3 所有表格提供底座
 - **范围**：`src/components/admin/shared/modern-table/` 全新目录
 - **依赖**：SEQ-20260325-14（Phase 0）全部完成
@@ -2406,16 +2406,20 @@
    - **测试**：`tests/unit/components/modern-table/useColumnResize.test.ts`（状态逻辑）
 
 5. CHG-208 — Pilot 验证：CrawlerSiteManager 接入 ModernDataTable
-   - **状态**：⬜ 待开始
+   - **状态**：✅ 已完成
    - **创建时间**：2026-03-25 22:00
    - **计划开始**：CHG-205/206/207 全部完成后
+   - **实际开始**：2026-03-25 23:39
+   - **完成时间**：2026-03-25 23:44
    - **依赖**：CHG-204 ~ CHG-207
    - **文件范围**（修改）：
-     - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx` — 替换 AdminTableFrame 为 ModernDataTable
-     - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx` — 用 `TableColumn<CrawlerSiteRow>` 重写列定义
+      - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx` — 替换 AdminTableFrame 为 ModernDataTable
+      - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx` — 用 `TableColumn<CrawlerSiteRow>` 重写列定义
+      - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns.ts` — 暴露列宽更新入口
+      - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx` — 同步表头排序/显隐/拖拽断言到 ModernDataTable
    - **验收标准**：
-     - 拖拽列宽独立不互相挤压
-     - 行高固定无换行
+      - 拖拽列宽独立不互相挤压
+      - 行高固定无换行
      - 内联操作（启用/停用 Switch）不触发整页刷新
      - 列宽刷新后恢复
      - 现有功能（筛选、排序、批量操作）不回退

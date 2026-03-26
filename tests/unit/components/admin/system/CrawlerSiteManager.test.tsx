@@ -30,6 +30,7 @@ const MOCK_SITES = [
     fromConfig: false,
     lastCrawledAt: null,
     lastCrawlStatus: null,
+    ingestPolicy: { allow_auto_publish: false },
     createdAt: '2026-03-19T00:00:00Z',
     updatedAt: '2026-03-19T00:00:00Z',
   },
@@ -46,6 +47,7 @@ const MOCK_SITES = [
     fromConfig: true,
     lastCrawledAt: null,
     lastCrawlStatus: null,
+    ingestPolicy: { allow_auto_publish: false },
     createdAt: '2026-03-19T00:00:00Z',
     updatedAt: '2026-03-19T00:00:00Z',
   },
@@ -97,7 +99,7 @@ describe('CrawlerSiteManager', () => {
     const { unmount } = render(<CrawlerSiteManager />)
     await screen.findByText('Alpha 源')
 
-    fireEvent.click(screen.getAllByRole('button', { name: /名称/i })[0])
+    fireEvent.click(screen.getByTestId('modern-table-sort-name'))
     fireEvent.click(screen.getByText('列设置'))
     fireEvent.click(screen.getByLabelText('Key'))
 
@@ -106,9 +108,8 @@ describe('CrawlerSiteManager', () => {
     render(<CrawlerSiteManager />)
     await screen.findByText('Alpha 源')
 
-    expect(screen.getAllByRole('button', { name: /名称/i })[0]?.textContent).toContain('↓')
-    const keyHeader = screen.getAllByText('Key')[0]?.closest('th')
-    expect(keyHeader?.className).toContain('hidden')
+    expect(screen.getByTestId('modern-table-sort-name').textContent).toContain('↓')
+    expect(screen.queryByTestId('modern-table-sort-key')).toBeNull()
   })
 
   it('resizes column width by dragging header separator', async () => {
@@ -118,7 +119,7 @@ describe('CrawlerSiteManager', () => {
     const nameHeader = screen.getByText('名称').closest('th')
     expect(nameHeader?.getAttribute('style') ?? '').toContain('width: 180px')
 
-    fireEvent.mouseDown(screen.getByTestId('resize-handle-name'), { clientX: 100 })
+    fireEvent.mouseDown(screen.getByTestId('modern-table-resize-name'), { clientX: 100 })
     fireEvent.mouseMove(window, { clientX: 160 })
     fireEvent.mouseUp(window)
 

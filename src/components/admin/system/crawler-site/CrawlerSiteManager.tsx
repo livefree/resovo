@@ -58,13 +58,9 @@ export function CrawlerSiteManager() {
     showColumnsPanel,
     setFilters,
     setShowColumnsPanel,
-    handleSort,
     setSort,
     toggleColumn,
-    startResize,
-    visibleColumnCount,
-    colClass,
-    visibleTableMinWidth,
+    setColumnWidth,
     columnMeta,
     requiredColumns,
   } = useCrawlerSiteColumns()
@@ -391,14 +387,10 @@ export function CrawlerSiteManager() {
         sortDir={sortDir}
         filters={filters}
         columnWidths={columnWidths}
-        visibleColumnCount={visibleColumnCount}
-        visibleTableMinWidth={visibleTableMinWidth}
         validateStates={validateStates}
         rowSaving={rowSaving}
         runningBySite={runningBySite}
         setFilters={setFilters}
-        colClass={colClass}
-        handleSort={handleSort}
         setSort={setSort}
         toggleColumn={toggleColumn}
         requiredColumns={requiredColumns}
@@ -406,7 +398,7 @@ export function CrawlerSiteManager() {
         setShowColumnsPanel={setShowColumnsPanel}
         columns={columns}
         columnMeta={columnMeta}
-        startResize={startResize}
+        setColumnWidth={setColumnWidth}
         toggleSelect={toggleSelect}
         toggleAll={toggleAll}
         handleInlineUpdate={handleInlineUpdate}

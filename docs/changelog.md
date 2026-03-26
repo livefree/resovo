@@ -3118,3 +3118,21 @@
   - 新增 Hook 单测覆盖：deltaX 计算、minWidth 约束、localStorage 恢复
 - **测试覆盖**：`npm run test -- --run tests/unit/components/modern-table/useColumnResize.test.ts`
 - **备注**：当前环境执行时 `vitest` 命令不可用（`sh: vitest: command not found`），需安装依赖后复跑验证
+
+---
+
+### CHG-208 — Pilot 验证：CrawlerSiteManager 接入 ModernDataTable
+- **完成时间**：2026-03-25 23:44
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns.ts`
+  - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+  - `docs/task-queue.md`
+- **变更内容**：
+  - `CrawlerSiteTable` 改为基于 `ModernDataTable` 的列定义渲染，保留现有筛选菜单、列设置、批量勾选、行内操作
+  - 接入 `TableCheckboxCell/TableBadgeCell/TableDateCell/TableSwitchCell/TableTextCell/TableUrlCell`
+  - 列宽拖拽切换为 `ModernTableHead` 的统一 resizer，列宽仍复用现有持久化状态
+  - `CrawlerSiteManager` 透传新的列宽更新能力，测试同步到 `modern-table-*` 选择器
+- **测试覆盖**：`npm run test -- --run tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`
+- **备注**：当前环境执行时 `vitest` 命令不可用（`sh: vitest: command not found`），需安装依赖后复跑验证
