@@ -2324,7 +2324,7 @@
 ## SEQ-20260325-15 — Phase 0.5：ModernDataTable 表格基建
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-25 22:00
-- **最后更新时间**：2026-03-25 23:34
+- **最后更新时间**：2026-03-25 23:39
 - **目标**：交付可复用的 ModernDataTable 表格骨架 + Cell 组件库 + 状态管理 Hook + 列宽拖拽，为 Phase 1~3 所有表格提供底座
 - **范围**：`src/components/admin/shared/modern-table/` 全新目录
 - **依赖**：SEQ-20260325-14（Phase 0）全部完成
@@ -2388,14 +2388,18 @@
    - **测试**：`tests/unit/components/modern-table/useModernTable.test.ts`
 
 4. CHG-207 — 列宽拖拽 Resizer
-   - **状态**：⬜ 待开始
+   - **状态**：✅ 已完成
    - **创建时间**：2026-03-25 22:00
    - **计划开始**：CHG-206 之后
+   - **实际开始**：2026-03-25 23:35
+   - **完成时间**：2026-03-25 23:39
    - **依赖**：CHG-204（骨架）+ CHG-206（列宽状态）
    - **文件范围**（新建）：
      - `src/components/admin/shared/modern-table/useColumnResize.ts` — 拖拽逻辑 Hook
+     - `tests/unit/components/modern-table/useColumnResize.test.ts` — Hook 状态逻辑测试
    - **文件范围**（修改）：
      - `src/components/admin/shared/modern-table/ModernTableHead.tsx` — 表头右边缘拖拽把手 UI
+     - `src/components/admin/shared/modern-table/ModernDataTable.tsx` — 透传列宽变更回调到表头
    - **逻辑**：mousedown → mousemove 计算 deltaX → 实时更新列宽 → mouseup 持久化 localStorage
    - **验收要点**：拖拽 A 列不影响 B 列宽度；拖拽过程中有视觉反馈；松手后宽度持久化
    - **测试策略**：单元测试仅覆盖 Hook 的状态逻辑（deltaX 计算、minWidth 约束、localStorage 读写），不测 DOM 几何布局。拖拽视觉效果依赖浏览器手工验收 + CHG-225 E2E Playwright 脚本顺带覆盖一次拖拽交互

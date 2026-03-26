@@ -17,6 +17,7 @@ interface ModernDataTableProps<T> {
   rows: T[]
   sort?: TableSortState
   onSortChange?: (nextSort: TableSortState) => void
+  onColumnWidthChange?: (columnId: string, nextWidth: number) => void
   loading?: boolean
   loadingText?: string
   emptyText?: string
@@ -74,6 +75,7 @@ export function ModernDataTable<T>({
   rows,
   sort,
   onSortChange,
+  onColumnWidthChange,
   loading = false,
   loadingText,
   emptyText,
@@ -102,6 +104,7 @@ export function ModernDataTable<T>({
             columns={resolvedColumns}
             sort={sort}
             onSortChange={onSortChange}
+            onColumnWidthChange={onColumnWidthChange}
           />
           <ModernTableBody
             columns={resolvedColumns}

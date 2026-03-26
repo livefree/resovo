@@ -3100,3 +3100,21 @@
   - 新增单测覆盖：默认初始化、URL 优先级、持久化恢复、选择态、滚动位置恢复
 - **测试覆盖**：`npm run test -- --run tests/unit/components/modern-table/useModernTable.test.ts`
 - **备注**：当前环境执行时 `vitest` 命令不可用（`sh: vitest: command not found`），需安装依赖后复跑验证
+
+---
+
+### CHG-207 — 列宽拖拽 Resizer
+- **完成时间**：2026-03-25 23:39
+- **修改文件**：
+  - `src/components/admin/shared/modern-table/useColumnResize.ts`（新建）
+  - `tests/unit/components/modern-table/useColumnResize.test.ts`（新建）
+  - `src/components/admin/shared/modern-table/ModernTableHead.tsx`
+  - `src/components/admin/shared/modern-table/ModernDataTable.tsx`
+  - `docs/task-queue.md`
+- **变更内容**：
+  - 新建 `useColumnResize`：支持 `startResize/updateResize/endResize`，按 `tableId` 落盘列宽
+  - `ModernTableHead` 新增列右边缘拖拽把手（`role="separator"`），拖拽中实时回调列宽
+  - `ModernDataTable` 新增 `onColumnWidthChange`，将宽度更新能力透传到表头
+  - 新增 Hook 单测覆盖：deltaX 计算、minWidth 约束、localStorage 恢复
+- **测试覆盖**：`npm run test -- --run tests/unit/components/modern-table/useColumnResize.test.ts`
+- **备注**：当前环境执行时 `vitest` 命令不可用（`sh: vitest: command not found`），需安装依赖后复跑验证
