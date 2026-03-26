@@ -525,6 +525,56 @@ export async function updateVisibility(
   return result.rows[0] ?? null
 }
 
+// ── 更新：视频审核（CHG-201）──────────────────────────────────────
+
+export type ReviewAction = 'approve' | 'reject'
+
+interface ReviewVideoInput {
+  action: ReviewAction
+  reason?: string
+  reviewedBy: string
+}
+
+/** 状态转换映射：action → { review_status, visibility_status } */
+const REVIEW_ACTION_MAP: Record<ReviewAction, {
+  reviewStatus: ReviewStatus
+  visibilityStatus: VisibilityStatus
+}> = {
+  approve: { reviewStatus: 'approved', visibilityStatus: 'public' },
+  reject: { reviewStatus: 'rejected', visibilityStatus: 'hidden' },
+}
+
+export async function reviewVideo(
+  db: Pool,
+  id: string,
+  input: ReviewVideoInput
+): Promise<{
+  id: string
+  review_status: string
+  visibility_status: string
+  is_published: boolean
+} | null> {
+  const mapping = REVIEW_ACTION_MAP[input.action]
+  const isPublished = mapping.visibilityStatus === 'public'
+  const result = await db.query<{
+    id: string; review_status: string; visibility_status: string; is_published: boolean
+  }>(
+    `UPDATE videos
+     SET review_status = $1,
+         visibility_status = $2,
+         is_published = $3,
+         reviewed_by = $4,
+         reviewed_at = NOW(),
+         review_reason = $5,
+         needs_manual_review = false,
+         updated_at = NOW()
+     WHERE id = $6 AND deleted_at IS NULL
+     RETURNING id, review_status, visibility_status, is_published`,
+    [mapping.reviewStatus, mapping.visibilityStatus, isPublished, input.reviewedBy, input.reason ?? null, id]
+  )
+  return result.rows[0] ?? null
+}
+
 // ── 更新：豆瓣元数据（CHG-23）────────────────────────────────────
 
 export interface UpdateDoubanInput {

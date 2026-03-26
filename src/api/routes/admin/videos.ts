@@ -28,6 +28,11 @@ const VisibilitySchema = z.object({
   visibility: z.enum(['public', 'internal', 'hidden'] as const),
 })
 
+const ReviewSchema = z.object({
+  action: z.enum(['approve', 'reject'] as const),
+  reason: z.string().max(500).optional(),
+})
+
 const BatchPublishSchema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(100),
   isPublished: z.boolean(),
@@ -135,7 +140,31 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
     return reply.send({ data: result })
   })
 
-  // ── POST /admin/videos/batch-publish ──────────���─────────────
+  // ── POST /admin/videos/:id/review ──────────────────────────
+  // CHG-201: 内容审核（approve / reject）
+  fastify.post('/admin/videos/:id/review', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const parsed = ReviewSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+
+    const result = await videoService.review(id, {
+      action: parsed.data.action,
+      reason: parsed.data.reason,
+      reviewedBy: request.user!.userId,
+    })
+    if (!result) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
+      })
+    }
+    return reply.send({ data: result })
+  })
+
+  // ── POST /admin/videos/batch-publish ───────────────────────
   fastify.post('/admin/videos/batch-publish', { preHandler: auth }, async (request, reply) => {
     const parsed = BatchPublishSchema.safeParse(request.body)
     if (!parsed.success) {

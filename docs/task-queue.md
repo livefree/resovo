@@ -2277,8 +2277,10 @@
    - **验收要点**：indexToES 包含 review_status/visibility_status；updateVisibility 同时更新 is_published；API 调用后触发 ES 同步
    - **测试**：`tests/unit/api/updateVisibility.test.ts`
 
-2. CHG-201 — 新建视频内容审核 API（approve/reject/block）+ ES 同步
-   - **状态**：⬜ 待开始
+2. CHG-201 — 新建视频内容审核 API（approve/reject）+ ES 同步
+   - **状态**：✅ 已完成
+   - **实际开始**：2026-03-25 22:50
+   - **完成时间**：2026-03-25 23:00
    - **创建时间**：2026-03-25 22:00
    - **计划开始**：CHG-200 之后
    - **依赖**：CHG-200（ES 字段已补充）

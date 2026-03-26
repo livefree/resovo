@@ -120,6 +120,17 @@ export class VideoService {
     return row
   }
 
+  async review(
+    id: string,
+    input: { action: videoQueries.ReviewAction; reason?: string; reviewedBy: string }
+  ): Promise<{
+    id: string; review_status: string; visibility_status: string; is_published: boolean
+  } | null> {
+    const row = await videoQueries.reviewVideo(this.db, id, input)
+    if (row) void this.indexToES(id)
+    return row
+  }
+
   async batchPublish(ids: string[], isPublished: boolean): Promise<number> {
     const count = await videoQueries.batchPublishVideos(this.db, ids, isPublished)
     if (count > 0) ids.forEach((id) => void this.indexToES(id))

@@ -3004,3 +3004,15 @@
   - `src/api/routes/admin/videos.ts` — 新增 PATCH /admin/videos/:id/visibility 端点 + VisibilitySchema
   - `tests/unit/api/updateVisibility.test.ts`（新建）— 5 个测试
 - **测试覆盖**：typecheck ✅ lint ✅ unit tests 604/604 ✅
+
+---
+
+### CHG-201 — 新建视频内容审核 API（approve/reject）+ ES 同步
+- **完成时间**：2026-03-25 23:00
+- **修改文件**：
+  - `src/api/db/queries/videos.ts` — 新增 reviewVideo() 函数 + ReviewAction 类型 + REVIEW_ACTION_MAP 状态映射
+  - `src/api/services/VideoService.ts` — 新增 review() Service 方法（DB 写入 + ES 同步）
+  - `src/api/routes/admin/videos.ts` — 新增 POST /admin/videos/:id/review 端点 + ReviewSchema
+  - `tests/unit/api/reviewVideo.test.ts`（新建）— 5 个测试
+- **备注**：DB CHECK 约束不含 'blocked'，block action 需后续 migration 补充
+- **测试覆盖**：typecheck ✅ lint ✅ unit tests 609/609 ✅
