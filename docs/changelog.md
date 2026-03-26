@@ -2984,3 +2984,11 @@
   - `CrawlerSiteManager`：移除向 `CrawlerSiteTopToolbar` 传递的 `toast={toast}` prop
 - **根因**：用户要求三项调整：框合并、完成提示、删除列表角落反馈
 - **测试覆盖**：typecheck ✅ lint ✅ unit tests 599/599 ✅
+
+---
+
+### CHG-199 — 站点列表工具栏按钮精简
+- **完成时间**：2026-03-25 20:25
+- **修改文件**：`src/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar.tsx`
+- **变更内容**：+ 添加源站→"+"；全站增量采集→"全站增量"；全站全量采集→"全站全量"；批量增量采集→"批量增量"；批量全量采集→"批量全量"；导出 JSON→"导出"；导入 JSON→"导入"
+- **测试覆盖**：typecheck ✅ unit tests 599/599 ✅

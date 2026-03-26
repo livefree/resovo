@@ -46,32 +46,32 @@ export function CrawlerSiteTopToolbar({
         className="gap-3"
         actions={(
           <>
-            <AdminButton onClick={onAdd} variant="primary" className="px-4 font-medium">
-              + 添加源站
+            <AdminButton onClick={onAdd} variant="primary" className="px-3 font-medium">
+              +
             </AdminButton>
             <AdminButton
               onClick={onTriggerIncremental}
               disabled={isAllIncrementalTriggering}
             >
-              全站增量采集
+              全站增量
             </AdminButton>
             <AdminButton
               onClick={onTriggerFull}
               disabled={isAllFullTriggering}
             >
-              全站全量采集
+              全站全量
             </AdminButton>
             <AdminButton
               onClick={onTriggerBatchIncremental}
               disabled={selectedCount === 0}
             >
-              批量增量采集
+              批量增量
             </AdminButton>
             <AdminButton
               onClick={onTriggerBatchFull}
               disabled={selectedCount === 0}
             >
-              批量全量采集
+              批量全量
             </AdminButton>
 
             <input
@@ -110,10 +110,10 @@ export function CrawlerSiteTopToolbar({
             </select>
 
             <AdminButton onClick={onExport}>
-              导出 JSON
+              导出
             </AdminButton>
             <AdminButton onClick={onImport}>
-              导入 JSON
+              导入
             </AdminButton>
 
             <AdminButton
