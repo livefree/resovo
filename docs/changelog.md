@@ -3016,3 +3016,14 @@
   - `tests/unit/api/reviewVideo.test.ts`（新建）— 5 个测试
 - **备注**：DB CHECK 约束不含 'blocked'，block action 需后续 migration 补充
 - **测试覆盖**：typecheck ✅ lint ✅ unit tests 609/609 ✅
+
+---
+
+### CHG-202 — 新建源 URL 替换 API
+- **完成时间**：2026-03-25 23:15
+- **修改文件**：
+  - `src/api/db/queries/sources.ts` — 新增 updateSourceUrl() 函数（替换 URL + 重置 is_active=true + last_checked=NOW）
+  - `src/api/services/ContentService.ts` — 新增 updateSourceUrl() Service 方法
+  - `src/api/routes/admin/content.ts` — 新增 PATCH /admin/sources/:id 端点 + UpdateSourceSchema
+  - `tests/unit/api/updateSourceUrl.test.ts`（新建）— 3 个测试
+- **测试覆盖**：typecheck ✅ unit tests 612/612 ✅

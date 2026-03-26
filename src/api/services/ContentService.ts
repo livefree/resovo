@@ -43,6 +43,13 @@ export class ContentService {
     return { isActive, responseMs, statusCode }
   }
 
+  async updateSourceUrl(
+    sourceId: string,
+    newUrl: string
+  ): Promise<{ id: string; source_url: string; is_active: boolean } | null> {
+    return sourcesQueries.updateSourceUrl(this.db, sourceId, newUrl)
+  }
+
   // ── 投稿队列 ────────────────────────────────────────────────────
 
   async listSubmissions(page: number, limit: number): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {

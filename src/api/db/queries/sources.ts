@@ -96,6 +96,30 @@ export async function updateSourceActiveStatus(
   )
 }
 
+// ── 更新：替换源 URL（CHG-202）───────────────────────────────────
+
+/**
+ * 替换失效源的 URL，同时重置为活跃状态。
+ */
+export async function updateSourceUrl(
+  db: Pool,
+  sourceId: string,
+  newUrl: string
+): Promise<{ id: string; source_url: string; is_active: boolean } | null> {
+  const result = await db.query<{
+    id: string; source_url: string; is_active: boolean
+  }>(
+    `UPDATE video_sources
+     SET source_url = $1,
+         is_active = true,
+         last_checked = NOW()
+     WHERE id = $2 AND deleted_at IS NULL
+     RETURNING id, source_url, is_active`,
+    [newUrl, sourceId]
+  )
+  return result.rows[0] ?? null
+}
+
 // ── 写入：Upsert 播放源（爬虫采集用）──────────────────────────────
 
 export interface UpsertSourceInput {
