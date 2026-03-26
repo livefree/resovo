@@ -22,6 +22,8 @@ export interface CrawlerSource {
   name: string
   base: string
   format: 'xml' | 'json'
+  /** CHG-203: 站点级采集策略，决定入库时的 review/visibility 状态 */
+  ingestPolicy?: { allow_auto_publish: boolean }
 }
 
 /** 从 CRAWLER_SOURCES 环境变量解析资源站配置（降级用） */
@@ -45,6 +47,7 @@ export async function getEnabledSources(db: Pool): Promise<CrawlerSource[]> {
       name:   s.key,
       base:   s.apiUrl,
       format: s.format,
+      ingestPolicy: { allow_auto_publish: s.ingestPolicy.allow_auto_publish },
     }))
   }
   return parseCrawlerSources(process.env.CRAWLER_SOURCES)
@@ -159,7 +162,8 @@ export class CrawlerService {
    *   规则 E — sources ON CONFLICT DO NOTHING（不覆盖已有播放源）
    */
   async upsertVideo(
-    parsed: ReturnType<typeof parseVodItem>
+    parsed: ReturnType<typeof parseVodItem>,
+    ingestPolicy?: { allow_auto_publish: boolean }
   ): Promise<{ videoId: string; sourcesUpserted: number }> {
     const { video, sources } = parsed
 
@@ -188,7 +192,12 @@ export class CrawlerService {
       // 新建视频记录（含 title_normalized + metadata_source）
       isNew = true
       const shortId = nanoid(8)
-      const autoPublish = config.AUTO_PUBLISH_CRAWLED === 'true'
+      // CHG-203: 站点级 ingest_policy 优先于全局 AUTO_PUBLISH_CRAWLED
+      const autoPublish = ingestPolicy
+        ? ingestPolicy.allow_auto_publish
+        : config.AUTO_PUBLISH_CRAWLED === 'true'
+      const reviewStatus = autoPublish ? 'approved' : 'pending_review'
+      const visibilityStatus = autoPublish ? 'public' : 'internal'
       const episodeCount = sources.length > 0
         ? Math.max(...sources.map((s) => s.episodeNumber ?? 1))
         : 1
@@ -212,6 +221,8 @@ export class CrawlerService {
         status: video.status,
         episodeCount,
         isPublished: autoPublish,
+        reviewStatus,
+        visibilityStatus,
         metadataSource: 'crawler',
       })
       videoId = inserted.id
@@ -410,7 +421,7 @@ export class CrawlerService {
             throw new Error('TASK_CANCELLED')
           }
           try {
-            const { sourcesUpserted: s } = await this.upsertVideo(parsed)
+            const { sourcesUpserted: s } = await this.upsertVideo(parsed, source.ingestPolicy)
             videosUpserted++
             sourcesUpserted += s
             processed++

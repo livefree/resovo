@@ -3027,3 +3027,14 @@
   - `src/api/routes/admin/content.ts` — 新增 PATCH /admin/sources/:id 端点 + UpdateSourceSchema
   - `tests/unit/api/updateSourceUrl.test.ts`（新建）— 3 个测试
 - **测试覆盖**：typecheck ✅ unit tests 612/612 ✅
+
+---
+
+### CHG-203 — 采集入库路由接入 ingest_policy（allow_auto_publish）
+- **完成时间**：2026-03-25 23:35
+- **修改文件**：
+  - `src/api/services/CrawlerService.ts` — CrawlerSource 接口新增 ingestPolicy；getEnabledSources 传递 allow_auto_publish；upsertVideo 接受 ingestPolicy 参数，优先于全局 AUTO_PUBLISH_CRAWLED；crawl() 传递 source.ingestPolicy
+  - `src/api/db/queries/videos.ts` — CrawlerInsertInput 新增可选 reviewStatus/visibilityStatus；insertCrawledVideo SQL 写入 review_status/visibility_status
+  - `tests/unit/api/ingestPolicy.test.ts`（新建）— 4 个测试
+- **测试覆盖**：typecheck ✅ unit tests 616/616 ✅
+- **备注**：Phase 0（SEQ-20260325-14）全部 4 个任务完成

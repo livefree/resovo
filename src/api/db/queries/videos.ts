@@ -694,6 +694,9 @@ export interface CrawlerInsertInput {
   status: VideoStatus
   episodeCount: number
   isPublished: boolean
+  /** CHG-203: 站点级采集策略决定入库状态 */
+  reviewStatus?: string
+  visibilityStatus?: string
   metadataSource: MetadataSource
 }
 
@@ -710,8 +713,8 @@ export async function insertCrawledVideo(
        (short_id, title, title_normalized, title_en, cover_url, type, source_category,
         genre, genre_source, content_rating,
         year, country, "cast", director, writers, description, status, episode_count,
-        is_published, metadata_source)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+        is_published, review_status, visibility_status, metadata_source)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
      RETURNING id`,
     [
       input.shortId,
@@ -733,6 +736,8 @@ export async function insertCrawledVideo(
       input.status,
       input.episodeCount,
       input.isPublished,
+      input.reviewStatus ?? 'pending_review',
+      input.visibilityStatus ?? 'internal',
       input.metadataSource,
     ]
   )
