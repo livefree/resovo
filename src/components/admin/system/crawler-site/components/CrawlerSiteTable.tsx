@@ -166,6 +166,7 @@ function HeaderCell({
       <button
         type="button"
         disabled={column.sortField == null}
+        data-testid={`modern-table-sort-${column.id}`}
         onClick={() => {
           if (!column.sortField) return
           setSort(column.sortField, isSorted && sortDir === 'asc' ? 'desc' : 'asc')

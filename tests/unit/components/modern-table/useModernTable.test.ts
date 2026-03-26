@@ -5,7 +5,7 @@ import { useModernTable } from '@/components/admin/shared/modern-table/useModern
 describe('useModernTable (CHG-206)', () => {
   beforeEach(() => {
     localStorage.clear()
-    window.history.replaceState({}, '', 'http://localhost/')
+    window.history.replaceState({}, '', '/')
   })
 
   it('initializes with defaults and toggles sort direction', () => {
@@ -29,7 +29,7 @@ describe('useModernTable (CHG-206)', () => {
   })
 
   it('prefers URL sort params on first render and syncs updates back to URL', () => {
-    window.history.replaceState({}, '', 'http://localhost/admin/videos?sortField=status&sortDir=asc&page=2')
+    window.history.replaceState({}, '', '/admin/videos?sortField=status&sortDir=asc&page=2')
     const replaceStateSpy = vi.spyOn(window.history, 'replaceState')
 
     const { result } = renderHook(() => useModernTable({

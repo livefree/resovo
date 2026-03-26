@@ -37,9 +37,16 @@ beforeEach(() => {
   mockSearchParams.delete('site')
 })
 
+async function renderFilters() {
+  render(<VideoFilters />)
+  await waitFor(() => {
+    expect(mockGet).toHaveBeenCalled()
+  })
+}
+
 describe('VideoFilters', () => {
-  it('渲染搜索框和四个筛选器', () => {
-    render(<VideoFilters />)
+  it('渲染搜索框和四个筛选器', async () => {
+    await renderFilters()
     expect(screen.getByTestId('video-filters-q')).toBeTruthy()
     expect(screen.getByTestId('video-filters-type')).toBeTruthy()
     expect(screen.getByTestId('video-filters-status')).toBeTruthy()
@@ -47,55 +54,55 @@ describe('VideoFilters', () => {
     expect(screen.getByTestId('video-filters-review')).toBeTruthy()
   })
 
-  it('选择类型后 router.push 包含 type 参数', () => {
-    render(<VideoFilters />)
+  it('选择类型后 router.push 包含 type 参数', async () => {
+    await renderFilters()
     const select = screen.getByTestId('video-filters-type') as HTMLSelectElement
     fireEvent.change(select, { target: { value: 'movie' } })
     expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('type=movie'))
   })
 
-  it('选择状态后 router.push 包含 status 参数', () => {
-    render(<VideoFilters />)
+  it('选择状态后 router.push 包含 status 参数', async () => {
+    await renderFilters()
     const select = screen.getByTestId('video-filters-status') as HTMLSelectElement
     fireEvent.change(select, { target: { value: 'published' } })
     expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('status=published'))
   })
 
-  it('选择可见性后 router.push 包含 visibilityStatus 参数', () => {
-    render(<VideoFilters />)
+  it('选择可见性后 router.push 包含 visibilityStatus 参数', async () => {
+    await renderFilters()
     const select = screen.getByTestId('video-filters-visibility') as HTMLSelectElement
     fireEvent.change(select, { target: { value: 'internal' } })
     expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('visibilityStatus=internal'))
   })
 
-  it('选择审核状态后 router.push 包含 reviewStatus 参数', () => {
-    render(<VideoFilters />)
+  it('选择审核状态后 router.push 包含 reviewStatus 参数', async () => {
+    await renderFilters()
     const select = screen.getByTestId('video-filters-review') as HTMLSelectElement
     fireEvent.change(select, { target: { value: 'approved' } })
     expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('reviewStatus=approved'))
   })
 
-  it('选择"全部类型"（空值）时删除 type 参数', () => {
+  it('选择"全部类型"（空值）时删除 type 参数', async () => {
     mockSearchParams.set('type', 'movie')
-    render(<VideoFilters />)
+    await renderFilters()
     const select = screen.getByTestId('video-filters-type') as HTMLSelectElement
     fireEvent.change(select, { target: { value: '' } })
     const calledWith = mockPush.mock.calls[0][0] as string
     expect(calledWith).not.toContain('type=')
   })
 
-  it('切换筛选时 page 参数被重置', () => {
+  it('切换筛选时 page 参数被重置', async () => {
     mockSearchParams.set('page', '3')
-    render(<VideoFilters />)
+    await renderFilters()
     const select = screen.getByTestId('video-filters-type') as HTMLSelectElement
     fireEvent.change(select, { target: { value: 'anime' } })
     const calledWith = mockPush.mock.calls[0][0] as string
     expect(calledWith).not.toContain('page=3')
   })
 
-  it('站点列表为空时不渲染来源站点下拉', () => {
+  it('站点列表为空时不渲染来源站点下拉', async () => {
     mockGet.mockResolvedValue({ data: [] })
-    render(<VideoFilters />)
+    await renderFilters()
     expect(screen.queryByTestId('video-filters-site')).toBeNull()
   })
 
