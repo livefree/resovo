@@ -3391,3 +3391,32 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：YTPlayer 用 dynamic import 避免 SSR；Player 导出名为 `YTPlayer`（非 `Player`）；sources API 用 `status=active` 参数过滤活跃源
+
+## CHG-224 — 快捷键支持 + 上下条切换
+- **完成时间**：2026-03-26
+- **记录时间**：2026-03-26 05:35
+- **修改文件**：
+  - `src/components/admin/moderation/useModerationHotkeys.ts`（新建）— 全局键盘 Hook，支持 `A/R/←/→`，文本输入聚焦与修饰键场景自动忽略
+  - `src/components/admin/moderation/ModerationDashboard.tsx` — 新增 navIds 轻量加载、`reviewingRef` 防重入、方向键切换上一条/下一条、审核提示文案
+  - `docs/task-queue.md`
+  - `docs/tasks.md`
+- **实现说明**：
+  - 快捷键在审核台激活时生效，`A=approve`、`R=reject`、`←/→=浏览待审列表`
+  - `Dashboard` 额外请求 `/admin/videos/pending-review?page=1&limit=50` 作为导航 ID 列表，不污染左侧列表自身分页逻辑
+  - 审核动作直接复用现有 review API，完成后清空选中并刷新列表
+- **约束说明**：任务文档原始描述含 `B=block`，但当前后端契约仅支持 `approve/reject`；本次实现未引入与后端不一致的 `block` 动作
+
+## CHG-225 — E2E 主干测试（入库 → 审核 → 可见性验证）
+- **完成时间**：2026-03-26
+- **记录时间**：2026-03-26 06:05
+- **修改文件**：
+  - `tests/e2e/video-governance.spec.ts`（新建）
+  - `docs/task-queue.md`
+  - `docs/tasks.md`
+- **测试路径**：
+  - Happy path：审核台选中待审视频后按 `A`，验证请求体为 `{ action: 'approve' }`，待审列表刷新后该视频从 `/admin/videos?visibilityStatus=public&reviewStatus=approved` 中可见
+  - Reject path：审核台选中待审视频后按 `R`，验证请求体为 `{ action: 'reject' }`，该视频不会出现在 `visibilityStatus=public` 列表中，并会出现在 `hidden + rejected` 结果集
+- **实现说明**：
+  - E2E 采用 `page.route()` mock API，不依赖真实后端/数据库
+  - 单一状态机驱动 `/admin/videos/pending-review`、`/admin/videos/:id/review`、`/admin/videos` 等接口，确保审核动作与列表结果联动一致
+  - 用快捷键而不是按钮触发审核，顺带覆盖 `CHG-224` 的主交互链路
