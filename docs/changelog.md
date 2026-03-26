@@ -3330,3 +3330,12 @@
 - **统计逻辑**：pendingCount 直查 pending_review 行数；todayReviewedCount 以 reviewed_at >= CURRENT_DATE 查已审核；interceptRate 取最近 7 天 rejected/(approved+rejected)×100%，无数据时返回 null
 - **待审列表**：含 firstSourceUrl 子查询（取第一条 is_active=true 的源）；按 created_at ASC 排序（最早入库优先审核）
 - **测试覆盖**：`tests/unit/api/moderationStats.test.ts` 7 个用例 ✅（664/664 全部通过）
+
+## CHG-227 — VideoTable.tsx 拆分 + lint fix
+- **完成时间**：2026-03-26 04:52
+- **修改文件**：
+  - `src/components/admin/videos/VideoTable.tsx` — 主组件精简至 252 行（原 543 行）
+  - `src/components/admin/videos/useVideoTableColumns.tsx`（新建）— 列定义 Hook + 类型 + 常量 + 辅助函数，240 行
+- **拆分内容**：VideoAdminRow 接口、VideoColumnId 类型、VIDEO_COLUMNS/COLUMN_LABELS/SORTABLE_MAP 常量、toComparableValue/getTypeLabel 等辅助函数、useVideoTableColumns hook（含 buildDataColumn switch）全部迁至新文件
+- **lint fix**：handleSelectAll 用 useCallback 包裹并加入 tableColumns useMemo 依赖数组，消除 react-hooks/exhaustive-deps warning
+- **测试覆盖**：664/664 全部通过；lint 0 warning
