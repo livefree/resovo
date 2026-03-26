@@ -2523,7 +2523,7 @@
 ## SEQ-20260325-17 — Phase 2：界面三 — 视频源健康度中心
 - **状态**：⬜ 待开始
 - **创建时间**：2026-03-25 22:00
-- **最后更新时间**：2026-03-25 22:00
+- **最后更新时间**：2026-03-26 00:17
 - **目标**：重构 `/admin/sources` 页面为双 Tab 健康度中心，新增告警横幅、URL 替换 UI、源健康检测轻量方案
 - **范围**：源管理前后端 + Bull 队列 + 新 API
 - **依赖**：SEQ-20260325-15（Phase 0.5）+ CHG-202（源 URL 替换 API）
@@ -2532,16 +2532,19 @@
 ### 任务列表（按执行顺序）
 
 1. CHG-215 — 空壳视频聚合查询 + 告警横幅组件
-   - **状态**：⬜ 待开始
+   - **状态**：✅ 已完成
    - **创建时间**：2026-03-25 22:00
    - **计划开始**：Phase 2 首个任务
    - **依赖**：SEQ-20260325-16 全部完成
+   - **实际开始**：2026-03-26 00:15
+   - **完成时间**：2026-03-26 00:17
    - **文件范围**：
      - `src/api/db/queries/sources.ts` — 新增 `countShellVideos(db)` 聚合查询（已上架 + 全部源 is_active=false 的视频数）
      - `src/api/services/ContentService.ts` — 新增 `getShellVideoCount()` Service 方法
      - `src/api/routes/admin/content.ts` — 新增 `GET /admin/sources/shell-count` 端点
      - `src/components/admin/sources/SourceHealthAlert.tsx`（新建）— 告警横幅 + [批量下架] 按钮
    - **验收要点**：横幅显示空壳视频数；批量下架调 updateVisibility API + ES 同步
+   - **测试**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/sources/SourceHealthAlert.test.tsx`
 
 2. CHG-216 — 源健康中心页面骨架 + 双 Tab 布局
    - **状态**：⬜ 待开始

@@ -57,6 +57,11 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
     return reply.send(result)
   })
 
+  fastify.get('/admin/sources/shell-count', { preHandler: auth }, async (_request, reply) => {
+    const result = await contentService.getShellVideoCount()
+    return reply.send({ data: result })
+  })
+
   fastify.delete('/admin/sources/:id', { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string }
     const deleted = await contentService.deleteSource(id)

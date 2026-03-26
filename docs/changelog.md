@@ -3231,3 +3231,23 @@
   - 保存时调用 `PATCH /admin/videos/:id` 更新标题、描述、年份、类型、国家/地区，成功后刷新当前页列表
   - 单测补充：打开抽屉时加载详情和源列表，保存时发送元数据更新请求
 - **测试覆盖**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/videos/VideoTable.test.tsx` ✅
+
+---
+
+### CHG-215 — 空壳视频聚合查询 + 告警横幅组件
+- **完成时间**：2026-03-26 00:17
+- **修改文件**：
+  - `src/api/db/queries/sources.ts`
+  - `src/api/services/ContentService.ts`
+  - `src/api/routes/admin/content.ts`
+  - `src/components/admin/sources/SourceHealthAlert.tsx`
+  - `src/components/admin/AdminSourceList.tsx`
+  - `src/app/[locale]/admin/sources/page.tsx`
+  - `tests/unit/components/admin/sources/SourceHealthAlert.test.tsx`
+  - `docs/task-queue.md`
+- **变更内容**：
+  - 新增 `countShellVideos()`，统计仍处于上架状态但已没有任何活跃源的“空壳视频”
+  - `ContentService` 与 `GET /admin/sources/shell-count` 暴露空壳视频数量与对应视频 ID 列表
+  - 新增 `SourceHealthAlert` 横幅，并在 `/admin/sources` 页面壳中挂载；支持一键将空壳视频批量切换为 `hidden`
+  - 页面入口切到 `AdminSourceList` 容器，为后续双 Tab 源健康中心预留组合位
+- **测试覆盖**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/sources/SourceHealthAlert.test.tsx` ✅

@@ -50,6 +50,10 @@ export class ContentService {
     return sourcesQueries.updateSourceUrl(this.db, sourceId, newUrl)
   }
 
+  async getShellVideoCount(): Promise<{ count: number; videoIds: string[] }> {
+    return sourcesQueries.countShellVideos(this.db)
+  }
+
   // ── 投稿队列 ────────────────────────────────────────────────────
 
   async listSubmissions(page: number, limit: number): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {

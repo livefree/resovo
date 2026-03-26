@@ -219,6 +219,36 @@ export async function listAdminSources(
   }
 }
 
+export async function countShellVideos(
+  db: Pool,
+): Promise<{ count: number; videoIds: string[] }> {
+  const result = await db.query<{ id: string }>(
+    `SELECT v.id
+     FROM videos v
+     WHERE v.deleted_at IS NULL
+       AND v.is_published = true
+       AND EXISTS (
+         SELECT 1
+         FROM video_sources s
+         WHERE s.video_id = v.id
+           AND s.deleted_at IS NULL
+       )
+       AND NOT EXISTS (
+         SELECT 1
+         FROM video_sources s
+         WHERE s.video_id = v.id
+           AND s.deleted_at IS NULL
+           AND s.is_active = true
+       )
+     ORDER BY v.updated_at DESC`
+  )
+
+  return {
+    count: result.rows.length,
+    videoIds: result.rows.map((row) => row.id),
+  }
+}
+
 export async function deleteSource(
   db: Pool,
   id: string
