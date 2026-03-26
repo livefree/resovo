@@ -3447,3 +3447,11 @@
 - **变更文件**：
   - `src/components/admin/videos/VideoFilters.tsx` — 类型下拉补充 documentary（纪录片）/short（短片）/sports（体育）/music（音乐）/news（新闻）/kids（少儿）/other（其他）7 个选项，与后端 VideoType 枚举全量对齐（共 11 类）
 - **测试**：typecheck + lint + 664/664 单元测试全部通过
+
+---
+
+## CHG-233 — 视频来源筛选 SQL 修复
+- **完成时间**：2026-03-26 17:00
+- **变更文件**：
+  - `src/api/db/queries/videos.ts` — `listAdminVideos` site 过滤条件从 `video_sources.source_name = $siteKey` 改为 `EXISTS (SELECT 1 FROM crawler_sites cs2 WHERE cs2.id = v.site_id AND cs2.key = $siteKey)`；更新注释
+- **测试**：typecheck + lint + 664/664 单元测试全部通过
