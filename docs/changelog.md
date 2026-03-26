@@ -3280,3 +3280,17 @@
   - 新增 `SourceUrlReplaceModal`，可直接调用 `PATCH /admin/sources/:id` 替换失效 URL
   - Tab 1 操作区调整为“验证 / 替换URL / 删除”，保持现有验证与软删除流程不变
 - **测试覆盖**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/sources/SourceTable.test.tsx` ✅
+
+---
+
+### CHG-218 — Tab 2 用户纠错表格
+- **完成时间**：2026-03-26 00:35
+- **修改文件**：
+  - `src/components/admin/sources/SourceTable.tsx`
+  - `tests/unit/components/admin/sources/SourceTable.test.tsx`
+  - `docs/task-queue.md`
+- **变更内容**：
+  - 用户纠错 Tab 增加“采纳 / 忽略”动作，分别调用 `/admin/submissions/:id/approve` 与 `/admin/submissions/:id/reject`
+  - 操作完成后自动刷新当前提交列表，保持与失效源 Tab 的分页状态解耦
+  - 测试补充：切换到 submissions Tab 后可执行采纳动作并触发列表刷新
+- **测试覆盖**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/sources/SourceTable.test.tsx` ✅

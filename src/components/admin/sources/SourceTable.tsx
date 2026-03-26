@@ -231,6 +231,24 @@ export function SourceTable() {
     }
   }
 
+  async function handleApproveSubmission(id: string) {
+    try {
+      await apiClient.post(`/admin/submissions/${id}/approve`)
+      void fetchSubmissions(submissionPage)
+    } catch {
+      // silent
+    }
+  }
+
+  async function handleRejectSubmission(id: string) {
+    try {
+      await apiClient.post(`/admin/submissions/${id}/reject`, {})
+      void fetchSubmissions(submissionPage)
+    } catch {
+      // silent
+    }
+  }
+
   function renderSortIndicator(columnId: SourceColumnId): string {
     if (!sortState.isSortedBy(columnId)) return ''
     return sortState.sort?.dir === 'asc' ? ' ↑' : ' ↓'
@@ -453,16 +471,17 @@ export function SourceTable() {
                 <th className="px-4 py-3 text-left">来源 URL</th>
                 <th className="px-4 py-3 text-left">提交者</th>
                 <th className="px-4 py-3 text-left">提交时间</th>
+                <th className="px-4 py-3 text-left">操作</th>
               </tr>
             </thead>
             <tbody>
               {submissionLoading ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-sm text-[var(--muted)]">加载中…</td>
+                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-[var(--muted)]">加载中…</td>
                 </tr>
               ) : submissions.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-sm text-[var(--muted)]">暂无用户纠错数据</td>
+                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-[var(--muted)]">暂无用户纠错数据</td>
                 </tr>
               ) : (
                 submissions.map((row) => (
@@ -477,6 +496,26 @@ export function SourceTable() {
                     </td>
                     <td className="px-4 py-3 text-[var(--muted)]">{row.submitted_by_username ?? '匿名'}</td>
                     <td className="px-4 py-3 text-xs text-[var(--muted)]">{new Date(row.created_at).toLocaleString()}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleApproveSubmission(row.id)}
+                          className="rounded border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-xs text-green-300"
+                          data-testid={`submission-approve-btn-${row.id}`}
+                        >
+                          采纳
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleRejectSubmission(row.id)}
+                          className="rounded border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-xs text-red-300"
+                          data-testid={`submission-reject-btn-${row.id}`}
+                        >
+                          忽略
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}

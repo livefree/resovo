@@ -5,12 +5,14 @@ import { SourceTable } from '@/components/admin/sources/SourceTable'
 const getMock = vi.fn()
 const deleteMock = vi.fn()
 const patchMock = vi.fn()
+const postMock = vi.fn()
 
 vi.mock('@/lib/api-client', () => ({
   apiClient: {
     get: (...args: unknown[]) => getMock(...args),
     delete: (...args: unknown[]) => deleteMock(...args),
     patch: (...args: unknown[]) => patchMock(...args),
+    post: (...args: unknown[]) => postMock(...args),
   },
 }))
 
@@ -85,6 +87,7 @@ describe('SourceTable (CHG-216)', () => {
     })
     deleteMock.mockResolvedValue({})
     patchMock.mockResolvedValue({})
+    postMock.mockResolvedValue({})
   })
 
   it('loads inactive sources by default and supports toggle sort', async () => {
@@ -124,6 +127,19 @@ describe('SourceTable (CHG-216)', () => {
     await screen.findByText('Fix Video')
     expect(getMock).toHaveBeenCalledWith('/admin/submissions?page=1&limit=20')
     expect(screen.getByText('alice')).toBeTruthy()
+  })
+
+  it('approves submission and refreshes submissions tab', async () => {
+    render(<SourceTable />)
+
+    fireEvent.click(screen.getByTestId('source-tab-submissions'))
+    await screen.findByText('Fix Video')
+    fireEvent.click(screen.getByTestId('submission-approve-btn-sub-1'))
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith('/admin/submissions/sub-1/approve')
+      expect(getMock).toHaveBeenCalledWith('/admin/submissions?page=1&limit=20')
+    })
   })
 
   it('persists resized width after remount', async () => {
