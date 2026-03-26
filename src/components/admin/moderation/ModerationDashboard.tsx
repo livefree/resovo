@@ -32,7 +32,9 @@ export function ModerationDashboard() {
         `/admin/videos/pending-review?page=1&limit=${NAV_FETCH_LIMIT}`
       )
       setNavIds(res.rows.map((r) => r.id))
-    } catch { /* silent */ }
+    } catch (_err) {
+      // nav IDs fetch failed: keyboard navigation falls back to no-op
+    }
   }, [])
 
   useEffect(() => { void fetchNavIds() }, [fetchNavIds, listRefreshKey])
@@ -48,7 +50,9 @@ export function ModerationDashboard() {
     try {
       await apiClient.post(`/admin/videos/${selectedVideoId}/review`, { action: 'approve' })
       handleReviewed()
-    } catch { /* silent */ } finally {
+    } catch (_err) {
+      // hotkey shortcut failed: detail panel's error state shows feedback
+    } finally {
       reviewingRef.current = false
     }
   }, [selectedVideoId, handleReviewed])
@@ -59,7 +63,9 @@ export function ModerationDashboard() {
     try {
       await apiClient.post(`/admin/videos/${selectedVideoId}/review`, { action: 'reject' })
       handleReviewed()
-    } catch { /* silent */ } finally {
+    } catch (_err) {
+      // hotkey shortcut failed: detail panel's error state shows feedback
+    } finally {
       reviewingRef.current = false
     }
   }, [selectedVideoId, handleReviewed])

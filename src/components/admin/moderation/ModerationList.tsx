@@ -58,7 +58,9 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
       )
       setRows(res.rows)
       setTotal(res.total)
-    } catch { /* silent */ } finally {
+    } catch (_err) {
+      // fetch failed: list remains empty, loading ends
+    } finally {
       setLoading(false)
     }
   }, [])

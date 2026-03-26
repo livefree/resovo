@@ -43,7 +43,9 @@ export function ModerationStats() {
       try {
         const res = await apiClient.get<ModerationStats>('/admin/videos/moderation-stats')
         setStats(res)
-      } catch { /* silent */ } finally {
+      } catch (_err) {
+        // fetch failed: stats remain null, component shows dashes
+      } finally {
         setLoading(false)
       }
     })()

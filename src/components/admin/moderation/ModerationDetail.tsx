@@ -83,7 +83,9 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
     try {
       await apiClient.post(`/admin/videos/${videoId}/review`, { action })
       onReviewed?.()
-    } catch { /* silent */ } finally {
+    } catch (_err) {
+      setError('审核操作失败，请重试')
+    } finally {
       setReviewLoading(null)
     }
   }, [videoId, onReviewed])

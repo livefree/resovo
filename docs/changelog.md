@@ -3429,3 +3429,13 @@
   2. 删除按钮补 `type="button"` 属性（P1-B）
   3. `useMemo` deps 同步移除 `selectedIds`（不再需要）
 - **测试**：664/664 全部通过
+
+## CHG-231 — Moderation 组件 catch 块规范化
+- **完成时间**：2026-03-26
+- **修改文件**：
+  - `src/components/admin/moderation/ModerationStats.tsx` — `catch` 改为 `catch (_err)`，注释说明 stats 显示 dashes
+  - `src/components/admin/moderation/ModerationList.tsx` — 同上，fetch 失败显示空列表
+  - `src/components/admin/moderation/ModerationDetail.tsx` — review action `catch (_err)` 同时调用 `setError('审核操作失败，请重试')` 向用户反馈
+  - `src/components/admin/moderation/ModerationDashboard.tsx` — fetchNavIds + handleApprove + handleReject 的 catch 改为 `catch (_err)` 加说明注释
+- **原因**：`catch { /* silent */ }` 等同于空 catch，违反 CLAUDE.md 规范；no-console ESLint rule 阻止 console.warn，改用 catch(_err) + 注释 + 必要时 setError
+- **测试**：664/664 全部通过
