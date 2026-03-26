@@ -256,6 +256,14 @@ export async function listTrendingVideos(
 
 // ── Admin 查询（含未发布视频）────────────────────────────────────
 
+const SORT_FIELD_WHITELIST: Record<string, string> = {
+  created_at: 'v.created_at',
+  updated_at: 'v.updated_at',
+  title: 'v.title',
+  year: 'v.year',
+  type: 'v.type',
+}
+
 export interface AdminVideoListFilters {
   status?: 'pending' | 'published' | 'unpublished' | 'all'
   type?: VideoType
@@ -264,6 +272,8 @@ export interface AdminVideoListFilters {
   siteKey?: string
   visibilityStatus?: VisibilityStatus
   reviewStatus?: ReviewStatus
+  sortField?: string
+  sortDir?: 'asc' | 'desc'
   page: number
   limit: number
 }
@@ -313,6 +323,8 @@ export async function listAdminVideos(
 
   const where = conditions.join(' AND ')
   const offset = (filters.page - 1) * filters.limit
+  const orderByCol = SORT_FIELD_WHITELIST[filters.sortField ?? ''] ?? 'v.created_at'
+  const orderByDir = filters.sortDir === 'asc' ? 'ASC' : 'DESC'
 
   const [rows, countResult] = await Promise.all([
     db.query<DbVideoRow & { source_count: string }>(
@@ -331,7 +343,7 @@ export async function listAdminVideos(
                 WHERE video_id = v.id AND deleted_at IS NULL)::text AS total_source_count
        FROM videos v
        WHERE ${where}
-       ORDER BY v.created_at DESC
+       ORDER BY ${orderByCol} ${orderByDir}
        LIMIT $${idx} OFFSET $${idx + 1}`,
       [...params, filters.limit, offset]
     ),

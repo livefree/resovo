@@ -57,6 +57,8 @@ const VideoMetaSchema = z.object({
 
 const CreateVideoSchema = VideoMetaSchema.required({ title: true, type: true })
 
+const SORT_FIELDS = ['created_at', 'updated_at', 'title', 'year', 'type'] as const
+
 const ListQuerySchema = z.object({
   status: z.enum(['pending', 'published', 'unpublished', 'all']).optional().default('all'),
   type: z.enum(['movie', 'series', 'anime', 'variety', 'documentary', 'short', 'sports', 'music', 'news', 'kids', 'other'] as const).optional(),
@@ -67,6 +69,8 @@ const ListQuerySchema = z.object({
   q: z.string().max(100).optional(),
   /** 按来源站点 key 筛选 */
   site: z.string().max(100).optional(),
+  sortField: z.enum(SORT_FIELDS).optional(),
+  sortDir: z.enum(['asc', 'desc']).optional(),
 })
 
 // ── 路由注册 ──────────────────────────────────────────────────────
@@ -86,7 +90,7 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const { status, type, visibilityStatus, reviewStatus, page, limit, q, site } = parsed.data
+    const { status, type, visibilityStatus, reviewStatus, page, limit, q, site, sortField, sortDir } = parsed.data
     const result = await videoService.adminList({
       status,
       type,
@@ -96,6 +100,8 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       limit,
       q,
       siteKey: site,
+      sortField,
+      sortDir,
     })
     return reply.send(result)
   })

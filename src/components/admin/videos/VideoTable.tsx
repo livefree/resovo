@@ -17,7 +17,6 @@ import { useAdminTableColumns } from '@/components/admin/shared/table/useAdminTa
 import { useAdminTableSort } from '@/components/admin/shared/table/useAdminTableSort'
 import {
   useVideoTableColumns,
-  toComparableValue,
   COLUMN_LABELS,
   SORTABLE_MAP,
   VIDEO_COLUMNS,
@@ -69,23 +68,6 @@ export function VideoTable() {
     [columnsState.columns],
   )
 
-  const sortedVideos = useMemo(() => {
-    if (!sortState.sort) return videos
-    const next = [...videos]
-    next.sort((a, b) => {
-      const va = toComparableValue(a, sortState.sort?.field ?? '')
-      const vb = toComparableValue(b, sortState.sort?.field ?? '')
-      if (va === vb) return 0
-      if (typeof va === 'number' && typeof vb === 'number') {
-        return sortState.sort?.dir === 'asc' ? va - vb : vb - va
-      }
-      const sa = String(va)
-      const sb = String(vb)
-      return sortState.sort?.dir === 'asc' ? sa.localeCompare(sb) : sb.localeCompare(sa)
-    })
-    return next
-  }, [videos, sortState.sort])
-
   const fetchVideos = useCallback(async (pageVal: number) => {
     setLoading(true)
     setSelectedIds([])
@@ -97,30 +79,34 @@ export function VideoTable() {
       if (visibilityStatus) params.set('visibilityStatus', visibilityStatus)
       if (reviewStatus) params.set('reviewStatus', reviewStatus)
       if (site) params.set('site', site)
+      if (sortState.sort) {
+        params.set('sortField', sortState.sort.field)
+        params.set('sortDir', sortState.sort.dir)
+      }
       const res = await apiClient.get<{ data: VideoAdminRow[]; total: number }>(`/admin/videos?${params}`)
       setVideos(res.data)
       setTotal(res.total)
-    } catch {
-      // silent
+    } catch (_err) {
+      // fetch failed: table remains showing previous data
     } finally {
       setLoading(false)
     }
-  }, [q, type, status, visibilityStatus, reviewStatus, site])
+  }, [q, type, status, visibilityStatus, reviewStatus, site, sortState.sort])
 
   useEffect(() => {
     setPage(1)
     void fetchVideos(1)
-  }, [q, type, status, visibilityStatus, reviewStatus, site, fetchVideos])
+  }, [q, type, status, visibilityStatus, reviewStatus, site, sortState.sort, fetchVideos])
 
   const handleCheck = useCallback((id: string, checked: boolean) => {
     setSelectedIds((prev) => (checked ? [...prev, id] : prev.filter((x) => x !== id)))
   }, [])
 
   const handleSelectAll = useCallback((checked: boolean) => {
-    setSelectedIds(checked ? sortedVideos.map((v) => v.id) : [])
-  }, [sortedVideos])
+    setSelectedIds(checked ? videos.map((v) => v.id) : [])
+  }, [videos])
 
-  const allSelected = sortedVideos.length > 0 && selectedIds.length === sortedVideos.length
+  const allSelected = videos.length > 0 && selectedIds.length === videos.length
 
   const handleVisibilityToggle = useCallback(async (row: VideoAdminRow, nextValue: boolean) => {
     const nextVisibility = nextValue ? 'public' : 'hidden'
@@ -208,7 +194,7 @@ export function VideoTable() {
 
       <ModernDataTable
         columns={tableColumns}
-        rows={sortedVideos}
+        rows={videos}
         sort={sort}
         onSortChange={(nextSort) => {
           sortState.setSort(nextSort.field, nextSort.direction === 'asc' ? 'asc' : 'desc')

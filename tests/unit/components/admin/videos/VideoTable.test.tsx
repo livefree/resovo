@@ -62,7 +62,16 @@ describe('VideoTable (CHG-211/212)', () => {
     mockSearchParams.forEach((_value, key) => mockSearchParams.delete(key))
     getMock.mockImplementation(async (url: string) => {
       if (url.startsWith('/admin/videos?')) {
-        return { data: MOCK_ROWS, total: MOCK_ROWS.length }
+        const params = new URLSearchParams(url.split('?')[1] ?? '')
+        const sortField = params.get('sortField')
+        const sortDir = params.get('sortDir')
+        // Server returns rows sorted per params (simulates server-side sort)
+        if (sortField === 'title' && sortDir === 'desc') {
+          // DESC: Zeta first (v2), Alpha second (v1)
+          return { data: [...MOCK_ROWS], total: MOCK_ROWS.length }
+        }
+        // Default / title ASC: Alpha first (v1), Zeta second (v2)
+        return { data: [...MOCK_ROWS].reverse(), total: MOCK_ROWS.length }
       }
 
       if (url === '/admin/videos/v1') {

@@ -3455,3 +3455,15 @@
 - **变更文件**：
   - `src/api/db/queries/videos.ts` — `listAdminVideos` site 过滤条件从 `video_sources.source_name = $siteKey` 改为 `EXISTS (SELECT 1 FROM crawler_sites cs2 WHERE cs2.id = v.site_id AND cs2.key = $siteKey)`；更新注释
 - **测试**：typecheck + lint + 664/664 单元测试全部通过
+
+---
+
+## CHG-234 — 视频列表排序改为服务端
+- **完成时间**：2026-03-26 17:15
+- **变更文件**：
+  - `src/api/db/queries/videos.ts` — `AdminVideoListFilters` 新增 `sortField`/`sortDir` 字段；添加 5 字段白名单 `SORT_FIELD_WHITELIST`；ORDER BY 从硬编码 `v.created_at DESC` 改为从白名单取列名动态构建
+  - `src/api/services/VideoService.ts` — `adminList` 透传 `sortField`/`sortDir`
+  - `src/api/routes/admin/videos.ts` — `ListQuerySchema` 新增 `sortField`（枚举白名单）和 `sortDir`；解构后传入 service
+  - `src/components/admin/videos/VideoTable.tsx` — 移除客户端 `sortedVideos` useMemo 排序逻辑；`fetchVideos` 将 `sortState.sort` 作为 URL 参数传给 API；catch 改为 `catch (_err)` 加注释；移除未使用的 `toComparableValue` 导入
+  - `tests/unit/components/admin/videos/VideoTable.test.tsx` — 更新 mock 根据 sortField/sortDir 返回不同顺序数据，验证服务端排序行为
+- **测试**：typecheck + lint + 664/664 单元测试全部通过

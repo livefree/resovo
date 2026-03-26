@@ -78,6 +78,8 @@ export class VideoService {
     siteKey?: string
     visibilityStatus?: import('@/types').VisibilityStatus
     reviewStatus?: import('@/types').ReviewStatus
+    sortField?: string
+    sortDir?: 'asc' | 'desc'
     page?: number
     limit?: number
   }): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
@@ -91,6 +93,8 @@ export class VideoService {
       siteKey: params.siteKey,
       visibilityStatus: params.visibilityStatus,
       reviewStatus: params.reviewStatus,
+      sortField: params.sortField,
+      sortDir: params.sortDir,
       page,
       limit,
     })
