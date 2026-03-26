@@ -3308,3 +3308,14 @@
   - **CHG-205 口径**：Cell 组件库数量从"6 个"修正为"7 个"（Codex 在用户建议下额外实现了 TableCheckboxCell）
   - **cells.test.tsx**：新增 TableCheckboxCell 受控 checked 状态测试（全选/取消全选由父层状态驱动，Checkbox 本身纯受控）
 - **测试覆盖**：`tests/unit/components/modern-table/cells.test.tsx` 8 个用例 ✅
+
+## CHG-219 — 源健康检测轻量方案（事件上报 + Bull 队列）
+- **完成时间**：2026-03-26 04:40
+- **修改文件**：
+  - `src/api/routes/sources.ts` — 新增 `POST /sources/:id/report-error` 公开端点（内存冷却限速 5 分钟）
+  - `tests/unit/api/sourceHealthCheck.test.ts`（新建）— 5 个用例
+- **实现决策**：
+  - 复用现有 `enqueueVerifySingle(id, url)` + `verifyQueue`（`verifyWorker.ts` 已实现 HTTP HEAD → 更新 `is_active` + `last_checked`），无需新建 `sourceHealthWorker.ts` 或新 Bull job type
+  - 冷却限速使用模块级 `Map<string, number>`（无需引入新依赖），同一源 5 分钟内只入队一次
+  - 源不存在返回 404，冷却期内返回 429
+- **测试覆盖**：`tests/unit/api/sourceHealthCheck.test.ts` 5 个用例 ✅（657/657 全部通过）
