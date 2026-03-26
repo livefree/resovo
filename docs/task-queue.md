@@ -2288,7 +2288,8 @@
      - `src/api/db/queries/videos.ts` — 新增 `reviewVideo(db, videoId, { action, reason, reviewedBy })` 函数
      - `src/api/services/VideoService.ts` — 新增 `review()` Service 方法，DB 写入后调 `indexToES()`
      - `src/api/routes/admin/videos.ts` — 新增 `POST /admin/videos/:id/review` 端点
-   - **状态转换表**：approve→(approved, public) / reject→(rejected, hidden) / block→(blocked, blocked)
+   - **状态转换表**：approve→(approved, public) / reject→(rejected, hidden)
+   - **已知约束**：`block` action 原计划支持但 Migration 016 的 CHECK 约束不含 `blocked` 值，当前实现仅支持 `approve`/`reject`；`block` 标记为后续演进项（需补 migration）
    - **验收要点**：API 正确转换 review_status + visibility_status；触发 ES 同步；填写 reviewed_by/reviewed_at/review_reason
    - **测试**：`tests/unit/api/reviewVideo.test.ts`
 
@@ -2302,7 +2303,7 @@
    - **文件范围**：
      - `src/api/db/queries/sources.ts` — 新增 `updateSourceUrl(db, sourceId, newUrl)` 函数
      - `src/api/services/ContentService.ts` — 新增 `updateSourceUrl()` Service 方法
-     - `src/api/routes/admin/content.ts` — 新增 `PATCH /admin/sources/:id` 端点，body: `{ source_url }`
+     - `src/api/routes/admin/content.ts` — 新增 `PATCH /admin/sources/:id` 端点，body: `{ sourceUrl }` (camelCase)
    - **验收要点**：API 正确更新 source_url；更新后同步设 `is_active=true`、`last_checked=NOW()`
    - **测试**：`tests/unit/api/updateSourceUrl.test.ts`
 
@@ -2348,7 +2349,7 @@
    - **验收要点**：空表可渲染；列宽独立不互相挤压；行高固定 48px；typecheck 通过
    - **测试**：`tests/unit/components/modern-table/ModernDataTable.test.tsx`
 
-2. CHG-205 — Cell 组件库（6 个标准 Cell）
+2. CHG-205 — Cell 组件库（7 个标准 Cell）
    - **状态**：✅ 已完成
    - **创建时间**：2026-03-25 22:00
    - **计划开始**：CHG-204 之后
@@ -2679,9 +2680,9 @@
 ---
 
 ## SEQ-20260325-19 — Phase 0/0.5 补丁：契约与流程一致性修复
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-25 23:25
-- **最后更新时间**：2026-03-25 23:25
+- **最后更新时间**：2026-03-26 04:25
 - **目标**：修复 CHG-200 ~ CHG-205 中已识别的文档契约不一致与流程口径偏差，补齐必要测试说明，避免影响后续联调与审计
 - **范围**：文档口径修复 + 定向测试补强（不改业务功能）
 - **依赖**：无（不阻塞 SEQ-20260325-16 ~ SEQ-20260325-18）
@@ -2690,8 +2691,10 @@
 ### 任务列表（按执行顺序）
 
 1. CHG-226 — CHG-200~205 契约与流程口径修复（不改主序列）
-   - **状态**：⬜ 待开始
+   - **状态**：✅ 已完成
    - **创建时间**：2026-03-25 23:25
+   - **实际开始**：2026-03-26 04:20
+   - **完成时间**：2026-03-26 04:25
    - **计划开始**：立即
    - **依赖**：无
    - **文件范围**：
@@ -2704,3 +2707,51 @@
      - CHG-205 “6/7 个 Cell”口径统一，验收项与测试覆盖说明一致
      - 对 CHG-204/205 与 Phase 0 依赖时间线补充解释，不改既有 CHG 编号与既定顺序
      - 定向测试可复现并通过（受环境限制时需记录阻塞原因）
+
+---
+
+## SEQ-20260326-20 — P0 规范修复：超限文件拆分
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 04:00
+- **最后更新时间**：2026-03-26 04:00
+- **目标**：修复 Codex 开发 CHG-208/211/216~218 产生的三个文件/函数超限违规（> 500 行 / > 80 行），符合 CLAUDE.md 硬规则；同时将 SourceTable 迁移至 ModernDataTable 体系（CHG-216~218 的设计偏差修复）
+- **范围**：前端组件重构，不涉及 API / DB 层
+- **依赖**：CHG-218（已完成）；必须在 CHG-221（Phase 3 前端）之前完成
+- **审核来源**：2026-03-26 Codex worktree 代码审核结论
+
+### 任务列表（按执行顺序）
+
+1. CHG-227 — VideoTable.tsx 拆分 + lint fix
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-26 04:00
+   - **计划开始**：CHG-226 之后
+   - **依赖**：CHG-226
+   - **违规现状**：543 行文件、VideoTable() 函数 360 行、useMemo 缺少 handleSelectAll 依赖（lint warning）
+   - **文件范围**：
+     - `src/components/admin/videos/VideoTable.tsx` → 拆出列定义到 `useVideoTableColumns.ts`（含 switch 块），主组件保留数据获取 + 渲染骨架
+     - `src/components/admin/videos/useVideoTableColumns.ts`（新建）— 返回 `TableColumn<VideoAdminRow>[]`
+   - **验收要点**：VideoTable.tsx < 250 行；useVideoTableColumns.ts < 150 行；各函数 ≤ 80 行；lint 0 warning；现有测试全部通过
+
+2. CHG-228 — CrawlerSiteTable.tsx 拆分
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-26 04:00
+   - **计划开始**：CHG-227 之后
+   - **依赖**：CHG-227
+   - **违规现状**：599 行文件、CrawlerSiteTable() 函数 346 行、HeaderCell() 函数 113 行
+   - **文件范围**：
+     - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx` → 拆出 HeaderCell 到独立文件，主函数体拆出列定义 hook
+     - `src/components/admin/system/crawler-site/components/CrawlerSiteTableHead.tsx`（新建）— HeaderCell 组件
+     - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteTableColumns.ts`（新建）— 列定义
+   - **验收要点**：各文件 < 300 行；各函数 ≤ 80 行；现有 CrawlerSiteManager 测试全部通过
+
+3. CHG-229 — SourceTable.tsx 拆分 + 迁移 ModernDataTable
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-26 04:00
+   - **计划开始**：CHG-228 之后
+   - **依赖**：CHG-228
+   - **违规现状**：591 行文件、SourceTable() 函数 ~484 行；Tab 1 未使用 ModernDataTable（CHG-216~218 设计偏差）
+   - **文件范围**：
+     - `src/components/admin/sources/SourceTable.tsx` → 拆分为主组件（骨架 + tab 切换）+ 两个子组件
+     - `src/components/admin/sources/InactiveSourceTable.tsx`（新建）— Tab 1：基于 ModernDataTable，列：视频标题、S/E、UrlCell、DateCell、操作
+     - `src/components/admin/sources/SubmissionTable.tsx`（新建）— Tab 2：基于 ModernDataTable，列：视频标题、UrlCell、提交者、操作
+   - **验收要点**：SourceTable.tsx < 150 行；子组件各 < 200 行；各函数 ≤ 80 行；Tab 1/2 均使用 ModernDataTable Cell 组件；现有测试全部通过

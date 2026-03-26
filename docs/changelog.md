@@ -3294,3 +3294,17 @@
   - 操作完成后自动刷新当前提交列表，保持与失效源 Tab 的分页状态解耦
   - 测试补充：切换到 submissions Tab 后可执行采纳动作并触发列表刷新
 - **测试覆盖**：`npm run typecheck`、`npm run test -- --run tests/unit/components/admin/sources/SourceTable.test.tsx` ✅
+
+---
+
+## CHG-226 — CHG-200~205 契约与流程口径修复
+- **完成时间**：2026-03-26 04:25
+- **修改文件**：
+  - `docs/task-queue.md`
+  - `tests/unit/components/modern-table/cells.test.tsx`
+- **变更内容**：
+  - **CHG-201 口径**：状态转换表移除 `block→(blocked, blocked)`；补充"已知约束"说明：`block` action 因 Migration 016 CHECK 约束不含 `blocked` 值，当前仅支持 `approve`/`reject`，`block` 标记为后续演进项（需补 migration）
+  - **CHG-202 口径**：请求体字段从 `source_url` 统一为 `sourceUrl`（与路由实现 Schema 一致）
+  - **CHG-205 口径**：Cell 组件库数量从"6 个"修正为"7 个"（Codex 在用户建议下额外实现了 TableCheckboxCell）
+  - **cells.test.tsx**：新增 TableCheckboxCell 受控 checked 状态测试（全选/取消全选由父层状态驱动，Checkbox 本身纯受控）
+- **测试覆盖**：`tests/unit/components/modern-table/cells.test.tsx` 8 个用例 ✅

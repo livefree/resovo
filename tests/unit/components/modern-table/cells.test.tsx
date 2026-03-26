@@ -46,6 +46,17 @@ describe('modern-table cells (CHG-205)', () => {
     expect(onChange).toHaveBeenCalledWith(true)
   })
 
+  it('TableCheckboxCell reflects controlled checked prop (全选/全不选语义由父层状态驱动)', () => {
+    // 全选：父层传入 checked=true，checkbox 应为 checked
+    const { rerender } = render(<TableCheckboxCell checked={true} onChange={vi.fn()} />)
+    const checkbox = screen.getByTestId('table-checkbox-cell') as HTMLInputElement
+    expect(checkbox.checked).toBe(true)
+
+    // 取消全选：父层传入 checked=false，checkbox 应取消
+    rerender(<TableCheckboxCell checked={false} onChange={vi.fn()} />)
+    expect(checkbox.checked).toBe(false)
+  })
+
   it('TableSwitchCell applies optimistic update and rollback on failure', async () => {
     const onToggle = vi.fn().mockRejectedValueOnce(new Error('network failed'))
     render(<TableSwitchCell value={false} onToggle={onToggle} />)
