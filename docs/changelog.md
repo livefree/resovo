@@ -3439,3 +3439,11 @@
   - `src/components/admin/moderation/ModerationDashboard.tsx` — fetchNavIds + handleApprove + handleReject 的 catch 改为 `catch (_err)` 加说明注释
 - **原因**：`catch { /* silent */ }` 等同于空 catch，违反 CLAUDE.md 规范；no-console ESLint rule 阻止 console.warn，改用 catch(_err) + 注释 + 必要时 setError
 - **测试**：664/664 全部通过
+
+---
+
+## CHG-232 — 视频类型筛选补全
+- **完成时间**：2026-03-26 16:52
+- **变更文件**：
+  - `src/components/admin/videos/VideoFilters.tsx` — 类型下拉补充 documentary（纪录片）/short（短片）/sports（体育）/music（音乐）/news（新闻）/kids（少儿）/other（其他）7 个选项，与后端 VideoType 枚举全量对齐（共 11 类）
+- **测试**：typecheck + lint + 664/664 单元测试全部通过

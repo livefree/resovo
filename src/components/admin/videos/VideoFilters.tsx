@@ -79,6 +79,13 @@ export function VideoFilters() {
         <option value="series">剧集</option>
         <option value="anime">动漫</option>
         <option value="variety">综艺</option>
+        <option value="documentary">纪录片</option>
+        <option value="short">短片</option>
+        <option value="sports">体育</option>
+        <option value="music">音乐</option>
+        <option value="news">新闻</option>
+        <option value="kids">少儿</option>
+        <option value="other">其他</option>
       </select>
 
       {/* 上架状态筛选 */}

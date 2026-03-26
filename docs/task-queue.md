@@ -2811,3 +2811,80 @@
    - **问题描述**：ModerationDetail/ModerationList/ModerationStats/ModerationDashboard 的 `catch { /* silent */ }` 等同于空 catch，违反 CLAUDE.md 精神；应在 dev 环境 console.warn，或在适当位置设置 error state
    - **文件范围**：`src/components/admin/moderation/ModerationDetail.tsx`、`ModerationList.tsx`、`ModerationStats.tsx`、`ModerationDashboard.tsx`
    - **验收要点**：所有 catch 块均为非空（含真实副作用：console.warn 或 setError）；原有测试通过
+
+---
+
+## SEQ-20260326-22 — 后台表格 UX 修复（admin_table_ux_fix_plan_20260326.md）
+- **状态**：🔄 执行中
+- **创建时间**：2026-03-26 16:10
+- **最后更新时间**：2026-03-26 16:10
+- **目标**：修复后台表格 10 个使用体验问题（来源筛选 bug、类型筛选缺项、排序仅当前页、批量栏遮挡、菜单裁切、分页能力不足、旧组件残留）
+- **来源**：`docs/admin_table_ux_fix_plan_20260326.md`
+- **依赖**：SEQ-20260326-21 已完成
+
+### 任务列表（按执行顺序）
+
+1. CHG-232 — 视频类型筛选补全（缺少 7 个类型选项）
+   - **状态**：✅ 已完成
+   - **创建时间**：2026-03-26 16:10
+   - **计划开始**：立即
+   - **实际开始**：2026-03-26 16:30
+   - **完成时间**：2026-03-26 16:52
+   - **依赖**：无
+   - **文件范围**：`src/components/admin/videos/VideoFilters.tsx`
+   - **变更内容**：补充 documentary/short/sports/music/news/kids/other 7 个类型选项及中文标签
+   - **验收要点**：类型下拉显示全部 11 类；选项值与后端 VideoType 枚举一致
+
+2. CHG-233 — 视频来源筛选 SQL 修复（source_name → site_id → cs.key）
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-26 16:10
+   - **计划开始**：CHG-232 之后
+   - **依赖**：无
+   - **文件范围**：`src/api/db/queries/videos.ts`
+   - **变更内容**：将 `video_sources.source_name = $siteKey` 改为 `EXISTS (SELECT 1 FROM crawler_sites cs2 WHERE cs2.id = v.site_id AND cs2.key = $...)`
+   - **验收要点**：传入站点 key 可正确筛出该站点入库的视频；测试通过
+
+3. CHG-234 — 视频列表排序改为服务端（API + DB + 前端）
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-26 16:10
+   - **计划开始**：CHG-233 之后
+   - **依赖**：CHG-233
+   - **文件范围**：`src/api/routes/admin/videos.ts`、`src/api/db/queries/videos.ts`、`src/components/admin/videos/VideoTable.tsx`
+   - **变更内容**：API 新增 sortField/sortDir 白名单参数；DB 查询改用 ORDER BY $sortField $sortDir（参数化）；前端将 sortState 传入 API 请求并移除客户端排序
+   - **验收要点**：排序跨页一致；非白名单 sortField 被拒绝或降级
+
+4. CHG-235 — BatchPublishBar layout 修复（fixed → content-area sticky）
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-26 16:10
+   - **计划开始**：CHG-234 之后
+   - **依赖**：无
+   - **文件范围**：`src/components/admin/videos/BatchPublishBar.tsx`
+   - **变更内容**：去掉 `fixed left-0 right-0`，改为内容区内 `sticky bottom-0`；左侧偏移适配 sidebar 宽度
+   - **验收要点**：选中后批量栏不遮挡左侧导航；底部行仍可见
+
+5. CHG-236 — ModernTableBody cell overflow 修复（操作列菜单不被裁切）
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-26 16:10
+   - **计划开始**：CHG-235 之后
+   - **依赖**：无
+   - **文件范围**：`src/components/admin/shared/modern-table/types.ts`、`src/components/admin/shared/modern-table/ModernTableBody.tsx`
+   - **变更内容**：TableColumn 新增可选 `overflowVisible?: boolean`；ModernTableBody cell 根据此 flag 切换 overflow-hidden / overflow-visible
+   - **验收要点**：操作列 CTA 弹层不被裁切；普通列文字溢出仍保持 ellipsis
+
+6. CHG-237 — PaginationV2（page size + 页码窗口 + 跳页）
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-26 16:10
+   - **计划开始**：CHG-236 之后
+   - **依赖**：无
+   - **文件范围**：`src/components/admin/PaginationV2.tsx`（新建）
+   - **变更内容**：新增 PaginationV2 组件，支持 pageSize 切换（20/50/100）、页码窗口含省略号、跳页输入
+   - **验收要点**：pageSize onChange 回调传出新值；大 total 时页码折叠正确；视觉与 AdminToolbar 风格一致
+
+7. CHG-238 — 删除无引用旧组件（5 个死代码文件）
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-26 16:10
+   - **计划开始**：CHG-237 之后
+   - **依赖**：无
+   - **文件范围**：`src/components/admin/DataTable.tsx`、`AdminVideoList.tsx`、`AdminUserList.tsx`、`AdminSubtitleList.tsx`、`AdminSubmissionList.tsx`（均删除）
+   - **变更内容**：全局引用扫描确认无使用后删除；清理 index.ts 旧导出
+   - **验收要点**：`rg` 检查无残留引用；lint + tests 通过
