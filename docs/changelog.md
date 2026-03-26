@@ -3083,3 +3083,20 @@
   - 新增单测覆盖 7 条核心行为
 - **测试覆盖**：`./node_modules/.bin/tsc --noEmit --incremental false` ✅ `./node_modules/.bin/eslint ...cells...` ✅ `npm run test -- --run tests/unit/components/modern-table/cells.test.tsx` ✅
 - **备注**：worktree 权限限制仍会阻止 `npm run typecheck`/`npm run lint` 写入生成文件，故使用等价离线校验命令
+
+---
+
+### CHG-206 — useModernTable Hook（排序/分页/列宽状态 + localStorage 持久化）
+- **完成时间**：2026-03-25 23:34
+- **修改文件**：
+  - `src/components/admin/shared/modern-table/useModernTable.ts`（新建）
+  - `tests/unit/components/modern-table/useModernTable.test.ts`（新建）
+  - `docs/task-queue.md`
+- **变更内容**：
+  - 新建 `useModernTable`，统一管理 `sort/page/pageSize/columnWidths/selectedRowIds/scrollPosition`
+  - `sort` 支持 URL 参数读写同步（默认 `sortField` + `sortDir`）
+  - 列宽、分页、排序状态按 `tableId` 持久化到 `localStorage`
+  - 提供 `toggleRow/toggleAll/clearSelection` 选择态 API 与滚动位置记忆/恢复 API
+  - 新增单测覆盖：默认初始化、URL 优先级、持久化恢复、选择态、滚动位置恢复
+- **测试覆盖**：`npm run test -- --run tests/unit/components/modern-table/useModernTable.test.ts`
+- **备注**：当前环境执行时 `vitest` 命令不可用（`sh: vitest: command not found`），需安装依赖后复跑验证

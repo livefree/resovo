@@ -2324,7 +2324,7 @@
 ## SEQ-20260325-15 — Phase 0.5：ModernDataTable 表格基建
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-25 22:00
-- **最后更新时间**：2026-03-25 22:55
+- **最后更新时间**：2026-03-25 23:34
 - **目标**：交付可复用的 ModernDataTable 表格骨架 + Cell 组件库 + 状态管理 Hook + 列宽拖拽，为 Phase 1~3 所有表格提供底座
 - **范围**：`src/components/admin/shared/modern-table/` 全新目录
 - **依赖**：SEQ-20260325-14（Phase 0）全部完成
@@ -2368,12 +2368,15 @@
    - **测试**：`tests/unit/components/modern-table/cells.test.tsx`
 
 3. CHG-206 — useModernTable Hook（排序/分页/列宽状态 + localStorage 持久化）
-   - **状态**：⬜ 待开始
+   - **状态**：✅ 已完成
    - **创建时间**：2026-03-25 22:00
    - **计划开始**：CHG-204 之后
+   - **实际开始**：2026-03-25 23:34
+   - **完成时间**：2026-03-25 23:34
    - **依赖**：CHG-204（类型定义）
    - **文件范围**（新建）：
      - `src/components/admin/shared/modern-table/useModernTable.ts`
+     - `tests/unit/components/modern-table/useModernTable.test.ts`
    - **功能**：
      - 排序状态（field + direction），URL 参数同步
      - 列宽状态（Map<columnId, width>）+ localStorage 持久化（key 按 tableId 隔离）
@@ -2632,3 +2635,32 @@
      - Happy path：入库(internal/pending_review) → 审核通过(public/approved) → 视频列表可见性确认
      - Reject path：入库 → 审核拒绝(hidden/rejected) → 列表不可见
    - **验收要点**：至少 2 条完整路径通过；覆盖 review_status + visibility_status 全流转
+
+---
+
+## SEQ-20260325-19 — Phase 0/0.5 补丁：契约与流程一致性修复
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-25 23:25
+- **最后更新时间**：2026-03-25 23:25
+- **目标**：修复 CHG-200 ~ CHG-205 中已识别的文档契约不一致与流程口径偏差，补齐必要测试说明，避免影响后续联调与审计
+- **范围**：文档口径修复 + 定向测试补强（不改业务功能）
+- **依赖**：无（不阻塞 SEQ-20260325-16 ~ SEQ-20260325-18）
+- **方案来源**：审查结论（CHG-200~205 一致性检查）
+
+### 任务列表（按执行顺序）
+
+1. CHG-226 — CHG-200~205 契约与流程口径修复（不改主序列）
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-25 23:25
+   - **计划开始**：立即
+   - **依赖**：无
+   - **文件范围**：
+     - `docs/task-queue.md` — 统一 CHG-201/202/205 描述口径（review action、请求字段命名、Cell 数量与验收描述）
+     - `docs/changelog.md` — 同步修正文档口径，补充“已知约束/后续任务”说明
+     - `tests/unit/components/modern-table/cells.test.tsx`（如需）— 补充 Checkbox 在“全选/反选”语义下的受控行为断言，或明确该语义由上层表格状态测试覆盖
+   - **验收要点**：
+     - CHG-202 请求体字段口径统一为 `sourceUrl`（文档与实现一致）
+     - CHG-201 明确当前仅支持 `approve/reject`；`block` 标记为后续演进项
+     - CHG-205 “6/7 个 Cell”口径统一，验收项与测试覆盖说明一致
+     - 对 CHG-204/205 与 Phase 0 依赖时间线补充解释，不改既有 CHG 编号与既定顺序
+     - 定向测试可复现并通过（受环境限制时需记录阻塞原因）
