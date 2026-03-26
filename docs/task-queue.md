@@ -2322,9 +2322,9 @@
 ---
 
 ## SEQ-20260325-15 — Phase 0.5：ModernDataTable 表格基建
-- **状态**：⬜ 待开始
+- **状态**：🔄 执行中
 - **创建时间**：2026-03-25 22:00
-- **最后更新时间**：2026-03-25 22:00
+- **最后更新时间**：2026-03-25 22:43
 - **目标**：交付可复用的 ModernDataTable 表格骨架 + Cell 组件库 + 状态管理 Hook + 列宽拖拽，为 Phase 1~3 所有表格提供底座
 - **范围**：`src/components/admin/shared/modern-table/` 全新目录
 - **依赖**：SEQ-20260325-14（Phase 0）全部完成
@@ -2333,9 +2333,11 @@
 ### 任务列表（按执行顺序）
 
 1. CHG-204 — ModernDataTable 核心骨架 + 类型定义
-   - **状态**：⬜ 待开始
+   - **状态**：✅ 已完成
    - **创建时间**：2026-03-25 22:00
    - **计划开始**：Phase 0 完成后首个任务
+   - **实际开始**：2026-03-25 22:24
+   - **完成时间**：2026-03-25 22:43
    - **依赖**：SEQ-20260325-14 全部完成
    - **文件范围**（新建）：
      - `src/components/admin/shared/modern-table/types.ts` — `TableColumn<T>` 接口（id, header, accessor, width, minWidth, enableResizing, enableSorting, cell）

@@ -3038,3 +3038,23 @@
   - `tests/unit/api/ingestPolicy.test.ts`（新建）— 4 个测试
 - **测试覆盖**：typecheck ✅ unit tests 616/616 ✅
 - **备注**：Phase 0（SEQ-20260325-14）全部 4 个任务完成
+
+---
+
+### CHG-204 — ModernDataTable 核心骨架 + 类型定义
+- **完成时间**：2026-03-25 22:43
+- **修改文件**：
+  - `src/components/admin/shared/modern-table/types.ts`
+  - `src/components/admin/shared/modern-table/ModernDataTable.tsx`
+  - `src/components/admin/shared/modern-table/ModernTableHead.tsx`
+  - `src/components/admin/shared/modern-table/ModernTableBody.tsx`
+  - `tests/unit/components/modern-table/ModernDataTable.test.tsx`（新建）
+  - `docs/task-queue.md`
+- **变更内容**：
+  - 新建 `TableColumn<T>` / `TableSortState` 等表格核心类型
+  - 新建 `ModernDataTable`：`overflow-x-auto` 容器、按列宽累加表格总宽、sticky thead
+  - 新建 `ModernTableHead`：受控排序按钮与排序指示器
+  - 新建 `ModernTableBody`：固定 `h-12` 行高、`whitespace-nowrap + overflow-hidden + text-ellipsis`、加载/空态渲染
+  - 补齐 CHG-204 单测，覆盖空态、列宽、总宽、行高样式、排序指示器
+- **测试覆盖**：`npx tsc --noEmit --incremental false` ✅ `npx eslint ...modern-table...` ✅ `npm run test -- --run tests/unit/components/modern-table/ModernDataTable.test.tsx` ✅
+- **备注**：当前 worktree 权限限制会阻止 `npm run typecheck`/`npm run lint` 生成文件，已使用等价校验命令完成验证
