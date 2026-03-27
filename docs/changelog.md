@@ -3493,3 +3493,19 @@
   - `src/components/admin/PaginationV2.tsx`（新建）— pageSize 切换（20/50/100）、页码窗口含省略号（≤7 页全显，>7 页折叠）、跳页输入（Enter 或按钮）、总条数展示
   - `tests/unit/components/admin/PaginationV2.test.tsx`（新建）— 8 个测试覆盖：渲染、页码点击、pageSize 切换、省略号、Enter 跳页、按钮跳页、首页 prev 禁用、末页 next 禁用
 - **测试**：typecheck + lint + 672/672 单元测试全部通过
+
+---
+
+## CHG-238 — 删除无引用旧组件
+- **完成时间**：2026-03-26 17:45
+- **变更文件**：
+  - `src/components/admin/DataTable.tsx` — 已删除（无引用，被 ModernDataTable 替代）
+  - `src/components/admin/AdminVideoList.tsx` — 已删除（无引用）
+  - `src/components/admin/AdminUserList.tsx` — 已删除（无引用）
+  - `src/components/admin/AdminSubtitleList.tsx` — 已删除（无引用）
+  - `src/components/admin/AdminSubmissionList.tsx` — 已删除（无引用）
+  - `src/components/admin/index.ts` — 移除 DataTable / Column 导出
+  - `tests/unit/components/admin/DataTable.test.tsx` — 已删除（随组件一起删除）
+  - `tests/unit/components/admin/AdminSubtitleList.test.tsx` — 已删除（随组件一起删除）
+  - `tests/unit/components/admin/AdminSubmissionList.test.tsx` — 已删除（随组件一起删除）
+- **测试**：typecheck + lint + 658/658 单元测试全部通过（72 个测试文件，3 个旧测试文件已随组件删除）
