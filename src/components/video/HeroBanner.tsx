@@ -45,52 +45,64 @@ export function HeroBanner() {
 
   return (
     <div
-      className="relative w-full overflow-hidden"
-      style={{ height: 420 }}
+      className="relative w-full overflow-hidden flex items-end"
+      style={{ minHeight: '65vh', maxHeight: '800px', background: 'var(--background)' }}
       data-testid="hero-banner"
     >
       {/* 背景图 */}
       {featured.coverUrl && (
-        <Image
-          src={featured.coverUrl}
-          alt={featured.title}
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover"
-        />
+        <div className="absolute inset-0">
+          <Image
+            src={featured.coverUrl}
+            alt={featured.title}
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover"
+          />
+        </div>
       )}
 
-      {/* 渐变遮罩 */}
-      <div
-        className="absolute inset-0"
-        style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.85) 40%, transparent 100%)' }}
-      />
+      {/* 渐变遮罩 (左深右浅 + 底部融合) */}
+      <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[var(--background)] via-[var(--background)]/20 to-transparent" />
 
       {/* 内容 */}
-      <div className="relative h-full max-w-screen-xl mx-auto px-4 flex flex-col justify-end pb-10">
-        <div className="max-w-lg">
+      <div className="relative w-full max-w-screen-xl mx-auto px-4 pb-16 z-10">
+        <div className="max-w-2xl space-y-4">
           {featured.rating !== null && (
-            <span className="text-sm font-medium" style={{ color: 'var(--gold)' }}>
-              ★ {featured.rating.toFixed(1)} · {featured.year ?? ''}
+            <span className="inline-block px-2.5 py-1 bg-black/50 backdrop-blur-md rounded border border-white/10 text-sm font-bold text-[var(--accent)]">
+              ★ {featured.rating.toFixed(1)} {featured.year && `· ${featured.year}`}
             </span>
           )}
-          <h2 className="mt-1 text-3xl font-bold text-white leading-tight line-clamp-2">
+          <h2 className="text-4xl md:text-5xl xl:text-6xl font-extrabold text-white leading-tight drop-shadow-xl line-clamp-2">
             {featured.title}
           </h2>
           {featured.titleEn && (
-            <p className="mt-1 text-sm" style={{ color: 'rgba(255,255,255,0.7)' }}>
+            <p className="text-lg text-white/70 font-medium tracking-wide drop-shadow-md">
               {featured.titleEn}
             </p>
           )}
-          <Link
-            href={href}
-            data-testid="hero-watch-btn"
-            className="mt-4 inline-flex items-center gap-2 px-6 py-2.5 rounded-lg font-semibold text-black transition-opacity hover:opacity-90"
-            style={{ background: 'var(--gold)' }}
-          >
-            ▶ 立即观看
-          </Link>
+          
+          <div className="pt-6 flex flex-wrap items-center gap-4">
+            <Link
+              href={href}
+              data-testid="hero-watch-btn"
+              className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full font-bold text-black bg-[var(--accent)] hover:scale-105 transition-transform duration-300 shadow-[0_0_20px_rgba(232,184,75,0.4)]"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              立即播放
+            </Link>
+            
+            <Link
+              href={`/${featured.type}/${featured.slug ? featured.slug + '-' + featured.shortId : featured.shortId}`}
+              className="inline-flex items-center justify-center px-8 py-3.5 rounded-full font-bold text-white bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-colors duration-300"
+            >
+              详情信息
+            </Link>
+          </div>
         </div>
       </div>
     </div>

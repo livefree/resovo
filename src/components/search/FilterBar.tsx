@@ -95,8 +95,8 @@ export function FilterBar({ className }: FilterBarProps) {
         />
         <button
           type="submit"
-          className="px-4 py-2 rounded-lg text-sm font-medium transition-opacity hover:opacity-90"
-          style={{ background: 'var(--gold)', color: 'black' }}
+          className="px-5 py-2 rounded-lg text-sm font-bold transition-all hover:scale-105 shadow-[0_0_10px_rgba(232,184,75,0.2)]"
+          style={{ background: 'var(--accent)', color: 'black' }}
           data-testid="search-submit"
         >
           搜索
@@ -116,15 +116,15 @@ export function FilterBar({ className }: FilterBarProps) {
               onClick={() => handleTypeSelect(opt.value)}
               data-testid={`filter-type-${opt.value || 'all'}`}
               className={cn(
-                'px-2.5 py-0.5 rounded-full text-xs transition-colors',
+                'px-3 py-1 rounded-full text-xs transition-all border outline-none',
                 currentType === opt.value
-                  ? 'font-semibold'
-                  : 'hover:bg-[var(--secondary)]'
+                  ? 'font-bold shadow-sm'
+                  : 'hover:bg-[var(--secondary)] hover:border-[var(--muted-foreground)]'
               )}
               style={
                 currentType === opt.value
-                  ? { background: 'var(--gold)', color: 'black' }
-                  : { color: 'var(--muted-foreground)' }
+                  ? { background: 'var(--accent)', color: 'black', borderColor: 'var(--accent)' }
+                  : { color: 'var(--muted-foreground)', borderColor: 'transparent', background: 'transparent' }
               }
             >
               {opt.label}
@@ -143,15 +143,15 @@ export function FilterBar({ className }: FilterBarProps) {
               onClick={() => handleSortSelect(opt.value)}
               data-testid={`sort-${opt.value}`}
               className={cn(
-                'px-2.5 py-0.5 rounded-full text-xs transition-colors',
+                'px-3 py-1 rounded-full text-xs transition-all border outline-none',
                 currentSort === opt.value
-                  ? 'font-semibold'
-                  : 'hover:bg-[var(--secondary)]'
+                  ? 'font-bold shadow-sm'
+                  : 'hover:bg-[var(--secondary)] hover:border-[var(--muted-foreground)]'
               )}
               style={
                 currentSort === opt.value
-                  ? { background: 'var(--gold)', color: 'black' }
-                  : { color: 'var(--muted-foreground)' }
+                  ? { background: 'var(--accent)', color: 'black', borderColor: 'var(--accent)' }
+                  : { color: 'var(--muted-foreground)', borderColor: 'transparent', background: 'transparent' }
               }
             >
               {opt.label}
