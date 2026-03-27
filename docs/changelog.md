@@ -3669,3 +3669,19 @@ VideoTable actions cell 由直接 button 改为 AdminDropdown，items=[{编辑}]
 
 ### 测试覆盖
 - typecheck + lint + 658/658 单元测试通过
+
+---
+
+## CHG-251 — 新建 ColumnSettingsPanel 统一列设置面板组件
+
+- **完成时间**：2026-03-26 22:25
+- **序列**：SEQ-20260326-27
+
+### 新建文件
+- `src/components/admin/shared/table/ColumnSettingsPanel.tsx`
+
+### 变更说明
+纯 UI 组件（controlled）。Props: columns（含 required 禁用灰化）、onToggle、onReset、data-testid 可选前缀。样式对齐现有 VideoTable inline panel。本任务只建组件，接入由 CHG-252~254 完成。
+
+### 测试覆盖
+- typecheck + lint + 658/658 单元测试通过
