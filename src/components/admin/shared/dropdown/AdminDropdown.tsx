@@ -111,12 +111,10 @@ export function AdminDropdown({
   ) : null
 
   return (
-    <div ref={triggerRef} className="relative inline-block" data-testid={testId}>
-      <div onClick={handleTriggerClick} role="button" tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTriggerClick() }}
-      >
-        {trigger}
-      </div>
+    <div ref={triggerRef} className="relative inline-block" data-testid={testId}
+      onClick={handleTriggerClick}
+    >
+      {trigger}
       {typeof document !== 'undefined' && createPortal(menu, document.body)}
     </div>
   )

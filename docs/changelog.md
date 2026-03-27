@@ -3651,3 +3651,21 @@ Portal 渲染（createPortal → document.body）彻底解决 overflow 裁切；
 
 ### 测试覆盖
 - typecheck + lint + 658/658 单元测试通过
+
+---
+
+## CHG-250 — VideoTable actions 列接入 AdminDropdown
+
+- **完成时间**：2026-03-26 22:10
+- **序列**：SEQ-20260326-26
+
+### 修改文件
+- `src/components/admin/videos/useVideoTableColumns.tsx`
+- `src/components/admin/shared/dropdown/AdminDropdown.tsx`（移除内层 role="button" 包装）
+- `tests/unit/components/admin/videos/VideoTable.test.tsx`（更新 testid + 两步交互）
+
+### 变更说明
+VideoTable actions cell 由直接 button 改为 AdminDropdown，items=[{编辑}]。同步修复 AdminDropdown 的内层 div 移除 role="button"，避免 testing-library 遭遇 "multiple elements" 错误。
+
+### 测试覆盖
+- typecheck + lint + 658/658 单元测试通过
