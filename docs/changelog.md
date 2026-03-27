@@ -3772,3 +3772,23 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 
 ### 测试覆盖
 - typecheck + lint + 658/658 单元测试通过
+
+---
+
+## CHG-257 — 收口清理与全局引用扫描
+
+- **完成时间**：2026-03-26 23:55
+- **序列**：SEQ-20260326-29
+
+### 检查结果
+- `admin/index.ts`：无旧残留，仅包含 Modal/StatusBadge/ConfirmDialog/Pagination 基础导出
+- `<details>` 元素：全局扫描为空，所有旧操作下拉已替换为 AdminDropdown
+- 遗留观察：`UserTable.tsx` 仍有 inline 列设置，未在本轮范围内（计入下一轮 SEQ 任务）
+- typecheck + lint + 658/658 单元测试全部通过
+
+### 本轮（SEQ-25~29）已完成功能汇总
+1. **视频来源筛选**：`videos.site_key` migration + 爬虫写入 + SQL 修复
+2. **AdminDropdown**：portal 渲染、click-away、ESC，CrawlerSite + VideoTable 接入
+3. **ColumnSettingsPanel**：统一列设置面板，5 个页面全部接入
+4. **SelectionActionBar**：inline + sticky-bottom 两变体，AdminBatchBar 变 wrapper
+5. **BatchPublishBar**：容器布局对齐 SelectionActionBar 规范
