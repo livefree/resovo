@@ -3484,3 +3484,12 @@
   - `src/components/admin/shared/modern-table/types.ts` — `TableColumn` 新增可选 `overflowVisible?: boolean`，文档注释说明用途
   - `src/components/admin/shared/modern-table/ModernTableBody.tsx` — td className 根据 `column.overflowVisible` 切换 `overflow-visible` 或 `overflow-hidden text-ellipsis`
 - **测试**：typecheck + lint + 664/664 单元测试全部通过
+
+---
+
+## CHG-237 — PaginationV2（增强分页控件）
+- **完成时间**：2026-03-26 17:35
+- **变更文件**：
+  - `src/components/admin/PaginationV2.tsx`（新建）— pageSize 切换（20/50/100）、页码窗口含省略号（≤7 页全显，>7 页折叠）、跳页输入（Enter 或按钮）、总条数展示
+  - `tests/unit/components/admin/PaginationV2.test.tsx`（新建）— 8 个测试覆盖：渲染、页码点击、pageSize 切换、省略号、Enter 跳页、按钮跳页、首页 prev 禁用、末页 next 禁用
+- **测试**：typecheck + lint + 672/672 单元测试全部通过
