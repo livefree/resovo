@@ -58,9 +58,10 @@ export const COLUMN_LABELS: Record<VideoColumnId, string> = {
   review_status: '审核状态', actions: '操作',
 }
 
+// Only fields present in the backend SORT_FIELDS whitelist are sortable
 export const SORTABLE_MAP: Record<VideoColumnId, boolean> = {
-  cover: false, title: true, type: true, source_health: true,
-  visibility: true, review_status: true, actions: false,
+  cover: false, title: true, type: true, source_health: false,
+  visibility: false, review_status: false, actions: false,
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -189,6 +190,7 @@ function buildDataColumn(columnId: VideoColumnId, deps: ColumnDeps): TableColumn
       break
     case 'actions':
       col.accessor = (row) => row.id
+      col.overflowVisible = true
       col.cell = ({ row }) => (
         <div className="flex flex-wrap gap-1.5">
           <button

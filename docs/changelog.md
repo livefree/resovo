@@ -3522,3 +3522,19 @@
   - `src/api/services/CrawlerService.ts` — `CrawlerSource` 接口加 `dbId?: string`；`getEnabledSources` 映射 `s.id → dbId`；`upsertVideo` 新增 `siteId?` 参数并传给 `insertCrawledVideo`；crawl 循环传入 `source.dbId`
 - **根因**：`videos.site_id` 列在所有 22 个 migration 中均无定义，导致 `listAdminVideos`（site 筛选路径）和 `listPendingReviewVideos` 在运行时引发 "column v.site_id does not exist" SQL 错误
 - **测试**：typecheck + lint + 658/658 单元测试全部通过
+
+---
+
+## CHG-240 — 修正 SORTABLE_MAP（P1 修复）
+- **完成时间**：2026-03-26 18:25
+- **变更文件**：
+  - `src/components/admin/videos/useVideoTableColumns.tsx` — `SORTABLE_MAP` 中 `source_health/visibility/review_status` 改为 `false`，与后端白名单 `['created_at','updated_at','title','year','type']` 对齐；避免前端传非法 sortField 触发 422 并被静默吞掉
+- **测试**：typecheck + lint + 658/658 单元测试全部通过
+
+---
+
+## CHG-241 — actions 列设置 overflowVisible: true（P2 修复）
+- **完成时间**：2026-03-26 18:25
+- **变更文件**：
+  - `src/components/admin/videos/useVideoTableColumns.tsx` — actions 列的 `col.overflowVisible = true`，使单元格 td 切换为 `overflow-visible`，操作列弹层不再被裁切
+- **测试**：typecheck + lint + 658/658 单元测试全部通过

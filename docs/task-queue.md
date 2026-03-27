@@ -2922,14 +2922,16 @@
    - **变更内容**：新增 migration 给 videos 加 `site_id UUID REFERENCES crawler_sites(id)`；insertCrawledVideo 写入 siteId；CrawlerService.upsertVideo 接收并传入 site db id
 
 2. CHG-240 — 修正 SORTABLE_MAP，前端仅允许后端白名单字段排序（P1）
-   - **状态**：⬜ 待开始
+   - **状态**：✅ 已完成
+   - **完成时间**：2026-03-26 18:25
    - **创建时间**：2026-03-26 18:00
    - **依赖**：无
    - **文件范围**：`src/components/admin/videos/useVideoTableColumns.tsx`
    - **变更内容**：`source_health/visibility/review_status` 改为 `false`，与后端白名单对齐
 
 3. CHG-241 — actions 列设置 overflowVisible: true（P2）
-   - **状态**：⬜ 待开始
+   - **状态**：✅ 已完成
+   - **完成时间**：2026-03-26 18:25
    - **创建时间**：2026-03-26 18:00
    - **依赖**：无
    - **文件范围**：`src/components/admin/videos/useVideoTableColumns.tsx`
