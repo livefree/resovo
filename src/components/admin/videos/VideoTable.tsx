@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
-import { Pagination } from '@/components/admin/Pagination'
+import { PaginationV2 } from '@/components/admin/PaginationV2'
 import { BatchPublishBar } from '@/components/admin/videos/BatchPublishBar'
 import { VideoDetailDrawer } from '@/components/admin/videos/VideoDetailDrawer'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
@@ -25,7 +25,7 @@ import {
   type VideoColumnId,
 } from './useVideoTableColumns'
 
-const PAGE_SIZE = 20
+const DEFAULT_PAGE_SIZE = 20
 
 function buildColumnsToggleId(columnId: string): string {
   return `video-column-toggle-${columnId}`
@@ -36,6 +36,7 @@ export function VideoTable() {
   const [videos, setVideos] = useState<VideoAdminRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [loading, setLoading] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [showColumnsPanel, setShowColumnsPanel] = useState(false)
@@ -68,11 +69,11 @@ export function VideoTable() {
     [columnsState.columns],
   )
 
-  const fetchVideos = useCallback(async (pageVal: number) => {
+  const fetchVideos = useCallback(async (pageVal: number, pageSizeVal: number) => {
     setLoading(true)
     setSelectedIds([])
     try {
-      const params = new URLSearchParams({ page: String(pageVal), limit: String(PAGE_SIZE) })
+      const params = new URLSearchParams({ page: String(pageVal), limit: String(pageSizeVal) })
       if (q) params.set('q', q)
       if (type) params.set('type', type)
       if (status) params.set('status', status)
@@ -95,8 +96,8 @@ export function VideoTable() {
 
   useEffect(() => {
     setPage(1)
-    void fetchVideos(1)
-  }, [q, type, status, visibilityStatus, reviewStatus, site, sortState.sort, fetchVideos])
+    void fetchVideos(1, pageSize)
+  }, [q, type, status, visibilityStatus, reviewStatus, site, sortState.sort, pageSize, fetchVideos])
 
   const handleCheck = useCallback((id: string, checked: boolean) => {
     setSelectedIds((prev) => (checked ? [...prev, id] : prev.filter((x) => x !== id)))
@@ -210,20 +211,21 @@ export function VideoTable() {
         getRowId={(row) => row.id}
       />
 
-      {total > PAGE_SIZE ? (
+      {total > 0 ? (
         <div className="mt-4">
-          <Pagination
+          <PaginationV2
             page={page}
             total={total}
-            pageSize={PAGE_SIZE}
-            onChange={(nextPage) => { setPage(nextPage); void fetchVideos(nextPage) }}
+            pageSize={pageSize}
+            onPageChange={(nextPage) => { setPage(nextPage); void fetchVideos(nextPage, pageSize) }}
+            onPageSizeChange={(nextSize) => { setPageSize(nextSize); setPage(1); void fetchVideos(1, nextSize) }}
           />
         </div>
       ) : null}
 
       <BatchPublishBar
         selectedIds={selectedIds}
-        onSuccess={() => void fetchVideos(page)}
+        onSuccess={() => void fetchVideos(page, pageSize)}
         onClear={() => setSelectedIds([])}
       />
 
@@ -231,7 +233,7 @@ export function VideoTable() {
         videoId={drawerVideoId}
         open={drawerVideoId !== null}
         onClose={() => setDrawerVideoId(null)}
-        onSaved={() => void fetchVideos(page)}
+        onSaved={() => void fetchVideos(page, pageSize)}
       />
     </div>
   )

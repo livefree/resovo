@@ -3538,3 +3538,11 @@
 - **变更文件**：
   - `src/components/admin/videos/useVideoTableColumns.tsx` — actions 列的 `col.overflowVisible = true`，使单元格 td 切换为 `overflow-visible`，操作列弹层不再被裁切
 - **测试**：typecheck + lint + 658/658 单元测试全部通过
+
+---
+
+## CHG-242 — VideoTable 接入 PaginationV2（P2 修复）
+- **完成时间**：2026-03-26 18:35
+- **变更文件**：
+  - `src/components/admin/videos/VideoTable.tsx` — 替换 `Pagination` → `PaginationV2`；新增 `pageSize` state（默认 20）；`fetchVideos` 签名改为 `(pageVal, pageSizeVal)`；onPageSizeChange 切换 pageSize 并重置到第 1 页；onSuccess/onSaved 回调传入 pageSize；原 `PAGE_SIZE` 常量重命名为 `DEFAULT_PAGE_SIZE`
+- **测试**：typecheck + lint + 658/658 单元测试全部通过
