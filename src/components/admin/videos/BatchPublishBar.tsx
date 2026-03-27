@@ -56,7 +56,7 @@ export function BatchPublishBar({ selectedIds, onSuccess, onClear }: BatchPublis
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between border-t border-[var(--border)] bg-[var(--bg2)] px-6 py-3 shadow-lg"
+      className="sticky bottom-0 z-10 flex items-center justify-between border-t border-[var(--border)] bg-[var(--bg2)] px-6 py-3 shadow-lg"
       data-testid="batch-publish-bar"
       style={{ animation: 'slideUp 0.2s ease-out' }}
     >

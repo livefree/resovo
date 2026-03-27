@@ -3467,3 +3467,11 @@
   - `src/components/admin/videos/VideoTable.tsx` — 移除客户端 `sortedVideos` useMemo 排序逻辑；`fetchVideos` 将 `sortState.sort` 作为 URL 参数传给 API；catch 改为 `catch (_err)` 加注释；移除未使用的 `toComparableValue` 导入
   - `tests/unit/components/admin/videos/VideoTable.test.tsx` — 更新 mock 根据 sortField/sortDir 返回不同顺序数据，验证服务端排序行为
 - **测试**：typecheck + lint + 664/664 单元测试全部通过
+
+---
+
+## CHG-235 — BatchPublishBar layout 修复
+- **完成时间**：2026-03-26 17:22
+- **变更文件**：
+  - `src/components/admin/videos/BatchPublishBar.tsx` — 将 `fixed bottom-0 left-0 right-0 z-50` 改为 `sticky bottom-0 z-10`，批量操作栏不再覆盖左侧导航
+- **测试**：typecheck + lint + 664/664 单元测试全部通过
