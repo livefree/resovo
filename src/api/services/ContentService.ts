@@ -56,8 +56,13 @@ export class ContentService {
 
   // ── 投稿队列 ────────────────────────────────────────────────────
 
-  async listSubmissions(page: number, limit: number): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
-    const { rows, total } = await sourcesQueries.listSubmissions(this.db, page, limit)
+  async listSubmissions(
+    page: number,
+    limit: number,
+    sortField?: string,
+    sortDir?: 'asc' | 'desc'
+  ): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
+    const { rows, total } = await sourcesQueries.listSubmissions(this.db, page, limit, sortField, sortDir)
     return { data: rows, total, page, limit }
   }
 
@@ -71,8 +76,13 @@ export class ContentService {
 
   // ── 字幕审核 ────────────────────────────────────────────────────
 
-  async listSubtitles(page: number, limit: number): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
-    const { rows, total } = await subtitleQueries.listAdminSubtitles(this.db, page, limit)
+  async listSubtitles(
+    page: number,
+    limit: number,
+    sortField?: string,
+    sortDir?: 'asc' | 'desc'
+  ): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
+    const { rows, total } = await subtitleQueries.listAdminSubtitles(this.db, page, limit, sortField, sortDir)
     return { data: rows, total, page, limit }
   }
 

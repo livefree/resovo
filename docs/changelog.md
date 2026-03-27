@@ -3792,3 +3792,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 3. **ColumnSettingsPanel**：统一列设置面板，5 个页面全部接入
 4. **SelectionActionBar**：inline + sticky-bottom 两变体，AdminBatchBar 变 wrapper
 5. **BatchPublishBar**：容器布局对齐 SelectionActionBar 规范
+
+---
+
+## CHG-258 — submissions + subtitles API 服务端排序支持（2026-03-26）
+
+**任务**：SEQ-20260326-30 / CHG-258
+
+**修改文件**：
+- `src/api/db/queries/sources.ts` — `listSubmissions` 增加 `sortField`/`sortDir` 参数，SUBMISSION_SORT_COLUMNS whitelist，无效 sortField 降级为 `created_at DESC`
+- `src/api/db/queries/subtitles.ts` — `listAdminSubtitles` 同样模式，SUBTITLE_SORT_COLUMNS whitelist
+- `src/api/services/ContentService.ts` — `listSubmissions` + `listSubtitles` 方法签名更新，透传 sort 参数
+- `src/api/routes/admin/content.ts` — `SubListSchema` 增加 `sortField`/`sortDir`；新增 `SubtitleListSchema`；路由调用时做白名单验证后传入 Service
+- `tests/unit/api/content-sort.test.ts` — 新增 10 个测试用例，覆盖有效/无效 sortField、各方向、fallback 行为
+
+**测试覆盖**：新增测试 10 个，全部通过；总计 668/668 通过；typecheck + lint 通过
+
+**设计规范验收**：规范 6（服务端排序，submissions + subtitles 部分）— 后端已就绪，前端迁移由 CHG-259/260 完成

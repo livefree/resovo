@@ -116,9 +116,14 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
   // 投稿队列（is_active=false && submitted_by IS NOT NULL）
   // ════════════════════════════════════════════════════════════════
 
+  const SUBMISSION_SORT_FIELDS = ['video', 'source_url', 'submitted_by', 'created_at'] as const
+  const SUBTITLE_SORT_FIELDS = ['video', 'language', 'format', 'uploaded_by', 'created_at'] as const
+
   const SubListSchema = z.object({
     page: z.coerce.number().int().min(1).optional().default(1),
     limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+    sortField: z.string().optional(),
+    sortDir: z.enum(['asc', 'desc']).optional(),
   })
 
   fastify.get('/admin/submissions', { preHandler: auth }, async (request, reply) => {
@@ -129,8 +134,11 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const { page, limit } = parsed.data
-    const result = await contentService.listSubmissions(page, limit)
+    const { page, limit, sortField, sortDir } = parsed.data
+    const validSortField = (sortField && (SUBMISSION_SORT_FIELDS as readonly string[]).includes(sortField))
+      ? sortField
+      : undefined
+    const result = await contentService.listSubmissions(page, limit, validSortField, sortDir)
     return reply.send(result)
   })
 
@@ -163,16 +171,26 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
   // 字幕审核队列（is_verified=false）
   // ════════════════════════════════════════════════════════════════
 
+  const SubtitleListSchema = z.object({
+    page: z.coerce.number().int().min(1).optional().default(1),
+    limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+    sortField: z.string().optional(),
+    sortDir: z.enum(['asc', 'desc']).optional(),
+  })
+
   fastify.get('/admin/subtitles', { preHandler: auth }, async (request, reply) => {
-    const parsed = SubListSchema.safeParse(request.query)
+    const parsed = SubtitleListSchema.safeParse(request.query)
     if (!parsed.success) {
       return reply.code(422).send({
         error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
       })
     }
 
-    const { page, limit } = parsed.data
-    const result = await contentService.listSubtitles(page, limit)
+    const { page, limit, sortField, sortDir } = parsed.data
+    const validSortField = (sortField && (SUBTITLE_SORT_FIELDS as readonly string[]).includes(sortField))
+      ? sortField
+      : undefined
+    const result = await contentService.listSubtitles(page, limit, validSortField, sortDir)
     return reply.send(result)
   })
 

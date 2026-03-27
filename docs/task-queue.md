@@ -3163,7 +3163,7 @@
 - **完成备注**：_（AI 填写）_
 
 #### CHG-256 — BatchPublishBar 迁移至 SelectionActionBar
-- **状态**：✅ 已完成
+- **状态**：❌ 有问题（部分完成）
 - **实际开始**：2026-03-26 23:30
 - **完成时间**：2026-03-26 23:40
 - **创建时间**：2026-03-26 20:30
@@ -3174,7 +3174,7 @@
 - **变更内容**：
   - BatchPublishBar 内部将布局层（sticky container + 信息区 + 操作组）替换为 `SelectionActionBar variant="sticky-bottom"`，业务逻辑（API 调用）保留
   - 保持 BatchPublishBar 对外接口不变（VideoTable 调用方无需改动）
-- **完成备注**：_（AI 填写）_
+- **完成备注**：实际执行时仅对齐外层 container className，内部按钮结构未迁移。原因：SelectionActionBar.items[] API 无法表达 accent/green/red 三种颜色差异。需扩展 SelectionActionBar API 后由 CHG-264 继续完成。
 
 ---
 
@@ -3200,4 +3200,177 @@
   1. 删除已无引用的旧导出（AdminBatchBar 等）
   2. 跑 `npm run typecheck && npm run lint` 全通过
   3. 对照 admin_table_ux_fix_plan_20260326.md 回归清单，逐项确认
+- **完成备注**：实际执行仅做了代码级死引用扫描，未对照设计方案 6 条规范逐一验收。真实状态：规范 1/2/6 均未通过。需由 CHG-258~265 补完后重新验收。
+
+---
+
+## SEQ-20260326-30 — 后台表格统一：后端服务端排序补全
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-26 11:00
+- **最后更新时间**：2026-03-26 11:50
+- **目标**：为 submissions 和 subtitles API 补充服务端排序支持，作为前端表格迁移前置条件
+- **依赖**：无
+
+### 任务列表
+
+#### CHG-258 — submissions + subtitles API 增加服务端 sortField/sortDir 支持
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-26 11:00
+- **计划开始**：—
+- **实际开始**：2026-03-26 11:30
+- **完成时间**：2026-03-26 11:50
+- **文件范围**：
+  - `src/api/routes/admin/content.ts`
+  - content 相关 queries 文件
+- **变更内容**：
+  - `GET /admin/submissions` 支持 sortField 白名单（video, source_url, submitted_by, created_at）和 sortDir（asc/desc）
+  - `GET /admin/subtitles` 支持 sortField 白名单（video, language, format, uploaded_by, created_at）和 sortDir
+  - 无效 sortField 降级为默认排序（created_at desc），不报错
+- **验收要点**：unit 测试覆盖有效/无效 sortField 两种情况；typecheck + lint 通过
+- **完成备注**：listSubmissions + listAdminSubtitles 各增加 whitelist 校验；路由层 schema 扩展；ContentService 更新。10 个新测试全部通过，668/668 全部通过。
+
+---
+
+## SEQ-20260326-31 — 后台表格统一：内容审核表格迁移
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 11:00
+- **最后更新时间**：2026-03-26 11:00
+- **目标**：将 SubmissionTable + SubtitleTable 从 AdminTableFrame 迁移至 ModernDataTable，补全服务端排序和 PaginationV2
+- **依赖**：CHG-258 已完成
+
+### 任务列表
+
+#### CHG-259 — SubmissionTable → ModernDataTable（服务端排序 + PaginationV2）
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 11:00
+- **计划开始**：—
+- **实际开始**：—
+- **完成时间**：—
+- **文件范围**：
+  - `src/components/admin/content/SubmissionTable.tsx`
+  - `src/components/admin/content/useSubmissionTableColumns.tsx`（新建）
+- **变更内容**：AdminTableFrame + 手动 thead/tbody → ModernDataTable；列定义提取；行操作改 AdminDropdown；服务端排序；Pagination → PaginationV2
+- **验收要点**：规范 1 ✅、规范 3/4 ✅、规范 6（排序/分页）✅；测试通过
+- **完成备注**：_（AI 填写）_
+
+#### CHG-260 — SubtitleTable → ModernDataTable（服务端排序 + PaginationV2）
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 11:00
+- **计划开始**：—
+- **实际开始**：—
+- **完成时间**：—
+- **依赖**：CHG-259 已完成
+- **文件范围**：
+  - `src/components/admin/content/SubtitleTable.tsx`
+  - `src/components/admin/content/useSubtitleTableColumns.tsx`（新建）
+- **变更内容**：与 CHG-259 对称
+- **验收要点**：同 CHG-259
+- **完成备注**：_（AI 填写）_
+
+---
+
+## SEQ-20260326-32 — 后台表格统一：用户管理表格迁移
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 11:00
+- **最后更新时间**：2026-03-26 11:00
+- **目标**：将 UserTable 迁移至 ModernDataTable，统一列设置、行操作、分页
+- **依赖**：CHG-259 已完成（模式已验证）
+
+### 任务列表
+
+#### CHG-261 — UserTable → ModernDataTable（ColumnSettingsPanel + AdminDropdown + PaginationV2）
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 11:00
+- **计划开始**：—
+- **实际开始**：—
+- **完成时间**：—
+- **文件范围**：
+  - `src/components/admin/users/UserTable.tsx`
+  - `src/components/admin/users/useUserTableColumns.tsx`（新建）
+- **变更内容**：AdminTableFrame → ModernDataTable；内联列设置 → ColumnSettingsPanel；列定义提取；UserActions 通过 AdminDropdown 触发；Pagination → PaginationV2；服务端排序（同步修复后端如需）
+- **验收要点**：规范 1 ✅、规范 2 ✅、规范 3/4 ✅、规范 6 ✅；测试通过
+- **完成备注**：_（AI 填写）_
+
+---
+
+## SEQ-20260326-33 — 后台表格统一：源管理 + 采集站点分页升级
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 11:00
+- **最后更新时间**：2026-03-26 11:00
+- **目标**：InactiveSourceTable 补列设置入口 + 全部剩余表格升级 PaginationV2
+- **依赖**：无（独立序列）
+
+### 任务列表
+
+#### CHG-262 — InactiveSourceTable 补充列设置入口 + PaginationV2
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 11:00
+- **计划开始**：—
+- **实际开始**：—
+- **完成时间**：—
+- **文件范围**：`src/components/admin/sources/InactiveSourceTable.tsx`
+- **变更内容**：AdminToolbar 增加列设置按钮 → ColumnSettingsPanel；Pagination → PaginationV2
+- **验收要点**：规范 2 ✅、规范 6（分页）✅
+- **完成备注**：_（AI 填写）_
+
+#### CHG-263 — CrawlerSiteManager 分页升级 PaginationV2
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 11:00
+- **计划开始**：—
+- **实际开始**：—
+- **完成时间**：—
+- **依赖**：CHG-262 已完成
+- **文件范围**：`src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`（或包含 Pagination 的子组件）
+- **变更内容**：Pagination → PaginationV2
+- **验收要点**：规范 6（分页）✅
+- **完成备注**：_（AI 填写）_
+
+---
+
+## SEQ-20260326-34 — 后台表格统一：批量操作栏完整迁移
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 11:00
+- **最后更新时间**：2026-03-26 11:00
+- **目标**：扩展 SelectionActionBar API，完成 BatchPublishBar 和 BatchDeleteBar 的真实迁移（CHG-256 遗留）
+- **依赖**：无（独立序列）
+
+### 任务列表
+
+#### CHG-264 — SelectionActionBar 扩展 variant + BatchPublishBar/BatchDeleteBar 完整迁移
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 11:00
+- **计划开始**：—
+- **实际开始**：—
+- **完成时间**：—
+- **文件范围**：
+  - `src/components/admin/shared/batch/SelectionActionBar.tsx`
+  - `src/components/admin/videos/BatchPublishBar.tsx`
+  - `src/components/admin/sources/BatchDeleteBar.tsx`
+- **变更内容**：items[] 增加 variant 类型；BatchPublishBar 内部布局替换为 SelectionActionBar sticky-bottom；BatchDeleteBar 接入 SelectionActionBar
+- **验收要点**：规范 5 ✅；测试通过
+- **完成备注**：_（AI 填写）_
+
+---
+
+## SEQ-20260326-35 — 后台表格统一：Analytics 迁移 + 死代码删除 + 最终验收
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 11:00
+- **最后更新时间**：2026-03-26 11:00
+- **目标**：完成最后 AdminTableFrame 迁移，删除死代码，执行 6 条规范最终验收
+- **依赖**：CHG-259/260/261/262/263/264 全部完成
+
+### 任务列表
+
+#### CHG-265 — AdminAnalyticsDashboard → ModernDataTable + 删除死代码 + 最终验收
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 11:00
+- **计划开始**：—
+- **实际开始**：—
+- **完成时间**：—
+- **文件范围**：
+  - `src/components/admin/AdminAnalyticsDashboard.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteToolbar.tsx`（删除）
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTableLiteHeader.tsx`（删除）
+- **变更内容**：mini crawler task 表格 AdminTableFrame → ModernDataTable；删除两个死代码文件；6 条规范逐一验收
+- **验收要点**：`rg 'AdminTableFrame'` 零结果；`rg 'CrawlerSiteToolbar|CrawlerSiteTableLiteHeader'` 零结果；6 条规范全 PASS
 - **完成备注**：_（AI 填写）_

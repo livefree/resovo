@@ -112,12 +112,25 @@ export async function verifySubtitle(db: Pool, id: string): Promise<void> {
 
 // ── Admin 查询 ────────────────────────────────────────────────────
 
+const SUBTITLE_SORT_COLUMNS: Record<string, string> = {
+  video: 'v.title',
+  language: 's.language',
+  format: 's.format',
+  uploaded_by: 's.uploaded_by',
+  created_at: 's.created_at',
+}
+
 export async function listAdminSubtitles(
   db: Pool,
   page: number,
-  limit: number
+  limit: number,
+  sortField?: string,
+  sortDir?: 'asc' | 'desc'
 ): Promise<{ rows: unknown[]; total: number }> {
   const offset = (page - 1) * limit
+  const validCol = sortField ? SUBTITLE_SORT_COLUMNS[sortField] : undefined
+  const orderCol = validCol ?? 's.created_at'
+  const orderDir = (validCol && sortDir === 'asc') ? 'ASC' : 'DESC'
 
   const [rows, countResult] = await Promise.all([
     db.query(
@@ -125,7 +138,7 @@ export async function listAdminSubtitles(
        FROM subtitles s
        LEFT JOIN videos v ON s.video_id = v.id
        WHERE s.is_verified = false AND s.deleted_at IS NULL
-       ORDER BY s.created_at ASC
+       ORDER BY ${orderCol} ${orderDir}
        LIMIT $1 OFFSET $2`,
       [limit, offset]
     ),

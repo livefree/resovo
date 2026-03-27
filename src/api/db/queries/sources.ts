@@ -273,12 +273,24 @@ export async function batchDeleteSources(
   return result.rowCount ?? 0
 }
 
+const SUBMISSION_SORT_COLUMNS: Record<string, string> = {
+  video: 'v.title',
+  source_url: 's.source_url',
+  submitted_by: 'u.username',
+  created_at: 's.created_at',
+}
+
 export async function listSubmissions(
   db: Pool,
   page: number,
-  limit: number
+  limit: number,
+  sortField?: string,
+  sortDir?: 'asc' | 'desc'
 ): Promise<{ rows: unknown[]; total: number }> {
   const offset = (page - 1) * limit
+  const validCol = sortField ? SUBMISSION_SORT_COLUMNS[sortField] : undefined
+  const orderCol = validCol ?? 's.created_at'
+  const orderDir = (validCol && sortDir === 'asc') ? 'ASC' : 'DESC'
 
   const [rows, countResult] = await Promise.all([
     db.query(
@@ -287,7 +299,7 @@ export async function listSubmissions(
        LEFT JOIN videos v ON s.video_id = v.id
        LEFT JOIN users u ON s.submitted_by = u.id::text
        WHERE s.is_active = false AND s.submitted_by IS NOT NULL AND s.deleted_at IS NULL
-       ORDER BY s.created_at DESC
+       ORDER BY ${orderCol} ${orderDir}
        LIMIT $1 OFFSET $2`,
       [limit, offset]
     ),
