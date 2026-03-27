@@ -3421,3 +3421,16 @@
 - **变更内容**：修复剧场模式下侧栏折叠/显示逻辑，保持默认模式选集换源能力；补充单元测试覆盖 default/theater 布局切换关键状态。
 - **依赖**：CHG-267 已完成
 - **完成备注**：新增 `getPlayerLayoutClass` / `getSidePanelClass` 布局函数并接入 PlayerShell；剧场模式下侧栏折叠为 `max-h-0 + opacity-0 + pointer-events-none + lg:w-0`，同时主布局 gap 归零。新增 4 条单测验证 default/theater 类名输出。`npx tsc --noEmit --incremental false` 通过；`npx eslint`（仅改动文件）通过；`playerShell.layout.test.ts` 4/4 通过。
+
+## CHG-269 — Nav “更多”下拉交互收口（可访问性 + click-away）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-27 05:20
+- **实际开始**：2026-03-27 05:20
+- **完成时间**：2026-03-27 05:10
+- **文件范围**：
+  - `src/components/layout/Nav.tsx`
+  - `tests/unit/components/layout/NavDropdown.test.tsx`（新建）
+- **变更原因**：当前“更多”分类下拉依赖 hover，缺少 click-away/ESC/键盘交互，移动端与可访问性一致性不足。
+- **变更内容**：改为按钮触发下拉，支持点击外部关闭、ESC 关闭、Enter/Space/ArrowDown 打开并焦点进入菜单；补充对应单测。
+- **依赖**：CHG-268 已完成
+- **完成备注**：`Nav` 增加 `isMoreOpen` 受控状态与 menu/trigger refs；实现 document 级 `mousedown` click-away 与 `Escape` 关闭；trigger 增加 `aria-expanded`/`aria-haspopup` 和键盘打开逻辑；菜单项点击后自动关闭。新增 `NavDropdown.test.tsx` 4 用例覆盖点击打开、点击外部关闭、ESC 关闭、Enter 打开并焦点进入首项。`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；单测 4/4 通过。

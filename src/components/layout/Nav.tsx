@@ -6,7 +6,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useAuthStore } from '@/stores/authStore'
@@ -16,11 +16,14 @@ import { cn } from '@/lib/utils'
 
 // ── 分类标签 ──────────────────────────────────────────────────────
 
-const CATEGORIES = [
-  { key: 'all',     labelKey: 'nav.catAll',     href: '/browse',              typeParam: '' },
+const MAIN_CATEGORIES = [
   { key: 'movie',   labelKey: 'nav.catMovie',   href: '/browse?type=movie',   typeParam: 'movie' },
   { key: 'series',  labelKey: 'nav.catSeries',  href: '/browse?type=series',  typeParam: 'series' },
   { key: 'anime',   labelKey: 'nav.catAnime',   href: '/browse?type=anime',   typeParam: 'anime' },
+]
+
+const MORE_CATEGORIES = [
+  { key: 'all',     labelKey: 'nav.catAll',     href: '/browse',              typeParam: '' },
   { key: 'variety', labelKey: 'nav.catVariety', href: '/browse?type=variety', typeParam: 'variety' },
 ]
 
@@ -40,12 +43,40 @@ export function Nav() {
   const searchParams = useSearchParams()
   const { user, logout } = useAuthStore()
   const [searchQuery, setSearchQuery] = useState('')
+  const [isMoreOpen, setIsMoreOpen] = useState(false)
+  const moreMenuRef = useRef<HTMLDivElement | null>(null)
+  const moreTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const firstMoreItemRef = useRef<HTMLAnchorElement | null>(null)
 
   // 当前 locale（从 pathname 中提取，如 /en/browse → en）
   const currentLocale = pathname.split('/')[1] ?? 'en'
 
   // 当前 URL 中的 type 参数（用于分类标签高亮）
   const currentType = pathname.includes('/browse') ? (searchParams.get('type') ?? '') : null
+
+  useEffect(() => {
+    if (!isMoreOpen) return
+
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node
+      if (moreMenuRef.current?.contains(target)) return
+      if (moreTriggerRef.current?.contains(target)) return
+      setIsMoreOpen(false)
+    }
+
+    function handleEsc(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+      setIsMoreOpen(false)
+      moreTriggerRef.current?.focus()
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleEsc)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEsc)
+    }
+  }, [isMoreOpen])
 
   function switchLocale(locale: string) {
     // 替换路径中的 locale 段
@@ -69,6 +100,18 @@ export function Nav() {
     router.push(q ? `/search?q=${encodeURIComponent(q)}` : '/search')
   }
 
+  function openMoreMenuAndFocusFirst() {
+    setIsMoreOpen(true)
+    requestAnimationFrame(() => firstMoreItemRef.current?.focus())
+  }
+
+  function handleMoreTriggerKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
+    if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      openMoreMenuAndFocusFirst()
+    }
+  }
+
   const isAdminOrModerator = user?.role === 'admin' || user?.role === 'moderator'
 
   return (
@@ -88,12 +131,22 @@ export function Nav() {
         </Link>
 
         {/* 分类标签 */}
-        <nav className="hidden sm:flex items-center gap-1 flex-1 overflow-x-auto scrollbar-none">
-          {CATEGORIES.map((cat) => {
-            // 精确高亮：在浏览页时对比 type 参数
-            const isActive = currentType !== null
-              ? currentType === cat.typeParam
-              : false
+        <nav className="hidden sm:flex items-center gap-1 flex-1 overflow-visible ml-4">
+          <Link
+            href="/"
+            className={cn(
+              'px-3 py-1.5 rounded-md text-sm whitespace-nowrap transition-colors',
+              'hover:bg-[var(--secondary)] hover:text-[var(--foreground)]',
+              pathname === '/en' || pathname === '/zh-CN' || pathname === '/'
+                ? 'font-semibold text-[var(--accent)]'
+                : 'text-[var(--muted-foreground)]'
+            )}
+          >
+            {t('nav.home')}
+          </Link>
+
+          {MAIN_CATEGORIES.map((cat) => {
+            const isActive = currentType !== null ? currentType === cat.typeParam : false
 
             return (
               <Link
@@ -102,9 +155,9 @@ export function Nav() {
                 data-testid={`nav-cat-${cat.key}`}
                 className={cn(
                   'px-3 py-1.5 rounded-md text-sm whitespace-nowrap transition-colors',
-                  'hover:bg-[var(--secondary)]',
+                  'hover:bg-[var(--secondary)] hover:text-[var(--foreground)]',
                   isActive
-                    ? 'font-semibold text-[var(--foreground)]'
+                    ? 'font-semibold text-[var(--accent)]'
                     : 'text-[var(--muted-foreground)]'
                 )}
               >
@@ -112,6 +165,69 @@ export function Nav() {
               </Link>
             )
           })}
+
+          {/* 更多分类 Dropdown */}
+          <div className="relative">
+            <button
+              ref={moreTriggerRef}
+              type="button"
+              data-testid="nav-more-trigger"
+              aria-haspopup="menu"
+              aria-expanded={isMoreOpen}
+              onClick={() => setIsMoreOpen((prev) => !prev)}
+              onKeyDown={handleMoreTriggerKeyDown}
+              className={cn(
+                'flex items-center gap-1 px-3 py-1.5 rounded-md text-sm transition-colors cursor-pointer',
+                'hover:bg-[var(--secondary)] hover:text-[var(--foreground)] text-[var(--muted-foreground)]'
+              )}
+            >
+              {t('nav.more')}
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cn('opacity-70 transition-transform duration-200', isMoreOpen && 'rotate-180')}>
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            {isMoreOpen ? (
+              <div className="absolute top-full left-0 pt-2 z-50" data-testid="nav-more-menu-wrap">
+                <div
+                  ref={moreMenuRef}
+                  role="menu"
+                  data-testid="nav-more-menu"
+                  className="bg-[var(--card)] border rounded-lg shadow-xl p-1.5 min-w-[120px] flex flex-col gap-0.5"
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  {MORE_CATEGORIES.map((cat, index) => {
+                    const isActive = currentType === cat.typeParam
+                    return (
+                      <Link
+                        key={cat.key}
+                        ref={index === 0 ? firstMoreItemRef : undefined}
+                        href={cat.href}
+                        role="menuitem"
+                        tabIndex={0}
+                        data-testid={`nav-cat-${cat.key}`}
+                        onClick={() => setIsMoreOpen(false)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Escape') {
+                            setIsMoreOpen(false)
+                            moreTriggerRef.current?.focus()
+                          }
+                        }}
+                        className={cn(
+                          'px-3 py-2 rounded-md text-sm transition-colors text-left',
+                          'hover:bg-[var(--secondary)] hover:text-[var(--foreground)]',
+                          isActive
+                            ? 'font-semibold text-[var(--accent)] bg-[var(--secondary)]'
+                            : 'text-[var(--muted-foreground)]'
+                        )}
+                      >
+                        {t(cat.labelKey)}
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
         </nav>
 
         {/* 右侧操作区 */}

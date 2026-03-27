@@ -3897,3 +3897,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/player/playerShell.layout.test.ts`（新建）— 4 个用例覆盖 default/theater 的主布局与侧栏可见性类
 - **验收结论**：播放器默认模式保留右侧选集/换源；剧场模式隐藏侧栏并收敛空白间距
 - **测试覆盖**：`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；`playerShell.layout.test.ts` 4/4 通过
+
+---
+
+## CHG-269 — Nav “更多”下拉交互收口（可访问性 + click-away）
+- **完成时间**：2026-03-27 05:10
+- **修改文件**：
+  - `src/components/layout/Nav.tsx`（更新）— “更多”菜单改为按钮驱动（非 hover-only），支持 `aria-expanded`、`aria-haspopup`、点击外部关闭、ESC 关闭、键盘打开并焦点进入首项
+  - `tests/unit/components/layout/NavDropdown.test.tsx`（新建）— 4 个用例覆盖点击打开、点击外部关闭、ESC 关闭、Enter 键打开并焦点进入首项
+- **验收结论**：导航“更多”下拉交互与可访问性行为达到统一规范，桌面端与键盘操作路径一致
+- **测试覆盖**：`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；`NavDropdown.test.tsx` 4/4 通过
