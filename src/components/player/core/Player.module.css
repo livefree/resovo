@@ -113,8 +113,10 @@
 /* Modes */
 .ytpTheater {
   aspect-ratio: unset;
-  height: 100vh;
-  max-height: calc(100vh - 56px);
+  /* Theater mode in shell layout should follow parent container size.
+     Avoid forcing viewport height to prevent top black clipping/cropping. */
+  height: 100%;
+  max-height: none;
 }
 
 .ytpFullscreen {

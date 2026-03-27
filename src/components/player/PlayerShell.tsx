@@ -55,6 +55,7 @@ export function PlayerShell({ slug }: PlayerShellProps) {
   const [loading, setLoading] = useState(true)
   const [activeSourceIndex, setActiveSourceIndex] = useState(0)
   const [startTime, setStartTime] = useState<number | undefined>(undefined)
+  const [playerVersion, setPlayerVersion] = useState(0)
   const [activePanelTab, setActivePanelTab] = useState<'episodes' | 'sources'>('episodes')
 
   // 播放器容器 ref，用于 DanmakuBar CCL overlay 挂载
@@ -92,6 +93,7 @@ export function PlayerShell({ slug }: PlayerShellProps) {
 
   useEffect(() => {
     if (!shortId || !video) return
+    setStartTime(undefined) // 切集后不复用上一集断点
     apiClient
       .get<ApiListResponse<VideoSource>>(
         `/videos/${shortId}/sources?episode=${currentEpisode}`,
@@ -261,6 +263,17 @@ export function PlayerShell({ slug }: PlayerShellProps) {
     )
   }
 
+  function handleResumeFromPrompt(time: number) {
+    // YTPlayer 的 startTime 是初始化语义；通过重建实例确保断点立即生效
+    setStartTime(time)
+    setPlayerVersion((v) => v + 1)
+  }
+
+  function handleRestartFromPrompt() {
+    setStartTime(0)
+    setPlayerVersion((v) => v + 1)
+  }
+
   return (
     <div
       className="w-full"
@@ -309,6 +322,7 @@ export function PlayerShell({ slug }: PlayerShellProps) {
               {activeSrc ? (
                 <>
                   <VideoPlayer
+                    key={`player-${shortId}-${currentEpisode}-${activeSourceIndex}-${playerVersion}`}
                     src={activeSrc}
                     title={video.title}
                     episodes={inlineEpisodes}
@@ -321,12 +335,15 @@ export function PlayerShell({ slug }: PlayerShellProps) {
                     startTime={startTime}
                     className="absolute inset-0"
                   />
-                  <ResumePrompt
-                    shortId={shortId}
-                    episode={currentEpisode}
-                    onResume={(t) => setStartTime(t)}
-                    onRestart={() => setStartTime(0)}
-                  />
+                  <div className="absolute inset-0 z-[120] pointer-events-none flex items-end justify-center pb-20 md:pb-24">
+                    <ResumePrompt
+                      shortId={shortId}
+                      episode={currentEpisode}
+                      onResume={handleResumeFromPrompt}
+                      onRestart={handleRestartFromPrompt}
+                      className="pointer-events-auto"
+                    />
+                  </div>
                 </>
               ) : (
                 <div

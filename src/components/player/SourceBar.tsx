@@ -1,12 +1,11 @@
 /**
- * SourceBar.tsx — 线路选择栏（播放器下方）
+ * SourceBar.tsx — 线路选择栏（固定网格）
  * Resovo 特有：同一视频的多个 CDN 提供商/线路切换
  * CHG-20: 移除 video.js Player 依赖，由 PlayerShell 通过 src prop 控制播放源
  */
 
 'use client'
 
-import { useState } from 'react'
 import { cn } from '@/lib/utils'
 
 export interface SourceItem {
@@ -23,53 +22,31 @@ interface SourceBarProps {
 }
 
 export function SourceBar({ sources, activeIndex, onSourceChange, className }: SourceBarProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
-
   if (sources.length === 0) return null
-
-  const SHOW_LIMIT = 3
-  const showAll = sources.length <= SHOW_LIMIT
-  const displaySources = showAll || isExpanded ? sources : sources.slice(0, SHOW_LIMIT - 1)
 
   return (
     <div
-      className={cn('flex items-center gap-2 px-3 py-1', className)}
+      className={cn('p-2', className)}
       data-testid="source-bar"
     >
-      <span className="text-xs shrink-0" style={{ color: 'var(--muted-foreground)' }}>线路</span>
-
-      <div className="flex flex-wrap gap-1.5">
-        {displaySources.map((src, i) => (
+      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 gap-1.5" data-testid="source-grid">
+        {sources.map((src, i) => (
           <button
             key={i}
+            type="button"
             onClick={() => onSourceChange(i)}
             className={cn(
-              'px-2.5 py-0.5 rounded text-xs transition-colors',
+              'py-2 text-center text-sm rounded transition-colors',
               i === activeIndex
-                ? 'font-semibold'
-                : 'hover:bg-[var(--border)]'
+                ? 'bg-[var(--accent)] text-black font-bold shadow-sm'
+                : 'bg-[var(--secondary)] hover:bg-[var(--border)] text-[var(--foreground)]'
             )}
-            style={
-              i === activeIndex
-                ? { background: 'var(--gold)', color: 'black' }
-                : { color: 'var(--foreground)' }
-            }
             data-testid={`source-btn-${i}`}
+            title={src.label ?? `线路${i + 1}`}
           >
             {src.label ?? `线路${i + 1}`}
           </button>
         ))}
-
-        {!showAll && (
-          <button
-            onClick={() => setIsExpanded((v) => !v)}
-            className="px-2.5 py-0.5 rounded text-xs transition-colors hover:bg-[var(--border)]"
-            style={{ color: 'var(--muted-foreground)' }}
-            data-testid="source-expand-btn"
-          >
-            {isExpanded ? '收起' : `+${sources.length - (SHOW_LIMIT - 1)} 条`}
-          </button>
-        )}
       </div>
     </div>
   )
