@@ -2947,3 +2947,35 @@
    - **文件范围**：`src/components/admin/shared/modern-table/ModernTableHead.tsx`
    - **变更内容**：在 `<th>` 添加 `suppressHydrationWarning`，消除服务端默认列宽与客户端 localStorage 持久化宽度之间的 React 水合不匹配警告
    - **验收要点**：Console 不再出现 hydration mismatch 报错；所有 658 个单元测试通过
+
+---
+
+## SEQ-20260326-24 — CHG-239/233 错误回滚 + 架构文档修正
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-26 19:30
+- **最后更新时间**：2026-03-26 19:45
+- **目标**：回滚因 crawler_sites 主键认知错误导致的两个破坏性变更；修正架构文档防止重复
+- **依赖**：无
+
+### 任务列表
+
+1. CHG-244 — Revert CHG-239（videos.site_id migration 及爬虫写入）
+   - **状态**：✅ 已完成
+   - **创建时间**：2026-03-26 19:30
+   - **实际开始**：2026-03-26 19:30
+   - **完成时间**：2026-03-26 19:35
+   - **文件范围**：`src/api/db/migrations/022_add_site_id_to_videos.sql`（删除）、`src/api/db/queries/videos.ts`、`src/api/db/queries/crawlerSites.ts`、`src/api/services/CrawlerService.ts`、`src/types/system.types.ts`
+   - **变更内容**：git revert 2148199；crawler_sites 无 id UUID，migration 引用错误列导致 migration 失败 + INSERT SQL 新增不存在列导致爬虫全面崩溃
+
+2. CHG-245 — Revert CHG-233（site filter SQL 引用不存在的 v.site_id）
+   - **状态**：✅ 已完成
+   - **创建时间**：2026-03-26 19:35
+   - **实际开始**：2026-03-26 19:35
+   - **完成时间**：2026-03-26 19:45
+   - **文件范围**：`src/api/db/queries/videos.ts`
+   - **变更内容**：git revert 257d314；site filter 改回原来的 video_sources.source_name 逻辑（旧逻辑语义有误但至少不 crash）
+
+3. 架构文档修正 — crawler_sites 主键说明
+   - **状态**：✅ 已完成
+   - **文件范围**：`docs/architecture-current.md`
+   - **变更内容**：`crawler_sites` 章节加警示注解：主键为 `key VARCHAR(100)`，无 `id UUID`，任何 `REFERENCES crawler_sites(id)` 均为错误写法

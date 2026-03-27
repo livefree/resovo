@@ -122,9 +122,11 @@ resovo/
 | updated_at | TIMESTAMPTZ | 更新时间 |
 
 #### crawler_sites
+> ⚠️ **注意**：`crawler_sites` 的主键是 `key VARCHAR(100)`，**没有** `id UUID` 字段。任何代码或 Migration 中若出现 `REFERENCES crawler_sites(id)` 均为错误写法，应改为 `REFERENCES crawler_sites(key)`，且外键列类型需为 `VARCHAR(100)`。
+
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| key | VARCHAR(100) PK | 站点 key |
+| key | VARCHAR(100) PK | 站点唯一标识（同时是 FK 被引用列，非 UUID） |
 | name | VARCHAR(200) | 站点名 |
 | api_url | TEXT UNIQUE INDEX | API 地址（唯一） |
 | detail | TEXT | 站点说明/主页 |

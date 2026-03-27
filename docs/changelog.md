@@ -3546,3 +3546,35 @@ React 水合报错：`ModernTableHead.tsx:77` — `<th style={{ width, minWidth 
 - `npm run typecheck` — 通过
 - `npm run lint` — 通过
 - `npm run test -- --run` — 72 个文件 / 658 个用例全部通过
+
+---
+
+## CHG-244 — Revert CHG-239（videos.site_id migration + 爬虫写入）（2026-03-26）
+
+### 修改文件
+- `src/api/db/migrations/022_add_site_id_to_videos.sql` — 删除（migration 设计错误）
+- `src/api/db/queries/videos.ts` — 撤销 `siteId` 参数及 INSERT 第 23 列
+- `src/api/db/queries/crawlerSites.ts` — 撤销错误的 `id` 字段映射
+- `src/types/system.types.ts` — 撤销 `CrawlerSite.id: string`
+- `src/api/services/CrawlerService.ts` — 撤销 `dbId` 字段及传递逻辑
+- `docs/architecture-current.md` — 新增警示注解：crawler_sites 主键为 `key VARCHAR(100)`，无 `id UUID`
+
+### 根因
+CHG-239 假设 `crawler_sites` 有 `id UUID` 字段，实际主键是 `key VARCHAR(100)`（Migration 005）。
+导致：① Migration 022 无法执行（`crawler_sites.id` 不存在）；② `insertCrawledVideo` INSERT SQL 新增不存在的 `site_id` 列，爬虫所有入库全面崩溃。
+
+### 测试覆盖
+- typecheck + lint + 658/658 单元测试全部通过
+
+---
+
+## CHG-245 — Revert CHG-233（site filter SQL 引用不存在的 v.site_id）（2026-03-26）
+
+### 修改文件
+- `src/api/db/queries/videos.ts` — site filter WHERE 子句恢复为 `video_sources.source_name` 逻辑
+
+### 根因
+CHG-233 将 site filter 改为 `WHERE cs2.id = v.site_id AND cs2.key = $X`，但 `videos.site_id` 列不存在（Migration 022 失败），`crawler_sites.id` 也不存在。site 筛选功能待后续以正确方式（`videos.site_key → crawler_sites.key`）重新实现。
+
+### 测试覆盖
+- typecheck + lint + 658/658 单元测试全部通过
