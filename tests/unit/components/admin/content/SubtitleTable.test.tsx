@@ -71,7 +71,7 @@ describe('SubtitleTable (CHG-129)', () => {
     await screen.findByText('Alpha')
 
     fireEvent.click(screen.getByTestId('subtitle-columns-toggle'))
-    fireEvent.click(screen.getByTestId('subtitle-column-toggle-language'))
+    fireEvent.click(screen.getByTestId('subtitle-columns-panel-toggle-language'))
 
     await waitFor(() => {
       expect(screen.queryByTestId('subtitle-sort-language')).toBeNull()

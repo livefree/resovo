@@ -3718,3 +3718,24 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 
 ### 测试覆盖
 - typecheck + lint + 658/658 单元测试通过
+
+---
+
+## CHG-254 — SubmissionTable / SubtitleTable / AdminAnalyticsDashboard 接入 ColumnSettingsPanel
+
+- **完成时间**：2026-03-26 23:10
+- **序列**：SEQ-20260326-27
+
+### 修改文件
+- `src/components/admin/content/SubmissionTable.tsx`
+- `src/components/admin/content/SubtitleTable.tsx`
+- `src/components/admin/AdminAnalyticsDashboard.tsx`
+- `tests/unit/components/admin/AdminAnalyticsDashboard.test.tsx`
+- `tests/unit/components/admin/content/SubmissionTable.test.tsx`
+- `tests/unit/components/admin/content/SubtitleTable.test.tsx`
+
+### 变更说明
+三个文件的 inline 列设置 UI（30 行重复代码 × 3）统一替换为 `<ColumnSettingsPanel>`。更新对应测试文件 testid 前缀（`*-column-toggle-*` → `*-columns-panel-toggle-*`）。
+
+### 测试覆盖
+- typecheck + lint + 658/658 单元测试通过

@@ -8,6 +8,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { AdminToolbar } from '@/components/admin/shared/toolbar/AdminToolbar'
+import { ColumnSettingsPanel } from '@/components/admin/shared/table/ColumnSettingsPanel'
 import { AdminTableFrame } from '@/components/admin/shared/table/AdminTableFrame'
 import { AdminTableState } from '@/components/admin/shared/feedback/AdminTableState'
 import { useAdminTableColumns, type AdminColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
@@ -230,32 +231,17 @@ export function AdminAnalyticsDashboard() {
           actions={null}
         />
         {showColumnsPanel && (
-          <div className="mb-2 rounded border border-[var(--border)] bg-[var(--bg2)] p-2" data-testid="analytics-task-columns-panel">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-xs text-[var(--muted)]">显示列</span>
-              <button
-                type="button"
-                className="text-xs text-[var(--muted)] hover:text-[var(--text)]"
-                onClick={() => columnsState.resetColumnsMeta()}
-                data-testid="analytics-task-columns-reset"
-              >
-                重置
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-1">
-              {columnsState.columns.map((column) => (
-                <label key={column.id} className="flex items-center gap-2 text-xs text-[var(--text)]">
-                  <input
-                    type="checkbox"
-                    checked={column.visible}
-                    onChange={() => columnsState.toggleColumnVisibility(column.id)}
-                    className="accent-[var(--accent)]"
-                    data-testid={`analytics-task-column-toggle-${column.id}`}
-                  />
-                  {CRAWLER_TASK_LABELS[column.id as CrawlerTaskColumnId]}
-                </label>
-              ))}
-            </div>
+          <div className="mb-2">
+            <ColumnSettingsPanel
+              data-testid="analytics-task-columns-panel"
+              columns={columnsState.columns.map((col) => ({
+                id: col.id,
+                label: CRAWLER_TASK_LABELS[col.id as CrawlerTaskColumnId] ?? col.id,
+                visible: col.visible,
+              }))}
+              onToggle={(id) => columnsState.toggleColumnVisibility(id)}
+              onReset={() => columnsState.resetColumnsMeta()}
+            />
           </div>
         )}
         <div data-testid="analytics-crawler-tasks">

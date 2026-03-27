@@ -67,7 +67,7 @@ describe('SubmissionTable (CHG-128)', () => {
     await screen.findByText('Alpha')
 
     fireEvent.click(screen.getByTestId('submission-columns-toggle'))
-    fireEvent.click(screen.getByTestId('submission-column-toggle-source_url'))
+    fireEvent.click(screen.getByTestId('submission-columns-panel-toggle-source_url'))
 
     await waitFor(() => {
       expect(screen.queryByTestId('submission-sort-source_url')).toBeNull()

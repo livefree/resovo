@@ -55,7 +55,7 @@ describe('AdminAnalyticsDashboard (CHG-130)', () => {
     expect(rows[0]?.getAttribute('data-testid')).toBe('analytics-task-row-t2')
 
     fireEvent.click(screen.getByTestId('analytics-task-columns-toggle'))
-    fireEvent.click(screen.getByTestId('analytics-task-column-toggle-status'))
+    fireEvent.click(screen.getByTestId('analytics-task-columns-panel-toggle-status'))
 
     await waitFor(() => {
       expect(screen.queryByTestId('analytics-task-sort-status')).toBeNull()

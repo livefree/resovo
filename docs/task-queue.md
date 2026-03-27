@@ -3077,7 +3077,7 @@
 ---
 
 ## SEQ-20260326-27 — ColumnSettingsPanel 统一列设置面板
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-26 20:30
 - **最后更新时间**：2026-03-26 20:30
 - **目标**：抽象统一列设置面板，替换 VideoTable / CrawlerSiteManager / SubmissionTable / SubtitleTable / AdminAnalyticsDashboard 五套各自的 inline 实现
@@ -3122,7 +3122,9 @@
 - **完成备注**：_（AI 填写）_
 
 #### CHG-254 — SubmissionTable / SubtitleTable / AdminAnalyticsDashboard 接入 ColumnSettingsPanel
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
+- **实际开始**：2026-03-26 23:00
+- **完成时间**：2026-03-26 23:10
 - **创建时间**：2026-03-26 20:30
 - **依赖**：CHG-253 已完成
 - **文件范围**：

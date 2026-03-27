@@ -10,6 +10,7 @@ import { apiClient } from '@/lib/api-client'
 import { Pagination } from '@/components/admin/Pagination'
 import { ReviewModal, type ReviewTarget } from '@/components/admin/content/ReviewModal'
 import { AdminToolbar } from '@/components/admin/shared/toolbar/AdminToolbar'
+import { ColumnSettingsPanel } from '@/components/admin/shared/table/ColumnSettingsPanel'
 import { AdminTableFrame } from '@/components/admin/shared/table/AdminTableFrame'
 import { AdminTableState } from '@/components/admin/shared/feedback/AdminTableState'
 import { useAdminTableColumns, type AdminColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
@@ -165,33 +166,16 @@ export function SubtitleTable() {
       <AdminToolbar className="gap-3" actions={null} />
 
       {showColumnsPanel && (
-        <div className="rounded border border-[var(--border)] bg-[var(--bg2)] p-2" data-testid="subtitle-columns-panel">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-xs text-[var(--muted)]">显示列</span>
-            <button
-              type="button"
-              className="text-xs text-[var(--muted)] hover:text-[var(--text)]"
-              onClick={() => columnsState.resetColumnsMeta()}
-              data-testid="subtitle-columns-reset"
-            >
-              重置
-            </button>
-          </div>
-          <div className="grid grid-cols-2 gap-1">
-            {columnsState.columns.map((column) => (
-              <label key={column.id} className="flex items-center gap-2 text-xs text-[var(--text)]">
-                <input
-                  type="checkbox"
-                  checked={column.visible}
-                  onChange={() => columnsState.toggleColumnVisibility(column.id)}
-                  className="accent-[var(--accent)]"
-                  data-testid={`subtitle-column-toggle-${column.id}`}
-                />
-                {SUBTITLE_COLUMN_LABELS[column.id as SubtitleColumnId]}
-              </label>
-            ))}
-          </div>
-        </div>
+        <ColumnSettingsPanel
+          data-testid="subtitle-columns-panel"
+          columns={columnsState.columns.map((col) => ({
+            id: col.id,
+            label: SUBTITLE_COLUMN_LABELS[col.id as SubtitleColumnId] ?? col.id,
+            visible: col.visible,
+          }))}
+          onToggle={(id) => columnsState.toggleColumnVisibility(id)}
+          onReset={() => columnsState.resetColumnsMeta()}
+        />
       )}
 
       <AdminTableFrame minWidth={900}>
