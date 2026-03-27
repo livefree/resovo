@@ -3864,3 +3864,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/users-sort.test.ts`（新建）— 5 个用例覆盖排序映射/方向/白名单防注入
 - **验收结论**：规范 1 PASS / 规范 2 PASS / 规范 3+4 PASS / 规范 6 排序 PASS / 规范 6 分页 PASS
 - **测试覆盖**：679/679 通过；typecheck + lint 通过
+
+---
+
+## CHG-262 — InactiveSourceTable 补充列设置入口 + PaginationV2
+- **完成时间**：2026-03-27 02:30
+- **修改文件**：
+  - `src/components/admin/sources/InactiveSourceTable.tsx`（更新）— 添加 useAdminTableColumns + ⚙ 叠加层 + ColumnSettingsPanel；Pagination→PaginationV2；动态列宽/列显隐
+  - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（新建）— 3 个用例：渲染/列显示/空状态
+- **架构说明**：SourceVerifyButton 含内联结果展示（响应时间/错误码），无法放入 AdminDropdown，保留内联行操作为架构约束例外
+- **验收结论**：规范 2 PASS / 规范 6 分页 PASS
+- **测试覆盖**：682/682 通过；typecheck 通过

@@ -3309,7 +3309,10 @@
 ### 任务列表
 
 #### CHG-262 — InactiveSourceTable 补充列设置入口 + PaginationV2
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
+- **实际开始**：2026-03-27 02:20
+- **完成时间**：2026-03-27 02:30
+- **完成备注**：添加 useAdminTableColumns + ⚙ 叠加层 + ColumnSettingsPanel；Pagination→PaginationV2；行操作保留内联（SourceVerifyButton 有内联结果展示，架构约束例外）；682/682 通过。规范 2 PASS / 规范 6 分页 PASS
 - **创建时间**：2026-03-26 11:00
 - **计划开始**：—
 - **实际开始**：—
