@@ -424,6 +424,7 @@ type AdminTableState = {
 | `015_content_format_backfill.sql` | 存量 content_format / episode_pattern 按 type+episode_count+status 规则回填 | ✅ |
 | `016_review_visibility.sql` | videos 新增 review_status / visibility_status / review_reason / review_source / reviewed_by / reviewed_at / needs_manual_review | ✅ |
 | `018_partial_ingest_policy.sql` | crawler_sites.ingest_policy JSONB（站点级采集策略，allow_auto_publish 等） | ✅ |
+| `022_add_site_key_to_videos.sql` | videos.site_key VARCHAR(100) FK → crawler_sites(key)；用于来源筛选与审核台站点关联 | ✅ |
 
 ---
 

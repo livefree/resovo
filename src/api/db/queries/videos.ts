@@ -268,7 +268,7 @@ export interface AdminVideoListFilters {
   status?: 'pending' | 'published' | 'unpublished' | 'all'
   type?: VideoType
   q?: string
-  /** 按来源站点 key 筛选（video_sources.source_name） */
+  /** 按来源站点 key 筛选（videos.site_key） */
   siteKey?: string
   visibilityStatus?: VisibilityStatus
   reviewStatus?: ReviewStatus
@@ -305,9 +305,7 @@ export async function listAdminVideos(
   }
 
   if (filters.siteKey) {
-    conditions.push(
-      `EXISTS (SELECT 1 FROM video_sources vs WHERE vs.video_id = v.id AND vs.source_name = $${idx++} AND vs.deleted_at IS NULL)`
-    )
+    conditions.push(`v.site_key = $${idx++}`)
     params.push(filters.siteKey)
   }
 
@@ -870,7 +868,7 @@ export async function listPendingReviewVideos(
                LIMIT 1) AS first_source_url,
               v.created_at
        FROM videos v
-       LEFT JOIN crawler_sites cs ON v.site_id = cs.id
+       LEFT JOIN crawler_sites cs ON cs.key = v.site_key
        WHERE v.review_status = 'pending_review' AND v.deleted_at IS NULL
        ORDER BY v.created_at ASC
        LIMIT $1 OFFSET $2`,

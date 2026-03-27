@@ -3578,3 +3578,23 @@ CHG-233 将 site filter 改为 `WHERE cs2.id = v.site_id AND cs2.key = $X`，但
 
 ### 测试覆盖
 - typecheck + lint + 658/658 单元测试全部通过
+
+---
+
+## CHG-246 — Migration: videos.site_key + listAdminVideos site filter 修复
+
+- **完成时间**：2026-03-26 21:00
+- **序列**：SEQ-20260326-25
+
+### 修改文件
+- `src/api/db/migrations/022_add_site_key_to_videos.sql`（新建）
+- `src/api/db/queries/videos.ts`（`listAdminVideos` site filter + `listPendingReviewVideos` JOIN）
+- `docs/architecture-current.md`（migration 记录补充）
+
+### 变更说明
+1. 新建 Migration 022：`videos.site_key VARCHAR(100) REFERENCES crawler_sites(key) ON DELETE SET NULL` + 稀疏索引
+2. `listAdminVideos` site filter：`EXISTS(video_sources.source_name=$X)` → `v.site_key = $X`（正确语义）
+3. `listPendingReviewVideos` JOIN：`v.site_id = cs.id`（CHG-220 遗留错误，两列均不存在）→ `cs.key = v.site_key`
+
+### 测试覆盖
+- typecheck + lint + 658/658 单元测试全部通过
