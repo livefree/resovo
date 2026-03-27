@@ -3886,3 +3886,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/sources/SourceTable.test.tsx`（更新）— 适配 CHG-267 后行操作交互（按钮点击改为下拉菜单点击）
 - **验收结论**：规范 2 PASS / 规范 3+4 PASS / 规范 6 分页 PASS
 - **测试覆盖**：typecheck 通过；lint 通过；`SourceTable.test.tsx` + `SourceSubmissionTable.test.tsx` 共 11/11 通过
+
+---
+
+## CHG-268 — 播放页剧场模式侧栏收口（PlayerShell）
+- **完成时间**：2026-03-27 05:05
+- **修改文件**：
+  - `src/components/player/PlayerShell.tsx`（更新）— 使用 `getPlayerLayoutClass`/`getSidePanelClass` 统一布局类，剧场模式下侧栏折叠且主布局间距归零
+  - `src/components/player/playerShell.layout.ts`（新建）— 抽离播放器布局类计算函数
+  - `tests/unit/components/player/playerShell.layout.test.ts`（新建）— 4 个用例覆盖 default/theater 的主布局与侧栏可见性类
+- **验收结论**：播放器默认模式保留右侧选集/换源；剧场模式隐藏侧栏并收敛空白间距
+- **测试覆盖**：`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；`playerShell.layout.test.ts` 4/4 通过

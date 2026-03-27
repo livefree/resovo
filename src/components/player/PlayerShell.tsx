@@ -22,6 +22,7 @@ import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@/types'
 import { SourceBar } from './SourceBar'
 import { DanmakuBar } from './DanmakuBar'
 import { ResumePrompt, saveProgress, loadProgress } from './ResumePrompt'
+import { getPlayerLayoutClass, getSidePanelClass } from './playerShell.layout'
 
 // VideoPlayer 动态导入，ssr: false（YTPlayer 依赖 DOM API）
 const VideoPlayer = dynamic(
@@ -172,24 +173,36 @@ export function PlayerShell({ slug }: PlayerShellProps) {
         )}
       >
         <div
-          className={cn(
-            'flex gap-4 transition-all duration-300',
-            isTheater ? 'flex-col' : 'lg:flex-row flex-col'
-          )}
+          className={getPlayerLayoutClass(isTheater)}
         >
-          {/* ── 播放器区域 ─────────────────────────────────── */}
+          {/* ── 播放器与标题区 ─────────────────────────────────── */}
           <div
             className={cn(
-              'flex-1 min-w-0 transition-all duration-300',
+              'flex-1 min-w-0 transition-all duration-300 flex flex-col',
               !isTheater && 'lg:flex-[2]'
             )}
             data-testid="player-main"
           >
+            {/* 标题置顶 */}
+            <div className="mb-4 space-y-1">
+              <h1 className="text-xl md:text-2xl font-bold line-clamp-2" style={{ color: 'var(--foreground)' }}>
+                {video.title} 
+                {video.episodeCount > 1 && <span className="ml-2 font-medium" style={{ color: 'var(--muted-foreground)' }}>第 {currentEpisode} 集</span>}
+              </h1>
+              <div className="flex items-center gap-3 text-sm" style={{ color: 'var(--muted-foreground)' }}>
+                {video.year && <span>{video.year}</span>}
+                {video.rating !== null && <span style={{ color: 'var(--gold)' }}>★ {video.rating.toFixed(1)}</span>}
+                <Link href={detailHref} className="hover:text-[var(--foreground)] transition-colors underline underline-offset-4 ml-1">
+                  详情信息
+                </Link>
+              </div>
+            </div>
+
             {/* 播放器容器（CCL overlay 挂载于此） */}
             <div
               ref={playerContainerRef}
-              className="w-full relative rounded-t-lg overflow-hidden"
-              style={{ aspectRatio: '16/9', background: '#000' }}
+              className="w-full relative rounded-lg overflow-hidden shadow-2xl border"
+              style={{ aspectRatio: '16/9', background: '#000', borderColor: 'var(--border)' }}
               data-testid="player-video-area"
             >
               {activeSrc ? (
@@ -230,73 +243,72 @@ export function PlayerShell({ slug }: PlayerShellProps) {
               )}
             </div>
 
-            {/* 线路选择栏 */}
-            {sources.length > 0 && (
-              <div className="rounded-none" style={{ background: '#111' }}>
-                <SourceBar
-                  sources={sources}
-                  activeIndex={activeSourceIndex}
-                  onSourceChange={setActiveSourceIndex}
-                />
-              </div>
-            )}
-
-            {/* 弹幕控制栏（CHG-22 接入弹幕数据） */}
+            {/* 弹幕控制栏 */}
             <DanmakuBar
               stageRef={playerContainerRef}
               currentTime={currentTime}
             />
-
-            {/* 标题行 */}
-            <div className="flex items-start justify-between mt-3 gap-2">
-              <div className="flex-1 min-w-0">
-                <Link
-                  href={detailHref}
-                  className="font-semibold text-base hover:text-[var(--gold)] transition-colors line-clamp-1"
-                  style={{ color: 'var(--foreground)' }}
-                  data-testid="player-title-link"
-                >
-                  {video.title}
-                  {video.episodeCount > 1 && ` 第${currentEpisode}集`}
-                </Link>
-                {video.titleEn && (
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>
-                    {video.titleEn}
-                  </p>
-                )}
-              </div>
-            </div>
           </div>
 
-          {/* ── 右侧面板（非剧场模式时显示） ─────────────── */}
+          {/* ── 交互面板 ─────────────── */}
           <div
-            className={cn(
-              'transition-all duration-300 overflow-hidden',
-              isTheater
-                ? 'lg:w-0 lg:opacity-0 lg:pointer-events-none'
-                : 'w-full lg:w-72 xl:w-80 opacity-100'
-            )}
+            className={getSidePanelClass(isTheater)}
             data-testid="player-side-panel"
           >
+            {/* 剧集与换源 */}
+            {(video.episodeCount > 1 || sources.length > 0) && (
+              <div className="rounded-lg border overflow-hidden flex flex-col" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+                <div className="p-3 border-b" style={{ borderColor: 'var(--border)', background: 'var(--secondary)' }}>
+                  <h3 className="font-semibold text-sm" style={{ color: 'var(--foreground)' }}>播放列表</h3>
+                </div>
+                
+                {video.episodeCount > 1 && (
+                  <div className="p-2 grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-4 xl:grid-cols-5 gap-1.5 max-h-[300px] overflow-y-auto scrollbar-thin">
+                    {Array.from({ length: video.episodeCount }).map((_, i) => {
+                      const epNum = i + 1;
+                      const isActive = currentEpisode === epNum;
+                      return (
+                        <button
+                          key={epNum}
+                          onClick={() => setEpisode(epNum)}
+                          className={cn(
+                            'py-2 text-center text-sm rounded transition-colors',
+                            isActive 
+                              ? 'bg-[var(--accent)] text-black font-bold shadow-sm' 
+                              : 'bg-[var(--secondary)] hover:bg-[var(--border)] text-[var(--muted-foreground)]'
+                          )}
+                        >
+                          {epNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                
+                {sources.length > 0 && (
+                  <div className="p-2 border-t" style={{ borderColor: 'var(--border)' }}>
+                    <div className="text-xs font-medium mb-2 px-1" style={{ color: 'var(--muted-foreground)' }}>切换线路</div>
+                    <div className="rounded-md overflow-hidden bg-[var(--secondary)]">
+                      <SourceBar
+                        sources={sources}
+                        activeIndex={activeSourceIndex}
+                        onSourceChange={setActiveSourceIndex}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 相关推荐 / 留白占位 */}
             <div
-              className="p-3 rounded-lg text-xs text-center"
-              style={{ background: 'var(--secondary)', color: 'var(--muted-foreground)' }}
+              className="p-4 rounded-lg text-xs text-center border"
+              style={{ background: 'var(--card)', borderColor: 'var(--border)', color: 'var(--muted-foreground)' }}
             >
               更多推荐内容即将上线
             </div>
           </div>
         </div>
-
-        {/* 剧场模式下：下方推荐（仅桌面端） */}
-        {isTheater && (
-          <div
-            className="hidden lg:block mt-4 px-4 py-2 rounded-lg text-xs text-center"
-            style={{ background: 'var(--secondary)', color: 'var(--muted-foreground)' }}
-            data-testid="theater-recommendations"
-          >
-            剧场模式推荐区域
-          </div>
-        )}
       </div>
     </div>
   )

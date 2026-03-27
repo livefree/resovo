@@ -3407,3 +3407,17 @@
 - **变更内容**：添加 useAdminTableColumns + ⚙ 覆盖层 + ColumnSettingsPanel；旧 Pagination → PaginationV2；2 按钮 → AdminDropdown
 - **依赖**：CHG-262 已完成
 - **完成备注**：5 新测试通过，687/687 全通过。规范 2 列设置 PASS / 规范 3+4 AdminDropdown PASS / 规范 6 分页 PASS
+
+## CHG-268 — 播放页剧场模式侧栏收口（PlayerShell）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-27 04:55
+- **实际开始**：2026-03-27 04:55
+- **完成时间**：2026-03-27 05:05
+- **文件范围**：
+  - `src/components/player/PlayerShell.tsx`
+  - `src/components/player/playerShell.layout.ts`（新建）
+  - `tests/unit/components/player/playerShell.layout.test.ts`（新建）
+- **变更原因**：当前剧场模式下右侧交互面板未按设计隐藏，与 UI 规划和 PLAYER 测试规范不一致。
+- **变更内容**：修复剧场模式下侧栏折叠/显示逻辑，保持默认模式选集换源能力；补充单元测试覆盖 default/theater 布局切换关键状态。
+- **依赖**：CHG-267 已完成
+- **完成备注**：新增 `getPlayerLayoutClass` / `getSidePanelClass` 布局函数并接入 PlayerShell；剧场模式下侧栏折叠为 `max-h-0 + opacity-0 + pointer-events-none + lg:w-0`，同时主布局 gap 归零。新增 4 条单测验证 default/theater 类名输出。`npx tsc --noEmit --incremental false` 通过；`npx eslint`（仅改动文件）通过；`playerShell.layout.test.ts` 4/4 通过。
