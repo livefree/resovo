@@ -1,11 +1,11 @@
 # 执行规范整合草案（待审核，2026-03-27）
 
-> status: draft
+> status: superseded
 > owner: @engineering
 > scope: execution-spec review draft before CLAUDE.md merge
 > source_of_truth: no
 > supersedes: none
-> superseded_by: none
+> superseded_by: CLAUDE.md（2026-03-27 已并入）
 > last_reviewed: 2026-03-27
 
 ## 1. 文档定位
