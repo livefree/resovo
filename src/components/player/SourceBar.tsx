@@ -36,7 +36,7 @@ export function SourceBar({ sources, activeIndex, onSourceChange, className }: S
       className={cn('flex items-center gap-2 px-3 py-1', className)}
       data-testid="source-bar"
     >
-      <span className="text-white/60 text-xs shrink-0">线路</span>
+      <span className="text-xs shrink-0" style={{ color: 'var(--muted-foreground)' }}>线路</span>
 
       <div className="flex flex-wrap gap-1.5">
         {displaySources.map((src, i) => (
@@ -47,9 +47,13 @@ export function SourceBar({ sources, activeIndex, onSourceChange, className }: S
               'px-2.5 py-0.5 rounded text-xs transition-colors',
               i === activeIndex
                 ? 'font-semibold'
-                : 'text-white/70 hover:text-white'
+                : 'hover:bg-[var(--border)]'
             )}
-            style={i === activeIndex ? { background: 'var(--gold)', color: 'black' } : {}}
+            style={
+              i === activeIndex
+                ? { background: 'var(--gold)', color: 'black' }
+                : { color: 'var(--foreground)' }
+            }
             data-testid={`source-btn-${i}`}
           >
             {src.label ?? `线路${i + 1}`}
@@ -59,7 +63,8 @@ export function SourceBar({ sources, activeIndex, onSourceChange, className }: S
         {!showAll && (
           <button
             onClick={() => setIsExpanded((v) => !v)}
-            className="px-2.5 py-0.5 rounded text-xs text-white/70 hover:text-white transition-colors"
+            className="px-2.5 py-0.5 rounded text-xs transition-colors hover:bg-[var(--border)]"
+            style={{ color: 'var(--muted-foreground)' }}
             data-testid="source-expand-btn"
           >
             {isExpanded ? '收起' : `+${sources.length - (SHOW_LIMIT - 1)} 条`}

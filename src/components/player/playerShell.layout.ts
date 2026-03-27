@@ -16,7 +16,7 @@ export function getSidePanelClass(isTheater: boolean): string {
     'transition-all duration-300 flex flex-col gap-4',
     isTheater
       ? 'max-h-0 overflow-hidden opacity-0 pointer-events-none lg:w-0'
-      : 'w-full lg:w-72 xl:w-80 shrink-0 opacity-100'
+      : 'w-full lg:w-72 xl:w-80 shrink-0 opacity-100 self-stretch'
   )
 }
 
