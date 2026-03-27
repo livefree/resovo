@@ -3618,3 +3618,20 @@ CHG-233 将 site filter 改为 `WHERE cs2.id = v.site_id AND cs2.key = $X`，但
 
 ### 测试覆盖
 - typecheck + lint + 658/658 单元测试全部通过
+
+---
+
+## CHG-248 — 新建 AdminDropdown 统一浮层下拉组件
+
+- **完成时间**：2026-03-26 21:35
+- **序列**：SEQ-20260326-26
+
+### 新建文件
+- `src/components/admin/shared/dropdown/AdminDropdown.tsx`
+- `src/components/admin/shared/dropdown/index.ts`
+
+### 变更说明
+Portal 渲染（createPortal → document.body）彻底解决 overflow 裁切；click-away (mousedown) + ESC (keydown) 自动关闭；left/right 对齐；role="menu"/role="menuitem" 无障碍支持。本任务只建组件，接入由 CHG-249/250 完成。
+
+### 测试覆盖
+- typecheck + lint + 658/658 单元测试通过
