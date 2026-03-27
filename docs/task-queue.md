@@ -3396,3 +3396,14 @@
   - `src/components/admin/moderation/ModerationDashboard.tsx`
 - **变更内容**：API 响应字段 `rows` → `data`，与 VideoService.pendingReviewList 返回格式对齐
 - **完成备注**：两处组件类型声明和字段访问全部修正。668/668 通过。
+
+#### CHG-267 — sources/SubmissionTable 补充列设置入口 + PaginationV2 + AdminDropdown 行操作
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-27 10:00
+- **实际开始**：2026-03-27 10:00
+- **完成时间**：2026-03-27 10:20
+- **文件范围**：`src/components/admin/sources/SubmissionTable.tsx`
+- **变更原因**：用户纠错表（Tab 2 播放源管理）在 CHG-262 中被遗漏，缺少 ⚙ 列设置、旧 Pagination、行操作未用 AdminDropdown
+- **变更内容**：添加 useAdminTableColumns + ⚙ 覆盖层 + ColumnSettingsPanel；旧 Pagination → PaginationV2；2 按钮 → AdminDropdown
+- **依赖**：CHG-262 已完成
+- **完成备注**：5 新测试通过，687/687 全通过。规范 2 列设置 PASS / 规范 3+4 AdminDropdown PASS / 规范 6 分页 PASS

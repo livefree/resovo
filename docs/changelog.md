@@ -3875,3 +3875,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **架构说明**：SourceVerifyButton 含内联结果展示（响应时间/错误码），无法放入 AdminDropdown，保留内联行操作为架构约束例外
 - **验收结论**：规范 2 PASS / 规范 6 分页 PASS
 - **测试覆盖**：682/682 通过；typecheck 通过
+
+---
+
+## CHG-267 — sources/SubmissionTable 补充列设置入口 + PaginationV2 + AdminDropdown 行操作
+- **完成时间**：2026-03-27 10:20
+- **修改文件**：
+  - `src/components/admin/sources/SubmissionTable.tsx`（更新）— 添加 useAdminTableColumns + ⚙ 叠加层 + ColumnSettingsPanel；Pagination -> PaginationV2；行操作按钮改为 AdminDropdown
+  - `tests/unit/components/admin/sources/SourceSubmissionTable.test.tsx`（新建）— 5 个用例覆盖：渲染/匿名提交者/列显隐/空状态/下拉采纳
+  - `tests/unit/components/admin/sources/SourceTable.test.tsx`（更新）— 适配 CHG-267 后行操作交互（按钮点击改为下拉菜单点击）
+- **验收结论**：规范 2 PASS / 规范 3+4 PASS / 规范 6 分页 PASS
+- **测试覆盖**：typecheck 通过；lint 通过；`SourceTable.test.tsx` + `SourceSubmissionTable.test.tsx` 共 11/11 通过

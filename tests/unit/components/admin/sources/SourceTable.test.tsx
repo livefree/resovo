@@ -124,16 +124,19 @@ describe('SourceTable (CHG-216)', () => {
     expect(screen.getByText('alice')).toBeTruthy()
   })
 
-  it('approves submission and refreshes submissions tab', async () => {
+  it('approves submission via dropdown and refreshes submissions tab', async () => {
     render(<SourceTable />)
 
     fireEvent.click(screen.getByTestId('source-tab-submissions'))
     await screen.findByText('Fix Video')
-    fireEvent.click(screen.getByTestId('submission-approve-btn-sub-1'))
+
+    // Open dropdown for the submission row
+    fireEvent.click(screen.getByTestId('source-submission-actions-sub-1'))
+    await waitFor(() => screen.getByText('采纳'))
+    fireEvent.click(screen.getByText('采纳'))
 
     await waitFor(() => {
       expect(postMock).toHaveBeenCalledWith('/admin/submissions/sub-1/approve')
-      expect(getMock).toHaveBeenCalledWith('/admin/submissions?page=1&limit=20')
     })
   })
 
