@@ -725,6 +725,8 @@ export interface CrawlerInsertInput {
   reviewStatus?: string
   visibilityStatus?: string
   metadataSource: MetadataSource
+  /** 来源站点 key，关联 crawler_sites.key（CHG-247） */
+  siteKey?: string
 }
 
 /**
@@ -740,8 +742,8 @@ export async function insertCrawledVideo(
        (short_id, title, title_normalized, title_en, cover_url, type, source_category,
         genre, genre_source, content_rating,
         year, country, "cast", director, writers, description, status, episode_count,
-        is_published, review_status, visibility_status, metadata_source)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+        is_published, review_status, visibility_status, metadata_source, site_key)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
      RETURNING id`,
     [
       input.shortId,
@@ -766,6 +768,7 @@ export async function insertCrawledVideo(
       input.reviewStatus ?? 'pending_review',
       input.visibilityStatus ?? 'internal',
       input.metadataSource,
+      input.siteKey ?? null,
     ]
   )
   return result.rows[0]

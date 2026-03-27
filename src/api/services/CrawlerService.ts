@@ -163,7 +163,8 @@ export class CrawlerService {
    */
   async upsertVideo(
     parsed: ReturnType<typeof parseVodItem>,
-    ingestPolicy?: { allow_auto_publish: boolean }
+    ingestPolicy?: { allow_auto_publish: boolean },
+    siteKey?: string
   ): Promise<{ videoId: string; sourcesUpserted: number }> {
     const { video, sources } = parsed
 
@@ -224,6 +225,7 @@ export class CrawlerService {
         reviewStatus,
         visibilityStatus,
         metadataSource: 'crawler',
+        siteKey,
       })
       videoId = inserted.id
     }
@@ -421,7 +423,7 @@ export class CrawlerService {
             throw new Error('TASK_CANCELLED')
           }
           try {
-            const { sourcesUpserted: s } = await this.upsertVideo(parsed, source.ingestPolicy)
+            const { sourcesUpserted: s } = await this.upsertVideo(parsed, source.ingestPolicy, source.name)
             videosUpserted++
             sourcesUpserted += s
             processed++

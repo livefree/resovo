@@ -3598,3 +3598,23 @@ CHG-233 将 site filter 改为 `WHERE cs2.id = v.site_id AND cs2.key = $X`，但
 
 ### 测试覆盖
 - typecheck + lint + 658/658 单元测试全部通过
+
+---
+
+## CHG-247 — 爬虫入库写入 site_key
+
+- **完成时间**：2026-03-26 21:15
+- **序列**：SEQ-20260326-25
+
+### 修改文件
+- `src/api/db/queries/videos.ts`（`CrawlerInsertInput` + `insertCrawledVideo`）
+- `src/api/services/CrawlerService.ts`（`upsertVideo` 签名 + 调用方）
+
+### 变更说明
+- `CrawlerInsertInput` 新增 `siteKey?: string`
+- `insertCrawledVideo` INSERT 语句增加第 23 列 `site_key`，值为 `input.siteKey ?? null`
+- `upsertVideo` 第三参数 `siteKey?: string`，新建视频时传入 `insertCrawledVideo`
+- 调用方 `crawl()` 传入 `source.name`（即 `crawler_sites.key`，`getEnabledSources` 已将 `key` 映射到 `name`）
+
+### 测试覆盖
+- typecheck + lint + 658/658 单元测试全部通过

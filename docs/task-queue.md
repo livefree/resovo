@@ -2983,9 +2983,9 @@
 ---
 
 ## SEQ-20260326-25 — 视频来源筛选正确实现
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-26 20:30
-- **最后更新时间**：2026-03-26 20:45
+- **最后更新时间**：2026-03-26 21:15
 - **目标**：为 videos 表添加 site_key 外键列，使来源筛选从语义错误的 video_sources.source_name 改为正确的 videos.site_key → crawler_sites.key；同步更新爬虫入库写入路径
 - **依赖**：无（独立修复）
 - **参考**：admin_table_ux_fix_plan_20260326.md 阶段 1；CHG-245 回滚说明
@@ -3005,7 +3005,9 @@
 - **完成备注**：Migration 添加 videos.site_key VARCHAR(100) FK→crawler_sites(key)；listAdminVideos site filter 改为直接 v.site_key=$N；顺带修复 listPendingReviewVideos 中 CHG-220 遗留的 v.site_id=cs.id 错误 JOIN。72/72 测试通过。
 
 #### CHG-247 — 爬虫入库写入 site_key（insertCrawledVideo + CrawlerService）
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
+- **实际开始**：2026-03-26 21:05
+- **完成时间**：2026-03-26 21:15
 - **创建时间**：2026-03-26 20:30
 - **依赖**：CHG-246 已完成
 - **文件范围**：
