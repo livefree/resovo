@@ -1,6 +1,7 @@
 /**
  * BatchDeleteBar.tsx — 批量删除失效源的底部浮动操作栏
  * CHG-28: 多选 → 底部栏 → ConfirmDialog → 批量删除
+ * CHG-264: 内部布局层替换为 SelectionActionBar sticky-bottom
  */
 
 'use client'
@@ -8,6 +9,7 @@
 import { useState } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
+import { SelectionActionBar } from '@/components/admin/shared/batch/SelectionActionBar'
 
 interface BatchDeleteBarProps {
   selectedIds: string[]
@@ -28,39 +30,34 @@ export function BatchDeleteBar({ selectedIds, onSuccess, onClear }: BatchDeleteB
       await apiClient.post('/admin/sources/batch-delete', { ids: selectedIds })
       setDialogOpen(false)
       onSuccess()
-    } catch {
-      // silent
-    } finally {
+    } catch { /* silent */ } finally {
       setLoading(false)
     }
   }
 
   return (
     <>
-      <div
-        className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between border-t border-[var(--border)] bg-[var(--bg2)] px-6 py-3 shadow-lg"
+      <SelectionActionBar
+        variant="sticky-bottom"
+        selectedCount={count}
         data-testid="batch-delete-bar"
-      >
-        <span className="text-sm text-[var(--text)]" data-testid="batch-delete-count">
-          已选 <span className="font-bold text-[var(--accent)]">{count}</span> 条失效源
-        </span>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onClear}
-            className="rounded-md border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--muted)] hover:text-[var(--text)]"
-            data-testid="batch-delete-clear-btn"
-          >
-            取消
-          </button>
-          <button
-            onClick={() => setDialogOpen(true)}
-            className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
-            data-testid="batch-delete-confirm-btn"
-          >
-            批量删除
-          </button>
-        </div>
-      </div>
+        countTestId="batch-delete-count"
+        actions={[
+          {
+            key: 'clear',
+            label: '取消',
+            onClick: onClear,
+            testId: 'batch-delete-clear-btn',
+          },
+          {
+            key: 'delete',
+            label: '批量删除',
+            onClick: () => setDialogOpen(true),
+            variant: 'danger',
+            testId: 'batch-delete-confirm-btn',
+          },
+        ]}
+      />
 
       <ConfirmDialog
         open={dialogOpen}

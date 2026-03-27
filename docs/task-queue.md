@@ -3323,16 +3323,14 @@
 - **完成备注**：_（AI 填写）_
 
 #### CHG-263 — CrawlerSiteManager 分页升级 PaginationV2
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-26 11:00
-- **计划开始**：—
-- **实际开始**：—
-- **完成时间**：—
+- **完成时间**：2026-03-27（上次 session 中已随 post-review fix 完成）
 - **依赖**：CHG-262 已完成
-- **文件范围**：`src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`（或包含 Pagination 的子组件）
+- **文件范围**：`src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`
 - **变更内容**：Pagination → PaginationV2
 - **验收要点**：规范 6（分页）✅
-- **完成备注**：_（AI 填写）_
+- **完成备注**：CrawlerSiteManager 已使用 PaginationV2（import 及 JSX 均确认），与 post-review fix 一起实施。
 
 ---
 
@@ -3346,7 +3344,9 @@
 ### 任务列表
 
 #### CHG-264 — SelectionActionBar 扩展 variant + BatchPublishBar/BatchDeleteBar 完整迁移
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
+- **实际开始**：2026-03-27 10:30
+- **完成时间**：2026-03-27 10:50
 - **创建时间**：2026-03-26 11:00
 - **计划开始**：—
 - **实际开始**：—

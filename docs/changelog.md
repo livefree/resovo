@@ -3886,3 +3886,21 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/sources/SourceTable.test.tsx`（更新）— 适配 CHG-267 后行操作交互（按钮点击改为下拉菜单点击）
 - **验收结论**：规范 2 PASS / 规范 3+4 PASS / 规范 6 分页 PASS
 - **测试覆盖**：typecheck 通过；lint 通过；`SourceTable.test.tsx` + `SourceSubmissionTable.test.tsx` 共 11/11 通过
+
+---
+
+## CHG-263 — CrawlerSiteManager 分页升级 PaginationV2
+- **完成时间**：2026-03-27（上次 session post-review fix 中已完成）
+- **修改文件**：`src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`（更新）
+- **验收结论**：规范 6（分页）PASS
+
+---
+
+## CHG-264 — SelectionActionBar 扩展 variant + BatchPublishBar/BatchDeleteBar 完整迁移
+- **完成时间**：2026-03-27 10:50
+- **修改文件**：
+  - `src/components/admin/shared/batch/SelectionActionBar.tsx`（更新）— SelectionAction 新增 variant/testId；新增 countTestId prop；ActionButtons 按 variant 映射 className
+  - `src/components/admin/videos/BatchPublishBar.tsx`（更新）— 内部布局完整替换为 SelectionActionBar sticky-bottom，5 个操作各带正确 variant
+  - `src/components/admin/sources/BatchDeleteBar.tsx`（更新）— 接入 SelectionActionBar sticky-bottom，ConfirmDialog 保留外挂
+- **验收结论**：规范 5 PASS；所有既有 BatchPublishBar 测试（8/8）全部通过
+- **测试覆盖**：typecheck 通过；lint 通过；687/687 全通过
