@@ -17,7 +17,7 @@
 ## 基本原则
 
 - **明确优于隐式**：宁可多写几行，也要让意图清晰
-- **每个函数只做一件事**：超过 40 行的函数考虑拆分
+- **每个函数只做一件事**：40 行时评估是否拆分，**超过 80 行必须拆分**（CLAUDE.md 硬规则）
 - **错误必须处理**：不得有 `catch (e) {}` 的空处理
 - **类型必须明确**：不使用 `any`，用 `unknown` 替代
 
@@ -147,20 +147,3 @@ export const MAX_PAGE_SIZE = 100
 | API 路由文件 | 150 行 | 拆分子路由 |
 | 工具函数文件 | 100 行 | 拆分为多文件 |
 
----
-
-## Git Commit 规范
-
-```
-feat: 新功能
-fix: Bug 修复
-refactor: 重构（不影响功能）
-docs: 文档更新
-test: 测试相关
-chore: 构建/配置相关
-
-示例：
-feat(player): add episode overlay with keyboard navigation
-fix(search): correct director filter query parameter
-docs(architecture): update videos table with new fields
-```
