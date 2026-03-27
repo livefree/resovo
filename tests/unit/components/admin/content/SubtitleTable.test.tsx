@@ -1,3 +1,8 @@
+/**
+ * SubtitleTable.test.tsx — CHG-260
+ * 验证：数据渲染 / 服务端排序参数 / 列显示切换 / 空状态
+ */
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { SubtitleTable } from '@/components/admin/content/SubtitleTable'
@@ -43,7 +48,7 @@ const MOCK_ROWS = [
   },
 ]
 
-describe('SubtitleTable (CHG-129)', () => {
+describe('SubtitleTable (CHG-260)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
@@ -51,22 +56,37 @@ describe('SubtitleTable (CHG-129)', () => {
     postMock.mockResolvedValue({})
   })
 
-  it('applies default created_at sort and supports toggleSort', async () => {
+  it('renders subtitle rows with video title and language', async () => {
+    render(<SubtitleTable />)
+    await screen.findByText('Alpha')
+    expect(screen.getByText('Beta')).toBeTruthy()
+    expect(screen.getByText('zh')).toBeTruthy()
+  })
+
+  it('calls API with default sortField=created_at&sortDir=desc on mount', async () => {
     render(<SubtitleTable />)
     await screen.findByText('Alpha')
 
-    const rowsDesc = Array.from(document.querySelectorAll('tr[data-testid^="subtitle-row-"]'))
-    expect(rowsDesc[0]?.getAttribute('data-testid')).toBe('subtitle-row-st2')
+    const firstCall = getMock.mock.calls[0][0] as string
+    expect(firstCall).toContain('sortField=created_at')
+    expect(firstCall).toContain('sortDir=desc')
+  })
 
-    fireEvent.click(screen.getByTestId('subtitle-sort-video'))
+  it('refetches with new sortField/sortDir when sort header is clicked', async () => {
+    render(<SubtitleTable />)
+    await screen.findByText('Alpha')
+
+    fireEvent.click(screen.getByTestId('modern-table-sort-video'))
 
     await waitFor(() => {
-      const rowsAsc = Array.from(document.querySelectorAll('tr[data-testid^="subtitle-row-"]'))
-      expect(rowsAsc[0]?.getAttribute('data-testid')).toBe('subtitle-row-st1')
+      const calls = getMock.mock.calls.map((c) => c[0] as string)
+      const sortedCall = calls.find((url) => url.includes('sortField=video'))
+      expect(sortedCall).toBeTruthy()
+      expect(sortedCall).toContain('sortDir=asc')
     })
   })
 
-  it('supports column visibility toggle', async () => {
+  it('supports column visibility toggle via ColumnSettingsPanel', async () => {
     render(<SubtitleTable />)
     await screen.findByText('Alpha')
 
@@ -74,30 +94,14 @@ describe('SubtitleTable (CHG-129)', () => {
     fireEvent.click(screen.getByTestId('subtitle-columns-panel-toggle-language'))
 
     await waitFor(() => {
-      expect(screen.queryByTestId('subtitle-sort-language')).toBeNull()
+      expect(screen.queryByTestId('modern-table-sort-language')).toBeNull()
     })
   })
 
-  it('persists resized column width after remount', async () => {
-    const { unmount } = render(<SubtitleTable />)
-    await screen.findByText('Alpha')
-
-    const languageHeader = screen.getByTestId('subtitle-sort-language').closest('th')
-    expect(languageHeader?.getAttribute('style')).toContain('width: 130px')
-
-    fireEvent.mouseDown(screen.getByTestId('subtitle-resize-language'), { clientX: 100 })
-    fireEvent.mouseMove(window, { clientX: 140 })
-    fireEvent.mouseUp(window)
-
-    await waitFor(() => {
-      expect(languageHeader?.getAttribute('style')).toContain('width: 170px')
-    })
-
-    unmount()
+  it('shows empty state when no subtitles', async () => {
+    getMock.mockResolvedValue({ data: [], total: 0 })
     render(<SubtitleTable />)
-    await screen.findByText('Alpha')
 
-    const remountLanguageHeader = screen.getByTestId('subtitle-sort-language').closest('th')
-    expect(remountLanguageHeader?.getAttribute('style')).toContain('width: 170px')
+    await screen.findByText('暂无待审字幕')
   })
 })

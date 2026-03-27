@@ -3838,3 +3838,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 规范 6 服务端排序：PASS
   - 规范 6 PaginationV2 分页：PASS
 - **测试覆盖**：670/670 通过；typecheck + lint 通过
+
+---
+
+## CHG-260 — SubtitleTable → ModernDataTable（服务端排序 + PaginationV2）
+- **完成时间**：2026-03-27 01:55
+- **修改文件**：
+  - `src/components/admin/content/useSubtitleTableColumns.tsx`（新建）— 字幕审核表格列定义，单"审核"直接按钮
+  - `src/components/admin/content/SubtitleTable.tsx`（重写）— ModernDataTable + PaginationV2 + 服务端排序，⚙ 叠加层列设置
+  - `tests/unit/components/admin/content/SubtitleTable.test.tsx`（更新）— 5 个用例覆盖：渲染 / 默认排序参数 / 排序触发 / 列显示 / 空状态
+- **验收结论**：规范 1 PASS / 规范 3+4 PASS / 规范 6 排序 PASS / 规范 6 分页 PASS
+- **测试覆盖**：672/672 通过；typecheck + lint 通过

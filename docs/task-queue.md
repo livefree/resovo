@@ -3254,7 +3254,10 @@
 - **完成备注**：新建 useSubmissionTableColumns.tsx；SubmissionTable.tsx 完整重写为 ModernDataTable + PaginationV2 + 服务端排序；旧本地排序逻辑 + AdminTableFrame 全部移除；测试更新为 5 个用例覆盖渲染/排序参数/列显示/空状态；670/670 全部通过。对照规范：规范 1 PASS / 规范 3+4 PASS / 规范 6 排序 PASS / 规范 6 分页 PASS
 
 #### CHG-260 — SubtitleTable → ModernDataTable（服务端排序 + PaginationV2）
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
+- **实际开始**：2026-03-27 00:10
+- **完成时间**：2026-03-27 01:55
+- **完成备注**：新建 useSubtitleTableColumns.tsx；SubtitleTable.tsx 完整重写为 ModernDataTable + PaginationV2 + 服务端排序；⚙ 列设置叠加在表格右上角（overflow-hidden 外）；"审核"保留直接按钮（单操作）；672/672 通过。规范 1 PASS / 规范 3+4 PASS / 规范 6 排序 PASS / 规范 6 分页 PASS
 - **创建时间**：2026-03-26 11:00
 - **计划开始**：—
 - **实际开始**：—
