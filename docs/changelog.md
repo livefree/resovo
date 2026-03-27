@@ -3450,11 +3450,8 @@
 
 ---
 
-## CHG-233 — 视频来源筛选 SQL 修复
-- **完成时间**：2026-03-26 17:00
-- **变更文件**：
-  - `src/api/db/queries/videos.ts` — `listAdminVideos` site 过滤条件从 `video_sources.source_name = $siteKey` 改为 `EXISTS (SELECT 1 FROM crawler_sites cs2 WHERE cs2.id = v.site_id AND cs2.key = $siteKey)`；更新注释
-- **测试**：typecheck + lint + 664/664 单元测试全部通过
+## CHG-233 — ~~视频来源筛选 SQL 修复~~ ⛔ 已通过 CHG-245 回滚
+- **回滚原因**：修复使用了不存在的 `v.site_id` 列（`crawler_sites` 主键为 `key`，`videos` 表无 `site_id` 列）；migration 022 设计错误无法执行；site 筛选功能待后续正确实现
 
 ---
 
