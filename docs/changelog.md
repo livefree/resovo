@@ -3635,3 +3635,19 @@ Portal 渲染（createPortal → document.body）彻底解决 overflow 裁切；
 
 ### 测试覆盖
 - typecheck + lint + 658/658 单元测试通过
+
+---
+
+## CHG-249 — CrawlerSiteTable 操作列接入 AdminDropdown
+
+- **完成时间**：2026-03-26 21:50
+- **序列**：SEQ-20260326-26
+
+### 修改文件
+- `src/components/admin/system/crawler-site/hooks/useCrawlerSiteTableColumns.tsx`
+
+### 变更说明
+`manageOps` cell 的 `<details>` 替换为 `<AdminDropdown>`，三个操作（检测/编辑/删除）映射为 items 数组，portal 渲染彻底消除 overflow 裁切。
+
+### 测试覆盖
+- typecheck + lint + 658/658 单元测试通过

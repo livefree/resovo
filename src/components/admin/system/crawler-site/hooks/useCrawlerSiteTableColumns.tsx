@@ -6,6 +6,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { useMemo } from 'react'
 import type { CrawlerSite, UpdateCrawlerSiteInput } from '@/types'
+import { AdminDropdown } from '@/components/admin/shared/dropdown/AdminDropdown'
 import { TableBadgeCell } from '@/components/admin/shared/modern-table/cells/TableBadgeCell'
 import { TableCheckboxCell } from '@/components/admin/shared/modern-table/cells/TableCheckboxCell'
 import { TableDateCell } from '@/components/admin/shared/modern-table/cells/TableDateCell'
@@ -120,22 +121,35 @@ function buildSiteCellRenderer(columnId: ColumnId, deps: SiteColumnDeps) {
       )
     }
     case 'manageOps': return ({ row }: { row: CrawlerSite }) => (
-      <details className="group relative">
-        <summary className="cursor-pointer list-none rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg3)]">操作</summary>
-        <div className="absolute right-0 z-20 mt-1 w-24 rounded border border-[var(--border)] bg-[var(--bg2)] p-1 shadow-lg">
-          <button type="button" disabled={deps.validateStates[row.key] === 'checking'}
-            onClick={() => { void deps.handleValidate(row) }}
-            className="block w-full rounded px-2 py-1 text-left text-xs text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-50"
-          >检测</button>
-          <button type="button" onClick={() => deps.setEditTarget(row)}
-            className="mt-0.5 block w-full rounded px-2 py-1 text-left text-xs text-[var(--text)] hover:bg-[var(--bg3)]"
-          >编辑</button>
-          <button type="button" disabled={row.fromConfig}
-            onClick={() => { void deps.handleDelete(row) }}
-            className="mt-0.5 block w-full rounded px-2 py-1 text-left text-xs text-red-400 hover:bg-red-500/10 disabled:text-[var(--muted)] disabled:hover:bg-transparent"
-          >删除</button>
-        </div>
-      </details>
+      <AdminDropdown
+        align="right"
+        data-testid={`crawler-site-ops-${row.key}`}
+        trigger={
+          <button type="button" className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg3)]">
+            操作
+          </button>
+        }
+        items={[
+          {
+            key: 'validate',
+            label: '检测',
+            disabled: deps.validateStates[row.key] === 'checking',
+            onClick: () => { void deps.handleValidate(row) },
+          },
+          {
+            key: 'edit',
+            label: '编辑',
+            onClick: () => deps.setEditTarget(row),
+          },
+          {
+            key: 'delete',
+            label: '删除',
+            danger: true,
+            disabled: row.fromConfig,
+            onClick: () => { void deps.handleDelete(row) },
+          },
+        ]}
+      />
     )
     default: return undefined
   }
