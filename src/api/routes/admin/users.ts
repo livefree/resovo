@@ -19,12 +19,16 @@ import * as usersQueries from '@/api/db/queries/users'
 export async function adminUserRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
 
+  const USER_SORT_FIELDS = ['username', 'email', 'role', 'created_at', 'status'] as const
+
   const ListSchema = z.object({
     q: z.string().max(100).optional(),
     role: z.enum(['user', 'moderator', 'admin']).optional(),
     banned: z.enum(['true', 'false']).optional(),
     page: z.coerce.number().int().min(1).optional().default(1),
     limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+    sortField: z.string().optional(),
+    sortDir: z.enum(['asc', 'desc']).optional(),
   })
 
   // ── GET /admin/users ─────────────────────────────────────────
@@ -36,8 +40,12 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const { q, role, banned, page, limit } = parsed.data
-    const { rows, total } = await usersQueries.listAdminUsers(db, { q, role, banned, page, limit })
+    const { q, role, banned, page, limit, sortDir } = parsed.data
+    const rawSortField = parsed.data.sortField
+    const sortField = rawSortField && (USER_SORT_FIELDS as readonly string[]).includes(rawSortField)
+      ? rawSortField
+      : undefined
+    const { rows, total } = await usersQueries.listAdminUsers(db, { q, role, banned, page, limit, sortField, sortDir })
     return reply.send({ data: rows, total, page, limit })
   })
 

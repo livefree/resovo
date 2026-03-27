@@ -1,6 +1,7 @@
 /**
  * UserActions.tsx — 用户管理操作列
  * CHG-26: 封号/解封 ConfirmDialog、角色切换、密码重置（一次性 Modal）
+ * CHG-261: 改为 AdminDropdown 触发（2~3 个操作，符合多选项下拉菜单设计规则）
  */
 
 'use client'
@@ -9,6 +10,7 @@ import { useState } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
 import { Modal } from '@/components/admin/Modal'
+import { AdminDropdown } from '@/components/admin/shared/dropdown/AdminDropdown'
 
 export interface UserRow {
   id: string
@@ -89,58 +91,41 @@ export function UserActions({ user, onRefresh }: UserActionsProps) {
 
   function handlePwModalClose() {
     setPwModalOpen(false)
-    setNewPassword(null)  // discard password after modal close
+    setNewPassword(null)
   }
+
+  const dropdownItems = [
+    user.banned_at
+      ? { key: 'unban', label: '解封', onClick: () => setUnbanDialogOpen(true) }
+      : { key: 'ban', label: '封号', onClick: () => setBanDialogOpen(true) },
+    ...(user.role === 'user'
+      ? [{ key: 'promote', label: '升为版主', onClick: () => { void handleRoleChange('moderator') } }]
+      : []),
+    ...(user.role === 'moderator'
+      ? [{ key: 'demote', label: '降为用户', onClick: () => { void handleRoleChange('user') } }]
+      : []),
+    {
+      key: 'reset-pw',
+      label: resetLoading ? '生成中…' : '重置密码',
+      onClick: () => { void handleResetPassword() },
+    },
+  ]
 
   return (
     <>
-      <div className="flex flex-wrap gap-1" data-testid={`user-actions-${user.id}`}>
-        {user.banned_at ? (
+      <AdminDropdown
+        data-testid={`user-actions-${user.id}`}
+        align="right"
+        trigger={
           <button
-            onClick={() => setUnbanDialogOpen(true)}
-            className="rounded px-2 py-0.5 text-xs bg-green-900/30 text-green-400 hover:bg-green-900/60"
-            data-testid={`user-unban-btn-${user.id}`}
+            type="button"
+            className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg2)]"
           >
-            解封
+            操作 ▾
           </button>
-        ) : (
-          <button
-            onClick={() => setBanDialogOpen(true)}
-            className="rounded px-2 py-0.5 text-xs bg-red-900/30 text-red-400 hover:bg-red-900/60"
-            data-testid={`user-ban-btn-${user.id}`}
-          >
-            封号
-          </button>
-        )}
-
-        {user.role === 'user' && (
-          <button
-            onClick={() => handleRoleChange('moderator')}
-            className="rounded px-2 py-0.5 text-xs bg-blue-900/30 text-blue-400 hover:bg-blue-900/60"
-            data-testid={`user-promote-btn-${user.id}`}
-          >
-            升为版主
-          </button>
-        )}
-        {user.role === 'moderator' && (
-          <button
-            onClick={() => handleRoleChange('user')}
-            className="rounded px-2 py-0.5 text-xs bg-[var(--bg3)] text-[var(--muted)] hover:text-[var(--text)]"
-            data-testid={`user-demote-btn-${user.id}`}
-          >
-            降为用户
-          </button>
-        )}
-
-        <button
-          onClick={handleResetPassword}
-          disabled={resetLoading}
-          className="rounded px-2 py-0.5 text-xs bg-[var(--bg3)] text-[var(--muted)] hover:text-[var(--text)] disabled:opacity-40"
-          data-testid={`user-reset-pw-btn-${user.id}`}
-        >
-          {resetLoading ? '生成中…' : '重置密码'}
-        </button>
-      </div>
+        }
+        items={dropdownItems}
+      />
 
       <ConfirmDialog
         open={banDialogOpen}
@@ -173,7 +158,10 @@ export function UserActions({ user, onRefresh }: UserActionsProps) {
           <p className="mb-3 text-sm text-[var(--muted)]">
             以下为一次性临时密码，关闭后不可再查看。请将密码告知用户，并提醒其登录后立即修改。
           </p>
-          <div className="rounded-md bg-[var(--bg3)] px-4 py-3 text-center font-mono text-lg tracking-widest text-[var(--accent)]" data-testid="reset-pw-value">
+          <div
+            className="rounded-md bg-[var(--bg3)] px-4 py-3 text-center font-mono text-lg tracking-widest text-[var(--accent)]"
+            data-testid="reset-pw-value"
+          >
             {newPassword}
           </div>
         </div>

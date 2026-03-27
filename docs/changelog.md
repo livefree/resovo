@@ -3849,3 +3849,18 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/content/SubtitleTable.test.tsx`（更新）— 5 个用例覆盖：渲染 / 默认排序参数 / 排序触发 / 列显示 / 空状态
 - **验收结论**：规范 1 PASS / 规范 3+4 PASS / 规范 6 排序 PASS / 规范 6 分页 PASS
 - **测试覆盖**：672/672 通过；typecheck + lint 通过
+
+---
+
+## CHG-261 — UserTable → ModernDataTable（服务端排序 + PaginationV2 + AdminDropdown）
+- **完成时间**：2026-03-27 02:15
+- **修改文件**：
+  - `src/api/db/queries/users.ts` — 添加 USER_SORT_COLUMNS，listAdminUsers 支持 sortField/sortDir
+  - `src/api/routes/admin/users.ts` — ListSchema 添加 sortField/sortDir，白名单校验
+  - `src/components/admin/users/UserActions.tsx` — 改为 AdminDropdown 触发（2~3 操作符合多选项规则）
+  - `src/components/admin/users/useUserTableColumns.tsx`（新建）— 用户管理表格列定义
+  - `src/components/admin/users/UserTable.tsx`（重写）— ModernDataTable + PaginationV2 + 服务端排序
+  - `tests/unit/components/admin/users/UserTable.test.tsx`（更新）— 5 个用例覆盖渲染/排序参数/列显示/空状态
+  - `tests/unit/api/users-sort.test.ts`（新建）— 5 个用例覆盖排序映射/方向/白名单防注入
+- **验收结论**：规范 1 PASS / 规范 2 PASS / 规范 3+4 PASS / 规范 6 排序 PASS / 规范 6 分页 PASS
+- **测试覆盖**：679/679 通过；typecheck + lint 通过

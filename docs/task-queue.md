@@ -3282,7 +3282,10 @@
 ### 任务列表
 
 #### CHG-261 — UserTable → ModernDataTable（ColumnSettingsPanel + AdminDropdown + PaginationV2）
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
+- **实际开始**：2026-03-27 02:00
+- **完成时间**：2026-03-27 02:15
+- **完成备注**：后端添加 USER_SORT_COLUMNS + listAdminUsers sortField/sortDir；UserActions 改为 AdminDropdown（2~3 操作符合多选项规则）；新建 useUserTableColumns.tsx；UserTable.tsx 重写为 ModernDataTable + PaginationV2 + 服务端排序；⚙ 叠加层；内联列设置 panel 替换为 ColumnSettingsPanel；679/679 通过。规范 1 PASS / 规范 2 PASS / 规范 3+4 PASS / 规范 6 排序 PASS / 规范 6 分页 PASS
 - **创建时间**：2026-03-26 11:00
 - **计划开始**：—
 - **实际开始**：—

@@ -91,12 +91,22 @@ export async function createUser(db: Pool, input: CreateUserInput): Promise<User
 
 // ── Admin 查询 ────────────────────────────────────────────────────
 
+const USER_SORT_COLUMNS: Record<string, string> = {
+  username: 'username',
+  email: 'email',
+  role: 'role',
+  created_at: 'created_at',
+  status: 'banned_at',
+}
+
 export interface AdminUserListFilters {
   q?: string
   role?: UserRole
   banned?: 'true' | 'false'
   page: number
   limit: number
+  sortField?: string
+  sortDir?: 'asc' | 'desc'
 }
 
 export async function listAdminUsers(
@@ -124,13 +134,16 @@ export async function listAdminUsers(
 
   const where = conditions.join(' AND ')
   const offset = (filters.page - 1) * filters.limit
+  const validCol = filters.sortField ? USER_SORT_COLUMNS[filters.sortField] : undefined
+  const orderCol = validCol ?? 'created_at'
+  const orderDir = (validCol && filters.sortDir === 'asc') ? 'ASC' : 'DESC'
 
   const [rows, countResult] = await Promise.all([
     db.query(
       `SELECT id, username, email, role, avatar_url, banned_at, created_at
        FROM users
        WHERE ${where}
-       ORDER BY created_at DESC
+       ORDER BY ${orderCol} ${orderDir}
        LIMIT $${idx} OFFSET $${idx + 1}`,
       [...params, filters.limit, offset]
     ),
