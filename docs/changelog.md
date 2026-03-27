@@ -3546,3 +3546,19 @@
 - **变更文件**：
   - `src/components/admin/videos/VideoTable.tsx` — 替换 `Pagination` → `PaginationV2`；新增 `pageSize` state（默认 20）；`fetchVideos` 签名改为 `(pageVal, pageSizeVal)`；onPageSizeChange 切换 pageSize 并重置到第 1 页；onSuccess/onSaved 回调传入 pageSize；原 `PAGE_SIZE` 常量重命名为 `DEFAULT_PAGE_SIZE`
 - **测试**：typecheck + lint + 658/658 单元测试全部通过
+
+## CHG-243 — 修复 ModernTableHead SSR/CSR 水合不一致（2026-03-26）
+
+### 修改文件
+- `src/components/admin/shared/modern-table/ModernTableHead.tsx` — `<th>` 添加 `suppressHydrationWarning`
+
+### 问题描述
+React 水合报错：`ModernTableHead.tsx:77` — `<th style={{ width, minWidth }}>` 在服务端渲染与客户端水合时不一致。根因：`useAdminTableState` 的 `useState` 初始化器在客户端从 `window.localStorage` 读取持久化列宽，但服务端无 localStorage，渲染默认宽度。
+
+### 修复方案
+在 `<th>` 添加 `suppressHydrationWarning`，这是 React 官方推荐的处理 SSR/CSR 状态驱动属性不一致的方式。不采用 deferred-state 方案（将 `useState` 初始化器改为始终用默认值），因为会与 `useAdminTableSort` 的 defaultSort effect 形成竞争，导致 remount 后持久化 sort 状态丢失。
+
+### 测试覆盖
+- `npm run typecheck` — 通过
+- `npm run lint` — 通过
+- `npm run test -- --run` — 72 个文件 / 658 个用例全部通过

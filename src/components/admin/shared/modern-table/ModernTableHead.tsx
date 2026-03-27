@@ -78,6 +78,7 @@ export function ModernTableHead<T>({
               key={column.id}
               className="relative h-12 border-b border-[var(--subtle)] px-4 text-left align-middle"
               style={{ width: `${column.width}px`, minWidth: `${column.minWidth}px` }}
+              suppressHydrationWarning
             >
               {canSort ? (
                 <button

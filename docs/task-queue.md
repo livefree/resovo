@@ -2945,3 +2945,13 @@
    - **依赖**：无
    - **文件范围**：`src/components/admin/videos/VideoTable.tsx`
    - **变更内容**：替换 Pagination → PaginationV2；新增 pageSize state；pageSize 传入 API 请求
+
+5. CHG-243 — 修复 ModernTableHead SSR/CSR 水合不一致（hydration error）
+   - **状态**：✅ 已完成
+   - **创建时间**：2026-03-26 19:00
+   - **实际开始**：2026-03-26 19:00
+   - **完成时间**：2026-03-26 19:10
+   - **依赖**：无
+   - **文件范围**：`src/components/admin/shared/modern-table/ModernTableHead.tsx`
+   - **变更内容**：在 `<th>` 添加 `suppressHydrationWarning`，消除服务端默认列宽与客户端 localStorage 持久化宽度之间的 React 水合不匹配警告
+   - **验收要点**：Console 不再出现 hydration mismatch 报错；所有 658 个单元测试通过
