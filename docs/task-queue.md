@@ -3452,3 +3452,30 @@
 - **变更内容**：将 Footer 接入各类型详情页与播放页；页面容器统一为 `min-h-screen flex flex-col`，主体区 `flex-1`，确保页脚位于底部且不遮挡内容。
 - **依赖**：CHG-269 已完成
 - **完成备注**：Footer 已接入 movie/series/anime/variety/others 详情页与 watch 播放页；这些页面统一改为 `min-h-screen flex flex-col` + 主体 `flex-1`。Auth 页保持沉浸式单卡布局，暂不接入 Footer（产品展示策略例外）。`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；`VideoDetailClient.test.tsx` 7/7 通过。
+
+## CHG-271 — 播放页选集入口职责收口（默认侧栏 / 剧场内置）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-27 05:16
+- **实际开始**：2026-03-27 05:16
+- **完成时间**：2026-03-27 05:17
+- **文件范围**：
+  - `src/components/player/PlayerShell.tsx`
+  - `src/components/player/playerShell.layout.ts`
+  - `tests/unit/components/player/playerShell.layout.test.ts`
+- **变更原因**：默认模式下选集入口同时出现在播放器内与右侧面板，交互重复；但剧场模式侧栏隐藏时仍需保留切集能力。
+- **变更内容**：新增 `getInlineEpisodes` 策略函数；默认模式禁用播放器内选集，仅保留右侧面板选集/换源；剧场模式启用播放器内选集作为回退；补充单测覆盖三种分支（默认禁用、剧场启用、单集禁用）。
+- **依赖**：CHG-270 已完成
+- **完成备注**：`PlayerShell` 改为按模式条件传入 `episodes/onEpisodeChange`；`playerShell.layout.test.ts` 扩展为 7 用例。`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；`playerShell.layout.test.ts` 7/7 通过。
+
+## CHG-272 — 视频卡片双入口交互补测试（详情/播放）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-27 05:18
+- **实际开始**：2026-03-27 05:18
+- **完成时间**：2026-03-27 05:20
+- **文件范围**：
+  - `tests/unit/components/video/VideoCard.test.tsx`（新建）
+  - `tests/unit/components/video/VideoCardWide.test.tsx`（新建）
+- **变更原因**：`VideoCard`/`VideoCardWide` 已实现“播放按钮直达 watch、卡片进入详情”的双入口交互，但缺少独立单测，存在后续回退风险。
+- **变更内容**：补齐 6 条用例，覆盖 slug/shortId 两类路由生成与 watch 链接参数、以及状态/集数文案渲染。
+- **依赖**：CHG-271 已完成
+- **完成备注**：新增两份组件级单测并通过。`npx eslint`（新测文件）通过；`vitest` 新增 6/6 通过。

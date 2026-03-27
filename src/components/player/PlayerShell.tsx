@@ -2,7 +2,8 @@
  * PlayerShell.tsx — 播放器外壳 + 布局模式切换
  * CHG-20: 替换 video.js 为 @livefree/yt-player
  *   - 剧场模式由 YTPlayer onTheaterChange 回调驱动
- *   - 选集由 YTPlayer episodes 面板 + SourceBar 共同管理
+ *   - 默认模式：选集/换源由右侧面板统一管理
+ *   - 剧场模式：侧栏收起时回退启用 YTPlayer 内选集
  *   - DanmakuBar 挂载在播放器容器上（CCL overlay 附加）
  * Default Mode: 播放器居左，右侧面板（推荐）
  * Theater Mode: 全宽，右侧面板收起，下方推荐
@@ -22,7 +23,7 @@ import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@/types'
 import { SourceBar } from './SourceBar'
 import { DanmakuBar } from './DanmakuBar'
 import { ResumePrompt, saveProgress, loadProgress } from './ResumePrompt'
-import { getPlayerLayoutClass, getSidePanelClass } from './playerShell.layout'
+import { getInlineEpisodes, getPlayerLayoutClass, getSidePanelClass } from './playerShell.layout'
 
 // VideoPlayer 动态导入，ssr: false（YTPlayer 依赖 DOM API）
 const VideoPlayer = dynamic(
@@ -123,11 +124,7 @@ export function PlayerShell({ slug }: PlayerShellProps) {
   const isTheater = mode === 'theater'
   const activeSrc = sources[activeSourceIndex]?.src ?? ''
 
-  // episodes 数组传给 YTPlayer 启用选集面板
-  const ytEpisodes =
-    video && video.episodeCount > 1
-      ? Array.from({ length: video.episodeCount }, (_, i) => ({ title: `第${i + 1}集` }))
-      : undefined
+  const inlineEpisodes = getInlineEpisodes(isTheater, video?.episodeCount ?? 0)
 
   const hasNext = !!video && video.episodeCount > 1 && currentEpisode < video.episodeCount
 
@@ -210,9 +207,9 @@ export function PlayerShell({ slug }: PlayerShellProps) {
                   <VideoPlayer
                     src={activeSrc}
                     title={video.title}
-                    episodes={ytEpisodes}
+                    episodes={inlineEpisodes}
                     activeEpisodeIndex={currentEpisode - 1}
-                    onEpisodeChange={handleEpisodeChange}
+                    onEpisodeChange={inlineEpisodes ? handleEpisodeChange : undefined}
                     onNext={hasNext ? () => setEpisode(currentEpisode + 1) : undefined}
                     onTimeUpdate={handleTimeUpdate}
                     onEnded={() => setPlaying(false)}

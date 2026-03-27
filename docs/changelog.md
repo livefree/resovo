@@ -3922,3 +3922,24 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/app/[locale]/watch/[slug]/page.tsx`（更新）— 接入 Footer，播放器区域包裹在 `main.flex-1`
 - **验收结论**：public 内容页（详情 + 播放）Footer 覆盖完成，页面底部结构一致；Auth 页保留沉浸式单卡布局作为例外
 - **测试覆盖**：`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；`VideoDetailClient.test.tsx` 7/7 通过
+
+---
+
+## CHG-271 — 播放页选集入口职责收口（默认侧栏 / 剧场内置）
+- **完成时间**：2026-03-27 05:17
+- **修改文件**：
+  - `src/components/player/PlayerShell.tsx`（更新）— 按模式条件传递 `episodes`/`onEpisodeChange`，默认模式不再启用播放器内选集
+  - `src/components/player/playerShell.layout.ts`（更新）— 新增 `getInlineEpisodes(isTheater, episodeCount)`，统一选集入口策略
+  - `tests/unit/components/player/playerShell.layout.test.ts`（更新）— 新增 3 个用例覆盖默认禁用/剧场启用/单集禁用
+- **验收结论**：默认模式选集职责统一在右侧面板；剧场模式侧栏收起时仍可在播放器内切集，避免能力回退
+- **测试覆盖**：`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；`playerShell.layout.test.ts` 7/7 通过
+
+---
+
+## CHG-272 — 视频卡片双入口交互补测试（详情/播放）
+- **完成时间**：2026-03-27 05:20
+- **修改文件**：
+  - `tests/unit/components/video/VideoCard.test.tsx`（新建）— 覆盖 slug/shortId 两种 detail/watch 路由与年份集数字段
+  - `tests/unit/components/video/VideoCardWide.test.tsx`（新建）— 覆盖 slug/shortId 两种 detail/watch 路由与状态/集数字段
+- **验收结论**：卡片 hover 播放直达 watch 与卡片详情跳转的双入口行为获得稳定回归保护
+- **测试覆盖**：`npx eslint`（新测文件）通过；`VideoCard.test.tsx` + `VideoCardWide.test.tsx` 共 6/6 通过
