@@ -51,14 +51,18 @@ describe('AdminAnalyticsDashboard (CHG-130)', () => {
     render(<AdminAnalyticsDashboard />)
     await screen.findByTestId('analytics-crawler-tasks')
 
-    const rows = Array.from(document.querySelectorAll('[data-testid^="analytics-task-row-"]'))
-    expect(rows[0]?.getAttribute('data-testid')).toBe('analytics-task-row-t2')
+    // Default sort: created_at DESC → t2 (2026-03-21) before t1 (2026-03-20)
+    const rows = Array.from(document.querySelectorAll('[data-testid^="modern-table-row-"]'))
+    expect(rows[0]?.getAttribute('data-testid')).toBe('modern-table-row-t2')
 
+    // Toggle off status column
     fireEvent.click(screen.getByTestId('analytics-task-columns-toggle'))
     fireEvent.click(screen.getByTestId('analytics-task-columns-panel-toggle-status'))
+    fireEvent.click(screen.getByTestId('analytics-task-columns-toggle')) // close panel
 
     await waitFor(() => {
-      expect(screen.queryByTestId('analytics-task-sort-status')).toBeNull()
+      // After toggling off status, its sort button should be gone
+      expect(screen.queryByTestId('modern-table-sort-status')).toBeNull()
     })
   })
 })

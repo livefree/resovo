@@ -3904,3 +3904,22 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/sources/BatchDeleteBar.tsx`（更新）— 接入 SelectionActionBar sticky-bottom，ConfirmDialog 保留外挂
 - **验收结论**：规范 5 PASS；所有既有 BatchPublishBar 测试（8/8）全部通过
 - **测试覆盖**：typecheck 通过；lint 通过；687/687 全通过
+
+---
+
+## CHG-265 — AdminAnalyticsDashboard → ModernDataTable + 删除死代码 + 最终验收
+- **完成时间**：2026-03-27 11:20
+- **修改文件**：
+  - `src/components/admin/AdminAnalyticsDashboard.tsx`（更新）— 爬虫任务 mini 表格 AdminTableFrame → ModernDataTable；useState<TableSortState> 替代 useAdminTableSort；⚙ 覆盖层 + ColumnSettingsPanel；移除 AdminToolbar
+  - `tests/unit/components/admin/AdminAnalyticsDashboard.test.tsx`（更新）— 适配新 testid（modern-table-row-* / modern-table-sort-*）
+  - 删除 `src/components/admin/system/crawler-site/components/CrawlerSiteToolbar.tsx`（零引用死代码）
+  - 删除 `src/components/admin/system/crawler-site/components/CrawlerSiteTableLiteHeader.tsx`（零引用死代码）
+- **最终验收结论**：
+  - 规范 1（ModernDataTable）：PASS — 7 个目标表格全部迁移
+  - 规范 2（ColumnSettingsPanel）：PASS — 全部目标表格有 ⚙ 覆盖层
+  - 规范 3+4（AdminDropdown + portal）：PASS — 多操作列均接入
+  - 规范 5（sticky-bottom 批量栏）：PASS — BatchPublishBar/BatchDeleteBar 均接入 SelectionActionBar
+  - 规范 6（服务端排序）：PASS — 所有目标表格服务端排序
+  - 规范 6（PaginationV2）：PASS — 7 个目标表格零旧版 Pagination
+  - 死代码清理：PASS — CrawlerSiteToolbar/Header 零引用已删除
+- **测试覆盖**：typecheck 通过；lint 通过；687/687 全通过

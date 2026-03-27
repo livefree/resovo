@@ -1,20 +1,19 @@
 /**
  * AdminAnalyticsDashboard.tsx — 数据看板组件
  * ADMIN-05: 显示运营统计数据
+ * CHG-265: 爬虫任务 mini 表格从 AdminTableFrame → ModernDataTable；⚙ 列设置覆盖层
  */
 
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
-import { AdminToolbar } from '@/components/admin/shared/toolbar/AdminToolbar'
 import { ColumnSettingsPanel } from '@/components/admin/shared/table/ColumnSettingsPanel'
-import { AdminTableFrame } from '@/components/admin/shared/table/AdminTableFrame'
-import { AdminTableState } from '@/components/admin/shared/feedback/AdminTableState'
+import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import { useAdminTableColumns, type AdminColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
-import { useAdminTableSort } from '@/components/admin/shared/table/useAdminTableSort'
+import { TableBadgeCell, TableDateCell, TableTextCell } from '@/components/admin/shared/modern-table/cells'
+import type { TableColumn, TableSortState } from '@/components/admin/shared/modern-table/types'
 import type { AnalyticsData } from '@/api/routes/admin/analytics'
-import type { AdminTableState as SharedAdminTableState } from '@/components/admin/shared/table/useAdminTableState'
 import { ContentQualityTable } from '@/components/admin/dashboard/ContentQualityTable'
 
 type CrawlerTaskRow = AnalyticsData['crawlerTasks']['recent'][number]
@@ -27,10 +26,6 @@ const CRAWLER_TASK_COLUMNS: AdminColumnMeta[] = [
   { id: 'finished_at', visible: true, width: 190, minWidth: 150, maxWidth: 280, resizable: true },
 ]
 
-const CRAWLER_TASK_DEFAULT_STATE: Omit<SharedAdminTableState, 'columns'> = {
-  sort: { field: 'created_at', dir: 'desc' },
-}
-
 const CRAWLER_TASK_LABELS: Record<CrawlerTaskColumnId, string> = {
   type: '资源站',
   status: '状态',
@@ -38,26 +33,55 @@ const CRAWLER_TASK_LABELS: Record<CrawlerTaskColumnId, string> = {
   finished_at: '结束时间',
 }
 
-const CRAWLER_TASK_SORTABLE: Record<CrawlerTaskColumnId, boolean> = {
-  type: true,
-  status: true,
-  created_at: true,
-  finished_at: true,
+const STATUS_TONE: Record<string, 'success' | 'danger' | 'info' | 'warning'> = {
+  done: 'success',
+  failed: 'danger',
+  running: 'info',
 }
 
 function toComparableValue(row: CrawlerTaskRow, field: string): string | number {
   switch (field) {
-    case 'type':
-      return row.type.toLowerCase()
-    case 'status':
-      return row.status
-    case 'created_at':
-      return new Date(row.created_at).getTime()
-    case 'finished_at':
-      return row.finished_at ? new Date(row.finished_at).getTime() : 0
-    default:
-      return ''
+    case 'type': return row.type.toLowerCase()
+    case 'status': return row.status
+    case 'created_at': return new Date(row.created_at).getTime()
+    case 'finished_at': return row.finished_at ? new Date(row.finished_at).getTime() : 0
+    default: return ''
   }
+}
+
+function buildColumns(
+  visibleColumnIds: CrawlerTaskColumnId[],
+  columnsById: Record<string, { width: number }>,
+): TableColumn<CrawlerTaskRow>[] {
+  const all: TableColumn<CrawlerTaskRow>[] = [
+    {
+      id: 'type', header: CRAWLER_TASK_LABELS.type,
+      width: columnsById['type']?.width ?? 220, minWidth: 160,
+      accessor: (r) => r.type, enableResizing: true, enableSorting: true,
+      cell: ({ row }) => <TableTextCell value={row.type} />,
+    },
+    {
+      id: 'status', header: CRAWLER_TASK_LABELS.status,
+      width: columnsById['status']?.width ?? 130, minWidth: 110,
+      accessor: (r) => r.status, enableResizing: true, enableSorting: true,
+      cell: ({ row }) => (
+        <TableBadgeCell label={row.status} tone={STATUS_TONE[row.status] ?? 'warning'} />
+      ),
+    },
+    {
+      id: 'created_at', header: CRAWLER_TASK_LABELS.created_at,
+      width: columnsById['created_at']?.width ?? 190, minWidth: 150,
+      accessor: (r) => r.created_at, enableResizing: true, enableSorting: true,
+      cell: ({ row }) => <TableDateCell value={row.created_at} className="text-xs" />,
+    },
+    {
+      id: 'finished_at', header: CRAWLER_TASK_LABELS.finished_at,
+      width: columnsById['finished_at']?.width ?? 190, minWidth: 150,
+      accessor: (r) => r.finished_at ?? '', enableResizing: true, enableSorting: true,
+      cell: ({ row }) => <TableDateCell value={row.finished_at} fallback="—" className="text-xs" />,
+    },
+  ]
+  return all.filter((col) => visibleColumnIds.includes(col.id as CrawlerTaskColumnId))
 }
 
 // ── StatCard ──────────────────────────────────────────────────────
@@ -94,26 +118,20 @@ export function AdminAnalyticsDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showColumnsPanel, setShowColumnsPanel] = useState(false)
+  const [sort, setSort] = useState<TableSortState>({ field: 'created_at', direction: 'desc' })
 
   const columnsState = useAdminTableColumns({
     route: '/admin/analytics',
     tableId: 'analytics-crawler-task-table',
     columns: CRAWLER_TASK_COLUMNS,
-    defaultState: CRAWLER_TASK_DEFAULT_STATE,
-  })
-
-  const sortState = useAdminTableSort({
-    tableState: columnsState,
-    columnsById: columnsState.columnsById,
-    defaultSort: CRAWLER_TASK_DEFAULT_STATE.sort,
-    sortable: CRAWLER_TASK_SORTABLE,
+    defaultState: {},
   })
 
   const visibleColumnIds = useMemo(
     () =>
       columnsState.columns
-        .filter((column) => column.visible)
-        .map((column) => column.id as CrawlerTaskColumnId),
+        .filter((col) => col.visible)
+        .map((col) => col.id as CrawlerTaskColumnId),
     [columnsState.columns],
   )
 
@@ -127,21 +145,25 @@ export function AdminAnalyticsDashboard() {
 
   const sortedCrawlerTasks = useMemo(() => {
     const source = data?.crawlerTasks.recent ?? []
-    if (!sortState.sort) return source
     const next = [...source]
     next.sort((a, b) => {
-      const va = toComparableValue(a, sortState.sort?.field ?? '')
-      const vb = toComparableValue(b, sortState.sort?.field ?? '')
+      const va = toComparableValue(a, sort.field)
+      const vb = toComparableValue(b, sort.field)
       if (va === vb) return 0
       if (typeof va === 'number' && typeof vb === 'number') {
-        return sortState.sort?.dir === 'asc' ? va - vb : vb - va
+        return sort.direction === 'asc' ? va - vb : vb - va
       }
       const sa = String(va)
       const sb = String(vb)
-      return sortState.sort?.dir === 'asc' ? sa.localeCompare(sb) : sb.localeCompare(sa)
+      return sort.direction === 'asc' ? sa.localeCompare(sb) : sb.localeCompare(sa)
     })
     return next
-  }, [data?.crawlerTasks.recent, sortState.sort])
+  }, [data?.crawlerTasks.recent, sort])
+
+  const tableColumns = useMemo(
+    () => buildColumns(visibleColumnIds, columnsState.columnsById),
+    [visibleColumnIds, columnsState.columnsById],
+  )
 
   if (loading) {
     return <p className="text-[var(--muted)]">加载中…</p>
@@ -152,11 +174,6 @@ export function AdminAnalyticsDashboard() {
   }
 
   const failRatePct = (data.sources.failRate * 100).toFixed(1)
-
-  function renderSortIndicator(columnId: CrawlerTaskColumnId): string {
-    if (!sortState.isSortedBy(columnId)) return ''
-    return sortState.sort?.dir === 'asc' ? ' ↑' : ' ↓'
-  }
 
   return (
     <div data-testid="analytics-dashboard" className="space-y-8">
@@ -226,119 +243,48 @@ export function AdminAnalyticsDashboard() {
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[var(--muted)]">
           爬虫最近任务
         </h2>
-        <AdminToolbar
-          className="mb-2 gap-3"
-          actions={null}
-        />
-        {showColumnsPanel && (
-          <div className="mb-2">
-            <ColumnSettingsPanel
-              data-testid="analytics-task-columns-panel"
-              columns={columnsState.columns.map((col) => ({
-                id: col.id,
-                label: CRAWLER_TASK_LABELS[col.id as CrawlerTaskColumnId] ?? col.id,
-                visible: col.visible,
-              }))}
-              onToggle={(id) => columnsState.toggleColumnVisibility(id)}
-              onReset={() => columnsState.resetColumnsMeta()}
-            />
+        <div className="relative" data-testid="analytics-crawler-tasks">
+          {/* ⚙ 列设置叠加在表格右上角 */}
+          <div className="absolute right-4 top-3 z-30">
+            <button
+              type="button"
+              className="rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+              onClick={() => setShowColumnsPanel((prev) => !prev)}
+              data-testid="analytics-task-columns-toggle"
+              aria-label="列设置"
+              title="列设置"
+            >⚙</button>
+            {showColumnsPanel ? (
+              <div className="absolute right-0 mt-1 w-52">
+                <ColumnSettingsPanel
+                  data-testid="analytics-task-columns-panel"
+                  columns={columnsState.columns.map((col) => ({
+                    id: col.id,
+                    label: CRAWLER_TASK_LABELS[col.id as CrawlerTaskColumnId] ?? col.id,
+                    visible: col.visible,
+                  }))}
+                  onToggle={(id) => columnsState.toggleColumnVisibility(id)}
+                  onReset={() => columnsState.resetColumnsMeta()}
+                />
+              </div>
+            ) : null}
           </div>
-        )}
-        <div data-testid="analytics-crawler-tasks">
-          <AdminTableFrame minWidth={760}>
-          <thead className="bg-[var(--bg2)] text-[var(--muted)]">
-            <tr>
-              {visibleColumnIds.map((columnId) => {
-                const meta = columnsState.columnsById[columnId]
-                const isLastVisible = columnId === visibleColumnIds[visibleColumnIds.length - 1]
-                return (
-                  <th key={columnId} className="relative px-4 py-3 text-left" style={{ width: `${meta.width}px` }}>
-                    <button
-                      type="button"
-                      className="text-left text-sm hover:text-[var(--text)]"
-                      onClick={() => sortState.toggleSort(columnId)}
-                      data-testid={`analytics-task-sort-${columnId}`}
-                    >
-                      {CRAWLER_TASK_LABELS[columnId]}
-                      {renderSortIndicator(columnId)}
-                    </button>
-                    {isLastVisible && (
-                      <button
-                        type="button"
-                        className="absolute right-4 top-1/2 -translate-y-1/2 rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-                        onClick={() => setShowColumnsPanel((prev) => !prev)}
-                        data-testid="analytics-task-columns-toggle"
-                        aria-label="列设置"
-                        title="列设置"
-                      >
-                        ⚙
-                      </button>
-                    )}
-                    {meta.resizable && (
-                      <button
-                        type="button"
-                        aria-label={`${CRAWLER_TASK_LABELS[columnId]}列宽拖拽`}
-                        data-testid={`analytics-task-resize-${columnId}`}
-                        onMouseDown={(event) => columnsState.startResize(columnId, event.clientX)}
-                        className="absolute right-0 top-0 h-full w-2 cursor-col-resize before:absolute before:right-0 before:top-0 before:h-full before:w-px before:bg-[var(--border)] hover:bg-[var(--bg3)]/40"
-                      />
-                    )}
-                  </th>
-                )
-              })}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--subtle)]">
-            <AdminTableState
-              isLoading={false}
-              isEmpty={sortedCrawlerTasks.length === 0}
-              colSpan={visibleColumnIds.length}
-              emptyText="暂无爬虫任务记录"
-            />
-            {sortedCrawlerTasks.map((task) => (
-              <tr
-                key={task.id}
-                className="h-[56px] bg-[var(--bg)] hover:bg-[var(--bg2)]"
-                data-testid={`analytics-task-row-${task.id}`}
-              >
-                {visibleColumnIds.includes('type') && (
-                  <td className="px-4 py-3 align-middle text-[var(--text)]">
-                    <span className="inline-block max-w-[220px] truncate" title={task.type}>
-                      {task.type}
-                    </span>
-                  </td>
-                )}
-                {visibleColumnIds.includes('status') && (
-                  <td className="px-4 py-3 align-middle">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs ${
-                        task.status === 'done'
-                          ? 'bg-green-900/30 text-green-400'
-                          : task.status === 'failed'
-                            ? 'bg-red-900/30 text-red-400'
-                            : task.status === 'running'
-                              ? 'bg-blue-900/30 text-blue-400'
-                              : 'bg-yellow-900/30 text-yellow-400'
-                      }`}
-                    >
-                      {task.status}
-                    </span>
-                  </td>
-                )}
-                {visibleColumnIds.includes('created_at') && (
-                  <td className="px-4 py-3 align-middle text-xs text-[var(--muted)]">
-                    {new Date(task.created_at).toLocaleString()}
-                  </td>
-                )}
-                {visibleColumnIds.includes('finished_at') && (
-                  <td className="px-4 py-3 align-middle text-xs text-[var(--muted)]">
-                    {task.finished_at ? new Date(task.finished_at).toLocaleString() : '—'}
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-          </AdminTableFrame>
+
+          <ModernDataTable
+            columns={tableColumns}
+            rows={sortedCrawlerTasks}
+            loading={false}
+            emptyText="暂无爬虫任务记录"
+            getRowId={(r) => r.id}
+            scrollTestId="analytics-crawler-table-scroll"
+            sort={sort}
+            onSortChange={setSort}
+            onColumnWidthChange={(columnId, nextWidth) => {
+              if (columnId in columnsState.columnsById) {
+                columnsState.setColumnWidth(columnId, nextWidth)
+              }
+            }}
+          />
         </div>
       </section>
 
