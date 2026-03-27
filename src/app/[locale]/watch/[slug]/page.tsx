@@ -6,6 +6,7 @@
 
 import { Suspense } from 'react'
 import { Nav } from '@/components/layout/Nav'
+import { Footer } from '@/components/layout/Footer'
 import { PlayerLoader } from './PlayerLoader'
 
 interface Props {
@@ -17,14 +18,17 @@ export default async function WatchPage({ params }: Props) {
 
   return (
     <div
-      className="min-h-screen"
+      className="min-h-screen flex flex-col"
       style={{ background: 'var(--background)' }}
       data-testid="watch-page"
     >
       <Nav />
-      <Suspense>
-        <PlayerLoader slug={slug} />
-      </Suspense>
+      <main className="flex-1">
+        <Suspense>
+          <PlayerLoader slug={slug} />
+        </Suspense>
+      </main>
+      <Footer />
     </div>
   )
 }

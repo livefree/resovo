@@ -39,6 +39,10 @@
     }
   },
   "nav": {
+    "home": "Home",
+    "more": "More",
+    "language": "Language",
+    "account": "Account",
     "logout": "Logout",
     "profile": "Profile",
     "signIn": "Sign In",
@@ -47,6 +51,13 @@
     "catSeries": "Series",
     "catAnime": "Anime",
     "catVariety": "Variety",
+    "catDocumentary": "Documentary",
+    "catShort": "Short",
+    "catSports": "Sports",
+    "catMusic": "Music",
+    "catNews": "News",
+    "catKids": "Kids",
+    "catOther": "Other",
     "search": "Search...",
     "admin": "Admin"
   },

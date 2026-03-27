@@ -6,6 +6,7 @@
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { Nav } from '@/components/layout/Nav'
+import { Footer } from '@/components/layout/Footer'
 import { HeroBanner } from '@/components/video/HeroBanner'
 import { VideoGrid } from '@/components/video/VideoGrid'
 
@@ -68,14 +69,7 @@ export default function HomePage() {
         </section>
       </main>
 
-      {/* 底部免责声明 */}
-      <footer
-        className="border-t py-6 text-center text-xs px-4"
-        style={{ borderColor: 'var(--border)', color: 'var(--muted-foreground)' }}
-        data-testid="footer-disclaimer"
-      >
-        {t('disclaimer')}
-      </footer>
+      <Footer />
     </div>
   )
 }

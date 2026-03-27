@@ -42,39 +42,37 @@
 
   .dark {
     /* ── Backgrounds ─────────────────────────────────────────── */
-    --background: #0f172a;   /* slate-900 */
-    --bg:   #0f172a;
-    --bg2:  #1e293b;         /* slate-800 */
-    --bg3:  #334155;         /* slate-700 — distinct from bg2 ✅ */
+    --background: #060606;   /* ultra deep */
+    --bg:         #060606;
+    --bg2:        #111111;   /* slightly elevated */
+    --bg3:        #1a1a1a;   /* panels */
 
     /* ── Foregrounds / Text ──────────────────────────────────── */
-    --foreground: #f1f5f9;          /* slate-100 — 15.3:1 on bg ✅ */
-    --text:       #f1f5f9;
-    /* secondary text: #a8b4c4 — 4.9:1 on bg2, 4.9:1 on bg3 ✅ */
-    --muted:            #a8b4c4;
-    --muted-foreground: #a8b4c4;
+    --foreground: #fafafa;
+    --text:       #fafafa;
+    --muted:            #a1a1aa;
+    --muted-foreground: #a1a1aa;
 
     /* ── Component surfaces ──────────────────────────────────── */
-    --card:              #1e293b;   /* slate-800 */
-    --card-foreground:   #f1f5f9;  /* 10.3:1 on card ✅ */
-    --secondary:         #1e293b;
-    --secondary-foreground: #f1f5f9; /* ✅ */
+    --card:              #111111;
+    --card-foreground:   #fafafa;
+    --secondary:         #1a1a1a;
+    --secondary-foreground: #fafafa;
 
     /* ── Accent / Brand ──────────────────────────────────────── */
-    /* Classic gold #e8b84b — 10.6:1 on dark bg ✅; use black fg on it ✅ */
     --accent:            #e8b84b;
-    --accent-foreground: #0f172a;   /* dark on gold: 10.6:1 ✅ */
+    --accent-foreground: #000000;
     --gold:              #e8b84b;
 
     /* ── Interactive ─────────────────────────────────────────── */
-    --primary:            #60a5fa;  /* blue-400 */
-    --primary-foreground: #1e3a5f;
+    --primary:            #60a5fa;
+    --primary-foreground: #000000;
     --ring:               #60a5fa;
 
     /* ── Structure ───────────────────────────────────────────── */
-    --border: #334155;   /* slate-700 — visible on bg/bg2 ✅ */
-    --input:  #334155;
-    --subtle: #1e293b;   /* dividers */
+    --border: #27272a;   /* zinc-800 */
+    --input:  #27272a;
+    --subtle: #18181b;   /* dividers */
   }
 }
 

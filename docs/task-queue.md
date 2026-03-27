@@ -3406,3 +3406,75 @@
 - **变更内容**：添加 useAdminTableColumns + ⚙ 覆盖层 + ColumnSettingsPanel；旧 Pagination → PaginationV2；2 按钮 → AdminDropdown
 - **依赖**：CHG-262 已完成
 - **完成备注**：5 新测试通过，687/687 全通过。规范 2 列设置 PASS / 规范 3+4 AdminDropdown PASS / 规范 6 分页 PASS
+
+## CHG-268 — 播放页剧场模式侧栏收口（PlayerShell）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-27 04:55
+- **实际开始**：2026-03-27 04:55
+- **完成时间**：2026-03-27 05:05
+- **文件范围**：
+  - `src/components/player/PlayerShell.tsx`
+  - `src/components/player/playerShell.layout.ts`（新建）
+  - `tests/unit/components/player/playerShell.layout.test.ts`（新建）
+- **变更原因**：当前剧场模式下右侧交互面板未按设计隐藏，与 UI 规划和 PLAYER 测试规范不一致。
+- **变更内容**：修复剧场模式下侧栏折叠/显示逻辑，保持默认模式选集换源能力；补充单元测试覆盖 default/theater 布局切换关键状态。
+- **依赖**：CHG-267 已完成
+- **完成备注**：新增 `getPlayerLayoutClass` / `getSidePanelClass` 布局函数并接入 PlayerShell；剧场模式下侧栏折叠为 `max-h-0 + opacity-0 + pointer-events-none + lg:w-0`，同时主布局 gap 归零。新增 4 条单测验证 default/theater 类名输出。`npx tsc --noEmit --incremental false` 通过；`npx eslint`（仅改动文件）通过；`playerShell.layout.test.ts` 4/4 通过。
+
+## CHG-269 — Nav “更多”下拉交互收口（可访问性 + click-away）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-27 05:20
+- **实际开始**：2026-03-27 05:20
+- **完成时间**：2026-03-27 05:10
+- **文件范围**：
+  - `src/components/layout/Nav.tsx`
+  - `tests/unit/components/layout/NavDropdown.test.tsx`（新建）
+- **变更原因**：当前“更多”分类下拉依赖 hover，缺少 click-away/ESC/键盘交互，移动端与可访问性一致性不足。
+- **变更内容**：改为按钮触发下拉，支持点击外部关闭、ESC 关闭、Enter/Space/ArrowDown 打开并焦点进入菜单；补充对应单测。
+- **依赖**：CHG-268 已完成
+- **完成备注**：`Nav` 增加 `isMoreOpen` 受控状态与 menu/trigger refs；实现 document 级 `mousedown` click-away 与 `Escape` 关闭；trigger 增加 `aria-expanded`/`aria-haspopup` 和键盘打开逻辑；菜单项点击后自动关闭。新增 `NavDropdown.test.tsx` 4 用例覆盖点击打开、点击外部关闭、ESC 关闭、Enter 打开并焦点进入首项。`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；单测 4/4 通过。
+
+## CHG-270 — Footer 覆盖范围收口（详情页 + 播放页）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-27 05:30
+- **实际开始**：2026-03-27 05:30
+- **完成时间**：2026-03-27 05:12
+- **文件范围**：
+  - `src/components/layout/Footer.tsx`
+  - `src/app/[locale]/movie/[slug]/page.tsx`
+  - `src/app/[locale]/series/[slug]/page.tsx`
+  - `src/app/[locale]/anime/[slug]/page.tsx`
+  - `src/app/[locale]/variety/[slug]/page.tsx`
+  - `src/app/[locale]/others/[slug]/page.tsx`
+  - `src/app/[locale]/watch/[slug]/page.tsx`
+- **变更原因**：Footer 目前仅接入 Home/Browse/Search，public 内容页覆盖不完整。
+- **变更内容**：将 Footer 接入各类型详情页与播放页；页面容器统一为 `min-h-screen flex flex-col`，主体区 `flex-1`，确保页脚位于底部且不遮挡内容。
+- **依赖**：CHG-269 已完成
+- **完成备注**：Footer 已接入 movie/series/anime/variety/others 详情页与 watch 播放页；这些页面统一改为 `min-h-screen flex flex-col` + 主体 `flex-1`。Auth 页保持沉浸式单卡布局，暂不接入 Footer（产品展示策略例外）。`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；`VideoDetailClient.test.tsx` 7/7 通过。
+
+## CHG-271 — 播放页选集入口职责收口（默认侧栏 / 剧场内置）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-27 05:16
+- **实际开始**：2026-03-27 05:16
+- **完成时间**：2026-03-27 05:17
+- **文件范围**：
+  - `src/components/player/PlayerShell.tsx`
+  - `src/components/player/playerShell.layout.ts`
+  - `tests/unit/components/player/playerShell.layout.test.ts`
+- **变更原因**：默认模式下选集入口同时出现在播放器内与右侧面板，交互重复；但剧场模式侧栏隐藏时仍需保留切集能力。
+- **变更内容**：新增 `getInlineEpisodes` 策略函数；默认模式禁用播放器内选集，仅保留右侧面板选集/换源；剧场模式启用播放器内选集作为回退；补充单测覆盖三种分支（默认禁用、剧场启用、单集禁用）。
+- **依赖**：CHG-270 已完成
+- **完成备注**：`PlayerShell` 改为按模式条件传入 `episodes/onEpisodeChange`；`playerShell.layout.test.ts` 扩展为 7 用例。`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；`playerShell.layout.test.ts` 7/7 通过。
+
+## CHG-272 — 视频卡片双入口交互补测试（详情/播放）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-27 05:18
+- **实际开始**：2026-03-27 05:18
+- **完成时间**：2026-03-27 05:20
+- **文件范围**：
+  - `tests/unit/components/video/VideoCard.test.tsx`（新建）
+  - `tests/unit/components/video/VideoCardWide.test.tsx`（新建）
+- **变更原因**：`VideoCard`/`VideoCardWide` 已实现“播放按钮直达 watch、卡片进入详情”的双入口交互，但缺少独立单测，存在后续回退风险。
+- **变更内容**：补齐 6 条用例，覆盖 slug/shortId 两类路由生成与 watch 链接参数、以及状态/集数文案渲染。
+- **依赖**：CHG-271 已完成
+- **完成备注**：新增两份组件级单测并通过。`npx eslint`（新测文件）通过；`vitest` 新增 6/6 通过。

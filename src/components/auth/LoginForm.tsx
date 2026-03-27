@@ -171,7 +171,7 @@ export function LoginForm() {
           aria-describedby={fieldErrors.identifier ? 'login-identifier-error' : undefined}
           className={cn(
             'w-full rounded-md px-3 py-2 text-sm outline-none transition-colors',
-            'border focus:ring-2 focus:ring-[var(--gold)]',
+            'border focus:ring-2 focus:ring-[var(--accent)]',
             'bg-[var(--input)] text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]',
             fieldErrors.identifier
               ? 'border-red-500 focus:ring-red-400'
@@ -205,7 +205,7 @@ export function LoginForm() {
           aria-describedby={fieldErrors.password ? 'login-password-error' : undefined}
           className={cn(
             'w-full rounded-md px-3 py-2 text-sm outline-none transition-colors',
-            'border focus:ring-2 focus:ring-[var(--gold)]',
+            'border focus:ring-2 focus:ring-[var(--accent)]',
             'bg-[var(--input)] text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]',
             fieldErrors.password
               ? 'border-red-500 focus:ring-red-400'
@@ -226,7 +226,7 @@ export function LoginForm() {
         data-testid="login-submit"
         className={cn(
           'w-full rounded-md py-2 text-sm font-semibold transition-opacity',
-          'bg-[var(--gold)] text-black',
+          'bg-[var(--accent)] text-black shadow-[0_0_15px_rgba(232,184,75,0.2)] hover:shadow-[0_0_25px_rgba(232,184,75,0.4)]',
           isSubmitting ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-90'
         )}
       >

@@ -3923,3 +3923,60 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 规范 6（PaginationV2）：PASS — 7 个目标表格零旧版 Pagination
   - 死代码清理：PASS — CrawlerSiteToolbar/Header 零引用已删除
 - **测试覆盖**：typecheck 通过；lint 通过；687/687 全通过
+
+---
+
+## CHG-268 — 播放页剧场模式侧栏收口（PlayerShell）
+- **完成时间**：2026-03-27 05:05
+- **修改文件**：
+  - `src/components/player/PlayerShell.tsx`（更新）— 使用 `getPlayerLayoutClass`/`getSidePanelClass` 统一布局类，剧场模式下侧栏折叠且主布局间距归零
+  - `src/components/player/playerShell.layout.ts`（新建）— 抽离播放器布局类计算函数
+  - `tests/unit/components/player/playerShell.layout.test.ts`（新建）— 4 个用例覆盖 default/theater 的主布局与侧栏可见性类
+- **验收结论**：播放器默认模式保留右侧选集/换源；剧场模式隐藏侧栏并收敛空白间距
+- **测试覆盖**：`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；`playerShell.layout.test.ts` 4/4 通过
+
+---
+
+## CHG-269 — Nav “更多”下拉交互收口（可访问性 + click-away）
+- **完成时间**：2026-03-27 05:10
+- **修改文件**：
+  - `src/components/layout/Nav.tsx`（更新）— “更多”菜单改为按钮驱动（非 hover-only），支持 `aria-expanded`、`aria-haspopup`、点击外部关闭、ESC 关闭、键盘打开并焦点进入首项
+  - `tests/unit/components/layout/NavDropdown.test.tsx`（新建）— 4 个用例覆盖点击打开、点击外部关闭、ESC 关闭、Enter 键打开并焦点进入首项
+- **验收结论**：导航“更多”下拉交互与可访问性行为达到统一规范，桌面端与键盘操作路径一致
+- **测试覆盖**：`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；`NavDropdown.test.tsx` 4/4 通过
+
+---
+
+## CHG-270 — Footer 覆盖范围收口（详情页 + 播放页）
+- **完成时间**：2026-03-27 05:12
+- **修改文件**：
+  - `src/components/layout/Footer.tsx`（新建）— 统一页脚组件（Help/Privacy/DMCA/About）
+  - `src/app/[locale]/movie/[slug]/page.tsx`（更新）— 接入 Footer，页面容器改为 `min-h-screen flex flex-col`
+  - `src/app/[locale]/series/[slug]/page.tsx`（更新）— 接入 Footer，页面容器改为 `min-h-screen flex flex-col`
+  - `src/app/[locale]/anime/[slug]/page.tsx`（更新）— 接入 Footer，页面容器改为 `min-h-screen flex flex-col`
+  - `src/app/[locale]/variety/[slug]/page.tsx`（更新）— 接入 Footer，页面容器改为 `min-h-screen flex flex-col`
+  - `src/app/[locale]/others/[slug]/page.tsx`（更新）— 接入 Footer，页面容器改为 `min-h-screen flex flex-col`
+  - `src/app/[locale]/watch/[slug]/page.tsx`（更新）— 接入 Footer，播放器区域包裹在 `main.flex-1`
+- **验收结论**：public 内容页（详情 + 播放）Footer 覆盖完成，页面底部结构一致；Auth 页保留沉浸式单卡布局作为例外
+- **测试覆盖**：`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；`VideoDetailClient.test.tsx` 7/7 通过
+
+---
+
+## CHG-271 — 播放页选集入口职责收口（默认侧栏 / 剧场内置）
+- **完成时间**：2026-03-27 05:17
+- **修改文件**：
+  - `src/components/player/PlayerShell.tsx`（更新）— 按模式条件传递 `episodes`/`onEpisodeChange`，默认模式不再启用播放器内选集
+  - `src/components/player/playerShell.layout.ts`（更新）— 新增 `getInlineEpisodes(isTheater, episodeCount)`，统一选集入口策略
+  - `tests/unit/components/player/playerShell.layout.test.ts`（更新）— 新增 3 个用例覆盖默认禁用/剧场启用/单集禁用
+- **验收结论**：默认模式选集职责统一在右侧面板；剧场模式侧栏收起时仍可在播放器内切集，避免能力回退
+- **测试覆盖**：`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；`playerShell.layout.test.ts` 7/7 通过
+
+---
+
+## CHG-272 — 视频卡片双入口交互补测试（详情/播放）
+- **完成时间**：2026-03-27 05:20
+- **修改文件**：
+  - `tests/unit/components/video/VideoCard.test.tsx`（新建）— 覆盖 slug/shortId 两种 detail/watch 路由与年份集数字段
+  - `tests/unit/components/video/VideoCardWide.test.tsx`（新建）— 覆盖 slug/shortId 两种 detail/watch 路由与状态/集数字段
+- **验收结论**：卡片 hover 播放直达 watch 与卡片详情跳转的双入口行为获得稳定回归保护
+- **测试覆盖**：`npx eslint`（新测文件）通过；`VideoCard.test.tsx` + `VideoCardWide.test.tsx` 共 6/6 通过

@@ -8,10 +8,11 @@ import { Nav } from '@/components/layout/Nav'
 import { FilterBar } from '@/components/search/FilterBar'
 import { ActiveFilterStrip } from '@/components/search/ActiveFilterStrip'
 import { SearchResultList } from '@/components/search/SearchResultList'
+import { Footer } from '@/components/layout/Footer'
 
 export default function SearchPage() {
   return (
-    <div className="min-h-screen" style={{ background: 'var(--background)' }}>
+    <div className="min-h-screen flex flex-col" style={{ background: 'var(--background)' }}>
       <Nav />
       <main className="max-w-screen-xl mx-auto w-full" data-testid="search-page">
         <Suspense>
@@ -20,6 +21,7 @@ export default function SearchPage() {
           <SearchResultList />
         </Suspense>
       </main>
+      <Footer />
     </div>
   )
 }

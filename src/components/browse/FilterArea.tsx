@@ -24,6 +24,13 @@ const FILTER_ROWS = [
       { value: 'series',  labelKey: 'nav.catSeries' },
       { value: 'anime',   labelKey: 'nav.catAnime' },
       { value: 'variety', labelKey: 'nav.catVariety' },
+      { value: 'documentary', labelKey: 'nav.catDocumentary' },
+      { value: 'short', labelKey: 'nav.catShort' },
+      { value: 'sports', labelKey: 'nav.catSports' },
+      { value: 'music', labelKey: 'nav.catMusic' },
+      { value: 'news', labelKey: 'nav.catNews' },
+      { value: 'kids', labelKey: 'nav.catKids' },
+      { value: 'other', labelKey: 'nav.catOther' },
     ],
   },
   {
@@ -145,15 +152,15 @@ export function FilterArea({ className }: FilterAreaProps) {
                     onClick={() => handleSelect(row.key, opt.value)}
                     data-testid={`filter-${row.key}-${opt.value || 'all'}`}
                     className={cn(
-                      'px-2.5 py-0.5 rounded-full text-xs transition-colors',
+                      'px-3 py-1 rounded-full text-xs transition-all border outline-none',
                       isActive
-                        ? 'font-semibold'
-                        : 'hover:bg-[var(--secondary)]'
+                        ? 'font-bold shadow-sm'
+                        : 'hover:bg-[var(--secondary)] hover:border-[var(--muted-foreground)]'
                     )}
                     style={
                       isActive
-                        ? { background: 'var(--gold)', color: 'black' }
-                        : { color: 'var(--muted-foreground)' }
+                        ? { background: 'var(--accent)', color: 'black', borderColor: 'var(--accent)' }
+                        : { color: 'var(--muted-foreground)', borderColor: 'transparent', background: 'transparent' }
                     }
                   >
                     {label}
