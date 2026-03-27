@@ -223,9 +223,8 @@ describe('VideoTable (CHG-211/212)', () => {
     render(<VideoTable />)
 
     await screen.findByText('Alpha Movie')
-    // Open the actions dropdown for row v1, then click the edit item
-    fireEvent.click(within(screen.getByTestId('video-actions-v1')).getByRole('button'))
-    fireEvent.click(await screen.findByRole('menuitem', { name: '编辑' }))
+    // Click the direct edit button for row v1
+    fireEvent.click(screen.getByTestId('video-actions-v1'))
 
     await screen.findByTestId('video-detail-drawer-title')
     expect(getMock).toHaveBeenCalledWith('/admin/videos/v1')

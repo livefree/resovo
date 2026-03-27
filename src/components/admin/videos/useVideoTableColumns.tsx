@@ -5,7 +5,6 @@
 'use client'
 
 import { useMemo } from 'react'
-import { AdminDropdown } from '@/components/admin/shared/dropdown/AdminDropdown'
 import {
   TableBadgeCell,
   TableCheckboxCell,
@@ -191,25 +190,13 @@ function buildDataColumn(columnId: VideoColumnId, deps: ColumnDeps): TableColumn
       break
     case 'actions':
       col.accessor = (row) => row.id
-      col.overflowVisible = true
       col.cell = ({ row }) => (
-        <AdminDropdown
-          align="right"
+        <button
+          type="button"
+          onClick={() => deps.setDrawerVideoId(row.id)}
+          className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg2)]"
           data-testid={`video-actions-${row.id}`}
-          trigger={
-            <button
-              type="button"
-              className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg2)]"
-            >操作</button>
-          }
-          items={[
-            {
-              key: 'edit',
-              label: '编辑',
-              onClick: () => deps.setDrawerVideoId(row.id),
-            },
-          ]}
-        />
+        >编辑</button>
       )
       break
   }
