@@ -2979,3 +2979,205 @@
    - **状态**：✅ 已完成
    - **文件范围**：`docs/architecture-current.md`
    - **变更内容**：`crawler_sites` 章节加警示注解：主键为 `key VARCHAR(100)`，无 `id UUID`，任何 `REFERENCES crawler_sites(id)` 均为错误写法
+
+---
+
+## SEQ-20260326-25 — 视频来源筛选正确实现
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 20:30
+- **最后更新时间**：2026-03-26 20:30
+- **目标**：为 videos 表添加 site_key 外键列，使来源筛选从语义错误的 video_sources.source_name 改为正确的 videos.site_key → crawler_sites.key；同步更新爬虫入库写入路径
+- **依赖**：无（独立修复）
+- **参考**：admin_table_ux_fix_plan_20260326.md 阶段 1；CHG-245 回滚说明
+
+### 任务列表
+
+#### CHG-246 — Migration: videos.site_key + listAdminVideos site filter 修复
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 20:30
+- **依赖**：无
+- **文件范围**：
+  - `src/api/db/migrations/023_add_site_key_to_videos.sql`（新建）
+  - `src/api/db/queries/videos.ts`（listAdminVideos site filter WHERE 子句）
+  - `docs/architecture-current.md`（videos 表字段更新）
+- **变更内容**：
+  1. Migration: `ALTER TABLE videos ADD COLUMN site_key VARCHAR(100) REFERENCES crawler_sites(key) ON DELETE SET NULL`；添加索引 `idx_videos_site_key`
+  2. `listAdminVideos`：site filter WHERE 由 `video_sources.source_name = $X` 改为 `v.site_key = $X`
+  3. 更新 architecture-current.md videos 表字段说明
+- **完成备注**：_（AI 填写）_
+
+#### CHG-247 — 爬虫入库写入 site_key（insertCrawledVideo + CrawlerService）
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 20:30
+- **依赖**：CHG-246 已完成
+- **文件范围**：
+  - `src/api/db/queries/videos.ts`（insertCrawledVideo 新增 site_key 参数）
+  - `src/api/services/CrawlerService.ts`（传入 site.key 到 upsertVideo）
+  - `src/api/services/SourceParserService.ts`（upsertVideo 签名更新）
+- **变更内容**：
+  1. `insertCrawledVideo` 新增第 23 个参数 `site_key`，INSERT SQL 写入 `site_key` 列
+  2. `CrawlerService.crawl()` 将当前 site 的 `key` 传入 upsertVideo 链路
+  3. `SourceParserService.upsertVideo()` 接收并传递 `siteKey`
+- **完成备注**：_（AI 填写）_
+
+---
+
+## SEQ-20260326-26 — AdminDropdown 统一浮层下拉组件
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 20:30
+- **最后更新时间**：2026-03-26 20:30
+- **目标**：抽象统一下拉组件，解决各表格操作列菜单无 click-away/ESC、被 overflow 裁切的问题
+- **依赖**：无（独立于 SEQ-25）
+
+### 任务列表
+
+#### CHG-248 — 新建 AdminDropdown 组件
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 20:30
+- **依赖**：无
+- **文件范围**：
+  - `src/components/admin/shared/dropdown/AdminDropdown.tsx`（新建）
+  - `src/components/admin/shared/dropdown/index.ts`（新建，导出）
+- **变更内容**：
+  - Props: `trigger` (ReactNode)、`items` (label/onClick/danger/disabled)、`align` (left/right)
+  - 行为：click-away 关闭（mousedown 监听）、ESC 关闭（keydown 监听）、portal 渲染至 document.body 避免 overflow 裁切、z-index 统一管理
+  - 定位：绝对坐标跟随 trigger 元素（getBoundingClientRect + scroll offset）
+  - 无障碍：role="menu"，items role="menuitem"，focus trap 可选
+- **完成备注**：_（AI 填写）_
+
+#### CHG-249 — CrawlerSiteTable 操作列接入 AdminDropdown（首次验证）
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 20:30
+- **依赖**：CHG-248 已完成
+- **文件范围**：
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteTableColumns.tsx`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`（清理局部 open state）
+- **变更内容**：
+  1. 操作列 cell 的菜单按钮替换为 `<AdminDropdown trigger={...} items={[...]} />`
+  2. 移除 CrawlerSiteTable/CrawlerSiteTableHead 内的手动 `open` state 和 inline menu 渲染
+- **完成备注**：_（AI 填写）_
+
+#### CHG-250 — VideoTable actions 列接入 AdminDropdown
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 20:30
+- **依赖**：CHG-249 已完成（已验证 AdminDropdown 在真实场景可用）
+- **文件范围**：
+  - `src/components/admin/videos/useVideoTableColumns.tsx`（actions 列 cell renderer）
+- **变更内容**：
+  1. actions 列 cell 的操作菜单替换为 AdminDropdown
+  2. 验证：菜单在 overflow hidden 行内不被裁切
+- **完成备注**：_（AI 填写）_
+
+---
+
+## SEQ-20260326-27 — ColumnSettingsPanel 统一列设置面板
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 20:30
+- **最后更新时间**：2026-03-26 20:30
+- **目标**：抽象统一列设置面板，替换 VideoTable / CrawlerSiteManager / SubmissionTable / SubtitleTable / AdminAnalyticsDashboard 五套各自的 inline 实现
+- **依赖**：无（可并行于 SEQ-26）
+
+### 任务列表
+
+#### CHG-251 — 新建 ColumnSettingsPanel 组件
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 20:30
+- **依赖**：无
+- **文件范围**：
+  - `src/components/admin/shared/table/ColumnSettingsPanel.tsx`（新建）
+- **变更内容**：
+  - Props: `columns: Array<{ id: string; label: string; visible: boolean; required?: boolean }>`、`onToggle(id)`、`onReset()`
+  - 行为：required 列显示但 checkbox disabled（灰化）；"重置默认"按钮；样式与现有 VideoTable inline panel 对齐
+  - 无需外部依赖，纯展示+事件回调
+- **完成备注**：_（AI 填写）_
+
+#### CHG-252 — VideoTable 接入 ColumnSettingsPanel
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 20:30
+- **依赖**：CHG-251 已完成
+- **文件范围**：
+  - `src/components/admin/videos/VideoTable.tsx`
+- **变更内容**：替换 VideoTable 内 30 行 inline 列设置实现为 `<ColumnSettingsPanel>`
+- **完成备注**：_（AI 填写）_
+
+#### CHG-253 — CrawlerSiteManager / CrawlerSiteTableHead 接入 ColumnSettingsPanel
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 20:30
+- **依赖**：CHG-252 已完成
+- **文件范围**：
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTableHead.tsx`
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`（如有 inline panel 残留）
+- **完成备注**：_（AI 填写）_
+
+#### CHG-254 — SubmissionTable / SubtitleTable / AdminAnalyticsDashboard 接入 ColumnSettingsPanel
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 20:30
+- **依赖**：CHG-253 已完成
+- **文件范围**：
+  - `src/components/admin/content/SubmissionTable.tsx`
+  - `src/components/admin/content/SubtitleTable.tsx`
+  - `src/components/admin/AdminAnalyticsDashboard.tsx`
+- **变更内容**：各自的 showColumnsPanel + inline 渲染块替换为 `<ColumnSettingsPanel>`
+- **完成备注**：_（AI 填写）_
+
+---
+
+## SEQ-20260326-28 — SelectionActionBar 统一批量操作栏
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 20:30
+- **最后更新时间**：2026-03-26 20:30
+- **目标**：统一视频页（BatchPublishBar 浮动底栏）与采集页（AdminBatchBar inline 栏）的批量操作布局规范和组件接口
+- **依赖**：无（独立序列）
+
+### 任务列表
+
+#### CHG-255 — 新建 SelectionActionBar，替换 AdminBatchBar
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 20:30
+- **依赖**：无
+- **文件范围**：
+  - `src/components/admin/shared/batch/SelectionActionBar.tsx`（新建）
+  - `src/components/admin/shared/batch/AdminBatchBar.tsx`（标记废弃或删除）
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar.tsx`（接入）
+- **变更内容**：
+  - Props: `selectedCount`、`actions: Array<{ key, label, onClick, danger?, disabled? }>`、`variant: 'inline' | 'sticky-bottom'`
+  - `inline` 模式：与 AdminBatchBar 外观一致（嵌入工具栏）
+  - `sticky-bottom` 模式：内容区 sticky bottom，不覆盖侧边栏（BatchPublishBar CHG-235 已有此定位逻辑）
+  - CrawlerSiteTopToolbar 用 `variant="inline"` 替换 AdminBatchBar
+- **完成备注**：_（AI 填写）_
+
+#### CHG-256 — BatchPublishBar 迁移至 SelectionActionBar
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 20:30
+- **依赖**：CHG-255 已完成
+- **文件范围**：
+  - `src/components/admin/videos/BatchPublishBar.tsx`
+  - `src/components/admin/videos/VideoTable.tsx`（props 传入方式调整）
+- **变更内容**：
+  - BatchPublishBar 内部将布局层（sticky container + 信息区 + 操作组）替换为 `SelectionActionBar variant="sticky-bottom"`，业务逻辑（API 调用）保留
+  - 保持 BatchPublishBar 对外接口不变（VideoTable 调用方无需改动）
+- **完成备注**：_（AI 填写）_
+
+---
+
+## SEQ-20260326-29 — 收口清理
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 20:30
+- **最后更新时间**：2026-03-26 20:30
+- **目标**：清理旧导出残留，执行全局引用扫描，验收 admin_table_ux_fix_plan_20260326 10 个问题全部闭环
+- **依赖**：SEQ-20260326-26、SEQ-20260326-27、SEQ-20260326-28 全部完成
+
+### 任务列表
+
+#### CHG-257 — admin/index.ts 旧导出清理 + 全局引用扫描
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-26 20:30
+- **依赖**：上游序列全部完成
+- **文件范围**：
+  - `src/components/admin/index.ts`（如有旧导出残留）
+  - 全局 `rg` 扫描确认无遗留引用
+- **变更内容**：
+  1. 删除已无引用的旧导出（AdminBatchBar 等）
+  2. 跑 `npm run typecheck && npm run lint` 全通过
+  3. 对照 admin_table_ux_fix_plan_20260326.md 回归清单，逐项确认
+- **完成备注**：_（AI 填写）_
