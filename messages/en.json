@@ -39,6 +39,8 @@
     }
   },
   "nav": {
+    "home": "Home",
+    "more": "More",
     "logout": "Logout",
     "profile": "Profile",
     "signIn": "Sign In",

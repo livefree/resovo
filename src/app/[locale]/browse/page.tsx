@@ -7,6 +7,7 @@ import { Suspense } from 'react'
 import { Nav } from '@/components/layout/Nav'
 import { FilterArea } from '@/components/browse/FilterArea'
 import { BrowseGrid } from '@/components/browse/BrowseGrid'
+import { Footer } from '@/components/layout/Footer'
 
 export default function BrowsePage() {
   return (
@@ -24,6 +25,7 @@ export default function BrowsePage() {
           <BrowseGrid />
         </Suspense>
       </main>
+      <Footer />
     </div>
   )
 }

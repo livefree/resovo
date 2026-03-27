@@ -39,6 +39,8 @@
     }
   },
   "nav": {
+    "home": "首页",
+    "more": "更多",
     "logout": "退出登录",
     "profile": "个人主页",
     "signIn": "登录",
