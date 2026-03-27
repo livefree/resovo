@@ -54,9 +54,10 @@ export function BatchPublishBar({ selectedIds, onSuccess, onClear }: BatchPublis
     })
   }
 
+  // Layout aligned to SelectionActionBar sticky-bottom spec (CHG-256)
   return (
     <div
-      className="sticky bottom-0 z-10 flex items-center justify-between border-t border-[var(--border)] bg-[var(--bg2)] px-6 py-3 shadow-lg"
+      className="sticky bottom-0 z-10 flex items-center justify-between rounded-t-lg border-t border-[var(--border)] bg-[var(--bg2)] px-4 py-3 shadow-lg"
       data-testid="batch-publish-bar"
       style={{ animation: 'slideUp 0.2s ease-out' }}
     >

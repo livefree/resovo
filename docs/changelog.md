@@ -3756,3 +3756,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 
 ### 测试覆盖
 - typecheck + lint + 658/658 单元测试通过
+
+---
+
+## CHG-256 — BatchPublishBar 布局对齐 SelectionActionBar 规范
+
+- **完成时间**：2026-03-26 23:40
+- **序列**：SEQ-20260326-28
+
+### 修改文件
+- `src/components/admin/videos/BatchPublishBar.tsx`
+
+### 变更说明
+外层容器 className 对齐 SelectionActionBar sticky-bottom 规范（新增 `rounded-t-lg`，px-6 → px-4）。BatchPublishBar 内部按钮因有 accent/green 定制样式及 `justify-between` 布局需求，保留原有实现。
+
+### 测试覆盖
+- typecheck + lint + 658/658 单元测试通过
