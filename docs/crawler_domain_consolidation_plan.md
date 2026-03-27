@@ -1,5 +1,14 @@
 # Resovo（流光）— 采集域 Admin 导航收归设计方案
 
+> status: reference
+> owner: @engineering
+> scope: crawler domain navigation consolidation plan reference
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 > 对应决策：ADR-014
 > 任务入口：SEQ-20260322-10（CHG-169）
 > 本文档描述问题背景、目标架构、改动范围与回滚策略，不含实现细节代码。

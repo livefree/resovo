@@ -1,4 +1,13 @@
 1. 顶部导航 (Nav.tsx)
+
+> status: reference
+> owner: @engineering
+> scope: frontend ui compatibility assessment
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
    现状兼容度：90%
    分析：目前你已经实现了基于 flex 的响应式布局，左侧分类、右侧工具栏（搜索、暗黑模式切换、多语言、用户态）应有尽有，并且已经实现了 backdrop-blur 和基于 CSS 变量的背景色。
    升级动作：

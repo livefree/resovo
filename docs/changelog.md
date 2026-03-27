@@ -1,5 +1,13 @@
 # Resovo（流光） — 开发变更记录
 
+> status: active
+> owner: @engineering
+> scope: completed task change history
+> source_of_truth: yes
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+>
 > 每次任务完成后，AI 在此追加一条记录。
 > 格式固定，便于追踪变更历史和排查问题。
 > 追加规则：新记录统一追加到文件尾部，不做头部插入。
@@ -1093,7 +1101,7 @@
 - **完成时间**：2026-03-20
 - **记录时间**：2026-03-20 12:08
 - **修改文件**：
-  - `docs/admin_v2_refactor_plan.md` — 新增 admin v2 重构执行方案（shared/UI/设计系统 + 分阶段计划）
+  - `docs/archive/2026Q1/admin_v2_refactor_plan.md` — 新增 admin v2 重构执行方案（shared/UI/设计系统 + 分阶段计划）
   - `docs/admin_design_system_v1.md` — 新增轻量设计系统规范（组件/交互/布局）
 - **新增依赖**：无
 - **数据库变更**：无
@@ -1104,7 +1112,7 @@
 - **完成时间**：2026-03-20
 - **记录时间**：2026-03-20 12:20
 - **修改文件**：
-  - `docs/admin_v2_refactor_plan.md` — 重排 Phase 1 顺序，补充强 DoD、UI 边界与 PR 单维度规则
+  - `docs/archive/2026Q1/admin_v2_refactor_plan.md` — 重排 Phase 1 顺序，补充强 DoD、UI 边界与 PR 单维度规则
   - `docs/rules/admin-module-template.md` — 同步执行约束与表格改动验收规则
 - **新增依赖**：无
 - **数据库变更**：无
@@ -1313,7 +1321,7 @@
   - `scripts/verify-admin-guardrails.mjs` — 新增 admin v2 规则门禁脚本（单维度变更集 + confirm/delete/toast 规则）
   - `package.json` — 新增 `verify:admin-guardrails` 与 `verify:admin-guardrails:all` 命令
   - `docs/rules/admin-module-template.md` — 增加交互规则硬约束并纳入门禁命令
-  - `docs/admin_v2_refactor_plan.md` — 执行规则补充门禁命令要求
+  - `docs/archive/2026Q1/admin_v2_refactor_plan.md` — 执行规则补充门禁命令要求
   - `src/components/admin/sources/SourceTable.tsx` — 单条删除接入 `ConfirmDialog` 二次确认
 - **新增依赖**：无
 - **数据库变更**：无

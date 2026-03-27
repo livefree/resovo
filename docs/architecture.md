@@ -1,5 +1,13 @@
 # Resovo（流光） — 技术架构参考
 
+> status: active
+> owner: @engineering
+> scope: system architecture and module boundaries
+> source_of_truth: yes
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+>
 > 本文件是架构的唯一权威来源。所有与架构相关的代码决策必须与本文件保持一致。
 > 若代码实现与本文件有出入，以本文件为准并修改代码。
 

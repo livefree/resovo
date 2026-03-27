@@ -1,5 +1,14 @@
 # Admin List Capability Matrix（后台列表能力矩阵）
 
+> status: reference
+> owner: @engineering
+> scope: admin list capability inventory matrix
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 > 记录时间：2026-03-21
 > 范围：`/admin` 下所有列表页
 

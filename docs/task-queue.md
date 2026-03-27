@@ -1,5 +1,13 @@
 # Resovo（流光）— 任务序列池（Task Queue）
 
+> status: active
+> owner: @engineering
+> scope: task sequencing, status tracking, blocker notifications
+> source_of_truth: yes
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+>
 > 用途：提前规划多个任务序列，避免”走一步看一步”；同时作为 BLOCKER/PHASE COMPLETE 通知的写入位置。
 > 关系：本文件负责”任务规划 + 状态追踪 + 通知”；`docs/tasks.md` 负责”当前单任务工作台（完成即清空）”；`docs/changelog.md` 负责”完成历史日志”。
 
@@ -186,7 +194,7 @@
 - **最后更新时间**：2026-03-19 19:21
 - **目标**：按 v1.1 将 admin system 重构为可维护模块边界，且保持行为不变
 - **范围**：`src/components/admin/system/*`（先 `CrawlerSiteManager`，后 `ConfigFileEditor/monitoring/migration`）
-- **依赖**：`docs/admin_refactor_plan_v1.md`（v1.1）
+- **依赖**：`docs/archive/2026Q1/admin_refactor_plan_v1.md`（v1.1）
 
 ### 任务列表（按执行顺序）
 1. CHG-54 — Phase A1：抽离 CrawlerSiteManager 表格状态模型（状态：✅ 已完成）
@@ -237,7 +245,7 @@
 - **最后更新时间**：2026-03-20 11:56
 - **目标**：按 v1.2 完成 admin system 纵向闭环拆分与目录归组，保持行为不变
 - **范围**：`src/components/admin/system/*`（先 crawler-site，再 system 归组与入口边界）
-- **依赖**：`docs/admin_refactor_plan_v1.2.md`
+- **依赖**：`docs/archive/2026Q1/admin_refactor_plan_v1.2.md`
 
 ### 任务列表（按执行顺序）
 1. CHG-60 — v1.2 T1-1：抽离 CrawlerSiteToolbar 组件（状态：✅ 已完成）
@@ -294,8 +302,8 @@
 - **创建时间**：2026-03-20 12:00
 - **最后更新时间**：2026-03-20 12:08
 - **目标**：将 admin v2 的 shared/UI/设计系统方案固化为可执行文档
-- **范围**：`docs/admin_v2_refactor_plan.md`、`docs/admin_design_system_v1.md`
-- **依赖**：`docs/admin_refactor_plan_v1.2.md`
+- **范围**：`docs/archive/2026Q1/admin_v2_refactor_plan.md`、`docs/admin_design_system_v1.md`
+- **依赖**：`docs/archive/2026Q1/admin_refactor_plan_v1.2.md`
 
 ### 任务列表（按执行顺序）
 1. CHG-67 — Admin v2 方案与设计系统文档落地（状态：✅ 已完成）
@@ -318,7 +326,7 @@
 - **最后更新时间**：2026-03-20 01:33
 - **目标**：按 v2 方案推进 shared 抽象、局部 UI 优化和设计系统代码化落地
 - **范围**：`src/components/admin/shared/*` + `crawler-site/videos/users/sources` + 对应 docs/rules
-- **依赖**：`docs/admin_v2_refactor_plan.md`、`docs/admin_design_system_v1.md`
+- **依赖**：`docs/archive/2026Q1/admin_v2_refactor_plan.md`、`docs/admin_design_system_v1.md`
 
 ### 任务列表（按执行顺序）
 1. CHG-69 — Phase1：抽离 AdminTableFrame/AdminTableState（状态：✅ 已完成）
@@ -1580,7 +1588,7 @@
 ### 任务列表（按执行顺序）
 1. CHG-160 — 修复 publish/batchPublish 缺失 ES 同步（状态：✅ 已完成）
    - 创建时间：2026-03-24 00:00
-   - 计划开始：2026-03-24
+   - 计划开始：2026-03-24 00:00
    - 实际开始：2026-03-25 00:00
    - 完成时间：2026-03-25 00:00
    - 验收要点：publish/batchPublish/batchUnpublish 后 ES 文档 is_published 字段同步；单元测试覆盖
@@ -1628,7 +1636,7 @@
 
 1. CHG-162 — 全站硬编码颜色修复（状态：✅ 已完成）
    - 创建时间：2026-03-25 00:00
-   - 计划开始：2026-03-25
+   - 计划开始：2026-03-25 00:00
    - 实际开始：2026-03-25 00:20
    - 完成时间：2026-03-25 00:24
    - 验收要点：`grep "#f5c518\|#a0a0a0" src/components/video src/components/search` 无结果；测试通过
@@ -2027,7 +2035,7 @@
 
 1. CHG-182 — Migration 020：新增 genre_source + content_rating 两列（状态：✅ 已完成）
    - 创建时间：2026-03-25 14:00
-   - 计划开始：2026-03-25
+   - 计划开始：2026-03-25 14:00
    - 实际开始：2026-03-25 14:05
    - 完成时间：2026-03-25 14:15
    - 验收要点：migration 幂等可重跑；两列存在于 videos 表；CHECK 约束正确；idx_videos_content_rating 索引建立
@@ -2329,7 +2337,7 @@
 - **目标**：交付可复用的 ModernDataTable 表格骨架 + Cell 组件库 + 状态管理 Hook + 列宽拖拽，为 Phase 1~3 所有表格提供底座
 - **范围**：`src/components/admin/shared/modern-table/` 全新目录
 - **依赖**：SEQ-20260325-14（Phase 0）全部完成
-- **方案来源**：`docs/video_admin_unified_plan_20260325.md` Phase 0.5 + `docs/admin_table_redesign_plan_20260325.md`
+- **方案来源**：`docs/video_admin_unified_plan_20260325.md` Phase 0.5 + `docs/archive/2026Q1/admin_table_redesign_plan_20260325.md`
 
 ### 任务列表（按执行顺序）
 

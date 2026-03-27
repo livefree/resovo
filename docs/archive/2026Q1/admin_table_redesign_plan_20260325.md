@@ -1,5 +1,13 @@
 # 现代后台管理端可交互表格 (Modern Admin DataTable) 重设计与实现方案
 
+> status: archived
+> owner: @engineering
+> scope: historical admin table redesign proposal
+> source_of_truth: no
+> supersedes: none
+> superseded_by: docs/admin_table_ux_fix_plan_20260326.md
+> last_reviewed: 2026-03-27
+>
 为了彻底解决目前后台管理表格在列宽拖拽、行高突变、交互跳转以及展示体验上的种种缺陷，本方案制定了一套详细且高度可落地的标准化表格体系。该方案旨在为后续的 AI 代码生成与业务开发提供严格的准则，保证开发不走样，同时兼顾代码的**高复用性**和**高可扩展性**。
 
 ---

@@ -1,5 +1,14 @@
 # DB 命名重建方案 — VideoType / VideoGenre 正交化
 
+> status: reference
+> owner: @engineering
+> scope: database naming rebuild plan result reference
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 **创建时间**：2026-03-25
 **状态**：✅ 已完成（SEQ-20260325-02 全部 7 个任务完成，2026-03-25）
 

@@ -1,5 +1,14 @@
 # Resovo（流光）— 后台界面统一重构总计划
 
+> status: reference
+> owner: @engineering
+> scope: admin ui unification strategy reference
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 > 本文档为后台 UI/UX 统一重构总纲，仅定义统一目标与阶段方向，不包含代码实现细节。
 
 ---

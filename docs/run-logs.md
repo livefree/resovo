@@ -1,5 +1,13 @@
 # Resovo（流光）— 运行日志（Run Logs）
 
+> status: active
+> owner: @engineering
+> scope: runtime events and blocker logs
+> source_of_truth: yes
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+>
 > 用途：记录开发过程中的运行事件（BLOCKER、恢复、临时决策、异常说明）。
 > 规则：新记录统一追加到文件尾部，禁止头部插入或重排历史记录。
 
@@ -248,7 +256,7 @@
 - **类型**：INFO
 - **关联任务**：CHG-67
 - **内容**：完成 admin v2 重构方案与设计系统 v1 文档固化。
-- **处理动作**：新增 `docs/admin_v2_refactor_plan.md` 与 `docs/admin_design_system_v1.md`，并纳入任务与变更记录。
+- **处理动作**：新增 `docs/archive/2026Q1/admin_v2_refactor_plan.md` 与 `docs/admin_design_system_v1.md`，并纳入任务与变更记录。
 - **后续**：可按文档 Phase 1 直接拆分 CHG 执行 shared 抽象。
 
 ## [LOG-20260320-1220-01] CHG-68 执行规则与顺序约束更新完成

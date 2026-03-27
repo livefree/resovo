@@ -1,5 +1,14 @@
 # Resovo（流光） — 代码风格规范
 
+> status: active
+> owner: @engineering
+> scope: code style and engineering conventions
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 > 适用范围：所有 TypeScript 文件（前端和后端）
 > AI 在编写任何代码前必须读取本文件
 

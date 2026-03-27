@@ -1,5 +1,14 @@
 # Resovo（流光） — 前端组件规范
 
+> status: active
+> owner: @engineering
+> scope: frontend ui component and interaction rules
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 > 适用范围：`src/components/`、`src/app/` 所有前端文件
 > AI 在编写前端组件前必须读取本文件
 

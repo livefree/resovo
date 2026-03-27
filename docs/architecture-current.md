@@ -1,5 +1,13 @@
 # Resovo（流光）— 技术架构（当前实现快照）
 
+> status: active
+> owner: @engineering
+> scope: implementation snapshot for diff/reference
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+>
 > 本文件基于当前代码仓库实现生成，用于记录“当前真实架构状态”。
 > 若与 `docs/architecture.md` 有差异，以代码与本文件快照为准，后续需统一回主架构文档。
 

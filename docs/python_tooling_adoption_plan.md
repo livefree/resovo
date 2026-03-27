@@ -1,5 +1,14 @@
 # Python Tooling 渐进接入方案（CHG-93）
 
+> status: reference
+> owner: @engineering
+> scope: python tooling adoption baseline reference
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 - **记录时间**：2026-03-20 12:48
 - **更新时间**：2026-03-20 12:56（CHG-94）
 - **状态**：已落盘，待按具体 Python 子任务逐步执行

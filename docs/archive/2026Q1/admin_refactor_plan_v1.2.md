@@ -1,5 +1,13 @@
 # admin_refactor_plan_v1.2
 
+> status: archived
+> owner: @engineering
+> scope: historical admin system refactor plan v1.2
+> source_of_truth: no
+> supersedes: docs/archive/2026Q1/admin_refactor_plan_v1.md
+> superseded_by: docs/admin_restructure_plan.md
+> last_reviewed: 2026-03-27
+>
 生成时间：2026-03-20 04:15  
 修订时间：2026-03-20 10:28
 

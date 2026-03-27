@@ -1,5 +1,13 @@
 # Admin v2 Refactor Plan
 
+> status: archived
+> owner: @engineering
+> scope: historical admin v2 refactor plan
+> source_of_truth: no
+> supersedes: docs/archive/2026Q1/admin_refactor_plan_v1.2.md
+> superseded_by: docs/admin_ui_unification_plan.md
+> last_reviewed: 2026-03-27
+>
 更新时间：2026-03-20 01:33
 
 ## 目标与约束

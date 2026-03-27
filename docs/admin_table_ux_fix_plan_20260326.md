@@ -1,5 +1,13 @@
 # 后台表格体验修复与统一实施计划（2026-03-26）
 
+> status: active
+> owner: @engineering
+> scope: admin table ux fixes and unification implementation
+> source_of_truth: no
+> supersedes: docs/archive/2026Q1/admin_table_redesign_plan_20260325.md
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
 ## 1. 背景与目标
 
 本计划针对后台重设计后暴露的 10 个使用体验问题，目标是：
@@ -202,4 +210,3 @@
 1. “来源筛选”修复可能涉及数据库字段语义调整，需先确定权威来源字段。
 2. 排序下沉到后端会改变默认结果顺序，需在 PR 描述中明确行为变更。
 3. 清理旧组件前必须做全局引用扫描并跑页面冒烟测试。
-

@@ -1,5 +1,14 @@
 # Admin Table Baseline（统一基线）
 
+> status: reference
+> owner: @engineering
+> scope: admin table interaction baseline reference
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 > 生效时间：2026-03-21
 > 目标：将后台所有列表页统一到同一套表格能力，降低维护成本，保证交互一致性。
 

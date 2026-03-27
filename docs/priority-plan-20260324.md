@@ -1,5 +1,14 @@
 # Resovo — 开发优先级规划（2026-03-24）
 
+> status: reference
+> owner: @engineering
+> scope: 2026-03-24 priority review and decomposition reference
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 > 本文件记录 2026-03-24 开发总监优先级评审的结论与 P1 任务拆解。
 > 作为后续任务排期的决策依据，不作为规范文件（勿在此追加规范）。
 

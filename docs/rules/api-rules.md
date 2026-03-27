@@ -1,5 +1,14 @@
 # Resovo（流光） — API 接口规范
 
+> status: active
+> owner: @engineering
+> scope: api layer implementation rules
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 > 适用范围：`src/api/routes/` 所有后端路由文件
 > AI 在编写 API 接口前必须读取本文件
 

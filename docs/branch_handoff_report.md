@@ -1,5 +1,14 @@
 # Branch Handoff Report
 
+> status: reference
+> owner: @engineering
+> scope: historical branch handoff audit report
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 ## 1. Executive Summary
 - What was done: This branch (`codex-takeover-20260319`) consolidated a large multi-phase admin/backend refactor: crawler run/task model, task controls (cancel/pause/resume/freeze/stop-all), shared admin table/state framework, migration of major admin list pages to shared behavior, and extensive documentation/process governance updates.
 - Completion level: High for structural migration; medium for runtime stability hardening in crawler monitoring/control.
@@ -63,7 +72,7 @@ Group by:
 
 ### Docs
 - What changed: Large process/task/changelog and architecture planning artifacts.
-- Key files: [docs/changelog.md](/Users/livefree/projects/resovo/docs/changelog.md), [docs/task-queue.md](/Users/livefree/projects/resovo/docs/task-queue.md), [docs/admin_v2_refactor_plan.md](/Users/livefree/projects/resovo/docs/admin_v2_refactor_plan.md), [README.md](/Users/livefree/projects/resovo/README.md).
+- Key files: [docs/changelog.md](/Users/livefree/projects/resovo/docs/changelog.md), [docs/task-queue.md](/Users/livefree/projects/resovo/docs/task-queue.md), [docs/archive/2026Q1/admin_v2_refactor_plan.md](/Users/livefree/projects/resovo/docs/archive/2026Q1/admin_v2_refactor_plan.md), [README.md](/Users/livefree/projects/resovo/README.md).
 - Purpose: Governance + execution traceability.
 - Impact: Strong audit trail; risk of drift if not kept in lockstep.
 

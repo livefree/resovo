@@ -1,5 +1,14 @@
 # Resovo（流光）— 后台管理结构重组设计
 
+> status: reference
+> owner: @engineering
+> scope: admin information architecture restructuring reference
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 > **文档性质**：架构设计决策文档，非任务卡片。
 > **创建时间**：2026-03-22
 > **状态**：设计已定稿，待排入任务序列实施

@@ -1,5 +1,14 @@
 # Resovo（流光）— 内容治理层 Schema 设计方案
 
+> status: reference
+> owner: @engineering
+> scope: content governance schema evolution reference
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 > 对应决策：ADR-016（S/E 统一模型）、ADR-017（类型系统扩展）、ADR-018（治理层字段）、ADR-019（Ingest Policy）
 > 任务入口：SEQ-20260322-11（CHG-170/171/172）、SEQ-20260322-12（CHG-173/174）
 > 本文档描述 schema 演化目标、字段设计、迁移策略与执行边界。

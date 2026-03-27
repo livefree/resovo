@@ -1,5 +1,14 @@
 # Resovo（流光） — 数据库操作规范
 
+> status: active
+> owner: @engineering
+> scope: database schema and query rules
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 > 适用范围：`src/api/db/` 所有数据库相关文件
 > AI 在编写数据库相关代码前必须读取本文件
 

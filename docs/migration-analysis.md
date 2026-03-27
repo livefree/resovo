@@ -1,5 +1,14 @@
 # 外部项目迁移可行性分析
 
+> status: reference
+> owner: @engineering
+> scope: external project migration feasibility analysis
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 **分析日期**：2026-03-18
 **分析对象**：`~/projects/LunaTV-enhanced`、`~/projects/yt-player`
 **目标**：评估将两个项目的功能模块迁移至 Resovo（流光）的可行性与复杂度

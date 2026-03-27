@@ -1,5 +1,14 @@
 # Admin 采集功能集中管理重构方案（CHG-96 基线）
 
+> status: reference
+> owner: @engineering
+> scope: admin crawl control center consolidation plan
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 - **版本**：v1.1
 - **日期**：2026-03-21
 - **适用范围**：后台 `站点配置` / `视频源配置（拟重命名）` / `采集任务记录`

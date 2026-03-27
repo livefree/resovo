@@ -1,5 +1,14 @@
 # Resovo 采集系统 — 功能流程图
 
+> status: reference
+> owner: @engineering
+> scope: crawler functional flow reference
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 > 本文档覆盖所有已实现的采集（crawler）功能，每个功能附详细 Mermaid 流程图。
 > 源文件索引见文末。最后更新：2026-03-25
 

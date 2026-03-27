@@ -1,5 +1,14 @@
 # Admin Module Template Rule
 
+> status: active
+> owner: @engineering
+> scope: admin module implementation checklist and constraints
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 更新时间：2026-03-20 01:33
 
 ## 适用范围

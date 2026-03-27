@@ -1,5 +1,13 @@
 # Admin System 重构方案（v1.1，可执行版）
 
+> status: archived
+> owner: @engineering
+> scope: historical admin system refactor plan v1.1
+> source_of_truth: no
+> supersedes: none
+> superseded_by: docs/admin_restructure_plan.md
+> last_reviewed: 2026-03-27
+>
 生成时间：2026-03-20 01:32  
 最后更新时间：2026-03-20 18:12  
 状态：仅更新规划，暂不执行代码重构

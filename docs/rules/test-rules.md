@@ -1,5 +1,14 @@
 # Resovo（流光） — 测试规范
 
+> status: active
+> owner: @engineering
+> scope: testing strategy and acceptance rules
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 > AI 在每个任务完成后，按本文件判断需要写什么测试、运行什么命令。
 > 测试全部通过才能执行 git commit。
 

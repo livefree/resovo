@@ -1,5 +1,14 @@
 # Resovo (流光) 前台 UI 重构方案计划
 
+> status: active
+> owner: @engineering
+> scope: frontend ui implementation execution plan
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 旨在将当前 MVP 基础呈现升级为具有高度「现代科技极简风 (Modern Tech Minimalist)」及一致性的高级流媒体 UI。
 
 ## User Review Required

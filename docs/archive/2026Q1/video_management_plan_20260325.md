@@ -1,5 +1,13 @@
 # 视频治理与管理方案 (2026-03-25)
 
+> status: archived
+> owner: @engineering
+> scope: historical video governance and admin plan
+> source_of_truth: no
+> supersedes: none
+> superseded_by: docs/video_admin_unified_plan_20260325.md
+> last_reviewed: 2026-03-27
+
 ## 方案背景
 后台管理已经基本完成采集，预合并工作，基于当前系统已经设计好的 `content_governance_schema_plan.md` 规范与 `video_sources` 的数据库结构逻辑，结合流媒体平台标准的业务实践，我们在不动代码的基础上，设计如下视频管理方案。整个方案分为「视频管理业务流转架构」与「对应的后台管理页面布局」两部分。
 
@@ -105,4 +113,3 @@
 
 #### 6. 审核多级提权与复核机制 (Escalation & Secondary Review)
 按角色权限 (RBAC) 拆分审核深度。初级审核员遇到争议视频，能且只能发起 `[升级处理 (Escalate)]`；最终的上架或终结许可交由高级管理员审批复合池进行二次判决。
-

@@ -1,5 +1,14 @@
 # 视频治理与管理方案流程图与界面功能明细表 (2026-03-27)
 
+> status: reference
+> owner: @engineering
+> scope: video governance lifecycle flow reference
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 为了清晰展现视频治理方案的全貌，本文档将各个后台界面的具体功能职责进行了模块化拆解，并提供了一份理想的视频治理全生命周期流程图。
 
 ## 一、 三大核心界面的具体功能分解

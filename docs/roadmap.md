@@ -1,5 +1,13 @@
 # Resovo（流光） — 开发路线图
 
+> status: active
+> owner: @engineering
+> scope: product delivery phases and milestones
+> source_of_truth: yes
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+>
 > 本文件定义四个开发阶段的目标和功能模块边界。
 > 每个 Phase 完成时在对应里程碑处打勾，并在 changelog.md 记录。
 

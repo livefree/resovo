@@ -1,5 +1,13 @@
 # 视频管理与表格基建统一实施方案 (2026-03-25)
 
+> status: active
+> owner: @engineering
+> scope: video admin workflow and table foundation execution plan
+> source_of_truth: no
+> supersedes: docs/archive/2026Q1/video_management_plan_20260325.md
+> superseded_by: none
+> last_reviewed: 2026-03-27
+>
 > 融合来源：`video_management_plan_20260325.md`（业务流程）+ `admin_table_redesign_plan_20260325.md`（表格基建）+ 两轮工程审核意见。
 > 本文档为最终可执行版本，后续拆分为 `task-queue.md` 原子任务的唯一依据。
 

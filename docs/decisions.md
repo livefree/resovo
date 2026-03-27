@@ -1,5 +1,13 @@
 # Resovo（流光） — 架构决策记录 (ADR)
 
+> status: active
+> owner: @engineering
+> scope: architecture decision records
+> source_of_truth: yes
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+>
 > 每次做出重要的技术决策时，在此追加记录。
 > AI 在遇到相关情形时必须查阅本文件，不得推翻已有决策。
 

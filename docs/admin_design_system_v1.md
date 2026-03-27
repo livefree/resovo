@@ -1,5 +1,14 @@
 # Admin Design System v1（Light）
 
+> status: reference
+> owner: @engineering
+> scope: admin design system v1 reference
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
+
 更新时间：2026-03-20 12:05
 
 ## 1. 组件规范
