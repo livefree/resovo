@@ -3374,3 +3374,16 @@
 - **变更内容**：mini crawler task 表格 AdminTableFrame → ModernDataTable；删除两个死代码文件；6 条规范逐一验收
 - **验收要点**：`rg 'AdminTableFrame'` 零结果；`rg 'CrawlerSiteToolbar|CrawlerSiteTableLiteHeader'` 零结果；6 条规范全 PASS
 - **完成备注**：_（AI 填写）_
+
+---
+
+## CHG-266 — hotfix: 内容审核台待审列表响应字段映射错误
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-26 12:00
+- **实际开始**：2026-03-26 12:00
+- **完成时间**：2026-03-26 12:05
+- **文件范围**：
+  - `src/components/admin/moderation/ModerationList.tsx`
+  - `src/components/admin/moderation/ModerationDashboard.tsx`
+- **变更内容**：API 响应字段 `rows` → `data`，与 VideoService.pendingReviewList 返回格式对齐
+- **完成备注**：两处组件类型声明和字段访问全部修正。668/668 通过。

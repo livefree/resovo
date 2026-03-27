@@ -53,10 +53,10 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
     setLoading(true)
     try {
       const params = new URLSearchParams({ page: String(pageVal), limit: String(PAGE_SIZE) })
-      const res = await apiClient.get<{ rows: PendingVideoRow[]; total: number }>(
+      const res = await apiClient.get<{ data: PendingVideoRow[]; total: number }>(
         `/admin/videos/pending-review?${params}`
       )
-      setRows(res.rows)
+      setRows(res.data)
       setTotal(res.total)
     } catch (_err) {
       // fetch failed: list remains empty, loading ends

@@ -28,10 +28,10 @@ export function ModerationDashboard() {
   // Fetch a lightweight ID list for keyboard navigation
   const fetchNavIds = useCallback(async () => {
     try {
-      const res = await apiClient.get<{ rows: NavIdRow[]; total: number }>(
+      const res = await apiClient.get<{ data: NavIdRow[]; total: number }>(
         `/admin/videos/pending-review?page=1&limit=${NAV_FETCH_LIMIT}`
       )
-      setNavIds(res.rows.map((r) => r.id))
+      setNavIds(res.data.map((r) => r.id))
     } catch (_err) {
       // nav IDs fetch failed: keyboard navigation falls back to no-op
     }

@@ -3809,3 +3809,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 **测试覆盖**：新增测试 10 个，全部通过；总计 668/668 通过；typecheck + lint 通过
 
 **设计规范验收**：规范 6（服务端排序，submissions + subtitles 部分）— 后端已就绪，前端迁移由 CHG-259/260 完成
+
+---
+
+## CHG-266 — 修复内容审核台待审列表始终为空（2026-03-26）
+
+**任务**：hotfix / CHG-266
+
+**修改文件**：
+- `src/components/admin/moderation/ModerationList.tsx` — `res.rows` → `res.data`
+- `src/components/admin/moderation/ModerationDashboard.tsx` — `res.rows.map(...)` → `res.data.map(...)`
+
+**根因**：`VideoService.pendingReviewList` 返回 `{ data, total, page, limit }`，但两个前端组件类型声明和字段读取均使用 `rows`，导致列表数据始终为 `undefined`，界面显示"暂无待审核视频"。
+
+**测试覆盖**：668/668 通过；typecheck + lint 通过
