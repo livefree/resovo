@@ -3739,3 +3739,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 
 ### 测试覆盖
 - typecheck + lint + 658/658 单元测试通过
+
+---
+
+## CHG-255 — 新建 SelectionActionBar 统一批量操作栏
+
+- **完成时间**：2026-03-26 23:25
+- **序列**：SEQ-20260326-28
+
+### 修改文件
+- `src/components/admin/shared/batch/SelectionActionBar.tsx`（新建）
+- `src/components/admin/shared/batch/AdminBatchBar.tsx`（改为 thin wrapper）
+
+### 变更说明
+`SelectionActionBar` 支持 `inline`（fragment 嵌工具栏）和 `sticky-bottom`（底部浮层）两种变体，以及 `disabled` 按钮状态。`AdminBatchBar` 改为 thin wrapper 保持向后兼容，CrawlerSiteTopToolbar 无需修改。
+
+### 测试覆盖
+- typecheck + lint + 658/658 单元测试通过
