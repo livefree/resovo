@@ -7,6 +7,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { cn } from '@/lib/utils'
 
 interface ResumePromptProps {
   shortId: string
@@ -85,9 +86,9 @@ export function ResumePrompt({ shortId, episode, onResume, onRestart, className 
 
   return (
     <div
-      className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm border shadow-xl backdrop-blur-sm ${className ?? ''}`}
+      className={cn('flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm border shadow-xl backdrop-blur-sm', className)}
       style={{
-        background: 'color-mix(in srgb, var(--card) 85%, #000 15%)',
+        background: 'color-mix(in srgb, var(--card) 85%, var(--background) 15%)',
         color: 'var(--foreground)',
         borderColor: 'color-mix(in srgb, var(--border) 80%, var(--foreground) 20%)',
       }}
@@ -101,7 +102,7 @@ export function ResumePrompt({ shortId, episode, onResume, onRestart, className 
         type="button"
         onClick={handleResume}
         className="px-3 py-1 rounded text-xs font-semibold"
-        style={{ background: 'var(--accent)', color: 'black' }}
+        style={{ background: 'var(--accent)', color: 'var(--accent-foreground)' }}
         data-testid="resume-continue-btn"
       >
         继续（{countdown}s）

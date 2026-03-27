@@ -81,7 +81,7 @@ export function VideoCard({ video, className }: VideoCardProps) {
         {/* 类型标签 */}
         <span
           className="absolute top-2 left-2 text-xs px-1.5 py-0.5 rounded font-medium pointer-events-none z-10"
-          style={{ background: 'var(--gold)', color: 'black' }}
+          style={{ background: 'var(--gold)', color: 'var(--accent-foreground)' }}
         >
           {TYPE_LABELS[video.type] ?? video.type}
         </span>

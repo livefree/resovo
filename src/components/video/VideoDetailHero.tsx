@@ -59,8 +59,8 @@ export function VideoDetailHero({ video }: VideoDetailHeroProps) {
         {/* 封面图与主操作区 (左侧) */}
         <div className="shrink-0 flex flex-col gap-6 w-[200px] md:w-[280px] mx-auto md:mx-0">
           <div
-            className="w-full rounded-2xl overflow-hidden shadow-2xl border border-white/10"
-            style={{ aspectRatio: '2/3' }}
+            className="w-full rounded-2xl overflow-hidden shadow-2xl border"
+            style={{ aspectRatio: '2/3', borderColor: 'color-mix(in srgb, var(--foreground) 10%, transparent)' }}
           >
             {video.coverUrl ? (
               <Image
@@ -84,7 +84,7 @@ export function VideoDetailHero({ video }: VideoDetailHeroProps) {
           <Link
             href={watchHref}
             className="w-full flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-base font-bold transition-all shadow-[0_0_20px_rgba(232,184,75,0.3)] hover:shadow-[0_0_30px_rgba(232,184,75,0.6)] hover:scale-105"
-            style={{ background: 'var(--accent)', color: 'black' }}
+            style={{ background: 'var(--accent)', color: 'var(--accent-foreground)' }}
             data-testid="detail-watch-btn"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
@@ -116,7 +116,7 @@ export function VideoDetailHero({ video }: VideoDetailHeroProps) {
           <div className="flex flex-wrap items-center gap-3">
             <span
               className="px-3 py-1 rounded-md text-sm font-bold tracking-wide"
-              style={{ background: 'var(--accent)', color: 'black' }}
+              style={{ background: 'var(--accent)', color: 'var(--accent-foreground)' }}
             >
               {TYPE_LABELS[video.type] ?? video.type}
             </span>
