@@ -3823,3 +3823,18 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 **根因**：`VideoService.pendingReviewList` 返回 `{ data, total, page, limit }`，但两个前端组件类型声明和字段读取均使用 `rows`，导致列表数据始终为 `undefined`，界面显示"暂无待审核视频"。
 
 **测试覆盖**：668/668 通过；typecheck + lint 通过
+
+---
+
+## CHG-259 — SubmissionTable → ModernDataTable（服务端排序 + PaginationV2）
+- **完成时间**：2026-03-26 14:50
+- **修改文件**：
+  - `src/components/admin/content/useSubmissionTableColumns.tsx`（新建）— 投稿审核表格列定义，含 AdminDropdown 行操作
+  - `src/components/admin/content/SubmissionTable.tsx`（重写）— 迁移至 ModernDataTable + PaginationV2 + 服务端排序，移除本地排序逻辑
+  - `tests/unit/components/admin/content/SubmissionTable.test.tsx`（更新）— 5 个用例覆盖：行渲染 / 默认排序参数 / 排序触发 API 重取 / 列显示切换 / 空状态
+- **验收结论**：
+  - 规范 1（ModernDataTable 基座）：PASS
+  - 规范 3+4（AdminDropdown + portal）：PASS
+  - 规范 6 服务端排序：PASS
+  - 规范 6 PaginationV2 分页：PASS
+- **测试覆盖**：670/670 通过；typecheck + lint 通过

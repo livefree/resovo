@@ -3232,26 +3232,26 @@
 ---
 
 ## SEQ-20260326-31 — 后台表格统一：内容审核表格迁移
-- **状态**：⬜ 待开始
+- **状态**：🔄 执行中
 - **创建时间**：2026-03-26 11:00
-- **最后更新时间**：2026-03-26 11:00
+- **最后更新时间**：2026-03-26 14:50
 - **目标**：将 SubmissionTable + SubtitleTable 从 AdminTableFrame 迁移至 ModernDataTable，补全服务端排序和 PaginationV2
 - **依赖**：CHG-258 已完成
 
 ### 任务列表
 
 #### CHG-259 — SubmissionTable → ModernDataTable（服务端排序 + PaginationV2）
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-26 11:00
 - **计划开始**：—
-- **实际开始**：—
-- **完成时间**：—
+- **实际开始**：2026-03-26 14:30
+- **完成时间**：2026-03-26 14:50
 - **文件范围**：
   - `src/components/admin/content/SubmissionTable.tsx`
   - `src/components/admin/content/useSubmissionTableColumns.tsx`（新建）
 - **变更内容**：AdminTableFrame + 手动 thead/tbody → ModernDataTable；列定义提取；行操作改 AdminDropdown；服务端排序；Pagination → PaginationV2
 - **验收要点**：规范 1 ✅、规范 3/4 ✅、规范 6（排序/分页）✅；测试通过
-- **完成备注**：_（AI 填写）_
+- **完成备注**：新建 useSubmissionTableColumns.tsx；SubmissionTable.tsx 完整重写为 ModernDataTable + PaginationV2 + 服务端排序；旧本地排序逻辑 + AdminTableFrame 全部移除；测试更新为 5 个用例覆盖渲染/排序参数/列显示/空状态；670/670 全部通过。对照规范：规范 1 PASS / 规范 3+4 PASS / 规范 6 排序 PASS / 规范 6 分页 PASS
 
 #### CHG-260 — SubtitleTable → ModernDataTable（服务端排序 + PaginationV2）
 - **状态**：⬜ 待开始

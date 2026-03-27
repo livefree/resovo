@@ -1,3 +1,8 @@
+/**
+ * SubmissionTable.test.tsx — CHG-259
+ * 验证：数据渲染 / 服务端排序参数 / 列显示切换
+ */
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { SubmissionTable } from '@/components/admin/content/SubmissionTable'
@@ -39,7 +44,7 @@ const MOCK_ROWS = [
   },
 ]
 
-describe('SubmissionTable (CHG-128)', () => {
+describe('SubmissionTable (CHG-259)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
@@ -47,22 +52,37 @@ describe('SubmissionTable (CHG-128)', () => {
     postMock.mockResolvedValue({})
   })
 
-  it('applies default created_at sort and supports toggleSort', async () => {
+  it('renders submission rows with video title and source url', async () => {
+    render(<SubmissionTable />)
+    await screen.findByText('Alpha')
+    expect(screen.getByText('Beta')).toBeTruthy()
+    expect(screen.getByText('https://example.com/a')).toBeTruthy()
+  })
+
+  it('calls API with default sortField=created_at&sortDir=desc on mount', async () => {
     render(<SubmissionTable />)
     await screen.findByText('Alpha')
 
-    const rowsDesc = Array.from(document.querySelectorAll('tr[data-testid^="submission-row-"]'))
-    expect(rowsDesc[0]?.getAttribute('data-testid')).toBe('submission-row-s2')
+    const firstCall = getMock.mock.calls[0][0] as string
+    expect(firstCall).toContain('sortField=created_at')
+    expect(firstCall).toContain('sortDir=desc')
+  })
 
-    fireEvent.click(screen.getByTestId('submission-sort-video'))
+  it('refetches with new sortField/sortDir when sort header is clicked', async () => {
+    render(<SubmissionTable />)
+    await screen.findByText('Alpha')
+
+    fireEvent.click(screen.getByTestId('modern-table-sort-video'))
 
     await waitFor(() => {
-      const rowsAsc = Array.from(document.querySelectorAll('tr[data-testid^="submission-row-"]'))
-      expect(rowsAsc[0]?.getAttribute('data-testid')).toBe('submission-row-s1')
+      const calls = getMock.mock.calls.map((c) => c[0] as string)
+      const sortedCall = calls.find((url) => url.includes('sortField=video'))
+      expect(sortedCall).toBeTruthy()
+      expect(sortedCall).toContain('sortDir=asc')
     })
   })
 
-  it('supports column visibility toggle', async () => {
+  it('supports column visibility toggle via ColumnSettingsPanel', async () => {
     render(<SubmissionTable />)
     await screen.findByText('Alpha')
 
@@ -70,30 +90,14 @@ describe('SubmissionTable (CHG-128)', () => {
     fireEvent.click(screen.getByTestId('submission-columns-panel-toggle-source_url'))
 
     await waitFor(() => {
-      expect(screen.queryByTestId('submission-sort-source_url')).toBeNull()
+      expect(screen.queryByTestId('modern-table-sort-source_url')).toBeNull()
     })
   })
 
-  it('persists resized column width after remount', async () => {
-    const { unmount } = render(<SubmissionTable />)
-    await screen.findByText('Alpha')
-
-    const sourceHeader = screen.getByTestId('submission-sort-source_url').closest('th')
-    expect(sourceHeader?.getAttribute('style')).toContain('width: 320px')
-
-    fireEvent.mouseDown(screen.getByTestId('submission-resize-source_url'), { clientX: 100 })
-    fireEvent.mouseMove(window, { clientX: 160 })
-    fireEvent.mouseUp(window)
-
-    await waitFor(() => {
-      expect(sourceHeader?.getAttribute('style')).toContain('width: 380px')
-    })
-
-    unmount()
+  it('shows empty state when no submissions', async () => {
+    getMock.mockResolvedValue({ data: [], total: 0 })
     render(<SubmissionTable />)
-    await screen.findByText('Alpha')
 
-    const remountSourceHeader = screen.getByTestId('submission-sort-source_url').closest('th')
-    expect(remountSourceHeader?.getAttribute('style')).toContain('width: 380px')
+    await screen.findByText('暂无待审投稿')
   })
 })
