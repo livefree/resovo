@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
+import { getVideoDetailHref } from '@/lib/video-route'
 import type { VideoCard, ApiListResponse } from '@/types'
 
 export function HeroBanner() {
@@ -97,7 +98,7 @@ export function HeroBanner() {
             </Link>
             
             <Link
-              href={`/${featured.type}/${featured.slug ? featured.slug + '-' + featured.shortId : featured.shortId}`}
+              href={getVideoDetailHref(featured)}
               className="inline-flex items-center justify-center px-8 py-3.5 rounded-full font-bold text-white bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-colors duration-300"
             >
               详情信息

@@ -6,6 +6,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
+import { getVideoDetailHref } from '@/lib/video-route'
 import type { VideoCard as VideoCardType } from '@/types'
 
 interface VideoCardWideProps {
@@ -19,9 +20,7 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 export function VideoCardWide({ video, className }: VideoCardWideProps) {
-  const detailHref = video.slug
-    ? `/${video.type}/${video.slug}-${video.shortId}`
-    : `/${video.type}/${video.shortId}`
+  const detailHref = getVideoDetailHref(video)
 
   const watchHref = `/watch/${video.slug ? video.slug + '-' + video.shortId : video.shortId}?ep=1`
 

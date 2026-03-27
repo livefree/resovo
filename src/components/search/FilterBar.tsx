@@ -18,6 +18,13 @@ const TYPE_OPTIONS = [
   { value: 'series',  label: '剧集' },
   { value: 'anime',   label: '动漫' },
   { value: 'variety', label: '综艺' },
+  { value: 'documentary', label: '纪录片' },
+  { value: 'short', label: '短剧' },
+  { value: 'sports', label: '体育' },
+  { value: 'music', label: '音乐' },
+  { value: 'news', label: '新闻' },
+  { value: 'kids', label: '少儿' },
+  { value: 'other', label: '其他' },
 ]
 
 const SORT_OPTIONS = [

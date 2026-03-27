@@ -25,13 +25,20 @@ const MAIN_CATEGORIES = [
 const MORE_CATEGORIES = [
   { key: 'all',     labelKey: 'nav.catAll',     href: '/browse',              typeParam: '' },
   { key: 'variety', labelKey: 'nav.catVariety', href: '/browse?type=variety', typeParam: 'variety' },
+  { key: 'documentary', labelKey: 'nav.catDocumentary', href: '/browse?type=documentary', typeParam: 'documentary' },
+  { key: 'short', labelKey: 'nav.catShort', href: '/browse?type=short', typeParam: 'short' },
+  { key: 'sports', labelKey: 'nav.catSports', href: '/browse?type=sports', typeParam: 'sports' },
+  { key: 'music', labelKey: 'nav.catMusic', href: '/browse?type=music', typeParam: 'music' },
+  { key: 'news', labelKey: 'nav.catNews', href: '/browse?type=news', typeParam: 'news' },
+  { key: 'kids', labelKey: 'nav.catKids', href: '/browse?type=kids', typeParam: 'kids' },
+  { key: 'other', labelKey: 'nav.catOther', href: '/browse?type=other', typeParam: 'other' },
 ]
 
 // ── 语言选项 ──────────────────────────────────────────────────────
 
 const LOCALES = [
-  { code: 'en',    label: 'EN' },
-  { code: 'zh-CN', label: '中' },
+  { code: 'en', label: 'English', short: 'EN' },
+  { code: 'zh-CN', label: '中文', short: '中' },
 ]
 
 // ── 组件 ──────────────────────────────────────────────────────────
@@ -44,9 +51,15 @@ export function Nav() {
   const { user, logout } = useAuthStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [isMoreOpen, setIsMoreOpen] = useState(false)
+  const [isLocaleOpen, setIsLocaleOpen] = useState(false)
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const moreMenuRef = useRef<HTMLDivElement | null>(null)
   const moreTriggerRef = useRef<HTMLButtonElement | null>(null)
   const firstMoreItemRef = useRef<HTMLAnchorElement | null>(null)
+  const localeMenuRef = useRef<HTMLDivElement | null>(null)
+  const localeTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const userMenuRef = useRef<HTMLDivElement | null>(null)
+  const userTriggerRef = useRef<HTMLButtonElement | null>(null)
 
   // 当前 locale（从 pathname 中提取，如 /en/browse → en）
   const currentLocale = pathname.split('/')[1] ?? 'en'
@@ -55,19 +68,28 @@ export function Nav() {
   const currentType = pathname.includes('/browse') ? (searchParams.get('type') ?? '') : null
 
   useEffect(() => {
-    if (!isMoreOpen) return
+    if (!isMoreOpen && !isLocaleOpen && !isUserMenuOpen) return
 
     function handleClickOutside(event: MouseEvent) {
       const target = event.target as Node
-      if (moreMenuRef.current?.contains(target)) return
-      if (moreTriggerRef.current?.contains(target)) return
+      if (
+        moreMenuRef.current?.contains(target) ||
+        moreTriggerRef.current?.contains(target) ||
+        localeMenuRef.current?.contains(target) ||
+        localeTriggerRef.current?.contains(target) ||
+        userMenuRef.current?.contains(target) ||
+        userTriggerRef.current?.contains(target)
+      ) return
       setIsMoreOpen(false)
+      setIsLocaleOpen(false)
+      setIsUserMenuOpen(false)
     }
 
     function handleEsc(event: KeyboardEvent) {
       if (event.key !== 'Escape') return
       setIsMoreOpen(false)
-      moreTriggerRef.current?.focus()
+      setIsLocaleOpen(false)
+      setIsUserMenuOpen(false)
     }
 
     document.addEventListener('mousedown', handleClickOutside)
@@ -76,13 +98,16 @@ export function Nav() {
       document.removeEventListener('mousedown', handleClickOutside)
       document.removeEventListener('keydown', handleEsc)
     }
-  }, [isMoreOpen])
+  }, [isLocaleOpen, isMoreOpen, isUserMenuOpen])
 
   function switchLocale(locale: string) {
     // 替换路径中的 locale 段
     const segments = pathname.split('/')
     segments[1] = locale
-    router.push(segments.join('/'))
+    const nextPath = segments.join('/')
+    const query = searchParams.toString()
+    router.push(query ? `${nextPath}?${query}` : nextPath)
+    setIsLocaleOpen(false)
   }
 
   async function handleLogout() {
@@ -92,6 +117,7 @@ export function Nav() {
       // 忽略 API 错误，仍然清除本地状态
     }
     logout()
+    setIsUserMenuOpen(false)
   }
 
   function handleSearch(e: React.FormEvent) {
@@ -101,6 +127,8 @@ export function Nav() {
   }
 
   function openMoreMenuAndFocusFirst() {
+    setIsLocaleOpen(false)
+    setIsUserMenuOpen(false)
     setIsMoreOpen(true)
     requestAnimationFrame(() => firstMoreItemRef.current?.focus())
   }
@@ -252,64 +280,132 @@ export function Nav() {
           {/* 主题切换 */}
           <ThemeToggle />
 
-          {/* 语言切换 */}
-          <div className="flex items-center rounded-md overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
-            {LOCALES.map((loc) => (
-              <button
-                key={loc.code}
-                onClick={() => switchLocale(loc.code)}
-                data-testid={`lang-${loc.code}`}
-                className={cn(
-                  'px-2.5 py-1 text-xs transition-colors',
-                  currentLocale === loc.code
-                    ? 'bg-[var(--secondary)] font-semibold text-[var(--foreground)]'
-                    : 'text-[var(--muted-foreground)] hover:bg-[var(--secondary)]'
-                )}
-              >
-                {loc.label}
-              </button>
-            ))}
+          {/* 语言切换（紧凑图标 + 下拉） */}
+          <div className="relative">
+            <button
+              ref={localeTriggerRef}
+              type="button"
+              data-testid="nav-locale-trigger"
+              aria-haspopup="menu"
+              aria-expanded={isLocaleOpen}
+              aria-label={t('nav.language')}
+              onClick={() => {
+                setIsLocaleOpen((prev) => !prev)
+                setIsMoreOpen(false)
+                setIsUserMenuOpen(false)
+              }}
+              className="h-8 w-8 rounded-md border inline-flex items-center justify-center text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
+              style={{ borderColor: 'var(--border)' }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M2 12h20"></path>
+                <path d="M12 2a15.3 15.3 0 0 1 0 20"></path>
+                <path d="M12 2a15.3 15.3 0 0 0 0 20"></path>
+              </svg>
+            </button>
+            {isLocaleOpen ? (
+              <div className="absolute right-0 top-full pt-2 z-50">
+                <div
+                  ref={localeMenuRef}
+                  role="menu"
+                  data-testid="nav-locale-menu"
+                  className="min-w-[140px] rounded-lg border shadow-xl p-1.5 bg-[var(--card)]"
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  {LOCALES.map((loc) => (
+                    <button
+                      key={loc.code}
+                      onClick={() => switchLocale(loc.code)}
+                      data-testid={`lang-${loc.code}`}
+                      className={cn(
+                        'w-full text-left px-3 py-2 rounded-md text-sm transition-colors',
+                        currentLocale === loc.code
+                          ? 'bg-[var(--secondary)] text-[var(--foreground)] font-semibold'
+                          : 'text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)]'
+                      )}
+                    >
+                      {loc.short} · {loc.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
 
-          {/* 用户状态 */}
+          {/* 用户入口（紧凑图标） */}
           {user ? (
-            <div className="flex items-center gap-2">
-              {/* 管理后台入口（admin / moderator 专属） */}
-              {isAdminOrModerator && (
-                <Link
-                  href="/admin"
-                  data-testid="nav-admin"
-                  className="text-sm px-3 py-1.5 rounded-md font-medium transition-colors hover:opacity-80"
-                  style={{ color: 'var(--gold)' }}
-                >
-                  {t('nav.admin')}
-                </Link>
-              )}
-
-              <span
-                data-testid="nav-username"
-                className="text-sm font-medium"
-                style={{ color: 'var(--foreground)' }}
-              >
-                {user.username}
-              </span>
+            <div className="relative">
               <button
-                onClick={handleLogout}
-                data-testid="nav-logout"
-                className="text-sm px-3 py-1.5 rounded-md transition-colors hover:bg-[var(--secondary)]"
-                style={{ color: 'var(--muted-foreground)' }}
+                ref={userTriggerRef}
+                type="button"
+                data-testid="nav-user-trigger"
+                aria-haspopup="menu"
+                aria-expanded={isUserMenuOpen}
+                aria-label={t('nav.account')}
+                onClick={() => {
+                  setIsUserMenuOpen((prev) => !prev)
+                  setIsMoreOpen(false)
+                  setIsLocaleOpen(false)
+                }}
+                className="h-8 w-8 rounded-full border inline-flex items-center justify-center text-xs font-bold bg-[var(--secondary)] text-[var(--foreground)] hover:opacity-90 transition-opacity"
+                style={{ borderColor: 'var(--border)' }}
               >
-                {t('nav.logout')}
+                {(user.username?.[0] ?? 'U').toUpperCase()}
               </button>
+              {isUserMenuOpen ? (
+                <div className="absolute right-0 top-full pt-2 z-50">
+                  <div
+                    ref={userMenuRef}
+                    role="menu"
+                    data-testid="nav-user-menu"
+                    className="min-w-[180px] rounded-lg border shadow-xl p-1.5 bg-[var(--card)]"
+                    style={{ borderColor: 'var(--border)' }}
+                  >
+                    <div className="px-3 py-2 text-xs border-b" style={{ borderColor: 'var(--border)', color: 'var(--muted-foreground)' }}>
+                      @{user.username}
+                    </div>
+                    <Link
+                      href="/profile"
+                      data-testid="nav-profile"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="block px-3 py-2 rounded-md text-sm text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)] transition-colors"
+                    >
+                      {t('nav.profile')}
+                    </Link>
+                    {isAdminOrModerator && (
+                      <Link
+                        href="/admin"
+                        data-testid="nav-admin"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="block px-3 py-2 rounded-md text-sm text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)] transition-colors"
+                      >
+                        {t('nav.admin')}
+                      </Link>
+                    )}
+                    <button
+                      onClick={handleLogout}
+                      data-testid="nav-logout"
+                      className="w-full text-left px-3 py-2 rounded-md text-sm text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)] transition-colors"
+                    >
+                      {t('nav.logout')}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : (
             <Link
               href="/auth/login"
               data-testid="nav-login"
-              className="text-sm px-3 py-1.5 rounded-md font-medium transition-colors"
-              style={{ background: 'var(--gold)', color: 'black' }}
+              aria-label={t('nav.signIn')}
+              className="h-8 w-8 rounded-md border inline-flex items-center justify-center text-[var(--foreground)] bg-[var(--accent)] transition-opacity hover:opacity-90"
+              style={{ borderColor: 'color-mix(in srgb, var(--accent) 60%, var(--border))' }}
             >
-              {t('nav.signIn')}
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
             </Link>
           )}
         </div>

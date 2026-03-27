@@ -41,6 +41,8 @@
   "nav": {
     "home": "首页",
     "more": "更多",
+    "language": "语言",
+    "account": "账户",
     "logout": "退出登录",
     "profile": "个人主页",
     "signIn": "登录",
@@ -49,6 +51,13 @@
     "catSeries": "剧集",
     "catAnime": "动漫",
     "catVariety": "综艺",
+    "catDocumentary": "纪录片",
+    "catShort": "短剧",
+    "catSports": "体育",
+    "catMusic": "音乐",
+    "catNews": "新闻",
+    "catKids": "少儿",
+    "catOther": "其他",
     "search": "搜索...",
     "admin": "管理后台"
   },

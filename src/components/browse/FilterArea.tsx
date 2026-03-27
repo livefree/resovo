@@ -24,6 +24,13 @@ const FILTER_ROWS = [
       { value: 'series',  labelKey: 'nav.catSeries' },
       { value: 'anime',   labelKey: 'nav.catAnime' },
       { value: 'variety', labelKey: 'nav.catVariety' },
+      { value: 'documentary', labelKey: 'nav.catDocumentary' },
+      { value: 'short', labelKey: 'nav.catShort' },
+      { value: 'sports', labelKey: 'nav.catSports' },
+      { value: 'music', labelKey: 'nav.catMusic' },
+      { value: 'news', labelKey: 'nav.catNews' },
+      { value: 'kids', labelKey: 'nav.catKids' },
+      { value: 'other', labelKey: 'nav.catOther' },
     ],
   },
   {
