@@ -4,8 +4,9 @@
 
 import type { Dispatch, SetStateAction } from 'react'
 import type { FilterState, ColumnId, SortDir, SortField } from '@/components/admin/system/crawler-site/tableState'
-import { DEFAULT_FILTERS } from '@/components/admin/system/crawler-site/tableState'
+import { DEFAULT_COLUMNS, DEFAULT_FILTERS } from '@/components/admin/system/crawler-site/tableState'
 import { ColumnMenu } from '@/components/admin/system/crawler-site/components/ColumnMenu'
+import { ColumnSettingsPanel } from '@/components/admin/shared/table/ColumnSettingsPanel'
 
 export interface WeightPreset {
   high: number
@@ -120,22 +121,24 @@ export function HeaderCell({
             title="列设置"
           >列设置</button>
           {showColumnsPanel ? (
-            <div className="absolute right-0 mt-2 w-56 rounded-md border border-[var(--border)] bg-[var(--bg2)] p-2 shadow-lg">
-              <p className="mb-2 text-xs text-[var(--muted)]">勾选显示列（名称/管理操作为必显）</p>
-              <div className="space-y-1">
-                {columnMeta.map((item) => (
-                  <label key={item.id} className="flex items-center gap-2 rounded px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg3)]">
-                    <input
-                      type="checkbox"
-                      checked={columns[item.id]}
-                      disabled={requiredColumns.includes(item.id)}
-                      onChange={() => toggleColumn(item.id)}
-                      className="accent-[var(--accent)]"
-                    />
-                    <span>{item.label}</span>
-                  </label>
-                ))}
-              </div>
+            <div className="absolute right-0 mt-2 w-56">
+              <ColumnSettingsPanel
+                data-testid="crawler-columns-panel"
+                columns={columnMeta.map((item) => ({
+                  id: item.id,
+                  label: item.label,
+                  visible: columns[item.id],
+                  required: requiredColumns.includes(item.id),
+                }))}
+                onToggle={(id) => toggleColumn(id as ColumnId)}
+                onReset={() => {
+                  for (const item of columnMeta) {
+                    if (!requiredColumns.includes(item.id) && columns[item.id] !== DEFAULT_COLUMNS[item.id]) {
+                      toggleColumn(item.id)
+                    }
+                  }
+                }}
+              />
             </div>
           ) : null}
         </div>
