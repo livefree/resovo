@@ -5,6 +5,7 @@
 
 import type { Metadata } from 'next'
 import { Nav } from '@/components/layout/Nav'
+import { Footer } from '@/components/layout/Footer'
 import { VideoDetailClient } from '@/components/video/VideoDetailClient'
 import { fetchVideoMeta } from '@/lib/video-detail'
 
@@ -28,9 +29,12 @@ export default async function SeriesDetailPage({ params }: Props) {
   const { slug } = await params
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--background)' }}>
+    <div className="min-h-screen flex flex-col" style={{ background: 'var(--background)' }}>
       <Nav />
-      <VideoDetailClient slug={slug} showEpisodes />
+      <main className="flex-1">
+        <VideoDetailClient slug={slug} showEpisodes />
+      </main>
+      <Footer />
     </div>
   )
 }

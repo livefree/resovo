@@ -3434,3 +3434,21 @@
 - **变更内容**：改为按钮触发下拉，支持点击外部关闭、ESC 关闭、Enter/Space/ArrowDown 打开并焦点进入菜单；补充对应单测。
 - **依赖**：CHG-268 已完成
 - **完成备注**：`Nav` 增加 `isMoreOpen` 受控状态与 menu/trigger refs；实现 document 级 `mousedown` click-away 与 `Escape` 关闭；trigger 增加 `aria-expanded`/`aria-haspopup` 和键盘打开逻辑；菜单项点击后自动关闭。新增 `NavDropdown.test.tsx` 4 用例覆盖点击打开、点击外部关闭、ESC 关闭、Enter 打开并焦点进入首项。`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；单测 4/4 通过。
+
+## CHG-270 — Footer 覆盖范围收口（详情页 + 播放页）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-27 05:30
+- **实际开始**：2026-03-27 05:30
+- **完成时间**：2026-03-27 05:12
+- **文件范围**：
+  - `src/components/layout/Footer.tsx`
+  - `src/app/[locale]/movie/[slug]/page.tsx`
+  - `src/app/[locale]/series/[slug]/page.tsx`
+  - `src/app/[locale]/anime/[slug]/page.tsx`
+  - `src/app/[locale]/variety/[slug]/page.tsx`
+  - `src/app/[locale]/others/[slug]/page.tsx`
+  - `src/app/[locale]/watch/[slug]/page.tsx`
+- **变更原因**：Footer 目前仅接入 Home/Browse/Search，public 内容页覆盖不完整。
+- **变更内容**：将 Footer 接入各类型详情页与播放页；页面容器统一为 `min-h-screen flex flex-col`，主体区 `flex-1`，确保页脚位于底部且不遮挡内容。
+- **依赖**：CHG-269 已完成
+- **完成备注**：Footer 已接入 movie/series/anime/variety/others 详情页与 watch 播放页；这些页面统一改为 `min-h-screen flex flex-col` + 主体 `flex-1`。Auth 页保持沉浸式单卡布局，暂不接入 Footer（产品展示策略例外）。`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；`VideoDetailClient.test.tsx` 7/7 通过。

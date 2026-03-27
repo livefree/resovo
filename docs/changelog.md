@@ -3907,3 +3907,18 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/layout/NavDropdown.test.tsx`（新建）— 4 个用例覆盖点击打开、点击外部关闭、ESC 关闭、Enter 键打开并焦点进入首项
 - **验收结论**：导航“更多”下拉交互与可访问性行为达到统一规范，桌面端与键盘操作路径一致
 - **测试覆盖**：`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；`NavDropdown.test.tsx` 4/4 通过
+
+---
+
+## CHG-270 — Footer 覆盖范围收口（详情页 + 播放页）
+- **完成时间**：2026-03-27 05:12
+- **修改文件**：
+  - `src/components/layout/Footer.tsx`（新建）— 统一页脚组件（Help/Privacy/DMCA/About）
+  - `src/app/[locale]/movie/[slug]/page.tsx`（更新）— 接入 Footer，页面容器改为 `min-h-screen flex flex-col`
+  - `src/app/[locale]/series/[slug]/page.tsx`（更新）— 接入 Footer，页面容器改为 `min-h-screen flex flex-col`
+  - `src/app/[locale]/anime/[slug]/page.tsx`（更新）— 接入 Footer，页面容器改为 `min-h-screen flex flex-col`
+  - `src/app/[locale]/variety/[slug]/page.tsx`（更新）— 接入 Footer，页面容器改为 `min-h-screen flex flex-col`
+  - `src/app/[locale]/others/[slug]/page.tsx`（更新）— 接入 Footer，页面容器改为 `min-h-screen flex flex-col`
+  - `src/app/[locale]/watch/[slug]/page.tsx`（更新）— 接入 Footer，播放器区域包裹在 `main.flex-1`
+- **验收结论**：public 内容页（详情 + 播放）Footer 覆盖完成，页面底部结构一致；Auth 页保留沉浸式单卡布局作为例外
+- **测试覆盖**：`npx tsc --noEmit --incremental false` 通过；`npx eslint`（改动文件）通过；`VideoDetailClient.test.tsx` 7/7 通过
