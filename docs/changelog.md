@@ -3685,3 +3685,20 @@ VideoTable actions cell 由直接 button 改为 AdminDropdown，items=[{编辑}]
 
 ### 测试覆盖
 - typecheck + lint + 658/658 单元测试通过
+
+---
+
+## CHG-252 — VideoTable 接入 ColumnSettingsPanel
+
+- **完成时间**：2026-03-26 22:40
+- **序列**：SEQ-20260326-27
+
+### 修改文件
+- `src/components/admin/videos/VideoTable.tsx`
+- `tests/unit/components/admin/videos/VideoTable.test.tsx`
+
+### 变更说明
+VideoTable 30 行 inline 列设置替换为 `<ColumnSettingsPanel>`；移除已无用的 `buildColumnsToggleId` 函数；更新测试 testid（`video-column-toggle-*` → `video-columns-panel-toggle-*`）。
+
+### 测试覆盖
+- typecheck + lint + 658/658 单元测试通过
