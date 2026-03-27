@@ -2900,3 +2900,44 @@
    - **文件范围**：`src/components/admin/DataTable.tsx`、`AdminVideoList.tsx`、`AdminUserList.tsx`、`AdminSubtitleList.tsx`、`AdminSubmissionList.tsx`（均删除）
    - **变更内容**：全局引用扫描确认无使用后删除；清理 index.ts 旧导出
    - **验收要点**：`rg` 检查无残留引用；lint + tests 通过
+
+---
+
+## SEQ-20260326-23 — CHG-232~238 遗留问题修复（后台功能实际失效修复）
+- **状态**：🔄 执行中
+- **创建时间**：2026-03-26 18:00
+- **最后更新时间**：2026-03-26 18:00
+- **目标**：修复 CHG-232~238 中部分未真正生效的改动
+- **依赖**：SEQ-20260326-22 已完成
+
+### 任务列表（按执行顺序）
+
+1. CHG-239 — 补 videos.site_id 迁移 + 爬虫写入 siteId（P0）
+   - **状态**：✅ 已完成
+   - **创建时间**：2026-03-26 18:00
+   - **实际开始**：2026-03-26 18:05
+   - **完成时间**：2026-03-26 18:20
+   - **依赖**：无
+   - **文件范围**：`src/api/db/migrations/022_add_site_id_to_videos.sql`（新建）、`src/api/db/queries/videos.ts`、`src/api/services/CrawlerService.ts`
+   - **变更内容**：新增 migration 给 videos 加 `site_id UUID REFERENCES crawler_sites(id)`；insertCrawledVideo 写入 siteId；CrawlerService.upsertVideo 接收并传入 site db id
+
+2. CHG-240 — 修正 SORTABLE_MAP，前端仅允许后端白名单字段排序（P1）
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-26 18:00
+   - **依赖**：无
+   - **文件范围**：`src/components/admin/videos/useVideoTableColumns.tsx`
+   - **变更内容**：`source_health/visibility/review_status` 改为 `false`，与后端白名单对齐
+
+3. CHG-241 — actions 列设置 overflowVisible: true（P2）
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-26 18:00
+   - **依赖**：无
+   - **文件范围**：`src/components/admin/videos/useVideoTableColumns.tsx`
+   - **变更内容**：actions 列定义添加 `overflowVisible: true`
+
+4. CHG-242 — VideoTable 接入 PaginationV2（P2）
+   - **状态**：⬜ 待开始
+   - **创建时间**：2026-03-26 18:00
+   - **依赖**：无
+   - **文件范围**：`src/components/admin/videos/VideoTable.tsx`
+   - **变更内容**：替换 Pagination → PaginationV2；新增 pageSize state；pageSize 传入 API 请求
