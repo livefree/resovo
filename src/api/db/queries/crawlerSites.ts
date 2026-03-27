@@ -14,7 +14,6 @@ import type {
 } from '@/types'
 
 interface DbRow {
-  id: string
   key: string
   name: string
   api_url: string
@@ -38,7 +37,6 @@ export function normalizeApiUrl(apiUrl: string): string {
 
 function rowToSite(row: DbRow): CrawlerSite {
   return {
-    id:              row.id,
     key:             row.key,
     name:            row.name,
     apiUrl:          row.api_url,

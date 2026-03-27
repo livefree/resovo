@@ -3512,19 +3512,6 @@
 
 ---
 
-## CHG-239 — 补 videos.site_id 迁移 + 爬虫写入 siteId（P0 修复）
-- **完成时间**：2026-03-26 18:20
-- **变更文件**：
-  - `src/api/db/migrations/022_add_site_id_to_videos.sql`（新建）— 给 videos 表加 `site_id UUID REFERENCES crawler_sites(id) ON DELETE SET NULL` + 索引
-  - `src/api/db/queries/videos.ts` — `CrawlerInsertInput` 新增 `siteId?: string | null`；INSERT 语句补写 `site_id` 为第 23 个参数
-  - `src/api/db/queries/crawlerSites.ts` — `DbRow` 和 `rowToSite` 加入 `id` 字段映射
-  - `src/types/system.types.ts` — `CrawlerSite` 接口加 `id: string`
-  - `src/api/services/CrawlerService.ts` — `CrawlerSource` 接口加 `dbId?: string`；`getEnabledSources` 映射 `s.id → dbId`；`upsertVideo` 新增 `siteId?` 参数并传给 `insertCrawledVideo`；crawl 循环传入 `source.dbId`
-- **根因**：`videos.site_id` 列在所有 22 个 migration 中均无定义，导致 `listAdminVideos`（site 筛选路径）和 `listPendingReviewVideos` 在运行时引发 "column v.site_id does not exist" SQL 错误
-- **测试**：typecheck + lint + 658/658 单元测试全部通过
-
----
-
 ## CHG-240 — 修正 SORTABLE_MAP（P1 修复）
 - **完成时间**：2026-03-26 18:25
 - **变更文件**：

@@ -2906,20 +2906,14 @@
 ## SEQ-20260326-23 — CHG-232~238 遗留问题修复（后台功能实际失效修复）
 - **状态**：✅ 已完成
 - **创建时间**：2026-03-26 18:00
-- **最后更新时间**：2026-03-26 18:35
+- **最后更新时间**：2026-03-26 19:35
 - **目标**：修复 CHG-232~238 中部分未真正生效的改动
 - **依赖**：SEQ-20260326-22 已完成
 
 ### 任务列表（按执行顺序）
 
-1. CHG-239 — 补 videos.site_id 迁移 + 爬虫写入 siteId（P0）
-   - **状态**：✅ 已完成
-   - **创建时间**：2026-03-26 18:00
-   - **实际开始**：2026-03-26 18:05
-   - **完成时间**：2026-03-26 18:20
-   - **依赖**：无
-   - **文件范围**：`src/api/db/migrations/022_add_site_id_to_videos.sql`（新建）、`src/api/db/queries/videos.ts`、`src/api/services/CrawlerService.ts`
-   - **变更内容**：新增 migration 给 videos 加 `site_id UUID REFERENCES crawler_sites(id)`；insertCrawledVideo 写入 siteId；CrawlerService.upsertVideo 接收并传入 site db id
+1. CHG-239 — ~~补 videos.site_id 迁移 + 爬虫写入 siteId（P0）~~ ⛔ 已通过 CHG-244 回滚
+   - **状态**：⛔ 已回滚（设计前提错误：`crawler_sites` 主键为 `key VARCHAR(100)`，非 `id UUID`）
 
 2. CHG-240 — 修正 SORTABLE_MAP，前端仅允许后端白名单字段排序（P1）
    - **状态**：✅ 已完成

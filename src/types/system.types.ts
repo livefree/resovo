@@ -94,8 +94,6 @@ export const DEFAULT_INGEST_POLICY: IngestPolicy = {
 }
 
 export interface CrawlerSite {
-  /** CHG-239: crawler_sites.id (UUID) */
-  id: string
   key: string
   name: string
   apiUrl: string

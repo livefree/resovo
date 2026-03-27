@@ -24,8 +24,6 @@ export interface CrawlerSource {
   format: 'xml' | 'json'
   /** CHG-203: 站点级采集策略，决定入库时的 review/visibility 状态 */
   ingestPolicy?: { allow_auto_publish: boolean }
-  /** CHG-239: crawler_sites.id，用于在 videos.site_id 写入溯源；env-based 降级时为 undefined */
-  dbId?: string
 }
 
 /** 从 CRAWLER_SOURCES 环境变量解析资源站配置（降级用） */
@@ -50,7 +48,6 @@ export async function getEnabledSources(db: Pool): Promise<CrawlerSource[]> {
       base:   s.apiUrl,
       format: s.format,
       ingestPolicy: { allow_auto_publish: s.ingestPolicy.allow_auto_publish },
-      dbId:   s.id,
     }))
   }
   return parseCrawlerSources(process.env.CRAWLER_SOURCES)
@@ -166,8 +163,7 @@ export class CrawlerService {
    */
   async upsertVideo(
     parsed: ReturnType<typeof parseVodItem>,
-    ingestPolicy?: { allow_auto_publish: boolean },
-    siteId?: string
+    ingestPolicy?: { allow_auto_publish: boolean }
   ): Promise<{ videoId: string; sourcesUpserted: number }> {
     const { video, sources } = parsed
 
@@ -228,7 +224,6 @@ export class CrawlerService {
         reviewStatus,
         visibilityStatus,
         metadataSource: 'crawler',
-        siteId: siteId ?? null,
       })
       videoId = inserted.id
     }
@@ -426,7 +421,7 @@ export class CrawlerService {
             throw new Error('TASK_CANCELLED')
           }
           try {
-            const { sourcesUpserted: s } = await this.upsertVideo(parsed, source.ingestPolicy, source.dbId)
+            const { sourcesUpserted: s } = await this.upsertVideo(parsed, source.ingestPolicy)
             videosUpserted++
             sourcesUpserted += s
             processed++
