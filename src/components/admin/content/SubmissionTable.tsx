@@ -124,48 +124,53 @@ export function SubmissionTable() {
         </div>
       )}
 
-      <div className="flex justify-end">
-        <button
-          type="button"
-          className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-          onClick={() => setShowColumnsPanel((prev) => !prev)}
-          data-testid="submission-columns-toggle"
-          aria-label="列设置"
-        >
-          列设置
-        </button>
-      </div>
+      {/* ⚙ 列设置按钮叠加在表格右上角，面板在表格外渲染（避免被 overflow-hidden 裁切） */}
+      <div className="relative">
+        <div className="absolute right-4 top-3 z-30">
+          <button
+            type="button"
+            className="rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+            onClick={() => setShowColumnsPanel((prev) => !prev)}
+            data-testid="submission-columns-toggle"
+            aria-label="列设置"
+            title="列设置"
+          >
+            ⚙
+          </button>
+          {showColumnsPanel ? (
+            <div className="absolute right-0 mt-1 w-52">
+              <ColumnSettingsPanel
+                data-testid="submission-columns-panel"
+                columns={columnsState.columns.map((col) => ({
+                  id: col.id,
+                  label: SUBMISSION_COLUMN_LABELS[col.id as SubmissionColumnId] ?? col.id,
+                  visible: col.visible,
+                }))}
+                onToggle={(id) => columnsState.toggleColumnVisibility(id)}
+                onReset={() => columnsState.resetColumnsMeta()}
+              />
+            </div>
+          ) : null}
+        </div>
 
-      {showColumnsPanel ? (
-        <ColumnSettingsPanel
-          data-testid="submission-columns-panel"
-          columns={columnsState.columns.map((col) => ({
-            id: col.id,
-            label: SUBMISSION_COLUMN_LABELS[col.id as SubmissionColumnId] ?? col.id,
-            visible: col.visible,
-          }))}
-          onToggle={(id) => columnsState.toggleColumnVisibility(id)}
-          onReset={() => columnsState.resetColumnsMeta()}
+        <ModernDataTable
+          columns={tableColumns}
+          rows={submissions}
+          sort={sort}
+          onSortChange={(nextSort) => {
+            sortState.setSort(nextSort.field, nextSort.direction === 'asc' ? 'asc' : 'desc')
+          }}
+          onColumnWidthChange={(columnId, nextWidth) => {
+            if (columnId in columnsState.columnsById) {
+              columnsState.setColumnWidth(columnId, nextWidth)
+            }
+          }}
+          loading={loading}
+          emptyText="暂无待审投稿"
+          scrollTestId="submission-table-scroll"
+          getRowId={(row) => row.id}
         />
-      ) : null}
-
-      <ModernDataTable
-        columns={tableColumns}
-        rows={submissions}
-        sort={sort}
-        onSortChange={(nextSort) => {
-          sortState.setSort(nextSort.field, nextSort.direction === 'asc' ? 'asc' : 'desc')
-        }}
-        onColumnWidthChange={(columnId, nextWidth) => {
-          if (columnId in columnsState.columnsById) {
-            columnsState.setColumnWidth(columnId, nextWidth)
-          }
-        }}
-        loading={loading}
-        emptyText="暂无待审投稿"
-        scrollTestId="submission-table-scroll"
-        getRowId={(row) => row.id}
-      />
+      </div>
 
       {total > 0 ? (
         <div className="mt-4">

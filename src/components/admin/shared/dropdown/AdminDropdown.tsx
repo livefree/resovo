@@ -45,12 +45,15 @@ export function AdminDropdown({
   const [isOpen, setIsOpen] = useState(false)
   const [pos, setPos] = useState<MenuPosition>({ top: 0, left: 0 })
   const triggerRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!isOpen) return
 
     function handleMouseDown(e: MouseEvent) {
       if (triggerRef.current && triggerRef.current.contains(e.target as Node)) return
+      // Don't close when clicking inside the portal menu — let click handler fire first
+      if (menuRef.current && menuRef.current.contains(e.target as Node)) return
       setIsOpen(false)
     }
 
@@ -75,6 +78,7 @@ export function AdminDropdown({
 
   const menu = isOpen ? (
     <div
+      ref={menuRef}
       role="menu"
       style={{
         position: 'absolute',

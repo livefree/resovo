@@ -100,7 +100,7 @@ describe('CrawlerSiteManager', () => {
     await screen.findByText('Alpha 源')
 
     fireEvent.click(screen.getByTestId('modern-table-sort-name'))
-    fireEvent.click(screen.getByText('列设置'))
+    fireEvent.click(screen.getByTestId('crawler-columns-toggle'))
     fireEvent.click(screen.getByLabelText('Key'))
 
     unmount()

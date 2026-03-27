@@ -6,7 +6,6 @@
 'use client'
 
 import { useMemo } from 'react'
-import { AdminDropdown } from '@/components/admin/shared/dropdown/AdminDropdown'
 import type { TableColumn } from '@/components/admin/shared/modern-table/types'
 import type { AdminColumnMeta, AdminResolvedColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
 import type { ReviewTarget } from '@/components/admin/content/ReviewModal'
@@ -137,25 +136,14 @@ export function useSubmissionTableColumns({
         enableResizing: false,
         overflowVisible: true,
         cell: ({ row }) => (
-          <AdminDropdown
-            data-testid={`submission-actions-${row.id}`}
-            align="left"
-            trigger={
-              <button
-                type="button"
-                className="rounded px-2 py-0.5 text-xs bg-[var(--bg3)] text-[var(--text)] hover:bg-[var(--bg2)]"
-              >
-                操作 ▾
-              </button>
-            }
-            items={[
-              {
-                key: 'review',
-                label: '审核',
-                onClick: () => setReviewTarget({ id: row.id, type: 'submission', title: row.video_title }),
-              },
-            ]}
-          />
+          <button
+            type="button"
+            onClick={() => setReviewTarget({ id: row.id, type: 'submission', title: row.video_title })}
+            className="rounded px-2 py-0.5 text-xs bg-[var(--accent)]/20 text-[var(--accent)] hover:bg-[var(--accent)]/40"
+            data-testid={`submission-review-btn-${row.id}`}
+          >
+            审核
+          </button>
         ),
       },
     ]

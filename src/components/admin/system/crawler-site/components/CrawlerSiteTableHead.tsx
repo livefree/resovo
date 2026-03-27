@@ -4,9 +4,8 @@
 
 import type { Dispatch, SetStateAction } from 'react'
 import type { FilterState, ColumnId, SortDir, SortField } from '@/components/admin/system/crawler-site/tableState'
-import { DEFAULT_COLUMNS, DEFAULT_FILTERS } from '@/components/admin/system/crawler-site/tableState'
+import { DEFAULT_FILTERS } from '@/components/admin/system/crawler-site/tableState'
 import { ColumnMenu } from '@/components/admin/system/crawler-site/components/ColumnMenu'
-import { ColumnSettingsPanel } from '@/components/admin/shared/table/ColumnSettingsPanel'
 
 export interface WeightPreset {
   high: number
@@ -111,37 +110,14 @@ export function HeaderCell({
       >⋮</button>
 
       {isLastColumn ? (
-        <div className="ml-auto relative">
-          <button
-            type="button"
-            onClick={() => setShowColumnsPanel((prev) => !prev)}
-            className="rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-            data-testid="crawler-columns-toggle"
-            aria-label="列设置"
-            title="列设置"
-          >列设置</button>
-          {showColumnsPanel ? (
-            <div className="absolute right-0 mt-2 w-56">
-              <ColumnSettingsPanel
-                data-testid="crawler-columns-panel"
-                columns={columnMeta.map((item) => ({
-                  id: item.id,
-                  label: item.label,
-                  visible: columns[item.id],
-                  required: requiredColumns.includes(item.id),
-                }))}
-                onToggle={(id) => toggleColumn(id as ColumnId)}
-                onReset={() => {
-                  for (const item of columnMeta) {
-                    if (!requiredColumns.includes(item.id) && columns[item.id] !== DEFAULT_COLUMNS[item.id]) {
-                      toggleColumn(item.id)
-                    }
-                  }
-                }}
-              />
-            </div>
-          ) : null}
-        </div>
+        <button
+          type="button"
+          onClick={() => setShowColumnsPanel((prev) => !prev)}
+          className="ml-auto rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+          data-testid="crawler-columns-toggle"
+          aria-label="列设置"
+          title="列设置"
+        >⚙</button>
       ) : null}
 
       {openMenuColumn === column.id ? (
