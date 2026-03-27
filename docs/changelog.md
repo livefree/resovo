@@ -3475,3 +3475,12 @@
 - **变更文件**：
   - `src/components/admin/videos/BatchPublishBar.tsx` — 将 `fixed bottom-0 left-0 right-0 z-50` 改为 `sticky bottom-0 z-10`，批量操作栏不再覆盖左侧导航
 - **测试**：typecheck + lint + 664/664 单元测试全部通过
+
+---
+
+## CHG-236 — ModernTableBody cell overflow 修复
+- **完成时间**：2026-03-26 17:28
+- **变更文件**：
+  - `src/components/admin/shared/modern-table/types.ts` — `TableColumn` 新增可选 `overflowVisible?: boolean`，文档注释说明用途
+  - `src/components/admin/shared/modern-table/ModernTableBody.tsx` — td className 根据 `column.overflowVisible` 切换 `overflow-visible` 或 `overflow-hidden text-ellipsis`
+- **测试**：typecheck + lint + 664/664 单元测试全部通过

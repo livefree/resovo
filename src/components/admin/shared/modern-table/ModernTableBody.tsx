@@ -81,7 +81,7 @@ export function ModernTableBody<T>({
           {columns.map((column) => (
             <td
               key={`${getRowId(row, rowIndex)}-${column.id}`}
-              className="h-12 whitespace-nowrap overflow-hidden text-ellipsis px-4 align-middle text-sm text-[var(--text)]"
+              className={`h-12 whitespace-nowrap px-4 align-middle text-sm text-[var(--text)] ${column.overflowVisible ? 'overflow-visible' : 'overflow-hidden text-ellipsis'}`}
               style={{ width: `${column.width}px`, minWidth: `${column.minWidth}px` }}
             >
               {renderCellValue(column, row, rowIndex)}

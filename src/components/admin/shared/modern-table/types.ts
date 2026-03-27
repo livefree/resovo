@@ -21,6 +21,8 @@ export interface TableColumn<T> {
   minWidth?: number
   enableResizing?: boolean
   enableSorting?: boolean
+  /** When true, cell uses overflow-visible so dropdown menus are not clipped */
+  overflowVisible?: boolean
   cell?: (props: TableCellContext<T>) => ReactNode
 }
 
