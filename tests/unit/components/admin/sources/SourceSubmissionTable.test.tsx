@@ -64,10 +64,9 @@ describe('SourceSubmissionTable (CHG-267)', () => {
     render(<SubmissionTable />)
     await screen.findByText('Alpha')
 
-    // Open panel, toggle off submitted_by, close panel, verify header gone
-    fireEvent.click(screen.getByTestId('source-submission-columns-toggle'))
-    fireEvent.click(screen.getByTestId('source-submission-columns-panel-toggle-submitted_by'))
-    fireEvent.click(screen.getByTestId('source-submission-columns-toggle')) // close panel
+    // Open settings panel, toggle off submitted_by, verify header gone
+    fireEvent.click(screen.getByTestId('source-submission-table-scroll-settings-btn'))
+    fireEvent.click(screen.getByTestId('source-submission-table-scroll-settings-content-visible-submitted_by'))
 
     await waitFor(() => {
       expect(screen.queryByText('提交者')).toBeNull()

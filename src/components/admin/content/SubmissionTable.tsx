@@ -9,11 +9,11 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { PaginationV2 } from '@/components/admin/PaginationV2'
 import { ReviewModal, type ReviewTarget } from '@/components/admin/content/ReviewModal'
-import { ColumnSettingsPanel } from '@/components/admin/shared/table/ColumnSettingsPanel'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import type { TableSortState } from '@/components/admin/shared/modern-table/types'
 import { useAdminTableColumns } from '@/components/admin/shared/table/useAdminTableColumns'
 import { useAdminTableSort } from '@/components/admin/shared/table/useAdminTableSort'
+import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import {
   useSubmissionTableColumns,
   SUBMISSION_COLUMN_LABELS,
@@ -23,6 +23,18 @@ import {
   type SubmissionRow,
   type SubmissionColumnId,
 } from './useSubmissionTableColumns'
+
+// 所有列 ID（useTableSettings 控制显/隐）
+const ALL_SUBMISSION_COLUMN_IDS = SUBMISSION_COLUMNS_META.map((col) => col.id as SubmissionColumnId)
+
+// useTableSettings 列描述（label + 默认可见/可排序）
+const SUBMISSION_SETTINGS_COLUMNS = SUBMISSION_COLUMNS_META.map((col) => ({
+  id: col.id,
+  label: SUBMISSION_COLUMN_LABELS[col.id as SubmissionColumnId] ?? col.id,
+  defaultVisible: col.visible ?? true,
+  defaultSortable: SUBMISSION_SORTABLE_MAP[col.id as SubmissionColumnId] ?? false,
+  required: col.id === 'actions',
+}))
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -34,8 +46,6 @@ export function SubmissionTable() {
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [reviewTarget, setReviewTarget] = useState<ReviewTarget | null>(null)
-  const [showColumnsPanel, setShowColumnsPanel] = useState(false)
-
   const columnsState = useAdminTableColumns({
     route: '/admin/content',
     tableId: 'submission-table',
@@ -50,24 +60,26 @@ export function SubmissionTable() {
     sortable: SUBMISSION_SORTABLE_MAP,
   })
 
-  const visibleColumnIds = useMemo(
-    () =>
-      columnsState.columns
-        .filter((col) => col.visible)
-        .map((col) => col.id as SubmissionColumnId),
-    [columnsState.columns],
-  )
+  const tableSettings = useTableSettings({
+    tableId: 'submission-table',
+    columns: SUBMISSION_SETTINGS_COLUMNS,
+  })
 
   const sort = useMemo<TableSortState | undefined>(() => {
     if (!sortState.sort) return undefined
     return { field: sortState.sort.field, direction: sortState.sort.dir }
   }, [sortState.sort])
 
-  const tableColumns = useSubmissionTableColumns({
-    visibleColumnIds,
+  const allTableColumns = useSubmissionTableColumns({
+    visibleColumnIds: ALL_SUBMISSION_COLUMN_IDS,
     columnsById: columnsState.columnsById,
     setReviewTarget,
   })
+
+  const tableColumns = useMemo(
+    () => tableSettings.applyToColumns(allTableColumns),
+    [tableSettings, allTableColumns],
+  )
 
   const fetchSubmissions = useCallback(async (pageVal: number, pageSizeVal: number) => {
     setLoading(true)
@@ -124,53 +136,28 @@ export function SubmissionTable() {
         </div>
       )}
 
-      {/* ⚙ 列设置按钮叠加在表格右上角，面板在表格外渲染（避免被 overflow-hidden 裁切） */}
-      <div className="relative">
-        <div className="absolute right-4 top-3 z-30">
-          <button
-            type="button"
-            className="rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-            onClick={() => setShowColumnsPanel((prev) => !prev)}
-            data-testid="submission-columns-toggle"
-            aria-label="列设置"
-            title="列设置"
-          >
-            ⚙
-          </button>
-          {showColumnsPanel ? (
-            <div className="absolute right-0 mt-1 w-52">
-              <ColumnSettingsPanel
-                data-testid="submission-columns-panel"
-                columns={columnsState.columns.map((col) => ({
-                  id: col.id,
-                  label: SUBMISSION_COLUMN_LABELS[col.id as SubmissionColumnId] ?? col.id,
-                  visible: col.visible,
-                }))}
-                onToggle={(id) => columnsState.toggleColumnVisibility(id)}
-                onReset={() => columnsState.resetColumnsMeta()}
-              />
-            </div>
-          ) : null}
-        </div>
-
-        <ModernDataTable
-          columns={tableColumns}
-          rows={submissions}
-          sort={sort}
-          onSortChange={(nextSort) => {
-            sortState.setSort(nextSort.field, nextSort.direction === 'asc' ? 'asc' : 'desc')
-          }}
-          onColumnWidthChange={(columnId, nextWidth) => {
-            if (columnId in columnsState.columnsById) {
-              columnsState.setColumnWidth(columnId, nextWidth)
-            }
-          }}
-          loading={loading}
-          emptyText="暂无待审投稿"
-          scrollTestId="submission-table-scroll"
-          getRowId={(row) => row.id}
-        />
-      </div>
+      <ModernDataTable
+        columns={tableColumns}
+        rows={submissions}
+        sort={sort}
+        onSortChange={(nextSort) => {
+          sortState.setSort(nextSort.field, nextSort.direction === 'asc' ? 'asc' : 'desc')
+        }}
+        onColumnWidthChange={(columnId, nextWidth) => {
+          if (columnId in columnsState.columnsById) {
+            columnsState.setColumnWidth(columnId, nextWidth)
+          }
+        }}
+        loading={loading}
+        emptyText="暂无待审投稿"
+        scrollTestId="submission-table-scroll"
+        getRowId={(row) => row.id}
+        settingsSlot={{
+          settingsColumns: tableSettings.orderedSettings,
+          onSettingsChange: tableSettings.updateSetting,
+          onSettingsReset: tableSettings.reset,
+        }}
+      />
 
       {total > 0 ? (
         <div className="mt-4">

@@ -4267,3 +4267,23 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/task-queue.md`（CHG-301 完成）
   - `docs/tasks.md`（空稳定态）
 - **测试覆盖**：typecheck 通过；lint 通过；unit tests 744 passed（1 pre-existing failure useAdminTableSort 与本次无关）
+
+---
+
+### CHG-302 — SubmissionTable(sources) 迁移到 useTableSettings + settingsSlot
+- **完成时间**：2026-03-28 14:34
+- **修改文件**：
+  - `src/components/admin/sources/SubmissionTable.tsx` — 移除 showColumnsPanel + ColumnSettingsPanel；buildColumns 简化（移除 visibleColumnIds 过滤参数）；引入 useTableSettings + applyToColumns + settingsSlot
+  - `tests/unit/components/admin/sources/SourceSubmissionTable.test.tsx` — 更新 testId
+  - `docs/task-queue.md`（CHG-302 完成）
+- **测试覆盖**：typecheck 通过；5/5 passed
+
+---
+
+### CHG-303 — SubmissionTable(content) 迁移到 useTableSettings + settingsSlot
+- **完成时间**：2026-03-28 14:36
+- **修改文件**：
+  - `src/components/admin/content/SubmissionTable.tsx` — 移除 showColumnsPanel + ColumnSettingsPanel；引入 useTableSettings + ALL_SUBMISSION_COLUMN_IDS + SUBMISSION_SETTINGS_COLUMNS；改用 settingsSlot
+  - `tests/unit/components/admin/content/SubmissionTable.test.tsx` — 更新 testId
+  - `docs/task-queue.md`（CHG-303 完成）
+- **测试覆盖**：typecheck 通过；5/5 passed

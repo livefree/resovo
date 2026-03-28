@@ -82,12 +82,12 @@ describe('SubmissionTable (CHG-259)', () => {
     })
   })
 
-  it('supports column visibility toggle via ColumnSettingsPanel', async () => {
+  it('supports column visibility toggle via TableSettingsTrigger', async () => {
     render(<SubmissionTable />)
     await screen.findByText('Alpha')
 
-    fireEvent.click(screen.getByTestId('submission-columns-toggle'))
-    fireEvent.click(screen.getByTestId('submission-columns-panel-toggle-source_url'))
+    fireEvent.click(screen.getByTestId('submission-table-scroll-settings-btn'))
+    fireEvent.click(screen.getByTestId('submission-table-scroll-settings-content-visible-source_url'))
 
     await waitFor(() => {
       expect(screen.queryByTestId('modern-table-sort-source_url')).toBeNull()

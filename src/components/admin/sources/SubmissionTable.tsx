@@ -1,6 +1,7 @@
 /**
  * SubmissionTable.tsx — Tab 2 用户纠错表格（CHG-229）
  * CHG-267: 补充 ⚙ 列设置入口 + PaginationV2 + AdminDropdown 行操作
+ * CHG-302: 迁移至 useTableSettings + settingsSlot
  */
 
 'use client'
@@ -9,9 +10,9 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { PaginationV2 } from '@/components/admin/PaginationV2'
 import { AdminDropdown } from '@/components/admin/shared/dropdown/AdminDropdown'
-import { ColumnSettingsPanel } from '@/components/admin/shared/table/ColumnSettingsPanel'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import { useAdminTableColumns, type AdminColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
+import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import { TableDateCell, TableTextCell, TableUrlCell } from '@/components/admin/shared/modern-table/cells'
 import type { TableColumn } from '@/components/admin/shared/modern-table/types'
 
@@ -42,6 +43,20 @@ const SOURCE_SUBMISSION_COLUMNS_META: AdminColumnMeta[] = [
 
 const SOURCE_SUBMISSION_DEFAULT_STATE = {}
 
+// 所有列 ID（useTableSettings 控制显/隐）
+const ALL_SOURCE_SUBMISSION_COLUMN_IDS = SOURCE_SUBMISSION_COLUMNS_META.map(
+  (col) => col.id as SourceSubmissionColumnId,
+)
+
+// useTableSettings 列描述（label + 默认可见/可排序）
+const SOURCE_SUBMISSION_SETTINGS_COLUMNS = SOURCE_SUBMISSION_COLUMNS_META.map((col) => ({
+  id: col.id,
+  label: SOURCE_SUBMISSION_COLUMN_LABELS[col.id as SourceSubmissionColumnId] ?? col.id,
+  defaultVisible: col.visible ?? true,
+  defaultSortable: false,
+  required: col.id === 'actions',
+}))
+
 interface SubmissionRow {
   id: string
   video_id: string
@@ -56,10 +71,9 @@ interface SubmissionRow {
 function buildColumns(
   onApprove: (id: string) => Promise<void>,
   onReject: (id: string) => Promise<void>,
-  visibleColumnIds: SourceSubmissionColumnId[],
   columnsById: Record<string, { width: number }>,
 ): TableColumn<SubmissionRow>[] {
-  const all: TableColumn<SubmissionRow>[] = [
+  return [
     {
       id: 'video_title', header: '视频标题',
       width: columnsById['video_title']?.width ?? 220, minWidth: 160,
@@ -111,8 +125,6 @@ function buildColumns(
       ),
     },
   ]
-
-  return all.filter((col) => visibleColumnIds.includes(col.id as SourceSubmissionColumnId))
 }
 
 export function SubmissionTable() {
@@ -121,7 +133,6 @@ export function SubmissionTable() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [loading, setLoading] = useState(false)
-  const [showColumnsPanel, setShowColumnsPanel] = useState(false)
 
   const columnsState = useAdminTableColumns({
     route: '/admin/sources',
@@ -130,13 +141,10 @@ export function SubmissionTable() {
     defaultState: SOURCE_SUBMISSION_DEFAULT_STATE,
   })
 
-  const visibleColumnIds = useMemo(
-    () =>
-      columnsState.columns
-        .filter((col) => col.visible)
-        .map((col) => col.id as SourceSubmissionColumnId),
-    [columnsState.columns],
-  )
+  const tableSettings = useTableSettings({
+    tableId: 'source-submission-table',
+    columns: SOURCE_SUBMISSION_SETTINGS_COLUMNS,
+  })
 
   const fetchSubmissions = useCallback(async (pageVal: number, pageSizeVal: number) => {
     setLoading(true)
@@ -164,54 +172,36 @@ export function SubmissionTable() {
     } catch { /* silent */ }
   }, [fetchSubmissions, page, pageSize])
 
+  const allTableColumns = useMemo(
+    () => buildColumns(handleApprove, handleReject, columnsState.columnsById),
+    [handleApprove, handleReject, columnsState.columnsById],
+  )
+
   const tableColumns = useMemo(
-    () => buildColumns(handleApprove, handleReject, visibleColumnIds, columnsState.columnsById),
-    [handleApprove, handleReject, visibleColumnIds, columnsState.columnsById],
+    () => tableSettings.applyToColumns(allTableColumns),
+    [tableSettings, allTableColumns],
   )
 
   return (
     <div className="space-y-2">
-      {/* ⚙ 列设置叠加在表格右上角，面板在 overflow-hidden 外渲染 */}
-      <div className="relative">
-        <div className="absolute right-4 top-3 z-30">
-          <button
-            type="button"
-            className="rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-            onClick={() => setShowColumnsPanel((prev) => !prev)}
-            data-testid="source-submission-columns-toggle"
-            aria-label="列设置"
-            title="列设置"
-          >⚙</button>
-          {showColumnsPanel ? (
-            <div className="absolute right-0 mt-1 w-52">
-              <ColumnSettingsPanel
-                data-testid="source-submission-columns-panel"
-                columns={columnsState.columns.map((col) => ({
-                  id: col.id,
-                  label: SOURCE_SUBMISSION_COLUMN_LABELS[col.id as SourceSubmissionColumnId] ?? col.id,
-                  visible: col.visible,
-                }))}
-                onToggle={(id) => columnsState.toggleColumnVisibility(id)}
-                onReset={() => columnsState.resetColumnsMeta()}
-              />
-            </div>
-          ) : null}
-        </div>
-
-        <ModernDataTable
-          columns={tableColumns}
-          rows={submissions}
-          loading={loading}
-          emptyText="暂无用户纠错数据"
-          getRowId={(r) => r.id}
-          scrollTestId="source-submission-table-scroll"
-          onColumnWidthChange={(columnId, nextWidth) => {
-            if (columnId in columnsState.columnsById) {
-              columnsState.setColumnWidth(columnId, nextWidth)
-            }
-          }}
-        />
-      </div>
+      <ModernDataTable
+        columns={tableColumns}
+        rows={submissions}
+        loading={loading}
+        emptyText="暂无用户纠错数据"
+        getRowId={(r) => r.id}
+        scrollTestId="source-submission-table-scroll"
+        onColumnWidthChange={(columnId, nextWidth) => {
+          if (columnId in columnsState.columnsById) {
+            columnsState.setColumnWidth(columnId, nextWidth)
+          }
+        }}
+        settingsSlot={{
+          settingsColumns: tableSettings.orderedSettings,
+          onSettingsChange: tableSettings.updateSetting,
+          onSettingsReset: tableSettings.reset,
+        }}
+      />
 
       {total > 0 ? (
         <div className="mt-4">

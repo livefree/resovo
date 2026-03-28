@@ -3804,19 +3804,19 @@
    - 文件范围：src/components/admin/users/UserTable.tsx, tests/unit/components/admin/users/UserTable.test.tsx
    - 验收要点：旧 ColumnSettingsPanel 块已移除；typecheck + lint + test 通过
 
-6. CHG-302 — SubmissionTable(sources) 迁移（状态：⬜ 待开始）
+6. CHG-302 — SubmissionTable(sources) 迁移（状态：✅ 已完成）
    - 创建时间：2026-03-28 00:00
    - 计划开始：CHG-301 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-28 14:32
+   - 完成时间：2026-03-28 14:34
    - 文件范围：src/components/admin/sources/SubmissionTable.tsx（或同类路径）
    - 验收要点：typecheck + lint + test 通过
 
-7. CHG-303 — SubmissionTable(content) 迁移（状态：⬜ 待开始）
+7. CHG-303 — SubmissionTable(content) 迁移（状态：✅ 已完成）
    - 创建时间：2026-03-28 00:00
    - 计划开始：CHG-302 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-28 14:35
+   - 完成时间：2026-03-28 14:36
    - 文件范围：src/components/admin/content/SubmissionTable.tsx（或同类路径）
    - 验收要点：typecheck + lint + test 通过
 
