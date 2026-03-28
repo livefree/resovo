@@ -4090,3 +4090,15 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/shared/table/useAdminTableColumns.test.tsx`（更新）— 列配置持久化读取断言调整为异步等待，匹配挂载后回放时序
 - **验收结论**：后台表格在 SSR 与 hydration 首帧保持一致，不再出现 `modern-data-table-table style.width` 不一致告警；挂载后仍可正确恢复本地列配置
 - **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/components/admin/shared/table/useAdminTableState.test.tsx tests/unit/components/admin/shared/table/useAdminTableColumns.test.tsx` 9/9 通过；`npx vitest run tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/sources/InactiveSourceTable.test.tsx` 12/12 通过
+
+---
+
+## CHG-290 — `/admin/sources` 查询能力扩展（关键词/标题/siteKey/排序）后端实现
+- **完成时间**：2026-03-27 20:32
+- **修改文件**：
+  - `src/api/routes/admin/content.ts`（更新）— `/admin/sources` 增加 `keyword/title/siteKey/sortField/sortDir` 参数解析，新增排序白名单与 `status -> is_active` 兼容映射
+  - `src/api/db/queries/sources.ts`（更新）— `listAdminSources` 支持关键词/标题/siteKey 过滤与可控排序（含 `last_checked NULLS LAST`）；查询结果补充 `site_key`
+  - `tests/unit/api/content-sort.test.ts`（更新）— 新增 `listAdminSources` 过滤和排序 SQL 行为测试
+  - `tests/unit/api/admin-sources-query.test.ts`（新建）— 覆盖 `/admin/sources` 扩展参数、兼容映射、权限限制
+- **验收结论**：`/admin/sources` 已具备后端筛选与排序扩展能力，为后续前端筛选 UI 与批量治理入口提供接口基础
+- **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/api/content-sort.test.ts tests/unit/api/admin-sources-query.test.ts` 19/19 通过

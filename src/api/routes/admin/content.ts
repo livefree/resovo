@@ -25,6 +25,15 @@ import { ContentService } from '@/api/services/ContentService'
 export async function adminContentRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['moderator', 'admin'])]
   const contentService = new ContentService(db)
+  const SOURCE_SORT_FIELDS = [
+    'created_at',
+    'last_checked',
+    'is_active',
+    'status',
+    'video_title',
+    'source_url',
+    'site_key',
+  ] as const
 
   // ════════════════════════════════════════════════════════════════
   // 播放源管理
@@ -38,6 +47,11 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
     page: z.coerce.number().int().min(1).optional().default(1),
     limit: z.coerce.number().int().min(1).max(100).optional().default(20),
     videoId: z.string().uuid().optional(),
+    keyword: z.string().optional(),
+    title: z.string().optional(),
+    siteKey: z.string().optional(),
+    sortField: z.string().optional(),
+    sortDir: z.enum(['asc', 'desc']).optional(),
   })
 
   fastify.get('/admin/sources', { preHandler: auth }, async (request, reply) => {
@@ -48,12 +62,28 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const { active, status, page, limit, videoId } = parsed.data
+    const { active, status, page, limit, videoId, keyword, title, siteKey, sortField, sortDir } = parsed.data
     // status 参数优先；向后兼容 active 参数
     const resolvedActive = status
       ? (status === 'active' ? 'true' : status === 'inactive' ? 'false' : 'all')
       : (active ?? 'all')
-    const result = await contentService.listSources({ active: resolvedActive, page, limit, videoId })
+    const normalizedKeyword = keyword?.trim() ? keyword.trim() : undefined
+    const normalizedTitle = title?.trim() ? title.trim() : undefined
+    const normalizedSiteKey = siteKey?.trim() ? siteKey.trim() : undefined
+    const validSortField = sortField && SOURCE_SORT_FIELDS.includes(sortField as typeof SOURCE_SORT_FIELDS[number])
+      ? (sortField === 'status' ? 'is_active' : sortField) as 'created_at' | 'last_checked' | 'is_active' | 'video_title' | 'source_url' | 'site_key'
+      : undefined
+    const result = await contentService.listSources({
+      active: resolvedActive,
+      page,
+      limit,
+      videoId,
+      keyword: normalizedKeyword,
+      title: normalizedTitle,
+      siteKey: normalizedSiteKey,
+      sortField: validSortField,
+      sortDir,
+    })
     return reply.send(result)
   })
 

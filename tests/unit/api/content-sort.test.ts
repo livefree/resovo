@@ -1,10 +1,10 @@
 /**
  * content-sort.test.ts — CHG-258
- * listSubmissions + listAdminSubtitles 服务端排序参数测试
+ * listSubmissions + listAdminSubtitles + listAdminSources 服务端排序参数测试
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { listSubmissions } from '@/api/db/queries/sources'
+import { listAdminSources, listSubmissions } from '@/api/db/queries/sources'
 import { listAdminSubtitles } from '@/api/db/queries/subtitles'
 
 describe('listSubmissions — server-side sort (CHG-258)', () => {
@@ -46,6 +46,66 @@ describe('listSubmissions — server-side sort (CHG-258)', () => {
     await listSubmissions(db, 1, 20, 'submitted_by', 'asc')
     const sql: string = query.mock.calls[0][0]
     expect(sql).toContain('u.username ASC')
+  })
+})
+
+describe('listAdminSources — filters and server-side sort (CHG-290)', () => {
+  const query = vi.fn()
+  const db = { query } as unknown as import('pg').Pool
+
+  beforeEach(() => {
+    query.mockReset()
+    query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [{ count: '0' }] })
+  })
+
+  it('uses default created_at DESC when no sortField provided', async () => {
+    await listAdminSources(db, { active: 'all', page: 1, limit: 20 })
+    const sql: string = query.mock.calls[0][0]
+    expect(sql).toContain('ORDER BY s.created_at DESC, s.created_at DESC')
+  })
+
+  it('supports keyword + title + siteKey filters', async () => {
+    await listAdminSources(db, {
+      active: 'all',
+      keyword: 'm3u8',
+      title: 'Test',
+      siteKey: 'site-a',
+      page: 1,
+      limit: 20,
+    })
+
+    const sql: string = query.mock.calls[0][0]
+    const params: unknown[] = query.mock.calls[0][1]
+    expect(sql).toContain('s.source_url ILIKE')
+    expect(sql).toContain('v.title ILIKE')
+    expect(sql).toContain('v.site_key =')
+    expect(params).toContain('%m3u8%')
+    expect(params).toContain('%Test%')
+    expect(params).toContain('site-a')
+  })
+
+  it('supports sorting by video_title ASC', async () => {
+    await listAdminSources(db, {
+      active: 'all',
+      sortField: 'video_title',
+      sortDir: 'asc',
+      page: 1,
+      limit: 20,
+    })
+    const sql: string = query.mock.calls[0][0]
+    expect(sql).toContain('ORDER BY v.title ASC')
+  })
+
+  it('supports sorting by last_checked DESC NULLS LAST', async () => {
+    await listAdminSources(db, {
+      active: 'all',
+      sortField: 'last_checked',
+      sortDir: 'desc',
+      page: 1,
+      limit: 20,
+    })
+    const sql: string = query.mock.calls[0][0]
+    expect(sql).toContain('ORDER BY s.last_checked DESC NULLS LAST')
   })
 })
 

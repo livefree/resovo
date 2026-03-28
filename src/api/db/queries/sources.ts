@@ -172,6 +172,11 @@ export async function upsertSources(
 export interface AdminSourceListFilters {
   active?: 'true' | 'false' | 'all'
   videoId?: string
+  keyword?: string
+  title?: string
+  siteKey?: string
+  sortField?: 'created_at' | 'last_checked' | 'is_active' | 'video_title' | 'source_url' | 'site_key'
+  sortDir?: 'asc' | 'desc'
   page: number
   limit: number
 }
@@ -193,22 +198,50 @@ export async function listAdminSources(
     conditions.push(`s.video_id = $${idx++}`)
     params.push(filters.videoId)
   }
+  if (filters.keyword) {
+    conditions.push(`(s.source_url ILIKE $${idx} OR s.source_name ILIKE $${idx} OR v.title ILIKE $${idx})`)
+    params.push(`%${filters.keyword}%`)
+    idx += 1
+  }
+  if (filters.title) {
+    conditions.push(`v.title ILIKE $${idx++}`)
+    params.push(`%${filters.title}%`)
+  }
+  if (filters.siteKey) {
+    conditions.push(`v.site_key = $${idx++}`)
+    params.push(filters.siteKey)
+  }
 
   const where = conditions.join(' AND ')
   const offset = (filters.page - 1) * filters.limit
+  const ORDER_BY_MAP: Record<NonNullable<AdminSourceListFilters['sortField']>, string> = {
+    created_at: 's.created_at',
+    last_checked: 's.last_checked',
+    is_active: 's.is_active',
+    video_title: 'v.title',
+    source_url: 's.source_url',
+    site_key: 'v.site_key',
+  }
+  const orderByColumn = filters.sortField ? ORDER_BY_MAP[filters.sortField] : 's.created_at'
+  const orderByDir = filters.sortDir === 'asc' ? 'ASC' : 'DESC'
+  const nullsClause = filters.sortField === 'last_checked' ? ' NULLS LAST' : ''
+  const orderBy = `${orderByColumn} ${orderByDir}${nullsClause}, s.created_at DESC`
 
   const [rows, countResult] = await Promise.all([
     db.query(
-      `SELECT s.*, v.title AS video_title
+      `SELECT s.*, v.title AS video_title, v.site_key AS site_key
        FROM video_sources s
        LEFT JOIN videos v ON s.video_id = v.id
        WHERE ${where}
-       ORDER BY s.created_at DESC
+       ORDER BY ${orderBy}
        LIMIT $${idx} OFFSET $${idx + 1}`,
       [...params, filters.limit, offset]
     ),
     db.query<{ count: string }>(
-      `SELECT COUNT(*) FROM video_sources s WHERE ${where}`,
+      `SELECT COUNT(*)
+       FROM video_sources s
+       LEFT JOIN videos v ON s.video_id = v.id
+       WHERE ${where}`,
       params
     ),
   ])

@@ -3630,3 +3630,94 @@
      - `tests/unit/components/admin/shared/table/useAdminTableState.test.tsx`
      - `tests/unit/components/admin/shared/table/useAdminTableColumns.test.tsx`
    - 验收要点：服务端与客户端 hydration 首帧宽度一致，不再报 `modern-data-table-table style.width` mismatch；挂载后仍可回放本地列配置
+
+## [SEQ-20260327-40] 播放源批量治理能力补齐（视频主体 + 源站）
+- **状态**：🔄 执行中
+- **创建时间**：2026-03-27 20:28
+- **最后更新时间**：2026-03-27 20:32
+- **目标**：让 `/admin/sources` 支持按视频主体与来源站点进行批量验证治理，并补齐筛选/排序与手工状态兜底能力
+- **范围**：播放源查询接口、批量验证接口、手工状态切换接口、来源管理前端交互与测试
+- **依赖**：`docs/admin_backend_capability_exposure_plan_20260327.md`
+
+### 任务列表（按执行顺序）
+
+1. CHG-290 — `/admin/sources` 查询能力扩展（关键词/标题/siteKey/排序）后端实现（状态：✅ 已完成）
+   - 创建时间：2026-03-27 20:28
+   - 计划开始：2026-03-27 20:35
+   - 实际开始：2026-03-27 20:29
+   - 完成时间：2026-03-27 20:32
+   - 文件范围：
+     - `src/api/routes/admin/content.ts`
+     - `src/api/services/ContentService.ts`
+     - `src/api/db/queries/sources.ts`
+     - `tests/unit/api/sources.test.ts`（扩展）
+   - 验收要点：接口支持 `keyword/title/siteKey/sortField/sortDir` 并保持向后兼容
+
+2. CHG-291 — `/admin/sources` 筛选/排序 UI 接线与 URL 状态同步（状态：⬜ 待开始）
+   - 创建时间：2026-03-27 20:28
+   - 计划开始：CHG-290 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：
+     - `src/components/admin/sources/SourceTable.tsx`
+     - `src/components/admin/sources/InactiveSourceTable.tsx`
+     - `tests/unit/components/admin/sources/SourceTable.test.tsx`（扩展）
+   - 验收要点：可按关键词/标题/siteKey筛选并切换排序，刷新后状态可恢复
+
+3. CHG-292 — 播放源批量验证接口（video/site/video+site scope）实现（状态：⬜ 待开始）
+   - 创建时间：2026-03-27 20:28
+   - 计划开始：CHG-291 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：
+     - `src/api/routes/admin/crawler.ts` 或 `src/api/routes/admin/content.ts`（按边界选其一）
+     - `src/api/services/ContentService.ts`
+     - `src/api/workers/verifyWorker.ts`（复用队列）
+     - `tests/unit/api/sources-verify.test.ts`（扩展）
+   - 验收要点：支持按视频、站点、视频+站点发起批量验证并返回任务摘要
+
+4. CHG-293 — 播放源批量验证前端操作与结果反馈（状态：⬜ 待开始）
+   - 创建时间：2026-03-27 20:28
+   - 计划开始：CHG-292 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：
+     - `src/components/admin/sources/SourceTable.tsx`
+     - `src/components/admin/sources/InactiveSourceTable.tsx`
+     - `src/components/admin/sources/SourceHealthAlert.tsx`
+     - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（扩展）
+   - 验收要点：可按当前筛选范围触发批量验证并看到成功/失败/超时反馈
+
+5. CHG-294 — 源状态手工切换接口（单条/批量，可选能力）实现（状态：⬜ 待开始）
+   - 创建时间：2026-03-27 20:28
+   - 计划开始：CHG-292 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：
+     - `src/api/routes/admin/content.ts`
+     - `src/api/services/ContentService.ts`
+     - `src/api/db/queries/sources.ts`
+     - `tests/unit/api/sources.test.ts`（扩展）
+   - 验收要点：支持单条/批量状态切换，权限为 moderator+，并保留操作日志字段
+
+6. CHG-295 — 源状态手工切换前端入口与权限控制（状态：⬜ 待开始）
+   - 创建时间：2026-03-27 20:28
+   - 计划开始：CHG-294 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：
+     - `src/components/admin/sources/InactiveSourceTable.tsx`
+     - `src/components/admin/sources/SourceTable.tsx`
+     - `tests/unit/components/admin/sources/SourceTable.test.tsx`（扩展）
+   - 验收要点：行级和批量操作可手工切换活跃/失效状态，动作反馈明确
+
+7. CHG-296 — 播放源治理链路回归与文档收口（状态：⬜ 待开始）
+   - 创建时间：2026-03-27 20:28
+   - 计划开始：CHG-295 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：
+     - `tests/e2e/admin-source-and-video-flows.spec.ts`（扩展）
+     - `docs/changelog.md`
+     - `docs/task-queue.md`
+   - 验收要点：筛选、批量验证、手工切换、状态回写四条关键链路具备回归覆盖
