@@ -1,22 +1,29 @@
-# Resovo（流光） — 前端组件规范
+# Resovo（流光） — 前后台 UI 实现规范
 
 > status: active
 > owner: @engineering
-> scope: frontend ui component and interaction rules
+> scope: frontend and admin ui component and interaction rules
 > source_of_truth: no
 > supersedes: none
 > superseded_by: none
-> last_reviewed: 2026-03-27
+> last_reviewed: 2026-03-28
+>
+> 本文件由原"前端组件规范"升级而来，适用范围扩展至前台与后台。
+> 升级依据：`docs/ui_governance_conflicts_20260327.md` §4.2 及 §5
 
 
-> 适用范围：`src/components/`、`src/app/` 所有前端文件
-> AI 在编写前端组件前必须读取本文件
+> 适用范围：`src/components/`、`src/app/` 所有前端文件（前台 + 后台 + 系统页）
+> AI 在编写任何前端组件前必须读取本文件
 
 ---
 
 ## 主题与颜色
 
 ### CSS 变量（必须使用，禁止硬编码）
+
+前台与后台当前使用两套独立的 CSS 变量体系，均来自 `src/app/globals.css`。两套体系并存属于已知历史分叉，将在 token 层统一后收敛。在此之前，各区域必须使用对应体系内的变量，**不得跨体系混用，不得引入新的硬编码颜色值**。
+
+#### 前台 CSS 变量（用于 `src/components/` 前台组件）
 
 ```css
 /* 背景 */
@@ -34,6 +41,27 @@
 --accent              /* 金色主题色 */
 --accent-foreground   /* accent 背景上的文字颜色（用于 accent 底色上的文字，不得用 black/white） */
 --gold                /* 纯金色（类型徽章、评分标记） */
+```
+
+#### 后台 CSS 变量（用于 `src/components/admin/` 后台组件）
+
+```css
+/* 背景层级 */
+--bg              /* 页面底色 */
+--bg2             /* 卡片/面板背景 */
+--bg3             /* 悬停/选中状态背景 */
+
+/* 文字 */
+--text            /* 主文字 */
+--muted           /* 次要文字、标签 */
+
+/* 边框 */
+--border          /* 标准边框 */
+--subtle          /* 弱边框、分隔线 */
+
+/* 强调色 */
+--accent          /* 主题色 */
+--foreground      /* 高对比前景色（用于强调背景上的文字） */
 ```
 
 ### 主题切换
@@ -229,3 +257,87 @@ const PlayerShell = dynamic(() => import('@/components/player/PlayerShell'), {
 后台数据表格的 6 项硬性约束定义在 **CLAUDE.md 第三层 › 后台表格规范（Admin Table）**，此处不重复列举。
 
 新建或修改后台列表页时，验收前必须逐项对照 CLAUDE.md 中的 6 项规范检验（不允许以"typecheck / lint 通过"代替逐项验收）。
+
+---
+
+## 浮层与 Portal 实现规范
+
+### 唯一浮层实现模式（强制）
+
+所有需要"脱离文档流"的浮层组件（下拉菜单、浮动面板、Popover、Tooltip 等）**必须使用以下标准模式**，不允许使用其他方式（如绝对定位叠加、`position: fixed` 直接写入组件、第三方浮层库未经封装直接使用）：
+
+```tsx
+// ✅ 标准浮层模式：createPortal + DOMRect + mousedown/Escape
+'use client'
+import { createPortal } from 'react-dom'
+import { useEffect, useRef, useState } from 'react'
+
+// 位置计算（参考 AdminDropdown.tsx）
+function calcPosition(rect: DOMRect): { top: number; right: number } {
+  return {
+    top: rect.bottom + window.scrollY + 4,
+    right: window.innerWidth - rect.right,
+  }
+}
+
+// 关闭行为（参考 AdminDropdown.tsx）
+useEffect(() => {
+  if (!isOpen) return
+  function handleMouseDown(e: MouseEvent) {
+    if (triggerRef.current?.contains(e.target as Node)) return
+    if (menuRef.current?.contains(e.target as Node)) return
+    setIsOpen(false)
+  }
+  function handleKeyDown(e: KeyboardEvent) {
+    if (e.key === 'Escape') setIsOpen(false)
+  }
+  document.addEventListener('mousedown', handleMouseDown)
+  document.addEventListener('keydown', handleKeyDown)
+  return () => {
+    document.removeEventListener('mousedown', handleMouseDown)
+    document.removeEventListener('keydown', handleKeyDown)
+  }
+}, [isOpen])
+
+// 渲染（避免 SSR 报错）
+{typeof document !== 'undefined' && createPortal(panel, document.body)}
+```
+
+**参考实现：** `src/components/admin/shared/dropdown/AdminDropdown.tsx`
+
+### 禁止行为
+
+- ❌ 新建浮层组件时绕过现有 `AdminDropdown` 等已封装实现（先确认有无可复用）
+- ❌ 使用 `position: fixed` + `z-index` 直接在组件内定位（跳过 portal 导致堆叠问题）
+- ❌ 在 `overflow: hidden` 容器内放置浮层（必须使用 portal 逃离边界）
+
+---
+
+## 后台共享组件边界规范
+
+### 新建共享组件前的强制检查
+
+在 `src/components/admin/shared/` 下新建任何组件之前，**必须先确认**以下目录中是否已有等价实现：
+
+```
+src/components/admin/shared/
+  batch/          ← 批量操作：SelectionActionBar
+  button/         ← 通用按钮：AdminButton
+  dialog/         ← 弹窗：AdminDialogShell
+  dropdown/       ← 下拉菜单/浮层：AdminDropdown
+  feedback/       ← 反馈状态：AdminHoverHint、AdminTableState
+  form/           ← 表单：AdminFormField、AdminInput、AdminSelect
+  layout/         ← 页面骨架：AdminPageShell
+  modal/          ← 模态框：AdminModal
+  modern-table/   ← 表格体系：ModernDataTable、TableColumn、cells/
+  table/          ← 旧表格辅助（逐步废弃中）：ColumnSettingsPanel*
+  toolbar/        ← 工具栏：AdminToolbar
+```
+
+> \* `ColumnSettingsPanel` 正在被 `TableSettingsTrigger + useTableSettings` 替代（SEQ-20260328-42）
+
+### 禁止行为
+
+- ❌ 在业务页面内联实现已有共享组件的功能（如手写下拉菜单、手写分页）
+- ❌ 新建并行实现后不更新此清单
+- ❌ 同一功能存在 3 处以上重复使用时不提取为共享组件

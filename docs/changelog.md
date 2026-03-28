@@ -4216,3 +4216,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/tasks.md`（空稳定态）
 - **验收结论**：所有治理规划文档纳入版本控制，符合 CLAUDE.md 文档管理规则
 - **测试覆盖**：不适用（纯文档变更）
+
+---
+
+## CHG-298 — ui-rules.md 规则收口
+- **完成时间**：2026-03-28 00:05
+- **修改文件**：
+  - `docs/rules/ui-rules.md`（更新）— 标题升级为"前后台 UI 实现规范"；适用范围扩展至前台+后台+系统页；新增后台 CSS 变量体系声明（--bg/--bg2/--bg3/--text/--muted 等）；新增"浮层与 Portal 实现规范"章节（唯一标准模式+禁止行为）；新增"后台共享组件边界规范"章节（目录清单+禁止行为）
+  - `docs/task-queue.md`（CHG-298 完成）
+  - `docs/tasks.md`（空稳定态）
+- **验收结论**：规则层已覆盖后台 CSS 变量体系和 portal 浮层约束，为 CHG-299（TableSettingsPanel 实现）提供规则基线
+- **测试覆盖**：不适用（纯规则文档变更）；typecheck 通过；lint 通过

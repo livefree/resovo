@@ -3752,7 +3752,7 @@
 ## [SEQ-20260328-42] UI 治理：TableSettingsPanel + Admin 表格设置统一
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-28 00:00
-- **最后更新时间**：2026-03-28 00:01
+- **最后更新时间**：2026-03-28 00:05
 - **目标**：将 6 处手写重复的列设置模式统一为 TableSettingsPanel，同步推进 UI 治理规则收口
 - **范围**：docs/rules/ui-rules.md、src/components/admin/shared/modern-table/settings/、src/app/[locale]/admin/sandbox/、7 个后台表格组件
 - **依赖**：无
@@ -3765,11 +3765,11 @@
    - 完成时间：2026-03-28 00:01
    - 验收要点：git status 无 untracked docs 文件
 
-2. CHG-298 — ui-rules.md 规则收口：扩展适用范围、声明后台 CSS 变量体系、并入 portal 实现约束（状态：⬜ 待开始）
+2. CHG-298 — ui-rules.md 规则收口：扩展适用范围、声明后台 CSS 变量体系、并入 portal 实现约束（状态：✅ 已完成）
    - 创建时间：2026-03-28 00:00
    - 计划开始：CHORE-03 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-28 00:02
+   - 完成时间：2026-03-28 00:05
    - 文件范围：docs/rules/ui-rules.md
    - 验收要点：适用范围包含前后台；后台变量体系已声明；portal 规则已并入
 
