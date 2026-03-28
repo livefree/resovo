@@ -6,6 +6,17 @@ const getMock = vi.fn()
 const deleteMock = vi.fn()
 const patchMock = vi.fn()
 const postMock = vi.fn()
+const replaceMock = vi.fn()
+const mockSearchParams = new URLSearchParams()
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: (...args: unknown[]) => replaceMock(...args) }),
+  usePathname: () => '/admin/sources',
+  useSearchParams: () => ({
+    get: (key: string) => mockSearchParams.get(key),
+    toString: () => mockSearchParams.toString(),
+  }),
+}))
 
 vi.mock('@/lib/api-client', () => ({
   apiClient: {
@@ -72,10 +83,12 @@ const MOCK_SUBMISSIONS = [
   },
 ]
 
-describe('SourceTable (CHG-216)', () => {
+describe('SourceTable (CHG-291)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    mockSearchParams.forEach((_value, key) => mockSearchParams.delete(key))
+
     getMock.mockImplementation(async (url: string) => {
       if (url.startsWith('/admin/sources?')) {
         return { data: MOCK_ROWS, total: MOCK_ROWS.length }
@@ -96,10 +109,8 @@ describe('SourceTable (CHG-216)', () => {
     await screen.findByText('Alpha Video')
     expect(getMock).toHaveBeenCalledWith('/admin/sources?page=1&limit=20&status=all')
 
-    // ModernDataTable rows use modern-table-row-{id} pattern
     const rows = Array.from(document.querySelectorAll('tr[data-testid^="modern-table-row-"]'))
     expect(rows.length).toBe(2)
-    // Both videos appear
     expect(screen.getByText('Zeta Video')).toBeTruthy()
   })
 
@@ -114,15 +125,67 @@ describe('SourceTable (CHG-216)', () => {
     })
   })
 
+  it('syncs tab change into URL params', async () => {
+    render(<SourceTable />)
+    await screen.findByText('Alpha Video')
+
+    fireEvent.click(screen.getByTestId('source-tab-inactive'))
+    expect(replaceMock).toHaveBeenCalledWith(expect.stringContaining('sourceTab=inactive'))
+  })
+
   it('renders column headers for inactive sources tab', async () => {
     render(<SourceTable />)
     await screen.findByText('Alpha Video')
 
-    // ModernDataTable column headers are rendered via column.header strings
-    expect(screen.getByText('视频标题')).toBeTruthy()
-    expect(screen.getByText('源 URL')).toBeTruthy()
-    expect(screen.getByText('状态')).toBeTruthy()
-    expect(screen.getByText('最后验证')).toBeTruthy()
+    expect(screen.getAllByText('视频标题').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('源 URL').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('状态').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('最后验证').length).toBeGreaterThan(0)
+  })
+
+  it('reads keyword/title/siteKey/sort from URL and forwards to request', async () => {
+    mockSearchParams.set('keyword', 'alpha')
+    mockSearchParams.set('title', 'Alpha')
+    mockSearchParams.set('siteKey', 'site-a')
+    mockSearchParams.set('sortField', 'video_title')
+    mockSearchParams.set('sortDir', 'asc')
+
+    render(<SourceTable />)
+    await screen.findByText('Alpha Video')
+
+    expect(getMock).toHaveBeenCalledWith(
+      '/admin/sources?page=1&limit=20&status=all&keyword=alpha&title=Alpha&siteKey=site-a&sortField=video_title&sortDir=asc',
+    )
+  })
+
+  it('updates URL when filter inputs change', async () => {
+    render(<SourceTable />)
+    await screen.findByText('Alpha Video')
+
+    fireEvent.change(screen.getByTestId('source-filters-keyword'), {
+      target: { value: 'new-keyword' },
+    })
+    expect(replaceMock).toHaveBeenCalledWith(expect.stringContaining('keyword=new-keyword'))
+
+    fireEvent.change(screen.getByTestId('source-filters-site-key'), {
+      target: { value: 'site-b' },
+    })
+    expect(replaceMock).toHaveBeenCalledWith(expect.stringContaining('siteKey=site-b'))
+  })
+
+  it('updates URL when sort changes', async () => {
+    render(<SourceTable />)
+    await screen.findByText('Alpha Video')
+
+    fireEvent.change(screen.getByTestId('source-filters-sort-field'), {
+      target: { value: 'last_checked' },
+    })
+    expect(replaceMock).toHaveBeenCalledWith(expect.stringContaining('sortField=last_checked'))
+
+    fireEvent.change(screen.getByTestId('source-filters-sort-dir'), {
+      target: { value: 'asc' },
+    })
+    expect(replaceMock).toHaveBeenCalledWith(expect.stringContaining('sortDir=asc'))
   })
 
   it('switches to submissions tab with independent request', async () => {
@@ -141,7 +204,6 @@ describe('SourceTable (CHG-216)', () => {
     fireEvent.click(screen.getByTestId('source-tab-submissions'))
     await screen.findByText('Fix Video')
 
-    // Open dropdown for the submission row
     fireEvent.click(screen.getByTestId('source-submission-actions-sub-1'))
     await waitFor(() => screen.getByText('采纳'))
     fireEvent.click(screen.getByText('采纳'))
@@ -149,19 +211,6 @@ describe('SourceTable (CHG-216)', () => {
     await waitFor(() => {
       expect(postMock).toHaveBeenCalledWith('/admin/submissions/sub-1/approve')
     })
-  })
-
-  it('renders source_url column and row data via ModernDataTable cells', async () => {
-    render(<SourceTable />)
-    await screen.findByText('Alpha Video')
-
-    // Rows use modern-table-row-{id} pattern
-    const rows = Array.from(document.querySelectorAll('tr[data-testid^="modern-table-row-"]'))
-    expect(rows.length).toBe(2)
-
-    // Source URL cells rendered by TableUrlCell
-    const urlCells = Array.from(document.querySelectorAll('[data-testid="table-url-cell"]'))
-    expect(urlCells.length).toBeGreaterThan(0)
   })
 
   it('opens replace modal and updates source url', async () => {

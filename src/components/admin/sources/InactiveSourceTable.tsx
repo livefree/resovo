@@ -55,9 +55,16 @@ const INACTIVE_SOURCE_COLUMNS_META: AdminColumnMeta[] = [
 
 const INACTIVE_SOURCE_DEFAULT_STATE = {}
 type SourceStatusFilter = 'all' | 'inactive'
+type SourceSortField = 'created_at' | 'last_checked' | 'is_active' | 'video_title' | 'source_url' | 'site_key'
+type SourceSortDir = 'asc' | 'desc'
 
 interface InactiveSourceTableProps {
   status?: SourceStatusFilter
+  keyword?: string
+  title?: string
+  siteKey?: string
+  sortField?: SourceSortField
+  sortDir?: SourceSortDir
 }
 
 export interface SourceRow {
@@ -180,7 +187,14 @@ function buildColumns(
   return [selectionColumn, ...dataColumns]
 }
 
-export function InactiveSourceTable({ status = 'inactive' }: InactiveSourceTableProps) {
+export function InactiveSourceTable({
+  status = 'inactive',
+  keyword,
+  title,
+  siteKey,
+  sortField,
+  sortDir,
+}: InactiveSourceTableProps) {
   const isAllStatus = status === 'all'
   const tableId = isAllStatus ? 'all-source-table' : 'inactive-source-table'
   const emptyText = isAllStatus ? '暂无播放源' : '暂无失效源'
@@ -244,6 +258,11 @@ export function InactiveSourceTable({ status = 'inactive' }: InactiveSourceTable
         limit: String(pageSizeVal),
         status,
       })
+      if (keyword) params.set('keyword', keyword)
+      if (title) params.set('title', title)
+      if (siteKey) params.set('siteKey', siteKey)
+      if (sortField) params.set('sortField', sortField)
+      if (sortDir) params.set('sortDir', sortDir)
       const res = await apiClient.get<{ data: SourceRow[]; total: number }>(`/admin/sources?${params}`)
       setSources(res.data)
       setTotal(res.total)
@@ -252,7 +271,7 @@ export function InactiveSourceTable({ status = 'inactive' }: InactiveSourceTable
     } finally {
       setLoading(false)
     }
-  }, [status])
+  }, [keyword, siteKey, sortDir, sortField, status, title])
 
   useEffect(() => { void fetchSources(page, pageSize) }, [fetchSources, page, pageSize])
 

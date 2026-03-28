@@ -3634,7 +3634,7 @@
 ## [SEQ-20260327-40] 播放源批量治理能力补齐（视频主体 + 源站）
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-27 20:28
-- **最后更新时间**：2026-03-27 20:32
+- **最后更新时间**：2026-03-27 20:40
 - **目标**：让 `/admin/sources` 支持按视频主体与来源站点进行批量验证治理，并补齐筛选/排序与手工状态兜底能力
 - **范围**：播放源查询接口、批量验证接口、手工状态切换接口、来源管理前端交互与测试
 - **依赖**：`docs/admin_backend_capability_exposure_plan_20260327.md`
@@ -3653,11 +3653,11 @@
      - `tests/unit/api/sources.test.ts`（扩展）
    - 验收要点：接口支持 `keyword/title/siteKey/sortField/sortDir` 并保持向后兼容
 
-2. CHG-291 — `/admin/sources` 筛选/排序 UI 接线与 URL 状态同步（状态：⬜ 待开始）
+2. CHG-291 — `/admin/sources` 筛选/排序 UI 接线与 URL 状态同步（状态：✅ 已完成）
    - 创建时间：2026-03-27 20:28
    - 计划开始：CHG-290 完成后
-   - 实际开始：—
-   - 完成时间：—
+   - 实际开始：2026-03-27 20:35
+   - 完成时间：2026-03-27 20:40
    - 文件范围：
      - `src/components/admin/sources/SourceTable.tsx`
      - `src/components/admin/sources/InactiveSourceTable.tsx`

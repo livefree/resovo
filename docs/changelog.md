@@ -4102,3 +4102,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/admin-sources-query.test.ts`（新建）— 覆盖 `/admin/sources` 扩展参数、兼容映射、权限限制
 - **验收结论**：`/admin/sources` 已具备后端筛选与排序扩展能力，为后续前端筛选 UI 与批量治理入口提供接口基础
 - **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/api/content-sort.test.ts tests/unit/api/admin-sources-query.test.ts` 19/19 通过
+
+---
+
+## CHG-291 — `/admin/sources` 筛选/排序 UI 接线与 URL 状态同步
+- **完成时间**：2026-03-27 20:40
+- **修改文件**：
+  - `src/components/admin/sources/SourceTable.tsx`（更新）— 新增关键词/标题/siteKey/排序字段/方向筛选控件；筛选与 Tab 切换同步 URL 参数（`sourceTab/keyword/title/siteKey/sortField/sortDir`）
+  - `src/components/admin/sources/InactiveSourceTable.tsx`（更新）— 接收并转发筛选参数到 `/admin/sources` 查询请求
+  - `tests/unit/components/admin/sources/SourceTable.test.tsx`（更新）— 新增 URL 参数回放与 URL 同步行为测试，覆盖筛选/排序/Tab 三条路径
+- **验收结论**：`/admin/sources` 已具备前端筛选与排序操作入口，并能在 URL 层保存与恢复当前治理上下文
+- **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/sources/InactiveSourceTable.test.tsx` 15/15 通过
