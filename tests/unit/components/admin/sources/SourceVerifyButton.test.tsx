@@ -28,7 +28,7 @@ describe('SourceVerifyButton (CHG-287)', () => {
       expect(screen.getByTestId('source-verify-result-src-1').textContent).toContain('✓ 132ms')
     })
 
-    expect(postMock).toHaveBeenCalledWith('/admin/sources/src-1/verify')
+    expect(postMock).toHaveBeenCalledWith('/admin/sources/src-1/verify', {})
     expect(onVerified).toHaveBeenCalledWith({ isActive: true, responseMs: 132, statusCode: 200 })
   })
 

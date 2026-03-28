@@ -3589,3 +3589,23 @@
      - `tests/unit/api/sources-verify.test.ts`
      - `tests/unit/components/admin/sources/SourceVerifyButton.test.tsx`（新建）
    - 验收要点：点击“验证”可直接返回 `isActive/responseMs/statusCode`，行内结果展示正确，列表刷新后 `状态/最后验证` 可见变化
+
+## [SEQ-20260327-38] 单条验证请求体兼容修复
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-27 20:03
+- **最后更新时间**：2026-03-27 20:04
+- **目标**：修复验证按钮请求被 Fastify 作为空 JSON 体拒绝导致“验证失败/状态不回写”的回归问题
+- **范围**：验证按钮请求参数、错误提示、相关组件单测
+- **依赖**：`SEQ-20260327-37 / CHG-287`
+
+### 任务列表（按执行顺序）
+
+1. CHG-288 — 验证按钮 POST 补空对象请求体，恢复后端可执行验证（状态：✅ 已完成）
+   - 创建时间：2026-03-27 20:03
+   - 计划开始：2026-03-27 20:05
+   - 实际开始：2026-03-27 20:03
+   - 完成时间：2026-03-27 20:04
+   - 文件范围：
+     - `src/components/admin/sources/SourceVerifyButton.tsx`
+     - `tests/unit/components/admin/sources/SourceVerifyButton.test.tsx`
+   - 验收要点：点击“验证”请求可达后端（不再命中空 JSON 400），成功后可刷新列表并看到状态/最后验证更新

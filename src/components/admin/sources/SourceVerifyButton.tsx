@@ -40,7 +40,8 @@ export function SourceVerifyButton({ sourceId, onVerified }: SourceVerifyButtonP
     setErrorText(null)
     try {
       const res = await apiClient.post<{ data: unknown }>(
-        `/admin/sources/${sourceId}/verify`
+        `/admin/sources/${sourceId}/verify`,
+        {}
       )
       if (!isVerifyResult(res.data)) {
         setErrorText('✗ 返回异常')

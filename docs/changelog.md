@@ -4069,3 +4069,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/sources/SourceVerifyButton.test.tsx`（新建）— 覆盖成功、超时、返回异常、请求失败四种按钮反馈
 - **验收结论**：验证按钮与后端契约一致，单条验证可即时返回结果并触发列表刷新，状态/最后验证列可正确回写
 - **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/api/sources-verify.test.ts tests/unit/api/crawler.test.ts tests/unit/components/admin/sources/SourceVerifyButton.test.tsx` 107/107 通过
+
+---
+
+## CHG-288 — 验证按钮请求体兼容修复（空 JSON 400 回归）
+- **完成时间**：2026-03-27 20:04
+- **修改文件**：
+  - `src/components/admin/sources/SourceVerifyButton.tsx`（更新）— 单条验证请求改为 `POST(url, {})`，避免空请求体 + `application/json` 被 Fastify 拒绝
+  - `tests/unit/components/admin/sources/SourceVerifyButton.test.tsx`（更新）— 同步断言请求签名改为包含空对象请求体
+- **验收结论**：点击“验证”不再落入前端失败分支，后端可执行校验并回写状态/最后验证
+- **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/components/admin/sources/SourceVerifyButton.test.tsx` 4/4 通过
