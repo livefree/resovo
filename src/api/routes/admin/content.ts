@@ -5,6 +5,8 @@
  * GET    /admin/sources                   — 播放源列表（按 is_active 筛选，需 moderator+）
  * DELETE /admin/sources/:id               — 软删除（需 moderator+）
  * POST   /admin/sources/batch-delete      — 批量软删除（需 moderator+）
+ * PATCH  /admin/sources/:id/status        — 单条手工切换状态（需 moderator+）
+ * POST   /admin/sources/batch-status      — 批量手工切换状态（需 moderator+）
  *
  * GET    /admin/submissions               — 投稿队列（is_active=false && submitted_by IS NOT NULL，需 moderator+）
  * POST   /admin/submissions/:id/approve   — 审核通过 → is_active=true（需 moderator+）
@@ -122,6 +124,43 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
 
     const deleted = await contentService.batchDeleteSources(parsed.data.ids)
     return reply.send({ data: { deleted } })
+  })
+
+  fastify.patch('/admin/sources/:id/status', { preHandler: auth }, async (request, reply) => {
+    const StatusSchema = z.object({
+      isActive: z.boolean(),
+    })
+    const parsed = StatusSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+
+    const { id } = request.params as { id: string }
+    const updated = await contentService.setSourceStatus(id, parsed.data.isActive)
+    if (!updated) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '播放源不存在', status: 404 },
+      })
+    }
+    return reply.send({ data: { updated: true, isActive: parsed.data.isActive } })
+  })
+
+  fastify.post('/admin/sources/batch-status', { preHandler: auth }, async (request, reply) => {
+    const BatchStatusSchema = z.object({
+      ids: z.array(z.string().uuid()).min(1).max(500),
+      isActive: z.boolean(),
+    })
+    const parsed = BatchStatusSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+
+    const updated = await contentService.batchSetSourceStatus(parsed.data.ids, parsed.data.isActive)
+    return reply.send({ data: { updated, isActive: parsed.data.isActive } })
   })
 
   // ── PATCH /admin/sources/:id ──────────────────────────────────

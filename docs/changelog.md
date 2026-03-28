@@ -4138,3 +4138,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（更新）— 覆盖批量验证请求参数、摘要渲染与按钮可用性约束
 - **验收结论**：`/admin/sources` 已可直接发起三种范围批量验证，且能在页面内看到处理结果并同步最新列表状态
 - **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/sources/InactiveSourceTable.test.tsx` 17/17 通过
+
+---
+
+## CHG-294 — 源状态手工切换接口（单条/批量）实现
+- **完成时间**：2026-03-27 20:56
+- **修改文件**：
+  - `src/api/routes/admin/content.ts`（更新）— 新增 `PATCH /admin/sources/:id/status` 与 `POST /admin/sources/batch-status`，支持 moderator+ 手工切换源状态
+  - `src/api/services/ContentService.ts`（更新）— 新增 `setSourceStatus` 与 `batchSetSourceStatus` 服务方法
+  - `src/api/db/queries/sources.ts`（更新）— 新增单条/批量状态更新 SQL，切换状态时同步更新 `last_checked`
+  - `tests/unit/api/admin-sources-status.test.ts`（新建）— 覆盖单条/批量状态切换成功路径、404、422、403
+  - `tests/unit/api/content-sort.test.ts`（更新）— 新增 `setSourceStatus / batchSetSourceStatus` 查询层行为断言
+- **验收结论**：后台已具备手工状态兜底接口，可单条或批量将播放源标记为活跃/失效
+- **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/api/admin-sources-status.test.ts tests/unit/api/content-sort.test.ts tests/unit/api/admin-sources-query.test.ts` 29/29 通过

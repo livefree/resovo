@@ -4,7 +4,13 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { listAdminSources, listSourcesForBatchVerify, listSubmissions } from '@/api/db/queries/sources'
+import {
+  batchSetSourceStatus,
+  listAdminSources,
+  listSourcesForBatchVerify,
+  listSubmissions,
+  setSourceStatus,
+} from '@/api/db/queries/sources'
 import { listAdminSubtitles } from '@/api/db/queries/subtitles'
 
 describe('listSubmissions — server-side sort (CHG-258)', () => {
@@ -161,6 +167,35 @@ describe('listSourcesForBatchVerify — scope filters (CHG-292)', () => {
     expect(sql).toContain('v.site_key =')
     expect(params).toContain('video-2')
     expect(params).toContain('site-b')
+  })
+})
+
+describe('setSourceStatus / batchSetSourceStatus (CHG-294)', () => {
+  const query = vi.fn()
+  const db = { query } as unknown as import('pg').Pool
+
+  beforeEach(() => {
+    query.mockReset()
+  })
+
+  it('setSourceStatus updates one row with last_checked', async () => {
+    query.mockResolvedValueOnce({ rowCount: 1 })
+    const updated = await setSourceStatus(db, 'src-1', false)
+    const sql: string = query.mock.calls[0][0]
+    const params: unknown[] = query.mock.calls[0][1]
+    expect(updated).toBe(true)
+    expect(sql).toContain('SET is_active = $1, last_checked = NOW()')
+    expect(params).toEqual([false, 'src-1'])
+  })
+
+  it('batchSetSourceStatus updates multiple rows', async () => {
+    query.mockResolvedValueOnce({ rowCount: 2 })
+    const count = await batchSetSourceStatus(db, ['src-1', 'src-2'], true)
+    const sql: string = query.mock.calls[0][0]
+    const params: unknown[] = query.mock.calls[0][1]
+    expect(count).toBe(2)
+    expect(sql).toContain('WHERE id IN ($2, $3) AND deleted_at IS NULL')
+    expect(params).toEqual([true, 'src-1', 'src-2'])
   })
 })
 

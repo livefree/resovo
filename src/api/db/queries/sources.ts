@@ -160,6 +160,37 @@ export async function updateSourceActiveStatus(
   )
 }
 
+export async function setSourceStatus(
+  db: Pool,
+  sourceId: string,
+  isActive: boolean,
+): Promise<boolean> {
+  const result = await db.query(
+    `UPDATE video_sources
+     SET is_active = $1, last_checked = NOW()
+     WHERE id = $2 AND deleted_at IS NULL
+     RETURNING id`,
+    [isActive, sourceId],
+  )
+  return (result.rowCount ?? 0) > 0
+}
+
+export async function batchSetSourceStatus(
+  db: Pool,
+  ids: string[],
+  isActive: boolean,
+): Promise<number> {
+  if (ids.length === 0) return 0
+  const placeholders = ids.map((_, i) => `$${i + 2}`).join(', ')
+  const result = await db.query(
+    `UPDATE video_sources
+     SET is_active = $1, last_checked = NOW()
+     WHERE id IN (${placeholders}) AND deleted_at IS NULL`,
+    [isActive, ...ids],
+  )
+  return result.rowCount ?? 0
+}
+
 // ── 更新：替换源 URL（CHG-202）───────────────────────────────────
 
 /**

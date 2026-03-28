@@ -3634,7 +3634,7 @@
 ## [SEQ-20260327-40] 播放源批量治理能力补齐（视频主体 + 源站）
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-27 20:28
-- **最后更新时间**：2026-03-27 20:52
+- **最后更新时间**：2026-03-27 20:56
 - **目标**：让 `/admin/sources` 支持按视频主体与来源站点进行批量验证治理，并补齐筛选/排序与手工状态兜底能力
 - **范围**：播放源查询接口、批量验证接口、手工状态切换接口、来源管理前端交互与测试
 - **依赖**：`docs/admin_backend_capability_exposure_plan_20260327.md`
@@ -3689,16 +3689,17 @@
      - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（扩展）
    - 验收要点：可按当前筛选范围触发批量验证并看到成功/失败/超时反馈
 
-5. CHG-294 — 源状态手工切换接口（单条/批量，可选能力）实现（状态：⬜ 待开始）
+5. CHG-294 — 源状态手工切换接口（单条/批量，可选能力）实现（状态：✅ 已完成）
    - 创建时间：2026-03-27 20:28
    - 计划开始：CHG-292 完成后
-   - 实际开始：—
-   - 完成时间：—
+   - 实际开始：2026-03-27 20:53
+   - 完成时间：2026-03-27 20:56
    - 文件范围：
      - `src/api/routes/admin/content.ts`
      - `src/api/services/ContentService.ts`
      - `src/api/db/queries/sources.ts`
-     - `tests/unit/api/sources.test.ts`（扩展）
+     - `tests/unit/api/admin-sources-status.test.ts`（新建）
+     - `tests/unit/api/content-sort.test.ts`（扩展）
    - 验收要点：支持单条/批量状态切换，权限为 moderator+，并保留操作日志字段
 
 6. CHG-295 — 源状态手工切换前端入口与权限控制（状态：⬜ 待开始）

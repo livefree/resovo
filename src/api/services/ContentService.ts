@@ -38,6 +38,14 @@ export class ContentService {
     return sourcesQueries.batchDeleteSources(this.db, ids)
   }
 
+  async setSourceStatus(sourceId: string, isActive: boolean): Promise<boolean> {
+    return sourcesQueries.setSourceStatus(this.db, sourceId, isActive)
+  }
+
+  async batchSetSourceStatus(ids: string[], isActive: boolean): Promise<number> {
+    return sourcesQueries.batchSetSourceStatus(this.db, ids, isActive)
+  }
+
   async verifySource(sourceId: string): Promise<{
     isActive: boolean
     responseMs: number
