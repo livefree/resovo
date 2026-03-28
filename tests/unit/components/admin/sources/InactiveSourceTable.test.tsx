@@ -102,10 +102,9 @@ describe('InactiveSourceTable (CHG-262)', () => {
     render(<InactiveSourceTable />)
     await screen.findByText('Alpha')
 
-    // Open panel, toggle off coordinate, close panel, verify header is gone
-    fireEvent.click(screen.getByTestId('inactive-source-columns-toggle'))
-    fireEvent.click(screen.getByTestId('inactive-source-columns-panel-toggle-coordinate'))
-    fireEvent.click(screen.getByTestId('inactive-source-columns-toggle')) // close panel
+    // Open settings panel, toggle off coordinate, verify header is gone
+    fireEvent.click(screen.getByTestId('inactive-source-table-scroll-settings-btn'))
+    fireEvent.click(screen.getByTestId('inactive-source-table-scroll-settings-content-visible-coordinate'))
 
     await waitFor(() => {
       expect(screen.queryByText('S/E')).toBeNull()

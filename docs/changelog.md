@@ -4297,3 +4297,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/videos/VideoTable.test.tsx` — 更新 testId
   - `docs/task-queue.md`（CHG-304 完成）
 - **测试覆盖**：typecheck 通过；11/11 passed
+
+---
+
+### CHG-305 — InactiveSourceTable 迁移到 useTableSettings + settingsSlot
+- **完成时间**：2026-03-28 14:41
+- **修改文件**：
+  - `src/components/admin/sources/InactiveSourceTable.tsx` — 移除 showColumnsPanel + ColumnSettingsPanel + columnsToggleTestId；引入 useTableSettings + INACTIVE_SOURCE_SETTINGS_COLUMNS + applyToColumns + settingsSlot；动态 tableId 传入 useTableSettings
+  - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx` — 更新 testId
+  - `docs/task-queue.md`（CHG-305 完成）
+- **测试覆盖**：typecheck 通过；10/10 passed

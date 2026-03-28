@@ -3828,20 +3828,20 @@
    - 文件范围：src/components/admin/videos/VideoTable.tsx
    - 验收要点：typecheck + lint + test 通过；排序行为不变
 
-9. CHG-305 — InactiveSourceTable 迁移（状态：⬜ 待开始）
+9. CHG-305 — InactiveSourceTable 迁移（状态：✅ 已完成）
    - 创建时间：2026-03-28 00:00
    - 计划开始：CHG-304 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-28 14:39
+   - 完成时间：2026-03-28 14:41
    - 文件范围：src/components/admin/sources/InactiveSourceTable.tsx
    - 验收要点：typecheck + lint + test 通过
 
-10. CHG-306 — CrawlerSiteManager 迁移（requiredColumns → required: true）（状态：⬜ 待开始）
+10. CHG-306 — CrawlerSiteManager 迁移（requiredColumns → required: true）（状态：🔄 进行中）
     - 创建时间：2026-03-28 00:00
     - 计划开始：CHG-305 完成后
-    - 实际开始：
+    - 实际开始：2026-03-28 14:42
     - 完成时间：
-    - 文件范围：src/components/admin/crawler/CrawlerSiteManager.tsx
+    - 文件范围：src/components/admin/system/crawler-site/CrawlerSiteManager.tsx + CrawlerSiteTable.tsx + useCrawlerSiteColumns.ts + useCrawlerSiteTableColumns.tsx + CrawlerSiteTableHead.tsx
     - 验收要点：typecheck + lint + test 通过；required 列仍无法隐藏
 
 11. CHG-307 — AdminAnalyticsDashboard 迁移（状态：⬜ 待开始）

@@ -13,9 +13,9 @@ import { SourceVerifyButton } from '@/components/admin/sources/SourceVerifyButto
 import { BatchDeleteBar } from '@/components/admin/sources/BatchDeleteBar'
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
 import { SelectionActionBar } from '@/components/admin/shared/batch/SelectionActionBar'
-import { ColumnSettingsPanel } from '@/components/admin/shared/table/ColumnSettingsPanel'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import { useAdminTableColumns, type AdminColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
+import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import {
   TableCheckboxCell,
   TableBadgeCell,
@@ -55,6 +55,21 @@ const INACTIVE_SOURCE_COLUMNS_META: AdminColumnMeta[] = [
 ]
 
 const INACTIVE_SOURCE_DEFAULT_STATE = {}
+
+// 所有列 ID（useTableSettings 控制显/隐）
+const ALL_INACTIVE_SOURCE_COLUMN_IDS = INACTIVE_SOURCE_COLUMNS_META.map(
+  (col) => col.id as InactiveSourceColumnId,
+)
+
+// useTableSettings 列描述
+const INACTIVE_SOURCE_SETTINGS_COLUMNS = INACTIVE_SOURCE_COLUMNS_META.map((col) => ({
+  id: col.id,
+  label: INACTIVE_SOURCE_COLUMN_LABELS[col.id as InactiveSourceColumnId] ?? col.id,
+  defaultVisible: col.visible ?? true,
+  defaultSortable: false,
+  required: col.id === 'actions',
+}))
+
 type SourceStatusFilter = 'all' | 'inactive'
 type SourceSortField = 'created_at' | 'last_checked' | 'is_active' | 'video_title' | 'source_url' | 'site_key'
 type SourceSortDir = 'asc' | 'desc'
@@ -100,7 +115,6 @@ function buildColumns(
   onVerified: (page: number) => void,
   onSetStatus: (row: SourceRow, nextActive: boolean) => void,
   statusUpdatingId: string | null,
-  visibleColumnIds: InactiveSourceColumnId[],
   columnsById: Record<string, { width: number }>,
   selection: {
     enabled: boolean
@@ -179,8 +193,7 @@ function buildColumns(
     },
   ]
 
-  const dataColumns = all.filter((col) => visibleColumnIds.includes(col.id as InactiveSourceColumnId))
-  if (!selection.enabled) return dataColumns
+  if (!selection.enabled) return all
 
   const selectionColumn: TableColumn<SourceRow> = {
     id: 'selection',
@@ -204,7 +217,7 @@ function buildColumns(
     ),
   }
 
-  return [selectionColumn, ...dataColumns]
+  return [selectionColumn, ...all]
 }
 
 export function InactiveSourceTable({
@@ -219,8 +232,6 @@ export function InactiveSourceTable({
   const tableId = isAllStatus ? 'all-source-table' : 'inactive-source-table'
   const emptyText = isAllStatus ? '暂无播放源' : '暂无失效源'
   const scrollTestId = isAllStatus ? 'all-source-table-scroll' : 'inactive-source-table-scroll'
-  const columnsToggleTestId = isAllStatus ? 'all-source-columns-toggle' : 'inactive-source-columns-toggle'
-  const columnsPanelTestId = isAllStatus ? 'all-source-columns-panel' : 'inactive-source-columns-panel'
 
   const [sources, setSources] = useState<SourceRow[]>([])
   const [total, setTotal] = useState(0)
@@ -230,7 +241,6 @@ export function InactiveSourceTable({
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [deleteTarget, setDeleteTarget] = useState<SourceRow | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
-  const [showColumnsPanel, setShowColumnsPanel] = useState(false)
   const [batchVerifyLoading, setBatchVerifyLoading] = useState<SourceBatchVerifyScope | null>(null)
   const [batchVerifySummary, setBatchVerifySummary] = useState<BatchVerifySummary | null>(null)
   const [batchVerifyError, setBatchVerifyError] = useState<string | null>(null)
@@ -245,13 +255,10 @@ export function InactiveSourceTable({
     defaultState: INACTIVE_SOURCE_DEFAULT_STATE,
   })
 
-  const visibleColumnIds = useMemo(
-    () =>
-      columnsState.columns
-        .filter((col) => col.visible)
-        .map((col) => col.id as InactiveSourceColumnId),
-    [columnsState.columns],
-  )
+  const tableSettings = useTableSettings({
+    tableId,
+    columns: INACTIVE_SOURCE_SETTINGS_COLUMNS,
+  })
 
   const allVisibleSelected = useMemo(
     () => sources.length > 0 && sources.every((row) => selectedIds.includes(row.id)),
@@ -390,7 +397,7 @@ export function InactiveSourceTable({
     }
   }, [fetchSources, page, pageSize, selectedIds])
 
-  const tableColumns = useMemo(
+  const allTableColumns = useMemo(
     () =>
       buildColumns(
         page,
@@ -398,7 +405,6 @@ export function InactiveSourceTable({
         (p) => { void fetchSources(p, pageSize) },
         (row, nextActive) => { void setSingleStatus(row, nextActive) },
         statusUpdatingId,
-        visibleColumnIds,
         columnsState.columnsById,
         {
           enabled: !isAllStatus,
@@ -414,7 +420,6 @@ export function InactiveSourceTable({
       fetchSources,
       setSingleStatus,
       statusUpdatingId,
-      visibleColumnIds,
       columnsState.columnsById,
       isAllStatus,
       selectedIds,
@@ -422,6 +427,11 @@ export function InactiveSourceTable({
       handleSelectAll,
       handleSelectRow,
     ],
+  )
+
+  const tableColumns = useMemo(
+    () => tableSettings.applyToColumns(allTableColumns),
+    [tableSettings, allTableColumns],
   )
 
   return (
@@ -507,47 +517,24 @@ export function InactiveSourceTable({
         </div>
       ) : null}
 
-      {/* ⚙ 列设置叠加在表格右上角，面板在 overflow-hidden 外渲染 */}
-      <div className="relative">
-        <div className="absolute right-4 top-3 z-30">
-          <button
-            type="button"
-            className="rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-            onClick={() => setShowColumnsPanel((prev) => !prev)}
-            data-testid={columnsToggleTestId}
-            aria-label="列设置"
-            title="列设置"
-          >⚙</button>
-          {showColumnsPanel ? (
-            <div className="absolute right-0 mt-1 w-52">
-              <ColumnSettingsPanel
-                data-testid={columnsPanelTestId}
-                columns={columnsState.columns.map((col) => ({
-                  id: col.id,
-                  label: INACTIVE_SOURCE_COLUMN_LABELS[col.id as InactiveSourceColumnId] ?? col.id,
-                  visible: col.visible,
-                }))}
-                onToggle={(id) => columnsState.toggleColumnVisibility(id)}
-                onReset={() => columnsState.resetColumnsMeta()}
-              />
-            </div>
-          ) : null}
-        </div>
-
-        <ModernDataTable
-          columns={tableColumns}
-          rows={sources}
-          loading={loading}
-          emptyText={emptyText}
-          getRowId={(r) => r.id}
-          scrollTestId={scrollTestId}
-          onColumnWidthChange={(columnId, nextWidth) => {
-            if (columnId in columnsState.columnsById) {
-              columnsState.setColumnWidth(columnId, nextWidth)
-            }
-          }}
-        />
-      </div>
+      <ModernDataTable
+        columns={tableColumns}
+        rows={sources}
+        loading={loading}
+        emptyText={emptyText}
+        getRowId={(r) => r.id}
+        scrollTestId={scrollTestId}
+        onColumnWidthChange={(columnId, nextWidth) => {
+          if (columnId in columnsState.columnsById) {
+            columnsState.setColumnWidth(columnId, nextWidth)
+          }
+        }}
+        settingsSlot={{
+          settingsColumns: tableSettings.orderedSettings,
+          onSettingsChange: tableSettings.updateSetting,
+          onSettingsReset: tableSettings.reset,
+        }}
+      />
 
       {total > 0 ? (
         <div className="mt-4">
