@@ -46,6 +46,7 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
   const [firstSourceUrl, setFirstSourceUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [reviewLoading, setReviewLoading] = useState<'approve' | 'reject' | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const fetchDetail = useCallback(async (id: string) => {
@@ -74,21 +75,26 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
     } else {
       setVideo(null)
       setFirstSourceUrl(null)
+      setRejectReason('')
     }
   }, [videoId, fetchDetail])
 
   const handleReview = useCallback(async (action: 'approve' | 'reject') => {
     if (!videoId) return
+    const reason = rejectReason.trim()
     setReviewLoading(action)
     try {
-      await apiClient.post(`/admin/videos/${videoId}/review`, { action })
+      await apiClient.post(`/admin/videos/${videoId}/review`, action === 'reject' && reason.length > 0
+        ? { action, reason }
+        : { action })
+      if (action === 'reject') setRejectReason('')
       onReviewed?.()
     } catch (_err) {
       setError('审核操作失败，请重试')
     } finally {
       setReviewLoading(null)
     }
-  }, [videoId, onReviewed])
+  }, [videoId, onReviewed, rejectReason])
 
   if (!videoId) {
     return (
@@ -144,7 +150,22 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
       </div>
 
       {/* 审核操作按钮 */}
-      <div className="flex gap-2" data-testid="moderation-actions">
+      <div className="space-y-2" data-testid="moderation-actions">
+        <div>
+          <label className="mb-1 block text-xs text-[var(--muted)]" htmlFor="moderation-reject-reason-input">
+            拒绝原因（可选）
+          </label>
+          <textarea
+            id="moderation-reject-reason-input"
+            value={rejectReason}
+            onChange={(event) => setRejectReason(event.target.value)}
+            placeholder="例如：片源不完整、画质异常、集数错误"
+            rows={2}
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-xs text-[var(--text)] placeholder:text-[var(--muted)]"
+            data-testid="moderation-reject-reason-input"
+          />
+        </div>
+        <div className="flex gap-2">
         <button
           type="button"
           disabled={reviewLoading != null}
@@ -163,6 +184,7 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
         >
           {reviewLoading === 'reject' ? '处理中…' : '拒绝'}
         </button>
+        </div>
       </div>
     </div>
   )

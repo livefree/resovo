@@ -4031,3 +4031,15 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/videos/BatchPublishBar.test.tsx`（更新）— 用例断言切换为 batch 接口，并新增批量隐藏走 `batch-unpublish` 的覆盖
 - **验收结论**：批量公开/隐藏已从逐条调用收敛为批量接口调用，请求数显著下降
 - **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`BatchPublishBar.test.tsx` 9/9 通过
+
+---
+
+## CHG-285 — 审核台拒绝原因录入与文案对齐
+- **完成时间**：2026-03-27 17:50
+- **修改文件**：
+  - `src/components/admin/moderation/ModerationDetail.tsx`（更新）— 拒绝动作新增“拒绝原因（可选）”输入框，提交拒绝时带上 reason；拒绝后清空输入
+  - `src/components/admin/moderation/ModerationDashboard.tsx`（更新）— 快捷键拒绝补充默认 reason，顶部快捷键文案与行为保持一致
+  - `src/app/[locale]/admin/moderation/page.tsx`（更新）— 页面描述改为“通过/拒绝（支持拒绝原因）”，移除未实现的“封禁”表述
+  - `tests/unit/components/admin/moderation/ModerationDetail.test.tsx`（新建）— 覆盖拒绝带 reason 提交与通过操作请求体
+- **验收结论**：审核台拒绝操作可录入并提交原因，页面文案与当前能力一致
+- **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`ModerationDetail.test.tsx` 2/2 通过

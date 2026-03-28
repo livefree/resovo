@@ -61,7 +61,7 @@ export function ModerationDashboard() {
     if (!selectedVideoId || reviewingRef.current) return
     reviewingRef.current = true
     try {
-      await apiClient.post(`/admin/videos/${selectedVideoId}/review`, { action: 'reject' })
+      await apiClient.post(`/admin/videos/${selectedVideoId}/review`, { action: 'reject', reason: '快捷键拒绝' })
       handleReviewed()
     } catch (_err) {
       // hotkey shortcut failed: detail panel's error state shows feedback
@@ -130,7 +130,7 @@ export function ModerationDashboard() {
             </p>
             {selectedVideoId != null && (
               <p className="mt-0.5 text-xs text-[var(--muted)]">
-                快捷键：A 通过 · R 拒绝 · ← → 切换
+                快捷键：A 通过 · R 快捷拒绝 · ← → 切换
               </p>
             )}
           </div>

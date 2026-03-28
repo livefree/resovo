@@ -11,7 +11,7 @@ export default function AdminModerationPage() {
   return (
     <AdminPageShell
       title="内容审核台"
-      description="审核爬虫采集内容，执行通过、拒绝或封禁操作。"
+      description="审核爬虫采集内容，执行通过或拒绝（支持填写拒绝原因）。"
       testId="admin-moderation-page"
     >
       <Suspense>

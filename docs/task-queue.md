@@ -3492,7 +3492,7 @@
 ## [SEQ-20260327-36] 后台能力显性化与闭环补齐（审核/视频/播放源）
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-27 17:27
-- **最后更新时间**：2026-03-27 17:47
+- **最后更新时间**：2026-03-27 17:50
 - **目标**：将已实现但未在后台充分展示的接口能力显性化，补齐审核、视频管理、播放源管理三条核心运营闭环
 - **范围**：`/admin/moderation`、`/admin/videos`、`/admin/sources` 对应前端组件与必要后端轻量配套
 - **依赖**：`docs/admin_backend_capability_exposure_plan_20260327.md`
@@ -3543,11 +3543,11 @@
      - `tests/unit/components/admin/videos/BatchPublishBar.test.tsx`（新建或扩展）
    - 验收要点：批量公开/隐藏优先命中 `/admin/videos/batch-publish|batch-unpublish`，请求数显著下降
 
-5. CHG-285 — 审核台拒绝原因录入与文案对齐（状态：⬜ 待开始）
+5. CHG-285 — 审核台拒绝原因录入与文案对齐（状态：✅ 已完成）
    - 创建时间：2026-03-27 17:27
    - 计划开始：CHG-284 完成后
-   - 实际开始：—
-   - 完成时间：—
+   - 实际开始：2026-03-27 17:48
+   - 完成时间：2026-03-27 17:50
    - 文件范围：
      - `src/components/admin/moderation/ModerationDetail.tsx`
      - `src/components/admin/moderation/ModerationDashboard.tsx`
