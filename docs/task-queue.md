@@ -3565,3 +3565,27 @@
      - `tests/e2e/admin-source-and-video-flows.spec.ts`（新建或扩展）
      - `docs/changelog.md`（按规范追加）
    - 验收要点：后台明确展示 Verify scheduler 运行态；审核/视频管理/播放源三条链路冒烟通过
+
+---
+
+## [SEQ-20260327-37] 播放源“单条验证”契约修复与状态回写
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-27 19:47
+- **最后更新时间**：2026-03-27 19:54
+- **目标**：修复“验证按钮与后端返回契约不一致”导致的误报超时与最后验证列不更新问题，恢复单条验证闭环
+- **范围**：`/admin/sources/:id/verify` 后端接口、验证按钮交互、相关单元测试
+- **依赖**：`docs/admin_backend_capability_exposure_plan_20260327.md`
+
+### 任务列表（按执行顺序）
+
+1. CHG-287 — 单条验证改为同步返回验证结果并刷新状态列（状态：✅ 已完成）
+   - 创建时间：2026-03-27 19:47
+   - 计划开始：2026-03-27 19:50
+   - 实际开始：2026-03-27 19:47
+   - 完成时间：2026-03-27 19:54
+   - 文件范围：
+     - `src/api/routes/admin/crawler.ts`
+     - `src/components/admin/sources/SourceVerifyButton.tsx`
+     - `tests/unit/api/sources-verify.test.ts`
+     - `tests/unit/components/admin/sources/SourceVerifyButton.test.tsx`（新建）
+   - 验收要点：点击“验证”可直接返回 `isActive/responseMs/statusCode`，行内结果展示正确，列表刷新后 `状态/最后验证` 可见变化

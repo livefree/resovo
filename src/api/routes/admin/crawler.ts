@@ -5,14 +5,14 @@
  * GET  /admin/crawler/tasks           — 任务列表（需 admin）
  * POST /admin/crawler/tasks           — 手动触发采集（需 admin）
  * GET  /admin/crawler/sites-status    — 各源站采集状态（需 admin）
- * POST /admin/sources/:id/verify      — 手动触发单条验证（需 admin）
+ * POST /admin/sources/:id/verify      — 手动触发单条同步验证（需 moderator+）
  */
 
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { CrawlerService } from '@/api/services/CrawlerService'
-import { findSourceById } from '@/api/db/queries/sources'
+import { ContentService } from '@/api/services/ContentService'
 import {
   listTasks,
   listTasksByRunId,
@@ -29,7 +29,6 @@ import {
 } from '@/api/db/queries/crawlerTasks'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import * as crawlerRunsQueries from '@/api/db/queries/crawlerRuns'
-import { enqueueVerifySingle } from '@/api/workers/verifyWorker'
 import { es } from '@/api/lib/elasticsearch'
 import { crawlerQueue } from '@/api/lib/queue'
 import { createCrawlerTaskLog, listCrawlerTaskLogs } from '@/api/db/queries/crawlerTaskLogs'
@@ -81,6 +80,7 @@ function mapTaskDto(task: CrawlerTask) {
 
 export async function adminCrawlerRoutes(fastify: FastifyInstance) {
   const crawlerService = new CrawlerService(db, es)
+  const contentService = new ContentService(db)
   const runService = new CrawlerRunService(db)
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
   const logTask = async (input: Parameters<typeof createCrawlerTaskLog>[1]) => {
@@ -626,16 +626,15 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     { preHandler: [fastify.authenticate, fastify.requireRole(['moderator', 'admin'])] },
     async (request, reply) => {
       const { id } = request.params as { id: string }
-      const source = await findSourceById(db, id)
+      const result = await contentService.verifySource(id)
 
-      if (!source) {
+      if (!result) {
         return reply.code(404).send({
           error: { code: 'NOT_FOUND', message: '播放源不存在', status: 404 },
         })
       }
 
-      const job = await enqueueVerifySingle(id, source.sourceUrl)
-      return reply.code(202).send({ data: { jobId: job.id, sourceId: id } })
+      return reply.send({ data: result })
     }
   )
 

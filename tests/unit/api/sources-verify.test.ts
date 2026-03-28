@@ -1,9 +1,14 @@
 /**
  * tests/unit/api/sources-verify.test.ts
- * CHG-28: POST /admin/sources/:id/verify — 异步入队，权限检查，404 处理
+ * CHG-287: POST /admin/sources/:id/verify — 同步验证返回结果，权限检查，404 处理
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+const { mockRedisGet, mockVerifySource } = vi.hoisted(() => ({
+  mockRedisGet: vi.fn().mockResolvedValue(null),
+  mockVerifySource: vi.fn(),
+}))
 
 // ── Mock 依赖 ─────────────────────────────────────────────────────
 
@@ -13,18 +18,58 @@ vi.mock('@/api/services/CrawlerService', () => ({
   CrawlerService: vi.fn(() => ({})),
   parseCrawlerSources: vi.fn(),
 }))
+vi.mock('@/api/services/ContentService', () => ({
+  ContentService: vi.fn().mockImplementation(() => ({
+    verifySource: mockVerifySource,
+  })),
+}))
 vi.mock('@/api/db/queries/crawlerTasks', () => ({
   listTasks: vi.fn(),
-  createTask: vi.fn(),
+  listTasksByRunId: vi.fn(),
+  cancelPendingTasksByRun: vi.fn(),
+  requestCancelRunningTasksByRun: vi.fn(),
+  cancelAllActiveTasks: vi.fn(),
+  findActiveTaskBySite: vi.fn(),
+  getLatestTaskBySite: vi.fn(),
+  getLatestTasksBySites: vi.fn(),
+  getCrawlerOverview: vi.fn(),
+  countOrphanActiveTasks: vi.fn(),
+  markStalePendingTasks: vi.fn(),
 }))
-vi.mock('@/api/workers/crawlerWorker', () => ({
-  enqueueFullCrawl: vi.fn(),
-  enqueueIncrementalCrawl: vi.fn(),
-  registerCrawlerWorker: vi.fn(),
+vi.mock('@/api/db/queries/crawlerSites', () => ({
+  findCrawlerSite: vi.fn(),
+  listCrawlerSites: vi.fn().mockResolvedValue([]),
+  listEnabledCrawlerSites: vi.fn().mockResolvedValue([]),
 }))
-
-const { mockRedisGet } = vi.hoisted(() => ({
-  mockRedisGet: vi.fn().mockResolvedValue(null),
+vi.mock('@/api/db/queries/crawlerRuns', () => ({
+  requestCancelAllActiveRuns: vi.fn().mockResolvedValue({ count: 0, runIds: [] }),
+  syncRunStatusFromTasks: vi.fn(),
+  listRuns: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
+  getRunById: vi.fn(),
+  updateRunControlStatus: vi.fn(),
+}))
+vi.mock('@/api/db/queries/crawlerTaskLogs', () => ({
+  createCrawlerTaskLog: vi.fn(),
+  listCrawlerTaskLogs: vi.fn().mockResolvedValue([]),
+}))
+vi.mock('@/api/services/CrawlerRunService', () => ({
+  CrawlerRunService: vi.fn().mockImplementation(() => ({
+    createAndEnqueueRun: vi.fn().mockResolvedValue({
+      runId: 'run-1',
+      taskIds: ['task-1'],
+      enqueuedSiteKeys: ['site-a'],
+      skippedSiteKeys: [],
+    }),
+  })),
+}))
+vi.mock('@/api/db/queries/systemSettings', () => ({
+  getAutoCrawlConfig: vi.fn(),
+  setAutoCrawlConfig: vi.fn(),
+  setSetting: vi.fn(),
+  getSetting: vi.fn(),
+}))
+vi.mock('@/api/lib/queue', () => ({
+  crawlerQueue: { getRepeatableJobs: vi.fn().mockResolvedValue([]), removeRepeatableByKey: vi.fn() },
 }))
 vi.mock('@/api/lib/redis', () => ({
   redis: { get: mockRedisGet },
@@ -34,50 +79,12 @@ vi.mock('@/api/lib/auth', () => ({
   blacklistKey: (t: string) => `blacklist:${t}`,
 }))
 
-vi.mock('@/api/db/queries/sources', () => ({
-  findSourceById: vi.fn(),
-  listAdminSources: vi.fn(),
-  updateSourceActiveStatus: vi.fn(),
-  deleteSource: vi.fn(),
-  batchDeleteSources: vi.fn(),
-  approveSubmission: vi.fn(),
-  rejectSubmission: vi.fn(),
-  listSubmissions: vi.fn(),
-}))
-
-vi.mock('@/api/workers/verifyWorker', () => ({
-  enqueueVerifySingle: vi.fn(),
-  enqueueVerifySource: vi.fn(),
-  registerVerifyWorker: vi.fn(),
-}))
-
-vi.mock('@/api/lib/queue', () => ({
-  verifyQueue: { add: vi.fn(), process: vi.fn(), on: vi.fn() },
-  crawlerQueue: { add: vi.fn(), process: vi.fn(), on: vi.fn() },
-}))
-
 import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
 import { setupAuthenticate } from '@/api/plugins/authenticate'
 import * as authLib from '@/api/lib/auth'
-import * as sourcesQueriesModule from '@/api/db/queries/sources'
-import * as verifyWorkerModule from '@/api/workers/verifyWorker'
 
 const mockVerify = authLib.verifyAccessToken as ReturnType<typeof vi.fn>
-const mockFindSource = sourcesQueriesModule.findSourceById as ReturnType<typeof vi.fn>
-const mockEnqueue = verifyWorkerModule.enqueueVerifySingle as ReturnType<typeof vi.fn>
-
-const MOCK_SOURCE = {
-  id: 'src-1',
-  videoId: 'vid-1',
-  episodeNumber: null,
-  sourceUrl: 'https://example.com/video.mp4',
-  sourceName: 'test',
-  quality: null,
-  type: 'hls',
-  isActive: true,
-  lastChecked: null,
-}
 
 async function buildApp() {
   const { adminCrawlerRoutes } = await import('@/api/routes/admin/crawler')
@@ -94,13 +101,13 @@ function authHeader(role: 'admin' | 'moderator' | 'user' = 'moderator') {
   return { Authorization: 'Bearer test-token' }
 }
 
-describe('POST /admin/sources/:id/verify (CHG-28)', () => {
+describe('POST /admin/sources/:id/verify (CHG-287)', () => {
   let app: Awaited<ReturnType<typeof buildApp>>
 
   beforeEach(async () => {
     vi.clearAllMocks()
     mockRedisGet.mockResolvedValue(null)
-    mockEnqueue.mockResolvedValue({ id: 'job-123' })
+    mockVerifySource.mockResolvedValue({ isActive: true, responseMs: 120, statusCode: 200 })
     app = await buildApp()
   })
 
@@ -119,48 +126,37 @@ describe('POST /admin/sources/:id/verify (CHG-28)', () => {
   })
 
   it('源不存在返回 404', async () => {
-    mockFindSource.mockResolvedValueOnce(null)
+    mockVerifySource.mockResolvedValueOnce(null)
     const res = await app.inject({
       method: 'POST',
       url: '/admin/sources/nonexistent/verify',
       headers: authHeader(),
     })
     expect(res.statusCode).toBe(404)
+    expect(mockVerifySource).toHaveBeenCalledWith('nonexistent')
   })
 
-  it('成功入队返回 202，响应包含 jobId 和 sourceId', async () => {
-    mockFindSource.mockResolvedValueOnce(MOCK_SOURCE)
+  it('验证成功返回 200，同步响应包含验证结果', async () => {
+    mockVerifySource.mockResolvedValueOnce({ isActive: false, responseMs: 876, statusCode: 503 })
 
     const res = await app.inject({
       method: 'POST',
       url: '/admin/sources/src-1/verify',
       headers: authHeader(),
     })
-    expect(res.statusCode).toBe(202)
-    const body = res.json<{ data: { jobId: string | number; sourceId: string } }>()
-    expect(body.data.jobId).toBe('job-123')
-    expect(body.data.sourceId).toBe('src-1')
-  })
 
-  it('成功时调用 enqueueVerifySingle 并传入 sourceId 和 url', async () => {
-    mockFindSource.mockResolvedValueOnce(MOCK_SOURCE)
-
-    await app.inject({
-      method: 'POST',
-      url: '/admin/sources/src-1/verify',
-      headers: authHeader(),
-    })
-    expect(mockEnqueue).toHaveBeenCalledWith('src-1', MOCK_SOURCE.sourceUrl)
+    expect(res.statusCode).toBe(200)
+    const body = res.json<{ data: { isActive: boolean; responseMs: number; statusCode: number | null } }>()
+    expect(body.data).toEqual({ isActive: false, responseMs: 876, statusCode: 503 })
+    expect(mockVerifySource).toHaveBeenCalledWith('src-1')
   })
 
   it('moderator 权限可以验证（不只限 admin）', async () => {
-    mockFindSource.mockResolvedValueOnce(MOCK_SOURCE)
-
     const res = await app.inject({
       method: 'POST',
       url: '/admin/sources/src-1/verify',
       headers: authHeader('moderator'),
     })
-    expect(res.statusCode).toBe(202)
+    expect(res.statusCode).toBe(200)
   })
 })

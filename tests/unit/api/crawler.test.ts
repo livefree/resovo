@@ -8,6 +8,10 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
+const { mockContentVerifySource } = vi.hoisted(() => ({
+  mockContentVerifySource: vi.fn(),
+}))
+
 // ── Mock 基础依赖 ─────────────────────────────────────────────────
 
 vi.mock('@/api/lib/postgres', () => ({ db: { query: vi.fn() } }))
@@ -39,6 +43,12 @@ vi.mock('@/api/services/CrawlerService', () => ({
   })),
   parseCrawlerSources: vi.fn().mockReturnValue([]),
   getEnabledSources: vi.fn().mockResolvedValue([]),
+}))
+
+vi.mock('@/api/services/ContentService', () => ({
+  ContentService: vi.fn().mockImplementation(() => ({
+    verifySource: mockContentVerifySource,
+  })),
 }))
 
 vi.mock('@/api/db/queries/crawlerSites', () => ({
@@ -666,10 +676,8 @@ import cookie from '@fastify/cookie'
 import { setupAuthenticate } from '@/api/plugins/authenticate'
 import * as authLib from '@/api/lib/auth'
 import * as crawlerTasksQueriesModule from '@/api/db/queries/crawlerTasks'
-import * as sourcesQueriesModule from '@/api/db/queries/sources'
 
 const mockListTasks = crawlerTasksQueriesModule.listTasks as ReturnType<typeof vi.fn>
-const mockFindSourceById = sourcesQueriesModule.findSourceById as ReturnType<typeof vi.fn>
 
 async function buildCrawlerAdminApp() {
   const { adminCrawlerRoutes } = await import('@/api/routes/admin/crawler')
@@ -697,7 +705,7 @@ describe('CRAWLER-04: 管理后台接口', () => {
     vi.clearAllMocks()
     mockJobAdd.mockResolvedValue({ id: 'job-42' })
     mockListTasks.mockResolvedValue({ rows: [], total: 0 })
-    mockFindSourceById.mockResolvedValue(null)
+    mockContentVerifySource.mockResolvedValue(null)
     // 重置 CrawlerService mock（vi.clearAllMocks 会清除 mockImplementation）
     const { CrawlerService } = await import('@/api/services/CrawlerService')
     ;(CrawlerService as ReturnType<typeof vi.fn>).mockImplementation(() => ({
@@ -829,27 +837,34 @@ describe('CRAWLER-04: 管理后台接口', () => {
   })
 
   it('POST /admin/sources/:id/verify：source 不存在返回 404', async () => {
-    mockFindSourceById.mockResolvedValueOnce(null)
+    mockContentVerifySource.mockResolvedValueOnce(null)
     const res = await app.inject({
       method: 'POST',
       url: '/admin/sources/nonexistent/verify',
       headers: authHeader('admin'),
     })
     expect(res.statusCode).toBe(404)
+    expect(mockContentVerifySource).toHaveBeenCalledWith('nonexistent')
   })
 
-  it('POST /admin/sources/:id/verify：source 存在时返回 202 并入队', async () => {
-    mockFindSourceById.mockResolvedValueOnce({
-      id: 'src-1',
-      sourceUrl: 'https://cdn.example.com/video.m3u8',
+  it('POST /admin/sources/:id/verify：source 存在时返回 200 与验证结果', async () => {
+    mockContentVerifySource.mockResolvedValueOnce({
+      isActive: false,
+      responseMs: 987,
+      statusCode: 503,
     })
     const res = await app.inject({
       method: 'POST',
       url: '/admin/sources/src-1/verify',
       headers: authHeader('admin'),
     })
-    expect(res.statusCode).toBe(202)
-    expect(res.json().data).toMatchObject({ sourceId: 'src-1' })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({
+      isActive: false,
+      responseMs: 987,
+      statusCode: 503,
+    })
+    expect(mockContentVerifySource).toHaveBeenCalledWith('src-1')
   })
 
   // ── POST /sources/submit ──────────────────────────────

@@ -4056,3 +4056,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/e2e/admin-source-and-video-flows.spec.ts`（新建）— 覆盖播放源页/视频管理操作列/审核拒绝理由三条关键路径的冒烟脚本
 - **验收结论**：后台可见源校验调度运行态，三条关键链路具备 e2e 冒烟脚本覆盖
 - **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`SourceHealthAlert.test.tsx` 2/2 通过；`playwright` 冒烟在当前沙箱因 `listen EPERM 0.0.0.0:3001` 未执行
+
+---
+
+## CHG-287 — 单条验证改为同步返回验证结果并刷新状态列
+- **完成时间**：2026-03-27 19:54
+- **修改文件**：
+  - `src/api/routes/admin/crawler.ts`（更新）— `/admin/sources/:id/verify` 改为复用 `ContentService.verifySource` 的同步验证返回，直接返回 `isActive/responseMs/statusCode`
+  - `src/components/admin/sources/SourceVerifyButton.tsx`（更新）— 新增验证响应结构校验与错误态文案（返回异常/验证失败），避免旧契约下误显示“超时”
+  - `tests/unit/api/sources-verify.test.ts`（更新）— 将断言从 `202+jobId` 调整为 `200+验证结果`，并覆盖 moderator 权限与 404 分支
+  - `tests/unit/api/crawler.test.ts`（更新）— 同步修正管理后台路由测试中 `/admin/sources/:id/verify` 的旧契约断言
+  - `tests/unit/components/admin/sources/SourceVerifyButton.test.tsx`（新建）— 覆盖成功、超时、返回异常、请求失败四种按钮反馈
+- **验收结论**：验证按钮与后端契约一致，单条验证可即时返回结果并触发列表刷新，状态/最后验证列可正确回写
+- **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/api/sources-verify.test.ts tests/unit/api/crawler.test.ts tests/unit/components/admin/sources/SourceVerifyButton.test.tsx` 107/107 通过
