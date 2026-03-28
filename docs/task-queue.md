@@ -3492,7 +3492,7 @@
 ## [SEQ-20260327-36] 后台能力显性化与闭环补齐（审核/视频/播放源）
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-27 17:27
-- **最后更新时间**：2026-03-27 17:39
+- **最后更新时间**：2026-03-27 17:44
 - **目标**：将已实现但未在后台充分展示的接口能力显性化，补齐审核、视频管理、播放源管理三条核心运营闭环
 - **范围**：`/admin/moderation`、`/admin/videos`、`/admin/sources` 对应前端组件与必要后端轻量配套
 - **依赖**：`docs/admin_backend_capability_exposure_plan_20260327.md`
@@ -3521,11 +3521,11 @@
      - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（新建或扩展）
    - 验收要点：勾选后批量栏出现且可调用 `/admin/sources/batch-delete`，删除后列表刷新
 
-3. CHG-283 — 视频管理操作列接入 publish/unpublish、douban-sync、完整编辑入口（状态：⬜ 待开始）
+3. CHG-283 — 视频管理操作列接入 publish/unpublish、douban-sync、完整编辑入口（状态：✅ 已完成）
    - 创建时间：2026-03-27 17:27
    - 计划开始：CHG-282 完成后
-   - 实际开始：—
-   - 完成时间：—
+   - 实际开始：2026-03-27 17:41
+   - 完成时间：2026-03-27 17:44
    - 文件范围：
      - `src/components/admin/videos/useVideoTableColumns.tsx`
      - `src/components/admin/videos/VideoTable.tsx`

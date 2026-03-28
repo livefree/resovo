@@ -4010,3 +4010,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（更新）— 新增失效源多选与批量删除端到端调用断言；补充“全部源不展示批量删除”断言
 - **验收结论**：失效源表勾选后可出现批量操作栏，确认后命中 `/admin/sources/batch-delete`，删除后列表刷新
 - **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`InactiveSourceTable.test.tsx` 5/5 通过
+
+---
+
+## CHG-283 — 视频管理操作列接入 publish/unpublish、douban-sync、完整编辑入口
+- **完成时间**：2026-03-27 17:44
+- **修改文件**：
+  - `src/components/admin/videos/useVideoTableColumns.tsx`（更新）— 操作列改为 `AdminDropdown`，新增快速编辑/完整编辑/上架下架/豆瓣同步动作；管理员角色控制豆瓣同步入口
+  - `src/components/admin/videos/VideoTable.tsx`（更新）— 接入 `publish` 与 `douban-sync` 行动作处理器，新增完整编辑路由跳转，补充行级 pending 状态管理
+  - `tests/unit/components/admin/videos/VideoTable.test.tsx`（更新）— 增加下拉操作链路测试：快速编辑、上下架、豆瓣同步、完整编辑跳转
+- **验收结论**：视频管理操作列可直接执行上架/下架、豆瓣同步（admin）与完整编辑跳转，已与既有快速编辑并存
+- **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`VideoTable.test.tsx` 11/11 通过

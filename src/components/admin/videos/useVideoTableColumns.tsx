@@ -5,6 +5,7 @@
 'use client'
 
 import { useMemo } from 'react'
+import { AdminDropdown } from '@/components/admin/shared/dropdown/AdminDropdown'
 import {
   TableBadgeCell,
   TableCheckboxCell,
@@ -129,9 +130,15 @@ interface ColumnDeps {
   sortState: { isSortable: (id: string) => boolean }
   selectedIds: string[]
   visibilityPendingIds: string[]
+  publishPendingIds: string[]
+  doubanSyncPendingIds: string[]
+  canSyncDouban: boolean
   handleCheck: (id: string, checked: boolean) => void
   handleVisibilityToggle: (row: VideoAdminRow, next: boolean) => Promise<void>
+  handlePublishToggle: (row: VideoAdminRow) => Promise<void>
+  handleDoubanSync: (id: string) => Promise<void>
   setDrawerVideoId: (id: string) => void
+  openFullEdit: (id: string) => void
 }
 
 function buildDataColumn(columnId: VideoColumnId, deps: ColumnDeps): TableColumn<VideoAdminRow> {
@@ -191,12 +198,34 @@ function buildDataColumn(columnId: VideoColumnId, deps: ColumnDeps): TableColumn
     case 'actions':
       col.accessor = (row) => row.id
       col.cell = ({ row }) => (
-        <button
-          type="button"
-          onClick={() => deps.setDrawerVideoId(row.id)}
-          className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg2)]"
+        <AdminDropdown
           data-testid={`video-actions-${row.id}`}
-        >编辑</button>
+          align="right"
+          trigger={
+            <button
+              type="button"
+              className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg2)]"
+            >操作 ▾</button>
+          }
+          items={[
+            { key: 'quick-edit', label: '快速编辑', onClick: () => deps.setDrawerVideoId(row.id) },
+            { key: 'full-edit', label: '完整编辑', onClick: () => deps.openFullEdit(row.id) },
+            {
+              key: 'publish-toggle',
+              label: row.is_published ? '下架' : '上架',
+              onClick: () => { void deps.handlePublishToggle(row) },
+              disabled: deps.publishPendingIds.includes(row.id),
+            },
+            ...(deps.canSyncDouban
+              ? [{
+                  key: 'douban-sync',
+                  label: '豆瓣同步',
+                  onClick: () => { void deps.handleDoubanSync(row.id) },
+                  disabled: deps.doubanSyncPendingIds.includes(row.id),
+                }]
+              : []),
+          ]}
+        />
       )
       break
   }
@@ -235,5 +264,16 @@ export function useVideoTableColumns({
     const dataCols = visibleColumnIds.map((id) => buildDataColumn(id, deps))
     return [selectionCol, ...dataCols]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allSelected, handleSelectAll, visibleColumnIds, deps.selectedIds, deps.visibilityPendingIds, deps.columnsById, deps.sortState])
+  }, [
+    allSelected,
+    handleSelectAll,
+    visibleColumnIds,
+    deps.selectedIds,
+    deps.visibilityPendingIds,
+    deps.publishPendingIds,
+    deps.doubanSyncPendingIds,
+    deps.canSyncDouban,
+    deps.columnsById,
+    deps.sortState,
+  ])
 }

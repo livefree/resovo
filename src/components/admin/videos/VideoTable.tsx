@@ -6,8 +6,9 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
+import { selectIsAdmin, useAuthStore } from '@/stores/authStore'
 import { PaginationV2 } from '@/components/admin/PaginationV2'
 import { BatchPublishBar } from '@/components/admin/videos/BatchPublishBar'
 import { VideoDetailDrawer } from '@/components/admin/videos/VideoDetailDrawer'
@@ -29,7 +30,9 @@ import {
 const DEFAULT_PAGE_SIZE = 20
 
 export function VideoTable() {
+  const router = useRouter()
   const searchParams = useSearchParams()
+  const isAdmin = useAuthStore(selectIsAdmin)
   const [videos, setVideos] = useState<VideoAdminRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -38,6 +41,8 @@ export function VideoTable() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [showColumnsPanel, setShowColumnsPanel] = useState(false)
   const [visibilityPendingIds, setVisibilityPendingIds] = useState<string[]>([])
+  const [publishPendingIds, setPublishPendingIds] = useState<string[]>([])
+  const [doubanSyncPendingIds, setDoubanSyncPendingIds] = useState<string[]>([])
   const [drawerVideoId, setDrawerVideoId] = useState<string | null>(null)
 
   const q = searchParams.get('q') ?? ''
@@ -130,6 +135,35 @@ export function VideoTable() {
     }
   }, [])
 
+  const handlePublishToggle = useCallback(async (row: VideoAdminRow) => {
+    const nextIsPublished = !row.is_published
+    setPublishPendingIds((ids) => (ids.includes(row.id) ? ids : [...ids, row.id]))
+    try {
+      await apiClient.patch(`/admin/videos/${row.id}/publish`, { isPublished: nextIsPublished })
+      await fetchVideos(page, pageSize)
+    } catch (_error) {
+      // silent
+    } finally {
+      setPublishPendingIds((ids) => ids.filter((id) => id !== row.id))
+    }
+  }, [fetchVideos, page, pageSize])
+
+  const handleDoubanSync = useCallback(async (videoId: string) => {
+    setDoubanSyncPendingIds((ids) => (ids.includes(videoId) ? ids : [...ids, videoId]))
+    try {
+      await apiClient.post(`/admin/videos/${videoId}/douban-sync`)
+      await fetchVideos(page, pageSize)
+    } catch (_error) {
+      // silent
+    } finally {
+      setDoubanSyncPendingIds((ids) => ids.filter((id) => id !== videoId))
+    }
+  }, [fetchVideos, page, pageSize])
+
+  const openFullEdit = useCallback((videoId: string) => {
+    router.push(`/admin/videos/${videoId}/edit`)
+  }, [router])
+
   const tableColumns = useVideoTableColumns({
     visibleColumnIds,
     allSelected,
@@ -139,9 +173,15 @@ export function VideoTable() {
       sortState,
       selectedIds,
       visibilityPendingIds,
+      publishPendingIds,
+      doubanSyncPendingIds,
+      canSyncDouban: isAdmin,
       handleCheck,
       handleVisibilityToggle,
+      handlePublishToggle,
+      handleDoubanSync,
       setDrawerVideoId,
+      openFullEdit,
     },
   })
 

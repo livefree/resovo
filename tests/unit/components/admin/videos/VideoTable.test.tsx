@@ -4,20 +4,28 @@ import { VideoTable } from '@/components/admin/videos/VideoTable'
 
 const getMock = vi.fn()
 const patchMock = vi.fn()
+const postMock = vi.fn()
+const pushMock = vi.fn()
 const mockSearchParams = new URLSearchParams()
 
 vi.mock('@/lib/api-client', () => ({
   apiClient: {
     get: (...args: unknown[]) => getMock(...args),
     patch: (...args: unknown[]) => patchMock(...args),
-    post: vi.fn(),
+    post: (...args: unknown[]) => postMock(...args),
   },
 }))
 
 vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: (...args: unknown[]) => pushMock(...args) }),
   useSearchParams: () => ({
     get: (key: string) => mockSearchParams.get(key),
   }),
+}))
+
+vi.mock('@/stores/authStore', () => ({
+  useAuthStore: (selector: (state: { user: { role: 'admin' } }) => unknown) => selector({ user: { role: 'admin' } }),
+  selectIsAdmin: (state: { user?: { role?: string } }) => state.user?.role === 'admin',
 }))
 
 const MOCK_ROWS = [
@@ -111,6 +119,7 @@ describe('VideoTable (CHG-211/212)', () => {
         is_published: false,
       },
     })
+    postMock.mockResolvedValue({})
   })
 
   it('applies default title sort and supports toggleSort', async () => {
@@ -223,8 +232,10 @@ describe('VideoTable (CHG-211/212)', () => {
     render(<VideoTable />)
 
     await screen.findByText('Alpha Movie')
-    // Click the direct edit button for row v1
+    // Open actions dropdown and choose quick edit for row v1
     fireEvent.click(screen.getByTestId('video-actions-v1'))
+    await screen.findByText('快速编辑')
+    fireEvent.click(screen.getByText('快速编辑'))
 
     await screen.findByTestId('video-detail-drawer-title')
     expect(getMock).toHaveBeenCalledWith('/admin/videos/v1')
@@ -244,5 +255,42 @@ describe('VideoTable (CHG-211/212)', () => {
         country: 'US',
       })
     })
+  })
+
+  it('supports publish/unpublish action from operations dropdown', async () => {
+    render(<VideoTable />)
+    await screen.findByText('Alpha Movie')
+
+    fireEvent.click(screen.getByTestId('video-actions-v1'))
+    await screen.findByText('下架')
+    fireEvent.click(screen.getByText('下架'))
+
+    await waitFor(() => {
+      expect(patchMock).toHaveBeenCalledWith('/admin/videos/v1/publish', { isPublished: false })
+    })
+  })
+
+  it('supports douban sync action for admin role', async () => {
+    render(<VideoTable />)
+    await screen.findByText('Alpha Movie')
+
+    fireEvent.click(screen.getByTestId('video-actions-v1'))
+    await screen.findByText('豆瓣同步')
+    fireEvent.click(screen.getByText('豆瓣同步'))
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith('/admin/videos/v1/douban-sync')
+    })
+  })
+
+  it('navigates to full-edit page from operations dropdown', async () => {
+    render(<VideoTable />)
+    await screen.findByText('Alpha Movie')
+
+    fireEvent.click(screen.getByTestId('video-actions-v1'))
+    await screen.findByText('完整编辑')
+    fireEvent.click(screen.getByText('完整编辑'))
+
+    expect(pushMock).toHaveBeenCalledWith('/admin/videos/v1/edit')
   })
 })
