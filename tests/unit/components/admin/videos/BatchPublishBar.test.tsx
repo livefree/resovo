@@ -8,12 +8,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { BatchPublishBar } from '@/components/admin/videos/BatchPublishBar'
 
 const postMock = vi.fn()
-const patchMock = vi.fn()
 
 vi.mock('@/lib/api-client', () => ({
   apiClient: {
     post: (...args: unknown[]) => postMock(...args),
-    patch: (...args: unknown[]) => patchMock(...args),
   },
 }))
 
@@ -21,7 +19,6 @@ describe('BatchPublishBar', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     postMock.mockResolvedValue({})
-    patchMock.mockResolvedValue({})
   })
 
   it('selectedIds 为空时不渲染', () => {
@@ -74,7 +71,7 @@ describe('BatchPublishBar', () => {
     expect(publishBtn.disabled).toBe(false)
   })
 
-  it('批量公开调用 visibility 接口并在成功后清空选择', async () => {
+  it('批量公开走 batch-publish 接口并在成功后清空选择', async () => {
     const onSuccess = vi.fn()
     const onClear = vi.fn()
 
@@ -85,10 +82,24 @@ describe('BatchPublishBar', () => {
     fireEvent.click(screen.getByTestId('batch-publish-btn'))
 
     await waitFor(() => {
-      expect(patchMock).toHaveBeenCalledWith('/admin/videos/id-1/visibility', { visibility: 'public' })
-      expect(patchMock).toHaveBeenCalledWith('/admin/videos/id-2/visibility', { visibility: 'public' })
+      expect(postMock).toHaveBeenCalledWith('/admin/videos/batch-publish', {
+        ids: ['id-1', 'id-2'],
+        isPublished: true,
+      })
       expect(onSuccess).toHaveBeenCalledOnce()
       expect(onClear).toHaveBeenCalledOnce()
+    })
+  })
+
+  it('批量隐藏走 batch-unpublish 接口', async () => {
+    render(
+      <BatchPublishBar selectedIds={['id-1', 'id-2']} onSuccess={vi.fn()} onClear={vi.fn()} />
+    )
+
+    fireEvent.click(screen.getByTestId('batch-hide-btn'))
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith('/admin/videos/batch-unpublish', { ids: ['id-1', 'id-2'] })
     })
   })
 

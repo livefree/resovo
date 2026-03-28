@@ -4021,3 +4021,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/videos/VideoTable.test.tsx`（更新）— 增加下拉操作链路测试：快速编辑、上下架、豆瓣同步、完整编辑跳转
 - **验收结论**：视频管理操作列可直接执行上架/下架、豆瓣同步（admin）与完整编辑跳转，已与既有快速编辑并存
 - **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`VideoTable.test.tsx` 11/11 通过
+
+---
+
+## CHG-284 — 视频批量公开/隐藏改走 batch 接口，降低逐条请求
+- **完成时间**：2026-03-27 17:47
+- **修改文件**：
+  - `src/components/admin/videos/BatchPublishBar.tsx`（更新）— 批量公开改为 `POST /admin/videos/batch-publish`，批量隐藏改为 `POST /admin/videos/batch-unpublish`，避免逐条请求
+  - `tests/unit/components/admin/videos/BatchPublishBar.test.tsx`（更新）— 用例断言切换为 batch 接口，并新增批量隐藏走 `batch-unpublish` 的覆盖
+- **验收结论**：批量公开/隐藏已从逐条调用收敛为批量接口调用，请求数显著下降
+- **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`BatchPublishBar.test.tsx` 9/9 通过

@@ -42,9 +42,12 @@ export function BatchPublishBar({ selectedIds, onSuccess, onClear }: BatchPublis
 
   async function handleVisibility(visibility: 'public' | 'hidden') {
     await runBatchAction(`visibility:${visibility}`, async () => {
-      await Promise.all(
-        selectedIds.map((id) => apiClient.patch(`/admin/videos/${id}/visibility`, { visibility })),
-      )
+      if (visibility === 'public') {
+        await apiClient.post('/admin/videos/batch-publish', { ids: selectedIds, isPublished: true })
+        return
+      }
+
+      await apiClient.post('/admin/videos/batch-unpublish', { ids: selectedIds })
     })
   }
 
