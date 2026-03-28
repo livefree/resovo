@@ -4043,3 +4043,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/moderation/ModerationDetail.test.tsx`（新建）— 覆盖拒绝带 reason 提交与通过操作请求体
 - **验收结论**：审核台拒绝操作可录入并提交原因，页面文案与当前能力一致
 - **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`ModerationDetail.test.tsx` 2/2 通过
+
+---
+
+## CHG-286 — 播放源治理运行态提示 + 关键路径回归
+- **完成时间**：2026-03-27 17:55
+- **修改文件**：
+  - `src/api/routes/admin/content.ts`（更新）— `/admin/sources/shell-count` 响应补充 `verifySchedulerEnabled`，用于后台显式展示源校验调度状态
+  - `src/components/admin/sources/SourceHealthAlert.tsx`（更新）— 告警区新增“源校验调度：运行中/已关闭”运行态提示
+  - `src/app/[locale]/admin/sources/page.tsx`（更新）— 页面描述文案补充“查看源校验调度运行态”
+  - `tests/unit/components/admin/sources/SourceHealthAlert.test.tsx`（更新）— 断言运行态文案渲染
+  - `tests/e2e/admin-source-and-video-flows.spec.ts`（新建）— 覆盖播放源页/视频管理操作列/审核拒绝理由三条关键路径的冒烟脚本
+- **验收结论**：后台可见源校验调度运行态，三条关键链路具备 e2e 冒烟脚本覆盖
+- **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`SourceHealthAlert.test.tsx` 2/2 通过；`playwright` 冒烟在当前沙箱因 `listen EPERM 0.0.0.0:3001` 未执行

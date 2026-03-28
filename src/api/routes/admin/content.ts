@@ -59,7 +59,13 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
 
   fastify.get('/admin/sources/shell-count', { preHandler: auth }, async (_request, reply) => {
     const result = await contentService.getShellVideoCount()
-    return reply.send({ data: result })
+    const verifySchedulerEnabled = process.env.VERIFY_SCHEDULER_ENABLED === 'true'
+    return reply.send({
+      data: {
+        ...result,
+        verifySchedulerEnabled,
+      },
+    })
   })
 
   fastify.delete('/admin/sources/:id', { preHandler: auth }, async (request, reply) => {

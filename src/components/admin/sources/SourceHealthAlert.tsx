@@ -6,6 +6,7 @@ import { apiClient } from '@/lib/api-client'
 interface ShellCountPayload {
   count: number
   videoIds: string[]
+  verifySchedulerEnabled?: boolean
 }
 
 interface SourceHealthAlertProps {
@@ -22,7 +23,13 @@ export function SourceHealthAlert({ onResolved }: SourceHealthAlertProps) {
     async function load() {
       try {
         const res = await apiClient.get<{ data: ShellCountPayload }>('/admin/sources/shell-count')
-        if (!cancelled) setPayload(res.data)
+        if (!cancelled) {
+          setPayload({
+            count: res.data.count,
+            videoIds: res.data.videoIds,
+            verifySchedulerEnabled: res.data.verifySchedulerEnabled ?? false,
+          })
+        }
       } catch {
         if (!cancelled) setPayload(null)
       }
@@ -62,6 +69,9 @@ export function SourceHealthAlert({ onResolved }: SourceHealthAlertProps) {
         <div>
           <div className="font-medium">检测到 {payload.count} 个空壳视频</div>
           <div className="text-xs text-[var(--muted)]">这些视频仍处于上架状态，但已没有任何可用播放源。</div>
+          <div className="mt-1 text-xs text-[var(--muted)]" data-testid="source-health-verify-status">
+            源校验调度：{payload.verifySchedulerEnabled ? '运行中' : '已关闭'}
+          </div>
         </div>
         <button
           type="button"

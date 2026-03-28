@@ -15,7 +15,7 @@ vi.mock('@/lib/api-client', () => ({
 describe('SourceHealthAlert (CHG-215)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    getMock.mockResolvedValue({ data: { count: 2, videoIds: ['v1', 'v2'] } })
+    getMock.mockResolvedValue({ data: { count: 2, videoIds: ['v1', 'v2'], verifySchedulerEnabled: true } })
     patchMock.mockResolvedValue({})
   })
 
@@ -24,6 +24,7 @@ describe('SourceHealthAlert (CHG-215)', () => {
 
     expect(await screen.findByTestId('source-health-alert')).toBeTruthy()
     expect(screen.getByText('检测到 2 个空壳视频')).toBeTruthy()
+    expect(screen.getByTestId('source-health-verify-status').textContent).toContain('运行中')
   })
 
   it('hides shell videos through visibility api', async () => {
