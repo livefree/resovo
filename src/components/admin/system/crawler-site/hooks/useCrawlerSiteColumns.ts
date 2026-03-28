@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   useAdminTableColumns,
   type AdminColumnMeta,
@@ -8,7 +8,6 @@ import {
   DEFAULT_COLUMN_WIDTH,
   DEFAULT_COLUMNS,
   DEFAULT_FILTERS,
-  REQUIRED_COLUMNS,
 } from '@/components/admin/system/crawler-site/tableState'
 import type {
   ColumnId,
@@ -28,7 +27,6 @@ const COLUMNS_CONFIG: AdminColumnMeta[] = COLUMN_META.map((col) => ({
 
 export function useCrawlerSiteColumns() {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS)
-  const [showColumnsPanel, setShowColumnsPanel] = useState(false)
 
   const tableColumns = useAdminTableColumns({
     route: '/admin/crawler-sites',
@@ -39,7 +37,7 @@ export function useCrawlerSiteColumns() {
     },
   })
 
-  const { state, updatePartial, columns: resolvedColumns, setColumnWidth, startResize, toggleColumnVisibility } = tableColumns
+  const { state, updatePartial, columns: resolvedColumns, setColumnWidth, startResize } = tableColumns
 
   const sortBy = (state.sort?.field ?? 'name') as SortField
   const sortDir = (state.sort?.dir ?? 'asc') as SortDir
@@ -56,19 +54,6 @@ export function useCrawlerSiteColumns() {
     updatePartial({ sort: { field, dir } })
   }
 
-  function toggleColumn(columnId: ColumnId) {
-    if (REQUIRED_COLUMNS.includes(columnId)) return
-    toggleColumnVisibility(columnId)
-  }
-
-  const columns = useMemo(() => {
-    const result = { ...DEFAULT_COLUMNS }
-    for (const col of resolvedColumns) {
-      result[col.id as ColumnId] = col.visible
-    }
-    return result
-  }, [resolvedColumns])
-
   const columnWidths = useMemo(() => {
     const result = { ...DEFAULT_COLUMN_WIDTH }
     for (const col of resolvedColumns) {
@@ -77,37 +62,17 @@ export function useCrawlerSiteColumns() {
     return result
   }, [resolvedColumns])
 
-  const colClass = useCallback((id: ColumnId) => (columns[id] ? '' : 'hidden'), [columns])
-
-  const visibleColumnCount = useMemo(
-    () => resolvedColumns.filter((col) => col.visible).length,
-    [resolvedColumns],
-  )
-
-  const visibleTableMinWidth = useMemo(
-    () => resolvedColumns.reduce((sum, col) => (col.visible ? sum + col.width : sum), 44),
-    [resolvedColumns],
-  )
-
   return {
     sortBy,
     sortDir,
     filters,
-    columns,
     columnWidths,
-    showColumnsPanel,
     setFilters,
-    setShowColumnsPanel,
     handleSort,
     setSort,
-    toggleColumn,
     setColumnWidth,
     startResize,
-    visibleColumnCount,
-    colClass,
-    visibleTableMinWidth,
     columnMeta: COLUMN_META,
-    requiredColumns: REQUIRED_COLUMNS,
     defaultColumnWidth: DEFAULT_COLUMN_WIDTH,
   }
 }

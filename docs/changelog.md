@@ -4307,3 +4307,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx` — 更新 testId
   - `docs/task-queue.md`（CHG-305 完成）
 - **测试覆盖**：typecheck 通过；10/10 passed
+
+---
+
+### CHG-306 — CrawlerSiteManager 迁移到 useTableSettings + settingsSlot
+- **完成时间**：2026-03-28 14:55
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns.ts` — 移除 showColumnsPanel/setShowColumnsPanel/columns/toggleColumn/requiredColumns/colClass 等列可见性管理逻辑
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteTableColumns.tsx` — 移除 visibleColumns 过滤；将 toggleColumn 替换为 onHideColumn；移除旧 panel 相关 props
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTableHead.tsx` — 移除 ⚙ 按钮；移除 panel 相关 props；添加 onHideColumn 接口
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx` — 引入 useTableSettings + CRAWLER_SITE_SETTINGS_COLUMNS + applyToColumns + settingsSlot；移除旧 panel props
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx` — 移除 ColumnSettingsPanel 导入和渲染块；移除旧 props 传递
+  - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx` — 更新 testId
+  - `docs/task-queue.md`（CHG-306 完成）
+- **测试覆盖**：typecheck 通过；5/5 passed

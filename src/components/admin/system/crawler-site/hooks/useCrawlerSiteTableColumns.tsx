@@ -163,9 +163,6 @@ interface UseCrawlerSiteTableColumnsParams {
   sortDir: SortDir
   filters: FilterState
   columnWidths: ColumnWidthState
-  columns: Record<ColumnId, boolean>
-  columnMeta: Array<{ id: ColumnId; label: string }>
-  requiredColumns: ColumnId[]
   openMenuColumn: ColumnId | null
   setOpenMenuColumn: Dispatch<SetStateAction<ColumnId | null>>
   weightPresets: WeightPreset
@@ -173,20 +170,13 @@ interface UseCrawlerSiteTableColumnsParams {
   setFilters: Dispatch<SetStateAction<FilterState>>
   clearColumnFilter: (columnId: ColumnId) => void
   setSort: (field: SortField, dir: SortDir) => void
-  toggleColumn: (columnId: ColumnId) => void
-  showColumnsPanel: boolean
-  setShowColumnsPanel: Dispatch<SetStateAction<boolean>>
+  onHideColumn: (columnId: ColumnId) => void
   toggleSelect: (key: string) => void
   toggleAll: () => void
   deps: SiteColumnDeps
 }
 
 export function useCrawlerSiteTableColumns(p: UseCrawlerSiteTableColumnsParams): TableColumn<CrawlerSite>[] {
-  const visibleColumns = useMemo(
-    () => new Set(HEADER_COLUMNS.map((c) => c.id).filter((id) => p.columns[id])),
-    [p.columns]
-  )
-
   return useMemo<TableColumn<CrawlerSite>[]>(() => {
     const result: TableColumn<CrawlerSite>[] = [{
       id: 'selection',
@@ -196,16 +186,12 @@ export function useCrawlerSiteTableColumns(p: UseCrawlerSiteTableColumnsParams):
       cell: ({ row }) => <TableCheckboxCell checked={p.selected.has(row.key)} ariaLabel={`选择 ${row.name}`} onChange={() => p.toggleSelect(row.key)} />,
     }]
 
-    for (const [index, column] of HEADER_COLUMNS.entries()) {
-      if (!visibleColumns.has(column.id)) continue
-      const isLastVisible = HEADER_COLUMNS.slice(index + 1).every((c) => !visibleColumns.has(c.id))
+    for (const column of HEADER_COLUMNS) {
       const header = (
         <HeaderCell
           column={column} sortBy={p.sortBy} sortDir={p.sortDir} filters={p.filters}
-          setSort={p.setSort} toggleColumn={p.toggleColumn}
-          showColumnsPanel={p.showColumnsPanel} setShowColumnsPanel={p.setShowColumnsPanel}
-          columns={p.columns} columnMeta={p.columnMeta} requiredColumns={p.requiredColumns}
-          isLastColumn={isLastVisible} openMenuColumn={p.openMenuColumn}
+          setSort={p.setSort} onHideColumn={p.onHideColumn}
+          openMenuColumn={p.openMenuColumn}
           setOpenMenuColumn={p.setOpenMenuColumn as (id: ColumnId | null) => void}
           onPatchFilter={(patch) => p.setFilters((prev) => ({ ...prev, ...patch }))}
           onClearColumnFilter={p.clearColumnFilter}
@@ -220,5 +206,5 @@ export function useCrawlerSiteTableColumns(p: UseCrawlerSiteTableColumnsParams):
     }
     return result
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.allVisibleSelected, p.selected, p.toggleAll, p.toggleSelect, p.sortBy, p.sortDir, p.filters, p.setSort, p.toggleColumn, p.showColumnsPanel, p.setShowColumnsPanel, p.columns, p.columnMeta, p.requiredColumns, p.openMenuColumn, p.setOpenMenuColumn, p.columnWidths, p.deps, p.clearColumnFilter, p.setFilters, p.onPatchWeightPreset, visibleColumns])
+  }, [p.allVisibleSelected, p.selected, p.toggleAll, p.toggleSelect, p.sortBy, p.sortDir, p.filters, p.setSort, p.onHideColumn, p.openMenuColumn, p.setOpenMenuColumn, p.columnWidths, p.deps, p.clearColumnFilter, p.setFilters, p.onPatchWeightPreset])
 }

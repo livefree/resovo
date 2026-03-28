@@ -23,9 +23,6 @@ import {
 } from '@/components/admin/system/crawler-site/components/CrawlerSiteFormDialog'
 import { parseSitesFromJson } from '@/components/admin/system/crawler-site/importParser'
 import { PaginationV2 } from '@/components/admin/PaginationV2'
-import { ColumnSettingsPanel } from '@/components/admin/shared/table/ColumnSettingsPanel'
-import { DEFAULT_COLUMNS } from '@/components/admin/system/crawler-site/tableState'
-import type { ColumnId } from '@/components/admin/system/crawler-site/tableState'
 
 const PAGE_SIZE = 20
 
@@ -56,16 +53,10 @@ export function CrawlerSiteManager() {
     sortBy,
     sortDir,
     filters,
-    columns,
     columnWidths,
-    showColumnsPanel,
     setFilters,
-    setShowColumnsPanel,
     setSort,
-    toggleColumn,
     setColumnWidth,
-    columnMeta,
-    requiredColumns,
   } = useCrawlerSiteColumns()
   const { sites, loading, fetchSites } = useCrawlerSites()
   const {
@@ -382,27 +373,6 @@ export function CrawlerSiteManager() {
 
       <ActiveFilterChipsBar filters={filters} setFilters={setFilters} />
 
-      {showColumnsPanel ? (
-        <ColumnSettingsPanel
-          data-testid="crawler-columns-panel"
-          columns={columnMeta.map((item) => ({
-            id: item.id,
-            label: item.label,
-            visible: columns[item.id as ColumnId],
-            required: requiredColumns.includes(item.id as ColumnId),
-          }))}
-          onToggle={(id) => toggleColumn(id as ColumnId)}
-          onReset={() => {
-            for (const item of columnMeta) {
-              const colId = item.id as ColumnId
-              if (!requiredColumns.includes(colId) && columns[colId] !== DEFAULT_COLUMNS[colId]) {
-                toggleColumn(colId)
-              }
-            }
-          }}
-        />
-      ) : null}
-
       <CrawlerSiteTable
         displaySites={pagedSites}
         selected={selected}
@@ -416,12 +386,6 @@ export function CrawlerSiteManager() {
         runningBySite={runningBySite}
         setFilters={setFilters}
         setSort={setSort}
-        toggleColumn={toggleColumn}
-        requiredColumns={requiredColumns}
-        showColumnsPanel={showColumnsPanel}
-        setShowColumnsPanel={setShowColumnsPanel}
-        columns={columns}
-        columnMeta={columnMeta}
         setColumnWidth={setColumnWidth}
         toggleSelect={toggleSelect}
         toggleAll={toggleAll}

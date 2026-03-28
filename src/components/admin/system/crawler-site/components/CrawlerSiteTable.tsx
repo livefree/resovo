@@ -7,12 +7,21 @@ import type { Dispatch, SetStateAction } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CrawlerSite, UpdateCrawlerSiteInput } from '@/types'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
+import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import type { ColumnId, ColumnWidthState, FilterState, SortDir, SortField } from '@/components/admin/system/crawler-site/tableState'
-import { DEFAULT_FILTERS } from '@/components/admin/system/crawler-site/tableState'
+import { COLUMN_META, DEFAULT_COLUMNS, DEFAULT_FILTERS, REQUIRED_COLUMNS } from '@/components/admin/system/crawler-site/tableState'
 import { useCrawlerSiteTableColumns, normalizeWeightPreset } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteTableColumns'
 import type { WeightPreset } from '@/components/admin/system/crawler-site/components/CrawlerSiteTableHead'
 
 type ValidateStatus = 'idle' | 'checking' | 'ok' | 'error' | 'timeout'
+
+const CRAWLER_SITE_SETTINGS_COLUMNS = COLUMN_META.map((col) => ({
+  id: col.id,
+  label: col.label,
+  defaultVisible: DEFAULT_COLUMNS[col.id as ColumnId] ?? true,
+  defaultSortable: false,
+  required: REQUIRED_COLUMNS.includes(col.id as ColumnId),
+}))
 
 interface CrawlerSiteTableProps {
   displaySites: CrawlerSite[]
@@ -27,12 +36,6 @@ interface CrawlerSiteTableProps {
   runningBySite: Record<string, boolean>
   setFilters: Dispatch<SetStateAction<FilterState>>
   setSort: (field: SortField, dir: SortDir) => void
-  toggleColumn: (columnId: ColumnId) => void
-  showColumnsPanel: boolean
-  setShowColumnsPanel: Dispatch<SetStateAction<boolean>>
-  columns: Record<ColumnId, boolean>
-  columnMeta: Array<{ id: ColumnId; label: string }>
-  requiredColumns: ColumnId[]
   setColumnWidth: (columnId: ColumnId, nextWidth: number) => void
   toggleSelect: (key: string) => void
   toggleAll: () => void
@@ -48,8 +51,7 @@ interface CrawlerSiteTableProps {
 export function CrawlerSiteTable(props: CrawlerSiteTableProps) {
   const {
     displaySites, selected, allVisibleSelected, sortBy, sortDir, filters, columnWidths,
-    validateStates, rowSaving, runningBySite, setFilters, setSort, toggleColumn,
-    showColumnsPanel, setShowColumnsPanel, columns, columnMeta, requiredColumns,
+    validateStates, rowSaving, runningBySite, setFilters, setSort,
     setColumnWidth, toggleSelect, toggleAll, handleInlineUpdate, handleToggleDisabled,
     handleValidate, handleTriggerCrawl, handleDelete, setEditTarget, showToast,
   } = props
@@ -57,6 +59,11 @@ export function CrawlerSiteTable(props: CrawlerSiteTableProps) {
   const [openMenuColumn, setOpenMenuColumn] = useState<ColumnId | null>(null)
   const [weightPresets, setWeightPresets] = useState<WeightPreset>({ high: 80, medium: 50, low: 20 })
   const wrapperRef = useRef<HTMLDivElement | null>(null)
+
+  const tableSettings = useTableSettings({
+    tableId: 'crawler-site-table',
+    columns: CRAWLER_SITE_SETTINGS_COLUMNS,
+  })
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
@@ -86,19 +93,25 @@ export function CrawlerSiteTable(props: CrawlerSiteTableProps) {
     setWeightPresets((prev) => normalizeWeightPreset(level, value, prev))
   }
 
-  const tableColumns = useCrawlerSiteTableColumns({
+  const allTableColumns = useCrawlerSiteTableColumns({
     displaySites, selected, allVisibleSelected, sortBy, sortDir, filters, columnWidths,
-    columns, columnMeta, requiredColumns, openMenuColumn,
+    openMenuColumn,
     setOpenMenuColumn: setOpenMenuColumn as Dispatch<SetStateAction<ColumnId | null>>,
     weightPresets, onPatchWeightPreset: handlePatchWeightPreset,
-    setFilters, clearColumnFilter, setSort, toggleColumn,
-    showColumnsPanel, setShowColumnsPanel, toggleSelect, toggleAll,
+    setFilters, clearColumnFilter, setSort,
+    onHideColumn: (id: ColumnId) => tableSettings.updateSetting(id, 'visible', false),
+    toggleSelect, toggleAll,
     deps: {
       rowSaving, runningBySite, validateStates, weightPresets,
       handleInlineUpdate, handleToggleDisabled, handleValidate,
       handleTriggerCrawl, handleDelete, setEditTarget, showToast,
     },
   })
+
+  const tableColumns = useMemo(
+    () => tableSettings.applyToColumns(allTableColumns),
+    [tableSettings, allTableColumns],
+  )
 
   function handleColumnWidthChange(columnId: string, nextWidth: number) {
     if (columnId !== 'selection') setColumnWidth(columnId as ColumnId, nextWidth)
@@ -116,6 +129,12 @@ export function CrawlerSiteTable(props: CrawlerSiteTableProps) {
         emptyText="没有符合当前筛选条件的源站"
         getRowId={(row) => row.key}
         onColumnWidthChange={handleColumnWidthChange}
+        scrollTestId="crawler-site-table-scroll"
+        settingsSlot={{
+          settingsColumns: tableSettings.orderedSettings,
+          onSettingsChange: tableSettings.updateSetting,
+          onSettingsReset: tableSettings.reset,
+        }}
       />
     </div>
   )

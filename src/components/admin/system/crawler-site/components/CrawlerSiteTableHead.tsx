@@ -61,13 +61,7 @@ export interface HeaderCellProps {
   sortDir: SortDir
   filters: FilterState
   setSort: (field: SortField, dir: SortDir) => void
-  toggleColumn: (columnId: ColumnId) => void
-  showColumnsPanel: boolean
-  setShowColumnsPanel: Dispatch<SetStateAction<boolean>>
-  columns: Record<ColumnId, boolean>
-  columnMeta: Array<{ id: ColumnId; label: string }>
-  requiredColumns: ColumnId[]
-  isLastColumn: boolean
+  onHideColumn: (columnId: ColumnId) => void
   openMenuColumn: ColumnId | null
   setOpenMenuColumn: (columnId: ColumnId | null) => void
   onPatchFilter: (patch: Partial<FilterState>) => void
@@ -77,14 +71,12 @@ export interface HeaderCellProps {
 }
 
 export function HeaderCell({
-  column, sortBy, sortDir, filters, setSort, toggleColumn,
-  showColumnsPanel, setShowColumnsPanel, columns, columnMeta, requiredColumns,
-  isLastColumn, openMenuColumn, setOpenMenuColumn,
+  column, sortBy, sortDir, filters, setSort, onHideColumn,
+  openMenuColumn, setOpenMenuColumn,
   onPatchFilter, onClearColumnFilter, weightPresets, onPatchWeightPreset,
 }: HeaderCellProps) {
   const isSorted = column.sortField != null && sortBy === column.sortField
   const filtered = isColumnFiltered(column.id, filters)
-  const canHide = !requiredColumns.includes(column.id)
 
   return (
     <div className="flex items-center gap-1">
@@ -109,30 +101,19 @@ export function HeaderCell({
         aria-label={`${column.label} 菜单`}
       >⋮</button>
 
-      {isLastColumn ? (
-        <button
-          type="button"
-          onClick={() => setShowColumnsPanel((prev) => !prev)}
-          className="ml-auto rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-          data-testid="crawler-columns-toggle"
-          aria-label="列设置"
-          title="列设置"
-        >⚙</button>
-      ) : null}
-
       {openMenuColumn === column.id ? (
         <ColumnMenu
           columnId={column.id}
           filters={filters}
           canSort={column.sortField != null}
           canFilter={column.canFilter === true}
-          canHide={canHide}
+          canHide={true}
           sortBy={sortBy}
           sortDir={sortDir}
           onSortAsc={() => { if (column.sortField) setSort(column.sortField, 'asc'); setOpenMenuColumn(null) }}
           onSortDesc={() => { if (column.sortField) setSort(column.sortField, 'desc'); setOpenMenuColumn(null) }}
           onClearFilter={() => onClearColumnFilter(column.id)}
-          onHideColumn={() => { toggleColumn(column.id); setOpenMenuColumn(null) }}
+          onHideColumn={() => { onHideColumn(column.id); setOpenMenuColumn(null) }}
           onPatchFilter={onPatchFilter}
           weightPresets={weightPresets}
           onPatchWeightPreset={onPatchWeightPreset}
