@@ -3988,3 +3988,15 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/video/VideoCardWide.test.tsx`（新建）— 覆盖 slug/shortId 两种 detail/watch 路由与状态/集数字段
 - **验收结论**：卡片 hover 播放直达 watch 与卡片详情跳转的双入口行为获得稳定回归保护
 - **测试覆盖**：`npx eslint`（新测文件）通过；`VideoCard.test.tsx` + `VideoCardWide.test.tsx` 共 6/6 通过
+
+---
+
+## CHG-281 — 播放源管理新增“全部源”主视图并接入 status=all
+- **完成时间**：2026-03-27 17:35
+- **修改文件**：
+  - `src/components/admin/sources/SourceTable.tsx`（更新）— Tab 扩展为 `全部源 / 失效源 / 用户纠错`，默认主视图改为“全部源”
+  - `src/components/admin/sources/InactiveSourceTable.tsx`（更新）— 提取 `status` 视图参数（`all/inactive`），复用同一查询/列表渲染实现并按视图分离 tableId 与空态文案
+  - `tests/unit/components/admin/sources/SourceTable.test.tsx`（更新）— 默认视图断言切换为 `status=all`，新增切换到失效源后请求 `status=inactive`
+  - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（更新）— 新增 `status=all` 模式请求断言
+- **验收结论**：`/admin/sources` 已支持三视图切换，且“全部源”可见 `status=all` 数据
+- **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`SourceTable.test.tsx` + `InactiveSourceTable.test.tsx` 共 11/11 通过

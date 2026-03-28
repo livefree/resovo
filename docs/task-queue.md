@@ -3486,3 +3486,82 @@
 - **变更内容**：补齐 6 条用例，覆盖 slug/shortId 两类路由生成与 watch 链接参数、以及状态/集数文案渲染。
 - **依赖**：CHG-271 已完成
 - **完成备注**：新增两份组件级单测并通过。`npx eslint`（新测文件）通过；`vitest` 新增 6/6 通过。
+
+---
+
+## [SEQ-20260327-36] 后台能力显性化与闭环补齐（审核/视频/播放源）
+- **状态**：🔄 执行中
+- **创建时间**：2026-03-27 17:27
+- **最后更新时间**：2026-03-27 17:35
+- **目标**：将已实现但未在后台充分展示的接口能力显性化，补齐审核、视频管理、播放源管理三条核心运营闭环
+- **范围**：`/admin/moderation`、`/admin/videos`、`/admin/sources` 对应前端组件与必要后端轻量配套
+- **依赖**：`docs/admin_backend_capability_exposure_plan_20260327.md`
+
+### 任务列表（按执行顺序）
+
+1. CHG-281 — 播放源管理新增“全部源”主视图并接入 status=all（状态：✅ 已完成）
+   - 创建时间：2026-03-27 17:27
+   - 计划开始：2026-03-27 17:40
+   - 实际开始：2026-03-27 17:32
+   - 完成时间：2026-03-27 17:35
+   - 文件范围：
+     - `src/components/admin/sources/SourceTable.tsx`
+     - `src/components/admin/sources/InactiveSourceTable.tsx`（拆分复用查询层）
+     - `src/components/admin/AdminSourceList.tsx`
+   - 验收要点：`/admin/sources` 可在“全部源/失效源/用户纠错”三视图间切换，`status=all` 数据可见
+
+2. CHG-282 — 失效源表补多选接线，恢复批量删除可达链路（状态：⬜ 待开始）
+   - 创建时间：2026-03-27 17:27
+   - 计划开始：CHG-281 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：
+     - `src/components/admin/sources/InactiveSourceTable.tsx`
+     - `src/components/admin/sources/BatchDeleteBar.tsx`
+     - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（新建或扩展）
+   - 验收要点：勾选后批量栏出现且可调用 `/admin/sources/batch-delete`，删除后列表刷新
+
+3. CHG-283 — 视频管理操作列接入 publish/unpublish、douban-sync、完整编辑入口（状态：⬜ 待开始）
+   - 创建时间：2026-03-27 17:27
+   - 计划开始：CHG-282 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：
+     - `src/components/admin/videos/useVideoTableColumns.tsx`
+     - `src/components/admin/videos/VideoTable.tsx`
+     - `src/app/[locale]/admin/videos/[id]/edit/page.tsx`（入口联动）
+   - 验收要点：操作列可执行单条上/下架、豆瓣同步（admin）、跳转完整编辑页
+
+4. CHG-284 — 视频批量公开/隐藏改走 batch 接口，降低逐条请求（状态：⬜ 待开始）
+   - 创建时间：2026-03-27 17:27
+   - 计划开始：CHG-283 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：
+     - `src/components/admin/videos/BatchPublishBar.tsx`
+     - `src/api/routes/admin/videos.ts`（仅在参数不足时做轻量兼容）
+     - `tests/unit/components/admin/videos/BatchPublishBar.test.tsx`（新建或扩展）
+   - 验收要点：批量公开/隐藏优先命中 `/admin/videos/batch-publish|batch-unpublish`，请求数显著下降
+
+5. CHG-285 — 审核台拒绝原因录入与文案对齐（状态：⬜ 待开始）
+   - 创建时间：2026-03-27 17:27
+   - 计划开始：CHG-284 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：
+     - `src/components/admin/moderation/ModerationDetail.tsx`
+     - `src/components/admin/moderation/ModerationDashboard.tsx`
+     - `src/app/[locale]/admin/moderation/page.tsx`
+   - 验收要点：拒绝操作可输入 reason 并提交到 `/admin/videos/:id/review`；页面描述与接口能力一致
+
+6. CHG-286 — 播放源治理运行态提示 + 关键路径回归（状态：⬜ 待开始）
+   - 创建时间：2026-03-27 17:27
+   - 计划开始：CHG-285 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：
+     - `src/app/[locale]/admin/sources/page.tsx`
+     - `src/components/admin/sources/SourceHealthAlert.tsx`
+     - `tests/e2e/admin-source-and-video-flows.spec.ts`（新建或扩展）
+     - `docs/changelog.md`（按规范追加）
+   - 验收要点：后台明确展示 Verify scheduler 运行态；审核/视频管理/播放源三条链路冒烟通过

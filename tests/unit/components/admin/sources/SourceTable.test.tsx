@@ -90,17 +90,28 @@ describe('SourceTable (CHG-216)', () => {
     postMock.mockResolvedValue({})
   })
 
-  it('loads inactive sources by default and renders rows via ModernDataTable', async () => {
+  it('loads all sources by default and renders rows via ModernDataTable', async () => {
     render(<SourceTable />)
 
     await screen.findByText('Alpha Video')
-    expect(getMock).toHaveBeenCalledWith('/admin/sources?page=1&limit=20&status=inactive')
+    expect(getMock).toHaveBeenCalledWith('/admin/sources?page=1&limit=20&status=all')
 
     // ModernDataTable rows use modern-table-row-{id} pattern
     const rows = Array.from(document.querySelectorAll('tr[data-testid^="modern-table-row-"]'))
     expect(rows.length).toBe(2)
     // Both videos appear
     expect(screen.getByText('Zeta Video')).toBeTruthy()
+  })
+
+  it('switches to inactive tab and requests status=inactive', async () => {
+    render(<SourceTable />)
+    await screen.findByText('Alpha Video')
+
+    fireEvent.click(screen.getByTestId('source-tab-inactive'))
+
+    await waitFor(() => {
+      expect(getMock).toHaveBeenCalledWith('/admin/sources?page=1&limit=20&status=inactive')
+    })
   })
 
   it('renders column headers for inactive sources tab', async () => {

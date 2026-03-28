@@ -81,6 +81,13 @@ describe('InactiveSourceTable (CHG-262)', () => {
     render(<InactiveSourceTable />)
     await screen.findByText('Alpha')
     expect(screen.getByText('Beta')).toBeTruthy()
+    expect(getMock).toHaveBeenCalledWith('/admin/sources?page=1&limit=20&status=inactive')
+  })
+
+  it('supports status=all mode', async () => {
+    render(<InactiveSourceTable status="all" />)
+    await screen.findByText('Alpha')
+    expect(getMock).toHaveBeenCalledWith('/admin/sources?page=1&limit=20&status=all')
   })
 
   it('supports column visibility toggle', async () => {

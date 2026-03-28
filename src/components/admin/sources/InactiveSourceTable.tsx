@@ -1,5 +1,5 @@
 /**
- * InactiveSourceTable.tsx — Tab 1 失效源表格（CHG-229）
+ * InactiveSourceTable.tsx — 播放源表格（失效源/全部源）
  * CHG-262: 补充列设置入口（⚙ 叠加 + ColumnSettingsPanel）+ PaginationV2
  * 注：SourceVerifyButton 含内联结果展示，不适合放入 AdminDropdown，保留内联行操作
  */
@@ -53,6 +53,11 @@ const INACTIVE_SOURCE_COLUMNS_META: AdminColumnMeta[] = [
 ]
 
 const INACTIVE_SOURCE_DEFAULT_STATE = {}
+type SourceStatusFilter = 'all' | 'inactive'
+
+interface InactiveSourceTableProps {
+  status?: SourceStatusFilter
+}
 
 export interface SourceRow {
   id: string
@@ -142,7 +147,14 @@ function buildColumns(
   return all.filter((col) => visibleColumnIds.includes(col.id as InactiveSourceColumnId))
 }
 
-export function InactiveSourceTable() {
+export function InactiveSourceTable({ status = 'inactive' }: InactiveSourceTableProps) {
+  const isAllStatus = status === 'all'
+  const tableId = isAllStatus ? 'all-source-table' : 'inactive-source-table'
+  const emptyText = isAllStatus ? '暂无播放源' : '暂无失效源'
+  const scrollTestId = isAllStatus ? 'all-source-table-scroll' : 'inactive-source-table-scroll'
+  const columnsToggleTestId = isAllStatus ? 'all-source-columns-toggle' : 'inactive-source-columns-toggle'
+  const columnsPanelTestId = isAllStatus ? 'all-source-columns-panel' : 'inactive-source-columns-panel'
+
   const [sources, setSources] = useState<SourceRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -156,7 +168,7 @@ export function InactiveSourceTable() {
 
   const columnsState = useAdminTableColumns({
     route: '/admin/sources',
-    tableId: 'inactive-source-table',
+    tableId,
     columns: INACTIVE_SOURCE_COLUMNS_META,
     defaultState: INACTIVE_SOURCE_DEFAULT_STATE,
   })
@@ -176,7 +188,7 @@ export function InactiveSourceTable() {
       const params = new URLSearchParams({
         page: String(pageVal),
         limit: String(pageSizeVal),
-        status: 'inactive',
+        status,
       })
       const res = await apiClient.get<{ data: SourceRow[]; total: number }>(`/admin/sources?${params}`)
       setSources(res.data)
@@ -186,7 +198,7 @@ export function InactiveSourceTable() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [status])
 
   useEffect(() => { void fetchSources(page, pageSize) }, [fetchSources, page, pageSize])
 
@@ -218,14 +230,14 @@ export function InactiveSourceTable() {
             type="button"
             className="rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
             onClick={() => setShowColumnsPanel((prev) => !prev)}
-            data-testid="inactive-source-columns-toggle"
+            data-testid={columnsToggleTestId}
             aria-label="列设置"
             title="列设置"
           >⚙</button>
           {showColumnsPanel ? (
             <div className="absolute right-0 mt-1 w-52">
               <ColumnSettingsPanel
-                data-testid="inactive-source-columns-panel"
+                data-testid={columnsPanelTestId}
                 columns={columnsState.columns.map((col) => ({
                   id: col.id,
                   label: INACTIVE_SOURCE_COLUMN_LABELS[col.id as InactiveSourceColumnId] ?? col.id,
@@ -242,9 +254,9 @@ export function InactiveSourceTable() {
           columns={tableColumns}
           rows={sources}
           loading={loading}
-          emptyText="暂无失效源"
+          emptyText={emptyText}
           getRowId={(r) => r.id}
-          scrollTestId="inactive-source-table-scroll"
+          scrollTestId={scrollTestId}
           onColumnWidthChange={(columnId, nextWidth) => {
             if (columnId in columnsState.columnsById) {
               columnsState.setColumnWidth(columnId, nextWidth)
