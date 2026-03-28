@@ -3,14 +3,29 @@
 import { useMemo } from 'react'
 import { ModernTableBody } from '@/components/admin/shared/modern-table/ModernTableBody'
 import { ModernTableHead } from '@/components/admin/shared/modern-table/ModernTableHead'
+import { TableSettingsTrigger } from '@/components/admin/shared/modern-table/settings/TableSettingsTrigger'
 import type {
   ResolvedTableColumn,
   TableColumn,
   TableSortState,
 } from '@/components/admin/shared/modern-table/types'
+import type {
+  ColumnRuntimeSetting,
+} from '@/components/admin/shared/modern-table/settings/types'
 
 const DEFAULT_COLUMN_WIDTH = 160
 const DEFAULT_MIN_WIDTH = 72
+
+/** settingsSlot prop：传入时在表格右上角渲染 TableSettingsTrigger */
+export interface ModernDataTableSettingsSlot {
+  settingsColumns: ColumnRuntimeSetting[]
+  onSettingsChange: (
+    id: string,
+    key: keyof Pick<ColumnRuntimeSetting, 'visible' | 'sortable'>,
+    value: boolean,
+  ) => void
+  onSettingsReset: () => void
+}
 
 interface ModernDataTableProps<T> {
   columns: Array<TableColumn<T>>
@@ -23,6 +38,11 @@ interface ModernDataTableProps<T> {
   emptyText?: string
   scrollTestId?: string
   getRowId?: (row: T, rowIndex: number) => string
+  /**
+   * 传入时在表格右上角渲染 TableSettingsTrigger（⋮ 按钮 + 浮动设置面板）。
+   * 建议与 useTableSettings + applyToColumns 配合使用。
+   */
+  settingsSlot?: ModernDataTableSettingsSlot
 }
 
 function getDefaultWidthByColumnId(columnId: string): number {
@@ -81,6 +101,7 @@ export function ModernDataTable<T>({
   emptyText,
   scrollTestId,
   getRowId = defaultGetRowId,
+  settingsSlot,
 }: ModernDataTableProps<T>) {
   const resolvedColumns = useMemo(
     () => columns.map((column) => resolveColumnMeta(column)),
@@ -93,28 +114,40 @@ export function ModernDataTable<T>({
   )
 
   return (
-    <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg)]">
-      <div className="overflow-x-auto" data-testid={scrollTestId}>
-        <table
-          className="min-w-full table-fixed text-sm [&_thead]:sticky [&_thead]:top-0 [&_thead]:z-20"
-          data-testid="modern-data-table-table"
-          style={{ width: `${tableWidth}px` }}
-        >
-          <ModernTableHead
-            columns={resolvedColumns}
-            sort={sort}
-            onSortChange={onSortChange}
-            onColumnWidthChange={onColumnWidthChange}
+    <div className="relative">
+      {settingsSlot && (
+        <div className="absolute right-2 top-2 z-30">
+          <TableSettingsTrigger
+            columns={settingsSlot.settingsColumns}
+            onToggle={settingsSlot.onSettingsChange}
+            onReset={settingsSlot.onSettingsReset}
+            data-testid={scrollTestId ? `${scrollTestId}-settings` : undefined}
           />
-          <ModernTableBody
-            columns={resolvedColumns}
-            rows={rows}
-            loading={loading}
-            loadingText={loadingText}
-            emptyText={emptyText}
-            getRowId={getRowId}
-          />
-        </table>
+        </div>
+      )}
+      <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg)]">
+        <div className="overflow-x-auto" data-testid={scrollTestId}>
+          <table
+            className="min-w-full table-fixed text-sm [&_thead]:sticky [&_thead]:top-0 [&_thead]:z-20"
+            data-testid="modern-data-table-table"
+            style={{ width: `${tableWidth}px` }}
+          >
+            <ModernTableHead
+              columns={resolvedColumns}
+              sort={sort}
+              onSortChange={onSortChange}
+              onColumnWidthChange={onColumnWidthChange}
+            />
+            <ModernTableBody
+              columns={resolvedColumns}
+              rows={rows}
+              loading={loading}
+              loadingText={loadingText}
+              emptyText={emptyText}
+              getRowId={getRowId}
+            />
+          </table>
+        </div>
       </div>
     </div>
   )

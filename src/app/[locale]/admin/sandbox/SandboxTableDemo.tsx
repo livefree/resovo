@@ -10,10 +10,7 @@
 import { useMemo } from 'react'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import type { TableColumn } from '@/components/admin/shared/modern-table/types'
-import {
-  useTableSettings,
-  TableSettingsTrigger,
-} from '@/components/admin/shared/modern-table/settings'
+import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 
 // ── mock 数据 ─────────────────────────────────────────────────────────────────
 
@@ -106,23 +103,18 @@ export function SandboxTableDemo() {
         </p>
       </div>
 
-      {/* 表格 + 设置触发器 */}
-      <div className="relative">
-        <div className="absolute right-2 top-2 z-30">
-          <TableSettingsTrigger
-            columns={orderedSettings}
-            onToggle={updateSetting}
-            onReset={reset}
-            data-testid="sandbox-settings"
-          />
-        </div>
-        <ModernDataTable
-          columns={visibleColumns}
-          rows={MOCK_ROWS}
-          getRowId={(row) => row.id}
-          scrollTestId="sandbox-table"
-        />
-      </div>
+      {/* 表格 + settingsSlot（由 ModernDataTable 内部渲染触发器） */}
+      <ModernDataTable
+        columns={visibleColumns}
+        rows={MOCK_ROWS}
+        getRowId={(row) => row.id}
+        scrollTestId="sandbox-table"
+        settingsSlot={{
+          settingsColumns: orderedSettings,
+          onSettingsChange: updateSetting,
+          onSettingsReset: reset,
+        }}
+      />
 
       {/* 状态展示区 */}
       <div className="rounded border border-[var(--border)] bg-[var(--bg2)] p-3">

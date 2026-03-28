@@ -4244,3 +4244,15 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/tasks.md`（空稳定态）
 - **验收结论**：组件在隔离区建设完成，零改动现有代码；portal 模式完全复刻 AdminDropdown；hydration-safe 存储模式对齐 useAdminTableState
 - **测试覆盖**：typecheck 通过；lint 通过；unit tests 83 passed（1 pre-existing failure in useAdminTableSort，与本次改动无关）
+
+---
+
+## CHG-300 — ModernDataTable settingsSlot 集成（Phase 2）
+- **完成时间**：2026-03-28 00:25
+- **修改文件**：
+  - `src/components/admin/shared/modern-table/ModernDataTable.tsx`（更新）— 新增 settingsSlot 可选 prop；外层加 relative wrapper；有 settingsSlot 时在 absolute right-2 top-2 z-30 渲染 TableSettingsTrigger
+  - `src/app/[locale]/admin/sandbox/SandboxTableDemo.tsx`（更新）— 改用 settingsSlot prop，移除手动 absolute 触发器
+  - `docs/task-queue.md`（CHG-300 完成）
+  - `docs/tasks.md`（空稳定态）
+- **验收结论**：有 settingsSlot 的表格右上角自动出现 ⋮ 触发器；无 settingsSlot 的表格无任何变化；DOM 改动经全使用点确认安全
+- **测试覆盖**：typecheck 通过；lint 通过；unit tests 83 passed（同一 pre-existing failure）

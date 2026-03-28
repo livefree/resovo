@@ -3787,11 +3787,11 @@
      - src/app/[locale]/admin/sandbox/page.tsx（新建）
    - 验收要点：/admin/sandbox 可访问；⋮ 触发浮动面板；toggle 正常；localStorage 刷新保持；Reset 清空
 
-4. CHG-300 — ModernDataTable settingsSlot 可选 prop 集成（Phase 2）（状态：⬜ 待开始）
+4. CHG-300 — ModernDataTable settingsSlot 可选 prop 集成（Phase 2）（状态：✅ 已完成）
    - 创建时间：2026-03-28 00:00
    - 计划开始：CHG-299 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-28 00:21
+   - 完成时间：2026-03-28 00:25
    - 文件范围：
      - src/components/admin/shared/modern-table/ModernDataTable.tsx
    - 验收要点：有 settingsSlot 的表格右上角出现 ⋮；无 settingsSlot 的表格无变化；全测试通过
