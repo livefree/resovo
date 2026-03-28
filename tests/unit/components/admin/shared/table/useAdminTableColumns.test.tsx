@@ -117,7 +117,7 @@ describe('useAdminTableColumns', () => {
     expect(result.current.columnsById.status.visible).toBe(true)
   })
 
-  it('loads persisted metadata through useAdminTableState storage', () => {
+  it('loads persisted metadata through useAdminTableState storage', async () => {
     const route = '/admin/test-storage'
     const tableId = 'storage-table'
     const key = buildAdminTableStorageKey(route, tableId)
@@ -136,8 +136,10 @@ describe('useAdminTableColumns', () => {
       useAdminTableColumns({ route, tableId, columns: COLUMNS })
     ))
 
-    expect(result.current.columnsById.name.width).toBe(180)
-    expect(result.current.columnsById.status.visible).toBe(false)
-    expect(result.current.columnsById.actions.width).toBe(120)
+    await waitFor(() => {
+      expect(result.current.columnsById.name.width).toBe(180)
+      expect(result.current.columnsById.status.visible).toBe(false)
+      expect(result.current.columnsById.actions.width).toBe(120)
+    })
   })
 })

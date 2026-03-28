@@ -156,22 +156,24 @@ export function useAdminTableState(options: UseAdminTableStateOptions) {
   const storage = useMemo(() => resolveStorage(storageOverride), [storageOverride])
   const storageKey = useMemo(() => buildAdminTableStorageKey(route, tableId), [route, tableId])
 
-  const [state, setInternalState] = useState<AdminTableState>(() => (
-    readStateFromStorage(storage, storageKey, defaultStateRef.current)
-  ))
+  // 首帧始终使用 defaultState，保证 SSR 与 hydration 的初始标记一致。
+  // 持久化状态在挂载后回放，避免列宽/显隐在 hydration 阶段不一致触发告警。
+  const [state, setInternalState] = useState<AdminTableState>(defaultStateRef.current)
+  const [hydratedStorageKey, setHydratedStorageKey] = useState<string | null>(null)
 
   useEffect(() => {
     setInternalState(readStateFromStorage(storage, storageKey, defaultStateRef.current))
+    setHydratedStorageKey(storageKey)
   }, [storage, storageKey])
 
   useEffect(() => {
-    if (!storage) return
+    if (!storage || hydratedStorageKey !== storageKey) return
     try {
       storage.setItem(storageKey, serializeAdminTableState(state))
     } catch {
       // ignore storage write failures (quota/private mode)
     }
-  }, [storage, storageKey, state])
+  }, [storage, storageKey, state, hydratedStorageKey])
 
   function setState(nextState: AdminTableState) {
     setInternalState(nextState)

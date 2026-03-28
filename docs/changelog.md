@@ -4079,3 +4079,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/sources/SourceVerifyButton.test.tsx`（更新）— 同步断言请求签名改为包含空对象请求体
 - **验收结论**：点击“验证”不再落入前端失败分支，后端可执行校验并回写状态/最后验证
 - **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/components/admin/sources/SourceVerifyButton.test.tsx` 4/4 通过
+
+---
+
+## CHG-289 — Admin 表格 hydration 列宽一致性修复
+- **完成时间**：2026-03-27 20:09
+- **修改文件**：
+  - `src/components/admin/shared/table/useAdminTableState.ts`（更新）— 首帧固定使用 `defaultState`，挂载后回放持久化状态；新增 `hydratedStorageKey` 门闩避免 key 切换时旧状态写入新 key
+  - `tests/unit/components/admin/shared/table/useAdminTableState.test.tsx`（更新）— 持久化回放断言调整为异步等待，覆盖挂载后回放路径
+  - `tests/unit/components/admin/shared/table/useAdminTableColumns.test.tsx`（更新）— 列配置持久化读取断言调整为异步等待，匹配挂载后回放时序
+- **验收结论**：后台表格在 SSR 与 hydration 首帧保持一致，不再出现 `modern-data-table-table style.width` 不一致告警；挂载后仍可正确恢复本地列配置
+- **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/components/admin/shared/table/useAdminTableState.test.tsx tests/unit/components/admin/shared/table/useAdminTableColumns.test.tsx` 9/9 通过；`npx vitest run tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/sources/InactiveSourceTable.test.tsx` 12/12 通过

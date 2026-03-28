@@ -3609,3 +3609,24 @@
      - `src/components/admin/sources/SourceVerifyButton.tsx`
      - `tests/unit/components/admin/sources/SourceVerifyButton.test.tsx`
    - 验收要点：点击“验证”请求可达后端（不再命中空 JSON 400），成功后可刷新列表并看到状态/最后验证更新
+
+## [SEQ-20260327-39] Admin 表格 Hydration 宽度一致性修复
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-27 20:07
+- **最后更新时间**：2026-03-27 20:09
+- **目标**：修复后台表格 SSR 与客户端首帧列宽状态不一致导致的 hydration mismatch
+- **范围**：`useAdminTableState` 持久化加载时机、相关 hook 单元测试
+- **依赖**：`SEQ-20260327-38 / CHG-288`
+
+### 任务列表（按执行顺序）
+
+1. CHG-289 — 延迟读取表格持久化状态到挂载后，消除首帧宽度不一致（状态：✅ 已完成）
+   - 创建时间：2026-03-27 20:07
+   - 计划开始：2026-03-27 20:10
+   - 实际开始：2026-03-27 20:07
+   - 完成时间：2026-03-27 20:09
+   - 文件范围：
+     - `src/components/admin/shared/table/useAdminTableState.ts`
+     - `tests/unit/components/admin/shared/table/useAdminTableState.test.tsx`
+     - `tests/unit/components/admin/shared/table/useAdminTableColumns.test.tsx`
+   - 验收要点：服务端与客户端 hydration 首帧宽度一致，不再报 `modern-data-table-table style.width` mismatch；挂载后仍可回放本地列配置

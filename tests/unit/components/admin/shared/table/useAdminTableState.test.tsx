@@ -58,10 +58,12 @@ describe('useAdminTableState', () => {
       useAdminTableState({ route, tableId, defaultState: DEFAULT_STATE })
     ))
 
-    expect(remountResult.current.state.sort).toEqual({ field: 'createdAt', dir: 'desc' })
+    await waitFor(() => {
+      expect(remountResult.current.state.sort).toEqual({ field: 'createdAt', dir: 'desc' })
+    })
   })
 
-  it('merges default state with partial state from storage', () => {
+  it('merges default state with partial state from storage', async () => {
     const route = '/admin/sources'
     const tableId = 'source-table'
     const key = buildAdminTableStorageKey(route, tableId)
@@ -81,10 +83,12 @@ describe('useAdminTableState', () => {
       useAdminTableState({ route, tableId, defaultState: DEFAULT_STATE })
     ))
 
-    expect(result.current.state.columns?.name).toEqual({ visible: false, width: 180 })
-    expect(result.current.state.columns?.status).toEqual({ visible: true, width: 120 })
-    expect(result.current.state.filters).toEqual({ keyword: 'abc', enabled: true })
-    expect(result.current.state.pagination).toEqual({ page: 1, pageSize: 20 })
+    await waitFor(() => {
+      expect(result.current.state.columns?.name).toEqual({ visible: false, width: 180 })
+      expect(result.current.state.columns?.status).toEqual({ visible: true, width: 120 })
+      expect(result.current.state.filters).toEqual({ keyword: 'abc', enabled: true })
+      expect(result.current.state.pagination).toEqual({ page: 1, pageSize: 20 })
+    })
   })
 
   it('resets invalid version payload to default state', async () => {
