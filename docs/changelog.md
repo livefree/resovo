@@ -4227,3 +4227,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/tasks.md`（空稳定态）
 - **验收结论**：规则层已覆盖后台 CSS 变量体系和 portal 浮层约束，为 CHG-299（TableSettingsPanel 实现）提供规则基线
 - **测试覆盖**：不适用（纯规则文档变更）；typecheck 通过；lint 通过
+
+---
+
+## CHG-299 — TableSettingsPanel 隔离区建设 + 沙盒页面（Phase 1）
+- **完成时间**：2026-03-28 00:20
+- **修改文件**：
+  - `src/components/admin/shared/modern-table/settings/types.ts`（新建）— ColumnRuntimeSetting 类型定义
+  - `src/components/admin/shared/modern-table/settings/useTableSettings.ts`（新建）— hydration-safe hook，含旧 key 迁移逻辑
+  - `src/components/admin/shared/modern-table/settings/TableSettingsPanel.tsx`（新建）— 纯 UI 矩阵面板组件
+  - `src/components/admin/shared/modern-table/settings/TableSettingsTrigger.tsx`（新建）— portal 浮动面板触发器
+  - `src/components/admin/shared/modern-table/settings/index.ts`（新建）— 统一导出
+  - `src/app/[locale]/admin/sandbox/page.tsx`（新建）— admin 角色访问守卫 + 沙盒页面 Server Component
+  - `src/app/[locale]/admin/sandbox/SandboxTableDemo.tsx`（新建）— 演示组件，含 mock 数据
+  - `docs/task-queue.md`（CHG-299 完成）
+  - `docs/tasks.md`（空稳定态）
+- **验收结论**：组件在隔离区建设完成，零改动现有代码；portal 模式完全复刻 AdminDropdown；hydration-safe 存储模式对齐 useAdminTableState
+- **测试覆盖**：typecheck 通过；lint 通过；unit tests 83 passed（1 pre-existing failure in useAdminTableSort，与本次改动无关）

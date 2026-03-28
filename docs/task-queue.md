@@ -3773,11 +3773,11 @@
    - 文件范围：docs/rules/ui-rules.md
    - 验收要点：适用范围包含前后台；后台变量体系已声明；portal 规则已并入
 
-3. CHG-299 — TableSettingsPanel 隔离区建设 + 沙盒页面（Phase 1）（状态：⬜ 待开始）
+3. CHG-299 — TableSettingsPanel 隔离区建设 + 沙盒页面（Phase 1）（状态：✅ 已完成）
    - 创建时间：2026-03-28 00:00
    - 计划开始：CHG-298 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-28 00:06
+   - 完成时间：2026-03-28 00:20
    - 文件范围：
      - src/components/admin/shared/modern-table/settings/types.ts（新建）
      - src/components/admin/shared/modern-table/settings/useTableSettings.ts（新建）
