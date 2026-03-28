@@ -16,7 +16,7 @@ import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDa
 import type { TableSortState } from '@/components/admin/shared/modern-table/types'
 import { useAdminTableColumns } from '@/components/admin/shared/table/useAdminTableColumns'
 import { useAdminTableSort } from '@/components/admin/shared/table/useAdminTableSort'
-import { ColumnSettingsPanel } from '@/components/admin/shared/table/ColumnSettingsPanel'
+import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import {
   useVideoTableColumns,
   COLUMN_LABELS,
@@ -26,6 +26,18 @@ import {
   type VideoAdminRow,
   type VideoColumnId,
 } from './useVideoTableColumns'
+
+// 所有列 ID（useTableSettings 控制显/隐）
+const ALL_VIDEO_COLUMN_IDS = VIDEO_COLUMNS.map((col) => col.id as VideoColumnId)
+
+// useTableSettings 列描述（label + defaultSortable 来自 SORTABLE_MAP）
+const VIDEO_SETTINGS_COLUMNS = VIDEO_COLUMNS.map((col) => ({
+  id: col.id,
+  label: COLUMN_LABELS[col.id as VideoColumnId] ?? col.id,
+  defaultVisible: col.visible ?? true,
+  defaultSortable: SORTABLE_MAP[col.id as VideoColumnId] ?? false,
+  required: col.id === 'actions',
+}))
 
 const DEFAULT_PAGE_SIZE = 20
 
@@ -39,7 +51,6 @@ export function VideoTable() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [loading, setLoading] = useState(false)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const [showColumnsPanel, setShowColumnsPanel] = useState(false)
   const [visibilityPendingIds, setVisibilityPendingIds] = useState<string[]>([])
   const [publishPendingIds, setPublishPendingIds] = useState<string[]>([])
   const [doubanSyncPendingIds, setDoubanSyncPendingIds] = useState<string[]>([])
@@ -66,10 +77,10 @@ export function VideoTable() {
     sortable: SORTABLE_MAP,
   })
 
-  const visibleColumnIds = useMemo(
-    () => columnsState.columns.filter((c) => c.visible).map((c) => c.id as VideoColumnId),
-    [columnsState.columns],
-  )
+  const tableSettings = useTableSettings({
+    tableId: 'video-table',
+    columns: VIDEO_SETTINGS_COLUMNS,
+  })
 
   const fetchVideos = useCallback(async (pageVal: number, pageSizeVal: number) => {
     setLoading(true)
@@ -164,8 +175,8 @@ export function VideoTable() {
     router.push(`/admin/videos/${videoId}/edit`)
   }, [router])
 
-  const tableColumns = useVideoTableColumns({
-    visibleColumnIds,
+  const allTableColumns = useVideoTableColumns({
+    visibleColumnIds: ALL_VIDEO_COLUMN_IDS,
     allSelected,
     handleSelectAll,
     deps: {
@@ -185,6 +196,11 @@ export function VideoTable() {
     },
   })
 
+  const tableColumns = useMemo(
+    () => tableSettings.applyToColumns(allTableColumns),
+    [tableSettings, allTableColumns],
+  )
+
   const sort = useMemo<TableSortState | undefined>(() => {
     if (!sortState.sort) return undefined
     return { field: sortState.sort.field, direction: sortState.sort.dir }
@@ -192,51 +208,28 @@ export function VideoTable() {
 
   return (
     <div data-testid="video-table" className="space-y-2">
-      {/* ⚙ 列设置叠加在表格右上角，面板在 overflow-hidden 外渲染 */}
-      <div className="relative">
-        <div className="absolute right-4 top-3 z-30">
-          <button
-            type="button"
-            className="rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-            onClick={() => setShowColumnsPanel((prev) => !prev)}
-            data-testid="video-columns-toggle"
-            aria-label="列设置"
-            title="列设置"
-          >⚙</button>
-          {showColumnsPanel ? (
-            <div className="absolute right-0 mt-1 w-52">
-              <ColumnSettingsPanel
-                data-testid="video-columns-panel"
-                columns={columnsState.columns.map((col) => ({
-                  id: col.id,
-                  label: COLUMN_LABELS[col.id as VideoColumnId] ?? col.id,
-                  visible: col.visible,
-                }))}
-                onToggle={(id) => columnsState.toggleColumnVisibility(id)}
-                onReset={() => columnsState.resetColumnsMeta()}
-              />
-            </div>
-          ) : null}
-        </div>
-
-        <ModernDataTable
-          columns={tableColumns}
-          rows={videos}
-          sort={sort}
-          onSortChange={(nextSort) => {
-            sortState.setSort(nextSort.field, nextSort.direction === 'asc' ? 'asc' : 'desc')
-          }}
-          onColumnWidthChange={(columnId, nextWidth) => {
-            if (columnId in columnsState.columnsById) {
-              columnsState.setColumnWidth(columnId, nextWidth)
-            }
-          }}
-          loading={loading}
-          emptyText="暂无数据"
-          scrollTestId="video-table-scroll"
-          getRowId={(row) => row.id}
-        />
-      </div>
+      <ModernDataTable
+        columns={tableColumns}
+        rows={videos}
+        sort={sort}
+        onSortChange={(nextSort) => {
+          sortState.setSort(nextSort.field, nextSort.direction === 'asc' ? 'asc' : 'desc')
+        }}
+        onColumnWidthChange={(columnId, nextWidth) => {
+          if (columnId in columnsState.columnsById) {
+            columnsState.setColumnWidth(columnId, nextWidth)
+          }
+        }}
+        loading={loading}
+        emptyText="暂无数据"
+        scrollTestId="video-table-scroll"
+        getRowId={(row) => row.id}
+        settingsSlot={{
+          settingsColumns: tableSettings.orderedSettings,
+          onSettingsChange: tableSettings.updateSetting,
+          onSettingsReset: tableSettings.reset,
+        }}
+      />
 
       {total > 0 ? (
         <div className="mt-4">

@@ -3820,11 +3820,11 @@
    - 文件范围：src/components/admin/content/SubmissionTable.tsx（或同类路径）
    - 验收要点：typecheck + lint + test 通过
 
-8. CHG-304 — VideoTable 迁移（SORTABLE_MAP → defaultSortable）（状态：⬜ 待开始）
+8. CHG-304 — VideoTable 迁移（SORTABLE_MAP → defaultSortable）（状态：✅ 已完成）
    - 创建时间：2026-03-28 00:00
    - 计划开始：CHG-303 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-28 14:37
+   - 完成时间：2026-03-28 14:38
    - 文件范围：src/components/admin/videos/VideoTable.tsx
    - 验收要点：typecheck + lint + test 通过；排序行为不变
 

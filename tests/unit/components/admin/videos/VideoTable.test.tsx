@@ -142,8 +142,8 @@ describe('VideoTable (CHG-211/212)', () => {
     render(<VideoTable />)
     await screen.findByText('Alpha Movie')
 
-    fireEvent.click(screen.getByTestId('video-columns-toggle'))
-    fireEvent.click(screen.getByTestId('video-columns-panel-toggle-review_status'))
+    fireEvent.click(screen.getByTestId('video-table-scroll-settings-btn'))
+    fireEvent.click(screen.getByTestId('video-table-scroll-settings-content-visible-review_status'))
 
     await waitFor(() => {
       expect(screen.queryByTestId('modern-table-sort-review_status')).toBeNull()

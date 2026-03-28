@@ -4287,3 +4287,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/content/SubmissionTable.test.tsx` — 更新 testId
   - `docs/task-queue.md`（CHG-303 完成）
 - **测试覆盖**：typecheck 通过；5/5 passed
+
+---
+
+### CHG-304 — VideoTable 迁移到 useTableSettings + settingsSlot
+- **完成时间**：2026-03-28 14:38
+- **修改文件**：
+  - `src/components/admin/videos/VideoTable.tsx` — 移除 showColumnsPanel + ColumnSettingsPanel；SORTABLE_MAP 映射为 defaultSortable；引入 useTableSettings + VIDEO_SETTINGS_COLUMNS + applyToColumns + settingsSlot
+  - `tests/unit/components/admin/videos/VideoTable.test.tsx` — 更新 testId
+  - `docs/task-queue.md`（CHG-304 完成）
+- **测试覆盖**：typecheck 通过；11/11 passed
