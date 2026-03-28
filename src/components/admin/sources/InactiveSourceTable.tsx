@@ -13,6 +13,7 @@ import { SourceVerifyButton } from '@/components/admin/sources/SourceVerifyButto
 import { SourceUrlReplaceModal } from '@/components/admin/sources/SourceUrlReplaceModal'
 import { BatchDeleteBar } from '@/components/admin/sources/BatchDeleteBar'
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
+import { SelectionActionBar } from '@/components/admin/shared/batch/SelectionActionBar'
 import { ColumnSettingsPanel } from '@/components/admin/shared/table/ColumnSettingsPanel'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import { useAdminTableColumns, type AdminColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
@@ -100,6 +101,8 @@ function buildColumns(
   onReplace: (row: SourceRow) => void,
   onDelete: (row: SourceRow) => void,
   onVerified: (page: number) => void,
+  onSetStatus: (row: SourceRow, nextActive: boolean) => void,
+  statusUpdatingId: string | null,
   visibleColumnIds: InactiveSourceColumnId[],
   columnsById: Record<string, { width: number }>,
   selection: {
@@ -167,6 +170,17 @@ function buildColumns(
             className="rounded bg-red-900/30 px-2 py-0.5 text-xs text-red-400 hover:bg-red-900/60"
             data-testid={`source-delete-btn-${row.id}`}
           >删除</button>
+          <button
+            type="button"
+            onClick={() => onSetStatus(row, !row.is_active)}
+            className="rounded bg-[var(--bg3)] px-2 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+            data-testid={`source-status-toggle-${row.id}`}
+            disabled={statusUpdatingId === row.id}
+          >
+            {statusUpdatingId === row.id
+              ? '处理中...'
+              : row.is_active ? '标记失效' : '标记活跃'}
+          </button>
         </div>
       ),
     },
@@ -229,6 +243,9 @@ export function InactiveSourceTable({
   const [batchVerifyLoading, setBatchVerifyLoading] = useState<SourceBatchVerifyScope | null>(null)
   const [batchVerifySummary, setBatchVerifySummary] = useState<BatchVerifySummary | null>(null)
   const [batchVerifyError, setBatchVerifyError] = useState<string | null>(null)
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null)
+  const [batchStatusLoading, setBatchStatusLoading] = useState<null | 'active' | 'inactive'>(null)
+  const [statusActionError, setStatusActionError] = useState<string | null>(null)
 
   const columnsState = useAdminTableColumns({
     route: '/admin/sources',
@@ -353,6 +370,45 @@ export function InactiveSourceTable({
     }
   }, [fetchSources, normalizedSiteKey, normalizedVideoId, page, pageSize])
 
+  const setSingleStatus = useCallback(async (row: SourceRow, nextActive: boolean) => {
+    setStatusUpdatingId(row.id)
+    setStatusActionError(null)
+    try {
+      await apiClient.patch(`/admin/sources/${row.id}/status`, { isActive: nextActive })
+      await fetchSources(page, pageSize)
+    } catch (error) {
+      if (error instanceof ApiClientError) {
+        setStatusActionError(error.message)
+      } else {
+        setStatusActionError('状态更新失败，请稍后重试')
+      }
+    } finally {
+      setStatusUpdatingId(null)
+    }
+  }, [fetchSources, page, pageSize])
+
+  const setBatchStatus = useCallback(async (nextActive: boolean) => {
+    if (selectedIds.length === 0) return
+    setBatchStatusLoading(nextActive ? 'active' : 'inactive')
+    setStatusActionError(null)
+    try {
+      await apiClient.post('/admin/sources/batch-status', {
+        ids: selectedIds,
+        isActive: nextActive,
+      })
+      setSelectedIds([])
+      await fetchSources(page, pageSize)
+    } catch (error) {
+      if (error instanceof ApiClientError) {
+        setStatusActionError(error.message)
+      } else {
+        setStatusActionError('批量状态更新失败，请稍后重试')
+      }
+    } finally {
+      setBatchStatusLoading(null)
+    }
+  }, [fetchSources, page, pageSize, selectedIds])
+
   const tableColumns = useMemo(
     () =>
       buildColumns(
@@ -360,6 +416,8 @@ export function InactiveSourceTable({
         setReplaceTarget,
         setDeleteTarget,
         (p) => { void fetchSources(p, pageSize) },
+        (row, nextActive) => { void setSingleStatus(row, nextActive) },
+        statusUpdatingId,
         visibleColumnIds,
         columnsState.columnsById,
         {
@@ -374,6 +432,8 @@ export function InactiveSourceTable({
       page,
       pageSize,
       fetchSources,
+      setSingleStatus,
+      statusUpdatingId,
       visibleColumnIds,
       columnsState.columnsById,
       isAllStatus,
@@ -422,6 +482,41 @@ export function InactiveSourceTable({
         </span>
       </div>
 
+      {selectedIds.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--bg2)] px-3 py-2">
+          <SelectionActionBar
+            variant="inline"
+            selectedCount={selectedIds.length}
+            countTestId="source-batch-status-count"
+            actions={[
+              {
+                key: 'mark-active',
+                label: batchStatusLoading === 'active' ? '处理中...' : '批量标记活跃',
+                onClick: () => { void setBatchStatus(true) },
+                variant: 'success',
+                disabled: batchStatusLoading !== null,
+                testId: 'source-batch-status-active',
+              },
+              {
+                key: 'mark-inactive',
+                label: batchStatusLoading === 'inactive' ? '处理中...' : '批量标记失效',
+                onClick: () => { void setBatchStatus(false) },
+                variant: 'danger',
+                disabled: batchStatusLoading !== null,
+                testId: 'source-batch-status-inactive',
+              },
+              {
+                key: 'clear',
+                label: '取消选择',
+                onClick: () => setSelectedIds([]),
+                disabled: batchStatusLoading !== null,
+                testId: 'source-batch-status-clear',
+              },
+            ]}
+          />
+        </div>
+      ) : null}
+
       {batchVerifySummary ? (
         <div
           className="rounded-md border border-emerald-700/40 bg-emerald-900/20 px-3 py-2 text-xs text-emerald-300"
@@ -439,6 +534,15 @@ export function InactiveSourceTable({
           data-testid="source-batch-verify-error"
         >
           {batchVerifyError}
+        </div>
+      ) : null}
+
+      {statusActionError ? (
+        <div
+          className="rounded-md border border-red-700/40 bg-red-900/20 px-3 py-2 text-xs text-red-300"
+          data-testid="source-status-action-error"
+        >
+          {statusActionError}
         </div>
       ) : null}
 

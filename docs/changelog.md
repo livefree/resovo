@@ -4151,3 +4151,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/content-sort.test.ts`（更新）— 新增 `setSourceStatus / batchSetSourceStatus` 查询层行为断言
 - **验收结论**：后台已具备手工状态兜底接口，可单条或批量将播放源标记为活跃/失效
 - **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/api/admin-sources-status.test.ts tests/unit/api/content-sort.test.ts tests/unit/api/admin-sources-query.test.ts` 29/29 通过
+
+---
+
+## CHG-295 — 源状态手工切换前端入口与权限控制
+- **完成时间**：2026-03-27 20:59
+- **修改文件**：
+  - `src/components/admin/sources/InactiveSourceTable.tsx`（更新）— 行操作新增“标记活跃/标记失效”；多选后提供批量状态切换按钮，调用 `/admin/sources/:id/status` 与 `/admin/sources/batch-status`
+  - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（更新）— 新增行级状态切换与批量状态切换测试
+  - `tests/unit/components/admin/sources/SourceTable.test.tsx`（更新）— 保持筛选与表格集成回归
+- **验收结论**：播放源表已支持手工状态切换的行级与批量入口，切换后可刷新列表并反馈失败信息
+- **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/components/admin/sources/InactiveSourceTable.test.tsx tests/unit/components/admin/sources/SourceTable.test.tsx` 19/19 通过

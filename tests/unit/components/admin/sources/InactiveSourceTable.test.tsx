@@ -10,12 +10,14 @@ import { InactiveSourceTable } from '@/components/admin/sources/InactiveSourceTa
 const getMock = vi.fn()
 const postMock = vi.fn()
 const deleteMock = vi.fn()
+const patchMock = vi.fn()
 
 vi.mock('@/lib/api-client', () => ({
   apiClient: {
     get: (...args: unknown[]) => getMock(...args),
     post: (...args: unknown[]) => postMock(...args),
     delete: (...args: unknown[]) => deleteMock(...args),
+    patch: (...args: unknown[]) => patchMock(...args),
   },
 }))
 
@@ -82,6 +84,7 @@ describe('InactiveSourceTable (CHG-262)', () => {
       return {}
     })
     deleteMock.mockResolvedValue({})
+    patchMock.mockResolvedValue({})
   })
 
   it('renders source rows with video title and url', async () => {
@@ -174,5 +177,33 @@ describe('InactiveSourceTable (CHG-262)', () => {
     expect(byVideo.disabled).toBe(true)
     expect(bySite.disabled).toBe(false)
     expect(byVideoSite.disabled).toBe(true)
+  })
+
+  it('supports row-level status toggle', async () => {
+    render(<InactiveSourceTable status="all" />)
+    await screen.findByText('Alpha')
+
+    fireEvent.click(screen.getByTestId('source-status-toggle-src1'))
+
+    await waitFor(() => {
+      expect(patchMock).toHaveBeenCalledWith('/admin/sources/src1/status', { isActive: true })
+      expect(getMock).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it('supports batch status toggle for selected rows', async () => {
+    render(<InactiveSourceTable />)
+    await screen.findByText('Alpha')
+
+    fireEvent.click(screen.getByLabelText('选择 Alpha'))
+    fireEvent.click(screen.getByTestId('source-batch-status-active'))
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith('/admin/sources/batch-status', {
+        ids: ['src1'],
+        isActive: true,
+      })
+      expect(getMock).toHaveBeenCalledTimes(2)
+    })
   })
 })
