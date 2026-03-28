@@ -140,13 +140,6 @@ export class ContentService {
     }
   }
 
-  async updateSourceUrl(
-    sourceId: string,
-    newUrl: string
-  ): Promise<{ id: string; source_url: string; is_active: boolean } | null> {
-    return sourcesQueries.updateSourceUrl(this.db, sourceId, newUrl)
-  }
-
   async getShellVideoCount(): Promise<{ count: number; videoIds: string[] }> {
     return sourcesQueries.countShellVideos(this.db)
   }

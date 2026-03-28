@@ -3722,3 +3722,29 @@
      - `docs/changelog.md`
      - `docs/task-queue.md`
    - 验收要点：筛选、批量验证、手工切换、状态回写四条关键链路具备回归覆盖
+
+## [SEQ-20260327-41] 播放源管理交互收敛（移除 videoId 筛选与替换URL）
+- **状态**：✅ 已完成
+- **创建时间**：2026-03-27 21:51
+- **最后更新时间**：2026-03-27 21:56
+- **目标**：移除后台播放源页不适合人工操作的入口，简化治理交互
+- **范围**：播放源前端筛选/行操作、对应后端端点、单元测试与 e2e 回归脚本
+- **依赖**：无
+
+### 任务列表（按执行顺序）
+1. CHG-297 — 移除 videoId 筛选与“替换URL”功能（状态：✅ 已完成）
+   - 创建时间：2026-03-27 21:51
+   - 计划开始：2026-03-27 21:51
+   - 实际开始：2026-03-27 21:51
+   - 完成时间：2026-03-27 21:56
+   - 文件范围：
+     - `src/components/admin/sources/SourceTable.tsx`
+     - `src/components/admin/sources/InactiveSourceTable.tsx`
+     - `src/components/admin/sources/SourceUrlReplaceModal.tsx`
+     - `src/api/routes/admin/content.ts`
+     - `src/api/services/ContentService.ts`
+     - `src/api/db/queries/sources.ts`
+     - `tests/unit/components/admin/sources/*.test.tsx`
+     - `tests/unit/api/updateSourceUrl.test.ts`
+     - `tests/e2e/admin-source-and-video-flows.spec.ts`
+   - 验收要点：后台播放源页不再出现 videoId 筛选输入与替换URL入口；替换URL API 链路删除后测试通过

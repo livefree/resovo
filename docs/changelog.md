@@ -4172,3 +4172,21 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/task-queue.md`（更新）— `SEQ-20260327-40` 与 CHG-296 标记为已完成
 - **验收结论**：播放源治理核心链路已形成回归脚本覆盖，任务序列完成收口
 - **测试覆盖**：`npm run typecheck` 通过；`npx eslint tests/e2e/admin-source-and-video-flows.spec.ts` 通过；Playwright e2e 在当前会话未执行（需本地可访问前端运行环境）
+
+---
+
+## CHG-297 — 播放源管理移除 videoId 筛选与替换URL功能
+- **完成时间**：2026-03-27 21:56
+- **修改文件**：
+  - `src/components/admin/sources/SourceTable.tsx`（更新）— 移除 `videoId` 筛选输入与 URL 参数同步
+  - `src/components/admin/sources/InactiveSourceTable.tsx`（更新）— 移除“替换URL”行操作与相关状态；批量验证入口收敛为按来源站点
+  - `src/components/admin/sources/SourceUrlReplaceModal.tsx`（删除）— 删除替换 URL 弹窗组件
+  - `src/api/routes/admin/content.ts`（更新）— 删除 `PATCH /admin/sources/:id` 替换 URL 端点
+  - `src/api/services/ContentService.ts`（更新）— 删除 `updateSourceUrl` 服务方法
+  - `src/api/db/queries/sources.ts`（更新）— 删除 `updateSourceUrl` 查询函数
+  - `tests/unit/components/admin/sources/SourceTable.test.tsx`（更新）— 删除 `videoId` 与替换URL相关断言
+  - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（更新）— 删除 `videoId` 相关断言，保留站点验证与状态切换覆盖
+  - `tests/e2e/admin-source-and-video-flows.spec.ts`（更新）— 删除 `videoId` 筛选输入操作
+  - `tests/unit/api/updateSourceUrl.test.ts`（删除）— 删除已下线功能的单测
+- **验收结论**：后台播放源页已不再提供人工难以使用的 `videoId` 筛选和“替换URL”能力，交互路径收敛为可运营动作
+- **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/sources/InactiveSourceTable.test.tsx tests/unit/api/admin-sources-query.test.ts tests/unit/api/admin-sources-status.test.ts` 29/29 通过

@@ -27,10 +27,6 @@ vi.mock('@/components/admin/sources/SourceVerifyButton', () => ({
   ),
 }))
 
-vi.mock('@/components/admin/sources/SourceUrlReplaceModal', () => ({
-  SourceUrlReplaceModal: () => null,
-}))
-
 const MOCK_ROWS = [
   {
     id: 'src1',
@@ -145,7 +141,6 @@ describe('InactiveSourceTable (CHG-262)', () => {
       <InactiveSourceTable
         status="all"
         siteKey="site-a"
-        videoId="11111111-1111-4111-8111-111111111111"
       />,
     )
     await screen.findByText('Alpha')
@@ -166,17 +161,19 @@ describe('InactiveSourceTable (CHG-262)', () => {
     expect(getMock).toHaveBeenCalledTimes(2)
   })
 
-  it('disables batch verify buttons when required filters are missing', async () => {
+  it('enables batch verify button when siteKey is provided', async () => {
     render(<InactiveSourceTable status="all" siteKey="site-a" />)
     await screen.findByText('Alpha')
 
-    const byVideo = screen.getByTestId('source-batch-verify-video') as HTMLButtonElement
     const bySite = screen.getByTestId('source-batch-verify-site') as HTMLButtonElement
-    const byVideoSite = screen.getByTestId('source-batch-verify-video-site') as HTMLButtonElement
 
-    expect(byVideo.disabled).toBe(true)
     expect(bySite.disabled).toBe(false)
-    expect(byVideoSite.disabled).toBe(true)
+  })
+
+  it('disables batch verify button when siteKey is missing', async () => {
+    render(<InactiveSourceTable status="all" />)
+    await screen.findByText('Alpha')
+    expect((screen.getByTestId('source-batch-verify-site') as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('supports row-level status toggle', async () => {

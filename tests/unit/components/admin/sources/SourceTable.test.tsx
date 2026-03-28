@@ -143,10 +143,9 @@ describe('SourceTable (CHG-291)', () => {
     expect(screen.getAllByText('最后验证').length).toBeGreaterThan(0)
   })
 
-  it('reads keyword/title/videoId/siteKey/sort from URL and forwards to request', async () => {
+  it('reads keyword/title/siteKey/sort from URL and forwards to request', async () => {
     mockSearchParams.set('keyword', 'alpha')
     mockSearchParams.set('title', 'Alpha')
-    mockSearchParams.set('videoId', '11111111-1111-4111-8111-111111111111')
     mockSearchParams.set('siteKey', 'site-a')
     mockSearchParams.set('sortField', 'video_title')
     mockSearchParams.set('sortDir', 'asc')
@@ -155,7 +154,7 @@ describe('SourceTable (CHG-291)', () => {
     await screen.findByText('Alpha Video')
 
     expect(getMock).toHaveBeenCalledWith(
-      '/admin/sources?page=1&limit=20&status=all&keyword=alpha&title=Alpha&videoId=11111111-1111-4111-8111-111111111111&siteKey=site-a&sortField=video_title&sortDir=asc',
+      '/admin/sources?page=1&limit=20&status=all&keyword=alpha&title=Alpha&siteKey=site-a&sortField=video_title&sortDir=asc',
     )
   })
 
@@ -172,11 +171,6 @@ describe('SourceTable (CHG-291)', () => {
       target: { value: 'site-b' },
     })
     expect(replaceMock).toHaveBeenCalledWith(expect.stringContaining('siteKey=site-b'))
-
-    fireEvent.change(screen.getByTestId('source-filters-video-id'), {
-      target: { value: '11111111-1111-4111-8111-111111111111' },
-    })
-    expect(replaceMock).toHaveBeenCalledWith(expect.stringContaining('videoId=11111111-1111-4111-8111-111111111111'))
   })
 
   it('updates URL when sort changes', async () => {
@@ -219,20 +213,4 @@ describe('SourceTable (CHG-291)', () => {
     })
   })
 
-  it('opens replace modal and updates source url', async () => {
-    render(<SourceTable />)
-
-    await screen.findByText('Alpha Video')
-    fireEvent.click(screen.getByTestId('source-replace-btn-s1'))
-    fireEvent.change(screen.getByTestId('source-url-replace-input'), {
-      target: { value: 'https://new.example.com/updated.m3u8' },
-    })
-    fireEvent.click(screen.getByTestId('source-url-replace-save'))
-
-    await waitFor(() => {
-      expect(patchMock).toHaveBeenCalledWith('/admin/sources/s1', {
-        sourceUrl: 'https://new.example.com/updated.m3u8',
-      })
-    })
-  })
 })

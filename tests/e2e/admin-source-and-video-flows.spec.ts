@@ -169,7 +169,6 @@ test('sources page supports filters, batch verify and status actions', async ({ 
   await expect(page.locator('[data-testid="source-health-verify-status"]')).toContainText('运行中')
   await expect(page.locator('text=全量视频A')).toBeVisible()
 
-  await page.getByTestId('source-filters-video-id').fill('11111111-1111-4111-8111-111111111111')
   await page.getByTestId('source-filters-site-key').fill('site-a')
 
   const batchVerifyReq = page.waitForRequest(`${API_BASE}/admin/sources/batch-verify`)

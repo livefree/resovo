@@ -10,7 +10,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { ApiClientError, apiClient } from '@/lib/api-client'
 import { PaginationV2 } from '@/components/admin/PaginationV2'
 import { SourceVerifyButton } from '@/components/admin/sources/SourceVerifyButton'
-import { SourceUrlReplaceModal } from '@/components/admin/sources/SourceUrlReplaceModal'
 import { BatchDeleteBar } from '@/components/admin/sources/BatchDeleteBar'
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
 import { SelectionActionBar } from '@/components/admin/shared/batch/SelectionActionBar'
@@ -59,13 +58,12 @@ const INACTIVE_SOURCE_DEFAULT_STATE = {}
 type SourceStatusFilter = 'all' | 'inactive'
 type SourceSortField = 'created_at' | 'last_checked' | 'is_active' | 'video_title' | 'source_url' | 'site_key'
 type SourceSortDir = 'asc' | 'desc'
-type SourceBatchVerifyScope = 'video' | 'site' | 'video_site'
+type SourceBatchVerifyScope = 'site'
 
 interface InactiveSourceTableProps {
   status?: SourceStatusFilter
   keyword?: string
   title?: string
-  videoId?: string
   siteKey?: string
   sortField?: SourceSortField
   sortDir?: SourceSortDir
@@ -98,7 +96,6 @@ interface BatchVerifySummary {
 
 function buildColumns(
   page: number,
-  onReplace: (row: SourceRow) => void,
   onDelete: (row: SourceRow) => void,
   onVerified: (page: number) => void,
   onSetStatus: (row: SourceRow, nextActive: boolean) => void,
@@ -162,10 +159,6 @@ function buildColumns(
       cell: ({ row }) => (
         <div className="flex flex-wrap items-center gap-1">
           <SourceVerifyButton sourceId={row.id} onVerified={() => onVerified(page)} />
-          <button type="button" onClick={() => onReplace(row)}
-            className="rounded bg-[var(--bg3)] px-2 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-            data-testid={`source-replace-btn-${row.id}`}
-          >替换URL</button>
           <button type="button" onClick={() => onDelete(row)}
             className="rounded bg-red-900/30 px-2 py-0.5 text-xs text-red-400 hover:bg-red-900/60"
             data-testid={`source-delete-btn-${row.id}`}
@@ -218,7 +211,6 @@ export function InactiveSourceTable({
   status = 'inactive',
   keyword,
   title,
-  videoId,
   siteKey,
   sortField,
   sortDir,
@@ -238,7 +230,6 @@ export function InactiveSourceTable({
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [deleteTarget, setDeleteTarget] = useState<SourceRow | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
-  const [replaceTarget, setReplaceTarget] = useState<SourceRow | null>(null)
   const [showColumnsPanel, setShowColumnsPanel] = useState(false)
   const [batchVerifyLoading, setBatchVerifyLoading] = useState<SourceBatchVerifyScope | null>(null)
   const [batchVerifySummary, setBatchVerifySummary] = useState<BatchVerifySummary | null>(null)
@@ -294,7 +285,6 @@ export function InactiveSourceTable({
       })
       if (keyword) params.set('keyword', keyword)
       if (title) params.set('title', title)
-      if (videoId) params.set('videoId', videoId)
       if (siteKey) params.set('siteKey', siteKey)
       if (sortField) params.set('sortField', sortField)
       if (sortDir) params.set('sortDir', sortDir)
@@ -306,7 +296,7 @@ export function InactiveSourceTable({
     } finally {
       setLoading(false)
     }
-  }, [keyword, siteKey, sortDir, sortField, status, title, videoId])
+  }, [keyword, siteKey, sortDir, sortField, status, title])
 
   useEffect(() => { void fetchSources(page, pageSize) }, [fetchSources, page, pageSize])
 
@@ -324,34 +314,25 @@ export function InactiveSourceTable({
     }
   }, [deleteTarget, fetchSources, page, pageSize])
 
-  const normalizedVideoId = videoId?.trim() ?? ''
   const normalizedSiteKey = siteKey?.trim() ?? ''
-  const canBatchByVideo = normalizedVideoId.length > 0
   const canBatchBySite = normalizedSiteKey.length > 0
-  const canBatchByVideoSite = canBatchByVideo && canBatchBySite
 
-  const runBatchVerify = useCallback(async (scope: SourceBatchVerifyScope) => {
-    setBatchVerifyLoading(scope)
+  const runBatchVerify = useCallback(async () => {
+    setBatchVerifyLoading('site')
     setBatchVerifyError(null)
     setBatchVerifySummary(null)
     try {
       const payload: {
         scope: SourceBatchVerifyScope
-        videoId?: string
         siteKey?: string
         activeOnly: boolean
         limit: number
       } = {
-        scope,
+        scope: 'site',
         activeOnly: false,
         limit: BATCH_VERIFY_LIMIT,
       }
-      if (scope === 'video' || scope === 'video_site') {
-        payload.videoId = normalizedVideoId
-      }
-      if (scope === 'site' || scope === 'video_site') {
-        payload.siteKey = normalizedSiteKey
-      }
+      payload.siteKey = normalizedSiteKey
 
       const res = await apiClient.post<{ data: BatchVerifySummary }>(
         '/admin/sources/batch-verify',
@@ -368,7 +349,7 @@ export function InactiveSourceTable({
     } finally {
       setBatchVerifyLoading(null)
     }
-  }, [fetchSources, normalizedSiteKey, normalizedVideoId, page, pageSize])
+  }, [fetchSources, normalizedSiteKey, page, pageSize])
 
   const setSingleStatus = useCallback(async (row: SourceRow, nextActive: boolean) => {
     setStatusUpdatingId(row.id)
@@ -413,7 +394,6 @@ export function InactiveSourceTable({
     () =>
       buildColumns(
         page,
-        setReplaceTarget,
         setDeleteTarget,
         (p) => { void fetchSources(p, pageSize) },
         (row, nextActive) => { void setSingleStatus(row, nextActive) },
@@ -450,34 +430,15 @@ export function InactiveSourceTable({
         <span className="text-xs text-[var(--muted)]">批量验证</span>
         <button
           type="button"
-          onClick={() => { void runBatchVerify('video') }}
-          disabled={!canBatchByVideo || batchVerifyLoading !== null}
-          className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-50"
-          data-testid="source-batch-verify-video"
-        >
-          {batchVerifyLoading === 'video' ? '验证中...' : '按视频主体'}
-        </button>
-        <button
-          type="button"
-          onClick={() => { void runBatchVerify('site') }}
+          onClick={() => { void runBatchVerify() }}
           disabled={!canBatchBySite || batchVerifyLoading !== null}
           className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-50"
           data-testid="source-batch-verify-site"
         >
           {batchVerifyLoading === 'site' ? '验证中...' : '按来源站点'}
         </button>
-        <button
-          type="button"
-          onClick={() => { void runBatchVerify('video_site') }}
-          disabled={!canBatchByVideoSite || batchVerifyLoading !== null}
-          className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-50"
-          data-testid="source-batch-verify-video-site"
-        >
-          {batchVerifyLoading === 'video_site' ? '验证中...' : '按视频+站点'}
-        </button>
 
         <span className="text-xs text-[var(--muted)]">
-          {canBatchByVideo ? '' : '先填写视频ID；'}
           {canBatchBySite ? '' : '先填写来源站点；'}
         </span>
       </div>
@@ -619,14 +580,6 @@ export function InactiveSourceTable({
         onConfirm={handleDelete}
         loading={deleteLoading}
         danger
-      />
-
-      <SourceUrlReplaceModal
-        sourceId={replaceTarget?.id ?? null}
-        currentUrl={replaceTarget?.source_url ?? ''}
-        open={replaceTarget !== null}
-        onClose={() => setReplaceTarget(null)}
-        onSuccess={() => void fetchSources(page, pageSize)}
       />
     </div>
   )

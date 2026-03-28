@@ -163,30 +163,6 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
     return reply.send({ data: { updated, isActive: parsed.data.isActive } })
   })
 
-  // ── PATCH /admin/sources/:id ──────────────────────────────────
-  // CHG-202: 替换源 URL（死链修复）
-  const UpdateSourceSchema = z.object({
-    sourceUrl: z.string().url().min(1),
-  })
-
-  fastify.patch('/admin/sources/:id', { preHandler: auth }, async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const parsed = UpdateSourceSchema.safeParse(request.body)
-    if (!parsed.success) {
-      return reply.code(422).send({
-        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
-      })
-    }
-
-    const result = await contentService.updateSourceUrl(id, parsed.data.sourceUrl)
-    if (!result) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: '播放源不存在', status: 404 },
-      })
-    }
-    return reply.send({ data: result })
-  })
-
   // ════════════════════════════════════════════════════════════════
   // 投稿队列（is_active=false && submitted_by IS NOT NULL）
   // ════════════════════════════════════════════════════════════════
