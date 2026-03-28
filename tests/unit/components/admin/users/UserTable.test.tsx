@@ -77,12 +77,12 @@ describe('UserTable (CHG-261)', () => {
     })
   })
 
-  it('supports column visibility toggle via ColumnSettingsPanel', async () => {
+  it('supports column visibility toggle via TableSettingsTrigger', async () => {
     render(<UserTable />)
     await screen.findByText('alpha_user')
 
-    fireEvent.click(screen.getByTestId('user-columns-toggle'))
-    fireEvent.click(screen.getByTestId('user-columns-panel-toggle-email'))
+    fireEvent.click(screen.getByTestId('user-table-scroll-settings-btn'))
+    fireEvent.click(screen.getByTestId('user-table-scroll-settings-content-visible-email'))
 
     await waitFor(() => {
       expect(screen.queryByTestId('modern-table-sort-email')).toBeNull()

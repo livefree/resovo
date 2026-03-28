@@ -3796,12 +3796,12 @@
      - src/components/admin/shared/modern-table/ModernDataTable.tsx
    - 验收要点：有 settingsSlot 的表格右上角出现 ⋮；无 settingsSlot 的表格无变化；全测试通过
 
-5. CHG-301 — UserTable 迁移到 useTableSettings + settingsSlot（状态：⬜ 待开始）
+5. CHG-301 — UserTable 迁移到 useTableSettings + settingsSlot（状态：✅ 已完成）
    - 创建时间：2026-03-28 00:00
    - 计划开始：CHG-300 完成后
-   - 实际开始：
-   - 完成时间：
-   - 文件范围：src/components/admin/users/UserTable.tsx
+   - 实际开始：2026-03-28 00:26
+   - 完成时间：2026-03-28 14:31
+   - 文件范围：src/components/admin/users/UserTable.tsx, tests/unit/components/admin/users/UserTable.test.tsx
    - 验收要点：旧 ColumnSettingsPanel 块已移除；typecheck + lint + test 通过
 
 6. CHG-302 — SubmissionTable(sources) 迁移（状态：⬜ 待开始）

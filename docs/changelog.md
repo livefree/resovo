@@ -4256,3 +4256,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/tasks.md`（空稳定态）
 - **验收结论**：有 settingsSlot 的表格右上角自动出现 ⋮ 触发器；无 settingsSlot 的表格无任何变化；DOM 改动经全使用点确认安全
 - **测试覆盖**：typecheck 通过；lint 通过；unit tests 83 passed（同一 pre-existing failure）
+
+---
+
+### CHG-301 — UserTable 迁移到 useTableSettings + settingsSlot
+- **完成时间**：2026-03-28 14:31
+- **修改文件**：
+  - `src/components/admin/users/UserTable.tsx` — 移除 useAdminTableColumns visibility 管理和手写 ColumnSettingsPanel 叠加层；引入 useTableSettings + ALL_USER_COLUMN_IDS + USER_SETTINGS_COLUMNS 常量；改用 settingsSlot prop
+  - `tests/unit/components/admin/users/UserTable.test.tsx` — 更新 testId 引用（user-columns-toggle → user-table-scroll-settings-btn；user-columns-panel-toggle-email → user-table-scroll-settings-content-visible-email）
+  - `docs/task-queue.md`（CHG-301 完成）
+  - `docs/tasks.md`（空稳定态）
+- **测试覆盖**：typecheck 通过；lint 通过；unit tests 744 passed（1 pre-existing failure useAdminTableSort 与本次无关）

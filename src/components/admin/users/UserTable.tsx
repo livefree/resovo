@@ -5,14 +5,14 @@
 
 'use client'
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useEffect, useCallback, useRef, useMemo, useState } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { PaginationV2 } from '@/components/admin/PaginationV2'
-import { ColumnSettingsPanel } from '@/components/admin/shared/table/ColumnSettingsPanel'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import type { TableSortState } from '@/components/admin/shared/modern-table/types'
 import { useAdminTableColumns } from '@/components/admin/shared/table/useAdminTableColumns'
 import { useAdminTableSort } from '@/components/admin/shared/table/useAdminTableSort'
+import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import {
   useUserTableColumns,
   USER_COLUMN_LABELS,
@@ -23,6 +23,18 @@ import {
   type UserColumnId,
 } from './useUserTableColumns'
 
+// 所有列 ID（useTableSettings 控制显/隐，useUserTableColumns 构建全集）
+const ALL_USER_COLUMN_IDS = USER_COLUMNS_META.map((col) => col.id as UserColumnId)
+
+// useTableSettings 列描述（label + 默认可见/可排序）
+const USER_SETTINGS_COLUMNS = USER_COLUMNS_META.map((col) => ({
+  id: col.id,
+  label: USER_COLUMN_LABELS[col.id as UserColumnId] ?? col.id,
+  defaultVisible: col.visible ?? true,
+  defaultSortable: USER_SORTABLE_MAP[col.id as UserColumnId] ?? false,
+  required: col.id === 'actions', // 操作列不可隐藏
+}))
+
 const DEFAULT_PAGE_SIZE = 20
 
 export function UserTable() {
@@ -32,7 +44,6 @@ export function UserTable() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
-  const [showColumnsPanel, setShowColumnsPanel] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const columnsState = useAdminTableColumns({
@@ -49,13 +60,10 @@ export function UserTable() {
     sortable: USER_SORTABLE_MAP,
   })
 
-  const visibleColumnIds = useMemo(
-    () =>
-      columnsState.columns
-        .filter((col) => col.visible)
-        .map((col) => col.id as UserColumnId),
-    [columnsState.columns],
-  )
+  const tableSettings = useTableSettings({
+    tableId: 'user-table',
+    columns: USER_SETTINGS_COLUMNS,
+  })
 
   const sort = useMemo<TableSortState | undefined>(() => {
     if (!sortState.sort) return undefined
@@ -89,11 +97,16 @@ export function UserTable() {
     void fetchUsers(search, 1, pageSize)
   }, [sortState.sort, pageSize, fetchUsers, search])
 
-  const tableColumns = useUserTableColumns({
-    visibleColumnIds,
+  const allTableColumns = useUserTableColumns({
+    visibleColumnIds: ALL_USER_COLUMN_IDS,
     columnsById: columnsState.columnsById,
     onRefresh: useCallback(() => { void fetchUsers(search, page, pageSize) }, [fetchUsers, search, page, pageSize]),
   })
+
+  const tableColumns = useMemo(
+    () => tableSettings.applyToColumns(allTableColumns),
+    [tableSettings, allTableColumns],
+  )
 
   function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>) {
     const val = e.target.value
@@ -117,51 +130,28 @@ export function UserTable() {
         />
       </div>
 
-      {/* ⚙ 列设置叠加在表格右上角，面板在 overflow-hidden 外渲染 */}
-      <div className="relative">
-        <div className="absolute right-4 top-3 z-30">
-          <button
-            type="button"
-            className="rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-            onClick={() => setShowColumnsPanel((prev) => !prev)}
-            data-testid="user-columns-toggle"
-            aria-label="列设置"
-            title="列设置"
-          >⚙</button>
-          {showColumnsPanel ? (
-            <div className="absolute right-0 mt-1 w-52">
-              <ColumnSettingsPanel
-                data-testid="user-columns-panel"
-                columns={columnsState.columns.map((col) => ({
-                  id: col.id,
-                  label: USER_COLUMN_LABELS[col.id as UserColumnId] ?? col.id,
-                  visible: col.visible,
-                }))}
-                onToggle={(id) => columnsState.toggleColumnVisibility(id)}
-                onReset={() => columnsState.resetColumnsMeta()}
-              />
-            </div>
-          ) : null}
-        </div>
-
-        <ModernDataTable
-          columns={tableColumns}
-          rows={users}
-          sort={sort}
-          onSortChange={(nextSort) => {
-            sortState.setSort(nextSort.field, nextSort.direction === 'asc' ? 'asc' : 'desc')
-          }}
-          onColumnWidthChange={(columnId, nextWidth) => {
-            if (columnId in columnsState.columnsById) {
-              columnsState.setColumnWidth(columnId, nextWidth)
-            }
-          }}
-          loading={loading}
-          emptyText="暂无数据"
-          scrollTestId="user-table-scroll"
-          getRowId={(row) => row.id}
-        />
-      </div>
+      <ModernDataTable
+        columns={tableColumns}
+        rows={users}
+        sort={sort}
+        onSortChange={(nextSort) => {
+          sortState.setSort(nextSort.field, nextSort.direction === 'asc' ? 'asc' : 'desc')
+        }}
+        onColumnWidthChange={(columnId, nextWidth) => {
+          if (columnId in columnsState.columnsById) {
+            columnsState.setColumnWidth(columnId, nextWidth)
+          }
+        }}
+        loading={loading}
+        emptyText="暂无数据"
+        scrollTestId="user-table-scroll"
+        getRowId={(row) => row.id}
+        settingsSlot={{
+          settingsColumns: tableSettings.orderedSettings,
+          onSettingsChange: tableSettings.updateSetting,
+          onSettingsReset: tableSettings.reset,
+        }}
+      />
 
       {total > 0 ? (
         <div className="mt-4">
