@@ -81,6 +81,70 @@ export async function findSourceById(
   return result.rows[0] ? mapSource(result.rows[0]) : null
 }
 
+export type AdminSourceVerifyScope = 'video' | 'site' | 'video_site'
+
+export interface AdminSourceBatchVerifyFilters {
+  scope: AdminSourceVerifyScope
+  videoId?: string
+  siteKey?: string
+  activeOnly?: boolean
+  limit?: number
+}
+
+export interface AdminSourceVerifyCandidate {
+  id: string
+  source_url: string
+}
+
+export async function listSourcesForBatchVerify(
+  db: Pool,
+  filters: AdminSourceBatchVerifyFilters,
+): Promise<AdminSourceVerifyCandidate[]> {
+  const conditions = [
+    's.deleted_at IS NULL',
+    's.submitted_by IS NULL',
+    'v.deleted_at IS NULL',
+  ]
+  const params: unknown[] = []
+  let idx = 1
+
+  if (filters.activeOnly ?? true) {
+    conditions.push('s.is_active = true')
+  }
+
+  if (filters.scope === 'video') {
+    if (!filters.videoId) return []
+    conditions.push(`s.video_id = $${idx++}`)
+    params.push(filters.videoId)
+  } else if (filters.scope === 'site') {
+    if (!filters.siteKey) return []
+    conditions.push(`v.site_key = $${idx++}`)
+    params.push(filters.siteKey)
+  } else {
+    if (!filters.videoId || !filters.siteKey) return []
+    conditions.push(`s.video_id = $${idx++}`)
+    params.push(filters.videoId)
+    conditions.push(`v.site_key = $${idx++}`)
+    params.push(filters.siteKey)
+  }
+
+  const limit = Math.max(1, Math.min(filters.limit ?? 200, 500))
+  params.push(limit)
+
+  const where = conditions.join(' AND ')
+  const result = await db.query<AdminSourceVerifyCandidate>(
+    `SELECT s.id, s.source_url
+     FROM video_sources s
+     JOIN videos v ON s.video_id = v.id
+     WHERE ${where}
+     ORDER BY s.last_checked ASC NULLS FIRST, s.created_at ASC
+     LIMIT $${idx}`,
+    params,
+  )
+
+  return result.rows
+}
+
 // ── 写入：更新活跃状态（用于验证服务）───────────────────────────
 
 export async function updateSourceActiveStatus(

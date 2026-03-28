@@ -4,7 +4,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { listAdminSources, listSubmissions } from '@/api/db/queries/sources'
+import { listAdminSources, listSourcesForBatchVerify, listSubmissions } from '@/api/db/queries/sources'
 import { listAdminSubtitles } from '@/api/db/queries/subtitles'
 
 describe('listSubmissions — server-side sort (CHG-258)', () => {
@@ -106,6 +106,61 @@ describe('listAdminSources — filters and server-side sort (CHG-290)', () => {
     })
     const sql: string = query.mock.calls[0][0]
     expect(sql).toContain('ORDER BY s.last_checked DESC NULLS LAST')
+  })
+})
+
+describe('listSourcesForBatchVerify — scope filters (CHG-292)', () => {
+  const query = vi.fn()
+  const db = { query } as unknown as import('pg').Pool
+
+  beforeEach(() => {
+    query.mockReset()
+    query.mockResolvedValue({ rows: [] })
+  })
+
+  it('scope=video adds video_id condition and active filter', async () => {
+    await listSourcesForBatchVerify(db, {
+      scope: 'video',
+      videoId: 'video-1',
+      activeOnly: true,
+      limit: 120,
+    })
+    const sql: string = query.mock.calls[0][0]
+    const params: unknown[] = query.mock.calls[0][1]
+    expect(sql).toContain('s.video_id =')
+    expect(sql).toContain('s.is_active = true')
+    expect(params).toContain('video-1')
+    expect(params).toContain(120)
+  })
+
+  it('scope=site adds site_key condition', async () => {
+    await listSourcesForBatchVerify(db, {
+      scope: 'site',
+      siteKey: 'site-a',
+      activeOnly: false,
+      limit: 80,
+    })
+    const sql: string = query.mock.calls[0][0]
+    const params: unknown[] = query.mock.calls[0][1]
+    expect(sql).toContain('v.site_key =')
+    expect(sql).not.toContain('s.is_active = true')
+    expect(params).toContain('site-a')
+    expect(params).toContain(80)
+  })
+
+  it('scope=video_site adds both conditions', async () => {
+    await listSourcesForBatchVerify(db, {
+      scope: 'video_site',
+      videoId: 'video-2',
+      siteKey: 'site-b',
+      limit: 60,
+    })
+    const sql: string = query.mock.calls[0][0]
+    const params: unknown[] = query.mock.calls[0][1]
+    expect(sql).toContain('s.video_id =')
+    expect(sql).toContain('v.site_key =')
+    expect(params).toContain('video-2')
+    expect(params).toContain('site-b')
   })
 })
 

@@ -5,9 +5,10 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockRedisGet, mockVerifySource } = vi.hoisted(() => ({
+const { mockRedisGet, mockVerifySource, mockBatchVerifySources } = vi.hoisted(() => ({
   mockRedisGet: vi.fn().mockResolvedValue(null),
   mockVerifySource: vi.fn(),
+  mockBatchVerifySources: vi.fn(),
 }))
 
 // ── Mock 依赖 ─────────────────────────────────────────────────────
@@ -21,6 +22,7 @@ vi.mock('@/api/services/CrawlerService', () => ({
 vi.mock('@/api/services/ContentService', () => ({
   ContentService: vi.fn().mockImplementation(() => ({
     verifySource: mockVerifySource,
+    batchVerifySources: mockBatchVerifySources,
   })),
 }))
 vi.mock('@/api/db/queries/crawlerTasks', () => ({
@@ -108,6 +110,19 @@ describe('POST /admin/sources/:id/verify (CHG-287)', () => {
     vi.clearAllMocks()
     mockRedisGet.mockResolvedValue(null)
     mockVerifySource.mockResolvedValue({ isActive: true, responseMs: 120, statusCode: 200 })
+    mockBatchVerifySources.mockResolvedValue({
+      scope: 'video',
+      videoId: '11111111-1111-4111-8111-111111111111',
+      siteKey: null,
+      activeOnly: true,
+      totalMatched: 2,
+      processed: 2,
+      activated: 1,
+      inactivated: 1,
+      timeout: 0,
+      failed: 0,
+      durationMs: 25,
+    })
     app = await buildApp()
   })
 
@@ -158,5 +173,76 @@ describe('POST /admin/sources/:id/verify (CHG-287)', () => {
       headers: authHeader('moderator'),
     })
     expect(res.statusCode).toBe(200)
+  })
+})
+
+describe('POST /admin/sources/batch-verify (CHG-292)', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockRedisGet.mockResolvedValue(null)
+    mockVerifySource.mockResolvedValue({ isActive: true, responseMs: 120, statusCode: 200 })
+    mockBatchVerifySources.mockResolvedValue({
+      scope: 'video_site',
+      videoId: '11111111-1111-4111-8111-111111111111',
+      siteKey: 'site-a',
+      activeOnly: true,
+      totalMatched: 3,
+      processed: 3,
+      activated: 2,
+      inactivated: 1,
+      timeout: 1,
+      failed: 0,
+      durationMs: 66,
+    })
+    app = await buildApp()
+  })
+
+  it('scope=video 缺少 videoId 返回 422', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/sources/batch-verify',
+      headers: authHeader('moderator'),
+      payload: { scope: 'video' },
+    })
+
+    expect(res.statusCode).toBe(422)
+    expect(mockBatchVerifySources).not.toHaveBeenCalled()
+  })
+
+  it('scope=site 缺少 siteKey 返回 422', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/sources/batch-verify',
+      headers: authHeader('moderator'),
+      payload: { scope: 'site' },
+    })
+
+    expect(res.statusCode).toBe(422)
+    expect(mockBatchVerifySources).not.toHaveBeenCalled()
+  })
+
+  it('按 video+site 批量验证返回摘要', async () => {
+    const payload = {
+      scope: 'video_site',
+      videoId: '11111111-1111-4111-8111-111111111111',
+      siteKey: 'site-a',
+      activeOnly: true,
+      limit: 120,
+    }
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/sources/batch-verify',
+      headers: authHeader('moderator'),
+      payload,
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(mockBatchVerifySources).toHaveBeenCalledWith(payload)
+    const body = res.json<{ data: { totalMatched: number; processed: number; timeout: number } }>()
+    expect(body.data.totalMatched).toBe(3)
+    expect(body.data.processed).toBe(3)
+    expect(body.data.timeout).toBe(1)
   })
 })

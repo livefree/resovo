@@ -8,6 +8,18 @@ import * as sourcesQueries from '@/api/db/queries/sources'
 import * as subtitleQueries from '@/api/db/queries/subtitles'
 import { checkUrl } from '@/api/workers/verifyWorker'
 
+const BATCH_VERIFY_CONCURRENCY = 5
+
+export type SourceBatchVerifyScope = 'video' | 'site' | 'video_site'
+
+export interface BatchVerifySourcesInput {
+  scope: SourceBatchVerifyScope
+  videoId?: string
+  siteKey?: string
+  activeOnly?: boolean
+  limit?: number
+}
+
 export class ContentService {
   constructor(private db: Pool) {}
 
@@ -41,6 +53,83 @@ export class ContentService {
     await sourcesQueries.updateSourceActiveStatus(this.db, sourceId, isActive)
 
     return { isActive, responseMs, statusCode }
+  }
+
+  async batchVerifySources(input: BatchVerifySourcesInput): Promise<{
+    scope: SourceBatchVerifyScope
+    videoId: string | null
+    siteKey: string | null
+    activeOnly: boolean
+    totalMatched: number
+    processed: number
+    activated: number
+    inactivated: number
+    timeout: number
+    failed: number
+    durationMs: number
+  }> {
+    const startedAt = Date.now()
+    const activeOnly = input.activeOnly ?? true
+    const limit = Math.max(1, Math.min(input.limit ?? 200, 500))
+    const candidates = await sourcesQueries.listSourcesForBatchVerify(this.db, {
+      scope: input.scope,
+      videoId: input.videoId,
+      siteKey: input.siteKey,
+      activeOnly,
+      limit,
+    })
+
+    let processed = 0
+    let activated = 0
+    let inactivated = 0
+    let timeout = 0
+    let failed = 0
+
+    for (let i = 0; i < candidates.length; i += BATCH_VERIFY_CONCURRENCY) {
+      const batch = candidates.slice(i, i + BATCH_VERIFY_CONCURRENCY)
+      const results = await Promise.all(
+        batch.map(async (source) => {
+          try {
+            const { isActive, statusCode } = await checkUrl(source.source_url)
+            await sourcesQueries.updateSourceActiveStatus(this.db, source.id, isActive)
+            return { ok: true as const, isActive, statusCode }
+          } catch {
+            return { ok: false as const }
+          }
+        }),
+      )
+
+      for (const result of results) {
+        if (!result.ok) {
+          failed += 1
+          continue
+        }
+
+        processed += 1
+        if (result.isActive) {
+          activated += 1
+        } else {
+          inactivated += 1
+        }
+        if (result.statusCode === null) {
+          timeout += 1
+        }
+      }
+    }
+
+    return {
+      scope: input.scope,
+      videoId: input.videoId ?? null,
+      siteKey: input.siteKey ?? null,
+      activeOnly,
+      totalMatched: candidates.length,
+      processed,
+      activated,
+      inactivated,
+      timeout,
+      failed,
+      durationMs: Date.now() - startedAt,
+    }
   }
 
   async updateSourceUrl(

@@ -4113,3 +4113,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/sources/SourceTable.test.tsx`（更新）— 新增 URL 参数回放与 URL 同步行为测试，覆盖筛选/排序/Tab 三条路径
 - **验收结论**：`/admin/sources` 已具备前端筛选与排序操作入口，并能在 URL 层保存与恢复当前治理上下文
 - **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/sources/InactiveSourceTable.test.tsx` 15/15 通过
+
+---
+
+## CHG-292 — 播放源批量验证接口（video/site/video+site scope）实现
+- **完成时间**：2026-03-27 20:48
+- **修改文件**：
+  - `src/api/db/queries/sources.ts`（更新）— 新增 `listSourcesForBatchVerify`，支持按 `scope(video/site/video_site)`、`videoId`、`siteKey`、`activeOnly` 选取待验证源
+  - `src/api/services/ContentService.ts`（更新）— 新增 `batchVerifySources`，按并发 5 批量执行 URL 验证并回写 `is_active/last_checked`，返回统计摘要
+  - `src/api/routes/admin/crawler.ts`（更新）— 新增 `POST /admin/sources/batch-verify`（moderator+），完成 scope 参数校验并对接批量验证服务
+  - `tests/unit/api/sources-verify.test.ts`（更新）— 新增批量验证接口参数校验与成功返回摘要测试
+  - `tests/unit/api/content-sort.test.ts`（更新）— 新增 `listSourcesForBatchVerify` 查询条件覆盖（video/site/video_site）
+- **验收结论**：后台已支持按视频、站点、视频+站点范围批量触发播放源验证，并同步返回处理摘要
+- **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/api/sources-verify.test.ts tests/unit/api/content-sort.test.ts` 25/25 通过

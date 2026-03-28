@@ -6,6 +6,7 @@
  * POST /admin/crawler/tasks           — 手动触发采集（需 admin）
  * GET  /admin/crawler/sites-status    — 各源站采集状态（需 admin）
  * POST /admin/sources/:id/verify      — 手动触发单条同步验证（需 moderator+）
+ * POST /admin/sources/batch-verify    — 按范围批量验证播放源（需 moderator+）
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -636,6 +637,55 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
 
       return reply.send({ data: result })
     }
+  )
+
+  // ── POST /admin/sources/batch-verify — 按范围批量验证 ────────
+
+  fastify.post(
+    '/admin/sources/batch-verify',
+    { preHandler: [fastify.authenticate, fastify.requireRole(['moderator', 'admin'])] },
+    async (request, reply) => {
+      const BatchVerifySchema = z.object({
+        scope: z.enum(['video', 'site', 'video_site']),
+        videoId: z.string().uuid().optional(),
+        siteKey: z.string().trim().min(1).max(100).optional(),
+        activeOnly: z.boolean().optional().default(true),
+        limit: z.coerce.number().int().min(1).max(500).optional().default(200),
+      })
+
+      const parsed = BatchVerifySchema.safeParse(request.body)
+      if (!parsed.success) {
+        return reply.code(422).send({
+          error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+        })
+      }
+
+      const { scope, videoId, siteKey, activeOnly, limit } = parsed.data
+      if (scope === 'video' && !videoId) {
+        return reply.code(422).send({
+          error: { code: 'VALIDATION_ERROR', message: 'scope=video 时必须传 videoId', status: 422 },
+        })
+      }
+      if (scope === 'site' && !siteKey) {
+        return reply.code(422).send({
+          error: { code: 'VALIDATION_ERROR', message: 'scope=site 时必须传 siteKey', status: 422 },
+        })
+      }
+      if (scope === 'video_site' && (!videoId || !siteKey)) {
+        return reply.code(422).send({
+          error: { code: 'VALIDATION_ERROR', message: 'scope=video_site 时必须同时传 videoId 和 siteKey', status: 422 },
+        })
+      }
+
+      const result = await contentService.batchVerifySources({
+        scope,
+        videoId,
+        siteKey,
+        activeOnly,
+        limit,
+      })
+      return reply.send({ data: result })
+    },
   )
 
   // ── POST /admin/crawler/reindex — 重建 ES 索引 ───────────────

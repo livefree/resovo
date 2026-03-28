@@ -3634,7 +3634,7 @@
 ## [SEQ-20260327-40] 播放源批量治理能力补齐（视频主体 + 源站）
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-27 20:28
-- **最后更新时间**：2026-03-27 20:40
+- **最后更新时间**：2026-03-27 20:48
 - **目标**：让 `/admin/sources` 支持按视频主体与来源站点进行批量验证治理，并补齐筛选/排序与手工状态兜底能力
 - **范围**：播放源查询接口、批量验证接口、手工状态切换接口、来源管理前端交互与测试
 - **依赖**：`docs/admin_backend_capability_exposure_plan_20260327.md`
@@ -3664,16 +3664,17 @@
      - `tests/unit/components/admin/sources/SourceTable.test.tsx`（扩展）
    - 验收要点：可按关键词/标题/siteKey筛选并切换排序，刷新后状态可恢复
 
-3. CHG-292 — 播放源批量验证接口（video/site/video+site scope）实现（状态：⬜ 待开始）
+3. CHG-292 — 播放源批量验证接口（video/site/video+site scope）实现（状态：✅ 已完成）
    - 创建时间：2026-03-27 20:28
    - 计划开始：CHG-291 完成后
-   - 实际开始：—
-   - 完成时间：—
+   - 实际开始：2026-03-27 20:44
+   - 完成时间：2026-03-27 20:48
    - 文件范围：
-     - `src/api/routes/admin/crawler.ts` 或 `src/api/routes/admin/content.ts`（按边界选其一）
+     - `src/api/routes/admin/crawler.ts`
      - `src/api/services/ContentService.ts`
-     - `src/api/workers/verifyWorker.ts`（复用队列）
+     - `src/api/db/queries/sources.ts`
      - `tests/unit/api/sources-verify.test.ts`（扩展）
+     - `tests/unit/api/content-sort.test.ts`（扩展）
    - 验收要点：支持按视频、站点、视频+站点发起批量验证并返回任务摘要
 
 4. CHG-293 — 播放源批量验证前端操作与结果反馈（状态：⬜ 待开始）
