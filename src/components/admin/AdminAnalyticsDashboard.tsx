@@ -8,9 +8,9 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
-import { ColumnSettingsPanel } from '@/components/admin/shared/table/ColumnSettingsPanel'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import { useAdminTableColumns, type AdminColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
+import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import { TableBadgeCell, TableDateCell, TableTextCell } from '@/components/admin/shared/modern-table/cells'
 import type { TableColumn, TableSortState } from '@/components/admin/shared/modern-table/types'
 import type { AnalyticsData } from '@/api/routes/admin/analytics'
@@ -33,6 +33,13 @@ const CRAWLER_TASK_LABELS: Record<CrawlerTaskColumnId, string> = {
   finished_at: '结束时间',
 }
 
+const ANALYTICS_SETTINGS_COLUMNS = CRAWLER_TASK_COLUMNS.map((col) => ({
+  id: col.id,
+  label: CRAWLER_TASK_LABELS[col.id as CrawlerTaskColumnId] ?? col.id,
+  defaultVisible: col.visible ?? true,
+  defaultSortable: true,
+}))
+
 const STATUS_TONE: Record<string, 'success' | 'danger' | 'info' | 'warning'> = {
   done: 'success',
   failed: 'danger',
@@ -50,7 +57,6 @@ function toComparableValue(row: CrawlerTaskRow, field: string): string | number 
 }
 
 function buildColumns(
-  visibleColumnIds: CrawlerTaskColumnId[],
   columnsById: Record<string, { width: number }>,
 ): TableColumn<CrawlerTaskRow>[] {
   const all: TableColumn<CrawlerTaskRow>[] = [
@@ -81,7 +87,7 @@ function buildColumns(
       cell: ({ row }) => <TableDateCell value={row.finished_at} fallback="—" className="text-xs" />,
     },
   ]
-  return all.filter((col) => visibleColumnIds.includes(col.id as CrawlerTaskColumnId))
+  return all
 }
 
 // ── StatCard ──────────────────────────────────────────────────────
@@ -117,7 +123,6 @@ export function AdminAnalyticsDashboard() {
   const [data, setData] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [showColumnsPanel, setShowColumnsPanel] = useState(false)
   const [sort, setSort] = useState<TableSortState>({ field: 'created_at', direction: 'desc' })
 
   const columnsState = useAdminTableColumns({
@@ -127,13 +132,10 @@ export function AdminAnalyticsDashboard() {
     defaultState: {},
   })
 
-  const visibleColumnIds = useMemo(
-    () =>
-      columnsState.columns
-        .filter((col) => col.visible)
-        .map((col) => col.id as CrawlerTaskColumnId),
-    [columnsState.columns],
-  )
+  const tableSettings = useTableSettings({
+    tableId: 'analytics-crawler-task-table',
+    columns: ANALYTICS_SETTINGS_COLUMNS,
+  })
 
   useEffect(() => {
     apiClient
@@ -160,9 +162,14 @@ export function AdminAnalyticsDashboard() {
     return next
   }, [data?.crawlerTasks.recent, sort])
 
+  const allTableColumns = useMemo(
+    () => buildColumns(columnsState.columnsById),
+    [columnsState.columnsById],
+  )
+
   const tableColumns = useMemo(
-    () => buildColumns(visibleColumnIds, columnsState.columnsById),
-    [visibleColumnIds, columnsState.columnsById],
+    () => tableSettings.applyToColumns(allTableColumns),
+    [tableSettings, allTableColumns],
   )
 
   if (loading) {
@@ -243,33 +250,7 @@ export function AdminAnalyticsDashboard() {
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[var(--muted)]">
           爬虫最近任务
         </h2>
-        <div className="relative" data-testid="analytics-crawler-tasks">
-          {/* ⚙ 列设置叠加在表格右上角 */}
-          <div className="absolute right-4 top-3 z-30">
-            <button
-              type="button"
-              className="rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-              onClick={() => setShowColumnsPanel((prev) => !prev)}
-              data-testid="analytics-task-columns-toggle"
-              aria-label="列设置"
-              title="列设置"
-            >⚙</button>
-            {showColumnsPanel ? (
-              <div className="absolute right-0 mt-1 w-52">
-                <ColumnSettingsPanel
-                  data-testid="analytics-task-columns-panel"
-                  columns={columnsState.columns.map((col) => ({
-                    id: col.id,
-                    label: CRAWLER_TASK_LABELS[col.id as CrawlerTaskColumnId] ?? col.id,
-                    visible: col.visible,
-                  }))}
-                  onToggle={(id) => columnsState.toggleColumnVisibility(id)}
-                  onReset={() => columnsState.resetColumnsMeta()}
-                />
-              </div>
-            ) : null}
-          </div>
-
+        <div data-testid="analytics-crawler-tasks">
           <ModernDataTable
             columns={tableColumns}
             rows={sortedCrawlerTasks}
@@ -283,6 +264,11 @@ export function AdminAnalyticsDashboard() {
               if (columnId in columnsState.columnsById) {
                 columnsState.setColumnWidth(columnId, nextWidth)
               }
+            }}
+            settingsSlot={{
+              settingsColumns: tableSettings.orderedSettings,
+              onSettingsChange: tableSettings.updateSetting,
+              onSettingsReset: tableSettings.reset,
             }}
           />
         </div>

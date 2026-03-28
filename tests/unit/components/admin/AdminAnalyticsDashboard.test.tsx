@@ -56,9 +56,8 @@ describe('AdminAnalyticsDashboard (CHG-130)', () => {
     expect(rows[0]?.getAttribute('data-testid')).toBe('modern-table-row-t2')
 
     // Toggle off status column
-    fireEvent.click(screen.getByTestId('analytics-task-columns-toggle'))
-    fireEvent.click(screen.getByTestId('analytics-task-columns-panel-toggle-status'))
-    fireEvent.click(screen.getByTestId('analytics-task-columns-toggle')) // close panel
+    fireEvent.click(screen.getByTestId('analytics-crawler-table-scroll-settings-btn'))
+    fireEvent.click(screen.getByTestId('analytics-crawler-table-scroll-settings-content-visible-status'))
 
     await waitFor(() => {
       // After toggling off status, its sort button should be gone

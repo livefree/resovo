@@ -4321,3 +4321,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx` — 更新 testId
   - `docs/task-queue.md`（CHG-306 完成）
 - **测试覆盖**：typecheck 通过；5/5 passed
+
+---
+
+### CHG-307 — AdminAnalyticsDashboard 迁移到 useTableSettings + settingsSlot
+- **完成时间**：2026-03-28 15:00
+- **修改文件**：
+  - `src/components/admin/AdminAnalyticsDashboard.tsx` — 移除 showColumnsPanel + ColumnSettingsPanel + visibleColumnIds；引入 useTableSettings + ANALYTICS_SETTINGS_COLUMNS + applyToColumns + settingsSlot
+  - `tests/unit/components/admin/AdminAnalyticsDashboard.test.tsx` — 更新 testId
+  - `docs/task-queue.md`（CHG-307 完成）
+- **测试覆盖**：typecheck 通过；1/1 passed

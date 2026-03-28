@@ -3844,15 +3844,15 @@
     - 文件范围：src/components/admin/system/crawler-site/CrawlerSiteManager.tsx + CrawlerSiteTable.tsx + useCrawlerSiteColumns.ts + useCrawlerSiteTableColumns.tsx + CrawlerSiteTableHead.tsx
     - 验收要点：typecheck + lint + test 通过；required 列仍无法隐藏
 
-11. CHG-307 — AdminAnalyticsDashboard 迁移（状态：⬜ 待开始）
+11. CHG-307 — AdminAnalyticsDashboard 迁移（状态：✅ 已完成）
     - 创建时间：2026-03-28 00:00
     - 计划开始：CHG-306 完成后
-    - 实际开始：
-    - 完成时间：
+    - 实际开始：2026-03-28 14:57
+    - 完成时间：2026-03-28 15:00
     - 文件范围：src/components/admin/analytics/AdminAnalyticsDashboard.tsx（或同类路径）
     - 验收要点：typecheck + lint + test 通过
 
-12. CHG-308 — 删除 ColumnSettingsPanel.tsx + docs/decisions.md ADR（状态：⬜ 待开始）
+12. CHG-308 — 删除 ColumnSettingsPanel.tsx + docs/decisions.md ADR（状态：🔄 进行中）
     - 创建时间：2026-03-28 00:00
     - 计划开始：CHG-307 完成后
     - 实际开始：
