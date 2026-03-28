@@ -3492,7 +3492,7 @@
 ## [SEQ-20260327-36] 后台能力显性化与闭环补齐（审核/视频/播放源）
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-27 17:27
-- **最后更新时间**：2026-03-27 17:35
+- **最后更新时间**：2026-03-27 17:39
 - **目标**：将已实现但未在后台充分展示的接口能力显性化，补齐审核、视频管理、播放源管理三条核心运营闭环
 - **范围**：`/admin/moderation`、`/admin/videos`、`/admin/sources` 对应前端组件与必要后端轻量配套
 - **依赖**：`docs/admin_backend_capability_exposure_plan_20260327.md`
@@ -3510,11 +3510,11 @@
      - `src/components/admin/AdminSourceList.tsx`
    - 验收要点：`/admin/sources` 可在“全部源/失效源/用户纠错”三视图间切换，`status=all` 数据可见
 
-2. CHG-282 — 失效源表补多选接线，恢复批量删除可达链路（状态：⬜ 待开始）
+2. CHG-282 — 失效源表补多选接线，恢复批量删除可达链路（状态：✅ 已完成）
    - 创建时间：2026-03-27 17:27
    - 计划开始：CHG-281 完成后
-   - 实际开始：—
-   - 完成时间：—
+   - 实际开始：2026-03-27 17:37
+   - 完成时间：2026-03-27 17:39
    - 文件范围：
      - `src/components/admin/sources/InactiveSourceTable.tsx`
      - `src/components/admin/sources/BatchDeleteBar.tsx`

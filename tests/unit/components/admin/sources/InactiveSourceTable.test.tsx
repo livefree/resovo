@@ -1,6 +1,6 @@
 /**
- * InactiveSourceTable.test.tsx — CHG-262
- * 验证：数据渲染 / 列显示切换 / 空状态
+ * InactiveSourceTable.test.tsx — CHG-262/282
+ * 验证：数据渲染 / 列显示切换 / 空状态 / 失效源多选批量删除链路
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -27,14 +27,6 @@ vi.mock('@/components/admin/sources/SourceVerifyButton', () => ({
 
 vi.mock('@/components/admin/sources/SourceUrlReplaceModal', () => ({
   SourceUrlReplaceModal: () => null,
-}))
-
-vi.mock('@/components/admin/sources/BatchDeleteBar', () => ({
-  BatchDeleteBar: () => null,
-}))
-
-vi.mock('@/components/admin/ConfirmDialog', () => ({
-  ConfirmDialog: () => null,
 }))
 
 const MOCK_ROWS = [
@@ -88,6 +80,8 @@ describe('InactiveSourceTable (CHG-262)', () => {
     render(<InactiveSourceTable status="all" />)
     await screen.findByText('Alpha')
     expect(getMock).toHaveBeenCalledWith('/admin/sources?page=1&limit=20&status=all')
+    expect(screen.queryByLabelText('全选当前页失效源')).toBeNull()
+    expect(screen.queryByTestId('batch-delete-bar')).toBeNull()
   })
 
   it('supports column visibility toggle', async () => {
@@ -108,5 +102,23 @@ describe('InactiveSourceTable (CHG-262)', () => {
     getMock.mockResolvedValue({ data: [], total: 0 })
     render(<InactiveSourceTable />)
     await screen.findByText('暂无失效源')
+  })
+
+  it('supports row selection and batch delete flow for inactive view', async () => {
+    render(<InactiveSourceTable />)
+    await screen.findByText('Alpha')
+
+    fireEvent.click(screen.getByLabelText('选择 Alpha'))
+    expect(screen.getByTestId('batch-delete-bar')).toBeTruthy()
+    expect(screen.getByTestId('batch-delete-count').textContent).toContain('1')
+
+    fireEvent.click(screen.getByTestId('batch-delete-confirm-btn'))
+    await screen.findByText('确认批量删除')
+    fireEvent.click(screen.getByTestId('confirm-dialog-confirm'))
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith('/admin/sources/batch-delete', { ids: ['src1'] })
+      expect(getMock).toHaveBeenCalledTimes(2)
+    })
   })
 })

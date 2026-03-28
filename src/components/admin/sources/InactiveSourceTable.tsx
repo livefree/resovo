@@ -17,6 +17,7 @@ import { ColumnSettingsPanel } from '@/components/admin/shared/table/ColumnSetti
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import { useAdminTableColumns, type AdminColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
 import {
+  TableCheckboxCell,
   TableBadgeCell,
   TableDateCell,
   TableTextCell,
@@ -81,6 +82,13 @@ function buildColumns(
   onVerified: (page: number) => void,
   visibleColumnIds: InactiveSourceColumnId[],
   columnsById: Record<string, { width: number }>,
+  selection: {
+    enabled: boolean
+    selectedIds: string[]
+    allSelected: boolean
+    onSelectAll: (checked: boolean) => void
+    onSelectRow: (id: string, checked: boolean) => void
+  },
 ): TableColumn<SourceRow>[] {
   const all: TableColumn<SourceRow>[] = [
     {
@@ -144,7 +152,32 @@ function buildColumns(
     },
   ]
 
-  return all.filter((col) => visibleColumnIds.includes(col.id as InactiveSourceColumnId))
+  const dataColumns = all.filter((col) => visibleColumnIds.includes(col.id as InactiveSourceColumnId))
+  if (!selection.enabled) return dataColumns
+
+  const selectionColumn: TableColumn<SourceRow> = {
+    id: 'selection',
+    header: (
+      <TableCheckboxCell
+        checked={selection.allSelected}
+        ariaLabel="全选当前页失效源"
+        onChange={selection.onSelectAll}
+      />
+    ),
+    accessor: (row) => row.id,
+    width: 44,
+    minWidth: 44,
+    enableResizing: false,
+    cell: ({ row }) => (
+      <TableCheckboxCell
+        checked={selection.selectedIds.includes(row.id)}
+        ariaLabel={`选择 ${row.video_title ?? row.source_name ?? row.id}`}
+        onChange={(checked) => selection.onSelectRow(row.id, checked)}
+      />
+    ),
+  }
+
+  return [selectionColumn, ...dataColumns]
 }
 
 export function InactiveSourceTable({ status = 'inactive' }: InactiveSourceTableProps) {
@@ -180,6 +213,27 @@ export function InactiveSourceTable({ status = 'inactive' }: InactiveSourceTable
         .map((col) => col.id as InactiveSourceColumnId),
     [columnsState.columns],
   )
+
+  const allVisibleSelected = useMemo(
+    () => sources.length > 0 && sources.every((row) => selectedIds.includes(row.id)),
+    [selectedIds, sources],
+  )
+
+  const handleSelectAll = useCallback((checked: boolean) => {
+    if (!checked) {
+      setSelectedIds([])
+      return
+    }
+    setSelectedIds(sources.map((row) => row.id))
+  }, [sources])
+
+  const handleSelectRow = useCallback((id: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      if (!checked) return prev.filter((item) => item !== id)
+      if (prev.includes(id)) return prev
+      return [...prev, id]
+    })
+  }, [])
 
   const fetchSources = useCallback(async (pageVal: number, pageSizeVal: number) => {
     setLoading(true)
@@ -217,8 +271,34 @@ export function InactiveSourceTable({ status = 'inactive' }: InactiveSourceTable
   }, [deleteTarget, fetchSources, page, pageSize])
 
   const tableColumns = useMemo(
-    () => buildColumns(page, setReplaceTarget, setDeleteTarget, (p) => { void fetchSources(p, pageSize) }, visibleColumnIds, columnsState.columnsById),
-    [page, pageSize, fetchSources, visibleColumnIds, columnsState.columnsById]
+    () =>
+      buildColumns(
+        page,
+        setReplaceTarget,
+        setDeleteTarget,
+        (p) => { void fetchSources(p, pageSize) },
+        visibleColumnIds,
+        columnsState.columnsById,
+        {
+          enabled: !isAllStatus,
+          selectedIds,
+          allSelected: allVisibleSelected,
+          onSelectAll: handleSelectAll,
+          onSelectRow: handleSelectRow,
+        },
+      ),
+    [
+      page,
+      pageSize,
+      fetchSources,
+      visibleColumnIds,
+      columnsState.columnsById,
+      isAllStatus,
+      selectedIds,
+      allVisibleSelected,
+      handleSelectAll,
+      handleSelectRow,
+    ],
   )
 
   return (
@@ -277,7 +357,13 @@ export function InactiveSourceTable({ status = 'inactive' }: InactiveSourceTable
         </div>
       ) : null}
 
-      <BatchDeleteBar selectedIds={selectedIds} onSuccess={() => void fetchSources(page, pageSize)} onClear={() => setSelectedIds([])} />
+      {!isAllStatus ? (
+        <BatchDeleteBar
+          selectedIds={selectedIds}
+          onSuccess={() => void fetchSources(page, pageSize)}
+          onClear={() => setSelectedIds([])}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}

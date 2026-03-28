@@ -4000,3 +4000,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（更新）— 新增 `status=all` 模式请求断言
 - **验收结论**：`/admin/sources` 已支持三视图切换，且“全部源”可见 `status=all` 数据
 - **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`SourceTable.test.tsx` + `InactiveSourceTable.test.tsx` 共 11/11 通过
+
+---
+
+## CHG-282 — 失效源表补多选接线，恢复批量删除可达链路
+- **完成时间**：2026-03-27 17:39
+- **修改文件**：
+  - `src/components/admin/sources/InactiveSourceTable.tsx`（更新）— 失效源视图新增选择列（行选 + 全选），并将批量栏限定在失效源视图；“全部源”视图不展示批量删除入口
+  - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（更新）— 新增失效源多选与批量删除端到端调用断言；补充“全部源不展示批量删除”断言
+- **验收结论**：失效源表勾选后可出现批量操作栏，确认后命中 `/admin/sources/batch-delete`，删除后列表刷新
+- **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`InactiveSourceTable.test.tsx` 5/5 通过
