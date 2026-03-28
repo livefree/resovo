@@ -7,7 +7,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { apiClient } from '@/lib/api-client'
+import { ApiClientError, apiClient } from '@/lib/api-client'
 import { PaginationV2 } from '@/components/admin/PaginationV2'
 import { SourceVerifyButton } from '@/components/admin/sources/SourceVerifyButton'
 import { SourceUrlReplaceModal } from '@/components/admin/sources/SourceUrlReplaceModal'
@@ -26,6 +26,7 @@ import {
 import type { TableColumn } from '@/components/admin/shared/modern-table/types'
 
 const DEFAULT_PAGE_SIZE = 20
+const BATCH_VERIFY_LIMIT = 500
 
 type InactiveSourceColumnId =
   | 'video_title'
@@ -57,11 +58,13 @@ const INACTIVE_SOURCE_DEFAULT_STATE = {}
 type SourceStatusFilter = 'all' | 'inactive'
 type SourceSortField = 'created_at' | 'last_checked' | 'is_active' | 'video_title' | 'source_url' | 'site_key'
 type SourceSortDir = 'asc' | 'desc'
+type SourceBatchVerifyScope = 'video' | 'site' | 'video_site'
 
 interface InactiveSourceTableProps {
   status?: SourceStatusFilter
   keyword?: string
   title?: string
+  videoId?: string
   siteKey?: string
   sortField?: SourceSortField
   sortDir?: SourceSortDir
@@ -80,6 +83,16 @@ export interface SourceRow {
   last_checked: string | null
   created_at: string
   video_title?: string
+}
+
+interface BatchVerifySummary {
+  scope: SourceBatchVerifyScope
+  totalMatched: number
+  processed: number
+  activated: number
+  inactivated: number
+  timeout: number
+  failed: number
 }
 
 function buildColumns(
@@ -191,6 +204,7 @@ export function InactiveSourceTable({
   status = 'inactive',
   keyword,
   title,
+  videoId,
   siteKey,
   sortField,
   sortDir,
@@ -212,6 +226,9 @@ export function InactiveSourceTable({
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [replaceTarget, setReplaceTarget] = useState<SourceRow | null>(null)
   const [showColumnsPanel, setShowColumnsPanel] = useState(false)
+  const [batchVerifyLoading, setBatchVerifyLoading] = useState<SourceBatchVerifyScope | null>(null)
+  const [batchVerifySummary, setBatchVerifySummary] = useState<BatchVerifySummary | null>(null)
+  const [batchVerifyError, setBatchVerifyError] = useState<string | null>(null)
 
   const columnsState = useAdminTableColumns({
     route: '/admin/sources',
@@ -260,6 +277,7 @@ export function InactiveSourceTable({
       })
       if (keyword) params.set('keyword', keyword)
       if (title) params.set('title', title)
+      if (videoId) params.set('videoId', videoId)
       if (siteKey) params.set('siteKey', siteKey)
       if (sortField) params.set('sortField', sortField)
       if (sortDir) params.set('sortDir', sortDir)
@@ -271,7 +289,7 @@ export function InactiveSourceTable({
     } finally {
       setLoading(false)
     }
-  }, [keyword, siteKey, sortDir, sortField, status, title])
+  }, [keyword, siteKey, sortDir, sortField, status, title, videoId])
 
   useEffect(() => { void fetchSources(page, pageSize) }, [fetchSources, page, pageSize])
 
@@ -288,6 +306,52 @@ export function InactiveSourceTable({
       setDeleteLoading(false)
     }
   }, [deleteTarget, fetchSources, page, pageSize])
+
+  const normalizedVideoId = videoId?.trim() ?? ''
+  const normalizedSiteKey = siteKey?.trim() ?? ''
+  const canBatchByVideo = normalizedVideoId.length > 0
+  const canBatchBySite = normalizedSiteKey.length > 0
+  const canBatchByVideoSite = canBatchByVideo && canBatchBySite
+
+  const runBatchVerify = useCallback(async (scope: SourceBatchVerifyScope) => {
+    setBatchVerifyLoading(scope)
+    setBatchVerifyError(null)
+    setBatchVerifySummary(null)
+    try {
+      const payload: {
+        scope: SourceBatchVerifyScope
+        videoId?: string
+        siteKey?: string
+        activeOnly: boolean
+        limit: number
+      } = {
+        scope,
+        activeOnly: false,
+        limit: BATCH_VERIFY_LIMIT,
+      }
+      if (scope === 'video' || scope === 'video_site') {
+        payload.videoId = normalizedVideoId
+      }
+      if (scope === 'site' || scope === 'video_site') {
+        payload.siteKey = normalizedSiteKey
+      }
+
+      const res = await apiClient.post<{ data: BatchVerifySummary }>(
+        '/admin/sources/batch-verify',
+        payload,
+      )
+      setBatchVerifySummary(res.data)
+      await fetchSources(page, pageSize)
+    } catch (error) {
+      if (error instanceof ApiClientError) {
+        setBatchVerifyError(error.message)
+      } else {
+        setBatchVerifyError('批量验证失败，请稍后重试')
+      }
+    } finally {
+      setBatchVerifyLoading(null)
+    }
+  }, [fetchSources, normalizedSiteKey, normalizedVideoId, page, pageSize])
 
   const tableColumns = useMemo(
     () =>
@@ -322,6 +386,62 @@ export function InactiveSourceTable({
 
   return (
     <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2">
+        <span className="text-xs text-[var(--muted)]">批量验证</span>
+        <button
+          type="button"
+          onClick={() => { void runBatchVerify('video') }}
+          disabled={!canBatchByVideo || batchVerifyLoading !== null}
+          className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-50"
+          data-testid="source-batch-verify-video"
+        >
+          {batchVerifyLoading === 'video' ? '验证中...' : '按视频主体'}
+        </button>
+        <button
+          type="button"
+          onClick={() => { void runBatchVerify('site') }}
+          disabled={!canBatchBySite || batchVerifyLoading !== null}
+          className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-50"
+          data-testid="source-batch-verify-site"
+        >
+          {batchVerifyLoading === 'site' ? '验证中...' : '按来源站点'}
+        </button>
+        <button
+          type="button"
+          onClick={() => { void runBatchVerify('video_site') }}
+          disabled={!canBatchByVideoSite || batchVerifyLoading !== null}
+          className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-50"
+          data-testid="source-batch-verify-video-site"
+        >
+          {batchVerifyLoading === 'video_site' ? '验证中...' : '按视频+站点'}
+        </button>
+
+        <span className="text-xs text-[var(--muted)]">
+          {canBatchByVideo ? '' : '先填写视频ID；'}
+          {canBatchBySite ? '' : '先填写来源站点；'}
+        </span>
+      </div>
+
+      {batchVerifySummary ? (
+        <div
+          className="rounded-md border border-emerald-700/40 bg-emerald-900/20 px-3 py-2 text-xs text-emerald-300"
+          data-testid="source-batch-verify-summary"
+        >
+          本次批量验证：命中 {batchVerifySummary.totalMatched}，处理 {batchVerifySummary.processed}，
+          活跃 {batchVerifySummary.activated}，失效 {batchVerifySummary.inactivated}，
+          超时 {batchVerifySummary.timeout}，失败 {batchVerifySummary.failed}
+        </div>
+      ) : null}
+
+      {batchVerifyError ? (
+        <div
+          className="rounded-md border border-red-700/40 bg-red-900/20 px-3 py-2 text-xs text-red-300"
+          data-testid="source-batch-verify-error"
+        >
+          {batchVerifyError}
+        </div>
+      ) : null}
+
       {/* ⚙ 列设置叠加在表格右上角，面板在 overflow-hidden 外渲染 */}
       <div className="relative">
         <div className="absolute right-4 top-3 z-30">

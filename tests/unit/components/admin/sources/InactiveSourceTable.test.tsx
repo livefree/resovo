@@ -65,7 +65,22 @@ describe('InactiveSourceTable (CHG-262)', () => {
     vi.clearAllMocks()
     localStorage.clear()
     getMock.mockResolvedValue({ data: MOCK_ROWS, total: MOCK_ROWS.length })
-    postMock.mockResolvedValue({})
+    postMock.mockImplementation(async (url: string) => {
+      if (url === '/admin/sources/batch-verify') {
+        return {
+          data: {
+            scope: 'site',
+            totalMatched: 2,
+            processed: 2,
+            activated: 1,
+            inactivated: 1,
+            timeout: 1,
+            failed: 0,
+          },
+        }
+      }
+      return {}
+    })
     deleteMock.mockResolvedValue({})
   })
 
@@ -120,5 +135,44 @@ describe('InactiveSourceTable (CHG-262)', () => {
       expect(postMock).toHaveBeenCalledWith('/admin/sources/batch-delete', { ids: ['src1'] })
       expect(getMock).toHaveBeenCalledTimes(2)
     })
+  })
+
+  it('runs batch verify by site and shows summary', async () => {
+    render(
+      <InactiveSourceTable
+        status="all"
+        siteKey="site-a"
+        videoId="11111111-1111-4111-8111-111111111111"
+      />,
+    )
+    await screen.findByText('Alpha')
+
+    fireEvent.click(screen.getByTestId('source-batch-verify-site'))
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith('/admin/sources/batch-verify', {
+        scope: 'site',
+        siteKey: 'site-a',
+        activeOnly: false,
+        limit: 500,
+      })
+    })
+
+    expect(await screen.findByTestId('source-batch-verify-summary')).toBeTruthy()
+    expect(screen.getByTestId('source-batch-verify-summary').textContent).toContain('命中 2')
+    expect(getMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('disables batch verify buttons when required filters are missing', async () => {
+    render(<InactiveSourceTable status="all" siteKey="site-a" />)
+    await screen.findByText('Alpha')
+
+    const byVideo = screen.getByTestId('source-batch-verify-video') as HTMLButtonElement
+    const bySite = screen.getByTestId('source-batch-verify-site') as HTMLButtonElement
+    const byVideoSite = screen.getByTestId('source-batch-verify-video-site') as HTMLButtonElement
+
+    expect(byVideo.disabled).toBe(true)
+    expect(bySite.disabled).toBe(false)
+    expect(byVideoSite.disabled).toBe(true)
   })
 })

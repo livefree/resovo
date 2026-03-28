@@ -48,6 +48,7 @@ export function SourceTable() {
   const queryTab = searchParams.get(SOURCE_TAB_QUERY_KEY)
   const queryKeyword = searchParams.get('keyword') ?? ''
   const queryTitle = searchParams.get('title') ?? ''
+  const queryVideoId = searchParams.get('videoId') ?? ''
   const querySiteKey = searchParams.get('siteKey') ?? ''
   const querySortField = parseSortField(searchParams.get('sortField'))
   const querySortDir = parseSortDir(searchParams.get('sortDir'))
@@ -55,6 +56,7 @@ export function SourceTable() {
   const [activeTab, setActiveTab] = useState<SourceTab>(parseTab(queryTab))
   const [keyword, setKeyword] = useState(queryKeyword)
   const [title, setTitle] = useState(queryTitle)
+  const [videoId, setVideoId] = useState(queryVideoId)
   const [siteKey, setSiteKey] = useState(querySiteKey)
   const [sortField, setSortField] = useState<SourceSortField | ''>(querySortField)
   const [sortDir, setSortDir] = useState<SourceSortDir>(querySortDir)
@@ -70,6 +72,10 @@ export function SourceTable() {
   useEffect(() => {
     setTitle(queryTitle)
   }, [queryTitle])
+
+  useEffect(() => {
+    setVideoId(queryVideoId)
+  }, [queryVideoId])
 
   useEffect(() => {
     setSiteKey(querySiteKey)
@@ -113,11 +119,12 @@ export function SourceTable() {
     () => ({
       keyword: keyword.trim() || undefined,
       title: title.trim() || undefined,
+      videoId: videoId.trim() || undefined,
       siteKey: siteKey.trim() || undefined,
       sortField: sortField || undefined,
       sortDir: sortField ? sortDir : undefined,
     }),
-    [keyword, siteKey, sortDir, sortField, title],
+    [keyword, siteKey, sortDir, sortField, title, videoId],
   )
 
   return (
@@ -172,6 +179,18 @@ export function SourceTable() {
                   }}
                   className="rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-1.5 text-sm text-[var(--text)] placeholder:text-[var(--muted)]"
                   data-testid="source-filters-title"
+                />
+                <input
+                  type="text"
+                  value={videoId}
+                  placeholder="视频ID（UUID）"
+                  onChange={(e) => {
+                    const next = e.target.value
+                    setVideoId(next)
+                    updateParam('videoId', next.trim())
+                  }}
+                  className="rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-1.5 text-sm text-[var(--text)] placeholder:text-[var(--muted)]"
+                  data-testid="source-filters-video-id"
                 />
                 <input
                   type="text"

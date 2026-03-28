@@ -4126,3 +4126,15 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/content-sort.test.ts`（更新）— 新增 `listSourcesForBatchVerify` 查询条件覆盖（video/site/video_site）
 - **验收结论**：后台已支持按视频、站点、视频+站点范围批量触发播放源验证，并同步返回处理摘要
 - **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/api/sources-verify.test.ts tests/unit/api/content-sort.test.ts` 25/25 通过
+
+---
+
+## CHG-293 — 播放源批量验证前端操作与结果反馈
+- **完成时间**：2026-03-27 20:52
+- **修改文件**：
+  - `src/components/admin/sources/SourceTable.tsx`（更新）— 筛选区新增 `videoId` 输入并同步 URL，向表格查询参数下发 `videoId`
+  - `src/components/admin/sources/InactiveSourceTable.tsx`（更新）— 新增按视频/站点/视频+站点三种批量验证按钮；调用 `/admin/sources/batch-verify` 后展示统计摘要并刷新列表
+  - `tests/unit/components/admin/sources/SourceTable.test.tsx`（更新）— 覆盖 `videoId` URL 回放和筛选输入 URL 同步
+  - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（更新）— 覆盖批量验证请求参数、摘要渲染与按钮可用性约束
+- **验收结论**：`/admin/sources` 已可直接发起三种范围批量验证，且能在页面内看到处理结果并同步最新列表状态
+- **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/sources/InactiveSourceTable.test.tsx` 17/17 通过

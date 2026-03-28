@@ -3634,7 +3634,7 @@
 ## [SEQ-20260327-40] 播放源批量治理能力补齐（视频主体 + 源站）
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-27 20:28
-- **最后更新时间**：2026-03-27 20:48
+- **最后更新时间**：2026-03-27 20:52
 - **目标**：让 `/admin/sources` 支持按视频主体与来源站点进行批量验证治理，并补齐筛选/排序与手工状态兜底能力
 - **范围**：播放源查询接口、批量验证接口、手工状态切换接口、来源管理前端交互与测试
 - **依赖**：`docs/admin_backend_capability_exposure_plan_20260327.md`
@@ -3677,15 +3677,15 @@
      - `tests/unit/api/content-sort.test.ts`（扩展）
    - 验收要点：支持按视频、站点、视频+站点发起批量验证并返回任务摘要
 
-4. CHG-293 — 播放源批量验证前端操作与结果反馈（状态：⬜ 待开始）
+4. CHG-293 — 播放源批量验证前端操作与结果反馈（状态：✅ 已完成）
    - 创建时间：2026-03-27 20:28
    - 计划开始：CHG-292 完成后
-   - 实际开始：—
-   - 完成时间：—
+   - 实际开始：2026-03-27 20:50
+   - 完成时间：2026-03-27 20:52
    - 文件范围：
      - `src/components/admin/sources/SourceTable.tsx`
      - `src/components/admin/sources/InactiveSourceTable.tsx`
-     - `src/components/admin/sources/SourceHealthAlert.tsx`
+     - `tests/unit/components/admin/sources/SourceTable.test.tsx`（扩展）
      - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（扩展）
    - 验收要点：可按当前筛选范围触发批量验证并看到成功/失败/超时反馈
 

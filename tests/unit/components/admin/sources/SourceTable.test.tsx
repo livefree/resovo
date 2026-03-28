@@ -143,9 +143,10 @@ describe('SourceTable (CHG-291)', () => {
     expect(screen.getAllByText('最后验证').length).toBeGreaterThan(0)
   })
 
-  it('reads keyword/title/siteKey/sort from URL and forwards to request', async () => {
+  it('reads keyword/title/videoId/siteKey/sort from URL and forwards to request', async () => {
     mockSearchParams.set('keyword', 'alpha')
     mockSearchParams.set('title', 'Alpha')
+    mockSearchParams.set('videoId', '11111111-1111-4111-8111-111111111111')
     mockSearchParams.set('siteKey', 'site-a')
     mockSearchParams.set('sortField', 'video_title')
     mockSearchParams.set('sortDir', 'asc')
@@ -154,7 +155,7 @@ describe('SourceTable (CHG-291)', () => {
     await screen.findByText('Alpha Video')
 
     expect(getMock).toHaveBeenCalledWith(
-      '/admin/sources?page=1&limit=20&status=all&keyword=alpha&title=Alpha&siteKey=site-a&sortField=video_title&sortDir=asc',
+      '/admin/sources?page=1&limit=20&status=all&keyword=alpha&title=Alpha&videoId=11111111-1111-4111-8111-111111111111&siteKey=site-a&sortField=video_title&sortDir=asc',
     )
   })
 
@@ -171,6 +172,11 @@ describe('SourceTable (CHG-291)', () => {
       target: { value: 'site-b' },
     })
     expect(replaceMock).toHaveBeenCalledWith(expect.stringContaining('siteKey=site-b'))
+
+    fireEvent.change(screen.getByTestId('source-filters-video-id'), {
+      target: { value: '11111111-1111-4111-8111-111111111111' },
+    })
+    expect(replaceMock).toHaveBeenCalledWith(expect.stringContaining('videoId=11111111-1111-4111-8111-111111111111'))
   })
 
   it('updates URL when sort changes', async () => {
