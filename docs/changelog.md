@@ -4162,3 +4162,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/sources/SourceTable.test.tsx`（更新）— 保持筛选与表格集成回归
 - **验收结论**：播放源表已支持手工状态切换的行级与批量入口，切换后可刷新列表并反馈失败信息
 - **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/components/admin/sources/InactiveSourceTable.test.tsx tests/unit/components/admin/sources/SourceTable.test.tsx` 19/19 通过
+
+---
+
+## CHG-296 — 播放源治理链路回归与文档收口
+- **完成时间**：2026-03-27 21:02
+- **修改文件**：
+  - `tests/e2e/admin-source-and-video-flows.spec.ts`（更新）— 在播放源页 e2e 脚本中补充筛选输入、批量验证请求、行级状态切换、批量状态切换四条治理链路断言
+  - `docs/task-queue.md`（更新）— `SEQ-20260327-40` 与 CHG-296 标记为已完成
+- **验收结论**：播放源治理核心链路已形成回归脚本覆盖，任务序列完成收口
+- **测试覆盖**：`npm run typecheck` 通过；`npx eslint tests/e2e/admin-source-and-video-flows.spec.ts` 通过；Playwright e2e 在当前会话未执行（需本地可访问前端运行环境）
