@@ -3748,3 +3748,116 @@
      - `tests/unit/api/updateSourceUrl.test.ts`
      - `tests/e2e/admin-source-and-video-flows.spec.ts`
    - 验收要点：后台播放源页不再出现 videoId 筛选输入与替换URL入口；替换URL API 链路删除后测试通过
+
+## [SEQ-20260328-42] UI 治理：TableSettingsPanel + Admin 表格设置统一
+- **状态**：🔄 执行中
+- **创建时间**：2026-03-28 00:00
+- **最后更新时间**：2026-03-28 00:01
+- **目标**：将 6 处手写重复的列设置模式统一为 TableSettingsPanel，同步推进 UI 治理规则收口
+- **范围**：docs/rules/ui-rules.md、src/components/admin/shared/modern-table/settings/、src/app/[locale]/admin/sandbox/、7 个后台表格组件
+- **依赖**：无
+
+### 任务列表（按执行顺序）
+1. CHORE-03 — 将所有 untracked 治理文档纳入版本控制（状态：✅ 已完成）
+   - 创建时间：2026-03-28 00:00
+   - 计划开始：2026-03-28 00:00
+   - 实际开始：2026-03-28 00:00
+   - 完成时间：2026-03-28 00:01
+   - 验收要点：git status 无 untracked docs 文件
+
+2. CHG-298 — ui-rules.md 规则收口：扩展适用范围、声明后台 CSS 变量体系、并入 portal 实现约束（状态：⬜ 待开始）
+   - 创建时间：2026-03-28 00:00
+   - 计划开始：CHORE-03 完成后
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：docs/rules/ui-rules.md
+   - 验收要点：适用范围包含前后台；后台变量体系已声明；portal 规则已并入
+
+3. CHG-299 — TableSettingsPanel 隔离区建设 + 沙盒页面（Phase 1）（状态：⬜ 待开始）
+   - 创建时间：2026-03-28 00:00
+   - 计划开始：CHG-298 完成后
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：
+     - src/components/admin/shared/modern-table/settings/types.ts（新建）
+     - src/components/admin/shared/modern-table/settings/useTableSettings.ts（新建）
+     - src/components/admin/shared/modern-table/settings/TableSettingsPanel.tsx（新建）
+     - src/components/admin/shared/modern-table/settings/TableSettingsTrigger.tsx（新建）
+     - src/components/admin/shared/modern-table/settings/index.ts（新建）
+     - src/app/[locale]/admin/sandbox/page.tsx（新建）
+   - 验收要点：/admin/sandbox 可访问；⋮ 触发浮动面板；toggle 正常；localStorage 刷新保持；Reset 清空
+
+4. CHG-300 — ModernDataTable settingsSlot 可选 prop 集成（Phase 2）（状态：⬜ 待开始）
+   - 创建时间：2026-03-28 00:00
+   - 计划开始：CHG-299 完成后
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：
+     - src/components/admin/shared/modern-table/ModernDataTable.tsx
+   - 验收要点：有 settingsSlot 的表格右上角出现 ⋮；无 settingsSlot 的表格无变化；全测试通过
+
+5. CHG-301 — UserTable 迁移到 useTableSettings + settingsSlot（状态：⬜ 待开始）
+   - 创建时间：2026-03-28 00:00
+   - 计划开始：CHG-300 完成后
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：src/components/admin/users/UserTable.tsx
+   - 验收要点：旧 ColumnSettingsPanel 块已移除；typecheck + lint + test 通过
+
+6. CHG-302 — SubmissionTable(sources) 迁移（状态：⬜ 待开始）
+   - 创建时间：2026-03-28 00:00
+   - 计划开始：CHG-301 完成后
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：src/components/admin/sources/SubmissionTable.tsx（或同类路径）
+   - 验收要点：typecheck + lint + test 通过
+
+7. CHG-303 — SubmissionTable(content) 迁移（状态：⬜ 待开始）
+   - 创建时间：2026-03-28 00:00
+   - 计划开始：CHG-302 完成后
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：src/components/admin/content/SubmissionTable.tsx（或同类路径）
+   - 验收要点：typecheck + lint + test 通过
+
+8. CHG-304 — VideoTable 迁移（SORTABLE_MAP → defaultSortable）（状态：⬜ 待开始）
+   - 创建时间：2026-03-28 00:00
+   - 计划开始：CHG-303 完成后
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：src/components/admin/videos/VideoTable.tsx
+   - 验收要点：typecheck + lint + test 通过；排序行为不变
+
+9. CHG-305 — InactiveSourceTable 迁移（状态：⬜ 待开始）
+   - 创建时间：2026-03-28 00:00
+   - 计划开始：CHG-304 完成后
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：src/components/admin/sources/InactiveSourceTable.tsx
+   - 验收要点：typecheck + lint + test 通过
+
+10. CHG-306 — CrawlerSiteManager 迁移（requiredColumns → required: true）（状态：⬜ 待开始）
+    - 创建时间：2026-03-28 00:00
+    - 计划开始：CHG-305 完成后
+    - 实际开始：
+    - 完成时间：
+    - 文件范围：src/components/admin/crawler/CrawlerSiteManager.tsx
+    - 验收要点：typecheck + lint + test 通过；required 列仍无法隐藏
+
+11. CHG-307 — AdminAnalyticsDashboard 迁移（状态：⬜ 待开始）
+    - 创建时间：2026-03-28 00:00
+    - 计划开始：CHG-306 完成后
+    - 实际开始：
+    - 完成时间：
+    - 文件范围：src/components/admin/analytics/AdminAnalyticsDashboard.tsx（或同类路径）
+    - 验收要点：typecheck + lint + test 通过
+
+12. CHG-308 — 删除 ColumnSettingsPanel.tsx + docs/decisions.md ADR（状态：⬜ 待开始）
+    - 创建时间：2026-03-28 00:00
+    - 计划开始：CHG-307 完成后
+    - 实际开始：
+    - 完成时间：
+    - 文件范围：
+      - src/components/admin/shared/table/ColumnSettingsPanel.tsx（删除）
+      - docs/decisions.md（追加 ADR）
+    - 验收要点：ColumnSettingsPanel 不再存在；ADR 已记录

@@ -1,13 +1,12 @@
 结合我们“**简洁、现代科技感 (Modern Tech & Minimalist)**”的设计基调，我将你的布局转化为了具体的前端结构设计与 UI 展现形式。
 
-> status: reference
+> status: archived
 > owner: @engineering
 > scope: frontend layout and visual direction reference
 > source_of_truth: no
 > supersedes: none
 > superseded_by: none
 > last_reviewed: 2026-03-27
-
 
 ### 〇、 前端视觉与设计语言 (Design Tokens)
 

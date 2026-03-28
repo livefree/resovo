@@ -29,6 +29,7 @@
 4. `docs/execution_spec_review_plan_20260327.md`（待审核并入 `CLAUDE.md`）
 5. `docs/ui_implementation_plan_20260327.md`
 6. `docs/ui_task_20260327.md`
+7. `docs/admin_backend_capability_exposure_plan_20260327.md`
 
 ## 3. 规划输入与兼容评估（References）
 

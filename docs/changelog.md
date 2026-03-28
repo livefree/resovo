@@ -4190,3 +4190,29 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/updateSourceUrl.test.ts`（删除）— 删除已下线功能的单测
 - **验收结论**：后台播放源页已不再提供人工难以使用的 `videoId` 筛选和“替换URL”能力，交互路径收敛为可运营动作
 - **测试覆盖**：`npm run typecheck` 通过；`npx eslint`（受影响文件）通过；`npx vitest run tests/unit/components/admin/sources/SourceTable.test.tsx tests/unit/components/admin/sources/InactiveSourceTable.test.tsx tests/unit/api/admin-sources-query.test.ts tests/unit/api/admin-sources-status.test.ts` 29/29 通过
+
+---
+
+## CHORE-03 — 将所有 untracked 治理文档纳入版本控制
+- **完成时间**：2026-03-28 00:01
+- **修改文件**：
+  - `docs/README.md`（更新）
+  - `docs/admin_backend_capability_exposure_plan_20260327.md`（新增）
+  - `docs/admin_reusable_table_capability_inventory_20260327.md`（新增）
+  - `docs/ui_current_state_inventory_20260327.md`（新增）
+  - `docs/ui_governance_conflicts_20260327.md`（新增）
+  - `docs/ui_governance_plan_frontend_admin_20260327.md`（新增）
+  - `docs/ui_unification_plan_admin.md`（新增）
+  - `docs/archive/ui_frontend_layout_plan_20260327.md`（新增，归档）
+  - `docs/archive/ui_implementation_plan_20260327.md`（新增，归档）
+  - `docs/archive/ui_task_20260327.md`（新增，归档）
+  - `docs/archive/video_admin_unified_plan_20260325.md`（新增，归档）
+  - `docs/admin_ui_unification_plan.md`（删除，已移至 docs/ui_unification_plan_admin.md）
+  - `docs/ui_frontend_layout_plan_20260327.md`（删除，已归档）
+  - `docs/ui_implementation_plan_20260327.md`（删除，已归档）
+  - `docs/ui_task_20260327.md`（删除，已归档）
+  - `docs/video_admin_unified_plan_20260325.md`（删除，已归档）
+  - `docs/task-queue.md`（SEQ-20260328-42 追加；CHORE-03 完成）
+  - `docs/tasks.md`（空稳定态）
+- **验收结论**：所有治理规划文档纳入版本控制，符合 CLAUDE.md 文档管理规则
+- **测试覆盖**：不适用（纯文档变更）
