@@ -54,8 +54,6 @@ export function UserTable() {
   })
 
   const sortState = useAdminTableSort({
-    tableState: columnsState,
-    columnsById: columnsState.columnsById,
     defaultSort: USER_DEFAULT_TABLE_STATE.sort,
     sortable: USER_SORTABLE_MAP,
   })

@@ -54,8 +54,6 @@ export function SubmissionTable() {
   })
 
   const sortState = useAdminTableSort({
-    tableState: columnsState,
-    columnsById: columnsState.columnsById,
     defaultSort: SUBMISSION_DEFAULT_TABLE_STATE.sort,
     sortable: SUBMISSION_SORTABLE_MAP,
   })

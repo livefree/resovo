@@ -48,8 +48,6 @@ export function SubtitleTable() {
   })
 
   const sortState = useAdminTableSort({
-    tableState: columnsState,
-    columnsById: columnsState.columnsById,
     defaultSort: SUBTITLE_DEFAULT_TABLE_STATE.sort,
     sortable: SUBTITLE_SORTABLE_MAP,
   })

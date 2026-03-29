@@ -1,87 +1,60 @@
-import { useEffect, useMemo } from 'react'
-import type { AdminResolvedColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
-import type { AdminTableSortState, AdminTableState } from '@/components/admin/shared/table/useAdminTableState'
+/**
+ * useAdminTableSort — 排序状态管理 hook
+ *
+ * CHG-312: 脱离 useAdminTableColumns/TableStateController 依赖，改为独立 useState。
+ * 排序状态不再持久化到 localStorage（由调用方决定是否持久化，或在 CHG-314 删除前维持当前行为）。
+ */
 
-type TableStateController = {
-  state: AdminTableState
-  setState: (nextState: AdminTableState) => void
-  updatePartial: (partial: { sort?: AdminTableSortState }) => void
-}
+import { useState } from 'react'
+import type { AdminTableSortState } from '@/components/admin/shared/table/useAdminTableState'
 
 type SortableConfig = string[] | Record<string, boolean>
 
-type UseAdminTableSortOptions = {
-  tableState: TableStateController
+interface UseAdminTableSortOptions {
   defaultSort?: AdminTableSortState
   sortable?: SortableConfig
-  columnsById?: Record<string, AdminResolvedColumnMeta>
 }
 
-function canSortField(
-  field: string,
-  sortable: SortableConfig | undefined,
-  columnsById: Record<string, AdminResolvedColumnMeta> | undefined,
-): boolean {
-  if (columnsById && !columnsById[field]) return false
-
+function canSortField(field: string, sortable: SortableConfig | undefined): boolean {
   if (!sortable) return true
-
-  if (Array.isArray(sortable)) {
-    return sortable.includes(field)
-  }
-
+  if (Array.isArray(sortable)) return sortable.includes(field)
   return sortable[field] === true
 }
 
-export function useAdminTableSort(options: UseAdminTableSortOptions) {
-  const { tableState, defaultSort, sortable, columnsById } = options
-
-  const sort = tableState.state.sort ?? defaultSort
-
-  useEffect(() => {
-    if (!defaultSort) return
-    if (tableState.state.sort) return
-    if (!canSortField(defaultSort.field, sortable, columnsById)) return
-
-    tableState.updatePartial({
-      sort: defaultSort,
-    })
-  }, [tableState, defaultSort, sortable, columnsById])
-
-  const sortableFields = useMemo(() => {
-    if (!sortable) return undefined
-    if (Array.isArray(sortable)) return sortable
-    return Object.keys(sortable).filter((key) => sortable[key])
-  }, [sortable])
+export function useAdminTableSort({ defaultSort, sortable }: UseAdminTableSortOptions) {
+  const [sort, setSortState] = useState<AdminTableSortState | undefined>(defaultSort)
 
   function isSortable(field: string): boolean {
-    return canSortField(field, sortable, columnsById)
+    return canSortField(field, sortable)
   }
 
   function setSort(field: string, dir: 'asc' | 'desc') {
     if (!isSortable(field)) return
-    tableState.updatePartial({ sort: { field, dir } })
+    setSortState({ field, dir })
   }
 
   function toggleSort(field: string) {
     if (!isSortable(field)) return
     if (!sort || sort.field !== field) {
-      setSort(field, 'asc')
+      setSortState({ field, dir: 'asc' })
       return
     }
-    setSort(field, sort.dir === 'asc' ? 'desc' : 'asc')
+    setSortState({ field, dir: sort.dir === 'asc' ? 'desc' : 'asc' })
   }
 
   function clearSort() {
-    tableState.setState({
-      ...tableState.state,
-      sort: undefined,
-    })
+    setSortState(defaultSort)
   }
 
   function isSortedBy(field: string): boolean {
     return sort?.field === field
   }
+
+  const sortableFields = (() => {
+    if (!sortable) return undefined
+    if (Array.isArray(sortable)) return sortable
+    return Object.keys(sortable).filter((key) => (sortable as Record<string, boolean>)[key])
+  })()
 
   return {
     sort,

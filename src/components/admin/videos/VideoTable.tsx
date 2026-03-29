@@ -71,8 +71,6 @@ export function VideoTable() {
   })
 
   const sortState = useAdminTableSort({
-    tableState: columnsState,
-    columnsById: columnsState.columnsById,
     defaultSort: VIDEO_DEFAULT_TABLE_STATE.sort,
     sortable: SORTABLE_MAP,
   })

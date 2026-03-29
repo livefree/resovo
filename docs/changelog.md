@@ -4403,3 +4403,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/task-queue.md`（CHG-311 完成）
 - **测试覆盖**：typecheck 通过；1/1 passed
 - **共享层沉淀评估**：列定义内联于组件（5 列，单文件，无需提取）
+
+---
+
+## CHG-312 — useAdminTableSort 脱离 useAdminTableColumns 依赖
+- **完成时间**：2026-03-29 14:55
+- **修改文件**：
+  - `src/components/admin/shared/table/useAdminTableSort.ts` — 重写：移除 `tableState: TableStateController` + `columnsById: AdminResolvedColumnMeta` 参数；改为独立 `useState<AdminTableSortState | undefined>` 管理状态；删除 localStorage 持久化（过渡阶段，CHG-314 删除此 hook）；保留 `toggleSort`/`setSort`/`clearSort`/`isSortable`/`isSortedBy`
+  - `src/components/admin/videos/VideoTable.tsx` — 移除 `tableState`/`columnsById` 参数
+  - `src/components/admin/users/UserTable.tsx` — 同上
+  - `src/components/admin/content/SubtitleTable.tsx` — 同上
+  - `src/components/admin/content/SubmissionTable.tsx` — 同上
+  - `src/components/admin/shared/table/useAdminTableSort.demo.tsx` — 移除 `useAdminTableColumns` 依赖
+  - `tests/unit/components/admin/shared/table/useAdminTableSort.test.tsx` — 重写：移除 localStorage 持久化测试（行为已删除）；3 个新测试：toggleSort/clearSort、非可排序列 block、setSort 切换
+  - `docs/task-queue.md`（CHG-312 完成）
+- **测试覆盖**：typecheck 通过；lint 通过；85/85 test files passed，757/757 tests passed（修复了 useAdminTableSort 的 1 个预存失败）
+- **共享层沉淀评估**：无需，`useAdminTableSort` 本身在 CHG-314 将被删除

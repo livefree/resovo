@@ -3867,7 +3867,7 @@
 ## [SEQ-20260328-43] 轨道 A — AdminTableFrame 退场 + 旧 Hook 收口
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-28 20:30
-- **最后更新时间**：2026-03-29 14:40
+- **最后更新时间**：2026-03-29 14:55
 - **目标**：彻底退出 `AdminTableFrame`、`useAdminTableColumns`、`useAdminTableSort`，消除 SEQ-20260328-42 遗留的双重 hook 共存技术债
 - **范围**：`src/components/admin/AdminCrawlerPanel.tsx`、`src/components/admin/system/monitoring/CacheManager.tsx`、`src/components/admin/system/monitoring/PerformanceMonitor.tsx`、`src/components/admin/shared/table/useAdminTableColumns.ts`、`src/components/admin/shared/table/useAdminTableSort.ts`、`src/components/admin/shared/modern-table/settings/useTableSettings.ts`
 - **依赖**：SEQ-20260328-42 已完成 ✅
@@ -3932,11 +3932,11 @@
    - 变更内容：同 CHG-310 模式
    - 验收要点：CLAUDE.md 后台表格规范 6 项；typecheck + lint + test 通过
 
-4. CHG-312 — useAdminTableSort 脱离 useAdminTableColumns 依赖（状态：⬜ 待开始）
+4. CHG-312 — useAdminTableSort 脱离 useAdminTableColumns 依赖（状态：✅ 已完成）
    - 创建时间：2026-03-28 20:30
    - 计划开始：CHG-311 完成后（可与 CHG-313 并排规划，但需先评估影响范围）
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-29 14:42
+   - 完成时间：2026-03-29 14:55
    - 文件范围：
      - `src/components/admin/shared/table/useAdminTableSort.ts`（重构）
      - 受影响的所有调用方（VideoTable、SubmissionTable×2、UserTable、InactiveSourceTable、AdminAnalyticsDashboard）
