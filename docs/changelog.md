@@ -4358,3 +4358,15 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/task-queue.md`（CHG-317 完成）
 - **测试覆盖**：typecheck 通过；lint 通过；7/7 passed
 - **共享层沉淀评估**：无需，`TASK_SORT_COLUMNS` 是 query 层内部常量
+
+---
+
+## CHG-318 — 前端：AdminCrawlerPanel 表格基座替换（AdminTableFrame → ModernDataTable + PaginationV2 + 服务端排序）
+- **完成时间**：2026-03-29 14:20
+- **修改文件**：
+  - `src/components/admin/AdminCrawlerPanel.tsx` — 重写：移除 `AdminTableFrame`/`useAdminTableColumns`/`useAdminTableSort`/手写 thead+tbody/手写分页；引入 `ModernDataTable` + `PaginationV2` + `useCrawlerTaskTableColumns`；`sort` state 接线到 API `sortField`/`sortDir` 参数；`showColumnsPanel` 状态保留（CHG-309 移除）
+  - `src/components/admin/system/crawler-task/useCrawlerTaskTableColumns.tsx` — 新建：含 `CrawlerTaskRow` 类型、列定义 hook、`StatusBadge`、`TriggerBadge`、`getRunId`/`getSiteKey`/`getErrorMessage`/`parseTime` 辅助函数；runId pill 触发过滤、actions 列触发日志面板
+  - `tests/unit/components/admin/AdminCrawlerPanel.test.tsx` — 新建：8 个测试（scroll container 渲染、task 行渲染、PaginationV2 显示/隐藏、sortField+sortDir 传参、status 过滤、runId pill 过滤、日志面板展开）
+  - `docs/task-queue.md`（CHG-318 完成）
+- **测试覆盖**：typecheck 通过；lint 通过；8/8 passed
+- **共享层沉淀评估**：`useCrawlerTaskTableColumns` 已提取至独立文件，遵循既有 `useXxxTableColumns` 模式；无需额外沉淀

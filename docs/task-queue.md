@@ -3867,7 +3867,7 @@
 ## [SEQ-20260328-43] 轨道 A — AdminTableFrame 退场 + 旧 Hook 收口
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-28 20:30
-- **最后更新时间**：2026-03-29 00:00
+- **最后更新时间**：2026-03-29 14:20
 - **目标**：彻底退出 `AdminTableFrame`、`useAdminTableColumns`、`useAdminTableSort`，消除 SEQ-20260328-42 遗留的双重 hook 共存技术债
 - **范围**：`src/components/admin/AdminCrawlerPanel.tsx`、`src/components/admin/system/monitoring/CacheManager.tsx`、`src/components/admin/system/monitoring/PerformanceMonitor.tsx`、`src/components/admin/shared/table/useAdminTableColumns.ts`、`src/components/admin/shared/table/useAdminTableSort.ts`、`src/components/admin/shared/modern-table/settings/useTableSettings.ts`
 - **依赖**：SEQ-20260328-42 已完成 ✅
@@ -3886,11 +3886,11 @@
    - 变更内容：`listTasks` 参数增加 `sortField?: string`、`sortDir?: 'asc'|'desc'`，生成动态 ORDER BY；路由 schema 同步；默认排序保持 `scheduled_at DESC`
    - 验收要点：typecheck + lint + 相关 API 测试通过
 
-2. CHG-318 — 前端：AdminCrawlerPanel 表格基座替换（AdminTableFrame → ModernDataTable + PaginationV2 + 服务端排序）（状态：⬜ 待开始）
+2. CHG-318 — 前端：AdminCrawlerPanel 表格基座替换（AdminTableFrame → ModernDataTable + PaginationV2 + 服务端排序）（状态：✅ 已完成）
    - 创建时间：2026-03-29 00:00
    - 计划开始：CHG-317 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-29 14:15
+   - 完成时间：2026-03-29 14:20
    - 文件范围：
      - `src/components/admin/AdminCrawlerPanel.tsx`（重构表格基座 + 分页 + 排序）
      - `src/components/admin/system/crawler-task/useCrawlerTaskTableColumns.tsx`（新建，列定义提取）
