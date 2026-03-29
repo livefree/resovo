@@ -3867,7 +3867,7 @@
 ## [SEQ-20260328-43] 轨道 A — AdminTableFrame 退场 + 旧 Hook 收口
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-28 20:30
-- **最后更新时间**：2026-03-29 14:20
+- **最后更新时间**：2026-03-29 14:26
 - **目标**：彻底退出 `AdminTableFrame`、`useAdminTableColumns`、`useAdminTableSort`，消除 SEQ-20260328-42 遗留的双重 hook 共存技术债
 - **范围**：`src/components/admin/AdminCrawlerPanel.tsx`、`src/components/admin/system/monitoring/CacheManager.tsx`、`src/components/admin/system/monitoring/PerformanceMonitor.tsx`、`src/components/admin/shared/table/useAdminTableColumns.ts`、`src/components/admin/shared/table/useAdminTableSort.ts`、`src/components/admin/shared/modern-table/settings/useTableSettings.ts`
 - **依赖**：SEQ-20260328-42 已完成 ✅
@@ -3901,11 +3901,11 @@
      - 行操作仅 1 个（"查看日志"），保留为 button（不需要 AdminDropdown）
    - 验收要点：规范 #1/#5/#6 满足；typecheck + lint + test 通过
 
-3. CHG-309 — 前端：AdminCrawlerPanel 列设置迁移（内联 panel → `useTableSettings` + `settingsSlot`）（状态：⬜ 待开始）
+3. CHG-309 — 前端：AdminCrawlerPanel 列设置迁移（内联 panel → `useTableSettings` + `settingsSlot`）（状态：✅ 已完成）
    - 创建时间：2026-03-29 00:00
    - 计划开始：CHG-318 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-29 14:22
+   - 完成时间：2026-03-29 14:26
    - 文件范围：
      - `src/components/admin/AdminCrawlerPanel.tsx`（删除 showColumnsPanel + 内联列设置 panel）
      - `src/components/admin/system/crawler-task/useCrawlerTaskTableColumns.tsx`（配合 useTableSettings）

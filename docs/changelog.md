@@ -4370,3 +4370,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/task-queue.md`（CHG-318 完成）
 - **测试覆盖**：typecheck 通过；lint 通过；8/8 passed
 - **共享层沉淀评估**：`useCrawlerTaskTableColumns` 已提取至独立文件，遵循既有 `useXxxTableColumns` 模式；无需额外沉淀
+
+---
+
+## CHG-309 — 前端：AdminCrawlerPanel 列设置迁移（内联 panel → useTableSettings + settingsSlot）
+- **完成时间**：2026-03-29 14:26
+- **修改文件**：
+  - `src/components/admin/AdminCrawlerPanel.tsx` — 引入 `useTableSettings` + `CRAWLER_SETTINGS_COLUMNS`（9 列描述）；`useCrawlerTaskTableColumns` 结果通过 `applyToColumns` 过滤；删除 `showColumnsPanel` state + 内联列设置 panel JSX；`ModernDataTable` 增加 `settingsSlot` prop
+  - `src/components/admin/system/crawler-task/useCrawlerTaskTableColumns.tsx` — 新增 `CRAWLER_TASK_COLUMN_LABELS` 导出（供 CRAWLER_SETTINGS_COLUMNS 使用）
+  - `docs/task-queue.md`（CHG-309 完成）
+- **测试覆盖**：typecheck 通过；lint 通过；8/8 passed（AdminCrawlerPanel 测试全部通过，settingsSlot 为可选 prop 不影响现有测试）
+- **共享层沉淀评估**：无需，`CRAWLER_SETTINGS_COLUMNS` 是组件内部配置常量

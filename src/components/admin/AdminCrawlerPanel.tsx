@@ -2,19 +2,36 @@
  * AdminCrawlerPanel.tsx — 爬虫管理面板
  * CHG-36: 全局触发 + 任务记录展示
  * CHG-318: AdminTableFrame → ModernDataTable; 手写分页 → PaginationV2; 服务端排序
+ * CHG-309: 内联列设置 panel → useTableSettings + settingsSlot
  */
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import type { TableSortState } from '@/components/admin/shared/modern-table/types'
+import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import { PaginationV2 } from '@/components/admin/PaginationV2'
 import {
   useCrawlerTaskTableColumns,
+  CRAWLER_TASK_COLUMN_LABELS,
   type CrawlerTaskRow,
 } from '@/components/admin/system/crawler-task/useCrawlerTaskTableColumns'
+
+// ── 列设置描述（useTableSettings 控制显/隐）────────────────────────
+
+const CRAWLER_SETTINGS_COLUMNS = [
+  { id: 'runId',       label: CRAWLER_TASK_COLUMN_LABELS.runId,       defaultVisible: true,  defaultSortable: true  },
+  { id: 'type',        label: CRAWLER_TASK_COLUMN_LABELS.type,        defaultVisible: true,  defaultSortable: true  },
+  { id: 'site',        label: CRAWLER_TASK_COLUMN_LABELS.site,        defaultVisible: true,  defaultSortable: true  },
+  { id: 'triggerType', label: CRAWLER_TASK_COLUMN_LABELS.triggerType, defaultVisible: true,  defaultSortable: true  },
+  { id: 'status',      label: CRAWLER_TASK_COLUMN_LABELS.status,      defaultVisible: true,  defaultSortable: true  },
+  { id: 'startedAt',   label: CRAWLER_TASK_COLUMN_LABELS.startedAt,   defaultVisible: true,  defaultSortable: true  },
+  { id: 'finishedAt',  label: CRAWLER_TASK_COLUMN_LABELS.finishedAt,  defaultVisible: true,  defaultSortable: true  },
+  { id: 'error',       label: CRAWLER_TASK_COLUMN_LABELS.error,       defaultVisible: true,  defaultSortable: true  },
+  { id: 'actions',     label: CRAWLER_TASK_COLUMN_LABELS.actions,     defaultVisible: true,  defaultSortable: false, required: true },
+]
 
 // ── 类型 ─────────────────────────────────────────────────────────
 
@@ -46,7 +63,6 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
   const [triggerFilter, setTriggerFilter] = useState<TaskTriggerFilter>('')
   const [runIdFilterInput, setRunIdFilterInput] = useState('')
   const [runIdFilter, setRunIdFilter] = useState('')
-  const [showColumnsPanel, setShowColumnsPanel] = useState(false)
   const [sort, setSort] = useState<TableSortState | undefined>(undefined)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -118,10 +134,20 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
     }
   }
 
-  const tableColumns = useCrawlerTaskTableColumns({
+  const tableSettings = useTableSettings({
+    tableId: 'crawler-tasks',
+    columns: CRAWLER_SETTINGS_COLUMNS,
+  })
+
+  const allTableColumns = useCrawlerTaskTableColumns({
     onRunIdClick: handleRunIdClick,
     onViewLogs: handleViewLogs,
   })
+
+  const tableColumns = useMemo(
+    () => tableSettings.applyToColumns(allTableColumns),
+    [tableSettings, allTableColumns],
+  )
 
   return (
     <div data-testid="admin-crawler-panel" className="space-y-6">
@@ -144,22 +170,6 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
             </button>
           </div>
         </div>
-
-        {/* 列设置面板（CHG-309 将替换为 settingsSlot）*/}
-        {showColumnsPanel && (
-          <div className="mb-3 rounded-md border border-[var(--border)] bg-[var(--bg2)] p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs text-[var(--muted)]">列显示</span>
-              <button
-                type="button"
-                className="text-xs text-[var(--muted)] hover:text-[var(--text)]"
-                onClick={() => setShowColumnsPanel(false)}
-              >
-                关闭
-              </button>
-            </div>
-          </div>
-        )}
 
         <div className="mb-3 flex gap-1 rounded-md border border-[var(--border)] p-0.5 w-fit">
           {([
@@ -261,6 +271,11 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
           emptyText="暂无任务记录"
           scrollTestId="crawler-tasks-table-scroll"
           getRowId={(row) => row.id}
+          settingsSlot={{
+            settingsColumns: tableSettings.orderedSettings,
+            onSettingsChange: tableSettings.updateSetting,
+            onSettingsReset: tableSettings.reset,
+          }}
         />
 
         {total > 0 && (
