@@ -3750,9 +3750,9 @@
    - 验收要点：后台播放源页不再出现 videoId 筛选输入与替换URL入口；替换URL API 链路删除后测试通过
 
 ## [SEQ-20260328-42] UI 治理：TableSettingsPanel + Admin 表格设置统一
-- **状态**：🔄 执行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-28 00:00
-- **最后更新时间**：2026-03-28 00:05
+- **最后更新时间**：2026-03-28 20:07
 - **目标**：将 6 处手写重复的列设置模式统一为 TableSettingsPanel，同步推进 UI 治理规则收口
 - **范围**：docs/rules/ui-rules.md、src/components/admin/shared/modern-table/settings/、src/app/[locale]/admin/sandbox/、7 个后台表格组件
 - **依赖**：无
@@ -3852,11 +3852,11 @@
     - 文件范围：src/components/admin/analytics/AdminAnalyticsDashboard.tsx（或同类路径）
     - 验收要点：typecheck + lint + test 通过
 
-12. CHG-308 — 删除 ColumnSettingsPanel.tsx + docs/decisions.md ADR（状态：🔄 进行中）
+12. CHG-308 — 删除 ColumnSettingsPanel.tsx + docs/decisions.md ADR（状态：✅ 已完成）
     - 创建时间：2026-03-28 00:00
     - 计划开始：CHG-307 完成后
-    - 实际开始：
-    - 完成时间：
+    - 实际开始：2026-03-28 15:01
+    - 完成时间：2026-03-28 20:07
     - 文件范围：
       - src/components/admin/shared/table/ColumnSettingsPanel.tsx（删除）
       - docs/decisions.md（追加 ADR）

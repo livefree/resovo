@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { CrawlerSiteManager } from '@/components/admin/system/crawler-site/CrawlerSiteManager'
 
 const getMock = vi.fn()
@@ -96,20 +97,30 @@ describe('CrawlerSiteManager', () => {
   })
 
   it('restores sort and column visibility from localStorage after remount', async () => {
+    const user = userEvent.setup()
     const { unmount } = render(<CrawlerSiteManager />)
     await screen.findByText('Alpha 源')
 
     fireEvent.click(screen.getByTestId('modern-table-sort-name'))
-    fireEvent.click(screen.getByTestId('crawler-site-table-scroll-settings-btn'))
-    fireEvent.click(screen.getByTestId('crawler-site-table-scroll-settings-content-visible-key'))
+    await user.click(screen.getByTestId('crawler-site-table-scroll-settings-btn'))
+    await user.click(screen.getByTestId('crawler-site-table-scroll-settings-content-visible-key'))
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('modern-table-sort-key')).toBeNull()
+    })
+    // Flush all pending effects (including localStorage write-back) before unmounting
+    await act(async () => {})
 
     unmount()
 
     render(<CrawlerSiteManager />)
     await screen.findByText('Alpha 源')
 
-    expect(screen.getByTestId('modern-table-sort-name').textContent).toContain('↓')
-    expect(screen.queryByTestId('modern-table-sort-key')).toBeNull()
+    // Wait for settings hydration from localStorage (useTableSettings mount effect is async)
+    await waitFor(() => {
+      expect(screen.getByTestId('modern-table-sort-name').textContent).toContain('↓')
+      expect(screen.queryByTestId('modern-table-sort-key')).toBeNull()
+    })
   })
 
   it('resizes column width by dragging header separator', async () => {

@@ -9,8 +9,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { PaginationV2 } from '@/components/admin/PaginationV2'
 import { ReviewModal, type ReviewTarget } from '@/components/admin/content/ReviewModal'
-import { ColumnSettingsPanel } from '@/components/admin/shared/table/ColumnSettingsPanel'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
+import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import type { TableSortState } from '@/components/admin/shared/modern-table/types'
 import { useAdminTableColumns } from '@/components/admin/shared/table/useAdminTableColumns'
 import { useAdminTableSort } from '@/components/admin/shared/table/useAdminTableSort'
@@ -24,6 +24,13 @@ import {
   type SubtitleColumnId,
 } from './useSubtitleTableColumns'
 
+const SUBTITLE_SETTINGS_COLUMNS = SUBTITLE_COLUMNS_META.map((col) => ({
+  id: col.id,
+  label: SUBTITLE_COLUMN_LABELS[col.id as SubtitleColumnId] ?? col.id,
+  defaultVisible: col.visible ?? true,
+  defaultSortable: SUBTITLE_SORTABLE_MAP[col.id as SubtitleColumnId] ?? false,
+}))
+
 const DEFAULT_PAGE_SIZE = 20
 
 export function SubtitleTable() {
@@ -33,8 +40,6 @@ export function SubtitleTable() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [loading, setLoading] = useState(false)
   const [reviewTarget, setReviewTarget] = useState<ReviewTarget | null>(null)
-  const [showColumnsPanel, setShowColumnsPanel] = useState(false)
-
   const columnsState = useAdminTableColumns({
     route: '/admin/content',
     tableId: 'subtitle-table',
@@ -49,24 +54,25 @@ export function SubtitleTable() {
     sortable: SUBTITLE_SORTABLE_MAP,
   })
 
-  const visibleColumnIds = useMemo(
-    () =>
-      columnsState.columns
-        .filter((col) => col.visible)
-        .map((col) => col.id as SubtitleColumnId),
-    [columnsState.columns],
-  )
+  const tableSettings = useTableSettings({
+    tableId: 'subtitle-table',
+    columns: SUBTITLE_SETTINGS_COLUMNS,
+  })
 
   const sort = useMemo<TableSortState | undefined>(() => {
     if (!sortState.sort) return undefined
     return { field: sortState.sort.field, direction: sortState.sort.dir }
   }, [sortState.sort])
 
-  const tableColumns = useSubtitleTableColumns({
-    visibleColumnIds,
+  const allTableColumns = useSubtitleTableColumns({
     columnsById: columnsState.columnsById,
     setReviewTarget,
   })
+
+  const tableColumns = useMemo(
+    () => tableSettings.applyToColumns(allTableColumns),
+    [tableSettings, allTableColumns],
+  )
 
   const fetchSubtitles = useCallback(async (pageVal: number, pageSizeVal: number) => {
     setLoading(true)
@@ -108,51 +114,28 @@ export function SubtitleTable() {
 
   return (
     <div data-testid="subtitle-table" className="space-y-2">
-      {/* ⚙ 列设置叠加在表格右上角，面板在 overflow-hidden 外渲染 */}
-      <div className="relative">
-        <div className="absolute right-4 top-3 z-30">
-          <button
-            type="button"
-            className="rounded border border-[var(--border)] bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
-            onClick={() => setShowColumnsPanel((prev) => !prev)}
-            data-testid="subtitle-columns-toggle"
-            aria-label="列设置"
-            title="列设置"
-          >⚙</button>
-          {showColumnsPanel ? (
-            <div className="absolute right-0 mt-1 w-52">
-              <ColumnSettingsPanel
-                data-testid="subtitle-columns-panel"
-                columns={columnsState.columns.map((col) => ({
-                  id: col.id,
-                  label: SUBTITLE_COLUMN_LABELS[col.id as SubtitleColumnId] ?? col.id,
-                  visible: col.visible,
-                }))}
-                onToggle={(id) => columnsState.toggleColumnVisibility(id)}
-                onReset={() => columnsState.resetColumnsMeta()}
-              />
-            </div>
-          ) : null}
-        </div>
-
-        <ModernDataTable
-          columns={tableColumns}
-          rows={subtitles}
-          sort={sort}
-          onSortChange={(nextSort) => {
-            sortState.setSort(nextSort.field, nextSort.direction === 'asc' ? 'asc' : 'desc')
-          }}
-          onColumnWidthChange={(columnId, nextWidth) => {
-            if (columnId in columnsState.columnsById) {
-              columnsState.setColumnWidth(columnId, nextWidth)
-            }
-          }}
-          loading={loading}
-          emptyText="暂无待审字幕"
-          scrollTestId="subtitle-table-scroll"
-          getRowId={(row) => row.id}
-        />
-      </div>
+      <ModernDataTable
+        columns={tableColumns}
+        rows={subtitles}
+        sort={sort}
+        onSortChange={(nextSort) => {
+          sortState.setSort(nextSort.field, nextSort.direction === 'asc' ? 'asc' : 'desc')
+        }}
+        onColumnWidthChange={(columnId, nextWidth) => {
+          if (columnId in columnsState.columnsById) {
+            columnsState.setColumnWidth(columnId, nextWidth)
+          }
+        }}
+        loading={loading}
+        emptyText="暂无待审字幕"
+        scrollTestId="subtitle-table-scroll"
+        getRowId={(row) => row.id}
+        settingsSlot={{
+          settingsColumns: tableSettings.orderedSettings,
+          onSettingsChange: tableSettings.updateSetting,
+          onSettingsReset: tableSettings.reset,
+        }}
+      />
 
       {total > 0 ? (
         <div className="mt-4">

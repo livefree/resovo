@@ -57,13 +57,11 @@ export const SUBTITLE_DEFAULT_TABLE_STATE = {
 }
 
 interface UseSubtitleTableColumnsOptions {
-  visibleColumnIds: SubtitleColumnId[]
   columnsById: Record<string, AdminResolvedColumnMeta>
   setReviewTarget: (target: ReviewTarget) => void
 }
 
 export function useSubtitleTableColumns({
-  visibleColumnIds,
   columnsById,
   setReviewTarget,
 }: UseSubtitleTableColumnsOptions): TableColumn<SubtitleRow>[] {
@@ -162,6 +160,6 @@ export function useSubtitleTableColumns({
       },
     ]
 
-    return all.filter((col) => visibleColumnIds.includes(col.id as SubtitleColumnId))
-  }, [visibleColumnIds, columnsById, setReviewTarget])
+    return all
+  }, [columnsById, setReviewTarget])
 }
