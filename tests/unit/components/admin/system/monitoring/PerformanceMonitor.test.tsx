@@ -10,7 +10,7 @@ vi.mock('@/lib/api-client', () => ({
   },
 }))
 
-describe('PerformanceMonitor (CHG-130)', () => {
+describe('PerformanceMonitor (CHG-311)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
@@ -30,17 +30,19 @@ describe('PerformanceMonitor (CHG-130)', () => {
 
   it('applies default duration desc sort and supports column visibility toggle', async () => {
     render(<PerformanceMonitor />)
-    await screen.findByTestId('slow-request-row-0')
+    await screen.findByTestId('modern-table-row-0')
 
-    const rows = Array.from(document.querySelectorAll('[data-testid^="slow-request-row-"]'))
-    expect(rows[0]?.getAttribute('data-testid')).toBe('slow-request-row-0')
+    const rows = Array.from(document.querySelectorAll('[data-testid^="modern-table-row-"]'))
+    expect(rows[0]?.getAttribute('data-testid')).toBe('modern-table-row-0')
     expect(rows[0]?.textContent).toContain('/v1/b')
 
-    fireEvent.click(screen.getByTestId('slow-request-columns-toggle'))
-    fireEvent.click(screen.getByTestId('slow-request-column-toggle-statusCode'))
+    // Open settings panel via ⋮ trigger button
+    fireEvent.click(screen.getByTestId('perf-slow-request-table-scroll-settings-btn'))
+    // Toggle statusCode visibility off
+    fireEvent.click(screen.getByTestId('perf-slow-request-table-scroll-settings-content-visible-statusCode'))
 
     await waitFor(() => {
-      expect(screen.queryByTestId('slow-request-sort-statusCode')).toBeNull()
+      expect(screen.queryByTestId('modern-table-sort-statusCode')).toBeNull()
     })
   })
 })

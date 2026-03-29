@@ -4392,3 +4392,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/task-queue.md`（CHG-310 完成）
 - **测试覆盖**：typecheck 通过；1/1 passed
 - **共享层沉淀评估**：列定义内联于组件（4 列，单文件，无需提取）
+
+---
+
+## CHG-311 — PerformanceMonitor → ModernDataTable + useTableSettings 迁移
+- **完成时间**：2026-03-29 14:40
+- **修改文件**：
+  - `src/components/admin/system/monitoring/PerformanceMonitor.tsx` — 重写：移除 `AdminTableFrame`/`AdminTableState`/`useAdminTableColumns`/`useAdminTableSort`/手写 thead+tbody/`showColumnsPanel`；引入 `ModernDataTable` + `useTableSettings`；列定义内联 `TableColumn<SlowRequestRow>[]`；客户端排序由 `useState<TableSortState>` 驱动；`getRowId` 使用行索引（无自然唯一键）；`settingsSlot` 提供 ⚙ 列设置面板
+  - `tests/unit/components/admin/system/monitoring/PerformanceMonitor.test.tsx` — 更新 testId：`slow-request-row-0` → `modern-table-row-0`；`slow-request-columns-toggle` → `perf-slow-request-table-scroll-settings-btn`；`slow-request-column-toggle-statusCode` → `perf-slow-request-table-scroll-settings-content-visible-statusCode`；`slow-request-sort-statusCode` → `modern-table-sort-statusCode`
+  - `docs/task-queue.md`（CHG-311 完成）
+- **测试覆盖**：typecheck 通过；1/1 passed
+- **共享层沉淀评估**：列定义内联于组件（5 列，单文件，无需提取）
