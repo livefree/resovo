@@ -866,3 +866,85 @@ src/
 4. 然后再创建 `design-system/tokens` 与 `design-system/primitives` 的目录骨架，不要先改页面。
 5. 再选 1 个后台列表页、1 个后台设置页、1 个前台详情页作为三类样板迁移页。
 6. 同步补 lint/import-boundary 规则，否则 AI 与人工都会继续绕开系统。
+
+---
+
+## 17. 执行回顾与方案修正（2026-03-28）
+
+> 本章为 SEQ-20260328-42 完成后的阶段性修正记录，优先级高于第 11 章的原始 Phase 规划。
+
+### 17.1 SEQ-20260328-42 实际交付（已完成）
+
+SEQ-20260328-42（UI 治理：TableSettingsPanel + Admin 表格设置统一）完成了以下工作：
+
+| 交付项 | 内容 |
+|---|---|
+| 新建共享机制 | `useTableSettings` hook + `TableSettingsPanel` + `TableSettingsTrigger`（portal 渲染）+ `ModernDataTable.settingsSlot` prop |
+| 迁移表格 | UserTable、SubmissionTable(sources)、SubmissionTable(content)、VideoTable、InactiveSourceTable、CrawlerSiteTable、SubtitleTable、AdminAnalyticsDashboard（共 8 个） |
+| 删除旧组件 | `ColumnSettingsPanel.tsx` |
+| 架构决策 | ADR-CHG-308（列设置统一）、ADR-021（治理策略调整） |
+| 数据迁移 | `migrateFromLegacy` 提供老 localStorage key 单次迁移路径 |
+
+### 17.2 已知技术债（SEQ-20260328-42 遗留）
+
+**债务 1：双重 hook 共存（结构性，不影响功能）**
+
+除 CrawlerSiteTable 外，所有迁移表格仍同时运行三套 hook：
+
+- `useAdminTableColumns`：列宽存储（`setColumnWidth`）+ 为 sort 提供 `columnsState`
+- `useAdminTableSort`：排序状态管理，依赖上面的 `columnsState`
+- `useTableSettings`：列可见性（新系统）
+
+根因是 `useTableSettings` 尚未支持列宽持久化，`useAdminTableSort` 尚未从 `useAdminTableColumns` 解耦。两套系统并行写入不同 localStorage key，存在潜在的状态不一致风险（详见 ADR-021）。
+
+**债务 2：AdminTableFrame 尚未退场（规范违反，3 处）**
+
+```
+src/components/admin/AdminCrawlerPanel.tsx        — 596行，手写表格+手写列设置+客户端排序
+src/components/admin/system/monitoring/CacheManager.tsx     — 使用旧 hook 体系
+src/components/admin/system/monitoring/PerformanceMonitor.tsx — 使用旧 hook 体系
+```
+
+这 3 个组件违反 CLAUDE.md 后台表格规范第 1 条（基座必须用 ModernDataTable）。
+
+### 17.3 原方案修正：放弃 Phase 顺序，采用双轨并行
+
+**修正依据**：Phase 1（tokens 基线）属于全局架构重建（涉及 globals.css + 全量 Tailwind 配置 + 所有组件样式），在项目业务快速迭代阶段风险过高，投入产出比低。Phase 3 的后台治理已经开始，不应等待 Phase 1 完成后再继续。
+
+**调整后执行方式：**
+
+```
+轨道 A（近期，高优先级）            轨道 B（长期，低优先级）
+AdminCrawlerPanel 迁移（CHG-309）    CSS 变量体系盘点与对齐（CHG-315）
+CacheManager 迁移（CHG-310）        ESLint 禁硬编码颜色规则（CHG-316）
+PerformanceMonitor 迁移（CHG-311）
+useAdminTableSort 解耦（CHG-312）
+useTableSettings 加列宽（CHG-313）
+删除旧 hook（CHG-314）
+```
+
+轨道 A 完成后：`AdminTableFrame`、`useAdminTableColumns`、`useAdminTableSort` 全部退出生命周期。
+
+### 17.4 暂不推进的方向
+
+以下属于原方案 Phase 2/4/5 的内容，暂不安排：
+
+- `ListPageShell`、`FilterToolbar` 等模式层组件（Phase 2）
+- 前台页面接入共享底座（Phase 4）
+- lint/import-boundary 治理自动化（Phase 5，除 CHG-316 的颜色规则外）
+
+触发条件：轨道 A 完成 + 业务模块基本稳态后，再评估是否进入 Phase 2。
+
+### 17.5 CHG-309 特别说明（AdminCrawlerPanel 迁移）
+
+`AdminCrawlerPanel.tsx` 是当前后台最复杂的手写表格（596行），包含：
+- 手写 `<thead>` / `<tbody>` / `<tr>` 结构
+- 手写列可见性 checkbox 面板（内联于组件内）
+- 客户端排序（任务数量少，不需要服务端排序）
+- 触发类型筛选、站点筛选、状态筛选（多个 filter 逻辑内联）
+
+**CHG-309 执行前必须先将其拆分为至少 2 个原子任务**，避免单次 commit 改动范围过大：
+1. 表格基座替换（AdminTableFrame → ModernDataTable）+ 行操作整理
+2. 列设置迁移（手写 checkbox panel → useTableSettings + settingsSlot）
+
+拆分细节由执行任务时的"开发前四步"确认，此处不预先规定。

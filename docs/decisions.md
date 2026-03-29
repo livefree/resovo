@@ -465,3 +465,47 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
 - **替代方案**：`useTableSettings` hook（`admin:table:settings:{tableId}:v1` localStorage 存储，支持单次迁移旧 key）+ `TableSettingsPanel`（portal 渲染，⋮ 触发，矩阵布局）+ `settingsSlot` prop（`ModernDataTable` 右上角定位）
 - **CSS 变量范围**：`TableSettingsPanel` 使用 admin 变量体系（`--bg2`、`--border`、`--text`、`--muted`、`--accent`），与前台体系（`--background`、`--foreground` 等）并存，各自适用于对应域
 - **影响文件**：`src/components/admin/shared/modern-table/settings/`（新增），所有上述表格组件文件（修改），`ColumnSettingsPanel.tsx`（删除）
+
+---
+
+## ADR-021: 后台 UI 治理策略调整 — 从 Phase 顺序推进改为双轨并行
+
+- **日期**：2026-03-28
+- **状态**：已采纳
+- **背景**：
+  - `ui_governance_plan_frontend_admin_20260327.md` 定义了 Phase 0→1→2→3→4→5 的顺序推进方案
+  - SEQ-20260328-42 完成后发现：在 Phase 1（tokens 基线）建立之前就推进 Phase 3（后台表格治理）是务实选择，但遗留了两类问题：
+    1. **双重 hook 共存**：大多数迁移表格（VideoTable、SubmissionTable×2、UserTable、InactiveSourceTable、AdminAnalyticsDashboard）仍同时运行 `useAdminTableColumns` + `useAdminTableSort`（用于列宽存储和排序状态）+ `useTableSettings`（新系统，负责列可见性）。根因：`useTableSettings` 不支持列宽持久化；`useAdminTableSort` 依赖 `useAdminTableColumns` 的 `columnsState`。
+    2. **AdminTableFrame 未退场**：`AdminCrawlerPanel`、`CacheManager`、`PerformanceMonitor` 三个组件仍使用旧基座，违反 CLAUDE.md 后台表格规范 #1。
+  - Phase 1（tokens 基线）属于架构性重建，涉及 `globals.css`、全量 Tailwind 配置、所有组件样式，在项目业务仍快速迭代阶段风险过高。
+
+- **决策**：放弃严格的 Phase 顺序，采用双轨并行推进：
+
+  ### 轨道 A（近期）：后台治理完成
+  完成 SEQ-20260328-42 遗留的两类问题：
+  1. 迁移剩余 3 个 AdminTableFrame 用户 → ModernDataTable（CHG-309~311）
+  2. 解耦 `useAdminTableSort` 对 `useAdminTableColumns` 的依赖（CHG-312）
+  3. `useTableSettings` 加入列宽持久化（CHG-313）
+  4. 删除 `useAdminTableColumns` + `useAdminTableSort`（CHG-314，依赖 312+313）
+
+  ### 轨道 B（长期，低优先级）：轻量级 Tokens 基线
+  不做全局 tokens 重建，只做：
+  1. 盘点并补全 admin / 前台 CSS 语义变量的缺失对齐项，建立统一变量文档（CHG-315）
+  2. 建立 ESLint 规则禁止新增硬编码颜色值（CHG-316），防止 debt 继续扩散
+
+- **轨道 A 完成标准**：
+  - `AdminTableFrame` 无任何业务消费方
+  - `useAdminTableColumns` 无任何业务消费方
+  - `useAdminTableSort` 无任何业务消费方
+  - 所有后台表格的列可见性、列排序、列宽均由 `useTableSettings` 一个 hook 管理
+
+- **轨道 B 完成标准**：
+  - 前后台 CSS 变量体系差异有文档记录，缺失项已补全
+  - ESLint 规则已上线，禁止在 `src/components/admin/` 中硬编码颜色值
+  - 不要求全量迁移既有颜色值（存量 debt 通过自然迭代逐步消化）
+
+- **不做的事**：
+  - 不推进 Phase 2（ListPageShell 等模式层），直到轨道 A 完成、项目业务模块基本稳态
+  - 不强制要求存量页面立刻接入统一 tokens（新增页面强制，存量在迁移时顺手修正）
+
+- **影响文档**：`docs/ui_governance_plan_frontend_admin_20260327.md`（第 17 章修正），`docs/task-queue.md`（SEQ-20260328-43、SEQ-20260328-44）

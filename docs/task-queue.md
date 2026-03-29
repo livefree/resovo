@@ -3861,3 +3861,133 @@
       - src/components/admin/shared/table/ColumnSettingsPanel.tsx（删除）
       - docs/decisions.md（追加 ADR）
     - 验收要点：ColumnSettingsPanel 不再存在；ADR 已记录
+
+---
+
+## [SEQ-20260328-43] 轨道 A — AdminTableFrame 退场 + 旧 Hook 收口
+- **状态**：🟡 规划中
+- **创建时间**：2026-03-28 20:30
+- **最后更新时间**：2026-03-28 20:30
+- **目标**：彻底退出 `AdminTableFrame`、`useAdminTableColumns`、`useAdminTableSort`，消除 SEQ-20260328-42 遗留的双重 hook 共存技术债
+- **范围**：`src/components/admin/AdminCrawlerPanel.tsx`、`src/components/admin/system/monitoring/CacheManager.tsx`、`src/components/admin/system/monitoring/PerformanceMonitor.tsx`、`src/components/admin/shared/table/useAdminTableColumns.ts`、`src/components/admin/shared/table/useAdminTableSort.ts`、`src/components/admin/shared/modern-table/settings/useTableSettings.ts`
+- **依赖**：SEQ-20260328-42 已完成 ✅
+- **参考**：`docs/ui_governance_plan_frontend_admin_20260327.md` 第 17 章
+
+### 任务列表（按执行顺序）
+
+1. CHG-309 — AdminCrawlerPanel → ModernDataTable 迁移（表格基座 + 列设置）（状态：⬜ 待开始）
+   - 创建时间：2026-03-28 20:30
+   - 计划开始：SEQ-20260328-43 启动时
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：
+     - `src/components/admin/AdminCrawlerPanel.tsx`（重构）
+   - 变更内容：
+     - 手写 `<thead>`/`<tbody>` → `ModernDataTable`
+     - 手写列可见性 panel → `useTableSettings` + `settingsSlot`
+     - 客户端排序保留（数据量小），`useAdminTableSort` 依赖视情况保留或替换
+     - 行操作若 2+ 项 → `AdminDropdown`（portal 渲染）
+   - ⚠️ 执行前必须先拆分为至少 2 个原子任务（见 docs/ui_governance_plan_frontend_admin_20260327.md §17.5）
+   - 验收要点：CLAUDE.md 后台表格规范 6 项全部满足；typecheck + lint + test 通过
+
+2. CHG-310 — CacheManager → ModernDataTable + useTableSettings 迁移（状态：⬜ 待开始）
+   - 创建时间：2026-03-28 20:30
+   - 计划开始：CHG-309 完成后
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：
+     - `src/components/admin/system/monitoring/CacheManager.tsx`
+   - 变更内容：`AdminTableFrame` → `ModernDataTable`；`useAdminTableColumns` + `useAdminTableSort` → `useTableSettings`（数据量小，客户端排序可保留）
+   - 验收要点：CLAUDE.md 后台表格规范 6 项；typecheck + lint + test 通过
+
+3. CHG-311 — PerformanceMonitor → ModernDataTable + useTableSettings 迁移（状态：⬜ 待开始）
+   - 创建时间：2026-03-28 20:30
+   - 计划开始：CHG-310 完成后
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：
+     - `src/components/admin/system/monitoring/PerformanceMonitor.tsx`
+   - 变更内容：同 CHG-310 模式
+   - 验收要点：CLAUDE.md 后台表格规范 6 项；typecheck + lint + test 通过
+
+4. CHG-312 — useAdminTableSort 脱离 useAdminTableColumns 依赖（状态：⬜ 待开始）
+   - 创建时间：2026-03-28 20:30
+   - 计划开始：CHG-311 完成后（可与 CHG-313 并排规划，但需先评估影响范围）
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：
+     - `src/components/admin/shared/table/useAdminTableSort.ts`（重构）
+     - 受影响的所有调用方（VideoTable、SubmissionTable×2、UserTable、InactiveSourceTable、AdminAnalyticsDashboard）
+   - 变更内容：
+     - `useAdminTableSort` 改为直接接受 `columnsById: Record<string, {width: number}>` 或等价最小接口，不再依赖完整的 `useAdminTableColumns` 返回值
+     - 或：将排序状态迁移进 `useTableSettings`（若 hook 接口调整可接受）
+   - ⚠️ 开始前必须完整梳理 useAdminTableSort 的所有调用方，确认接口变更影响范围
+   - 验收要点：所有使用方编译通过；sort 持久化行为不变；test 通过
+
+5. CHG-313 — useTableSettings 加入列宽持久化（状态：⬜ 待开始）
+   - 创建时间：2026-03-28 20:30
+   - 计划开始：CHG-312 完成后（依赖 sort 解耦先完成，确认新接口稳定）
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：
+     - `src/components/admin/shared/modern-table/settings/useTableSettings.ts`（扩展）
+     - `src/components/admin/shared/modern-table/settings/types.ts`（扩展 PersistedTableSettings）
+     - 所有使用 `useTableSettings` 的表格组件（迁移列宽写入路径）
+   - 变更内容：
+     - `PersistedTableSettings` 新增 `widths: Record<string, number>`
+     - `UseTableSettingsReturn` 新增 `updateWidth(id, width)` 方法
+     - `ModernDataTable.onColumnWidthChange` 改为调用 `tableSettings.updateWidth`
+     - 对应 `useAdminTableColumns.setColumnWidth` 的调用全部切换
+   - ⚠️ storage key 不变，`widths` 字段为可选（已有数据不破坏）
+   - 验收要点：列宽持久化行为与旧实现一致；typecheck + lint + test 通过
+
+6. CHG-314 — 删除 useAdminTableColumns + useAdminTableSort（状态：⬜ 待开始）
+   - 创建时间：2026-03-28 20:30
+   - 计划开始：CHG-312 + CHG-313 均完成后
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：
+     - `src/components/admin/shared/table/useAdminTableColumns.ts`（删除）
+     - `src/components/admin/shared/table/useAdminTableSort.ts`（删除）
+     - 所有仍有 import 的文件（清理）
+   - 验收要点：`grep -r "useAdminTableColumns\|useAdminTableSort" src/` 无结果；typecheck 通过
+
+---
+
+## [SEQ-20260328-44] 轨道 B — 轻量级 Tokens 基线
+- **状态**：🟡 规划中
+- **创建时间**：2026-03-28 20:30
+- **最后更新时间**：2026-03-28 20:30
+- **目标**：在不做全局 tokens 重建的前提下，建立最小可用的颜色语义基线，并通过 lint 规则防止 debt 继续扩散
+- **范围**：`src/app/globals.css`、ESLint 配置、受影响的组件样式文件
+- **依赖**：无硬依赖；建议在 SEQ-20260328-43 轨道 A 完成后启动，避免同时改动同一文件
+- **参考**：`docs/ui_governance_plan_frontend_admin_20260327.md` §17.3 + §17.4
+
+### 任务列表（按执行顺序）
+
+1. CHG-315 — 前后台 CSS 变量体系盘点与对齐文档化（状态：⬜ 待开始）
+   - 创建时间：2026-03-28 20:30
+   - 计划开始：SEQ-20260328-43 完成后
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：
+     - `src/app/globals.css`（补全缺失语义变量，不改现有变量名）
+     - `docs/rules/ui-rules.md`（§主题与颜色 更新，统一前后台变量对照表）
+   - 变更内容：
+     - 盘点 admin 体系（`--bg`/`--text`/`--accent` 等）与前台体系（`--background`/`--foreground` 等）的语义差距
+     - 补全双方均缺少但语义明确的变量（如 `--status-success`、`--status-danger` 等状态色）
+     - 在 `ui-rules.md` 建立双体系对照表，明确每个语义变量的适用区域
+   - 验收要点：不改现有变量名（向后兼容）；ui-rules.md 有完整对照表；typecheck 通过
+
+2. CHG-316 — ESLint 规则：禁止后台组件中硬编码颜色值（状态：⬜ 待开始）
+   - 创建时间：2026-03-28 20:30
+   - 计划开始：CHG-315 完成后
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：
+     - ESLint 配置文件（新增规则或 plugin）
+     - `src/components/admin/` 下违规文件（修正存量违规，或统一 eslint-disable 标注后再逐步消化）
+   - 变更内容：
+     - 新增 ESLint 规则，对 `src/components/admin/**` 禁止在 `className`/`style` 中出现 `#[0-9a-fA-F]` 或非 CSS 变量的颜色值
+     - 存量违规项：如果过多（>20 处），本次仅建立规则 + warn 级别，不强制修复（单独排期）
+   - 验收要点：lint 规则可检出示例违规；不阻塞现有 `npm run lint` 通过（视存量决定 warn/error）
