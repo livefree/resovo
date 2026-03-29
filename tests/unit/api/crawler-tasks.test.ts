@@ -1,12 +1,55 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  listTasks,
   markStaleHeartbeatRunningTasksWithRunIds,
   markTimedOutRunningTasksWithRunIds,
   touchTaskHeartbeat,
 } from '@/api/db/queries/crawlerTasks'
 
+const EMPTY_DB_RESULT = { rows: [], rowCount: 0 }
+
+describe('listTasks', () => {
+  function makeDb(rows: object[] = []) {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows, rowCount: rows.length })        // data query
+      .mockResolvedValueOnce({ rows: [{ total: '0' }], rowCount: 1 }) // count query
+    return { query }
+  }
+
+  it('uses default ORDER BY scheduled_at DESC when no sortField', async () => {
+    const db = makeDb()
+    await listTasks(db as never, {})
+    const sql: string = db.query.mock.calls[0][0] as string
+    expect(sql).toContain('ORDER BY scheduled_at DESC')
+  })
+
+  it('maps sortField=startedAt to started_at ASC', async () => {
+    const db = makeDb()
+    await listTasks(db as never, { sortField: 'startedAt', sortDir: 'asc' })
+    const sql: string = db.query.mock.calls[0][0] as string
+    expect(sql).toContain('started_at ASC NULLS LAST')
+  })
+
+  it('maps sortField=site to source_site DESC', async () => {
+    const db = makeDb()
+    await listTasks(db as never, { sortField: 'site', sortDir: 'desc' })
+    const sql: string = db.query.mock.calls[0][0] as string
+    expect(sql).toContain('source_site DESC NULLS LAST')
+  })
+
+  it('falls back to scheduled_at DESC for unknown sortField', async () => {
+    const db = makeDb()
+    await listTasks(db as never, { sortField: 'unknown_field', sortDir: 'asc' })
+    const sql: string = db.query.mock.calls[0][0] as string
+    expect(sql).toContain('ORDER BY scheduled_at DESC')
+    expect(sql).not.toContain('unknown_field')
+  })
+})
+
 describe('crawlerTasks query helpers', () => {
+  // keep unused var lint-quiet
+  void EMPTY_DB_RESULT
   it('touchTaskHeartbeat updates heartbeat_at only', async () => {
     const db = {
       query: vi.fn().mockResolvedValue({ rowCount: 1, rows: [] }),
@@ -50,3 +93,4 @@ describe('crawlerTasks query helpers', () => {
     expect(query).toHaveBeenCalledWith(expect.stringContaining('staleMinutes'), [20])
   })
 })
+

@@ -4346,3 +4346,15 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/task-queue.md`（CHG-308 完成，SEQ-20260328-42 完成）
 - **测试覆盖**：typecheck 通过；lint 通过；34/34 test files passed（1 pre-existing failure: useAdminTableSort）
 - **共享层沉淀评估**：ColumnSettingsPanel 已删除，消费方均已迁移至 useTableSettings + settingsSlot，无需额外沉淀
+
+---
+
+## CHG-317 — 后端：`/admin/crawler/tasks` 服务端排序支持（sortField/sortDir）
+- **完成时间**：2026-03-29 14:10
+- **修改文件**：
+  - `src/api/db/queries/crawlerTasks.ts` — `listTasks` 增加 `sortField?`/`sortDir?` 参数；新增 `TASK_SORT_COLUMNS` 白名单（防 SQL 注入）；动态 ORDER BY + NULLS LAST；默认保持 `scheduled_at DESC`
+  - `src/api/routes/admin/crawler.ts` — GET `/admin/crawler/tasks` QuerySchema 增加 `sortField`/`sortDir` 枚举验证，透传到 `listTasks`
+  - `tests/unit/api/crawler-tasks.test.ts` — 新增 4 个 `listTasks` 单测（默认排序、字段映射 ×2、未知字段 fallback）
+  - `docs/task-queue.md`（CHG-317 完成）
+- **测试覆盖**：typecheck 通过；lint 通过；7/7 passed
+- **共享层沉淀评估**：无需，`TASK_SORT_COLUMNS` 是 query 层内部常量

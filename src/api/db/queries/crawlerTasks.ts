@@ -318,12 +318,26 @@ export async function markStaleHeartbeatRunningTasksWithRunIds(
 
 // ── 查询任务列表 ──────────────────────────────────────────────────
 
+// Safe whitelist: maps frontend sortField names to DB column names
+const TASK_SORT_COLUMNS: Record<string, string> = {
+  runId:       'run_id',
+  type:        'type',
+  site:        'source_site',
+  triggerType: 'trigger_type',
+  status:      'status',
+  startedAt:   'started_at',
+  finishedAt:  'finished_at',
+  error:       'error',
+}
+
 export async function listTasks(
   db: Pool,
   params: {
     status?: CrawlerTaskStatus
     triggerType?: 'single' | 'batch' | 'all' | 'schedule'
     runId?: string
+    sortField?: string
+    sortDir?: 'asc' | 'desc'
     limit?: number
     offset?: number
   }
@@ -349,10 +363,15 @@ export async function listTasks(
   const limit = params.limit ?? 20
   const offset = params.offset ?? 0
 
+  const dbCol = params.sortField ? TASK_SORT_COLUMNS[params.sortField] : undefined
+  const orderBy = dbCol
+    ? `${dbCol} ${params.sortDir === 'asc' ? 'ASC' : 'DESC'} NULLS LAST`
+    : 'scheduled_at DESC'
+
   const [dataResult, countResult] = await Promise.all([
     db.query<DbCrawlerTaskRow>(
       `SELECT * FROM crawler_tasks ${where}
-       ORDER BY scheduled_at DESC
+       ORDER BY ${orderBy}
        LIMIT $${idx++} OFFSET $${idx}`,
       [...values, limit, offset]
     ),

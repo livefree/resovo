@@ -134,6 +134,8 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
       status: z.enum(['pending', 'running', 'paused', 'done', 'failed', 'cancelled', 'timeout']).optional(),
       triggerType: z.enum(['single', 'batch', 'all', 'schedule']).optional(),
       runId: z.string().uuid().optional(),
+      sortField: z.enum(['runId', 'type', 'site', 'triggerType', 'status', 'startedAt', 'finishedAt', 'error']).optional(),
+      sortDir: z.enum(['asc', 'desc']).optional(),
       page:   z.coerce.number().int().min(1).default(1),
       limit:  z.coerce.number().int().min(1).max(100).default(20),
     })
@@ -145,11 +147,13 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const { status, triggerType, runId, page, limit } = parsed.data
+    const { status, triggerType, runId, sortField, sortDir, page, limit } = parsed.data
     const { rows, total } = await listTasks(db, {
       status,
       triggerType,
       runId,
+      sortField,
+      sortDir,
       limit,
       offset: (page - 1) * limit,
     })

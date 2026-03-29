@@ -3865,9 +3865,9 @@
 ---
 
 ## [SEQ-20260328-43] 轨道 A — AdminTableFrame 退场 + 旧 Hook 收口
-- **状态**：🟡 规划中
+- **状态**：🔄 执行中
 - **创建时间**：2026-03-28 20:30
-- **最后更新时间**：2026-03-28 20:30
+- **最后更新时间**：2026-03-29 00:00
 - **目标**：彻底退出 `AdminTableFrame`、`useAdminTableColumns`、`useAdminTableSort`，消除 SEQ-20260328-42 遗留的双重 hook 共存技术债
 - **范围**：`src/components/admin/AdminCrawlerPanel.tsx`、`src/components/admin/system/monitoring/CacheManager.tsx`、`src/components/admin/system/monitoring/PerformanceMonitor.tsx`、`src/components/admin/shared/table/useAdminTableColumns.ts`、`src/components/admin/shared/table/useAdminTableSort.ts`、`src/components/admin/shared/modern-table/settings/useTableSettings.ts`
 - **依赖**：SEQ-20260328-42 已完成 ✅
@@ -3875,20 +3875,42 @@
 
 ### 任务列表（按执行顺序）
 
-1. CHG-309 — AdminCrawlerPanel → ModernDataTable 迁移（表格基座 + 列设置）（状态：⬜ 待开始）
-   - 创建时间：2026-03-28 20:30
+1. CHG-317 — 后端：`/admin/crawler/tasks` 增加 `sortField`/`sortDir` 服务端排序支持（状态：✅ 已完成）
+   - 创建时间：2026-03-29 00:00
    - 计划开始：SEQ-20260328-43 启动时
+   - 实际开始：2026-03-29 00:10
+   - 完成时间：2026-03-29 14:10
+   - 文件范围：
+     - `src/api/db/queries/crawlerTasks.ts`（`listTasks` 增加动态 ORDER BY）
+     - `src/api/routes/admin/crawler.ts`（GET /admin/crawler/tasks schema 增加 sortField/sortDir）
+   - 变更内容：`listTasks` 参数增加 `sortField?: string`、`sortDir?: 'asc'|'desc'`，生成动态 ORDER BY；路由 schema 同步；默认排序保持 `scheduled_at DESC`
+   - 验收要点：typecheck + lint + 相关 API 测试通过
+
+2. CHG-318 — 前端：AdminCrawlerPanel 表格基座替换（AdminTableFrame → ModernDataTable + PaginationV2 + 服务端排序）（状态：⬜ 待开始）
+   - 创建时间：2026-03-29 00:00
+   - 计划开始：CHG-317 完成后
    - 实际开始：
    - 完成时间：
    - 文件范围：
-     - `src/components/admin/AdminCrawlerPanel.tsx`（重构）
+     - `src/components/admin/AdminCrawlerPanel.tsx`（重构表格基座 + 分页 + 排序）
+     - `src/components/admin/system/crawler-task/useCrawlerTaskTableColumns.tsx`（新建，列定义提取）
    - 变更内容：
-     - 手写 `<thead>`/`<tbody>` → `ModernDataTable`
-     - 手写列可见性 panel → `useTableSettings` + `settingsSlot`
-     - 客户端排序保留（数据量小），`useAdminTableSort` 依赖视情况保留或替换
-     - 行操作若 2+ 项 → `AdminDropdown`（portal 渲染）
-   - ⚠️ 执行前必须先拆分为至少 2 个原子任务（见 docs/ui_governance_plan_frontend_admin_20260327.md §17.5）
-   - 验收要点：CLAUDE.md 后台表格规范 6 项全部满足；typecheck + lint + test 通过
+     - `useAdminTableColumns` + `useAdminTableSort` → `useAdminTableSort` 状态接线到 API params（sortField/sortDir）
+     - 手写 `<thead>`/`<tbody>` → `ModernDataTable` + 列定义文件
+     - 手写 `上一页/下一页` 分页 → `PaginationV2`
+     - 行操作仅 1 个（"查看日志"），保留为 button（不需要 AdminDropdown）
+   - 验收要点：规范 #1/#5/#6 满足；typecheck + lint + test 通过
+
+3. CHG-309 — 前端：AdminCrawlerPanel 列设置迁移（内联 panel → `useTableSettings` + `settingsSlot`）（状态：⬜ 待开始）
+   - 创建时间：2026-03-29 00:00
+   - 计划开始：CHG-318 完成后
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：
+     - `src/components/admin/AdminCrawlerPanel.tsx`（删除 showColumnsPanel + 内联列设置 panel）
+     - `src/components/admin/system/crawler-task/useCrawlerTaskTableColumns.tsx`（配合 useTableSettings）
+   - 变更内容：`showColumnsPanel` state 删除 + 内联 checkbox panel 删除 → `useTableSettings` hook + `settingsSlot` prop
+   - 验收要点：规范 #2 满足；6 项全部满足；typecheck + lint + test 通过
 
 2. CHG-310 — CacheManager → ModernDataTable + useTableSettings 迁移（状态：⬜ 待开始）
    - 创建时间：2026-03-28 20:30
