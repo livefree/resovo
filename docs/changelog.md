@@ -4381,3 +4381,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/task-queue.md`（CHG-309 完成）
 - **测试覆盖**：typecheck 通过；lint 通过；8/8 passed（AdminCrawlerPanel 测试全部通过，settingsSlot 为可选 prop 不影响现有测试）
 - **共享层沉淀评估**：无需，`CRAWLER_SETTINGS_COLUMNS` 是组件内部配置常量
+
+---
+
+## CHG-310 — CacheManager → ModernDataTable + useTableSettings 迁移
+- **完成时间**：2026-03-29 14:35
+- **修改文件**：
+  - `src/components/admin/system/monitoring/CacheManager.tsx` — 重写：移除 `AdminTableFrame`/`AdminTableState`/`useAdminTableColumns`/`useAdminTableSort`/手写 thead+tbody/`showColumnsPanel`；引入 `ModernDataTable` + `useTableSettings`；列定义内联 `TableColumn<CacheStat>[]`；客户端排序由 `useState<TableSortState>` 驱动（数据量小，显式允许）；`settingsSlot` 提供 ⚙ 列设置面板
+  - `tests/unit/components/admin/system/monitoring/CacheManager.test.tsx` — 更新 testId：`cache-row-video` → `modern-table-row-video`；`cache-columns-toggle` → `cache-manager-table-scroll-settings-btn`；`cache-column-toggle-sizeKb` → `cache-manager-table-scroll-settings-content-visible-sizeKb`；`cache-sort-sizeKb` → `modern-table-sort-sizeKb`
+  - `docs/task-queue.md`（CHG-310 完成）
+- **测试覆盖**：typecheck 通过；1/1 passed
+- **共享层沉淀评估**：列定义内联于组件（4 列，单文件，无需提取）

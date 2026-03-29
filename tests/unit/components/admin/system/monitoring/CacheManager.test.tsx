@@ -12,7 +12,7 @@ vi.mock('@/lib/api-client', () => ({
   },
 }))
 
-describe('CacheManager (CHG-130)', () => {
+describe('CacheManager (CHG-310)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
@@ -27,16 +27,18 @@ describe('CacheManager (CHG-130)', () => {
 
   it('applies default count desc sort and supports column visibility toggle', async () => {
     render(<CacheManager />)
-    await screen.findByTestId('cache-row-video')
+    await screen.findByTestId('modern-table-row-video')
 
-    const rows = Array.from(document.querySelectorAll('[data-testid^="cache-row-"]'))
-    expect(rows[0]?.getAttribute('data-testid')).toBe('cache-row-video')
+    const rows = Array.from(document.querySelectorAll('[data-testid^="modern-table-row-"]'))
+    expect(rows[0]?.getAttribute('data-testid')).toBe('modern-table-row-video')
 
-    fireEvent.click(screen.getByTestId('cache-columns-toggle'))
-    fireEvent.click(screen.getByTestId('cache-column-toggle-sizeKb'))
+    // Open settings panel via ⋮ trigger button
+    fireEvent.click(screen.getByTestId('cache-manager-table-scroll-settings-btn'))
+    // Toggle sizeKb visibility off
+    fireEvent.click(screen.getByTestId('cache-manager-table-scroll-settings-content-visible-sizeKb'))
 
     await waitFor(() => {
-      expect(screen.queryByTestId('cache-sort-sizeKb')).toBeNull()
+      expect(screen.queryByTestId('modern-table-sort-sizeKb')).toBeNull()
     })
   })
 })

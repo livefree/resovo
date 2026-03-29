@@ -3867,7 +3867,7 @@
 ## [SEQ-20260328-43] 轨道 A — AdminTableFrame 退场 + 旧 Hook 收口
 - **状态**：🔄 执行中
 - **创建时间**：2026-03-28 20:30
-- **最后更新时间**：2026-03-29 14:26
+- **最后更新时间**：2026-03-29 14:35
 - **目标**：彻底退出 `AdminTableFrame`、`useAdminTableColumns`、`useAdminTableSort`，消除 SEQ-20260328-42 遗留的双重 hook 共存技术债
 - **范围**：`src/components/admin/AdminCrawlerPanel.tsx`、`src/components/admin/system/monitoring/CacheManager.tsx`、`src/components/admin/system/monitoring/PerformanceMonitor.tsx`、`src/components/admin/shared/table/useAdminTableColumns.ts`、`src/components/admin/shared/table/useAdminTableSort.ts`、`src/components/admin/shared/modern-table/settings/useTableSettings.ts`
 - **依赖**：SEQ-20260328-42 已完成 ✅
@@ -3912,11 +3912,11 @@
    - 变更内容：`showColumnsPanel` state 删除 + 内联 checkbox panel 删除 → `useTableSettings` hook + `settingsSlot` prop
    - 验收要点：规范 #2 满足；6 项全部满足；typecheck + lint + test 通过
 
-2. CHG-310 — CacheManager → ModernDataTable + useTableSettings 迁移（状态：⬜ 待开始）
+2. CHG-310 — CacheManager → ModernDataTable + useTableSettings 迁移（状态：✅ 已完成）
    - 创建时间：2026-03-28 20:30
    - 计划开始：CHG-309 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-29 14:30
+   - 完成时间：2026-03-29 14:35
    - 文件范围：
      - `src/components/admin/system/monitoring/CacheManager.tsx`
    - 变更内容：`AdminTableFrame` → `ModernDataTable`；`useAdminTableColumns` + `useAdminTableSort` → `useTableSettings`（数据量小，客户端排序可保留）
