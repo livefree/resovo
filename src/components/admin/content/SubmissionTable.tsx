@@ -11,8 +11,7 @@ import { PaginationV2 } from '@/components/admin/PaginationV2'
 import { ReviewModal, type ReviewTarget } from '@/components/admin/content/ReviewModal'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import type { TableSortState } from '@/components/admin/shared/modern-table/types'
-import { useAdminTableColumns } from '@/components/admin/shared/table/useAdminTableColumns'
-import { useAdminTableSort } from '@/components/admin/shared/table/useAdminTableSort'
+import type { AdminTableSortState } from '@/components/admin/shared/table/useAdminTableState'
 import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import {
   useSubmissionTableColumns,
@@ -46,31 +45,20 @@ export function SubmissionTable() {
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [reviewTarget, setReviewTarget] = useState<ReviewTarget | null>(null)
-  const columnsState = useAdminTableColumns({
-    route: '/admin/content',
-    tableId: 'submission-table',
-    columns: SUBMISSION_COLUMNS_META,
-    defaultState: SUBMISSION_DEFAULT_TABLE_STATE,
-  })
-
-  const sortState = useAdminTableSort({
-    defaultSort: SUBMISSION_DEFAULT_TABLE_STATE.sort,
-    sortable: SUBMISSION_SORTABLE_MAP,
-  })
+  const [sort, setSort] = useState<AdminTableSortState | undefined>(SUBMISSION_DEFAULT_TABLE_STATE.sort)
 
   const tableSettings = useTableSettings({
     tableId: 'submission-table',
     columns: SUBMISSION_SETTINGS_COLUMNS,
   })
 
-  const sort = useMemo<TableSortState | undefined>(() => {
-    if (!sortState.sort) return undefined
-    return { field: sortState.sort.field, direction: sortState.sort.dir }
-  }, [sortState.sort])
+  const tableSortState = useMemo<TableSortState | undefined>(() => {
+    if (!sort) return undefined
+    return { field: sort.field, direction: sort.dir }
+  }, [sort])
 
   const allTableColumns = useSubmissionTableColumns({
     visibleColumnIds: ALL_SUBMISSION_COLUMN_IDS,
-    columnsById: columnsState.columnsById,
     setReviewTarget,
   })
 
@@ -86,9 +74,9 @@ export function SubmissionTable() {
         page: String(pageVal),
         limit: String(pageSizeVal),
       })
-      if (sortState.sort) {
-        params.set('sortField', sortState.sort.field)
-        params.set('sortDir', sortState.sort.dir)
+      if (sort) {
+        params.set('sortField', sort.field)
+        params.set('sortDir', sort.dir)
       }
       const res = await apiClient.get<{ data: SubmissionRow[]; total: number }>(
         `/admin/submissions?${params}`
@@ -100,12 +88,12 @@ export function SubmissionTable() {
     } finally {
       setLoading(false)
     }
-  }, [sortState.sort])
+  }, [sort])
 
   useEffect(() => {
     setPage(1)
     void fetchSubmissions(1, pageSize)
-  }, [sortState.sort, pageSize, fetchSubmissions])
+  }, [sort, pageSize, fetchSubmissions])
 
   function showToast(msg: string) {
     setToast(msg)
@@ -137,9 +125,9 @@ export function SubmissionTable() {
       <ModernDataTable
         columns={tableColumns}
         rows={submissions}
-        sort={sort}
+        sort={tableSortState}
         onSortChange={(nextSort) => {
-          sortState.setSort(nextSort.field, nextSort.direction === 'asc' ? 'asc' : 'desc')
+          setSort({ field: nextSort.field, dir: nextSort.direction === 'asc' ? 'asc' : 'desc' })
         }}
         onColumnWidthChange={tableSettings.updateWidth}
         loading={loading}

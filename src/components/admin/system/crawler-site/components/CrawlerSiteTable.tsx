@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CrawlerSite, UpdateCrawlerSiteInput } from '@/types'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
-import type { ColumnId, ColumnWidthState, FilterState, SortDir, SortField } from '@/components/admin/system/crawler-site/tableState'
+import type { ColumnId, FilterState, SortDir, SortField } from '@/components/admin/system/crawler-site/tableState'
 import { COLUMN_META, DEFAULT_COLUMNS, DEFAULT_FILTERS, REQUIRED_COLUMNS } from '@/components/admin/system/crawler-site/tableState'
 import { useCrawlerSiteTableColumns, normalizeWeightPreset } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteTableColumns'
 import type { WeightPreset } from '@/components/admin/system/crawler-site/components/CrawlerSiteTableHead'
@@ -30,13 +30,11 @@ interface CrawlerSiteTableProps {
   sortBy: SortField
   sortDir: SortDir
   filters: FilterState
-  columnWidths: ColumnWidthState
   validateStates: Record<string, ValidateStatus>
   rowSaving: Record<string, boolean>
   runningBySite: Record<string, boolean>
   setFilters: Dispatch<SetStateAction<FilterState>>
   setSort: (field: SortField, dir: SortDir) => void
-  setColumnWidth: (columnId: ColumnId, nextWidth: number) => void
   toggleSelect: (key: string) => void
   toggleAll: () => void
   handleInlineUpdate: (site: CrawlerSite, patch: UpdateCrawlerSiteInput, showSuccess?: boolean) => Promise<void>
@@ -50,9 +48,9 @@ interface CrawlerSiteTableProps {
 
 export function CrawlerSiteTable(props: CrawlerSiteTableProps) {
   const {
-    displaySites, selected, allVisibleSelected, sortBy, sortDir, filters, columnWidths,
+    displaySites, selected, allVisibleSelected, sortBy, sortDir, filters,
     validateStates, rowSaving, runningBySite, setFilters, setSort,
-    setColumnWidth, toggleSelect, toggleAll, handleInlineUpdate, handleToggleDisabled,
+    toggleSelect, toggleAll, handleInlineUpdate, handleToggleDisabled,
     handleValidate, handleTriggerCrawl, handleDelete, setEditTarget, showToast,
   } = props
 
@@ -94,7 +92,7 @@ export function CrawlerSiteTable(props: CrawlerSiteTableProps) {
   }
 
   const allTableColumns = useCrawlerSiteTableColumns({
-    displaySites, selected, allVisibleSelected, sortBy, sortDir, filters, columnWidths,
+    displaySites, selected, allVisibleSelected, sortBy, sortDir, filters,
     openMenuColumn,
     setOpenMenuColumn: setOpenMenuColumn as Dispatch<SetStateAction<ColumnId | null>>,
     weightPresets, onPatchWeightPreset: handlePatchWeightPreset,
@@ -114,7 +112,7 @@ export function CrawlerSiteTable(props: CrawlerSiteTableProps) {
   )
 
   function handleColumnWidthChange(columnId: string, nextWidth: number) {
-    if (columnId !== 'selection') setColumnWidth(columnId as ColumnId, nextWidth)
+    if (columnId !== 'selection') tableSettings.updateWidth(columnId, nextWidth)
   }
 
   return (

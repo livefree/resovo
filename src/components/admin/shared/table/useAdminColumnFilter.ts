@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import type { AdminResolvedColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
 import type { AdminTableFiltersState } from '@/components/admin/shared/table/useAdminTableState'
 
 type TableStateController = {
@@ -11,7 +10,7 @@ type TableStateController = {
 
 type UseAdminColumnFilterOptions = {
   tableState: TableStateController
-  columnsById?: Record<string, AdminResolvedColumnMeta>
+  columnsById?: Record<string, unknown>
 }
 
 export type ColumnFilterRenderContext = {
@@ -27,7 +26,7 @@ export type ColumnFilterRenderContext = {
 
 function hasColumn(
   columnId: string,
-  columnsById: Record<string, AdminResolvedColumnMeta> | undefined,
+  columnsById: Record<string, unknown> | undefined,
 ): boolean {
   if (!columnsById) return true
   return Boolean(columnsById[columnId])

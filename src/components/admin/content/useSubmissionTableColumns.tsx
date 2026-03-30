@@ -7,7 +7,7 @@
 
 import { useMemo } from 'react'
 import type { TableColumn } from '@/components/admin/shared/modern-table/types'
-import type { AdminColumnMeta, AdminResolvedColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
+import type { AdminColumnMeta } from '@/components/admin/shared/table/adminColumnTypes'
 import type { ReviewTarget } from '@/components/admin/content/ReviewModal'
 
 export interface SubmissionRow {
@@ -53,13 +53,11 @@ export const SUBMISSION_DEFAULT_TABLE_STATE = {
 
 interface UseSubmissionTableColumnsOptions {
   visibleColumnIds: SubmissionColumnId[]
-  columnsById: Record<string, AdminResolvedColumnMeta>
   setReviewTarget: (target: ReviewTarget) => void
 }
 
 export function useSubmissionTableColumns({
   visibleColumnIds,
-  columnsById,
   setReviewTarget,
 }: UseSubmissionTableColumnsOptions): TableColumn<SubmissionRow>[] {
   return useMemo((): TableColumn<SubmissionRow>[] => {
@@ -68,7 +66,7 @@ export function useSubmissionTableColumns({
         id: 'video',
         header: SUBMISSION_COLUMN_LABELS.video,
         accessor: (row) => row.video_title ?? row.video_id,
-        width: columnsById['video']?.width ?? 240,
+        width: 240,
         minWidth: 180,
         enableSorting: SUBMISSION_SORTABLE_MAP.video,
         enableResizing: true,
@@ -85,7 +83,7 @@ export function useSubmissionTableColumns({
         id: 'source_url',
         header: SUBMISSION_COLUMN_LABELS.source_url,
         accessor: (row) => row.source_url,
-        width: columnsById['source_url']?.width ?? 320,
+        width: 320,
         minWidth: 220,
         enableSorting: SUBMISSION_SORTABLE_MAP.source_url,
         enableResizing: true,
@@ -102,7 +100,7 @@ export function useSubmissionTableColumns({
         id: 'submitted_by',
         header: SUBMISSION_COLUMN_LABELS.submitted_by,
         accessor: (row) => row.submitted_by_username ?? row.submitted_by ?? '',
-        width: columnsById['submitted_by']?.width ?? 140,
+        width: 140,
         minWidth: 120,
         enableSorting: SUBMISSION_SORTABLE_MAP.submitted_by,
         enableResizing: true,
@@ -116,7 +114,7 @@ export function useSubmissionTableColumns({
         id: 'created_at',
         header: SUBMISSION_COLUMN_LABELS.created_at,
         accessor: (row) => row.created_at,
-        width: columnsById['created_at']?.width ?? 170,
+        width: 170,
         minWidth: 130,
         enableSorting: SUBMISSION_SORTABLE_MAP.created_at,
         enableResizing: true,
@@ -130,7 +128,7 @@ export function useSubmissionTableColumns({
         id: 'actions',
         header: SUBMISSION_COLUMN_LABELS.actions,
         accessor: () => null,
-        width: columnsById['actions']?.width ?? 120,
+        width: 120,
         minWidth: 110,
         enableSorting: false,
         enableResizing: false,
@@ -149,5 +147,5 @@ export function useSubmissionTableColumns({
     ]
 
     return all.filter((col) => visibleColumnIds.includes(col.id as SubmissionColumnId))
-  }, [visibleColumnIds, columnsById, setReviewTarget])
+  }, [visibleColumnIds, setReviewTarget])
 }

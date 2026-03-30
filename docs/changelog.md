@@ -4438,3 +4438,37 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx` — resize 测试降级为 handle 存在性验证（prop 链路过深，full DOM propagation 在单元测试层不稳定）
 - **测试覆盖**：typecheck 通过；lint 通过；86/86 test files passed，761/761 tests passed
 - **共享层沉淀评估**：`updateWidth` 已沉淀进 `useTableSettings` hook 层 ✅
+
+---
+
+## CHG-314 — 删除 useAdminTableColumns + useAdminTableSort
+
+- **完成时间**：2026-03-29 21:40
+- **修改文件**：
+  - `src/components/admin/shared/table/adminColumnTypes.ts`（新增 — AdminColumnMeta 类型）
+  - `src/components/admin/shared/table/useAdminTableColumns.ts`（删除）
+  - `src/components/admin/shared/table/useAdminTableSort.ts`（删除）
+  - `src/components/admin/shared/table/useAdminColumnFilter.ts`（解耦 AdminResolvedColumnMeta）
+  - `src/components/admin/shared/table/useAdminTableColumns.demo.tsx`（删除）
+  - `src/components/admin/shared/table/useAdminTableSort.demo.tsx`（删除）
+  - `src/components/admin/shared/table/useAdminColumnFilter.demo.tsx`（删除）
+  - `src/components/admin/videos/VideoTable.tsx`（移除 useAdminTableColumns/Sort）
+  - `src/components/admin/videos/useVideoTableColumns.tsx`（移除 columnsById/sortState 依赖）
+  - `src/components/admin/users/UserTable.tsx`（移除 useAdminTableColumns/Sort）
+  - `src/components/admin/users/useUserTableColumns.tsx`（移除 columnsById 依赖）
+  - `src/components/admin/content/SubtitleTable.tsx`（移除 useAdminTableColumns/Sort）
+  - `src/components/admin/content/useSubtitleTableColumns.tsx`（移除 columnsById 依赖）
+  - `src/components/admin/content/SubmissionTable.tsx`（移除 useAdminTableColumns/Sort）
+  - `src/components/admin/content/useSubmissionTableColumns.tsx`（移除 columnsById 依赖）
+  - `src/components/admin/sources/SubmissionTable.tsx`（移除 useAdminTableColumns）
+  - `src/components/admin/sources/InactiveSourceTable.tsx`（移除 useAdminTableColumns）
+  - `src/components/admin/AdminAnalyticsDashboard.tsx`（移除 useAdminTableColumns）
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns.ts`（改为纯 useState）
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteTableColumns.tsx`（移除 columnWidths 参数）
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`（移除 columnWidths/setColumnWidth props）
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`（移除 columnWidths/setColumnWidth）
+  - `tests/unit/components/admin/shared/table/useAdminTableColumns.test.tsx`（删除）
+  - `tests/unit/components/admin/shared/table/useAdminTableSort.test.tsx`（删除）
+  - `tests/unit/components/admin/shared/table/useAdminColumnFilter.test.tsx`（删除）
+  - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`（更新测试：sort 不再持久化）
+- **测试覆盖**：typecheck + lint + `npm run test -- --run` 749/749 通过

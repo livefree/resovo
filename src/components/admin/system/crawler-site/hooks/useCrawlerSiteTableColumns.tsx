@@ -14,7 +14,8 @@ import { TableSwitchCell } from '@/components/admin/shared/modern-table/cells/Ta
 import { TableTextCell } from '@/components/admin/shared/modern-table/cells/TableTextCell'
 import { TableUrlCell } from '@/components/admin/shared/modern-table/cells/TableUrlCell'
 import type { TableColumn } from '@/components/admin/shared/modern-table/types'
-import type { ColumnId, ColumnWidthState, FilterState, SortDir, SortField } from '../tableState'
+import type { ColumnId, FilterState, SortDir, SortField } from '../tableState'
+import { DEFAULT_COLUMN_WIDTH } from '../tableState'
 import {
   HEADER_COLUMNS,
   HeaderCell,
@@ -162,7 +163,6 @@ interface UseCrawlerSiteTableColumnsParams {
   sortBy: SortField
   sortDir: SortDir
   filters: FilterState
-  columnWidths: ColumnWidthState
   openMenuColumn: ColumnId | null
   setOpenMenuColumn: Dispatch<SetStateAction<ColumnId | null>>
   weightPresets: WeightPreset
@@ -200,11 +200,11 @@ export function useCrawlerSiteTableColumns(p: UseCrawlerSiteTableColumnsParams):
       )
       result.push({
         id: column.id, header, accessor: (site) => site.key,
-        width: p.columnWidths[column.id], minWidth: 72, enableSorting: false,
+        width: DEFAULT_COLUMN_WIDTH[column.id as ColumnId], minWidth: 72, enableSorting: false,
         cell: buildSiteCellRenderer(column.id, p.deps),
       })
     }
     return result
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.allVisibleSelected, p.selected, p.toggleAll, p.toggleSelect, p.sortBy, p.sortDir, p.filters, p.setSort, p.onHideColumn, p.openMenuColumn, p.setOpenMenuColumn, p.columnWidths, p.deps, p.clearColumnFilter, p.setFilters, p.onPatchWeightPreset])
+  }, [p.allVisibleSelected, p.selected, p.toggleAll, p.toggleSelect, p.sortBy, p.sortDir, p.filters, p.setSort, p.onHideColumn, p.openMenuColumn, p.setOpenMenuColumn, p.deps, p.clearColumnFilter, p.setFilters, p.onPatchWeightPreset])
 }

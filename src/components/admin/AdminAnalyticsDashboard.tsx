@@ -9,7 +9,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
-import { useAdminTableColumns, type AdminColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
 import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import { TableBadgeCell, TableDateCell, TableTextCell } from '@/components/admin/shared/modern-table/cells'
 import type { TableColumn, TableSortState } from '@/components/admin/shared/modern-table/types'
@@ -19,13 +18,6 @@ import { ContentQualityTable } from '@/components/admin/dashboard/ContentQuality
 type CrawlerTaskRow = AnalyticsData['crawlerTasks']['recent'][number]
 type CrawlerTaskColumnId = 'type' | 'status' | 'created_at' | 'finished_at'
 
-const CRAWLER_TASK_COLUMNS: AdminColumnMeta[] = [
-  { id: 'type', visible: true, width: 220, minWidth: 160, maxWidth: 360, resizable: true },
-  { id: 'status', visible: true, width: 130, minWidth: 110, maxWidth: 220, resizable: true },
-  { id: 'created_at', visible: true, width: 190, minWidth: 150, maxWidth: 280, resizable: true },
-  { id: 'finished_at', visible: true, width: 190, minWidth: 150, maxWidth: 280, resizable: true },
-]
-
 const CRAWLER_TASK_LABELS: Record<CrawlerTaskColumnId, string> = {
   type: '资源站',
   status: '状态',
@@ -33,10 +25,10 @@ const CRAWLER_TASK_LABELS: Record<CrawlerTaskColumnId, string> = {
   finished_at: '结束时间',
 }
 
-const ANALYTICS_SETTINGS_COLUMNS = CRAWLER_TASK_COLUMNS.map((col) => ({
-  id: col.id,
-  label: CRAWLER_TASK_LABELS[col.id as CrawlerTaskColumnId] ?? col.id,
-  defaultVisible: col.visible ?? true,
+const ANALYTICS_SETTINGS_COLUMNS = (Object.keys(CRAWLER_TASK_LABELS) as CrawlerTaskColumnId[]).map((id) => ({
+  id,
+  label: CRAWLER_TASK_LABELS[id],
+  defaultVisible: true,
   defaultSortable: true,
 }))
 
@@ -56,19 +48,17 @@ function toComparableValue(row: CrawlerTaskRow, field: string): string | number 
   }
 }
 
-function buildColumns(
-  columnsById: Record<string, { width: number }>,
-): TableColumn<CrawlerTaskRow>[] {
-  const all: TableColumn<CrawlerTaskRow>[] = [
+function buildColumns(): TableColumn<CrawlerTaskRow>[] {
+  return [
     {
       id: 'type', header: CRAWLER_TASK_LABELS.type,
-      width: columnsById['type']?.width ?? 220, minWidth: 160,
+      width: 220, minWidth: 160,
       accessor: (r) => r.type, enableResizing: true, enableSorting: true,
       cell: ({ row }) => <TableTextCell value={row.type} />,
     },
     {
       id: 'status', header: CRAWLER_TASK_LABELS.status,
-      width: columnsById['status']?.width ?? 130, minWidth: 110,
+      width: 130, minWidth: 110,
       accessor: (r) => r.status, enableResizing: true, enableSorting: true,
       cell: ({ row }) => (
         <TableBadgeCell label={row.status} tone={STATUS_TONE[row.status] ?? 'warning'} />
@@ -76,18 +66,17 @@ function buildColumns(
     },
     {
       id: 'created_at', header: CRAWLER_TASK_LABELS.created_at,
-      width: columnsById['created_at']?.width ?? 190, minWidth: 150,
+      width: 190, minWidth: 150,
       accessor: (r) => r.created_at, enableResizing: true, enableSorting: true,
       cell: ({ row }) => <TableDateCell value={row.created_at} className="text-xs" />,
     },
     {
       id: 'finished_at', header: CRAWLER_TASK_LABELS.finished_at,
-      width: columnsById['finished_at']?.width ?? 190, minWidth: 150,
+      width: 190, minWidth: 150,
       accessor: (r) => r.finished_at ?? '', enableResizing: true, enableSorting: true,
       cell: ({ row }) => <TableDateCell value={row.finished_at} fallback="—" className="text-xs" />,
     },
   ]
-  return all
 }
 
 // ── StatCard ──────────────────────────────────────────────────────
@@ -125,13 +114,6 @@ export function AdminAnalyticsDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [sort, setSort] = useState<TableSortState>({ field: 'created_at', direction: 'desc' })
 
-  const columnsState = useAdminTableColumns({
-    route: '/admin/analytics',
-    tableId: 'analytics-crawler-task-table',
-    columns: CRAWLER_TASK_COLUMNS,
-    defaultState: {},
-  })
-
   const tableSettings = useTableSettings({
     tableId: 'analytics-crawler-task-table',
     columns: ANALYTICS_SETTINGS_COLUMNS,
@@ -162,10 +144,7 @@ export function AdminAnalyticsDashboard() {
     return next
   }, [data?.crawlerTasks.recent, sort])
 
-  const allTableColumns = useMemo(
-    () => buildColumns(columnsState.columnsById),
-    [columnsState.columnsById],
-  )
+  const allTableColumns = useMemo(() => buildColumns(), [])
 
   const tableColumns = useMemo(
     () => tableSettings.applyToColumns(allTableColumns),

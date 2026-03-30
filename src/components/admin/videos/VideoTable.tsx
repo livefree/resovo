@@ -14,8 +14,7 @@ import { BatchPublishBar } from '@/components/admin/videos/BatchPublishBar'
 import { VideoDetailDrawer } from '@/components/admin/videos/VideoDetailDrawer'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import type { TableSortState } from '@/components/admin/shared/modern-table/types'
-import { useAdminTableColumns } from '@/components/admin/shared/table/useAdminTableColumns'
-import { useAdminTableSort } from '@/components/admin/shared/table/useAdminTableSort'
+import type { AdminTableSortState } from '@/components/admin/shared/table/useAdminTableState'
 import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import {
   useVideoTableColumns,
@@ -63,17 +62,7 @@ export function VideoTable() {
   const reviewStatus = searchParams.get('reviewStatus') ?? ''
   const site = searchParams.get('site') ?? ''
 
-  const columnsState = useAdminTableColumns({
-    route: '/admin/videos',
-    tableId: 'video-table',
-    columns: VIDEO_COLUMNS,
-    defaultState: VIDEO_DEFAULT_TABLE_STATE,
-  })
-
-  const sortState = useAdminTableSort({
-    defaultSort: VIDEO_DEFAULT_TABLE_STATE.sort,
-    sortable: SORTABLE_MAP,
-  })
+  const [sort, setSort] = useState<AdminTableSortState | undefined>(VIDEO_DEFAULT_TABLE_STATE.sort)
 
   const tableSettings = useTableSettings({
     tableId: 'video-table',
@@ -91,9 +80,9 @@ export function VideoTable() {
       if (visibilityStatus) params.set('visibilityStatus', visibilityStatus)
       if (reviewStatus) params.set('reviewStatus', reviewStatus)
       if (site) params.set('site', site)
-      if (sortState.sort) {
-        params.set('sortField', sortState.sort.field)
-        params.set('sortDir', sortState.sort.dir)
+      if (sort) {
+        params.set('sortField', sort.field)
+        params.set('sortDir', sort.dir)
       }
       const res = await apiClient.get<{ data: VideoAdminRow[]; total: number }>(`/admin/videos?${params}`)
       setVideos(res.data)
@@ -103,12 +92,12 @@ export function VideoTable() {
     } finally {
       setLoading(false)
     }
-  }, [q, type, status, visibilityStatus, reviewStatus, site, sortState.sort])
+  }, [q, type, status, visibilityStatus, reviewStatus, site, sort])
 
   useEffect(() => {
     setPage(1)
     void fetchVideos(1, pageSize)
-  }, [q, type, status, visibilityStatus, reviewStatus, site, sortState.sort, pageSize, fetchVideos])
+  }, [q, type, status, visibilityStatus, reviewStatus, site, sort, pageSize, fetchVideos])
 
   const handleCheck = useCallback((id: string, checked: boolean) => {
     setSelectedIds((prev) => (checked ? [...prev, id] : prev.filter((x) => x !== id)))
@@ -178,8 +167,7 @@ export function VideoTable() {
     allSelected,
     handleSelectAll,
     deps: {
-      columnsById: columnsState.columnsById,
-      sortState,
+      sortable: SORTABLE_MAP,
       selectedIds,
       visibilityPendingIds,
       publishPendingIds,
@@ -199,19 +187,19 @@ export function VideoTable() {
     [tableSettings, allTableColumns],
   )
 
-  const sort = useMemo<TableSortState | undefined>(() => {
-    if (!sortState.sort) return undefined
-    return { field: sortState.sort.field, direction: sortState.sort.dir }
-  }, [sortState.sort])
+  const tableSortState = useMemo<TableSortState | undefined>(() => {
+    if (!sort) return undefined
+    return { field: sort.field, direction: sort.dir }
+  }, [sort])
 
   return (
     <div data-testid="video-table" className="space-y-2">
       <ModernDataTable
         columns={tableColumns}
         rows={videos}
-        sort={sort}
+        sort={tableSortState}
         onSortChange={(nextSort) => {
-          sortState.setSort(nextSort.field, nextSort.direction === 'asc' ? 'asc' : 'desc')
+          setSort({ field: nextSort.field, dir: nextSort.direction === 'asc' ? 'asc' : 'desc' })
         }}
         onColumnWidthChange={tableSettings.updateWidth}
         loading={loading}

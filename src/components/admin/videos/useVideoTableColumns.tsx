@@ -14,7 +14,7 @@ import {
   TableTextCell,
 } from '@/components/admin/shared/modern-table/cells'
 import type { TableColumn } from '@/components/admin/shared/modern-table/types'
-import type { AdminColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
+import type { AdminColumnMeta } from '@/components/admin/shared/table/adminColumnTypes'
 import type { AdminTableState as SharedAdminTableState } from '@/components/admin/shared/table/useAdminTableState'
 
 // ── 类型与常量 ────────────────────────────────────────────────────
@@ -126,8 +126,7 @@ export function toComparableValue(row: VideoAdminRow, field: string): string | n
 // ── 单列构建器 ────────────────────────────────────────────────────
 
 interface ColumnDeps {
-  columnsById: Record<string, AdminColumnMeta>
-  sortState: { isSortable: (id: string) => boolean }
+  sortable: Record<string, boolean>
   selectedIds: string[]
   visibilityPendingIds: string[]
   publishPendingIds: string[]
@@ -142,15 +141,15 @@ interface ColumnDeps {
 }
 
 function buildDataColumn(columnId: VideoColumnId, deps: ColumnDeps): TableColumn<VideoAdminRow> {
-  const meta = deps.columnsById[columnId]
+  const meta = VIDEO_COLUMNS.find((c) => c.id === columnId)
   const col: TableColumn<VideoAdminRow> = {
     id: columnId,
     header: COLUMN_LABELS[columnId],
     accessor: (row) => row.title,
-    width: meta.width,
-    minWidth: meta.minWidth,
-    enableResizing: meta.resizable,
-    enableSorting: deps.sortState.isSortable(columnId),
+    width: meta?.width,
+    minWidth: meta?.minWidth,
+    enableResizing: meta?.resizable,
+    enableSorting: deps.sortable[columnId] ?? false,
   }
   switch (columnId) {
     case 'cover':
@@ -273,7 +272,6 @@ export function useVideoTableColumns({
     deps.publishPendingIds,
     deps.doubanSyncPendingIds,
     deps.canSyncDouban,
-    deps.columnsById,
-    deps.sortState,
+    deps.sortable,
   ])
 }

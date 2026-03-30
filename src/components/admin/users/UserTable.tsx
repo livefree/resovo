@@ -10,8 +10,7 @@ import { apiClient } from '@/lib/api-client'
 import { PaginationV2 } from '@/components/admin/PaginationV2'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import type { TableSortState } from '@/components/admin/shared/modern-table/types'
-import { useAdminTableColumns } from '@/components/admin/shared/table/useAdminTableColumns'
-import { useAdminTableSort } from '@/components/admin/shared/table/useAdminTableSort'
+import type { AdminTableSortState } from '@/components/admin/shared/table/useAdminTableState'
 import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import {
   useUserTableColumns,
@@ -46,27 +45,17 @@ export function UserTable() {
   const [loading, setLoading] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const columnsState = useAdminTableColumns({
-    route: '/admin/users',
-    tableId: 'user-table',
-    columns: USER_COLUMNS_META,
-    defaultState: USER_DEFAULT_TABLE_STATE,
-  })
-
-  const sortState = useAdminTableSort({
-    defaultSort: USER_DEFAULT_TABLE_STATE.sort,
-    sortable: USER_SORTABLE_MAP,
-  })
+  const [sort, setSort] = useState<AdminTableSortState | undefined>(USER_DEFAULT_TABLE_STATE.sort)
 
   const tableSettings = useTableSettings({
     tableId: 'user-table',
     columns: USER_SETTINGS_COLUMNS,
   })
 
-  const sort = useMemo<TableSortState | undefined>(() => {
-    if (!sortState.sort) return undefined
-    return { field: sortState.sort.field, direction: sortState.sort.dir }
-  }, [sortState.sort])
+  const tableSortState = useMemo<TableSortState | undefined>(() => {
+    if (!sort) return undefined
+    return { field: sort.field, direction: sort.dir }
+  }, [sort])
 
   const fetchUsers = useCallback(async (searchVal: string, pageVal: number, pageSizeVal: number) => {
     setLoading(true)
@@ -76,9 +65,9 @@ export function UserTable() {
         limit: String(pageSizeVal),
       })
       if (searchVal) params.set('q', searchVal)
-      if (sortState.sort) {
-        params.set('sortField', sortState.sort.field)
-        params.set('sortDir', sortState.sort.dir)
+      if (sort) {
+        params.set('sortField', sort.field)
+        params.set('sortDir', sort.dir)
       }
       const res = await apiClient.get<{ data: UserRow[]; total: number }>(`/admin/users?${params}`)
       setUsers(res.data)
@@ -88,16 +77,15 @@ export function UserTable() {
     } finally {
       setLoading(false)
     }
-  }, [sortState.sort])
+  }, [sort])
 
   useEffect(() => {
     setPage(1)
     void fetchUsers(search, 1, pageSize)
-  }, [sortState.sort, pageSize, fetchUsers, search])
+  }, [sort, pageSize, fetchUsers, search])
 
   const allTableColumns = useUserTableColumns({
     visibleColumnIds: ALL_USER_COLUMN_IDS,
-    columnsById: columnsState.columnsById,
     onRefresh: useCallback(() => { void fetchUsers(search, page, pageSize) }, [fetchUsers, search, page, pageSize]),
   })
 
@@ -131,9 +119,9 @@ export function UserTable() {
       <ModernDataTable
         columns={tableColumns}
         rows={users}
-        sort={sort}
+        sort={tableSortState}
         onSortChange={(nextSort) => {
-          sortState.setSort(nextSort.field, nextSort.direction === 'asc' ? 'asc' : 'desc')
+          setSort({ field: nextSort.field, dir: nextSort.direction === 'asc' ? 'asc' : 'desc' })
         }}
         onColumnWidthChange={tableSettings.updateWidth}
         loading={loading}

@@ -12,8 +12,7 @@ import { ReviewModal, type ReviewTarget } from '@/components/admin/content/Revie
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import type { TableSortState } from '@/components/admin/shared/modern-table/types'
-import { useAdminTableColumns } from '@/components/admin/shared/table/useAdminTableColumns'
-import { useAdminTableSort } from '@/components/admin/shared/table/useAdminTableSort'
+import type { AdminTableSortState } from '@/components/admin/shared/table/useAdminTableState'
 import {
   useSubtitleTableColumns,
   SUBTITLE_COLUMN_LABELS,
@@ -40,30 +39,19 @@ export function SubtitleTable() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [loading, setLoading] = useState(false)
   const [reviewTarget, setReviewTarget] = useState<ReviewTarget | null>(null)
-  const columnsState = useAdminTableColumns({
-    route: '/admin/content',
-    tableId: 'subtitle-table',
-    columns: SUBTITLE_COLUMNS_META,
-    defaultState: SUBTITLE_DEFAULT_TABLE_STATE,
-  })
-
-  const sortState = useAdminTableSort({
-    defaultSort: SUBTITLE_DEFAULT_TABLE_STATE.sort,
-    sortable: SUBTITLE_SORTABLE_MAP,
-  })
+  const [sort, setSort] = useState<AdminTableSortState | undefined>(SUBTITLE_DEFAULT_TABLE_STATE.sort)
 
   const tableSettings = useTableSettings({
     tableId: 'subtitle-table',
     columns: SUBTITLE_SETTINGS_COLUMNS,
   })
 
-  const sort = useMemo<TableSortState | undefined>(() => {
-    if (!sortState.sort) return undefined
-    return { field: sortState.sort.field, direction: sortState.sort.dir }
-  }, [sortState.sort])
+  const tableSortState = useMemo<TableSortState | undefined>(() => {
+    if (!sort) return undefined
+    return { field: sort.field, direction: sort.dir }
+  }, [sort])
 
   const allTableColumns = useSubtitleTableColumns({
-    columnsById: columnsState.columnsById,
     setReviewTarget,
   })
 
@@ -79,9 +67,9 @@ export function SubtitleTable() {
         page: String(pageVal),
         limit: String(pageSizeVal),
       })
-      if (sortState.sort) {
-        params.set('sortField', sortState.sort.field)
-        params.set('sortDir', sortState.sort.dir)
+      if (sort) {
+        params.set('sortField', sort.field)
+        params.set('sortDir', sort.dir)
       }
       const res = await apiClient.get<{ data: SubtitleRow[]; total: number }>(
         `/admin/subtitles?${params}`
@@ -93,12 +81,12 @@ export function SubtitleTable() {
     } finally {
       setLoading(false)
     }
-  }, [sortState.sort])
+  }, [sort])
 
   useEffect(() => {
     setPage(1)
     void fetchSubtitles(1, pageSize)
-  }, [sortState.sort, pageSize, fetchSubtitles])
+  }, [sort, pageSize, fetchSubtitles])
 
   async function handleApprove(id: string) {
     await apiClient.post(`/admin/subtitles/${id}/approve`)
@@ -115,9 +103,9 @@ export function SubtitleTable() {
       <ModernDataTable
         columns={tableColumns}
         rows={subtitles}
-        sort={sort}
+        sort={tableSortState}
         onSortChange={(nextSort) => {
-          sortState.setSort(nextSort.field, nextSort.direction === 'asc' ? 'asc' : 'desc')
+          setSort({ field: nextSort.field, dir: nextSort.direction === 'asc' ? 'asc' : 'desc' })
         }}
         onColumnWidthChange={tableSettings.updateWidth}
         loading={loading}

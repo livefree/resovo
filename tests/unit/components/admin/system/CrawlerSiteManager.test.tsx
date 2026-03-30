@@ -96,12 +96,11 @@ describe('CrawlerSiteManager', () => {
     })
   })
 
-  it('restores sort and column visibility from localStorage after remount', async () => {
+  it('restores column visibility from localStorage after remount', async () => {
     const user = userEvent.setup()
     const { unmount } = render(<CrawlerSiteManager />)
     await screen.findByText('Alpha 源')
 
-    fireEvent.click(screen.getByTestId('modern-table-sort-name'))
     await user.click(screen.getByTestId('crawler-site-table-scroll-settings-btn'))
     await user.click(screen.getByTestId('crawler-site-table-scroll-settings-content-visible-key'))
 
@@ -118,7 +117,6 @@ describe('CrawlerSiteManager', () => {
 
     // Wait for settings hydration from localStorage (useTableSettings mount effect is async)
     await waitFor(() => {
-      expect(screen.getByTestId('modern-table-sort-name').textContent).toContain('↓')
       expect(screen.queryByTestId('modern-table-sort-key')).toBeNull()
     })
   })

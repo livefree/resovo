@@ -53,10 +53,8 @@ export function CrawlerSiteManager() {
     sortBy,
     sortDir,
     filters,
-    columnWidths,
     setFilters,
     setSort,
-    setColumnWidth,
   } = useCrawlerSiteColumns()
   const { sites, loading, fetchSites } = useCrawlerSites()
   const {
@@ -380,13 +378,11 @@ export function CrawlerSiteManager() {
         sortBy={sortBy}
         sortDir={sortDir}
         filters={filters}
-        columnWidths={columnWidths}
         validateStates={validateStates}
         rowSaving={rowSaving}
         runningBySite={runningBySite}
         setFilters={setFilters}
         setSort={setSort}
-        setColumnWidth={setColumnWidth}
         toggleSelect={toggleSelect}
         toggleAll={toggleAll}
         handleInlineUpdate={handleInlineUpdate}

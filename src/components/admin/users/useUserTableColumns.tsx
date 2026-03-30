@@ -9,7 +9,7 @@ import { useMemo } from 'react'
 import { StatusBadge } from '@/components/admin/StatusBadge'
 import { UserActions, type UserRow } from '@/components/admin/users/UserActions'
 import type { TableColumn } from '@/components/admin/shared/modern-table/types'
-import type { AdminColumnMeta, AdminResolvedColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
+import type { AdminColumnMeta } from '@/components/admin/shared/table/adminColumnTypes'
 import type { BadgeStatus } from '@/components/admin/StatusBadge'
 
 export type { UserRow }
@@ -55,13 +55,11 @@ const ROLE_STATUS_MAP: Record<string, BadgeStatus> = {
 
 interface UseUserTableColumnsOptions {
   visibleColumnIds: UserColumnId[]
-  columnsById: Record<string, AdminResolvedColumnMeta>
   onRefresh: () => void
 }
 
 export function useUserTableColumns({
   visibleColumnIds,
-  columnsById,
   onRefresh,
 }: UseUserTableColumnsOptions): TableColumn<UserRow>[] {
   return useMemo((): TableColumn<UserRow>[] => {
@@ -70,7 +68,7 @@ export function useUserTableColumns({
         id: 'username',
         header: USER_COLUMN_LABELS.username,
         accessor: (row) => row.username,
-        width: columnsById['username']?.width ?? 180,
+        width: 180,
         minWidth: 140,
         enableSorting: USER_SORTABLE_MAP.username,
         enableResizing: true,
@@ -87,7 +85,7 @@ export function useUserTableColumns({
         id: 'email',
         header: USER_COLUMN_LABELS.email,
         accessor: (row) => row.email,
-        width: columnsById['email']?.width ?? 260,
+        width: 260,
         minWidth: 180,
         enableSorting: USER_SORTABLE_MAP.email,
         enableResizing: true,
@@ -104,7 +102,7 @@ export function useUserTableColumns({
         id: 'role',
         header: USER_COLUMN_LABELS.role,
         accessor: (row) => row.role,
-        width: columnsById['role']?.width ?? 110,
+        width: 110,
         minWidth: 90,
         enableSorting: USER_SORTABLE_MAP.role,
         enableResizing: true,
@@ -116,7 +114,7 @@ export function useUserTableColumns({
         id: 'created_at',
         header: USER_COLUMN_LABELS.created_at,
         accessor: (row) => row.created_at,
-        width: columnsById['created_at']?.width ?? 130,
+        width: 130,
         minWidth: 110,
         enableSorting: USER_SORTABLE_MAP.created_at,
         enableResizing: true,
@@ -130,7 +128,7 @@ export function useUserTableColumns({
         id: 'status',
         header: USER_COLUMN_LABELS.status,
         accessor: (row) => row.banned_at ?? '',
-        width: columnsById['status']?.width ?? 110,
+        width: 110,
         minWidth: 90,
         enableSorting: USER_SORTABLE_MAP.status,
         enableResizing: true,
@@ -142,7 +140,7 @@ export function useUserTableColumns({
         id: 'actions',
         header: USER_COLUMN_LABELS.actions,
         accessor: () => null,
-        width: columnsById['actions']?.width ?? 170,
+        width: 170,
         minWidth: 140,
         enableSorting: false,
         enableResizing: false,
@@ -154,5 +152,5 @@ export function useUserTableColumns({
     ]
 
     return all.filter((col) => visibleColumnIds.includes(col.id as UserColumnId))
-  }, [visibleColumnIds, columnsById, onRefresh])
+  }, [visibleColumnIds, onRefresh])
 }

@@ -14,7 +14,7 @@ import { BatchDeleteBar } from '@/components/admin/sources/BatchDeleteBar'
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
 import { SelectionActionBar } from '@/components/admin/shared/batch/SelectionActionBar'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
-import { useAdminTableColumns, type AdminColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
+import type { AdminColumnMeta } from '@/components/admin/shared/table/adminColumnTypes'
 import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import {
   TableCheckboxCell,
@@ -53,13 +53,6 @@ const INACTIVE_SOURCE_COLUMNS_META: AdminColumnMeta[] = [
   { id: 'last_checked', visible: true, width: 170, minWidth: 130, maxWidth: 240, resizable: true },
   { id: 'actions', visible: true, width: 220, minWidth: 180, maxWidth: 300, resizable: false },
 ]
-
-const INACTIVE_SOURCE_DEFAULT_STATE = {}
-
-// 所有列 ID（useTableSettings 控制显/隐）
-const ALL_INACTIVE_SOURCE_COLUMN_IDS = INACTIVE_SOURCE_COLUMNS_META.map(
-  (col) => col.id as InactiveSourceColumnId,
-)
 
 // useTableSettings 列描述
 const INACTIVE_SOURCE_SETTINGS_COLUMNS = INACTIVE_SOURCE_COLUMNS_META.map((col) => ({
@@ -115,7 +108,6 @@ function buildColumns(
   onVerified: (page: number) => void,
   onSetStatus: (row: SourceRow, nextActive: boolean) => void,
   statusUpdatingId: string | null,
-  columnsById: Record<string, { width: number }>,
   selection: {
     enabled: boolean
     selectedIds: string[]
@@ -127,14 +119,14 @@ function buildColumns(
   const all: TableColumn<SourceRow>[] = [
     {
       id: 'video_title', header: '视频标题',
-      width: columnsById['video_title']?.width ?? 220, minWidth: 160,
+      width: 220, minWidth: 160,
       accessor: (r) => r.video_title ?? '—',
       enableResizing: true,
       cell: ({ row }) => <TableTextCell value={row.video_title ?? '—'} />,
     },
     {
       id: 'coordinate', header: 'S/E',
-      width: columnsById['coordinate']?.width ?? 110, minWidth: 90,
+      width: 110, minWidth: 90,
       accessor: (r) => `S${r.season_number ?? 1}/E${r.episode_number ?? 1}`,
       enableResizing: true,
       cell: ({ row }) => (
@@ -143,14 +135,14 @@ function buildColumns(
     },
     {
       id: 'source_url', header: '源 URL',
-      width: columnsById['source_url']?.width ?? 340, minWidth: 220,
+      width: 340, minWidth: 220,
       accessor: (r) => r.source_url,
       enableResizing: true,
       cell: ({ row }) => <TableUrlCell url={row.source_url} maxLength={60} />,
     },
     {
       id: 'status', header: '状态',
-      width: columnsById['status']?.width ?? 120, minWidth: 100,
+      width: 120, minWidth: 100,
       accessor: (r) => r.is_active ? '活跃' : '失效',
       enableResizing: true,
       cell: ({ row }) => (
@@ -159,14 +151,14 @@ function buildColumns(
     },
     {
       id: 'last_checked', header: '最后验证',
-      width: columnsById['last_checked']?.width ?? 170, minWidth: 130,
+      width: 170, minWidth: 130,
       accessor: (r) => r.last_checked ?? '',
       enableResizing: true,
       cell: ({ row }) => <TableDateCell value={row.last_checked} fallback="—" className="text-xs" />,
     },
     {
       id: 'actions', header: '操作',
-      width: columnsById['actions']?.width ?? 220, minWidth: 180,
+      width: 220, minWidth: 180,
       enableResizing: false,
       accessor: (r) => r.id,
       // SourceVerifyButton 有内联结果展示，不适合放入 AdminDropdown，保留内联布局
@@ -247,13 +239,6 @@ export function InactiveSourceTable({
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null)
   const [batchStatusLoading, setBatchStatusLoading] = useState<null | 'active' | 'inactive'>(null)
   const [statusActionError, setStatusActionError] = useState<string | null>(null)
-
-  const columnsState = useAdminTableColumns({
-    route: '/admin/sources',
-    tableId,
-    columns: INACTIVE_SOURCE_COLUMNS_META,
-    defaultState: INACTIVE_SOURCE_DEFAULT_STATE,
-  })
 
   const tableSettings = useTableSettings({
     tableId,
@@ -405,7 +390,6 @@ export function InactiveSourceTable({
         (p) => { void fetchSources(p, pageSize) },
         (row, nextActive) => { void setSingleStatus(row, nextActive) },
         statusUpdatingId,
-        columnsState.columnsById,
         {
           enabled: !isAllStatus,
           selectedIds,
@@ -420,7 +404,6 @@ export function InactiveSourceTable({
       fetchSources,
       setSingleStatus,
       statusUpdatingId,
-      columnsState.columnsById,
       isAllStatus,
       selectedIds,
       allVisibleSelected,

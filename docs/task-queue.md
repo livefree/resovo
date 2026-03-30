@@ -3865,9 +3865,9 @@
 ---
 
 ## [SEQ-20260328-43] 轨道 A — AdminTableFrame 退场 + 旧 Hook 收口
-- **状态**：🔄 执行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-28 20:30
-- **最后更新时间**：2026-03-29 14:55
+- **最后更新时间**：2026-03-29 21:40
 - **目标**：彻底退出 `AdminTableFrame`、`useAdminTableColumns`、`useAdminTableSort`，消除 SEQ-20260328-42 遗留的双重 hook 共存技术债
 - **范围**：`src/components/admin/AdminCrawlerPanel.tsx`、`src/components/admin/system/monitoring/CacheManager.tsx`、`src/components/admin/system/monitoring/PerformanceMonitor.tsx`、`src/components/admin/shared/table/useAdminTableColumns.ts`、`src/components/admin/shared/table/useAdminTableSort.ts`、`src/components/admin/shared/modern-table/settings/useTableSettings.ts`
 - **依赖**：SEQ-20260328-42 已完成 ✅
@@ -3963,11 +3963,11 @@
    - ⚠️ storage key 不变，`widths` 字段为可选（已有数据不破坏）
    - 验收要点：列宽持久化行为与旧实现一致；typecheck + lint + test 通过
 
-6. CHG-314 — 删除 useAdminTableColumns + useAdminTableSort（状态：⬜ 待开始）
+6. CHG-314 — 删除 useAdminTableColumns + useAdminTableSort（状态：✅ 已完成）
    - 创建时间：2026-03-28 20:30
    - 计划开始：CHG-312 + CHG-313 均完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-29 21:10
+   - 完成时间：2026-03-29 21:40
    - 文件范围：
      - `src/components/admin/shared/table/useAdminTableColumns.ts`（删除）
      - `src/components/admin/shared/table/useAdminTableSort.ts`（删除）

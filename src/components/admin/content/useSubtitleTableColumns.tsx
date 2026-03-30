@@ -7,7 +7,7 @@
 
 import { useMemo } from 'react'
 import type { TableColumn } from '@/components/admin/shared/modern-table/types'
-import type { AdminColumnMeta, AdminResolvedColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
+import type { AdminColumnMeta } from '@/components/admin/shared/table/adminColumnTypes'
 import type { ReviewTarget } from '@/components/admin/content/ReviewModal'
 
 export interface SubtitleRow {
@@ -57,12 +57,10 @@ export const SUBTITLE_DEFAULT_TABLE_STATE = {
 }
 
 interface UseSubtitleTableColumnsOptions {
-  columnsById: Record<string, AdminResolvedColumnMeta>
   setReviewTarget: (target: ReviewTarget) => void
 }
 
 export function useSubtitleTableColumns({
-  columnsById,
   setReviewTarget,
 }: UseSubtitleTableColumnsOptions): TableColumn<SubtitleRow>[] {
   return useMemo((): TableColumn<SubtitleRow>[] => {
@@ -71,7 +69,7 @@ export function useSubtitleTableColumns({
         id: 'video',
         header: SUBTITLE_COLUMN_LABELS.video,
         accessor: (row) => row.video_title ?? row.video_id,
-        width: columnsById['video']?.width ?? 240,
+        width: 240,
         minWidth: 180,
         enableSorting: SUBTITLE_SORTABLE_MAP.video,
         enableResizing: true,
@@ -88,7 +86,7 @@ export function useSubtitleTableColumns({
         id: 'language',
         header: SUBTITLE_COLUMN_LABELS.language,
         accessor: (row) => row.language,
-        width: columnsById['language']?.width ?? 130,
+        width: 130,
         minWidth: 110,
         enableSorting: SUBTITLE_SORTABLE_MAP.language,
         enableResizing: true,
@@ -100,7 +98,7 @@ export function useSubtitleTableColumns({
         id: 'format',
         header: SUBTITLE_COLUMN_LABELS.format,
         accessor: (row) => row.format,
-        width: columnsById['format']?.width ?? 110,
+        width: 110,
         minWidth: 90,
         enableSorting: SUBTITLE_SORTABLE_MAP.format,
         enableResizing: true,
@@ -112,7 +110,7 @@ export function useSubtitleTableColumns({
         id: 'uploaded_by',
         header: SUBTITLE_COLUMN_LABELS.uploaded_by,
         accessor: (row) => row.uploader_username ?? row.uploaded_by ?? '',
-        width: columnsById['uploaded_by']?.width ?? 140,
+        width: 140,
         minWidth: 120,
         enableSorting: SUBTITLE_SORTABLE_MAP.uploaded_by,
         enableResizing: true,
@@ -129,7 +127,7 @@ export function useSubtitleTableColumns({
         id: 'created_at',
         header: SUBTITLE_COLUMN_LABELS.created_at,
         accessor: (row) => row.created_at,
-        width: columnsById['created_at']?.width ?? 170,
+        width: 170,
         minWidth: 130,
         enableSorting: SUBTITLE_SORTABLE_MAP.created_at,
         enableResizing: true,
@@ -143,7 +141,7 @@ export function useSubtitleTableColumns({
         id: 'actions',
         header: SUBTITLE_COLUMN_LABELS.actions,
         accessor: () => null,
-        width: columnsById['actions']?.width ?? 120,
+        width: 120,
         minWidth: 110,
         enableSorting: false,
         enableResizing: false,
@@ -161,5 +159,5 @@ export function useSubtitleTableColumns({
     ]
 
     return all
-  }, [columnsById, setReviewTarget])
+  }, [setReviewTarget])
 }

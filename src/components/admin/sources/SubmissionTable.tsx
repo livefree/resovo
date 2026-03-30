@@ -11,7 +11,7 @@ import { apiClient } from '@/lib/api-client'
 import { PaginationV2 } from '@/components/admin/PaginationV2'
 import { AdminDropdown } from '@/components/admin/shared/dropdown/AdminDropdown'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
-import { useAdminTableColumns, type AdminColumnMeta } from '@/components/admin/shared/table/useAdminTableColumns'
+import type { AdminColumnMeta } from '@/components/admin/shared/table/adminColumnTypes'
 import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import { TableDateCell, TableTextCell, TableUrlCell } from '@/components/admin/shared/modern-table/cells'
 import type { TableColumn } from '@/components/admin/shared/modern-table/types'
@@ -41,13 +41,6 @@ const SOURCE_SUBMISSION_COLUMNS_META: AdminColumnMeta[] = [
   { id: 'actions', visible: true, width: 130, minWidth: 110, maxWidth: 200, resizable: false },
 ]
 
-const SOURCE_SUBMISSION_DEFAULT_STATE = {}
-
-// 所有列 ID（useTableSettings 控制显/隐）
-const ALL_SOURCE_SUBMISSION_COLUMN_IDS = SOURCE_SUBMISSION_COLUMNS_META.map(
-  (col) => col.id as SourceSubmissionColumnId,
-)
-
 // useTableSettings 列描述（label + 默认可见/可排序）
 const SOURCE_SUBMISSION_SETTINGS_COLUMNS = SOURCE_SUBMISSION_COLUMNS_META.map((col) => ({
   id: col.id,
@@ -71,40 +64,39 @@ interface SubmissionRow {
 function buildColumns(
   onApprove: (id: string) => Promise<void>,
   onReject: (id: string) => Promise<void>,
-  columnsById: Record<string, { width: number }>,
 ): TableColumn<SubmissionRow>[] {
   return [
     {
       id: 'video_title', header: '视频标题',
-      width: columnsById['video_title']?.width ?? 220, minWidth: 160,
+      width: 220, minWidth: 160,
       accessor: (r) => r.video_title ?? '—',
       enableResizing: true,
       cell: ({ row }) => <TableTextCell value={row.video_title ?? '—'} />,
     },
     {
       id: 'source_url', header: '来源 URL',
-      width: columnsById['source_url']?.width ?? 340, minWidth: 220,
+      width: 340, minWidth: 220,
       accessor: (r) => r.source_url,
       enableResizing: true,
       cell: ({ row }) => <TableUrlCell url={row.source_url} maxLength={60} />,
     },
     {
       id: 'submitted_by', header: '提交者',
-      width: columnsById['submitted_by']?.width ?? 120, minWidth: 100,
+      width: 120, minWidth: 100,
       accessor: (r) => r.submitted_by_username ?? '匿名',
       enableResizing: true,
       cell: ({ row }) => <TableTextCell value={row.submitted_by_username ?? '匿名'} className="text-[var(--muted)]" />,
     },
     {
       id: 'created_at', header: '提交时间',
-      width: columnsById['created_at']?.width ?? 160, minWidth: 130,
+      width: 160, minWidth: 130,
       accessor: (r) => r.created_at,
       enableResizing: true,
       cell: ({ row }) => <TableDateCell value={row.created_at} className="text-xs" />,
     },
     {
       id: 'actions', header: '操作',
-      width: columnsById['actions']?.width ?? 130, minWidth: 110,
+      width: 130, minWidth: 110,
       enableResizing: false,
       accessor: (r) => r.id,
       cell: ({ row }) => (
@@ -133,13 +125,6 @@ export function SubmissionTable() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [loading, setLoading] = useState(false)
-
-  const columnsState = useAdminTableColumns({
-    route: '/admin/sources',
-    tableId: 'source-submission-table',
-    columns: SOURCE_SUBMISSION_COLUMNS_META,
-    defaultState: SOURCE_SUBMISSION_DEFAULT_STATE,
-  })
 
   const tableSettings = useTableSettings({
     tableId: 'source-submission-table',
@@ -173,8 +158,8 @@ export function SubmissionTable() {
   }, [fetchSubmissions, page, pageSize])
 
   const allTableColumns = useMemo(
-    () => buildColumns(handleApprove, handleReject, columnsState.columnsById),
-    [handleApprove, handleReject, columnsState.columnsById],
+    () => buildColumns(handleApprove, handleReject),
+    [handleApprove, handleReject],
   )
 
   const tableColumns = useMemo(
