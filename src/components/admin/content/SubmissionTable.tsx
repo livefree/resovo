@@ -141,11 +141,7 @@ export function SubmissionTable() {
         onSortChange={(nextSort) => {
           sortState.setSort(nextSort.field, nextSort.direction === 'asc' ? 'asc' : 'desc')
         }}
-        onColumnWidthChange={(columnId, nextWidth) => {
-          if (columnId in columnsState.columnsById) {
-            columnsState.setColumnWidth(columnId, nextWidth)
-          }
-        }}
+        onColumnWidthChange={tableSettings.updateWidth}
         loading={loading}
         emptyText="暂无待审投稿"
         scrollTestId="submission-table-scroll"

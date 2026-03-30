@@ -3946,11 +3946,11 @@
    - ⚠️ 开始前必须完整梳理 useAdminTableSort 的所有调用方，确认接口变更影响范围
    - 验收要点：所有使用方编译通过；sort 持久化行为不变；test 通过
 
-5. CHG-313 — useTableSettings 加入列宽持久化（状态：⬜ 待开始）
+5. CHG-313 — useTableSettings 加入列宽持久化（状态：✅ 已完成）
    - 创建时间：2026-03-28 20:30
    - 计划开始：CHG-312 完成后（依赖 sort 解耦先完成，确认新接口稳定）
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-29 15:00
+   - 完成时间：2026-03-29 21:05
    - 文件范围：
      - `src/components/admin/shared/modern-table/settings/useTableSettings.ts`（扩展）
      - `src/components/admin/shared/modern-table/settings/types.ts`（扩展 PersistedTableSettings）

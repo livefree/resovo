@@ -27,4 +27,6 @@ export type ColumnRuntimeSettingsMap = Record<string, ColumnRuntimeSetting>
 export interface PersistedTableSettings {
   version: 'v1'
   settings: ColumnRuntimeSettingsMap
+  /** 列宽持久化（CHG-313），可选字段，旧格式数据不受影响 */
+  widths?: Record<string, number>
 }

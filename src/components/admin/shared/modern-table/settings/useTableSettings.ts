@@ -34,18 +34,18 @@ function buildLegacyStorageKey(tableId: string): string {
 
 // ── 序列化 / 反序列化 ─────────────────────────────────────────────────────────
 
-function serialize(settings: ColumnRuntimeSettingsMap): string {
-  const payload: PersistedTableSettings = { version: 'v1', settings }
+function serialize(settings: ColumnRuntimeSettingsMap, widths: Record<string, number>): string {
+  const payload: PersistedTableSettings = { version: 'v1', settings, widths }
   return JSON.stringify(payload)
 }
 
-function deserialize(raw: string): ColumnRuntimeSettingsMap | null {
+function deserialize(raw: string): { settings: ColumnRuntimeSettingsMap; widths: Record<string, number> } | null {
   try {
     const parsed = JSON.parse(raw) as Partial<PersistedTableSettings>
     if (parsed.version !== 'v1' || typeof parsed.settings !== 'object' || parsed.settings === null) {
       return null
     }
-    return parsed.settings
+    return { settings: parsed.settings, widths: parsed.widths ?? {} }
   } catch {
     return null
   }
@@ -63,26 +63,26 @@ function readFromStorage(
   storage: Storage | null,
   key: string,
   defaults: ColumnRuntimeSettingsMap,
-): ColumnRuntimeSettingsMap {
-  if (!storage) return defaults
+): { settings: ColumnRuntimeSettingsMap; widths: Record<string, number> } {
+  if (!storage) return { settings: defaults, widths: {} }
   try {
     const raw = storage.getItem(key)
-    if (!raw) return defaults
+    if (!raw) return { settings: defaults, widths: {} }
     const parsed = deserialize(raw)
     if (!parsed) {
       storage.removeItem(key)
-      return defaults
+      return { settings: defaults, widths: {} }
     }
     // 合并：default 优先保留新列，storage 优先保留用户偏好
     const merged: ColumnRuntimeSettingsMap = { ...defaults }
-    for (const id of Object.keys(parsed)) {
+    for (const id of Object.keys(parsed.settings)) {
       if (id in merged) {
-        merged[id] = { ...merged[id], ...parsed[id] }
+        merged[id] = { ...merged[id], ...parsed.settings[id] }
       }
     }
-    return merged
+    return { settings: merged, widths: parsed.widths }
   } catch {
-    return defaults
+    return { settings: defaults, widths: {} }
   }
 }
 
@@ -122,14 +122,20 @@ function migrateFromLegacy(
       }
       if (parsed.version !== 'v1' || !parsed.state?.columns) continue
 
-      // 将旧 visible 字段写入新格式
+      // 将旧 visible / width 字段写入新格式
       const migrated: ColumnRuntimeSettingsMap = { ...defaults }
+      const migratedWidths: Record<string, number> = {}
       for (const [id, col] of Object.entries(parsed.state.columns)) {
-        if (id in migrated && typeof col.visible === 'boolean') {
-          migrated[id] = { ...migrated[id], visible: col.visible }
+        if (id in migrated) {
+          if (typeof col.visible === 'boolean') {
+            migrated[id] = { ...migrated[id], visible: col.visible }
+          }
+          if (typeof col.width === 'number') {
+            migratedWidths[id] = col.width
+          }
         }
       }
-      storage.setItem(newKey, serialize(migrated))
+      storage.setItem(newKey, serialize(migrated, migratedWidths))
       return
     }
   } catch {
@@ -166,13 +172,16 @@ export interface UseTableSettingsReturn {
     key: keyof Pick<ColumnRuntimeSetting, 'visible' | 'sortable'>,
     value: boolean,
   ) => void
-  /** 恢复所有列到默认状态，清除 localStorage */
+  /** 更新单列宽度并持久化到 localStorage */
+  updateWidth: (id: string, width: number) => void
+  /** 恢复所有列到默认状态（含列宽），清除 localStorage */
   reset: () => void
   /**
    * 将设置应用到 TableColumn 数组：
    * - visible === false 的列被过滤掉
    * - sortable === false 的列 enableSorting 强制设为 false
-   * - 未找到对应 setting 的列原样通过
+   * - 持久化列宽覆盖列定义中的默认 width
+   * - 未找到对应 setting 的列原样通过（仍应用列宽覆盖）
    */
   applyToColumns: <T>(columns: Array<TableColumn<T>>) => Array<TableColumn<T>>
 }
@@ -210,13 +219,15 @@ export function useTableSettings(options: UseTableSettingsOptions): UseTableSett
 
   // 首帧使用 defaultSettings（SSR 安全）
   const [settingsMap, setSettingsMap] = useState<ColumnRuntimeSettingsMap>(defaultSettings)
+  const [widths, setWidths] = useState<Record<string, number>>({})
   const [hydratedStorageKey, setHydratedStorageKey] = useState<string | null>(null)
 
   // Mount 后从 localStorage 读回（含旧数据迁移）
   useEffect(() => {
     migrateFromLegacy(storage, tableId, storageKey, defaultSettings)
     const hydrated = readFromStorage(storage, storageKey, defaultSettings)
-    setSettingsMap(hydrated)
+    setSettingsMap(hydrated.settings)
+    setWidths(hydrated.widths)
     setHydratedStorageKey(storageKey)
   }, [storage, storageKey, tableId, defaultSettings])
 
@@ -224,11 +235,11 @@ export function useTableSettings(options: UseTableSettingsOptions): UseTableSett
   useEffect(() => {
     if (!storage || hydratedStorageKey !== storageKey) return
     try {
-      storage.setItem(storageKey, serialize(settingsMap))
+      storage.setItem(storageKey, serialize(settingsMap, widths))
     } catch {
       // ignore quota / private mode
     }
-  }, [storage, storageKey, settingsMap, hydratedStorageKey])
+  }, [storage, storageKey, settingsMap, widths, hydratedStorageKey])
 
   const orderedSettings = useMemo<ColumnRuntimeSetting[]>(
     () => orderedIds.map((id) => settingsMap[id]).filter(Boolean) as ColumnRuntimeSetting[],
@@ -250,8 +261,13 @@ export function useTableSettings(options: UseTableSettingsOptions): UseTableSett
     }))
   }
 
+  function updateWidth(id: string, width: number) {
+    setWidths((prev) => ({ ...prev, [id]: width }))
+  }
+
   function reset() {
     setSettingsMap(defaultSettings)
+    setWidths({})
     if (!storage) return
     try {
       storage.removeItem(storageKey)
@@ -263,16 +279,18 @@ export function useTableSettings(options: UseTableSettingsOptions): UseTableSett
   function applyToColumns<T>(columns: Array<TableColumn<T>>): Array<TableColumn<T>> {
     return columns.reduce<Array<TableColumn<T>>>((acc, col) => {
       const setting = settingsMap[col.id]
+      const storedWidth = widths[col.id]
+      const withWidth = storedWidth != null ? { ...col, width: storedWidth } : col
       if (!setting) {
-        acc.push(col)
+        acc.push(withWidth)
         return acc
       }
       if (!setting.visible) return acc
       if (!setting.sortable) {
-        acc.push({ ...col, enableSorting: false })
+        acc.push({ ...withWidth, enableSorting: false })
         return acc
       }
-      acc.push(col)
+      acc.push(withWidth)
       return acc
     }, [])
   }
@@ -281,6 +299,7 @@ export function useTableSettings(options: UseTableSettingsOptions): UseTableSett
     orderedSettings,
     settingsMap,
     updateSetting,
+    updateWidth,
     reset,
     applyToColumns,
   }

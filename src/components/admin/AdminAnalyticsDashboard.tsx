@@ -260,11 +260,7 @@ export function AdminAnalyticsDashboard() {
             scrollTestId="analytics-crawler-table-scroll"
             sort={sort}
             onSortChange={setSort}
-            onColumnWidthChange={(columnId, nextWidth) => {
-              if (columnId in columnsState.columnsById) {
-                columnsState.setColumnWidth(columnId, nextWidth)
-              }
-            }}
+            onColumnWidthChange={tableSettings.updateWidth}
             settingsSlot={{
               settingsColumns: tableSettings.orderedSettings,
               onSettingsChange: tableSettings.updateSetting,

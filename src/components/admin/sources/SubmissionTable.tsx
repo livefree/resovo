@@ -191,11 +191,7 @@ export function SubmissionTable() {
         emptyText="暂无用户纠错数据"
         getRowId={(r) => r.id}
         scrollTestId="source-submission-table-scroll"
-        onColumnWidthChange={(columnId, nextWidth) => {
-          if (columnId in columnsState.columnsById) {
-            columnsState.setColumnWidth(columnId, nextWidth)
-          }
-        }}
+        onColumnWidthChange={tableSettings.updateWidth}
         settingsSlot={{
           settingsColumns: tableSettings.orderedSettings,
           onSettingsChange: tableSettings.updateSetting,

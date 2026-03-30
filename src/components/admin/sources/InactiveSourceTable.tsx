@@ -524,11 +524,7 @@ export function InactiveSourceTable({
         emptyText={emptyText}
         getRowId={(r) => r.id}
         scrollTestId={scrollTestId}
-        onColumnWidthChange={(columnId, nextWidth) => {
-          if (columnId in columnsState.columnsById) {
-            columnsState.setColumnWidth(columnId, nextWidth)
-          }
-        }}
+        onColumnWidthChange={tableSettings.updateWidth}
         settingsSlot={{
           settingsColumns: tableSettings.orderedSettings,
           onSettingsChange: tableSettings.updateSetting,

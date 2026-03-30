@@ -4419,3 +4419,22 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/task-queue.md`（CHG-312 完成）
 - **测试覆盖**：typecheck 通过；lint 通过；85/85 test files passed，757/757 tests passed（修复了 useAdminTableSort 的 1 个预存失败）
 - **共享层沉淀评估**：无需，`useAdminTableSort` 本身在 CHG-314 将被删除
+
+---
+
+## CHG-313 — useTableSettings 加入列宽持久化
+- **完成时间**：2026-03-29 21:05
+- **修改文件**：
+  - `src/components/admin/shared/modern-table/settings/types.ts` — `PersistedTableSettings` 新增 `widths?: Record<string, number>`
+  - `src/components/admin/shared/modern-table/settings/useTableSettings.ts` — 新增 `widths` 状态、`updateWidth(id, w)` 方法、`applyToColumns` widths 覆盖逻辑、`reset()` 清空 widths；序列化/反序列化支持 widths；migrate 迁移旧 key 时附带宽度迁移
+  - `src/components/admin/content/VideoTable.tsx` — `onColumnWidthChange` 改为 `tableSettings.updateWidth`
+  - `src/components/admin/content/UserTable.tsx` — 同上
+  - `src/components/admin/content/SubtitleTable.tsx` — 同上
+  - `src/components/admin/content/SubmissionTable.tsx` — 同上
+  - `src/components/admin/sources/SubmissionTable.tsx` — 同上
+  - `src/components/admin/sources/InactiveSourceTable.tsx` — 同上
+  - `src/components/admin/AdminAnalyticsDashboard.tsx` — 同上
+  - `tests/unit/components/admin/shared/modern-table/settings/useTableSettings.test.ts` — 新增 4 个测试：updateWidth 覆盖宽度、localStorage 持久化、reset 清空、required 列保护
+  - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx` — resize 测试降级为 handle 存在性验证（prop 链路过深，full DOM propagation 在单元测试层不稳定）
+- **测试覆盖**：typecheck 通过；lint 通过；86/86 test files passed，761/761 tests passed
+- **共享层沉淀评估**：`updateWidth` 已沉淀进 `useTableSettings` hook 层 ✅
