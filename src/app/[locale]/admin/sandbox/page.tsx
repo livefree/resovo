@@ -10,7 +10,7 @@
 
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { AdminPageShell } from '@/components/admin/shared/layout/AdminPageShell'
+import { ListPageShell } from '@/components/shared/layout/ListPageShell'
 import { SandboxTableDemo } from './SandboxTableDemo'
 
 export default async function SandboxPage() {
@@ -21,8 +21,8 @@ export default async function SandboxPage() {
   }
 
   return (
-    <AdminPageShell title="组件沙盒" description="用于验证共享组件的视觉与交互行为。">
+    <ListPageShell variant="admin" title="组件沙盒" description="用于验证共享组件的视觉与交互行为。">
       <SandboxTableDemo />
-    </AdminPageShell>
+    </ListPageShell>
   )
 }

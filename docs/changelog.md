@@ -4498,3 +4498,54 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/StatusBadge.test.tsx`（断言从 hex rgb 值改为 CSS 变量字符串）
 - **测试覆盖**：750/750 通过；typecheck ✅；lint ✅（no warnings）
 - **已知残余 debt**：Tailwind 颜色工具类存量 71 处（25 文件），guardrails warn 已覆盖，单独排期处理
+
+---
+
+## CHG-319 — ListPageShell 跨域化
+- **完成时间**：2026-03-30 01:15
+- **来源序列**：SEQ-20260330-45
+- **修改文件**：
+  - `src/components/shared/layout/ListPageShell.tsx`（新建，variant: admin | frontend）
+  - `src/components/admin/shared/layout/AdminPageShell.tsx`（改为 ListPageShell 薄包装）
+- **测试覆盖**：typecheck ✅；759 tests 通过
+
+---
+
+## CHG-320 — FilterToolbar 通用化
+- **完成时间**：2026-03-30 01:28
+- **来源序列**：SEQ-20260330-45
+- **修改文件**：
+  - `src/components/shared/toolbar/FilterToolbar.tsx`（新建，search/filters/actions/feedback 四槽）
+  - `src/components/admin/videos/VideoFilters.tsx`（迁移：search 槽 + filters 槽分离）
+- **测试覆盖**：typecheck ✅；759 tests 通过
+
+---
+
+## CHG-321 — DetailPageShell + DetailSection 新建
+- **完成时间**：2026-03-30 01:44
+- **来源序列**：SEQ-20260330-45
+- **修改文件**：
+  - `src/components/shared/layout/DetailPageShell.tsx`（新建，header/content/sidebar 三区）
+  - `src/components/shared/layout/DetailSection.tsx`（新建，fields grid label+value）
+  - `tests/unit/components/shared/DetailPageShell.test.tsx`（新建，4 tests）
+  - `tests/unit/components/shared/DetailSection.test.tsx`（新建，5 tests）
+- **测试覆盖**：typecheck ✅；759 tests 通过（含 9 个新单测）
+
+---
+
+## CHG-322 — 后台页面迁移至 ListPageShell
+- **完成时间**：2026-03-30 01:52
+- **来源序列**：SEQ-20260330-45
+- **修改文件**：
+  - `src/app/[locale]/admin/` 下 12 个 page.tsx（AdminPageShell → ListPageShell variant="admin"）
+- **测试覆盖**：typecheck ✅；759 tests 通过
+
+---
+
+## CHG-323 — DashboardShell
+- **完成时间**：2026-03-30 02:10
+- **来源序列**：SEQ-20260330-45
+- **修改文件**：
+  - `src/components/shared/layout/DashboardShell.tsx`（新建，DashboardShell + DashboardSection）
+  - `src/components/admin/AdminAnalyticsDashboard.tsx`（迁移使用 DashboardShell/DashboardSection；顺手修复 text-red-400 → text-[var(--status-danger)]）
+- **测试覆盖**：typecheck ✅；759 tests 通过

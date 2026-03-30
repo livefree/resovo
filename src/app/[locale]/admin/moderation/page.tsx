@@ -4,12 +4,12 @@
  */
 
 import { Suspense } from 'react'
-import { AdminPageShell } from '@/components/admin/shared/layout/AdminPageShell'
+import { ListPageShell } from '@/components/shared/layout/ListPageShell'
 import { ModerationDashboard } from '@/components/admin/moderation/ModerationDashboard'
 
 export default function AdminModerationPage() {
   return (
-    <AdminPageShell
+    <ListPageShell variant="admin"
       title="内容审核台"
       description="审核爬虫采集内容，执行通过或拒绝（支持填写拒绝原因）。"
       testId="admin-moderation-page"
@@ -17,6 +17,6 @@ export default function AdminModerationPage() {
       <Suspense>
         <ModerationDashboard />
       </Suspense>
-    </AdminPageShell>
+    </ListPageShell>
   )
 }

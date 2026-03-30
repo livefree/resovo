@@ -3,17 +3,17 @@
  * CHG-32
  */
 
-import { AdminPageShell } from '@/components/admin/shared/layout/AdminPageShell'
+import { ListPageShell } from '@/components/shared/layout/ListPageShell'
 import { PerformanceMonitor } from '@/components/admin/system/monitoring/PerformanceMonitor'
 
 export default function AdminMonitorPage() {
   return (
-    <AdminPageShell
+    <ListPageShell variant="admin"
       title="性能监控"
       description="监控接口耗时、慢请求与系统性能指标。"
       testId="admin-monitor-page"
     >
       <PerformanceMonitor />
-    </AdminPageShell>
+    </ListPageShell>
   )
 }

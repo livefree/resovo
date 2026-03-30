@@ -4019,9 +4019,9 @@
 ---
 
 ## [SEQ-20260330-45] 轨道 C — UI-04 页面模式组件建设
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-30 01:00
-- **最后更新时间**：2026-03-30 01:00
+- **最后更新时间**：2026-03-30 02:10
 - **目标**：建立跨域可复用的页面组织层（ListPageShell、FilterToolbar、DetailPageShell、DetailSection、DashboardShell），消除当前 AdminPageShell admin-only 局限
 - **范围**：`src/components/shared/layout/`（新建）、`src/components/shared/toolbar/`（新建）、`src/components/admin/shared/layout/AdminPageShell.tsx`（薄包装改造）、后台 page 文件
 - **依赖**：SEQ-20260328-43 ✅ + SEQ-20260328-44 ✅（均已完成）
@@ -4029,54 +4029,54 @@
 
 ### 任务列表（按执行顺序）
 
-1. CHG-319 — ListPageShell 跨域化（状态：⬜ 待开始）
+1. CHG-319 — ListPageShell 跨域化（状态：✅ 已完成）
    - 创建时间：2026-03-30 01:00
    - 计划开始：SEQ-20260330-45 启动时
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-30 01:00
+   - 完成时间：2026-03-30 01:15
    - 文件范围：
      - `src/components/shared/layout/ListPageShell.tsx`（新建，token 驱动，variant: 'admin' | 'frontend'）
      - `src/components/admin/shared/layout/AdminPageShell.tsx`（改为 ListPageShell 薄包装，保持向后兼容）
    - 变更内容：新建 ListPageShell 组件（title、description、actions、children、variant props）；AdminPageShell 内部 import ListPageShell 并固定 variant="admin"；不迁移现有调用方
    - 验收要点：AdminPageShell 行为不变；typecheck + lint + test 通过
 
-2. CHG-320 — FilterToolbar 通用化（状态：⬜ 待开始）
+2. CHG-320 — FilterToolbar 通用化（状态：✅ 已完成）
    - 创建时间：2026-03-30 01:00
    - 计划开始：CHG-319 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-30 01:20
+   - 完成时间：2026-03-30 01:28
    - 文件范围：
      - `src/components/shared/toolbar/FilterToolbar.tsx`（新建，search slot + filter slots + action slot）
      - `src/components/admin/videos/VideoFilters.tsx`（迁移为 FilterToolbar 的具体实现）
    - 变更内容：提取三区布局（左-筛选区 / 中-搜索区 / 右-操作区）为 FilterToolbar；VideoFilters 改用 FilterToolbar 组合
    - 验收要点：视频列表筛选功能不变；typecheck + lint + test 通过
 
-3. CHG-321 — DetailPageShell + DetailSection 新建（状态：⬜ 待开始）
+3. CHG-321 — DetailPageShell + DetailSection 新建（状态：✅ 已完成）
    - 创建时间：2026-03-30 01:00
    - 计划开始：CHG-320 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-30 01:30
+   - 完成时间：2026-03-30 01:44
    - 文件范围：
      - `src/components/shared/layout/DetailPageShell.tsx`（新建，header zone + content zone + sidebar zone）
      - `src/components/shared/layout/DetailSection.tsx`（新建，分组字段展示，label + value 对）
    - 变更内容：新建两个 layout 组件，提供类型和 data-testid 规范；不做大范围迁移，只建立组件
    - 验收要点：组件可独立渲染；有单测覆盖 props 边界；typecheck + lint + test 通过
 
-4. CHG-322 — 后台页面迁移至 ListPageShell（状态：⬜ 待开始）
+4. CHG-322 — 后台页面迁移至 ListPageShell（状态：✅ 已完成）
    - 创建时间：2026-03-30 01:00
    - 计划开始：CHG-321 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-30 01:45
+   - 完成时间：2026-03-30 01:52
    - 文件范围：
      - `src/app/[locale]/admin/*/page.tsx`（所有后台 page 文件，从 AdminPageShell 切换到 ListPageShell variant="admin"）
    - 变更内容：批量替换 import AdminPageShell → ListPageShell；添加 variant="admin" prop
    - 验收要点：页面视觉不变；typecheck + lint + test 通过
 
-5. CHG-323 — DashboardShell（状态：⬜ 待开始）
+5. CHG-323 — DashboardShell（状态：✅ 已完成）
    - 创建时间：2026-03-30 01:00
    - 计划开始：CHG-322 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-03-30 01:55
+   - 完成时间：2026-03-30 02:10
    - 文件范围：
      - `src/components/shared/layout/DashboardShell.tsx`（新建，metric grid + section 布局）
      - `src/components/admin/analytics/AdminAnalyticsDashboard.tsx`（迁移使用 DashboardShell）
@@ -4113,3 +4113,20 @@
    - 计划开始：CHG-325 完成后
    - 文件范围：search 页筛选区
    - 变更内容：使用 FilterToolbar；保留前台样式差异
+
+---
+✅ SEQ COMPLETE — SEQ-20260330-45 已完成，等待确认开始 SEQ-20260330-46
+- **完成时间**：2026-03-30 02:10
+- **本序列完成任务数**：5 个（CHG-319 ~ CHG-323）
+- **新增共享层组件**：
+  - `src/components/shared/layout/ListPageShell.tsx`（跨域列表页容器）
+  - `src/components/shared/layout/DetailPageShell.tsx`（详情页三区容器）
+  - `src/components/shared/layout/DetailSection.tsx`（字段分组展示）
+  - `src/components/shared/layout/DashboardShell.tsx` + `DashboardSection`（仪表盘布局）
+  - `src/components/shared/toolbar/FilterToolbar.tsx`（筛选工具栏）
+- **建议下一步**：SEQ-20260330-46（UI-06 前台页面基座接入）— 建议先人工验收当前后台页面视觉效果
+- **需要你做的事**：
+  - [ ] 验收测试（浏览后台各页面：视频/用户/投稿/源管理/Analytics 等）
+  - [ ] 确认 ListPageShell/FilterToolbar/DetailPageShell 在前台页面的扩展方向
+  - [ ] 确认开始 SEQ-20260330-46（删除此块即可）
+---

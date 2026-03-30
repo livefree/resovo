@@ -6,13 +6,13 @@
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { AdminButton } from '@/components/admin/shared/button/AdminButton'
-import { AdminPageShell } from '@/components/admin/shared/layout/AdminPageShell'
+import { ListPageShell } from '@/components/shared/layout/ListPageShell'
 import { VideoFilters } from '@/components/admin/videos/VideoFilters'
 import { VideoTable } from '@/components/admin/videos/VideoTable'
 
 export default function AdminVideosPage() {
   return (
-    <AdminPageShell
+    <ListPageShell variant="admin"
       title="视频管理"
       description="管理视频信息、筛选状态并执行上架下架操作。"
       testId="admin-videos-page"
@@ -28,6 +28,6 @@ export default function AdminVideosPage() {
         <VideoFilters />
         <VideoTable />
       </Suspense>
-    </AdminPageShell>
+    </ListPageShell>
   )
 }

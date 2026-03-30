@@ -3,17 +3,17 @@
  * CHG-30
  */
 
-import { AdminPageShell } from '@/components/admin/shared/layout/AdminPageShell'
+import { ListPageShell } from '@/components/shared/layout/ListPageShell'
 import { CacheManager } from '@/components/admin/system/monitoring/CacheManager'
 
 export default function AdminCachePage() {
   return (
-    <AdminPageShell
+    <ListPageShell variant="admin"
       title="缓存管理"
       description="管理各类缓存命中与清理操作。"
       testId="admin-cache-page"
     >
       <CacheManager />
-    </AdminPageShell>
+    </ListPageShell>
   )
 }

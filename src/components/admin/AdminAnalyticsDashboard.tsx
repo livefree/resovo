@@ -2,6 +2,7 @@
  * AdminAnalyticsDashboard.tsx — 数据看板组件
  * ADMIN-05: 显示运营统计数据
  * CHG-265: 爬虫任务 mini 表格从 AdminTableFrame → ModernDataTable；⚙ 列设置覆盖层
+ * CHG-323: 迁移至 DashboardShell + DashboardSection
  */
 
 'use client'
@@ -14,6 +15,7 @@ import { TableBadgeCell, TableDateCell, TableTextCell } from '@/components/admin
 import type { TableColumn, TableSortState } from '@/components/admin/shared/modern-table/types'
 import type { AnalyticsData } from '@/api/routes/admin/analytics'
 import { ContentQualityTable } from '@/components/admin/dashboard/ContentQualityTable'
+import { DashboardShell, DashboardSection } from '@/components/shared/layout/DashboardShell'
 
 type CrawlerTaskRow = AnalyticsData['crawlerTasks']['recent'][number]
 type CrawlerTaskColumnId = 'type' | 'status' | 'created_at' | 'finished_at'
@@ -156,106 +158,81 @@ export function AdminAnalyticsDashboard() {
   }
 
   if (error || !data) {
-    return <p className="text-red-400">{error ?? '加载失败'}</p>
+    return <p className="text-[var(--status-danger)]">{error ?? '加载失败'}</p>
   }
 
   const failRatePct = (data.sources.failRate * 100).toFixed(1)
 
   return (
-    <div data-testid="analytics-dashboard" className="space-y-8">
-      {/* ── 视频统计 ────────────────────────────────────────────── */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[var(--muted)]">
-          视频
-        </h2>
-        <div className="grid grid-cols-3 gap-4" data-testid="analytics-videos">
-          <StatCard title="视频总数" value={data.videos.total} />
-          <StatCard title="已上架" value={data.videos.published} accent />
-          <StatCard title="待审/下架" value={data.videos.pending} />
-        </div>
-      </section>
+    <DashboardShell testId="analytics-dashboard">
+      {/* 视频统计 */}
+      <DashboardSection title="视频" columns={3} testId="analytics-videos">
+        <StatCard title="视频总数" value={data.videos.total} />
+        <StatCard title="已上架" value={data.videos.published} accent />
+        <StatCard title="待审/下架" value={data.videos.pending} />
+      </DashboardSection>
 
-      {/* ── 播放源统计 ───────────────────────────────────────────── */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[var(--muted)]">
-          播放源
-        </h2>
-        <div className="grid grid-cols-3 gap-4" data-testid="analytics-sources">
-          <StatCard title="播放源总数" value={data.sources.total} />
-          <StatCard title="有效" value={data.sources.active} accent />
-          <StatCard
-            title="失效率"
-            value={`${failRatePct}%`}
-            sub={`失效 ${data.sources.inactive} 条`}
-          />
-        </div>
-      </section>
+      {/* 播放源统计 */}
+      <DashboardSection title="播放源" columns={3} testId="analytics-sources">
+        <StatCard title="播放源总数" value={data.sources.total} />
+        <StatCard title="有效" value={data.sources.active} accent />
+        <StatCard
+          title="失效率"
+          value={`${failRatePct}%`}
+          sub={`失效 ${data.sources.inactive} 条`}
+        />
+      </DashboardSection>
 
-      {/* ── 用户统计 ────────────────────────────────────────────── */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[var(--muted)]">
-          用户
-        </h2>
-        <div className="grid grid-cols-3 gap-4" data-testid="analytics-users">
-          <StatCard title="注册用户总数" value={data.users.total} />
-          <StatCard title="今日新增" value={data.users.todayNew} accent />
-          <StatCard title="已封禁" value={data.users.banned} />
-        </div>
-      </section>
+      {/* 用户统计 */}
+      <DashboardSection title="用户" columns={3} testId="analytics-users">
+        <StatCard title="注册用户总数" value={data.users.total} />
+        <StatCard title="今日新增" value={data.users.todayNew} accent />
+        <StatCard title="已封禁" value={data.users.banned} />
+      </DashboardSection>
 
-      {/* ── 待处理队列 ──────────────────────────────────────────── */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[var(--muted)]">
-          待处理事项
-        </h2>
-        <div className="grid grid-cols-2 gap-4" data-testid="analytics-queues">
-          <StatCard
-            title="待审投稿"
-            value={data.queues.submissions}
-            sub={data.queues.submissions > 0 ? '需要处理' : '全部处理完毕'}
-            accent={data.queues.submissions > 0}
-          />
-          <StatCard
-            title="待审字幕"
-            value={data.queues.subtitles}
-            sub={data.queues.subtitles > 0 ? '需要处理' : '全部处理完毕'}
-            accent={data.queues.subtitles > 0}
-          />
-        </div>
-      </section>
+      {/* 待处理队列 */}
+      <DashboardSection title="待处理事项" columns={2} testId="analytics-queues">
+        <StatCard
+          title="待审投稿"
+          value={data.queues.submissions}
+          sub={data.queues.submissions > 0 ? '需要处理' : '全部处理完毕'}
+          accent={data.queues.submissions > 0}
+        />
+        <StatCard
+          title="待审字幕"
+          value={data.queues.subtitles}
+          sub={data.queues.subtitles > 0 ? '需要处理' : '全部处理完毕'}
+          accent={data.queues.subtitles > 0}
+        />
+      </DashboardSection>
 
-      {/* ── 爬虫状态快照 ────────────────────────────────────────── */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[var(--muted)]">
-          爬虫最近任务
-        </h2>
-        <div data-testid="analytics-crawler-tasks">
-          <ModernDataTable
-            columns={tableColumns}
-            rows={sortedCrawlerTasks}
-            loading={false}
-            emptyText="暂无爬虫任务记录"
-            getRowId={(r) => r.id}
-            scrollTestId="analytics-crawler-table-scroll"
-            sort={sort}
-            onSortChange={setSort}
-            onColumnWidthChange={tableSettings.updateWidth}
-            settingsSlot={{
-              settingsColumns: tableSettings.orderedSettings,
-              onSettingsChange: tableSettings.updateSetting,
-              onSettingsReset: tableSettings.reset,
-            }}
-          />
-        </div>
-      </section>
+      {/* 爬虫最近任务 */}
+      <DashboardSection title="爬虫最近任务" columns={1} testId="analytics-crawler-tasks">
+        <ModernDataTable
+          columns={tableColumns}
+          rows={sortedCrawlerTasks}
+          loading={false}
+          emptyText="暂无爬虫任务记录"
+          getRowId={(r) => r.id}
+          scrollTestId="analytics-crawler-table-scroll"
+          sort={sort}
+          onSortChange={setSort}
+          onColumnWidthChange={tableSettings.updateWidth}
+          settingsSlot={{
+            settingsColumns: tableSettings.orderedSettings,
+            onSettingsChange: tableSettings.updateSetting,
+            onSettingsReset: tableSettings.reset,
+          }}
+        />
+      </DashboardSection>
 
       {/* 内容质量统计（ADMIN-06）*/}
       <section className="space-y-3" data-testid="content-quality-section">
-        <h2 className="text-base font-semibold" style={{ color: 'var(--foreground)' }}>
+        <h2 className="text-base font-semibold text-[var(--text)]">
           内容质量（按来源站点）
         </h2>
         <ContentQualityTable />
       </section>
-    </div>
+    </DashboardShell>
   )
 }

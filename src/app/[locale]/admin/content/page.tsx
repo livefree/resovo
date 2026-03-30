@@ -6,7 +6,7 @@
 'use client'
 
 import { useState } from 'react'
-import { AdminPageShell } from '@/components/admin/shared/layout/AdminPageShell'
+import { ListPageShell } from '@/components/shared/layout/ListPageShell'
 import { SubmissionTable } from '@/components/admin/content/SubmissionTable'
 import { SubtitleTable } from '@/components/admin/content/SubtitleTable'
 
@@ -14,7 +14,7 @@ export default function AdminContentPage() {
   const [tab, setTab] = useState<'submissions' | 'subtitles'>('submissions')
 
   return (
-    <AdminPageShell
+    <ListPageShell variant="admin"
       title="内容审核"
       description="统一处理投稿审核与字幕审核，按审核对象切换视图。"
       testId="admin-content-page"
@@ -46,6 +46,6 @@ export default function AdminContentPage() {
 
       {tab === 'submissions' && <SubmissionTable />}
       {tab === 'subtitles' && <SubtitleTable />}
-    </AdminPageShell>
+    </ListPageShell>
   )
 }
