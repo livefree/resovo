@@ -41,6 +41,12 @@
 --accent              /* 金色主题色 */
 --accent-foreground   /* accent 背景上的文字颜色（用于 accent 底色上的文字，不得用 black/white） */
 --gold                /* 纯金色（类型徽章、评分标记） */
+
+/* 状态语义色（前后台通用） */
+--status-success      /* 成功/在线/已完成 */
+--status-danger       /* 错误/离线/危险操作 */
+--status-warning      /* 警告/待处理/注意 */
+--status-info         /* 信息/进行中 */
 ```
 
 #### 后台 CSS 变量（用于 `src/components/admin/` 后台组件）
@@ -62,7 +68,41 @@
 /* 强调色 */
 --accent          /* 主题色 */
 --foreground      /* 高对比前景色（用于强调背景上的文字） */
+
+/* 状态语义色（前后台通用） */
+--status-success      /* 成功/在线/已完成 */
+--status-danger       /* 错误/离线/危险操作 */
+--status-warning      /* 警告/待处理/注意 */
+--status-info         /* 信息/进行中 */
 ```
+
+#### 前台 / 后台变量对照表
+
+| 语义 | 前台变量 | 后台变量 |
+|------|---------|---------|
+| 页面底色 | `--background` | `--bg` |
+| 次级背景（卡片/面板） | `--secondary` | `--bg2` |
+| 三级背景（悬停/选中） | — | `--bg3` |
+| 主文字 | `--foreground` | `--text` |
+| 次要文字 | `--muted-foreground` | `--muted` |
+| 高对比前景（强调背景上） | — | `--foreground` |
+| 标准边框 | `--border` | `--border` |
+| 弱边框/分隔线 | — | `--subtle` |
+| 主题强调色 | `--accent` | `--accent` |
+| 强调色前景 | `--accent-foreground` | `--foreground` |
+| 纯金色（徽章/评分） | `--gold` | — |
+| 卡片背景 | `--card` | — |
+| 卡片前景文字 | `--card-foreground` | — |
+| 互动主色（按钮/链接） | `--primary` | — |
+| 互动主色前景 | `--primary-foreground` | — |
+| 焦点环 | `--ring` | — |
+| 输入框边框 | `--input` | — |
+| 状态色：成功 | `--status-success` | `--status-success` |
+| 状态色：危险/错误 | `--status-danger` | `--status-danger` |
+| 状态色：警告 | `--status-warning` | `--status-warning` |
+| 状态色：信息 | `--status-info` | `--status-info` |
+
+> `--status-*` 为前后台共用语义色，直接用于文字/图标颜色。不得将其用于大面积背景（对比度依赖场景）。
 
 ### 主题切换
 ```tsx

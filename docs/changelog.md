@@ -4472,3 +4472,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/shared/table/useAdminColumnFilter.test.tsx`（删除）
   - `tests/unit/components/admin/system/CrawlerSiteManager.test.tsx`（更新测试：sort 不再持久化）
 - **测试覆盖**：typecheck + lint + `npm run test -- --run` 749/749 通过
+
+---
+
+## CHG-315 — 前后台 CSS 变量体系盘点与对齐文档化
+- **完成时间**：2026-03-29 22:15
+- **来源序列**：SEQ-20260328-44
+- **修改文件**：
+  - `src/app/globals.css`（新增 `--status-success/danger/warning/info` 四个状态语义色，`:root` 和 `.dark` 均补全）
+  - `docs/rules/ui-rules.md`（前后台 CSS 变量对照表、状态色文档化）
+- **测试覆盖**：typecheck 通过；纯 CSS 变量 + 文档变更，无逻辑代码
