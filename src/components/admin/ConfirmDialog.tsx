@@ -61,8 +61,8 @@ export function ConfirmDialog({
           className="px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
           style={
             danger
-              ? { background: '#ef4444', color: '#fff' }
-              : { background: 'var(--accent, #e8b84b)', color: '#000' }
+              ? { background: 'var(--status-danger)', color: 'var(--bg)' }
+              : { background: 'var(--accent)', color: 'var(--accent-foreground)' }
           }
           data-testid="confirm-dialog-confirm"
         >

@@ -4482,3 +4482,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/app/globals.css`（新增 `--status-success/danger/warning/info` 四个状态语义色，`:root` 和 `.dark` 均补全）
   - `docs/rules/ui-rules.md`（前后台 CSS 变量对照表、状态色文档化）
 - **测试覆盖**：typecheck 通过；纯 CSS 变量 + 文档变更，无逻辑代码
+
+---
+
+## CHG-316 — ESLint 规则：禁止后台组件中硬编码颜色值
+- **完成时间**：2026-03-30 00:30
+- **来源序列**：SEQ-20260328-44
+- **修改文件**：
+  - `src/app/globals.css`（新增 `--status-neutral`、`--status-{success/danger/warning/neutral}-bg`、`--modal-overlay`，深浅主题均补全）
+  - `src/components/admin/StatusBadge.tsx`（STATUS_CONFIG 中 12 处 hardcode hex/rgba → CSS 变量）
+  - `src/components/admin/ConfirmDialog.tsx`（danger 按钮 `#ef4444` → `var(--status-danger)` 等）
+  - `src/components/admin/Modal.tsx`（遮罩 `rgba(0,0,0,0.6)` → `var(--modal-overlay)`）
+  - `.eslintrc.json`（overrides 针对 admin/**，4 条 no-restricted-syntax warn 规则）
+  - `scripts/verify-admin-guardrails.mjs`（追加 Tailwind 颜色工具类 warn 检测，非阻塞）
+  - `tests/unit/components/admin/StatusBadge.test.tsx`（断言从 hex rgb 值改为 CSS 变量字符串）
+- **测试覆盖**：750/750 通过；typecheck ✅；lint ✅（no warnings）
+- **已知残余 debt**：Tailwind 颜色工具类存量 71 处（25 文件），guardrails warn 已覆盖，单独排期处理

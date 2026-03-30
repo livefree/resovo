@@ -3977,9 +3977,9 @@
 ---
 
 ## [SEQ-20260328-44] 轨道 B — 轻量级 Tokens 基线
-- **状态**：🟡 规划中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-28 20:30
-- **最后更新时间**：2026-03-29 22:15
+- **最后更新时间**：2026-03-30 00:30
 - **目标**：在不做全局 tokens 重建的前提下，建立最小可用的颜色语义基线，并通过 lint 规则防止 debt 继续扩散
 - **范围**：`src/app/globals.css`、ESLint 配置、受影响的组件样式文件
 - **依赖**：无硬依赖；建议在 SEQ-20260328-43 轨道 A 完成后启动，避免同时改动同一文件
@@ -4001,15 +4001,115 @@
      - 在 `ui-rules.md` 建立双体系对照表，明确每个语义变量的适用区域
    - 验收要点：不改现有变量名（向后兼容）；ui-rules.md 有完整对照表；typecheck 通过
 
-2. CHG-316 — ESLint 规则：禁止后台组件中硬编码颜色值（状态：⬜ 待开始）
+2. CHG-316 — ESLint 规则：禁止后台组件中硬编码颜色值（状态：✅ 已完成）
    - 创建时间：2026-03-28 20:30
    - 计划开始：CHG-315 完成后
+   - 实际开始：2026-03-30 00:00
+   - 完成时间：2026-03-30 00:30
+   - 文件范围：
+     - `src/app/globals.css`（补 6 个新变量）
+     - `src/components/admin/StatusBadge.tsx`（12处 hardcode → CSS 变量）
+     - `src/components/admin/ConfirmDialog.tsx`（2处 hardcode → CSS 变量）
+     - `src/components/admin/Modal.tsx`（1处 rgba → var(--modal-overlay)）
+     - `.eslintrc.json`（overrides 添加 4 条 no-restricted-syntax warn 规则）
+     - `scripts/verify-admin-guardrails.mjs`（追加 Tailwind 颜色类 warn 检测）
+     - `tests/unit/components/admin/StatusBadge.test.tsx`（断言同步更新）
+   - 验收：typecheck ✅ / lint ✅（no errors, no warnings）/ 750/750 tests ✅
+
+---
+
+## [SEQ-20260330-45] 轨道 C — UI-04 页面模式组件建设
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-30 01:00
+- **最后更新时间**：2026-03-30 01:00
+- **目标**：建立跨域可复用的页面组织层（ListPageShell、FilterToolbar、DetailPageShell、DetailSection、DashboardShell），消除当前 AdminPageShell admin-only 局限
+- **范围**：`src/components/shared/layout/`（新建）、`src/components/shared/toolbar/`（新建）、`src/components/admin/shared/layout/AdminPageShell.tsx`（薄包装改造）、后台 page 文件
+- **依赖**：SEQ-20260328-43 ✅ + SEQ-20260328-44 ✅（均已完成）
+- **参考**：`docs/ui_governance_plan_frontend_admin_20260327.md` §UI-04
+
+### 任务列表（按执行顺序）
+
+1. CHG-319 — ListPageShell 跨域化（状态：⬜ 待开始）
+   - 创建时间：2026-03-30 01:00
+   - 计划开始：SEQ-20260330-45 启动时
    - 实际开始：
    - 完成时间：
    - 文件范围：
-     - ESLint 配置文件（新增规则或 plugin）
-     - `src/components/admin/` 下违规文件（修正存量违规，或统一 eslint-disable 标注后再逐步消化）
-   - 变更内容：
-     - 新增 ESLint 规则，对 `src/components/admin/**` 禁止在 `className`/`style` 中出现 `#[0-9a-fA-F]` 或非 CSS 变量的颜色值
-     - 存量违规项：如果过多（>20 处），本次仅建立规则 + warn 级别，不强制修复（单独排期）
-   - 验收要点：lint 规则可检出示例违规；不阻塞现有 `npm run lint` 通过（视存量决定 warn/error）
+     - `src/components/shared/layout/ListPageShell.tsx`（新建，token 驱动，variant: 'admin' | 'frontend'）
+     - `src/components/admin/shared/layout/AdminPageShell.tsx`（改为 ListPageShell 薄包装，保持向后兼容）
+   - 变更内容：新建 ListPageShell 组件（title、description、actions、children、variant props）；AdminPageShell 内部 import ListPageShell 并固定 variant="admin"；不迁移现有调用方
+   - 验收要点：AdminPageShell 行为不变；typecheck + lint + test 通过
+
+2. CHG-320 — FilterToolbar 通用化（状态：⬜ 待开始）
+   - 创建时间：2026-03-30 01:00
+   - 计划开始：CHG-319 完成后
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：
+     - `src/components/shared/toolbar/FilterToolbar.tsx`（新建，search slot + filter slots + action slot）
+     - `src/components/admin/videos/VideoFilters.tsx`（迁移为 FilterToolbar 的具体实现）
+   - 变更内容：提取三区布局（左-筛选区 / 中-搜索区 / 右-操作区）为 FilterToolbar；VideoFilters 改用 FilterToolbar 组合
+   - 验收要点：视频列表筛选功能不变；typecheck + lint + test 通过
+
+3. CHG-321 — DetailPageShell + DetailSection 新建（状态：⬜ 待开始）
+   - 创建时间：2026-03-30 01:00
+   - 计划开始：CHG-320 完成后
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：
+     - `src/components/shared/layout/DetailPageShell.tsx`（新建，header zone + content zone + sidebar zone）
+     - `src/components/shared/layout/DetailSection.tsx`（新建，分组字段展示，label + value 对）
+   - 变更内容：新建两个 layout 组件，提供类型和 data-testid 规范；不做大范围迁移，只建立组件
+   - 验收要点：组件可独立渲染；有单测覆盖 props 边界；typecheck + lint + test 通过
+
+4. CHG-322 — 后台页面迁移至 ListPageShell（状态：⬜ 待开始）
+   - 创建时间：2026-03-30 01:00
+   - 计划开始：CHG-321 完成后
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：
+     - `src/app/[locale]/admin/*/page.tsx`（所有后台 page 文件，从 AdminPageShell 切换到 ListPageShell variant="admin"）
+   - 变更内容：批量替换 import AdminPageShell → ListPageShell；添加 variant="admin" prop
+   - 验收要点：页面视觉不变；typecheck + lint + test 通过
+
+5. CHG-323 — DashboardShell（状态：⬜ 待开始）
+   - 创建时间：2026-03-30 01:00
+   - 计划开始：CHG-322 完成后
+   - 实际开始：
+   - 完成时间：
+   - 文件范围：
+     - `src/components/shared/layout/DashboardShell.tsx`（新建，metric grid + section 布局）
+     - `src/components/admin/analytics/AdminAnalyticsDashboard.tsx`（迁移使用 DashboardShell）
+   - 验收要点：Analytics 页面功能不变；typecheck + lint + test 通过
+
+---
+
+## [SEQ-20260330-46] 轨道 D — UI-06 前台页面基座接入
+- **状态**：⬜ 待开始
+- **创建时间**：2026-03-30 01:00
+- **最后更新时间**：2026-03-30 01:00
+- **目标**：前台 browse/search/detail 页面使用 UI-04 输出的 ListPageShell / DetailPageShell，统一底层结构，保留前台视觉差异
+- **范围**：`src/app/[locale]/browse/`、`src/app/[locale]/search/`、`src/app/[locale]/series/`、`src/app/[locale]/movie/`、`src/app/[locale]/anime/` 等前台页面
+- **依赖**：SEQ-20260330-45 全部完成 ✅
+- **参考**：`docs/ui_governance_plan_frontend_admin_20260327.md` §UI-06
+- **⚠️ 注意**：SEQ-20260330-45 完成后需重新评估细化，任务粒度为方向性占位
+
+### 任务列表（粗粒度，待 SEQ-45 完成后细化）
+
+1. CHG-324 — 前台 browse/search 页接入 ListPageShell（状态：⬜ 待开始）
+   - 创建时间：2026-03-30 01:00
+   - 计划开始：SEQ-20260330-45 完成后
+   - 文件范围：`src/app/[locale]/browse/page.tsx`、`src/app/[locale]/search/page.tsx`
+   - 变更内容：使用 ListPageShell variant="frontend"
+
+2. CHG-325 — 前台 detail 页接入 DetailPageShell（状态：⬜ 待开始）
+   - 创建时间：2026-03-30 01:00
+   - 计划开始：CHG-324 完成后
+   - 文件范围：series/movie/anime/others 详情 page.tsx
+   - 变更内容：使用 DetailPageShell；保留各自视觉层
+
+3. CHG-326 — 前台 FilterToolbar 接入（状态：⬜ 待开始）
+   - 创建时间：2026-03-30 01:00
+   - 计划开始：CHG-325 完成后
+   - 文件范围：search 页筛选区
+   - 变更内容：使用 FilterToolbar；保留前台样式差异

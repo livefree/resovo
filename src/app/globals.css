@@ -44,6 +44,16 @@
     --status-danger:  #dc2626;   /* red-600,   5.9:1 on white ✅ */
     --status-warning: #d97706;   /* amber-600, 3.1:1 on white (use on bg3+) */
     --status-info:    #2563eb;   /* blue-600,  5.1:1 on white ✅ */
+    --status-neutral: #64748b;   /* slate-500, 5.9:1 on white ✅ */
+
+    /* ── Status background chips (12% opacity) ───────────────── */
+    --status-success-bg: rgba(22, 163, 74, 0.12);
+    --status-danger-bg:  rgba(220, 38, 38, 0.12);
+    --status-warning-bg: rgba(217, 119, 6, 0.12);
+    --status-neutral-bg: rgba(100, 116, 139, 0.12);
+
+    /* ── Overlay ─────────────────────────────────────────────── */
+    --modal-overlay: rgba(0, 0, 0, 0.6);
   }
 
   .dark {
@@ -85,6 +95,16 @@
     --status-danger:  #f87171;   /* red-400,   6.9:1 on #060606 ✅ */
     --status-warning: #fbbf24;   /* amber-400, 10.1:1 on #060606 ✅ */
     --status-info:    #60a5fa;   /* blue-400,  6.2:1 on #060606 ✅ */
+    --status-neutral: #94a3b8;   /* slate-400, 8.2:1 on #060606 ✅ */
+
+    /* ── Status background chips (12% opacity) ───────────────── */
+    --status-success-bg: rgba(74, 222, 128, 0.12);
+    --status-danger-bg:  rgba(248, 113, 113, 0.12);
+    --status-warning-bg: rgba(251, 191, 36, 0.12);
+    --status-neutral-bg: rgba(148, 163, 184, 0.12);
+
+    /* ── Overlay ─────────────────────────────────────────────── */
+    --modal-overlay: rgba(0, 0, 0, 0.7);
   }
 }
 

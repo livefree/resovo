@@ -3,5 +3,31 @@
   "ignorePatterns": ["src/**/templates/**", ".next/**", "node_modules/**"],
   "rules": {
     "no-console": "error"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["src/components/admin/**/*.tsx", "src/components/admin/**/*.ts"],
+      "rules": {
+        "no-restricted-syntax": [
+          "warn",
+          {
+            "selector": "JSXAttribute[name.name='style'] Literal[value=/^#[0-9a-fA-F]{3}/i]",
+            "message": "admin 组件禁止在 style prop 中硬编码颜色，请使用 CSS 变量（如 var(--status-danger)）"
+          },
+          {
+            "selector": "JSXAttribute[name.name='style'] Literal[value=/^rgba?\\(/i]",
+            "message": "admin 组件禁止在 style prop 中硬编码 rgba/rgb，请使用 CSS 变量（如 var(--modal-overlay)）"
+          },
+          {
+            "selector": "Property > Literal[value=/^#[0-9a-fA-F]{3,8}$/i]",
+            "message": "admin 组件禁止硬编码颜色值，请使用 CSS 变量（如 var(--status-success)）"
+          },
+          {
+            "selector": "Property[key.name=/[Cc]olor|[Bb]ackground|[Bb]g/] > Literal[value=/^rgba?\\(/i]",
+            "message": "admin 组件禁止硬编码 rgba/rgb，请使用 CSS 变量（如 var(--status-success-bg)）"
+          }
+        ]
+      }
+    }
+  ]
 }

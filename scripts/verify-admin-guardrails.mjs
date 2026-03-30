@@ -82,6 +82,11 @@ function checkSingleDimension(changedFiles) {
   ]
 }
 
+// Tailwind 颜色工具类（存量 debt，warn-only，不阻塞构建）
+// 格式：text-{color}-{shade} / bg-{color}-{shade} / border-{color}-{shade}
+const TW_COLOR_RE =
+  /\b(?:text|bg|border|from|to|via|ring|fill|stroke|shadow|accent|decoration|outline|caret|divide|placeholder)-(red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-(?:50|100|200|300|400|500|600|700|800|900|950)\b/
+
 function checkFileContent(file) {
   if (!SOURCE_EXT_RE.test(file)) return []
   if (!existsSync(file)) return []
@@ -102,6 +107,20 @@ function checkFileContent(file) {
   }
 
   return issues
+}
+
+function checkTailwindColors(files) {
+  const warnings = []
+  for (const file of files) {
+    if (!SOURCE_EXT_RE.test(file)) continue
+    if (!existsSync(file)) continue
+    const text = readFileSync(file, 'utf8')
+    const matches = text.match(new RegExp(TW_COLOR_RE.source, 'g'))
+    if (matches && matches.length > 0) {
+      warnings.push(`  ${file}: ${matches.length} 处 Tailwind 颜色工具类（${[...new Set(matches)].slice(0, 3).join(', ')}…），建议改用 CSS 变量`)
+    }
+  }
+  return warnings
 }
 
 function main() {
@@ -128,6 +147,15 @@ function main() {
       console.error(`- ${issue}`)
     }
     process.exit(1)
+  }
+
+  // Tailwind 颜色类：warn-only，不阻塞
+  const twWarnings = checkTailwindColors(scopeFiles)
+  if (twWarnings.length > 0) {
+    console.warn(`verify-admin-guardrails: ${twWarnings.length} 个文件存在 Tailwind 硬编码颜色类（已知 debt，建议逐步迁移）：`)
+    for (const w of twWarnings) {
+      console.warn(w)
+    }
   }
 
   console.log(`verify-admin-guardrails passed (${scopeFiles.length} files checked)`)

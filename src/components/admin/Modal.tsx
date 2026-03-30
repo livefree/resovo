@@ -53,7 +53,7 @@ export function Modal({ open, onClose, title, children, size = 'md', className }
       {/* 遮罩层 */}
       <div
         className="absolute inset-0"
-        style={{ background: 'rgba(0,0,0,0.6)' }}
+        style={{ background: 'var(--modal-overlay)' }}
         aria-hidden="true"
       />
 

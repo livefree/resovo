@@ -25,12 +25,12 @@ interface StatusBadgeProps {
 // ── 配置 ──────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<BadgeStatus, { label: string; dotColor: string; bgVar: string }> = {
-  active:    { label: '活跃',   dotColor: '#22c55e', bgVar: 'rgba(34,197,94,0.12)' },
-  inactive:  { label: '停用',   dotColor: '#94a3b8', bgVar: 'rgba(148,163,184,0.12)' },
-  pending:   { label: '待审核', dotColor: '#f59e0b', bgVar: 'rgba(245,158,11,0.12)' },
-  banned:    { label: '已封禁', dotColor: '#ef4444', bgVar: 'rgba(239,68,68,0.12)' },
-  published: { label: '已发布', dotColor: '#22c55e', bgVar: 'rgba(34,197,94,0.12)' },
-  draft:     { label: '草稿',   dotColor: '#94a3b8', bgVar: 'rgba(148,163,184,0.12)' },
+  active:    { label: '活跃',   dotColor: 'var(--status-success)', bgVar: 'var(--status-success-bg)' },
+  inactive:  { label: '停用',   dotColor: 'var(--status-neutral)', bgVar: 'var(--status-neutral-bg)' },
+  pending:   { label: '待审核', dotColor: 'var(--status-warning)', bgVar: 'var(--status-warning-bg)' },
+  banned:    { label: '已封禁', dotColor: 'var(--status-danger)',  bgVar: 'var(--status-danger-bg)' },
+  published: { label: '已发布', dotColor: 'var(--status-success)', bgVar: 'var(--status-success-bg)' },
+  draft:     { label: '草稿',   dotColor: 'var(--status-neutral)', bgVar: 'var(--status-neutral-bg)' },
 }
 
 // ── Component ─────────────────────────────────────────────────────
