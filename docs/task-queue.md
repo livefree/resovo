@@ -4130,3 +4130,53 @@
   - [ ] 确认 ListPageShell/FilterToolbar/DetailPageShell 在前台页面的扩展方向
   - [ ] 确认开始 SEQ-20260330-46（删除此块即可）
 ---
+
+---
+
+## [SEQ-20260331-47] ColumnHeaderMenu 共享化 + 排序修复
+- **状态**：🔄 进行中
+- **创建时间**：2026-03-31 00:00
+- **最后更新时间**：2026-03-31 00:30
+- **目标**：将 CrawlerSite per-column 菜单提取为共享组件并推广；修复 TableSettingsPanel sortable 断路
+- **依赖**：SEQ-20260330-45 ✅
+
+### 任务列表
+
+1. CHG-327 — 提取 ColumnHeaderMenu 为共享组件 + ModernTableHead 原生支持（状态：✅ 已完成）
+   - 创建时间：2026-03-31 00:00
+   - 计划开始：立即
+   - 实际开始：2026-03-31 00:00
+   - 完成时间：2026-03-31 00:30
+   - 文件范围：
+     - `src/components/admin/shared/modern-table/column-menu/ColumnHeaderMenu.tsx`（新建）
+     - `src/components/admin/shared/modern-table/types.ts`（新增 ColumnMenuConfig）
+     - `src/components/admin/shared/modern-table/ModernTableHead.tsx`（column menu 渲染）
+     - `src/components/admin/shared/modern-table/ModernDataTable.tsx`（派生 onHideColumn）
+     - `src/components/admin/system/crawler-site/tableState.ts`（新增 WeightPreset + isColumnFiltered）
+     - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteTableColumns.tsx`（迁移）
+     - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`（sort wiring）
+     - `src/components/admin/system/crawler-site/components/ColumnMenu.tsx`（删除）
+     - `src/components/admin/system/crawler-site/components/CrawlerSiteTableHead.tsx`（删除）
+   - 完成备注：新建 ColumnHeaderMenu 共享组件（canSort/canHide/filterContent slot）；ModernTableHead 增加 openColumnMenu state + click-outside + ColumnHeaderCellContent；ModernDataTable 派生 onHideColumn；tableState.ts 新增 WeightPreset + isColumnFiltered；CrawlerSiteTable 完成 sort wiring；删除旧的 one-off ColumnMenu + CrawlerSiteTableHead；全部 86 测试文件 772 tests 通过
+
+2. CHG-328 — 修复 TableSettingsPanel sortable 断路（状态：⬜ 待开始）
+   - 创建时间：2026-03-31 00:00
+   - 计划开始：CHG-327 完成后
+   - 文件范围：
+     - `src/components/admin/shared/modern-table/ModernDataTable.tsx`
+     - `src/components/admin/shared/modern-table/settings/TableSettingsTrigger.tsx`
+     - `src/components/admin/shared/modern-table/settings/TableSettingsPanel.tsx`
+   - 变更内容：派生 hasSorting = !!onSortChange，传入 TableSettingsPanel，无排序时隐藏 sortable 列
+   - 完成备注：_（AI 填写）_
+
+3. CHG-329 — 为已接入排序的表格添加 per-column 菜单（状态：⬜ 待开始）
+   - 创建时间：2026-03-31 00:00
+   - 计划开始：CHG-328 完成后
+   - 文件范围：
+     - `src/components/admin/users/useUserTableColumns.tsx`
+     - `src/components/admin/videos/useVideoTableColumns.tsx`
+     - `src/components/admin/content/useSubmissionTableColumns.tsx`
+     - `src/components/admin/content/useSubtitleTableColumns.tsx`
+     - `src/components/admin/system/crawler-task/useCrawlerTaskTableColumns.tsx`
+   - 变更内容：各列增加 `columnMenu: { canSort, canHide: true }`（本轮不加 filterContent）
+   - 完成备注：_（AI 填写）_

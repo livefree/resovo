@@ -1,12 +1,14 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { ResolvedTableColumn, TableSortState } from '@/components/admin/shared/modern-table/types'
+import { ColumnHeaderMenu } from '@/components/admin/shared/modern-table/column-menu/ColumnHeaderMenu'
 
 interface ModernTableHeadProps<T> {
   columns: Array<ResolvedTableColumn<T>>
   sort?: TableSortState
   onSortChange?: (nextSort: TableSortState) => void
   onColumnWidthChange?: (columnId: string, nextWidth: number) => void
+  onHideColumn?: (id: string) => void
 }
 
 function getSortIndicator(columnId: string, sort?: TableSortState): string {
@@ -18,21 +20,135 @@ function getNextSort(columnId: string, sort?: TableSortState): TableSortState {
   if (!sort || sort.field !== columnId) {
     return { field: columnId, direction: 'asc' }
   }
-
   return {
     field: columnId,
     direction: sort.direction === 'asc' ? 'desc' : 'asc',
   }
 }
 
+// ── ColumnHeaderCellContent ───────────────────────────────────────
+
+interface ColumnHeaderCellContentProps {
+  column: ResolvedTableColumn<unknown>
+  sort?: TableSortState
+  onSortChange?: (nextSort: TableSortState) => void
+  onHideColumn?: (id: string) => void
+  openColumnMenu: string | null
+  setOpenColumnMenu: (id: string | null) => void
+}
+
+function ColumnHeaderCellContent({
+  column,
+  sort,
+  onSortChange,
+  onHideColumn,
+  openColumnMenu,
+  setOpenColumnMenu,
+}: ColumnHeaderCellContentProps) {
+  const canSort = column.enableSorting === true && typeof onSortChange === 'function'
+  const hasMenu = Boolean(column.columnMenu)
+  const isMenuOpen = openColumnMenu === column.id
+  const currentSortDir = sort?.field === column.id ? sort.direction : null
+
+  const menuCanSort = (
+    column.columnMenu?.canSort === true
+    && column.enableSorting !== false
+    && typeof onSortChange === 'function'
+  )
+
+  const filterDot = column.columnMenu?.isFiltered
+    ? <span className="inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--accent)]" />
+    : null
+
+  return (
+    <div className="relative flex items-center gap-1">
+      {canSort ? (
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 text-sm font-medium hover:text-[var(--text)]"
+          data-testid={`modern-table-sort-${column.id}`}
+          onClick={() => onSortChange?.(getNextSort(column.id, sort))}
+        >
+          {column.header}
+          {getSortIndicator(column.id, sort)}
+          {filterDot}
+        </button>
+      ) : (
+        <span className="inline-flex items-center gap-1 text-sm font-medium">
+          {column.header}
+          {filterDot}
+        </span>
+      )}
+
+      {hasMenu && (
+        <button
+          type="button"
+          aria-label={`${String(column.header)} 列菜单`}
+          aria-expanded={isMenuOpen}
+          onClick={() => setOpenColumnMenu(isMenuOpen ? null : column.id)}
+          className="rounded px-1 text-xs text-[var(--muted)] hover:bg-[var(--bg3)] hover:text-[var(--text)]"
+          data-testid={`column-menu-trigger-${column.id}`}
+        >
+          ⋮
+        </button>
+      )}
+
+      {isMenuOpen && column.columnMenu && (
+        <ColumnHeaderMenu
+          canSort={menuCanSort}
+          currentSortDir={currentSortDir}
+          canHide={column.columnMenu.canHide === true}
+          filterContent={column.columnMenu.filterContent}
+          isFiltered={column.columnMenu.isFiltered}
+          onSortAsc={() => {
+            onSortChange?.({ field: column.id, direction: 'asc' })
+            setOpenColumnMenu(null)
+          }}
+          onSortDesc={() => {
+            onSortChange?.({ field: column.id, direction: 'desc' })
+            setOpenColumnMenu(null)
+          }}
+          onHide={() => {
+            onHideColumn?.(column.id)
+            setOpenColumnMenu(null)
+          }}
+          onClearFilter={column.columnMenu.onClearFilter}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── ModernTableHead ───────────────────────────────────────────────
+
 export function ModernTableHead<T>({
   columns,
   sort,
   onSortChange,
   onColumnWidthChange,
+  onHideColumn,
 }: ModernTableHeadProps<T>) {
+  const [openColumnMenu, setOpenColumnMenu] = useState<string | null>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
 
+  // Click-outside: close column menu on mousedown outside
+  useEffect(() => {
+    if (!openColumnMenu) return
+
+    function handleMouseDown(e: MouseEvent) {
+      const target = e.target as Node
+      // Close if click is outside a column menu container
+      const menuContainers = document.querySelectorAll('[data-column-menu-container]')
+      let inside = false
+      menuContainers.forEach((el) => { if (el.contains(target)) inside = true })
+      if (!inside) setOpenColumnMenu(null)
+    }
+
+    document.addEventListener('mousedown', handleMouseDown)
+    return () => document.removeEventListener('mousedown', handleMouseDown)
+  }, [openColumnMenu])
+
+  // Resize drag cleanup on unmount
   useEffect(() => () => {
     cleanupRef.current?.()
   }, [])
@@ -70,42 +186,34 @@ export function ModernTableHead<T>({
   return (
     <thead className="bg-[var(--bg2)] text-[var(--muted)]">
       <tr>
-        {columns.map((column) => {
-          const canSort = column.enableSorting === true && typeof onSortChange === 'function'
-
-          return (
-            <th
-              key={column.id}
-              className="relative h-12 border-b border-[var(--subtle)] px-4 text-left align-middle"
-              style={{ width: `${column.width}px`, minWidth: `${column.minWidth}px` }}
-              suppressHydrationWarning
-            >
-              {canSort ? (
-                <button
-                  type="button"
-                  className="inline-flex items-center text-sm font-medium hover:text-[var(--text)]"
-                  data-testid={`modern-table-sort-${column.id}`}
-                  onClick={() => onSortChange?.(getNextSort(column.id, sort))}
-                >
-                  {column.header}
-                  {getSortIndicator(column.id, sort)}
-                </button>
-              ) : (
-                <span className="text-sm font-medium">{column.header}</span>
-              )}
-              {column.enableResizing && onColumnWidthChange ? (
-                <span
-                  role="separator"
-                  aria-orientation="vertical"
-                  aria-label={`调整${column.id}列宽`}
-                  className="absolute right-0 top-0 h-full w-2 cursor-col-resize select-none"
-                  data-testid={`modern-table-resize-${column.id}`}
-                  onMouseDown={(event) => handleResizeMouseDown(event, column.id, column.width, column.minWidth)}
-                />
-              ) : null}
-            </th>
-          )
-        })}
+        {columns.map((column) => (
+          <th
+            key={column.id}
+            data-column-menu-container
+            className="relative h-12 border-b border-[var(--subtle)] px-4 text-left align-middle"
+            style={{ width: `${column.width}px`, minWidth: `${column.minWidth}px` }}
+            suppressHydrationWarning
+          >
+            <ColumnHeaderCellContent
+              column={column as ResolvedTableColumn<unknown>}
+              sort={sort}
+              onSortChange={onSortChange}
+              onHideColumn={onHideColumn}
+              openColumnMenu={openColumnMenu}
+              setOpenColumnMenu={setOpenColumnMenu}
+            />
+            {column.enableResizing && onColumnWidthChange ? (
+              <span
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={`调整${column.id}列宽`}
+                className="absolute right-0 top-0 h-full w-2 cursor-col-resize select-none"
+                data-testid={`modern-table-resize-${column.id}`}
+                onMouseDown={(event) => handleResizeMouseDown(event, column.id, column.width, column.minWidth)}
+              />
+            ) : null}
+          </th>
+        ))}
       </tr>
     </thead>
   )

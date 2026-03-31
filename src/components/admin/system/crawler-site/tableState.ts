@@ -91,6 +91,27 @@ export const DEFAULT_COLUMN_WIDTH: ColumnWidthState = {
   manageOps: 120,
 }
 
+/** 权重预设（高/中/低阈值）*/
+export interface WeightPreset {
+  high: number
+  medium: number
+  low: number
+}
+
+/** 判断某列是否有激活的筛选条件 */
+export function isColumnFiltered(columnId: ColumnId, filters: FilterState): boolean {
+  switch (columnId) {
+    case 'name': return filters.keyOrName.trim() !== ''
+    case 'key': return filters.apiUrl.trim() !== ''
+    case 'typeFormat': return filters.sourceType !== 'all' || filters.format !== 'all'
+    case 'weight': return filters.weightMin.trim() !== '' || filters.weightMax.trim() !== ''
+    case 'isAdult': return filters.isAdult !== 'all'
+    case 'fromConfig': return filters.fromConfig !== 'all'
+    case 'enabled': return filters.disabled !== 'all'
+    default: return false
+  }
+}
+
 export function readPersistedState() {
   const defaults = {
     sortBy: 'name' as SortField,

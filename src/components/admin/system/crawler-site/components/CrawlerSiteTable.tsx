@@ -1,17 +1,18 @@
 /**
  * CrawlerSiteTable.tsx — 爬虫站点表格（Client Component）
- * CHG-228: HeaderCell → CrawlerSiteTableHead; 列定义 → useCrawlerSiteTableColumns
+ * CHG-228: 列定义 → useCrawlerSiteTableColumns
+ * CHG-327: 迁移至共享 ColumnHeaderMenu；增加 sort/onSortChange wiring
  */
 
 import type { Dispatch, SetStateAction } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { CrawlerSite, UpdateCrawlerSiteInput } from '@/types'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
-import type { ColumnId, FilterState, SortDir, SortField } from '@/components/admin/system/crawler-site/tableState'
+import type { TableSortState } from '@/components/admin/shared/modern-table/types'
+import type { ColumnId, FilterState, SortDir, SortField, WeightPreset } from '@/components/admin/system/crawler-site/tableState'
 import { COLUMN_META, DEFAULT_COLUMNS, DEFAULT_FILTERS, REQUIRED_COLUMNS } from '@/components/admin/system/crawler-site/tableState'
 import { useCrawlerSiteTableColumns, normalizeWeightPreset } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteTableColumns'
-import type { WeightPreset } from '@/components/admin/system/crawler-site/components/CrawlerSiteTableHead'
 
 type ValidateStatus = 'idle' | 'checking' | 'ok' | 'error' | 'timeout'
 
@@ -54,22 +55,18 @@ export function CrawlerSiteTable(props: CrawlerSiteTableProps) {
     handleValidate, handleTriggerCrawl, handleDelete, setEditTarget, showToast,
   } = props
 
-  const [openMenuColumn, setOpenMenuColumn] = useState<ColumnId | null>(null)
   const [weightPresets, setWeightPresets] = useState<WeightPreset>({ high: 80, medium: 50, low: 20 })
-  const wrapperRef = useRef<HTMLDivElement | null>(null)
 
   const tableSettings = useTableSettings({
     tableId: 'crawler-site-table',
     columns: CRAWLER_SITE_SETTINGS_COLUMNS,
   })
 
-  useEffect(() => {
-    const onPointerDown = (event: MouseEvent) => {
-      if (!wrapperRef.current?.contains(event.target as Node)) setOpenMenuColumn(null)
-    }
-    window.addEventListener('mousedown', onPointerDown)
-    return () => window.removeEventListener('mousedown', onPointerDown)
-  }, [])
+  // Adapter: ColumnFilterPanel expects (patch: Partial<FilterState>) => void
+  const handlePatchFilters = useMemo(
+    () => (patch: Partial<FilterState>) => setFilters((prev) => ({ ...prev, ...patch })),
+    [setFilters],
+  )
 
   const clearColumnFilter = useMemo(
     () => (columnId: ColumnId) => {
@@ -91,13 +88,16 @@ export function CrawlerSiteTable(props: CrawlerSiteTableProps) {
     setWeightPresets((prev) => normalizeWeightPreset(level, value, prev))
   }
 
+  // Wire ModernDataTable sort → domain setSort
+  function handleSortChange(s: TableSortState) {
+    setSort(s.field as SortField, s.direction as SortDir)
+  }
+
   const allTableColumns = useCrawlerSiteTableColumns({
-    displaySites, selected, allVisibleSelected, sortBy, sortDir, filters,
-    openMenuColumn,
-    setOpenMenuColumn: setOpenMenuColumn as Dispatch<SetStateAction<ColumnId | null>>,
+    displaySites, selected, allVisibleSelected, filters,
     weightPresets, onPatchWeightPreset: handlePatchWeightPreset,
-    setFilters, clearColumnFilter, setSort,
-    onHideColumn: (id: ColumnId) => tableSettings.updateSetting(id, 'visible', false),
+    setFilters: handlePatchFilters,
+    clearColumnFilter,
     toggleSelect, toggleAll,
     deps: {
       rowSaving, runningBySite, validateStates, weightPresets,
@@ -117,13 +117,14 @@ export function CrawlerSiteTable(props: CrawlerSiteTableProps) {
 
   return (
     <div
-      ref={wrapperRef}
       data-testid="crawler-sites-scroll-container"
       className="h-[60vh] min-h-[420px] max-h-[720px] overflow-y-auto"
     >
       <ModernDataTable
         columns={tableColumns}
         rows={displaySites}
+        sort={{ field: sortBy, direction: sortDir }}
+        onSortChange={handleSortChange}
         emptyText="没有符合当前筛选条件的源站"
         getRowId={(row) => row.key}
         onColumnWidthChange={handleColumnWidthChange}

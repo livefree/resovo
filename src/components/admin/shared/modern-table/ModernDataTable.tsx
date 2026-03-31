@@ -113,6 +113,11 @@ export function ModernDataTable<T>({
     [resolvedColumns],
   )
 
+  // Derive onHideColumn from settingsSlot so column menus can hide columns
+  const onHideColumn = settingsSlot
+    ? (id: string) => settingsSlot.onSettingsChange(id, 'visible', false)
+    : undefined
+
   return (
     <div className="relative">
       {settingsSlot && (
@@ -137,6 +142,7 @@ export function ModernDataTable<T>({
               sort={sort}
               onSortChange={onSortChange}
               onColumnWidthChange={onColumnWidthChange}
+              onHideColumn={onHideColumn}
             />
             <ModernTableBody
               columns={resolvedColumns}

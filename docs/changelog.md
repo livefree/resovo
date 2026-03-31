@@ -4549,3 +4549,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/shared/layout/DashboardShell.tsx`（新建，DashboardShell + DashboardSection）
   - `src/components/admin/AdminAnalyticsDashboard.tsx`（迁移使用 DashboardShell/DashboardSection；顺手修复 text-red-400 → text-[var(--status-danger)]）
 - **测试覆盖**：typecheck ✅；759 tests 通过
+
+## CHG-327 — 提取 ColumnHeaderMenu 为共享组件 + ModernTableHead 原生支持
+- **完成时间**：2026-03-31 00:30
+- **修改文件**：
+  - `src/components/admin/shared/modern-table/column-menu/ColumnHeaderMenu.tsx`（新建）
+  - `src/components/admin/shared/modern-table/types.ts`（新增 ColumnMenuConfig + columnMenu 字段）
+  - `src/components/admin/shared/modern-table/ModernTableHead.tsx`（openColumnMenu state + ColumnHeaderCellContent + ColumnHeaderMenu 渲染）
+  - `src/components/admin/shared/modern-table/ModernDataTable.tsx`（派生 onHideColumn，传给 ModernTableHead）
+  - `src/components/admin/system/crawler-site/tableState.ts`（WeightPreset 类型 + isColumnFiltered 函数）
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteTableColumns.tsx`（迁移至 columnMenu；删除 HeaderCell 依赖）
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`（sort/onSortChange wiring；移除 openMenuColumn state）
+  - `src/components/admin/system/crawler-site/components/ColumnMenu.tsx`（删除）
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTableHead.tsx`（删除）
+  - `tests/unit/components/admin/shared/modern-table/ColumnHeaderMenu.test.tsx`（新建，13 tests）
+- **测试覆盖**：全部 86 测试文件 772 tests 通过；typecheck + lint 通过
+- **共享层沉淀**：ColumnHeaderMenu 已沉淀至 `admin/shared/modern-table/column-menu/`；WeightPreset / isColumnFiltered 沉淀至 tableState.ts
