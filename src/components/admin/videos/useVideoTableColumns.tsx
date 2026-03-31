@@ -142,6 +142,7 @@ interface ColumnDeps {
 
 function buildDataColumn(columnId: VideoColumnId, deps: ColumnDeps): TableColumn<VideoAdminRow> {
   const meta = VIDEO_COLUMNS.find((c) => c.id === columnId)
+  const canSort = deps.sortable[columnId] ?? false
   const col: TableColumn<VideoAdminRow> = {
     id: columnId,
     header: COLUMN_LABELS[columnId],
@@ -149,7 +150,8 @@ function buildDataColumn(columnId: VideoColumnId, deps: ColumnDeps): TableColumn
     width: meta?.width,
     minWidth: meta?.minWidth,
     enableResizing: meta?.resizable,
-    enableSorting: deps.sortable[columnId] ?? false,
+    enableSorting: canSort,
+    columnMenu: columnId !== 'actions' ? { canSort, canHide: true } : undefined,
   }
   switch (columnId) {
     case 'cover':

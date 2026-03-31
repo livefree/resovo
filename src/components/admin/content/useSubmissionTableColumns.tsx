@@ -70,6 +70,7 @@ export function useSubmissionTableColumns({
         minWidth: 180,
         enableSorting: SUBMISSION_SORTABLE_MAP.video,
         enableResizing: true,
+        columnMenu: { canSort: SUBMISSION_SORTABLE_MAP.video, canHide: true },
         cell: ({ row }) => (
           <span
             className="inline-block max-w-[240px] truncate text-[var(--text)]"
@@ -87,6 +88,7 @@ export function useSubmissionTableColumns({
         minWidth: 220,
         enableSorting: SUBMISSION_SORTABLE_MAP.source_url,
         enableResizing: true,
+        columnMenu: { canSort: SUBMISSION_SORTABLE_MAP.source_url, canHide: true },
         cell: ({ row }) => (
           <span
             className="inline-block max-w-[320px] truncate font-mono text-xs text-[var(--muted)]"
@@ -104,6 +106,7 @@ export function useSubmissionTableColumns({
         minWidth: 120,
         enableSorting: SUBMISSION_SORTABLE_MAP.submitted_by,
         enableResizing: true,
+        columnMenu: { canSort: SUBMISSION_SORTABLE_MAP.submitted_by, canHide: true },
         cell: ({ row }) => (
           <span className="text-[var(--muted)]">
             {row.submitted_by_username ?? row.submitted_by ?? '—'}
@@ -118,6 +121,7 @@ export function useSubmissionTableColumns({
         minWidth: 130,
         enableSorting: SUBMISSION_SORTABLE_MAP.created_at,
         enableResizing: true,
+        columnMenu: { canSort: SUBMISSION_SORTABLE_MAP.created_at, canHide: true },
         cell: ({ row }) => (
           <span className="text-xs text-[var(--muted)]">
             {new Date(row.created_at).toLocaleDateString()}

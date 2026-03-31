@@ -4574,3 +4574,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/shared/modern-table/settings/TableSettingsPanel.tsx`（hasSorting=false 时隐藏排序列和 sortable checkbox）
 - **测试覆盖**：全部 86 测试文件 772 tests 通过；typecheck + lint 通过
 - **共享层沉淀**：无新共享组件；TableSettingsPanel hasSorting 行为向后兼容（默认 true）
+
+## CHG-329 — 为已接入排序的表格添加 per-column 菜单
+- **完成时间**：2026-03-31 01:10
+- **修改文件**：
+  - `src/components/admin/users/useUserTableColumns.tsx`（5 列 columnMenu）
+  - `src/components/admin/videos/useVideoTableColumns.tsx`（buildDataColumn 中 columnMenu）
+  - `src/components/admin/content/useSubmissionTableColumns.tsx`（4 列 columnMenu）
+  - `src/components/admin/content/useSubtitleTableColumns.tsx`（5 列 columnMenu）
+  - `src/components/admin/system/crawler-task/useCrawlerTaskTableColumns.tsx`（8 列 columnMenu）
+- **测试覆盖**：全部 86 测试文件 772 tests 通过；typecheck + lint 通过
+- **共享层沉淀**：无新共享层；本次为既有共享组件 ColumnHeaderMenu 的接入扩展

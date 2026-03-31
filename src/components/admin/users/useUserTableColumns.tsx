@@ -72,6 +72,7 @@ export function useUserTableColumns({
         minWidth: 140,
         enableSorting: USER_SORTABLE_MAP.username,
         enableResizing: true,
+        columnMenu: { canSort: USER_SORTABLE_MAP.username, canHide: true },
         cell: ({ row }) => (
           <span
             className="inline-block max-w-[180px] truncate font-medium text-[var(--text)]"
@@ -89,6 +90,7 @@ export function useUserTableColumns({
         minWidth: 180,
         enableSorting: USER_SORTABLE_MAP.email,
         enableResizing: true,
+        columnMenu: { canSort: USER_SORTABLE_MAP.email, canHide: true },
         cell: ({ row }) => (
           <span
             className="inline-block max-w-[260px] truncate text-[var(--muted)]"
@@ -106,6 +108,7 @@ export function useUserTableColumns({
         minWidth: 90,
         enableSorting: USER_SORTABLE_MAP.role,
         enableResizing: true,
+        columnMenu: { canSort: USER_SORTABLE_MAP.role, canHide: true },
         cell: ({ row }) => (
           <StatusBadge status={ROLE_STATUS_MAP[row.role] ?? 'inactive'} />
         ),
@@ -118,6 +121,7 @@ export function useUserTableColumns({
         minWidth: 110,
         enableSorting: USER_SORTABLE_MAP.created_at,
         enableResizing: true,
+        columnMenu: { canSort: USER_SORTABLE_MAP.created_at, canHide: true },
         cell: ({ row }) => (
           <span className="text-xs text-[var(--muted)]">
             {new Date(row.created_at).toLocaleDateString()}
@@ -132,6 +136,7 @@ export function useUserTableColumns({
         minWidth: 90,
         enableSorting: USER_SORTABLE_MAP.status,
         enableResizing: true,
+        columnMenu: { canSort: USER_SORTABLE_MAP.status, canHide: true },
         cell: ({ row }) => (
           <StatusBadge status={row.banned_at ? 'banned' : 'active'} />
         ),

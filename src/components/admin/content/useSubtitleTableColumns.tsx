@@ -73,6 +73,7 @@ export function useSubtitleTableColumns({
         minWidth: 180,
         enableSorting: SUBTITLE_SORTABLE_MAP.video,
         enableResizing: true,
+        columnMenu: { canSort: SUBTITLE_SORTABLE_MAP.video, canHide: true },
         cell: ({ row }) => (
           <span
             className="inline-block max-w-[240px] truncate text-[var(--text)]"
@@ -90,6 +91,7 @@ export function useSubtitleTableColumns({
         minWidth: 110,
         enableSorting: SUBTITLE_SORTABLE_MAP.language,
         enableResizing: true,
+        columnMenu: { canSort: SUBTITLE_SORTABLE_MAP.language, canHide: true },
         cell: ({ row }) => (
           <span className="text-[var(--muted)]">{row.language}</span>
         ),
@@ -102,6 +104,7 @@ export function useSubtitleTableColumns({
         minWidth: 90,
         enableSorting: SUBTITLE_SORTABLE_MAP.format,
         enableResizing: true,
+        columnMenu: { canSort: SUBTITLE_SORTABLE_MAP.format, canHide: true },
         cell: ({ row }) => (
           <span className="uppercase text-[var(--muted)]">{row.format}</span>
         ),
@@ -114,6 +117,7 @@ export function useSubtitleTableColumns({
         minWidth: 120,
         enableSorting: SUBTITLE_SORTABLE_MAP.uploaded_by,
         enableResizing: true,
+        columnMenu: { canSort: SUBTITLE_SORTABLE_MAP.uploaded_by, canHide: true },
         cell: ({ row }) => (
           <span
             className="inline-block max-w-[140px] truncate text-[var(--muted)]"
@@ -131,6 +135,7 @@ export function useSubtitleTableColumns({
         minWidth: 130,
         enableSorting: SUBTITLE_SORTABLE_MAP.created_at,
         enableResizing: true,
+        columnMenu: { canSort: SUBTITLE_SORTABLE_MAP.created_at, canHide: true },
         cell: ({ row }) => (
           <span className="text-xs text-[var(--muted)]">
             {new Date(row.created_at).toLocaleDateString()}

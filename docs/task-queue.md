@@ -4134,9 +4134,9 @@
 ---
 
 ## [SEQ-20260331-47] ColumnHeaderMenu 共享化 + 排序修复
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-03-31 00:00
-- **最后更新时间**：2026-03-31 00:30
+- **最后更新时间**：2026-03-31 01:10
 - **目标**：将 CrawlerSite per-column 菜单提取为共享组件并推广；修复 TableSettingsPanel sortable 断路
 - **依赖**：SEQ-20260330-45 ✅
 
@@ -4171,9 +4171,11 @@
    - 变更内容：派生 hasSorting = !!onSortChange，传入 TableSettingsPanel，无排序时隐藏 sortable 列
    - 完成备注：ModernDataTable 派生 hasSorting；TableSettingsTrigger 透传；TableSettingsPanel 条件渲染排序列；向后兼容（hasSorting 默认 true）；772 tests 通过
 
-3. CHG-329 — 为已接入排序的表格添加 per-column 菜单（状态：⬜ 待开始）
+3. CHG-329 — 为已接入排序的表格添加 per-column 菜单（状态：✅ 已完成）
    - 创建时间：2026-03-31 00:00
    - 计划开始：CHG-328 完成后
+   - 实际开始：2026-03-31 00:55
+   - 完成时间：2026-03-31 01:10
    - 文件范围：
      - `src/components/admin/users/useUserTableColumns.tsx`
      - `src/components/admin/videos/useVideoTableColumns.tsx`
@@ -4181,4 +4183,4 @@
      - `src/components/admin/content/useSubtitleTableColumns.tsx`
      - `src/components/admin/system/crawler-task/useCrawlerTaskTableColumns.tsx`
    - 变更内容：各列增加 `columnMenu: { canSort, canHide: true }`（本轮不加 filterContent）
-   - 完成备注：_（AI 填写）_
+   - 完成备注：5 个表格共计 ~25 列添加 columnMenu；actions 列不添加；772 tests 通过

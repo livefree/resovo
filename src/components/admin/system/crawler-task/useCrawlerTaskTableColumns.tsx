@@ -131,6 +131,7 @@ export function useCrawlerTaskTableColumns({
         header: CRAWLER_TASK_COLUMN_LABELS.runId,
         accessor: (row) => getRunId(row),
         width: 120, minWidth: 100, enableResizing: true, enableSorting: true,
+        columnMenu: { canSort: true, canHide: true },
         cell: ({ row }) => {
           const runId = getRunId(row)
           if (!runId) return <span className="text-xs text-[var(--muted)]">—</span>
@@ -151,6 +152,7 @@ export function useCrawlerTaskTableColumns({
         header: CRAWLER_TASK_COLUMN_LABELS.type,
         accessor: (row) => row.type,
         width: 120, minWidth: 96, enableResizing: true, enableSorting: true,
+        columnMenu: { canSort: true, canHide: true },
         cell: ({ row }) => <span className="text-[var(--text)]">{row.type}</span>,
       },
       {
@@ -158,6 +160,7 @@ export function useCrawlerTaskTableColumns({
         header: CRAWLER_TASK_COLUMN_LABELS.site,
         accessor: getSiteKey,
         width: 220, minWidth: 150, enableResizing: true, enableSorting: true,
+        columnMenu: { canSort: true, canHide: true },
         cell: ({ row }) => (
           <span className="block max-w-xs truncate text-xs text-[var(--muted)]">
             {getSiteKey(row)}
@@ -169,6 +172,7 @@ export function useCrawlerTaskTableColumns({
         header: CRAWLER_TASK_COLUMN_LABELS.triggerType,
         accessor: (row) => row.triggerType,
         width: 120, minWidth: 96, enableResizing: true, enableSorting: true,
+        columnMenu: { canSort: true, canHide: true },
         cell: ({ row }) => <TriggerBadge triggerType={row.triggerType} />,
       },
       {
@@ -176,6 +180,7 @@ export function useCrawlerTaskTableColumns({
         header: CRAWLER_TASK_COLUMN_LABELS.status,
         accessor: (row) => row.status,
         width: 110, minWidth: 90, enableResizing: true, enableSorting: true,
+        columnMenu: { canSort: true, canHide: true },
         cell: ({ row }) => <StatusBadge status={row.status} />,
       },
       {
@@ -183,6 +188,7 @@ export function useCrawlerTaskTableColumns({
         header: CRAWLER_TASK_COLUMN_LABELS.startedAt,
         accessor: (row) => row.startedAt ?? row.started_at ?? row.scheduledAt,
         width: 180, minWidth: 140, enableResizing: true, enableSorting: true,
+        columnMenu: { canSort: true, canHide: true },
         cell: ({ row }) => (
           <span className="text-xs text-[var(--muted)]">
             {parseTime(row.startedAt ?? row.started_at ?? row.scheduledAt)}
@@ -194,6 +200,7 @@ export function useCrawlerTaskTableColumns({
         header: CRAWLER_TASK_COLUMN_LABELS.finishedAt,
         accessor: (row) => row.finishedAt ?? row.finished_at,
         width: 180, minWidth: 140, enableResizing: true, enableSorting: true,
+        columnMenu: { canSort: true, canHide: true },
         cell: ({ row }) => (
           <span className="text-xs text-[var(--muted)]">
             {parseTime(row.finishedAt ?? row.finished_at)}
@@ -205,6 +212,7 @@ export function useCrawlerTaskTableColumns({
         header: CRAWLER_TASK_COLUMN_LABELS.error,
         accessor: getErrorMessage,
         width: 260, minWidth: 180, enableResizing: true, enableSorting: true,
+        columnMenu: { canSort: true, canHide: true },
         cell: ({ row }) => (
           <span className="block max-w-xs truncate text-xs text-red-400">
             {getErrorMessage(row)}
