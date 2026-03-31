@@ -35,6 +35,8 @@ interface TableSettingsTriggerProps {
     value: boolean,
   ) => void
   onReset: () => void
+  /** 当前表格是否支持排序；false 时 TableSettingsPanel 隐藏排序列 */
+  hasSorting?: boolean
   'data-testid'?: string
 }
 
@@ -42,6 +44,7 @@ export function TableSettingsTrigger({
   columns,
   onToggle,
   onReset,
+  hasSorting,
   'data-testid': testId,
 }: TableSettingsTriggerProps) {
   const [isOpen, setIsOpen] = useState(false)
@@ -95,6 +98,7 @@ export function TableSettingsTrigger({
         columns={columns}
         onToggle={onToggle}
         onReset={onReset}
+        hasSorting={hasSorting}
         data-testid={testId ? `${testId}-content` : undefined}
       />
     </div>

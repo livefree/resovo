@@ -118,6 +118,9 @@ export function ModernDataTable<T>({
     ? (id: string) => settingsSlot.onSettingsChange(id, 'visible', false)
     : undefined
 
+  // hasSorting: whether this table supports sorting (controls sortable checkbox visibility)
+  const hasSorting = typeof onSortChange === 'function'
+
   return (
     <div className="relative">
       {settingsSlot && (
@@ -126,6 +129,7 @@ export function ModernDataTable<T>({
             columns={settingsSlot.settingsColumns}
             onToggle={settingsSlot.onSettingsChange}
             onReset={settingsSlot.onSettingsReset}
+            hasSorting={hasSorting}
             data-testid={scrollTestId ? `${scrollTestId}-settings` : undefined}
           />
         </div>

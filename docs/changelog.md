@@ -4565,3 +4565,12 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/shared/modern-table/ColumnHeaderMenu.test.tsx`（新建，13 tests）
 - **测试覆盖**：全部 86 测试文件 772 tests 通过；typecheck + lint 通过
 - **共享层沉淀**：ColumnHeaderMenu 已沉淀至 `admin/shared/modern-table/column-menu/`；WeightPreset / isColumnFiltered 沉淀至 tableState.ts
+
+## CHG-328 — 修复 TableSettingsPanel sortable 断路
+- **完成时间**：2026-03-31 00:50
+- **修改文件**：
+  - `src/components/admin/shared/modern-table/ModernDataTable.tsx`（派生 hasSorting = typeof onSortChange === 'function'）
+  - `src/components/admin/shared/modern-table/settings/TableSettingsTrigger.tsx`（新增 hasSorting 透传）
+  - `src/components/admin/shared/modern-table/settings/TableSettingsPanel.tsx`（hasSorting=false 时隐藏排序列和 sortable checkbox）
+- **测试覆盖**：全部 86 测试文件 772 tests 通过；typecheck + lint 通过
+- **共享层沉淀**：无新共享组件；TableSettingsPanel hasSorting 行为向后兼容（默认 true）

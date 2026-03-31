@@ -4159,15 +4159,17 @@
      - `src/components/admin/system/crawler-site/components/CrawlerSiteTableHead.tsx`（删除）
    - 完成备注：新建 ColumnHeaderMenu 共享组件（canSort/canHide/filterContent slot）；ModernTableHead 增加 openColumnMenu state + click-outside + ColumnHeaderCellContent；ModernDataTable 派生 onHideColumn；tableState.ts 新增 WeightPreset + isColumnFiltered；CrawlerSiteTable 完成 sort wiring；删除旧的 one-off ColumnMenu + CrawlerSiteTableHead；全部 86 测试文件 772 tests 通过
 
-2. CHG-328 — 修复 TableSettingsPanel sortable 断路（状态：⬜ 待开始）
+2. CHG-328 — 修复 TableSettingsPanel sortable 断路（状态：✅ 已完成）
    - 创建时间：2026-03-31 00:00
    - 计划开始：CHG-327 完成后
+   - 实际开始：2026-03-31 00:35
+   - 完成时间：2026-03-31 00:50
    - 文件范围：
      - `src/components/admin/shared/modern-table/ModernDataTable.tsx`
      - `src/components/admin/shared/modern-table/settings/TableSettingsTrigger.tsx`
      - `src/components/admin/shared/modern-table/settings/TableSettingsPanel.tsx`
    - 变更内容：派生 hasSorting = !!onSortChange，传入 TableSettingsPanel，无排序时隐藏 sortable 列
-   - 完成备注：_（AI 填写）_
+   - 完成备注：ModernDataTable 派生 hasSorting；TableSettingsTrigger 透传；TableSettingsPanel 条件渲染排序列；向后兼容（hasSorting 默认 true）；772 tests 通过
 
 3. CHG-329 — 为已接入排序的表格添加 per-column 菜单（状态：⬜ 待开始）
    - 创建时间：2026-03-31 00:00
