@@ -4085,51 +4085,35 @@
 ---
 
 ## [SEQ-20260330-46] 轨道 D — UI-06 前台页面基座接入
-- **状态**：⬜ 待开始
+- **状态**：⏸ 暂缓
 - **创建时间**：2026-03-30 01:00
-- **最后更新时间**：2026-03-30 01:00
+- **最后更新时间**：2026-03-31 01:20
 - **目标**：前台 browse/search/detail 页面使用 UI-04 输出的 ListPageShell / DetailPageShell，统一底层结构，保留前台视觉差异
 - **范围**：`src/app/[locale]/browse/`、`src/app/[locale]/search/`、`src/app/[locale]/series/`、`src/app/[locale]/movie/`、`src/app/[locale]/anime/` 等前台页面
 - **依赖**：SEQ-20260330-45 全部完成 ✅
 - **参考**：`docs/ui_governance_plan_frontend_admin_20260327.md` §UI-06
-- **⚠️ 注意**：SEQ-20260330-45 完成后需重新评估细化，任务粒度为方向性占位
 
-### 任务列表（粗粒度，待 SEQ-45 完成后细化）
+**暂缓原因（2026-03-31 评估）**：SEQ-45 完成后对前台页面逐一审查，发现三个任务均不具备直接迁移条件：
 
-1. CHG-324 — 前台 browse/search 页接入 ListPageShell（状态：⬜ 待开始）
+- **CHG-324**：browse/search 两页无显式"页面标题区"，`FilterArea`/`FilterBar` 以 `sticky top-14 z-40` 直接开始，与 `ListPageShell` 的 title+children 结构不匹配；强行接入需新增空白标题占位并重新处理 z-index 层叠，改动大收益零。
+- **CHG-325**：detail 页的 header/content/sidebar 三区均封装在 `VideoDetailClient` 内部；接入 `DetailPageShell` 需先拆解 VideoDetailClient，属于超出 UI-06 范围的独立重构。
+- **CHG-326**：`FilterArea`（186 行，多行展开 + URL 双向同步）和 `FilterBar`（172 行）比 `FilterToolbar` 四槽容器更专业化，嵌套后无实质收益。
+
+**恢复条件**：前台新增需要统一标题区的列表页、或 VideoDetailClient 有独立的拆解计划时，由人工解封对应 CHG 并重新细化。
+
+### 任务列表
+
+1. CHG-324 — 前台 browse/search 页接入 ListPageShell（状态：⏸ 暂缓）
    - 创建时间：2026-03-30 01:00
-   - 计划开始：SEQ-20260330-45 完成后
-   - 文件范围：`src/app/[locale]/browse/page.tsx`、`src/app/[locale]/search/page.tsx`
-   - 变更内容：使用 ListPageShell variant="frontend"
+   - 暂缓原因：页面无标题区，FilterArea/FilterBar sticky 布局与 ListPageShell 结构不兼容
 
-2. CHG-325 — 前台 detail 页接入 DetailPageShell（状态：⬜ 待开始）
+2. CHG-325 — 前台 detail 页接入 DetailPageShell（状态：⏸ 暂缓）
    - 创建时间：2026-03-30 01:00
-   - 计划开始：CHG-324 完成后
-   - 文件范围：series/movie/anime/others 详情 page.tsx
-   - 变更内容：使用 DetailPageShell；保留各自视觉层
+   - 暂缓原因：VideoDetailClient 将三区封装为整体，接入需先进行独立重构
 
-3. CHG-326 — 前台 FilterToolbar 接入（状态：⬜ 待开始）
+3. CHG-326 — 前台 FilterToolbar 接入（状态：⏸ 暂缓）
    - 创建时间：2026-03-30 01:00
-   - 计划开始：CHG-325 完成后
-   - 文件范围：search 页筛选区
-   - 变更内容：使用 FilterToolbar；保留前台样式差异
-
----
-✅ SEQ COMPLETE — SEQ-20260330-45 已完成，等待确认开始 SEQ-20260330-46
-- **完成时间**：2026-03-30 02:10
-- **本序列完成任务数**：5 个（CHG-319 ~ CHG-323）
-- **新增共享层组件**：
-  - `src/components/shared/layout/ListPageShell.tsx`（跨域列表页容器）
-  - `src/components/shared/layout/DetailPageShell.tsx`（详情页三区容器）
-  - `src/components/shared/layout/DetailSection.tsx`（字段分组展示）
-  - `src/components/shared/layout/DashboardShell.tsx` + `DashboardSection`（仪表盘布局）
-  - `src/components/shared/toolbar/FilterToolbar.tsx`（筛选工具栏）
-- **建议下一步**：SEQ-20260330-46（UI-06 前台页面基座接入）— 建议先人工验收当前后台页面视觉效果
-- **需要你做的事**：
-  - [ ] 验收测试（浏览后台各页面：视频/用户/投稿/源管理/Analytics 等）
-  - [ ] 确认 ListPageShell/FilterToolbar/DetailPageShell 在前台页面的扩展方向
-  - [ ] 确认开始 SEQ-20260330-46（删除此块即可）
----
+   - 暂缓原因：现有 FilterArea/FilterBar 是 domain-specific 实现，比 FilterToolbar 更专业化，嵌套无实质收益
 
 ---
 
