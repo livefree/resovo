@@ -4604,3 +4604,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/sources/SourceTable.test.tsx`（更新三处 API 请求断言以匹配新的默认排序参数格式）
 - **测试覆盖**：InactiveSourceTable + SourceTable 共 19 tests 通过；typecheck + lint 通过
 - **共享层沉淀**：无需沉淀，排序映射为本组件局部配置
+
+---
+
+### CHG-332 — ColumnHeaderMenu portal化 + TableUrlCell tooltip修复
+- **完成时间**：2026-04-01 14:58
+- **修改文件**：
+  - `src/components/admin/shared/modern-table/ModernTableHead.tsx`（`ColumnHeaderCellContent` 新增 `triggerRef` + `menuPos` state；触发按钮改为 `ref` 引用并计算 `getBoundingClientRect`；`ColumnHeaderMenu` 改用 `createPortal` 渲染到 `document.body`，portal wrapper 使用 `position: fixed; width: 0; height: 0` 使菜单的 `absolute right-0 top-full` 定位正确锚定到触发按钮下方）
+  - `src/components/admin/shared/modern-table/cells/TableUrlCell.tsx`（移除 CSS hover tooltip span，保留 `title` 原生属性；移除 `group relative` class）
+- **测试覆盖**：modern-table + sources + system 共 49 tests 通过；typecheck + lint 通过
+- **共享层沉淀**：无需沉淀，portal 位置计算为 ModernTableHead 内部 UI 逻辑

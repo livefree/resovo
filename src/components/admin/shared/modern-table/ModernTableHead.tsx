@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { ResolvedTableColumn, TableSortState } from '@/components/admin/shared/modern-table/types'
 import { ColumnHeaderMenu } from '@/components/admin/shared/modern-table/column-menu/ColumnHeaderMenu'
@@ -49,6 +50,8 @@ function ColumnHeaderCellContent({
   const hasMenu = Boolean(column.columnMenu)
   const isMenuOpen = openColumnMenu === column.id
   const currentSortDir = sort?.field === column.id ? sort.direction : null
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
 
   const menuCanSort = (
     column.columnMenu?.canSort === true
@@ -59,6 +62,18 @@ function ColumnHeaderCellContent({
   const filterDot = column.columnMenu?.isFiltered
     ? <span className="inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--accent)]" />
     : null
+
+  function handleMenuToggle() {
+    if (isMenuOpen) {
+      setOpenColumnMenu(null)
+      return
+    }
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect()
+      setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+    }
+    setOpenColumnMenu(column.id)
+  }
 
   return (
     <div className="relative flex items-center gap-1">
@@ -82,10 +97,11 @@ function ColumnHeaderCellContent({
 
       {hasMenu && (
         <button
+          ref={triggerRef}
           type="button"
           aria-label={`${String(column.header)} 列菜单`}
           aria-expanded={isMenuOpen}
-          onClick={() => setOpenColumnMenu(isMenuOpen ? null : column.id)}
+          onClick={handleMenuToggle}
           className="rounded px-1 text-xs text-[var(--muted)] hover:bg-[var(--bg3)] hover:text-[var(--text)]"
           data-testid={`column-menu-trigger-${column.id}`}
         >
@@ -93,27 +109,33 @@ function ColumnHeaderCellContent({
         </button>
       )}
 
-      {isMenuOpen && column.columnMenu && (
-        <ColumnHeaderMenu
-          canSort={menuCanSort}
-          currentSortDir={currentSortDir}
-          canHide={column.columnMenu.canHide === true}
-          filterContent={column.columnMenu.filterContent}
-          isFiltered={column.columnMenu.isFiltered}
-          onSortAsc={() => {
-            onSortChange?.({ field: column.id, direction: 'asc' })
-            setOpenColumnMenu(null)
-          }}
-          onSortDesc={() => {
-            onSortChange?.({ field: column.id, direction: 'desc' })
-            setOpenColumnMenu(null)
-          }}
-          onHide={() => {
-            onHideColumn?.(column.id)
-            setOpenColumnMenu(null)
-          }}
-          onClearFilter={column.columnMenu.onClearFilter}
-        />
+      {isMenuOpen && column.columnMenu && menuPos && createPortal(
+        <div
+          data-column-menu-container
+          style={{ position: 'fixed', top: menuPos.top, right: menuPos.right, zIndex: 9999, width: 0, height: 0 }}
+        >
+          <ColumnHeaderMenu
+            canSort={menuCanSort}
+            currentSortDir={currentSortDir}
+            canHide={column.columnMenu.canHide === true}
+            filterContent={column.columnMenu.filterContent}
+            isFiltered={column.columnMenu.isFiltered}
+            onSortAsc={() => {
+              onSortChange?.({ field: column.id, direction: 'asc' })
+              setOpenColumnMenu(null)
+            }}
+            onSortDesc={() => {
+              onSortChange?.({ field: column.id, direction: 'desc' })
+              setOpenColumnMenu(null)
+            }}
+            onHide={() => {
+              onHideColumn?.(column.id)
+              setOpenColumnMenu(null)
+            }}
+            onClearFilter={column.columnMenu.onClearFilter}
+          />
+        </div>,
+        document.body,
       )}
     </div>
   )

@@ -59,7 +59,7 @@ export function TableUrlCell({
   }
 
   return (
-    <span className="group relative inline-flex max-w-full items-center gap-2" data-testid="table-url-cell">
+    <span className="inline-flex max-w-full items-center gap-2" data-testid="table-url-cell">
       <button
         type="button"
         className="inline-flex max-w-full items-center text-left"
@@ -71,10 +71,6 @@ export function TableUrlCell({
           {buildDisplayText(resolvedUrl, maxLength)}
         </span>
       </button>
-
-      <span className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden max-w-[560px] rounded border border-[var(--border)] bg-[var(--bg2)] px-2 py-1 text-xs text-[var(--text)] group-hover:block">
-        {resolvedUrl}
-      </span>
 
       {copied ? <span className="text-xs text-[var(--muted)]">已复制</span> : null}
       {copyError ? <span className="text-xs text-[var(--muted)]">{copyError}</span> : null}
