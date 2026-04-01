@@ -107,7 +107,7 @@ describe('SourceTable (CHG-291)', () => {
     render(<SourceTable />)
 
     await screen.findByText('Alpha Video')
-    expect(getMock).toHaveBeenCalledWith('/admin/sources?page=1&limit=20&status=all')
+    expect(getMock).toHaveBeenCalledWith('/admin/sources?page=1&limit=20&status=all&sortField=last_checked&sortDir=desc')
 
     const rows = Array.from(document.querySelectorAll('tr[data-testid^="modern-table-row-"]'))
     expect(rows.length).toBe(2)
@@ -121,7 +121,7 @@ describe('SourceTable (CHG-291)', () => {
     fireEvent.click(screen.getByTestId('source-tab-inactive'))
 
     await waitFor(() => {
-      expect(getMock).toHaveBeenCalledWith('/admin/sources?page=1&limit=20&status=inactive')
+      expect(getMock).toHaveBeenCalledWith('/admin/sources?page=1&limit=20&status=inactive&sortField=last_checked&sortDir=desc')
     })
   })
 
@@ -154,7 +154,7 @@ describe('SourceTable (CHG-291)', () => {
     await screen.findByText('Alpha Video')
 
     expect(getMock).toHaveBeenCalledWith(
-      '/admin/sources?page=1&limit=20&status=all&keyword=alpha&title=Alpha&siteKey=site-a&sortField=video_title&sortDir=asc',
+      '/admin/sources?page=1&limit=20&status=all&sortField=video_title&sortDir=asc&keyword=alpha&title=Alpha&siteKey=site-a',
     )
   })
 

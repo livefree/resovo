@@ -4593,3 +4593,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（更新 status=all 模式测试：复选框可见，BatchDeleteBar 仍隐藏）
 - **测试覆盖**：全部 86 测试文件 772 tests 通过；typecheck + lint 通过
 - **共享层沉淀**：无新共享层，为现有组件行为修正
+
+---
+
+### CHG-331 — InactiveSourceTable 服务端排序接入
+- **完成时间**：2026-04-01 14:52
+- **修改文件**：
+  - `src/components/admin/sources/InactiveSourceTable.tsx`（新增 SORTABLE_COLUMNS/SORT_FIELD_TO_COLUMN 映射、internalSortField/internalSortDir state、handleSortChange 回调；各可排序列增加 enableSorting + columnMenu；ModernDataTable 接收 sort+onSortChange；fetchSources 改用内部 sort state 而非外部 props）
+  - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（更新 API 请求断言，包含默认 sortField=last_checked&sortDir=desc）
+  - `tests/unit/components/admin/sources/SourceTable.test.tsx`（更新三处 API 请求断言以匹配新的默认排序参数格式）
+- **测试覆盖**：InactiveSourceTable + SourceTable 共 19 tests 通过；typecheck + lint 通过
+- **共享层沉淀**：无需沉淀，排序映射为本组件局部配置

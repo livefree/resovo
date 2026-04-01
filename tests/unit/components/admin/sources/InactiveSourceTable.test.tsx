@@ -87,13 +87,13 @@ describe('InactiveSourceTable (CHG-262)', () => {
     render(<InactiveSourceTable />)
     await screen.findByText('Alpha')
     expect(screen.getByText('Beta')).toBeTruthy()
-    expect(getMock).toHaveBeenCalledWith('/admin/sources?page=1&limit=20&status=inactive')
+    expect(getMock).toHaveBeenCalledWith('/admin/sources?page=1&limit=20&status=inactive&sortField=last_checked&sortDir=desc')
   })
 
   it('supports status=all mode', async () => {
     render(<InactiveSourceTable status="all" />)
     await screen.findByText('Alpha')
-    expect(getMock).toHaveBeenCalledWith('/admin/sources?page=1&limit=20&status=all')
+    expect(getMock).toHaveBeenCalledWith('/admin/sources?page=1&limit=20&status=all&sortField=last_checked&sortDir=desc')
     // 复选框始终可见（CHG-330：selection.enabled = true）
     expect(screen.queryByLabelText('全选当前页失效源')).toBeTruthy()
     // 批量删除 bar 仍在 !isAllStatus 条件下隐藏（危险操作保持限制）

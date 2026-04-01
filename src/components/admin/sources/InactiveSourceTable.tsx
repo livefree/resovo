@@ -23,7 +23,7 @@ import {
   TableTextCell,
   TableUrlCell,
 } from '@/components/admin/shared/modern-table/cells'
-import type { TableColumn } from '@/components/admin/shared/modern-table/types'
+import type { TableColumn, TableSortState } from '@/components/admin/shared/modern-table/types'
 
 const DEFAULT_PAGE_SIZE = 20
 const BATCH_VERIFY_LIMIT = 500
@@ -54,12 +54,28 @@ const INACTIVE_SOURCE_COLUMNS_META: AdminColumnMeta[] = [
   { id: 'actions', visible: true, width: 220, minWidth: 180, maxWidth: 300, resizable: false },
 ]
 
+// 排序支持的列（column id → API sortField）
+const SORTABLE_COLUMNS: Partial<Record<InactiveSourceColumnId, SourceSortField>> = {
+  video_title: 'video_title',
+  source_url: 'source_url',
+  status: 'is_active',
+  last_checked: 'last_checked',
+}
+
+// 反向映射：API sortField → column id（用于传给 ModernDataTable sort.field）
+const SORT_FIELD_TO_COLUMN: Partial<Record<SourceSortField, InactiveSourceColumnId>> = {
+  video_title: 'video_title',
+  source_url: 'source_url',
+  is_active: 'status',
+  last_checked: 'last_checked',
+}
+
 // useTableSettings 列描述
 const INACTIVE_SOURCE_SETTINGS_COLUMNS = INACTIVE_SOURCE_COLUMNS_META.map((col) => ({
   id: col.id,
   label: INACTIVE_SOURCE_COLUMN_LABELS[col.id as InactiveSourceColumnId] ?? col.id,
   defaultVisible: col.visible ?? true,
-  defaultSortable: false,
+  defaultSortable: col.id in SORTABLE_COLUMNS,
   required: col.id === 'actions',
 }))
 
@@ -121,7 +137,8 @@ function buildColumns(
       id: 'video_title', header: '视频标题',
       width: 220, minWidth: 160,
       accessor: (r) => r.video_title ?? '—',
-      enableResizing: true,
+      enableResizing: true, enableSorting: true,
+      columnMenu: { canSort: true, canHide: true },
       cell: ({ row }) => <TableTextCell value={row.video_title ?? '—'} />,
     },
     {
@@ -129,6 +146,7 @@ function buildColumns(
       width: 110, minWidth: 90,
       accessor: (r) => `S${r.season_number ?? 1}/E${r.episode_number ?? 1}`,
       enableResizing: true,
+      columnMenu: { canSort: false, canHide: true },
       cell: ({ row }) => (
         <TableTextCell value={`S${row.season_number ?? 1} / E${row.episode_number ?? 1}`} className="text-xs text-[var(--muted)]" />
       ),
@@ -137,14 +155,16 @@ function buildColumns(
       id: 'source_url', header: '源 URL',
       width: 340, minWidth: 220,
       accessor: (r) => r.source_url,
-      enableResizing: true,
+      enableResizing: true, enableSorting: true,
+      columnMenu: { canSort: true, canHide: true },
       cell: ({ row }) => <TableUrlCell url={row.source_url} maxLength={60} />,
     },
     {
       id: 'status', header: '状态',
       width: 120, minWidth: 100,
       accessor: (r) => r.is_active ? '活跃' : '失效',
-      enableResizing: true,
+      enableResizing: true, enableSorting: true,
+      columnMenu: { canSort: true, canHide: true },
       cell: ({ row }) => (
         <TableBadgeCell label={row.is_active ? '活跃' : '失效'} tone={row.is_active ? 'success' : 'danger'} />
       ),
@@ -153,7 +173,8 @@ function buildColumns(
       id: 'last_checked', header: '最后验证',
       width: 170, minWidth: 130,
       accessor: (r) => r.last_checked ?? '',
-      enableResizing: true,
+      enableResizing: true, enableSorting: true,
+      columnMenu: { canSort: true, canHide: true },
       cell: ({ row }) => <TableDateCell value={row.last_checked} fallback="—" className="text-xs" />,
     },
     {
@@ -239,6 +260,8 @@ export function InactiveSourceTable({
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null)
   const [batchStatusLoading, setBatchStatusLoading] = useState<null | 'active' | 'inactive'>(null)
   const [statusActionError, setStatusActionError] = useState<string | null>(null)
+  const [internalSortField, setInternalSortField] = useState<SourceSortField>(sortField ?? 'last_checked')
+  const [internalSortDir, setInternalSortDir] = useState<SourceSortDir>(sortDir ?? 'desc')
 
   const tableSettings = useTableSettings({
     tableId,
@@ -266,6 +289,14 @@ export function InactiveSourceTable({
     })
   }, [])
 
+  const handleSortChange = useCallback((s: TableSortState) => {
+    const apiField = SORTABLE_COLUMNS[s.field as InactiveSourceColumnId]
+    if (!apiField) return
+    setInternalSortField(apiField)
+    setInternalSortDir(s.direction as SourceSortDir)
+    setPage(1)
+  }, [])
+
   const fetchSources = useCallback(async (pageVal: number, pageSizeVal: number) => {
     setLoading(true)
     setSelectedIds([])
@@ -274,12 +305,12 @@ export function InactiveSourceTable({
         page: String(pageVal),
         limit: String(pageSizeVal),
         status,
+        sortField: internalSortField,
+        sortDir: internalSortDir,
       })
       if (keyword) params.set('keyword', keyword)
       if (title) params.set('title', title)
       if (siteKey) params.set('siteKey', siteKey)
-      if (sortField) params.set('sortField', sortField)
-      if (sortDir) params.set('sortDir', sortDir)
       const res = await apiClient.get<{ data: SourceRow[]; total: number }>(`/admin/sources?${params}`)
       setSources(res.data)
       setTotal(res.total)
@@ -288,7 +319,7 @@ export function InactiveSourceTable({
     } finally {
       setLoading(false)
     }
-  }, [keyword, siteKey, sortDir, sortField, status, title])
+  }, [keyword, siteKey, internalSortDir, internalSortField, status, title])
 
   useEffect(() => { void fetchSources(page, pageSize) }, [fetchSources, page, pageSize])
 
@@ -506,6 +537,8 @@ export function InactiveSourceTable({
         emptyText={emptyText}
         getRowId={(r) => r.id}
         scrollTestId={scrollTestId}
+        sort={{ field: SORT_FIELD_TO_COLUMN[internalSortField] ?? internalSortField, direction: internalSortDir }}
+        onSortChange={handleSortChange}
         onColumnWidthChange={tableSettings.updateWidth}
         settingsSlot={{
           settingsColumns: tableSettings.orderedSettings,

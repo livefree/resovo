@@ -4174,7 +4174,7 @@
 ## [SEQ-20260401-48] 后台表格 4 项修复
 - **状态**：🔄 进行中
 - **创建时间**：2026-04-01 00:00
-- **最后更新时间**：2026-04-01 00:00
+- **最后更新时间**：2026-04-01 14:52
 - **目标**：修复播放源管理表格复选框条件渲染、缺少排序、tooltip 遮挡、操作刷新闪烁等 4 个问题
 - **依赖**：SEQ-20260331-47 ✅
 
@@ -4191,14 +4191,15 @@
    - 变更内容：选择列始终渲染（selection.enabled: true）；BatchDeleteBar 保持 !isAllStatus 条件（删除是危险操作）
    - 完成备注：_（AI 填写）_
 
-2. CHG-331 — InactiveSourceTable 服务端排序接入（状态：🔄 进行中）
+2. CHG-331 — InactiveSourceTable 服务端排序接入（状态：✅ 已完成）
    - 创建时间：2026-04-01 00:00
    - 计划开始：CHG-330 完成后
-   - 完成时间：_
+   - 实际开始：2026-04-01 00:10
+   - 完成时间：2026-04-01 14:52
    - 文件范围：
      - `src/components/admin/sources/InactiveSourceTable.tsx`（增加内部 sort state + onSortChange + 传入 ModernDataTable）
    - 变更内容：新增内部 sortField/sortDir state，派生 onSortChange 处理器，传入 ModernDataTable sort+onSortChange；各列增加 enableSorting + columnMenu
-   - 完成备注：_（AI 填写）_
+   - 完成备注：新增 SORTABLE_COLUMNS/SORT_FIELD_TO_COLUMN 映射；fetchSources 改用内部 sort state；19 tests 通过
 
 3. CHG-332 — ColumnHeaderMenu portal化 + TableUrlCell tooltip修复（状态：⬜ 待开始）
    - 创建时间：2026-04-01 00:00
