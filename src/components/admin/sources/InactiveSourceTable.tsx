@@ -377,10 +377,13 @@ export function InactiveSourceTable({
   const setSingleStatus = useCallback(async (row: SourceRow, nextActive: boolean) => {
     setStatusUpdatingId(row.id)
     setStatusActionError(null)
+    // Optimistic
+    setSources((prev) => prev.map((s) => s.id === row.id ? { ...s, is_active: nextActive } : s))
     try {
       await apiClient.patch(`/admin/sources/${row.id}/status`, { isActive: nextActive })
-      await fetchSources(page, pageSize)
     } catch (error) {
+      // Rollback
+      setSources((prev) => prev.map((s) => s.id === row.id ? { ...s, is_active: row.is_active } : s))
       if (error instanceof ApiClientError) {
         setStatusActionError(error.message)
       } else {
@@ -389,20 +392,26 @@ export function InactiveSourceTable({
     } finally {
       setStatusUpdatingId(null)
     }
-  }, [fetchSources, page, pageSize])
+  }, [])
 
   const setBatchStatus = useCallback(async (nextActive: boolean) => {
     if (selectedIds.length === 0) return
+    const affectedIds = [...selectedIds]
     setBatchStatusLoading(nextActive ? 'active' : 'inactive')
     setStatusActionError(null)
+    // Capture pre-update snapshot for rollback
+    const previousSources = sources
+    // Optimistic
+    setSources((prev) => prev.map((s) => affectedIds.includes(s.id) ? { ...s, is_active: nextActive } : s))
+    setSelectedIds([])
     try {
       await apiClient.post('/admin/sources/batch-status', {
-        ids: selectedIds,
+        ids: affectedIds,
         isActive: nextActive,
       })
-      setSelectedIds([])
-      await fetchSources(page, pageSize)
     } catch (error) {
+      // Rollback
+      setSources(previousSources)
       if (error instanceof ApiClientError) {
         setStatusActionError(error.message)
       } else {
@@ -411,7 +420,7 @@ export function InactiveSourceTable({
     } finally {
       setBatchStatusLoading(null)
     }
-  }, [fetchSources, page, pageSize, selectedIds])
+  }, [selectedIds, sources])
 
   const allTableColumns = useMemo(
     () =>

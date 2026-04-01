@@ -4614,3 +4614,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/shared/modern-table/cells/TableUrlCell.tsx`（移除 CSS hover tooltip span，保留 `title` 原生属性；移除 `group relative` class）
 - **测试覆盖**：modern-table + sources + system 共 49 tests 通过；typecheck + lint 通过
 - **共享层沉淀**：无需沉淀，portal 位置计算为 ModernTableHead 内部 UI 逻辑
+
+---
+
+### CHG-333 — 表格操作乐观更新消除刷新闪烁
+- **完成时间**：2026-04-01 15:08
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSites.ts`（必要联动：暴露 `setSites` 供 CrawlerSiteManager 乐观更新）
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`（`handleInlineUpdate` 改为先 `setSites` 乐观更新，失败时 rollback，不再调用全量 `fetchSites`）
+  - `src/components/admin/sources/InactiveSourceTable.tsx`（`setSingleStatus`/`setBatchStatus` 改为先 `setSources` 乐观更新，失败时 rollback，不再调用 `fetchSources`）
+  - `src/components/admin/videos/VideoTable.tsx`（`handlePublishToggle` 改为先 `setVideos` 乐观更新，失败时 rollback，不再调用 `fetchVideos`）
+  - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（更新 row-level/batch status 测试：断言 getMock 只调用 1 次 + badge 立即更新）
+- **测试覆盖**：InactiveSourceTable + VideoTable + CrawlerSiteManager 共 26 tests 通过；typecheck + lint 通过
+- **共享层沉淀**：无需沉淀；`setSites` 暴露为必要 hook 扩展，非共享层候选

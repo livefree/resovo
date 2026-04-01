@@ -4172,9 +4172,9 @@
 ---
 
 ## [SEQ-20260401-48] 后台表格 4 项修复
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-01 00:00
-- **最后更新时间**：2026-04-01 14:58
+- **最后更新时间**：2026-04-01 15:08
 - **目标**：修复播放源管理表格复选框条件渲染、缺少排序、tooltip 遮挡、操作刷新闪烁等 4 个问题
 - **依赖**：SEQ-20260331-47 ✅
 
@@ -4189,7 +4189,8 @@
    - 文件范围：
      - `src/components/admin/sources/InactiveSourceTable.tsx`（移除 selection.enabled = !isAllStatus 条件）
    - 变更内容：选择列始终渲染（selection.enabled: true）；BatchDeleteBar 保持 !isAllStatus 条件（删除是危险操作）
-   - 完成备注：_（AI 填写）_
+   - 完成备注：useCrawlerSites 增加 setSites 返回值（必要联动）；三处乐观更新均实现失败 rollback；26 tests 通过
+   - 补充：SEQ-20260401-48 序列全部 4 任务已完成
 
 2. CHG-331 — InactiveSourceTable 服务端排序接入（状态：✅ 已完成）
    - 创建时间：2026-04-01 00:00
@@ -4212,10 +4213,11 @@
    - 变更内容：ModernTableHead 中触发按钮加 ref，计算 getBoundingClientRect，createPortal 渲染 ColumnHeaderMenu；TableUrlCell tooltip 改为 title 属性（原生，不受 overflow 影响）
    - 完成备注：portal wrapper 用 width:0/height:0 固定定位，使 ColumnHeaderMenu 的 absolute right-0 top-full 正确锚定；49 tests 通过
 
-4. CHG-333 — 表格操作乐观更新消除刷新闪烁（状态：⬜ 待开始）
+4. CHG-333 — 表格操作乐观更新消除刷新闪烁（状态：✅ 已完成）
    - 创建时间：2026-04-01 00:00
    - 计划开始：CHG-332 完成后
-   - 完成时间：_
+   - 实际开始：2026-04-01 15:00
+   - 完成时间：2026-04-01 15:08
    - 文件范围：
      - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`（handleInlineUpdate 乐观更新）
      - `src/components/admin/sources/InactiveSourceTable.tsx`（setSingleStatus + setBatchStatus 乐观更新）

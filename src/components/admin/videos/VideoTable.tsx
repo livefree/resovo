@@ -136,15 +136,17 @@ export function VideoTable() {
   const handlePublishToggle = useCallback(async (row: VideoAdminRow) => {
     const nextIsPublished = !row.is_published
     setPublishPendingIds((ids) => (ids.includes(row.id) ? ids : [...ids, row.id]))
+    // Optimistic
+    setVideos((prev) => prev.map((v) => v.id === row.id ? { ...v, is_published: nextIsPublished } : v))
     try {
       await apiClient.patch(`/admin/videos/${row.id}/publish`, { isPublished: nextIsPublished })
-      await fetchVideos(page, pageSize)
     } catch (_error) {
-      // silent
+      // Rollback
+      setVideos((prev) => prev.map((v) => v.id === row.id ? { ...v, is_published: row.is_published } : v))
     } finally {
       setPublishPendingIds((ids) => ids.filter((id) => id !== row.id))
     }
-  }, [fetchVideos, page, pageSize])
+  }, [])
 
   const handleDoubanSync = useCallback(async (videoId: string) => {
     setDoubanSyncPendingIds((ids) => (ids.includes(videoId) ? ids : [...ids, videoId]))

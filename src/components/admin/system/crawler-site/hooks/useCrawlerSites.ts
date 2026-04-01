@@ -27,5 +27,6 @@ export function useCrawlerSites() {
     sites,
     loading,
     fetchSites,
+    setSites,
   }
 }

@@ -177,21 +177,25 @@ describe('InactiveSourceTable (CHG-262)', () => {
     expect((screen.getByTestId('source-batch-verify-site') as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('supports row-level status toggle', async () => {
+  it('supports row-level status toggle (optimistic, no refetch)', async () => {
     render(<InactiveSourceTable status="all" />)
     await screen.findByText('Alpha')
+    expect(getMock).toHaveBeenCalledTimes(1)
 
     fireEvent.click(screen.getByTestId('source-status-toggle-src1'))
 
     await waitFor(() => {
       expect(patchMock).toHaveBeenCalledWith('/admin/sources/src1/status', { isActive: true })
-      expect(getMock).toHaveBeenCalledTimes(2)
+      // Optimistic: badge updates immediately without refetch
+      expect(screen.getAllByText('活跃').length).toBeGreaterThan(0)
     })
+    expect(getMock).toHaveBeenCalledTimes(1)
   })
 
-  it('supports batch status toggle for selected rows', async () => {
+  it('supports batch status toggle for selected rows (optimistic, no refetch)', async () => {
     render(<InactiveSourceTable />)
     await screen.findByText('Alpha')
+    expect(getMock).toHaveBeenCalledTimes(1)
 
     fireEvent.click(screen.getByLabelText('选择 Alpha'))
     fireEvent.click(screen.getByTestId('source-batch-status-active'))
@@ -201,7 +205,9 @@ describe('InactiveSourceTable (CHG-262)', () => {
         ids: ['src1'],
         isActive: true,
       })
-      expect(getMock).toHaveBeenCalledTimes(2)
+      // Optimistic: badge updates immediately without refetch
+      expect(screen.getAllByText('活跃').length).toBeGreaterThan(0)
     })
+    expect(getMock).toHaveBeenCalledTimes(1)
   })
 })

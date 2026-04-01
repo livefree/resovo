@@ -56,7 +56,7 @@ export function CrawlerSiteManager() {
     setFilters,
     setSort,
   } = useCrawlerSiteColumns()
-  const { sites, loading, fetchSites } = useCrawlerSites()
+  const { sites, loading, fetchSites, setSites } = useCrawlerSites()
   const {
     runningBySite,
     hydrateRunningFromSites,
@@ -153,11 +153,28 @@ export function CrawlerSiteManager() {
 
   async function handleInlineUpdate(site: CrawlerSite, patch: UpdateCrawlerSiteInput, showSuccess = true) {
     setRowSaving((prev) => ({ ...prev, [site.key]: true }))
+    // Optimistic: apply patch fields to local state
+    const optimisticSite: CrawlerSite = {
+      ...site,
+      ...(patch.name !== undefined && { name: patch.name }),
+      ...(patch.apiUrl !== undefined && { apiUrl: patch.apiUrl }),
+      ...(patch.detail !== undefined && { detail: patch.detail ?? null }),
+      ...(patch.sourceType !== undefined && { sourceType: patch.sourceType }),
+      ...(patch.format !== undefined && { format: patch.format }),
+      ...(patch.weight !== undefined && { weight: patch.weight }),
+      ...(patch.isAdult !== undefined && { isAdult: patch.isAdult }),
+      ...(patch.disabled !== undefined && { disabled: patch.disabled }),
+      ...(patch.allowAutoPublish !== undefined && {
+        ingestPolicy: { ...site.ingestPolicy, allow_auto_publish: patch.allowAutoPublish },
+      }),
+    }
+    setSites((prev) => prev.map((s) => s.key === site.key ? optimisticSite : s))
     try {
       await apiClient.patch(`/admin/crawler/sites/${site.key}`, patch)
-      await fetchSites()
       if (showSuccess) showToast(`已更新 ${site.name}`, true)
     } catch {
+      // Rollback
+      setSites((prev) => prev.map((s) => s.key === site.key ? site : s))
       showToast(`更新 ${site.name} 失败`, false)
     } finally {
       setRowSaving((prev) => ({ ...prev, [site.key]: false }))
