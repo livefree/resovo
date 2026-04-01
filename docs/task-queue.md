@@ -4168,3 +4168,55 @@
      - `src/components/admin/system/crawler-task/useCrawlerTaskTableColumns.tsx`
    - 变更内容：各列增加 `columnMenu: { canSort, canHide: true }`（本轮不加 filterContent）
    - 完成备注：5 个表格共计 ~25 列添加 columnMenu；actions 列不添加；772 tests 通过
+
+---
+
+## [SEQ-20260401-48] 后台表格 4 项修复
+- **状态**：🔄 进行中
+- **创建时间**：2026-04-01 00:00
+- **最后更新时间**：2026-04-01 00:00
+- **目标**：修复播放源管理表格复选框条件渲染、缺少排序、tooltip 遮挡、操作刷新闪烁等 4 个问题
+- **依赖**：SEQ-20260331-47 ✅
+
+### 任务列表
+
+1. CHG-330 — InactiveSourceTable 复选框始终可见（状态：✅ 已完成）
+   - 创建时间：2026-04-01 00:00
+   - 计划开始：立即
+   - 实际开始：2026-04-01 00:00
+   - 完成时间：2026-04-01 00:05
+   - 完成时间：_
+   - 文件范围：
+     - `src/components/admin/sources/InactiveSourceTable.tsx`（移除 selection.enabled = !isAllStatus 条件）
+   - 变更内容：选择列始终渲染（selection.enabled: true）；BatchDeleteBar 保持 !isAllStatus 条件（删除是危险操作）
+   - 完成备注：_（AI 填写）_
+
+2. CHG-331 — InactiveSourceTable 服务端排序接入（状态：🔄 进行中）
+   - 创建时间：2026-04-01 00:00
+   - 计划开始：CHG-330 完成后
+   - 完成时间：_
+   - 文件范围：
+     - `src/components/admin/sources/InactiveSourceTable.tsx`（增加内部 sort state + onSortChange + 传入 ModernDataTable）
+   - 变更内容：新增内部 sortField/sortDir state，派生 onSortChange 处理器，传入 ModernDataTable sort+onSortChange；各列增加 enableSorting + columnMenu
+   - 完成备注：_（AI 填写）_
+
+3. CHG-332 — ColumnHeaderMenu portal化 + TableUrlCell tooltip修复（状态：⬜ 待开始）
+   - 创建时间：2026-04-01 00:00
+   - 计划开始：CHG-331 完成后
+   - 完成时间：_
+   - 文件范围：
+     - `src/components/admin/shared/modern-table/ModernTableHead.tsx`（ColumnHeaderMenu 改为 portal 渲染 + 位置计算）
+     - `src/components/admin/shared/modern-table/cells/TableUrlCell.tsx`（tooltip 改用 title 属性）
+   - 变更内容：ModernTableHead 中触发按钮加 ref，计算 getBoundingClientRect，createPortal 渲染 ColumnHeaderMenu；TableUrlCell tooltip 改为 title 属性（原生，不受 overflow 影响）
+   - 完成备注：_（AI 填写）_
+
+4. CHG-333 — 表格操作乐观更新消除刷新闪烁（状态：⬜ 待开始）
+   - 创建时间：2026-04-01 00:00
+   - 计划开始：CHG-332 完成后
+   - 完成时间：_
+   - 文件范围：
+     - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`（handleInlineUpdate 乐观更新）
+     - `src/components/admin/sources/InactiveSourceTable.tsx`（setSingleStatus + setBatchStatus 乐观更新）
+     - `src/components/admin/videos/VideoTable.tsx`（handlePublishToggle 乐观更新）
+   - 变更内容：三处表格操作改为先更新本地 state，API 成功后 merge 响应，失败时回滚；不再调用全量 fetchXxx
+   - 完成备注：_（AI 填写）_

@@ -391,7 +391,7 @@ export function InactiveSourceTable({
         (row, nextActive) => { void setSingleStatus(row, nextActive) },
         statusUpdatingId,
         {
-          enabled: !isAllStatus,
+          enabled: true,
           selectedIds,
           allSelected: allVisibleSelected,
           onSelectAll: handleSelectAll,
@@ -404,7 +404,6 @@ export function InactiveSourceTable({
       fetchSources,
       setSingleStatus,
       statusUpdatingId,
-      isAllStatus,
       selectedIds,
       allVisibleSelected,
       handleSelectAll,

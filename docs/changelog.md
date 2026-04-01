@@ -4585,3 +4585,11 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/system/crawler-task/useCrawlerTaskTableColumns.tsx`（8 列 columnMenu）
 - **测试覆盖**：全部 86 测试文件 772 tests 通过；typecheck + lint 通过
 - **共享层沉淀**：无新共享层；本次为既有共享组件 ColumnHeaderMenu 的接入扩展
+
+## CHG-330 — InactiveSourceTable 复选框始终可见
+- **完成时间**：2026-04-01 00:05
+- **修改文件**：
+  - `src/components/admin/sources/InactiveSourceTable.tsx`（selection.enabled 由 !isAllStatus 改为 true；去除 isAllStatus 依赖项）
+  - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（更新 status=all 模式测试：复选框可见，BatchDeleteBar 仍隐藏）
+- **测试覆盖**：全部 86 测试文件 772 tests 通过；typecheck + lint 通过
+- **共享层沉淀**：无新共享层，为现有组件行为修正
