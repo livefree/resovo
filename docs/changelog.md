@@ -4627,3 +4627,12 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（更新 row-level/batch status 测试：断言 getMock 只调用 1 次 + badge 立即更新）
 - **测试覆盖**：InactiveSourceTable + VideoTable + CrawlerSiteManager 共 26 tests 通过；typecheck + lint 通过
 - **共享层沉淀**：无需沉淀；`setSites` 暴露为必要 hook 扩展，非共享层候选
+
+---
+
+### fix(CHG-332) — ModernTableHead 补加 'use client' 修复 SSR 崩溃
+- **完成时间**：2026-04-01 15:25
+- **修改文件**：
+  - `src/components/admin/shared/modern-table/ModernTableHead.tsx`（在文件顶部补加 `'use client'` 指令；CHG-332 引入 `createPortal` + `window.innerWidth` 后未加此指令，导致 Next.js 15 SSR 将其视为 Server Component，所有 admin 页面陷入加载中状态）
+- **测试覆盖**：772 tests 通过；typecheck + lint 通过
+- **共享层沉淀**：无；为漏加指令的单行修复
