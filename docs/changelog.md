@@ -4651,3 +4651,10 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`：`queryByText` 改为 `within(tableScroll).queryByText`，修复误判（排除 settings 面板中的列标签）
   - `tests/unit/components/admin/sources/SourceSubmissionTable.test.tsx`：同上
 - **测试**：typecheck ✅ lint ✅ 772 unit tests ✅
+
+## DEC-01 — 新增禁止前端 import @/api/** 的 ESLint 规则（warn 模式）
+- **完成时间**：2026-04-02 10:30
+- **修改文件**：
+  - `.eslintrc.json`：新增 overrides，对 src/app|components|lib|stores 下 @/api/** import 发出 warn，附带中文整改说明
+  - `docs/dec-coupling-violations.md`：新建，记录 7 处违规（6 文件），含严重性分级与整改任务映射
+- **测试**：typecheck ✅ lint warn-only（7 warnings，0 errors）✅ 772 unit tests ✅

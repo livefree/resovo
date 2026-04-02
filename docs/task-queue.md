@@ -4266,23 +4266,23 @@
 ## [SEQ-20260402-50] 前后台解耦架构（DEC 系列）
 - **状态**：🔄 进行中
 - **创建时间**：2026-04-02 10:00
-- **最后更新时间**：2026-04-02 10:00
+- **最后更新时间**：2026-04-02 10:30
 - **目标**：按 frontend_backend_decoupling_plan_20260401.md Phase 0-3 完成代码解耦、前台用户能力下线、后台独立登录路由
 - **依赖**：SEQ-20260401-49 ✅
 - **参考文档**：`docs/frontend_backend_decoupling_plan_20260401.md`
 
 ### 任务列表
 
-1. DEC-01 — 新增禁止前端 import @/api/** 的 ESLint 规则（warn 模式）+ 产出违规清单（状态：⬜ 待开始）
+1. DEC-01 — 新增禁止前端 import @/api/\*\* 的 ESLint 规则（warn 模式）+ 产出违规清单（状态：✅ 已完成）
    - 创建时间：2026-04-02 10:00
    - 计划开始：立即
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-04-02 10:10
+   - 完成时间：2026-04-02 10:30
    - 文件范围：
-     - `.eslintrc.json` 或 `eslint.config.mjs`（新增 no-restricted-imports 规则，warn 级别）
-     - `docs/dec-coupling-violations.md`（新建，违规清单）
+     - `.eslintrc.json`（新增 no-restricted-imports warn 规则）
+     - `docs/dec-coupling-violations.md`（新建，7处违规清单）
    - 变更内容：对 src/app|src/components|src/lib|src/stores 下的 @/api/** import 发出 warn；同步扫描产出违规文件清单
-   - 完成备注：_（AI 填写）_
+   - 完成备注：7处违规（6文件）已记录，含严重性分级；lint warn-only 不阻断构建；772 tests 通过
 
 2. DEC-02 — 抽离 AnalyticsData 类型到 src/types/contracts/v1/（状态：⬜ 待开始）
    - 创建时间：2026-04-02 10:00
