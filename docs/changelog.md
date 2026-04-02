@@ -4719,3 +4719,12 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/app/[locale]/admin/login/page.tsx`：新建，复用 LoginForm 组件，标题"管理员登录"
   - `src/middleware.ts`：/admin 守卫排除 /admin/login 路径；未登录跳转目标从 /auth/login 改为 /admin/login
 - **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅
+
+---
+
+## DEC-08 — 前台旧登录路由确认 + robots.txt 屏蔽 /admin/**
+- **完成时间**：2026-04-02 04:50
+- **修改文件**：
+  - `src/app/robots.ts`：新建，使用 Next.js MetadataRoute 生成 robots.txt，Disallow: /admin/ 和 /auth/
+- **备注**：旧登录路由 /auth/login 和 /auth/register 已在 DEC-05 改为 notFound()
+- **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅

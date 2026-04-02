@@ -4266,7 +4266,7 @@
 ## [SEQ-20260402-50] 前后台解耦架构（DEC 系列）
 - **状态**：🔄 进行中
 - **创建时间**：2026-04-02 10:00
-- **最后更新时间**：2026-04-02 04:45
+- **最后更新时间**：2026-04-02 04:50
 - **目标**：按 frontend_backend_decoupling_plan_20260401.md Phase 0-3 完成代码解耦、前台用户能力下线、后台独立登录路由
 - **依赖**：SEQ-20260401-49 ✅
 - **参考文档**：`docs/frontend_backend_decoupling_plan_20260401.md`
@@ -4358,16 +4358,15 @@
    - 变更内容：新增 /admin/login 路由；middleware 守卫更新，callbackUrl 传递正常
    - 完成备注：typecheck ✅ lint 零警告 ✅ 772 tests ✅
 
-8. DEC-08 — 前台旧登录路由返回 404（状态：⬜ 待开始）
+8. DEC-08 — 前台旧登录路由确认 + robots.txt 屏蔽 /admin/**（状态：✅ 已完成）
    - 创建时间：2026-04-02 10:00
    - 计划开始：DEC-07 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-04-02 04:48
+   - 完成时间：2026-04-02 04:50
    - 文件范围：
-     - `src/app/auth/login/page.tsx`（已在 DEC-05 处理，此处确认并完善）
-     - `robots.txt`（屏蔽 /admin/**）
-   - 变更内容：确认旧登录路由返回 404；robots.txt 新增 Disallow: /admin/
-   - 完成备注：_（AI 填写）_
+     - `src/app/robots.ts`（新建，Next.js MetadataRoute 方式生成 robots.txt）
+   - 变更内容：robots.txt 屏蔽 /admin/ 和 /auth/；旧登录路由已在 DEC-05 处理（notFound()）
+   - 完成备注：typecheck ✅ lint 零警告 ✅ 772 tests ✅
 
 ---
 
