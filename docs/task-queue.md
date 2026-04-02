@@ -4230,7 +4230,7 @@
 ## [SEQ-20260401-49] 后台稳定性与设置面板修复
 - **状态**：🔄 进行中
 - **创建时间**：2026-04-01 15:30
-- **最后更新时间**：2026-04-01 15:30
+- **最后更新时间**：2026-04-01 16:10
 - **目标**：修复 Redis 连接错误无上下文提示、表格设置面板点击后自动关闭、排序复选框无效三个问题
 - **依赖**：SEQ-20260401-48 ✅
 
@@ -4240,19 +4240,21 @@
    - 创建时间：2026-04-01 15:30
    - 计划开始：立即
    - 实际开始：2026-04-01 15:30
-   - 完成时间：_
+   - 完成时间：2026-04-01 15:45
    - 文件范围：
      - `src/api/lib/redis.ts`（连接错误按错误码给出原因提示；超时配置；重连次数耗尽提醒）
      - `src/api/plugins/authenticate.ts`（JWT验证与Redis黑名单解耦，Redis不可用时降级放行）
    - 变更内容：已有未提交的 redis/authenticate 改动基础上，增强 redis.ts 错误事件处理：按 ECONNREFUSED/ENOTFOUND/ETIMEDOUT 给出可能原因；添加 connectTimeout；添加 ready 事件；重连耗尽时打印详细提醒
-   - 完成备注：_（AI 填写）_
+   - 完成备注：connectTimeout+按错误码提示原因+重连耗尽详细提醒+ready事件；authenticate JWT与Redis解耦降级放行；772 tests通过
 
-2. CHG-335 — TableSettingsTrigger 面板停止冒泡修复（状态：⬜ 待开始）
+2. CHG-335 — TableSettingsTrigger 面板停止冒泡修复（状态：✅ 已完成）
    - 创建时间：2026-04-01 15:30
    - 计划开始：CHG-334 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-04-01 15:50
+   - 完成时间：2026-04-01 16:10
    - 文件范围：
-     - `src/components/admin/shared/modern-table/settings/TableSettingsTrigger.tsx`（portal div 增加 stopPropagation）
-   - 变更内容：portal panel 根 div 增加 `onClick={(e) => e.stopPropagation()}`，阻止 React 合成事件冒泡到外层 triggerRef div 的 handleTriggerClick，解决点击复选框面板自动关闭及排序设置无效两个问题
-   - 完成备注：_（AI 填写）_
+     - `src/components/admin/shared/modern-table/settings/TableSettingsTrigger.tsx`（onClick 从 wrapper div 移到 button）
+     - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`（within scoping 修复）
+     - `tests/unit/components/admin/sources/SourceSubmissionTable.test.tsx`（within scoping 修复）
+   - 变更内容：onClick 从 wrapper div 移到 button，portal 内点击不再冒泡到 handleTriggerClick；面板保持开启，排序/显示复选框均可正常操作；2 个测试误判修复（queryByText 改为 within(tableScroll).queryByText）
+   - 完成备注：onClick 从 wrapper div 移到 button；portal 内点击不再冒泡到 handleTriggerClick；2 个测试误判修复（within scoping）；772 tests 通过

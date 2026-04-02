@@ -109,7 +109,6 @@ export function TableSettingsTrigger({
       ref={triggerRef}
       className="relative inline-block"
       data-testid={testId}
-      onClick={handleTriggerClick}
     >
       <button
         type="button"
@@ -121,6 +120,7 @@ export function TableSettingsTrigger({
           isOpen ? 'bg-[var(--bg3)] text-[var(--text)]' : '',
         ].join(' ')}
         data-testid={testId ? `${testId}-btn` : undefined}
+        onClick={handleTriggerClick}
       >
         ⋮
       </button>

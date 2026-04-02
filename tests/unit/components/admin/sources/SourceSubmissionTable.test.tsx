@@ -4,7 +4,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { SubmissionTable } from '@/components/admin/sources/SubmissionTable'
 
 const getMock = vi.fn()
@@ -69,7 +69,9 @@ describe('SourceSubmissionTable (CHG-267)', () => {
     fireEvent.click(screen.getByTestId('source-submission-table-scroll-settings-content-visible-submitted_by'))
 
     await waitFor(() => {
-      expect(screen.queryByText('提交者')).toBeNull()
+      // 仅在表格内查找，排除 settings 面板中仍显示的列标签
+      const tableScroll = screen.getByTestId('source-submission-table-scroll')
+      expect(within(tableScroll).queryByText('提交者')).toBeNull()
     })
   })
 

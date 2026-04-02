@@ -4643,3 +4643,11 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/api/lib/redis.ts`：新增 connectTimeout:5000；retryStrategy 重连耗尽时打印详细建议；error 事件按错误码（ECONNREFUSED/ENOTFOUND/ETIMEDOUT/ECONNRESET/EACCES）给出中文原因提示；reconnecting 补充 delay 参数；新增 ready 事件日志
   - `src/api/plugins/authenticate.ts`：JWT 验证与 Redis 黑名单检查解耦；Redis 不可用时降级放行（记录警告日志）
 - **测试**：typecheck ✅ lint ✅ 772 unit tests ✅
+
+## CHG-335 — TableSettingsTrigger 面板点击停止冒泡修复
+- **完成时间**：2026-04-01 16:10
+- **修改文件**：
+  - `src/components/admin/shared/modern-table/settings/TableSettingsTrigger.tsx`：`onClick={handleTriggerClick}` 从 wrapper div 移到 button，portal 内点击不再冒泡至 handleTriggerClick，面板保持开启
+  - `tests/unit/components/admin/sources/InactiveSourceTable.test.tsx`：`queryByText` 改为 `within(tableScroll).queryByText`，修复误判（排除 settings 面板中的列标签）
+  - `tests/unit/components/admin/sources/SourceSubmissionTable.test.tsx`：同上
+- **测试**：typecheck ✅ lint ✅ 772 unit tests ✅

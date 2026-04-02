@@ -4,7 +4,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { InactiveSourceTable } from '@/components/admin/sources/InactiveSourceTable'
 
 const getMock = vi.fn()
@@ -109,7 +109,9 @@ describe('InactiveSourceTable (CHG-262)', () => {
     fireEvent.click(screen.getByTestId('inactive-source-table-scroll-settings-content-visible-coordinate'))
 
     await waitFor(() => {
-      expect(screen.queryByText('S/E')).toBeNull()
+      // 仅在表格内查找，排除 settings 面板中仍显示的列标签
+      const tableScroll = screen.getByTestId('inactive-source-table-scroll')
+      expect(within(tableScroll).queryByText('S/E')).toBeNull()
     })
   })
 
