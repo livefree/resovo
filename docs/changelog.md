@@ -4683,3 +4683,11 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/system/monitoring/CacheManager.tsx`：import 改用 @/types/contracts/v1/admin
   - `src/lib/api-client.ts`：getCacheStats/clearCache 的 inline import 改用 @/types/contracts/v1/admin
 - **测试**：typecheck ✅ lint 零警告（所有7处 DEC-01 违规已清零）✅ 772 unit tests ✅
+
+---
+
+## DEC-04 — 修复 AnalyticsService 反向依赖 route 类型
+- **完成时间**：2026-04-02 04:15
+- **修改文件**：
+  - `src/api/services/AnalyticsService.ts`：`import type { AnalyticsData }` 从 @/api/routes/admin/analytics 改为 @/types/contracts/v1/admin
+- **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅

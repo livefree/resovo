@@ -4266,7 +4266,7 @@
 ## [SEQ-20260402-50] 前后台解耦架构（DEC 系列）
 - **状态**：🔄 进行中
 - **创建时间**：2026-04-02 10:00
-- **最后更新时间**：2026-04-02 04:10
+- **最后更新时间**：2026-04-02 04:15
 - **目标**：按 frontend_backend_decoupling_plan_20260401.md Phase 0-3 完成代码解耦、前台用户能力下线、后台独立登录路由
 - **依赖**：SEQ-20260401-49 ✅
 - **参考文档**：`docs/frontend_backend_decoupling_plan_20260401.md`
@@ -4313,15 +4313,15 @@
    - 变更内容：CacheStat/CacheType 迁移到 contracts/v1，消除最后1处 DEC-01 lint 警告；lint 现在零警告
    - 完成备注：typecheck ✅ lint 零警告 ✅ 772 tests ✅
 
-4. DEC-04 — 修复 AnalyticsService 反向依赖 route 类型（状态：⬜ 待开始）
+4. DEC-04 — 修复 AnalyticsService 反向依赖 route 类型（状态：✅ 已完成）
    - 创建时间：2026-04-02 10:00
    - 计划开始：DEC-02/DEC-03 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-04-02 04:12
+   - 完成时间：2026-04-02 04:15
    - 文件范围：
-     - `src/api/services/AnalyticsService.ts`（改用 contracts 类型，移除 routes import）
-   - 变更内容：AnalyticsService 不再 import route 层类型，改用 src/types/contracts/v1/admin
-   - 完成备注：_（AI 填写）_
+     - `src/api/services/AnalyticsService.ts`（import 改用 @/types/contracts/v1/admin）
+   - 变更内容：AnalyticsService 不再反向依赖 route 层类型，Service→Route 循环依赖消除
+   - 完成备注：typecheck ✅ lint 零警告 ✅ 772 tests ✅
 
 5. DEC-05 — 下线前台登录/注册入口（状态：⬜ 待开始）
    - 创建时间：2026-04-02 10:00

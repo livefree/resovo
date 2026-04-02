@@ -12,7 +12,7 @@ import {
   getPendingSubmissionCount,
   getPendingSubtitleCount,
 } from '@/api/db/queries/analytics'
-import type { AnalyticsData } from '@/api/routes/admin/analytics'
+import type { AnalyticsData } from '@/types/contracts/v1/admin'
 
 export class AnalyticsService {
   constructor(private db: Pool) {}
