@@ -11,7 +11,10 @@ export function useCrawlerSites() {
     if (!silent) setLoading(true)
     try {
       const res = await apiClient.get<{ data: CrawlerSite[] }>('/admin/crawler/sites')
-      setSites(res.data)
+      const sorted = [...res.data].sort((a, b) =>
+        a.name.localeCompare(b.name, 'zh-CN', { sensitivity: 'base' })
+      )
+      setSites(sorted)
     } catch {
       // 静默
     } finally {

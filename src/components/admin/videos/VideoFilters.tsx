@@ -27,7 +27,12 @@ export function VideoFilters() {
   useEffect(() => {
     apiClient
       .get<{ data: CrawlerSite[] }>('/admin/crawler/sites')
-      .then((res) => setSites(res.data ?? []))
+      .then((res) => {
+        const sorted = [...(res.data ?? [])].sort((a, b) =>
+          a.name.localeCompare(b.name, 'zh-CN', { sensitivity: 'base' })
+        )
+        setSites(sorted)
+      })
       .catch(() => {/* 站点加载失败时下拉为空，不影响其他筛选 */})
   }, [])
 

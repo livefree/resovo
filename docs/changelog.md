@@ -4748,3 +4748,12 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar.tsx`：移除 AdminBatchBar 和 onBatch prop
   - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`：新增 SelectionActionBar variant="sticky-bottom"，包含启用/停用/标记成人/批量删除4个动作
 - **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅
+
+---
+
+## UX-03 — 采集源下拉排序改为名称优先
+- **完成时间**：2026-04-02 05:26
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSites.ts`：fetchSites 后按 name asc 排序再 setSites
+  - `src/components/admin/videos/VideoFilters.tsx`：fetch 后按 name asc 排序再 setSites
+- **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅

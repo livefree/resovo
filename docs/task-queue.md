@@ -4373,7 +4373,7 @@
 ## [SEQ-20260402-51] 后台交互改造（UX 系列）
 - **状态**：🔄 进行中
 - **创建时间**：2026-04-02 10:00
-- **最后更新时间**：2026-04-02 05:18
+- **最后更新时间**：2026-04-02 05:26
 - **目标**：按 admin_console_decoupling_and_ux_plan_20260402.md Phase 1-2 完成后台交互规范统一与核心页面重构
 - **依赖**：SEQ-20260402-50 DEC-01 ✅（lint 规则生效后再展开 UX 系列）
 - **参考文档**：`docs/admin_console_decoupling_and_ux_plan_20260402.md`
@@ -4404,16 +4404,16 @@
    - 变更内容：采集控制台批量操作从 inline 顶部工具栏迁移至底部悬浮，与视频/源管理表格保持一致
    - 完成备注：typecheck ✅ lint 零警告 ✅ 772 tests ✅
 
-3. UX-03 — 采集源下拉排序改为名称优先（状态：⬜ 待开始）
+3. UX-03 — 采集源下拉排序改为名称优先（状态：✅ 已完成）
    - 创建时间：2026-04-02 10:00
    - 计划开始：UX-01 完成后（可与 UX-02 并行）
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-04-02 05:22
+   - 完成时间：2026-04-02 05:26
    - 文件范围：
-     - 采集源相关下拉/筛选组件（默认排序改为 name asc）
-     - 后端接口（如需支持 sortBy=name 参数）
-   - 变更内容：采集源选择下拉默认按名称升序排列；管理页面可切换为 weight 排序
-   - 完成备注：_（AI 填写）_
+     - `src/components/admin/system/crawler-site/hooks/useCrawlerSites.ts`（setSites 时按 name asc 排序）
+     - `src/components/admin/videos/VideoFilters.tsx`（setSites 时按 name asc 排序）
+   - 变更内容：所有采集源下拉（VideoFilters、CrawlerAdvancedTab 等）默认按名称升序显示；管理表格已有自己的 sort 机制不受影响
+   - 完成备注：typecheck ✅ lint 零警告 ✅ 772 tests ✅
 
 4. UX-04 — 视频管理操作区重构（状态：⬜ 待开始）
    - 创建时间：2026-04-02 10:00
