@@ -4728,3 +4728,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/app/robots.ts`：新建，使用 Next.js MetadataRoute 生成 robots.txt，Disallow: /admin/ 和 /auth/
 - **备注**：旧登录路由 /auth/login 和 /auth/register 已在 DEC-05 改为 notFound()
 - **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅
+
+---
+
+## UX-01 — 全局 AdminToastHost 上线，替换所有 alert()
+- **完成时间**：2026-04-02 05:05
+- **修改文件**：
+  - `src/components/admin/shared/toast/useAdminToast.ts`：新建，Zustand store，notify.success/info/warn/error API，dedupeKey 去重，MAX_VISIBLE=3 队列管理
+  - `src/components/admin/shared/toast/AdminToastHost.tsx`：新建，右下角固定，不占文档流，自动/手动关闭
+  - `src/app/[locale]/admin/layout.tsx`：挂载 AdminToastHost
+  - `src/components/admin/AdminCrawlerPanel.tsx`：alert() → notify.error()
+- **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅

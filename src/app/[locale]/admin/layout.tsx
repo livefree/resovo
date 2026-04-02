@@ -7,6 +7,7 @@
 
 import { cookies } from 'next/headers'
 import { AdminSidebar } from '@/components/admin/AdminSidebar'
+import { AdminToastHost } from '@/components/admin/shared/toast/AdminToastHost'
 
 // ── 布局 ──────────────────────────────────────────────────────────
 
@@ -24,6 +25,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
       {/* ── 主内容区 ─────────────────────────────────────────────── */}
       <main className="min-w-0 flex-1 overflow-y-auto p-8">{children}</main>
+
+      {/* ── 全局 Toast（右下角，不占布局） ───────────────────────── */}
+      <AdminToastHost />
     </div>
   )
 }

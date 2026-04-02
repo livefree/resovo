@@ -4371,27 +4371,27 @@
 ---
 
 ## [SEQ-20260402-51] 后台交互改造（UX 系列）
-- **状态**：⬜ 待开始
+- **状态**：🔄 进行中
 - **创建时间**：2026-04-02 10:00
-- **最后更新时间**：2026-04-02 10:00
+- **最后更新时间**：2026-04-02 05:05
 - **目标**：按 admin_console_decoupling_and_ux_plan_20260402.md Phase 1-2 完成后台交互规范统一与核心页面重构
 - **依赖**：SEQ-20260402-50 DEC-01 ✅（lint 规则生效后再展开 UX 系列）
 - **参考文档**：`docs/admin_console_decoupling_and_ux_plan_20260402.md`
 
 ### 任务列表
 
-1. UX-01 — 全局 AdminToastHost 上线，替换所有 alert()（状态：⬜ 待开始）
+1. UX-01 — 全局 AdminToastHost 上线，替换所有 alert()（状态：✅ 已完成）
    - 创建时间：2026-04-02 10:00
    - 计划开始：DEC-01 完成后（可与 DEC-02 并行启动）
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-04-02 04:55
+   - 完成时间：2026-04-02 05:05
    - 文件范围：
-     - `src/components/admin/shared/toast/AdminToastHost.tsx`（新建）
-     - `src/components/admin/shared/toast/useAdminToast.ts`（新建，notify API）
-     - `src/app/admin/layout.tsx`（挂载 AdminToastHost）
-     - 全局扫描替换 alert() 调用
-   - 变更内容：实现全局 toast 体系（success/info/warn/error，dedupeKey，队列，右下角定位）；替换全部 alert()
-   - 完成备注：_（AI 填写）_
+     - `src/components/admin/shared/toast/useAdminToast.ts`（新建，Zustand store + notify API）
+     - `src/components/admin/shared/toast/AdminToastHost.tsx`（新建，右下角 toast 渲染）
+     - `src/app/[locale]/admin/layout.tsx`（挂载 AdminToastHost）
+     - `src/components/admin/AdminCrawlerPanel.tsx`（alert() 替换为 notify.error()）
+   - 变更内容：全局 toast 体系上线（success/info/warn/error，dedupeKey 去重，MAX 3条队列，自动/手动关闭）；1处 alert() 替换
+   - 完成备注：typecheck ✅ lint 零警告 ✅ 772 tests ✅
 
 2. UX-02 — 批量操作栏统一为底部悬浮（采集控制台对齐）（状态：⬜ 待开始）
    - 创建时间：2026-04-02 10:00

@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
+import { notify } from '@/components/admin/shared/toast/useAdminToast'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import type { TableSortState } from '@/components/admin/shared/modern-table/types'
 import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
@@ -127,7 +128,7 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
       )
       setTaskLogs(res.data.logs ?? [])
     } catch (err) {
-      alert(err instanceof Error ? err.message : '日志加载失败')
+      notify.error(err instanceof Error ? err.message : '日志加载失败')
       setTaskLogs([])
     } finally {
       setLogLoading(false)
