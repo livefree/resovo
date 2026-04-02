@@ -4515,13 +4515,14 @@
    - 变更内容：类型筛选/排序；多源播放器；tv→series 清理；三层（Route→Service→Query）同步
    - 完成备注：Route 层增加 type/sortDir 参数；Service 层透传；Query 层动态 WHERE + ORDER BY；ModerationList 完整重写（11 类枚举、排序按钮、reset page）；ModerationDetail 修正 TYPE_LABELS（tv→series+补全 11 类），sources 改 limit=10，新增多源选择器 UI（按钮组 + N/M 提示）；770 tests ✅ lint ✅ typecheck ✅
 
-6. CHG-342 — 统一视频类型选项（AdminVideoForm 对齐 API Schema）（状态：⬜ 待开始）
+6. CHG-342 — 统一视频类型选项（AdminVideoForm 对齐 API Schema）（状态：✅ 已完成）
    - 创建时间：2026-04-02 14:30
    - 计划开始：CHG-341 完成后
-   - 实际开始：—
-   - 完成时间：—
+   - 实际开始：2026-04-02 15:58
+   - 完成时间：2026-04-02 16:02
    - 文件范围：`src/components/admin/AdminVideoForm.tsx`（line 253-257）
    - 变更内容：type select 从 4 类扩展到 11 类（对齐 VideoMetaSchema）
+   - 完成备注：新增 documentary/short/sports/music/news/kids/other 7 个选项；770 tests ✅ lint ✅ typecheck ✅
    - 完成备注：_（AI 填写）_
 
 7. CHG-343 — robots.txt 基于 routing.locales 动态生成多语言屏蔽路径（状态：⬜ 待开始）

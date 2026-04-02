@@ -4863,3 +4863,12 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/moderation/ModerationDetail.tsx`：TYPE_LABELS 修正 `tv` → `series` 并补全 11 类；sources 请求从 `limit=1` 改为 `limit=10`；state 从 `firstSourceUrl` 改为 `sources[]` + `selectedSourceIdx`；新增多源按钮组选择器（含 N/M 条提示）
 - **共享层沉淀**：无需提取，多源选择器为审核台专有 UI
 - **测试**：typecheck ✅ lint 零警告 ✅ 770 unit tests ✅
+
+---
+
+### CHG-342 — 统一视频类型选项（AdminVideoForm 对齐 API Schema）（2026-04-02）
+
+- **修改文件**：
+  - `src/components/admin/AdminVideoForm.tsx`：type select 从 4 类（movie/series/anime/variety）扩展为 11 类，补全 documentary/short/sports/music/news/kids/other 及对应中文标签
+- **共享层沉淀**：无需提取
+- **测试**：typecheck ✅ lint 零警告 ✅ 770 unit tests ✅
