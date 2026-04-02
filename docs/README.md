@@ -30,6 +30,7 @@
 5. `docs/ui_implementation_plan_20260327.md`
 6. `docs/ui_task_20260327.md`
 7. `docs/admin_backend_capability_exposure_plan_20260327.md`
+8. `docs/frontend_backend_decoupling_plan_20260401.md`
 
 ## 3. 规划输入与兼容评估（References）
 
