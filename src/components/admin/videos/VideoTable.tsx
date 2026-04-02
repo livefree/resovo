@@ -108,12 +108,11 @@ export function VideoTable() {
 
   const allSelected = videos.length > 0 && selectedIds.length === videos.length
 
-  const handleVisibilityToggle = useCallback(async (row: VideoAdminRow, nextValue: boolean) => {
-    const nextVisibility = nextValue ? 'public' : 'hidden'
+  const handleVisibilityToggle = useCallback(async (row: VideoAdminRow, nextVisibility: 'public' | 'internal' | 'hidden') => {
     const prev = { visibility_status: row.visibility_status, is_published: row.is_published }
     setVisibilityPendingIds((ids) => [...ids, row.id])
     setVideos((vs) => vs.map((item) => (
-      item.id === row.id ? { ...item, visibility_status: nextVisibility, is_published: nextValue } : item
+      item.id === row.id ? { ...item, visibility_status: nextVisibility } : item
     )))
     try {
       const res = await apiClient.patch<{ data: { visibility_status: VideoAdminRow['visibility_status']; is_published: boolean } }>(

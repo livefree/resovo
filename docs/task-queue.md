@@ -4497,14 +4497,14 @@
    - 变更内容：删除 useVideoOpsV2Flag() 和旧版 AdminDropdown 操作下拉代码
    - 完成备注：useVideoTableColumns 删除 videoOpsV2/setDrawerVideoId/doubanSyncPendingIds/canSyncDouban/handleDoubanSync/AdminDropdown；VideoTable 同步清理；测试更新（快速编辑/豆瓣同步/完整编辑下拉→编辑图标按钮+发布Toggle按钮）；770/772 tests ✅ lint ✅ typecheck ✅
 
-4. CHG-340 — visibility 从 2 态开关改为 3 态选择控件（状态：⬜ 待开始）
+4. CHG-340 — visibility 从 2 态开关改为 3 态选择控件（状态：✅ 已完成）
    - 创建时间：2026-04-02 14:30
    - 计划开始：CHG-339 完成后
-   - 实际开始：—
-   - 完成时间：—
+   - 实际开始：2026-04-02 15:45
+   - 完成时间：2026-04-02 16:00
    - 文件范围：`src/components/admin/videos/useVideoTableColumns.tsx`（line 186-197）
    - 变更内容：TableSwitchCell → 三态 select；API 字段用 visibility（非 visibility_status）
-   - 完成备注：_（AI 填写）_
+   - 完成备注：ColumnDeps handleVisibilityToggle 签名改为接受三态字符串；select onChange 加 .catch 消化 rollback-already-handled 错误；测试更新为 getByTestId('visibility-select-v1')；770 tests ✅ lint ✅ typecheck ✅
 
 5. CHG-341 — 审核台补齐过滤、排序、多源播放器（状态：⬜ 待开始）
    - 创建时间：2026-04-02 14:30

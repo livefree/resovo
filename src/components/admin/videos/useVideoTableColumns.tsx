@@ -133,7 +133,7 @@ interface ColumnDeps {
   visibilityPendingIds: string[]
   publishPendingIds: string[]
   handleCheck: (id: string, checked: boolean) => void
-  handleVisibilityToggle: (row: VideoAdminRow, next: boolean) => Promise<void>
+  handleVisibilityToggle: (row: VideoAdminRow, next: 'public' | 'internal' | 'hidden') => Promise<void>
   handlePublishToggle: (row: VideoAdminRow) => Promise<void>
   openFullEdit: (id: string) => void
 }
@@ -179,16 +179,27 @@ function buildDataColumn(columnId: VideoColumnId, deps: ColumnDeps): TableColumn
       break
     case 'visibility':
       col.accessor = (row) => getVisibilityLabel(row.visibility_status)
-      col.cell = ({ row }) => (
-        <div className="flex items-center gap-2">
-          <TableSwitchCell
-            value={row.visibility_status === 'public'}
-            disabled={deps.visibilityPendingIds.includes(row.id)}
-            onToggle={(next) => deps.handleVisibilityToggle(row, next)}
-          />
-          <span className="text-xs text-[var(--muted)]">{getVisibilityLabel(row.visibility_status)}</span>
-        </div>
-      )
+      col.cell = ({ row }) => {
+        const isPending = deps.visibilityPendingIds.includes(row.id)
+        return (
+          <select
+            value={row.visibility_status ?? 'public'}
+            disabled={isPending}
+            onChange={(e) => {
+              const next = e.target.value as 'public' | 'internal' | 'hidden'
+              void deps.handleVisibilityToggle(row, next).catch(() => {
+                // rollback handled inside handleVisibilityToggle
+              })
+            }}
+            data-testid={`visibility-select-${row.id}`}
+            className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] disabled:opacity-50 focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          >
+            <option value="public">公开</option>
+            <option value="internal">内部</option>
+            <option value="hidden">隐藏</option>
+          </select>
+        )
+      }
       break
     case 'review_status':
       col.accessor = (row) => getReviewLabel(row.review_status)

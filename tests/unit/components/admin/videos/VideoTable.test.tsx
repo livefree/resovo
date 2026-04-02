@@ -197,34 +197,37 @@ describe('VideoTable (CHG-211/212)', () => {
     expect(within(row).getByText('已通过')).toBeTruthy()
   })
 
-  it('optimistically toggles visibility without refetching the table', async () => {
+  it('optimistically changes visibility via 3-state select without refetching the table (CHG-340)', async () => {
     render(<VideoTable />)
 
     const row = await screen.findByTestId('modern-table-row-v1')
-    const switchButton = within(row).getByTestId('table-switch-toggle')
+    const visibilitySelect = within(row).getByTestId('visibility-select-v1')
     expect(getMock).toHaveBeenCalledTimes(1)
+    // v1 has visibility_status: 'public'
+    expect((visibilitySelect as HTMLSelectElement).value).toBe('public')
 
-    fireEvent.click(switchButton)
+    fireEvent.change(visibilitySelect, { target: { value: 'hidden' } })
 
     await waitFor(() => {
       expect(patchMock).toHaveBeenCalledWith('/admin/videos/v1/visibility', { visibility: 'hidden' })
-      expect(within(screen.getByTestId('modern-table-row-v1')).getByText('隐藏')).toBeTruthy()
+      // Optimistic update: select now shows 'hidden'
+      expect((screen.getByTestId('visibility-select-v1') as HTMLSelectElement).value).toBe('hidden')
     })
 
     expect(getMock).toHaveBeenCalledTimes(1)
   })
 
-  it('rolls back visibility on toggle failure', async () => {
+  it('rolls back visibility on change failure (CHG-340)', async () => {
     patchMock.mockRejectedValueOnce(new Error('服务异常'))
     render(<VideoTable />)
 
     const row = await screen.findByTestId('modern-table-row-v1')
-    fireEvent.click(within(row).getByTestId('table-switch-toggle'))
+    const visibilitySelect = within(row).getByTestId('visibility-select-v1')
+    fireEvent.change(visibilitySelect, { target: { value: 'hidden' } })
 
     await waitFor(() => {
-      const currentRow = screen.getByTestId('modern-table-row-v1')
-      expect(within(currentRow).getByText('公开')).toBeTruthy()
-      expect(within(currentRow).getByText('服务异常')).toBeTruthy()
+      // State rolled back to original 'public'
+      expect((screen.getByTestId('visibility-select-v1') as HTMLSelectElement).value).toBe('public')
     })
   })
 

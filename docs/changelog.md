@@ -4839,3 +4839,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/videos/VideoTable.test.tsx`：更新测试（旧下拉交互→新图标按钮/直接 toggle 按钮；移除豆瓣同步下拉测试）
 - **共享层沉淀**：无需提取
 - **测试**：770/772 tests ✅（删除 2 个旧版 v1 测试）lint 零警告 ✅ typecheck ✅
+
+---
+
+### CHG-340 — visibility 从 2 态开关改为 3 态选择控件（2026-04-02）
+
+- **修改文件**：
+  - `src/components/admin/videos/useVideoTableColumns.tsx`：visibility case 从 `TableSwitchCell` 改为 `<select>` 三选一（公开/内部/隐藏），data-testid 为 `visibility-select-{row.id}`；ColumnDeps `handleVisibilityToggle` 签名从 `(row, boolean)` 改为 `(row, 'public'|'internal'|'hidden')`；onChange 加 `.catch(() => {})` 消化已由函数内部处理的 rollback 抛出
+  - `src/components/admin/videos/VideoTable.tsx`：`handleVisibilityToggle` 直接接收三态值并传入 PATCH body `{ visibility: nextVisibility }`
+  - `tests/unit/components/admin/videos/VideoTable.test.tsx`：更新 visibility 测试使用 `getByTestId('visibility-select-v1')` 和 `fireEvent.change`
+- **共享层沉淀**：`TableSwitchCell` 在其他列保持不变，只更换了 visibility case
+- **测试**：770 tests ✅ lint 零警告 ✅ typecheck ✅
