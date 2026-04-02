@@ -4710,3 +4710,12 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **修改文件**：
   - `src/components/player/PlayerShell.tsx`：移除 DanmakuBar import、playerContainerRef（useRef）、DanmakuBar JSX、currentTime 从 usePlayerStore 解构；后端弹幕 API 保留
 - **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅
+
+---
+
+## DEC-07 — 新建后台独立登录路由 /admin/login
+- **完成时间**：2026-04-02 04:45
+- **修改文件**：
+  - `src/app/[locale]/admin/login/page.tsx`：新建，复用 LoginForm 组件，标题"管理员登录"
+  - `src/middleware.ts`：/admin 守卫排除 /admin/login 路径；未登录跳转目标从 /auth/login 改为 /admin/login
+- **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅

@@ -43,13 +43,13 @@ export default function middleware(request: NextRequest): NextResponse {
   const { locale, path } = stripLocale(pathname)
 
   // ── /admin 路径守卫 ────────────────────────────────────────────
-  if (path.startsWith('/admin') && path !== '/admin/403') {
+  if (path.startsWith('/admin') && path !== '/admin/403' && path !== '/admin/login') {
     const refreshToken = request.cookies.get('refresh_token')?.value
     const userRole = request.cookies.get('user_role')?.value
 
-    // 未登录 → 跳到登录页
+    // 未登录 → 跳到后台登录页
     if (!refreshToken) {
-      const loginUrl = new URL(`/${locale}/auth/login`, request.url)
+      const loginUrl = new URL(`/${locale}/admin/login`, request.url)
       loginUrl.searchParams.set('callbackUrl', pathname)
       return NextResponse.redirect(loginUrl)
     }
