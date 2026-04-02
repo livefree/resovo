@@ -4828,3 +4828,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **共享层沉淀**：`AnalyticsSkeleton` 为纯声明性组件，无需提取
 - **安全修复**：彻底移除 `x-internal-secret` 绕过鉴权的反模式
 - **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅
+
+---
+
+### CHG-339 — 去除视频管理 v2 灰度开关，默认启用（2026-04-02）
+
+- **修改文件**：
+  - `src/components/admin/videos/useVideoTableColumns.tsx`：删除 `useVideoOpsV2Flag()` hook；从 `ColumnDeps` 移除 `videoOpsV2`/`setDrawerVideoId`/`doubanSyncPendingIds`/`canSyncDouban`/`handleDoubanSync`；移除 `AdminDropdown` import；actions case 简化为直接渲染 v2 图标按钮
+  - `src/components/admin/videos/VideoTable.tsx`：移除 `useVideoOpsV2Flag` import 和 `videoOpsV2` 常量；移除 `doubanSyncPendingIds` 状态和 `handleDoubanSync` callback；清理 deps 对象
+  - `tests/unit/components/admin/videos/VideoTable.test.tsx`：更新测试（旧下拉交互→新图标按钮/直接 toggle 按钮；移除豆瓣同步下拉测试）
+- **共享层沉淀**：无需提取
+- **测试**：770/772 tests ✅（删除 2 个旧版 v1 测试）lint 零警告 ✅ typecheck ✅

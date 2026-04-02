@@ -228,74 +228,29 @@ describe('VideoTable (CHG-211/212)', () => {
     })
   })
 
-  it('opens detail drawer, loads video sources and saves metadata', async () => {
+  it('navigates to full edit page on edit button click (CHG-339: v2 actions)', async () => {
     render(<VideoTable />)
 
     await screen.findByText('Alpha Movie')
-    // Open actions dropdown and choose quick edit for row v1
-    fireEvent.click(screen.getByTestId('video-actions-v1'))
-    await screen.findByText('快速编辑')
-    fireEvent.click(screen.getByText('快速编辑'))
+    const actionsDiv = screen.getByTestId('video-actions-v1')
+    const editBtn = actionsDiv.querySelector('button[title="编辑"]') as HTMLElement
+    expect(editBtn).toBeTruthy()
+    fireEvent.click(editBtn)
 
-    await screen.findByTestId('video-detail-drawer-title')
-    expect(getMock).toHaveBeenCalledWith('/admin/videos/v1')
-    expect(getMock).toHaveBeenCalledWith('/admin/sources?videoId=v1&page=1&limit=20')
-
-    // Sources are on the "关联源" tab — switch to verify URL is displayed
-    fireEvent.click(screen.getByText(/关联源/))
-    expect(screen.getByText('https://cdn.example.com/v1.m3u8')).toBeTruthy()
-
-    // Switch back to edit tab to fill form and save
-    fireEvent.click(screen.getByText('基础编辑'))
-    fireEvent.change(screen.getByTestId('video-detail-title-input'), { target: { value: 'Alpha Movie Updated' } })
-    fireEvent.change(screen.getByTestId('video-detail-country-input'), { target: { value: 'US' } })
-    fireEvent.click(screen.getByTestId('video-detail-save'))
-
-    await waitFor(() => {
-      expect(patchMock).toHaveBeenCalledWith('/admin/videos/v1', {
-        title: 'Alpha Movie Updated',
-        description: 'Old description',
-        year: 2025,
-        type: 'series',
-        country: 'US',
-      })
-    })
+    expect(pushMock).toHaveBeenCalledWith('/admin/videos/v1/edit')
   })
 
-  it('supports publish/unpublish action from operations dropdown', async () => {
+  it('supports publish/unpublish toggle button in actions (CHG-339: v2 actions)', async () => {
     render(<VideoTable />)
     await screen.findByText('Alpha Movie')
 
-    fireEvent.click(screen.getByTestId('video-actions-v1'))
-    await screen.findByText('下架')
-    fireEvent.click(screen.getByText('下架'))
+    // Alpha Movie (v1) is published → shows "已上架" button
+    const actionsDiv = screen.getByTestId('video-actions-v1')
+    const publishBtn = within(actionsDiv).getByTitle('下架')
+    fireEvent.click(publishBtn)
 
     await waitFor(() => {
       expect(patchMock).toHaveBeenCalledWith('/admin/videos/v1/publish', { isPublished: false })
     })
-  })
-
-  it('supports douban sync action for admin role', async () => {
-    render(<VideoTable />)
-    await screen.findByText('Alpha Movie')
-
-    fireEvent.click(screen.getByTestId('video-actions-v1'))
-    await screen.findByText('豆瓣同步')
-    fireEvent.click(screen.getByText('豆瓣同步'))
-
-    await waitFor(() => {
-      expect(postMock).toHaveBeenCalledWith('/admin/videos/v1/douban-sync')
-    })
-  })
-
-  it('navigates to full-edit page from operations dropdown', async () => {
-    render(<VideoTable />)
-    await screen.findByText('Alpha Movie')
-
-    fireEvent.click(screen.getByTestId('video-actions-v1'))
-    await screen.findByText('完整编辑')
-    fireEvent.click(screen.getByText('完整编辑'))
-
-    expect(pushMock).toHaveBeenCalledWith('/admin/videos/v1/edit')
   })
 })

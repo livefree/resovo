@@ -18,7 +18,6 @@ import type { AdminTableSortState } from '@/components/admin/shared/table/useAdm
 import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import {
   useVideoTableColumns,
-  useVideoOpsV2Flag,
   COLUMN_LABELS,
   SORTABLE_MAP,
   VIDEO_COLUMNS,
@@ -45,7 +44,6 @@ export function VideoTable() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const isAdmin = useAuthStore(selectIsAdmin)
-  const videoOpsV2 = useVideoOpsV2Flag()
   const [videos, setVideos] = useState<VideoAdminRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -54,7 +52,6 @@ export function VideoTable() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [visibilityPendingIds, setVisibilityPendingIds] = useState<string[]>([])
   const [publishPendingIds, setPublishPendingIds] = useState<string[]>([])
-  const [doubanSyncPendingIds, setDoubanSyncPendingIds] = useState<string[]>([])
   const [drawerVideoId, setDrawerVideoId] = useState<string | null>(null)
 
   const q = searchParams.get('q') ?? ''
@@ -150,18 +147,6 @@ export function VideoTable() {
     }
   }, [])
 
-  const handleDoubanSync = useCallback(async (videoId: string) => {
-    setDoubanSyncPendingIds((ids) => (ids.includes(videoId) ? ids : [...ids, videoId]))
-    try {
-      await apiClient.post(`/admin/videos/${videoId}/douban-sync`)
-      await fetchVideos(page, pageSize)
-    } catch (_error) {
-      // silent
-    } finally {
-      setDoubanSyncPendingIds((ids) => ids.filter((id) => id !== videoId))
-    }
-  }, [fetchVideos, page, pageSize])
-
   const openFullEdit = useCallback((videoId: string) => {
     router.push(`/admin/videos/${videoId}/edit`)
   }, [router])
@@ -175,14 +160,9 @@ export function VideoTable() {
       selectedIds,
       visibilityPendingIds,
       publishPendingIds,
-      doubanSyncPendingIds,
-      canSyncDouban: isAdmin,
-      videoOpsV2,
       handleCheck,
       handleVisibilityToggle,
       handlePublishToggle,
-      handleDoubanSync,
-      setDrawerVideoId,
       openFullEdit,
     },
   })

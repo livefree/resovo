@@ -4488,14 +4488,14 @@
    - 变更内容：删除 x-internal-secret SSR fetch；AnalyticsCards 改为可选 initialData + 首屏客户端拉数
    - 完成备注：AnalyticsCards initialData 改为可选，useState<null>初始，useEffect 首屏立即拉数（cancelled flag 防泄漏）；QueueAlerts 移入 AnalyticsCards 内渲染；admin/page.tsx 简化为纯 Server Component Shell。typecheck ✅ lint ✅ 772 tests ✅
 
-3. CHG-339 — 去除视频管理 v2 灰度开关，默认启用（状态：⬜ 待开始）
+3. CHG-339 — 去除视频管理 v2 灰度开关，默认启用（状态：✅ 已完成）
    - 创建时间：2026-04-02 14:30
    - 计划开始：CHG-338 完成后
-   - 实际开始：—
-   - 完成时间：—
+   - 实际开始：2026-04-02 15:00
+   - 完成时间：2026-04-02 15:40
    - 文件范围：`src/components/admin/videos/useVideoTableColumns.tsx`，`VideoTable.tsx`
    - 变更内容：删除 useVideoOpsV2Flag() 和旧版 AdminDropdown 操作下拉代码
-   - 完成备注：_（AI 填写）_
+   - 完成备注：useVideoTableColumns 删除 videoOpsV2/setDrawerVideoId/doubanSyncPendingIds/canSyncDouban/handleDoubanSync/AdminDropdown；VideoTable 同步清理；测试更新（快速编辑/豆瓣同步/完整编辑下拉→编辑图标按钮+发布Toggle按钮）；770/772 tests ✅ lint ✅ typecheck ✅
 
 4. CHG-340 — visibility 从 2 态开关改为 3 态选择控件（状态：⬜ 待开始）
    - 创建时间：2026-04-02 14:30
