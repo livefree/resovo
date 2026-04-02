@@ -11,7 +11,7 @@
 
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -22,7 +22,6 @@ import { extractShortId } from '@/lib/video-detail'
 import { getVideoDetailHref } from '@/lib/video-route'
 import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@/types'
 import { SourceBar } from './SourceBar'
-import { DanmakuBar } from './DanmakuBar'
 import { ResumePrompt, saveProgress } from './ResumePrompt'
 import { getInlineEpisodes, getPlayerLayoutClass, getSidePanelClass } from './playerShell.layout'
 
@@ -47,7 +46,6 @@ export function PlayerShell({ slug }: PlayerShellProps) {
     setPlaying,
     setCurrentTime,
     setDuration,
-    currentTime,
   } = usePlayerStore()
 
   const [video, setVideo] = useState<Video | null>(null)
@@ -57,9 +55,6 @@ export function PlayerShell({ slug }: PlayerShellProps) {
   const [startTime, setStartTime] = useState<number | undefined>(undefined)
   const [playerVersion, setPlayerVersion] = useState(0)
   const [activePanelTab, setActivePanelTab] = useState<'episodes' | 'sources'>('episodes')
-
-  // 播放器容器 ref，用于 DanmakuBar CCL overlay 挂载
-  const playerContainerRef = useRef<HTMLDivElement>(null)
 
   const shortId = extractShortId(slug)
 
@@ -312,9 +307,7 @@ export function PlayerShell({ slug }: PlayerShellProps) {
             )}
             data-testid="player-main"
           >
-            {/* 播放器容器（CCL overlay 挂载于此） */}
             <div
-              ref={playerContainerRef}
               className="w-full relative rounded-lg overflow-hidden shadow-2xl border"
               style={{ aspectRatio: '16/9', background: '#000', borderColor: 'var(--border)' }}
               data-testid="player-video-area"
@@ -361,13 +354,7 @@ export function PlayerShell({ slug }: PlayerShellProps) {
               )}
             </div>
 
-            {/* 弹幕控制栏 */}
-            <DanmakuBar
-              stageRef={playerContainerRef}
-              currentTime={currentTime}
-            />
-
-            {/* 影院模式：将选集/线路移至弹幕下方，宽度与播放器对齐 */}
+            {/* 影院模式：将选集/线路移至播放器下方，宽度与播放器对齐 */}
             {isTheater ? (
               <div className="mt-3">
                 {renderSelectionPanel()}

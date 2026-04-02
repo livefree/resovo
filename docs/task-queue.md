@@ -4266,7 +4266,7 @@
 ## [SEQ-20260402-50] 前后台解耦架构（DEC 系列）
 - **状态**：🔄 进行中
 - **创建时间**：2026-04-02 10:00
-- **最后更新时间**：2026-04-02 04:25
+- **最后更新时间**：2026-04-02 04:35
 - **目标**：按 frontend_backend_decoupling_plan_20260401.md Phase 0-3 完成代码解耦、前台用户能力下线、后台独立登录路由
 - **依赖**：SEQ-20260401-49 ✅
 - **参考文档**：`docs/frontend_backend_decoupling_plan_20260401.md`
@@ -4337,16 +4337,15 @@
    - 变更内容：前台公开页面无用户态入口；/auth/* 路由返回 404
    - 完成备注：typecheck ✅ lint 零警告 ✅ 772 tests ✅
 
-6. DEC-06 — 播放页隐藏弹幕模块并停止请求（状态：⬜ 待开始）
+6. DEC-06 — 播放页隐藏弹幕模块并停止请求（状态：✅ 已完成）
    - 创建时间：2026-04-02 10:00
    - 计划开始：DEC-05 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-04-02 04:30
+   - 完成时间：2026-04-02 04:35
    - 文件范围：
-     - 播放页相关组件（DanmakuBar 条件渲染或移除）
-     - 弹幕相关 API 调用（停止触发）
-   - 变更内容：播放页不渲染 DanmakuBar；弹幕 API 调用停止；后端弹幕 API 保留但前台不暴露
-   - 完成备注：_（AI 填写）_
+     - `src/components/player/PlayerShell.tsx`（移除 DanmakuBar import/ref/JSX 及 currentTime store 解构）
+   - 变更内容：PlayerShell 不再 import/渲染 DanmakuBar；playerContainerRef、currentTime 随之移除；后端弹幕 API 保留
+   - 完成备注：typecheck ✅ lint 零警告 ✅ 772 tests ✅ 关键播放路径（断点续播/线路切换/影院模式）回归验证通过
 
 7. DEC-07 — 新建后台独立登录路由 /admin/login（状态：⬜ 待开始）
    - 创建时间：2026-04-02 10:00

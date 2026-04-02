@@ -4702,3 +4702,11 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/layout/Header.tsx`：移除未登录时的 Sign In 链接（else 分支→null）
   - `src/components/layout/Nav.tsx`：移除未登录时的登录图标链接（else 分支→null）
 - **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅
+
+---
+
+## DEC-06 — 播放页隐藏弹幕模块并停止请求
+- **完成时间**：2026-04-02 04:35
+- **修改文件**：
+  - `src/components/player/PlayerShell.tsx`：移除 DanmakuBar import、playerContainerRef（useRef）、DanmakuBar JSX、currentTime 从 usePlayerStore 解构；后端弹幕 API 保留
+- **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅
