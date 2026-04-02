@@ -4658,3 +4658,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `.eslintrc.json`：新增 overrides，对 src/app|components|lib|stores 下 @/api/** import 发出 warn，附带中文整改说明
   - `docs/dec-coupling-violations.md`：新建，记录 7 处违规（6 文件），含严重性分级与整改任务映射
 - **测试**：typecheck ✅ lint warn-only（7 warnings，0 errors）✅ 772 unit tests ✅
+
+---
+
+## DEC-02 — 抽离 AnalyticsData 类型到 src/types/contracts/v1/
+- **完成时间**：2026-04-02 04:00
+- **修改文件**：
+  - `src/types/contracts/v1/admin.ts`：新建，定义 AnalyticsData + ContentQualityRow 作为前后台共享类型契约
+  - `src/api/routes/admin/analytics.ts`：移除本地类型定义，改从 contracts 导入并重新导出
+  - `src/app/[locale]/admin/page.tsx`：最高优先级违规修复——移除直接 AnalyticsService+db 调用，改为 server-side fetch 至 /v1/admin/analytics
+  - `src/components/admin/AdminAnalyticsDashboard.tsx`：import 改用 @/types/contracts/v1/admin
+  - `src/components/admin/dashboard/AnalyticsCards.tsx`：import 改用 @/types/contracts/v1/admin
+  - `src/components/admin/dashboard/QueueAlerts.tsx`：import 改用 @/types/contracts/v1/admin
+  - `src/lib/api-client.ts`：getAnalytics 的 inline import 改用 @/types/contracts/v1/admin
+- **测试**：typecheck ✅ lint 仅剩 CacheStat/CacheType 1 warning（DEC-03 处理）✅ 772 unit tests ✅

@@ -13,7 +13,7 @@ import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDa
 import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import { TableBadgeCell, TableDateCell, TableTextCell } from '@/components/admin/shared/modern-table/cells'
 import type { TableColumn, TableSortState } from '@/components/admin/shared/modern-table/types'
-import type { AnalyticsData } from '@/api/routes/admin/analytics'
+import type { AnalyticsData } from '@/types/contracts/v1/admin'
 import { ContentQualityTable } from '@/components/admin/dashboard/ContentQualityTable'
 import { DashboardShell, DashboardSection } from '@/components/shared/layout/DashboardShell'
 

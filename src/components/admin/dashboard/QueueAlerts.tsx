@@ -4,7 +4,7 @@
  */
 
 import Link from 'next/link'
-import type { AnalyticsData } from '@/api/routes/admin/analytics'
+import type { AnalyticsData } from '@/types/contracts/v1/admin'
 
 interface QueueAlertsProps {
   queues: AnalyticsData['queues']

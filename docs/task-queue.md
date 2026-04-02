@@ -4266,7 +4266,7 @@
 ## [SEQ-20260402-50] 前后台解耦架构（DEC 系列）
 - **状态**：🔄 进行中
 - **创建时间**：2026-04-02 10:00
-- **最后更新时间**：2026-04-02 10:30
+- **最后更新时间**：2026-04-02 04:00
 - **目标**：按 frontend_backend_decoupling_plan_20260401.md Phase 0-3 完成代码解耦、前台用户能力下线、后台独立登录路由
 - **依赖**：SEQ-20260401-49 ✅
 - **参考文档**：`docs/frontend_backend_decoupling_plan_20260401.md`
@@ -4284,17 +4284,21 @@
    - 变更内容：对 src/app|src/components|src/lib|src/stores 下的 @/api/** import 发出 warn；同步扫描产出违规文件清单
    - 完成备注：7处违规（6文件）已记录，含严重性分级；lint warn-only 不阻断构建；772 tests 通过
 
-2. DEC-02 — 抽离 AnalyticsData 类型到 src/types/contracts/v1/（状态：⬜ 待开始）
+2. DEC-02 — 抽离 AnalyticsData 类型到 src/types/contracts/v1/（状态：✅ 已完成）
    - 创建时间：2026-04-02 10:00
    - 计划开始：DEC-01 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-04-02 00:00
+   - 完成时间：2026-04-02 04:00
    - 文件范围：
-     - `src/types/contracts/v1/admin.ts`（新建，定义 AnalyticsData）
-     - `src/api/routes/analytics.ts`（改用 contracts 类型）
-     - `src/components/admin/AdminAnalyticsDashboard.tsx`（改用 contracts 类型，消除 warn）
-   - 变更内容：将 AnalyticsData 从 api/routes 迁移到 contracts/v1，前后端统一引用
-   - 完成备注：_（AI 填写）_
+     - `src/types/contracts/v1/admin.ts`（新建，定义 AnalyticsData + ContentQualityRow）
+     - `src/api/routes/admin/analytics.ts`（移除本地类型定义，改从 contracts 导入并重新导出）
+     - `src/app/[locale]/admin/page.tsx`（移除 AnalyticsService+db 直接调用，改为 server-side fetch）
+     - `src/components/admin/AdminAnalyticsDashboard.tsx`（import 改用 contracts 类型）
+     - `src/components/admin/dashboard/AnalyticsCards.tsx`（import 改用 contracts 类型）
+     - `src/components/admin/dashboard/QueueAlerts.tsx`（import 改用 contracts 类型）
+     - `src/lib/api-client.ts`（getAnalytics inline import 改用 contracts 类型）
+   - 变更内容：将 AnalyticsData/ContentQualityRow 从 api/routes 迁移到 contracts/v1，消除6处 DEC-01 违规；page.tsx 最高优先级违规（直接调用 Service+db）改为 API fetch
+   - 完成备注：typecheck 通过，lint 仅剩 CacheService 警告（DEC-03 处理），772 tests 全部通过；共享层已沉淀至 src/types/contracts/v1/admin.ts
 
 3. DEC-03 — 抽离 CacheStat/CacheType 到 src/types/contracts/v1/（状态：⬜ 待开始）
    - 创建时间：2026-04-02 10:00

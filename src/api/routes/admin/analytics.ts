@@ -9,51 +9,9 @@ import type { FastifyInstance } from 'fastify'
 import { db } from '@/api/lib/postgres'
 import { es, ES_INDEX } from '@/api/lib/elasticsearch'
 import { AnalyticsService } from '@/api/services/AnalyticsService'
+import type { AnalyticsData, ContentQualityRow } from '@/types/contracts/v1/admin'
 
-export interface AnalyticsData {
-  videos: {
-    total: number
-    published: number
-    pending: number
-  }
-  sources: {
-    total: number
-    active: number
-    inactive: number
-    failRate: number  // 0~1
-  }
-  users: {
-    total: number
-    todayNew: number
-    banned: number
-  }
-  queues: {
-    submissions: number   // 待审投稿
-    subtitles: number     // 待审字幕
-  }
-  crawlerTasks: {
-    recent: Array<{
-      id: string
-      type: string
-      status: string
-      created_at: string
-      finished_at: string | null
-    }>
-  }
-}
-
-/** 单站内容质量统计行 */
-export interface ContentQualityRow {
-  siteKey: string
-  total: number
-  published: number
-  hasCover: number
-  hasDescription: number
-  hasYear: number
-  activeSources: number
-  totalSources: number
-  aliasCount: number  // 该站点中有跨站合并记录的视频数
-}
+export type { AnalyticsData, ContentQualityRow }
 
 export async function adminAnalyticsRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]

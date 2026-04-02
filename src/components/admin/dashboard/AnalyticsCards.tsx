@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { StatusBadge } from '@/components/admin/StatusBadge'
-import type { AnalyticsData } from '@/api/routes/admin/analytics'
+import type { AnalyticsData } from '@/types/contracts/v1/admin'
 import type { BadgeStatus } from '@/components/admin/StatusBadge'
 
 const REFRESH_INTERVAL_MS = 30_000

@@ -201,7 +201,7 @@ export const apiClient = {
   },
 
   /** 获取数据看板统计数据（admin only） */
-  getAnalytics(): Promise<{ data: import('@/api/routes/admin/analytics').AnalyticsData }> {
+  getAnalytics(): Promise<{ data: import('@/types/contracts/v1/admin').AnalyticsData }> {
     return request('/admin/analytics', { method: 'GET' })
   },
 
