@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import type { CrawlerSiteBatchAction } from '@/types'
 import type { FilterState } from '@/components/admin/system/crawler-site/tableState'
-import { AdminBatchBar } from '@/components/admin/shared/batch/AdminBatchBar'
 import { AdminToolbar } from '@/components/admin/shared/toolbar/AdminToolbar'
 import { AdminButton } from '@/components/admin/shared/button/AdminButton'
 import { CrawlerSiteAdvancedFilters } from '@/components/admin/system/crawler-site/components/CrawlerSiteAdvancedFilters'
@@ -20,7 +18,6 @@ interface CrawlerSiteTopToolbarProps {
   onTriggerBatchFull: () => void
   onExport: () => void
   onImport: () => void
-  onBatch: (action: CrawlerSiteBatchAction) => void
 }
 
 export function CrawlerSiteTopToolbar({
@@ -36,7 +33,6 @@ export function CrawlerSiteTopToolbar({
   onTriggerBatchFull,
   onExport,
   onImport,
-  onBatch,
 }: CrawlerSiteTopToolbarProps) {
   const [showAdvanced, setShowAdvanced] = useState(false)
 
@@ -123,16 +119,6 @@ export function CrawlerSiteTopToolbar({
             >
               高级筛选
             </AdminButton>
-
-            <AdminBatchBar
-              selectedCount={selectedCount}
-              actions={[
-                { key: 'enable', label: '批量启用', onClick: () => onBatch('enable') },
-                { key: 'disable', label: '批量停用', onClick: () => onBatch('disable') },
-                { key: 'mark_adult', label: '标记成人', onClick: () => onBatch('mark_adult') },
-                { key: 'delete', label: '批量删除', onClick: () => onBatch('delete'), danger: true },
-              ]}
-            />
           </>
         )}
         feedback={null}

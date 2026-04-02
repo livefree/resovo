@@ -4373,7 +4373,7 @@
 ## [SEQ-20260402-51] 后台交互改造（UX 系列）
 - **状态**：🔄 进行中
 - **创建时间**：2026-04-02 10:00
-- **最后更新时间**：2026-04-02 05:05
+- **最后更新时间**：2026-04-02 05:18
 - **目标**：按 admin_console_decoupling_and_ux_plan_20260402.md Phase 1-2 完成后台交互规范统一与核心页面重构
 - **依赖**：SEQ-20260402-50 DEC-01 ✅（lint 规则生效后再展开 UX 系列）
 - **参考文档**：`docs/admin_console_decoupling_and_ux_plan_20260402.md`
@@ -4393,16 +4393,16 @@
    - 变更内容：全局 toast 体系上线（success/info/warn/error，dedupeKey 去重，MAX 3条队列，自动/手动关闭）；1处 alert() 替换
    - 完成备注：typecheck ✅ lint 零警告 ✅ 772 tests ✅
 
-2. UX-02 — 批量操作栏统一为底部悬浮（采集控制台对齐）（状态：⬜ 待开始）
+2. UX-02 — 批量操作栏统一为底部悬浮（采集控制台对齐）（状态：✅ 已完成）
    - 创建时间：2026-04-02 10:00
    - 计划开始：UX-01 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-04-02 05:10
+   - 完成时间：2026-04-02 05:18
    - 文件范围：
-     - `src/components/admin/system/crawler-site/`（批量栏从顶部 inline 改为底部悬浮）
-     - `src/components/admin/system/crawler-task/`（同上，如有 inline 批量栏）
-   - 变更内容：将采集控制台的 inline 批量操作区改用 SelectionActionBar variant="sticky-bottom"，与其它表格一致
-   - 完成备注：_（AI 填写）_
+     - `src/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar.tsx`（移除 AdminBatchBar 和 onBatch prop）
+     - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`（新增 SelectionActionBar variant="sticky-bottom"）
+   - 变更内容：采集控制台批量操作从 inline 顶部工具栏迁移至底部悬浮，与视频/源管理表格保持一致
+   - 完成备注：typecheck ✅ lint 零警告 ✅ 772 tests ✅
 
 3. UX-03 — 采集源下拉排序改为名称优先（状态：⬜ 待开始）
    - 创建时间：2026-04-02 10:00

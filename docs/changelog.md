@@ -4739,3 +4739,12 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/app/[locale]/admin/layout.tsx`：挂载 AdminToastHost
   - `src/components/admin/AdminCrawlerPanel.tsx`：alert() → notify.error()
 - **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅
+
+---
+
+## UX-02 — 批量操作栏统一为底部悬浮（采集控制台对齐）
+- **完成时间**：2026-04-02 05:18
+- **修改文件**：
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTopToolbar.tsx`：移除 AdminBatchBar 和 onBatch prop
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`：新增 SelectionActionBar variant="sticky-bottom"，包含启用/停用/标记成人/批量删除4个动作
+- **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅

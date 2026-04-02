@@ -23,6 +23,7 @@ import {
 } from '@/components/admin/system/crawler-site/components/CrawlerSiteFormDialog'
 import { parseSitesFromJson } from '@/components/admin/system/crawler-site/importParser'
 import { PaginationV2 } from '@/components/admin/PaginationV2'
+import { SelectionActionBar } from '@/components/admin/shared/batch/SelectionActionBar'
 
 const PAGE_SIZE = 20
 
@@ -381,9 +382,6 @@ export function CrawlerSiteManager() {
         }}
         onExport={handleExport}
         onImport={handleImport}
-        onBatch={(action) => {
-          void handleBatch(action)
-        }}
       />
 
       <ActiveFilterChipsBar filters={filters} setFilters={setFilters} />
@@ -421,6 +419,17 @@ export function CrawlerSiteManager() {
           />
         </div>
       ) : null}
+
+      <SelectionActionBar
+        selectedCount={selected.size}
+        variant="sticky-bottom"
+        actions={[
+          { key: 'enable',      label: '批量启用', onClick: () => { void handleBatch('enable') } },
+          { key: 'disable',     label: '批量停用', onClick: () => { void handleBatch('disable') } },
+          { key: 'mark_adult',  label: '标记成人', onClick: () => { void handleBatch('mark_adult') } },
+          { key: 'delete',      label: '批量删除', onClick: () => { void handleBatch('delete') }, variant: 'danger' },
+        ]}
+      />
 
       {/* 添加 Modal */}
       {showAdd && (
