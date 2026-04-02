@@ -384,31 +384,62 @@ const SUBMISSION_SORT_COLUMNS: Record<string, string> = {
   created_at: 's.created_at',
 }
 
+export interface ListSubmissionsFilter {
+  videoType?: string
+  siteKey?: string
+}
+
 export async function listSubmissions(
   db: Pool,
   page: number,
   limit: number,
   sortField?: string,
-  sortDir?: 'asc' | 'desc'
+  sortDir?: 'asc' | 'desc',
+  filter?: ListSubmissionsFilter
 ): Promise<{ rows: unknown[]; total: number }> {
   const offset = (page - 1) * limit
   const validCol = sortField ? SUBMISSION_SORT_COLUMNS[sortField] : undefined
   const orderCol = validCol ?? 's.created_at'
   const orderDir = (validCol && sortDir === 'asc') ? 'ASC' : 'DESC'
 
+  const whereClauses: string[] = [
+    's.is_active = false',
+    's.submitted_by IS NOT NULL',
+    's.deleted_at IS NULL',
+  ]
+  const filterParams: unknown[] = []
+
+  if (filter?.videoType) {
+    filterParams.push(filter.videoType)
+    whereClauses.push(`v.type = $${filterParams.length}`)
+  }
+  if (filter?.siteKey) {
+    filterParams.push(filter.siteKey)
+    whereClauses.push(`v.site_key = $${filterParams.length}`)
+  }
+
+  const whereSQL = whereClauses.join(' AND ')
+  const listParams = [...filterParams, limit, offset]
+  const countParams = [...filterParams]
+
   const [rows, countResult] = await Promise.all([
     db.query(
-      `SELECT s.*, v.title AS video_title, u.username AS submitted_by_username
+      `SELECT s.*, v.title AS video_title, v.type AS video_type, v.site_key AS video_site_key,
+              u.username AS submitted_by_username
        FROM video_sources s
        LEFT JOIN videos v ON s.video_id = v.id
        LEFT JOIN users u ON s.submitted_by = u.id::text
-       WHERE s.is_active = false AND s.submitted_by IS NOT NULL AND s.deleted_at IS NULL
+       WHERE ${whereSQL}
        ORDER BY ${orderCol} ${orderDir}
-       LIMIT $1 OFFSET $2`,
-      [limit, offset]
+       LIMIT $${filterParams.length + 1} OFFSET $${filterParams.length + 2}`,
+      listParams
     ),
     db.query<{ count: string }>(
-      `SELECT COUNT(*) FROM video_sources WHERE is_active = false AND submitted_by IS NOT NULL AND deleted_at IS NULL`
+      `SELECT COUNT(*)
+       FROM video_sources s
+       LEFT JOIN videos v ON s.video_id = v.id
+       WHERE ${whereSQL}`,
+      countParams
     ),
   ])
 
@@ -416,6 +447,36 @@ export async function listSubmissions(
     rows: rows.rows,
     total: parseInt(countResult.rows[0]?.count ?? '0'),
   }
+}
+
+export async function batchApproveSubmissions(
+  db: Pool,
+  ids: string[]
+): Promise<number> {
+  if (ids.length === 0) return 0
+  const placeholders = ids.map((_, i) => `$${i + 1}`).join(', ')
+  const result = await db.query(
+    `UPDATE video_sources SET is_active = true, last_checked = NOW()
+     WHERE id IN (${placeholders}) AND is_active = false AND deleted_at IS NULL`,
+    ids
+  )
+  return result.rowCount ?? 0
+}
+
+export async function batchRejectSubmissions(
+  db: Pool,
+  ids: string[],
+  reason?: string
+): Promise<number> {
+  if (ids.length === 0) return 0
+  const reasonVal = reason ?? null
+  const placeholders = ids.map((_, i) => `$${i + 2}`).join(', ')
+  const result = await db.query(
+    `UPDATE video_sources SET deleted_at = NOW(), rejection_reason = $1
+     WHERE id IN (${placeholders}) AND is_active = false AND deleted_at IS NULL`,
+    [reasonVal, ...ids]
+  )
+  return result.rowCount ?? 0
 }
 
 export async function approveSubmission(

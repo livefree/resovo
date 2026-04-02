@@ -1,6 +1,7 @@
 /**
- * ReviewModal.tsx — 审核通过/驳回模态框
+ * ReviewModal.tsx — 审核通过/驳回模态框（UX-06）
  * CHG-29: 通过直接提交；驳回需填写必填理由（1~200 字）
+ * UX-06: 新增 sourceUrl 预览、拒绝原因模板、批量审核支持
  */
 
 'use client'
@@ -8,10 +9,13 @@
 import { useState } from 'react'
 import { Modal } from '@/components/admin/Modal'
 
+// ── 类型 ──────────────────────────────────────────────────────────
+
 export type ReviewTarget = {
   id: string
   type: 'submission' | 'subtitle'
   title?: string
+  sourceUrl?: string
 }
 
 interface ReviewModalProps {
@@ -22,6 +26,17 @@ interface ReviewModalProps {
   onReject: (id: string, type: ReviewTarget['type'], reason: string) => Promise<void>
 }
 
+// ── 拒绝原因模板（投稿专用） ──────────────────────────────────────
+
+const REJECT_TEMPLATES = [
+  '来源无法访问',
+  '内容与视频不符',
+  '重复提交',
+  '格式不支持',
+]
+
+// ── 主组件 ──────────────────────────────────────────────────────
+
 export function ReviewModal({ open, target, onClose, onApprove, onReject }: ReviewModalProps) {
   const [tab, setTab] = useState<'approve' | 'reject'>('approve')
   const [reason, setReason] = useState('')
@@ -31,6 +46,7 @@ export function ReviewModal({ open, target, onClose, onApprove, onReject }: Revi
 
   const typeLabel = target.type === 'submission' ? '投稿' : '字幕'
   const canReject = reason.trim().length >= 1 && reason.trim().length <= 200
+  const isSubmission = target.type === 'submission'
 
   async function handleSubmit() {
     if (!target) return
@@ -59,6 +75,30 @@ export function ReviewModal({ open, target, onClose, onApprove, onReject }: Revi
       <div data-testid="review-modal-body">
         {target.title && (
           <p className="mb-3 text-sm text-[var(--muted)]">{target.title}</p>
+        )}
+
+        {/* 投稿源 URL 预览 */}
+        {isSubmission && target.sourceUrl && (
+          <div className="mb-3 rounded border border-[var(--border)] bg-[var(--bg2)] px-3 py-2">
+            <div className="mb-1 text-xs font-medium text-[var(--muted)]">源 URL</div>
+            <div className="flex items-start gap-2">
+              <span
+                className="flex-1 break-all font-mono text-xs text-[var(--text)]"
+                data-testid="review-modal-source-url"
+              >
+                {target.sourceUrl}
+              </span>
+              <a
+                href={target.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 rounded border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+                data-testid="review-modal-source-link"
+              >
+                打开
+              </a>
+            </div>
+          </div>
         )}
 
         {/* Tab 切换 */}
@@ -95,6 +135,22 @@ export function ReviewModal({ open, target, onClose, onApprove, onReject }: Revi
 
         {tab === 'reject' && (
           <div className="mb-4">
+            {/* 拒绝原因模板（投稿专用） */}
+            {isSubmission && (
+              <div className="mb-2 flex flex-wrap gap-1">
+                {REJECT_TEMPLATES.map((tpl) => (
+                  <button
+                    key={tpl}
+                    type="button"
+                    onClick={() => setReason(tpl)}
+                    className="rounded border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--muted)] hover:border-red-400/50 hover:text-red-400"
+                    data-testid={`review-reject-template-${tpl}`}
+                  >
+                    {tpl}
+                  </button>
+                ))}
+              </div>
+            )}
             <label className="mb-1 block text-sm font-medium text-[var(--text)]">
               驳回理由 <span className="text-red-400">*</span>
             </label>

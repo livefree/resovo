@@ -150,9 +150,10 @@ export class ContentService {
     page: number,
     limit: number,
     sortField?: string,
-    sortDir?: 'asc' | 'desc'
+    sortDir?: 'asc' | 'desc',
+    filter?: sourcesQueries.ListSubmissionsFilter
   ): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
-    const { rows, total } = await sourcesQueries.listSubmissions(this.db, page, limit, sortField, sortDir)
+    const { rows, total } = await sourcesQueries.listSubmissions(this.db, page, limit, sortField, sortDir, filter)
     return { data: rows, total, page, limit }
   }
 
@@ -162,6 +163,14 @@ export class ContentService {
 
   async rejectSubmission(id: string, reason?: string): Promise<boolean> {
     return sourcesQueries.rejectSubmission(this.db, id, reason)
+  }
+
+  async batchApproveSubmissions(ids: string[]): Promise<number> {
+    return sourcesQueries.batchApproveSubmissions(this.db, ids)
+  }
+
+  async batchRejectSubmissions(ids: string[], reason?: string): Promise<number> {
+    return sourcesQueries.batchRejectSubmissions(this.db, ids, reason)
   }
 
   // ── 字幕审核 ────────────────────────────────────────────────────

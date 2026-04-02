@@ -175,6 +175,8 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
     limit: z.coerce.number().int().min(1).max(100).optional().default(20),
     sortField: z.string().optional(),
     sortDir: z.enum(['asc', 'desc']).optional(),
+    videoType: z.string().max(50).optional(),
+    siteKey: z.string().max(100).optional(),
   })
 
   fastify.get('/admin/submissions', { preHandler: auth }, async (request, reply) => {
@@ -185,11 +187,14 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const { page, limit, sortField, sortDir } = parsed.data
+    const { page, limit, sortField, sortDir, videoType, siteKey } = parsed.data
     const validSortField = (sortField && (SUBMISSION_SORT_FIELDS as readonly string[]).includes(sortField))
       ? sortField
       : undefined
-    const result = await contentService.listSubmissions(page, limit, validSortField, sortDir)
+    const result = await contentService.listSubmissions(
+      page, limit, validSortField, sortDir,
+      { videoType, siteKey }
+    )
     return reply.send(result)
   })
 
@@ -216,6 +221,37 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
       })
     }
     return reply.code(204).send()
+  })
+
+  // UX-06: 批量通过投稿
+  fastify.post('/admin/submissions/batch-approve', { preHandler: auth }, async (request, reply) => {
+    const BatchSchema = z.object({
+      ids: z.array(z.string().uuid()).min(1).max(100),
+    })
+    const parsed = BatchSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+    const approved = await contentService.batchApproveSubmissions(parsed.data.ids)
+    return reply.send({ data: { approved } })
+  })
+
+  // UX-06: 批量拒绝投稿
+  fastify.post('/admin/submissions/batch-reject', { preHandler: auth }, async (request, reply) => {
+    const BatchSchema = z.object({
+      ids: z.array(z.string().uuid()).min(1).max(100),
+      reason: z.string().min(1).max(200).optional(),
+    })
+    const parsed = BatchSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+    const rejected = await contentService.batchRejectSubmissions(parsed.data.ids, parsed.data.reason)
+    return reply.send({ data: { rejected } })
   })
 
   // ════════════════════════════════════════════════════════════════

@@ -48,7 +48,12 @@ describe('SubmissionTable (CHG-259)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
-    getMock.mockResolvedValue({ data: MOCK_ROWS, total: MOCK_ROWS.length })
+    getMock.mockImplementation(async (url: string) => {
+      if (url === '/admin/crawler/sites') {
+        return { data: [] }
+      }
+      return { data: MOCK_ROWS, total: MOCK_ROWS.length }
+    })
     postMock.mockResolvedValue({})
   })
 
@@ -63,9 +68,9 @@ describe('SubmissionTable (CHG-259)', () => {
     render(<SubmissionTable />)
     await screen.findByText('Alpha')
 
-    const firstCall = getMock.mock.calls[0][0] as string
-    expect(firstCall).toContain('sortField=created_at')
-    expect(firstCall).toContain('sortDir=desc')
+    const submissionsCall = getMock.mock.calls.map((c) => c[0] as string).find((url) => url.startsWith('/admin/submissions'))
+    expect(submissionsCall).toContain('sortField=created_at')
+    expect(submissionsCall).toContain('sortDir=desc')
   })
 
   it('refetches with new sortField/sortDir when sort header is clicked', async () => {

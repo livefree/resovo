@@ -4373,7 +4373,7 @@
 ## [SEQ-20260402-51] 后台交互改造（UX 系列）
 - **状态**：🔄 进行中
 - **创建时间**：2026-04-02 10:00
-- **最后更新时间**：2026-04-02 06:30
+- **最后更新时间**：2026-04-02 07:15
 - **目标**：按 admin_console_decoupling_and_ux_plan_20260402.md Phase 1-2 完成后台交互规范统一与核心页面重构
 - **依赖**：SEQ-20260402-50 DEC-01 ✅（lint 规则生效后再展开 UX 系列）
 - **参考文档**：`docs/admin_console_decoupling_and_ux_plan_20260402.md`
@@ -4437,16 +4437,16 @@
    - 变更内容：编辑面板分区（基础元数据/源信息摘要/元数据同步）；豆瓣同步并入编辑流程
    - 完成备注：VideoDetailDrawer 重构为 3 Tab（基础编辑/关联源/豆瓣同步）；后端新增 GET /admin/videos/:id/douban-preview（admin only，无 DB 写入）；PATCH /admin/videos/:id 新增 doubanId 字段支持；DoubanService.previewVideo() 复用现有搜索逻辑；typecheck ✅ lint 零警告 ✅ 772 tests ✅
 
-6. UX-06 — 审核页补齐过滤、排序、批量审核、多源播放器（状态：⬜ 待开始）
+6. UX-06 — 审核页补齐过滤、排序、批量审核、多源播放器（状态：✅ 已完成）
    - 创建时间：2026-04-02 10:00
    - 计划开始：UX-05 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-04-02 06:35
+   - 完成时间：2026-04-02 07:15
    - 文件范围：
      - `src/components/admin/content/`（SubmissionTable 等审核组件）
      - 后端审核接口（扩展过滤/排序参数，新增批量审核接口）
    - 变更内容：待审列表补齐类型/来源/时间过滤和排序；批量通过/拒绝（含拒绝原因模板）；审核播放器支持多源切换和失败回退
-   - 完成备注：_（AI 填写）_
+   - 完成备注：后端新增类型/站点过滤参数（GET /admin/submissions 扩展 videoType+siteKey）、批量审核端点（/batch-approve + /batch-reject）；前端 SubmissionTable 新增过滤栏+选择列+批量操作栏+批量拒绝理由 inline form；ReviewModal 新增 sourceUrl 预览+拒绝原因模板；useSubmissionTableColumns 加 selection 列；typecheck ✅ lint 零警告 ✅ 772 tests ✅
 
 7. UX-07 — 用户管理增加软删除能力（状态：⬜ 待开始）
    - 创建时间：2026-04-02 10:00

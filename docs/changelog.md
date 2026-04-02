@@ -4780,3 +4780,18 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/videos/VideoTable.test.tsx`：更新 drawer 测试以适配 3 Tab 布局（点击关联源 Tab 再验证 URL）
 - **共享层沉淀**：DoubanService.previewVideo() 为 Service 层复用方法；FieldCheckbox 子组件限于 Drawer 内使用，不提取（单处使用）
 - **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅
+
+---
+
+## UX-06 — 审核页补齐过滤、排序、批量审核、多源播放器
+- **完成时间**：2026-04-02 07:15
+- **修改文件**：
+  - `src/api/db/queries/sources.ts`：`listSubmissions()` 新增 `ListSubmissionsFilter`（videoType/siteKey）过滤；SELECT 增加 `v.type AS video_type, v.site_key AS video_site_key`；新增 `batchApproveSubmissions()` 和 `batchRejectSubmissions()` 函数
+  - `src/api/services/ContentService.ts`：`listSubmissions()` 透传 filter 参数；新增 `batchApproveSubmissions/batchRejectSubmissions` 方法
+  - `src/api/routes/admin/content.ts`：`SubListSchema` 扩展 `videoType/siteKey`；新增 `POST /admin/submissions/batch-approve` 和 `POST /admin/submissions/batch-reject`
+  - `src/components/admin/content/ReviewModal.tsx`：`ReviewTarget` 新增 `sourceUrl?`；添加源 URL 预览区（带外链按钮）；投稿拒绝支持一键模板（来源无法访问/内容不符/重复提交/格式不支持）
+  - `src/components/admin/content/useSubmissionTableColumns.tsx`：`SubmissionRow` 新增 `video_type/video_site_key`；hook 加 selection 列 + `allSelected/selectedIds/handleSelectAll/handleCheck` deps；setReviewTarget 传 sourceUrl
+  - `src/components/admin/content/SubmissionTable.tsx`：新增视频类型/来源站点过滤栏；新增行选择状态；批量通过/拒绝（拒绝含 inline 理由表单+模板）；SelectionActionBar sticky-bottom
+  - `tests/unit/components/admin/content/SubmissionTable.test.tsx`：更新 getMock 以区分 /admin/crawler/sites 和 /admin/submissions，submissions 调用断言改为 url 模式匹配
+- **共享层沉淀**：`ListSubmissionsFilter` 接口沉淀至 queries 层；`batchApproveSubmissions/batchRejectSubmissions` 复用现有 SQL 模式
+- **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅
