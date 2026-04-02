@@ -4636,3 +4636,10 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/shared/modern-table/ModernTableHead.tsx`（在文件顶部补加 `'use client'` 指令；CHG-332 引入 `createPortal` + `window.innerWidth` 后未加此指令，导致 Next.js 15 SSR 将其视为 Server Component，所有 admin 页面陷入加载中状态）
 - **测试覆盖**：772 tests 通过；typecheck + lint 通过
 - **共享层沉淀**：无；为漏加指令的单行修复
+
+## CHG-334 — Redis 连接错误日志改进 + authenticate 降级优化
+- **完成时间**：2026-04-01 15:45
+- **修改文件**：
+  - `src/api/lib/redis.ts`：新增 connectTimeout:5000；retryStrategy 重连耗尽时打印详细建议；error 事件按错误码（ECONNREFUSED/ENOTFOUND/ETIMEDOUT/ECONNRESET/EACCES）给出中文原因提示；reconnecting 补充 delay 参数；新增 ready 事件日志
+  - `src/api/plugins/authenticate.ts`：JWT 验证与 Redis 黑名单检查解耦；Redis 不可用时降级放行（记录警告日志）
+- **测试**：typecheck ✅ lint ✅ 772 unit tests ✅

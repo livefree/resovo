@@ -45,15 +45,23 @@ function extractBearerToken(request: FastifyRequest): string | null {
 }
 
 async function resolveUser(token: string): Promise<RequestUser | null> {
+  let payload: ReturnType<typeof verifyAccessToken>
   try {
-    const payload = verifyAccessToken(token)
-    // 检查是否在 Redis 黑名单中（access token 一般不需要，但防御性检查）
-    const blocked = await redis.get(blacklistKey(token))
-    if (blocked) return null
-    return { userId: payload.userId, role: payload.role }
+    payload = verifyAccessToken(token)
   } catch {
     return null
   }
+
+  // 防御性黑名单检查：Redis 不可用时降级放行（JWT 已验证）
+  try {
+    const blocked = await redis.get(blacklistKey(token))
+    if (blocked) return null
+  } catch {
+    // Redis down — 记录警告，降级放行
+    process.stderr.write('[auth] Redis blacklist check failed, skipping\n')
+  }
+
+  return { userId: payload.userId, role: payload.role }
 }
 
 // ── 认证处理器 ───────────────────────────────────────────────────
