@@ -4691,3 +4691,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **修改文件**：
   - `src/api/services/AnalyticsService.ts`：`import type { AnalyticsData }` 从 @/api/routes/admin/analytics 改为 @/types/contracts/v1/admin
 - **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅
+
+---
+
+## DEC-05 — 下线前台登录/注册入口
+- **完成时间**：2026-04-02 04:25
+- **修改文件**：
+  - `src/app/[locale]/auth/login/page.tsx`：改为调用 notFound()，路由返回 404
+  - `src/app/[locale]/auth/register/page.tsx`：改为调用 notFound()，路由返回 404
+  - `src/components/layout/Header.tsx`：移除未登录时的 Sign In 链接（else 分支→null）
+  - `src/components/layout/Nav.tsx`：移除未登录时的登录图标链接（else 分支→null）
+- **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅

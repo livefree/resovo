@@ -4266,7 +4266,7 @@
 ## [SEQ-20260402-50] 前后台解耦架构（DEC 系列）
 - **状态**：🔄 进行中
 - **创建时间**：2026-04-02 10:00
-- **最后更新时间**：2026-04-02 04:15
+- **最后更新时间**：2026-04-02 04:25
 - **目标**：按 frontend_backend_decoupling_plan_20260401.md Phase 0-3 完成代码解耦、前台用户能力下线、后台独立登录路由
 - **依赖**：SEQ-20260401-49 ✅
 - **参考文档**：`docs/frontend_backend_decoupling_plan_20260401.md`
@@ -4323,17 +4323,19 @@
    - 变更内容：AnalyticsService 不再反向依赖 route 层类型，Service→Route 循环依赖消除
    - 完成备注：typecheck ✅ lint 零警告 ✅ 772 tests ✅
 
-5. DEC-05 — 下线前台登录/注册入口（状态：⬜ 待开始）
+5. DEC-05 — 下线前台登录/注册入口（状态：✅ 已完成）
    - 创建时间：2026-04-02 10:00
    - 计划开始：DEC-04 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-04-02 04:20
+   - 完成时间：2026-04-02 04:25
    - 文件范围：
-     - `src/components/`（Header/Nav 移除登录/注册/个人中心入口）
+     - `src/components/layout/Header.tsx`（移除登录 Link else 分支）
+     - `src/components/layout/Nav.tsx`（移除登录 Link else 分支）
      - `src/app/auth/login/page.tsx`（返回 404 或 notFound()）
-     - `src/app/auth/register/page.tsx`（返回 404 或 notFound()）
+     - `src/app/[locale]/auth/login/page.tsx`（改为 notFound()）
+     - `src/app/[locale]/auth/register/page.tsx`（改为 notFound()）
    - 变更内容：前台公开页面无用户态入口；/auth/* 路由返回 404
-   - 完成备注：_（AI 填写）_
+   - 完成备注：typecheck ✅ lint 零警告 ✅ 772 tests ✅
 
 6. DEC-06 — 播放页隐藏弹幕模块并停止请求（状态：⬜ 待开始）
    - 创建时间：2026-04-02 10:00

@@ -55,15 +55,7 @@ export function Header() {
               {t('logout')}
             </button>
           </>
-        ) : (
-          <Link
-            href="/auth/login"
-            className="text-sm font-medium hover:opacity-80 transition-opacity"
-            style={{ color: 'var(--foreground)' }}
-          >
-            Sign In
-          </Link>
-        )}
+        ) : null}
       </nav>
     </header>
   )
