@@ -4266,7 +4266,7 @@
 ## [SEQ-20260402-50] 前后台解耦架构（DEC 系列）
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-02 10:00
-- **最后更新时间**：2026-04-02 04:50
+- **最后更新时间**：2026-04-02 12:30 [已修正：原记录 04:50 早于创建时间，系历史写入错误]
 - **目标**：按 frontend_backend_decoupling_plan_20260401.md Phase 0-3 完成代码解耦、前台用户能力下线、后台独立登录路由
 - **依赖**：SEQ-20260401-49 ✅
 - **参考文档**：`docs/frontend_backend_decoupling_plan_20260401.md`
@@ -4373,7 +4373,7 @@
 ## [SEQ-20260402-51] 后台交互改造（UX 系列）
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-02 10:00
-- **最后更新时间**：2026-04-02 07:45
+- **最后更新时间**：2026-04-02 14:00 [已修正：原记录 07:45 早于创建时间，系历史写入错误]
 - **目标**：按 admin_console_decoupling_and_ux_plan_20260402.md Phase 1-2 完成后台交互规范统一与核心页面重构
 - **依赖**：SEQ-20260402-50 DEC-01 ✅（lint 规则生效后再展开 UX 系列）
 - **参考文档**：`docs/admin_console_decoupling_and_ux_plan_20260402.md`
@@ -4464,8 +4464,9 @@
 ## SEQ-20260402-52（审计收敛：DEC/UX 风险修复）
 
 > 来源：dec_ux_audit_findings_20260402.md
+> 状态：✅ 已完成
 > 创建时间：2026-04-02 14:30
-> 最后更新时间：2026-04-02 14:30
+> 最后更新时间：2026-04-02 16:35
 > 描述：根据审计发现，系统性修复 SEQ-20260402-50/51 的遗留风险与验收偏差。DEC 完成度 ~75%，UX 完成度 ~45%。执行顺序：P0（链路断裂）→ P1（验收偏差）→ P2（清尾）→ P3（治理）。
 
 ### 任务列表
@@ -4543,11 +4544,11 @@
    - 变更内容：旧局部 toast → notify.success/error；删除/废弃 shared/feedback/useAdminToast.ts
    - 完成备注：迁移 ConfigFileEditor/SiteSettings/CacheManager（内联 useState toast）；useCrawlerMonitor/useCrawlerSiteCrawlTasks/AutoCrawlSettingsPanel/CrawlerAdvancedTab/CrawlerConfigTab/CrawlerSiteManager/CrawlerSiteTable/useCrawlerSiteTableColumns（showToast prop 链路）移除 showToast 参数，直接调用 notify；shared/feedback/useAdminToast.ts 废弃（仅保留 @deprecated 注释）；更新 ConfigFileEditor.test + CrawlerAdvancedTab.test 改为 mock notify；770 tests ✅ lint ✅ typecheck ✅
 
-9. CHG-345 — 台账/文档一致性收敛 + ESLint no-restricted-imports 升级为 error（状态：⬜ 待开始）
+9. CHG-345 — 台账/文档一致性收敛 + ESLint no-restricted-imports 升级为 error（状态：✅ 已完成）
    - 创建时间：2026-04-02 14:30
    - 计划开始：CHG-344 完成后
-   - 实际开始：—
-   - 完成时间：—
+   - 实际开始：2026-04-02 16:28
+   - 完成时间：2026-04-02 16:35
    - 文件范围：`docs/task-queue.md`，`docs/admin_console_decoupling_and_ux_plan_20260402.md`，`.eslintrc.json`
    - 变更内容：修正时间戳倒序；标注已撤销决策；no-restricted-imports warn→error
-   - 完成备注：_（AI 填写）_
+   - 完成备注：SEQ-50/51 最后更新时间倒序标注[已修正]；方案文档风险描述#2 标注~~已撤销~~；.eslintrc.json no-restricted-imports warn→error（npm run lint 验证零违规后升级）；770 tests ✅ lint ✅ typecheck ✅

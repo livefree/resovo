@@ -18,12 +18,12 @@
       ],
       "rules": {
         "no-restricted-imports": [
-          "warn",
+          "error",
           {
             "patterns": [
               {
                 "group": ["@/api/*", "@/api/**"],
-                "message": "[DEC-01] 前台代码禁止直接 import @/api/**（后端实现层）。请改用 @/types/contracts/v1/ 中的共享类型，或通过 @/lib/api-client 发起 HTTP 请求。Phase 1 修复后此规则将升级为 error。"
+                "message": "[DEC-01] 前台代码禁止直接 import @/api/**（后端实现层）。请改用 @/types/contracts/v1/ 中的共享类型，或通过 @/lib/api-client 发起 HTTP 请求。"
               }
             ]
           }

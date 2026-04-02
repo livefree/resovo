@@ -4905,3 +4905,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/AdminCrawlerTabs.tsx`：移除 `noop`，`useCrawlerMonitor()` 无参调用
 - **共享层沉淀**：`notify` 已是全局共享对象，无需额外提取
 - **测试**：typecheck ✅ lint 零警告 ✅ 770 unit tests ✅
+
+---
+
+### CHG-345 — 台账/文档一致性收敛 + ESLint no-restricted-imports 升级为 error（2026-04-02）
+
+- **修改文件**：
+  - `docs/task-queue.md`：SEQ-20260402-50/51 最后更新时间倒序标注 [已修正]；SEQ-20260402-52 状态改为 ✅ 已完成
+  - `docs/admin_console_decoupling_and_ux_plan_20260402.md`：第9节风险#2（site_key 回填）标注 ~~已撤销~~，消除语义冲突
+  - `.eslintrc.json`：`no-restricted-imports` 规则从 `"warn"` 升级为 `"error"`（先验证 npm run lint 零违规后执行）
+- **共享层沉淀**：无
+- **测试**：typecheck ✅ lint 零错误/零警告 ✅ 770 unit tests ✅

@@ -246,7 +246,7 @@
 ## 9. 风险与注意事项
 
 1. `visibility_status` 与 `is_published` 历史兼容逻辑复杂，重构前必须先冻结状态机文档。
-2. 播放源三视图若缺 `site_key` 将导致联动精度不足，需优先补齐模型。
+2. ~~播放源三视图若缺 `site_key` 将导致联动精度不足，需优先补齐模型。~~ **已撤销**：现有 `video_sources → videos.site_key → crawler_sites` JOIN 链路完整，无需补充 schema（见 Phase 3 审核修订）。
 3. 视频编辑流程合并后，需严格保留权限边界（如豆瓣同步 admin only）。
 4. 所有重构必须保持 API 向后兼容或提供迁移窗口，避免影响现有后台自动化脚本。
 
