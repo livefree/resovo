@@ -22,8 +22,10 @@
 
 2. 任务编号命名（沿用现有规范）
 - 任务 ID 格式：`<PREFIX>-NN`
-- `PREFIX` 必须使用既有前缀：`INFRA` / `AUTH` / `VIDEO` / `SEARCH` / `PLAYER` / `CRAWLER` / `ADMIN` / `USER` / `SOCIAL` / `LIST` / `CONTRIB` / `CHG` / `CHORE`
-- `NN` 为两位数字，按同前缀内最大编号递增（例如当前最大 `CHG-38`，下一个必须是 `CHG-39`）
+- `PREFIX` 必须使用既有前缀：`INFRA` / `AUTH` / `VIDEO` / `SEARCH` / `PLAYER` / `CRAWLER` / `ADMIN` / `USER` / `SOCIAL` / `LIST` / `CONTRIB` / `CHG` / `CHORE` / `DEC` / `UX`
+  - `DEC`：前后台解耦架构任务（来自 frontend_backend_decoupling_plan_20260401.md，2026-04-02 新增）
+  - `UX`：后台交互改造任务（来自 admin_console_decoupling_and_ux_plan_20260402.md，2026-04-02 新增）
+- `NN` 为两位数字，按同前缀内最大编号递增（例如当前最大 `CHG-335`，下一个必须是 `CHG-336`）
 - 禁止跳号占坑、禁止复用已存在编号
 
 3. 时间戳要求
@@ -4258,3 +4260,196 @@
      - `tests/unit/components/admin/sources/SourceSubmissionTable.test.tsx`（within scoping 修复）
    - 变更内容：onClick 从 wrapper div 移到 button，portal 内点击不再冒泡到 handleTriggerClick；面板保持开启，排序/显示复选框均可正常操作；2 个测试误判修复（queryByText 改为 within(tableScroll).queryByText）
    - 完成备注：onClick 从 wrapper div 移到 button；portal 内点击不再冒泡到 handleTriggerClick；2 个测试误判修复（within scoping）；772 tests 通过
+
+---
+
+## [SEQ-20260402-50] 前后台解耦架构（DEC 系列）
+- **状态**：🔄 进行中
+- **创建时间**：2026-04-02 10:00
+- **最后更新时间**：2026-04-02 10:00
+- **目标**：按 frontend_backend_decoupling_plan_20260401.md Phase 0-3 完成代码解耦、前台用户能力下线、后台独立登录路由
+- **依赖**：SEQ-20260401-49 ✅
+- **参考文档**：`docs/frontend_backend_decoupling_plan_20260401.md`
+
+### 任务列表
+
+1. DEC-01 — 新增禁止前端 import @/api/** 的 ESLint 规则（warn 模式）+ 产出违规清单（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 10:00
+   - 计划开始：立即
+   - 实际开始：_
+   - 完成时间：_
+   - 文件范围：
+     - `.eslintrc.json` 或 `eslint.config.mjs`（新增 no-restricted-imports 规则，warn 级别）
+     - `docs/dec-coupling-violations.md`（新建，违规清单）
+   - 变更内容：对 src/app|src/components|src/lib|src/stores 下的 @/api/** import 发出 warn；同步扫描产出违规文件清单
+   - 完成备注：_（AI 填写）_
+
+2. DEC-02 — 抽离 AnalyticsData 类型到 src/types/contracts/v1/（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 10:00
+   - 计划开始：DEC-01 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 文件范围：
+     - `src/types/contracts/v1/admin.ts`（新建，定义 AnalyticsData）
+     - `src/api/routes/analytics.ts`（改用 contracts 类型）
+     - `src/components/admin/AdminAnalyticsDashboard.tsx`（改用 contracts 类型，消除 warn）
+   - 变更内容：将 AnalyticsData 从 api/routes 迁移到 contracts/v1，前后端统一引用
+   - 完成备注：_（AI 填写）_
+
+3. DEC-03 — 抽离 CacheStat/CacheType 到 src/types/contracts/v1/（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 10:00
+   - 计划开始：DEC-02 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 文件范围：
+     - `src/types/contracts/v1/admin.ts`（追加 CacheStat/CacheType）
+     - `src/api/routes/cache.ts`（改用 contracts 类型）
+     - `src/components/admin/system/monitoring/CacheManager.tsx`（改用 contracts 类型，消除 warn）
+   - 变更内容：同 DEC-02 模式，处理 CacheStat/CacheType
+   - 完成备注：_（AI 填写）_
+
+4. DEC-04 — 修复 AnalyticsService 反向依赖 route 类型（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 10:00
+   - 计划开始：DEC-02/DEC-03 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 文件范围：
+     - `src/api/services/AnalyticsService.ts`（改用 contracts 类型，移除 routes import）
+   - 变更内容：AnalyticsService 不再 import route 层类型，改用 src/types/contracts/v1/admin
+   - 完成备注：_（AI 填写）_
+
+5. DEC-05 — 下线前台登录/注册入口（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 10:00
+   - 计划开始：DEC-04 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 文件范围：
+     - `src/components/`（Header/Nav 移除登录/注册/个人中心入口）
+     - `src/app/auth/login/page.tsx`（返回 404 或 notFound()）
+     - `src/app/auth/register/page.tsx`（返回 404 或 notFound()）
+   - 变更内容：前台公开页面无用户态入口；/auth/* 路由返回 404
+   - 完成备注：_（AI 填写）_
+
+6. DEC-06 — 播放页隐藏弹幕模块并停止请求（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 10:00
+   - 计划开始：DEC-05 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 文件范围：
+     - 播放页相关组件（DanmakuBar 条件渲染或移除）
+     - 弹幕相关 API 调用（停止触发）
+   - 变更内容：播放页不渲染 DanmakuBar；弹幕 API 调用停止；后端弹幕 API 保留但前台不暴露
+   - 完成备注：_（AI 填写）_
+
+7. DEC-07 — 新建后台独立登录路由 /admin/login（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 10:00
+   - 计划开始：DEC-05 完成后（可与 DEC-06 并行）
+   - 实际开始：_
+   - 完成时间：_
+   - 文件范围：
+     - `src/app/admin/login/page.tsx`（新建管理员登录页）
+     - 复用现有登录表单组件，文案改为"管理员登录"
+   - 变更内容：新增 /admin/login 路由，登录成功后跳转 /admin；鉴权链路仅在 /admin/** 下生效
+   - 完成备注：_（AI 填写）_
+
+8. DEC-08 — 前台旧登录路由返回 404（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 10:00
+   - 计划开始：DEC-07 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 文件范围：
+     - `src/app/auth/login/page.tsx`（已在 DEC-05 处理，此处确认并完善）
+     - `robots.txt`（屏蔽 /admin/**）
+   - 变更内容：确认旧登录路由返回 404；robots.txt 新增 Disallow: /admin/
+   - 完成备注：_（AI 填写）_
+
+---
+
+## [SEQ-20260402-51] 后台交互改造（UX 系列）
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-02 10:00
+- **最后更新时间**：2026-04-02 10:00
+- **目标**：按 admin_console_decoupling_and_ux_plan_20260402.md Phase 1-2 完成后台交互规范统一与核心页面重构
+- **依赖**：SEQ-20260402-50 DEC-01 ✅（lint 规则生效后再展开 UX 系列）
+- **参考文档**：`docs/admin_console_decoupling_and_ux_plan_20260402.md`
+
+### 任务列表
+
+1. UX-01 — 全局 AdminToastHost 上线，替换所有 alert()（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 10:00
+   - 计划开始：DEC-01 完成后（可与 DEC-02 并行启动）
+   - 实际开始：_
+   - 完成时间：_
+   - 文件范围：
+     - `src/components/admin/shared/toast/AdminToastHost.tsx`（新建）
+     - `src/components/admin/shared/toast/useAdminToast.ts`（新建，notify API）
+     - `src/app/admin/layout.tsx`（挂载 AdminToastHost）
+     - 全局扫描替换 alert() 调用
+   - 变更内容：实现全局 toast 体系（success/info/warn/error，dedupeKey，队列，右下角定位）；替换全部 alert()
+   - 完成备注：_（AI 填写）_
+
+2. UX-02 — 批量操作栏统一为底部悬浮（采集控制台对齐）（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 10:00
+   - 计划开始：UX-01 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 文件范围：
+     - `src/components/admin/system/crawler-site/`（批量栏从顶部 inline 改为底部悬浮）
+     - `src/components/admin/system/crawler-task/`（同上，如有 inline 批量栏）
+   - 变更内容：将采集控制台的 inline 批量操作区改用 SelectionActionBar variant="sticky-bottom"，与其它表格一致
+   - 完成备注：_（AI 填写）_
+
+3. UX-03 — 采集源下拉排序改为名称优先（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 10:00
+   - 计划开始：UX-01 完成后（可与 UX-02 并行）
+   - 实际开始：_
+   - 完成时间：_
+   - 文件范围：
+     - 采集源相关下拉/筛选组件（默认排序改为 name asc）
+     - 后端接口（如需支持 sortBy=name 参数）
+   - 变更内容：采集源选择下拉默认按名称升序排列；管理页面可切换为 weight 排序
+   - 完成备注：_（AI 填写）_
+
+4. UX-04 — 视频管理操作区重构（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 10:00
+   - 计划开始：UX-02/UX-03 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 文件范围：
+     - `src/components/admin/videos/useVideoTableColumns.tsx`（操作列重构）
+     - `src/components/admin/videos/VideoTable.tsx`（灰度开关 localStorage admin_video_ops_v2）
+   - 变更内容：移除下拉菜单，合并编辑入口为图标按钮；灰度开关控制新旧版本；2周后全量切换
+   - 完成备注：_（AI 填写）_
+
+5. UX-05 — 视频编辑面板整合豆瓣同步预览/应用流程（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 10:00
+   - 计划开始：UX-04 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 文件范围：
+     - 视频编辑抽屉/侧栏组件（整合快速/完整编辑为单一面板）
+     - 豆瓣同步流程（预览变更 → 选择字段 → 确认应用）
+   - 变更内容：编辑面板分区（基础元数据/源信息摘要/元数据同步）；豆瓣同步并入编辑流程
+   - 完成备注：_（AI 填写）_
+
+6. UX-06 — 审核页补齐过滤、排序、批量审核、多源播放器（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 10:00
+   - 计划开始：UX-05 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 文件范围：
+     - `src/components/admin/content/`（SubmissionTable 等审核组件）
+     - 后端审核接口（扩展过滤/排序参数，新增批量审核接口）
+   - 变更内容：待审列表补齐类型/来源/时间过滤和排序；批量通过/拒绝（含拒绝原因模板）；审核播放器支持多源切换和失败回退
+   - 完成备注：_（AI 填写）_
+
+7. UX-07 — 用户管理增加软删除能力（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 10:00
+   - 计划开始：UX-06 完成后
+   - 实际开始：_
+   - 完成时间：_
+   - 文件范围：
+     - `src/components/admin/users/UserTable.tsx`（操作栏补充删除动作）
+     - 后端用户服务（软删除接口，deleted_at 标记）
+   - 变更内容：用户操作栏增加删除按钮（权限保护 + 二次确认）；后端实现软删除（不物理删行）
+   - 完成备注：_（AI 填写）_
