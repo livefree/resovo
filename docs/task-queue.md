@@ -4225,7 +4225,7 @@
      - `src/components/admin/sources/InactiveSourceTable.tsx`（setSingleStatus + setBatchStatus 乐观更新）
      - `src/components/admin/videos/VideoTable.tsx`（handlePublishToggle 乐观更新）
    - 变更内容：三处表格操作改为先更新本地 state，API 成功后 merge 响应，失败时回滚；不再调用全量 fetchXxx
-   - 完成备注：_（AI 填写）_
+   - 完成备注：users.ts queries 新增 softDeleteUser()（SQL 内置 role != 'admin' 防删）；路由层 DELETE /admin/users/:id（admin only，二次 role 校验）；UserActions 下拉菜单加"删除用户"选项 + ConfirmDialog 二次确认；typecheck ✅ lint 零警告 ✅ 772 tests ✅
 
 ---
 
@@ -4373,7 +4373,7 @@
 ## [SEQ-20260402-51] 后台交互改造（UX 系列）
 - **状态**：🔄 进行中
 - **创建时间**：2026-04-02 10:00
-- **最后更新时间**：2026-04-02 07:15
+- **最后更新时间**：2026-04-02 07:45
 - **目标**：按 admin_console_decoupling_and_ux_plan_20260402.md Phase 1-2 完成后台交互规范统一与核心页面重构
 - **依赖**：SEQ-20260402-50 DEC-01 ✅（lint 规则生效后再展开 UX 系列）
 - **参考文档**：`docs/admin_console_decoupling_and_ux_plan_20260402.md`
@@ -4448,11 +4448,11 @@
    - 变更内容：待审列表补齐类型/来源/时间过滤和排序；批量通过/拒绝（含拒绝原因模板）；审核播放器支持多源切换和失败回退
    - 完成备注：后端新增类型/站点过滤参数（GET /admin/submissions 扩展 videoType+siteKey）、批量审核端点（/batch-approve + /batch-reject）；前端 SubmissionTable 新增过滤栏+选择列+批量操作栏+批量拒绝理由 inline form；ReviewModal 新增 sourceUrl 预览+拒绝原因模板；useSubmissionTableColumns 加 selection 列；typecheck ✅ lint 零警告 ✅ 772 tests ✅
 
-7. UX-07 — 用户管理增加软删除能力（状态：⬜ 待开始）
+7. UX-07 — 用户管理增加软删除能力（状态：✅ 已完成）
    - 创建时间：2026-04-02 10:00
    - 计划开始：UX-06 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-04-02 07:20
+   - 完成时间：2026-04-02 07:45
    - 文件范围：
      - `src/components/admin/users/UserTable.tsx`（操作栏补充删除动作）
      - 后端用户服务（软删除接口，deleted_at 标记）

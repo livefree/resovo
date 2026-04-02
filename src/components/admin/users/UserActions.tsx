@@ -30,7 +30,9 @@ interface UserActionsProps {
 export function UserActions({ user, onRefresh }: UserActionsProps) {
   const [banDialogOpen, setBanDialogOpen] = useState(false)
   const [unbanDialogOpen, setUnbanDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [banLoading, setBanLoading] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
   const [newPassword, setNewPassword] = useState<string | null>(null)
   const [pwModalOpen, setPwModalOpen] = useState(false)
@@ -62,6 +64,19 @@ export function UserActions({ user, onRefresh }: UserActionsProps) {
       // error is visible via dialog UI
     } finally {
       setBanLoading(false)
+    }
+  }
+
+  async function handleDelete() {
+    setDeleteLoading(true)
+    try {
+      await apiClient.delete(`/admin/users/${user.id}`)
+      setDeleteDialogOpen(false)
+      onRefresh()
+    } catch {
+      // error is visible via dialog UI
+    } finally {
+      setDeleteLoading(false)
     }
   }
 
@@ -109,6 +124,12 @@ export function UserActions({ user, onRefresh }: UserActionsProps) {
       label: resetLoading ? '生成中…' : '重置密码',
       onClick: () => { void handleResetPassword() },
     },
+    {
+      key: 'delete',
+      label: '删除用户',
+      onClick: () => setDeleteDialogOpen(true),
+      danger: true,
+    },
   ]
 
   return (
@@ -146,6 +167,17 @@ export function UserActions({ user, onRefresh }: UserActionsProps) {
         confirmText="解封"
         onConfirm={handleUnban}
         loading={banLoading}
+      />
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        title="删除用户"
+        description={`确定要删除用户「${user.username}」吗？该用户将无法登录，但数据仍保留在系统中。`}
+        confirmText="删除"
+        onConfirm={handleDelete}
+        loading={deleteLoading}
+        danger
       />
 
       <Modal

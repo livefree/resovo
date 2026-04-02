@@ -216,3 +216,15 @@ export async function resetUserPassword(
   )
   return result.rows[0] ?? null
 }
+
+// UX-07: 软删除用户（设置 deleted_at，数据保留）
+export async function softDeleteUser(
+  db: Pool,
+  id: string
+): Promise<boolean> {
+  const result = await db.query(
+    `UPDATE users SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL AND role != 'admin' RETURNING id`,
+    [id]
+  )
+  return (result.rowCount ?? 0) > 0
+}

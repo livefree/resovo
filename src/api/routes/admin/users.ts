@@ -124,6 +124,32 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
     return reply.send({ data: result })
   })
 
+  // ── DELETE /admin/users/:id ──────────────────────────────────
+  // UX-07: 软删除（deleted_at = NOW()，数据保留；admin 账号不可删除）
+  fastify.delete('/admin/users/:id', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+
+    const user = await usersQueries.findAdminUserById(db, id)
+    if (!user) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '用户不存在', status: 404 },
+      })
+    }
+    if (user.role === 'admin') {
+      return reply.code(403).send({
+        error: { code: 'FORBIDDEN', message: '不能删除 admin 账号', status: 403 },
+      })
+    }
+
+    const deleted = await usersQueries.softDeleteUser(db, id)
+    if (!deleted) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '用户不存在或已被删除', status: 404 },
+      })
+    }
+    return reply.code(204).send()
+  })
+
   // ── POST /admin/users/:id/reset-password ──────────────────────
   fastify.post('/admin/users/:id/reset-password', { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string }

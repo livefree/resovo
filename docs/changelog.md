@@ -4795,3 +4795,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/content/SubmissionTable.test.tsx`：更新 getMock 以区分 /admin/crawler/sites 和 /admin/submissions，submissions 调用断言改为 url 模式匹配
 - **共享层沉淀**：`ListSubmissionsFilter` 接口沉淀至 queries 层；`batchApproveSubmissions/batchRejectSubmissions` 复用现有 SQL 模式
 - **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅
+
+---
+
+## UX-07 — 用户管理增加软删除能力
+- **完成时间**：2026-04-02 07:45
+- **修改文件**：
+  - `src/api/db/queries/users.ts`：新增 `softDeleteUser()` 函数（`UPDATE users SET deleted_at = NOW() WHERE ... AND role != 'admin'`，DB 层双保险）
+  - `src/api/routes/admin/users.ts`：新增 `DELETE /admin/users/:id`（admin only；不可删除 admin 账号；成功返回 204）
+  - `src/components/admin/users/UserActions.tsx`：操作下拉新增"删除用户"选项；新增 `handleDelete()` + `deleteDialogOpen/deleteLoading` 状态；新增删除确认 ConfirmDialog（danger 样式）
+- **共享层沉淀**：无需提取，`softDeleteUser` 为独立 query 函数，不重复
+- **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅
