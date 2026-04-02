@@ -4,8 +4,18 @@ import userEvent from '@testing-library/user-event'
 import { CrawlerAdvancedTab } from '@/components/admin/system/crawler-site/components/CrawlerAdvancedTab'
 
 const postMock = vi.fn()
-const showToastMock = vi.fn()
+const notifyErrorMock = vi.fn()
+const notifySuccessMock = vi.fn()
 const refreshMonitorMock = vi.fn()
+
+vi.mock('@/components/admin/shared/toast/useAdminToast', () => ({
+  notify: {
+    success: (...args: unknown[]) => notifySuccessMock(...args),
+    error: (...args: unknown[]) => notifyErrorMock(...args),
+    warn: vi.fn(),
+    info: vi.fn(),
+  },
+}))
 
 const MOCK_SITES = [
   { key: 'iqiyizyapi.com', name: '爱奇艺', apiUrl: 'https://iqiyizyapi.com/api.php/provide/vod' },
@@ -17,14 +27,6 @@ vi.mock('@/lib/api-client', () => ({
   apiClient: {
     post: (...args: unknown[]) => postMock(...args),
   },
-}))
-
-vi.mock('@/components/admin/shared/feedback/useAdminToast', () => ({
-  useAdminToast: () => ({
-    toast: null,
-    showToast: showToastMock,
-    clearToast: vi.fn(),
-  }),
 }))
 
 vi.mock('@/components/admin/system/crawler-site/hooks/useCrawlerSites', () => ({
@@ -114,7 +116,7 @@ describe('CrawlerAdvancedTab', () => {
     await user.click(screen.getByTestId('crawler-custom-run-submit'))
 
     expect(postMock).not.toHaveBeenCalled()
-    expect(showToastMock).toHaveBeenCalledWith('请先选择至少一个站点', false)
+    expect(notifyErrorMock).toHaveBeenCalledWith('请先选择至少一个站点')
   })
 })
 

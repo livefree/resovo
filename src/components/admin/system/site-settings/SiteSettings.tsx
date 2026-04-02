@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
+import { notify } from '@/components/admin/shared/toast/useAdminToast'
 import type { SiteSettings } from '@/types'
 
 // ── 默认值 ────────────────────────────────────────────────────
@@ -108,12 +109,6 @@ export function SiteSettings() {
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SETTINGS)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
-
-  const showToast = (msg: string, ok: boolean) => {
-    setToast({ msg, ok })
-    setTimeout(() => setToast(null), 3000)
-  }
 
   const fetchSettings = useCallback(async () => {
     setLoading(true)
@@ -142,9 +137,9 @@ export function SiteSettings() {
         videoProxyEnabled: settings.videoProxyEnabled,
         videoProxyUrl: settings.videoProxyUrl,
       })
-      showToast('保存成功', true)
+      notify.success('保存成功')
     } catch {
-      showToast('保存失败，请重试', false)
+      notify.error('保存失败，请重试')
     } finally {
       setSaving(false)
     }
@@ -240,11 +235,6 @@ export function SiteSettings() {
         >
           {saving ? '保存中…' : '保存配置'}
         </button>
-        {toast && (
-          <span className={`text-sm ${toast.ok ? 'text-green-500' : 'text-red-500'}`}>
-            {toast.msg}
-          </span>
-        )}
       </div>
     </div>
   )

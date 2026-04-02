@@ -4534,14 +4534,14 @@
    - 变更内容：动态读取 routing.locales 生成 /[locale]/admin/ 和 /[locale]/auth/ 的 disallow
    - 完成备注：import routing from @/i18n/routing，flatMap 生成 /en/admin/、/en/auth/、/zh-CN/admin/、/zh-CN/auth/；770 tests ✅ lint ✅ typecheck ✅
 
-8. CHG-344 — 全量迁移剩余局部 toast 到全局 notify（状态：⬜ 待开始）
+8. CHG-344 — 全量迁移剩余局部 toast 到全局 notify（状态：✅ 已完成）
    - 创建时间：2026-04-02 14:30
    - 计划开始：CHG-343 完成后
-   - 实际开始：—
-   - 完成时间：—
+   - 实际开始：2026-04-02 16:10
+   - 完成时间：2026-04-02 16:25
    - 文件范围：`src/components/admin/system/` 及全量扫描，`src/components/admin/shared/feedback/`
    - 变更内容：旧局部 toast → notify.success/error；删除/废弃 shared/feedback/useAdminToast.ts
-   - 完成备注：_（AI 填写）_
+   - 完成备注：迁移 ConfigFileEditor/SiteSettings/CacheManager（内联 useState toast）；useCrawlerMonitor/useCrawlerSiteCrawlTasks/AutoCrawlSettingsPanel/CrawlerAdvancedTab/CrawlerConfigTab/CrawlerSiteManager/CrawlerSiteTable/useCrawlerSiteTableColumns（showToast prop 链路）移除 showToast 参数，直接调用 notify；shared/feedback/useAdminToast.ts 废弃（仅保留 @deprecated 注释）；更新 ConfigFileEditor.test + CrawlerAdvancedTab.test 改为 mock notify；770 tests ✅ lint ✅ typecheck ✅
 
 9. CHG-345 — 台账/文档一致性收敛 + ESLint no-restricted-imports 升级为 error（状态：⬜ 待开始）
    - 创建时间：2026-04-02 14:30

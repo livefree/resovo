@@ -8,7 +8,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { apiClient } from '@/lib/api-client'
 import type { CrawlerSite, CreateCrawlerSiteInput, UpdateCrawlerSiteInput, CrawlerSiteBatchAction } from '@/types'
-import { useAdminToast } from '@/components/admin/shared/feedback/useAdminToast'
+import { notify } from '@/components/admin/shared/toast/useAdminToast'
 import { useCrawlerSiteColumns } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteColumns'
 import { useCrawlerSiteSelection } from '@/components/admin/system/crawler-site/hooks/useCrawlerSiteSelection'
 import { useCrawlerSites } from '@/components/admin/system/crawler-site/hooks/useCrawlerSites'
@@ -49,7 +49,6 @@ export function CrawlerSiteManager() {
     'incremental-crawl': false,
     'full-crawl': false,
   })
-  const { toast, showToast } = useAdminToast({ durationMs: 3500 })
   const {
     sortBy,
     sortDir,
@@ -64,7 +63,6 @@ export function CrawlerSiteManager() {
     triggerSiteCrawl,
   } = useCrawlerSiteCrawlTasks({
     refreshSitesSilently: () => fetchSites({ silent: true }),
-    showToast,
   })
 
   const displaySites = useMemo(() => {
@@ -172,11 +170,11 @@ export function CrawlerSiteManager() {
     setSites((prev) => prev.map((s) => s.key === site.key ? optimisticSite : s))
     try {
       await apiClient.patch(`/admin/crawler/sites/${site.key}`, patch)
-      if (showSuccess) showToast(`已更新 ${site.name}`, true)
+      if (showSuccess) notify.success(`已更新 ${site.name}`)
     } catch {
       // Rollback
       setSites((prev) => prev.map((s) => s.key === site.key ? site : s))
-      showToast(`更新 ${site.name} 失败`, false)
+      notify.error(`更新 ${site.name} 失败`)
     } finally {
       setRowSaving((prev) => ({ ...prev, [site.key]: false }))
     }
@@ -194,9 +192,9 @@ export function CrawlerSiteManager() {
         triggerType: 'all',
         mode: type === 'full-crawl' ? 'full' : 'incremental',
       })
-      showToast(type === 'full-crawl' ? '已触发全站全量采集' : '已触发全站增量采集', true)
+      notify.success(type === 'full-crawl' ? '已触发全站全量采集' : '已触发全站增量采集')
     } catch {
-      showToast(type === 'full-crawl' ? '全站全量采集触发失败' : '全站增量采集触发失败', false)
+      notify.error(type === 'full-crawl' ? '全站全量采集触发失败' : '全站增量采集触发失败')
     } finally {
       setAllCrawlTriggering((prev) => ({ ...prev, [type]: false }))
     }
@@ -204,7 +202,7 @@ export function CrawlerSiteManager() {
 
   async function handleTriggerBatchCrawl(type: 'full-crawl' | 'incremental-crawl') {
     if (selected.size === 0) {
-      showToast('请先勾选要采集的源站', false)
+      notify.error('请先勾选要采集的源站')
       return
     }
     try {
@@ -213,9 +211,9 @@ export function CrawlerSiteManager() {
         mode: type === 'full-crawl' ? 'full' : 'incremental',
         siteKeys: Array.from(selected),
       })
-      showToast(type === 'full-crawl' ? '已触发批量全量采集' : '已触发批量增量采集', true)
+      notify.success(type === 'full-crawl' ? '已触发批量全量采集' : '已触发批量增量采集')
     } catch {
-      showToast(type === 'full-crawl' ? '批量全量采集触发失败' : '批量增量采集触发失败', false)
+      notify.error(type === 'full-crawl' ? '批量全量采集触发失败' : '批量增量采集触发失败')
     }
   }
 
@@ -226,16 +224,16 @@ export function CrawlerSiteManager() {
     try {
       await apiClient.delete(`/admin/crawler/sites/${site.key}`)
       await fetchSites()
-      showToast('已删除', true)
+      notify.success('已删除')
     } catch {
-      showToast('删除失败（配置文件来源的源站不可删除）', false)
+      notify.error('删除失败（配置文件来源的源站不可删除）')
     }
   }
 
   // ── 批量操作 ───────────────────────────────────────────────
 
   async function handleBatch(action: CrawlerSiteBatchAction) {
-    if (selected.size === 0) { showToast('请先选择源站', false); return }
+    if (selected.size === 0) { notify.error('请先选择源站'); return }
     const label = { enable: '启用', disable: '停用', delete: '删除', mark_adult: '标记成人', unmark_adult: '取消成人', mark_shortdrama: '标记短剧', mark_vod: '标记长片' }[action]
     if (action === 'delete' && !confirm(`确定批量删除 ${selected.size} 个源站？`)) return
     try {
@@ -245,9 +243,9 @@ export function CrawlerSiteManager() {
       })
       await fetchSites()
       clearSelection()
-      showToast(`批量${label}成功，影响 ${res.data.affected} 条`, true)
+      notify.success(`批量${label}成功，影响 ${res.data.affected} 条`)
     } catch {
-      showToast('批量操作失败', false)
+      notify.error('批量操作失败')
     }
   }
 
@@ -270,7 +268,7 @@ export function CrawlerSiteManager() {
       await apiClient.patch(`/admin/crawler/sites/${form.key}`, { allowAutoPublish: true })
     }
     await fetchSites()
-    showToast('添加成功', true)
+    notify.success('添加成功')
   }
 
   // ── 编辑 ───────────────────────────────────────────────────
@@ -289,7 +287,7 @@ export function CrawlerSiteManager() {
     }
     await apiClient.patch(`/admin/crawler/sites/${editTarget.key}`, input)
     await fetchSites()
-    showToast('更新成功', true)
+    notify.success('更新成功')
   }
 
   // ── 导出 ───────────────────────────────────────────────────
@@ -320,7 +318,7 @@ export function CrawlerSiteManager() {
         const json = JSON.parse(text)
         const parsedSites = parseSitesFromJson(json)
         if (parsedSites.length === 0) {
-          showToast('未识别到可导入源站（需包含 name + api/api_url/url）', false)
+          notify.error('未识别到可导入源站（需包含 name + api/api_url/url）')
           return
         }
         const existingByApi = new Map(sites.map((site) => [site.apiUrl, site]))
@@ -345,9 +343,10 @@ export function CrawlerSiteManager() {
           } catch { fail++ }
         }
         await fetchSites()
-        showToast(`导入完成：成功 ${ok}，失败 ${fail}`, ok > 0)
+        if (ok > 0) notify.success(`导入完成：成功 ${ok}，失败 ${fail}`)
+        else notify.error(`导入完成：成功 ${ok}，失败 ${fail}`)
       } catch {
-        showToast('JSON 解析失败', false)
+        notify.error('JSON 解析失败')
       }
     }
     input.click()
@@ -406,7 +405,6 @@ export function CrawlerSiteManager() {
         handleTriggerCrawl={handleTriggerCrawl}
         handleDelete={handleDelete}
         setEditTarget={setEditTarget}
-        showToast={showToast}
       />
 
       {displaySites.length > PAGE_SIZE ? (

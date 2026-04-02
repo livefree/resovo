@@ -17,13 +17,11 @@ interface AutoCrawlConfigSnapshot {
 interface CrawlerConsoleMonitorSectionProps {
   sites: CrawlerSite[]
   onAutoConfigChange: (next: AutoCrawlConfigSnapshot | null) => void
-  showToast: (message: string, ok: boolean) => void
 }
 
 export function CrawlerConsoleMonitorSection({
   sites,
   onAutoConfigChange,
-  showToast,
 }: CrawlerConsoleMonitorSectionProps) {
   const {
     overview,
@@ -37,7 +35,7 @@ export function CrawlerConsoleMonitorSection({
     setFreezeEnabled,
     stopAllPending,
     freezeSwitchPending,
-  } = useCrawlerMonitor({ showToast })
+  } = useCrawlerMonitor()
 
   return (
     <>
@@ -49,7 +47,7 @@ export function CrawlerConsoleMonitorSection({
         onStopAll={() => { void stopAll() }}
         onSetFreezeEnabled={(enabled) => { void setFreezeEnabled(enabled) }}
       />
-      <AutoCrawlSettingsPanel sites={sites} showToast={showToast} onConfigChange={onAutoConfigChange} />
+      <AutoCrawlSettingsPanel sites={sites} onConfigChange={onAutoConfigChange} />
       <section className="mb-2 rounded-lg border border-[var(--border)] bg-[var(--bg2)] px-3 py-2" data-testid="crawler-run-monitor-header">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold text-[var(--text)]">采集批次状态</h3>

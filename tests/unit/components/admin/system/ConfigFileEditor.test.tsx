@@ -4,6 +4,17 @@ import { ConfigFileEditor } from '@/components/admin/system/config-file/ConfigFi
 
 const getMock = vi.fn()
 const postMock = vi.fn()
+const notifySuccessMock = vi.fn()
+const notifyErrorMock = vi.fn()
+
+vi.mock('@/components/admin/shared/toast/useAdminToast', () => ({
+  notify: {
+    success: (...args: unknown[]) => notifySuccessMock(...args),
+    error: (...args: unknown[]) => notifyErrorMock(...args),
+    warn: vi.fn(),
+    info: vi.fn(),
+  },
+}))
 
 vi.mock('@/lib/api-client', () => ({
   apiClient: {
@@ -21,6 +32,8 @@ describe('ConfigFileEditor', () => {
     vi.clearAllMocks()
     getMock.mockResolvedValue({ data: { configFile: '', subscriptionUrl: '' } })
     postMock.mockResolvedValue({ data: { ok: true, synced: 0, skipped: 0 } })
+    notifySuccessMock.mockReset()
+    notifyErrorMock.mockReset()
   })
 
   it('can switch to local upload tab', async () => {
@@ -46,7 +59,7 @@ describe('ConfigFileEditor', () => {
     fireEvent.change(fileInput, { target: { files: [file] } })
 
     await waitFor(() => {
-      expect(screen.getByText('本地文件加载成功')).not.toBeNull()
+      expect(notifySuccessMock).toHaveBeenCalledWith('本地文件加载成功')
     })
 
     const textarea = screen.getByPlaceholderText(/crawler_sites/) as HTMLTextAreaElement
@@ -67,7 +80,7 @@ describe('ConfigFileEditor', () => {
     fireEvent.change(fileInput, { target: { files: [badFile] } })
 
     await waitFor(() => {
-      expect(screen.getByText(/本地文件解析失败/)).not.toBeNull()
+      expect(notifyErrorMock).toHaveBeenCalledWith(expect.stringMatching(/本地文件解析失败/))
     })
   })
 })

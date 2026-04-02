@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { apiClient, ApiClientError } from '@/lib/api-client'
+import { notify } from '@/components/admin/shared/toast/useAdminToast'
 import { AdminButton } from '@/components/admin/shared/button/AdminButton'
 import { CONFIG_FILE_PLACEHOLDER } from '@/components/admin/system/config-file/constants'
 import {
@@ -30,13 +31,7 @@ export function ConfigFileEditor() {
   const [fetching, setFetching] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [jsonError, setJsonError] = useState<string | null>(null)
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const [selectedFileName, setSelectedFileName] = useState('')
-
-  const showToast = (msg: string, ok: boolean) => {
-    setToast({ msg, ok })
-    setTimeout(() => setToast(null), 4000)
-  }
 
   const fetchCurrent = useCallback(async () => {
     setLoading(true)
@@ -68,7 +63,7 @@ export function ConfigFileEditor() {
 
   async function handleFetch() {
     if (!data.subscriptionUrl) {
-      showToast('请先填写订阅 URL', false)
+      notify.error('请先填写订阅 URL')
       return
     }
     setFetching(true)
@@ -79,9 +74,9 @@ export function ConfigFileEditor() {
       const prettyText = parseJsonToPrettyText(text)
       setData((prev) => ({ ...prev, configFile: prettyText }))
       setJsonError(null)
-      showToast('拉取成功', true)
+      notify.success('拉取成功')
     } catch (e) {
-      showToast(e instanceof Error ? `拉取失败：${e.message}` : '拉取失败', false)
+      notify.error(e instanceof Error ? `拉取失败：${e.message}` : '拉取失败')
     } finally {
       setFetching(false)
     }
@@ -96,9 +91,9 @@ export function ConfigFileEditor() {
       const prettyText = parseJsonToPrettyText(text)
       setData((prev) => ({ ...prev, configFile: prettyText }))
       setJsonError(null)
-      showToast('本地文件加载成功', true)
+      notify.success('本地文件加载成功')
     } catch (e) {
-      showToast(e instanceof Error ? `本地文件解析失败：${e.message}` : '本地文件解析失败', false)
+      notify.error(e instanceof Error ? `本地文件解析失败：${e.message}` : '本地文件解析失败')
     } finally {
       setUploading(false)
     }
@@ -110,7 +105,7 @@ export function ConfigFileEditor() {
     const payload: { configFile: string; subscriptionUrl?: string } = { configFile: data.configFile }
     const normalizedSubscription = normalizeSubscriptionUrl(data.subscriptionUrl)
     if (!normalizedSubscription.ok) {
-      showToast(normalizedSubscription.error ?? '订阅 URL 格式错误', false)
+      notify.error(normalizedSubscription.error ?? '订阅 URL 格式错误')
       return
     }
     if (normalizedSubscription.value) {
@@ -126,17 +121,16 @@ export function ConfigFileEditor() {
         payload,
       )
       const { synced, skipped } = res.data
-      showToast(
+      notify.success(
         skipped > 0
           ? `保存成功：已同步 ${synced} 个源站，跳过 ${skipped} 个无效项`
           : `保存成功，已同步 ${synced} 个源站到视频源配置`,
-        true,
       )
     } catch (e) {
       if (e instanceof ApiClientError) {
-        showToast(`保存失败：${e.message}`, false)
+        notify.error(`保存失败：${e.message}`)
       } else {
-        showToast('保存失败，请重试', false)
+        notify.error('保存失败，请重试')
       }
     } finally {
       setSaving(false)
@@ -266,11 +260,6 @@ export function ConfigFileEditor() {
           >
             {saving ? '保存中…' : '保存并同步'}
           </AdminButton>
-          {toast && (
-            <span className={`text-sm ${toast.ok ? 'text-green-500' : 'text-red-500'}`}>
-              {toast.msg}
-            </span>
-          )}
         </div>
       </div>
     </div>

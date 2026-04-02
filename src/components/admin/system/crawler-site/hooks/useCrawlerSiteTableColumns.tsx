@@ -6,6 +6,7 @@
 
 import { useMemo } from 'react'
 import type { CrawlerSite, UpdateCrawlerSiteInput } from '@/types'
+import { notify } from '@/components/admin/shared/toast/useAdminToast'
 import { AdminDropdown } from '@/components/admin/shared/dropdown/AdminDropdown'
 import { TableBadgeCell } from '@/components/admin/shared/modern-table/cells/TableBadgeCell'
 import { TableCheckboxCell } from '@/components/admin/shared/modern-table/cells/TableCheckboxCell'
@@ -31,7 +32,6 @@ interface SiteColumnDeps {
   handleTriggerCrawl: (type: 'full-crawl' | 'incremental-crawl', site?: CrawlerSite) => Promise<void>
   handleDelete: (site: CrawlerSite) => Promise<void>
   setEditTarget: (site: CrawlerSite) => void
-  showToast: (msg: string, ok: boolean) => void
 }
 
 /** 可排序的列 id（同时也是有效的 SortField 值）*/
@@ -95,7 +95,7 @@ function buildSiteCellRenderer(columnId: ColumnId, deps: SiteColumnDeps) {
     case 'key': return ({ row }: { row: CrawlerSite }) => (
       <div className="flex items-center gap-2">
         <TableTextCell value={row.key} title={row.apiUrl} className="max-w-[120px] font-mono text-xs text-[var(--muted)]" />
-        <TableUrlCell url={row.apiUrl} maxLength={22} onCopied={() => deps.showToast('已复制 API 地址', true)} />
+        <TableUrlCell url={row.apiUrl} maxLength={22} onCopied={() => notify.success('已复制 API 地址')} />
       </div>
     )
     case 'typeFormat': return ({ row }: { row: CrawlerSite }) => <TableBadgeCell label={formatTypeLabel(row)} tone="info" />

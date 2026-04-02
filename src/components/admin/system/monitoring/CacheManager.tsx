@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { apiClient } from '@/lib/api-client'
+import { notify } from '@/components/admin/shared/toast/useAdminToast'
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
 import { AdminToolbar } from '@/components/admin/shared/toolbar/AdminToolbar'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
@@ -58,7 +59,6 @@ export function CacheManager() {
   const [loading, setLoading] = useState(false)
   const [clearingType, setClearingType] = useState<CacheType | null>(null)
   const [confirmTarget, setConfirmTarget] = useState<CacheType | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
   const [sort, setSort] = useState<TableSortState>({ field: 'count', direction: 'desc' })
 
   const tableSettings = useTableSettings({
@@ -80,19 +80,14 @@ export function CacheManager() {
 
   useEffect(() => { fetchStats() }, [fetchStats])
 
-  function showToast(msg: string) {
-    setToast(msg)
-    setTimeout(() => setToast(null), 4000)
-  }
-
   async function handleClear(type: CacheType) {
     setClearingType(type)
     try {
       const res = await apiClient.clearCache(type)
-      showToast(`已清除 ${res.data.deleted} 个缓存 key`)
+      notify.success(`已清除 ${res.data.deleted} 个缓存 key`)
       fetchStats()
     } catch {
-      showToast('清除失败，请稍后重试')
+      notify.error('清除失败，请稍后重试')
     } finally {
       setClearingType(null)
       setConfirmTarget(null)
@@ -174,15 +169,6 @@ export function CacheManager() {
 
   return (
     <div data-testid="cache-manager">
-      {toast && (
-        <div
-          className="mb-4 rounded-lg border border-green-500/40 bg-green-500/10 px-4 py-2 text-sm text-green-400"
-          data-testid="cache-toast"
-        >
-          {toast}
-        </div>
-      )}
-
       <AdminToolbar
         className="mb-2 gap-3"
         actions={null}

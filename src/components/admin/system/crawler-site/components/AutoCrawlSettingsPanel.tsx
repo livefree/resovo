@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiClient } from '@/lib/api-client'
+import { notify } from '@/components/admin/shared/toast/useAdminToast'
 import type { CrawlerSite } from '@/types'
 
 type AutoCrawlMode = 'incremental' | 'full'
@@ -22,7 +23,6 @@ interface AutoCrawlConfig {
 
 interface AutoCrawlSettingsPanelProps {
   sites: CrawlerSite[]
-  showToast: (message: string, ok: boolean) => void
   onConfigChange?: (config: AutoCrawlConfig) => void
 }
 
@@ -48,7 +48,7 @@ function normalizeConfig(input: Partial<AutoCrawlConfig> | null | undefined): Au
   }
 }
 
-export function AutoCrawlSettingsPanel({ sites, showToast, onConfigChange }: AutoCrawlSettingsPanelProps) {
+export function AutoCrawlSettingsPanel({ sites, onConfigChange }: AutoCrawlSettingsPanelProps) {
   const [config, setConfig] = useState<AutoCrawlConfig | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -70,11 +70,11 @@ export function AutoCrawlSettingsPanel({ sites, showToast, onConfigChange }: Aut
         setSelectedOverrideKey(siteOptions[0].key)
       }
     } catch {
-      showToast('自动采集配置加载失败', false)
+      notify.error('自动采集配置加载失败')
     } finally {
       setLoading(false)
     }
-  }, [onConfigChange, selectedOverrideKey, showToast, siteOptions])
+  }, [onConfigChange, selectedOverrideKey, siteOptions])
 
   async function saveConfig() {
     if (!config) return
@@ -82,9 +82,9 @@ export function AutoCrawlSettingsPanel({ sites, showToast, onConfigChange }: Aut
     try {
       await apiClient.post('/admin/crawler/auto-config', normalizeConfig(config))
       onConfigChange?.(normalizeConfig(config))
-      showToast('自动采集配置已保存', true)
+      notify.success('自动采集配置已保存')
     } catch {
-      showToast('自动采集配置保存失败', false)
+      notify.error('自动采集配置保存失败')
     } finally {
       setSaving(false)
     }

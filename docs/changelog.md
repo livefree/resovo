@@ -4881,3 +4881,27 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/app/robots.ts`：import `routing` from `@/i18n/routing`，`flatMap(locales)` 动态生成 `/en/admin/`、`/en/auth/`、`/zh-CN/admin/`、`/zh-CN/auth/` 等 disallow 路径；新增语言时无需手动维护
 - **共享层沉淀**：无需提取
 - **测试**：typecheck ✅ lint 零警告 ✅ 770 unit tests ✅
+
+---
+
+### CHG-344 — 全量迁移局部 toast 到全局 notify（2026-04-02）
+
+- **修改文件**：
+  - `src/components/admin/system/config-file/ConfigFileEditor.tsx`：移除 `toast` state 和 `showToast` 函数，改用 `notify.success/error`
+  - `src/components/admin/system/site-settings/SiteSettings.tsx`：同上
+  - `src/components/admin/system/monitoring/CacheManager.tsx`：同上，移除 `data-testid="cache-toast"` 内联渲染
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerMonitor.ts`：移除 `showToast` prop，直接调用 `notify`
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteCrawlTasks.ts`：同上
+  - `src/components/admin/system/crawler-site/components/AutoCrawlSettingsPanel.tsx`：移除 `showToast` prop，直接调用 `notify`
+  - `src/components/admin/system/crawler-site/components/CrawlerAdvancedTab.tsx`：移除 `useAdminToast`，改用 `notify`
+  - `src/components/admin/system/crawler-site/components/CrawlerConfigTab.tsx`：同上
+  - `src/components/admin/system/crawler-site/components/CrawlerConsoleMonitorSection.tsx`：移除 `showToast` prop
+  - `src/components/admin/system/crawler-site/CrawlerSiteManager.tsx`：移除 `useAdminToast`，全量替换 `showToast` → `notify`
+  - `src/components/admin/system/crawler-site/components/CrawlerSiteTable.tsx`：移除 `showToast` prop
+  - `src/components/admin/system/crawler-site/hooks/useCrawlerSiteTableColumns.tsx`：移除 `showToast` dep，改用 `notify`
+  - `src/components/admin/shared/feedback/useAdminToast.ts`：清空实现，仅保留 `@deprecated` 注释封口
+  - `tests/unit/components/admin/system/ConfigFileEditor.test.tsx`：改为 mock `notify` 验证
+  - `tests/unit/components/admin/system/crawler-site/CrawlerAdvancedTab.test.tsx`：同上
+  - `src/components/admin/AdminCrawlerTabs.tsx`：移除 `noop`，`useCrawlerMonitor()` 无参调用
+- **共享层沉淀**：`notify` 已是全局共享对象，无需额外提取
+- **测试**：typecheck ✅ lint 零警告 ✅ 770 unit tests ✅

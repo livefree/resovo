@@ -44,7 +44,6 @@ interface CrawlerSiteTableProps {
   handleTriggerCrawl: (type: 'full-crawl' | 'incremental-crawl', site?: CrawlerSite) => Promise<void>
   handleDelete: (site: CrawlerSite) => Promise<void>
   setEditTarget: (site: CrawlerSite) => void
-  showToast: (msg: string, ok: boolean) => void
 }
 
 export function CrawlerSiteTable(props: CrawlerSiteTableProps) {
@@ -52,7 +51,7 @@ export function CrawlerSiteTable(props: CrawlerSiteTableProps) {
     displaySites, selected, allVisibleSelected, sortBy, sortDir, filters,
     validateStates, rowSaving, runningBySite, setFilters, setSort,
     toggleSelect, toggleAll, handleInlineUpdate, handleToggleDisabled,
-    handleValidate, handleTriggerCrawl, handleDelete, setEditTarget, showToast,
+    handleValidate, handleTriggerCrawl, handleDelete, setEditTarget,
   } = props
 
   const [weightPresets, setWeightPresets] = useState<WeightPreset>({ high: 80, medium: 50, low: 20 })
@@ -102,7 +101,7 @@ export function CrawlerSiteTable(props: CrawlerSiteTableProps) {
     deps: {
       rowSaving, runningBySite, validateStates, weightPresets,
       handleInlineUpdate, handleToggleDisabled, handleValidate,
-      handleTriggerCrawl, handleDelete, setEditTarget, showToast,
+      handleTriggerCrawl, handleDelete, setEditTarget,
     },
   })
 

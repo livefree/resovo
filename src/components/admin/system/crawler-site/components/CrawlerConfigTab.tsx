@@ -5,9 +5,7 @@ import { CrawlerSiteManager } from '@/components/admin/system/crawler-site/Crawl
 import { useCrawlerMonitor } from '@/components/admin/system/crawler-site/hooks/useCrawlerMonitor'
 import type { CrawlerRunSummary } from '@/components/admin/system/crawler-site/hooks/useCrawlerMonitor'
 import { AdminHoverHint } from '@/components/admin/shared/feedback/AdminHoverHint'
-import { useAdminToast } from '@/components/admin/shared/feedback/useAdminToast'
-
-function noop() {}
+import { notify } from '@/components/admin/shared/toast/useAdminToast'
 
 function labelForTrigger(t: CrawlerRunSummary['triggerType']) {
   if (t === 'single') return '单站'
@@ -43,8 +41,7 @@ function statusColor(s: CrawlerRunSummary['status']) {
 }
 
 export function CrawlerConfigTab() {
-  const { runs } = useCrawlerMonitor({ showToast: noop })
-  const { toast, showToast } = useAdminToast({ durationMs: 4000 })
+  const { runs } = useCrawlerMonitor()
   const latestRun = runs[0] ?? null
 
   const total          = typeof latestRun?.summary?.total          === 'number' ? latestRun.summary.total          : 0
@@ -67,11 +64,12 @@ export function CrawlerConfigTab() {
           latestRun.status === 'success'         ? '采集完成' :
           latestRun.status === 'partial_failed'  ? '采集部分失败' :
           latestRun.status === 'cancelled'       ? '采集已取消' : '采集失败'
-        showToast(label, ok)
+        if (ok) notify.success(label)
+        else notify.error(label)
       }
     }
     prevRunRef.current = { id: latestRun.id, status: latestRun.status }
-  }, [latestRun, showToast])
+  }, [latestRun])
 
   return (
     <div className="space-y-4" data-testid="crawler-config-tab">
@@ -82,11 +80,6 @@ export function CrawlerConfigTab() {
             <h3 className="text-sm font-semibold text-[var(--text)]">实时采集监控</h3>
             <AdminHoverHint text="统计数据与运行进度局部刷新，不影响下方源站表格的筛选、排序、列宽和滚动位置。" />
           </div>
-          {toast && (
-            <span className={`text-xs font-medium ${toast.ok ? 'text-green-400' : 'text-red-400'}`}>
-              {toast.msg}
-            </span>
-          )}
         </div>
         <div className="mt-2">
           {latestRun ? (

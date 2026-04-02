@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { apiClient } from '@/lib/api-client'
-import { useAdminToast } from '@/components/admin/shared/feedback/useAdminToast'
+import { notify } from '@/components/admin/shared/toast/useAdminToast'
 import { useCrawlerMonitor } from '@/components/admin/system/crawler-site/hooks/useCrawlerMonitor'
 import { useCrawlerSites } from '@/components/admin/system/crawler-site/hooks/useCrawlerSites'
 import { CrawlerSystemStatusStrip } from '@/components/admin/system/crawler-site/components/CrawlerSystemStatusStrip'
@@ -23,7 +23,6 @@ interface TriggerRunResponse {
 }
 
 export function CrawlerAdvancedTab() {
-  const { toast, showToast } = useAdminToast({ durationMs: 3500 })
   const { sites } = useCrawlerSites()
   const {
     systemStatus,
@@ -36,7 +35,7 @@ export function CrawlerAdvancedTab() {
     resumeRun,
     cancelRun,
     refreshMonitor,
-  } = useCrawlerMonitor({ showToast })
+  } = useCrawlerMonitor()
 
   const [triggerType, setTriggerType] = useState<TriggerType>('all')
   const [mode, setMode] = useState<CrawlMode>('incremental')
@@ -113,12 +112,12 @@ export function CrawlerAdvancedTab() {
         ? selectedSiteKeys.slice(0, 1)
         : selectedSiteKeys
       if (siteKeys.length === 0) {
-        showToast('请先选择至少一个站点', false)
+        notify.error('请先选择至少一个站点')
         return
       }
       const invalid = siteKeys.filter((siteKey) => !siteKeySet.has(siteKey))
       if (invalid.length > 0) {
-        showToast(`存在无效站点 Key：${invalid.join(', ')}`, false)
+        notify.error(`存在无效站点 Key：${invalid.join(', ')}`)
         return
       }
       payload.siteKeys = siteKeys
@@ -128,10 +127,10 @@ export function CrawlerAdvancedTab() {
     try {
       const res = await apiClient.post<TriggerRunResponse>('/admin/crawler/runs', payload)
       setLastRunId(res.data.runId)
-      showToast('自定义采集任务已创建', true)
+      notify.success('自定义采集任务已创建')
       await refreshMonitor()
     } catch {
-      showToast('自定义采集任务创建失败', false)
+      notify.error('自定义采集任务创建失败')
     } finally {
       setSubmitting(false)
     }
@@ -163,7 +162,7 @@ export function CrawlerAdvancedTab() {
         onResume={(runId) => { void resumeRun(runId) }}
       />
 
-      <AutoCrawlSettingsPanel sites={sites} showToast={showToast} />
+      <AutoCrawlSettingsPanel sites={sites} />
 
       <section className="rounded-lg border border-[var(--border)] bg-[var(--bg2)] p-4" data-testid="crawler-custom-run-builder">
         <div className="mb-3 flex items-center justify-between">
@@ -329,9 +328,6 @@ export function CrawlerAdvancedTab() {
           >
             {submitting ? '创建中…' : '创建自定义任务'}
           </button>
-          {toast ? (
-            <span className={`text-xs ${toast.ok ? 'text-green-400' : 'text-red-400'}`}>{toast.msg}</span>
-          ) : null}
         </div>
       </section>
 

@@ -34,8 +34,6 @@ function parseCrawlerTab(input: string | null): CrawlerTab {
   return 'sites'
 }
 
-function noop() {}
-
 interface TasksTabPanelProps {
   runId: string
   statusFilter: TaskStatusFilter
@@ -43,7 +41,7 @@ interface TasksTabPanelProps {
 }
 
 function TasksTabPanel({ runId, statusFilter, onRunIdChange }: TasksTabPanelProps) {
-  const { overview } = useCrawlerMonitor({ showToast: noop })
+  const { overview } = useCrawlerMonitor()
   return (
     <>
       <CrawlerSiteOverviewStats data={overview} />

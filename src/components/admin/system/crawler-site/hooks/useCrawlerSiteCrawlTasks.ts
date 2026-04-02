@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiClientError } from '@/lib/api-client'
+import { notify } from '@/components/admin/shared/toast/useAdminToast'
 import type { CrawlMode, CrawlTaskDTO } from '@/components/admin/system/crawler-site/crawlTask.types'
 import {
   getLatestCrawlTaskBySite,
@@ -12,7 +13,6 @@ import {
 interface UseCrawlerSiteCrawlTasksOptions {
   refreshSitesSilently?: () => Promise<void>
   onTaskSettled?: (siteKeys: string[]) => Promise<void> | void
-  showToast: (message: string, ok: boolean) => void
   pollIntervalMs?: number
 }
 
@@ -27,9 +27,8 @@ interface UseCrawlerSiteCrawlTasksResult {
 export function useCrawlerSiteCrawlTasks({
   refreshSitesSilently,
   onTaskSettled,
-  showToast,
   pollIntervalMs = 3000,
-}: UseCrawlerSiteCrawlTasksOptions): UseCrawlerSiteCrawlTasksResult {
+}: UseCrawlerSiteCrawlTasksOptions = {}): UseCrawlerSiteCrawlTasksResult {
   const [runningBySite, setRunningBySite] = useState<Record<string, boolean>>({})
   const [runningModeBySite, setRunningModeBySite] = useState<Record<string, CrawlMode | null>>({})
   const [latestTaskBySite, setLatestTaskBySite] = useState<Record<string, CrawlTaskDTO | null>>({})
@@ -77,18 +76,17 @@ export function useCrawlerSiteCrawlTasks({
         if (!notifiedTaskIdsRef.current.has(latest.id)) {
           notifiedTaskIdsRef.current.add(latest.id)
           if (latest.status === 'success') {
-            showToast(
+            notify.success(
               latest.itemCount !== null
                 ? `采集完成：新增/更新 ${latest.itemCount} 条`
-                : '采集完成',
-              true
+                : '采集完成'
             )
           } else if (latest.status === 'failed') {
-            showToast(latest.message ? `采集失败：${latest.message}` : '采集失败', false)
+            notify.error(latest.message ? `采集失败：${latest.message}` : '采集失败')
           } else if (latest.status === 'cancelled') {
-            showToast('采集已取消', false)
+            notify.warn('采集已取消')
           } else if (latest.status === 'timeout') {
-            showToast('采集超时', false)
+            notify.warn('采集超时')
           }
         }
       }
@@ -104,7 +102,7 @@ export function useCrawlerSiteCrawlTasks({
     } catch {
       // 轮询失败不中断 UI，可等待下一轮重试
     }
-  }, [onTaskSettled, refreshSitesSilently, showToast])
+  }, [onTaskSettled, refreshSitesSilently])
 
   useEffect(() => {
     if (activeSitesRef.current.size === 0) return
@@ -117,7 +115,7 @@ export function useCrawlerSiteCrawlTasks({
   const triggerSiteCrawl = useCallback(
     async (siteKey: string, mode: CrawlMode, siteName?: string) => {
       if (runningBySite[siteKey]) {
-        showToast(`${siteName ?? siteKey} 已有采集任务在运行`, false)
+        notify.error(`${siteName ?? siteKey} 已有采集任务在运行`)
         return
       }
 
@@ -127,7 +125,7 @@ export function useCrawlerSiteCrawlTasks({
 
       try {
         await triggerSiteCrawlTask(siteKey, mode)
-        showToast(`已触发 ${siteName ?? siteKey} ${mode === 'full' ? '全量' : '增量'}采集`, true)
+        notify.success(`已触发 ${siteName ?? siteKey} ${mode === 'full' ? '全量' : '增量'}采集`)
         await syncLatestTasks()
       } catch (error) {
         activeSitesRef.current.delete(siteKey)
@@ -135,14 +133,14 @@ export function useCrawlerSiteCrawlTasks({
         setRunningModeBySite((prev) => ({ ...prev, [siteKey]: null }))
 
         if (error instanceof ApiClientError && error.status === 409) {
-          showToast(`${siteName ?? siteKey} 已有采集任务在运行`, false)
+          notify.error(`${siteName ?? siteKey} 已有采集任务在运行`)
           return
         }
 
-        showToast(`${siteName ?? siteKey} 采集触发失败`, false)
+        notify.error(`${siteName ?? siteKey} 采集触发失败`)
       }
     },
-    [runningBySite, showToast, syncLatestTasks]
+    [runningBySite, syncLatestTasks]
   )
 
   const hydrateRunningFromSites = useCallback(async (siteKeys: string[]) => {

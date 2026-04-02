@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiClient } from '@/lib/api-client'
+import { notify } from '@/components/admin/shared/toast/useAdminToast'
 
 export interface CrawlerOverview {
   siteTotal: number
@@ -33,13 +34,11 @@ export interface CrawlerSystemStatus {
 
 interface UseCrawlerMonitorOptions {
   pollIntervalMs?: number
-  showToast: (message: string, ok: boolean) => void
 }
 
 export function useCrawlerMonitor({
   pollIntervalMs = 5000,
-  showToast,
-}: UseCrawlerMonitorOptions) {
+}: UseCrawlerMonitorOptions = {}) {
   const [overview, setOverview] = useState<CrawlerOverview | null>(null)
   const [runs, setRuns] = useState<CrawlerRunSummary[]>([])
   const [systemStatus, setSystemStatus] = useState<CrawlerSystemStatus | null>(null)
@@ -121,39 +120,39 @@ export function useCrawlerMonitor({
     async (runId: string) => {
       try {
         await apiClient.post(`/admin/crawler/runs/${runId}/pause`)
-        showToast('已发送暂停请求', true)
+        notify.success('已发送暂停请求')
         await fetchRuns()
       } catch {
-        showToast('暂停批次失败', false)
+        notify.error('暂停批次失败')
       }
     },
-    [fetchRuns, showToast],
+    [fetchRuns],
   )
 
   const resumeRun = useCallback(
     async (runId: string) => {
       try {
         await apiClient.post(`/admin/crawler/runs/${runId}/resume`)
-        showToast('已发送恢复请求', true)
+        notify.success('已发送恢复请求')
         await fetchRuns()
       } catch {
-        showToast('恢复批次失败', false)
+        notify.error('恢复批次失败')
       }
     },
-    [fetchRuns, showToast],
+    [fetchRuns],
   )
 
   const cancelRun = useCallback(
     async (runId: string) => {
       try {
         await apiClient.post(`/admin/crawler/runs/${runId}/cancel`)
-        showToast('已发送中止请求', true)
+        notify.success('已发送中止请求')
         await fetchRuns()
       } catch {
-        showToast('中止批次失败', false)
+        notify.error('中止批次失败')
       }
     },
-    [fetchRuns, showToast],
+    [fetchRuns],
   )
 
   const stopAll = useCallback(async () => {
@@ -163,27 +162,27 @@ export function useCrawlerMonitor({
         freeze: true,
         removeRepeatableTick: true,
       })
-      showToast('已执行 stop-all（冻结 + 取消活跃任务）', true)
+      notify.success('已执行 stop-all（冻结 + 取消活跃任务）')
       await refreshMonitor()
     } catch {
-      showToast('执行 stop-all 失败', false)
+      notify.error('执行 stop-all 失败')
     } finally {
       setStopAllPending(false)
     }
-  }, [refreshMonitor, showToast])
+  }, [refreshMonitor])
 
   const setFreezeEnabled = useCallback(async (enabled: boolean) => {
     setFreezeSwitchPending(true)
     try {
       await apiClient.post('/admin/crawler/freeze', { enabled })
-      showToast(enabled ? '已开启全局冻结' : '已关闭全局冻结', true)
+      notify.success(enabled ? '已开启全局冻结' : '已关闭全局冻结')
       await refreshMonitor()
     } catch {
-      showToast(enabled ? '开启全局冻结失败' : '关闭全局冻结失败', false)
+      notify.error(enabled ? '开启全局冻结失败' : '关闭全局冻结失败')
     } finally {
       setFreezeSwitchPending(false)
     }
-  }, [refreshMonitor, showToast])
+  }, [refreshMonitor])
 
   return {
     overview,
