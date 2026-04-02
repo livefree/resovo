@@ -53,6 +53,7 @@ const VideoMetaSchema = z.object({
   director: z.array(z.string()).optional(),
   cast: z.array(z.string()).optional(),
   writers: z.array(z.string()).optional(),
+  doubanId: z.string().max(20).optional().nullable(),
 })
 
 const CreateVideoSchema = VideoMetaSchema.required({ title: true, type: true })
@@ -303,6 +304,21 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
     }
 
     const result = await doubanService.syncVideo(id)
+    return reply.send({ data: result })
+  })
+
+  // ── GET /admin/videos/:id/douban-preview ─────────────────────
+  // UX-05: admin only，预览豆瓣元数据（不写 DB）
+  fastify.get('/admin/videos/:id/douban-preview', { preHandler: adminOnly }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+
+    if (!/^[0-9a-f-]{36}$/.test(id)) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
+      })
+    }
+
+    const result = await doubanService.previewVideo(id)
     return reply.send({ data: result })
   })
 }

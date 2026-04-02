@@ -28,6 +28,23 @@ export interface SyncSkipped {
   reason: SyncReason
 }
 
+export interface DoubanPreviewFound {
+  found: true
+  doubanId: string
+  title: string
+  year: number | null
+  rating: number | null
+  description: string | null
+  coverUrl: string | null
+  directors: string[]
+  casts: string[]
+}
+
+export interface DoubanPreviewMiss {
+  found: false
+  reason: SyncReason
+}
+
 // ── 字符串相似度（简易 Jaccard 字符二元组） ──────────────────────
 
 function similarity(a: string, b: string): number {
@@ -114,5 +131,49 @@ export class DoubanService {
     if (detail.casts.length > 0) fields.push('cast')
 
     return { updated: true, fields, doubanId: detail.id }
+  }
+
+  async previewVideo(videoId: string): Promise<DoubanPreviewFound | DoubanPreviewMiss> {
+    const video = await videoQueries.findAdminVideoById(this.db, videoId)
+    if (!video) return { found: false, reason: 'no_match' }
+
+    let candidates: Awaited<ReturnType<typeof searchDouban>>
+    try {
+      candidates = await searchDouban(video.title, video.year ?? undefined)
+    } catch {
+      return { found: false, reason: 'fetch_failed' }
+    }
+    if (candidates.length === 0) return { found: false, reason: 'no_match' }
+
+    let bestId: string | null = null
+    let bestScore = 0
+    for (const item of candidates) {
+      const score = similarity(video.title, item.title)
+      if (score > bestScore) {
+        bestScore = score
+        bestId = item.id
+      }
+    }
+    if (!bestId || bestScore < 0.8) return { found: false, reason: 'no_match' }
+
+    let detail: Awaited<ReturnType<typeof getDoubanDetail>>
+    try {
+      detail = await getDoubanDetail(bestId)
+    } catch {
+      return { found: false, reason: 'fetch_failed' }
+    }
+    if (!detail) return { found: false, reason: 'fetch_failed' }
+
+    return {
+      found: true,
+      doubanId: detail.id,
+      title: detail.title,
+      year: detail.year,
+      rating: detail.rating,
+      description: detail.summary,
+      coverUrl: detail.posterUrl,
+      directors: detail.directors,
+      casts: detail.casts,
+    }
   }
 }

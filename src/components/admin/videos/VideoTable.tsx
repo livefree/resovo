@@ -241,6 +241,7 @@ export function VideoTable() {
         open={drawerVideoId !== null}
         onClose={() => setDrawerVideoId(null)}
         onSaved={() => void fetchVideos(page, pageSize)}
+        canSyncDouban={isAdmin}
       />
     </div>
   )

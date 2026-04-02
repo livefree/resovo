@@ -4766,3 +4766,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/videos/useVideoTableColumns.tsx`：新增 useVideoOpsV2Flag hook（读取 localStorage admin_video_ops_v2）；v2 actions：编辑/前台详情/前台播放图标+上架Toggle；v1 保持原有下拉菜单（默认）
   - `src/components/admin/videos/VideoTable.tsx`：读取 videoOpsV2 flag，传入 deps.videoOpsV2
 - **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅
+
+---
+
+## UX-05 — 视频编辑面板整合豆瓣同步预览/应用流程
+- **完成时间**：2026-04-02 06:30
+- **修改文件**：
+  - `src/api/services/DoubanService.ts`：新增 `previewVideo()` 方法（搜索豆瓣并返回预览数据，不写 DB）；新增 `DoubanPreviewFound/DoubanPreviewMiss` 类型
+  - `src/api/db/queries/videos.ts`：`UpdateVideoMetaInput` 新增 `doubanId` 字段；`fieldMap` 加 `doubanId → douban_id`
+  - `src/api/routes/admin/videos.ts`：`VideoMetaSchema` 新增 `doubanId` 字段；新增 `GET /admin/videos/:id/douban-preview`（admin only，无 DB 写入）
+  - `src/components/admin/videos/VideoDetailDrawer.tsx`：重构为 3 Tab（基础编辑/关联源/豆瓣同步）；豆瓣同步 Tab 实现"搜索→预览→选字段→应用"流程；新增 `canSyncDouban` prop
+  - `src/components/admin/videos/VideoTable.tsx`：传入 `canSyncDouban={isAdmin}` 给 VideoDetailDrawer
+  - `tests/unit/components/admin/videos/VideoTable.test.tsx`：更新 drawer 测试以适配 3 Tab 布局（点击关联源 Tab 再验证 URL）
+- **共享层沉淀**：DoubanService.previewVideo() 为 Service 层复用方法；FieldCheckbox 子组件限于 Drawer 内使用，不提取（单处使用）
+- **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅

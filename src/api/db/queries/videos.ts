@@ -437,6 +437,7 @@ export interface UpdateVideoMetaInput {
   director?: string[]
   cast?: string[]
   writers?: string[]
+  doubanId?: string | null
 }
 
 export async function updateVideoMeta(
@@ -464,6 +465,7 @@ export async function updateVideoMeta(
     director: 'director',
     cast: '"cast"',
     writers: 'writers',
+    doubanId: 'douban_id',
   }
 
   for (const [key, col] of Object.entries(fieldMap)) {

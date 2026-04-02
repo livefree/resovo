@@ -240,8 +240,13 @@ describe('VideoTable (CHG-211/212)', () => {
     await screen.findByTestId('video-detail-drawer-title')
     expect(getMock).toHaveBeenCalledWith('/admin/videos/v1')
     expect(getMock).toHaveBeenCalledWith('/admin/sources?videoId=v1&page=1&limit=20')
+
+    // Sources are on the "关联源" tab — switch to verify URL is displayed
+    fireEvent.click(screen.getByText(/关联源/))
     expect(screen.getByText('https://cdn.example.com/v1.m3u8')).toBeTruthy()
 
+    // Switch back to edit tab to fill form and save
+    fireEvent.click(screen.getByText('基础编辑'))
     fireEvent.change(screen.getByTestId('video-detail-title-input'), { target: { value: 'Alpha Movie Updated' } })
     fireEvent.change(screen.getByTestId('video-detail-country-input'), { target: { value: 'US' } })
     fireEvent.click(screen.getByTestId('video-detail-save'))
