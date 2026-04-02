@@ -4672,3 +4672,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/dashboard/QueueAlerts.tsx`：import 改用 @/types/contracts/v1/admin
   - `src/lib/api-client.ts`：getAnalytics 的 inline import 改用 @/types/contracts/v1/admin
 - **测试**：typecheck ✅ lint 仅剩 CacheStat/CacheType 1 warning（DEC-03 处理）✅ 772 unit tests ✅
+
+---
+
+## DEC-03 — 抽离 CacheStat/CacheType 到 src/types/contracts/v1/
+- **完成时间**：2026-04-02 04:10
+- **修改文件**：
+  - `src/types/contracts/v1/admin.ts`：追加 CacheType（字面量联合）和 CacheStat 接口
+  - `src/api/services/CacheService.ts`：移除本地类型定义，改从 contracts 导入并重新导出
+  - `src/components/admin/system/monitoring/CacheManager.tsx`：import 改用 @/types/contracts/v1/admin
+  - `src/lib/api-client.ts`：getCacheStats/clearCache 的 inline import 改用 @/types/contracts/v1/admin
+- **测试**：typecheck ✅ lint 零警告（所有7处 DEC-01 违规已清零）✅ 772 unit tests ✅

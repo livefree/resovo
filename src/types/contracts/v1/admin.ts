@@ -38,6 +38,16 @@ export interface AnalyticsData {
   }
 }
 
+/** 缓存业务分类 */
+export type CacheType = 'search' | 'video' | 'danmaku' | 'analytics' | 'all'
+
+/** 单个缓存类型的统计信息 */
+export interface CacheStat {
+  type: CacheType
+  count: number
+  sizeKb: number
+}
+
 /** 单站内容质量统计行 */
 export interface ContentQualityRow {
   siteKey: string

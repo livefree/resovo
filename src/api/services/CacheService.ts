@@ -4,6 +4,9 @@
  */
 
 import type { Redis } from 'ioredis'
+import type { CacheType, CacheStat } from '@/types/contracts/v1/admin'
+
+export type { CacheType, CacheStat }
 
 // ── 业务缓存前缀定义 ───────────────────────────────────────────────
 
@@ -14,16 +17,8 @@ export const CACHE_PREFIXES = {
   analytics: 'analytics:',
 } as const
 
-export type CacheType = keyof typeof CACHE_PREFIXES | 'all'
-
 /** 不得清除的系统 key 前缀（Bull 队列、token 黑名单） */
 const PROTECTED_PREFIXES = ['bull:', 'blacklist:']
-
-export interface CacheStat {
-  type: CacheType
-  count: number
-  sizeKb: number
-}
 
 // ── CacheService ───────────────────────────────────────────────────
 

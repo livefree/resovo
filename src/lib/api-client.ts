@@ -206,12 +206,12 @@ export const apiClient = {
   },
 
   /** 获取缓存统计（admin only） */
-  getCacheStats(): Promise<{ data: import('@/api/services/CacheService').CacheStat[] }> {
+  getCacheStats(): Promise<{ data: import('@/types/contracts/v1/admin').CacheStat[] }> {
     return request('/admin/cache/stats', { method: 'GET' })
   },
 
   /** 清除指定类型缓存（admin only） */
-  clearCache(type: import('@/api/services/CacheService').CacheType): Promise<{ data: { deleted: number } }> {
+  clearCache(type: import('@/types/contracts/v1/admin').CacheType): Promise<{ data: { deleted: number } }> {
     return request(`/admin/cache/${type}`, { method: 'DELETE' })
   },
 

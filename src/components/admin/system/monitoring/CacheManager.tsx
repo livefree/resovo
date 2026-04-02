@@ -13,7 +13,7 @@ import { AdminToolbar } from '@/components/admin/shared/toolbar/AdminToolbar'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import type { TableColumn, TableSortState } from '@/components/admin/shared/modern-table/types'
 import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
-import type { CacheStat, CacheType } from '@/api/services/CacheService'
+import type { CacheStat, CacheType } from '@/types/contracts/v1/admin'
 
 // ── 列标签与设置描述 ──────────────────────────────────────────────────────────
 
