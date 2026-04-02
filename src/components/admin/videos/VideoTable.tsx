@@ -18,6 +18,7 @@ import type { AdminTableSortState } from '@/components/admin/shared/table/useAdm
 import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
 import {
   useVideoTableColumns,
+  useVideoOpsV2Flag,
   COLUMN_LABELS,
   SORTABLE_MAP,
   VIDEO_COLUMNS,
@@ -44,6 +45,7 @@ export function VideoTable() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const isAdmin = useAuthStore(selectIsAdmin)
+  const videoOpsV2 = useVideoOpsV2Flag()
   const [videos, setVideos] = useState<VideoAdminRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -175,6 +177,7 @@ export function VideoTable() {
       publishPendingIds,
       doubanSyncPendingIds,
       canSyncDouban: isAdmin,
+      videoOpsV2,
       handleCheck,
       handleVisibilityToggle,
       handlePublishToggle,

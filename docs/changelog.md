@@ -4757,3 +4757,12 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/system/crawler-site/hooks/useCrawlerSites.ts`：fetchSites 后按 name asc 排序再 setSites
   - `src/components/admin/videos/VideoFilters.tsx`：fetch 后按 name asc 排序再 setSites
 - **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅
+
+---
+
+## UX-04 — 视频管理操作区重构（灰度开关）
+- **完成时间**：2026-04-02 05:42
+- **修改文件**：
+  - `src/components/admin/videos/useVideoTableColumns.tsx`：新增 useVideoOpsV2Flag hook（读取 localStorage admin_video_ops_v2）；v2 actions：编辑/前台详情/前台播放图标+上架Toggle；v1 保持原有下拉菜单（默认）
+  - `src/components/admin/videos/VideoTable.tsx`：读取 videoOpsV2 flag，传入 deps.videoOpsV2
+- **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅

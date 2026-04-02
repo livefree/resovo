@@ -4373,7 +4373,7 @@
 ## [SEQ-20260402-51] 后台交互改造（UX 系列）
 - **状态**：🔄 进行中
 - **创建时间**：2026-04-02 10:00
-- **最后更新时间**：2026-04-02 05:26
+- **最后更新时间**：2026-04-02 05:42
 - **目标**：按 admin_console_decoupling_and_ux_plan_20260402.md Phase 1-2 完成后台交互规范统一与核心页面重构
 - **依赖**：SEQ-20260402-50 DEC-01 ✅（lint 规则生效后再展开 UX 系列）
 - **参考文档**：`docs/admin_console_decoupling_and_ux_plan_20260402.md`
@@ -4415,16 +4415,16 @@
    - 变更内容：所有采集源下拉（VideoFilters、CrawlerAdvancedTab 等）默认按名称升序显示；管理表格已有自己的 sort 机制不受影响
    - 完成备注：typecheck ✅ lint 零警告 ✅ 772 tests ✅
 
-4. UX-04 — 视频管理操作区重构（状态：⬜ 待开始）
+4. UX-04 — 视频管理操作区重构（状态：✅ 已完成）
    - 创建时间：2026-04-02 10:00
    - 计划开始：UX-02/UX-03 完成后
-   - 实际开始：_
-   - 完成时间：_
+   - 实际开始：2026-04-02 05:30
+   - 完成时间：2026-04-02 05:42
    - 文件范围：
-     - `src/components/admin/videos/useVideoTableColumns.tsx`（操作列重构）
-     - `src/components/admin/videos/VideoTable.tsx`（灰度开关 localStorage admin_video_ops_v2）
-   - 变更内容：移除下拉菜单，合并编辑入口为图标按钮；灰度开关控制新旧版本；2周后全量切换
-   - 完成备注：_（AI 填写）_
+     - `src/components/admin/videos/useVideoTableColumns.tsx`（新增 v2 图标按钮 actions + useVideoOpsV2Flag hook）
+     - `src/components/admin/videos/VideoTable.tsx`（读取 videoOpsV2 flag 并传入 deps）
+   - 变更内容：v2 模式：编辑+前台详情+前台播放+上架toggle图标按钮；v1 模式：原下拉菜单（默认）；通过 localStorage admin_video_ops_v2=true 启用 v2
+   - 完成备注：typecheck ✅ lint 零警告 ✅ 772 tests ✅
 
 5. UX-05 — 视频编辑面板整合豆瓣同步预览/应用流程（状态：⬜ 待开始）
    - 创建时间：2026-04-02 10:00

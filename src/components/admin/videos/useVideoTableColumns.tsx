@@ -4,8 +4,11 @@
 
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { AdminDropdown } from '@/components/admin/shared/dropdown/AdminDropdown'
+import { getVideoDetailHref } from '@/lib/video-route'
+import type { VideoType } from '@/types'
 import {
   TableBadgeCell,
   TableCheckboxCell,
@@ -132,6 +135,7 @@ interface ColumnDeps {
   publishPendingIds: string[]
   doubanSyncPendingIds: string[]
   canSyncDouban: boolean
+  videoOpsV2: boolean
   handleCheck: (id: string, checked: boolean) => void
   handleVisibilityToggle: (row: VideoAdminRow, next: boolean) => Promise<void>
   handlePublishToggle: (row: VideoAdminRow) => Promise<void>
@@ -198,36 +202,92 @@ function buildDataColumn(columnId: VideoColumnId, deps: ColumnDeps): TableColumn
       break
     case 'actions':
       col.accessor = (row) => row.id
-      col.cell = ({ row }) => (
-        <AdminDropdown
-          data-testid={`video-actions-${row.id}`}
-          align="right"
-          trigger={
-            <button
-              type="button"
-              className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg2)]"
-            >操作 ▾</button>
-          }
-          items={[
-            { key: 'quick-edit', label: '快速编辑', onClick: () => deps.setDrawerVideoId(row.id) },
-            { key: 'full-edit', label: '完整编辑', onClick: () => deps.openFullEdit(row.id) },
-            {
-              key: 'publish-toggle',
-              label: row.is_published ? '下架' : '上架',
-              onClick: () => { void deps.handlePublishToggle(row) },
-              disabled: deps.publishPendingIds.includes(row.id),
-            },
-            ...(deps.canSyncDouban
-              ? [{
-                  key: 'douban-sync',
-                  label: '豆瓣同步',
-                  onClick: () => { void deps.handleDoubanSync(row.id) },
-                  disabled: deps.doubanSyncPendingIds.includes(row.id),
-                }]
-              : []),
-          ]}
-        />
-      )
+      col.cell = ({ row }) => {
+        if (deps.videoOpsV2) {
+          const detailHref = getVideoDetailHref({
+            type: row.type as VideoType,
+            slug: null,
+            shortId: row.short_id,
+          })
+          const playHref = `/watch/${row.short_id}`
+          const isPending = deps.publishPendingIds.includes(row.id)
+          return (
+            <div className="flex items-center gap-1.5" data-testid={`video-actions-${row.id}`}>
+              {/* 编辑 */}
+              <button
+                type="button"
+                title="编辑"
+                onClick={() => deps.openFullEdit(row.id)}
+                className="rounded border border-[var(--border)] p-1.5 text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--bg3)] transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              {/* 前台详情 */}
+              <Link
+                href={detailHref}
+                target="_blank"
+                title="前台详情"
+                className="rounded border border-[var(--border)] p-1.5 text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--bg3)] transition-colors inline-flex"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              </Link>
+              {/* 前台播放 */}
+              <Link
+                href={playHref}
+                target="_blank"
+                title="前台播放"
+                className="rounded border border-[var(--border)] p-1.5 text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--bg3)] transition-colors inline-flex"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              </Link>
+              {/* 上架/下架 Toggle */}
+              <button
+                type="button"
+                title={row.is_published ? '下架' : '上架'}
+                disabled={isPending}
+                onClick={() => { void deps.handlePublishToggle(row) }}
+                className={`rounded border px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                  row.is_published
+                    ? 'border-green-500/40 bg-green-500/10 text-green-300 hover:bg-green-500/20'
+                    : 'border-[var(--border)] bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'
+                }`}
+              >
+                {row.is_published ? '已上架' : '上架'}
+              </button>
+            </div>
+          )
+        }
+        return (
+          <AdminDropdown
+            data-testid={`video-actions-${row.id}`}
+            align="right"
+            trigger={
+              <button
+                type="button"
+                className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg2)]"
+              >操作 ▾</button>
+            }
+            items={[
+              { key: 'quick-edit', label: '快速编辑', onClick: () => deps.setDrawerVideoId(row.id) },
+              { key: 'full-edit', label: '完整编辑', onClick: () => deps.openFullEdit(row.id) },
+              {
+                key: 'publish-toggle',
+                label: row.is_published ? '下架' : '上架',
+                onClick: () => { void deps.handlePublishToggle(row) },
+                disabled: deps.publishPendingIds.includes(row.id),
+              },
+              ...(deps.canSyncDouban
+                ? [{
+                    key: 'douban-sync',
+                    label: '豆瓣同步',
+                    onClick: () => { void deps.handleDoubanSync(row.id) },
+                    disabled: deps.doubanSyncPendingIds.includes(row.id),
+                  }]
+                : []),
+            ]}
+          />
+        )
+      }
       break
   }
   return col
@@ -240,6 +300,17 @@ interface UseVideoTableColumnsParams {
   allSelected: boolean
   handleSelectAll: (checked: boolean) => void
   deps: ColumnDeps
+}
+
+export function useVideoOpsV2Flag(): boolean {
+  const [v2] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('admin_video_ops_v2') === 'true'
+    } catch {
+      return false
+    }
+  })
+  return v2
 }
 
 export function useVideoTableColumns({
@@ -274,6 +345,7 @@ export function useVideoTableColumns({
     deps.publishPendingIds,
     deps.doubanSyncPendingIds,
     deps.canSyncDouban,
+    deps.videoOpsV2,
     deps.sortable,
   ])
 }
