@@ -4525,14 +4525,14 @@
    - 完成备注：新增 documentary/short/sports/music/news/kids/other 7 个选项；770 tests ✅ lint ✅ typecheck ✅
    - 完成备注：_（AI 填写）_
 
-7. CHG-343 — robots.txt 基于 routing.locales 动态生成多语言屏蔽路径（状态：⬜ 待开始）
+7. CHG-343 — robots.txt 基于 routing.locales 动态生成多语言屏蔽路径（状态：✅ 已完成）
    - 创建时间：2026-04-02 14:30
    - 计划开始：CHG-342 完成后
-   - 实际开始：—
-   - 完成时间：—
+   - 实际开始：2026-04-02 16:04
+   - 完成时间：2026-04-02 16:08
    - 文件范围：`src/app/robots.ts`
    - 变更内容：动态读取 routing.locales 生成 /[locale]/admin/ 和 /[locale]/auth/ 的 disallow
-   - 完成备注：_（AI 填写）_
+   - 完成备注：import routing from @/i18n/routing，flatMap 生成 /en/admin/、/en/auth/、/zh-CN/admin/、/zh-CN/auth/；770 tests ✅ lint ✅ typecheck ✅
 
 8. CHG-344 — 全量迁移剩余局部 toast 到全局 notify（状态：⬜ 待开始）
    - 创建时间：2026-04-02 14:30

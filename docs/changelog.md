@@ -4872,3 +4872,12 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/AdminVideoForm.tsx`：type select 从 4 类（movie/series/anime/variety）扩展为 11 类，补全 documentary/short/sports/music/news/kids/other 及对应中文标签
 - **共享层沉淀**：无需提取
 - **测试**：typecheck ✅ lint 零警告 ✅ 770 unit tests ✅
+
+---
+
+### CHG-343 — robots.txt 动态生成多语言屏蔽路径（2026-04-02）
+
+- **修改文件**：
+  - `src/app/robots.ts`：import `routing` from `@/i18n/routing`，`flatMap(locales)` 动态生成 `/en/admin/`、`/en/auth/`、`/zh-CN/admin/`、`/zh-CN/auth/` 等 disallow 路径；新增语言时无需手动维护
+- **共享层沉淀**：无需提取
+- **测试**：typecheck ✅ lint 零警告 ✅ 770 unit tests ✅
