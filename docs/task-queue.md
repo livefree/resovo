@@ -4458,3 +4458,95 @@
      - 后端用户服务（软删除接口，deleted_at 标记）
    - 变更内容：用户操作栏增加删除按钮（权限保护 + 二次确认）；后端实现软删除（不物理删行）
    - 完成备注：users.ts queries 新增 softDeleteUser()（SQL 内置 role != 'admin' 防删）；路由层 DELETE /admin/users/:id（admin only，二次 role 校验）；UserActions 下拉菜单加"删除用户"选项 + ConfirmDialog 二次确认；typecheck ✅ lint 零警告 ✅ 772 tests ✅
+
+---
+
+## SEQ-20260402-52（审计收敛：DEC/UX 风险修复）
+
+> 来源：dec_ux_audit_findings_20260402.md
+> 创建时间：2026-04-02 14:30
+> 最后更新时间：2026-04-02 14:30
+> 描述：根据审计发现，系统性修复 SEQ-20260402-50/51 的遗留风险与验收偏差。DEC 完成度 ~75%，UX 完成度 ~45%。执行顺序：P0（链路断裂）→ P1（验收偏差）→ P2（清尾）→ P3（治理）。
+
+### 任务列表
+
+1. CHG-337 — 修复 api-client.ts 401 重定向目标（状态：✅ 已完成）
+   - 创建时间：2026-04-02 14:30
+   - 计划开始：立即
+   - 实际开始：2026-04-02 14:35
+   - 完成时间：2026-04-02 14:40
+   - 文件范围：`src/lib/api-client.ts`（line 61, 70）
+   - 变更内容：getLoginRedirectPath() 的 guard 和返回值从 /auth/login 改为 /admin/login
+   - 完成备注：两处字符串修正（line 61 guard + line 70 return）；typecheck ✅ lint ✅ 772 tests ✅
+
+2. CHG-338 — 修复后台首页 analytics SSR 鉴权（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 14:30
+   - 计划开始：CHG-337 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：`src/app/[locale]/admin/page.tsx`，`src/components/admin/dashboard/AnalyticsCards.tsx`
+   - 变更内容：删除 x-internal-secret SSR fetch；AnalyticsCards 改为可选 initialData + 首屏客户端拉数
+   - 完成备注：_（AI 填写）_
+
+3. CHG-339 — 去除视频管理 v2 灰度开关，默认启用（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 14:30
+   - 计划开始：CHG-338 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：`src/components/admin/videos/useVideoTableColumns.tsx`，`VideoTable.tsx`
+   - 变更内容：删除 useVideoOpsV2Flag() 和旧版 AdminDropdown 操作下拉代码
+   - 完成备注：_（AI 填写）_
+
+4. CHG-340 — visibility 从 2 态开关改为 3 态选择控件（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 14:30
+   - 计划开始：CHG-339 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：`src/components/admin/videos/useVideoTableColumns.tsx`（line 186-197）
+   - 变更内容：TableSwitchCell → 三态 select；API 字段用 visibility（非 visibility_status）
+   - 完成备注：_（AI 填写）_
+
+5. CHG-341 — 审核台补齐过滤、排序、多源播放器（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 14:30
+   - 计划开始：CHG-340 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：`src/components/admin/moderation/ModerationList.tsx`，`ModerationDetail.tsx`，`src/api/routes/admin/videos.ts`，对应 Service 与 DB query 层
+   - 变更内容：类型筛选/排序；多源播放器；tv→series 清理；三层（Route→Service→Query）同步
+   - 完成备注：_（AI 填写）_
+
+6. CHG-342 — 统一视频类型选项（AdminVideoForm 对齐 API Schema）（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 14:30
+   - 计划开始：CHG-341 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：`src/components/admin/AdminVideoForm.tsx`（line 253-257）
+   - 变更内容：type select 从 4 类扩展到 11 类（对齐 VideoMetaSchema）
+   - 完成备注：_（AI 填写）_
+
+7. CHG-343 — robots.txt 基于 routing.locales 动态生成多语言屏蔽路径（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 14:30
+   - 计划开始：CHG-342 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：`src/app/robots.ts`
+   - 变更内容：动态读取 routing.locales 生成 /[locale]/admin/ 和 /[locale]/auth/ 的 disallow
+   - 完成备注：_（AI 填写）_
+
+8. CHG-344 — 全量迁移剩余局部 toast 到全局 notify（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 14:30
+   - 计划开始：CHG-343 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：`src/components/admin/system/` 及全量扫描，`src/components/admin/shared/feedback/`
+   - 变更内容：旧局部 toast → notify.success/error；删除/废弃 shared/feedback/useAdminToast.ts
+   - 完成备注：_（AI 填写）_
+
+9. CHG-345 — 台账/文档一致性收敛 + ESLint no-restricted-imports 升级为 error（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 14:30
+   - 计划开始：CHG-344 完成后
+   - 实际开始：—
+   - 完成时间：—
+   - 文件范围：`docs/task-queue.md`，`docs/admin_console_decoupling_and_ux_plan_20260402.md`，`.eslintrc.json`
+   - 变更内容：修正时间戳倒序；标注已撤销决策；no-restricted-imports warn→error
+   - 完成备注：_（AI 填写）_

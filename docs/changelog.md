@@ -4806,3 +4806,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/users/UserActions.tsx`：操作下拉新增"删除用户"选项；新增 `handleDelete()` + `deleteDialogOpen/deleteLoading` 状态；新增删除确认 ConfirmDialog（danger 样式）
 - **共享层沉淀**：无需提取，`softDeleteUser` 为独立 query 函数，不重复
 - **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅
+
+---
+
+### CHG-337 — 修复 api-client.ts 401 重定向目标（2026-04-02）
+
+- **修改文件**：`src/lib/api-client.ts`
+- **变更内容**：
+  - `getLoginRedirectPath()` guard：`pathname.includes('/auth/login')` → `pathname.includes('/admin/login')`（防止重定向到新后台登录页后再次触发 401 形成循环）
+  - `getLoginRedirectPath()` 返回值：`/${locale}/auth/login?callbackUrl=...` → `/${locale}/admin/login?callbackUrl=...`（后台会话失效后正确跳转到 /admin/login 而非已下线的 404 页面）
+- **共享层沉淀**：无需提取，单文件字符串修正
+- **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅

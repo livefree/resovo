@@ -58,7 +58,7 @@ function getLoginRedirectPath(): string | null {
   if (typeof window === 'undefined') return null
 
   const { pathname, search } = window.location
-  if (pathname.includes('/auth/login')) return null
+  if (pathname.includes('/admin/login')) return null
 
   const segments = pathname.split('/').filter(Boolean)
   const locale = segments[0] === 'en' || segments[0] === 'zh-CN' ? segments[0] : 'zh-CN'
@@ -67,7 +67,7 @@ function getLoginRedirectPath(): string | null {
   if (!isAdminPath) return null
 
   const callbackUrl = `${pathname}${search}`
-  return `/${locale}/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`
+  return `/${locale}/admin/login?callbackUrl=${encodeURIComponent(callbackUrl)}`
 }
 
 function handleUnauthorized(): void {
