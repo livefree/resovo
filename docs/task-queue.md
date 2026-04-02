@@ -4479,14 +4479,14 @@
    - 变更内容：getLoginRedirectPath() 的 guard 和返回值从 /auth/login 改为 /admin/login
    - 完成备注：两处字符串修正（line 61 guard + line 70 return）；typecheck ✅ lint ✅ 772 tests ✅
 
-2. CHG-338 — 修复后台首页 analytics SSR 鉴权（状态：⬜ 待开始）
+2. CHG-338 — 修复后台首页 analytics SSR 鉴权（状态：✅ 已完成）
    - 创建时间：2026-04-02 14:30
    - 计划开始：CHG-337 完成后
-   - 实际开始：—
-   - 完成时间：—
+   - 实际开始：2026-04-02 14:42
+   - 完成时间：2026-04-02 14:55
    - 文件范围：`src/app/[locale]/admin/page.tsx`，`src/components/admin/dashboard/AnalyticsCards.tsx`
    - 变更内容：删除 x-internal-secret SSR fetch；AnalyticsCards 改为可选 initialData + 首屏客户端拉数
-   - 完成备注：_（AI 填写）_
+   - 完成备注：AnalyticsCards initialData 改为可选，useState<null>初始，useEffect 首屏立即拉数（cancelled flag 防泄漏）；QueueAlerts 移入 AnalyticsCards 内渲染；admin/page.tsx 简化为纯 Server Component Shell。typecheck ✅ lint ✅ 772 tests ✅
 
 3. CHG-339 — 去除视频管理 v2 灰度开关，默认启用（状态：⬜ 待开始）
    - 创建时间：2026-04-02 14:30

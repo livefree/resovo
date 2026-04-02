@@ -4817,3 +4817,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `getLoginRedirectPath()` 返回值：`/${locale}/auth/login?callbackUrl=...` → `/${locale}/admin/login?callbackUrl=...`（后台会话失效后正确跳转到 /admin/login 而非已下线的 404 页面）
 - **共享层沉淀**：无需提取，单文件字符串修正
 - **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅
+
+---
+
+### CHG-338 — 修复后台首页 analytics SSR 鉴权（2026-04-02）
+
+- **修改文件**：
+  - `src/app/[locale]/admin/page.tsx`：删除 `fetchAnalytics()` 函数及 `x-internal-secret` 调用，简化为纯 Server Component Shell
+  - `src/components/admin/dashboard/AnalyticsCards.tsx`：`initialData` 改为 `AnalyticsData | null`（可选），`useEffect` 增加首屏立即拉数逻辑（cancelled flag 防内存泄漏），新增 `AnalyticsSkeleton` 骨架屏，`QueueAlerts` 移入组件内渲染
+- **共享层沉淀**：`AnalyticsSkeleton` 为纯声明性组件，无需提取
+- **安全修复**：彻底移除 `x-internal-secret` 绕过鉴权的反模式
+- **测试**：typecheck ✅ lint 零警告 ✅ 772 unit tests ✅

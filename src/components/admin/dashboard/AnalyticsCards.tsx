@@ -1,6 +1,7 @@
 /**
  * AnalyticsCards.tsx — 数据看板卡片（Client Component，30 秒自动刷新）
  * CHG-25: 展示 6 张核心统计卡片，每 30 秒轮询刷新
+ * CHG-338: 改为首屏客户端拉数（移除 x-internal-secret SSR prefetch），initialData 改为可选
  */
 
 'use client'
@@ -8,6 +9,7 @@
 import { useState, useEffect } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { StatusBadge } from '@/components/admin/StatusBadge'
+import { QueueAlerts } from '@/components/admin/dashboard/QueueAlerts'
 import type { AnalyticsData } from '@/types/contracts/v1/admin'
 import type { BadgeStatus } from '@/components/admin/StatusBadge'
 
@@ -53,27 +55,82 @@ function StatCard({
   )
 }
 
+// ── 骨架屏 ────────────────────────────────────────────────────────
+
+function AnalyticsSkeleton() {
+  return (
+    <div className="space-y-8" data-testid="analytics-skeleton">
+      <div className="grid grid-cols-3 gap-4">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="h-24 animate-pulse rounded-lg bg-[var(--bg3)]" />
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-24 animate-pulse rounded-lg bg-[var(--bg3)]" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── 主组件 ────────────────────────────────────────────────────────
 
 interface AnalyticsCardsProps {
-  initialData: AnalyticsData
+  initialData?: AnalyticsData | null
 }
 
 export function AnalyticsCards({ initialData }: AnalyticsCardsProps) {
-  const [data, setData] = useState<AnalyticsData>(initialData)
+  const [data, setData] = useState<AnalyticsData | null>(initialData ?? null)
+  const [loading, setLoading] = useState(!initialData)
 
   useEffect(() => {
+    let cancelled = false
+
+    // 若无初始数据，首屏立即拉数
+    if (!initialData) {
+      apiClient
+        .getAnalytics()
+        .then((res) => {
+          if (!cancelled) {
+            setData(res.data)
+            setLoading(false)
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setLoading(false)
+        })
+    }
+
+    // 每 30 秒轮询刷新
     const intervalId = setInterval(() => {
       apiClient
         .getAnalytics()
-        .then((res) => setData(res.data))
+        .then((res) => {
+          if (!cancelled) setData(res.data)
+        })
         .catch(() => {
           // 静默失败：保留上次数据，不打断页面
         })
     }, REFRESH_INTERVAL_MS)
 
-    return () => clearInterval(intervalId)
-  }, [])
+    return () => {
+      cancelled = true
+      clearInterval(intervalId)
+    }
+  }, [initialData])
+
+  if (loading) {
+    return <AnalyticsSkeleton />
+  }
+
+  if (!data) {
+    return (
+      <p className="text-sm text-red-400" data-testid="analytics-error">
+        数据加载失败，请刷新页面重试
+      </p>
+    )
+  }
 
   const failRatePct = (data.sources.failRate * 100).toFixed(1)
   const pendingTotal = data.queues.submissions + data.queues.subtitles
@@ -81,6 +138,8 @@ export function AnalyticsCards({ initialData }: AnalyticsCardsProps) {
 
   return (
     <div data-testid="analytics-cards" className="space-y-8">
+      <QueueAlerts queues={data.queues} />
+
       {/* ── 核心统计卡片（6 张） ─────────────────────────────────── */}
       <section>
         <div className="grid grid-cols-3 gap-4" data-testid="analytics-summary-cards">
