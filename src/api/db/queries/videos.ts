@@ -855,9 +855,20 @@ export interface PendingReviewVideoRow {
 
 export async function listPendingReviewVideos(
   db: Pool,
-  params: { page: number; limit: number }
+  params: { page: number; limit: number; type?: string; sortDir?: 'asc' | 'desc' }
 ): Promise<{ rows: PendingReviewVideoRow[]; total: number }> {
   const offset = (params.page - 1) * params.limit
+  const conditions: string[] = [`v.review_status = 'pending_review'`, `v.deleted_at IS NULL`]
+  const filterParams: unknown[] = []
+  let idx = 1
+
+  if (params.type) {
+    conditions.push(`v.type = $${idx++}`)
+    filterParams.push(params.type)
+  }
+
+  const where = conditions.join(' AND ')
+  const orderDir = params.sortDir === 'asc' ? 'ASC' : 'DESC'
 
   const [rows, countResult] = await Promise.all([
     db.query<{
@@ -874,14 +885,14 @@ export async function listPendingReviewVideos(
               v.created_at
        FROM videos v
        LEFT JOIN crawler_sites cs ON cs.key = v.site_key
-       WHERE v.review_status = 'pending_review' AND v.deleted_at IS NULL
-       ORDER BY v.created_at ASC
-       LIMIT $1 OFFSET $2`,
-      [params.limit, offset]
+       WHERE ${where}
+       ORDER BY v.created_at ${orderDir}
+       LIMIT $${idx} OFFSET $${idx + 1}`,
+      [...filterParams, params.limit, offset]
     ),
     db.query<{ count: string }>(
-      `SELECT COUNT(*) FROM videos
-       WHERE review_status = 'pending_review' AND deleted_at IS NULL`
+      `SELECT COUNT(*) FROM videos v WHERE ${where}`,
+      filterParams
     ),
   ])
 

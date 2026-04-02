@@ -1,6 +1,7 @@
 /**
  * ModerationDetail.tsx — 审核台右侧详情面板（CHG-223）
  * 展示视频元数据 + 内嵌播放器 + 审核操作按钮（通过 / 拒绝）
+ * CHG-341: 修正 tv→series 映射；支持多源切换（limit=10）
  */
 
 'use client'
@@ -33,17 +34,25 @@ interface ModerationDetailProps {
   onReviewed?: () => void
 }
 
+// 与 VideoMetaSchema 保持一致（CHG-341：修正 tv→series，补全 11 类）
 const TYPE_LABELS: Record<string, string> = {
   movie: '电影',
-  tv: '剧集',
+  series: '剧集',
   anime: '动漫',
   variety: '综艺',
   documentary: '纪录片',
+  short: '短片',
+  sports: '体育',
+  music: '音乐',
+  news: '新闻',
+  kids: '少儿',
+  other: '其他',
 }
 
 export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps) {
   const [video, setVideo] = useState<VideoDetail | null>(null)
-  const [firstSourceUrl, setFirstSourceUrl] = useState<string | null>(null)
+  const [sources, setSources] = useState<SourceRow[]>([])
+  const [selectedSourceIdx, setSelectedSourceIdx] = useState(0)
   const [loading, setLoading] = useState(false)
   const [reviewLoading, setReviewLoading] = useState<'approve' | 'reject' | null>(null)
   const [rejectReason, setRejectReason] = useState('')
@@ -52,16 +61,17 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
   const fetchDetail = useCallback(async (id: string) => {
     setLoading(true)
     setError(null)
-    setFirstSourceUrl(null)
+    setSources([])
+    setSelectedSourceIdx(0)
     try {
       const [videoRes, sourcesRes] = await Promise.all([
         apiClient.get<{ data: VideoDetail }>(`/admin/videos/${id}`),
         apiClient.get<{ data: SourceRow[]; total: number }>(
-          `/admin/sources?videoId=${id}&status=active&page=1&limit=1`
+          `/admin/sources?videoId=${id}&status=active&page=1&limit=10`
         ),
       ])
       setVideo(videoRes.data)
-      setFirstSourceUrl(sourcesRes.data[0]?.source_url ?? null)
+      setSources(sourcesRes.data)
     } catch {
       setError('加载失败，请重试')
     } finally {
@@ -74,7 +84,8 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
       void fetchDetail(videoId)
     } else {
       setVideo(null)
-      setFirstSourceUrl(null)
+      setSources([])
+      setSelectedSourceIdx(0)
       setRejectReason('')
     }
   }, [videoId, fetchDetail])
@@ -122,14 +133,42 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
     )
   }
 
+  const currentSource = sources[selectedSourceIdx] ?? null
+
   return (
     <div className="flex flex-col gap-4 overflow-y-auto p-4" data-testid="moderation-detail">
       {/* 内嵌播放器 */}
       <ModerationPlayer
-        sourceUrl={firstSourceUrl}
+        sourceUrl={currentSource?.source_url ?? null}
         title={video.title}
         coverUrl={video.cover_url}
       />
+
+      {/* 多源选择器 */}
+      {sources.length > 0 && (
+        <div className="flex items-center gap-2" data-testid="moderation-source-selector">
+          <span className="shrink-0 text-xs text-[var(--muted)]">
+            片源 {selectedSourceIdx + 1} / {sources.length}
+          </span>
+          <div className="flex flex-wrap gap-1">
+            {sources.map((src, idx) => (
+              <button
+                key={src.id}
+                type="button"
+                onClick={() => setSelectedSourceIdx(idx)}
+                data-testid={`moderation-source-btn-${idx}`}
+                className={`rounded px-2 py-0.5 text-xs transition-colors ${
+                  idx === selectedSourceIdx
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'
+                }`}
+              >
+                {src.source_name || `源 ${idx + 1}`}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 视频元数据 */}
       <div className="space-y-1.5">

@@ -2,6 +2,7 @@
  * ModerationList.tsx — 审核台左侧待审列表面板（CHG-222）
  * 调用 GET /admin/videos/pending-review，展示紧凑视频列表
  * 点击条目触发 onSelect 回调，选中态高亮显示
+ * CHG-341: 增加类型筛选、排序（最新/最早）；修正 tv→series 映射
  */
 
 'use client'
@@ -30,17 +31,28 @@ interface ModerationListProps {
 
 const PAGE_SIZE = 30
 
-function formatDate(iso: string): string {
-  return iso.slice(0, 10)
-}
+// 全量类型枚举（与 VideoMetaSchema 保持一致）
+const TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: '全部类型' },
+  { value: 'movie', label: '电影' },
+  { value: 'series', label: '剧集' },
+  { value: 'anime', label: '动漫' },
+  { value: 'variety', label: '综艺' },
+  { value: 'documentary', label: '纪录片' },
+  { value: 'short', label: '短片' },
+  { value: 'sports', label: '体育' },
+  { value: 'music', label: '音乐' },
+  { value: 'news', label: '新闻' },
+  { value: 'kids', label: '少儿' },
+  { value: 'other', label: '其他' },
+]
 
 function getTypeLabel(type: string): string {
-  switch (type) {
-    case 'movie': return '电影'
-    case 'tv': return '剧集'
-    case 'anime': return '动漫'
-    default: return type
-  }
+  return TYPE_OPTIONS.find((o) => o.value === type)?.label ?? type
+}
+
+function formatDate(iso: string): string {
+  return iso.slice(0, 10)
 }
 
 export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
@@ -48,11 +60,14 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [typeFilter, setTypeFilter] = useState('')
+  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
 
-  const fetchRows = useCallback(async (pageVal: number) => {
+  const fetchRows = useCallback(async (pageVal: number, type: string, dir: 'asc' | 'desc') => {
     setLoading(true)
     try {
-      const params = new URLSearchParams({ page: String(pageVal), limit: String(PAGE_SIZE) })
+      const params = new URLSearchParams({ page: String(pageVal), limit: String(PAGE_SIZE), sortDir: dir })
+      if (type) params.set('type', type)
       const res = await apiClient.get<{ data: PendingVideoRow[]; total: number }>(
         `/admin/videos/pending-review?${params}`
       )
@@ -65,21 +80,65 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
     }
   }, [])
 
-  useEffect(() => { void fetchRows(page) }, [fetchRows, page])
+  useEffect(() => { void fetchRows(page, typeFilter, sortDir) }, [fetchRows, page, typeFilter, sortDir])
+
+  function handleTypeChange(newType: string) {
+    setTypeFilter(newType)
+    setPage(1)
+  }
+
+  function handleSortDir(newDir: 'asc' | 'desc') {
+    setSortDir(newDir)
+    setPage(1)
+  }
 
   const hasMore = page * PAGE_SIZE < total
   const hasPrev = page > 1
 
   return (
     <div className="flex h-full flex-col" data-testid="moderation-list">
-      {/* 列表头 */}
-      <div className="shrink-0 border-b border-[var(--border)] px-4 py-3">
-        <p className="text-sm font-medium text-[var(--text)]">
-          待审核列表
-          {total > 0 && (
-            <span className="ml-2 text-xs text-[var(--muted)]">共 {total} 条</span>
-          )}
-        </p>
+      {/* 列表头 + 筛选 */}
+      <div className="shrink-0 border-b border-[var(--border)] px-4 py-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-[var(--text)]">
+            待审核列表
+            {total > 0 && (
+              <span className="ml-2 text-xs text-[var(--muted)]">共 {total} 条</span>
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* 类型筛选 */}
+          <select
+            value={typeFilter}
+            onChange={(e) => handleTypeChange(e.target.value)}
+            data-testid="moderation-list-type-filter"
+            className="flex-1 rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          >
+            {TYPE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          {/* 排序切换 */}
+          <div className="flex rounded border border-[var(--border)] overflow-hidden shrink-0">
+            <button
+              type="button"
+              data-testid="moderation-list-sort-desc"
+              onClick={() => handleSortDir('desc')}
+              className={`px-2 py-1 text-xs transition-colors ${sortDir === 'desc' ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'}`}
+            >
+              最新
+            </button>
+            <button
+              type="button"
+              data-testid="moderation-list-sort-asc"
+              onClick={() => handleSortDir('asc')}
+              className={`px-2 py-1 text-xs transition-colors ${sortDir === 'asc' ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'}`}
+            >
+              最早
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* 列表内容 */}

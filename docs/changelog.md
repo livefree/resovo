@@ -4850,3 +4850,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/videos/VideoTable.test.tsx`：更新 visibility 测试使用 `getByTestId('visibility-select-v1')` 和 `fireEvent.change`
 - **共享层沉淀**：`TableSwitchCell` 在其他列保持不变，只更换了 visibility case
 - **测试**：770 tests ✅ lint 零警告 ✅ typecheck ✅
+
+---
+
+### CHG-341 — 审核台补齐过滤、排序、多源播放器（2026-04-02）
+
+- **修改文件**：
+  - `src/api/db/queries/videos.ts`：`listPendingReviewVideos` 新增 `type` 动态 WHERE 过滤、`sortDir` 控制 ORDER BY 方向（asc/desc），参数化查询防注入
+  - `src/api/services/VideoService.ts`：`pendingReviewList` 接收并透传 `type`/`sortDir`
+  - `src/api/routes/admin/videos.ts`：`GET /admin/videos/pending-review` 增加 `type`/`sortDir` 可选参数并验证
+  - `src/components/admin/moderation/ModerationList.tsx`：完整重写；TYPE_OPTIONS 枚举对齐 VideoMetaSchema 全量 11 类；修正 `getTypeLabel` 移除 `tv` 遗留映射；新增类型筛选 select 和最新/最早排序按钮；筛选/排序变更时 page 重置为 1
+  - `src/components/admin/moderation/ModerationDetail.tsx`：TYPE_LABELS 修正 `tv` → `series` 并补全 11 类；sources 请求从 `limit=1` 改为 `limit=10`；state 从 `firstSourceUrl` 改为 `sources[]` + `selectedSourceIdx`；新增多源按钮组选择器（含 N/M 条提示）
+- **共享层沉淀**：无需提取，多源选择器为审核台专有 UI
+- **测试**：typecheck ✅ lint 零警告 ✅ 770 unit tests ✅

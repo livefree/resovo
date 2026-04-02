@@ -281,6 +281,8 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
     const PendingQuerySchema = z.object({
       page: z.coerce.number().int().min(1).optional().default(1),
       limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+      type: z.string().max(50).optional(),
+      sortDir: z.enum(['asc', 'desc']).optional(),
     })
     const parsed = PendingQuerySchema.safeParse(request.query)
     if (!parsed.success) {

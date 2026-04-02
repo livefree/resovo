@@ -165,10 +165,14 @@ export class VideoService {
   async pendingReviewList(params: {
     page: number
     limit: number
+    type?: string
+    sortDir?: 'asc' | 'desc'
   }): Promise<{ data: PendingReviewVideoRow[]; total: number; page: number; limit: number }> {
     const page = Math.max(1, params.page)
     const limit = Math.min(MAX_LIMIT, Math.max(1, params.limit))
-    const { rows, total } = await videoQueries.listPendingReviewVideos(this.db, { page, limit })
+    const { rows, total } = await videoQueries.listPendingReviewVideos(this.db, {
+      page, limit, type: params.type, sortDir: params.sortDir,
+    })
     return { data: rows, total, page, limit }
   }
 

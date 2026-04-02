@@ -4506,14 +4506,14 @@
    - 变更内容：TableSwitchCell → 三态 select；API 字段用 visibility（非 visibility_status）
    - 完成备注：ColumnDeps handleVisibilityToggle 签名改为接受三态字符串；select onChange 加 .catch 消化 rollback-already-handled 错误；测试更新为 getByTestId('visibility-select-v1')；770 tests ✅ lint ✅ typecheck ✅
 
-5. CHG-341 — 审核台补齐过滤、排序、多源播放器（状态：⬜ 待开始）
+5. CHG-341 — 审核台补齐过滤、排序、多源播放器（状态：✅ 已完成）
    - 创建时间：2026-04-02 14:30
    - 计划开始：CHG-340 完成后
-   - 实际开始：—
-   - 完成时间：—
-   - 文件范围：`src/components/admin/moderation/ModerationList.tsx`，`ModerationDetail.tsx`，`src/api/routes/admin/videos.ts`，对应 Service 与 DB query 层
+   - 实际开始：2026-04-02 16:05
+   - 完成时间：2026-04-02 15:55
+   - 文件范围：`src/components/admin/moderation/ModerationList.tsx`，`ModerationDetail.tsx`，`src/api/routes/admin/videos.ts`，`src/api/services/VideoService.ts`，`src/api/db/queries/videos.ts`
    - 变更内容：类型筛选/排序；多源播放器；tv→series 清理；三层（Route→Service→Query）同步
-   - 完成备注：_（AI 填写）_
+   - 完成备注：Route 层增加 type/sortDir 参数；Service 层透传；Query 层动态 WHERE + ORDER BY；ModerationList 完整重写（11 类枚举、排序按钮、reset page）；ModerationDetail 修正 TYPE_LABELS（tv→series+补全 11 类），sources 改 limit=10，新增多源选择器 UI（按钮组 + N/M 提示）；770 tests ✅ lint ✅ typecheck ✅
 
 6. CHG-342 — 统一视频类型选项（AdminVideoForm 对齐 API Schema）（状态：⬜ 待开始）
    - 创建时间：2026-04-02 14:30
