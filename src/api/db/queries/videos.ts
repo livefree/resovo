@@ -944,6 +944,28 @@ export async function insertCrawledVideo(
 }
 
 /**
+ * 当采集到更大集数时，推进 videos.episode_count（只增不减）。
+ */
+export async function bumpEpisodeCountIfHigher(
+  db: Pool,
+  videoId: string,
+  incomingEpisodeCount: number
+): Promise<boolean> {
+  if (!Number.isFinite(incomingEpisodeCount) || incomingEpisodeCount <= 0) return false
+  const result = await db.query<{ id: string }>(
+    `UPDATE videos
+     SET episode_count = GREATEST(episode_count, $2),
+         updated_at = NOW()
+     WHERE id = $1
+       AND deleted_at IS NULL
+       AND episode_count < $2
+     RETURNING id`,
+    [videoId, incomingEpisodeCount]
+  )
+  return (result.rowCount ?? 0) > 0
+}
+
+/**
  * 向 video_aliases 表写入别名（INSERT IGNORE）。
  * 规则 C: 将 vod_name / vod_en 写入别名表，便于跨站标题匹配。
  */

@@ -4841,13 +4841,16 @@
    - 变更内容：按 `source_name` 聚合线路；线路内按 `episode_number` 选集；播放器按“线路+集数”定位 URL。
    - 完成备注：新增 groupedLines 聚合模型，线路按钮不再按行渲染；新增选集按钮组；切换线路时保持可用集数并回落。`npm` 不可用，未执行 typecheck/lint/test。
 
-2. CHG-351 — 爬虫命中已有视频时同步推进 episode_count（状态：🔄 进行中）
+2. CHG-351 — 爬虫命中已有视频时同步推进 episode_count（状态：✅ 已完成）
    - 创建时间：2026-04-02 21:35
    - 计划开始：CHG-350 完成后
+   - 实际开始：2026-04-02 21:58
+   - 完成时间：2026-04-02 22:05
    - 文件范围：`src/api/services/CrawlerService.ts`，`src/api/db/queries/videos.ts`
    - 变更内容：existing 分支执行 `episode_count = GREATEST(episode_count, incomingMaxEpisode)`（只增不减）。
+   - 完成备注：新增 `bumpEpisodeCountIfHigher()`；`CrawlerService.upsertVideo()` 统一计算 `incomingMaxEpisode`，existing 分支调用推进逻辑，new 分支复用该值写入。`npm` 不可用，未执行 typecheck/lint/test。
 
-3. CHG-352 — 历史 episode_count 漂移回填 migration（状态：⬜ 待开始）
+3. CHG-352 — 历史 episode_count 漂移回填 migration（状态：🔄 进行中）
    - 创建时间：2026-04-02 21:35
    - 计划开始：CHG-351 完成后
    - 文件范围：`src/api/db/migrations/024_backfill_videos_episode_count_from_sources.sql`

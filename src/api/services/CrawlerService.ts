@@ -167,6 +167,9 @@ export class CrawlerService {
     siteKey?: string
   ): Promise<{ videoId: string; sourcesUpserted: number }> {
     const { video, sources } = parsed
+    const incomingMaxEpisode = sources.length > 0
+      ? Math.max(...sources.map((s) => s.episodeNumber ?? 1))
+      : 1
 
     // 规则 B: 标准化标题
     const titleNormalized = normalizeTitle(video.title)
@@ -186,6 +189,8 @@ export class CrawlerService {
     if (existing) {
       // 已存在：规则 D — 低优先级（crawler）不覆盖高优先级元数据
       videoId = existing.id
+      // 命中 existing 分支时，同步推进 episode_count（只增不减）
+      await videosQueries.bumpEpisodeCountIfHigher(this.db, videoId, incomingMaxEpisode)
       const existingPriority = videosQueries.METADATA_SOURCE_PRIORITY[existing.metadataSource] ?? 0
       // crawler 采集优先级最低，不做元数据覆盖；若未来有 tmdb/douban 来源可在此扩展
       void existingPriority // 当前仅 crawler 来源，始终跳过覆盖
@@ -199,9 +204,6 @@ export class CrawlerService {
         : config.AUTO_PUBLISH_CRAWLED === 'true'
       const reviewStatus = autoPublish ? 'approved' : 'pending_review'
       const visibilityStatus = autoPublish ? 'public' : 'internal'
-      const episodeCount = sources.length > 0
-        ? Math.max(...sources.map((s) => s.episodeNumber ?? 1))
-        : 1
       const inserted = await videosQueries.insertCrawledVideo(this.db, {
         shortId,
         title: video.title,
@@ -220,7 +222,7 @@ export class CrawlerService {
         writers: video.writers,
         description: video.description,
         status: video.status,
-        episodeCount,
+        episodeCount: incomingMaxEpisode,
         isPublished: autoPublish,
         reviewStatus,
         visibilityStatus,

@@ -4940,3 +4940,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 播放器 URL 由“源索引”切换为“线路 + 集数”解析；切线路时优先保持当前集，不存在则回落到该线路首集。
 - **效果**：同一线路不再因分集拆行造成源选项爆炸，审核播放器可同时操作线路与集数。
 - **测试**：当前环境缺失 `npm` 命令，未执行自动化测试。
+
+---
+
+### CHG-351 — 爬虫 existing 分支同步推进 episode_count（2026-04-02）
+
+- **修改文件**：
+  - `src/api/db/queries/videos.ts`
+  - `src/api/services/CrawlerService.ts`
+- **变更内容**：
+  - 新增 `bumpEpisodeCountIfHigher(db, videoId, incomingEpisodeCount)`，通过 `GREATEST` 实现 `episode_count` 单调递增。
+  - `CrawlerService.upsertVideo()` 统一计算 `incomingMaxEpisode`；命中 existing 视频时调用推进函数；新建视频时复用同一值写入初始 `episode_count`。
+- **效果**：后续采集新增分集时，视频主表集数不再卡在旧值，前台可按真实集数显示选集。
+- **测试**：当前环境缺失 `npm` 命令，未执行自动化测试。
