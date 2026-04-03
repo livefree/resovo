@@ -26,6 +26,7 @@ interface SourceRow {
   id: string
   source_url: string
   source_name: string
+  site_key?: string | null
   episode_number: number
   is_active: boolean
 }
@@ -131,9 +132,28 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
 
     return Array.from(lines.entries()).map(([name, rows]) => ({
       name,
+      siteKey: rows[0]?.site_key?.trim() || null,
       rows: rows.slice().sort((a, b) => a.episode_number - b.episode_number),
     }))
   }, [sources])
+
+  const siteKeys = useMemo(() => {
+    const unique = new Set<string>()
+    for (const line of groupedLines) {
+      if (line.siteKey) unique.add(line.siteKey)
+    }
+    return Array.from(unique)
+  }, [groupedLines])
+
+  const isSiteLineOneToOne = useMemo(() => {
+    if (groupedLines.length === 0) return false
+    const seen = new Map<string, number>()
+    for (const line of groupedLines) {
+      const key = line.siteKey || '__NO_SITE__'
+      seen.set(key, (seen.get(key) ?? 0) + 1)
+    }
+    return Array.from(seen.values()).every((count) => count === 1)
+  }, [groupedLines])
 
   const activeLine = groupedLines.find((line) => line.name === selectedLine) ?? groupedLines[0] ?? null
   const lineEpisodes = activeLine
@@ -187,28 +207,35 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
               {groupedLines.findIndex((line) => line.name === activeLine?.name) + 1} / {groupedLines.length}
             </span>
           </div>
-          <select
-            value={activeLine?.name ?? ''}
-            onChange={(event) => {
-              const nextLineName = event.target.value
-              const nextLine = groupedLines.find((line) => line.name === nextLineName)
-              if (!nextLine) return
-              setSelectedLine(nextLineName)
-              const episodesInLine = new Set(nextLine.rows.map((row) => row.episode_number))
-              const nextEpisode = episodesInLine.has(selectedEpisode)
-                ? selectedEpisode
-                : (nextLine.rows[0]?.episode_number ?? 1)
-              setSelectedEpisode(nextEpisode)
-            }}
-            className="w-full rounded border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-xs text-[var(--text)]"
-            data-testid="moderation-source-select"
-          >
+          {siteKeys.length > 0 && (
+            <div className="text-xs text-[var(--muted)]" data-testid="moderation-site-info">
+              源站：{siteKeys.join(' / ')}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-1.5">
             {groupedLines.map((line) => (
-              <option key={line.name} value={line.name}>
-                {line.name}
-              </option>
+              <button
+                key={line.name}
+                type="button"
+                onClick={() => {
+                  setSelectedLine(line.name)
+                  const episodesInLine = new Set(line.rows.map((row) => row.episode_number))
+                  const nextEpisode = episodesInLine.has(selectedEpisode)
+                    ? selectedEpisode
+                    : (line.rows[0]?.episode_number ?? 1)
+                  setSelectedEpisode(nextEpisode)
+                }}
+                data-testid={`moderation-source-btn-${line.name}`}
+                className={`rounded px-2 py-0.5 text-xs transition-colors ${
+                  line.name === activeLine?.name
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'
+                }`}
+              >
+                {isSiteLineOneToOne ? (line.siteKey ?? line.name) : line.name}
+              </button>
             ))}
-          </select>
+          </div>
         </div>
       )}
 
