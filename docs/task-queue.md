@@ -4825,9 +4825,9 @@
 ## SEQ-20260402-54（视频源/选集一致性修复）
 
 > 来源：前台播放异常回归（同线路分集被误作多源、部分多集视频无选集）
-> 状态：🔄 执行中
+> 状态：✅ 已完成
 > 创建时间：2026-04-02 21:35
-> 最后更新时间：2026-04-02 21:35
+> 最后更新时间：2026-04-02 22:10
 > 描述：围绕源选择模型与 episode_count 漂移进行分步修复，先改审核页展示，再修采集写入，再补历史数据回填。
 
 ### 任务列表
@@ -4850,8 +4850,11 @@
    - 变更内容：existing 分支执行 `episode_count = GREATEST(episode_count, incomingMaxEpisode)`（只增不减）。
    - 完成备注：新增 `bumpEpisodeCountIfHigher()`；`CrawlerService.upsertVideo()` 统一计算 `incomingMaxEpisode`，existing 分支调用推进逻辑，new 分支复用该值写入。`npm` 不可用，未执行 typecheck/lint/test。
 
-3. CHG-352 — 历史 episode_count 漂移回填 migration（状态：🔄 进行中）
+3. CHG-352 — 历史 episode_count 漂移回填 migration（状态：✅ 已完成）
    - 创建时间：2026-04-02 21:35
    - 计划开始：CHG-351 完成后
+   - 实际开始：2026-04-02 22:07
+   - 完成时间：2026-04-02 22:10
    - 文件范围：`src/api/db/migrations/024_backfill_videos_episode_count_from_sources.sql`
    - 变更内容：按 `video_sources` 的 `MAX(episode_number)` 回填 `videos.episode_count`（仅更新更大值）。
+   - 完成备注：过滤 `deleted_at IS NULL` 且 `submitted_by IS NULL`，避免把用户投稿计入主数据；幂等更新仅提升 episode_count。`npm` 不可用，未执行迁移与自动化测试。

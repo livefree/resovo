@@ -4953,3 +4953,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `CrawlerService.upsertVideo()` 统一计算 `incomingMaxEpisode`；命中 existing 视频时调用推进函数；新建视频时复用同一值写入初始 `episode_count`。
 - **效果**：后续采集新增分集时，视频主表集数不再卡在旧值，前台可按真实集数显示选集。
 - **测试**：当前环境缺失 `npm` 命令，未执行自动化测试。
+
+---
+
+### CHG-352 — 历史 episode_count 漂移回填 migration（2026-04-02）
+
+- **新增文件**：
+  - `src/api/db/migrations/024_backfill_videos_episode_count_from_sources.sql`
+- **变更内容**：
+  - 基于 `video_sources` 计算每个视频 `MAX(episode_number)`。
+  - 仅在 `max_episode > videos.episode_count` 时更新主表集数与 `updated_at`。
+  - 过滤 `deleted_at IS NULL` 和 `submitted_by IS NULL`，避免将已删除源与用户投稿写入主数据统计。
+- **效果**：可一次性修复历史“主表单集、实际多集”的漂移，补齐前台选集展示前置条件。
+- **测试**：当前环境缺失 `npm` 命令，未执行自动化测试；该 migration 尚未在本地执行。
