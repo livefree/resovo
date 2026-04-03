@@ -4916,3 +4916,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `.eslintrc.json`：`no-restricted-imports` 规则从 `"warn"` 升级为 `"error"`（先验证 npm run lint 零违规后执行）
 - **共享层沉淀**：无
 - **测试**：typecheck ✅ lint 零错误/零警告 ✅ 770 unit tests ✅
+
+---
+
+### CHG-350/351/352 — 视频源与选集一致性修复方案归档（2026-04-02）
+
+- **新增文档**：
+  - `docs/video_source_episode_recovery_plan_20260402.md`
+- **台账更新**：
+  - `docs/task-queue.md` 新增 `SEQ-20260402-54`（CHG-350~352）
+  - `docs/tasks.md` 将 CHG-350 设为当前进行中任务
+- **说明**：本次提交仅完成方案与任务归档，不含业务代码变更。

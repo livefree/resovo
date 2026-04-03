@@ -4819,3 +4819,33 @@
      - 执行 migration 023 到目标环境
      - 运行 typecheck/lint/tests（当前环境缺失 Node 工具链）
      - 补充 transition API 的单测/集成测试
+
+---
+
+## SEQ-20260402-54（视频源/选集一致性修复）
+
+> 来源：前台播放异常回归（同线路分集被误作多源、部分多集视频无选集）
+> 状态：🔄 执行中
+> 创建时间：2026-04-02 21:35
+> 最后更新时间：2026-04-02 21:35
+> 描述：围绕源选择模型与 episode_count 漂移进行分步修复，先改审核页展示，再修采集写入，再补历史数据回填。
+
+### 任务列表
+
+1. CHG-350 — 审核台多源播放器改造为“线路+选集”双维（状态：🔄 进行中）
+   - 创建时间：2026-04-02 21:35
+   - 计划开始：立即
+   - 文件范围：`src/components/admin/moderation/ModerationDetail.tsx`
+   - 变更内容：按 `source_name` 聚合线路；线路内按 `episode_number` 选集；播放器按“线路+集数”定位 URL。
+
+2. CHG-351 — 爬虫命中已有视频时同步推进 episode_count（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 21:35
+   - 计划开始：CHG-350 完成后
+   - 文件范围：`src/api/services/CrawlerService.ts`，`src/api/db/queries/videos.ts`
+   - 变更内容：existing 分支执行 `episode_count = GREATEST(episode_count, incomingMaxEpisode)`（只增不减）。
+
+3. CHG-352 — 历史 episode_count 漂移回填 migration（状态：⬜ 待开始）
+   - 创建时间：2026-04-02 21:35
+   - 计划开始：CHG-351 完成后
+   - 文件范围：`src/api/db/migrations/024_backfill_videos_episode_count_from_sources.sql`
+   - 变更内容：按 `video_sources` 的 `MAX(episode_number)` 回填 `videos.episode_count`（仅更新更大值）。
