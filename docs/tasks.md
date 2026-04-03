@@ -14,10 +14,10 @@
 
 ## 当前进行中（仅保留一条）
 
-### CHG-350 — 审核台多源播放器改造为“线路+选集”双维
+### CHG-351 — 爬虫命中已有视频时同步推进 episode_count
 
 - 状态：🔄 进行中
 - 关联序列：`SEQ-20260402-54`
-- 目标：修复审核页将分集行误当“多源”的建模偏差，改为“线路选择 + 选集选择”。
-- 文件范围：`src/components/admin/moderation/ModerationDetail.tsx`
-- 验收要点：同一 `source_name` 只出现一个线路入口；切换线路后仍可按集数播放。
+- 目标：修复已有视频在持续采集时 `episode_count` 不增长的问题，避免前台误判为单集。
+- 文件范围：`src/api/services/CrawlerService.ts`，`src/api/db/queries/videos.ts`
+- 验收要点：命中 existing 分支后，`videos.episode_count` 可随新集数单调递增（只增不减）。

@@ -6,7 +6,7 @@
 
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { ModerationPlayer } from '@/components/admin/moderation/ModerationPlayer'
 
@@ -26,6 +26,7 @@ interface SourceRow {
   id: string
   source_url: string
   source_name: string
+  episode_number: number
   is_active: boolean
 }
 
@@ -52,7 +53,8 @@ const TYPE_LABELS: Record<string, string> = {
 export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps) {
   const [video, setVideo] = useState<VideoDetail | null>(null)
   const [sources, setSources] = useState<SourceRow[]>([])
-  const [selectedSourceIdx, setSelectedSourceIdx] = useState(0)
+  const [selectedLine, setSelectedLine] = useState<string | null>(null)
+  const [selectedEpisode, setSelectedEpisode] = useState<number>(1)
   const [loading, setLoading] = useState(false)
   const [reviewLoading, setReviewLoading] = useState<'approve' | 'reject' | null>(null)
   const [rejectReason, setRejectReason] = useState('')
@@ -62,7 +64,8 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
     setLoading(true)
     setError(null)
     setSources([])
-    setSelectedSourceIdx(0)
+    setSelectedLine(null)
+    setSelectedEpisode(1)
     try {
       const [videoRes, sourcesRes] = await Promise.all([
         apiClient.get<{ data: VideoDetail }>(`/admin/videos/${id}`),
@@ -72,6 +75,11 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
       ])
       setVideo(videoRes.data)
       setSources(sourcesRes.data)
+      if (sourcesRes.data.length > 0) {
+        const first = sourcesRes.data[0]
+        setSelectedLine(first.source_name || '默认线路')
+        setSelectedEpisode(first.episode_number || 1)
+      }
     } catch {
       setError('加载失败，请重试')
     } finally {
@@ -85,7 +93,8 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
     } else {
       setVideo(null)
       setSources([])
-      setSelectedSourceIdx(0)
+      setSelectedLine(null)
+      setSelectedEpisode(1)
       setRejectReason('')
     }
   }, [videoId, fetchDetail])
@@ -133,7 +142,31 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
     )
   }
 
-  const currentSource = sources[selectedSourceIdx] ?? null
+  const groupedLines = useMemo(() => {
+    const lines = new Map<string, SourceRow[]>()
+    for (const row of sources) {
+      const key = row.source_name || '默认线路'
+      const list = lines.get(key)
+      if (list) {
+        list.push(row)
+      } else {
+        lines.set(key, [row])
+      }
+    }
+
+    return Array.from(lines.entries()).map(([name, rows]) => ({
+      name,
+      rows: rows.slice().sort((a, b) => a.episode_number - b.episode_number),
+    }))
+  }, [sources])
+
+  const activeLine = groupedLines.find((line) => line.name === selectedLine) ?? groupedLines[0] ?? null
+  const lineEpisodes = activeLine
+    ? Array.from(new Set(activeLine.rows.map((row) => row.episode_number))).sort((a, b) => a - b)
+    : []
+  const currentSource = activeLine
+    ? activeLine.rows.find((row) => row.episode_number === selectedEpisode) ?? activeLine.rows[0] ?? null
+    : null
 
   return (
     <div className="flex flex-col gap-4 overflow-y-auto p-4" data-testid="moderation-detail">
@@ -144,26 +177,59 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
         coverUrl={video.cover_url}
       />
 
-      {/* 多源选择器 */}
-      {sources.length > 0 && (
+      {/* 线路选择器（按 source_name 聚合） */}
+      {groupedLines.length > 0 && (
         <div className="flex items-center gap-2" data-testid="moderation-source-selector">
           <span className="shrink-0 text-xs text-[var(--muted)]">
-            片源 {selectedSourceIdx + 1} / {sources.length}
+            线路 {groupedLines.findIndex((line) => line.name === activeLine?.name) + 1} / {groupedLines.length}
           </span>
           <div className="flex flex-wrap gap-1">
-            {sources.map((src, idx) => (
+            {groupedLines.map((line) => (
               <button
-                key={src.id}
+                key={line.name}
                 type="button"
-                onClick={() => setSelectedSourceIdx(idx)}
-                data-testid={`moderation-source-btn-${idx}`}
+                onClick={() => {
+                  setSelectedLine(line.name)
+                  const episodesInLine = new Set(line.rows.map((row) => row.episode_number))
+                  const nextEpisode = episodesInLine.has(selectedEpisode)
+                    ? selectedEpisode
+                    : (line.rows[0]?.episode_number ?? 1)
+                  setSelectedEpisode(nextEpisode)
+                }}
+                data-testid={`moderation-source-btn-${line.name}`}
                 className={`rounded px-2 py-0.5 text-xs transition-colors ${
-                  idx === selectedSourceIdx
+                  line.name === activeLine?.name
                     ? 'bg-[var(--accent)] text-white'
                     : 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'
                 }`}
               >
-                {src.source_name || `源 ${idx + 1}`}
+                {line.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 选集选择器（按当前线路展示） */}
+      {lineEpisodes.length > 0 && (
+        <div className="flex items-center gap-2" data-testid="moderation-episode-selector">
+          <span className="shrink-0 text-xs text-[var(--muted)]">
+            选集
+          </span>
+          <div className="flex flex-wrap gap-1">
+            {lineEpisodes.map((episode) => (
+              <button
+                key={episode}
+                type="button"
+                onClick={() => setSelectedEpisode(episode)}
+                data-testid={`moderation-episode-btn-${episode}`}
+                className={`rounded px-2 py-0.5 text-xs transition-colors ${
+                  episode === (currentSource?.episode_number ?? selectedEpisode)
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'
+                }`}
+              >
+                第{episode}集
               </button>
             ))}
           </div>

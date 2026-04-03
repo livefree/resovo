@@ -4927,3 +4927,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/task-queue.md` 新增 `SEQ-20260402-54`（CHG-350~352）
   - `docs/tasks.md` 将 CHG-350 设为当前进行中任务
 - **说明**：本次提交仅完成方案与任务归档，不含业务代码变更。
+
+---
+
+### CHG-350 — 审核台多源播放器改造为“线路+选集”双维（2026-04-02）
+
+- **修改文件**：
+  - `src/components/admin/moderation/ModerationDetail.tsx`
+- **变更内容**：
+  - 将原“按 `video_sources` 行渲染多源按钮”改为“按 `source_name` 聚合线路”。
+  - 新增选集按钮组（按当前线路的 `episode_number` 去重排序）。
+  - 播放器 URL 由“源索引”切换为“线路 + 集数”解析；切线路时优先保持当前集，不存在则回落到该线路首集。
+- **效果**：同一线路不再因分集拆行造成源选项爆炸，审核播放器可同时操作线路与集数。
+- **测试**：当前环境缺失 `npm` 命令，未执行自动化测试。
