@@ -119,7 +119,8 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
   const groupedLines = useMemo(() => {
     const lines = new Map<string, SourceRow[]>()
     for (const row of sources) {
-      const key = row.source_name || '默认线路'
+      const normalizedName = row.source_name?.trim()
+      const key = normalizedName && normalizedName.length > 0 ? normalizedName : '默认线路'
       const list = lines.get(key)
       if (list) {
         list.push(row)
@@ -179,34 +180,35 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
 
       {/* 线路选择器（按 source_name 聚合） */}
       {groupedLines.length > 0 && (
-        <div className="flex items-center gap-2" data-testid="moderation-source-selector">
-          <span className="shrink-0 text-xs text-[var(--muted)]">
-            线路 {groupedLines.findIndex((line) => line.name === activeLine?.name) + 1} / {groupedLines.length}
-          </span>
-          <div className="flex flex-wrap gap-1">
-            {groupedLines.map((line) => (
-              <button
-                key={line.name}
-                type="button"
-                onClick={() => {
-                  setSelectedLine(line.name)
-                  const episodesInLine = new Set(line.rows.map((row) => row.episode_number))
-                  const nextEpisode = episodesInLine.has(selectedEpisode)
-                    ? selectedEpisode
-                    : (line.rows[0]?.episode_number ?? 1)
-                  setSelectedEpisode(nextEpisode)
-                }}
-                data-testid={`moderation-source-btn-${line.name}`}
-                className={`rounded px-2 py-0.5 text-xs transition-colors ${
-                  line.name === activeLine?.name
-                    ? 'bg-[var(--accent)] text-white'
-                    : 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'
-                }`}
-              >
-                {line.name}
-              </button>
-            ))}
+        <div className="space-y-1" data-testid="moderation-source-selector">
+          <div className="flex items-center justify-between">
+            <span className="shrink-0 text-xs text-[var(--muted)]">源站/线路</span>
+            <span className="shrink-0 text-xs text-[var(--muted)]">
+              {groupedLines.findIndex((line) => line.name === activeLine?.name) + 1} / {groupedLines.length}
+            </span>
           </div>
+          <select
+            value={activeLine?.name ?? ''}
+            onChange={(event) => {
+              const nextLineName = event.target.value
+              const nextLine = groupedLines.find((line) => line.name === nextLineName)
+              if (!nextLine) return
+              setSelectedLine(nextLineName)
+              const episodesInLine = new Set(nextLine.rows.map((row) => row.episode_number))
+              const nextEpisode = episodesInLine.has(selectedEpisode)
+                ? selectedEpisode
+                : (nextLine.rows[0]?.episode_number ?? 1)
+              setSelectedEpisode(nextEpisode)
+            }}
+            className="w-full rounded border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-xs text-[var(--text)]"
+            data-testid="moderation-source-select"
+          >
+            {groupedLines.map((line) => (
+              <option key={line.name} value={line.name}>
+                {line.name}
+              </option>
+            ))}
+          </select>
         </div>
       )}
 
