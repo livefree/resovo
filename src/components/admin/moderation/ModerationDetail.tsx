@@ -68,18 +68,20 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
     setSelectedLine(null)
     setSelectedEpisode(1)
     try {
-      const [videoRes, sourcesRes] = await Promise.all([
-        apiClient.get<{ data: VideoDetail }>(`/admin/videos/${id}`),
-        apiClient.get<{ data: SourceRow[]; total: number }>(
-          `/admin/sources?videoId=${id}&status=active&page=1&limit=200`
-        ),
-      ])
+      const videoRes = await apiClient.get<{ data: VideoDetail }>(`/admin/videos/${id}`)
       setVideo(videoRes.data)
-      setSources(sourcesRes.data)
-      if (sourcesRes.data.length > 0) {
-        const first = sourcesRes.data[0]
-        setSelectedLine(first.source_name || '默认线路')
-        setSelectedEpisode(first.episode_number || 1)
+      try {
+        const sourcesRes = await apiClient.get<{ data: SourceRow[]; total: number }>(
+          `/admin/sources?videoId=${id}&status=active&page=1&limit=100`
+        )
+        setSources(sourcesRes.data)
+        if (sourcesRes.data.length > 0) {
+          const first = sourcesRes.data[0]
+          setSelectedLine(first.source_name || '默认线路')
+          setSelectedEpisode(first.episode_number || 1)
+        }
+      } catch {
+        setSources([])
       }
     } catch {
       setError('加载失败，请重试')
