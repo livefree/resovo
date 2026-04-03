@@ -1044,7 +1044,15 @@ export interface PendingReviewVideoRow {
 
 export async function listPendingReviewVideos(
   db: Pool,
-  params: { page: number; limit: number; type?: string; sortDir?: 'asc' | 'desc' }
+  params: {
+    page: number
+    limit: number
+    type?: string
+    sortDir?: 'asc' | 'desc'
+    q?: string
+    siteKey?: string
+    sourceState?: 'all' | 'active' | 'missing'
+  }
 ): Promise<{ rows: PendingReviewVideoRow[]; total: number }> {
   const offset = (params.page - 1) * params.limit
   const conditions: string[] = [`v.review_status = 'pending_review'`, `v.deleted_at IS NULL`]
@@ -1054,6 +1062,45 @@ export async function listPendingReviewVideos(
   if (params.type) {
     conditions.push(`v.type = $${idx++}`)
     filterParams.push(params.type)
+  }
+  if (params.q) {
+    conditions.push(`(
+      v.title ILIKE $${idx}
+      OR v.short_id ILIKE $${idx}
+      OR EXISTS (
+        SELECT 1
+        FROM video_sources s2
+        WHERE s2.video_id = v.id
+          AND s2.deleted_at IS NULL
+          AND (
+            s2.source_name ILIKE $${idx}
+            OR s2.source_url ILIKE $${idx}
+          )
+      )
+    )`)
+    filterParams.push(`%${params.q}%`)
+    idx += 1
+  }
+  if (params.siteKey) {
+    conditions.push(`v.site_key = $${idx++}`)
+    filterParams.push(params.siteKey)
+  }
+  if (params.sourceState === 'active') {
+    conditions.push(`EXISTS (
+      SELECT 1
+      FROM video_sources s3
+      WHERE s3.video_id = v.id
+        AND s3.deleted_at IS NULL
+        AND s3.is_active = true
+    )`)
+  } else if (params.sourceState === 'missing') {
+    conditions.push(`NOT EXISTS (
+      SELECT 1
+      FROM video_sources s3
+      WHERE s3.video_id = v.id
+        AND s3.deleted_at IS NULL
+        AND s3.is_active = true
+    )`)
   }
 
   const where = conditions.join(' AND ')

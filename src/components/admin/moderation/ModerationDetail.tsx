@@ -71,7 +71,7 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
       const [videoRes, sourcesRes] = await Promise.all([
         apiClient.get<{ data: VideoDetail }>(`/admin/videos/${id}`),
         apiClient.get<{ data: SourceRow[]; total: number }>(
-          `/admin/sources?videoId=${id}&status=active&page=1&limit=10`
+          `/admin/sources?videoId=${id}&status=active&page=1&limit=200`
         ),
       ])
       setVideo(videoRes.data)

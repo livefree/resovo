@@ -62,12 +62,27 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
   const [loading, setLoading] = useState(false)
   const [typeFilter, setTypeFilter] = useState('')
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
+  const [sourceState, setSourceState] = useState<'all' | 'active' | 'missing'>('all')
+  const [keywordInput, setKeywordInput] = useState('')
+  const [keyword, setKeyword] = useState('')
+  const [siteKeyInput, setSiteKeyInput] = useState('')
+  const [siteKey, setSiteKey] = useState('')
 
-  const fetchRows = useCallback(async (pageVal: number, type: string, dir: 'asc' | 'desc') => {
+  const fetchRows = useCallback(async (
+    pageVal: number,
+    type: string,
+    dir: 'asc' | 'desc',
+    source: 'all' | 'active' | 'missing',
+    q: string,
+    site: string
+  ) => {
     setLoading(true)
     try {
       const params = new URLSearchParams({ page: String(pageVal), limit: String(PAGE_SIZE), sortDir: dir })
       if (type) params.set('type', type)
+      if (q) params.set('q', q)
+      if (site) params.set('siteKey', site)
+      if (source !== 'all') params.set('sourceState', source)
       const res = await apiClient.get<{ data: PendingVideoRow[]; total: number }>(
         `/admin/videos/pending-review?${params}`
       )
@@ -80,7 +95,9 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
     }
   }, [])
 
-  useEffect(() => { void fetchRows(page, typeFilter, sortDir) }, [fetchRows, page, typeFilter, sortDir])
+  useEffect(() => {
+    void fetchRows(page, typeFilter, sortDir, sourceState, keyword, siteKey)
+  }, [fetchRows, page, typeFilter, sortDir, sourceState, keyword, siteKey])
 
   function handleTypeChange(newType: string) {
     setTypeFilter(newType)
@@ -89,6 +106,23 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
 
   function handleSortDir(newDir: 'asc' | 'desc') {
     setSortDir(newDir)
+    setPage(1)
+  }
+
+  function handleApplyFilters() {
+    setKeyword(keywordInput.trim())
+    setSiteKey(siteKeyInput.trim())
+    setPage(1)
+  }
+
+  function handleResetFilters() {
+    setTypeFilter('')
+    setSortDir('desc')
+    setSourceState('all')
+    setKeywordInput('')
+    setKeyword('')
+    setSiteKeyInput('')
+    setSiteKey('')
     setPage(1)
   }
 
@@ -107,36 +141,89 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-1 gap-2">
           {/* 类型筛选 */}
-          <select
-            value={typeFilter}
-            onChange={(e) => handleTypeChange(e.target.value)}
-            data-testid="moderation-list-type-filter"
-            className="flex-1 rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-          >
-            {TYPE_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          {/* 排序切换 */}
-          <div className="flex rounded border border-[var(--border)] overflow-hidden shrink-0">
-            <button
-              type="button"
-              data-testid="moderation-list-sort-desc"
-              onClick={() => handleSortDir('desc')}
-              className={`px-2 py-1 text-xs transition-colors ${sortDir === 'desc' ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'}`}
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              value={typeFilter}
+              onChange={(e) => handleTypeChange(e.target.value)}
+              data-testid="moderation-list-type-filter"
+              className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
             >
-              最新
-            </button>
-            <button
-              type="button"
-              data-testid="moderation-list-sort-asc"
-              onClick={() => handleSortDir('asc')}
-              className={`px-2 py-1 text-xs transition-colors ${sortDir === 'asc' ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'}`}
+              {TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <select
+              value={sourceState}
+              onChange={(e) => {
+                setSourceState(e.target.value as 'all' | 'active' | 'missing')
+                setPage(1)
+              }}
+              data-testid="moderation-list-source-state-filter"
+              className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
             >
-              最早
-            </button>
+              <option value="all">片源状态：全部</option>
+              <option value="active">片源状态：有可用源</option>
+              <option value="missing">片源状态：无可用源</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              value={keywordInput}
+              onChange={(e) => setKeywordInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleApplyFilters() }}
+              placeholder="搜索标题/shortId/源名"
+              data-testid="moderation-list-keyword-filter"
+              className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] placeholder:text-[var(--muted)]"
+            />
+            <input
+              value={siteKeyInput}
+              onChange={(e) => setSiteKeyInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleApplyFilters() }}
+              placeholder="按站点 key 过滤"
+              data-testid="moderation-list-site-filter"
+              className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] placeholder:text-[var(--muted)]"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            {/* 排序切换 */}
+            <div className="flex rounded border border-[var(--border)] overflow-hidden shrink-0">
+              <button
+                type="button"
+                data-testid="moderation-list-sort-desc"
+                onClick={() => handleSortDir('desc')}
+                className={`px-2 py-1 text-xs transition-colors ${sortDir === 'desc' ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'}`}
+              >
+                最新
+              </button>
+              <button
+                type="button"
+                data-testid="moderation-list-sort-asc"
+                onClick={() => handleSortDir('asc')}
+                className={`px-2 py-1 text-xs transition-colors ${sortDir === 'asc' ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'}`}
+              >
+                最早
+              </button>
+            </div>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={handleApplyFilters}
+                data-testid="moderation-list-apply-filter"
+                className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg2)]"
+              >
+                应用
+              </button>
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                data-testid="moderation-list-reset-filter"
+                className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--bg2)]"
+              >
+                重置
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -206,11 +206,20 @@ export class VideoService {
     limit: number
     type?: string
     sortDir?: 'asc' | 'desc'
+    q?: string
+    siteKey?: string
+    sourceState?: 'all' | 'active' | 'missing'
   }): Promise<{ data: PendingReviewVideoRow[]; total: number; page: number; limit: number }> {
     const page = Math.max(1, params.page)
     const limit = Math.min(MAX_LIMIT, Math.max(1, params.limit))
     const { rows, total } = await videoQueries.listPendingReviewVideos(this.db, {
-      page, limit, type: params.type, sortDir: params.sortDir,
+      page,
+      limit,
+      type: params.type,
+      sortDir: params.sortDir,
+      q: params.q,
+      siteKey: params.siteKey,
+      sourceState: params.sourceState,
     })
     return { data: rows, total, page, limit }
   }
