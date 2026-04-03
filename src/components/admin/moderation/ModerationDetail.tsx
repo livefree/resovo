@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiClient } from '@/lib/api-client'
+import { buildLineDisplayName } from '@/lib/line-display-name'
 import { ModerationPlayer } from '@/components/admin/moderation/ModerationPlayer'
 
 interface VideoDetail {
@@ -27,6 +28,7 @@ interface SourceRow {
   source_url: string
   source_name: string
   site_key?: string | null
+  quality?: string | null
   episode_number: number
   is_active: boolean
 }
@@ -149,8 +151,13 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
       }
     }
 
-    return Array.from(lines.entries()).map(([name, rows]) => ({
+    return Array.from(lines.entries()).map(([name, rows], idx) => ({
       name,
+      displayName: buildLineDisplayName({
+        rawName: name,
+        fallbackIndex: idx,
+        quality: rows[0]?.quality ?? null,
+      }),
       siteKey: rows[0]?.site_key?.trim() || null,
       rows: rows.slice().sort((a, b) => a.episode_number - b.episode_number),
     }))
@@ -251,7 +258,7 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
                     : 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'
                 }`}
               >
-                {isSiteLineOneToOne ? (line.siteKey ?? line.name) : line.name}
+                {isSiteLineOneToOne ? (line.siteKey ?? line.displayName) : line.displayName}
               </button>
             ))}
           </div>

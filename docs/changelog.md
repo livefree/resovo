@@ -4979,3 +4979,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **说明**：
   - 线路命名规范标记为“下一步实施”。
   - 分级验证标记为“未来扩展”，暂不进入当前开发序列。
+
+---
+
+### CHG-355 — 线路显示名规范 Phase 1 接线（2026-04-02）
+
+- **新增文件**：
+  - `src/lib/line-display-name.ts`
+- **修改文件**：
+  - `src/components/player/PlayerShell.tsx`
+  - `src/components/admin/moderation/ModerationDetail.tsx`
+  - `docs/task-queue.md`
+- **变更内容**：
+  - 新增 `buildLineDisplayName()` 与 provider/generic 规则（`subyun -> SUB云`、`线路2 -> 线路B` 等）。
+  - 前台播放器线路按钮统一走归一化文案，并在有质量字段时拼接质量后缀。
+  - 审核详情线路按钮同步接入归一化文案，避免直接展示技术名。
+- **说明**：Phase 1 仅显示层改造，不涉及 DB schema 变更。

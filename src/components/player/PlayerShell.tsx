@@ -20,6 +20,7 @@ import { usePlayerStore } from '@/stores/playerStore'
 import { apiClient } from '@/lib/api-client'
 import { extractShortId } from '@/lib/video-detail'
 import { getVideoDetailHref } from '@/lib/video-route'
+import { buildLineDisplayName } from '@/lib/line-display-name'
 import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@/types'
 import { SourceBar } from './SourceBar'
 import { ResumePrompt, saveProgress } from './ResumePrompt'
@@ -74,7 +75,11 @@ export function PlayerShell({ slug }: PlayerShellProps) {
             { skipAuth: true }
           )
           .then((r) => {
-            setSources(r.data.map((s) => ({ src: s.sourceUrl, type: s.type, label: s.sourceName })))
+            setSources(r.data.map((s, index) => ({
+              src: s.sourceUrl,
+              type: s.type,
+              label: buildLineDisplayName({ rawName: s.sourceName, fallbackIndex: index, quality: s.quality }),
+            })))
             setActiveSourceIndex(0)
           })
           .catch(() => setSources([]))
@@ -95,7 +100,11 @@ export function PlayerShell({ slug }: PlayerShellProps) {
         { skipAuth: true }
       )
       .then((res) => {
-        setSources(res.data.map((s) => ({ src: s.sourceUrl, type: s.type, label: s.sourceName })))
+        setSources(res.data.map((s, index) => ({
+          src: s.sourceUrl,
+          type: s.type,
+          label: buildLineDisplayName({ rawName: s.sourceName, fallbackIndex: index, quality: s.quality }),
+        })))
         setActiveSourceIndex(0)
       })
       .catch(() => {/* 无源时保留已有源 */})

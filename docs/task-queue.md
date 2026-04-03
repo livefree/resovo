@@ -4884,3 +4884,23 @@
    - 文件范围：`docs/tiered_source_verification_future_plan_20260402.md`
    - 变更内容：定义 L1/L2/L3 分层、成本控制、前端事件回传混合模型与字段建议。
    - 完成备注：标记为“未来扩展”，暂不进入立即开发。
+
+---
+
+## SEQ-20260402-56（线路命名规范实施 Phase 1）
+
+> 来源：CHG-353 规范落地
+> 状态：✅ 已完成
+> 创建时间：2026-04-02 22:45
+> 最后更新时间：2026-04-02 22:50
+> 描述：先在前台播放器与审核详情接入线路显示名归一化，不改 DB schema。
+
+### 任务列表
+
+1. CHG-355 — 新增线路显示名归一化工具并接入播放器/审核台（状态：✅ 已完成）
+   - 创建时间：2026-04-02 22:45
+   - 实际开始：2026-04-02 22:45
+   - 完成时间：2026-04-02 22:50
+   - 文件范围：`src/lib/line-display-name.ts`，`src/components/player/PlayerShell.tsx`，`src/components/admin/moderation/ModerationDetail.tsx`
+   - 变更内容：新增 `buildLineDisplayName()` 规则；将 `subyun`、`线路2` 等归一化为用户可读文案；播放器与审核详情统一接入。
+   - 完成备注：Phase 1 仅前端显示层改造，暂未引入 `video_sources.display_name` 持久化字段。
