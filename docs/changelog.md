@@ -4995,3 +4995,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 前台播放器线路按钮统一走归一化文案，并在有质量字段时拼接质量后缀。
   - 审核详情线路按钮同步接入归一化文案，避免直接展示技术名。
 - **说明**：Phase 1 仅显示层改造，不涉及 DB schema 变更。
+
+---
+
+### CHG-356/357 — 成人内容开关后端化 + 成人源站视频安全收敛（2026-04-02）
+
+- **修改文件**：
+  - `src/api/routes/admin/videos.ts`
+  - `src/api/services/VideoService.ts`
+  - `src/api/db/queries/videos.ts`
+- **新增文件**：
+  - `src/api/db/migrations/025_enforce_adult_site_video_safety.sql`
+- **变更内容**：
+  - 后台内容管理（`/admin/videos`、`/admin/videos/pending-review`）接入 `show_adult_content` 开关：关闭时过滤 `crawler_sites.is_adult=true` 视频。
+  - 前台逻辑保持固定屏蔽成人内容（仍基于 `content_rating='general'` + `visibility_status='public'` 等条件）。
+  - 新增成人源站视频数据收敛 migration：将目标视频统一收敛到 `type='other'`、`hidden`、`rejected`、`unpublished`。
+- **实现细节**：
+  - 受状态机触发器约束，迁移采用合法跃迁链：先 hidden/unpublished，再 approved->pending，再 pending->rejected。

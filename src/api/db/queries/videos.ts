@@ -270,6 +270,8 @@ export interface AdminVideoListFilters {
   q?: string
   /** 按来源站点 key 筛选（videos.site_key） */
   siteKey?: string
+  /** false 时隐藏来自成人源站（crawler_sites.is_adult=true）的视频 */
+  includeAdult?: boolean
   visibilityStatus?: VisibilityStatus
   reviewStatus?: ReviewStatus
   sortField?: string
@@ -308,6 +310,9 @@ export async function listAdminVideos(
     conditions.push(`v.site_key = $${idx++}`)
     params.push(filters.siteKey)
   }
+  if (filters.includeAdult === false) {
+    conditions.push(`COALESCE(cs.is_adult, false) = false`)
+  }
 
   if (filters.visibilityStatus) {
     conditions.push(`v.visibility_status = $${idx++}`)
@@ -340,13 +345,16 @@ export async function listAdminVideos(
               ,(SELECT COUNT(*) FROM video_sources
                 WHERE video_id = v.id AND deleted_at IS NULL)::text AS total_source_count
        FROM videos v
+       LEFT JOIN crawler_sites cs ON cs.key = v.site_key
        WHERE ${where}
        ORDER BY ${orderByCol} ${orderByDir}
        LIMIT $${idx} OFFSET $${idx + 1}`,
       [...params, filters.limit, offset]
     ),
     db.query<{ count: string }>(
-      `SELECT COUNT(*) FROM videos v WHERE ${where}`,
+      `SELECT COUNT(*) FROM videos v
+       LEFT JOIN crawler_sites cs ON cs.key = v.site_key
+       WHERE ${where}`,
       params
     ),
   ])
@@ -1052,6 +1060,7 @@ export async function listPendingReviewVideos(
     q?: string
     siteKey?: string
     sourceState?: 'all' | 'active' | 'missing'
+    includeAdult?: boolean
   }
 ): Promise<{ rows: PendingReviewVideoRow[]; total: number }> {
   const offset = (params.page - 1) * params.limit
@@ -1084,6 +1093,9 @@ export async function listPendingReviewVideos(
   if (params.siteKey) {
     conditions.push(`v.site_key = $${idx++}`)
     filterParams.push(params.siteKey)
+  }
+  if (params.includeAdult === false) {
+    conditions.push(`COALESCE(cs.is_adult, false) = false`)
   }
   if (params.sourceState === 'active') {
     conditions.push(`EXISTS (
@@ -1127,7 +1139,10 @@ export async function listPendingReviewVideos(
       [...filterParams, params.limit, offset]
     ),
     db.query<{ count: string }>(
-      `SELECT COUNT(*) FROM videos v WHERE ${where}`,
+      `SELECT COUNT(*)
+       FROM videos v
+       LEFT JOIN crawler_sites cs ON cs.key = v.site_key
+       WHERE ${where}`,
       filterParams
     ),
   ])

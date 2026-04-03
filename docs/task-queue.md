@@ -4904,3 +4904,31 @@
    - 文件范围：`src/lib/line-display-name.ts`，`src/components/player/PlayerShell.tsx`，`src/components/admin/moderation/ModerationDetail.tsx`
    - 变更内容：新增 `buildLineDisplayName()` 规则；将 `subyun`、`线路2` 等归一化为用户可读文案；播放器与审核详情统一接入。
    - 完成备注：Phase 1 仅前端显示层改造，暂未引入 `video_sources.display_name` 持久化字段。
+
+---
+
+## SEQ-20260402-57（成人内容开关后端化 + 成人源站数据收敛）
+
+> 来源：站点配置“显示成人内容”逻辑收敛需求
+> 状态：✅ 已完成
+> 创建时间：2026-04-02 23:20
+> 最后更新时间：2026-04-02 23:28
+> 描述：将 show_adult_content 暂时作为后台内容管理开关；前台始终屏蔽成人内容；补充成人源站视频安全收敛迁移。
+
+### 任务列表
+
+1. CHG-356 — show_adult_content 接入后台内容管理列表过滤（状态：✅ 已完成）
+   - 创建时间：2026-04-02 23:20
+   - 实际开始：2026-04-02 23:20
+   - 完成时间：2026-04-02 23:25
+   - 文件范围：`src/api/routes/admin/videos.ts`，`src/api/services/VideoService.ts`，`src/api/db/queries/videos.ts`
+   - 变更内容：读取 `system_settings.show_adult_content`；关闭时 `/admin/videos` 与 `/admin/videos/pending-review` 隐藏 `crawler_sites.is_adult=true` 的视频。
+   - 完成备注：仅影响后台内容管理；前台过滤链路保持不变。
+
+2. CHG-357 — 成人源站视频批量安全收敛 migration（状态：✅ 已完成）
+   - 创建时间：2026-04-02 23:25
+   - 实际开始：2026-04-02 23:25
+   - 完成时间：2026-04-02 23:28
+   - 文件范围：`src/api/db/migrations/025_enforce_adult_site_video_safety.sql`
+   - 变更内容：将来自成人源站的视频收敛为 `type='other'`、`visibility_status='hidden'`、`review_status='rejected'`、`is_published=false`。
+   - 完成备注：按状态机触发器白名单分步跃迁（approved->pending->rejected）实现，避免 DB 触发器拒绝更新。

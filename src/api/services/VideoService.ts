@@ -76,6 +76,7 @@ export class VideoService {
     type?: import('@/types').VideoType
     q?: string
     siteKey?: string
+    includeAdult?: boolean
     visibilityStatus?: import('@/types').VisibilityStatus
     reviewStatus?: import('@/types').ReviewStatus
     sortField?: string
@@ -91,6 +92,7 @@ export class VideoService {
       type: params.type,
       q: params.q,
       siteKey: params.siteKey,
+      includeAdult: params.includeAdult,
       visibilityStatus: params.visibilityStatus,
       reviewStatus: params.reviewStatus,
       sortField: params.sortField,
@@ -209,6 +211,7 @@ export class VideoService {
     q?: string
     siteKey?: string
     sourceState?: 'all' | 'active' | 'missing'
+    includeAdult?: boolean
   }): Promise<{ data: PendingReviewVideoRow[]; total: number; page: number; limit: number }> {
     const page = Math.max(1, params.page)
     const limit = Math.min(MAX_LIMIT, Math.max(1, params.limit))
@@ -220,6 +223,7 @@ export class VideoService {
       q: params.q,
       siteKey: params.siteKey,
       sourceState: params.sourceState,
+      includeAdult: params.includeAdult,
     })
     return { data: rows, total, page, limit }
   }

@@ -16,6 +16,7 @@ import { db } from '@/api/lib/postgres'
 import { es } from '@/api/lib/elasticsearch'
 import { VideoService } from '@/api/services/VideoService'
 import { DoubanService } from '@/api/services/DoubanService'
+import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import type { VideoType, VideoStatus, VideoGenre, VisibilityStatus } from '@/types'
 
 // ── Zod Schema ────────────────────────────────────────────────────
@@ -95,6 +96,10 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
   const adminOnly = [fastify.authenticate, fastify.requireRole(['admin'])]
   const videoService = new VideoService(db, es)
   const doubanService = new DoubanService(db)
+  async function shouldIncludeAdultInAdminContent(): Promise<boolean> {
+    const raw = await systemSettingsQueries.getSetting(db, 'show_adult_content')
+    return raw === 'true'
+  }
   function mapTransitionError(err: unknown): { status: number; code: string; message: string } {
     if (err instanceof Error && err.message === 'STATE_CONFLICT') {
       return { status: 409, code: 'STATE_CONFLICT', message: '状态已被其他操作更新，请刷新后重试' }
@@ -115,6 +120,7 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
     }
 
     const { status, type, visibilityStatus, reviewStatus, page, limit, q, site, sortField, sortDir } = parsed.data
+    const includeAdult = await shouldIncludeAdultInAdminContent()
     const result = await videoService.adminList({
       status,
       type,
@@ -124,6 +130,7 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       limit,
       q,
       siteKey: site,
+      includeAdult,
       sortField,
       sortDir,
     })
@@ -369,7 +376,11 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
         error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
       })
     }
-    const result = await videoService.pendingReviewList(parsed.data)
+    const includeAdult = await shouldIncludeAdultInAdminContent()
+    const result = await videoService.pendingReviewList({
+      ...parsed.data,
+      includeAdult,
+    })
     return reply.send(result)
   })
 
