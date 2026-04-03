@@ -119,7 +119,9 @@ export class VideoService {
   }
 
   async publish(id: string, isPublished: boolean): Promise<unknown | null> {
-    const row = await videoQueries.publishVideo(this.db, id, isPublished)
+    const row = await videoQueries.transitionVideoState(this.db, id, {
+      action: isPublished ? 'publish' : 'unpublish',
+    })
     if (row) void this.indexToES(id)
     return row
   }
@@ -128,7 +130,12 @@ export class VideoService {
     id: string,
     visibility: VisibilityStatus
   ): Promise<{ id: string; visibility_status: string; is_published: boolean } | null> {
-    const row = await videoQueries.updateVisibility(this.db, id, visibility)
+    const action = visibility === 'public'
+      ? 'publish'
+      : visibility === 'internal'
+        ? 'set_internal'
+        : 'set_hidden'
+    const row = await videoQueries.transitionVideoState(this.db, id, { action })
     if (row) void this.indexToES(id)
     return row
   }
@@ -139,14 +146,46 @@ export class VideoService {
   ): Promise<{
     id: string; review_status: string; visibility_status: string; is_published: boolean
   } | null> {
-    const row = await videoQueries.reviewVideo(this.db, id, input)
+    const row = await videoQueries.transitionVideoState(this.db, id, {
+      action: input.action === 'approve' ? 'approve' : 'reject',
+      reviewedBy: input.reviewedBy,
+      reason: input.reason,
+    })
+    if (row) void this.indexToES(id)
+    return row
+  }
+
+  async transitionState(
+    id: string,
+    input: {
+      action: videoQueries.VideoStateTransitionAction
+      reviewedBy?: string
+      reason?: string
+      expectedUpdatedAt?: string
+    },
+  ): Promise<{
+    id: string
+    review_status: string
+    visibility_status: string
+    is_published: boolean
+    updated_at: string
+  } | null> {
+    const row = await videoQueries.transitionVideoState(this.db, id, input)
     if (row) void this.indexToES(id)
     return row
   }
 
   async batchPublish(ids: string[], isPublished: boolean): Promise<number> {
-    const count = await videoQueries.batchPublishVideos(this.db, ids, isPublished)
-    if (count > 0) ids.forEach((id) => void this.indexToES(id))
+    let count = 0
+    for (const id of ids) {
+      const row = await videoQueries.transitionVideoState(this.db, id, {
+        action: isPublished ? 'publish' : 'unpublish',
+      })
+      if (row) {
+        count += 1
+        void this.indexToES(id)
+      }
+    }
     return count
   }
 

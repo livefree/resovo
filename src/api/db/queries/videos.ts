@@ -500,6 +500,173 @@ export async function publishVideo(
   return result.rows[0] ?? null
 }
 
+export type VideoStateTransitionAction =
+  | 'approve'
+  | 'reject'
+  | 'reopen_pending'
+  | 'publish'
+  | 'unpublish'
+  | 'set_internal'
+  | 'set_hidden'
+
+export interface TransitionVideoStateInput {
+  action: VideoStateTransitionAction
+  reviewedBy?: string
+  reason?: string
+  expectedUpdatedAt?: string
+}
+
+export interface TransitionVideoStateResult {
+  id: string
+  review_status: ReviewStatus
+  visibility_status: VisibilityStatus
+  is_published: boolean
+  updated_at: string
+}
+
+/**
+ * Single write entry for governance state transitions.
+ * All transitions are applied atomically with row lock.
+ */
+export async function transitionVideoState(
+  db: Pool,
+  id: string,
+  input: TransitionVideoStateInput,
+): Promise<TransitionVideoStateResult | null> {
+  const client: PoolClient = await db.connect()
+  try {
+    await client.query('BEGIN')
+    const currentResult = await client.query<{
+      id: string
+      review_status: ReviewStatus
+      visibility_status: VisibilityStatus
+      is_published: boolean
+      updated_at: string
+      review_reason: string | null
+      reviewed_by: string | null
+      reviewed_at: string | null
+      deleted_at: string | null
+    }>(
+      `SELECT id, review_status, visibility_status, is_published, updated_at,
+              review_reason, reviewed_by, reviewed_at, deleted_at
+       FROM videos
+       WHERE id = $1
+       FOR UPDATE`,
+      [id],
+    )
+    const current = currentResult.rows[0]
+    if (!current || current.deleted_at) {
+      await client.query('ROLLBACK')
+      return null
+    }
+
+    if (input.expectedUpdatedAt && new Date(current.updated_at).toISOString() !== new Date(input.expectedUpdatedAt).toISOString()) {
+      throw new Error('STATE_CONFLICT')
+    }
+
+    let nextReview = current.review_status
+    let nextVisibility = current.visibility_status
+    let nextPublished = current.is_published
+    let reviewReason: string | null = current.review_reason
+    let reviewedBy: string | null = current.reviewed_by
+    let reviewedAt: string | null = current.reviewed_at
+
+    switch (input.action) {
+      case 'approve': {
+        if (current.review_status !== 'pending_review') {
+          throw new Error('INVALID_TRANSITION')
+        }
+        nextReview = 'approved'
+        nextVisibility = 'public'
+        nextPublished = true
+        reviewReason = input.reason ?? null
+        reviewedBy = input.reviewedBy ?? null
+        reviewedAt = new Date().toISOString()
+        break
+      }
+      case 'reject': {
+        if (current.review_status !== 'pending_review' && current.review_status !== 'approved') {
+          throw new Error('INVALID_TRANSITION')
+        }
+        nextReview = 'rejected'
+        nextVisibility = 'hidden'
+        nextPublished = false
+        reviewReason = input.reason ?? null
+        reviewedBy = input.reviewedBy ?? null
+        reviewedAt = new Date().toISOString()
+        break
+      }
+      case 'reopen_pending': {
+        if (current.review_status !== 'rejected') {
+          throw new Error('INVALID_TRANSITION')
+        }
+        nextReview = 'pending_review'
+        nextVisibility = 'hidden'
+        nextPublished = false
+        reviewReason = null
+        reviewedBy = null
+        reviewedAt = null
+        break
+      }
+      case 'publish': {
+        if (current.review_status !== 'approved') {
+          throw new Error('INVALID_TRANSITION')
+        }
+        nextReview = 'approved'
+        nextVisibility = 'public'
+        nextPublished = true
+        break
+      }
+      case 'unpublish': {
+        if (current.review_status !== 'approved') {
+          throw new Error('INVALID_TRANSITION')
+        }
+        nextReview = 'approved'
+        nextVisibility = 'internal'
+        nextPublished = false
+        break
+      }
+      case 'set_internal': {
+        if (current.review_status === 'rejected') {
+          throw new Error('INVALID_TRANSITION')
+        }
+        nextVisibility = 'internal'
+        nextPublished = false
+        break
+      }
+      case 'set_hidden': {
+        nextVisibility = 'hidden'
+        nextPublished = false
+        break
+      }
+      default:
+        throw new Error('INVALID_TRANSITION')
+    }
+
+    const result = await client.query<TransitionVideoStateResult>(
+      `UPDATE videos
+       SET review_status = $1,
+           visibility_status = $2,
+           is_published = $3,
+           review_reason = $4,
+           reviewed_by = $5,
+           reviewed_at = $6::timestamptz,
+           needs_manual_review = false,
+           updated_at = NOW()
+       WHERE id = $7 AND deleted_at IS NULL
+       RETURNING id, review_status, visibility_status, is_published, updated_at`,
+      [nextReview, nextVisibility, nextPublished, reviewReason, reviewedBy, reviewedAt, id],
+    )
+    await client.query('COMMIT')
+    return result.rows[0] ?? null
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
 export async function batchPublishVideos(
   db: Pool,
   ids: string[],

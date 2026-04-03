@@ -33,6 +33,20 @@ const ReviewSchema = z.object({
   reason: z.string().max(500).optional(),
 })
 
+const StateTransitionSchema = z.object({
+  action: z.enum([
+    'approve',
+    'reject',
+    'reopen_pending',
+    'publish',
+    'unpublish',
+    'set_internal',
+    'set_hidden',
+  ] as const),
+  reason: z.string().max(500).optional(),
+  expectedUpdatedAt: z.string().datetime().optional(),
+})
+
 const BatchPublishSchema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(100),
   isPublished: z.boolean(),
@@ -81,6 +95,15 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
   const adminOnly = [fastify.authenticate, fastify.requireRole(['admin'])]
   const videoService = new VideoService(db, es)
   const doubanService = new DoubanService(db)
+  function mapTransitionError(err: unknown): { status: number; code: string; message: string } {
+    if (err instanceof Error && err.message === 'STATE_CONFLICT') {
+      return { status: 409, code: 'STATE_CONFLICT', message: '状态已被其他操作更新，请刷新后重试' }
+    }
+    if (err instanceof Error && err.message === 'INVALID_TRANSITION') {
+      return { status: 422, code: 'INVALID_TRANSITION', message: '非法状态跃迁，请按审核流程操作' }
+    }
+    return { status: 500, code: 'INTERNAL_ERROR', message: '状态更新失败' }
+  }
 
   // ── GET /admin/videos ────────────────────────────────────────
   fastify.get('/admin/videos', { preHandler: auth }, async (request, reply) => {
@@ -129,13 +152,20 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const result = await videoService.publish(id, parsed.data.isPublished)
-    if (!result) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
+    try {
+      const result = await videoService.publish(id, parsed.data.isPublished)
+      if (!result) {
+        return reply.code(404).send({
+          error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
+        })
+      }
+      return reply.send({ data: result })
+    } catch (err) {
+      const mapped = mapTransitionError(err)
+      return reply.code(mapped.status).send({
+        error: { code: mapped.code, message: mapped.message, status: mapped.status },
       })
     }
-    return reply.send({ data: result })
   })
 
   // ── PATCH /admin/videos/:id/visibility ─────────────────────
@@ -149,13 +179,20 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const result = await videoService.updateVisibility(id, parsed.data.visibility as VisibilityStatus)
-    if (!result) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
+    try {
+      const result = await videoService.updateVisibility(id, parsed.data.visibility as VisibilityStatus)
+      if (!result) {
+        return reply.code(404).send({
+          error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
+        })
+      }
+      return reply.send({ data: result })
+    } catch (err) {
+      const mapped = mapTransitionError(err)
+      return reply.code(mapped.status).send({
+        error: { code: mapped.code, message: mapped.message, status: mapped.status },
       })
     }
-    return reply.send({ data: result })
   })
 
   // ── POST /admin/videos/:id/review ──────────────────────────
@@ -169,17 +206,56 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const result = await videoService.review(id, {
-      action: parsed.data.action,
-      reason: parsed.data.reason,
-      reviewedBy: request.user!.userId,
-    })
-    if (!result) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
+    try {
+      const result = await videoService.review(id, {
+        action: parsed.data.action,
+        reason: parsed.data.reason,
+        reviewedBy: request.user!.userId,
+      })
+      if (!result) {
+        return reply.code(404).send({
+          error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
+        })
+      }
+      return reply.send({ data: result })
+    } catch (err) {
+      const mapped = mapTransitionError(err)
+      return reply.code(mapped.status).send({
+        error: { code: mapped.code, message: mapped.message, status: mapped.status },
       })
     }
-    return reply.send({ data: result })
+  })
+
+  // ── POST /admin/videos/:id/state-transition ─────────────────
+  // 单一状态写入口：审核/可见性/上架统一通过 action 驱动
+  fastify.post('/admin/videos/:id/state-transition', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const parsed = StateTransitionSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+
+    try {
+      const result = await videoService.transitionState(id, {
+        action: parsed.data.action,
+        reason: parsed.data.reason,
+        expectedUpdatedAt: parsed.data.expectedUpdatedAt,
+        reviewedBy: request.user!.userId,
+      })
+      if (!result) {
+        return reply.code(404).send({
+          error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
+        })
+      }
+      return reply.send({ data: result })
+    } catch (err) {
+      const mapped = mapTransitionError(err)
+      return reply.code(mapped.status).send({
+        error: { code: mapped.code, message: mapped.message, status: mapped.status },
+      })
+    }
   })
 
   // ── POST /admin/videos/batch-publish ───────────────────────
