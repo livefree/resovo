@@ -61,6 +61,25 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
   const [rejectReason, setRejectReason] = useState('')
   const [error, setError] = useState<string | null>(null)
 
+  const fetchAllActiveSources = useCallback(async (id: string): Promise<SourceRow[]> => {
+    const pageSize = 100
+    let page = 1
+    let total = 0
+    const merged: SourceRow[] = []
+
+    do {
+      const res = await apiClient.get<{ data: SourceRow[]; total: number }>(
+        `/admin/sources?videoId=${id}&status=active&page=${page}&limit=${pageSize}`
+      )
+      if (page === 1) total = res.total
+      merged.push(...res.data)
+      if (res.data.length === 0) break
+      page += 1
+    } while (merged.length < total)
+
+    return merged
+  }, [])
+
   const fetchDetail = useCallback(async (id: string) => {
     setLoading(true)
     setError(null)
@@ -71,12 +90,10 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
       const videoRes = await apiClient.get<{ data: VideoDetail }>(`/admin/videos/${id}`)
       setVideo(videoRes.data)
       try {
-        const sourcesRes = await apiClient.get<{ data: SourceRow[]; total: number }>(
-          `/admin/sources?videoId=${id}&status=active&page=1&limit=100`
-        )
-        setSources(sourcesRes.data)
-        if (sourcesRes.data.length > 0) {
-          const first = sourcesRes.data[0]
+        const allSources = await fetchAllActiveSources(id)
+        setSources(allSources)
+        if (allSources.length > 0) {
+          const first = allSources[0]
           setSelectedLine(first.source_name || '默认线路')
           setSelectedEpisode(first.episode_number || 1)
         }
@@ -88,7 +105,7 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [fetchAllActiveSources])
 
   useEffect(() => {
     if (videoId) {
