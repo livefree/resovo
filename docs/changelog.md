@@ -4966,3 +4966,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 过滤 `deleted_at IS NULL` 和 `submitted_by IS NULL`，避免将已删除源与用户投稿写入主数据统计。
 - **效果**：可一次性修复历史“主表单集、实际多集”的漂移，补齐前台选集展示前置条件。
 - **测试**：当前环境缺失 `npm` 命令，未执行自动化测试；该 migration 尚未在本地执行。
+
+---
+
+### CHG-353/354 — 线路命名规范与分级验证方案落盘（2026-04-02）
+
+- **新增文档**：
+  - `docs/line_display_name_spec_20260402.md`
+  - `docs/tiered_source_verification_future_plan_20260402.md`
+- **台账更新**：
+  - `docs/task-queue.md` 新增 `SEQ-20260402-55`（CHG-353/354）
+- **说明**：
+  - 线路命名规范标记为“下一步实施”。
+  - 分级验证标记为“未来扩展”，暂不进入当前开发序列。
