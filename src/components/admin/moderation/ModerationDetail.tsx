@@ -116,32 +116,6 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
     }
   }, [videoId, onReviewed, rejectReason])
 
-  if (!videoId) {
-    return (
-      <div className="flex h-full items-center justify-center p-6" data-testid="moderation-detail-empty">
-        <p className="text-sm text-[var(--muted)]">请从左侧选择视频</p>
-      </div>
-    )
-  }
-
-  if (loading) {
-    return (
-      <div className="space-y-4 p-4" data-testid="moderation-detail-loading">
-        <div className="aspect-video w-full animate-pulse rounded-md bg-[var(--bg3)]" />
-        <div className="h-4 w-2/3 animate-pulse rounded bg-[var(--bg3)]" />
-        <div className="h-3 w-1/3 animate-pulse rounded bg-[var(--bg3)]" />
-      </div>
-    )
-  }
-
-  if (error || !video) {
-    return (
-      <div className="flex h-full items-center justify-center p-6" data-testid="moderation-detail-error">
-        <p className="text-sm text-red-400">{error ?? '视频不存在'}</p>
-      </div>
-    )
-  }
-
   const groupedLines = useMemo(() => {
     const lines = new Map<string, SourceRow[]>()
     for (const row of sources) {
@@ -167,6 +141,32 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
   const currentSource = activeLine
     ? activeLine.rows.find((row) => row.episode_number === selectedEpisode) ?? activeLine.rows[0] ?? null
     : null
+
+  if (!videoId) {
+    return (
+      <div className="flex h-full items-center justify-center p-6" data-testid="moderation-detail-empty">
+        <p className="text-sm text-[var(--muted)]">请从左侧选择视频</p>
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-4 p-4" data-testid="moderation-detail-loading">
+        <div className="aspect-video w-full animate-pulse rounded-md bg-[var(--bg3)]" />
+        <div className="h-4 w-2/3 animate-pulse rounded bg-[var(--bg3)]" />
+        <div className="h-3 w-1/3 animate-pulse rounded bg-[var(--bg3)]" />
+      </div>
+    )
+  }
+
+  if (error || !video) {
+    return (
+      <div className="flex h-full items-center justify-center p-6" data-testid="moderation-detail-error">
+        <p className="text-sm text-red-400">{error ?? '视频不存在'}</p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-4 overflow-y-auto p-4" data-testid="moderation-detail">
