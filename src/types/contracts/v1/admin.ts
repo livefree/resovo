@@ -60,3 +60,27 @@ export interface ContentQualityRow {
   totalSources: number
   aliasCount: number  // 该站点中有跨站合并记录的视频数
 }
+
+// ── 豆瓣同步类型（前后台共享契约） ────────────────────────────────
+
+export type DoubanSyncReason = 'already_synced' | 'no_match' | 'fetch_failed'
+
+export interface DoubanPreviewFound {
+  found: true
+  doubanId: string
+  title: string
+  year: number | null
+  rating: number | null
+  description: string | null
+  coverUrl: string | null
+  directors: string[]
+  casts: string[]
+  partial?: boolean
+}
+
+export interface DoubanPreviewMiss {
+  found: false
+  reason: DoubanSyncReason
+}
+
+export type DoubanPreview = DoubanPreviewFound | DoubanPreviewMiss

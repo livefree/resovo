@@ -12,6 +12,7 @@
 import type { Pool } from 'pg'
 import { searchDouban, getDoubanDetail } from '@/api/lib/douban'
 import * as videoQueries from '@/api/db/queries/videos'
+import type { DoubanPreviewFound, DoubanPreviewMiss, DoubanPreview } from '@/types/contracts/v1/admin'
 
 // ── 类型 ──────────────────────────────────────────────────────────
 
@@ -28,22 +29,7 @@ export interface SyncSkipped {
   reason: SyncReason
 }
 
-export interface DoubanPreviewFound {
-  found: true
-  doubanId: string
-  title: string
-  year: number | null
-  rating: number | null
-  description: string | null
-  coverUrl: string | null
-  directors: string[]
-  casts: string[]
-}
-
-export interface DoubanPreviewMiss {
-  found: false
-  reason: SyncReason
-}
+export type { DoubanPreviewFound, DoubanPreviewMiss, DoubanPreview }
 
 // ── 字符串相似度（简易 Jaccard 字符二元组） ──────────────────────
 
@@ -64,6 +50,50 @@ function similarity(a: string, b: string): number {
   let intersection = 0
   for (const g of sa) if (sb.has(g)) intersection++
   return (2 * intersection) / (sa.size + sb.size)
+}
+
+function normalizeForMatch(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[（(][^）)]*[）)]/g, '')
+    .replace(/[^\p{L}\p{N}]/gu, '')
+}
+
+function parseYear(value: string | number | null | undefined): number | null {
+  if (value == null) return null
+  const match = String(value).match(/\d{4}/)
+  if (!match) return null
+  const year = Number.parseInt(match[0], 10)
+  return Number.isFinite(year) ? year : null
+}
+
+type Candidate = Awaited<ReturnType<typeof searchDouban>>[number]
+
+function candidateScore(videoTitle: string, videoYear: number | null | undefined, item: Candidate): number {
+  const titleScore = similarity(normalizeForMatch(videoTitle), normalizeForMatch(item.title))
+  const subtitleScore = similarity(normalizeForMatch(videoTitle), normalizeForMatch(item.sub_title ?? ''))
+  const baseScore = Math.max(titleScore, subtitleScore)
+
+  const targetYear = videoYear ?? null
+  const candidateYear = parseYear(item.year)
+  if (targetYear == null || candidateYear == null) return baseScore
+  if (targetYear === candidateYear) return Math.min(1, baseScore + 0.2)
+  if (Math.abs(targetYear - candidateYear) === 1) return Math.min(1, baseScore + 0.1)
+  return baseScore
+}
+
+function pickBestCandidate(videoTitle: string, videoYear: number | null | undefined, candidates: Candidate[]): Candidate | null {
+  let best: Candidate | null = null
+  let bestScore = 0
+  for (const item of candidates) {
+    const score = candidateScore(videoTitle, videoYear, item)
+    if (score > bestScore) {
+      bestScore = score
+      best = item
+    }
+  }
+  // 旧阈值 0.8 过严，实际会漏掉大量有效候选；放宽到 0.45 由详情抓取再次兜底
+  return best && bestScore >= 0.45 ? best : null
 }
 
 // ── Service ──────────────────────────────────────────────────────
@@ -89,22 +119,14 @@ export class DoubanService {
 
     if (candidates.length === 0) return { updated: false, reason: 'no_match' }
 
-    // 4. 选取相似度最高的候选，必须 >80%
-    let bestId: string | null = null
-    let bestScore = 0
-    for (const item of candidates) {
-      const score = similarity(video.title, item.title)
-      if (score > bestScore) {
-        bestScore = score
-        bestId = item.id
-      }
-    }
-    if (!bestId || bestScore < 0.8) return { updated: false, reason: 'no_match' }
+    // 4. 选取最优候选（标题/副标题 + 年份加权）
+    const best = pickBestCandidate(video.title, video.year ?? null, candidates)
+    if (!best) return { updated: false, reason: 'no_match' }
 
     // 5. 获取详情
     let detail: Awaited<ReturnType<typeof getDoubanDetail>>
     try {
-      detail = await getDoubanDetail(bestId)
+      detail = await getDoubanDetail(best.id)
     } catch {
       return { updated: false, reason: 'fetch_failed' }
     }
@@ -145,24 +167,29 @@ export class DoubanService {
     }
     if (candidates.length === 0) return { found: false, reason: 'no_match' }
 
-    let bestId: string | null = null
-    let bestScore = 0
-    for (const item of candidates) {
-      const score = similarity(video.title, item.title)
-      if (score > bestScore) {
-        bestScore = score
-        bestId = item.id
-      }
-    }
-    if (!bestId || bestScore < 0.8) return { found: false, reason: 'no_match' }
+    const best = pickBestCandidate(video.title, video.year ?? null, candidates)
+    if (!best) return { found: false, reason: 'no_match' }
 
     let detail: Awaited<ReturnType<typeof getDoubanDetail>>
     try {
-      detail = await getDoubanDetail(bestId)
+      detail = await getDoubanDetail(best.id)
     } catch {
-      return { found: false, reason: 'fetch_failed' }
+      detail = null
     }
-    if (!detail) return { found: false, reason: 'fetch_failed' }
+    if (!detail) {
+      return {
+        found: true,
+        partial: true,
+        doubanId: best.id,
+        title: best.title,
+        year: parseYear(best.year),
+        rating: null,
+        description: null,
+        coverUrl: null,
+        directors: [],
+        casts: [],
+      }
+    }
 
     return {
       found: true,

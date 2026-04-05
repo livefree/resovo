@@ -42,7 +42,7 @@ function delay(): Promise<void> {
 
 // ── 搜索 ──────────────────────────────────────────────────────────
 
-interface SuggestItem {
+export interface SuggestItem {
   id: string
   title: string
   year: string
@@ -57,24 +57,38 @@ export async function searchDouban(
   title: string,
   year?: number
 ): Promise<SuggestItem[]> {
-  await delay()
+  try {
+    await delay()
 
-  const query = year ? `${title} ${year}` : title
-  const url = `https://www.douban.com/j/subject_suggest?q=${encodeURIComponent(query)}`
+    async function fetchSuggest(query: string): Promise<SuggestItem[]> {
+      const url = `https://movie.douban.com/j/subject_suggest?q=${encodeURIComponent(query)}`
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': pickUA(),
+          Referer: 'https://movie.douban.com/',
+          Accept: 'application/json, text/plain, */*',
+        },
+        signal: AbortSignal.timeout(8000),
+      })
+      if (!res.ok) return []
+      try {
+        const data = await res.json() as SuggestItem[]
+        return Array.isArray(data) ? data.filter((item) => item.id && item.title) : []
+      } catch {
+        // 反爬或非常规响应时视为无结果，让上层走降级查询
+        return []
+      }
+    }
 
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': pickUA(),
-      Referer: 'https://www.douban.com/',
-      Accept: 'application/json, text/plain, */*',
-    },
-    signal: AbortSignal.timeout(8000),
-  })
-
-  if (!res.ok) return []
-
-  const data = await res.json() as SuggestItem[]
-  return Array.isArray(data) ? data.filter((item) => item.id && item.title) : []
+    const queryWithYear = year ? `${title} ${year}` : title
+    const first = await fetchSuggest(queryWithYear)
+    if (first.length > 0 || !year) return first
+    // 回退：去掉年份再搜，避免年份噪声导致无结果
+    return fetchSuggest(title)
+  } catch {
+    // 网络错误/超时统一降级为空结果，由上层决定 no_match 语义
+    return []
+  }
 }
 
 // ── 详情 ──────────────────────────────────────────────────────────

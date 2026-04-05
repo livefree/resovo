@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
 import type { VideoType, VideoStatus, VideoGenre } from '@/types'
+import type { DoubanPreviewFound, DoubanPreviewMiss, DoubanPreview } from '@/types/contracts/v1/admin'
 
 const GENRE_OPTIONS: { value: VideoGenre; label: string }[] = [
   { value: 'action',       label: '动作' },
@@ -48,6 +49,16 @@ interface FormData {
   writers: string
 }
 
+interface VideoSourceRow {
+  id: string
+  source_url: string
+  source_name: string
+  is_active: boolean
+  episode_number: number
+  season_number: number
+}
+
+
 const DEFAULT_FORM: FormData = {
   title: '',
   titleEn: '',
@@ -64,6 +75,12 @@ const DEFAULT_FORM: FormData = {
   director: '',
   cast: '',
   writers: '',
+}
+
+const MISS_REASON_LABEL: Record<DoubanPreviewMiss['reason'], string> = {
+  already_synced: '该视频已关联豆瓣 ID，无需重新同步',
+  no_match: '未找到相似度满足要求的豆瓣条目',
+  fetch_failed: '豆瓣接口请求失败，请稍后重试',
 }
 
 // ── 辅助 ──────────────────────────────────────────────────────────
@@ -126,14 +143,22 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(isEdit)
   const [error, setError] = useState<string | null>(null)
+  const [sources, setSources] = useState<VideoSourceRow[]>([])
+  const [doubanLoading, setDoubanLoading] = useState(false)
+  const [doubanPreview, setDoubanPreview] = useState<DoubanPreview | null>(null)
+  const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set())
+  const [doubanApplying, setDoubanApplying] = useState(false)
 
   // 编辑模式：加载现有数据
   useEffect(() => {
     if (!videoId) return
     const load = async () => {
       try {
-        const res = await apiClient.get<{ data: Record<string, unknown> }>(`/admin/videos/${videoId}`)
-        const v = res.data
+        const [videoRes, sourcesRes] = await Promise.all([
+          apiClient.get<{ data: Record<string, unknown> }>(`/admin/videos/${videoId}`),
+          apiClient.get<{ data: VideoSourceRow[] }>(`/admin/sources?videoId=${videoId}&page=1&limit=20`),
+        ])
+        const v = videoRes.data
         setForm({
           title: String(v.title ?? ''),
           titleEn: String(v.title_en ?? ''),
@@ -151,8 +176,10 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
           cast: Array.isArray(v.cast) ? v.cast.join(', ') : '',
           writers: Array.isArray(v.writers) ? v.writers.join(', ') : '',
         })
+        setSources(sourcesRes.data)
       } catch (err) {
         setError(err instanceof Error ? err.message : '加载失败')
+        setSources([])
       } finally {
         setFetching(false)
       }
@@ -169,6 +196,63 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
       .split(/[,，]/)
       .map((s) => s.trim())
       .filter(Boolean)
+  }
+
+  async function handleDoubanSearch() {
+    if (!videoId) return
+    setDoubanLoading(true)
+    setDoubanPreview(null)
+    setSelectedFields(new Set())
+    try {
+      const res = await apiClient.get<{ data: DoubanPreview }>(`/admin/videos/${videoId}/douban-preview`)
+      setDoubanPreview(res.data)
+      if (res.data.found) {
+        const defaults = new Set<string>()
+        if (res.data.description) defaults.add('description')
+        if (res.data.coverUrl) defaults.add('coverUrl')
+        if (res.data.rating !== null) defaults.add('rating')
+        if (res.data.directors.length > 0) defaults.add('director')
+        if (res.data.casts.length > 0) defaults.add('cast')
+        setSelectedFields(defaults)
+      }
+    } catch {
+      setDoubanPreview({ found: false, reason: 'fetch_failed' })
+    } finally {
+      setDoubanLoading(false)
+    }
+  }
+
+  function toggleField(field: string) {
+    setSelectedFields((prev) => {
+      const next = new Set(prev)
+      if (next.has(field)) next.delete(field)
+      else next.add(field)
+      return next
+    })
+  }
+
+  async function handleDoubanApply() {
+    if (!videoId || !doubanPreview?.found) return
+    setDoubanApplying(true)
+    try {
+      const payload: Record<string, unknown> = { doubanId: doubanPreview.doubanId }
+      if (selectedFields.has('description')) payload.description = doubanPreview.description
+      if (selectedFields.has('coverUrl')) payload.coverUrl = doubanPreview.coverUrl
+      if (selectedFields.has('rating')) payload.rating = doubanPreview.rating
+      if (selectedFields.has('director')) payload.director = doubanPreview.directors
+      if (selectedFields.has('cast')) payload.cast = doubanPreview.casts
+      await apiClient.patch(`/admin/videos/${videoId}`, payload)
+      setForm((prev) => ({
+        ...prev,
+        description: selectedFields.has('description') ? (doubanPreview.description ?? '') : prev.description,
+        coverUrl: selectedFields.has('coverUrl') ? (doubanPreview.coverUrl ?? '') : prev.coverUrl,
+        rating: selectedFields.has('rating') && doubanPreview.rating !== null ? String(doubanPreview.rating) : prev.rating,
+        director: selectedFields.has('director') ? doubanPreview.directors.join(', ') : prev.director,
+        cast: selectedFields.has('cast') ? doubanPreview.casts.join(', ') : prev.cast,
+      }))
+    } finally {
+      setDoubanApplying(false)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -372,6 +456,135 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
         placeholder="多人用逗号分隔"
       />
 
+      {isEdit && (
+        <>
+          <section className="space-y-3 rounded-md border border-[var(--border)] bg-[var(--bg2)] p-4" data-testid="admin-video-sources-panel">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-medium text-[var(--text)]">关联源</h2>
+              <span className="text-xs text-[var(--muted)]">{sources.length} 条源</span>
+            </div>
+            <div className="space-y-2">
+              {sources.map((source) => (
+                <div key={source.id} className="rounded border border-[var(--border)] bg-[var(--bg3)] px-3 py-2">
+                  <div className="flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
+                    <span>{source.source_name}</span>
+                    <span>{source.is_active ? 'active' : 'inactive'}</span>
+                  </div>
+                  <div className="mt-1 break-all text-sm text-[var(--text)]">{source.source_url}</div>
+                  <div className="mt-1 text-xs text-[var(--muted)]">S{source.season_number} / E{source.episode_number}</div>
+                </div>
+              ))}
+              {sources.length === 0 && (
+                <div className="rounded border border-dashed border-[var(--border)] px-3 py-6 text-center text-sm text-[var(--muted)]">
+                  暂无源数据
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="space-y-3 rounded-md border border-[var(--border)] bg-[var(--bg2)] p-4" data-testid="admin-video-douban-panel">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-medium text-[var(--text)]">豆瓣同步</h2>
+              <button
+                type="button"
+                disabled={doubanLoading}
+                onClick={() => { void handleDoubanSearch() }}
+                className="rounded border border-[var(--border)] bg-[var(--bg3)] px-3 py-1.5 text-sm text-[var(--text)] hover:bg-[var(--bg2)] disabled:opacity-50"
+                data-testid="admin-video-douban-search"
+              >
+                {doubanLoading ? '搜索中…' : '搜索豆瓣'}
+              </button>
+            </div>
+
+            {doubanPreview && !doubanPreview.found && (
+              <div className="rounded border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--muted)]">
+                {MISS_REASON_LABEL[doubanPreview.reason]}
+              </div>
+            )}
+
+            {doubanPreview?.found && (
+              <div className="space-y-3" data-testid="admin-video-douban-preview">
+                <div className="rounded border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-xs text-[var(--muted)]">
+                  豆瓣匹配：<span className="font-medium text-[var(--text)]">{doubanPreview.title}</span>
+                  {doubanPreview.year ? ` (${doubanPreview.year})` : ''}
+                  <span className="ml-2">ID: {doubanPreview.doubanId}</span>
+                </div>
+
+                <div className="space-y-2">
+                  {doubanPreview.description && (
+                    <FieldCheckbox
+                      field="description"
+                      label="简介"
+                      value={doubanPreview.description}
+                      checked={selectedFields.has('description')}
+                      onChange={toggleField}
+                    />
+                  )}
+                  {doubanPreview.coverUrl && (
+                    <FieldCheckbox
+                      field="coverUrl"
+                      label="封面"
+                      value={doubanPreview.coverUrl}
+                      checked={selectedFields.has('coverUrl')}
+                      onChange={toggleField}
+                    />
+                  )}
+                  {doubanPreview.rating !== null && (
+                    <FieldCheckbox
+                      field="rating"
+                      label="评分"
+                      value={String(doubanPreview.rating)}
+                      checked={selectedFields.has('rating')}
+                      onChange={toggleField}
+                    />
+                  )}
+                  {doubanPreview.directors.length > 0 && (
+                    <FieldCheckbox
+                      field="director"
+                      label="导演"
+                      value={doubanPreview.directors.join('、')}
+                      checked={selectedFields.has('director')}
+                      onChange={toggleField}
+                    />
+                  )}
+                  {doubanPreview.casts.length > 0 && (
+                    <FieldCheckbox
+                      field="cast"
+                      label="演员"
+                      value={doubanPreview.casts.join('、')}
+                      checked={selectedFields.has('cast')}
+                      onChange={toggleField}
+                    />
+                  )}
+                </div>
+
+                <div className="flex justify-end">
+                  {doubanPreview.partial && (
+                    <div className="rounded border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-xs text-[var(--muted)]">
+                      已匹配到豆瓣条目，但详情抓取失败。你仍可先应用豆瓣 ID，稍后再补全字段。
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    disabled={doubanApplying}
+                    onClick={() => { void handleDoubanApply() }}
+                    className="rounded bg-[var(--accent)] px-3 py-2 text-sm font-medium text-black disabled:opacity-50"
+                    data-testid="admin-video-douban-apply"
+                  >
+                    {doubanApplying
+                      ? '应用中…'
+                      : selectedFields.size > 0
+                        ? `应用选中字段（${selectedFields.size}）`
+                        : '仅应用豆瓣 ID'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+        </>
+      )}
+
       <div className="flex gap-3">
         <button
           type="submit"
@@ -390,5 +603,30 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
         </button>
       </div>
     </form>
+  )
+}
+
+interface FieldCheckboxProps {
+  field: string
+  label: string
+  value: string
+  checked: boolean
+  onChange: (field: string) => void
+}
+
+function FieldCheckbox({ field, label, value, checked, onChange }: FieldCheckboxProps) {
+  return (
+    <label className="flex cursor-pointer items-start gap-2 rounded border border-[var(--border)] bg-[var(--bg3)] px-3 py-2">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => onChange(field)}
+        className="mt-0.5 shrink-0"
+      />
+      <div className="min-w-0">
+        <div className="text-xs font-medium text-[var(--text)]">{label}</div>
+        <div className="mt-0.5 line-clamp-2 text-xs text-[var(--muted)]">{value}</div>
+      </div>
+    </label>
   )
 }

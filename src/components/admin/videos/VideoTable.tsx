@@ -8,10 +8,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
-import { selectIsAdmin, useAuthStore } from '@/stores/authStore'
 import { PaginationV2 } from '@/components/admin/PaginationV2'
 import { BatchPublishBar } from '@/components/admin/videos/BatchPublishBar'
-import { VideoDetailDrawer } from '@/components/admin/videos/VideoDetailDrawer'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import type { TableSortState } from '@/components/admin/shared/modern-table/types'
 import type { AdminTableSortState } from '@/components/admin/shared/table/useAdminTableState'
@@ -43,7 +41,6 @@ const DEFAULT_PAGE_SIZE = 20
 export function VideoTable() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const isAdmin = useAuthStore(selectIsAdmin)
   const [videos, setVideos] = useState<VideoAdminRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -52,7 +49,6 @@ export function VideoTable() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [visibilityPendingIds, setVisibilityPendingIds] = useState<string[]>([])
   const [publishPendingIds, setPublishPendingIds] = useState<string[]>([])
-  const [drawerVideoId, setDrawerVideoId] = useState<string | null>(null)
 
   const q = searchParams.get('q') ?? ''
   const type = searchParams.get('type') ?? ''
@@ -213,14 +209,6 @@ export function VideoTable() {
         selectedIds={selectedIds}
         onSuccess={() => void fetchVideos(page, pageSize)}
         onClear={() => setSelectedIds([])}
-      />
-
-      <VideoDetailDrawer
-        videoId={drawerVideoId}
-        open={drawerVideoId !== null}
-        onClose={() => setDrawerVideoId(null)}
-        onSaved={() => void fetchVideos(page, pageSize)}
-        canSyncDouban={isAdmin}
       />
     </div>
   )
