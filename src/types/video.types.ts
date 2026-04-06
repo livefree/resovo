@@ -81,6 +81,10 @@ export interface Video {
   genreSource: 'auto' | 'manual' | null   // genre 来源：系统映射 / 管理员核验
   contentRating: 'general' | 'adult'      // 内容分级（adult 为隐藏，未来专区门控）
   createdAt: string
+  // 三层架构字段（CHG-371）
+  catalogId: string | null
+  imdbId: string | null
+  tmdbId: number | null
 }
 
 // ── 视频卡片（列表用，字段较少）────────────────────────────────

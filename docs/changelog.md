@@ -5222,3 +5222,30 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `SearchService.search`：multi_match fields 新增 `title_original^2`。
 - **测试覆盖**：typecheck ✅，lint ✅；无新增测试失败。
 - **共享层沉淀评估**：indexToES SQL 在两个 Service 中重复，建议日后提取为共享查询函数，暂不阻塞。
+
+---
+
+## CHG-371 — [Types] 更新类型系统
+- **完成时间**：2026-04-06 04:15
+- **修改文件**：
+  - `src/types/video.types.ts`
+  - `src/types/contracts/v1/admin.ts`
+  - `src/api/db/queries/videos.ts`
+- **变更说明**：
+  - `video.types.ts`：Video 接口新增 `catalogId: string | null`、`imdbId: string | null`、`tmdbId: number | null` 三个字段。
+  - `admin.ts`：新增 `MediaCatalogRow` 契约类型（含三层架构所有元数据字段），供前端组件和后台路由共享引用。
+  - `videos.ts`：`DbVideoRow` 新增 `imdb_id`、`tmdb_id`；`VIDEO_FULL_SELECT` 补充 `mc.imdb_id, mc.tmdb_id`；`mapVideoRow` 补充 `catalogId`、`imdbId`、`tmdbId` 映射。
+- **测试覆盖**：typecheck ✅，lint ✅；无新增测试失败。
+- **共享层沉淀评估**：MediaCatalogRow 已提取到 contracts/v1/admin.ts 契约层，正确复用点。
+
+---
+
+## SEQ-20260405-58 序列完成
+- **完成时间**：2026-04-06 04:15
+- **序列名称**：三层架构改造 + 外部数据 Baseline 建设
+- **完成任务**：CHG-358 ～ CHG-371，共 14 个任务
+- **核心成果**：
+  - media_catalog（作品元数据层）三层架构完整落地
+  - 外部数据暂存表 + 导入 Service + CLI 脚本
+  - ES mapping 更新 + VideoService.indexToES 修复
+  - 类型系统统一更新

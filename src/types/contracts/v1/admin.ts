@@ -84,3 +84,36 @@ export interface DoubanPreviewMiss {
 }
 
 export type DoubanPreview = DoubanPreviewFound | DoubanPreviewMiss
+
+// ── MediaCatalog 公开类型契约（CHG-371）────────────────────────────
+
+export interface MediaCatalogRow {
+  id: string
+  title: string
+  titleEn: string | null
+  titleOriginal: string | null
+  titleNormalized: string
+  type: string
+  genre: string | null
+  genresRaw: string[]
+  year: number | null
+  releaseDate: string | null
+  country: string | null
+  runtimeMinutes: number | null
+  status: string
+  description: string | null
+  coverUrl: string | null
+  rating: number | null
+  ratingVotes: number | null
+  director: string[]
+  cast: string[]
+  writers: string[]
+  imdbId: string | null
+  tmdbId: number | null
+  doubanId: string | null
+  bangumiSubjectId: number | null
+  metadataSource: string
+  lockedFields: string[]
+  createdAt: string
+  updatedAt: string
+}

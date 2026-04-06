@@ -50,6 +50,8 @@ interface DbVideoRow {
   writers: string[]
   genre: string | null
   douban_id: string | null
+  imdb_id: string | null
+  tmdb_id: number | null
   title_normalized: string
   metadata_source: string
 }
@@ -82,9 +84,12 @@ function mapVideoRow(row: DbVideoRow): Video {
     reviewStatus: (row.review_status as ReviewStatus) ?? 'pending_review',
     visibilityStatus: (row.visibility_status as VisibilityStatus) ?? 'internal',
     needsManualReview: row.needs_manual_review ?? false,
-    genreSource: null,  // genre_source 已随 migration 029 移除，CHG-371 将从类型中移除此字段
+    genreSource: null,
     contentRating: row.content_rating ?? 'general',
     createdAt: row.created_at,
+    catalogId: row.catalog_id ?? null,
+    imdbId: row.imdb_id ?? null,
+    tmdbId: row.tmdb_id ?? null,
   }
 }
 
@@ -132,7 +137,7 @@ const VIDEO_FULL_SELECT = `
   v.content_rating, v.site_key, v.source_category,
   mc.title_en, mc.description, mc.cover_url, mc.rating, mc.year, mc.country,
   mc.status, mc.director, mc."cast", mc.writers, mc.genre,
-  mc.douban_id, mc.title_normalized, mc.metadata_source
+  mc.douban_id, mc.imdb_id, mc.tmdb_id, mc.title_normalized, mc.metadata_source
 `
 
 // ── 查询：列表 ───────────────────────────────────────────────────

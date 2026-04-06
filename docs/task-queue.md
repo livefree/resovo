@@ -4938,9 +4938,9 @@
 ## SEQ-20260405-58（三层架构改造 + 外部数据 Baseline 建设）
 
 > 来源：架构评审——videos 表职责混合，外部数据（Douban/TMDB/Bangumi）建设需求
-> 状态：🔄 执行中
+> 状态：✅ 已完成
 > 创建时间：2026-04-05 00:00
-> 最后更新时间：2026-04-06 00:50
+> 最后更新时间：2026-04-06 04:15
 > 描述：将 videos 拆分为 media_catalog（作品元数据层）+ videos（平台实例层）+ video_sources（播放源层）；同步建设外部数据暂存表，为 Douban/TMDB/Bangumi 导入提供基础。
 
 ### 任务列表
@@ -5036,7 +5036,9 @@
     - 文件范围：`src/api/db/migrations/es_mapping.json`，`src/api/services/SearchService.ts`，`src/api/services/VideoService.ts`（indexToES 修复），`src/api/services/CrawlerService.ts`（新字段）
     - 变更内容：新增 catalog_id/imdb_id/tmdb_id/title_original；SearchService 查询更新
 
-14. CHG-371 — [Types] 更新类型系统（状态：⬜ 待开始）
+14. CHG-371 — [Types] 更新类型系统（状态：✅ 已完成）
     - 创建时间：2026-04-05 00:00
-    - 文件范围：`src/types/video.types.ts`，`src/types/contracts/v1/admin.ts`
+    - 实际开始：2026-04-06 04:06
+    - 完成时间：2026-04-06 04:15
+    - 文件范围：`src/types/video.types.ts`，`src/types/contracts/v1/admin.ts`，`src/api/db/queries/videos.ts`
     - 变更内容：Video 类型新增 catalogId/imdbId/tmdbId；新增 MediaCatalogRow 类型
