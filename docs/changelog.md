@@ -5012,3 +5012,18 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 新增成人源站视频数据收敛 migration：将目标视频统一收敛到 `type='other'`、`hidden`、`rejected`、`unpublished`。
 - **实现细节**：
   - 受状态机触发器约束，迁移采用合法跃迁链：先 hidden/unpublished，再 approved->pending，再 pending->rejected。
+
+---
+
+### CHG-358 — [Schema] 026_create_media_catalog.sql（2026-04-05）
+
+- **修改文件**：无
+- **新增文件**：
+  - `src/api/db/migrations/026_create_media_catalog.sql`
+- **变更内容**：
+  - 创建 `media_catalog` 表：三层架构的作品元数据层，包含 title/title_en/title_original/title_normalized、type、genre/genres_raw、year/release_date/country/runtime_minutes、description/cover_url/rating/rating_votes、director/cast/writers 数组字段；四个外部 ID（imdb_id UNIQUE、tmdb_id UNIQUE、douban_id UNIQUE、bangumi_subject_id UNIQUE）；metadata_source（优先级 manual>tmdb>bangumi=douban>crawler）；locked_fields TEXT[]（Service 层字段锁）。
+  - 唯一索引：有精确外部 ID 时各自 UNIQUE；无精确 ID 时 title_normalized+year+type 三元组唯一（条件索引）。
+  - 创建 `media_catalog_aliases` 表：存储多语言别名（alias/lang/source），与 media_catalog 1:N 关联。
+  - 创建 `updated_at` 自动更新触发器 `trg_media_catalog_updated_at`。
+- **测试覆盖**：INFRA 任务，跳过单元测试；typecheck ✅，lint ✅。
+- **共享层沉淀评估**：纯 DDL migration，无需沉淀到共享层。

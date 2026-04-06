@@ -4932,3 +4932,87 @@
    - 文件范围：`src/api/db/migrations/025_enforce_adult_site_video_safety.sql`
    - 变更内容：将来自成人源站的视频收敛为 `type='other'`、`visibility_status='hidden'`、`review_status='rejected'`、`is_published=false`。
    - 完成备注：按状态机触发器白名单分步跃迁（approved->pending->rejected）实现，避免 DB 触发器拒绝更新。
+
+---
+
+## SEQ-20260405-58（三层架构改造 + 外部数据 Baseline 建设）
+
+> 来源：架构评审——videos 表职责混合，外部数据（Douban/TMDB/Bangumi）建设需求
+> 状态：🔄 执行中
+> 创建时间：2026-04-05 00:00
+> 最后更新时间：2026-04-05 00:30
+> 描述：将 videos 拆分为 media_catalog（作品元数据层）+ videos（平台实例层）+ video_sources（播放源层）；同步建设外部数据暂存表，为 Douban/TMDB/Bangumi 导入提供基础。
+
+### 任务列表
+
+1. CHG-358 — [Schema] 026_create_media_catalog.sql（状态：✅ 已完成）
+   - 创建时间：2026-04-05 00:00
+   - 实际开始：2026-04-05 00:01
+   - 完成时间：2026-04-05 00:30
+   - 文件范围：`src/api/db/migrations/026_create_media_catalog.sql`
+   - 变更内容：创建 media_catalog 表（含 locked_fields、4 个外部 ID 列、所有索引）；创建 media_catalog_aliases 表；updated_at 自动触发器
+
+2. CHG-359 — [Schema] 027_create_external_raw_tables.sql（状态：⬜ 待开始）
+   - 创建时间：2026-04-05 00:00
+   - 文件范围：`src/api/db/migrations/027_create_external_raw_tables.sql`
+   - 变更内容：创建 external_import_batches、external_douban_movies_raw、external_tmdb_movies_raw、external_bangumi_subjects_raw、external_imdb_tmdb_links 共 5 张表
+
+3. CHG-360 — [Schema] 028_videos_add_catalog_id.sql（状态：⬜ 待开始）
+   - 创建时间：2026-04-05 00:00
+   - 文件范围：`src/api/db/migrations/028_videos_add_catalog_id.sql`
+   - 变更内容：videos 加 catalog_id 列；CTE 批量从现有 videos 数据创建 catalog 条目并回填；迁移 douban_id 到 catalog
+
+4. CHG-361 — [Schema] 029_videos_drop_metadata_fields.sql（状态：⬜ 待开始）
+   - 创建时间：2026-04-05 00:00
+   - 文件范围：`src/api/db/migrations/029_videos_drop_metadata_fields.sql`
+   - 变更内容：删除 videos 表中 13 个已迁移字段；catalog_id 设为 NOT NULL；断言验证
+
+5. CHG-362 — [Schema] 030_video_aliases_to_catalog.sql（状态：⬜ 待开始）
+   - 创建时间：2026-04-05 00:00
+   - 文件范围：`src/api/db/migrations/030_video_aliases_to_catalog.sql`
+   - 变更内容：迁移 video_aliases 数据到 media_catalog_aliases
+
+6. CHG-363 — [Query] 新建 mediaCatalog.ts（状态：⬜ 待开始）
+   - 创建时间：2026-04-05 00:00
+   - 文件范围：`src/api/db/queries/mediaCatalog.ts`
+   - 变更内容：findCatalogBy{ImdbId,TmdbId,NormalizedKey,DoubanId,BangumiId}；upsertCatalog；updateCatalogFields（含 locked_fields 检查）；findOrCreate
+
+7. CHG-364 — [Query] 改造 videos.ts（状态：⬜ 待开始）
+   - 创建时间：2026-04-05 00:00
+   - 文件范围：`src/api/db/queries/videos.ts`
+   - 变更内容：DbVideoRow 瘦身；所有 SELECT JOIN media_catalog；insertCrawledVideo 接受 catalogId；删除 updateDoubanData 和 findVideoByNormalizedKey
+
+8. CHG-365 — [Service] 新建 MediaCatalogService.ts（状态：⬜ 待开始）
+   - 创建时间：2026-04-05 00:00
+   - 文件范围：`src/api/services/MediaCatalogService.ts`
+   - 变更内容：findOrCreate（5 步匹配）；safeUpdate（priority+lock 双重检查）；lockFields；CATALOG_SOURCE_PRIORITY 常量
+
+9. CHG-366 — [Service] 改造 CrawlerService.ts（状态：⬜ 待开始）
+   - 创建时间：2026-04-05 00:00
+   - 文件范围：`src/api/services/CrawlerService.ts`
+   - 变更内容：upsertVideo 按新六步流程重写；indexToES SQL 改为 JOIN media_catalog；引入 MediaCatalogService
+
+10. CHG-367 — [Service] 改造 DoubanService.ts（状态：⬜ 待开始）
+    - 创建时间：2026-04-05 00:00
+    - 文件范围：`src/api/services/DoubanService.ts`
+    - 变更内容：syncVideo/previewVideo 目标改为 media_catalog；safeUpdate(source='douban')；同步冗余字段 videos.title
+
+11. CHG-368 — [Service] 新建 ExternalDataImportService.ts（状态：⬜ 待开始）
+    - 创建时间：2026-04-05 00:00
+    - 文件范围：`src/api/services/ExternalDataImportService.ts`
+    - 变更内容：流式 CSV/JSONLINES 读取；import{Douban,Tmdb,Bangumi,MovieLensLinks}；buildCatalogFrom{Douban,Tmdb,Bangumi}（含 ID 桥接）；幂等设计
+
+12. CHG-369 — [Script] 编写导入 CLI 脚本（状态：⬜ 待开始）
+    - 创建时间：2026-04-05 00:00
+    - 文件范围：`scripts/import-external-data.ts`（新建）
+    - 变更内容：CLI 参数 --source --file；进度输出；调用 ExternalDataImportService
+
+13. CHG-370 — [ES] 更新 es_mapping.json + 重建索引（状态：⬜ 待开始）
+    - 创建时间：2026-04-05 00:00
+    - 文件范围：`src/api/db/migrations/es_mapping.json`，`src/api/services/SearchService.ts`
+    - 变更内容：新增 catalog_id/imdb_id/tmdb_id/title_original；SearchService 查询更新
+
+14. CHG-371 — [Types] 更新类型系统（状态：⬜ 待开始）
+    - 创建时间：2026-04-05 00:00
+    - 文件范围：`src/types/video.types.ts`，`src/types/contracts/v1/admin.ts`
+    - 变更内容：Video 类型新增 catalogId/imdbId/tmdbId；新增 MediaCatalogRow 类型
