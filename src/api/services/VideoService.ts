@@ -12,6 +12,8 @@ import type {
   ModerationStats,
   PendingReviewVideoRow,
 } from '@/api/db/queries/videos'
+import { MediaCatalogService } from '@/api/services/MediaCatalogService'
+import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 100
@@ -139,8 +141,33 @@ export class VideoService {
   }
 
   async update(id: string, input: Record<string, unknown>): Promise<unknown | null> {
-    // 仅更新 videos 表自有字段（title/type/episodeCount/slug）
-    // 元数据字段更新由 MediaCatalogService.safeUpdate 处理（CHG-365 实现）
+    // Step 1: 获取当前视频（含 catalog_id）
+    const video = await videoQueries.findAdminVideoById(this.db, id)
+    if (!video) return null
+
+    // Step 2: 提取 catalog 元数据字段，通过 MediaCatalogService.safeUpdate 写入（source='manual'）
+    const catalogFields: CatalogUpdateData = {}
+    if (input.title !== undefined) catalogFields.title = String(input.title)
+    if (input.titleEn !== undefined) catalogFields.titleEn = input.titleEn as string | null
+    if (input.description !== undefined) catalogFields.description = input.description as string | null
+    if (input.coverUrl !== undefined) catalogFields.coverUrl = input.coverUrl as string | null
+    if (input.type !== undefined) catalogFields.type = input.type as string
+    if (input.genre !== undefined) catalogFields.genre = input.genre as string | null
+    if (input.year !== undefined) catalogFields.year = input.year as number | null
+    if (input.country !== undefined) catalogFields.country = input.country as string | null
+    if (input.status !== undefined) catalogFields.status = input.status as string
+    if (input.rating !== undefined) catalogFields.rating = input.rating as number | null
+    if (input.director !== undefined) catalogFields.director = input.director as string[]
+    if (input.cast !== undefined) catalogFields.cast = input.cast as string[]
+    if (input.writers !== undefined) catalogFields.writers = input.writers as string[]
+    if (input.doubanId !== undefined) catalogFields.doubanId = input.doubanId as string | null
+
+    if (Object.keys(catalogFields).length > 0) {
+      const catalogService = new MediaCatalogService(this.db)
+      await catalogService.safeUpdate(video.catalog_id, catalogFields, 'manual')
+    }
+
+    // Step 3: 更新 videos 表冗余副本字段（title/type/episodeCount/slug）
     const adaptedInput: UpdateVideoMetaInput = {
       ...(input.title !== undefined ? { title: String(input.title) } : {}),
       ...(input.type !== undefined ? { type: input.type as VideoType } : {}),
@@ -149,7 +176,7 @@ export class VideoService {
     }
     const row = await videoQueries.updateVideoMeta(this.db, id, adaptedInput)
     if (row) void this.indexToES(id)
-    return row
+    return row ?? { id, updated_at: new Date().toISOString() }
   }
 
   async publish(id: string, isPublished: boolean): Promise<unknown | null> {

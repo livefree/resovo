@@ -5249,3 +5249,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 外部数据暂存表 + 导入 Service + CLI 脚本
   - ES mapping 更新 + VideoService.indexToES 修复
   - 类型系统统一更新
+
+---
+
+## CHG-372 — [Fix] VideoService.update() 写入 catalog 元数据
+- **完成时间**：2026-04-06 10:15
+- **修改文件**：
+  - `src/api/services/VideoService.ts`：update() 重写，先查询 catalog_id，再调用 MediaCatalogService.safeUpdate(catalogId, catalogFields, 'manual')；然后更新 videos 表冗余副本
+  - `src/api/routes/admin/videos.ts`：移除无效的 genreSource 附加逻辑（catalog 无此字段，原注释说"由 safeUpdate 处理"但从未实现）
+- **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为 SEQ-20260405-58 遗留的预存失败，与本次无关）
+- **共享层沉淀**：否——直接复用已有 MediaCatalogService.safeUpdate，无需新沉淀

@@ -5042,3 +5042,38 @@
     - 完成时间：2026-04-06 04:15
     - 文件范围：`src/types/video.types.ts`，`src/types/contracts/v1/admin.ts`，`src/api/db/queries/videos.ts`
     - 变更内容：Video 类型新增 catalogId/imdbId/tmdbId；新增 MediaCatalogRow 类型
+
+---
+
+## SEQ-20260406-59（后台内容管理修复 + 豆瓣适配器迁移）
+
+> 创建时间：2026-04-06 10:00
+> 最后更新时间：2026-04-06 10:00
+> 状态：🔄 进行中
+> 描述：修复 VideoService.update() 未写入 catalog 元数据的关键 Bug；将 external-adapter/douban-adapter 迁移到主工程，替换现有 7 字段豆瓣实现；更新后台视频表单支持新增字段（screenwriters、原标题等）。
+
+### 任务列表
+
+1. CHG-372 — [Fix] VideoService.update() 写入 catalog 元数据（状态：✅ 已完成）
+   - 创建时间：2026-04-06 10:00
+   - 实际开始：2026-04-06 10:01
+   - 完成时间：2026-04-06 10:15
+   - 变更原因：PATCH /admin/videos/:id 中元数据字段（genre/rating/description/coverUrl/year/country/director/cast/writers/doubanId）被静默丢弃，从未写入 media_catalog
+   - 文件范围：`src/api/services/VideoService.ts`，`src/api/routes/admin/videos.ts`
+   - 变更内容：VideoService.update() 先查询视频获取 catalog_id，提取 catalog 字段后调用 MediaCatalogService.safeUpdate(catalogId, catalogFields, 'manual')；移除路由层无效 genreSource 附加逻辑
+   - 完成备注：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为预存，与本次无关）
+
+2. CHG-373 — [Infra] 迁移 douban-adapter 到主工程（状态：⬜ 待开始）
+   - 创建时间：2026-04-06 10:00
+   - 依赖：CHG-372 ✅
+   - 变更原因：external-adapter/douban-adapter 提供 23+ 字段 + 防爬虫 + 缓存，优于现有 7 字段实现
+   - 文件范围：`package.json`，`src/api/lib/doubanAdapter.ts`（新建），`src/api/lib/douban.ts`（保留但标记 @deprecated），`src/api/services/DoubanService.ts`
+   - 变更内容：package.json 添加 `"douban-adapter": "file:../external-adapter/douban-adapter"` 本地依赖；新建 doubanAdapter.ts 包装 createDoubanDetailsService + createDoubanResolverService；DoubanService.ts 切换到新 adapter，previewVideo 返回 DoubanPreviewFound 新增 screenwriters/titleOriginal/genres/languages 字段；DoubanPreviewFound 类型扩展
+   - 完成备注：_（AI 填写）_
+
+3. CHG-374 — [UI] 后台视频表单 + 路由支持新字段（状态：⬜ 待开始）
+   - 创建时间：2026-04-06 10:00
+   - 依赖：CHG-373 ✅
+   - 文件范围：`src/components/admin/AdminVideoForm.tsx`，`src/api/routes/admin/videos.ts`，`src/types/contracts/v1/admin.ts`
+   - 变更内容：AdminVideoForm 表单增加 screenwriters 字段；豆瓣预览面板显示原标题/screenwriters；VideoMetaSchema 添加 screenwriters；DoubanPreviewFound 增加 screenwriters/titleOriginal
+   - 完成备注：_（AI 填写）_

@@ -318,14 +318,7 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    // 管理员手动设置 genre 时，自动标记 genreSource='manual'；清空时置 null
-    const updateInput = {
-      ...parsed.data,
-      ...(('genre' in parsed.data)
-        ? { genreSource: parsed.data.genre ? ('manual' as const) : null }
-        : {}),
-    }
-    const result = await videoService.update(id, updateInput)
+    const result = await videoService.update(id, parsed.data)
     if (!result) {
       return reply.code(404).send({
         error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
