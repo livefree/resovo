@@ -5092,3 +5092,23 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 验证块输出：total/migrated/skipped 统计。
 - **测试覆盖**：INFRA 任务，跳过单元测试；typecheck ✅，lint ✅。
 - **共享层沉淀评估**：纯 DDL migration，无需沉淀到共享层。
+
+---
+
+### CHG-363 — [Query] 新建 src/api/db/queries/mediaCatalog.ts（2026-04-05）
+
+- **修改文件**：无
+- **新增文件**：
+  - `src/api/db/queries/mediaCatalog.ts`
+- **变更内容**：
+  - 定义并导出 `MediaCatalogRow`、`CatalogInsertData`、`CatalogUpdateData` 类型。
+  - `findCatalogById`：按主键查询。
+  - `findCatalogByImdbId / findCatalogByTmdbId / findCatalogByDoubanId / findCatalogByBangumiId`：精确外部 ID 查询。
+  - `findCatalogByNormalizedKey(titleNormalized, year, type)`：三元组模糊匹配（无精确 ID 时使用）。
+  - `insertCatalog(data)`：INSERT ON CONFLICT DO NOTHING，冲突时返回 null（由 Service 层判断后续处理）。
+  - `updateCatalogFields(id, data)`：动态构建 SET 子句，仅更新传入字段；locked_fields 校验由 MediaCatalogService 在调用前完成。
+  - `addLockedFields(id, fields)` / `setLockedFields(id, fields)`：追加/覆盖 locked_fields 数组。
+  - `linkVideoToCatalog(videoId, catalogId)`：更新 videos.catalog_id（跨表绑定）。
+- **设计说明**：locked_fields 校验不在 Query 层，只在 Service 层（MediaCatalogService.safeUpdate）。
+- **测试覆盖**：typecheck ✅，lint ✅（数据库 Query 层单元测试依赖真实 DB，在集成测试中覆盖）。
+- **共享层沉淀评估**：MediaCatalogRow 类型已导出，供 Service 层复用；CHG-371 将其迁移到 @/types 统一类型入口。
