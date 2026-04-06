@@ -5063,13 +5063,15 @@
    - 变更内容：VideoService.update() 先查询视频获取 catalog_id，提取 catalog 字段后调用 MediaCatalogService.safeUpdate(catalogId, catalogFields, 'manual')；移除路由层无效 genreSource 附加逻辑
    - 完成备注：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为预存，与本次无关）
 
-2. CHG-373 — [Infra] 迁移 douban-adapter 到主工程（状态：⬜ 待开始）
+2. CHG-373 — [Infra] 迁移 douban-adapter 到主工程（状态：✅ 已完成）
    - 创建时间：2026-04-06 10:00
+   - 实际开始：2026-04-06 10:20
+   - 完成时间：2026-04-06 10:50
    - 依赖：CHG-372 ✅
    - 变更原因：external-adapter/douban-adapter 提供 23+ 字段 + 防爬虫 + 缓存，优于现有 7 字段实现
-   - 文件范围：`package.json`，`src/api/lib/doubanAdapter.ts`（新建），`src/api/lib/douban.ts`（保留但标记 @deprecated），`src/api/services/DoubanService.ts`
-   - 变更内容：package.json 添加 `"douban-adapter": "file:../external-adapter/douban-adapter"` 本地依赖；新建 doubanAdapter.ts 包装 createDoubanDetailsService + createDoubanResolverService；DoubanService.ts 切换到新 adapter，previewVideo 返回 DoubanPreviewFound 新增 screenwriters/titleOriginal/genres/languages 字段；DoubanPreviewFound 类型扩展
-   - 完成备注：_（AI 填写）_
+   - 文件范围：`package.json`，`src/api/lib/doubanAdapter.ts`（新建），`src/api/services/DoubanService.ts`，`src/types/contracts/v1/admin.ts`，`tests/unit/api/douban.test.ts`
+   - 变更内容：package.json 添加本地 file: 依赖；新建 doubanAdapter.ts 包装 createDoubanDetailsService；DoubanService.ts 切换到 getDoubanDetailRich（支持 screenwriters/genres/countries/languages/genresRaw/writers）；DoubanPreviewFound 类型增加 5 个可选字段；更新 douban.test.ts mock 数据格式
+   - 完成备注：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为预存）
 
 3. CHG-374 — [UI] 后台视频表单 + 路由支持新字段（状态：⬜ 待开始）
    - 创建时间：2026-04-06 10:00

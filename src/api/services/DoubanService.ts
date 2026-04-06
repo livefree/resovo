@@ -10,7 +10,8 @@
  */
 
 import type { Pool } from 'pg'
-import { searchDouban, getDoubanDetail } from '@/api/lib/douban'
+import { searchDouban } from '@/api/lib/douban'
+import { getDoubanDetailRich } from '@/api/lib/doubanAdapter'
 import * as videoQueries from '@/api/db/queries/videos'
 import * as catalogQueries from '@/api/db/queries/mediaCatalog'
 import { MediaCatalogService } from './MediaCatalogService'
@@ -129,35 +130,36 @@ export class DoubanService {
     const best = pickBestCandidate(catalog.title, catalog.year ?? null, candidates)
     if (!best) return { updated: false, reason: 'no_match' }
 
-    // 5. 获取详情
-    let detail: Awaited<ReturnType<typeof getDoubanDetail>>
-    try {
-      detail = await getDoubanDetail(best.id)
-    } catch {
-      return { updated: false, reason: 'fetch_failed' }
-    }
+    // 5. 获取详情（使用 douban-adapter，支持 23+ 字段）
+    const detail = await getDoubanDetailRich(best.id)
     if (!detail) return { updated: false, reason: 'fetch_failed' }
 
     // 6. 通过 MediaCatalogService.safeUpdate 写入 catalog（source='douban', priority=3）
     const catalogService = new MediaCatalogService(this.db)
+    const ratingNum = detail.rate ? parseFloat(detail.rate) : NaN
     const updateFields: import('@/api/db/queries/mediaCatalog').CatalogUpdateData = {
       doubanId: detail.id,
     }
-    if (detail.rating !== null) updateFields.rating = detail.rating
-    if (detail.summary) updateFields.description = detail.summary
-    if (detail.posterUrl) updateFields.coverUrl = detail.posterUrl
+    if (!isNaN(ratingNum)) updateFields.rating = ratingNum
+    if (detail.plotSummary) updateFields.description = detail.plotSummary
+    if (detail.poster) updateFields.coverUrl = detail.poster
     if (detail.directors.length > 0) updateFields.director = detail.directors
-    if (detail.casts.length > 0) updateFields.cast = detail.casts
+    if (detail.cast.length > 0) updateFields.cast = detail.cast
+    if (detail.screenwriters.length > 0) updateFields.writers = detail.screenwriters
+    if (detail.genres.length > 0) updateFields.genresRaw = detail.genres
+    if (detail.countries.length > 0) updateFields.country = detail.countries[0]
 
     const updated = await catalogService.safeUpdate(catalog.id, updateFields, 'douban')
     if (!updated) return { updated: false, reason: 'fetch_failed' }
 
     const fields: string[] = ['doubanId']
-    if (detail.rating !== null) fields.push('rating')
-    if (detail.summary) fields.push('description')
-    if (detail.posterUrl) fields.push('coverUrl')
+    if (!isNaN(ratingNum)) fields.push('rating')
+    if (detail.plotSummary) fields.push('description')
+    if (detail.poster) fields.push('coverUrl')
     if (detail.directors.length > 0) fields.push('director')
-    if (detail.casts.length > 0) fields.push('cast')
+    if (detail.cast.length > 0) fields.push('cast')
+    if (detail.screenwriters.length > 0) fields.push('writers')
+    if (detail.genres.length > 0) fields.push('genresRaw')
 
     return { updated: true, fields, doubanId: detail.id }
   }
@@ -177,12 +179,7 @@ export class DoubanService {
     const best = pickBestCandidate(video.title, video.year ?? null, candidates)
     if (!best) return { found: false, reason: 'no_match' }
 
-    let detail: Awaited<ReturnType<typeof getDoubanDetail>>
-    try {
-      detail = await getDoubanDetail(best.id)
-    } catch {
-      detail = null
-    }
+    const detail = await getDoubanDetailRich(best.id)
     if (!detail) {
       return {
         found: true,
@@ -198,16 +195,21 @@ export class DoubanService {
       }
     }
 
+    const ratingNum = detail.rate ? parseFloat(detail.rate) : NaN
     return {
       found: true,
       doubanId: detail.id,
       title: detail.title,
-      year: detail.year,
-      rating: detail.rating,
-      description: detail.summary,
-      coverUrl: detail.posterUrl,
+      year: parseYear(detail.year),
+      rating: !isNaN(ratingNum) ? ratingNum : null,
+      description: detail.plotSummary ?? null,
+      coverUrl: detail.poster,
       directors: detail.directors,
-      casts: detail.casts,
+      casts: detail.cast,
+      screenwriters: detail.screenwriters,
+      genres: detail.genres,
+      countries: detail.countries,
+      languages: detail.languages,
     }
   }
 }

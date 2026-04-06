@@ -46,12 +46,16 @@ vi.mock('@/api/db/queries/mediaCatalog', () => ({
 
 vi.mock('@/api/lib/douban', () => ({
   searchDouban: vi.fn(),
-  getDoubanDetail: vi.fn(),
+}))
+
+vi.mock('@/api/lib/doubanAdapter', () => ({
+  getDoubanDetailRich: vi.fn(),
 }))
 
 import * as videoQueries from '@/api/db/queries/videos'
 import * as catalogQueries from '@/api/db/queries/mediaCatalog'
 import * as doubanLib from '@/api/lib/douban'
+import * as doubanAdapterLib from '@/api/lib/doubanAdapter'
 
 const mockVQ = videoQueries as {
   findAdminVideoById: ReturnType<typeof vi.fn>
@@ -62,7 +66,7 @@ const mockCQ = catalogQueries as {
   updateCatalogFields: ReturnType<typeof vi.fn>
 }
 const mockSearch = doubanLib.searchDouban as ReturnType<typeof vi.fn>
-const mockDetail = doubanLib.getDoubanDetail as ReturnType<typeof vi.fn>
+const mockDetail = doubanAdapterLib.getDoubanDetailRich as ReturnType<typeof vi.fn>
 
 // ── 测试数据 ─────────────────────────────────────────────────────
 
@@ -149,12 +153,19 @@ describe('POST /v1/admin/videos/:id/douban-sync', () => {
     mockDetail.mockResolvedValue({
       id: '26266893',
       title: '流浪地球',
-      year: 2019,
-      rating: 7.9,
-      summary: '近未来，太阳急速老化膨胀...',
+      poster: 'https://img.douban.com/view/photo/s_ratio_poster/public/p2544305534.jpg',
+      rate: '7.9',
+      year: '2019',
       directors: ['郭帆'],
-      casts: ['吴京', '屈楚萧'],
-      posterUrl: 'https://img.douban.com/view/photo/s_ratio_poster/public/p2544305534.jpg',
+      screenwriters: [],
+      cast: ['吴京', '屈楚萧'],
+      genres: ['科幻', '冒险'],
+      countries: ['中国大陆'],
+      languages: ['普通话'],
+      plotSummary: '近未来，太阳急速老化膨胀...',
+      celebrities: [],
+      recommendations: [],
+      actors: [],
     })
     mockCQ.updateCatalogFields.mockResolvedValue({
       ...DEFAULT_CATALOG_ROW,
@@ -245,12 +256,19 @@ describe('DoubanService.syncVideo', () => {
     mockDetail.mockResolvedValue({
       id: '26266893',
       title: '流浪地球',
-      year: 2019,
-      rating: 7.9,
-      summary: '近未来，太阳急速老化膨胀...',
+      poster: 'https://img.douban.com/view/photo/s_ratio_poster/public/p2544305534.jpg',
+      rate: '7.9',
+      year: '2019',
       directors: ['郭帆'],
-      casts: ['吴京', '屈楚萧'],
-      posterUrl: 'https://img.douban.com/view/photo/s_ratio_poster/public/p2544305534.jpg',
+      screenwriters: [],
+      cast: ['吴京', '屈楚萧'],
+      genres: ['科幻'],
+      countries: ['中国大陆'],
+      languages: ['普通话'],
+      plotSummary: '近未来，太阳急速老化膨胀...',
+      celebrities: [],
+      recommendations: [],
+      actors: [],
     })
     mockCQ.updateCatalogFields.mockResolvedValue({
       ...DEFAULT_CATALOG_ROW,

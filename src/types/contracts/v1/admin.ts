@@ -69,12 +69,17 @@ export interface DoubanPreviewFound {
   found: true
   doubanId: string
   title: string
+  titleOriginal?: string | null   // 原标题（来自 douban-adapter）
   year: number | null
   rating: number | null
   description: string | null
   coverUrl: string | null
   directors: string[]
   casts: string[]
+  screenwriters?: string[]        // 编剧（来自 douban-adapter）
+  genres?: string[]               // 题材标签，如 ['剧情', '动作']（来自 douban-adapter）
+  countries?: string[]            // 出品国家（来自 douban-adapter）
+  languages?: string[]            // 语言（来自 douban-adapter）
   partial?: boolean
 }
 

@@ -5259,3 +5259,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/api/routes/admin/videos.ts`：移除无效的 genreSource 附加逻辑（catalog 无此字段，原注释说"由 safeUpdate 处理"但从未实现）
 - **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为 SEQ-20260405-58 遗留的预存失败，与本次无关）
 - **共享层沉淀**：否——直接复用已有 MediaCatalogService.safeUpdate，无需新沉淀
+
+---
+
+## CHG-373 — [Infra] 迁移 douban-adapter 到主工程
+- **完成时间**：2026-04-06 10:50
+- **修改文件**：
+  - `package.json`：添加 `"douban-adapter": "file:external-adapter/douban-adapter"` 本地依赖（npm 安装为 symlink）
+  - `src/api/lib/doubanAdapter.ts`（新建）：包装 createDoubanDetailsService，提供 getDoubanDetailRich()
+  - `src/api/services/DoubanService.ts`：syncVideo/previewVideo 切换到 getDoubanDetailRich；同步写入 writers/genresRaw/country（首个国家）；previewVideo 返回新增 screenwriters/genres/countries/languages 字段
+  - `src/types/contracts/v1/admin.ts`：DoubanPreviewFound 增加 titleOriginal/screenwriters/genres/countries/languages 可选字段
+  - `tests/unit/api/douban.test.ts`：mock 从 getDoubanDetail 改为 getDoubanDetailRich，更新 mock 数据格式（rate/poster/cast/plotSummary）
+- **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为 SEQ-20260405-58 遗留）
+- **共享层沉淀**：是——`doubanAdapter.ts` 作为 douban-adapter 包在主工程的唯一适配层
