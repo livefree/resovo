@@ -5048,8 +5048,8 @@
 ## SEQ-20260406-59（后台内容管理修复 + 豆瓣适配器迁移）
 
 > 创建时间：2026-04-06 10:00
-> 最后更新时间：2026-04-06 10:00
-> 状态：🔄 进行中
+> 最后更新时间：2026-04-06 11:20
+> 状态：✅ 已完成
 > 描述：修复 VideoService.update() 未写入 catalog 元数据的关键 Bug；将 external-adapter/douban-adapter 迁移到主工程，替换现有 7 字段豆瓣实现；更新后台视频表单支持新增字段（screenwriters、原标题等）。
 
 ### 任务列表
@@ -5073,9 +5073,11 @@
    - 变更内容：package.json 添加本地 file: 依赖；新建 doubanAdapter.ts 包装 createDoubanDetailsService；DoubanService.ts 切换到 getDoubanDetailRich（支持 screenwriters/genres/countries/languages/genresRaw/writers）；DoubanPreviewFound 类型增加 5 个可选字段；更新 douban.test.ts mock 数据格式
    - 完成备注：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为预存）
 
-3. CHG-374 — [UI] 后台视频表单 + 路由支持新字段（状态：⬜ 待开始）
+3. CHG-374 — [UI] 后台视频表单 + 路由支持新字段（状态：✅ 已完成）
    - 创建时间：2026-04-06 10:00
+   - 实际开始：2026-04-06 11:00
+   - 完成时间：2026-04-06 11:20
    - 依赖：CHG-373 ✅
-   - 文件范围：`src/components/admin/AdminVideoForm.tsx`，`src/api/routes/admin/videos.ts`，`src/types/contracts/v1/admin.ts`
-   - 变更内容：AdminVideoForm 表单增加 screenwriters 字段；豆瓣预览面板显示原标题/screenwriters；VideoMetaSchema 添加 screenwriters；DoubanPreviewFound 增加 screenwriters/titleOriginal
-   - 完成备注：_（AI 填写）_
+   - 文件范围：`src/components/admin/AdminVideoForm.tsx`
+   - 变更内容：豆瓣预览面板新增 screenwriters（编剧）checkbox，应用时映射到 writers 字段；匹配摘要行显示 titleOriginal（原标题）；handleDoubanSearch 自动勾选 writers；handleDoubanApply 写入 writers payload 并同步更新表单
+   - 完成备注：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为预存）

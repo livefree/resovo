@@ -5272,3 +5272,12 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/douban.test.ts`：mock 从 getDoubanDetail 改为 getDoubanDetailRich，更新 mock 数据格式（rate/poster/cast/plotSummary）
 - **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为 SEQ-20260405-58 遗留）
 - **共享层沉淀**：是——`doubanAdapter.ts` 作为 douban-adapter 包在主工程的唯一适配层
+
+---
+
+## CHG-374 — [UI] 后台视频表单 + 路由支持新字段
+- **完成时间**：2026-04-06 11:20
+- **修改文件**：
+  - `src/components/admin/AdminVideoForm.tsx`：豆瓣预览面板新增 screenwriters checkbox（编剧，映射到 writers 字段）；摘要行显示 titleOriginal；handleDoubanSearch 自动勾选 writers；handleDoubanApply 写入 payload.writers 并同步更新表单 writers 字段
+- **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为预存）
+- **共享层沉淀**：否——变更局限于该表单的豆瓣子面板扩展

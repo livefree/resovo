@@ -213,6 +213,7 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
         if (res.data.rating !== null) defaults.add('rating')
         if (res.data.directors.length > 0) defaults.add('director')
         if (res.data.casts.length > 0) defaults.add('cast')
+        if (res.data.screenwriters && res.data.screenwriters.length > 0) defaults.add('writers')
         setSelectedFields(defaults)
       }
     } catch {
@@ -241,6 +242,7 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
       if (selectedFields.has('rating')) payload.rating = doubanPreview.rating
       if (selectedFields.has('director')) payload.director = doubanPreview.directors
       if (selectedFields.has('cast')) payload.cast = doubanPreview.casts
+      if (selectedFields.has('writers') && doubanPreview.screenwriters) payload.writers = doubanPreview.screenwriters
       await apiClient.patch(`/admin/videos/${videoId}`, payload)
       setForm((prev) => ({
         ...prev,
@@ -249,6 +251,9 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
         rating: selectedFields.has('rating') && doubanPreview.rating !== null ? String(doubanPreview.rating) : prev.rating,
         director: selectedFields.has('director') ? doubanPreview.directors.join(', ') : prev.director,
         cast: selectedFields.has('cast') ? doubanPreview.casts.join(', ') : prev.cast,
+        writers: selectedFields.has('writers') && doubanPreview.screenwriters
+          ? doubanPreview.screenwriters.join(', ')
+          : prev.writers,
       }))
     } finally {
       setDoubanApplying(false)
@@ -506,6 +511,9 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
               <div className="space-y-3" data-testid="admin-video-douban-preview">
                 <div className="rounded border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-xs text-[var(--muted)]">
                   豆瓣匹配：<span className="font-medium text-[var(--text)]">{doubanPreview.title}</span>
+                  {doubanPreview.titleOriginal && doubanPreview.titleOriginal !== doubanPreview.title && (
+                    <span className="ml-1 text-[var(--muted)]">（{doubanPreview.titleOriginal}）</span>
+                  )}
                   {doubanPreview.year ? ` (${doubanPreview.year})` : ''}
                   <span className="ml-2">ID: {doubanPreview.doubanId}</span>
                 </div>
@@ -553,6 +561,15 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
                       label="演员"
                       value={doubanPreview.casts.join('、')}
                       checked={selectedFields.has('cast')}
+                      onChange={toggleField}
+                    />
+                  )}
+                  {doubanPreview.screenwriters && doubanPreview.screenwriters.length > 0 && (
+                    <FieldCheckbox
+                      field="writers"
+                      label="编剧"
+                      value={doubanPreview.screenwriters.join('、')}
+                      checked={selectedFields.has('writers')}
                       onChange={toggleField}
                     />
                   )}
