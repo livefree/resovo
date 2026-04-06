@@ -5015,9 +5015,11 @@
     - 文件范围：`src/api/services/DoubanService.ts`, `tests/unit/api/douban.test.ts`
     - 变更内容：syncVideo/previewVideo 目标改为 media_catalog；safeUpdate(source='douban')；同步冗余字段 videos.title
 
-11. CHG-368 — [Service] 新建 ExternalDataImportService.ts（状态：⬜ 待开始）
+11. CHG-368 — [Service] 新建 ExternalDataImportService.ts（状态：✅ 已完成）
     - 创建时间：2026-04-05 00:00
-    - 文件范围：`src/api/services/ExternalDataImportService.ts`
+    - 实际开始：2026-04-06 03:20
+    - 完成时间：2026-04-06 03:45
+    - 文件范围：`src/api/services/ExternalDataImportService.ts`（新建），`src/api/db/queries/externalRaw.ts`（新建）
     - 变更内容：流式 CSV/JSONLINES 读取；import{Douban,Tmdb,Bangumi,MovieLensLinks}；buildCatalogFrom{Douban,Tmdb,Bangumi}（含 ID 桥接）；幂等设计
 
 12. CHG-369 — [Script] 编写导入 CLI 脚本（状态：⬜ 待开始）

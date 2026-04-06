@@ -5177,3 +5177,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 测试文件新增 `@/api/db/queries/mediaCatalog` mock（`findCatalogById` / `updateCatalogFields`），移除已废弃的 `updateDoubanData` 期望，更新 `already_synced` 检查逻辑。
 - **测试覆盖**：12 个 douban 测试全通过；typecheck ✅，lint ✅。
 - **共享层沉淀评估**：直接复用 MediaCatalogService.safeUpdate，无新逻辑需沉淀。
+
+---
+
+## CHG-368 — [Service] 新建 ExternalDataImportService.ts
+- **完成时间**：2026-04-06 03:45
+- **修改文件**：
+  - `src/api/db/queries/externalRaw.ts`（新建）
+  - `src/api/services/ExternalDataImportService.ts`（新建）
+- **变更说明**：
+  - `externalRaw.ts`（DB queries 层）：batch 管理（createImportBatch/finishImportBatch/updateBatchProgress）；UNNEST 风格批量 INSERT（batchInsertDoubanRaw/TmdbRaw/BangumiRaw/MovieLensLinks）；cursor 分页 fetch（fetchUnprocessedDoubanRows/TmdbRows/BangumiRows）；catalog_id 回填（updateRawRowCatalogId）；ID 桥接查询（lookupTmdbByImdbId）。
+  - `ExternalDataImportService.ts`（Service 层）：`importDouban/Tmdb/Bangumi/MovieLensLinks` 各方法流式（readline）读取 CSV/JSONLINES，按 BATCH=500 分批写入暂存表；`buildCatalogFromDouban/Tmdb/Bangumi` 各方法分页（PAGE=200）从暂存表读取，构建 CatalogInsertData，调用 MediaCatalogService.findOrCreate 写入 media_catalog，回填 catalog_id。
+  - 豆瓣 IMDB→TMDB ID 桥接：buildDoubanCatalogData 中若有 imdb_id 则 lookupTmdbByImdbId 附加 tmdb_id。
+- **测试覆盖**：typecheck ✅，lint ✅；无新增测试失败（本任务为新增 Service，无对应现有测试）。
+- **共享层沉淀评估**：normalizeTitle 函数与 DoubanService 存在重复，建议后续统一提取到 src/api/lib/textUtils.ts，当前不阻塞。
