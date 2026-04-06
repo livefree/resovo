@@ -10,9 +10,12 @@ BEGIN;
 ALTER TABLE videos
   ADD COLUMN IF NOT EXISTS catalog_id UUID REFERENCES media_catalog(id) ON DELETE SET NULL;
 
--- ── Step 2: 为现有 videos 批量创建 media_catalog 条目 ────────────────────────
+-- ── Step 2: 为现有 videos 批量创建 media_catalog 条目并回填 catalog_id ──────────
 -- 只处理 catalog_id 还为空的行（幂等支持）
 -- 注意：title_normalized 在 videos 表中已存在（由 migration 007 生成）
+--
+-- 设计说明：将 inserted_catalog + existing_catalog + UPDATE 合并为一条语句，
+-- 避免 PostgreSQL CTE 作用域只覆盖单条语句的限制。
 
 WITH video_data AS (
   SELECT
@@ -26,7 +29,7 @@ WITH video_data AS (
     v.country,
     v.rating,
     v.director,
-    v.cast,
+    v."cast",
     v.writers,
     v.status,
     v.genre,
@@ -49,7 +52,7 @@ inserted_catalog AS (
     cover_url,
     rating,
     director,
-    cast,
+    "cast",
     writers,
     status,
     genre,
@@ -60,8 +63,6 @@ inserted_catalog AS (
     vd.title,
     vd.title_en,
     vd.title_normalized,
-    -- videos.type 枚举与 media_catalog.type 枚举存在差异（media_catalog 更多类型）
-    -- videos 中 'short', 'documentary' 等已在 migration 013 引入，保持原样
     vd.type,
     vd.year,
     vd.country,
@@ -69,7 +70,7 @@ inserted_catalog AS (
     vd.cover_url,
     vd.rating,
     vd.director,
-    vd.cast,
+    vd."cast",
     vd.writers,
     vd.status,
     vd.genre,
@@ -80,41 +81,43 @@ inserted_catalog AS (
   ON CONFLICT DO NOTHING
   RETURNING id, title, title_normalized, type, year, douban_id
 ),
--- 对于 ON CONFLICT 跳过的行（catalog 已存在），通过 douban_id 或 title_normalized+year+type 找到已有 catalog
-existing_catalog AS (
-  SELECT mc.id AS catalog_id, v.id AS video_id
-  FROM videos v
+-- 新插入的 catalog 与 video 的映射
+new_links AS (
+  SELECT ic.id AS catalog_id, vd.video_id
+  FROM inserted_catalog ic
+  JOIN video_data vd
+    ON vd.title = ic.title
+   AND vd.title_normalized = ic.title_normalized
+   AND vd.type = ic.type
+   AND vd.year IS NOT DISTINCT FROM ic.year
+),
+-- ON CONFLICT 跳过的行：通过 douban_id 或 title_normalized+year+type 找已有 catalog
+existing_links AS (
+  SELECT mc.id AS catalog_id, vd.video_id
+  FROM video_data vd
   JOIN media_catalog mc ON (
-    -- 优先通过 douban_id 匹配
-    (v.douban_id IS NOT NULL AND mc.douban_id = v.douban_id)
+    (vd.douban_id IS NOT NULL AND mc.douban_id = vd.douban_id)
     OR
-    -- 回退到 title_normalized + year + type 匹配
-    (v.douban_id IS NULL
-      AND mc.title_normalized = COALESCE(v.title_normalized, lower(v.title))
-      AND mc.year IS NOT DISTINCT FROM v.year
-      AND mc.type = v.type)
+    (vd.douban_id IS NULL
+      AND mc.title_normalized = vd.title_normalized
+      AND mc.year IS NOT DISTINCT FROM vd.year
+      AND mc.type = vd.type)
   )
-  WHERE v.catalog_id IS NULL
-    AND v.deleted_at IS NULL
+  -- 排除已在 new_links 中处理的视频
+  WHERE NOT EXISTS (
+    SELECT 1 FROM new_links nl WHERE nl.video_id = vd.video_id
+  )
+),
+all_links AS (
+  SELECT catalog_id, video_id FROM new_links
+  UNION ALL
+  SELECT catalog_id, video_id FROM existing_links
 )
--- Step 2a: 用新插入的 catalog 条目回填 catalog_id
 UPDATE videos v
-SET catalog_id = ic.id,
+SET catalog_id = al.catalog_id,
     updated_at = NOW()
-FROM inserted_catalog ic
-JOIN video_data vd ON vd.title = ic.title
-  AND vd.title_normalized = ic.title_normalized
-  AND vd.type = ic.type
-  AND vd.year IS NOT DISTINCT FROM ic.year
-WHERE v.id = vd.video_id
-  AND v.catalog_id IS NULL;
-
--- Step 2b: 用已有 catalog 条目回填 catalog_id（ON CONFLICT 跳过的行）
-UPDATE videos v
-SET catalog_id = ec.catalog_id,
-    updated_at = NOW()
-FROM existing_catalog ec
-WHERE v.id = ec.video_id
+FROM all_links al
+WHERE v.id = al.video_id
   AND v.catalog_id IS NULL;
 
 -- ── Step 3: 将 videos.douban_id 迁移到 media_catalog.douban_id ──────────────
@@ -142,8 +145,8 @@ DECLARE
   linked_videos   INT;
   unlinked_videos INT;
 BEGIN
-  SELECT COUNT(*)                                    INTO total_videos    FROM videos WHERE deleted_at IS NULL;
-  SELECT COUNT(*) FILTER (WHERE catalog_id IS NOT NULL) INTO linked_videos FROM videos WHERE deleted_at IS NULL;
+  SELECT COUNT(*)                                        INTO total_videos    FROM videos WHERE deleted_at IS NULL;
+  SELECT COUNT(*) FILTER (WHERE catalog_id IS NOT NULL)  INTO linked_videos   FROM videos WHERE deleted_at IS NULL;
   unlinked_videos := total_videos - linked_videos;
 
   RAISE NOTICE 'Migration 028 complete: total=%, linked=%, unlinked=%',

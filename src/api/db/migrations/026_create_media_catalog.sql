@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS media_catalog (
 
   -- 人员（数组，与 videos 表一致）
   director             TEXT[]      NOT NULL DEFAULT '{}',
-  cast                 TEXT[]      NOT NULL DEFAULT '{}',
+  "cast"               TEXT[]      NOT NULL DEFAULT '{}',
   writers              TEXT[]      NOT NULL DEFAULT '{}',
 
   -- 外部 ID（精确去重依据，优先级高于标题匹配）
