@@ -4940,7 +4940,7 @@
 > 来源：架构评审——videos 表职责混合，外部数据（Douban/TMDB/Bangumi）建设需求
 > 状态：🔄 执行中
 > 创建时间：2026-04-05 00:00
-> 最后更新时间：2026-04-05 00:30
+> 最后更新时间：2026-04-05 00:45
 > 描述：将 videos 拆分为 media_catalog（作品元数据层）+ videos（平台实例层）+ video_sources（播放源层）；同步建设外部数据暂存表，为 Douban/TMDB/Bangumi 导入提供基础。
 
 ### 任务列表
@@ -4952,8 +4952,10 @@
    - 文件范围：`src/api/db/migrations/026_create_media_catalog.sql`
    - 变更内容：创建 media_catalog 表（含 locked_fields、4 个外部 ID 列、所有索引）；创建 media_catalog_aliases 表；updated_at 自动触发器
 
-2. CHG-359 — [Schema] 027_create_external_raw_tables.sql（状态：⬜ 待开始）
+2. CHG-359 — [Schema] 027_create_external_raw_tables.sql（状态：✅ 已完成）
    - 创建时间：2026-04-05 00:00
+   - 实际开始：2026-04-05 00:31
+   - 完成时间：2026-04-05 00:45
    - 文件范围：`src/api/db/migrations/027_create_external_raw_tables.sql`
    - 变更内容：创建 external_import_batches、external_douban_movies_raw、external_tmdb_movies_raw、external_bangumi_subjects_raw、external_imdb_tmdb_links 共 5 张表
 

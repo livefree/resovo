@@ -5027,3 +5027,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 创建 `updated_at` 自动更新触发器 `trg_media_catalog_updated_at`。
 - **测试覆盖**：INFRA 任务，跳过单元测试；typecheck ✅，lint ✅。
 - **共享层沉淀评估**：纯 DDL migration，无需沉淀到共享层。
+
+---
+
+### CHG-359 — [Schema] 027_create_external_raw_tables.sql（2026-04-05）
+
+- **修改文件**：无
+- **新增文件**：
+  - `src/api/db/migrations/027_create_external_raw_tables.sql`
+- **变更内容**：
+  - 创建 `external_import_batches` 批次登记表（source/file_name/status/total_rows/imported_rows 等）。
+  - 创建 `external_douban_movies_raw`：14 万行豆瓣电影原始数据，含 movie_id/name/actors/directors/douban_score/imdb_id/regions/year 等字段，catalog_id 回填列；三个查找索引（imdb_id/movie_id/catalog_id）。
+  - 创建 `external_tmdb_movies_raw`：124 万行 TMDB 数据，tmdb_id UNIQUE 索引，catalog_id 回填列。
+  - 创建 `external_bangumi_subjects_raw`：仅存 bgm_type IN (2,6)（动画/真人影视），bangumi_id UNIQUE。
+  - 创建 `external_imdb_tmdb_links`：MovieLens 87k 条 IMDB↔TMDB ID 桥接表（imdb_id UNIQUE, tmdb_id UNIQUE）。
+- **测试覆盖**：INFRA 任务，跳过单元测试；typecheck ✅，lint ✅。
+- **共享层沉淀评估**：纯 DDL migration，无需沉淀到共享层。
