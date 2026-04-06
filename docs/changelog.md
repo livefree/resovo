@@ -5112,3 +5112,23 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **设计说明**：locked_fields 校验不在 Query 层，只在 Service 层（MediaCatalogService.safeUpdate）。
 - **测试覆盖**：typecheck ✅，lint ✅（数据库 Query 层单元测试依赖真实 DB，在集成测试中覆盖）。
 - **共享层沉淀评估**：MediaCatalogRow 类型已导出，供 Service 层复用；CHG-371 将其迁移到 @/types 统一类型入口。
+
+---
+
+### CHG-364 — [Query] 改造 videos.ts + VideoService.ts 适配（2026-04-06）
+
+- **修改文件**：
+  - `src/api/db/queries/videos.ts`
+  - `src/api/services/VideoService.ts`（最小适配）
+- **变更内容**：
+  - `DbVideoRow` 瘦身：移除 15 个迁移字段（title_en/description/cover_url/rating/year/country/status/director/cast/writers/genre/genre_source/douban_id/title_normalized/metadata_source），改为通过 media_catalog JOIN 获取；新增 catalog_id 字段。
+  - 新增 `VIDEO_JOIN` / `VIDEO_FULL_SELECT` 常量，统一所有 SELECT 的 JOIN 写法。
+  - 更新 listVideos/findVideoByShortId/listTrendingVideos/listAdminVideos/findAdminVideoById/listPendingReviewVideos 的 SELECT 和 WHERE，metadata 过滤条件改用 mc.* 前缀。
+  - `CreateVideoInput` 简化为 videos 表自有字段（catalogId+title+type+episodeCount 等）。
+  - `UpdateVideoMetaInput` 精简为只含 videos 表字段（title/type/episodeCount/slug）。
+  - `insertCrawledVideo`：新接口接受 catalogId；过渡期保留内联创建 catalog 的兼容逻辑（CHG-366 完成后移除）。
+  - `updateDoubanData` / `findVideoByNormalizedKey`：保留签名标注 @deprecated，实现改为通过 catalog JOIN（CHG-366/367 完成后移除）。
+  - `VideoService.create/update`：适配新接口，过渡期通过 insertCrawledVideo 内联创建 catalog。
+- **技术债**：insertCrawledVideo 过渡兼容逻辑待 CHG-366 清理；videos.ts 1224 行超 500 限，建议 CHG-366 后拆分 ES 辅助函数。
+- **测试覆盖**：typecheck ✅，lint ✅。
+- **共享层沉淀评估**：VIDEO_JOIN/VIDEO_FULL_SELECT 为文件内共享常量，无需提取；MediaCatalogRow 已在 mediaCatalog.ts 导出。

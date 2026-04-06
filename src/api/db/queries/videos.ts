@@ -10,32 +10,20 @@ import type { Video, VideoCard, VideoType, VideoStatus, VideoGenre, ContentForma
 // ── 内部 DB 行类型 ────────────────────────────────────────────────
 
 interface DbVideoRow {
+  // ── videos 表字段 ───────────────────────────────────────────────
   id: string
   short_id: string
   slug: string | null
-  title: string
-  title_en: string | null
-  description: string | null
-  cover_url: string | null
-  type: VideoType
-  douban_id: string | null
-  source_category: string | null  // 爬虫原始分类字符串（Migration 019）
-  genre: string | null            // 平台策展题材（VideoGenre 枚举，初始 NULL）
-  rating: number | null
-  year: number | null
-  country: string | null
+  title: string            // 冗余副本，canonical 在 media_catalog.title
+  type: VideoType          // 冗余副本，canonical 在 media_catalog.type
+  catalog_id: string
   episode_count: number
-  status: VideoStatus
-  director: string[]
-  cast: string[]
-  writers: string[]
   is_published: boolean
   created_at: string
   updated_at: string
-  source_count: string  // COUNT() 返回字符串
+  source_count: string     // COUNT() 子查询
   subtitle_langs: string[] | null
-  title_normalized: string | null
-  metadata_source: string | null
+  source_category: string | null  // 爬虫原始分类字符串（Migration 019）
   // Migration 013 字段
   source_content_type: string | null
   normalized_type: string | null
@@ -46,8 +34,24 @@ interface DbVideoRow {
   visibility_status: string
   needs_manual_review: boolean
   // Migration 020 字段
-  genre_source: 'auto' | 'manual' | null
   content_rating: 'general' | 'adult'
+  // Migration 022
+  site_key: string | null
+  // ── media_catalog JOIN 字段（mc.*）───────────────────────────────
+  title_en: string | null
+  description: string | null
+  cover_url: string | null
+  rating: number | null
+  year: number | null
+  country: string | null
+  status: VideoStatus      // 系列完结状态（ongoing/completed），来自 mc.status
+  director: string[]
+  cast: string[]
+  writers: string[]
+  genre: string | null
+  douban_id: string | null
+  title_normalized: string
+  metadata_source: string
 }
 
 function mapVideoRow(row: DbVideoRow): Video {
@@ -78,7 +82,7 @@ function mapVideoRow(row: DbVideoRow): Video {
     reviewStatus: (row.review_status as ReviewStatus) ?? 'pending_review',
     visibilityStatus: (row.visibility_status as VisibilityStatus) ?? 'internal',
     needsManualReview: row.needs_manual_review ?? false,
-    genreSource: row.genre_source ?? null,
+    genreSource: null,  // genre_source 已随 migration 029 移除，CHG-371 将从类型中移除此字段
     contentRating: row.content_rating ?? 'general',
     createdAt: row.created_at,
   }
@@ -113,6 +117,24 @@ const SUBTITLE_LANGS_SUBQUERY = `(
   WHERE video_id = v.id AND deleted_at IS NULL
 )`
 
+/** 标准 JOIN：videos + media_catalog */
+const VIDEO_JOIN = `FROM videos v JOIN media_catalog mc ON mc.id = v.catalog_id`
+
+/**
+ * 标准 SELECT 列列表（用于返回完整 DbVideoRow）
+ * 所有 metadata 字段通过 JOIN mc 取得
+ */
+const VIDEO_FULL_SELECT = `
+  v.id, v.short_id, v.slug, v.title, v.type, v.catalog_id,
+  v.episode_count, v.is_published, v.created_at, v.updated_at,
+  v.source_content_type, v.normalized_type, v.content_format, v.episode_pattern,
+  v.review_status, v.visibility_status, v.needs_manual_review,
+  v.content_rating, v.site_key, v.source_category,
+  mc.title_en, mc.description, mc.cover_url, mc.rating, mc.year, mc.country,
+  mc.status, mc.director, mc."cast", mc.writers, mc.genre,
+  mc.douban_id, mc.title_normalized, mc.metadata_source
+`
+
 // ── 查询：列表 ───────────────────────────────────────────────────
 
 export interface VideoListFilters {
@@ -139,25 +161,25 @@ export async function listVideos(
     params.push(filters.type)
   }
   if (filters.genre) {
-    conditions.push(`v.genre = $${idx++}`)
+    conditions.push(`mc.genre = $${idx++}`)
     params.push(filters.genre)
   }
   if (filters.year) {
-    conditions.push(`v.year = $${idx++}`)
+    conditions.push(`mc.year = $${idx++}`)
     params.push(filters.year)
   }
   if (filters.country) {
-    conditions.push(`v.country = $${idx++}`)
+    conditions.push(`mc.country = $${idx++}`)
     params.push(filters.country)
   }
   if (filters.ratingMin !== undefined) {
-    conditions.push(`v.rating >= $${idx++}`)
+    conditions.push(`mc.rating >= $${idx++}`)
     params.push(filters.ratingMin)
   }
 
   const orderBy: Record<string, string> = {
     hot: `${SOURCE_COUNT_SUBQUERY} DESC`,
-    rating: 'v.rating DESC NULLS LAST',
+    rating: 'mc.rating DESC NULLS LAST',
     latest: 'v.created_at DESC',
     updated: 'v.updated_at DESC',
   }
@@ -167,17 +189,17 @@ export async function listVideos(
 
   const [rows, countResult] = await Promise.all([
     db.query<DbVideoRow>(
-      `SELECT v.*,
+      `SELECT ${VIDEO_FULL_SELECT},
         ${SOURCE_COUNT_SUBQUERY} AS source_count,
         ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs
-       FROM videos v
+       ${VIDEO_JOIN}
        WHERE ${where}
        ORDER BY ${order}
        LIMIT $${idx} OFFSET $${idx + 1}`,
       [...params, filters.limit, offset]
     ),
     db.query<{ count: string }>(
-      `SELECT COUNT(*) FROM videos v WHERE ${where}`,
+      `SELECT COUNT(*) ${VIDEO_JOIN} WHERE ${where}`,
       params
     ),
   ])
@@ -195,10 +217,10 @@ export async function findVideoByShortId(
   shortId: string
 ): Promise<Video | null> {
   const result = await db.query<DbVideoRow>(
-    `SELECT v.*,
+    `SELECT ${VIDEO_FULL_SELECT},
       ${SOURCE_COUNT_SUBQUERY} AS source_count,
       ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs
-     FROM videos v
+     ${VIDEO_JOIN}
      WHERE v.short_id = $1
        AND v.is_published = true
        AND v.deleted_at IS NULL
@@ -242,10 +264,10 @@ export async function listTrendingVideos(
 
   const where = conditions.join(' AND ')
   const result = await db.query<DbVideoRow>(
-    `SELECT v.*,
+    `SELECT ${VIDEO_FULL_SELECT},
       ${SOURCE_COUNT_SUBQUERY} AS source_count,
       ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs
-     FROM videos v
+     ${VIDEO_JOIN}
      WHERE ${where}
      ORDER BY v.updated_at DESC
      LIMIT $${idx}`,
@@ -260,7 +282,7 @@ const SORT_FIELD_WHITELIST: Record<string, string> = {
   created_at: 'v.created_at',
   updated_at: 'v.updated_at',
   title: 'v.title',
-  year: 'v.year',
+  year: 'mc.year',   // year 在 media_catalog
   type: 'v.type',
 }
 
@@ -301,7 +323,7 @@ export async function listAdminVideos(
   }
 
   if (filters.q) {
-    conditions.push(`(v.title ILIKE $${idx} OR v.title_en ILIKE $${idx})`)
+    conditions.push(`(v.title ILIKE $${idx} OR mc.title_en ILIKE $${idx})`)
     params.push(`%${filters.q}%`)
     idx++
   }
@@ -330,21 +352,16 @@ export async function listAdminVideos(
   const orderByDir = filters.sortDir === 'asc' ? 'ASC' : 'DESC'
 
   const [rows, countResult] = await Promise.all([
-    db.query<DbVideoRow & { source_count: string }>(
-      `SELECT v.id, v.short_id, v.title, v.title_en, v.cover_url, v.type,
-              v.year, v.is_published, v.created_at, v.updated_at,
-              v.visibility_status, v.review_status,
-              '' AS slug, '' AS description, NULL AS source_category, NULL AS genre, '' AS country,
-              0 AS episode_count, 'completed' AS status, NULL AS rating,
-              '[]'::json AS director, '[]'::json AS "cast", '[]'::json AS writers,
-              NULL AS subtitle_langs,
+    db.query<DbVideoRow & { active_source_count: string; total_source_count: string }>(
+      `SELECT ${VIDEO_FULL_SELECT},
+              NULL::text[] AS subtitle_langs,
               (SELECT COUNT(*) FROM video_sources
-               WHERE video_id = v.id AND is_active = true AND deleted_at IS NULL)::text AS source_count
-              ,(SELECT COUNT(*) FROM video_sources
-                WHERE video_id = v.id AND is_active = true AND deleted_at IS NULL)::text AS active_source_count
-              ,(SELECT COUNT(*) FROM video_sources
-                WHERE video_id = v.id AND deleted_at IS NULL)::text AS total_source_count
-       FROM videos v
+               WHERE video_id = v.id AND is_active = true AND deleted_at IS NULL)::text AS source_count,
+              (SELECT COUNT(*) FROM video_sources
+               WHERE video_id = v.id AND is_active = true AND deleted_at IS NULL)::text AS active_source_count,
+              (SELECT COUNT(*) FROM video_sources
+               WHERE video_id = v.id AND deleted_at IS NULL)::text AS total_source_count
+       ${VIDEO_JOIN}
        LEFT JOIN crawler_sites cs ON cs.key = v.site_key
        WHERE ${where}
        ORDER BY ${orderByCol} ${orderByDir}
@@ -352,7 +369,7 @@ export async function listAdminVideos(
       [...params, filters.limit, offset]
     ),
     db.query<{ count: string }>(
-      `SELECT COUNT(*) FROM videos v
+      `SELECT COUNT(*) ${VIDEO_JOIN}
        LEFT JOIN crawler_sites cs ON cs.key = v.site_key
        WHERE ${where}`,
       params
@@ -369,12 +386,12 @@ export async function findAdminVideoById(
   db: Pool,
   id: string
 ): Promise<DbVideoRow | null> {
-  const result = await db.query<DbVideoRow & { source_count: string }>(
-    `SELECT v.*,
+  const result = await db.query<DbVideoRow>(
+    `SELECT ${VIDEO_FULL_SELECT},
       (SELECT COUNT(*) FROM video_sources
        WHERE video_id = v.id AND is_active = true AND deleted_at IS NULL)::text AS source_count,
-      NULL AS subtitle_langs
-     FROM videos v
+      NULL::text[] AS subtitle_langs
+     ${VIDEO_JOIN}
      WHERE v.id = $1 AND v.deleted_at IS NULL`,
     [id]
   )
@@ -382,113 +399,87 @@ export async function findAdminVideoById(
 }
 
 export interface CreateVideoInput {
-  title: string
-  titleEn?: string | null
-  description?: string | null
-  coverUrl?: string | null
-  type: VideoType
-  genre?: string | null
-  year?: number | null
-  country?: string | null
+  /** 已在 MediaCatalogService.findOrCreate 后获得的 catalog ID */
+  catalogId: string
+  title: string    // 冗余副本（与 mc.title 保持一致）
+  type: VideoType  // 冗余副本（与 mc.type 保持一致）
   episodeCount?: number
-  status?: VideoStatus
-  rating?: number | null
-  director?: string[]
-  cast?: string[]
-  writers?: string[]
+  siteKey?: string | null
+  sourceCategory?: string | null
+  contentRating?: 'general' | 'adult'
 }
 
 export async function createVideo(
   db: Pool,
   input: CreateVideoInput
 ): Promise<DbVideoRow> {
+  const shortId = Math.random().toString(36).slice(2, 10)
   const result = await db.query<DbVideoRow>(
     `INSERT INTO videos
-       (title, title_en, description, cover_url, type, genre, year, country,
-        episode_count, status, rating, director, "cast", writers, is_published)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
-     RETURNING *`,
+       (short_id, catalog_id, title, type, episode_count,
+        site_key, source_category, content_rating, is_published)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     RETURNING id, short_id, slug, title, type, catalog_id, episode_count,
+               is_published, created_at, updated_at,
+               source_content_type, normalized_type, content_format, episode_pattern,
+               review_status, visibility_status, needs_manual_review,
+               content_rating, site_key, source_category`,
     [
+      shortId,
+      input.catalogId,
       input.title,
-      input.titleEn ?? null,
-      input.description ?? null,
-      input.coverUrl ?? null,
       input.type,
-      input.genre ?? null,
-      input.year ?? null,
-      input.country ?? null,
       input.episodeCount ?? 1,
-      input.status ?? 'completed',
-      input.rating ?? null,
-      JSON.stringify(input.director ?? []),
-      JSON.stringify(input.cast ?? []),
-      JSON.stringify(input.writers ?? []),
+      input.siteKey ?? null,
+      input.sourceCategory ?? null,
+      input.contentRating ?? 'general',
       false,
     ]
   )
   return result.rows[0]
 }
 
+/**
+ * 更新 videos 表自有字段（冗余副本 + 平台实例字段）
+ * 注意：title/type 是冗余字段，canonical 值在 media_catalog；
+ *       元数据字段（titleEn/description/coverUrl 等）已迁移到 media_catalog，
+ *       请通过 MediaCatalogService.safeUpdate 更新。
+ */
 export interface UpdateVideoMetaInput {
-  title?: string
-  titleEn?: string | null
-  description?: string | null
-  coverUrl?: string | null
-  type?: VideoType
-  genre?: string | null
-  genreSource?: 'auto' | 'manual' | null  // 管理员编辑时传 'manual'，清除时传 null
-  year?: number | null
-  country?: string | null
+  title?: string      // 冗余副本更新（与 mc.title 同步时使用）
+  type?: VideoType    // 冗余副本更新（与 mc.type 同步时使用）
   episodeCount?: number
-  status?: VideoStatus
-  rating?: number | null
-  director?: string[]
-  cast?: string[]
-  writers?: string[]
-  doubanId?: string | null
+  slug?: string | null
 }
 
 export async function updateVideoMeta(
   db: Pool,
   id: string,
   input: UpdateVideoMetaInput
-): Promise<DbVideoRow | null> {
+): Promise<{ id: string; updated_at: string } | null> {
   const sets: string[] = ['updated_at = NOW()']
   const params: unknown[] = []
   let idx = 1
 
   const fieldMap: Record<string, string> = {
     title: 'title',
-    titleEn: 'title_en',
-    description: 'description',
-    coverUrl: 'cover_url',
     type: 'type',
-    genre: 'genre',
-    genreSource: 'genre_source',
-    year: 'year',
-    country: 'country',
     episodeCount: 'episode_count',
-    status: 'status',
-    rating: 'rating',
-    director: 'director',
-    cast: '"cast"',
-    writers: 'writers',
-    doubanId: 'douban_id',
+    slug: 'slug',
   }
 
   for (const [key, col] of Object.entries(fieldMap)) {
     if (key in input && input[key as keyof UpdateVideoMetaInput] !== undefined) {
       sets.push(`${col} = $${idx++}`)
-      const val = input[key as keyof UpdateVideoMetaInput]
-      params.push(Array.isArray(val) ? JSON.stringify(val) : val)
+      params.push(input[key as keyof UpdateVideoMetaInput])
     }
   }
 
   params.push(id)
-  const result = await db.query<DbVideoRow>(
+  const result = await db.query<{ id: string; updated_at: string }>(
     `UPDATE videos SET ${sets.join(', ')}
      WHERE id = $${idx} AND deleted_at IS NULL
-     RETURNING *`,
+     RETURNING id, updated_at`,
     params
   )
   return result.rows[0] ?? null
@@ -779,7 +770,57 @@ export async function reviewVideo(
   return result.rows[0] ?? null
 }
 
-// ── 更新：豆瓣元数据（CHG-23）────────────────────────────────────
+// ── Admin 工具查询 ────────────────────────────────────────────────
+
+/**
+ * 按 short_id 查找视频 ID（含未发布视频，用于 admin 导入场景）
+ */
+export async function findVideoIdByShortId(
+  db: Pool,
+  shortId: string
+): Promise<string | null> {
+  const result = await db.query<{ id: string }>(
+    `SELECT id FROM videos WHERE short_id = $1 AND deleted_at IS NULL`,
+    [shortId]
+  )
+  return result.rows[0]?.id ?? null
+}
+
+// ── CHG-38: 视频归并策略 ──────────────────────────────────────────
+
+/** metadata_source 优先级（越大越高）*/
+export const METADATA_SOURCE_PRIORITY: Record<string, number> = {
+  tmdb:    4,
+  douban:  3,
+  manual:  2,
+  crawler: 1,
+}
+
+export type MetadataSource = 'tmdb' | 'douban' | 'manual' | 'crawler'
+
+/**
+ * @deprecated 由 MediaCatalogService.findOrCreate 替代（CHG-366 完成后移除）
+ * 通过 media_catalog JOIN 实现，兼容旧调用方
+ */
+export async function findVideoByNormalizedKey(
+  db: Pool,
+  titleNormalized: string,
+  year: number | null,
+  type: VideoType
+): Promise<{ id: string; metadataSource: string } | null> {
+  const result = await db.query<{ id: string; metadata_source: string }>(
+    `SELECT v.id, mc.metadata_source
+     ${VIDEO_JOIN}
+     WHERE mc.title_normalized = $1
+       AND mc.year IS NOT DISTINCT FROM $2
+       AND v.type = $3
+       AND v.deleted_at IS NULL
+     LIMIT 1`,
+    [titleNormalized, year, type]
+  )
+  if (!result.rows[0]) return null
+  return { id: result.rows[0].id, metadataSource: result.rows[0].metadata_source }
+}
 
 export interface UpdateDoubanInput {
   doubanId: string
@@ -790,6 +831,10 @@ export interface UpdateDoubanInput {
   cast?: string[]
 }
 
+/**
+ * @deprecated 由 MediaCatalogService.safeUpdate(source='douban') 替代（CHG-367 完成后移除）
+ * 现在写入 media_catalog 而非 videos（相关列已迁移）
+ */
 export async function updateDoubanData(
   db: Pool,
   videoId: string,
@@ -821,134 +866,147 @@ export async function updateDoubanData(
 
   params.push(videoId)
   const result = await db.query(
-    `UPDATE videos SET ${sets.join(', ')} WHERE id = $${params.length} AND deleted_at IS NULL`,
+    `UPDATE media_catalog mc
+     SET ${sets.join(', ')}
+     FROM videos v
+     WHERE v.id = $${params.length}
+       AND mc.id = v.catalog_id
+       AND v.deleted_at IS NULL`,
     params
   )
   return (result.rowCount ?? 0) > 0
 }
 
-// ── Admin 工具查询 ────────────────────────────────────────────────
-
-/**
- * 按 short_id 查找视频 ID（含未发布视频，用于 admin 导入场景）
- */
-export async function findVideoIdByShortId(
-  db: Pool,
-  shortId: string
-): Promise<string | null> {
-  const result = await db.query<{ id: string }>(
-    `SELECT id FROM videos WHERE short_id = $1 AND deleted_at IS NULL`,
-    [shortId]
-  )
-  return result.rows[0]?.id ?? null
-}
-
-// ── CHG-38: 视频归并策略 ──────────────────────────────────────────
-
-/** metadata_source 优先级（越大越高）*/
-export const METADATA_SOURCE_PRIORITY: Record<string, number> = {
-  tmdb:    4,
-  douban:  3,
-  manual:  2,
-  crawler: 1,
-}
-
-export type MetadataSource = 'tmdb' | 'douban' | 'manual' | 'crawler'
-
-/**
- * 按归并 match_key 查找已有视频。
- * 规则 A: (title_normalized, year, type) 三元组完全相同才认为是同一视频。
- */
-export async function findVideoByNormalizedKey(
-  db: Pool,
-  titleNormalized: string,
-  year: number | null,
-  type: VideoType
-): Promise<{ id: string; metadataSource: string } | null> {
-  const result = await db.query<{ id: string; metadata_source: string }>(
-    `SELECT id, metadata_source FROM videos
-     WHERE title_normalized = $1
-       AND year IS NOT DISTINCT FROM $2
-       AND type = $3
-       AND deleted_at IS NULL
-     LIMIT 1`,
-    [titleNormalized, year, type]
-  )
-  if (!result.rows[0]) return null
-  return { id: result.rows[0].id, metadataSource: result.rows[0].metadata_source }
-}
-
 export interface CrawlerInsertInput {
+  /**
+   * CHG-366 完成后变为必填；当前临时可选（CrawlerService 尚未接入 MediaCatalogService）
+   * 若未提供，insertCrawledVideo 会先创建一个最小 catalog 条目
+   */
+  catalogId?: string
   shortId: string
-  title: string
-  titleNormalized: string
-  titleEn: string | null
-  coverUrl: string | null
-  type: VideoType
-  sourceCategory: string | null  // 爬虫原始分类字符串（写入 source_category 列）
-  genre: VideoGenre | null       // 系统自动推断的题材
-  genreSource: 'auto' | null     // 爬虫写入时来源固定为 'auto'
+  title: string      // 冗余副本（与 mc.title 一致）
+  type: VideoType    // 冗余副本（与 mc.type 一致）
+  sourceCategory: string | null
   contentRating: 'general' | 'adult'
-  year: number | null
-  country: string | null
-  cast: string[]
-  director: string[]
-  writers: string[]
-  description: string | null
-  status: VideoStatus
   episodeCount: number
   isPublished: boolean
-  /** CHG-203: 站点级采集策略决定入库状态 */
   reviewStatus?: string
   visibilityStatus?: string
-  metadataSource: MetadataSource
-  /** 来源站点 key，关联 crawler_sites.key（CHG-247） */
   siteKey?: string
+  // ── @deprecated 字段（CHG-366 完成后移除，当前仍被 CrawlerService 传入）──
+  /** @deprecated 元数据已迁移到 media_catalog，此字段仅用于临时 catalog 创建 */
+  titleNormalized?: string
+  /** @deprecated */
+  titleEn?: string | null
+  /** @deprecated */
+  coverUrl?: string | null
+  /** @deprecated */
+  genre?: string | null
+  /** @deprecated */
+  genreSource?: 'auto' | null
+  /** @deprecated */
+  year?: number | null
+  /** @deprecated */
+  country?: string | null
+  /** @deprecated */
+  cast?: string[]
+  /** @deprecated */
+  director?: string[]
+  /** @deprecated */
+  writers?: string[]
+  /** @deprecated */
+  description?: string | null
+  /** @deprecated */
+  status?: VideoStatus
+  /** @deprecated */
+  metadataSource?: MetadataSource
 }
 
 /**
  * 新建视频记录（爬虫采集专用）。
- * 含 title_normalized 和 metadata_source。
+ * 优先使用 input.catalogId；若未提供（CHG-366 过渡期），
+ * 用 @deprecated 旧字段在事务中先创建最小 media_catalog 条目。
  */
 export async function insertCrawledVideo(
   db: Pool,
   input: CrawlerInsertInput
 ): Promise<{ id: string }> {
-  const result = await db.query<{ id: string }>(
-    `INSERT INTO videos
-       (short_id, title, title_normalized, title_en, cover_url, type, source_category,
-        genre, genre_source, content_rating,
-        year, country, "cast", director, writers, description, status, episode_count,
-        is_published, review_status, visibility_status, metadata_source, site_key)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
-     RETURNING id`,
-    [
-      input.shortId,
-      input.title,
-      input.titleNormalized,
-      input.titleEn,
-      input.coverUrl,
-      input.type,
-      input.sourceCategory,
-      input.genre,
-      input.genreSource,
-      input.contentRating,
-      input.year,
-      input.country,
-      input.cast,
-      input.director,
-      input.writers,
-      input.description,
-      input.status,
-      input.episodeCount,
-      input.isPublished,
-      input.reviewStatus ?? 'pending_review',
-      input.visibilityStatus ?? 'internal',
-      input.metadataSource,
-      input.siteKey ?? null,
-    ]
-  )
-  return result.rows[0]
+  const client = await (db as import('pg').Pool).connect()
+  try {
+    await client.query('BEGIN')
+
+    let catalogId = input.catalogId
+    if (!catalogId) {
+      // CHG-366 过渡兼容：CrawlerService 尚未接入 MediaCatalogService，在此临时创建 catalog
+      const titleNorm = input.titleNormalized ?? input.title.toLowerCase()
+      const catalogResult = await client.query<{ id: string }>(
+        `INSERT INTO media_catalog
+           (title, title_en, title_normalized, type, year, country, description, cover_url,
+            director, "cast", writers, status, genre, metadata_source)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+         ON CONFLICT DO NOTHING
+         RETURNING id`,
+        [
+          input.title,
+          input.titleEn ?? null,
+          titleNorm,
+          input.type,
+          input.year ?? null,
+          input.country ?? null,
+          input.description ?? null,
+          input.coverUrl ?? null,
+          input.director ?? [],
+          input.cast ?? [],
+          input.writers ?? [],
+          input.status ?? 'completed',
+          input.genre ?? null,
+          input.metadataSource ?? 'crawler',
+        ]
+      )
+      if (catalogResult.rows[0]) {
+        catalogId = catalogResult.rows[0].id
+      } else {
+        // ON CONFLICT：通过 title_normalized+year+type 查找已有 catalog
+        const existing = await client.query<{ id: string }>(
+          `SELECT id FROM media_catalog
+           WHERE title_normalized = $1 AND type = $2 AND year IS NOT DISTINCT FROM $3
+           LIMIT 1`,
+          [titleNorm, input.type, input.year ?? null]
+        )
+        catalogId = existing.rows[0]?.id
+        if (!catalogId) throw new Error('insertCrawledVideo: unable to resolve catalog_id')
+      }
+    }
+
+    const result = await client.query<{ id: string }>(
+      `INSERT INTO videos
+         (short_id, catalog_id, title, type, source_category,
+          content_rating, episode_count, is_published,
+          review_status, visibility_status, site_key)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       RETURNING id`,
+      [
+        input.shortId,
+        catalogId,
+        input.title,
+        input.type,
+        input.sourceCategory,
+        input.contentRating,
+        input.episodeCount,
+        input.isPublished,
+        input.reviewStatus ?? 'pending_review',
+        input.visibilityStatus ?? 'internal',
+        input.siteKey ?? null,
+      ]
+    )
+    await client.query('COMMIT')
+    return result.rows[0]
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
 }
 
 /**
@@ -1125,13 +1183,14 @@ export async function listPendingReviewVideos(
       site_key: string | null; site_name: string | null
       first_source_url: string | null; created_at: string
     }>(
-      `SELECT v.id, v.short_id, v.title, v.type, v.cover_url, v.year,
+      `SELECT v.id, v.short_id, v.title, v.type,
+              mc.cover_url, mc.year,
               cs.key AS site_key, cs.name AS site_name,
               (SELECT s.source_url FROM video_sources s
                WHERE s.video_id = v.id AND s.is_active = true AND s.deleted_at IS NULL
                LIMIT 1) AS first_source_url,
               v.created_at
-       FROM videos v
+       ${VIDEO_JOIN}
        LEFT JOIN crawler_sites cs ON cs.key = v.site_key
        WHERE ${where}
        ORDER BY v.created_at ${orderDir}
@@ -1140,7 +1199,7 @@ export async function listPendingReviewVideos(
     ),
     db.query<{ count: string }>(
       `SELECT COUNT(*)
-       FROM videos v
+       ${VIDEO_JOIN}
        LEFT JOIN crawler_sites cs ON cs.key = v.site_key
        WHERE ${where}`,
       filterParams

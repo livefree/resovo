@@ -5,10 +5,9 @@
 
 import type { Pool } from 'pg'
 import type { Client as ESClient } from '@elastic/elasticsearch'
-import type { Video, VideoCard, VideoType, VisibilityStatus, Pagination } from '@/types'
+import type { Video, VideoCard, VideoType, VideoStatus, VisibilityStatus, Pagination } from '@/types'
 import * as videoQueries from '@/api/db/queries/videos'
 import type {
-  CreateVideoInput,
   UpdateVideoMetaInput,
   ModerationStats,
   PendingReviewVideoRow,
@@ -108,14 +107,47 @@ export class VideoService {
     return videoQueries.findAdminVideoById(this.db, id)
   }
 
-  async create(input: CreateVideoInput): Promise<unknown> {
-    const row = await videoQueries.createVideo(this.db, input)
-    void this.indexToES(row.id)
-    return row
+  async create(input: Record<string, unknown>): Promise<unknown> {
+    // CHG-365 完成后，admin 流程改为先调用 MediaCatalogService.findOrCreate 获取 catalogId
+    // 当前临时将 admin 输入转换为 CrawlerInsertInput 并走 insertCrawledVideo 的 catalog 自动创建路径
+    const inserted = await videoQueries.insertCrawledVideo(this.db, {
+      shortId: Math.random().toString(36).slice(2, 10),
+      title: String(input.title ?? ''),
+      type: (input.type as VideoType) ?? 'movie',
+      sourceCategory: null,
+      contentRating: 'general',
+      episodeCount: (input.episodeCount as number) ?? 1,
+      isPublished: false,
+      reviewStatus: 'pending_review',
+      visibilityStatus: 'internal',
+      // @deprecated 临时字段，供 insertCrawledVideo 自动创建 catalog 条目
+      titleNormalized: undefined,
+      titleEn: input.titleEn as string | null,
+      coverUrl: input.coverUrl as string | null,
+      genre: input.genre as string | null,
+      year: input.year as number | null,
+      country: input.country as string | null,
+      cast: (input.cast as string[]) ?? [],
+      director: (input.director as string[]) ?? [],
+      writers: (input.writers as string[]) ?? [],
+      description: input.description as string | null,
+      status: (input.status as VideoStatus) ?? 'completed',
+      metadataSource: 'manual',
+    })
+    void this.indexToES(inserted.id)
+    return inserted
   }
 
-  async update(id: string, input: UpdateVideoMetaInput): Promise<unknown | null> {
-    const row = await videoQueries.updateVideoMeta(this.db, id, input)
+  async update(id: string, input: Record<string, unknown>): Promise<unknown | null> {
+    // 仅更新 videos 表自有字段（title/type/episodeCount/slug）
+    // 元数据字段更新由 MediaCatalogService.safeUpdate 处理（CHG-365 实现）
+    const adaptedInput: UpdateVideoMetaInput = {
+      ...(input.title !== undefined ? { title: String(input.title) } : {}),
+      ...(input.type !== undefined ? { type: input.type as VideoType } : {}),
+      ...(input.episodeCount !== undefined ? { episodeCount: input.episodeCount as number } : {}),
+      ...(input.slug !== undefined ? { slug: input.slug as string | null } : {}),
+    }
+    const row = await videoQueries.updateVideoMeta(this.db, id, adaptedInput)
     if (row) void this.indexToES(id)
     return row
   }
