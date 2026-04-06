@@ -5077,3 +5077,18 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - **注意**：此 migration 必须在 CHG-364（videos.ts 查询层改造）上线后才能在生产环境执行。
 - **测试覆盖**：INFRA 任务，跳过单元测试；typecheck ✅，lint ✅。
 - **共享层沉淀评估**：纯 DDL migration，无需沉淀到共享层。
+
+---
+
+### CHG-362 — [Schema] 030_video_aliases_to_catalog.sql（2026-04-05）
+
+- **修改文件**：无
+- **新增文件**：
+  - `src/api/db/migrations/030_video_aliases_to_catalog.sql`
+- **变更内容**：
+  - 将 video_aliases 表数据通过 videos.catalog_id 迁移到 media_catalog_aliases（source='crawler'，lang=NULL）。
+  - ON CONFLICT DO NOTHING 保证幂等（基于 catalog_id+alias 唯一约束）。
+  - 跳过 catalog_id 为 NULL 或已删除的 videos。
+  - 验证块输出：total/migrated/skipped 统计。
+- **测试覆盖**：INFRA 任务，跳过单元测试；typecheck ✅，lint ✅。
+- **共享层沉淀评估**：纯 DDL migration，无需沉淀到共享层。

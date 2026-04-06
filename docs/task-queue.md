@@ -4940,7 +4940,7 @@
 > 来源：架构评审——videos 表职责混合，外部数据（Douban/TMDB/Bangumi）建设需求
 > 状态：🔄 执行中
 > 创建时间：2026-04-05 00:00
-> 最后更新时间：2026-04-05 01:20
+> 最后更新时间：2026-04-05 01:30
 > 描述：将 videos 拆分为 media_catalog（作品元数据层）+ videos（平台实例层）+ video_sources（播放源层）；同步建设外部数据暂存表，为 Douban/TMDB/Bangumi 导入提供基础。
 
 ### 任务列表
@@ -4973,8 +4973,10 @@
    - 文件范围：`src/api/db/migrations/029_videos_drop_metadata_fields.sql`
    - 变更内容：删除 videos 表中 15 个已迁移/孤立字段；catalog_id 设为 NOT NULL；前置断言 + 验证块
 
-5. CHG-362 — [Schema] 030_video_aliases_to_catalog.sql（状态：⬜ 待开始）
+5. CHG-362 — [Schema] 030_video_aliases_to_catalog.sql（状态：✅ 已完成）
    - 创建时间：2026-04-05 00:00
+   - 实际开始：2026-04-05 01:21
+   - 完成时间：2026-04-05 01:30
    - 文件范围：`src/api/db/migrations/030_video_aliases_to_catalog.sql`
    - 变更内容：迁移 video_aliases 数据到 media_catalog_aliases
 
