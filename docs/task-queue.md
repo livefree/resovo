@@ -5008,9 +5008,11 @@
    - 文件范围：`src/api/services/CrawlerService.ts`
    - 变更内容：upsertVideo 按新六步流程重写；indexToES SQL 改为 JOIN media_catalog；引入 MediaCatalogService
 
-10. CHG-367 — [Service] 改造 DoubanService.ts（状态：⬜ 待开始）
+10. CHG-367 — [Service] 改造 DoubanService.ts（状态：✅ 已完成）
     - 创建时间：2026-04-05 00:00
-    - 文件范围：`src/api/services/DoubanService.ts`
+    - 实际开始：2026-04-06 00:51
+    - 完成时间：2026-04-06 03:19
+    - 文件范围：`src/api/services/DoubanService.ts`, `tests/unit/api/douban.test.ts`
     - 变更内容：syncVideo/previewVideo 目标改为 media_catalog；safeUpdate(source='douban')；同步冗余字段 videos.title
 
 11. CHG-368 — [Service] 新建 ExternalDataImportService.ts（状态：⬜ 待开始）

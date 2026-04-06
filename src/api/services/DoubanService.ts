@@ -12,6 +12,8 @@
 import type { Pool } from 'pg'
 import { searchDouban, getDoubanDetail } from '@/api/lib/douban'
 import * as videoQueries from '@/api/db/queries/videos'
+import * as catalogQueries from '@/api/db/queries/mediaCatalog'
+import { MediaCatalogService } from './MediaCatalogService'
 import type { DoubanPreviewFound, DoubanPreviewMiss, DoubanPreview } from '@/types/contracts/v1/admin'
 
 // ── 类型 ──────────────────────────────────────────────────────────
@@ -102,25 +104,29 @@ export class DoubanService {
   constructor(private db: Pool) {}
 
   async syncVideo(videoId: string): Promise<SyncResult | SyncSkipped> {
-    // 1. 获取视频基本信息
+    // 1. 获取视频基本信息（含 catalog JOIN 字段）
     const video = await videoQueries.findAdminVideoById(this.db, videoId)
     if (!video) return { updated: false, reason: 'no_match' }
 
-    // 2. 已有 douban_id，跳过
-    if (video.douban_id) return { updated: false, reason: 'already_synced' }
+    // 2. 获取关联的 catalog 条目
+    const catalog = await catalogQueries.findCatalogById(this.db, video.catalog_id)
+    if (!catalog) return { updated: false, reason: 'no_match' }
 
-    // 3. 搜索豆瓣
+    // 2b. 已有 douban_id（在 catalog 层），跳过
+    if (catalog.doubanId) return { updated: false, reason: 'already_synced' }
+
+    // 3. 搜索豆瓣（使用 catalog 标题和年份）
     let candidates: Awaited<ReturnType<typeof searchDouban>>
     try {
-      candidates = await searchDouban(video.title, video.year ?? undefined)
+      candidates = await searchDouban(catalog.title, catalog.year ?? undefined)
     } catch {
       return { updated: false, reason: 'fetch_failed' }
     }
 
     if (candidates.length === 0) return { updated: false, reason: 'no_match' }
 
-    // 4. 选取最优候选（标题/副标题 + 年份加权）
-    const best = pickBestCandidate(video.title, video.year ?? null, candidates)
+    // 4. 选取最优候选
+    const best = pickBestCandidate(catalog.title, catalog.year ?? null, candidates)
     if (!best) return { updated: false, reason: 'no_match' }
 
     // 5. 获取详情
@@ -132,23 +138,24 @@ export class DoubanService {
     }
     if (!detail) return { updated: false, reason: 'fetch_failed' }
 
-    // 6. 更新 DB
-    const input: videoQueries.UpdateDoubanInput = {
+    // 6. 通过 MediaCatalogService.safeUpdate 写入 catalog（source='douban', priority=3）
+    const catalogService = new MediaCatalogService(this.db)
+    const updateFields: import('@/api/db/queries/mediaCatalog').CatalogUpdateData = {
       doubanId: detail.id,
-      rating: detail.rating,
-      description: detail.summary,
-      coverUrl: detail.posterUrl,
-      director: detail.directors.length > 0 ? detail.directors : undefined,
-      cast: detail.casts.length > 0 ? detail.casts : undefined,
     }
+    if (detail.rating !== null) updateFields.rating = detail.rating
+    if (detail.summary) updateFields.description = detail.summary
+    if (detail.posterUrl) updateFields.coverUrl = detail.posterUrl
+    if (detail.directors.length > 0) updateFields.director = detail.directors
+    if (detail.casts.length > 0) updateFields.cast = detail.casts
 
-    const updated = await videoQueries.updateDoubanData(this.db, videoId, input)
+    const updated = await catalogService.safeUpdate(catalog.id, updateFields, 'douban')
     if (!updated) return { updated: false, reason: 'fetch_failed' }
 
-    const fields: string[] = ['douban_id']
+    const fields: string[] = ['doubanId']
     if (detail.rating !== null) fields.push('rating')
     if (detail.summary) fields.push('description')
-    if (detail.posterUrl) fields.push('cover_url')
+    if (detail.posterUrl) fields.push('coverUrl')
     if (detail.directors.length > 0) fields.push('director')
     if (detail.casts.length > 0) fields.push('cast')
 

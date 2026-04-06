@@ -5163,3 +5163,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 移除对 `findVideoByNormalizedKey`（@deprecated）的调用。
 - **测试覆盖**：typecheck ✅，lint ✅。
 - **共享层沉淀评估**：MediaCatalogService 已在 CHG-365 提取为独立 Service，无需新增沉淀。
+
+---
+
+## CHG-367 — [Service] 改造 DoubanService.ts
+- **完成时间**：2026-04-06 03:19
+- **修改文件**：
+  - `src/api/services/DoubanService.ts`
+  - `tests/unit/api/douban.test.ts`
+- **变更说明**：
+  - `syncVideo` 改为先通过 `catalogQueries.findCatalogById` 获取关联 catalog，检查 `catalog.doubanId`（原检查 `video.douban_id`）；以 `catalog.title` / `catalog.year` 发起搜索；写入改用 `MediaCatalogService.safeUpdate(source='douban')`，通过优先级和 locked_fields 双重保护写入 media_catalog。
+  - `previewVideo` 无需改动，`findAdminVideoById` 已通过 JOIN 包含 catalog 字段。
+  - 测试文件新增 `@/api/db/queries/mediaCatalog` mock（`findCatalogById` / `updateCatalogFields`），移除已废弃的 `updateDoubanData` 期望，更新 `already_synced` 检查逻辑。
+- **测试覆盖**：12 个 douban 测试全通过；typecheck ✅，lint ✅。
+- **共享层沉淀评估**：直接复用 MediaCatalogService.safeUpdate，无新逻辑需沉淀。
