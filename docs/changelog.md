@@ -5043,3 +5043,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 创建 `external_imdb_tmdb_links`：MovieLens 87k 条 IMDB↔TMDB ID 桥接表（imdb_id UNIQUE, tmdb_id UNIQUE）。
 - **测试覆盖**：INFRA 任务，跳过单元测试；typecheck ✅，lint ✅。
 - **共享层沉淀评估**：纯 DDL migration，无需沉淀到共享层。
+
+---
+
+### CHG-360 — [Schema] 028_videos_add_catalog_id.sql（2026-04-05）
+
+- **修改文件**：无
+- **新增文件**：
+  - `src/api/db/migrations/028_videos_add_catalog_id.sql`
+- **变更内容**：
+  - Step 1：`videos` 表新增 `catalog_id UUID REFERENCES media_catalog(id) ON DELETE SET NULL`（nullable，下一 migration 改为 NOT NULL）。
+  - Step 2：CTE 批量为现有 videos 创建对应 media_catalog 条目，通过 `ON CONFLICT DO NOTHING` 保证幂等；对已有 catalog 的视频通过 douban_id 或 title_normalized+year+type 匹配并回填 catalog_id。
+  - Step 3：将 videos.douban_id 迁移到 media_catalog.douban_id（仅填充空值字段）。
+  - Step 4：创建 `idx_videos_catalog_id` 索引。
+  - DO 块验证：输出 total/linked/unlinked 统计；unlinked>0 时触发 WARNING。
+- **测试覆盖**：INFRA 任务，跳过单元测试；typecheck ✅，lint ✅。
+- **共享层沉淀评估**：纯 DDL migration，无需沉淀到共享层。
