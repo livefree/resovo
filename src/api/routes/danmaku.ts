@@ -41,7 +41,7 @@ export async function danmakuRoutes(fastify: FastifyInstance) {
     }
 
     // short_id 格式校验
-    if (!/^[A-Za-z0-9]{8}$/.test(id)) {
+    if (!/^[A-Za-z0-9_-]{8}$/.test(id)) {
       return reply.code(404).send({
         error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
       })
@@ -65,7 +65,7 @@ export async function danmakuRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const { id } = request.params as { id: string }
 
-      if (!/^[A-Za-z0-9]{8}$/.test(id)) {
+      if (!/^[A-Za-z0-9_-]{8}$/.test(id)) {
         return reply.code(404).send({
           error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
         })

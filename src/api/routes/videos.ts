@@ -72,7 +72,7 @@ export async function videoRoutes(fastify: FastifyInstance) {
     const { id } = request.params as { id: string }
 
     // short_id 格式：8 位字母数字
-    if (!/^[A-Za-z0-9]{8}$/.test(id)) {
+    if (!/^[A-Za-z0-9_-]{8}$/.test(id)) {
       return reply.code(404).send({
         error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
       })

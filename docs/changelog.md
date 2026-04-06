@@ -5281,3 +5281,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/AdminVideoForm.tsx`：豆瓣预览面板新增 screenwriters checkbox（编剧，映射到 writers 字段）；摘要行显示 titleOriginal；handleDoubanSearch 自动勾选 writers；handleDoubanApply 写入 payload.writers 并同步更新表单 writers 字段
 - **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为预存）
 - **共享层沉淀**：否——变更局限于该表单的豆瓣子面板扩展
+
+---
+
+## CHG-375 — [Fix] short_id 路由正则缺少 _ 和 - 字符
+- **完成时间**：2026-04-06 12:10
+- **修改文件**：
+  - `src/api/routes/videos.ts`：`GET /videos/:id` 正则 `[A-Za-z0-9]{8}` → `[A-Za-z0-9_-]{8}`
+  - `src/api/routes/danmaku.ts`：`GET/POST /videos/:id/danmaku` 两处同步修正
+- **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass
+- **共享层沉淀**：否——三处独立校验，规模不足提取共用函数

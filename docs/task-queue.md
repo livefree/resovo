@@ -5081,3 +5081,20 @@
    - 文件范围：`src/components/admin/AdminVideoForm.tsx`
    - 变更内容：豆瓣预览面板新增 screenwriters（编剧）checkbox，应用时映射到 writers 字段；匹配摘要行显示 titleOriginal（原标题）；handleDoubanSearch 自动勾选 writers；handleDoubanApply 写入 writers payload 并同步更新表单
    - 完成备注：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为预存）
+
+---
+
+## hotfix — CHG-375（short_id 正则与 nanoid 字母表不一致）
+
+> 创建时间：2026-04-06 12:00
+> 最后更新时间：2026-04-06 12:10
+> 状态：✅ 已完成
+
+#### CHG-375 — [Fix] short_id 路由正则缺少 _ 和 - 字符（状态：✅ 已完成）
+- **创建时间**：2026-04-06 12:00
+- **实际开始**：2026-04-06 12:00
+- **完成时间**：2026-04-06 12:10
+- **变更原因**：nanoid(8) 默认字母表含 `_-`，路由校验正则 `^[A-Za-z0-9]{8}$` 不含这两个字符，含 `_` 的合法 short_id（如 `_Eczo0NN`）在查 DB 前被拒绝返回 404
+- **文件范围**：`src/api/routes/videos.ts`，`src/api/routes/danmaku.ts`
+- **变更内容**：3 处正则统一改为 `^[A-Za-z0-9_-]{8}$`
+- **完成备注**：typecheck ✅ lint ✅ 745/770 tests pass
