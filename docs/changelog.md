@@ -5205,3 +5205,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 每 1000 行节流输出进度到 stdout。
 - **测试覆盖**：typecheck ✅，lint ✅；CLI 脚本不写单元测试。
 - **共享层沉淀评估**：N/A（CLI 脚本入口层）。
+
+---
+
+## CHG-370 — [ES] 更新 es_mapping.json + 重建索引
+- **完成时间**：2026-04-06 04:05
+- **修改文件**：
+  - `src/api/db/migrations/es_mapping.json`
+  - `src/api/services/SearchService.ts`
+  - `src/api/services/VideoService.ts`
+  - `src/api/services/CrawlerService.ts`
+- **变更说明**：
+  - `es_mapping.json`：新增 `catalog_id`（keyword）、`imdb_id`（keyword）、`tmdb_id`（integer）、`title_original`（text，ik_max_word + keyword subfield）。
+  - `VideoService.indexToES`：修复预存 bug（原 SQL 直接查 videos 表无 JOIN，migration 后 title_en/cover_url 等字段已移至 media_catalog）；改为 `JOIN media_catalog mc ON mc.id = v.catalog_id`；补充 catalog_id/imdb_id/tmdb_id/title_original 到 ES document。
+  - `CrawlerService.indexToES`：补充 catalog_id/imdb_id/tmdb_id/title_original 到 ES document。
+  - `SearchService.search`：multi_match fields 新增 `title_original^2`。
+- **测试覆盖**：typecheck ✅，lint ✅；无新增测试失败。
+- **共享层沉淀评估**：indexToES SQL 在两个 Service 中重复，建议日后提取为共享查询函数，暂不阻塞。

@@ -5029,9 +5029,11 @@
     - 文件范围：`scripts/import-external-data.ts`（新建）
     - 变更内容：CLI 参数 --source --file；进度输出；调用 ExternalDataImportService
 
-13. CHG-370 — [ES] 更新 es_mapping.json + 重建索引（状态：⬜ 待开始）
+13. CHG-370 — [ES] 更新 es_mapping.json + 重建索引（状态：✅ 已完成）
     - 创建时间：2026-04-05 00:00
-    - 文件范围：`src/api/db/migrations/es_mapping.json`，`src/api/services/SearchService.ts`
+    - 实际开始：2026-04-06 03:55
+    - 完成时间：2026-04-06 04:05
+    - 文件范围：`src/api/db/migrations/es_mapping.json`，`src/api/services/SearchService.ts`，`src/api/services/VideoService.ts`（indexToES 修复），`src/api/services/CrawlerService.ts`（新字段）
     - 变更内容：新增 catalog_id/imdb_id/tmdb_id/title_original；SearchService 查询更新
 
 14. CHG-371 — [Types] 更新类型系统（状态：⬜ 待开始）

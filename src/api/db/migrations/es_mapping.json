@@ -57,6 +57,15 @@
       "slug": {
         "type": "keyword"
       },
+      "catalog_id": {
+        "type": "keyword"
+      },
+      "imdb_id": {
+        "type": "keyword"
+      },
+      "tmdb_id": {
+        "type": "integer"
+      },
       "title": {
         "type": "text",
         "analyzer": "ik_max_word",
@@ -72,6 +81,16 @@
         }
       },
       "title_en": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart",
+        "fields": {
+          "keyword": {
+            "type": "keyword"
+          }
+        }
+      },
+      "title_original": {
         "type": "text",
         "analyzer": "ik_max_word",
         "search_analyzer": "ik_smart",

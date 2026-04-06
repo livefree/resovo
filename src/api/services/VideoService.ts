@@ -266,19 +266,22 @@ export class VideoService {
     if (!this.es) return
     try {
       const result = await this.db.query<{
-        id: string; short_id: string; slug: string | null
-        title: string; title_en: string | null; cover_url: string | null
-        type: string; genre: string | null; year: number | null
-        country: string | null; episode_count: number
+        id: string; short_id: string; slug: string | null; catalog_id: string
+        title: string; title_en: string | null; title_original: string | null
+        cover_url: string | null; type: string; genre: string | null
+        year: number | null; country: string | null; episode_count: number
         rating: number | null; status: string; is_published: boolean
-        content_rating: string
-        review_status: string; visibility_status: string
+        content_rating: string; review_status: string; visibility_status: string
+        imdb_id: string | null; tmdb_id: number | null
       }>(
-        `SELECT id, short_id, slug, title, title_en, cover_url,
-                type, genre, year, country, episode_count,
-                rating, status, is_published, content_rating,
-                review_status, visibility_status
-         FROM videos WHERE id = $1`,
+        `SELECT v.id, v.short_id, v.slug, v.title, v.type, v.episode_count,
+                v.is_published, v.content_rating, v.review_status, v.visibility_status,
+                v.catalog_id,
+                mc.title_en, mc.title_original, mc.cover_url, mc.genre, mc.year,
+                mc.country, mc.rating, mc.status, mc.imdb_id, mc.tmdb_id
+         FROM videos v
+         JOIN media_catalog mc ON mc.id = v.catalog_id
+         WHERE v.id = $1`,
         [videoId]
       )
       if (!result.rows[0]) return
@@ -291,8 +294,10 @@ export class VideoService {
           id: row.id,
           short_id: row.short_id,
           slug: row.slug,
+          catalog_id: row.catalog_id,
           title: row.title,
           title_en: row.title_en,
+          title_original: row.title_original,
           cover_url: row.cover_url,
           type: row.type,
           genre: row.genre,
@@ -305,6 +310,8 @@ export class VideoService {
           content_rating: row.content_rating,
           review_status: row.review_status,
           visibility_status: row.visibility_status,
+          imdb_id: row.imdb_id,
+          tmdb_id: row.tmdb_id,
           updated_at: new Date().toISOString(),
         },
       })
