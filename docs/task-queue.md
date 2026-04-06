@@ -4940,7 +4940,7 @@
 > 来源：架构评审——videos 表职责混合，外部数据（Douban/TMDB/Bangumi）建设需求
 > 状态：🔄 执行中
 > 创建时间：2026-04-05 00:00
-> 最后更新时间：2026-04-06 00:10
+> 最后更新时间：2026-04-06 00:30
 > 描述：将 videos 拆分为 media_catalog（作品元数据层）+ videos（平台实例层）+ video_sources（播放源层）；同步建设外部数据暂存表，为 Douban/TMDB/Bangumi 导入提供基础。
 
 ### 任务列表
@@ -4994,8 +4994,10 @@
    - 文件范围：`src/api/db/queries/videos.ts`、`src/api/services/VideoService.ts`（最小修复）
    - 变更内容：DbVideoRow 瘦身（移除迁移字段，加入 catalog JOIN 字段）；所有 SELECT JOIN media_catalog；VIDEO_JOIN/VIDEO_FULL_SELECT 常量；insertCrawledVideo 接受 catalogId（过渡期含内联创建逻辑）；updateDoubanData/findVideoByNormalizedKey 标注 @deprecated 并改为通过 catalog 实现；VideoService.create/update 适配新接口
 
-8. CHG-365 — [Service] 新建 MediaCatalogService.ts（状态：⬜ 待开始）
+8. CHG-365 — [Service] 新建 MediaCatalogService.ts（状态：✅ 已完成）
    - 创建时间：2026-04-05 00:00
+   - 实际开始：2026-04-06 00:11
+   - 完成时间：2026-04-06 00:30
    - 文件范围：`src/api/services/MediaCatalogService.ts`
    - 变更内容：findOrCreate（5 步匹配）；safeUpdate（priority+lock 双重检查）；lockFields；CATALOG_SOURCE_PRIORITY 常量
 

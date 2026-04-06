@@ -5132,3 +5132,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **技术债**：insertCrawledVideo 过渡兼容逻辑待 CHG-366 清理；videos.ts 1224 行超 500 限，建议 CHG-366 后拆分 ES 辅助函数。
 - **测试覆盖**：typecheck ✅，lint ✅。
 - **共享层沉淀评估**：VIDEO_JOIN/VIDEO_FULL_SELECT 为文件内共享常量，无需提取；MediaCatalogRow 已在 mediaCatalog.ts 导出。
+
+---
+
+### CHG-365 — [Service] 新建 MediaCatalogService.ts（2026-04-06）
+
+- **修改文件**：无
+- **新增文件**：
+  - `src/api/services/MediaCatalogService.ts`
+- **变更内容**：
+  - `CATALOG_SOURCE_PRIORITY`：优先级常量（manual=5 > tmdb=4 > bangumi=douban=3 > crawler=1）。
+  - `findOrCreate(input)`：5 步精确→模糊匹配（imdb_id → tmdb_id → douban_id → bangumi_subject_id → title_normalized+year+type），全部未命中时 INSERT（含并发重试）；事务保护防止竞态。
+  - `safeUpdate(catalogId, fields, source)`：来源优先级 < 当前 → 跳过；locked_fields 字段过滤；manual 写入后自动追加 locked_fields。
+  - `lockFields / unlockFields`：管理员手动锁/解锁字段。
+  - `linkVideo(videoId, catalogId)`：绑定 videos.catalog_id。
+  - `findById(catalogId)`：直接查找，供其他 Service 使用。
+- **测试覆盖**：typecheck ✅，lint ✅。
+- **共享层沉淀评估**：Service 层，职责单一，CATALOG_SOURCE_PRIORITY 已导出供 CrawlerService/DoubanService 在 CHG-366/367 中使用。
