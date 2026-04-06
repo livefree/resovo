@@ -5059,3 +5059,21 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - DO 块验证：输出 total/linked/unlinked 统计；unlinked>0 时触发 WARNING。
 - **测试覆盖**：INFRA 任务，跳过单元测试；typecheck ✅，lint ✅。
 - **共享层沉淀评估**：纯 DDL migration，无需沉淀到共享层。
+
+---
+
+### CHG-361 — [Schema] 029_videos_drop_metadata_fields.sql（2026-04-05）
+
+- **修改文件**：无
+- **新增文件**：
+  - `src/api/db/migrations/029_videos_drop_metadata_fields.sql`
+- **变更内容**：
+  - 前置断言：确保所有 active videos 的 catalog_id 已回填（有 NULL 则阻断执行）。
+  - 删除 videos 表中已迁移到 media_catalog 的 15 列：title_en、description、cover_url、rating、year、country、status、director、cast、writers、genre、genre_source（孤立）、douban_id、title_normalized、metadata_source。
+  - 删除关联的多列索引 idx_videos_normalized_year_type（先于 DROP COLUMN 执行，避免冲突）。
+  - 将 catalog_id 设为 NOT NULL（三层架构完成的关键约束）。
+  - 清理孤立的单列索引（idx_videos_year/rating/country/title_normalized）。
+  - 验证块：确认 genre 列已删除；确认 catalog_id 无 NULL。
+  - **注意**：此 migration 必须在 CHG-364（videos.ts 查询层改造）上线后才能在生产环境执行。
+- **测试覆盖**：INFRA 任务，跳过单元测试；typecheck ✅，lint ✅。
+- **共享层沉淀评估**：纯 DDL migration，无需沉淀到共享层。
