@@ -9,6 +9,7 @@ import type { Pool } from 'pg'
 import type { Client as ESClient } from '@elastic/elasticsearch'
 import { parseXmlResponse, parseJsonResponse, parseVodItem } from './SourceParserService'
 import { normalizeTitle } from './TitleNormalizer'
+import { MediaCatalogService } from './MediaCatalogService'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
 import * as sourcesQueries from '@/api/db/queries/sources'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
@@ -154,12 +155,13 @@ export class CrawlerService {
   /**
    * 将单个解析结果写入数据库，并触发 ES 索引同步。
    *
-   * 归并策略（CHG-38）：
-   *   规则 A — match_key = (title_normalized, year, type)；type 不同不合并
-   *   规则 B — TitleNormalizer 生成 title_normalized
-   *   规则 C — 将 title / titleEn 写入 video_aliases（INSERT IGNORE）
-   *   规则 D — metadata_source 优先级 tmdb(4) > douban(3) > manual(2) > crawler(1)；低优先级不覆盖高优先级元数据
-   *   规则 E — sources ON CONFLICT DO NOTHING（不覆盖已有播放源）
+   * 新六步流程（CHG-366，三层架构）：
+   *   Step 1 — TitleNormalizer 生成 title_normalized
+   *   Step 2 — MediaCatalogService.findOrCreate：5 步匹配，找到或创建 media_catalog 条目
+   *   Step 3 — 若 catalog 已有视频实例，复用该视频 ID，推进 episode_count
+   *   Step 4 — 若无对应视频，创建新 videos 行并绑定 catalog_id
+   *   Step 5 — 将 title/titleEn 写入 video_aliases 和 media_catalog_aliases
+   *   Step 6 — upsert 播放源，触发 ES 索引
    */
   async upsertVideo(
     parsed: ReturnType<typeof parseVodItem>,
@@ -171,73 +173,70 @@ export class CrawlerService {
       ? Math.max(...sources.map((s) => s.episodeNumber ?? 1))
       : 1
 
-    // 规则 B: 标准化标题
+    // Step 1: 标准化标题
     const titleNormalized = normalizeTitle(video.title)
-    const incomingPriority = videosQueries.METADATA_SOURCE_PRIORITY['crawler']
 
-    // 规则 A: 按 (title_normalized, year, type) 查找已有视频
-    const existing = await videosQueries.findVideoByNormalizedKey(
-      this.db,
+    // Step 2: 找到或创建 media_catalog 条目（爬虫来源，最低优先级）
+    const catalogService = new MediaCatalogService(this.db)
+    const catalog = await catalogService.findOrCreate({
+      title: video.title,
+      titleEn: video.titleEn ?? null,
       titleNormalized,
-      video.year,
-      video.type
+      type: video.type,
+      year: video.year ?? null,
+      country: video.country ?? null,
+      description: video.description ?? null,
+      coverUrl: video.coverUrl ?? null,
+      genre: video.genre ?? null,
+      director: video.director ?? [],
+      cast: video.cast ?? [],
+      writers: video.writers ?? [],
+      status: video.status ?? 'completed',
+      metadataSource: 'crawler',
+    })
+
+    // Step 3: 查找是否已有视频实例关联到此 catalog
+    const existingVideoResult = await this.db.query<{ id: string }>(
+      `SELECT id FROM videos WHERE catalog_id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [catalog.id]
     )
+    const existingVideo = existingVideoResult.rows[0]
 
     let videoId: string
-    let isNew = false
 
-    if (existing) {
-      // 已存在：规则 D — 低优先级（crawler）不覆盖高优先级元数据
-      videoId = existing.id
-      // 命中 existing 分支时，同步推进 episode_count（只增不减）
+    if (existingVideo) {
+      // 已有视频：推进 episode_count（只增不减）
+      videoId = existingVideo.id
       await videosQueries.bumpEpisodeCountIfHigher(this.db, videoId, incomingMaxEpisode)
-      const existingPriority = videosQueries.METADATA_SOURCE_PRIORITY[existing.metadataSource] ?? 0
-      // crawler 采集优先级最低，不做元数据覆盖；若未来有 tmdb/douban 来源可在此扩展
-      void existingPriority // 当前仅 crawler 来源，始终跳过覆盖
+      // crawler 优先级最低（1），不覆盖 catalog 元数据
     } else {
-      // 新建视频记录（含 title_normalized + metadata_source）
-      isNew = true
+      // Step 4: 新建 videos 实例
       const shortId = nanoid(8)
-      // CHG-203: 站点级 ingest_policy 优先于全局 AUTO_PUBLISH_CRAWLED
       const autoPublish = ingestPolicy
         ? ingestPolicy.allow_auto_publish
         : config.AUTO_PUBLISH_CRAWLED === 'true'
-      const reviewStatus = autoPublish ? 'approved' : 'pending_review'
-      const visibilityStatus = autoPublish ? 'public' : 'internal'
       const inserted = await videosQueries.insertCrawledVideo(this.db, {
+        catalogId: catalog.id,
         shortId,
         title: video.title,
-        titleNormalized,
-        titleEn: video.titleEn,
-        coverUrl: video.coverUrl,   // ADR-009: 存外链
         type: video.type,
-        sourceCategory: video.category,
-        genre: video.genre,
-        genreSource: video.genre ? 'auto' : null,
-        contentRating: video.contentRating,
-        year: video.year,
-        country: video.country,
-        cast: video.cast,
-        director: video.director,
-        writers: video.writers,
-        description: video.description,
-        status: video.status,
+        sourceCategory: video.category ?? null,
+        contentRating: video.contentRating ?? 'general',
         episodeCount: incomingMaxEpisode,
         isPublished: autoPublish,
-        reviewStatus,
-        visibilityStatus,
-        metadataSource: 'crawler',
+        reviewStatus: autoPublish ? 'approved' : 'pending_review',
+        visibilityStatus: autoPublish ? 'public' : 'internal',
         siteKey,
       })
       videoId = inserted.id
     }
 
-    // 规则 C: 写入别名（title + titleEn，INSERT IGNORE）
+    // Step 5: 写入别名（video_aliases 保持不变，供爬虫归并参考）
     const aliases: string[] = [video.title]
     if (video.titleEn) aliases.push(video.titleEn)
     await videosQueries.upsertVideoAliases(this.db, videoId, aliases)
 
-    // 规则 E: Upsert 播放源（ON CONFLICT DO NOTHING）
+    // Step 6: Upsert 播放源（ON CONFLICT DO NOTHING）
     const sourcesUpserted = await sourcesQueries.upsertSources(
       this.db,
       sources.map((s) => ({
@@ -249,13 +248,7 @@ export class CrawlerService {
       }))
     )
 
-    // 每次 upsert 后触发 ES 索引（异步，不等待）
-    // 新视频：首次索引；已存在视频：补偿 ES 空缺（如 ES 停机期间入库的数据）
     void this.indexToES(videoId)
-
-    // 规则 D 参考：当前来源始终为 crawler（priority=1），未来可传入 incomingPriority
-    void incomingPriority
-
     return { videoId, sourcesUpserted }
   }
 
@@ -273,11 +266,13 @@ export class CrawlerService {
         content_rating: string
         review_status: string; visibility_status: string
       }>(
-        `SELECT id, short_id, slug, title, title_en, cover_url,
-                type, genre, year, country, episode_count,
-                rating, status, is_published, content_rating,
-                review_status, visibility_status
-         FROM videos WHERE id = $1`,
+        `SELECT v.id, v.short_id, v.slug, v.title, v.type, v.episode_count,
+                v.is_published, v.content_rating, v.review_status, v.visibility_status,
+                mc.title_en, mc.cover_url, mc.genre, mc.year, mc.country,
+                mc.rating, mc.status
+         FROM videos v
+         JOIN media_catalog mc ON mc.id = v.catalog_id
+         WHERE v.id = $1`,
         [videoId]
       )
       if (!result.rows[0]) return

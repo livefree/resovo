@@ -5149,3 +5149,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `findById(catalogId)`：直接查找，供其他 Service 使用。
 - **测试覆盖**：typecheck ✅，lint ✅。
 - **共享层沉淀评估**：Service 层，职责单一，CATALOG_SOURCE_PRIORITY 已导出供 CrawlerService/DoubanService 在 CHG-366/367 中使用。
+
+---
+
+### CHG-366 — [Service] 改造 CrawlerService.ts（2026-04-06）
+
+- **修改文件**：
+  - `src/api/services/CrawlerService.ts`
+- **变更内容**：
+  - 引入 `MediaCatalogService`。
+  - `upsertVideo` 重写为新六步流程：(1) 标准化标题；(2) MediaCatalogService.findOrCreate；(3) 查找已有视频实例；(4) 新建 videos 行并传入 catalogId；(5) 写入 video_aliases；(6) upsert 播放源 + 触发 ES。
+  - `indexToES` SQL 改为 `JOIN media_catalog mc ON mc.id = v.catalog_id`，metadata 字段从 mc 取（title_en/cover_url/genre/year/country/rating/status）。
+  - 移除对 `findVideoByNormalizedKey`（@deprecated）的调用。
+- **测试覆盖**：typecheck ✅，lint ✅。
+- **共享层沉淀评估**：MediaCatalogService 已在 CHG-365 提取为独立 Service，无需新增沉淀。

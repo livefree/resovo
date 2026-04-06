@@ -4940,7 +4940,7 @@
 > 来源：架构评审——videos 表职责混合，外部数据（Douban/TMDB/Bangumi）建设需求
 > 状态：🔄 执行中
 > 创建时间：2026-04-05 00:00
-> 最后更新时间：2026-04-06 00:30
+> 最后更新时间：2026-04-06 00:50
 > 描述：将 videos 拆分为 media_catalog（作品元数据层）+ videos（平台实例层）+ video_sources（播放源层）；同步建设外部数据暂存表，为 Douban/TMDB/Bangumi 导入提供基础。
 
 ### 任务列表
@@ -5001,8 +5001,10 @@
    - 文件范围：`src/api/services/MediaCatalogService.ts`
    - 变更内容：findOrCreate（5 步匹配）；safeUpdate（priority+lock 双重检查）；lockFields；CATALOG_SOURCE_PRIORITY 常量
 
-9. CHG-366 — [Service] 改造 CrawlerService.ts（状态：⬜ 待开始）
+9. CHG-366 — [Service] 改造 CrawlerService.ts（状态：✅ 已完成）
    - 创建时间：2026-04-05 00:00
+   - 实际开始：2026-04-06 00:31
+   - 完成时间：2026-04-06 00:50
    - 文件范围：`src/api/services/CrawlerService.ts`
    - 变更内容：upsertVideo 按新六步流程重写；indexToES SQL 改为 JOIN media_catalog；引入 MediaCatalogService
 
