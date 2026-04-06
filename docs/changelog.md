@@ -5191,3 +5191,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 豆瓣 IMDB→TMDB ID 桥接：buildDoubanCatalogData 中若有 imdb_id 则 lookupTmdbByImdbId 附加 tmdb_id。
 - **测试覆盖**：typecheck ✅，lint ✅；无新增测试失败（本任务为新增 Service，无对应现有测试）。
 - **共享层沉淀评估**：normalizeTitle 函数与 DoubanService 存在重复，建议后续统一提取到 src/api/lib/textUtils.ts，当前不阻塞。
+
+---
+
+## CHG-369 — [Script] 编写导入 CLI 脚本
+- **完成时间**：2026-04-06 03:52
+- **修改文件**：
+  - `scripts/import-external-data.ts`（新建）
+- **变更说明**：
+  - 支持 `--source <douban|tmdb|bangumi|movielens>`、`--file <path>`、`--build-only`、`--batch-id <uuid>` 参数。
+  - 两步流程：[1/2] 调用 importDouban/Tmdb/Bangumi/MovieLensLinks 写入暂存表；[2/2] 调用 buildCatalogFrom{Douban/Tmdb/Bangumi} 构建 media_catalog。
+  - movielens 源仅执行导入步骤，跳过 catalog 构建。
+  - 每 1000 行节流输出进度到 stdout。
+- **测试覆盖**：typecheck ✅，lint ✅；CLI 脚本不写单元测试。
+- **共享层沉淀评估**：N/A（CLI 脚本入口层）。

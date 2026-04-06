@@ -5022,8 +5022,10 @@
     - 文件范围：`src/api/services/ExternalDataImportService.ts`（新建），`src/api/db/queries/externalRaw.ts`（新建）
     - 变更内容：流式 CSV/JSONLINES 读取；import{Douban,Tmdb,Bangumi,MovieLensLinks}；buildCatalogFrom{Douban,Tmdb,Bangumi}（含 ID 桥接）；幂等设计
 
-12. CHG-369 — [Script] 编写导入 CLI 脚本（状态：⬜ 待开始）
+12. CHG-369 — [Script] 编写导入 CLI 脚本（状态：✅ 已完成）
     - 创建时间：2026-04-05 00:00
+    - 实际开始：2026-04-06 03:46
+    - 完成时间：2026-04-06 03:52
     - 文件范围：`scripts/import-external-data.ts`（新建）
     - 变更内容：CLI 参数 --source --file；进度输出；调用 ExternalDataImportService
 
