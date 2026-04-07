@@ -37,8 +37,7 @@ interface FormData {
   description: string
   coverUrl: string
   type: VideoType
-  genre: VideoGenre | ''
-  category: string
+  genres: VideoGenre[]
   year: string
   country: string
   episodeCount: string
@@ -65,8 +64,7 @@ const DEFAULT_FORM: FormData = {
   description: '',
   coverUrl: '',
   type: 'movie',
-  genre: '',
-  category: '',
+  genres: [],
   year: '',
   country: '',
   episodeCount: '1',
@@ -165,8 +163,7 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
           description: String(v.description ?? ''),
           coverUrl: String(v.cover_url ?? ''),
           type: (v.type as VideoType) ?? 'movie',
-          genre: (v.genre as VideoGenre | null) ?? '',
-          category: String(v.category ?? ''),
+          genres: Array.isArray(v.genres) ? (v.genres as VideoGenre[]) : [],
           year: v.year ? String(v.year) : '',
           country: String(v.country ?? ''),
           episodeCount: String(v.episode_count ?? '1'),
@@ -214,6 +211,7 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
         if (res.data.directors.length > 0) defaults.add('director')
         if (res.data.casts.length > 0) defaults.add('cast')
         if (res.data.screenwriters && res.data.screenwriters.length > 0) defaults.add('writers')
+        if (res.data.genres && res.data.genres.length > 0) defaults.add('genres')
         setSelectedFields(defaults)
       }
     } catch {
@@ -243,6 +241,7 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
       if (selectedFields.has('director')) payload.director = doubanPreview.directors
       if (selectedFields.has('cast')) payload.cast = doubanPreview.casts
       if (selectedFields.has('writers') && doubanPreview.screenwriters) payload.writers = doubanPreview.screenwriters
+      if (selectedFields.has('genres') && doubanPreview.genres) payload.genres = doubanPreview.genres
       await apiClient.patch(`/admin/videos/${videoId}`, payload)
       setForm((prev) => ({
         ...prev,
@@ -254,6 +253,9 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
         writers: selectedFields.has('writers') && doubanPreview.screenwriters
           ? doubanPreview.screenwriters.join(', ')
           : prev.writers,
+        genres: selectedFields.has('genres') && doubanPreview.genres
+          ? (doubanPreview.genres as VideoGenre[])
+          : prev.genres,
       }))
     } finally {
       setDoubanApplying(false)
@@ -271,8 +273,7 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
         description: form.description || null,
         coverUrl: form.coverUrl || null,
         type: form.type,
-        genre: form.genre || null,
-        category: form.category || null,
+        genres: form.genres,
         year: form.year ? parseInt(form.year) : null,
         country: form.country || null,
         episodeCount: form.episodeCount ? parseInt(form.episodeCount) : 1,
@@ -400,29 +401,33 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
         />
       </div>
 
-      {/* 题材 */}
+      {/* 题材（多选） */}
       <div>
         <label className="mb-1 block text-sm font-medium text-[var(--text)]">题材</label>
-        <select
-          value={form.genre}
-          onChange={(e) => set('genre')(e.target.value)}
-          className="w-full rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+        <div
+          className="flex flex-wrap gap-2 rounded-md border border-[var(--border)] bg-[var(--bg3)] px-3 py-2"
           data-testid="admin-video-form-genre"
         >
-          <option value="">— 未分类 —</option>
           {GENRE_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+            <label key={opt.value} className="flex items-center gap-1 cursor-pointer text-sm text-[var(--text)]">
+              <input
+                type="checkbox"
+                checked={form.genres.includes(opt.value)}
+                onChange={(e) => {
+                  setForm((prev) => ({
+                    ...prev,
+                    genres: e.target.checked
+                      ? [...prev.genres, opt.value]
+                      : prev.genres.filter((g) => g !== opt.value),
+                  }))
+                }}
+                className="accent-[var(--accent)]"
+              />
+              {opt.label}
+            </label>
           ))}
-        </select>
+        </div>
       </div>
-
-      <FormField
-        label="分类"
-        name="category"
-        value={form.category}
-        onChange={set('category')}
-        placeholder="爱情 / 科幻 / 悬疑…"
-      />
       <FormField
         label="封面图 URL"
         name="coverUrl"
@@ -570,6 +575,15 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
                       label="编剧"
                       value={doubanPreview.screenwriters.join('、')}
                       checked={selectedFields.has('writers')}
+                      onChange={toggleField}
+                    />
+                  )}
+                  {doubanPreview.genres && doubanPreview.genres.length > 0 && (
+                    <FieldCheckbox
+                      field="genres"
+                      label="题材"
+                      value={doubanPreview.genres.join('、')}
+                      checked={selectedFields.has('genres')}
                       onChange={toggleField}
                     />
                   )}

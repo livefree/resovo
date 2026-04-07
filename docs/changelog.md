@@ -5322,3 +5322,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/api/services/DoubanService.ts`：syncVideo() 在写 genresRaw 后调用 mapDoubanGenres 填充 genres；fields 列表同步追加
 - **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 pre-existing）
 - **共享层沉淀**：genreMapper.ts 已沉淀为可复用工具库（src/api/lib/）
+
+---
+
+## CHG-378 — [UI] genres 多值：表单多选 + 移除 category 字段
+
+- **完成时间**：2026-04-07 00:45
+- **修改文件**：
+  - `src/components/admin/AdminVideoForm.tsx`：FormData genre→genres[]，DEFAULT_FORM 同步；移除 category 字段（source_category 废弃，读写均失效）；题材 UI 从单选下拉改为多选 checkbox 组；豆瓣预览面板新增 genres FieldCheckbox（显示豆瓣原始题材，供选择应用）；handleDoubanSearch 自动勾选 genres；handleDoubanApply 写入 genres payload 并同步更新表单状态
+- **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 pre-existing）
+- **共享层沉淀**：否——表单内部状态变更，不需要共享

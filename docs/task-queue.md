@@ -5104,8 +5104,8 @@
 ## SEQ-20260406-60（genre 多值改造）
 
 > 创建时间：2026-04-06 14:00
-> 最后更新时间：2026-04-06 14:00
-> 状态：🔄 执行中
+> 最后更新时间：2026-04-07 00:45
+> 状态：✅ 已完成
 > 描述：将 media_catalog.genre（单值枚举 TEXT）改造为 genres（多值 TEXT[]），支持一部作品同时归属多种题材；同步移除后台表单中已失效的「分类」字段（category/source_category），并建立 genres_raw → genres 归一化映射（豆瓣同步高置信度）及 source_category → genres 推断映射（低置信度）。
 
 ### 任务列表（按执行顺序）
@@ -5127,9 +5127,11 @@
    - 文件范围：`src/api/services/DoubanService.ts`，`src/api/services/VideoService.ts`，`src/api/lib/genreMapper.ts`（新建）
    - 变更内容：新建 genreMapper.ts（豆瓣中文→VideoGenre 映射表 + source_category→VideoGenre 映射表）；DoubanService.syncVideo() 用 genres_raw 通过映射生成 genres；VideoService.update() 接受 genres[] 并写入 catalog
 
-3. CHG-378 — [UI] genres 多值：表单多选 + 移除 category 字段（状态：⬜ 待开始）
+3. CHG-378 — [UI] genres 多值：表单多选 + 移除 category 字段（状态：✅ 已完成）
    - 创建时间：2026-04-06 14:00
    - 计划开始：CHG-377 完成后
+   - 实际开始：2026-04-07 00:35
+   - 完成时间：2026-04-07 00:45
    - 依赖：CHG-377 ✅
    - 文件范围：`src/components/admin/AdminVideoForm.tsx`，`src/api/routes/admin/videos.ts`，`src/api/routes/videos.ts`
    - 变更内容：表单 genre 单选下拉 → genres 多选 checkbox 组；移除 category 文本输入字段；豆瓣同步 genres 字段预览与应用；列表筛选 genre 参数改为支持 genres 数组包含查询
