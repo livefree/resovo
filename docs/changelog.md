@@ -5311,3 +5311,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/video/VideoMeta.tsx`：单值 genre chip→多值 genres map
 - **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 pre-existing failures 与本次无关）
 - **共享层沉淀**：否——纯类型重命名，无需共享层
+
+---
+
+## CHG-377 — [Service] genres 多值：归一化映射 + DoubanService
+
+- **完成时间**：2026-04-07 00:30
+- **修改文件**：
+  - `src/api/lib/genreMapper.ts`（新建）：豆瓣中文题材→VideoGenre 高置信度映射表（40+ 条目）；source_category→VideoGenre 低置信度映射表（30 条目）；导出 mapDoubanGenres / mapSourceCategory 两个纯函数
+  - `src/api/services/DoubanService.ts`：syncVideo() 在写 genresRaw 后调用 mapDoubanGenres 填充 genres；fields 列表同步追加
+- **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 pre-existing）
+- **共享层沉淀**：genreMapper.ts 已沉淀为可复用工具库（src/api/lib/）

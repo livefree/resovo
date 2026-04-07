@@ -12,6 +12,7 @@
 import type { Pool } from 'pg'
 import { searchDouban } from '@/api/lib/douban'
 import { getDoubanDetailRich } from '@/api/lib/doubanAdapter'
+import { mapDoubanGenres } from '@/api/lib/genreMapper'
 import * as videoQueries from '@/api/db/queries/videos'
 import * as catalogQueries from '@/api/db/queries/mediaCatalog'
 import { MediaCatalogService } from './MediaCatalogService'
@@ -146,7 +147,11 @@ export class DoubanService {
     if (detail.directors.length > 0) updateFields.director = detail.directors
     if (detail.cast.length > 0) updateFields.cast = detail.cast
     if (detail.screenwriters.length > 0) updateFields.writers = detail.screenwriters
-    if (detail.genres.length > 0) updateFields.genresRaw = detail.genres
+    if (detail.genres.length > 0) {
+      updateFields.genresRaw = detail.genres
+      const mapped = mapDoubanGenres(detail.genres)
+      if (mapped.length > 0) updateFields.genres = mapped
+    }
     if (detail.countries.length > 0) updateFields.country = detail.countries[0]
 
     const updated = await catalogService.safeUpdate(catalog.id, updateFields, 'douban')
@@ -159,7 +164,10 @@ export class DoubanService {
     if (detail.directors.length > 0) fields.push('director')
     if (detail.cast.length > 0) fields.push('cast')
     if (detail.screenwriters.length > 0) fields.push('writers')
-    if (detail.genres.length > 0) fields.push('genresRaw')
+    if (detail.genres.length > 0) {
+      fields.push('genresRaw')
+      if (mapDoubanGenres(detail.genres).length > 0) fields.push('genres')
+    }
 
     return { updated: true, fields, doubanId: detail.id }
   }
