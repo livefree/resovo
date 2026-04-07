@@ -59,7 +59,7 @@ const VideoMetaSchema = z.object({
   description: z.string().max(5000).optional().nullable(),
   coverUrl: z.string().url().optional().nullable(),
   type: z.enum(['movie', 'series', 'anime', 'variety', 'documentary', 'short', 'sports', 'music', 'news', 'kids', 'other'] as const).optional(),
-  genre: z.string().max(50).optional().nullable(),
+  genres: z.array(z.string().max(50)).optional(),
   year: z.number().int().min(1900).max(2100).optional().nullable(),
   country: z.string().max(10).optional().nullable(),
   episodeCount: z.number().int().min(0).optional(),

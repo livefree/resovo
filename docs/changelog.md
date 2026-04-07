@@ -5291,3 +5291,23 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/api/routes/danmaku.ts`：`GET/POST /videos/:id/danmaku` 两处同步修正
 - **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass
 - **共享层沉淀**：否——三处独立校验，规模不足提取共用函数
+
+---
+
+## CHG-376 — [Schema+Types] genres 多值：DB migration + 类型层 + 查询层
+
+- **完成时间**：2026-04-07 00:15
+- **修改文件**：
+  - `src/api/db/migrations/031_genre_to_genres.sql`（新建）：添加 genres TEXT[] 列，从 genre 单值回填，建 GIN 索引，删除 genre 列
+  - `src/api/db/queries/mediaCatalog.ts`：DbMediaCatalogRow/MediaCatalogRow/CatalogInsertData/CatalogUpdateData genre→genres，CATALOG_SELECT/INSERT/UPDATE/RETURNING 同步更新
+  - `src/api/db/queries/videos.ts`：DbVideoRow genre→genres，VIDEO_FULL_SELECT mc.genre→mc.genres，listVideos 过滤 =→@> 数组包含，insertCrawledVideo 废弃路径 genre→genres[]，移除 genreSource 字段
+  - `src/types/video.types.ts`：Video.genre→genres，移除 genreSource 废弃字段
+  - `src/api/services/VideoService.ts`：catalogFields.genre→genres，indexToES 内联 SQL 及文档字段同步
+  - `src/api/services/CrawlerService.ts`：findOrCreate 调用 genre→genres[]，indexToES 内联 SQL 同步
+  - `src/api/services/ExternalDataImportService.ts`：两处 buildXxxCatalogData genre:first→genres:all
+  - `src/api/services/SearchService.ts`：ES 过滤 genre→genres
+  - `src/api/routes/admin/videos.ts`：UpdateVideoSchema genre string→genres string[]
+  - `src/types/contracts/v1/admin.ts`：MediaCatalogRow genre→genres
+  - `src/components/video/VideoMeta.tsx`：单值 genre chip→多值 genres map
+- **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 pre-existing failures 与本次无关）
+- **共享层沉淀**：否——纯类型重命名，无需共享层

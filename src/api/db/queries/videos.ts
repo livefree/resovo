@@ -48,7 +48,7 @@ interface DbVideoRow {
   director: string[]
   cast: string[]
   writers: string[]
-  genre: string | null
+  genres: string[]
   douban_id: string | null
   imdb_id: string | null
   tmdb_id: number | null
@@ -66,7 +66,7 @@ function mapVideoRow(row: DbVideoRow): Video {
     description: row.description,
     coverUrl: row.cover_url,
     type: row.type,
-    genre: (row.genre as VideoGenre) ?? null,
+    genres: (row.genres ?? []) as VideoGenre[],
     rating: row.rating,
     year: row.year,
     country: row.country,
@@ -84,7 +84,6 @@ function mapVideoRow(row: DbVideoRow): Video {
     reviewStatus: (row.review_status as ReviewStatus) ?? 'pending_review',
     visibilityStatus: (row.visibility_status as VisibilityStatus) ?? 'internal',
     needsManualReview: row.needs_manual_review ?? false,
-    genreSource: null,
     contentRating: row.content_rating ?? 'general',
     createdAt: row.created_at,
     catalogId: row.catalog_id ?? null,
@@ -136,7 +135,7 @@ const VIDEO_FULL_SELECT = `
   v.review_status, v.visibility_status, v.needs_manual_review,
   v.content_rating, v.site_key, v.source_category,
   mc.title_en, mc.description, mc.cover_url, mc.rating, mc.year, mc.country,
-  mc.status, mc.director, mc."cast", mc.writers, mc.genre,
+  mc.status, mc.director, mc."cast", mc.writers, mc.genres,
   mc.douban_id, mc.imdb_id, mc.tmdb_id, mc.title_normalized, mc.metadata_source
 `
 
@@ -166,7 +165,7 @@ export async function listVideos(
     params.push(filters.type)
   }
   if (filters.genre) {
-    conditions.push(`mc.genre = $${idx++}`)
+    conditions.push(`mc.genres @> ARRAY[$${idx++}::text]`)
     params.push(filters.genre)
   }
   if (filters.year) {
@@ -947,7 +946,7 @@ export async function insertCrawledVideo(
       const catalogResult = await client.query<{ id: string }>(
         `INSERT INTO media_catalog
            (title, title_en, title_normalized, type, year, country, description, cover_url,
-            director, "cast", writers, status, genre, metadata_source)
+            director, "cast", writers, status, genres, metadata_source)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
          ON CONFLICT DO NOTHING
          RETURNING id`,
@@ -964,7 +963,7 @@ export async function insertCrawledVideo(
           input.cast ?? [],
           input.writers ?? [],
           input.status ?? 'completed',
-          input.genre ?? null,
+          input.genre ? [input.genre] : [],
           input.metadataSource ?? 'crawler',
         ]
       )

@@ -5098,3 +5098,36 @@
 - **文件范围**：`src/api/routes/videos.ts`，`src/api/routes/danmaku.ts`
 - **变更内容**：3 处正则统一改为 `^[A-Za-z0-9_-]{8}$`
 - **完成备注**：typecheck ✅ lint ✅ 745/770 tests pass
+
+---
+
+## SEQ-20260406-60（genre 多值改造）
+
+> 创建时间：2026-04-06 14:00
+> 最后更新时间：2026-04-06 14:00
+> 状态：🔄 执行中
+> 描述：将 media_catalog.genre（单值枚举 TEXT）改造为 genres（多值 TEXT[]），支持一部作品同时归属多种题材；同步移除后台表单中已失效的「分类」字段（category/source_category），并建立 genres_raw → genres 归一化映射（豆瓣同步高置信度）及 source_category → genres 推断映射（低置信度）。
+
+### 任务列表（按执行顺序）
+
+1. CHG-376 — [Schema+Types] genres 多值：DB migration + 类型层 + 查询层（状态：✅ 已完成）
+   - 创建时间：2026-04-06 14:00
+   - 计划开始：2026-04-06 14:00
+   - 实际开始：2026-04-06 14:00
+   - 完成时间：2026-04-07 00:15
+   - 文件范围：`src/api/db/migrations/031_genre_to_genres.sql`（新建），`src/api/db/queries/mediaCatalog.ts`，`src/api/db/queries/videos.ts`，`src/types/video.types.ts`
+   - 变更内容：新增 031 migration（添加 genres TEXT[]，从 genre 回填，建 GIN 索引，删 genre 列）；更新所有类型定义（genre→genres）；更新 SELECT/filter 查询（= → @> 数组包含）
+
+2. CHG-377 — [Service] genres 多值：归一化映射 + DoubanService + VideoService（状态：⬜ 待开始）
+   - 创建时间：2026-04-06 14:00
+   - 计划开始：CHG-376 完成后
+   - 依赖：CHG-376 ✅
+   - 文件范围：`src/api/services/DoubanService.ts`，`src/api/services/VideoService.ts`，`src/api/lib/genreMapper.ts`（新建）
+   - 变更内容：新建 genreMapper.ts（豆瓣中文→VideoGenre 映射表 + source_category→VideoGenre 映射表）；DoubanService.syncVideo() 用 genres_raw 通过映射生成 genres；VideoService.update() 接受 genres[] 并写入 catalog
+
+3. CHG-378 — [UI] genres 多值：表单多选 + 移除 category 字段（状态：⬜ 待开始）
+   - 创建时间：2026-04-06 14:00
+   - 计划开始：CHG-377 完成后
+   - 依赖：CHG-377 ✅
+   - 文件范围：`src/components/admin/AdminVideoForm.tsx`，`src/api/routes/admin/videos.ts`，`src/api/routes/videos.ts`
+   - 变更内容：表单 genre 单选下拉 → genres 多选 checkbox 组；移除 category 文本输入字段；豆瓣同步 genres 字段预览与应用；列表筛选 genre 参数改为支持 genres 数组包含查询

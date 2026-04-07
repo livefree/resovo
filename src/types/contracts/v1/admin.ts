@@ -99,7 +99,7 @@ export interface MediaCatalogRow {
   titleOriginal: string | null
   titleNormalized: string
   type: string
-  genre: string | null
+  genres: string[]
   genresRaw: string[]
   year: number | null
   releaseDate: string | null

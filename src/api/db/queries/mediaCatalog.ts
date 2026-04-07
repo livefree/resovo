@@ -15,7 +15,7 @@ interface DbMediaCatalogRow {
   title_original: string | null
   title_normalized: string
   type: string
-  genre: string | null
+  genres: string[]
   genres_raw: string[]
   year: number | null
   release_date: string | null
@@ -48,7 +48,7 @@ export interface MediaCatalogRow {
   titleOriginal: string | null
   titleNormalized: string
   type: string
-  genre: string | null
+  genres: string[]
   genresRaw: string[]
   year: number | null
   releaseDate: string | null
@@ -78,7 +78,7 @@ export interface CatalogInsertData {
   titleOriginal?: string | null
   titleNormalized: string
   type: string
-  genre?: string | null
+  genres?: string[]
   genresRaw?: string[]
   year?: number | null
   releaseDate?: string | null
@@ -105,7 +105,7 @@ export interface CatalogUpdateData {
   titleOriginal?: string | null
   titleNormalized?: string
   type?: string
-  genre?: string | null
+  genres?: string[]
   genresRaw?: string[]
   year?: number | null
   releaseDate?: string | null
@@ -136,7 +136,7 @@ function mapCatalogRow(row: DbMediaCatalogRow): MediaCatalogRow {
     titleOriginal: row.title_original,
     titleNormalized: row.title_normalized,
     type: row.type,
-    genre: row.genre,
+    genres: row.genres ?? [],
     genresRaw: row.genres_raw ?? [],
     year: row.year,
     releaseDate: row.release_date,
@@ -164,7 +164,7 @@ function mapCatalogRow(row: DbMediaCatalogRow): MediaCatalogRow {
 const CATALOG_SELECT = `
   SELECT
     id, title, title_en, title_original, title_normalized,
-    type, genre, genres_raw, year, release_date, country, runtime_minutes,
+    type, genres, genres_raw, year, release_date, country, runtime_minutes,
     status, description, cover_url, rating, rating_votes,
     director, "cast", writers,
     imdb_id, tmdb_id, douban_id, bangumi_subject_id,
@@ -257,7 +257,7 @@ export async function insertCatalog(
   const result = await db.query<DbMediaCatalogRow>(
     `INSERT INTO media_catalog (
        title, title_en, title_original, title_normalized,
-       type, genre, genres_raw, year, release_date, country, runtime_minutes,
+       type, genres, genres_raw, year, release_date, country, runtime_minutes,
        status, description, cover_url, rating, rating_votes,
        director, "cast", writers,
        imdb_id, tmdb_id, douban_id, bangumi_subject_id,
@@ -273,7 +273,7 @@ export async function insertCatalog(
      ON CONFLICT DO NOTHING
      RETURNING
        id, title, title_en, title_original, title_normalized,
-       type, genre, genres_raw, year, release_date, country, runtime_minutes,
+       type, genres, genres_raw, year, release_date, country, runtime_minutes,
        status, description, cover_url, rating, rating_votes,
        director, "cast", writers,
        imdb_id, tmdb_id, douban_id, bangumi_subject_id,
@@ -284,7 +284,7 @@ export async function insertCatalog(
       data.titleOriginal ?? null,
       data.titleNormalized,
       data.type,
-      data.genre ?? null,
+      data.genres ?? [],
       data.genresRaw ?? [],
       data.year ?? null,
       data.releaseDate ?? null,
@@ -328,7 +328,7 @@ export async function updateCatalogFields(
     titleOriginal: 'title_original',
     titleNormalized: 'title_normalized',
     type: 'type',
-    genre: 'genre',
+    genres: 'genres',
     genresRaw: 'genres_raw',
     year: 'year',
     releaseDate: 'release_date',
@@ -365,7 +365,7 @@ export async function updateCatalogFields(
      WHERE id = $${idx}
      RETURNING
        id, title, title_en, title_original, title_normalized,
-       type, genre, genres_raw, year, release_date, country, runtime_minutes,
+       type, genres, genres_raw, year, release_date, country, runtime_minutes,
        status, description, cover_url, rating, rating_votes,
        director, "cast", writers,
        imdb_id, tmdb_id, douban_id, bangumi_subject_id,

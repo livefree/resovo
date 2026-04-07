@@ -187,7 +187,7 @@ export class CrawlerService {
       country: video.country ?? null,
       description: video.description ?? null,
       coverUrl: video.coverUrl ?? null,
-      genre: video.genre ?? null,
+      genres: video.genre ? [video.genre] : [],
       director: video.director ?? [],
       cast: video.cast ?? [],
       writers: video.writers ?? [],
@@ -260,7 +260,7 @@ export class CrawlerService {
       const result = await this.db.query<{
         id: string; short_id: string; slug: string | null; catalog_id: string
         title: string; title_en: string | null; title_original: string | null
-        cover_url: string | null; type: string; genre: string | null
+        cover_url: string | null; type: string; genres: string[]
         year: number | null; country: string | null; episode_count: number
         rating: number | null; status: string; is_published: boolean
         content_rating: string; review_status: string; visibility_status: string
@@ -269,7 +269,7 @@ export class CrawlerService {
         `SELECT v.id, v.short_id, v.slug, v.title, v.type, v.episode_count,
                 v.is_published, v.content_rating, v.review_status, v.visibility_status,
                 v.catalog_id,
-                mc.title_en, mc.title_original, mc.cover_url, mc.genre, mc.year,
+                mc.title_en, mc.title_original, mc.cover_url, mc.genres, mc.year,
                 mc.country, mc.rating, mc.status, mc.imdb_id, mc.tmdb_id
          FROM videos v
          JOIN media_catalog mc ON mc.id = v.catalog_id
@@ -292,7 +292,7 @@ export class CrawlerService {
           title_original: row.title_original,
           cover_url: row.cover_url,
           type: row.type,
-          genre: row.genre,
+          genres: row.genres ?? [],
           year: row.year,
           country: row.country,
           episode_count: row.episode_count,

@@ -57,7 +57,7 @@ export interface Video {
   description: string | null
   coverUrl: string | null  // Cloudflare R2 URL
   type: VideoType
-  genre: VideoGenre | null
+  genres: VideoGenre[]
   rating: number | null    // 0-10
   year: number | null
   country: string | null   // ISO 3166-1 alpha-2，如 JP、US、CN
@@ -77,8 +77,6 @@ export interface Video {
   reviewStatus: ReviewStatus
   visibilityStatus: VisibilityStatus
   needsManualReview: boolean
-  // 数据质量字段（Migration 020）
-  genreSource: 'auto' | 'manual' | null   // genre 来源：系统映射 / 管理员核验
   contentRating: 'general' | 'adult'      // 内容分级（adult 为隐藏，未来专区门控）
   createdAt: string
   // 三层架构字段（CHG-371）
@@ -139,7 +137,7 @@ export interface Tag {
 
 export interface VideoListParams {
   type?: VideoType
-  genre?: VideoGenre
+  genre?: VideoGenre    // 单值过滤参数（后端使用 @> 数组包含查询）
   year?: number
   country?: string
   ratingMin?: number

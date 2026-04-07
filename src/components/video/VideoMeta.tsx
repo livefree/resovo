@@ -123,9 +123,9 @@ export function VideoMeta({ video, isLoggedIn = false, className }: VideoMetaPro
           {video.country && (
             <MetaChip label={video.country} type="country" />
           )}
-          {video.genre && (
-            <MetaChip label={video.genre} type="genre" />
-          )}
+          {video.genres.map((g) => (
+            <MetaChip key={g} label={g} type="genre" />
+          ))}
           {video.rating && (
             <span
               className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold"

@@ -65,7 +65,7 @@ export class SearchService {
 
     // 精确过滤
     if (filters.type) filter.push({ term: { type: filters.type } })
-    if (filters.genre) filter.push({ term: { genre: filters.genre } })
+    if (filters.genre) filter.push({ term: { genres: filters.genre } })
     if (filters.year) filter.push({ term: { year: filters.year } })
     if (filters.lang) filter.push({ term: { subtitle_langs: filters.lang } })
     if (filters.ratingMin !== undefined) {

@@ -126,7 +126,7 @@ export class VideoService {
       titleNormalized: undefined,
       titleEn: input.titleEn as string | null,
       coverUrl: input.coverUrl as string | null,
-      genre: input.genre as string | null,
+      genre: Array.isArray(input.genres) && input.genres.length > 0 ? (input.genres as string[])[0] : null,
       year: input.year as number | null,
       country: input.country as string | null,
       cast: (input.cast as string[]) ?? [],
@@ -152,7 +152,7 @@ export class VideoService {
     if (input.description !== undefined) catalogFields.description = input.description as string | null
     if (input.coverUrl !== undefined) catalogFields.coverUrl = input.coverUrl as string | null
     if (input.type !== undefined) catalogFields.type = input.type as string
-    if (input.genre !== undefined) catalogFields.genre = input.genre as string | null
+    if (input.genres !== undefined) catalogFields.genres = input.genres as string[]
     if (input.year !== undefined) catalogFields.year = input.year as number | null
     if (input.country !== undefined) catalogFields.country = input.country as string | null
     if (input.status !== undefined) catalogFields.status = input.status as string
@@ -295,7 +295,7 @@ export class VideoService {
       const result = await this.db.query<{
         id: string; short_id: string; slug: string | null; catalog_id: string
         title: string; title_en: string | null; title_original: string | null
-        cover_url: string | null; type: string; genre: string | null
+        cover_url: string | null; type: string; genres: string[]
         year: number | null; country: string | null; episode_count: number
         rating: number | null; status: string; is_published: boolean
         content_rating: string; review_status: string; visibility_status: string
@@ -304,7 +304,7 @@ export class VideoService {
         `SELECT v.id, v.short_id, v.slug, v.title, v.type, v.episode_count,
                 v.is_published, v.content_rating, v.review_status, v.visibility_status,
                 v.catalog_id,
-                mc.title_en, mc.title_original, mc.cover_url, mc.genre, mc.year,
+                mc.title_en, mc.title_original, mc.cover_url, mc.genres, mc.year,
                 mc.country, mc.rating, mc.status, mc.imdb_id, mc.tmdb_id
          FROM videos v
          JOIN media_catalog mc ON mc.id = v.catalog_id
@@ -327,7 +327,7 @@ export class VideoService {
           title_original: row.title_original,
           cover_url: row.cover_url,
           type: row.type,
-          genre: row.genre,
+          genres: row.genres ?? [],
           year: row.year,
           country: row.country,
           episode_count: row.episode_count,
