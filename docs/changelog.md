@@ -5377,3 +5377,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/architecture.md`（videos 表字段说明、crawler_runs 扩展字段说明同步更新）
 - **测试覆盖**：typecheck ✅ lint ✅；相关测试失败均为预存（transitionVideoState mock 问题），与本次改动无关
 - **共享层沉淀**：DoubanStatus / SourceCheckStatus 已在 types/index.ts 自动导出，无需额外提取
+
+## CHG-382 — [API] 修改 approve 审核终态：通过→暂存（approved+internal）
+- **完成时间**：2026-04-09 03:30
+- **修改文件**：
+  - `src/api/db/queries/videos.ts`（VideoStateTransitionAction 新增 approve_and_publish；transitionVideoState approve case 终态改为 internal+false；新增 approve_and_publish case；ReviewAction / REVIEW_ACTION_MAP 同步更新）
+  - `src/api/services/VideoService.ts`（review() 方法支持 approve_and_publish 转发）
+  - `src/api/routes/admin/videos.ts`（ReviewSchema / StateTransitionSchema 新增 approve_and_publish；两处路由加 admin 角色权限检查）
+  - `tests/unit/api/reviewVideo.test.ts`（重写 mock 为 transitionVideoState，更新 approve 期望为 internal+false，新增 approve_and_publish 测试用例，共 6 个测试）
+- **测试覆盖**：typecheck ✅ lint ✅；reviewVideo.test.ts 6/6 通过；其余失败均为预存
+- **共享层沉淀**：无需；approve_and_publish 为新 action，逻辑集中在 DB queries 层

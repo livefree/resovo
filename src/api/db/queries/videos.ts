@@ -513,6 +513,7 @@ export async function publishVideo(
 
 export type VideoStateTransitionAction =
   | 'approve'
+  | 'approve_and_publish'
   | 'reject'
   | 'reopen_pending'
   | 'publish'
@@ -584,6 +585,18 @@ export async function transitionVideoState(
 
     switch (input.action) {
       case 'approve': {
+        if (current.review_status !== 'pending_review') {
+          throw new Error('INVALID_TRANSITION')
+        }
+        nextReview = 'approved'
+        nextVisibility = 'internal'
+        nextPublished = false
+        reviewReason = input.reason ?? null
+        reviewedBy = input.reviewedBy ?? null
+        reviewedAt = new Date().toISOString()
+        break
+      }
+      case 'approve_and_publish': {
         if (current.review_status !== 'pending_review') {
           throw new Error('INVALID_TRANSITION')
         }
@@ -734,7 +747,7 @@ export async function updateVisibility(
 
 // ── 更新：视频审核（CHG-201）──────────────────────────────────────
 
-export type ReviewAction = 'approve' | 'reject'
+export type ReviewAction = 'approve' | 'approve_and_publish' | 'reject'
 
 interface ReviewVideoInput {
   action: ReviewAction
@@ -742,13 +755,15 @@ interface ReviewVideoInput {
   reviewedBy: string
 }
 
-/** 状态转换映射：action → { review_status, visibility_status } */
+/** 状态转换映射：action → { review_status, visibility_status, is_published } */
 const REVIEW_ACTION_MAP: Record<ReviewAction, {
   reviewStatus: ReviewStatus
   visibilityStatus: VisibilityStatus
+  isPublished: boolean
 }> = {
-  approve: { reviewStatus: 'approved', visibilityStatus: 'public' },
-  reject: { reviewStatus: 'rejected', visibilityStatus: 'hidden' },
+  approve: { reviewStatus: 'approved', visibilityStatus: 'internal', isPublished: false },
+  approve_and_publish: { reviewStatus: 'approved', visibilityStatus: 'public', isPublished: true },
+  reject: { reviewStatus: 'rejected', visibilityStatus: 'hidden', isPublished: false },
 }
 
 export async function reviewVideo(
@@ -762,7 +777,7 @@ export async function reviewVideo(
   is_published: boolean
 } | null> {
   const mapping = REVIEW_ACTION_MAP[input.action]
-  const isPublished = mapping.visibilityStatus === 'public'
+  const isPublished = mapping.isPublished
   const result = await db.query<{
     id: string; review_status: string; visibility_status: string; is_published: boolean
   }>(

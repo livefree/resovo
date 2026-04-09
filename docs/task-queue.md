@@ -5228,20 +5228,22 @@
 - **完成备注**：migration 032 幂等实现（videos +3/crawler_runs +3），类型层新增 DoubanStatus/SourceCheckStatus，Video 接口/DbVideoRow/VIDEO_FULL_SELECT/mapper/PendingReviewVideoRow/listPendingReviewVideos/CrawlerRun/createRun 全部更新，architecture.md 同步。typecheck/lint ✅。
 
 #### CHG-382 — [API] 修改 approve 审核终态：通过→暂存（approved+internal）
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **计划开始**：CHG-381 完成后
+- **实际开始**：2026-04-09 03:00
+- **完成时间**：2026-04-09 03:30
 - **依赖**：CHG-381 ✅
 - **文件范围**：
   - `src/api/routes/admin/videos.ts`（修改 review 路由 approve 分支的终态）
   - `src/api/services/VideoService.ts`（修改 review() 方法 approve 分支）
-  - `tests/unit/api/moderationStats.test.ts`（更新 approve 后的预期状态断言）
-  - `tests/unit/api/reviewVideo.test.ts`（更新断言）
+  - `src/api/db/queries/videos.ts`（VideoStateTransitionAction / ReviewAction / REVIEW_ACTION_MAP 更新）
+  - `tests/unit/api/reviewVideo.test.ts`（更新断言，重写 mock 为 transitionVideoState）
 - **变更内容**：
   - `POST /admin/videos/:id/review { action: 'approve' }` 终态改为 `approved+internal+false`
   - 新增 `action: 'approve_and_publish'`，终态为 `approved+public+true`，限 admin 角色
   - 更新测试断言以反映新终态
-- **完成备注**：_（AI 填写）_
+- **完成备注**：transitionVideoState.approve 终态改为 internal+false，新增 approve_and_publish case（public+true）；ReviewSchema/StateTransitionSchema 新增 approve_and_publish；route 层加 admin 权限检查；reviewVideo.test.ts 重写为 mock transitionVideoState 并覆盖 6 个测试用例（含新 approve_and_publish case）。typecheck/lint ✅，reviewVideo.test.ts 6/6 通过，其余失败均为预存。共享层：无需沉淀。
 
 #### CHG-383 — [API] 新增 auto-publish-staging Job 与 maintenance-queue Worker
 - **状态**：⬜ 待开始

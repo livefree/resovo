@@ -30,13 +30,14 @@ const VisibilitySchema = z.object({
 })
 
 const ReviewSchema = z.object({
-  action: z.enum(['approve', 'reject'] as const),
+  action: z.enum(['approve', 'approve_and_publish', 'reject'] as const),
   reason: z.string().max(500).optional(),
 })
 
 const StateTransitionSchema = z.object({
   action: z.enum([
     'approve',
+    'approve_and_publish',
     'reject',
     'reopen_pending',
     'publish',
@@ -213,6 +214,12 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       })
     }
 
+    if (parsed.data.action === 'approve_and_publish' && request.user!.role !== 'admin') {
+      return reply.code(403).send({
+        error: { code: 'FORBIDDEN', message: 'approve_and_publish 仅限 admin 角色', status: 403 },
+      })
+    }
+
     try {
       const result = await videoService.review(id, {
         action: parsed.data.action,
@@ -241,6 +248,12 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(422).send({
         error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+
+    if (parsed.data.action === 'approve_and_publish' && request.user!.role !== 'admin') {
+      return reply.code(403).send({
+        error: { code: 'FORBIDDEN', message: 'approve_and_publish 仅限 admin 角色', status: 403 },
       })
     }
 

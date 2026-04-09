@@ -207,8 +207,12 @@ export class VideoService {
   ): Promise<{
     id: string; review_status: string; visibility_status: string; is_published: boolean
   } | null> {
+    const action: videoQueries.VideoStateTransitionAction =
+      input.action === 'approve_and_publish' ? 'approve_and_publish'
+      : input.action === 'approve' ? 'approve'
+      : 'reject'
     const row = await videoQueries.transitionVideoState(this.db, id, {
-      action: input.action === 'approve' ? 'approve' : 'reject',
+      action,
       reviewedBy: input.reviewedBy,
       reason: input.reason,
     })
