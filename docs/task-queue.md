@@ -5185,3 +5185,497 @@
 - **文件范围**：`src/components/admin/moderation/ModerationDashboard.tsx`，`src/components/admin/moderation/ModerationStats.tsx`（删除）
 - **变更内容**：移除 ModerationStats 组件引用及文件，后端 API 路由保留
 - **完成备注**：typecheck ✅ lint ✅；共享层无需提取
+
+---
+
+## SEQ-20260409-01（采集到上架全流程改造 — Pipeline Overhaul）
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **最后更新时间**：2026-04-09 01:00
+- **目标**：重构从爬虫采集到内容上架的完整流水线，分离"内容合规审核"与"上架质检"，建立自动丰富机制、关键词/补源采集模式、暂存发布队列，最终实现高质量内容的自动化上架与失效源的自愈闭环
+- **权威规范文档**：`docs/pipeline-overhaul-plan.md`
+- **里程碑**：M1（Phase 1）→ M2（Phase 2）→ M3（Phase 3）→ M4（Phase 4）→ M5（Phase 5）→ M6（Phase 6）→ M7（Phase 7）
+- **里程碑评审规则**：每个 Milestone 达成后，执行规范文档第十二章"各 Phase 完成后的暂停检查"，确认通过后再进入下一 Phase
+
+---
+
+### Phase 1：核心流程修正
+> 目标：修复"审核通过即上架"的根本问题，建立暂存队列基础设施
+> 里程碑：M1（验收标准见 pipeline-overhaul-plan.md §十一）
+> ⚠ Phase 1 完成后必须暂停，执行里程碑评审，确认再进入 Phase 2
+
+#### CHG-381 — [DB] 新增 videos 辅助状态字段（douban_status / source_check_status / meta_score）
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：Phase 1 第一个任务
+- **依赖**：无
+- **文件范围**：
+  - `src/api/db/migrations/032_videos_pipeline_status_fields.sql`（新建）
+  - `src/api/db/queries/videos.ts`（新增字段到查询返回类型）
+  - `src/types/index.ts` 或对应类型文件（新增字段类型）
+  - `docs/architecture.md`（同步更新 videos 表字段描述）
+- **变更内容**：
+  - 新增 `videos.douban_status TEXT DEFAULT 'pending' CHECK IN('pending','matched','candidate','unmatched')`
+  - 新增 `videos.source_check_status TEXT DEFAULT 'pending' CHECK IN('pending','ok','partial','all_dead')`
+  - 新增 `videos.meta_score SMALLINT DEFAULT 0 CHECK BETWEEN 0 AND 100`
+  - 新增 `crawler_runs.crawl_mode TEXT DEFAULT 'batch' CHECK IN('batch','keyword','source-refetch')`
+  - 新增 `crawler_runs.keyword TEXT`
+  - 新增 `crawler_runs.target_video_id UUID REFERENCES videos(id) ON DELETE SET NULL`
+  - 同步更新 listAdminVideos / findAdminVideoById 等查询的返回字段
+- **完成备注**：_（AI 填写）_
+
+#### CHG-382 — [API] 修改 approve 审核终态：通过→暂存（approved+internal）
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：CHG-381 完成后
+- **依赖**：CHG-381 ✅
+- **文件范围**：
+  - `src/api/routes/admin/videos.ts`（修改 review 路由 approve 分支的终态）
+  - `src/api/services/VideoService.ts`（修改 review() 方法 approve 分支）
+  - `tests/unit/api/moderationStats.test.ts`（更新 approve 后的预期状态断言）
+  - `tests/unit/api/reviewVideo.test.ts`（更新断言）
+- **变更内容**：
+  - `POST /admin/videos/:id/review { action: 'approve' }` 终态改为 `approved+internal+false`
+  - 新增 `action: 'approve_and_publish'`，终态为 `approved+public+true`，限 admin 角色
+  - 更新测试断言以反映新终态
+- **完成备注**：_（AI 填写）_
+
+#### CHG-383 — [API] 新增 auto-publish-staging Job 与 maintenance-queue Worker
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：CHG-382 完成后
+- **依赖**：CHG-382 ✅
+- **文件范围**：
+  - `src/api/workers/maintenanceWorker.ts`（新建 Worker）
+  - `src/api/workers/maintenanceScheduler.ts`（新建 Scheduler）
+  - `src/api/services/StagingPublishService.ts`（新建，封装就绪检查 + 发布逻辑）
+  - `src/api/db/queries/staging.ts`（新建，查询 approved+internal 视频及就绪状态）
+  - `src/api/routes/admin/staging.ts`（新建，暂存队列 API）
+  - `tests/unit/api/stagingPublish.test.ts`（新建单元测试）
+- **变更内容**：
+  - `auto-publish-staging` Job：扫描 approved+internal 视频，满足就绪条件（douban_status='matched' + activeSourceCount>=1 + coverUrl不为空 + 规则配置）自动发布
+  - 就绪规则从 `system_settings` 读取（key='auto_publish_staging_rules'）
+  - GET /admin/staging：分页列表，含就绪状态计算字段
+  - POST /admin/staging/:id/publish：手动发布单条
+  - POST /admin/staging/batch-publish：批量发布就绪视频
+  - GET/PUT /admin/staging/rules：读写自动发布规则配置
+- **完成备注**：_（AI 填写）_
+
+#### ADMIN-09 — [UI] 暂存发布队列页面（/admin/staging，基础版）
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：CHG-383 完成后
+- **依赖**：CHG-383 ✅
+- **文件范围**：
+  - `src/app/[locale]/admin/staging/page.tsx`（新建）
+  - `src/components/admin/staging/StagingDashboard.tsx`（新建主容器）
+  - `src/components/admin/staging/StagingTable.tsx`（新建表格，ModernDataTable）
+  - `src/components/admin/staging/StagingReadinessBadge.tsx`（就绪状态 badge）
+  - `src/components/admin/staging/StagingRulesPanel.tsx`（自动发布规则配置面板）
+  - `src/components/admin/AdminSidebar.tsx`（新增"暂存队列"菜单项）
+  - `tests/unit/components/admin/staging/StagingDashboard.test.tsx`（新建）
+- **变更内容**：
+  - 表格列：标题 / 类型 / 元数据进度条(meta_score) / 豆瓣状态badge / 源健康 / 暂存时长 / 就绪状态 / 操作
+  - 顶部：[一键发布全部就绪] [批量豆瓣同步（Phase 5 实现，本期按钮存在但 disabled）]
+  - 筛选：就绪/警告/阻塞 tab + 类型/站点 filter
+  - 底部折叠面板：自动发布规则配置
+  - 行级操作：[发布] / [查看详情（跳转视频编辑）]
+- **完成备注**：_（AI 填写）_
+
+> 🏁 **M1 里程碑评审节点**（ADMIN-09 完成后触发）
+> 评审清单见 pipeline-overhaul-plan.md §十一 M1 验收条件
+
+---
+
+### Phase 2：采集能力扩展
+> 目标：新增关键词搜索采集、单视频补源采集，改造源 Upsert 策略
+> 里程碑：M2
+> ⚠ Phase 2 完成后必须暂停，执行里程碑评审
+
+#### CRAWLER-01 — [DB/API] crawler_runs 新增模式字段 + CrawlJobData 扩展
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：M1 评审通过后
+- **依赖**：CHG-381 ✅（crawler_runs 字段已在 CHG-381 migration 中添加）
+- **文件范围**：
+  - `src/api/workers/crawlerWorker.ts`（扩展 CrawlJobData 接口）
+  - `src/api/services/CrawlerService.ts`（新增 keyword-crawl 和 source-refetch 逻辑）
+  - `src/api/services/CrawlerRunService.ts`（新增 crawl_mode 参数传递）
+  - `src/api/routes/admin/crawler.ts`（POST /admin/crawler/runs 新增 keyword/targetVideoId 参数）
+  - `src/api/db/queries/crawlerRuns.ts`（更新插入/查询支持新字段）
+  - `tests/unit/api/crawlerKeyword.test.ts`（新建）
+- **变更内容**：
+  - `CrawlJobData` 新增：`crawlMode: 'batch'|'keyword'|'source-refetch'`，`keyword?: string`，`targetVideoId?: string`，`previewOnly?: boolean`，`targetSiteKeys?: string[]`
+  - `CrawlerService.crawl()` 支持接收 `keyword` 参数，调用 `buildApiUrl({ keyword })`
+  - 新增 `CrawlerService.refetchSourcesForVideo(videoId, siteKeys)` 方法
+  - API 路由新增参数校验（crawlMode/keyword/targetVideoId）
+- **完成备注**：_（AI 填写）_
+
+#### CRAWLER-02 — [Service] 源 Upsert 策略改造：同站点全量替换
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：CRAWLER-01 完成后
+- **依赖**：CRAWLER-01 ✅
+- **文件范围**：
+  - `src/api/services/CrawlerService.ts`（修改 upsertSources 方法）
+  - `src/api/db/queries/videos.ts`（新增 replaceSourcesForSite 查询）
+  - `tests/unit/api/crawlerSourceUpsert.test.ts`（新建，覆盖新增/保留/移除三种情况）
+- **变更内容**：
+  - 新增 `replaceSourcesForSite(videoId, siteKey, newUrls[])` DB query
+  - `upsertSources` 默认使用全量替换策略
+  - `ingest_policy.source_update = 'append_only'` 时退回旧策略
+  - 任务结果 result 新增 `sourcesAdded / sourcesKept / sourcesRemoved` 字段
+- **完成备注**：_（AI 填写）_
+
+#### CRAWLER-03 — [API] 关键词搜索采集：预览模式 + 入库模式
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：CRAWLER-02 完成后
+- **依赖**：CRAWLER-02 ✅
+- **文件范围**：
+  - `src/api/routes/admin/crawler.ts`（新增 POST /admin/crawler/keyword-preview 路由）
+  - `src/api/services/CrawlerService.ts`（新增 previewKeywordSearch 方法，不写库，返回结果）
+  - `tests/unit/api/crawlerKeywordPreview.test.ts`（新建）
+- **变更内容**：
+  - `POST /admin/crawler/keyword-preview { keyword, siteKeys[], type? }`：执行搜索但不写库，返回各站点匹配视频预览列表（title/year/type/sourceCount/sourceStatus）
+  - `POST /admin/crawler/runs { crawlMode:'keyword', keyword, siteKeys[] }`：正式采集并入库
+  - 预览结果中的 sourceStatus 为快速 HEAD 检验结果（超时 800ms）
+- **完成备注**：_（AI 填写）_
+
+#### CRAWLER-04 — [API] 单视频补源采集 Job
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：CRAWLER-03 完成后
+- **依赖**：CRAWLER-03 ✅
+- **文件范围**：
+  - `src/api/services/CrawlerService.ts`（refetchSourcesForVideo 实现）
+  - `src/api/routes/admin/crawler.ts`（POST /admin/crawler/refetch-sources 路由）
+  - `src/api/routes/admin/videos.ts`（行级操作：POST /admin/videos/:id/refetch-sources）
+  - `tests/unit/api/sourceRefetch.test.ts`（新建）
+- **变更内容**：
+  - `POST /admin/crawler/refetch-sources { videoId, siteKeys? }`：以视频标题搜索，同站点全量替换策略写入新源
+  - `POST /admin/videos/:id/refetch-sources`：从视频管理页面触发（代理到 crawler API）
+  - 匹配规则：title_normalized 相似度 >= 0.8 才写入
+  - 任务结果区分：sourcesAdded / notFound(站点列表)
+- **完成备注**：_（AI 填写）_
+
+#### UX-08 — [UI] 采集控制台"发起采集" Tab（三模式统一入口）
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：CRAWLER-04 完成后
+- **依赖**：CRAWLER-04 ✅
+- **文件范围**：
+  - `src/app/[locale]/admin/crawler/page.tsx`（新增"发起采集"Tab）
+  - `src/components/admin/system/crawler-site/components/CrawlerLaunchPanel.tsx`（新建，三模式 UI）
+  - `src/components/admin/system/crawler-site/components/KeywordCrawlForm.tsx`（新建）
+  - `src/components/admin/system/crawler-site/components/SourceRefetchForm.tsx`（新建）
+  - `src/components/admin/system/crawler-site/components/KeywordPreviewTable.tsx`（新建，预览结果表格）
+  - `src/components/admin/AdminCrawlerTabs.tsx`（新增 Tab 入口）
+  - `tests/unit/components/admin/crawler/CrawlerLaunchPanel.test.tsx`（新建）
+- **变更内容**：
+  - 模式切换：批量采集 / 关键词搜索 / 单视频补源
+  - 关键词搜索：搜索词+站点多选+选项→[搜索并预览]/[直接采集]→预览表格→[确认采集选中项]
+  - 单视频补源：已有视频搜索下拉（输入触发 API 搜索）→展示当前源状态→[开始补源采集]
+  - 采集结果 Toast 提示（视频数/源数/更新数）
+- **完成备注**：_（AI 填写）_
+
+#### UX-09 — [UI] 采集任务详情展开：站点维度结果拆分
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：UX-08 完成后
+- **依赖**：UX-08 ✅
+- **文件范围**：
+  - `src/components/admin/AdminCrawlerPanel.tsx`（任务行展开逻辑）
+  - `src/api/routes/admin/crawler.ts`（GET /admin/crawler/tasks/:id 新增 siteBreakdown 字段）
+  - `src/api/db/queries/crawlerTasks.ts`（新增按 task_id 查各站点统计）
+- **变更内容**：
+  - 任务行点击展开：显示站点维度统计表（站点名 / 状态 / 视频数 / 新增源 / 更新源 / 移除源 / 耗时）
+  - 关键词采集任务展示搜索词
+  - 补源采集任务展示目标视频标题
+- **完成备注**：_（AI 填写）_
+
+> 🏁 **M2 里程碑评审节点**（UX-09 完成后触发）
+
+---
+
+### Phase 3：自动丰富流水线
+> 目标：建立 external_data schema，新增 metadata-enrich Job，实现入库后自动豆瓣匹配
+> 里程碑：M3
+> ⚠ Phase 3 完成后必须暂停，执行里程碑评审
+
+#### CHG-384 — [DB] 创建 external_data schema（douban_entries / bangumi_entries）
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：M2 评审通过后
+- **依赖**：CHG-381 ✅
+- **文件范围**：
+  - `src/api/db/migrations/033_external_data_schema.sql`（新建）
+  - `scripts/import-douban-dump.ts`（新建，将本地 dump 导入 external_data.douban_entries）
+  - `scripts/import-bangumi-dump.ts`（新建，导入 external_data.bangumi_entries，仅 type=2 动画）
+  - `docs/architecture.md`（新增 external_data schema 说明）
+- **变更内容**：
+  - `external_data.douban_entries`：douban_id/title/title_normalized/year/media_type/rating/description/cover_url/directors[]/cast[]/writers[]/genres[]/country
+  - `external_data.bangumi_entries`：bangumi_id/title_cn/title_jp/title_normalized/air_date/rating/episode_count/summary/cover_url
+  - 两表均在 (title_normalized, year) 上建索引
+  - 导入脚本：幂等执行（ON CONFLICT DO UPDATE），支持 --limit N 参数用于测试
+- **完成备注**：_（AI 填写）_
+
+#### CHG-385 — [Service/Worker] metadata-enrich Job（enrichment-queue Worker）
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：CHG-384 完成后
+- **依赖**：CHG-384 ✅，CHG-381 ✅（douban_status 等字段存在）
+- **文件范围**：
+  - `src/api/workers/enrichmentWorker.ts`（新建 Worker）
+  - `src/api/services/MetadataEnrichService.ts`（新建，封装五步丰富逻辑）
+  - `src/api/db/queries/externalData.ts`（新建，查询 external_data schema）
+  - `src/api/services/CrawlerService.ts`（入库后推送 metadata-enrich Job）
+  - `tests/unit/api/metadataEnrich.test.ts`（新建）
+- **变更内容**：
+  - EnrichJobData: { videoId, catalogId, title, year, type }
+  - Step1: 查 external_data.douban_entries（本地精确匹配，毫秒级）
+  - Step2: fallback → douban-adapter 网络搜索（置信度分级处理）
+  - Step3: type=anime 时查 external_data.bangumi_entries
+  - Step4: 源 HEAD 检验，写 source_check_status
+  - Step5: 计算 meta_score（title+cover+description+genres+year+type 各占权重）
+  - CrawlerService.upsertVideo 完成后推送 Job（Bull delay: 300000ms，即5分钟）
+- **完成备注**：_（AI 填写）_
+
+#### CHG-386 — [API] 暂存队列新增豆瓣相关操作接口
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：CHG-385 完成后
+- **依赖**：CHG-385 ✅
+- **文件范围**：
+  - `src/api/routes/admin/staging.ts`（新增 douban 相关路由）
+  - `src/api/services/DoubanService.ts`（新增批量同步方法）
+  - `tests/unit/api/stagingDouban.test.ts`（新建）
+- **变更内容**：
+  - `POST /admin/staging/batch-douban-sync { ids[] }`：批量触发豆瓣同步 Job
+  - `POST /admin/staging/:id/douban-search { keyword }`：在暂存页面手动搜索豆瓣
+  - `POST /admin/staging/:id/douban-confirm { subjectId }`：确认应用候选/搜索结果
+  - 上述操作完成后更新 videos.douban_status
+- **完成备注**：_（AI 填写）_
+
+> 🏁 **M3 里程碑评审节点**（CHG-386 完成后触发）
+
+---
+
+### Phase 4：审核台增强
+> 目标：审核台增加元数据内联编辑、豆瓣状态展示、源健康展示、批量通过、审核历史
+> 里程碑：M4
+> ⚠ Phase 4 完成后必须暂停，执行里程碑评审
+
+#### UX-10 — [UI] 审核台左侧列表增强（豆瓣/源/元数据状态指示）
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：M3 评审通过后
+- **依赖**：CHG-381 ✅（字段存在），CHG-382 ✅（终态已改）
+- **文件范围**：
+  - `src/components/admin/moderation/ModerationList.tsx`（现有，增强每行显示内容）
+  - `src/api/db/queries/videos.ts`（listPendingReviewVideos 新增 douban_status/source_check_status/meta_score 字段）
+  - `tests/unit/components/admin/moderation/ModerationList.test.tsx`（更新）
+- **变更内容**：
+  - 每行新增：豆瓣状态 badge（✓已匹配/?候选/✗未匹配/○待检）
+  - 每行新增：源健康状态（●N条可达/⚠部分/✕全失效/○未检验）
+  - 每行新增：元数据进度条（meta_score 百分比）
+  - 筛选器新增：按豆瓣状态筛选、按源健康状态筛选
+- **完成备注**：_（AI 填写）_
+
+#### UX-11 — [UI] 审核台右侧：豆瓣信息区 + 源健康区
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：UX-10 完成后
+- **依赖**：UX-10 ✅，CHG-386 ✅（douban search/confirm API 存在）
+- **文件范围**：
+  - `src/components/admin/moderation/ModerationDetail.tsx`（重构为多折叠块布局）
+  - `src/components/admin/moderation/ModerationDoubanBlock.tsx`（新建，豆瓣信息折叠块）
+  - `src/components/admin/moderation/ModerationSourceBlock.tsx`（新建，源健康折叠块）
+  - `src/api/routes/admin/moderation.ts`（新建或复用，单条源检验接口）
+  - `tests/unit/components/admin/moderation/ModerationDetail.test.tsx`（更新）
+- **变更内容**：
+  - 基础信息折叠块（默认展开）：封面/标题/年份/类型/分类/元数据完整度
+  - 豆瓣信息折叠块：matched态显示评分/简介/导演主演+[重新同步]；candidate态显示对比+[确认][忽略][手动搜索]；unmatched态显示搜索框
+  - 源健康折叠块：线路列表（label/url/is_active/last_checked）+[单条检验][全部检验]
+  - 播放器折叠块（默认折叠，点击展开）
+- **完成备注**：_（AI 填写）_
+
+#### UX-12 — [UI] 审核台内联元数据编辑
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：UX-11 完成后
+- **依赖**：UX-11 ✅
+- **文件范围**：
+  - `src/components/admin/moderation/ModerationDetail.tsx`（基础信息块增加编辑能力）
+  - `src/api/routes/admin/moderation.ts`（PATCH /admin/moderation/:id/meta 快速编辑接口）
+  - `tests/unit/api/moderationMetaEdit.test.tsx`（新建）
+- **变更内容**：
+  - 标题/年份/类型：点击字段触发 inline 编辑（contenteditable 或小 input），失焦或回车保存
+  - 分类标签：可增删 chip（从枚举选择），保存时写 media_catalog（source='manual', priority=2）
+  - 保存反馈：成功 Toast，失败恢复原值
+  - PATCH /admin/moderation/:id/meta { title?, year?, type?, genres? }（底层复用 MediaCatalogService.safeUpdate）
+- **完成备注**：_（AI 填写）_
+
+#### UX-13 — [UI] 审核台批量操作 + 审核历史 Tab
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：UX-12 完成后
+- **依赖**：UX-12 ✅
+- **文件范围**：
+  - `src/components/admin/moderation/ModerationList.tsx`（新增多选 + 批量操作 bar）
+  - `src/components/admin/moderation/ModerationHistory.tsx`（新建，已审核 Tab）
+  - `src/app/[locale]/admin/moderation/page.tsx`（新增 Tab 切换）
+  - `src/api/routes/admin/moderation.ts`（POST /admin/moderation/batch-approve，GET /admin/moderation/history）
+  - `tests/unit/api/moderationBatch.test.ts`（新建）
+- **变更内容**：
+  - 列表行 checkbox 多选，底部出现 SelectionActionBar：[批量通过暂存] [批量拒绝（需选原因）]
+  - 批量通过暂存：全部变为 approved+internal+false，返回成功/失败数量
+  - 新增"已审核"Tab：展示 review_status IN ('approved','rejected') 的视频，含筛选（审核员/日期/结果/类型）
+  - 已审核列表 rejected 行显示[复审]按钮 → state-transition: reopen_pending
+- **完成备注**：_（AI 填写）_
+
+#### CHG-387 — [API] 审核台快速操作 API 整合（moderation 路由完整实现）
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：UX-13 完成后（或与 UX-10 并行，取决于路由是否已足够）
+- **依赖**：UX-13 ✅
+- **文件范围**：
+  - `src/api/routes/admin/moderation.ts`（汇总本 Phase 新增的所有路由，确保一致性）
+  - `tests/unit/api/moderationRoutes.test.ts`（新建综合测试）
+- **变更内容**：
+  - 汇总整理：PATCH /meta / POST /batch-approve / POST /batch-reject / GET /history
+  - 确保所有操作正确触发 state-transition（复用现有 API，不重复实现状态机）
+  - 权限检查：approve_and_publish 限 admin 角色，其余 moderator 可用
+- **完成备注**：_（AI 填写）_
+
+> 🏁 **M4 里程碑评审节点**（CHG-387 完成后触发）
+
+---
+
+### Phase 5：暂存队列完善
+> 目标：暂存队列增加批量豆瓣同步、侧滑编辑、触发补源、规则配置完善
+> 里程碑：M5
+> ⚠ Phase 5 完成后必须暂停，执行里程碑评审
+
+#### ADMIN-10 — [UI] 暂存队列：批量豆瓣同步 + 侧滑元数据编辑
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：M4 评审通过后
+- **依赖**：ADMIN-09 ✅（基础页面存在），CHG-386 ✅（批量同步 API 存在）
+- **文件范围**：
+  - `src/components/admin/staging/StagingDashboard.tsx`（新增批量操作、解锁豆瓣同步按钮）
+  - `src/components/admin/staging/StagingEditPanel.tsx`（新建，侧滑编辑面板）
+  - `tests/unit/components/admin/staging/StagingEditPanel.test.tsx`（新建）
+- **变更内容**：
+  - 批量豆瓣同步：多选后 SelectionActionBar 显示[批量豆瓣同步]，触发 batch-douban-sync API，完成后刷新行状态
+  - 侧滑编辑面板（Drawer）：点击行级[处理]按钮打开，包含基础元数据编辑 + 豆瓣搜索确认 + 源状态，不离开当前页面
+  - 编辑保存后当前行就绪状态实时刷新
+- **完成备注**：_（AI 填写）_
+
+#### ADMIN-11 — [UI] 暂存队列：触发补源采集 + 就绪状态联动刷新
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：ADMIN-10 完成后
+- **依赖**：ADMIN-10 ✅，CRAWLER-04 ✅（补源 API 存在）
+- **文件范围**：
+  - `src/components/admin/staging/StagingEditPanel.tsx`（新增补源触发操作）
+  - `src/components/admin/staging/StagingTable.tsx`（行级操作新增[触发补源]）
+- **变更内容**：
+  - 当 source_check_status='all_dead' 时，行级和侧滑面板均显示[触发补源采集]按钮
+  - 点击后调用 POST /admin/videos/:id/refetch-sources，触发补源 Job
+  - Job 完成后（通过轮询或 SSE）刷新该行源健康状态和就绪状态
+- **完成备注**：_（AI 填写）_
+
+> 🏁 **M5 里程碑评审节点**（ADMIN-11 完成后触发）
+
+---
+
+### Phase 6：源管理闭环
+> 目标：失效源自动下架、自动补源、孤岛视频 Tab、替换弹窗播放器确认
+> 里程碑：M6
+> ⚠ Phase 6 完成后必须暂停，执行里程碑评审
+
+#### CHG-388 — [Service/Worker] 失效源自动下架 + 自动补源触发
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：M5 评审通过后
+- **依赖**：CRAWLER-04 ✅（source-refetch Job 存在），CHG-383 ✅（maintenance-queue 存在）
+- **文件范围**：
+  - `src/api/workers/maintenanceWorker.ts`（verify-published-sources Job 增强逻辑）
+  - `src/api/services/SourceVerificationService.ts`（新建或增强，封装验活+状态联动逻辑）
+  - `src/api/db/queries/sources.ts`（新增孤岛视频查询，新增 source_health_events 写入）
+  - `src/api/db/migrations/034_source_health_events.sql`（新建，source_health_events 表）
+  - `tests/unit/api/sourceVerificationService.test.ts`（新建）
+- **变更内容**：
+  - `source_health_events` 表：id/video_id/origin/old_status/new_status/created_at（用于孤岛 Tab 展示历史）
+  - verify-published-sources Job 发现孤岛（is_published=true 且所有源失效）→ 自动 unpublish（state-transition）+ 写 source_health_events + 推送 source-refetch Job
+  - source-refetch Job 成功 → 重新 publish + 写 source_health_events(origin='auto_refetch_success')
+  - source-refetch Job 失败 → 写 source_health_events(origin='auto_refetch_failed')，视频保持 approved+internal
+- **完成备注**：_（AI 填写）_
+
+#### ADMIN-12 — [UI] 源管理：孤岛视频 Tab + 替换源弹窗播放器确认
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：CHG-388 完成后
+- **依赖**：CHG-388 ✅
+- **文件范围**：
+  - `src/app/[locale]/admin/sources/page.tsx`（新增孤岛视频 Tab）
+  - `src/components/admin/sources/OrphanVideoTable.tsx`（新建，孤岛视频列表）
+  - `src/components/admin/sources/SourceReplaceDialog.tsx`（现有替换弹窗，增加内嵌播放器）
+  - `src/components/admin/sources/SourceHealthAlert.tsx`（缩减或移除，Tab 已承载功能）
+  - `src/api/routes/admin/sources.ts`（GET /admin/sources/orphan-videos 接口）
+  - `tests/unit/components/admin/sources/OrphanVideoTable.test.tsx`（新建）
+- **变更内容**：
+  - 新增"孤岛视频"Tab：展示 source_health_events 最新记录为 auto_refetch_failed 的视频，操作：[手动处理（进暂存）] [标记已处理] [触发补源]
+  - 替换源弹窗：输入新URL后[验活]按钮 → 内嵌 ModerationPlayer 加载预播放，确认可播后[确认替换]才写库
+- **完成备注**：_（AI 填写）_
+
+> 🏁 **M6 里程碑评审节点**（ADMIN-12 完成后触发）
+
+---
+
+### Phase 7：视频管理整合
+> 目标：视频管理页面整合暂存队列入口、元数据质量指标、豆瓣状态列
+> 里程碑：M7
+> ⚠ Phase 7 完成后进行最终全流程验收
+
+#### VIDEO-09 — [UI] 视频管理：新增元数据完整度列 + 豆瓣状态列
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：M6 评审通过后
+- **依赖**：CHG-381 ✅（字段存在），CHG-385 ✅（字段有数据）
+- **文件范围**：
+  - `src/components/admin/` 视频列表相关组件（现有，新增可选列）
+  - `src/api/db/queries/videos.ts`（listAdminVideos 新增 douban_status/meta_score 字段输出）
+  - `tests/unit/components/admin/videos/VideoTable.test.tsx`（更新）
+- **变更内容**：
+  - 新增可选列：元数据完整度（meta_score 进度条，默认隐藏）
+  - 新增可选列：豆瓣状态（badge，默认隐藏）；badge 旁有[立即同步]按钮（单条触发）
+  - 暂存中状态视频行显示[进入暂存]快捷操作
+- **完成备注**：_（AI 填写）_
+
+#### VIDEO-10 — [UI] 视频管理：复审按钮 + 暂存队列 badge + 补源触发
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-09 01:00
+- **计划开始**：VIDEO-09 完成后
+- **依赖**：VIDEO-09 ✅，CRAWLER-04 ✅
+- **文件范围**：
+  - `src/app/[locale]/admin/videos/page.tsx`（顶部新增暂存 badge）
+  - `src/components/admin/` 视频行操作相关组件（现有，新增操作项）
+- **变更内容**：
+  - 页面顶部：暂存队列数量 badge（"暂存中 N 条"，点击跳转 /admin/staging）
+  - rejected 状态行新增[复审]操作 → state-transition: reopen_pending
+  - all_dead 状态行新增[触发补源]操作 → POST /admin/videos/:id/refetch-sources
+- **完成备注**：_（AI 填写）_
+
+> 🏁 **M7 里程碑评审节点 / 最终全流程验收**（VIDEO-10 完成后触发）
+>
+> 最终验收：执行完整端到端流程测试
+> 1. 采集一批新视频（低信赖源站）→ 确认进入 pending_review
+> 2. 等待5分钟 → 确认 douban_status 更新，meta_score 计算
+> 3. 审核台通过暂存 → 确认变为 approved+internal
+> 4. 暂存队列自动发布（或手动）→ 确认变为 approved+public+true
+> 5. 手动将源标记为失效 → 确认自动下架 + 触发补源 Job
+> 6. 关键词搜索采集"测试影片" → 确认多站点结果及预览功能
+> 7. 整体 npm run test -- --run 通过率与改造前基准持平
