@@ -5402,3 +5402,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/stagingPublish.test.ts`（新建，14 个测试）
 - **测试覆盖**：typecheck ✅ lint ✅；stagingPublish.test.ts 14/14；其余失败为预存
 - **共享层沉淀**：StagingPublishRules / DEFAULT_STAGING_RULES 导出自 db/queries/staging.ts，供 routes 和 service 复用
+
+## ADMIN-09 — [UI] 暂存发布队列页面（/admin/staging，基础版）
+- **完成时间**：2026-04-09 06:00
+- **修改文件**：
+  - `src/app/[locale]/admin/staging/page.tsx`（新建）
+  - `src/components/admin/staging/StagingReadinessBadge.tsx`（新建，含 DoubanStatusBadge / SourceHealthBadge）
+  - `src/components/admin/staging/StagingRulesPanel.tsx`（新建，规则折叠配置面板）
+  - `src/components/admin/staging/StagingTable.tsx`（新建，ModernDataTable + 行级操作 + 批量发布）
+  - `src/components/admin/staging/StagingDashboard.tsx`（新建，主容器）
+  - `src/components/admin/AdminSidebar.tsx`（新增"暂存发布队列"菜单项）
+  - `src/lib/api-client.ts`（新增 put 方法）
+- **测试覆盖**：typecheck ✅ lint ✅；无新增测试失败；UI 组件暂无单元测试（表格交互逻辑测试在 M1 里程碑评审后补充）
+- **共享层沉淀**：StagingReadinessBadge / DoubanStatusBadge / SourceHealthBadge 从 staging/StagingReadinessBadge.tsx 导出，供后续 moderation/detail 页面复用

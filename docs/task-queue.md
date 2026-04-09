@@ -5269,7 +5269,9 @@
 - **完成备注**：新增 maintenance-queue（queue.ts）；staging.ts queries（listStagingVideos/getStagingVideoById/listReadyStagingVideoIds/StagingPublishRules）；StagingPublishService（checkReadiness/getRules/saveRules/publishSingle/publishReadyBatch）；maintenanceWorker（auto-publish-staging 处理）；maintenanceScheduler（5min tick）；staging.ts routes（5个端点）；server.ts 注册 worker/scheduler/routes；system.types.ts 新增 3 个 setting key。typecheck ✅ lint ✅，stagingPublish.test.ts 14/14 通过。共享层：StagingPublishRules/DEFAULT_STAGING_RULES 已在 staging.ts 导出。
 
 #### ADMIN-09 — [UI] 暂存发布队列页面（/admin/staging，基础版）
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
+- **实际开始**：2026-04-09 05:00
+- **完成时间**：2026-04-09 06:00
 - **创建时间**：2026-04-09 01:00
 - **计划开始**：CHG-383 完成后
 - **依赖**：CHG-383 ✅
@@ -5287,7 +5289,7 @@
   - 筛选：就绪/警告/阻塞 tab + 类型/站点 filter
   - 底部折叠面板：自动发布规则配置
   - 行级操作：[发布] / [查看详情（跳转视频编辑）]
-- **完成备注**：_（AI 填写）_
+- **完成备注**：新建 staging/ 目录（StagingReadinessBadge/DoubanStatusBadge/SourceHealthBadge、StagingRulesPanel、StagingTable、StagingDashboard）；page.tsx；AdminSidebar 新增"暂存发布队列"菜单项；apiClient 新增 put 方法。表格含 8 列（标题/类型/元数据进度条/豆瓣badge/源健康/暂存时长/就绪状态/操作）；底部规则折叠面板；一键发布就绪按钮。元数据进度条颜色使用 CSS 变量（--accent/--status-warning/--status-danger）。typecheck ✅ lint ✅ 无新增测试失败。共享层：3 个 Badge 组件已在 StagingReadinessBadge.tsx 导出供后续复用。
 
 > 🏁 **M1 里程碑评审节点**（ADMIN-09 完成后触发）
 > 评审清单见 pipeline-overhaul-plan.md §十一 M1 验收条件

@@ -11,6 +11,7 @@ interface MenuItem {
 
 const CONTENT_MENU: MenuItem[] = [
   { href: '/admin/moderation', label: '内容审核台', icon: '🔍' },
+  { href: '/admin/staging', label: '暂存发布队列', icon: '📤' },
   { href: '/admin/videos', label: '视频管理', icon: '🎬' },
   { href: '/admin/sources', label: '播放源管理', icon: '🔗' },
   { href: '/admin/content', label: '内容审核', icon: '📝' },
