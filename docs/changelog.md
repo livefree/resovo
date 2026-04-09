@@ -5332,3 +5332,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/AdminVideoForm.tsx`：FormData genre→genres[]，DEFAULT_FORM 同步；移除 category 字段（source_category 废弃，读写均失效）；题材 UI 从单选下拉改为多选 checkbox 组；豆瓣预览面板新增 genres FieldCheckbox（显示豆瓣原始题材，供选择应用）；handleDoubanSearch 自动勾选 genres；handleDoubanApply 写入 genres payload 并同步更新表单状态
 - **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 pre-existing）
 - **共享层沉淀**：否——表单内部状态变更，不需要共享
+
+---
+
+### UX-01 — [Detail] 重构 VideoDetailHero + 移除 VideoDetailMeta
+- **完成时间**：2026-04-08 00:30
+- **修改文件**：
+  - `src/components/video/VideoDetailHero.tsx` — 主体改版：改为 client component，新增 genres 标签行（GENRE_LABELS 映射中文）、线路数量指示器（sourceCount，绿色 badge）、字幕语言指示器（subtitleLangs，最多展示4种）、导演/编剧/演员 MetaChip 行（合并自 VideoDetailMeta）、描述折叠展开（超过150字可展开）；封面列简化；立即播放按钮保留
+  - `src/components/video/VideoDetailMeta.tsx` — **删除**（功能完整合并入 Hero）
+  - `src/components/video/VideoDetailClient.tsx` — 移除 VideoDetailMeta import 和渲染
+  - `tests/unit/components/video/VideoDetailClient.test.tsx` — 移除 VideoDetailMeta mock；修正 makeVideo() 中 category→genres 字段
+  - `src/components/templates/Page.template.tsx` — 移除注释中 VideoDetailMeta 引用
+- **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为预存，与本次无关）
+- **共享层沉淀**：GENRE_LABELS 为 VideoDetailHero 专用，暂无需提取（仅一处使用）

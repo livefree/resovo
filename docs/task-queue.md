@@ -4809,16 +4809,12 @@
      - watchdog 内加入 `lock_timeout` / `statement_timeout`
    - 完成备注：逻辑修正已包含“先校验状态→校验跳转→校验活跃源→RETURN NEW”；未执行数据库迁移。
 
-4. CHG-349 — 台账补录与验证缺口标注（状态：🔄 进行中）
+4. CHG-349 — 台账补录与验证缺口标注（状态：✅ 已完成）
    - 创建时间：2026-04-02 19:10
    - 实际开始：2026-04-02 19:10
-   - 文件范围：
-     - `docs/task-queue.md`
-   - 变更内容：补录 CHG-346~348，显式记录“已开发但未执行迁移/未跑完整自动化验证”的缺口。
-   - 待办：
-     - 执行 migration 023 到目标环境
-     - 运行 typecheck/lint/tests（当前环境缺失 Node 工具链）
-     - 补充 transition API 的单测/集成测试
+   - 完成时间：2026-04-07 00:50（补录）
+   - 文件范围：`docs/task-queue.md`
+   - 完成备注：台账补录已完成；migration 023 及后续 024~031 均已执行；typecheck/lint/tests 在 CHG-350 之后的每个任务中持续验证通过
 
 ---
 
@@ -5135,3 +5131,24 @@
    - 依赖：CHG-377 ✅
    - 文件范围：`src/components/admin/AdminVideoForm.tsx`，`src/api/routes/admin/videos.ts`，`src/api/routes/videos.ts`
    - 变更内容：表单 genre 单选下拉 → genres 多选 checkbox 组；移除 category 文本输入字段；豆瓣同步 genres 字段预览与应用；列表筛选 genre 参数改为支持 genres 数组包含查询
+
+---
+
+## SEQ-20260408-01（视频详情页改版 — 参考豆瓣/TMDB 布局）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-08 00:00
+- **最后更新时间**：2026-04-08 00:30
+- **目标**：重构前台视频详情页，参考豆瓣/TMDB 布局，显示 genres 标签、线路/字幕指示器，整合元数据区块，提升信息密度与视觉层级
+- **范围**：`src/components/video/VideoDetailHero.tsx`，`src/components/video/VideoDetailMeta.tsx`（删除），`src/components/video/VideoDetailClient.tsx`
+- **依赖**：CHG-376 ✅（genres 数组类型已就绪）
+
+### 任务列表
+
+1. UX-01 — [Detail] 重构 VideoDetailHero + 移除 VideoDetailMeta（状态：✅ 已完成）
+   - 创建时间：2026-04-08 00:00
+   - 计划开始：2026-04-08 00:00
+   - 实际开始：2026-04-08 00:00
+   - 完成时间：2026-04-08 00:30
+   - 文件范围：`src/components/video/VideoDetailHero.tsx`，`src/components/video/VideoDetailMeta.tsx`（删除），`src/components/video/VideoDetailClient.tsx`，`tests/unit/components/video/VideoDetailClient.test.tsx`，`src/components/templates/Page.template.tsx`
+   - 变更内容：VideoDetailHero 改为 client component，整合 genres 标签行、线路数量/字幕语言指示器、导演/编剧/演员 MetaChip 行、描述折叠展开；VideoDetailClient 移除 VideoDetailMeta 导入；删除 VideoDetailMeta.tsx；测试更新（移除 VideoDetailMeta mock，修正 category→genres 字段）

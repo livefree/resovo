@@ -25,12 +25,6 @@ vi.mock('@/components/video/VideoDetailHero', () => ({
   ),
 }))
 
-vi.mock('@/components/video/VideoDetailMeta', () => ({
-  VideoDetailMeta: ({ video }: { video: Video }) => (
-    <div data-testid="video-detail-meta">{video.titleEn}</div>
-  ),
-}))
-
 vi.mock('@/components/video/EpisodeGrid', () => ({
   EpisodeGrid: () => <div data-testid="episode-grid">剧集列表</div>,
 }))
@@ -47,7 +41,7 @@ function makeVideo(overrides?: Partial<Video>): Video {
     description: '这是一部测试电影。',
     coverUrl: 'https://cdn.example.com/cover.jpg',
     type: 'movie',
-    category: 'action',
+    genres: ['action'],
     rating: 8.5,
     year: 2024,
     country: 'JP',
@@ -74,19 +68,17 @@ describe('VideoDetailClient', () => {
     vi.clearAllMocks()
   })
 
-  it('加载中时渲染 skeleton（无 hero/meta）', () => {
+  it('加载中时渲染 skeleton（无 hero）', () => {
     getMock.mockReturnValue(new Promise(() => {}))
     render(<VideoDetailClient slug="test-movie-aB3kR9x1" />)
     expect(screen.queryByTestId('video-detail-hero')).toBeNull()
-    expect(screen.queryByTestId('video-detail-meta')).toBeNull()
   })
 
-  it('数据加载后渲染 hero 和 meta', async () => {
+  it('数据加载后渲染 hero', async () => {
     getMock.mockResolvedValue(makeApiResponse(makeVideo()))
     render(<VideoDetailClient slug="test-movie-aB3kR9x1" />)
     await screen.findByTestId('video-detail-hero')
     expect(screen.getByTestId('video-detail-hero').textContent).toBe('测试电影')
-    expect(screen.getByTestId('video-detail-meta')).toBeTruthy()
   })
 
   it('从 slug 中正确提取 shortId 进行 API 请求', async () => {

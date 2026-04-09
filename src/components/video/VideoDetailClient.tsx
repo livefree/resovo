@@ -9,7 +9,6 @@ import { useEffect, useState } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { extractShortId } from '@/lib/video-detail'
 import { VideoDetailHero } from './VideoDetailHero'
-import { VideoDetailMeta } from './VideoDetailMeta'
 import { EpisodeGrid } from './EpisodeGrid'
 import type { Video, ApiResponse } from '@/types'
 
@@ -49,7 +48,6 @@ export function VideoDetailClient({ slug, showEpisodes }: Props) {
   return (
     <>
       <VideoDetailHero video={video} />
-      <VideoDetailMeta video={video} />
       {showEpisodes && <EpisodeGrid video={video} />}
     </>
   )
