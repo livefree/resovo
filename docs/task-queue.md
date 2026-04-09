@@ -5687,3 +5687,25 @@
 > 5. 手动将源标记为失效 → 确认自动下架 + 触发补源 Job
 > 6. 关键词搜索采集"测试影片" → 确认多站点结果及预览功能
 > 7. 整体 npm run test -- --run 通过率与改造前基准持平
+
+---
+⏸ M1 里程碑评审 — Phase 1 已完成，等待人工验收后继续 Phase 2
+
+- **完成时间**：2026-04-09 06:30
+- **Phase 1 完成任务**：CHG-381、CHG-382、CHG-383、ADMIN-09（共 4 个）
+- **已提交 commits**：
+  - `chg(CHG-381)`: migration 032 + 类型层流水线字段
+  - `chg(CHG-382)`: approve 终态改为暂存，新增 approve_and_publish
+  - `chg(CHG-383)`: maintenance-queue Worker + auto-publish-staging Job + 暂存 API
+  - `feat(ADMIN-09)`: /admin/staging 页面（表格/badge/规则面板）
+- **M1 验收清单**（pipeline-overhaul-plan.md §十一）：
+  - [ ] 审核通过视频不再直接上架，进入 approved+internal+false 暂存态
+  - [ ] /admin/staging 页面可访问，列表正常展示暂存视频
+  - [ ] 单条手动发布功能正常（POST /admin/staging/:id/publish）
+  - [ ] 自动发布规则可配置并保存
+  - [ ] 侧边栏"暂存发布队列"菜单可见可点
+- **需要你做的事**：
+  - [ ] 运行 `npm run test` 确认测试状态
+  - [ ] 启动本地服务，验证 M1 验收清单
+  - [ ] 确认通过后，删除此块即可继续 Phase 2
+---
