@@ -37,15 +37,22 @@ export async function adminStagingRoutes(fastify: FastifyInstance) {
       })
     }
 
-    const rules = await svc.getRules()
-    const result = await stagingQueries.listStagingVideos(db, parsed.data)
+    try {
+      const rules = await svc.getRules()
+      const result = await stagingQueries.listStagingVideos(db, parsed.data)
 
-    const rows = result.rows.map((video) => ({
-      ...video,
-      readiness: svc.checkReadiness(video, rules),
-    }))
+      const rows = result.rows.map((video) => ({
+        ...video,
+        readiness: svc.checkReadiness(video, rules),
+      }))
 
-    return reply.send({ data: rows, total: result.total, rules })
+      return reply.send({ data: rows, total: result.total, rules })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: `暂存队列查询失败: ${msg}`, status: 500 },
+      })
+    }
   })
 
   // ── POST /admin/staging/:id/publish — 手动发布单条 ─────────
@@ -78,8 +85,15 @@ export async function adminStagingRoutes(fastify: FastifyInstance) {
 
   // ── GET /admin/staging/rules — 获取自动发布规则 ─────────────
   fastify.get('/admin/staging/rules', { preHandler: auth }, async (_request, reply) => {
-    const rules = await svc.getRules()
-    return reply.send({ data: rules })
+    try {
+      const rules = await svc.getRules()
+      return reply.send({ data: rules })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: `获取规则失败: ${msg}`, status: 500 },
+      })
+    }
   })
 
   // ── PUT /admin/staging/rules — 更新自动发布规则 ─────────────
