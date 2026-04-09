@@ -28,6 +28,9 @@ export type SystemSettingKey =
   | 'crawler_global_freeze'
   | 'config_file'
   | 'config_file_url'
+  | 'auto_publish_staging_enabled'
+  | 'auto_publish_staging_rules'
+  | 'auto_publish_staging_last_run'
 
 export interface SystemSetting {
   key: SystemSettingKey

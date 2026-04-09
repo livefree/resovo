@@ -43,6 +43,17 @@ export const verifyQueue = new Bull('verify-queue', {
   },
 })
 
+/** 维护任务队列（auto-publish-staging / verify-published-sources 等低频后台任务） */
+export const maintenanceQueue = new Bull('maintenance-queue', {
+  redis: redisOptions,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'fixed', delay: 30_000 },
+    removeOnComplete: 20,
+    removeOnFail: 10,
+  },
+})
+
 // ── 队列事件日志 ──────────────────────────────────────────────────
 
 function attachQueueLogger(queue: Bull.Queue, name: string) {
@@ -56,8 +67,9 @@ function attachQueueLogger(queue: Bull.Queue, name: string) {
 
 attachQueueLogger(crawlerQueue, 'crawler-queue')
 attachQueueLogger(verifyQueue, 'verify-queue')
+attachQueueLogger(maintenanceQueue, 'maintenance-queue')
 
-const queues = { crawlerQueue, verifyQueue }
+const queues = { crawlerQueue, verifyQueue, maintenanceQueue }
 export default queues
 
 /** 确认 crawler 队列可用，避免创建任务后因入队失败留下 pending 脏状态 */

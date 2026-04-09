@@ -5246,9 +5246,11 @@
 - **完成备注**：transitionVideoState.approve 终态改为 internal+false，新增 approve_and_publish case（public+true）；ReviewSchema/StateTransitionSchema 新增 approve_and_publish；route 层加 admin 权限检查；reviewVideo.test.ts 重写为 mock transitionVideoState 并覆盖 6 个测试用例（含新 approve_and_publish case）。typecheck/lint ✅，reviewVideo.test.ts 6/6 通过，其余失败均为预存。共享层：无需沉淀。
 
 #### CHG-383 — [API] 新增 auto-publish-staging Job 与 maintenance-queue Worker
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **计划开始**：CHG-382 完成后
+- **实际开始**：2026-04-09 04:00
+- **完成时间**：2026-04-09 05:00
 - **依赖**：CHG-382 ✅
 - **文件范围**：
   - `src/api/workers/maintenanceWorker.ts`（新建 Worker）
@@ -5264,7 +5266,7 @@
   - POST /admin/staging/:id/publish：手动发布单条
   - POST /admin/staging/batch-publish：批量发布就绪视频
   - GET/PUT /admin/staging/rules：读写自动发布规则配置
-- **完成备注**：_（AI 填写）_
+- **完成备注**：新增 maintenance-queue（queue.ts）；staging.ts queries（listStagingVideos/getStagingVideoById/listReadyStagingVideoIds/StagingPublishRules）；StagingPublishService（checkReadiness/getRules/saveRules/publishSingle/publishReadyBatch）；maintenanceWorker（auto-publish-staging 处理）；maintenanceScheduler（5min tick）；staging.ts routes（5个端点）；server.ts 注册 worker/scheduler/routes；system.types.ts 新增 3 个 setting key。typecheck ✅ lint ✅，stagingPublish.test.ts 14/14 通过。共享层：StagingPublishRules/DEFAULT_STAGING_RULES 已在 staging.ts 导出。
 
 #### ADMIN-09 — [UI] 暂存发布队列页面（/admin/staging，基础版）
 - **状态**：⬜ 待开始

@@ -25,6 +25,9 @@ import { danmakuRoutes } from '@/api/routes/danmaku'
 import { registerVerifyWorker } from '@/api/workers/verifyWorker'
 import { registerCrawlerWorker } from '@/api/workers/crawlerWorker'
 import { registerCrawlerScheduler } from '@/api/workers/crawlerScheduler'
+import { registerMaintenanceWorker } from '@/api/workers/maintenanceWorker'
+import { registerMaintenanceScheduler } from '@/api/workers/maintenanceScheduler'
+import { adminStagingRoutes } from '@/api/routes/admin/staging'
 import { VerifyService } from '@/api/services/VerifyService'
 import { db } from '@/api/lib/postgres'
 
@@ -72,15 +75,24 @@ async function start() {
   await fastify.register(adminPerformanceRoutes, { prefix: '/v1' })
   await fastify.register(adminSiteConfigRoutes, { prefix: '/v1' })
   await fastify.register(adminCrawlerSitesRoutes, { prefix: '/v1' })
+  await fastify.register(adminStagingRoutes, { prefix: '/v1' })
 
   registerVerifyWorker()
   registerCrawlerWorker()
+  registerMaintenanceWorker()
 
   const schedulerEnabled = process.env.CRAWLER_SCHEDULER_ENABLED === 'true'
   if (schedulerEnabled) {
     registerCrawlerScheduler()
   } else {
     process.stderr.write('[crawler-scheduler] disabled (set CRAWLER_SCHEDULER_ENABLED=true to enable)\n')
+  }
+
+  const maintenanceSchedulerEnabled = process.env.MAINTENANCE_SCHEDULER_ENABLED === 'true'
+  if (maintenanceSchedulerEnabled) {
+    registerMaintenanceScheduler()
+  } else {
+    process.stderr.write('[maintenance-scheduler] disabled (set MAINTENANCE_SCHEDULER_ENABLED=true to enable)\n')
   }
 
   // 链接存活定时扫描：每 24h 将所有活跃 sources 批量入队 verify-queue

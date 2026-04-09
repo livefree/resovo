@@ -5387,3 +5387,18 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/reviewVideo.test.ts`（重写 mock 为 transitionVideoState，更新 approve 期望为 internal+false，新增 approve_and_publish 测试用例，共 6 个测试）
 - **测试覆盖**：typecheck ✅ lint ✅；reviewVideo.test.ts 6/6 通过；其余失败均为预存
 - **共享层沉淀**：无需；approve_and_publish 为新 action，逻辑集中在 DB queries 层
+
+## CHG-383 — [API] 新增 auto-publish-staging Job 与 maintenance-queue Worker
+- **完成时间**：2026-04-09 05:00
+- **修改文件**：
+  - `src/api/lib/queue.ts`（新增 maintenanceQueue）
+  - `src/types/system.types.ts`（SystemSettingKey 新增 3 个 staging 键）
+  - `src/api/db/queries/staging.ts`（新建，listStagingVideos / getStagingVideoById / listReadyStagingVideoIds / StagingPublishRules / DEFAULT_STAGING_RULES）
+  - `src/api/services/StagingPublishService.ts`（新建，checkReadiness / getRules / saveRules / publishSingle / publishReadyBatch）
+  - `src/api/workers/maintenanceWorker.ts`（新建，处理 auto-publish-staging Job）
+  - `src/api/workers/maintenanceScheduler.ts`（新建，5min tick 调度）
+  - `src/api/routes/admin/staging.ts`（新建，5 个 API 端点）
+  - `src/api/server.ts`（注册 maintenanceWorker / maintenanceScheduler / adminStagingRoutes）
+  - `tests/unit/api/stagingPublish.test.ts`（新建，14 个测试）
+- **测试覆盖**：typecheck ✅ lint ✅；stagingPublish.test.ts 14/14；其余失败为预存
+- **共享层沉淀**：StagingPublishRules / DEFAULT_STAGING_RULES 导出自 db/queries/staging.ts，供 routes 和 service 复用
