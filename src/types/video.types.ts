@@ -25,6 +25,12 @@ export type VideoStatus   = 'ongoing' | 'completed'
 // ── 内容治理（Migration 016）────────────────────────────────────
 export type ReviewStatus     = 'pending_review' | 'approved' | 'rejected'
 export type VisibilityStatus = 'public' | 'internal' | 'hidden'
+
+// ── 流水线辅助状态（Migration 032，Pipeline Overhaul）────────────
+/** 豆瓣匹配状态：自动丰富 Job 写入 */
+export type DoubanStatus = 'pending' | 'matched' | 'candidate' | 'unmatched'
+/** 源活性批量检验结果 */
+export type SourceCheckStatus = 'pending' | 'ok' | 'partial' | 'all_dead'
 /** VideoGenre — 内容题材（与 VideoType 内容形式严格正交）*/
 export type VideoGenre =
   | 'action'       // 动作
@@ -83,6 +89,11 @@ export interface Video {
   catalogId: string | null
   imdbId: string | null
   tmdbId: number | null
+  // 流水线辅助字段（Migration 032）
+  doubanStatus: DoubanStatus
+  sourceCheckStatus: SourceCheckStatus
+  /** 元数据完整度评分 0-100 */
+  metaScore: number
 }
 
 // ── 视频卡片（列表用，字段较少）────────────────────────────────

@@ -5364,3 +5364,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/moderation/ModerationStats.tsx` — 删除（dead code）
 - **测试覆盖**：typecheck ✅ lint ✅（pending-review 测试失败为预存问题，与本次无关）
 - **共享层沉淀**：无需提取
+
+---
+
+### CHG-381 — [DB] 新增 videos 辅助状态字段（douban_status / source_check_status / meta_score）
+- **完成时间**：2026-04-09 02:30
+- **修改文件**：
+  - `src/api/db/migrations/032_videos_pipeline_status_fields.sql`（新建，幂等 migration）
+  - `src/types/video.types.ts`（新增 DoubanStatus / SourceCheckStatus 类型，Video 接口新增3字段）
+  - `src/api/db/queries/videos.ts`（DbVideoRow / VIDEO_FULL_SELECT / mapVideoRow / PendingReviewVideoRow / listPendingReviewVideos 全部更新）
+  - `src/api/db/queries/crawlerRuns.ts`（CrawlerRunCrawlMode 类型 / CrawlerRun / DbRunRow / mapRun / createRun 更新）
+  - `docs/architecture.md`（videos 表字段说明、crawler_runs 扩展字段说明同步更新）
+- **测试覆盖**：typecheck ✅ lint ✅；相关测试失败均为预存（transitionVideoState mock 问题），与本次改动无关
+- **共享层沉淀**：DoubanStatus / SourceCheckStatus 已在 types/index.ts 自动导出，无需额外提取

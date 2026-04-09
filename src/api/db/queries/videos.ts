@@ -5,7 +5,7 @@
  */
 
 import type { Pool, PoolClient } from 'pg'
-import type { Video, VideoCard, VideoType, VideoStatus, VideoGenre, ContentFormat, EpisodePattern, ReviewStatus, VisibilityStatus } from '@/types'
+import type { Video, VideoCard, VideoType, VideoStatus, VideoGenre, ContentFormat, EpisodePattern, ReviewStatus, VisibilityStatus, DoubanStatus, SourceCheckStatus } from '@/types'
 
 // ── 内部 DB 行类型 ────────────────────────────────────────────────
 
@@ -37,6 +37,10 @@ interface DbVideoRow {
   content_rating: 'general' | 'adult'
   // Migration 022
   site_key: string | null
+  // Migration 032 — 流水线辅助字段
+  douban_status: DoubanStatus
+  source_check_status: SourceCheckStatus
+  meta_score: number
   // ── media_catalog JOIN 字段（mc.*）───────────────────────────────
   title_en: string | null
   description: string | null
@@ -89,6 +93,9 @@ function mapVideoRow(row: DbVideoRow): Video {
     catalogId: row.catalog_id ?? null,
     imdbId: row.imdb_id ?? null,
     tmdbId: row.tmdb_id ?? null,
+    doubanStatus: row.douban_status ?? 'pending',
+    sourceCheckStatus: row.source_check_status ?? 'pending',
+    metaScore: row.meta_score ?? 0,
   }
 }
 
@@ -134,6 +141,7 @@ const VIDEO_FULL_SELECT = `
   v.source_content_type, v.normalized_type, v.content_format, v.episode_pattern,
   v.review_status, v.visibility_status, v.needs_manual_review,
   v.content_rating, v.site_key, v.source_category,
+  v.douban_status, v.source_check_status, v.meta_score,
   mc.title_en, mc.description, mc.cover_url, mc.rating, mc.year, mc.country,
   mc.status, mc.director, mc."cast", mc.writers, mc.genres,
   mc.douban_id, mc.imdb_id, mc.tmdb_id, mc.title_normalized, mc.metadata_source
@@ -1110,6 +1118,11 @@ export interface PendingReviewVideoRow {
   siteName: string | null
   firstSourceUrl: string | null
   createdAt: string
+  // 流水线辅助字段（Migration 032）
+  doubanStatus: DoubanStatus
+  sourceCheckStatus: SourceCheckStatus
+  metaScore: number
+  activeSourceCount: number
 }
 
 export async function listPendingReviewVideos(
@@ -1186,6 +1199,8 @@ export async function listPendingReviewVideos(
       cover_url: string | null; year: number | null
       site_key: string | null; site_name: string | null
       first_source_url: string | null; created_at: string
+      douban_status: DoubanStatus; source_check_status: SourceCheckStatus
+      meta_score: number; active_source_count: string
     }>(
       `SELECT v.id, v.short_id, v.title, v.type,
               mc.cover_url, mc.year,
@@ -1193,7 +1208,11 @@ export async function listPendingReviewVideos(
               (SELECT s.source_url FROM video_sources s
                WHERE s.video_id = v.id AND s.is_active = true AND s.deleted_at IS NULL
                LIMIT 1) AS first_source_url,
-              v.created_at
+              v.created_at,
+              v.douban_status, v.source_check_status, v.meta_score,
+              (SELECT COUNT(*) FROM video_sources s
+               WHERE s.video_id = v.id AND s.is_active = true AND s.deleted_at IS NULL
+              )::int AS active_source_count
        ${VIDEO_JOIN}
        LEFT JOIN crawler_sites cs ON cs.key = v.site_key
        WHERE ${where}
@@ -1222,6 +1241,10 @@ export async function listPendingReviewVideos(
       siteName: r.site_name,
       firstSourceUrl: r.first_source_url,
       createdAt: r.created_at,
+      doubanStatus: r.douban_status ?? 'pending',
+      sourceCheckStatus: r.source_check_status ?? 'pending',
+      metaScore: r.meta_score ?? 0,
+      activeSourceCount: parseInt(r.active_source_count ?? '0'),
     })),
     total: parseInt(countResult.rows[0]?.count ?? '0'),
   }

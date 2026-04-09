@@ -5206,8 +5206,10 @@
 > ⚠ Phase 1 完成后必须暂停，执行里程碑评审，确认再进入 Phase 2
 
 #### CHG-381 — [DB] 新增 videos 辅助状态字段（douban_status / source_check_status / meta_score）
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
+- **实际开始**：2026-04-09 02:00
+- **完成时间**：2026-04-09 02:30
 - **计划开始**：Phase 1 第一个任务
 - **依赖**：无
 - **文件范围**：
@@ -5223,7 +5225,7 @@
   - 新增 `crawler_runs.keyword TEXT`
   - 新增 `crawler_runs.target_video_id UUID REFERENCES videos(id) ON DELETE SET NULL`
   - 同步更新 listAdminVideos / findAdminVideoById 等查询的返回字段
-- **完成备注**：_（AI 填写）_
+- **完成备注**：migration 032 幂等实现（videos +3/crawler_runs +3），类型层新增 DoubanStatus/SourceCheckStatus，Video 接口/DbVideoRow/VIDEO_FULL_SELECT/mapper/PendingReviewVideoRow/listPendingReviewVideos/CrawlerRun/createRun 全部更新，architecture.md 同步。typecheck/lint ✅。
 
 #### CHG-382 — [API] 修改 approve 审核终态：通过→暂存（approved+internal）
 - **状态**：⬜ 待开始

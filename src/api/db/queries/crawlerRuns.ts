@@ -4,6 +4,8 @@ export type CrawlerRunTriggerType = 'single' | 'batch' | 'all' | 'schedule'
 export type CrawlerRunMode = 'incremental' | 'full'
 export type CrawlerRunStatus = 'queued' | 'running' | 'paused' | 'success' | 'partial_failed' | 'failed' | 'cancelled'
 export type CrawlerRunControlStatus = 'active' | 'pausing' | 'paused' | 'cancelling' | 'cancelled'
+/** Migration 032：采集模式（batch=定时批量，keyword=关键词搜索，source-refetch=单视频补源） */
+export type CrawlerRunCrawlMode = 'batch' | 'keyword' | 'source-refetch'
 
 export interface CrawlerRun {
   id: string
@@ -22,6 +24,10 @@ export interface CrawlerRun {
   finishedAt: string | null
   createdAt: string
   updatedAt: string
+  // Migration 032 — 采集模式扩展
+  crawlMode: CrawlerRunCrawlMode
+  keyword: string | null
+  targetVideoId: string | null
 }
 
 interface DbRunRow {
@@ -41,6 +47,10 @@ interface DbRunRow {
   finished_at: string | null
   created_at: string
   updated_at: string
+  // Migration 032
+  crawl_mode: CrawlerRunCrawlMode
+  keyword: string | null
+  target_video_id: string | null
 }
 
 function mapRun(row: DbRunRow): CrawlerRun {
@@ -61,6 +71,9 @@ function mapRun(row: DbRunRow): CrawlerRun {
     finishedAt: row.finished_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    crawlMode: row.crawl_mode ?? 'batch',
+    keyword: row.keyword ?? null,
+    targetVideoId: row.target_video_id ?? null,
   }
 }
 
@@ -74,13 +87,18 @@ export async function createRun(
     createdBy?: string | null
     scheduleId?: string | null
     summary?: Record<string, unknown> | null
+    // Migration 032
+    crawlMode?: CrawlerRunCrawlMode
+    keyword?: string | null
+    targetVideoId?: string | null
   },
 ): Promise<CrawlerRun> {
   const result = await db.query<DbRunRow>(
     `INSERT INTO crawler_runs (
        trigger_type, mode, status, control_status,
-       requested_site_count, timeout_seconds, created_by, schedule_id, summary
-     ) VALUES ($1, $2, 'queued', 'active', $3, $4, $5, $6, $7::jsonb)
+       requested_site_count, timeout_seconds, created_by, schedule_id, summary,
+       crawl_mode, keyword, target_video_id
+     ) VALUES ($1, $2, 'queued', 'active', $3, $4, $5, $6, $7::jsonb, $8, $9, $10)
      RETURNING *`,
     [
       input.triggerType,
@@ -90,6 +108,9 @@ export async function createRun(
       input.createdBy ?? null,
       input.scheduleId ?? null,
       input.summary ? JSON.stringify(input.summary) : null,
+      input.crawlMode ?? 'batch',
+      input.keyword ?? null,
+      input.targetVideoId ?? null,
     ],
   )
   return mapRun(result.rows[0])
