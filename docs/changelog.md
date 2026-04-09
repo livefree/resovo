@@ -5345,3 +5345,12 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/templates/Page.template.tsx` — 移除注释中 VideoDetailMeta 引用
 - **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为预存，与本次无关）
 - **共享层沉淀**：GENRE_LABELS 为 VideoDetailHero 专用，暂无需提取（仅一处使用）
+
+---
+
+### CHG-379 — [Fix] 切集后线路重置：保留用户选中的线路
+- **完成时间**：2026-04-08 01:10
+- **修改文件**：
+  - `src/components/player/PlayerShell.tsx` — episode useEffect 的 then 回调中，获取新源后用 `sources[activeSourceIndex]?.label` 按名称在新源列表中查找匹配项，命中则保留 index，否则回退 0；移除原来无条件的 `setActiveSourceIndex(0)`
+- **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为预存，与本次无关）
+- **共享层沉淀**：无需提取

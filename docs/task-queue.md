@@ -5152,3 +5152,19 @@
    - 完成时间：2026-04-08 00:30
    - 文件范围：`src/components/video/VideoDetailHero.tsx`，`src/components/video/VideoDetailMeta.tsx`（删除），`src/components/video/VideoDetailClient.tsx`，`tests/unit/components/video/VideoDetailClient.test.tsx`，`src/components/templates/Page.template.tsx`
    - 变更内容：VideoDetailHero 改为 client component，整合 genres 标签行、线路数量/字幕语言指示器、导演/编剧/演员 MetaChip 行、描述折叠展开；VideoDetailClient 移除 VideoDetailMeta 导入；删除 VideoDetailMeta.tsx；测试更新（移除 VideoDetailMeta mock，修正 category→genres 字段）
+
+---
+
+## hotfix — CHG-379（切换选集后线路被强制重置）
+
+> 创建时间：2026-04-08 01:00
+> 最后更新时间：2026-04-08 01:10
+> 状态：✅ 已完成
+
+#### CHG-379 — [Fix] 切集后线路重置：保留用户选中的线路（状态：✅ 已完成）
+- **创建时间**：2026-04-08 01:00
+- **实际开始**：2026-04-08 01:00
+- **完成时间**：2026-04-08 01:10
+- **变更原因**：切换选集时 setActiveSourceIndex(0) 无条件重置，用户选中的线路被抹除
+- **文件范围**：`src/components/player/PlayerShell.tsx`
+- **变更内容**：episode 切换获取新源后，用 sources[activeSourceIndex]?.label 在新源列表中按名称匹配，命中则保留 index，否则回退 0

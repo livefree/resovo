@@ -100,14 +100,20 @@ export function PlayerShell({ slug }: PlayerShellProps) {
         { skipAuth: true }
       )
       .then((res) => {
-        setSources(res.data.map((s, index) => ({
+        const newSources = res.data.map((s, index) => ({
           src: s.sourceUrl,
           type: s.type,
           label: buildLineDisplayName({ rawName: s.sourceName, fallbackIndex: index, quality: s.quality }),
-        })))
-        setActiveSourceIndex(0)
+        }))
+        setSources(newSources)
+        // 保留用户选中的线路：按 label 在新源列表中查找，命中则保留，否则回退 0
+        const prevLabel = sources[activeSourceIndex]?.label
+        const matched = prevLabel ? newSources.findIndex((s) => s.label === prevLabel) : -1
+        setActiveSourceIndex(matched >= 0 ? matched : 0)
       })
       .catch(() => {/* 无源时保留已有源 */})
+    // sources/activeSourceIndex 故意排除在依赖外：effect 仅由切集触发，
+    // 在 then 回调中读取的是切集时的快照（即用户当前选中的线路），行为正确
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentEpisode])
 
