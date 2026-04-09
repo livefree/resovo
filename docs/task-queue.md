@@ -5709,3 +5709,18 @@
   - [ ] 启动本地服务，验证 M1 验收清单
   - [ ] 确认通过后，删除此块即可继续 Phase 2
 ---
+
+#### CHG-384 — [DB+UI] 修复 approve 暂存：更新 DB 触发器白名单 + 审核台新增操作按钮
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-09 07:00
+- **实际开始**：2026-04-09 07:00
+- **完成时间**：2026-04-09 08:00
+- **变更原因**：CHG-382 的 approve 终态改为 approved+internal+false，但 Migration 023 的 transition whitelist 不含此跃迁，导致 DB 触发器拦截所有 approve 操作；且 approve_and_publish 无 UI 入口
+- **影响的已完成任务**：CHG-382
+- **文件范围**：
+  - `src/api/db/migrations/033_update_state_machine_approve_staging.sql`（新建）
+  - `src/components/admin/moderation/ModerationDetail.tsx`（操作按钮改版）
+- **变更内容**：
+  - Migration 033：更新触发器白名单，允许 pending_review|internal|0 → approved|internal|0，pending_review|hidden|0 → approved|hidden|0
+  - ModerationDetail："通过" 按钮改为 "通过（暂存）"（action=approve）；管理员额外展示 "通过并上架" 按钮（action=approve_and_publish）
+- **完成备注**：Migration 033 新建触发器函数重写，补全两条缺失跃迁；ModerationDetail 增加 isAdmin 判断，approve 按钮重命名为"通过（暂存）"，管理员可见"通过并直接上架"；architecture.md 补充跃迁白名单表格；typecheck ✅ lint ✅ 785 tests passing

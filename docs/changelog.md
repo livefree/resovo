@@ -5415,3 +5415,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/lib/api-client.ts`（新增 put 方法）
 - **测试覆盖**：typecheck ✅ lint ✅；无新增测试失败；UI 组件暂无单元测试（表格交互逻辑测试在 M1 里程碑评审后补充）
 - **共享层沉淀**：StagingReadinessBadge / DoubanStatusBadge / SourceHealthBadge 从 staging/StagingReadinessBadge.tsx 导出，供后续 moderation/detail 页面复用
+
+## CHG-384 — [DB+UI] 修复 approve 暂存：更新 DB 触发器白名单 + 审核台新增操作按钮
+- **完成时间**：2026-04-09
+- **记录时间**：2026-04-09 08:00
+- **修改文件**：
+  - `src/api/db/migrations/033_update_state_machine_approve_staging.sql` — 新建，重写 enforce_videos_state_machine() 函数，补全 pending_review|internal|0→approved|internal|0 和 pending_review|hidden|0→approved|hidden|0 两条跃迁
+  - `src/components/admin/moderation/ModerationDetail.tsx` — 增加 isAdmin 判断，"通过"改为"通过（暂存）"，管理员专属"通过并直接上架"按钮
+  - `docs/architecture.md` — 第6节补充完整跃迁白名单表格
+- **新增依赖**：无
+- **数据库变更**：Migration 033 重建触发器 trg_videos_state_machine（函数替换，触发器重建）
+- **注意事项**：Migration 033 需在 CHG-382 的代码变更部署后执行；执行后 approve 操作才能正常将视频跃迁至 approved+internal+false 暂存态
+- **测试覆盖**：typecheck ✅ lint ✅；785 tests passing（20 failing 均为预存失败，与本次改动无关）
+- **共享层沉淀**：isAdmin 判断通过已有 useAuthStore(selectIsAdmin) 实现，无需新建共享逻辑

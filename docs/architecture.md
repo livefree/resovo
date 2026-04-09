@@ -158,6 +158,17 @@ resovo/
 - `approved`: `(public,true)` 或 `(internal,false)` 或 `(hidden,false)`
 - `rejected`: `(hidden,false)`
 
+跃迁白名单（Migration 033 更新）：
+
+| 旧状态 | 允许跃迁至 |
+|--------|-----------|
+| `pending_review+internal` | `pending_review+hidden` / `approved+internal`（暂存）/ `approved+public`（直接上架）/ `rejected+hidden` |
+| `pending_review+hidden` | `pending_review+internal` / `approved+hidden` / `approved+public` / `rejected+hidden` |
+| `approved+public` | `approved+internal` / `approved+hidden` |
+| `approved+internal` | `approved+public` / `approved+hidden` |
+| `approved+hidden` | `approved+public` / `approved+internal` |
+| `rejected+hidden` | `pending_review+hidden` / `pending_review+internal` |
+
 附加硬约束：
 
 - `is_published=true` 必须存在至少 1 条 active source。

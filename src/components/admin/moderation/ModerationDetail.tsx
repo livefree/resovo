@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { buildLineDisplayName } from '@/lib/line-display-name'
 import { ModerationPlayer } from '@/components/admin/moderation/ModerationPlayer'
+import { useAuthStore, selectIsAdmin } from '@/stores/authStore'
 
 interface VideoDetail {
   id: string
@@ -54,12 +55,13 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps) {
+  const isAdmin = useAuthStore(selectIsAdmin)
   const [video, setVideo] = useState<VideoDetail | null>(null)
   const [sources, setSources] = useState<SourceRow[]>([])
   const [selectedLine, setSelectedLine] = useState<string | null>(null)
   const [selectedEpisode, setSelectedEpisode] = useState<number>(1)
   const [loading, setLoading] = useState(false)
-  const [reviewLoading, setReviewLoading] = useState<'approve' | 'reject' | null>(null)
+  const [reviewLoading, setReviewLoading] = useState<'approve' | 'approve_and_publish' | 'reject' | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -121,7 +123,7 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
     }
   }, [videoId, fetchDetail])
 
-  const handleReview = useCallback(async (action: 'approve' | 'reject') => {
+  const handleReview = useCallback(async (action: 'approve' | 'approve_and_publish' | 'reject') => {
     if (!videoId) return
     const reason = rejectReason.trim()
     setReviewLoading(action)
@@ -325,25 +327,40 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
             data-testid="moderation-reject-reason-input"
           />
         </div>
-        <div className="flex gap-2">
-        <button
-          type="button"
-          disabled={reviewLoading != null}
-          onClick={() => void handleReview('approve')}
-          data-testid="moderation-approve-btn"
-          className="flex-1 rounded-md border border-green-500/40 bg-green-500/10 py-2 text-sm font-medium text-green-300 transition-colors hover:bg-green-500/20 disabled:opacity-50"
-        >
-          {reviewLoading === 'approve' ? '处理中…' : '通过'}
-        </button>
-        <button
-          type="button"
-          disabled={reviewLoading != null}
-          onClick={() => void handleReview('reject')}
-          data-testid="moderation-reject-btn"
-          className="flex-1 rounded-md border border-red-500/40 bg-red-500/10 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20 disabled:opacity-50"
-        >
-          {reviewLoading === 'reject' ? '处理中…' : '拒绝'}
-        </button>
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={reviewLoading != null}
+              onClick={() => void handleReview('approve')}
+              data-testid="moderation-approve-btn"
+              className="flex-1 rounded-md border border-green-500/40 bg-green-500/10 py-2 text-sm font-medium text-green-300 transition-colors hover:bg-green-500/20 disabled:opacity-50"
+              title="通过内容审核，进入暂存队列，待元数据和源完善后再发布"
+            >
+              {reviewLoading === 'approve' ? '处理中…' : '通过（暂存）'}
+            </button>
+            <button
+              type="button"
+              disabled={reviewLoading != null}
+              onClick={() => void handleReview('reject')}
+              data-testid="moderation-reject-btn"
+              className="flex-1 rounded-md border border-red-500/40 bg-red-500/10 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+            >
+              {reviewLoading === 'reject' ? '处理中…' : '拒绝'}
+            </button>
+          </div>
+          {isAdmin && (
+            <button
+              type="button"
+              disabled={reviewLoading != null}
+              onClick={() => void handleReview('approve_and_publish')}
+              data-testid="moderation-approve-publish-btn"
+              className="w-full rounded-md border border-[var(--accent)]/40 bg-[var(--accent)]/10 py-2 text-sm font-medium text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/20 disabled:opacity-50"
+              title="通过并直接上架（仅管理员可用）"
+            >
+              {reviewLoading === 'approve_and_publish' ? '处理中…' : '通过并直接上架（管理员）'}
+            </button>
+          )}
         </div>
       </div>
     </div>
