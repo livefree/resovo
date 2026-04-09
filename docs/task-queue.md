@@ -5689,6 +5689,21 @@
 > 7. 整体 npm run test -- --run 通过率与改造前基准持平
 
 ---
+#### CHG-389 — [DB+UI] 修复暂存队列空白：StagingTable 错误可见化 + Migration 034 hidden→approve 跃迁
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-09 08:30
+- **实际开始**：2026-04-09 08:30
+- **完成时间**：2026-04-09 09:00
+- **变更原因**：StagingTable 静默吞掉所有 API 错误导致用户看到空列表无法诊断；Migration 033 缺少 pending_review|hidden|0 → approved|internal|0 跃迁，曾被拒绝后重审的视频无法通过暂存
+- **影响的已完成任务**：CHG-383（StagingTable）、CHG-384（Migration 033）
+- **文件范围**：
+  - `src/api/db/migrations/034_fix_approve_hidden_to_internal.sql`（新建）
+  - `src/components/admin/staging/StagingTable.tsx`（错误状态显示）
+- **变更内容**：
+  - Migration 034：在触发器白名单中补充 pending_review|hidden|0 → approved|internal|0
+  - StagingTable：catch 块改为设置 error state，渲染错误提示而非空列表
+- **完成备注**：Migration 034 补充 pending_review|hidden|0 → approved|internal|0 跃迁；StagingTable catch 块改为显示错误提示（含后端服务/migrations 提示）；architecture.md 更新跃迁白名单；typecheck ✅ lint ✅ 785 tests passing
+
 ⏸ M1 里程碑评审 — Phase 1 已完成，等待人工验收后继续 Phase 2
 
 - **完成时间**：2026-04-09 06:30

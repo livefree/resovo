@@ -163,7 +163,7 @@ resovo/
 | 旧状态 | 允许跃迁至 |
 |--------|-----------|
 | `pending_review+internal` | `pending_review+hidden` / `approved+internal`（暂存）/ `approved+public`（直接上架）/ `rejected+hidden` |
-| `pending_review+hidden` | `pending_review+internal` / `approved+hidden` / `approved+public` / `rejected+hidden` |
+| `pending_review+hidden` | `pending_review+internal` / `approved+internal`（暂存，034）/ `approved+hidden` / `approved+public` / `rejected+hidden` |
 | `approved+public` | `approved+internal` / `approved+hidden` |
 | `approved+internal` | `approved+public` / `approved+hidden` |
 | `approved+hidden` | `approved+public` / `approved+internal` |

@@ -5428,3 +5428,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **注意事项**：Migration 033 需在 CHG-382 的代码变更部署后执行；执行后 approve 操作才能正常将视频跃迁至 approved+internal+false 暂存态
 - **测试覆盖**：typecheck ✅ lint ✅；785 tests passing（20 failing 均为预存失败，与本次改动无关）
 - **共享层沉淀**：isAdmin 判断通过已有 useAuthStore(selectIsAdmin) 实现，无需新建共享逻辑
+
+## CHG-389 — [DB+UI] 修复暂存队列空白：StagingTable 错误可见化 + Migration 034 hidden→approve 跃迁
+- **完成时间**：2026-04-09
+- **记录时间**：2026-04-09 09:00
+- **修改文件**：
+  - `src/api/db/migrations/034_fix_approve_hidden_to_internal.sql` — 新建，重写触发器函数，在 pending_review|hidden|0 白名单中补充 approved|internal|0（使"通过（暂存）"对 hidden 状态视频也能正常工作）
+  - `src/components/admin/staging/StagingTable.tsx` — catch 块不再静默；增加 fetchError state 和错误提示 banner，含"后端服务已重启且 migrations 已执行"提示
+  - `docs/architecture.md` — 更新 pending_review+hidden 行的跃迁白名单
+- **新增依赖**：无
+- **数据库变更**：Migration 034 重建触发器 trg_videos_state_machine（在 034 之后运行 npm run migrate 生效）
+- **注意事项**：如果暂存队列仍为空，应先在浏览器 Network 面板查看 /admin/staging 的实际响应；错误提示会明确告知需要重启后端或运行 migrations
+- **测试覆盖**：typecheck ✅ lint ✅；785 tests passing；20 failing 均为预存失败
+- **共享层沉淀**：无；错误 state 为局部 UI 状态

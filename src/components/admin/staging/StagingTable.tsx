@@ -75,6 +75,7 @@ export function StagingTable({ rules }: StagingTableProps) {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [publishingIds, setPublishingIds] = useState<string[]>([])
   const [refreshKey, setRefreshKey] = useState(0)
@@ -83,6 +84,7 @@ export function StagingTable({ rules }: StagingTableProps) {
 
   const fetchData = useCallback(async () => {
     setLoading(true)
+    setFetchError(null)
     try {
       const res = await apiClient.get<{
         data: StagingRow[]
@@ -91,8 +93,11 @@ export function StagingTable({ rules }: StagingTableProps) {
       }>(`/admin/staging?page=${page}&limit=${pageSize}`)
       setRows(res.data)
       setTotal(res.total)
-    } catch {
-      // 加载失败静默处理
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '加载失败，请刷新重试'
+      setFetchError(msg)
+      setRows([])
+      setTotal(0)
     } finally {
       setLoading(false)
     }
@@ -267,6 +272,16 @@ export function StagingTable({ rules }: StagingTableProps) {
           一键发布全部就绪（{readyCount}）
         </button>
       </div>
+
+      {/* 错误提示 */}
+      {fetchError && (
+        <div
+          className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400"
+          data-testid="staging-table-error"
+        >
+          加载暂存队列失败：{fetchError}（请确认后端服务已重启且 migrations 已执行）
+        </div>
+      )}
 
       {/* 表格 */}
       <ModernDataTable
