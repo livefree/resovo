@@ -8,7 +8,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiClient } from '@/lib/api-client'
-import { ModerationStats } from '@/components/admin/moderation/ModerationStats'
 import { ModerationList } from '@/components/admin/moderation/ModerationList'
 import { ModerationDetail } from '@/components/admin/moderation/ModerationDetail'
 import { useModerationHotkeys } from '@/components/admin/moderation/useModerationHotkeys'
@@ -102,9 +101,6 @@ export function ModerationDashboard() {
 
   return (
     <div className="flex flex-col gap-4" data-testid="moderation-dashboard">
-      {/* 顶部统计板 */}
-      <ModerationStats />
-
       {/* 左右分栏 */}
       <div className="flex min-h-[600px] gap-4">
         {/* 左侧：待审列表面板 */}

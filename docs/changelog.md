@@ -5354,3 +5354,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/player/PlayerShell.tsx` — episode useEffect 的 then 回调中，获取新源后用 `sources[activeSourceIndex]?.label` 按名称在新源列表中查找匹配项，命中则保留 index，否则回退 0；移除原来无条件的 `setActiveSourceIndex(0)`
 - **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为预存，与本次无关）
 - **共享层沉淀**：无需提取
+
+---
+
+### CHG-380 — 删除审核台顶部无功能统计区块
+- **完成时间**：2026-04-09 00:05
+- **修改文件**：
+  - `src/components/admin/moderation/ModerationDashboard.tsx` — 移除 ModerationStats import 和 JSX
+  - `src/components/admin/moderation/ModerationStats.tsx` — 删除（dead code）
+- **测试覆盖**：typecheck ✅ lint ✅（pending-review 测试失败为预存问题，与本次无关）
+- **共享层沉淀**：无需提取

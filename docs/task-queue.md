@@ -5168,3 +5168,20 @@
 - **变更原因**：切换选集时 setActiveSourceIndex(0) 无条件重置，用户选中的线路被抹除
 - **文件范围**：`src/components/player/PlayerShell.tsx`
 - **变更内容**：episode 切换获取新源后，用 sources[activeSourceIndex]?.label 在新源列表中按名称匹配，命中则保留 index，否则回退 0
+
+---
+
+## hotfix — CHG-380（删除审核台顶部无功能统计区块）
+
+> 创建时间：2026-04-09 00:00
+> 最后更新时间：2026-04-09 00:05
+> 状态：✅ 已完成
+
+#### CHG-380 — 删除审核台顶部无功能统计区块（状态：✅ 已完成）
+- **创建时间**：2026-04-09 00:00
+- **实际开始**：2026-04-09 00:00
+- **完成时间**：2026-04-09 00:05
+- **变更原因**：审核台页面顶部三个统计区块（待审核视频/今日已审核/拦截率）没有实际功能需求，用户要求删除
+- **文件范围**：`src/components/admin/moderation/ModerationDashboard.tsx`，`src/components/admin/moderation/ModerationStats.tsx`（删除）
+- **变更内容**：移除 ModerationStats 组件引用及文件，后端 API 路由保留
+- **完成备注**：typecheck ✅ lint ✅；共享层无需提取
