@@ -1,6 +1,7 @@
 /**
  * staging.ts — 暂存队列查询
  * CHG-383: 查询 approved+internal+false 视频及就绪状态
+ * CHG-389: 修复 title_en/year/cover_url 字段来自 media_catalog，需 JOIN
  */
 
 import type { Pool } from 'pg'
@@ -90,16 +91,16 @@ export async function listStagingVideos(
   const offset = (page - 1) * limit
 
   const conditions: string[] = [
-    `review_status = 'approved'`,
-    `visibility_status = 'internal'`,
-    `is_published = false`,
-    `deleted_at IS NULL`,
+    `v.review_status = 'approved'`,
+    `v.visibility_status = 'internal'`,
+    `v.is_published = false`,
+    `v.deleted_at IS NULL`,
   ]
   const values: unknown[] = []
   let idx = 1
 
   if (params.type) {
-    conditions.push(`type = $${idx++}`)
+    conditions.push(`v.type = $${idx++}`)
     values.push(params.type)
   }
 
@@ -108,19 +109,21 @@ export async function listStagingVideos(
   const [dataResult, countResult] = await Promise.all([
     db.query<DbStagingRow>(
       `SELECT
-         v.id, v.short_id, v.slug, v.title, v.title_en, v.cover_url, v.type, v.year,
+         v.id, v.short_id, v.slug, v.title, v.type,
          v.douban_status, v.source_check_status, v.meta_score,
          v.reviewed_at, v.updated_at,
+         mc.title_en, mc.cover_url, mc.year,
          (SELECT COUNT(*)::text FROM video_sources vs
           WHERE vs.video_id = v.id AND vs.is_active = true) AS active_source_count
        FROM videos v
+       LEFT JOIN media_catalog mc ON mc.id = v.catalog_id
        ${where}
        ORDER BY v.reviewed_at ASC NULLS LAST, v.updated_at ASC
        LIMIT $${idx++} OFFSET $${idx}`,
       [...values, limit, offset],
     ),
     db.query<{ total: string }>(
-      `SELECT COUNT(*)::text AS total FROM videos ${where}`,
+      `SELECT COUNT(*)::text AS total FROM videos v ${where}`,
       values,
     ),
   ])
@@ -137,12 +140,14 @@ export async function getStagingVideoById(
 ): Promise<StagingVideo | null> {
   const result = await db.query<DbStagingRow>(
     `SELECT
-       v.id, v.short_id, v.slug, v.title, v.title_en, v.cover_url, v.type, v.year,
+       v.id, v.short_id, v.slug, v.title, v.type,
        v.douban_status, v.source_check_status, v.meta_score,
        v.reviewed_at, v.updated_at,
+       mc.title_en, mc.cover_url, mc.year,
        (SELECT COUNT(*)::text FROM video_sources vs
         WHERE vs.video_id = v.id AND vs.is_active = true) AS active_source_count
      FROM videos v
+     LEFT JOIN media_catalog mc ON mc.id = v.catalog_id
      WHERE v.id = $1
        AND v.review_status = 'approved'
        AND v.visibility_status = 'internal'
@@ -174,12 +179,13 @@ export async function listReadyStagingVideoIds(
     conditions.push(`v.douban_status = 'matched'`)
   }
   if (rules.requireCoverUrl) {
-    conditions.push(`v.cover_url IS NOT NULL`)
+    conditions.push(`mc.cover_url IS NOT NULL`)
   }
 
   const result = await db.query<{ id: string }>(
     `SELECT v.id
      FROM videos v
+     LEFT JOIN media_catalog mc ON mc.id = v.catalog_id
      WHERE ${conditions.join(' AND ')}
      ORDER BY v.reviewed_at ASC NULLS LAST
      LIMIT $${idx}`,
