@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react'
 import { apiClient } from '@/lib/api-client'
+import { useAuthStore, selectIsAdmin } from '@/stores/authStore'
 import { StagingTable } from '@/components/admin/staging/StagingTable'
 import { StagingRulesPanel } from '@/components/admin/staging/StagingRulesPanel'
 
@@ -25,6 +26,7 @@ const DEFAULT_RULES: StagingRules = {
 }
 
 export function StagingDashboard() {
+  const isAdmin = useAuthStore(selectIsAdmin)
   const [rules, setRules] = useState<StagingRules>(DEFAULT_RULES)
   const [rulesLoaded, setRulesLoaded] = useState(false)
 
@@ -49,8 +51,8 @@ export function StagingDashboard() {
 
   return (
     <div className="flex flex-col gap-6" data-testid="staging-dashboard">
-      <StagingTable rules={rules} />
-      <StagingRulesPanel initialRules={rules} onSaved={setRules} />
+      <StagingTable rules={rules} isAdmin={isAdmin} />
+      <StagingRulesPanel initialRules={rules} isAdmin={isAdmin} onSaved={setRules} />
     </div>
   )
 }

@@ -53,6 +53,8 @@ interface StagingRow {
 
 interface StagingTableProps {
   rules: StagingRules
+  /** 当前用户是否为 admin（控制 adminOnly 操作的可见性） */
+  isAdmin: boolean
 }
 
 // ── 工具 ─────────────────────────────────────────────────────────
@@ -69,7 +71,7 @@ function formatStagingDuration(approvedAt: string | null): string {
 
 // ── 组件 ─────────────────────────────────────────────────────────
 
-export function StagingTable({ rules }: StagingTableProps) {
+export function StagingTable({ rules, isAdmin }: StagingTableProps) {
   const router = useRouter()
   const [rows, setRows] = useState<StagingRow[]>([])
   const [total, setTotal] = useState(0)
@@ -130,10 +132,13 @@ export function StagingTable({ rules }: StagingTableProps) {
 
   async function handleBatchPublish() {
     setLoading(true)
+    setPublishError(null)
     try {
       await apiClient.post('/admin/staging/batch-publish')
       setSelectedIds([])
       setRefreshKey((k) => k + 1)
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : '批量发布失败，请重试')
     } finally {
       setLoading(false)
     }
@@ -273,15 +278,17 @@ export function StagingTable({ rules }: StagingTableProps) {
             )}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={handleBatchPublish}
-          disabled={loading || readyCount === 0}
-          className="rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-black hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-          data-testid="batch-publish-btn"
-        >
-          一键发布全部就绪（{readyCount}）
-        </button>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={handleBatchPublish}
+            disabled={loading || readyCount === 0}
+            className="rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-black hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+            data-testid="batch-publish-btn"
+          >
+            一键发布全部就绪（{readyCount}）
+          </button>
+        )}
       </div>
 
       {/* 加载错误提示 */}

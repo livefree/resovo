@@ -5802,3 +5802,17 @@
   - MAINTENANCE_SCHEDULER_ENABLED: `=== 'true'` → `!== 'false'`（默认启用）
   - Migration 035: INSERT auto_publish_staging_enabled='true' ON CONFLICT DO NOTHING
 - **完成备注**：typecheck ✅
+
+#### CHG-394 — [UI] 暂存页权限一致性：admin-only 操作对 moderator 隐藏/只读
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-10 01:20
+- **实际开始**：2026-04-10 01:20
+- **完成时间**：2026-04-10 01:30
+- **变更原因**：PUT /admin/staging/rules 和 POST /admin/staging/batch-publish 均为 adminOnly，但前端对所有角色展示可用 UI 并静默吞错
+- **影响的已完成任务**：ADMIN-09
+- **文件范围**：`src/components/admin/staging/StagingDashboard.tsx`、`StagingRulesPanel.tsx`、`StagingTable.tsx`
+- **变更内容**：
+  - StagingDashboard：读取 selectIsAdmin，透传 isAdmin 到子组件
+  - StagingRulesPanel：新增 isAdmin prop；非 admin 时表单 disabled + 隐藏保存按钮 + 显示只读提示；catch {} → 显示错误信息
+  - StagingTable：新增 isAdmin prop；非 admin 时隐藏"一键发布"按钮；handleBatchPublish catch {} → 显示错误信息
+- **完成备注**：typecheck ✅

@@ -5474,3 +5474,9 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/api/db/migrations/035_seed_auto_publish_staging_enabled.sql`（新建）
 - **测试覆盖**：typecheck ✅
 - **说明**：三层修复：interval 30 分钟、null 视为启用、scheduler 默认 opt-out。Migration 035 补种默认值
+
+## CHG-394 — 暂存页权限 UI 一致性
+- **完成时间**：2026-04-10 01:30
+- **修改文件**：`src/components/admin/staging/StagingDashboard.tsx`、`StagingRulesPanel.tsx`、`StagingTable.tsx`
+- **测试覆盖**：typecheck ✅
+- **说明**：StagingDashboard 读取 selectIsAdmin 后向下透传；RulesPanel 非 admin 只读；StagingTable 非 admin 隐藏批量发布；两处 catch {} 补全错误展示

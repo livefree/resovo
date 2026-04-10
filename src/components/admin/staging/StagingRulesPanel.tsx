@@ -17,26 +17,30 @@ interface StagingRules {
 
 interface StagingRulesPanelProps {
   initialRules: StagingRules
+  /** 当前用户是否为 admin（非 admin 只读） */
+  isAdmin: boolean
   /** 规则保存成功后回调（刷新列表就绪状态） */
   onSaved?: (rules: StagingRules) => void
 }
 
-export function StagingRulesPanel({ initialRules, onSaved }: StagingRulesPanelProps) {
+export function StagingRulesPanel({ initialRules, isAdmin, onSaved }: StagingRulesPanelProps) {
   const [open, setOpen] = useState(false)
   const [rules, setRules] = useState<StagingRules>(initialRules)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   async function handleSave() {
     setSaving(true)
     setSaved(false)
+    setSaveError(null)
     try {
       await apiClient.put('/admin/staging/rules', rules)
       setSaved(true)
       onSaved?.(rules)
       setTimeout(() => setSaved(false), 2000)
-    } catch {
-      // 保存失败不影响面板展示
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : '保存失败，请重试')
     } finally {
       setSaving(false)
     }
@@ -60,6 +64,12 @@ export function StagingRulesPanel({ initialRules, onSaved }: StagingRulesPanelPr
 
       {open && (
         <div className="border-t border-[var(--border)] px-4 py-4 space-y-4">
+          {!isAdmin && (
+            <p className="text-xs text-[var(--muted)]" data-testid="rules-readonly-hint">
+              当前角色无权修改规则（仅管理员可编辑）
+            </p>
+          )}
+
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {/* 最低元数据评分 */}
             <label className="flex flex-col gap-1">
@@ -70,7 +80,8 @@ export function StagingRulesPanel({ initialRules, onSaved }: StagingRulesPanelPr
                 max={100}
                 value={rules.minMetaScore}
                 onChange={(e) => setRules((r) => ({ ...r, minMetaScore: Number(e.target.value) }))}
-                className="rounded border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+                disabled={!isAdmin}
+                className="rounded border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="rules-min-meta-score"
               />
             </label>
@@ -84,50 +95,58 @@ export function StagingRulesPanel({ initialRules, onSaved }: StagingRulesPanelPr
                 max={10}
                 value={rules.minActiveSourceCount}
                 onChange={(e) => setRules((r) => ({ ...r, minActiveSourceCount: Number(e.target.value) }))}
-                className="rounded border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+                disabled={!isAdmin}
+                className="rounded border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="rules-min-source-count"
               />
             </label>
 
             {/* 要求封面 */}
-            <label className="flex items-center gap-2 cursor-pointer">
+            <label className={`flex items-center gap-2 ${isAdmin ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
               <input
                 type="checkbox"
                 checked={rules.requireCoverUrl}
                 onChange={(e) => setRules((r) => ({ ...r, requireCoverUrl: e.target.checked }))}
-                className="accent-[var(--accent)]"
+                disabled={!isAdmin}
+                className="accent-[var(--accent)] disabled:opacity-50"
                 data-testid="rules-require-cover"
               />
               <span className="text-sm text-[var(--text)]">要求封面图</span>
             </label>
 
             {/* 要求豆瓣匹配 */}
-            <label className="flex items-center gap-2 cursor-pointer">
+            <label className={`flex items-center gap-2 ${isAdmin ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
               <input
                 type="checkbox"
                 checked={rules.requireDoubanMatched}
                 onChange={(e) => setRules((r) => ({ ...r, requireDoubanMatched: e.target.checked }))}
-                className="accent-[var(--accent)]"
+                disabled={!isAdmin}
+                className="accent-[var(--accent)] disabled:opacity-50"
                 data-testid="rules-require-douban"
               />
               <span className="text-sm text-[var(--text)]">要求豆瓣匹配</span>
             </label>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className="rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-black hover:opacity-90 disabled:opacity-50"
-              data-testid="rules-save-btn"
-            >
-              {saving ? '保存中…' : '保存规则'}
-            </button>
-            {saved && (
-              <span className="text-xs text-green-400" data-testid="rules-saved-hint">已保存</span>
-            )}
-          </div>
+          {isAdmin && (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-black hover:opacity-90 disabled:opacity-50"
+                data-testid="rules-save-btn"
+              >
+                {saving ? '保存中…' : '保存规则'}
+              </button>
+              {saved && (
+                <span className="text-xs text-green-400" data-testid="rules-saved-hint">已保存</span>
+              )}
+              {saveError && (
+                <span className="text-xs text-red-400" data-testid="rules-save-error">{saveError}</span>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
