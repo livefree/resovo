@@ -33,6 +33,15 @@ export interface StagingPublishRules {
   minActiveSourceCount: number  // 最少活跃源数量（default 1）
 }
 
+export interface StagingReadinessSummary {
+  all: number
+  ready: number
+  warning: number
+  blocked: number
+  /** 当前 type/siteKey 筛选条件下的可用站点 key 列表 */
+  siteKeys: string[]
+}
+
 export const DEFAULT_STAGING_RULES: StagingPublishRules = {
   minMetaScore: 40,
   requireDoubanMatched: false,
@@ -84,53 +93,137 @@ export async function listStagingVideos(
     page?: number
     limit?: number
     type?: VideoType
+    readiness?: 'ready' | 'warning' | 'blocked'
+    siteKey?: string
+    rules?: StagingPublishRules
   } = {},
-): Promise<{ rows: StagingVideo[]; total: number }> {
+): Promise<{ rows: StagingVideo[]; total: number; summary: StagingReadinessSummary }> {
   const page = params.page ?? 1
   const limit = params.limit ?? 20
   const offset = (page - 1) * limit
+  const rules = params.rules ?? DEFAULT_STAGING_RULES
 
-  const conditions: string[] = [
+  // ── 基础 WHERE 条件（type / siteKey）────────────────────────────
+  const baseConditions: string[] = [
     `v.review_status = 'approved'`,
     `v.visibility_status = 'internal'`,
     `v.is_published = false`,
     `v.deleted_at IS NULL`,
   ]
-  const values: unknown[] = []
+  const baseValues: unknown[] = []
   let idx = 1
 
   if (params.type) {
-    conditions.push(`v.type = $${idx++}`)
-    values.push(params.type)
+    baseConditions.push(`v.type = $${idx++}`)
+    baseValues.push(params.type)
+  }
+  if (params.siteKey) {
+    baseConditions.push(`v.site_key = $${idx++}`)
+    baseValues.push(params.siteKey)
   }
 
-  const where = `WHERE ${conditions.join(' AND ')}`
+  // ── 规则参数占位符（供 classified CTE 使用）──────────────────────
+  const minSourcesIdx = idx++
+  const minScoreIdx = idx++
+  const reqDoubanIdx = idx++
+  const reqCoverIdx = idx++
+  const rulesValues: unknown[] = [
+    rules.minActiveSourceCount,
+    rules.minMetaScore,
+    rules.requireDoubanMatched,
+    rules.requireCoverUrl,
+  ]
 
-  const [dataResult, countResult] = await Promise.all([
-    db.query<DbStagingRow>(
-      `SELECT
-         v.id, v.short_id, v.slug, v.title, v.type,
-         v.douban_status, v.source_check_status, v.meta_score,
-         v.reviewed_at, v.updated_at,
-         mc.title_en, mc.cover_url, mc.year,
-         (SELECT COUNT(*)::text FROM video_sources vs
-          WHERE vs.video_id = v.id AND vs.is_active = true) AS active_source_count
-       FROM videos v
-       LEFT JOIN media_catalog mc ON mc.id = v.catalog_id
-       ${where}
-       ORDER BY v.reviewed_at ASC NULLS LAST, v.updated_at ASC
-       LIMIT $${idx++} OFFSET $${idx}`,
-      [...values, limit, offset],
+  // ── CTE：base（活跃源计数）+ classified（readiness 分类）────────
+  const cteBase = `
+    WITH base AS (
+      SELECT
+        v.id, v.short_id, v.slug, v.title, v.type, v.site_key,
+        v.douban_status, v.source_check_status, v.meta_score,
+        v.reviewed_at, v.updated_at,
+        mc.title_en, mc.cover_url, mc.year,
+        (SELECT COUNT(*)::text FROM video_sources vs
+         WHERE vs.video_id = v.id AND vs.is_active = true AND vs.deleted_at IS NULL
+        ) AS active_source_count
+      FROM videos v
+      LEFT JOIN media_catalog mc ON mc.id = v.catalog_id
+      WHERE ${baseConditions.join(' AND ')}
+    ),
+    classified AS (
+      SELECT *,
+        CASE
+          WHEN active_source_count::int = 0 OR source_check_status = 'all_dead' THEN 'blocked'
+          WHEN active_source_count::int >= $${minSourcesIdx}
+               AND meta_score >= $${minScoreIdx}
+               AND ($${reqDoubanIdx}::boolean = false OR douban_status = 'matched')
+               AND ($${reqCoverIdx}::boolean = false OR cover_url IS NOT NULL)
+               AND source_check_status != 'all_dead'
+          THEN 'ready'
+          ELSE 'warning'
+        END AS readiness_level
+      FROM base
+    )`
+
+  // summaryParams = baseValues + rulesValues（不含 readiness/分页）
+  const summaryParams = [...baseValues, ...rulesValues]
+
+  // ── readiness 过滤子句（仅 data/count 查询使用）──────────────────
+  const readinessValues: unknown[] = []
+  let readinessClause = ''
+  if (params.readiness) {
+    readinessClause = `WHERE readiness_level = $${idx++}`
+    readinessValues.push(params.readiness)
+  }
+
+  const limitIdx = idx++
+  const offsetIdx = idx
+
+  const dataParams = [...baseValues, ...rulesValues, ...readinessValues, limit, offset]
+  const countParams = [...baseValues, ...rulesValues, ...readinessValues]
+
+  // ── 并行执行 4 个查询 ─────────────────────────────────────────────
+  const [dataResult, countResult, summaryResult, siteKeysResult] = await Promise.all([
+    db.query<DbStagingRow & { readiness_level: string }>(
+      `${cteBase}
+       SELECT * FROM classified ${readinessClause}
+       ORDER BY reviewed_at ASC NULLS LAST, updated_at ASC
+       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      dataParams,
     ),
     db.query<{ total: string }>(
-      `SELECT COUNT(*)::text AS total FROM videos v ${where}`,
-      values,
+      `${cteBase}
+       SELECT COUNT(*)::text AS total FROM classified ${readinessClause}`,
+      countParams,
+    ),
+    db.query<{ readiness_level: string; cnt: number }>(
+      `${cteBase}
+       SELECT readiness_level, COUNT(*)::int AS cnt FROM classified GROUP BY readiness_level`,
+      summaryParams,
+    ),
+    db.query<{ site_key: string }>(
+      `${cteBase}
+       SELECT DISTINCT site_key FROM classified WHERE site_key IS NOT NULL ORDER BY site_key`,
+      summaryParams,
     ),
   ])
+
+  const readinessMap: Record<string, number> = {}
+  let totalAll = 0
+  for (const r of summaryResult.rows) {
+    readinessMap[r.readiness_level] = r.cnt
+    totalAll += r.cnt
+  }
 
   return {
     rows: dataResult.rows.map(mapStagingRow),
     total: parseInt(countResult.rows[0]?.total ?? '0', 10),
+    summary: {
+      all: totalAll,
+      ready: readinessMap['ready'] ?? 0,
+      warning: readinessMap['warning'] ?? 0,
+      blocked: readinessMap['blocked'] ?? 0,
+      siteKeys: siteKeysResult.rows.map((r) => r.site_key),
+    },
   }
 }
 

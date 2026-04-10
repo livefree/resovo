@@ -5490,3 +5490,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/staging/StagingTable.tsx`
 - **测试覆盖**：typecheck ✅ lint ✅ ModernDataTable 单元测试 4/4 通过；modern-table 全部测试通过
 - **共享层沉淀**：selection 功能已在 ModernDataTable / ModernTableHead / ModernTableBody 三层封装，调用方零感知
+
+## CHG-396 — 暂存页筛选实现：就绪/警告/阻塞 tab + 类型/站点 filter
+- **完成时间**：2026-04-10 17:00
+- **修改文件**：
+  - `src/api/db/queries/staging.ts`
+  - `src/api/routes/admin/staging.ts`
+  - `src/components/admin/staging/StagingTable.tsx`
+  - `tests/unit/api/stagingPublish.test.ts`
+- **测试覆盖**：typecheck ✅ lint ✅ stagingPublish.test.ts 14/14 通过
+- **共享层沉淀**：readiness 分类逻辑封装在 DB 层 CTE，不在 service 层重复

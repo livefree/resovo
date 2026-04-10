@@ -19,6 +19,21 @@ import {
 } from '@/components/admin/staging/StagingReadinessBadge'
 import type { TableColumn } from '@/components/admin/shared/modern-table/types'
 
+// ── 常量 ─────────────────────────────────────────────────────────
+
+const VIDEO_TYPES = ['movie', 'series', 'anime', 'variety', 'documentary', 'short', 'sports', 'music', 'news', 'kids', 'other'] as const
+const VIDEO_TYPE_LABELS: Record<string, string> = {
+  movie: '电影', series: '剧集', anime: '动画', variety: '综艺',
+  documentary: '纪录片', short: '短剧', sports: '体育', music: '音乐',
+  news: '新闻', kids: '儿童', other: '其他',
+}
+
+type ReadinessFilter = 'all' | 'ready' | 'warning' | 'blocked'
+
+const READINESS_LABELS: Record<ReadinessFilter, string> = {
+  all: '全部', ready: '就绪', warning: '警告', blocked: '阻塞',
+}
+
 // ── 类型 ─────────────────────────────────────────────────────────
 
 interface StagingRules {
@@ -31,6 +46,14 @@ interface StagingRules {
 interface ReadinessResult {
   ready: boolean
   blockers: string[]
+}
+
+interface StagingSummary {
+  all: number
+  ready: number
+  warning: number
+  blocked: number
+  siteKeys: string[]
 }
 
 interface StagingRow {
@@ -82,6 +105,10 @@ export function StagingTable({ rules, isAdmin }: StagingTableProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [publishingIds, setPublishingIds] = useState<string[]>([])
   const [refreshKey, setRefreshKey] = useState(0)
+  const [readinessFilter, setReadinessFilter] = useState<ReadinessFilter>('all')
+  const [typeFilter, setTypeFilter] = useState('')
+  const [siteKeyFilter, setSiteKeyFilter] = useState('')
+  const [summary, setSummary] = useState<StagingSummary | null>(null)
 
   const pageSize = 20
 
@@ -89,13 +116,19 @@ export function StagingTable({ rules, isAdmin }: StagingTableProps) {
     setLoading(true)
     setFetchError(null)
     try {
+      const qs = new URLSearchParams({ page: String(page), limit: String(pageSize) })
+      if (readinessFilter !== 'all') qs.set('readiness', readinessFilter)
+      if (typeFilter) qs.set('type', typeFilter)
+      if (siteKeyFilter) qs.set('siteKey', siteKeyFilter)
       const res = await apiClient.get<{
         data: StagingRow[]
         total: number
         rules: StagingRules
-      }>(`/admin/staging?page=${page}&limit=${pageSize}`)
+        summary: StagingSummary
+      }>(`/admin/staging?${qs}`)
       setRows(res.data)
       setTotal(res.total)
+      setSummary(res.summary)
     } catch (err) {
       const msg = err instanceof Error ? err.message : '加载失败，请刷新重试'
       setFetchError(msg)
@@ -104,9 +137,27 @@ export function StagingTable({ rules, isAdmin }: StagingTableProps) {
     } finally {
       setLoading(false)
     }
-  }, [page, refreshKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page, refreshKey, readinessFilter, typeFilter, siteKeyFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { void fetchData() }, [fetchData])
+
+  function handleReadinessChange(next: ReadinessFilter) {
+    setReadinessFilter(next)
+    setPage(1)
+    setSelectedIds([])
+  }
+
+  function handleTypeChange(next: string) {
+    setTypeFilter(next)
+    setPage(1)
+    setSelectedIds([])
+  }
+
+  function handleSiteKeyChange(next: string) {
+    setSiteKeyFilter(next)
+    setPage(1)
+    setSelectedIds([])
+  }
 
   async function handlePublishSingle(id: string) {
     setPublishError(null)
@@ -264,15 +315,73 @@ export function StagingTable({ rules, isAdmin }: StagingTableProps) {
     },
   ], [publishingIds, router]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const readyCount = rows.filter((r) => r.readiness.ready).length
+  const readyCount = summary?.ready ?? rows.filter((r) => r.readiness.ready).length
 
   return (
     <div className="flex flex-col gap-4" data-testid="staging-table-container">
+      {/* 筛选栏：readiness tab + type/siteKey select */}
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Readiness tabs */}
+        <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--bg2)] p-1">
+          {(['all', 'ready', 'warning', 'blocked'] as ReadinessFilter[]).map((tab) => {
+            const count = tab === 'all' ? (summary?.all ?? total) : (summary?.[tab] ?? 0)
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => handleReadinessChange(tab)}
+                data-testid={`readiness-tab-${tab}`}
+                className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                  readinessFilter === tab
+                    ? 'bg-[var(--accent)] text-black'
+                    : 'text-[var(--muted)] hover:text-[var(--text)]'
+                }`}
+              >
+                {READINESS_LABELS[tab]}
+                {summary && (
+                  <span className={`ml-1 ${readinessFilter === tab ? 'opacity-70' : 'opacity-50'}`}>
+                    ({count})
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* 类型筛选 */}
+        <select
+          value={typeFilter}
+          onChange={(e) => handleTypeChange(e.target.value)}
+          data-testid="type-filter-select"
+          className="rounded border border-[var(--border)] bg-[var(--bg2)] px-2 py-1 text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+        >
+          <option value="">全部类型</option>
+          {VIDEO_TYPES.map((t) => (
+            <option key={t} value={t}>{VIDEO_TYPE_LABELS[t]}</option>
+          ))}
+        </select>
+
+        {/* 站点筛选 */}
+        {(summary?.siteKeys ?? []).length > 0 && (
+          <select
+            value={siteKeyFilter}
+            onChange={(e) => handleSiteKeyChange(e.target.value)}
+            data-testid="site-key-filter-select"
+            className="rounded border border-[var(--border)] bg-[var(--bg2)] px-2 py-1 text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+          >
+            <option value="">全部站点</option>
+            {(summary?.siteKeys ?? []).map((key) => (
+              <option key={key} value={key}>{key}</option>
+            ))}
+          </select>
+        )}
+      </div>
+
       {/* 工具栏 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-sm text-[var(--muted)]">
-            共 <strong className="text-[var(--text)]">{total}</strong> 条暂存
+            共 <strong className="text-[var(--text)]">{total}</strong> 条
             {readyCount > 0 && (
               <>，<strong className="text-green-400">{readyCount}</strong> 条就绪</>
             )}

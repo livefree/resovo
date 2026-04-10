@@ -39,8 +39,10 @@ const mockSetSetting = systemSettings.setSetting as ReturnType<typeof vi.fn>
 // ── Helpers ────────────────────────────────────────────────────────
 
 function makeDb() {
+  // 默认返回 count=1，满足 publishSingle 的活跃源预检（CHG-391）
+  // batchPublish 通过 mocked module 调用，不依赖此返回值
   return {
-    query: vi.fn().mockResolvedValue({ rows: [] }),
+    query: vi.fn().mockResolvedValue({ rows: [{ count: '1' }] }),
   } as unknown as import('pg').Pool
 }
 

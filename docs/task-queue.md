@@ -5831,3 +5831,18 @@
   - ModernDataTable：新增 selectedIds / onSelectionChange 可选 props；派生 allRowIds / handleRowSelect / handleSelectAll；tableWidth 含 40px checkbox 列；向下串联到 Head 和 Body
   - StagingTable：传入 selectedIds 和 onSelectionChange={setSelectedIds} 到 ModernDataTable
 - **完成备注**：typecheck ✅ lint ✅ modern-table 单元测试全通过；selection props 全为可选，向后兼容
+
+#### CHG-396 — 暂存页筛选实现：就绪/警告/阻塞 tab + 类型/站点 filter
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-10 16:50
+- **实际开始**：2026-04-10 16:50
+- **完成时间**：2026-04-10 17:00
+- **变更原因**：ADMIN-09 承诺的就绪/警告/阻塞 tab 和类型/站点筛选未实现；API 只有 type 参数；前端无任何筛选 UI
+- **影响的已完成任务**：ADMIN-09
+- **文件范围**：`src/api/db/queries/staging.ts`、`src/api/routes/admin/staging.ts`、`src/components/admin/staging/StagingTable.tsx`、`tests/unit/api/stagingPublish.test.ts`
+- **变更内容**：
+  - staging.ts (queries)：重构 listStagingVideos 为 CTE，SQL 层计算 readiness 等级；新增 readiness/siteKey/rules 参数；返回值增加 summary（all/ready/warning/blocked 计数 + siteKeys）
+  - staging.ts (routes)：ListQuerySchema 增加 readiness/siteKey；传入 rules 到 query；响应增加 summary
+  - StagingTable.tsx：新增 readiness tab 行（带计数）、type select、siteKey select（动态来自 summary）；filter 切换时重置 page+selectedIds；readyCount 改用 summary.ready 保证全局准确
+  - stagingPublish.test.ts：修复 makeDb() 默认返回 count=1，消除 CHG-391 活跃源预检导致的测试失败
+- **完成备注**：typecheck ✅ lint ✅ stagingPublish.test.ts 全通过（14/14）；pre-existing 失败 20 条不属于本任务范围
