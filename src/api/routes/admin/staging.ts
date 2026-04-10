@@ -78,7 +78,7 @@ export async function adminStagingRoutes(fastify: FastifyInstance) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       return reply.code(500).send({
-        error: { code: 'INTERNAL_ERROR', message: `发布失败: ${msg}`, status: 500 },
+        error: { code: 'PUBLISH_FAILED', message: msg, status: 500 },
       })
     }
   })

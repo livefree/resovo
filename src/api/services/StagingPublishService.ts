@@ -74,6 +74,16 @@ export class StagingPublishService {
 
   /** 手动发布单条暂存视频 */
   async publishSingle(videoId: string, publishedBy: string): Promise<boolean> {
+    // 预检：发布必须有活跃源，提前抛出友好错误（避免 DB 触发器技术性异常信息暴露给前端）
+    const { rows: [sourceRow] } = await this.db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM video_sources
+       WHERE video_id = $1 AND is_active = true AND deleted_at IS NULL`,
+      [videoId],
+    )
+    if (parseInt(sourceRow?.count ?? '0', 10) === 0) {
+      throw new Error('视频暂无活跃播放源，请先添加有效的视频源后再发布')
+    }
+
     const row = await videoQueries.transitionVideoState(this.db, videoId, {
       action: 'publish',
       reviewedBy: publishedBy,

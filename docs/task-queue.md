@@ -5756,3 +5756,20 @@
   - AdminVideoEditPage：读取 `searchParams.from`，传给 `AdminVideoForm` 的 `returnUrl` prop
   - AdminVideoForm：prop 增加 `returnUrl?: string`；保存成功后 `router.push(returnUrl ?? '/admin/videos')`；取消按钮 `router.push(returnUrl ?? '/admin/videos')`
 - **完成备注**：typecheck ✅ lint ✅（无新增警告）
+
+#### CHG-391 — [UI+Service] 立即发布失败：友好错误提示 + 无活跃源前置校验
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-10 00:20
+- **实际开始**：2026-04-10 00:20
+- **完成时间**：2026-04-10 00:30
+- **变更原因**：立即发布始终显示"请求失败，请稍后重试"（后端无 try/catch 时 Fastify 默认格式与 apiClient 不匹配）；即使后端重启后实际错误是"no active source"（DB 触发器技术性消息），用户也看不懂
+- **影响的已完成任务**：CHG-389（staging publish route）
+- **文件范围**：
+  - `src/components/admin/staging/StagingTable.tsx`（前端前置校验）
+  - `src/api/services/StagingPublishService.ts`（service 层预检）
+  - `src/api/routes/admin/staging.ts`（路由错误消息去掉冗余前缀）
+- **变更内容**：
+  - StagingTable：handlePublishSingle 前置检查 activeSourceCount===0，直接 setPublishError 不发请求
+  - StagingPublishService.publishSingle：先查 video_sources 活跃数，为零时 throw 友好中文错误
+  - staging route catch：message 直接用 err.message（不再加 "发布失败: " 前缀，service 层已是完整描述）
+- **完成备注**：typecheck ✅ lint ✅

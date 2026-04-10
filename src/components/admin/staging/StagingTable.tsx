@@ -107,8 +107,16 @@ export function StagingTable({ rules }: StagingTableProps) {
   useEffect(() => { void fetchData() }, [fetchData])
 
   async function handlePublishSingle(id: string) {
-    setPublishingIds((prev) => [...prev, id])
     setPublishError(null)
+
+    // 前置校验：无活跃源时直接提示，无需发请求
+    const row = rows.find((r) => r.id === id)
+    if (row && row.activeSourceCount === 0) {
+      setPublishError(`视频「${row.title}」暂无活跃播放源，请先添加有效的视频源后再发布`)
+      return
+    }
+
+    setPublishingIds((prev) => [...prev, id])
     try {
       await apiClient.post(`/admin/staging/${id}/publish`)
       setRefreshKey((k) => k + 1)

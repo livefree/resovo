@@ -5450,3 +5450,12 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/AdminVideoForm.tsx`
 - **测试覆盖**：typecheck ✅ lint ✅（无新增错误/警告）
 - **说明**：通过 `?from=` query param + `returnUrl` prop 支持跨页面返回；不影响 /admin/videos 新建/编辑的现有行为（默认仍返回 /admin/videos）
+
+## CHG-391 — 立即发布失败：友好错误提示 + 无活跃源前置校验
+- **完成时间**：2026-04-10 00:30
+- **修改文件**：
+  - `src/components/admin/staging/StagingTable.tsx`
+  - `src/api/services/StagingPublishService.ts`
+  - `src/api/routes/admin/staging.ts`
+- **测试覆盖**：typecheck ✅ lint ✅
+- **说明**：双层防护——前端在 activeSourceCount===0 时拦截，service 层在发 DB 请求前预检，均抛出可读的中文错误；路由 catch 直接透传 err.message
