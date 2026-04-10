@@ -5465,3 +5465,12 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **修改文件**：`src/lib/api-client.ts`、`src/api/routes/admin/staging.ts`（移除诊断日志）、`src/components/admin/staging/StagingTable.tsx`（移除诊断日志）
 - **测试覆盖**：typecheck ✅
 - **说明**：Content-Type: application/json 现在只在有 body 时设置；修复所有无 body 的 POST/DELETE 请求（不局限于 staging）
+
+## CHG-393 — auto-publish-staging 调度器 30 分钟间隔 + 默认启用
+- **完成时间**：2026-04-10 01:10
+- **修改文件**：
+  - `src/api/workers/maintenanceScheduler.ts`
+  - `src/api/server.ts`
+  - `src/api/db/migrations/035_seed_auto_publish_staging_enabled.sql`（新建）
+- **测试覆盖**：typecheck ✅
+- **说明**：三层修复：interval 30 分钟、null 视为启用、scheduler 默认 opt-out。Migration 035 补种默认值

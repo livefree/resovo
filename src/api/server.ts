@@ -88,11 +88,12 @@ async function start() {
     process.stderr.write('[crawler-scheduler] disabled (set CRAWLER_SCHEDULER_ENABLED=true to enable)\n')
   }
 
-  const maintenanceSchedulerEnabled = process.env.MAINTENANCE_SCHEDULER_ENABLED === 'true'
+  // CHG-393: 改为 opt-out（默认启用）；设 MAINTENANCE_SCHEDULER_ENABLED=false 可在开发环境关闭
+  const maintenanceSchedulerEnabled = process.env.MAINTENANCE_SCHEDULER_ENABLED !== 'false'
   if (maintenanceSchedulerEnabled) {
     registerMaintenanceScheduler()
   } else {
-    process.stderr.write('[maintenance-scheduler] disabled (set MAINTENANCE_SCHEDULER_ENABLED=true to enable)\n')
+    process.stderr.write('[maintenance-scheduler] disabled (MAINTENANCE_SCHEDULER_ENABLED=false)\n')
   }
 
   // 链接存活定时扫描：每 24h 将所有活跃 sources 批量入队 verify-queue

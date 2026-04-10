@@ -5784,3 +5784,21 @@
 - **文件范围**：`src/lib/api-client.ts`（条件 Content-Type）、同步清理 CHG-391 诊断日志
 - **变更内容**：只在 body !== undefined 时才设置 Content-Type: application/json；移除 staging.ts/StagingTable.tsx 中的临时 process.stderr.write 和 console.error
 - **完成备注**：typecheck ✅
+
+#### CHG-393 — [Scheduler] auto-publish-staging 30 分钟间隔 + 默认启用
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-10 01:00
+- **实际开始**：2026-04-10 01:00
+- **完成时间**：2026-04-10 01:10
+- **变更原因**：M1 验收要求 auto-publish-staging 每 30 分钟执行；scheduler 为 opt-in 且依赖未初始化的 DB setting，导致 Phase 1 下 Job 从未运行
+- **影响的已完成任务**：CHG-383（maintenanceScheduler）
+- **文件范围**：
+  - `src/api/workers/maintenanceScheduler.ts`（TICK_MS 5→30 分钟；enabled 逻辑 opt-out）
+  - `src/api/server.ts`（MAINTENANCE_SCHEDULER_ENABLED opt-in → opt-out）
+  - `src/api/db/migrations/035_seed_auto_publish_staging_enabled.sql`（新建）
+- **变更内容**：
+  - TICK_MS: 5*60_000 → 30*60_000
+  - enabled 判断: `enabled !== 'true'` → `enabled === 'false'`（null = 未设置 = 启用）
+  - MAINTENANCE_SCHEDULER_ENABLED: `=== 'true'` → `!== 'false'`（默认启用）
+  - Migration 035: INSERT auto_publish_staging_enabled='true' ON CONFLICT DO NOTHING
+- **完成备注**：typecheck ✅

@@ -1,6 +1,7 @@
 /**
  * maintenanceScheduler.ts — 维护任务定时调度器
- * CHG-383: 每 5 分钟检查是否需要触发 auto-publish-staging
+ * CHG-383: 定时检查是否需要触发 auto-publish-staging
+ * CHG-393: 间隔改为 30 分钟（M1 验收要求）；null 视为已启用（显式 'false' 才禁用）
  */
 
 import { maintenanceQueue } from '@/api/lib/queue'
@@ -8,7 +9,7 @@ import { db } from '@/api/lib/postgres'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import type { MaintenanceJobData } from '@/api/workers/maintenanceWorker'
 
-const TICK_MS = 5 * 60_000   // 5 分钟
+const TICK_MS = 30 * 60_000   // 30 分钟（M1 验收口径）
 let schedulerTimer: NodeJS.Timeout | null = null
 let tickRunning = false
 
@@ -17,7 +18,8 @@ async function runMaintenanceTick(): Promise<void> {
   tickRunning = true
   try {
     const enabled = await systemSettingsQueries.getSetting(db, 'auto_publish_staging_enabled')
-    if (enabled !== 'true') return
+    // null（未初始化）视为已启用；只有显式设为 'false' 时才跳过
+    if (enabled === 'false') return
 
     // 防止短时间内重复入队：检查 queue 中是否已有等待中的 auto-publish-staging job
     const waitingCount = await maintenanceQueue.getWaitingCount()
@@ -44,5 +46,5 @@ export function registerMaintenanceScheduler(): void {
   schedulerTimer = setInterval(() => {
     void runMaintenanceTick()
   }, TICK_MS)
-  process.stderr.write('[maintenance-scheduler] registered (5min interval)\n')
+  process.stderr.write('[maintenance-scheduler] registered (30min interval)\n')
 }
