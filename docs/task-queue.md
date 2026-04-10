@@ -5739,3 +5739,20 @@
   - Migration 033：更新触发器白名单，允许 pending_review|internal|0 → approved|internal|0，pending_review|hidden|0 → approved|hidden|0
   - ModerationDetail："通过" 按钮改为 "通过（暂存）"（action=approve）；管理员额外展示 "通过并上架" 按钮（action=approve_and_publish）
 - **完成备注**：Migration 033 新建触发器函数重写，补全两条缺失跃迁；ModerationDetail 增加 isAdmin 判断，approve 按钮重命名为"通过（暂存）"，管理员可见"通过并直接上架"；architecture.md 补充跃迁白名单表格；typecheck ✅ lint ✅ 785 tests passing
+
+#### CHG-390 — [UI] 编辑元数据完成/取消后返回来源页面
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-10 00:00
+- **实际开始**：2026-04-10 00:00
+- **完成时间**：2026-04-10 00:10
+- **变更原因**：从暂存队列点击"编辑元数据"后，保存或取消均跳转到 /admin/videos 而非 /admin/staging
+- **影响的已完成任务**：ADMIN-09（StagingTable）
+- **文件范围**：
+  - `src/components/admin/staging/StagingTable.tsx`（编辑 URL 增加 ?from= 参数）
+  - `src/app/[locale]/admin/videos/[id]/edit/page.tsx`（读取 searchParams 传递 returnUrl）
+  - `src/components/admin/AdminVideoForm.tsx`（新增 returnUrl prop，用于保存/取消导航）
+- **变更内容**：
+  - StagingTable：`/admin/videos/${id}/edit` → `/admin/videos/${id}/edit?from=/admin/staging`
+  - AdminVideoEditPage：读取 `searchParams.from`，传给 `AdminVideoForm` 的 `returnUrl` prop
+  - AdminVideoForm：prop 增加 `returnUrl?: string`；保存成功后 `router.push(returnUrl ?? '/admin/videos')`；取消按钮 `router.push(returnUrl ?? '/admin/videos')`
+- **完成备注**：typecheck ✅ lint ✅（无新增警告）

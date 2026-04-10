@@ -134,7 +134,7 @@ function FormField({
 
 // ── 主组件 ────────────────────────────────────────────────────────
 
-export function AdminVideoForm({ videoId }: { videoId?: string }) {
+export function AdminVideoForm({ videoId, returnUrl }: { videoId?: string; returnUrl?: string }) {
   const router = useRouter()
   const isEdit = Boolean(videoId)
   const [form, setForm] = useState<FormData>(DEFAULT_FORM)
@@ -289,7 +289,7 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
       } else {
         await apiClient.post('/admin/videos', payload)
       }
-      router.push('/admin/videos')
+      router.push(returnUrl ?? '/admin/videos')
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败')
     } finally {
@@ -627,7 +627,7 @@ export function AdminVideoForm({ videoId }: { videoId?: string }) {
         </button>
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={() => router.push(returnUrl ?? '/admin/videos')}
           className="rounded-md border border-[var(--border)] px-5 py-2 text-sm text-[var(--muted)] hover:text-[var(--text)]"
         >
           取消

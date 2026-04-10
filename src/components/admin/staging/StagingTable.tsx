@@ -243,7 +243,7 @@ export function StagingTable({ rules }: StagingTableProps) {
             {
               key: 'edit',
               label: '编辑元数据',
-              onClick: () => router.push(`/admin/videos/${row.id}/edit`),
+              onClick: () => router.push(`/admin/videos/${row.id}/edit?from=/admin/staging`),
             },
           ]}
         />

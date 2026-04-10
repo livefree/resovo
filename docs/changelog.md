@@ -5441,3 +5441,12 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **注意事项**：如果暂存队列仍为空，应先在浏览器 Network 面板查看 /admin/staging 的实际响应；错误提示会明确告知需要重启后端或运行 migrations
 - **测试覆盖**：typecheck ✅ lint ✅；785 tests passing；20 failing 均为预存失败
 - **共享层沉淀**：无；错误 state 为局部 UI 状态
+
+## CHG-390 — 编辑元数据完成/取消后返回来源页面
+- **完成时间**：2026-04-10 00:10
+- **修改文件**：
+  - `src/components/admin/staging/StagingTable.tsx`
+  - `src/app/[locale]/admin/videos/[id]/edit/page.tsx`
+  - `src/components/admin/AdminVideoForm.tsx`
+- **测试覆盖**：typecheck ✅ lint ✅（无新增错误/警告）
+- **说明**：通过 `?from=` query param + `returnUrl` prop 支持跨页面返回；不影响 /admin/videos 新建/编辑的现有行为（默认仍返回 /admin/videos）

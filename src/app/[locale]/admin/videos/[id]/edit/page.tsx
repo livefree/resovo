@@ -7,14 +7,17 @@ import { AdminVideoForm } from '@/components/admin/AdminVideoForm'
 
 export default async function AdminVideoEditPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ from?: string }>
 }) {
   const { id } = await params
+  const { from } = await searchParams
   return (
     <div data-testid="admin-video-edit-page">
       <h1 className="mb-6 text-2xl font-bold">编辑视频</h1>
-      <AdminVideoForm videoId={id} />
+      <AdminVideoForm videoId={id} returnUrl={from ?? '/admin/videos'} />
     </div>
   )
 }
