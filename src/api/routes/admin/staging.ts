@@ -59,21 +59,28 @@ export async function adminStagingRoutes(fastify: FastifyInstance) {
   fastify.post('/admin/staging/:id/publish', { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string }
 
-    const video = await stagingQueries.getStagingVideoById(db, id)
-    if (!video) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: '视频不存在或不在暂存状态', status: 404 },
+    try {
+      const video = await stagingQueries.getStagingVideoById(db, id)
+      if (!video) {
+        return reply.code(404).send({
+          error: { code: 'NOT_FOUND', message: '视频不存在或不在暂存状态', status: 404 },
+        })
+      }
+
+      const ok = await svc.publishSingle(id, request.user!.userId)
+      if (!ok) {
+        return reply.code(422).send({
+          error: { code: 'PUBLISH_FAILED', message: '发布失败，状态可能已变更', status: 422 },
+        })
+      }
+
+      return reply.send({ data: { id, published: true } })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: `发布失败: ${msg}`, status: 500 },
       })
     }
-
-    const ok = await svc.publishSingle(id, request.user!.userId)
-    if (!ok) {
-      return reply.code(422).send({
-        error: { code: 'PUBLISH_FAILED', message: '发布失败，状态可能已变更', status: 422 },
-      })
-    }
-
-    return reply.send({ data: { id, published: true } })
   })
 
   // ── POST /admin/staging/batch-publish — 批量发布就绪视频 ───

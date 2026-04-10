@@ -76,6 +76,7 @@ export function StagingTable({ rules }: StagingTableProps) {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
+  const [publishError, setPublishError] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [publishingIds, setPublishingIds] = useState<string[]>([])
   const [refreshKey, setRefreshKey] = useState(0)
@@ -107,11 +108,13 @@ export function StagingTable({ rules }: StagingTableProps) {
 
   async function handlePublishSingle(id: string) {
     setPublishingIds((prev) => [...prev, id])
+    setPublishError(null)
     try {
       await apiClient.post(`/admin/staging/${id}/publish`)
       setRefreshKey((k) => k + 1)
-    } catch {
-      // 发布失败不需要提示，刷新后状态会更新
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '发布失败，请重试'
+      setPublishError(msg)
     } finally {
       setPublishingIds((prev) => prev.filter((x) => x !== id))
     }
@@ -240,7 +243,7 @@ export function StagingTable({ rules }: StagingTableProps) {
             {
               key: 'edit',
               label: '编辑元数据',
-              onClick: () => router.push(`/admin/videos?edit=${row.id}`),
+              onClick: () => router.push(`/admin/videos/${row.id}/edit`),
             },
           ]}
         />
@@ -273,13 +276,23 @@ export function StagingTable({ rules }: StagingTableProps) {
         </button>
       </div>
 
-      {/* 错误提示 */}
+      {/* 加载错误提示 */}
       {fetchError && (
         <div
           className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400"
           data-testid="staging-table-error"
         >
           加载暂存队列失败：{fetchError}（请确认后端服务已重启且 migrations 已执行）
+        </div>
+      )}
+
+      {/* 发布错误提示 */}
+      {publishError && (
+        <div
+          className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400"
+          data-testid="staging-publish-error"
+        >
+          发布失败：{publishError}
         </div>
       )}
 
