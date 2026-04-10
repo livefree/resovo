@@ -320,6 +320,8 @@ export function StagingTable({ rules, isAdmin }: StagingTableProps) {
         emptyText="暂无暂存视频"
         getRowId={(row) => row.id}
         scrollTestId="staging-table-scroll"
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
       />
 
       {/* 批量操作栏 */}

@@ -43,6 +43,10 @@ interface ModernDataTableProps<T> {
    * 建议与 useTableSettings + applyToColumns 配合使用。
    */
   settingsSlot?: ModernDataTableSettingsSlot
+  /** 已选中行 ID 集合；传入时启用行选择（全选 checkbox + 行级 checkbox） */
+  selectedIds?: string[]
+  /** 行选择变更回调（接收新的完整 ID 集合） */
+  onSelectionChange?: (ids: string[]) => void
 }
 
 function getDefaultWidthByColumnId(columnId: string): number {
@@ -102,15 +106,39 @@ export function ModernDataTable<T>({
   scrollTestId,
   getRowId = defaultGetRowId,
   settingsSlot,
+  selectedIds,
+  onSelectionChange,
 }: ModernDataTableProps<T>) {
   const resolvedColumns = useMemo(
     () => columns.map((column) => resolveColumnMeta(column)),
     [columns],
   )
 
+  const allRowIds = useMemo(
+    () => rows.map((row, rowIndex) => getRowId(row, rowIndex)),
+    [rows, getRowId],
+  )
+
+  const handleRowSelect = selectedIds !== undefined
+    ? (id: string, checked: boolean) => {
+        if (!onSelectionChange) return
+        if (checked) {
+          onSelectionChange([...selectedIds, id])
+        } else {
+          onSelectionChange(selectedIds.filter((x) => x !== id))
+        }
+      }
+    : undefined
+
+  const handleSelectAll = selectedIds !== undefined
+    ? (checked: boolean) => {
+        onSelectionChange?.(checked ? allRowIds : [])
+      }
+    : undefined
+
   const tableWidth = useMemo(
-    () => Math.max(1, resolvedColumns.reduce((sum, column) => sum + column.width, 0)),
-    [resolvedColumns],
+    () => Math.max(1, resolvedColumns.reduce((sum, column) => sum + column.width, 0)) + (selectedIds !== undefined ? 40 : 0),
+    [resolvedColumns, selectedIds],
   )
 
   // Derive onHideColumn from settingsSlot so column menus can hide columns
@@ -147,6 +175,9 @@ export function ModernDataTable<T>({
               onSortChange={onSortChange}
               onColumnWidthChange={onColumnWidthChange}
               onHideColumn={onHideColumn}
+              allRowIds={selectedIds !== undefined ? allRowIds : undefined}
+              selectedIds={selectedIds}
+              onSelectAll={handleSelectAll}
             />
             <ModernTableBody
               columns={resolvedColumns}
@@ -155,6 +186,8 @@ export function ModernDataTable<T>({
               loadingText={loadingText}
               emptyText={emptyText}
               getRowId={getRowId}
+              selectedIds={selectedIds}
+              onRowSelect={handleRowSelect}
             />
           </table>
         </div>

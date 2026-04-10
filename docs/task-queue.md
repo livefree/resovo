@@ -5816,3 +5816,18 @@
   - StagingRulesPanel：新增 isAdmin prop；非 admin 时表单 disabled + 隐藏保存按钮 + 显示只读提示；catch {} → 显示错误信息
   - StagingTable：新增 isAdmin prop；非 admin 时隐藏"一键发布"按钮；handleBatchPublish catch {} → 显示错误信息
 - **完成备注**：typecheck ✅
+
+#### CHG-395 — ModernDataTable 补全 selection props，接入 StagingTable 行选择
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-10 01:40
+- **实际开始**：2026-04-10 01:40
+- **完成时间**：2026-04-10 16:40
+- **变更原因**：StagingTable 的 selectedIds 状态从未被表格行选择更新；ModernDataTable 无 selection props；SelectionActionBar 永远不出现
+- **影响的已完成任务**：ADMIN-09
+- **文件范围**：`src/components/admin/shared/modern-table/ModernDataTable.tsx`、`ModernTableHead.tsx`、`ModernTableBody.tsx`、`src/components/admin/staging/StagingTable.tsx`
+- **变更内容**：
+  - ModernTableBody：新增 selectedIds / onRowSelect props；每行前置 checkbox td；colSpan 含 checkbox 列
+  - ModernTableHead：新增 allRowIds / selectedIds / onSelectAll props；前置全选 checkbox th，支持 indeterminate 状态
+  - ModernDataTable：新增 selectedIds / onSelectionChange 可选 props；派生 allRowIds / handleRowSelect / handleSelectAll；tableWidth 含 40px checkbox 列；向下串联到 Head 和 Body
+  - StagingTable：传入 selectedIds 和 onSelectionChange={setSelectedIds} 到 ModernDataTable
+- **完成备注**：typecheck ✅ lint ✅ modern-table 单元测试全通过；selection props 全为可选，向后兼容

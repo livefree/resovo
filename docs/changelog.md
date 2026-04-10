@@ -5480,3 +5480,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **修改文件**：`src/components/admin/staging/StagingDashboard.tsx`、`StagingRulesPanel.tsx`、`StagingTable.tsx`
 - **测试覆盖**：typecheck ✅
 - **说明**：StagingDashboard 读取 selectIsAdmin 后向下透传；RulesPanel 非 admin 只读；StagingTable 非 admin 隐藏批量发布；两处 catch {} 补全错误展示
+
+## CHG-395 — ModernDataTable 补全 selection props，接入 StagingTable 行选择
+- **完成时间**：2026-04-10 16:40
+- **修改文件**：
+  - `src/components/admin/shared/modern-table/ModernTableBody.tsx`
+  - `src/components/admin/shared/modern-table/ModernTableHead.tsx`
+  - `src/components/admin/shared/modern-table/ModernDataTable.tsx`
+  - `src/components/admin/staging/StagingTable.tsx`
+- **测试覆盖**：typecheck ✅ lint ✅ ModernDataTable 单元测试 4/4 通过；modern-table 全部测试通过
+- **共享层沉淀**：selection 功能已在 ModernDataTable / ModernTableHead / ModernTableBody 三层封装，调用方零感知

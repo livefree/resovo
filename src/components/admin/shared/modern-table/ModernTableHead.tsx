@@ -12,6 +12,12 @@ interface ModernTableHeadProps<T> {
   onSortChange?: (nextSort: TableSortState) => void
   onColumnWidthChange?: (columnId: string, nextWidth: number) => void
   onHideColumn?: (id: string) => void
+  /** 全部行 ID；与 selectedIds 一起决定全选 checkbox 状态 */
+  allRowIds?: string[]
+  /** 已选中行 ID 集合；存在时渲染全选 checkbox 列 */
+  selectedIds?: string[]
+  /** 全选/取消全选回调 */
+  onSelectAll?: (checked: boolean) => void
 }
 
 function getSortIndicator(columnId: string, sort?: TableSortState): string {
@@ -151,6 +157,9 @@ export function ModernTableHead<T>({
   onSortChange,
   onColumnWidthChange,
   onHideColumn,
+  allRowIds,
+  selectedIds,
+  onSelectAll,
 }: ModernTableHeadProps<T>) {
   const [openColumnMenu, setOpenColumnMenu] = useState<string | null>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
@@ -207,9 +216,32 @@ export function ModernTableHead<T>({
     cleanupRef.current = onMouseUp
   }
 
+  const hasSelection = selectedIds !== undefined
+  const allChecked = hasSelection && (allRowIds?.length ?? 0) > 0
+    && (allRowIds ?? []).every((id) => selectedIds.includes(id))
+  const someChecked = hasSelection && selectedIds.length > 0 && !allChecked
+
   return (
     <thead className="bg-[var(--bg2)] text-[var(--muted)]">
       <tr>
+        {hasSelection && (
+          <th
+            className="relative h-12 border-b border-[var(--subtle)] px-3 align-middle"
+            style={{ width: '40px', minWidth: '40px' }}
+          >
+            <input
+              type="checkbox"
+              checked={allChecked}
+              ref={(el) => {
+                if (el) el.indeterminate = someChecked
+              }}
+              onChange={(e) => onSelectAll?.(e.target.checked)}
+              className="accent-[var(--accent)]"
+              data-testid="select-all-checkbox"
+              aria-label="全选"
+            />
+          </th>
+        )}
         {columns.map((column) => (
           <th
             key={column.id}
