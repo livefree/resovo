@@ -82,9 +82,9 @@ function handleUnauthorized(): void {
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, headers = {}, skipAuth = false, _isRetry = false } = options
 
-  // 构建请求头
+  // 构建请求头（只有在有 body 时才设置 Content-Type，避免 Fastify FST_ERR_CTP_EMPTY_JSON_BODY）
   const reqHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
     ...headers,
   }
 

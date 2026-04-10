@@ -5459,3 +5459,9 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/api/routes/admin/staging.ts`
 - **测试覆盖**：typecheck ✅ lint ✅
 - **说明**：双层防护——前端在 activeSourceCount===0 时拦截，service 层在发 DB 请求前预检，均抛出可读的中文错误；路由 catch 直接透传 err.message
+
+## CHG-392 — apiClient 修复无 body POST 触发 Fastify 400 FST_ERR_CTP_EMPTY_JSON_BODY
+- **完成时间**：2026-04-10 00:45
+- **修改文件**：`src/lib/api-client.ts`、`src/api/routes/admin/staging.ts`（移除诊断日志）、`src/components/admin/staging/StagingTable.tsx`（移除诊断日志）
+- **测试覆盖**：typecheck ✅
+- **说明**：Content-Type: application/json 现在只在有 body 时设置；修复所有无 body 的 POST/DELETE 请求（不局限于 staging）

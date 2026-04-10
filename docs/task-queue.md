@@ -5773,3 +5773,14 @@
   - StagingPublishService.publishSingle：先查 video_sources 活跃数，为零时 throw 友好中文错误
   - staging route catch：message 直接用 err.message（不再加 "发布失败: " 前缀，service 层已是完整描述）
 - **完成备注**：typecheck ✅ lint ✅
+
+#### CHG-392 — [apiClient] 修复无 body 的 POST 请求触发 Fastify FST_ERR_CTP_EMPTY_JSON_BODY
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-10 00:40
+- **实际开始**：2026-04-10 00:40
+- **完成时间**：2026-04-10 00:45
+- **变更原因**：apiClient 无论是否有 body 都强制设置 Content-Type: application/json；Fastify 在进入路由 handler 前就拒绝（400 FST_ERR_CTP_EMPTY_JSON_BODY），导致路由 try/catch 无效，前端只收到"请求失败，请稍后重试"
+- **影响的已完成任务**：staging 立即发布（POST /admin/staging/:id/publish）
+- **文件范围**：`src/lib/api-client.ts`（条件 Content-Type）、同步清理 CHG-391 诊断日志
+- **变更内容**：只在 body !== undefined 时才设置 Content-Type: application/json；移除 staging.ts/StagingTable.tsx 中的临时 process.stderr.write 和 console.error
+- **完成备注**：typecheck ✅
