@@ -1,6 +1,7 @@
 /**
  * tests/unit/api/video-service-publish.test.ts
  * CHG-160: publish/batchPublish/batchUnpublish 触发 ES 同步
+ * CHG-397: 修复 mock — publish/batchPublish 已改用 transitionVideoState
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -12,16 +13,24 @@ vi.mock('@/api/db/queries/videos', () => ({
   publishVideo: vi.fn(),
   batchPublishVideos: vi.fn(),
   batchUnpublishVideos: vi.fn(),
+  transitionVideoState: vi.fn(),
 }))
 
 import * as videoQueries from '@/api/db/queries/videos'
-const mockPublishVideo = videoQueries.publishVideo as ReturnType<typeof vi.fn>
-const mockBatchPublish = videoQueries.batchPublishVideos as ReturnType<typeof vi.fn>
+const mockTransition = videoQueries.transitionVideoState as ReturnType<typeof vi.fn>
 const mockBatchUnpublish = videoQueries.batchUnpublishVideos as ReturnType<typeof vi.fn>
 
 // ── Helpers ───────────────────────────────────────────────────────
 
-function makeDb(queryResult = { rows: [{ id: 'vid-1', short_id: 'abCD1234', slug: 'test-abCD1234', title: '测试', title_en: null, cover_url: null, type: 'movie', category: null, year: 2024, country: null, episode_count: 1, rating: null, status: 'completed', is_published: true }] }) {
+function makeDb(queryResult = {
+  rows: [{
+    id: 'vid-1', short_id: 'abCD1234', slug: 'test-abCD1234', title: '测试',
+    title_en: null, cover_url: null, type: 'movie', category: null, year: 2024,
+    country: null, episode_count: 1, rating: null, status: 'completed',
+    is_published: true, review_status: 'approved', visibility_status: 'public',
+    content_rating: 'general',
+  }],
+}) {
   return { query: vi.fn().mockResolvedValue(queryResult) } as unknown as import('pg').Pool
 }
 
@@ -39,7 +48,7 @@ describe('VideoService.publish — ES 同步', () => {
   it('publish(true) — DB 更新成功后触发 indexToES', async () => {
     const db = makeDb()
     const es = makeEs()
-    mockPublishVideo.mockResolvedValue({ id: 'vid-1', is_published: true })
+    mockTransition.mockResolvedValue({ id: 'vid-1', is_published: true })
 
     const svc = new VideoService(db, es)
     await svc.publish('vid-1', true)
@@ -52,9 +61,17 @@ describe('VideoService.publish — ES 同步', () => {
   })
 
   it('publish(false) — 下架时也触发 indexToES（同步 is_published:false 到 ES）', async () => {
-    const db = makeDb({ rows: [{ id: 'vid-1', short_id: 'abCD1234', slug: null, title: '测试', title_en: null, cover_url: null, type: 'movie', category: null, year: 2024, country: null, episode_count: 1, rating: null, status: 'completed', is_published: false }] })
+    const db = makeDb({
+      rows: [{
+        id: 'vid-1', short_id: 'abCD1234', slug: null, title: '测试',
+        title_en: null, cover_url: null, type: 'movie', category: null, year: 2024,
+        country: null, episode_count: 1, rating: null, status: 'completed',
+        is_published: false, review_status: 'approved', visibility_status: 'internal',
+        content_rating: 'general',
+      }],
+    })
     const es = makeEs()
-    mockPublishVideo.mockResolvedValue({ id: 'vid-1', is_published: false })
+    mockTransition.mockResolvedValue({ id: 'vid-1', is_published: false })
 
     const svc = new VideoService(db, es)
     await svc.publish('vid-1', false)
@@ -67,7 +84,7 @@ describe('VideoService.publish — ES 同步', () => {
   it('publish — DB 返回 null（视频不存在）时不调用 indexToES', async () => {
     const db = makeDb()
     const es = makeEs()
-    mockPublishVideo.mockResolvedValue(null)
+    mockTransition.mockResolvedValue(null)
 
     const svc = new VideoService(db, es)
     await svc.publish('nonexistent', true)
@@ -79,7 +96,7 @@ describe('VideoService.publish — ES 同步', () => {
 
   it('publish — 无 ES 客户端时不抛出错误', async () => {
     const db = makeDb()
-    mockPublishVideo.mockResolvedValue({ id: 'vid-1', is_published: true })
+    mockTransition.mockResolvedValue({ id: 'vid-1', is_published: true })
 
     const svc = new VideoService(db) // 不传 es
     await expect(svc.publish('vid-1', true)).resolves.not.toThrow()
@@ -91,11 +108,11 @@ describe('VideoService.batchPublish — ES 同步', () => {
     vi.clearAllMocks()
   })
 
-  it('batchPublish — DB 更新 N 条后对每个 id 触发 indexToES', async () => {
+  it('batchPublish — 每个 id 调用 transitionVideoState，全部成功后触发 indexToES', async () => {
     const ids = ['vid-1', 'vid-2', 'vid-3']
     const db = makeDb()
     const es = makeEs()
-    mockBatchPublish.mockResolvedValue(3)
+    mockTransition.mockResolvedValue({ id: 'vid-1', is_published: true })
 
     const svc = new VideoService(db, es)
     const count = await svc.batchPublish(ids, true)
@@ -108,11 +125,12 @@ describe('VideoService.batchPublish — ES 同步', () => {
     const ids = ['vid-1', 'vid-2']
     const db = makeDb()
     const es = makeEs()
-    mockBatchPublish.mockResolvedValue(0)
+    mockTransition.mockResolvedValue(null)
 
     const svc = new VideoService(db, es)
-    await svc.batchPublish(ids, true)
+    const count = await svc.batchPublish(ids, true)
 
+    expect(count).toBe(0)
     await new Promise((r) => setTimeout(r, 10))
     expect(es.index).not.toHaveBeenCalled()
   })

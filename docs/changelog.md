@@ -5500,3 +5500,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/stagingPublish.test.ts`
 - **测试覆盖**：typecheck ✅ lint ✅ stagingPublish.test.ts 14/14 通过
 - **共享层沉淀**：readiness 分类逻辑封装在 DB 层 CTE，不在 service 层重复
+
+---
+
+### CHG-397 — M1 测试质量修复：修复 5 个预存测试失败 + 补 CHG-396 组件测试
+- **完成时间**：2026-04-10 17:20
+- **修改文件**：
+  - `tests/unit/api/updateVisibility.test.ts`（重写：mock 改用 transitionVideoState）
+  - `tests/unit/api/video-service-publish.test.ts`（重写：publish/batchPublish mock 跟进）
+  - `tests/unit/api/crawler-service-es.test.ts`（修复：MediaCatalogService mock + bumpEpisodeCountIfHigher + connect）
+  - `tests/unit/api/ingestPolicy.test.ts`（修复：同上 + 已存在视频分支改用 db.query mockImplementation）
+  - `tests/unit/api/moderationStats.test.ts`（修复：systemSettings mock + 分页断言 objectContaining）
+  - `tests/unit/components/admin/staging/StagingTable.test.tsx`（新建：13 用例覆盖 CHG-396）
+- **测试覆盖**：全量 npm test -- --run 88 文件 / 798 用例全部通过
+- **共享层沉淀**：无需提取；MediaCatalogService 类 mock 模式已在同类文件中统一

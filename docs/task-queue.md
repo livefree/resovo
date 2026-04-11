@@ -5846,3 +5846,24 @@
   - StagingTable.tsx：新增 readiness tab 行（带计数）、type select、siteKey select（动态来自 summary）；filter 切换时重置 page+selectedIds；readyCount 改用 summary.ready 保证全局准确
   - stagingPublish.test.ts：修复 makeDb() 默认返回 count=1，消除 CHG-391 活跃源预检导致的测试失败
 - **完成备注**：typecheck ✅ lint ✅ stagingPublish.test.ts 全通过（14/14）；pre-existing 失败 20 条不属于本任务范围
+
+#### CHG-397 — M1 测试质量修复：修复 5 个预存测试失败 + 补 CHG-396 组件测试
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-10 17:05
+- **实际开始**：2026-04-10 17:10
+- **完成时间**：2026-04-10 17:20
+- **变更原因**：M1 里程碑评审发现全量测试未跑，CHG-396 筛选功能缺组件测试，且有 5 个预存测试失败
+- **影响的已完成任务**：CHG-395、CHG-396、CHG-160、CHG-161、CHG-203、CHG-220
+- **文件范围**：
+  `tests/unit/api/updateVisibility.test.ts`、`tests/unit/api/video-service-publish.test.ts`、
+  `tests/unit/api/crawler-service-es.test.ts`、`tests/unit/api/ingestPolicy.test.ts`、
+  `tests/unit/api/moderationStats.test.ts`、
+  `tests/unit/components/admin/staging/StagingTable.test.tsx`（新建）
+- **变更内容**：
+  - updateVisibility.test.ts：将 mockUpdateVisibility 替换为 mockTransition（transitionVideoState），更新断言为 action 参数格式
+  - video-service-publish.test.ts：publish/batchPublish mock 改用 transitionVideoState；batchPublish 改为按 id 循环调用的断言
+  - crawler-service-es.test.ts：添加 bumpEpisodeCountIfHigher mock + 完整 MediaCatalogService 类 mock + makeDb connect mock
+  - ingestPolicy.test.ts：同上 + 已存在视频测试改用 db.query mockImplementation（检测 catalog_id 查询）
+  - moderationStats.test.ts：mock @/api/db/queries/systemSettings（getSetting）；分页断言改用 objectContaining
+  - StagingTable.test.tsx（新建）：13 用例覆盖 CHG-396 readiness tab、type/siteKey filter、isAdmin 按钮可见性
+- **完成备注**：全量 npm test -- --run：88 测试文件 / 798 测试全部通过。M1 质量状态由"有残留风险"升级为"全量验证闭环"。

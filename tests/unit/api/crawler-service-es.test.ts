@@ -13,6 +13,14 @@ vi.mock('@/api/db/queries/videos', () => ({
   findVideoByNormalizedKey: vi.fn(),
   insertCrawledVideo: vi.fn(),
   upsertVideoAliases: vi.fn(),
+  transitionVideoState: vi.fn(),
+  bumpEpisodeCountIfHigher: vi.fn(),
+}))
+// MediaCatalogService 内部使用 db.connect，直接 mock 整个 class 避免复杂 DB 依赖
+vi.mock('@/api/services/MediaCatalogService', () => ({
+  MediaCatalogService: class {
+    findOrCreate = vi.fn().mockResolvedValue({ id: 'cat-uuid-1', title: '测试视频' })
+  },
 }))
 vi.mock('@/api/db/queries/sources', () => ({
   upsertSources: vi.fn(),
@@ -55,8 +63,13 @@ const DB_ROW = {
 }
 
 function makeDb() {
+  const client = {
+    query: vi.fn().mockResolvedValue({ rows: [DB_ROW] }),
+    release: vi.fn(),
+  }
   return {
     query: vi.fn().mockResolvedValue({ rows: [DB_ROW] }),
+    connect: vi.fn().mockResolvedValue(client),
   } as unknown as import('pg').Pool
 }
 

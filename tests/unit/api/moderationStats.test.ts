@@ -22,6 +22,12 @@ vi.mock('@/api/lib/redis', () => ({
 vi.mock('@/api/lib/postgres', () => ({ db: {} }))
 vi.mock('@/api/lib/elasticsearch', () => ({ es: undefined }))
 
+// shouldIncludeAdultInAdminContent 调用 getSetting，需 mock 否则用空 db 对象抛 500
+vi.mock('@/api/db/queries/systemSettings', () => ({
+  getSetting: vi.fn().mockResolvedValue(null),
+  setSetting: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock('@/api/db/queries/videos', () => ({
   listAdminVideos: vi.fn(),
   findAdminVideoById: vi.fn(),
@@ -173,7 +179,7 @@ describe('GET /admin/videos/pending-review', () => {
     expect(res.statusCode).toBe(200)
     expect(mockListPendingReviewVideos).toHaveBeenCalledWith(
       expect.anything(),
-      { page: 2, limit: 10 }
+      expect.objectContaining({ page: 2, limit: 10 }),
     )
   })
 
