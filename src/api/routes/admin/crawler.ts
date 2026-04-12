@@ -20,6 +20,7 @@ import { getEnabledSources } from '@/api/workers/crawlerWorker'
 import {
   listTasks,
   listTasksByRunId,
+  findTaskById,
   cancelPendingTasksByRun,
   requestCancelRunningTasksByRun,
   cancelAllActiveTasks,
@@ -519,6 +520,46 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     await crawlerRunsQueries.updateRunControlStatus(db, id, 'active')
     await crawlerRunsQueries.syncRunStatusFromTasks(db, id)
     return reply.send({ data: { runId: id, controlStatus: 'active' } })
+  })
+
+  // ── GET /admin/crawler/tasks/:id ─────────────────────────────
+  // UX-09: 任务详情（含运行上下文 crawlMode / keyword / targetVideoId）
+
+  fastify.get('/admin/crawler/tasks/:id', { preHandler: auth }, async (request, reply) => {
+    const ParamsSchema = z.object({ id: z.string().uuid() })
+    const p = ParamsSchema.safeParse(request.params)
+    if (!p.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+
+    const task = await findTaskById(db, p.data.id)
+    if (!task) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '任务不存在', status: 404 },
+      })
+    }
+
+    const run = task.runId ? await crawlerRunsQueries.getRunById(db, task.runId) : null
+    const runContext = run
+      ? { crawlMode: run.crawlMode, keyword: run.keyword, targetVideoId: run.targetVideoId }
+      : null
+
+    return reply.send({
+      data: {
+        ...mapTaskDto(task),
+        siteBreakdown: {
+          siteKey: task.sourceSite,
+          videosUpserted: (task.result?.videosUpserted as number | undefined) ?? 0,
+          sourcesUpserted: (task.result?.sourcesUpserted as number | undefined) ?? 0,
+          sourcesKept: (task.result?.sourcesKept as number | undefined) ?? 0,
+          sourcesRemoved: (task.result?.sourcesRemoved as number | undefined) ?? 0,
+          errors: (task.result?.errors as number | undefined) ?? 0,
+        },
+        runContext,
+      },
+    })
   })
 
   // ── GET /admin/crawler/tasks/:id/logs ───────────────────────

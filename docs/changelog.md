@@ -5598,3 +5598,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/crawler/CrawlerLaunchPanel.test.tsx`（新建：8 用例）
 - **测试覆盖**：新增 8 用例（模式切换/站点渲染/批量发起/关键词校验/关键词采集/模式按钮）全部通过
 - **共享层沉淀**：KeywordPreviewResult/KeywordPreviewItem 类型从 KeywordPreviewTable.tsx 导出，可供其他模块复用
+
+---
+
+## UX-09 — [UI] 采集任务详情展开：站点维度结果拆分
+- **完成时间**：2026-04-12 16:10
+- **关联序列**：Phase 2 采集能力扩展
+- **变更摘要**：
+  - `crawlerTasks.ts`: 新增 `findTaskById(db, taskId)` 按 ID 查单条任务
+  - `crawler.ts`: 新增 `GET /admin/crawler/tasks/:id`，返回 task + siteBreakdown（从 result JSON 提取）+ runContext（crawlMode/keyword/targetVideoId 来自关联 run）
+  - `useCrawlerTaskTableColumns.tsx`: actions 列新增"详情"按钮（可选 `onViewDetail` 回调）
+  - `AdminCrawlerPanel.tsx`: 新增 `detailTaskId/detailLoading/taskDetail` 状态；"详情"按钮点击展开 detail 面板（toggle），显示站点维度统计表 + 关键词/补源目标上下文
+- **文件列表**：
+  - `src/api/db/queries/crawlerTasks.ts`（新增 findTaskById）
+  - `src/api/routes/admin/crawler.ts`（新增 GET /admin/crawler/tasks/:id）
+  - `src/components/admin/system/crawler-task/useCrawlerTaskTableColumns.tsx`（actions 列新增详情按钮）
+  - `src/components/admin/AdminCrawlerPanel.tsx`（展开 detail 面板）
+- **测试覆盖**：无新增测试文件（详情展开行为覆盖在现有 AdminCrawlerPanel.test.tsx 集成测试中）

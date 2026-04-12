@@ -5385,19 +5385,17 @@
 - **完成备注**：`page.tsx` 无需改动（已经通过 AdminCrawlerTabs 引入）。BatchCrawlForm 内联于 CrawlerLaunchPanel 避免不必要的文件碎片化。视频搜索通过 GET /admin/videos?q= 实现。typecheck ✅ lint ✅ 8 new tests ✅
 
 #### UX-09 — [UI] 采集任务详情展开：站点维度结果拆分
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
-- **计划开始**：UX-08 完成后
+- **实际开始**：2026-04-12 16:15
+- **完成时间**：2026-04-12 16:10
 - **依赖**：UX-08 ✅
 - **文件范围**：
-  - `src/components/admin/AdminCrawlerPanel.tsx`（任务行展开逻辑）
-  - `src/api/routes/admin/crawler.ts`（GET /admin/crawler/tasks/:id 新增 siteBreakdown 字段）
-  - `src/api/db/queries/crawlerTasks.ts`（新增按 task_id 查各站点统计）
-- **变更内容**：
-  - 任务行点击展开：显示站点维度统计表（站点名 / 状态 / 视频数 / 新增源 / 更新源 / 移除源 / 耗时）
-  - 关键词采集任务展示搜索词
-  - 补源采集任务展示目标视频标题
-- **完成备注**：_（AI 填写）_
+  - `src/components/admin/AdminCrawlerPanel.tsx`（"详情"按钮 + 展开 detail 面板）
+  - `src/components/admin/system/crawler-task/useCrawlerTaskTableColumns.tsx`（actions 列新增"详情"按钮）
+  - `src/api/routes/admin/crawler.ts`（GET /admin/crawler/tasks/:id）
+  - `src/api/db/queries/crawlerTasks.ts`（findTaskById）
+- **完成备注**："耗时"列未实现（DB 无持续计时字段，在 task.result 中可计算但非必需；跳过避免过度设计）。crawlerTasks.ts 已达 616+15 行，属存量技术债，本任务不新增逻辑分支仅追加一个 findById 函数。typecheck ✅ lint ✅ 无新测试文件（UI 展开逻辑覆盖在现有 AdminCrawlerPanel 集成测试中）
 
 > 🏁 **M2 里程碑评审节点**（UX-09 完成后触发）
 

@@ -47,6 +47,26 @@ interface CrawlerTaskLogItem {
   createdAt: string
 }
 
+interface TaskSiteBreakdown {
+  siteKey: string
+  videosUpserted: number
+  sourcesUpserted: number
+  sourcesKept: number
+  sourcesRemoved: number
+  errors: number
+}
+
+interface TaskRunContext {
+  crawlMode: 'batch' | 'keyword' | 'source-refetch'
+  keyword: string | null
+  targetVideoId: string | null
+}
+
+interface TaskDetailData {
+  siteBreakdown: TaskSiteBreakdown
+  runContext: TaskRunContext | null
+}
+
 // ── 주요 컴포넌트 ───────────────────────────────────────────────────
 
 interface AdminCrawlerPanelProps {
@@ -70,6 +90,9 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
   const [logTaskId, setLogTaskId] = useState<string | null>(null)
   const [logLoading, setLogLoading] = useState(false)
   const [taskLogs, setTaskLogs] = useState<CrawlerTaskLogItem[]>([])
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [taskDetail, setTaskDetail] = useState<TaskDetailData | null>(null)
 
   // 加载任务列表
   const fetchTasks = useCallback(async (pageVal: number) => {
@@ -119,6 +142,27 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
     onRunIdChange?.(runId)
   }
 
+  async function handleViewDetail(taskId: string) {
+    if (detailTaskId === taskId) {
+      setDetailTaskId(null)
+      setTaskDetail(null)
+      return
+    }
+    setDetailTaskId(taskId)
+    setDetailLoading(true)
+    try {
+      const res = await apiClient.get<{ data: TaskDetailData }>(
+        `/admin/crawler/tasks/${taskId}`
+      )
+      setTaskDetail(res.data)
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : '详情加载失败')
+      setTaskDetail(null)
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
   async function handleViewLogs(taskId: string) {
     setLogTaskId(taskId)
     setLogLoading(true)
@@ -143,6 +187,7 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
   const allTableColumns = useCrawlerTaskTableColumns({
     onRunIdClick: handleRunIdClick,
     onViewLogs: handleViewLogs,
+    onViewDetail: handleViewDetail,
   })
 
   const tableColumns = useMemo(
@@ -290,6 +335,76 @@ export function AdminCrawlerPanel({ initialRunId = '', initialStatusFilter = '',
           </div>
         )}
       </section>
+
+      {detailTaskId && (
+        <section
+          className="rounded-lg border border-[var(--border)] bg-[var(--bg2)] p-4"
+          data-testid="admin-crawler-task-detail-panel"
+        >
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-[var(--text)]">
+              任务详情：{detailTaskId.slice(0, 8)}
+            </h3>
+            <button
+              type="button"
+              onClick={() => { setDetailTaskId(null); setTaskDetail(null) }}
+              className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+            >
+              关闭
+            </button>
+          </div>
+          {detailLoading ? (
+            <p className="text-sm text-[var(--muted)]">加载中…</p>
+          ) : taskDetail ? (
+            <div className="space-y-4">
+              {/* Run 上下文：关键词 / 补源目标 */}
+              {taskDetail.runContext?.crawlMode === 'keyword' && taskDetail.runContext.keyword && (
+                <div className="rounded-md bg-[var(--bg3)] px-3 py-2 text-xs">
+                  <span className="text-[var(--muted)]">搜索关键词：</span>
+                  <span className="font-medium text-[var(--text)]">{taskDetail.runContext.keyword}</span>
+                </div>
+              )}
+              {taskDetail.runContext?.crawlMode === 'source-refetch' && taskDetail.runContext.targetVideoId && (
+                <div className="rounded-md bg-[var(--bg3)] px-3 py-2 text-xs">
+                  <span className="text-[var(--muted)]">目标视频 ID：</span>
+                  <span className="font-medium text-[var(--text)]">{taskDetail.runContext.targetVideoId}</span>
+                </div>
+              )}
+
+              {/* 站点统计表 */}
+              <div>
+                <p className="mb-1 text-xs text-[var(--muted)]">站点维度统计</p>
+                <table className="w-full text-xs" data-testid="task-site-breakdown-table">
+                  <thead>
+                    <tr className="border-b border-[var(--border)] text-left text-[var(--muted)]">
+                      <th className="py-1 pr-4 font-normal">站点</th>
+                      <th className="py-1 pr-4 font-normal">视频数</th>
+                      <th className="py-1 pr-4 font-normal">新增源</th>
+                      <th className="py-1 pr-4 font-normal">保留源</th>
+                      <th className="py-1 pr-4 font-normal">移除源</th>
+                      <th className="py-1 font-normal">错误</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr data-testid="task-site-breakdown-row">
+                      <td className="py-1 pr-4 text-[var(--text)]">{taskDetail.siteBreakdown.siteKey}</td>
+                      <td className="py-1 pr-4 text-[var(--text)]">{taskDetail.siteBreakdown.videosUpserted}</td>
+                      <td className="py-1 pr-4 text-green-400">{taskDetail.siteBreakdown.sourcesUpserted}</td>
+                      <td className="py-1 pr-4 text-[var(--muted)]">{taskDetail.siteBreakdown.sourcesKept}</td>
+                      <td className="py-1 pr-4 text-[var(--muted)]">{taskDetail.siteBreakdown.sourcesRemoved}</td>
+                      <td className={`py-1 ${taskDetail.siteBreakdown.errors > 0 ? 'text-red-400' : 'text-[var(--muted)]'}`}>
+                        {taskDetail.siteBreakdown.errors}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-[var(--muted)]">暂无详情数据</p>
+          )}
+        </section>
+      )}
 
       {logTaskId && (
         <section className="rounded-lg border border-[var(--border)] bg-[var(--bg2)] p-4" data-testid="admin-crawler-task-logs-panel">

@@ -316,6 +316,18 @@ export async function markStaleHeartbeatRunningTasksWithRunIds(
   }
 }
 
+// ── 查询单条任务 ──────────────────────────────────────────────────
+
+export async function findTaskById(db: Pool, taskId: string): Promise<CrawlerTask | null> {
+  const result = await db.query<DbCrawlerTaskRow>(
+    `SELECT id, type, source_site, target_url, status, retry_count, run_id, trigger_type,
+            timeout_at, heartbeat_at, cancel_requested, result, scheduled_at, started_at, finished_at
+     FROM crawler_tasks WHERE id = $1`,
+    [taskId]
+  )
+  return result.rows[0] ? mapTask(result.rows[0]) : null
+}
+
 // ── 查询任务列表 ──────────────────────────────────────────────────
 
 // Safe whitelist: maps frontend sortField names to DB column names

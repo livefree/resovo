@@ -118,11 +118,13 @@ export function parseTime(value: string | null | undefined): string {
 interface UseCrawlerTaskTableColumnsOptions {
   onRunIdClick: (runId: string) => void
   onViewLogs: (taskId: string) => void
+  onViewDetail?: (taskId: string) => void
 }
 
 export function useCrawlerTaskTableColumns({
   onRunIdClick,
   onViewLogs,
+  onViewDetail,
 }: UseCrawlerTaskTableColumnsOptions): TableColumn<CrawlerTaskRow>[] {
   return useMemo<TableColumn<CrawlerTaskRow>[]>(
     () => [
@@ -223,19 +225,31 @@ export function useCrawlerTaskTableColumns({
         id: 'actions',
         header: CRAWLER_TASK_COLUMN_LABELS.actions,
         accessor: (row) => row.id,
-        width: 120, minWidth: 100, enableResizing: false, enableSorting: false,
+        width: 180, minWidth: 140, enableResizing: false, enableSorting: false,
         cell: ({ row }) => (
-          <button
-            type="button"
-            onClick={() => onViewLogs(row.id)}
-            className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg2)]"
-            data-testid={`admin-crawler-task-logs-${row.id}`}
-          >
-            查看日志
-          </button>
+          <div className="flex gap-1">
+            {onViewDetail && (
+              <button
+                type="button"
+                onClick={() => onViewDetail(row.id)}
+                className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg2)]"
+                data-testid={`admin-crawler-task-detail-${row.id}`}
+              >
+                详情
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onViewLogs(row.id)}
+              className="rounded border border-[var(--border)] px-2 py-1 text-xs text-[var(--text)] hover:bg-[var(--bg2)]"
+              data-testid={`admin-crawler-task-logs-${row.id}`}
+            >
+              查看日志
+            </button>
+          </div>
         ),
       },
     ],
-    [onRunIdClick, onViewLogs],
+    [onRunIdClick, onViewLogs, onViewDetail],
   )
 }
