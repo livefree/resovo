@@ -5323,9 +5323,10 @@
 - **完成备注**：DB 层已在 CHG-381 完成；本任务完成上层扩展。parseCrawlerSources/getEnabledSources 从 CrawlerService 迁入 crawlerWorker（worker 是唯一调用方）以规避 CrawlerService.ts 500 行硬限制。refetchSourcesForVideo 为 stub，CRAWLER-04 实现。typecheck ✅ lint ✅ 89文件/806测试 ✅
 
 #### CRAWLER-02 — [Service] 源 Upsert 策略改造：同站点全量替换
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
-- **计划开始**：CRAWLER-01 完成后
+- **实际开始**：2026-04-12 15:40
+- **完成时间**：2026-04-12 15:50
 - **依赖**：CRAWLER-01 ✅
 - **文件范围**：
   - `src/api/services/CrawlerService.ts`（修改 upsertSources 方法）
@@ -5336,7 +5337,7 @@
   - `upsertSources` 默认使用全量替换策略
   - `ingest_policy.source_update = 'append_only'` 时退回旧策略
   - 任务结果 result 新增 `sourcesAdded / sourcesKept / sourcesRemoved` 字段
-- **完成备注**：_（AI 填写）_
+- **完成备注**：replaceSourcesForSite 加入 sources.ts（非 videos.ts，语义更正确）。upsertVideo 返回类型扩展 sourcesKept/sourcesRemoved。无 siteKey 时自动退回 append_only 路径，兼容已有测试。sources.ts 约 620 行，超 500 行技术债已记录。typecheck ✅ lint ✅ 90文件/812测试 ✅
 
 #### CRAWLER-03 — [API] 关键词搜索采集：预览模式 + 入库模式
 - **状态**：⬜ 待开始

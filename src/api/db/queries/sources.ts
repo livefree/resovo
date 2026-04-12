@@ -547,3 +547,78 @@ export async function exportAllSources(db: Pool): Promise<ExportedSource[]> {
     episodeNumber: row.episode_number,
   }))
 }
+
+// ── 全量替换策略（CRAWLER-02）─────────────────────────────────────
+
+export interface ReplaceSourcesStats {
+  sourcesAdded: number
+  sourcesKept: number
+  sourcesRemoved: number
+}
+
+/**
+ * CRAWLER-02: 同站点全量替换策略
+ * 1. 查询指定 videoId + siteKey（source_name）的现有活跃源 URL
+ * 2. 软删除不在新列表中的旧源
+ * 3. 插入不在旧列表中的新源
+ * 返回 sourcesAdded / sourcesKept / sourcesRemoved 统计
+ */
+export async function replaceSourcesForSite(
+  db: Pool,
+  videoId: string,
+  siteKey: string,
+  newSources: UpsertSourceInput[]
+): Promise<ReplaceSourcesStats> {
+  const client = await (db as import('pg').Pool).connect()
+  try {
+    await client.query('BEGIN')
+
+    const existing = await client.query<{ id: string; source_url: string }>(
+      `SELECT id, source_url FROM video_sources
+       WHERE video_id = $1 AND source_name = $2 AND deleted_at IS NULL`,
+      [videoId, siteKey],
+    )
+
+    const existingUrls = new Set(existing.rows.map((r) => r.source_url))
+    const newUrls = new Set(newSources.map((s) => s.sourceUrl))
+
+    // 软删除不再出现的旧源
+    const toRemoveIds = existing.rows
+      .filter((r) => !newUrls.has(r.source_url))
+      .map((r) => r.id)
+
+    let sourcesRemoved = 0
+    if (toRemoveIds.length > 0) {
+      const placeholders = toRemoveIds.map((_, i) => `$${i + 1}`).join(', ')
+      const result = await client.query(
+        `UPDATE video_sources SET deleted_at = NOW() WHERE id IN (${placeholders})`,
+        toRemoveIds,
+      )
+      sourcesRemoved = result.rowCount ?? 0
+    }
+
+    // 插入新增的源
+    let sourcesAdded = 0
+    for (const src of newSources) {
+      if (existingUrls.has(src.sourceUrl)) continue
+      await client.query(
+        `INSERT INTO video_sources
+           (video_id, season_number, episode_number, source_url, source_name, type, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, true)
+         ON CONFLICT ON CONSTRAINT uq_sources_video_episode_url DO NOTHING`,
+        [videoId, src.seasonNumber ?? 1, src.episodeNumber, src.sourceUrl, src.sourceName, src.type],
+      )
+      sourcesAdded++
+    }
+
+    const sourcesKept = newSources.length - sourcesAdded
+
+    await client.query('COMMIT')
+    return { sourcesAdded, sourcesKept, sourcesRemoved }
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
+}

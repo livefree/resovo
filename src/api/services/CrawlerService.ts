@@ -23,7 +23,11 @@ export interface CrawlerSource {
   base: string
   format: 'xml' | 'json'
   /** CHG-203: 站点级采集策略，决定入库时的 review/visibility 状态 */
-  ingestPolicy?: { allow_auto_publish: boolean }
+  ingestPolicy?: {
+    allow_auto_publish: boolean
+    /** CRAWLER-02: 'replace'（默认全量替换）| 'append_only'（仅追加，保留旧源） */
+    source_update?: 'replace' | 'append_only'
+  }
 }
 
 // 注：parseCrawlerSources / getEnabledSources 已迁移至 crawlerWorker.ts（CRAWLER-01）
@@ -139,9 +143,9 @@ export class CrawlerService {
    */
   async upsertVideo(
     parsed: ReturnType<typeof parseVodItem>,
-    ingestPolicy?: { allow_auto_publish: boolean },
+    ingestPolicy?: CrawlerSource['ingestPolicy'],
     siteKey?: string
-  ): Promise<{ videoId: string; sourcesUpserted: number }> {
+  ): Promise<{ videoId: string; sourcesUpserted: number; sourcesKept: number; sourcesRemoved: number }> {
     const { video, sources } = parsed
     const incomingMaxEpisode = sources.length > 0
       ? Math.max(...sources.map((s) => s.episodeNumber ?? 1))
@@ -210,20 +214,35 @@ export class CrawlerService {
     if (video.titleEn) aliases.push(video.titleEn)
     await videosQueries.upsertVideoAliases(this.db, videoId, aliases)
 
-    // Step 6: Upsert 播放源（ON CONFLICT DO NOTHING）
-    const sourcesUpserted = await sourcesQueries.upsertSources(
-      this.db,
-      sources.map((s) => ({
-        videoId,
-        episodeNumber: s.episodeNumber,
-        sourceUrl: s.sourceUrl,
-        sourceName: s.sourceName,
-        type: s.type,
-      }))
-    )
+    // Step 6: 写入播放源
+    // CRAWLER-02: 默认全量替换策略（同站点全量替换）；ingest_policy.source_update='append_only' 退回旧策略
+    const sourceMappings = sources.map((s) => ({
+      videoId,
+      episodeNumber: s.episodeNumber,
+      sourceUrl: s.sourceUrl,
+      sourceName: s.sourceName,
+      type: s.type,
+    }))
+
+    const useAppendOnly = ingestPolicy?.source_update === 'append_only'
+    let sourcesAdded = 0
+    let sourcesKept = 0
+    let sourcesRemoved = 0
+
+    if (useAppendOnly || !siteKey) {
+      // 旧策略：仅追加，不移除旧源
+      const count = await sourcesQueries.upsertSources(this.db, sourceMappings)
+      sourcesAdded = count
+    } else {
+      // 全量替换策略：同站点内容全量替换
+      const stats = await sourcesQueries.replaceSourcesForSite(this.db, videoId, siteKey, sourceMappings)
+      sourcesAdded = stats.sourcesAdded
+      sourcesKept = stats.sourcesKept
+      sourcesRemoved = stats.sourcesRemoved
+    }
 
     void this.indexToES(videoId)
-    return { videoId, sourcesUpserted }
+    return { videoId, sourcesUpserted: sourcesAdded, sourcesKept, sourcesRemoved }
   }
 
   /**

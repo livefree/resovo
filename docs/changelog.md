@@ -5531,3 +5531,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/system-config.test.ts`（更新：同上）
 - **测试覆盖**：全量 npm test -- --run 89 文件 / 806 用例全部通过
 - **共享层沉淀**：parseCrawlerSources/getEnabledSources 迁移至 crawlerWorker.ts（worker 是唯一调用方，语义更明确）
+
+---
+
+#### CRAWLER-02 — [Service] 源 Upsert 策略改造：同站点全量替换
+- **完成时间**：2026-04-12 15:50
+- **变更文件**：
+  - `src/api/db/queries/sources.ts`（新增 replaceSourcesForSite 事务函数 + ReplaceSourcesStats 类型；注：任务规划写 videos.ts，实际按架构规范放 sources.ts）
+  - `src/api/services/CrawlerService.ts`（CrawlerSource.ingestPolicy 新增 source_update 字段；upsertVideo Step 6 改造为全量替换策略；无 siteKey 或 append_only 时退回旧路径；返回类型扩展 sourcesKept/sourcesRemoved）
+  - `tests/unit/api/crawlerSourceUpsert.test.ts`（新建：6 用例覆盖新增/保留/移除/回滚/策略路由）
+- **测试覆盖**：全量 npm test -- --run 90 文件 / 812 用例全部通过
+- **共享层沉淀**：ReplaceSourcesStats 类型导出自 sources.ts，供后续 CRAWLER-04 复用
