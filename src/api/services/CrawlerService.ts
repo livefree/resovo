@@ -12,7 +12,6 @@ import { normalizeTitle } from './TitleNormalizer'
 import { MediaCatalogService } from './MediaCatalogService'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
 import * as sourcesQueries from '@/api/db/queries/sources'
-import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import * as videosQueries from '@/api/db/queries/videos'
 import { nanoid } from 'nanoid'
 import { config } from '@/api/lib/config'
@@ -27,32 +26,7 @@ export interface CrawlerSource {
   ingestPolicy?: { allow_auto_publish: boolean }
 }
 
-/** 从 CRAWLER_SOURCES 环境变量解析资源站配置（降级用） */
-export function parseCrawlerSources(env?: string): CrawlerSource[] {
-  if (!env) return []
-  try {
-    return JSON.parse(env) as CrawlerSource[]
-  } catch {
-    return []
-  }
-}
-
-/**
- * 获取启用的资源站列表：
- * 优先从 crawler_sites 表读取，若表为空则降级到 CRAWLER_SOURCES 环境变量
- */
-export async function getEnabledSources(db: Pool): Promise<CrawlerSource[]> {
-  const dbSites = await crawlerSitesQueries.listEnabledCrawlerSites(db)
-  if (dbSites.length > 0) {
-    return dbSites.map((s) => ({
-      name:   s.key,
-      base:   s.apiUrl,
-      format: s.format,
-      ingestPolicy: { allow_auto_publish: s.ingestPolicy.allow_auto_publish },
-    }))
-  }
-  return parseCrawlerSources(process.env.CRAWLER_SOURCES)
-}
+// 注：parseCrawlerSources / getEnabledSources 已迁移至 crawlerWorker.ts（CRAWLER-01）
 
 // ── 采集结果 ──────────────────────────────────────────────────────
 
@@ -126,7 +100,7 @@ export class CrawlerService {
    */
   async fetchPage(
     source: CrawlerSource,
-    options: { page?: number; hoursAgo?: number; signal?: AbortSignal } = {}
+    options: { page?: number; hoursAgo?: number; keyword?: string; signal?: AbortSignal } = {}
   ): Promise<ReturnType<typeof parseVodItem>[]> {
     const { signal, ...fetchOptions } = options
     // Step 1: 获取列表，拿到 vod_id 列表
@@ -340,6 +314,8 @@ export class CrawlerService {
     source: CrawlerSource,
     options: {
       hoursAgo?: number
+      /** CRAWLER-01: 关键词搜索采集，传入 keyword 时调用 buildApiUrl({ keyword }) */
+      keyword?: string
       taskType?: 'full-crawl' | 'incremental-crawl'
       taskId?: string
       signal?: AbortSignal
@@ -400,6 +376,7 @@ export class CrawlerService {
         source: source.name,
         type: options.taskType ?? (options.hoursAgo ? 'incremental-crawl' : 'full-crawl'),
         hoursAgo: options.hoursAgo ?? null,
+        keyword: options.keyword ?? null,
       })
       await crawlerTasksQueries.updateTaskStatus(this.db, taskId, 'running')
 
@@ -412,7 +389,7 @@ export class CrawlerService {
           throw new Error('TASK_CANCELLED')
         }
         await emit('info', 'crawl.page.fetch.start', '开始拉取分页', { page })
-        const items = await this.fetchPage(source, { page, hoursAgo: options.hoursAgo, signal: options.signal })
+        const items = await this.fetchPage(source, { page, hoursAgo: options.hoursAgo, keyword: options.keyword, signal: options.signal })
         await emit('info', 'crawl.page.fetch.done', '分页拉取完成', { page, items: items.length })
         if (items.length === 0) break
 
@@ -451,8 +428,8 @@ export class CrawlerService {
 
         page++
         await pushProgress()
-        // 增量模式单页即可（仅最近更新）
-        if (options.hoursAgo) break
+        // 增量模式和关键词模式均只取第一页
+        if (options.hoursAgo || options.keyword) break
       }
 
       await crawlerTasksQueries.updateTaskStatus(this.db, taskId, 'done', {
@@ -494,5 +471,17 @@ export class CrawlerService {
     }
 
     return { sourceSite: source.name, page: page - 1, videosUpserted, sourcesUpserted, errors }
+  }
+
+  /**
+   * CRAWLER-01: 单视频补源采集（stub）
+   * 以视频标题搜索各站点，用同站点全量替换策略写入新源。
+   * 完整实现在 CRAWLER-04（需要 title_normalized 相似度匹配 + replaceSourcesForSite）。
+   */
+  async refetchSourcesForVideo(
+    _videoId: string,
+    _siteKeys?: string[]
+  ): Promise<{ sourcesAdded: number; notFound: string[] }> {
+    throw new Error('NOT_IMPLEMENTED: refetchSourcesForVideo will be implemented in CRAWLER-04')
   }
 }

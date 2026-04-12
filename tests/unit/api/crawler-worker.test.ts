@@ -26,11 +26,6 @@ vi.mock('@/api/lib/elasticsearch', () => ({
 
 vi.mock('@/api/services/CrawlerService', () => ({
   CrawlerService: vi.fn(),
-  getEnabledSources: vi.fn().mockResolvedValue([
-    { name: 'site-a', base: 'https://a.example.com', format: 'json' },
-    { name: 'site-b', base: 'https://b.example.com', format: 'xml' },
-  ]),
-  parseCrawlerSources: vi.fn().mockReturnValue([]),
 }))
 
 vi.mock('@/api/db/queries/crawlerSites', () => ({

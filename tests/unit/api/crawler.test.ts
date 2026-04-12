@@ -41,8 +41,6 @@ vi.mock('@/api/services/CrawlerService', () => ({
   CrawlerService: vi.fn().mockImplementation(() => ({
     reindexAll: vi.fn().mockResolvedValue({ indexed: 0, errors: 0 }),
   })),
-  parseCrawlerSources: vi.fn().mockReturnValue([]),
-  getEnabledSources: vi.fn().mockResolvedValue([]),
 }))
 
 vi.mock('@/api/services/ContentService', () => ({

@@ -5303,9 +5303,10 @@
 > ⚠ Phase 2 完成后必须暂停，执行里程碑评审
 
 #### CRAWLER-01 — [DB/API] crawler_runs 新增模式字段 + CrawlJobData 扩展
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
-- **计划开始**：M1 评审通过后
+- **实际开始**：2026-04-12 10:00
+- **完成时间**：2026-04-12 15:35
 - **依赖**：CHG-381 ✅（crawler_runs 字段已在 CHG-381 migration 中添加）
 - **文件范围**：
   - `src/api/workers/crawlerWorker.ts`（扩展 CrawlJobData 接口）
@@ -5319,7 +5320,7 @@
   - `CrawlerService.crawl()` 支持接收 `keyword` 参数，调用 `buildApiUrl({ keyword })`
   - 新增 `CrawlerService.refetchSourcesForVideo(videoId, siteKeys)` 方法
   - API 路由新增参数校验（crawlMode/keyword/targetVideoId）
-- **完成备注**：_（AI 填写）_
+- **完成备注**：DB 层已在 CHG-381 完成；本任务完成上层扩展。parseCrawlerSources/getEnabledSources 从 CrawlerService 迁入 crawlerWorker（worker 是唯一调用方）以规避 CrawlerService.ts 500 行硬限制。refetchSourcesForVideo 为 stub，CRAWLER-04 实现。typecheck ✅ lint ✅ 89文件/806测试 ✅
 
 #### CRAWLER-02 — [Service] 源 Upsert 策略改造：同站点全量替换
 - **状态**：⬜ 待开始

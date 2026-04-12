@@ -7,16 +7,48 @@ import type Bull from 'bull'
 import { crawlerQueue } from '@/api/lib/queue'
 import { db } from '@/api/lib/postgres'
 import { es } from '@/api/lib/elasticsearch'
-import { CrawlerService, getEnabledSources } from '@/api/services/CrawlerService'
+import { CrawlerService, type CrawlerSource } from '@/api/services/CrawlerService'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
 import { createCrawlerTaskLog } from '@/api/db/queries/crawlerTaskLogs'
 import * as crawlerRunsQueries from '@/api/db/queries/crawlerRuns'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 
+// ── 资源站工具函数（从 CrawlerService 迁入，worker 是唯一调用方） ───
+
+/** 从 CRAWLER_SOURCES 环境变量解析资源站配置（降级用） */
+export function parseCrawlerSources(env?: string): CrawlerSource[] {
+  if (!env) return []
+  try {
+    return JSON.parse(env) as CrawlerSource[]
+  } catch {
+    return []
+  }
+}
+
+/**
+ * 获取启用的资源站列表：
+ * 优先从 crawler_sites 表读取，若表为空则降级到 CRAWLER_SOURCES 环境变量
+ */
+export async function getEnabledSources(db: import('pg').Pool): Promise<CrawlerSource[]> {
+  const dbSites = await crawlerSitesQueries.listEnabledCrawlerSites(db)
+  if (dbSites.length > 0) {
+    return dbSites.map((s) => ({
+      name:   s.key,
+      base:   s.apiUrl,
+      format: s.format,
+      ingestPolicy: { allow_auto_publish: s.ingestPolicy.allow_auto_publish },
+    }))
+  }
+  return parseCrawlerSources(process.env.CRAWLER_SOURCES)
+}
+
 // ── 任务类型 ──────────────────────────────────────────────────────
 
 export type CrawlJobType = 'full-crawl' | 'incremental-crawl'
+
+/** CRAWLER-01: 采集模式（batch=批量/定时，keyword=关键词搜索，source-refetch=单视频补源） */
+export type CrawlJobMode = 'batch' | 'keyword' | 'source-refetch'
 
 export interface CrawlJobData {
   type: CrawlJobType
@@ -28,6 +60,16 @@ export interface CrawlJobData {
   runId: string
   /** 增量模式：只采集最近 N 小时更新的内容 */
   hoursAgo?: number
+  /** CRAWLER-01: 采集模式 */
+  crawlMode?: CrawlJobMode
+  /** CRAWLER-01: 关键词搜索采集的搜索词（crawlMode='keyword' 时使用） */
+  keyword?: string
+  /** CRAWLER-01: 单视频补源目标视频 ID（crawlMode='source-refetch' 时使用） */
+  targetVideoId?: string
+  /** CRAWLER-01: 是否预览模式（不写库，只返回结果） */
+  previewOnly?: boolean
+  /** CRAWLER-01: 限定采集的站点 key 列表（为空时采集所有启用站点） */
+  targetSiteKeys?: string[]
 }
 
 export interface CrawlJobResult {

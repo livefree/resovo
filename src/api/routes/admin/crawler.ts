@@ -368,14 +368,26 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
       siteKeys: z.array(z.string().min(1)).optional(),
       hoursAgo: z.number().int().min(1).max(720).optional(),
       timeoutSeconds: z.number().int().min(60).max(7200).optional(),
+      /** CRAWLER-01: 采集模式（batch=批量，keyword=关键词，source-refetch=单视频补源） */
+      crawlMode: z.enum(['batch', 'keyword', 'source-refetch']).optional(),
+      /** CRAWLER-01: 关键词搜索词（crawlMode='keyword' 时必填） */
+      keyword: z.string().min(1).max(100).optional(),
+      /** CRAWLER-01: 目标视频 ID（crawlMode='source-refetch' 时必填） */
+      targetVideoId: z.string().uuid().optional(),
     })
     const parsed = BodySchema.safeParse(request.body)
     if (!parsed.success) {
       return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
     }
-    const { triggerType, mode, siteKeys, hoursAgo, timeoutSeconds } = parsed.data
+    const { triggerType, mode, siteKeys, hoursAgo, timeoutSeconds, crawlMode, keyword, targetVideoId } = parsed.data
     if ((triggerType === 'single' || triggerType === 'batch') && (!siteKeys || siteKeys.length === 0)) {
       return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: 'siteKeys 不能为空', status: 422 } })
+    }
+    if (crawlMode === 'keyword' && !keyword) {
+      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: 'crawlMode=keyword 时 keyword 必填', status: 422 } })
+    }
+    if (crawlMode === 'source-refetch' && !targetVideoId) {
+      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: 'crawlMode=source-refetch 时 targetVideoId 必填', status: 422 } })
     }
     try {
       const createdBy = (request.user as { userId?: string } | undefined)?.userId ?? null
@@ -386,6 +398,9 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
         hoursAgo,
         timeoutSeconds,
         createdBy,
+        crawlMode: crawlMode as 'batch' | 'keyword' | 'source-refetch' | undefined,
+        keyword: keyword ?? null,
+        targetVideoId: targetVideoId ?? null,
       })
       return reply.code(202).send({ data: result })
     } catch (err) {

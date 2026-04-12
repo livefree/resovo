@@ -27,8 +27,6 @@ vi.mock('@/api/lib/queue', () => ({
 
 vi.mock('@/api/services/CrawlerService', () => ({
   CrawlerService: class {},
-  parseCrawlerSources: vi.fn(() => []),
-  getEnabledSources: vi.fn(async () => []),
 }))
 
 vi.mock('@/api/services/AnalyticsService', () => ({ AnalyticsService: class {} }))

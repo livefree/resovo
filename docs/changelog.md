@@ -5514,3 +5514,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/staging/StagingTable.test.tsx`（新建：13 用例覆盖 CHG-396）
 - **测试覆盖**：全量 npm test -- --run 88 文件 / 798 用例全部通过
 - **共享层沉淀**：无需提取；MediaCatalogService 类 mock 模式已在同类文件中统一
+
+---
+
+#### CRAWLER-01 — [DB/API] crawler_runs 新增模式字段 + CrawlJobData 扩展
+- **完成时间**：2026-04-12 15:35
+- **变更文件**：
+  - `src/api/workers/crawlerWorker.ts`（扩展 CrawlJobData 接口加 crawlMode/keyword/targetVideoId/previewOnly/targetSiteKeys；迁入 parseCrawlerSources + getEnabledSources）
+  - `src/api/services/CrawlerService.ts`（移出两函数；fetchPage + crawl() 新增 keyword 参数；新增 refetchSourcesForVideo stub；移除 crawlerSitesQueries import）
+  - `src/api/services/CrawlerRunService.ts`（input 类型新增 crawlMode/keyword/targetVideoId；传递给 createRun()）
+  - `src/api/routes/admin/crawler.ts`（POST /admin/crawler/runs body schema 扩展 crawlMode/keyword/targetVideoId；加参数互斥校验）
+  - `tests/unit/api/crawlerKeyword.test.ts`（新建：8 用例覆盖 buildApiUrl keyword、CrawlJobData 新字段、CrawlerRunService crawlMode 传递、refetchSourcesForVideo stub）
+  - `tests/unit/api/crawler.test.ts`（更新：移除已迁出的 CrawlerService mock 成员）
+  - `tests/unit/api/crawler-worker.test.ts`（更新：同上）
+  - `tests/unit/api/sources-verify.test.ts`（更新：同上）
+  - `tests/unit/api/system-config.test.ts`（更新：同上）
+- **测试覆盖**：全量 npm test -- --run 89 文件 / 806 用例全部通过
+- **共享层沉淀**：parseCrawlerSources/getEnabledSources 迁移至 crawlerWorker.ts（worker 是唯一调用方，语义更明确）

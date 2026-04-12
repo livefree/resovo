@@ -2,6 +2,7 @@ import type { Pool } from 'pg'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
 import * as crawlerRunsQueries from '@/api/db/queries/crawlerRuns'
+import type { CrawlerRunCrawlMode } from '@/api/db/queries/crawlerRuns'
 import { createCrawlerTaskLog } from '@/api/db/queries/crawlerTaskLogs'
 import { ensureCrawlerQueueReady } from '@/api/lib/queue'
 import { enqueueFullCrawl, enqueueIncrementalCrawl } from '@/api/workers/crawlerWorker'
@@ -29,6 +30,12 @@ export class CrawlerRunService {
     timeoutSeconds?: number
     createdBy?: string | null
     scheduleId?: string | null
+    /** CRAWLER-01: 采集模式（默认 batch） */
+    crawlMode?: CrawlerRunCrawlMode
+    /** CRAWLER-01: 关键词搜索词（crawlMode='keyword' 时使用） */
+    keyword?: string | null
+    /** CRAWLER-01: 目标视频 ID（crawlMode='source-refetch' 时使用） */
+    targetVideoId?: string | null
   }): Promise<{
     runId: string
     taskIds: string[]
@@ -65,6 +72,9 @@ export class CrawlerRunService {
       createdBy: input.createdBy ?? null,
       scheduleId: input.scheduleId ?? null,
       summary: { hoursAgo },
+      crawlMode: input.crawlMode ?? 'batch',
+      keyword: input.keyword ?? null,
+      targetVideoId: input.targetVideoId ?? null,
     })
 
     const enqueuedSiteKeys: string[] = []
