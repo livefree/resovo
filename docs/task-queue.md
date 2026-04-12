@@ -5370,24 +5370,19 @@
 - **完成备注**：CrawlerService.ts 超 500 行限制，将 refetchSourcesForVideo 拆入 CrawlerRefetchService.ts（extends CrawlerService，复用 fetchPage）。titleSimilarity 用 bigram Dice 系数实现，阈值 0.8。crawlerKeyword.test.ts stub 测试替换为 titleSimilarity 单元测试（4 tests）。typecheck ✅ lint ✅ 7 new tests ✅
 
 #### UX-08 — [UI] 采集控制台"发起采集" Tab（三模式统一入口）
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
-- **计划开始**：CRAWLER-04 完成后
+- **实际开始**：2026-04-12 16:10
+- **完成时间**：2026-04-12 16:05
 - **依赖**：CRAWLER-04 ✅
 - **文件范围**：
-  - `src/app/[locale]/admin/crawler/page.tsx`（新增"发起采集"Tab）
-  - `src/components/admin/system/crawler-site/components/CrawlerLaunchPanel.tsx`（新建，三模式 UI）
+  - `src/components/admin/system/crawler-site/components/CrawlerLaunchPanel.tsx`（新建，三模式 + BatchCrawlForm）
   - `src/components/admin/system/crawler-site/components/KeywordCrawlForm.tsx`（新建）
   - `src/components/admin/system/crawler-site/components/SourceRefetchForm.tsx`（新建）
   - `src/components/admin/system/crawler-site/components/KeywordPreviewTable.tsx`（新建，预览结果表格）
-  - `src/components/admin/AdminCrawlerTabs.tsx`（新增 Tab 入口）
-  - `tests/unit/components/admin/crawler/CrawlerLaunchPanel.test.tsx`（新建）
-- **变更内容**：
-  - 模式切换：批量采集 / 关键词搜索 / 单视频补源
-  - 关键词搜索：搜索词+站点多选+选项→[搜索并预览]/[直接采集]→预览表格→[确认采集选中项]
-  - 单视频补源：已有视频搜索下拉（输入触发 API 搜索）→展示当前源状态→[开始补源采集]
-  - 采集结果 Toast 提示（视频数/源数/更新数）
-- **完成备注**：_（AI 填写）_
+  - `src/components/admin/AdminCrawlerTabs.tsx`（新增"发起采集"Tab）
+  - `tests/unit/components/admin/crawler/CrawlerLaunchPanel.test.tsx`（新建，8 tests）
+- **完成备注**：`page.tsx` 无需改动（已经通过 AdminCrawlerTabs 引入）。BatchCrawlForm 内联于 CrawlerLaunchPanel 避免不必要的文件碎片化。视频搜索通过 GET /admin/videos?q= 实现。typecheck ✅ lint ✅ 8 new tests ✅
 
 #### UX-09 — [UI] 采集任务详情展开：站点维度结果拆分
 - **状态**：⬜ 待开始

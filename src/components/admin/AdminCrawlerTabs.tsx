@@ -6,9 +6,10 @@ import { AdminCrawlerPanel } from '@/components/admin/AdminCrawlerPanel'
 import { CrawlerConfigTab } from '@/components/admin/system/crawler-site/components/CrawlerConfigTab'
 import { CrawlerAdvancedTab } from '@/components/admin/system/crawler-site/components/CrawlerAdvancedTab'
 import { CrawlerSiteOverviewStats } from '@/components/admin/system/crawler-site/components/CrawlerSiteOverviewStats'
+import { CrawlerLaunchPanel } from '@/components/admin/system/crawler-site/components/CrawlerLaunchPanel'
 import { useCrawlerMonitor } from '@/components/admin/system/crawler-site/hooks/useCrawlerMonitor'
 
-type CrawlerTab = 'sites' | 'tasks' | 'settings' | 'logs'
+type CrawlerTab = 'sites' | 'tasks' | 'settings' | 'logs' | 'launch'
 type TaskStatusFilter = 'pending' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled' | 'timeout' | ''
 
 function parseTaskStatusFilter(input: string | null): TaskStatusFilter {
@@ -30,6 +31,7 @@ function parseCrawlerTab(input: string | null): CrawlerTab {
   if (input === 'tasks') return 'tasks'
   if (input === 'settings' || input === 'advanced') return 'settings'
   if (input === 'logs') return 'logs'
+  if (input === 'launch') return 'launch'
   // 兼容旧 query：tab=config / tab=sites → 默认 sites
   return 'sites'
 }
@@ -88,6 +90,10 @@ export function AdminCrawlerTabs() {
       next.delete('taskStatus')
     } else if (nextTab === 'logs') {
       next.set('tab', 'logs')
+      next.delete('runId')
+      next.delete('taskStatus')
+    } else if (nextTab === 'launch') {
+      next.set('tab', 'launch')
       next.delete('runId')
       next.delete('taskStatus')
     } else {
@@ -172,6 +178,19 @@ export function AdminCrawlerTabs() {
           </button>
           <button
             type="button"
+            onClick={() => switchTab('launch')}
+            data-testid="admin-crawler-tab-launch"
+            title="发起批量采集、关键词搜索或单视频补源"
+            className={`rounded px-4 py-2 text-sm transition-colors ${
+              tab === 'launch'
+                ? 'bg-[var(--accent)] text-black'
+                : 'text-[var(--muted)] hover:text-[var(--text)]'
+            }`}
+          >
+            发起采集
+          </button>
+          <button
+            type="button"
             onClick={() => switchTab('settings')}
             data-testid="admin-crawler-tab-settings"
             title="自动采集策略与爬虫 API 配置"
@@ -200,6 +219,11 @@ export function AdminCrawlerTabs() {
         {tab === 'logs' && (
           <div data-testid="admin-crawler-tab-panel-logs">
             <p className="py-10 text-center text-sm text-[var(--muted)]">日志面板（即将上线）</p>
+          </div>
+        )}
+        {tab === 'launch' && (
+          <div data-testid="admin-crawler-tab-panel-launch">
+            <CrawlerLaunchPanel />
           </div>
         )}
         {tab === 'settings' && (

@@ -5577,3 +5577,24 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/crawlerKeyword.test.ts`（stub 测试替换为 titleSimilarity 测试）
 - **测试覆盖**：新增 11 用例（7 sourceRefetch + 4 titleSimilarity），全量通过
 - **共享层沉淀**：titleSimilarity 导出自 CrawlerRefetchService.ts，供 UX-08 等前端展示层调用参考
+
+---
+
+## UX-08 — [UI] 采集控制台"发起采集" Tab（三模式统一入口）
+- **完成时间**：2026-04-12 16:05
+- **关联序列**：Phase 2 采集能力扩展
+- **变更摘要**：
+  - 新建 `CrawlerLaunchPanel.tsx`：三模式选择器（批量/关键词/补源）+ 内联 `BatchCrawlForm`；useCrawlerSites 加载站点
+  - 新建 `KeywordCrawlForm.tsx`：关键词输入 + 站点多选 + [搜索并预览]/[直接采集]；预览结果展示 KeywordPreviewTable
+  - 新建 `SourceRefetchForm.tsx`：视频搜索下拉（GET /admin/videos?q=，300ms debounce）+ 站点多选 + [开始补源采集]（POST /admin/videos/:id/refetch-sources）
+  - 新建 `KeywordPreviewTable.tsx`：按站点分组显示预览结果（标题/年份/类型/源数/状态探测）
+  - `AdminCrawlerTabs.tsx`：新增"发起采集"Tab（'launch'），CrawlerLaunchPanel 接入 + URL 参数同步
+- **文件列表**：
+  - `src/components/admin/system/crawler-site/components/CrawlerLaunchPanel.tsx`（新建）
+  - `src/components/admin/system/crawler-site/components/KeywordCrawlForm.tsx`（新建）
+  - `src/components/admin/system/crawler-site/components/SourceRefetchForm.tsx`（新建）
+  - `src/components/admin/system/crawler-site/components/KeywordPreviewTable.tsx`（新建）
+  - `src/components/admin/AdminCrawlerTabs.tsx`（新增 launch tab）
+  - `tests/unit/components/admin/crawler/CrawlerLaunchPanel.test.tsx`（新建：8 用例）
+- **测试覆盖**：新增 8 用例（模式切换/站点渲染/批量发起/关键词校验/关键词采集/模式按钮）全部通过
+- **共享层沉淀**：KeywordPreviewResult/KeywordPreviewItem 类型从 KeywordPreviewTable.tsx 导出，可供其他模块复用
