@@ -67,3 +67,22 @@ module/
 ## 备注
 
 - 本规则对存量代码采用增量收敛策略，不强制一次性迁移。
+
+---
+
+## 后台数据表格六项规范（硬约束）
+
+所有后台数据表格必须同时满足以下 6 项（每项均为硬约束，不允许部分完成却标记已完成）：
+
+| # | 规范项 | 要求 | 禁止 |
+|---|--------|------|------|
+| 1 | 基座 | `ModernDataTable` | `AdminTableFrame` |
+| 2 | 列设置 | `ColumnSettingsPanel` + ⚙ overlay | 内联实现 / 缺失 |
+| 3 | 行操作（2+ 个动作） | `AdminDropdown`（portal 渲染） | 直接堆砌 button |
+| 4 | 批量操作 | `SelectionActionBar variant="sticky-bottom"` | 内联实现 |
+| 5 | 分页 | `PaginationV2` | 旧版 `Pagination` |
+| 6 | 排序 | 服务端排序（`sortField` / `sortDir` API 参数） | 本地排序 |
+
+验收时必须逐项检验。以"typecheck / lint 通过"代替逐项验收，视为验收未完成。
+
+> 来源：CLAUDE.md §"后台表格规范"（2026-04-12 迁入）
