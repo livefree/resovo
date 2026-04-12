@@ -5340,9 +5340,10 @@
 - **完成备注**：replaceSourcesForSite 加入 sources.ts（非 videos.ts，语义更正确）。upsertVideo 返回类型扩展 sourcesKept/sourcesRemoved。无 siteKey 时自动退回 append_only 路径，兼容已有测试。sources.ts 约 620 行，超 500 行技术债已记录。typecheck ✅ lint ✅ 90文件/812测试 ✅
 
 #### CRAWLER-03 — [API] 关键词搜索采集：预览模式 + 入库模式
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
-- **计划开始**：CRAWLER-02 完成后
+- **实际开始**：2026-04-12 15:55
+- **完成时间**：2026-04-12 16:00
 - **依赖**：CRAWLER-02 ✅
 - **文件范围**：
   - `src/api/routes/admin/crawler.ts`（新增 POST /admin/crawler/keyword-preview 路由）
@@ -5352,7 +5353,7 @@
   - `POST /admin/crawler/keyword-preview { keyword, siteKeys[], type? }`：执行搜索但不写库，返回各站点匹配视频预览列表（title/year/type/sourceCount/sourceStatus）
   - `POST /admin/crawler/runs { crawlMode:'keyword', keyword, siteKeys[] }`：正式采集并入库
   - 预览结果中的 sourceStatus 为快速 HEAD 检验结果（超时 800ms）
-- **完成备注**：_（AI 填写）_
+- **完成备注**：CrawlerService.ts 超 500 行，将 previewKeywordSearch 拆入新 CrawlerPreviewService.ts（extends CrawlerService，复用 fetchPage/buildApiUrl）。入库模式（crawlMode=keyword）通过 CRAWLER-01 的 POST /admin/crawler/runs 支持。typecheck ✅ lint ✅ 91文件/819测试 ✅
 
 #### CRAWLER-04 — [API] 单视频补源采集 Job
 - **状态**：⬜ 待开始

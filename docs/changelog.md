@@ -5542,3 +5542,15 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/crawlerSourceUpsert.test.ts`（新建：6 用例覆盖新增/保留/移除/回滚/策略路由）
 - **测试覆盖**：全量 npm test -- --run 90 文件 / 812 用例全部通过
 - **共享层沉淀**：ReplaceSourcesStats 类型导出自 sources.ts，供后续 CRAWLER-04 复用
+
+---
+
+#### CRAWLER-03 — [API] 关键词搜索采集：预览模式 + 入库模式
+- **完成时间**：2026-04-12 16:00
+- **变更文件**：
+  - `src/api/services/CrawlerPreviewService.ts`（新建：extends CrawlerService，previewKeywordSearch + probeSourceUrl；CrawlerService.ts 超 500 行，故拆入新文件）
+  - `src/api/services/CrawlerService.ts`（fetchText 改为 protected，供子类访问）
+  - `src/api/routes/admin/crawler.ts`（新增 POST /admin/crawler/keyword-preview 路由；导入 CrawlerPreviewService + getEnabledSources）
+  - `tests/unit/api/crawlerKeywordPreview.test.ts`（新建：7 用例覆盖多站点聚合/类型过滤/sourceStatus 探测/错误处理）
+- **测试覆盖**：全量 npm test -- --run 91 文件 / 819 用例全部通过
+- **共享层沉淀**：KeywordPreviewItem / KeywordPreviewResult 类型导出自 CrawlerPreviewService.ts，入库模式通过 CRAWLER-01 扩展的 POST /admin/crawler/runs（crawlMode=keyword）支持

@@ -85,7 +85,7 @@ export class CrawlerService {
   }
 
   /** 通用 HTTP 取文本，可选外部 AbortSignal（与内置 30s 超时合并） */
-  private async fetchText(url: string, signal?: AbortSignal): Promise<string> {
+  protected async fetchText(url: string, signal?: AbortSignal): Promise<string> {
     const timeoutSignal = AbortSignal.timeout(30_000)
     const combinedSignal = signal
       ? AbortSignal.any([signal, timeoutSignal])

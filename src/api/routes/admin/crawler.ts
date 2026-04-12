@@ -13,7 +13,9 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { CrawlerService } from '@/api/services/CrawlerService'
+import { CrawlerPreviewService } from '@/api/services/CrawlerPreviewService'
 import { ContentService } from '@/api/services/ContentService'
+import { getEnabledSources } from '@/api/workers/crawlerWorker'
 import {
   listTasks,
   listTasksByRunId,
@@ -81,6 +83,7 @@ function mapTaskDto(task: CrawlerTask) {
 
 export async function adminCrawlerRoutes(fastify: FastifyInstance) {
   const crawlerService = new CrawlerService(db, es)
+  const previewService = new CrawlerPreviewService(db, es)
   const contentService = new ContentService(db)
   const runService = new CrawlerRunService(db)
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
@@ -706,6 +709,39 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
       return reply.send({ data: result })
     },
   )
+
+  // ── POST /admin/crawler/keyword-preview — 关键词搜索预览 ─────
+  // CRAWLER-03: 对各启用站点执行关键词搜索，返回匹配视频预览（不写库）
+
+  fastify.post('/admin/crawler/keyword-preview', { preHandler: auth }, async (request, reply) => {
+    const BodySchema = z.object({
+      keyword: z.string().min(1).max(100),
+      siteKeys: z.array(z.string().min(1)).optional(),
+      type: z.string().optional(),
+    })
+    const parsed = BodySchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+    const { keyword, siteKeys, type } = parsed.data
+
+    // 获取目标站点列表（指定 siteKeys 则过滤，否则使用所有启用站点）
+    let sources = await getEnabledSources(db)
+    if (siteKeys && siteKeys.length > 0) {
+      sources = sources.filter((s) => siteKeys.includes(s.name))
+    }
+
+    if (sources.length === 0) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '没有可用的采集站点', status: 422 },
+      })
+    }
+
+    const results = await previewService.previewKeywordSearch(keyword, sources, type)
+    return reply.send({ data: { keyword, results } })
+  })
 
   // ── POST /admin/crawler/reindex — 重建 ES 索引 ───────────────
 
