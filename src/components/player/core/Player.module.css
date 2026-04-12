@@ -83,6 +83,18 @@
   --ytp-tooltip-bg:           #1c1c1c; /* solid color; opacity controlled separately */
   --ytp-tooltip-bg-opacity:   0.75;    /* background-only opacity (0–1) */
   --ytp-tooltip-color:        #ffffff;
+  --ytp-safe-top:             env(safe-area-inset-top, 0px);
+  --ytp-safe-right:           env(safe-area-inset-right, 0px);
+  --ytp-safe-bottom:          env(safe-area-inset-bottom, 0px);
+  --ytp-safe-left:            env(safe-area-inset-left, 0px);
+  --ytp-panel-bg:             rgba(28, 28, 28, 0.92);
+  --ytp-panel-border:         rgba(255, 255, 255, 0.08);
+  --ytp-panel-radius:         10px;
+  --ytp-panel-shadow:         0 10px 28px rgba(0, 0, 0, 0.38);
+  --ytp-panel-text-primary:   #ffffff;
+  --ytp-panel-text-secondary: rgba(255, 255, 255, 0.68);
+  --ytp-panel-hover-bg:       rgba(255, 255, 255, 0.08);
+  --ytp-panel-active-bg:      rgba(255, 255, 255, 0.16);
   /* bottom of tooltip bubble aligned with panel bottom (panels: bottom 54px;
      button sits ~8px above player bottom → 54 − 8 = 46px from button bottom) */
   --ytp-tooltip-bottom:       46px;
@@ -113,10 +125,7 @@
 /* Modes */
 .ytpTheater {
   aspect-ratio: unset;
-  /* Theater mode in shell layout should follow parent container size.
-     Avoid forcing viewport height to prevent top black clipping/cropping. */
   height: 100%;
-  max-height: none;
 }
 
 .ytpFullscreen {
@@ -183,13 +192,27 @@
 
 .ytpChromeTop {
   position: absolute;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
   top: 0;
   left: 0;
   right: 0;
-  padding: 12px 12px 8px;
+  padding:
+    calc(12px + var(--ytp-safe-top))
+    calc(12px + var(--ytp-safe-right))
+    0
+    calc(12px + var(--ytp-safe-left));
   opacity: 0;
   transition: opacity 0.25s ease;
   pointer-events: none;
+  min-width: 0;
+}
+
+.moviePlayer[data-layout-band="compact"] .ytpChromeTop,
+.moviePlayer[data-layout-band="narrow"] .ytpChromeTop,
+.moviePlayer[data-layout-band="phone-portrait"] .ytpChromeTop {
+  gap: 8px;
 }
 
 .moviePlayer:not(.ytpAutohide) .ytpChromeTop {
@@ -197,7 +220,37 @@
   pointer-events: auto;
 }
 
+.moviePlayer[data-top-controls-interactive="true"] .ytpChromeTop {
+  z-index: 35;
+}
+
 .ytpTitle {
+  min-width: 0;
+}
+
+.ytpControlSlot {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+}
+
+.ytpControlSlot[data-control-slot="top-right"] {
+  justify-content: flex-end;
+  margin-left: auto;
+  align-self: flex-start;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.ytpControlSlot[data-control-slot="top-right"] > * {
+  flex-shrink: 0;
+}
+
+.moviePlayer[data-layout-band="compact"] .ytpControlSlot[data-control-slot="top-right"],
+.moviePlayer[data-layout-band="narrow"] .ytpControlSlot[data-control-slot="top-right"],
+.moviePlayer[data-layout-band="phone-portrait"] .ytpControlSlot[data-control-slot="top-right"] {
+  gap: 10px;
 }
 
 .ytpTitleText {
@@ -233,6 +286,16 @@
   pointer-events: auto;
 }
 
+.ytpUnmutePromptBelowTopChrome {
+  top: 56px;
+}
+
+.ytpUnmutePromptBelowTopChromeLeft {
+  top: 56px;
+  left: calc(12px + var(--ytp-safe-left));
+  right: auto;
+}
+
 .ytpUnmuteButton {
   display: flex;
   align-items: center;
@@ -252,18 +315,37 @@
   background: rgba(0, 0, 0, 0.9);
 }
 
+.ytpUnmuteButton:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
 .ytpUnmuteLabel {
   white-space: nowrap;
 }
 
 /* ─── Layer 3: Gesture layer ────────────────────────────────────────────────── */
 
-.ytpGestureLayer {
+.ytpGestureSurface {
   position: absolute;
-  inset: 0;
+  inset: var(--ytp-gesture-top, 0px) 0 0 0;
   /* Covers video, below chrome */
   z-index: 30;
   cursor: default;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.ytpGestureSurface[data-zone-count="1"] {
+  grid-template-columns: 1fr;
+}
+
+.ytpGestureSurface[data-gestures-blocked="true"] {
+  pointer-events: none;
+}
+
+.ytpGestureZone {
+  min-width: 0;
 }
 
 /* ─── Layer 4: Spinner ──────────────────────────────────────────────────────── */
@@ -275,11 +357,12 @@
   transform: translate(-50%, -50%);
   width: 60px;
   height: 60px;
+  pointer-events: none;
 }
 
 .ytpSpinnerContainer {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 0;
 }
 
 .ytpSpinnerRotator {
@@ -305,6 +388,9 @@
 }
 
 .ytpSpinnerCircle {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 200%;
   height: 100%;
   border: 3px solid transparent;
@@ -316,6 +402,18 @@
 .ytpSpinnerRight .ytpSpinnerCircle {
   left: -100%;
   animation-name: ytpSpinnerRight;
+}
+
+.ytpSpinnerLabel {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 @keyframes ytpSpinnerRotate {
@@ -479,6 +577,10 @@
   bottom: 80px;
 }
 
+.ytpCaptionsWindowRaised {
+  bottom: 132px;
+}
+
 .ytpCaptionSegment {
   background: rgba(0, 0, 0, 0.75);
   color: #fff;
@@ -539,16 +641,54 @@
   position: absolute;
 }
 
+.ytpPanelSurface {
+  background: var(--ytp-panel-bg);
+  border: 1px solid var(--ytp-panel-border);
+  border-radius: var(--ytp-panel-radius);
+  box-shadow: var(--ytp-panel-shadow);
+  color: var(--ytp-panel-text-primary);
+  backdrop-filter: blur(18px);
+  display: flex;
+  flex-direction: column;
+}
+
 .ytpSettingsMenu {
-  bottom: 54px;
-  right: 12px;
-  background: rgba(28, 28, 28, 0.95);
-  border-radius: 2px;
+  bottom: calc(54px + var(--ytp-safe-bottom));
+  right: calc(12px + var(--ytp-safe-right));
   min-width: 220px;
   max-width: 300px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  max-height: calc(100% - 76px - var(--ytp-safe-top) - var(--ytp-safe-bottom));
   overflow: hidden;
   animation: ytpPanelIn 0.12s ease;
+}
+
+.ytpSpeedPanel {
+  bottom: calc(54px + var(--ytp-safe-bottom));
+  right: calc(12px + var(--ytp-safe-right));
+  width: min(
+    248px,
+    calc(100% - 24px - var(--ytp-safe-left) - var(--ytp-safe-right))
+  );
+  min-width: 0;
+  max-width: min(
+    248px,
+    calc(100% - 24px - var(--ytp-safe-left) - var(--ytp-safe-right))
+  );
+  max-height: calc(100% - 76px - var(--ytp-safe-top) - var(--ytp-safe-bottom));
+  overflow: hidden;
+  animation: ytpPanelIn 0.12s ease;
+}
+
+.ytpSettingsMenu[data-placement="top-right"] {
+  top: calc(52px + var(--ytp-safe-top));
+  right: calc(12px + var(--ytp-safe-right));
+  bottom: auto;
+}
+
+.ytpSpeedPanel[data-placement="top-right"] {
+  top: calc(52px + var(--ytp-safe-top));
+  right: calc(12px + var(--ytp-safe-right));
+  bottom: auto;
 }
 
 @keyframes ytpPanelIn {
@@ -571,6 +711,42 @@
 
 .ytpPanelMenu {
   padding: 8px 0;
+  min-height: min-content;
+}
+
+.ytpPanelScroller {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+.ytpSettingsMenu[data-panel-sizing="compact"],
+.ytpSpeedPanel[data-panel-sizing="compact"],
+.ytpEpisodesPanel[data-panel-sizing="compact"] {
+  bottom: calc(84px + var(--ytp-safe-bottom));
+  max-height: calc(100% - 112px - var(--ytp-safe-top) - var(--ytp-safe-bottom));
+}
+
+.ytpSettingsMenu[data-placement="top-right"][data-panel-sizing="compact"],
+.ytpSpeedPanel[data-placement="top-right"][data-panel-sizing="compact"],
+.ytpEpisodesPanel[data-placement="top-right"][data-panel-sizing="compact"] {
+  top: calc(48px + var(--ytp-safe-top));
+  bottom: auto;
+}
+
+.ytpSettingsMenu[data-panel-sizing="compact"] {
+  width: min(
+    calc(100% - 24px - var(--ytp-safe-left) - var(--ytp-safe-right)),
+    296px
+  );
+  max-width: min(
+    calc(100% - 24px - var(--ytp-safe-left) - var(--ytp-safe-right)),
+    296px
+  );
 }
 
 .ytpMenuHeader {
@@ -578,16 +754,22 @@
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  color: #fff;
+  color: var(--ytp-panel-text-primary);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--ytp-panel-border);
   margin-bottom: 4px;
 }
 
 .ytpMenuHeader:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--ytp-panel-hover-bg);
+}
+
+.ytpMenuHeader:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .ytpMenuBack {
@@ -599,7 +781,7 @@
   align-items: center;
   gap: 0;
   padding: 10px 16px;
-  color: #fff;
+  color: var(--ytp-panel-text-primary);
   font-size: 13px;
   cursor: pointer;
   position: relative;
@@ -608,7 +790,13 @@
 }
 
 .ytpMenuItem:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--ytp-panel-hover-bg);
+}
+
+.ytpMenuItem:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .ytpMenuItemActive {
@@ -617,11 +805,11 @@
 
 .ytpMenuItemLabel {
   flex: 1;
-  color: #fff;
+  color: var(--ytp-panel-text-primary);
 }
 
 .ytpMenuItemValue {
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--ytp-panel-text-secondary);
   font-size: 12px;
   margin-right: 4px;
 }
@@ -634,6 +822,190 @@
   margin-right: 8px;
   opacity: 0.9;
   flex-shrink: 0;
+}
+
+/* ─── Settings: read-only resolution info row ──────────────────────────────── */
+
+.ytpMenuInfoRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px 10px;
+  border-top: 1px solid var(--ytp-panel-border);
+  cursor: default;
+  pointer-events: none;
+}
+
+.ytpMenuInfoLabel {
+  flex: 1;
+  font-size: 13px;
+  color: var(--ytp-panel-text-secondary);
+}
+
+.ytpMenuInfoValue {
+  font-size: 12px;
+  color: var(--ytp-panel-text-secondary);
+}
+
+/* ─── Control bar: quality badge ────────────────────────────────────────────── */
+
+/* Flex wrapper for badge + right-controls pill — keeps them right-aligned together */
+.ytpChromeControlsRight {
+  display: flex;
+  align-items: center;
+  gap: var(--ytp-btn-gap);
+  flex-shrink: 0;
+}
+
+/* Independent pill-shaped badge; uses the same bg token as ytpRightControls */
+.ytpQualityBadge {
+  display: flex;
+  align-items: center;
+  height: var(--ytp-bg-height);
+  padding: 0 8px;
+  border-radius: calc(var(--ytp-bg-height) / 2);
+  background: var(--ytp-bg-color);
+  color: rgba(255, 255, 255, 0.87);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.ytpSpeedPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px 6px;
+}
+
+.ytpSpeedPanelValue {
+  color: var(--ytp-panel-text-primary);
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ytpSpeedPanelBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 12px 10px;
+  align-items: stretch;
+}
+
+.ytpSpeedPanelBody[data-density="compact"] {
+  gap: 7px;
+  padding-top: 10px;
+  padding-bottom: 8px;
+}
+
+.ytpSpeedSliderBlock {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.ytpSpeedSliderRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.ytpSpeedRange {
+  position: absolute;
+  inset: -8px 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+  margin: 0;
+}
+
+.ytpSpeedStepButton {
+  --_bg-w: 28px;
+  --_hover-w: 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+}
+
+.ytpSpeedStepGlyph {
+  position: relative;
+  z-index: 1;
+  min-width: 1ch;
+  text-align: center;
+  color: #fff;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.ytpSpeedSlider {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background: var(--ytp-vol-track-color);
+  border-radius: 2px;
+}
+
+.ytpSpeedSliderFill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: var(--ytp-vol-fill-color);
+  border-radius: 2px;
+}
+
+.ytpSpeedSliderHandle {
+  position: absolute;
+  top: 50%;
+  width: var(--ytp-vol-handle-size);
+  height: var(--ytp-vol-handle-size);
+  background: var(--ytp-vol-fill-color);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.ytpSpeedPresets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ytpSpeedPreset {
+  min-height: 30px;
+  border: 1px solid color-mix(in srgb, var(--ytp-panel-border) 100%, white 25%);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ytp-panel-text-primary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.ytpSpeedPreset:hover {
+  background: var(--ytp-panel-hover-bg);
+}
+
+.ytpSpeedPreset:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.ytpSpeedPresetActive {
+  background: var(--ytp-panel-active-bg);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: var(--ytp-brand-color);
 }
 
 /* ─── Layer 9: Gradient bottom ──────────────────────────────────────────────── */
@@ -663,8 +1035,9 @@
 .ytpChromeBottom {
   position: absolute;
   bottom: 0;
-  left: 12px;
-  right: 12px;
+  left: calc(12px + var(--ytp-safe-left));
+  right: calc(12px + var(--ytp-safe-right));
+  padding-bottom: calc(6px + var(--ytp-safe-bottom));
   opacity: 0;
   transition: opacity 0.25s ease;
   /* Pointer events only when visible */
@@ -674,6 +1047,93 @@
 .moviePlayer:not(.ytpAutohide) .ytpChromeBottom {
   opacity: 1;
   pointer-events: auto;
+}
+
+.ytpCenterControls {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.25s ease;
+}
+
+.ytpControlSlot[data-control-slot="center-overlay"] {
+  gap: 14px;
+}
+
+.ytpControlSlot[data-control-slot="center-overlay"] .ytpPlayButton {
+  --_bg-w: 56px;
+  --_hover-w: 56px;
+  width: 56px;
+  height: 56px;
+}
+
+.ytpControlSlot[data-control-slot="center-overlay"] .ytpNextButton {
+  --_bg-w: 44px;
+  --_hover-w: 44px;
+  width: 44px;
+  height: 44px;
+}
+
+.ytpEdgeRight {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding-right: 8px;
+  z-index: 9;
+  pointer-events: none;
+}
+
+.ytpEdgeRight > * {
+  pointer-events: auto;
+}
+
+/* ─── Mobile: center touch play/next overlay ────────────────────────────────── */
+
+.ytpCenterTouchArea {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+  transition: opacity 0.25s ease;
+}
+
+.ytpCenterTouchBtn {
+  position: absolute;
+  top: 50%;
+  border: none;
+  cursor: pointer;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 50%;
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ytpCenterTouchBtn:active {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* Play at exact player center */
+.ytpCenterTouchPlay {
+  width: 72px;
+  height: 72px;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Next: left edge starts at (player center + play radius + gap) */
+.ytpCenterTouchNext {
+  width: 52px;
+  height: 52px;
+  /* 36px = play radius, 14px = gap, result = left edge 50px from center */
+  left: calc(50% + 50px);
+  transform: translateY(-50%);
 }
 
 /* ─── Progress bar container ────────────────────────────────────────────────── */
@@ -845,6 +1305,22 @@
 
 /* ─── Controls bar ──────────────────────────────────────────────────────────── */
 
+.ytpTimeAboveProgress {
+  display: flex;
+  align-items: center;
+  padding: 0 2px 2px;
+}
+
+.ytpTimeAboveProgress .ytpTimeDisplay {
+  font-size: 11px;
+  height: auto;
+  padding: 0 6px;
+}
+
+.ytpTimeAboveProgress .ytpTimeDisplay::before {
+  display: none;
+}
+
 .ytpChromeControls {
   display: flex;
   align-items: center;
@@ -958,6 +1434,24 @@
   outline-offset: 2px;
 }
 
+.ytpButton:disabled,
+.ytpButtonDisabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.ytpButton:disabled::before,
+.ytpButton:disabled::after,
+.ytpButtonDisabled::before,
+.ytpButtonDisabled::after {
+  opacity: 0;
+}
+
+.ytpButton:disabled .ytpTooltip,
+.ytpButtonDisabled .ytpTooltip {
+  display: none;
+}
+
 /* ── Tooltip — React <span> child, shown on button hover ────────────────── */
 /* bottom aligns tooltip's lower edge with the panel bottom (54px from player bottom).
    Calculation: panel-bottom(54) − button-offset-from-player-bottom(8) = 46px */
@@ -979,18 +1473,26 @@
   z-index: 100;
 }
 
+.ytpButton[data-tooltip-placement="below"] .ytpTooltip {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+
 .ytpButton:hover .ytpTooltip {
   opacity: 1;
 }
 
 /* ── Tooltip edge-pinning: prevent clipping by player overflow:hidden ─────── */
-/* Left-edge button (play): align tooltip left edge with button left edge */
-.ytpPlayButton .ytpTooltip {
+/* Pin the first visible control in left-anchored slots to the left edge. */
+[data-control-slot="bottom-left"] > :first-child .ytpTooltip,
+[data-control-slot="top-left"] > :first-child .ytpTooltip {
   left: 0;
   transform: none;
 }
-/* Right-edge button (last in right-controls-right, always fullscreen): right-align */
-.ytpRightControlsRight > :last-child .ytpTooltip {
+
+/* Pin the last visible control in right-anchored slots to the right edge. */
+[data-control-slot="bottom-right"] > :last-child .ytpTooltip,
+[data-control-slot="top-right"] > :last-child .ytpTooltip {
   left: auto;
   right: 0;
   transform: none;
@@ -1066,6 +1568,37 @@
   --_hover-w: var(--ytp-play-hover-width);
 }
 
+.ytpSpeedButton {
+  --_bg-w: 88px;
+  --_hover-w: 88px;
+  width: 88px;
+  gap: 4px;
+  padding: 0 10px 0 8px;
+  border-radius: 999px;
+}
+
+.ytpSpeedButtonValue {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  font-weight: 500;
+  color: #fff;
+  letter-spacing: 0.01em;
+  min-width: 4.75ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.moviePlayer[data-layout-band="compact"] .ytpSpeedButton,
+.moviePlayer[data-layout-band="narrow"] .ytpSpeedButton,
+.moviePlayer[data-layout-band="phone-portrait"] .ytpSpeedButton {
+  --_bg-w: 66px;
+  --_hover-w: 66px;
+  width: 66px;
+  padding: 0 10px;
+  justify-content: center;
+}
+
 .ytpNextButton {
   --_bg-w: var(--ytp-next-bg-width);
   --_hover-w: var(--ytp-next-hover-width);
@@ -1121,21 +1654,40 @@
 
 .ytpEpisodesPanel {
   position: absolute;
-  bottom: 54px;
-  left: 0;
-  background: rgba(28, 28, 28, 0.95);
-  border-radius: 4px;
-  padding: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
-  max-height: 260px;
-  overflow-y: auto;
+  bottom: calc(54px + var(--ytp-safe-bottom));
+  left: var(--ytp-safe-left);
+  /* Right padding removed so the inner scrollbar hugs the panel border.
+     Content spacing on the right is provided by ytpEpisodesGrid padding-right. */
+  padding: 8px 0 8px 8px;
+  width: min(
+    calc(100% - 24px - var(--ytp-safe-left) - var(--ytp-safe-right)),
+    calc(var(--_ep-cols, 6) * 40px + (var(--_ep-cols, 6) - 1) * 4px + 16px)
+  );
+  max-height: min(
+    var(--_ep-max-height, 260px),
+    calc(100% - 76px - var(--ytp-safe-top) - var(--ytp-safe-bottom))
+  );
+  overflow: hidden;
   animation: ytpPanelIn 0.12s ease; /* reuse existing panel-in animation */
+}
+
+.ytpEpisodesPanel[data-placement="top-right"] {
+  top: calc(52px + var(--ytp-safe-top));
+  right: calc(12px + var(--ytp-safe-right));
+  bottom: auto;
+  left: auto;
+}
+
+.ytpEpisodesPanel[data-placement="bottom-right"] {
+  right: calc(12px + var(--ytp-safe-right));
+  left: auto;
 }
 
 .ytpEpisodesGrid {
   display: grid;
   grid-template-columns: repeat(var(--_ep-cols, 6), 1fr);
   gap: 4px;
+  padding-right: 8px; /* visual right margin; outer panel has no right padding */
 }
 
 .ytpEpisodeItem {
@@ -1147,7 +1699,7 @@
   background: transparent;
   border: none;
   border-radius: 999px;
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--ytp-panel-text-secondary);
   font-size: 13px;
   letter-spacing: 0.3px;
   cursor: pointer;
@@ -1155,8 +1707,14 @@
 }
 
 .ytpEpisodeItem:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: var(--ytp-panel-hover-bg);
+  color: var(--ytp-panel-text-primary);
+}
+
+.ytpEpisodeItem:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+  color: var(--ytp-panel-text-primary);
 }
 
 /* Currently playing episode — brand colour + bold */
@@ -1168,8 +1726,8 @@
 /* Keyboard-focused episode (also synced to mouse hover via onMouseEnter).
    Pill highlight: stronger fill replaces rectangular outline for consistency. */
 .ytpEpisodeFocused {
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
+  background: var(--ytp-panel-active-bg);
+  color: var(--ytp-panel-text-primary);
 }
 
 .ytpMuteButton {
@@ -1229,6 +1787,40 @@
   border-radius: 50%;
   background: var(--ytp-vol-fill-color);
   pointer-events: none;
+}
+
+/* ─── Shared horizontal slider primitives (HorizontalSlider component) ─────── */
+/* trackClassName is provided by the caller (ytpVolumeSlider / ytpSpeedSlider). */
+
+.ytpHSliderFill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: var(--ytp-vol-fill-color);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.ytpHSliderHandle {
+  position: absolute;
+  top: 50%;
+  width: var(--ytp-vol-handle-size);
+  height: var(--ytp-vol-handle-size);
+  background: var(--ytp-vol-fill-color);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.ytpHSliderInput {
+  position: absolute;
+  inset: -8px 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+  margin: 0;
 }
 
 /* ─── Time display ──────────────────────────────────────────────────────────── */
@@ -1383,6 +1975,8 @@
 
 /* Controls fade when ytpAutohide class is present */
 .ytpAutohide .ytpChromeBottom,
+.ytpAutohide .ytpCenterControls,
+.ytpAutohide .ytpCenterTouchArea,
 .ytpAutohide .ytpChromeTop,
 .ytpAutohide .ytpGradientTop,
 .ytpAutohide .ytpGradientBottom {
@@ -1404,7 +1998,7 @@
   }
 
   /* Prevent double-tap browser zoom on interactive elements */
-  .ytpGestureLayer,
+  .ytpGestureSurface,
   .ytpButton,
   .ytpTimeDisplay,
   .ytpVolumeArea {
@@ -1434,11 +2028,12 @@
   }
 }
 
-/* ─── Fullscreen – safe area insets (iPhone Home Bar) ───────────────────────── */
+/* ─── Fullscreen / mobile panel fit ─────────────────────────────────────────── */
 
-.ytpFullscreen .ytpChromeBottom {
-  /* Push controls above the Home Bar on notched iPhones */
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+.ytpFullscreen .ytpSettingsMenu,
+.ytpFullscreen .ytpSpeedPanel,
+.ytpFullscreen .ytpEpisodesPanel {
+  max-height: calc(100% - 88px - var(--ytp-safe-top) - var(--ytp-safe-bottom));
 }
 
 /* ─── Responsive – small player ─────────────────────────────────────────────── */

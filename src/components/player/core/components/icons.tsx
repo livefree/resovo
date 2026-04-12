@@ -90,6 +90,29 @@ export function SettingsIcon() {
   );
 }
 
+export function SpeedIcon() {
+  return (
+    <svg
+      fill="none"
+      height="24"
+      viewBox="0 0 24 24"
+      width="24"
+      aria-hidden="true"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M4.5 15.5A8 8 0 1 1 19.5 15.5" />
+      <path d="M12 7.5V9.5" />
+      <path d="M7.8 11.1L9.2 12.1" />
+      <path d="M16.2 11.1L14.8 12.1" />
+      <path d="M12 15.5L16 11.5" />
+      <circle cx="12" cy="15.5" r="1.2" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function SubtitlesIcon({ active }: { active: boolean }) {
   return (
     <svg
@@ -209,6 +232,57 @@ export function NextIcon() {
     >
       <path
         d="M20 20C20.26 20 20.51 19.89 20.70 19.70C20.89 19.51 21 19.26 21 19V5C21 4.73 20.89 4.48 20.70 4.29C20.51 4.10 20.26 4 20 4C19.73 4 19.48 4.10 19.29 4.29C19.10 4.48 19 4.73 19 5V19C19 19.26 19.10 19.51 19.29 19.70C19.48 19.89 19.73 20 20 20ZM5.04 19.77L18 12L5.04 4.22C4.84 4.10 4.60 4.03 4.36 4.03C4.12 4.03 3.89 4.09 3.68 4.21C3.47 4.32 3.30 4.49 3.18 4.70C3.06 4.91 2.99 5.14 3 5.38V18.61C2.99 18.85 3.06 19.08 3.18 19.29C3.30 19.50 3.47 19.67 3.68 19.79C3.89 19.90 4.12 19.96 4.36 19.96C4.60 19.96 4.84 19.89 5.04 19.77Z"
+        fill="white"
+      />
+    </svg>
+  );
+}
+
+export function MenuChevronIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      aria-hidden="true"
+      className={className}
+    >
+      <path
+        d="M9.71 18.71l-1.42-1.42 5.3-5.29-5.3-5.29 1.42-1.42 6.7 6.71z"
+        fill="white"
+      />
+    </svg>
+  );
+}
+
+export function MenuBackIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      aria-hidden="true"
+      className={className}
+    >
+      <path
+        d="M14.29 5.29L12.88 3.88 5.76 11l7.12 7.12 1.41-1.41L8.58 11z"
+        fill="white"
+      />
+    </svg>
+  );
+}
+
+export function MenuCheckIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      aria-hidden="true"
+      className={className}
+    >
+      <path
+        d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
         fill="white"
       />
     </svg>
