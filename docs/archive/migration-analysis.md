@@ -1,6 +1,6 @@
 # 外部项目迁移可行性分析
 
-> status: reference
+> status: archived
 > owner: @engineering
 > scope: external project migration feasibility analysis
 > source_of_truth: no

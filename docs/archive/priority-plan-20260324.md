@@ -1,6 +1,6 @@
 # Resovo — 开发优先级规划（2026-03-24）
 
-> status: reference
+> status: archived
 > owner: @engineering
 > scope: 2026-03-24 priority review and decomposition reference
 > source_of_truth: no

@@ -1,6 +1,6 @@
 # UI 现状盘点清单（2026-03-27）
 
-> status: active
+> status: archived
 > owner: @engineering
 > scope: current frontend/admin/system ui inventory for governance and design-system migration
 > source_of_truth: no

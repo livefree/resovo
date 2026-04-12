@@ -1,6 +1,6 @@
 # Docs 同主题冲突清单（2026-03-27）
 
-> status: active
+> status: archived
 > owner: @engineering
 > scope: duplicate-topic document conflict inventory and resolution suggestions
 > source_of_truth: no

@@ -1,6 +1,6 @@
 # Admin 采集功能集中管理重构方案（CHG-96 基线）
 
-> status: reference
+> status: archived
 > owner: @engineering
 > scope: admin crawl control center consolidation plan
 > source_of_truth: no

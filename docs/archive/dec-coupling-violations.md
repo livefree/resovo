@@ -1,5 +1,13 @@
 # DEC 解耦违规清单
 
+> status: archived
+> owner: @engineering
+> scope: DEC coupling violation audit list
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-04-02
+
 > 生成时间：2026-04-02
 > 生成方式：DEC-01 lint 扫描（`grep -rn "from '@/api/" src/app src/components src/lib src/stores`）
 > 用途：Phase 1（DEC-02~04）整改依据，修复完毕后此文件归档

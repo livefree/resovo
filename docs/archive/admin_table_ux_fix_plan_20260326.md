@@ -1,6 +1,6 @@
 # 后台表格体验修复与统一实施计划（2026-03-26）
 
-> status: active
+> status: archived
 > owner: @engineering
 > scope: admin table ux fixes and unification implementation
 > source_of_truth: no

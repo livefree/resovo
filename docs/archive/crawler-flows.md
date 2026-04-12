@@ -1,6 +1,6 @@
 # Resovo 采集系统 — 功能流程图
 
-> status: reference
+> status: archived
 > owner: @engineering
 > scope: crawler functional flow reference
 > source_of_truth: no

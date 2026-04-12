@@ -1,6 +1,6 @@
 # Resovo（流光）— 内容治理层 Schema 设计方案
 
-> status: reference
+> status: archived
 > owner: @engineering
 > scope: content governance schema evolution reference
 > source_of_truth: no

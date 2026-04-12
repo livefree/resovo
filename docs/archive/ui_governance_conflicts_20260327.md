@@ -1,6 +1,6 @@
 # UI 规则冲突收口清单（2026-03-27）
 
-> status: active
+> status: archived
 > owner: @engineering
 > scope: reconcile ui-rules and frontend/admin ui governance plan
 > source_of_truth: no

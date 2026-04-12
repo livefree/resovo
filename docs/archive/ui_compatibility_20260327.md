@@ -1,6 +1,6 @@
 1. 顶部导航 (Nav.tsx)
 
-> status: reference
+> status: archived
 > owner: @engineering
 > scope: frontend ui compatibility assessment
 > source_of_truth: no

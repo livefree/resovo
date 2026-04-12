@@ -1,5 +1,13 @@
 # 线路显示名称规范方案（2026-04-02）
 
+> status: archived
+> owner: @engineering
+> scope: line display name specification
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-04-02
+
 ## 目标
 
 将“线路2 / subyun”这类技术名替换为用户可理解、稳定一致、可运营治理的展示名。

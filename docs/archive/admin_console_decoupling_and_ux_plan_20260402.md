@@ -1,7 +1,12 @@
 # Resovo — 后台控制台解耦与交互改造方案（2026-04-02）
 
-> status: active
+> status: archived
+> owner: @engineering
 > scope: admin console only
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-04-02
 > reviewed_by: AI engineering review
 > decisions_confirmed: 2026-04-02
 
@@ -257,4 +262,3 @@
 1. 本文为《frontend_backend_decoupling_plan_20260401.md》的后台交互与治理补充。
 2. 本文优先级高于旧的“页面局部修补清单”，用于后续实施排期与验收。
 3. 评审通过后，建议在任务队列拆分为独立 CHG 序列执行。
-

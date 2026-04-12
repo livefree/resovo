@@ -1,6 +1,6 @@
 # 视频治理与管理方案流程图与界面功能明细表 (2026-03-27)
 
-> status: reference
+> status: archived
 > owner: @engineering
 > scope: video governance lifecycle flow reference
 > source_of_truth: no

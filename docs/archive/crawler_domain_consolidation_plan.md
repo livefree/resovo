@@ -1,6 +1,6 @@
 # Resovo（流光）— 采集域 Admin 导航收归设计方案
 
-> status: reference
+> status: archived
 > owner: @engineering
 > scope: crawler domain navigation consolidation plan reference
 > source_of_truth: no

@@ -1,6 +1,6 @@
 # Admin Table Baseline（统一基线）
 
-> status: reference
+> status: archived
 > owner: @engineering
 > scope: admin table interaction baseline reference
 > source_of_truth: no

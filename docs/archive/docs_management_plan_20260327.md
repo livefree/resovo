@@ -1,6 +1,6 @@
 # Docs 管理方案（2026-03-27）
 
-> status: active
+> status: archived
 > owner: @engineering
 > scope: docs governance and lifecycle management plan
 > source_of_truth: no

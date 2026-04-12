@@ -1,6 +1,6 @@
 # Admin Design System v1（Light）
 
-> status: reference
+> status: archived
 > owner: @engineering
 > scope: admin design system v1 reference
 > source_of_truth: no

@@ -1,6 +1,6 @@
 # 执行规范整合草案（待审核，2026-03-27）
 
-> status: superseded
+> status: archived
 > owner: @engineering
 > scope: execution-spec review draft before CLAUDE.md merge
 > source_of_truth: no

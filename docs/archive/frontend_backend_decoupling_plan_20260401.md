@@ -1,6 +1,6 @@
 # Resovo — 前后台彻底解耦实施方案（2026-04-01）
 
-> status: active
+> status: archived
 > owner: @engineering
 > scope: frontend/admin/backend decoupling and independent deployment
 > source_of_truth: no

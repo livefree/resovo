@@ -1,6 +1,6 @@
 # DB 命名重建方案 — VideoType / VideoGenre 正交化
 
-> status: reference
+> status: archived
 > owner: @engineering
 > scope: database naming rebuild plan result reference
 > source_of_truth: no

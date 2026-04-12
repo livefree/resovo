@@ -1,5 +1,13 @@
 # 审计收敛计划：DEC/UX 风险修复序列（修订版）
 
+> status: archived
+> owner: @engineering
+> scope: DEC/UX audit risk remediation plan
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-04-02
+
 > 目标：根据 `dec_ux_audit_findings_20260402.md` 的审计发现，系统性收敛 SEQ-20260402-50/51 的遗留风险与验收偏差
 > 日期：2026-04-02（修订：用户复核意见已合入）
 > 触发原因：任务台账标记"已完成"，但实测体感变化不大，审计确认 DEC 完成度约 75%、UX 约 45%

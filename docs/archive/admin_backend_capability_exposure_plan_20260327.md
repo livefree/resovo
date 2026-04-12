@@ -1,6 +1,6 @@
 # 后台已实现能力显性化方案（2026-03-27）
 
-> status: active
+> status: archived
 > owner: @engineering
 > scope: expose implemented admin APIs/features in admin UI and complete operation loops
 > source_of_truth: no

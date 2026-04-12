@@ -1,6 +1,6 @@
 # Resovo（流光）— 后台管理结构重组设计
 
-> status: reference
+> status: archived
 > owner: @engineering
 > scope: admin information architecture restructuring reference
 > source_of_truth: no

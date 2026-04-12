@@ -1,6 +1,6 @@
 # Python Tooling 渐进接入方案（CHG-93）
 
-> status: reference
+> status: archived
 > owner: @engineering
 > scope: python tooling adoption baseline reference
 > source_of_truth: no

@@ -1,6 +1,6 @@
 # Branch Handoff Report
 
-> status: reference
+> status: archived
 > owner: @engineering
 > scope: historical branch handoff audit report
 > source_of_truth: no

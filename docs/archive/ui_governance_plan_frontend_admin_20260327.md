@@ -1,6 +1,6 @@
 # Resovo（流光）前后台 UI 统一治理总方案（2026-03-27）
 
-> status: active
+> status: archived
 > owner: @engineering
 > scope: shared frontend/admin ui foundations, component system, page patterns, and governance workflow
 > source_of_truth: no

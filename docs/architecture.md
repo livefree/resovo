@@ -4,6 +4,8 @@
 > owner: @engineering  
 > scope: system architecture and module boundaries  
 > source_of_truth: yes  
+> supersedes: none  
+> superseded_by: none  
 > last_reviewed: 2026-04-05
 
 ---
@@ -307,4 +309,3 @@ resovo/
 - 迁移文件名对齐为 `019_rebuild_video_type_genre.sql`。
 - 增补 023/024/025 的状态机与成人内容治理。
 - 增补 `clear-local-db.sh` 与当前调度/watchdog 机制。
-

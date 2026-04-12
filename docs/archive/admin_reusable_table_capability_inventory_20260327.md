@@ -1,5 +1,13 @@
 # 后台可复用表格能力盘点（2026-03-27）
 
+> status: archived
+> owner: @engineering
+> scope: admin reusable table capability inventory
+> source_of_truth: no
+> supersedes: none
+> superseded_by: none
+> last_reviewed: 2026-03-27
+
 ## 1. 范围与目标
 - 范围：`src/components/admin` 下后台表格相关“可复用能力”与其接入现状。
 - 目标：明确当前“可复用表格”已经具备哪些能力、文件结构与核心变量命名、以及仍存在的非统一实现残留。

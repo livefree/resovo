@@ -1,6 +1,6 @@
 # Admin List Capability Matrix（后台列表能力矩阵）
 
-> status: reference
+> status: archived
 > owner: @engineering
 > scope: admin list capability inventory matrix
 > source_of_truth: no
