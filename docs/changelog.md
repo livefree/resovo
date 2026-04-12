@@ -5554,3 +5554,26 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/crawlerKeywordPreview.test.ts`（新建：7 用例覆盖多站点聚合/类型过滤/sourceStatus 探测/错误处理）
 - **测试覆盖**：全量 npm test -- --run 91 文件 / 819 用例全部通过
 - **共享层沉淀**：KeywordPreviewItem / KeywordPreviewResult 类型导出自 CrawlerPreviewService.ts，入库模式通过 CRAWLER-01 扩展的 POST /admin/crawler/runs（crawlMode=keyword）支持
+
+---
+
+## CRAWLER-04 — [API] 单视频补源采集 Job
+- **完成时间**：2026-04-12 15:55
+- **关联序列**：Phase 2 采集能力扩展
+- **变更摘要**：
+  - 新建 `CrawlerRefetchService.ts`（extends CrawlerService）：实现 `refetchSourcesForVideo(videoId, siteKeys?)` — 以视频标题关键词搜索各站点，使用 bigram Dice 相似度（阈值 0.8）过滤结果，匹配后通过 `replaceSourcesForSite` 全量替换同站点源
+  - 新增 `titleSimilarity(a, b)` 工具函数（导出，可独立测试）
+  - `CrawlerService.ts`：移除 refetchSourcesForVideo stub；`db` 字段改为 `protected`（供子类访问）
+  - `POST /admin/crawler/refetch-sources { videoId, siteKeys? }`：admin 权限，返回 `{ sourcesAdded, notFound }`
+  - `POST /admin/videos/:id/refetch-sources`：moderator+ 权限，代理到 CrawlerRefetchService
+  - `tests/unit/api/sourceRefetch.test.ts`（新建）：7 用例覆盖标题匹配写入/相似度低跳过/站点失败/siteKeys 过滤/视频不存在/多站点汇总
+  - `crawlerKeyword.test.ts`：stub 测试替换为 titleSimilarity 单元测试（4 用例）
+- **文件列表**：
+  - `src/api/services/CrawlerRefetchService.ts`（新建）
+  - `src/api/services/CrawlerService.ts`（db→protected，移除 stub）
+  - `src/api/routes/admin/crawler.ts`（新增 POST /admin/crawler/refetch-sources）
+  - `src/api/routes/admin/videos.ts`（新增 POST /admin/videos/:id/refetch-sources）
+  - `tests/unit/api/sourceRefetch.test.ts`（新建：7 用例）
+  - `tests/unit/api/crawlerKeyword.test.ts`（stub 测试替换为 titleSimilarity 测试）
+- **测试覆盖**：新增 11 用例（7 sourceRefetch + 4 titleSimilarity），全量通过
+- **共享层沉淀**：titleSimilarity 导出自 CrawlerRefetchService.ts，供 UX-08 等前端展示层调用参考

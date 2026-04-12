@@ -170,12 +170,27 @@ describe('CrawlerRunService.createAndEnqueueRun — crawlMode 参数', () => {
   })
 })
 
-// ── Tests: CrawlerService.refetchSourcesForVideo stub ─────────────
+// ── Tests: CrawlerRefetchService titleSimilarity ──────────────────
 
-describe('CrawlerService.refetchSourcesForVideo — stub', () => {
-  it('调用时抛出 NOT_IMPLEMENTED 错误（CRAWLER-04 实现）', async () => {
-    const { CrawlerService } = await import('@/api/services/CrawlerService')
-    const svc = new CrawlerService({} as import('pg').Pool, {} as import('@elastic/elasticsearch').Client)
-    await expect(svc.refetchSourcesForVideo('video-id-1')).rejects.toThrow('NOT_IMPLEMENTED')
+describe('titleSimilarity — bigram Dice 相似度', () => {
+  it('完全相同的字符串返回 1', async () => {
+    const { titleSimilarity } = await import('@/api/services/CrawlerRefetchService')
+    expect(titleSimilarity('星际穿越', '星际穿越')).toBe(1)
+  })
+
+  it('完全不同的字符串返回 0 或接近 0', async () => {
+    const { titleSimilarity } = await import('@/api/services/CrawlerRefetchService')
+    const score = titleSimilarity('ABCD', 'WXYZ')
+    expect(score).toBeLessThan(0.3)
+  })
+
+  it('短字符串（< 2 字符）完全相同时返回 1', async () => {
+    const { titleSimilarity } = await import('@/api/services/CrawlerRefetchService')
+    expect(titleSimilarity('A', 'A')).toBe(1)
+  })
+
+  it('短字符串（< 2 字符）不同时返回 0', async () => {
+    const { titleSimilarity } = await import('@/api/services/CrawlerRefetchService')
+    expect(titleSimilarity('A', 'B')).toBe(0)
   })
 })

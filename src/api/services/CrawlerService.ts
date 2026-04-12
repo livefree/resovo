@@ -46,7 +46,7 @@ export interface CrawlResult {
 
 export class CrawlerService {
   constructor(
-    private db: Pool,
+    protected db: Pool,
     private es: ESClient,
   ) {}
 
@@ -492,15 +492,4 @@ export class CrawlerService {
     return { sourceSite: source.name, page: page - 1, videosUpserted, sourcesUpserted, errors }
   }
 
-  /**
-   * CRAWLER-01: 单视频补源采集（stub）
-   * 以视频标题搜索各站点，用同站点全量替换策略写入新源。
-   * 完整实现在 CRAWLER-04（需要 title_normalized 相似度匹配 + replaceSourcesForSite）。
-   */
-  async refetchSourcesForVideo(
-    _videoId: string,
-    _siteKeys?: string[]
-  ): Promise<{ sourcesAdded: number; notFound: string[] }> {
-    throw new Error('NOT_IMPLEMENTED: refetchSourcesForVideo will be implemented in CRAWLER-04')
-  }
 }

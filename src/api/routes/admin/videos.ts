@@ -16,6 +16,7 @@ import { db } from '@/api/lib/postgres'
 import { es } from '@/api/lib/elasticsearch'
 import { VideoService } from '@/api/services/VideoService'
 import { DoubanService } from '@/api/services/DoubanService'
+import { CrawlerRefetchService } from '@/api/services/CrawlerRefetchService'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import type { VideoType, VideoStatus, VideoGenre, VisibilityStatus } from '@/types'
 
@@ -97,6 +98,7 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
   const adminOnly = [fastify.authenticate, fastify.requireRole(['admin'])]
   const videoService = new VideoService(db, es)
   const doubanService = new DoubanService(db)
+  const refetchService = new CrawlerRefetchService(db, es)
   async function shouldIncludeAdultInAdminContent(): Promise<boolean> {
     const raw = await systemSettingsQueries.getSetting(db, 'show_adult_content')
     return raw === 'true'
@@ -418,6 +420,41 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
 
     const result = await doubanService.previewVideo(id)
     return reply.send({ data: result })
+  })
+
+  // ── POST /admin/videos/:id/refetch-sources ────────────────────
+  // CRAWLER-04: 代理到 CrawlerRefetchService.refetchSourcesForVideo
+  fastify.post('/admin/videos/:id/refetch-sources', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+
+    if (!/^[0-9a-f-]{36}$/.test(id)) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
+      })
+    }
+
+    const BodySchema = z.object({
+      siteKeys: z.array(z.string().min(1)).optional(),
+    })
+    const parsed = BodySchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+
+    try {
+      const result = await refetchService.refetchSourcesForVideo(id, parsed.data.siteKeys)
+      return reply.send({ data: result })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (message === 'VIDEO_NOT_FOUND') {
+        return reply.code(404).send({
+          error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
+        })
+      }
+      throw err
+    }
   })
 }
 

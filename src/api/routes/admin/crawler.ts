@@ -14,6 +14,7 @@ import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { CrawlerService } from '@/api/services/CrawlerService'
 import { CrawlerPreviewService } from '@/api/services/CrawlerPreviewService'
+import { CrawlerRefetchService } from '@/api/services/CrawlerRefetchService'
 import { ContentService } from '@/api/services/ContentService'
 import { getEnabledSources } from '@/api/workers/crawlerWorker'
 import {
@@ -84,6 +85,7 @@ function mapTaskDto(task: CrawlerTask) {
 export async function adminCrawlerRoutes(fastify: FastifyInstance) {
   const crawlerService = new CrawlerService(db, es)
   const previewService = new CrawlerPreviewService(db, es)
+  const refetchService = new CrawlerRefetchService(db, es)
   const contentService = new ContentService(db)
   const runService = new CrawlerRunService(db)
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
@@ -741,6 +743,36 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
 
     const results = await previewService.previewKeywordSearch(keyword, sources, type)
     return reply.send({ data: { keyword, results } })
+  })
+
+  // ── POST /admin/crawler/refetch-sources — 单视频补源采集 ─────
+  // CRAWLER-04: 以视频标题搜索指定站点，相似度 >= 0.8 才写入（全量替换策略）
+
+  fastify.post('/admin/crawler/refetch-sources', { preHandler: auth }, async (request, reply) => {
+    const BodySchema = z.object({
+      videoId: z.string().uuid(),
+      siteKeys: z.array(z.string().min(1)).optional(),
+    })
+    const parsed = BodySchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+    const { videoId, siteKeys } = parsed.data
+
+    try {
+      const result = await refetchService.refetchSourcesForVideo(videoId, siteKeys)
+      return reply.send({ data: result })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (message === 'VIDEO_NOT_FOUND') {
+        return reply.code(404).send({
+          error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
+        })
+      }
+      throw err
+    }
   })
 
   // ── POST /admin/crawler/reindex — 重建 ES 索引 ───────────────

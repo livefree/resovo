@@ -5356,21 +5356,18 @@
 - **完成备注**：CrawlerService.ts 超 500 行，将 previewKeywordSearch 拆入新 CrawlerPreviewService.ts（extends CrawlerService，复用 fetchPage/buildApiUrl）。入库模式（crawlMode=keyword）通过 CRAWLER-01 的 POST /admin/crawler/runs 支持。typecheck ✅ lint ✅ 91文件/819测试 ✅
 
 #### CRAWLER-04 — [API] 单视频补源采集 Job
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
-- **计划开始**：CRAWLER-03 完成后
+- **实际开始**：2026-04-12 16:05
+- **完成时间**：2026-04-12 15:55
 - **依赖**：CRAWLER-03 ✅
 - **文件范围**：
-  - `src/api/services/CrawlerService.ts`（refetchSourcesForVideo 实现）
+  - `src/api/services/CrawlerService.ts`（refetchSourcesForVideo stub 移除，db 改 protected）
+  - `src/api/services/CrawlerRefetchService.ts`（新建，extends CrawlerService）
   - `src/api/routes/admin/crawler.ts`（POST /admin/crawler/refetch-sources 路由）
-  - `src/api/routes/admin/videos.ts`（行级操作：POST /admin/videos/:id/refetch-sources）
-  - `tests/unit/api/sourceRefetch.test.ts`（新建）
-- **变更内容**：
-  - `POST /admin/crawler/refetch-sources { videoId, siteKeys? }`：以视频标题搜索，同站点全量替换策略写入新源
-  - `POST /admin/videos/:id/refetch-sources`：从视频管理页面触发（代理到 crawler API）
-  - 匹配规则：title_normalized 相似度 >= 0.8 才写入
-  - 任务结果区分：sourcesAdded / notFound(站点列表)
-- **完成备注**：_（AI 填写）_
+  - `src/api/routes/admin/videos.ts`（POST /admin/videos/:id/refetch-sources）
+  - `tests/unit/api/sourceRefetch.test.ts`（新建，7 tests）
+- **完成备注**：CrawlerService.ts 超 500 行限制，将 refetchSourcesForVideo 拆入 CrawlerRefetchService.ts（extends CrawlerService，复用 fetchPage）。titleSimilarity 用 bigram Dice 系数实现，阈值 0.8。crawlerKeyword.test.ts stub 测试替换为 titleSimilarity 单元测试（4 tests）。typecheck ✅ lint ✅ 7 new tests ✅
 
 #### UX-08 — [UI] 采集控制台"发起采集" Tab（三模式统一入口）
 - **状态**：⬜ 待开始
