@@ -15,6 +15,7 @@ import * as sourcesQueries from '@/api/db/queries/sources'
 import * as videosQueries from '@/api/db/queries/videos'
 import { nanoid } from 'nanoid'
 import { config } from '@/api/lib/config'
+import { enrichmentQueue } from '@/api/lib/queue'
 
 // ── 资源站配置 ────────────────────────────────────────────────────
 
@@ -242,6 +243,15 @@ export class CrawlerService {
     }
 
     void this.indexToES(videoId)
+    // 入库完成后延迟 5 分钟触发元数据丰富（等待来源写库稳定）
+    void enrichmentQueue.add(
+      { videoId, catalogId: catalog.id, title: video.title, year: video.year ?? null, type: video.type },
+      { delay: 300_000, jobId: `enrich-${videoId}` }
+    ).catch((err: unknown) => {
+      process.stderr.write(
+        `[CrawlerService] enrichment enqueue failed for ${videoId}: ${err instanceof Error ? err.message : String(err)}\n`
+      )
+    })
     return { videoId, sourcesUpserted: sourcesAdded, sourcesKept, sourcesRemoved }
   }
 

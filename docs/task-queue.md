@@ -5473,25 +5473,29 @@
 - **完成备注**：migration 036（原计划 033，因 033~035 已被 Phase 2 占用而顺延）新建 external_data schema + douban_entries/bangumi_entries + 索引。两个导入脚本支持 --limit N 幂等运行。architecture.md 已同步更新迁移列表至 036。typecheck ✅ lint ✅
 
 #### CHG-385 — [Service/Worker] metadata-enrich Job（enrichment-queue Worker）
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
+- **实际开始**：2026-04-12 22:10
+- **完成时间**：2026-04-12 22:15
 - **计划开始**：CHG-384 完成后
 - **依赖**：CHG-384 ✅，CHG-381 ✅（douban_status 等字段存在）
 - **文件范围**：
+  - `src/api/lib/queue.ts`（新增 enrichmentQueue）
   - `src/api/workers/enrichmentWorker.ts`（新建 Worker）
   - `src/api/services/MetadataEnrichService.ts`（新建，封装五步丰富逻辑）
   - `src/api/db/queries/externalData.ts`（新建，查询 external_data schema）
+  - `src/api/db/queries/videos.ts`（新增 updateVideoEnrichStatus / updateVideoSourceCheckStatus）
   - `src/api/services/CrawlerService.ts`（入库后推送 metadata-enrich Job）
-  - `tests/unit/api/metadataEnrich.test.ts`（新建）
+  - `tests/unit/api/metadataEnrich.test.ts`（新建，7条测试）
 - **变更内容**：
   - EnrichJobData: { videoId, catalogId, title, year, type }
-  - Step1: 查 external_data.douban_entries（本地精确匹配，毫秒级）
-  - Step2: fallback → douban-adapter 网络搜索（置信度分级处理）
-  - Step3: type=anime 时查 external_data.bangumi_entries
+  - Step1: 本地 douban_entries 精确匹配（有条目则返回 matched/candidate，不走 Step2）
+  - Step2: fallback（仅 Step1 无本地条目时）→ searchDouban 网络搜索（置信度分级）
+  - Step3: type=anime 时查 bangumi_entries（补充 bangumiSubjectId/description）
   - Step4: 源 HEAD 检验，写 source_check_status
-  - Step5: 计算 meta_score（title+cover+description+genres+year+type 各占权重）
-  - CrawlerService.upsertVideo 完成后推送 Job（Bull delay: 300000ms，即5分钟）
-- **完成备注**：_（AI 填写）_
+  - Step5: 计算 meta_score（title/cover/description/genres/year/type 各有权重）
+  - CrawlerService.upsertVideo 完成后 void enrichmentQueue.add（delay 300s，jobId 去重）
+- **完成备注**：typecheck ✅ lint ✅ 7条测试全部通过
 
 #### CHG-386 — [API] 暂存队列新增豆瓣相关操作接口
 - **状态**：⬜ 待开始

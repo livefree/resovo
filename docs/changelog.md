@@ -5671,3 +5671,21 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无（pg、node:fs、node:readline 均已存在）
 - **数据库变更**：Migration 036 新建 external_data schema（不影响现有表）
 - **注意事项**：migration 编号从原计划 033 改为 036（033~035 已被 Phase 2 使用）；导入脚本为一次性 CLI 工具，不参与运行时
+
+---
+
+## CHG-385 — [Service/Worker] metadata-enrich Job（enrichment-queue Worker）
+
+- **完成时间**：2026-04-12 22:15
+- **变更类型**：后端服务 + Worker + DB 查询
+- **影响文件**：
+  - `src/api/lib/queue.ts` — 新增 `enrichmentQueue`（Bull）及日志绑定
+  - `src/api/db/queries/externalData.ts`（新建）— `findDoubanByTitleNorm` / `findBangumiByTitleNorm` 查询 external_data schema
+  - `src/api/db/queries/videos.ts` — 新增 `updateVideoEnrichStatus` / `updateVideoSourceCheckStatus`
+  - `src/api/services/MetadataEnrichService.ts`（新建）— 五步流程：Step1 本地豆瓣匹配、Step2 网络搜索 fallback、Step3 bangumi 动画补充、Step4 源 HEAD 检验、Step5 meta_score 计算
+  - `src/api/workers/enrichmentWorker.ts`（新建）— 注册 Worker（并发 2）+ `enqueueEnrichJob`
+  - `src/api/services/CrawlerService.ts` — `upsertVideo` 完成后 void enrichmentQueue.add（delay=300s, jobId=enrich-{videoId} 去重）
+  - `tests/unit/api/metadataEnrich.test.ts`（新建）— 7 条测试，覆盖 Step1~5 主路径
+- **新增依赖**：无
+- **数据库变更**：无（使用 Migration 036 新建的 external_data schema）
+- **注意事项**：Step2 仅在 Step1 无本地条目时运行（candidate 不触发网络搜索）；`enrichmentQueue` 已加到 queue.ts exports 中，未来需在 server 启动时调用 `registerEnrichmentWorker()`

@@ -1264,3 +1264,31 @@ export async function listPendingReviewVideos(
     total: parseInt(countResult.rows[0]?.count ?? '0'),
   }
 }
+
+// ── 丰富流水线状态更新 ────────────────────────────────────────────
+
+/** 写入豆瓣匹配状态和元数据完整度评分（MetadataEnrichService 调用） */
+export async function updateVideoEnrichStatus(
+  db: Pool,
+  videoId: string,
+  { doubanStatus, metaScore }: { doubanStatus: DoubanStatus; metaScore: number }
+): Promise<void> {
+  await db.query(
+    `UPDATE videos SET douban_status = $1, meta_score = $2, updated_at = NOW()
+     WHERE id = $3 AND deleted_at IS NULL`,
+    [doubanStatus, metaScore, videoId]
+  )
+}
+
+/** 写入源活性检验聚合结果（MetadataEnrichService 调用） */
+export async function updateVideoSourceCheckStatus(
+  db: Pool,
+  videoId: string,
+  status: SourceCheckStatus
+): Promise<void> {
+  await db.query(
+    `UPDATE videos SET source_check_status = $1, updated_at = NOW()
+     WHERE id = $2 AND deleted_at IS NULL`,
+    [status, videoId]
+  )
+}

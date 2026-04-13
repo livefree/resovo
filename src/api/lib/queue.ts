@@ -43,6 +43,17 @@ export const verifyQueue = new Bull('verify-queue', {
   },
 })
 
+/** 元数据丰富队列（metadata-enrich：本地豆瓣匹配 + 网络搜索 + 源检验 + meta_score） */
+export const enrichmentQueue = new Bull('enrichment-queue', {
+  redis: redisOptions,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: RETRY_BACKOFF,
+    removeOnComplete: 200,
+    removeOnFail: 50,
+  },
+})
+
 /** 维护任务队列（auto-publish-staging / verify-published-sources 等低频后台任务） */
 export const maintenanceQueue = new Bull('maintenance-queue', {
   redis: redisOptions,
@@ -68,8 +79,9 @@ function attachQueueLogger(queue: Bull.Queue, name: string) {
 attachQueueLogger(crawlerQueue, 'crawler-queue')
 attachQueueLogger(verifyQueue, 'verify-queue')
 attachQueueLogger(maintenanceQueue, 'maintenance-queue')
+attachQueueLogger(enrichmentQueue, 'enrichment-queue')
 
-const queues = { crawlerQueue, verifyQueue, maintenanceQueue }
+const queues = { crawlerQueue, verifyQueue, maintenanceQueue, enrichmentQueue }
 export default queues
 
 /** 确认 crawler 队列可用，避免创建任务后因入队失败留下 pending 脏状态 */
