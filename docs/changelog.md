@@ -5745,3 +5745,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/moderation/ModerationDetail.test.tsx` — 重写并新增折叠块交互、新字段渲染测试（9 条）
 - **新增依赖**：无
 - **数据库变更**：无
+
+---
+
+## UX-12 — [UI] 审核台内联元数据编辑
+
+- **完成时间**：2026-04-13
+- **关联序列**：Phase 4 审核台增强
+- **变更内容**：
+  - `src/api/routes/admin/moderation.ts` — 新增 `PATCH /admin/moderation/:id/meta`（zod MetaEditSchema 校验，复用 VideoService.update / MediaCatalogService.safeUpdate source='manual'）
+  - `src/components/admin/moderation/ModerationDetail.tsx` — 基础信息块新增内联编辑：标题/年份（点击切换 input，Enter/失焦保存），类型（即时 select），分类标签（chip 编辑器，保存/取消按钮）；成功 notify.success，失败 notify.error
+  - `tests/unit/api/moderationMetaEdit.test.ts`（新建）— 11 条 API 路由单测，覆盖正常更新/404/422/500/401 全路径
+- **新增依赖**：无
+- **数据库变更**：无

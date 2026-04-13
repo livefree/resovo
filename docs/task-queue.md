@@ -5586,20 +5586,17 @@
 - **完成备注**：typecheck ✅ lint ✅ 9 条测试全部通过；新建 moderation.ts（douban-search/confirm 路由）+ server.ts 注册；ModerationDoubanBlock/ModerationSourceBlock 新建；ModerationDetail 重构为 4 个折叠块（基础信息/豆瓣/源健康/播放器）；测试更新并新增折叠块交互用例
 
 #### UX-12 — [UI] 审核台内联元数据编辑
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
+- **实际开始**：2026-04-13
+- **完成时间**：2026-04-13
 - **创建时间**：2026-04-09 01:00
 - **计划开始**：UX-11 完成后
 - **依赖**：UX-11 ✅
 - **文件范围**：
   - `src/components/admin/moderation/ModerationDetail.tsx`（基础信息块增加编辑能力）
   - `src/api/routes/admin/moderation.ts`（PATCH /admin/moderation/:id/meta 快速编辑接口）
-  - `tests/unit/api/moderationMetaEdit.test.tsx`（新建）
-- **变更内容**：
-  - 标题/年份/类型：点击字段触发 inline 编辑（contenteditable 或小 input），失焦或回车保存
-  - 分类标签：可增删 chip（从枚举选择），保存时写 media_catalog（source='manual', priority=2）
-  - 保存反馈：成功 Toast，失败恢复原值
-  - PATCH /admin/moderation/:id/meta { title?, year?, type?, genres? }（底层复用 MediaCatalogService.safeUpdate）
-- **完成备注**：_（AI 填写）_
+  - `tests/unit/api/moderationMetaEdit.test.ts`（新建）
+- **完成备注**：PATCH /admin/moderation/:id/meta 路由（zod 校验 + VideoService.update 复用）；ModerationDetail 基础信息块增加标题/年份点击 inline input、类型即时 select、分类标签 chip 编辑器；成功 notify.success/失败 notify.error；11 条 API 单测 + 现有 9 条组件测试全部通过。
 
 #### UX-13 — [UI] 审核台批量操作 + 审核历史 Tab
 - **状态**：⬜ 待开始
