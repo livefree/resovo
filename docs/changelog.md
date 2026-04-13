@@ -5703,3 +5703,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：`confirmSubject` 在 safeUpdate 后重新读取 catalog 计算 meta_score；MediaCatalogService 在方法内延迟实例化（非构造器）
+
+---
+
+## CHG-385/386 修复 — enrichmentWorker 注册缺失 + staging 路由无暂存校验
+
+- **完成时间**：2026-04-13
+- **问题**：P1 server.ts 遗漏 registerEnrichmentWorker()；P2 batch-douban-sync/douban-confirm 未限定暂存视频
+- **修复**：
+  - `src/api/server.ts` — 新增 `import { registerEnrichmentWorker }` + 调用 `registerEnrichmentWorker()`
+  - `src/api/routes/admin/staging.ts` — `batch-douban-sync` 路由层逐一调用 `getStagingVideoById` 过滤，非暂存计入 skipped；`douban-search` / `douban-confirm` 路由层先校验 `getStagingVideoById`，不在暂存状态返回 404
+- **测试**：10 条单元测试全部通过，typecheck ✅ lint ✅

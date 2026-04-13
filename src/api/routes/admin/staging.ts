@@ -140,8 +140,15 @@ export async function adminStagingRoutes(fastify: FastifyInstance) {
       })
     }
     try {
-      const result = await doubanSvc.batchEnqueueEnrich(parsed.data.ids)
-      return reply.send({ data: result })
+      // 只对仍处于暂存状态（approved+internal+unpublished）的视频入队
+      const stagingIds: string[] = []
+      let skipped = 0
+      for (const id of parsed.data.ids) {
+        const video = await stagingQueries.getStagingVideoById(db, id)
+        if (video) { stagingIds.push(id) } else { skipped++ }
+      }
+      const result = await doubanSvc.batchEnqueueEnrich(stagingIds)
+      return reply.send({ data: { queued: result.queued, skipped: skipped + result.skipped } })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       return reply.code(500).send({
@@ -157,6 +164,12 @@ export async function adminStagingRoutes(fastify: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(422).send({
         error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+    const video = await stagingQueries.getStagingVideoById(db, id)
+    if (!video) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '视频不存在或不在暂存状态', status: 404 },
       })
     }
     try {
@@ -177,6 +190,12 @@ export async function adminStagingRoutes(fastify: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(422).send({
         error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+    const video = await stagingQueries.getStagingVideoById(db, id)
+    if (!video) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '视频不存在或不在暂存状态', status: 404 },
       })
     }
     try {

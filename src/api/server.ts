@@ -27,6 +27,7 @@ import { registerCrawlerWorker } from '@/api/workers/crawlerWorker'
 import { registerCrawlerScheduler } from '@/api/workers/crawlerScheduler'
 import { registerMaintenanceWorker } from '@/api/workers/maintenanceWorker'
 import { registerMaintenanceScheduler } from '@/api/workers/maintenanceScheduler'
+import { registerEnrichmentWorker } from '@/api/workers/enrichmentWorker'
 import { adminStagingRoutes } from '@/api/routes/admin/staging'
 import { VerifyService } from '@/api/services/VerifyService'
 import { db } from '@/api/lib/postgres'
@@ -80,6 +81,7 @@ async function start() {
   registerVerifyWorker()
   registerCrawlerWorker()
   registerMaintenanceWorker()
+  registerEnrichmentWorker()
 
   const schedulerEnabled = process.env.CRAWLER_SCHEDULER_ENABLED === 'true'
   if (schedulerEnabled) {
