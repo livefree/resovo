@@ -113,6 +113,32 @@ describe('replaceSourcesForSite — 全量替换策略', () => {
     expect(stats.sourcesRemoved).toBe(1)
   })
 
+  it('软删除 URL 被恢复：ON CONFLICT DO UPDATE 恢复 deleted_at=NULL', async () => {
+    // 场景：某 URL 曾被软删除（不在 SELECT existing 结果中），新源包含该 URL
+    // 期望：INSERT 语句以 DO UPDATE 执行，rowCount=1，计入 sourcesAdded
+    const { replaceSourcesForSite } = await import('@/api/db/queries/sources')
+
+    mockClient.query
+      .mockResolvedValueOnce({ rows: [] })                    // BEGIN
+      .mockResolvedValueOnce({ rows: [] })                    // SELECT existing（软删除行不在结果中）
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] })       // INSERT ... DO UPDATE（恢复软删除行）
+      .mockResolvedValueOnce({ rows: [] })                    // COMMIT
+
+    const stats = await replaceSourcesForSite(mockDb as unknown as import('pg').Pool, 'vid-1', 'site-a', [
+      makeSrc('https://cdn.example.com/restored.mp4', 1),
+    ])
+
+    expect(stats.sourcesAdded).toBe(1)   // 恢复行计为新增
+    expect(stats.sourcesKept).toBe(0)
+    expect(stats.sourcesRemoved).toBe(0)
+    // 验证 INSERT 使用 DO UPDATE（含 deleted_at = NULL）
+    const insertCall = mockClient.query.mock.calls.find(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('DO UPDATE')
+    )
+    expect(insertCall).toBeTruthy()
+    expect((insertCall![0] as string)).toContain('deleted_at = NULL')
+  })
+
   it('事务回滚：INSERT 失败时 ROLLBACK 被调用', async () => {
     const { replaceSourcesForSite } = await import('@/api/db/queries/sources')
 

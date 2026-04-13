@@ -5399,6 +5399,25 @@
 
 > 🏁 **M2 里程碑评审节点**（UX-09 完成后触发）
 
+#### CHG-398 — [BUG] Phase 2 M2 审核缺口修复（三项关键路径缺口）
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-12 16:30
+- **实际开始**：2026-04-12 16:30
+- **完成时间**：2026-04-12 17:00
+- **来源**：M2 人工审核反馈（P1×2 + P2×1）
+- **变更原因**：
+  - P1a：crawlMode/keyword/targetVideoId 未进入 Bull 队列任务，keyword 采集与 source-refetch 降级为普通 batch
+  - P1b：getEnabledSources 在映射 crawlerSites 时丢弃 source_update 字段，DB 站点路径下全量替换策略失效
+  - P2：replaceSourcesForSite 使用 ON CONFLICT DO NOTHING 导致 sourcesAdded 虚增；且无法恢复软删 URL
+- **文件范围**：
+  - `src/api/workers/crawlerWorker.ts`（EnqueueExtras 接口；enqueue 函数接受 extras；worker 按 crawlMode 分支；getEnabledSources 传 source_update）
+  - `src/api/services/CrawlerRunService.ts`（enqueue 调用传 crawlMode/keyword/targetVideoId）
+  - `src/api/db/queries/sources.ts`（replaceSourcesForSite ON CONFLICT DO UPDATE + 准确计数 + 软删恢复）
+  - `src/types/system.types.ts`（IngestPolicy 加 source_update?: 'replace' | 'append_only'）
+  - `tests/unit/api/crawlerKeyword.test.ts`（enqueue payload 断言补充）
+  - `tests/unit/api/crawlerSourceUpsert.test.ts`（soft-delete 恢复场景新增）
+- **完成备注**：三个 P1/P2 缺口全部修复。ON CONFLICT DO UPDATE SET deleted_at=NULL 正确恢复软删行并通过 rowCount 精确计数。crawlMode 通过 EnqueueExtras 全链路透传到 processCrawlJob worker 分支。typecheck ✅ lint ✅ 91 tests ✅（2 pre-existing failures in moderationStats.test.ts）
+
 ---
 
 ### Phase 3：自动丰富流水线

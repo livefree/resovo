@@ -597,21 +597,27 @@ export async function replaceSourcesForSite(
       sourcesRemoved = result.rowCount ?? 0
     }
 
-    // 插入新增的源
+    // 插入新增的源（包含恢复曾被软删除的同 URL 行）
     let sourcesAdded = 0
+    let sourcesKept = 0
     for (const src of newSources) {
-      if (existingUrls.has(src.sourceUrl)) continue
-      await client.query(
+      if (existingUrls.has(src.sourceUrl)) {
+        sourcesKept++
+        continue
+      }
+      // ON CONFLICT DO UPDATE 同时覆盖软删除行（恢复 deleted_at=NULL, is_active=true）
+      const insertResult = await client.query(
         `INSERT INTO video_sources
            (video_id, season_number, episode_number, source_url, source_name, type, is_active)
          VALUES ($1, $2, $3, $4, $5, $6, true)
-         ON CONFLICT ON CONSTRAINT uq_sources_video_episode_url DO NOTHING`,
+         ON CONFLICT ON CONSTRAINT uq_sources_video_episode_url
+         DO UPDATE SET deleted_at = NULL, is_active = true,
+                       source_name = EXCLUDED.source_name,
+                       type = EXCLUDED.type`,
         [videoId, src.seasonNumber ?? 1, src.episodeNumber, src.sourceUrl, src.sourceName, src.type],
       )
-      sourcesAdded++
+      sourcesAdded += insertResult.rowCount ?? 0
     }
-
-    const sourcesKept = newSources.length - sourcesAdded
 
     await client.query('COMMIT')
     return { sourcesAdded, sourcesKept, sourcesRemoved }

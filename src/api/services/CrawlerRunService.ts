@@ -120,11 +120,16 @@ export class CrawlerRunService {
       })
       taskIds.push(task.id)
 
+      const extras = {
+        crawlMode: input.crawlMode,
+        keyword: input.keyword ?? undefined,
+        targetVideoId: input.targetVideoId ?? undefined,
+      }
       try {
         if (taskMode === 'full') {
-          await enqueueFullCrawl(siteKey, task.id, run.id)
+          await enqueueFullCrawl(siteKey, task.id, run.id, extras)
         } else {
-          await enqueueIncrementalCrawl(siteKey, hoursAgo, task.id, run.id)
+          await enqueueIncrementalCrawl(siteKey, hoursAgo, task.id, run.id, extras)
         }
         enqueuedSiteKeys.push(siteKey)
       } catch (err) {

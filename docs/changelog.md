@@ -5615,3 +5615,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/system/crawler-task/useCrawlerTaskTableColumns.tsx`（actions 列新增详情按钮）
   - `src/components/admin/AdminCrawlerPanel.tsx`（展开 detail 面板）
 - **测试覆盖**：无新增测试文件（详情展开行为覆盖在现有 AdminCrawlerPanel.test.tsx 集成测试中）
+
+---
+
+## CHG-398 — [BUG] Phase 2 M2 审核缺口修复（三项关键路径缺口）
+- **完成时间**：2026-04-12
+- **记录时间**：2026-04-12 17:00
+- **修改文件**：
+  - `src/api/workers/crawlerWorker.ts` — 新增 `EnqueueExtras` 接口；`enqueueFullCrawl`/`enqueueIncrementalCrawl` 接受 `extras?` 参数并写入 job data；`processCrawlJob` 按 `crawlMode` 分支（source-refetch → CrawlerRefetchService，keyword → crawl() 传 keyword）；`getEnabledSources` 补全 `source_update` 字段映射
+  - `src/api/services/CrawlerRunService.ts` — `createAndEnqueueRun` 构建 `extras` 对象并透传至 enqueue 调用
+  - `src/api/db/queries/sources.ts` — `replaceSourcesForSite` INSERT 改为 `ON CONFLICT DO UPDATE SET deleted_at = NULL, is_active = true`，修复软删恢复；计数逻辑改为 `sourcesKept++`（已有 URL）/ `sourcesAdded += insertResult.rowCount ?? 0`（实际插入数）
+  - `src/types/system.types.ts` — `IngestPolicy` 新增 `source_update?: 'replace' | 'append_only'`
+  - `tests/unit/api/crawlerKeyword.test.ts` — 补充 enqueue payload 断言（crawlMode/keyword/targetVideoId 进入 extras）
+  - `tests/unit/api/crawlerSourceUpsert.test.ts` — 新增软删除恢复场景测试（ON CONFLICT DO UPDATE + deleted_at = NULL）
+- **新增依赖**：无
+- **数据库变更**：无（INSERT 语义变更，无 schema 变更）
+- **注意事项**：`getEnabledSources` 现在透传 `source_update`，crawlerWorker 中的 `source.ingestPolicy.source_update` 判断才能生效。`replaceSourcesForSite` 的 ON CONFLICT 目标是 `uq_sources_video_episode_url`（video_id + episode_number + source_url），确保该约束存在于 DB schema。

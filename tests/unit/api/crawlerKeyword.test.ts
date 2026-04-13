@@ -168,6 +168,50 @@ describe('CrawlerRunService.createAndEnqueueRun — crawlMode 参数', () => {
       expect.objectContaining({ crawlMode: 'batch' }),
     )
   })
+
+  it('crawlMode=keyword 时 enqueueIncrementalCrawl 收到 keyword extras', async () => {
+    const { CrawlerRunService } = await import('@/api/services/CrawlerRunService')
+    const { enqueueIncrementalCrawl } = await import('@/api/workers/crawlerWorker')
+
+    const svc = new CrawlerRunService({} as import('pg').Pool)
+    await svc.createAndEnqueueRun({
+      triggerType: 'batch',
+      mode: 'incremental',
+      siteKeys: ['site-a'],
+      crawlMode: 'keyword',
+      keyword: '钢铁侠',
+    })
+
+    expect(enqueueIncrementalCrawl).toHaveBeenCalledWith(
+      'site-a',
+      expect.any(Number),
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({ crawlMode: 'keyword', keyword: '钢铁侠' }),
+    )
+  })
+
+  it('crawlMode=source-refetch 时 enqueueIncrementalCrawl 收到 targetVideoId extras', async () => {
+    const { CrawlerRunService } = await import('@/api/services/CrawlerRunService')
+    const { enqueueIncrementalCrawl } = await import('@/api/workers/crawlerWorker')
+
+    const svc = new CrawlerRunService({} as import('pg').Pool)
+    await svc.createAndEnqueueRun({
+      triggerType: 'batch',
+      mode: 'incremental',
+      siteKeys: ['site-a'],
+      crawlMode: 'source-refetch',
+      targetVideoId: 'video-uuid-9999',
+    })
+
+    expect(enqueueIncrementalCrawl).toHaveBeenCalledWith(
+      'site-a',
+      expect.any(Number),
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({ crawlMode: 'source-refetch', targetVideoId: 'video-uuid-9999' }),
+    )
+  })
 })
 
 // ── Tests: CrawlerRefetchService titleSimilarity ──────────────────

@@ -8,6 +8,7 @@ import { crawlerQueue } from '@/api/lib/queue'
 import { db } from '@/api/lib/postgres'
 import { es } from '@/api/lib/elasticsearch'
 import { CrawlerService, type CrawlerSource } from '@/api/services/CrawlerService'
+import { CrawlerRefetchService } from '@/api/services/CrawlerRefetchService'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
 import { createCrawlerTaskLog } from '@/api/db/queries/crawlerTaskLogs'
@@ -37,7 +38,10 @@ export async function getEnabledSources(db: import('pg').Pool): Promise<CrawlerS
       name:   s.key,
       base:   s.apiUrl,
       format: s.format,
-      ingestPolicy: { allow_auto_publish: s.ingestPolicy.allow_auto_publish },
+      ingestPolicy: {
+        allow_auto_publish: s.ingestPolicy.allow_auto_publish,
+        source_update: s.ingestPolicy.source_update,
+      },
     }))
   }
   return parseCrawlerSources(process.env.CRAWLER_SOURCES)
@@ -84,7 +88,7 @@ export interface CrawlJobResult {
 // ── Worker 处理函数 ───────────────────────────────────────────────
 
 async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobResult> {
-  const { type, siteKey, taskId, runId, hoursAgo } = job.data
+  const { type, siteKey, taskId, runId, hoursAgo, crawlMode, keyword, targetVideoId } = job.data
   const start = Date.now()
   const crawlerService = new CrawlerService(db, es)
   let freezeCache: { value: boolean; checkedAt: number } = { value: false, checkedAt: 0 }
@@ -302,12 +306,30 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
 
       try {
         process.stderr.write(
-          `[crawler-worker] crawling ${source.name} (${source.base}, ${type}${hoursAgo ? `, last ${hoursAgo}h` : ''})\n`
+          `[crawler-worker] crawling ${source.name} (${source.base}, mode=${crawlMode ?? 'batch'}${keyword ? `, kw=${keyword}` : ''}${targetVideoId ? `, vid=${targetVideoId}` : ''})\n`
         )
+
+        // ── source-refetch 模式：调用 CrawlerRefetchService ─────────
+        if (crawlMode === 'source-refetch' && targetVideoId) {
+          const refetchService = new CrawlerRefetchService(db, es)
+          const refetchResult = await refetchService.refetchSourcesForVideo(targetVideoId, [source.name])
+          sourcesUpserted += refetchResult.sourcesAdded
+          if (refetchResult.notFound.length > 0) errors++
+          await crawlerSitesQueries.updateCrawlStatus(db, source.name, 'ok')
+          await logTask('info', 'worker.source.done', '补源采集完成', {
+            source: source.name,
+            sourcesAdded: refetchResult.sourcesAdded,
+            notFound: refetchResult.notFound,
+          })
+          continue
+        }
+
+        // ── keyword / batch 模式：调用 CrawlerService.crawl ─────────
         const result = await crawlerService.crawl(source, {
           taskType: type,
           taskId,
           signal: abortController.signal,
+          keyword: crawlMode === 'keyword' ? (keyword ?? undefined) : undefined,
           hoursAgo: type === 'incremental-crawl' ? (hoursAgo ?? 24) : undefined,
           shouldStop: async () => {
             try {
@@ -476,12 +498,27 @@ export function registerCrawlerWorker(concurrency = 1): void {
 // 这是硬性保障层，与 crawler_tasks.timeout_at 的软性 watchdog 互补。
 const CRAWLER_JOB_TIMEOUT_MS = 30 * 60 * 1000
 
+interface EnqueueExtras {
+  crawlMode?: CrawlJobMode
+  keyword?: string | null
+  targetVideoId?: string | null
+}
+
 /** 添加全量采集任务到队列（可选指定单站 key） */
-export async function enqueueFullCrawl(siteKey: string, taskId: string, runId: string): Promise<Bull.Job<CrawlJobData>> {
+export async function enqueueFullCrawl(
+  siteKey: string,
+  taskId: string,
+  runId: string,
+  extras?: EnqueueExtras,
+): Promise<Bull.Job<CrawlJobData>> {
   if (!siteKey || !taskId || !runId) {
     throw new Error('CRAWL_JOB_CONTRACT_INVALID: enqueueFullCrawl requires siteKey/taskId/runId')
   }
-  return crawlerQueue.add({ type: 'full-crawl', siteKey, taskId, runId }, { timeout: CRAWLER_JOB_TIMEOUT_MS })
+  const data: CrawlJobData = { type: 'full-crawl', siteKey, taskId, runId }
+  if (extras?.crawlMode) data.crawlMode = extras.crawlMode
+  if (extras?.keyword) data.keyword = extras.keyword
+  if (extras?.targetVideoId) data.targetVideoId = extras.targetVideoId
+  return crawlerQueue.add(data, { timeout: CRAWLER_JOB_TIMEOUT_MS })
 }
 
 /** 添加增量采集任务到队列（默认最近 24 小时，可选指定单站 key） */
@@ -490,9 +527,14 @@ export async function enqueueIncrementalCrawl(
   hoursAgo = 24,
   taskId: string,
   runId: string,
+  extras?: EnqueueExtras,
 ): Promise<Bull.Job<CrawlJobData>> {
   if (!siteKey || !taskId || !runId) {
     throw new Error('CRAWL_JOB_CONTRACT_INVALID: enqueueIncrementalCrawl requires siteKey/taskId/runId')
   }
-  return crawlerQueue.add({ type: 'incremental-crawl', siteKey, taskId, runId, hoursAgo }, { timeout: CRAWLER_JOB_TIMEOUT_MS })
+  const data: CrawlJobData = { type: 'incremental-crawl', siteKey, taskId, runId, hoursAgo }
+  if (extras?.crawlMode) data.crawlMode = extras.crawlMode
+  if (extras?.keyword) data.keyword = extras.keyword
+  if (extras?.targetVideoId) data.targetVideoId = extras.targetVideoId
+  return crawlerQueue.add(data, { timeout: CRAWLER_JOB_TIMEOUT_MS })
 }

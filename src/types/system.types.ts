@@ -85,6 +85,8 @@ export interface IngestPolicy {
   allow_public_detail: boolean
   allow_playback: boolean
   require_review_before_publish: boolean
+  /** 同站点源更新策略：replace=全量替换（默认），append_only=只追加不删除 */
+  source_update?: 'replace' | 'append_only'
 }
 
 export const DEFAULT_INGEST_POLICY: IngestPolicy = {
