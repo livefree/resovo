@@ -29,6 +29,7 @@ import { registerMaintenanceWorker } from '@/api/workers/maintenanceWorker'
 import { registerMaintenanceScheduler } from '@/api/workers/maintenanceScheduler'
 import { registerEnrichmentWorker } from '@/api/workers/enrichmentWorker'
 import { adminStagingRoutes } from '@/api/routes/admin/staging'
+import { adminModerationRoutes } from '@/api/routes/admin/moderation'
 import { VerifyService } from '@/api/services/VerifyService'
 import { db } from '@/api/lib/postgres'
 
@@ -77,6 +78,7 @@ async function start() {
   await fastify.register(adminSiteConfigRoutes, { prefix: '/v1' })
   await fastify.register(adminCrawlerSitesRoutes, { prefix: '/v1' })
   await fastify.register(adminStagingRoutes, { prefix: '/v1' })
+  await fastify.register(adminModerationRoutes, { prefix: '/v1' })
 
   registerVerifyWorker()
   registerCrawlerWorker()

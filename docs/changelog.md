@@ -5729,3 +5729,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/moderation/ModerationList.test.tsx`（新建）— 10 条测试，覆盖各状态 badge 渲染、筛选参数传递、重置行为
 - **新增依赖**：无
 - **数据库变更**：无
+
+---
+
+## UX-11 — [UI] 审核台右侧：豆瓣信息区 + 源健康区
+
+- **完成时间**：2026-04-13
+- **关联序列**：Phase 4 审核台增强
+- **变更内容**：
+  - `src/api/routes/admin/moderation.ts`（新建）— `POST /admin/moderation/:id/douban-search` + `POST /admin/moderation/:id/douban-confirm`（无暂存限制，供待审视频使用）
+  - `src/api/server.ts` — 注册 `adminModerationRoutes`
+  - `src/components/admin/moderation/ModerationDoubanBlock.tsx`（新建）— 按 doubanStatus 展示豆瓣信息 / 搜索框 / 确认按钮
+  - `src/components/admin/moderation/ModerationSourceBlock.tsx`（新建）— 展示所有播放源活跃状态，支持单条/全部检验
+  - `src/components/admin/moderation/ModerationDetail.tsx` — 重构为四折叠块：基础信息（默认展开）/ 豆瓣信息（默认展开）/ 源健康（默认展开）/ 播放器（默认折叠）
+  - `tests/unit/components/admin/moderation/ModerationDetail.test.tsx` — 重写并新增折叠块交互、新字段渲染测试（9 条）
+- **新增依赖**：无
+- **数据库变更**：无

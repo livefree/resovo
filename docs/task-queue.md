@@ -5566,8 +5566,10 @@
 - **完成备注**：typecheck ✅ lint ✅ 10 条测试全部通过；DB 层新增 doubanStatus/sourceCheckStatus WHERE 条件；API 路由透传；ModerationList 新增 2 个筛选 select + 3 个 badge 组件
 
 #### UX-11 — [UI] 审核台右侧：豆瓣信息区 + 源健康区
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
+- **实际开始**：2026-04-13
+- **完成时间**：2026-04-13
 - **计划开始**：UX-10 完成后
 - **依赖**：UX-10 ✅，CHG-386 ✅（douban search/confirm API 存在）
 - **文件范围**：
@@ -5581,7 +5583,7 @@
   - 豆瓣信息折叠块：matched态显示评分/简介/导演主演+[重新同步]；candidate态显示对比+[确认][忽略][手动搜索]；unmatched态显示搜索框
   - 源健康折叠块：线路列表（label/url/is_active/last_checked）+[单条检验][全部检验]
   - 播放器折叠块（默认折叠，点击展开）
-- **完成备注**：_（AI 填写）_
+- **完成备注**：typecheck ✅ lint ✅ 9 条测试全部通过；新建 moderation.ts（douban-search/confirm 路由）+ server.ts 注册；ModerationDoubanBlock/ModerationSourceBlock 新建；ModerationDetail 重构为 4 个折叠块（基础信息/豆瓣/源健康/播放器）；测试更新并新增折叠块交互用例
 
 #### UX-12 — [UI] 审核台内联元数据编辑
 - **状态**：⬜ 待开始
