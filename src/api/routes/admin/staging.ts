@@ -8,6 +8,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { StagingPublishService } from '@/api/services/StagingPublishService'
+import { DoubanService } from '@/api/services/DoubanService'
 import * as stagingQueries from '@/api/db/queries/staging'
 
 const ListQuerySchema = z.object({
@@ -16,6 +17,18 @@ const ListQuerySchema = z.object({
   type: z.enum(['movie', 'series', 'anime', 'variety', 'documentary', 'short', 'sports', 'music', 'news', 'kids', 'other'] as const).optional(),
   readiness: z.enum(['ready', 'warning', 'blocked']).optional(),
   siteKey: z.string().max(100).optional(),
+})
+
+const BatchDoubanSyncSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(100),
+})
+
+const DoubanSearchSchema = z.object({
+  keyword: z.string().min(1).max(200),
+})
+
+const DoubanConfirmSchema = z.object({
+  subjectId: z.string().min(1).max(100),
 })
 
 const RulesSchema = z.object({
@@ -29,6 +42,7 @@ export async function adminStagingRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['moderator', 'admin'])]
   const adminOnly = [fastify.authenticate, fastify.requireRole(['admin'])]
   const svc = new StagingPublishService(db)
+  const doubanSvc = new DoubanService(db)
 
   // ── GET /admin/staging — 暂存队列列表 ────────────────────────
   fastify.get('/admin/staging', { preHandler: auth }, async (request, reply) => {
@@ -115,5 +129,69 @@ export async function adminStagingRoutes(fastify: FastifyInstance) {
     }
     await svc.saveRules(parsed.data)
     return reply.send({ data: parsed.data })
+  })
+
+  // ── POST /admin/staging/batch-douban-sync — 批量触发豆瓣丰富 ─
+  fastify.post('/admin/staging/batch-douban-sync', { preHandler: auth }, async (request, reply) => {
+    const parsed = BatchDoubanSyncSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+    try {
+      const result = await doubanSvc.batchEnqueueEnrich(parsed.data.ids)
+      return reply.send({ data: result })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: `批量同步失败: ${msg}`, status: 500 },
+      })
+    }
+  })
+
+  // ── POST /admin/staging/:id/douban-search — 手动搜索豆瓣 ─────
+  fastify.post('/admin/staging/:id/douban-search', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const parsed = DoubanSearchSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+    try {
+      const candidates = await doubanSvc.searchByKeyword(parsed.data.keyword)
+      return reply.send({ data: { videoId: id, candidates } })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.code(500).send({
+        error: { code: 'SEARCH_FAILED', message: `豆瓣搜索失败: ${msg}`, status: 500 },
+      })
+    }
+  })
+
+  // ── POST /admin/staging/:id/douban-confirm — 确认豆瓣条目 ────
+  fastify.post('/admin/staging/:id/douban-confirm', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const parsed = DoubanConfirmSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+    try {
+      const result = await doubanSvc.confirmSubject(id, parsed.data.subjectId)
+      if (!result.updated) {
+        return reply.code(422).send({
+          error: { code: 'CONFIRM_FAILED', message: result.reason ?? '确认失败', status: 422 },
+        })
+      }
+      return reply.send({ data: { id, confirmed: true } })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: `确认失败: ${msg}`, status: 500 },
+      })
+    }
   })
 }

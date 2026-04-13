@@ -5498,8 +5498,10 @@
 - **完成备注**：typecheck ✅ lint ✅ 7条测试全部通过
 
 #### CHG-386 — [API] 暂存队列新增豆瓣相关操作接口
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
+- **实际开始**：2026-04-12 10:00
+- **完成时间**：2026-04-12 10:30
 - **计划开始**：CHG-385 完成后
 - **依赖**：CHG-385 ✅
 - **文件范围**：
@@ -5511,7 +5513,7 @@
   - `POST /admin/staging/:id/douban-search { keyword }`：在暂存页面手动搜索豆瓣
   - `POST /admin/staging/:id/douban-confirm { subjectId }`：确认应用候选/搜索结果
   - 上述操作完成后更新 videos.douban_status
-- **完成备注**：_（AI 填写）_
+- **完成备注**：typecheck ✅ lint ✅ 10条测试全部通过；DoubanService 新增 batchEnqueueEnrich/searchByKeyword/confirmSubject；staging.ts 追加 3 条路由；mediaCatalogService 延迟创建（在 confirmSubject 内）
 
 > 🏁 **M3 里程碑评审节点**（CHG-386 完成后触发）
 

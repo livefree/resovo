@@ -16,7 +16,9 @@ import { mapDoubanGenres } from '@/api/lib/genreMapper'
 import * as videoQueries from '@/api/db/queries/videos'
 import * as catalogQueries from '@/api/db/queries/mediaCatalog'
 import { MediaCatalogService } from './MediaCatalogService'
+import { enrichmentQueue } from '@/api/lib/queue'
 import type { DoubanPreviewFound, DoubanPreviewMiss, DoubanPreview } from '@/types/contracts/v1/admin'
+import type { EnrichJobData } from './MetadataEnrichService'
 
 // ── 类型 ──────────────────────────────────────────────────────────
 
@@ -172,6 +174,73 @@ export class DoubanService {
     return { updated: true, fields, doubanId: detail.id }
   }
 
+  // ── CHG-386：暂存队列豆瓣操作 ─────────────────────────────────────
+
+  /** 批量为指定视频入队元数据丰富 Job（jobId 去重，delay=0 立即执行） */
+  async batchEnqueueEnrich(videoIds: string[]): Promise<{ queued: number; skipped: number }> {
+    let queued = 0
+    let skipped = 0
+    for (const videoId of videoIds) {
+      const video = await videoQueries.findAdminVideoById(this.db, videoId)
+      if (!video) { skipped++; continue }
+      const jobData: EnrichJobData = {
+        videoId,
+        catalogId: video.catalog_id,
+        title: video.title,
+        year: video.year ?? null,
+        type: video.type,
+      }
+      await enrichmentQueue.add(jobData, {
+        delay: 0,
+        jobId: `enrich-${videoId}`,
+      })
+      queued++
+    }
+    return { queued, skipped }
+  }
+
+  /** 关键词搜索豆瓣，返回候选列表（不写 DB） */
+  async searchByKeyword(keyword: string): Promise<Awaited<ReturnType<typeof searchDouban>>> {
+    return searchDouban(keyword)
+  }
+
+  /** 确认应用指定豆瓣条目，写入 catalog + 更新 videos.douban_status */
+  async confirmSubject(videoId: string, subjectId: string): Promise<{ updated: boolean; reason?: string }> {
+    const video = await videoQueries.findAdminVideoById(this.db, videoId)
+    if (!video) return { updated: false, reason: 'video_not_found' }
+
+    const detail = await getDoubanDetailRich(subjectId)
+    if (!detail) return { updated: false, reason: 'fetch_failed' }
+
+    const catalogService = new MediaCatalogService(this.db)
+    const ratingNum = detail.rate ? parseFloat(detail.rate) : NaN
+    const updateFields: import('@/api/db/queries/mediaCatalog').CatalogUpdateData = {
+      doubanId: detail.id,
+    }
+    if (!isNaN(ratingNum)) updateFields.rating = ratingNum
+    if (detail.plotSummary) updateFields.description = detail.plotSummary
+    if (detail.poster) updateFields.coverUrl = detail.poster
+    if (detail.directors.length > 0) updateFields.director = detail.directors
+    if (detail.cast.length > 0) updateFields.cast = detail.cast
+    if (detail.screenwriters.length > 0) updateFields.writers = detail.screenwriters
+    if (detail.genres.length > 0) {
+      updateFields.genresRaw = detail.genres
+      const mapped = mapDoubanGenres(detail.genres)
+      if (mapped.length > 0) updateFields.genres = mapped
+    }
+    if (detail.countries.length > 0) updateFields.country = detail.countries[0]
+
+    const updated = await catalogService.safeUpdate(video.catalog_id, updateFields, 'douban')
+    if (!updated) return { updated: false, reason: 'catalog_update_rejected' }
+
+    // 读取最新 catalog 计算 meta_score
+    const catalog = await catalogQueries.findCatalogById(this.db, video.catalog_id)
+    const metaScore = calcMetaScore(catalog)
+
+    await videoQueries.updateVideoEnrichStatus(this.db, videoId, { doubanStatus: 'matched', metaScore })
+    return { updated: true }
+  }
+
   async previewVideo(videoId: string): Promise<DoubanPreviewFound | DoubanPreviewMiss> {
     const video = await videoQueries.findAdminVideoById(this.db, videoId)
     if (!video) return { found: false, reason: 'no_match' }
@@ -220,4 +289,18 @@ export class DoubanService {
       languages: detail.languages,
     }
   }
+}
+
+// ── 工具函数 ─────────────────────────────────────────────────────
+
+function calcMetaScore(catalog: import('@/api/db/queries/mediaCatalog').MediaCatalogRow | null): number {
+  if (!catalog) return 0
+  let score = 0
+  if (catalog.title) score += 20
+  if (catalog.coverUrl) score += 20
+  if (catalog.description) score += 20
+  if (catalog.genres && catalog.genres.length > 0) score += 20
+  if (catalog.year) score += 10
+  if (catalog.type && catalog.type !== 'other') score += 10
+  return Math.min(100, score)
 }

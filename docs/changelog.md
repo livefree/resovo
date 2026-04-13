@@ -5689,3 +5689,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无（使用 Migration 036 新建的 external_data schema）
 - **注意事项**：Step2 仅在 Step1 无本地条目时运行（candidate 不触发网络搜索）；`enrichmentQueue` 已加到 queue.ts exports 中，未来需在 server 启动时调用 `registerEnrichmentWorker()`
+
+---
+
+## CHG-386 — [API] 暂存队列新增豆瓣相关操作接口
+
+- **完成时间**：2026-04-12 10:30
+- **关联序列**：Phase 3 自动丰富流水线
+- **变更内容**：
+  - `src/api/services/DoubanService.ts` — 新增 `batchEnqueueEnrich(videoIds[])` / `searchByKeyword(keyword)` / `confirmSubject(videoId, subjectId)` 三个方法
+  - `src/api/routes/admin/staging.ts` — 新增 3 条路由：`POST /admin/staging/batch-douban-sync`、`POST /admin/staging/:id/douban-search`、`POST /admin/staging/:id/douban-confirm`
+  - `tests/unit/api/stagingDouban.test.ts`（新建）— 10 条测试，覆盖 batchEnqueueEnrich（3）、searchByKeyword（2）、confirmSubject（5）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：`confirmSubject` 在 safeUpdate 后重新读取 catalog 计算 meta_score；MediaCatalogService 在方法内延迟实例化（非构造器）
