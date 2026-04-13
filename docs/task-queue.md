@@ -5418,6 +5418,21 @@
   - `tests/unit/api/crawlerSourceUpsert.test.ts`（soft-delete 恢复场景新增）
 - **完成备注**：三个 P1/P2 缺口全部修复。ON CONFLICT DO UPDATE SET deleted_at=NULL 正确恢复软删行并通过 rowCount 精确计数。crawlMode 通过 EnqueueExtras 全链路透传到 processCrawlJob worker 分支。typecheck ✅ lint ✅ 91 tests ✅（2 pre-existing failures in moderationStats.test.ts）
 
+#### CHG-399 — [BUG] 单视频补源 Job 闭环（source-refetch 落库完成态 + UI 改走队列）
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-12 18:00
+- **实际开始**：2026-04-12 18:00
+- **完成时间**：2026-04-12 18:30
+- **来源**：M2 复审反馈（补充 CHG-398 遗漏的两个闭环缺口）
+- **变更原因**：
+  - P1：source-refetch 分支 continue 绕过了 CrawlerService.crawl() 的 updateTaskStatus('done')，任务永久停留在 running 状态
+  - P2：SourceRefetchForm 仍通过 /admin/videos/:id/refetch-sources 同步调用，HTTP handler 阻塞、无任务详情记录
+- **文件范围**：
+  - `src/api/workers/crawlerWorker.ts`（source-refetch 循环后调 updateTaskStatus('done') + syncRunStatusFromTasks）
+  - `src/components/admin/system/crawler-site/components/SourceRefetchForm.tsx`（改走 POST /admin/crawler/runs，crawlMode=source-refetch）
+  - `tests/unit/api/crawlerWorkerSourceRefetch.test.ts`（新建，4 tests：done 落库 / syncRun 调用 / notFound 计 errors / batch 不重复）
+- **完成备注**：P1 修复后 source-refetch 任务能正确从 running→done 落库；P2 修复后 UI 入队即返回提示，可在任务记录查看进度。typecheck ✅ lint ✅ 4 new tests ✅
+
 ---
 
 ### Phase 3：自动丰富流水线

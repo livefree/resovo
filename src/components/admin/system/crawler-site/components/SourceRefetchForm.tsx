@@ -26,10 +26,11 @@ interface VideoSearchResponse {
   total: number
 }
 
-interface RefetchResponse {
+interface RunEnqueueResponse {
   data: {
-    sourcesAdded: number
-    notFound: string[]
+    runId: string
+    enqueuedSiteKeys: string[]
+    skippedSiteKeys: string[]
   }
 }
 
@@ -104,15 +105,21 @@ export function SourceRefetchForm({ sites }: SourceRefetchFormProps) {
     }
     setSubmitting(true)
     try {
-      const res = await apiClient.post<RefetchResponse>(
-        `/admin/videos/${selectedVideo.id}/refetch-sources`,
-        { siteKeys: selectedSiteKeys.length > 0 ? selectedSiteKeys : undefined }
-      )
-      const { sourcesAdded, notFound } = res.data
-      const notFoundMsg = notFound.length > 0 ? `，${notFound.length} 个站点无匹配` : ''
-      notify.success(`补源完成：新增 ${sourcesAdded} 条源${notFoundMsg}`)
+      const hasSiteFilter = selectedSiteKeys.length > 0
+      const res = await apiClient.post<RunEnqueueResponse>('/admin/crawler/runs', {
+        triggerType: hasSiteFilter ? 'batch' : 'all',
+        mode: 'incremental',
+        crawlMode: 'source-refetch',
+        targetVideoId: selectedVideo.id,
+        ...(hasSiteFilter ? { siteKeys: selectedSiteKeys } : {}),
+      })
+      const { enqueuedSiteKeys, skippedSiteKeys } = res.data
+      const skippedMsg = skippedSiteKeys.length > 0 ? `，${skippedSiteKeys.length} 个站点跳过` : ''
+      notify.success(`补源已加入队列（${enqueuedSiteKeys.length} 个站点）${skippedMsg}，可在"任务记录"查看进度`)
+      clearSelection()
+      setSelectedSiteKeys([])
     } catch (err) {
-      const message = err instanceof Error ? err.message : '补源失败'
+      const message = err instanceof Error ? err.message : '发起补源失败'
       notify.error(message)
     } finally {
       setSubmitting(false)
@@ -219,7 +226,7 @@ export function SourceRefetchForm({ sites }: SourceRefetchFormProps) {
         disabled={!selectedVideo || submitting}
         data-testid="refetch-btn"
       >
-        {submitting ? '补源中...' : '开始补源采集'}
+        {submitting ? '提交中...' : '加入补源队列'}
       </AdminButton>
     </div>
   )

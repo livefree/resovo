@@ -440,6 +440,18 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
       await job.progress(Math.round(((i + 1) / allSources.length) * 100))
     }
 
+    // source-refetch 模式跳过了 CrawlerService.crawl()，需手动落库完成态
+    if (crawlMode === 'source-refetch' && taskId) {
+      await crawlerTasksQueries.updateTaskStatus(db, taskId, 'done', {
+        sourcesUpserted,
+        videosUpserted: 0,
+        errors,
+      })
+      if (runId) {
+        await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
+      }
+    }
+
     return {
       type,
       sites: siteNames,

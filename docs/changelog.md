@@ -5631,3 +5631,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无（INSERT 语义变更，无 schema 变更）
 - **注意事项**：`getEnabledSources` 现在透传 `source_update`，crawlerWorker 中的 `source.ingestPolicy.source_update` 判断才能生效。`replaceSourcesForSite` 的 ON CONFLICT 目标是 `uq_sources_video_episode_url`（video_id + episode_number + source_url），确保该约束存在于 DB schema。
+
+---
+
+## CHG-399 — [BUG] 单视频补源 Job 闭环（source-refetch 落库完成态 + UI 改走队列）
+- **完成时间**：2026-04-12
+- **记录时间**：2026-04-12 18:30
+- **修改文件**：
+  - `src/api/workers/crawlerWorker.ts` — source-refetch for 循环结束后新增：`if (crawlMode === 'source-refetch' && taskId)` → `updateTaskStatus(db, taskId, 'done', { sourcesUpserted, videosUpserted: 0, errors })`；`if (runId)` → `syncRunStatusFromTasks`
+  - `src/components/admin/system/crawler-site/components/SourceRefetchForm.tsx` — `handleRefetch` 改为 POST `/admin/crawler/runs` `{ triggerType: 'batch'|'all', mode: 'incremental', crawlMode: 'source-refetch', targetVideoId }`；移除同步 `RefetchResponse` 解析，改为入队成功提示；按钮文字改为"加入补源队列"
+  - `tests/unit/api/crawlerWorkerSourceRefetch.test.ts` — 新建，4 tests：P1 done 落库 / syncRun 被调用 / notFound 计入 errors / batch 模式不重复调用
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：原 `/admin/videos/:id/refetch-sources` 和 `/admin/crawler/refetch-sources` 同步路由仍保留（CLAUDE.md 禁止删除 API 路径），但 UI 已改走 runs 队列路径。
