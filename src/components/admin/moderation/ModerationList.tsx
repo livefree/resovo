@@ -3,6 +3,7 @@
  * 调用 GET /admin/videos/pending-review，展示紧凑视频列表
  * 点击条目触发 onSelect 回调，选中态高亮显示
  * CHG-341: 增加类型筛选、排序（最新/最早）；修正 tv→series 映射
+ * UX-10: 每行新增豆瓣状态/源健康/元数据进度 badge；新增对应筛选器
  */
 
 'use client'
@@ -10,6 +11,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { TableImageCell } from '@/components/admin/shared/modern-table/cells'
+import type { DoubanStatus, SourceCheckStatus } from '@/types'
 
 interface PendingVideoRow {
   id: string
@@ -22,6 +24,10 @@ interface PendingVideoRow {
   siteName: string | null
   firstSourceUrl: string | null
   createdAt: string
+  doubanStatus: DoubanStatus
+  sourceCheckStatus: SourceCheckStatus
+  metaScore: number
+  activeSourceCount: number
 }
 
 interface ModerationListProps {
@@ -47,6 +53,22 @@ const TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: 'other', label: '其他' },
 ]
 
+const DOUBAN_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: '豆瓣：全部' },
+  { value: 'matched', label: '豆瓣：已匹配' },
+  { value: 'candidate', label: '豆瓣：候选' },
+  { value: 'unmatched', label: '豆瓣：未匹配' },
+  { value: 'pending', label: '豆瓣：待检' },
+]
+
+const SOURCE_CHECK_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: '源检验：全部' },
+  { value: 'ok', label: '源检验：全可达' },
+  { value: 'partial', label: '源检验：部分可达' },
+  { value: 'all_dead', label: '源检验：全失效' },
+  { value: 'pending', label: '源检验：未检验' },
+]
+
 function getTypeLabel(type: string): string {
   return TYPE_OPTIONS.find((o) => o.value === type)?.label ?? type
 }
@@ -54,6 +76,35 @@ function getTypeLabel(type: string): string {
 function formatDate(iso: string): string {
   return iso.slice(0, 10)
 }
+
+// ── 状态 Badge ────────────────────────────────────────────────────
+
+function DoubanBadge({ status }: { status: DoubanStatus }) {
+  const map: Record<DoubanStatus, { label: string; cls: string }> = {
+    matched:   { label: '✓匹配', cls: 'text-[var(--success,#22c55e)]' },
+    candidate: { label: '?候选', cls: 'text-[var(--warning,#f59e0b)]' },
+    unmatched: { label: '✗未匹配', cls: 'text-[var(--error,#ef4444)]' },
+    pending:   { label: '○待检', cls: 'text-[var(--muted)]' },
+  }
+  const { label, cls } = map[status] ?? map.pending
+  return <span className={`text-[10px] ${cls}`} data-testid="douban-badge">{label}</span>
+}
+
+function SourceBadge({ status, count }: { status: SourceCheckStatus; count: number }) {
+  if (status === 'ok')       return <span className="text-[10px] text-[var(--success,#22c55e)]" data-testid="source-badge">●{count}可达</span>
+  if (status === 'partial')  return <span className="text-[10px] text-[var(--warning,#f59e0b)]" data-testid="source-badge">⚠部分可达</span>
+  if (status === 'all_dead') return <span className="text-[10px] text-[var(--error,#ef4444)]" data-testid="source-badge">✕全失效</span>
+  return <span className="text-[10px] text-[var(--muted)]" data-testid="source-badge">○未检验</span>
+}
+
+function MetaScoreBadge({ score }: { score: number }) {
+  const cls = score >= 80 ? 'text-[var(--success,#22c55e)]'
+    : score >= 50 ? 'text-[var(--warning,#f59e0b)]'
+    : 'text-[var(--muted)]'
+  return <span className={`text-[10px] ${cls}`} data-testid="meta-score-badge">元{score}%</span>
+}
+
+// ── 组件 ──────────────────────────────────────────────────────────
 
 export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
   const [rows, setRows] = useState<PendingVideoRow[]>([])
@@ -63,6 +114,8 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
   const [typeFilter, setTypeFilter] = useState('')
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc')
   const [sourceState, setSourceState] = useState<'all' | 'active' | 'missing'>('all')
+  const [doubanStatusFilter, setDoubanStatusFilter] = useState('')
+  const [sourceCheckFilter, setSourceCheckFilter] = useState('')
   const [keywordInput, setKeywordInput] = useState('')
   const [keyword, setKeyword] = useState('')
   const [siteKeyInput, setSiteKeyInput] = useState('')
@@ -73,6 +126,8 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
     type: string,
     dir: 'asc' | 'desc',
     source: 'all' | 'active' | 'missing',
+    douban: string,
+    sourceCheck: string,
     q: string,
     site: string
   ) => {
@@ -83,6 +138,8 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
       if (q) params.set('q', q)
       if (site) params.set('siteKey', site)
       if (source !== 'all') params.set('sourceState', source)
+      if (douban) params.set('doubanStatus', douban)
+      if (sourceCheck) params.set('sourceCheckStatus', sourceCheck)
       const res = await apiClient.get<{ data: PendingVideoRow[]; total: number }>(
         `/admin/videos/pending-review?${params}`
       )
@@ -96,8 +153,8 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
   }, [])
 
   useEffect(() => {
-    void fetchRows(page, typeFilter, sortDir, sourceState, keyword, siteKey)
-  }, [fetchRows, page, typeFilter, sortDir, sourceState, keyword, siteKey])
+    void fetchRows(page, typeFilter, sortDir, sourceState, doubanStatusFilter, sourceCheckFilter, keyword, siteKey)
+  }, [fetchRows, page, typeFilter, sortDir, sourceState, doubanStatusFilter, sourceCheckFilter, keyword, siteKey])
 
   function handleTypeChange(newType: string) {
     setTypeFilter(newType)
@@ -119,6 +176,8 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
     setTypeFilter('')
     setSortDir('desc')
     setSourceState('all')
+    setDoubanStatusFilter('')
+    setSourceCheckFilter('')
     setKeywordInput('')
     setKeyword('')
     setSiteKeyInput('')
@@ -142,7 +201,7 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
           </p>
         </div>
         <div className="grid grid-cols-1 gap-2">
-          {/* 类型筛选 */}
+          {/* 类型 + 片源状态 */}
           <div className="grid grid-cols-2 gap-2">
             <select
               value={typeFilter}
@@ -166,6 +225,29 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
               <option value="all">片源状态：全部</option>
               <option value="active">片源状态：有可用源</option>
               <option value="missing">片源状态：无可用源</option>
+            </select>
+          </div>
+          {/* 豆瓣状态 + 源检验状态 */}
+          <div className="grid grid-cols-2 gap-2">
+            <select
+              value={doubanStatusFilter}
+              onChange={(e) => { setDoubanStatusFilter(e.target.value); setPage(1) }}
+              data-testid="moderation-list-douban-filter"
+              className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+            >
+              {DOUBAN_STATUS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <select
+              value={sourceCheckFilter}
+              onChange={(e) => { setSourceCheckFilter(e.target.value); setPage(1) }}
+              data-testid="moderation-list-source-check-filter"
+              className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-1 text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+            >
+              {SOURCE_CHECK_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -266,6 +348,12 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
                         <span>{getTypeLabel(row.type)}</span>
                         {row.year && <span>· {row.year}</span>}
                         {row.siteName && <span>· {row.siteName}</span>}
+                      </div>
+                      {/* 流水线状态行 */}
+                      <div className="mt-0.5 flex items-center gap-2">
+                        <DoubanBadge status={row.doubanStatus} />
+                        <SourceBadge status={row.sourceCheckStatus} count={row.activeSourceCount} />
+                        <MetaScoreBadge score={row.metaScore} />
                       </div>
                       <p className="mt-0.5 text-xs text-[var(--muted)]">{formatDate(row.createdAt)}</p>
                     </div>

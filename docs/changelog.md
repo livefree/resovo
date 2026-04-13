@@ -5714,3 +5714,18 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/api/server.ts` — 新增 `import { registerEnrichmentWorker }` + 调用 `registerEnrichmentWorker()`
   - `src/api/routes/admin/staging.ts` — `batch-douban-sync` 路由层逐一调用 `getStagingVideoById` 过滤，非暂存计入 skipped；`douban-search` / `douban-confirm` 路由层先校验 `getStagingVideoById`，不在暂存状态返回 404
 - **测试**：10 条单元测试全部通过，typecheck ✅ lint ✅
+
+---
+
+## UX-10 — [UI] 审核台左侧列表增强（豆瓣/源/元数据状态指示）
+
+- **完成时间**：2026-04-13
+- **关联序列**：Phase 4 审核台增强
+- **变更内容**：
+  - `src/api/db/queries/videos.ts` — `listPendingReviewVideos` 新增 `doubanStatus` / `sourceCheckStatus` WHERE 条件（可选参数）
+  - `src/api/services/VideoService.ts` — `pendingReviewList` 透传两个新筛选参数
+  - `src/api/routes/admin/videos.ts` — `GET /admin/videos/pending-review` 新增 `doubanStatus` / `sourceCheckStatus` 查询参数（zod 枚举校验）
+  - `src/components/admin/moderation/ModerationList.tsx` — 每行新增 `DoubanBadge` / `SourceBadge` / `MetaScoreBadge`；筛选区新增豆瓣状态和源检验状态两个 select；重置时同步清除新参数
+  - `tests/unit/components/admin/moderation/ModerationList.test.tsx`（新建）— 10 条测试，覆盖各状态 badge 渲染、筛选参数传递、重置行为
+- **新增依赖**：无
+- **数据库变更**：无

@@ -1151,6 +1151,8 @@ export async function listPendingReviewVideos(
     siteKey?: string
     sourceState?: 'all' | 'active' | 'missing'
     includeAdult?: boolean
+    doubanStatus?: DoubanStatus
+    sourceCheckStatus?: SourceCheckStatus
   }
 ): Promise<{ rows: PendingReviewVideoRow[]; total: number }> {
   const offset = (params.page - 1) * params.limit
@@ -1203,6 +1205,14 @@ export async function listPendingReviewVideos(
         AND s3.deleted_at IS NULL
         AND s3.is_active = true
     )`)
+  }
+  if (params.doubanStatus) {
+    conditions.push(`v.douban_status = $${idx++}`)
+    filterParams.push(params.doubanStatus)
+  }
+  if (params.sourceCheckStatus) {
+    conditions.push(`v.source_check_status = $${idx++}`)
+    filterParams.push(params.sourceCheckStatus)
   }
 
   const where = conditions.join(' AND ')

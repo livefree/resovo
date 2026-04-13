@@ -275,6 +275,8 @@ export class VideoService {
     siteKey?: string
     sourceState?: 'all' | 'active' | 'missing'
     includeAdult?: boolean
+    doubanStatus?: import('@/types').DoubanStatus
+    sourceCheckStatus?: import('@/types').SourceCheckStatus
   }): Promise<{ data: PendingReviewVideoRow[]; total: number; page: number; limit: number }> {
     const page = Math.max(1, params.page)
     const limit = Math.min(MAX_LIMIT, Math.max(1, params.limit))
@@ -287,6 +289,8 @@ export class VideoService {
       siteKey: params.siteKey,
       sourceState: params.sourceState,
       includeAdult: params.includeAdult,
+      doubanStatus: params.doubanStatus,
+      sourceCheckStatus: params.sourceCheckStatus,
     })
     return { data: rows, total, page, limit }
   }

@@ -378,6 +378,8 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       q: z.string().max(100).optional(),
       siteKey: z.string().max(100).optional(),
       sourceState: z.enum(['all', 'active', 'missing']).optional(),
+      doubanStatus: z.enum(['pending', 'matched', 'candidate', 'unmatched']).optional(),
+      sourceCheckStatus: z.enum(['pending', 'ok', 'partial', 'all_dead']).optional(),
     })
     const parsed = PendingQuerySchema.safeParse(request.query)
     if (!parsed.success) {
@@ -389,6 +391,8 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
     const result = await videoService.pendingReviewList({
       ...parsed.data,
       includeAdult,
+      doubanStatus: parsed.data.doubanStatus,
+      sourceCheckStatus: parsed.data.sourceCheckStatus,
     })
     return reply.send(result)
   })

@@ -5521,6 +5521,7 @@
 - **触发时间**：2026-04-12 10:30
 - **触发原因**：Phase 3「自动丰富流水线」全部任务（CHG-384 / CHG-385 / CHG-386）已完成
 - **等待操作**：人工验收 M3 里程碑，通过后方可开始 Phase 4
+- **评审结果**：✅ 通过（2026-04-13）
 
 ### Phase 3 完成概要
 
@@ -5545,20 +5546,24 @@
 > ⚠ Phase 4 完成后必须暂停，执行里程碑评审
 
 #### UX-10 — [UI] 审核台左侧列表增强（豆瓣/源/元数据状态指示）
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
+- **实际开始**：2026-04-13
+- **完成时间**：2026-04-13
 - **计划开始**：M3 评审通过后
 - **依赖**：CHG-381 ✅（字段存在），CHG-382 ✅（终态已改）
 - **文件范围**：
-  - `src/components/admin/moderation/ModerationList.tsx`（现有，增强每行显示内容）
-  - `src/api/db/queries/videos.ts`（listPendingReviewVideos 新增 douban_status/source_check_status/meta_score 字段）
-  - `tests/unit/components/admin/moderation/ModerationList.test.tsx`（更新）
+  - `src/components/admin/moderation/ModerationList.tsx`（增强）
+  - `src/api/db/queries/videos.ts`（listPendingReviewVideos 新增 doubanStatus/sourceCheckStatus 筛选）
+  - `src/api/services/VideoService.ts`（透传新筛选参数）
+  - `src/api/routes/admin/videos.ts`（pending-review 路由新增两个查询参数）
+  - `tests/unit/components/admin/moderation/ModerationList.test.tsx`（新建）
 - **变更内容**：
   - 每行新增：豆瓣状态 badge（✓已匹配/?候选/✗未匹配/○待检）
   - 每行新增：源健康状态（●N条可达/⚠部分/✕全失效/○未检验）
   - 每行新增：元数据进度条（meta_score 百分比）
   - 筛选器新增：按豆瓣状态筛选、按源健康状态筛选
-- **完成备注**：_（AI 填写）_
+- **完成备注**：typecheck ✅ lint ✅ 10 条测试全部通过；DB 层新增 doubanStatus/sourceCheckStatus WHERE 条件；API 路由透传；ModerationList 新增 2 个筛选 select + 3 个 badge 组件
 
 #### UX-11 — [UI] 审核台右侧：豆瓣信息区 + 源健康区
 - **状态**：⬜ 待开始
