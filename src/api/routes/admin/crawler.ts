@@ -39,6 +39,7 @@ import { crawlerQueue } from '@/api/lib/queue'
 import { createCrawlerTaskLog, listCrawlerTaskLogs } from '@/api/db/queries/crawlerTaskLogs'
 import { CrawlerRunService } from '@/api/services/CrawlerRunService'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
+import { findAdminVideoById } from '@/api/db/queries/videos'
 
 function mapTaskDto(task: CrawlerTask) {
   const mode = task.type === 'incremental-crawl' ? 'incremental' : 'full'
@@ -786,8 +787,8 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     return reply.send({ data: { keyword, results } })
   })
 
-  // ── POST /admin/crawler/refetch-sources — 单视频补源采集 ─────
-  // CRAWLER-04: 以视频标题搜索指定站点，相似度 >= 0.8 才写入（全量替换策略）
+  // ── POST /admin/crawler/refetch-sources — 单视频补源采集（入队） ──
+  // CRAWLER-04: 创建 source-refetch run，进入 run/task/queue，不同步执行
 
   fastify.post('/admin/crawler/refetch-sources', { preHandler: auth }, async (request, reply) => {
     const BodySchema = z.object({
@@ -802,18 +803,22 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     }
     const { videoId, siteKeys } = parsed.data
 
-    try {
-      const result = await refetchService.refetchSourcesForVideo(videoId, siteKeys)
-      return reply.send({ data: result })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      if (message === 'VIDEO_NOT_FOUND') {
-        return reply.code(404).send({
-          error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
-        })
-      }
-      throw err
+    const video = await findAdminVideoById(db, videoId)
+    if (!video) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
+      })
     }
+
+    const hasSiteFilter = (siteKeys ?? []).length > 0
+    const result = await runService.createAndEnqueueRun({
+      triggerType: hasSiteFilter ? 'batch' : 'all',
+      mode: 'incremental',
+      crawlMode: 'source-refetch',
+      targetVideoId: videoId,
+      ...(hasSiteFilter ? { siteKeys } : {}),
+    })
+    return reply.code(202).send({ data: result })
   })
 
   // ── POST /admin/crawler/reindex — 重建 ES 索引 ───────────────

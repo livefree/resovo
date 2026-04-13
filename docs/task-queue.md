@@ -5433,6 +5433,18 @@
   - `tests/unit/api/crawlerWorkerSourceRefetch.test.ts`（新建，4 tests：done 落库 / syncRun 调用 / notFound 计 errors / batch 不重复）
 - **完成备注**：P1 修复后 source-refetch 任务能正确从 running→done 落库；P2 修复后 UI 入队即返回提示，可在任务记录查看进度。typecheck ✅ lint ✅ 4 new tests ✅
 
+#### CHG-400 — [BUG] 两个补源专用 API 改走队列
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-12 19:00
+- **实际开始**：2026-04-12 19:00
+- **完成时间**：2026-04-12 19:20
+- **来源**：M2 复审反馈（CRAWLER-04 验收语义补充）
+- **变更原因**：POST /admin/crawler/refetch-sources 和 POST /admin/videos/:id/refetch-sources 仍直接 await refetchSourcesForVideo，阻塞 HTTP handler 且不产生任务记录
+- **文件范围**：
+  - `src/api/routes/admin/crawler.ts`（refetch-sources 改走 runService.createAndEnqueueRun；新增 findAdminVideoById 引入）
+  - `src/api/routes/admin/videos.ts`（refetch-sources 改走 CrawlerRunService；移除 CrawlerRefetchService 依赖；新增 findAdminVideoById）
+- **完成备注**：两路由均保留 404 视频校验（改用 findAdminVideoById），然后创建 source-refetch run 返回 202。typecheck ✅ lint ✅ 无新增测试失败
+
 ---
 
 ### Phase 3：自动丰富流水线

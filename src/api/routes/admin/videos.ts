@@ -16,7 +16,8 @@ import { db } from '@/api/lib/postgres'
 import { es } from '@/api/lib/elasticsearch'
 import { VideoService } from '@/api/services/VideoService'
 import { DoubanService } from '@/api/services/DoubanService'
-import { CrawlerRefetchService } from '@/api/services/CrawlerRefetchService'
+import { CrawlerRunService } from '@/api/services/CrawlerRunService'
+import { findAdminVideoById } from '@/api/db/queries/videos'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import type { VideoType, VideoStatus, VideoGenre, VisibilityStatus } from '@/types'
 
@@ -98,7 +99,7 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
   const adminOnly = [fastify.authenticate, fastify.requireRole(['admin'])]
   const videoService = new VideoService(db, es)
   const doubanService = new DoubanService(db)
-  const refetchService = new CrawlerRefetchService(db, es)
+  const runService = new CrawlerRunService(db)
   async function shouldIncludeAdultInAdminContent(): Promise<boolean> {
     const raw = await systemSettingsQueries.getSetting(db, 'show_adult_content')
     return raw === 'true'
@@ -423,7 +424,7 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
   })
 
   // ── POST /admin/videos/:id/refetch-sources ────────────────────
-  // CRAWLER-04: 代理到 CrawlerRefetchService.refetchSourcesForVideo
+  // CRAWLER-04: 创建 source-refetch run，进入 run/task/queue，不同步执行
   fastify.post('/admin/videos/:id/refetch-sources', { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string }
 
@@ -443,18 +444,23 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
       })
     }
 
-    try {
-      const result = await refetchService.refetchSourcesForVideo(id, parsed.data.siteKeys)
-      return reply.send({ data: result })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      if (message === 'VIDEO_NOT_FOUND') {
-        return reply.code(404).send({
-          error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
-        })
-      }
-      throw err
+    const video = await findAdminVideoById(db, id)
+    if (!video) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
+      })
     }
+
+    const siteKeys = parsed.data.siteKeys
+    const hasSiteFilter = (siteKeys ?? []).length > 0
+    const result = await runService.createAndEnqueueRun({
+      triggerType: hasSiteFilter ? 'batch' : 'all',
+      mode: 'incremental',
+      crawlMode: 'source-refetch',
+      targetVideoId: id,
+      ...(hasSiteFilter ? { siteKeys } : {}),
+    })
+    return reply.code(202).send({ data: result })
   })
 }
 

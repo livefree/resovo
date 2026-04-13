@@ -5644,3 +5644,15 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：原 `/admin/videos/:id/refetch-sources` 和 `/admin/crawler/refetch-sources` 同步路由仍保留（CLAUDE.md 禁止删除 API 路径），但 UI 已改走 runs 队列路径。
+
+---
+
+## CHG-400 — [BUG] 两个补源专用 API 改走队列
+- **完成时间**：2026-04-12
+- **记录时间**：2026-04-12 19:20
+- **修改文件**：
+  - `src/api/routes/admin/crawler.ts` — `POST /admin/crawler/refetch-sources`：改为 `findAdminVideoById` 验证存在后，调 `runService.createAndEnqueueRun({ crawlMode: 'source-refetch', targetVideoId })`，返回 202；新增 `findAdminVideoById` 导入
+  - `src/api/routes/admin/videos.ts` — `POST /admin/videos/:id/refetch-sources`：同上改走队列；移除 `CrawlerRefetchService` 和 `import { es }` 相关依赖（实际 es 被 VideoService 继续使用，只移除 refetchService）；新增 `CrawlerRunService` + `findAdminVideoById` 导入
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：两路由响应格式由原来的 `{ data: { sourcesAdded, notFound } }` 变为 `{ data: { runId, taskIds, enqueuedSiteKeys, skippedSiteKeys } }`，状态码由 200 变为 202。已有调用方（如 UI）若依赖旧格式需更新（SourceRefetchForm 已在 CHG-399 中改为不依赖响应字段）。
