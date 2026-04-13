@@ -5656,3 +5656,18 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：两路由响应格式由原来的 `{ data: { sourcesAdded, notFound } }` 变为 `{ data: { runId, taskIds, enqueuedSiteKeys, skippedSiteKeys } }`，状态码由 200 变为 202。已有调用方（如 UI）若依赖旧格式需更新（SourceRefetchForm 已在 CHG-399 中改为不依赖响应字段）。
+
+---
+
+## CHG-384 — [DB] 创建 external_data schema（douban_entries / bangumi_entries）
+
+- **完成时间**：2026-04-12 22:00
+- **变更类型**：数据库 schema + 导入脚本
+- **影响文件**：
+  - `src/api/db/migrations/036_external_data_schema.sql`（新建）— `external_data` schema，`douban_entries`（14万行豆瓣条目）、`bangumi_entries`（1万行动画条目），各含 `(title_normalized, year)` 索引供 MetadataEnrichService Step1/Step3 使用
+  - `scripts/import-douban-dump.ts`（新建）— 从 external-db/douban/moviedata-10m/movies.csv 流式导入；ON CONFLICT DO UPDATE；支持 --limit N
+  - `scripts/import-bangumi-dump.ts`（新建）— 从 external-db/bangumi/…/subject.jsonlines 流式导入 type=2 动画；ON CONFLICT DO UPDATE；支持 --limit N
+  - `docs/architecture.md`（更新）— 新增 §5.5 external_data schema 说明，迁移文件列表更新至 036
+- **新增依赖**：无（pg、node:fs、node:readline 均已存在）
+- **数据库变更**：Migration 036 新建 external_data schema（不影响现有表）
+- **注意事项**：migration 编号从原计划 033 改为 036（033~035 已被 Phase 2 使用）；导入脚本为一次性 CLI 工具，不参与运行时

@@ -5453,12 +5453,13 @@
 > ⚠ Phase 3 完成后必须暂停，执行里程碑评审
 
 #### CHG-384 — [DB] 创建 external_data schema（douban_entries / bangumi_entries）
-- **状态**：⬜ 待开始
+- **状态**：🔄 进行中
 - **创建时间**：2026-04-09 01:00
+- **实际开始**：2026-04-12 20:00
 - **计划开始**：M2 评审通过后
 - **依赖**：CHG-381 ✅
 - **文件范围**：
-  - `src/api/db/migrations/033_external_data_schema.sql`（新建）
+  - `src/api/db/migrations/036_external_data_schema.sql`（新建，原规划 033 已被占用）
   - `scripts/import-douban-dump.ts`（新建，将本地 dump 导入 external_data.douban_entries）
   - `scripts/import-bangumi-dump.ts`（新建，导入 external_data.bangumi_entries，仅 type=2 动画）
   - `docs/architecture.md`（新增 external_data schema 说明）
@@ -5467,7 +5468,9 @@
   - `external_data.bangumi_entries`：bangumi_id/title_cn/title_jp/title_normalized/air_date/rating/episode_count/summary/cover_url
   - 两表均在 (title_normalized, year) 上建索引
   - 导入脚本：幂等执行（ON CONFLICT DO UPDATE），支持 --limit N 参数用于测试
-- **完成备注**：_（AI 填写）_
+- **状态**：✅ 已完成
+- **完成时间**：2026-04-12 22:00
+- **完成备注**：migration 036（原计划 033，因 033~035 已被 Phase 2 占用而顺延）新建 external_data schema + douban_entries/bangumi_entries + 索引。两个导入脚本支持 --limit N 幂等运行。architecture.md 已同步更新迁移列表至 036。typecheck ✅ lint ✅
 
 #### CHG-385 — [Service/Worker] metadata-enrich Job（enrichment-queue Worker）
 - **状态**：⬜ 待开始

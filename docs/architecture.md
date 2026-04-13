@@ -148,6 +148,21 @@ resovo/
 - `crawler_tasks`：单任务状态（含 pause/cancel/timeout）
 - `crawler_task_logs`：结构化日志
 
+### 5.5 外部数据 schema（external_data）
+
+Migration 036 新增，供 MetadataEnrichService 做本地毫秒级标题匹配（与 external_*_raw 原始暂存表用途不同）：
+
+- `external_data.douban_entries`：豆瓣条目查询表（约 14 万行，来源 external-db/douban/）
+  - 关键字段：`douban_id`（UNIQUE）、`title`、`title_normalized`、`year`、`rating`、`directors[]`、`cast[]`、`genres[]`
+  - 索引：`(title_normalized, year)` — Step1 精确匹配用
+  - 导入脚本：`scripts/import-douban-dump.ts`（ON CONFLICT DO UPDATE，幂等）
+- `external_data.bangumi_entries`：Bangumi 动画条目查询表（type=2，约 1 万行，来源 external-db/bangumi/）
+  - 关键字段：`bangumi_id`（UNIQUE）、`title_cn`、`title_jp`、`title_normalized`、`air_date`、`year`、`rating`
+  - 索引：`(title_normalized, year)` — Step3 动画匹配用
+  - 导入脚本：`scripts/import-bangumi-dump.ts`（ON CONFLICT DO UPDATE，幂等）
+
+注意：`external_*_raw` 表（Migration 027）用于构建 `media_catalog`，是导入暂存表，不用于运行时查询。
+
 ---
 
 ## 6. 视频状态机（DB 强约束）
@@ -267,7 +282,7 @@ resovo/
 
 ---
 
-## 13. 迁移基线（001~025）
+## 13. 迁移基线（001~036）
 
 当前目录实际迁移文件：
 
@@ -287,7 +302,7 @@ resovo/
 - `014_season_episode.sql`
 - `015_content_format_backfill.sql`
 - `016_review_visibility.sql`
-- `018_partial_ingest_policy.sql`
+- `018_partial_ingest_policy.sql`（017 不存在，历史序号空洞）
 - `019_rebuild_video_type_genre.sql`
 - `020_add_genre_source_content_rating.sql`
 - `021_backfill_type_genre_content_rating.sql`
@@ -295,8 +310,17 @@ resovo/
 - `023_enforce_video_state_machine_trigger.sql`
 - `024_backfill_videos_episode_count_from_sources.sql`
 - `025_enforce_adult_site_video_safety.sql`
-
-说明：`017` 号不存在，属历史序号空洞（非异常）。
+- `026_create_media_catalog.sql`
+- `027_create_external_raw_tables.sql`（外部原始暂存表）
+- `028_videos_add_catalog_id.sql`
+- `029_videos_drop_metadata_fields.sql`
+- `030_video_aliases_to_catalog.sql`
+- `031_genre_to_genres.sql`
+- `032_videos_pipeline_status_fields.sql`（douban_status / source_check_status / meta_score）
+- `033_update_state_machine_approve_staging.sql`
+- `034_fix_approve_hidden_to_internal.sql`
+- `035_seed_auto_publish_staging_enabled.sql`
+- `036_external_data_schema.sql`（external_data schema：douban_entries / bangumi_entries）
 
 ---
 
