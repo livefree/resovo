@@ -5517,6 +5517,27 @@
 
 > 🏁 **M3 里程碑评审节点**（CHG-386 完成后触发）
 
+## 🚨 PHASE COMPLETE — M3 里程碑评审节点
+
+- **触发时间**：2026-04-12 10:30
+- **触发原因**：Phase 3「自动丰富流水线」全部任务（CHG-384 / CHG-385 / CHG-386）已完成
+- **等待操作**：人工验收 M3 里程碑，通过后方可开始 Phase 4
+
+### Phase 3 完成概要
+
+| 任务 | 内容 | 状态 |
+|------|------|------|
+| CHG-384 | external_data schema（Migration 036）+ 导入脚本 | ✅ |
+| CHG-385 | MetadataEnrichService 五步丰富 + enrichmentWorker + CrawlerService 触发 | ✅ |
+| CHG-386 | staging 豆瓣操作 3 条 API + DoubanService 扩展 + 测试 | ✅ |
+
+**验收要点**（M3）：
+- [ ] Migration 036 可在目标环境执行（external_data.douban_entries / bangumi_entries）
+- [ ] 导入脚本 import-douban-dump.ts / import-bangumi-dump.ts 可用
+- [ ] enrichmentQueue 正常连接 Redis，worker 可处理 Job
+- [ ] 三条 staging 豆瓣 API 可访问（需 moderator/admin 角色）
+- [ ] 全量单元测试：新增 17 条（CHG-385:7 + CHG-386:10）全部通过
+
 ---
 
 ### Phase 4：审核台增强
