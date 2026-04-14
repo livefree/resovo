@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { notify } from '@/components/admin/shared/toast/useAdminToast'
 import { AdminFormField } from '@/components/admin/shared/form/AdminFormField'
@@ -134,12 +134,15 @@ export function StagingEditPanel({ videoId, onClose, onUpdated }: StagingEditPan
   const [searchError, setSearchError] = useState<string | null>(null)
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
 
-  // 加载视频详情（复用 staging 列表接口，目前没有单条 staging detail API，通过列表接口取首条）
+  // 补源采集
+  const [refetching, setRefetching] = useState(false)
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // 加载视频详情（无单条 staging API，通过列表接口批量取后按 ID 匹配）
   const loadVideo = useCallback(async (id: string) => {
     setLoadError(null)
     try {
-      const res = await apiClient.get<{ data: StagingVideoDetail[] }>(`/admin/staging?page=1&limit=1`)
-      // 暂存队列可能不返回单条接口，用 ID 匹配
+      const res = await apiClient.get<{ data: StagingVideoDetail[] }>(`/admin/staging?page=1&limit=200`)
       const found = res.data.find((v) => v.id === id) ?? null
       if (!found) {
         setLoadError('视频不在暂存状态或已发布')
@@ -151,9 +154,15 @@ export function StagingEditPanel({ videoId, onClose, onUpdated }: StagingEditPan
       setType(found.type)
       setGenresInput((found.genres ?? []).join(', '))
       setSearchKeyword(found.title)
+      return found
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : '加载失败')
     }
+  }, [])
+
+  // 清理轮询
+  useEffect(() => () => {
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current)
   }, [])
 
   useEffect(() => {
@@ -161,6 +170,10 @@ export function StagingEditPanel({ videoId, onClose, onUpdated }: StagingEditPan
       setVideo(null)
       setCandidates([])
       setSearchError(null)
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current)
+        pollTimerRef.current = null
+      }
       return
     }
     void loadVideo(videoId)
@@ -235,6 +248,40 @@ export function StagingEditPanel({ videoId, onClose, onUpdated }: StagingEditPan
     }
   }
 
+  async function handleRefetchSources() {
+    if (!videoId || refetching) return
+    setRefetching(true)
+    try {
+      await apiClient.post(`/admin/videos/${videoId}/refetch-sources`, {})
+      notify.success('补源采集已触发，正在后台执行…')
+      onUpdated()
+
+      // 轮询：每 5s 刷新一次，最多 30s（6 次）
+      let attempts = 0
+      const MAX_ATTEMPTS = 6
+      pollTimerRef.current = setInterval(async () => {
+        attempts++
+        const updated = await loadVideo(videoId)
+        if (
+          updated?.sourceCheckStatus !== 'all_dead' ||
+          attempts >= MAX_ATTEMPTS
+        ) {
+          if (pollTimerRef.current) {
+            clearInterval(pollTimerRef.current)
+            pollTimerRef.current = null
+          }
+          setRefetching(false)
+          if (updated?.sourceCheckStatus !== 'all_dead') {
+            onUpdated()
+          }
+        }
+      }, 5000)
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : '触发补源失败')
+      setRefetching(false)
+    }
+  }
+
   const isOpen = videoId !== null
 
   return (
@@ -296,6 +343,17 @@ export function StagingEditPanel({ videoId, onClose, onUpdated }: StagingEditPan
                   status={video.sourceCheckStatus}
                   activeCount={video.activeSourceCount}
                 />
+                {video.sourceCheckStatus === 'all_dead' && (
+                  <button
+                    type="button"
+                    onClick={() => void handleRefetchSources()}
+                    disabled={refetching}
+                    data-testid="staging-refetch-sources-btn"
+                    className="mt-2 w-full rounded-md border border-orange-500/40 bg-orange-500/10 py-2 text-xs text-orange-300 hover:bg-orange-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {refetching ? '补源中，等待结果…' : '触发补源采集'}
+                  </button>
+                )}
               </div>
 
               {/* 豆瓣状态 */}

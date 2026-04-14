@@ -5663,18 +5663,20 @@
 - **完成备注**：staging.ts 新增 MetaEditSchema + PATCH 路由；StagingEditPanel 为新建侧滑面板；StagingTable 集成[处理]下拉项 + 批量豆瓣同步按钮；单测 12 条全部通过；typecheck + lint 全部通过
 
 #### ADMIN-11 — [UI] 暂存队列：触发补源采集 + 就绪状态联动刷新
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **计划开始**：ADMIN-10 完成后
+- **实际开始**：2026-04-14
+- **完成时间**：2026-04-14
 - **依赖**：ADMIN-10 ✅，CRAWLER-04 ✅（补源 API 存在）
 - **文件范围**：
-  - `src/components/admin/staging/StagingEditPanel.tsx`（新增补源触发操作）
+  - `src/components/admin/staging/StagingEditPanel.tsx`（新增补源触发操作 + 轮询刷新）
   - `src/components/admin/staging/StagingTable.tsx`（行级操作新增[触发补源]）
 - **变更内容**：
-  - 当 source_check_status='all_dead' 时，行级和侧滑面板均显示[触发补源采集]按钮
-  - 点击后调用 POST /admin/videos/:id/refetch-sources，触发补源 Job
-  - Job 完成后（通过轮询或 SSE）刷新该行源健康状态和就绪状态
-- **完成备注**：_（AI 填写）_
+  - StagingEditPanel：source_check_status='all_dead' 时显示[触发补源采集]按钮，触发后每 5s 轮询（最多 30s）
+  - StagingTable AdminDropdown：all_dead 行新增[触发补源]项，触发后刷新列表
+  - loadVideo 改用 limit=200 修复原 limit=1 无法按 ID 匹配的 bug
+- **完成备注**：无新增文件，无 API 改动；仅组件层增强；typecheck + lint + 25 条单测全部通过
 
 > 🏁 **M5 里程碑评审节点**（ADMIN-11 完成后触发）
 

@@ -114,6 +114,7 @@ export function StagingTable({ rules, isAdmin }: StagingTableProps) {
   const [summary, setSummary] = useState<StagingSummary | null>(null)
   const [editPanelVideoId, setEditPanelVideoId] = useState<string | null>(null)
   const [batchDoubanLoading, setBatchDoubanLoading] = useState(false)
+  const [refetchingIds, setRefetchingIds] = useState<string[]>([])
 
   const pageSize = 20
 
@@ -197,6 +198,19 @@ export function StagingTable({ rules, isAdmin }: StagingTableProps) {
       setPublishError(err instanceof Error ? err.message : '批量发布失败，请重试')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleRefetchSingle(id: string) {
+    setRefetchingIds((prev) => [...prev, id])
+    try {
+      await apiClient.post(`/admin/videos/${id}/refetch-sources`, {})
+      notify.success('补源采集已触发，稍后刷新查看结果')
+      setRefreshKey((k) => k + 1)
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : '触发补源失败')
+    } finally {
+      setRefetchingIds((prev) => prev.filter((x) => x !== id))
     }
   }
 
@@ -325,6 +339,12 @@ export function StagingTable({ rules, isAdmin }: StagingTableProps) {
               label: '处理',
               onClick: () => setEditPanelVideoId(row.id),
             },
+            ...(row.sourceCheckStatus === 'all_dead' ? [{
+              key: 'refetch',
+              label: refetchingIds.includes(row.id) ? '补源中…' : '触发补源',
+              disabled: refetchingIds.includes(row.id),
+              onClick: () => void handleRefetchSingle(row.id),
+            }] : []),
             {
               key: 'publish',
               label: publishingIds.includes(row.id) ? '发布中…' : '立即发布',

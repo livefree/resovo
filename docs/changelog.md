@@ -5786,3 +5786,12 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **共享层沉淀**：PATCH meta 路由复用 VideoService.update，无需新增 DB 查询层
+
+## ADMIN-11 — [UI] 暂存队列：触发补源采集 + 就绪状态联动刷新
+- **完成时间**：2026-04-14
+- **修改文件**：
+  - `src/components/admin/staging/StagingEditPanel.tsx` — source_check_status='all_dead' 时显示[触发补源采集]按钮；触发后每 5s 轮询（最多 30s/6 次）自动刷新源状态；loadVideo 修复 limit=1 bug 改为 limit=200
+  - `src/components/admin/staging/StagingTable.tsx` — AdminDropdown 对 all_dead 行新增[触发补源]项；新增 refetchingIds 状态 + handleRefetchSingle 逻辑
+- **新增依赖**：无
+- **数据库变更**：无
+- **共享层沉淀**：复用 POST /admin/videos/:id/refetch-sources（CRAWLER-04 已有），无需新增 API
