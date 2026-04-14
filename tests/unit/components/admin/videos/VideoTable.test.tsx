@@ -367,4 +367,84 @@ describe('VideoTable (CHG-211/212)', () => {
     // v2: review_status='pending_review' → 不显示暂存按钮
     expect(screen.queryByTestId('video-staging-v2')).toBeNull()
   })
+
+  // ── VIDEO-10: 复审按钮 ─────────────────────────────────────────────
+
+  it('rejected 行显示复审按钮，点击调用 state-transition reopen_pending', async () => {
+    getMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/admin/videos?')) {
+        return {
+          data: [{
+            ...MOCK_ROWS[0],
+            id: 'v-rej',
+            review_status: 'rejected',
+            source_check_status: 'ok',
+          }],
+          total: 1,
+        }
+      }
+      return { data: [], total: 0 }
+    })
+
+    render(<VideoTable />)
+    await screen.findByText('Zeta Movie')
+
+    const reopenBtn = screen.getByTestId('video-reopen-v-rej')
+    expect(reopenBtn).toBeDefined()
+
+    fireEvent.click(reopenBtn)
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith(
+        '/admin/videos/v-rej/state-transition',
+        { action: 'reopen_pending' },
+      )
+    })
+  })
+
+  it('非 rejected 行不显示复审按钮', async () => {
+    render(<VideoTable />)
+    await screen.findByText('Alpha Movie')
+
+    expect(screen.queryByTestId('video-reopen-v1')).toBeNull()
+    expect(screen.queryByTestId('video-reopen-v2')).toBeNull()
+  })
+
+  // ── VIDEO-10: 触发补源按钮 ─────────────────────────────────────────
+
+  it('all_dead 行显示补源按钮，点击调用 refetch-sources', async () => {
+    getMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/admin/videos?')) {
+        return {
+          data: [{
+            ...MOCK_ROWS[0],
+            id: 'v-dead',
+            source_check_status: 'all_dead',
+          }],
+          total: 1,
+        }
+      }
+      return { data: [], total: 0 }
+    })
+
+    render(<VideoTable />)
+    await screen.findByText('Zeta Movie')
+
+    const refetchBtn = screen.getByTestId('video-refetch-v-dead')
+    expect(refetchBtn).toBeDefined()
+
+    fireEvent.click(refetchBtn)
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith('/admin/videos/v-dead/refetch-sources', {})
+    })
+  })
+
+  it('非 all_dead 行不显示补源按钮', async () => {
+    render(<VideoTable />)
+    await screen.findByText('Alpha Movie')
+
+    expect(screen.queryByTestId('video-refetch-v1')).toBeNull()
+    expect(screen.queryByTestId('video-refetch-v2')).toBeNull()
+  })
 })

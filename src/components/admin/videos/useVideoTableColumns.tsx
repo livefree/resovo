@@ -141,10 +141,14 @@ interface ColumnDeps {
   visibilityPendingIds: string[]
   publishPendingIds: string[]
   doubanSyncPendingIds: string[]
+  reopenPendingIds: string[]
+  refetchPendingIds: string[]
   handleCheck: (id: string, checked: boolean) => void
   handleVisibilityToggle: (row: VideoAdminRow, next: 'public' | 'internal' | 'hidden') => Promise<void>
   handlePublishToggle: (row: VideoAdminRow) => Promise<void>
   handleDoubanSync: (row: VideoAdminRow) => Promise<void>
+  handleReopen: (row: VideoAdminRow) => Promise<void>
+  handleRefetchSources: (row: VideoAdminRow) => Promise<void>
   openFullEdit: (id: string) => void
   openStaging: (videoId: string) => void
 }
@@ -313,6 +317,32 @@ function buildDataColumn(columnId: VideoColumnId, deps: ColumnDeps): TableColumn
                 暂存
               </button>
             ) : null}
+            {/* 已拒绝：复审（reopen_pending） */}
+            {row.review_status === 'rejected' ? (
+              <button
+                type="button"
+                title="复审（重置为待审核）"
+                disabled={deps.reopenPendingIds.includes(row.id)}
+                onClick={() => { void deps.handleReopen(row) }}
+                className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                data-testid={`video-reopen-${row.id}`}
+              >
+                {deps.reopenPendingIds.includes(row.id) ? '提交中…' : '复审'}
+              </button>
+            ) : null}
+            {/* 全失效：触发补源 */}
+            {row.source_check_status === 'all_dead' ? (
+              <button
+                type="button"
+                title="触发补源采集"
+                disabled={deps.refetchPendingIds.includes(row.id)}
+                onClick={() => { void deps.handleRefetchSources(row) }}
+                className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                data-testid={`video-refetch-${row.id}`}
+              >
+                {deps.refetchPendingIds.includes(row.id) ? '触发中…' : '补源'}
+              </button>
+            ) : null}
             {/* 上架/下架 Toggle */}
             <button
               type="button"
@@ -375,6 +405,8 @@ export function useVideoTableColumns({
     deps.visibilityPendingIds,
     deps.publishPendingIds,
     deps.doubanSyncPendingIds,
+    deps.reopenPendingIds,
+    deps.refetchPendingIds,
     deps.sortable,
   ])
 }

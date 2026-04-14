@@ -50,6 +50,8 @@ export function VideoTable() {
   const [visibilityPendingIds, setVisibilityPendingIds] = useState<string[]>([])
   const [publishPendingIds, setPublishPendingIds] = useState<string[]>([])
   const [doubanSyncPendingIds, setDoubanSyncPendingIds] = useState<string[]>([])
+  const [reopenPendingIds, setReopenPendingIds] = useState<string[]>([])
+  const [refetchPendingIds, setRefetchPendingIds] = useState<string[]>([])
 
   const q = searchParams.get('q') ?? ''
   const type = searchParams.get('type') ?? ''
@@ -163,6 +165,30 @@ export function VideoTable() {
     router.push(`/admin/staging?videoId=${videoId}`)
   }, [router])
 
+  const handleReopen = useCallback(async (row: VideoAdminRow) => {
+    setReopenPendingIds((ids) => (ids.includes(row.id) ? ids : [...ids, row.id]))
+    try {
+      await apiClient.post(`/admin/videos/${row.id}/state-transition`, { action: 'reopen_pending' })
+      void fetchVideos(page, pageSize)
+    } catch (_err) {
+      // 失败不阻断交互
+    } finally {
+      setReopenPendingIds((ids) => ids.filter((id) => id !== row.id))
+    }
+  }, [fetchVideos, page, pageSize])
+
+  const handleRefetchSources = useCallback(async (row: VideoAdminRow) => {
+    setRefetchPendingIds((ids) => (ids.includes(row.id) ? ids : [...ids, row.id]))
+    try {
+      await apiClient.post(`/admin/videos/${row.id}/refetch-sources`, {})
+      void fetchVideos(page, pageSize)
+    } catch (_err) {
+      // 失败不阻断交互
+    } finally {
+      setRefetchPendingIds((ids) => ids.filter((id) => id !== row.id))
+    }
+  }, [fetchVideos, page, pageSize])
+
   const allTableColumns = useVideoTableColumns({
     visibleColumnIds: ALL_VIDEO_COLUMN_IDS,
     allSelected,
@@ -173,10 +199,14 @@ export function VideoTable() {
       visibilityPendingIds,
       publishPendingIds,
       doubanSyncPendingIds,
+      reopenPendingIds,
+      refetchPendingIds,
       handleCheck,
       handleVisibilityToggle,
       handlePublishToggle,
       handleDoubanSync,
+      handleReopen,
+      handleRefetchSources,
       openFullEdit,
       openStaging,
     },

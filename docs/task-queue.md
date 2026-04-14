@@ -5753,18 +5753,24 @@
 - **完成备注**：VideoAdminRow 补充 douban_status/meta_score/source_check_status 字段；新列默认 visible:false；14 个测试全部通过
 
 #### VIDEO-10 — [UI] 视频管理：复审按钮 + 暂存队列 badge + 补源触发
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
+- **实际开始**：2026-04-14
+- **完成时间**：2026-04-14
 - **计划开始**：VIDEO-09 完成后
 - **依赖**：VIDEO-09 ✅，CRAWLER-04 ✅
 - **文件范围**：
-  - `src/app/[locale]/admin/videos/page.tsx`（顶部新增暂存 badge）
-  - `src/components/admin/` 视频行操作相关组件（现有，新增操作项）
+  - `src/app/[locale]/admin/videos/page.tsx`（顶部新增 StagingCountBadge）
+  - `src/components/admin/videos/StagingCountBadge.tsx`（新建）
+  - `src/components/admin/videos/useVideoTableColumns.tsx`（actions 列新增条件按钮）
+  - `src/components/admin/videos/VideoTable.tsx`（新增 handler + state）
+  - `tests/unit/components/admin/videos/VideoTable.test.tsx`（+4 用例，共 18 测）
 - **变更内容**：
-  - 页面顶部：暂存队列数量 badge（"暂存中 N 条"，点击跳转 /admin/staging）
-  - rejected 状态行新增[复审]操作 → state-transition: reopen_pending
-  - all_dead 状态行新增[触发补源]操作 → POST /admin/videos/:id/refetch-sources
-- **完成备注**：_（AI 填写）_
+  - StagingCountBadge: 拉取 /admin/staging?page=1&limit=1 获取 total，显示"暂存中 N 条"link badge，N=0 时不渲染
+  - rejected 行显示[复审]按钮 → POST /admin/videos/:id/state-transition {action:'reopen_pending'}
+  - source_check_status=all_dead 行显示[补源]按钮 → POST /admin/videos/:id/refetch-sources
+  - 两个操作均有 pending 状态管理和完成后刷新
+- **完成备注**：StagingCountBadge 为独立 Client Component，不影响页面 SSR；条件按钮互斥，不增加行内按钮数量上限
 
 > 🏁 **M7 里程碑评审节点 / 最终全流程验收**（VIDEO-10 完成后触发）
 >

@@ -5840,3 +5840,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无（listAdminVideos 已通过 VIDEO_FULL_SELECT 透传 douban_status/meta_score，无需改 DB 层）
 - **架构备注**："暂存中"状态用 review_status==='approved'&&!is_published 判定，无需额外字段或 API 变更
+
+---
+
+## VIDEO-10 — [UI] 视频管理：复审按钮 + 暂存队列 badge + 补源触发
+
+- **完成时间**：2026-04-14
+- **实际开始**：2026-04-14
+- **交付内容**：
+  - `src/components/admin/videos/StagingCountBadge.tsx`（新建）— Client Component，挂载时拉取 GET /admin/staging?page=1&limit=1 获取暂存总数，N>0 时渲染"暂存中 N 条"badge link，点击跳转 /admin/staging
+  - `src/app/[locale]/admin/videos/page.tsx` — actions 区插入 StagingCountBadge
+  - `src/components/admin/videos/useVideoTableColumns.tsx` — ColumnDeps 新增 reopenPendingIds/refetchPendingIds/handleReopen/handleRefetchSources；actions 列新增条件按钮：review_status=rejected→[复审]、source_check_status=all_dead→[补源]
+  - `src/components/admin/videos/VideoTable.tsx` — 新增 reopenPendingIds/refetchPendingIds state；handleReopen（POST state-transition reopen_pending + 刷新）；handleRefetchSources（POST refetch-sources + 刷新）
+  - `tests/unit/components/admin/videos/VideoTable.test.tsx` — 新增 4 条单测（复审按钮渲染/调用、非rejected不显示、补源按钮渲染/调用），共 18 测全部通过
+- **新增依赖**：无
+- **数据库变更**：无
+- **架构备注**：StagingCountBadge 独立 Client Component，Server Component 页面无需 async；条件按钮仅在对应状态下渲染，不增加通常行的按钮密度
