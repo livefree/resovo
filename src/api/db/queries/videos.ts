@@ -1302,3 +1302,76 @@ export async function updateVideoSourceCheckStatus(
     [status, videoId]
   )
 }
+
+/**
+ * 从 video_sources.is_active 聚合并回写单条视频的 source_check_status。
+ * 用于补源完成后即时更新状态（crawlerWorker source-refetch 成功路径）。
+ */
+export async function syncSourceCheckStatusFromSources(
+  db: Pool,
+  videoId: string,
+): Promise<void> {
+  await db.query(
+    `UPDATE videos
+     SET source_check_status = (
+       CASE
+         WHEN NOT EXISTS (
+           SELECT 1 FROM video_sources WHERE video_id = $1 AND deleted_at IS NULL
+         ) THEN 'no_source'
+         WHEN NOT EXISTS (
+           SELECT 1 FROM video_sources WHERE video_id = $1 AND is_active = true AND deleted_at IS NULL
+         ) THEN 'all_dead'
+         WHEN EXISTS (
+           SELECT 1 FROM video_sources WHERE video_id = $1 AND is_active = false AND deleted_at IS NULL
+         ) THEN 'partial'
+         ELSE 'ok'
+       END
+     ),
+     updated_at = NOW()
+     WHERE id = $1 AND deleted_at IS NULL`,
+    [videoId],
+  )
+}
+
+/**
+ * 批量从 video_sources.is_active 聚合并回写 source_check_status。
+ * filter='published'：已上架视频（verify-published-sources 前置步骤）。
+ * filter='staging'：暂存中视频（verify-staging-sources 任务）。
+ * 返回实际更新行数。
+ */
+export async function bulkSyncSourceCheckStatus(
+  db: Pool,
+  filter: 'published' | 'staging',
+  limit = 500,
+): Promise<number> {
+  const filterClause = filter === 'published'
+    ? `is_published = true`
+    : `review_status = 'approved' AND visibility_status = 'internal' AND is_published = false`
+
+  const result = await db.query(
+    `UPDATE videos
+     SET source_check_status = (
+       CASE
+         WHEN NOT EXISTS (
+           SELECT 1 FROM video_sources WHERE video_id = videos.id AND deleted_at IS NULL
+         ) THEN 'no_source'
+         WHEN NOT EXISTS (
+           SELECT 1 FROM video_sources WHERE video_id = videos.id AND is_active = true AND deleted_at IS NULL
+         ) THEN 'all_dead'
+         WHEN EXISTS (
+           SELECT 1 FROM video_sources WHERE video_id = videos.id AND is_active = false AND deleted_at IS NULL
+         ) THEN 'partial'
+         ELSE 'ok'
+       END
+     ),
+     updated_at = NOW()
+     WHERE id IN (
+       SELECT id FROM videos
+       WHERE ${filterClause}
+         AND deleted_at IS NULL
+       LIMIT $1
+     )`,
+    [limit],
+  )
+  return result.rowCount ?? 0
+}

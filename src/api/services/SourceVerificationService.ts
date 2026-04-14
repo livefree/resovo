@@ -12,7 +12,7 @@
 
 import type { Pool } from 'pg'
 import * as sourcesQueries from '@/api/db/queries/sources'
-import { transitionVideoState } from '@/api/db/queries/videos'
+import { transitionVideoState, bulkSyncSourceCheckStatus } from '@/api/db/queries/videos'
 import { CrawlerRunService } from '@/api/services/CrawlerRunService'
 
 export interface VerifyPublishedSourcesResult {
@@ -36,6 +36,10 @@ export class SourceVerificationService {
       skipped: 0,
       failed: 0,
     }
+
+    // 先从 video_sources.is_active 聚合回写 source_check_status，
+    // 确保 listIslandVideos 能读到最新失效状态而非仅依赖 MetadataEnrich 的快照
+    await bulkSyncSourceCheckStatus(this.db, 'published', batchLimit * 10)
 
     const islands = await sourcesQueries.listIslandVideos(this.db, batchLimit)
 

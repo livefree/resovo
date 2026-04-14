@@ -8,10 +8,14 @@ import { maintenanceQueue } from '@/api/lib/queue'
 import { db } from '@/api/lib/postgres'
 import { StagingPublishService } from '@/api/services/StagingPublishService'
 import { SourceVerificationService } from '@/api/services/SourceVerificationService'
+import { bulkSyncSourceCheckStatus } from '@/api/db/queries/videos'
 
 // ── 任务类型 ──────────────────────────────────────────────────────
 
-export type MaintenanceJobType = 'auto-publish-staging' | 'verify-published-sources'
+export type MaintenanceJobType =
+  | 'auto-publish-staging'
+  | 'verify-published-sources'
+  | 'verify-staging-sources'
 
 export interface MaintenanceJobData {
   type: MaintenanceJobType
@@ -19,6 +23,8 @@ export interface MaintenanceJobData {
   maxBatch?: number
   /** verify-published-sources: 单批次最大检测数量（default 50） */
   batchLimit?: number
+  /** verify-staging-sources: 单批次最大同步数量（default 200） */
+  stagingBatchLimit?: number
 }
 
 export interface MaintenanceJobResult {
@@ -53,6 +59,16 @@ async function processMaintenanceJob(
         `refetchEnqueued=${stats.refetchEnqueued} skipped=${stats.skipped} failed=${stats.failed} (${durationMs}ms)\n`,
       )
       return { type: data.type, durationMs, ...stats }
+    }
+    case 'verify-staging-sources': {
+      // 从 video_sources.is_active 聚合回写暂存视频的 source_check_status，
+      // 使 StagingTable 的 ready/blocked 状态反映当前真实源状态
+      const updated = await bulkSyncSourceCheckStatus(db, 'staging', data.stagingBatchLimit ?? 200)
+      const durationMs = Date.now() - startAt
+      process.stderr.write(
+        `[maintenance-worker] verify-staging-sources: updated=${updated} (${durationMs}ms)\n`,
+      )
+      return { type: data.type, durationMs, updated }
     }
     default: {
       const never: never = data.type

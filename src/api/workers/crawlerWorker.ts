@@ -15,6 +15,7 @@ import { createCrawlerTaskLog } from '@/api/db/queries/crawlerTaskLogs'
 import * as crawlerRunsQueries from '@/api/db/queries/crawlerRuns'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import * as sourcesQueries from '@/api/db/queries/sources'
+import { syncSourceCheckStatusFromSources, transitionVideoState } from '@/api/db/queries/videos'
 
 // ── 资源站工具函数（从 CrawlerService 迁入，worker 是唯一调用方） ───
 
@@ -455,11 +456,28 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
 
     // source-refetch 模式：写 source_health_events（成功/失败）
     if (crawlMode === 'source-refetch' && targetVideoId) {
+      const refetchOrigin = sourcesUpserted > 0 ? 'auto_refetch_success' : 'auto_refetch_failed'
       await sourcesQueries.insertSourceHealthEvent(db, {
         videoId: targetVideoId,
-        origin: sourcesUpserted > 0 ? 'auto_refetch_success' : 'auto_refetch_failed',
+        origin: refetchOrigin,
         triggeredBy: 'maintenance_worker',
       })
+
+      // 补源成功：聚合新源状态 + 自动重新发布
+      if (refetchOrigin === 'auto_refetch_success') {
+        await syncSourceCheckStatusFromSources(db, targetVideoId)
+        try {
+          await transitionVideoState(db, targetVideoId, {
+            action: 'publish',
+            reviewedBy: 'system',
+          })
+        } catch {
+          // 若视频已不在 approved+internal 状态，transition 会拒绝，属正常情况
+          process.stderr.write(
+            `[crawler-worker] auto re-publish skipped for ${targetVideoId} (state mismatch)\n`
+          )
+        }
+      }
     }
 
     return {

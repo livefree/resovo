@@ -19,6 +19,8 @@ const mockCreateCrawlerTaskLog = vi.fn().mockResolvedValue(undefined)
 const mockGetSetting = vi.fn().mockResolvedValue(null)
 const mockRefetchSourcesForVideo = vi.fn()
 const mockInsertSourceHealthEvent = vi.fn().mockResolvedValue('event-id-1')
+const mockSyncSourceCheckStatusFromSources = vi.fn().mockResolvedValue(undefined)
+const mockTransitionVideoState = vi.fn().mockResolvedValue({ id: 'video-uuid-1234', is_published: true })
 
 const mockAdd = vi.fn().mockResolvedValue({ id: 'job-1' })
 const mockProcess = vi.fn()
@@ -83,6 +85,11 @@ vi.mock('@/api/db/queries/systemSettings', () => ({
 
 vi.mock('@/api/db/queries/sources', () => ({
   insertSourceHealthEvent: mockInsertSourceHealthEvent,
+}))
+
+vi.mock('@/api/db/queries/videos', () => ({
+  syncSourceCheckStatusFromSources: mockSyncSourceCheckStatusFromSources,
+  transitionVideoState: mockTransitionVideoState,
 }))
 
 // ── 工具函数 ────────────────────────────────────────────────────────
@@ -150,6 +157,17 @@ describe('processCrawlJob — source-refetch 任务落库完成态', () => {
       expect.anything(),
       expect.objectContaining({ videoId: 'video-uuid-1234', origin: 'auto_refetch_success' }),
     )
+
+    // P1b: 补源成功后同步 source_check_status 并重新发布
+    expect(mockSyncSourceCheckStatusFromSources).toHaveBeenCalledWith(
+      expect.anything(),
+      'video-uuid-1234',
+    )
+    expect(mockTransitionVideoState).toHaveBeenCalledWith(
+      expect.anything(),
+      'video-uuid-1234',
+      expect.objectContaining({ action: 'publish', reviewedBy: 'system' }),
+    )
   })
 
   it('source-refetch 成功：syncRunStatusFromTasks 被调用以更新 run 状态', async () => {
@@ -206,6 +224,10 @@ describe('processCrawlJob — source-refetch 任务落库完成态', () => {
       expect.anything(),
       expect.objectContaining({ videoId: 'video-uuid-1234', origin: 'auto_refetch_failed' }),
     )
+
+    // P1b: 补源失败时不调用 sync/publish
+    expect(mockSyncSourceCheckStatusFromSources).not.toHaveBeenCalled()
+    expect(mockTransitionVideoState).not.toHaveBeenCalled()
   })
 
   it('batch 模式：updateTaskStatus("done") 由 CrawlerService.crawl() 内部调用，不重复调用', async () => {

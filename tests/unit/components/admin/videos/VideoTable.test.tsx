@@ -23,8 +23,11 @@ vi.mock('next/navigation', () => ({
   }),
 }))
 
+// 可在测试内切换角色
+const mockAuthState = { user: { role: 'admin' as string } }
+
 vi.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: { user: { role: 'admin' } }) => unknown) => selector({ user: { role: 'admin' } }),
+  useAuthStore: (selector: (state: typeof mockAuthState) => unknown) => selector(mockAuthState),
   selectIsAdmin: (state: { user?: { role?: string } }) => state.user?.role === 'admin',
 }))
 
@@ -91,6 +94,7 @@ describe('VideoTable (CHG-211/212)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    mockAuthState.user.role = 'admin' // 每次测试前重置为 admin
     mockSearchParams.forEach((_value, key) => mockSearchParams.delete(key))
     getMock.mockImplementation(async (url: string) => {
       if (url.startsWith('/admin/videos?')) {
@@ -446,5 +450,50 @@ describe('VideoTable (CHG-211/212)', () => {
 
     expect(screen.queryByTestId('video-refetch-v1')).toBeNull()
     expect(screen.queryByTestId('video-refetch-v2')).toBeNull()
+  })
+
+  // ── P2c: 豆瓣同步按钮仅 admin 可见 ───────────────────────────────
+
+  it('moderator 不显示豆瓣同步按钮', async () => {
+    mockAuthState.user.role = 'moderator'
+
+    render(<VideoTable />)
+    await screen.findByText('Alpha Movie')
+
+    fireEvent.click(screen.getByTestId('video-table-scroll-settings-btn'))
+    fireEvent.click(screen.getByTestId('video-table-scroll-settings-content-visible-douban_status'))
+
+    await waitFor(() => {
+      expect(screen.getByText('已匹配')).toBeDefined()
+    })
+
+    // 非 admin，不渲染同步按钮
+    expect(screen.queryByTestId('douban-sync-v1')).toBeNull()
+    expect(screen.queryByTestId('douban-sync-v2')).toBeNull()
+  })
+
+  // ── P3: [暂存] + [补源] 互斥 ─────────────────────────────────────
+
+  it('approved+!is_published+all_dead 行只显示[暂存]不显示[补源]', async () => {
+    getMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/admin/videos?')) {
+        return {
+          data: [{
+            ...MOCK_STAGING_ROW,
+            source_check_status: 'all_dead',
+          }],
+          total: 1,
+        }
+      }
+      return { data: [], total: 0 }
+    })
+
+    render(<VideoTable />)
+    await screen.findByText('Staging Movie')
+
+    // 应显示[暂存]
+    expect(screen.getByTestId('video-staging-v3')).toBeDefined()
+    // 不应显示[补源]（互斥）
+    expect(screen.queryByTestId('video-refetch-v3')).toBeNull()
   })
 })

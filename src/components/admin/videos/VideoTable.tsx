@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
+import { useAuthStore, selectIsAdmin } from '@/stores/authStore'
 import { PaginationV2 } from '@/components/admin/PaginationV2'
 import { BatchPublishBar } from '@/components/admin/videos/BatchPublishBar'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
@@ -41,6 +42,7 @@ const DEFAULT_PAGE_SIZE = 20
 export function VideoTable() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const isAdmin = useAuthStore(selectIsAdmin)
   const [videos, setVideos] = useState<VideoAdminRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -201,6 +203,7 @@ export function VideoTable() {
       doubanSyncPendingIds,
       reopenPendingIds,
       refetchPendingIds,
+      isAdmin,
       handleCheck,
       handleVisibilityToggle,
       handlePublishToggle,

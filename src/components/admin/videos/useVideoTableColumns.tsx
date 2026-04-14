@@ -143,6 +143,7 @@ interface ColumnDeps {
   doubanSyncPendingIds: string[]
   reopenPendingIds: string[]
   refetchPendingIds: string[]
+  isAdmin: boolean
   handleCheck: (id: string, checked: boolean) => void
   handleVisibilityToggle: (row: VideoAdminRow, next: 'public' | 'internal' | 'hidden') => Promise<void>
   handlePublishToggle: (row: VideoAdminRow) => Promise<void>
@@ -234,16 +235,18 @@ function buildDataColumn(columnId: VideoColumnId, deps: ColumnDeps): TableColumn
         return (
           <div className="flex items-center gap-1.5">
             <TableBadgeCell label={labelMap[status] ?? status} tone={toneMap[status] ?? 'info'} />
-            <button
-              type="button"
-              title="立即同步豆瓣"
-              disabled={isPending}
-              onClick={() => { void deps.handleDoubanSync(row) }}
-              className="rounded border border-[var(--border)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-40 disabled:cursor-not-allowed"
-              data-testid={`douban-sync-${row.id}`}
-            >
-              {isPending ? '同步中…' : '同步'}
-            </button>
+            {deps.isAdmin ? (
+              <button
+                type="button"
+                title="立即同步豆瓣（仅 admin）"
+                disabled={isPending}
+                onClick={() => { void deps.handleDoubanSync(row) }}
+                className="rounded border border-[var(--border)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-40 disabled:cursor-not-allowed"
+                data-testid={`douban-sync-${row.id}`}
+              >
+                {isPending ? '同步中…' : '同步'}
+              </button>
+            ) : null}
           </div>
         )
       }
@@ -330,8 +333,9 @@ function buildDataColumn(columnId: VideoColumnId, deps: ColumnDeps): TableColumn
                 {deps.reopenPendingIds.includes(row.id) ? '提交中…' : '复审'}
               </button>
             ) : null}
-            {/* 全失效：触发补源 */}
-            {row.source_check_status === 'all_dead' ? (
+            {/* 全失效：触发补源（暂存中视频不显示，由自动机制处理） */}
+            {row.source_check_status === 'all_dead'
+              && !(row.review_status === 'approved' && !row.is_published) ? (
               <button
                 type="button"
                 title="触发补源采集"
