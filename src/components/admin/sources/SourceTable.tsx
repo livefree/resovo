@@ -10,15 +10,16 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { AdminToolbar } from '@/components/admin/shared/toolbar/AdminToolbar'
 import { InactiveSourceTable } from '@/components/admin/sources/InactiveSourceTable'
 import { SubmissionTable } from '@/components/admin/sources/SubmissionTable'
+import { OrphanVideoTable } from '@/components/admin/sources/OrphanVideoTable'
 
-type SourceTab = 'all' | 'inactive' | 'submissions'
+type SourceTab = 'all' | 'inactive' | 'submissions' | 'orphan'
 type SourceSortField = 'created_at' | 'last_checked' | 'is_active' | 'video_title' | 'source_url' | 'site_key'
 type SourceSortDir = 'asc' | 'desc'
 
 const SOURCE_TAB_QUERY_KEY = 'sourceTab'
 
 function parseTab(input: string | null): SourceTab {
-  if (input === 'inactive' || input === 'submissions') return input
+  if (input === 'inactive' || input === 'submissions' || input === 'orphan') return input
   return 'all'
 }
 
@@ -145,9 +146,15 @@ export function SourceTable() {
                 className={`rounded px-3 py-1 text-sm ${activeTab === 'submissions' ? 'bg-[var(--accent)] text-black' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
                 data-testid="source-tab-submissions"
               >用户纠错</button>
+              <button
+                type="button"
+                onClick={() => handleTabChange('orphan')}
+                className={`rounded px-3 py-1 text-sm ${activeTab === 'orphan' ? 'bg-[var(--accent)] text-black' : 'text-[var(--muted)] hover:text-[var(--text)]'}`}
+                data-testid="source-tab-orphan"
+              >孤岛视频</button>
             </div>
 
-            {activeTab !== 'submissions' ? (
+            {activeTab !== 'submissions' && activeTab !== 'orphan' ? (
               <>
                 <input
                   type="text"
@@ -229,6 +236,7 @@ export function SourceTable() {
       {activeTab === 'all' ? <InactiveSourceTable key="all" status="all" {...sourceFilters} /> : null}
       {activeTab === 'inactive' ? <InactiveSourceTable key="inactive" status="inactive" {...sourceFilters} /> : null}
       {activeTab === 'submissions' ? <SubmissionTable /> : null}
+      {activeTab === 'orphan' ? <OrphanVideoTable /> : null}
     </div>
   )
 }

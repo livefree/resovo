@@ -5808,3 +5808,21 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：新建 source_health_events 表（migration 037）
 - **架构备注**：source-refetch 完成/失败回写 health events 预留给 ADMIN-12 阶段联动
+
+---
+
+## ADMIN-12 — [UI] 源管理：孤岛视频 Tab + 替换源弹窗播放器确认
+
+- **完成时间**：2026-04-14
+- **实际开始**：2026-04-14
+- **交付内容**：
+  - `src/api/routes/admin/content.ts` — 新增三端点：GET /admin/sources/orphan-videos（最新事件为 auto_refetch_failed 且无后续 manually_resolved 的视频列表）、POST /admin/sources/orphan-videos/:id/resolve（写入 manually_resolved 事件）、PATCH /admin/sources/:id/url（替换源 URL 并设 is_active=true）
+  - `src/api/db/queries/sources.ts` — 新增 listOrphanVideos（DISTINCT ON + 关联子查询）、resolveOrphanVideo、replaceSourceUrl
+  - `src/components/admin/sources/OrphanVideoTable.tsx`（新建）— 孤岛视频列表，[触发补源][进入暂存][标记已处理]
+  - `src/components/admin/sources/SourceTable.tsx` — 新增"孤岛视频"Tab，过滤器在该 Tab 下隐藏
+  - `src/components/admin/sources/SourceReplaceDialog.tsx`（新建）— 输入新 URL → ModerationPlayer 预览 → [确认替换] 调 PATCH /admin/sources/:id/url
+  - `src/components/admin/sources/InactiveSourceTable.tsx` — 操作列新增[替换URL]按钮（actions 列宽 220→280），点击打开 SourceReplaceDialog
+  - `tests/unit/components/admin/sources/OrphanVideoTable.test.tsx`（新建）— 12 条单测：加载态/空态/列表渲染/触发补源/标记已处理/进入暂存/刷新
+- **新增依赖**：无
+- **数据库变更**：无（复用 migration 037 中的 source_health_events 表）
+- **架构备注**：SourceReplaceDialog 复用 AdminDialogShell + ModerationPlayer，无新共享组件；孤岛判定逻辑完全在 DB query 层，路由层零业务逻辑

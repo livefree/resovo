@@ -706,3 +706,90 @@ export async function insertSourceHealthEvent(
   )
   return result.rows[0].id
 }
+
+// ── ADMIN-12: 孤岛视频查询（最新事件为 auto_refetch_failed）────────
+
+export interface OrphanVideoRow {
+  id: string
+  title: string
+  siteKey: string | null
+  sourceCheckStatus: string
+  lastEventOrigin: string
+  lastEventAt: string
+}
+
+/**
+ * 查询孤岛视频：source_health_events 中最新事件为 auto_refetch_failed 且
+ * 尚无 manually_resolved 事件的视频（需要人工处理）
+ */
+export async function listOrphanVideos(
+  db: Pool,
+  limit = 50,
+): Promise<OrphanVideoRow[]> {
+  const result = await db.query<{
+    id: string
+    title: string
+    site_key: string | null
+    source_check_status: string
+    last_event_origin: string
+    last_event_at: string
+  }>(
+    `SELECT DISTINCT ON (v.id)
+       v.id, v.title, v.site_key, v.source_check_status,
+       she.origin AS last_event_origin,
+       she.created_at AS last_event_at
+     FROM videos v
+     JOIN source_health_events she ON she.video_id = v.id
+     WHERE she.origin = 'auto_refetch_failed'
+       AND v.deleted_at IS NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM source_health_events r
+         WHERE r.video_id = v.id
+           AND r.origin = 'manually_resolved'
+           AND r.created_at > she.created_at
+       )
+     ORDER BY v.id, she.created_at DESC
+     LIMIT $1`,
+    [limit],
+  )
+  return result.rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    siteKey: r.site_key,
+    sourceCheckStatus: r.source_check_status,
+    lastEventOrigin: r.last_event_origin,
+    lastEventAt: r.last_event_at,
+  }))
+}
+
+/**
+ * 标记孤岛视频已处理：写入 manually_resolved 事件
+ */
+export async function resolveOrphanVideo(
+  db: Pool,
+  videoId: string,
+): Promise<void> {
+  await db.query(
+    `INSERT INTO source_health_events (video_id, origin, triggered_by)
+     VALUES ($1, 'manually_resolved', 'admin')`,
+    [videoId],
+  )
+}
+
+/**
+ * 替换播放源 URL（用于 SourceReplaceDialog 确认替换）
+ */
+export async function replaceSourceUrl(
+  db: Pool,
+  sourceId: string,
+  newUrl: string,
+): Promise<boolean> {
+  const result = await db.query(
+    `UPDATE video_sources
+     SET source_url = $1, is_active = true, last_checked = NOW()
+     WHERE id = $2 AND deleted_at IS NULL
+     RETURNING id`,
+    [newUrl, sourceId],
+  )
+  return (result.rowCount ?? 0) > 0
+}

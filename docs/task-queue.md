@@ -5709,21 +5709,21 @@
 - **完成备注**：source-refetch 成功/失败时写回 health events 的逻辑依赖 CrawlerWorker 回调，在 ADMIN-12 与孤岛 Tab 联动时完善
 
 #### ADMIN-12 — [UI] 源管理：孤岛视频 Tab + 替换源弹窗播放器确认
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **计划开始**：CHG-388 完成后
+- **实际开始**：2026-04-14
+- **完成时间**：2026-04-14
 - **依赖**：CHG-388 ✅
 - **文件范围**：
-  - `src/app/[locale]/admin/sources/page.tsx`（新增孤岛视频 Tab）
-  - `src/components/admin/sources/OrphanVideoTable.tsx`（新建，孤岛视频列表）
-  - `src/components/admin/sources/SourceReplaceDialog.tsx`（现有替换弹窗，增加内嵌播放器）
-  - `src/components/admin/sources/SourceHealthAlert.tsx`（缩减或移除，Tab 已承载功能）
-  - `src/api/routes/admin/sources.ts`（GET /admin/sources/orphan-videos 接口）
-  - `tests/unit/components/admin/sources/OrphanVideoTable.test.tsx`（新建）
-- **变更内容**：
-  - 新增"孤岛视频"Tab：展示 source_health_events 最新记录为 auto_refetch_failed 的视频，操作：[手动处理（进暂存）] [标记已处理] [触发补源]
-  - 替换源弹窗：输入新URL后[验活]按钮 → 内嵌 ModerationPlayer 加载预播放，确认可播后[确认替换]才写库
-- **完成备注**：_（AI 填写）_
+  - `src/api/routes/admin/content.ts`（新增 GET /admin/sources/orphan-videos、POST .../resolve、PATCH .../url）
+  - `src/api/db/queries/sources.ts`（新增 listOrphanVideos + resolveOrphanVideo + replaceSourceUrl）
+  - `src/components/admin/sources/OrphanVideoTable.tsx`（新建）
+  - `src/components/admin/sources/SourceTable.tsx`（新增孤岛视频 Tab）
+  - `src/components/admin/sources/SourceReplaceDialog.tsx`（新建，内嵌 ModerationPlayer）
+  - `src/components/admin/sources/InactiveSourceTable.tsx`（新增[替换URL]操作）
+  - `tests/unit/components/admin/sources/OrphanVideoTable.test.tsx`（新建，12 个用例）
+- **完成备注**：API 三端点已纳入 content.ts 路由。OrphanVideoTable 使用 DISTINCT ON + 关联子查询定义孤岛。SourceReplaceDialog 输入 URL → 内嵌 ModerationPlayer 预览 → 确认替换调 PATCH /admin/sources/:id/url。InactiveSourceTable 新增[替换URL]按钮，actions 列宽从 220 调整为 280。12 个单元测试全部通过，typecheck/lint 零错误。
 
 > 🏁 **M6 里程碑评审节点**（ADMIN-12 完成后触发）
 

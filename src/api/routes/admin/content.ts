@@ -21,6 +21,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { ContentService } from '@/api/services/ContentService'
+import * as sourcesQueries from '@/api/db/queries/sources'
 
 // ── 路由注册 ──────────────────────────────────────────────────────
 
@@ -304,5 +305,65 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
       })
     }
     return reply.code(204).send()
+  })
+
+  // ════════════════════════════════════════════════════════════════
+  // 孤岛视频（ADMIN-12: CHG-388 自动下架后补源仍失败的视频）
+  // ════════════════════════════════════════════════════════════════
+
+  // ── GET /admin/sources/orphan-videos ─────────────────────────────
+  fastify.get('/admin/sources/orphan-videos', { preHandler: auth }, async (_request, reply) => {
+    try {
+      const rows = await sourcesQueries.listOrphanVideos(db, 100)
+      return reply.send({ data: rows, total: rows.length })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: `查询孤岛视频失败: ${msg}`, status: 500 },
+      })
+    }
+  })
+
+  // ── POST /admin/sources/orphan-videos/:id/resolve — 标记已处理 ───
+  fastify.post('/admin/sources/orphan-videos/:id/resolve', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      await sourcesQueries.resolveOrphanVideo(db, id)
+      return reply.send({ data: { id, resolved: true } })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: `标记失败: ${msg}`, status: 500 },
+      })
+    }
+  })
+
+  // ── PATCH /admin/sources/:id/url — 替换播放源 URL ───────────────
+  const ReplaceUrlSchema = z.object({
+    newUrl: z.string().url().max(2048),
+  })
+
+  fastify.patch('/admin/sources/:id/url', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const parsed = ReplaceUrlSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+    try {
+      const ok = await sourcesQueries.replaceSourceUrl(db, id, parsed.data.newUrl)
+      if (!ok) {
+        return reply.code(404).send({
+          error: { code: 'NOT_FOUND', message: '播放源不存在', status: 404 },
+        })
+      }
+      return reply.send({ data: { id, updated: true } })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: `替换失败: ${msg}`, status: 500 },
+      })
+    }
   })
 }

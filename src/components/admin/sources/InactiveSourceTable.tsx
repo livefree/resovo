@@ -13,6 +13,7 @@ import { SourceVerifyButton } from '@/components/admin/sources/SourceVerifyButto
 import { BatchDeleteBar } from '@/components/admin/sources/BatchDeleteBar'
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
 import { SelectionActionBar } from '@/components/admin/shared/batch/SelectionActionBar'
+import { SourceReplaceDialog } from '@/components/admin/sources/SourceReplaceDialog'
 import { ModernDataTable } from '@/components/admin/shared/modern-table/ModernDataTable'
 import type { AdminColumnMeta } from '@/components/admin/shared/table/adminColumnTypes'
 import { useTableSettings } from '@/components/admin/shared/modern-table/settings'
@@ -51,7 +52,7 @@ const INACTIVE_SOURCE_COLUMNS_META: AdminColumnMeta[] = [
   { id: 'source_url', visible: true, width: 340, minWidth: 220, maxWidth: 520, resizable: true },
   { id: 'status', visible: true, width: 120, minWidth: 100, maxWidth: 180, resizable: true },
   { id: 'last_checked', visible: true, width: 170, minWidth: 130, maxWidth: 240, resizable: true },
-  { id: 'actions', visible: true, width: 220, minWidth: 180, maxWidth: 300, resizable: false },
+  { id: 'actions', visible: true, width: 280, minWidth: 220, maxWidth: 360, resizable: false },
 ]
 
 // 排序支持的列（column id → API sortField）
@@ -131,6 +132,7 @@ function buildColumns(
     onSelectAll: (checked: boolean) => void
     onSelectRow: (id: string, checked: boolean) => void
   },
+  onReplaceUrl: (row: SourceRow) => void,
 ): TableColumn<SourceRow>[] {
   const all: TableColumn<SourceRow>[] = [
     {
@@ -201,6 +203,14 @@ function buildColumns(
               ? '处理中...'
               : row.is_active ? '标记失效' : '标记活跃'}
           </button>
+          <button
+            type="button"
+            onClick={() => onReplaceUrl(row)}
+            className="rounded border border-[var(--border)] bg-[var(--bg3)] px-2 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+            data-testid={`source-replace-url-${row.id}`}
+          >
+            替换URL
+          </button>
         </div>
       ),
     },
@@ -260,6 +270,7 @@ export function InactiveSourceTable({
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null)
   const [batchStatusLoading, setBatchStatusLoading] = useState<null | 'active' | 'inactive'>(null)
   const [statusActionError, setStatusActionError] = useState<string | null>(null)
+  const [replaceDialogSource, setReplaceDialogSource] = useState<SourceRow | null>(null)
   const [internalSortField, setInternalSortField] = useState<SourceSortField>(sortField ?? 'last_checked')
   const [internalSortDir, setInternalSortDir] = useState<SourceSortDir>(sortDir ?? 'desc')
 
@@ -437,6 +448,7 @@ export function InactiveSourceTable({
           onSelectAll: handleSelectAll,
           onSelectRow: handleSelectRow,
         },
+        (row) => setReplaceDialogSource(row),
       ),
     [
       page,
@@ -588,6 +600,15 @@ export function InactiveSourceTable({
         loading={deleteLoading}
         danger
       />
+
+      {replaceDialogSource ? (
+        <SourceReplaceDialog
+          sourceId={replaceDialogSource.id}
+          videoTitle={replaceDialogSource.video_title}
+          onClose={() => setReplaceDialogSource(null)}
+          onReplaced={() => { void fetchSources(page, pageSize) }}
+        />
+      ) : null}
     </div>
   )
 }
