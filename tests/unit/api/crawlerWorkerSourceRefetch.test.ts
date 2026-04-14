@@ -18,6 +18,7 @@ const mockGetRunById = vi.fn()
 const mockCreateCrawlerTaskLog = vi.fn().mockResolvedValue(undefined)
 const mockGetSetting = vi.fn().mockResolvedValue(null)
 const mockRefetchSourcesForVideo = vi.fn()
+const mockInsertSourceHealthEvent = vi.fn().mockResolvedValue('event-id-1')
 
 const mockAdd = vi.fn().mockResolvedValue({ id: 'job-1' })
 const mockProcess = vi.fn()
@@ -80,6 +81,10 @@ vi.mock('@/api/db/queries/systemSettings', () => ({
   getAutoCrawlConfig: vi.fn().mockResolvedValue(null),
 }))
 
+vi.mock('@/api/db/queries/sources', () => ({
+  insertSourceHealthEvent: mockInsertSourceHealthEvent,
+}))
+
 // ── 工具函数 ────────────────────────────────────────────────────────
 
 function makeJob(data: object) {
@@ -139,6 +144,12 @@ describe('processCrawlJob — source-refetch 任务落库完成态', () => {
     expect(doneCalls).toHaveLength(1)
     expect(doneCalls[0][1]).toBe('task-1')
     expect(doneCalls[0][3]).toMatchObject({ sourcesUpserted: 3, videosUpserted: 0 })
+
+    // sourcesAdded > 0 → 写 auto_refetch_success 事件
+    expect(mockInsertSourceHealthEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ videoId: 'video-uuid-1234', origin: 'auto_refetch_success' }),
+    )
   })
 
   it('source-refetch 成功：syncRunStatusFromTasks 被调用以更新 run 状态', async () => {
@@ -189,6 +200,12 @@ describe('processCrawlJob — source-refetch 任务落库完成态', () => {
     )
     expect(doneCalls).toHaveLength(1)
     expect(doneCalls[0][3]).toMatchObject({ errors: 1 })
+
+    // sourcesAdded = 0 → 写 auto_refetch_failed 事件
+    expect(mockInsertSourceHealthEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ videoId: 'video-uuid-1234', origin: 'auto_refetch_failed' }),
+    )
   })
 
   it('batch 模式：updateTaskStatus("done") 由 CrawlerService.crawl() 内部调用，不重复调用', async () => {
