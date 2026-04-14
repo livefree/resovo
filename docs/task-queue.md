@@ -5599,7 +5599,9 @@
 - **完成备注**：PATCH /admin/moderation/:id/meta 路由（zod 校验 + VideoService.update 复用）；ModerationDetail 基础信息块增加标题/年份点击 inline input、类型即时 select、分类标签 chip 编辑器；成功 notify.success/失败 notify.error；11 条 API 单测 + 现有 9 条组件测试全部通过。
 
 #### UX-13 — [UI] 审核台批量操作 + 审核历史 Tab
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
+- **实际开始**：2026-04-13
+- **完成时间**：2026-04-13
 - **创建时间**：2026-04-09 01:00
 - **计划开始**：UX-12 完成后
 - **依赖**：UX-12 ✅
@@ -5612,12 +5614,14 @@
 - **变更内容**：
   - 列表行 checkbox 多选，底部出现 SelectionActionBar：[批量通过暂存] [批量拒绝（需选原因）]
   - 批量通过暂存：全部变为 approved+internal+false，返回成功/失败数量
-  - 新增"已审核"Tab：展示 review_status IN ('approved','rejected') 的视频，含筛选（审核员/日期/结果/类型）
+  - 新增"已审核"Tab：展示 review_status IN ('approved','rejected') 的视频，含筛选（结果/类型/排序）
   - 已审核列表 rejected 行显示[复审]按钮 → state-transition: reopen_pending
-- **完成备注**：_（AI 填写）_
+- **完成备注**：typecheck ✅ lint ✅ 21条API单测（moderationBatch）全部通过；ModerationList 加 checkbox 多选 + BatchRejectDialog；新建 ModerationHistory（已审核列表+复审）；ModerationDashboard 加 Tab（待审核/已审核）；新建 queries/moderation.ts（listModerationHistory）；路由新增 batch-approve/batch-reject/history/reopen（/:id/reopen）
 
 #### CHG-387 — [API] 审核台快速操作 API 整合（moderation 路由完整实现）
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
+- **实际开始**：2026-04-13
+- **完成时间**：2026-04-13
 - **创建时间**：2026-04-09 01:00
 - **计划开始**：UX-13 完成后（或与 UX-10 并行，取决于路由是否已足够）
 - **依赖**：UX-13 ✅
@@ -5625,10 +5629,10 @@
   - `src/api/routes/admin/moderation.ts`（汇总本 Phase 新增的所有路由，确保一致性）
   - `tests/unit/api/moderationRoutes.test.ts`（新建综合测试）
 - **变更内容**：
-  - 汇总整理：PATCH /meta / POST /batch-approve / POST /batch-reject / GET /history
-  - 确保所有操作正确触发 state-transition（复用现有 API，不重复实现状态机）
-  - 权限检查：approve_and_publish 限 admin 角色，其余 moderator 可用
-- **完成备注**：_（AI 填写）_
+  - 汇总整理：PATCH /meta / POST /batch-approve / POST /batch-reject / GET /history / POST /:id/reopen
+  - 确保所有操作正确触发 state-transition（复用现有 transitionVideoState，不重复实现状态机）
+  - 权限检查：batch-approve/batch-reject/history/reopen 均需 moderator 以上角色；approve_and_publish 由 videos.ts review 路由单独限 admin
+- **完成备注**：typecheck ✅ lint ✅ 10条单测（moderationRoutes）全部通过：权限矩阵（moderator/admin均可）+ reason约束（无reason→422，空→422，超500→422）+ history分页参数透传
 
 > 🏁 **M4 里程碑评审节点**（CHG-387 完成后触发）
 

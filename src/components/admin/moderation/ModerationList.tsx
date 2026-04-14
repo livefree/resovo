@@ -4,6 +4,7 @@
  * 点击条目触发 onSelect 回调，选中态高亮显示
  * CHG-341: 增加类型筛选、排序（最新/最早）；修正 tv→series 映射
  * UX-10: 每行新增豆瓣状态/源健康/元数据进度 badge；新增对应筛选器
+ * UX-13: 多选 checkbox + SelectionActionBar（批量通过暂存 / 批量拒绝）
  */
 
 'use client'
@@ -11,6 +12,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { TableImageCell } from '@/components/admin/shared/modern-table/cells'
+import { SelectionActionBar } from '@/components/admin/shared/batch/SelectionActionBar'
+import { notify } from '@/components/admin/shared/toast/useAdminToast'
 import type { DoubanStatus, SourceCheckStatus } from '@/types'
 
 interface PendingVideoRow {
@@ -33,11 +36,11 @@ interface PendingVideoRow {
 interface ModerationListProps {
   selectedId: string | null
   onSelect: (id: string) => void
+  onBatchComplete?: () => void
 }
 
 const PAGE_SIZE = 30
 
-// 全量类型枚举（与 VideoMetaSchema 保持一致）
 const TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: '', label: '全部类型' },
   { value: 'movie', label: '电影' },
@@ -68,6 +71,8 @@ const SOURCE_CHECK_OPTIONS: { value: string; label: string }[] = [
   { value: 'all_dead', label: '源检验：全失效' },
   { value: 'pending', label: '源检验：未检验' },
 ]
+
+const REJECT_PRESET_REASONS = ['片源不完整', '画质异常', '集数错误', '内容违规', '重复上传']
 
 function getTypeLabel(type: string): string {
   return TYPE_OPTIONS.find((o) => o.value === type)?.label ?? type
@@ -104,9 +109,66 @@ function MetaScoreBadge({ score }: { score: number }) {
   return <span className={`text-[10px] ${cls}`} data-testid="meta-score-badge">元{score}%</span>
 }
 
+// ── 批量拒绝弹窗 ──────────────────────────────────────────────────
+
+interface BatchRejectDialogProps {
+  count: number
+  onConfirm: (reason: string) => void
+  onCancel: () => void
+}
+
+function BatchRejectDialog({ count, onConfirm, onCancel }: BatchRejectDialogProps) {
+  const [reason, setReason] = useState('')
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" data-testid="batch-reject-dialog">
+      <div className="w-96 rounded-lg border border-[var(--border)] bg-[var(--bg2)] p-5 shadow-xl">
+        <p className="mb-3 text-sm font-medium text-[var(--text)]">批量拒绝 {count} 条视频</p>
+        <div className="mb-2 flex flex-wrap gap-1">
+          {REJECT_PRESET_REASONS.map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setReason((prev) => prev ? `${prev}，${r}` : r)}
+              className="rounded border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--bg3)]"
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="请输入拒绝原因（必填）"
+          rows={3}
+          data-testid="batch-reject-reason-input"
+          className="w-full rounded border border-[var(--border)] bg-[var(--bg)] p-2 text-xs text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+        />
+        <div className="mt-3 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            disabled={!reason.trim()}
+            onClick={() => onConfirm(reason.trim())}
+            data-testid="batch-reject-confirm-btn"
+            className="rounded border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/20 disabled:opacity-50"
+          >
+            确认拒绝
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── 组件 ──────────────────────────────────────────────────────────
 
-export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
+export function ModerationList({ selectedId, onSelect, onBatchComplete }: ModerationListProps) {
   const [rows, setRows] = useState<PendingVideoRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -120,6 +182,10 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
   const [keyword, setKeyword] = useState('')
   const [siteKeyInput, setSiteKeyInput] = useState('')
   const [siteKey, setSiteKey] = useState('')
+  // 多选状态
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [showRejectDialog, setShowRejectDialog] = useState(false)
+  const [batchLoading, setBatchLoading] = useState(false)
 
   const fetchRows = useCallback(async (
     pageVal: number,
@@ -156,6 +222,9 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
     void fetchRows(page, typeFilter, sortDir, sourceState, doubanStatusFilter, sourceCheckFilter, keyword, siteKey)
   }, [fetchRows, page, typeFilter, sortDir, sourceState, doubanStatusFilter, sourceCheckFilter, keyword, siteKey])
 
+  // 翻页/筛选时清空选择
+  useEffect(() => { setSelectedIds(new Set()) }, [page, typeFilter, sortDir, sourceState, doubanStatusFilter, sourceCheckFilter, keyword, siteKey])
+
   function handleTypeChange(newType: string) {
     setTypeFilter(newType)
     setPage(1)
@@ -185,20 +254,84 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
     setPage(1)
   }
 
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) { next.delete(id) } else { next.add(id) }
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === rows.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(rows.map((r) => r.id)))
+    }
+  }
+
+  async function handleBatchApprove() {
+    if (selectedIds.size === 0 || batchLoading) return
+    setBatchLoading(true)
+    try {
+      const res = await apiClient.post<{ data: { approved: number; skipped: number; failed: number } }>(
+        '/admin/moderation/batch-approve',
+        { ids: Array.from(selectedIds) }
+      )
+      const { approved, skipped, failed } = res.data
+      notify.success(`批量通过：成功 ${approved}，跳过 ${skipped}${failed > 0 ? `，失败 ${failed}` : ''}`)
+      setSelectedIds(new Set())
+      onBatchComplete?.()
+    } catch (_err) {
+      notify.error('批量通过失败，请重试')
+    } finally {
+      setBatchLoading(false)
+    }
+  }
+
+  async function handleBatchRejectConfirm(reason: string) {
+    setShowRejectDialog(false)
+    setBatchLoading(true)
+    try {
+      const res = await apiClient.post<{ data: { rejected: number; skipped: number; failed: number } }>(
+        '/admin/moderation/batch-reject',
+        { ids: Array.from(selectedIds), reason }
+      )
+      const { rejected, skipped, failed } = res.data
+      notify.success(`批量拒绝：成功 ${rejected}，跳过 ${skipped}${failed > 0 ? `，失败 ${failed}` : ''}`)
+      setSelectedIds(new Set())
+      onBatchComplete?.()
+    } catch (_err) {
+      notify.error('批量拒绝失败，请重试')
+    } finally {
+      setBatchLoading(false)
+    }
+  }
+
   const hasMore = page * PAGE_SIZE < total
   const hasPrev = page > 1
+  const allSelected = rows.length > 0 && selectedIds.size === rows.length
 
   return (
     <div className="flex h-full flex-col" data-testid="moderation-list">
       {/* 列表头 + 筛选 */}
       <div className="shrink-0 border-b border-[var(--border)] px-4 py-3 space-y-2">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-[var(--text)]">
-            待审核列表
-            {total > 0 && (
-              <span className="ml-2 text-xs text-[var(--muted)]">共 {total} 条</span>
-            )}
-          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleSelectAll}
+              data-testid="moderation-list-select-all"
+              className="rounded border-[var(--border)] accent-[var(--accent)]"
+            />
+            <p className="text-sm font-medium text-[var(--text)]">
+              待审核列表
+              {total > 0 && (
+                <span className="ml-2 text-xs text-[var(--muted)]">共 {total} 条</span>
+              )}
+            </p>
+          </div>
         </div>
         <div className="grid grid-cols-1 gap-2">
           {/* 类型 + 片源状态 */}
@@ -269,7 +402,6 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
             />
           </div>
           <div className="flex items-center justify-between gap-2">
-            {/* 排序切换 */}
             <div className="flex rounded border border-[var(--border)] overflow-hidden shrink-0">
               <button
                 type="button"
@@ -325,7 +457,17 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
         ) : (
           <ul className="space-y-0.5 p-2">
             {rows.map((row) => (
-              <li key={row.id}>
+              <li key={row.id} className="flex items-start gap-2 px-1">
+                {/* 多选 checkbox */}
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(row.id)}
+                  onChange={() => toggleSelect(row.id)}
+                  data-testid={`moderation-list-checkbox-${row.id}`}
+                  className="mt-3 rounded border-[var(--border)] accent-[var(--accent)]"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                {/* 条目按钮 */}
                 <button
                   type="button"
                   onClick={() => onSelect(row.id)}
@@ -337,11 +479,9 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    {/* 封面缩略图 */}
                     <div className="mt-0.5 shrink-0">
                       <TableImageCell src={row.coverUrl} alt={row.title} width={32} height={48} />
                     </div>
-                    {/* 文字信息 */}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm text-[var(--text)]">{row.title}</p>
                       <div className="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--muted)]">
@@ -349,7 +489,6 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
                         {row.year && <span>· {row.year}</span>}
                         {row.siteName && <span>· {row.siteName}</span>}
                       </div>
-                      {/* 流水线状态行 */}
                       <div className="mt-0.5 flex items-center gap-2">
                         <DoubanBadge status={row.doubanStatus} />
                         <SourceBadge status={row.sourceCheckStatus} count={row.activeSourceCount} />
@@ -388,6 +527,40 @@ export function ModerationList({ selectedId, onSelect }: ModerationListProps) {
             下一页
           </button>
         </div>
+      )}
+
+      {/* 批量操作栏 */}
+      <SelectionActionBar
+        selectedCount={selectedIds.size}
+        variant="sticky-bottom"
+        data-testid="moderation-batch-bar"
+        actions={[
+          {
+            key: 'approve',
+            label: '批量通过暂存',
+            variant: 'success',
+            disabled: batchLoading,
+            testId: 'batch-approve-btn',
+            onClick: () => { void handleBatchApprove() },
+          },
+          {
+            key: 'reject',
+            label: '批量拒绝',
+            variant: 'danger',
+            disabled: batchLoading,
+            testId: 'batch-reject-btn',
+            onClick: () => setShowRejectDialog(true),
+          },
+        ]}
+      />
+
+      {/* 批量拒绝弹窗 */}
+      {showRejectDialog && (
+        <BatchRejectDialog
+          count={selectedIds.size}
+          onConfirm={(reason) => { void handleBatchRejectConfirm(reason) }}
+          onCancel={() => setShowRejectDialog(false)}
+        />
       )}
     </div>
   )

@@ -5758,3 +5758,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/moderationMetaEdit.test.ts`（新建）— 11 条 API 路由单测，覆盖正常更新/404/422/500/401 全路径
 - **新增依赖**：无
 - **数据库变更**：无
+
+---
+
+## UX-13 + CHG-387 — [UI+API] 审核台批量操作 + 审核历史 Tab + 路由整合
+
+- **完成时间**：2026-04-13
+- **关联序列**：Phase 4 审核台增强
+- **变更内容**：
+  - `src/api/db/queries/moderation.ts`（新建）— `listModerationHistory`：查询 review_status IN ('approved','rejected') 视频，含 reviewed_at/reviewed_by/review_reason，支持 result/type/sortDir 筛选
+  - `src/api/routes/admin/moderation.ts` — 新增 4 个路由：POST /batch-approve（transitionVideoState approve，跳过 STATE_CONFLICT）/ POST /batch-reject（需 reason，max 500 字）/ GET /history（listModerationHistory）/ POST /:id/reopen（rejected→pending_review）
+  - `src/components/admin/moderation/ModerationList.tsx` — 新增 checkbox 多选（全选/单选），列表底部 SelectionActionBar（sticky-bottom），[批量通过暂存]/ [批量拒绝] + BatchRejectDialog（预置原因快选 + textarea）
+  - `src/components/admin/moderation/ModerationHistory.tsx`（新建）— 已审核列表，筛选（结果/类型/排序），rejected 行显示[复审]按钮
+  - `src/components/admin/moderation/ModerationDashboard.tsx` — 新增 Tab 切换（待审核/已审核），待审核 Tab 显示原分栏，已审核 Tab 渲染 ModerationHistory；热键仅在待审核 Tab 下生效
+  - `tests/unit/api/moderationBatch.test.ts`（新建）— 21 条单测：batch-approve（7）/ batch-reject（5）/ GET history（4）/ POST reopen（5）
+  - `tests/unit/api/moderationRoutes.test.ts`（新建，CHG-387）— 10 条单测：权限矩阵（moderator/admin）/ batch-reject reason 约束 / history 分页参数
+- **新增依赖**：无
+- **数据库变更**：无（仅 SELECT，已有字段 reviewed_at/reviewed_by/review_reason）

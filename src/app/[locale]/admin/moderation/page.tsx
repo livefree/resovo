@@ -1,6 +1,7 @@
 /**
  * /admin/moderation — 内容审核台页面（CHG-221）
  * 爬虫采集内容的人工审核工作台入口
+ * UX-13: 待审核 / 已审核 Tab 切换（由 ModerationDashboard 管理）
  */
 
 import { Suspense } from 'react'
