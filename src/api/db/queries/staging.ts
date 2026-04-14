@@ -251,6 +251,42 @@ export async function getStagingVideoById(
   return result.rows[0] ? mapStagingRow(result.rows[0]) : null
 }
 
+export interface StagingVideoDetail extends StagingVideo {
+  genres: string[]
+  doubanId: string | null  // media_catalog.douban_id
+}
+
+export async function getStagingVideoDetailById(
+  db: Pool,
+  id: string,
+): Promise<StagingVideoDetail | null> {
+  const result = await db.query<DbStagingRow & { genres: string[] | null; douban_id: string | null }>(
+    `SELECT
+       v.id, v.short_id, v.slug, v.title, v.type,
+       v.douban_status, v.source_check_status, v.meta_score,
+       v.reviewed_at, v.updated_at,
+       mc.title_en, mc.cover_url, mc.year,
+       mc.genres, mc.douban_id,
+       (SELECT COUNT(*)::text FROM video_sources vs
+        WHERE vs.video_id = v.id AND vs.is_active = true) AS active_source_count
+     FROM videos v
+     LEFT JOIN media_catalog mc ON mc.id = v.catalog_id
+     WHERE v.id = $1
+       AND v.review_status = 'approved'
+       AND v.visibility_status = 'internal'
+       AND v.is_published = false
+       AND v.deleted_at IS NULL`,
+    [id],
+  )
+  if (!result.rows[0]) return null
+  const base = mapStagingRow(result.rows[0])
+  return {
+    ...base,
+    genres: result.rows[0].genres ?? [],
+    doubanId: result.rows[0].douban_id ?? null,
+  }
+}
+
 /** 查询满足就绪条件的暂存视频 ID 列表，供 auto-publish Job 批量发布 */
 export async function listReadyStagingVideoIds(
   db: Pool,

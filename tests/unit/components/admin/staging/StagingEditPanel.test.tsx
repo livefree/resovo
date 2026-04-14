@@ -49,14 +49,15 @@ const MOCK_VIDEO = {
   genres: ['动作', '科幻'],
   coverUrl: null,
   doubanStatus: 'pending',
-  doubanSubjectId: null,
+  doubanId: null,
   sourceCheckStatus: 'ok',
   activeSourceCount: 2,
   metaScore: 75,
 }
 
 function mockApiSuccess() {
-  getMock.mockResolvedValue({ data: [MOCK_VIDEO], total: 1 })
+  // GET /admin/staging/:id 返回单条 detail
+  getMock.mockResolvedValue({ data: MOCK_VIDEO })
 }
 
 // ── Tests ──────────────────────────────────────────────────────────

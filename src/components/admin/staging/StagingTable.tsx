@@ -81,6 +81,8 @@ interface StagingTableProps {
   rules: StagingRules
   /** 当前用户是否为 admin（控制 adminOnly 操作的可见性） */
   isAdmin: boolean
+  /** 外部刷新 key，变化时触发重新请求（如规则保存后通知刷新） */
+  externalRefreshKey?: number
 }
 
 // ── 工具 ─────────────────────────────────────────────────────────
@@ -97,7 +99,7 @@ function formatStagingDuration(approvedAt: string | null): string {
 
 // ── 组件 ─────────────────────────────────────────────────────────
 
-export function StagingTable({ rules, isAdmin }: StagingTableProps) {
+export function StagingTable({ rules, isAdmin, externalRefreshKey }: StagingTableProps) {
   const router = useRouter()
   const [rows, setRows] = useState<StagingRow[]>([])
   const [total, setTotal] = useState(0)
@@ -143,7 +145,7 @@ export function StagingTable({ rules, isAdmin }: StagingTableProps) {
     } finally {
       setLoading(false)
     }
-  }, [page, refreshKey, readinessFilter, typeFilter, siteKeyFilter]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page, refreshKey, externalRefreshKey, readinessFilter, typeFilter, siteKeyFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { void fetchData() }, [fetchData])
 

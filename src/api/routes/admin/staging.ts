@@ -80,6 +80,26 @@ export async function adminStagingRoutes(fastify: FastifyInstance) {
     }
   })
 
+  // ── GET /admin/staging/:id — 暂存视频详情（含 genres + doubanId）──
+  fastify.get('/admin/staging/:id', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      const video = await stagingQueries.getStagingVideoDetailById(db, id)
+      if (!video) {
+        return reply.code(404).send({
+          error: { code: 'NOT_FOUND', message: '视频不存在或不在暂存状态', status: 404 },
+        })
+      }
+      const rules = await svc.getRules()
+      return reply.send({ data: { ...video, readiness: svc.checkReadiness(video, rules) } })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: `查询失败: ${msg}`, status: 500 },
+      })
+    }
+  })
+
   // ── POST /admin/staging/:id/publish — 手动发布单条 ─────────
   fastify.post('/admin/staging/:id/publish', { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string }
@@ -182,7 +202,17 @@ export async function adminStagingRoutes(fastify: FastifyInstance) {
       })
     }
     try {
-      const candidates = await doubanSvc.searchByKeyword(parsed.data.keyword)
+      const raw = await doubanSvc.searchByKeyword(parsed.data.keyword)
+      // 规范化字段名：SuggestItem.id → subjectId，供前端 confirm 接口使用
+      const candidates = raw.map((item) => ({
+        subjectId: item.id,
+        title: item.title,
+        year: item.year ? parseInt(item.year, 10) : null,
+        subTitle: item.sub_title,
+        coverUrl: null as string | null,
+        rating: null as number | null,
+        type: '',
+      }))
       return reply.send({ data: { videoId: id, candidates } })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)

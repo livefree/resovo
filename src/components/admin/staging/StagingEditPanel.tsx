@@ -23,7 +23,7 @@ interface StagingVideoDetail {
   genres: string[]
   coverUrl: string | null
   doubanStatus: 'pending' | 'matched' | 'candidate' | 'unmatched'
-  doubanSubjectId: string | null
+  doubanId: string | null   // media_catalog.douban_id
   sourceCheckStatus: 'pending' | 'ok' | 'partial' | 'all_dead'
   activeSourceCount: number
   metaScore: number
@@ -138,16 +138,12 @@ export function StagingEditPanel({ videoId, onClose, onUpdated }: StagingEditPan
   const [refetching, setRefetching] = useState(false)
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // 加载视频详情（无单条 staging API，通过列表接口批量取后按 ID 匹配）
+  // 加载视频详情（使用单条 detail 接口，含 genres + doubanId）
   const loadVideo = useCallback(async (id: string) => {
     setLoadError(null)
     try {
-      const res = await apiClient.get<{ data: StagingVideoDetail[] }>(`/admin/staging?page=1&limit=200`)
-      const found = res.data.find((v) => v.id === id) ?? null
-      if (!found) {
-        setLoadError('视频不在暂存状态或已发布')
-        return
-      }
+      const res = await apiClient.get<{ data: StagingVideoDetail }>(`/admin/staging/${id}`)
+      const found = res.data
       setVideo(found)
       setTitle(found.title)
       setYear(found.year != null ? String(found.year) : '')
@@ -361,8 +357,8 @@ export function StagingEditPanel({ videoId, onClose, onUpdated }: StagingEditPan
                 <p className="mb-2 text-xs font-medium text-[var(--muted)] uppercase tracking-wide">豆瓣匹配</p>
                 <div className="flex items-center gap-2">
                   <DoubanStatusBadge status={video.doubanStatus} />
-                  {video.doubanSubjectId && (
-                    <span className="text-xs text-[var(--muted)]">#{video.doubanSubjectId}</span>
+                  {video.doubanId && (
+                    <span className="text-xs text-[var(--muted)]">#{video.doubanId}</span>
                   )}
                 </div>
               </div>

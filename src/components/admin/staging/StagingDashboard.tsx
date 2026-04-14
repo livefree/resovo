@@ -29,6 +29,7 @@ export function StagingDashboard() {
   const isAdmin = useAuthStore(selectIsAdmin)
   const [rules, setRules] = useState<StagingRules>(DEFAULT_RULES)
   const [rulesLoaded, setRulesLoaded] = useState(false)
+  const [tableRefreshKey, setTableRefreshKey] = useState(0)
 
   useEffect(() => {
     apiClient.get<{ data: StagingRules }>('/admin/staging/rules')
@@ -41,6 +42,11 @@ export function StagingDashboard() {
       })
   }, [])
 
+  function handleRulesSaved(newRules: StagingRules) {
+    setRules(newRules)
+    setTableRefreshKey((k) => k + 1)
+  }
+
   if (!rulesLoaded) {
     return (
       <div className="flex items-center justify-center py-16 text-sm text-[var(--muted)]" data-testid="staging-dashboard-loading">
@@ -51,8 +57,8 @@ export function StagingDashboard() {
 
   return (
     <div className="flex flex-col gap-6" data-testid="staging-dashboard">
-      <StagingTable rules={rules} isAdmin={isAdmin} />
-      <StagingRulesPanel initialRules={rules} isAdmin={isAdmin} onSaved={setRules} />
+      <StagingTable rules={rules} isAdmin={isAdmin} externalRefreshKey={tableRefreshKey} />
+      <StagingRulesPanel initialRules={rules} isAdmin={isAdmin} onSaved={handleRulesSaved} />
     </div>
   )
 }
