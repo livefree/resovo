@@ -1,6 +1,7 @@
 /**
  * ModerationDetail.test.tsx
  * UX-11: 折叠块布局 + 豆瓣/源健康 block 渲染
+ * UX-12: 基础信息块内联编辑（由 ModerationBasicInfoBlock 承担）
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -30,6 +31,15 @@ vi.mock('@/components/admin/moderation/ModerationDoubanBlock', () => ({
 vi.mock('@/components/admin/moderation/ModerationSourceBlock', () => ({
   ModerationSourceBlock: ({ sourceCheckStatus }: { sourceCheckStatus: string }) => (
     <div data-testid="source-block-mock" data-status={sourceCheckStatus} />
+  ),
+}))
+
+vi.mock('@/components/admin/moderation/ModerationBasicInfoBlock', () => ({
+  ModerationBasicInfoBlock: ({ video }: { video: { title: string; meta_score: number } }) => (
+    <div data-testid="basic-info-block-mock">
+      <span>{video.title}</span>
+      <span>{`元数据 ${video.meta_score}%`}</span>
+    </div>
   ),
 }))
 
@@ -148,5 +158,13 @@ describe('ModerationDetail', () => {
   it('videoId 为 null 时显示空状态', () => {
     render(<ModerationDetail videoId={null} onReviewed={vi.fn()} />)
     expect(screen.getByTestId('moderation-detail-empty')).toBeTruthy()
+  })
+
+  it('点击快选预置原因追加到文本框', async () => {
+    render(<ModerationDetail videoId="vid-1" onReviewed={vi.fn()} />)
+    await screen.findByText('测试视频')
+    fireEvent.click(screen.getByTestId('reject-preset-片源不完整'))
+    const textarea = screen.getByTestId('moderation-reject-reason-input') as HTMLTextAreaElement
+    expect(textarea.value).toBe('片源不完整')
   })
 })

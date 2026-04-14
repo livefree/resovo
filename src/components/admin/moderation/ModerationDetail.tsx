@@ -1,20 +1,19 @@
 /**
  * ModerationDetail.tsx — 审核台右侧详情面板（CHG-223）
- * UX-11: 重构为四折叠块布局
- *   基础信息（默认展开）/ 豆瓣信息（默认展开）/ 源健康（默认展开）/ 播放器（默认折叠）
- * UX-12: 基础信息块增加内联元数据编辑（标题/年份/类型/分类标签）
+ * UX-11: 折叠块布局（播放器/基础信息/豆瓣/源健康）
+ * UX-12: 内联元数据编辑（提取至 ModerationBasicInfoBlock）
  */
 
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { buildLineDisplayName } from '@/lib/line-display-name'
 import { ModerationPlayer } from '@/components/admin/moderation/ModerationPlayer'
 import { ModerationDoubanBlock } from '@/components/admin/moderation/ModerationDoubanBlock'
 import { ModerationSourceBlock } from '@/components/admin/moderation/ModerationSourceBlock'
+import { ModerationBasicInfoBlock } from '@/components/admin/moderation/ModerationBasicInfoBlock'
 import { useAuthStore, selectIsAdmin } from '@/stores/authStore'
-import { notify } from '@/components/admin/shared/toast/useAdminToast'
 import type { DoubanStatus, SourceCheckStatus } from '@/types'
 
 // ── 类型 ─────────────────────────────────────────────────────────
@@ -29,7 +28,6 @@ interface VideoDetail {
   review_status: string
   visibility_status: string
   created_at: string
-  // 流水线字段（UX-11）
   douban_status: DoubanStatus
   source_check_status: SourceCheckStatus
   meta_score: number
@@ -40,10 +38,11 @@ interface VideoDetail {
   genres: string[]
 }
 
+// snake_case — 与 GET /admin/sources 返回的 DB 原始行一致
 interface SourceRow {
   id: string
   source_url: string
-  source_name: string
+  source_name: string | null
   site_key?: string | null
   quality?: string | null
   episode_number: number
@@ -55,21 +54,7 @@ interface ModerationDetailProps {
   onReviewed?: () => void
 }
 
-// 与 VideoMetaSchema 保持一致
-const TYPE_LABELS: Record<string, string> = {
-  movie: '电影', series: '剧集', anime: '动漫', variety: '综艺',
-  documentary: '纪录片', short: '短片', sports: '体育', music: '音乐',
-  news: '新闻', kids: '少儿', other: '其他',
-}
-
-const TYPE_OPTIONS = Object.entries(TYPE_LABELS)
-
-const GENRE_LABELS: Record<string, string> = {
-  action: '动作', comedy: '喜剧', romance: '爱情', thriller: '惊悚',
-  horror: '恐怖', sci_fi: '科幻', fantasy: '奇幻', history: '历史',
-  crime: '犯罪', mystery: '悬疑', war: '战争', family: '家庭',
-  biography: '传记', martial_arts: '武侠', other: '其他',
-}
+const REJECT_PRESETS = ['片源不完整', '画质异常', '集数错误', '内容违规', '重复上传']
 
 // ── 折叠块 ───────────────────────────────────────────────────────
 
@@ -108,16 +93,6 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
   const [rejectReason, setRejectReason] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
-  // UX-12: inline meta editing
-  const [editingTitle, setEditingTitle] = useState(false)
-  const [titleDraft, setTitleDraft] = useState('')
-  const [editingYear, setEditingYear] = useState(false)
-  const [yearDraft, setYearDraft] = useState('')
-  const [editingGenres, setEditingGenres] = useState(false)
-  const [genresDraft, setGenresDraft] = useState<string[]>([])
-  const [metaSaving, setMetaSaving] = useState(false)
-  const titleInputRef = useRef<HTMLInputElement>(null)
-  const yearInputRef = useRef<HTMLInputElement>(null)
 
   const fetchAllActiveSources = useCallback(async (id: string): Promise<SourceRow[]> => {
     const pageSize = 100
@@ -192,23 +167,6 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
     }
   }, [videoId, onReviewed, rejectReason])
 
-  useEffect(() => { if (editingTitle) titleInputRef.current?.focus() }, [editingTitle])
-  useEffect(() => { if (editingYear) yearInputRef.current?.focus() }, [editingYear])
-
-  const saveMeta = useCallback(async (patch: { title?: string; year?: number | null; type?: string; genres?: string[] }) => {
-    if (!videoId) return
-    setMetaSaving(true)
-    try {
-      await apiClient.patch(`/admin/moderation/${videoId}/meta`, patch)
-      notify.success('已保存')
-      setRefreshKey((k) => k + 1)
-    } catch {
-      notify.error('保存失败')
-    } finally {
-      setMetaSaving(false)
-    }
-  }, [videoId])
-
   const groupedLines = useMemo(() => {
     const lines = new Map<string, SourceRow[]>()
     for (const row of sources) {
@@ -280,227 +238,7 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
   return (
     <div className="flex flex-col gap-3 overflow-y-auto p-4" data-testid="moderation-detail">
 
-      {/* 审核操作 */}
-      <div className="space-y-2" data-testid="moderation-actions">
-        <div>
-          <label className="mb-1 block text-xs text-[var(--muted)]" htmlFor="moderation-reject-reason-input">
-            拒绝原因（可选）
-          </label>
-          <textarea
-            id="moderation-reject-reason-input"
-            value={rejectReason}
-            onChange={(e) => setRejectReason(e.target.value)}
-            placeholder="例如：片源不完整、画质异常、集数错误"
-            rows={2}
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-xs text-[var(--text)] placeholder:text-[var(--muted)]"
-            data-testid="moderation-reject-reason-input"
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={reviewLoading != null}
-              onClick={() => void handleReview('approve')}
-              data-testid="moderation-approve-btn"
-              className="flex-1 rounded-md border border-green-500/40 bg-green-500/10 py-2 text-sm font-medium text-green-300 transition-colors hover:bg-green-500/20 disabled:opacity-50"
-            >
-              {reviewLoading === 'approve' ? '处理中…' : '通过（暂存）'}
-            </button>
-            <button
-              type="button"
-              disabled={reviewLoading != null}
-              onClick={() => void handleReview('reject')}
-              data-testid="moderation-reject-btn"
-              className="flex-1 rounded-md border border-red-500/40 bg-red-500/10 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20 disabled:opacity-50"
-            >
-              {reviewLoading === 'reject' ? '处理中…' : '拒绝'}
-            </button>
-          </div>
-          {isAdmin && (
-            <button
-              type="button"
-              disabled={reviewLoading != null}
-              onClick={() => void handleReview('approve_and_publish')}
-              data-testid="moderation-approve-publish-btn"
-              className="w-full rounded-md border border-[var(--accent)]/40 bg-[var(--accent)]/10 py-2 text-sm font-medium text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/20 disabled:opacity-50"
-            >
-              {reviewLoading === 'approve_and_publish' ? '处理中…' : '通过并直接上架（管理员）'}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* 基础信息 */}
-      <Collapsible title="基础信息" testId="collapsible-basic">
-        <div className="space-y-2">
-          {/* 标题 */}
-          {editingTitle ? (
-            <input
-              ref={titleInputRef}
-              value={titleDraft}
-              onChange={(e) => setTitleDraft(e.target.value)}
-              onBlur={() => {
-                setEditingTitle(false)
-                const trimmed = titleDraft.trim()
-                if (trimmed && trimmed !== video.title) void saveMeta({ title: trimmed })
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') { e.currentTarget.blur() }
-                if (e.key === 'Escape') { setEditingTitle(false) }
-              }}
-              disabled={metaSaving}
-              data-testid="meta-title-input"
-              className="w-full rounded border border-[var(--accent)] bg-[var(--bg)] px-2 py-1 text-base font-semibold text-[var(--text)] focus:outline-none"
-            />
-          ) : (
-            <h3
-              className="cursor-pointer text-base font-semibold text-[var(--text)] hover:underline"
-              title="点击编辑标题"
-              data-testid="meta-title-display"
-              onClick={() => { setTitleDraft(video.title); setEditingTitle(true) }}
-            >
-              {video.title}
-            </h3>
-          )}
-
-          {/* 类型 + 年份 */}
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={video.type}
-              onChange={(e) => void saveMeta({ type: e.target.value })}
-              disabled={metaSaving}
-              data-testid="meta-type-select"
-              className="rounded border border-[var(--border)] bg-[var(--bg)] px-1.5 py-0.5 text-xs text-[var(--text)]"
-            >
-              {TYPE_OPTIONS.map(([v, label]) => (
-                <option key={v} value={v}>{label}</option>
-              ))}
-            </select>
-            {editingYear ? (
-              <input
-                ref={yearInputRef}
-                type="number"
-                min={1900}
-                max={2100}
-                value={yearDraft}
-                onChange={(e) => setYearDraft(e.target.value)}
-                onBlur={() => {
-                  setEditingYear(false)
-                  const n = yearDraft === '' ? null : parseInt(yearDraft, 10)
-                  if (n !== video.year) void saveMeta({ year: n })
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') { e.currentTarget.blur() }
-                  if (e.key === 'Escape') { setEditingYear(false) }
-                }}
-                disabled={metaSaving}
-                data-testid="meta-year-input"
-                className="w-20 rounded border border-[var(--accent)] bg-[var(--bg)] px-1.5 py-0.5 text-xs text-[var(--text)] focus:outline-none"
-              />
-            ) : (
-              <span
-                className="cursor-pointer text-xs text-[var(--muted)] hover:underline"
-                title="点击编辑年份"
-                data-testid="meta-year-display"
-                onClick={() => { setYearDraft(video.year != null ? String(video.year) : ''); setEditingYear(true) }}
-              >
-                {video.year ?? '—'}
-              </span>
-            )}
-            <span className="rounded border border-[var(--border)] px-1.5 py-0.5 text-xs text-[var(--muted)]">{video.review_status}</span>
-            <span className="rounded border border-[var(--border)] px-1.5 py-0.5 text-xs text-[var(--muted)]">元数据 {video.meta_score}%</span>
-          </div>
-
-          {/* 分类标签 */}
-          <div>
-            {editingGenres ? (
-              <div className="space-y-1.5">
-                <div className="flex flex-wrap gap-1">
-                  {Object.entries(GENRE_LABELS).map(([v, label]) => {
-                    const selected = genresDraft.includes(v)
-                    return (
-                      <button
-                        key={v}
-                        type="button"
-                        data-testid={`genre-option-${v}`}
-                        onClick={() => setGenresDraft(selected ? genresDraft.filter((g) => g !== v) : [...genresDraft, v])}
-                        className={`rounded px-2 py-0.5 text-xs transition-colors ${selected ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'}`}
-                      >
-                        {label}
-                      </button>
-                    )
-                  })}
-                </div>
-                <div className="flex gap-1.5">
-                  <button
-                    type="button"
-                    disabled={metaSaving}
-                    data-testid="meta-genres-save-btn"
-                    onClick={() => { setEditingGenres(false); void saveMeta({ genres: genresDraft }) }}
-                    className="rounded bg-[var(--accent)] px-2 py-0.5 text-xs text-white disabled:opacity-50"
-                  >
-                    保存
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="meta-genres-cancel-btn"
-                    onClick={() => setEditingGenres(false)}
-                    className="rounded border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--muted)]"
-                  >
-                    取消
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-center gap-1">
-                {video.genres.length > 0
-                  ? video.genres.map((g) => (
-                      <span key={g} className="rounded bg-[var(--bg3)] px-1.5 py-0.5 text-xs text-[var(--muted)]">
-                        {GENRE_LABELS[g] ?? g}
-                      </span>
-                    ))
-                  : <span className="text-xs text-[var(--muted)]">无分类</span>
-                }
-                <button
-                  type="button"
-                  data-testid="meta-genres-edit-btn"
-                  onClick={() => { setGenresDraft([...video.genres]); setEditingGenres(true) }}
-                  className="rounded border border-[var(--border)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:bg-[var(--bg3)]"
-                >
-                  编辑
-                </button>
-              </div>
-            )}
-          </div>
-
-          {video.description && (
-            <p className="line-clamp-3 text-xs text-[var(--muted)]">{video.description}</p>
-          )}
-          <p className="text-xs text-[var(--muted)]">入库：{video.created_at.slice(0, 10)}</p>
-        </div>
-      </Collapsible>
-
-      {/* 豆瓣信息 */}
-      <Collapsible title={`豆瓣信息 · ${video.douban_status === 'matched' ? '已匹配' : video.douban_status === 'candidate' ? '候选' : video.douban_status === 'unmatched' ? '未匹配' : '待检'}`} testId="collapsible-douban">
-        <ModerationDoubanBlock
-          videoId={video.id}
-          doubanStatus={video.douban_status}
-          doubanId={video.douban_id}
-          rating={video.rating}
-          description={video.description}
-          directors={video.director ?? []}
-          cast={video.cast ?? []}
-          onUpdated={() => setRefreshKey((k) => k + 1)}
-        />
-      </Collapsible>
-
-      {/* 源健康 */}
-      <Collapsible title="源健康" testId="collapsible-sources">
-        <ModerationSourceBlock videoId={video.id} sourceCheckStatus={video.source_check_status} />
-      </Collapsible>
-
-      {/* 播放器（默认折叠） */}
+      {/* 播放器预览（置顶，默认折叠） */}
       <Collapsible title="播放器预览" defaultOpen={false} testId="collapsible-player">
         <div className="space-y-2">
           <ModerationPlayer
@@ -559,6 +297,106 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
             </div>
           )}
         </div>
+      </Collapsible>
+
+      {/* 审核操作 */}
+      <div className="space-y-2" data-testid="moderation-actions">
+        <div>
+          <label className="mb-1 block text-xs text-[var(--muted)]" htmlFor="moderation-reject-reason-input">
+            拒绝原因（可选）
+          </label>
+          {/* 预置原因快选 */}
+          <div className="mb-1.5 flex flex-wrap gap-1">
+            {REJECT_PRESETS.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setRejectReason((prev) => prev ? `${prev}、${preset}` : preset)}
+                className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--muted)] hover:bg-[var(--bg3)]"
+                data-testid={`reject-preset-${preset}`}
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
+          <textarea
+            id="moderation-reject-reason-input"
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            placeholder="点击上方快选或手动填写"
+            rows={2}
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1.5 text-xs text-[var(--text)] placeholder:text-[var(--muted)]"
+            data-testid="moderation-reject-reason-input"
+          />
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={reviewLoading != null}
+              onClick={() => void handleReview('approve')}
+              data-testid="moderation-approve-btn"
+              className="flex-1 rounded-md border border-green-500/40 bg-green-500/10 py-2 text-sm font-medium text-green-300 transition-colors hover:bg-green-500/20 disabled:opacity-50"
+            >
+              {reviewLoading === 'approve' ? '处理中…' : '通过（暂存）'}
+            </button>
+            <button
+              type="button"
+              disabled={reviewLoading != null}
+              onClick={() => void handleReview('reject')}
+              data-testid="moderation-reject-btn"
+              className="flex-1 rounded-md border border-red-500/40 bg-red-500/10 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+            >
+              {reviewLoading === 'reject' ? '处理中…' : '拒绝'}
+            </button>
+          </div>
+          {isAdmin && (
+            <button
+              type="button"
+              disabled={reviewLoading != null}
+              onClick={() => void handleReview('approve_and_publish')}
+              data-testid="moderation-approve-publish-btn"
+              className="w-full rounded-md border border-[var(--accent)]/40 bg-[var(--accent)]/10 py-2 text-sm font-medium text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/20 disabled:opacity-50"
+            >
+              {reviewLoading === 'approve_and_publish' ? '处理中…' : '通过并直接上架（管理员）'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 基础信息（内联编辑） */}
+      <Collapsible title="基础信息" testId="collapsible-basic">
+        <ModerationBasicInfoBlock
+          video={video}
+          videoId={video.id}
+          onSaved={() => setRefreshKey((k) => k + 1)}
+        />
+      </Collapsible>
+
+      {/* 豆瓣信息 */}
+      <Collapsible
+        title={`豆瓣信息 · ${
+          video.douban_status === 'matched' ? '已匹配' :
+          video.douban_status === 'candidate' ? '候选' :
+          video.douban_status === 'unmatched' ? '未匹配' : '待检'
+        }`}
+        testId="collapsible-douban"
+      >
+        <ModerationDoubanBlock
+          videoId={video.id}
+          doubanStatus={video.douban_status}
+          doubanId={video.douban_id}
+          rating={video.rating}
+          description={video.description}
+          directors={video.director ?? []}
+          cast={video.cast ?? []}
+          onUpdated={() => setRefreshKey((k) => k + 1)}
+        />
+      </Collapsible>
+
+      {/* 源健康 */}
+      <Collapsible title="源健康" testId="collapsible-sources">
+        <ModerationSourceBlock videoId={video.id} sourceCheckStatus={video.source_check_status} />
       </Collapsible>
     </div>
   )
