@@ -5775,3 +5775,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/moderationRoutes.test.ts`（新建，CHG-387）— 10 条单测：权限矩阵（moderator/admin）/ batch-reject reason 约束 / history 分页参数
 - **新增依赖**：无
 - **数据库变更**：无（仅 SELECT，已有字段 reviewed_at/reviewed_by/review_reason）
+
+## ADMIN-10 — [UI] 暂存队列：批量豆瓣同步 + 侧滑元数据编辑
+- **完成时间**：2026-04-14
+- **修改文件**：
+  - `src/api/routes/admin/staging.ts` — 新增 MetaEditSchema + PATCH /admin/staging/:id/meta（暂存状态校验 + VideoService.update）
+  - `src/components/admin/staging/StagingEditPanel.tsx`（新建）— 侧滑 Drawer 面板：元数据编辑（title/year/type/genres）/ 豆瓣搜索确认 / 源健康摘要
+  - `src/components/admin/staging/StagingTable.tsx` — AdminDropdown 新增[处理]项（打开侧滑面板）；SelectionActionBar 新增[批量豆瓣同步]按钮；集成 StagingEditPanel
+  - `tests/unit/components/admin/staging/StagingEditPanel.test.tsx`（新建）— 12 条单测：面板显示/隐藏 / 元数据保存 / 豆瓣搜索 / 豆瓣确认
+- **新增依赖**：无
+- **数据库变更**：无
+- **共享层沉淀**：PATCH meta 路由复用 VideoService.update，无需新增 DB 查询层

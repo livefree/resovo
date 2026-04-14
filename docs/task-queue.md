@@ -5644,19 +5644,23 @@
 > ⚠ Phase 5 完成后必须暂停，执行里程碑评审
 
 #### ADMIN-10 — [UI] 暂存队列：批量豆瓣同步 + 侧滑元数据编辑
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **计划开始**：M4 评审通过后
+- **实际开始**：2026-04-13
+- **完成时间**：2026-04-14
 - **依赖**：ADMIN-09 ✅（基础页面存在），CHG-386 ✅（批量同步 API 存在）
 - **文件范围**：
-  - `src/components/admin/staging/StagingDashboard.tsx`（新增批量操作、解锁豆瓣同步按钮）
+  - `src/api/routes/admin/staging.ts`（新增 PATCH /admin/staging/:id/meta + MetaEditSchema）
   - `src/components/admin/staging/StagingEditPanel.tsx`（新建，侧滑编辑面板）
-  - `tests/unit/components/admin/staging/StagingEditPanel.test.tsx`（新建）
+  - `src/components/admin/staging/StagingTable.tsx`（新增[处理]按钮 + 批量豆瓣同步 SelectionActionBar）
+  - `tests/unit/components/admin/staging/StagingEditPanel.test.tsx`（新建，12 个测试）
 - **变更内容**：
-  - 批量豆瓣同步：多选后 SelectionActionBar 显示[批量豆瓣同步]，触发 batch-douban-sync API，完成后刷新行状态
-  - 侧滑编辑面板（Drawer）：点击行级[处理]按钮打开，包含基础元数据编辑 + 豆瓣搜索确认 + 源状态，不离开当前页面
-  - 编辑保存后当前行就绪状态实时刷新
-- **完成备注**：_（AI 填写）_
+  - PATCH /admin/staging/:id/meta：暂存状态校验 + VideoService.update 元数据写入
+  - 批量豆瓣同步：多选后 SelectionActionBar 显示[批量豆瓣同步]，触发 batch-douban-sync API
+  - 侧滑编辑面板：点击行级[处理]按钮打开，含元数据编辑 + 豆瓣搜索确认 + 源健康摘要
+  - 编辑保存/豆瓣确认后触发 onUpdated 刷新列表
+- **完成备注**：staging.ts 新增 MetaEditSchema + PATCH 路由；StagingEditPanel 为新建侧滑面板；StagingTable 集成[处理]下拉项 + 批量豆瓣同步按钮；单测 12 条全部通过；typecheck + lint 全部通过
 
 #### ADMIN-11 — [UI] 暂存队列：触发补源采集 + 就绪状态联动刷新
 - **状态**：⬜ 待开始

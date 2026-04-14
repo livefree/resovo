@@ -2,6 +2,7 @@
  * staging.ts — 暂存发布队列 API
  * CHG-383: GET /admin/staging, POST /admin/staging/:id/publish,
  *          POST /admin/staging/batch-publish, GET/PUT /admin/staging/rules
+ * ADMIN-10: PATCH /admin/staging/:id/meta（暂存阶段元数据快速编辑）
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -9,6 +10,7 @@ import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { StagingPublishService } from '@/api/services/StagingPublishService'
 import { DoubanService } from '@/api/services/DoubanService'
+import { VideoService } from '@/api/services/VideoService'
 import * as stagingQueries from '@/api/db/queries/staging'
 
 const ListQuerySchema = z.object({
@@ -36,6 +38,13 @@ const RulesSchema = z.object({
   requireDoubanMatched: z.boolean(),
   requireCoverUrl: z.boolean(),
   minActiveSourceCount: z.number().int().min(0).max(10),
+})
+
+const MetaEditSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  year: z.number().int().min(1900).max(2100).nullable().optional(),
+  type: z.enum(['movie', 'series', 'anime', 'variety', 'documentary', 'short', 'sports', 'music', 'news', 'kids', 'other'] as const).optional(),
+  genres: z.array(z.string().min(1).max(50)).max(10).optional(),
 })
 
 export async function adminStagingRoutes(fastify: FastifyInstance) {
@@ -179,6 +188,33 @@ export async function adminStagingRoutes(fastify: FastifyInstance) {
       const msg = err instanceof Error ? err.message : String(err)
       return reply.code(500).send({
         error: { code: 'SEARCH_FAILED', message: `豆瓣搜索失败: ${msg}`, status: 500 },
+      })
+    }
+  })
+
+  // ── PATCH /admin/staging/:id/meta — 暂存阶段元数据快速编辑（ADMIN-10）─
+  fastify.patch('/admin/staging/:id/meta', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const parsed = MetaEditSchema.safeParse(request.body)
+    if (!parsed.success || Object.keys(parsed.data).length === 0) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+    const video = await stagingQueries.getStagingVideoById(db, id)
+    if (!video) {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '视频不存在或不在暂存状态', status: 404 },
+      })
+    }
+    try {
+      const videoSvc = new VideoService(db)
+      await videoSvc.update(id, parsed.data)
+      return reply.send({ data: { id, updated: true } })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: `保存失败: ${msg}`, status: 500 },
       })
     }
   })

@@ -1,6 +1,7 @@
 /**
  * StagingTable.tsx — 暂存队列表格（Client Component）
  * ADMIN-09: ModernDataTable + 就绪状态 + 行级操作
+ * ADMIN-10: 批量豆瓣同步 + [处理]按钮打开侧滑面板
  */
 
 'use client'
@@ -17,6 +18,8 @@ import {
   DoubanStatusBadge,
   SourceHealthBadge,
 } from '@/components/admin/staging/StagingReadinessBadge'
+import { StagingEditPanel } from '@/components/admin/staging/StagingEditPanel'
+import { notify } from '@/components/admin/shared/toast/useAdminToast'
 import type { TableColumn } from '@/components/admin/shared/modern-table/types'
 
 // ── 常量 ─────────────────────────────────────────────────────────
@@ -109,6 +112,8 @@ export function StagingTable({ rules, isAdmin }: StagingTableProps) {
   const [typeFilter, setTypeFilter] = useState('')
   const [siteKeyFilter, setSiteKeyFilter] = useState('')
   const [summary, setSummary] = useState<StagingSummary | null>(null)
+  const [editPanelVideoId, setEditPanelVideoId] = useState<string | null>(null)
+  const [batchDoubanLoading, setBatchDoubanLoading] = useState(false)
 
   const pageSize = 20
 
@@ -192,6 +197,23 @@ export function StagingTable({ rules, isAdmin }: StagingTableProps) {
       setPublishError(err instanceof Error ? err.message : '批量发布失败，请重试')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleBatchDoubanSync() {
+    if (selectedIds.length === 0) return
+    setBatchDoubanLoading(true)
+    try {
+      const res = await apiClient.post<{ data: { queued: number; skipped: number } }>(
+        '/admin/staging/batch-douban-sync',
+        { ids: selectedIds },
+      )
+      notify.success(`豆瓣同步已入队 ${res.data.queued} 条${res.data.skipped > 0 ? `，跳过 ${res.data.skipped} 条` : ''}`)
+      setSelectedIds([])
+    } catch (err) {
+      notify.error(err instanceof Error ? err.message : '批量豆瓣同步失败')
+    } finally {
+      setBatchDoubanLoading(false)
     }
   }
 
@@ -298,6 +320,11 @@ export function StagingTable({ rules, isAdmin }: StagingTableProps) {
             </button>
           }
           items={[
+            {
+              key: 'process',
+              label: '处理',
+              onClick: () => setEditPanelVideoId(row.id),
+            },
             {
               key: 'publish',
               label: publishingIds.includes(row.id) ? '发布中…' : '立即发布',
@@ -440,6 +467,13 @@ export function StagingTable({ rules, isAdmin }: StagingTableProps) {
           variant="sticky-bottom"
           actions={[
             {
+              key: 'batch-douban-sync',
+              label: batchDoubanLoading ? '同步中…' : `批量豆瓣同步 (${selectedIds.length})`,
+              variant: 'default',
+              disabled: batchDoubanLoading,
+              onClick: () => void handleBatchDoubanSync(),
+            },
+            {
               key: 'publish-selected',
               label: `发布选中 (${selectedIds.length})`,
               variant: 'primary',
@@ -467,6 +501,13 @@ export function StagingTable({ rules, isAdmin }: StagingTableProps) {
           onPageChange={setPage}
         />
       )}
+
+      {/* 侧滑编辑面板 */}
+      <StagingEditPanel
+        videoId={editPanelVideoId}
+        onClose={() => setEditPanelVideoId(null)}
+        onUpdated={() => setRefreshKey((k) => k + 1)}
+      />
     </div>
   )
 }
