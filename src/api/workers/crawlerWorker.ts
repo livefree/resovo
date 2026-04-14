@@ -14,6 +14,7 @@ import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
 import { createCrawlerTaskLog } from '@/api/db/queries/crawlerTaskLogs'
 import * as crawlerRunsQueries from '@/api/db/queries/crawlerRuns'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
+import * as sourcesQueries from '@/api/db/queries/sources'
 
 // ── 资源站工具函数（从 CrawlerService 迁入，worker 是唯一调用方） ───
 
@@ -450,6 +451,15 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
       if (runId) {
         await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
       }
+    }
+
+    // source-refetch 模式：写 source_health_events（成功/失败）
+    if (crawlMode === 'source-refetch' && targetVideoId) {
+      await sourcesQueries.insertSourceHealthEvent(db, {
+        videoId: targetVideoId,
+        origin: sourcesUpserted > 0 ? 'auto_refetch_success' : 'auto_refetch_failed',
+        triggeredBy: 'maintenance_worker',
+      })
     }
 
     return {

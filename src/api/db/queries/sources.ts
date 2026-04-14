@@ -734,21 +734,20 @@ export async function listOrphanVideos(
     last_event_origin: string
     last_event_at: string
   }>(
-    `SELECT DISTINCT ON (v.id)
-       v.id, v.title, v.site_key, v.source_check_status,
-       she.origin AS last_event_origin,
-       she.created_at AS last_event_at
+    `WITH latest_events AS (
+       SELECT DISTINCT ON (video_id)
+         video_id, origin, created_at
+       FROM source_health_events
+       ORDER BY video_id, created_at DESC
+     )
+     SELECT v.id, v.title, v.site_key, v.source_check_status,
+            le.origin AS last_event_origin,
+            le.created_at AS last_event_at
      FROM videos v
-     JOIN source_health_events she ON she.video_id = v.id
-     WHERE she.origin = 'auto_refetch_failed'
+     JOIN latest_events le ON le.video_id = v.id
+     WHERE le.origin = 'auto_refetch_failed'
        AND v.deleted_at IS NULL
-       AND NOT EXISTS (
-         SELECT 1 FROM source_health_events r
-         WHERE r.video_id = v.id
-           AND r.origin = 'manually_resolved'
-           AND r.created_at > she.created_at
-       )
-     ORDER BY v.id, she.created_at DESC
+     ORDER BY le.created_at DESC
      LIMIT $1`,
     [limit],
   )

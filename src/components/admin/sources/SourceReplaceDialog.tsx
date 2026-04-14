@@ -104,7 +104,7 @@ export function SourceReplaceDialog({
           <button
             type="button"
             onClick={() => { void handleConfirm() }}
-            disabled={loading || !newUrl.trim()}
+            disabled={loading || !newUrl.trim() || previewUrl !== newUrl.trim()}
             className="rounded-md bg-[var(--accent)] px-4 py-2 text-sm font-medium text-black hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             data-testid="replace-dialog-confirm-btn"
           >
