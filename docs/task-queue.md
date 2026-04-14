@@ -5688,22 +5688,25 @@
 > ⚠ Phase 6 完成后必须暂停，执行里程碑评审
 
 #### CHG-388 — [Service/Worker] 失效源自动下架 + 自动补源触发
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **计划开始**：M5 评审通过后
+- **实际开始**：2026-04-14
+- **完成时间**：2026-04-14
 - **依赖**：CRAWLER-04 ✅（source-refetch Job 存在），CHG-383 ✅（maintenance-queue 存在）
 - **文件范围**：
-  - `src/api/workers/maintenanceWorker.ts`（verify-published-sources Job 增强逻辑）
-  - `src/api/services/SourceVerificationService.ts`（新建或增强，封装验活+状态联动逻辑）
-  - `src/api/db/queries/sources.ts`（新增孤岛视频查询，新增 source_health_events 写入）
-  - `src/api/db/migrations/034_source_health_events.sql`（新建，source_health_events 表）
-  - `tests/unit/api/sourceVerificationService.test.ts`（新建）
+  - `src/api/db/migrations/037_source_health_events.sql`（新建）
+  - `src/api/db/queries/sources.ts`（新增 listIslandVideos + insertSourceHealthEvent）
+  - `src/api/services/SourceVerificationService.ts`（新建）
+  - `src/api/workers/maintenanceWorker.ts`（新增 verify-published-sources case）
+  - `src/api/workers/maintenanceScheduler.ts`（新增 60min verifyTimer）
+  - `tests/unit/api/sourceVerificationService.test.ts`（新建，7 条测试）
 - **变更内容**：
-  - `source_health_events` 表：id/video_id/origin/old_status/new_status/created_at（用于孤岛 Tab 展示历史）
-  - verify-published-sources Job 发现孤岛（is_published=true 且所有源失效）→ 自动 unpublish（state-transition）+ 写 source_health_events + 推送 source-refetch Job
-  - source-refetch Job 成功 → 重新 publish + 写 source_health_events(origin='auto_refetch_success')
-  - source-refetch Job 失败 → 写 source_health_events(origin='auto_refetch_failed')，视频保持 approved+internal
-- **完成备注**：_（AI 填写）_
+  - source_health_events 表：id/video_id/origin/old_status/new_status/triggered_by/created_at
+  - SourceVerificationService：批量查孤岛 → unpublish → 写 island_detected 事件 → 入队 source-refetch
+  - verify-published-sources Job：由 maintenance-worker 调度，60min 一次
+  - 补源入队失败不阻断下架流程；各视频错误互相隔离
+- **完成备注**：source-refetch 成功/失败时写回 health events 的逻辑依赖 CrawlerWorker 回调，在 ADMIN-12 与孤岛 Tab 联动时完善
 
 #### ADMIN-12 — [UI] 源管理：孤岛视频 Tab + 替换源弹窗播放器确认
 - **状态**：⬜ 待开始

@@ -628,3 +628,81 @@ export async function replaceSourcesForSite(
     client.release()
   }
 }
+
+// ── CHG-388: 孤岛视频查询 + source_health_events ─────────────────
+
+export interface IslandVideo {
+  id: string
+  title: string
+  siteKey: string | null
+  reviewStatus: string
+  visibilityStatus: string
+  isPublished: boolean
+  sourceCheckStatus: string
+}
+
+/**
+ * 查询"孤岛视频"：is_published=true 且所有活跃源均已失效（source_check_status='all_dead'）
+ * 用于 verify-published-sources Job 自动下架 + 触发补源
+ */
+export async function listIslandVideos(
+  db: Pool,
+  limit = 50,
+): Promise<IslandVideo[]> {
+  const result = await db.query<{
+    id: string
+    title: string
+    site_key: string | null
+    review_status: string
+    visibility_status: string
+    is_published: boolean
+    source_check_status: string
+  }>(
+    `SELECT v.id, v.title, v.site_key,
+            v.review_status, v.visibility_status, v.is_published, v.source_check_status
+     FROM videos v
+     WHERE v.is_published = true
+       AND v.source_check_status = 'all_dead'
+       AND v.deleted_at IS NULL
+     ORDER BY v.updated_at ASC
+     LIMIT $1`,
+    [limit],
+  )
+  return result.rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    siteKey: r.site_key,
+    reviewStatus: r.review_status,
+    visibilityStatus: r.visibility_status,
+    isPublished: r.is_published,
+    sourceCheckStatus: r.source_check_status,
+  }))
+}
+
+export interface SourceHealthEventInput {
+  videoId: string
+  origin: 'island_detected' | 'auto_refetch_success' | 'auto_refetch_failed'
+  oldStatus?: string | null
+  newStatus?: string | null
+  triggeredBy?: string
+}
+
+export async function insertSourceHealthEvent(
+  db: Pool,
+  input: SourceHealthEventInput,
+): Promise<string> {
+  const result = await db.query<{ id: string }>(
+    `INSERT INTO source_health_events
+       (video_id, origin, old_status, new_status, triggered_by)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id`,
+    [
+      input.videoId,
+      input.origin,
+      input.oldStatus ?? null,
+      input.newStatus ?? null,
+      input.triggeredBy ?? 'maintenance_worker',
+    ],
+  )
+  return result.rows[0].id
+}

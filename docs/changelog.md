@@ -5795,3 +5795,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **共享层沉淀**：复用 POST /admin/videos/:id/refetch-sources（CRAWLER-04 已有），无需新增 API
+
+## CHG-388 — [Service/Worker] 失效源自动下架 + 自动补源触发
+- **完成时间**：2026-04-14
+- **修改文件**：
+  - `src/api/db/migrations/037_source_health_events.sql`（新建）— source_health_events 表：id/video_id/origin/old_status/new_status/triggered_by/created_at
+  - `src/api/db/queries/sources.ts` — 新增 `listIslandVideos`（孤岛视频查询）+ `insertSourceHealthEvent`（事件写入）
+  - `src/api/services/SourceVerificationService.ts`（新建）— 孤岛检测：unpublish + 写 island_detected 事件 + 触发 source-refetch Job；错误互相隔离
+  - `src/api/workers/maintenanceWorker.ts` — 新增 `verify-published-sources` job type，调用 SourceVerificationService
+  - `src/api/workers/maintenanceScheduler.ts` — 新增 60min 独立定时器调度 verify-published-sources
+  - `tests/unit/api/sourceVerificationService.test.ts`（新建）— 7 条单测：正常流程/无孤岛/skip/null transition/补源入队失败/异常隔离/batchLimit 传递
+- **新增依赖**：无
+- **数据库变更**：新建 source_health_events 表（migration 037）
+- **架构备注**：source-refetch 完成/失败回写 health events 预留给 ADMIN-12 阶段联动
