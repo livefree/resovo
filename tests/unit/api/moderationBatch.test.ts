@@ -83,7 +83,8 @@ describe('POST /v1/admin/moderation/batch-approve', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks()
-    // 默认：状态迁移成功（返回迁移结果对象）
+    // 默认：视频存在且是 pending_review；状态迁移成功
+    mockFindAdminVideoById.mockResolvedValue({ id: 'v1', review_status: 'pending_review', meta_score: 80 })
     mockTransitionVideoState.mockResolvedValue({ id: 'v1', review_status: 'approved' })
     app = await buildApp()
     authHeader = await modToken()
@@ -109,6 +110,19 @@ describe('POST /v1/admin/moderation/batch-approve', () => {
       'v1',
       { action: 'approve', reviewedBy: 'u-mod' }
     )
+  })
+
+  it('approved 状态视频 → 计入 skipped，不改状态（P2 fix）', async () => {
+    mockFindAdminVideoById.mockResolvedValue({ id: 'v1', review_status: 'approved', meta_score: 80 })
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/moderation/batch-approve',
+      headers: { authorization: authHeader, 'content-type': 'application/json' },
+      body: JSON.stringify({ ids: ['v1'] }),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({ approved: 0, skipped: 1, failed: 0 })
+    expect(mockTransitionVideoState).not.toHaveBeenCalled()
   })
 
   it('STATE_CONFLICT → 计入 skipped，不失败', async () => {
@@ -192,6 +206,7 @@ describe('POST /v1/admin/moderation/batch-reject', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks()
+    mockFindAdminVideoById.mockResolvedValue({ id: 'v1', review_status: 'pending_review', meta_score: 80 })
     mockTransitionVideoState.mockResolvedValue({ id: 'v1', review_status: 'rejected' })
     app = await buildApp()
     authHeader = await modToken()
@@ -213,6 +228,19 @@ describe('POST /v1/admin/moderation/batch-reject', () => {
       'v1',
       { action: 'reject', reason: '画质异常', reviewedBy: 'u-mod' }
     )
+  })
+
+  it('approved 状态视频 → 计入 skipped，不拒绝已通过视频（P2 fix）', async () => {
+    mockFindAdminVideoById.mockResolvedValue({ id: 'v1', review_status: 'approved', meta_score: 80 })
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/moderation/batch-reject',
+      headers: { authorization: authHeader, 'content-type': 'application/json' },
+      body: JSON.stringify({ ids: ['v1'], reason: '画质异常' }),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({ rejected: 0, skipped: 1, failed: 0 })
+    expect(mockTransitionVideoState).not.toHaveBeenCalled()
   })
 
   it('reason 缺失 → 422', async () => {
@@ -310,17 +338,34 @@ describe('GET /v1/admin/moderation/history', () => {
     )
   })
 
-  it('非法 result 值被忽略（undefined）', async () => {
+  it('非法 result 值 → 422 VALIDATION_ERROR（P3 fix）', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/v1/admin/moderation/history?result=unknown',
       headers: { authorization: authHeader },
     })
-    expect(res.statusCode).toBe(200)
-    expect(mockListModerationHistory).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ result: undefined })
-    )
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('非数字 page → 422 VALIDATION_ERROR（P3 fix）', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/moderation/history?page=abc',
+      headers: { authorization: authHeader },
+    })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('非数字 limit → 422 VALIDATION_ERROR（P3 fix）', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/moderation/history?limit=xyz',
+      headers: { authorization: authHeader },
+    })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.code).toBe('VALIDATION_ERROR')
   })
 
   it('未认证 → 401', async () => {

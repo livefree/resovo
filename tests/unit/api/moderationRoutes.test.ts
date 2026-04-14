@@ -75,8 +75,8 @@ describe('CHG-387 权限矩阵', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks()
+    mockFindAdminVideoById.mockResolvedValue({ id: 'v1', review_status: 'pending_review', meta_score: 70 })
     mockTransitionVideoState.mockResolvedValue({ id: 'v1', review_status: 'approved' })
-    mockFindAdminVideoById.mockResolvedValue({ id: 'v1', review_status: 'rejected', meta_score: 70 })
     app = await buildApp()
   })
 
@@ -126,6 +126,8 @@ describe('CHG-387 权限矩阵', () => {
   })
 
   it('moderator 可以调用 reopen', async () => {
+    // reopen 需要 rejected 状态
+    mockFindAdminVideoById.mockResolvedValue({ id: 'v1', review_status: 'rejected', meta_score: 70 })
     const token = await tokenFor('moderator')
     const res = await app.inject({
       method: 'POST',
@@ -146,6 +148,7 @@ describe('CHG-387 batch-reject reason 约束', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks()
+    mockFindAdminVideoById.mockResolvedValue({ id: 'v1', review_status: 'pending_review', meta_score: 80 })
     mockTransitionVideoState.mockResolvedValue({ id: 'v1', review_status: 'rejected' })
     app = await buildApp()
     authHeader = await tokenFor('moderator')

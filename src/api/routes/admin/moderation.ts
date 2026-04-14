@@ -39,6 +39,14 @@ const BatchRejectSchema = z.object({
   reason: z.string().min(1).max(500),
 })
 
+const HistoryQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+  result: z.enum(['approved', 'rejected']).optional(),
+  type: z.string().optional(),
+  sortDir: z.enum(['asc', 'desc']).default('desc'),
+})
+
 export async function adminModerationRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['moderator', 'admin'])]
   const svc = new DoubanService(db)
@@ -176,6 +184,9 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
     let approved = 0, skipped = 0, failed = 0
     for (const id of parsed.data.ids) {
       try {
+        // 仅 pending_review 视频可批量通过；其他状态直接计入 skipped
+        const video = await videoQueries.findAdminVideoById(db, id)
+        if (!video || video.review_status !== 'pending_review') { skipped++; continue }
         const result = await videoQueries.transitionVideoState(db, id, {
           action: 'approve',
           reviewedBy: userId,
@@ -203,6 +214,9 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
     let rejected = 0, skipped = 0, failed = 0
     for (const id of parsed.data.ids) {
       try {
+        // 仅 pending_review 视频可批量拒绝；其他状态（包括 approved）直接计入 skipped
+        const video = await videoQueries.findAdminVideoById(db, id)
+        if (!video || video.review_status !== 'pending_review') { skipped++; continue }
         const result = await videoQueries.transitionVideoState(db, id, {
           action: 'reject',
           reason: parsed.data.reason,
@@ -221,15 +235,18 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
   // ── GET /admin/moderation/history ────────────────────────────
   // 已审核历史列表（approved / rejected）
   fastify.get('/admin/moderation/history', { preHandler: auth }, async (request, reply) => {
-    const query = request.query as Record<string, string>
-    const page = Math.max(1, parseInt(query.page ?? '1', 10))
-    const limit = Math.min(100, Math.max(1, parseInt(query.limit ?? '30', 10)))
+    const parsed = HistoryQuerySchema.safeParse(request.query)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '分页参数错误', status: 422 },
+      })
+    }
     const result = await moderationQueries.listModerationHistory(db, {
-      result: (query.result === 'approved' || query.result === 'rejected') ? query.result : undefined,
-      type: query.type || undefined,
-      sortDir: query.sortDir === 'asc' ? 'asc' : 'desc',
-      page,
-      limit,
+      result: parsed.data.result,
+      type: parsed.data.type,
+      sortDir: parsed.data.sortDir,
+      page: parsed.data.page,
+      limit: parsed.data.limit,
     })
     return reply.send({ data: result.rows, total: result.total })
   })
