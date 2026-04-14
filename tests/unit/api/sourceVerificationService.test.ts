@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const mockListIslandVideos = vi.fn()
 const mockInsertSourceHealthEvent = vi.fn().mockResolvedValue('event-1')
 const mockTransitionVideoState = vi.fn()
+const mockBulkSyncSourceCheckStatus = vi.fn().mockResolvedValue(0)
 const mockCreateAndEnqueueRun = vi.fn()
 
 vi.mock('@/api/lib/postgres', () => ({
@@ -25,6 +26,7 @@ vi.mock('@/api/db/queries/sources', () => ({
 
 vi.mock('@/api/db/queries/videos', () => ({
   transitionVideoState: (...args: unknown[]) => mockTransitionVideoState(...args),
+  bulkSyncSourceCheckStatus: (...args: unknown[]) => mockBulkSyncSourceCheckStatus(...args),
 }))
 
 vi.mock('@/api/services/CrawlerRunService', () => ({

@@ -1317,7 +1317,7 @@ export async function syncSourceCheckStatusFromSources(
        CASE
          WHEN NOT EXISTS (
            SELECT 1 FROM video_sources WHERE video_id = $1 AND deleted_at IS NULL
-         ) THEN 'no_source'
+         ) THEN 'all_dead'
          WHEN NOT EXISTS (
            SELECT 1 FROM video_sources WHERE video_id = $1 AND is_active = true AND deleted_at IS NULL
          ) THEN 'all_dead'
@@ -1354,7 +1354,7 @@ export async function bulkSyncSourceCheckStatus(
        CASE
          WHEN NOT EXISTS (
            SELECT 1 FROM video_sources WHERE video_id = videos.id AND deleted_at IS NULL
-         ) THEN 'no_source'
+         ) THEN 'all_dead'
          WHEN NOT EXISTS (
            SELECT 1 FROM video_sources WHERE video_id = videos.id AND is_active = true AND deleted_at IS NULL
          ) THEN 'all_dead'
