@@ -110,18 +110,20 @@ describe('ModerationDetail', () => {
     expect(block.getAttribute('data-status')).toBe('ok')
   })
 
-  it('播放器折叠块默认折叠（不渲染 player）', async () => {
+  it('播放器折叠块默认展开（渲染 player）', async () => {
     render(<ModerationDetail videoId="vid-1" onReviewed={vi.fn()} />)
     await screen.findByText('测试视频')
-    expect(screen.queryByTestId('moderation-player-mock')).toBeNull()
+    expect(screen.getByTestId('moderation-player-mock')).toBeTruthy()
   })
 
-  it('点击播放器折叠块标题后展开 player', async () => {
+  it('点击播放器折叠块标题后折叠 player', async () => {
     render(<ModerationDetail videoId="vid-1" onReviewed={vi.fn()} />)
     await screen.findByText('测试视频')
+    // player 初始展开，点击折叠
+    expect(screen.getByTestId('moderation-player-mock')).toBeTruthy()
     fireEvent.click(screen.getByText('播放器预览'))
     await waitFor(() => {
-      expect(screen.getByTestId('moderation-player-mock')).toBeTruthy()
+      expect(screen.queryByTestId('moderation-player-mock')).toBeNull()
     })
   })
 

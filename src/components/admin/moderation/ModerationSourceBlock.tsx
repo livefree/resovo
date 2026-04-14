@@ -1,7 +1,9 @@
 /**
  * ModerationSourceBlock.tsx — 审核台源健康折叠块（UX-11）
- * P2 fix: /admin/sources 返回 DB 原始行（snake_case）
- * 按 source_name 汇总成线路卡片，每张可展开查看集数详情
+ * - snake_case 字段（GET /admin/sources 返回 DB 原始行）
+ * - 按 source_name 汇总线路，每条线路内显示集数 chip 标签
+ * - chip 颜色表示健康状态（绿/红），点击单条检验
+ * - 检验后从已拉取源数据本地计算状态，无需等待父组件 refetch
  */
 
 'use client'
@@ -23,7 +25,6 @@ interface SourceRow {
 interface LineGroup {
   name: string
   sources: SourceRow[]
-  activeCount: number
 }
 
 interface ModerationSourceBlockProps {
@@ -31,9 +32,12 @@ interface ModerationSourceBlockProps {
   sourceCheckStatus: SourceCheckStatus
 }
 
-function formatChecked(iso: string | null): string {
-  if (!iso) return '未检验'
-  return iso.slice(0, 16).replace('T', ' ')
+function computeStatus(rows: SourceRow[]): SourceCheckStatus {
+  if (rows.length === 0) return 'pending'
+  const active = rows.filter((r) => r.is_active).length
+  if (active === rows.length) return 'ok'
+  if (active === 0) return 'all_dead'
+  return 'partial'
 }
 
 function groupByLine(rows: SourceRow[]): LineGroup[] {
@@ -46,69 +50,17 @@ function groupByLine(rows: SourceRow[]): LineGroup[] {
   return Array.from(map.entries()).map(([name, sources]) => ({
     name,
     sources: sources.slice().sort((a, b) => (a.episode_number ?? 0) - (b.episode_number ?? 0)),
-    activeCount: sources.filter((s) => s.is_active).length,
   }))
 }
 
-function LineCard({ group, onVerifyOne, verifying }: {
-  group: LineGroup
-  onVerifyOne: (id: string) => void
-  verifying: string | null
-}) {
-  const [open, setOpen] = useState(false)
-  const total = group.sources.length
-  const active = group.activeCount
-
-  return (
-    <div className="rounded border border-[var(--border)]">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-2 py-1.5 text-left"
-      >
-        <span className="truncate text-[10px] text-[var(--text)]">{group.name}</span>
-        <div className="ml-2 flex shrink-0 items-center gap-1.5">
-          <span className={`text-[10px] ${active === total ? 'text-[var(--success,#22c55e)]' : active === 0 ? 'text-[var(--error,#ef4444)]' : 'text-[var(--warning,#f59e0b)]'}`}>
-            {active}/{total}
-          </span>
-          <span className="text-[10px] text-[var(--muted)]">{open ? '▲' : '▼'}</span>
-        </div>
-      </button>
-      {open && (
-        <ul className="border-t border-[var(--border)] divide-y divide-[var(--border)]">
-          {group.sources.map((src) => (
-            <li key={src.id} className="flex items-center gap-2 px-2 py-1">
-              <span
-                className={`shrink-0 text-[10px] ${src.is_active ? 'text-[var(--success,#22c55e)]' : 'text-[var(--error,#ef4444)]'}`}
-                data-testid={`source-active-${src.id}`}
-              >
-                {src.is_active ? '●' : '✕'}
-              </span>
-              <div className="min-w-0 flex-1">
-                {src.episode_number != null && (
-                  <p className="text-[10px] text-[var(--muted)]">E{src.episode_number}</p>
-                )}
-                <p className="text-[10px] text-[var(--muted)]">{formatChecked(src.last_checked)}</p>
-              </div>
-              <button
-                type="button"
-                disabled={verifying === src.id}
-                onClick={() => onVerifyOne(src.id)}
-                data-testid={`source-verify-btn-${src.id}`}
-                className="shrink-0 rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px] hover:bg-[var(--bg3)] disabled:opacity-50"
-              >
-                {verifying === src.id ? '…' : '检验'}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
+const STATUS_LABEL: Record<SourceCheckStatus, string> = {
+  ok: '全部可达', partial: '部分可达', all_dead: '全部失效', pending: '未检验',
 }
 
 export function ModerationSourceBlock({ videoId, sourceCheckStatus }: ModerationSourceBlockProps) {
   const [lines, setLines] = useState<LineGroup[]>([])
+  const [allSources, setAllSources] = useState<SourceRow[]>([])
+  const [computedStatus, setComputedStatus] = useState<SourceCheckStatus>(sourceCheckStatus)
   const [loading, setLoading] = useState(false)
   const [verifying, setVerifying] = useState<string | null>(null)
   const [verifyingAll, setVerifyingAll] = useState(false)
@@ -120,7 +72,9 @@ export function ModerationSourceBlock({ videoId, sourceCheckStatus }: Moderation
       const res = await apiClient.get<{ data: SourceRow[]; total: number }>(
         `/admin/sources?videoId=${videoId}&status=all&page=1&limit=100`
       )
+      setAllSources(res.data)
       setLines(groupByLine(res.data))
+      setComputedStatus(computeStatus(res.data))
     } catch {
       setLines([])
     } finally {
@@ -151,10 +105,7 @@ export function ModerationSourceBlock({ videoId, sourceCheckStatus }: Moderation
     setMsg(null)
     try {
       await apiClient.post('/admin/sources/batch-verify', {
-        scope: 'video',
-        videoId,
-        activeOnly: false,
-        limit: 100,
+        scope: 'video', videoId, activeOnly: false, limit: 100,
       })
       await fetchSources()
       setMsg('全部检验完成')
@@ -165,19 +116,16 @@ export function ModerationSourceBlock({ videoId, sourceCheckStatus }: Moderation
     }
   }
 
-  const statusLabel: Record<SourceCheckStatus, string> = {
-    ok: '全部可达', partial: '部分可达', all_dead: '全部失效', pending: '未检验',
-  }
-
-  const totalSources = lines.reduce((n, g) => n + g.sources.length, 0)
-
   return (
     <div className="space-y-2" data-testid="source-block">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] text-[var(--muted)]">检验状态：{statusLabel[sourceCheckStatus]}</span>
+        <span className="text-[10px] text-[var(--muted)]">
+          检验状态：{STATUS_LABEL[computedStatus]}
+          {allSources.length > 0 && ` (${allSources.filter(s => s.is_active).length}/${allSources.length})`}
+        </span>
         <button
           type="button"
-          disabled={verifyingAll || totalSources === 0}
+          disabled={verifyingAll || allSources.length === 0}
           onClick={() => void handleVerifyAll()}
           data-testid="source-verify-all-btn"
           className="rounded border border-[var(--border)] px-2 py-0.5 text-[10px] hover:bg-[var(--bg3)] disabled:opacity-50"
@@ -185,24 +133,48 @@ export function ModerationSourceBlock({ videoId, sourceCheckStatus }: Moderation
           {verifyingAll ? '检验中…' : '全部检验'}
         </button>
       </div>
+
       {msg && <p className="text-[10px] text-[var(--muted)]" data-testid="source-msg">{msg}</p>}
+
       {loading ? (
-        <div className="space-y-1">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-7 animate-pulse rounded bg-[var(--bg3)]" />
+        <div className="flex gap-1">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-6 w-10 animate-pulse rounded bg-[var(--bg3)]" />
           ))}
         </div>
       ) : lines.length === 0 ? (
         <p className="text-xs text-[var(--muted)]">暂无播放源</p>
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-2">
           {lines.map((group) => (
-            <LineCard
-              key={group.name}
-              group={group}
-              onVerifyOne={(id) => void handleVerifyOne(id)}
-              verifying={verifying}
-            />
+            <div key={group.name}>
+              {lines.length > 1 && (
+                <p className="mb-1 text-[10px] text-[var(--muted)]">{group.name}</p>
+              )}
+              <div className="flex flex-wrap gap-1">
+                {group.sources.map((src) => (
+                  <button
+                    key={src.id}
+                    type="button"
+                    disabled={verifying === src.id || verifyingAll}
+                    onClick={() => void handleVerifyOne(src.id)}
+                    title={`上次检验：${src.last_checked ? src.last_checked.slice(0, 16).replace('T', ' ') : '未检验'}`}
+                    data-testid={`source-verify-btn-${src.id}`}
+                    className={`rounded px-2 py-0.5 text-xs transition-colors ${
+                      verifying === src.id
+                        ? 'bg-[var(--bg3)] text-[var(--muted)] opacity-70'
+                        : src.is_active
+                          ? 'bg-green-500/20 text-green-300 hover:bg-green-500/30'
+                          : 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
+                    }`}
+                  >
+                    {verifying === src.id
+                      ? '…'
+                      : `${src.is_active ? '●' : '✕'} E${src.episode_number ?? '?'}`}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}

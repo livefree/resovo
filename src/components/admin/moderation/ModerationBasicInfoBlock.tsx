@@ -1,8 +1,8 @@
 /**
  * ModerationBasicInfoBlock.tsx — 审核台基础信息内联编辑块（UX-12）
- * 从 ModerationDetail 拆分，避免单文件超 500 行
  * 标题：点击切换 input / 年份：点击切换 input
- * 类型：单排单选卡片（立即保存）/ 分类标签：复选卡片（立即保存）
+ * 类型：单排单选卡片（立即保存，乐观更新）
+ * 分类标签：复选卡片（点击立即保存，乐观更新）
  */
 
 'use client'
@@ -47,27 +47,53 @@ export function ModerationBasicInfoBlock({ video, videoId, onSaved }: Moderation
   const [titleDraft, setTitleDraft] = useState('')
   const [editingYear, setEditingYear] = useState(false)
   const [yearDraft, setYearDraft] = useState('')
+  // 乐观本地状态：在 refetch 前即时反映用户操作
+  const [localType, setLocalType] = useState(video.type)
+  const [localGenres, setLocalGenres] = useState<string[]>(video.genres)
   const [saving, setSaving] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const yearInputRef = useRef<HTMLInputElement>(null)
 
+  // 父组件 refetch 后同步（去掉 onSaved 防止循环）
+  useEffect(() => { setLocalType(video.type) }, [video.type])
+  useEffect(() => { setLocalGenres(video.genres) }, [video.genres])
+
   useEffect(() => { if (editingTitle) titleInputRef.current?.focus() }, [editingTitle])
   useEffect(() => { if (editingYear) yearInputRef.current?.focus() }, [editingYear])
 
-  const saveMeta = useCallback(async (
-    patch: { title?: string; year?: number | null; type?: string; genres?: string[] }
+  const saveField = useCallback(async (
+    patch: { title?: string; year?: number | null; type?: string; genres?: string[] },
+    successMsg: string
   ) => {
     setSaving(true)
     try {
       await apiClient.patch(`/admin/moderation/${videoId}/meta`, patch)
-      notify.success('已保存')
+      notify.success(successMsg)
       onSaved()
     } catch {
-      notify.error('保存失败')
+      notify.error('保存失败，已恢复原值')
+      // 回滚乐观更新
+      setLocalType(video.type)
+      setLocalGenres(video.genres)
     } finally {
       setSaving(false)
     }
-  }, [videoId, onSaved])
+  }, [videoId, onSaved, video.type, video.genres])
+
+  const handleTypeClick = useCallback((v: string) => {
+    if (v === localType || saving) return
+    setLocalType(v)
+    void saveField({ type: v }, `类型已改为：${TYPE_LABELS[v] ?? v}`)
+  }, [localType, saving, saveField])
+
+  const handleGenreToggle = useCallback((v: string) => {
+    if (saving) return
+    const next = localGenres.includes(v)
+      ? localGenres.filter((g) => g !== v)
+      : [...localGenres, v]
+    setLocalGenres(next)
+    void saveField({ genres: next }, '分类标签已保存')
+  }, [localGenres, saving, saveField])
 
   return (
     <div className="space-y-2.5">
@@ -80,7 +106,7 @@ export function ModerationBasicInfoBlock({ video, videoId, onSaved }: Moderation
           onBlur={() => {
             setEditingTitle(false)
             const trimmed = titleDraft.trim()
-            if (trimmed && trimmed !== video.title) void saveMeta({ title: trimmed })
+            if (trimmed && trimmed !== video.title) void saveField({ title: trimmed }, `标题已保存`)
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') { e.currentTarget.blur() }
@@ -114,7 +140,7 @@ export function ModerationBasicInfoBlock({ video, videoId, onSaved }: Moderation
             onBlur={() => {
               setEditingYear(false)
               const n = yearDraft === '' ? null : parseInt(yearDraft, 10)
-              if (n !== video.year) void saveMeta({ year: n })
+              if (n !== video.year) void saveField({ year: n }, `年份已保存`)
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') { e.currentTarget.blur() }
@@ -142,7 +168,7 @@ export function ModerationBasicInfoBlock({ video, videoId, onSaved }: Moderation
         </span>
       </div>
 
-      {/* 类型：单选卡片 */}
+      {/* 类型：单选卡片（乐观更新） */}
       <div>
         <p className="mb-1 text-[10px] text-[var(--muted)]">类型</p>
         <div className="flex flex-wrap gap-1">
@@ -152,8 +178,8 @@ export function ModerationBasicInfoBlock({ video, videoId, onSaved }: Moderation
               type="button"
               disabled={saving}
               data-testid={`meta-type-${v}`}
-              onClick={() => { if (v !== video.type) void saveMeta({ type: v }) }}
-              className={`rounded px-2 py-0.5 text-xs transition-colors ${v === video.type ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'}`}
+              onClick={() => handleTypeClick(v)}
+              className={`rounded px-2 py-0.5 text-xs transition-colors ${v === localType ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'}`}
             >
               {label}
             </button>
@@ -161,24 +187,19 @@ export function ModerationBasicInfoBlock({ video, videoId, onSaved }: Moderation
         </div>
       </div>
 
-      {/* 分类标签：复选卡片（点击立即保存） */}
+      {/* 分类标签：复选卡片（乐观更新） */}
       <div>
         <p className="mb-1 text-[10px] text-[var(--muted)]">分类标签</p>
         <div className="flex flex-wrap gap-1">
           {Object.entries(GENRE_LABELS).map(([v, label]) => {
-            const selected = video.genres.includes(v)
+            const selected = localGenres.includes(v)
             return (
               <button
                 key={v}
                 type="button"
                 disabled={saving}
                 data-testid={`genre-option-${v}`}
-                onClick={() => {
-                  const next = selected
-                    ? video.genres.filter((g) => g !== v)
-                    : [...video.genres, v]
-                  void saveMeta({ genres: next })
-                }}
+                onClick={() => handleGenreToggle(v)}
                 className={`rounded px-2 py-0.5 text-xs transition-colors ${selected ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'}`}
               >
                 {label}

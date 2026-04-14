@@ -98,6 +98,7 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
   })
 
   // ── POST /admin/moderation/:id/douban-confirm ────────────────
+  // 仅 pending_review 视频
   fastify.post('/admin/moderation/:id/douban-confirm', { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string }
     const parsed = DoubanConfirmSchema.safeParse(request.body)
@@ -105,6 +106,13 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       return reply.code(422).send({
         error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
       })
+    }
+    const video = await videoQueries.findAdminVideoById(db, id)
+    if (!video) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 } })
+    }
+    if (video.review_status !== 'pending_review') {
+      return reply.code(422).send({ error: { code: 'NOT_PENDING', message: '仅待审核视频可操作', status: 422 } })
     }
     try {
       const result = await svc.confirmSubject(id, parsed.data.subjectId)

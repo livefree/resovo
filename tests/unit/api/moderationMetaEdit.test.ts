@@ -282,3 +282,44 @@ describe('POST /v1/admin/moderation/:id/douban-ignore', () => {
     expect(res.statusCode).toBe(401)
   })
 })
+
+// ═══════════════════════════════════════════════════════════════
+// POST /v1/admin/moderation/:id/douban-confirm — pending_review 校验（P2 fix）
+// ═══════════════════════════════════════════════════════════════
+
+describe('POST /v1/admin/moderation/:id/douban-confirm — pending_review guard', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+  let authHeader: string
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockFindAdminVideoById.mockResolvedValue(makePendingVideo())
+    app = await buildApp()
+    authHeader = await modToken()
+  })
+
+  afterEach(() => app.close())
+
+  it('视频非 pending_review → 422 NOT_PENDING（P2 fix）', async () => {
+    mockFindAdminVideoById.mockResolvedValue(makePendingVideo({ review_status: 'approved' }))
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/moderation/vid-1/douban-confirm',
+      headers: { authorization: authHeader, 'content-type': 'application/json' },
+      body: JSON.stringify({ subjectId: 'db-sub-1' }),
+    })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.code).toBe('NOT_PENDING')
+  })
+
+  it('视频不存在 → 404', async () => {
+    mockFindAdminVideoById.mockResolvedValue(null)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/moderation/not-exist/douban-confirm',
+      headers: { authorization: authHeader, 'content-type': 'application/json' },
+      body: JSON.stringify({ subjectId: 'db-sub-1' }),
+    })
+    expect(res.statusCode).toBe(404)
+  })
+})

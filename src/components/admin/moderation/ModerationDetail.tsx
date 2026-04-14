@@ -93,6 +93,7 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
   const [rejectReason, setRejectReason] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [episodesExpanded, setEpisodesExpanded] = useState(false)
 
   const fetchAllActiveSources = useCallback(async (id: string): Promise<SourceRow[]> => {
     const pageSize = 100
@@ -238,8 +239,8 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
   return (
     <div className="flex flex-col gap-3 overflow-y-auto p-4" data-testid="moderation-detail">
 
-      {/* 播放器预览（置顶，默认折叠） */}
-      <Collapsible title="播放器预览" defaultOpen={false} testId="collapsible-player">
+      {/* 播放器预览（置顶，默认展开） */}
+      <Collapsible title="播放器预览" defaultOpen={true} testId="collapsible-player">
         <div className="space-y-2">
           <ModerationPlayer
             sourceUrl={currentSource?.source_url ?? null}
@@ -279,10 +280,24 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
             </div>
           )}
           {lineEpisodes.length > 0 && (
-            <div className="flex items-center gap-2" data-testid="moderation-episode-selector">
-              <span className="shrink-0 text-xs text-[var(--muted)]">选集</span>
+            <div className="space-y-1" data-testid="moderation-episode-selector">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-[var(--muted)]">选集</span>
+                {lineEpisodes.length > 12 && (
+                  <button
+                    type="button"
+                    onClick={() => setEpisodesExpanded((v) => !v)}
+                    className="text-[10px] text-[var(--muted)] hover:underline"
+                  >
+                    {episodesExpanded ? '收起' : `共 ${lineEpisodes.length} 集 ▼`}
+                  </button>
+                )}
+              </div>
               <div className="flex flex-wrap gap-1">
-                {lineEpisodes.map((episode) => (
+                {(lineEpisodes.length > 12 && !episodesExpanded
+                  ? lineEpisodes.slice(0, 12)
+                  : lineEpisodes
+                ).map((episode) => (
                   <button
                     key={episode}
                     type="button"
@@ -290,7 +305,7 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
                     data-testid={`moderation-episode-btn-${episode}`}
                     className={`rounded px-2 py-0.5 text-xs transition-colors ${episode === (currentSource?.episode_number ?? selectedEpisode) ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'}`}
                   >
-                    第{episode}集
+                    {episode}
                   </button>
                 ))}
               </div>
