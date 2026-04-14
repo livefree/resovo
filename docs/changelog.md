@@ -5826,3 +5826,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无（复用 migration 037 中的 source_health_events 表）
 - **架构备注**：SourceReplaceDialog 复用 AdminDialogShell + ModerationPlayer，无新共享组件；孤岛判定逻辑完全在 DB query 层，路由层零业务逻辑
+
+---
+
+## VIDEO-09 — [UI] 视频管理：新增元数据完整度列 + 豆瓣状态列
+
+- **完成时间**：2026-04-14
+- **实际开始**：2026-04-14
+- **交付内容**：
+  - `src/components/admin/videos/useVideoTableColumns.tsx` — VideoAdminRow 新增 douban_status/meta_score/source_check_status 字段；VideoColumnId 扩充两列；VIDEO_COLUMNS 新增 douban_status（默认隐藏）和 meta_score（默认隐藏）；COLUMN_LABELS/SORTABLE_MAP 同步更新；ColumnDeps 新增 doubanSyncPendingIds/handleDoubanSync/openStaging；buildDataColumn 新增 douban_status（badge+同步按钮）和 meta_score（进度条+数值）；actions 列新增暂存按钮（review_status==='approved'&&!is_published 时显示）
+  - `src/components/admin/videos/VideoTable.tsx` — 新增 doubanSyncPendingIds state、handleDoubanSync（POST /admin/videos/:id/douban-sync + 刷新）、openStaging（router.push /admin/staging?videoId=）；deps 传入新 handler
+  - `tests/unit/components/admin/videos/VideoTable.test.tsx` — MOCK_ROWS 补充 douban_status/meta_score 字段；新增 MOCK_STAGING_ROW；新增 6 条单测：豆瓣状态列渲染、同步按钮调用 API、元数据完整度进度条渲染、暂存按钮跳转、非暂存行不显示按钮
+- **新增依赖**：无
+- **数据库变更**：无（listAdminVideos 已通过 VIDEO_FULL_SELECT 透传 douban_status/meta_score，无需改 DB 层）
+- **架构备注**："暂存中"状态用 review_status==='approved'&&!is_published 判定，无需额外字段或 API 变更

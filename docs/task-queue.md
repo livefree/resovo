@@ -5735,19 +5735,22 @@
 > ⚠ Phase 7 完成后进行最终全流程验收
 
 #### VIDEO-09 — [UI] 视频管理：新增元数据完整度列 + 豆瓣状态列
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
+- **实际开始**：2026-04-14
+- **完成时间**：2026-04-14
 - **计划开始**：M6 评审通过后
 - **依赖**：CHG-381 ✅（字段存在），CHG-385 ✅（字段有数据）
 - **文件范围**：
-  - `src/components/admin/` 视频列表相关组件（现有，新增可选列）
-  - `src/api/db/queries/videos.ts`（listAdminVideos 新增 douban_status/meta_score 字段输出）
-  - `tests/unit/components/admin/videos/VideoTable.test.tsx`（更新）
+  - `src/components/admin/videos/useVideoTableColumns.tsx`（新增列定义）
+  - `src/components/admin/videos/VideoTable.tsx`（handler + 暂存跳转）
+  - `tests/unit/components/admin/videos/VideoTable.test.tsx`（更新，+6 用例）
 - **变更内容**：
   - 新增可选列：元数据完整度（meta_score 进度条，默认隐藏）
-  - 新增可选列：豆瓣状态（badge，默认隐藏）；badge 旁有[立即同步]按钮（单条触发）
-  - 暂存中状态视频行显示[进入暂存]快捷操作
-- **完成备注**：_（AI 填写）_
+  - 新增可选列：豆瓣状态（badge + [同步]按钮，默认隐藏；POST /admin/videos/:id/douban-sync）
+  - approved + !is_published 行显示[暂存]按钮，点击跳转 /admin/staging?videoId=
+  - listAdminVideos 已透传 douban_status/meta_score，无需改 DB 层
+- **完成备注**：VideoAdminRow 补充 douban_status/meta_score/source_check_status 字段；新列默认 visible:false；14 个测试全部通过
 
 #### VIDEO-10 — [UI] 视频管理：复审按钮 + 暂存队列 badge + 补源触发
 - **状态**：⬜ 待开始

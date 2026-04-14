@@ -49,6 +49,7 @@ export function VideoTable() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [visibilityPendingIds, setVisibilityPendingIds] = useState<string[]>([])
   const [publishPendingIds, setPublishPendingIds] = useState<string[]>([])
+  const [doubanSyncPendingIds, setDoubanSyncPendingIds] = useState<string[]>([])
 
   const q = searchParams.get('q') ?? ''
   const type = searchParams.get('type') ?? ''
@@ -142,8 +143,24 @@ export function VideoTable() {
     }
   }, [])
 
+  const handleDoubanSync = useCallback(async (row: VideoAdminRow) => {
+    setDoubanSyncPendingIds((ids) => (ids.includes(row.id) ? ids : [...ids, row.id]))
+    try {
+      await apiClient.post(`/admin/videos/${row.id}/douban-sync`, {})
+      void fetchVideos(page, pageSize)
+    } catch (_err) {
+      // 失败不阻断交互，下次刷新可重试
+    } finally {
+      setDoubanSyncPendingIds((ids) => ids.filter((id) => id !== row.id))
+    }
+  }, [fetchVideos, page, pageSize])
+
   const openFullEdit = useCallback((videoId: string) => {
     router.push(`/admin/videos/${videoId}/edit`)
+  }, [router])
+
+  const openStaging = useCallback((videoId: string) => {
+    router.push(`/admin/staging?videoId=${videoId}`)
   }, [router])
 
   const allTableColumns = useVideoTableColumns({
@@ -155,10 +172,13 @@ export function VideoTable() {
       selectedIds,
       visibilityPendingIds,
       publishPendingIds,
+      doubanSyncPendingIds,
       handleCheck,
       handleVisibilityToggle,
       handlePublishToggle,
+      handleDoubanSync,
       openFullEdit,
+      openStaging,
     },
   })
 

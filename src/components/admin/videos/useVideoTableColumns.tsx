@@ -36,10 +36,14 @@ export interface VideoAdminRow {
   visibility_status?: 'public' | 'internal' | 'hidden'
   review_status?: 'pending_review' | 'approved' | 'rejected'
   created_at: string
+  douban_status?: 'pending' | 'matched' | 'candidate' | 'unmatched'
+  meta_score?: number
+  source_check_status?: string
 }
 
 export type VideoColumnId =
-  | 'cover' | 'title' | 'type' | 'source_health' | 'visibility' | 'review_status' | 'actions'
+  | 'cover' | 'title' | 'type' | 'source_health' | 'visibility' | 'review_status'
+  | 'douban_status' | 'meta_score' | 'actions'
 
 export const VIDEO_COLUMNS: AdminColumnMeta[] = [
   { id: 'cover', visible: true, width: 88, minWidth: 76, maxWidth: 120, resizable: true },
@@ -48,6 +52,8 @@ export const VIDEO_COLUMNS: AdminColumnMeta[] = [
   { id: 'source_health', visible: true, width: 160, minWidth: 140, maxWidth: 240, resizable: true },
   { id: 'visibility', visible: true, width: 132, minWidth: 120, maxWidth: 180, resizable: true },
   { id: 'review_status', visible: true, width: 132, minWidth: 120, maxWidth: 180, resizable: true },
+  { id: 'douban_status', visible: false, width: 180, minWidth: 160, maxWidth: 260, resizable: true },
+  { id: 'meta_score', visible: false, width: 160, minWidth: 140, maxWidth: 220, resizable: true },
   { id: 'actions', visible: true, width: 168, minWidth: 148, maxWidth: 240, resizable: false },
 ]
 
@@ -58,13 +64,15 @@ export const VIDEO_DEFAULT_TABLE_STATE: Omit<SharedAdminTableState, 'columns'> =
 export const COLUMN_LABELS: Record<VideoColumnId, string> = {
   cover: '封面', title: '标题', type: '类型',
   source_health: '源健康度', visibility: '可见性',
-  review_status: '审核状态', actions: '操作',
+  review_status: '审核状态', douban_status: '豆瓣状态',
+  meta_score: '元数据完整度', actions: '操作',
 }
 
 // Only fields present in the backend SORT_FIELDS whitelist are sortable
 export const SORTABLE_MAP: Record<VideoColumnId, boolean> = {
   cover: false, title: true, type: true, source_health: false,
-  visibility: false, review_status: false, actions: false,
+  visibility: false, review_status: false, douban_status: false,
+  meta_score: false, actions: false,
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -132,10 +140,13 @@ interface ColumnDeps {
   selectedIds: string[]
   visibilityPendingIds: string[]
   publishPendingIds: string[]
+  doubanSyncPendingIds: string[]
   handleCheck: (id: string, checked: boolean) => void
   handleVisibilityToggle: (row: VideoAdminRow, next: 'public' | 'internal' | 'hidden') => Promise<void>
   handlePublishToggle: (row: VideoAdminRow) => Promise<void>
+  handleDoubanSync: (row: VideoAdminRow) => Promise<void>
   openFullEdit: (id: string) => void
+  openStaging: (videoId: string) => void
 }
 
 function buildDataColumn(columnId: VideoColumnId, deps: ColumnDeps): TableColumn<VideoAdminRow> {
@@ -205,6 +216,52 @@ function buildDataColumn(columnId: VideoColumnId, deps: ColumnDeps): TableColumn
       col.accessor = (row) => getReviewLabel(row.review_status)
       col.cell = ({ row }) => <TableBadgeCell label={getReviewLabel(row.review_status)} tone={getReviewTone(row.review_status)} />
       break
+    case 'douban_status': {
+      col.accessor = (row) => row.douban_status ?? 'pending'
+      col.cell = ({ row }) => {
+        const status = row.douban_status ?? 'pending'
+        const labelMap: Record<string, string> = {
+          pending: '未检测', matched: '已匹配', candidate: '候选', unmatched: '未匹配',
+        }
+        const toneMap: Record<string, 'success' | 'warning' | 'info' | 'danger'> = {
+          pending: 'warning', matched: 'success', candidate: 'info', unmatched: 'danger',
+        }
+        const isPending = deps.doubanSyncPendingIds.includes(row.id)
+        return (
+          <div className="flex items-center gap-1.5">
+            <TableBadgeCell label={labelMap[status] ?? status} tone={toneMap[status] ?? 'info'} />
+            <button
+              type="button"
+              title="立即同步豆瓣"
+              disabled={isPending}
+              onClick={() => { void deps.handleDoubanSync(row) }}
+              className="rounded border border-[var(--border)] px-1.5 py-0.5 text-xs text-[var(--muted)] hover:text-[var(--text)] hover:bg-[var(--bg3)] disabled:opacity-40 disabled:cursor-not-allowed"
+              data-testid={`douban-sync-${row.id}`}
+            >
+              {isPending ? '同步中…' : '同步'}
+            </button>
+          </div>
+        )
+      }
+      break
+    }
+    case 'meta_score': {
+      col.accessor = (row) => row.meta_score ?? 0
+      col.cell = ({ row }) => {
+        const score = Math.min(100, Math.max(0, row.meta_score ?? 0))
+        const pct = `${score}%`
+        const barColor = score >= 80 ? 'bg-green-500' : score >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+        return (
+          <div className="flex items-center gap-2 min-w-0" data-testid={`meta-score-${row.id}`}>
+            <div className="h-1.5 flex-1 rounded-full bg-[var(--border)] overflow-hidden">
+              <div className={`h-full rounded-full ${barColor}`} style={{ width: pct }} />
+            </div>
+            <span className="shrink-0 text-xs text-[var(--muted)] tabular-nums">{score}</span>
+          </div>
+        )
+      }
+      break
+    }
     case 'actions':
       col.accessor = (row) => row.id
       col.cell = ({ row }) => {
@@ -244,6 +301,18 @@ function buildDataColumn(columnId: VideoColumnId, deps: ColumnDeps): TableColumn
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             </Link>
+            {/* 暂存中：进入暂存队列 */}
+            {row.review_status === 'approved' && !row.is_published ? (
+              <button
+                type="button"
+                title="进入暂存队列"
+                onClick={() => deps.openStaging(row.id)}
+                className="rounded border border-blue-500/40 bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-300 hover:bg-blue-500/20 transition-colors"
+                data-testid={`video-staging-${row.id}`}
+              >
+                暂存
+              </button>
+            ) : null}
             {/* 上架/下架 Toggle */}
             <button
               type="button"
@@ -305,6 +374,7 @@ export function useVideoTableColumns({
     deps.selectedIds,
     deps.visibilityPendingIds,
     deps.publishPendingIds,
+    deps.doubanSyncPendingIds,
     deps.sortable,
   ])
 }

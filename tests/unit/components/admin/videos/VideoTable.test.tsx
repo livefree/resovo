@@ -44,6 +44,8 @@ const MOCK_ROWS = [
     visibility_status: 'internal',
     review_status: 'pending_review',
     created_at: '2026-03-20T00:00:00Z',
+    douban_status: 'pending',
+    meta_score: 40,
   },
   {
     id: 'v1',
@@ -60,8 +62,30 @@ const MOCK_ROWS = [
     visibility_status: 'public',
     review_status: 'approved',
     created_at: '2026-03-20T00:00:00Z',
+    douban_status: 'matched',
+    meta_score: 85,
   },
 ]
+
+// 暂存中行：approved + !is_published
+const MOCK_STAGING_ROW = {
+  id: 'v3',
+  short_id: 'v3short',
+  title: 'Staging Movie',
+  title_en: null,
+  cover_url: null,
+  type: 'movie',
+  year: 2026,
+  is_published: false,
+  source_count: '2',
+  active_source_count: '2',
+  total_source_count: '2',
+  visibility_status: 'internal',
+  review_status: 'approved',
+  created_at: '2026-04-14T00:00:00Z',
+  douban_status: 'matched',
+  meta_score: 70,
+}
 
 describe('VideoTable (CHG-211/212)', () => {
   beforeEach(() => {
@@ -255,5 +279,92 @@ describe('VideoTable (CHG-211/212)', () => {
     await waitFor(() => {
       expect(patchMock).toHaveBeenCalledWith('/admin/videos/v1/publish', { isPublished: false })
     })
+  })
+
+  // ── VIDEO-09: 豆瓣状态列 ─────────────────────────────────────────
+
+  it('启用豆瓣状态列后渲染 badge 和同步按钮', async () => {
+    render(<VideoTable />)
+    await screen.findByText('Alpha Movie')
+
+    // 启用豆瓣状态列
+    fireEvent.click(screen.getByTestId('video-table-scroll-settings-btn'))
+    fireEvent.click(screen.getByTestId('video-table-scroll-settings-content-visible-douban_status'))
+
+    await waitFor(() => {
+      // v1 douban_status = 'matched' → 已匹配 badge
+      expect(screen.getByText('已匹配')).toBeDefined()
+    })
+
+    // 每行都有同步按钮
+    expect(screen.getByTestId('douban-sync-v1')).toBeDefined()
+    expect(screen.getByTestId('douban-sync-v2')).toBeDefined()
+  })
+
+  it('点击同步按钮调用 POST douban-sync 并刷新列表', async () => {
+    render(<VideoTable />)
+    await screen.findByText('Alpha Movie')
+
+    fireEvent.click(screen.getByTestId('video-table-scroll-settings-btn'))
+    fireEvent.click(screen.getByTestId('video-table-scroll-settings-content-visible-douban_status'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('douban-sync-v1')).toBeDefined()
+    })
+
+    const callsBefore = getMock.mock.calls.length
+    fireEvent.click(screen.getByTestId('douban-sync-v1'))
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith('/admin/videos/v1/douban-sync', {})
+    })
+    await waitFor(() => {
+      expect(getMock.mock.calls.length).toBeGreaterThan(callsBefore)
+    })
+  })
+
+  // ── VIDEO-09: 元数据完整度列 ─────────────────────────────────────
+
+  it('启用元数据完整度列后渲染进度条', async () => {
+    render(<VideoTable />)
+    await screen.findByText('Alpha Movie')
+
+    fireEvent.click(screen.getByTestId('video-table-scroll-settings-btn'))
+    fireEvent.click(screen.getByTestId('video-table-scroll-settings-content-visible-meta_score'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('meta-score-v1')).toBeDefined()
+    })
+    expect(screen.getByTestId('meta-score-v2')).toBeDefined()
+  })
+
+  // ── VIDEO-09: 暂存中快捷操作 ──────────────────────────────────────
+
+  it('approved + !is_published 行显示暂存按钮，点击跳转 /admin/staging', async () => {
+    getMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/admin/videos?')) {
+        return { data: [MOCK_STAGING_ROW], total: 1 }
+      }
+      return { data: [], total: 0 }
+    })
+
+    render(<VideoTable />)
+    await screen.findByText('Staging Movie')
+
+    const stagingBtn = screen.getByTestId('video-staging-v3')
+    expect(stagingBtn).toBeDefined()
+
+    fireEvent.click(stagingBtn)
+    expect(pushMock).toHaveBeenCalledWith('/admin/staging?videoId=v3')
+  })
+
+  it('is_published=true 的行不显示暂存按钮', async () => {
+    render(<VideoTable />)
+    await screen.findByText('Alpha Movie')
+
+    // v1: review_status='approved', is_published=true → 不显示暂存按钮
+    expect(screen.queryByTestId('video-staging-v1')).toBeNull()
+    // v2: review_status='pending_review' → 不显示暂存按钮
+    expect(screen.queryByTestId('video-staging-v2')).toBeNull()
   })
 })
