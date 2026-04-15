@@ -24,9 +24,10 @@
 2. 任务编号命名（沿用现有规范）
 
 - 任务 ID 格式：`<PREFIX>-NN`
-- `PREFIX` 必须使用既有前缀：`INFRA` / `AUTH` / `VIDEO` / `SEARCH` / `PLAYER` / `CRAWLER` / `ADMIN` / `USER` / `SOCIAL` / `LIST` / `CONTRIB` / `CHG` / `CHORE` / `DEC` / `UX`
+- `PREFIX` 必须使用既有前缀：`INFRA` / `AUTH` / `VIDEO` / `SEARCH` / `PLAYER` / `CRAWLER` / `ADMIN` / `USER` / `SOCIAL` / `LIST` / `CONTRIB` / `CHG` / `CHORE` / `DEC` / `UX` / `META`
   - `DEC`：前后台解耦架构任务（来自 frontend_backend_decoupling_plan_20260401.md，2026-04-02 新增）
   - `UX`：后台交互改造任务（来自 admin_console_decoupling_and_ux_plan_20260402.md，2026-04-02 新增）
+  - `META`：外部元数据层建设任务（来自 external_metadata_import_plan_20260405.md + 2026-04-14 豆瓣扩展方案，2026-04-14 新增）
 - `NN` 为两位数字，按同前缀内最大编号递增（例如当前最大 `CHG-335`，下一个必须是 `CHG-336`）
 - 禁止跳号占坑、禁止复用已存在编号
 
@@ -6093,3 +6094,124 @@
      - 爬虫写入侧：落库时同步写入 source_site_key
      - docs/architecture.md：同步更新 video_sources 表结构说明
    - 验收要点：同一视频来自 A、B 两个源站的线路分别显示对应 display_name；存量数据 fallback 正常；typecheck + 全量测试通过
+
+---
+
+## [SEQ-20260414-05] 外部元数据层建设（META Phase 1–3）
+
+- **状态**：🟡 规划中
+- **创建时间**：2026-04-14 19:30
+- **最后更新时间**：2026-04-14 19:30
+- **目标**：将 external-db（豆瓣 dump）和 external-adapter（douban-adapter）从"辅助匹配工具"升级为"统一外部元数据层"，建立原始数据层→标准化候选层→业务写入层三层结构
+- **范围**：external_data schema / MetadataEnrichService / scripts/import-* / ExternalSubjectCandidate 类型 / video_external_refs
+- **依赖**：SEQ-20260414-02 已完成（CHG-410/411/412 全部完成）
+- **方案文档**：`docs/external_metadata_import_plan_20260405.md`（原 TMDB/Bangumi 方案，META 系列与其兼容并扩展 Douban 专项）
+
+### 背景说明
+
+当前 `external_data` schema 存在以下 gap：
+1. `external_data.douban_entries` 只同步了 movies.csv 的基础字段（title/year/rating/directors/cast/genres/country），未同步 ALIAS/IMDB_ID/LANGUAGES/MINS/TAGS/DOUBAN_VOTES 等已在 `external_douban_movies_raw` 存在的字段
+2. person.csv（约 10 万人物条目）无对应查询表，导演/演员精确匹配依赖文本数组而非结构化 person 实体
+3. 评分数据（ratings.csv）仅靠 DOUBAN_VOTES 单值，无评分分布
+4. `MetadataEnrichService` 直接面向 douban_entries 行写业务字段，本地 dump 和在线 adapter 无统一候选模型，置信度决策分散在多处
+5. `video_external_refs` 关联表（老方案设计）未建，无法追踪"哪个外部条目匹配了哪个内部视频"
+
+### 任务列表（按执行顺序）
+
+1. META-01 — P2：external_data.douban_entries 补全字段 + 导入脚本重算（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 19:30
+   - 计划开始：SEQ-20260414-04（CHG-414）触发前启动
+   - 验收要点：
+     - Migration：`external_data.douban_entries` 新增 aliases TEXT[] / imdb_id TEXT / languages TEXT[] / duration_minutes INT / tags TEXT[] / douban_votes INT / regions TEXT[] / release_date DATE / actor_ids TEXT[] / director_ids TEXT[]
+     - 导入脚本（`scripts/import-douban-dump.ts`）从 `external_douban_movies_raw` 重算，新字段正确填充
+     - 脚本支持 --limit / --dry-run / --source-dir，幂等可重跑
+     - typecheck + 全量测试通过
+
+2. META-02 — P2：external_data.douban_people 新增 + person.csv 导入脚本（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 19:30
+   - 依赖：META-01 完成（导入基础设施已就绪）
+   - 验收要点：
+     - Migration：新建 `external_data.douban_people`（person_id TEXT PK / name TEXT / name_en TEXT / sex TEXT / birth DATE / birthplace TEXT / constellation TEXT / profession TEXT[] / biography TEXT）
+     - 新建 `scripts/import-douban-people.ts`，幂等导入 person.csv，支持 --limit / --dry-run
+     - typecheck + 全量测试通过
+
+3. META-03 — P2：video_external_refs 关联表建立（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 19:30
+   - 依赖：META-01 完成
+   - 验收要点：
+     - Migration：新建 `video_external_refs`（id UUID PK / video_id UUID FK → videos.id / provider TEXT CHECK('douban','tmdb','bangumi','imdb') / external_id TEXT / external_work_id UUID nullable FK → external_data.douban_entries.id / match_status TEXT CHECK('auto_matched','manual_confirmed','candidate','rejected') / match_method TEXT / confidence NUMERIC(4,2) / is_primary BOOLEAN / linked_by TEXT / linked_at TIMESTAMPTZ / notes TEXT）
+     - 唯一索引：(video_id, provider)（每视频每来源只允许一个 primary）
+     - externalData.ts 新增 upsertVideoExternalRef / findVideoExternalRef 查询函数
+     - typecheck + 单元测试通过
+
+4. META-04 — P3：ExternalSubjectCandidate 统一模型 + 两个 mapper（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 19:30
+   - 依赖：META-01/02/03 完成
+   - 验收要点：
+     - 新增 `src/types/external.types.ts`：ExternalSubjectCandidate / ExternalPerson 接口定义
+     - 新增 `src/api/lib/externalCandidateMappers.ts`：mapDoubanDumpEntryToCandidate() + mapDoubanAdapterDetailsToCandidate()
+     - 两个 mapper 均有单元测试（mock 输入 → 断言 candidate 字段）
+     - typecheck 通过
+
+5. META-05 — P3：MetadataEnrichService 重构（本地多字段召回 + 统一 candidate 决策）（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 19:30
+   - 依赖：META-04 完成
+   - 验收要点：
+     - MetadataEnrichService 不再直接面向 douban_entries 行写业务字段
+     - Step1 本地召回支持：title_normalized 精确 / alias 匹配 / year ±1 / imdb_id 精确
+     - 置信度决策统一：≥0.85 auto matched 写入；0.60–0.85 写 candidate 不覆盖；<0.60 unmatched
+     - 低置信不覆盖已有人工编辑字段
+     - 匹配成功后写 video_external_refs 记录
+     - 原有 Step2 网络搜索仅在本地低置信/无结果时触发
+     - 所有现有 MetadataEnrichService 测试通过 + 新增重构路径测试
+
+---
+
+## [SEQ-20260414-06] 外部元数据层建设（META Phase 4–8）
+
+- **状态**：🟡 规划中（依赖 SEQ-20260414-05 完成）
+- **创建时间**：2026-04-14 19:30
+- **最后更新时间**：2026-04-14 19:30
+- **目标**：在 Phase 1–3 基础上，扩展 media_catalog 字段、审核台字段级对比、ES 索引联动、字段来源锁定机制
+- **范围**：media_catalog / 审核台 / 暂存队列 / ES schema / SearchService / 前台详情页 / 字段 provenance
+- **依赖**：SEQ-20260414-05 全部完成
+
+### 任务列表（按执行顺序）
+
+1. META-06 — P3：media_catalog 字段扩展（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 19:30
+   - 验收要点：
+     - Migration 新增：original_title / aliases TEXT[] / imdb_id / languages TEXT[] / duration_minutes INT / release_date DATE / official_site TEXT / tags TEXT[] / backdrop_url TEXT / trailer_url TEXT / rating_votes INT
+     - docs/architecture.md 同步更新 media_catalog 表结构
+     - API contract 更新（MediaCatalog 类型，现有接口向后兼容）
+     - typecheck 通过
+
+2. META-07 — P3：审核台外部元数据字段级对比应用（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 19:30
+   - 依赖：META-05/06 完成
+   - 验收要点：
+     - 审核台豆瓣区新增"候选值 vs 当前值"字段级对比 UI
+     - 支持"应用全部"和"只应用选中字段"两种操作
+     - candidate 态展示置信度 breakdown（标题相似度/年份/主创/别名命中）
+     - 人工确认后写 video_external_refs.match_status=manual_confirmed，后续自动任务不覆盖
+
+3. META-08 — P3：ES 索引扩展 + 前台搜索/详情联动（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 19:30
+   - 依赖：META-06 完成
+   - 验收要点：
+     - ES mapping 新增：original_title / aliases / languages / directors / writers / cast / tags / imdb_id / rating_votes
+     - alias/cast/director/tags 参与搜索（SearchService query 扩展）
+     - 前台详情页展示：原标题/别名/语言/片长/评分人数/标签/导演/演员/编剧
+     - 元数据确认后 ES 同步更新，前台可见
+     - typecheck + 全量测试通过
+
+4. META-09 — P4：字段来源追踪与锁定机制（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 19:30
+   - 依赖：META-07 完成
+   - 优先级说明：长期必要但不阻塞前期流程，待 META-05~08 稳定后执行
+   - 验收要点：
+     - Migration：新建 `video_metadata_provenance`（video_id / field_name / source_kind / source_ref / source_priority / updated_at）
+     - Migration：新建 `video_metadata_locks`（video_id / field_name / lock_mode TEXT CHECK('soft','hard') / locked_by / locked_at / reason）
+     - MetadataEnrichService 写字段前检查 lock，hard lock 不得覆盖
+     - 后台审核台可显示字段来源标记（爬虫/豆瓣/Bangumi/手动）
+     - 优先级顺序：manual > tmdb > bangumi > douban > crawler
