@@ -6116,3 +6116,15 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：Migration 042，ALTER TABLE media_catalog ADD COLUMN x6，向后兼容（有 IF NOT EXISTS + DEFAULT）
 - **注意事项**：imdb_id/rating_votes/release_date/title_original/runtime_minutes 已存在（Migration 026），本次只新增真正缺失的 6 个字段；MediaCatalogService.safeUpdate 无需改动（fieldMap 动态构建，CatalogUpdateData 扩展即自动支持新字段）
+
+## [META-07] 审核台豆瓣候选态字段级对比 UI + manual_confirmed 写入
+- **完成时间**：2026-04-15
+- **记录时间**：2026-04-15 00:20
+- **修改文件**：
+  - `src/api/db/queries/externalData.ts` — 新增 `findDoubanEntryById`（按 douban_id 查本地条目）、`listVideoExternalRefs`（列出视频所有外部关联）、`updateExternalRefMatchStatus`（更新 match_status/is_primary/linked_by）
+  - `src/api/services/DoubanService.ts` — 新增 `CandidateProposed` 内部接口、`FieldDiff`/`DoubanCandidateComparison` 导出类型；新增 `getCandidateData()`（获取候选对比数据）和 `confirmFields()`（选中字段应用）；`confirmSubject()` 确认后补写 `manual_confirmed` 到 video_external_refs；新增 `formatFieldValue()` 工具函数
+  - `src/api/routes/admin/moderation.ts` — 新增 `GET /admin/moderation/:id/douban-candidate` 和 `POST /admin/moderation/:id/douban-confirm-fields`（含 DoubanConfirmFieldsSchema）
+  - `src/components/admin/moderation/ModerationDoubanBlock.tsx` — 候选态全面重构：加载字段对比数据、`FieldComparisonTable` 组件（复选框）、置信度 badge、[应用全部]/[只应用选中] 双按钮；无对比数据时 fallback 到原有简单显示
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：`confirmFields()` 中 genres 字段特殊处理（写 genresRaw + mapDoubanGenres 写 genres）；候选数据优先查本地 dump（`external_data.douban_entries`），找不到则网络 fallback（`getDoubanDetailRich`）；置信度展示 badge 精确到整数百分比

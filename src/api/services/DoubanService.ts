@@ -15,6 +15,7 @@ import { getDoubanDetailRich } from '@/api/lib/doubanAdapter'
 import { mapDoubanGenres } from '@/api/lib/genreMapper'
 import * as videoQueries from '@/api/db/queries/videos'
 import * as catalogQueries from '@/api/db/queries/mediaCatalog'
+import * as externalDataQueries from '@/api/db/queries/externalData'
 import { MediaCatalogService } from './MediaCatalogService'
 import { enrichmentQueue } from '@/api/lib/queue'
 import type { DoubanPreviewFound, DoubanPreviewMiss, DoubanPreview } from '@/types/contracts/v1/admin'
@@ -36,6 +37,35 @@ export interface SyncSkipped {
 }
 
 export type { DoubanPreviewFound, DoubanPreviewMiss, DoubanPreview }
+
+// META-07: 候选字段对比数据（内部使用，不导出）
+interface CandidateProposed {
+  title: string | null
+  year: number | null
+  rating: number | null
+  description: string | null
+  coverUrl: string | null
+  directors: string[]
+  cast: string[]
+  genres: string[]
+  country: string | null
+}
+
+export interface FieldDiff {
+  field: string
+  label: string
+  current: string | null
+  proposed: string | null
+  changed: boolean
+}
+
+export interface DoubanCandidateComparison {
+  externalRefId: string
+  externalId: string
+  confidence: number | null
+  matchMethod: string | null
+  diffs: FieldDiff[]
+}
 
 // ── 字符串相似度（简易 Jaccard 字符二元组） ──────────────────────
 
@@ -204,7 +234,7 @@ export class DoubanService {
     return searchDouban(keyword)
   }
 
-  /** 确认应用指定豆瓣条目，写入 catalog + 更新 videos.douban_status */
+  /** 确认应用指定豆瓣条目，写入 catalog + 更新 videos.douban_status + 标记 manual_confirmed */
   async confirmSubject(videoId: string, subjectId: string): Promise<{ updated: boolean; reason?: string }> {
     const video = await videoQueries.findAdminVideoById(this.db, videoId)
     if (!video) return { updated: false, reason: 'video_not_found' }
@@ -233,10 +263,172 @@ export class DoubanService {
     const updated = await catalogService.safeUpdate(video.catalog_id, updateFields, 'douban')
     if (!updated) return { updated: false, reason: 'catalog_update_rejected' }
 
+    // 标记 video_external_refs 为 manual_confirmed
+    await externalDataQueries.upsertVideoExternalRef(this.db, {
+      videoId,
+      provider: 'douban',
+      externalId: subjectId,
+      matchStatus: 'manual_confirmed',
+      matchMethod: 'manual',
+      isPrimary: true,
+      linkedBy: 'moderator',
+    })
+
     // 读取最新 catalog 计算 meta_score
     const catalog = await catalogQueries.findCatalogById(this.db, video.catalog_id)
     const metaScore = calcMetaScore(catalog)
 
+    await videoQueries.updateVideoEnrichStatus(this.db, videoId, { doubanStatus: 'matched', metaScore })
+    return { updated: true }
+  }
+
+  /**
+   * META-07: 获取候选对比数据（当前 catalog 字段 vs 候选条目字段）
+   * 返回 null 表示无候选条目或视频不存在
+   */
+  async getCandidateData(videoId: string): Promise<DoubanCandidateComparison | null> {
+    const video = await videoQueries.findAdminVideoById(this.db, videoId)
+    if (!video) return null
+
+    const refs = await externalDataQueries.listVideoExternalRefs(this.db, videoId, 'douban')
+    const candidateRef = refs.find((r) => r.matchStatus === 'candidate')
+    if (!candidateRef) return null
+
+    // 先查本地 dump，再网络 fallback
+    let proposed: CandidateProposed | null = null
+    const localEntry = await externalDataQueries.findDoubanEntryById(this.db, candidateRef.externalId)
+    if (localEntry) {
+      proposed = {
+        title: localEntry.title,
+        year: localEntry.year,
+        rating: localEntry.rating,
+        description: localEntry.description,
+        coverUrl: localEntry.coverUrl,
+        directors: localEntry.directors,
+        cast: localEntry.cast,
+        genres: localEntry.genres,
+        country: localEntry.country,
+      }
+    } else {
+      // 网络 fallback
+      const detail = await getDoubanDetailRich(candidateRef.externalId)
+      if (detail) {
+        const ratingNum = detail.rate ? parseFloat(detail.rate) : NaN
+        proposed = {
+          title: detail.title,
+          year: parseYear(detail.year),
+          rating: isNaN(ratingNum) ? null : ratingNum,
+          description: detail.plotSummary ?? null,
+          coverUrl: detail.poster ?? null,
+          directors: detail.directors,
+          cast: detail.cast,
+          genres: detail.genres,
+          country: detail.countries[0] ?? null,
+        }
+      }
+    }
+    if (!proposed) return null
+
+    const catalog = await catalogQueries.findCatalogById(this.db, video.catalog_id)
+    const current: CandidateProposed = {
+      title: catalog?.title ?? null,
+      year: catalog?.year ?? null,
+      rating: catalog?.rating ?? null,
+      description: catalog?.description ?? null,
+      coverUrl: catalog?.coverUrl ?? null,
+      directors: catalog?.director ?? [],
+      cast: catalog?.cast ?? [],
+      genres: catalog?.genresRaw ?? [],
+      country: catalog?.country ?? null,
+    }
+
+    const FIELD_LABELS: Record<string, string> = {
+      title: '标题', year: '年份', rating: '评分',
+      description: '简介', coverUrl: '封面', directors: '导演',
+      cast: '主演', genres: '题材', country: '国家/地区',
+    }
+
+    const diffs: FieldDiff[] = (Object.keys(FIELD_LABELS) as (keyof CandidateProposed)[]).map((field) => {
+      const curr = formatFieldValue(current[field])
+      const prop = formatFieldValue(proposed![field])
+      return { field, label: FIELD_LABELS[field]!, current: curr, proposed: prop, changed: curr !== prop }
+    })
+
+    return { externalRefId: candidateRef.id, externalId: candidateRef.externalId, confidence: candidateRef.confidence, matchMethod: candidateRef.matchMethod, diffs }
+  }
+
+  /**
+   * META-07: 仅应用选中字段，并将 video_external_refs 标记为 manual_confirmed
+   */
+  async confirmFields(
+    videoId: string,
+    subjectId: string,
+    fields: string[],
+  ): Promise<{ updated: boolean; reason?: string }> {
+    const video = await videoQueries.findAdminVideoById(this.db, videoId)
+    if (!video) return { updated: false, reason: 'video_not_found' }
+    if (fields.length === 0) return { updated: false, reason: 'no_fields' }
+
+    // 获取候选数据（优先本地 dump）
+    const localEntry = await externalDataQueries.findDoubanEntryById(this.db, subjectId)
+    let proposed: CandidateProposed | null = null
+    if (localEntry) {
+      proposed = {
+        title: localEntry.title, year: localEntry.year, rating: localEntry.rating,
+        description: localEntry.description, coverUrl: localEntry.coverUrl,
+        directors: localEntry.directors, cast: localEntry.cast,
+        genres: localEntry.genres, country: localEntry.country,
+      }
+    } else {
+      const detail = await getDoubanDetailRich(subjectId)
+      if (!detail) return { updated: false, reason: 'fetch_failed' }
+      const ratingNum = detail.rate ? parseFloat(detail.rate) : NaN
+      proposed = {
+        title: detail.title, year: parseYear(detail.year),
+        rating: isNaN(ratingNum) ? null : ratingNum,
+        description: detail.plotSummary ?? null, coverUrl: detail.poster ?? null,
+        directors: detail.directors, cast: detail.cast,
+        genres: detail.genres, country: detail.countries[0] ?? null,
+      }
+    }
+
+    const FIELD_TO_CATALOG: Record<string, keyof import('@/api/db/queries/mediaCatalog').CatalogUpdateData> = {
+      title: 'title', year: 'year', rating: 'rating',
+      description: 'description', coverUrl: 'coverUrl', directors: 'director',
+      cast: 'cast', genres: 'genresRaw', country: 'country',
+    }
+
+    const updateFields: import('@/api/db/queries/mediaCatalog').CatalogUpdateData = { doubanId: subjectId }
+    for (const f of fields) {
+      const catalogKey = FIELD_TO_CATALOG[f]
+      if (!catalogKey) continue
+      const val = proposed[f as keyof CandidateProposed]
+      if (f === 'genres' && Array.isArray(val)) {
+        updateFields.genresRaw = val as string[]
+        const mapped = mapDoubanGenres(val as string[])
+        if (mapped.length > 0) updateFields.genres = mapped
+      } else {
+        (updateFields as Record<string, unknown>)[catalogKey] = val
+      }
+    }
+
+    const catalogService = new MediaCatalogService(this.db)
+    const updated = await catalogService.safeUpdate(video.catalog_id, updateFields, 'douban')
+    if (!updated) return { updated: false, reason: 'catalog_update_rejected' }
+
+    // 标记 manual_confirmed
+    await externalDataQueries.upsertVideoExternalRef(this.db, {
+      videoId,
+      provider: 'douban',
+      externalId: subjectId,
+      matchStatus: 'manual_confirmed',
+      matchMethod: 'manual_fields',
+      isPrimary: true,
+      linkedBy: 'moderator',
+    })
+
+    const catalog = await catalogQueries.findCatalogById(this.db, video.catalog_id)
+    const metaScore = calcMetaScore(catalog)
     await videoQueries.updateVideoEnrichStatus(this.db, videoId, { doubanStatus: 'matched', metaScore })
     return { updated: true }
   }
@@ -292,6 +484,13 @@ export class DoubanService {
 }
 
 // ── 工具函数 ─────────────────────────────────────────────────────
+
+/** META-07: 将字段值序列化为可比较的字符串（null/undefined → null） */
+function formatFieldValue(val: unknown): string | null {
+  if (val == null) return null
+  if (Array.isArray(val)) return val.length === 0 ? null : val.join(' / ')
+  return String(val)
+}
 
 function calcMetaScore(catalog: import('@/api/db/queries/mediaCatalog').MediaCatalogRow | null): number {
   if (!catalog) return 0

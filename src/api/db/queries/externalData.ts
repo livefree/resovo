@@ -345,6 +345,112 @@ export async function upsertVideoExternalRef(
 }
 
 /**
+ * META-07: 按 douban_id 查询单条豆瓣条目（用于候选态字段对比）
+ */
+export async function findDoubanEntryById(
+  db: Pool,
+  doubanId: string,
+): Promise<DoubanEntryMatch | null> {
+  const result = await db.query<{
+    douban_id: string; title: string; year: number | null
+    rating: string | null; description: string | null; cover_url: string | null
+    directors: string[]; cast: string[]; writers: string[]; genres: string[]; country: string | null
+    aliases: string[]; imdb_id: string | null; languages: string[]
+    duration_minutes: number | null; tags: string[]; douban_votes: number | null
+    regions: string[]; release_date: string | null
+    actor_ids: string[]; director_ids: string[]; official_site: string | null
+  }>(
+    `SELECT douban_id, title, year, rating, description, cover_url,
+            directors, cast, writers, genres, country,
+            aliases, imdb_id, languages, duration_minutes, tags, douban_votes,
+            regions, release_date, actor_ids, director_ids, official_site
+     FROM external_data.douban_entries
+     WHERE douban_id = $1
+     LIMIT 1`,
+    [doubanId]
+  )
+  if (!result.rows[0]) return null
+  const r = result.rows[0]
+  return {
+    doubanId: r.douban_id,
+    title: r.title,
+    year: r.year,
+    rating: r.rating ? Number(r.rating) : null,
+    description: r.description,
+    coverUrl: r.cover_url,
+    directors: r.directors ?? [],
+    cast: r.cast ?? [],
+    writers: r.writers ?? [],
+    genres: r.genres ?? [],
+    country: r.country,
+    aliases: r.aliases ?? [],
+    imdbId: r.imdb_id,
+    languages: r.languages ?? [],
+    durationMinutes: r.duration_minutes,
+    tags: r.tags ?? [],
+    doubanVotes: r.douban_votes,
+    regions: r.regions ?? [],
+    releaseDate: r.release_date,
+    actorIds: r.actor_ids ?? [],
+    directorIds: r.director_ids ?? [],
+    officialSite: r.official_site,
+  }
+}
+
+/**
+ * META-07: 列出一个视频的所有外部关联记录（按创建时间倒序）
+ */
+export async function listVideoExternalRefs(
+  db: Pool,
+  videoId: string,
+  provider?: ExternalRefProvider,
+): Promise<VideoExternalRef[]> {
+  const result = await db.query<{
+    id: string; video_id: string; provider: string; external_id: string
+    match_status: string; match_method: string | null; confidence: string | null
+    is_primary: boolean; linked_by: string | null; linked_at: string; notes: string | null
+  }>(
+    `SELECT * FROM video_external_refs
+     WHERE video_id = $1${provider ? ' AND provider = $2' : ''}
+     ORDER BY linked_at DESC`,
+    provider ? [videoId, provider] : [videoId]
+  )
+  return result.rows.map((r) => ({
+    id: r.id,
+    videoId: r.video_id,
+    provider: r.provider as ExternalRefProvider,
+    externalId: r.external_id,
+    matchStatus: r.match_status as ExternalRefMatchStatus,
+    matchMethod: r.match_method,
+    confidence: r.confidence ? Number(r.confidence) : null,
+    isPrimary: r.is_primary,
+    linkedBy: r.linked_by,
+    linkedAt: r.linked_at,
+    notes: r.notes,
+  }))
+}
+
+/**
+ * META-07: 更新单条外部关联的 match_status / is_primary / linked_by（用于人工确认/拒绝）
+ */
+export async function updateExternalRefMatchStatus(
+  db: Pool,
+  id: string,
+  matchStatus: ExternalRefMatchStatus,
+  opts: { linkedBy?: string; isPrimary?: boolean } = {},
+): Promise<void> {
+  await db.query(
+    `UPDATE video_external_refs
+     SET match_status = $1,
+         is_primary   = COALESCE($3, is_primary),
+         linked_by    = COALESCE($4, linked_by),
+         updated_at   = NOW()
+     WHERE id = $2`,
+    [matchStatus, id, opts.isPrimary ?? null, opts.linkedBy ?? null]
+  )
+}
+
+/**
  * 查询一个视频在指定 provider 的 primary 外部关联（最常用路径）。
  * 返回 null 表示尚无 primary 绑定。
  */

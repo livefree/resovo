@@ -30,6 +30,11 @@ const DoubanConfirmSchema = z.object({
   subjectId: z.string().min(1).max(100),
 })
 
+const DoubanConfirmFieldsSchema = z.object({
+  subjectId: z.string().min(1).max(100),
+  fields: z.array(z.string().min(1).max(50)).min(1).max(20),
+})
+
 const BatchApproveSchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(50),
 })
@@ -168,6 +173,53 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({
         error: { code: 'INTERNAL_ERROR', message: `操作失败: ${msg}`, status: 500 },
       })
+    }
+  })
+
+  // ── GET /admin/moderation/:id/douban-candidate ──────────────
+  // META-07: 获取候选对比数据（当前 catalog 字段 vs 候选条目字段）
+  fastify.get('/admin/moderation/:id/douban-candidate', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const video = await videoQueries.findAdminVideoById(db, id)
+    if (!video) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 } })
+    }
+    try {
+      const data = await svc.getCandidateData(id)
+      if (!data) {
+        return reply.code(404).send({ error: { code: 'NO_CANDIDATE', message: '无候选豆瓣条目', status: 404 } })
+      }
+      return reply.send({ data })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: msg, status: 500 } })
+    }
+  })
+
+  // ── POST /admin/moderation/:id/douban-confirm-fields ─────────
+  // META-07: 只应用选中字段，并写 manual_confirmed
+  fastify.post('/admin/moderation/:id/douban-confirm-fields', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const parsed = DoubanConfirmFieldsSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
+    }
+    const video = await videoQueries.findAdminVideoById(db, id)
+    if (!video) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 } })
+    }
+    if (video.review_status !== 'pending_review') {
+      return reply.code(422).send({ error: { code: 'NOT_PENDING', message: '仅待审核视频可操作', status: 422 } })
+    }
+    try {
+      const result = await svc.confirmFields(id, parsed.data.subjectId, parsed.data.fields)
+      if (!result.updated) {
+        return reply.code(422).send({ error: { code: 'CONFIRM_FAILED', message: result.reason ?? '确认失败', status: 422 } })
+      }
+      return reply.send({ data: { id, confirmed: true } })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: msg, status: 500 } })
     }
   })
 

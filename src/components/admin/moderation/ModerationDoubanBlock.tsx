@@ -1,14 +1,12 @@
 /**
- * ModerationDoubanBlock.tsx — 审核台豆瓣信息折叠块（UX-11）
- * matched:   显示已匹配信息 + [重新同步]
- * candidate: 显示当前候选信息 + [确认当前候选] + [忽略] + 手动搜索框
- * unmatched/pending: 显示手动搜索框
- * P2 fix: candidate 态补充确认/忽略动作
+ * ModerationDoubanBlock.tsx — 审核台豆瓣信息折叠块
+ * UX-11: matched/candidate/unmatched/pending 四态
+ * META-07: candidate 态新增字段级对比 UI + 置信度展示 + 选中字段应用
  */
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { apiClient } from '@/lib/api-client'
 import type { DoubanStatus } from '@/types'
 
@@ -17,6 +15,22 @@ interface DoubanCandidate {
   title: string
   year: string | null
   sub_title: string | null
+}
+
+interface FieldDiff {
+  field: string
+  label: string
+  current: string | null
+  proposed: string | null
+  changed: boolean
+}
+
+interface CandidateComparison {
+  externalRefId: string
+  externalId: string
+  confidence: number | null
+  matchMethod: string | null
+  diffs: FieldDiff[]
 }
 
 interface ModerationDoubanBlockProps {
@@ -29,6 +43,8 @@ interface ModerationDoubanBlockProps {
   cast: string[]
   onUpdated: () => void
 }
+
+// ── 子组件 ────────────────────────────────────────────────────────
 
 function CandidateInfo({ doubanId, rating, directors, cast, description }: {
   doubanId: string | null
@@ -48,6 +64,64 @@ function CandidateInfo({ doubanId, rating, directors, cast, description }: {
   )
 }
 
+/** META-07: 字段级对比表格 */
+function FieldComparisonTable({
+  diffs,
+  selected,
+  onToggle,
+}: {
+  diffs: FieldDiff[]
+  selected: Set<string>
+  onToggle: (field: string) => void
+}) {
+  const changedDiffs = diffs.filter((d) => d.changed)
+  const sameDiffs = diffs.filter((d) => !d.changed)
+
+  if (changedDiffs.length === 0) {
+    return <p className="text-[10px] text-[var(--muted)]">候选值与当前值完全一致</p>
+  }
+
+  return (
+    <div className="space-y-1" data-testid="field-comparison-table">
+      <p className="text-[10px] text-[var(--muted)]">勾选要应用的字段：</p>
+      <div className="rounded border border-[var(--border)] divide-y divide-[var(--border)]">
+        {changedDiffs.map((d) => (
+          <label
+            key={d.field}
+            className="flex cursor-pointer items-start gap-2 px-2 py-1.5 hover:bg-[var(--bg3)]"
+            data-testid={`field-diff-${d.field}`}
+          >
+            <input
+              type="checkbox"
+              checked={selected.has(d.field)}
+              onChange={() => onToggle(d.field)}
+              className="mt-0.5 shrink-0"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-medium text-[var(--text)]">{d.label}</p>
+              <p className="truncate text-[10px] text-[var(--muted)]">
+                当前：<span>{d.current ?? '（空）'}</span>
+              </p>
+              <p className="truncate text-[10px] text-[var(--accent)]">
+                候选：<span>{d.proposed ?? '（空）'}</span>
+              </p>
+            </div>
+          </label>
+        ))}
+        {sameDiffs.length > 0 && (
+          <div className="px-2 py-1">
+            <p className="text-[10px] text-[var(--muted)]">
+              {sameDiffs.map((d) => d.label).join('、')} 与当前值一致，无需应用
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── 主组件 ────────────────────────────────────────────────────────
+
 export function ModerationDoubanBlock({
   videoId, doubanStatus, doubanId, rating, description, directors, cast, onUpdated,
 }: ModerationDoubanBlockProps) {
@@ -58,6 +132,35 @@ export function ModerationDoubanBlock({
   const [ignoring, setIgnoring] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
+
+  // META-07: 候选对比数据
+  const [comparison, setComparison] = useState<CandidateComparison | null>(null)
+  const [compLoading, setCompLoading] = useState(false)
+  const [selectedFields, setSelectedFields] = useState<Set<string>>(new Set())
+
+  // 进入候选态时加载对比数据
+  useEffect(() => {
+    if (doubanStatus !== 'candidate') return
+    setCompLoading(true)
+    apiClient
+      .get<{ data: CandidateComparison }>(`/admin/moderation/${videoId}/douban-candidate`)
+      .then((res) => {
+        setComparison(res.data)
+        // 默认勾选所有有变化的字段
+        setSelectedFields(new Set(res.data.diffs.filter((d) => d.changed).map((d) => d.field)))
+      })
+      .catch(() => { /* 无候选数据时静默，保持原有显示 */ })
+      .finally(() => setCompLoading(false))
+  }, [videoId, doubanStatus])
+
+  function toggleField(field: string) {
+    setSelectedFields((prev) => {
+      const next = new Set(prev)
+      if (next.has(field)) next.delete(field)
+      else next.add(field)
+      return next
+    })
+  }
 
   async function handleSearch() {
     if (!keyword.trim()) return
@@ -85,6 +188,24 @@ export function ModerationDoubanBlock({
       setMsg('已成功应用豆瓣信息')
       setCandidates([])
       setKeyword('')
+      onUpdated()
+    } catch {
+      setMsg('确认失败，请重试')
+    } finally {
+      setConfirming(null)
+    }
+  }
+
+  async function handleConfirmFields(subjectId: string) {
+    if (selectedFields.size === 0) { setMsg('请至少选择一个字段'); return }
+    setConfirming(subjectId)
+    setMsg(null)
+    try {
+      await apiClient.post(`/admin/moderation/${videoId}/douban-confirm-fields`, {
+        subjectId,
+        fields: [...selectedFields],
+      })
+      setMsg('已成功应用选中字段')
       onUpdated()
     } catch {
       setMsg('确认失败，请重试')
@@ -121,7 +242,6 @@ export function ModerationDoubanBlock({
     }
   }
 
-  // CHG-407: 状态说明文案
   const statusHint: Record<DoubanStatus, string> = {
     pending:   '自动匹配尚未完成，可手动搜索绑定',
     candidate: '系统找到疑似条目，请确认或忽略',
@@ -156,15 +276,83 @@ export function ModerationDoubanBlock({
         </div>
       )}
 
-      {/* 候选：展示当前候选信息 + 确认 + 标记不匹配 + 重新搜索 */}
+      {/* 候选：META-07 字段级对比 UI */}
       {doubanStatus === 'candidate' && (
-        <div className="space-y-1.5">
-          <CandidateInfo
-            doubanId={doubanId} rating={rating} directors={directors}
-            cast={cast} description={description}
-          />
-          <div className="flex gap-1.5">
-            {doubanId && (
+        <div className="space-y-2">
+          {/* 置信度标签 */}
+          {comparison && (
+            <div className="flex items-center gap-1.5">
+              {comparison.confidence != null && (
+                <span
+                  className="rounded bg-[var(--accent)]/10 px-1.5 py-0.5 text-[10px] text-[var(--accent)]"
+                  data-testid="douban-confidence-badge"
+                >
+                  置信度 {(comparison.confidence * 100).toFixed(0)}%
+                </span>
+              )}
+              {comparison.matchMethod && (
+                <span className="text-[10px] text-[var(--muted)]">
+                  {comparison.matchMethod === 'title' ? '标题匹配' :
+                   comparison.matchMethod === 'alias' ? '别名匹配' :
+                   comparison.matchMethod === 'network' ? '网络搜索' :
+                   comparison.matchMethod}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* 字段对比表格 */}
+          {compLoading && <p className="text-[10px] text-[var(--muted)]">加载候选数据中…</p>}
+          {!compLoading && comparison && (
+            <FieldComparisonTable
+              diffs={comparison.diffs}
+              selected={selectedFields}
+              onToggle={toggleField}
+            />
+          )}
+          {/* fallback：无对比数据时显示原始候选信息 */}
+          {!compLoading && !comparison && (
+            <CandidateInfo
+              doubanId={doubanId} rating={rating} directors={directors}
+              cast={cast} description={description}
+            />
+          )}
+
+          {/* 操作按钮 */}
+          {comparison && (
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                disabled={confirming != null}
+                onClick={() => void handleConfirm(comparison.externalId)}
+                data-testid="douban-confirm-all-btn"
+                className="rounded border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-2 py-0.5 text-xs text-[var(--accent)] hover:bg-[var(--accent)]/20 disabled:opacity-50"
+              >
+                {confirming === comparison.externalId ? '确认中…' : '应用全部'}
+              </button>
+              <button
+                type="button"
+                disabled={confirming != null || selectedFields.size === 0}
+                onClick={() => void handleConfirmFields(comparison.externalId)}
+                data-testid="douban-confirm-fields-btn"
+                className="rounded border border-[var(--border)] px-2 py-0.5 text-xs hover:bg-[var(--bg3)] disabled:opacity-50"
+              >
+                {confirming != null && confirming !== comparison.externalId ? '确认中…' : `只应用选中（${selectedFields.size}）`}
+              </button>
+              <button
+                type="button"
+                disabled={ignoring}
+                onClick={() => void handleIgnore()}
+                data-testid="douban-ignore-btn"
+                className="rounded border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--muted)] hover:bg-[var(--bg3)] disabled:opacity-50"
+              >
+                {ignoring ? '处理中…' : '标记为不匹配'}
+              </button>
+            </div>
+          )}
+          {/* fallback 无对比数据时的操作 */}
+          {!comparison && !compLoading && doubanId && (
+            <div className="flex gap-1.5">
               <button
                 type="button"
                 disabled={confirming != null}
@@ -174,17 +362,17 @@ export function ModerationDoubanBlock({
               >
                 {confirming === doubanId ? '确认中…' : '应用此豆瓣条目'}
               </button>
-            )}
-            <button
-              type="button"
-              disabled={ignoring}
-              onClick={() => void handleIgnore()}
-              data-testid="douban-ignore-btn"
-              className="rounded border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--muted)] hover:bg-[var(--bg3)] disabled:opacity-50"
-            >
-              {ignoring ? '处理中…' : '标记为不匹配'}
-            </button>
-          </div>
+              <button
+                type="button"
+                disabled={ignoring}
+                onClick={() => void handleIgnore()}
+                data-testid="douban-ignore-btn"
+                className="rounded border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--muted)] hover:bg-[var(--bg3)] disabled:opacity-50"
+              >
+                {ignoring ? '处理中…' : '标记为不匹配'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -215,7 +403,6 @@ export function ModerationDoubanBlock({
         {msg && <p className="text-[10px] text-[var(--muted)]" data-testid="douban-msg">{msg}</p>}
         {candidates.length > 0 && (
           <>
-            {/* CHG-407: 写入提示 */}
             <p className="text-[10px] text-[var(--muted)]" data-testid="douban-overwrite-hint">
               确认后将覆盖：标题、简介、评分、封面（如豆瓣有相应数据）
             </p>
