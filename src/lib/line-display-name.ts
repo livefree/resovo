@@ -81,3 +81,19 @@ export function resolveSourceDisplayName(
   return normalizeProviderName(sourceName) ?? '未知线路'
 }
 
+/**
+ * CHG-413: 对 label 重复的项追加 -1/-2 序号，保证每条线路 label 全局唯一。
+ * 仅对出现超过一次的 label 编号（唯一的 label 保持原样）。
+ */
+export function deduplicateLabels<T extends { label: string }>(items: T[]): T[] {
+  const counts = new Map<string, number>()
+  const seen = new Map<string, number>()
+  for (const it of items) counts.set(it.label, (counts.get(it.label) ?? 0) + 1)
+  return items.map((it) => {
+    if ((counts.get(it.label) ?? 1) <= 1) return it
+    const n = (seen.get(it.label) ?? 0) + 1
+    seen.set(it.label, n)
+    return { ...it, label: `${it.label}-${n}` }
+  })
+}
+

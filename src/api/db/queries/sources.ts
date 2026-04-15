@@ -15,7 +15,7 @@ interface DbSourceRow {
   episode_number: number
   source_url: string
   source_name: string
-  /** CHG-412: LEFT JOIN crawler_sites cs ON cs.key = vs.source_name */
+  /** CHG-413: JOIN videos v→crawler_sites cs via v.site_key（正确关联路径）*/
   site_display_name: string | null
   quality: string | null
   type: string
@@ -61,11 +61,18 @@ export async function findActiveSourcesByVideoId(
     params.push(episode)
   }
 
-  // CHG-412: JOIN crawler_sites 以获取 display_name 用于前台线路命名
+  // CHG-413: JOIN 路径改为 video_sources→videos(site_key)→crawler_sites
+  // site_key 是爬虫入库时记录的源站 key，与 crawler_sites.key 一一对应；
+  // source_name 是苹果 CMS 的线路名（如 bfzym3u8 / 线路1），两者不同。
   const result = await db.query<DbSourceRow>(
-    `SELECT vs.*, cs.display_name AS site_display_name
+    `SELECT vs.id, vs.video_id, vs.season_number, vs.episode_number,
+            vs.source_url, vs.source_name, vs.quality, vs.type,
+            vs.is_active, vs.submitted_by, vs.last_checked,
+            vs.deleted_at, vs.created_at,
+            cs.display_name AS site_display_name
      FROM video_sources vs
-     LEFT JOIN crawler_sites cs ON cs.key = vs.source_name
+     JOIN videos v ON v.id = vs.video_id
+     LEFT JOIN crawler_sites cs ON cs.key = v.site_key
      WHERE ${conditions.map((c) => `vs.${c}`).join(' AND ')}
      ORDER BY vs.created_at ASC`,
     params

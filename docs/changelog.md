@@ -6012,3 +6012,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/player/PlayerShell.tsx`（两处 buildLineDisplayName 调用传入 siteDisplayName: s.siteDisplayName）
 - **测试覆盖**：typecheck + 全量测试通过；无新增测试（DB JOIN + 类型变更，逻辑在 lineDisplayName.test.ts 已覆盖）
 - **架构备注**：SEQ-20260414-02 全部 3 个任务（CHG-410/411/412）完成
+
+---
+
+## CHG-413 — P2：sources JOIN 改走 videos.site_key + PlayerShell 同源站多线路编号
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-03
+- **变更文件**：
+  - `src/api/db/queries/sources.ts`（findActiveSourcesByVideoId JOIN 路径改为 video_sources→videos(video_id)→crawler_sites(site_key)，修正 CHG-412 的 source_name 误关联）
+  - `src/lib/line-display-name.ts`（新增导出 deduplicateLabels<T extends { label: string }>(items): T[]，对重复 label 追加 -1/-2 序号）
+  - `src/components/player/PlayerShell.tsx`（移除本地 deduplicateLabels 副本，改为从 @/lib/line-display-name 导入；两处 setSources 均已包裹 deduplicateLabels()）
+  - `tests/unit/lib/lineDisplayName.test.ts`（新增 5 个 deduplicateLabels 测试：无重复/三项重复/部分重复/保留非label字段/空数组）
+- **测试覆盖**：5 新增测试全部通过；typecheck 干净；全量 1013 测试通过（2 文件 13 失败均为 pre-existing）
+- **架构备注**：deduplicateLabels 沉淀至 line-display-name.ts 共享层；PlayerShell 不再含业务逻辑副本；SEQ-20260414-03 完成

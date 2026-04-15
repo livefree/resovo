@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { normalizeProviderName, resolveSourceDisplayName } from '@/lib/line-display-name'
+import { normalizeProviderName, resolveSourceDisplayName, deduplicateLabels } from '@/lib/line-display-name'
 
 describe('normalizeProviderName — CHG-405 爬虫 key 映射', () => {
   it.each([
@@ -58,5 +58,43 @@ describe('resolveSourceDisplayName', () => {
 
   it('siteDisplayName 空白字符串视为无效，fallback 到 sourceName', () => {
     expect(resolveSourceDisplayName('   ', 'lzzy')).toBe('量子资源')
+  })
+})
+
+describe('deduplicateLabels — CHG-413 同源多线路编号', () => {
+  it('无重复时原样返回', () => {
+    const items = [{ label: '暴风资源', url: 'a' }, { label: '量子资源', url: 'b' }]
+    expect(deduplicateLabels(items)).toEqual(items)
+  })
+
+  it('重复 label 追加 -1/-2 序号', () => {
+    const items = [
+      { label: '暴风资源', url: 'a' },
+      { label: '暴风资源', url: 'b' },
+      { label: '暴风资源', url: 'c' },
+    ]
+    const result = deduplicateLabels(items)
+    expect(result[0].label).toBe('暴风资源-1')
+    expect(result[1].label).toBe('暴风资源-2')
+    expect(result[2].label).toBe('暴风资源-3')
+  })
+
+  it('只有一个重复项时，两者都编号', () => {
+    const items = [{ label: 'A', id: 1 }, { label: 'B', id: 2 }, { label: 'A', id: 3 }]
+    const result = deduplicateLabels(items)
+    expect(result[0].label).toBe('A-1')
+    expect(result[1].label).toBe('B')
+    expect(result[2].label).toBe('A-2')
+  })
+
+  it('不修改非 label 字段', () => {
+    const items = [{ label: '速播资源', extra: 42 }, { label: '速播资源', extra: 99 }]
+    const result = deduplicateLabels(items)
+    expect(result[0].extra).toBe(42)
+    expect(result[1].extra).toBe(99)
+  })
+
+  it('空数组返回空数组', () => {
+    expect(deduplicateLabels([])).toEqual([])
   })
 })

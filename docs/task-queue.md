@@ -6050,3 +6050,21 @@
 3. CHG-412 — P2：crawler_sites.display_name 进入前台线路命名链路（状态：✅ 已完成）
    - 创建时间：2026-04-14 18:15
    - 验收要点：PlayerShell 线路名优先展示 display_name；管理员后台配置的中文名前台可见
+
+---
+
+## [SEQ-20260414-03] 前台线路命名补全修复
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-14 18:35
+- **最后更新时间**：2026-04-14 19:00
+- **目标**：修复 CHG-412 遗留的两处缺陷：JOIN 路径走 videos.site_key 而非 source_name；同源站多线路追加 -1/-2 序号
+- **范围**：sources.ts / PlayerShell.tsx
+- **依赖**：CHG-412 已完成
+
+### 任务列表（按执行顺序）
+
+1. CHG-413 — P2：sources JOIN 改走 videos.site_key + PlayerShell 同源站多线路编号（状态：✅ 已完成）
+   - 创建时间：2026-04-14 18:35
+   - 完成时间：2026-04-14 19:00
+   - 验收要点：JOIN 路径 video_sources→videos→crawler_sites；同一源站两条线路显示为"暴风资源-1/暴风资源-2"；label 唯一性保证切集后线路保持逻辑正确

@@ -20,7 +20,7 @@ import { usePlayerStore } from '@/stores/playerStore'
 import { apiClient } from '@/lib/api-client'
 import { extractShortId } from '@/lib/video-detail'
 import { getVideoDetailHref } from '@/lib/video-route'
-import { buildLineDisplayName } from '@/lib/line-display-name'
+import { buildLineDisplayName, deduplicateLabels } from '@/lib/line-display-name'
 import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@/types'
 import { SourceBar } from './SourceBar'
 import { ResumePrompt, saveProgress } from './ResumePrompt'
@@ -75,11 +75,11 @@ export function PlayerShell({ slug }: PlayerShellProps) {
             { skipAuth: true }
           )
           .then((r) => {
-            setSources(r.data.map((s, index) => ({
+            setSources(deduplicateLabels(r.data.map((s, index) => ({
               src: s.sourceUrl,
               type: s.type,
               label: buildLineDisplayName({ rawName: s.sourceName, siteDisplayName: s.siteDisplayName, fallbackIndex: index, quality: s.quality }),
-            })))
+            }))))
             setActiveSourceIndex(0)
           })
           .catch(() => setSources([]))
@@ -100,11 +100,11 @@ export function PlayerShell({ slug }: PlayerShellProps) {
         { skipAuth: true }
       )
       .then((res) => {
-        const newSources = res.data.map((s, index) => ({
+        const newSources = deduplicateLabels(res.data.map((s, index) => ({
           src: s.sourceUrl,
           type: s.type,
           label: buildLineDisplayName({ rawName: s.sourceName, siteDisplayName: s.siteDisplayName, fallbackIndex: index, quality: s.quality }),
-        }))
+        })))
         setSources(newSources)
         // 保留用户选中的线路：按 label 在新源列表中查找，命中则保留，否则回退 0
         const prevLabel = sources[activeSourceIndex]?.label
