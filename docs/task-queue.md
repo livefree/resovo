@@ -6188,8 +6188,10 @@
 
 ### 任务列表（按执行顺序）
 
-1. META-06 — P3：media_catalog 字段扩展（状态：⬜ 待开始）
+1. META-06 — P3：media_catalog 字段扩展（状态：✅ 已完成）
    - 创建时间：2026-04-14 19:30
+   - 实际开始：2026-04-14 23:55
+   - 完成时间：2026-04-15 00:05
    - 验收要点：
      - Migration 新增：original_title / aliases TEXT[] / imdb_id / languages TEXT[] / duration_minutes INT / release_date DATE / official_site TEXT / tags TEXT[] / backdrop_url TEXT / trailer_url TEXT / rating_votes INT
      - docs/architecture.md 同步更新 media_catalog 表结构

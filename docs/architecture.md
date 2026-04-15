@@ -127,6 +127,31 @@ resovo/
 
 注意：历史文档中的 `blocked` 状态已不在当前 schema 中。
 
+### 5.1a media_catalog（作品元数据层）
+
+Migration 026 建表，Migration 042（META-06）新增 6 个扩展字段：
+
+核心字段：
+- `title` / `title_en` / `title_original` / `title_normalized`：标题四形态
+- `type`：作品类型（与 videos.type 一致）
+- `genres TEXT[]` / `genres_raw TEXT[]`：平台题材 / 原始题材
+- `year INT` / `release_date TEXT`：年份与首播/上映日期
+- `country TEXT` / `runtime_minutes INT`：国家地区 / 片长（分钟）
+- `status TEXT`：作品完成状态
+- `description TEXT` / `cover_url TEXT` / `rating NUMERIC` / `rating_votes INT`：简介/封面/评分/评分人数
+- `director TEXT[]` / `cast TEXT[]` / `writers TEXT[]`：导演/演员/编剧（字符串数组）
+- `imdb_id TEXT` / `tmdb_id INT` / `douban_id TEXT` / `bangumi_subject_id INT`：外部 ID
+- `metadata_source TEXT`：元数据最近写入来源（manual/tmdb/bangumi/douban/crawler）
+- `locked_fields TEXT[]`：已锁定字段列表（手动确认后不被自动覆盖）
+
+META-06 新增字段：
+- `aliases TEXT[]`：别名/又名列表
+- `languages TEXT[]`：语言列表
+- `official_site TEXT`：官网 URL
+- `tags TEXT[]`：标签列表
+- `backdrop_url TEXT`：横幅/背景图 URL
+- `trailer_url TEXT`：预告片 URL
+
 ### 5.2 video_sources
 
 - `season_number INT NOT NULL DEFAULT 1`

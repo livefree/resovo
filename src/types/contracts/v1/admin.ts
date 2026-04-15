@@ -119,6 +119,13 @@ export interface MediaCatalogRow {
   bangumiSubjectId: number | null
   metadataSource: string
   lockedFields: string[]
+  // META-06 新增字段
+  aliases: string[]
+  languages: string[]
+  officialSite: string | null
+  tags: string[]
+  backdropUrl: string | null
+  trailerUrl: string | null
   createdAt: string
   updatedAt: string
 }

@@ -6104,3 +6104,15 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无（video_external_refs 表已在 META-03 迁移创建）
 - **注意事项**：confidence 阈值设计保证向后兼容——title+年份相同=0.92≥0.85，title+年差≥2=0.70∈[0.60,0.85) → candidate 不走 Step2，行为与原版语义一致；alias base 0.65+年份相同=0.87≥0.85 可 auto_matched
+
+## [META-06] media_catalog 字段扩展（aliases / languages / official_site / tags / backdrop_url / trailer_url）
+- **完成时间**：2026-04-15
+- **记录时间**：2026-04-15 00:05
+- **修改文件**：
+  - `src/api/db/migrations/042_media_catalog_extend.sql`（新建）— ALTER TABLE 新增 6 列（aliases TEXT[], languages TEXT[], official_site TEXT, tags TEXT[], backdrop_url TEXT, trailer_url TEXT）
+  - `src/api/db/queries/mediaCatalog.ts` — DbMediaCatalogRow/MediaCatalogRow/CatalogInsertData/CatalogUpdateData 扩展 6 字段；mapCatalogRow/CATALOG_SELECT/insertCatalog/updateCatalogFields 同步更新
+  - `src/types/contracts/v1/admin.ts` — MediaCatalogRow 公开类型契约同步扩展
+  - `docs/architecture.md` — 新增 5.1a media_catalog 表结构说明
+- **新增依赖**：无
+- **数据库变更**：Migration 042，ALTER TABLE media_catalog ADD COLUMN x6，向后兼容（有 IF NOT EXISTS + DEFAULT）
+- **注意事项**：imdb_id/rating_votes/release_date/title_original/runtime_minutes 已存在（Migration 026），本次只新增真正缺失的 6 个字段；MediaCatalogService.safeUpdate 无需改动（fieldMap 动态构建，CatalogUpdateData 扩展即自动支持新字段）

@@ -35,6 +35,13 @@ interface DbMediaCatalogRow {
   bangumi_subject_id: number | null
   metadata_source: string
   locked_fields: string[]
+  // META-06 新增字段
+  aliases: string[]
+  languages: string[]
+  official_site: string | null
+  tags: string[]
+  backdrop_url: string | null
+  trailer_url: string | null
   created_at: string
   updated_at: string
 }
@@ -68,6 +75,13 @@ export interface MediaCatalogRow {
   bangumiSubjectId: number | null
   metadataSource: string
   lockedFields: string[]
+  // META-06 新增字段
+  aliases: string[]
+  languages: string[]
+  officialSite: string | null
+  tags: string[]
+  backdropUrl: string | null
+  trailerUrl: string | null
   createdAt: string
   updatedAt: string
 }
@@ -97,6 +111,13 @@ export interface CatalogInsertData {
   doubanId?: string | null
   bangumiSubjectId?: number | null
   metadataSource?: string
+  // META-06 新增字段
+  aliases?: string[]
+  languages?: string[]
+  officialSite?: string | null
+  tags?: string[]
+  backdropUrl?: string | null
+  trailerUrl?: string | null
 }
 
 export interface CatalogUpdateData {
@@ -124,6 +145,13 @@ export interface CatalogUpdateData {
   doubanId?: string | null
   bangumiSubjectId?: number | null
   metadataSource?: string
+  // META-06 新增字段
+  aliases?: string[]
+  languages?: string[]
+  officialSite?: string | null
+  tags?: string[]
+  backdropUrl?: string | null
+  trailerUrl?: string | null
 }
 
 // ── 映射函数 ─────────────────────────────────────────────────────
@@ -156,6 +184,12 @@ function mapCatalogRow(row: DbMediaCatalogRow): MediaCatalogRow {
     bangumiSubjectId: row.bangumi_subject_id,
     metadataSource: row.metadata_source,
     lockedFields: row.locked_fields ?? [],
+    aliases: row.aliases ?? [],
+    languages: row.languages ?? [],
+    officialSite: row.official_site,
+    tags: row.tags ?? [],
+    backdropUrl: row.backdrop_url,
+    trailerUrl: row.trailer_url,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -168,7 +202,9 @@ const CATALOG_SELECT = `
     status, description, cover_url, rating, rating_votes,
     director, "cast", writers,
     imdb_id, tmdb_id, douban_id, bangumi_subject_id,
-    metadata_source, locked_fields, created_at, updated_at
+    metadata_source, locked_fields,
+    aliases, languages, official_site, tags, backdrop_url, trailer_url,
+    created_at, updated_at
   FROM media_catalog
 `
 
@@ -261,14 +297,16 @@ export async function insertCatalog(
        status, description, cover_url, rating, rating_votes,
        director, "cast", writers,
        imdb_id, tmdb_id, douban_id, bangumi_subject_id,
-       metadata_source
+       metadata_source,
+       aliases, languages, official_site, tags, backdrop_url, trailer_url
      ) VALUES (
        $1, $2, $3, $4,
        $5, $6, $7, $8, $9, $10, $11,
        $12, $13, $14, $15, $16,
        $17, $18, $19,
        $20, $21, $22, $23,
-       $24
+       $24,
+       $25, $26, $27, $28, $29, $30
      )
      ON CONFLICT DO NOTHING
      RETURNING
@@ -277,7 +315,9 @@ export async function insertCatalog(
        status, description, cover_url, rating, rating_votes,
        director, "cast", writers,
        imdb_id, tmdb_id, douban_id, bangumi_subject_id,
-       metadata_source, locked_fields, created_at, updated_at`,
+       metadata_source, locked_fields,
+       aliases, languages, official_site, tags, backdrop_url, trailer_url,
+       created_at, updated_at`,
     [
       data.title,
       data.titleEn ?? null,
@@ -303,6 +343,12 @@ export async function insertCatalog(
       data.doubanId ?? null,
       data.bangumiSubjectId ?? null,
       data.metadataSource ?? 'crawler',
+      data.aliases ?? [],
+      data.languages ?? [],
+      data.officialSite ?? null,
+      data.tags ?? [],
+      data.backdropUrl ?? null,
+      data.trailerUrl ?? null,
     ]
   )
   return result.rows[0] ? mapCatalogRow(result.rows[0]) : null
@@ -347,6 +393,12 @@ export async function updateCatalogFields(
     doubanId: 'douban_id',
     bangumiSubjectId: 'bangumi_subject_id',
     metadataSource: 'metadata_source',
+    aliases: 'aliases',
+    languages: 'languages',
+    officialSite: 'official_site',
+    tags: 'tags',
+    backdropUrl: 'backdrop_url',
+    trailerUrl: 'trailer_url',
   }
 
   for (const [key, col] of Object.entries(fieldMap) as [keyof CatalogUpdateData, string][]) {
@@ -369,7 +421,9 @@ export async function updateCatalogFields(
        status, description, cover_url, rating, rating_votes,
        director, "cast", writers,
        imdb_id, tmdb_id, douban_id, bangumi_subject_id,
-       metadata_source, locked_fields, created_at, updated_at`,
+       metadata_source, locked_fields,
+       aliases, languages, official_site, tags, backdrop_url, trailer_url,
+       created_at, updated_at`,
     params
   )
   return result.rows[0] ? mapCatalogRow(result.rows[0]) : null
