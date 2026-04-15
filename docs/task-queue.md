@@ -6025,3 +6025,28 @@
    - 实际开始：2026-04-14 18:08
    - 完成时间：2026-04-14 18:08
    - 验收要点：新增测试全部通过；全量 npm test -- --run 通过
+
+---
+
+## [SEQ-20260414-02] ES 一致性与源命名链路补全
+
+- **状态**：🔄 执行中
+- **创建时间**：2026-04-14 18:15
+- **最后更新时间**：2026-04-14 18:15
+- **目标**：修复 CHG-401/405 遗留的三处缺陷：ES 漏下架文档、索引缺字段、前台不消费 display_name
+- **范围**：VideoIndexSyncService / sources.ts / VideoSource 类型 / PlayerShell / line-display-name
+- **依赖**：SEQ-20260414-01 已完成
+
+### 任务列表（按执行顺序）
+
+1. CHG-410 — P1：VideoIndexSyncService 补全缺失 ES 字段（description/director/cast/writers/subtitle_langs/created_at）（状态：✅ 已完成）
+   - 创建时间：2026-04-14 18:15
+   - 验收要点：syncVideo 写入的文档包含全部 ES mapping 字段；SearchService 依赖字段验证可搜
+
+2. CHG-411 — P1：reconcileStale — ES 漏下架文档清理路径（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 18:15
+   - 验收要点：reconcileStale 补 upsert 非上架视频（is_published→false）；补 delete 软删除视频；maintenance job 同时执行两条路径
+
+3. CHG-412 — P2：crawler_sites.display_name 进入前台线路命名链路（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 18:15
+   - 验收要点：PlayerShell 线路名优先展示 display_name；管理员后台配置的中文名前台可见

@@ -78,13 +78,25 @@ async function processMaintenanceJob(
     }
     case 'reconcile-search-index': {
       // CHG-401: 补全 DB 已上架但 ES 索引缺失/过期的视频文档
+      // CHG-411: 同时修复漏下架/漏删除的旧 ES 文档
       const svc = new VideoIndexSyncService(db, es)
-      const { synced, errors } = await svc.reconcilePublished(data.reconcileBatchLimit ?? 100)
+      const [publishedResult, staleResult] = await Promise.all([
+        svc.reconcilePublished(data.reconcileBatchLimit ?? 100),
+        svc.reconcileStale(),
+      ])
       const durationMs = Date.now() - startAt
       process.stderr.write(
-        `[maintenance-worker] reconcile-search-index: synced=${synced} errors=${errors} (${durationMs}ms)\n`,
+        `[maintenance-worker] reconcile-search-index: ` +
+        `synced=${publishedResult.synced} fixed=${staleResult.fixed} deleted=${staleResult.deleted} ` +
+        `errors=${publishedResult.errors + staleResult.errors} (${durationMs}ms)\n`,
       )
-      return { type: data.type, durationMs, synced, errors }
+      return {
+        type: data.type, durationMs,
+        synced: publishedResult.synced,
+        fixed: staleResult.fixed,
+        deleted: staleResult.deleted,
+        errors: publishedResult.errors + staleResult.errors,
+      }
     }
     default: {
       const never: never = data.type

@@ -5973,3 +5973,28 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/lib/lineDisplayName.test.ts`（新建，19 个测试覆盖 CHG-405 新增的 PROVIDER_PATTERNS 爬虫 key 映射和 resolveSourceDisplayName 函数）
 - **测试覆盖**：19 新增单元测试全部通过；全量 990 tests 通过（13 pre-existing failures 无变化）
 - **架构备注**：SEQ-20260414-01 所有 9 个任务（CHG-401 至 CHG-409）全部完成
+
+---
+
+## CHG-410 — P1：VideoIndexSyncService 补全缺失 ES 字段
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-02
+- **变更文件**：
+  - `src/api/services/VideoIndexSyncService.ts`（VideoEsRow 新增 description/director/cast/writers/subtitle_langs/created_at；FETCH_SQL/RECONCILE_SQL 补全对应字段；buildDocument 写入全部字段）
+  - `tests/unit/api/videoIndexSync.test.ts`（VIDEO_ROW fixture 补全字段；新增 CHG-410 字段断言测试）
+- **测试覆盖**：12 测试全部通过
+- **架构备注**：subtitle_langs 使用与 videos.ts 一致的 SUBTITLE_LANGS_SUBQUERY 子查询
+
+---
+
+## CHG-411 — P1：reconcileStale — ES 漏下架文档清理路径
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-02
+- **变更文件**：
+  - `src/api/services/VideoIndexSyncService.ts`（新增 reconcileStale(daysLookback, batchLimit)：非上架视频 upsert，软删除视频 delete；404 幂等处理）
+  - `src/api/workers/maintenanceWorker.ts`（reconcile-search-index case 同时调用 reconcilePublished + reconcileStale，日志扩展 fixed/deleted 字段）
+  - `tests/unit/api/videoIndexSync.test.ts`（4 个 reconcileStale 测试：正常路径/delete 路径/404幂等/双路计数）
+- **测试覆盖**：4 新增测试全部通过
+- **架构备注**：daysLookback 默认 7，避免全表扫描；ES delete 404 视为幂等成功（文档已不存在）
