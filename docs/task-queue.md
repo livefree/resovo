@@ -6068,3 +6068,26 @@
    - 创建时间：2026-04-14 18:35
    - 完成时间：2026-04-14 19:00
    - 验收要点：JOIN 路径 video_sources→videos→crawler_sites；同一源站两条线路显示为"暴风资源-1/暴风资源-2"；label 唯一性保证切集后线路保持逻辑正确
+
+---
+
+## [SEQ-20260414-04] video_sources 精确源站归属
+
+- **状态**：🟡 规划中
+- **创建时间**：2026-04-14 19:10
+- **最后更新时间**：2026-04-14 19:10
+- **目标**：为 video_sources 增加行级源站标识，支持"同一视频聚合多个不同源站线路"时精确显示每条线路的来源站点
+- **背景**：CHG-413 通过 videos.site_key 间接推导 display_name，属于视频级粒度。当一个视频长期聚合来自多个不同源站的线路时，所有线路会显示同一 display_name，与实际源站不符。
+- **触发条件**：出现"单视频多源站聚合"的实际场景后启动；当前架构足够用
+- **依赖**：CHG-413 已完成
+
+### 任务列表（按执行顺序）
+
+1. CHG-414 — P3：video_sources 新增 source_site_key 列，display_name JOIN 改走行级（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 19:10
+   - 技术方案：
+     - Migration：`ALTER TABLE video_sources ADD COLUMN source_site_key VARCHAR(100)`（nullable，存量数据可为 NULL 或 backfill 自 videos.site_key）
+     - sources.ts：JOIN 路径改为 `video_sources.source_site_key → crawler_sites.key`，NULL 时 fallback 到 `videos.site_key`（向后兼容）
+     - 爬虫写入侧：落库时同步写入 source_site_key
+     - docs/architecture.md：同步更新 video_sources 表结构说明
+   - 验收要点：同一视频来自 A、B 两个源站的线路分别显示对应 display_name；存量数据 fallback 正常；typecheck + 全量测试通过
