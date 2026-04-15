@@ -12,3 +12,4 @@ export type * from './player.types'
 
 export type * from './crawler.types'
 export type * from './system.types'
+export type * from './external.types'

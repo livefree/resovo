@@ -2,6 +2,7 @@
  * externalData.ts — external_data schema 查询
  * 供 MetadataEnrichService 做本地毫秒级标题匹配
  * 不用于构建 media_catalog（那是 externalRaw.ts 的职责）
+ * META-04: DoubanEntryMatch 扩展 META-01 新字段，供 externalCandidateMappers 消费
  */
 
 import type { Pool } from 'pg'
@@ -20,6 +21,18 @@ export interface DoubanEntryMatch {
   writers: string[]
   genres: string[]
   country: string | null
+  // META-01 扩展字段
+  aliases: string[]
+  imdbId: string | null
+  languages: string[]
+  durationMinutes: number | null
+  tags: string[]
+  doubanVotes: number | null
+  regions: string[]
+  releaseDate: string | null
+  actorIds: string[]
+  directorIds: string[]
+  officialSite: string | null
 }
 
 export interface BangumiEntryMatch {
@@ -47,9 +60,15 @@ export async function findDoubanByTitleNorm(
     douban_id: string; title: string; year: number | null
     rating: string | null; description: string | null; cover_url: string | null
     directors: string[]; cast: string[]; writers: string[]; genres: string[]; country: string | null
+    aliases: string[]; imdb_id: string | null; languages: string[]
+    duration_minutes: number | null; tags: string[]; douban_votes: number | null
+    regions: string[]; release_date: string | null
+    actor_ids: string[]; director_ids: string[]; official_site: string | null
   }>(
     `SELECT douban_id, title, year, rating, description, cover_url,
-            directors, cast, writers, genres, country
+            directors, cast, writers, genres, country,
+            aliases, imdb_id, languages, duration_minutes, tags, douban_votes,
+            regions, release_date, actor_ids, director_ids, official_site
      FROM external_data.douban_entries
      WHERE title_normalized = $1
      ORDER BY
@@ -73,6 +92,17 @@ export async function findDoubanByTitleNorm(
     writers: r.writers ?? [],
     genres: r.genres ?? [],
     country: r.country,
+    aliases: r.aliases ?? [],
+    imdbId: r.imdb_id,
+    languages: r.languages ?? [],
+    durationMinutes: r.duration_minutes,
+    tags: r.tags ?? [],
+    doubanVotes: r.douban_votes,
+    regions: r.regions ?? [],
+    releaseDate: r.release_date,
+    actorIds: r.actor_ids ?? [],
+    directorIds: r.director_ids ?? [],
+    officialSite: r.official_site,
   }))
 }
 

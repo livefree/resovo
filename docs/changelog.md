@@ -6079,3 +6079,18 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/architecture.md`（5.6 节内外部关联表说明）
 - **测试覆盖**：9 项新增测试全部通过；typecheck 通过
 - **架构备注**：未引入 external_work_id FK（规划中的字段，依赖 META-04 ExternalWork 统一实体，当前用 external_id 文本绑定已足够，避免过早依赖）
+
+---
+
+## META-04 — ExternalSubjectCandidate 统一模型 + 两个 mapper
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-05
+- **变更文件**：
+  - `src/types/external.types.ts`（新建：ExternalSubjectCandidate / ExternalPerson / ExternalRecommendation）
+  - `src/types/index.ts`（新增 external.types 导出）
+  - `src/api/db/queries/externalData.ts`（DoubanEntryMatch 补全 11 个 META-01 新字段；findDoubanByTitleNorm SELECT 语句补全对应列）
+  - `src/api/lib/externalCandidateMappers.ts`（新建：mapDoubanDumpEntryToCandidate / mapDoubanAdapterDetailsToCandidate，均接受 opts.confidence/confidenceBreakdown 覆盖）
+  - `tests/unit/lib/externalCandidateMappers.test.ts`（新建：16 项测试，覆盖基础字段/人物 id 映射/空值转 undefined/actors fallback/rate 字符串转数字/confidence 覆盖）
+- **测试覆盖**：16 项新增测试全部通过；typecheck 通过
+- **架构备注**：ExternalRecommendation 额外新增（用户原方案未列出，但 adapter 有 recommendations 字段，顺手一致性处理）；confidence/confidenceBreakdown 由调用方填入，mapper 不承担匹配逻辑

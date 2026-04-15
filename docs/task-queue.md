@@ -6150,14 +6150,16 @@
      - 9 项单元测试全部通过；typecheck 通过
    - 备注：未引入 external_work_id FK（该字段依赖 META-04 的统一 ExternalWork 实体，当前先用 external_id 文本绑定即可，保持简洁）
 
-4. META-04 — P3：ExternalSubjectCandidate 统一模型 + 两个 mapper（状态：⬜ 待开始）
+4. META-04 — P3：ExternalSubjectCandidate 统一模型 + 两个 mapper（状态：✅ 已完成）
    - 创建时间：2026-04-14 19:30
+   - 实际开始：2026-04-14 20:25
+   - 完成时间：2026-04-14 20:40
    - 依赖：META-01/02/03 完成
    - 验收要点：
-     - 新增 `src/types/external.types.ts`：ExternalSubjectCandidate / ExternalPerson 接口定义
+     - 新增 `src/types/external.types.ts`：ExternalSubjectCandidate / ExternalPerson / ExternalRecommendation
+     - DoubanEntryMatch 补全 META-01 新字段；findDoubanByTitleNorm SELECT 补全
      - 新增 `src/api/lib/externalCandidateMappers.ts`：mapDoubanDumpEntryToCandidate() + mapDoubanAdapterDetailsToCandidate()
-     - 两个 mapper 均有单元测试（mock 输入 → 断言 candidate 字段）
-     - typecheck 通过
+     - 16 项单元测试全部通过；typecheck 通过
 
 5. META-05 — P3：MetadataEnrichService 重构（本地多字段召回 + 统一 candidate 决策）（状态：⬜ 待开始）
    - 创建时间：2026-04-14 19:30
