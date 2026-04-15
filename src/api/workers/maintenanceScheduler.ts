@@ -111,6 +111,23 @@ async function runReconcileTick(): Promise<void> {
   }
 }
 
+export interface SchedulerInfo {
+  name: string
+  enabled: boolean
+  intervalMs: number
+}
+
+/** CHG-408: 返回各定时器当前状态，供 GET /admin/system/scheduler-status 使用 */
+export function getSchedulerStatus(): SchedulerInfo[] {
+  const globalEnabled = process.env.MAINTENANCE_SCHEDULER_ENABLED !== 'false'
+  return [
+    { name: 'auto-publish-staging',    enabled: globalEnabled && schedulerTimer != null,       intervalMs: TICK_MS },
+    { name: 'verify-published-sources', enabled: globalEnabled && verifyTimer != null,          intervalMs: VERIFY_TICK_MS },
+    { name: 'verify-staging-sources',   enabled: globalEnabled && stagingVerifyTimer != null,   intervalMs: STAGING_VERIFY_TICK_MS },
+    { name: 'reconcile-search-index',   enabled: globalEnabled && reconcileTimer != null,       intervalMs: RECONCILE_TICK_MS },
+  ]
+}
+
 export function registerMaintenanceScheduler(): void {
   if (schedulerTimer) return
   schedulerTimer = setInterval(() => {

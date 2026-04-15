@@ -13,6 +13,7 @@ import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
+import { getSchedulerStatus } from '@/api/workers/maintenanceScheduler'
 import type { SystemSettingKey } from '@/types'
 
 const SiteSettingsBodySchema = z.object({
@@ -177,5 +178,13 @@ export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
     }
 
     return reply.send({ data: { ok: true, synced, skipped } })
+  })
+
+  // ── GET /admin/system/scheduler-status ───────────────────────
+  // CHG-408: 返回 maintenance scheduler 各定时器状态
+  fastify.get('/admin/system/scheduler-status', { preHandler: auth }, async (_request, reply) => {
+    const schedulers = getSchedulerStatus()
+    const globalEnabled = process.env.MAINTENANCE_SCHEDULER_ENABLED !== 'false'
+    return reply.send({ data: { enabled: globalEnabled, schedulers } })
   })
 }

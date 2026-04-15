@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
 import { notify } from '@/components/admin/shared/toast/useAdminToast'
+import { SchedulerStatusPanel } from '@/components/admin/system/site-settings/SchedulerStatusPanel'
 import type { SiteSettings } from '@/types'
 
 // ── 默认值 ────────────────────────────────────────────────────
@@ -224,6 +225,11 @@ export function SiteSettings() {
             前往采集控制台
           </Link>
         </div>
+      </Section>
+
+      {/* ── 调度器状态 ────────────────────────────────────── */}
+      <Section title="维护调度器状态">
+        <SchedulerStatusPanel />
       </Section>
 
       {/* ── 保存按钮 ──────────────────────────────────────── */}

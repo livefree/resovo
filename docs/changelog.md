@@ -5948,3 +5948,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/moderation/ModerationDoubanBlock.tsx`（顶部新增 statusHint 说明文案；candidate 按钮文案"确认当前候选"→"应用此豆瓣条目"、"忽略"→"标记为不匹配"；搜索结果条目按钮"确认"→"应用此豆瓣条目"；新增写入前覆盖提示）
 - **测试覆盖**：typecheck+lint 通过；无新增测试（UI 文案修改）
 - **架构备注**：genres controlled multiselect 已在 ModerationBasicInfoBlock.tsx 中正确实现（localGenres + handleGenreToggle），无需修改；豆瓣 diff 仅展示文案提示，不依赖额外 API 字段
+
+---
+
+## CHG-408 — P2：调度器状态展示 + 文档修正
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-01
+- **变更文件**：
+  - `src/api/workers/maintenanceScheduler.ts`（新增 getSchedulerStatus() + SchedulerInfo 类型，暴露四个定时器状态）
+  - `src/api/routes/admin/siteConfig.ts`（新增 GET /admin/system/scheduler-status 路由，需 auth）
+  - `src/components/admin/system/site-settings/SchedulerStatusPanel.tsx`（新建，调用 scheduler-status API 展示四个定时器运行状态和 intervalMs；disabled 时显示警告横幅）
+  - `src/components/admin/system/site-settings/SiteSettings.tsx`（在"维护调度器状态"Section 中挂载 SchedulerStatusPanel）
+- **测试覆盖**：typecheck+lint 通过；无新增测试（API 端只读接口）
+- **架构备注**：getSchedulerStatus 通过检查 timer 是否 != null 判断启动状态；MAINTENANCE_SCHEDULER_ENABLED=false 时所有调度器 enabled=false 并显示警告横幅
