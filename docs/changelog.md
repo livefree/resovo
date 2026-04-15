@@ -5886,3 +5886,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/moderation/ModerationDetail.tsx`（无活跃源时显示"暂无活跃播放源"提示）
 - **测试覆盖**：API 层过滤已有测试覆盖；UI 层为视觉修复，无新增测试
 - **架构备注**：API 层（findActiveSourcesByVideoId）过滤 is_active=true AND deleted_at IS NULL 已正确，本次只修复 UI 空态文案
+
+---
+
+## CHG-403 — P0-C：orphan-videos 503 MIGRATION_PENDING 友好报错
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-01
+- **变更文件**：
+  - `src/api/routes/admin/content.ts`（GET/POST orphan-videos catch 识别 PG 错误码 42P01，返回 503+MIGRATION_PENDING）
+- **测试覆盖**：无新增测试（需 DB 环境，计划在 CHG-409 补充集成测试）
+- **架构备注**：migration 037 文件已存在，只修复了运行时缺表时的错误提示，不改变 migration 执行机制

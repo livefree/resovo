@@ -5986,7 +5986,7 @@
    - 创建时间：2026-04-14 00:00
    - 验收要点：全部源 inactive 时前台显示"暂无可用播放源"；后台审核台 inactive 源有标识
 
-3. CHG-403 — P0-C：orphan-videos 503 MIGRATION_PENDING 友好报错（状态：⬜ 待开始）
+3. CHG-403 — P0-C：orphan-videos 503 MIGRATION_PENDING 友好报错（状态：✅ 已完成））
    - 创建时间：2026-04-14 00:00
    - 验收要点：表不存在时返回 503+MIGRATION_PENDING；表存在时正常返回
 

@@ -317,6 +317,16 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
       const rows = await sourcesQueries.listOrphanVideos(db, 100)
       return reply.send({ data: rows, total: rows.length })
     } catch (err) {
+      // PG 错误码 42P01：表不存在（migration 未执行）
+      if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === '42P01') {
+        return reply.code(503).send({
+          error: {
+            code: 'MIGRATION_PENDING',
+            message: 'source_health_events 表尚未迁移，请运行 migration 037_source_health_events.sql',
+            status: 503,
+          },
+        })
+      }
       const msg = err instanceof Error ? err.message : String(err)
       return reply.code(500).send({
         error: { code: 'INTERNAL_ERROR', message: `查询孤岛视频失败: ${msg}`, status: 500 },
@@ -331,6 +341,15 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
       await sourcesQueries.resolveOrphanVideo(db, id)
       return reply.send({ data: { id, resolved: true } })
     } catch (err) {
+      if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === '42P01') {
+        return reply.code(503).send({
+          error: {
+            code: 'MIGRATION_PENDING',
+            message: 'source_health_events 表尚未迁移，请运行 migration 037_source_health_events.sql',
+            status: 503,
+          },
+        })
+      }
       const msg = err instanceof Error ? err.message : String(err)
       return reply.code(500).send({
         error: { code: 'INTERNAL_ERROR', message: `标记失败: ${msg}`, status: 500 },
