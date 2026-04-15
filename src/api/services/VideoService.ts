@@ -14,15 +14,22 @@ import type {
 } from '@/api/db/queries/videos'
 import { MediaCatalogService } from '@/api/services/MediaCatalogService'
 import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
+import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 100
 
 export class VideoService {
+  private readonly indexSync?: VideoIndexSyncService
+
   constructor(
     private db: Pool,
     private es?: ESClient
-  ) {}
+  ) {
+    if (es) {
+      this.indexSync = new VideoIndexSyncService(db, es)
+    }
+  }
 
   async list(params: {
     type?: VideoType
@@ -136,7 +143,7 @@ export class VideoService {
       status: (input.status as VideoStatus) ?? 'completed',
       metadataSource: 'manual',
     })
-    void this.indexToES(inserted.id)
+    void this.indexSync?.syncVideo(inserted.id as string)
     return inserted
   }
 
@@ -175,7 +182,7 @@ export class VideoService {
       ...(input.slug !== undefined ? { slug: input.slug as string | null } : {}),
     }
     const row = await videoQueries.updateVideoMeta(this.db, id, adaptedInput)
-    if (row) void this.indexToES(id)
+    if (row) void this.indexSync?.syncVideo(id)
     return row ?? { id, updated_at: new Date().toISOString() }
   }
 
@@ -183,7 +190,7 @@ export class VideoService {
     const row = await videoQueries.transitionVideoState(this.db, id, {
       action: isPublished ? 'publish' : 'unpublish',
     })
-    if (row) void this.indexToES(id)
+    if (row) void this.indexSync?.syncVideo(id)
     return row
   }
 
@@ -197,7 +204,7 @@ export class VideoService {
         ? 'set_internal'
         : 'set_hidden'
     const row = await videoQueries.transitionVideoState(this.db, id, { action })
-    if (row) void this.indexToES(id)
+    if (row) void this.indexSync?.syncVideo(id)
     return row
   }
 
@@ -216,7 +223,7 @@ export class VideoService {
       reviewedBy: input.reviewedBy,
       reason: input.reason,
     })
-    if (row) void this.indexToES(id)
+    if (row) void this.indexSync?.syncVideo(id)
     return row
   }
 
@@ -236,7 +243,7 @@ export class VideoService {
     updated_at: string
   } | null> {
     const row = await videoQueries.transitionVideoState(this.db, id, input)
-    if (row) void this.indexToES(id)
+    if (row) void this.indexSync?.syncVideo(id)
     return row
   }
 
@@ -248,7 +255,7 @@ export class VideoService {
       })
       if (row) {
         count += 1
-        void this.indexToES(id)
+        void this.indexSync?.syncVideo(id)
       }
     }
     return count
@@ -256,7 +263,7 @@ export class VideoService {
 
   async batchUnpublish(ids: string[]): Promise<number> {
     const count = await videoQueries.batchUnpublishVideos(this.db, ids)
-    if (count > 0) ids.forEach((id) => void this.indexToES(id))
+    if (count > 0) ids.forEach((id) => void this.indexSync?.syncVideo(id))
     return count
   }
 
@@ -295,64 +302,4 @@ export class VideoService {
     return { data: rows, total, page, limit }
   }
 
-  // ── ES 同步（异步，不阻塞响应）──────────────────────────────────
-
-  private async indexToES(videoId: string): Promise<void> {
-    if (!this.es) return
-    try {
-      const result = await this.db.query<{
-        id: string; short_id: string; slug: string | null; catalog_id: string
-        title: string; title_en: string | null; title_original: string | null
-        cover_url: string | null; type: string; genres: string[]
-        year: number | null; country: string | null; episode_count: number
-        rating: number | null; status: string; is_published: boolean
-        content_rating: string; review_status: string; visibility_status: string
-        imdb_id: string | null; tmdb_id: number | null
-      }>(
-        `SELECT v.id, v.short_id, v.slug, v.title, v.type, v.episode_count,
-                v.is_published, v.content_rating, v.review_status, v.visibility_status,
-                v.catalog_id,
-                mc.title_en, mc.title_original, mc.cover_url, mc.genres, mc.year,
-                mc.country, mc.rating, mc.status, mc.imdb_id, mc.tmdb_id
-         FROM videos v
-         JOIN media_catalog mc ON mc.id = v.catalog_id
-         WHERE v.id = $1`,
-        [videoId]
-      )
-      if (!result.rows[0]) return
-
-      const row = result.rows[0]
-      await this.es.index({
-        index: 'resovo_videos',
-        id: row.id,
-        document: {
-          id: row.id,
-          short_id: row.short_id,
-          slug: row.slug,
-          catalog_id: row.catalog_id,
-          title: row.title,
-          title_en: row.title_en,
-          title_original: row.title_original,
-          cover_url: row.cover_url,
-          type: row.type,
-          genres: row.genres ?? [],
-          year: row.year,
-          country: row.country,
-          episode_count: row.episode_count,
-          rating: row.rating,
-          status: row.status,
-          is_published: row.is_published,
-          content_rating: row.content_rating,
-          review_status: row.review_status,
-          visibility_status: row.visibility_status,
-          imdb_id: row.imdb_id,
-          tmdb_id: row.tmdb_id,
-          updated_at: new Date().toISOString(),
-        },
-      })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`[VideoService] ES index failed for ${videoId}: ${message}\n`)
-    }
-  }
 }

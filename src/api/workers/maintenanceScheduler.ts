@@ -4,6 +4,7 @@
  * CHG-393: 间隔改为 30 分钟（M1 验收要求）；null 视为已启用（显式 'false' 才禁用）
  * CHG-388: 新增 verify-published-sources 独立 60min 定时器
  * CHG-399: 新增 verify-staging-sources 独立 8h 定时器
+ * CHG-401: 新增 reconcile-search-index 独立 24h 定时器
  */
 
 import { maintenanceQueue } from '@/api/lib/queue'
@@ -11,16 +12,19 @@ import { db } from '@/api/lib/postgres'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import type { MaintenanceJobData } from '@/api/workers/maintenanceWorker'
 
-const TICK_MS = 30 * 60_000               // 30 分钟（auto-publish-staging）
-const VERIFY_TICK_MS = 60 * 60_000        // 60 分钟（verify-published-sources）
+const TICK_MS = 30 * 60_000                  // 30 分钟（auto-publish-staging）
+const VERIFY_TICK_MS = 60 * 60_000           // 60 分钟（verify-published-sources）
 const STAGING_VERIFY_TICK_MS = 8 * 3600_000  // 8 小时（verify-staging-sources）
+const RECONCILE_TICK_MS = 24 * 3600_000      // 24 小时（reconcile-search-index）
 
 let schedulerTimer: NodeJS.Timeout | null = null
 let verifyTimer: NodeJS.Timeout | null = null
 let stagingVerifyTimer: NodeJS.Timeout | null = null
+let reconcileTimer: NodeJS.Timeout | null = null
 let tickRunning = false
 let verifyTickRunning = false
 let stagingVerifyTickRunning = false
+let reconcileTickRunning = false
 
 async function runMaintenanceTick(): Promise<void> {
   if (tickRunning) return
@@ -88,6 +92,25 @@ async function runStagingVerifyTick(): Promise<void> {
   }
 }
 
+async function runReconcileTick(): Promise<void> {
+  if (reconcileTickRunning) return
+  reconcileTickRunning = true
+  try {
+    const jobData: MaintenanceJobData = { type: 'reconcile-search-index', reconcileBatchLimit: 100 }
+    await maintenanceQueue.add(jobData, {
+      jobId: `reconcile-search-index-${Date.now()}`,
+      removeOnComplete: 10,
+      removeOnFail: 5,
+    })
+    process.stderr.write('[maintenance-scheduler] enqueued reconcile-search-index\n')
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    process.stderr.write(`[maintenance-scheduler] reconcile tick failed: ${msg}\n`)
+  } finally {
+    reconcileTickRunning = false
+  }
+}
+
 export function registerMaintenanceScheduler(): void {
   if (schedulerTimer) return
   schedulerTimer = setInterval(() => {
@@ -106,4 +129,10 @@ export function registerMaintenanceScheduler(): void {
     void runStagingVerifyTick()
   }, STAGING_VERIFY_TICK_MS)
   process.stderr.write('[maintenance-scheduler] verify-staging-sources registered (8h interval)\n')
+
+  if (reconcileTimer) return
+  reconcileTimer = setInterval(() => {
+    void runReconcileTick()
+  }, RECONCILE_TICK_MS)
+  process.stderr.write('[maintenance-scheduler] reconcile-search-index registered (24h interval)\n')
 }

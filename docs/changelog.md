@@ -5856,3 +5856,21 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **架构备注**：StagingCountBadge 独立 Client Component，Server Component 页面无需 async；条件按钮仅在对应状态下渲染，不增加通常行的按钮密度
+
+---
+
+## CHG-401 — P0-A：提取 VideoIndexSyncService + 统一 ES 同步入口 + reconcile job
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-01
+- **变更文件**：
+  - `src/api/services/VideoIndexSyncService.ts`（新建，统一 ES 同步逻辑）
+  - `src/api/services/VideoService.ts`（删除 private indexToES，改用 VideoIndexSyncService）
+  - `src/api/services/StagingPublishService.ts`（同上，同时修复错误 index 名 'videos' → 'resovo_videos'）
+  - `src/api/services/CrawlerService.ts`（同上）
+  - `src/api/workers/maintenanceWorker.ts`（新增 reconcile-search-index job type）
+  - `src/api/workers/maintenanceScheduler.ts`（新增 24h reconcile 定时器）
+  - `tests/unit/api/videoIndexSync.test.ts`（新建，7 个测试）
+  - `docs/stability_fix_plan_20260414.md`（新建，本批次方案文档）
+- **测试覆盖**：7 新增单元测试全部通过；全量 968 tests（13 pre-existing failures 无变化）
+- **架构备注**：VideoIndexSyncService 只做 upsert，不做 remove（SearchService 已有 is_published=true 过滤保证前台安全）；reconcile job 批量补全 approved+public+published 视频的 ES 索引，每 24h 运行

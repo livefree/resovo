@@ -1,6 +1,7 @@
 /**
  * StagingPublishService.ts — 暂存发布服务
  * CHG-383: 就绪检查 + 单条/批量发布逻辑
+ * CHG-401: ES 同步改用 VideoIndexSyncService
  */
 
 import type { Pool } from 'pg'
@@ -8,6 +9,7 @@ import type { Client } from '@elastic/elasticsearch'
 import * as stagingQueries from '@/api/db/queries/staging'
 import * as videoQueries from '@/api/db/queries/videos'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
+import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 
 export interface ReadinessResult {
   ready: boolean
@@ -15,10 +17,16 @@ export interface ReadinessResult {
 }
 
 export class StagingPublishService {
+  private readonly indexSync?: VideoIndexSyncService
+
   constructor(
     private readonly db: Pool,
     private readonly es?: Client,
-  ) {}
+  ) {
+    if (es) {
+      this.indexSync = new VideoIndexSyncService(db, es)
+    }
+  }
 
   /** 从 system_settings 读取自动发布规则 */
   async getRules(): Promise<stagingQueries.StagingPublishRules> {
@@ -89,9 +97,7 @@ export class StagingPublishService {
       reviewedBy: publishedBy,
     })
     if (!row) return false
-    if (this.es) {
-      void this.indexToES(videoId)
-    }
+    void this.indexSync?.syncVideo(videoId)
     return true
   }
 
@@ -109,7 +115,7 @@ export class StagingPublishService {
         })
         if (row) {
           published++
-          if (this.es) void this.indexToES(id)
+          void this.indexSync?.syncVideo(id)
         } else {
           skipped++
         }
@@ -127,26 +133,4 @@ export class StagingPublishService {
     return { published, skipped }
   }
 
-  private async indexToES(videoId: string): Promise<void> {
-    if (!this.es) return
-    try {
-      const result = await this.db.query<{
-        id: string; title: string; type: string
-        review_status: string; visibility_status: string; is_published: boolean
-      }>(
-        `SELECT id, title, type, review_status, visibility_status, is_published
-         FROM videos WHERE id = $1`,
-        [videoId],
-      )
-      const v = result.rows[0]
-      if (!v) return
-      await this.es.index({
-        index: 'videos',
-        id: v.id,
-        document: v,
-      })
-    } catch {
-      // ES 同步失败不影响主流程
-    }
-  }
 }

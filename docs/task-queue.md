@@ -5962,3 +5962,54 @@
   - moderationStats.test.ts：mock @/api/db/queries/systemSettings（getSetting）；分页断言改用 objectContaining
   - StagingTable.test.tsx（新建）：13 用例覆盖 CHG-396 readiness tab、type/siteKey filter、isAdmin 按钮可见性
 - **完成备注**：全量 npm test -- --run：88 测试文件 / 798 测试全部通过。M1 质量状态由"有残留风险"升级为"全量验证闭环"。
+
+---
+
+## [SEQ-20260414-01] 稳定性修复批次（P0–P3）
+
+- **状态**：🔄 执行中
+- **创建时间**：2026-04-14 00:00
+- **最后更新时间**：2026-04-14 00:00
+- **目标**：修复上架/下架 ES 不一致、前台 inactive 源可见、孤岛 Tab 500、聚合状态延迟等积累缺陷
+- **范围**：VideoService / StagingPublishService / CrawlerService / verifyWorker / maintenanceScheduler / PlayerShell / admin routes
+- **依赖**：无（独立修复批次）
+- **方案文档**：`docs/stability_fix_plan_20260414.md`
+
+### 任务列表（按执行顺序）
+
+1. CHG-401 — P0-A：提取 VideoIndexSyncService + 统一 ES 同步入口 + reconcile job（状态：✅ 已完成）
+   - 创建时间：2026-04-14 00:00
+   - 实际开始：2026-04-14 00:00
+   - 验收要点：approve_and_publish 后前台搜索立即可见；unpublish 后前台不再搜到；元数据改后 ES 同步更新；reconcile job 有日志
+
+2. CHG-402 — P0-B：前台隐藏 inactive 源 + PlayerShell 空态 UI（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 00:00
+   - 验收要点：全部源 inactive 时前台显示"暂无可用播放源"；后台审核台 inactive 源有标识
+
+3. CHG-403 — P0-C：orphan-videos 503 MIGRATION_PENDING 友好报错（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 00:00
+   - 验收要点：表不存在时返回 503+MIGRATION_PENDING；表存在时正常返回
+
+4. CHG-404 — P0-D：verifyWorker 完成后即时同步 source_check_status（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 00:00
+   - 验收要点：单条验证完成后 source_check_status 立即更新
+
+5. CHG-405 — P1：crawler_sites.display_name + 线路命名重构（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 00:00
+   - 验收要点：bfzym3u8/1080zyk 不再直接显示；前台展示中文名
+
+6. CHG-406 — P1：源健康检验语义重构（UI 文案 + m3u8 GET fallback）（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 00:00
+   - 验收要点：后台不再将 HEAD 成功描述为"可播放"；m3u8 HEAD 失败时 GET fallback
+
+7. CHG-407 — P2：审核台交互修复（分类标签 + 豆瓣说明 + 写入 diff）（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 00:00
+   - 验收要点：genres 标签可复选可取消；豆瓣状态说明文案正确
+
+8. CHG-408 — P2：调度器状态展示 + 文档修正（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 00:00
+   - 验收要点：后台可见调度器启用状态；verify-published-sources 频率文档统一为 60min
+
+9. CHG-409 — P3：补全 P0–P1 修复的单元测试（状态：⬜ 待开始）
+   - 创建时间：2026-04-14 00:00
+   - 验收要点：新增测试全部通过；全量 npm test -- --run 通过
