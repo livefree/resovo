@@ -247,6 +247,11 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
             title={video.title}
             coverUrl={video.cover_url}
           />
+          {groupedLines.length === 0 && !loading && (
+            <div className="text-xs text-[var(--muted)]" data-testid="moderation-no-active-source">
+              暂无活跃播放源（inactive 源可在源健康面板查看）
+            </div>
+          )}
           {groupedLines.length > 0 && (
             <div className="space-y-1" data-testid="moderation-source-selector">
               <div className="flex items-center justify-between">

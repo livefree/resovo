@@ -364,7 +364,9 @@ export function PlayerShell({ slug }: PlayerShellProps) {
                   {video.episodeCount > 1 && (
                     <span className="text-xs">第 {currentEpisode} 集</span>
                   )}
-                  <span className="text-xs mt-1">播放源暂时不可用，请切换线路</span>
+                  <span className="text-xs mt-1">
+                    {sources.length === 0 ? '暂无可用播放源' : '播放源暂时不可用，请切换线路'}
+                  </span>
                 </div>
               )}
             </div>

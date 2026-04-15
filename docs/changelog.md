@@ -5874,3 +5874,15 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/stability_fix_plan_20260414.md`（新建，本批次方案文档）
 - **测试覆盖**：7 新增单元测试全部通过；全量 968 tests（13 pre-existing failures 无变化）
 - **架构备注**：VideoIndexSyncService 只做 upsert，不做 remove（SearchService 已有 is_published=true 过滤保证前台安全）；reconcile job 批量补全 approved+public+published 视频的 ES 索引，每 24h 运行
+
+---
+
+## CHG-402 — P0-B：前台隐藏 inactive 源 + PlayerShell 空态 UI
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-01
+- **变更文件**：
+  - `src/components/player/PlayerShell.tsx`（sources 为空时显示"暂无可用播放源"，而非错误引导"请切换线路"）
+  - `src/components/admin/moderation/ModerationDetail.tsx`（无活跃源时显示"暂无活跃播放源"提示）
+- **测试覆盖**：API 层过滤已有测试覆盖；UI 层为视觉修复，无新增测试
+- **架构备注**：API 层（findActiveSourcesByVideoId）过滤 is_active=true AND deleted_at IS NULL 已正确，本次只修复 UI 空态文案
