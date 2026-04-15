@@ -6138,14 +6138,17 @@
      - 新建 `scripts/import-douban-people.ts`，幂等导入 person.csv，支持 --limit / --dry-run / --file
      - typecheck 通过；全量测试通过（pre-existing 失败不变）
 
-3. META-03 — P2：video_external_refs 关联表建立（状态：⬜ 待开始）
+3. META-03 — P2：video_external_refs 关联表建立（状态：✅ 已完成）
    - 创建时间：2026-04-14 19:30
+   - 实际开始：2026-04-14 20:10
+   - 完成时间：2026-04-14 20:20
    - 依赖：META-01 完成
    - 验收要点：
-     - Migration：新建 `video_external_refs`（id UUID PK / video_id UUID FK → videos.id / provider TEXT CHECK('douban','tmdb','bangumi','imdb') / external_id TEXT / external_work_id UUID nullable FK → external_data.douban_entries.id / match_status TEXT CHECK('auto_matched','manual_confirmed','candidate','rejected') / match_method TEXT / confidence NUMERIC(4,2) / is_primary BOOLEAN / linked_by TEXT / linked_at TIMESTAMPTZ / notes TEXT）
-     - 唯一索引：(video_id, provider)（每视频每来源只允许一个 primary）
-     - externalData.ts 新增 upsertVideoExternalRef / findVideoExternalRef 查询函数
-     - typecheck + 单元测试通过
+     - Migration：新建 `video_external_refs`（id UUID PK / video_id UUID FK / provider CHECK / external_id / match_status CHECK / match_method / confidence NUMERIC(4,2) / is_primary BOOLEAN / linked_by / linked_at / notes）
+     - 唯一部分索引：(video_id, provider) WHERE is_primary=true
+     - externalData.ts 新增 upsertVideoExternalRef / findPrimaryVideoExternalRef 查询函数
+     - 9 项单元测试全部通过；typecheck 通过
+   - 备注：未引入 external_work_id FK（该字段依赖 META-04 的统一 ExternalWork 实体，当前先用 external_id 文本绑定即可，保持简洁）
 
 4. META-04 — P3：ExternalSubjectCandidate 统一模型 + 两个 mapper（状态：⬜ 待开始）
    - 创建时间：2026-04-14 19:30

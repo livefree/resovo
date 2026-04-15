@@ -6065,3 +6065,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/architecture.md`（douban_people 表说明 + 迁移列表更新）
 - **测试覆盖**：typecheck 通过；全量测试通过（douban.test.ts 6 项失败为 pre-existing buildApp() 需要 DB 环境，与本次变更无关）
 - **架构备注**：birth 存 TEXT（与 release_date 统一，CSV 格式不保证标准 DATE）；name_zh 字段额外保留 CSV NAME_ZH 列（原计划未列出，但字段存在且有价值）
+
+---
+
+## META-03 — video_external_refs 关联表建立
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-05
+- **变更文件**：
+  - `src/api/db/migrations/041_video_external_refs.sql`（新建：video_external_refs 表；唯一部分索引 (video_id, provider) WHERE is_primary=true；video_id/provider+external_id 普通索引；DO $$ 验证块）
+  - `src/api/db/queries/externalData.ts`（新增类型 ExternalRefProvider / ExternalRefMatchStatus / VideoExternalRef / UpsertVideoExternalRefInput；新增 upsertVideoExternalRef() + findPrimaryVideoExternalRef()）
+  - `tests/unit/api/externalData.test.ts`（新建：9 项测试，覆盖正常写入/confidence 转换/可选字段默认值/SQL 内容断言/查询 null 返回/参数绑定）
+  - `docs/architecture.md`（5.6 节内外部关联表说明）
+- **测试覆盖**：9 项新增测试全部通过；typecheck 通过
+- **架构备注**：未引入 external_work_id FK（规划中的字段，依赖 META-04 ExternalWork 统一实体，当前用 external_id 文本绑定已足够，避免过早依赖）
