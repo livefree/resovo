@@ -5937,3 +5937,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/components/admin/moderation/ModerationList.test.tsx`（更新 source-badge 断言文案）
 - **测试覆盖**：全量测试通过（仅预存 13 failures 无变化）
 - **架构备注**：GET fallback 只用于 .m3u8 URL；GET 200 时验证 content-type 包含 mpegurl，避免把非 HLS 内容误判为有效
+
+---
+
+## CHG-407 — P2：审核台交互修复（豆瓣状态说明 + 写入 diff 提示）
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-01
+- **变更文件**：
+  - `src/components/admin/moderation/ModerationDoubanBlock.tsx`（顶部新增 statusHint 说明文案；candidate 按钮文案"确认当前候选"→"应用此豆瓣条目"、"忽略"→"标记为不匹配"；搜索结果条目按钮"确认"→"应用此豆瓣条目"；新增写入前覆盖提示）
+- **测试覆盖**：typecheck+lint 通过；无新增测试（UI 文案修改）
+- **架构备注**：genres controlled multiselect 已在 ModerationBasicInfoBlock.tsx 中正确实现（localGenres + handleGenreToggle），无需修改；豆瓣 diff 仅展示文案提示，不依赖额外 API 字段
