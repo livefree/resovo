@@ -5969,7 +5969,7 @@
 
 - **状态**：🔄 执行中
 - **创建时间**：2026-04-14 00:00
-- **最后更新时间**：2026-04-14 00:00
+- **最后更新时间**：2026-04-14 17:35
 - **目标**：修复上架/下架 ES 不一致、前台 inactive 源可见、孤岛 Tab 500、聚合状态延迟等积累缺陷
 - **范围**：VideoService / StagingPublishService / CrawlerService / verifyWorker / maintenanceScheduler / PlayerShell / admin routes
 - **依赖**：无（独立修复批次）
@@ -5990,8 +5990,10 @@
    - 创建时间：2026-04-14 00:00
    - 验收要点：表不存在时返回 503+MIGRATION_PENDING；表存在时正常返回
 
-4. CHG-404 — P0-D：verifyWorker 完成后即时同步 source_check_status（状态：⬜ 待开始）
+4. CHG-404 — P0-D：verifyWorker 完成后即时同步 source_check_status（状态：✅ 已完成）
    - 创建时间：2026-04-14 00:00
+   - 实际开始：2026-04-14 00:00
+   - 完成时间：2026-04-14 17:35
    - 验收要点：单条验证完成后 source_check_status 立即更新
 
 5. CHG-405 — P1：crawler_sites.display_name + 线路命名重构（状态：⬜ 待开始）

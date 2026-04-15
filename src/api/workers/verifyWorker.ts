@@ -8,6 +8,7 @@ import type Bull from 'bull'
 import { verifyQueue } from '@/api/lib/queue'
 import { db } from '@/api/lib/postgres'
 import { updateSourceActiveStatus } from '@/api/db/queries/sources'
+import { syncSourceCheckStatusFromSources } from '@/api/db/queries/videos'
 
 // ── 任务类型 ──────────────────────────────────────────────────────
 
@@ -66,6 +67,20 @@ async function processVerifyJob(job: Bull.Job<VerifyJobData>): Promise<VerifyJob
   const { isActive, statusCode } = await checkUrl(url)
 
   await updateSourceActiveStatus(db, sourceId, isActive)
+
+  // CHG-404: 验证完成后即时聚合 source_check_status，无需等待 maintenance job
+  try {
+    const row = await db.query<{ video_id: string }>(
+      'SELECT video_id FROM video_sources WHERE id = $1',
+      [sourceId],
+    )
+    if (row.rows[0]) {
+      await syncSourceCheckStatusFromSources(db, row.rows[0].video_id)
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    process.stderr.write(`[verify-worker] syncSourceCheckStatus failed for source ${sourceId}: ${msg}\n`)
+  }
 
   process.stderr.write(
     `[verify-worker] source ${sourceId}: ${url} → ${isActive ? 'active' : 'inactive'} (${statusCode ?? 'timeout'})\n`

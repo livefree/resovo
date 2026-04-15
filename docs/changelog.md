@@ -5897,3 +5897,15 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/api/routes/admin/content.ts`（GET/POST orphan-videos catch 识别 PG 错误码 42P01，返回 503+MIGRATION_PENDING）
 - **测试覆盖**：无新增测试（需 DB 环境，计划在 CHG-409 补充集成测试）
 - **架构备注**：migration 037 文件已存在，只修复了运行时缺表时的错误提示，不改变 migration 执行机制
+
+---
+
+## CHG-404 — P0-D：verifyWorker 完成后即时同步 source_check_status
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-01
+- **变更文件**：
+  - `src/api/workers/verifyWorker.ts`（processVerifyJob 内 updateSourceActiveStatus 之后，立即查 video_id 并调用 syncSourceCheckStatusFromSources；失败时仅 stderr 日志，不中断 worker）
+  - `tests/unit/api/verifyWorkerSourceCheckSync.test.ts`（新建，3 个测试）
+- **测试覆盖**：3 新增单元测试全部通过（正常路径、无 video_id 跳过、syncSourceCheckStatus 异常不中断）
+- **架构备注**：syncSourceCheckStatusFromSources 是已有共享函数，本次只新增调用点；异常用 try/catch 吸收，保证 worker 稳定性
