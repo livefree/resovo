@@ -5962,3 +5962,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `src/components/admin/system/site-settings/SiteSettings.tsx`（在"维护调度器状态"Section 中挂载 SchedulerStatusPanel）
 - **测试覆盖**：typecheck+lint 通过；无新增测试（API 端只读接口）
 - **架构备注**：getSchedulerStatus 通过检查 timer 是否 != null 判断启动状态；MAINTENANCE_SCHEDULER_ENABLED=false 时所有调度器 enabled=false 并显示警告横幅
+
+---
+
+## CHG-409 — P3：补全 P0–P1 修复的单元测试
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-01
+- **变更文件**：
+  - `tests/unit/lib/lineDisplayName.test.ts`（新建，19 个测试覆盖 CHG-405 新增的 PROVIDER_PATTERNS 爬虫 key 映射和 resolveSourceDisplayName 函数）
+- **测试覆盖**：19 新增单元测试全部通过；全量 990 tests 通过（13 pre-existing failures 无变化）
+- **架构备注**：SEQ-20260414-01 所有 9 个任务（CHG-401 至 CHG-409）全部完成
