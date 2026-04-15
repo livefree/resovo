@@ -73,18 +73,18 @@ describe('ModerationList', () => {
     expect(screen.getByTestId('douban-badge').textContent).toBe('✗未匹配')
   })
 
-  it('源检验 ok 时显示可达数量', async () => {
+  it('源检验 ok 时显示检测通过数量', async () => {
     getMock.mockResolvedValue(makeApiResponse([makeRow({ sourceCheckStatus: 'ok', activeSourceCount: 5 })]))
     render(<ModerationList selectedId={null} onSelect={vi.fn()} />)
     await screen.findByText('测试视频')
-    expect(screen.getByTestId('source-badge').textContent).toBe('●5可达')
+    expect(screen.getByTestId('source-badge').textContent).toBe('●5检测通过')
   })
 
-  it('源检验 all_dead 显示 ✕全失效', async () => {
+  it('源检验 all_dead 显示 ✕全部异常', async () => {
     getMock.mockResolvedValue(makeApiResponse([makeRow({ sourceCheckStatus: 'all_dead' })]))
     render(<ModerationList selectedId={null} onSelect={vi.fn()} />)
     await screen.findByText('测试视频')
-    expect(screen.getByTestId('source-badge').textContent).toBe('✕全失效')
+    expect(screen.getByTestId('source-badge').textContent).toBe('✕全部异常')
   })
 
   it('meta_score 显示为百分比', async () => {

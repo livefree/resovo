@@ -5924,3 +5924,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/architecture.md`（5.3 节补充 display_name 字段说明）
 - **测试覆盖**：无新增测试（纯配置/类型变更，运行时依赖 migration 执行）；typecheck + lint + 全量测试通过
 - **架构备注**：短期方案——扩展 PROVIDER_PATTERNS 即可覆盖已知爬虫 key；display_name 字段供将来管理员在后台编辑，resolveSourceDisplayName 优先使用 display_name，否则 fallback 到 normalizeProviderName
+
+---
+
+## CHG-406 — P1：源健康检验语义重构（UI 文案 + m3u8 GET fallback）
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-01
+- **变更文件**：
+  - `src/components/admin/moderation/ModerationList.tsx`（SourceBadge 文案：可达→检测通过，部分可达→部分异常，全失效→全部异常，未检验→未检测）
+  - `src/api/workers/verifyWorker.ts`（checkUrl 提取 fetchWithTimeout；.m3u8 URL HEAD 失败后追加 GET fallback，验证 content-type 含 mpegurl）
+  - `tests/unit/components/admin/moderation/ModerationList.test.tsx`（更新 source-badge 断言文案）
+- **测试覆盖**：全量测试通过（仅预存 13 failures 无变化）
+- **架构备注**：GET fallback 只用于 .m3u8 URL；GET 200 时验证 content-type 包含 mpegurl，避免把非 HLS 内容误判为有效

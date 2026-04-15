@@ -38,18 +38,41 @@ const TIMEOUT_MS = 10_000  // 10 秒超时
 
 /**
  * 发送 HEAD 请求检测 URL 可达性。
- * 200 → active=true；4xx/5xx/超时 → active=false
+ * 200 → active=true；4xx/5xx/超时 → active=false。
+ * CHG-406: 对 .m3u8 URL，HEAD 失败后追加 GET fallback
+ * （部分防爬站点屏蔽 HEAD 但实际可播）。
  */
 export async function checkUrl(url: string): Promise<{ isActive: boolean; statusCode: number | null }> {
+  const headResult = await fetchWithTimeout(url, 'HEAD')
+  if (headResult.isActive) return headResult
+
+  // m3u8 GET fallback：HEAD 失败时尝试 GET 验证内容类型
+  if (/\.m3u8(\?.*)?$/i.test(url)) {
+    const getResult = await fetchWithTimeout(url, 'GET')
+    if (getResult.isActive) return getResult
+  }
+
+  return headResult
+}
+
+async function fetchWithTimeout(
+  url: string,
+  method: 'HEAD' | 'GET',
+): Promise<{ isActive: boolean; statusCode: number | null }> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
   try {
     const res = await fetch(url, {
-      method: 'HEAD',
+      method,
       signal: controller.signal,
       headers: { 'User-Agent': 'Resovo-Verifier/1.0' },
     })
+    if (method === 'GET' && res.ok) {
+      const ct = res.headers.get('content-type') ?? ''
+      const isM3u8 = ct.includes('mpegurl') || ct.includes('x-mpegurl') || ct.includes('vnd.apple')
+      return { isActive: isM3u8, statusCode: res.status }
+    }
     return { isActive: res.ok, statusCode: res.status }
   } catch {
     return { isActive: false, statusCode: null }

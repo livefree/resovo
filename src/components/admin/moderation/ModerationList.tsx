@@ -96,10 +96,10 @@ function DoubanBadge({ status }: { status: DoubanStatus }) {
 }
 
 function SourceBadge({ status, count }: { status: SourceCheckStatus; count: number }) {
-  if (status === 'ok')       return <span className="text-[10px] text-[var(--success,#22c55e)]" data-testid="source-badge">●{count}可达</span>
-  if (status === 'partial')  return <span className="text-[10px] text-[var(--warning,#f59e0b)]" data-testid="source-badge">⚠部分可达</span>
-  if (status === 'all_dead') return <span className="text-[10px] text-[var(--error,#ef4444)]" data-testid="source-badge">✕全失效</span>
-  return <span className="text-[10px] text-[var(--muted)]" data-testid="source-badge">○未检验</span>
+  if (status === 'ok')       return <span className="text-[10px] text-[var(--success,#22c55e)]" data-testid="source-badge">●{count}检测通过</span>
+  if (status === 'partial')  return <span className="text-[10px] text-[var(--warning,#f59e0b)]" data-testid="source-badge">⚠部分异常</span>
+  if (status === 'all_dead') return <span className="text-[10px] text-[var(--error,#ef4444)]" data-testid="source-badge">✕全部异常</span>
+  return <span className="text-[10px] text-[var(--muted)]" data-testid="source-badge">○未检测</span>
 }
 
 function MetaScoreBadge({ score }: { score: number }) {
