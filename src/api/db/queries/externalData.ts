@@ -106,6 +106,119 @@ export async function findDoubanByTitleNorm(
   }))
 }
 
+/**
+ * META-05: 按别名搜索豆瓣条目（title_norm 无结果时的 fallback）
+ * 使用原始标题文本做数组包含匹配，最多返回 5 条
+ */
+export async function findDoubanByAlias(
+  db: Pool,
+  title: string,
+  year: number | null
+): Promise<DoubanEntryMatch[]> {
+  const result = await db.query<{
+    douban_id: string; title: string; year: number | null
+    rating: string | null; description: string | null; cover_url: string | null
+    directors: string[]; cast: string[]; writers: string[]; genres: string[]; country: string | null
+    aliases: string[]; imdb_id: string | null; languages: string[]
+    duration_minutes: number | null; tags: string[]; douban_votes: number | null
+    regions: string[]; release_date: string | null
+    actor_ids: string[]; director_ids: string[]; official_site: string | null
+  }>(
+    `SELECT douban_id, title, year, rating, description, cover_url,
+            directors, cast, writers, genres, country,
+            aliases, imdb_id, languages, duration_minutes, tags, douban_votes,
+            regions, release_date, actor_ids, director_ids, official_site
+     FROM external_data.douban_entries
+     WHERE $1::TEXT = ANY(aliases)
+     ORDER BY
+       CASE WHEN $2::INT IS NULL THEN 0
+            WHEN year = $2::INT THEN 0
+            WHEN year IS NOT NULL AND ABS(year - $2::INT) <= 1 THEN 1
+            ELSE 2 END,
+       rating DESC NULLS LAST
+     LIMIT 5`,
+    [title, year]
+  )
+  return result.rows.map((r) => ({
+    doubanId: r.douban_id,
+    title: r.title,
+    year: r.year,
+    rating: r.rating ? Number(r.rating) : null,
+    description: r.description,
+    coverUrl: r.cover_url,
+    directors: r.directors ?? [],
+    cast: r.cast ?? [],
+    writers: r.writers ?? [],
+    genres: r.genres ?? [],
+    country: r.country,
+    aliases: r.aliases ?? [],
+    imdbId: r.imdb_id,
+    languages: r.languages ?? [],
+    durationMinutes: r.duration_minutes,
+    tags: r.tags ?? [],
+    doubanVotes: r.douban_votes,
+    regions: r.regions ?? [],
+    releaseDate: r.release_date,
+    actorIds: r.actor_ids ?? [],
+    directorIds: r.director_ids ?? [],
+    officialSite: r.official_site,
+  }))
+}
+
+/**
+ * META-05: 按 IMDB ID 精确匹配豆瓣条目（最高置信度路径）
+ * 返回第一条命中记录，无则 null
+ */
+export async function findDoubanByImdbId(
+  db: Pool,
+  imdbId: string
+): Promise<DoubanEntryMatch | null> {
+  const result = await db.query<{
+    douban_id: string; title: string; year: number | null
+    rating: string | null; description: string | null; cover_url: string | null
+    directors: string[]; cast: string[]; writers: string[]; genres: string[]; country: string | null
+    aliases: string[]; imdb_id: string | null; languages: string[]
+    duration_minutes: number | null; tags: string[]; douban_votes: number | null
+    regions: string[]; release_date: string | null
+    actor_ids: string[]; director_ids: string[]; official_site: string | null
+  }>(
+    `SELECT douban_id, title, year, rating, description, cover_url,
+            directors, cast, writers, genres, country,
+            aliases, imdb_id, languages, duration_minutes, tags, douban_votes,
+            regions, release_date, actor_ids, director_ids, official_site
+     FROM external_data.douban_entries
+     WHERE imdb_id = $1
+     LIMIT 1`,
+    [imdbId]
+  )
+  if (!result.rows[0]) return null
+  const r = result.rows[0]
+  return {
+    doubanId: r.douban_id,
+    title: r.title,
+    year: r.year,
+    rating: r.rating ? Number(r.rating) : null,
+    description: r.description,
+    coverUrl: r.cover_url,
+    directors: r.directors ?? [],
+    cast: r.cast ?? [],
+    writers: r.writers ?? [],
+    genres: r.genres ?? [],
+    country: r.country,
+    aliases: r.aliases ?? [],
+    imdbId: r.imdb_id,
+    languages: r.languages ?? [],
+    durationMinutes: r.duration_minutes,
+    tags: r.tags ?? [],
+    doubanVotes: r.douban_votes,
+    regions: r.regions ?? [],
+    releaseDate: r.release_date,
+    actorIds: r.actor_ids ?? [],
+    directorIds: r.director_ids ?? [],
+    officialSite: r.official_site,
+  }
+}
+
 // ── Bangumi 条目查询 ──────────────────────────────────────────────
 
 /**

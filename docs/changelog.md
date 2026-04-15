@@ -6094,3 +6094,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/lib/externalCandidateMappers.test.ts`（新建：16 项测试，覆盖基础字段/人物 id 映射/空值转 undefined/actors fallback/rate 字符串转数字/confidence 覆盖）
 - **测试覆盖**：16 项新增测试全部通过；typecheck 通过
 - **架构备注**：ExternalRecommendation 额外新增（用户原方案未列出，但 adapter 有 recommendations 字段，顺手一致性处理）；confidence/confidenceBreakdown 由调用方填入，mapper 不承担匹配逻辑
+
+## [META-05] MetadataEnrichService 重构（多字段本地召回 + 置信度决策 + video_external_refs）
+- **完成时间**：2026-04-14
+- **记录时间**：2026-04-14 23:50
+- **修改文件**：
+  - `src/api/services/MetadataEnrichService.ts` — 重构 step1：新增 alias fallback（title_norm 无结果时搜 aliases[]）；置信度决策（≥0.85 auto_matched/[0.60,0.85) candidate/<0.60 跳过）；step2 补写 video_external_refs；导出 computeLocalDoubanConfidence() 纯函数
+  - `tests/unit/api/metadataEnrich.test.ts` — 更新 vi.mock 工厂（新增 findDoubanByAlias / findDoubanByImdbId / upsertVideoExternalRef mock）；扩展 makeDoubanMatch() 含 11 个 META-01 字段；新增 alias fallback 路径测试、refs 写入断言、computeLocalDoubanConfidence 单元测试共 20 项
+- **新增依赖**：无
+- **数据库变更**：无（video_external_refs 表已在 META-03 迁移创建）
+- **注意事项**：confidence 阈值设计保证向后兼容——title+年份相同=0.92≥0.85，title+年差≥2=0.70∈[0.60,0.85) → candidate 不走 Step2，行为与原版语义一致；alias base 0.65+年份相同=0.87≥0.85 可 auto_matched

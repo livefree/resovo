@@ -1,10 +1,13 @@
 /**
  * MetadataEnrichService.ts — 自动元数据丰富服务
  * CHG-385 Phase 3：入库后自动豆瓣匹配 + Bangumi 补充 + 源检验 + meta_score
+ * META-05：Step1 改为多字段召回（title_norm → alias fallback）+ 置信度决策
+ *           + video_external_refs 写入
  *
  * 五步流程：
- *   Step1: 本地 external_data.douban_entries 精确匹配
- *   Step2: fallback → douban 网络搜索（置信度分级）
+ *   Step1: 本地 external_data.douban_entries 多字段召回（title_norm → alias）
+ *          置信度 ≥0.85 → auto_matched 写 catalog；[0.60,0.85) → candidate 仅写 refs
+ *   Step2: 本地无结果 fallback → douban 网络搜索（置信度分级）
  *   Step3: type=anime 时查 external_data.bangumi_entries
  *   Step4: 源 HEAD 检验，写 source_check_status
  *   Step5: 计算 meta_score（title/cover/description/genres/year/type 各有权重）
@@ -21,6 +24,7 @@ import * as externalDataQueries from '@/api/db/queries/externalData'
 import * as sourcesQueries from '@/api/db/queries/sources'
 import * as videosQueries from '@/api/db/queries/videos'
 import * as catalogQueries from '@/api/db/queries/mediaCatalog'
+import type { DoubanEntryMatch } from '@/api/db/queries/externalData'
 
 // ── 公开接口 ──────────────────────────────────────────────────────
 
@@ -34,7 +38,11 @@ export interface EnrichJobData {
 
 // ── 内部常量 ──────────────────────────────────────────────────────
 
-/** 豆瓣 Step2 网络搜索置信度阈值 */
+/** 置信度阈值：≥ AUTO_MATCH → 写 catalog；≥ CANDIDATE → 仅写 refs */
+const CONFIDENCE_AUTO_MATCH = 0.85
+const CONFIDENCE_CANDIDATE = 0.60
+
+/** 豆瓣 Step2 网络搜索置信度阈值（沿用原有语义） */
 const MATCH_THRESHOLD = 0.75
 const CANDIDATE_THRESHOLD = 0.45
 
@@ -60,14 +68,13 @@ export class MetadataEnrichService {
 
     let doubanStatus: DoubanStatus = 'unmatched'
 
-    // Step 1: 本地豆瓣匹配
-    const step1 = await this.step1LocalDouban(catalogId, titleNorm, year)
+    // Step 1: 本地豆瓣多字段召回
+    const step1 = await this.step1LocalDouban(videoId, catalogId, titleNorm, title, year)
     if (step1 !== null) {
-      // 本地有条目（matched 或 candidate），不再走网络搜索
       doubanStatus = step1
     } else {
       // Step 2: 本地无任何匹配，fallback 至网络搜索
-      const step2 = await this.step2NetworkSearch(catalogId, title, year)
+      const step2 = await this.step2NetworkSearch(videoId, catalogId, title, year)
       if (step2 !== null) doubanStatus = step2
     }
 
@@ -82,7 +89,6 @@ export class MetadataEnrichService {
     // Step 5: 计算 meta_score
     const metaScore = await this.step5MetaScore(catalogId)
 
-    // 写入最终状态
     await videosQueries.updateVideoEnrichStatus(this.db, videoId, { doubanStatus, metaScore })
     await videosQueries.updateVideoSourceCheckStatus(this.db, videoId, sourceStatus)
   }
@@ -90,38 +96,61 @@ export class MetadataEnrichService {
   // ── Step 1 ───────────────────────────────────────────────────────
 
   private async step1LocalDouban(
+    videoId: string,
     catalogId: string,
     titleNorm: string,
-    year: number | null
+    originalTitle: string,
+    year: number | null,
   ): Promise<DoubanStatus | null> {
-    const matches = await externalDataQueries.findDoubanByTitleNorm(this.db, titleNorm, year)
+    // 1a: title_normalized 精确匹配
+    let matches = await externalDataQueries.findDoubanByTitleNorm(this.db, titleNorm, year)
+    let matchBy: 'title' | 'alias' = 'title'
+
+    // 1b: alias fallback（title_norm 无结果时用原始标题搜 aliases[]）
+    if (matches.length === 0) {
+      matches = await externalDataQueries.findDoubanByAlias(this.db, originalTitle, year)
+      matchBy = 'alias'
+    }
+
     if (matches.length === 0) return null
 
     const best = matches[0]
-    const yearMatch = !year || !best.year || Math.abs(best.year - year) <= 1
+    const { confidence, breakdown } = computeLocalDoubanConfidence(best, matchBy, year)
 
-    await this.catalogService.safeUpdate(catalogId, {
-      doubanId: best.doubanId,
-      rating: best.rating ?? undefined,
-      description: best.description ?? undefined,
-      coverUrl: best.coverUrl ?? undefined,
-      director: best.directors,
-      cast: best.cast,
-      writers: best.writers,
-      genres: best.genres.length > 0 ? mapDoubanGenres(best.genres) : undefined,
-      genresRaw: best.genres.length > 0 ? best.genres : undefined,
-      country: best.country ?? undefined,
-    }, 'douban')
+    if (confidence < CONFIDENCE_CANDIDATE) return null
 
-    return yearMatch ? 'matched' : 'candidate'
+    const matchStatus = confidence >= CONFIDENCE_AUTO_MATCH ? 'auto_matched' : 'candidate'
+
+    // 写 video_external_refs（无论 auto_matched 还是 candidate）
+    await this.writeExternalRef(videoId, best.doubanId, matchStatus, confidence, breakdown, matchBy)
+
+    // 仅 auto_matched 时写 catalog
+    if (matchStatus === 'auto_matched') {
+      await this.catalogService.safeUpdate(catalogId, {
+        doubanId: best.doubanId,
+        rating: best.rating ?? undefined,
+        description: best.description ?? undefined,
+        coverUrl: best.coverUrl ?? undefined,
+        director: best.directors,
+        cast: best.cast,
+        writers: best.writers,
+        genres: best.genres.length > 0 ? mapDoubanGenres(best.genres) : undefined,
+        genresRaw: best.genres.length > 0 ? best.genres : undefined,
+        country: best.country ?? undefined,
+      }, 'douban')
+      return 'matched'
+    }
+
+    return 'candidate'
   }
 
   // ── Step 2 ───────────────────────────────────────────────────────
 
   private async step2NetworkSearch(
+    videoId: string,
     catalogId: string,
     title: string,
-    year: number | null
+    year: number | null,
   ): Promise<DoubanStatus | null> {
     let candidates: Awaited<ReturnType<typeof searchDouban>>
     try {
@@ -150,11 +179,22 @@ export class MetadataEnrichService {
           genresRaw: detail.genres.length > 0 ? detail.genres : undefined,
           country: detail.countries[0] ?? undefined,
         }, 'douban')
+        await this.writeExternalRef(
+          videoId, detail.id, 'auto_matched',
+          best.score, { network_score: best.score }, 'network'
+        )
         return 'matched'
       }
     }
 
-    return best.score >= CANDIDATE_THRESHOLD ? 'candidate' : 'unmatched'
+    const status = best.score >= CANDIDATE_THRESHOLD ? 'candidate' : 'unmatched'
+    if (status === 'candidate') {
+      await this.writeExternalRef(
+        videoId, best.id, 'candidate',
+        best.score, { network_score: best.score }, 'network'
+      )
+    }
+    return status
   }
 
   // ── Step 3 ───────────────────────────────────────────────────────
@@ -162,13 +202,12 @@ export class MetadataEnrichService {
   private async step3Bangumi(
     catalogId: string,
     titleNorm: string,
-    year: number | null
+    year: number | null,
   ): Promise<void> {
     const matches = await externalDataQueries.findBangumiByTitleNorm(this.db, titleNorm, year)
     if (matches.length === 0) return
 
     const best = matches[0]
-    // Bangumi 补充：优先回填 description（若 catalog 尚无内容）
     await this.catalogService.safeUpdate(catalogId, {
       bangumiSubjectId: best.bangumiId,
       description: best.summary ?? undefined,
@@ -187,7 +226,6 @@ export class MetadataEnrichService {
     })
     if (sources.length === 0) return 'pending'
 
-    // 并发 HEAD 检验（分批避免超出并发上限）
     let activeCount = 0
     for (let i = 0; i < sources.length; i += SOURCE_CHECK_CONCURRENCY) {
       const chunk = sources.slice(i, i + SOURCE_CHECK_CONCURRENCY)
@@ -218,18 +256,85 @@ export class MetadataEnrichService {
     if (catalog.type && catalog.type !== 'other') score += 10
     return Math.min(100, score)
   }
+
+  // ── 辅助 ─────────────────────────────────────────────────────────
+
+  private async writeExternalRef(
+    videoId: string,
+    externalId: string,
+    matchStatus: 'auto_matched' | 'candidate',
+    confidence: number,
+    breakdown: Record<string, number>,
+    matchMethod: string,
+  ): Promise<void> {
+    try {
+      await externalDataQueries.upsertVideoExternalRef(this.db, {
+        videoId,
+        provider: 'douban',
+        externalId,
+        matchStatus,
+        matchMethod,
+        confidence,
+        isPrimary: matchStatus === 'auto_matched',
+        linkedBy: 'auto',
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[MetadataEnrichService] writeExternalRef failed for ${videoId}: ${msg}\n`)
+    }
+  }
 }
 
-// ── 工具函数 ──────────────────────────────────────────────────────
+// ── 纯函数工具 ─────────────────────────────────────────────────────
+
+/**
+ * META-05: 计算本地 dump 条目的置信度
+ *
+ * 基础分（匹配方式）：
+ *   title_norm 精确: 0.70
+ *   alias 精确:       0.65
+ *
+ * 年份加分：
+ *   diff == 0: +0.22
+ *   diff == 1: +0.17
+ *   diff >= 2: +0（不加分）
+ *   无年份:    +0
+ *
+ * 阈值：≥0.85 → auto_matched；[0.60,0.85) → candidate；<0.60 → 丢弃
+ */
+export function computeLocalDoubanConfidence(
+  entry: DoubanEntryMatch,
+  matchBy: 'title' | 'alias',
+  year: number | null,
+): { confidence: number; breakdown: Record<string, number> } {
+  const breakdown: Record<string, number> = {}
+
+  const base = matchBy === 'alias' ? 0.65 : 0.70
+  breakdown[matchBy] = base
+  let confidence = base
+
+  if (year !== null && entry.year !== null) {
+    const diff = Math.abs(entry.year - year)
+    if (diff === 0) {
+      breakdown.year_exact = 0.22
+      confidence += 0.22
+    } else if (diff === 1) {
+      breakdown.year_close = 0.17
+      confidence += 0.17
+    }
+    // diff >= 2: no bonus
+  }
+
+  return { confidence: Math.min(1, confidence), breakdown }
+}
 
 type Candidate = Awaited<ReturnType<typeof searchDouban>>[number]
-
 interface ScoredCandidate { id: string; score: number }
 
 function pickBestCandidate(
   title: string,
   year: number | null,
-  candidates: Candidate[]
+  candidates: Candidate[],
 ): ScoredCandidate | null {
   function similarity(a: string, b: string): number {
     const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, '')
@@ -246,13 +351,14 @@ function pickBestCandidate(
     for (const g of sa) if (sb.has(g)) intersection++
     return (2 * intersection) / (sa.size + sb.size)
   }
-  const normalize = (s: string) => s.toLowerCase().replace(/[（(][^）)]*[）)]/g, '').replace(/[^\p{L}\p{N}]/gu, '')
+  const normalize = (s: string) =>
+    s.toLowerCase().replace(/[（(][^）)]*[）)]/g, '').replace(/[^\p{L}\p{N}]/gu, '')
 
   let best: ScoredCandidate | null = null
   for (const item of candidates) {
     const titleSim = Math.max(
       similarity(normalize(title), normalize(item.title)),
-      similarity(normalize(title), normalize(item.sub_title ?? ''))
+      similarity(normalize(title), normalize(item.sub_title ?? '')),
     )
     const yearMatch = year && item.year ? (() => {
       const cy = parseInt(item.year); return Math.abs(cy - year)

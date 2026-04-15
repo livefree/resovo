@@ -6161,8 +6161,10 @@
      - 新增 `src/api/lib/externalCandidateMappers.ts`：mapDoubanDumpEntryToCandidate() + mapDoubanAdapterDetailsToCandidate()
      - 16 项单元测试全部通过；typecheck 通过
 
-5. META-05 — P3：MetadataEnrichService 重构（本地多字段召回 + 统一 candidate 决策）（状态：⬜ 待开始）
+5. META-05 — P3：MetadataEnrichService 重构（本地多字段召回 + 统一 candidate 决策）（状态：✅ 已完成）
    - 创建时间：2026-04-14 19:30
+   - 实际开始：2026-04-14 20:45
+   - 完成时间：2026-04-14 23:50
    - 依赖：META-04 完成
    - 验收要点：
      - MetadataEnrichService 不再直接面向 douban_entries 行写业务字段
