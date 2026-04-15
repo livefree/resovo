@@ -101,6 +101,8 @@ export const DEFAULT_INGEST_POLICY: IngestPolicy = {
 export interface CrawlerSite {
   key: string
   name: string
+  /** 对用户友好的中文展示名称（Migration 038）。未设置时前台 fallback 到 normalizeProviderName */
+  displayName: string | null
   apiUrl: string
   detail: string | null
   sourceType: CrawlerSiteType

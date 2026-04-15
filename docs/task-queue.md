@@ -5969,7 +5969,7 @@
 
 - **状态**：🔄 执行中
 - **创建时间**：2026-04-14 00:00
-- **最后更新时间**：2026-04-14 17:35
+- **最后更新时间**：2026-04-14 17:39
 - **目标**：修复上架/下架 ES 不一致、前台 inactive 源可见、孤岛 Tab 500、聚合状态延迟等积累缺陷
 - **范围**：VideoService / StagingPublishService / CrawlerService / verifyWorker / maintenanceScheduler / PlayerShell / admin routes
 - **依赖**：无（独立修复批次）
@@ -5996,8 +5996,10 @@
    - 完成时间：2026-04-14 17:35
    - 验收要点：单条验证完成后 source_check_status 立即更新
 
-5. CHG-405 — P1：crawler_sites.display_name + 线路命名重构（状态：⬜ 待开始）
+5. CHG-405 — P1：crawler_sites.display_name + 线路命名重构（状态：✅ 已完成）
    - 创建时间：2026-04-14 00:00
+   - 实际开始：2026-04-14 17:36
+   - 完成时间：2026-04-14 17:39
    - 验收要点：bfzym3u8/1080zyk 不再直接显示；前台展示中文名
 
 6. CHG-406 — P1：源健康检验语义重构（UI 文案 + m3u8 GET fallback）（状态：⬜ 待开始）

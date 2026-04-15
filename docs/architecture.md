@@ -136,6 +136,7 @@ resovo/
 ### 5.3 crawler_sites
 
 - 主键是 `key VARCHAR(100)`，不是 UUID。
+- `display_name VARCHAR(200)`：对用户友好的中文展示名称（Migration 038）。未设置时前台 fallback 到 `normalizeProviderName(source_name)`。
 - `is_adult` 控制成人源站标记。
 - `ingest_policy` 存站点级采集策略。
 

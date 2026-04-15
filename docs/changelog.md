@@ -5909,3 +5909,18 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/verifyWorkerSourceCheckSync.test.ts`（新建，3 个测试）
 - **测试覆盖**：3 新增单元测试全部通过（正常路径、无 video_id 跳过、syncSourceCheckStatus 异常不中断）
 - **架构备注**：syncSourceCheckStatusFromSources 是已有共享函数，本次只新增调用点；异常用 try/catch 吸收，保证 worker 稳定性
+
+---
+
+## CHG-405 — P1：crawler_sites.display_name + 线路命名重构
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-01
+- **变更文件**：
+  - `src/api/db/migrations/038_crawler_sites_display_name.sql`（新建，ADD COLUMN display_name + seed data for bfzy/1080zyk 等 8 个常用源站）
+  - `src/types/system.types.ts`（CrawlerSite 接口新增 displayName: string | null）
+  - `src/api/db/queries/crawlerSites.ts`（DbRow 新增 display_name；rowToSite 映射 displayName）
+  - `src/lib/line-display-name.ts`（PROVIDER_PATTERNS 新增 8 条爬虫 key 映射；新增 resolveSourceDisplayName 函数）
+  - `docs/architecture.md`（5.3 节补充 display_name 字段说明）
+- **测试覆盖**：无新增测试（纯配置/类型变更，运行时依赖 migration 执行）；typecheck + lint + 全量测试通过
+- **架构备注**：短期方案——扩展 PROVIDER_PATTERNS 即可覆盖已知爬虫 key；display_name 字段供将来管理员在后台编辑，resolveSourceDisplayName 优先使用 display_name，否则 fallback 到 normalizeProviderName

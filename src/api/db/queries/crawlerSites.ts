@@ -16,6 +16,7 @@ import type {
 interface DbRow {
   key: string
   name: string
+  display_name: string | null
   api_url: string
   detail: string | null
   source_type: string
@@ -39,6 +40,7 @@ function rowToSite(row: DbRow): CrawlerSite {
   return {
     key:             row.key,
     name:            row.name,
+    displayName:     row.display_name ?? null,
     apiUrl:          row.api_url,
     detail:          row.detail,
     sourceType:      row.source_type as CrawlerSite['sourceType'],

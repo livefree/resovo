@@ -9,6 +9,15 @@ const PROVIDER_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /tx[\s_-]*yun|tencent/i, label: '腾讯云' },
   { pattern: /quark/i, label: '夸克云' },
   { pattern: /bili|bilibili/i, label: '哔哩源' },
+  // CHG-405: 爬虫源站 key 映射（避免原始 key 暴露给用户）
+  { pattern: /bfzy|bfzym3u8|暴风/i, label: '暴风资源' },
+  { pattern: /1080zyk|1080p?zy/i, label: '1080P资源' },
+  { pattern: /lzzy|量子/i, label: '量子资源' },
+  { pattern: /jyzy|金鹰/i, label: '金鹰资源' },
+  { pattern: /wolongzy|卧龙/i, label: '卧龙资源' },
+  { pattern: /subo|速播/i, label: '速播资源' },
+  { pattern: /modu|魔都/i, label: '魔都资源' },
+  { pattern: /youzzy|优质/i, label: '优质资源' },
 ]
 
 const GENERIC_LINE_PATTERN = /^(line|线路|默认线路|备用线路|备用|route|source)\s*([0-9]+)?$/i
@@ -53,5 +62,18 @@ export function buildLineDisplayName(input: {
   const quality = input.quality?.trim()
   if (quality) return `${base} · ${quality}`
   return base
+}
+
+/**
+ * CHG-405: 优先使用 crawler_sites.display_name，
+ * 否则 fallback 到 normalizeProviderName(sourceName)，
+ * 最终 fallback 为 '未知线路'。
+ */
+export function resolveSourceDisplayName(
+  siteDisplayName: string | null | undefined,
+  sourceName: string | null | undefined,
+): string {
+  if (siteDisplayName?.trim()) return siteDisplayName.trim()
+  return normalizeProviderName(sourceName) ?? '未知线路'
 }
 
