@@ -6128,13 +6128,15 @@
      - 脚本支持 --limit / --dry-run / --file，幂等可重跑
      - typecheck 通过；全量测试 1013 项（2 文件 13 失败为 pre-existing）
 
-2. META-02 — P2：external_data.douban_people 新增 + person.csv 导入脚本（状态：⬜ 待开始）
+2. META-02 — P2：external_data.douban_people 新增 + person.csv 导入脚本（状态：✅ 已完成）
    - 创建时间：2026-04-14 19:30
+   - 实际开始：2026-04-14 19:55
+   - 完成时间：2026-04-14 20:05
    - 依赖：META-01 完成（导入基础设施已就绪）
    - 验收要点：
-     - Migration：新建 `external_data.douban_people`（person_id TEXT PK / name TEXT / name_en TEXT / sex TEXT / birth DATE / birthplace TEXT / constellation TEXT / profession TEXT[] / biography TEXT）
-     - 新建 `scripts/import-douban-people.ts`，幂等导入 person.csv，支持 --limit / --dry-run
-     - typecheck + 全量测试通过
+     - Migration：新建 `external_data.douban_people`（person_id TEXT UNIQUE / name TEXT / name_en TEXT / name_zh TEXT / sex TEXT / birth TEXT / birthplace TEXT / constellation TEXT / profession TEXT[] / biography TEXT）
+     - 新建 `scripts/import-douban-people.ts`，幂等导入 person.csv，支持 --limit / --dry-run / --file
+     - typecheck 通过；全量测试通过（pre-existing 失败不变）
 
 3. META-03 — P2：video_external_refs 关联表建立（状态：⬜ 待开始）
    - 创建时间：2026-04-14 19:30

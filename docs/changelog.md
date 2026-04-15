@@ -6052,3 +6052,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/architecture.md`（douban_entries 字段说明 + 迁移列表更新）
 - **测试覆盖**：typecheck 通过；全量测试通过（pre-existing 2 文件 13 失败不变）；无新增单元测试（纯 schema/脚本变更，无运行时逻辑路径需覆盖）
 - **架构备注**：release_date 存 TEXT 而非 DATE，兼容 CSV 格式不统一；imdb_id 索引为 META-05 alias/imdb 精确匹配预留；--source-dir 未实现（CSV 文件结构固定，单 --file 参数已足够，不过度设计）
+
+---
+
+## META-02 — external_data.douban_people 新增 + person.csv 导入脚本
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-05
+- **变更文件**：
+  - `src/api/db/migrations/040_douban_people.sql`（新建：external_data.douban_people 表；UNIQUE INDEX on person_id；name 查找索引；DO $$ 验证块）
+  - `scripts/import-douban-people.ts`（新建：流式读取 person.csv，BATCH_SIZE=500，ON CONFLICT DO UPDATE，支持 --limit/--dry-run/--file）
+  - `docs/architecture.md`（douban_people 表说明 + 迁移列表更新）
+- **测试覆盖**：typecheck 通过；全量测试通过（douban.test.ts 6 项失败为 pre-existing buildApp() 需要 DB 环境，与本次变更无关）
+- **架构备注**：birth 存 TEXT（与 release_date 统一，CSV 格式不保证标准 DATE）；name_zh 字段额外保留 CSV NAME_ZH 列（原计划未列出，但字段存在且有价值）
