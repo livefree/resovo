@@ -54,10 +54,14 @@ export function normalizeProviderName(rawName: string | null | undefined): strin
 
 export function buildLineDisplayName(input: {
   rawName?: string | null
+  /** CHG-412: crawler_sites.display_name，优先级高于 normalizeProviderName(rawName) */
+  siteDisplayName?: string | null
   fallbackIndex: number
   quality?: string | null
 }): string {
-  const provider = normalizeProviderName(input.rawName)
+  const provider = input.siteDisplayName?.trim()
+    ? input.siteDisplayName.trim()
+    : normalizeProviderName(input.rawName)
   const base = provider ?? `线路${toAlphaIndex(parseLineOrdinal(input.rawName?.trim() ?? '') ?? input.fallbackIndex)}`
   const quality = input.quality?.trim()
   if (quality) return `${base} · ${quality}`

@@ -78,7 +78,7 @@ export function PlayerShell({ slug }: PlayerShellProps) {
             setSources(r.data.map((s, index) => ({
               src: s.sourceUrl,
               type: s.type,
-              label: buildLineDisplayName({ rawName: s.sourceName, fallbackIndex: index, quality: s.quality }),
+              label: buildLineDisplayName({ rawName: s.sourceName, siteDisplayName: s.siteDisplayName, fallbackIndex: index, quality: s.quality }),
             })))
             setActiveSourceIndex(0)
           })
@@ -103,7 +103,7 @@ export function PlayerShell({ slug }: PlayerShellProps) {
         const newSources = res.data.map((s, index) => ({
           src: s.sourceUrl,
           type: s.type,
-          label: buildLineDisplayName({ rawName: s.sourceName, fallbackIndex: index, quality: s.quality }),
+          label: buildLineDisplayName({ rawName: s.sourceName, siteDisplayName: s.siteDisplayName, fallbackIndex: index, quality: s.quality }),
         }))
         setSources(newSources)
         // 保留用户选中的线路：按 label 在新源列表中查找，命中则保留，否则回退 0

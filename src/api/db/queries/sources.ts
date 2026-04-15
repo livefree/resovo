@@ -15,6 +15,8 @@ interface DbSourceRow {
   episode_number: number
   source_url: string
   source_name: string
+  /** CHG-412: LEFT JOIN crawler_sites cs ON cs.key = vs.source_name */
+  site_display_name: string | null
   quality: string | null
   type: string
   is_active: boolean
@@ -31,6 +33,7 @@ function mapSource(row: DbSourceRow): VideoSource {
     episodeNumber: row.episode_number,
     sourceUrl: row.source_url, // ADR-001: 直链，不做代理
     sourceName: row.source_name,
+    siteDisplayName: row.site_display_name ?? null,
     quality: (row.quality as VideoQuality) ?? null,
     type: row.type as SourceType,
     isActive: row.is_active,
@@ -58,10 +61,13 @@ export async function findActiveSourcesByVideoId(
     params.push(episode)
   }
 
+  // CHG-412: JOIN crawler_sites 以获取 display_name 用于前台线路命名
   const result = await db.query<DbSourceRow>(
-    `SELECT * FROM video_sources
-     WHERE ${conditions.join(' AND ')}
-     ORDER BY created_at ASC`,
+    `SELECT vs.*, cs.display_name AS site_display_name
+     FROM video_sources vs
+     LEFT JOIN crawler_sites cs ON cs.key = vs.source_name
+     WHERE ${conditions.map((c) => `vs.${c}`).join(' AND ')}
+     ORDER BY vs.created_at ASC`,
     params
   )
   return result.rows.map(mapSource)

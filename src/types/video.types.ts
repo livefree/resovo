@@ -113,6 +113,8 @@ export interface VideoSource {
   episodeNumber: number | null  // null 表示电影
   sourceUrl: string             // 第三方直链（ADR-001：不做代理）
   sourceName: string            // 如"线路1"
+  /** CHG-412: crawler_sites.display_name，用于前台线路命名；未配置时为 null */
+  siteDisplayName: string | null
   quality: VideoQuality | null
   type: SourceType
   isActive: boolean

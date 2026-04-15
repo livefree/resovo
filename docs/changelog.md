@@ -5998,3 +5998,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/videoIndexSync.test.ts`（4 个 reconcileStale 测试：正常路径/delete 路径/404幂等/双路计数）
 - **测试覆盖**：4 新增测试全部通过
 - **架构备注**：daysLookback 默认 7，避免全表扫描；ES delete 404 视为幂等成功（文档已不存在）
+
+---
+
+## CHG-412 — P2：crawler_sites.display_name 进入前台线路命名链路
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-02
+- **变更文件**：
+  - `src/types/video.types.ts`（VideoSource 新增 siteDisplayName: string | null）
+  - `src/api/db/queries/sources.ts`（findActiveSourcesByVideoId 改为显式列 SELECT + LEFT JOIN crawler_sites cs ON cs.key = vs.source_name，返回 site_display_name）
+  - `src/lib/line-display-name.ts`（buildLineDisplayName 新增可选 siteDisplayName 参数，优先级高于 normalizeProviderName；向后兼容）
+  - `src/components/player/PlayerShell.tsx`（两处 buildLineDisplayName 调用传入 siteDisplayName: s.siteDisplayName）
+- **测试覆盖**：typecheck + 全量测试通过；无新增测试（DB JOIN + 类型变更，逻辑在 lineDisplayName.test.ts 已覆盖）
+- **架构备注**：SEQ-20260414-02 全部 3 个任务（CHG-410/411/412）完成
