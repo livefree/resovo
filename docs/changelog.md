@@ -6039,3 +6039,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/videoIndexSync.test.ts`（新增 reconcileStale 4 个测试：非上架 upsert、软删除 delete、404 幂等、两路并发计数）
 - **测试覆盖**：12 项单元测试全部通过
 - **架构备注**：任务卡片因上下文压缩未及时更新，本条为补记；SEQ-20260414-02 全序列（CHG-410/411/412）均已完成
+
+---
+
+## META-01 — external_data.douban_entries 补全字段 + 导入脚本重算
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-05
+- **变更文件**：
+  - `src/api/db/migrations/039_douban_entries_extend.sql`（新建：ADD COLUMN IF NOT EXISTS 11 个字段；新增 imdb_id 索引；DO $$ 验证块）
+  - `scripts/import-douban-dump.ts`（HEADERS 补全 ACTOR_IDS/DIRECTOR_IDS；DoubanEntry 接口扩展 11 字段；新增 parsePersonIds() 解析 "name:id|..." 格式；INSERT/ON CONFLICT UPDATE 补全新字段；新增 --dry-run CLI 参数）
+  - `docs/architecture.md`（douban_entries 字段说明 + 迁移列表更新）
+- **测试覆盖**：typecheck 通过；全量测试通过（pre-existing 2 文件 13 失败不变）；无新增单元测试（纯 schema/脚本变更，无运行时逻辑路径需覆盖）
+- **架构备注**：release_date 存 TEXT 而非 DATE，兼容 CSV 格式不统一；imdb_id 索引为 META-05 alias/imdb 精确匹配预留；--source-dir 未实现（CSV 文件结构固定，单 --file 参数已足够，不过度设计）

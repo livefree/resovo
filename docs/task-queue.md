@@ -6099,9 +6099,9 @@
 
 ## [SEQ-20260414-05] 外部元数据层建设（META Phase 1–3）
 
-- **状态**：🟡 规划中
+- **状态**：🔄 执行中
 - **创建时间**：2026-04-14 19:30
-- **最后更新时间**：2026-04-14 19:30
+- **最后更新时间**：2026-04-14 19:45
 - **目标**：将 external-db（豆瓣 dump）和 external-adapter（douban-adapter）从"辅助匹配工具"升级为"统一外部元数据层"，建立原始数据层→标准化候选层→业务写入层三层结构
 - **范围**：external_data schema / MetadataEnrichService / scripts/import-* / ExternalSubjectCandidate 类型 / video_external_refs
 - **依赖**：SEQ-20260414-02 已完成（CHG-410/411/412 全部完成）
@@ -6118,14 +6118,15 @@
 
 ### 任务列表（按执行顺序）
 
-1. META-01 — P2：external_data.douban_entries 补全字段 + 导入脚本重算（状态：⬜ 待开始）
+1. META-01 — P2：external_data.douban_entries 补全字段 + 导入脚本重算（状态：✅ 已完成）
    - 创建时间：2026-04-14 19:30
-   - 计划开始：SEQ-20260414-04（CHG-414）触发前启动
+   - 实际开始：2026-04-14 19:40
+   - 完成时间：2026-04-14 19:50
    - 验收要点：
-     - Migration：`external_data.douban_entries` 新增 aliases TEXT[] / imdb_id TEXT / languages TEXT[] / duration_minutes INT / tags TEXT[] / douban_votes INT / regions TEXT[] / release_date DATE / actor_ids TEXT[] / director_ids TEXT[]
-     - 导入脚本（`scripts/import-douban-dump.ts`）从 `external_douban_movies_raw` 重算，新字段正确填充
-     - 脚本支持 --limit / --dry-run / --source-dir，幂等可重跑
-     - typecheck + 全量测试通过
+     - Migration：`external_data.douban_entries` 新增 aliases TEXT[] / imdb_id TEXT / languages TEXT[] / duration_minutes INT / tags TEXT[] / douban_votes INT / regions TEXT[] / release_date TEXT / actor_ids TEXT[] / director_ids TEXT[] / official_site TEXT（共 11 列）
+     - 导入脚本（`scripts/import-douban-dump.ts`）HEADERS 补全 ACTOR_IDS/DIRECTOR_IDS，所有新字段正确填充
+     - 脚本支持 --limit / --dry-run / --file，幂等可重跑
+     - typecheck 通过；全量测试 1013 项（2 文件 13 失败为 pre-existing）
 
 2. META-02 — P2：external_data.douban_people 新增 + person.csv 导入脚本（状态：⬜ 待开始）
    - 创建时间：2026-04-14 19:30
