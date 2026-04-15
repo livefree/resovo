@@ -6030,9 +6030,9 @@
 
 ## [SEQ-20260414-02] ES 一致性与源命名链路补全
 
-- **状态**：🔄 执行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-14 18:15
-- **最后更新时间**：2026-04-14 18:28
+- **最后更新时间**：2026-04-14 19:20
 - **目标**：修复 CHG-401/405 遗留的三处缺陷：ES 漏下架文档、索引缺字段、前台不消费 display_name
 - **范围**：VideoIndexSyncService / sources.ts / VideoSource 类型 / PlayerShell / line-display-name
 - **依赖**：SEQ-20260414-01 已完成
@@ -6043,9 +6043,11 @@
    - 创建时间：2026-04-14 18:15
    - 验收要点：syncVideo 写入的文档包含全部 ES mapping 字段；SearchService 依赖字段验证可搜
 
-2. CHG-411 — P1：reconcileStale — ES 漏下架文档清理路径（状态：⬜ 待开始）
+2. CHG-411 — P1：reconcileStale — ES 漏下架文档清理路径（状态：✅ 已完成）
    - 创建时间：2026-04-14 18:15
+   - 完成时间：2026-04-14 19:20
    - 验收要点：reconcileStale 补 upsert 非上架视频（is_published→false）；补 delete 软删除视频；maintenance job 同时执行两条路径
+   - 备注：实现已在 VideoIndexSyncService.ts（STALE_UNPUBLISHED_SQL + STALE_DELETED_SQL + reconcileStale()）和 maintenanceWorker.ts（Promise.all）中完成，12 项单元测试全部通过；任务卡片未按时更新，此处补记
 
 3. CHG-412 — P2：crawler_sites.display_name 进入前台线路命名链路（状态：✅ 已完成）
    - 创建时间：2026-04-14 18:15

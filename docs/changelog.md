@@ -6026,3 +6026,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/lib/lineDisplayName.test.ts`（新增 5 个 deduplicateLabels 测试：无重复/三项重复/部分重复/保留非label字段/空数组）
 - **测试覆盖**：5 新增测试全部通过；typecheck 干净；全量 1013 测试通过（2 文件 13 失败均为 pre-existing）
 - **架构备注**：deduplicateLabels 沉淀至 line-display-name.ts 共享层；PlayerShell 不再含业务逻辑副本；SEQ-20260414-03 完成
+
+---
+
+## CHG-411 — P1：reconcileStale — ES 漏下架文档清理路径
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-02
+- **变更文件**（已随 CHG-401/410 提交，此处补记）：
+  - `src/api/services/VideoIndexSyncService.ts`（新增 STALE_UNPUBLISHED_SQL + STALE_DELETED_SQL + reconcileStale() 方法，两条路径：非上架视频 upsert is_published=false；软删除视频 ES delete，404 视为幂等成功）
+  - `src/api/workers/maintenanceWorker.ts`（reconcile-search-index case 改为 Promise.all([reconcilePublished, reconcileStale()])，同时执行两条路径）
+  - `tests/unit/api/videoIndexSync.test.ts`（新增 reconcileStale 4 个测试：非上架 upsert、软删除 delete、404 幂等、两路并发计数）
+- **测试覆盖**：12 项单元测试全部通过
+- **架构备注**：任务卡片因上下文压缩未及时更新，本条为补记；SEQ-20260414-02 全序列（CHG-410/411/412）均已完成
