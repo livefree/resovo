@@ -171,7 +171,7 @@ export class VideoService {
 
     if (Object.keys(catalogFields).length > 0) {
       const catalogService = new MediaCatalogService(this.db)
-      await catalogService.safeUpdate(video.catalog_id, catalogFields, 'manual')
+      await catalogService.safeUpdate(video.catalog_id, catalogFields, 'manual', {})
     }
 
     // Step 3: 更新 videos 表冗余副本字段（title/type/episodeCount/slug）

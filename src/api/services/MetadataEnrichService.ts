@@ -66,10 +66,14 @@ export class MetadataEnrichService {
     const { videoId, catalogId, title, year, type } = data
     const titleNorm = normalizeTitle(title)
 
+    // 预取 catalog 以获取 imdbId（供 step1 精确匹配），step5 仍独立查询以拿到更新后的数据
+    const catalogSnapshot = await catalogQueries.findCatalogById(this.db, catalogId)
+    const imdbId = catalogSnapshot?.imdbId ?? null
+
     let doubanStatus: DoubanStatus = 'unmatched'
 
     // Step 1: 本地豆瓣多字段召回
-    const step1 = await this.step1LocalDouban(videoId, catalogId, titleNorm, title, year)
+    const step1 = await this.step1LocalDouban(videoId, catalogId, titleNorm, title, year, imdbId)
     if (step1 !== null) {
       doubanStatus = step1
     } else {
@@ -101,12 +105,34 @@ export class MetadataEnrichService {
     titleNorm: string,
     originalTitle: string,
     year: number | null,
+    imdbId: string | null,
   ): Promise<DoubanStatus | null> {
-    // 1a: title_normalized 精确匹配
+    // 1a: imdb_id 精确匹配（最高置信度，直接 auto_matched）
+    if (imdbId) {
+      const imdbMatch = await externalDataQueries.findDoubanByImdbId(this.db, imdbId)
+      if (imdbMatch) {
+        await this.writeExternalRef(videoId, imdbMatch.doubanId, 'auto_matched', 1.0, { imdb_id: 1.0 }, 'imdb_id')
+        await this.catalogService.safeUpdate(catalogId, {
+          doubanId: imdbMatch.doubanId,
+          rating: imdbMatch.rating ?? undefined,
+          description: imdbMatch.description ?? undefined,
+          coverUrl: imdbMatch.coverUrl ?? undefined,
+          director: imdbMatch.directors,
+          cast: imdbMatch.cast,
+          writers: imdbMatch.writers,
+          genres: imdbMatch.genres.length > 0 ? mapDoubanGenres(imdbMatch.genres) : undefined,
+          genresRaw: imdbMatch.genres.length > 0 ? imdbMatch.genres : undefined,
+          country: imdbMatch.country ?? undefined,
+        }, 'douban', { sourceRef: imdbMatch.doubanId })
+        return 'matched'
+      }
+    }
+
+    // 1b: title_normalized 精确匹配
     let matches = await externalDataQueries.findDoubanByTitleNorm(this.db, titleNorm, year)
     let matchBy: 'title' | 'alias' = 'title'
 
-    // 1b: alias fallback（title_norm 无结果时用原始标题搜 aliases[]）
+    // 1c: alias fallback（title_norm 无结果时用原始标题搜 aliases[]）
     if (matches.length === 0) {
       matches = await externalDataQueries.findDoubanByAlias(this.db, originalTitle, year)
       matchBy = 'alias'
@@ -277,6 +303,7 @@ export class MetadataEnrichService {
         confidence,
         isPrimary: matchStatus === 'auto_matched',
         linkedBy: 'auto',
+        notes: JSON.stringify(breakdown),
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
