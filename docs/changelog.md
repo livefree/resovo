@@ -6308,3 +6308,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：E2E 测试需真实三进程运行环境，通过代理层的 E2E 验证留待联调环境就绪后执行
+
+---
+
+## DEC-16 — `apps/web` 配置补全
+
+- **任务 ID**：DEC-16
+- **完成时间**：2026-04-17 16:20
+- **来源序列**：SEQ-20260417-02
+- **变更文件**：
+  - `apps/web/package.json` — 更新：添加 dev/build/start/typecheck/lint 脚本，port 3000，依赖声明与 apps/server 对齐
+  - `apps/web/next.config.ts` — 新建：next-intl plugin（指向 `./src/i18n/request.ts`），images remotePatterns
+  - `apps/web/tsconfig.json` — 新建：`@/*` → `./src/*`，`@resovo/types` / `@resovo/player` 指向 packages
+  - `apps/web/tailwind.config.ts` — 新建：content glob 指向 ./src，darkMode class，CSS 变量颜色映射
+  - `apps/web/postcss.config.mjs` — 新建：tailwindcss + autoprefixer
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅ / lint ✅ / unit tests 通过（预存 3 文件 16 失败不变）

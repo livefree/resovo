@@ -6335,3 +6335,39 @@
      - ✅ `apps/server/next.config.ts` 添加 assetPrefix 支持，生产环境 /admin/_next/ 资源正确路由
      - ✅ `docs/architecture.md` 更新部署拓扑图（1a 节）
    - 备注：E2E 测试需真实服务运行环境，通过代理的 E2E 验证留待联调环境就绪后执行
+
+## [SEQ-20260417-02] 前台 apps/web 迁移（DEC Phase 3）
+
+- **状态**：🔄 执行中
+- **创建时间**：2026-04-17 16:00
+- **最后更新时间**：2026-04-17 16:20
+- **目标**：将现有 `src/` 前台代码迁移到 `apps/web/`，使前台成为独立可运行的 Next.js 应用，根目录清理为纯 monorepo 宿主
+- **范围**：`apps/web/`、`src/`（除 types shim）、根目录构建脚本
+- **依赖**：SEQ-20260417-01 全部完成 ✅
+
+### 任务列表（按执行顺序）
+
+1. DEC-16 — `apps/web` 配置补全（状态：✅ 已完成）
+   - 创建时间：2026-04-17 16:00
+   - 计划开始：2026-04-17 16:00
+   - 实际开始：2026-04-17 16:05
+   - 完成时间：2026-04-17 16:20
+   - 验收要点：
+     - `apps/web/package.json` 含独立 dev/build/start/typecheck/lint 脚本，`dev` 在 port 3000
+     - `apps/web/next.config.ts`：含 next-intl plugin，images remotePatterns
+     - `apps/web/tsconfig.json`：`@/*` → `./src/*`，`@resovo/types` / `@resovo/player` 指向 packages
+     - `apps/web/tailwind.config.ts` + `apps/web/postcss.config.mjs` 与现有根目录一致
+     - 根目录 typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
+
+2. DEC-17 — `src/` 全量迁入 `apps/web/src/`（状态：⬜ 待开始）
+   - 创建时间：2026-04-17 16:00
+   - 计划开始：DEC-16 完成后
+   - 实际开始：
+   - 完成时间：
+   - 验收要点：
+     - `src/app/`、`src/components/`、`src/hooks/`、`src/lib/`、`src/stores/`、`src/i18n/`、`src/middleware.ts` 全量迁移到 `apps/web/src/`
+     - `src/` 下仅保留 `types/`（shim）及 `app/globals.css`（如仍被根引用）
+     - 根目录 `package.json` dev/build 脚本改为通过 `apps/web` 驱动（`turbo dev --filter=@resovo/web` 或直接 `cd apps/web && next dev`）
+     - 根目录 `tsconfig.json` paths 更新（`@/*` → `apps/web/src/*`），vitest aliases 同步
+     - `apps/web` 独立 `next dev -p 3000` 可正常启动
+     - 根目录 typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
