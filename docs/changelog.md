@@ -6278,3 +6278,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：admin 页面 redirect 路径均为 /admin/...（无 locale），兼容独立部署；本地开发通过 --env-file ../../.env.local 共享环境变量
+
+---
+
+## DEC-14 — 清理 `apps/web`（前台移除 admin 残留）
+- **完成时间**：2026-04-17 17:30
+- **修改文件**：
+  - `src/app/[locale]/admin/` — 已删除（内容已在 DEC-13 迁入 apps/server）
+  - `src/components/admin/` — 已删除
+  - `src/components/shared/` — 已删除
+  - `src/middleware.ts` — 精简为纯 next-intl 中间件（移除 admin 守卫逻辑）
+  - `vitest.config.ts` — resolve.alias 加 @/components/admin → apps/server/src/components/admin、@/components/shared → apps/server/src/components/shared（测试过渡期重定向，待 tests/ 迁移完成后删除）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：tests/unit/components/admin/ 等测试文件仍在根目录 tests/，通过 vitest alias 过渡；后续应迁移至 apps/server/tests/

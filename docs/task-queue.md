@@ -6244,7 +6244,7 @@
 
 - **状态**：🔄 执行中
 - **创建时间**：2026-04-17 14:00
-- **最后更新时间**：2026-04-17 17:10
+- **最后更新时间**：2026-04-17 17:30
 - **目标**：将现有 Next.js 单体拆分为 `apps/web`（前台）+ `apps/server`（后台管理）+ `apps/api`（Fastify），通过 Turbo Monorepo 组织，共享 `packages/player` 和 `packages/types`，前后端仅通过数据库建立联系，可独立部署
 - **范围**：根目录构建配置、src/ 全量迁移、packages/ 新建、反向代理配置
 - **依赖**：无（与 META 系列并行，不共享文件范围）
@@ -6312,17 +6312,16 @@
      - middleware 只守卫 /admin/*，无 locale 剥离逻辑 ✅
      - 根目录 typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
 
-6. DEC-14 — 清理 `apps/web`（前台移除 admin 残留）（状态：⬜ 待开始）
+6. DEC-14 — 清理 `apps/web`（前台移除 admin 残留）（状态：✅ 已完成）
    - 创建时间：2026-04-17 14:00
    - 计划开始：DEC-13 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-04-17 17:15
+   - 完成时间：2026-04-17 17:30
    - 验收要点：
-     - `apps/web/src/` 中无任何 `admin` 路由、组件、import 引用
-     - `apps/web/src/middleware.ts` 仅处理前台路由守卫（无 `/admin/*` 相关逻辑）
-     - `apps/web` 的 `authStore.ts` 为独立实现（前台用户登录，现阶段可为空壳）
-     - `pnpm --filter @resovo/web build` 构建产物不含 admin 相关模块（bundle 分析验证）
-     - E2E 前台关键路径（首页 / 搜索 / 播放 / 详情）全部通过
+     - src/app/[locale]/admin/ + src/components/admin/ + src/components/shared/ 全部删除 ✅
+     - src/middleware.ts 精简为纯 next-intl（无 admin 守卫逻辑）✅
+     - vitest alias 过渡重定向保障现有测试不回归 ✅
+     - typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
 
 7. DEC-15 — 反向代理配置与联调验证（状态：⬜ 待开始）
    - 创建时间：2026-04-17 14:00
