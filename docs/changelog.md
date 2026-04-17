@@ -6189,3 +6189,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：video_sources 新增 source_site_key 列（Migration 046，含存量 backfill）
 - **注意事项**：存量 backfill 幂等；fallback 到 videos.site_key 保证向后兼容；新爬虫数据写入时自动携带行级标识
+
+---
+
+## DEC-09 — 建立 Turbo Monorepo 骨架
+- **完成时间**：2026-04-17 14:45
+- **修改文件**：
+  - `package.json` — 新增 `workspaces: ["apps/*", "packages/*"]`；devDependencies 新增 `turbo ^2.3.0`
+  - `turbo.json` — 新建，定义 build / dev / typecheck / lint 构建 pipeline
+  - `apps/web/package.json` — 新建占位（@resovo/web）
+  - `apps/server/package.json` — 新建占位（@resovo/server）
+  - `apps/api/package.json` — 新建占位（@resovo/api）
+  - `packages/player/package.json` — 新建占位（@resovo/player）
+  - `packages/types/package.json` — 新建占位（@resovo/types）
+  - `package-lock.json` — 自动更新（npm workspaces 安装）
+- **新增依赖**：`turbo ^2.3.0`（devDependency，构建编排工具）
+- **数据库变更**：无
+- **注意事项**：此阶段只建目录骨架，不移动任何业务代码；现有 `npm run dev/build/typecheck/lint/test` 脚本全部保持兼容；预存 3 个测试文件失败（stagingDouban / douban / moderationStats）与本次变更无关

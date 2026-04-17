@@ -2,6 +2,10 @@
   "name": "resovo",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "next dev -p 3000",
     "api": "node --env-file=.env.local --import tsx --watch src/api/server.ts",
@@ -60,6 +64,7 @@
     "zustand": "^4.5.0"
   },
   "devDependencies": {
+    "turbo": "^2.3.0",
     "@playwright/test": "^1.49.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.1.0",

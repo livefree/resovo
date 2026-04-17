@@ -6237,3 +6237,104 @@
      - MetadataEnrichService 写字段前检查 lock，hard lock 不得覆盖
      - 后台审核台可显示字段来源标记（爬虫/豆瓣/Bangumi/手动）
      - 优先级顺序：manual > tmdb > bangumi > douban > crawler
+
+---
+
+## [SEQ-20260417-01] 前后端解耦 Monorepo 迁移（DEC Phase 2）
+
+- **状态**：🔄 执行中
+- **创建时间**：2026-04-17 14:00
+- **最后更新时间**：2026-04-17 14:45
+- **目标**：将现有 Next.js 单体拆分为 `apps/web`（前台）+ `apps/server`（后台管理）+ `apps/api`（Fastify），通过 Turbo Monorepo 组织，共享 `packages/player` 和 `packages/types`，前后端仅通过数据库建立联系，可独立部署
+- **范围**：根目录构建配置、src/ 全量迁移、packages/ 新建、反向代理配置
+- **依赖**：无（与 META 系列并行，不共享文件范围）
+
+### 任务列表（按执行顺序）
+
+1. DEC-09 — 建立 Turbo Monorepo 骨架（状态：✅ 已完成）
+   - 创建时间：2026-04-17 14:00
+   - 计划开始：2026-04-17
+   - 实际开始：2026-04-17 14:30
+   - 完成时间：2026-04-17 14:45
+   - 验收要点：
+     - 根目录添加 `turbo.json`、npm `workspaces` 字段（使用 npm workspaces 替代 pnpm-workspace.yaml，项目现用 npm）
+     - 创建 `apps/web/`、`apps/server/`、`apps/api/`、`packages/player/`、`packages/types/` 目录占位（含最简 package.json）
+     - 根目录 `package.json` 改为 workspace root，原有 scripts 全部保留
+     - `npm install` 通过，各 workspace 包可独立寻址
+     - typecheck ✅ / lint ✅ / test 通过（3 个预存失败文件与本次无关）
+
+2. DEC-10 — 提取 `packages/types`（状态：⬜ 待开始）
+   - 创建时间：2026-04-17 14:00
+   - 计划开始：DEC-09 完成后
+   - 实际开始：
+   - 完成时间：
+   - 验收要点：
+     - `src/types/` 全量迁移到 `packages/types/src/`
+     - 导出入口 `packages/types/index.ts` 维持原有 `@/types` 的所有导出
+     - `apps/web`、`apps/server`、`apps/api` 的 tsconfig paths 指向 `packages/types`
+     - 原 `src/types/` 保留空壳重导出（`export * from '@resovo/types'`）过渡期兼容
+     - typecheck 通过，无任何 import 路径报错
+
+3. DEC-11 — 迁移 `apps/api`（状态：⬜ 待开始）
+   - 创建时间：2026-04-17 14:00
+   - 计划开始：DEC-10 完成后
+   - 实际开始：
+   - 完成时间：
+   - 验收要点：
+     - `src/api/` 全量迁移到 `apps/api/src/`
+     - `apps/api/package.json` 包含独立的 `dev`/`build`/`start` 脚本
+     - Fastify 独立启动（`pnpm --filter @resovo/api dev`）正常响应 `/v1/videos`
+     - 原 `src/api/` 删除，根目录 `npm run api` 别名指向新路径
+     - E2E 测试（API 相关）通过
+
+4. DEC-12 — 提取 `packages/player`（状态：⬜ 待开始）
+   - 创建时间：2026-04-17 14:00
+   - 计划开始：DEC-11 完成后
+   - 实际开始：
+   - 完成时间：
+   - 验收要点：
+     - `src/components/player/` 迁移到 `packages/player/src/`
+     - 导出两个入口：`VideoPlayer`（完整版，web 用）和 `PlayerPreview`（精简版，server 用，无弹幕/续播）
+     - `PlayerPreview` Props 类型定义完整，不使用 `any`
+     - `apps/web` watch 页引用 `@resovo/player` 播放器功能回归正常
+     - 断点续播 / 线路切换 / 影院模式 / 字幕开关四条关键路径回归测试通过
+     - typecheck / lint 通过
+
+5. DEC-13 — 拆分 `apps/server`（后台 Next.js 独立）（状态：⬜ 待开始）
+   - 创建时间：2026-04-17 14:00
+   - 计划开始：DEC-12 完成后
+   - 实际开始：
+   - 完成时间：
+   - 验收要点：
+     - `src/app/[locale]/admin/**` 迁移到 `apps/server/src/app/admin/**`（去掉 `[locale]` 层）
+     - `src/components/admin/` 迁移到 `apps/server/src/components/`
+     - `src/components/shared/` 迁移到 `apps/server/src/components/shared/`（后台独用，不再是前后台共享）
+     - `apps/server` 拥有独立 `next.config.ts`、`middleware.ts`（守卫 `/admin/*`）、`authStore.ts`
+     - `apps/server` 无 next-intl，路由为 `/admin/login`、`/admin/videos` 等（无 `[locale]`）
+     - `apps/server` 引用 `@resovo/player` 的 `PlayerPreview` 实现内容预览
+     - `pnpm --filter @resovo/server build` 独立构建通过
+     - 后台所有页面功能回归（登录、视频管理、审核、源管理、系统配置）
+
+6. DEC-14 — 清理 `apps/web`（前台移除 admin 残留）（状态：⬜ 待开始）
+   - 创建时间：2026-04-17 14:00
+   - 计划开始：DEC-13 完成后
+   - 实际开始：
+   - 完成时间：
+   - 验收要点：
+     - `apps/web/src/` 中无任何 `admin` 路由、组件、import 引用
+     - `apps/web/src/middleware.ts` 仅处理前台路由守卫（无 `/admin/*` 相关逻辑）
+     - `apps/web` 的 `authStore.ts` 为独立实现（前台用户登录，现阶段可为空壳）
+     - `pnpm --filter @resovo/web build` 构建产物不含 admin 相关模块（bundle 分析验证）
+     - E2E 前台关键路径（首页 / 搜索 / 播放 / 详情）全部通过
+
+7. DEC-15 — 反向代理配置与联调验证（状态：⬜ 待开始）
+   - 创建时间：2026-04-17 14:00
+   - 计划开始：DEC-14 完成后
+   - 实际开始：
+   - 完成时间：
+   - 验收要点：
+     - 提供 `docker/nginx.conf`（或 Caddyfile）路由规则：`/v1/*` → api:4000，`/admin/*` → server:3001，`/*` → web:3000
+     - 本地通过 nginx/caddy 代理后三端联调通过
+     - refresh_token Cookie 在同域三进程间正常传递
+     - E2E 全量测试（PLAYER / SEARCH / VIDEO）在代理层下通过
+     - `docs/architecture.md` 更新部署拓扑图
