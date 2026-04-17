@@ -1,0 +1,221 @@
+/**
+ * auth.ts — 认证路由
+ * POST /auth/register   注册
+ * POST /auth/login      登录
+ * POST /auth/refresh    刷新 Access Token
+ * POST /auth/logout     登出
+ *
+ * ADR-003: refresh_token 通过 HttpOnly Cookie 传递，不出现在响应 body
+ */
+
+import type { FastifyInstance } from 'fastify'
+import { z } from 'zod'
+
+import { db } from '@/api/lib/postgres'
+import { redis } from '@/api/lib/redis'
+import { UserService, ConflictError, UnauthorizedError } from '@/api/services/UserService'
+
+// Cookie 名称（统一管理）
+const REFRESH_COOKIE = 'refresh_token'
+// user_role 非 HttpOnly，供 Next.js middleware 读取角色（ADR-010）
+const ROLE_COOKIE = 'user_role'
+
+// Cookie 选项（ADR-003）
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict' as const,
+  maxAge: 30 * 24 * 60 * 60, // 30 天，单位秒（CHG-37）
+  path: '/',
+}
+
+// user_role cookie 与 refresh_token 同寿命，非 HttpOnly
+const ROLE_COOKIE_OPTIONS = {
+  httpOnly: false,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict' as const,
+  maxAge: 30 * 24 * 60 * 60, // 30 天（CHG-37）
+  path: '/',
+}
+
+// ── Zod Schema ───────────────────────────────────────────────────
+
+const RegisterSchema = z.object({
+  username: z.string().min(3).max(20),
+  email: z.string().email(),
+  password: z.string().min(8),
+  locale: z.string().optional(),
+})
+
+const LoginSchema = z.object({
+  identifier: z.string().min(1),
+  password: z.string().min(1),
+})
+
+const DevLoginSchema = z.object({
+  identifier: z.string().min(1).optional(),
+})
+
+// ── 路由注册 ─────────────────────────────────────────────────────
+
+export async function authRoutes(fastify: FastifyInstance) {
+  const userService = new UserService(db, redis)
+
+  // ── POST /auth/register ──────────────────────────────────────
+  fastify.post('/auth/register', async (request, reply) => {
+    const parsed = RegisterSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: parsed.error.errors[0]?.message ?? '参数错误',
+          status: 422,
+        },
+      })
+    }
+
+    try {
+      const { user, accessToken, refreshToken } = await userService.register(parsed.data)
+      reply.setCookie(REFRESH_COOKIE, refreshToken, COOKIE_OPTIONS)
+      reply.setCookie(ROLE_COOKIE, user.role, ROLE_COOKIE_OPTIONS)
+      return reply.code(201).send({ data: { user, accessToken } })
+    } catch (error) {
+      if (error instanceof ConflictError) {
+        return reply.code(422).send({
+          error: { code: 'CONFLICT', message: error.message, status: 422 },
+        })
+      }
+      request.log.error({ error }, 'register failed')
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: '注册失败，请稍后重试', status: 500 },
+      })
+    }
+  })
+
+  // ── POST /auth/login ─────────────────────────────────────────
+  fastify.post('/auth/login', async (request, reply) => {
+    const parsed = LoginSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: parsed.error.errors[0]?.message ?? '参数错误',
+          status: 422,
+        },
+      })
+    }
+
+    try {
+      const { user, accessToken, refreshToken } = await userService.login(
+        parsed.data.identifier,
+        parsed.data.password
+      )
+      reply.setCookie(REFRESH_COOKIE, refreshToken, COOKIE_OPTIONS)
+      reply.setCookie(ROLE_COOKIE, user.role, ROLE_COOKIE_OPTIONS)
+      return reply.send({ data: { user, accessToken } })
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        return reply.code(401).send({
+          error: { code: 'UNAUTHORIZED', message: error.message, status: 401 },
+        })
+      }
+      request.log.error({ error }, 'login failed')
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: '登录失败，请稍后重试', status: 500 },
+      })
+    }
+  })
+
+  // ── POST /auth/refresh ───────────────────────────────────────
+  fastify.post('/auth/refresh', async (request, reply) => {
+    const refreshToken = request.cookies[REFRESH_COOKIE]
+    if (!refreshToken) {
+      return reply.code(401).send({
+        error: { code: 'UNAUTHORIZED', message: '未找到 refresh token', status: 401 },
+      })
+    }
+
+    try {
+      const { accessToken } = await userService.refresh(refreshToken)
+      return reply.send({ data: { accessToken } })
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        return reply.code(401).send({
+          error: { code: 'UNAUTHORIZED', message: error.message, status: 401 },
+        })
+      }
+      request.log.error({ error }, 'refresh failed')
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: '刷新失败，请稍后重试', status: 500 },
+      })
+    }
+  })
+
+  // ── POST /auth/dev-login（开发环境快捷登录）────────────────────
+  fastify.post('/auth/dev-login', async (request, reply) => {
+    if (process.env.NODE_ENV === 'production') {
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: 'Not Found', status: 404 },
+      })
+    }
+
+    const expected = process.env.DEV_LOGIN_SECRET
+    if (!expected) {
+      return reply.code(503).send({
+        error: { code: 'DEV_LOGIN_DISABLED', message: '开发快捷登录未配置（缺少 DEV_LOGIN_SECRET）', status: 503 },
+      })
+    }
+
+    const received = request.headers['x-dev-auth']
+    const provided = Array.isArray(received) ? received[0] : received
+    if (!provided || provided !== expected) {
+      return reply.code(401).send({
+        error: { code: 'UNAUTHORIZED', message: '开发快捷登录鉴权失败', status: 401 },
+      })
+    }
+
+    const parsed = DevLoginSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
+      })
+    }
+
+    const identifier = parsed.data.identifier ?? process.env.DEV_LOGIN_IDENTIFIER ?? 'admin'
+
+    try {
+      const { user, accessToken, refreshToken } = await userService.devLogin(identifier)
+      reply.setCookie(REFRESH_COOKIE, refreshToken, COOKIE_OPTIONS)
+      reply.setCookie(ROLE_COOKIE, user.role, ROLE_COOKIE_OPTIONS)
+      return reply.send({ data: { user, accessToken } })
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        return reply.code(401).send({
+          error: { code: 'UNAUTHORIZED', message: error.message, status: 401 },
+        })
+      }
+      request.log.error({ error }, 'dev-login failed')
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: '开发快捷登录失败', status: 500 },
+      })
+    }
+  })
+
+  // ── POST /auth/logout ────────────────────────────────────────
+  fastify.post('/auth/logout', async (request, reply) => {
+    const refreshToken = request.cookies[REFRESH_COOKIE]
+
+    if (refreshToken) {
+      try {
+        await userService.logout(refreshToken)
+      } catch (error) {
+        request.log.error({ error }, 'logout blacklist failed')
+      }
+    }
+
+    // 无论如何都清除 Cookie
+    reply.clearCookie(REFRESH_COOKIE, { path: '/' })
+    reply.clearCookie(ROLE_COOKIE, { path: '/' })
+    return reply.code(204).send()
+  })
+}

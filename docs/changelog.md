@@ -6222,3 +6222,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无（`@resovo/types` 为 workspace 包，非外部依赖）
 - **数据库变更**：无
 - **注意事项**：src/types/ 中各个 *.types.ts 文件保持原位作为过渡期来源，子路径导入（@/types/system.types、@/types/contracts/v1/admin）无需变更继续工作；仅 index.ts 变为 shim
+
+---
+
+## DEC-11 — 迁移 `apps/api`
+- **完成时间**：2026-04-17 15:30
+- **修改文件**：
+  - `apps/api/src/` — 新建，从 src/api/ 移入全量内容（routes / services / db / lib / plugins / workers / server.ts）
+  - `apps/api/package.json` — 更新，加 dev/start scripts（--env-file=../../.env.local）
+  - `apps/api/tsconfig.json` — 新建，配置 @/api/* → ./src/*，@/types → packages/types/src
+  - `tsconfig.json`（根）— paths 加 `"@/api/*": ["./apps/api/src/*"]`；include 加 `apps/api/src/**/*.ts`；exclude 加 `apps/**/templates/**`
+  - `vitest.config.ts` — resolve.alias 加 `@/api → apps/api/src`；coverage.include 路径更新
+  - `package.json`（根）— api script 路径从 src/api/server.ts 改为 apps/api/src/server.ts
+  - `src/api/` — 已删除（内容已迁至 apps/api/src/）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：scripts/ 和 tests/ 中的 @/api/ 导入无需修改，通过 tsconfig/vitest alias 自动解析

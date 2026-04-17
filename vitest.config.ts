@@ -15,9 +15,9 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: [
-        'src/api/services/**',
-        'src/api/routes/**',
-        'src/api/db/queries/**',
+        'apps/api/src/services/**',
+        'apps/api/src/routes/**',
+        'apps/api/src/db/queries/**',
         'src/components/player/**',
         'src/lib/api-client.ts',
       ],
@@ -33,6 +33,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@/api': path.resolve(__dirname, './apps/api/src'),
       '@': path.resolve(__dirname, './src'),
     },
   },

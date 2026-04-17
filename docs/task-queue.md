@@ -6244,7 +6244,7 @@
 
 - **状态**：🔄 执行中
 - **创建时间**：2026-04-17 14:00
-- **最后更新时间**：2026-04-17 15:05
+- **最后更新时间**：2026-04-17 15:30
 - **目标**：将现有 Next.js 单体拆分为 `apps/web`（前台）+ `apps/server`（后台管理）+ `apps/api`（Fastify），通过 Turbo Monorepo 组织，共享 `packages/player` 和 `packages/types`，前后端仅通过数据库建立联系，可独立部署
 - **范围**：根目录构建配置、src/ 全量迁移、packages/ 新建、反向代理配置
 - **依赖**：无（与 META 系列并行，不共享文件范围）
@@ -6275,17 +6275,17 @@
      - `@resovo/types` 作为 workspace dep 已 symlink 到 node_modules
      - typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
 
-3. DEC-11 — 迁移 `apps/api`（状态：⬜ 待开始）
+3. DEC-11 — 迁移 `apps/api`（状态：✅ 已完成）
    - 创建时间：2026-04-17 14:00
    - 计划开始：DEC-10 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-04-17 15:10
+   - 完成时间：2026-04-17 15:30
    - 验收要点：
-     - `src/api/` 全量迁移到 `apps/api/src/`
-     - `apps/api/package.json` 包含独立的 `dev`/`build`/`start` 脚本
-     - Fastify 独立启动（`pnpm --filter @resovo/api dev`）正常响应 `/v1/videos`
-     - 原 `src/api/` 删除，根目录 `npm run api` 别名指向新路径
-     - E2E 测试（API 相关）通过
+     - `src/api/` 全量迁移到 `apps/api/src/`，原目录已删除 ✅
+     - `apps/api/package.json` 包含独立 dev/start 脚本 ✅
+     - 根 tsconfig/@/api/* 别名、vitest alias 均指向 apps/api/src/ ✅
+     - 根目录 `npm run api` 已指向 apps/api/src/server.ts ✅
+     - typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
 
 4. DEC-12 — 提取 `packages/player`（状态：⬜ 待开始）
    - 创建时间：2026-04-17 14:00

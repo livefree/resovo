@@ -15,6 +15,7 @@
     "incremental": true,
     "plugins": [{ "name": "next" }],
     "paths": {
+      "@/api/*": ["./apps/api/src/*"],
       "@/*": ["./src/*"]
     }
   },
@@ -22,12 +23,14 @@
     "next-env.d.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
+    "apps/api/src/**/*.ts",
     "*.ts",
     "*.tsx",
     ".next/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
-    "src/**/templates/**"
+    "src/**/templates/**",
+    "apps/**/templates/**"
   ]
 }
