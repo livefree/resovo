@@ -30,6 +30,7 @@ interface CandidateComparison {
   externalId: string
   confidence: number | null
   matchMethod: string | null
+  breakdown: Record<string, number> | null
   diffs: FieldDiff[]
 }
 
@@ -279,24 +280,43 @@ export function ModerationDoubanBlock({
       {/* 候选：META-07 字段级对比 UI */}
       {doubanStatus === 'candidate' && (
         <div className="space-y-2">
-          {/* 置信度标签 */}
+          {/* 置信度标签 + breakdown */}
           {comparison && (
-            <div className="flex items-center gap-1.5">
-              {comparison.confidence != null && (
-                <span
-                  className="rounded bg-[var(--accent)]/10 px-1.5 py-0.5 text-[10px] text-[var(--accent)]"
-                  data-testid="douban-confidence-badge"
-                >
-                  置信度 {(comparison.confidence * 100).toFixed(0)}%
-                </span>
-              )}
-              {comparison.matchMethod && (
-                <span className="text-[10px] text-[var(--muted)]">
-                  {comparison.matchMethod === 'title' ? '标题匹配' :
-                   comparison.matchMethod === 'alias' ? '别名匹配' :
-                   comparison.matchMethod === 'network' ? '网络搜索' :
-                   comparison.matchMethod}
-                </span>
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5">
+                {comparison.confidence != null && (
+                  <span
+                    className="rounded bg-[var(--accent)]/10 px-1.5 py-0.5 text-[10px] text-[var(--accent)]"
+                    data-testid="douban-confidence-badge"
+                  >
+                    置信度 {(comparison.confidence * 100).toFixed(0)}%
+                  </span>
+                )}
+                {comparison.matchMethod && (
+                  <span className="text-[10px] text-[var(--muted)]">
+                    {comparison.matchMethod === 'title' ? '标题匹配' :
+                     comparison.matchMethod === 'alias' ? '别名匹配' :
+                     comparison.matchMethod === 'imdb_id' ? 'IMDB 精确' :
+                     comparison.matchMethod === 'network' ? '网络搜索' :
+                     comparison.matchMethod}
+                  </span>
+                )}
+              </div>
+              {comparison.breakdown && Object.keys(comparison.breakdown).length > 0 && (
+                <div className="flex flex-wrap gap-1" data-testid="douban-confidence-breakdown">
+                  {Object.entries(comparison.breakdown).map(([key, val]) => (
+                    <span
+                      key={key}
+                      className="rounded px-1 py-0.5 text-[9px]"
+                      style={{
+                        color: 'var(--muted-foreground)',
+                        background: 'color-mix(in srgb, var(--muted-foreground) 8%, transparent)',
+                      }}
+                    >
+                      {key} +{(val * 100).toFixed(0)}
+                    </span>
+                  ))}
+                </div>
               )}
             </div>
           )}

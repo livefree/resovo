@@ -64,6 +64,7 @@ export interface DoubanCandidateComparison {
   externalId: string
   confidence: number | null
   matchMethod: string | null
+  breakdown: Record<string, number> | null
   diffs: FieldDiff[]
 }
 
@@ -354,7 +355,12 @@ export class DoubanService {
       return { field, label: FIELD_LABELS[field]!, current: curr, proposed: prop, changed: curr !== prop }
     })
 
-    return { externalRefId: candidateRef.id, externalId: candidateRef.externalId, confidence: candidateRef.confidence, matchMethod: candidateRef.matchMethod, diffs }
+    let breakdown: Record<string, number> | null = null
+    if (candidateRef.notes) {
+      try { breakdown = JSON.parse(candidateRef.notes) as Record<string, number> } catch { /* invalid JSON, ignore */ }
+    }
+
+    return { externalRefId: candidateRef.id, externalId: candidateRef.externalId, confidence: candidateRef.confidence, matchMethod: candidateRef.matchMethod, breakdown, diffs }
   }
 
   /**
