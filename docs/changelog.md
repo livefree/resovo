@@ -6206,3 +6206,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：`turbo ^2.3.0`（devDependency，构建编排工具）
 - **数据库变更**：无
 - **注意事项**：此阶段只建目录骨架，不移动任何业务代码；现有 `npm run dev/build/typecheck/lint/test` 脚本全部保持兼容；预存 3 个测试文件失败（stagingDouban / douban / moderationStats）与本次变更无关
+
+---
+
+## DEC-10 — 提取 `packages/types`
+- **完成时间**：2026-04-17 15:05
+- **修改文件**：
+  - `packages/types/src/` — 新建，复制 src/types/ 全量内容（*.types.ts / contracts/ / utility-types-augment.d.ts）
+  - `packages/types/src/index.ts` — 新建入口，`export type *` 全量类型 + `export { DEFAULT_INGEST_POLICY }` 值导出
+  - `packages/types/package.json` — 配置 main/types/exports，支持 `.` 和 `./contracts/v1/admin` 子路径
+  - `packages/types/tsconfig.json` — 新建包级 tsconfig
+  - `src/types/index.ts` — 改为 shim（`export type * from '@resovo/types'` + `export { DEFAULT_INGEST_POLICY } from '@resovo/types'`）
+  - `package.json` — dependencies 新增 `"@resovo/types": "*"`
+  - `package-lock.json` — 自动更新（workspace symlink）
+- **新增依赖**：无（`@resovo/types` 为 workspace 包，非外部依赖）
+- **数据库变更**：无
+- **注意事项**：src/types/ 中各个 *.types.ts 文件保持原位作为过渡期来源，子路径导入（@/types/system.types、@/types/contracts/v1/admin）无需变更继续工作；仅 index.ts 变为 shim

@@ -6244,7 +6244,7 @@
 
 - **状态**：🔄 执行中
 - **创建时间**：2026-04-17 14:00
-- **最后更新时间**：2026-04-17 14:45
+- **最后更新时间**：2026-04-17 15:05
 - **目标**：将现有 Next.js 单体拆分为 `apps/web`（前台）+ `apps/server`（后台管理）+ `apps/api`（Fastify），通过 Turbo Monorepo 组织，共享 `packages/player` 和 `packages/types`，前后端仅通过数据库建立联系，可独立部署
 - **范围**：根目录构建配置、src/ 全量迁移、packages/ 新建、反向代理配置
 - **依赖**：无（与 META 系列并行，不共享文件范围）
@@ -6263,17 +6263,17 @@
      - `npm install` 通过，各 workspace 包可独立寻址
      - typecheck ✅ / lint ✅ / test 通过（3 个预存失败文件与本次无关）
 
-2. DEC-10 — 提取 `packages/types`（状态：⬜ 待开始）
+2. DEC-10 — 提取 `packages/types`（状态：✅ 已完成）
    - 创建时间：2026-04-17 14:00
    - 计划开始：DEC-09 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-04-17 14:50
+   - 完成时间：2026-04-17 15:05
    - 验收要点：
-     - `src/types/` 全量迁移到 `packages/types/src/`
-     - 导出入口 `packages/types/index.ts` 维持原有 `@/types` 的所有导出
-     - `apps/web`、`apps/server`、`apps/api` 的 tsconfig paths 指向 `packages/types`
-     - 原 `src/types/` 保留空壳重导出（`export * from '@resovo/types'`）过渡期兼容
-     - typecheck 通过，无任何 import 路径报错
+     - `src/types/` 全量复制到 `packages/types/src/`（含 contracts/、utility-types-augment.d.ts）
+     - `packages/types/src/index.ts` 导出全量类型 + DEFAULT_INGEST_POLICY 值
+     - `src/types/index.ts` 改为 shim（@resovo/types），子路径导入继续原位工作
+     - `@resovo/types` 作为 workspace dep 已 symlink 到 node_modules
+     - typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
 
 3. DEC-11 — 迁移 `apps/api`（状态：⬜ 待开始）
    - 创建时间：2026-04-17 14:00
