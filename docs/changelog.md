@@ -6165,3 +6165,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：新增 video_metadata_provenance、video_metadata_locks 两张表（043/044 migration）
 - **注意事项**：provenance 使用 catalog_id（非 video_id）作为 FK，与 MediaCatalogService 操作对象一致；provenance 写入为 fire-and-forget，不阻塞 safeUpdate 主流程；hard lock 字段在 safeUpdate 时直接跳过，soft lock 字段仅通过现有 lockedFields 逻辑保护
+
+---
+
+## CHG-402 — 前台无源空态 UI + 审核台 inactive 源视觉标识
+- **完成时间**：2026-04-17 15:00
+- **修改文件**：
+  - `src/components/player/PlayerShell.tsx` — 侧面板「线路」区 `!hasSources` 时增加「暂无可用播放源」占位
+  - `src/components/admin/moderation/ModerationDetail.tsx` — API 改为 `status=all` 获取所有源；全停用线路以 opacity-50 + line-through + 「停用」标签标识；初始化优先选有活跃源的线路
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：前台播放源隐藏已在 DB 层（findActiveSourcesByVideoId is_active=true）完成；本次补全的是空态 UX 和管理台可见性

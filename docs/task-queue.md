@@ -5983,8 +5983,10 @@
    - 实际开始：2026-04-14 00:00
    - 验收要点：approve_and_publish 后前台搜索立即可见；unpublish 后前台不再搜到；元数据改后 ES 同步更新；reconcile job 有日志
 
-2. CHG-402 — P0-B：前台隐藏 inactive 源 + PlayerShell 空态 UI（状态：⬜ 待开始）
+2. CHG-402 — P0-B：前台隐藏 inactive 源 + PlayerShell 空态 UI（状态：✅ 已完成）
    - 创建时间：2026-04-14 00:00
+   - 实际开始：2026-04-17 14:00
+   - 完成时间：2026-04-17 15:00
    - 验收要点：全部源 inactive 时前台显示"暂无可用播放源"；后台审核台 inactive 源有标识
 
 3. CHG-403 — P0-C：orphan-videos 503 MIGRATION_PENDING 友好报错（状态：✅ 已完成））
