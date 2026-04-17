@@ -6145,3 +6145,23 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无（ES mapping 文件更新，运行中实例需 PUT /_mappings 或重建索引）
 - **注意事项**：ES 已有索引需执行 PUT /resovo_videos/_mapping 增量更新（新字段不破坏现有文档）；首次写入包含新字段需触发 reconcilePublished 或逐条 syncVideo
+
+---
+
+## META-09 — 字段来源追踪与锁定机制
+- **完成时间**：2026-04-17 13:00
+- **修改文件**：
+  - `src/api/db/migrations/043_video_metadata_provenance.sql` — 新建，含 (catalog_id, field_name) PK，source_kind/source_ref/source_priority/updated_at
+  - `src/api/db/migrations/044_video_metadata_locks.sql` — 新建，含 lock_mode CHECK('soft','hard')/locked_by/locked_at/reason
+  - `src/api/db/queries/metadataProvenance.ts` — 新建，提供 batchUpsertFieldProvenance / getProvenanceByCatalogId / getHardLockedFields / getLocksByCatalogId / upsertFieldLock / removeFieldLock
+  - `src/api/services/MediaCatalogService.ts` — safeUpdate 扩展 provenanceCtx 参数；并行查 hardLockedFields，合并到 lockedSet；成功后 void 写 provenance
+  - `src/api/services/MetadataEnrichService.ts` — step1/2/3 safeUpdate 传入 { sourceRef }
+  - `src/api/services/DoubanService.ts` — confirmSubject/confirmFields safeUpdate 传入 { sourceRef }
+  - `src/api/routes/admin/moderation.ts` — 新增 GET /admin/moderation/:id/metadata-provenance 路由，并行返回 provenance + locks
+  - `src/components/admin/moderation/ModerationDetail.tsx` — 新增「字段来源」折叠块
+  - `src/components/admin/moderation/ModerationProvenanceBlock.tsx` — 新建，展示字段来源 badge（手动/豆瓣/Bangumi/TMDB/爬虫）+ 锁状态 badge（硬锁/软锁）
+  - `docs/architecture.md` — 新增 5.7 节，记录两张新表结构及 migration 列表
+  - `tests/unit/api/metadataEnrich.test.ts` — 更新 safeUpdate 断言增加第 4 个参数 { sourceRef }
+- **新增依赖**：无
+- **数据库变更**：新增 video_metadata_provenance、video_metadata_locks 两张表（043/044 migration）
+- **注意事项**：provenance 使用 catalog_id（非 video_id）作为 FK，与 MediaCatalogService 操作对象一致；provenance 写入为 fire-and-forget，不阻塞 safeUpdate 主流程；hard lock 字段在 safeUpdate 时直接跳过，soft lock 字段仅通过现有 lockedFields 逻辑保护

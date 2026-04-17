@@ -13,6 +13,7 @@ import { ModerationPlayer } from '@/components/admin/moderation/ModerationPlayer
 import { ModerationDoubanBlock } from '@/components/admin/moderation/ModerationDoubanBlock'
 import { ModerationSourceBlock } from '@/components/admin/moderation/ModerationSourceBlock'
 import { ModerationBasicInfoBlock } from '@/components/admin/moderation/ModerationBasicInfoBlock'
+import { ModerationProvenanceBlock } from '@/components/admin/moderation/ModerationProvenanceBlock'
 import { useAuthStore, selectIsAdmin } from '@/stores/authStore'
 import type { DoubanStatus, SourceCheckStatus } from '@/types'
 
@@ -417,6 +418,11 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
       {/* 源健康 */}
       <Collapsible title="源健康" testId="collapsible-sources">
         <ModerationSourceBlock videoId={video.id} sourceCheckStatus={video.source_check_status} />
+      </Collapsible>
+
+      {/* 字段来源追踪（META-09） */}
+      <Collapsible title="字段来源" defaultOpen={false} testId="collapsible-provenance">
+        <ModerationProvenanceBlock videoId={video.id} />
       </Collapsible>
     </div>
   )

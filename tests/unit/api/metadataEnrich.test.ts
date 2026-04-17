@@ -126,7 +126,7 @@ describe('MetadataEnrichService.enrich()', () => {
       expect.anything(), expect.any(String), 2013
     )
     // 置信度 0.70+0.22=0.92 ≥ 0.85 → auto_matched → 写 catalog
-    expect(mockSafeUpdate).toHaveBeenCalledWith('c1', expect.objectContaining({ doubanId: 'd1' }), 'douban')
+    expect(mockSafeUpdate).toHaveBeenCalledWith('c1', expect.objectContaining({ doubanId: 'd1' }), 'douban', { sourceRef: 'd1' })
     const call = vi.mocked(videosQueries.updateVideoEnrichStatus).mock.calls[0]
     expect(call[2]).toMatchObject({ doubanStatus: 'matched' })
   })
@@ -187,7 +187,7 @@ describe('MetadataEnrichService.enrich()', () => {
       expect.anything(), '进击的巨人', 2013
     )
     // confidence = 0.65(alias) + 0.22(年份) = 0.87 ≥ 0.85 → auto_matched
-    expect(mockSafeUpdate).toHaveBeenCalledWith('c1', expect.objectContaining({ doubanId: 'd1' }), 'douban')
+    expect(mockSafeUpdate).toHaveBeenCalledWith('c1', expect.objectContaining({ doubanId: 'd1' }), 'douban', { sourceRef: 'd1' })
     const call = vi.mocked(videosQueries.updateVideoEnrichStatus).mock.calls[0]
     expect(call[2]).toMatchObject({ doubanStatus: 'matched' })
     // 不走网络搜索

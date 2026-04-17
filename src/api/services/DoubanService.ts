@@ -186,7 +186,7 @@ export class DoubanService {
     }
     if (detail.countries.length > 0) updateFields.country = detail.countries[0]
 
-    const updated = await catalogService.safeUpdate(catalog.id, updateFields, 'douban')
+    const updated = await catalogService.safeUpdate(catalog.id, updateFields, 'douban', { sourceRef: detail.id })
     if (!updated) return { updated: false, reason: 'fetch_failed' }
 
     const fields: string[] = ['doubanId']
@@ -260,7 +260,7 @@ export class DoubanService {
     }
     if (detail.countries.length > 0) updateFields.country = detail.countries[0]
 
-    const updated = await catalogService.safeUpdate(video.catalog_id, updateFields, 'douban')
+    const updated = await catalogService.safeUpdate(video.catalog_id, updateFields, 'douban', { sourceRef: subjectId })
     if (!updated) return { updated: false, reason: 'catalog_update_rejected' }
 
     // 标记 video_external_refs 为 manual_confirmed
@@ -413,7 +413,7 @@ export class DoubanService {
     }
 
     const catalogService = new MediaCatalogService(this.db)
-    const updated = await catalogService.safeUpdate(video.catalog_id, updateFields, 'douban')
+    const updated = await catalogService.safeUpdate(video.catalog_id, updateFields, 'douban', { sourceRef: subjectId })
     if (!updated) return { updated: false, reason: 'catalog_update_rejected' }
 
     // 标记 manual_confirmed

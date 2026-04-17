@@ -137,7 +137,7 @@ export class MetadataEnrichService {
         genres: best.genres.length > 0 ? mapDoubanGenres(best.genres) : undefined,
         genresRaw: best.genres.length > 0 ? best.genres : undefined,
         country: best.country ?? undefined,
-      }, 'douban')
+      }, 'douban', { sourceRef: best.doubanId })
       return 'matched'
     }
 
@@ -178,7 +178,7 @@ export class MetadataEnrichService {
           genres: detail.genres.length > 0 ? mapDoubanGenres(detail.genres) : undefined,
           genresRaw: detail.genres.length > 0 ? detail.genres : undefined,
           country: detail.countries[0] ?? undefined,
-        }, 'douban')
+        }, 'douban', { sourceRef: detail.id })
         await this.writeExternalRef(
           videoId, detail.id, 'auto_matched',
           best.score, { network_score: best.score }, 'network'
@@ -212,7 +212,7 @@ export class MetadataEnrichService {
       bangumiSubjectId: best.bangumiId,
       description: best.summary ?? undefined,
       rating: best.rating ?? undefined,
-    }, 'bangumi')
+    }, 'bangumi', { sourceRef: String(best.bangumiId) })
   }
 
   // ── Step 4 ───────────────────────────────────────────────────────

@@ -15,6 +15,7 @@ import type { Pool, PoolClient } from 'pg'
 import type { VideoType } from '@/types'
 import * as catalogQueries from '@/api/db/queries/mediaCatalog'
 import type { MediaCatalogRow, CatalogInsertData, CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
+import * as provenanceQueries from '@/api/db/queries/metadataProvenance'
 
 export { MediaCatalogRow, CatalogInsertData, CatalogUpdateData }
 
@@ -155,21 +156,26 @@ export class MediaCatalogService {
   }
 
   /**
-   * safeUpdate — 优先级 + locked_fields 双重保护的元数据更新
+   * safeUpdate — 优先级 + locked_fields + video_metadata_locks 三重保护的元数据更新
    *
    * 规则：
    * 1. 若来源优先级 < 当前 catalog 的 metadata_source 优先级 → 跳过所有字段
-   * 2. 对每个字段，若字段名在 locked_fields 中 → 跳过该字段
+   * 2. 对每个字段，若字段名在 locked_fields 或 video_metadata_locks(hard) 中 → 跳过该字段
    * 3. 若来源为 'manual' → 写入后自动将写入字段加入 locked_fields
+   * 4. 若提供 provenanceCtx → 写入后记录字段来源到 video_metadata_provenance
    *
    * 返回更新后的 catalog（若无字段写入则返回原 catalog）
    */
   async safeUpdate(
     catalogId: string,
     fields: CatalogUpdateData,
-    source: CatalogMetadataSource
+    source: CatalogMetadataSource,
+    provenanceCtx?: { sourceRef?: string }
   ): Promise<MediaCatalogRow | null> {
-    const current = await catalogQueries.findCatalogById(this.db, catalogId)
+    const [current, hardLocked] = await Promise.all([
+      catalogQueries.findCatalogById(this.db, catalogId),
+      provenanceQueries.getHardLockedFields(this.db, catalogId),
+    ])
     if (!current) return null
 
     const incomingPriority = CATALOG_SOURCE_PRIORITY[source] ?? 0
@@ -178,8 +184,8 @@ export class MediaCatalogService {
     // 来源优先级低于当前 → 跳过整个更新
     if (incomingPriority < currentPriority) return current
 
-    // 过滤掉被锁字段
-    const lockedSet = new Set(current.lockedFields)
+    // 过滤掉 locked_fields 和 hard lock 字段
+    const lockedSet = new Set([...current.lockedFields, ...hardLocked])
     const filteredFields: CatalogUpdateData = {}
 
     for (const [key, value] of Object.entries(fields) as [keyof CatalogUpdateData, unknown][]) {
@@ -200,10 +206,28 @@ export class MediaCatalogService {
       await catalogQueries.setLockedFields(this.db, catalogId, uniqueLocked)
     }
 
-    return catalogQueries.updateCatalogFields(this.db, catalogId, {
+    const updated = await catalogQueries.updateCatalogFields(this.db, catalogId, {
       ...filteredFields,
       metadataSource: source,
     })
+
+    // 写入字段来源 provenance（非阻塞，失败不影响主流程）
+    if (provenanceCtx !== undefined) {
+      const writtenFields = Object.keys(filteredFields).filter((k) => k !== 'metadataSource')
+      void provenanceQueries.batchUpsertFieldProvenance(
+        this.db,
+        catalogId,
+        writtenFields,
+        source,
+        provenanceCtx.sourceRef ?? null,
+        incomingPriority,
+      ).catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err)
+        process.stderr.write(`[MediaCatalogService] provenance write failed for ${catalogId}: ${msg}\n`)
+      })
+    }
+
+    return updated
   }
 
   /**

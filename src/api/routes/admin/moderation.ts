@@ -16,6 +16,7 @@ import { VideoService } from '@/api/services/VideoService'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import * as videoQueries from '@/api/db/queries/videos'
 import * as moderationQueries from '@/api/db/queries/moderation'
+import * as provenanceQueries from '@/api/db/queries/metadataProvenance'
 
 const MetaEditSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -328,6 +329,26 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({
         error: { code: 'INTERNAL_ERROR', message: `复审失败: ${msg}`, status: 500 },
       })
+    }
+  })
+
+  // ── GET /admin/moderation/:id/metadata-provenance ────────────
+  // META-09: 查询视频 catalog 的字段来源记录与锁状态
+  fastify.get('/admin/moderation/:id/metadata-provenance', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const video = await videoQueries.findAdminVideoById(db, id)
+    if (!video) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 } })
+    }
+    try {
+      const [provenance, locks] = await Promise.all([
+        provenanceQueries.getProvenanceByCatalogId(db, video.catalog_id),
+        provenanceQueries.getLocksByCatalogId(db, video.catalog_id),
+      ])
+      return reply.send({ data: { provenance, locks } })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: msg, status: 500 } })
     }
   })
 }
