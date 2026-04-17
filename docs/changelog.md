@@ -6254,3 +6254,27 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无（@resovo/player 为 workspace 包）
 - **数据库变更**：无
 - **注意事项**：PlayerShell / ResumePrompt / DanmakuBar / SourceBar 含业务逻辑（apiClient / playerStore / useDanmaku），保留在 src/components/player/，不进入 packages/player；packages/player 仅包含无 @/ 依赖的纯 UI 核心
+
+---
+
+## DEC-13 — 拆分 `apps/server`（后台 Next.js 独立）
+- **完成时间**：2026-04-17 17:10
+- **修改文件**：
+  - `apps/server/src/app/admin/**` — 从 src/app/[locale]/admin/ 复制（去掉 [locale] 层）
+  - `apps/server/src/components/admin/` — 从 src/components/admin/ 复制
+  - `apps/server/src/components/shared/` — 从 src/components/shared/ 复制
+  - `apps/server/src/components/auth/AdminLoginForm.tsx` — 新建，去 next-intl 版登录表单
+  - `apps/server/src/app/admin/login/page.tsx` — 改用 AdminLoginForm
+  - `apps/server/src/lib/` — 复制 api-client / line-display-name / utils / video-route
+  - `apps/server/src/stores/authStore.ts` — 复制
+  - `apps/server/src/app/layout.tsx` — 新建根 layout（无 next-intl）
+  - `apps/server/src/app/globals.css` — 复制
+  - `apps/server/next.config.ts` — 新建（无 next-intl plugin，端口 3001）
+  - `apps/server/middleware.ts` — 新建（admin 守卫，无 locale 剥离逻辑）
+  - `apps/server/tsconfig.json` — 新建
+  - `apps/server/tailwind.config.ts` — 新建
+  - `apps/server/postcss.config.mjs` — 新建
+  - `apps/server/package.json` — 更新（scripts + deps）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：admin 页面 redirect 路径均为 /admin/...（无 locale），兼容独立部署；本地开发通过 --env-file ../../.env.local 共享环境变量

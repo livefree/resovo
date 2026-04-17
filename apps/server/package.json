@@ -1,5 +1,35 @@
 {
   "name": "@resovo/server",
   "version": "0.1.0",
-  "private": true
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3001 --env-file ../../.env.local",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "typecheck": "tsc --noEmit",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@resovo/player": "*",
+    "@resovo/types": "*",
+    "clsx": "*",
+    "dayjs": "*",
+    "next": "*",
+    "react": "*",
+    "react-dom": "*",
+    "tailwind-merge": "*",
+    "zod": "*",
+    "zustand": "*"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "@types/react": "*",
+    "@types/react-dom": "*",
+    "autoprefixer": "*",
+    "eslint": "*",
+    "eslint-config-next": "*",
+    "postcss": "*",
+    "tailwindcss": "*",
+    "typescript": "*"
+  }
 }

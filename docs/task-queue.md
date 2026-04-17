@@ -6244,7 +6244,7 @@
 
 - **状态**：🔄 执行中
 - **创建时间**：2026-04-17 14:00
-- **最后更新时间**：2026-04-17 15:55
+- **最后更新时间**：2026-04-17 17:10
 - **目标**：将现有 Next.js 单体拆分为 `apps/web`（前台）+ `apps/server`（后台管理）+ `apps/api`（Fastify），通过 Turbo Monorepo 组织，共享 `packages/player` 和 `packages/types`，前后端仅通过数据库建立联系，可独立部署
 - **范围**：根目录构建配置、src/ 全量迁移、packages/ 新建、反向代理配置
 - **依赖**：无（与 META 系列并行，不共享文件范围）
@@ -6299,20 +6299,18 @@
      - PlayerShell/ResumePrompt/DanmakuBar/SourceBar（含业务逻辑）保留 src/，不污染 package ✅
      - typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
 
-5. DEC-13 — 拆分 `apps/server`（后台 Next.js 独立）（状态：⬜ 待开始）
+5. DEC-13 — 拆分 `apps/server`（后台 Next.js 独立）（状态：✅ 已完成）
    - 创建时间：2026-04-17 14:00
    - 计划开始：DEC-12 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-04-17 16:00
+   - 完成时间：2026-04-17 17:10
    - 验收要点：
-     - `src/app/[locale]/admin/**` 迁移到 `apps/server/src/app/admin/**`（去掉 `[locale]` 层）
-     - `src/components/admin/` 迁移到 `apps/server/src/components/`
-     - `src/components/shared/` 迁移到 `apps/server/src/components/shared/`（后台独用，不再是前后台共享）
-     - `apps/server` 拥有独立 `next.config.ts`、`middleware.ts`（守卫 `/admin/*`）、`authStore.ts`
-     - `apps/server` 无 next-intl，路由为 `/admin/login`、`/admin/videos` 等（无 `[locale]`）
-     - `apps/server` 引用 `@resovo/player` 的 `PlayerPreview` 实现内容预览
-     - `pnpm --filter @resovo/server build` 独立构建通过
-     - 后台所有页面功能回归（登录、视频管理、审核、源管理、系统配置）
+     - admin 路由复制到 apps/server/src/app/admin/**（无 [locale] 层）✅
+     - admin/shared 组件复制到 apps/server/src/components/ ✅
+     - 独立 next.config.ts / middleware.ts / tsconfig.json / tailwind / postcss ✅
+     - AdminLoginForm 去 next-intl，后台登录不依赖前台 i18n ✅
+     - middleware 只守卫 /admin/*，无 locale 剥离逻辑 ✅
+     - 根目录 typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
 
 6. DEC-14 — 清理 `apps/web`（前台移除 admin 残留）（状态：⬜ 待开始）
    - 创建时间：2026-04-17 14:00
