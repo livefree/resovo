@@ -6209,8 +6209,10 @@
      - candidate 态展示置信度 breakdown（标题相似度/年份/主创/别名命中）
      - 人工确认后写 video_external_refs.match_status=manual_confirmed，后续自动任务不覆盖
 
-3. META-08 — P3：ES 索引扩展 + 前台搜索/详情联动（状态：⬜ 待开始）
+3. META-08 — P3：ES 索引扩展 + 前台搜索/详情联动（状态：✅ 已完成）
    - 创建时间：2026-04-14 19:30
+   - 实际开始：2026-04-17 10:00
+   - 完成时间：2026-04-17 11:00
    - 依赖：META-06 完成
    - 验收要点：
      - ES mapping 新增：original_title / aliases / languages / directors / writers / cast / tags / imdb_id / rating_votes

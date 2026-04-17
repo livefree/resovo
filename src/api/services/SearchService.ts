@@ -56,7 +56,10 @@ export class SearchService {
       must.push({
         multi_match: {
           query: filters.q,
-          fields: ['title^3', 'title.pinyin', 'title_en^2', 'title_original^2', 'description'],
+          fields: [
+            'title^3', 'title.pinyin', 'title_en^2', 'title_original^2',
+            'aliases^2', 'tags', 'description',
+          ],
           type: 'best_fields',
           fuzziness: 'AUTO',
         },
@@ -168,7 +171,7 @@ export class SearchService {
             {
               multi_match: {
                 query: q,
-                fields: ['title', 'title.pinyin', 'title_en'],
+                fields: ['title', 'title.pinyin', 'title_en', 'aliases'],
                 type: 'phrase_prefix',
               },
             },

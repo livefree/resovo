@@ -6128,3 +6128,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：`confirmFields()` 中 genres 字段特殊处理（写 genresRaw + mapDoubanGenres 写 genres）；候选数据优先查本地 dump（`external_data.douban_entries`），找不到则网络 fallback（`getDoubanDetailRich`）；置信度展示 badge 精确到整数百分比
+
+---
+
+## META-08 — ES 索引扩展 + 前台搜索/详情联动
+- **完成时间**：2026-04-17 11:00
+- **修改文件**：
+  - `src/api/db/migrations/es_mapping.json` — 新增 aliases/languages/tags/rating_votes/runtime_minutes 字段 mapping
+  - `src/api/services/VideoIndexSyncService.ts` — 抽取 ES_FIELDS 常量（消除三份 SQL 字段重复），VideoEsRow 补全新字段，buildDocument 补全新字段
+  - `src/api/services/SearchService.ts` — multi_match 加入 aliases^2/tags；suggest 加入 aliases
+  - `src/types/video.types.ts` — Video 接口新增 titleOriginal/aliases/languages/tags/ratingVotes/runtimeMinutes
+  - `src/api/db/queries/videos.ts` — DbVideoRow/VIDEO_FULL_SELECT/mapVideoRow 补全新字段
+  - `src/components/video/VideoDetailHero.tsx` — 展示原标题/评分人数/片长/别名/语言/标签
+  - `src/api/routes/admin/moderation.ts` — douban-confirm-fields 成功后触发 void indexSync.syncVideo
+- **测试覆盖**：typecheck + lint 通过；全量单测 3 个预存在失败文件（douban/moderationStats/stagingDouban）与改动无关，未引入新失败
+- **新增依赖**：无
+- **数据库变更**：无（ES mapping 文件更新，运行中实例需 PUT /_mappings 或重建索引）
+- **注意事项**：ES 已有索引需执行 PUT /resovo_videos/_mapping 增量更新（新字段不破坏现有文档）；首次写入包含新字段需触发 reconcilePublished 或逐条 syncVideo

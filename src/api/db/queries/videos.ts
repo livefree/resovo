@@ -43,9 +43,12 @@ interface DbVideoRow {
   meta_score: number
   // ── media_catalog JOIN 字段（mc.*）───────────────────────────────
   title_en: string | null
+  title_original: string | null
   description: string | null
   cover_url: string | null
   rating: number | null
+  rating_votes: number | null
+  runtime_minutes: number | null
   year: number | null
   country: string | null
   status: VideoStatus      // 系列完结状态（ongoing/completed），来自 mc.status
@@ -53,6 +56,9 @@ interface DbVideoRow {
   cast: string[]
   writers: string[]
   genres: string[]
+  aliases: string[]
+  languages: string[]
+  tags: string[]
   douban_id: string | null
   imdb_id: string | null
   tmdb_id: number | null
@@ -67,11 +73,14 @@ function mapVideoRow(row: DbVideoRow): Video {
     slug: row.slug,
     title: row.title,
     titleEn: row.title_en,
+    titleOriginal: row.title_original ?? null,
     description: row.description,
     coverUrl: row.cover_url,
     type: row.type,
     genres: (row.genres ?? []) as VideoGenre[],
     rating: row.rating,
+    ratingVotes: row.rating_votes ?? null,
+    runtimeMinutes: row.runtime_minutes ?? null,
     year: row.year,
     country: row.country,
     episodeCount: row.episode_count,
@@ -79,6 +88,9 @@ function mapVideoRow(row: DbVideoRow): Video {
     director: row.director ?? [],
     cast: row.cast ?? [],
     writers: row.writers ?? [],
+    aliases: row.aliases ?? [],
+    languages: row.languages ?? [],
+    tags: row.tags ?? [],
     sourceCount: parseInt(row.source_count ?? '0'),
     subtitleLangs: row.subtitle_langs ?? [],
     sourceContentType: row.source_content_type ?? null,
@@ -142,8 +154,10 @@ const VIDEO_FULL_SELECT = `
   v.review_status, v.visibility_status, v.needs_manual_review,
   v.content_rating, v.site_key, v.source_category,
   v.douban_status, v.source_check_status, v.meta_score,
-  mc.title_en, mc.description, mc.cover_url, mc.rating, mc.year, mc.country,
+  mc.title_en, mc.title_original, mc.description, mc.cover_url,
+  mc.rating, mc.rating_votes, mc.runtime_minutes, mc.year, mc.country,
   mc.status, mc.director, mc."cast", mc.writers, mc.genres,
+  mc.aliases, mc.languages, mc.tags,
   mc.douban_id, mc.imdb_id, mc.tmdb_id, mc.title_normalized, mc.metadata_source
 `
 

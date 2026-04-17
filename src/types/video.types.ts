@@ -89,6 +89,13 @@ export interface Video {
   catalogId: string | null
   imdbId: string | null
   tmdbId: number | null
+  // META-06/08 扩展字段（来自 media_catalog）
+  titleOriginal: string | null
+  aliases: string[]
+  languages: string[]
+  tags: string[]
+  ratingVotes: number | null
+  runtimeMinutes: number | null
   // 流水线辅助字段（Migration 032）
   doubanStatus: DoubanStatus
   sourceCheckStatus: SourceCheckStatus

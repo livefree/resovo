@@ -41,10 +41,15 @@ interface VideoEsRow {
   country: string | null
   episode_count: number
   rating: number | null
+  rating_votes: number | null
+  runtime_minutes: number | null
   status: string
   director: string[]
   cast: string[]
   writers: string[]
+  aliases: string[]
+  languages: string[]
+  tags: string[]
   subtitle_langs: string[] | null
   is_published: boolean
   content_rating: string
@@ -57,14 +62,19 @@ interface VideoEsRow {
 
 // ── SQL ──────────────────────────────────────────────────────────
 
+const ES_FIELDS = `
+  v.id, v.short_id, v.slug, v.title, v.type, v.episode_count,
+  v.is_published, v.content_rating, v.review_status, v.visibility_status,
+  v.catalog_id, v.created_at,
+  mc.title_en, mc.title_original, mc.description, mc.cover_url,
+  mc.genres, mc.year, mc.country, mc.rating, mc.rating_votes, mc.runtime_minutes,
+  mc.status, mc.director, mc."cast", mc.writers,
+  mc.aliases, mc.languages, mc.tags,
+  mc.imdb_id, mc.tmdb_id
+`
+
 const FETCH_SQL = `
-  SELECT v.id, v.short_id, v.slug, v.title, v.type, v.episode_count,
-         v.is_published, v.content_rating, v.review_status, v.visibility_status,
-         v.catalog_id, v.created_at,
-         mc.title_en, mc.title_original, mc.description, mc.cover_url,
-         mc.genres, mc.year, mc.country, mc.rating, mc.status,
-         mc.director, mc."cast", mc.writers,
-         mc.imdb_id, mc.tmdb_id,
+  SELECT ${ES_FIELDS},
          ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs
   FROM videos v
   JOIN media_catalog mc ON mc.id = v.catalog_id
@@ -73,13 +83,7 @@ const FETCH_SQL = `
 `
 
 const RECONCILE_SQL = `
-  SELECT v.id, v.short_id, v.slug, v.title, v.type, v.episode_count,
-         v.is_published, v.content_rating, v.review_status, v.visibility_status,
-         v.catalog_id, v.created_at,
-         mc.title_en, mc.title_original, mc.description, mc.cover_url,
-         mc.genres, mc.year, mc.country, mc.rating, mc.status,
-         mc.director, mc."cast", mc.writers,
-         mc.imdb_id, mc.tmdb_id,
+  SELECT ${ES_FIELDS},
          ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs
   FROM videos v
   JOIN media_catalog mc ON mc.id = v.catalog_id
@@ -93,13 +97,7 @@ const RECONCILE_SQL = `
 
 /** CHG-411: 查询最近修改的非上架视频（用于修复漏下架的 ES 文档） */
 const STALE_UNPUBLISHED_SQL = `
-  SELECT v.id, v.short_id, v.slug, v.title, v.type, v.episode_count,
-         v.is_published, v.content_rating, v.review_status, v.visibility_status,
-         v.catalog_id, v.created_at,
-         mc.title_en, mc.title_original, mc.description, mc.cover_url,
-         mc.genres, mc.year, mc.country, mc.rating, mc.status,
-         mc.director, mc."cast", mc.writers,
-         mc.imdb_id, mc.tmdb_id,
+  SELECT ${ES_FIELDS},
          ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs
   FROM videos v
   JOIN media_catalog mc ON mc.id = v.catalog_id
@@ -138,10 +136,15 @@ function buildDocument(row: VideoEsRow): Record<string, unknown> {
     country:          row.country,
     episode_count:    row.episode_count,
     rating:           row.rating,
+    rating_votes:     row.rating_votes,
+    runtime_minutes:  row.runtime_minutes,
     status:           row.status,
     director:         row.director ?? [],
     cast:             row.cast ?? [],
     writers:          row.writers ?? [],
+    aliases:          row.aliases ?? [],
+    languages:        row.languages ?? [],
+    tags:             row.tags ?? [],
     subtitle_langs:   row.subtitle_langs ?? [],
     is_published:     row.is_published,
     content_rating:   row.content_rating,

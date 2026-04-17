@@ -216,9 +216,17 @@ export function VideoDetailHero({ video }: VideoDetailHeroProps) {
                 {video.titleEn}
               </p>
             )}
+            {video.titleOriginal && video.titleOriginal !== video.titleEn && (
+              <p
+                className="text-sm"
+                style={{ color: 'var(--muted-foreground)' }}
+              >
+                {video.titleOriginal}
+              </p>
+            )}
           </div>
 
-          {/* Meta 行：年份 · 地区 · 类型 · 状态 · 集数 */}
+          {/* Meta 行：年份 · 地区 · 类型 · 状态 · 集数 · 片长 */}
           <div
             className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"
             style={{ color: 'var(--muted-foreground)' }}
@@ -243,6 +251,12 @@ export function VideoDetailHero({ video }: VideoDetailHeroProps) {
               <>
                 <span className="opacity-30">·</span>
                 <span>全 {video.episodeCount} 集</span>
+              </>
+            )}
+            {video.runtimeMinutes !== null && video.runtimeMinutes > 0 && (
+              <>
+                <span className="opacity-30">·</span>
+                <span>{video.runtimeMinutes} 分钟</span>
               </>
             )}
           </div>
@@ -273,6 +287,11 @@ export function VideoDetailHero({ video }: VideoDetailHeroProps) {
                 >
                   {video.rating.toFixed(1)}
                 </span>
+                {video.ratingVotes !== null && video.ratingVotes > 0 && (
+                  <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                    ({video.ratingVotes.toLocaleString()} 人评)
+                  </span>
+                )}
               </div>
             )}
 
@@ -305,8 +324,8 @@ export function VideoDetailHero({ video }: VideoDetailHeroProps) {
             )}
           </div>
 
-          {/* 人员信息 */}
-          {hasPersonnel && (
+          {/* 人员信息 + 扩展元数据 */}
+          {(hasPersonnel || video.aliases.length > 0 || video.languages.length > 0 || video.tags.length > 0) && (
             <div
               className="space-y-2 pt-3 border-t"
               style={{ borderColor: 'var(--border)' }}
@@ -315,6 +334,47 @@ export function VideoDetailHero({ video }: VideoDetailHeroProps) {
               <MetaRow label="导演" names={video.director} type="director" />
               <MetaRow label="编剧" names={video.writers} type="writer" />
               <MetaRow label="演员" names={video.cast} type="actor" />
+              {video.aliases.length > 0 && (
+                <div className="flex gap-2 items-start">
+                  <span className="text-xs shrink-0 pt-0.5 w-12" style={{ color: 'var(--muted-foreground)' }}>
+                    别名
+                  </span>
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--muted-foreground)' }}>
+                    {video.aliases.join(' / ')}
+                  </p>
+                </div>
+              )}
+              {video.languages.length > 0 && (
+                <div className="flex gap-2 items-start">
+                  <span className="text-xs shrink-0 pt-0.5 w-12" style={{ color: 'var(--muted-foreground)' }}>
+                    语言
+                  </span>
+                  <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                    {video.languages.join(' / ')}
+                  </p>
+                </div>
+              )}
+              {video.tags.length > 0 && (
+                <div className="flex gap-2 items-start">
+                  <span className="text-xs shrink-0 pt-0.5 w-12" style={{ color: 'var(--muted-foreground)' }}>
+                    标签
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {video.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="px-1.5 py-0.5 rounded text-xs border"
+                        style={{
+                          color: 'var(--muted-foreground)',
+                          borderColor: 'var(--border)',
+                        }}
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

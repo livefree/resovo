@@ -10,8 +10,10 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
+import { es } from '@/api/lib/elasticsearch'
 import { DoubanService } from '@/api/services/DoubanService'
 import { VideoService } from '@/api/services/VideoService'
+import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import * as videoQueries from '@/api/db/queries/videos'
 import * as moderationQueries from '@/api/db/queries/moderation'
 
@@ -56,6 +58,7 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['moderator', 'admin'])]
   const svc = new DoubanService(db)
   const videoSvc = new VideoService(db)
+  const indexSync = new VideoIndexSyncService(db, es)
 
   // ── PATCH /admin/moderation/:id/meta — 内联元数据快速编辑 ────
   fastify.patch('/admin/moderation/:id/meta', { preHandler: auth }, async (request, reply) => {
@@ -216,6 +219,7 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       if (!result.updated) {
         return reply.code(422).send({ error: { code: 'CONFIRM_FAILED', message: result.reason ?? '确认失败', status: 422 } })
       }
+      void indexSync.syncVideo(id)
       return reply.send({ data: { id, confirmed: true } })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)

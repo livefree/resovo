@@ -153,6 +153,35 @@
           }
         }
       },
+      "aliases": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart",
+        "fields": {
+          "keyword": {
+            "type": "keyword"
+          }
+        }
+      },
+      "languages": {
+        "type": "keyword"
+      },
+      "tags": {
+        "type": "text",
+        "analyzer": "ik_max_word",
+        "search_analyzer": "ik_smart",
+        "fields": {
+          "keyword": {
+            "type": "keyword"
+          }
+        }
+      },
+      "rating_votes": {
+        "type": "integer"
+      },
+      "runtime_minutes": {
+        "type": "integer"
+      },
       "subtitle_langs": {
         "type": "keyword"
       },
