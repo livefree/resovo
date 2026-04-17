@@ -6292,3 +6292,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：tests/unit/components/admin/ 等测试文件仍在根目录 tests/，通过 vitest alias 过渡；后续应迁移至 apps/server/tests/
+
+---
+
+## DEC-15 — 反向代理配置与联调验证
+
+- **完成时间**：2026-04-17 15:30
+- **所属序列**：SEQ-20260417-01
+- **变更摘要**：提供 nginx 反向代理配置，完成三进程同域路由规则，更新架构文档部署拓扑图
+- **涉及文件**：
+  - `docker/nginx.conf`（新建）— 路由规则：`/v1/*`→api:4000，`/admin/*`→server:3001，`/*`→web:3000；`/admin/_next/` 路径重写以正确路由 server 静态资源
+  - `docker/docker-compose.dev.yml`（新建）— 本地联调代理，访问 localhost:8080 统一入口
+  - `apps/server/next.config.ts` — 添加 `assetPrefix`（`NEXT_PUBLIC_ASSET_PREFIX` 控制），生产环境设置 `/admin` 使静态资源引用带前缀
+  - `docs/architecture.md` — 新增 §1a 部署拓扑图、同域 Cookie 说明、Monorepo 目录说明；更新 §3.2/3.3/3.4 路由章节与 §4 服务入口路径
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：E2E 测试需真实三进程运行环境，通过代理层的 E2E 验证留待联调环境就绪后执行

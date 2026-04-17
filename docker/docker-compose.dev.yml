@@ -1,0 +1,29 @@
+# 本地反向代理开发环境
+# 用途：在本地通过统一入口（localhost:8080）联调三个进程
+#
+# 前置条件（先在单独终端启动三个进程）：
+#   npm run dev                      # web:3000
+#   npx turbo dev --filter=@resovo/server  # server:3001
+#   npx turbo dev --filter=@resovo/api     # api:4000
+#
+# 启动代理：
+#   docker compose -f docker/docker-compose.dev.yml up
+#
+# 访问：
+#   http://localhost:8080/           前台
+#   http://localhost:8080/admin      后台
+#   http://localhost:8080/v1/health  API
+
+version: '3.9'
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: resovo_nginx_dev
+    ports:
+      - '8080:80'
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    restart: unless-stopped

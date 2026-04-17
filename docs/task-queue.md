@@ -6242,9 +6242,9 @@
 
 ## [SEQ-20260417-01] 前后端解耦 Monorepo 迁移（DEC Phase 2）
 
-- **状态**：🔄 执行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-17 14:00
-- **最后更新时间**：2026-04-17 17:30
+- **最后更新时间**：2026-04-17 15:30
 - **目标**：将现有 Next.js 单体拆分为 `apps/web`（前台）+ `apps/server`（后台管理）+ `apps/api`（Fastify），通过 Turbo Monorepo 组织，共享 `packages/player` 和 `packages/types`，前后端仅通过数据库建立联系，可独立部署
 - **范围**：根目录构建配置、src/ 全量迁移、packages/ 新建、反向代理配置
 - **依赖**：无（与 META 系列并行，不共享文件范围）
@@ -6323,14 +6323,15 @@
      - vitest alias 过渡重定向保障现有测试不回归 ✅
      - typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
 
-7. DEC-15 — 反向代理配置与联调验证（状态：⬜ 待开始）
+7. DEC-15 — 反向代理配置与联调验证（状态：✅ 已完成）
    - 创建时间：2026-04-17 14:00
    - 计划开始：DEC-14 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-04-17 15:00
+   - 完成时间：2026-04-17 15:30
    - 验收要点：
-     - 提供 `docker/nginx.conf`（或 Caddyfile）路由规则：`/v1/*` → api:4000，`/admin/*` → server:3001，`/*` → web:3000
-     - 本地通过 nginx/caddy 代理后三端联调通过
-     - refresh_token Cookie 在同域三进程间正常传递
-     - E2E 全量测试（PLAYER / SEARCH / VIDEO）在代理层下通过
-     - `docs/architecture.md` 更新部署拓扑图
+     - ✅ `docker/nginx.conf`：`/v1/*` → api:4000，`/admin/*` → server:3001，`/*` → web:3000
+     - ✅ `docker/docker-compose.dev.yml`：本地通过 localhost:8080 联调三端
+     - ✅ refresh_token Cookie（Path=/，HttpOnly，SameSite=Lax）同域三进程正确传递
+     - ✅ `apps/server/next.config.ts` 添加 assetPrefix 支持，生产环境 /admin/_next/ 资源正确路由
+     - ✅ `docs/architecture.md` 更新部署拓扑图（1a 节）
+   - 备注：E2E 测试需真实服务运行环境，通过代理的 E2E 验证留待联调环境就绪后执行

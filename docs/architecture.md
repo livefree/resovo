@@ -12,18 +12,75 @@
 
 ## 1. 系统总览
 
-Resovo 当前采用前后端解耦部署：
+Resovo 采用同域多进程独立部署：
 
-- 前端：Next.js App Router（`src/app`）
-- 后端：Fastify API（`src/api`，统一前缀 `/v1`）
-- 数据：PostgreSQL + Elasticsearch
-- 异步：Redis + Bull（crawler/verify 队列）
+- **web**（前台）：Next.js App Router（`src/app`，含 `[locale]`，i18n）— 端口 3000
+- **server**（后台）：Next.js App Router（`apps/server/src/app`，无 `[locale]`）— 端口 3001
+- **api**：Fastify API（`apps/api/src`，统一前缀 `/v1`）— 端口 4000
+- **数据**：PostgreSQL + Elasticsearch
+- **异步**：Redis + Bull（crawler/verify 队列）
 
 关键边界：
 
-- 前端不直连数据库，仅通过 `/v1` API。
+- 前台与后台仅通过 `/v1` API 与数据库建立联系，不共享代码路径。
 - 业务规则收敛在 `services` + `db/queries` + DB 触发器；页面层不做状态机判定。
 - 视频状态（三元组）由数据库触发器强约束（Migration 023）。
+
+---
+
+## 1a. 部署拓扑（Monorepo 三进程）
+
+```
+                    ┌─────────────────────────────────────────┐
+                    │           Nginx 反向代理（:80）           │
+                    │                                         │
+                    │  /v1/*    ──→  api:4000   (Fastify)     │
+                    │  /admin/* ──→  server:3001 (Next.js)    │
+                    │  /*       ──→  web:3000   (Next.js)     │
+                    └─────────────────────────────────────────┘
+                           │              │              │
+                    ┌──────┘       ┌──────┘       ┌─────┘
+                    ▼              ▼              ▼
+             web:3000          server:3001     api:4000
+             前台 Next.js      后台 Next.js    Fastify API
+             src/app/          apps/server/   apps/api/
+             [locale]/*        admin/*        /v1/*
+                    │              │              │
+                    └──────┬───────┘              │
+                           │                      │
+                    ┌──────▼──────────────────────▼──────┐
+                    │  PostgreSQL  │  Elasticsearch  │  Redis │
+                    └────────────────────────────────────┘
+```
+
+**同域 Cookie 传递**：`refresh_token` 由 API（`/v1/auth/`）设置，`Path=/`，`HttpOnly`，`SameSite=Lax`。
+三个进程共享同一域名，浏览器在所有请求中自动携带该 Cookie，无需额外配置。
+
+**静态资源路由**：
+- `server` 应用在生产环境设置 `assetPrefix=/admin`（`NEXT_PUBLIC_ASSET_PREFIX` 环境变量）。
+- 浏览器请求 `/admin/_next/...` → nginx 剥除 `/admin` 前缀 → 转发给 `server:3001/_next/...`。
+- `web` 应用的 `/_next/...` 直接路由到 `web:3000`，互不干扰。
+
+**Monorepo 结构**：
+
+```text
+resovo/                         ← Turbo + npm workspaces 根
+├── apps/
+│   ├── web/                    ← 前台（占位，src/ 为实际前台代码）
+│   ├── server/                 ← 后台 Next.js（@resovo/server）
+│   └── api/                    ← Fastify API（@resovo/api）
+├── packages/
+│   ├── player/                 ← 共享播放器组件（@resovo/player）
+│   └── types/                  ← 共享类型（@resovo/types）
+├── src/                        ← 前台 Next.js 主代码（待迁移到 apps/web/）
+├── docker/
+│   ├── nginx.conf              ← 反向代理路由规则
+│   ├── docker-compose.dev.yml  ← 本地三端联调代理
+│   └── elasticsearch.Dockerfile
+└── docker-compose.yml          ← PostgreSQL + Elasticsearch + Redis
+```
+
+**本地开发**：各进程独立启动（npm run dev / turbo dev），通过 `docker/docker-compose.dev.yml` 启动 nginx 实现同域联调（localhost:8080）。
 
 ---
 
@@ -72,28 +129,32 @@ resovo/
 
 ### 3.2 登录与后台入口
 
-- 后台登录：`/[locale]/admin/login`
+- 后台登录：`/admin/login`（`apps/server` 独立进程，无 `[locale]` 前缀）
 - 前台登录/注册路由仍存在文件，但已下线为 `notFound()`：
   - `/[locale]/auth/login`
   - `/[locale]/auth/register`
 
-### 3.3 后台路由
+### 3.3 后台路由（`apps/server`，进程 server:3001）
 
-- `/[locale]/admin`
-- `admin/{videos,sources,users,content,submissions,subtitles,crawler,analytics,moderation}`
-- `admin/403`
+- `/admin`（首页）
+- `/admin/{videos,sources,users,content,submissions,subtitles,crawler,analytics,moderation}`
+- `/admin/403`
 
-中间件约束（`src/middleware.ts`）：
+中间件约束（`apps/server/middleware.ts`）：
 
 - `/admin/**`（除 `/admin/login`、`/admin/403`）要求存在 `refresh_token`。
 - `user_role=user` 拒绝进入后台。
 - moderator 不能访问 admin-only（`/admin/users`、`/admin/crawler`、`/admin/analytics`）。
 
+### 3.4 前台中间件（`src/middleware.ts`）
+
+仅负责 next-intl 国际化路由，不含鉴权逻辑。
+
 ---
 
 ## 4. API 架构
 
-服务入口：`src/api/server.ts`
+服务入口：`apps/api/src/server.ts`
 
 - 所有路由挂载在 `/v1`。
 - 已注册核心路由：
