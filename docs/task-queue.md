@@ -6088,8 +6088,10 @@
 
 ### 任务列表（按执行顺序）
 
-1. CHG-414 — P3：video_sources 新增 source_site_key 列，display_name JOIN 改走行级（状态：⬜ 待开始）
+1. CHG-414 — P3：video_sources 新增 source_site_key 列，display_name JOIN 改走行级（状态：✅ 已完成）
    - 创建时间：2026-04-14 19:10
+   - 实际开始：2026-04-17 15:00
+   - 完成时间：2026-04-17 16:00
    - 技术方案：
      - Migration：`ALTER TABLE video_sources ADD COLUMN source_site_key VARCHAR(100)`（nullable，存量数据可为 NULL 或 backfill 自 videos.site_key）
      - sources.ts：JOIN 路径改为 `video_sources.source_site_key → crawler_sites.key`，NULL 时 fallback 到 `videos.site_key`（向后兼容）

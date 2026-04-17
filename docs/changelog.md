@@ -6176,3 +6176,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：前台播放源隐藏已在 DB 层（findActiveSourcesByVideoId is_active=true）完成；本次补全的是空态 UX 和管理台可见性
+
+---
+
+## CHG-414 — video_sources 新增 source_site_key，display_name JOIN 改走行级
+- **完成时间**：2026-04-17 16:00
+- **修改文件**：
+  - `src/api/db/migrations/046_video_sources_source_site_key.sql` — 新增 source_site_key VARCHAR(100) NULL，存量数据从 videos.site_key backfill
+  - `src/api/db/queries/sources.ts` — UpsertSourceInput 新增 sourceSiteKey 字段；upsertSource / replaceSourcesForSite INSERT 写入 source_site_key；findActiveSourcesByVideoId JOIN 改为 COALESCE(vs.source_site_key, v.site_key)
+  - `src/api/services/CrawlerService.ts` — sourceMappings 传入 sourceSiteKey=siteKey
+  - `docs/architecture.md` — 补充 video_sources.source_site_key 字段说明 + 046 migration 列表
+- **新增依赖**：无
+- **数据库变更**：video_sources 新增 source_site_key 列（Migration 046，含存量 backfill）
+- **注意事项**：存量 backfill 幂等；fallback 到 videos.site_key 保证向后兼容；新爬虫数据写入时自动携带行级标识
