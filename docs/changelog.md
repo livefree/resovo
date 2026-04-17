@@ -6238,3 +6238,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：scripts/ 和 tests/ 中的 @/api/ 导入无需修改，通过 tsconfig/vitest alias 自动解析
+
+---
+
+## DEC-12 — 提取 `packages/player`
+- **完成时间**：2026-04-17 15:55
+- **修改文件**：
+  - `packages/player/src/VideoPlayer.tsx` — 新建，从 src/components/player/VideoPlayer.tsx 复制（纯 UI，无 @/ 依赖）
+  - `packages/player/src/core/` — 新建，从 src/components/player/core/ 复制（YTPlayer 核心，无 @/ 依赖）
+  - `packages/player/src/PlayerPreview.tsx` — 新建精简版（无弹幕/续播，供后台内容预览）
+  - `packages/player/src/index.ts` — 新建导出入口（VideoPlayer + PlayerPreview + 类型）
+  - `packages/player/package.json` — 配置 main/types/exports/peerDependencies
+  - `packages/player/tsconfig.json` — 新建包级 tsconfig
+  - `package.json` — dependencies 新增 `"@resovo/player": "*"`
+- **新增依赖**：无（@resovo/player 为 workspace 包）
+- **数据库变更**：无
+- **注意事项**：PlayerShell / ResumePrompt / DanmakuBar / SourceBar 含业务逻辑（apiClient / playerStore / useDanmaku），保留在 src/components/player/，不进入 packages/player；packages/player 仅包含无 @/ 依赖的纯 UI 核心

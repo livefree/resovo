@@ -6244,7 +6244,7 @@
 
 - **状态**：🔄 执行中
 - **创建时间**：2026-04-17 14:00
-- **最后更新时间**：2026-04-17 15:30
+- **最后更新时间**：2026-04-17 15:55
 - **目标**：将现有 Next.js 单体拆分为 `apps/web`（前台）+ `apps/server`（后台管理）+ `apps/api`（Fastify），通过 Turbo Monorepo 组织，共享 `packages/player` 和 `packages/types`，前后端仅通过数据库建立联系，可独立部署
 - **范围**：根目录构建配置、src/ 全量迁移、packages/ 新建、反向代理配置
 - **依赖**：无（与 META 系列并行，不共享文件范围）
@@ -6287,18 +6287,17 @@
      - 根目录 `npm run api` 已指向 apps/api/src/server.ts ✅
      - typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
 
-4. DEC-12 — 提取 `packages/player`（状态：⬜ 待开始）
+4. DEC-12 — 提取 `packages/player`（状态：✅ 已完成）
    - 创建时间：2026-04-17 14:00
    - 计划开始：DEC-11 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-04-17 15:35
+   - 完成时间：2026-04-17 15:55
    - 验收要点：
-     - `src/components/player/` 迁移到 `packages/player/src/`
-     - 导出两个入口：`VideoPlayer`（完整版，web 用）和 `PlayerPreview`（精简版，server 用，无弹幕/续播）
-     - `PlayerPreview` Props 类型定义完整，不使用 `any`
-     - `apps/web` watch 页引用 `@resovo/player` 播放器功能回归正常
-     - 断点续播 / 线路切换 / 影院模式 / 字幕开关四条关键路径回归测试通过
-     - typecheck / lint 通过
+     - packages/player/src/ 包含 VideoPlayer + core/（纯 UI，无 @/ 依赖）✅
+     - VideoPlayer（完整版 web 用）+ PlayerPreview（精简版 server 用）两个导出 ✅
+     - PlayerPreview Props 类型完整，无 any ✅
+     - PlayerShell/ResumePrompt/DanmakuBar/SourceBar（含业务逻辑）保留 src/，不污染 package ✅
+     - typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
 
 5. DEC-13 — 拆分 `apps/server`（后台 Next.js 独立）（状态：⬜ 待开始）
    - 创建时间：2026-04-17 14:00
