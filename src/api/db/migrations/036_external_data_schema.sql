@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS external_data.douban_entries (
   description      TEXT,
   cover_url        TEXT,
   directors        TEXT[]        NOT NULL DEFAULT '{}',
-  cast             TEXT[]        NOT NULL DEFAULT '{}',
+  "cast"           TEXT[]        NOT NULL DEFAULT '{}',
   writers          TEXT[]        NOT NULL DEFAULT '{}',
   genres           TEXT[]        NOT NULL DEFAULT '{}',
   country          TEXT,

@@ -133,7 +133,7 @@ async function flushBatch(db: Pool, batch: DoubanEntry[]): Promise<void> {
       await client.query(
         `INSERT INTO external_data.douban_entries
            (douban_id, title, title_normalized, year, media_type, rating,
-            description, cover_url, directors, cast, writers, genres, country,
+            description, cover_url, directors, "cast", writers, genres, country,
             aliases, imdb_id, languages, duration_minutes, tags, douban_votes,
             regions, release_date, actor_ids, director_ids, official_site)
          VALUES ($1, $2, $3, $4, 'movie', $5, $6, $7, $8, $9, '{}', $10, $11,
@@ -142,7 +142,7 @@ async function flushBatch(db: Pool, batch: DoubanEntry[]): Promise<void> {
            title = EXCLUDED.title, title_normalized = EXCLUDED.title_normalized,
            year = EXCLUDED.year, rating = EXCLUDED.rating,
            description = EXCLUDED.description, cover_url = EXCLUDED.cover_url,
-           directors = EXCLUDED.directors, cast = EXCLUDED.cast,
+           directors = EXCLUDED.directors, "cast" = EXCLUDED."cast",
            genres = EXCLUDED.genres, country = EXCLUDED.country,
            aliases = EXCLUDED.aliases, imdb_id = EXCLUDED.imdb_id,
            languages = EXCLUDED.languages, duration_minutes = EXCLUDED.duration_minutes,

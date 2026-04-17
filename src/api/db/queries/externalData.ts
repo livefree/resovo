@@ -66,7 +66,7 @@ export async function findDoubanByTitleNorm(
     actor_ids: string[]; director_ids: string[]; official_site: string | null
   }>(
     `SELECT douban_id, title, year, rating, description, cover_url,
-            directors, cast, writers, genres, country,
+            directors, "cast", writers, genres, country,
             aliases, imdb_id, languages, duration_minutes, tags, douban_votes,
             regions, release_date, actor_ids, director_ids, official_site
      FROM external_data.douban_entries
@@ -125,7 +125,7 @@ export async function findDoubanByAlias(
     actor_ids: string[]; director_ids: string[]; official_site: string | null
   }>(
     `SELECT douban_id, title, year, rating, description, cover_url,
-            directors, cast, writers, genres, country,
+            directors, "cast", writers, genres, country,
             aliases, imdb_id, languages, duration_minutes, tags, douban_votes,
             regions, release_date, actor_ids, director_ids, official_site
      FROM external_data.douban_entries
@@ -183,7 +183,7 @@ export async function findDoubanByImdbId(
     actor_ids: string[]; director_ids: string[]; official_site: string | null
   }>(
     `SELECT douban_id, title, year, rating, description, cover_url,
-            directors, cast, writers, genres, country,
+            directors, "cast", writers, genres, country,
             aliases, imdb_id, languages, duration_minutes, tags, douban_votes,
             regions, release_date, actor_ids, director_ids, official_site
      FROM external_data.douban_entries
@@ -361,7 +361,7 @@ export async function findDoubanEntryById(
     actor_ids: string[]; director_ids: string[]; official_site: string | null
   }>(
     `SELECT douban_id, title, year, rating, description, cover_url,
-            directors, cast, writers, genres, country,
+            directors, "cast", writers, genres, country,
             aliases, imdb_id, languages, duration_minutes, tags, douban_votes,
             regions, release_date, actor_ids, director_ids, official_site
      FROM external_data.douban_entries
