@@ -6325,3 +6325,29 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **测试覆盖**：typecheck ✅ / lint ✅ / unit tests 通过（预存 3 文件 16 失败不变）
+
+---
+
+## DEC-17 — `src/` 全量迁入 `apps/web/src/`
+
+- **任务 ID**：DEC-17
+- **完成时间**：2026-04-17 17:00
+- **来源序列**：SEQ-20260417-02
+- **变更文件**：
+  - `apps/web/src/app/` — 新建（从 `src/app/` 迁移，含 [locale] 路由、globals.css、layout、page、robots）
+  - `apps/web/src/components/` — 新建（从 `src/components/` 迁移，含 auth/browse/layout/player/search/ui/video）
+  - `apps/web/src/hooks/` — 新建（从 `src/hooks/` 迁移）
+  - `apps/web/src/i18n/` — 新建（从 `src/i18n/` 迁移）
+  - `apps/web/src/lib/` — 新建（从 `src/lib/` 迁移）
+  - `apps/web/src/stores/` — 新建（从 `src/stores/` 迁移）
+  - `apps/web/src/types/` — 新建（从 `src/types/` 迁移，shim → @resovo/types）
+  - `apps/web/middleware.ts` — 新建（从 `src/middleware.ts` 迁移）
+  - `src/` — 删除（已完全清空，目录可移除）
+  - `tsconfig.json` — 更新：`@/*` → `apps/web/src/*`，include 替换为 `apps/web/src/**/*.ts`
+  - `vitest.config.ts` — 更新：`@` alias → `apps/web/src`，coverage includes 路径更新
+  - `.eslintrc.json` — 更新：ignorePatterns 补充 `apps/**/templates/**`，overrides 补充 apps/web + apps/server 路径
+  - `next.config.ts` — 更新：简化为占位配置（移除 next-intl plugin）
+  - `package.json` — 更新：dev/build/start/lint 脚本改为委托 apps/web
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅ / lint ✅ / unit tests 通过（预存 3 文件 16 失败不变）

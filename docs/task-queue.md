@@ -6338,9 +6338,9 @@
 
 ## [SEQ-20260417-02] 前台 apps/web 迁移（DEC Phase 3）
 
-- **状态**：🔄 执行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-17 16:00
-- **最后更新时间**：2026-04-17 16:20
+- **最后更新时间**：2026-04-17 17:00
 - **目标**：将现有 `src/` 前台代码迁移到 `apps/web/`，使前台成为独立可运行的 Next.js 应用，根目录清理为纯 monorepo 宿主
 - **范围**：`apps/web/`、`src/`（除 types shim）、根目录构建脚本
 - **依赖**：SEQ-20260417-01 全部完成 ✅
@@ -6359,11 +6359,11 @@
      - `apps/web/tailwind.config.ts` + `apps/web/postcss.config.mjs` 与现有根目录一致
      - 根目录 typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
 
-2. DEC-17 — `src/` 全量迁入 `apps/web/src/`（状态：⬜ 待开始）
+2. DEC-17 — `src/` 全量迁入 `apps/web/src/`（状态：✅ 已完成）
    - 创建时间：2026-04-17 16:00
    - 计划开始：DEC-16 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-04-17 16:25
+   - 完成时间：2026-04-17 17:00
    - 验收要点：
      - `src/app/`、`src/components/`、`src/hooks/`、`src/lib/`、`src/stores/`、`src/i18n/`、`src/middleware.ts` 全量迁移到 `apps/web/src/`
      - `src/` 下仅保留 `types/`（shim）及 `app/globals.css`（如仍被根引用）

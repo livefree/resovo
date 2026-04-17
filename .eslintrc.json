@@ -1,6 +1,6 @@
 {
   "extends": ["next/core-web-vitals", "prettier"],
-  "ignorePatterns": ["src/**/templates/**", ".next/**", "node_modules/**"],
+  "ignorePatterns": ["src/**/templates/**", "apps/**/templates/**", ".next/**", "node_modules/**"],
   "rules": {
     "no-console": "error"
   },
@@ -14,7 +14,15 @@
         "src/lib/**/*.ts",
         "src/lib/**/*.tsx",
         "src/stores/**/*.ts",
-        "src/stores/**/*.tsx"
+        "src/stores/**/*.tsx",
+        "apps/web/src/app/**/*.ts",
+        "apps/web/src/app/**/*.tsx",
+        "apps/web/src/components/**/*.ts",
+        "apps/web/src/components/**/*.tsx",
+        "apps/web/src/lib/**/*.ts",
+        "apps/web/src/lib/**/*.tsx",
+        "apps/web/src/stores/**/*.ts",
+        "apps/web/src/stores/**/*.tsx"
       ],
       "rules": {
         "no-restricted-imports": [
@@ -31,7 +39,12 @@
       }
     },
     {
-      "files": ["src/components/admin/**/*.tsx", "src/components/admin/**/*.ts"],
+      "files": [
+        "src/components/admin/**/*.tsx",
+        "src/components/admin/**/*.ts",
+        "apps/server/src/components/admin/**/*.tsx",
+        "apps/server/src/components/admin/**/*.ts"
+      ],
       "rules": {
         "no-restricted-syntax": [
           "warn",

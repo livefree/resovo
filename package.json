@@ -7,12 +7,12 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "next dev -p 3000",
+    "dev": "cd apps/web && npm run dev",
     "api": "node --env-file=.env.local --import tsx --watch apps/api/src/server.ts",
-    "build": "next build",
-    "start": "next start",
+    "build": "cd apps/web && npm run build",
+    "start": "cd apps/web && npm run start",
     "typecheck": "tsc --noEmit",
-    "lint": "next lint",
+    "lint": "cd apps/web && npm run lint",
     "test": "vitest",
     "test:run": "vitest run",
     "test:e2e": "playwright test",

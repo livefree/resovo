@@ -1,22 +1,7 @@
 import type { NextConfig } from 'next'
-import createNextIntlPlugin from 'next-intl/plugin'
 
-const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts')
+// 根目录不再是 Next.js 应用，此文件仅为 monorepo 占位。
+// 前台：apps/web（port 3000）  后台：apps/server（port 3001）
+const nextConfig: NextConfig = {}
 
-const nextConfig: NextConfig = {
-  reactStrictMode: true,
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '**',
-      },
-      {
-        protocol: 'http',
-        hostname: '**',
-      },
-    ],
-  },
-}
-
-export default withNextIntl(nextConfig)
+export default nextConfig

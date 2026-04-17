@@ -18,8 +18,8 @@ export default defineConfig({
         'apps/api/src/services/**',
         'apps/api/src/routes/**',
         'apps/api/src/db/queries/**',
-        'src/components/player/**',
-        'src/lib/api-client.ts',
+        'apps/web/src/components/player/**',
+        'apps/web/src/lib/api-client.ts',
       ],
       thresholds: {
         // 覆盖率低于此值时输出警告（不阻断）
@@ -36,7 +36,7 @@ export default defineConfig({
       '@/api': path.resolve(__dirname, './apps/api/src'),
       '@/components/admin': path.resolve(__dirname, './apps/server/src/components/admin'),
       '@/components/shared': path.resolve(__dirname, './apps/server/src/components/shared'),
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(__dirname, './apps/web/src'),
     },
   },
   // 自动 JSX 转换（React 17+ automatic runtime，组件测试不需要 import React）
