@@ -103,7 +103,7 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
     const merged: SourceRow[] = []
     do {
       const res = await apiClient.get<{ data: SourceRow[]; total: number }>(
-        `/admin/sources?videoId=${id}&status=active&page=${page}&limit=${pageSize}`
+        `/admin/sources?videoId=${id}&status=all&page=${page}&limit=${pageSize}`
       )
       if (page === 1) total = res.total
       merged.push(...res.data)
@@ -126,9 +126,10 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
         const allSources = await fetchAllActiveSources(id)
         setSources(allSources)
         if (allSources.length > 0) {
-          const first = allSources[0]
-          setSelectedLine(first.source_name || '默认线路')
-          setSelectedEpisode(first.episode_number || 1)
+          // 优先选第一个有活跃源的行，无则退回到第一行
+          const firstActive = allSources.find((s) => s.is_active) ?? allSources[0]
+          setSelectedLine(firstActive.source_name || '默认线路')
+          setSelectedEpisode(firstActive.episode_number || 1)
         }
       } catch {
         setSources([])
@@ -182,6 +183,7 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
       displayName: buildLineDisplayName({ rawName: name, fallbackIndex: idx, quality: rows[0]?.quality ?? null }),
       siteKey: rows[0]?.site_key?.trim() || null,
       rows: rows.slice().sort((a, b) => a.episode_number - b.episode_number),
+      hasActiveRows: rows.some((r) => r.is_active),
     }))
   }, [sources])
 
@@ -250,7 +252,7 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
           />
           {groupedLines.length === 0 && !loading && (
             <div className="text-xs text-[var(--muted)]" data-testid="moderation-no-active-source">
-              暂无活跃播放源（inactive 源可在源健康面板查看）
+              暂无播放源
             </div>
           )}
           {groupedLines.length > 0 && (
@@ -277,9 +279,19 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
                       setSelectedEpisode(episodesInLine.has(selectedEpisode) ? selectedEpisode : (line.rows[0]?.episode_number ?? 1))
                     }}
                     data-testid={`moderation-source-btn-${line.name}`}
-                    className={`rounded px-2 py-0.5 text-xs transition-colors ${line.name === activeLine?.name ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'}`}
+                    className={`rounded px-2 py-0.5 text-xs transition-colors ${
+                      line.name === activeLine?.name
+                        ? 'bg-[var(--accent)] text-white'
+                        : line.hasActiveRows
+                          ? 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'
+                          : 'bg-[var(--bg3)] text-[var(--muted)] opacity-50 line-through hover:bg-[var(--bg2)]'
+                    }`}
+                    title={line.hasActiveRows ? undefined : '该线路全部源已停用'}
                   >
                     {isSiteLineOneToOne ? (line.siteKey ?? line.displayName) : line.displayName}
+                    {!line.hasActiveRows && (
+                      <span className="ml-1 text-[9px] opacity-80">停用</span>
+                    )}
                   </button>
                 ))}
               </div>

@@ -268,6 +268,14 @@ export function PlayerShell({ slug }: PlayerShellProps) {
               />
             </div>
           </div>
+        ) : !hasSources && activePanelTab === 'sources' ? (
+          <div
+            className="p-4 text-xs text-center"
+            style={{ color: 'var(--muted-foreground)' }}
+            data-testid="player-panel-no-source"
+          >
+            暂无可用播放源
+          </div>
         ) : null}
       </div>
     )

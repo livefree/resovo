@@ -12,4 +12,15 @@
 
 ---
 
+### CHG-402 — P0-B：前台隐藏 inactive 源 + PlayerShell 空态 UI
+- **状态**：🔄 进行中
+- **来源序列**：SEQ-20260414-01
+- **实际开始**：2026-04-17 14:00
+- **文件范围**：
+  - src/components/player/PlayerShell.tsx
+  - src/components/admin/moderation/ModerationDetail.tsx
+- **完成备注**：_（完成后填写）_
+
+---
+
 
