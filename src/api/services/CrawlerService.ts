@@ -229,6 +229,7 @@ export class CrawlerService {
       sourceUrl: s.sourceUrl,
       sourceName: s.sourceName,
       type: s.type,
+      sourceSiteKey: siteKey ?? null,
     }))
 
     const useAppendOnly = ingestPolicy?.source_update === 'append_only'

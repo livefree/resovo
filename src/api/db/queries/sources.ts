@@ -61,9 +61,7 @@ export async function findActiveSourcesByVideoId(
     params.push(episode)
   }
 
-  // CHG-413: JOIN 路径改为 video_sources→videos(site_key)→crawler_sites
-  // site_key 是爬虫入库时记录的源站 key，与 crawler_sites.key 一一对应；
-  // source_name 是苹果 CMS 的线路名（如 bfzym3u8 / 线路1），两者不同。
+  // CHG-413/414: JOIN 路径优先用行级 vs.source_site_key，NULL 时 fallback 到 v.site_key
   const result = await db.query<DbSourceRow>(
     `SELECT vs.id, vs.video_id, vs.season_number, vs.episode_number,
             vs.source_url, vs.source_name, vs.quality, vs.type,
@@ -72,7 +70,7 @@ export async function findActiveSourcesByVideoId(
             cs.display_name AS site_display_name
      FROM video_sources vs
      JOIN videos v ON v.id = vs.video_id
-     LEFT JOIN crawler_sites cs ON cs.key = v.site_key
+     LEFT JOIN crawler_sites cs ON cs.key = COALESCE(vs.source_site_key, v.site_key)
      WHERE ${conditions.map((c) => `vs.${c}`).join(' AND ')}
      ORDER BY vs.created_at ASC`,
     params
@@ -213,6 +211,7 @@ export interface UpsertSourceInput {
   sourceUrl: string      // ADR-001: 第三方直链，不做代理
   sourceName: string
   type: SourceType
+  sourceSiteKey?: string | null  // CHG-414: 行级源站 key，优先于 videos.site_key
 }
 
 /**
@@ -227,12 +226,12 @@ export async function upsertSource(
 ): Promise<VideoSource | null> {
   const result = await db.query<DbSourceRow>(
     `INSERT INTO video_sources
-       (video_id, season_number, episode_number, source_url, source_name, type, is_active)
-     VALUES ($1, $2, $3, $4, $5, $6, true)
+       (video_id, season_number, episode_number, source_url, source_name, type, is_active, source_site_key)
+     VALUES ($1, $2, $3, $4, $5, $6, true, $7)
      ON CONFLICT ON CONSTRAINT uq_sources_video_episode_url
      DO NOTHING
      RETURNING *`,
-    [input.videoId, input.seasonNumber ?? 1, input.episodeNumber, input.sourceUrl, input.sourceName, input.type]
+    [input.videoId, input.seasonNumber ?? 1, input.episodeNumber, input.sourceUrl, input.sourceName, input.type, input.sourceSiteKey ?? null]
   )
   return result.rows[0] ? mapSource(result.rows[0]) : null
 }
@@ -621,13 +620,14 @@ export async function replaceSourcesForSite(
       // ON CONFLICT DO UPDATE 同时覆盖软删除行（恢复 deleted_at=NULL, is_active=true）
       const insertResult = await client.query(
         `INSERT INTO video_sources
-           (video_id, season_number, episode_number, source_url, source_name, type, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, true)
+           (video_id, season_number, episode_number, source_url, source_name, type, is_active, source_site_key)
+         VALUES ($1, $2, $3, $4, $5, $6, true, $7)
          ON CONFLICT ON CONSTRAINT uq_sources_video_episode_url
          DO UPDATE SET deleted_at = NULL, is_active = true,
                        source_name = EXCLUDED.source_name,
-                       type = EXCLUDED.type`,
-        [videoId, src.seasonNumber ?? 1, src.episodeNumber, src.sourceUrl, src.sourceName, src.type],
+                       type = EXCLUDED.type,
+                       source_site_key = EXCLUDED.source_site_key`,
+        [videoId, src.seasonNumber ?? 1, src.episodeNumber, src.sourceUrl, src.sourceName, src.type, src.sourceSiteKey ?? null],
       )
       sourcesAdded += insertResult.rowCount ?? 0
     }
