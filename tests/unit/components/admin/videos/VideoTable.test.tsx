@@ -23,8 +23,11 @@ vi.mock('next/navigation', () => ({
   }),
 }))
 
+// 可在测试内切换角色
+const mockAuthState = { user: { role: 'admin' as string } }
+
 vi.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: { user: { role: 'admin' } }) => unknown) => selector({ user: { role: 'admin' } }),
+  useAuthStore: (selector: (state: typeof mockAuthState) => unknown) => selector(mockAuthState),
   selectIsAdmin: (state: { user?: { role?: string } }) => state.user?.role === 'admin',
 }))
 
@@ -44,6 +47,8 @@ const MOCK_ROWS = [
     visibility_status: 'internal',
     review_status: 'pending_review',
     created_at: '2026-03-20T00:00:00Z',
+    douban_status: 'pending',
+    meta_score: 40,
   },
   {
     id: 'v1',
@@ -60,13 +65,36 @@ const MOCK_ROWS = [
     visibility_status: 'public',
     review_status: 'approved',
     created_at: '2026-03-20T00:00:00Z',
+    douban_status: 'matched',
+    meta_score: 85,
   },
 ]
+
+// 暂存中行：approved + !is_published
+const MOCK_STAGING_ROW = {
+  id: 'v3',
+  short_id: 'v3short',
+  title: 'Staging Movie',
+  title_en: null,
+  cover_url: null,
+  type: 'movie',
+  year: 2026,
+  is_published: false,
+  source_count: '2',
+  active_source_count: '2',
+  total_source_count: '2',
+  visibility_status: 'internal',
+  review_status: 'approved',
+  created_at: '2026-04-14T00:00:00Z',
+  douban_status: 'matched',
+  meta_score: 70,
+}
 
 describe('VideoTable (CHG-211/212)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    mockAuthState.user.role = 'admin' // 每次测试前重置为 admin
     mockSearchParams.forEach((_value, key) => mockSearchParams.delete(key))
     getMock.mockImplementation(async (url: string) => {
       if (url.startsWith('/admin/videos?')) {
@@ -255,5 +283,217 @@ describe('VideoTable (CHG-211/212)', () => {
     await waitFor(() => {
       expect(patchMock).toHaveBeenCalledWith('/admin/videos/v1/publish', { isPublished: false })
     })
+  })
+
+  // ── VIDEO-09: 豆瓣状态列 ─────────────────────────────────────────
+
+  it('启用豆瓣状态列后渲染 badge 和同步按钮', async () => {
+    render(<VideoTable />)
+    await screen.findByText('Alpha Movie')
+
+    // 启用豆瓣状态列
+    fireEvent.click(screen.getByTestId('video-table-scroll-settings-btn'))
+    fireEvent.click(screen.getByTestId('video-table-scroll-settings-content-visible-douban_status'))
+
+    await waitFor(() => {
+      // v1 douban_status = 'matched' → 已匹配 badge
+      expect(screen.getByText('已匹配')).toBeDefined()
+    })
+
+    // 每行都有同步按钮
+    expect(screen.getByTestId('douban-sync-v1')).toBeDefined()
+    expect(screen.getByTestId('douban-sync-v2')).toBeDefined()
+  })
+
+  it('点击同步按钮调用 POST douban-sync 并刷新列表', async () => {
+    render(<VideoTable />)
+    await screen.findByText('Alpha Movie')
+
+    fireEvent.click(screen.getByTestId('video-table-scroll-settings-btn'))
+    fireEvent.click(screen.getByTestId('video-table-scroll-settings-content-visible-douban_status'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('douban-sync-v1')).toBeDefined()
+    })
+
+    const callsBefore = getMock.mock.calls.length
+    fireEvent.click(screen.getByTestId('douban-sync-v1'))
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith('/admin/videos/v1/douban-sync', {})
+    })
+    await waitFor(() => {
+      expect(getMock.mock.calls.length).toBeGreaterThan(callsBefore)
+    })
+  })
+
+  // ── VIDEO-09: 元数据完整度列 ─────────────────────────────────────
+
+  it('启用元数据完整度列后渲染进度条', async () => {
+    render(<VideoTable />)
+    await screen.findByText('Alpha Movie')
+
+    fireEvent.click(screen.getByTestId('video-table-scroll-settings-btn'))
+    fireEvent.click(screen.getByTestId('video-table-scroll-settings-content-visible-meta_score'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('meta-score-v1')).toBeDefined()
+    })
+    expect(screen.getByTestId('meta-score-v2')).toBeDefined()
+  })
+
+  // ── VIDEO-09: 暂存中快捷操作 ──────────────────────────────────────
+
+  it('approved + !is_published 行显示暂存按钮，点击跳转 /admin/staging', async () => {
+    getMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/admin/videos?')) {
+        return { data: [MOCK_STAGING_ROW], total: 1 }
+      }
+      return { data: [], total: 0 }
+    })
+
+    render(<VideoTable />)
+    await screen.findByText('Staging Movie')
+
+    const stagingBtn = screen.getByTestId('video-staging-v3')
+    expect(stagingBtn).toBeDefined()
+
+    fireEvent.click(stagingBtn)
+    expect(pushMock).toHaveBeenCalledWith('/admin/staging?videoId=v3')
+  })
+
+  it('is_published=true 的行不显示暂存按钮', async () => {
+    render(<VideoTable />)
+    await screen.findByText('Alpha Movie')
+
+    // v1: review_status='approved', is_published=true → 不显示暂存按钮
+    expect(screen.queryByTestId('video-staging-v1')).toBeNull()
+    // v2: review_status='pending_review' → 不显示暂存按钮
+    expect(screen.queryByTestId('video-staging-v2')).toBeNull()
+  })
+
+  // ── VIDEO-10: 复审按钮 ─────────────────────────────────────────────
+
+  it('rejected 行显示复审按钮，点击调用 state-transition reopen_pending', async () => {
+    getMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/admin/videos?')) {
+        return {
+          data: [{
+            ...MOCK_ROWS[0],
+            id: 'v-rej',
+            review_status: 'rejected',
+            source_check_status: 'ok',
+          }],
+          total: 1,
+        }
+      }
+      return { data: [], total: 0 }
+    })
+
+    render(<VideoTable />)
+    await screen.findByText('Zeta Movie')
+
+    const reopenBtn = screen.getByTestId('video-reopen-v-rej')
+    expect(reopenBtn).toBeDefined()
+
+    fireEvent.click(reopenBtn)
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith(
+        '/admin/videos/v-rej/state-transition',
+        { action: 'reopen_pending' },
+      )
+    })
+  })
+
+  it('非 rejected 行不显示复审按钮', async () => {
+    render(<VideoTable />)
+    await screen.findByText('Alpha Movie')
+
+    expect(screen.queryByTestId('video-reopen-v1')).toBeNull()
+    expect(screen.queryByTestId('video-reopen-v2')).toBeNull()
+  })
+
+  // ── VIDEO-10: 触发补源按钮 ─────────────────────────────────────────
+
+  it('all_dead 行显示补源按钮，点击调用 refetch-sources', async () => {
+    getMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/admin/videos?')) {
+        return {
+          data: [{
+            ...MOCK_ROWS[0],
+            id: 'v-dead',
+            source_check_status: 'all_dead',
+          }],
+          total: 1,
+        }
+      }
+      return { data: [], total: 0 }
+    })
+
+    render(<VideoTable />)
+    await screen.findByText('Zeta Movie')
+
+    const refetchBtn = screen.getByTestId('video-refetch-v-dead')
+    expect(refetchBtn).toBeDefined()
+
+    fireEvent.click(refetchBtn)
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith('/admin/videos/v-dead/refetch-sources', {})
+    })
+  })
+
+  it('非 all_dead 行不显示补源按钮', async () => {
+    render(<VideoTable />)
+    await screen.findByText('Alpha Movie')
+
+    expect(screen.queryByTestId('video-refetch-v1')).toBeNull()
+    expect(screen.queryByTestId('video-refetch-v2')).toBeNull()
+  })
+
+  // ── P2c: 豆瓣同步按钮仅 admin 可见 ───────────────────────────────
+
+  it('moderator 不显示豆瓣同步按钮', async () => {
+    mockAuthState.user.role = 'moderator'
+
+    render(<VideoTable />)
+    await screen.findByText('Alpha Movie')
+
+    fireEvent.click(screen.getByTestId('video-table-scroll-settings-btn'))
+    fireEvent.click(screen.getByTestId('video-table-scroll-settings-content-visible-douban_status'))
+
+    await waitFor(() => {
+      expect(screen.getByText('已匹配')).toBeDefined()
+    })
+
+    // 非 admin，不渲染同步按钮
+    expect(screen.queryByTestId('douban-sync-v1')).toBeNull()
+    expect(screen.queryByTestId('douban-sync-v2')).toBeNull()
+  })
+
+  // ── P3: [暂存] + [补源] 互斥 ─────────────────────────────────────
+
+  it('approved+!is_published+all_dead 行只显示[暂存]不显示[补源]', async () => {
+    getMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/admin/videos?')) {
+        return {
+          data: [{
+            ...MOCK_STAGING_ROW,
+            source_check_status: 'all_dead',
+          }],
+          total: 1,
+        }
+      }
+      return { data: [], total: 0 }
+    })
+
+    render(<VideoTable />)
+    await screen.findByText('Staging Movie')
+
+    // 应显示[暂存]
+    expect(screen.getByTestId('video-staging-v3')).toBeDefined()
+    // 不应显示[补源]（互斥）
+    expect(screen.queryByTestId('video-refetch-v3')).toBeNull()
   })
 })

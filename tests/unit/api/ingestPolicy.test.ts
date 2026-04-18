@@ -12,6 +12,14 @@ vi.mock('@/api/db/queries/videos', () => ({
   insertCrawledVideo: vi.fn(),
   upsertVideoAliases: vi.fn(),
   METADATA_SOURCE_PRIORITY: { crawler: 1, manual: 2, douban: 3, tmdb: 4 },
+  transitionVideoState: vi.fn(),
+  bumpEpisodeCountIfHigher: vi.fn(),
+}))
+// MediaCatalogService 内部使用 db.connect，直接 mock 整个 class 避免复杂 DB 依赖
+vi.mock('@/api/services/MediaCatalogService', () => ({
+  MediaCatalogService: class {
+    findOrCreate = vi.fn().mockResolvedValue({ id: 'cat-uuid-1', title: '测试视频' })
+  },
 }))
 
 vi.mock('@/api/db/queries/sources', () => ({
@@ -48,8 +56,13 @@ const mockUpsertSources = sourcesQueries.upsertSources as ReturnType<typeof vi.f
 // ── Helpers ───────────────────────────────────────────────────────
 
 function makeDb() {
+  const client = {
+    query: vi.fn().mockResolvedValue({ rows: [] }),
+    release: vi.fn(),
+  }
   return {
     query: vi.fn().mockResolvedValue({ rows: [] }),
+    connect: vi.fn().mockResolvedValue(client),
   } as unknown as import('pg').Pool
 }
 
@@ -133,9 +146,19 @@ describe('CrawlerService.upsertVideo — ingestPolicy 入库路由', () => {
   })
 
   it('已存在的视频 — 不调用 insertCrawledVideo，不受 ingestPolicy 影响', async () => {
-    mockFindByKey.mockResolvedValue({ id: 'vid-existing', metadataSource: 'crawler' })
+    // CrawlerService 已改用 db.query 查 catalog_id 对应的已有视频（不再用 findVideoByNormalizedKey）
+    // 让 db.query 对 catalog_id 查询返回已有视频行，触发"已有视频"分支
+    const existingDb = {
+      query: vi.fn().mockImplementation((sql: string) => {
+        if (typeof sql === 'string' && sql.includes('catalog_id')) {
+          return Promise.resolve({ rows: [{ id: 'vid-existing' }] })
+        }
+        return Promise.resolve({ rows: [] })
+      }),
+      connect: vi.fn().mockResolvedValue({ query: vi.fn().mockResolvedValue({ rows: [] }), release: vi.fn() }),
+    } as unknown as import('pg').Pool
 
-    const svc = new CrawlerService(makeDb(), makeEs())
+    const svc = new CrawlerService(existingDb, makeEs())
     await svc.upsertVideo(makeParsedVideo(), { allow_auto_publish: true })
 
     expect(mockInsert).not.toHaveBeenCalled()

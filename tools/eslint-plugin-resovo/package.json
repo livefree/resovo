@@ -1,0 +1,12 @@
+{
+  "name": "eslint-plugin-resovo",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "eslint": ">=8"
+  }
+}

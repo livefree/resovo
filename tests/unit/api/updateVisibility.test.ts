@@ -1,6 +1,7 @@
 /**
  * tests/unit/api/updateVisibility.test.ts
  * CHG-200: updateVisibility — 可见性切换 + is_published 同步 + ES 同步
+ * CHG-397: 修复 mock — VideoService.updateVisibility 已改用 transitionVideoState
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -13,10 +14,11 @@ vi.mock('@/api/db/queries/videos', () => ({
   publishVideo: vi.fn(),
   batchPublishVideos: vi.fn(),
   batchUnpublishVideos: vi.fn(),
+  transitionVideoState: vi.fn(),
 }))
 
 import * as videoQueries from '@/api/db/queries/videos'
-const mockUpdateVisibility = videoQueries.updateVisibility as ReturnType<typeof vi.fn>
+const mockTransition = videoQueries.transitionVideoState as ReturnType<typeof vi.fn>
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -62,7 +64,7 @@ describe('VideoService.updateVisibility', () => {
   it('切换到 public — DB 更新成功后触发 indexToES', async () => {
     const db = makeDb({ visibility_status: 'public', is_published: true })
     const es = makeEs()
-    mockUpdateVisibility.mockResolvedValue({
+    mockTransition.mockResolvedValue({
       id: 'vid-1',
       visibility_status: 'public',
       is_published: true,
@@ -76,7 +78,7 @@ describe('VideoService.updateVisibility', () => {
       visibility_status: 'public',
       is_published: true,
     })
-    expect(mockUpdateVisibility).toHaveBeenCalledWith(db, 'vid-1', 'public')
+    expect(mockTransition).toHaveBeenCalledWith(db, 'vid-1', { action: 'publish' })
 
     // 验证 ES 同步被触发
     await vi.waitFor(() => expect(es.index).toHaveBeenCalledTimes(1))
@@ -93,7 +95,7 @@ describe('VideoService.updateVisibility', () => {
       review_status: 'approved',
     })
     const es = makeEs()
-    mockUpdateVisibility.mockResolvedValue({
+    mockTransition.mockResolvedValue({
       id: 'vid-1',
       visibility_status: 'hidden',
       is_published: false,
@@ -107,6 +109,7 @@ describe('VideoService.updateVisibility', () => {
       visibility_status: 'hidden',
       is_published: false,
     })
+    expect(mockTransition).toHaveBeenCalledWith(db, 'vid-1', { action: 'set_hidden' })
 
     await vi.waitFor(() => expect(es.index).toHaveBeenCalledTimes(1))
     const call = (es.index as ReturnType<typeof vi.fn>).mock.calls[0][0]
@@ -117,7 +120,7 @@ describe('VideoService.updateVisibility', () => {
   it('视频不存在 — 返回 null，不触发 ES 同步', async () => {
     const db = makeDb()
     const es = makeEs()
-    mockUpdateVisibility.mockResolvedValue(null)
+    mockTransition.mockResolvedValue(null)
 
     const svc = new VideoService(db, es)
     const result = await svc.updateVisibility('nonexistent', 'public')
@@ -129,7 +132,7 @@ describe('VideoService.updateVisibility', () => {
 
   it('无 ES 客户端 — 不抛出错误', async () => {
     const db = makeDb()
-    mockUpdateVisibility.mockResolvedValue({
+    mockTransition.mockResolvedValue({
       id: 'vid-1',
       visibility_status: 'public',
       is_published: true,
@@ -151,7 +154,7 @@ describe('VideoService.indexToES — 新增字段验证', () => {
       visibility_status: 'internal',
     })
     const es = makeEs()
-    mockUpdateVisibility.mockResolvedValue({
+    mockTransition.mockResolvedValue({
       id: 'vid-1',
       visibility_status: 'internal',
       is_published: false,

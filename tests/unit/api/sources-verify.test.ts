@@ -17,7 +17,6 @@ vi.mock('@/api/lib/postgres', () => ({ db: { query: vi.fn() } }))
 vi.mock('@/api/lib/elasticsearch', () => ({ es: {} }))
 vi.mock('@/api/services/CrawlerService', () => ({
   CrawlerService: vi.fn(() => ({})),
-  parseCrawlerSources: vi.fn(),
 }))
 vi.mock('@/api/services/ContentService', () => ({
   ContentService: vi.fn().mockImplementation(() => ({

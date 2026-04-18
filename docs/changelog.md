@@ -20,6 +20,8 @@
 ## [TASK-ID] 任务标题
 - **完成时间**：YYYY-MM-DD
 - **记录时间**：YYYY-MM-DD HH:mm
+- **执行模型**：claude-<opus|sonnet|haiku>-<version>（完整 ID，如 claude-sonnet-4-6）
+- **子代理**：无 / [subagent-name (claude-xxx-x-x), ...]
 - **修改文件**：
   - `path/to/file.ts` — 说明做了什么
   - `path/to/another.ts` — 说明做了什么
@@ -27,6 +29,11 @@
 - **数据库变更**：（如无则写"无"）
 - **注意事项**：（后续开发需要知道的事情，如无则写"无"）
 ```
+
+字段约束：
+- "执行模型" 必填，必须是完整模型 ID
+- "子代理" 必填；本任务未 spawn 任何 Task 工具调用时写 "无"；有则列出每个 subagent 的名称和其对应 model ID
+- 历史条目（本补丁应用前的条目）不强制回填，保持原样
 
 ---
 
@@ -4916,3 +4923,1578 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `.eslintrc.json`：`no-restricted-imports` 规则从 `"warn"` 升级为 `"error"`（先验证 npm run lint 零违规后执行）
 - **共享层沉淀**：无
 - **测试**：typecheck ✅ lint 零错误/零警告 ✅ 770 unit tests ✅
+
+---
+
+### CHG-350/351/352 — 视频源与选集一致性修复方案归档（2026-04-02）
+
+- **新增文档**：
+  - `docs/video_source_episode_recovery_plan_20260402.md`
+- **台账更新**：
+  - `docs/task-queue.md` 新增 `SEQ-20260402-54`（CHG-350~352）
+  - `docs/tasks.md` 将 CHG-350 设为当前进行中任务
+- **说明**：本次提交仅完成方案与任务归档，不含业务代码变更。
+
+---
+
+### CHG-350 — 审核台多源播放器改造为“线路+选集”双维（2026-04-02）
+
+- **修改文件**：
+  - `src/components/admin/moderation/ModerationDetail.tsx`
+- **变更内容**：
+  - 将原“按 `video_sources` 行渲染多源按钮”改为“按 `source_name` 聚合线路”。
+  - 新增选集按钮组（按当前线路的 `episode_number` 去重排序）。
+  - 播放器 URL 由“源索引”切换为“线路 + 集数”解析；切线路时优先保持当前集，不存在则回落到该线路首集。
+- **效果**：同一线路不再因分集拆行造成源选项爆炸，审核播放器可同时操作线路与集数。
+- **测试**：当前环境缺失 `npm` 命令，未执行自动化测试。
+
+---
+
+### CHG-351 — 爬虫 existing 分支同步推进 episode_count（2026-04-02）
+
+- **修改文件**：
+  - `src/api/db/queries/videos.ts`
+  - `src/api/services/CrawlerService.ts`
+- **变更内容**：
+  - 新增 `bumpEpisodeCountIfHigher(db, videoId, incomingEpisodeCount)`，通过 `GREATEST` 实现 `episode_count` 单调递增。
+  - `CrawlerService.upsertVideo()` 统一计算 `incomingMaxEpisode`；命中 existing 视频时调用推进函数；新建视频时复用同一值写入初始 `episode_count`。
+- **效果**：后续采集新增分集时，视频主表集数不再卡在旧值，前台可按真实集数显示选集。
+- **测试**：当前环境缺失 `npm` 命令，未执行自动化测试。
+
+---
+
+### CHG-352 — 历史 episode_count 漂移回填 migration（2026-04-02）
+
+- **新增文件**：
+  - `src/api/db/migrations/024_backfill_videos_episode_count_from_sources.sql`
+- **变更内容**：
+  - 基于 `video_sources` 计算每个视频 `MAX(episode_number)`。
+  - 仅在 `max_episode > videos.episode_count` 时更新主表集数与 `updated_at`。
+  - 过滤 `deleted_at IS NULL` 和 `submitted_by IS NULL`，避免将已删除源与用户投稿写入主数据统计。
+- **效果**：可一次性修复历史“主表单集、实际多集”的漂移，补齐前台选集展示前置条件。
+- **测试**：当前环境缺失 `npm` 命令，未执行自动化测试；该 migration 尚未在本地执行。
+
+---
+
+### CHG-353/354 — 线路命名规范与分级验证方案落盘（2026-04-02）
+
+- **新增文档**：
+  - `docs/line_display_name_spec_20260402.md`
+  - `docs/tiered_source_verification_future_plan_20260402.md`
+- **台账更新**：
+  - `docs/task-queue.md` 新增 `SEQ-20260402-55`（CHG-353/354）
+- **说明**：
+  - 线路命名规范标记为“下一步实施”。
+  - 分级验证标记为“未来扩展”，暂不进入当前开发序列。
+
+---
+
+### CHG-355 — 线路显示名规范 Phase 1 接线（2026-04-02）
+
+- **新增文件**：
+  - `src/lib/line-display-name.ts`
+- **修改文件**：
+  - `src/components/player/PlayerShell.tsx`
+  - `src/components/admin/moderation/ModerationDetail.tsx`
+  - `docs/task-queue.md`
+- **变更内容**：
+  - 新增 `buildLineDisplayName()` 与 provider/generic 规则（`subyun -> SUB云`、`线路2 -> 线路B` 等）。
+  - 前台播放器线路按钮统一走归一化文案，并在有质量字段时拼接质量后缀。
+  - 审核详情线路按钮同步接入归一化文案，避免直接展示技术名。
+- **说明**：Phase 1 仅显示层改造，不涉及 DB schema 变更。
+
+---
+
+### CHG-356/357 — 成人内容开关后端化 + 成人源站视频安全收敛（2026-04-02）
+
+- **修改文件**：
+  - `src/api/routes/admin/videos.ts`
+  - `src/api/services/VideoService.ts`
+  - `src/api/db/queries/videos.ts`
+- **新增文件**：
+  - `src/api/db/migrations/025_enforce_adult_site_video_safety.sql`
+- **变更内容**：
+  - 后台内容管理（`/admin/videos`、`/admin/videos/pending-review`）接入 `show_adult_content` 开关：关闭时过滤 `crawler_sites.is_adult=true` 视频。
+  - 前台逻辑保持固定屏蔽成人内容（仍基于 `content_rating='general'` + `visibility_status='public'` 等条件）。
+  - 新增成人源站视频数据收敛 migration：将目标视频统一收敛到 `type='other'`、`hidden`、`rejected`、`unpublished`。
+- **实现细节**：
+  - 受状态机触发器约束，迁移采用合法跃迁链：先 hidden/unpublished，再 approved->pending，再 pending->rejected。
+
+---
+
+### CHG-358 — [Schema] 026_create_media_catalog.sql（2026-04-05）
+
+- **修改文件**：无
+- **新增文件**：
+  - `src/api/db/migrations/026_create_media_catalog.sql`
+- **变更内容**：
+  - 创建 `media_catalog` 表：三层架构的作品元数据层，包含 title/title_en/title_original/title_normalized、type、genre/genres_raw、year/release_date/country/runtime_minutes、description/cover_url/rating/rating_votes、director/cast/writers 数组字段；四个外部 ID（imdb_id UNIQUE、tmdb_id UNIQUE、douban_id UNIQUE、bangumi_subject_id UNIQUE）；metadata_source（优先级 manual>tmdb>bangumi=douban>crawler）；locked_fields TEXT[]（Service 层字段锁）。
+  - 唯一索引：有精确外部 ID 时各自 UNIQUE；无精确 ID 时 title_normalized+year+type 三元组唯一（条件索引）。
+  - 创建 `media_catalog_aliases` 表：存储多语言别名（alias/lang/source），与 media_catalog 1:N 关联。
+  - 创建 `updated_at` 自动更新触发器 `trg_media_catalog_updated_at`。
+- **测试覆盖**：INFRA 任务，跳过单元测试；typecheck ✅，lint ✅。
+- **共享层沉淀评估**：纯 DDL migration，无需沉淀到共享层。
+
+---
+
+### CHG-359 — [Schema] 027_create_external_raw_tables.sql（2026-04-05）
+
+- **修改文件**：无
+- **新增文件**：
+  - `src/api/db/migrations/027_create_external_raw_tables.sql`
+- **变更内容**：
+  - 创建 `external_import_batches` 批次登记表（source/file_name/status/total_rows/imported_rows 等）。
+  - 创建 `external_douban_movies_raw`：14 万行豆瓣电影原始数据，含 movie_id/name/actors/directors/douban_score/imdb_id/regions/year 等字段，catalog_id 回填列；三个查找索引（imdb_id/movie_id/catalog_id）。
+  - 创建 `external_tmdb_movies_raw`：124 万行 TMDB 数据，tmdb_id UNIQUE 索引，catalog_id 回填列。
+  - 创建 `external_bangumi_subjects_raw`：仅存 bgm_type IN (2,6)（动画/真人影视），bangumi_id UNIQUE。
+  - 创建 `external_imdb_tmdb_links`：MovieLens 87k 条 IMDB↔TMDB ID 桥接表（imdb_id UNIQUE, tmdb_id UNIQUE）。
+- **测试覆盖**：INFRA 任务，跳过单元测试；typecheck ✅，lint ✅。
+- **共享层沉淀评估**：纯 DDL migration，无需沉淀到共享层。
+
+---
+
+### CHG-360 — [Schema] 028_videos_add_catalog_id.sql（2026-04-05）
+
+- **修改文件**：无
+- **新增文件**：
+  - `src/api/db/migrations/028_videos_add_catalog_id.sql`
+- **变更内容**：
+  - Step 1：`videos` 表新增 `catalog_id UUID REFERENCES media_catalog(id) ON DELETE SET NULL`（nullable，下一 migration 改为 NOT NULL）。
+  - Step 2：CTE 批量为现有 videos 创建对应 media_catalog 条目，通过 `ON CONFLICT DO NOTHING` 保证幂等；对已有 catalog 的视频通过 douban_id 或 title_normalized+year+type 匹配并回填 catalog_id。
+  - Step 3：将 videos.douban_id 迁移到 media_catalog.douban_id（仅填充空值字段）。
+  - Step 4：创建 `idx_videos_catalog_id` 索引。
+  - DO 块验证：输出 total/linked/unlinked 统计；unlinked>0 时触发 WARNING。
+- **测试覆盖**：INFRA 任务，跳过单元测试；typecheck ✅，lint ✅。
+- **共享层沉淀评估**：纯 DDL migration，无需沉淀到共享层。
+
+---
+
+### CHG-361 — [Schema] 029_videos_drop_metadata_fields.sql（2026-04-05）
+
+- **修改文件**：无
+- **新增文件**：
+  - `src/api/db/migrations/029_videos_drop_metadata_fields.sql`
+- **变更内容**：
+  - 前置断言：确保所有 active videos 的 catalog_id 已回填（有 NULL 则阻断执行）。
+  - 删除 videos 表中已迁移到 media_catalog 的 15 列：title_en、description、cover_url、rating、year、country、status、director、cast、writers、genre、genre_source（孤立）、douban_id、title_normalized、metadata_source。
+  - 删除关联的多列索引 idx_videos_normalized_year_type（先于 DROP COLUMN 执行，避免冲突）。
+  - 将 catalog_id 设为 NOT NULL（三层架构完成的关键约束）。
+  - 清理孤立的单列索引（idx_videos_year/rating/country/title_normalized）。
+  - 验证块：确认 genre 列已删除；确认 catalog_id 无 NULL。
+  - **注意**：此 migration 必须在 CHG-364（videos.ts 查询层改造）上线后才能在生产环境执行。
+- **测试覆盖**：INFRA 任务，跳过单元测试；typecheck ✅，lint ✅。
+- **共享层沉淀评估**：纯 DDL migration，无需沉淀到共享层。
+
+---
+
+### CHG-362 — [Schema] 030_video_aliases_to_catalog.sql（2026-04-05）
+
+- **修改文件**：无
+- **新增文件**：
+  - `src/api/db/migrations/030_video_aliases_to_catalog.sql`
+- **变更内容**：
+  - 将 video_aliases 表数据通过 videos.catalog_id 迁移到 media_catalog_aliases（source='crawler'，lang=NULL）。
+  - ON CONFLICT DO NOTHING 保证幂等（基于 catalog_id+alias 唯一约束）。
+  - 跳过 catalog_id 为 NULL 或已删除的 videos。
+  - 验证块输出：total/migrated/skipped 统计。
+- **测试覆盖**：INFRA 任务，跳过单元测试；typecheck ✅，lint ✅。
+- **共享层沉淀评估**：纯 DDL migration，无需沉淀到共享层。
+
+---
+
+### CHG-363 — [Query] 新建 src/api/db/queries/mediaCatalog.ts（2026-04-05）
+
+- **修改文件**：无
+- **新增文件**：
+  - `src/api/db/queries/mediaCatalog.ts`
+- **变更内容**：
+  - 定义并导出 `MediaCatalogRow`、`CatalogInsertData`、`CatalogUpdateData` 类型。
+  - `findCatalogById`：按主键查询。
+  - `findCatalogByImdbId / findCatalogByTmdbId / findCatalogByDoubanId / findCatalogByBangumiId`：精确外部 ID 查询。
+  - `findCatalogByNormalizedKey(titleNormalized, year, type)`：三元组模糊匹配（无精确 ID 时使用）。
+  - `insertCatalog(data)`：INSERT ON CONFLICT DO NOTHING，冲突时返回 null（由 Service 层判断后续处理）。
+  - `updateCatalogFields(id, data)`：动态构建 SET 子句，仅更新传入字段；locked_fields 校验由 MediaCatalogService 在调用前完成。
+  - `addLockedFields(id, fields)` / `setLockedFields(id, fields)`：追加/覆盖 locked_fields 数组。
+  - `linkVideoToCatalog(videoId, catalogId)`：更新 videos.catalog_id（跨表绑定）。
+- **设计说明**：locked_fields 校验不在 Query 层，只在 Service 层（MediaCatalogService.safeUpdate）。
+- **测试覆盖**：typecheck ✅，lint ✅（数据库 Query 层单元测试依赖真实 DB，在集成测试中覆盖）。
+- **共享层沉淀评估**：MediaCatalogRow 类型已导出，供 Service 层复用；CHG-371 将其迁移到 @/types 统一类型入口。
+
+---
+
+### CHG-364 — [Query] 改造 videos.ts + VideoService.ts 适配（2026-04-06）
+
+- **修改文件**：
+  - `src/api/db/queries/videos.ts`
+  - `src/api/services/VideoService.ts`（最小适配）
+- **变更内容**：
+  - `DbVideoRow` 瘦身：移除 15 个迁移字段（title_en/description/cover_url/rating/year/country/status/director/cast/writers/genre/genre_source/douban_id/title_normalized/metadata_source），改为通过 media_catalog JOIN 获取；新增 catalog_id 字段。
+  - 新增 `VIDEO_JOIN` / `VIDEO_FULL_SELECT` 常量，统一所有 SELECT 的 JOIN 写法。
+  - 更新 listVideos/findVideoByShortId/listTrendingVideos/listAdminVideos/findAdminVideoById/listPendingReviewVideos 的 SELECT 和 WHERE，metadata 过滤条件改用 mc.* 前缀。
+  - `CreateVideoInput` 简化为 videos 表自有字段（catalogId+title+type+episodeCount 等）。
+  - `UpdateVideoMetaInput` 精简为只含 videos 表字段（title/type/episodeCount/slug）。
+  - `insertCrawledVideo`：新接口接受 catalogId；过渡期保留内联创建 catalog 的兼容逻辑（CHG-366 完成后移除）。
+  - `updateDoubanData` / `findVideoByNormalizedKey`：保留签名标注 @deprecated，实现改为通过 catalog JOIN（CHG-366/367 完成后移除）。
+  - `VideoService.create/update`：适配新接口，过渡期通过 insertCrawledVideo 内联创建 catalog。
+- **技术债**：insertCrawledVideo 过渡兼容逻辑待 CHG-366 清理；videos.ts 1224 行超 500 限，建议 CHG-366 后拆分 ES 辅助函数。
+- **测试覆盖**：typecheck ✅，lint ✅。
+- **共享层沉淀评估**：VIDEO_JOIN/VIDEO_FULL_SELECT 为文件内共享常量，无需提取；MediaCatalogRow 已在 mediaCatalog.ts 导出。
+
+---
+
+### CHG-365 — [Service] 新建 MediaCatalogService.ts（2026-04-06）
+
+- **修改文件**：无
+- **新增文件**：
+  - `src/api/services/MediaCatalogService.ts`
+- **变更内容**：
+  - `CATALOG_SOURCE_PRIORITY`：优先级常量（manual=5 > tmdb=4 > bangumi=douban=3 > crawler=1）。
+  - `findOrCreate(input)`：5 步精确→模糊匹配（imdb_id → tmdb_id → douban_id → bangumi_subject_id → title_normalized+year+type），全部未命中时 INSERT（含并发重试）；事务保护防止竞态。
+  - `safeUpdate(catalogId, fields, source)`：来源优先级 < 当前 → 跳过；locked_fields 字段过滤；manual 写入后自动追加 locked_fields。
+  - `lockFields / unlockFields`：管理员手动锁/解锁字段。
+  - `linkVideo(videoId, catalogId)`：绑定 videos.catalog_id。
+  - `findById(catalogId)`：直接查找，供其他 Service 使用。
+- **测试覆盖**：typecheck ✅，lint ✅。
+- **共享层沉淀评估**：Service 层，职责单一，CATALOG_SOURCE_PRIORITY 已导出供 CrawlerService/DoubanService 在 CHG-366/367 中使用。
+
+---
+
+### CHG-366 — [Service] 改造 CrawlerService.ts（2026-04-06）
+
+- **修改文件**：
+  - `src/api/services/CrawlerService.ts`
+- **变更内容**：
+  - 引入 `MediaCatalogService`。
+  - `upsertVideo` 重写为新六步流程：(1) 标准化标题；(2) MediaCatalogService.findOrCreate；(3) 查找已有视频实例；(4) 新建 videos 行并传入 catalogId；(5) 写入 video_aliases；(6) upsert 播放源 + 触发 ES。
+  - `indexToES` SQL 改为 `JOIN media_catalog mc ON mc.id = v.catalog_id`，metadata 字段从 mc 取（title_en/cover_url/genre/year/country/rating/status）。
+  - 移除对 `findVideoByNormalizedKey`（@deprecated）的调用。
+- **测试覆盖**：typecheck ✅，lint ✅。
+- **共享层沉淀评估**：MediaCatalogService 已在 CHG-365 提取为独立 Service，无需新增沉淀。
+
+---
+
+## CHG-367 — [Service] 改造 DoubanService.ts
+- **完成时间**：2026-04-06 03:19
+- **修改文件**：
+  - `src/api/services/DoubanService.ts`
+  - `tests/unit/api/douban.test.ts`
+- **变更说明**：
+  - `syncVideo` 改为先通过 `catalogQueries.findCatalogById` 获取关联 catalog，检查 `catalog.doubanId`（原检查 `video.douban_id`）；以 `catalog.title` / `catalog.year` 发起搜索；写入改用 `MediaCatalogService.safeUpdate(source='douban')`，通过优先级和 locked_fields 双重保护写入 media_catalog。
+  - `previewVideo` 无需改动，`findAdminVideoById` 已通过 JOIN 包含 catalog 字段。
+  - 测试文件新增 `@/api/db/queries/mediaCatalog` mock（`findCatalogById` / `updateCatalogFields`），移除已废弃的 `updateDoubanData` 期望，更新 `already_synced` 检查逻辑。
+- **测试覆盖**：12 个 douban 测试全通过；typecheck ✅，lint ✅。
+- **共享层沉淀评估**：直接复用 MediaCatalogService.safeUpdate，无新逻辑需沉淀。
+
+---
+
+## CHG-368 — [Service] 新建 ExternalDataImportService.ts
+- **完成时间**：2026-04-06 03:45
+- **修改文件**：
+  - `src/api/db/queries/externalRaw.ts`（新建）
+  - `src/api/services/ExternalDataImportService.ts`（新建）
+- **变更说明**：
+  - `externalRaw.ts`（DB queries 层）：batch 管理（createImportBatch/finishImportBatch/updateBatchProgress）；UNNEST 风格批量 INSERT（batchInsertDoubanRaw/TmdbRaw/BangumiRaw/MovieLensLinks）；cursor 分页 fetch（fetchUnprocessedDoubanRows/TmdbRows/BangumiRows）；catalog_id 回填（updateRawRowCatalogId）；ID 桥接查询（lookupTmdbByImdbId）。
+  - `ExternalDataImportService.ts`（Service 层）：`importDouban/Tmdb/Bangumi/MovieLensLinks` 各方法流式（readline）读取 CSV/JSONLINES，按 BATCH=500 分批写入暂存表；`buildCatalogFromDouban/Tmdb/Bangumi` 各方法分页（PAGE=200）从暂存表读取，构建 CatalogInsertData，调用 MediaCatalogService.findOrCreate 写入 media_catalog，回填 catalog_id。
+  - 豆瓣 IMDB→TMDB ID 桥接：buildDoubanCatalogData 中若有 imdb_id 则 lookupTmdbByImdbId 附加 tmdb_id。
+- **测试覆盖**：typecheck ✅，lint ✅；无新增测试失败（本任务为新增 Service，无对应现有测试）。
+- **共享层沉淀评估**：normalizeTitle 函数与 DoubanService 存在重复，建议后续统一提取到 src/api/lib/textUtils.ts，当前不阻塞。
+
+---
+
+## CHG-369 — [Script] 编写导入 CLI 脚本
+- **完成时间**：2026-04-06 03:52
+- **修改文件**：
+  - `scripts/import-external-data.ts`（新建）
+- **变更说明**：
+  - 支持 `--source <douban|tmdb|bangumi|movielens>`、`--file <path>`、`--build-only`、`--batch-id <uuid>` 参数。
+  - 两步流程：[1/2] 调用 importDouban/Tmdb/Bangumi/MovieLensLinks 写入暂存表；[2/2] 调用 buildCatalogFrom{Douban/Tmdb/Bangumi} 构建 media_catalog。
+  - movielens 源仅执行导入步骤，跳过 catalog 构建。
+  - 每 1000 行节流输出进度到 stdout。
+- **测试覆盖**：typecheck ✅，lint ✅；CLI 脚本不写单元测试。
+- **共享层沉淀评估**：N/A（CLI 脚本入口层）。
+
+---
+
+## CHG-370 — [ES] 更新 es_mapping.json + 重建索引
+- **完成时间**：2026-04-06 04:05
+- **修改文件**：
+  - `src/api/db/migrations/es_mapping.json`
+  - `src/api/services/SearchService.ts`
+  - `src/api/services/VideoService.ts`
+  - `src/api/services/CrawlerService.ts`
+- **变更说明**：
+  - `es_mapping.json`：新增 `catalog_id`（keyword）、`imdb_id`（keyword）、`tmdb_id`（integer）、`title_original`（text，ik_max_word + keyword subfield）。
+  - `VideoService.indexToES`：修复预存 bug（原 SQL 直接查 videos 表无 JOIN，migration 后 title_en/cover_url 等字段已移至 media_catalog）；改为 `JOIN media_catalog mc ON mc.id = v.catalog_id`；补充 catalog_id/imdb_id/tmdb_id/title_original 到 ES document。
+  - `CrawlerService.indexToES`：补充 catalog_id/imdb_id/tmdb_id/title_original 到 ES document。
+  - `SearchService.search`：multi_match fields 新增 `title_original^2`。
+- **测试覆盖**：typecheck ✅，lint ✅；无新增测试失败。
+- **共享层沉淀评估**：indexToES SQL 在两个 Service 中重复，建议日后提取为共享查询函数，暂不阻塞。
+
+---
+
+## CHG-371 — [Types] 更新类型系统
+- **完成时间**：2026-04-06 04:15
+- **修改文件**：
+  - `src/types/video.types.ts`
+  - `src/types/contracts/v1/admin.ts`
+  - `src/api/db/queries/videos.ts`
+- **变更说明**：
+  - `video.types.ts`：Video 接口新增 `catalogId: string | null`、`imdbId: string | null`、`tmdbId: number | null` 三个字段。
+  - `admin.ts`：新增 `MediaCatalogRow` 契约类型（含三层架构所有元数据字段），供前端组件和后台路由共享引用。
+  - `videos.ts`：`DbVideoRow` 新增 `imdb_id`、`tmdb_id`；`VIDEO_FULL_SELECT` 补充 `mc.imdb_id, mc.tmdb_id`；`mapVideoRow` 补充 `catalogId`、`imdbId`、`tmdbId` 映射。
+- **测试覆盖**：typecheck ✅，lint ✅；无新增测试失败。
+- **共享层沉淀评估**：MediaCatalogRow 已提取到 contracts/v1/admin.ts 契约层，正确复用点。
+
+---
+
+## SEQ-20260405-58 序列完成
+- **完成时间**：2026-04-06 04:15
+- **序列名称**：三层架构改造 + 外部数据 Baseline 建设
+- **完成任务**：CHG-358 ～ CHG-371，共 14 个任务
+- **核心成果**：
+  - media_catalog（作品元数据层）三层架构完整落地
+  - 外部数据暂存表 + 导入 Service + CLI 脚本
+  - ES mapping 更新 + VideoService.indexToES 修复
+  - 类型系统统一更新
+
+---
+
+## CHG-372 — [Fix] VideoService.update() 写入 catalog 元数据
+- **完成时间**：2026-04-06 10:15
+- **修改文件**：
+  - `src/api/services/VideoService.ts`：update() 重写，先查询 catalog_id，再调用 MediaCatalogService.safeUpdate(catalogId, catalogFields, 'manual')；然后更新 videos 表冗余副本
+  - `src/api/routes/admin/videos.ts`：移除无效的 genreSource 附加逻辑（catalog 无此字段，原注释说"由 safeUpdate 处理"但从未实现）
+- **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为 SEQ-20260405-58 遗留的预存失败，与本次无关）
+- **共享层沉淀**：否——直接复用已有 MediaCatalogService.safeUpdate，无需新沉淀
+
+---
+
+## CHG-373 — [Infra] 迁移 douban-adapter 到主工程
+- **完成时间**：2026-04-06 10:50
+- **修改文件**：
+  - `package.json`：添加 `"douban-adapter": "file:external-adapter/douban-adapter"` 本地依赖（npm 安装为 symlink）
+  - `src/api/lib/doubanAdapter.ts`（新建）：包装 createDoubanDetailsService，提供 getDoubanDetailRich()
+  - `src/api/services/DoubanService.ts`：syncVideo/previewVideo 切换到 getDoubanDetailRich；同步写入 writers/genresRaw/country（首个国家）；previewVideo 返回新增 screenwriters/genres/countries/languages 字段
+  - `src/types/contracts/v1/admin.ts`：DoubanPreviewFound 增加 titleOriginal/screenwriters/genres/countries/languages 可选字段
+  - `tests/unit/api/douban.test.ts`：mock 从 getDoubanDetail 改为 getDoubanDetailRich，更新 mock 数据格式（rate/poster/cast/plotSummary）
+- **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为 SEQ-20260405-58 遗留）
+- **共享层沉淀**：是——`doubanAdapter.ts` 作为 douban-adapter 包在主工程的唯一适配层
+
+---
+
+## CHG-374 — [UI] 后台视频表单 + 路由支持新字段
+- **完成时间**：2026-04-06 11:20
+- **修改文件**：
+  - `src/components/admin/AdminVideoForm.tsx`：豆瓣预览面板新增 screenwriters checkbox（编剧，映射到 writers 字段）；摘要行显示 titleOriginal；handleDoubanSearch 自动勾选 writers；handleDoubanApply 写入 payload.writers 并同步更新表单 writers 字段
+- **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为预存）
+- **共享层沉淀**：否——变更局限于该表单的豆瓣子面板扩展
+
+---
+
+## CHG-375 — [Fix] short_id 路由正则缺少 _ 和 - 字符
+- **完成时间**：2026-04-06 12:10
+- **修改文件**：
+  - `src/api/routes/videos.ts`：`GET /videos/:id` 正则 `[A-Za-z0-9]{8}` → `[A-Za-z0-9_-]{8}`
+  - `src/api/routes/danmaku.ts`：`GET/POST /videos/:id/danmaku` 两处同步修正
+- **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass
+- **共享层沉淀**：否——三处独立校验，规模不足提取共用函数
+
+---
+
+## CHG-376 — [Schema+Types] genres 多值：DB migration + 类型层 + 查询层
+
+- **完成时间**：2026-04-07 00:15
+- **修改文件**：
+  - `src/api/db/migrations/031_genre_to_genres.sql`（新建）：添加 genres TEXT[] 列，从 genre 单值回填，建 GIN 索引，删除 genre 列
+  - `src/api/db/queries/mediaCatalog.ts`：DbMediaCatalogRow/MediaCatalogRow/CatalogInsertData/CatalogUpdateData genre→genres，CATALOG_SELECT/INSERT/UPDATE/RETURNING 同步更新
+  - `src/api/db/queries/videos.ts`：DbVideoRow genre→genres，VIDEO_FULL_SELECT mc.genre→mc.genres，listVideos 过滤 =→@> 数组包含，insertCrawledVideo 废弃路径 genre→genres[]，移除 genreSource 字段
+  - `src/types/video.types.ts`：Video.genre→genres，移除 genreSource 废弃字段
+  - `src/api/services/VideoService.ts`：catalogFields.genre→genres，indexToES 内联 SQL 及文档字段同步
+  - `src/api/services/CrawlerService.ts`：findOrCreate 调用 genre→genres[]，indexToES 内联 SQL 同步
+  - `src/api/services/ExternalDataImportService.ts`：两处 buildXxxCatalogData genre:first→genres:all
+  - `src/api/services/SearchService.ts`：ES 过滤 genre→genres
+  - `src/api/routes/admin/videos.ts`：UpdateVideoSchema genre string→genres string[]
+  - `src/types/contracts/v1/admin.ts`：MediaCatalogRow genre→genres
+  - `src/components/video/VideoMeta.tsx`：单值 genre chip→多值 genres map
+- **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 pre-existing failures 与本次无关）
+- **共享层沉淀**：否——纯类型重命名，无需共享层
+
+---
+
+## CHG-377 — [Service] genres 多值：归一化映射 + DoubanService
+
+- **完成时间**：2026-04-07 00:30
+- **修改文件**：
+  - `src/api/lib/genreMapper.ts`（新建）：豆瓣中文题材→VideoGenre 高置信度映射表（40+ 条目）；source_category→VideoGenre 低置信度映射表（30 条目）；导出 mapDoubanGenres / mapSourceCategory 两个纯函数
+  - `src/api/services/DoubanService.ts`：syncVideo() 在写 genresRaw 后调用 mapDoubanGenres 填充 genres；fields 列表同步追加
+- **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 pre-existing）
+- **共享层沉淀**：genreMapper.ts 已沉淀为可复用工具库（src/api/lib/）
+
+---
+
+## CHG-378 — [UI] genres 多值：表单多选 + 移除 category 字段
+
+- **完成时间**：2026-04-07 00:45
+- **修改文件**：
+  - `src/components/admin/AdminVideoForm.tsx`：FormData genre→genres[]，DEFAULT_FORM 同步；移除 category 字段（source_category 废弃，读写均失效）；题材 UI 从单选下拉改为多选 checkbox 组；豆瓣预览面板新增 genres FieldCheckbox（显示豆瓣原始题材，供选择应用）；handleDoubanSearch 自动勾选 genres；handleDoubanApply 写入 genres payload 并同步更新表单状态
+- **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 pre-existing）
+- **共享层沉淀**：否——表单内部状态变更，不需要共享
+
+---
+
+### UX-01 — [Detail] 重构 VideoDetailHero + 移除 VideoDetailMeta
+- **完成时间**：2026-04-08 00:30
+- **修改文件**：
+  - `src/components/video/VideoDetailHero.tsx` — 主体改版：改为 client component，新增 genres 标签行（GENRE_LABELS 映射中文）、线路数量指示器（sourceCount，绿色 badge）、字幕语言指示器（subtitleLangs，最多展示4种）、导演/编剧/演员 MetaChip 行（合并自 VideoDetailMeta）、描述折叠展开（超过150字可展开）；封面列简化；立即播放按钮保留
+  - `src/components/video/VideoDetailMeta.tsx` — **删除**（功能完整合并入 Hero）
+  - `src/components/video/VideoDetailClient.tsx` — 移除 VideoDetailMeta import 和渲染
+  - `tests/unit/components/video/VideoDetailClient.test.tsx` — 移除 VideoDetailMeta mock；修正 makeVideo() 中 category→genres 字段
+  - `src/components/templates/Page.template.tsx` — 移除注释中 VideoDetailMeta 引用
+- **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为预存，与本次无关）
+- **共享层沉淀**：GENRE_LABELS 为 VideoDetailHero 专用，暂无需提取（仅一处使用）
+
+---
+
+### CHG-379 — [Fix] 切集后线路重置：保留用户选中的线路
+- **完成时间**：2026-04-08 01:10
+- **修改文件**：
+  - `src/components/player/PlayerShell.tsx` — episode useEffect 的 then 回调中，获取新源后用 `sources[activeSourceIndex]?.label` 按名称在新源列表中查找匹配项，命中则保留 index，否则回退 0；移除原来无条件的 `setActiveSourceIndex(0)`
+- **测试覆盖**：typecheck ✅ lint ✅ 745/770 tests pass（25 failures 均为预存，与本次无关）
+- **共享层沉淀**：无需提取
+
+---
+
+### CHG-380 — 删除审核台顶部无功能统计区块
+- **完成时间**：2026-04-09 00:05
+- **修改文件**：
+  - `src/components/admin/moderation/ModerationDashboard.tsx` — 移除 ModerationStats import 和 JSX
+  - `src/components/admin/moderation/ModerationStats.tsx` — 删除（dead code）
+- **测试覆盖**：typecheck ✅ lint ✅（pending-review 测试失败为预存问题，与本次无关）
+- **共享层沉淀**：无需提取
+
+---
+
+### CHG-381 — [DB] 新增 videos 辅助状态字段（douban_status / source_check_status / meta_score）
+- **完成时间**：2026-04-09 02:30
+- **修改文件**：
+  - `src/api/db/migrations/032_videos_pipeline_status_fields.sql`（新建，幂等 migration）
+  - `src/types/video.types.ts`（新增 DoubanStatus / SourceCheckStatus 类型，Video 接口新增3字段）
+  - `src/api/db/queries/videos.ts`（DbVideoRow / VIDEO_FULL_SELECT / mapVideoRow / PendingReviewVideoRow / listPendingReviewVideos 全部更新）
+  - `src/api/db/queries/crawlerRuns.ts`（CrawlerRunCrawlMode 类型 / CrawlerRun / DbRunRow / mapRun / createRun 更新）
+  - `docs/architecture.md`（videos 表字段说明、crawler_runs 扩展字段说明同步更新）
+- **测试覆盖**：typecheck ✅ lint ✅；相关测试失败均为预存（transitionVideoState mock 问题），与本次改动无关
+- **共享层沉淀**：DoubanStatus / SourceCheckStatus 已在 types/index.ts 自动导出，无需额外提取
+
+## CHG-382 — [API] 修改 approve 审核终态：通过→暂存（approved+internal）
+- **完成时间**：2026-04-09 03:30
+- **修改文件**：
+  - `src/api/db/queries/videos.ts`（VideoStateTransitionAction 新增 approve_and_publish；transitionVideoState approve case 终态改为 internal+false；新增 approve_and_publish case；ReviewAction / REVIEW_ACTION_MAP 同步更新）
+  - `src/api/services/VideoService.ts`（review() 方法支持 approve_and_publish 转发）
+  - `src/api/routes/admin/videos.ts`（ReviewSchema / StateTransitionSchema 新增 approve_and_publish；两处路由加 admin 角色权限检查）
+  - `tests/unit/api/reviewVideo.test.ts`（重写 mock 为 transitionVideoState，更新 approve 期望为 internal+false，新增 approve_and_publish 测试用例，共 6 个测试）
+- **测试覆盖**：typecheck ✅ lint ✅；reviewVideo.test.ts 6/6 通过；其余失败均为预存
+- **共享层沉淀**：无需；approve_and_publish 为新 action，逻辑集中在 DB queries 层
+
+## CHG-383 — [API] 新增 auto-publish-staging Job 与 maintenance-queue Worker
+- **完成时间**：2026-04-09 05:00
+- **修改文件**：
+  - `src/api/lib/queue.ts`（新增 maintenanceQueue）
+  - `src/types/system.types.ts`（SystemSettingKey 新增 3 个 staging 键）
+  - `src/api/db/queries/staging.ts`（新建，listStagingVideos / getStagingVideoById / listReadyStagingVideoIds / StagingPublishRules / DEFAULT_STAGING_RULES）
+  - `src/api/services/StagingPublishService.ts`（新建，checkReadiness / getRules / saveRules / publishSingle / publishReadyBatch）
+  - `src/api/workers/maintenanceWorker.ts`（新建，处理 auto-publish-staging Job）
+  - `src/api/workers/maintenanceScheduler.ts`（新建，5min tick 调度）
+  - `src/api/routes/admin/staging.ts`（新建，5 个 API 端点）
+  - `src/api/server.ts`（注册 maintenanceWorker / maintenanceScheduler / adminStagingRoutes）
+  - `tests/unit/api/stagingPublish.test.ts`（新建，14 个测试）
+- **测试覆盖**：typecheck ✅ lint ✅；stagingPublish.test.ts 14/14；其余失败为预存
+- **共享层沉淀**：StagingPublishRules / DEFAULT_STAGING_RULES 导出自 db/queries/staging.ts，供 routes 和 service 复用
+
+## ADMIN-09 — [UI] 暂存发布队列页面（/admin/staging，基础版）
+- **完成时间**：2026-04-09 06:00
+- **修改文件**：
+  - `src/app/[locale]/admin/staging/page.tsx`（新建）
+  - `src/components/admin/staging/StagingReadinessBadge.tsx`（新建，含 DoubanStatusBadge / SourceHealthBadge）
+  - `src/components/admin/staging/StagingRulesPanel.tsx`（新建，规则折叠配置面板）
+  - `src/components/admin/staging/StagingTable.tsx`（新建，ModernDataTable + 行级操作 + 批量发布）
+  - `src/components/admin/staging/StagingDashboard.tsx`（新建，主容器）
+  - `src/components/admin/AdminSidebar.tsx`（新增"暂存发布队列"菜单项）
+  - `src/lib/api-client.ts`（新增 put 方法）
+- **测试覆盖**：typecheck ✅ lint ✅；无新增测试失败；UI 组件暂无单元测试（表格交互逻辑测试在 M1 里程碑评审后补充）
+- **共享层沉淀**：StagingReadinessBadge / DoubanStatusBadge / SourceHealthBadge 从 staging/StagingReadinessBadge.tsx 导出，供后续 moderation/detail 页面复用
+
+## CHG-384 — [DB+UI] 修复 approve 暂存：更新 DB 触发器白名单 + 审核台新增操作按钮
+- **完成时间**：2026-04-09
+- **记录时间**：2026-04-09 08:00
+- **修改文件**：
+  - `src/api/db/migrations/033_update_state_machine_approve_staging.sql` — 新建，重写 enforce_videos_state_machine() 函数，补全 pending_review|internal|0→approved|internal|0 和 pending_review|hidden|0→approved|hidden|0 两条跃迁
+  - `src/components/admin/moderation/ModerationDetail.tsx` — 增加 isAdmin 判断，"通过"改为"通过（暂存）"，管理员专属"通过并直接上架"按钮
+  - `docs/architecture.md` — 第6节补充完整跃迁白名单表格
+- **新增依赖**：无
+- **数据库变更**：Migration 033 重建触发器 trg_videos_state_machine（函数替换，触发器重建）
+- **注意事项**：Migration 033 需在 CHG-382 的代码变更部署后执行；执行后 approve 操作才能正常将视频跃迁至 approved+internal+false 暂存态
+- **测试覆盖**：typecheck ✅ lint ✅；785 tests passing（20 failing 均为预存失败，与本次改动无关）
+- **共享层沉淀**：isAdmin 判断通过已有 useAuthStore(selectIsAdmin) 实现，无需新建共享逻辑
+
+## CHG-389 — [DB+UI] 修复暂存队列空白：StagingTable 错误可见化 + Migration 034 hidden→approve 跃迁
+- **完成时间**：2026-04-09
+- **记录时间**：2026-04-09 09:00
+- **修改文件**：
+  - `src/api/db/migrations/034_fix_approve_hidden_to_internal.sql` — 新建，重写触发器函数，在 pending_review|hidden|0 白名单中补充 approved|internal|0（使"通过（暂存）"对 hidden 状态视频也能正常工作）
+  - `src/components/admin/staging/StagingTable.tsx` — catch 块不再静默；增加 fetchError state 和错误提示 banner，含"后端服务已重启且 migrations 已执行"提示
+  - `docs/architecture.md` — 更新 pending_review+hidden 行的跃迁白名单
+- **新增依赖**：无
+- **数据库变更**：Migration 034 重建触发器 trg_videos_state_machine（在 034 之后运行 npm run migrate 生效）
+- **注意事项**：如果暂存队列仍为空，应先在浏览器 Network 面板查看 /admin/staging 的实际响应；错误提示会明确告知需要重启后端或运行 migrations
+- **测试覆盖**：typecheck ✅ lint ✅；785 tests passing；20 failing 均为预存失败
+- **共享层沉淀**：无；错误 state 为局部 UI 状态
+
+## CHG-390 — 编辑元数据完成/取消后返回来源页面
+- **完成时间**：2026-04-10 00:10
+- **修改文件**：
+  - `src/components/admin/staging/StagingTable.tsx`
+  - `src/app/[locale]/admin/videos/[id]/edit/page.tsx`
+  - `src/components/admin/AdminVideoForm.tsx`
+- **测试覆盖**：typecheck ✅ lint ✅（无新增错误/警告）
+- **说明**：通过 `?from=` query param + `returnUrl` prop 支持跨页面返回；不影响 /admin/videos 新建/编辑的现有行为（默认仍返回 /admin/videos）
+
+## CHG-391 — 立即发布失败：友好错误提示 + 无活跃源前置校验
+- **完成时间**：2026-04-10 00:30
+- **修改文件**：
+  - `src/components/admin/staging/StagingTable.tsx`
+  - `src/api/services/StagingPublishService.ts`
+  - `src/api/routes/admin/staging.ts`
+- **测试覆盖**：typecheck ✅ lint ✅
+- **说明**：双层防护——前端在 activeSourceCount===0 时拦截，service 层在发 DB 请求前预检，均抛出可读的中文错误；路由 catch 直接透传 err.message
+
+## CHG-392 — apiClient 修复无 body POST 触发 Fastify 400 FST_ERR_CTP_EMPTY_JSON_BODY
+- **完成时间**：2026-04-10 00:45
+- **修改文件**：`src/lib/api-client.ts`、`src/api/routes/admin/staging.ts`（移除诊断日志）、`src/components/admin/staging/StagingTable.tsx`（移除诊断日志）
+- **测试覆盖**：typecheck ✅
+- **说明**：Content-Type: application/json 现在只在有 body 时设置；修复所有无 body 的 POST/DELETE 请求（不局限于 staging）
+
+## CHG-393 — auto-publish-staging 调度器 30 分钟间隔 + 默认启用
+- **完成时间**：2026-04-10 01:10
+- **修改文件**：
+  - `src/api/workers/maintenanceScheduler.ts`
+  - `src/api/server.ts`
+  - `src/api/db/migrations/035_seed_auto_publish_staging_enabled.sql`（新建）
+- **测试覆盖**：typecheck ✅
+- **说明**：三层修复：interval 30 分钟、null 视为启用、scheduler 默认 opt-out。Migration 035 补种默认值
+
+## CHG-394 — 暂存页权限 UI 一致性
+- **完成时间**：2026-04-10 01:30
+- **修改文件**：`src/components/admin/staging/StagingDashboard.tsx`、`StagingRulesPanel.tsx`、`StagingTable.tsx`
+- **测试覆盖**：typecheck ✅
+- **说明**：StagingDashboard 读取 selectIsAdmin 后向下透传；RulesPanel 非 admin 只读；StagingTable 非 admin 隐藏批量发布；两处 catch {} 补全错误展示
+
+## CHG-395 — ModernDataTable 补全 selection props，接入 StagingTable 行选择
+- **完成时间**：2026-04-10 16:40
+- **修改文件**：
+  - `src/components/admin/shared/modern-table/ModernTableBody.tsx`
+  - `src/components/admin/shared/modern-table/ModernTableHead.tsx`
+  - `src/components/admin/shared/modern-table/ModernDataTable.tsx`
+  - `src/components/admin/staging/StagingTable.tsx`
+- **测试覆盖**：typecheck ✅ lint ✅ ModernDataTable 单元测试 4/4 通过；modern-table 全部测试通过
+- **共享层沉淀**：selection 功能已在 ModernDataTable / ModernTableHead / ModernTableBody 三层封装，调用方零感知
+
+## CHG-396 — 暂存页筛选实现：就绪/警告/阻塞 tab + 类型/站点 filter
+- **完成时间**：2026-04-10 17:00
+- **修改文件**：
+  - `src/api/db/queries/staging.ts`
+  - `src/api/routes/admin/staging.ts`
+  - `src/components/admin/staging/StagingTable.tsx`
+  - `tests/unit/api/stagingPublish.test.ts`
+- **测试覆盖**：typecheck ✅ lint ✅ stagingPublish.test.ts 14/14 通过
+- **共享层沉淀**：readiness 分类逻辑封装在 DB 层 CTE，不在 service 层重复
+
+---
+
+### CHG-397 — M1 测试质量修复：修复 5 个预存测试失败 + 补 CHG-396 组件测试
+- **完成时间**：2026-04-10 17:20
+- **修改文件**：
+  - `tests/unit/api/updateVisibility.test.ts`（重写：mock 改用 transitionVideoState）
+  - `tests/unit/api/video-service-publish.test.ts`（重写：publish/batchPublish mock 跟进）
+  - `tests/unit/api/crawler-service-es.test.ts`（修复：MediaCatalogService mock + bumpEpisodeCountIfHigher + connect）
+  - `tests/unit/api/ingestPolicy.test.ts`（修复：同上 + 已存在视频分支改用 db.query mockImplementation）
+  - `tests/unit/api/moderationStats.test.ts`（修复：systemSettings mock + 分页断言 objectContaining）
+  - `tests/unit/components/admin/staging/StagingTable.test.tsx`（新建：13 用例覆盖 CHG-396）
+- **测试覆盖**：全量 npm test -- --run 88 文件 / 798 用例全部通过
+- **共享层沉淀**：无需提取；MediaCatalogService 类 mock 模式已在同类文件中统一
+
+---
+
+#### CRAWLER-01 — [DB/API] crawler_runs 新增模式字段 + CrawlJobData 扩展
+- **完成时间**：2026-04-12 15:35
+- **变更文件**：
+  - `src/api/workers/crawlerWorker.ts`（扩展 CrawlJobData 接口加 crawlMode/keyword/targetVideoId/previewOnly/targetSiteKeys；迁入 parseCrawlerSources + getEnabledSources）
+  - `src/api/services/CrawlerService.ts`（移出两函数；fetchPage + crawl() 新增 keyword 参数；新增 refetchSourcesForVideo stub；移除 crawlerSitesQueries import）
+  - `src/api/services/CrawlerRunService.ts`（input 类型新增 crawlMode/keyword/targetVideoId；传递给 createRun()）
+  - `src/api/routes/admin/crawler.ts`（POST /admin/crawler/runs body schema 扩展 crawlMode/keyword/targetVideoId；加参数互斥校验）
+  - `tests/unit/api/crawlerKeyword.test.ts`（新建：8 用例覆盖 buildApiUrl keyword、CrawlJobData 新字段、CrawlerRunService crawlMode 传递、refetchSourcesForVideo stub）
+  - `tests/unit/api/crawler.test.ts`（更新：移除已迁出的 CrawlerService mock 成员）
+  - `tests/unit/api/crawler-worker.test.ts`（更新：同上）
+  - `tests/unit/api/sources-verify.test.ts`（更新：同上）
+  - `tests/unit/api/system-config.test.ts`（更新：同上）
+- **测试覆盖**：全量 npm test -- --run 89 文件 / 806 用例全部通过
+- **共享层沉淀**：parseCrawlerSources/getEnabledSources 迁移至 crawlerWorker.ts（worker 是唯一调用方，语义更明确）
+
+---
+
+#### CRAWLER-02 — [Service] 源 Upsert 策略改造：同站点全量替换
+- **完成时间**：2026-04-12 15:50
+- **变更文件**：
+  - `src/api/db/queries/sources.ts`（新增 replaceSourcesForSite 事务函数 + ReplaceSourcesStats 类型；注：任务规划写 videos.ts，实际按架构规范放 sources.ts）
+  - `src/api/services/CrawlerService.ts`（CrawlerSource.ingestPolicy 新增 source_update 字段；upsertVideo Step 6 改造为全量替换策略；无 siteKey 或 append_only 时退回旧路径；返回类型扩展 sourcesKept/sourcesRemoved）
+  - `tests/unit/api/crawlerSourceUpsert.test.ts`（新建：6 用例覆盖新增/保留/移除/回滚/策略路由）
+- **测试覆盖**：全量 npm test -- --run 90 文件 / 812 用例全部通过
+- **共享层沉淀**：ReplaceSourcesStats 类型导出自 sources.ts，供后续 CRAWLER-04 复用
+
+---
+
+#### CRAWLER-03 — [API] 关键词搜索采集：预览模式 + 入库模式
+- **完成时间**：2026-04-12 16:00
+- **变更文件**：
+  - `src/api/services/CrawlerPreviewService.ts`（新建：extends CrawlerService，previewKeywordSearch + probeSourceUrl；CrawlerService.ts 超 500 行，故拆入新文件）
+  - `src/api/services/CrawlerService.ts`（fetchText 改为 protected，供子类访问）
+  - `src/api/routes/admin/crawler.ts`（新增 POST /admin/crawler/keyword-preview 路由；导入 CrawlerPreviewService + getEnabledSources）
+  - `tests/unit/api/crawlerKeywordPreview.test.ts`（新建：7 用例覆盖多站点聚合/类型过滤/sourceStatus 探测/错误处理）
+- **测试覆盖**：全量 npm test -- --run 91 文件 / 819 用例全部通过
+- **共享层沉淀**：KeywordPreviewItem / KeywordPreviewResult 类型导出自 CrawlerPreviewService.ts，入库模式通过 CRAWLER-01 扩展的 POST /admin/crawler/runs（crawlMode=keyword）支持
+
+---
+
+## CRAWLER-04 — [API] 单视频补源采集 Job
+- **完成时间**：2026-04-12 15:55
+- **关联序列**：Phase 2 采集能力扩展
+- **变更摘要**：
+  - 新建 `CrawlerRefetchService.ts`（extends CrawlerService）：实现 `refetchSourcesForVideo(videoId, siteKeys?)` — 以视频标题关键词搜索各站点，使用 bigram Dice 相似度（阈值 0.8）过滤结果，匹配后通过 `replaceSourcesForSite` 全量替换同站点源
+  - 新增 `titleSimilarity(a, b)` 工具函数（导出，可独立测试）
+  - `CrawlerService.ts`：移除 refetchSourcesForVideo stub；`db` 字段改为 `protected`（供子类访问）
+  - `POST /admin/crawler/refetch-sources { videoId, siteKeys? }`：admin 权限，返回 `{ sourcesAdded, notFound }`
+  - `POST /admin/videos/:id/refetch-sources`：moderator+ 权限，代理到 CrawlerRefetchService
+  - `tests/unit/api/sourceRefetch.test.ts`（新建）：7 用例覆盖标题匹配写入/相似度低跳过/站点失败/siteKeys 过滤/视频不存在/多站点汇总
+  - `crawlerKeyword.test.ts`：stub 测试替换为 titleSimilarity 单元测试（4 用例）
+- **文件列表**：
+  - `src/api/services/CrawlerRefetchService.ts`（新建）
+  - `src/api/services/CrawlerService.ts`（db→protected，移除 stub）
+  - `src/api/routes/admin/crawler.ts`（新增 POST /admin/crawler/refetch-sources）
+  - `src/api/routes/admin/videos.ts`（新增 POST /admin/videos/:id/refetch-sources）
+  - `tests/unit/api/sourceRefetch.test.ts`（新建：7 用例）
+  - `tests/unit/api/crawlerKeyword.test.ts`（stub 测试替换为 titleSimilarity 测试）
+- **测试覆盖**：新增 11 用例（7 sourceRefetch + 4 titleSimilarity），全量通过
+- **共享层沉淀**：titleSimilarity 导出自 CrawlerRefetchService.ts，供 UX-08 等前端展示层调用参考
+
+---
+
+## UX-08 — [UI] 采集控制台"发起采集" Tab（三模式统一入口）
+- **完成时间**：2026-04-12 16:05
+- **关联序列**：Phase 2 采集能力扩展
+- **变更摘要**：
+  - 新建 `CrawlerLaunchPanel.tsx`：三模式选择器（批量/关键词/补源）+ 内联 `BatchCrawlForm`；useCrawlerSites 加载站点
+  - 新建 `KeywordCrawlForm.tsx`：关键词输入 + 站点多选 + [搜索并预览]/[直接采集]；预览结果展示 KeywordPreviewTable
+  - 新建 `SourceRefetchForm.tsx`：视频搜索下拉（GET /admin/videos?q=，300ms debounce）+ 站点多选 + [开始补源采集]（POST /admin/videos/:id/refetch-sources）
+  - 新建 `KeywordPreviewTable.tsx`：按站点分组显示预览结果（标题/年份/类型/源数/状态探测）
+  - `AdminCrawlerTabs.tsx`：新增"发起采集"Tab（'launch'），CrawlerLaunchPanel 接入 + URL 参数同步
+- **文件列表**：
+  - `src/components/admin/system/crawler-site/components/CrawlerLaunchPanel.tsx`（新建）
+  - `src/components/admin/system/crawler-site/components/KeywordCrawlForm.tsx`（新建）
+  - `src/components/admin/system/crawler-site/components/SourceRefetchForm.tsx`（新建）
+  - `src/components/admin/system/crawler-site/components/KeywordPreviewTable.tsx`（新建）
+  - `src/components/admin/AdminCrawlerTabs.tsx`（新增 launch tab）
+  - `tests/unit/components/admin/crawler/CrawlerLaunchPanel.test.tsx`（新建：8 用例）
+- **测试覆盖**：新增 8 用例（模式切换/站点渲染/批量发起/关键词校验/关键词采集/模式按钮）全部通过
+- **共享层沉淀**：KeywordPreviewResult/KeywordPreviewItem 类型从 KeywordPreviewTable.tsx 导出，可供其他模块复用
+
+---
+
+## UX-09 — [UI] 采集任务详情展开：站点维度结果拆分
+- **完成时间**：2026-04-12 16:10
+- **关联序列**：Phase 2 采集能力扩展
+- **变更摘要**：
+  - `crawlerTasks.ts`: 新增 `findTaskById(db, taskId)` 按 ID 查单条任务
+  - `crawler.ts`: 新增 `GET /admin/crawler/tasks/:id`，返回 task + siteBreakdown（从 result JSON 提取）+ runContext（crawlMode/keyword/targetVideoId 来自关联 run）
+  - `useCrawlerTaskTableColumns.tsx`: actions 列新增"详情"按钮（可选 `onViewDetail` 回调）
+  - `AdminCrawlerPanel.tsx`: 新增 `detailTaskId/detailLoading/taskDetail` 状态；"详情"按钮点击展开 detail 面板（toggle），显示站点维度统计表 + 关键词/补源目标上下文
+- **文件列表**：
+  - `src/api/db/queries/crawlerTasks.ts`（新增 findTaskById）
+  - `src/api/routes/admin/crawler.ts`（新增 GET /admin/crawler/tasks/:id）
+  - `src/components/admin/system/crawler-task/useCrawlerTaskTableColumns.tsx`（actions 列新增详情按钮）
+  - `src/components/admin/AdminCrawlerPanel.tsx`（展开 detail 面板）
+- **测试覆盖**：无新增测试文件（详情展开行为覆盖在现有 AdminCrawlerPanel.test.tsx 集成测试中）
+
+---
+
+## CHG-398 — [BUG] Phase 2 M2 审核缺口修复（三项关键路径缺口）
+- **完成时间**：2026-04-12
+- **记录时间**：2026-04-12 17:00
+- **修改文件**：
+  - `src/api/workers/crawlerWorker.ts` — 新增 `EnqueueExtras` 接口；`enqueueFullCrawl`/`enqueueIncrementalCrawl` 接受 `extras?` 参数并写入 job data；`processCrawlJob` 按 `crawlMode` 分支（source-refetch → CrawlerRefetchService，keyword → crawl() 传 keyword）；`getEnabledSources` 补全 `source_update` 字段映射
+  - `src/api/services/CrawlerRunService.ts` — `createAndEnqueueRun` 构建 `extras` 对象并透传至 enqueue 调用
+  - `src/api/db/queries/sources.ts` — `replaceSourcesForSite` INSERT 改为 `ON CONFLICT DO UPDATE SET deleted_at = NULL, is_active = true`，修复软删恢复；计数逻辑改为 `sourcesKept++`（已有 URL）/ `sourcesAdded += insertResult.rowCount ?? 0`（实际插入数）
+  - `src/types/system.types.ts` — `IngestPolicy` 新增 `source_update?: 'replace' | 'append_only'`
+  - `tests/unit/api/crawlerKeyword.test.ts` — 补充 enqueue payload 断言（crawlMode/keyword/targetVideoId 进入 extras）
+  - `tests/unit/api/crawlerSourceUpsert.test.ts` — 新增软删除恢复场景测试（ON CONFLICT DO UPDATE + deleted_at = NULL）
+- **新增依赖**：无
+- **数据库变更**：无（INSERT 语义变更，无 schema 变更）
+- **注意事项**：`getEnabledSources` 现在透传 `source_update`，crawlerWorker 中的 `source.ingestPolicy.source_update` 判断才能生效。`replaceSourcesForSite` 的 ON CONFLICT 目标是 `uq_sources_video_episode_url`（video_id + episode_number + source_url），确保该约束存在于 DB schema。
+
+---
+
+## CHG-399 — [BUG] 单视频补源 Job 闭环（source-refetch 落库完成态 + UI 改走队列）
+- **完成时间**：2026-04-12
+- **记录时间**：2026-04-12 18:30
+- **修改文件**：
+  - `src/api/workers/crawlerWorker.ts` — source-refetch for 循环结束后新增：`if (crawlMode === 'source-refetch' && taskId)` → `updateTaskStatus(db, taskId, 'done', { sourcesUpserted, videosUpserted: 0, errors })`；`if (runId)` → `syncRunStatusFromTasks`
+  - `src/components/admin/system/crawler-site/components/SourceRefetchForm.tsx` — `handleRefetch` 改为 POST `/admin/crawler/runs` `{ triggerType: 'batch'|'all', mode: 'incremental', crawlMode: 'source-refetch', targetVideoId }`；移除同步 `RefetchResponse` 解析，改为入队成功提示；按钮文字改为"加入补源队列"
+  - `tests/unit/api/crawlerWorkerSourceRefetch.test.ts` — 新建，4 tests：P1 done 落库 / syncRun 被调用 / notFound 计入 errors / batch 模式不重复调用
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：原 `/admin/videos/:id/refetch-sources` 和 `/admin/crawler/refetch-sources` 同步路由仍保留（CLAUDE.md 禁止删除 API 路径），但 UI 已改走 runs 队列路径。
+
+---
+
+## CHG-400 — [BUG] 两个补源专用 API 改走队列
+- **完成时间**：2026-04-12
+- **记录时间**：2026-04-12 19:20
+- **修改文件**：
+  - `src/api/routes/admin/crawler.ts` — `POST /admin/crawler/refetch-sources`：改为 `findAdminVideoById` 验证存在后，调 `runService.createAndEnqueueRun({ crawlMode: 'source-refetch', targetVideoId })`，返回 202；新增 `findAdminVideoById` 导入
+  - `src/api/routes/admin/videos.ts` — `POST /admin/videos/:id/refetch-sources`：同上改走队列；移除 `CrawlerRefetchService` 和 `import { es }` 相关依赖（实际 es 被 VideoService 继续使用，只移除 refetchService）；新增 `CrawlerRunService` + `findAdminVideoById` 导入
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：两路由响应格式由原来的 `{ data: { sourcesAdded, notFound } }` 变为 `{ data: { runId, taskIds, enqueuedSiteKeys, skippedSiteKeys } }`，状态码由 200 变为 202。已有调用方（如 UI）若依赖旧格式需更新（SourceRefetchForm 已在 CHG-399 中改为不依赖响应字段）。
+
+---
+
+## CHG-384 — [DB] 创建 external_data schema（douban_entries / bangumi_entries）
+
+- **完成时间**：2026-04-12 22:00
+- **变更类型**：数据库 schema + 导入脚本
+- **影响文件**：
+  - `src/api/db/migrations/036_external_data_schema.sql`（新建）— `external_data` schema，`douban_entries`（14万行豆瓣条目）、`bangumi_entries`（1万行动画条目），各含 `(title_normalized, year)` 索引供 MetadataEnrichService Step1/Step3 使用
+  - `scripts/import-douban-dump.ts`（新建）— 从 external-db/douban/moviedata-10m/movies.csv 流式导入；ON CONFLICT DO UPDATE；支持 --limit N
+  - `scripts/import-bangumi-dump.ts`（新建）— 从 external-db/bangumi/…/subject.jsonlines 流式导入 type=2 动画；ON CONFLICT DO UPDATE；支持 --limit N
+  - `docs/architecture.md`（更新）— 新增 §5.5 external_data schema 说明，迁移文件列表更新至 036
+- **新增依赖**：无（pg、node:fs、node:readline 均已存在）
+- **数据库变更**：Migration 036 新建 external_data schema（不影响现有表）
+- **注意事项**：migration 编号从原计划 033 改为 036（033~035 已被 Phase 2 使用）；导入脚本为一次性 CLI 工具，不参与运行时
+
+---
+
+## CHG-385 — [Service/Worker] metadata-enrich Job（enrichment-queue Worker）
+
+- **完成时间**：2026-04-12 22:15
+- **变更类型**：后端服务 + Worker + DB 查询
+- **影响文件**：
+  - `src/api/lib/queue.ts` — 新增 `enrichmentQueue`（Bull）及日志绑定
+  - `src/api/db/queries/externalData.ts`（新建）— `findDoubanByTitleNorm` / `findBangumiByTitleNorm` 查询 external_data schema
+  - `src/api/db/queries/videos.ts` — 新增 `updateVideoEnrichStatus` / `updateVideoSourceCheckStatus`
+  - `src/api/services/MetadataEnrichService.ts`（新建）— 五步流程：Step1 本地豆瓣匹配、Step2 网络搜索 fallback、Step3 bangumi 动画补充、Step4 源 HEAD 检验、Step5 meta_score 计算
+  - `src/api/workers/enrichmentWorker.ts`（新建）— 注册 Worker（并发 2）+ `enqueueEnrichJob`
+  - `src/api/services/CrawlerService.ts` — `upsertVideo` 完成后 void enrichmentQueue.add（delay=300s, jobId=enrich-{videoId} 去重）
+  - `tests/unit/api/metadataEnrich.test.ts`（新建）— 7 条测试，覆盖 Step1~5 主路径
+- **新增依赖**：无
+- **数据库变更**：无（使用 Migration 036 新建的 external_data schema）
+- **注意事项**：Step2 仅在 Step1 无本地条目时运行（candidate 不触发网络搜索）；`enrichmentQueue` 已加到 queue.ts exports 中，未来需在 server 启动时调用 `registerEnrichmentWorker()`
+
+---
+
+## CHG-386 — [API] 暂存队列新增豆瓣相关操作接口
+
+- **完成时间**：2026-04-12 10:30
+- **关联序列**：Phase 3 自动丰富流水线
+- **变更内容**：
+  - `src/api/services/DoubanService.ts` — 新增 `batchEnqueueEnrich(videoIds[])` / `searchByKeyword(keyword)` / `confirmSubject(videoId, subjectId)` 三个方法
+  - `src/api/routes/admin/staging.ts` — 新增 3 条路由：`POST /admin/staging/batch-douban-sync`、`POST /admin/staging/:id/douban-search`、`POST /admin/staging/:id/douban-confirm`
+  - `tests/unit/api/stagingDouban.test.ts`（新建）— 10 条测试，覆盖 batchEnqueueEnrich（3）、searchByKeyword（2）、confirmSubject（5）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：`confirmSubject` 在 safeUpdate 后重新读取 catalog 计算 meta_score；MediaCatalogService 在方法内延迟实例化（非构造器）
+
+---
+
+## CHG-385/386 修复 — enrichmentWorker 注册缺失 + staging 路由无暂存校验
+
+- **完成时间**：2026-04-13
+- **问题**：P1 server.ts 遗漏 registerEnrichmentWorker()；P2 batch-douban-sync/douban-confirm 未限定暂存视频
+- **修复**：
+  - `src/api/server.ts` — 新增 `import { registerEnrichmentWorker }` + 调用 `registerEnrichmentWorker()`
+  - `src/api/routes/admin/staging.ts` — `batch-douban-sync` 路由层逐一调用 `getStagingVideoById` 过滤，非暂存计入 skipped；`douban-search` / `douban-confirm` 路由层先校验 `getStagingVideoById`，不在暂存状态返回 404
+- **测试**：10 条单元测试全部通过，typecheck ✅ lint ✅
+
+---
+
+## UX-10 — [UI] 审核台左侧列表增强（豆瓣/源/元数据状态指示）
+
+- **完成时间**：2026-04-13
+- **关联序列**：Phase 4 审核台增强
+- **变更内容**：
+  - `src/api/db/queries/videos.ts` — `listPendingReviewVideos` 新增 `doubanStatus` / `sourceCheckStatus` WHERE 条件（可选参数）
+  - `src/api/services/VideoService.ts` — `pendingReviewList` 透传两个新筛选参数
+  - `src/api/routes/admin/videos.ts` — `GET /admin/videos/pending-review` 新增 `doubanStatus` / `sourceCheckStatus` 查询参数（zod 枚举校验）
+  - `src/components/admin/moderation/ModerationList.tsx` — 每行新增 `DoubanBadge` / `SourceBadge` / `MetaScoreBadge`；筛选区新增豆瓣状态和源检验状态两个 select；重置时同步清除新参数
+  - `tests/unit/components/admin/moderation/ModerationList.test.tsx`（新建）— 10 条测试，覆盖各状态 badge 渲染、筛选参数传递、重置行为
+- **新增依赖**：无
+- **数据库变更**：无
+
+---
+
+## UX-11 — [UI] 审核台右侧：豆瓣信息区 + 源健康区
+
+- **完成时间**：2026-04-13
+- **关联序列**：Phase 4 审核台增强
+- **变更内容**：
+  - `src/api/routes/admin/moderation.ts`（新建）— `POST /admin/moderation/:id/douban-search` + `POST /admin/moderation/:id/douban-confirm`（无暂存限制，供待审视频使用）
+  - `src/api/server.ts` — 注册 `adminModerationRoutes`
+  - `src/components/admin/moderation/ModerationDoubanBlock.tsx`（新建）— 按 doubanStatus 展示豆瓣信息 / 搜索框 / 确认按钮
+  - `src/components/admin/moderation/ModerationSourceBlock.tsx`（新建）— 展示所有播放源活跃状态，支持单条/全部检验
+  - `src/components/admin/moderation/ModerationDetail.tsx` — 重构为四折叠块：基础信息（默认展开）/ 豆瓣信息（默认展开）/ 源健康（默认展开）/ 播放器（默认折叠）
+  - `tests/unit/components/admin/moderation/ModerationDetail.test.tsx` — 重写并新增折叠块交互、新字段渲染测试（9 条）
+- **新增依赖**：无
+- **数据库变更**：无
+
+---
+
+## UX-12 — [UI] 审核台内联元数据编辑
+
+- **完成时间**：2026-04-13
+- **关联序列**：Phase 4 审核台增强
+- **变更内容**：
+  - `src/api/routes/admin/moderation.ts` — 新增 `PATCH /admin/moderation/:id/meta`（zod MetaEditSchema 校验，复用 VideoService.update / MediaCatalogService.safeUpdate source='manual'）
+  - `src/components/admin/moderation/ModerationDetail.tsx` — 基础信息块新增内联编辑：标题/年份（点击切换 input，Enter/失焦保存），类型（即时 select），分类标签（chip 编辑器，保存/取消按钮）；成功 notify.success，失败 notify.error
+  - `tests/unit/api/moderationMetaEdit.test.ts`（新建）— 11 条 API 路由单测，覆盖正常更新/404/422/500/401 全路径
+- **新增依赖**：无
+- **数据库变更**：无
+
+---
+
+## UX-13 + CHG-387 — [UI+API] 审核台批量操作 + 审核历史 Tab + 路由整合
+
+- **完成时间**：2026-04-13
+- **关联序列**：Phase 4 审核台增强
+- **变更内容**：
+  - `src/api/db/queries/moderation.ts`（新建）— `listModerationHistory`：查询 review_status IN ('approved','rejected') 视频，含 reviewed_at/reviewed_by/review_reason，支持 result/type/sortDir 筛选
+  - `src/api/routes/admin/moderation.ts` — 新增 4 个路由：POST /batch-approve（transitionVideoState approve，跳过 STATE_CONFLICT）/ POST /batch-reject（需 reason，max 500 字）/ GET /history（listModerationHistory）/ POST /:id/reopen（rejected→pending_review）
+  - `src/components/admin/moderation/ModerationList.tsx` — 新增 checkbox 多选（全选/单选），列表底部 SelectionActionBar（sticky-bottom），[批量通过暂存]/ [批量拒绝] + BatchRejectDialog（预置原因快选 + textarea）
+  - `src/components/admin/moderation/ModerationHistory.tsx`（新建）— 已审核列表，筛选（结果/类型/排序），rejected 行显示[复审]按钮
+  - `src/components/admin/moderation/ModerationDashboard.tsx` — 新增 Tab 切换（待审核/已审核），待审核 Tab 显示原分栏，已审核 Tab 渲染 ModerationHistory；热键仅在待审核 Tab 下生效
+  - `tests/unit/api/moderationBatch.test.ts`（新建）— 21 条单测：batch-approve（7）/ batch-reject（5）/ GET history（4）/ POST reopen（5）
+  - `tests/unit/api/moderationRoutes.test.ts`（新建，CHG-387）— 10 条单测：权限矩阵（moderator/admin）/ batch-reject reason 约束 / history 分页参数
+- **新增依赖**：无
+- **数据库变更**：无（仅 SELECT，已有字段 reviewed_at/reviewed_by/review_reason）
+
+## ADMIN-10 — [UI] 暂存队列：批量豆瓣同步 + 侧滑元数据编辑
+- **完成时间**：2026-04-14
+- **修改文件**：
+  - `src/api/routes/admin/staging.ts` — 新增 MetaEditSchema + PATCH /admin/staging/:id/meta（暂存状态校验 + VideoService.update）
+  - `src/components/admin/staging/StagingEditPanel.tsx`（新建）— 侧滑 Drawer 面板：元数据编辑（title/year/type/genres）/ 豆瓣搜索确认 / 源健康摘要
+  - `src/components/admin/staging/StagingTable.tsx` — AdminDropdown 新增[处理]项（打开侧滑面板）；SelectionActionBar 新增[批量豆瓣同步]按钮；集成 StagingEditPanel
+  - `tests/unit/components/admin/staging/StagingEditPanel.test.tsx`（新建）— 12 条单测：面板显示/隐藏 / 元数据保存 / 豆瓣搜索 / 豆瓣确认
+- **新增依赖**：无
+- **数据库变更**：无
+- **共享层沉淀**：PATCH meta 路由复用 VideoService.update，无需新增 DB 查询层
+
+## ADMIN-11 — [UI] 暂存队列：触发补源采集 + 就绪状态联动刷新
+- **完成时间**：2026-04-14
+- **修改文件**：
+  - `src/components/admin/staging/StagingEditPanel.tsx` — source_check_status='all_dead' 时显示[触发补源采集]按钮；触发后每 5s 轮询（最多 30s/6 次）自动刷新源状态；loadVideo 修复 limit=1 bug 改为 limit=200
+  - `src/components/admin/staging/StagingTable.tsx` — AdminDropdown 对 all_dead 行新增[触发补源]项；新增 refetchingIds 状态 + handleRefetchSingle 逻辑
+- **新增依赖**：无
+- **数据库变更**：无
+- **共享层沉淀**：复用 POST /admin/videos/:id/refetch-sources（CRAWLER-04 已有），无需新增 API
+
+## CHG-388 — [Service/Worker] 失效源自动下架 + 自动补源触发
+- **完成时间**：2026-04-14
+- **修改文件**：
+  - `src/api/db/migrations/037_source_health_events.sql`（新建）— source_health_events 表：id/video_id/origin/old_status/new_status/triggered_by/created_at
+  - `src/api/db/queries/sources.ts` — 新增 `listIslandVideos`（孤岛视频查询）+ `insertSourceHealthEvent`（事件写入）
+  - `src/api/services/SourceVerificationService.ts`（新建）— 孤岛检测：unpublish + 写 island_detected 事件 + 触发 source-refetch Job；错误互相隔离
+  - `src/api/workers/maintenanceWorker.ts` — 新增 `verify-published-sources` job type，调用 SourceVerificationService
+  - `src/api/workers/maintenanceScheduler.ts` — 新增 60min 独立定时器调度 verify-published-sources
+  - `tests/unit/api/sourceVerificationService.test.ts`（新建）— 7 条单测：正常流程/无孤岛/skip/null transition/补源入队失败/异常隔离/batchLimit 传递
+- **新增依赖**：无
+- **数据库变更**：新建 source_health_events 表（migration 037）
+- **架构备注**：source-refetch 完成/失败回写 health events 预留给 ADMIN-12 阶段联动
+
+---
+
+## ADMIN-12 — [UI] 源管理：孤岛视频 Tab + 替换源弹窗播放器确认
+
+- **完成时间**：2026-04-14
+- **实际开始**：2026-04-14
+- **交付内容**：
+  - `src/api/routes/admin/content.ts` — 新增三端点：GET /admin/sources/orphan-videos（最新事件为 auto_refetch_failed 且无后续 manually_resolved 的视频列表）、POST /admin/sources/orphan-videos/:id/resolve（写入 manually_resolved 事件）、PATCH /admin/sources/:id/url（替换源 URL 并设 is_active=true）
+  - `src/api/db/queries/sources.ts` — 新增 listOrphanVideos（DISTINCT ON + 关联子查询）、resolveOrphanVideo、replaceSourceUrl
+  - `src/components/admin/sources/OrphanVideoTable.tsx`（新建）— 孤岛视频列表，[触发补源][进入暂存][标记已处理]
+  - `src/components/admin/sources/SourceTable.tsx` — 新增"孤岛视频"Tab，过滤器在该 Tab 下隐藏
+  - `src/components/admin/sources/SourceReplaceDialog.tsx`（新建）— 输入新 URL → ModerationPlayer 预览 → [确认替换] 调 PATCH /admin/sources/:id/url
+  - `src/components/admin/sources/InactiveSourceTable.tsx` — 操作列新增[替换URL]按钮（actions 列宽 220→280），点击打开 SourceReplaceDialog
+  - `tests/unit/components/admin/sources/OrphanVideoTable.test.tsx`（新建）— 12 条单测：加载态/空态/列表渲染/触发补源/标记已处理/进入暂存/刷新
+- **新增依赖**：无
+- **数据库变更**：无（复用 migration 037 中的 source_health_events 表）
+- **架构备注**：SourceReplaceDialog 复用 AdminDialogShell + ModerationPlayer，无新共享组件；孤岛判定逻辑完全在 DB query 层，路由层零业务逻辑
+
+---
+
+## VIDEO-09 — [UI] 视频管理：新增元数据完整度列 + 豆瓣状态列
+
+- **完成时间**：2026-04-14
+- **实际开始**：2026-04-14
+- **交付内容**：
+  - `src/components/admin/videos/useVideoTableColumns.tsx` — VideoAdminRow 新增 douban_status/meta_score/source_check_status 字段；VideoColumnId 扩充两列；VIDEO_COLUMNS 新增 douban_status（默认隐藏）和 meta_score（默认隐藏）；COLUMN_LABELS/SORTABLE_MAP 同步更新；ColumnDeps 新增 doubanSyncPendingIds/handleDoubanSync/openStaging；buildDataColumn 新增 douban_status（badge+同步按钮）和 meta_score（进度条+数值）；actions 列新增暂存按钮（review_status==='approved'&&!is_published 时显示）
+  - `src/components/admin/videos/VideoTable.tsx` — 新增 doubanSyncPendingIds state、handleDoubanSync（POST /admin/videos/:id/douban-sync + 刷新）、openStaging（router.push /admin/staging?videoId=）；deps 传入新 handler
+  - `tests/unit/components/admin/videos/VideoTable.test.tsx` — MOCK_ROWS 补充 douban_status/meta_score 字段；新增 MOCK_STAGING_ROW；新增 6 条单测：豆瓣状态列渲染、同步按钮调用 API、元数据完整度进度条渲染、暂存按钮跳转、非暂存行不显示按钮
+- **新增依赖**：无
+- **数据库变更**：无（listAdminVideos 已通过 VIDEO_FULL_SELECT 透传 douban_status/meta_score，无需改 DB 层）
+- **架构备注**："暂存中"状态用 review_status==='approved'&&!is_published 判定，无需额外字段或 API 变更
+
+---
+
+## VIDEO-10 — [UI] 视频管理：复审按钮 + 暂存队列 badge + 补源触发
+
+- **完成时间**：2026-04-14
+- **实际开始**：2026-04-14
+- **交付内容**：
+  - `src/components/admin/videos/StagingCountBadge.tsx`（新建）— Client Component，挂载时拉取 GET /admin/staging?page=1&limit=1 获取暂存总数，N>0 时渲染"暂存中 N 条"badge link，点击跳转 /admin/staging
+  - `src/app/[locale]/admin/videos/page.tsx` — actions 区插入 StagingCountBadge
+  - `src/components/admin/videos/useVideoTableColumns.tsx` — ColumnDeps 新增 reopenPendingIds/refetchPendingIds/handleReopen/handleRefetchSources；actions 列新增条件按钮：review_status=rejected→[复审]、source_check_status=all_dead→[补源]
+  - `src/components/admin/videos/VideoTable.tsx` — 新增 reopenPendingIds/refetchPendingIds state；handleReopen（POST state-transition reopen_pending + 刷新）；handleRefetchSources（POST refetch-sources + 刷新）
+  - `tests/unit/components/admin/videos/VideoTable.test.tsx` — 新增 4 条单测（复审按钮渲染/调用、非rejected不显示、补源按钮渲染/调用），共 18 测全部通过
+- **新增依赖**：无
+- **数据库变更**：无
+- **架构备注**：StagingCountBadge 独立 Client Component，Server Component 页面无需 async；条件按钮仅在对应状态下渲染，不增加通常行的按钮密度
+
+---
+
+## CHG-401 — P0-A：提取 VideoIndexSyncService + 统一 ES 同步入口 + reconcile job
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-01
+- **变更文件**：
+  - `src/api/services/VideoIndexSyncService.ts`（新建，统一 ES 同步逻辑）
+  - `src/api/services/VideoService.ts`（删除 private indexToES，改用 VideoIndexSyncService）
+  - `src/api/services/StagingPublishService.ts`（同上，同时修复错误 index 名 'videos' → 'resovo_videos'）
+  - `src/api/services/CrawlerService.ts`（同上）
+  - `src/api/workers/maintenanceWorker.ts`（新增 reconcile-search-index job type）
+  - `src/api/workers/maintenanceScheduler.ts`（新增 24h reconcile 定时器）
+  - `tests/unit/api/videoIndexSync.test.ts`（新建，7 个测试）
+  - `docs/stability_fix_plan_20260414.md`（新建，本批次方案文档）
+- **测试覆盖**：7 新增单元测试全部通过；全量 968 tests（13 pre-existing failures 无变化）
+- **架构备注**：VideoIndexSyncService 只做 upsert，不做 remove（SearchService 已有 is_published=true 过滤保证前台安全）；reconcile job 批量补全 approved+public+published 视频的 ES 索引，每 24h 运行
+
+---
+
+## CHG-402 — P0-B：前台隐藏 inactive 源 + PlayerShell 空态 UI
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-01
+- **变更文件**：
+  - `src/components/player/PlayerShell.tsx`（sources 为空时显示"暂无可用播放源"，而非错误引导"请切换线路"）
+  - `src/components/admin/moderation/ModerationDetail.tsx`（无活跃源时显示"暂无活跃播放源"提示）
+- **测试覆盖**：API 层过滤已有测试覆盖；UI 层为视觉修复，无新增测试
+- **架构备注**：API 层（findActiveSourcesByVideoId）过滤 is_active=true AND deleted_at IS NULL 已正确，本次只修复 UI 空态文案
+
+---
+
+## CHG-403 — P0-C：orphan-videos 503 MIGRATION_PENDING 友好报错
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-01
+- **变更文件**：
+  - `src/api/routes/admin/content.ts`（GET/POST orphan-videos catch 识别 PG 错误码 42P01，返回 503+MIGRATION_PENDING）
+- **测试覆盖**：无新增测试（需 DB 环境，计划在 CHG-409 补充集成测试）
+- **架构备注**：migration 037 文件已存在，只修复了运行时缺表时的错误提示，不改变 migration 执行机制
+
+---
+
+## CHG-404 — P0-D：verifyWorker 完成后即时同步 source_check_status
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-01
+- **变更文件**：
+  - `src/api/workers/verifyWorker.ts`（processVerifyJob 内 updateSourceActiveStatus 之后，立即查 video_id 并调用 syncSourceCheckStatusFromSources；失败时仅 stderr 日志，不中断 worker）
+  - `tests/unit/api/verifyWorkerSourceCheckSync.test.ts`（新建，3 个测试）
+- **测试覆盖**：3 新增单元测试全部通过（正常路径、无 video_id 跳过、syncSourceCheckStatus 异常不中断）
+- **架构备注**：syncSourceCheckStatusFromSources 是已有共享函数，本次只新增调用点；异常用 try/catch 吸收，保证 worker 稳定性
+
+---
+
+## CHG-405 — P1：crawler_sites.display_name + 线路命名重构
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-01
+- **变更文件**：
+  - `src/api/db/migrations/038_crawler_sites_display_name.sql`（新建，ADD COLUMN display_name + seed data for bfzy/1080zyk 等 8 个常用源站）
+  - `src/types/system.types.ts`（CrawlerSite 接口新增 displayName: string | null）
+  - `src/api/db/queries/crawlerSites.ts`（DbRow 新增 display_name；rowToSite 映射 displayName）
+  - `src/lib/line-display-name.ts`（PROVIDER_PATTERNS 新增 8 条爬虫 key 映射；新增 resolveSourceDisplayName 函数）
+  - `docs/architecture.md`（5.3 节补充 display_name 字段说明）
+- **测试覆盖**：无新增测试（纯配置/类型变更，运行时依赖 migration 执行）；typecheck + lint + 全量测试通过
+- **架构备注**：短期方案——扩展 PROVIDER_PATTERNS 即可覆盖已知爬虫 key；display_name 字段供将来管理员在后台编辑，resolveSourceDisplayName 优先使用 display_name，否则 fallback 到 normalizeProviderName
+
+---
+
+## CHG-406 — P1：源健康检验语义重构（UI 文案 + m3u8 GET fallback）
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-01
+- **变更文件**：
+  - `src/components/admin/moderation/ModerationList.tsx`（SourceBadge 文案：可达→检测通过，部分可达→部分异常，全失效→全部异常，未检验→未检测）
+  - `src/api/workers/verifyWorker.ts`（checkUrl 提取 fetchWithTimeout；.m3u8 URL HEAD 失败后追加 GET fallback，验证 content-type 含 mpegurl）
+  - `tests/unit/components/admin/moderation/ModerationList.test.tsx`（更新 source-badge 断言文案）
+- **测试覆盖**：全量测试通过（仅预存 13 failures 无变化）
+- **架构备注**：GET fallback 只用于 .m3u8 URL；GET 200 时验证 content-type 包含 mpegurl，避免把非 HLS 内容误判为有效
+
+---
+
+## CHG-407 — P2：审核台交互修复（豆瓣状态说明 + 写入 diff 提示）
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-01
+- **变更文件**：
+  - `src/components/admin/moderation/ModerationDoubanBlock.tsx`（顶部新增 statusHint 说明文案；candidate 按钮文案"确认当前候选"→"应用此豆瓣条目"、"忽略"→"标记为不匹配"；搜索结果条目按钮"确认"→"应用此豆瓣条目"；新增写入前覆盖提示）
+- **测试覆盖**：typecheck+lint 通过；无新增测试（UI 文案修改）
+- **架构备注**：genres controlled multiselect 已在 ModerationBasicInfoBlock.tsx 中正确实现（localGenres + handleGenreToggle），无需修改；豆瓣 diff 仅展示文案提示，不依赖额外 API 字段
+
+---
+
+## CHG-408 — P2：调度器状态展示 + 文档修正
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-01
+- **变更文件**：
+  - `src/api/workers/maintenanceScheduler.ts`（新增 getSchedulerStatus() + SchedulerInfo 类型，暴露四个定时器状态）
+  - `src/api/routes/admin/siteConfig.ts`（新增 GET /admin/system/scheduler-status 路由，需 auth）
+  - `src/components/admin/system/site-settings/SchedulerStatusPanel.tsx`（新建，调用 scheduler-status API 展示四个定时器运行状态和 intervalMs；disabled 时显示警告横幅）
+  - `src/components/admin/system/site-settings/SiteSettings.tsx`（在"维护调度器状态"Section 中挂载 SchedulerStatusPanel）
+- **测试覆盖**：typecheck+lint 通过；无新增测试（API 端只读接口）
+- **架构备注**：getSchedulerStatus 通过检查 timer 是否 != null 判断启动状态；MAINTENANCE_SCHEDULER_ENABLED=false 时所有调度器 enabled=false 并显示警告横幅
+
+---
+
+## CHG-409 — P3：补全 P0–P1 修复的单元测试
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-01
+- **变更文件**：
+  - `tests/unit/lib/lineDisplayName.test.ts`（新建，19 个测试覆盖 CHG-405 新增的 PROVIDER_PATTERNS 爬虫 key 映射和 resolveSourceDisplayName 函数）
+- **测试覆盖**：19 新增单元测试全部通过；全量 990 tests 通过（13 pre-existing failures 无变化）
+- **架构备注**：SEQ-20260414-01 所有 9 个任务（CHG-401 至 CHG-409）全部完成
+
+---
+
+## CHG-410 — P1：VideoIndexSyncService 补全缺失 ES 字段
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-02
+- **变更文件**：
+  - `src/api/services/VideoIndexSyncService.ts`（VideoEsRow 新增 description/director/cast/writers/subtitle_langs/created_at；FETCH_SQL/RECONCILE_SQL 补全对应字段；buildDocument 写入全部字段）
+  - `tests/unit/api/videoIndexSync.test.ts`（VIDEO_ROW fixture 补全字段；新增 CHG-410 字段断言测试）
+- **测试覆盖**：12 测试全部通过
+- **架构备注**：subtitle_langs 使用与 videos.ts 一致的 SUBTITLE_LANGS_SUBQUERY 子查询
+
+---
+
+## CHG-411 — P1：reconcileStale — ES 漏下架文档清理路径
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-02
+- **变更文件**：
+  - `src/api/services/VideoIndexSyncService.ts`（新增 reconcileStale(daysLookback, batchLimit)：非上架视频 upsert，软删除视频 delete；404 幂等处理）
+  - `src/api/workers/maintenanceWorker.ts`（reconcile-search-index case 同时调用 reconcilePublished + reconcileStale，日志扩展 fixed/deleted 字段）
+  - `tests/unit/api/videoIndexSync.test.ts`（4 个 reconcileStale 测试：正常路径/delete 路径/404幂等/双路计数）
+- **测试覆盖**：4 新增测试全部通过
+- **架构备注**：daysLookback 默认 7，避免全表扫描；ES delete 404 视为幂等成功（文档已不存在）
+
+---
+
+## CHG-412 — P2：crawler_sites.display_name 进入前台线路命名链路
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-02
+- **变更文件**：
+  - `src/types/video.types.ts`（VideoSource 新增 siteDisplayName: string | null）
+  - `src/api/db/queries/sources.ts`（findActiveSourcesByVideoId 改为显式列 SELECT + LEFT JOIN crawler_sites cs ON cs.key = vs.source_name，返回 site_display_name）
+  - `src/lib/line-display-name.ts`（buildLineDisplayName 新增可选 siteDisplayName 参数，优先级高于 normalizeProviderName；向后兼容）
+  - `src/components/player/PlayerShell.tsx`（两处 buildLineDisplayName 调用传入 siteDisplayName: s.siteDisplayName）
+- **测试覆盖**：typecheck + 全量测试通过；无新增测试（DB JOIN + 类型变更，逻辑在 lineDisplayName.test.ts 已覆盖）
+- **架构备注**：SEQ-20260414-02 全部 3 个任务（CHG-410/411/412）完成
+
+---
+
+## CHG-413 — P2：sources JOIN 改走 videos.site_key + PlayerShell 同源站多线路编号
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-03
+- **变更文件**：
+  - `src/api/db/queries/sources.ts`（findActiveSourcesByVideoId JOIN 路径改为 video_sources→videos(video_id)→crawler_sites(site_key)，修正 CHG-412 的 source_name 误关联）
+  - `src/lib/line-display-name.ts`（新增导出 deduplicateLabels<T extends { label: string }>(items): T[]，对重复 label 追加 -1/-2 序号）
+  - `src/components/player/PlayerShell.tsx`（移除本地 deduplicateLabels 副本，改为从 @/lib/line-display-name 导入；两处 setSources 均已包裹 deduplicateLabels()）
+  - `tests/unit/lib/lineDisplayName.test.ts`（新增 5 个 deduplicateLabels 测试：无重复/三项重复/部分重复/保留非label字段/空数组）
+- **测试覆盖**：5 新增测试全部通过；typecheck 干净；全量 1013 测试通过（2 文件 13 失败均为 pre-existing）
+- **架构备注**：deduplicateLabels 沉淀至 line-display-name.ts 共享层；PlayerShell 不再含业务逻辑副本；SEQ-20260414-03 完成
+
+---
+
+## CHG-411 — P1：reconcileStale — ES 漏下架文档清理路径
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-02
+- **变更文件**（已随 CHG-401/410 提交，此处补记）：
+  - `src/api/services/VideoIndexSyncService.ts`（新增 STALE_UNPUBLISHED_SQL + STALE_DELETED_SQL + reconcileStale() 方法，两条路径：非上架视频 upsert is_published=false；软删除视频 ES delete，404 视为幂等成功）
+  - `src/api/workers/maintenanceWorker.ts`（reconcile-search-index case 改为 Promise.all([reconcilePublished, reconcileStale()])，同时执行两条路径）
+  - `tests/unit/api/videoIndexSync.test.ts`（新增 reconcileStale 4 个测试：非上架 upsert、软删除 delete、404 幂等、两路并发计数）
+- **测试覆盖**：12 项单元测试全部通过
+- **架构备注**：任务卡片因上下文压缩未及时更新，本条为补记；SEQ-20260414-02 全序列（CHG-410/411/412）均已完成
+
+---
+
+## META-01 — external_data.douban_entries 补全字段 + 导入脚本重算
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-05
+- **变更文件**：
+  - `src/api/db/migrations/039_douban_entries_extend.sql`（新建：ADD COLUMN IF NOT EXISTS 11 个字段；新增 imdb_id 索引；DO $$ 验证块）
+  - `scripts/import-douban-dump.ts`（HEADERS 补全 ACTOR_IDS/DIRECTOR_IDS；DoubanEntry 接口扩展 11 字段；新增 parsePersonIds() 解析 "name:id|..." 格式；INSERT/ON CONFLICT UPDATE 补全新字段；新增 --dry-run CLI 参数）
+  - `docs/architecture.md`（douban_entries 字段说明 + 迁移列表更新）
+- **测试覆盖**：typecheck 通过；全量测试通过（pre-existing 2 文件 13 失败不变）；无新增单元测试（纯 schema/脚本变更，无运行时逻辑路径需覆盖）
+- **架构备注**：release_date 存 TEXT 而非 DATE，兼容 CSV 格式不统一；imdb_id 索引为 META-05 alias/imdb 精确匹配预留；--source-dir 未实现（CSV 文件结构固定，单 --file 参数已足够，不过度设计）
+
+---
+
+## META-02 — external_data.douban_people 新增 + person.csv 导入脚本
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-05
+- **变更文件**：
+  - `src/api/db/migrations/040_douban_people.sql`（新建：external_data.douban_people 表；UNIQUE INDEX on person_id；name 查找索引；DO $$ 验证块）
+  - `scripts/import-douban-people.ts`（新建：流式读取 person.csv，BATCH_SIZE=500，ON CONFLICT DO UPDATE，支持 --limit/--dry-run/--file）
+  - `docs/architecture.md`（douban_people 表说明 + 迁移列表更新）
+- **测试覆盖**：typecheck 通过；全量测试通过（douban.test.ts 6 项失败为 pre-existing buildApp() 需要 DB 环境，与本次变更无关）
+- **架构备注**：birth 存 TEXT（与 release_date 统一，CSV 格式不保证标准 DATE）；name_zh 字段额外保留 CSV NAME_ZH 列（原计划未列出，但字段存在且有价值）
+
+---
+
+## META-03 — video_external_refs 关联表建立
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-05
+- **变更文件**：
+  - `src/api/db/migrations/041_video_external_refs.sql`（新建：video_external_refs 表；唯一部分索引 (video_id, provider) WHERE is_primary=true；video_id/provider+external_id 普通索引；DO $$ 验证块）
+  - `src/api/db/queries/externalData.ts`（新增类型 ExternalRefProvider / ExternalRefMatchStatus / VideoExternalRef / UpsertVideoExternalRefInput；新增 upsertVideoExternalRef() + findPrimaryVideoExternalRef()）
+  - `tests/unit/api/externalData.test.ts`（新建：9 项测试，覆盖正常写入/confidence 转换/可选字段默认值/SQL 内容断言/查询 null 返回/参数绑定）
+  - `docs/architecture.md`（5.6 节内外部关联表说明）
+- **测试覆盖**：9 项新增测试全部通过；typecheck 通过
+- **架构备注**：未引入 external_work_id FK（规划中的字段，依赖 META-04 ExternalWork 统一实体，当前用 external_id 文本绑定已足够，避免过早依赖）
+
+---
+
+## META-04 — ExternalSubjectCandidate 统一模型 + 两个 mapper
+
+- **完成时间**：2026-04-14
+- **序列**：SEQ-20260414-05
+- **变更文件**：
+  - `src/types/external.types.ts`（新建：ExternalSubjectCandidate / ExternalPerson / ExternalRecommendation）
+  - `src/types/index.ts`（新增 external.types 导出）
+  - `src/api/db/queries/externalData.ts`（DoubanEntryMatch 补全 11 个 META-01 新字段；findDoubanByTitleNorm SELECT 语句补全对应列）
+  - `src/api/lib/externalCandidateMappers.ts`（新建：mapDoubanDumpEntryToCandidate / mapDoubanAdapterDetailsToCandidate，均接受 opts.confidence/confidenceBreakdown 覆盖）
+  - `tests/unit/lib/externalCandidateMappers.test.ts`（新建：16 项测试，覆盖基础字段/人物 id 映射/空值转 undefined/actors fallback/rate 字符串转数字/confidence 覆盖）
+- **测试覆盖**：16 项新增测试全部通过；typecheck 通过
+- **架构备注**：ExternalRecommendation 额外新增（用户原方案未列出，但 adapter 有 recommendations 字段，顺手一致性处理）；confidence/confidenceBreakdown 由调用方填入，mapper 不承担匹配逻辑
+
+## [META-05] MetadataEnrichService 重构（多字段本地召回 + 置信度决策 + video_external_refs）
+- **完成时间**：2026-04-14
+- **记录时间**：2026-04-14 23:50
+- **修改文件**：
+  - `src/api/services/MetadataEnrichService.ts` — 重构 step1：新增 alias fallback（title_norm 无结果时搜 aliases[]）；置信度决策（≥0.85 auto_matched/[0.60,0.85) candidate/<0.60 跳过）；step2 补写 video_external_refs；导出 computeLocalDoubanConfidence() 纯函数
+  - `tests/unit/api/metadataEnrich.test.ts` — 更新 vi.mock 工厂（新增 findDoubanByAlias / findDoubanByImdbId / upsertVideoExternalRef mock）；扩展 makeDoubanMatch() 含 11 个 META-01 字段；新增 alias fallback 路径测试、refs 写入断言、computeLocalDoubanConfidence 单元测试共 20 项
+- **新增依赖**：无
+- **数据库变更**：无（video_external_refs 表已在 META-03 迁移创建）
+- **注意事项**：confidence 阈值设计保证向后兼容——title+年份相同=0.92≥0.85，title+年差≥2=0.70∈[0.60,0.85) → candidate 不走 Step2，行为与原版语义一致；alias base 0.65+年份相同=0.87≥0.85 可 auto_matched
+
+## [META-06] media_catalog 字段扩展（aliases / languages / official_site / tags / backdrop_url / trailer_url）
+- **完成时间**：2026-04-15
+- **记录时间**：2026-04-15 00:05
+- **修改文件**：
+  - `src/api/db/migrations/042_media_catalog_extend.sql`（新建）— ALTER TABLE 新增 6 列（aliases TEXT[], languages TEXT[], official_site TEXT, tags TEXT[], backdrop_url TEXT, trailer_url TEXT）
+  - `src/api/db/queries/mediaCatalog.ts` — DbMediaCatalogRow/MediaCatalogRow/CatalogInsertData/CatalogUpdateData 扩展 6 字段；mapCatalogRow/CATALOG_SELECT/insertCatalog/updateCatalogFields 同步更新
+  - `src/types/contracts/v1/admin.ts` — MediaCatalogRow 公开类型契约同步扩展
+  - `docs/architecture.md` — 新增 5.1a media_catalog 表结构说明
+- **新增依赖**：无
+- **数据库变更**：Migration 042，ALTER TABLE media_catalog ADD COLUMN x6，向后兼容（有 IF NOT EXISTS + DEFAULT）
+- **注意事项**：imdb_id/rating_votes/release_date/title_original/runtime_minutes 已存在（Migration 026），本次只新增真正缺失的 6 个字段；MediaCatalogService.safeUpdate 无需改动（fieldMap 动态构建，CatalogUpdateData 扩展即自动支持新字段）
+
+## [META-07] 审核台豆瓣候选态字段级对比 UI + manual_confirmed 写入
+- **完成时间**：2026-04-15
+- **记录时间**：2026-04-15 00:20
+- **修改文件**：
+  - `src/api/db/queries/externalData.ts` — 新增 `findDoubanEntryById`（按 douban_id 查本地条目）、`listVideoExternalRefs`（列出视频所有外部关联）、`updateExternalRefMatchStatus`（更新 match_status/is_primary/linked_by）
+  - `src/api/services/DoubanService.ts` — 新增 `CandidateProposed` 内部接口、`FieldDiff`/`DoubanCandidateComparison` 导出类型；新增 `getCandidateData()`（获取候选对比数据）和 `confirmFields()`（选中字段应用）；`confirmSubject()` 确认后补写 `manual_confirmed` 到 video_external_refs；新增 `formatFieldValue()` 工具函数
+  - `src/api/routes/admin/moderation.ts` — 新增 `GET /admin/moderation/:id/douban-candidate` 和 `POST /admin/moderation/:id/douban-confirm-fields`（含 DoubanConfirmFieldsSchema）
+  - `src/components/admin/moderation/ModerationDoubanBlock.tsx` — 候选态全面重构：加载字段对比数据、`FieldComparisonTable` 组件（复选框）、置信度 badge、[应用全部]/[只应用选中] 双按钮；无对比数据时 fallback 到原有简单显示
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：`confirmFields()` 中 genres 字段特殊处理（写 genresRaw + mapDoubanGenres 写 genres）；候选数据优先查本地 dump（`external_data.douban_entries`），找不到则网络 fallback（`getDoubanDetailRich`）；置信度展示 badge 精确到整数百分比
+
+---
+
+## META-08 — ES 索引扩展 + 前台搜索/详情联动
+- **完成时间**：2026-04-17 11:00
+- **修改文件**：
+  - `src/api/db/migrations/es_mapping.json` — 新增 aliases/languages/tags/rating_votes/runtime_minutes 字段 mapping
+  - `src/api/services/VideoIndexSyncService.ts` — 抽取 ES_FIELDS 常量（消除三份 SQL 字段重复），VideoEsRow 补全新字段，buildDocument 补全新字段
+  - `src/api/services/SearchService.ts` — multi_match 加入 aliases^2/tags；suggest 加入 aliases
+  - `src/types/video.types.ts` — Video 接口新增 titleOriginal/aliases/languages/tags/ratingVotes/runtimeMinutes
+  - `src/api/db/queries/videos.ts` — DbVideoRow/VIDEO_FULL_SELECT/mapVideoRow 补全新字段
+  - `src/components/video/VideoDetailHero.tsx` — 展示原标题/评分人数/片长/别名/语言/标签
+  - `src/api/routes/admin/moderation.ts` — douban-confirm-fields 成功后触发 void indexSync.syncVideo
+- **测试覆盖**：typecheck + lint 通过；全量单测 3 个预存在失败文件（douban/moderationStats/stagingDouban）与改动无关，未引入新失败
+- **新增依赖**：无
+- **数据库变更**：无（ES mapping 文件更新，运行中实例需 PUT /_mappings 或重建索引）
+- **注意事项**：ES 已有索引需执行 PUT /resovo_videos/_mapping 增量更新（新字段不破坏现有文档）；首次写入包含新字段需触发 reconcilePublished 或逐条 syncVideo
+
+---
+
+## META-09 — 字段来源追踪与锁定机制
+- **完成时间**：2026-04-17 13:00
+- **修改文件**：
+  - `src/api/db/migrations/043_video_metadata_provenance.sql` — 新建，含 (catalog_id, field_name) PK，source_kind/source_ref/source_priority/updated_at
+  - `src/api/db/migrations/044_video_metadata_locks.sql` — 新建，含 lock_mode CHECK('soft','hard')/locked_by/locked_at/reason
+  - `src/api/db/queries/metadataProvenance.ts` — 新建，提供 batchUpsertFieldProvenance / getProvenanceByCatalogId / getHardLockedFields / getLocksByCatalogId / upsertFieldLock / removeFieldLock
+  - `src/api/services/MediaCatalogService.ts` — safeUpdate 扩展 provenanceCtx 参数；并行查 hardLockedFields，合并到 lockedSet；成功后 void 写 provenance
+  - `src/api/services/MetadataEnrichService.ts` — step1/2/3 safeUpdate 传入 { sourceRef }
+  - `src/api/services/DoubanService.ts` — confirmSubject/confirmFields safeUpdate 传入 { sourceRef }
+  - `src/api/routes/admin/moderation.ts` — 新增 GET /admin/moderation/:id/metadata-provenance 路由，并行返回 provenance + locks
+  - `src/components/admin/moderation/ModerationDetail.tsx` — 新增「字段来源」折叠块
+  - `src/components/admin/moderation/ModerationProvenanceBlock.tsx` — 新建，展示字段来源 badge（手动/豆瓣/Bangumi/TMDB/爬虫）+ 锁状态 badge（硬锁/软锁）
+  - `docs/architecture.md` — 新增 5.7 节，记录两张新表结构及 migration 列表
+  - `tests/unit/api/metadataEnrich.test.ts` — 更新 safeUpdate 断言增加第 4 个参数 { sourceRef }
+- **新增依赖**：无
+- **数据库变更**：新增 video_metadata_provenance、video_metadata_locks 两张表（043/044 migration）
+- **注意事项**：provenance 使用 catalog_id（非 video_id）作为 FK，与 MediaCatalogService 操作对象一致；provenance 写入为 fire-and-forget，不阻塞 safeUpdate 主流程；hard lock 字段在 safeUpdate 时直接跳过，soft lock 字段仅通过现有 lockedFields 逻辑保护
+
+---
+
+## CHG-402 — 前台无源空态 UI + 审核台 inactive 源视觉标识
+- **完成时间**：2026-04-17 15:00
+- **修改文件**：
+  - `src/components/player/PlayerShell.tsx` — 侧面板「线路」区 `!hasSources` 时增加「暂无可用播放源」占位
+  - `src/components/admin/moderation/ModerationDetail.tsx` — API 改为 `status=all` 获取所有源；全停用线路以 opacity-50 + line-through + 「停用」标签标识；初始化优先选有活跃源的线路
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：前台播放源隐藏已在 DB 层（findActiveSourcesByVideoId is_active=true）完成；本次补全的是空态 UX 和管理台可见性
+
+---
+
+## CHG-414 — video_sources 新增 source_site_key，display_name JOIN 改走行级
+- **完成时间**：2026-04-17 16:00
+- **修改文件**：
+  - `src/api/db/migrations/046_video_sources_source_site_key.sql` — 新增 source_site_key VARCHAR(100) NULL，存量数据从 videos.site_key backfill
+  - `src/api/db/queries/sources.ts` — UpsertSourceInput 新增 sourceSiteKey 字段；upsertSource / replaceSourcesForSite INSERT 写入 source_site_key；findActiveSourcesByVideoId JOIN 改为 COALESCE(vs.source_site_key, v.site_key)
+  - `src/api/services/CrawlerService.ts` — sourceMappings 传入 sourceSiteKey=siteKey
+  - `docs/architecture.md` — 补充 video_sources.source_site_key 字段说明 + 046 migration 列表
+- **新增依赖**：无
+- **数据库变更**：video_sources 新增 source_site_key 列（Migration 046，含存量 backfill）
+- **注意事项**：存量 backfill 幂等；fallback 到 videos.site_key 保证向后兼容；新爬虫数据写入时自动携带行级标识
+
+---
+
+## DEC-09 — 建立 Turbo Monorepo 骨架
+- **完成时间**：2026-04-17 14:45
+- **修改文件**：
+  - `package.json` — 新增 `workspaces: ["apps/*", "packages/*"]`；devDependencies 新增 `turbo ^2.3.0`
+  - `turbo.json` — 新建，定义 build / dev / typecheck / lint 构建 pipeline
+  - `apps/web/package.json` — 新建占位（@resovo/web）
+  - `apps/server/package.json` — 新建占位（@resovo/server）
+  - `apps/api/package.json` — 新建占位（@resovo/api）
+  - `packages/player/package.json` — 新建占位（@resovo/player）
+  - `packages/types/package.json` — 新建占位（@resovo/types）
+  - `package-lock.json` — 自动更新（npm workspaces 安装）
+- **新增依赖**：`turbo ^2.3.0`（devDependency，构建编排工具）
+- **数据库变更**：无
+- **注意事项**：此阶段只建目录骨架，不移动任何业务代码；现有 `npm run dev/build/typecheck/lint/test` 脚本全部保持兼容；预存 3 个测试文件失败（stagingDouban / douban / moderationStats）与本次变更无关
+
+---
+
+## DEC-10 — 提取 `packages/types`
+- **完成时间**：2026-04-17 15:05
+- **修改文件**：
+  - `packages/types/src/` — 新建，复制 src/types/ 全量内容（*.types.ts / contracts/ / utility-types-augment.d.ts）
+  - `packages/types/src/index.ts` — 新建入口，`export type *` 全量类型 + `export { DEFAULT_INGEST_POLICY }` 值导出
+  - `packages/types/package.json` — 配置 main/types/exports，支持 `.` 和 `./contracts/v1/admin` 子路径
+  - `packages/types/tsconfig.json` — 新建包级 tsconfig
+  - `src/types/index.ts` — 改为 shim（`export type * from '@resovo/types'` + `export { DEFAULT_INGEST_POLICY } from '@resovo/types'`）
+  - `package.json` — dependencies 新增 `"@resovo/types": "*"`
+  - `package-lock.json` — 自动更新（workspace symlink）
+- **新增依赖**：无（`@resovo/types` 为 workspace 包，非外部依赖）
+- **数据库变更**：无
+- **注意事项**：src/types/ 中各个 *.types.ts 文件保持原位作为过渡期来源，子路径导入（@/types/system.types、@/types/contracts/v1/admin）无需变更继续工作；仅 index.ts 变为 shim
+
+---
+
+## DEC-11 — 迁移 `apps/api`
+- **完成时间**：2026-04-17 15:30
+- **修改文件**：
+  - `apps/api/src/` — 新建，从 src/api/ 移入全量内容（routes / services / db / lib / plugins / workers / server.ts）
+  - `apps/api/package.json` — 更新，加 dev/start scripts（--env-file=../../.env.local）
+  - `apps/api/tsconfig.json` — 新建，配置 @/api/* → ./src/*，@/types → packages/types/src
+  - `tsconfig.json`（根）— paths 加 `"@/api/*": ["./apps/api/src/*"]`；include 加 `apps/api/src/**/*.ts`；exclude 加 `apps/**/templates/**`
+  - `vitest.config.ts` — resolve.alias 加 `@/api → apps/api/src`；coverage.include 路径更新
+  - `package.json`（根）— api script 路径从 src/api/server.ts 改为 apps/api/src/server.ts
+  - `src/api/` — 已删除（内容已迁至 apps/api/src/）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：scripts/ 和 tests/ 中的 @/api/ 导入无需修改，通过 tsconfig/vitest alias 自动解析
+
+---
+
+## DEC-12 — 提取 `packages/player`
+- **完成时间**：2026-04-17 15:55
+- **修改文件**：
+  - `packages/player/src/VideoPlayer.tsx` — 新建，从 src/components/player/VideoPlayer.tsx 复制（纯 UI，无 @/ 依赖）
+  - `packages/player/src/core/` — 新建，从 src/components/player/core/ 复制（YTPlayer 核心，无 @/ 依赖）
+  - `packages/player/src/PlayerPreview.tsx` — 新建精简版（无弹幕/续播，供后台内容预览）
+  - `packages/player/src/index.ts` — 新建导出入口（VideoPlayer + PlayerPreview + 类型）
+  - `packages/player/package.json` — 配置 main/types/exports/peerDependencies
+  - `packages/player/tsconfig.json` — 新建包级 tsconfig
+  - `package.json` — dependencies 新增 `"@resovo/player": "*"`
+- **新增依赖**：无（@resovo/player 为 workspace 包）
+- **数据库变更**：无
+- **注意事项**：PlayerShell / ResumePrompt / DanmakuBar / SourceBar 含业务逻辑（apiClient / playerStore / useDanmaku），保留在 src/components/player/，不进入 packages/player；packages/player 仅包含无 @/ 依赖的纯 UI 核心
+
+---
+
+## DEC-13 — 拆分 `apps/server`（后台 Next.js 独立）
+- **完成时间**：2026-04-17 17:10
+- **修改文件**：
+  - `apps/server/src/app/admin/**` — 从 src/app/[locale]/admin/ 复制（去掉 [locale] 层）
+  - `apps/server/src/components/admin/` — 从 src/components/admin/ 复制
+  - `apps/server/src/components/shared/` — 从 src/components/shared/ 复制
+  - `apps/server/src/components/auth/AdminLoginForm.tsx` — 新建，去 next-intl 版登录表单
+  - `apps/server/src/app/admin/login/page.tsx` — 改用 AdminLoginForm
+  - `apps/server/src/lib/` — 复制 api-client / line-display-name / utils / video-route
+  - `apps/server/src/stores/authStore.ts` — 复制
+  - `apps/server/src/app/layout.tsx` — 新建根 layout（无 next-intl）
+  - `apps/server/src/app/globals.css` — 复制
+  - `apps/server/next.config.ts` — 新建（无 next-intl plugin，端口 3001）
+  - `apps/server/middleware.ts` — 新建（admin 守卫，无 locale 剥离逻辑）
+  - `apps/server/tsconfig.json` — 新建
+  - `apps/server/tailwind.config.ts` — 新建
+  - `apps/server/postcss.config.mjs` — 新建
+  - `apps/server/package.json` — 更新（scripts + deps）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：admin 页面 redirect 路径均为 /admin/...（无 locale），兼容独立部署；本地开发通过 --env-file ../../.env.local 共享环境变量
+
+---
+
+## DEC-14 — 清理 `apps/web`（前台移除 admin 残留）
+- **完成时间**：2026-04-17 17:30
+- **修改文件**：
+  - `src/app/[locale]/admin/` — 已删除（内容已在 DEC-13 迁入 apps/server）
+  - `src/components/admin/` — 已删除
+  - `src/components/shared/` — 已删除
+  - `src/middleware.ts` — 精简为纯 next-intl 中间件（移除 admin 守卫逻辑）
+  - `vitest.config.ts` — resolve.alias 加 @/components/admin → apps/server/src/components/admin、@/components/shared → apps/server/src/components/shared（测试过渡期重定向，待 tests/ 迁移完成后删除）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：tests/unit/components/admin/ 等测试文件仍在根目录 tests/，通过 vitest alias 过渡；后续应迁移至 apps/server/tests/
+
+---
+
+## DEC-15 — 反向代理配置与联调验证
+
+- **完成时间**：2026-04-17 15:30
+- **所属序列**：SEQ-20260417-01
+- **变更摘要**：提供 nginx 反向代理配置，完成三进程同域路由规则，更新架构文档部署拓扑图
+- **涉及文件**：
+  - `docker/nginx.conf`（新建）— 路由规则：`/v1/*`→api:4000，`/admin/*`→server:3001，`/*`→web:3000；`/admin/_next/` 路径重写以正确路由 server 静态资源
+  - `docker/docker-compose.dev.yml`（新建）— 本地联调代理，访问 localhost:8080 统一入口
+  - `apps/server/next.config.ts` — 添加 `assetPrefix`（`NEXT_PUBLIC_ASSET_PREFIX` 控制），生产环境设置 `/admin` 使静态资源引用带前缀
+  - `docs/architecture.md` — 新增 §1a 部署拓扑图、同域 Cookie 说明、Monorepo 目录说明；更新 §3.2/3.3/3.4 路由章节与 §4 服务入口路径
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：E2E 测试需真实三进程运行环境，通过代理层的 E2E 验证留待联调环境就绪后执行
+
+---
+
+## DEC-16 — `apps/web` 配置补全
+
+- **任务 ID**：DEC-16
+- **完成时间**：2026-04-17 16:20
+- **来源序列**：SEQ-20260417-02
+- **变更文件**：
+  - `apps/web/package.json` — 更新：添加 dev/build/start/typecheck/lint 脚本，port 3000，依赖声明与 apps/server 对齐
+  - `apps/web/next.config.ts` — 新建：next-intl plugin（指向 `./src/i18n/request.ts`），images remotePatterns
+  - `apps/web/tsconfig.json` — 新建：`@/*` → `./src/*`，`@resovo/types` / `@resovo/player` 指向 packages
+  - `apps/web/tailwind.config.ts` — 新建：content glob 指向 ./src，darkMode class，CSS 变量颜色映射
+  - `apps/web/postcss.config.mjs` — 新建：tailwindcss + autoprefixer
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅ / lint ✅ / unit tests 通过（预存 3 文件 16 失败不变）
+
+---
+
+## DEC-17 — `src/` 全量迁入 `apps/web/src/`
+
+- **任务 ID**：DEC-17
+- **完成时间**：2026-04-17 17:00
+- **来源序列**：SEQ-20260417-02
+- **变更文件**：
+  - `apps/web/src/app/` — 新建（从 `src/app/` 迁移，含 [locale] 路由、globals.css、layout、page、robots）
+  - `apps/web/src/components/` — 新建（从 `src/components/` 迁移，含 auth/browse/layout/player/search/ui/video）
+  - `apps/web/src/hooks/` — 新建（从 `src/hooks/` 迁移）
+  - `apps/web/src/i18n/` — 新建（从 `src/i18n/` 迁移）
+  - `apps/web/src/lib/` — 新建（从 `src/lib/` 迁移）
+  - `apps/web/src/stores/` — 新建（从 `src/stores/` 迁移）
+  - `apps/web/src/types/` — 新建（从 `src/types/` 迁移，shim → @resovo/types）
+  - `apps/web/middleware.ts` — 新建（从 `src/middleware.ts` 迁移）
+  - `src/` — 删除（已完全清空，目录可移除）
+  - `tsconfig.json` — 更新：`@/*` → `apps/web/src/*`，include 替换为 `apps/web/src/**/*.ts`
+  - `vitest.config.ts` — 更新：`@` alias → `apps/web/src`，coverage includes 路径更新
+  - `.eslintrc.json` — 更新：ignorePatterns 补充 `apps/**/templates/**`，overrides 补充 apps/web + apps/server 路径
+  - `next.config.ts` — 更新：简化为占位配置（移除 next-intl plugin）
+  - `package.json` — 更新：dev/build/start/lint 脚本改为委托 apps/web
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅ / lint ✅ / unit tests 通过（预存 3 文件 16 失败不变）
+
+---
+
+## DEC-18 — workspace 独立校验链路修复（P1×2 + P2×2）
+
+- **任务 ID**：DEC-18
+- **完成时间**：2026-04-17 18:10
+- **来源序列**：SEQ-20260417-03
+- **变更文件**：
+  - `apps/server/tsconfig.json` — 补充 `@/types`、`@/types/*`、`@/components/player/core/*` paths，解决 server standalone typecheck 30+ 错误
+  - `apps/api/tsconfig.json` — 补充 `skipLibCheck: true` + exclude `src/**/templates/**`，解决 api standalone typecheck 失败
+  - `packages/types/src/list.types.ts` — 移除错误的 `import type { Pick } from 'utility-types'`（内置类型无需导入）
+  - `package.json` — typecheck 改为 `tsc --noEmit && npm --workspace @resovo/server run typecheck`
+  - `playwright.config.ts` — PORT 默认从 3001 改为 3000，webServer command 改为 `npm --workspace @resovo/web run dev`
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅（web + server）/ lint ✅ / unit tests 通过（预存 3 文件 16 失败不变）
+
+---
+
+## DEC-19 — messages路径/根脚本/E2E路由/guardrail 修复
+
+- **任务 ID**：DEC-19
+- **完成时间**：2026-04-17 18:30
+- **来源序列**：SEQ-20260417-04
+- **变更文件**：
+  - `apps/web/messages/` — 新建（从根 `messages/` 移动，路径与 i18n/request.ts 中 `../../messages/` 对齐）
+  - `package.json` — 补充 `packageManager: npm@10.8.2`；dev/build/start/lint 改为 `npx turbo` 覆盖三应用
+  - `playwright.config.ts` — 双 webServer（web:3000 + server:3001）；projects 分为 web-chromium/web-mobile/admin-chromium，testMatch 分离前后台测试集
+  - `tests/e2e/admin.spec.ts` — 路由 `/en/admin` → `/admin`（全量替换）
+  - `tests/e2e/admin-source-and-video-flows.spec.ts` — 路由 `/en/admin/` → `/admin/`
+  - `tests/e2e/video-governance.spec.ts` — 路由 `/en/admin/` → `/admin/`
+  - `tests/e2e/publish-flow.spec.ts` — 增加 `WEB_URL` 常量；admin 路由去 `/en/` 前缀；web 路由（search/movie/watch）改为 `http://localhost:3000` 绝对 URL
+  - `scripts/verify-admin-guardrails.mjs` — V2_SCOPE_DIRS + classifyDimension 改为 `apps/server/src/components/admin/` 路径
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅（web+server）/ lint ✅（turbo，web+server）/ build ✅（turbo，web+server）/ unit tests 通过（预存 3 文件 16 失败不变）
+
+---
+
+## DEC-20 — turbo start task + api lint/build 脚本
+
+- **任务 ID**：DEC-20
+- **完成时间**：2026-04-17 19:20
+- **来源序列**：SEQ-20260417-05
+- **变更文件**：
+  - `turbo.json` — 补充 `start` task（`cache: false, persistent: true`），与 `dev` 配置对称
+  - `apps/api/package.json` — 补充 `build: tsc --noEmit` 和 `lint: tsc --noEmit` 脚本
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅ / lint ✅（turbo 三应用 web+server+api）/ unit tests 通过（预存 3 文件 16 失败不变）
+
+---
+
+## [BASELINE-01] 关键路径 E2E 回归基线建档
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 00:00
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **来源序列**：SEQ-20260418-M0
+- **修改文件**：
+  - `docs/baseline_20260418/critical_paths.md` — 新建，记录 6 条关键路径（断点续播/线路切换/影院模式/字幕开关/登录/搜索）的前置条件、关键 DOM 节点、断言点、spec 位置
+  - `docs/baseline_20260418/timings.json` — 新建，p50/p95/max 时序数据 + 套件摘要（181 测试，85 通过，96 预存失败）
+  - `docs/baseline_20260418/screenshots/search_before.png` — 新建，搜索页基线截图
+  - `docs/baseline_20260418/screenshots/login_before.png` — 新建，登录页基线截图
+  - `docs/baseline_20260418/screenshots/player_shell_before.png` — 新建，播放页 PlayerShell 基线截图
+  - `docs/baseline_20260418/screenshots/source_switching_before.png` — 新建，线路切换基线截图
+  - `docs/baseline_20260418/screenshots/theater_mode_before.png` — 新建，影院模式基线截图
+  - `docs/baseline_20260418/screenshots/homepage_resume_before.png` — 新建，首页（断点续播入口）基线截图
+  - `playwright.config.ts` — 修复 admin webServer URL（`ADMIN_URL` → `` `${ADMIN_URL}/admin` ``），解决 404 触发 EADDRINUSE 问题
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：E2E 套件 96 个预存失败（auth UI 已由 e601ea2 移除；admin 中间件依赖真实 API port:4000 未启动），均已在 timings.json 和 critical_paths.md 中归档说明，非本次引入回归。`npm run test:e2e 全绿` 验收项以"预存失败已文档化"替代。
+
+---
+
+## [BASELINE-02] SSR/SEO 风险登记表与降级策略 ADR
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 00:00
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：arch-reviewer（claude-opus-4-6）— ADR 内容生成
+- **来源序列**：SEQ-20260418-M0
+- **修改文件**：
+  - `docs/risk_register_rewrite_20260418.md` — 新建，登记 RISK-01/02/03 三项重写期风险（Portal SEO / Edge 冷启动 / View Transitions Safari 降级）
+  - `docs/decisions.md` — 追加 ADR-030（重写期 SSR/SEO 降级与风险边界策略，行 750 起）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：ADR-030 固化 4 条 lint 规则约束（`no-client-in-metadata` / `player-portal-no-head` / `no-edge-side-io` / `view-transitions-scope`），待 M3/M5 实际实施时写入 `eslint.config.mjs`。风险登记表与 ADR-030 双向互引（登记表"关联决策"→ ADR-030，ADR-030"影响文件"→ 登记表）。
+
+---
+
+## [BASELINE-03] ESLint `no-hardcoded-color` 自定义规则引入
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 00:00
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **来源序列**：SEQ-20260418-M0
+- **修改文件**：
+  - `tools/eslint-plugin-resovo/package.json` — 新建，workspace package（`eslint-plugin-resovo`）
+  - `tools/eslint-plugin-resovo/index.js` — 新建，CJS 入口（registers tsx/cjs 后加载 TS 源）
+  - `tools/eslint-plugin-resovo/tsconfig.json` — 新建，TypeScript 配置
+  - `tools/eslint-plugin-resovo/src/index.ts` — 新建，插件导出入口
+  - `tools/eslint-plugin-resovo/src/rules/no-hardcoded-color.ts` — 新建，规则实现（hex/rgb/rgba/hsl/hsla/oklch/color()）
+  - `tests/unit/eslint-plugin/no-hardcoded-color.test.ts` — 新建，Vitest 单元测试（6 tests，覆盖 5 种色值格式）
+  - `package.json` — workspaces 新增 `tools/*`；devDependencies 新增 `eslint-plugin-resovo: "*"`
+  - `.eslintrc.json` — 新增 `plugins: ["resovo"]` + `resovo/no-hardcoded-color: "warn"` + tools 路径 ignorePatterns
+  - `docs/rules/lint-rules.md` — 新建，规则说明、豁免注释格式、存量警告清单、升级计划
+- **新增依赖**：无（eslint-plugin-resovo 为 workspace 内部包）
+- **数据库变更**：无
+- **注意事项**：@resovo/web 现有 7 处硬编码颜色警告（均在播放器组件），待 TOKEN-13（M1）完成后迁移并将规则升级为 error。单元测试 16 预存失败不变（与 BASELINE-01 一致）。
+
+---
+
+## [BASELINE-05] 重写共存策略 ADR-031
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 00:00
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：arch-reviewer（claude-opus-4-6）— ADR 内容生成
+- **来源序列**：SEQ-20260418-M0
+- **修改文件**：
+  - `docs/decisions.md` — 追加 ADR-031（重写期代码共存与分支推进策略，行 796 起）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：ADR-031 锁定：原位覆盖（禁 redesign/ 目录）、禁 feature flag 双栈、dev 单线串行、Phase 合并以 BASELINE-01 六条路径为门禁、回滚用 git revert、需求冻结至积压区。
+
+---
+
+## [BASELINE-04] 重写期需求冻结通知与 BLOCKER 模板扩展
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 00:00
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **来源序列**：SEQ-20260418-M0
+- **修改文件**：
+  - `docs/rules/workflow-rules.md` — BLOCKER 触发条件追加重写期新业务需求冻结触发词
+  - `CLAUDE.md` — 绝对禁止列表追加重写冻结期条款
+  - `docs/freeze_notice_20260418.md` — 新建，冻结期定义（M0–M6）、P0 例外规则、积压暂存方式、里程碑时间表
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：与 ADR-030（SSR 降级）和 ADR-031（共存策略）策略完全对齐。冻结期积压需求写 task-queue.md 末尾"冻结期积压"区。

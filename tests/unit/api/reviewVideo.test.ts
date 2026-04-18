@@ -1,6 +1,6 @@
 /**
  * tests/unit/api/reviewVideo.test.ts
- * CHG-201: reviewVideo — 内容审核 approve/reject + ES 同步
+ * CHG-382: reviewVideo — approve 终态改为 approved+internal+false；新增 approve_and_publish
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -9,6 +9,7 @@ import { VideoService } from '@/api/services/VideoService'
 // ── Mocks ────────────────────────────────────────────────────────
 
 vi.mock('@/api/db/queries/videos', () => ({
+  transitionVideoState: vi.fn(),
   reviewVideo: vi.fn(),
   publishVideo: vi.fn(),
   updateVisibility: vi.fn(),
@@ -17,7 +18,7 @@ vi.mock('@/api/db/queries/videos', () => ({
 }))
 
 import * as videoQueries from '@/api/db/queries/videos'
-const mockReviewVideo = videoQueries.reviewVideo as ReturnType<typeof vi.fn>
+const mockTransition = videoQueries.transitionVideoState as ReturnType<typeof vi.fn>
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -36,10 +37,10 @@ function makeDb(overrides: Record<string, unknown> = {}) {
     episode_count: 1,
     rating: null,
     status: 'completed',
-    is_published: true,
+    is_published: false,
     content_rating: 'general',
     review_status: 'approved',
-    visibility_status: 'public',
+    visibility_status: 'internal',
     ...overrides,
   }
   return {
@@ -60,14 +61,15 @@ describe('VideoService.review', () => {
     vi.clearAllMocks()
   })
 
-  it('approve — 设置 review_status=approved, visibility_status=public', async () => {
-    const db = makeDb({ review_status: 'approved', visibility_status: 'public' })
+  it('approve — 终态为 review_status=approved, visibility_status=internal, is_published=false（暂存）', async () => {
+    const db = makeDb()
     const es = makeEs()
-    mockReviewVideo.mockResolvedValue({
+    mockTransition.mockResolvedValue({
       id: 'vid-1',
       review_status: 'approved',
-      visibility_status: 'public',
-      is_published: true,
+      visibility_status: 'internal',
+      is_published: false,
+      updated_at: '2026-04-09T03:00:00.000Z',
     })
 
     const svc = new VideoService(db, es)
@@ -76,22 +78,54 @@ describe('VideoService.review', () => {
       reviewedBy: 'admin-1',
     })
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
+      id: 'vid-1',
+      review_status: 'approved',
+      visibility_status: 'internal',
+      is_published: false,
+    })
+    expect(mockTransition).toHaveBeenCalledWith(db, 'vid-1', {
+      action: 'approve',
+      reviewedBy: 'admin-1',
+      reason: undefined,
+    })
+
+    await vi.waitFor(() => expect(es.index).toHaveBeenCalledTimes(1))
+    const doc = (es.index as ReturnType<typeof vi.fn>).mock.calls[0][0].document
+    expect(doc.review_status).toBe('approved')
+    expect(doc.visibility_status).toBe('internal')
+  })
+
+  it('approve_and_publish — 终态为 review_status=approved, visibility_status=public, is_published=true', async () => {
+    const db = makeDb({ visibility_status: 'public', is_published: true })
+    const es = makeEs()
+    mockTransition.mockResolvedValue({
+      id: 'vid-1',
+      review_status: 'approved',
+      visibility_status: 'public',
+      is_published: true,
+      updated_at: '2026-04-09T03:00:00.000Z',
+    })
+
+    const svc = new VideoService(db, es)
+    const result = await svc.review('vid-1', {
+      action: 'approve_and_publish',
+      reviewedBy: 'admin-1',
+    })
+
+    expect(result).toMatchObject({
       id: 'vid-1',
       review_status: 'approved',
       visibility_status: 'public',
       is_published: true,
     })
-    expect(mockReviewVideo).toHaveBeenCalledWith(db, 'vid-1', {
-      action: 'approve',
+    expect(mockTransition).toHaveBeenCalledWith(db, 'vid-1', {
+      action: 'approve_and_publish',
       reviewedBy: 'admin-1',
+      reason: undefined,
     })
 
-    // 验证 ES 同步
     await vi.waitFor(() => expect(es.index).toHaveBeenCalledTimes(1))
-    const doc = (es.index as ReturnType<typeof vi.fn>).mock.calls[0][0].document
-    expect(doc.review_status).toBe('approved')
-    expect(doc.visibility_status).toBe('public')
   })
 
   it('reject — 设置 review_status=rejected, visibility_status=hidden', async () => {
@@ -101,11 +135,12 @@ describe('VideoService.review', () => {
       is_published: false,
     })
     const es = makeEs()
-    mockReviewVideo.mockResolvedValue({
+    mockTransition.mockResolvedValue({
       id: 'vid-1',
       review_status: 'rejected',
       visibility_status: 'hidden',
       is_published: false,
+      updated_at: '2026-04-09T03:00:00.000Z',
     })
 
     const svc = new VideoService(db, es)
@@ -115,13 +150,13 @@ describe('VideoService.review', () => {
       reviewedBy: 'admin-1',
     })
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       id: 'vid-1',
       review_status: 'rejected',
       visibility_status: 'hidden',
       is_published: false,
     })
-    expect(mockReviewVideo).toHaveBeenCalledWith(db, 'vid-1', {
+    expect(mockTransition).toHaveBeenCalledWith(db, 'vid-1', {
       action: 'reject',
       reason: '内容低质',
       reviewedBy: 'admin-1',
@@ -136,7 +171,7 @@ describe('VideoService.review', () => {
   it('视频不存在 — 返回 null，不触发 ES 同步', async () => {
     const db = makeDb()
     const es = makeEs()
-    mockReviewVideo.mockResolvedValue(null)
+    mockTransition.mockResolvedValue(null)
 
     const svc = new VideoService(db, es)
     const result = await svc.review('nonexistent', {
@@ -151,11 +186,12 @@ describe('VideoService.review', () => {
 
   it('无 ES 客户端 — 不抛出错误', async () => {
     const db = makeDb()
-    mockReviewVideo.mockResolvedValue({
+    mockTransition.mockResolvedValue({
       id: 'vid-1',
       review_status: 'approved',
-      visibility_status: 'public',
-      is_published: true,
+      visibility_status: 'internal',
+      is_published: false,
+      updated_at: '2026-04-09T03:00:00.000Z',
     })
 
     const svc = new VideoService(db) // 不传 es
@@ -164,14 +200,15 @@ describe('VideoService.review', () => {
     ).resolves.not.toThrow()
   })
 
-  it('approve 含 reason — reason 正确传递', async () => {
+  it('approve 含 reason — reason 正确传递给 transitionVideoState', async () => {
     const db = makeDb()
     const es = makeEs()
-    mockReviewVideo.mockResolvedValue({
+    mockTransition.mockResolvedValue({
       id: 'vid-1',
       review_status: 'approved',
-      visibility_status: 'public',
-      is_published: true,
+      visibility_status: 'internal',
+      is_published: false,
+      updated_at: '2026-04-09T03:00:00.000Z',
     })
 
     const svc = new VideoService(db, es)
@@ -181,7 +218,7 @@ describe('VideoService.review', () => {
       reviewedBy: 'admin-1',
     })
 
-    expect(mockReviewVideo).toHaveBeenCalledWith(db, 'vid-1', {
+    expect(mockTransition).toHaveBeenCalledWith(db, 'vid-1', {
       action: 'approve',
       reason: '内容优质',
       reviewedBy: 'admin-1',

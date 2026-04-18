@@ -163,7 +163,7 @@ test('sources page supports filters, batch verify and status actions', async ({ 
     })
   })
 
-  await page.goto(`${BASE_URL}/en/admin/sources`)
+  await page.goto(`${BASE_URL}/admin/sources`)
   await expect(page.locator('[data-testid="admin-sources-page"]')).toBeVisible()
   await expect(page.locator('[data-testid="source-health-alert"]')).toBeVisible()
   await expect(page.locator('[data-testid="source-health-verify-status"]')).toContainText('运行中')
@@ -268,7 +268,7 @@ test('video actions dropdown triggers publish and douban sync endpoints', async 
     })
   })
 
-  await page.goto(`${BASE_URL}/en/admin/videos`)
+  await page.goto(`${BASE_URL}/admin/videos`)
   await expect(page.locator('[data-testid="admin-videos-page"]')).toBeVisible()
   await expect(page.locator('[data-testid="modern-table-row-vid-1"]')).toBeVisible()
 
@@ -373,7 +373,7 @@ test('moderation reject submits reason', async ({ context, page }) => {
     })
   })
 
-  await page.goto(`${BASE_URL}/en/admin/moderation`)
+  await page.goto(`${BASE_URL}/admin/moderation`)
   await expect(page.locator('[data-testid="admin-moderation-page"]')).toBeVisible()
 
   await page.getByTestId('moderation-list-item-vid-1').click()
