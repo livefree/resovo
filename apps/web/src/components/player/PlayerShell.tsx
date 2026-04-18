@@ -1,10 +1,5 @@
 /**
  * PlayerShell.tsx — 播放器外壳 + 布局模式切换
- * CHG-20: 替换 video.js 为 @livefree/yt-player
- *   - 剧场模式由 YTPlayer onTheaterChange 回调驱动
- *   - 默认模式：选集/换源由右侧面板统一管理
- *   - 剧场模式：侧栏收起时回退启用 YTPlayer 内选集
- *   - DanmakuBar 挂载在播放器容器上（CCL overlay 附加）
  * Default Mode: 播放器居左，右侧面板（推荐）
  * Theater Mode: 全宽，右侧面板收起，下方推荐
  */

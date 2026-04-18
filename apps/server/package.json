@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3001 --env-file ../../.env.local",
+    "dev": "node --env-file=../../.env.local ../../node_modules/.bin/next dev -p 3001",
     "build": "next build",
-    "start": "next start -p 3001",
+    "start": "node --env-file=../../.env.local ../../node_modules/.bin/next start -p 3001",
     "typecheck": "tsc --noEmit",
     "lint": "next lint"
   },

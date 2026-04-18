@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useAuthStore } from '@/stores/authStore'
 
 interface MenuItem {
   href: string
@@ -67,6 +69,13 @@ function SidebarSection({
 
 export function AdminSidebar({ isAdmin }: { isAdmin: boolean }) {
   const [collapsed, setCollapsed] = useState(false)
+  const router = useRouter()
+  const logout = useAuthStore((s) => s.logout)
+
+  async function handleLogout() {
+    logout()
+    router.push('/admin/login')
+  }
 
   useEffect(() => {
     const saved = localStorage.getItem('admin-sidebar-collapsed')
@@ -109,16 +118,17 @@ export function AdminSidebar({ isAdmin }: { isAdmin: boolean }) {
           {isAdmin && <SidebarSection title="系统管理" items={SYSTEM_MENU} collapsed={collapsed} />}
 
           <div className="mt-auto pt-4 border-t border-[var(--border)]">
-            <Link
-              href="/"
-              data-testid="admin-back-to-site"
-              title={collapsed ? '返回前台' : undefined}
-              className="flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-[var(--bg3)] hover:text-[var(--text)]"
+            <button
+              type="button"
+              onClick={handleLogout}
+              data-testid="admin-logout"
+              title={collapsed ? '登出' : undefined}
+              className="w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-[var(--bg3)] hover:text-[var(--text)]"
               style={{ color: 'var(--muted-foreground)' }}
             >
-              <span aria-hidden>←</span>
-              {!collapsed && <span>返回前台</span>}
-            </Link>
+              <span aria-hidden>⏻</span>
+              {!collapsed && <span>登出</span>}
+            </button>
           </div>
         </div>
       </div>

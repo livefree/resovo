@@ -1,17 +1,10 @@
-/**
- * Nav.tsx — 顶部导航栏
- * Logo + 分类标签 + 搜索框 + 主题切换 + 语言切换 + 用户状态
- */
-
 'use client'
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useAuthStore } from '@/stores/authStore'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
-import { apiClient } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
 
 // ── 分类标签 ──────────────────────────────────────────────────────
@@ -48,18 +41,14 @@ export function Nav() {
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { user, logout } = useAuthStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [isMoreOpen, setIsMoreOpen] = useState(false)
   const [isLocaleOpen, setIsLocaleOpen] = useState(false)
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const moreMenuRef = useRef<HTMLDivElement | null>(null)
   const moreTriggerRef = useRef<HTMLButtonElement | null>(null)
   const firstMoreItemRef = useRef<HTMLAnchorElement | null>(null)
   const localeMenuRef = useRef<HTMLDivElement | null>(null)
   const localeTriggerRef = useRef<HTMLButtonElement | null>(null)
-  const userMenuRef = useRef<HTMLDivElement | null>(null)
-  const userTriggerRef = useRef<HTMLButtonElement | null>(null)
 
   // 当前 locale（从 pathname 中提取，如 /en/browse → en）
   const currentLocale = pathname.split('/')[1] ?? 'en'
@@ -68,7 +57,7 @@ export function Nav() {
   const currentType = pathname.includes('/browse') ? (searchParams.get('type') ?? '') : null
 
   useEffect(() => {
-    if (!isMoreOpen && !isLocaleOpen && !isUserMenuOpen) return
+    if (!isMoreOpen && !isLocaleOpen) return
 
     function handleClickOutside(event: MouseEvent) {
       const target = event.target as Node
@@ -76,20 +65,16 @@ export function Nav() {
         moreMenuRef.current?.contains(target) ||
         moreTriggerRef.current?.contains(target) ||
         localeMenuRef.current?.contains(target) ||
-        localeTriggerRef.current?.contains(target) ||
-        userMenuRef.current?.contains(target) ||
-        userTriggerRef.current?.contains(target)
+        localeTriggerRef.current?.contains(target)
       ) return
       setIsMoreOpen(false)
       setIsLocaleOpen(false)
-      setIsUserMenuOpen(false)
     }
 
     function handleEsc(event: KeyboardEvent) {
       if (event.key !== 'Escape') return
       setIsMoreOpen(false)
       setIsLocaleOpen(false)
-      setIsUserMenuOpen(false)
     }
 
     document.addEventListener('mousedown', handleClickOutside)
@@ -98,7 +83,7 @@ export function Nav() {
       document.removeEventListener('mousedown', handleClickOutside)
       document.removeEventListener('keydown', handleEsc)
     }
-  }, [isLocaleOpen, isMoreOpen, isUserMenuOpen])
+  }, [isLocaleOpen, isMoreOpen])
 
   function switchLocale(locale: string) {
     // 替换路径中的 locale 段
@@ -110,16 +95,6 @@ export function Nav() {
     setIsLocaleOpen(false)
   }
 
-  async function handleLogout() {
-    try {
-      await apiClient.post('/auth/logout', undefined)
-    } catch {
-      // 忽略 API 错误，仍然清除本地状态
-    }
-    logout()
-    setIsUserMenuOpen(false)
-  }
-
   function handleSearch(e: React.FormEvent) {
     e.preventDefault()
     const q = searchQuery.trim()
@@ -128,7 +103,6 @@ export function Nav() {
 
   function openMoreMenuAndFocusFirst() {
     setIsLocaleOpen(false)
-    setIsUserMenuOpen(false)
     setIsMoreOpen(true)
     requestAnimationFrame(() => firstMoreItemRef.current?.focus())
   }
@@ -139,8 +113,6 @@ export function Nav() {
       openMoreMenuAndFocusFirst()
     }
   }
-
-  const isAdminOrModerator = user?.role === 'admin' || user?.role === 'moderator'
 
   return (
     <header
@@ -292,7 +264,6 @@ export function Nav() {
               onClick={() => {
                 setIsLocaleOpen((prev) => !prev)
                 setIsMoreOpen(false)
-                setIsUserMenuOpen(false)
               }}
               className="h-8 w-8 rounded-md border inline-flex items-center justify-center text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
               style={{ borderColor: 'var(--border)' }}
@@ -333,68 +304,6 @@ export function Nav() {
             ) : null}
           </div>
 
-          {/* 用户入口（紧凑图标） */}
-          {user ? (
-            <div className="relative">
-              <button
-                ref={userTriggerRef}
-                type="button"
-                data-testid="nav-user-trigger"
-                aria-haspopup="menu"
-                aria-expanded={isUserMenuOpen}
-                aria-label={t('nav.account')}
-                onClick={() => {
-                  setIsUserMenuOpen((prev) => !prev)
-                  setIsMoreOpen(false)
-                  setIsLocaleOpen(false)
-                }}
-                className="h-8 w-8 rounded-full border inline-flex items-center justify-center text-xs font-bold bg-[var(--secondary)] text-[var(--foreground)] hover:opacity-90 transition-opacity"
-                style={{ borderColor: 'var(--border)' }}
-              >
-                {(user.username?.[0] ?? 'U').toUpperCase()}
-              </button>
-              {isUserMenuOpen ? (
-                <div className="absolute right-0 top-full pt-2 z-50">
-                  <div
-                    ref={userMenuRef}
-                    role="menu"
-                    data-testid="nav-user-menu"
-                    className="min-w-[180px] rounded-lg border shadow-xl p-1.5 bg-[var(--card)]"
-                    style={{ borderColor: 'var(--border)' }}
-                  >
-                    <div className="px-3 py-2 text-xs border-b" style={{ borderColor: 'var(--border)', color: 'var(--muted-foreground)' }}>
-                      @{user.username}
-                    </div>
-                    <Link
-                      href="/profile"
-                      data-testid="nav-profile"
-                      onClick={() => setIsUserMenuOpen(false)}
-                      className="block px-3 py-2 rounded-md text-sm text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)] transition-colors"
-                    >
-                      {t('nav.profile')}
-                    </Link>
-                    {isAdminOrModerator && (
-                      <Link
-                        href="/admin"
-                        data-testid="nav-admin"
-                        onClick={() => setIsUserMenuOpen(false)}
-                        className="block px-3 py-2 rounded-md text-sm text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)] transition-colors"
-                      >
-                        {t('nav.admin')}
-                      </Link>
-                    )}
-                    <button
-                      onClick={handleLogout}
-                      data-testid="nav-logout"
-                      className="w-full text-left px-3 py-2 rounded-md text-sm text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)] transition-colors"
-                    >
-                      {t('nav.logout')}
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
         </div>
       </div>
     </header>
