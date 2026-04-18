@@ -6394,3 +6394,27 @@
      - 根目录 `npm run typecheck` 涵盖 apps/server（失败时根也失败）
      - `playwright.config.ts` webServer 命令明确指向 apps/web，PORT 默认 3000
      - 根目录 typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
+
+## [SEQ-20260417-04] 迁移收尾：messages路径/根脚本/E2E路由/guardrail
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-17 18:30
+- **最后更新时间**：2026-04-17 18:30
+- **目标**：修复前后端拆分后遗留的 4 个问题：P1 web构建被messages路径阻断、P2 根脚本未覆盖三应用、P2 admin E2E路由与进程错配、P3 guardrail脚本引用旧路径
+- **范围**：`apps/web/`、`package.json`、`playwright.config.ts`、`tests/e2e/admin*.spec.ts`、`tests/e2e/video-governance.spec.ts`、`tests/e2e/publish-flow.spec.ts`、`scripts/verify-admin-guardrails.mjs`
+- **依赖**：SEQ-20260417-03 全部完成 ✅
+
+### 任务列表（按执行顺序）
+
+1. DEC-19 — messages路径/根脚本/E2E路由/guardrail 一次性修复（状态：✅ 已完成）
+   - 创建时间：2026-04-17 18:30
+   - 计划开始：2026-04-17 18:30
+   - 实际开始：2026-04-17 18:35
+   - 完成时间：2026-04-17 18:30
+   - 验收要点：
+     - `npm --workspace @resovo/web run build` ✅（messages 路径解析成功）
+     - 根 dev/build/lint 覆盖 web + server + api 三进程
+     - `playwright.config.ts`：两个 webServer（web:3000 + server:3001），web/admin 项目分离
+     - admin E2E 路由去掉 /en/ 前缀（/en/admin/ → /admin/）
+     - `scripts/verify-admin-guardrails.mjs` V2_SCOPE_DIRS 和 classifyDimension 改为 apps/server 路径
+     - 根目录 typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）

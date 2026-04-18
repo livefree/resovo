@@ -8,7 +8,9 @@
 
 import { test, expect } from '@playwright/test'
 
+// admin 路由用相对路径（baseURL = server:3001），web 路由用绝对 URL
 const BASE_URL = ''
+const WEB_URL  = 'http://localhost:3000'
 const API_BASE = 'http://localhost:4000/v1'
 
 // ── Mock 数据 ──────────────────────────────────────────────────────
@@ -116,7 +118,7 @@ test('管理员在视频列表中发布待审核视频，状态变为已上架',
     })
   })
 
-  await page.goto(`${BASE_URL}/en/admin/videos`)
+  await page.goto(`${BASE_URL}/admin/videos`)
   await expect(page.locator('[data-testid="admin-videos-page"]')).toBeVisible()
 
   // 点击上架按钮
@@ -141,7 +143,7 @@ test('视频发布后，前台搜索页返回该视频', async ({ page }) => {
     })
   })
 
-  await page.goto(`${BASE_URL}/en/search?q=流通测试`)
+  await page.goto(`${WEB_URL}/en/search?q=流通测试`)
 
   // 搜索结果应出现
   await expect(page.locator('[data-testid="search-page"]')).toBeVisible()
@@ -159,7 +161,7 @@ test('点击搜索结果进入详情页，基本信息可见', async ({ page }) 
     })
   })
 
-  await page.goto(`${BASE_URL}/en/movie/flow-test-movie-fLow1234`)
+  await page.goto(`${WEB_URL}/en/movie/flow-test-movie-fLow1234`)
   // 等待页面加载（VideoDetailClient CSR）
   await expect(page.locator('text=流通测试电影').first()).toBeVisible({ timeout: 8000 })
 })
@@ -183,6 +185,6 @@ test('进入播放页，播放器容器正常加载', async ({ page }) => {
     })
   })
 
-  await page.goto(`${BASE_URL}/en/watch/flow-test-movie-fLow1234`)
+  await page.goto(`${WEB_URL}/en/watch/flow-test-movie-fLow1234`)
   await expect(page.locator('[data-testid="watch-page"]')).toBeVisible()
 })

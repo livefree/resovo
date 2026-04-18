@@ -5,12 +5,12 @@ import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 const V2_SCOPE_DIRS = [
-  'src/components/admin/system/crawler-site',
-  'src/components/admin/system/config-file',
-  'src/components/admin/videos',
-  'src/components/admin/users',
-  'src/components/admin/sources',
-  'src/components/admin/shared',
+  'apps/server/src/components/admin/system/crawler-site',
+  'apps/server/src/components/admin/system/config-file',
+  'apps/server/src/components/admin/videos',
+  'apps/server/src/components/admin/users',
+  'apps/server/src/components/admin/sources',
+  'apps/server/src/components/admin/shared',
 ]
 
 const SOURCE_EXT_RE = /\.(ts|tsx|js|jsx)$/
@@ -55,8 +55,8 @@ function inV2Scope(file) {
 }
 
 function classifyDimension(file) {
-  if (!file.startsWith('src/components/admin/')) return null
-  if (file.startsWith('src/components/admin/shared/')) return 'shared'
+  if (!file.startsWith('apps/server/src/components/admin/')) return null
+  if (file.startsWith('apps/server/src/components/admin/shared/')) return 'shared'
 
   const isLogicPath =
     file.includes('/hooks/') ||

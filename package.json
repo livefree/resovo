@@ -2,17 +2,18 @@
   "name": "resovo",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@10.8.2",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
-    "dev": "cd apps/web && npm run dev",
+    "dev": "npx turbo dev",
     "api": "node --env-file=.env.local --import tsx --watch apps/api/src/server.ts",
-    "build": "cd apps/web && npm run build",
-    "start": "cd apps/web && npm run start",
+    "build": "npx turbo build",
+    "start": "npx turbo start",
     "typecheck": "tsc --noEmit && npm --workspace @resovo/server run typecheck",
-    "lint": "cd apps/web && npm run lint",
+    "lint": "npx turbo lint",
     "test": "vitest",
     "test:run": "vitest run",
     "test:e2e": "playwright test",

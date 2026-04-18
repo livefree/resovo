@@ -6368,3 +6368,23 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **测试覆盖**：typecheck ✅（web + server）/ lint ✅ / unit tests 通过（预存 3 文件 16 失败不变）
+
+---
+
+## DEC-19 — messages路径/根脚本/E2E路由/guardrail 修复
+
+- **任务 ID**：DEC-19
+- **完成时间**：2026-04-17 18:30
+- **来源序列**：SEQ-20260417-04
+- **变更文件**：
+  - `apps/web/messages/` — 新建（从根 `messages/` 移动，路径与 i18n/request.ts 中 `../../messages/` 对齐）
+  - `package.json` — 补充 `packageManager: npm@10.8.2`；dev/build/start/lint 改为 `npx turbo` 覆盖三应用
+  - `playwright.config.ts` — 双 webServer（web:3000 + server:3001）；projects 分为 web-chromium/web-mobile/admin-chromium，testMatch 分离前后台测试集
+  - `tests/e2e/admin.spec.ts` — 路由 `/en/admin` → `/admin`（全量替换）
+  - `tests/e2e/admin-source-and-video-flows.spec.ts` — 路由 `/en/admin/` → `/admin/`
+  - `tests/e2e/video-governance.spec.ts` — 路由 `/en/admin/` → `/admin/`
+  - `tests/e2e/publish-flow.spec.ts` — 增加 `WEB_URL` 常量；admin 路由去 `/en/` 前缀；web 路由（search/movie/watch）改为 `http://localhost:3000` 绝对 URL
+  - `scripts/verify-admin-guardrails.mjs` — V2_SCOPE_DIRS + classifyDimension 改为 `apps/server/src/components/admin/` 路径
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅（web+server）/ lint ✅（turbo，web+server）/ build ✅（turbo，web+server）/ unit tests 通过（预存 3 文件 16 失败不变）

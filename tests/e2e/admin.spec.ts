@@ -51,14 +51,14 @@ async function setCookies(
 
 test('未登录访问 /admin 重定向到登录页', async ({ context, page }) => {
   await setCookies(context, {})
-  await page.goto(`${BASE_URL}/en/admin`)
+  await page.goto(`${BASE_URL}/admin`)
   await expect(page).toHaveURL(/\/auth\/login/)
   await expect(page.url()).toContain('callbackUrl')
 })
 
 test('未登录访问 /admin/videos 重定向到登录页', async ({ context, page }) => {
   await setCookies(context, {})
-  await page.goto(`${BASE_URL}/en/admin/videos`)
+  await page.goto(`${BASE_URL}/admin/videos`)
   await expect(page).toHaveURL(/\/auth\/login/)
 })
 
@@ -66,14 +66,14 @@ test('未登录访问 /admin/videos 重定向到登录页', async ({ context, pa
 
 test('role=user 访问 /admin 重定向到 403 页面', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'user' })
-  await page.goto(`${BASE_URL}/en/admin`)
+  await page.goto(`${BASE_URL}/admin`)
   await expect(page).toHaveURL(/\/admin\/403/)
   await expect(page.locator('[data-testid="admin-403-page"]')).toBeVisible()
 })
 
 test('role=user 访问 /admin/videos 重定向到 403 页面', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'user' })
-  await page.goto(`${BASE_URL}/en/admin/videos`)
+  await page.goto(`${BASE_URL}/admin/videos`)
   await expect(page).toHaveURL(/\/admin\/403/)
 })
 
@@ -81,7 +81,7 @@ test('role=user 访问 /admin/videos 重定向到 403 页面', async ({ context,
 
 test('role=moderator 访问 /admin/videos 可正常进入', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'moderator' })
-  await page.goto(`${BASE_URL}/en/admin/videos`)
+  await page.goto(`${BASE_URL}/admin/videos`)
   // 不被重定向到 403 或 login
   await expect(page).not.toHaveURL(/\/admin\/403/)
   await expect(page).not.toHaveURL(/\/auth\/login/)
@@ -89,19 +89,19 @@ test('role=moderator 访问 /admin/videos 可正常进入', async ({ context, pa
 
 test('role=moderator 访问 /admin/users 重定向到 403', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'moderator' })
-  await page.goto(`${BASE_URL}/en/admin/users`)
+  await page.goto(`${BASE_URL}/admin/users`)
   await expect(page).toHaveURL(/\/admin\/403/)
 })
 
 test('role=moderator 访问 /admin/crawler 重定向到 403', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'moderator' })
-  await page.goto(`${BASE_URL}/en/admin/crawler`)
+  await page.goto(`${BASE_URL}/admin/crawler`)
   await expect(page).toHaveURL(/\/admin\/403/)
 })
 
 test('role=moderator 访问 /admin/analytics 重定向到 403', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'moderator' })
-  await page.goto(`${BASE_URL}/en/admin/analytics`)
+  await page.goto(`${BASE_URL}/admin/analytics`)
   await expect(page).toHaveURL(/\/admin\/403/)
 })
 
@@ -109,21 +109,21 @@ test('role=moderator 访问 /admin/analytics 重定向到 403', async ({ context
 
 test('role=admin 访问 /admin/videos 可正常进入', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
-  await page.goto(`${BASE_URL}/en/admin/videos`)
+  await page.goto(`${BASE_URL}/admin/videos`)
   await expect(page).not.toHaveURL(/\/admin\/403/)
   await expect(page).not.toHaveURL(/\/auth\/login/)
 })
 
 test('role=admin 访问 /admin/users 可正常进入', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
-  await page.goto(`${BASE_URL}/en/admin/users`)
+  await page.goto(`${BASE_URL}/admin/users`)
   await expect(page).not.toHaveURL(/\/admin\/403/)
   await expect(page).not.toHaveURL(/\/auth\/login/)
 })
 
 test('role=admin 访问 /admin/analytics 可正常进入', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
-  await page.goto(`${BASE_URL}/en/admin/analytics`)
+  await page.goto(`${BASE_URL}/admin/analytics`)
   await expect(page).not.toHaveURL(/\/admin\/403/)
   await expect(page).not.toHaveURL(/\/auth\/login/)
 })
@@ -133,7 +133,7 @@ test('role=admin 访问 /admin/analytics 可正常进入', async ({ context, pag
 test('moderator 侧边栏不显示系统管理区', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'moderator' })
   // 访问某个内容管理页（需要 admin 布局渲染）
-  await page.goto(`${BASE_URL}/en/admin/videos`)
+  await page.goto(`${BASE_URL}/admin/videos`)
   await expect(page).not.toHaveURL(/\/admin\/403/)
   // 系统管理菜单不可见
   const sidebar = page.locator('[data-testid="admin-sidebar"]')
@@ -145,7 +145,7 @@ test('moderator 侧边栏不显示系统管理区', async ({ context, page }) =>
 
 test('admin 侧边栏显示系统管理区', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
-  await page.goto(`${BASE_URL}/en/admin/videos`)
+  await page.goto(`${BASE_URL}/admin/videos`)
   await expect(page).not.toHaveURL(/\/admin\/403/)
   const sidebar = page.locator('[data-testid="admin-sidebar"]')
   await expect(sidebar).toBeVisible()
@@ -158,7 +158,7 @@ test('admin 侧边栏显示系统管理区', async ({ context, page }) => {
 
 test('admin 侧边栏有「返回前台」链接', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
-  await page.goto(`${BASE_URL}/en/admin/videos`)
+  await page.goto(`${BASE_URL}/admin/videos`)
   await expect(page).not.toHaveURL(/\/admin\/403/)
   const backLink = page.locator('[data-testid="admin-back-to-site"]')
   await expect(backLink).toBeVisible()
@@ -167,7 +167,7 @@ test('admin 侧边栏有「返回前台」链接', async ({ context, page }) => 
 
 test('moderator 侧边栏同样有「返回前台」链接', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'moderator' })
-  await page.goto(`${BASE_URL}/en/admin/videos`)
+  await page.goto(`${BASE_URL}/admin/videos`)
   await expect(page).not.toHaveURL(/\/admin\/403/)
   const backLink = page.locator('[data-testid="admin-back-to-site"]')
   await expect(backLink).toBeVisible()
@@ -202,7 +202,7 @@ test('视频列表页渲染并显示状态筛选器', async ({ context, page }) 
     })
   })
 
-  await page.goto(`${BASE_URL}/en/admin/videos`)
+  await page.goto(`${BASE_URL}/admin/videos`)
   await expect(page.locator('[data-testid="admin-videos-page"]')).toBeVisible()
   await expect(page.locator('[data-testid="admin-videos-filter-all"]')).toBeVisible()
   await expect(page.locator('[data-testid="admin-videos-filter-pending"]')).toBeVisible()
@@ -232,7 +232,7 @@ test('点击上架触发 PATCH 请求', async ({ context, page }) => {
     })
   })
 
-  await page.goto(`${BASE_URL}/en/admin/videos`)
+  await page.goto(`${BASE_URL}/admin/videos`)
   const patchReq = page.waitForRequest(`${API_BASE}/admin/videos/vid-uuid-1/publish`)
   await page.locator('[data-testid="admin-video-toggle-vid-uuid-1"]').click()
   await patchReq
@@ -241,7 +241,7 @@ test('点击上架触发 PATCH 请求', async ({ context, page }) => {
 
 test('手动添加视频页面渲染表单', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'admin' })
-  await page.goto(`${BASE_URL}/en/admin/videos/new`)
+  await page.goto(`${BASE_URL}/admin/videos/new`)
   await expect(page.locator('[data-testid="admin-videos-new-page"]')).toBeVisible()
   await expect(page.locator('[data-testid="admin-video-form"]')).toBeVisible()
   await expect(page.locator('[data-testid="admin-video-form-submit"]')).toHaveText('创建视频')
@@ -263,7 +263,7 @@ test('提交创建表单触发 POST 请求', async ({ context, page }) => {
     }
   })
 
-  await page.goto(`${BASE_URL}/en/admin/videos/new`)
+  await page.goto(`${BASE_URL}/admin/videos/new`)
   await page.locator('[data-testid="admin-video-form"] input[name="title"]').fill('新测试电影')
   const postReq = page.waitForRequest(`${API_BASE}/admin/videos`)
   await page.locator('[data-testid="admin-video-form-submit"]').click()
@@ -295,7 +295,7 @@ test('投稿审核页面显示待审列表', async ({ context, page }) => {
     })
   })
 
-  await page.goto(`${BASE_URL}/en/admin/submissions`)
+  await page.goto(`${BASE_URL}/admin/submissions`)
   await expect(page.locator('[data-testid="admin-submissions-page"]')).toBeVisible()
   await expect(page.locator('[data-testid="admin-submission-list"]')).toBeVisible()
   await expect(page.locator(`[data-testid="admin-submission-row-sub-uuid-1"]`)).toBeVisible()
@@ -327,7 +327,7 @@ test('点击通过触发 approve 请求', async ({ context, page }) => {
     })
   })
 
-  await page.goto(`${BASE_URL}/en/admin/submissions`)
+  await page.goto(`${BASE_URL}/admin/submissions`)
   const approveReq = page.waitForRequest(`${API_BASE}/admin/submissions/sub-uuid-1/approve`)
   await page.locator('[data-testid="admin-submission-approve-sub-uuid-1"]').click()
   await approveReq
@@ -359,7 +359,7 @@ test('字幕审核页面显示待审列表', async ({ context, page }) => {
     })
   })
 
-  await page.goto(`${BASE_URL}/en/admin/subtitles`)
+  await page.goto(`${BASE_URL}/admin/subtitles`)
   await expect(page.locator('[data-testid="admin-subtitles-page"]')).toBeVisible()
   await expect(page.locator('[data-testid="admin-subtitle-row-subtitle-uuid-1"]')).toBeVisible()
 })
@@ -395,7 +395,7 @@ test('用户管理页面显示用户列表', async ({ context, page }) => {
     })
   })
 
-  await page.goto(`${BASE_URL}/en/admin/users`)
+  await page.goto(`${BASE_URL}/admin/users`)
   await expect(page.locator('[data-testid="admin-users-page"]')).toBeVisible()
   await expect(page.locator('[data-testid="admin-user-list"]')).toBeVisible()
   await expect(page.locator('[data-testid="admin-user-row-user-uuid-1"]')).toBeVisible()
@@ -420,7 +420,7 @@ test('点击封号触发 ban 请求', async ({ context, page }) => {
     })
   })
 
-  await page.goto(`${BASE_URL}/en/admin/users`)
+  await page.goto(`${BASE_URL}/admin/users`)
   // 模拟 confirm 对话框
   page.on('dialog', (dialog) => dialog.accept())
   const banReq = page.waitForRequest(`${API_BASE}/admin/users/user-uuid-1/ban`)
@@ -469,7 +469,7 @@ test('采集任务记录页为只读模式（无触发按钮）', async ({ conte
     })
   })
 
-  await page.goto(`${BASE_URL}/en/admin/crawler`)
+  await page.goto(`${BASE_URL}/admin/crawler`)
   await page.locator('[data-testid="admin-crawler-tab-tasks"]').click()
   await expect(page.locator('[data-testid="admin-crawler-page"]')).toBeVisible()
   await expect(page.locator('[data-testid="admin-crawler-trigger-full"]')).toHaveCount(0)
@@ -504,7 +504,7 @@ test('采集控制台触发入口位于 sites tab', async ({ context, page }) =>
     })
   })
 
-  await page.goto(`${BASE_URL}/en/admin/crawler`)
+  await page.goto(`${BASE_URL}/admin/crawler`)
   await expect(page.locator('button:has-text("全站增量采集")')).toBeVisible()
   await expect(page.locator('button:has-text("全站全量采集")')).toBeVisible()
 })
