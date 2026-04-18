@@ -86,6 +86,7 @@ npm run test:e2e         # PLAYER / AUTH / SEARCH / VIDEO 任务完成后运行
 - ❌ "最小改动"作为首要依据——未满足价值排序 1–4 时不得以改动范围小绕过架构约束
 - ❌ 函数超 80 行非声明性 / 嵌套 3 层 / 多独立逻辑阶段，不先拆分就继续写
 - ❌ 文件超 500 行非声明性 / 导出 2+ 主要概念，不先拆分就继续写
+- ❌ 重写冻结期（M0–M6）接受与三份方案（design_system / frontend_redesign / image_pipeline）目标无关的新业务需求——一律写 BLOCKER 暂停，等人工决定
 
 ---
 

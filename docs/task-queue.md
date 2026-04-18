@@ -6533,7 +6533,10 @@
 - **完成备注**：插件 `eslint-plugin-resovo` 已创建（`tools/eslint-plugin-resovo/`），6 个单元测试全部通过（hex 3/4/6/8 位、rgb/rgba、hsl/hsla、oklch、color()）。Lint 全局启用为 `warn`，@resovo/web 现有 7 处硬编码颜色（均在播放器组件）已发出警告，不阻断 commit。Root workspace 新增 `tools/*` 支持。
 
 #### BASELINE-04 — 重写期需求冻结通知与 BLOCKER 模板扩展
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
+- **实际开始**：2026-04-18
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
 - **建议模型**：haiku
 - **创建时间**：2026-04-18
 - **依赖**：BASELINE-02（引用 ADR-030），BASELINE-05（引用 ADR-031）
@@ -6549,10 +6552,13 @@
   - 三份文件 `git add` 后 `git status` 无遗漏
   - `CLAUDE.md` 与 `workflow-rules.md` 的变更相互呼应，无措辞冲突
   - `freeze_notice_20260418.md` 明确 M0–M6 的日期区间（估算即可，后续可更新）
-- **完成备注**：_（AI 填写）_
+- **完成备注**：三份文件均已完成。`workflow-rules.md` BLOCKER 触发条件追加重写期新需求冻结触发词；`CLAUDE.md` 绝对禁止列表追加一条；`freeze_notice_20260418.md` 含冻结期 M0-M6 时间表（估算至 2026-07-31）、P0 例外规则、积压暂存方式。与 ADR-031 策略完全一致。
 
 #### BASELINE-05 — 重写共存策略 ADR
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
+- **实际开始**：2026-04-18
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6（主循环）+ claude-opus-4-6（ADR 内容生成）
 - **建议模型**：opus
 - **创建时间**：2026-04-18
 - **依赖**：无
@@ -6568,7 +6574,7 @@
   - ADR-031 纳入 decisions.md 正常排序（紧接 ADR-030）
   - 内容与 git-rules.md 分支策略不矛盾
   - 与 BASELINE-04 freeze_notice 策略一致
-- **完成备注**：_（AI 填写）_
+- **完成备注**：ADR-031 已追加至 decisions.md（行 796 起）。锁定：原位覆盖（禁 redesign/ 目录）、禁 feature flag 双栈、dev 单线串行、phase 合并以 BASELINE-01 六条路径为门禁、回滚用 git revert、需求冻结至 task-queue.md 积压区。
 
 ---
 

@@ -790,3 +790,48 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
   - `apps/web/eslint.config.mjs`（新增 `no-client-in-metadata` / `player-portal-no-head` / `no-edge-side-io` / `view-transitions-scope`）
   - `docs/risk_register_rewrite_20260418.md`（风险登记与状态跟踪）
   - `docs/architecture.md`（同步"metadata 由 Server Component 输出 + middleware I/O 禁令"至架构章节）
+
+---
+
+## ADR-031: 重写期代码共存与分支推进策略
+
+- **日期**：2026-04-18
+- **状态**：已采纳
+- **背景**：
+  - 前端重写期（M0–M6）涉及设计系统 Token 化、播放器提升至 Root Layout Portal（ADR-026）、页面过渡动画接入 View Transitions（ADR-027）三项结构性改造，以及三份配套方案（design_system / frontend_redesign / image_pipeline）。改动面覆盖几乎所有客户端代码路径。
+  - 面对"大规模改写与既有站点共存"这一典型场景，行业常见三种策略：(A) 在仓库内平行维护 `src/redesign/` 等新子目录、双目录并存；(B) 通过 `ENABLE_REDESIGN=true` 之类 feature flag 同时运行新旧两套 UI，灰度切换；(C) 单线推进、新代码直接覆盖旧代码、通过分支与 Phase 合并节奏控制风险。
+  - 本项目当前 git 策略已明确：`main` 作为稳定分支（Phase 完成才合并），`dev` 作为日常开发分支，不创建 feature 分支，Phase 完成时执行 `git merge dev --no-ff -m "feat: complete Phase N MVP"`。方案 A、B 与该单线策略存在根本张力，且本项目维护人力极为有限。需要一份 ADR 把这条推进路径固化下来，避免后续任务"顺手开一个 redesign 目录"或"顺手加一个 flag"侵蚀架构。
+  - 该策略同时是 BASELINE-04 需求冻结通知的上位依据——冻结通知只是执行层动作，真正的架构承诺在本 ADR。
+- **决策**：
+  - **不开 `redesign/` 子目录**：重写代码直接覆盖旧代码，路径保持不变（`apps/web/src/components/...`、`apps/web/src/app/[locale]/...` 原位替换）。**禁止**新建 `apps/web/src/redesign/`、`apps/web/src/app-v2/`、`apps/web/src/components-new/` 等任何平行目录来存放"重写版本"。
+  - **不使用 feature flag 双栈**：**禁止**通过 `ENABLE_REDESIGN` / `USE_NEW_UI` / `NEXT_PUBLIC_REDESIGN` 等环境变量或运行时开关同时运行新旧两套 UI。组件级短期 flag（单一任务内的开关，生命周期 < 1 个 Phase 且任务完成时必须移除）不在禁止之列，但"整套 UI 双栈"绝对不允许。
+  - **单线 `dev` 分支推进**：M0 → M1 → M2 → M3 → M4 → M5 → M6 严格串行，任一 Phase 未达成合并条件前不得开始下一 Phase。Phase 内允许多 commit（每任务一次 commit），Phase 完成时以 `git merge dev --no-ff -m "feat: complete Phase N MVP"` 合并至 `main`，不创建 `feature/*` 或 `release/*` 分支。
+  - **回滚策略**：发现无法向前推进（质量门禁失败、关键路径回归、风险登记表新增高危风险）时，**必须**使用 `git revert <commit>` 回滚，保留历史；**禁止**使用 `git reset --hard` / `git push --force` 销毁历史。回滚后在 `docs/changelog.md` 追加 revert 说明，记录被回滚 commit 的 SHA、回滚原因、后续计划。
+  - **与 BASELINE-01 基线对接**：每个 Phase 合并 `main` 前，**必须**对照 `docs/baseline_20260418/critical_paths.md` 完整验证 6 条关键路径（首页加载 / 搜索 / 详情页 / 播放 / 登录注册 / 后台录入）。6 条全部通过是合并 `main` 的前置硬门禁，任一路径失败即视为 Phase 未完成，不得合并。
+  - **需求冻结**：M0–M6 期间**禁止**接收与三份方案（`docs/design_system_plan_20260418.md` / `docs/frontend_redesign_plan_20260418.md` / `docs/image_pipeline_plan_20260418.md`）目标无关的新业务需求。新提出的业务需求统一记录到 `docs/task-queue.md` 末尾的"冻结期积压"区（新增 section），待 M6 完成后解冻处理；冻结期内不得将积压需求插队到进行中的 Phase。紧急线上 bug 修复不在冻结范围，但必须走独立 hotfix commit 且不引入新特性。
+- **理由**：
+  - **为何不选 A（`redesign/` 平行目录）**：平行目录在短期内"看起来安全"，但实际会造成三类持续成本——import 路径双份、类型定义双份、共享组件归属不清。本项目共享组件已有成熟沉淀（`src/components/shared/`、`src/components/admin/shared/`），平行目录会让 CLAUDE.md "新建前先确认已有实现"的约束失效，最终演变为两套不相容的组件森林。且当完成迁移时需要再做一次"redesign → 主目录"的大搬家，等于把重写工作量翻倍。
+  - **为何不选 B（feature flag 双栈）**：双栈在本项目的唯一 dev 分支 + 唯一维护者模型下成本倍增——每个 PR 都要在两套 UI 上验证、每条关键路径 Playwright 用例要 × 2、Token 系统要同时服务新旧组件。ADR-026（播放器提升至 Root Layout）和 ADR-027（View Transitions）都假设"单一 UI 形态"，双栈会让这两条架构决策失去意义。此外 feature flag 的"遗忘成本"极高——历史项目多次出现 flag 上线数月后无人清理，成为技术债长期沉淀。
+  - **为何选 C（单线覆盖 + Phase 合并）**：与现有 git 策略天然对齐；依赖 Phase 粒度的 BASELINE-01 关键路径门禁做风险控制，颗粒度已经足够细（6 个 Phase = 6 次门禁）；回滚路径由 `git revert` + changelog 提供，历史完整可追溯；配合 ADR-030 的降级边界（metadata / middleware / View Transitions 三条风险线），单线策略不会让单次失败影响超出一个 Phase 的范围。
+  - **为何用 `git revert` 而非 `git reset --hard`**：`main` 分支一旦 push，历史是共享合约；`reset --hard` 会让其它机器（未来可能的协作者、CI 缓存、Vercel 部署历史）出现 ref 漂移。`revert` 生成新 commit，历史线性可读，事后审计（诸如"M3 的 Portal 化为什么被撤回"）有完整链路。
+  - **为何需求冻结到 `task-queue.md` 末尾而非独立看板**：保留单一任务入口（CLAUDE.md 明确规定 `docs/tasks.md` + `docs/task-queue.md` 是任务的唯一入口），避免引入第二个任务源导致"任务在哪个文件"的歧义。末尾"冻结期积压"区只记录、不排期，与现有优先级区隔离。
+- **架构约束**：
+  - **禁止平行目录**：`apps/web/src/redesign/`、`apps/web/src/app-v2/`、`apps/web/src/components-new/`、`apps/server/src/redesign/` 等目录不得存在；由 CI 目录结构校验脚本（在 `scripts/check-repo-shape.ts` 中）阻断新增。
+  - **禁止全局 UI 开关**：`.env*` 与 `next.config.ts` 中不得出现 `ENABLE_REDESIGN` / `USE_NEW_UI` / `NEXT_PUBLIC_REDESIGN` / `NEXT_PUBLIC_ENABLE_REDESIGN` 等命名的环境变量；由 lint 规则 `no-redesign-flag` 检测变量声明与读取。
+  - **禁止 feature 分支**：`git push` 到 `origin/feature/*` / `origin/release/*` 必须被仓库侧的 branch protection 规则拒绝；本地短期分支可存在但不得推送。
+  - **禁止历史销毁**：`main` 分支禁用 force push（`main` 与 `dev` 同步设置 branch protection `allow_force_pushes=false`）；任务完成后如需撤销，只能走 `git revert`。
+  - **Phase 合并门禁**：`dev` → `main` 的合并 commit message 必须匹配 `^feat: complete Phase [0-6] MVP$` 正则；合并前必须存在对应 Phase 的 BASELINE-01 关键路径验证记录（在 `docs/changelog.md` 中以 `[PHASE-N-BASELINE-PASS]` 标记 6 条全通过）。
+  - **Phase 串行**：M(N+1) 的首个任务卡（写入 `docs/tasks.md`）不得在 M(N) 合并 `main` 之前创建；`docs/task-queue.md` 中 M(N+1) 的任务状态在 M(N) 合并前必须保持 `pending`，不得转为 `in_progress`。
+  - **冻结期积压区**：`docs/task-queue.md` 新增固定 section `## 冻结期积压（M0–M6 期间禁止开工）`，新业务需求仅写入此区；该 section 内任务的"建议模型"字段必须留空，防止误触发主循环领取。
+  - **Revert 审计**：`git revert` 操作的 commit message 前缀必须为 `revert:`，正文须包含被回滚 commit 的短 SHA 与原任务 TASK-ID；`docs/changelog.md` 同步追加 `[REVERT]` 条目，列明回滚原因与是否进入重做队列。
+  - **hotfix 例外**：紧急线上 bug 修复允许在冻结期推进，但必须在任务卡"执行模型"字段旁增加 `[HOTFIX]` 标记，且 commit message 以 `fix:` 起头（不得混入新特性）；hotfix 合并走 `dev` → `main` 正常路径，不开独立分支。
+- **影响文件**：
+  - `docs/task-queue.md`（新增"冻结期积压"section；所有 M0–M6 任务卡在"执行模型"字段对齐本 ADR 语义）
+  - `docs/changelog.md`（新增 `[PHASE-N-BASELINE-PASS]` / `[REVERT]` / `[HOTFIX]` 条目规范）
+  - `docs/baseline_20260418/critical_paths.md`（作为 Phase 合并硬门禁的唯一来源）
+  - `docs/rules/workflow-rules.md`（Phase 串行、单线 `dev` 推进、需求冻结规则落地到工作流）
+  - `docs/rules/git-rules.md`（`git revert` 优先、禁止 force push、Phase 合并 commit message 正则）
+  - `scripts/check-repo-shape.ts`（新建 / 扩展，校验无平行 redesign 目录）
+  - `apps/web/eslint.config.mjs`（新增 `no-redesign-flag` 规则）
+  - `docs/architecture.md`（同步"重写期单线推进 + 冻结期积压"章节）
+

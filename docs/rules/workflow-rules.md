@@ -164,7 +164,7 @@ tasks.md 最终稳定态为**空文件（仅保留标题行）**。
 
 ### BLOCKER 模板
 
-触发条件：测试连续 2 次仍失败 / 需要引入未确认依赖 / schema 与 architecture.md 冲突 / 任务描述歧义无法实现。
+触发条件：测试连续 2 次仍失败 / 需要引入未确认依赖 / schema 与 architecture.md 冲突 / 任务描述歧义无法实现 / 重写阶段（M0–M6）收到与三份方案（design_system / frontend_redesign / image_pipeline）目标无关的新业务需求。
 
 ```markdown
 ---

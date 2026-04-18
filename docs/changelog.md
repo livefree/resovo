@@ -6468,3 +6468,33 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无（eslint-plugin-resovo 为 workspace 内部包）
 - **数据库变更**：无
 - **注意事项**：@resovo/web 现有 7 处硬编码颜色警告（均在播放器组件），待 TOKEN-13（M1）完成后迁移并将规则升级为 error。单元测试 16 预存失败不变（与 BASELINE-01 一致）。
+
+---
+
+## [BASELINE-05] 重写共存策略 ADR-031
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 00:00
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：arch-reviewer（claude-opus-4-6）— ADR 内容生成
+- **来源序列**：SEQ-20260418-M0
+- **修改文件**：
+  - `docs/decisions.md` — 追加 ADR-031（重写期代码共存与分支推进策略，行 796 起）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：ADR-031 锁定：原位覆盖（禁 redesign/ 目录）、禁 feature flag 双栈、dev 单线串行、Phase 合并以 BASELINE-01 六条路径为门禁、回滚用 git revert、需求冻结至积压区。
+
+---
+
+## [BASELINE-04] 重写期需求冻结通知与 BLOCKER 模板扩展
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 00:00
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **来源序列**：SEQ-20260418-M0
+- **修改文件**：
+  - `docs/rules/workflow-rules.md` — BLOCKER 触发条件追加重写期新业务需求冻结触发词
+  - `CLAUDE.md` — 绝对禁止列表追加重写冻结期条款
+  - `docs/freeze_notice_20260418.md` — 新建，冻结期定义（M0–M6）、P0 例外规则、积压暂存方式、里程碑时间表
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：与 ADR-030（SSR 降级）和 ADR-031（共存策略）策略完全对齐。冻结期积压需求写 task-queue.md 末尾"冻结期积压"区。
