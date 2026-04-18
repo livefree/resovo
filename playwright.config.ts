@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 3001)
+const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 3000)
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? `http://localhost:${PORT}`
 
 export default defineConfig({
@@ -22,9 +22,10 @@ export default defineConfig({
     { name: 'mobile',   use: { ...devices['iPhone 14'] } },
   ],
 
-  // 运行 E2E 前自动启动开发服务器
+  // 运行 E2E 前自动启动 apps/web 开发服务器（前台，port 3000）
+  // admin/server 相关 E2E 需额外启动 apps/server（port 3001）
   webServer: {
-    command: `npm run dev -- -p ${PORT}`,
+    command: 'npm --workspace @resovo/web run dev',
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 60000,

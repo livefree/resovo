@@ -6371,3 +6371,26 @@
      - 根目录 `tsconfig.json` paths 更新（`@/*` → `apps/web/src/*`），vitest aliases 同步
      - `apps/web` 独立 `next dev -p 3000` 可正常启动
      - 根目录 typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
+
+## [SEQ-20260417-03] Monorepo 独立校验链路修复
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-17 17:30
+- **最后更新时间**：2026-04-17 18:10
+- **目标**：修复前后端拆分后各 workspace 无法独立 typecheck/build 的 4 个问题，使质量门禁真正覆盖全部 workspace
+- **范围**：`apps/server/tsconfig.json`、`apps/api/tsconfig.json`、`packages/types/src/list.types.ts`、`package.json`、`playwright.config.ts`
+- **依赖**：SEQ-20260417-02 全部完成 ✅
+
+### 任务列表（按执行顺序）
+
+1. DEC-18 — workspace 独立校验链路修复（P1×2 + P2×2）（状态：✅ 已完成）
+   - 创建时间：2026-04-17 17:30
+   - 计划开始：2026-04-17 17:30
+   - 实际开始：2026-04-17 17:35
+   - 完成时间：2026-04-17 18:10
+   - 验收要点：
+     - `npm --workspace @resovo/server run typecheck` ✅（0 错误）
+     - `npm --workspace @resovo/api exec tsc -- --noEmit` ✅（0 错误）
+     - 根目录 `npm run typecheck` 涵盖 apps/server（失败时根也失败）
+     - `playwright.config.ts` webServer 命令明确指向 apps/web，PORT 默认 3000
+     - 根目录 typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）

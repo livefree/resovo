@@ -15,6 +15,9 @@
     "incremental": true,
     "plugins": [{ "name": "next" }],
     "paths": {
+      "@/types": ["../../packages/types/src/index.ts"],
+      "@/types/*": ["../../packages/types/src/*"],
+      "@/components/player/core/*": ["../../packages/player/src/core/*"],
       "@/*": ["./src/*"],
       "@resovo/types": ["../../packages/types/src/index.ts"],
       "@resovo/player": ["../../packages/player/src/index.ts"]

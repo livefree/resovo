@@ -6351,3 +6351,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **测试覆盖**：typecheck ✅ / lint ✅ / unit tests 通过（预存 3 文件 16 失败不变）
+
+---
+
+## DEC-18 — workspace 独立校验链路修复（P1×2 + P2×2）
+
+- **任务 ID**：DEC-18
+- **完成时间**：2026-04-17 18:10
+- **来源序列**：SEQ-20260417-03
+- **变更文件**：
+  - `apps/server/tsconfig.json` — 补充 `@/types`、`@/types/*`、`@/components/player/core/*` paths，解决 server standalone typecheck 30+ 错误
+  - `apps/api/tsconfig.json` — 补充 `skipLibCheck: true` + exclude `src/**/templates/**`，解决 api standalone typecheck 失败
+  - `packages/types/src/list.types.ts` — 移除错误的 `import type { Pick } from 'utility-types'`（内置类型无需导入）
+  - `package.json` — typecheck 改为 `tsc --noEmit && npm --workspace @resovo/server run typecheck`
+  - `playwright.config.ts` — PORT 默认从 3001 改为 3000，webServer command 改为 `npm --workspace @resovo/web run dev`
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅（web + server）/ lint ✅ / unit tests 通过（预存 3 文件 16 失败不变）

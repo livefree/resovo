@@ -3,7 +3,6 @@
  */
 
 import type { VideoCard } from './video.types'
-import type { Pick } from 'utility-types'  // 使用标准 TypeScript Pick，不需要额外依赖
 
 // ── 枚举 ─────────────────────────────────────────────────────────
 
