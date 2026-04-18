@@ -6388,3 +6388,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **测试覆盖**：typecheck ✅（web+server）/ lint ✅（turbo，web+server）/ build ✅（turbo，web+server）/ unit tests 通过（预存 3 文件 16 失败不变）
+
+---
+
+## DEC-20 — turbo start task + api lint/build 脚本
+
+- **任务 ID**：DEC-20
+- **完成时间**：2026-04-17 19:20
+- **来源序列**：SEQ-20260417-05
+- **变更文件**：
+  - `turbo.json` — 补充 `start` task（`cache: false, persistent: true`），与 `dev` 配置对称
+  - `apps/api/package.json` — 补充 `build: tsc --noEmit` 和 `lint: tsc --noEmit` 脚本
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅ / lint ✅（turbo 三应用 web+server+api）/ unit tests 通过（预存 3 文件 16 失败不变）

@@ -6418,3 +6418,25 @@
      - admin E2E 路由去掉 /en/ 前缀（/en/admin/ → /admin/）
      - `scripts/verify-admin-guardrails.mjs` V2_SCOPE_DIRS 和 classifyDimension 改为 apps/server 路径
      - 根目录 typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
+
+## [SEQ-20260417-05] 根脚本完整覆盖补漏
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-17 19:00
+- **最后更新时间**：2026-04-17 19:20
+- **目标**：补齐 P1（turbo start 失败）和 P2（api 未进入 lint/build 门禁）两个残留问题
+- **范围**：`turbo.json`、`apps/api/package.json`
+- **依赖**：SEQ-20260417-04 全部完成 ✅
+
+### 任务列表（按执行顺序）
+
+1. DEC-20 — turbo start task + api lint/build 脚本（状态：✅ 已完成）
+   - 创建时间：2026-04-17 19:00
+   - 计划开始：2026-04-17 19:00
+   - 实际开始：2026-04-17 19:05
+   - 完成时间：2026-04-17 19:20
+   - 验收要点：
+     - `npx turbo start --dry=json` 不再报 Missing tasks
+     - `npx turbo build --dry=json` 包含 @resovo/api#build
+     - `npx turbo lint --dry=json` 包含 @resovo/api#lint
+     - 根目录 typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
