@@ -9,7 +9,7 @@
 > last_reviewed: 2026-03-27
 
 
-> 适用范围：`src/api/db/` 所有数据库相关文件
+> 适用范围：`apps/api/src/db/` 所有数据库相关文件
 > AI 在编写数据库相关代码前必须读取本文件
 
 ---
@@ -26,7 +26,7 @@
 ## 查询函数规范
 
 ```typescript
-// src/api/db/queries/videos.ts
+// apps/api/src/db/queries/videos.ts
 
 // ✅ 正确：参数化查询，明确返回类型
 export async function findVideoByShortId(
@@ -122,7 +122,7 @@ export async function createListWithFirstItem(
 ## 迁移文件规范
 
 ```sql
--- src/api/db/migrations/003_add_directors.sql
+-- apps/api/src/db/migrations/003_add_directors.sql
 -- 描述：为 videos 表添加 director/cast/writers 字段
 -- 日期：2025-03
 -- 幂等：是（使用 IF NOT EXISTS）

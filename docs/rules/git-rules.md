@@ -58,6 +58,12 @@ fix(VIDEO-01): correct short_id lookup in video detail query
 chg(CHG-01): update player sources to direct link per ADR-001
 ```
 
+**无 TASK-ID 的例外情况**（满足 MAINT 条件时允许省略括号部分）：
+```
+chore: 根目录旧配置文件清理
+docs: 更新 rules/ 路径引用至 monorepo 结构
+```
+
 不得使用模糊描述（`update`、`fix stuff`、`misc changes`）。提交信息应与任务记录、changelog 保持一致。
 
 ---

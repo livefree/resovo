@@ -93,17 +93,17 @@ npm run test:e2e         # PLAYER / AUTH / SEARCH / VIDEO 任务完成后运行
 
 开始编写代码前，根据任务类型读取对应规范：
 
-| 任务类型 | 规范文件 |
-|---------|---------|
-| 所有代码任务 | `docs/rules/code-style.md` |
-| 前端组件任务 | `docs/rules/ui-rules.md` |
-| API 接口任务 | `docs/rules/api-rules.md` |
-| 数据库任务 | `docs/rules/db-rules.md` |
-| 测试编写 | `docs/rules/test-rules.md` |
-| 后台模块 | `docs/rules/admin-module-template.md` |
-| 任务工作流 | `docs/rules/workflow-rules.md` |
-| Git 提交 | `docs/rules/git-rules.md` |
-| 质量门禁 | `docs/rules/quality-gates.md` |
+| 任务类型 | 规范文件 | 触发关键词 |
+|---------|---------|-----------|
+| 所有代码任务 | `docs/rules/code-style.md` | 任何 TS/TSX 文件改动 |
+| 前端组件任务 | `docs/rules/ui-rules.md` | 组件、CSS 变量、主题、国际化、响应式、Portal、播放器 |
+| API 接口任务 | `docs/rules/api-rules.md` | Route、Fastify、zod、分页、响应格式、认证中间件 |
+| 数据库任务 | `docs/rules/db-rules.md` | migration、SQL、query、schema、索引、软删除、事务 |
+| 测试编写 | `docs/rules/test-rules.md` | Vitest、Playwright、test、spec、覆盖率 |
+| 后台模块 | `docs/rules/admin-module-template.md` | ModernDataTable、AdminDropdown、列表页、后台新模块 |
+| 任务工作流 | `docs/rules/workflow-rules.md` | 开工、选任务、BLOCKER、PHASE COMPLETE |
+| Git 提交 | `docs/rules/git-rules.md` | commit、branch、merge、TASK-ID |
+| 质量门禁 | `docs/rules/quality-gates.md` | 任务完成前、六问、AI-CHECK、偏离检测 |
 
 **架构决策**：以下情形必须先查阅 `docs/decisions.md`：播放器架构、视频源处理、搜索方案、认证机制、DB schema 变更、URL 结构设计。
 
@@ -111,4 +111,4 @@ npm run test:e2e         # PLAYER / AUTH / SEARCH / VIDEO 任务完成后运行
 
 **统一 API 客户端**：`import { apiClient } from '@/lib/api-client'`（前端不得直接使用 fetch）
 
-**文件模板**：新建文件优先使用 `src/components/templates/` 和 `src/api/templates/` 下的模板，详见 `TEMPLATES.md`。
+**文件模板**：新建文件优先使用 `apps/web/src/components/templates/`、`apps/server/src/components/templates/` 和 `apps/api/src/templates/` 下的模板，详见 `TEMPLATES.md`。

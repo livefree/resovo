@@ -12,7 +12,7 @@
 > 升级依据：`docs/ui_governance_conflicts_20260327.md` §4.2 及 §5
 
 
-> 适用范围：`src/components/`、`src/app/` 所有前端文件（前台 + 后台 + 系统页）
+> 适用范围：`apps/web/src/components/`、`apps/web/src/app/`（前台）；`apps/server/src/components/`、`apps/server/src/app/`（后台）
 > AI 在编写任何前端组件前必须读取本文件
 
 ---
@@ -21,9 +21,9 @@
 
 ### CSS 变量（必须使用，禁止硬编码）
 
-前台与后台当前使用两套独立的 CSS 变量体系，均来自 `src/app/globals.css`。两套体系并存属于已知历史分叉，将在 token 层统一后收敛。在此之前，各区域必须使用对应体系内的变量，**不得跨体系混用，不得引入新的硬编码颜色值**。
+前台与后台当前使用两套独立的 CSS 变量体系，分别来自 `apps/web/src/app/globals.css`（前台）和 `apps/server/src/app/globals.css`（后台）。两套体系并存属于已知历史分叉，将在 token 层统一后收敛。在此之前，各区域必须使用对应体系内的变量，**不得跨体系混用，不得引入新的硬编码颜色值**。
 
-#### 前台 CSS 变量（用于 `src/components/` 前台组件）
+#### 前台 CSS 变量（用于 `apps/web/src/components/` 前台组件）
 
 ```css
 /* 背景 */
@@ -49,7 +49,7 @@
 --status-info         /* 信息/进行中 */
 ```
 
-#### 后台 CSS 变量（用于 `src/components/admin/` 后台组件）
+#### 后台 CSS 变量（用于 `apps/server/src/components/admin/` 后台组件）
 
 ```css
 /* 背景层级 */
@@ -183,7 +183,7 @@ import { cn } from '@/lib/utils'
 
 ## 播放器组件规范
 
-播放器相关组件在 `src/components/player/` 目录，有特殊规范：
+播放器相关组件在 `apps/web/src/components/player/` 目录，有特殊规范：
 
 ### 状态管理
 ```tsx
@@ -343,7 +343,7 @@ useEffect(() => {
 {typeof document !== 'undefined' && createPortal(panel, document.body)}
 ```
 
-**参考实现：** `src/components/admin/shared/dropdown/AdminDropdown.tsx`
+**参考实现：** `apps/server/src/components/admin/shared/dropdown/AdminDropdown.tsx`
 
 ### 禁止行为
 
@@ -357,10 +357,10 @@ useEffect(() => {
 
 ### 新建共享组件前的强制检查
 
-在 `src/components/admin/shared/` 下新建任何组件之前，**必须先确认**以下目录中是否已有等价实现：
+在 `apps/server/src/components/admin/shared/` 下新建任何组件之前，**必须先确认**以下目录中是否已有等价实现：
 
 ```
-src/components/admin/shared/
+apps/server/src/components/admin/shared/
   batch/          ← 批量操作：SelectionActionBar
   button/         ← 通用按钮：AdminButton
   dialog/         ← 弹窗：AdminDialogShell

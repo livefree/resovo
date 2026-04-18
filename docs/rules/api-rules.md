@@ -9,7 +9,7 @@
 > last_reviewed: 2026-03-27
 
 
-> 适用范围：`src/api/routes/` 所有后端路由文件
+> 适用范围：`apps/api/src/routes/` 所有后端路由文件
 > AI 在编写 API 接口前必须读取本文件
 
 ---
@@ -27,7 +27,7 @@
 ## 路由文件结构
 
 ```typescript
-// src/api/routes/videos.ts 标准结构
+// apps/api/src/routes/videos.ts 标准结构
 import { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { VideoService } from '@/api/services/VideoService'
@@ -95,7 +95,7 @@ export async function videoRoutes(fastify: FastifyInstance) {
 
 ### 错误码规范
 ```typescript
-// 在 src/api/lib/errors.ts 中统一定义
+// 在 apps/api/src/lib/errors.ts 中统一定义
 export const ErrorCodes = {
   NOT_FOUND: 404,
   UNAUTHORIZED: 401,

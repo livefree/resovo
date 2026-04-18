@@ -10,6 +10,7 @@
 
 
 > 适用范围：所有 TypeScript 文件（前端和后端）
+> 路径约定：前台 `apps/web/src/`，后台 `apps/server/src/`，API `apps/api/src/`
 > AI 在编写任何代码前必须读取本文件
 
 ---
@@ -130,7 +131,8 @@ console.log('debug:', data)
 
 ### 常量管理
 ```typescript
-// ✅ 集中管理在 src/lib/constants.ts
+// ✅ 集中管理在 apps/api/src/lib/constants.ts（后端）
+//              或 apps/web/src/lib/constants.ts（前台）
 export const VIDEO_TYPES = ['movie', 'series', 'anime', 'variety'] as const
 export const DEFAULT_PAGE_SIZE = 20
 export const MAX_PAGE_SIZE = 100

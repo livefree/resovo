@@ -13,6 +13,16 @@
 
 **`docs/tasks.md` 是执行任务的唯一入口。** 所有任务必须先经过 tasks.md，才能执行和更新状态。
 
+### Session 冷启动检查（上次 commit 超过 4 小时时执行）
+
+```bash
+npm run preflight   # 环境 + 迁移 + 类型 + lint + 单测基线
+```
+
+全部通过后再进入任务流程；若失败先修复基线，再选取任务。
+
+---
+
 ### 每次开工前的三步顺序
 
 **第零步（最高优先级）：检查 `docs/task-queue.md` 是否有 `🚨 BLOCKER`**
@@ -78,6 +88,24 @@ tasks.md 最终稳定态为**空文件（仅保留标题行）**。
 4. `docs/changelog.md` 末尾追加记录（任务 ID、文件列表、测试覆盖情况）
 5. 如有新架构决策，在 `docs/decisions.md` 追加 ADR
 6. git commit（包含代码文件 + task-queue.md + changelog.md + tasks.md，**不得**在进行中状态提交 tasks.md）
+
+---
+
+## 维护性工作快速通道（MAINT）
+
+适用于**计划外、不在 task-queue 中**的轻量维护工作，无需完整任务卡片流程。
+
+**触发条件（全部满足）：**
+- 影响文件 ≤ 5 个
+- 不涉及业务逻辑（仅配置、依赖、文档、路径、格式）
+- 操作可逆（无 schema 变更、无 API 删除）
+
+**执行流程：**
+1. 直接开始执行（跳过 tasks.md 卡片）
+2. commit 格式：`chore: 描述` 或 `docs: 描述`（允许省略 TASK-ID）
+3. 完成后在 `docs/changelog.md` 追加一行记录
+
+**不适用场景：** 影响业务逻辑、超过 5 个文件、schema 变更 → 必须走正常任务流程。
 
 ---
 

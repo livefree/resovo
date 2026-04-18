@@ -13,7 +13,7 @@
 
 ## 适用范围
 
-- `src/components/admin/system/*`
+- `apps/server/src/components/admin/system/*`
 - 后续新增或重构的 admin 业务模块
 
 ## 目标

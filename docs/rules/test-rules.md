@@ -32,34 +32,30 @@
 ```
 tests/
 ├── unit/                        ← Vitest
-│   ├── api/                     ← 后端 Service 和路由
+│   ├── api/                     ← 后端 Service 和路由（apps/api/src/）
 │   │   ├── auth.test.ts
 │   │   ├── videos.test.ts
 │   │   ├── search.test.ts
 │   │   ├── sources.test.ts
 │   │   ├── subtitles.test.ts
-│   │   ├── danmaku.test.ts
-│   │   ├── lists.test.ts
-│   │   └── crawler.test.ts
-│   ├── components/              ← 前端组件逻辑
-│   │   ├── player/
-│   │   │   ├── ControlBar.test.tsx
-│   │   │   ├── EpisodeOverlay.test.tsx
-│   │   │   ├── SpeedPanel.test.tsx
-│   │   │   ├── CCPanel.test.tsx
-│   │   │   └── DanmakuBar.test.tsx
-│   │   └── search/
-│   │       ├── FilterBar.test.tsx
-│   │       └── MetaChip.test.tsx
+│   │   ├── danmaku.test.ts      ← API 侧弹幕逻辑（后端保留）
+│   │   ├── crawler.test.ts
+│   │   └── ...（其他 api 测试）
+│   ├── components/
+│   │   ├── player/              ← apps/web/src/components/player/
+│   │   │   ├── playerShell.layout.test.ts
+│   │   │   └── ResumePrompt.test.tsx
+│   │   ├── admin/               ← apps/server/src/components/admin/
+│   │   │   └── ...（后台组件测试）
+│   │   └── ...（其他前台组件测试）
 │   ├── stores/                  ← Zustand store 状态逻辑
-│   │   ├── playerStore.test.ts
-│   │   └── authStore.test.ts
+│   │   └── playerStore.test.ts  ← authStore 已删除（前台无用户功能）
 │   └── lib/
 │       └── api-client.test.ts
 ├── e2e/                         ← Playwright
 │   ├── search.spec.ts           ← 搜索流程
 │   ├── player.spec.ts           ← 播放、切换、续播
-│   ├── auth.spec.ts             ← 登录/登出流程
+│   ├── auth.spec.ts             ← 后台管理员登录/登出流程
 │   ├── homepage.spec.ts         ← 首页加载与导航
 │   └── admin.spec.ts            ← 后台操作
 └── helpers/
@@ -82,6 +78,8 @@ bash scripts/verify-env.sh
 ---
 
 ### AUTH 任务
+
+> 注意：前台已移除用户功能（登录/注册页面、authStore）。AUTH 任务仅针对后台管理员认证（apps/api/src/routes/auth.ts + apps/server/src/）。
 
 **Vitest（必须）— 采集与映射正确性**
 ```typescript
@@ -116,13 +114,13 @@ describe('logout', () => {
 })
 ```
 
-**Playwright（必须）— 用户流程可用性**
+**Playwright（必须）— 管理员登录流程可用性**
 ```typescript
 // tests/e2e/auth.spec.ts
-test('用户完成 注册 → 登录 → 查看个人中心 → 登出 完整流程')
-test('登录后导航栏显示用户名和头像')
-test('登出后访问需要登录的页面重定向到登录页')
-test('access_token 过期后操作自动续签，用户无感知')
+test('管理员完成 登录 → 进入后台 → 登出 完整流程')
+test('登录后侧栏显示登出按钮，点击跳转到登录页')
+test('登出后访问 /admin 重定向到 /admin/login')
+test('access_token 过期后操作自动续签，管理员无感知')
 ```
 
 ---
@@ -185,7 +183,6 @@ describe('playerStore', () => {
   it('setEpisode 更新 currentEpisode，不影响其他字段')
   it('theaterMode 只能由 ControlBar 的 toggleTheater action 修改')
   it('speed 更新后，SpeedPanel 中对应预设高亮')
-  it('danmakuEnabled 关闭后，danmakuOpacity 和 fontSize 状态保留')
 })
 
 // tests/unit/components/player/ControlBar.test.tsx
@@ -229,7 +226,6 @@ test('打开选集浮层，用键盘方向键导航，按 Enter 切换集数')
 test('切换字幕语言，Video.js 加载新字幕轨道')
 test('设置播放进度到 30 秒，刷新页面，进度从 30 秒续播（断点续播）')
 test('切换播放线路，视频重新加载')
-test('弹幕开关 OFF 后，飞行弹幕消失；ON 后恢复')
 test('按快捷键 T，剧场模式切换；按 F，全屏切换；按 Esc，关闭浮层')
 ```
 
@@ -314,9 +310,8 @@ npm run test:e2e -- tests/e2e/player.spec.ts
 
 | 路径 | 目标行覆盖率 |
 |------|------------|
-| `src/api/services/` | 80% |
-| `src/api/routes/` | 70% |
-| `src/api/db/queries/` | 60% |
-| `src/components/player/` | 70% |
-| `src/lib/api-client.ts` | 85% |
-| `src/stores/` | 75% |
+| `apps/api/src/services/` | 80% |
+| `apps/api/src/routes/` | 70% |
+| `apps/api/src/db/queries/` | 60% |
+| `apps/web/src/components/player/` | 70% |
+| `apps/web/src/lib/api-client.ts` | 85% |
