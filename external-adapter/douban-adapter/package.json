@@ -1,0 +1,33 @@
+{
+  "name": "douban-adapter",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Portable Douban subject details adapter.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "INTEGRATION_GUIDE.md",
+    "PROJECT_PLAN.md",
+    "DEVELOPMENT_LOG.md",
+    "RELEASE_CHECKLIST.md"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "node ./scripts/run-tsc.mjs -p tsconfig.json",
+    "typecheck": "node ./scripts/run-tsc.mjs -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test dist/tests/external-package.test.js",
+    "test:live": "npm run build && node ./scripts/live-validation.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.3",
+    "typescript": "^5.8.3"
+  }
+}
