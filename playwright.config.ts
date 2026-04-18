@@ -50,7 +50,7 @@ export default defineConfig({
     },
     {
       command: 'npm --workspace @resovo/server run dev',
-      url: ADMIN_URL,
+      url: `${ADMIN_URL}/admin`,
       reuseExistingServer: !process.env.CI,
       timeout: 60000,
     },

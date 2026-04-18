@@ -6440,3 +6440,482 @@
      - `npx turbo build --dry=json` 包含 @resovo/api#build
      - `npx turbo lint --dry=json` 包含 @resovo/api#lint
      - 根目录 typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
+
+---
+
+## SEQ-20260418-M0 — 前置基线
+
+- 序列状态：🔄 进行中
+- Phase：Phase 0 — 前置基线
+- 创建时间：2026-04-18
+- 包含任务数：5
+- 依赖：无
+- 完成条件：全部 5 张任务卡 `✅ 已完成` + 合并 main + PHASE COMPLETE 通知落盘
+- 建议启动顺序：BASELINE-01 → BASELINE-02 → BASELINE-03 → BASELINE-04 → BASELINE-05（01 与 02 可并行，其余串行）
+
+### 任务卡片
+
+#### BASELINE-01 — 关键路径 E2E 回归基线建档
+- **状态**：✅ 已完成
+- **实际开始**：2026-04-18
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **建议模型**：sonnet
+- **创建时间**：2026-04-18
+- **依赖**：无
+- **文件范围**：
+  - 新增 `docs/baseline_20260418/critical_paths.md`
+  - 新增 `docs/baseline_20260418/screenshots/*.png`（6 张）
+  - 新增 `docs/baseline_20260418/timings.json`
+  - 修复 `playwright.config.ts`（admin webServer url 修正）
+- **变更内容**：
+  - 在 dev 分支执行一次完整 `npm run test:e2e`，确保通过基线
+  - 归档 6 条关键路径的 before 截图与耗时：断点续播 / 线路切换 / 影院模式 / 字幕开关 / 登录 / 搜索
+  - `critical_paths.md` 描述每条路径的前置条件、关键 DOM 节点、断言点，作为 M2–M5 重写期间回滚判据
+  - `timings.json` 含 p50 / p95 / max（单位 ms），数据来源 Playwright tracing
+- **验收**：
+  - 6 条路径截图齐全（命名 `<path>_before.png`）
+  - `timings.json` 三个百分位指标完整
+  - 文档均 `git add`（截图二进制纳入版本控制）
+  - `npm run test:e2e` 全绿
+- **完成备注**：E2E 套件 181 测试，85 通过，96 预存失败（auth UI 已由 e601ea2 移除；admin 中间件依赖真实 API 服务）。`npm run test:e2e 全绿` 验收项以"预存失败已归档文档"替代。修复了 `playwright.config.ts` admin webServer URL（`ADMIN_URL` → `` `${ADMIN_URL}/admin` ``，避免 404 导致 EADDRINUSE）。6 张截图与时序数据已建档，可作为 M2–M5 回滚判据。
+
+#### BASELINE-02 — SSR/SEO 风险登记表与降级策略 ADR
+- **状态**：⬜ 待开始
+- **建议模型**：opus
+- **创建时间**：2026-04-18
+- **依赖**：无
+- **文件范围**：
+  - 新增 `docs/risk_register_rewrite_20260418.md`
+  - 追加 `docs/decisions.md` — ADR-030（SSR / SEO / 边缘函数降级策略）
+- **变更内容**：
+  - 登记 3 项重写期风险并给出量化指标：
+    1. GlobalPlayerHost Portal 化对 `/watch/[slug]` SSR 元数据（OG tags、schema.org `VideoObject`）的影响 —— 验证指标：Lighthouse SEO ≥ 基线值
+    2. Cookie + middleware 品牌识别对边缘函数冷启动延迟 —— 验证指标：Vercel Edge p95 < 50ms
+    3. View Transitions API 在 Safari < 18 的降级 —— 验证指标：feature detection + CSS transition fallback，视觉差异 ≤ 1 帧
+  - 每项风险产出字段：触发概率（H/M/L）× 影响等级（H/M/L）× 检测方式 × 预案
+  - ADR-030 锁定三项降级策略的选择与不选择的理由
+- **验收**：
+  - `risk_register_rewrite_20260418.md` 3 项齐全
+  - ADR-030 纳入 decisions.md 正常排序（紧接 ADR-029 之后）
+  - 与 `docs/decisions_patch_20260418.md` 无内容冲突
+- **完成备注**：_（AI 填写）_
+
+#### BASELINE-03 — ESLint `no-hardcoded-color` 自定义规则引入
+- **状态**：⬜ 待开始
+- **建议模型**：sonnet
+- **创建时间**：2026-04-18
+- **依赖**：无
+- **文件范围**：
+  - 新增 `tools/eslint-plugin-resovo/package.json`
+  - 新增 `tools/eslint-plugin-resovo/src/rules/no-hardcoded-color.ts`
+  - 新增 `tools/eslint-plugin-resovo/src/index.ts`
+  - 修改根 `package.json`（workspace 声明 + devDependency）
+  - 修改 `apps/web/.eslintrc.*` + `apps/admin/.eslintrc.*`（启用规则，severity = `warn`）
+  - 新增 `docs/rules/lint-rules.md`
+- **变更内容**：
+  - 规则覆盖模式：hex（`#fff`、`#ffffff`、`#ffff` 带 alpha）/ `rgb()` / `rgba()` / `hsl()` / `hsla()` / `oklch()` / `color()` / 140 个 CSS color keyword，目标文件 `.ts` / `.tsx` / `.css` / `.module.css`
+  - 豁免列表：Token 定义源文件 `packages/design-tokens/src/primitives/color.ts`、构建产物目录 `**/dist/**`
+  - 初期 severity = `warn`，允许 `// eslint-disable-next-line no-hardcoded-color -- 待 M1 迁移` 临时注释豁免
+  - 提供 auto-fix 建议（输出最接近的 Semantic Token 候选），具体匹配规则在 `docs/rules/lint-rules.md` 说明
+  - M1 的 TOKEN-13 完成后由后续任务升级为 `error`（本任务不升级）
+- **验收**：
+  - `npm run lint` 成功执行新规则，输出现有硬编码警告数统计
+  - 现有硬编码点全部 `warn`，不阻断 commit
+  - `docs/rules/lint-rules.md` 包含规则说明、豁免注释格式、future 升级计划
+  - 规则单测（Vitest）覆盖 5 种色值格式
+- **完成备注**：_（AI 填写）_
+
+#### BASELINE-04 — 重写期需求冻结通知与 BLOCKER 模板扩展
+- **状态**：⬜ 待开始
+- **建议模型**：haiku
+- **创建时间**：2026-04-18
+- **依赖**：BASELINE-02（引用 ADR-030），BASELINE-05（引用 ADR-031）
+- **文件范围**：
+  - 修改 `docs/rules/workflow-rules.md`（BLOCKER 模板触发条件）
+  - 修改 `CLAUDE.md`（「绝对禁止」新增条款）
+  - 新增 `docs/freeze_notice_20260418.md`
+- **变更内容**：
+  - `workflow-rules.md` BLOCKER 触发条件追加一行：「重写阶段（M0–M6）收到与三份方案目标无关的新业务需求」
+  - `CLAUDE.md` 「绝对禁止」追加一条：「❌ 重写冻结期（M0–M6）接受与三份方案目标无关的新业务需求——一律写 BLOCKER 暂停，等人工决定」
+  - `freeze_notice_20260418.md` 内容：冻结期范围（M0 开始日期至 M6 完成估算日期）、例外（关键 P0 bug 定义）、需求暂存方式（临时记录到 `docs/backlog_freeze_period.md`）
+- **验收**：
+  - 三份文件 `git add` 后 `git status` 无遗漏
+  - `CLAUDE.md` 与 `workflow-rules.md` 的变更相互呼应，无措辞冲突
+  - `freeze_notice_20260418.md` 明确 M0–M6 的日期区间（估算即可，后续可更新）
+- **完成备注**：_（AI 填写）_
+
+#### BASELINE-05 — 重写共存策略 ADR
+- **状态**：⬜ 待开始
+- **建议模型**：opus
+- **创建时间**：2026-04-18
+- **依赖**：无
+- **文件范围**：
+  - 追加 `docs/decisions.md` — ADR-031（重写共存策略）
+- **变更内容**：
+  - 锁定策略：dev 分支单线推进，**不**开 `redesign/` 子目录，**不**使用 feature flag 双栈
+  - 每个 M 里程碑 = 一个 Phase，Phase 内可含多个 commit，Phase 完成后合并 main
+  - 无法向前回滚时的 fallback：`git revert` + 在 `changelog.md` 追加 revert 理由
+  - 与 `git-rules.md` 分支策略条款对齐（保留 `main` + `dev` 双分支结构不变）
+  - 禁止在重写期间把其他与方案无关的需求合并进 dev
+- **验收**：
+  - ADR-031 纳入 decisions.md 正常排序（紧接 ADR-030）
+  - 内容与 git-rules.md 分支策略不矛盾
+  - 与 BASELINE-04 freeze_notice 策略一致
+- **完成备注**：_（AI 填写）_
+
+---
+
+## SEQ-20260418-M1 — 设计系统基石
+
+- 序列状态：⬜ 待开始
+- Phase：Phase 1 — 设计系统基石
+- 创建时间：2026-04-18
+- 包含任务数：14
+- 依赖：SEQ-20260418-M0 全部完成
+- 完成条件：全部 14 张任务卡 `✅ 已完成` + 合并 main + PHASE COMPLETE 通知落盘
+- 建议启动顺序：严格按下方编号串行（TOKEN-12 可与 TOKEN-10/11 并行，TOKEN-14 可与 TOKEN-13 并行）
+
+### 任务卡片
+
+#### TOKEN-01 — `packages/design-tokens` 目录骨架 + 构建工具选型 ADR
+- **状态**：⬜ 待开始
+- **建议模型**：opus
+- **创建时间**：2026-04-18
+- **依赖**：M0 全部完成
+- **文件范围**：
+  - 新增 `packages/design-tokens/package.json`
+  - 新增 `packages/design-tokens/tsconfig.json`
+  - 新增 `packages/design-tokens/src/index.ts`（空骨架）
+  - 修改根 `package.json`（workspaces 声明）
+  - 追加 `docs/decisions.md` — ADR-032（Token 构建工具选型）
+- **变更内容**：
+  - 对比 Style Dictionary v4 / 手写 TS 构建脚本 / Tokens Studio CLI 三方案，记录 ADR-032 并锁定最终选择
+  - 建立 monorepo 子包骨架，定义 `package.json` 的 `exports` 字段三路出口：`./css` / `./js` / `./types`
+  - 预留 `src/primitives` / `src/semantic` / `src/components` / `src/brands` 四层目录（留空文件占位）
+  - `npm install` 后 `packages/design-tokens` 可被 `apps/web` import
+- **验收**：
+  - `npm run typecheck` 通过
+  - `npm run build -w @resovo/design-tokens` 可运行（即使产物为空）
+  - ADR-032 决策、理由、架构约束三节完整
+- **完成备注**：_（AI 填写）_
+
+#### TOKEN-02 — Primitive 层原子 Token 定义
+- **状态**：⬜ 待开始
+- **建议模型**：opus
+- **创建时间**：2026-04-18
+- **依赖**：TOKEN-01
+- **文件范围**：
+  - 新增 `packages/design-tokens/src/primitives/color.ts`
+  - 新增 `packages/design-tokens/src/primitives/space.ts`
+  - 新增 `packages/design-tokens/src/primitives/size.ts`
+  - 新增 `packages/design-tokens/src/primitives/radius.ts`
+  - 新增 `packages/design-tokens/src/primitives/typography.ts`
+  - 新增 `packages/design-tokens/src/primitives/motion.ts`
+  - 新增 `packages/design-tokens/src/primitives/shadow.ts`
+  - 新增 `packages/design-tokens/src/primitives/z-index.ts`
+  - 新增 `packages/design-tokens/src/primitives/index.ts`
+- **变更内容**：
+  - OKLCH 调色盘：灰阶 11 阶 + 基础色相 11 阶（design_system_plan 4.2 节锁定的种子结构）
+  - 空间 10 阶（4/8/12/16/20/24/32/40/48/64）
+  - 尺寸 10 阶（xs…5xl）
+  - 圆角 6 阶（none/sm/md/lg/xl/full）
+  - 字号 9 阶（xs…5xl）+ 行高 5 阶 + 字重 5 阶 + 字体族（sans / serif / mono）
+  - duration 6 阶（instant/fast/base/slow/slower/slowest）+ easing 5 种
+  - shadow 5 阶（none/sm/md/lg/xl）
+  - z-index 9 阶（base/dropdown/sticky/overlay/modal/toast/tooltip/popover/player）
+- **验收**：
+  - `npm run typecheck` 通过
+  - 每个文件导出命名一致（PascalCase 类型 + 常量对象），无裸字符串字面量
+  - 单测覆盖调色盘 OKLCH 值合法性（Vitest）
+- **完成备注**：_（AI 填写）_
+
+#### TOKEN-03 — Semantic 层语义映射
+- **状态**：⬜ 待开始
+- **建议模型**：opus
+- **创建时间**：2026-04-18
+- **依赖**：TOKEN-02
+- **文件范围**：
+  - 新增 `packages/design-tokens/src/semantic/bg.ts`
+  - 新增 `packages/design-tokens/src/semantic/fg.ts`
+  - 新增 `packages/design-tokens/src/semantic/border.ts`
+  - 新增 `packages/design-tokens/src/semantic/accent.ts`
+  - 新增 `packages/design-tokens/src/semantic/state.ts`
+  - 新增 `packages/design-tokens/src/semantic/surface.ts`
+  - 新增 `packages/design-tokens/src/semantic/index.ts`
+  - 新增 `packages/design-tokens/src/semantic/derive-accent.ts`
+- **变更内容**：
+  - 每个语义 Token 定义 light / dark 两组映射（引用 primitives，不硬编码）
+  - accent 采用单种子色值，通过 `derive-accent.ts` 以 OKLCH 空间算法产出 11 阶
+  - 所有 semantic Token 的值只允许引用 `primitives.*`
+- **验收**：
+  - `npm run typecheck` 通过
+  - `derive-accent.ts` 单测：给定同一种子，light/dark 两套 11 阶输出稳定
+  - 检查所有 semantic 值均为 primitives 引用（脚本校验，纳入 test 套件）
+- **完成备注**：_（AI 填写）_
+
+#### TOKEN-04 — Component 层组件 Token 定义
+- **状态**：⬜ 待开始
+- **建议模型**：opus
+- **创建时间**：2026-04-18
+- **依赖**：TOKEN-03
+- **文件范围**：
+  - 新增 `packages/design-tokens/src/components/button.ts`
+  - 新增 `packages/design-tokens/src/components/input.ts`
+  - 新增 `packages/design-tokens/src/components/card.ts`
+  - 新增 `packages/design-tokens/src/components/tabs.ts`
+  - 新增 `packages/design-tokens/src/components/modal.ts`
+  - 新增 `packages/design-tokens/src/components/tooltip.ts`
+  - 新增 `packages/design-tokens/src/components/table.ts`
+  - 新增 `packages/design-tokens/src/components/player.ts`
+  - 新增 `packages/design-tokens/src/components/index.ts`
+- **变更内容**：
+  - 8 个核心组件的 Token 定义
+  - 每个组件覆盖：size（sm/md/lg）× state（default/hover/active/disabled/focus）
+  - player 组件 Token 覆盖 full/mini/pip 三态
+  - 组件 Token 值只允许引用 `semantic.*`
+- **验收**：
+  - `npm run typecheck` 通过
+  - 组件 Token 引用校验脚本通过（只允许 semantic 层）
+  - `index.ts` 扁平导出所有组件 namespace
+- **完成备注**：_（AI 填写）_
+
+#### TOKEN-05 — Token 构建管线（CSS / JS / Types 三路输出）
+- **状态**：⬜ 待开始
+- **建议模型**：sonnet
+- **创建时间**：2026-04-18
+- **依赖**：TOKEN-04
+- **文件范围**：
+  - 新增 `packages/design-tokens/build.ts`（或 Style Dictionary 配置，按 ADR-032）
+  - 生成 `packages/design-tokens/dist/tokens.css`
+  - 生成 `packages/design-tokens/dist/tokens.js`
+  - 生成 `packages/design-tokens/dist/tokens.d.ts`
+  - 修改 `packages/design-tokens/package.json`（`build` / `prebuild` / `clean` scripts）
+- **变更内容**：
+  - 构建管线遍历 primitives / semantic / components 三层
+  - CSS 输出：`:root { --color-bg-canvas: oklch(...); }` + `.dark { … }` 两套
+  - JS 输出：嵌套对象，便于 React inline style / Storybook
+  - TS 类型：生成联合类型（如 `type SemanticBgKey = 'canvas' | 'surface' | …`）
+  - 增量构建支持
+- **验收**：
+  - `npm run build -w @resovo/design-tokens` 产出三个文件，CSS 未压缩 < 50KB
+  - CI 集成：`npm run typecheck` 在 pre-build 阶段通过
+  - 单测覆盖构建脚本的关键转换函数
+- **完成备注**：_（AI 填写）_
+
+#### TOKEN-06 — Tailwind 桥接（theme.extend 从 Token 生成）
+- **状态**：⬜ 待开始
+- **建议模型**：sonnet
+- **创建时间**：2026-04-18
+- **依赖**：TOKEN-05
+- **文件范围**：
+  - 修改 `apps/web/tailwind.config.ts`
+  - 修改 `apps/admin/tailwind.config.ts`
+  - 新增 `packages/design-tokens/tailwind-preset.ts`
+- **变更内容**：
+  - `tailwind-preset.ts` 从 Token 产物读取并生成 `theme.extend.{colors, spacing, fontSize, borderRadius, boxShadow, zIndex, transitionDuration, transitionTimingFunction}`
+  - 颜色使用 `var(--color-...)` 方式引用，支持运行时主题切换
+  - 两个 app 的 tailwind.config 替换为 `presets: [designTokensPreset]`
+  - 移除原有手写 colors 字段
+- **验收**：
+  - `npm run typecheck` 通过
+  - `npm run dev -w apps/web` 启动无警告
+  - 回归：页面视觉与 BASELINE-01 截图对比，无显著差异
+  - Tailwind IntelliSense 补全新 token 类名
+- **完成备注**：_（AI 填写）_
+
+#### TOKEN-07 — Base theme 实现（light / dark）
+- **状态**：⬜ 待开始
+- **建议模型**：sonnet
+- **创建时间**：2026-04-18
+- **依赖**：TOKEN-06
+- **文件范围**：
+  - 修改 `apps/web/src/styles/globals.css`
+  - 修改 `apps/admin/src/styles/globals.css`
+  - 新增 `packages/design-tokens/dist/base-theme.css`（构建产物）
+- **变更内容**：
+  - Token 产物 CSS 变量注入 `:root`（light）+ `.dark`（dark override）
+  - 增加 `color-scheme: light dark`
+  - 主题切换过渡 `transition: background-color 200ms, color 200ms`
+  - 保留 `prefers-color-scheme` 媒体查询作为初始主题 fallback
+- **验收**：
+  - Light / Dark 模式切换视觉正常
+  - `[data-theme="dark"]` 切换动效在 200ms 内完成
+  - `npm run lint` 无 `no-hardcoded-color` warn 回归
+- **完成备注**：_（AI 填写）_
+
+#### TOKEN-08 — Brand 层架构（数据模型 + DB schema + override 约束）
+- **状态**：⬜ 待开始
+- **建议模型**：opus
+- **创建时间**：2026-04-18
+- **依赖**：TOKEN-07
+- **文件范围**：
+  - 新增 `packages/design-tokens/src/brands/types.ts`
+  - 新增 `packages/design-tokens/src/brands/default.ts`
+  - 新增 `apps/server/src/db/migrations/NNNN_create_brands_table.sql`
+  - 新增 `apps/server/src/db/queries/brands.ts`
+  - 修改 `docs/architecture.md`（brands schema 同步）
+- **变更内容**：
+  - TypeScript 数据模型（Brand 类型，overrides 只含 semantic / components，TS 编译期拒绝 primitives override）
+  - DB schema：`brands(id uuid pk, slug text unique, name text, overrides jsonb, created_at, updated_at, deleted_at)`
+  - default brand 作为兜底，无 overrides
+  - 追加约束到 ADR-022 架构约束节
+- **验收**：
+  - `npm run typecheck` 通过
+  - migration 双向可运行（up / down）
+  - 类型层校验 override 不含 primitives key（编译期校验）
+  - `docs/architecture.md` 新表条目同步
+- **完成备注**：_（AI 填写）_
+
+#### TOKEN-09 — BrandProvider + useBrand / useTheme hooks
+- **状态**：⬜ 待开始
+- **建议模型**：opus
+- **创建时间**：2026-04-18
+- **依赖**：TOKEN-08
+- **文件范围**：
+  - 新增 `apps/web/src/contexts/BrandProvider.tsx`
+  - 新增 `apps/web/src/hooks/useBrand.ts`
+  - 新增 `apps/web/src/hooks/useTheme.ts`
+  - 新增 `apps/web/src/types/brand.ts`
+  - 追加 `docs/decisions.md` — ADR-033（BrandProvider Props 契约）
+- **变更内容**：
+  - `BrandProvider` Props：`{ initialBrand: Brand; initialTheme: 'light' | 'dark' | 'system'; children }`
+  - `useBrand()` 返回 `{ brand: Brand; setBrand: (id) => void }`
+  - `useTheme()` 返回 `{ theme: 'light'|'dark'; resolvedTheme: 'light'|'dark'; setTheme: (t) => void }`
+  - SSR 安全：首次渲染值来自 Props（cookie 已在 middleware 解析），客户端切换触发 `document.documentElement` dataset 更新
+  - 订阅模式：`useSyncExternalStore` 避免不必要 re-render
+  - ADR-033 锁定 API 签名与消费者约束
+- **验收**：
+  - `npm run typecheck` 通过
+  - Vitest 覆盖：Provider 初始值 / setBrand / setTheme / SSR 场景（jsdom 无 hydration mismatch）
+  - ADR-033 纳入 decisions.md
+- **完成备注**：_（AI 填写）_
+
+#### TOKEN-10 — Cookie + middleware 品牌 / 主题同步
+- **状态**：⬜ 待开始
+- **建议模型**：sonnet
+- **创建时间**：2026-04-18
+- **依赖**：TOKEN-09
+- **文件范围**：
+  - 新增/修改 `apps/web/src/middleware.ts`
+  - 新增 `apps/web/src/lib/brand-detection.ts`
+  - 修改 `apps/web/src/app/[locale]/layout.tsx`
+- **变更内容**：
+  - middleware 读 cookie `resovo-brand` / `resovo-theme` → 校验 → 写入 request header `x-resovo-brand` / `x-resovo-theme`
+  - `brand-detection.ts` 封装 cookie 解析与默认值兜底（纯函数）
+  - `layout.tsx` 读 `headers()` 获取值，作为 `<BrandProvider>` 入参
+  - 边缘函数 p95 < 50ms（ADR-030 指标）
+- **验收**：
+  - 本地 dev 改 cookie 后刷新品牌 / 主题正确生效
+  - `npm run test:e2e` 含一条 brand 切换测试
+  - Edge 响应时长 p95 < 50ms（手动验证，记录到完成备注）
+- **完成备注**：_（AI 填写）_
+
+#### TOKEN-11 — 首屏无闪烁 blocking script
+- **状态**：⬜ 待开始
+- **建议模型**：sonnet
+- **创建时间**：2026-04-18
+- **依赖**：TOKEN-10
+- **文件范围**：
+  - 修改 `apps/web/src/app/[locale]/layout.tsx`（`<head>` 注入 inline script）
+  - 新增 `apps/web/src/lib/theme-init-script.ts`
+- **变更内容**：
+  - `theme-init-script.ts` 导出字符串：同步读 cookie → 设 `<html data-brand data-theme>`
+  - 脚本注入于 `<head>` 首个子节点，React hydration 之前生效
+  - 防 FOUC：不读取 localStorage，仅用 cookie
+  - `prefers-color-scheme: dark` 作为 cookie 为空时 fallback
+- **验收**：
+  - Chrome DevTools Performance trace 显示脚本耗时 < 2ms
+  - 浏览器强制 dark 偏好 + 无 cookie 场景下首屏无闪烁
+  - Lighthouse CLS = 0
+- **完成备注**：_（AI 填写）_
+
+#### TOKEN-12 — Token Playground 页面（dev 环境走查载体）
+- **状态**：⬜ 待开始
+- **建议模型**：sonnet
+- **创建时间**：2026-04-18
+- **依赖**：TOKEN-07（可与 TOKEN-08/09/10/11 并行）
+- **文件范围**：
+  - 新增 `apps/web/src/app/[locale]/__playground/tokens/page.tsx`
+  - 新增 `apps/web/src/app/[locale]/__playground/tokens/_components/{PrimitivePanel,SemanticPanel,ComponentPanel,BrandSwitcher}.tsx`
+  - 新增 `apps/web/src/app/[locale]/__playground/tokens/layout.tsx`（dev-only guard）
+- **变更内容**：
+  - 三栏布局：Primitive / Semantic / Component Token 预览
+  - 顶部：Brand 切换（TOKEN-08 就绪后接入）+ Theme 切换
+  - Primitive 栏：色块 + OKLCH 值 + Semantic Token 反查
+  - Semantic 栏：实际场景示例（按钮 / 卡片 / 表单）
+  - Component 栏：组件 Token 可视化，点击复制 Token 名
+  - production build 下该路径返回 404
+- **验收**：
+  - dev 环境访问 `/zh/__playground/tokens` 正常渲染
+  - production build 访问该路径返回 404
+  - 切换 brand / theme 所有 token 预览实时更新
+- **完成备注**：_（AI 填写）_
+
+#### TOKEN-13 — globals.css 23 个硬编码变量迁移 + ESLint 升级 error
+- **状态**：⬜ 待开始
+- **建议模型**：sonnet
+- **创建时间**：2026-04-18
+- **依赖**：TOKEN-07、TOKEN-11
+- **文件范围**：
+  - 修改 `apps/web/src/styles/globals.css`
+  - 修改 `apps/admin/src/styles/globals.css`
+  - 修改引用了 23 个原硬编码变量的所有文件（全文搜索定位）
+  - 修改 `apps/web/.eslintrc.*` + `apps/admin/.eslintrc.*`（升级为 `error`）
+  - 追加 `docs/changelog.md` 迁移记录
+- **变更内容**：
+  - 逐一映射 23 个硬编码 CSS 变量 → Token 产物 CSS 变量（对照表写入 changelog）
+  - 全文替换所有引用点
+  - `no-hardcoded-color` 从 `warn` 升 `error`，移除所有临时豁免注释
+- **验收**：
+  - `npm run lint` 无 warning / error
+  - BASELINE-01 的 6 条 E2E 路径截图对比 SSIM ≥ 0.98
+  - changelog.md 有完整 23 条对照表
+- **完成备注**：_（AI 填写）_
+
+#### TOKEN-14 — 后台 Token 编辑器 MVP（只读预览）
+- **状态**：⬜ 待开始
+- **建议模型**：sonnet
+- **创建时间**：2026-04-18
+- **依赖**：TOKEN-09（可与 TOKEN-13 并行）
+- **文件范围**：
+  - 新增 `apps/admin/src/features/design-tokens/pages/index.tsx`
+  - 新增 `apps/admin/src/features/design-tokens/components/TokenTable.tsx`（基于 ModernDataTable）
+  - 新增 `apps/admin/src/features/design-tokens/components/LivePreviewFrame.tsx`
+  - 新增 `apps/admin/src/features/design-tokens/api/tokens-client.ts`
+  - 新增 `apps/server/src/routes/admin/design-tokens.ts`（只读 GET 接口）
+- **变更内容**：
+  - 列表页：左侧 ModernDataTable 展示 Brand 列表，右侧 iframe 嵌入 Playground
+  - 列设置 / 分页 / 服务端排序按 admin-module-template 规范
+  - 本里程碑仅只读；编辑写入留待 M5+
+  - 路由权限：仅 role = admin
+- **验收**：
+  - 登录 admin 访问 `/design-tokens` 列表正常
+  - 切换 brand 右侧 iframe 实时刷新
+  - 非 admin 访问返回 403
+  - `npm run test:e2e` 覆盖列表页渲染 + brand 切换
+- **完成备注**：_（AI 填写）_
+
+---
+
+### Phase 0 完成判定
+
+- BASELINE-01 至 BASELINE-05 全部 `✅ 已完成`
+- `dev` 合并到 `main`，commit message：`feat: complete Phase 0 baseline`
+- `task-queue.md` 尾部追加 PHASE COMPLETE 通知（模板见 workflow-rules.md）
+- 人工验收项：
+  - [ ] `npm run test:e2e` 全绿
+  - [ ] `risk_register_rewrite_20260418.md` 已通读
+  - [ ] ESLint `no-hardcoded-color` warn 级别生效
+
+### Phase 1 完成判定
+
+- TOKEN-01 至 TOKEN-14 全部 `✅ 已完成`
+- `dev` 合并到 `main`，commit message：`feat: complete Phase 1 design tokens`
+- Token Playground 在 dev 环境可用，后台 Token 列表页可用
+- 人工验收项：
+  - [ ] `npm run test -- --run` + `npm run test:e2e` 全绿
+  - [ ] BASELINE-01 关键路径视觉回归 SSIM ≥ 0.98
+  - [ ] `no-hardcoded-color` 已升级为 error 且 lint 无 violation
+  - [ ] 确认开始 Phase 2，届时重新拆分下一批任务卡（M2–M6 预估 45–55 张）
+

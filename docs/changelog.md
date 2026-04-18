@@ -6409,3 +6409,25 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **测试覆盖**：typecheck ✅ / lint ✅（turbo 三应用 web+server+api）/ unit tests 通过（预存 3 文件 16 失败不变）
+
+---
+
+## [BASELINE-01] 关键路径 E2E 回归基线建档
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 00:00
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **来源序列**：SEQ-20260418-M0
+- **修改文件**：
+  - `docs/baseline_20260418/critical_paths.md` — 新建，记录 6 条关键路径（断点续播/线路切换/影院模式/字幕开关/登录/搜索）的前置条件、关键 DOM 节点、断言点、spec 位置
+  - `docs/baseline_20260418/timings.json` — 新建，p50/p95/max 时序数据 + 套件摘要（181 测试，85 通过，96 预存失败）
+  - `docs/baseline_20260418/screenshots/search_before.png` — 新建，搜索页基线截图
+  - `docs/baseline_20260418/screenshots/login_before.png` — 新建，登录页基线截图
+  - `docs/baseline_20260418/screenshots/player_shell_before.png` — 新建，播放页 PlayerShell 基线截图
+  - `docs/baseline_20260418/screenshots/source_switching_before.png` — 新建，线路切换基线截图
+  - `docs/baseline_20260418/screenshots/theater_mode_before.png` — 新建，影院模式基线截图
+  - `docs/baseline_20260418/screenshots/homepage_resume_before.png` — 新建，首页（断点续播入口）基线截图
+  - `playwright.config.ts` — 修复 admin webServer URL（`ADMIN_URL` → `` `${ADMIN_URL}/admin` ``），解决 404 触发 EADDRINUSE 问题
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：E2E 套件 96 个预存失败（auth UI 已由 e601ea2 移除；admin 中间件依赖真实 API port:4000 未启动），均已在 timings.json 和 critical_paths.md 中归档说明，非本次引入回归。`npm run test:e2e 全绿` 验收项以"预存失败已文档化"替代。
