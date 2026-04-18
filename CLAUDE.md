@@ -105,6 +105,61 @@ npm run test:e2e         # PLAYER / AUTH / SEARCH / VIDEO 任务完成后运行
 | Git 提交 | `docs/rules/git-rules.md` | commit、branch、merge、TASK-ID |
 | 质量门禁 | `docs/rules/quality-gates.md` | 任务完成前、六问、AI-CHECK、偏离检测 |
 
+---
+
+## 模型路由规则
+
+### 主循环模型选择
+
+- **默认主循环**：`claude-sonnet-4-6`
+- 每个任务卡（tasks.md / task-queue.md）的"建议模型"字段指定启动主循环模型（`opus` / `sonnet` / `haiku`）
+- 会话启动时人工按照建议传 `--model <完整 ID>`（映射表见 `docs/model_routing_patch_20260418.md` 第 3 节）
+- **主循环模型中途不可升级**：执行中发现任务难度高于预期时，必须写 BLOCKER 停止会话，不得擅自 spawn Opus 子代理替主循环做最终决策
+
+### 强制升 Opus 子代理的情形
+
+主循环在以下工作前必须通过 Task 工具 spawn Opus 子代理完成决策后再落地：
+
+1. 定义新的共享组件 API 契约（Props 类型、事件签名、生命周期）
+2. 设计跨 3+ 消费方的 schema / migration 字段
+3. 撰写即将成为 ADR 的决策文档
+4. 重构播放器 core / shell 层的接口
+5. 设计 Token 层新增字段的结构与引用规则
+6. 高风险 PR 的独立 code review（调用 `arch-reviewer` 预设子代理）
+
+调用模板：
+
+    Task(subagent_type: "arch-reviewer", model: "claude-opus-4-6",
+         prompt: "<独立设计任务，自带完整上下文>")
+
+主循环拿到子代理输出后按其结论实施，子代理的模型 ID 必须记入 tasks.md 卡片的"子代理调用"字段。
+
+### 强制降 Haiku 子代理的情形
+
+以下工作应 spawn Haiku 子代理节省成本：
+
+1. 机械性 docstring / typo 修正
+2. 文档归档 / 文件移动 / README 索引更新
+3. 统一 import 顺序、格式化任务
+4. 读取并提取特定文件的结构化信息（纯读不改）
+5. 追加模板化 changelog / ADR 条目
+
+### 不得自动切换的情形
+
+1. 任务执行中发现难度高于预期 → 写 BLOCKER，不得继续
+2. 主循环直接改写架构决策 → 必须先 spawn Opus 子代理出具方案
+3. Sonnet 主循环在未调 Opus 子代理的情况下直接产出新 ADR → 禁止
+
+### 审计要求
+
+每个任务完成时必须记录：
+
+- 主循环模型 ID（完整形式，如 `claude-sonnet-4-6`）
+- 本任务中 spawn 的所有子代理及其模型 ID
+- 上述信息写入 tasks.md 卡片的"执行模型"与"子代理调用"字段，并同步到 changelog.md 条目和 commit trailer
+
+---
+
 **架构决策**：以下情形必须先查阅 `docs/decisions.md`：播放器架构、视频源处理、搜索方案、认证机制、DB schema 变更、URL 结构设计。
 
 **统一类型入口**：`import type { Video, User, SearchParams, ApiResponse } from '@/types'`

@@ -66,6 +66,40 @@ docs: 更新 rules/ 路径引用至 monorepo 结构
 
 不得使用模糊描述（`update`、`fix stuff`、`misc changes`）。提交信息应与任务记录、changelog 保持一致。
 
+### Commit trailers（执行审计必填）
+
+除标题行与正文外，commit message 必须在末尾追加两条 git trailer，记录本次 commit 的执行模型来源：
+
+```
+<type>(<TASK-ID>): <简短描述>
+
+<可选正文>
+
+Executed-By-Model: claude-sonnet-4-6
+Subagents: none
+```
+
+多子代理场景：
+
+```
+feat(PLAYER-ROOT-01): root-ize GlobalPlayerHost with zustand singleton
+
+Implements ADR-026. Full/mini/pip states via FLIP transitions.
+
+Executed-By-Model: claude-opus-4-6
+Subagents: arch-reviewer (claude-opus-4-6)
+```
+
+Trailer 字段约束：
+
+- `Executed-By-Model` 必填，值为主循环模型完整 ID（如 `claude-sonnet-4-6`）
+- `Subagents` 必填，无子代理时写 `none`；多个子代理用逗号分隔，格式 `name (model-id)`
+- Trailer 行之间不得有空行（git trailer 协议要求）
+- 与 `Co-Authored-By` 共存时，按 `Executed-By-Model → Subagents → Co-Authored-By` 的顺序排列
+- MAINT 快速通道的 commit 同样需要 trailer（即使无 TASK-ID）
+
+git 本身支持任意 trailer，CI 可通过 `git log --format="%(trailers:key=Executed-By-Model)"` 聚合统计各模型的 commit 量，便于回溯成本与质量分布。
+
 ---
 
 ## 提交时机

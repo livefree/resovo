@@ -20,6 +20,8 @@
 ## [TASK-ID] 任务标题
 - **完成时间**：YYYY-MM-DD
 - **记录时间**：YYYY-MM-DD HH:mm
+- **执行模型**：claude-<opus|sonnet|haiku>-<version>（完整 ID，如 claude-sonnet-4-6）
+- **子代理**：无 / [subagent-name (claude-xxx-x-x), ...]
 - **修改文件**：
   - `path/to/file.ts` — 说明做了什么
   - `path/to/another.ts` — 说明做了什么
@@ -27,6 +29,11 @@
 - **数据库变更**：（如无则写"无"）
 - **注意事项**：（后续开发需要知道的事情，如无则写"无"）
 ```
+
+字段约束：
+- "执行模型" 必填，必须是完整模型 ID
+- "子代理" 必填；本任务未 spawn 任何 Task 工具调用时写 "无"；有则列出每个 subagent 的名称和其对应 model ID
+- 历史条目（本补丁应用前的条目）不强制回填，保持原样
 
 ---
 
