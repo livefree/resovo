@@ -33,3 +33,9 @@ docs/crawler_sites_updated.json
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Turbo cache
+.turbo/
+
+# 外部元数据原始 dump 文件（GB 级，不入 git）
+external-db/

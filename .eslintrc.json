@@ -1,20 +1,12 @@
 {
   "extends": ["next/core-web-vitals", "prettier"],
-  "ignorePatterns": ["src/**/templates/**", "apps/**/templates/**", ".next/**", "node_modules/**"],
+  "ignorePatterns": ["apps/**/templates/**", ".next/**", "node_modules/**"],
   "rules": {
     "no-console": "error"
   },
   "overrides": [
     {
       "files": [
-        "src/app/**/*.ts",
-        "src/app/**/*.tsx",
-        "src/components/**/*.ts",
-        "src/components/**/*.tsx",
-        "src/lib/**/*.ts",
-        "src/lib/**/*.tsx",
-        "src/stores/**/*.ts",
-        "src/stores/**/*.tsx",
         "apps/web/src/app/**/*.ts",
         "apps/web/src/app/**/*.tsx",
         "apps/web/src/components/**/*.ts",
@@ -40,8 +32,6 @@
     },
     {
       "files": [
-        "src/components/admin/**/*.tsx",
-        "src/components/admin/**/*.ts",
         "apps/server/src/components/admin/**/*.tsx",
         "apps/server/src/components/admin/**/*.ts"
       ],
