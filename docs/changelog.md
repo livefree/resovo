@@ -6431,3 +6431,18 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：E2E 套件 96 个预存失败（auth UI 已由 e601ea2 移除；admin 中间件依赖真实 API port:4000 未启动），均已在 timings.json 和 critical_paths.md 中归档说明，非本次引入回归。`npm run test:e2e 全绿` 验收项以"预存失败已文档化"替代。
+
+---
+
+## [BASELINE-02] SSR/SEO 风险登记表与降级策略 ADR
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 00:00
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：arch-reviewer（claude-opus-4-6）— ADR 内容生成
+- **来源序列**：SEQ-20260418-M0
+- **修改文件**：
+  - `docs/risk_register_rewrite_20260418.md` — 新建，登记 RISK-01/02/03 三项重写期风险（Portal SEO / Edge 冷启动 / View Transitions Safari 降级）
+  - `docs/decisions.md` — 追加 ADR-030（重写期 SSR/SEO 降级与风险边界策略，行 750 起）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：ADR-030 固化 4 条 lint 规则约束（`no-client-in-metadata` / `player-portal-no-head` / `no-edge-side-io` / `view-transitions-scope`），待 M3/M5 实际实施时写入 `eslint.config.mjs`。风险登记表与 ADR-030 双向互引（登记表"关联决策"→ ADR-030，ADR-030"影响文件"→ 登记表）。

@@ -6481,7 +6481,10 @@
 - **完成备注**：E2E 套件 181 测试，85 通过，96 预存失败（auth UI 已由 e601ea2 移除；admin 中间件依赖真实 API 服务）。`npm run test:e2e 全绿` 验收项以"预存失败已归档文档"替代。修复了 `playwright.config.ts` admin webServer URL（`ADMIN_URL` → `` `${ADMIN_URL}/admin` ``，避免 404 导致 EADDRINUSE）。6 张截图与时序数据已建档，可作为 M2–M5 回滚判据。
 
 #### BASELINE-02 — SSR/SEO 风险登记表与降级策略 ADR
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
+- **实际开始**：2026-04-18
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6（主循环）+ claude-opus-4-6（ADR 内容生成）
 - **建议模型**：opus
 - **创建时间**：2026-04-18
 - **依赖**：无
@@ -6499,7 +6502,7 @@
   - `risk_register_rewrite_20260418.md` 3 项齐全
   - ADR-030 纳入 decisions.md 正常排序（紧接 ADR-029 之后）
   - 与 `docs/decisions_patch_20260418.md` 无内容冲突
-- **完成备注**：_（AI 填写）_
+- **完成备注**：RISK-01/02/03 三项已完整登记于 `docs/risk_register_rewrite_20260418.md`；ADR-030 已追加至 decisions.md（行 750 起）。各风险均含：触发概率/影响等级/检测方式/预案，并固化为 4 条 lint 规则约束（`no-client-in-metadata`/`player-portal-no-head`/`no-edge-side-io`/`view-transitions-scope`）。执行模型：claude-opus-4-6 子代理（ADR 内容）。
 
 #### BASELINE-03 — ESLint `no-hardcoded-color` 自定义规则引入
 - **状态**：⬜ 待开始

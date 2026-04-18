@@ -744,3 +744,49 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
   - CI / 测试环境必须使用 MinIO 或内存 mock，不得依赖真实 Cloudflare 账户
   - 未来如需切换 CDN（imgix / 阿里云 / 自建），只改 `cloudflareLoader` 的 URL 拼接规则，业务代码零改动
 - **影响文件**：`src/lib/image/loader.ts`、`src/lib/storage/**`、`next.config.ts`、`src/api/services/UploadService.ts`、`docs/architecture.md`（需同步 CDN 与存储方案）
+
+---
+
+## ADR-030: 重写期 SSR/SEO 降级与风险边界策略
+
+- **日期**：2026-04-18
+- **状态**：已采纳
+- **背景**：
+  - 前端重写期（M0–M6）同时推进三项高风险改造：设计系统 Token 化、播放器提升至 Root Layout Portal（ADR-026）、页面过渡动画接入 View Transitions API（ADR-027）。三者都在"客户端渲染 / 首屏 SSR / 平台运行时"这条最敏感的路径上叠加。
+  - 风险登记表（`docs/risk_register_rewrite_20260418.md`）已识别出三条具体风险：Portal 化对 `/watch/[slug]` SSR 元数据的污染（RISK-01）、Cookie-based 品牌 middleware 对 Edge 冷启动的延迟（RISK-02）、View Transitions 在 Safari < 18 的兼容性（RISK-03）。任一风险失控都会让站点在重写期出现明显的业务退化（SEO 降级、TTFB 劣化、路由白屏）。
+  - 此前的 ADR 只对"目标形态"作了规定，缺一份明确的"降级边界"——即哪些行为必须保留可回退路径、哪些依赖绝不允许引入、哪些阈值触发自动回滚。本 ADR 固化三项风险的降级策略，让主循环在实现阶段有刚性约束可依循。
+- **决策**：
+  - **RISK-01 · Portal 化不得污染 head metadata**：
+    - OG tags（`og:title` / `og:video` / `og:image` 等）与 `schema.org VideoObject` 的 JSON-LD **必须**在服务端 `generateMetadata()` 或 Server Component 的静态输出中生成，数据源直接读 DB/cache，不得依赖任何客户端 Portal 组件或 Zustand store。
+    - `GlobalPlayerHost` Portal **只负责播放器 DOM 挂载与播放态控制**，**不得** render 任何影响 head 的 `<meta>` / `<script type="application/ld+json">` / `<title>`；违反即视为架构回归。
+    - **明确不选**：不把 meta 数据交给客户端 hydration 后补齐（即使技术上可行，会破坏爬虫抓取与分享预览）。
+  - **RISK-02 · Edge middleware 品牌识别硬上限 5ms**：
+    - Edge middleware 品牌识别分支**必须只做 cookie parse + in-memory 查表**，单次执行 < 5ms；**禁止** fetch / DB / KV / JWT 验签等一切 I/O 或阻塞操作。
+    - Cookie 缺失或解析失败时**不得阻塞请求**，直接 fallback 到默认品牌 `resovo`；品牌识别失败不是错误路径，而是预期降级路径。
+    - **明确不选**：不引入远程 KV（Upstash / Vercel KV）做品牌配置查询；不在 middleware 中做会员身份或 AB 分桶判断（这些应放 Server Component 或 Route Handler）。
+  - **RISK-03 · View Transitions 强制 feature detection，禁止 polyfill**：
+    - 所有调用点**必须**使用 `if ('startViewTransition' in document) { ... } else { router.push(...) }` 的 feature detection；未命中分支直接走无动画瞬切路径，**不得**抛错、不得打开 loading overlay 遮盖真实内容。
+    - 降级路径由 `<RouteStack>` 统一封装，业务组件不得绕过该原语直接调用 View Transitions API。
+    - **明确不选**：不引入任何 View Transitions polyfill（现有候选体积 ≈ 25KB 且运行时性能不佳，对重写期 bundle size 预算不合算）；不用 Framer Motion 模拟 View Transitions（ADR-027 已规定 Framer Motion 仅作为 FLIP 降级路径，不用于填 API 空洞）。
+- **理由**：
+  - 三项决策都遵循同一原则：**高风险路径必须有可回退的确定性分支**，且分支不依赖"运行时状态良好"的前提。
+  - RISK-01 选择把 metadata 钉死在服务端静态路径，是因为 SEO 是长期业务指标，任何一次误操作都会带来排名损失且恢复周期长；Portal 重构可以回滚，但已被爬虫抓取的错误 meta 会污染索引数周。
+  - RISK-02 硬上限 5ms 是经验值（Vercel Edge 冷启动基线 ≈ 15–30ms，middleware 内逻辑保留 5ms 上限可让 p95 稳定在 50ms 以下）；禁止 I/O 是对"中间件职责边界"的明确承诺，避免退化成"迷你 BFF"。
+  - RISK-03 禁止 polyfill 是明确的 bundle-size vs 动画体验权衡：Safari 17 用户获得瞬切体验（功能不降级、只是无动画），而全体用户不必承担 polyfill 体积；feature detection 是 web 平台标准做法，未来 Safari 18 普及后分支会自然收敛。
+- **架构约束**：
+  - **HEAD metadata 与 Portal 解耦**：任何 route 的 `generateMetadata()` 或 Server Component 返回的 `<head>` 内容，**不得** import 任何带 `'use client'` 指令的模块。违反项由 CI lint 规则 `no-client-in-metadata` 阻断。
+  - **禁止在 Portal 组件内 render head 元素**：`GlobalPlayerHost` 及其子树禁止出现 `next/head`、`<meta>`、`<script type="application/ld+json">`、`<title>`；由 ESLint 规则 `player-portal-no-head` 检测。
+  - **Edge middleware I/O 禁令**：`middleware.ts` 内禁止出现 `fetch` / `db.` / `kv.` / `jose.verify` / `crypto.subtle.sign` 等 I/O 调用；由 lint 规则 `no-edge-side-io` 阻断；品牌识别耗时 > 5ms 必须触发 warning 日志并上报监控。
+  - **品牌 fallback 默认化**：cookie 解析失败时必须 return 默认品牌 `resovo`，**禁止抛错或 redirect**；相关代码路径必须有 unit test 覆盖"cookie 缺失 / 格式异常 / 值越界"三种情形。
+  - **View Transitions 调用收敛**：全项目仅允许 `src/components/shared/transitions/RouteStack.tsx` 直接调用 `document.startViewTransition`，其它文件禁止；由 lint 规则 `view-transitions-scope` 检测。
+  - **禁止 View Transitions polyfill**：`package.json` 禁止出现任何名为 `view-transitions-polyfill*` 的依赖；由 CI `depcheck` 规则阻断。
+  - **降级 e2e 必跑**：RISK-01 / RISK-03 对应的 Playwright 用例（禁用 JS 抓取 meta、Safari 17 WebKit channel 路由切换）是 `pnpm test:e2e` 的必经用例；未通过不得合并。
+- **影响文件**：
+  - `apps/web/src/app/[locale]/watch/[slug]/page.tsx`（`generateMetadata()` 静态化）
+  - `apps/web/src/app/[locale]/watch/[slug]/VideoObjectJsonLd.tsx`（新建 / 提炼 Server Component）
+  - `apps/web/src/components/player/GlobalPlayerHost.tsx`（移除任何 head 相关 render）
+  - `apps/web/src/middleware.ts`（品牌识别 I/O 禁令实施）
+  - `apps/web/src/components/shared/transitions/RouteStack.tsx`（feature detection 唯一入口）
+  - `apps/web/eslint.config.mjs`（新增 `no-client-in-metadata` / `player-portal-no-head` / `no-edge-side-io` / `view-transitions-scope`）
+  - `docs/risk_register_rewrite_20260418.md`（风险登记与状态跟踪）
+  - `docs/architecture.md`（同步"metadata 由 Server Component 输出 + middleware I/O 禁令"至架构章节）
