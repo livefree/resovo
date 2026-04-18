@@ -835,3 +835,7 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
   - `apps/web/eslint.config.mjs`（新增 `no-redesign-flag` 规则）
   - `docs/architecture.md`（同步"重写期单线推进 + 冻结期积压"章节）
 
+
+## ADR-034: <待 TESTFIX-02 决策填充 — /watch/ vs /movie/ 路由真源>
+
+> 占位行，TESTFIX-02 完成后替换为完整 ADR 内容

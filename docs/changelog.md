@@ -6498,3 +6498,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：与 ADR-030（SSR 降级）和 ADR-031（共存策略）策略完全对齐。冻结期积压需求写 task-queue.md 末尾"冻结期积压"区。
+
+---
+
+## [TESTFIX-00] workflow-rules.md 追加 Phase 基线测试条款
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 00:00
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **来源序列**：SEQ-20260418-M0.5
+- **修改文件**：
+  - `docs/rules/workflow-rules.md` — 新增「Phase 基线测试条款」章节（5 条协议 + 失败类别定义表），scope/last_reviewed 更新
+  - `docs/task-queue.md` — 追加 SEQ-20260418-M0.5（7 张任务卡 TESTFIX-00~06）
+  - `docs/decisions.md` — 预留 ADR-034 占位行（TESTFIX-02 完成后替换）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：failing_tests.json 路径 = docs/baseline_20260418/failing_tests.json（TESTFIX-03 创建）；当前隔离清单大小 = 0（TESTFIX-06 生成后更新）。

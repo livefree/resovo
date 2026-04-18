@@ -6947,3 +6947,125 @@
   - [ ] 确认 ADR-031 分支策略（原位覆盖，禁 redesign/ 目录）
   - [ ] 回复"继续"以开始 Phase 1（TOKEN-01）
 ---
+
+---
+
+## SEQ-20260418-M0.5 — 测试床修复与分类
+
+- 序列状态：🔄 进行中
+- Phase：Phase 0.5 — 测试床修复与分类
+- 创建时间：2026-04-18
+- 包含任务数：7
+- 依赖：SEQ-20260418-M0 全部完成（已满足，commit `2e5cfdf`）
+- 完成条件：全部 7 张任务卡 `✅ 已完成` + 合并 main + PHASE COMPLETE 通知落盘
+- 串行约束：TESTFIX-00 → (TESTFIX-01 ‖ TESTFIX-02) → TESTFIX-03 → (TESTFIX-04 ‖ TESTFIX-05) → TESTFIX-06
+
+### 任务卡片
+
+#### TESTFIX-00 — workflow-rules.md 追加 Phase 基线测试条款
+- **状态**：🔄 进行中
+- **建议模型**：haiku
+- **创建时间**：2026-04-18
+- **实际开始**：2026-04-18
+- **依赖**：无（M0.5 启动信号）
+- **文件范围**：
+  - 修改 `docs/rules/workflow-rules.md`（按补丁 §3.0 定位插入 §3.1 内容）
+- **变更内容**：
+  - 在「任务入口规则」与「任务卡片格式」之间新增「Phase 基线测试条款」章节
+  - 更新文件头 `last_reviewed: 2026-04-18`
+  - 在 `scope` 字段尾部追加 `, baseline test ledger protocol`
+  - 不修改其他章节
+- **验收**：
+  - 新章节锚点不与现有章节冲突
+  - `git diff` 仅含本任务范围内的改动
+- **完成备注**：workflow-rules.md「Phase 基线测试条款」章节已插入，scope + last_reviewed 已更新。M0.5 序列已追加 task-queue.md，ADR-034 占位行已写入 decisions.md。
+- **状态**：✅ 已完成
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+
+#### TESTFIX-01 — 修复 2 个 vitest suite import 失败
+- **状态**：⬜ 待开始
+- **建议模型**：sonnet
+- **创建时间**：2026-04-18
+- **依赖**：TESTFIX-00
+- **文件范围**：
+  - 由调查阶段定位的 2 个失败 suite 文件
+  - 可能涉及 `tsconfig.json` path alias、`vitest.config.ts`、缺失的 `package.json` dependency
+- **变更内容**：
+  - 跑 `npm run test -- --run` 输出 `--reporter=verbose`，定位 2 个 suite import 失败的精确报错
+  - 修复 import 链路至 suite 可正常加载
+- **验收**：
+  - `npm run test -- --run` 输出中 0 suite import error
+  - 单测总数从基线的 977 增加
+  - `npm run typecheck` 不引入新错
+- **完成备注**：_（AI 填写）_
+
+#### TESTFIX-02 — `/watch/` vs `/movie/` 路由真源决策 + ADR-034
+- **状态**：⬜ 待开始
+- **建议模型**：opus
+- **创建时间**：2026-04-18
+- **依赖**：无（可与 TESTFIX-01 并行）
+- **文件范围**：
+  - 调查：`apps/web/src/app/[locale]/{watch,movie}/`、搜索组件、url-builder、e2e 相关断言
+  - 实施：决策落地后的源码 / 测试侧改动文件
+  - 追加 `docs/decisions.md` — ADR-034（替换占位行）
+- **验收**：
+  - ADR-034 已写入 decisions.md（替换占位行）
+  - E2E 中所有 `/watch/` `/movie/` 相关失败消除
+- **完成备注**：_（AI 填写）_
+
+#### TESTFIX-03 — E2E 失败逐项分类登记 + triage 文档 + 校验脚本
+- **状态**：⬜ 待开始
+- **建议模型**：opus
+- **创建时间**：2026-04-18
+- **依赖**：TESTFIX-01、TESTFIX-02
+- **文件范围**：
+  - 新增 `docs/test_triage_20260418.md`
+  - 新增 `docs/baseline_20260418/failing_tests.json`
+  - 新增 `scripts/verify-baseline.ts`
+  - 修改 `package.json`（追加 `verify:baseline` script）
+- **验收**：
+  - test_triage 文档覆盖所有当前失败测试，无空白处置
+  - failing_tests.json 通过自身 verify-baseline 校验
+  - 所有 `defer` 项均关联到具体里程碑
+- **完成备注**：_（AI 填写）_
+
+#### TESTFIX-04 — 修复 C 类「立即修复」testid / DOM 漂移
+- **状态**：⬜ 待开始
+- **建议模型**：sonnet
+- **创建时间**：2026-04-18
+- **依赖**：TESTFIX-03
+- **文件范围**：
+  - 由 triage 文档 C 类「立即修」清单决定
+- **验收**：
+  - 关联 E2E 全绿
+  - triage 文档 C 类「立即修」状态全部 `fixed`
+- **完成备注**：_（AI 填写）_
+
+#### TESTFIX-05 — 修复 D 类「真 bug」（源代码侧）
+- **状态**：⬜ 待开始
+- **建议模型**：sonnet
+- **创建时间**：2026-04-18
+- **依赖**：TESTFIX-03
+- **文件范围**：
+  - 由 triage 文档 D 类「真 bug」清单决定
+- **验收**：
+  - 关联单测全绿
+  - triage 文档 D 类「真 bug」状态全部 `fixed`
+- **完成备注**：_（AI 填写）_
+
+#### TESTFIX-06 — 隔离清单 + CI 门禁 + test:guarded 脚本
+- **状态**：⬜ 待开始
+- **建议模型**：sonnet
+- **创建时间**：2026-04-18
+- **依赖**：TESTFIX-04、TESTFIX-05
+- **文件范围**：
+  - 新增 `docs/known_failing_tests_phase0.md`
+  - 修改 `scripts/verify-baseline.ts`（追加 diff 模式）
+  - 新增 `scripts/test-guarded.ts`
+  - 修改 `package.json`（追加 `test:guarded` script）
+- **验收**：
+  - 模拟新失败 → CI 退出码 1
+  - 模拟隔离清单内失败 → CI 仅 warning，退出码 0
+  - `npm run test:guarded` 本地可跑
+- **完成备注**：_（AI 填写）_

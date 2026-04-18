@@ -2,10 +2,10 @@
 
 > status: active
 > owner: @engineering
-> scope: task lifecycle, task-queue management, blocker/phase-complete protocols
+> scope: task lifecycle, task-queue management, blocker/phase-complete protocols, baseline test ledger protocol
 > source_of_truth: yes
 > supersedes: CLAUDE.md §"第二层：执行流程"（2026-04-12 拆出）
-> last_reviewed: 2026-04-12
+> last_reviewed: 2026-04-18
 
 ---
 
@@ -47,6 +47,47 @@ npm run preflight   # 环境 + 迁移 + 类型 + lint + 单测基线
 - `docs/task-queue.md` 对应条目改为 `🔄 进行中`，填写实际开始时间
 
 **第三步：直接开始执行**（任务描述标注 `⚠️ 开始前需确认` 时除外）
+
+---
+
+## Phase 基线测试条款（每次重写启动必走）
+
+凡进入 Phase 0 类型的「重写启动」里程碑，BASELINE 类任务必须遵守以下五条协议，否则 PHASE COMPLETE 通知不得发出：
+
+1. **失败完整归档**：`npm run test -- --run` 与 `npm run test:e2e` 输出的失败数与失败测试 ID 清单必须完整归档到 `docs/baseline_<YYYYMMDD>/failing_tests.json`。JSON schema 由 `scripts/verify-baseline.ts` 约束，至少含字段 `{ test_id, suite, kind: "unit"|"e2e", status: "failed"|"passed"|"flaky", duration_ms, error_excerpt }`。
+
+2. **失败逐条分类**：每条失败必须在 `docs/test_triage_<YYYYMMDD>.md` 标注：
+   - **类别**：A（基础设施 / suite 加载失败）/ B（架构真源冲突）/ C（testid / DOM 漂移）/ D（断言漂移）
+   - **处置**：`fix`（本 Phase 内修） / `quarantine`（进隔离清单） / `defer`（延迟到具体里程碑）
+   - **原因**：一句话说明
+   - 选 `defer` 的必须填关联里程碑编号（如 `M3`、`M5`）
+   不得有空字段。
+
+3. **数字一致性校验**：PHASE COMPLETE 通知中引用的失败数字必须与 `failing_tests.json` 一致，由 `scripts/verify-baseline.ts` 在 PR 检查阶段保证。数字不符时阻断 PHASE COMPLETE。
+
+4. **隔离清单作为 Phase 门禁**：`docs/known_failing_tests_phase<N>.md` 是 Phase 合并门禁。CI 流程跑 `npm run test:guarded` 时，将当前失败集合与隔离清单做 diff：
+   - 清单**外**新增失败 → 退出码非 0，阻断 merge
+   - 清单**内**失败 → 仅 warning，不阻断
+   - 清单**外**新增通过（即原本失败的测试现在通过）→ 提示该测试可以从清单移除
+
+5. **隔离清单单调收敛**：每进入新 Phase，隔离清单只能**缩小不能增长**。新增失败必须走以下任一路径：
+   - 在本 Phase 内修复
+   - 创建 CHG-NN 任务卡，在下一个 Phase 内修复
+   - 不得直接追加到隔离清单
+
+### 失败类别定义
+
+| 类别 | 定义 | 典型修复方 |
+|------|------|----------|
+| A | 测试 suite 自身加载失败（import 错、依赖缺失） | 测试基础设施 |
+| B | 测试断言与实现属于两套真源（路由命名、字段命名等架构级冲突） | ADR 决策后双侧对齐 |
+| C | 组件 testid 或 DOM 结构在某次重构后未同步测试 | 测试侧或组件侧均可，看哪侧将先重写 |
+| D | 测试断言陈旧（API 返回值、边界处理变化），可能是真 bug 或断言过时 | 真 bug 修源码，否则修测试 |
+
+### 与现有规则的衔接
+
+- 「连续执行规则」中「测试连续 2 次仍失败」BLOCKER 触发条件不变，但默认范围限定为「**隔离清单外**的失败」
+- 「任务完成后：必做事项」第 4 步 changelog 追加，对于 BASELINE 任务必须含「failing_tests.json 路径 + 当前隔离清单大小」两项
 
 ---
 
