@@ -6984,7 +6984,10 @@
 - **执行模型**：claude-sonnet-4-6
 
 #### TESTFIX-01 — 修复 2 个 vitest suite import 失败
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
+- **实际开始**：2026-04-18
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
 - **依赖**：TESTFIX-00
@@ -6998,7 +7001,7 @@
   - `npm run test -- --run` 输出中 0 suite import error
   - 单测总数从基线的 977 增加
   - `npm run typecheck` 不引入新错
-- **完成备注**：_（AI 填写）_
+- **完成备注**：根因：`vitest.config.ts` 缺少 `@/stores` 别名，server 组件的 `@/stores/authStore` 解析到 `apps/web/src/stores` 导致找不到。修复：在 `vitest.config.ts` resolve.alias 中添加 `'@/stores': path.resolve(__dirname, './apps/server/src/stores')`。修复后 ModerationDetail（10 tests）+ VideoTable（20 tests）均通过，总测试数 977 → 1007，失败数 16 不变（预存）。
 
 #### TESTFIX-02 — `/watch/` vs `/movie/` 路由真源决策 + ADR-034
 - **状态**：⬜ 待开始

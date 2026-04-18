@@ -36,6 +36,8 @@ export default defineConfig({
       '@/api': path.resolve(__dirname, './apps/api/src'),
       '@/components/admin': path.resolve(__dirname, './apps/server/src/components/admin'),
       '@/components/shared': path.resolve(__dirname, './apps/server/src/components/shared'),
+      // server app's @/stores resolves to apps/server/src/stores (not web)
+      '@/stores': path.resolve(__dirname, './apps/server/src/stores'),
       '@': path.resolve(__dirname, './apps/web/src'),
     },
   },

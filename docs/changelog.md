@@ -6514,3 +6514,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：failing_tests.json 路径 = docs/baseline_20260418/failing_tests.json（TESTFIX-03 创建）；当前隔离清单大小 = 0（TESTFIX-06 生成后更新）。
+
+---
+
+## [TESTFIX-01] 修复 2 个 vitest suite import 失败
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 00:00
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **来源序列**：SEQ-20260418-M0.5
+- **修改文件**：
+  - `vitest.config.ts` — resolve.alias 新增 `@/stores → apps/server/src/stores`（解决 server 组件 import @/stores/authStore 找不到的问题）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：failing_tests.json 路径 = docs/baseline_20260418/failing_tests.json（TESTFIX-03 创建）；当前隔离清单大小 = 0（TESTFIX-06 生成后更新）。修复后单测总数 977 → 1007，失败数 16 不变（全为预存）。
