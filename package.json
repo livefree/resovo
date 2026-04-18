@@ -5,7 +5,8 @@
   "packageManager": "npm@10.8.2",
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "tools/*"
   ],
   "scripts": {
     "dev": "npx turbo dev",
@@ -82,6 +83,7 @@
     "eslint": "^8.57.0",
     "eslint-config-next": "^15.1.0",
     "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-resovo": "*",
     "jsdom": "^26.0.0",
     "prettier": "^3.4.0",
     "tsx": "^4.19.0",

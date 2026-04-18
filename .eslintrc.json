@@ -1,8 +1,10 @@
 {
   "extends": ["next/core-web-vitals", "prettier"],
-  "ignorePatterns": ["apps/**/templates/**", ".next/**", "node_modules/**"],
+  "plugins": ["resovo"],
+  "ignorePatterns": ["apps/**/templates/**", ".next/**", "node_modules/**", "tools/eslint-plugin-resovo/**"],
   "rules": {
-    "no-console": "error"
+    "no-console": "error",
+    "resovo/no-hardcoded-color": "warn"
   },
   "overrides": [
     {

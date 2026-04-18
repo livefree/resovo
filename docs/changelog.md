@@ -6446,3 +6446,25 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：ADR-030 固化 4 条 lint 规则约束（`no-client-in-metadata` / `player-portal-no-head` / `no-edge-side-io` / `view-transitions-scope`），待 M3/M5 实际实施时写入 `eslint.config.mjs`。风险登记表与 ADR-030 双向互引（登记表"关联决策"→ ADR-030，ADR-030"影响文件"→ 登记表）。
+
+---
+
+## [BASELINE-03] ESLint `no-hardcoded-color` 自定义规则引入
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 00:00
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **来源序列**：SEQ-20260418-M0
+- **修改文件**：
+  - `tools/eslint-plugin-resovo/package.json` — 新建，workspace package（`eslint-plugin-resovo`）
+  - `tools/eslint-plugin-resovo/index.js` — 新建，CJS 入口（registers tsx/cjs 后加载 TS 源）
+  - `tools/eslint-plugin-resovo/tsconfig.json` — 新建，TypeScript 配置
+  - `tools/eslint-plugin-resovo/src/index.ts` — 新建，插件导出入口
+  - `tools/eslint-plugin-resovo/src/rules/no-hardcoded-color.ts` — 新建，规则实现（hex/rgb/rgba/hsl/hsla/oklch/color()）
+  - `tests/unit/eslint-plugin/no-hardcoded-color.test.ts` — 新建，Vitest 单元测试（6 tests，覆盖 5 种色值格式）
+  - `package.json` — workspaces 新增 `tools/*`；devDependencies 新增 `eslint-plugin-resovo: "*"`
+  - `.eslintrc.json` — 新增 `plugins: ["resovo"]` + `resovo/no-hardcoded-color: "warn"` + tools 路径 ignorePatterns
+  - `docs/rules/lint-rules.md` — 新建，规则说明、豁免注释格式、存量警告清单、升级计划
+- **新增依赖**：无（eslint-plugin-resovo 为 workspace 内部包）
+- **数据库变更**：无
+- **注意事项**：@resovo/web 现有 7 处硬编码颜色警告（均在播放器组件），待 TOKEN-13（M1）完成后迁移并将规则升级为 error。单元测试 16 预存失败不变（与 BASELINE-01 一致）。

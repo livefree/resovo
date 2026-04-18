@@ -6505,7 +6505,10 @@
 - **完成备注**：RISK-01/02/03 三项已完整登记于 `docs/risk_register_rewrite_20260418.md`；ADR-030 已追加至 decisions.md（行 750 起）。各风险均含：触发概率/影响等级/检测方式/预案，并固化为 4 条 lint 规则约束（`no-client-in-metadata`/`player-portal-no-head`/`no-edge-side-io`/`view-transitions-scope`）。执行模型：claude-opus-4-6 子代理（ADR 内容）。
 
 #### BASELINE-03 — ESLint `no-hardcoded-color` 自定义规则引入
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
+- **实际开始**：2026-04-18
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
 - **依赖**：无
@@ -6527,7 +6530,7 @@
   - 现有硬编码点全部 `warn`，不阻断 commit
   - `docs/rules/lint-rules.md` 包含规则说明、豁免注释格式、future 升级计划
   - 规则单测（Vitest）覆盖 5 种色值格式
-- **完成备注**：_（AI 填写）_
+- **完成备注**：插件 `eslint-plugin-resovo` 已创建（`tools/eslint-plugin-resovo/`），6 个单元测试全部通过（hex 3/4/6/8 位、rgb/rgba、hsl/hsla、oklch、color()）。Lint 全局启用为 `warn`，@resovo/web 现有 7 处硬编码颜色（均在播放器组件）已发出警告，不阻断 commit。Root workspace 新增 `tools/*` 支持。
 
 #### BASELINE-04 — 重写期需求冻结通知与 BLOCKER 模板扩展
 - **状态**：⬜ 待开始
