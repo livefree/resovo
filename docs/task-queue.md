@@ -6932,3 +6932,18 @@
   - [ ] `no-hardcoded-color` 已升级为 error 且 lint 无 violation
   - [ ] 确认开始 Phase 2，届时重新拆分下一批任务卡（M2–M6 预估 45–55 张）
 
+
+---
+✅ PHASE COMPLETE — Phase 0（M0）前置基线已完成，等待确认开始 Phase 1
+- **完成时间**：2026-04-18
+- **本 Phase 完成任务数**：5 个（BASELINE-01~05）
+- **已合并到 main**：是（commit 2e5cfdf）
+- **建议下一步**：SEQ-20260418-M1 TOKEN-01（建议模型：opus）
+- **需要你做的事**：
+  - [ ] 验收测试（`npm run test -- --run`：16 预存失败为正常；`npm run test:e2e`：96 预存失败为正常）
+  - [ ] 通读 `docs/risk_register_rewrite_20260418.md`（RISK-01~03 降级策略）
+  - [ ] 确认 ESLint `resovo/no-hardcoded-color` warn 级别生效（7 处播放器警告为存量）
+  - [ ] 确认 `docs/baseline_20260418/` 6 张截图与时序数据齐全
+  - [ ] 确认 ADR-031 分支策略（原位覆盖，禁 redesign/ 目录）
+  - [ ] 回复"继续"以开始 Phase 1（TOKEN-01）
+---
