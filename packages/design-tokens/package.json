@@ -1,0 +1,28 @@
+{
+  "name": "@resovo/design-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": ["./src/css/*.css"],
+  "exports": {
+    "./css": {
+      "default": "./src/css/tokens.css"
+    },
+    "./js": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "default": "./src/types.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsx scripts/build-css.ts",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx scripts/build-css.ts --watch"
+  },
+  "devDependencies": {
+    "typescript": "*"
+  }
+}

@@ -836,6 +836,44 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
   - `docs/architecture.md`（同步"重写期单线推进 + 冻结期积压"章节）
 
 
+## ADR-032: `packages/design-tokens` 构建工具选型 — 手写 TS 构建脚本（零外部依赖）
+
+- **日期**：2026-04-18
+- **状态**：已采纳
+- **子代理**：claude-opus-4-6（方案评估与决策）
+- **背景**：
+  - TOKEN-01 需要建立 `packages/design-tokens` 包，为 M1 设计系统提供 CSS 变量 + JS 常量 + TypeScript 类型三路出口
+  - ADR-022 设定了"W3C Design Tokens JSON 格式为单一真源"，但项目有"禁止引入技术栈以外新依赖"的绝对约束
+  - 候选方案：A（Style Dictionary v4）/ B（手写 TS 构建脚本）/ C（Tokens Studio CLI）
+  - 项目为单人维护，无 Figma 设计师协作，无多平台（iOS/Android）产出需求
+- **决策**：
+  - **选方案 B（手写 TS 构建脚本，零外部依赖）**
+  - Token 源文件以 **TypeScript `as const` 对象**定义（`src/primitives/*.ts`、`src/semantic/*.ts` 等），取代 ADR-022 中的 JSON 格式（见"对 ADR-022 的精化"节）
+  - CSS 变量通过 `scripts/build-css.ts`（tsx 运行）从 TS 源文件派生，产物写入 `src/css/tokens.css`
+  - 三路出口：`@resovo/design-tokens/css`（CSS 变量文件）/ `@resovo/design-tokens/js`（JS 常量）/ `@resovo/design-tokens/types`（TS 类型）
+  - `exports` 字段在骨架阶段指向 `src/`，待 TOKEN-05 构建管道完善后迁移到 `dist/`
+- **对 ADR-022 的精化**：
+  - ADR-022 规定"W3C JSON 格式"，但当前项目不引入 Style Dictionary 的约束更强；TypeScript-first 方案满足同等目标：类型与值天然一致，无 JSON schema 漂移风险
+  - 4 层目录结构（`primitives / semantic / components / brands`）与 ADR-022 的三子层 + 品牌层分层保持一致
+  - 若未来接入 Figma / Tokens Studio，可在 `src/tokens/*.ts` 上游增加 JSON → TS 转换器，下游消费契约（exports 字段）保持稳定，无破坏性变更
+- **理由**：
+  - monorepo 已有 tsx / tsc 生态，延续既有工具链零学习成本、复用 turbo 缓存策略
+  - 不引入新依赖，满足 CLAUDE.md 绝对禁止第 2 条
+  - TS 对象 `typeof` 直接派生类型，类型与运行时值天然一致
+  - CSS 生成脚本 < 150 行，完全可控可调试
+- **不选原因**：
+  - **方案 A（Style Dictionary v4）**：单人项目 + 无多平台输出需求，三层抽象（transform / format / filter）仅用到 < 10% 能力；且引入新依赖触发 BLOCKER
+  - **方案 C（Tokens Studio CLI）**：无 Figma 插件、无设计师协作流程；引入云/外部依赖违反约束
+- **架构约束**：
+  1. **单一真源**：所有 token 必须在 `packages/design-tokens/src/` 中以 `as const` TypeScript 对象定义；**禁止**在 `apps/*` 直接定义 CSS 变量或颜色常量
+  2. **三路出口不可绕过**：消费方只能通过 `@resovo/design-tokens/css`、`/js`、`/types` 三个入口；禁止深层相对路径（`src/...` 或 `dist/...`）穿透
+  3. **CSS 变量与 JS key 同构**：CSS 变量名（如 `--color-primary-500`）必须与 JS 常量路径（`colors.primary[500]`）严格对应，由 `build-css.ts` 统一派生，禁止手写旁路注入
+- **影响文件**：
+  - 新增 `packages/design-tokens/`（全部）
+  - 修改根 `package.json` workspaces（已含 `packages/*`，无需额外修改）
+  - 消费方：`apps/web/src/app/globals.css`（M1 TOKEN-03 后引入 `@import '@resovo/design-tokens/css'`）
+
+
 ## ADR-034: 详情页按类型分段 + `/watch/` 专注播放：双路由分治不合并
 
 - **日期**：2026-04-18
