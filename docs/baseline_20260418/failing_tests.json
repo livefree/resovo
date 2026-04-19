@@ -1,131 +1,171 @@
 [
   {
-    "test_id": "unit::stagingDouban::DoubanService.confirmSubject::成功写入豆瓣信息并更新 douban_status=matched",
-    "suite": "tests/unit/api/stagingDouban.test.ts",
-    "kind": "unit",
+    "test_id": "e2e::homepage.spec.ts::首页::导航栏显示分类标签",
+    "suite": "tests/e2e/homepage.spec.ts",
+    "kind": "e2e",
     "status": "failed",
-    "duration_ms": 12,
-    "error_excerpt": "TypeError: db.query is not a function @ apps/api/src/db/queries/externalData.ts:300 (upsertVideoExternalRef)"
+    "duration_ms": 3800,
+    "error_excerpt": "expect(locator).toBeVisible() failed: data-testid='nav-cat-all' not present in rendered navigation"
   },
   {
-    "test_id": "unit::stagingDouban::DoubanService.confirmSubject::meta_score 正确计算（所有字段齐全 → 100）",
-    "suite": "tests/unit/api/stagingDouban.test.ts",
-    "kind": "unit",
+    "test_id": "e2e::homepage.spec.ts::首页::底部免责声明常驻显示",
+    "suite": "tests/e2e/homepage.spec.ts",
+    "kind": "e2e",
     "status": "failed",
-    "duration_ms": 2,
-    "error_excerpt": "TypeError: db.query is not a function @ apps/api/src/db/queries/externalData.ts:300 (upsertVideoExternalRef)"
+    "duration_ms": 2900,
+    "error_excerpt": "expect(locator).toBeVisible() failed: data-testid='footer-disclaimer' not present in rendered footer"
   },
   {
-    "test_id": "unit::douban::POST /v1/admin/videos/:id/douban-sync::未登录返回 401",
-    "suite": "tests/unit/api/douban.test.ts",
-    "kind": "unit",
+    "test_id": "e2e::homepage.spec.ts::首页::未登录时显示Sign In按钮",
+    "suite": "tests/e2e/homepage.spec.ts",
+    "kind": "e2e",
     "status": "failed",
-    "duration_ms": 139,
-    "error_excerpt": "process.exit unexpectedly called with 1 @ apps/api/src/lib/config.ts:59 (CrawlerService module-level import triggers process.exit on missing env vars)"
+    "duration_ms": 3200,
+    "error_excerpt": "expect(locator).toBeVisible() failed: data-testid='nav-login' not rendered in navigation bar"
   },
   {
-    "test_id": "unit::douban::POST /v1/admin/videos/:id/douban-sync::moderator 权限返回 403",
-    "suite": "tests/unit/api/douban.test.ts",
-    "kind": "unit",
+    "test_id": "e2e::homepage.spec.ts::语言切换::切换到中文后页面为中文内容",
+    "suite": "tests/e2e/homepage.spec.ts",
+    "kind": "e2e",
     "status": "failed",
-    "duration_ms": 0,
-    "error_excerpt": "process.exit unexpectedly called with 1 (cascade: beforeEach failed, app is undefined)"
+    "duration_ms": 8200,
+    "error_excerpt": "expect(locator).toBeVisible() failed: lang switch relies on nav-login click which does not exist"
   },
   {
-    "test_id": "unit::douban::POST /v1/admin/videos/:id/douban-sync::user 权限返回 403",
-    "suite": "tests/unit/api/douban.test.ts",
-    "kind": "unit",
+    "test_id": "e2e::homepage.spec.ts::语言切换::切换回英文后页面为英文内容",
+    "suite": "tests/e2e/homepage.spec.ts",
+    "kind": "e2e",
     "status": "failed",
-    "duration_ms": 0,
-    "error_excerpt": "process.exit unexpectedly called with 1 (cascade)"
+    "duration_ms": 7800,
+    "error_excerpt": "expect(locator).toBeVisible() failed: lang switch precondition (nav-login) not met"
   },
   {
-    "test_id": "unit::douban::POST /v1/admin/videos/:id/douban-sync::匹配成功时返回 200 updated:true 和 fields",
-    "suite": "tests/unit/api/douban.test.ts",
-    "kind": "unit",
+    "test_id": "e2e::homepage.spec.ts::导航跳转::点击Sign In跳转到登录页",
+    "suite": "tests/e2e/homepage.spec.ts",
+    "kind": "e2e",
     "status": "failed",
-    "duration_ms": 0,
-    "error_excerpt": "process.exit unexpectedly called with 1 (cascade)"
+    "duration_ms": 30000,
+    "error_excerpt": "locator.click: Test timeout of 30000ms exceeded — waiting for getByTestId('nav-login')"
   },
   {
-    "test_id": "unit::douban::POST /v1/admin/videos/:id/douban-sync::搜索无结果降级返回 updated:false reason:no_match，不抛 500",
-    "suite": "tests/unit/api/douban.test.ts",
-    "kind": "unit",
+    "test_id": "e2e::auth.spec.ts::登录页::登录页正常加载显示账号和密码输入框",
+    "suite": "tests/e2e/auth.spec.ts",
+    "kind": "e2e",
     "status": "failed",
-    "duration_ms": 0,
-    "error_excerpt": "process.exit unexpectedly called with 1 (cascade)"
+    "duration_ms": 4100,
+    "error_excerpt": "expect(locator).toBeVisible() failed: #login-identifier not found in /en/auth/login page DOM"
   },
   {
-    "test_id": "unit::douban::POST /v1/admin/videos/:id/douban-sync::ID 格式非法返回 404",
-    "suite": "tests/unit/api/douban.test.ts",
-    "kind": "unit",
+    "test_id": "e2e::auth.spec.ts::登录页::空表单提交显示必填验证错误",
+    "suite": "tests/e2e/auth.spec.ts",
+    "kind": "e2e",
     "status": "failed",
-    "duration_ms": 0,
-    "error_excerpt": "process.exit unexpectedly called with 1 (cascade)"
+    "duration_ms": 3600,
+    "error_excerpt": "expect(locator).toBeVisible() failed: login-submit testid not found"
   },
   {
-    "test_id": "unit::douban::DoubanService.syncVideo::匹配成功时更新 catalog，返回 updated:true",
-    "suite": "tests/unit/api/douban.test.ts",
-    "kind": "unit",
+    "test_id": "e2e::auth.spec.ts::登录页::空账号提交显示账号必填错误",
+    "suite": "tests/e2e/auth.spec.ts",
+    "kind": "e2e",
     "status": "failed",
-    "duration_ms": 2,
-    "error_excerpt": "TypeError: db.query is not a function @ apps/api/src/db/queries/metadataProvenance.ts:128 (getHardLockedFields)"
+    "duration_ms": 3700,
+    "error_excerpt": "locator.fill: #login-identifier not found in page DOM"
   },
   {
-    "test_id": "unit::moderationStats::GET /admin/videos/moderation-stats::返回统计数据",
-    "suite": "tests/unit/api/moderationStats.test.ts",
-    "kind": "unit",
+    "test_id": "e2e::auth.spec.ts::登录页::用户完成登录后跳转到首页",
+    "suite": "tests/e2e/auth.spec.ts",
+    "kind": "e2e",
     "status": "failed",
-    "duration_ms": 256,
-    "error_excerpt": "process.exit unexpectedly called with 1 @ apps/api/src/lib/config.ts:59 (CrawlerService module-level import triggers process.exit on missing env vars)"
+    "duration_ms": 4200,
+    "error_excerpt": "locator.fill: #login-identifier not found; login form IDs changed since test was written"
   },
   {
-    "test_id": "unit::moderationStats::GET /admin/videos/moderation-stats::未认证 → 401",
-    "suite": "tests/unit/api/moderationStats.test.ts",
-    "kind": "unit",
+    "test_id": "e2e::auth.spec.ts::登录页::登录后导航栏显示用户名",
+    "suite": "tests/e2e/auth.spec.ts",
+    "kind": "e2e",
     "status": "failed",
-    "duration_ms": 0,
-    "error_excerpt": "process.exit unexpectedly called with 1 (cascade); Cannot read properties of undefined (reading 'close')"
+    "duration_ms": 4000,
+    "error_excerpt": "locator.fill: #login-identifier not found (cascade from form DOM change)"
   },
   {
-    "test_id": "unit::moderationStats::GET /admin/videos/moderation-stats::interceptRate 无数据时为 null",
-    "suite": "tests/unit/api/moderationStats.test.ts",
-    "kind": "unit",
+    "test_id": "e2e::auth.spec.ts::登录页::登录失败401显示错误提示",
+    "suite": "tests/e2e/auth.spec.ts",
+    "kind": "e2e",
     "status": "failed",
-    "duration_ms": 0,
-    "error_excerpt": "process.exit unexpectedly called with 1 (cascade)"
+    "duration_ms": 3900,
+    "error_excerpt": "locator.fill: #login-identifier not found"
   },
   {
-    "test_id": "unit::moderationStats::GET /admin/videos/pending-review::返回待审列表，含 firstSourceUrl",
-    "suite": "tests/unit/api/moderationStats.test.ts",
-    "kind": "unit",
+    "test_id": "e2e::auth.spec.ts::登录页::点击注册链接跳转到注册页",
+    "suite": "tests/e2e/auth.spec.ts",
+    "kind": "e2e",
     "status": "failed",
-    "duration_ms": 0,
-    "error_excerpt": "process.exit unexpectedly called with 1 (cascade)"
+    "duration_ms": 4500,
+    "error_excerpt": "expect(page).toHaveURL('/en/auth/register') failed — register link testid drift"
   },
   {
-    "test_id": "unit::moderationStats::GET /admin/videos/pending-review::分页参数传递给查询层",
-    "suite": "tests/unit/api/moderationStats.test.ts",
-    "kind": "unit",
+    "test_id": "e2e::auth.spec.ts::注册页::注册页正常加载显示三个输入框",
+    "suite": "tests/e2e/auth.spec.ts",
+    "kind": "e2e",
     "status": "failed",
-    "duration_ms": 0,
-    "error_excerpt": "process.exit unexpectedly called with 1 (cascade)"
+    "duration_ms": 4100,
+    "error_excerpt": "expect(locator).toBeVisible() failed: registration form input IDs not found in page DOM"
   },
   {
-    "test_id": "unit::moderationStats::GET /admin/videos/pending-review::无效分页参数 → 422",
-    "suite": "tests/unit/api/moderationStats.test.ts",
-    "kind": "unit",
+    "test_id": "e2e::auth.spec.ts::注册页::空表单提交显示用户名必填错误",
+    "suite": "tests/e2e/auth.spec.ts",
+    "kind": "e2e",
     "status": "failed",
-    "duration_ms": 0,
-    "error_excerpt": "process.exit unexpectedly called with 1 (cascade)"
+    "duration_ms": 3800,
+    "error_excerpt": "expect(locator).toBeVisible() failed: register-submit testid not found"
   },
   {
-    "test_id": "unit::moderationStats::GET /admin/videos/pending-review::未认证 → 401",
-    "suite": "tests/unit/api/moderationStats.test.ts",
-    "kind": "unit",
+    "test_id": "e2e::auth.spec.ts::注册页::密码少于8位显示密码长度错误",
+    "suite": "tests/e2e/auth.spec.ts",
+    "kind": "e2e",
     "status": "failed",
-    "duration_ms": 0,
-    "error_excerpt": "process.exit unexpectedly called with 1 (cascade)"
+    "duration_ms": 3900,
+    "error_excerpt": "locator.fill: form input IDs changed"
+  },
+  {
+    "test_id": "e2e::auth.spec.ts::注册页::用户完成注册后跳转到首页",
+    "suite": "tests/e2e/auth.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 4200,
+    "error_excerpt": "locator.fill: registration form IDs not present"
+  },
+  {
+    "test_id": "e2e::auth.spec.ts::注册页::注册后导航栏显示用户名",
+    "suite": "tests/e2e/auth.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 4000,
+    "error_excerpt": "locator.fill: registration form IDs not present (cascade)"
+  },
+  {
+    "test_id": "e2e::auth.spec.ts::注册页::重复邮箱422CONFLICT显示冲突错误",
+    "suite": "tests/e2e/auth.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 4100,
+    "error_excerpt": "locator.fill: registration form IDs not present"
+  },
+  {
+    "test_id": "e2e::auth.spec.ts::注册页::点击登录链接跳转到登录页",
+    "suite": "tests/e2e/auth.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 4300,
+    "error_excerpt": "link to login page not found / testid drift"
+  },
+  {
+    "test_id": "e2e::auth.spec.ts::登出流程::登出后导航栏不显示用户名",
+    "suite": "tests/e2e/auth.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 30000,
+    "error_excerpt": "locator.fill: Test timeout 30000ms exceeded waiting for #login-identifier"
   },
   {
     "test_id": "e2e::player.spec.ts::电影详情页::立即观看按钮指向播放页",
@@ -133,7 +173,7 @@
     "kind": "e2e",
     "status": "failed",
     "duration_ms": 4200,
-    "error_excerpt": "expect(href).toContain('/watch/aB3kR9x1') — received '/watch/test-movie-aB3kR9x1-aB3kR9x1' (test expects shortId-only slug, code uses title-slug format)"
+    "error_excerpt": "expect(href).toContain('/watch/aB3kR9x1') — received '/watch/test-movie-aB3kR9x1-aB3kR9x1' (test expects shortId-only slug)"
   },
   {
     "test_id": "e2e::player.spec.ts::动漫详情页（多集）::点击第 3 集跳转到播放页 ep 3",
@@ -141,7 +181,7 @@
     "kind": "e2e",
     "status": "failed",
     "duration_ms": 3800,
-    "error_excerpt": "expect(href).toContain('/watch/') with ep param — received URL uses title+shortId slug format, test expects shortId-only"
+    "error_excerpt": "expect(href).toContain() — href uses title+shortId slug format, test expects shortId-only"
   },
   {
     "test_id": "e2e::player.spec.ts::播放页（PlayerShell）::标题链接指向详情页",
@@ -149,7 +189,7 @@
     "kind": "e2e",
     "status": "failed",
     "duration_ms": 5100,
-    "error_excerpt": "expect(locator).toBeVisible() failed: element not found (data-testid='back-to-detail-link' not present in current PlayerShell DOM)"
+    "error_excerpt": "expect(locator).toBeVisible() failed: data-testid='back-to-detail-link' not present in PlayerShell DOM"
   },
   {
     "test_id": "e2e::player.spec.ts::播放页（PlayerShell）::剧场模式切换按钮可见（大屏设备）",
@@ -157,7 +197,7 @@
     "kind": "e2e",
     "status": "failed",
     "duration_ms": 4900,
-    "error_excerpt": "expect(locator).toBeAttached() failed: element not found (data-testid='theater-mode-btn' not rendered)"
+    "error_excerpt": "expect(locator).toBeAttached() failed: data-testid='theater-mode-btn' not rendered"
   },
   {
     "test_id": "e2e::player.spec.ts::播放页（多集动漫）::显示右侧选集面板",
@@ -165,7 +205,7 @@
     "kind": "e2e",
     "status": "failed",
     "duration_ms": 5300,
-    "error_excerpt": "expect(locator).toBeVisible() failed: element not found (data-testid='player-side-panel' absent)"
+    "error_excerpt": "expect(locator).toBeVisible() failed: data-testid='player-side-panel' absent"
   },
   {
     "test_id": "e2e::player.spec.ts::播放页（多集动漫）::选集面板显示正确数量",
@@ -181,7 +221,7 @@
     "kind": "e2e",
     "status": "failed",
     "duration_ms": 6200,
-    "error_excerpt": "expect(locator).toBeVisible() failed: element not found (data-testid='danmaku-bar' not present in current PlayerShell)"
+    "error_excerpt": "expect(locator).toBeVisible() failed: data-testid='danmaku-bar' not present (danmaku removed in e601ea2)"
   },
   {
     "test_id": "e2e::search.spec.ts::分类浏览页::点击类型筛选后结果更新（只显示该类型）",
@@ -198,5 +238,197 @@
     "status": "failed",
     "duration_ms": 2900,
     "error_excerpt": "expect(href).toMatch(/\\/watch\\//) failed — result-card href does not match /watch/ pattern"
+  },
+  {
+    "test_id": "e2e::admin.spec.ts::权限控制::未登录访问/admin重定向到登录页",
+    "suite": "tests/e2e/admin.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 4200,
+    "error_excerpt": "expect(page).toHaveURL() failed — redirect URL format changed or middleware not redirecting correctly"
+  },
+  {
+    "test_id": "e2e::admin.spec.ts::权限控制::未登录访问/admin/videos重定向到登录页",
+    "suite": "tests/e2e/admin.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 4000,
+    "error_excerpt": "expect(page).toHaveURL() failed — redirect target URL changed"
+  },
+  {
+    "test_id": "e2e::admin.spec.ts::权限控制::role=user访问/admin重定向到403页面",
+    "suite": "tests/e2e/admin.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 3900,
+    "error_excerpt": "expect(page).toHaveURL() failed — 403 redirect target or page URL format changed"
+  },
+  {
+    "test_id": "e2e::admin.spec.ts::权限控制::role=user访问/admin/videos重定向到403页面",
+    "suite": "tests/e2e/admin.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 3900,
+    "error_excerpt": "expect(page).toHaveURL() failed — same pattern as above"
+  },
+  {
+    "test_id": "e2e::admin.spec.ts::权限控制::role=moderator访问/admin/users重定向到403",
+    "suite": "tests/e2e/admin.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 3800,
+    "error_excerpt": "expect(page).toHaveURL() failed — 403 redirect URL drift"
+  },
+  {
+    "test_id": "e2e::admin.spec.ts::权限控制::role=moderator访问/admin/crawler重定向到403",
+    "suite": "tests/e2e/admin.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 3800,
+    "error_excerpt": "expect(page).toHaveURL() failed — 403 redirect URL drift"
+  },
+  {
+    "test_id": "e2e::admin.spec.ts::权限控制::role=moderator访问/admin/analytics重定向到403",
+    "suite": "tests/e2e/admin.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 3800,
+    "error_excerpt": "expect(page).toHaveURL() failed — 403 redirect URL drift"
+  },
+  {
+    "test_id": "e2e::admin.spec.ts::侧边栏::admin侧边栏显示系统管理区",
+    "suite": "tests/e2e/admin.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 5100,
+    "error_excerpt": "expect(locator).toBeVisible() failed: system-admin-section testid absent from sidebar"
+  },
+  {
+    "test_id": "e2e::admin.spec.ts::侧边栏::admin侧边栏有返回前台链接",
+    "suite": "tests/e2e/admin.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 4800,
+    "error_excerpt": "expect(locator).toBeVisible() failed: back-to-frontend link testid not found in sidebar"
+  },
+  {
+    "test_id": "e2e::admin.spec.ts::侧边栏::moderator侧边栏同样有返回前台链接",
+    "suite": "tests/e2e/admin.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 4700,
+    "error_excerpt": "expect(locator).toBeVisible() failed: back-to-frontend link testid not found (moderator role)"
+  },
+  {
+    "test_id": "e2e::admin.spec.ts::视频管理::视频列表页渲染并显示状态筛选器",
+    "suite": "tests/e2e/admin.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 4900,
+    "error_excerpt": "expect(locator).toBeVisible() failed: video status filter testid not found in admin video list page"
+  },
+  {
+    "test_id": "e2e::admin.spec.ts::视频管理::点击上架触发PATCH请求",
+    "suite": "tests/e2e/admin.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 30000,
+    "error_excerpt": "Test timeout of 30000ms exceeded — publish button click does not trigger expected network request"
+  },
+  {
+    "test_id": "e2e::admin.spec.ts::投稿审核::投稿审核页面显示待审列表",
+    "suite": "tests/e2e/admin.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 4600,
+    "error_excerpt": "expect(locator).toBeVisible() failed: pending-review list testid absent from moderation page"
+  },
+  {
+    "test_id": "e2e::admin.spec.ts::投稿审核::点击通过触发approve请求",
+    "suite": "tests/e2e/admin.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 30000,
+    "error_excerpt": "Test timeout of 30000ms exceeded — approve button not found or click does not trigger request"
+  },
+  {
+    "test_id": "e2e::admin.spec.ts::字幕审核::字幕审核页面显示待审列表",
+    "suite": "tests/e2e/admin.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 4500,
+    "error_excerpt": "expect(locator).toBeVisible() failed: subtitle review list testid absent"
+  },
+  {
+    "test_id": "e2e::admin.spec.ts::用户管理::用户管理页面显示用户列表",
+    "suite": "tests/e2e/admin.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 4700,
+    "error_excerpt": "expect(locator).toBeVisible() failed: user list testid not found in admin user management page"
+  },
+  {
+    "test_id": "e2e::admin.spec.ts::用户管理::点击封号触发ban请求",
+    "suite": "tests/e2e/admin.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 30000,
+    "error_excerpt": "Test timeout of 30000ms exceeded — ban button not found or click does not complete"
+  },
+  {
+    "test_id": "e2e::admin.spec.ts::采集控制台::采集控制台触发入口位于sites_tab",
+    "suite": "tests/e2e/admin.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 4800,
+    "error_excerpt": "expect(locator).toBeVisible() failed: crawler sites tab testid not found"
+  },
+  {
+    "test_id": "e2e::admin-source-and-video-flows.spec.ts::视频操作::video_actions_dropdown_triggers_publish_and_douban_sync",
+    "suite": "tests/e2e/admin-source-and-video-flows.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 30000,
+    "error_excerpt": "Test timeout of 30000ms exceeded — dropdown interaction not completing or network request not triggered"
+  },
+  {
+    "test_id": "e2e::admin-source-and-video-flows.spec.ts::审核流程::moderation_reject_submits_reason",
+    "suite": "tests/e2e/admin-source-and-video-flows.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 30000,
+    "error_excerpt": "Test timeout of 30000ms exceeded — reject action not completing"
+  },
+  {
+    "test_id": "e2e::publish-flow.spec.ts::发布流程::管理员在视频列表中发布待审核视频状态变为已上架",
+    "suite": "tests/e2e/publish-flow.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 30000,
+    "error_excerpt": "Test timeout of 30000ms exceeded — publish action in admin video list not completing"
+  },
+  {
+    "test_id": "e2e::publish-flow.spec.ts::搜索验证::点击搜索结果进入详情页基本信息可见",
+    "suite": "tests/e2e/publish-flow.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 5200,
+    "error_excerpt": "expect(locator).toBeVisible() failed: video detail page basic info testid absent (from publish-flow perspective)"
+  },
+  {
+    "test_id": "e2e::video-governance.spec.ts::审核快捷键::happy_path_入库后在审核台按快捷键通过",
+    "suite": "tests/e2e/video-governance.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 6100,
+    "error_excerpt": "expect(locator).toBeVisible() failed: moderation shortcut UI testid not found"
+  },
+  {
+    "test_id": "e2e::video-governance.spec.ts::审核快捷键::reject_path_入库后在审核台按快捷键拒绝",
+    "suite": "tests/e2e/video-governance.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 30000,
+    "error_excerpt": "Test timeout of 30000ms exceeded — reject shortcut action not completing"
   }
 ]

@@ -9,6 +9,7 @@
  *   npm run verify:baseline -- --unit 16 --e2e 9    # also assert exact counts
  *   npm run verify:baseline -- --total 25            # assert total
  *   npm run verify:baseline -- --diff                # diff baseline vs quarantine list
+ *   npm run verify:baseline -- --coverage-report     # per-suite breakdown vs e2e_coverage_report.md
  */
 
 import * as fs from 'fs'
@@ -58,14 +59,24 @@ function validateSchema(tests: FailingTest[]): string[] {
   return errors
 }
 
-function parseArgs(): { counts: Record<string, number>; diff: boolean; phase: number } {
+interface CoverageStat {
+  total: number
+  pass: number
+  fail: number
+  flaky: number
+}
+
+function parseArgs(): { counts: Record<string, number>; diff: boolean; phase: number; coverageReport: boolean } {
   const args = process.argv.slice(2)
   const counts: Record<string, number> = {}
   let diff = false
   let phase = 0
+  let coverageReport = false
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--diff') {
       diff = true
+    } else if (args[i] === '--coverage-report') {
+      coverageReport = true
     } else if (args[i] === '--phase' && i + 1 < args.length) {
       phase = parseInt(args[i + 1], 10)
       i++
@@ -78,7 +89,69 @@ function parseArgs(): { counts: Record<string, number>; diff: boolean; phase: nu
       }
     }
   }
-  return { counts, diff, phase }
+  return { counts, diff, phase, coverageReport }
+}
+
+function readCoverageReport(): Record<string, CoverageStat> | null {
+  const reportPath = path.join(__dirname, '..', 'docs', 'baseline_20260418', 'e2e_coverage_report.md')
+  if (!fs.existsSync(reportPath)) {
+    return null
+  }
+  const content = fs.readFileSync(reportPath, 'utf-8')
+  const match = content.match(/```json\n([\s\S]+?)```/)
+  if (!match) return null
+  try {
+    return JSON.parse(match[1]) as Record<string, CoverageStat>
+  } catch {
+    return null
+  }
+}
+
+function runCoverageReport(tests: FailingTest[]): boolean {
+  const expected = readCoverageReport()
+  if (!expected) {
+    console.error('ERROR: e2e_coverage_report.md not found or JSON block missing')
+    return false
+  }
+
+  const baselineFailsBySuite: Record<string, number> = {}
+  for (const t of tests) {
+    if (t.kind === 'e2e' && t.status === 'failed') {
+      const suiteName = path.basename(t.suite)
+      baselineFailsBySuite[suiteName] = (baselineFailsBySuite[suiteName] ?? 0) + 1
+    }
+  }
+
+  console.log('\nCoverage report (e2e_coverage_report.md vs failing_tests.json):')
+  console.log(
+    `${'Suite'.padEnd(50)} ${'Expected fail'.padStart(13)} ${'Baseline fail'.padStart(13)} ${'Match'.padStart(6)}`,
+  )
+  console.log('-'.repeat(85))
+
+  let allMatch = true
+  for (const [suite, stat] of Object.entries(expected)) {
+    const baselineCount = baselineFailsBySuite[suite] ?? 0
+    const match = baselineCount === stat.fail
+    if (!match) allMatch = false
+    const marker = match ? 'OK' : 'MISMATCH'
+    console.log(
+      `${suite.padEnd(50)} ${String(stat.fail).padStart(13)} ${String(baselineCount).padStart(13)} ${marker.padStart(6)}`,
+    )
+  }
+
+  const extraSuites = Object.keys(baselineFailsBySuite).filter((s) => !(s in expected))
+  if (extraSuites.length > 0) {
+    console.log(`\n  Suites in baseline but not in coverage report:`)
+    extraSuites.forEach((s) => console.log(`    - ${s} (${baselineFailsBySuite[s]} failures)`))
+    allMatch = false
+  }
+
+  if (!allMatch) {
+    console.error('\nFAIL: coverage report numbers do not match baseline')
+  } else {
+    console.log('\nOK: all suite fail counts match coverage report')
+  }
+  return allMatch
 }
 
 function readQuarantineIds(phase: number): Set<string> {
@@ -132,7 +205,7 @@ function main(): void {
   console.log(`  total failed : ${totalFailed}`)
   console.log(`  total entries: ${tests.length}`)
 
-  const { counts: expected, diff, phase } = parseArgs()
+  const { counts: expected, diff, phase, coverageReport } = parseArgs()
   let mismatch = false
 
   if ('unit' in expected && expected.unit !== unitFailed) {
@@ -151,6 +224,11 @@ function main(): void {
   if (mismatch) {
     console.error('FAIL: phase-notice numbers do not match baseline — PHASE COMPLETE blocked')
     process.exit(1)
+  }
+
+  if (coverageReport) {
+    const ok = runCoverageReport(tests)
+    if (!ok) process.exit(1)
   }
 
   if (diff) {

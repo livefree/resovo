@@ -7077,8 +7077,9 @@
 - **完成备注**：执行模型: claude-sonnet-4-6
 
 #### TESTFIX-07 — E2E 全 suite 基线重建 + triage 补全
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **实际开始**：2026-04-18
+- **完成时间**：2026-04-18
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
 - **依赖**：TESTFIX-06 已完成
@@ -7088,18 +7089,12 @@
   - 新增 `docs/baseline_20260418/e2e_coverage_report.md`（本次扫描覆盖率说明）
   - 修改 `docs/known_failing_tests_phase0.md`（按新 triage 同步）
   - 修改 `scripts/verify-baseline.ts`（增加 `--coverage-report` 子命令验证 coverage_report.md 与 failing_tests.json 的 suite 列表一致）
-- **变更内容**：
-  1. 全量跑 E2E（playwright JSON reporter，全部 8 suite），采集 failed/flaky 条目重建 `failing_tests.json`
-  2. 对新增失败条目按规则严格分类 A/B/C/D（不照搬当前 triage 的错位分类）
-  3. 补全 triage 文档，汇总表数字与 JSON 一致
-  4. 同步隔离清单（quarantine/defer 条目），每个 defer 绑定具体里程碑
-  5. 新增 `verify-baseline --coverage-report` 子命令校验 suite 覆盖率
-- **验收**：
-  - `failing_tests.json` 含全部有失败 suite 的条目，suite distinct 值 ≥ 有失败的 suite 数
-  - `e2e_coverage_report.md` 显示 8 suite 全覆盖
-  - `npm run verify:baseline -- --coverage-report` 通过
-  - triage 汇总表与 JSON 一致；known_failing 与 triage quarantine+defer 总和一致
-- **完成备注**：_（AI 填写：必须列出重建前后失败数对比表、每个 suite 失败分布、新发现的失败类别分布）_
+- **完成备注**：
+  - **重建前后失败数对比**：旧基线 25 条（16 单元 + 9 E2E，仅覆盖 player/search）→ 新基线 54 条（0 单元 + 54 E2E，覆盖全 8 suite）
+  - **suite 失败分布**：homepage×6、auth×15、player×7、search×2、admin×18、admin-source×2、publish-flow×2、video-governance×2
+  - **失败类型分布**：C×47（testid/URL 漂移）、D×7（交互超时/功能失败）；A/B 类 0 条
+  - `npm run verify:baseline -- --e2e 54 --total 54 --coverage-report` 全通过
+  - 隔离清单从 9 条扩展至 54 条，每条绑定里程碑（M2/M3/M4/M5/M6/TESTFIX-08）
 
 #### TESTFIX-08 — 跨 E2E suite 修复 Mock 契约 + 补齐 testid
 - **状态**：⬜ 待开始

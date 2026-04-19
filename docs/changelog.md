@@ -6587,6 +6587,26 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 
 ---
 
+## TESTFIX-07 — E2E 全 suite 基线重建 + triage 补全
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件列表**：
+  - `docs/baseline_20260418/failing_tests.json` — 全量重建（25→54 条，0 单元 + 54 E2E，覆盖全 8 suite）
+  - `docs/baseline_20260418/e2e_coverage_report.md` — 新增，8 suite 采集完整性说明 + 机读 JSON 块
+  - `docs/test_triage_20260418.md` — 全量重写（补全 homepage/auth/admin/admin-source/publish-flow/video-governance 45 条，A 类历史记录保留，汇总表更新）
+  - `docs/known_failing_tests_phase0.md` — 隔离清单从 9 扩展至 54 条，覆盖全 8 suite
+  - `scripts/verify-baseline.ts` — 新增 `--coverage-report` 子命令（per-suite 失败数 vs e2e_coverage_report.md JSON 块对比）
+- **重建前后对比**：
+  - 旧基线：25 条（16 单元 + 9 E2E，仅 player/search）
+  - 新基线：54 条（0 单元 + 54 E2E，8 suite 全覆盖）
+- **suite 失败分布**：homepage×6、auth×15、player×7、search×2、admin×18、admin-source×2、publish-flow×2、video-governance×2
+- **失败类型分布**：C×47（testid/URL 漂移）、D×7（交互超时/功能失败）
+- **校验命令**：`npm run verify:baseline -- --e2e 54 --total 54 --coverage-report` → OK
+
+---
+
 ## TESTFIX-06 — 隔离清单 + CI 门禁 + test:guarded 脚本
 
 - **完成时间**：2026-04-18
