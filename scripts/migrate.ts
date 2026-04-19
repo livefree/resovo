@@ -25,7 +25,7 @@ if (!DATABASE_URL) {
 
 const db = new Pool({ connectionString: DATABASE_URL })
 
-const MIGRATIONS_DIR = join(process.cwd(), 'src/api/db/migrations')
+const MIGRATIONS_DIR = join(process.cwd(), 'apps/api/src/db/migrations')
 
 async function main() {
   const client = await db.connect()
