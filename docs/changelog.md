@@ -7058,3 +7058,25 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - apps/web-next video-route.ts 同步引入 URL_SEGMENT_MAP
   - apps/web next.config.ts 添加 308 永久重定向：/variety/:path* → /tvshow/:path*
 - **质量门禁**：typecheck ✅ lint ✅ unit tests 1102/1102 ✅
+
+## [M2-TVSHOW-05] search FilterBar + SearchResultList variety → tvshow
+
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **变更摘要**：
+  - FilterBar.tsx TYPE_OPTIONS：variety → tvshow（label 保持 '综艺'）
+  - SearchResultList.tsx 新增 TYPE_ALIAS（tvshow→variety）映射，保证 API 接收正确参数
+  - tests/e2e/search.spec.ts href 正则：variety → tvshow
+- **质量门禁**：typecheck ✅ lint ✅ unit tests 1102/1102 ✅
+
+## [M2-TVSHOW-06] apps/web 剩余 variety URL 构造扫尾
+
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **变更摘要**：
+  - 扫描确认 VideoCard/VideoMeta/VideoDetailHero 中 variety 均为 TYPE_LABELS 显示映射（无 URL 构造），无需修改
+  - tvshow/[slug]/page.tsx 注释从 variety→tvshow 已更新
+  - 无硬编码 /variety/ URL 字符串残留
+- **质量门禁**：typecheck ✅ lint ✅ unit tests 1102/1102 ✅

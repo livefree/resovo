@@ -7466,12 +7466,12 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - **建议模型**：sonnet
 - **文件范围**：git mv variety→tvshow / video-route.ts URL_SEGMENT_MAP / next.config.ts redirects
 
-#### M2-TVSHOW-05 — search FilterBar + ResultCard variety → tvshow（状态：⬜ 待开始）
+#### M2-TVSHOW-05 — search FilterBar + ResultCard variety → tvshow（状态：✅ 已完成）
 - **建议模型**：sonnet
 - **依赖**：M2-TVSHOW-04
 - **文件范围**：apps/web FilterBar.tsx / ResultCard.tsx / search.spec.ts 断言同步
 
-#### M2-TVSHOW-06 — apps/web 剩余 variety URL 构造扫尾（状态：⬜ 待开始）
+#### M2-TVSHOW-06 — apps/web 剩余 variety URL 构造扫尾（状态：✅ 已完成）
 - **建议模型**：haiku
 - **依赖**：M2-TVSHOW-04
 - **文件范围**：VideoCard / VideoMeta / VideoDetailHero / Page.template / others/[slug]

@@ -1,5 +1,5 @@
 /**
- * variety/[slug]/page.tsx — 综艺详情页
+ * tvshow/[slug]/page.tsx — 综艺（tvshow）详情页
  * 数据由 VideoDetailClient 在客户端获取（确保 E2E page.route() 可拦截）
  */
 
