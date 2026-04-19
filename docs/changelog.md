@@ -6961,3 +6961,30 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **质量门禁**：typecheck ✅ / lint ✅ / 1099 tests（含 12 个 rewrite-match 新增）✅
+
+---
+
+## RW-SETUP-03 — tests/e2e-next/ + playwright project + test-guarded 扩展
+
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **涉及文件**：
+  - 新增 `tests/e2e-next/README.md`
+  - 新增 `tests/e2e-next/smoke.spec.ts`（2 tests：en + zh-CN locale，data-testid="next-placeholder-root" 验收）
+  - 修改 `playwright.config.ts`：新增 `WEB_NEXT_URL` 常量、`web-next-chromium` project（testDir: tests/e2e-next）、webServer 条目
+  - 修改 `scripts/test-guarded.ts`：`readQuarantine` 返回 `e2eNext` 集合；`collectE2EFailures` 按文件路径自动选 `e2e-next::` 前缀；`runE2EGate` 接受双 quarantine 参数，输出分桶报告
+  - 修改 `scripts/verify-baseline.ts`：`runCoverageReport` 增加 web-next-chromium section
+  - 修改 `apps/web-next/src/app/[locale]/next-placeholder/page.tsx`：加 `data-testid="next-placeholder-root"`
+- **新增依赖**：无
+- **数据库变更**：无
+- **质量门禁**：typecheck ✅ / lint ✅ / 1099 unit tests ✅ / playwright web-next-chromium 2 passed ✅
+
+---
+
+## SEQ-20260418-RW-SETUP 完成
+
+- **完成时间**：2026-04-19
+- **包含任务**：RW-SETUP-01 / RW-SETUP-02 / RW-SETUP-03（共 3 张卡）
+- **产出**：apps/web-next/ scaffold（port 3002）+ ADR-035 路由切分协议（ALLOWLIST middleware）+ tests/e2e-next/ + playwright web-next-chromium project + test-guarded 三 project 合并报告
+- **M2 启动条件**：✅ 全部满足，可立即开始 M2 homepage 接管

@@ -1,6 +1,7 @@
 export default function NextPlaceholderPage() {
   return (
     <main
+      data-testid="next-placeholder-root"
       className="min-h-screen p-8"
       style={{ backgroundColor: 'var(--bg-canvas)', color: 'var(--fg-default)' }}
     >

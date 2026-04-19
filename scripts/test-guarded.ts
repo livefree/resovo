@@ -55,17 +55,17 @@ function parseArgs(): { phase: number; e2eInfo: boolean; mode: RunMode } {
   return { phase, e2eInfo, mode }
 }
 
-function readQuarantine(phase: number): { unit: Set<string>; e2e: Set<string> } {
+function readQuarantine(phase: number): { unit: Set<string>; e2e: Set<string>; e2eNext: Set<string> } {
   const quarantinePath = path.join(ROOT, 'docs', `known_failing_tests_phase${phase}.md`)
   if (!fs.existsSync(quarantinePath)) {
     console.warn(`WARN: quarantine file not found: ${quarantinePath}`)
-    return { unit: new Set(), e2e: new Set() }
+    return { unit: new Set(), e2e: new Set(), e2eNext: new Set() }
   }
   const content = fs.readFileSync(quarantinePath, 'utf-8')
   const match = content.match(/```json\n([\s\S]+?)```/)
   if (!match) {
     console.warn('WARN: no JSON quarantine block found in quarantine file')
-    return { unit: new Set(), e2e: new Set() }
+    return { unit: new Set(), e2e: new Set(), e2eNext: new Set() }
   }
   let ids: string[]
   try {
@@ -75,8 +75,9 @@ function readQuarantine(phase: number): { unit: Set<string>; e2e: Set<string> } 
     process.exit(1)
   }
   const unit = new Set(ids.filter((id) => id.startsWith('unit::')))
-  const e2e = new Set(ids.filter((id) => id.startsWith('e2e::')))
-  return { unit, e2e }
+  const e2e = new Set(ids.filter((id) => id.startsWith('e2e::') && !id.startsWith('e2e-next::')))
+  const e2eNext = new Set(ids.filter((id) => id.startsWith('e2e-next::')))
+  return { unit, e2e, e2eNext }
 }
 
 // ── Unit test types ──────────────────────────────────────────────────
@@ -161,14 +162,20 @@ interface PlaywrightReport {
   }
 }
 
+function getE2EPrefix(filePath: string): 'e2e-next' | 'e2e' {
+  return filePath.includes('e2e-next') ? 'e2e-next' : 'e2e'
+}
+
 function collectE2EFailures(suites: PlaywrightSuite[], fileBase: string): string[] {
   const failing: string[] = []
   for (const suite of suites) {
-    const currentFile = suite.file
-      ? path.basename(suite.file).replace(/\.(test|spec)\.(ts|tsx|js)$/, '')
+    const rawFile = suite.file ?? ''
+    const currentFile = rawFile
+      ? path.basename(rawFile).replace(/\.(test|spec)\.(ts|tsx|js)$/, '')
       : fileBase
+    const prefix = rawFile ? getE2EPrefix(rawFile) : getE2EPrefix(fileBase)
     if (suite.suites) {
-      failing.push(...collectE2EFailures(suite.suites, currentFile))
+      failing.push(...collectE2EFailures(suite.suites, suite.file ? rawFile : fileBase))
     }
     if (suite.specs) {
       for (const spec of suite.specs) {
@@ -176,7 +183,7 @@ function collectE2EFailures(suites: PlaywrightSuite[], fileBase: string): string
           (t) => t.status === 'unexpected' || t.status === 'flaky',
         )
         if (!spec.ok || isUnexpected) {
-          failing.push(`e2e::${currentFile}::${spec.title}`)
+          failing.push(`${prefix}::${currentFile}::${spec.title}`)
         }
       }
     }
@@ -271,21 +278,30 @@ function runUnitGate(unitQuarantine: Set<string>): boolean {
   return true
 }
 
-function runE2EGate(e2eQuarantine: Set<string>): boolean {
-  console.log('Running E2E tests (playwright)...')
+function runE2EGate(e2eQuarantine: Set<string>, e2eNextQuarantine: Set<string>): boolean {
+  console.log('Running E2E tests (playwright — web-chromium + web-mobile + admin-chromium + web-next-chromium)...')
   const summary = runE2ETests()
 
-  const newFailures = summary.failingIds.filter((id) => !e2eQuarantine.has(id))
-  const knownFailures = summary.failingIds.filter((id) => e2eQuarantine.has(id))
-  const regressedFromQuarantine = [...e2eQuarantine].filter((id) => !summary.failingIds.includes(id))
+  // 合并两个 quarantine 集合用于统一判断
+  const allQuarantine = new Set([...e2eQuarantine, ...e2eNextQuarantine])
+  const newFailures = summary.failingIds.filter((id) => !allQuarantine.has(id))
+  const knownFailures = summary.failingIds.filter((id) => allQuarantine.has(id))
+  const regressedFromQuarantine = [...allQuarantine].filter((id) => !summary.failingIds.includes(id))
+
+  // 分桶显示
+  const legacyFailing = summary.failingIds.filter((id) => id.startsWith('e2e::'))
+  const nextFailing = summary.failingIds.filter((id) => id.startsWith('e2e-next::'))
 
   console.log('\nE2E test summary:')
-  console.log(`  total        : ${summary.total}`)
-  console.log(`  passed       : ${summary.passed}`)
-  console.log(`  failed       : ${summary.failed}`)
-  console.log(`  flaky        : ${summary.flaky}`)
-  console.log(`  new failures : ${newFailures.length}`)
-  console.log(`  quarantined  : ${knownFailures.length}`)
+  console.log(`  total              : ${summary.total}`)
+  console.log(`  passed             : ${summary.passed}`)
+  console.log(`  failed             : ${summary.failed}`)
+  console.log(`  flaky              : ${summary.flaky}`)
+  console.log(`  new failures       : ${newFailures.length}`)
+  console.log(`  quarantined        : ${knownFailures.length}`)
+  console.log(`\nProject breakdown:`)
+  console.log(`  e2e:: (web/admin)  : ${legacyFailing.length} failing`)
+  console.log(`  e2e-next:: (web-next): ${nextFailing.length} failing`)
 
   if (regressedFromQuarantine.length > 0) {
     console.log('\nINFO: E2E quarantine items now PASSING (consider removing from list):')
@@ -314,11 +330,11 @@ function main(): void {
   const { phase, e2eInfo, mode } = parseArgs()
 
   console.log(`Phase ${phase} quarantine gate — mode: ${mode}`)
-  const { unit: unitQuarantine, e2e: e2eQuarantine } = readQuarantine(phase)
+  const { unit: unitQuarantine, e2e: e2eQuarantine, e2eNext: e2eNextQuarantine } = readQuarantine(phase)
 
   if (mode === 'unit' && e2eInfo) {
-    console.log(`\nINFO: E2E quarantine (${e2eQuarantine.size} items, not run here):`)
-    ;[...e2eQuarantine].forEach((id) => console.log(`  ○ ${id}`))
+    console.log(`\nINFO: E2E quarantine (${e2eQuarantine.size} legacy + ${e2eNextQuarantine.size} e2e-next items, not run here):`)
+    ;[...e2eQuarantine, ...e2eNextQuarantine].forEach((id) => console.log(`  ○ ${id}`))
   }
 
   let passed = true
@@ -329,7 +345,7 @@ function main(): void {
   }
 
   if (mode === 'e2e' || mode === 'all') {
-    const ok = runE2EGate(e2eQuarantine)
+    const ok = runE2EGate(e2eQuarantine, e2eNextQuarantine)
     if (!ok) passed = false
   }
 

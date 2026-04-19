@@ -7252,9 +7252,9 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ## SEQ-20260418-RW-SETUP — apps/*-next/ 并行重写脚手架
 
-- **状态**：🔄 执行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-18 00:00
-- **最后更新时间**：2026-04-18 23:55
+- **最后更新时间**：2026-04-19
 - **目标**：搭建 apps/web-next/ 骨架 + middleware 路由切分协议 + tests/e2e-next/ 测试基础设施，为 M2 启动做好并行准备
 - **范围**：apps/web-next/ scaffold、中间件路由、playwright project 扩展、test-guarded 双前缀分桶
 - **依赖**：M1 TOKEN-03 以上完成（至少基础 token 可消费）；可与 M1 TOKEN-01..06 并行
@@ -7275,9 +7275,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 完成时间：2026-04-19
    - 验收要点：ADR-035 写入 decisions.md；空 ALLOWLIST 下旧路由不受影响；回滚路径本地可复现
 
-3. RW-SETUP-03 — tests/e2e-next/ + playwright project + test-guarded 扩展（状态：⬜ 待开始）
+3. RW-SETUP-03 — tests/e2e-next/ + playwright project + test-guarded 扩展（状态：✅ 已完成）
    - 创建时间：2026-04-18 00:00
    - 计划开始：RW-SETUP-02 完成后
+   - 实际开始：2026-04-19
+   - 完成时间：2026-04-19
    - 验收要点：web-next-chromium project smoke 绿；test:guarded:e2e 三 project 合并报告；coverage-report 双 project 并列
 
 #### RW-SETUP-01 — apps/web-next/ Next.js 14 App Router scaffold
@@ -7334,9 +7336,10 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 #### RW-SETUP-03 — tests/e2e-next/ + playwright project + test-guarded 扩展
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
+- **完成时间**：2026-04-19
 - **依赖**：RW-SETUP-01、RW-SETUP-02
 - **文件范围**：
   - 新增 `tests/e2e-next/`（目录 + README.md）
@@ -7349,7 +7352,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   - `npm run test:guarded:e2e` 三 project 同时跑，输出合并 diff 报告
   - 模拟 smoke 新失败 → `test:guarded:e2e` 退出码 1
   - coverage-report 显示两个 E2E project 与对应 suite 清单
-- **完成备注**：_（AI 填写：必须记录三 project 配置 commit hash、test-guarded 扩展前后对比）_
+- **完成备注**：playwright.config.ts 新增 web-next-chromium project（testDir: tests/e2e-next, baseURL: localhost:3002）+ webServer 条目；tests/e2e-next/ 目录 + smoke.spec.ts（2 tests，locale en/zh-CN 各一）全部绿；test-guarded.ts 扩展：readQuarantine 返回 e2eNext 集合，e2e-next:: 前缀分桶，runE2EGate 签名加参数；verify-baseline.ts coverageReport 增加 web-next-chromium section；typecheck ✅ / 1099 unit tests ✅ / playwright web-next-chromium 2 tests ✅；执行模型：claude-sonnet-4-6
 ---
 ✅ PHASE COMPLETE — Phase 1（M1）Design Token 里程碑已完成，等待合并到 main 并确认下一步
 - **完成时间**：2026-04-18
