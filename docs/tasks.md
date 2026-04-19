@@ -14,18 +14,22 @@
 
 ---
 
-### TOKEN-01 — `packages/design-tokens` 目录骨架 + 构建工具选型 ADR
+### TOKEN-02 — Primitive 层原子 Token 定义
 - **状态**：🔄 进行中
 - **来源序列**：SEQ-20260418-M1
 - **建议模型**：opus
 - **执行模型**：claude-sonnet-4-6（主循环）
-- **子代理调用**：arch-reviewer (claude-opus-4-6)（ADR-032 构建工具选型 + package exports 契约决策）
+- **子代理调用**：arch-reviewer (claude-opus-4-6)（token 命名规范 + OKLCH 色阶结构 + 所有原子类型契约决策）
 - **实际开始**：2026-04-18 00:00
 - **文件范围**：
-  - 新增 `packages/design-tokens/package.json`
-  - 新增 `packages/design-tokens/tsconfig.json`
-  - 新增 `packages/design-tokens/src/index.ts`
-  - 修改根 `package.json`（workspaces 声明）
-  - 追加 `docs/decisions.md` — ADR-032（Token 构建工具选型）
+  - 新增 `packages/design-tokens/src/primitives/color.ts`
+  - 新增 `packages/design-tokens/src/primitives/space.ts`
+  - 新增 `packages/design-tokens/src/primitives/size.ts`
+  - 新增 `packages/design-tokens/src/primitives/radius.ts`
+  - 新增 `packages/design-tokens/src/primitives/typography.ts`
+  - 新增 `packages/design-tokens/src/primitives/motion.ts`
+  - 新增 `packages/design-tokens/src/primitives/shadow.ts`
+  - 新增 `packages/design-tokens/src/primitives/z-index.ts`
+  - 修改 `packages/design-tokens/src/primitives/index.ts`
 - **完成备注**：_（完成后填写）_
 

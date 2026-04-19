@@ -6674,3 +6674,26 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - doc(baseline_20260418): 新建 README.md 同义声明（承接 JSON 无法注释的缺口）
 - decision: M2 起前端走 apps/*-next/ 并行路线，详见 task_queue_patch_rewrite_track_20260418.md
 - queue(RW-SETUP): 追加 SEQ-20260418-RW-SETUP 三张任务卡到 task-queue.md
+
+---
+
+## TOKEN-01 — packages/design-tokens 目录骨架 + ADR-032
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：claude-opus-4-6（ADR-032 构建工具选型：方案 A/B/C 评估 + exports 契约设计 + 架构约束）
+- **文件列表**：
+  - `packages/design-tokens/package.json` — 三路 exports（css/js/types），`"build": "tsx scripts/build-css.ts"`
+  - `packages/design-tokens/tsconfig.json` — noEmit 类型检查配置
+  - `packages/design-tokens/src/index.ts` — 主出口（re-export 四层）
+  - `packages/design-tokens/src/types.ts` — 类型出口骨架
+  - `packages/design-tokens/src/primitives/index.ts` — 占位
+  - `packages/design-tokens/src/semantic/index.ts` — 占位
+  - `packages/design-tokens/src/components/index.ts` — 占位
+  - `packages/design-tokens/src/brands/index.ts` — 占位
+  - `packages/design-tokens/scripts/build-css.ts` — CSS 变量生成器骨架
+  - `packages/design-tokens/src/css/tokens.css` — 构建产物（占位）
+  - `packages/design-tokens/README.md` — 消费方使用说明
+  - `docs/decisions.md` — ADR-032（选方案 B：手写 TS 构建脚本，零外部依赖；对 ADR-022 JSON 格式精化为 TypeScript-first）
+- **ADR-032 选型结论**：方案 B（手写 TS 构建脚本）；不选 A（Style Dictionary，引入新依赖）；不选 C（Tokens Studio，无 Figma 协作场景）
+- **质量门禁**：`npm run build -w @resovo/design-tokens` ✅ / `typecheck` ✅ / `lint` ✅ / 1007 unit tests ✅
