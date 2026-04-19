@@ -7252,18 +7252,20 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ## SEQ-20260418-RW-SETUP — apps/*-next/ 并行重写脚手架
 
-- **状态**：⬜ 待开始
+- **状态**：🔄 执行中
 - **创建时间**：2026-04-18 00:00
-- **最后更新时间**：2026-04-18 00:00
+- **最后更新时间**：2026-04-18 23:55
 - **目标**：搭建 apps/web-next/ 骨架 + middleware 路由切分协议 + tests/e2e-next/ 测试基础设施，为 M2 启动做好并行准备
 - **范围**：apps/web-next/ scaffold、中间件路由、playwright project 扩展、test-guarded 双前缀分桶
 - **依赖**：M1 TOKEN-03 以上完成（至少基础 token 可消费）；可与 M1 TOKEN-01..06 并行
 
 ### 任务列表（按执行顺序）
 
-1. RW-SETUP-01 — apps/web-next/ Next.js 14 App Router scaffold（状态：⬜ 待开始）
+1. RW-SETUP-01 — apps/web-next/ Next.js 14 App Router scaffold（状态：✅ 已完成）
    - 创建时间：2026-04-18 00:00
    - 计划开始：TOKEN-03 完成后
+   - 实际开始：2026-04-18
+   - 完成时间：2026-04-18
    - 验收要点：npm run dev --workspace=apps/web-next 启动成功；next-placeholder 返回 200；typecheck + lint 通过
 
 2. RW-SETUP-02 — middleware 路由切分协议 + ADR-035（状态：⬜ 待开始）
@@ -7278,9 +7280,10 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 #### RW-SETUP-01 — apps/web-next/ Next.js 14 App Router scaffold
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
+- **完成时间**：2026-04-18
 - **依赖**：M1 TOKEN-03 以上
 - **文件范围**：
   - 新增 `apps/web-next/`（全部，目录从 0 搭建）
@@ -7301,7 +7304,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   - `npm run typecheck` 包含 apps/web-next/ 且通过
   - `npm run lint` 通过
   - 根 `package.json` workspaces、`tsconfig.json` paths 更新正确
-- **完成备注**：_（AI 填写：必须记录 Next.js 版本、port 配置 commit hash）_
+- **完成备注**：Next.js 15.x（与 apps/web 同版本，根 package.json `"next": "^15.1.0"`）；port 3002（apps/server 占用 3001，任务卡描述有误）；apps/web-next/ 完整 scaffold：next-intl i18n（en/zh-CN）+ design-tokens CSS vars + Tailwind preset + blocking theme-init script；占位路由 `/[locale]/next-placeholder` 验收 200 ✅；typecheck + lint + 1087 unit 全部通过；执行模型：claude-sonnet-4-6
 
 #### RW-SETUP-02 — middleware 路由切分协议 + ADR-035
 

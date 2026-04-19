@@ -6924,3 +6924,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **数据库变更**：无（复用 TOKEN-08 的 brands 表 + listBrands query）
 - **注意事项**：apps/admin/ 不存在，实际位置为 apps/server/（port 3001）；本里程碑仅只读，编辑写入留待 M5+；WEB_BASE_URL 通过 env.NEXT_PUBLIC_WEB_URL 注入
 - **质量门禁**：typecheck ✅ / lint ✅ / tests 1087 passed ✅
+
+---
+
+## RW-SETUP-01 — apps/web-next/ Next.js 14 App Router scaffold
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **涉及文件**：
+  - 新增 `apps/web-next/`（全部目录）：package.json / tsconfig.json / next.config.ts / tailwind.config.ts / postcss.config.js / middleware.ts / i18n/routing.ts / i18n/request.ts / app/layout.tsx / app/[locale]/layout.tsx / app/[locale]/next-placeholder/page.tsx / app/globals.css / messages/en.json / messages/zh-CN.json / lib/theme-init-script.ts / README.md
+  - 修改 `package.json`（根）：typecheck 追加 `--workspace @resovo/web-next`
+  - 修改 `.eslintrc.json`（根）：overrides 追加 apps/web-next/src/ 路径
+  - 修改 `apps/web/src/app/[locale]/playground/tokens/_components/PrimitivePanel.tsx`：加 eslint-disable 注释（resovo/no-hardcoded-color 规则对 dev-only playground 的原始 token 值展示合理豁免）
+- **新增依赖**：无（复用根 workspace 已有依赖）
+- **数据库变更**：无
+- **注意事项**：port 使用 3002（任务卡写的 3001 与 apps/server 冲突）；apps/web-next 继承根 ESLint 配置无需独立 `.eslintrc.json`；brand-detection.ts 不在本卡范围内（RW-SETUP-02 起接入）
+- **质量门禁**：typecheck ✅ / lint ✅ / tests 1087 passed ✅ / http://localhost:3002/en/next-placeholder 200 ✅
