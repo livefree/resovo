@@ -7268,9 +7268,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 完成时间：2026-04-18
    - 验收要点：npm run dev --workspace=apps/web-next 启动成功；next-placeholder 返回 200；typecheck + lint 通过
 
-2. RW-SETUP-02 — middleware 路由切分协议 + ADR-035（状态：⬜ 待开始）
+2. RW-SETUP-02 — middleware 路由切分协议 + ADR-035（状态：✅ 已完成）
    - 创建时间：2026-04-18 00:00
    - 计划开始：RW-SETUP-01 完成后
+   - 实际开始：2026-04-19
+   - 完成时间：2026-04-19
    - 验收要点：ADR-035 写入 decisions.md；空 ALLOWLIST 下旧路由不受影响；回滚路径本地可复现
 
 3. RW-SETUP-03 — tests/e2e-next/ + playwright project + test-guarded 扩展（状态：⬜ 待开始）
@@ -7308,9 +7310,10 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 #### RW-SETUP-02 — middleware 路由切分协议 + ADR-035
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **建议模型**：opus（架构决策：影响 M2–M6 所有里程碑 cutover）
 - **创建时间**：2026-04-18
+- **完成时间**：2026-04-19
 - **依赖**：RW-SETUP-01
 - **文件范围**：
   - 新增 `apps/web-next/src/middleware.ts`
@@ -7327,7 +7330,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   - 空 ALLOWLIST 下旧路由不受影响
   - 临时把 `/next-placeholder` 加入 ALLOWLIST 测试，路由切到 web-next
   - 架构文档含「重写期路由拓扑」章节（ASCII 或 mermaid 拓扑图）
-- **完成备注**：_（AI 填写：必须记录 Opus 子代理模型 ID、ADR-035 commit hash、选择方案的核心理由）_
+- **完成备注**：子代理 arch-reviewer (claude-opus-4-6) 评估方案 A（部署层）vs 方案 B（Next.js middleware），选择方案 B；核心理由：ALLOWLIST TS 常量单一真源、dev/prod 同构、可 Vitest 单测、`NextResponse.rewrite` 爬虫零感知；实现：`apps/web/middleware.ts` 分流逻辑 + `rewrite-allowlist.ts` + `rewrite-match.ts`（纯函数）+ `tests/unit/lib/rewrite-match.test.ts`（12 tests）；ADR-035 写入 decisions.md；architecture.md 新增§15 重写期路由拓扑；`/next-placeholder` enabled:true 验收正常；typecheck ✅ / lint ✅ / 1099 tests ✅；执行模型：claude-sonnet-4-6
 
 #### RW-SETUP-03 — tests/e2e-next/ + playwright project + test-guarded 扩展
 

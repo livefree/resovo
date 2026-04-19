@@ -6941,3 +6941,23 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **数据库变更**：无
 - **注意事项**：port 使用 3002（任务卡写的 3001 与 apps/server 冲突）；apps/web-next 继承根 ESLint 配置无需独立 `.eslintrc.json`；brand-detection.ts 不在本卡范围内（RW-SETUP-02 起接入）
 - **质量门禁**：typecheck ✅ / lint ✅ / tests 1087 passed ✅ / http://localhost:3002/en/next-placeholder 200 ✅
+
+---
+
+## RW-SETUP-02 — middleware 路由切分协议 + ADR-035
+
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：arch-reviewer (claude-opus-4-6) — 方案 A vs B 评估 + ADR-035 草稿
+- **涉及文件**：
+  - 修改 `apps/web/middleware.ts`：插入 ADR-035 分流逻辑（ALLOWLIST 匹配 → `NextResponse.rewrite` to web-next；kill-switch 环境变量；`x-rewrite-source`/`x-rewrite-rule` 响应头）
+  - 新增 `apps/web/src/lib/rewrite-allowlist.ts`：ALLOWLIST 单一真源，含 `RewriteRule` 类型、`REWRITE_LOCALES`、kill-switch 常量、upstream 配置
+  - 新增 `apps/web/src/lib/rewrite-match.ts`：纯函数 `matchRewrite`/`stripLocale`，支持 exact/prefix + localeAware 匹配
+  - 新增 `tests/unit/lib/rewrite-match.test.ts`：12 个单元测试，覆盖 locale 剥离、前缀边界、未命中
+  - 追加 `docs/decisions.md`：ADR-035（方案 B，Next.js middleware 切分）
+  - 追加 `docs/architecture.md`：§15 重写期路由拓扑（ASCII 拓扑图 + 里程碑接管表 + kill-switch 说明）
+  - 修改 `docs/task-queue.md`：RW-SETUP-02 状态更新
+- **决策摘要**：采纳方案 B（middleware 切分）；ALLOWLIST 含 `/next-placeholder`（enabled: true）用于验收；M2 起追加业务路由
+- **新增依赖**：无
+- **数据库变更**：无
+- **质量门禁**：typecheck ✅ / lint ✅ / 1099 tests（含 12 个 rewrite-match 新增）✅
