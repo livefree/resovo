@@ -327,7 +327,7 @@ export function PlayerShell({ slug }: PlayerShellProps) {
           >
             <div
               className="w-full relative rounded-lg overflow-hidden shadow-2xl border"
-              style={{ aspectRatio: '16/9', background: '#000', borderColor: 'var(--border)' }}
+              style={{ aspectRatio: '16/9', background: 'black', borderColor: 'var(--border)' }}
               data-testid="player-video-area"
             >
               {activeSrc ? (
@@ -359,7 +359,7 @@ export function PlayerShell({ slug }: PlayerShellProps) {
               ) : (
                 <div
                   className="absolute inset-0 flex flex-col items-center justify-center gap-2"
-                  style={{ color: 'rgba(255,255,255,0.5)' }}
+                  style={{ color: 'color-mix(in oklch, white 50%, transparent)' }}
                   data-testid="player-no-source"
                 >
                   <span className="text-4xl">▶</span>

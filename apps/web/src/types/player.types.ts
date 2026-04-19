@@ -54,8 +54,8 @@ export interface PlayerSettings {
 export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   autoPlayNext: true,
   resumePlayback: true,
-  subtitleColor: '#ffffff',
-  subtitleBgColor: '#000000',
+  subtitleColor: 'white',
+  subtitleBgColor: 'black',
   subtitleBgOpacity: 75,
 }
 

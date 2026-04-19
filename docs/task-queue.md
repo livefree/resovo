@@ -6874,7 +6874,7 @@
 - **完成备注**：新增 @resovo/design-tokens workspace 依赖至 web package.json + tsconfig 路径映射（根 tsconfig + apps/web/tsconfig）；layout.tsx dev-only guard（NODE_ENV !== development → notFound()）；page.tsx Server Component 导入 token 数据传 props；4 个 Client 组件（BrandSwitcher 调 useTheme、PrimitivePanel 展示色块/数值、SemanticPanel 实时 resolvedTheme 适配、ComponentPanel 点击复制 Token 名）；typecheck ✅ / lint ✅ / tests ✅
 
 #### TOKEN-13 — globals.css 23 个硬编码变量迁移 + ESLint 升级 error
-- **状态**：⬜ 待开始
+- **状态**：🔄 执行中
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
 - **依赖**：TOKEN-07、TOKEN-11

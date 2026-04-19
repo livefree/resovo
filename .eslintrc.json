@@ -4,7 +4,7 @@
   "ignorePatterns": ["apps/**/templates/**", ".next/**", "node_modules/**", "tools/eslint-plugin-resovo/**"],
   "rules": {
     "no-console": "error",
-    "resovo/no-hardcoded-color": "warn"
+    "resovo/no-hardcoded-color": "error"
   },
   "overrides": [
     {

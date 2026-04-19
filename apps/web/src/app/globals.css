@@ -130,118 +130,61 @@
 }
 /* ── End design-token vars ────────────────────────────────────────── */
 
+/* ── Legacy variable aliases (TOKEN-13) — mapped to design-token CSS vars */
+/* Existing consumers use these names; they now delegate to the token system */
 @layer base {
   :root {
-    /* ── Backgrounds ─────────────────────────────────────────── */
-    --background: #ffffff;
-    --bg:   #ffffff;
-    --bg2:  #f9fafb;   /* gray-50 */
-    --bg3:  #f3f4f6;   /* gray-100 */
-
-    /* ── Foregrounds / Text ──────────────────────────────────── */
-    --foreground: #111827;          /* gray-900  — 16.1:1 on white ✅ */
-    --text:       #111827;
-    /* secondary text: #4b5563 (gray-600) — 7.6:1 on white, 6.8:1 on bg3 ✅ */
-    --muted:            #4b5563;
-    --muted-foreground: #4b5563;
-
-    /* ── Component surfaces ──────────────────────────────────── */
-    --card:              #ffffff;
-    --card-foreground:   #111827;
-    --secondary:         #f3f4f6;   /* gray-100 */
-    --secondary-foreground: #1f2937; /* gray-800, 14:1 on secondary ✅ */
-
-    /* ── Accent / Brand ──────────────────────────────────────── */
-    /* Amber-700 used on light backgrounds: 3.85:1 — AA for large/bold text ✅ */
-    --accent:            #b8720a;
-    --accent-foreground: #111827;   /* dark on amber: 4.9:1 ✅ */
-    --gold:              #b8720a;
-
-    /* ── Interactive ─────────────────────────────────────────── */
-    --primary:            #2563eb;  /* blue-600 */
-    --primary-foreground: #ffffff;  /* white on blue: 5.1:1 ✅ */
-    --ring:               #2563eb;
-
-    /* ── Structure ───────────────────────────────────────────── */
-    --border: #d1d5db;   /* gray-300, visible on white/bg2/bg3 ✅ */
-    --input:  #d1d5db;
-    --subtle: #e5e7eb;   /* gray-200, dividers */
-
-    /* ── Status / Semantic ────────────────────────────────────── */
-    --status-success: #16a34a;   /* green-600, 4.6:1 on white ✅ */
-    --status-danger:  #dc2626;   /* red-600,   5.9:1 on white ✅ */
-    --status-warning: #d97706;   /* amber-600, 3.1:1 on white (use on bg3+) */
-    --status-info:    #2563eb;   /* blue-600,  5.1:1 on white ✅ */
-    --status-neutral: #64748b;   /* slate-500, 5.9:1 on white ✅ */
-
-    /* ── Status background chips (12% opacity) ───────────────── */
-    --status-success-bg: rgba(22, 163, 74, 0.12);
-    --status-danger-bg:  rgba(220, 38, 38, 0.12);
-    --status-warning-bg: rgba(217, 119, 6, 0.12);
-    --status-neutral-bg: rgba(100, 116, 139, 0.12);
-
-    /* ── Overlay ─────────────────────────────────────────────── */
-    --modal-overlay: rgba(0, 0, 0, 0.6);
+    /* Backgrounds */
+    --background:     var(--bg-canvas);
+    --bg:             var(--bg-canvas);
+    --bg2:            var(--bg-surface-sunken);
+    --bg3:            var(--bg-surface-sunken);
+    /* Foregrounds */
+    --foreground:     var(--fg-default);
+    --text:           var(--fg-default);
+    --muted:          var(--fg-muted);
+    --muted-foreground: var(--fg-muted);
+    /* Component surfaces */
+    --card:           var(--bg-surface);
+    --card-foreground: var(--fg-default);
+    --secondary:      var(--bg-surface-sunken);
+    --secondary-foreground: var(--fg-default);
+    /* Accent / Brand */
+    --accent:         var(--accent-default);
+    --accent-foreground: var(--accent-fg);
+    --gold:           var(--accent-default);
+    /* Interactive */
+    --primary:        var(--accent-default);
+    --primary-foreground: var(--accent-fg);
+    --ring:           var(--border-focus);
+    /* Structure */
+    --border:         var(--border-default);
+    --input:          var(--border-default);
+    --subtle:         var(--border-subtle);
+    /* Status */
+    --status-success: var(--state-success-fg);
+    --status-danger:  var(--state-error-fg);
+    --status-warning: var(--state-warning-fg);
+    --status-info:    var(--state-info-fg);
+    --status-neutral: var(--fg-muted);
+    /* Status backgrounds */
+    --status-success-bg: var(--state-success-bg);
+    --status-danger-bg:  var(--state-error-bg);
+    --status-warning-bg: var(--state-warning-bg);
+    --status-neutral-bg: color-mix(in oklch, var(--fg-muted) 12%, transparent);
+    /* Overlay */
+    --modal-overlay:  var(--bg-overlay);
   }
-
-  .dark {
-    /* ── Backgrounds ─────────────────────────────────────────── */
-    --background: #060606;   /* ultra deep */
-    --bg:         #060606;
-    --bg2:        #111111;   /* slightly elevated */
-    --bg3:        #1a1a1a;   /* panels */
-
-    /* ── Foregrounds / Text ──────────────────────────────────── */
-    --foreground: #fafafa;
-    --text:       #fafafa;
-    --muted:            #a1a1aa;
-    --muted-foreground: #a1a1aa;
-
-    /* ── Component surfaces ──────────────────────────────────── */
-    --card:              #111111;
-    --card-foreground:   #fafafa;
-    --secondary:         #1a1a1a;
-    --secondary-foreground: #fafafa;
-
-    /* ── Accent / Brand ──────────────────────────────────────── */
-    --accent:            #e8b84b;
-    --accent-foreground: #000000;
-    --gold:              #e8b84b;
-
-    /* ── Interactive ─────────────────────────────────────────── */
-    --primary:            #60a5fa;
-    --primary-foreground: #000000;
-    --ring:               #60a5fa;
-
-    /* ── Structure ───────────────────────────────────────────── */
-    --border: #27272a;   /* zinc-800 */
-    --input:  #27272a;
-    --subtle: #18181b;   /* dividers */
-
-    /* ── Status / Semantic ────────────────────────────────────── */
-    --status-success: #4ade80;   /* green-400, 9.7:1 on #060606 ✅ */
-    --status-danger:  #f87171;   /* red-400,   6.9:1 on #060606 ✅ */
-    --status-warning: #fbbf24;   /* amber-400, 10.1:1 on #060606 ✅ */
-    --status-info:    #60a5fa;   /* blue-400,  6.2:1 on #060606 ✅ */
-    --status-neutral: #94a3b8;   /* slate-400, 8.2:1 on #060606 ✅ */
-
-    /* ── Status background chips (12% opacity) ───────────────── */
-    --status-success-bg: rgba(74, 222, 128, 0.12);
-    --status-danger-bg:  rgba(248, 113, 113, 0.12);
-    --status-warning-bg: rgba(251, 191, 36, 0.12);
-    --status-neutral-bg: rgba(148, 163, 184, 0.12);
-
-    /* ── Overlay ─────────────────────────────────────────────── */
-    --modal-overlay: rgba(0, 0, 0, 0.7);
-  }
+  /* No .dark overrides needed — all aliases delegate to token vars which handle dark mode */
 }
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: var(--border-default);
   }
   body {
-    @apply bg-background text-foreground;
+    background-color: var(--bg-canvas);
+    color: var(--fg-default);
     transition: background-color 200ms ease, color 200ms ease;
   }
 }
