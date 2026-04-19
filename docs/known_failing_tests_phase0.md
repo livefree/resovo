@@ -28,12 +28,6 @@
 
 ```json
 [
-  "e2e::homepage.spec.ts::首页::导航栏显示分类标签",
-  "e2e::homepage.spec.ts::首页::底部免责声明常驻显示",
-  "e2e::homepage.spec.ts::首页::未登录时显示Sign In按钮",
-  "e2e::homepage.spec.ts::语言切换::切换到中文后页面为中文内容",
-  "e2e::homepage.spec.ts::语言切换::切换回英文后页面为英文内容",
-  "e2e::homepage.spec.ts::导航跳转::点击Sign In跳转到登录页",
   "e2e::auth.spec.ts::登录页::登录页正常加载显示账号和密码输入框",
   "e2e::auth.spec.ts::登录页::空表单提交显示必填验证错误",
   "e2e::auth.spec.ts::登录页::空账号提交显示账号必填错误",

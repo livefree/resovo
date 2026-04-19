@@ -1,1 +1,31 @@
-{}
+{
+  "nav": {
+    "home": "首页",
+    "more": "更多",
+    "language": "语言",
+    "account": "账户",
+    "logout": "退出登录",
+    "profile": "个人主页",
+    "signIn": "登录",
+    "catAll": "全部",
+    "catMovie": "电影",
+    "catSeries": "剧集",
+    "catAnime": "动漫",
+    "catVariety": "综艺",
+    "catDocumentary": "纪录片",
+    "catShort": "短剧",
+    "catSports": "体育",
+    "catMusic": "音乐",
+    "catNews": "新闻",
+    "catKids": "少儿",
+    "catOther": "其他",
+    "search": "搜索...",
+    "admin": "管理后台"
+  },
+  "home": {
+    "trendingMovies": "热门电影",
+    "trendingSeries": "热播剧集",
+    "disclaimer": "流光仅索引公开可访问的视频链接，不托管任何视频内容。所有版权归原作者所有。",
+    "viewAll": "查看全部"
+  }
+}

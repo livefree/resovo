@@ -7368,3 +7368,36 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   - [ ] 确认合并 dev → main（执行 `git merge dev -m "feat: complete Phase 1 design tokens"`）
   - [ ] 确认开始 Phase 2，届时拆分 M2–M6 任务卡
 ---
+
+## SEQ-20260419-M2 — M2 Homepage 迁移
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-19
+- **最后更新时间**：2026-04-19
+- **目标**：将首页从 apps/web 迁移到 apps/web-next，同步更新 ALLOWLIST、E2E 和隔离清单
+- **依赖**：M1 全部完成 ✅、RW-SETUP-01..03 全部完成 ✅
+
+### 任务列表
+
+#### M2-HOMEPAGE-01 — apps/web-next/ homepage 路由实现（状态：✅ 已完成）
+
+- **创建时间**：2026-04-19
+- **完成时间**：2026-04-19
+- **依赖**：M1 TOKEN-06 完成、RW-SETUP-03 完成
+- **目录目标**：apps/web-next/
+- **文件范围**：
+  - 新增：`apps/web-next/src/app/[locale]/page.tsx`
+  - 新增：`apps/web-next/src/lib/utils.ts`、`api-client.ts`、`video-route.ts`
+  - 新增：`apps/web-next/src/stores/themeStore.ts`
+  - 新增：`apps/web-next/src/components/ui/ThemeToggle.tsx`
+  - 新增：`apps/web-next/src/components/layout/Nav.tsx`、`Footer.tsx`
+  - 新增：`apps/web-next/src/components/video/HeroBanner.tsx`、`VideoGrid.tsx`、`VideoCard.tsx`、`VideoCardWide.tsx`
+  - 修改：`apps/web-next/messages/en.json`、`zh-CN.json`（nav + home 翻译）
+  - 修改：`apps/web-next/package.json`（追加 zustand 依赖）
+  - 修改：`apps/web/src/lib/rewrite-allowlist.ts`（追加 M2 homepage `path: '/'` exact localeAware）
+  - 删除：`apps/web/src/app/[locale]/(home)/page.tsx` + `(home)/` 目录
+  - 删除：`tests/e2e/homepage.spec.ts`（14 tests，6 failing）
+  - 新增：`tests/e2e-next/homepage.spec.ts`（按新组件 testid 重写，含 nav-login + footer-disclaimer testid）
+  - 修改：`tests/unit/lib/rewrite-match.test.ts`（追加 M2 homepage rule 测试 4 条）
+  - 修改：`docs/known_failing_tests_phase0.md`（删除 6 条 homepage 隔离条目）
+- **完成备注**：typecheck ✅ / lint ✅ / 1102 unit tests ✅；ALLOWLIST 新增 M2:home exact localeAware 条目；旧 apps/web homepage 整份删除；新 tests/e2e-next/homepage.spec.ts 15 tests；known_failing 清单删除 6 条；执行模型：claude-sonnet-4-6

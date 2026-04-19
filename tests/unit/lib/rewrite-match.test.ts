@@ -45,8 +45,26 @@ describe('matchRewrite — next-placeholder scaffold rule', () => {
     const r = matchRewrite('/en/browse')
     expect(r.matched).toBe(false)
   })
-  it('does not match /', () => {
+})
+
+describe('matchRewrite — M2 homepage rule', () => {
+  it('matches / (exact)', () => {
     const r = matchRewrite('/')
+    expect(r.matched).toBe(true)
+    if (r.matched) expect(r.rule.domain).toBe('home')
+  })
+  it('matches /en (locale-aware exact)', () => {
+    const r = matchRewrite('/en')
+    expect(r.matched).toBe(true)
+    if (r.matched) expect(r.rule.domain).toBe('home')
+  })
+  it('matches /zh-CN (locale-aware exact)', () => {
+    const r = matchRewrite('/zh-CN')
+    expect(r.matched).toBe(true)
+    if (r.matched) expect(r.rule.domain).toBe('home')
+  })
+  it('does not match /en/browse (only / is exact)', () => {
+    const r = matchRewrite('/en/browse')
     expect(r.matched).toBe(false)
   })
 })

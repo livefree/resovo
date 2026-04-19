@@ -17,7 +17,8 @@
     "next-intl": "*",
     "react": "*",
     "react-dom": "*",
-    "tailwind-merge": "*"
+    "tailwind-merge": "*",
+    "zustand": "*"
   },
   "devDependencies": {
     "@types/node": "*",

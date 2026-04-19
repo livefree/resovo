@@ -1,16 +1,14 @@
 /**
- * tests/e2e/homepage.spec.ts
- * VIDEO-02: 首页加载、主题切换、导航跳转 E2E 测试
+ * tests/e2e-next/homepage.spec.ts
+ * M2: 首页加载、导航、主题切换、语言切换 E2E 测试
  * 使用 page.route() 拦截 API 请求，不依赖真实后端
  */
 
 import { test, expect } from '@playwright/test'
 
-// ── Mock 数据 ───────────────────────────────────────────────────────
-
 const API_BASE = 'http://localhost:4000/v1'
 
-const MOCK_MOVIE: Record<string, unknown> = {
+const MOCK_MOVIE = {
   id: 'uuid-movie-1',
   shortId: 'aB3kR9x1',
   slug: 'test-movie-aB3kR9x1',
@@ -25,7 +23,7 @@ const MOCK_MOVIE: Record<string, unknown> = {
   sourceCount: 2,
 }
 
-const MOCK_SERIES: Record<string, unknown> = {
+const MOCK_SERIES = {
   id: 'uuid-series-1',
   shortId: 'bC4lS0y2',
   slug: 'test-series-bC4lS0y2',
@@ -40,8 +38,7 @@ const MOCK_SERIES: Record<string, unknown> = {
   sourceCount: 1,
 }
 
-async function mockApiRoutes(page: Parameters<typeof test>[1] extends { page: infer P } ? P : never) {
-  // GET /videos/trending?type=movie
+async function mockApiRoutes(page: import('@playwright/test').Page) {
   await page.route(`${API_BASE}/videos/trending*`, (route) => {
     const url = route.request().url()
     const type = new URL(url).searchParams.get('type')
@@ -74,8 +71,8 @@ test.describe('首页', () => {
   })
 
   test('导航栏显示分类标签', async ({ page }) => {
-    await expect(page.getByTestId('nav-cat-all')).toBeVisible()
     await expect(page.getByTestId('nav-cat-movie')).toBeVisible()
+    await expect(page.getByTestId('nav-cat-series')).toBeVisible()
     await expect(page.getByTestId('nav-cat-anime')).toBeVisible()
   })
 
@@ -117,9 +114,7 @@ test.describe('主题切换', () => {
   test('点击主题切换按钮改变主题', async ({ page }) => {
     const toggle = page.getByTestId('theme-toggle')
     const initialLabel = await toggle.getAttribute('aria-label')
-
     await toggle.click()
-
     const afterLabel = await toggle.getAttribute('aria-label')
     expect(afterLabel).not.toBe(initialLabel)
   })
@@ -127,11 +122,9 @@ test.describe('主题切换', () => {
   test('连续点击三次回到初始主题', async ({ page }) => {
     const toggle = page.getByTestId('theme-toggle')
     const initialLabel = await toggle.getAttribute('aria-label')
-
     await toggle.click()
     await toggle.click()
     await toggle.click()
-
     const finalLabel = await toggle.getAttribute('aria-label')
     expect(finalLabel).toBe(initialLabel)
   })
@@ -148,14 +141,16 @@ test.describe('语言切换', () => {
   })
 
   test('切换到中文后页面为中文内容', async ({ page }) => {
+    await page.getByTestId('nav-locale-trigger').click()
     await page.getByTestId('lang-zh-CN').click()
     await expect(page).toHaveURL('/zh-CN')
-    // 导航分类标签应变为中文
     await expect(page.getByTestId('nav-cat-movie')).toHaveText('电影')
   })
 
   test('切换回英文后页面为英文内容', async ({ page }) => {
+    await page.getByTestId('nav-locale-trigger').click()
     await page.getByTestId('lang-zh-CN').click()
+    await page.getByTestId('nav-locale-trigger').click()
     await page.getByTestId('lang-en').click()
     await expect(page).toHaveURL('/en')
     await expect(page.getByTestId('nav-cat-movie')).toHaveText('Movies')
@@ -173,8 +168,6 @@ test.describe('导航跳转', () => {
   })
 
   test('点击 Logo 返回首页', async ({ page }) => {
-    await page.goto('/en/auth/login')
-    await page.goto('/en')
     await page.getByTestId('nav-logo').click()
     await expect(page).toHaveURL('/en')
   })

@@ -6988,3 +6988,23 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **包含任务**：RW-SETUP-01 / RW-SETUP-02 / RW-SETUP-03（共 3 张卡）
 - **产出**：apps/web-next/ scaffold（port 3002）+ ADR-035 路由切分协议（ALLOWLIST middleware）+ tests/e2e-next/ + playwright web-next-chromium project + test-guarded 三 project 合并报告
 - **M2 启动条件**：✅ 全部满足，可立即开始 M2 homepage 接管
+
+---
+
+## M2-HOMEPAGE-01 — apps/web-next/ homepage 路由实现
+
+- **任务 ID**：M2-HOMEPAGE-01
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **变更摘要**：
+  - 新增 apps/web-next/ 首页组件树：Nav、Footer、ThemeToggle、HeroBanner、VideoGrid、VideoCard、VideoCardWide + page.tsx
+  - 新增 apps/web-next/ lib（utils、api-client、video-route）和 stores（themeStore）
+  - ALLOWLIST 追加 M2 homepage exact localeAware 条目（path: `/`）
+  - 删除 apps/web/src/app/[locale]/(home)/page.tsx
+  - 删除 tests/e2e/homepage.spec.ts；新增 tests/e2e-next/homepage.spec.ts（15 tests）
+  - rewrite-match.test.ts 追加 M2 homepage rule 4 条单元测试（共 1102 tests）
+  - known_failing_tests_phase0.md 删除 6 条 homepage 隔离条目
+  - docs/architecture.md §15 添加过渡期拓扑方向说明（ADR-035 vs 补丁§2 终态区分）
+  - docs/task-queue.md 追加 SEQ-20260419-M2 序列
+- **质量门禁**：typecheck ✅ lint ✅ unit tests 1102/1102 ✅
