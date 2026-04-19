@@ -6852,7 +6852,7 @@
 - **完成备注**：theme-init-script.ts 导出 IIFE 字符串；读 resovo-brand/resovo-theme cookie → resolveTheme（system/空→matchMedia fallback）→ 设 `document.documentElement.dataset.brand/theme`；layout.tsx 在 providers 之前注入 `<script dangerouslySetInnerHTML>`；typecheck ✅ / lint ✅；无新增依赖
 
 #### TOKEN-12 — Token Playground 页面（dev 环境走查载体）
-- **状态**：🔄 执行中
+- **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
 - **依赖**：TOKEN-07（可与 TOKEN-08/09/10/11 并行）
@@ -6871,7 +6871,7 @@
   - dev 环境访问 `/zh/__playground/tokens` 正常渲染
   - production build 访问该路径返回 404
   - 切换 brand / theme 所有 token 预览实时更新
-- **完成备注**：_（AI 填写）_
+- **完成备注**：新增 @resovo/design-tokens workspace 依赖至 web package.json + tsconfig 路径映射（根 tsconfig + apps/web/tsconfig）；layout.tsx dev-only guard（NODE_ENV !== development → notFound()）；page.tsx Server Component 导入 token 数据传 props；4 个 Client 组件（BrandSwitcher 调 useTheme、PrimitivePanel 展示色块/数值、SemanticPanel 实时 resolvedTheme 适配、ComponentPanel 点击复制 Token 名）；typecheck ✅ / lint ✅ / tests ✅
 
 #### TOKEN-13 — globals.css 23 个硬编码变量迁移 + ESLint 升级 error
 - **状态**：⬜ 待开始

@@ -6859,3 +6859,23 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **数据库变更**：无
 - **注意事项**：脚本仅读 cookie，不用 localStorage，与 middleware 同源策略保持一致；system theme 时通过 window.matchMedia 解析为 light/dark；无 cookie 时默认 brand=resovo / theme 跟随系统偏好
 - **质量门禁**：typecheck ✅ / lint ✅
+
+## [TOKEN-12] Token Playground dev-only 页面
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 22:30
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/web/src/app/[locale]/__playground/tokens/layout.tsx` — 新增；NODE_ENV !== development 时 notFound()
+  - `apps/web/src/app/[locale]/__playground/tokens/page.tsx` — 新增；Server Component 导入 design-tokens 常量，三栏布局
+  - `apps/web/src/app/[locale]/__playground/tokens/_components/BrandSwitcher.tsx` — 新增；useTheme hook 驱动 light/dark/system 切换
+  - `apps/web/src/app/[locale]/__playground/tokens/_components/PrimitivePanel.tsx` — 新增；颜色色块 + OKLCH 值 + space/radius/shadow/typography/motion/zIndex
+  - `apps/web/src/app/[locale]/__playground/tokens/_components/SemanticPanel.tsx` — 新增；resolvedTheme 实时适配，Live Preview 按钮/输入框示例
+  - `apps/web/src/app/[locale]/__playground/tokens/_components/ComponentPanel.tsx` — 新增；flattenTokenPath 展开组件 token，点击复制 token 名
+  - `apps/web/package.json` — 新增 @resovo/design-tokens workspace 依赖
+  - `apps/web/tsconfig.json` — 新增 @resovo/design-tokens 路径映射
+  - `tsconfig.json` — 新增 @resovo/design-tokens 路径映射
+- **新增依赖**：@resovo/design-tokens（workspace 第一方包，非外部依赖）
+- **数据库变更**：无
+- **注意事项**：playground 仅 dev 环境可见；production build 访问 /__playground/tokens → 404；token 数据由 Server Component 导入后以 props 传递给 client 组件
+- **质量门禁**：typecheck ✅ / lint ✅ / tests 1087 passed ✅
