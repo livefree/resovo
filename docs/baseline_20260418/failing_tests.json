@@ -1,0 +1,202 @@
+[
+  {
+    "test_id": "unit::stagingDouban::DoubanService.confirmSubject::成功写入豆瓣信息并更新 douban_status=matched",
+    "suite": "tests/unit/api/stagingDouban.test.ts",
+    "kind": "unit",
+    "status": "failed",
+    "duration_ms": 12,
+    "error_excerpt": "TypeError: db.query is not a function @ apps/api/src/db/queries/externalData.ts:300 (upsertVideoExternalRef)"
+  },
+  {
+    "test_id": "unit::stagingDouban::DoubanService.confirmSubject::meta_score 正确计算（所有字段齐全 → 100）",
+    "suite": "tests/unit/api/stagingDouban.test.ts",
+    "kind": "unit",
+    "status": "failed",
+    "duration_ms": 2,
+    "error_excerpt": "TypeError: db.query is not a function @ apps/api/src/db/queries/externalData.ts:300 (upsertVideoExternalRef)"
+  },
+  {
+    "test_id": "unit::douban::POST /v1/admin/videos/:id/douban-sync::未登录返回 401",
+    "suite": "tests/unit/api/douban.test.ts",
+    "kind": "unit",
+    "status": "failed",
+    "duration_ms": 139,
+    "error_excerpt": "process.exit unexpectedly called with 1 @ apps/api/src/lib/config.ts:59 (CrawlerService module-level import triggers process.exit on missing env vars)"
+  },
+  {
+    "test_id": "unit::douban::POST /v1/admin/videos/:id/douban-sync::moderator 权限返回 403",
+    "suite": "tests/unit/api/douban.test.ts",
+    "kind": "unit",
+    "status": "failed",
+    "duration_ms": 0,
+    "error_excerpt": "process.exit unexpectedly called with 1 (cascade: beforeEach failed, app is undefined)"
+  },
+  {
+    "test_id": "unit::douban::POST /v1/admin/videos/:id/douban-sync::user 权限返回 403",
+    "suite": "tests/unit/api/douban.test.ts",
+    "kind": "unit",
+    "status": "failed",
+    "duration_ms": 0,
+    "error_excerpt": "process.exit unexpectedly called with 1 (cascade)"
+  },
+  {
+    "test_id": "unit::douban::POST /v1/admin/videos/:id/douban-sync::匹配成功时返回 200 updated:true 和 fields",
+    "suite": "tests/unit/api/douban.test.ts",
+    "kind": "unit",
+    "status": "failed",
+    "duration_ms": 0,
+    "error_excerpt": "process.exit unexpectedly called with 1 (cascade)"
+  },
+  {
+    "test_id": "unit::douban::POST /v1/admin/videos/:id/douban-sync::搜索无结果降级返回 updated:false reason:no_match，不抛 500",
+    "suite": "tests/unit/api/douban.test.ts",
+    "kind": "unit",
+    "status": "failed",
+    "duration_ms": 0,
+    "error_excerpt": "process.exit unexpectedly called with 1 (cascade)"
+  },
+  {
+    "test_id": "unit::douban::POST /v1/admin/videos/:id/douban-sync::ID 格式非法返回 404",
+    "suite": "tests/unit/api/douban.test.ts",
+    "kind": "unit",
+    "status": "failed",
+    "duration_ms": 0,
+    "error_excerpt": "process.exit unexpectedly called with 1 (cascade)"
+  },
+  {
+    "test_id": "unit::douban::DoubanService.syncVideo::匹配成功时更新 catalog，返回 updated:true",
+    "suite": "tests/unit/api/douban.test.ts",
+    "kind": "unit",
+    "status": "failed",
+    "duration_ms": 2,
+    "error_excerpt": "TypeError: db.query is not a function @ apps/api/src/db/queries/metadataProvenance.ts:128 (getHardLockedFields)"
+  },
+  {
+    "test_id": "unit::moderationStats::GET /admin/videos/moderation-stats::返回统计数据",
+    "suite": "tests/unit/api/moderationStats.test.ts",
+    "kind": "unit",
+    "status": "failed",
+    "duration_ms": 256,
+    "error_excerpt": "process.exit unexpectedly called with 1 @ apps/api/src/lib/config.ts:59 (CrawlerService module-level import triggers process.exit on missing env vars)"
+  },
+  {
+    "test_id": "unit::moderationStats::GET /admin/videos/moderation-stats::未认证 → 401",
+    "suite": "tests/unit/api/moderationStats.test.ts",
+    "kind": "unit",
+    "status": "failed",
+    "duration_ms": 0,
+    "error_excerpt": "process.exit unexpectedly called with 1 (cascade); Cannot read properties of undefined (reading 'close')"
+  },
+  {
+    "test_id": "unit::moderationStats::GET /admin/videos/moderation-stats::interceptRate 无数据时为 null",
+    "suite": "tests/unit/api/moderationStats.test.ts",
+    "kind": "unit",
+    "status": "failed",
+    "duration_ms": 0,
+    "error_excerpt": "process.exit unexpectedly called with 1 (cascade)"
+  },
+  {
+    "test_id": "unit::moderationStats::GET /admin/videos/pending-review::返回待审列表，含 firstSourceUrl",
+    "suite": "tests/unit/api/moderationStats.test.ts",
+    "kind": "unit",
+    "status": "failed",
+    "duration_ms": 0,
+    "error_excerpt": "process.exit unexpectedly called with 1 (cascade)"
+  },
+  {
+    "test_id": "unit::moderationStats::GET /admin/videos/pending-review::分页参数传递给查询层",
+    "suite": "tests/unit/api/moderationStats.test.ts",
+    "kind": "unit",
+    "status": "failed",
+    "duration_ms": 0,
+    "error_excerpt": "process.exit unexpectedly called with 1 (cascade)"
+  },
+  {
+    "test_id": "unit::moderationStats::GET /admin/videos/pending-review::无效分页参数 → 422",
+    "suite": "tests/unit/api/moderationStats.test.ts",
+    "kind": "unit",
+    "status": "failed",
+    "duration_ms": 0,
+    "error_excerpt": "process.exit unexpectedly called with 1 (cascade)"
+  },
+  {
+    "test_id": "unit::moderationStats::GET /admin/videos/pending-review::未认证 → 401",
+    "suite": "tests/unit/api/moderationStats.test.ts",
+    "kind": "unit",
+    "status": "failed",
+    "duration_ms": 0,
+    "error_excerpt": "process.exit unexpectedly called with 1 (cascade)"
+  },
+  {
+    "test_id": "e2e::player.spec.ts::电影详情页::立即观看按钮指向播放页",
+    "suite": "tests/e2e/player.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 4200,
+    "error_excerpt": "expect(href).toContain('/watch/aB3kR9x1') — received '/watch/test-movie-aB3kR9x1-aB3kR9x1' (test expects shortId-only slug, code uses title-slug format)"
+  },
+  {
+    "test_id": "e2e::player.spec.ts::动漫详情页（多集）::点击第 3 集跳转到播放页 ep 3",
+    "suite": "tests/e2e/player.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 3800,
+    "error_excerpt": "expect(href).toContain('/watch/') with ep param — received URL uses title+shortId slug format, test expects shortId-only"
+  },
+  {
+    "test_id": "e2e::player.spec.ts::播放页（PlayerShell）::标题链接指向详情页",
+    "suite": "tests/e2e/player.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 5100,
+    "error_excerpt": "expect(locator).toBeVisible() failed: element not found (data-testid='back-to-detail-link' not present in current PlayerShell DOM)"
+  },
+  {
+    "test_id": "e2e::player.spec.ts::播放页（PlayerShell）::剧场模式切换按钮可见（大屏设备）",
+    "suite": "tests/e2e/player.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 4900,
+    "error_excerpt": "expect(locator).toBeAttached() failed: element not found (data-testid='theater-mode-btn' not rendered)"
+  },
+  {
+    "test_id": "e2e::player.spec.ts::播放页（多集动漫）::显示右侧选集面板",
+    "suite": "tests/e2e/player.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 5300,
+    "error_excerpt": "expect(locator).toBeVisible() failed: element not found (data-testid='player-side-panel' absent)"
+  },
+  {
+    "test_id": "e2e::player.spec.ts::播放页（多集动漫）::选集面板显示正确数量",
+    "suite": "tests/e2e/player.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 5100,
+    "error_excerpt": "expect(locator).toHaveCount(12) failed: resolved to 0 elements (side-episode-* testids absent)"
+  },
+  {
+    "test_id": "e2e::player.spec.ts::PLAYER-10 播放页完整链路::DanmakuBar 存在于播放页中（data-testid=danmaku-bar）",
+    "suite": "tests/e2e/player.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 6200,
+    "error_excerpt": "expect(locator).toBeVisible() failed: element not found (data-testid='danmaku-bar' not present in current PlayerShell)"
+  },
+  {
+    "test_id": "e2e::search.spec.ts::分类浏览页::点击类型筛选后结果更新（只显示该类型）",
+    "suite": "tests/e2e/search.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 3600,
+    "error_excerpt": "expect(countText).toContain('1') failed — data-testid='result-count' text does not reflect filtered count"
+  },
+  {
+    "test_id": "e2e::search.spec.ts::搜索页::点击结果卡片跳转到播放页",
+    "suite": "tests/e2e/search.spec.ts",
+    "kind": "e2e",
+    "status": "failed",
+    "duration_ms": 2900,
+    "error_excerpt": "expect(href).toMatch(/\\/watch\\//) failed — result-card href does not match /watch/ pattern"
+  }
+]

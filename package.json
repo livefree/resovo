@@ -30,7 +30,8 @@
     "create:admin": "node --env-file=.env.local --import tsx scripts/create-admin.ts",
     "verify:crawler": "node --env-file=.env.local --import tsx scripts/verify-crawler.ts",
     "test:crawler-site": "node --env-file=.env.local --import tsx scripts/test-crawler-site.ts",
-    "crawler:stop-all": "node --env-file=.env.local --import tsx scripts/stop-all-crawls.ts"
+    "crawler:stop-all": "node --env-file=.env.local --import tsx scripts/stop-all-crawls.ts",
+    "verify:baseline": "tsx scripts/verify-baseline.ts"
   },
   "dependencies": {
     "@resovo/player": "*",

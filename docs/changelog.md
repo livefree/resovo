@@ -6543,3 +6543,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：failing_tests.json（TESTFIX-03 创建）；隔离清单 = 0（TESTFIX-06 后更新）。修复后 player.spec.ts 15 通过/7 失败（7 个为 C/D 类，进入 TESTFIX-04/05）。
+
+---
+
+## TESTFIX-03 — E2E 失败逐项分类登记 + triage 文档 + 校验脚本
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件列表**：
+  - `docs/test_triage_20260418.md` — 25 条失败逐一分类（A×13 defer TESTFIX-05；D×3 fix TESTFIX-05；C×9 defer M2–M5）
+  - `docs/baseline_20260418/failing_tests.json` — 25 条失败完整归档（schema：test_id/suite/kind/status/duration_ms/error_excerpt）
+  - `scripts/verify-baseline.ts` — 校验脚本（schema 验证 + --unit/--e2e/--total 数字断言，失败时 exit 1）
+  - `package.json` — 追加 `verify:baseline` script
+- **测试覆盖**：`npm run verify:baseline -- --unit 16 --e2e 9 --total 25` 通过
+- **failing_tests.json 路径**：`docs/baseline_20260418/failing_tests.json`
+- **当前隔离清单大小**：0（TESTFIX-06 创建隔离清单后更新）
+- **数字快照**：单元失败 16，E2E 失败 9（web-chromium），合计 25
