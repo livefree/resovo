@@ -8,6 +8,7 @@
  *   npm run verify:baseline                          # schema check + print counts
  *   npm run verify:baseline -- --unit 16 --e2e 9    # also assert exact counts
  *   npm run verify:baseline -- --total 25            # assert total
+ *   npm run verify:baseline -- --diff                # diff baseline vs quarantine list
  */
 
 import * as fs from 'fs'
@@ -57,20 +58,42 @@ function validateSchema(tests: FailingTest[]): string[] {
   return errors
 }
 
-function parseArgs(): Record<string, number> {
+function parseArgs(): { counts: Record<string, number>; diff: boolean; phase: number } {
   const args = process.argv.slice(2)
-  const result: Record<string, number> = {}
+  const counts: Record<string, number> = {}
+  let diff = false
+  let phase = 0
   for (let i = 0; i < args.length; i++) {
-    if (args[i].startsWith('--') && i + 1 < args.length) {
+    if (args[i] === '--diff') {
+      diff = true
+    } else if (args[i] === '--phase' && i + 1 < args.length) {
+      phase = parseInt(args[i + 1], 10)
+      i++
+    } else if (args[i].startsWith('--') && i + 1 < args.length) {
       const key = args[i].slice(2)
       const val = parseInt(args[i + 1], 10)
       if (!isNaN(val)) {
-        result[key] = val
+        counts[key] = val
         i++
       }
     }
   }
-  return result
+  return { counts, diff, phase }
+}
+
+function readQuarantineIds(phase: number): Set<string> {
+  const quarantinePath = path.join(__dirname, '..', 'docs', `known_failing_tests_phase${phase}.md`)
+  if (!fs.existsSync(quarantinePath)) {
+    return new Set()
+  }
+  const content = fs.readFileSync(quarantinePath, 'utf-8')
+  const match = content.match(/```json\n([\s\S]+?)```/)
+  if (!match) return new Set()
+  try {
+    return new Set(JSON.parse(match[1]) as string[])
+  } catch {
+    return new Set()
+  }
 }
 
 function main(): void {
@@ -109,7 +132,7 @@ function main(): void {
   console.log(`  total failed : ${totalFailed}`)
   console.log(`  total entries: ${tests.length}`)
 
-  const expected = parseArgs()
+  const { counts: expected, diff, phase } = parseArgs()
   let mismatch = false
 
   if ('unit' in expected && expected.unit !== unitFailed) {
@@ -128,6 +151,26 @@ function main(): void {
   if (mismatch) {
     console.error('FAIL: phase-notice numbers do not match baseline — PHASE COMPLETE blocked')
     process.exit(1)
+  }
+
+  if (diff) {
+    const quarantineIds = readQuarantineIds(phase)
+    const baselineIds = new Set(tests.filter((t) => t.status === 'failed').map((t) => t.test_id))
+    const notInQuarantine = [...baselineIds].filter((id) => !quarantineIds.has(id))
+    const notInBaseline = [...quarantineIds].filter((id) => !baselineIds.has(id))
+    console.log(`\nDiff: baseline vs Phase ${phase} quarantine:`)
+    console.log(`  baseline failed : ${baselineIds.size}`)
+    console.log(`  quarantine size : ${quarantineIds.size}`)
+    if (notInQuarantine.length > 0) {
+      console.log(`\n  In baseline but NOT in quarantine (${notInQuarantine.length}):`)
+      notInQuarantine.forEach((id) => console.log(`    - ${id}`))
+    } else {
+      console.log('  All baseline failures are covered by quarantine.')
+    }
+    if (notInBaseline.length > 0) {
+      console.log(`\n  In quarantine but NOT in baseline (${notInBaseline.length}):`)
+      notInBaseline.forEach((id) => console.log(`    + ${id}`))
+    }
   }
 
   console.log('OK: schema valid' + (Object.keys(expected).length > 0 ? ', counts match' : ''))

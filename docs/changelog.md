@@ -6560,3 +6560,27 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **failing_tests.json 路径**：`docs/baseline_20260418/failing_tests.json`
 - **当前隔离清单大小**：0（TESTFIX-06 创建隔离清单后更新）
 - **数字快照**：单元失败 16，E2E 失败 9（web-chromium），合计 25
+
+---
+
+## TESTFIX-04 — 修复 C 类「立即修复」testid / DOM 漂移（空操作）
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件列表**：无
+- **说明**：triage 文档中 9 条 C 类失败全部 defer（href 格式/PlayerShell testid/DanmakuBar/search filter），无立即修复项。
+
+---
+
+## TESTFIX-05 — 修复 A 类（process.exit）和 D 类（db.query mock）单元测试失败
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件列表**：
+  - `tests/unit/api/stagingDouban.test.ts` — 新增 externalData mock + safeUpdate 断言更新（sourceRef 第 4 参数）
+  - `tests/unit/api/douban.test.ts` — 新增 CrawlerRunService mock（process.exit 链断）+ metadataProvenance mock（db.query 修复）
+  - `tests/unit/api/moderationStats.test.ts` — 新增 CrawlerRunService mock
+- **测试覆盖**：1007 unit tests passed (0 failed，修复前 16 failed)
+- **数据库变更**：无
