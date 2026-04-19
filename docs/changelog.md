@@ -7080,3 +7080,14 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - tvshow/[slug]/page.tsx 注释从 variety→tvshow 已更新
   - 无硬编码 /variety/ URL 字符串残留
 - **质量门禁**：typecheck ✅ lint ✅ unit tests 1102/1102 ✅
+
+## [M2-E2E-01] M2 E2E 新增覆盖 & 断言同步
+
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **变更摘要**：
+  - 新建 tests/e2e-next/browse-tvshow.spec.ts（3 个测试组）
+  - 覆盖：/variety/* → /tvshow/* 308 重定向；VideoCard href /tvshow/；BrowseGrid type=tvshow API 别名映射
+  - 现有 e2e 已无 variety URL 残留（search.spec.ts 已在 TVSHOW-05 同步）
+- **质量门禁**：typecheck ✅ lint ✅ unit tests 1102/1102 ✅

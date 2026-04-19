@@ -7476,7 +7476,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - **依赖**：M2-TVSHOW-04
 - **文件范围**：VideoCard / VideoMeta / VideoDetailHero / Page.template / others/[slug]
 
-#### M2-E2E-01 — M2 E2E 新增覆盖 & 断言同步（状态：⬜ 待开始）
+#### M2-E2E-01 — M2 E2E 新增覆盖 & 断言同步（状态：✅ 已完成）
 - **建议模型**：sonnet
 - **依赖**：HOMEPAGE-02 + TVSHOW-04..06 全部 ✅
 - **文件范围**：tests/e2e-next/browse-tvshow.spec.ts（新增）/ tests/e2e/ 断言同步
