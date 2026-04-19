@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Design-token semantic vars — synced with packages/design-tokens/src/css/tokens.css */
+:root {
+  color-scheme: light dark;
+  --bg-canvas: oklch(98.5% 0.002 247);
+  --bg-surface: oklch(100% 0 0);
+  --bg-surface-raised: oklch(100% 0 0);
+  --bg-surface-sunken: oklch(96.8% 0.004 247);
+  --bg-overlay: color-mix(in oklch, oklch(6.5% 0.004 247) 50%, transparent);
+  --fg-default: oklch(11.2% 0.006 247);
+  --fg-muted: oklch(32.8% 0.012 247);
+  --fg-subtle: oklch(55.4% 0.014 247);
+  --fg-on-accent: oklch(100% 0 0);
+  --fg-disabled: oklch(70.8% 0.012 247);
+  --border-default: oklch(92.9% 0.006 247);
+  --border-strong: oklch(70.8% 0.012 247);
+  --border-subtle: oklch(96.8% 0.004 247);
+  --border-focus: oklch(64.5% 0.165 230);
+  --accent-default: oklch(64.5% 0.165 230);
+  --accent-hover: oklch(52.0% 0.155 230);
+  --accent-active: oklch(38.0% 0.120 230);
+  --accent-muted: oklch(92.0% 0.045 230);
+  --accent-fg: oklch(100% 0 0);
+  --surface-canvas: oklch(98.5% 0.002 247);
+  --surface-surface: oklch(100% 0 0);
+  --surface-surface-raised: oklch(100% 0 0);
+  --surface-glass: color-mix(in oklch, oklch(100% 0 0) 70%, transparent);
+  --surface-scrim: linear-gradient(180deg, transparent 0%, oklch(6.5% 0.004 247) 100%);
+  --state-success-bg: oklch(88.0% 0.090 155);
+  --state-success-fg: oklch(44.0% 0.135 155);
+  --state-success-border: oklch(62.0% 0.165 155);
+  --state-warning-bg: oklch(90.0% 0.095 85);
+  --state-warning-fg: oklch(52.0% 0.135 85);
+  --state-warning-border: oklch(74.0% 0.160 85);
+  --state-error-bg: oklch(88.0% 0.080 25);
+  --state-error-fg: oklch(45.0% 0.165 25);
+  --state-error-border: oklch(62.0% 0.195 25);
+  --state-info-bg: oklch(90.0% 0.060 250);
+  --state-info-fg: oklch(48.0% 0.125 250);
+  --state-info-border: oklch(66.0% 0.145 250);
+}
+
+.dark {
+  --bg-canvas: oklch(6.5% 0.004 247);
+  --bg-surface: oklch(11.2% 0.006 247);
+  --bg-surface-raised: oklch(16.5% 0.008 247);
+  --bg-surface-sunken: oklch(6.5% 0.004 247);
+  --bg-overlay: color-mix(in oklch, oklch(6.5% 0.004 247) 70%, transparent);
+  --fg-default: oklch(98.5% 0.002 247);
+  --fg-muted: oklch(86.9% 0.009 247);
+  --fg-subtle: oklch(55.4% 0.014 247);
+  --fg-on-accent: oklch(100% 0 0);
+  --fg-disabled: oklch(43.9% 0.014 247);
+  --border-default: oklch(23.0% 0.010 247);
+  --border-strong: oklch(43.9% 0.014 247);
+  --border-subtle: oklch(16.5% 0.008 247);
+  --border-focus: oklch(64.5% 0.165 230);
+  --accent-default: oklch(64.5% 0.165 230);
+  --accent-hover: oklch(78.0% 0.110 230);
+  --accent-active: oklch(92.0% 0.045 230);
+  --accent-muted: oklch(38.0% 0.120 230);
+  --accent-fg: oklch(100% 0 0);
+  --surface-canvas: oklch(6.5% 0.004 247);
+  --surface-surface: oklch(11.2% 0.006 247);
+  --surface-surface-raised: oklch(16.5% 0.008 247);
+  --surface-glass: color-mix(in oklch, oklch(11.2% 0.006 247) 60%, transparent);
+  --surface-scrim: linear-gradient(180deg, transparent 0%, oklch(6.5% 0.004 247) 100%);
+  --state-success-bg: oklch(44.0% 0.135 155);
+  --state-success-fg: oklch(88.0% 0.090 155);
+  --state-success-border: oklch(62.0% 0.165 155);
+  --state-warning-bg: oklch(52.0% 0.135 85);
+  --state-warning-fg: oklch(90.0% 0.095 85);
+  --state-warning-border: oklch(74.0% 0.160 85);
+  --state-error-bg: oklch(45.0% 0.165 25);
+  --state-error-fg: oklch(88.0% 0.080 25);
+  --state-error-border: oklch(62.0% 0.195 25);
+  --state-info-bg: oklch(48.0% 0.125 250);
+  --state-info-fg: oklch(90.0% 0.060 250);
+  --state-info-border: oklch(66.0% 0.145 250);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg-canvas: oklch(6.5% 0.004 247);
+    --bg-surface: oklch(11.2% 0.006 247);
+    --bg-surface-raised: oklch(16.5% 0.008 247);
+    --bg-surface-sunken: oklch(6.5% 0.004 247);
+    --bg-overlay: color-mix(in oklch, oklch(6.5% 0.004 247) 70%, transparent);
+    --fg-default: oklch(98.5% 0.002 247);
+    --fg-muted: oklch(86.9% 0.009 247);
+    --fg-subtle: oklch(55.4% 0.014 247);
+    --fg-on-accent: oklch(100% 0 0);
+    --fg-disabled: oklch(43.9% 0.014 247);
+    --border-default: oklch(23.0% 0.010 247);
+    --border-strong: oklch(43.9% 0.014 247);
+    --border-subtle: oklch(16.5% 0.008 247);
+    --border-focus: oklch(64.5% 0.165 230);
+    --accent-default: oklch(64.5% 0.165 230);
+    --accent-hover: oklch(78.0% 0.110 230);
+    --accent-active: oklch(92.0% 0.045 230);
+    --accent-muted: oklch(38.0% 0.120 230);
+    --accent-fg: oklch(100% 0 0);
+    --surface-canvas: oklch(6.5% 0.004 247);
+    --surface-surface: oklch(11.2% 0.006 247);
+    --surface-surface-raised: oklch(16.5% 0.008 247);
+    --surface-glass: color-mix(in oklch, oklch(11.2% 0.006 247) 60%, transparent);
+    --state-success-bg: oklch(44.0% 0.135 155);
+    --state-success-fg: oklch(88.0% 0.090 155);
+    --state-success-border: oklch(62.0% 0.165 155);
+    --state-warning-bg: oklch(52.0% 0.135 85);
+    --state-warning-fg: oklch(90.0% 0.095 85);
+    --state-warning-border: oklch(74.0% 0.160 85);
+    --state-error-bg: oklch(45.0% 0.165 25);
+    --state-error-fg: oklch(88.0% 0.080 25);
+    --state-error-border: oklch(62.0% 0.195 25);
+    --state-info-bg: oklch(48.0% 0.125 250);
+    --state-info-fg: oklch(90.0% 0.060 250);
+    --state-info-border: oklch(66.0% 0.145 250);
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--border-default);
+  }
+  body {
+    background-color: var(--bg-canvas);
+    color: var(--fg-default);
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+}

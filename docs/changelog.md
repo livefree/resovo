@@ -6924,3 +6924,67 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **数据库变更**：无（复用 TOKEN-08 的 brands 表 + listBrands query）
 - **注意事项**：apps/admin/ 不存在，实际位置为 apps/server/（port 3001）；本里程碑仅只读，编辑写入留待 M5+；WEB_BASE_URL 通过 env.NEXT_PUBLIC_WEB_URL 注入
 - **质量门禁**：typecheck ✅ / lint ✅ / tests 1087 passed ✅
+
+---
+
+## RW-SETUP-01 — apps/web-next/ Next.js 14 App Router scaffold
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **涉及文件**：
+  - 新增 `apps/web-next/`（全部目录）：package.json / tsconfig.json / next.config.ts / tailwind.config.ts / postcss.config.js / middleware.ts / i18n/routing.ts / i18n/request.ts / app/layout.tsx / app/[locale]/layout.tsx / app/[locale]/next-placeholder/page.tsx / app/globals.css / messages/en.json / messages/zh-CN.json / lib/theme-init-script.ts / README.md
+  - 修改 `package.json`（根）：typecheck 追加 `--workspace @resovo/web-next`
+  - 修改 `.eslintrc.json`（根）：overrides 追加 apps/web-next/src/ 路径
+  - 修改 `apps/web/src/app/[locale]/playground/tokens/_components/PrimitivePanel.tsx`：加 eslint-disable 注释（resovo/no-hardcoded-color 规则对 dev-only playground 的原始 token 值展示合理豁免）
+- **新增依赖**：无（复用根 workspace 已有依赖）
+- **数据库变更**：无
+- **注意事项**：port 使用 3002（任务卡写的 3001 与 apps/server 冲突）；apps/web-next 继承根 ESLint 配置无需独立 `.eslintrc.json`；brand-detection.ts 不在本卡范围内（RW-SETUP-02 起接入）
+- **质量门禁**：typecheck ✅ / lint ✅ / tests 1087 passed ✅ / http://localhost:3002/en/next-placeholder 200 ✅
+
+---
+
+## RW-SETUP-02 — middleware 路由切分协议 + ADR-035
+
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：arch-reviewer (claude-opus-4-6) — 方案 A vs B 评估 + ADR-035 草稿
+- **涉及文件**：
+  - 修改 `apps/web/middleware.ts`：插入 ADR-035 分流逻辑（ALLOWLIST 匹配 → `NextResponse.rewrite` to web-next；kill-switch 环境变量；`x-rewrite-source`/`x-rewrite-rule` 响应头）
+  - 新增 `apps/web/src/lib/rewrite-allowlist.ts`：ALLOWLIST 单一真源，含 `RewriteRule` 类型、`REWRITE_LOCALES`、kill-switch 常量、upstream 配置
+  - 新增 `apps/web/src/lib/rewrite-match.ts`：纯函数 `matchRewrite`/`stripLocale`，支持 exact/prefix + localeAware 匹配
+  - 新增 `tests/unit/lib/rewrite-match.test.ts`：12 个单元测试，覆盖 locale 剥离、前缀边界、未命中
+  - 追加 `docs/decisions.md`：ADR-035（方案 B，Next.js middleware 切分）
+  - 追加 `docs/architecture.md`：§15 重写期路由拓扑（ASCII 拓扑图 + 里程碑接管表 + kill-switch 说明）
+  - 修改 `docs/task-queue.md`：RW-SETUP-02 状态更新
+- **决策摘要**：采纳方案 B（middleware 切分）；ALLOWLIST 含 `/next-placeholder`（enabled: true）用于验收；M2 起追加业务路由
+- **新增依赖**：无
+- **数据库变更**：无
+- **质量门禁**：typecheck ✅ / lint ✅ / 1099 tests（含 12 个 rewrite-match 新增）✅
+
+---
+
+## RW-SETUP-03 — tests/e2e-next/ + playwright project + test-guarded 扩展
+
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **涉及文件**：
+  - 新增 `tests/e2e-next/README.md`
+  - 新增 `tests/e2e-next/smoke.spec.ts`（2 tests：en + zh-CN locale，data-testid="next-placeholder-root" 验收）
+  - 修改 `playwright.config.ts`：新增 `WEB_NEXT_URL` 常量、`web-next-chromium` project（testDir: tests/e2e-next）、webServer 条目
+  - 修改 `scripts/test-guarded.ts`：`readQuarantine` 返回 `e2eNext` 集合；`collectE2EFailures` 按文件路径自动选 `e2e-next::` 前缀；`runE2EGate` 接受双 quarantine 参数，输出分桶报告
+  - 修改 `scripts/verify-baseline.ts`：`runCoverageReport` 增加 web-next-chromium section
+  - 修改 `apps/web-next/src/app/[locale]/next-placeholder/page.tsx`：加 `data-testid="next-placeholder-root"`
+- **新增依赖**：无
+- **数据库变更**：无
+- **质量门禁**：typecheck ✅ / lint ✅ / 1099 unit tests ✅ / playwright web-next-chromium 2 passed ✅
+
+---
+
+## SEQ-20260418-RW-SETUP 完成
+
+- **完成时间**：2026-04-19
+- **包含任务**：RW-SETUP-01 / RW-SETUP-02 / RW-SETUP-03（共 3 张卡）
+- **产出**：apps/web-next/ scaffold（port 3002）+ ADR-035 路由切分协议（ALLOWLIST middleware）+ tests/e2e-next/ + playwright web-next-chromium project + test-guarded 三 project 合并报告
+- **M2 启动条件**：✅ 全部满足，可立即开始 M2 homepage 接管

@@ -16,7 +16,13 @@
         "apps/web/src/lib/**/*.ts",
         "apps/web/src/lib/**/*.tsx",
         "apps/web/src/stores/**/*.ts",
-        "apps/web/src/stores/**/*.tsx"
+        "apps/web/src/stores/**/*.tsx",
+        "apps/web-next/src/app/**/*.ts",
+        "apps/web-next/src/app/**/*.tsx",
+        "apps/web-next/src/components/**/*.ts",
+        "apps/web-next/src/components/**/*.tsx",
+        "apps/web-next/src/lib/**/*.ts",
+        "apps/web-next/src/lib/**/*.tsx"
       ],
       "rules": {
         "no-restricted-imports": [

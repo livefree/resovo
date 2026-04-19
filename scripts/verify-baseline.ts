@@ -136,7 +136,8 @@ function runCoverageReport(tests: FailingTest[]): boolean {
     }
   }
 
-  console.log('\nCoverage report (e2e_coverage_report.md vs failing_tests.json):')
+  // ── Legacy E2E project (e2e/) ────────────────────────────────────────
+  console.log('\nCoverage report — E2E Project: web-chromium / web-mobile / admin-chromium (tests/e2e/)')
   console.log(
     `${'Suite'.padEnd(50)} ${'Expected fail'.padStart(13)} ${'Baseline fail'.padStart(13)} ${'Match'.padStart(6)}`,
   )
@@ -159,6 +160,11 @@ function runCoverageReport(tests: FailingTest[]): boolean {
     extraSuites.forEach((s) => console.log(`    - ${s} (${baselineFailsBySuite[s]} failures)`))
     allMatch = false
   }
+
+  // ── New E2E project (e2e-next/) ─────────────────────────────────────
+  console.log('\nCoverage report — E2E Project: web-next-chromium (tests/e2e-next/)')
+  console.log('  smoke.spec.ts  [RW-SETUP-02 scaffold verification]')
+  console.log('  (additional suites added per milestone M2–M6)')
 
   if (!allMatch) {
     console.error('\nFAIL: coverage report numbers do not match baseline')

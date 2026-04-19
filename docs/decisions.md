@@ -934,3 +934,30 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
   - `tests/e2e/player.spec.ts`（补齐 `MOCK_MOVIE` / `MOCK_ANIME` 字段）
   - `docs/decisions.md`（本 ADR）
   - 架构守护层无新增文件，既有路由保持原样
+
+---
+
+## ADR-035: 重写期路由切分协议（apps/web → apps/web-next 渐进迁移）
+
+- **日期**：2026-04-19
+- **状态**：已采纳
+- **子代理**：arch-reviewer (claude-opus-4-6)
+- **背景**：Resovo 进行 M2–M6 前端重写，`apps/web`（port 3000）与 `apps/web-next`（port 3002）需在同一对外域名下并存，按里程碑逐步由新应用接管路由。过渡期要求爬虫零感知（无 3xx）、URL 不变、每个里程碑可分钟级发布 + 秒级回滚。
+- **决策**：采纳方案 B — Next.js middleware 切分。`apps/web/middleware.ts` 读取代码库内的 TypeScript 常量 ALLOWLIST，命中的路径用 `NextResponse.rewrite` 透明转发到 `apps/web-next`（内网 upstream）；未命中路径维持原有 next-intl + 品牌主题逻辑。
+- **核心理由**：
+  1. ALLOWLIST 作为 TS 常量存在代码库，与里程碑接管代码同 PR 提交，回滚即 `git revert`，审计链路完整。
+  2. 本地 `next dev` 直接复现路由切分，无需额外代理组件；改 ALLOWLIST 热更新，dev 体验一致。
+  3. matchRewrite 纯函数可用 Vitest 单元覆盖，Playwright E2E 可断言 `x-rewrite-source` 头。
+  4. `NextResponse.rewrite` 对外 200，URL 不变，SEO 爬虫零感知。
+- **ALLOWLIST 数据结构**：
+  - 单一真源：`apps/web/src/lib/rewrite-allowlist.ts`
+  - 匹配工具：`apps/web/src/lib/rewrite-match.ts`（纯函数，含单元测试）
+  - `RewriteRule` 字段：`milestone`（M2–M6）/ `domain` / `path` / `mode`（exact/prefix）/ `localeAware` / `enabled` / `note`
+  - `enabled: false` 用于灰度/回滚兜底；`REWRITE_KILL_SWITCH_ENV` 环境变量秒级禁用所有 rewrite
+- **dev 工作流**：本地同时运行 apps/web（3000）+ apps/web-next（3002）；middleware 读 `REWRITE_UPSTREAM_URL`（默认 `http://127.0.0.1:3002`）做 rewrite；响应头 `x-rewrite-source: web-next` 可在 DevTools 确认命中
+- **prod cutover 流程**：① `apps/web-next` 实现路由（`enabled: false`）→ CI 全绿 → ② 第二个 PR 将 `enabled: false` 改为 `true`（diff 仅 1 行）→ ③ 监控 24h → ④ 下一里程碑重复
+- **回滚机制**：① 秒级：设置 `REWRITE_ALLOWLIST_DISABLED=1` 环境变量，middleware 短路回旧 app；② 分钟级：`git revert` 对应 PR，重新部署 apps/web
+- **架构约束**：ALLOWLIST 单一真源，修改须绑定里程碑任务；middleware 只用 `NextResponse.rewrite` 不得用 3xx；入口层不做 locale 重协商；`x-rewrite-source` / `x-rewrite-rule` 头必须透传；禁止 apps/web 与 apps/web-next 直接共享代码（共享逻辑放 `packages/*`）
+- **非目标**：CDN 缓存策略、按用户灰度、apps/server 路由、apps/api 路由
+- **影响文件**：`apps/web/middleware.ts`、`apps/web/src/lib/rewrite-allowlist.ts`、`apps/web/src/lib/rewrite-match.ts`、`apps/web/src/lib/__tests__/rewrite-match.test.ts`、`docs/architecture.md`（新增重写期路由拓扑章节）
+- **退役时机**：M6-RENAME 时，连同 `apps/web` 整体退役；本 ADR 状态更新为「已完成并废弃」

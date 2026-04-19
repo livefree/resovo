@@ -1,3 +1,4 @@
+/* eslint-disable resovo/no-hardcoded-color -- dev-only playground: intentionally displays raw primitive token values */
 'use client'
 
 import { useState } from 'react'

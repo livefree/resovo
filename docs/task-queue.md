@@ -7252,35 +7252,42 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ## SEQ-20260418-RW-SETUP — apps/*-next/ 并行重写脚手架
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-18 00:00
-- **最后更新时间**：2026-04-18 00:00
+- **最后更新时间**：2026-04-19
 - **目标**：搭建 apps/web-next/ 骨架 + middleware 路由切分协议 + tests/e2e-next/ 测试基础设施，为 M2 启动做好并行准备
 - **范围**：apps/web-next/ scaffold、中间件路由、playwright project 扩展、test-guarded 双前缀分桶
 - **依赖**：M1 TOKEN-03 以上完成（至少基础 token 可消费）；可与 M1 TOKEN-01..06 并行
 
 ### 任务列表（按执行顺序）
 
-1. RW-SETUP-01 — apps/web-next/ Next.js 14 App Router scaffold（状态：⬜ 待开始）
+1. RW-SETUP-01 — apps/web-next/ Next.js 14 App Router scaffold（状态：✅ 已完成）
    - 创建时间：2026-04-18 00:00
    - 计划开始：TOKEN-03 完成后
+   - 实际开始：2026-04-18
+   - 完成时间：2026-04-18
    - 验收要点：npm run dev --workspace=apps/web-next 启动成功；next-placeholder 返回 200；typecheck + lint 通过
 
-2. RW-SETUP-02 — middleware 路由切分协议 + ADR-035（状态：⬜ 待开始）
+2. RW-SETUP-02 — middleware 路由切分协议 + ADR-035（状态：✅ 已完成）
    - 创建时间：2026-04-18 00:00
    - 计划开始：RW-SETUP-01 完成后
+   - 实际开始：2026-04-19
+   - 完成时间：2026-04-19
    - 验收要点：ADR-035 写入 decisions.md；空 ALLOWLIST 下旧路由不受影响；回滚路径本地可复现
 
-3. RW-SETUP-03 — tests/e2e-next/ + playwright project + test-guarded 扩展（状态：⬜ 待开始）
+3. RW-SETUP-03 — tests/e2e-next/ + playwright project + test-guarded 扩展（状态：✅ 已完成）
    - 创建时间：2026-04-18 00:00
    - 计划开始：RW-SETUP-02 完成后
+   - 实际开始：2026-04-19
+   - 完成时间：2026-04-19
    - 验收要点：web-next-chromium project smoke 绿；test:guarded:e2e 三 project 合并报告；coverage-report 双 project 并列
 
 #### RW-SETUP-01 — apps/web-next/ Next.js 14 App Router scaffold
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
+- **完成时间**：2026-04-18
 - **依赖**：M1 TOKEN-03 以上
 - **文件范围**：
   - 新增 `apps/web-next/`（全部，目录从 0 搭建）
@@ -7301,13 +7308,14 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   - `npm run typecheck` 包含 apps/web-next/ 且通过
   - `npm run lint` 通过
   - 根 `package.json` workspaces、`tsconfig.json` paths 更新正确
-- **完成备注**：_（AI 填写：必须记录 Next.js 版本、port 配置 commit hash）_
+- **完成备注**：Next.js 15.x（与 apps/web 同版本，根 package.json `"next": "^15.1.0"`）；port 3002（apps/server 占用 3001，任务卡描述有误）；apps/web-next/ 完整 scaffold：next-intl i18n（en/zh-CN）+ design-tokens CSS vars + Tailwind preset + blocking theme-init script；占位路由 `/[locale]/next-placeholder` 验收 200 ✅；typecheck + lint + 1087 unit 全部通过；执行模型：claude-sonnet-4-6
 
 #### RW-SETUP-02 — middleware 路由切分协议 + ADR-035
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **建议模型**：opus（架构决策：影响 M2–M6 所有里程碑 cutover）
 - **创建时间**：2026-04-18
+- **完成时间**：2026-04-19
 - **依赖**：RW-SETUP-01
 - **文件范围**：
   - 新增 `apps/web-next/src/middleware.ts`
@@ -7324,13 +7332,14 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   - 空 ALLOWLIST 下旧路由不受影响
   - 临时把 `/next-placeholder` 加入 ALLOWLIST 测试，路由切到 web-next
   - 架构文档含「重写期路由拓扑」章节（ASCII 或 mermaid 拓扑图）
-- **完成备注**：_（AI 填写：必须记录 Opus 子代理模型 ID、ADR-035 commit hash、选择方案的核心理由）_
+- **完成备注**：子代理 arch-reviewer (claude-opus-4-6) 评估方案 A（部署层）vs 方案 B（Next.js middleware），选择方案 B；核心理由：ALLOWLIST TS 常量单一真源、dev/prod 同构、可 Vitest 单测、`NextResponse.rewrite` 爬虫零感知；实现：`apps/web/middleware.ts` 分流逻辑 + `rewrite-allowlist.ts` + `rewrite-match.ts`（纯函数）+ `tests/unit/lib/rewrite-match.test.ts`（12 tests）；ADR-035 写入 decisions.md；architecture.md 新增§15 重写期路由拓扑；`/next-placeholder` enabled:true 验收正常；typecheck ✅ / lint ✅ / 1099 tests ✅；执行模型：claude-sonnet-4-6
 
 #### RW-SETUP-03 — tests/e2e-next/ + playwright project + test-guarded 扩展
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
+- **完成时间**：2026-04-19
 - **依赖**：RW-SETUP-01、RW-SETUP-02
 - **文件范围**：
   - 新增 `tests/e2e-next/`（目录 + README.md）
@@ -7343,7 +7352,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   - `npm run test:guarded:e2e` 三 project 同时跑，输出合并 diff 报告
   - 模拟 smoke 新失败 → `test:guarded:e2e` 退出码 1
   - coverage-report 显示两个 E2E project 与对应 suite 清单
-- **完成备注**：_（AI 填写：必须记录三 project 配置 commit hash、test-guarded 扩展前后对比）_
+- **完成备注**：playwright.config.ts 新增 web-next-chromium project（testDir: tests/e2e-next, baseURL: localhost:3002）+ webServer 条目；tests/e2e-next/ 目录 + smoke.spec.ts（2 tests，locale en/zh-CN 各一）全部绿；test-guarded.ts 扩展：readQuarantine 返回 e2eNext 集合，e2e-next:: 前缀分桶，runE2EGate 签名加参数；verify-baseline.ts coverageReport 增加 web-next-chromium section；typecheck ✅ / 1099 unit tests ✅ / playwright web-next-chromium 2 tests ✅；执行模型：claude-sonnet-4-6
 ---
 ✅ PHASE COMPLETE — Phase 1（M1）Design Token 里程碑已完成，等待合并到 main 并确认下一步
 - **完成时间**：2026-04-18
