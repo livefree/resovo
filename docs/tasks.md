@@ -1,5 +1,18 @@
 # Resovo（流光） — 任务看板
 
+### TESTFIX-05 — 修复 D 类真 bug（db.query mock 缺失）+ A 类基础设施（process.exit 问题）
+- **状态**：🔄 进行中
+- **来源序列**：SEQ-20260418-M0.5
+- **建议模型**：sonnet
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **实际开始**：2026-04-18
+- **文件范围**：
+  - 修改 `tests/unit/api/stagingDouban.test.ts`（D-01, D-02：db.query mock）
+  - 修改 `tests/unit/api/douban.test.ts`（A-01~A-06, D-03：process.exit + db.query）
+  - 修改 `tests/unit/api/moderationStats.test.ts`（A-07~A-13：process.exit）
+- **完成备注**：_（AI 填写）_
+
 > status: active
 > owner: @engineering
 > scope: single active task workbench

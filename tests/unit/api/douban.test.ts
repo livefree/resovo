@@ -52,6 +52,19 @@ vi.mock('@/api/lib/doubanAdapter', () => ({
   getDoubanDetailRich: vi.fn(),
 }))
 
+vi.mock('@/api/services/CrawlerRunService', () => ({
+  CrawlerRunService: class {},
+}))
+
+vi.mock('@/api/db/queries/metadataProvenance', () => ({
+  getHardLockedFields: vi.fn().mockResolvedValue([]),
+  getLocksByCatalogId: vi.fn().mockResolvedValue([]),
+  batchUpsertFieldProvenance: vi.fn().mockResolvedValue(undefined),
+  upsertFieldLock: vi.fn().mockResolvedValue(undefined),
+  removeFieldLock: vi.fn().mockResolvedValue(undefined),
+  getProvenanceByCatalogId: vi.fn().mockResolvedValue([]),
+}))
+
 import * as videoQueries from '@/api/db/queries/videos'
 import * as catalogQueries from '@/api/db/queries/mediaCatalog'
 import * as doubanLib from '@/api/lib/douban'

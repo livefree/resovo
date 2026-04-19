@@ -7038,21 +7038,20 @@
 - **完成备注**：25 条失败归档（unit×16 A×13/D×3，e2e×9 C×9）。verify-baseline 通过。执行模型: claude-sonnet-4-6
 
 #### TESTFIX-04 — 修复 C 类「立即修复」testid / DOM 漂移
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
+- **完成时间**：2026-04-18
 - **依赖**：TESTFIX-03
-- **文件范围**：
-  - 由 triage 文档 C 类「立即修」清单决定
-- **验收**：
-  - 关联 E2E 全绿
-  - triage 文档 C 类「立即修」状态全部 `fixed`
-- **完成备注**：_（AI 填写）_
+- **文件范围**：无（C 类全部 defer）
+- **验收**：triage 文档 C 类全部为 defer（M2/M3/M5），无立即修复项
+- **完成备注**：triage 文档中 9 条 C 类失败均为 defer（href 格式/PlayerShell testid/DanmakuBar/search filter），本 Phase 无 C 类 fix 项，任务空操作。执行模型: claude-sonnet-4-6
 
 #### TESTFIX-05 — 修复 D 类「真 bug」（源代码侧）
-- **状态**：⬜ 待开始
+- **状态**：🔄 进行中
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
+- **实际开始**：2026-04-18
 - **依赖**：TESTFIX-03
 - **文件范围**：
   - 由 triage 文档 D 类「真 bug」清单决定
