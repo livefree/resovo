@@ -7121,3 +7121,15 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 新增 apps/web-next/src/lib/line-display-name.ts
   - 全部组件使用 TOKEN-13 CSS 变量命名
 - **质量门禁**：typecheck ✅ lint ✅ unit tests 1102/1102 ✅
+
+## [M3-DETAIL-02] 5 种详情页路由新建 apps/web-next
+
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **变更摘要**：
+  - 新增 _lib/detail-page-factory.tsx（工厂函数，避免 5 个 page.tsx 重复实现）
+  - 新增 movie/series/anime/tvshow/others 各 [slug]/page.tsx（5~6 行极简，调用工厂）
+  - 工厂使用 var(--bg-canvas)，无旧变量名
+  - 无 variety URL 段（验证零命中）
+- **质量门禁**：typecheck ✅ lint ✅ unit tests 1102/1102 ✅

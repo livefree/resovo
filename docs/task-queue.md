@@ -7519,11 +7519,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - **建议模型**：sonnet
 - **文件范围**：EpisodeGrid / VideoDetailClient / VideoDetailHero / VideoMeta / video-detail.ts / line-display-name.ts
 
-#### M3-DETAIL-02 — 5 种详情页路由新建 apps/web-next（状态：🔄 进行中）
+#### M3-DETAIL-02 — 5 种详情页路由新建 apps/web-next（状态：✅ 已完成）
 - **建议模型**：sonnet
 - **依赖**：M3-DETAIL-01
 
-#### M3-DETAIL-03 — ALLOWLIST 翻转 + apps/web 详情页删除 + E2E 迁移（状态：⬜ 待开始）
+#### M3-DETAIL-03 — ALLOWLIST 翻转 + apps/web 详情页删除 + E2E 迁移（状态：🔄 进行中）
 - **建议模型**：sonnet
 - **依赖**：M3-DETAIL-02
 
