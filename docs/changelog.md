@@ -6584,3 +6584,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/api/moderationStats.test.ts` — 新增 CrawlerRunService mock
 - **测试覆盖**：1007 unit tests passed (0 failed，修复前 16 failed)
 - **数据库变更**：无
+
+---
+
+## TESTFIX-06 — 隔离清单 + CI 门禁 + test:guarded 脚本
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件列表**：
+  - `docs/known_failing_tests_phase0.md` — Phase 0 隔离清单（9 条 E2E C 类，0 条单元）
+  - `scripts/test-guarded.ts` — CI 门禁脚本（清单外新增失败 exit 1，清单内失败 warning）
+  - `scripts/verify-baseline.ts` — 追加 --diff --phase 模式（baseline vs 隔离清单差异）
+  - `package.json` — 追加 test:guarded script
+- **测试覆盖**：test:guarded → GATE PASSED (1007 passed, 0 new failures)
+- **failing_tests.json 路径**：`docs/baseline_20260418/failing_tests.json`
+- **当前隔离清单大小**：9（E2E C 类，defer M2/M3/M5）
