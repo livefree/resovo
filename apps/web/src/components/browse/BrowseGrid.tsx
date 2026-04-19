@@ -15,6 +15,9 @@ import { useTranslations } from 'next-intl'
 
 // ── 翻译 URL 参数 → /search API 参数 ─────────────────────────────
 
+// tvshow → variety: web-next 路由层重命名，API 不感知，此处透明映射
+const TYPE_ALIAS: Record<string, string> = { tvshow: 'variety' }
+
 function buildSearchQuery(params: URLSearchParams): string {
   const parts: string[] = []
   const mapping: Record<string, string> = {
@@ -28,8 +31,11 @@ function buildSearchQuery(params: URLSearchParams): string {
     page:       'page',
   }
   for (const [urlKey, apiKey] of Object.entries(mapping)) {
-    const value = params.get(urlKey)
-    if (value) parts.push(`${apiKey}=${encodeURIComponent(value)}`)
+    let value = params.get(urlKey)
+    if (value) {
+      if (urlKey === 'type') value = TYPE_ALIAS[value] ?? value
+      parts.push(`${apiKey}=${encodeURIComponent(value)}`)
+    }
   }
   parts.push('limit=24')
   return parts.join('&')

@@ -7401,3 +7401,33 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   - 修改：`tests/unit/lib/rewrite-match.test.ts`（追加 M2 homepage rule 测试 4 条）
   - 修改：`docs/known_failing_tests_phase0.md`（删除 6 条 homepage 隔离条目）
 - **完成备注**：typecheck ✅ / lint ✅ / 1102 unit tests ✅；ALLOWLIST 新增 M2:home exact localeAware 条目；旧 apps/web homepage 整份删除；新 tests/e2e-next/homepage.spec.ts 15 tests；known_failing 清单删除 6 条；执行模型：claude-sonnet-4-6
+
+---
+
+## SEQ-20260419-M2-TVSHOW — variety URL 改名为 tvshow（方案 A）
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-19
+- **目标**：在 web-next 路由层将 `variety` 类型重命名为 `tvshow`，内部 API 调用透明映射回 `variety`，DB/VideoType 不变
+- **依赖**：M2-HOMEPAGE-01 完成 ✅
+
+### 任务列表
+
+#### M2-TVSHOW-01 — variety URL 改名为 tvshow（状态：✅ 已完成）
+
+- **建议模型**：sonnet
+- **创建时间**：2026-04-19
+- **目录目标**：apps/web-next/（主体）+ apps/web/（兼容补丁）
+- **文件范围**：
+  - 修改：`apps/web-next/src/components/layout/Nav.tsx`（MORE_CATEGORIES variety → tvshow：key/typeParam/href/data-testid）
+  - 修改：`apps/web/src/components/browse/BrowseGrid.tsx`（buildSearchQuery 加 tvshow→variety 映射，属路由切分兼容补丁）
+- **不在范围内**：
+  - `apps/web/src/components/browse/FilterArea.tsx`（留 M5 browse 迁移时统一改）
+  - `packages/types` VideoType（方案 A 不改 DB 类型）
+  - 消息文件 labelKey（显示文本 "综艺"/"Variety" 不变）
+- **验收**：
+  - Nav 中"更多"下拉 `nav-cat-tvshow` testid 存在，href 为 `/browse?type=tvshow`
+  - 访问 `/browse?type=tvshow` 时 API 调用透传 `type=variety`，返回综艺视频
+  - `npm run typecheck` 通过
+  - `npm run lint` 通过
+  - `npm run test -- --run` 通过

@@ -7008,3 +7008,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - docs/architecture.md §15 添加过渡期拓扑方向说明（ADR-035 vs 补丁§2 终态区分）
   - docs/task-queue.md 追加 SEQ-20260419-M2 序列
 - **质量门禁**：typecheck ✅ lint ✅ unit tests 1102/1102 ✅
+
+---
+
+## M2-TVSHOW-01 — variety URL 改名为 tvshow（方案 A）
+
+- **任务 ID**：M2-TVSHOW-01
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **变更摘要**：
+  - apps/web-next/Nav.tsx：MORE_CATEGORIES variety → tvshow（key/typeParam/href），labelKey 与显示文本保持不变
+  - apps/web/BrowseGrid.tsx：buildSearchQuery 加 tvshow→variety 类型别名映射（路由切分兼容补丁）
+  - DB/VideoType/packages/types 均未改动（方案 A）
+- **质量门禁**：typecheck ✅ lint ✅ unit tests 1102/1102 ✅

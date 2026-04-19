@@ -15,7 +15,7 @@ const MAIN_CATEGORIES = [
 
 const MORE_CATEGORIES = [
   { key: 'all',          labelKey: 'nav.catAll',          href: '/browse',                    typeParam: '' },
-  { key: 'variety',      labelKey: 'nav.catVariety',      href: '/browse?type=variety',       typeParam: 'variety' },
+  { key: 'tvshow',       labelKey: 'nav.catVariety',      href: '/browse?type=tvshow',        typeParam: 'tvshow' },
   { key: 'documentary',  labelKey: 'nav.catDocumentary',  href: '/browse?type=documentary',   typeParam: 'documentary' },
   { key: 'short',        labelKey: 'nav.catShort',        href: '/browse?type=short',         typeParam: 'short' },
   { key: 'sports',       labelKey: 'nav.catSports',       href: '/browse?type=sports',        typeParam: 'sports' },
