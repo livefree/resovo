@@ -17,7 +17,10 @@
     "paths": {
       "@/api/*": ["./apps/api/src/*"],
       "@/*": ["./apps/web/src/*"],
-      "@resovo/design-tokens": ["./packages/design-tokens/src/index.ts"]
+      "@resovo/design-tokens": ["./packages/design-tokens/src/index.ts"],
+      "@resovo/player-core": ["./packages/player-core/src/index.ts"],
+      "@resovo/types": ["./packages/types/src/index.ts"],
+      "@resovo/player": ["./packages/player/src/index.ts"]
     }
   },
   "include": [

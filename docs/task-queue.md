@@ -7531,12 +7531,13 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ## SEQ-20260420-M3-PLAYER — 播放器核心迁移
 
-- **状态**：⬜ 待开始
+- **状态**：🔄 进行中
 - **依赖**：M3-DETAIL-03 ✅
 
-#### M3-PLAYER-01 — player core 提升 packages/player-core/ + ADR-036（状态：⬜ 待开始）
+#### M3-PLAYER-01 — player core 提升 packages/player-core/ + ADR-036（状态：✅ 已完成）
 - **建议模型**：opus（强制 + arch-reviewer 子代理）
 - **依赖**：M3-DETAIL-03
+- **完成时间**：2026-04-19
 
 #### M3-PLAYER-02 — apps/web-next PlayerShell + shell 层 + /watch 路由（状态：⬜ 待开始）
 - **建议模型**：sonnet

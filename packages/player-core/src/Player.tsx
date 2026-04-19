@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * YTPlayer — built from YouTube's DOM architecture
+ * Player — built from YouTube's DOM architecture
  *
  * Layer system (mirrors data-layer="N"):
  *   0  html5-video-container      <video>
@@ -66,7 +66,7 @@ type LoadingState = "idle" | "initial" | "buffering";
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function YTPlayer({
+export function Player({
   src,
   qualities = [],
   activeQualityId,

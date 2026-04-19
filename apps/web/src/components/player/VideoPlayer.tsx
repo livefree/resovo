@@ -1,12 +1,6 @@
-/**
- * VideoPlayer.tsx — YTPlayer 封装
- * 播放器源码内嵌于 src/components/player/core/，无 npm 包依赖
- * 必须通过 dynamic import + ssr: false 使用，不可 SSR
- */
-
 'use client'
 
-import { YTPlayer } from './core/Player'
+import { Player } from '@resovo/player-core'
 
 export interface VideoPlayerProps {
   /** HLS .m3u8 或 MP4 直链 */
@@ -50,7 +44,7 @@ export function VideoPlayer({
       style={{ width: '100%', height: '100%' }}
       data-testid="video-player"
     >
-      <YTPlayer
+      <Player
         src={src}
         title={title}
         episodes={episodes}

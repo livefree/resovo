@@ -39,6 +39,8 @@ export default defineConfig({
       // server app's @/stores resolves to apps/server/src/stores (not web)
       '@/stores': path.resolve(__dirname, './apps/server/src/stores'),
       '@': path.resolve(__dirname, './apps/web/src'),
+      '@resovo/player-core': path.resolve(__dirname, './packages/player-core/src/index.ts'),
+      '@resovo/types': path.resolve(__dirname, './packages/types/src/index.ts'),
     },
   },
   // 自动 JSX 转换（React 17+ automatic runtime，组件测试不需要 import React）

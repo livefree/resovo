@@ -961,3 +961,36 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
 - **非目标**：CDN 缓存策略、按用户灰度、apps/server 路由、apps/api 路由
 - **影响文件**：`apps/web/middleware.ts`、`apps/web/src/lib/rewrite-allowlist.ts`、`apps/web/src/lib/rewrite-match.ts`、`apps/web/src/lib/__tests__/rewrite-match.test.ts`、`docs/architecture.md`（新增重写期路由拓扑章节）
 - **退役时机**：M6-RENAME 时，连同 `apps/web` 整体退役；本 ADR 状态更新为「已完成并废弃」
+
+
+---
+
+## ADR-036: Player Core 层提升为独立包（packages/player-core）
+
+- **日期**：2026-04-19
+- **状态**：已采纳
+- **子代理**：arch-reviewer (claude-opus-4-6)
+- **背景**：播放器核心实现（HLS 加载、手势控制、快捷键、字幕渲染等）内嵌于 `apps/web/src/components/player/core/`，随 M3-PLAYER-02 开始 `apps/web-next` 需要复用同一份代码。若直接 import 会产生跨 app 直接引用，违反架构约束"禁止 apps 间直接共享代码"。
+- **决策**：将 `apps/web/src/components/player/core/` 通过 `git mv` 整体迁移到 `packages/player-core/src/`，对外发布为内部私有包 `@resovo/player-core`，两个 apps 均通过包名引用。`YTPlayer` 组件重命名为 `Player`（去掉 YouTube 品牌色彩，语义更通用）。
+- **API 契约**（公开导出）：
+  - `Player` — 播放器主组件（前身 YTPlayer）
+  - `PlayerProps` — 组件 Props 类型
+  - `SubtitleTrack` — 字幕轨道描述类型
+  - `QualityLevel` — 画质选项类型
+  - `Chapter` — 章节类型
+  - 上述全部从 `packages/player-core/src/index.ts` 统一导出，消费方只做 `import { Player } from '@resovo/player-core'`
+- **包配置**：
+  - `name: "@resovo/player-core"`，`private: true`
+  - `main` / `types` 均指向 `./src/index.ts`（零构建，workspace path resolve）
+  - `peerDependencies: { react: ">=18", react-dom: ">=18" }`
+  - `tsconfig.json` 的 `paths` 中 `@resovo/types` 指向 `../types/src/index.ts`
+- **迁移方式**：`git mv` 保留完整 git 历史
+- **非目标**：不引入构建步骤（无 tsc emit / rollup）、不改 Player 内部实现逻辑、不触碰 `packages/player/`（legacy mirror，M6 后统一退役）
+- **影响文件**：
+  - 新增：`packages/player-core/package.json`、`packages/player-core/tsconfig.json`、`packages/player-core/src/index.ts`、`packages/player-core/README.md`
+  - git mv：`apps/web/src/components/player/core/` → `packages/player-core/src/`
+  - 修改：`apps/web/src/components/player/VideoPlayer.tsx`（import 改 `@resovo/player-core`）
+  - 修改：`apps/web/package.json`（新增 `@resovo/player-core: *`）
+  - 修改：`apps/web/tsconfig.json`（新增 paths 映射）
+  - 修改：根 `package.json`（typecheck 追加 `--workspace @resovo/player-core`）
+- **退役时机**：长期维护；`packages/player/` 在 M6 末退役，本包继续保留

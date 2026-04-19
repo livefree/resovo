@@ -70,7 +70,8 @@ resovo/                         ← Turbo + npm workspaces 根
 │   ├── server/                 ← 后台 Next.js（@resovo/server，port 3001）
 │   └── api/                    ← Fastify API（@resovo/api，port 4000）
 ├── packages/
-│   ├── player/                 ← 共享播放器组件（@resovo/player）
+│   ├── player/                 ← 共享播放器组件（@resovo/player，legacy）
+│   ├── player-core/            ← 播放器核心层（@resovo/player-core，M3+，ADR-036）
 │   └── types/                  ← 共享类型（@resovo/types）
 ├── docker/
 │   ├── nginx.conf              ← 反向代理路由规则
@@ -109,7 +110,8 @@ resovo/
 │           ├── db/queries/          # SQL 读写层
 │           └── workers/             # 异步任务执行
 ├── packages/
-│   ├── player/                      # 共享播放器组件（@resovo/player）
+│   ├── player/                      # 共享播放器组件（@resovo/player，legacy）
+│   ├── player-core/                 # 播放器核心层（@resovo/player-core，M3+，ADR-036）
 │   └── types/                       # 共享类型（@resovo/types）
 ├── docs/
 │   ├── architecture.md

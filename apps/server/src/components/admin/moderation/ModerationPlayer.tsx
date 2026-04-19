@@ -7,8 +7,8 @@
 
 import dynamic from 'next/dynamic'
 
-const YTPlayer = dynamic(
-  () => import('@/components/player/core/Player').then((m) => m.YTPlayer),
+const Player = dynamic(
+  () => import('@resovo/player-core').then((m) => m.Player),
   { ssr: false }
 )
 
@@ -35,7 +35,7 @@ export function ModerationPlayer({ sourceUrl, title, coverUrl }: ModerationPlaye
       className="aspect-video w-full overflow-hidden rounded-md bg-black"
       data-testid="moderation-player"
     >
-      <YTPlayer
+      <Player
         src={sourceUrl}
         title={title}
         poster={coverUrl ?? undefined}

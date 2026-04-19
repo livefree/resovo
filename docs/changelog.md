@@ -7150,3 +7150,25 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - rewrite-match.test.ts 追加 16 条 M3 prefix 测试
   - known_failing 删除 2 条 M3 详情页条目
 - **质量门禁**：typecheck ✅ lint ✅ unit tests 1111/1111 ✅
+
+---
+
+### M3-PLAYER-01 — player core 提升 packages/player-core/ + ADR-036
+
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-6) — API 契约设计 + ADR-036 草稿
+- **变更摘要**：
+  - 新建 `packages/player-core/`（package.json / tsconfig.json / README.md / src/css.d.ts）
+  - `git mv apps/web/src/components/player/core/ → packages/player-core/src/`（保留 git 历史）
+  - `YTPlayer` → `Player`（Player.tsx 导出名重命名）
+  - 新增 `packages/player-core/src/index.ts` 公开 barrel（Player / PlayerProps / SubtitleTrack / QualityLevel / Chapter）
+  - `apps/web/src/components/player/VideoPlayer.tsx`：import 改 `@resovo/player-core`
+  - `apps/server/src/components/admin/moderation/ModerationPlayer.tsx`：import 改 `@resovo/player-core`（消除旧 path alias 依赖）
+  - `apps/web/package.json` + `apps/web/tsconfig.json`：新增 `@resovo/player-core`
+  - `apps/server/package.json` + `apps/server/tsconfig.json`：新增 `@resovo/player-core`，移除旧 core/* path alias
+  - 根 `tsconfig.json` + `vitest.config.ts`：新增 `@resovo/player-core` 路径映射
+  - 根 `package.json`：typecheck 追加 `--workspace @resovo/player-core`
+  - `docs/decisions.md`：追加 ADR-036
+  - `docs/architecture.md`：§1 + §2 追加 player-core 条目
+- **质量门禁**：typecheck ✅ lint ✅ unit tests 1111/1111 ✅
