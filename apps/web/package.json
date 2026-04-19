@@ -10,6 +10,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@resovo/design-tokens": "*",
     "@resovo/player": "*",
     "@resovo/types": "*",
     "clsx": "*",

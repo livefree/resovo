@@ -6852,7 +6852,7 @@
 - **完成备注**：theme-init-script.ts 导出 IIFE 字符串；读 resovo-brand/resovo-theme cookie → resolveTheme（system/空→matchMedia fallback）→ 设 `document.documentElement.dataset.brand/theme`；layout.tsx 在 providers 之前注入 `<script dangerouslySetInnerHTML>`；typecheck ✅ / lint ✅；无新增依赖
 
 #### TOKEN-12 — Token Playground 页面（dev 环境走查载体）
-- **状态**：⬜ 待开始
+- **状态**：🔄 执行中
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
 - **依赖**：TOKEN-07（可与 TOKEN-08/09/10/11 并行）

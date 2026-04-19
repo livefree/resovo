@@ -16,7 +16,8 @@
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/api/*": ["./apps/api/src/*"],
-      "@/*": ["./apps/web/src/*"]
+      "@/*": ["./apps/web/src/*"],
+      "@resovo/design-tokens": ["./packages/design-tokens/src/index.ts"]
     }
   },
   "include": [
