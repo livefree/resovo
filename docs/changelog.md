@@ -7022,3 +7022,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - apps/web/BrowseGrid.tsx：buildSearchQuery 加 tvshow→variety 类型别名映射（路由切分兼容补丁）
   - DB/VideoType/packages/types 均未改动（方案 A）
 - **质量门禁**：typecheck ✅ lint ✅ unit tests 1102/1102 ✅
+
+---
+
+## M2-TVSHOW-02 + M2-TVSHOW-03 — apps/web Nav & FilterArea variety → tvshow
+
+- **任务 ID**：M2-TVSHOW-02、M2-TVSHOW-03
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **变更摘要**：
+  - apps/web Nav.tsx MORE_CATEGORIES：variety → tvshow（key/typeParam/href），labelKey 不变
+  - apps/web FilterArea.tsx FILTER_ROWS type 筛选项：variety → tvshow；testid filter-type-variety → filter-type-tvshow
+  - BrowseGrid TYPE_ALIAS 已存在（tvshow→variety），API 映射自动正确
+- **质量门禁**：typecheck ✅ lint ✅ unit tests 1102/1102 ✅

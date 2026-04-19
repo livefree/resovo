@@ -7422,7 +7422,6 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   - 修改：`apps/web-next/src/components/layout/Nav.tsx`（MORE_CATEGORIES variety → tvshow：key/typeParam/href/data-testid）
   - 修改：`apps/web/src/components/browse/BrowseGrid.tsx`（buildSearchQuery 加 tvshow→variety 映射，属路由切分兼容补丁）
 - **不在范围内**：
-  - `apps/web/src/components/browse/FilterArea.tsx`（留 M5 browse 迁移时统一改）
   - `packages/types` VideoType（方案 A 不改 DB 类型）
   - 消息文件 labelKey（显示文本 "综艺"/"Variety" 不变）
 - **验收**：
@@ -7431,3 +7430,21 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   - `npm run typecheck` 通过
   - `npm run lint` 通过
   - `npm run test -- --run` 通过
+
+#### M2-TVSHOW-02 — apps/web Nav.tsx variety → tvshow（状态：✅ 已完成）
+
+- **建议模型**：sonnet
+- **创建时间**：2026-04-19
+- **目录目标**：apps/web/（路由切分兼容补丁）
+- **文件范围**：
+  - 修改：`apps/web/src/components/layout/Nav.tsx`（MORE_CATEGORIES variety → tvshow：key/typeParam/href）
+- **验收**：`npm run typecheck` / `lint` / `test -- --run` 通过
+
+#### M2-TVSHOW-03 — apps/web FilterArea.tsx variety → tvshow（状态：✅ 已完成）
+
+- **建议模型**：sonnet
+- **创建时间**：2026-04-19
+- **目录目标**：apps/web/（路由切分兼容补丁）
+- **文件范围**：
+  - 修改：`apps/web/src/components/browse/FilterArea.tsx`（FILTER_ROWS type 筛选项 variety → tvshow；testid `filter-type-variety` → `filter-type-tvshow`）
+- **验收**：`npm run typecheck` / `lint` / `test -- --run` 通过；BrowseGrid TYPE_ALIAS 已存在，API 映射自动正确
