@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { routing } from '@/i18n/routing'
 import { BrandProvider } from '@/contexts/BrandProvider'
 import { HEADER_BRAND, HEADER_THEME, parseBrandSlug, parseTheme } from '@/lib/brand-detection'
+import { THEME_INIT_SCRIPT } from '@/lib/theme-init-script'
 import type { Brand, Theme } from '@/types/brand'
 
 // 默认品牌常量（与 packages/design-tokens/src/brands/default.ts 保持同步）
@@ -45,10 +46,15 @@ export default async function LocaleLayout({
   const initialBrand: Brand = RESOVO_DEFAULT_BRAND
 
   return (
-    <NextIntlClientProvider locale={locale} messages={messages}>
-      <BrandProvider initialBrand={initialBrand} initialTheme={theme}>
-        {children}
-      </BrandProvider>
-    </NextIntlClientProvider>
+    <>
+      {/* 防 FOUC blocking script — 在 CSS 加载前设置 data-brand / data-theme */}
+      {/* eslint-disable-next-line react/no-danger */}
+      <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      <NextIntlClientProvider locale={locale} messages={messages}>
+        <BrandProvider initialBrand={initialBrand} initialTheme={theme}>
+          {children}
+        </BrandProvider>
+      </NextIntlClientProvider>
+    </>
   )
 }

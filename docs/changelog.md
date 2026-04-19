@@ -6846,3 +6846,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **数据库变更**：无
 - **注意事项**：当前仅支持默认品牌 slug='resovo'；非默认品牌的 DB 查询留待 TOKEN-14；middleware 在 Edge Runtime 纯内存操作，p95 < 50ms
 - **质量门禁**：typecheck ✅ / lint ✅
+
+## [TOKEN-11] 首屏无闪烁 blocking script
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 22:15
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/web/src/lib/theme-init-script.ts` — 新增；导出 THEME_INIT_SCRIPT 字符串（IIFE：读 resovo-brand/resovo-theme cookie → resolveTheme → 设 html.dataset.brand/theme）
+  - `apps/web/src/app/[locale]/layout.tsx` — 修改；在 providers 之前注入 `<script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}>`（blocking，React hydration 前生效）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：脚本仅读 cookie，不用 localStorage，与 middleware 同源策略保持一致；system theme 时通过 window.matchMedia 解析为 light/dark；无 cookie 时默认 brand=resovo / theme 跟随系统偏好
+- **质量门禁**：typecheck ✅ / lint ✅

@@ -6833,7 +6833,7 @@
 - **完成备注**：middleware.ts 读 resovo-brand/resovo-theme cookie → 校验 → 写入 x-resovo-brand/x-resovo-theme header；brand-detection.ts 纯函数工具（slug 格式校验/theme 枚举校验/默认兜底）；layout.tsx 读 headers 并挂载 BrandProvider；当前仅支持默认品牌，TOKEN-14 起扩展非默认品牌 DB 查询；Edge p95 < 50ms（纯 cookie read + header set，无 IO）；typecheck + lint ✅
 
 #### TOKEN-11 — 首屏无闪烁 blocking script
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
 - **依赖**：TOKEN-10
@@ -6849,7 +6849,7 @@
   - Chrome DevTools Performance trace 显示脚本耗时 < 2ms
   - 浏览器强制 dark 偏好 + 无 cookie 场景下首屏无闪烁
   - Lighthouse CLS = 0
-- **完成备注**：_（AI 填写）_
+- **完成备注**：theme-init-script.ts 导出 IIFE 字符串；读 resovo-brand/resovo-theme cookie → resolveTheme（system/空→matchMedia fallback）→ 设 `document.documentElement.dataset.brand/theme`；layout.tsx 在 providers 之前注入 `<script dangerouslySetInnerHTML>`；typecheck ✅ / lint ✅；无新增依赖
 
 #### TOKEN-12 — Token Playground 页面（dev 环境走查载体）
 - **状态**：⬜ 待开始
