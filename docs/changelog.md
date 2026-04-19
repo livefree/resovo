@@ -6879,3 +6879,31 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **数据库变更**：无
 - **注意事项**：playground 仅 dev 环境可见；production build 访问 /__playground/tokens → 404；token 数据由 Server Component 导入后以 props 传递给 client 组件
 - **质量门禁**：typecheck ✅ / lint ✅ / tests 1087 passed ✅
+
+## [TOKEN-13] 硬编码 CSS 变量迁移 + ESLint 升级 error
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 23:00
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/web/src/app/globals.css` — @layer base 旧变量重映射至 token 系统，移除 .dark 覆写区块，body/border 改用直接 CSS var() 引用
+  - `apps/web/src/components/player/PlayerShell.tsx` — `#000` → `black`；`rgba(255,255,255,0.5)` → `color-mix(in oklch, white 50%, transparent)`
+  - `apps/web/src/components/video/VideoCard.tsx` — `rgba(0,0,0,0.7)` → `var(--bg-overlay)`
+  - `apps/web/src/components/video/VideoCardWide.tsx` — 2 处 rgba → `var(--bg-overlay)`
+  - `apps/web/src/types/player.types.ts` — subtitleColor `#ffffff` → `white`；subtitleBgColor `#000000` → `black`
+  - `.eslintrc.json` — `resovo/no-hardcoded-color` 从 `warn` 升为 `error`
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  旧变量映射对照表（31条，实际比规划23条多）：
+  --background→--bg-canvas, --bg→--bg-canvas, --bg2→--bg-surface-sunken, --bg3→--bg-surface-sunken,
+  --foreground→--fg-default, --text→--fg-default, --muted→--fg-muted, --muted-foreground→--fg-muted,
+  --card→--bg-surface, --card-foreground→--fg-default, --secondary→--bg-surface-sunken,
+  --secondary-foreground→--fg-default, --accent→--accent-default, --accent-foreground→--accent-fg,
+  --gold→--accent-default, --primary→--accent-default, --primary-foreground→--accent-fg,
+  --ring→--border-focus, --border→--border-default, --input→--border-default, --subtle→--border-subtle,
+  --status-success→--state-success-fg, --status-danger→--state-error-fg, --status-warning→--state-warning-fg,
+  --status-info→--state-info-fg, --status-neutral→--fg-muted, --status-success-bg→--state-success-bg,
+  --status-danger-bg→--state-error-bg, --status-warning-bg→--state-warning-bg,
+  --status-neutral-bg→color-mix(in oklch, var(--fg-muted) 12%, transparent), --modal-overlay→--bg-overlay
+- **质量门禁**：typecheck ✅ / lint ✅ no warnings / tests 1087 passed ✅

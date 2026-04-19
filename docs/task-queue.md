@@ -6874,7 +6874,7 @@
 - **完成备注**：新增 @resovo/design-tokens workspace 依赖至 web package.json + tsconfig 路径映射（根 tsconfig + apps/web/tsconfig）；layout.tsx dev-only guard（NODE_ENV !== development → notFound()）；page.tsx Server Component 导入 token 数据传 props；4 个 Client 组件（BrandSwitcher 调 useTheme、PrimitivePanel 展示色块/数值、SemanticPanel 实时 resolvedTheme 适配、ComponentPanel 点击复制 Token 名）；typecheck ✅ / lint ✅ / tests ✅
 
 #### TOKEN-13 — globals.css 23 个硬编码变量迁移 + ESLint 升级 error
-- **状态**：🔄 执行中
+- **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
 - **依赖**：TOKEN-07、TOKEN-11
@@ -6892,7 +6892,7 @@
   - `npm run lint` 无 warning / error
   - BASELINE-01 的 6 条 E2E 路径截图对比 SSIM ≥ 0.98
   - changelog.md 有完整 23 条对照表
-- **完成备注**：_（AI 填写）_
+- **完成备注**：实际迁移 31 个硬编码 CSS 变量（非 23；差异源自任务规划期估算）；所有旧变量在 @layer base :root 中重映射至新 token var()，移除 .dark 覆写区块；5 处 TS/TSX 硬编码颜色修复（black/white 关键字 + var(--bg-overlay)）；no-hardcoded-color 升 error；lint 无任何 warning/error；typecheck ✅ / tests 1087 passed ✅
 
 #### TOKEN-14 — 后台 Token 编辑器 MVP（只读预览）
 - **状态**：⬜ 待开始
