@@ -10,9 +10,7 @@ interface LivePreviewFrameProps {
 export function LivePreviewFrame({ selectedBrandSlug, webBaseUrl }: LivePreviewFrameProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
-  const src = selectedBrandSlug
-    ? `${webBaseUrl}/zh/__playground/tokens`
-    : `${webBaseUrl}/zh/__playground/tokens`
+  const src = `${webBaseUrl}/zh/playground/tokens`
 
   useEffect(() => {
     if (iframeRef.current) {
