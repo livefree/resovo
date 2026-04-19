@@ -6699,10 +6699,10 @@
   - `npm run typecheck` 通过
   - 组件 Token 引用校验脚本通过（只允许 semantic 层）
   - `index.ts` 扁平导出所有组件 namespace
-- **完成备注**：_（AI 填写）_
+- **完成备注**：8 组件 Token 定义完成（button/input/card/tabs/modal/tooltip/table/player）；arch-reviewer 子代理设计 size×state 矩阵 + player 三态；80 单元测试全通过；commit 0d368df
 
 #### TOKEN-05 — Token 构建管线（CSS / JS / Types 三路输出）
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
 - **依赖**：TOKEN-04
@@ -6722,7 +6722,7 @@
   - `npm run build -w @resovo/design-tokens` 产出三个文件，CSS 未压缩 < 50KB
   - CI 集成：`npm run typecheck` 在 pre-build 阶段通过
   - 单测覆盖构建脚本的关键转换函数
-- **完成备注**：_（AI 填写）_
+- **完成备注**：新增 build.ts（手写 TS，零外部依赖，符合 ADR-032）；dist/tokens.css 7.1KB（primitive :root + semantic light :root + .dark override）；dist/tokens.js 8.2KB（嵌套对象）；dist/tokens.d.ts 含 PrimitiveVarName/SemanticVarName 联合类型；typecheck + lint clean
 
 #### TOKEN-06 — Tailwind 桥接（theme.extend 从 Token 生成）
 - **状态**：⬜ 待开始

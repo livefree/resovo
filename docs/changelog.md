@@ -6756,3 +6756,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `packages/design-tokens/src/components/index.ts` — 桶导出
   - `tests/unit/design-tokens/components.test.ts` — 16 tests（引用完整性 + 结构校验）
 - **质量门禁**：typecheck ✅ / 1087 unit tests ✅
+
+## [TOKEN-05] Token 构建管线（CSS / JS / Types 三路输出）
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 21:20
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `packages/design-tokens/build.ts` — 新增主构建脚本（手写 TS，零外部依赖）；输出 dist/ 三路产物
+  - `packages/design-tokens/package.json` — 增加 clean/prebuild/build scripts；dist/ 导出路径
+  - `packages/design-tokens/dist/tokens.css` — 生成：:root {primitive + semantic.light} + .dark {semantic.dark}；7.1KB
+  - `packages/design-tokens/dist/tokens.js` — 生成：primitives + semantic 嵌套对象（ESM）；8.2KB
+  - `packages/design-tokens/dist/tokens.d.ts` — 生成：PrimitiveVarName / SemanticVarName / TokenVarName 联合类型
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：dist/ 为构建产物，不纳入版本控制（.gitignore 需包含 packages/design-tokens/dist/）；build.ts 已修正原 build-css.ts 的颜色变量命名问题（--color-gray-50 而非 --color-50）
+- **质量门禁**：typecheck ✅ / lint ✅ / 80 design-token unit tests ✅ / CSS < 50KB ✅

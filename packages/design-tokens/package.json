@@ -3,14 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "sideEffects": ["./src/css/*.css"],
+  "sideEffects": ["./src/css/*.css", "./dist/tokens.css"],
   "exports": {
     "./css": {
       "default": "./src/css/tokens.css"
     },
+    "./dist/css": {
+      "default": "./dist/tokens.css"
+    },
     "./js": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./dist/js": {
+      "types": "./dist/tokens.d.ts",
+      "default": "./dist/tokens.js"
     },
     "./types": {
       "types": "./src/types.ts",
@@ -18,7 +25,9 @@
     }
   },
   "scripts": {
-    "build": "tsx scripts/build-css.ts",
+    "clean": "node -e \"const {rmSync,existsSync}=require('fs');if(existsSync('dist'))rmSync('dist',{recursive:true})\"",
+    "prebuild": "npm run clean -w @resovo/design-tokens || true",
+    "build": "tsx build.ts && tsx scripts/build-css.ts",
     "typecheck": "tsc --noEmit",
     "dev": "tsx scripts/build-css.ts --watch"
   },
