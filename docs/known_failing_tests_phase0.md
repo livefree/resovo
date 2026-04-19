@@ -1,5 +1,14 @@
 # 已知失败测试隔离清单 — Phase 0
 
+> **⚠️ LEGACY SNAPSHOT**（2026-04-18 标注）
+>
+> 本清单是 apps/web/ + apps/admin/ + apps/server/ 重写前夜的 E2E 失败快照，**不适用于 M2 起的重写期里程碑**。
+>
+> - 自 M2 起每个里程碑完成时，本清单中对应 suite 的条目将**随旧 suite 被删除而作废**（依据 workflow-rules §重写期测试基线例外）
+> - 本清单的回归保护价值仅限于 Phase 0.5 窗口
+> - **TESTFIX-08 D-class（D-04~D-10）验证状态**：commit 6dca65d 做出代码改动，但未 playwright 重跑验证；在 legacy snapshot 豁免下接受"假设已修"；若在 M6 admin 重写前发现任一条仍失败，不触发回归告警
+> - M6 末本文件将被 `known_failing_tests_phase1.md`（基于 apps/*-next/）替代
+
 > 适用阶段：Phase 0（2026-04-18 起）
 > 更新协议：每进入新 Phase 只能缩小不能增长；新增失败必须在本 Phase 内修复或创建 CHG-NN 任务
 > 关联文档：`docs/test_triage_20260418.md`，`docs/baseline_20260418/failing_tests.json`

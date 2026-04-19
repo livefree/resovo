@@ -6661,3 +6661,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `--phase-target TESTFIX-08` → OK
   - `--phase-target INVALID` → exit 1
 - **质量门禁**：`npm run typecheck` + `npm run test -- --run` 全绿
+
+---
+
+## 2026-04-18（Phase 0.5 闭幕修订）
+
+- close(PHASE-0.5): 正式闭幕 Phase 0.5，接受 TESTFIX-08 D×7 未验证状态；基于 legacy snapshot 视角止损，不创建 TESTFIX-10
+- rule(workflow-rules): 新增 §Phase 独立审计员条款（Phase 关闭前必须独立会话审计）
+- rule(workflow-rules): 新增 §重写期测试基线例外（M2–M6 期间 known_failing 允许逐块删除新增）
+- rule(workflow-rules): 新增 §重写期目录约定（apps/*-next/ 并行路线，M6 末 rename）
+- doc(known_failing_tests_phase0): 文件头标注 LEGACY SNAPSHOT 豁免
+- doc(baseline_20260418): 新建 README.md 同义声明（承接 JSON 无法注释的缺口）
+- decision: M2 起前端走 apps/*-next/ 并行路线，详见 task_queue_patch_rewrite_track_20260418.md
+- queue(RW-SETUP): 追加 SEQ-20260418-RW-SETUP 三张任务卡到 task-queue.md
