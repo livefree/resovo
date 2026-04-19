@@ -55,6 +55,8 @@ export const REWRITE_ALLOWLIST: ReadonlyArray<RewriteRule> = [
   { milestone: 'M3', domain: 'player', path: '/anime',   mode: 'prefix', localeAware: true, enabled: true, note: 'M3 anime detail' },
   { milestone: 'M3', domain: 'player', path: '/tvshow',  mode: 'prefix', localeAware: true, enabled: true, note: 'M3 tvshow detail' },
   { milestone: 'M3', domain: 'player', path: '/others',  mode: 'prefix', localeAware: true, enabled: true, note: 'M3 others detail' },
+  // M3 — 播放器（批 2）
+  { milestone: 'M3', domain: 'player', path: '/watch',   mode: 'prefix', localeAware: true, enabled: true, note: 'M3 watch player' },
   // M4 示例
   // { milestone: 'M4', domain: 'auth',   path: '/auth',    mode: 'prefix', localeAware: true, enabled: false },
   // M5 示例

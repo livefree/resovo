@@ -7190,3 +7190,23 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 新增 `apps/web-next/src/app/[locale]/watch/[slug]/page.tsx`（Server Component 入口）
   - `apps/web-next/package.json` + `apps/web-next/tsconfig.json`：新增 @resovo/player-core
 - **质量门禁**：typecheck ✅ lint ✅ unit tests 1111/1111 ✅
+
+---
+
+### M3-PLAYER-03 — ALLOWLIST 翻转 /watch + apps/web 清退 + 播放页 E2E 迁移
+
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **人工回归**：①断点续播✅ ②线路切换✅ ③剧场模式✅（面板移至下方，行为正确）④字幕暂无源跳过
+- **变更摘要**：
+  - `apps/web/src/lib/rewrite-allowlist.ts`：追加 M3 `/watch` prefix 条目
+  - `tests/unit/lib/rewrite-match.test.ts`：追加 /watch 4 条 prefix 测试
+  - 新增 `tests/e2e-next/player.spec.ts`（播放页全套 describe，从 tests/e2e/player.spec.ts 迁移）
+  - git rm `apps/web/src/app/[locale]/watch/`（含 PlayerLoader.tsx + page.tsx）
+  - git rm `apps/web/src/components/player/`（PlayerShell / SourceBar / ResumePrompt / VideoPlayer / layout 全部）
+  - git rm `apps/web/src/stores/playerStore.ts`
+  - git rm `tests/e2e/player.spec.ts`（旧播放页 E2E）
+  - git rm `tests/unit/components/player/`（ResumePrompt.test + playerShell.layout.test，随源文件删除）
+  - `docs/known_failing_tests_phase0.md`：删除 4 条 M3 C 类播放页条目，DanmakuBar 条目更新为 e2e-next 前缀
+- **质量门禁**：typecheck ✅ lint ✅ unit tests 1105/1105 ✅

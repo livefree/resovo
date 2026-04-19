@@ -95,3 +95,25 @@ describe('matchRewrite — M3 detail page prefix rules', () => {
     expect(r.matched).toBe(false)
   })
 })
+
+describe('matchRewrite — M3 /watch prefix rule', () => {
+  it('matches /watch/some-slug', () => {
+    const r = matchRewrite('/watch/test-movie-aB3kR9x1')
+    expect(r.matched).toBe(true)
+  })
+
+  it('matches /en/watch/some-slug (locale-aware)', () => {
+    const r = matchRewrite('/en/watch/test-movie-aB3kR9x1')
+    expect(r.matched).toBe(true)
+  })
+
+  it('matches /zh-CN/watch/some-slug (locale-aware)', () => {
+    const r = matchRewrite('/zh-CN/watch/test-anime-bC4lS0y2')
+    expect(r.matched).toBe(true)
+  })
+
+  it('does not match /watchlist (no partial prefix match)', () => {
+    const r = matchRewrite('/watchlist')
+    expect(r.matched).toBe(false)
+  })
+})

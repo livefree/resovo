@@ -1,7 +1,7 @@
 /**
- * tests/e2e/player.spec.ts
- * DETAIL-01: 视频详情页 E2E 测试
- * 测试详情页加载、MetaChip 跳转、立即观看按钮链路
+ * tests/e2e-next/player.spec.ts
+ * M3-PLAYER-03: 播放页 E2E（从 tests/e2e/player.spec.ts 迁移）
+ * 覆盖：PlayerShell / 多集动漫 / VideoPlayer 集成 / PLAYER-10 完整链路
  */
 
 import { test, expect } from '@playwright/test'
@@ -9,8 +9,6 @@ import type { Video } from '../../apps/web/src/types'
 
 const API_BASE = 'http://localhost:4000/v1'
 
-// ADR-034: E2E mock 必须遵守 Video 契约，不得用 partial 对象
-// 新增 Video 字段时同步此 factory，否则 typecheck 会立即失败
 const MOCK_MOVIE: Video = {
   id: 'uuid-1',
   shortId: 'aB3kR9x1',
@@ -80,6 +78,18 @@ async function mockVideoApi(
   })
 }
 
+const MOCK_HLS_SOURCE = {
+  id: 'src-uuid-1',
+  videoId: 'uuid-1',
+  episodeNumber: null,
+  sourceUrl: 'https://example.com/test.m3u8',
+  sourceName: '线路1',
+  quality: '1080P',
+  type: 'hls',
+  isActive: true,
+  lastChecked: null,
+}
+
 // ── PLAYER-02: 播放页布局 ─────────────────────────────────────────
 
 test.describe('播放页（PlayerShell）', () => {
@@ -109,7 +119,6 @@ test.describe('播放页（PlayerShell）', () => {
 
   test('剧场模式切换按钮可见（大屏设备）', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 })
-    // 按钮通过 CSS 隐藏在移动端，桌面端可见
     const theaterBtn = page.getByTestId('theater-mode-btn')
     await expect(theaterBtn).toBeAttached()
   })
@@ -134,22 +143,9 @@ test.describe('播放页（多集动漫）', () => {
 
 // ── PLAYER-03: VideoPlayer 集成 ───────────────────────────────────
 
-const MOCK_HLS_SOURCE = {
-  id: 'src-uuid-1',
-  videoId: 'uuid-1',
-  episodeNumber: null,
-  sourceUrl: 'https://example.com/test.m3u8',
-  sourceName: '线路1',
-  quality: '1080P',
-  type: 'hls',
-  isActive: true,
-  lastChecked: null,
-}
-
 test.describe('播放页（VideoPlayer 集成）', () => {
   test.beforeEach(async ({ page }) => {
     await mockVideoApi(page, MOCK_MOVIE)
-    // Mock sources API
     await page.route(`${API_BASE}/videos/${MOCK_MOVIE.shortId}/sources*`, (route) => {
       route.fulfill({
         status: 200,
@@ -169,9 +165,7 @@ test.describe('播放页（VideoPlayer 集成）', () => {
   })
 
   test('有播放源时渲染 VideoPlayer', async ({ page }) => {
-    // VideoPlayer 初始化后 video-player 元素存在
     const playerEl = page.getByTestId('video-player')
-    // 可能 video-js 初始化需要时间
     await expect(playerEl).toBeAttached({ timeout: 5000 })
   })
 })
@@ -249,10 +243,8 @@ test.describe('PLAYER-10: 播放页完整链路', () => {
     await page.goto(`/en/watch/${MOCK_MOVIE.slug}`)
     await page.waitForTimeout(800)
     await page.getByTestId('source-btn-1').click()
-    // 激活按钮样式通过 style 属性判断（background: var(--gold)）
     const btn1 = page.getByTestId('source-btn-1')
     await expect(btn1).toBeVisible()
-    // Verify we can click without error (navigation doesn't crash)
     await expect(page.getByTestId('player-shell')).toBeVisible()
   })
 
