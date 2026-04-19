@@ -107,14 +107,14 @@ export function Nav() {
   return (
     <header
       className="sticky top-0 z-50 border-b backdrop-blur-sm"
-      style={{ background: 'color-mix(in srgb, var(--background) 90%, transparent)', borderColor: 'var(--border)' }}
+      style={{ background: 'color-mix(in srgb, var(--bg-canvas) 90%, transparent)', borderColor: 'var(--border-default)' }}
     >
       <div className="max-w-screen-xl mx-auto px-4 flex items-center gap-6 h-14">
         {/* Logo */}
         <Link
           href="/"
           className="text-xl font-bold tracking-tight shrink-0"
-          style={{ color: 'var(--gold)' }}
+          style={{ color: 'var(--accent-default)' }}
           data-testid="nav-logo"
         >
           Resovo
@@ -126,10 +126,10 @@ export function Nav() {
             href="/"
             className={cn(
               'px-3 py-1.5 rounded-md text-sm whitespace-nowrap transition-colors',
-              'hover:bg-[var(--secondary)] hover:text-[var(--foreground)]',
+              'hover:bg-[var(--bg-surface-sunken)] hover:text-[var(--fg-default)]',
               pathname === '/en' || pathname === '/zh-CN' || pathname === '/'
-                ? 'font-semibold text-[var(--accent)]'
-                : 'text-[var(--muted-foreground)]'
+                ? 'font-semibold text-[var(--accent-default)]'
+                : 'text-[var(--fg-muted)]'
             )}
           >
             {t('nav.home')}
@@ -144,10 +144,10 @@ export function Nav() {
                 data-testid={`nav-cat-${cat.key}`}
                 className={cn(
                   'px-3 py-1.5 rounded-md text-sm whitespace-nowrap transition-colors',
-                  'hover:bg-[var(--secondary)] hover:text-[var(--foreground)]',
+                  'hover:bg-[var(--bg-surface-sunken)] hover:text-[var(--fg-default)]',
                   isActive
-                    ? 'font-semibold text-[var(--accent)]'
-                    : 'text-[var(--muted-foreground)]'
+                    ? 'font-semibold text-[var(--accent-default)]'
+                    : 'text-[var(--fg-muted)]'
                 )}
               >
                 {t(cat.labelKey)}
@@ -167,7 +167,7 @@ export function Nav() {
               onKeyDown={handleMoreTriggerKeyDown}
               className={cn(
                 'flex items-center gap-1 px-3 py-1.5 rounded-md text-sm transition-colors cursor-pointer',
-                'hover:bg-[var(--secondary)] hover:text-[var(--foreground)] text-[var(--muted-foreground)]'
+                'hover:bg-[var(--bg-surface-sunken)] hover:text-[var(--fg-default)] text-[var(--fg-muted)]'
               )}
             >
               {t('nav.more')}
@@ -181,8 +181,8 @@ export function Nav() {
                   ref={moreMenuRef}
                   role="menu"
                   data-testid="nav-more-menu"
-                  className="bg-[var(--card)] border rounded-lg shadow-xl p-1.5 min-w-[120px] flex flex-col gap-0.5"
-                  style={{ borderColor: 'var(--border)' }}
+                  className="bg-[var(--bg-surface)] border rounded-lg shadow-xl p-1.5 min-w-[120px] flex flex-col gap-0.5"
+                  style={{ borderColor: 'var(--border-default)' }}
                 >
                   {MORE_CATEGORIES.map((cat, index) => {
                     const isActive = currentType === cat.typeParam
@@ -203,10 +203,10 @@ export function Nav() {
                         }}
                         className={cn(
                           'px-3 py-2 rounded-md text-sm transition-colors text-left',
-                          'hover:bg-[var(--secondary)] hover:text-[var(--foreground)]',
+                          'hover:bg-[var(--bg-surface-sunken)] hover:text-[var(--fg-default)]',
                           isActive
-                            ? 'font-semibold text-[var(--accent)] bg-[var(--secondary)]'
-                            : 'text-[var(--muted-foreground)]'
+                            ? 'font-semibold text-[var(--accent-default)] bg-[var(--bg-surface-sunken)]'
+                            : 'text-[var(--fg-muted)]'
                         )}
                       >
                         {t(cat.labelKey)}
@@ -231,9 +231,9 @@ export function Nav() {
               data-testid="nav-search"
               className="w-28 rounded-md px-2.5 py-1 text-xs border outline-none focus:w-40 transition-all"
               style={{
-                background: 'var(--secondary)',
-                borderColor: 'var(--border)',
-                color: 'var(--foreground)',
+                background: 'var(--bg-surface-sunken)',
+                borderColor: 'var(--border-default)',
+                color: 'var(--fg-default)',
               }}
             />
           </form>
@@ -254,8 +254,8 @@ export function Nav() {
                 setIsLocaleOpen((prev) => !prev)
                 setIsMoreOpen(false)
               }}
-              className="h-8 w-8 rounded-md border inline-flex items-center justify-center text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] transition-colors"
-              style={{ borderColor: 'var(--border)' }}
+              className="h-8 w-8 rounded-md border inline-flex items-center justify-center text-[var(--fg-muted)] hover:text-[var(--fg-default)] hover:bg-[var(--bg-surface-sunken)] transition-colors"
+              style={{ borderColor: 'var(--border-default)' }}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10"></circle>
@@ -270,8 +270,8 @@ export function Nav() {
                   ref={localeMenuRef}
                   role="menu"
                   data-testid="nav-locale-menu"
-                  className="min-w-[140px] rounded-lg border shadow-xl p-1.5 bg-[var(--card)]"
-                  style={{ borderColor: 'var(--border)' }}
+                  className="min-w-[140px] rounded-lg border shadow-xl p-1.5 bg-[var(--bg-surface)]"
+                  style={{ borderColor: 'var(--border-default)' }}
                 >
                   {LOCALES.map((loc) => (
                     <button
@@ -281,8 +281,8 @@ export function Nav() {
                       className={cn(
                         'w-full text-left px-3 py-2 rounded-md text-sm transition-colors',
                         currentLocale === loc.code
-                          ? 'bg-[var(--secondary)] text-[var(--foreground)] font-semibold'
-                          : 'text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)]'
+                          ? 'bg-[var(--bg-surface-sunken)] text-[var(--fg-default)] font-semibold'
+                          : 'text-[var(--fg-muted)] hover:bg-[var(--bg-surface-sunken)] hover:text-[var(--fg-default)]'
                       )}
                     >
                       {loc.short} · {loc.label}
@@ -299,8 +299,8 @@ export function Nav() {
             data-testid="nav-login"
             className="hidden sm:inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium border transition-colors"
             style={{
-              borderColor: 'var(--border)',
-              color: 'var(--muted-foreground)',
+              borderColor: 'var(--border-default)',
+              color: 'var(--fg-muted)',
             }}
           >
             {t('nav.signIn')}

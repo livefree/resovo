@@ -25,11 +25,11 @@ export function HeroBanner() {
     return (
       <div
         className="relative w-full flex items-end"
-        style={{ height: 420, background: 'var(--secondary)' }}
+        style={{ height: 420, background: 'var(--bg-surface-sunken)' }}
         data-testid="hero-banner"
         aria-label="Hero banner"
       >
-        <div className="absolute inset-0 animate-pulse" style={{ background: 'var(--secondary)' }} />
+        <div className="absolute inset-0 animate-pulse" style={{ background: 'var(--bg-surface-sunken)' }} />
       </div>
     )
   }
@@ -41,7 +41,7 @@ export function HeroBanner() {
   return (
     <div
       className="relative w-full overflow-hidden flex items-end"
-      style={{ minHeight: '65vh', maxHeight: '800px', background: 'var(--background)' }}
+      style={{ minHeight: '65vh', maxHeight: '800px', background: 'var(--bg-canvas)' }}
       data-testid="hero-banner"
     >
       {featured.coverUrl && (
@@ -58,12 +58,12 @@ export function HeroBanner() {
       )}
 
       <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent" />
-      <div className="absolute inset-0 bg-gradient-to-t from-[var(--background)] via-[var(--background)]/20 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-canvas)] via-[var(--bg-canvas)]/20 to-transparent" />
 
       <div className="relative w-full max-w-screen-xl mx-auto px-4 pb-16 z-10">
         <div className="max-w-2xl space-y-4">
           {featured.rating !== null && (
-            <span className="inline-block px-2.5 py-1 bg-black/50 backdrop-blur-md rounded border border-white/10 text-sm font-bold text-[var(--accent)]">
+            <span className="inline-block px-2.5 py-1 bg-black/50 backdrop-blur-md rounded border border-white/10 text-sm font-bold text-[var(--accent-default)]">
               ★ {featured.rating.toFixed(1)} {featured.year && `· ${featured.year}`}
             </span>
           )}
@@ -80,7 +80,7 @@ export function HeroBanner() {
             <Link
               href={href}
               data-testid="hero-watch-btn"
-              className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full font-bold text-black bg-[var(--accent)] hover:scale-105 transition-transform duration-300 shadow-[0_0_20px_rgba(232,184,75,0.4)]"
+              className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full font-bold text-black bg-[var(--accent-default)] hover:scale-105 transition-transform duration-300 shadow-[0_0_20px_rgba(232,184,75,0.4)]"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <polygon points="5 3 19 12 5 21 5 3"></polygon>

@@ -7448,3 +7448,40 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - **文件范围**：
   - 修改：`apps/web/src/components/browse/FilterArea.tsx`（FILTER_ROWS type 筛选项 variety → tvshow；testid `filter-type-variety` → `filter-type-tvshow`）
 - **验收**：`npm run typecheck` / `lint` / `test -- --run` 通过；BrowseGrid TYPE_ALIAS 已存在，API 映射自动正确
+
+---
+
+## SEQ-20260419-M2-CLOSE — M2 闭幕序列
+
+- **状态**：⬜ 待开始
+- **创建时间**：2026-04-19
+- **依赖**：M2-HOMEPAGE-01 + M2-TVSHOW-01..03 全部 ✅
+- **目标**：闭合三个未闭合缺口（CSS 变量 / 详情页 URL / 搜索页）+ 关闭 M2 里程碑，准备进入 M3
+
+#### M2-HOMEPAGE-02 — apps/web-next/ 清退旧 CSS 变量名（状态：🔄 进行中）
+- **建议模型**：sonnet
+- **文件范围**：apps/web-next/ 所有新增组件（page.tsx / Nav / Footer / ThemeToggle / HeroBanner / VideoGrid / VideoCard / VideoCardWide）
+
+#### M2-TVSHOW-04 — 详情页 URL /variety → /tvshow（状态：⬜ 待开始）
+- **建议模型**：sonnet
+- **文件范围**：git mv variety→tvshow / video-route.ts URL_SEGMENT_MAP / next.config.ts redirects
+
+#### M2-TVSHOW-05 — search FilterBar + ResultCard variety → tvshow（状态：⬜ 待开始）
+- **建议模型**：sonnet
+- **依赖**：M2-TVSHOW-04
+- **文件范围**：apps/web FilterBar.tsx / ResultCard.tsx / search.spec.ts 断言同步
+
+#### M2-TVSHOW-06 — apps/web 剩余 variety URL 构造扫尾（状态：⬜ 待开始）
+- **建议模型**：haiku
+- **依赖**：M2-TVSHOW-04
+- **文件范围**：VideoCard / VideoMeta / VideoDetailHero / Page.template / others/[slug]
+
+#### M2-E2E-01 — M2 E2E 新增覆盖 & 断言同步（状态：⬜ 待开始）
+- **建议模型**：sonnet
+- **依赖**：HOMEPAGE-02 + TVSHOW-04..06 全部 ✅
+- **文件范围**：tests/e2e-next/browse-tvshow.spec.ts（新增）/ tests/e2e/ 断言同步
+
+#### M2-CLOSE-01 — M2 PHASE COMPLETE + 文档收尾（状态：⬜ 待开始）
+- **建议模型**：haiku（+ Opus 子代理独立审计）
+- **依赖**：HOMEPAGE-02 + TVSHOW-04..06 + E2E-01 全部 ✅
+- **文件范围**：docs/ 仅

@@ -55,7 +55,7 @@ export function VideoGrid({
               style={{
                 width: cardWidth,
                 aspectRatio: variant === 'portrait' ? '2/3' : '16/9',
-                background: 'var(--secondary)',
+                background: 'var(--bg-surface-sunken)',
                 scrollSnapAlign: 'start',
               }}
             />
@@ -72,7 +72,7 @@ export function VideoGrid({
             className="rounded-lg animate-pulse"
             style={{
               aspectRatio: variant === 'portrait' ? '2/3' : '16/9',
-              background: 'var(--secondary)',
+              background: 'var(--bg-surface-sunken)',
             }}
           />
         ))}
@@ -82,7 +82,7 @@ export function VideoGrid({
 
   if (videos.length === 0) {
     return (
-      <div data-testid={testId} className="py-8 text-center" style={{ color: 'var(--muted-foreground)' }}>
+      <div data-testid={testId} className="py-8 text-center" style={{ color: 'var(--fg-muted)' }}>
         暂无数据
       </div>
     )

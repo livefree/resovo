@@ -9,7 +9,7 @@ export default function HomePage() {
   const t = useTranslations('home')
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: 'var(--background)' }}>
+    <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-canvas)' }}>
       <Nav />
 
       <HeroBanner />
@@ -17,13 +17,13 @@ export default function HomePage() {
       <main className="flex-1 max-w-screen-xl mx-auto w-full px-4 py-8 space-y-12">
         <section aria-label={t('trendingMovies')}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold" style={{ color: 'var(--foreground)' }}>
+            <h2 className="text-xl font-bold" style={{ color: 'var(--fg-default)' }}>
               {t('trendingMovies')}
             </h2>
             <Link
               href="/browse?type=movie"
               className="text-sm hover:opacity-80 transition-opacity"
-              style={{ color: 'var(--gold)' }}
+              style={{ color: 'var(--accent-default)' }}
             >
               {t('viewAll')} →
             </Link>
@@ -38,13 +38,13 @@ export default function HomePage() {
 
         <section aria-label={t('trendingSeries')}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold" style={{ color: 'var(--foreground)' }}>
+            <h2 className="text-xl font-bold" style={{ color: 'var(--fg-default)' }}>
               {t('trendingSeries')}
             </h2>
             <Link
               href="/browse?type=series"
               className="text-sm hover:opacity-80 transition-opacity"
-              style={{ color: 'var(--gold)' }}
+              style={{ color: 'var(--accent-default)' }}
             >
               {t('viewAll')} →
             </Link>

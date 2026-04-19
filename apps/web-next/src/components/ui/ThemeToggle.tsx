@@ -39,7 +39,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       aria-label={`Switch theme (current: ${LABELS[theme]})`}
       className={cn(
         'flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm transition-colors',
-        'hover:bg-[var(--secondary)] text-[var(--muted-foreground)]',
+        'hover:bg-[var(--bg-surface-sunken)] text-[var(--fg-muted)]',
         className
       )}
     >

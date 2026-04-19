@@ -36,7 +36,7 @@ export function VideoCardWide({ video, className }: VideoCardWideProps) {
         ) : (
           <div
             className="absolute inset-0 flex items-center justify-center pointer-events-none"
-            style={{ background: 'var(--secondary)' }}
+            style={{ background: 'var(--bg-surface-sunken)' }}
           >
             <span className="text-4xl opacity-30">🎬</span>
           </div>
@@ -47,7 +47,7 @@ export function VideoCardWide({ video, className }: VideoCardWideProps) {
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 z-10 pointer-events-none">
           <Link
             href={watchHref}
-            className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 pointer-events-auto hover:bg-[var(--accent)] hover:scale-110"
+            className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 pointer-events-auto hover:bg-[var(--accent-default)] hover:scale-110"
             aria-label="Play Now"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="white" className="ml-1">
@@ -59,8 +59,8 @@ export function VideoCardWide({ video, className }: VideoCardWideProps) {
         <span
           className="absolute top-2 left-2 text-xs px-1.5 py-0.5 rounded font-medium pointer-events-none z-10"
           style={{
-            background: video.status === 'ongoing' ? 'var(--gold)' : 'var(--bg-overlay)',
-            color: video.status === 'ongoing' ? 'black' : 'var(--muted-foreground)',
+            background: video.status === 'ongoing' ? 'var(--accent-default)' : 'var(--bg-overlay)',
+            color: video.status === 'ongoing' ? 'black' : 'var(--fg-muted)',
           }}
         >
           {STATUS_LABELS[video.status] ?? video.status}
@@ -69,7 +69,7 @@ export function VideoCardWide({ video, className }: VideoCardWideProps) {
         {video.rating !== null && (
           <span
             className="absolute top-2 right-2 text-xs px-1.5 py-0.5 rounded font-medium pointer-events-none z-10"
-            style={{ background: 'var(--bg-overlay)', color: 'var(--gold)' }}
+            style={{ background: 'var(--bg-overlay)', color: 'var(--accent-default)' }}
           >
             ★ {video.rating.toFixed(1)}
           </span>
@@ -79,13 +79,13 @@ export function VideoCardWide({ video, className }: VideoCardWideProps) {
       <div className="mt-2 space-y-0.5 relative z-10">
         <Link href={detailHref} className="after:absolute after:inset-0">
           <p
-            className="text-sm font-medium line-clamp-1 group-hover:text-[var(--accent)] transition-colors"
-            style={{ color: 'var(--foreground)' }}
+            className="text-sm font-medium line-clamp-1 group-hover:text-[var(--accent-default)] transition-colors"
+            style={{ color: 'var(--fg-default)' }}
           >
             {video.title}
           </p>
         </Link>
-        <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+        <p className="text-xs" style={{ color: 'var(--fg-muted)' }}>
           {video.year && `${video.year} · `}
           {video.episodeCount > 1 ? `全 ${video.episodeCount} 集` : '电影'}
         </p>
