@@ -6895,7 +6895,7 @@
 - **完成备注**：实际迁移 31 个硬编码 CSS 变量（非 23；差异源自任务规划期估算）；所有旧变量在 @layer base :root 中重映射至新 token var()，移除 .dark 覆写区块；5 处 TS/TSX 硬编码颜色修复（black/white 关键字 + var(--bg-overlay)）；no-hardcoded-color 升 error；lint 无任何 warning/error；typecheck ✅ / tests 1087 passed ✅
 
 #### TOKEN-14 — 后台 Token 编辑器 MVP（只读预览）
-- **状态**：⬜ 待开始
+- **状态**：🔄 执行中
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
 - **依赖**：TOKEN-09（可与 TOKEN-13 并行）
