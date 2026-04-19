@@ -90,7 +90,7 @@ export function VideoCard({ video, className }: VideoCardProps) {
         {video.rating !== null && (
           <span
             className="absolute top-2 right-2 text-xs px-1.5 py-0.5 rounded font-medium pointer-events-none z-10"
-            style={{ background: 'rgba(0,0,0,0.7)', color: 'var(--gold)' }}
+            style={{ background: 'var(--bg-overlay)', color: 'var(--gold)' }}
           >
             ★ {video.rating.toFixed(1)}
           </span>

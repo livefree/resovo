@@ -6661,3 +6661,266 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `--phase-target TESTFIX-08` → OK
   - `--phase-target INVALID` → exit 1
 - **质量门禁**：`npm run typecheck` + `npm run test -- --run` 全绿
+
+---
+
+## 2026-04-18（Phase 0.5 闭幕修订）
+
+- close(PHASE-0.5): 正式闭幕 Phase 0.5，接受 TESTFIX-08 D×7 未验证状态；基于 legacy snapshot 视角止损，不创建 TESTFIX-10
+- rule(workflow-rules): 新增 §Phase 独立审计员条款（Phase 关闭前必须独立会话审计）
+- rule(workflow-rules): 新增 §重写期测试基线例外（M2–M6 期间 known_failing 允许逐块删除新增）
+- rule(workflow-rules): 新增 §重写期目录约定（apps/*-next/ 并行路线，M6 末 rename）
+- doc(known_failing_tests_phase0): 文件头标注 LEGACY SNAPSHOT 豁免
+- doc(baseline_20260418): 新建 README.md 同义声明（承接 JSON 无法注释的缺口）
+- decision: M2 起前端走 apps/*-next/ 并行路线，详见 task_queue_patch_rewrite_track_20260418.md
+- queue(RW-SETUP): 追加 SEQ-20260418-RW-SETUP 三张任务卡到 task-queue.md
+
+---
+
+## TOKEN-01 — packages/design-tokens 目录骨架 + ADR-032
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：claude-opus-4-6（ADR-032 构建工具选型：方案 A/B/C 评估 + exports 契约设计 + 架构约束）
+- **文件列表**：
+  - `packages/design-tokens/package.json` — 三路 exports（css/js/types），`"build": "tsx scripts/build-css.ts"`
+  - `packages/design-tokens/tsconfig.json` — noEmit 类型检查配置
+  - `packages/design-tokens/src/index.ts` — 主出口（re-export 四层）
+  - `packages/design-tokens/src/types.ts` — 类型出口骨架
+  - `packages/design-tokens/src/primitives/index.ts` — 占位
+  - `packages/design-tokens/src/semantic/index.ts` — 占位
+  - `packages/design-tokens/src/components/index.ts` — 占位
+  - `packages/design-tokens/src/brands/index.ts` — 占位
+  - `packages/design-tokens/scripts/build-css.ts` — CSS 变量生成器骨架
+  - `packages/design-tokens/src/css/tokens.css` — 构建产物（占位）
+  - `packages/design-tokens/README.md` — 消费方使用说明
+  - `docs/decisions.md` — ADR-032（选方案 B：手写 TS 构建脚本，零外部依赖；对 ADR-022 JSON 格式精化为 TypeScript-first）
+- **ADR-032 选型结论**：方案 B（手写 TS 构建脚本）；不选 A（Style Dictionary，引入新依赖）；不选 C（Tokens Studio，无 Figma 协作场景）
+- **质量门禁**：`npm run build -w @resovo/design-tokens` ✅ / `typecheck` ✅ / `lint` ✅ / 1007 unit tests ✅
+
+---
+
+## TOKEN-02 — Primitive 层原子 Token 定义
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：claude-opus-4-6（token 结构契约：值域/命名/CSS 派生规则/chroma 衰减策略）
+- **文件列表**：
+  - `packages/design-tokens/src/primitives/color.ts` — 灰阶 13 阶 + accent 青色 5 阶 + 状态色 4×3（OKLCH）
+  - `packages/design-tokens/src/primitives/space.ts` — 11 阶间距
+  - `packages/design-tokens/src/primitives/size.ts` — xs~5xl 9 阶
+  - `packages/design-tokens/src/primitives/radius.ts` — none~full 6 阶
+  - `packages/design-tokens/src/primitives/typography.ts` — fontSize×9 + lineHeight×5 + fontWeight×5 + fontFamily×2
+  - `packages/design-tokens/src/primitives/motion.ts` — duration×6 + easing×5
+  - `packages/design-tokens/src/primitives/shadow.ts` — none~xl 5 阶（深色主题双层叠加）
+  - `packages/design-tokens/src/primitives/z-index.ts` — 9 阶，player 置顶
+  - `packages/design-tokens/scripts/build-css.ts` — 递归扁平化生成 102 个 CSS 变量
+  - `tests/unit/design-tokens/primitives.test.ts` — 48 tests
+- **质量门禁**：typecheck ✅ / build ✅ / 1055 unit tests ✅
+
+---
+
+## TOKEN-03 — Semantic 层语义映射
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：claude-opus-4-6（semantic token 命名体系 + light/dark 映射 + derive-accent 算法）
+- **文件列表**：
+  - `packages/design-tokens/src/semantic/bg.ts` — canvas/surface/surfaceRaised/surfaceSunken/overlay（light+dark）
+  - `packages/design-tokens/src/semantic/fg.ts` — default/muted/subtle/onAccent/disabled（light+dark）
+  - `packages/design-tokens/src/semantic/border.ts` — default/strong/subtle/focus（light+dark）
+  - `packages/design-tokens/src/semantic/accent.ts` — default/hover/active/muted/fg（light+dark）
+  - `packages/design-tokens/src/semantic/state.ts` — success/warning/error/info × bg/fg/border（light+dark）
+  - `packages/design-tokens/src/semantic/surface.ts` — bg 超集 + glass/scrim（light+dark）
+  - `packages/design-tokens/src/semantic/derive-accent.ts` — OKLCH 种子推导 11 阶，chroma 边缘衰减
+  - `packages/design-tokens/src/semantic/index.ts` — 统一重导出
+  - `tests/unit/design-tokens/semantic.test.ts` — 16 tests（结构/primitive 引用完整性/derive-accent 稳定性）
+- **质量门禁**：typecheck ✅ / 1071 unit tests ✅
+
+---
+
+## TOKEN-04 — Component 层组件 Token 定义
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：claude-opus-4-6（8 组件 token 结构契约 + size×state 矩阵 + player 三态设计）
+- **文件列表**：
+  - `packages/design-tokens/src/components/button.ts` — 4 variant × 3 size × 5 state（primary/secondary/ghost/destructive）
+  - `packages/design-tokens/src/components/input.ts` — 3 size × 5 state + placeholderFg/labelFg
+  - `packages/design-tokens/src/components/card.ts` — 3 variant × 2 state（default/elevated/outlined）
+  - `packages/design-tokens/src/components/tabs.ts` — 4 item state + indicator + list
+  - `packages/design-tokens/src/components/modal.ts` — 5 parts（backdrop/panel/header/body/footer）
+  - `packages/design-tokens/src/components/tooltip.ts` — 反色面板（light tooltip 走 dark bg）
+  - `packages/design-tokens/src/components/table.ts` — header + 4 row state + cell
+  - `packages/design-tokens/src/components/player.ts` — full/mini/pip 三态（固定深色，复用 accent.dark）
+  - `packages/design-tokens/src/components/index.ts` — 桶导出
+  - `tests/unit/design-tokens/components.test.ts` — 16 tests（引用完整性 + 结构校验）
+- **质量门禁**：typecheck ✅ / 1087 unit tests ✅
+
+## [TOKEN-05] Token 构建管线（CSS / JS / Types 三路输出）
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 21:20
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `packages/design-tokens/build.ts` — 新增主构建脚本（手写 TS，零外部依赖）；输出 dist/ 三路产物
+  - `packages/design-tokens/package.json` — 增加 clean/prebuild/build scripts；dist/ 导出路径
+  - `packages/design-tokens/dist/tokens.css` — 生成：:root {primitive + semantic.light} + .dark {semantic.dark}；7.1KB
+  - `packages/design-tokens/dist/tokens.js` — 生成：primitives + semantic 嵌套对象（ESM）；8.2KB
+  - `packages/design-tokens/dist/tokens.d.ts` — 生成：PrimitiveVarName / SemanticVarName / TokenVarName 联合类型
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：dist/ 为构建产物，不纳入版本控制（.gitignore 需包含 packages/design-tokens/dist/）；build.ts 已修正原 build-css.ts 的颜色变量命名问题（--color-gray-50 而非 --color-50）
+- **质量门禁**：typecheck ✅ / lint ✅ / 80 design-token unit tests ✅ / CSS < 50KB ✅
+
+## [TOKEN-06] Tailwind 桥接（theme.extend 从 Token 生成）
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 21:25
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `packages/design-tokens/tailwind-preset.ts` — 新增；9 个 theme.extend 键（colors/spacing/fontSize/fontFamily/borderRadius/boxShadow/zIndex/transitionDuration/transitionTimingFunction）；颜色使用 var(--x) 运行时引用
+  - `apps/web/tailwind.config.ts` — 接入 presets: [designTokensPreset]，移除手写 colors
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：apps/admin/ 目录尚未创建，tailwind.config.ts 跳过；token 颜色键使用 bg-{key} 访问语义色（如 text-fg-default），accent 同时含 numeric 和 semantic 子键
+- **质量门禁**：typecheck ✅ / lint ✅ / 80 design-token unit tests ✅
+
+## [TOKEN-07] Base theme 实现（light / dark CSS 注入）
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 21:30
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/web/src/app/globals.css` — 注入 35 个语义层 token CSS 变量（:root light + .dark + @media prefers-color-scheme dark fallback）；body 过渡 200ms；color-scheme: light dark
+  - `packages/design-tokens/build.ts` — 新增 buildBaseTheme() 输出 dist/base-theme.css
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：globals.css 中旧硬编码变量（--background, --foreground 等）与新 token 变量共存，TOKEN-13 负责迁移并删除旧变量；dist/base-theme.css 为构建产物，gitignored
+- **质量门禁**：typecheck ✅ / lint ✅ / 80 design-token unit tests ✅
+
+## [TOKEN-08] Brand 层架构（数据模型 + DB schema + override 约束）
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 21:40
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-6) — Brand 类型体系 + DB schema 设计
+- **修改文件**：
+  - `packages/design-tokens/src/brands/types.ts` — 新增；BrandOverrides（仅 semantic+component）、Brand 接口、编译期 primitive 拦截
+  - `packages/design-tokens/src/brands/default.ts` — 新增；defaultBrand + defaultBrandOverrides
+  - `packages/design-tokens/src/brands/index.ts` — 由空占位改为正式导出
+  - `packages/design-tokens/package.json` — 新增 ./brands 子路径 export
+  - `apps/api/src/db/migrations/047_create_brands_table.sql` — 新增；brands 表 + 部分唯一索引 + updated_at 触发器
+  - `apps/api/src/db/queries/brands.ts` — 新增；getBrandBySlug / listBrands / upsertBrand
+  - `docs/architecture.md` — 追加 §5.8 brands 表条目
+- **新增依赖**：无
+- **数据库变更**：新增 brands 表（Migration 047）
+- **注意事项**：migration 未实际运行（需手动执行）；brands.ts 中 BrandOverrides 本地定义（不跨包），运行期由 service 层 zod 校验结构
+- **质量门禁**：typecheck ✅ / lint ✅ / 80 design-token tests ✅
+
+## [TOKEN-09] BrandProvider + useBrand / useTheme hooks
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 21:50
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-6) — BrandProvider API 契约设计 + ADR-033
+- **修改文件**：
+  - `apps/web/src/types/brand.ts` — 新增；Brand / BrandOverrides / Theme / ThemeContextValue 等类型
+  - `apps/web/src/contexts/BrandProvider.tsx` — 新增；双 Context（BrandContext+ThemeContext）+ useSyncExternalStore + 系统主题 mql 监听 + setBrand 异步 fetch
+  - `apps/web/src/hooks/useBrand.ts` — 新增；BrandContext 读取，空 context 抛错
+  - `apps/web/src/hooks/useTheme.ts` — 新增；ThemeContext 读取，空 context 抛错
+  - `docs/decisions.md` — 追加 ADR-033（BrandProvider API 契约，ADR-032 与 ADR-034 之间）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：Brand 类型在 web app 内本地定义（与 packages/design-tokens 结构兼容，避免跨包依赖）；Vitest 单测留待 TOKEN-12 补充
+- **质量门禁**：typecheck ✅ / lint ✅ / 80 design-token tests ✅
+
+## [TOKEN-10] Cookie + middleware 品牌 / 主题同步
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 22:00
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/web/middleware.ts` — 修改；在 next-intl 链条前插入 brand/theme cookie 读取 + header 注入
+  - `apps/web/src/lib/brand-detection.ts` — 新增；parseBrandSlug / parseTheme 纯函数（格式校验 + 默认兜底）
+  - `apps/web/src/app/[locale]/layout.tsx` — 修改；读 headers + 挂载 BrandProvider（initialBrand + initialTheme）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：当前仅支持默认品牌 slug='resovo'；非默认品牌的 DB 查询留待 TOKEN-14；middleware 在 Edge Runtime 纯内存操作，p95 < 50ms
+- **质量门禁**：typecheck ✅ / lint ✅
+
+## [TOKEN-11] 首屏无闪烁 blocking script
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 22:15
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/web/src/lib/theme-init-script.ts` — 新增；导出 THEME_INIT_SCRIPT 字符串（IIFE：读 resovo-brand/resovo-theme cookie → resolveTheme → 设 html.dataset.brand/theme）
+  - `apps/web/src/app/[locale]/layout.tsx` — 修改；在 providers 之前注入 `<script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}>`（blocking，React hydration 前生效）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：脚本仅读 cookie，不用 localStorage，与 middleware 同源策略保持一致；system theme 时通过 window.matchMedia 解析为 light/dark；无 cookie 时默认 brand=resovo / theme 跟随系统偏好
+- **质量门禁**：typecheck ✅ / lint ✅
+
+## [TOKEN-12] Token Playground dev-only 页面
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 22:30
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/web/src/app/[locale]/__playground/tokens/layout.tsx` — 新增；NODE_ENV !== development 时 notFound()
+  - `apps/web/src/app/[locale]/__playground/tokens/page.tsx` — 新增；Server Component 导入 design-tokens 常量，三栏布局
+  - `apps/web/src/app/[locale]/__playground/tokens/_components/BrandSwitcher.tsx` — 新增；useTheme hook 驱动 light/dark/system 切换
+  - `apps/web/src/app/[locale]/__playground/tokens/_components/PrimitivePanel.tsx` — 新增；颜色色块 + OKLCH 值 + space/radius/shadow/typography/motion/zIndex
+  - `apps/web/src/app/[locale]/__playground/tokens/_components/SemanticPanel.tsx` — 新增；resolvedTheme 实时适配，Live Preview 按钮/输入框示例
+  - `apps/web/src/app/[locale]/__playground/tokens/_components/ComponentPanel.tsx` — 新增；flattenTokenPath 展开组件 token，点击复制 token 名
+  - `apps/web/package.json` — 新增 @resovo/design-tokens workspace 依赖
+  - `apps/web/tsconfig.json` — 新增 @resovo/design-tokens 路径映射
+  - `tsconfig.json` — 新增 @resovo/design-tokens 路径映射
+- **新增依赖**：@resovo/design-tokens（workspace 第一方包，非外部依赖）
+- **数据库变更**：无
+- **注意事项**：playground 仅 dev 环境可见；production build 访问 /__playground/tokens → 404；token 数据由 Server Component 导入后以 props 传递给 client 组件
+- **质量门禁**：typecheck ✅ / lint ✅ / tests 1087 passed ✅
+
+## [TOKEN-13] 硬编码 CSS 变量迁移 + ESLint 升级 error
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 23:00
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/web/src/app/globals.css` — @layer base 旧变量重映射至 token 系统，移除 .dark 覆写区块，body/border 改用直接 CSS var() 引用
+  - `apps/web/src/components/player/PlayerShell.tsx` — `#000` → `black`；`rgba(255,255,255,0.5)` → `color-mix(in oklch, white 50%, transparent)`
+  - `apps/web/src/components/video/VideoCard.tsx` — `rgba(0,0,0,0.7)` → `var(--bg-overlay)`
+  - `apps/web/src/components/video/VideoCardWide.tsx` — 2 处 rgba → `var(--bg-overlay)`
+  - `apps/web/src/types/player.types.ts` — subtitleColor `#ffffff` → `white`；subtitleBgColor `#000000` → `black`
+  - `.eslintrc.json` — `resovo/no-hardcoded-color` 从 `warn` 升为 `error`
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  旧变量映射对照表（31条，实际比规划23条多）：
+  --background→--bg-canvas, --bg→--bg-canvas, --bg2→--bg-surface-sunken, --bg3→--bg-surface-sunken,
+  --foreground→--fg-default, --text→--fg-default, --muted→--fg-muted, --muted-foreground→--fg-muted,
+  --card→--bg-surface, --card-foreground→--fg-default, --secondary→--bg-surface-sunken,
+  --secondary-foreground→--fg-default, --accent→--accent-default, --accent-foreground→--accent-fg,
+  --gold→--accent-default, --primary→--accent-default, --primary-foreground→--accent-fg,
+  --ring→--border-focus, --border→--border-default, --input→--border-default, --subtle→--border-subtle,
+  --status-success→--state-success-fg, --status-danger→--state-error-fg, --status-warning→--state-warning-fg,
+  --status-info→--state-info-fg, --status-neutral→--fg-muted, --status-success-bg→--state-success-bg,
+  --status-danger-bg→--state-error-bg, --status-warning-bg→--state-warning-bg,
+  --status-neutral-bg→color-mix(in oklch, var(--fg-muted) 12%, transparent), --modal-overlay→--bg-overlay
+- **质量门禁**：typecheck ✅ / lint ✅ no warnings / tests 1087 passed ✅
+
+## [TOKEN-14] 后台 Token 编辑器 MVP（只读预览）
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 23:30
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/routes/admin/design-tokens.ts` — 新增；GET /v1/admin/design-tokens（requireRole admin），返回 brands 列表
+  - `apps/api/src/server.ts` — 修改；注册 adminDesignTokenRoutes
+  - `apps/server/src/app/admin/design-tokens/page.tsx` — 新增；Server Component 页面，渲染 DesignTokensView
+  - `apps/server/src/components/admin/design-tokens/DesignTokensView.tsx` — 新增；Client Component，管理 selectedSlug 状态，左右分栏布局
+  - `apps/server/src/components/admin/design-tokens/TokenTable.tsx` — 新增；Client Component，ModernDataTable 展示 Brand 列表，点击行触发 onBrandSelect
+  - `apps/server/src/components/admin/design-tokens/LivePreviewFrame.tsx` — 新增；Client Component，iframe 嵌入 /zh/__playground/tokens
+- **新增依赖**：无
+- **数据库变更**：无（复用 TOKEN-08 的 brands 表 + listBrands query）
+- **注意事项**：apps/admin/ 不存在，实际位置为 apps/server/（port 3001）；本里程碑仅只读，编辑写入留待 M5+；WEB_BASE_URL 通过 env.NEXT_PUBLIC_WEB_URL 注入
+- **质量门禁**：typecheck ✅ / lint ✅ / tests 1087 passed ✅

@@ -2,7 +2,7 @@
 
 > status: active
 > owner: @engineering
-> scope: task lifecycle, task-queue management, blocker/phase-complete protocols, baseline test ledger protocol
+> scope: task lifecycle, task-queue management, blocker/phase-complete protocols, baseline test ledger protocol, independent auditor protocol, rewrite-era baseline exception
 > source_of_truth: yes
 > supersedes: CLAUDE.md §"第二层：执行流程"（2026-04-12 拆出）
 > last_reviewed: 2026-04-18
@@ -88,6 +88,69 @@ npm run preflight   # 环境 + 迁移 + 类型 + lint + 单测基线
 
 - 「连续执行规则」中「测试连续 2 次仍失败」BLOCKER 触发条件不变，但默认范围限定为「**隔离清单外**的失败」
 - 「任务完成后：必做事项」第 4 步 changelog 追加，对于 BASELINE 任务必须含「failing_tests.json 路径 + 当前隔离清单大小」两项
+
+---
+
+## Phase 独立审计员条款
+
+任何 Phase 的 PHASE COMPLETE 通知不得由该 Phase 内执行任务的同一 Claude Code 会话 / 同一模型实例自行发出。Phase 关闭前必须：
+
+1. **spawn 一个独立 Opus 子代理**（通过 Task 工具，`subagent_type: "arch-reviewer"` 或等价预设），向其提供完整 Phase 上下文：
+   - 本 Phase 的 task-queue.md 完整序列
+   - 基线目录 `docs/baseline_<date>/`
+   - triage 文档与隔离清单
+   - 本 Phase 的全部 git log（commit hash + message + diffstat）
+2. 审计员必须产出：
+   - **红线项清单**：必修，否则不得 PHASE COMPLETE
+   - **黄线项清单**：应修，列明风险
+   - **数字一致性审查**：通知正文数字 vs 三份 artifact（failing_tests.json / triage / known_failing）
+   - **git log 交叉核验**：通知「已完成工作」字段 vs git log commit 内容
+3. 审计报告归档到 `docs/audit_phase<N>_<date>.md`，作为 PHASE COMPLETE 通知发出的**硬前置**
+4. 审计发现的红线必须在 Phase 闭幕前处理（修 / 明示接受并写入通知 / 创建 CHG-NN 任务），**不得被动绕过**
+
+理由：LLM 执行者存在已知的「乐观自报」倾向。让同一会话既改代码又审自己的完成度，会系统性地低估缺陷。Phase 0.5 的 TESTFIX-08 D×7 不一致正是通过此机制捕获 —— 没有独立审计环节，Phase 0.5 就会带着假数字进入生产轨迹。
+
+---
+
+## 重写期测试基线例外
+
+原「Phase 基线测试条款」第 5 条「隔离清单单调收敛」适用于**稳态期**（代码增量演化、测试契约稳定）。本项目自 M2 起进入**重写期**：apps/web/、apps/admin/、apps/server/ 将在 M2–M6 分批被 apps/web-next/ 等并行应用替代，旧 E2E 随旧组件同步作废。
+
+重写期基线协议改为：
+
+1. `docs/known_failing_tests_phase<N>.md` 在重写里程碑启动时，允许**同一 commit 内同时**：
+   - **删除**：因组件被新代码替代而作废的条目（必须注明对应 suite 文件路径 + 哪个 milestone cutover）
+   - **新增**：新组件首次采集的失败条目（必须附处置：fix / quarantine / defer）
+2. 每个重写里程碑（M2 起）的完成条件强制包含：
+   - 旧 suite（`tests/e2e/<component>.spec.ts`）已删除
+   - 新 suite（`tests/e2e-next/<component>.spec.ts`）已创建并纳入 playwright project
+   - 隔离清单对应条目同步更新
+3. `verify-baseline` 的 `--coverage-report` 与 `--phase-target` 校验维持运行，但接受「旧 suite 被删除」作为合法变更
+
+**适用范围**：M2 起至 M6 末。M6 完成后（apps/*-next/ 全部就位，apps/web/ 等删除），恢复「Phase 基线测试条款」§5 单调收敛约束。
+
+---
+
+## 重写期目录约定
+
+自 2026-04-18 起至 M6 完成期间，应用目录遵循双并行约定：
+
+1. **新代码去向**：所有 M2 起的业务改动必须落入 `apps/*-next/`，**禁止**修改 `apps/web/`、`apps/admin/`、`apps/server/`（除路由切分配置与 deprecation 标注外）
+2. **路由切分协议**：`apps/web-next/src/config/rewrite-allowlist.ts` 是旧/新路由切换的**单一真源**（ADR-035）
+3. **E2E 目录约定**：旧 E2E 在 `tests/e2e/`（LEGACY SNAPSHOT，逐块删除）；新 E2E 在 `tests/e2e-next/`；test-guarded 按 project 区分
+4. **M6 末目录 rename**：`apps/*-next → apps/*`（M6-RENAME-01 专门处理），本条约定随之失效
+
+### 禁止
+
+- ❌ 在 `apps/web/` 内新增业务组件 / 修复旧组件 testid（旧代码冻结）
+- ❌ 在 `apps/web-next/` 内 import `apps/web/` 的任何模块（破坏并行隔离）
+- ❌ 跳过 middleware ALLOWLIST 直接从 apps/web/ link 到 apps/web-next/ 页面
+- ❌ 在 `tests/e2e/` 下新增测试（新测试全部去 `tests/e2e-next/`）
+- ❌ 拖延旧代码删除（里程碑完成必须同 commit 删旧 + 加新）
+
+### 衔接
+
+本章节与「重写期测试基线例外」联动生效、联动失效。M6-RENAME-01 完成时两条同步标注作废，项目恢复单目录单基线稳态。
 
 ---
 
