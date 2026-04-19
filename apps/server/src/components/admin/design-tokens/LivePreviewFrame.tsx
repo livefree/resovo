@@ -6,7 +6,7 @@ interface LivePreviewFrameProps {
 }
 
 export function LivePreviewFrame({ webBaseUrl }: LivePreviewFrameProps) {
-  const src = `${webBaseUrl}/zh/playground/tokens`
+  const src = `${webBaseUrl}/en/playground/tokens`
 
   return (
     <iframe

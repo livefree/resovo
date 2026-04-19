@@ -1,32 +1,72 @@
 'use client'
 
-import { useTheme } from '@/hooks/useTheme'
-import type { bg, fg, border, accent, state, surface } from '@resovo/design-tokens'
+import { useEffect, useState } from 'react'
 
-type SemanticData = {
-  bg: typeof bg
-  fg: typeof fg
-  border: typeof border
-  accent: typeof accent
-  state: typeof state
-  surface: typeof surface
+const CSS_VAR_GROUPS = {
+  Background: [
+    '--bg-canvas',
+    '--bg-surface',
+    '--bg-surface-raised',
+    '--bg-surface-sunken',
+    '--bg-overlay',
+  ],
+  Foreground: [
+    '--fg-default',
+    '--fg-muted',
+    '--fg-subtle',
+    '--fg-on-accent',
+    '--fg-disabled',
+  ],
+  Border: [
+    '--border-default',
+    '--border-strong',
+    '--border-subtle',
+    '--border-focus',
+  ],
+  Accent: [
+    '--accent-default',
+    '--accent-hover',
+    '--accent-active',
+    '--accent-muted',
+    '--accent-fg',
+  ],
+  Surface: [
+    '--surface-canvas',
+    '--surface-surface',
+    '--surface-surface-raised',
+    '--surface-glass',
+    '--surface-scrim',
+  ],
+  'State — Success': ['--state-success-bg', '--state-success-fg', '--state-success-border'],
+  'State — Warning': ['--state-warning-bg', '--state-warning-fg', '--state-warning-border'],
+  'State — Error': ['--state-error-bg', '--state-error-fg', '--state-error-border'],
+  'State — Info': ['--state-info-bg', '--state-info-fg', '--state-info-border'],
 }
 
-function SwatchRow({ label, value, cssVar }: { label: string; value: string; cssVar?: string }) {
+function useCssVar(varName: string): string {
+  const [value, setValue] = useState('')
+
+  useEffect(() => {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
+    setValue(v)
+  }, [varName])
+
+  return value
+}
+
+function SwatchRow({ cssVar }: { cssVar: string }) {
+  const value = useCssVar(cssVar)
   return (
     <div className="flex items-center gap-2 py-0.5">
       <div
         className="w-5 h-5 rounded border shrink-0"
-        style={{
-          backgroundColor: cssVar ? `var(${cssVar})` : value,
-          borderColor: 'var(--border-subtle)',
-        }}
+        style={{ backgroundColor: `var(${cssVar})`, borderColor: 'var(--border-subtle)' }}
       />
       <span className="text-xs font-mono truncate" style={{ color: 'var(--fg-muted)' }}>
-        {label}
+        {cssVar}
       </span>
-      <span className="text-xs font-mono ml-auto shrink-0" style={{ color: 'var(--fg-subtle)' }}>
-        {cssVar ?? value.slice(0, 28)}
+      <span className="text-xs font-mono ml-auto shrink-0 max-w-[140px] truncate" style={{ color: 'var(--fg-subtle)' }}>
+        {value || '…'}
       </span>
     </div>
   )
@@ -43,66 +83,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-export function SemanticPanel({ data }: { data: SemanticData }) {
-  const { resolvedTheme } = useTheme()
-  const t = resolvedTheme
-
+export function SemanticPanel() {
   return (
     <div>
-      <Section title="Background">
-        {(Object.entries(data.bg[t]) as [string, string][]).map(([key, value]) => (
-          <SwatchRow key={key} label={`bg.${key}`} value={value} cssVar={`--bg-${camel2kebab(key)}`} />
-        ))}
-      </Section>
-
-      <Section title="Foreground">
-        {(Object.entries(data.fg[t]) as [string, string][]).map(([key, value]) => (
-          <div key={key} className="flex items-center justify-between py-0.5 gap-2">
-            <span className="text-xs font-mono" style={{ color: `var(--fg-${camel2kebab(key)})` }}>
-              fg.{key}
-            </span>
-            <span className="text-xs font-mono" style={{ color: 'var(--fg-subtle)' }}>
-              {value.slice(0, 28)}
-            </span>
-          </div>
-        ))}
-      </Section>
-
-      <Section title="Accent">
-        {(Object.entries(data.accent[t]) as [string, string][]).map(([key, value]) => (
-          <SwatchRow key={key} label={`accent.${key}`} value={value} cssVar={`--accent-${key}`} />
-        ))}
-      </Section>
-
-      <Section title="Border">
-        {(Object.entries(data.border[t]) as [string, string][]).map(([key, value]) => (
-          <SwatchRow key={key} label={`border.${key}`} value={value} cssVar={`--border-${camel2kebab(key)}`} />
-        ))}
-      </Section>
-
-      <Section title="State">
-        {(Object.entries(data.state[t]) as [string, Record<string, string>][]).map(([kind, slots]) => (
-          <div key={kind} className="mb-2">
-            <p className="text-xs font-medium mb-1 capitalize" style={{ color: 'var(--fg-subtle)' }}>
-              {kind}
-            </p>
-            {(Object.entries(slots) as [string, string][]).map(([slot, value]) => (
-              <SwatchRow
-                key={slot}
-                label={`state.${kind}.${slot}`}
-                value={value}
-                cssVar={`--state-${kind}-${slot}`}
-              />
-            ))}
-          </div>
-        ))}
-      </Section>
-
-      <Section title="Surface">
-        {(Object.entries(data.surface[t]) as [string, string][]).map(([key, value]) => (
-          <SwatchRow key={key} label={`surface.${key}`} value={value} cssVar={`--surface-${camel2kebab(key)}`} />
-        ))}
-      </Section>
+      {Object.entries(CSS_VAR_GROUPS).map(([group, vars]) => (
+        <Section key={group} title={group}>
+          {vars.map((v) => (
+            <SwatchRow key={v} cssVar={v} />
+          ))}
+        </Section>
+      ))}
 
       <div
         className="mt-6 rounded p-4 border"
@@ -147,8 +137,4 @@ export function SemanticPanel({ data }: { data: SemanticData }) {
       </div>
     </div>
   )
-}
-
-function camel2kebab(s: string): string {
-  return s.replace(/([A-Z])/g, '-$1').toLowerCase()
 }

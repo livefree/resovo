@@ -1,6 +1,3 @@
-import { colors, space, radius, shadow, typography, motion, zIndex } from '@resovo/design-tokens'
-import { bg, fg, border, accent, state, surface } from '@resovo/design-tokens'
-import { button, card, input } from '@resovo/design-tokens'
 import { PrimitivePanel } from './_components/PrimitivePanel'
 import { SemanticPanel } from './_components/SemanticPanel'
 import { ComponentPanel } from './_components/ComponentPanel'
@@ -9,14 +6,10 @@ import { BrandSwitcher } from './_components/BrandSwitcher'
 export const metadata = { title: 'Token Playground — Dev Only' }
 
 export default function TokenPlaygroundPage() {
-  const primitiveData = { colors, space, radius, shadow, typography, motion, zIndex }
-  const semanticData = { bg, fg, border, accent, state, surface }
-  const componentData = { button, card, input }
-
   return (
     <div className="flex flex-col h-screen">
       <header
-        className="flex items-center justify-between px-6 py-3 border-b"
+        className="flex items-center justify-between px-6 py-3 border-b shrink-0"
         style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-surface)' }}
       >
         <h1 className="text-sm font-semibold" style={{ color: 'var(--fg-muted)' }}>
@@ -36,21 +29,21 @@ export default function TokenPlaygroundPage() {
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--fg-muted)' }}>
             Primitive
           </h2>
-          <PrimitivePanel data={primitiveData} />
+          <PrimitivePanel />
         </section>
 
         <section className="w-1/3 overflow-y-auto border-r p-4" style={{ borderColor: 'var(--border-default)' }}>
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--fg-muted)' }}>
             Semantic
           </h2>
-          <SemanticPanel data={semanticData} />
+          <SemanticPanel />
         </section>
 
         <section className="w-1/3 overflow-y-auto p-4">
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--fg-muted)' }}>
             Component
           </h2>
-          <ComponentPanel data={componentData} />
+          <ComponentPanel />
         </section>
       </div>
     </div>
