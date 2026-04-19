@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss'
+import designTokensPreset from '../../packages/design-tokens/tailwind-preset.js'
 
 const config: Config = {
   content: [
@@ -6,17 +7,9 @@ const config: Config = {
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   darkMode: 'class',
+  presets: [designTokensPreset],
   theme: {
-    extend: {
-      colors: {
-        background: 'var(--background)',
-        foreground: 'var(--foreground)',
-        card: 'var(--card)',
-        primary: 'var(--accent)',
-        muted: 'var(--muted)',
-        border: 'var(--border)',
-      },
-    },
+    extend: {},
   },
   plugins: [],
 }

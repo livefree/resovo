@@ -6772,3 +6772,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **数据库变更**：无
 - **注意事项**：dist/ 为构建产物，不纳入版本控制（.gitignore 需包含 packages/design-tokens/dist/）；build.ts 已修正原 build-css.ts 的颜色变量命名问题（--color-gray-50 而非 --color-50）
 - **质量门禁**：typecheck ✅ / lint ✅ / 80 design-token unit tests ✅ / CSS < 50KB ✅
+
+## [TOKEN-06] Tailwind 桥接（theme.extend 从 Token 生成）
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 21:25
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `packages/design-tokens/tailwind-preset.ts` — 新增；9 个 theme.extend 键（colors/spacing/fontSize/fontFamily/borderRadius/boxShadow/zIndex/transitionDuration/transitionTimingFunction）；颜色使用 var(--x) 运行时引用
+  - `apps/web/tailwind.config.ts` — 接入 presets: [designTokensPreset]，移除手写 colors
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：apps/admin/ 目录尚未创建，tailwind.config.ts 跳过；token 颜色键使用 bg-{key} 访问语义色（如 text-fg-default），accent 同时含 numeric 和 semantic 子键
+- **质量门禁**：typecheck ✅ / lint ✅ / 80 design-token unit tests ✅

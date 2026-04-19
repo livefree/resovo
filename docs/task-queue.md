@@ -6725,7 +6725,7 @@
 - **完成备注**：新增 build.ts（手写 TS，零外部依赖，符合 ADR-032）；dist/tokens.css 7.1KB（primitive :root + semantic light :root + .dark override）；dist/tokens.js 8.2KB（嵌套对象）；dist/tokens.d.ts 含 PrimitiveVarName/SemanticVarName 联合类型；typecheck + lint clean
 
 #### TOKEN-06 — Tailwind 桥接（theme.extend 从 Token 生成）
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
 - **依赖**：TOKEN-05
@@ -6743,7 +6743,7 @@
   - `npm run dev -w apps/web` 启动无警告
   - 回归：页面视觉与 BASELINE-01 截图对比，无显著差异
   - Tailwind IntelliSense 补全新 token 类名
-- **完成备注**：_（AI 填写）_
+- **完成备注**：新增 tailwind-preset.ts（9 个 theme.extend 键：colors/spacing/fontSize/fontFamily/borderRadius/boxShadow/zIndex/transitionDuration/transitionTimingFunction）；颜色双层结构（primitive gray/accent numeric keys + semantic bg/fg/border/accent/surface/state keys）；apps/web/tailwind.config.ts 接入 presets + 移除手写 colors；apps/admin 不存在，跳过；typecheck + lint ✅
 
 #### TOKEN-07 — Base theme 实现（light / dark）
 - **状态**：⬜ 待开始
