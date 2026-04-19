@@ -6785,3 +6785,16 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **数据库变更**：无
 - **注意事项**：apps/admin/ 目录尚未创建，tailwind.config.ts 跳过；token 颜色键使用 bg-{key} 访问语义色（如 text-fg-default），accent 同时含 numeric 和 semantic 子键
 - **质量门禁**：typecheck ✅ / lint ✅ / 80 design-token unit tests ✅
+
+## [TOKEN-07] Base theme 实现（light / dark CSS 注入）
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 21:30
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/web/src/app/globals.css` — 注入 35 个语义层 token CSS 变量（:root light + .dark + @media prefers-color-scheme dark fallback）；body 过渡 200ms；color-scheme: light dark
+  - `packages/design-tokens/build.ts` — 新增 buildBaseTheme() 输出 dist/base-theme.css
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：globals.css 中旧硬编码变量（--background, --foreground 等）与新 token 变量共存，TOKEN-13 负责迁移并删除旧变量；dist/base-theme.css 为构建产物，gitignored
+- **质量门禁**：typecheck ✅ / lint ✅ / 80 design-token unit tests ✅

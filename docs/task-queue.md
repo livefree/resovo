@@ -6746,7 +6746,7 @@
 - **完成备注**：新增 tailwind-preset.ts（9 个 theme.extend 键：colors/spacing/fontSize/fontFamily/borderRadius/boxShadow/zIndex/transitionDuration/transitionTimingFunction）；颜色双层结构（primitive gray/accent numeric keys + semantic bg/fg/border/accent/surface/state keys）；apps/web/tailwind.config.ts 接入 presets + 移除手写 colors；apps/admin 不存在，跳过；typecheck + lint ✅
 
 #### TOKEN-07 — Base theme 实现（light / dark）
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
 - **依赖**：TOKEN-06
@@ -6763,7 +6763,7 @@
   - Light / Dark 模式切换视觉正常
   - `[data-theme="dark"]` 切换动效在 200ms 内完成
   - `npm run lint` 无 `no-hardcoded-color` warn 回归
-- **完成备注**：_（AI 填写）_
+- **完成备注**：globals.css 注入 35 个语义层 CSS 变量（bg/fg/border/accent/surface/state light+dark）；color-scheme: light dark；body 过渡 200ms；@media prefers-color-scheme 系统偏好 fallback；build.ts 新增 dist/base-theme.css 构建产物（5.5KB）；admin app 不存在跳过；typecheck + lint ✅
 
 #### TOKEN-08 — Brand 层架构（数据模型 + DB schema + override 约束）
 - **状态**：⬜ 待开始
