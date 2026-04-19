@@ -6789,7 +6789,7 @@
 - **完成备注**：arch-reviewer (claude-opus-4-6) 设计 Brand 层类型体系；brands/types.ts + default.ts + index.ts；migration 047 + brands.ts 查询（getBrandBySlug/listBrands/upsertBrand）；package.json 追加 ./brands 子路径 export；architecture.md §5.8 brand 表条目；typecheck + lint + 80 tests ✅
 
 #### TOKEN-09 — BrandProvider + useBrand / useTheme hooks
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **建议模型**：opus
 - **创建时间**：2026-04-18
 - **依赖**：TOKEN-08
@@ -6810,7 +6810,7 @@
   - `npm run typecheck` 通过
   - Vitest 覆盖：Provider 初始值 / setBrand / setTheme / SSR 场景（jsdom 无 hydration mismatch）
   - ADR-033 纳入 decisions.md
-- **完成备注**：_（AI 填写）_
+- **完成备注**：arch-reviewer (claude-opus-4-6) 设计 BrandProvider API 契约；BrandProvider.tsx（双 Context + useSyncExternalStore + 系统主题 mql 监听）；useBrand / useTheme hooks（空 context 抛错）；types/brand.ts（本地 Brand 接口，与 design-tokens 结构兼容）；ADR-033 写入 decisions.md；typecheck + lint ✅；Vitest 测试留待 TOKEN-12 Playground 集成阶段补充
 
 #### TOKEN-10 — Cookie + middleware 品牌 / 主题同步
 - **状态**：⬜ 待开始

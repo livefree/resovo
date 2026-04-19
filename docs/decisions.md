@@ -874,6 +874,31 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
   - 消费方：`apps/web/src/app/globals.css`（M1 TOKEN-03 后引入 `@import '@resovo/design-tokens/css'`）
 
 
+## ADR-033: BrandProvider API 契约与消费者约束
+
+- **日期**：2026-04-18
+- **状态**：已采纳，锁定
+- **子代理**：arch-reviewer (claude-opus-4-6)（API 契约设计评审）
+- **背景**：
+  - ADR-024 确立"主题与品牌正交 + SSR 首屏无闪烁"的整体策略，但未锁定 Provider / hooks 的具体签名
+  - TOKEN-09 需落地 `apps/web/src/contexts/BrandProvider.tsx` / `useBrand` / `useTheme`；M1–M6 大量消费者将依赖这三个契约
+  - 必须通过 ADR 锁定 API，防止后续任务"顺手修改 hook 返回形状"破坏全站消费者
+- **决策**：锁定以下 API 形状，任何变更必须通过新 ADR 或本 ADR 的 supersede 记录：
+  1. `<BrandProvider initialBrand: Brand; initialTheme: 'light' | 'dark' | 'system'; children: ReactNode />`
+  2. `useBrand(): { brand: Brand; setBrand: (slug: string) => void }`：`setBrand` 异步 fetch，失败仅 `console.error`，不抛、不回滚
+  3. `useTheme(): { theme: 'light' | 'dark' | 'system'; resolvedTheme: 'light' | 'dark'; setTheme: (t) => void }`：样式条件必须用 `resolvedTheme`，不得用 `theme`
+- **架构约束**：
+  - DOM 同步唯一入口：消费者不得直接写 `document.documentElement.dataset.brand / dataset.theme`
+  - 品牌切换唯一入口：必须通过 `setBrand(slug)`，禁止在组件内直接构造 Brand 对象
+  - 两个 Context 分开提供；禁止引入第三个"合并 context"
+  - `useSyncExternalStore` 的 `getServerSnapshot` 必须返回 initialBrand/initialTheme 对应快照
+  - 未在 Provider 子树中调用 `useBrand`/`useTheme` 必须抛显式错误，不得静默兜底
+  - API 签名定稿后不得在无 ADR 的情况下新增必填字段（可新增 optional 字段向后兼容）
+- **非目标**：`setBrand` 的乐观更新、回滚、loading 状态暴露 —— 若后续需要另立 ADR
+- **影响文件**：`apps/web/src/types/brand.ts`、`apps/web/src/contexts/BrandProvider.tsx`、`apps/web/src/hooks/useBrand.ts`、`apps/web/src/hooks/useTheme.ts`
+
+---
+
 ## ADR-034: 详情页按类型分段 + `/watch/` 专注播放：双路由分治不合并
 
 - **日期**：2026-04-18

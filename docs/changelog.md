@@ -6816,3 +6816,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **数据库变更**：新增 brands 表（Migration 047）
 - **注意事项**：migration 未实际运行（需手动执行）；brands.ts 中 BrandOverrides 本地定义（不跨包），运行期由 service 层 zod 校验结构
 - **质量门禁**：typecheck ✅ / lint ✅ / 80 design-token tests ✅
+
+## [TOKEN-09] BrandProvider + useBrand / useTheme hooks
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 21:50
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-6) — BrandProvider API 契约设计 + ADR-033
+- **修改文件**：
+  - `apps/web/src/types/brand.ts` — 新增；Brand / BrandOverrides / Theme / ThemeContextValue 等类型
+  - `apps/web/src/contexts/BrandProvider.tsx` — 新增；双 Context（BrandContext+ThemeContext）+ useSyncExternalStore + 系统主题 mql 监听 + setBrand 异步 fetch
+  - `apps/web/src/hooks/useBrand.ts` — 新增；BrandContext 读取，空 context 抛错
+  - `apps/web/src/hooks/useTheme.ts` — 新增；ThemeContext 读取，空 context 抛错
+  - `docs/decisions.md` — 追加 ADR-033（BrandProvider API 契约，ADR-032 与 ADR-034 之间）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：Brand 类型在 web app 内本地定义（与 packages/design-tokens 结构兼容，避免跨包依赖）；Vitest 单测留待 TOKEN-12 补充
+- **质量门禁**：typecheck ✅ / lint ✅ / 80 design-token tests ✅
