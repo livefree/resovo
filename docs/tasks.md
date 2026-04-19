@@ -14,22 +14,21 @@
 
 ---
 
-### TOKEN-02 — Primitive 层原子 Token 定义
+### TOKEN-03 — Semantic 层语义映射
 - **状态**：🔄 进行中
 - **来源序列**：SEQ-20260418-M1
 - **建议模型**：opus
 - **执行模型**：claude-sonnet-4-6（主循环）
-- **子代理调用**：arch-reviewer (claude-opus-4-6)（token 命名规范 + OKLCH 色阶结构 + 所有原子类型契约决策）
+- **子代理调用**：arch-reviewer (claude-opus-4-6)（semantic token 命名体系 + light/dark 映射 + derive-accent 算法设计）
 - **实际开始**：2026-04-18 00:00
 - **文件范围**：
-  - 新增 `packages/design-tokens/src/primitives/color.ts`
-  - 新增 `packages/design-tokens/src/primitives/space.ts`
-  - 新增 `packages/design-tokens/src/primitives/size.ts`
-  - 新增 `packages/design-tokens/src/primitives/radius.ts`
-  - 新增 `packages/design-tokens/src/primitives/typography.ts`
-  - 新增 `packages/design-tokens/src/primitives/motion.ts`
-  - 新增 `packages/design-tokens/src/primitives/shadow.ts`
-  - 新增 `packages/design-tokens/src/primitives/z-index.ts`
-  - 修改 `packages/design-tokens/src/primitives/index.ts`
+  - 新增 `packages/design-tokens/src/semantic/bg.ts`
+  - 新增 `packages/design-tokens/src/semantic/fg.ts`
+  - 新增 `packages/design-tokens/src/semantic/border.ts`
+  - 新增 `packages/design-tokens/src/semantic/accent.ts`
+  - 新增 `packages/design-tokens/src/semantic/state.ts`
+  - 新增 `packages/design-tokens/src/semantic/surface.ts`
+  - 新增 `packages/design-tokens/src/semantic/derive-accent.ts`
+  - 修改 `packages/design-tokens/src/semantic/index.ts`
 - **完成备注**：_（完成后填写）_
 

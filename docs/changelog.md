@@ -6697,3 +6697,42 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/decisions.md` — ADR-032（选方案 B：手写 TS 构建脚本，零外部依赖；对 ADR-022 JSON 格式精化为 TypeScript-first）
 - **ADR-032 选型结论**：方案 B（手写 TS 构建脚本）；不选 A（Style Dictionary，引入新依赖）；不选 C（Tokens Studio，无 Figma 协作场景）
 - **质量门禁**：`npm run build -w @resovo/design-tokens` ✅ / `typecheck` ✅ / `lint` ✅ / 1007 unit tests ✅
+
+---
+
+## TOKEN-02 — Primitive 层原子 Token 定义
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：claude-opus-4-6（token 结构契约：值域/命名/CSS 派生规则/chroma 衰减策略）
+- **文件列表**：
+  - `packages/design-tokens/src/primitives/color.ts` — 灰阶 13 阶 + accent 青色 5 阶 + 状态色 4×3（OKLCH）
+  - `packages/design-tokens/src/primitives/space.ts` — 11 阶间距
+  - `packages/design-tokens/src/primitives/size.ts` — xs~5xl 9 阶
+  - `packages/design-tokens/src/primitives/radius.ts` — none~full 6 阶
+  - `packages/design-tokens/src/primitives/typography.ts` — fontSize×9 + lineHeight×5 + fontWeight×5 + fontFamily×2
+  - `packages/design-tokens/src/primitives/motion.ts` — duration×6 + easing×5
+  - `packages/design-tokens/src/primitives/shadow.ts` — none~xl 5 阶（深色主题双层叠加）
+  - `packages/design-tokens/src/primitives/z-index.ts` — 9 阶，player 置顶
+  - `packages/design-tokens/scripts/build-css.ts` — 递归扁平化生成 102 个 CSS 变量
+  - `tests/unit/design-tokens/primitives.test.ts` — 48 tests
+- **质量门禁**：typecheck ✅ / build ✅ / 1055 unit tests ✅
+
+---
+
+## TOKEN-03 — Semantic 层语义映射
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：claude-opus-4-6（semantic token 命名体系 + light/dark 映射 + derive-accent 算法）
+- **文件列表**：
+  - `packages/design-tokens/src/semantic/bg.ts` — canvas/surface/surfaceRaised/surfaceSunken/overlay（light+dark）
+  - `packages/design-tokens/src/semantic/fg.ts` — default/muted/subtle/onAccent/disabled（light+dark）
+  - `packages/design-tokens/src/semantic/border.ts` — default/strong/subtle/focus（light+dark）
+  - `packages/design-tokens/src/semantic/accent.ts` — default/hover/active/muted/fg（light+dark）
+  - `packages/design-tokens/src/semantic/state.ts` — success/warning/error/info × bg/fg/border（light+dark）
+  - `packages/design-tokens/src/semantic/surface.ts` — bg 超集 + glass/scrim（light+dark）
+  - `packages/design-tokens/src/semantic/derive-accent.ts` — OKLCH 种子推导 11 阶，chroma 边缘衰减
+  - `packages/design-tokens/src/semantic/index.ts` — 统一重导出
+  - `tests/unit/design-tokens/semantic.test.ts` — 16 tests（结构/primitive 引用完整性/derive-accent 稳定性）
+- **质量门禁**：typecheck ✅ / 1071 unit tests ✅
