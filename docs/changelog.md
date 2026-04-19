@@ -6736,3 +6736,23 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `packages/design-tokens/src/semantic/index.ts` — 统一重导出
   - `tests/unit/design-tokens/semantic.test.ts` — 16 tests（结构/primitive 引用完整性/derive-accent 稳定性）
 - **质量门禁**：typecheck ✅ / 1071 unit tests ✅
+
+---
+
+## TOKEN-04 — Component 层组件 Token 定义
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：claude-opus-4-6（8 组件 token 结构契约 + size×state 矩阵 + player 三态设计）
+- **文件列表**：
+  - `packages/design-tokens/src/components/button.ts` — 4 variant × 3 size × 5 state（primary/secondary/ghost/destructive）
+  - `packages/design-tokens/src/components/input.ts` — 3 size × 5 state + placeholderFg/labelFg
+  - `packages/design-tokens/src/components/card.ts` — 3 variant × 2 state（default/elevated/outlined）
+  - `packages/design-tokens/src/components/tabs.ts` — 4 item state + indicator + list
+  - `packages/design-tokens/src/components/modal.ts` — 5 parts（backdrop/panel/header/body/footer）
+  - `packages/design-tokens/src/components/tooltip.ts` — 反色面板（light tooltip 走 dark bg）
+  - `packages/design-tokens/src/components/table.ts` — header + 4 row state + cell
+  - `packages/design-tokens/src/components/player.ts` — full/mini/pip 三态（固定深色，复用 accent.dark）
+  - `packages/design-tokens/src/components/index.ts` — 桶导出
+  - `tests/unit/design-tokens/components.test.ts` — 16 tests（引用完整性 + 结构校验）
+- **质量门禁**：typecheck ✅ / 1087 unit tests ✅
