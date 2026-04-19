@@ -49,10 +49,12 @@ export const REWRITE_ALLOWLIST: ReadonlyArray<RewriteRule> = [
   },
   // M2 — homepage
   { milestone: 'M2', domain: 'home', path: '/', mode: 'exact', localeAware: true, enabled: true, note: 'M2 homepage' },
-  // M3 示例
-  // { milestone: 'M3', domain: 'player', path: '/watch',   mode: 'prefix', localeAware: true, enabled: false },
-  // { milestone: 'M3', domain: 'player', path: '/movie',   mode: 'prefix', localeAware: true, enabled: false },
-  // { milestone: 'M3', domain: 'player', path: '/anime',   mode: 'prefix', localeAware: true, enabled: false },
+  // M3 — 详情页（批 1）
+  { milestone: 'M3', domain: 'player', path: '/movie',   mode: 'prefix', localeAware: true, enabled: true, note: 'M3 movie detail' },
+  { milestone: 'M3', domain: 'player', path: '/series',  mode: 'prefix', localeAware: true, enabled: true, note: 'M3 series detail' },
+  { milestone: 'M3', domain: 'player', path: '/anime',   mode: 'prefix', localeAware: true, enabled: true, note: 'M3 anime detail' },
+  { milestone: 'M3', domain: 'player', path: '/tvshow',  mode: 'prefix', localeAware: true, enabled: true, note: 'M3 tvshow detail' },
+  { milestone: 'M3', domain: 'player', path: '/others',  mode: 'prefix', localeAware: true, enabled: true, note: 'M3 others detail' },
   // M4 示例
   // { milestone: 'M4', domain: 'auth',   path: '/auth',    mode: 'prefix', localeAware: true, enabled: false },
   // M5 示例

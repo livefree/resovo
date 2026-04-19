@@ -7133,3 +7133,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 工厂使用 var(--bg-canvas)，无旧变量名
   - 无 variety URL 段（验证零命中）
 - **质量门禁**：typecheck ✅ lint ✅ unit tests 1102/1102 ✅
+
+## [M3-DETAIL-03] ALLOWLIST 翻转 + apps/web 详情页删除 + E2E 迁移
+
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **变更摘要**：
+  - ALLOWLIST 追加 5 条 M3 prefix（movie/series/anime/tvshow/others，全部 enabled: true）
+  - 删除 apps/web 详情页路由：movie/series/anime/tvshow/others（5 个 [slug] 目录）
+  - 删除 apps/web 详情页组件：EpisodeGrid/VideoDetailClient/VideoDetailHero/VideoMeta.tsx
+  - 删除 tests/unit/components/video/VideoDetailClient.test.tsx（组件已迁出）
+  - /variety→/tvshow redirect 从 apps/web/next.config.ts 迁移到 apps/web-next/next.config.ts
+  - 新增 tests/e2e-next/detail.spec.ts（电影详情页+动漫详情页，共 10 tests）
+  - tests/e2e/player.spec.ts 移除 2 个迁出的 describe 块
+  - rewrite-match.test.ts 追加 16 条 M3 prefix 测试
+  - known_failing 删除 2 条 M3 详情页条目
+- **质量门禁**：typecheck ✅ lint ✅ unit tests 1111/1111 ✅

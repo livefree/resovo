@@ -68,3 +68,30 @@ describe('matchRewrite — M2 homepage rule', () => {
     expect(r.matched).toBe(false)
   })
 })
+
+describe('matchRewrite — M3 detail page prefix rules', () => {
+  const detailPaths = ['/movie', '/series', '/anime', '/tvshow', '/others'] as const
+
+  for (const path of detailPaths) {
+    it(`matches ${path}/some-slug (prefix)`, () => {
+      const r = matchRewrite(`${path}/some-slug-abc123`)
+      expect(r.matched).toBe(true)
+      if (r.matched) expect(r.rule.domain).toBe('player')
+    })
+
+    it(`matches /en${path}/some-slug (locale-aware prefix)`, () => {
+      const r = matchRewrite(`/en${path}/some-slug-abc123`)
+      expect(r.matched).toBe(true)
+    })
+
+    it(`matches /zh-CN${path}/some-slug (locale-aware prefix)`, () => {
+      const r = matchRewrite(`/zh-CN${path}/some-slug-abc123`)
+      expect(r.matched).toBe(true)
+    })
+  }
+
+  it('does not match /movies (no partial prefix match)', () => {
+    const r = matchRewrite('/movies/test')
+    expect(r.matched).toBe(false)
+  })
+})

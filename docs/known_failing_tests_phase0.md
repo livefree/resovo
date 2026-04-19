@@ -43,8 +43,6 @@
   "e2e::auth.spec.ts::注册页::重复邮箱422CONFLICT显示冲突错误",
   "e2e::auth.spec.ts::注册页::点击登录链接跳转到登录页",
   "e2e::auth.spec.ts::登出流程::登出后导航栏不显示用户名",
-  "e2e::player.spec.ts::电影详情页::立即观看按钮指向播放页",
-  "e2e::player.spec.ts::动漫详情页（多集）::点击第 3 集跳转到播放页 ep 3",
   "e2e::player.spec.ts::播放页（PlayerShell）::标题链接指向详情页",
   "e2e::player.spec.ts::播放页（PlayerShell）::剧场模式切换按钮可见（大屏设备）",
   "e2e::player.spec.ts::播放页（多集动漫）::显示右侧选集面板",

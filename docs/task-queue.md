@@ -7510,7 +7510,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ## SEQ-20260420-M3-DETAIL — 5 种详情页接管
 
-- **状态**：🔄 进行中
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-19
 - **依赖**：M2 PHASE COMPLETE ✅
 - **目标**：movie / series / anime / tvshow / others 5 种详情页从 apps/web 迁移到 apps/web-next
@@ -7523,7 +7523,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - **建议模型**：sonnet
 - **依赖**：M3-DETAIL-01
 
-#### M3-DETAIL-03 — ALLOWLIST 翻转 + apps/web 详情页删除 + E2E 迁移（状态：🔄 进行中）
+#### M3-DETAIL-03 — ALLOWLIST 翻转 + apps/web 详情页删除 + E2E 迁移（状态：✅ 已完成）
 - **建议模型**：sonnet
 - **依赖**：M3-DETAIL-02
 
