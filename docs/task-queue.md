@@ -7458,11 +7458,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - **依赖**：M2-HOMEPAGE-01 + M2-TVSHOW-01..03 全部 ✅
 - **目标**：闭合三个未闭合缺口（CSS 变量 / 详情页 URL / 搜索页）+ 关闭 M2 里程碑，准备进入 M3
 
-#### M2-HOMEPAGE-02 — apps/web-next/ 清退旧 CSS 变量名（状态：🔄 进行中）
+#### M2-HOMEPAGE-02 — apps/web-next/ 清退旧 CSS 变量名（状态：✅ 已完成）
 - **建议模型**：sonnet
 - **文件范围**：apps/web-next/ 所有新增组件（page.tsx / Nav / Footer / ThemeToggle / HeroBanner / VideoGrid / VideoCard / VideoCardWide）
 
-#### M2-TVSHOW-04 — 详情页 URL /variety → /tvshow（状态：⬜ 待开始）
+#### M2-TVSHOW-04 — 详情页 URL /variety → /tvshow（状态：✅ 已完成）
 - **建议模型**：sonnet
 - **文件范围**：git mv variety→tvshow / video-route.ts URL_SEGMENT_MAP / next.config.ts redirects
 

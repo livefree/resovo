@@ -7035,3 +7035,26 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - apps/web FilterArea.tsx FILTER_ROWS type 筛选项：variety → tvshow；testid filter-type-variety → filter-type-tvshow
   - BrowseGrid TYPE_ALIAS 已存在（tvshow→variety），API 映射自动正确
 - **质量门禁**：typecheck ✅ lint ✅ unit tests 1102/1102 ✅
+
+## [M2-HOMEPAGE-02] apps/web-next CSS 变量迁移至 TOKEN-13 命名体系
+
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **变更摘要**：
+  - 将 apps/web-next 所有新增组件中的旧 CSS 变量替换为 TOKEN-13 规范名
+  - 涉及：page.tsx / Nav.tsx / Footer.tsx / ThemeToggle.tsx / HeroBanner.tsx / VideoGrid.tsx / VideoCard.tsx / VideoCardWide.tsx
+  - 替换映射：--background→--bg-canvas、--foreground→--fg-default、--gold/--accent→--accent-default 等
+- **质量门禁**：typecheck ✅ lint ✅ unit tests 1102/1102 ✅
+
+## [M2-TVSHOW-04] 详情页 URL /variety → /tvshow
+
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **变更摘要**：
+  - `git mv apps/web/src/app/[locale]/variety → tvshow`
+  - apps/web video-route.ts 引入 URL_SEGMENT_MAP（variety → tvshow），getDetailSegment 使用映射
+  - apps/web-next video-route.ts 同步引入 URL_SEGMENT_MAP
+  - apps/web next.config.ts 添加 308 永久重定向：/variety/:path* → /tvshow/:path*
+- **质量门禁**：typecheck ✅ lint ✅ unit tests 1102/1102 ✅
