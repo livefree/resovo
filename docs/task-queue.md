@@ -6952,14 +6952,13 @@
 
 ## SEQ-20260418-M0.5 — 测试床修复与分类
 
-- 序列状态：✅ 已完成
-- 完成时间：2026-04-18
+- 序列状态：🔄 进行中（TESTFIX-07/08/09 待执行）
 - Phase：Phase 0.5 — 测试床修复与分类
 - 创建时间：2026-04-18
-- 包含任务数：7
+- 包含任务数：10
 - 依赖：SEQ-20260418-M0 全部完成（已满足，commit `2e5cfdf`）
-- 完成条件：全部 7 张任务卡 `✅ 已完成` + 合并 main + PHASE COMPLETE 通知落盘
-- 串行约束：TESTFIX-00 → (TESTFIX-01 ‖ TESTFIX-02) → TESTFIX-03 → (TESTFIX-04 ‖ TESTFIX-05) → TESTFIX-06
+- 完成条件：全部 10 张任务卡 `✅ 已完成` + 合并 main + PHASE COMPLETE 通知落盘（合并与通知均在 TESTFIX-09 内完成）
+- 串行约束：TESTFIX-00 → (TESTFIX-01 ‖ TESTFIX-02) → TESTFIX-03 → (TESTFIX-04 ‖ TESTFIX-05) → TESTFIX-06 → TESTFIX-07 → TESTFIX-08 → TESTFIX-09
 
 ### 任务卡片
 
@@ -7076,3 +7075,78 @@
   - 修改 `package.json`（追加 `test:guarded` script）
 - **验收**：test:guarded → GATE PASSED，1007 passed 0 new failures
 - **完成备注**：执行模型: claude-sonnet-4-6
+
+#### TESTFIX-07 — E2E 全 suite 基线重建 + triage 补全
+- **状态**：🔄 进行中
+- **实际开始**：2026-04-18
+- **建议模型**：sonnet
+- **创建时间**：2026-04-18
+- **依赖**：TESTFIX-06 已完成
+- **文件范围**：
+  - 修改 `docs/baseline_20260418/failing_tests.json`（重建，不是追加）
+  - 修改 `docs/test_triage_20260418.md`（补充 6 个此前未覆盖 suite 的条目 + 重分类 A 类）
+  - 新增 `docs/baseline_20260418/e2e_coverage_report.md`（本次扫描覆盖率说明）
+  - 修改 `docs/known_failing_tests_phase0.md`（按新 triage 同步）
+  - 修改 `scripts/verify-baseline.ts`（增加 `--coverage-report` 子命令验证 coverage_report.md 与 failing_tests.json 的 suite 列表一致）
+- **变更内容**：
+  1. 全量跑 E2E（playwright JSON reporter，全部 8 suite），采集 failed/flaky 条目重建 `failing_tests.json`
+  2. 对新增失败条目按规则严格分类 A/B/C/D（不照搬当前 triage 的错位分类）
+  3. 补全 triage 文档，汇总表数字与 JSON 一致
+  4. 同步隔离清单（quarantine/defer 条目），每个 defer 绑定具体里程碑
+  5. 新增 `verify-baseline --coverage-report` 子命令校验 suite 覆盖率
+- **验收**：
+  - `failing_tests.json` 含全部有失败 suite 的条目，suite distinct 值 ≥ 有失败的 suite 数
+  - `e2e_coverage_report.md` 显示 8 suite 全覆盖
+  - `npm run verify:baseline -- --coverage-report` 通过
+  - triage 汇总表与 JSON 一致；known_failing 与 triage quarantine+defer 总和一致
+- **完成备注**：_（AI 填写：必须列出重建前后失败数对比表、每个 suite 失败分布、新发现的失败类别分布）_
+
+#### TESTFIX-08 — 跨 E2E suite 修复 Mock 契约 + 补齐 testid
+- **状态**：⬜ 待开始
+- **建议模型**：sonnet
+- **创建时间**：2026-04-18
+- **依赖**：TESTFIX-07
+- **文件范围**：
+  - 修改 `tests/e2e/homepage.spec.ts`（MOCK_MOVIE / MOCK_SERIES 补齐 Video contract 必填字段）
+  - 由 TESTFIX-07 triage D 类「mock 契约缺失」条目决定的其他 suite 文件
+  - 由 TESTFIX-07 triage C 类「本 Phase 内可立即修」条目决定的组件文件
+  - 不触碰 `e2e/player.spec.ts`、`e2e/search.spec.ts` 中已标注 `defer M2/M3/M5` 的条目
+- **变更内容**：
+  1. `homepage.spec.ts` MOCK_MOVIE/MOCK_SERIES 补齐 Video 必填字段（genres/aliases/languages/tags/subtitleLangs）
+  2. 按 TESTFIX-07 triage D 类清单逐一修复其他 suite 的 mock 契约
+  3. 若 ≥3 spec 重复定义 mock，提取到 `tests/e2e/fixtures/mock-video.ts`
+  4. C 类可立即修的 testid 缺失在对应组件补 data-testid 属性
+  5. 每修一条在 triage 文档 `处置` 字段改为 `fixed` + commit hash
+- **验收**：
+  - `homepage.spec.ts` MOCK 含 5 个必填数组字段
+  - 所有标注 `fix` 的 mock 契约条目，对应 suite 单独跑全绿
+  - `npm run typecheck` + `npm run lint` 全绿
+  - triage `fix` 状态条目全部标记 `fixed`；未触碰 `defer` 项
+- **完成备注**：_（AI 填写：必须列出修复的 suite×test 清单、是否沉淀了共享 mock fixture）_
+
+#### TESTFIX-09 — test-guarded 扩展 E2E 子命令 + 合并 main + PHASE COMPLETE
+- **状态**：⬜ 待开始
+- **建议模型**：sonnet
+- **创建时间**：2026-04-18
+- **依赖**：TESTFIX-07、TESTFIX-08 全部完成
+- **文件范围**：
+  - 修改 `scripts/test-guarded.ts`（新增 `--mode unit|e2e|all`）
+  - 修改 `package.json`（追加 `test:guarded:e2e`、`test:guarded:all`；保留 `test:guarded` 为 unit only）
+  - 修改 `scripts/verify-baseline.ts`（新增 `--phase-target` 枚举校验）
+  - 修改 `docs/task-queue.md`（追加 PHASE COMPLETE — Phase 0.5 通知块）
+  - 修改 `docs/changelog.md`（追加 M0.5 总结条目）
+  - 合并操作：`dev` → `main`（TESTFIX-09 最后一步）
+- **变更内容**：
+  1. `test-guarded.ts` 新增 `--mode unit|e2e|all`（默认 unit 兼容现状）
+  2. `verify-baseline.ts` 新增 `--phase-target` 校验 triage 里程碑合法性
+  3. 质量门禁全部通过后合并 main
+  4. 追加 PHASE COMPLETE 通知（数字由 verify-baseline 读取插值）
+- **验收**：
+  - `test:guarded` 保持 unit only 行为
+  - `test:guarded:e2e` 输出 E2E 隔离 diff 报告
+  - `test:guarded:all` 合并 unit+e2e diff
+  - 模拟 E2E 新失败 → `test:guarded:e2e` 退出码 1
+  - `verify-baseline --phase-target` 通过；非法里程碑值时退出码 1
+  - `main` HEAD 为 M0.5 合并 commit
+  - `task-queue.md` 末尾存在 PHASE COMPLETE — Phase 0.5 通知块，数字与 failing_tests.json 一致
+- **完成备注**：_（AI 填写：必须列出 main 合并 commit hash、PHASE COMPLETE 通知插入位置行号、三模式实测输出截取）_
