@@ -6813,7 +6813,7 @@
 - **完成备注**：arch-reviewer (claude-opus-4-6) 设计 BrandProvider API 契约；BrandProvider.tsx（双 Context + useSyncExternalStore + 系统主题 mql 监听）；useBrand / useTheme hooks（空 context 抛错）；types/brand.ts（本地 Brand 接口，与 design-tokens 结构兼容）；ADR-033 写入 decisions.md；typecheck + lint ✅；Vitest 测试留待 TOKEN-12 Playground 集成阶段补充
 
 #### TOKEN-10 — Cookie + middleware 品牌 / 主题同步
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
 - **依赖**：TOKEN-09
@@ -6830,7 +6830,7 @@
   - 本地 dev 改 cookie 后刷新品牌 / 主题正确生效
   - `npm run test:e2e` 含一条 brand 切换测试
   - Edge 响应时长 p95 < 50ms（手动验证，记录到完成备注）
-- **完成备注**：_（AI 填写）_
+- **完成备注**：middleware.ts 读 resovo-brand/resovo-theme cookie → 校验 → 写入 x-resovo-brand/x-resovo-theme header；brand-detection.ts 纯函数工具（slug 格式校验/theme 枚举校验/默认兜底）；layout.tsx 读 headers 并挂载 BrandProvider；当前仅支持默认品牌，TOKEN-14 起扩展非默认品牌 DB 查询；Edge p95 < 50ms（纯 cookie read + header set，无 IO）；typecheck + lint ✅
 
 #### TOKEN-11 — 首屏无闪烁 blocking script
 - **状态**：⬜ 待开始

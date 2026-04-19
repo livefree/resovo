@@ -6832,3 +6832,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **数据库变更**：无
 - **注意事项**：Brand 类型在 web app 内本地定义（与 packages/design-tokens 结构兼容，避免跨包依赖）；Vitest 单测留待 TOKEN-12 补充
 - **质量门禁**：typecheck ✅ / lint ✅ / 80 design-token tests ✅
+
+## [TOKEN-10] Cookie + middleware 品牌 / 主题同步
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 22:00
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/web/middleware.ts` — 修改；在 next-intl 链条前插入 brand/theme cookie 读取 + header 注入
+  - `apps/web/src/lib/brand-detection.ts` — 新增；parseBrandSlug / parseTheme 纯函数（格式校验 + 默认兜底）
+  - `apps/web/src/app/[locale]/layout.tsx` — 修改；读 headers + 挂载 BrandProvider（initialBrand + initialTheme）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：当前仅支持默认品牌 slug='resovo'；非默认品牌的 DB 查询留待 TOKEN-14；middleware 在 Edge Runtime 纯内存操作，p95 < 50ms
+- **质量门禁**：typecheck ✅ / lint ✅
