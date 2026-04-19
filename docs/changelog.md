@@ -7091,3 +7091,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 覆盖：/variety/* → /tvshow/* 308 重定向；VideoCard href /tvshow/；BrowseGrid type=tvshow API 别名映射
   - 现有 e2e 已无 variety URL 残留（search.spec.ts 已在 TVSHOW-05 同步）
 - **质量门禁**：typecheck ✅ lint ✅ unit tests 1102/1102 ✅
+
+## [M2-CLOSE-01] M2 PHASE COMPLETE — 首页迁移 + variety→tvshow
+
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：claude-opus-4-6（arch-reviewer，PHASE COMPLETE 审计）
+- **审计结论**：10/10 ✅，PHASE COMPLETE 通过
+- **M2 里程碑总结**：
+  - apps/web-next 首页上线（组件体系 + TOKEN-13 CSS 变量 + i18n + 主题切换）
+  - REWRITE_ALLOWLIST 新增 M2 homepage 规则
+  - variety → tvshow URL 改名（Method A：路由层改名，DB/API/VideoType 不变）
+  - 308 永久重定向 /variety/* → /tvshow/*
+  - E2E 覆盖：homepage.spec.ts（15 tests）+ browse-tvshow.spec.ts（3 test groups）
+  - unit test: 1102/1102 通过

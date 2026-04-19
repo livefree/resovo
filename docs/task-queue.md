@@ -7453,7 +7453,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ## SEQ-20260419-M2-CLOSE — M2 闭幕序列
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-19
 - **依赖**：M2-HOMEPAGE-01 + M2-TVSHOW-01..03 全部 ✅
 - **目标**：闭合三个未闭合缺口（CSS 变量 / 详情页 URL / 搜索页）+ 关闭 M2 里程碑，准备进入 M3
@@ -7481,7 +7481,27 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - **依赖**：HOMEPAGE-02 + TVSHOW-04..06 全部 ✅
 - **文件范围**：tests/e2e-next/browse-tvshow.spec.ts（新增）/ tests/e2e/ 断言同步
 
-#### M2-CLOSE-01 — M2 PHASE COMPLETE + 文档收尾（状态：⬜ 待开始）
+#### M2-CLOSE-01 — M2 PHASE COMPLETE + 文档收尾（状态：✅ 已完成）
 - **建议模型**：haiku（+ Opus 子代理独立审计）
 - **依赖**：HOMEPAGE-02 + TVSHOW-04..06 + E2E-01 全部 ✅
 - **文件范围**：docs/ 仅
+
+---
+
+## 🚀 PHASE COMPLETE — M2（首页迁移 + variety→tvshow）
+
+- **声明时间**：2026-04-19
+- **审计模型**：claude-opus-4-6（arch-reviewer 子代理）
+- **审计结论**：PHASE COMPLETE 通过（10/10 条 ✅）
+- **M2 完成任务**：
+  - M2-HOMEPAGE-01 ✅ 首页迁移至 apps/web-next，ALLOWLIST 更新，旧首页删除，E2E 新建
+  - M2-HOMEPAGE-02 ✅ web-next CSS 变量迁移至 TOKEN-13 命名体系
+  - M2-TVSHOW-01 ✅ BrowseGrid TYPE_ALIAS + web-next Nav tvshow 条目
+  - M2-TVSHOW-02 ✅ apps/web Nav variety→tvshow
+  - M2-TVSHOW-03 ✅ apps/web FilterArea variety→tvshow
+  - M2-TVSHOW-04 ✅ git mv variety→tvshow + URL_SEGMENT_MAP + 308 重定向
+  - M2-TVSHOW-05 ✅ search FilterBar + SearchResultList TYPE_ALIAS + E2E 断言同步
+  - M2-TVSHOW-06 ✅ 扫描确认无剩余硬编码 /variety/ URL
+  - M2-E2E-01 ✅ browse-tvshow.spec.ts E2E 新增覆盖
+  - M2-CLOSE-01 ✅ PHASE COMPLETE 文档收尾
+- **下一里程碑**：M3（待规划）
