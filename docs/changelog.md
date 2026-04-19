@@ -6637,3 +6637,27 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **修复清单**：D-04、D-05、D-06（admin）、D-07、D-08（admin-source）、D-09（publish-flow）、D-10/C-47（video-governance）
 - **共享 fixture 沉淀**：否（各 spec mock 结构差异较大，不满足 ≥3 重复条件）
 - **质量门禁**：`npm run typecheck` + `npm run lint` + `npm run test -- --run` 全绿（1007 passed）
+
+---
+
+## TESTFIX-09 — test-guarded E2E 子命令 + verify-baseline --phase-target + PHASE COMPLETE
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件列表**：
+  - `scripts/test-guarded.ts` — 新增 `--mode unit|e2e|all`；E2E 模式调用 playwright JSON reporter，比对 e2e 隔离清单；默认 unit 行为完全向后兼容
+  - `scripts/verify-baseline.ts` — 新增 `--phase-target` 枚举校验（M0–M6、TESTFIX-XX、"PHASE COMPLETE"；非法值 exit 1）
+  - `package.json` — 追加 `test:guarded:e2e`、`test:guarded:all` 两条 scripts
+  - `docs/task-queue.md` — 追加 PHASE COMPLETE — Phase 0.5 通知块；TESTFIX-09 + SEQ 状态更新为完成
+  - `docs/changelog.md` — 追加本条目
+  - `docs/tasks.md` — TESTFIX-09 卡片删除（已完成）
+- **三模式说明**：
+  - `test:guarded` (unit)：原行为，1007 unit passed，GATE PASSED
+  - `test:guarded:e2e`：调用 playwright JSON reporter，比对 e2e quarantine（54 条），新失败 exit 1
+  - `test:guarded:all`：unit + e2e 顺序执行，任一失败即 GATE BLOCKED
+- **phase-target 校验实测**：
+  - `--phase-target M2` → OK
+  - `--phase-target TESTFIX-08` → OK
+  - `--phase-target INVALID` → exit 1
+- **质量门禁**：`npm run typecheck` + `npm run test -- --run` 全绿

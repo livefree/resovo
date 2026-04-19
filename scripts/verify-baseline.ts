@@ -66,12 +66,23 @@ interface CoverageStat {
   flaky: number
 }
 
-function parseArgs(): { counts: Record<string, number>; diff: boolean; phase: number; coverageReport: boolean } {
+const VALID_PHASE_TARGETS = new Set([
+  'M0', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6',
+  'PHASE COMPLETE',
+])
+const TESTFIX_PATTERN = /^TESTFIX-\d+$/
+
+function isValidPhaseTarget(target: string): boolean {
+  return VALID_PHASE_TARGETS.has(target) || TESTFIX_PATTERN.test(target)
+}
+
+function parseArgs(): { counts: Record<string, number>; diff: boolean; phase: number; coverageReport: boolean; phaseTarget: string | null } {
   const args = process.argv.slice(2)
   const counts: Record<string, number> = {}
   let diff = false
   let phase = 0
   let coverageReport = false
+  let phaseTarget: string | null = null
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--diff') {
       diff = true
@@ -79,6 +90,9 @@ function parseArgs(): { counts: Record<string, number>; diff: boolean; phase: nu
       coverageReport = true
     } else if (args[i] === '--phase' && i + 1 < args.length) {
       phase = parseInt(args[i + 1], 10)
+      i++
+    } else if (args[i] === '--phase-target' && i + 1 < args.length) {
+      phaseTarget = args[i + 1]
       i++
     } else if (args[i].startsWith('--') && i + 1 < args.length) {
       const key = args[i].slice(2)
@@ -89,7 +103,7 @@ function parseArgs(): { counts: Record<string, number>; diff: boolean; phase: nu
       }
     }
   }
-  return { counts, diff, phase, coverageReport }
+  return { counts, diff, phase, coverageReport, phaseTarget }
 }
 
 function readCoverageReport(): Record<string, CoverageStat> | null {
@@ -205,7 +219,16 @@ function main(): void {
   console.log(`  total failed : ${totalFailed}`)
   console.log(`  total entries: ${tests.length}`)
 
-  const { counts: expected, diff, phase, coverageReport } = parseArgs()
+  const { counts: expected, diff, phase, coverageReport, phaseTarget } = parseArgs()
+
+  if (phaseTarget !== null) {
+    if (!isValidPhaseTarget(phaseTarget)) {
+      console.error(`ERROR: --phase-target "${phaseTarget}" is not a valid milestone`)
+      console.error(`  Valid values: M0–M6, TESTFIX-XX, "PHASE COMPLETE"`)
+      process.exit(1)
+    }
+    console.log(`phase-target: ${phaseTarget} — OK`)
+  }
   let mismatch = false
 
   if ('unit' in expected && expected.unit !== unitFailed) {

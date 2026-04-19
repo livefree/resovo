@@ -1,12 +1,16 @@
 #!/usr/bin/env tsx
 /**
  * test-guarded.ts
- * CI gate: run unit tests and compare failures against Phase quarantine list.
+ * CI gate: run tests and compare failures against Phase quarantine list.
  *
  * Usage:
- *   npm run test:guarded                  # unit tests, Phase 0 quarantine
- *   npm run test:guarded -- --phase 1     # use Phase 1 quarantine list
- *   npm run test:guarded -- --e2e-info    # also print E2E quarantine summary
+ *   npm run test:guarded                      # unit tests only (default, Phase 0)
+ *   npm run test:guarded -- --phase 1         # use Phase 1 quarantine
+ *   npm run test:guarded -- --e2e-info        # also print E2E quarantine summary
+ *   npm run test:guarded:e2e                  # E2E tests only
+ *   npm run test:guarded:all                  # unit + E2E
+ *   npm run test:guarded -- --mode e2e        # same as test:guarded:e2e
+ *   npm run test:guarded -- --mode all        # same as test:guarded:all
  *
  * Exit codes:
  *   0 = all failures are within quarantine (or no failures)
@@ -22,21 +26,33 @@ import { fileURLToPath } from 'url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.join(__dirname, '..')
 const RESULTS_FILE = path.join(os.tmpdir(), `vitest-guarded-${Date.now()}.json`)
+const E2E_RESULTS_FILE = path.join(os.tmpdir(), `playwright-guarded-${Date.now()}.json`)
 
-function parseArgs(): { phase: number; e2eInfo: boolean } {
+type RunMode = 'unit' | 'e2e' | 'all'
+
+function parseArgs(): { phase: number; e2eInfo: boolean; mode: RunMode } {
   const args = process.argv.slice(2)
   let phase = 0
   let e2eInfo = false
+  let mode: RunMode = 'unit'
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--phase' && i + 1 < args.length) {
       phase = parseInt(args[i + 1], 10)
       i++
-    }
-    if (args[i] === '--e2e-info') {
+    } else if (args[i] === '--e2e-info') {
       e2eInfo = true
+    } else if (args[i] === '--mode' && i + 1 < args.length) {
+      const val = args[i + 1]
+      if (val === 'unit' || val === 'e2e' || val === 'all') {
+        mode = val
+      } else {
+        console.error(`ERROR: --mode must be one of: unit, e2e, all (got: "${val}")`)
+        process.exit(1)
+      }
+      i++
     }
   }
-  return { phase, e2eInfo }
+  return { phase, e2eInfo, mode }
 }
 
 function readQuarantine(phase: number): { unit: Set<string>; e2e: Set<string> } {
@@ -62,6 +78,8 @@ function readQuarantine(phase: number): { unit: Set<string>; e2e: Set<string> } 
   const e2e = new Set(ids.filter((id) => id.startsWith('e2e::')))
   return { unit, e2e }
 }
+
+// ── Unit test types ──────────────────────────────────────────────────
 
 interface VitestTestResult {
   name: string
@@ -99,7 +117,7 @@ function runUnitTests(): VitestOutput {
   return output
 }
 
-function getFailingTestIds(results: VitestOutput): string[] {
+function getUnitFailingIds(results: VitestOutput): string[] {
   const failing: string[] = []
   for (const file of results.testResults) {
     const fileBase = path.basename(file.name).replace(/\.(test|spec)\.(ts|tsx|js)$/, '')
@@ -114,13 +132,112 @@ function getFailingTestIds(results: VitestOutput): string[] {
   return failing
 }
 
-function main(): void {
-  const { phase, e2eInfo } = parseArgs()
+// ── E2E test types ───────────────────────────────────────────────────
 
-  console.log(`Phase ${phase} quarantine gate — running unit tests...`)
+interface PlaywrightSpec {
+  title: string
+  ok: boolean
+  tests: Array<{
+    status: 'expected' | 'unexpected' | 'flaky' | 'skipped'
+    projectName?: string
+  }>
+}
+
+interface PlaywrightSuite {
+  title: string
+  file?: string
+  suites?: PlaywrightSuite[]
+  specs?: PlaywrightSpec[]
+}
+
+interface PlaywrightReport {
+  suites?: PlaywrightSuite[]
+  stats?: {
+    expected: number
+    unexpected: number
+    flaky: number
+    skipped: number
+    total?: number
+  }
+}
+
+function collectE2EFailures(suites: PlaywrightSuite[], fileBase: string): string[] {
+  const failing: string[] = []
+  for (const suite of suites) {
+    const currentFile = suite.file
+      ? path.basename(suite.file).replace(/\.(test|spec)\.(ts|tsx|js)$/, '')
+      : fileBase
+    if (suite.suites) {
+      failing.push(...collectE2EFailures(suite.suites, currentFile))
+    }
+    if (suite.specs) {
+      for (const spec of suite.specs) {
+        const isUnexpected = spec.tests.some(
+          (t) => t.status === 'unexpected' || t.status === 'flaky',
+        )
+        if (!spec.ok || isUnexpected) {
+          failing.push(`e2e::${currentFile}::${spec.title}`)
+        }
+      }
+    }
+  }
+  return failing
+}
+
+interface E2ESummary {
+  total: number
+  passed: number
+  failed: number
+  flaky: number
+  failingIds: string[]
+}
+
+function runE2ETests(): E2ESummary {
+  const result = spawnSync(
+    'npx',
+    ['playwright', 'test', '--reporter=json'],
+    {
+      cwd: ROOT,
+      stdio: ['ignore', 'pipe', 'inherit'],
+      shell: true,
+      timeout: 300000,
+    },
+  )
+
+  const stdout = result.stdout?.toString() ?? ''
+  if (!stdout.trim()) {
+    console.error('ERROR: playwright did not produce JSON output (stdout empty)')
+    console.error('Exit code:', result.status)
+    process.exit(1)
+  }
+
+  let report: PlaywrightReport
+  try {
+    report = JSON.parse(stdout) as PlaywrightReport
+  } catch (e) {
+    console.error(`ERROR: could not parse playwright JSON output: ${(e as Error).message}`)
+    process.exit(1)
+  }
+
+  const stats = report.stats ?? { expected: 0, unexpected: 0, flaky: 0, skipped: 0 }
+  const total = (stats.expected ?? 0) + (stats.unexpected ?? 0) + (stats.flaky ?? 0) + (stats.skipped ?? 0)
+  const failingIds = collectE2EFailures(report.suites ?? [], '')
+
+  return {
+    total,
+    passed: stats.expected ?? 0,
+    failed: stats.unexpected ?? 0,
+    flaky: stats.flaky ?? 0,
+    failingIds,
+  }
+}
+
+// ── Gate runners ─────────────────────────────────────────────────────
+
+function runUnitGate(unitQuarantine: Set<string>): boolean {
+  console.log('Running unit tests...')
   const results = runUnitTests()
-  const failing = getFailingTestIds(results)
-  const { unit: unitQuarantine, e2e: e2eQuarantine } = readQuarantine(phase)
+  const failing = getUnitFailingIds(results)
 
   const newFailures = failing.filter((id) => !unitQuarantine.has(id))
   const knownFailures = failing.filter((id) => unitQuarantine.has(id))
@@ -143,19 +260,85 @@ function main(): void {
     knownFailures.forEach((id) => console.log(`  ⚠  KNOWN: ${id}`))
   }
 
-  if (e2eInfo) {
+  if (newFailures.length > 0) {
+    console.error('\nFAIL: New unit failures outside quarantine:')
+    newFailures.forEach((id) => console.error(`  ✗ NEW: ${id}`))
+    console.error(`\nUNIT GATE BLOCKED: ${newFailures.length} new failure(s)`)
+    return false
+  }
+
+  console.log('\nUNIT GATE PASSED: all unit test failures within quarantine')
+  return true
+}
+
+function runE2EGate(e2eQuarantine: Set<string>): boolean {
+  console.log('Running E2E tests (playwright)...')
+  const summary = runE2ETests()
+
+  const newFailures = summary.failingIds.filter((id) => !e2eQuarantine.has(id))
+  const knownFailures = summary.failingIds.filter((id) => e2eQuarantine.has(id))
+  const regressedFromQuarantine = [...e2eQuarantine].filter((id) => !summary.failingIds.includes(id))
+
+  console.log('\nE2E test summary:')
+  console.log(`  total        : ${summary.total}`)
+  console.log(`  passed       : ${summary.passed}`)
+  console.log(`  failed       : ${summary.failed}`)
+  console.log(`  flaky        : ${summary.flaky}`)
+  console.log(`  new failures : ${newFailures.length}`)
+  console.log(`  quarantined  : ${knownFailures.length}`)
+
+  if (regressedFromQuarantine.length > 0) {
+    console.log('\nINFO: E2E quarantine items now PASSING (consider removing from list):')
+    regressedFromQuarantine.forEach((id) => console.log(`  ✓ RECOVERED: ${id}`))
+  }
+
+  if (knownFailures.length > 0) {
+    console.log('\nWARN: Known E2E quarantine failures (not blocking):')
+    knownFailures.forEach((id) => console.log(`  ⚠  KNOWN: ${id}`))
+  }
+
+  if (newFailures.length > 0) {
+    console.error('\nFAIL: New E2E failures outside quarantine:')
+    newFailures.forEach((id) => console.error(`  ✗ NEW: ${id}`))
+    console.error(`\nE2E GATE BLOCKED: ${newFailures.length} new failure(s)`)
+    return false
+  }
+
+  console.log('\nE2E GATE PASSED: all E2E test failures within quarantine')
+  return true
+}
+
+// ── Main ─────────────────────────────────────────────────────────────
+
+function main(): void {
+  const { phase, e2eInfo, mode } = parseArgs()
+
+  console.log(`Phase ${phase} quarantine gate — mode: ${mode}`)
+  const { unit: unitQuarantine, e2e: e2eQuarantine } = readQuarantine(phase)
+
+  if (mode === 'unit' && e2eInfo) {
     console.log(`\nINFO: E2E quarantine (${e2eQuarantine.size} items, not run here):`)
     ;[...e2eQuarantine].forEach((id) => console.log(`  ○ ${id}`))
   }
 
-  if (newFailures.length > 0) {
-    console.error('\nFAIL: New failures outside quarantine:')
-    newFailures.forEach((id) => console.error(`  ✗ NEW: ${id}`))
-    console.error(`\nGATE BLOCKED: ${newFailures.length} new failure(s) — fix before merging`)
+  let passed = true
+
+  if (mode === 'unit' || mode === 'all') {
+    const ok = runUnitGate(unitQuarantine)
+    if (!ok) passed = false
+  }
+
+  if (mode === 'e2e' || mode === 'all') {
+    const ok = runE2EGate(e2eQuarantine)
+    if (!ok) passed = false
+  }
+
+  if (!passed) {
+    console.error('\nGATE BLOCKED: fix failures before merging')
     process.exit(1)
   }
 
-  console.log('\nGATE PASSED: all unit test failures within quarantine')
+  console.log('\nGATE PASSED')
 }
 
 main()
