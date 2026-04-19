@@ -6895,7 +6895,7 @@
 - **完成备注**：实际迁移 31 个硬编码 CSS 变量（非 23；差异源自任务规划期估算）；所有旧变量在 @layer base :root 中重映射至新 token var()，移除 .dark 覆写区块；5 处 TS/TSX 硬编码颜色修复（black/white 关键字 + var(--bg-overlay)）；no-hardcoded-color 升 error；lint 无任何 warning/error；typecheck ✅ / tests 1087 passed ✅
 
 #### TOKEN-14 — 后台 Token 编辑器 MVP（只读预览）
-- **状态**：🔄 执行中
+- **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
 - **依赖**：TOKEN-09（可与 TOKEN-13 并行）
@@ -6915,7 +6915,7 @@
   - 切换 brand 右侧 iframe 实时刷新
   - 非 admin 访问返回 403
   - `npm run test:e2e` 覆盖列表页渲染 + brand 切换
-- **完成备注**：_（AI 填写）_
+- **完成备注**：GET /v1/admin/design-tokens（requireRole admin）调用 brandsQueries.listBrands；apps/server 后台页 /admin/design-tokens 由 DesignTokensView 管理选中 slug 状态；TokenTable 通过 ModernDataTable 展示 Brand 列表（name/slug/overrides数/updatedAt），点击行触发 onBrandSelect；LivePreviewFrame 嵌入 web 的 Token Playground iframe；typecheck ✅ / lint ✅ / tests 1087 ✅；apps/admin/ 不存在，改为 apps/server/
 
 ---
 

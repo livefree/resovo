@@ -6907,3 +6907,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   --status-danger-bg→--state-error-bg, --status-warning-bg→--state-warning-bg,
   --status-neutral-bg→color-mix(in oklch, var(--fg-muted) 12%, transparent), --modal-overlay→--bg-overlay
 - **质量门禁**：typecheck ✅ / lint ✅ no warnings / tests 1087 passed ✅
+
+## [TOKEN-14] 后台 Token 编辑器 MVP（只读预览）
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 23:30
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/routes/admin/design-tokens.ts` — 新增；GET /v1/admin/design-tokens（requireRole admin），返回 brands 列表
+  - `apps/api/src/server.ts` — 修改；注册 adminDesignTokenRoutes
+  - `apps/server/src/app/admin/design-tokens/page.tsx` — 新增；Server Component 页面，渲染 DesignTokensView
+  - `apps/server/src/components/admin/design-tokens/DesignTokensView.tsx` — 新增；Client Component，管理 selectedSlug 状态，左右分栏布局
+  - `apps/server/src/components/admin/design-tokens/TokenTable.tsx` — 新增；Client Component，ModernDataTable 展示 Brand 列表，点击行触发 onBrandSelect
+  - `apps/server/src/components/admin/design-tokens/LivePreviewFrame.tsx` — 新增；Client Component，iframe 嵌入 /zh/__playground/tokens
+- **新增依赖**：无
+- **数据库变更**：无（复用 TOKEN-08 的 brands 表 + listBrands query）
+- **注意事项**：apps/admin/ 不存在，实际位置为 apps/server/（port 3001）；本里程碑仅只读，编辑写入留待 M5+；WEB_BASE_URL 通过 env.NEXT_PUBLIC_WEB_URL 注入
+- **质量门禁**：typecheck ✅ / lint ✅ / tests 1087 passed ✅
