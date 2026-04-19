@@ -7105,3 +7105,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 308 永久重定向 /variety/* → /tvshow/*
   - E2E 覆盖：homepage.spec.ts（15 tests）+ browse-tvshow.spec.ts（3 test groups）
   - unit test: 1102/1102 通过
+
+## [M3-DETAIL-01] 详情页共享组件迁移 apps/web-next
+
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **变更摘要**：
+  - 新增 apps/web-next/src/components/search/MetaChip.tsx（TOKEN-13 CSS 变量）
+  - 新增 apps/web-next/src/components/video/EpisodeGrid.tsx
+  - 新增 apps/web-next/src/components/video/VideoDetailClient.tsx
+  - 新增 apps/web-next/src/components/video/VideoDetailHero.tsx
+  - 新增 apps/web-next/src/components/video/VideoMeta.tsx
+  - 新增 apps/web-next/src/lib/video-detail.ts（import @resovo/types）
+  - 新增 apps/web-next/src/lib/line-display-name.ts
+  - 全部组件使用 TOKEN-13 CSS 变量命名
+- **质量门禁**：typecheck ✅ lint ✅ unit tests 1102/1102 ✅

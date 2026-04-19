@@ -7505,3 +7505,55 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   - M2-E2E-01 ✅ browse-tvshow.spec.ts E2E 新增覆盖
   - M2-CLOSE-01 ✅ PHASE COMPLETE 文档收尾
 - **下一里程碑**：M3（待规划）
+
+---
+
+## SEQ-20260420-M3-DETAIL — 5 种详情页接管
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-04-19
+- **依赖**：M2 PHASE COMPLETE ✅
+- **目标**：movie / series / anime / tvshow / others 5 种详情页从 apps/web 迁移到 apps/web-next
+
+#### M3-DETAIL-01 — 详情页共享组件迁移 apps/web-next（状态：✅ 已完成）
+- **建议模型**：sonnet
+- **文件范围**：EpisodeGrid / VideoDetailClient / VideoDetailHero / VideoMeta / video-detail.ts / line-display-name.ts
+
+#### M3-DETAIL-02 — 5 种详情页路由新建 apps/web-next（状态：🔄 进行中）
+- **建议模型**：sonnet
+- **依赖**：M3-DETAIL-01
+
+#### M3-DETAIL-03 — ALLOWLIST 翻转 + apps/web 详情页删除 + E2E 迁移（状态：⬜ 待开始）
+- **建议模型**：sonnet
+- **依赖**：M3-DETAIL-02
+
+---
+
+## SEQ-20260420-M3-PLAYER — 播放器核心迁移
+
+- **状态**：⬜ 待开始
+- **依赖**：M3-DETAIL-03 ✅
+
+#### M3-PLAYER-01 — player core 提升 packages/player-core/ + ADR-036（状态：⬜ 待开始）
+- **建议模型**：opus（强制 + arch-reviewer 子代理）
+- **依赖**：M3-DETAIL-03
+
+#### M3-PLAYER-02 — apps/web-next PlayerShell + shell 层 + /watch 路由（状态：⬜ 待开始）
+- **建议模型**：sonnet
+- **依赖**：M3-PLAYER-01
+
+#### M3-PLAYER-03 — ALLOWLIST 翻转 /watch + apps/web 清退 + 播放页 E2E 迁移 + 关键路径回归（状态：⬜ 待开始）
+- **建议模型**：sonnet
+- **依赖**：M3-PLAYER-02
+- **硬阻断**：合并前必须完成断点续播 / 线路切换 / 剧场模式 / 字幕开关 四项人工回归
+
+---
+
+## SEQ-20260420-M3-CLOSE — M3 闭幕
+
+- **状态**：⬜ 待开始
+- **依赖**：M3-DETAIL-03 + M3-PLAYER-03 全部 ✅
+
+#### M3-CLOSE-01 — M3 PHASE COMPLETE + 缩减统计 + 审计挂钩（状态：⬜ 待开始）
+- **建议模型**：haiku
+- **依赖**：全部 M3 任务 ✅
