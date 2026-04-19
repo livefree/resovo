@@ -7344,3 +7344,18 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   - 模拟 smoke 新失败 → `test:guarded:e2e` 退出码 1
   - coverage-report 显示两个 E2E project 与对应 suite 清单
 - **完成备注**：_（AI 填写：必须记录三 project 配置 commit hash、test-guarded 扩展前后对比）_
+---
+✅ PHASE COMPLETE — Phase 1（M1）Design Token 里程碑已完成，等待合并到 main 并确认下一步
+- **完成时间**：2026-04-18
+- **本 Phase 完成任务数**：14 个（TOKEN-01~14）
+- **已合并到 main**：待人工确认后执行（`git merge dev --ff-only` 或 `git merge dev -m "feat: complete Phase 1 design tokens"`）
+- **建议下一步**：Phase 2（M2–M6）详情见 task-queue.md 后续序列
+- **需要你做的事**：
+  - [x] `npm run test -- --run`：1087 passed ✅
+  - [x] `no-hardcoded-color` 已升级为 error，lint 零 violation ✅
+  - [ ] 人工验收：dev 环境访问 `/zh/__playground/tokens` 三栏 Token Playground 正常渲染
+  - [ ] 人工验收：admin `/admin/design-tokens` Brand 列表 + iframe 预览正常
+  - [ ] 人工验收：BASELINE-01 关键路径视觉回归 SSIM ≥ 0.98（可选）
+  - [ ] 确认合并 dev → main（执行 `git merge dev -m "feat: complete Phase 1 design tokens"`）
+  - [ ] 确认开始 Phase 2，届时拆分 M2–M6 任务卡
+---
