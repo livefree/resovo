@@ -7004,7 +7004,10 @@
 - **完成备注**：根因：`vitest.config.ts` 缺少 `@/stores` 别名，server 组件的 `@/stores/authStore` 解析到 `apps/web/src/stores` 导致找不到。修复：在 `vitest.config.ts` resolve.alias 中添加 `'@/stores': path.resolve(__dirname, './apps/server/src/stores')`。修复后 ModerationDetail（10 tests）+ VideoTable（20 tests）均通过，总测试数 977 → 1007，失败数 16 不变（预存）。
 
 #### TESTFIX-02 — `/watch/` vs `/movie/` 路由真源决策 + ADR-034
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
+- **实际开始**：2026-04-18
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6（主循环）+ claude-opus-4-6（决策+实施）
 - **建议模型**：opus
 - **创建时间**：2026-04-18
 - **依赖**：无（可与 TESTFIX-01 并行）
@@ -7015,7 +7018,7 @@
 - **验收**：
   - ADR-034 已写入 decisions.md（替换占位行）
   - E2E 中所有 `/watch/` `/movie/` 相关失败消除
-- **完成备注**：_（AI 填写）_
+- **完成备注**：根因确定：并非路由架构冲突（B 类），而是 `MOCK_MOVIE` 缺失 `genres`/`aliases`/`languages`/`tags` 等 21 个 Video 契约字段，导致 `VideoDetailHero` 内访问抛 TypeError。决策：双路由分治不合并（`/movie/` 详情、`/watch/` 播放）。修复：player.spec.ts MOCK_MOVIE/MOCK_ANIME 显式类型为 `Video`，补齐所有字段。player.spec.ts 之前全失败的 22 个电影/动漫详情页测试现在 15 通过，7 个 C/D 类漂移进入 TESTFIX-04/05。ADR-034 已写入。
 
 #### TESTFIX-03 — E2E 失败逐项分类登记 + triage 文档 + 校验脚本
 - **状态**：⬜ 待开始

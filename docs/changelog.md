@@ -6528,3 +6528,18 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：failing_tests.json 路径 = docs/baseline_20260418/failing_tests.json（TESTFIX-03 创建）；当前隔离清单大小 = 0（TESTFIX-06 生成后更新）。修复后单测总数 977 → 1007，失败数 16 不变（全为预存）。
+
+---
+
+## [TESTFIX-02] /watch/ vs /movie/ 路由真源决策 + ADR-034
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 00:00
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：arch-reviewer（claude-opus-4-6）— 调查 + 决策 + 实施
+- **来源序列**：SEQ-20260418-M0.5
+- **修改文件**：
+  - `docs/decisions.md` — ADR-034（双路由分治不合并：/movie/ 详情 + /watch/ 播放，行 839 起）
+  - `tests/e2e/player.spec.ts` — MOCK_MOVIE/MOCK_ANIME 补齐 21 个 Video 字段，类型改为 `Video`
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：failing_tests.json（TESTFIX-03 创建）；隔离清单 = 0（TESTFIX-06 后更新）。修复后 player.spec.ts 15 通过/7 失败（7 个为 C/D 类，进入 TESTFIX-04/05）。
