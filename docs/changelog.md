@@ -7210,3 +7210,21 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - git rm `tests/unit/components/player/`（ResumePrompt.test + playerShell.layout.test，随源文件删除）
   - `docs/known_failing_tests_phase0.md`：删除 4 条 M3 C 类播放页条目，DanmakuBar 条目更新为 e2e-next 前缀
 - **质量门禁**：typecheck ✅ lint ✅ unit tests 1105/1105 ✅
+
+---
+
+### M3-CLOSE-01 — M3 PHASE COMPLETE 闭幕汇总
+
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-6) — M3 独立审计（AUDIT RESULT: PASS，7/7）
+- **M3 里程碑汇总（7 张卡）**：
+  - M3-DETAIL-01 ✅ 详情页共享组件迁移（MetaChip / EpisodeGrid / VideoDetailHero / VideoMeta 等）
+  - M3-DETAIL-02 ✅ 5 种详情页路由（movie/series/anime/tvshow/others）+ detail-page-factory
+  - M3-DETAIL-03 ✅ ALLOWLIST 批 1 翻转（5 条）+ apps/web 旧详情页清退 + detail E2E 迁移
+  - M3-PLAYER-01 ✅ packages/player-core 新建（git mv），YTPlayer→Player，ADR-036
+  - M3-PLAYER-02 ✅ apps/web-next PlayerShell + shell 层 + /watch 路由
+  - M3-PLAYER-03 ✅ ALLOWLIST 批 2 翻转（/watch）+ apps/web 播放器清退 + player E2E 迁移
+  - M3-CLOSE-01 ✅ 本条目
+- **ALLOWLIST 当前启用（8 条）**：/next-placeholder、/（exact）、/movie、/series、/anime、/tvshow、/others、/watch
+- **known_failing 缩减**：54 → 42（删除 12 条 C 类，1 条更新前缀为 e2e-next）

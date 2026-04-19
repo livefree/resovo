@@ -12,6 +12,13 @@
 > 适用阶段：Phase 0（2026-04-18 起）
 > 更新协议：每进入新 Phase 只能缩小不能增长；新增失败必须在本 Phase 内修复或创建 CHG-NN 任务
 > 关联文档：`docs/test_triage_20260418.md`，`docs/baseline_20260418/failing_tests.json`
+>
+> **条目缩减统计（截至 M3 PHASE COMPLETE）**
+> - 起点：54 条（C×47 + D×7）
+> - M2 删除：6 条（homepage nav testids × 4 + search result-count × 1 + publish-flow detail × 1）
+> - M3-DETAIL-03 删除：2 条（电影/动漫详情页 C 类）
+> - M3-PLAYER-03 删除：4 条（PlayerShell × 2 + 多集动漫 × 2）
+> - 当前：**42 条**（C×34 + D×7 + e2e-next DanmakuBar × 1）
 
 ---
 

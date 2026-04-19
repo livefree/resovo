@@ -7554,9 +7554,31 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ## SEQ-20260420-M3-CLOSE — M3 闭幕
 
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **依赖**：M3-DETAIL-03 + M3-PLAYER-03 全部 ✅
 
-#### M3-CLOSE-01 — M3 PHASE COMPLETE + 缩减统计 + 审计挂钩（状态：⬜ 待开始）
+#### M3-CLOSE-01 — M3 PHASE COMPLETE + 缩减统计 + 审计挂钩（状态：✅ 已完成）
 - **建议模型**：haiku
 - **依赖**：全部 M3 任务 ✅
+- **完成时间**：2026-04-19
+
+---
+
+## 🚀 PHASE COMPLETE — M3（详情页 + 播放器重写里程碑）
+
+> ✅ PHASE COMPLETE — Phase 3（M3）详情页 + 播放器重写里程碑已完成
+>
+> **完成时间**：2026-04-19
+> **审计员**：arch-reviewer (claude-opus-4-6) — AUDIT RESULT: PASS（7/7）
+>
+> **关键产出**：
+> - `packages/player-core/`（@resovo/player-core）新建，YTPlayer → Player，ADR-036 已采纳
+> - 5 种详情页（movie/series/anime/tvshow/others）迁移到 apps/web-next，detail-page-factory 复用
+> - apps/web-next PlayerShell + shell 层 + /watch 路由就位
+> - ALLOWLIST 新增 6 条（批 1 详情页 × 5 + 批 2 /watch × 1），当前共 8 条 enabled
+> - known_failing 从 54 条缩减至 42 条（删除 12 条 C 类，1 条更新前缀）
+> - apps/web 旧详情页目录、player/ 目录、watch/ 目录、playerStore 全部清退
+>
+> **人工回归（M3-PLAYER-03）**：断点续播✅ 线路切换✅ 剧场模式✅ 字幕暂无源跳过
+>
+> **下一里程碑**：M4（auth 登录/注册接管）

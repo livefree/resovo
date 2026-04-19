@@ -528,7 +528,7 @@ apps/web (port 3000) ← 对外唯一入口
 |--------|---------|----------------------|
 | RW-SETUP | `/next-placeholder` | prefix（验收用，M6 前退役） |
 | M2 | `/`（含 `/en`、`/zh-CN`） | exact + localeAware |
-| M3 | `/watch`、`/movie`、`/anime`、`/series`、`/variety`、`/others` | prefix |
+| M3 | `/movie`、`/series`、`/anime`、`/tvshow`、`/others`（批 1）、`/watch`（批 2）| prefix（共 6 条，tvshow 替代 variety URL 段）|
 | M4 | `/auth` | prefix |
 | M5 | `/search` | prefix |
 | M6 | 剩余路径全量接管 | 反向白名单或全 prefix |
