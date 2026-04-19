@@ -234,7 +234,7 @@ test('点击上架触发 PATCH 请求', async ({ context, page }) => {
 
   await page.goto(`${BASE_URL}/admin/videos`)
   const patchReq = page.waitForRequest(`${API_BASE}/admin/videos/vid-uuid-1/publish`)
-  await page.locator('[data-testid="admin-video-toggle-vid-uuid-1"]').click()
+  await page.locator('[data-testid="video-publish-toggle-vid-uuid-1"]').click()
   await patchReq
   expect(patchCalled).toBe(true)
 })
@@ -304,32 +304,89 @@ test('投稿审核页面显示待审列表', async ({ context, page }) => {
 test('点击通过触发 approve 请求', async ({ context, page }) => {
   await setCookies(context, { refreshToken: 'mock-rt', userRole: 'moderator' })
 
-  await page.route(`${API_BASE}/admin/submissions*`, (route) => {
-    if (route.request().url().includes('/approve')) {
+  await page.route(`${API_BASE}/admin/videos/moderation-stats`, (route) => {
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ pendingCount: 1, todayReviewedCount: 0, interceptRate: null }),
+    })
+  })
+
+  await page.route(`${API_BASE}/admin/videos/pending-review*`, (route) => {
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [{
+          id: 'vid-uuid-1',
+          shortId: 'aB3kR9x',
+          title: '测试电影',
+          type: 'movie',
+          coverUrl: null,
+          year: 2024,
+          siteKey: 'site-1',
+          siteName: 'Site 1',
+          firstSourceUrl: 'http://example.com/video.m3u8',
+          createdAt: '2026-03-15T00:00:00Z',
+          doubanStatus: 'pending',
+          sourceCheckStatus: 'pending',
+          metaScore: 0,
+          activeSourceCount: 1,
+        }],
+        total: 1,
+      }),
+    })
+  })
+
+  await page.route(`${API_BASE}/admin/videos/vid-uuid-1`, (route) => {
+    if (route.request().method() === 'GET') {
       route.fulfill({
         contentType: 'application/json',
-        body: JSON.stringify({ data: { approved: true } }),
-      })
-    } else {
-      route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({ data: [MOCK_SUBMISSION], total: 1, page: 1, limit: 20 }),
+        body: JSON.stringify({
+          data: {
+            id: 'vid-uuid-1',
+            title: '测试电影',
+            type: 'movie',
+            year: 2024,
+            description: '',
+            cover_url: null,
+            review_status: 'pending_review',
+            visibility_status: 'internal',
+            created_at: '2026-03-15T00:00:00Z',
+            genres: [],
+            director: [],
+            cast: [],
+            douban_status: 'pending',
+            source_check_status: 'pending',
+            meta_score: 0,
+            douban_id: null,
+            rating: null,
+          },
+        }),
       })
     }
   })
 
-  let approveCalled = false
-  await page.route(`${API_BASE}/admin/submissions/sub-uuid-1/approve`, (route) => {
-    approveCalled = true
+  await page.route(`${API_BASE}/admin/sources*`, (route) => {
     route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({ data: { approved: true } }),
+      body: JSON.stringify({ data: [], total: 0 }),
     })
   })
 
-  await page.goto(`${BASE_URL}/admin/submissions`)
-  const approveReq = page.waitForRequest(`${API_BASE}/admin/submissions/sub-uuid-1/approve`)
-  await page.locator('[data-testid="admin-submission-approve-sub-uuid-1"]').click()
+  let approveCalled = false
+  await page.route(`${API_BASE}/admin/videos/vid-uuid-1/review`, (route) => {
+    approveCalled = true
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { id: 'vid-uuid-1', review_status: 'approved' } }),
+    })
+  })
+
+  await page.goto(`${BASE_URL}/admin/moderation`)
+  await expect(page.locator('[data-testid="admin-moderation-page"]')).toBeVisible()
+  await page.locator('[data-testid="moderation-list-item-vid-uuid-1"]').click()
+  await expect(page.locator('[data-testid="moderation-detail"]')).toBeVisible()
+  const approveReq = page.waitForRequest(`${API_BASE}/admin/videos/vid-uuid-1/review`)
+  await page.locator('[data-testid="moderation-approve-btn"]').click()
   await approveReq
   expect(approveCalled).toBe(true)
 })
@@ -421,10 +478,10 @@ test('点击封号触发 ban 请求', async ({ context, page }) => {
   })
 
   await page.goto(`${BASE_URL}/admin/users`)
-  // 模拟 confirm 对话框
-  page.on('dialog', (dialog) => dialog.accept())
   const banReq = page.waitForRequest(`${API_BASE}/admin/users/user-uuid-1/ban`)
-  await page.locator('[data-testid="admin-user-ban-user-uuid-1"]').click()
+  await page.locator('[data-testid="user-actions-user-uuid-1"]').click()
+  await page.getByRole('menuitem', { name: '封号' }).click()
+  await page.locator('[data-testid="confirm-dialog-confirm"]').click()
   await banReq
   expect(banCalled).toBe(true)
 })

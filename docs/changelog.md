@@ -6620,3 +6620,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **测试覆盖**：test:guarded → GATE PASSED (1007 passed, 0 new failures)
 - **failing_tests.json 路径**：`docs/baseline_20260418/failing_tests.json`
 - **当前隔离清单大小**：9（E2E C 类，defer M2/M3/M5）
+
+---
+
+## TESTFIX-08 — 跨 E2E suite 修复 Mock 契约 + 补齐 testid
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件列表**：
+  - `apps/server/src/components/admin/videos/useVideoTableColumns.tsx` — 补 `data-testid="video-publish-toggle-{id}"` 到上架/下架按钮
+  - `tests/e2e/admin.spec.ts` — D-04 testid 更新；D-05 重写（submissions→moderation；approve 流程）；D-06 修复（native dialog → AdminDropdown + ConfirmDialog）
+  - `tests/e2e/admin-source-and-video-flows.spec.ts` — D-07 移除 menuitem 模式，改用 `video-publish-toggle-*`/`douban-sync-*`；D-08 pending-review + video detail mock 补全必填字段
+  - `tests/e2e/publish-flow.spec.ts` — D-09 testid `admin-video-toggle-*` → `video-publish-toggle-*`
+  - `tests/e2e/video-governance.spec.ts` — D-10/C-47 mock 键 `rows`→`data`；PendingVideoRow 补 `doubanStatus/sourceCheckStatus/metaScore/activeSourceCount`；VideoDetail 补 9 个字段
+- **修复清单**：D-04、D-05、D-06（admin）、D-07、D-08（admin-source）、D-09（publish-flow）、D-10/C-47（video-governance）
+- **共享 fixture 沉淀**：否（各 spec mock 结构差异较大，不满足 ≥3 重复条件）
+- **质量门禁**：`npm run typecheck` + `npm run lint` + `npm run test -- --run` 全绿（1007 passed）

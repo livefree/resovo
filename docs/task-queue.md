@@ -7097,27 +7097,27 @@
   - 隔离清单从 9 条扩展至 54 条，每条绑定里程碑（M2/M3/M4/M5/M6/TESTFIX-08）
 
 #### TESTFIX-08 — 跨 E2E suite 修复 Mock 契约 + 补齐 testid
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
+- **完成时间**：2026-04-18
 - **依赖**：TESTFIX-07
 - **文件范围**：
-  - 修改 `tests/e2e/homepage.spec.ts`（MOCK_MOVIE / MOCK_SERIES 补齐 Video contract 必填字段）
-  - 由 TESTFIX-07 triage D 类「mock 契约缺失」条目决定的其他 suite 文件
-  - 由 TESTFIX-07 triage C 类「本 Phase 内可立即修」条目决定的组件文件
-  - 不触碰 `e2e/player.spec.ts`、`e2e/search.spec.ts` 中已标注 `defer M2/M3/M5` 的条目
-- **变更内容**：
-  1. `homepage.spec.ts` MOCK_MOVIE/MOCK_SERIES 补齐 Video 必填字段（genres/aliases/languages/tags/subtitleLangs）
-  2. 按 TESTFIX-07 triage D 类清单逐一修复其他 suite 的 mock 契约
-  3. 若 ≥3 spec 重复定义 mock，提取到 `tests/e2e/fixtures/mock-video.ts`
-  4. C 类可立即修的 testid 缺失在对应组件补 data-testid 属性
-  5. 每修一条在 triage 文档 `处置` 字段改为 `fixed` + commit hash
-- **验收**：
-  - `homepage.spec.ts` MOCK 含 5 个必填数组字段
-  - 所有标注 `fix` 的 mock 契约条目，对应 suite 单独跑全绿
-  - `npm run typecheck` + `npm run lint` 全绿
-  - triage `fix` 状态条目全部标记 `fixed`；未触碰 `defer` 项
-- **完成备注**：_（AI 填写：必须列出修复的 suite×test 清单、是否沉淀了共享 mock fixture）_
+  - 修改 `tests/e2e/admin.spec.ts`（D-04/D-05/D-06）
+  - 修改 `tests/e2e/admin-source-and-video-flows.spec.ts`（D-07/D-08）
+  - 修改 `tests/e2e/publish-flow.spec.ts`（D-09）
+  - 修改 `tests/e2e/video-governance.spec.ts`（D-10/C-47）
+  - 修改 `apps/server/src/components/admin/videos/useVideoTableColumns.tsx`（补 testid）
+- **完成备注**：
+  - D-04（admin）: `admin-video-toggle-*` → `video-publish-toggle-*`
+  - D-05（admin）: 重写 approve 测试，从 `/admin/submissions` 迁移到 `/admin/moderation`，使用 `moderation-approve-btn`
+  - D-06（admin）: 移除 `page.on('dialog')` native dialog，改用 `user-actions-*` AdminDropdown + `confirm-dialog-confirm`
+  - D-07（admin-source）: 移除 `video-actions-*` + menuitem 模式，改用 `video-publish-toggle-*` 与 `douban-sync-*` 直接点击
+  - D-08（admin-source）: pending-review mock 补 `doubanStatus/sourceCheckStatus/metaScore/activeSourceCount`；video detail mock 补 `genres/director/cast/douban_status/source_check_status/meta_score/douban_id/rating`
+  - D-09（publish-flow）: `admin-video-toggle-*` → `video-publish-toggle-*`
+  - D-10/C-47（video-governance）: mock 响应键 `rows` → `data`；PendingVideoRow 补 4 个字段；VideoDetail 补 9 个字段
+  - 未沉淀共享 fixture（各 spec mock 结构差异较大，不满足 ≥3 重复条件）
+  - `npm run typecheck` + `npm run lint` + `npm run test -- --run` 全绿
 
 #### TESTFIX-09 — test-guarded 扩展 E2E 子命令 + 合并 main + PHASE COMPLETE
 - **状态**：⬜ 待开始

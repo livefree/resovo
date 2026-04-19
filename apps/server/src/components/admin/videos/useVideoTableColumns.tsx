@@ -353,6 +353,7 @@ function buildDataColumn(columnId: VideoColumnId, deps: ColumnDeps): TableColumn
               title={row.is_published ? '下架' : '上架'}
               disabled={isPending}
               onClick={() => { void deps.handlePublishToggle(row) }}
+              data-testid={`video-publish-toggle-${row.id}`}
               className={`rounded border px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${
                 row.is_published
                   ? 'border-green-500/40 bg-green-500/10 text-green-300 hover:bg-green-500/20'
