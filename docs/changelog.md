@@ -6798,3 +6798,21 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **数据库变更**：无
 - **注意事项**：globals.css 中旧硬编码变量（--background, --foreground 等）与新 token 变量共存，TOKEN-13 负责迁移并删除旧变量；dist/base-theme.css 为构建产物，gitignored
 - **质量门禁**：typecheck ✅ / lint ✅ / 80 design-token unit tests ✅
+
+## [TOKEN-08] Brand 层架构（数据模型 + DB schema + override 约束）
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 21:40
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-6) — Brand 类型体系 + DB schema 设计
+- **修改文件**：
+  - `packages/design-tokens/src/brands/types.ts` — 新增；BrandOverrides（仅 semantic+component）、Brand 接口、编译期 primitive 拦截
+  - `packages/design-tokens/src/brands/default.ts` — 新增；defaultBrand + defaultBrandOverrides
+  - `packages/design-tokens/src/brands/index.ts` — 由空占位改为正式导出
+  - `packages/design-tokens/package.json` — 新增 ./brands 子路径 export
+  - `apps/api/src/db/migrations/047_create_brands_table.sql` — 新增；brands 表 + 部分唯一索引 + updated_at 触发器
+  - `apps/api/src/db/queries/brands.ts` — 新增；getBrandBySlug / listBrands / upsertBrand
+  - `docs/architecture.md` — 追加 §5.8 brands 表条目
+- **新增依赖**：无
+- **数据库变更**：新增 brands 表（Migration 047）
+- **注意事项**：migration 未实际运行（需手动执行）；brands.ts 中 BrandOverrides 本地定义（不跨包），运行期由 service 层 zod 校验结构
+- **质量门禁**：typecheck ✅ / lint ✅ / 80 design-token tests ✅

@@ -22,6 +22,10 @@
     "./types": {
       "types": "./src/types.ts",
       "default": "./src/types.ts"
+    },
+    "./brands": {
+      "types": "./src/brands/index.ts",
+      "default": "./src/brands/index.ts"
     }
   },
   "scripts": {

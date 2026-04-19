@@ -6766,7 +6766,7 @@
 - **完成备注**：globals.css 注入 35 个语义层 CSS 变量（bg/fg/border/accent/surface/state light+dark）；color-scheme: light dark；body 过渡 200ms；@media prefers-color-scheme 系统偏好 fallback；build.ts 新增 dist/base-theme.css 构建产物（5.5KB）；admin app 不存在跳过；typecheck + lint ✅
 
 #### TOKEN-08 — Brand 层架构（数据模型 + DB schema + override 约束）
-- **状态**：⬜ 待开始
+- **状态**：✅ 已完成
 - **建议模型**：opus
 - **创建时间**：2026-04-18
 - **依赖**：TOKEN-07
@@ -6786,7 +6786,7 @@
   - migration 双向可运行（up / down）
   - 类型层校验 override 不含 primitives key（编译期校验）
   - `docs/architecture.md` 新表条目同步
-- **完成备注**：_（AI 填写）_
+- **完成备注**：arch-reviewer (claude-opus-4-6) 设计 Brand 层类型体系；brands/types.ts + default.ts + index.ts；migration 047 + brands.ts 查询（getBrandBySlug/listBrands/upsertBrand）；package.json 追加 ./brands 子路径 export；architecture.md §5.8 brand 表条目；typecheck + lint + 80 tests ✅
 
 #### TOKEN-09 — BrandProvider + useBrand / useTheme hooks
 - **状态**：⬜ 待开始
