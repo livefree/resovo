@@ -7539,9 +7539,10 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - **依赖**：M3-DETAIL-03
 - **完成时间**：2026-04-19
 
-#### M3-PLAYER-02 — apps/web-next PlayerShell + shell 层 + /watch 路由（状态：⬜ 待开始）
+#### M3-PLAYER-02 — apps/web-next PlayerShell + shell 层 + /watch 路由（状态：✅ 已完成）
 - **建议模型**：sonnet
 - **依赖**：M3-PLAYER-01
+- **完成时间**：2026-04-19
 
 #### M3-PLAYER-03 — ALLOWLIST 翻转 /watch + apps/web 清退 + 播放页 E2E 迁移 + 关键路径回归（状态：⬜ 待开始）
 - **建议模型**：sonnet

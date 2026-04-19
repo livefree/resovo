@@ -31,6 +31,9 @@
       ],
       "@resovo/types": [
         "../../packages/types/src/index.ts"
+      ],
+      "@resovo/player-core": [
+        "../../packages/player-core/src/index.ts"
       ]
     }
   },

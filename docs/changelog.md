@@ -7172,3 +7172,21 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `docs/decisions.md`：追加 ADR-036
   - `docs/architecture.md`：§1 + §2 追加 player-core 条目
 - **质量门禁**：typecheck ✅ lint ✅ unit tests 1111/1111 ✅
+
+---
+
+### M3-PLAYER-02 — apps/web-next PlayerShell + shell 层 + /watch 路由
+
+- **完成时间**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **变更摘要**：
+  - 新增 `apps/web-next/src/stores/playerStore.ts`（zustand，API 与 apps/web 保持一致）
+  - 新增 `apps/web-next/src/components/player/playerShell.layout.ts`
+  - 新增 `apps/web-next/src/components/player/SourceBar.tsx`（TOKEN-13 CSS 变量）
+  - 新增 `apps/web-next/src/components/player/ResumePrompt.tsx`（TOKEN-13 CSS 变量）
+  - 新增 `apps/web-next/src/components/player/VideoPlayer.tsx`（dynamic import @resovo/player-core）
+  - 新增 `apps/web-next/src/components/player/PlayerShell.tsx`（消费 @resovo/player-core，TOKEN-13 CSS 变量，无 apps/web 直接引用）
+  - 新增 `apps/web-next/src/app/[locale]/watch/[slug]/page.tsx`（Server Component 入口）
+  - `apps/web-next/package.json` + `apps/web-next/tsconfig.json`：新增 @resovo/player-core
+- **质量门禁**：typecheck ✅ lint ✅ unit tests 1111/1111 ✅
