@@ -123,7 +123,7 @@ test('管理员在视频列表中发布待审核视频，状态变为已上架',
 
   // 点击上架按钮
   const publishReq = page.waitForRequest(`${API_BASE}/admin/videos/vid-flow-1/publish`)
-  await page.locator('[data-testid="admin-video-toggle-vid-flow-1"]').click()
+  await page.locator('[data-testid="video-publish-toggle-vid-flow-1"]').click()
   await publishReq
 
   expect(publishCalled).toBe(true)

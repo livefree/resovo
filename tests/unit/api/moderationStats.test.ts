@@ -46,6 +46,10 @@ vi.mock('@/api/services/DoubanService', () => ({
   DoubanService: class { syncVideo = vi.fn() },
 }))
 
+vi.mock('@/api/services/CrawlerRunService', () => ({
+  CrawlerRunService: class {},
+}))
+
 import * as videoQueries from '@/api/db/queries/videos'
 
 const mockGetModerationStats = videoQueries.getModerationStats as ReturnType<typeof vi.fn>

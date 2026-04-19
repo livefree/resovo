@@ -45,6 +45,15 @@ vi.mock('@/api/lib/postgres', () => ({
   db: { query: vi.fn().mockResolvedValue({ rows: [] }) },
 }))
 
+vi.mock('@/api/db/queries/externalData', () => ({
+  upsertVideoExternalRef: vi.fn().mockResolvedValue({ id: 'ref-1', videoId: 'v1', provider: 'douban', externalId: 'db123' }),
+  listVideoExternalRefs: vi.fn().mockResolvedValue([]),
+  findDoubanEntryById: vi.fn().mockResolvedValue(null),
+  findDoubanByTitleNorm: vi.fn().mockResolvedValue(null),
+  findPrimaryVideoExternalRef: vi.fn().mockResolvedValue(null),
+  updateExternalRefMatchStatus: vi.fn().mockResolvedValue(undefined),
+}))
+
 // ── Import after mocks ────────────────────────────────────────────
 
 import { DoubanService } from '@/api/services/DoubanService'
@@ -173,7 +182,7 @@ describe('DoubanService.confirmSubject()', () => {
     const mockSafeUpdate = (MediaCatalogService as ReturnType<typeof vi.fn>).mock.results.at(-1)?.value.safeUpdate
     expect(result.updated).toBe(true)
     expect(getDoubanDetailRich).toHaveBeenCalledWith('db123')
-    expect(mockSafeUpdate).toHaveBeenCalledWith('c1', expect.objectContaining({ doubanId: 'db123' }), 'douban')
+    expect(mockSafeUpdate).toHaveBeenCalledWith('c1', expect.objectContaining({ doubanId: 'db123' }), 'douban', expect.objectContaining({ sourceRef: 'db123' }))
     expect(videoQueries.updateVideoEnrichStatus).toHaveBeenCalledWith(
       mockPool, 'v1', expect.objectContaining({ doubanStatus: 'matched' })
     )

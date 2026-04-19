@@ -273,14 +273,12 @@ test('video actions dropdown triggers publish and douban sync endpoints', async 
   await expect(page.locator('[data-testid="modern-table-row-vid-1"]')).toBeVisible()
 
   const publishReq = page.waitForRequest(`${API_BASE}/admin/videos/vid-1/publish`)
-  await page.getByTestId('video-actions-vid-1').click()
-  await page.getByRole('menuitem', { name: '下架' }).click()
+  await page.getByTestId('video-publish-toggle-vid-1').click()
   const publishRequest = await publishReq
   expect(publishRequest.postDataJSON()).toEqual({ isPublished: false })
 
   const doubanReq = page.waitForRequest(`${API_BASE}/admin/videos/vid-1/douban-sync`)
-  await page.getByTestId('video-actions-vid-1').click()
-  await page.getByRole('menuitem', { name: '豆瓣同步' }).click()
+  await page.getByTestId('douban-sync-vid-1').click()
   await doubanReq
 })
 
@@ -313,6 +311,10 @@ test('moderation reject submits reason', async ({ context, page }) => {
         siteName: 'Site 1',
         firstSourceUrl: 'https://media.example.com/a.m3u8',
         createdAt: '2026-03-27T00:00:00Z',
+        doubanStatus: 'pending',
+        sourceCheckStatus: 'pending',
+        metaScore: 0,
+        activeSourceCount: 1,
       }]
       await route.fulfill({
         contentType: 'application/json',
@@ -335,6 +337,14 @@ test('moderation reject submits reason', async ({ context, page }) => {
             review_status: 'pending_review',
             visibility_status: 'internal',
             created_at: '2026-03-27T00:00:00Z',
+            genres: [],
+            director: [],
+            cast: [],
+            douban_status: 'pending',
+            source_check_status: 'pending',
+            meta_score: 0,
+            douban_id: null,
+            rating: null,
           },
         }),
       })

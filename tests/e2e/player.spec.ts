@@ -5,10 +5,13 @@
  */
 
 import { test, expect } from '@playwright/test'
+import type { Video } from '../../apps/web/src/types'
 
 const API_BASE = 'http://localhost:4000/v1'
 
-const MOCK_MOVIE = {
+// ADR-034: E2E mock 必须遵守 Video 契约，不得用 partial 对象
+// 新增 Video 字段时同步此 factory，否则 typecheck 会立即失败
+const MOCK_MOVIE: Video = {
   id: 'uuid-1',
   shortId: 'aB3kR9x1',
   slug: 'test-movie-aB3kR9x1',
@@ -17,7 +20,7 @@ const MOCK_MOVIE = {
   description: '这是一部测试电影的简介',
   coverUrl: null,
   type: 'movie',
-  category: 'action',
+  genres: ['action'],
   rating: 8.5,
   year: 2024,
   country: 'CN',
@@ -28,10 +31,30 @@ const MOCK_MOVIE = {
   writers: ['赵编剧'],
   sourceCount: 2,
   subtitleLangs: ['zh-CN'],
+  sourceContentType: null,
+  normalizedType: null,
+  contentFormat: 'movie',
+  episodePattern: 'single',
+  reviewStatus: 'approved',
+  visibilityStatus: 'public',
+  needsManualReview: false,
+  contentRating: 'general',
   createdAt: '2024-01-01T00:00:00.000Z',
+  catalogId: null,
+  imdbId: null,
+  tmdbId: null,
+  titleOriginal: null,
+  aliases: [],
+  languages: ['zh-CN'],
+  tags: [],
+  ratingVotes: 1000,
+  runtimeMinutes: 120,
+  doubanStatus: 'matched',
+  sourceCheckStatus: 'ok',
+  metaScore: 80,
 }
 
-const MOCK_ANIME = {
+const MOCK_ANIME: Video = {
   ...MOCK_MOVIE,
   shortId: 'bC4lS0y2',
   slug: 'test-anime-bC4lS0y2',
@@ -40,11 +63,13 @@ const MOCK_ANIME = {
   type: 'anime',
   status: 'ongoing',
   episodeCount: 12,
+  contentFormat: 'episodic',
+  episodePattern: 'multi',
 }
 
 async function mockVideoApi(
   page: Parameters<typeof test>[1] extends { page: infer P } ? P : never,
-  video: typeof MOCK_MOVIE
+  video: Video
 ) {
   await page.route(`${API_BASE}/videos/${video.shortId}`, (route) => {
     route.fulfill({

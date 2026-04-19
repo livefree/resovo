@@ -835,3 +835,39 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
   - `apps/web/eslint.config.mjs`（新增 `no-redesign-flag` 规则）
   - `docs/architecture.md`（同步"重写期单线推进 + 冻结期积压"章节）
 
+
+## ADR-034: 详情页按类型分段 + `/watch/` 专注播放：双路由分治不合并
+
+- **日期**：2026-04-18
+- **状态**：已采纳
+- **背景**：
+  - 当前 `apps/web/src/app/[locale]/` 同时存在 5 条"详情页"路由（`movie` / `anime` / `series` / `variety` / `others`）与 1 条"播放页"路由（`watch`）。
+  - 5 条详情页 page.tsx 皆走 `VideoDetailClient`（CSR）+ SSR `generateMetadata`，承担 OG tags / 标题 / 描述，是 SEO 入口。
+  - `/watch/[slug]` 加载 `PlayerLoader → PlayerShell`（`ssr: false`），承担播放体验（断点续播、线路切换、影院模式、选集面板、弹幕）。
+  - Phase 0 E2E "电影详情页" 测试组大量 `element(s) not found`：测试导航到 `/en/movie/[slug]` 期望 `data-testid="video-detail-hero"`，路由本身正常加载，但因 E2E mock 缺失 `Video` 契约的必填字段（`genres` / `aliases` / `languages` / `tags` / `subtitleLangs` 等），`VideoDetailHero` 内 `video.genres.length > 0` 等访问抛 `TypeError`，整个 section 崩溃，testid 无法出现在 DOM 中。
+  - 疑问的焦点是：这究竟是"路由架构冲突"（`/movie/` 与 `/watch/` 职责重叠），还是"mock 不遵守契约 + 组件未兜底"两层工程问题？经排查，前者不成立 —— 两条路由语义互不重叠；真正的 Bug 在测试侧。
+- **决策**：
+  1. **保留"按类型分段"的详情页路由**：`/[locale]/movie/[slug]`、`/anime/[slug]`、`/series/[slug]`、`/variety/[slug]`、`/others/[slug]` 作为 SEO 真源，任一类型详情页都承诺渲染 `data-testid="video-detail-hero"`。URL 形如 `/en/movie/title-shortId`，`shortId` 为最后一段 nanoid（8 位），`extractShortId` 作为通用解析器。
+  2. **保留 `/[locale]/watch/[slug]`** 作为播放真源，承诺渲染 `data-testid="watch-page" + player-shell + player-video-area`，不承担 SEO 主页面（标题 / OG 由类型详情页提供；播放页仅 `document.title` 无需 SSR meta）。
+  3. **不合并、不重命名、不 redirect**：类型详情页与播放页语义正交，分治比合并更清晰；合并会破坏既有内链（`VideoDetailHero.watchHref = /watch/{slug}-{shortId}?ep=1`、`getVideoDetailHref` 反向生成类型详情 URL）与搜索页已上线的跳转路径。
+  4. **契约校验下沉到测试层**：E2E mock 必须遵守 `Video` 类型契约（所有非 optional 字段一个不少）；共享 `makeVideoMock()` helper 放在测试工具文件，禁止每个 spec 自己拼 partial 对象。
+  5. **架构约束**：`VideoDetailHero` 等消费方按类型契约访问字段，**不得**为了兼容坏 mock 而改成"防御式编程"（`video.genres ?? []`），否则类型约束形同虚设。mock 坏了应该让测试红，而不是让运行时悄悄回退默认值。
+- **理由**：
+  - **SEO 历史链接保留**：合并路由会让 `/movie/*` 重定向到 `/watch/*` 或反向，搜索引擎收录链接失效、内部链接全部要改；分治无此代价。
+  - **职责单一**：详情页是"读取 + SEO + 决策点"，播放页是"消费 + 状态机"（断点续播 / 线路切换 / 影院模式）。两者渲染树、字体大小、布局模式、加载策略（CSR vs dynamic `ssr:false`）皆不同，合并成同一组件反而要加条件分支，污染更大。
+  - **按类型分段有 SEO 增益**：`/movie/xxx` 和 `/anime/xxx` 在 SERP 上天然区分内容类型，便于结构化数据（未来 `VideoObject` schema 按类型输出不同字段）。
+  - **测试 mock 契约化**比组件兜底更符合"正确性 > 改动收敛"的价值排序（CLAUDE.md 第 1 条）：组件加 `?? []` 会遮蔽未来 API 契约演进的真 Bug。
+- **架构约束（代码层面强制）**：
+  - 详情页 page.tsx 只能通过 `VideoDetailClient` 消费 `Video`，不得在 page.tsx 里直接渲染 hero（保持模板一致性）。
+  - 播放页 page.tsx 只能通过 `PlayerLoader → PlayerShell` 承载，不得内联播放逻辑。
+  - `getVideoDetailHref(video)` 是"视频 → 详情 URL"的唯一入口，禁止手拼 `/${type}/${slug}`。
+  - 新增视频类型必须在 `getVideoDetailHref` 的 `PRIMARY_DETAIL_TYPES` 白名单 或 `others` 兜底中二选一，不得新增第六个类型路由目录而不更新 `video-route.ts`。
+  - E2E mock 必须覆盖 `Video` 类型全部非 optional 字段；新增 `Video` 字段时，测试 mock helper 必须同步（代码评审检查项）。
+- **迁移路径**：
+  - 本次只修 `tests/e2e/player.spec.ts`：把 `MOCK_MOVIE` / `MOCK_ANIME` 补齐 `Video` 契约缺失字段；不改生产代码。
+  - 不新增 redirect，不动任何 page.tsx。
+  - 后续新增视频类型（如 `documentary` 如果升格为一级入口）时，按"架构约束"第 4 条决定新增路由还是复用 `/others/`。
+- **影响文件**：
+  - `tests/e2e/player.spec.ts`（补齐 `MOCK_MOVIE` / `MOCK_ANIME` 字段）
+  - `docs/decisions.md`（本 ADR）
+  - 架构守护层无新增文件，既有路由保持原样

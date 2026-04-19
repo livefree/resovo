@@ -109,11 +109,15 @@ async function installGovernanceMocks(page: Page, state: VideoState) {
             siteName: 'Mock Site',
             firstSourceUrl: state.source_url,
             createdAt: state.created_at,
+            doubanStatus: 'pending',
+            sourceCheckStatus: 'pending',
+            metaScore: 0,
+            activeSourceCount: 1,
           }]
         : []
       await route.fulfill({
         contentType: 'application/json',
-        body: JSON.stringify({ rows, total: rows.length, page: 1, limit: 30 }),
+        body: JSON.stringify({ data: rows, total: rows.length, page: 1, limit: 30 }),
       })
       return
     }
@@ -157,6 +161,14 @@ async function installGovernanceMocks(page: Page, state: VideoState) {
             review_status: state.review_status,
             visibility_status: state.visibility_status,
             created_at: state.created_at,
+            genres: [],
+            director: [],
+            cast: [],
+            rating: null,
+            douban_status: 'pending',
+            source_check_status: 'pending',
+            meta_score: 0,
+            douban_id: null,
           },
         }),
       })

@@ -6498,3 +6498,166 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：与 ADR-030（SSR 降级）和 ADR-031（共存策略）策略完全对齐。冻结期积压需求写 task-queue.md 末尾"冻结期积压"区。
+
+---
+
+## [TESTFIX-00] workflow-rules.md 追加 Phase 基线测试条款
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 00:00
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **来源序列**：SEQ-20260418-M0.5
+- **修改文件**：
+  - `docs/rules/workflow-rules.md` — 新增「Phase 基线测试条款」章节（5 条协议 + 失败类别定义表），scope/last_reviewed 更新
+  - `docs/task-queue.md` — 追加 SEQ-20260418-M0.5（7 张任务卡 TESTFIX-00~06）
+  - `docs/decisions.md` — 预留 ADR-034 占位行（TESTFIX-02 完成后替换）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：failing_tests.json 路径 = docs/baseline_20260418/failing_tests.json（TESTFIX-03 创建）；当前隔离清单大小 = 0（TESTFIX-06 生成后更新）。
+
+---
+
+## [TESTFIX-01] 修复 2 个 vitest suite import 失败
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 00:00
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **来源序列**：SEQ-20260418-M0.5
+- **修改文件**：
+  - `vitest.config.ts` — resolve.alias 新增 `@/stores → apps/server/src/stores`（解决 server 组件 import @/stores/authStore 找不到的问题）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：failing_tests.json 路径 = docs/baseline_20260418/failing_tests.json（TESTFIX-03 创建）；当前隔离清单大小 = 0（TESTFIX-06 生成后更新）。修复后单测总数 977 → 1007，失败数 16 不变（全为预存）。
+
+---
+
+## [TESTFIX-02] /watch/ vs /movie/ 路由真源决策 + ADR-034
+- **完成时间**：2026-04-18
+- **记录时间**：2026-04-18 00:00
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：arch-reviewer（claude-opus-4-6）— 调查 + 决策 + 实施
+- **来源序列**：SEQ-20260418-M0.5
+- **修改文件**：
+  - `docs/decisions.md` — ADR-034（双路由分治不合并：/movie/ 详情 + /watch/ 播放，行 839 起）
+  - `tests/e2e/player.spec.ts` — MOCK_MOVIE/MOCK_ANIME 补齐 21 个 Video 字段，类型改为 `Video`
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：failing_tests.json（TESTFIX-03 创建）；隔离清单 = 0（TESTFIX-06 后更新）。修复后 player.spec.ts 15 通过/7 失败（7 个为 C/D 类，进入 TESTFIX-04/05）。
+
+---
+
+## TESTFIX-03 — E2E 失败逐项分类登记 + triage 文档 + 校验脚本
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件列表**：
+  - `docs/test_triage_20260418.md` — 25 条失败逐一分类（A×13 defer TESTFIX-05；D×3 fix TESTFIX-05；C×9 defer M2–M5）
+  - `docs/baseline_20260418/failing_tests.json` — 25 条失败完整归档（schema：test_id/suite/kind/status/duration_ms/error_excerpt）
+  - `scripts/verify-baseline.ts` — 校验脚本（schema 验证 + --unit/--e2e/--total 数字断言，失败时 exit 1）
+  - `package.json` — 追加 `verify:baseline` script
+- **测试覆盖**：`npm run verify:baseline -- --unit 16 --e2e 9 --total 25` 通过
+- **failing_tests.json 路径**：`docs/baseline_20260418/failing_tests.json`
+- **当前隔离清单大小**：0（TESTFIX-06 创建隔离清单后更新）
+- **数字快照**：单元失败 16，E2E 失败 9（web-chromium），合计 25
+
+---
+
+## TESTFIX-04 — 修复 C 类「立即修复」testid / DOM 漂移（空操作）
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件列表**：无
+- **说明**：triage 文档中 9 条 C 类失败全部 defer（href 格式/PlayerShell testid/DanmakuBar/search filter），无立即修复项。
+
+---
+
+## TESTFIX-05 — 修复 A 类（process.exit）和 D 类（db.query mock）单元测试失败
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件列表**：
+  - `tests/unit/api/stagingDouban.test.ts` — 新增 externalData mock + safeUpdate 断言更新（sourceRef 第 4 参数）
+  - `tests/unit/api/douban.test.ts` — 新增 CrawlerRunService mock（process.exit 链断）+ metadataProvenance mock（db.query 修复）
+  - `tests/unit/api/moderationStats.test.ts` — 新增 CrawlerRunService mock
+- **测试覆盖**：1007 unit tests passed (0 failed，修复前 16 failed)
+- **数据库变更**：无
+
+---
+
+## TESTFIX-07 — E2E 全 suite 基线重建 + triage 补全
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件列表**：
+  - `docs/baseline_20260418/failing_tests.json` — 全量重建（25→54 条，0 单元 + 54 E2E，覆盖全 8 suite）
+  - `docs/baseline_20260418/e2e_coverage_report.md` — 新增，8 suite 采集完整性说明 + 机读 JSON 块
+  - `docs/test_triage_20260418.md` — 全量重写（补全 homepage/auth/admin/admin-source/publish-flow/video-governance 45 条，A 类历史记录保留，汇总表更新）
+  - `docs/known_failing_tests_phase0.md` — 隔离清单从 9 扩展至 54 条，覆盖全 8 suite
+  - `scripts/verify-baseline.ts` — 新增 `--coverage-report` 子命令（per-suite 失败数 vs e2e_coverage_report.md JSON 块对比）
+- **重建前后对比**：
+  - 旧基线：25 条（16 单元 + 9 E2E，仅 player/search）
+  - 新基线：54 条（0 单元 + 54 E2E，8 suite 全覆盖）
+- **suite 失败分布**：homepage×6、auth×15、player×7、search×2、admin×18、admin-source×2、publish-flow×2、video-governance×2
+- **失败类型分布**：C×47（testid/URL 漂移）、D×7（交互超时/功能失败）
+- **校验命令**：`npm run verify:baseline -- --e2e 54 --total 54 --coverage-report` → OK
+
+---
+
+## TESTFIX-06 — 隔离清单 + CI 门禁 + test:guarded 脚本
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件列表**：
+  - `docs/known_failing_tests_phase0.md` — Phase 0 隔离清单（9 条 E2E C 类，0 条单元）
+  - `scripts/test-guarded.ts` — CI 门禁脚本（清单外新增失败 exit 1，清单内失败 warning）
+  - `scripts/verify-baseline.ts` — 追加 --diff --phase 模式（baseline vs 隔离清单差异）
+  - `package.json` — 追加 test:guarded script
+- **测试覆盖**：test:guarded → GATE PASSED (1007 passed, 0 new failures)
+- **failing_tests.json 路径**：`docs/baseline_20260418/failing_tests.json`
+- **当前隔离清单大小**：9（E2E C 类，defer M2/M3/M5）
+
+---
+
+## TESTFIX-08 — 跨 E2E suite 修复 Mock 契约 + 补齐 testid
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件列表**：
+  - `apps/server/src/components/admin/videos/useVideoTableColumns.tsx` — 补 `data-testid="video-publish-toggle-{id}"` 到上架/下架按钮
+  - `tests/e2e/admin.spec.ts` — D-04 testid 更新；D-05 重写（submissions→moderation；approve 流程）；D-06 修复（native dialog → AdminDropdown + ConfirmDialog）
+  - `tests/e2e/admin-source-and-video-flows.spec.ts` — D-07 移除 menuitem 模式，改用 `video-publish-toggle-*`/`douban-sync-*`；D-08 pending-review + video detail mock 补全必填字段
+  - `tests/e2e/publish-flow.spec.ts` — D-09 testid `admin-video-toggle-*` → `video-publish-toggle-*`
+  - `tests/e2e/video-governance.spec.ts` — D-10/C-47 mock 键 `rows`→`data`；PendingVideoRow 补 `doubanStatus/sourceCheckStatus/metaScore/activeSourceCount`；VideoDetail 补 9 个字段
+- **修复清单**：D-04、D-05、D-06（admin）、D-07、D-08（admin-source）、D-09（publish-flow）、D-10/C-47（video-governance）
+- **共享 fixture 沉淀**：否（各 spec mock 结构差异较大，不满足 ≥3 重复条件）
+- **质量门禁**：`npm run typecheck` + `npm run lint` + `npm run test -- --run` 全绿（1007 passed）
+
+---
+
+## TESTFIX-09 — test-guarded E2E 子命令 + verify-baseline --phase-target + PHASE COMPLETE
+
+- **完成时间**：2026-04-18
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件列表**：
+  - `scripts/test-guarded.ts` — 新增 `--mode unit|e2e|all`；E2E 模式调用 playwright JSON reporter，比对 e2e 隔离清单；默认 unit 行为完全向后兼容
+  - `scripts/verify-baseline.ts` — 新增 `--phase-target` 枚举校验（M0–M6、TESTFIX-XX、"PHASE COMPLETE"；非法值 exit 1）
+  - `package.json` — 追加 `test:guarded:e2e`、`test:guarded:all` 两条 scripts
+  - `docs/task-queue.md` — 追加 PHASE COMPLETE — Phase 0.5 通知块；TESTFIX-09 + SEQ 状态更新为完成
+  - `docs/changelog.md` — 追加本条目
+  - `docs/tasks.md` — TESTFIX-09 卡片删除（已完成）
+- **三模式说明**：
+  - `test:guarded` (unit)：原行为，1007 unit passed，GATE PASSED
+  - `test:guarded:e2e`：调用 playwright JSON reporter，比对 e2e quarantine（54 条），新失败 exit 1
+  - `test:guarded:all`：unit + e2e 顺序执行，任一失败即 GATE BLOCKED
+- **phase-target 校验实测**：
+  - `--phase-target M2` → OK
+  - `--phase-target TESTFIX-08` → OK
+  - `--phase-target INVALID` → exit 1
+- **质量门禁**：`npm run typecheck` + `npm run test -- --run` 全绿
