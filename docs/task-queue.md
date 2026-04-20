@@ -7697,9 +7697,13 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ### 任务列表（按执行顺序）
 
-1. REG-M2-01 — Root layout 四件套常驻化（状态：⬜ 未开始）
+1. REG-M2-01 — Root layout 四件套常驻化（状态：✅ 已完成）
    - 创建时间：2026-04-20 00:00
+   - 实际开始：2026-04-19 14:35
+   - 完成时间：2026-04-19 15:00
    - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制，决策 R-C）
+   - 执行模型：claude-sonnet-4-6（主循环）+ arch-reviewer (claude-opus-4-6 子代理，ADR-040)
+   - 完成备注：四件套迁入 layout.tsx；各 page 移除 Nav/Footer；globals.css 新增 3 条布局规则；ADR-040 已落 decisions.md；typecheck ✅ lint ✅ unit 1136/1136 ✅
    - 规模：M（~120 min）
    - 依赖：REG-M1-03 ✅
    - 决策产出：ADR-040（Root layout 常驻契约 + rerender 隔离）

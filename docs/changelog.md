@@ -7313,3 +7313,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 追加 ADR-043 到 `docs/decisions.md`
 - **测试覆盖**：typecheck ✅ lint ✅ unit tests 1136/1136 ✅（新增 6 cases）
 - **架构沉淀**：ADR-043（Token 后台 MVP 增量：PUT API 整体替换/生产只读/继承指示/原子落盘/Diff 面板）；DesignTokensService 依赖注入模式（readEnv/runBuildFn）使所有分支在单元级别可测
+
+## REG-M2-01 — Root layout 四件套常驻化
+
+- **日期**：2026-04-19
+- **执行模型**：claude-sonnet-4-6（主循环）+ arch-reviewer (claude-opus-4-6 子代理)
+- **子代理**：arch-reviewer (claude-opus-4-6) — ADR-040（layout 契约设计 + rerender 隔离策略）
+- **任务 ID**：REG-M2-01 / SEQ-20260420-REGRESSION-M2
+- **变更内容**：
+  - 修改 `apps/web-next/src/app/[locale]/layout.tsx`（Nav + main-slot + GlobalPlayerHostPlaceholder + Footer 四件套注入 BrandProvider 内）
+  - 修改 `apps/web-next/src/app/[locale]/page.tsx`（移除 Nav/Footer/外层 div）
+  - 修改 `apps/web-next/src/app/[locale]/_lib/detail-page-factory.tsx`（移除 Nav/Footer/外层 div）
+  - 修改 `apps/web-next/src/app/[locale]/watch/[slug]/page.tsx`（移除 Nav/Footer）
+  - 修改 `apps/web-next/src/app/[locale]/next-placeholder/page.tsx`（main → section，避免嵌套 main）
+  - 修改 `apps/web-next/src/app/globals.css`（新增 .app-shell / .main-slot / #global-player-host-portal 三条规则）
+  - 追加 ADR-040 到 docs/decisions.md
+- **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
+- **架构沉淀**：ADR-040（Root layout 四件套；App Router 天然保证 layout 不 remount；GlobalPlayerHostPlaceholder 占位预留）

@@ -133,3 +133,26 @@
     transition: background-color 200ms ease, color 200ms ease;
   }
 }
+
+/* REG-M2-01 — Root layout 四件套常驻化（ADR-040） */
+.app-shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-canvas);
+}
+
+.main-slot {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+#global-player-host-portal {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: var(--z-player-host, 40);
+}

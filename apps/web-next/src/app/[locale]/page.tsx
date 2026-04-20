@@ -1,7 +1,5 @@
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
-import { Nav } from '@/components/layout/Nav'
-import { Footer } from '@/components/layout/Footer'
 import { HeroBanner } from '@/components/video/HeroBanner'
 import { VideoGrid } from '@/components/video/VideoGrid'
 
@@ -9,12 +7,10 @@ export default function HomePage() {
   const t = useTranslations('home')
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-canvas)' }}>
-      <Nav />
-
+    <>
       <HeroBanner />
 
-      <main className="flex-1 max-w-screen-xl mx-auto w-full px-4 py-8 space-y-12">
+      <div className="max-w-screen-xl mx-auto w-full px-4 py-8 space-y-12">
         <section aria-label={t('trendingMovies')}>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold" style={{ color: 'var(--fg-default)' }}>
@@ -56,9 +52,7 @@ export default function HomePage() {
             data-testid="series-grid"
           />
         </section>
-      </main>
-
-      <Footer />
-    </div>
+      </div>
+    </>
   )
 }

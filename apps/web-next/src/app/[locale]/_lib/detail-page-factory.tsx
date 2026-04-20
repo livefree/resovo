@@ -1,6 +1,4 @@
 import type { Metadata } from 'next'
-import { Nav } from '@/components/layout/Nav'
-import { Footer } from '@/components/layout/Footer'
 import { VideoDetailClient } from '@/components/video/VideoDetailClient'
 import { fetchVideoMeta } from '@/lib/video-detail'
 
@@ -27,14 +25,6 @@ export async function detailGenerateMetadata({ params }: PageProps): Promise<Met
 export function createDetailPage(showEpisodes: boolean) {
   return async function DetailPage({ params }: PageProps) {
     const { slug } = await params
-    return (
-      <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-canvas)' }}>
-        <Nav />
-        <main className="flex-1">
-          <VideoDetailClient slug={slug} showEpisodes={showEpisodes} />
-        </main>
-        <Footer />
-      </div>
-    )
+    return <VideoDetailClient slug={slug} showEpisodes={showEpisodes} />
   }
 }

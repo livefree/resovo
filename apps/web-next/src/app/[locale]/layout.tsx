@@ -6,6 +6,8 @@ import { routing } from '@/i18n/routing'
 import { THEME_INIT_SCRIPT } from '@/lib/theme-init-script'
 import { parseBrandSlug, parseTheme, DEFAULT_BRAND_SLUG } from '@/lib/brand-detection'
 import { BrandProvider } from '@/contexts/BrandProvider'
+import { Nav } from '@/components/layout/Nav'
+import { Footer } from '@/components/layout/Footer'
 import type { Brand } from '@/types/brand'
 
 export function generateStaticParams() {
@@ -50,7 +52,14 @@ export default async function LocaleLayout({
       <body>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <BrandProvider initialBrand={initialBrand} initialTheme={initialTheme}>
-            {children}
+            <div className="app-shell">
+              <Nav />
+              <main id="main-content" className="main-slot">
+                {children}
+              </main>
+              <div id="global-player-host-portal" data-testid="global-player-host" />
+              <Footer />
+            </div>
           </BrandProvider>
         </NextIntlClientProvider>
       </body>
