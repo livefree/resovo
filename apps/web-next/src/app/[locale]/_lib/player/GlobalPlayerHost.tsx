@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { usePlayerStore } from '@/stores/playerStore'
 import { GlobalPlayerFullFrame } from './GlobalPlayerFullFrame'
+import { MiniPlayer } from './MiniPlayer'
 
 const PORTAL_ID = 'global-player-host-portal'
 
@@ -33,8 +34,7 @@ export default function GlobalPlayerHost() {
   return createPortal(
     <div data-testid="global-player-host-root" data-host-mode={hostMode}>
       {hostMode === 'full' && <GlobalPlayerFullFrame />}
-      {/* TODO: REG-M3-02 填充 mini 态 UI */}
-      {hostMode === 'mini' && <PlaceholderSlot mode="mini" />}
+      {hostMode === 'mini' && <MiniPlayer />}
       {/* TODO: REG-M3-03 填充 pip 态 */}
       {hostMode === 'pip'  && <PlaceholderSlot mode="pip" />}
     </div>,

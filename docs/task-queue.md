@@ -7772,7 +7772,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 验收要点：mode 状态机合法（closed/full/mini/pip）+ 持久化 sessionStorage + dynamic ssr:false 挂 root layout
    - 备注：本卡只就绪 full 态，mini/pip 留给 REG-M3-02/03
 
-2. REG-M3-02 — mini 态 UI + FLIP full↔mini 过渡（状态：⬜ 未开始）
+2. REG-M3-02 — mini 态 UI + FLIP full↔mini 过渡（状态：✅ 已完成）
    - 创建时间：2026-04-20 00:00
    - 建议模型：claude-sonnet-4-6
    - 规模：M（~120 min）

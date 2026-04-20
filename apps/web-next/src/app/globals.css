@@ -134,6 +134,15 @@
   }
 }
 
+/* REG-M3-02 — mini 播放器 token */
+:root {
+  --mini-player-w: 320px;
+  --mini-player-h: 180px;
+  --mini-player-radius: 12px;
+  --mini-player-gap: 16px;
+  --mini-player-z: 50;
+}
+
 /* REG-M2-03 — 动画 token（ADR-044） */
 :root {
   --transition-page: 240ms;

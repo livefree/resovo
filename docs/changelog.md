@@ -7439,3 +7439,18 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **数据库变更**：无
 - **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
 - **注意事项**：PlayerShell.tsx 本卡零改动。/watch 仍走现有 PlayerShell。GlobalPlayerFullFrame 是占位框架，REG-M3-04 迁入播放逻辑后替换。
+
+## REG-M3-02 — mini 态 UI + FLIP full↔mini 过渡
+
+- **日期**：2026-04-19
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：无
+- **任务 ID**：REG-M3-02 / SEQ-20260420-REGRESSION-M3
+- **变更内容**：
+  - 新增 `apps/web-next/src/app/[locale]/_lib/player/MiniPlayer.tsx`（固定右下，CSS transition FLIP，颜色零硬编码）
+  - 修改 `apps/web-next/src/app/[locale]/_lib/player/GlobalPlayerHost.tsx`（mini 占位 → MiniPlayer）
+  - 修改 `apps/web-next/src/app/globals.css`（新增 --mini-player-w/h/radius/gap/z token）
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
+- **注意事项**：MiniPlayer 内容区是占位（REG-M3-04 接入播放逻辑后替换）。FLIP 动画通过 CSS transition + requestAnimationFrame 实现，使用 --transition-shared / --ease-page 变量。
