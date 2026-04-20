@@ -7386,3 +7386,21 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **数据库变更**：无
 - **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
 - **注意事项**：BlurHashCanvas 解码使用缩放尺寸（max 32px），避免 decode 开销过大。priority=true 跳过 IO 直接加载，适用首屏封面图。
+
+## REG-M2-05 — SafeImage + FallbackCover + image-loader 契约
+
+- **日期**：2026-04-19
+- **执行模型**：claude-sonnet-4-6（主循环）+ arch-reviewer (claude-opus-4-6 子代理)
+- **子代理**：arch-reviewer (claude-opus-4-6) — ADR-045（图片 primitive 契约）
+- **任务 ID**：REG-M2-05 / SEQ-20260420-REGRESSION-M2
+- **变更内容**：
+  - 新增 `apps/web-next/src/lib/image/image-loader.ts`（passthrough + Cloudflare Images TODO）
+  - 新增 `apps/web-next/src/components/media/FallbackCover.tsx`（纯 CSS + 内联 SVG，只用 CSS 变量）
+  - 新增 `apps/web-next/src/components/media/SafeImage.tsx`（四级降级链）
+  - 新增 `apps/web-next/src/components/media/types.ts`
+  - 新增 `apps/web-next/src/components/media/index.ts`
+  - 追加 ADR-045 到 `docs/decisions.md`
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
+- **注意事项**：本卡只建 primitive，不做全站 img 替换。image-loader 为 passthrough，后续 Cloudflare Images 接入只需改 buildImageUrl 函数体。FallbackCover 颜色零硬编码。

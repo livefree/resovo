@@ -7733,7 +7733,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 验收要点：视口外不发起请求，BlurHash canvas 占位，priority=true 立即加载
    - 备注：blurhash@2.x 依赖为方案 §17 决策项（不触发 BLOCKER，需 changelog 标注）
 
-5. REG-M2-05 — SafeImage + FallbackCover + image-loader 契约（状态：⬜ 未开始）
+5. REG-M2-05 — SafeImage + FallbackCover + image-loader 契约（状态：✅ 已完成）
    - 创建时间：2026-04-20 00:00
    - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制）
    - 规模：L（~240 min）

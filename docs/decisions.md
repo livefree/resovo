@@ -1106,3 +1106,23 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
 
 - REG-M2-03 不实现边缘滑动手势；RouteStack stub 注释"TODO: M5 Tab Bar 上线时实装手势"。
 - SharedElement FLIP bridge 注释"TODO: REG-M3-01 填充 FLIP 实现"。
+
+## ADR-045: 图像基础 Primitive 契约（SafeImage / FallbackCover / image-loader）
+
+- **状态**: Accepted
+- **日期**: 2026-04-19
+- **关联任务**: REG-M2-05（承接 REG-M2-04 LazyImage）
+- **上游决策**: REG-M2-04（LazyImage + BlurHash）
+- **下游影响**: REG-M2-06（全站 img 替换推进）
+
+### 决策
+
+1. **SafeImage**：封装 LazyImage，四级降级链：LazyImage 加载中 → LazyImage blurHash 占位 → FallbackCover（品牌色）→ fallback prop（自定义）。Props 透传 LazyImageProps，blurHash 由必填降为可选，新增 fallback / onLoadError / imageLoader。
+2. **FallbackCover**：纯 CSS + 内联 SVG 组件，无网络请求。颜色**全部**来自 token：背景 --bg-surface，图标 --fg-muted，边框 --border-default，不硬编码任何颜色值。
+3. **image-loader**：导出纯函数 buildImageUrl(src, opts)，当前 passthrough 实现，源文件内 TODO 注释预留 Cloudflare Images URL 模板。类型 ImageLoader 允许消费方注入自定义 loader。
+
+### 后果
+
+- CDN 切换为单点修改，调用方零感知。
+- FallbackCover 解决全站"破图"体验，品牌色一致。
+- 本卡只建 primitive 不做全站替换（由后续卡片承接）。
