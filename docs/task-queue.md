@@ -7670,13 +7670,17 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - typecheck ✅ / lint ✅
    - **完成备注**：新增 validate-tokens.ts（4 层校验：primitive/semantic/component/brand 键约束）；扩展 build-css.ts（输出 semantic 76 个 CSS 变量，`:root` 含 light 值，`[data-theme="dark"]` 含 dark 值，brand 覆写槽位已预留）；default.ts 添加文件命名约定注释；package.json 新增 tokens:validate 脚本；typecheck ✅ lint ✅ unit 1130/1130 ✅
 
-5. REG-M1-04 — Token 后台 MVP 增量补齐 3 项（Diff / 继承指示 / 保存链路）（状态：⬜ 未开始）
+5. REG-M1-04 — Token 后台 MVP 增量补齐 3 项（Diff / 继承指示 / 保存链路）（状态：✅ 已完成）
    - 创建时间：2026-04-20 00:00
+   - 实际开始：2026-04-19 12:50
+   - 完成时间：2026-04-19 14:30
    - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制，决策 R-F）
+   - 执行模型：claude-sonnet-4-6（主循环）+ arch-reviewer (claude-opus-4-6 子代理，ADR-043 决策)
    - 规模：L（~240 min）
    - 依赖：REG-M1-04-PREP ✅（补全 validate-tokens.ts 和 build-css.ts 扩展后方可开始）
-   - 决策产出：ADR-043（Token 后台 MVP 增量范围 + V2 推迟项）
-   - 验收要点：开发环境编辑 Token 后保存→源文件落盘→刷新值保持；生产环境 API 返回 403；继承指示标签 + Diff 面板正常工作；Primitive 层禁改
+   - 决策产出：ADR-043（Token 后台 MVP 增量范围 + V2 推迟项）已追加到 docs/decisions.md
+   - 验收要点：生产环境 API 返回 403 ✅（assertWriteAllowed + DesignTokensWriteDisabledError）；继承指示 InheritanceBadge ✅；Diff 面板 ✅；保存链路 PUT API + service ✅；Primitive 层禁改（DesignTokensValidationError）✅
+   - 完成备注：arch-reviewer Opus 子代理产出 ADR-043（5 个决策点：PUT API 契约/生产只读/继承指示算法/落盘策略/Diff 面板）；实现 DesignTokensService（依赖注入设计，assertWriteAllowed/validateOverrides/CAS 乐观锁/temp+rename 原子写/prettier 格式化/history 管理）；PUT+增强GET路由；DiffPanel/TokenEditor/InheritanceBadge/_diff/_paths 组件；service 单元测试 6 cases；typecheck ✅ lint ✅ unit 1136/1136 ✅
    - 详见补丁 §5.4
 
 ---

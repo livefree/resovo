@@ -7288,3 +7288,28 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 更新 `packages/design-tokens/package.json`（新增 `tokens:validate` 脚本）
 - **测试覆盖**：`npm run tokens:validate` ✅ `npm run build` ✅ typecheck ✅ lint ✅ unit 1130/1130 ✅
 - **架构沉淀**：semantic 层 CSS 变量正式纳入构建产物；brand 文件命名约定写入注释；`[data-theme="dark"]` 选择器（ADR-038）在 build-css.ts 中落地
+
+## REG-M1-04 — Token 后台 MVP 增量补齐 3 项（Diff / 继承指示 / 保存链路）
+
+- **日期**：2026-04-19
+- **执行模型**：claude-sonnet-4-6（主循环）+ arch-reviewer (claude-opus-4-6 子代理)
+- **子代理**：arch-reviewer (claude-opus-4-6) — ADR-043 草稿（PUT API 契约 + 生产只读边界 + 继承指示算法 + 落盘策略 + Diff 面板设计）
+- **任务 ID**：REG-M1-04 / SEQ-20260420-REGRESSION-M1
+- **变更内容**：
+  - 新增 `packages/design-tokens/src/brands/_validate.ts`（validateBrandOverridesShape 纯函数）
+  - 新增 `packages/design-tokens/src/brands/_patch.ts`（setPath/unsetPath/pruneEmpty）
+  - 新增 `packages/design-tokens/src/brands/_resolve.ts`（resolveBrandTokens + flattenBase + overrideMap）
+  - 修改 `apps/api/src/db/queries/brands.ts`（新增 updateBrandOverridesIfUnchanged 乐观锁）
+  - 新增 `apps/api/src/services/DesignTokensService.ts`（依赖注入 + 写回编排）
+  - 修改 `apps/api/src/routes/admin/design-tokens.ts`（GET :brandSlug + PUT :brandSlug）
+  - 新增 `apps/server/src/components/admin/design-tokens/DiffPanel.tsx`
+  - 新增 `apps/server/src/components/admin/design-tokens/TokenEditor.tsx`
+  - 新增 `apps/server/src/components/admin/design-tokens/InheritanceBadge.tsx`
+  - 新增 `apps/server/src/components/admin/design-tokens/_diff.ts`（diffOverrides + buildCommitMessage）
+  - 新增 `apps/server/src/components/admin/design-tokens/_paths.ts`（flattenOverrides + unflattenOverrides）
+  - 修改 `apps/server/src/components/admin/design-tokens/DesignTokensView.tsx`（三栏布局：列表/编辑器/Diff+预览）
+  - 修改 `apps/server/src/components/admin/design-tokens/LivePreviewFrame.tsx`（接受 iframeRef prop）
+  - 新增 `tests/unit/api/admin-design-tokens-write.test.ts`（service 单元测试 6 cases）
+  - 追加 ADR-043 到 `docs/decisions.md`
+- **测试覆盖**：typecheck ✅ lint ✅ unit tests 1136/1136 ✅（新增 6 cases）
+- **架构沉淀**：ADR-043（Token 后台 MVP 增量：PUT API 整体替换/生产只读/继承指示/原子落盘/Diff 面板）；DesignTokensService 依赖注入模式（readEnv/runBuildFn）使所有分支在单元级别可测

@@ -1046,3 +1046,27 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
   - 不改：`apps/web-next/src/app/[locale]/layout.tsx`（维持 `cookies()` 读取）
   - 新增：`tests/unit/lib/brand-detection.test.ts`（parseBrandSlug/parseTheme 纯函数单元测试 25 cases）
   - 新增：`tests/e2e-next/brand-detection.spec.ts`（middleware header 注入 E2E 验证 4 cases）
+
+---
+
+## ADR-043 — Token 后台 MVP 增量补齐（Diff / 继承指示 / 保存链路）
+
+- **日期**：2026-04-19
+- **决策者**：arch-reviewer (claude-opus-4-6)，主循环 claude-sonnet-4-6 落地
+- **背景**：TOKEN-14 只有只读预览，方案 §5.0 MVP 11 项仅覆盖 4 项。本次补齐 3 项：Diff 辅助、继承指示、保存链路（dev only 写回）。
+- **决策**：
+  - **D1 PUT API**：`PUT /v1/admin/design-tokens/:brandSlug`，整体替换 overrides（非 partial patch），乐观锁通过 `expectedUpdatedAt` CAS
+  - **D2 生产只读**：`assertWriteAllowed()` 在 service 层做唯一判定（NODE_ENV=production || DESIGN_TOKENS_WRITE_DISABLED）；路由层只做错误映射（403）；依赖注入 `readEnv` 使单元可测
+  - **D3 继承指示**：service 返回 `overrideMap: Record<flatPath, 'base'|'brand-override'>`；前端 working-copy 管理 dirty paths；UI 显示 InheritanceBadge
+  - **D4 写回落盘**：slug='resovo' → default.ts，其他 → <slug>.ts；固定字符串模板 + prettier 格式化；temp+rename 原子写；build 同步子进程；失败时 fs 回滚
+  - **D5 Diff 面板**：前端计算 diff（baseline vs working），生成建议 commit message 格式 `tokens(<slug>): <verb> <N> field(s) [<scope>...]`
+- **不做（V2）**：新建 brand UI、版本回滚 UI、多人协作、单字段 PATCH、审计日志落 DB、primitive/base semantic 编辑、ts-morph AST 写回
+- **影响文件**：
+  - 新增：`apps/api/src/services/DesignTokensService.ts`（写回编排）
+  - 修改：`apps/api/src/routes/admin/design-tokens.ts`（GET :slug + PUT）
+  - 新增：`apps/server/src/components/admin/design-tokens/{DiffPanel,TokenEditor,InheritanceBadge}.tsx`
+  - 新增：`apps/server/src/components/admin/design-tokens/{_diff,_paths}.ts`
+  - 修改：`apps/server/src/components/admin/design-tokens/DesignTokensView.tsx`（三栏布局）
+  - 新增：`packages/design-tokens/src/brands/{_validate,_patch,_resolve}.ts`
+  - 修改：`apps/api/src/db/queries/brands.ts`（`updateBrandOverridesIfUnchanged` 乐观锁）
+  - 新增：`tests/unit/api/admin-design-tokens-write.test.ts`（service 单元测试 6 cases）
