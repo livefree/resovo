@@ -7330,3 +7330,21 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 追加 ADR-040 到 docs/decisions.md
 - **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
 - **架构沉淀**：ADR-040（Root layout 四件套；App Router 天然保证 layout 不 remount；GlobalPlayerHostPlaceholder 占位预留）
+
+## REG-M2-02 — useBrand 驱动触点（Nav/Footer Logo 与版权文案清理）
+
+- **日期**：2026-04-19
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：无
+- **任务 ID**：REG-M2-02 / SEQ-20260420-REGRESSION-M2
+- **变更内容**：
+  - 修改 `apps/web-next/src/lib/brand-detection.ts`（新增导出 `DEFAULT_BRAND_NAME = 'Resovo' as const`）
+  - 修改 `apps/web-next/src/components/layout/Nav.tsx`（导入 useBrand，Logo 文字改为 `{brand.name}`）
+  - 修改 `apps/web-next/src/components/layout/Footer.tsx`（添加 `'use client'`，导入 useBrand，版权文本改为 `{brand.name}`）
+  - 修改 `apps/web-next/src/app/[locale]/_lib/detail-page-factory.tsx`（metadata title 使用 `DEFAULT_BRAND_NAME` 常量，移除硬编码字面量）
+  - 修改 `apps/web-next/src/app/layout.tsx`（root metadata 使用 `DEFAULT_BRAND_NAME`）
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
+- **验收**：`grep -rn "Resovo\|流光" apps/web-next/src --include="*.tsx" --include="*.ts"` 除 brand-detection.ts 常量定义外零业务命中
+- **注意事项**：Server Component 的 metadata 不可使用 useBrand()（Client-only），统一通过 `DEFAULT_BRAND_NAME` 常量引用。

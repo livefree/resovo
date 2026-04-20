@@ -16,6 +16,7 @@ export const HEADER_BRAND = 'x-resovo-brand'
 export const HEADER_THEME = 'x-resovo-theme'
 
 export const DEFAULT_BRAND_SLUG = 'resovo'
+export const DEFAULT_BRAND_NAME = 'Resovo' as const
 export const DEFAULT_THEME: Theme = 'system'
 
 export function parseBrandSlug(raw: string | undefined): string {

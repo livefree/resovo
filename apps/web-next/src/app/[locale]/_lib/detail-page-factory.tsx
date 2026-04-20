@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { VideoDetailClient } from '@/components/video/VideoDetailClient'
 import { fetchVideoMeta } from '@/lib/video-detail'
+import { DEFAULT_BRAND_NAME } from '@/lib/brand-detection'
 
 interface PageProps {
   params: Promise<{ locale: string; slug: string }>
@@ -9,13 +10,13 @@ interface PageProps {
 export async function detailGenerateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params
   const video = await fetchVideoMeta(slug)
-  if (!video) return { title: '流光视频' }
+  if (!video) return { title: `${DEFAULT_BRAND_NAME}视频` }
   const description = video.description?.slice(0, 150) ?? undefined
   return {
-    title: `${video.title} - 流光`,
+    title: `${video.title} - ${DEFAULT_BRAND_NAME}`,
     description,
     openGraph: {
-      title: `${video.title} - 流光`,
+      title: `${video.title} - ${DEFAULT_BRAND_NAME}`,
       description,
       images: video.coverUrl ? [{ url: video.coverUrl }] : [],
     },

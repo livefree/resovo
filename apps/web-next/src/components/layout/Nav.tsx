@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
+import { useBrand } from '@/hooks/useBrand'
 import { cn } from '@/lib/utils'
 
 const MAIN_CATEGORIES = [
@@ -31,6 +32,7 @@ const LOCALES = [
 ]
 
 export function Nav() {
+  const { brand } = useBrand()
   const t = useTranslations()
   const pathname = usePathname()
   const router = useRouter()
@@ -117,7 +119,7 @@ export function Nav() {
           style={{ color: 'var(--accent-default)' }}
           data-testid="nav-logo"
         >
-          Resovo
+          {brand.name}
         </Link>
 
         {/* 分类标签 */}

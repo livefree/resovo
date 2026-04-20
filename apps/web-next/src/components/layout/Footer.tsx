@@ -1,7 +1,11 @@
+'use client'
+
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
+import { useBrand } from '@/hooks/useBrand'
 
 export function Footer() {
+  const { brand } = useBrand()
   const t = useTranslations('home')
 
   return (
@@ -16,7 +20,7 @@ export function Footer() {
       >
         <div className="flex flex-col items-center md:items-start gap-1 text-center md:text-left">
           <span className="font-bold text-sm tracking-tight" style={{ color: 'var(--accent-default)' }}>
-            Resovo
+            {brand.name}
           </span>
           <p className="max-w-xl" data-testid="footer-disclaimer">{t('disclaimer')}</p>
         </div>
