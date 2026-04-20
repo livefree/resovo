@@ -85,15 +85,17 @@ function toLinear(v: number): number {
   return n <= 0.04045 ? n / 12.92 : ((n + 0.055) / 1.055) ** 2.4
 }
 
-/** RGB → OKLCH L（0–100）近似 */
-function oklchL(r: number, g: number, b: number): number {
+/** RGB → OKLCH L（0–100）近似，供测试用 */
+export function oklchLuminance(r: number, g: number, b: number): number {
   const lr = toLinear(r)
   const lg = toLinear(g)
   const lb = toLinear(b)
-  // Y（亮度）via sRGB→XYZ 标准权重
   const y = 0.2126 * lr + 0.7152 * lg + 0.0722 * lb
-  // OKLAB l ≈ cbrt(y)，OKLCH L = l * 100
   return Math.cbrt(y) * 100
+}
+
+function oklchL(r: number, g: number, b: number): number {
+  return oklchLuminance(r, g, b)
 }
 
 function rgbToHex(p: RgbPixel): string {
