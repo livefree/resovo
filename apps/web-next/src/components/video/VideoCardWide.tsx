@@ -1,9 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import { cn } from '@/lib/utils'
 import { getVideoDetailHref } from '@/lib/video-route'
+import { SafeImage } from '@/components/media'
+import { reportBrokenImage } from '@/lib/report-broken-image'
 import type { VideoCard as VideoCardType } from '@resovo/types'
 
 interface VideoCardWideProps {
@@ -22,25 +23,22 @@ export function VideoCardWide({ video, className }: VideoCardWideProps) {
 
   return (
     <div className={cn('group relative block', className)} data-testid="video-card-wide">
-      <div className="relative overflow-hidden rounded-lg" style={{ aspectRatio: '16/9' }}>
-        <Link href={detailHref} className="absolute inset-0 z-0" aria-label={video.title} />
+      <div className="relative rounded-lg overflow-hidden">
+        <SafeImage
+          src={video.coverUrl}
+          alt={video.title}
+          width={320}
+          height={180}
+          aspect="16:9"
+          className="pointer-events-none"
+          imgClassName="transition-transform duration-300 group-hover:scale-105"
+          fallback={{ title: video.title, type: video.type, seed: video.id }}
+          onLoadFail={({ src }) =>
+            reportBrokenImage({ videoId: video.id, imageKind: 'poster', url: src })
+          }
+        />
 
-        {video.coverUrl ? (
-          <Image
-            src={video.coverUrl}
-            alt={video.title}
-            fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-            className="object-cover transition-transform duration-300 group-hover:scale-105 pointer-events-none"
-          />
-        ) : (
-          <div
-            className="absolute inset-0 flex items-center justify-center pointer-events-none"
-            style={{ background: 'var(--bg-surface-sunken)' }}
-          >
-            <span className="text-4xl opacity-30">🎬</span>
-          </div>
-        )}
+        <Link href={detailHref} className="absolute inset-0" aria-label={video.title} />
 
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300 pointer-events-none" />
 

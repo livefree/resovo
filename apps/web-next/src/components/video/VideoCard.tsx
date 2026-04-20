@@ -1,9 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import { cn } from '@/lib/utils'
 import { getVideoDetailHref } from '@/lib/video-route'
+import { SafeImage } from '@/components/media'
+import { reportBrokenImage } from '@/lib/report-broken-image'
 import type { VideoCard as VideoCardType } from '@resovo/types'
 
 interface VideoCardProps {
@@ -31,25 +32,24 @@ export function VideoCard({ video, className }: VideoCardProps) {
 
   return (
     <div className={cn('group relative block', className)} data-testid="video-card">
-      <div className="relative overflow-hidden rounded-lg" style={{ aspectRatio: '2/3' }}>
-        <Link href={detailHref} className="absolute inset-0 z-0" aria-label={video.title} />
+      <div className="relative rounded-lg overflow-hidden">
+        {/* SafeImage 设定宽高比并渲染图片；pointer-events-none 使点击穿透到 Link */}
+        <SafeImage
+          src={video.coverUrl}
+          alt={video.title}
+          width={200}
+          height={300}
+          aspect="2:3"
+          blurHash={video.posterBlurhash ?? undefined}
+          className="pointer-events-none"
+          imgClassName="transition-transform duration-300 group-hover:scale-105"
+          fallback={{ title: video.title, type: video.type, seed: video.id }}
+          onLoadFail={({ src }) =>
+            reportBrokenImage({ videoId: video.id, imageKind: 'poster', url: src })
+          }
+        />
 
-        {video.coverUrl ? (
-          <Image
-            src={video.coverUrl}
-            alt={video.title}
-            fill
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-            className="object-cover transition-transform duration-300 group-hover:scale-105 pointer-events-none"
-          />
-        ) : (
-          <div
-            className="absolute inset-0 flex items-center justify-center pointer-events-none"
-            style={{ background: 'var(--bg-surface-sunken)' }}
-          >
-            <span className="text-4xl opacity-30">🎬</span>
-          </div>
-        )}
+        <Link href={detailHref} className="absolute inset-0" aria-label={video.title} />
 
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300 pointer-events-none" />
 

@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
 import { getVideoDetailHref } from '@/lib/video-route'
+import { SafeImage } from '@/components/media'
 import type { VideoCard, ApiListResponse } from '@resovo/types'
 
 export function HeroBanner() {
@@ -45,14 +45,16 @@ export function HeroBanner() {
       data-testid="hero-banner"
     >
       {featured.coverUrl && (
-        <div className="absolute inset-0">
-          <Image
+        <div className="absolute inset-0" aria-hidden>
+          <SafeImage
             src={featured.coverUrl}
-            alt={featured.title}
-            fill
+            alt=""
+            width={1920}
+            height={1080}
             priority
-            sizes="100vw"
-            className="object-cover"
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', aspectRatio: 'unset' }}
+            imgClassName="object-cover"
+            fallback={{ seed: featured.id }}
           />
         </div>
       )}

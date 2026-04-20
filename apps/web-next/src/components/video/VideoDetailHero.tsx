@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { MetaChip } from '@/components/search/MetaChip'
+import { SafeImage } from '@/components/media'
+import { reportBrokenImage } from '@/lib/report-broken-image'
 import type { Video } from '@resovo/types'
 
 const TYPE_LABELS: Record<string, string> = {
@@ -119,14 +120,18 @@ export function VideoDetailHero({ video }: VideoDetailHeroProps) {
       style={{ background: 'var(--bg-canvas)' }}
       data-testid="video-detail-hero"
     >
+      {/* 装饰性模糊背景 — aria-hidden，加载失败静默降级 */}
       {video.coverUrl && (
         <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
-          <Image
+          <SafeImage
             src={video.coverUrl}
             alt=""
-            fill
-            sizes="100vw"
-            className="object-cover opacity-10 blur-xl scale-110"
+            width={1920}
+            height={1080}
+            priority
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', aspectRatio: 'unset' }}
+            imgClassName="object-cover opacity-10 blur-xl scale-110"
+            fallback={{ seed: video.id }}
           />
         </div>
       )}
@@ -136,28 +141,22 @@ export function VideoDetailHero({ video }: VideoDetailHeroProps) {
         <div className="shrink-0 flex flex-col gap-4 w-[180px] md:w-[240px] mx-auto md:mx-0">
           <div
             className="relative w-full rounded-2xl overflow-hidden shadow-2xl border"
-            style={{
-              aspectRatio: '2/3',
-              borderColor: 'color-mix(in srgb, var(--fg-default) 10%, transparent)',
-            }}
+            style={{ borderColor: 'color-mix(in srgb, var(--fg-default) 10%, transparent)' }}
           >
-            {video.coverUrl ? (
-              <Image
-                src={video.coverUrl}
-                alt={video.title}
-                fill
-                sizes="(max-width: 768px) 180px, 240px"
-                className="object-cover"
-                data-testid="detail-cover"
-              />
-            ) : (
-              <div
-                className="absolute inset-0 flex items-center justify-center"
-                style={{ background: 'var(--bg-surface-sunken)' }}
-              >
-                <span className="text-5xl opacity-30">🎬</span>
-              </div>
-            )}
+            <SafeImage
+              src={video.coverUrl}
+              alt={video.title}
+              width={240}
+              height={360}
+              aspect="2:3"
+              blurHash={video.posterBlurhash ?? undefined}
+              data-testid="detail-cover"
+              imgClassName="object-cover"
+              fallback={{ title: video.title, type: video.type, seed: video.id }}
+              onLoadFail={({ src }) =>
+                reportBrokenImage({ videoId: video.id, imageKind: 'poster', url: src })
+              }
+            />
           </div>
 
           <Link

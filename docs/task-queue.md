@@ -8040,11 +8040,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - arch-reviewer Opus 子代理 AUDIT RESULT: PASS
      - `npm run typecheck` ✅ / `npm run lint` ✅ / `npm run test -- --run` ✅
 
-3. IMG-04 — 全站业务组件迁移到 `<SafeImage>`（状态：⬜ 待开始）
+3. IMG-04 — 全站业务组件迁移到 `<SafeImage>`（状态：✅ 已完成）
    - 创建时间：2026-04-20 10:00
    - 计划开始：待 IMG-03.5 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-04-20 16:10
+   - 完成时间：2026-04-20 16:20
    - 建议模型：claude-sonnet-4-6
    - 规模：L（~240 min）
    - 依赖：IMG-03 ✅ + IMG-03.5 ✅（beacon 端点 + SafeImage 契约补齐均就绪；依据 IMG-00 C5/C6）

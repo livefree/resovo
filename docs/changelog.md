@@ -7655,3 +7655,26 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 
 - arch-reviewer Opus 子代理 AUDIT RESULT: PASS ✅
 - typecheck ✅ / lint ✅ / 1192/1192 unit tests（115 files）✅
+
+---
+
+## IMG-04 — 全站业务组件迁移到 `<SafeImage>`
+
+- **完成时间**：2026-04-20 16:20
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **关联序列**：SEQ-20260420-IMG-M2
+- **变更摘要**：将 `apps/web-next/src/components/video/` 中 4 个业务组件（VideoCard、VideoCardWide、VideoDetailHero、HeroBanner）从裸 `next/image` 迁移到 `<SafeImage>`；新建 `report-broken-image.ts`（Session 级去重 beacon 上报）。所有组件传入 `fallback={{ title, type, seed }}` 结构化降级数据与 `onLoadFail` → `reportBrokenImage` 回调。
+- **修改文件**：
+  - `apps/web-next/src/lib/report-broken-image.ts` — 新建；`navigator.sendBeacon` + module-level Set 去重
+  - `apps/web-next/src/components/video/VideoCard.tsx` — 移除 `next/image`，改用 `SafeImage`（aspect="2:3"）；Link/overlay 改为绝对定位同级元素
+  - `apps/web-next/src/components/video/VideoCardWide.tsx` — 移除 `next/image`，改用 `SafeImage`（aspect="16:9"）；同上布局模式
+  - `apps/web-next/src/components/video/VideoDetailHero.tsx` — 装饰背景使用 `SafeImage`（aspectRatio: unset 填充容器，aria-hidden）；海报使用 `SafeImage`（aspect="2:3" + blurHash + onLoadFail）
+  - `apps/web-next/src/components/video/HeroBanner.tsx` — 移除 `next/image`，改用 `SafeImage`（absoluteInset 填充，aria-hidden 装饰背景）
+- **新增依赖**：无
+- **数据库变更**：无
+
+### 验收结果
+
+- `grep -r "from 'next/image'" apps/web-next/src/app apps/web-next/src/components --exclude-dir="primitives"` 零命中 ✅
+- typecheck ✅ / lint ✅ / 1192/1192 unit tests（115 files）✅
