@@ -107,26 +107,34 @@ test.describe('主题切换', () => {
     await page.goto('/en')
   })
 
-  test('主题切换按钮存在', async ({ page }) => {
+  test('主题切换容器存在并包含三个选项', async ({ page }) => {
     await expect(page.getByTestId('theme-toggle')).toBeVisible()
+    await expect(page.getByTestId('theme-toggle-light')).toBeVisible()
+    await expect(page.getByTestId('theme-toggle-system')).toBeVisible()
+    await expect(page.getByTestId('theme-toggle-dark')).toBeVisible()
   })
 
-  test('点击主题切换按钮改变主题', async ({ page }) => {
-    const toggle = page.getByTestId('theme-toggle')
-    const initialLabel = await toggle.getAttribute('aria-label')
-    await toggle.click()
-    const afterLabel = await toggle.getAttribute('aria-label')
-    expect(afterLabel).not.toBe(initialLabel)
+  test('点击深色按钮切换到深色主题', async ({ page }) => {
+    await page.getByTestId('theme-toggle-dark').click()
+    const checked = await page.getByTestId('theme-toggle-dark').getAttribute('aria-checked')
+    expect(checked).toBe('true')
+    const dataTheme = await page.locator('html').getAttribute('data-theme')
+    expect(dataTheme).toBe('dark')
   })
 
-  test('连续点击三次回到初始主题', async ({ page }) => {
-    const toggle = page.getByTestId('theme-toggle')
-    const initialLabel = await toggle.getAttribute('aria-label')
-    await toggle.click()
-    await toggle.click()
-    await toggle.click()
-    const finalLabel = await toggle.getAttribute('aria-label')
-    expect(finalLabel).toBe(initialLabel)
+  test('点击浅色按钮切换到浅色主题', async ({ page }) => {
+    await page.getByTestId('theme-toggle-light').click()
+    const checked = await page.getByTestId('theme-toggle-light').getAttribute('aria-checked')
+    expect(checked).toBe('true')
+    const dataTheme = await page.locator('html').getAttribute('data-theme')
+    expect(dataTheme).toBe('light')
+  })
+
+  test('点击系统按钮回到系统主题', async ({ page }) => {
+    await page.getByTestId('theme-toggle-dark').click()
+    await page.getByTestId('theme-toggle-system').click()
+    const checked = await page.getByTestId('theme-toggle-system').getAttribute('aria-checked')
+    expect(checked).toBe('true')
   })
 })
 

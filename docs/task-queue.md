@@ -7581,4 +7581,284 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 >
 > **人工回归（M3-PLAYER-03）**：断点续播✅ 线路切换✅ 剧场模式✅ 字幕暂无源跳过
 >
-> **下一里程碑**：M4（auth 登录/注册接管）
+> **下一里程碑**：~~M4（auth 登录/注册接管）~~ → **REGRESSION 阶段（见下方 BLOCKER）**
+
+---
+
+## 🚨 BLOCKER — REGRESSION 阶段启动（exec-M4 及后续任务冻结）
+
+- **触发时间**：2026-04-20 00:00
+- **触发原因**：三份原方案（design_system_plan / frontend_redesign_plan / image_pipeline_plan）对齐复盘结论 — 方案 M1/M2/M3 能力层在 apps/web-next 端存在结构性断档（执行侧 exec-M1/M2/M3 与方案侧 M1/M2/M3 语义已严重错位）
+- **依据补丁**：`docs/task_queue_patch_regression_m1m2m3_20260420.md`（15 张原始 REGRESSION 卡片完整定义、决策 R-A 至 R-F、模型路由表、风险缓解）
+- **审计追加**：2026-04-19 架构审计（claude-sonnet-4-6）新增 2 张卡（REG-M1-04-PREP + REG-POST-01），总计 **17 张卡**
+- **封锁范围**：
+  - 🚫 禁止启动任何 exec-M4 及后续里程碑任务（auth / search / admin / community 模块搬家全部暂停）
+  - 🚫 禁止对 apps/web-next 新增业务页面
+  - 🚫 禁止修改 ALLOWLIST（除 REGRESSION 序列内允许的操作外）
+  - ✅ 允许：REGRESSION 序列（REG-M1-01 至 REG-CLOSE-01，见下方 4 个 SEQ）
+  - ✅ 允许：hotfix（破坏性 bug 必须报独立 BLOCKER 后另开序列）
+- **解除条件**：
+  1. REG-CLOSE-01 ✅ 已完成
+  2. arch-reviewer (claude-opus-4-6) 独立审计 AUDIT RESULT: PASS
+  3. 补丁第 2 节"方案 ↔ 执行 对齐表"19 项条目全部打勾
+- **解除后**：删除本 BLOCKER 块，开始 exec-M4（人工选定，建议方案 M4 图片治理或原 exec-M4 auth 接管）
+
+---
+
+## SEQ-20260420-REGRESSION-M1 — M1 残片回迁（apps/web-next 补齐）
+
+- **状态**：🟡 规划中
+- **创建时间**：2026-04-20 00:00
+- **最后更新时间**：2026-04-20 00:00
+- **目标**：把 M1 阶段在 apps/web 建立的 BrandProvider/useBrand/useTheme/middleware 品牌识别体系迁到 apps/web-next，并补齐 Token 后台 MVP 的 3 项关键能力
+- **范围**：apps/web-next/src/{contexts,hooks,lib,middleware,stores,components/ui,app/[locale]/layout.tsx} + apps/api/src/routes/admin/design-tokens + apps/server/src/components/admin/design-tokens
+- **依赖**：M3 PHASE COMPLETE ✅
+- **依据**：`docs/task_queue_patch_regression_m1m2m3_20260420.md` §5.1–§5.4
+
+### 任务列表（按执行顺序）
+
+1. REG-M1-01 — BrandProvider 体系迁 apps/web-next + 双轨主题统一（状态：✅ 已完成）
+   - 创建时间：2026-04-20 00:00
+   - 实际开始：2026-04-19
+   - 实际完成：2026-04-19
+   - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制，决策 R-A）
+   - 执行模型：claude-sonnet-4-6（人工在 sonnet 会话启动，spawn arch-reviewer opus 子代理决策 ADR-038）
+   - 规模：M（~120 min）
+   - 决策产出：ADR-038（双轨主题统一）已追加到 docs/decisions.md
+   - 完成备注：路径 A（删除 themeStore）；DOM 统一为 data-theme；Cookie 统一存储；ThemeToggle 升级为三态 radiogroup（inline SVG 无新依赖）；E2E 测试同步更新；typecheck ✅ lint ✅ 单元测试 1105/1105 ✅
+
+2. REG-M1-02 — middleware brand/theme 识别迁 apps/web-next（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 00:00
+   - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制，决策 R-B）
+   - 规模：M（~90 min）
+   - 决策产出：ADR-039（middleware 分层协议）
+   - 验收要点：apps/web-next middleware 注入 `x-resovo-brand` / `x-resovo-theme` header，layout 通过 headers() 可读，E2E 覆盖域名/query/cookie/默认 4 条路径
+   - 详见补丁 §5.2
+
+3. REG-M1-03 — apps/web-next layout 挂 BrandProvider（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 00:00
+   - 建议模型：claude-sonnet-4-6
+   - 规模：S（~45 min）
+   - 依赖：REG-M1-01 ✅ + REG-M1-02 ✅
+   - 验收要点：Server Component 渲染时 useBrand().id === 'resovo'，无 hydration mismatch
+   - 详见补丁 §5.3
+
+4. REG-M1-04-PREP — design-tokens 构建基础设施补全（状态：⬜ 未开始）
+   - 创建时间：2026-04-19（架构审计追加）
+   - 建议模型：claude-sonnet-4-6
+   - 规模：S（~60 min）
+   - 依赖：REG-M1-01 / 02 / 03 ✅
+   - 背景：审计发现 REG-M1-04 依赖的 validate-tokens.ts 不存在；build-css.ts 只处理 primitive 层（不含 semantic/brand 覆写层）；brands/ 目录只有 default.ts（slug='resovo'），无独立 resovo.ts，写回路径与补丁描述不一致
+   - **文件范围**：
+     - 新增 `packages/design-tokens/scripts/validate-tokens.ts`：校验 alias 引用闭环（所有 `{$value: ref}` 的引用目标存在）+ semantic/component/brand 层字段合法性校验（不校验 primitive 层数值合理性）
+     - 扩展 `packages/design-tokens/scripts/build-css.ts`：在现有 primitive 输出基础上，追加 semantic 层（semantic/bg/fg/border/accent/surface/state）和 brand 层覆写的 CSS 变量输出
+     - 明确并写入注释：brand 文件命名约定为 `brands/default.ts`（slug 为 resovo，不新建 resovo.ts），BrandOverrides 写回时以 `overrides` 字段 patch 到 `defaultBrandOverrides` 对象
+     - 更新 `packages/design-tokens/package.json` scripts：新增 `"tokens:validate": "tsx scripts/validate-tokens.ts"` 命令
+   - **验收**：
+     - `npm run tokens:validate` 在当前代码库零错误通过
+     - `npm run build` 产出的 dist/tokens.css 包含 semantic 层 CSS 变量（如 `--color-bg-canvas-light`）
+     - 修改 defaultBrandOverrides 添加一个测试覆写 → build 后 CSS 变量值被覆盖 → 回滚
+     - typecheck ✅ / lint ✅
+
+5. REG-M1-04 — Token 后台 MVP 增量补齐 3 项（Diff / 继承指示 / 保存链路）（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 00:00
+   - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制，决策 R-F）
+   - 规模：L（~240 min）
+   - 依赖：REG-M1-04-PREP ✅（补全 validate-tokens.ts 和 build-css.ts 扩展后方可开始）
+   - 决策产出：ADR-043（Token 后台 MVP 增量范围 + V2 推迟项）
+   - 验收要点：开发环境编辑 Token 后保存→源文件落盘→刷新值保持；生产环境 API 返回 403；继承指示标签 + Diff 面板正常工作；Primitive 层禁改
+   - 详见补丁 §5.4
+
+---
+
+## SEQ-20260420-REGRESSION-M2 — 方案 M2 全量落地（全局骨架 + primitives）
+
+- **状态**：🟡 规划中
+- **创建时间**：2026-04-20 00:00
+- **最后更新时间**：2026-04-20 00:00
+- **目标**：Root layout 四件套常驻化 + useBrand 驱动触点 + 5 个核心 primitive（PageTransition / SharedElement / RouteStack / LazyImage+BlurHash / SafeImage+FallbackCover / ScrollRestoration / PrefetchOnHover）
+- **范围**：apps/web-next/src/{app/[locale]/layout.tsx,components/{layout,shared/primitives,player},lib/{motion-tokens,blurhash,image-loader},next.config.ts}
+- **依赖**：SEQ-20260420-REGRESSION-M1 ✅
+- **依据**：`docs/task_queue_patch_regression_m1m2m3_20260420.md` §5.5–§5.10
+
+### 任务列表（按执行顺序）
+
+1. REG-M2-01 — Root layout 四件套常驻化（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 00:00
+   - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制，决策 R-C）
+   - 规模：M（~120 min）
+   - 依赖：REG-M1-03 ✅
+   - 决策产出：ADR-040（Root layout 常驻契约 + rerender 隔离）
+   - 验收要点：跨页切换时 Nav/Footer DOM 节点不重新挂载；GlobalPlayerHostPlaceholder 占位就位
+   - 详见补丁 §5.5
+
+2. REG-M2-02 — useBrand 驱动触点（Header/Footer/Logo/文案）（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 00:00
+   - 建议模型：**claude-haiku-4-5-20251001**（机械扫描替换）
+   - 规模：S（~60 min）
+   - 依赖：REG-M2-01 ✅
+   - 验收要点：grep "Resovo"/"流光" 在 .tsx 中零业务命中，brand token 改名后所有触点更新
+
+3. REG-M2-03 — PageTransition + SharedElement + RouteStack primitives（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 00:00
+   - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制）
+   - 规模：L（~240 min）
+   - 依赖：REG-M2-01 ✅
+   - 决策产出：ADR-044（四类过渡 primitive 契约）
+   - 验收要点：临时 /__dev/primitives 页面演示四类过渡，Safari/Firefox 降级路径有 fallback，prefers-reduced-motion 切换瞬时 opacity
+   - **【审计约束】RouteStack 本轮仅实现 stub**：移动端边缘滑动手势逻辑**不在本卡实现**，只建类型定义 + noop 导出 + 注释 "TODO: M5 Tab Bar 上线时实装手势"。理由：手势实现依赖 Tab Bar 布局（方案 §14.1 属 M5 范围），REGRESSION 阶段提前实现会引入未被消费的复杂逻辑。ADR-044 中须记录此推迟决定。
+
+4. REG-M2-04 — LazyImage + BlurHash primitive（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 00:00
+   - 建议模型：claude-sonnet-4-6
+   - 规模：M（~90 min）
+   - 验收要点：视口外不发起请求，BlurHash canvas 占位，priority=true 立即加载
+   - 备注：blurhash@2.x 依赖为方案 §17 决策项（不触发 BLOCKER，需 changelog 标注）
+
+5. REG-M2-05 — SafeImage + FallbackCover + image-loader 契约（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 00:00
+   - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制）
+   - 规模：L（~240 min）
+   - 依赖：REG-M2-04 ✅
+   - 决策产出：ADR-045（图片 primitive 契约 + Cloudflare Images loader 预留）
+   - 验收要点：四级降级链生效，FallbackCover 用品牌 token 不硬编码颜色，loader 契约与 Cloudflare URL 模板一致
+   - 备注：本卡只建 primitive 不全站替换 <img>
+
+6. REG-M2-06 — ScrollRestoration + PrefetchOnHover primitives（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 00:00
+   - 建议模型：claude-sonnet-4-6
+   - 规模：S（~60 min）
+   - 依赖：REG-M2-03 ✅
+   - 验收要点：同层切换 scrollY 恢复，PC hover 150ms 触发 prefetch，移动端 noop
+
+---
+
+## SEQ-20260420-REGRESSION-M3 — 方案 M3 全量落地（播放器 root 化）
+
+- **状态**：🟡 规划中
+- **创建时间**：2026-04-20 00:00
+- **最后更新时间**：2026-04-20 00:00
+- **目标**：GlobalPlayerHost + zustand 单例 + mini/full/pip 三态 + FLIP full↔mini 过渡 + /watch 接入 Host + 路由切换语义
+- **范围**：apps/web-next/src/{stores/playerStore,components/player/{GlobalPlayerHost,MiniPlayer,playerTransitions,PlayerShell},hooks/usePlayerRouteSync,app/[locale]/{layout.tsx,watch/[slug]/page.tsx}}
+- **依赖**：SEQ-20260420-REGRESSION-M2 ✅（特别是 REG-M2-01 root layout + REG-M2-03 SharedElement primitive）
+- **依据**：`docs/task_queue_patch_regression_m1m2m3_20260420.md` §5.11–§5.14
+
+### 任务列表（按执行顺序）
+
+1. REG-M3-01 — GlobalPlayerHost + zustand 扩展（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 00:00
+   - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制，CLAUDE.md 强制升 Opus #4 — 播放器 core/shell 重构）
+   - 规模：L（~240 min）
+   - 依赖：REG-M2-01 ✅
+   - 决策产出：ADR-041（GlobalPlayerHost 契约）
+   - 验收要点：mode 状态机合法（closed/full/mini/pip）+ 持久化 sessionStorage + dynamic ssr:false 挂 root layout
+   - 备注：本卡只就绪 full 态，mini/pip 留给 REG-M3-02/03
+
+2. REG-M3-02 — mini 态 UI + FLIP full↔mini 过渡（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 00:00
+   - 建议模型：claude-sonnet-4-6
+   - 规模：M（~120 min）
+   - 依赖：REG-M3-01 ✅ + REG-M2-03 ✅
+   - 验收要点：220-360ms FLIP 动画 + 移动端浮于 safe-area-inset-bottom + 桌面右下 320×180
+
+3. REG-M3-03 — pip 态（Picture-in-Picture）（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 00:00
+   - 建议模型：claude-sonnet-4-6
+   - 规模：S（~60 min）
+   - 依赖：REG-M3-01 ✅
+   - 验收要点：Chrome/Edge 进入原生 PiP，关闭后回 full/mini，不支持的浏览器按钮 disabled
+
+4. REG-M3-04 — 路由切换语义 + /watch 接入 GlobalPlayerHost（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 00:00
+   - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制，决策 R-E）
+   - 规模：M（~120 min）
+   - 依赖：REG-M3-01 ✅ + REG-M3-02 ✅
+   - 决策产出：ADR-042（/watch URL 保留 + 方案 §13.1 偏离说明）
+   - 硬阻断：人工回归 ①断点续播 ②线路切换 ③剧场模式 ④字幕 ⑤mini 跨路由 ⑥替换视频 ConfirmDialog
+   - 验收要点：/watch 不再自渲染 PlayerShell，离开 → mini 持续播放，再进 → mini→full FLIP
+   - **【审计约束】player.spec.ts 影响处置（必须在本卡完成前明确）**：
+     - 本卡将 /watch 从页面级 PlayerShell 改为 Host Portal，`tests/e2e-next/player.spec.ts` 中依赖直接 DOM 选择器（如 `[data-testid=video-player]`、PlayerShell 的容器节点）的测试会因结构变化失效
+     - 执行前：列出受影响测试 ID，在 tasks.md 卡片中记录
+     - 执行后：受影响测试**迁移到新 Portal 结构后重写**（不进 quarantine，不是方案变更引发的无效测试）
+     - 已知 quarantine 条目 `"e2e-next::player.spec.ts::PLAYER-10 播放页完整链路::DanmakuBar"` 在本卡范围内不动（保持 quarantine 状态，M5 DanmakuBar 接入时处理）
+     - 本卡完成后立即跑 `npm run test:e2e` 并记录失败数量到 changelog，若新增失败数 > 3 须报 BLOCKER
+
+---
+
+## SEQ-20260420-REGRESSION-CLOSE — REGRESSION 阶段闭幕
+
+- **状态**：🟡 规划中
+- **创建时间**：2026-04-20 00:00
+- **最后更新时间**：2026-04-20 00:00
+- **目标**：宣告 REGRESSION 阶段完成，解除 BLOCKER，为 exec-M4 启动清场
+- **依赖**：SEQ-20260420-REGRESSION-M1 + M2 + M3 全部 ✅
+- **依据**：`docs/task_queue_patch_regression_m1m2m3_20260420.md` §5.15
+
+### 任务列表
+
+1. REG-CLOSE-01 — REGRESSION PHASE COMPLETE + Opus 独立审计 + ADR-037（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 00:00
+   - 建议模型：**claude-opus-4-6**（主循环 + 独立审计 opus 子代理强制）
+   - 规模：S（~90 min）
+   - 决策产出：ADR-037（执行里程碑与方案里程碑对齐协议 — 历史偏差追认）
+   - 文档更新：
+     - 新建 `docs/milestone_alignment_20260420.md`（方案 M# ↔ 执行里程碑映射表）
+     - `docs/decisions.md` 追加 ADR-037 至 ADR-045 共 9 条（前 8 条由 REG-M1-01 至 REG-M3-04 各自落盘，本卡补 ADR-037 + 汇总）
+     - `docs/architecture.md` 追加 GlobalPlayerHost / BrandProvider(apps/web-next) / middleware 分层 章节
+     - `CLAUDE.md` "绝对禁止"追加："PHASE COMPLETE 必须含方案对齐表"
+     - `docs/rules/workflow-rules.md` "重写期测试基线例外"追加"回归补齐"子条款
+     - `docs/changelog.md` 追加 16 条 REG 条目（含 REG-M1-04-PREP）+ REGRESSION 阶段汇总
+     - `docs/task-queue.md` 删除 BLOCKER 块 + 追加 🚀 REGRESSION PHASE COMPLETE 块
+   - 硬阻断：补丁第 2 节对齐表 19 条全部打勾 + arch-reviewer Opus 子代理 AUDIT RESULT: PASS + 人工端到端回归全 PASS
+   - 详见补丁 §5.15
+
+---
+
+## SEQ-20260420-REGRESSION-POST — 人工审核汇总 + 文档更新
+
+- **状态**：🟡 规划中
+- **创建时间**：2026-04-19（架构审计追加）
+- **最后更新时间**：2026-04-19
+- **目标**：REGRESSION PHASE COMPLETE 后，对整个 REGRESSION 阶段的人工审核点进行集中汇总，同步更新 README、CLAUDE.md 架构概览、架构文档等面向开发者的说明文件，确保新加入的工程师能从文档理解当前系统状态
+- **依赖**：SEQ-20260420-REGRESSION-CLOSE ✅（REG-CLOSE-01 完成后方可开始）
+- **说明**：本 SEQ 不产出新代码，只更新文档与审核汇总。建议使用 haiku 降成本
+
+### 任务列表
+
+1. REG-POST-01 — 人工审核点汇总 + README / 说明文档更新（状态：⬜ 未开始）
+   - 创建时间：2026-04-19（架构审计追加）
+   - 建议模型：**claude-haiku-4-5-20251001**（纯文档整理，不含代码改动）
+   - 规模：S（~60 min）
+   - 依赖：REG-CLOSE-01 ✅
+   - **目标**：
+     1. 整理 REGRESSION 阶段所有人工审核记录，输出一份汇总快照
+     2. 更新面向开发者的入口文档，使其反映 REGRESSION 完成后的实际系统状态
+   - **文件范围**：
+     - 新建 `docs/regression_human_review_log_20260420.md`：汇总 REGRESSION 阶段全部人工审核点，格式如下：
+       - 每张卡（REG-M1-01 至 REG-M3-04）的"硬阻断"人工审核结果（通过 / 不适用 / 已记录偏差）
+       - REG-M3-04 E2E 跑分结果（失败数量 + 已知失败条目核对）
+       - REG-CLOSE-01 端到端人工回归 8 个场景的实测结果
+       - Opus 审计签字（AUDIT RESULT: PASS / FAIL + 审计人子代理 ID）
+       - 任何在 REGRESSION 期间发现并写为 BLOCKER 的问题及其处置结果
+     - 修改 `README.md`（若已存在）或新建 `apps/web-next/README.md`：
+       - 更新"当前架构状态"章节，说明 apps/web-next 为主前端，apps/web 为网关
+       - 加入"核心能力层"小节（BrandProvider + GlobalPlayerHost + PageTransition + SafeImage 四件套）
+       - 加入"本地开发快速启动"（命令、端口、ALLOWLIST 说明）
+       - 加入"测试策略"（单元 / E2E-next / E2E-legacy quarantine 三层）
+     - 修改 `CLAUDE.md`（仅"核心架构约束"章节）：
+       - 追加 apps/web-next 核心能力层描述（BrandProvider / GlobalPlayerHost / 四类过渡 primitive / SafeImage 四级降级）
+       - 更新播放器模块描述：从"PlayerShell 层"扩展为"GlobalPlayerHost + mini/full/pip 三态"
+       - 更新"共享组件"段落：加入 `apps/web-next/src/components/shared/primitives/` 路径
+     - 修改 `docs/architecture.md`（若 REG-CLOSE-01 已追加章节，本卡做最终校对和目录更新）：
+       - 确认 GlobalPlayerHost / BrandProvider(apps/web-next) / middleware 分层三个章节内容与实际代码一致
+       - 更新文件目录索引（如有）
+   - **验收**：
+     - `docs/regression_human_review_log_20260420.md` 存在且所有字段填写完整（无空行"待补"）
+     - `README.md`（或 `apps/web-next/README.md`）中"当前架构状态"描述与 REG-CLOSE-01 后的代码库实际一致
+     - `CLAUDE.md` 中"播放器模块"段落描述 GlobalPlayerHost 三态
+     - `docs/architecture.md` 目录索引与文件章节一致
+     - typecheck ✅（文档改动不影响，但若触及 CLAUDE.md 规则文字，确认 lint 通过）
+   - **注意事项**：
+     - 本卡**不修改**任何 .ts / .tsx / .css 源代码
+     - `docs/regression_human_review_log_20260420.md` 必须 `git add` 纳入版本控制（CLAUDE.md 审计类文档规则）
+     - 若 REG-CLOSE-01 的 Opus 审计结论为 FAIL，本卡暂停，等 BLOCKER 补救卡处置完成后再开始

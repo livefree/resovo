@@ -7228,3 +7228,25 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - M3-CLOSE-01 ✅ 本条目
 - **ALLOWLIST 当前启用（8 条）**：/next-placeholder、/（exact）、/movie、/series、/anime、/tvshow、/others、/watch
 - **known_failing 缩减**：54 → 42（删除 12 条 C 类，1 条更新前缀为 e2e-next）
+
+## REG-M1-01 — BrandProvider 体系迁 apps/web-next + 双轨主题统一
+
+- **日期**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-6) — 双轨主题统一决策 + ADR-038 草稿
+- **任务 ID**：REG-M1-01 / SEQ-20260420-REGRESSION-M1
+- **变更内容**：
+  - 新增 `apps/web-next/src/types/brand.ts`（Brand/Theme/BrandContextValue/ThemeContextValue 类型）
+  - 新增 `apps/web-next/src/lib/brand-detection.ts`（parseBrandSlug/parseTheme 纯函数，Cookie 常量）
+  - 新增 `apps/web-next/src/contexts/BrandProvider.tsx`（双 Context + useSyncExternalStore 外部 store，含 Cookie 写回）
+  - 新增 `apps/web-next/src/hooks/useBrand.ts`
+  - 新增 `apps/web-next/src/hooks/useTheme.ts`
+  - 修改 `apps/web-next/src/app/[locale]/layout.tsx`（Server Component 读 Cookie → 挂 BrandProvider）
+  - 删除 `apps/web-next/src/stores/themeStore.ts`（路径 A，zustand 完全移除）
+  - 重写 `apps/web-next/src/components/ui/ThemeToggle.tsx`（三态 radiogroup，inline SVG 图标，useTheme hook）
+  - 修改 `apps/web-next/tailwind.config.ts`（darkMode: 'class' → ['selector', '[data-theme="dark"]']）
+  - 修改 `apps/web-next/src/app/globals.css`（.dark {} → [data-theme="dark"] {}，媒体查询降级选择器更新）
+  - 修改 `tests/e2e-next/homepage.spec.ts`（ThemeToggle 测试适配新 testid 体系）
+  - 新增 ADR-038 到 `docs/decisions.md`
+- **测试覆盖**：typecheck ✅ lint ✅ unit tests 1105/1105 ✅
+- **架构沉淀**：ADR-038（双轨主题统一）；DOM/存储/Context 三通道单事实源；apps/web-next 主题层与 apps/web 协议一致

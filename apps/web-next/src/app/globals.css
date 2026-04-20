@@ -43,7 +43,7 @@
   --state-info-border: oklch(66.0% 0.145 250);
 }
 
-.dark {
+[data-theme="dark"] {
   --bg-canvas: oklch(6.5% 0.004 247);
   --bg-surface: oklch(11.2% 0.006 247);
   --bg-surface-raised: oklch(16.5% 0.008 247);
@@ -82,8 +82,9 @@
   --state-info-border: oklch(66.0% 0.145 250);
 }
 
+/* 系统深色模式降级（init-script 未运行时的 no-JS 兜底） */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
+  :root:not([data-theme='light']):not([data-theme='dark']) {
     --bg-canvas: oklch(6.5% 0.004 247);
     --bg-surface: oklch(11.2% 0.006 247);
     --bg-surface-raised: oklch(16.5% 0.008 247);
