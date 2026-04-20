@@ -120,7 +120,7 @@ export function VideoDetailHero({ video }: VideoDetailHeroProps) {
       style={{ background: 'var(--bg-canvas)' }}
       data-testid="video-detail-hero"
     >
-      {/* 装饰性模糊背景 — aria-hidden，加载失败静默降级 */}
+      {/* 装饰性模糊背景 — aria-hidden，onLoadFail 不注册：同一 coverUrl 已由主海报 SafeImage 上报，session 级去重保证不重复写入 broken_image_events */}
       {video.coverUrl && (
         <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
           <SafeImage

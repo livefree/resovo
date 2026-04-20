@@ -9,6 +9,12 @@ interface ReportParams {
 // Session 级去重：同一 URL 在本次页面会话中只上报一次
 const reported = new Set<string>()
 
+// 读取时解析，避免模块加载时 env 尚未注入
+function getBeaconUrl(): string {
+  const base = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:4000/v1'
+  return `${base}/internal/image-broken`
+}
+
 export function reportBrokenImage({ videoId, imageKind, url }: ReportParams): void {
   const key = `${videoId}:${imageKind}:${url}`
   if (reported.has(key)) return
@@ -20,5 +26,5 @@ export function reportBrokenImage({ videoId, imageKind, url }: ReportParams): vo
     [JSON.stringify({ video_id: videoId, image_kind: imageKind, url, reason: 'client_load_error' })],
     { type: 'application/json' },
   )
-  navigator.sendBeacon('/internal/image-broken', body)
+  navigator.sendBeacon(getBeaconUrl(), body)
 }

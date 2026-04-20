@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
 import { getVideoDetailHref } from '@/lib/video-route'
 import { SafeImage } from '@/components/media'
+import { reportBrokenImage } from '@/lib/report-broken-image'
 import type { VideoCard, ApiListResponse } from '@resovo/types'
 
 export function HeroBanner() {
@@ -55,6 +56,9 @@ export function HeroBanner() {
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', aspectRatio: 'unset' }}
             imgClassName="object-cover"
             fallback={{ seed: featured.id }}
+            onLoadFail={({ src }) =>
+              reportBrokenImage({ videoId: featured.id, imageKind: 'poster', url: src })
+            }
           />
         </div>
       )}
