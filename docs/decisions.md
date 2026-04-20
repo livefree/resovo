@@ -1233,3 +1233,40 @@ Resovo 当前图片字段仅有 `media_catalog.cover_url`（P0 竖版）与 `med
 ### 结论
 
 Migration 048 落实六项约束后可直接执行。后续 M5 若列表卡需要 logo 叠放，需写独立 ADR 扩展 VideoCard 契约。
+
+---
+
+## ADR-047 — SafeImage/FallbackCover 最终契约（IMG-03.5）
+
+- **状态**：已接受
+- **日期**：2026-04-20
+- **决策者**：arch-reviewer（claude-opus-4-6 子代理）
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **关联任务**：IMG-03.5
+- **上游 ADR**：ADR-045（初始契约）
+
+### 背景
+
+ADR-045 建立了 SafeImage/FallbackCover 的基础契约，但缺少：空 src 语义澄清、MediaAspect 类型安全、seed 确定性渐变、品牌角标 CSS 变量注入、cloudflareLoader 实现、onLoadFail 统一回调签名。IMG-03.5 由 arch-reviewer Opus 子代理设计契约后补齐实现。
+
+### 关键决策
+
+**D1 — 空 src 静默降级**：`src=undefined/null/''` 时直接渲染 FallbackCover，不触发 `onLoadFail`（区别于网络错误）。空 src 是已知预期状态，不应触发上报链路。
+
+**D2 — MediaAspect 类型**：`'2:3' | '16:9' | '1:1' | '5:6' | '21:9'`，替代裸字符串 aspectRatio；原 `aspectRatio?: string` 保留为 backward-compat 降级。
+
+**D3 — onLoadFail 回调**：`(payload: { src, reason: 'network'|'decode' }) => void`，替代 `onLoadError`；旧签名 `onLoadError` 保留 deprecated 标注，网络错误时两者同时触发。
+
+**D4 — seed → DJB2 → CSS var**：`hashSeed(seed) % 6` → `var(--fallback-gradient-{idx})`；6 个变量在 globals.css `:root` 中定义（使用现有 token 的渐变组合）；无 JS 颜色值硬编码。
+
+**D5 — 品牌角标 CSS 变量**：`--brand-logo-mono-url: none` + `--brand-initial: 'R'` 在 `:root` 设默认值；`.fallback-cover__brand::before { content: var(--brand-initial, ''); }` 在 globals.css 定义；FallbackCover 保持 RSC（无 'use client'），不读 JS-level Brand 状态。Brand TS 类型不扩展。
+
+**D6 — cloudflareLoader**：URL 格式 `https://imagedelivery.net/{ACCOUNT_HASH}/{imageId}/{w,q,f}`；账号 Hash 通过 `IMAGE_LOADER_CF_ACCOUNT_HASH`/`NEXT_PUBLIC_IMAGE_LOADER_CF_ACCOUNT_HASH` 环境变量注入，在调用时（非模块加载时）读取；`getLoader()` 通过 `IMAGE_LOADER`/`NEXT_PUBLIC_IMAGE_LOADER` 选择 passthrough/cloudflare。
+
+**D7 — vitest 别名**：`vitest.config.ts` 新增 smart `@/` 别名（`customResolver` 基于 importer 路径区分 web-next/web），使 web-next 组件测试可在统一 test suite 中运行。
+
+### 后果
+
+- **正面**：FallbackCover 具备结构化内容（title + type badge + brand badge + seed 渐变）；SafeImage 空 src 语义明确；loader 体系可运行时切换。
+- **负面**：FallbackCover 的品牌 logo 图片（`--brand-logo-mono-url`）需由 BrandProvider 在 DOM 注入才能生效；本 ADR 只定义变量约定，BrandProvider 注入为后续任务。
+- **Arch-reviewer 审计**：PASS（claude-opus-4-6，2026-04-20）

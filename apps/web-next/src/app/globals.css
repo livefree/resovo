@@ -184,3 +184,20 @@
   pointer-events: none;
   z-index: var(--z-player-host, 40);
 }
+
+/* IMG-03.5 — FallbackCover gradient tokens + brand initial */
+:root {
+  --fallback-gradient-0: linear-gradient(135deg, var(--accent-muted) 0%, var(--bg-surface-raised) 100%);
+  --fallback-gradient-1: linear-gradient(135deg, var(--state-info-bg) 0%, var(--bg-surface-raised) 100%);
+  --fallback-gradient-2: linear-gradient(135deg, var(--state-success-bg) 0%, var(--bg-surface-raised) 100%);
+  --fallback-gradient-3: linear-gradient(135deg, var(--state-warning-bg) 0%, var(--bg-surface-raised) 100%);
+  --fallback-gradient-4: linear-gradient(135deg, var(--state-error-bg) 0%, var(--bg-surface-raised) 100%);
+  --fallback-gradient-5: linear-gradient(160deg, var(--accent-muted) 0%, var(--state-info-bg) 100%);
+  --brand-logo-mono-url: none;
+  --brand-initial: 'R';
+}
+
+.fallback-cover__brand::before {
+  content: var(--brand-initial, '');
+  display: block;
+}

@@ -8018,11 +8018,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - `reason` 填 `fetch_404`（服务端专用）→ 返回 `400`
      - `npm run typecheck` ✅ / `npm run lint` ✅ / `npm run test -- --run` ✅
 
-2. IMG-03.5 — SafeImage/FallbackCover 契约补齐（插入 IMG-03 与 IMG-04 之间）（状态：⬜ 待开始）
+2. IMG-03.5 — SafeImage/FallbackCover 契约补齐（插入 IMG-03 与 IMG-04 之间）（状态：✅ 已完成）
    - 创建时间：2026-04-20 10:00
    - 计划开始：待 IMG-03 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-04-20 15:00
+   - 完成时间：2026-04-20 16:00
    - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制 — 新建共享组件 API 契约，CLAUDE.md 强制升 Opus #1）
    - 规模：L（~240 min）
    - 依赖：IMG-03 ✅（依据 IMG-00 C5/C7）

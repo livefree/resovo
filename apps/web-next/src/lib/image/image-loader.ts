@@ -9,12 +9,40 @@ export interface ImageLoaderOptions {
 
 export type ImageLoader = (src: string, opts: ImageLoaderOptions) => string
 
-/**
- * 默认 loader：passthrough。
- * TODO: Cloudflare Images:
- *   https://imagedelivery.net/<accountHash>/<imageId>/w=<width>,q=<quality>,f=<format>
- */
-export const buildImageUrl: ImageLoader = (src, _opts) => {
+export const passthroughLoader: ImageLoader = (src) => src || ''
+
+/** @deprecated use passthroughLoader or getLoader() */
+export const buildImageUrl: ImageLoader = passthroughLoader
+
+// ── Cloudflare Images loader ──────────────────────────────────────
+
+function getCfAccountHash(): string {
+  return (
+    process.env['IMAGE_LOADER_CF_ACCOUNT_HASH'] ??
+    process.env['NEXT_PUBLIC_IMAGE_LOADER_CF_ACCOUNT_HASH'] ??
+    ''
+  )
+}
+
+export const cloudflareLoader: ImageLoader = (src, opts) => {
   if (!src) return ''
-  return src
+  const variant = [
+    opts.width != null ? `w=${opts.width}` : null,
+    `q=${opts.quality ?? 80}`,
+    `f=${opts.format ?? 'auto'}`,
+  ].filter(Boolean).join(',')
+  return `https://imagedelivery.net/${getCfAccountHash()}/${src}/${variant}`
+}
+
+// ── 运行时 loader 选择 ────────────────────────────────────────────
+
+type LoaderType = 'passthrough' | 'cloudflare'
+
+export function getLoader(): ImageLoader {
+  const env = (
+    process.env['IMAGE_LOADER'] ??
+    process.env['NEXT_PUBLIC_IMAGE_LOADER'] ??
+    'passthrough'
+  ) as LoaderType
+  return env === 'cloudflare' ? cloudflareLoader : passthroughLoader
 }

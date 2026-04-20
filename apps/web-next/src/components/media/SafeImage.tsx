@@ -2,37 +2,37 @@
 
 import { useEffect, useState } from 'react'
 import { LazyImage } from '@/components/primitives/lazy-image'
-import { buildImageUrl } from '@/lib/image/image-loader'
+import { getLoader } from '@/lib/image/image-loader'
 import { FallbackCover } from './FallbackCover'
 import type { SafeImageProps } from './types'
 
 export function SafeImage({
   src,
   blurHash,
+  aspect,
   fallback,
   fallbackProps,
+  onLoadFail,
   onLoadError,
-  imageLoader = buildImageUrl,
+  imageLoader,
   loaderOptions = { format: 'auto' },
   onError,
   ...rest
 }: SafeImageProps) {
   const [errored, setErrored] = useState(false)
 
-  // src 变化时重置错误状态（避免永久降级）
   useEffect(() => {
     setErrored(false)
   }, [src])
 
+  const loader = imageLoader ?? getLoader()
+
   if (!src || errored) {
-    if (!src) {
-      onLoadError?.({ src: src ?? '', reason: 'empty-src' })
-    }
     if (fallback !== undefined) return <>{fallback}</>
-    return <FallbackCover variant="generic" {...fallbackProps} />
+    return <FallbackCover variant="generic" aspect={aspect} {...fallbackProps} />
   }
 
-  const resolvedSrc = imageLoader(src, loaderOptions)
+  const resolvedSrc = loader(src, loaderOptions ?? {})
 
   return (
     <LazyImage
@@ -41,6 +41,7 @@ export function SafeImage({
       blurHash={blurHash}
       onError={() => {
         setErrored(true)
+        onLoadFail?.({ src, reason: 'network' })
         onLoadError?.({ src, reason: 'network' })
         onError?.()
       }}

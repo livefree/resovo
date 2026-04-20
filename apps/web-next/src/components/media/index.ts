@@ -1,3 +1,10 @@
 export { SafeImage } from './SafeImage'
 export { FallbackCover } from './FallbackCover'
-export type { SafeImageProps, FallbackCoverProps } from './types'
+export type {
+  SafeImageProps,
+  FallbackCoverProps,
+  MediaAspect,
+  FallbackVariant,
+  ImageLoadFailReason,
+  ImageLoadFailPayload,
+} from './types'

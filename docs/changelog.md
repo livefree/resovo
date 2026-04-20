@@ -7626,3 +7626,32 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 ### 验收结果
 
 - typecheck ✅ / lint ✅ / 1152/1152 unit tests（112 files）✅
+
+---
+
+## [IMG-03.5] SafeImage/FallbackCover 契约补齐
+
+- **完成时间**：2026-04-20
+- **记录时间**：2026-04-20 16:00
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：arch-reviewer（claude-opus-4-6）— API 契约设计 AUDIT RESULT: PASS
+- **修改文件**：
+  - `apps/web-next/src/components/media/types.ts` — 新增 MediaAspect / FallbackVariant / ImageLoadFailReason / ImageLoadFailPayload；扩展 FallbackCoverProps（title/originalTitle/type/seed/aspect）；SafeImageProps 新增 aspect/onLoadFail + deprecated onLoadError
+  - `apps/web-next/src/components/media/FallbackCover.tsx` — seed DJB2 → fallback-gradient-{0-5} CSS var；底部 title/type badge overlay；品牌角标 CSS .fallback-cover__brand::before
+  - `apps/web-next/src/components/media/SafeImage.tsx` — 空 src 静默降级（不触发 onLoadFail）；aspect 传 FallbackCover；getLoader() 替换 buildImageUrl 默认值
+  - `apps/web-next/src/components/media/index.ts` — 导出新增类型
+  - `apps/web-next/src/lib/image/image-loader.ts` — 新增 passthroughLoader / cloudflareLoader / getLoader()；CF_ACCOUNT_HASH 改为调用时读取（非模块加载时）
+  - `apps/web-next/src/app/globals.css` — 追加 --fallback-gradient-{0-5} / --brand-logo-mono-url / --brand-initial token；.fallback-cover__brand::before CSS class
+  - `tests/unit/components/media/image-loader.test.ts` — 新建，10 个测试
+  - `tests/unit/components/media/FallbackCover.test.tsx` — 新建，14 个测试
+  - `tests/unit/components/media/SafeImage.test.tsx` — 新建，8 个测试
+  - `vitest.config.ts` — 新增 smart @/ customResolver（web-next 文件 → apps/web-next/src，其他 → apps/web/src）
+  - `docs/decisions.md` — 追加 ADR-047（SafeImage/FallbackCover 最终契约）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：--brand-logo-mono-url / --brand-initial CSS 变量目前仅有默认值，BrandProvider 注入为后续任务（IMG-04 前可选）；FallbackCover 品牌角标目前显示默认值 'R'
+
+### 验收结果
+
+- arch-reviewer Opus 子代理 AUDIT RESULT: PASS ✅
+- typecheck ✅ / lint ✅ / 1192/1192 unit tests（115 files）✅
