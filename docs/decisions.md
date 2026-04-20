@@ -1202,3 +1202,34 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
 - **正面**：防止"页面搬家进度"vs"能力层完成度"再次错位；每次 PHASE COMPLETE 自带可审计覆盖率报告；ADR 偏离声明强制可见。
 - **负面**：短期开发效率下降（每里程碑 +15–30 min 对齐确认，PHASE COMPLETE +30–60 min 对齐表）；Opus 子代理审计为强约束，小幅增加模型路由成本。
 - **长期收益 >> 短期成本**：本次 REGRESSION 单次成本约 26 小时，若每三个里程碑需一次类似补齐，规模放大 3–5 倍；本协议把成本前置摊平。
+
+---
+
+## ADR-046 图片治理 schema 契约（IMG-01）
+
+- **状态**：已接受
+- **日期**：2026-04-20
+- **决策者**：arch-reviewer（claude-opus-4-6）
+- **执行模型**：claude-sonnet-4-6（主循环）+ arch-reviewer（claude-opus-4-6）子代理
+
+### 背景
+
+Resovo 当前图片字段仅有 `media_catalog.cover_url`（P0 竖版）与 `media_catalog.backdrop_url`（P1 横版，META-06）。REGRESSION 阶段（ADR-037）已引入 SafeImage + FallbackCover + image-loader 四级降级链，但缺少服务端提供的 `blurhash / primaryColor / governance status` 输入。IMG-01 从 DB 侧补齐契约，使 FallbackCover 可使用 blurhash 占位、前台可按 status 判断是否降级到保底图。
+
+### 决策点
+
+**D1 — status 枚举存储**：TEXT + CHECK CONSTRAINT（与 `review_status/visibility_status/douban_status` 现有惯例一致；PG ENUM TYPE 扩展需 ALTER TYPE，运维风险高）
+
+**D2 — `broken_image_events` 去重约束**：`UNIQUE (video_id, image_kind, url_hash_prefix, bucket_start)`（含 video_id，避免同 URL 跨多视频引用时事件错误合并；另建二级索引 `(image_kind, url_hash_prefix, bucket_start)` 服务跨视频 CDN 聚合）
+
+**D3 — FK 级联策略**：`ON DELETE CASCADE`（与 `video_sources/subtitles` 子表家族一致；RESTRICT 增加维护摩擦无额外安全收益）
+
+**D4 — `stills_urls/meta` 默认值**：`JSONB NOT NULL DEFAULT '[]'::jsonb`（空数组 fallback，避免 NULL 引发 jsonb 函数错误；与 `genres/aliases/tags TEXT[] DEFAULT '{}'` 传统一致）
+
+**D5 — VIDEO_FULL_SELECT 扩展**：直接追加 6 列到单一常量（`mc.poster_blurhash/status/backdrop_blurhash/status/logo_url/status`），不新建 VIDEO_IMAGE_SELECT 子集（避免二次往返，维持"JOIN mc 单次取全"模式）
+
+**D6 — VideoCard 图片字段**：仅新增 `posterBlurhash? + posterStatus?`（列表卡只渲染竖封面；backdrop/logo 不进 VideoCard）
+
+### 结论
+
+Migration 048 落实六项约束后可直接执行。后续 M5 若列表卡需要 logo 叠放，需写独立 ADR 扩展 VideoCard 契约。

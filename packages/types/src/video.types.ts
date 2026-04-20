@@ -101,6 +101,13 @@ export interface Video {
   sourceCheckStatus: SourceCheckStatus
   /** 元数据完整度评分 0-100 */
   metaScore: number
+  // 图片治理字段（IMG-01，ADR-046）——前台渲染最小集，由 media_catalog JOIN 提供
+  posterBlurhash?: string | null
+  posterStatus?: string | null
+  backdropBlurhash?: string | null
+  backdropStatus?: string | null
+  logoUrl?: string | null
+  logoStatus?: string | null
 }
 
 // ── 视频卡片（列表用，字段较少）────────────────────────────────
@@ -108,7 +115,8 @@ export interface Video {
 export type VideoCard = Pick<
   Video,
   'id' | 'shortId' | 'slug' | 'title' | 'titleEn' |
-  'coverUrl' | 'type' | 'rating' | 'year' | 'status' |
+  'coverUrl' | 'posterBlurhash' | 'posterStatus' |
+  'type' | 'rating' | 'year' | 'status' |
   'episodeCount' | 'sourceCount'
 >
 
@@ -173,6 +181,47 @@ export interface TrendingParams {
 
 export interface SourceReportInput {
   reason: 'broken' | 'low_quality' | 'wrong_episode' | 'other'
+}
+
+// ── 图片治理（IMG-01，ADR-046）─────────────────────────────────
+
+export type ImageKind =
+  | 'poster'
+  | 'backdrop'
+  | 'logo'
+  | 'banner_backdrop'
+  | 'stills'
+  | 'thumbnail'
+
+export type ImageStatus = 'ok' | 'missing' | 'broken' | 'low_quality' | 'pending_review'
+
+export interface BrokenImageEvent {
+  id: string
+  videoId: string
+  seasonNumber: number | null
+  episodeNumber: number | null
+  imageKind: ImageKind
+  url: string
+  urlHashPrefix: string    // sha256(url) 前 16 位十六进制
+  bucketStart: string      // ISO 8601，floor(time, 10min)
+  eventType: string
+  firstSeenAt: string
+  lastSeenAt: string
+  occurrenceCount: number
+  resolvedAt: string | null
+  resolutionNote: string | null
+}
+
+export interface VideoEpisodeImage {
+  id: string
+  videoId: string
+  seasonNumber: number
+  episodeNumber: number
+  thumbnailUrl: string | null
+  thumbnailBlurhash: string | null
+  thumbnailStatus: ImageStatus
+  createdAt: string
+  updatedAt: string
 }
 
 export interface SubtitleUploadInput {

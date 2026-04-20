@@ -1,7 +1,6 @@
 # Resovo（流光） — 任务看板
 
 
-
 > status: active
 > owner: @engineering
 > scope: single active task workbench

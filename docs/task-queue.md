@@ -7927,10 +7927,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ### 任务列表（按执行顺序）
 
-1. IMG-01 — media_catalog 图片治理字段扩展 + broken_image_events + video_episode_images 表 + 迁移脚本（状态：⬜ 待开始）
+1. IMG-01 — media_catalog 图片治理字段扩展 + broken_image_events + video_episode_images 表 + 迁移脚本（状态：✅ 已完成）
    - 创建时间：2026-04-20 10:00
-   - 计划开始：待人工排期
-   - 实际开始：
+   - 计划开始：2026-04-20 12:00
+   - 实际开始：2026-04-20 12:00
+   - 完成时间：2026-04-20 13:00
    - 完成时间：
    - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制 — 跨 3+ 消费方 schema 变更，CLAUDE.md 强制升 Opus #2）
    - 规模：M（~120 min）

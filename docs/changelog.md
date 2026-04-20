@@ -7551,3 +7551,28 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **测试覆盖**：无代码改动，typecheck/lint/unit 不受影响
+
+## IMG-01 — media_catalog 图片治理字段扩展 + broken_image_events + video_episode_images（2026-04-20）
+
+- **任务 ID**：IMG-01
+- **所属序列**：SEQ-20260420-IMG-M1
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理调用**：arch-reviewer（claude-opus-4-6）— ADR-046 图片治理 schema 契约
+
+### 变更内容
+
+**新文件**：
+- `apps/api/src/db/migrations/048_image_pipeline.sql`：media_catalog 治理字段、videos 门控字段、broken_image_events 表（含去重 UNIQUE 约束）、video_episode_images 表
+- `apps/api/src/db/queries/imageHealth.ts`：broken_image_events upsert/查询/聚合函数、updateCatalogImageStatus、updateCatalogImageBlurhash
+
+**修改文件**：
+- `apps/api/src/db/queries/videos.ts`：`VIDEO_FULL_SELECT` 追加 6 列、`DbVideoRow` 新增图片字段、`mapVideoRow`/`mapVideoCard` 透传
+- `apps/api/src/db/queries/mediaCatalog.ts`：`DbMediaCatalogRow`/`MediaCatalogRow`/`CatalogUpdateData` 扩展图片治理字段、`CATALOG_SELECT`/`RETURNING`/`fieldMap` 同步更新
+- `packages/types/src/video.types.ts`：`Video` 追加 6 个可选图片字段；`VideoCard` 追加 `posterBlurhash/posterStatus`；新增 `ImageKind`/`ImageStatus`/`BrokenImageEvent`/`VideoEpisodeImage` 类型
+- `docs/architecture.md`：新增 §5.9 图片治理层章节
+- `docs/decisions.md`：追加 ADR-046
+
+### 验收结果
+
+- typecheck ✅ / lint ✅ / 1136/1136 unit tests ✅
+- arch-reviewer Opus 子代理 AUDIT RESULT: PASS（6 个决策点全部落地）

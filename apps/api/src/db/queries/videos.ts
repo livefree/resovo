@@ -64,6 +64,13 @@ interface DbVideoRow {
   tmdb_id: number | null
   title_normalized: string
   metadata_source: string
+  // 图片治理字段（IMG-01，ADR-046）
+  poster_blurhash: string | null
+  poster_status: string | null
+  backdrop_blurhash: string | null
+  backdrop_status: string | null
+  logo_url: string | null
+  logo_status: string | null
 }
 
 function mapVideoRow(row: DbVideoRow): Video {
@@ -108,6 +115,12 @@ function mapVideoRow(row: DbVideoRow): Video {
     doubanStatus: row.douban_status ?? 'pending',
     sourceCheckStatus: row.source_check_status ?? 'pending',
     metaScore: row.meta_score ?? 0,
+    posterBlurhash: row.poster_blurhash ?? null,
+    posterStatus: row.poster_status ?? null,
+    backdropBlurhash: row.backdrop_blurhash ?? null,
+    backdropStatus: row.backdrop_status ?? null,
+    logoUrl: row.logo_url ?? null,
+    logoStatus: row.logo_status ?? null,
   }
 }
 
@@ -125,6 +138,8 @@ function mapVideoCard(row: DbVideoRow): VideoCard {
     status: row.status,
     episodeCount: row.episode_count,
     sourceCount: parseInt(row.source_count ?? '0'),
+    posterBlurhash: row.poster_blurhash ?? null,
+    posterStatus: row.poster_status ?? null,
   }
 }
 
@@ -158,7 +173,10 @@ const VIDEO_FULL_SELECT = `
   mc.rating, mc.rating_votes, mc.runtime_minutes, mc.year, mc.country,
   mc.status, mc.director, mc."cast", mc.writers, mc.genres,
   mc.aliases, mc.languages, mc.tags,
-  mc.douban_id, mc.imdb_id, mc.tmdb_id, mc.title_normalized, mc.metadata_source
+  mc.douban_id, mc.imdb_id, mc.tmdb_id, mc.title_normalized, mc.metadata_source,
+  mc.poster_blurhash, mc.poster_status,
+  mc.backdrop_blurhash, mc.backdrop_status,
+  mc.logo_url, mc.logo_status
 `
 
 // ── 查询：列表 ───────────────────────────────────────────────────
