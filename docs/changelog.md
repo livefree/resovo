@@ -7250,3 +7250,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 新增 ADR-038 到 `docs/decisions.md`
 - **测试覆盖**：typecheck ✅ lint ✅ unit tests 1105/1105 ✅
 - **架构沉淀**：ADR-038（双轨主题统一）；DOM/存储/Context 三通道单事实源；apps/web-next 主题层与 apps/web 协议一致
+
+## REG-M1-02 — middleware brand/theme 识别迁 apps/web-next
+
+- **日期**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-6) — middleware 分层协议决策 + ADR-039 草稿
+- **任务 ID**：REG-M1-02 / SEQ-20260420-REGRESSION-M1
+- **变更内容**：
+  - 修改 `apps/web-next/src/middleware.ts`（next-intl 链式 + brand/theme header 注入，ADR-039）
+  - 新增 `tests/unit/lib/brand-detection.test.ts`（parseBrandSlug 15 cases + parseTheme 10 cases）
+  - 新增 `tests/e2e-next/brand-detection.spec.ts`（middleware header 注入 E2E 验证 4 cases）
+  - 新增 ADR-039 到 `docs/decisions.md`（middleware 分层协议）
+- **测试覆盖**：typecheck ✅ lint ✅ unit tests 1130/1130 ✅
+- **架构沉淀**：ADR-039（middleware 品牌识别分层协议）；解析链一元化；Cookie 为事实源，header 为派生副本；intl-先跑-header-后注入 组合约定；Edge Runtime 约束写入规范

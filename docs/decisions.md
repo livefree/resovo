@@ -1020,3 +1020,29 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
   - 修改：`apps/web-next/tailwind.config.ts`（darkMode selector）
   - 修改：`apps/web-next/src/app/globals.css`（`.dark {}` → `[data-theme="dark"] {}`）
   - 修改：`tests/e2e-next/homepage.spec.ts`（ThemeToggle 测试适配新 testid）
+
+## ADR-039: middleware 品牌/主题识别分层协议（apps/web-next）
+
+- **日期**：2026-04-19
+- **状态**：已采纳
+- **子代理**：arch-reviewer (claude-opus-4-6)
+- **背景**：REG-M1-01 已在 apps/web-next 引入 BrandProvider 并由 `layout.tsx` 直接 `cookies()` 读取，但尚无 middleware 层把 brand/theme 上下文派发给 Route Handler、下游 RSC fetch 及后续埋点链路。同时 `apps/web-next/src/middleware.ts` 当前只挂载 next-intl，缺少链式组合规范。本 ADR 一次性裁定 middleware 的识别协议、优先级链、与 next-intl 的组合方式及 Edge Runtime 约束。
+- **决策**：
+  1. **解析链一元化**：middleware 与 layout 共用 `lib/brand-detection.ts` 的 `parseBrandSlug` / `parseTheme` 纯函数，不重复实现解析逻辑，不 import Server-only 模块。
+  2. **事实源仍是 Cookie，header 仅为派生副本**：`resovo-brand` / `resovo-theme` Cookie 是唯一权威存储（ADR-038）；middleware 在每次请求上读 Cookie → 解析 → 注入 `x-resovo-brand` / `x-resovo-theme` 到 response headers，供下游 RSC / API Route 读取。`layout.tsx` 继续 `cookies()` 读取，不改为读 header，以保持 layout 在无 middleware 场景（单测、直挂 Route Handler）下仍正确。
+  3. **优先级链（M1 定稿）**：`cookie → DEFAULT_BRAND_SLUG('resovo')` / `cookie → DEFAULT_THEME('system')`。不支持 query param（CDN 缓存污染风险）、不支持 hostname 映射（当前单域名，YAGNI）。`resolveBrandContext()` 以函数形态封装，未来新增 hostname 层只在函数内部追加。
+  4. **next-intl 组合采用「intl 先跑、header 后注入」**：`createIntlMiddleware` 返回的 `NextResponse` 可能是 rewrite / redirect / next，必须先由 intl 决定形态，再由我们 `response.headers.set(...)` 追加；不得在 intl 之前预生成 response。
+  5. **Edge Runtime 约束写入规范**：`lib/brand-detection.ts` 及任何被 middleware 传递引入的模块必须 Edge-safe（禁止 `fs` / Node built-ins / 依赖它们的三方库）；middleware 内禁止 import RSC 专用 API（`next/cache`、DB client 等）。
+  6. **Header 命名对齐**：`HEADER_BRAND='x-resovo-brand'`、`HEADER_THEME='x-resovo-theme'`，`x-` 前缀标示应用自定义。
+- **理由**：Cookie 为事实源，header 为派生面，避免 layout 耦合到 middleware 必须执行；`parseBrandSlug` / `parseTheme` 纯函数复用三处；query/hostname 路径在单域名期是纯负担，以专门 ADR 在多品牌落地时评估；next-intl 组合顺序由其可能含 rewrite/redirect 决定，顺序颠倒会吞掉国际化路由决策。
+- **后果**：
+  - 正面：middleware 层契约固化，后续任务新增 header 字段只需追加 `set(...)` 一行；layout 无需随 middleware 变动。
+  - 正面：`lib/brand-detection.ts` 成为 Edge/Node 双可运行的纯函数层。
+  - 负面：每次请求多一次 cookie 解析（两次字符串正则），性能开销可忽略。
+  - 注意：若未来为 middleware 增加 DB/hostname map 查询，必须另发 ADR；不得悄悄加依赖破坏 Edge-safe 属性。
+- **涉及文件**：
+  - 修改：`apps/web-next/src/middleware.ts`（next-intl + brand/theme header 注入）
+  - 复用：`apps/web-next/src/lib/brand-detection.ts`（REG-M1-01 已建立）
+  - 不改：`apps/web-next/src/app/[locale]/layout.tsx`（维持 `cookies()` 读取）
+  - 新增：`tests/unit/lib/brand-detection.test.ts`（parseBrandSlug/parseTheme 纯函数单元测试 25 cases）
+  - 新增：`tests/e2e-next/brand-detection.spec.ts`（middleware header 注入 E2E 验证 4 cases）
