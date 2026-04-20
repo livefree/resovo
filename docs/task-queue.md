@@ -24,10 +24,11 @@
 2. 任务编号命名（沿用现有规范）
 
 - 任务 ID 格式：`<PREFIX>-NN`
-- `PREFIX` 必须使用既有前缀：`INFRA` / `AUTH` / `VIDEO` / `SEARCH` / `PLAYER` / `CRAWLER` / `ADMIN` / `USER` / `SOCIAL` / `LIST` / `CONTRIB` / `CHG` / `CHORE` / `DEC` / `UX` / `META`
+- `PREFIX` 必须使用既有前缀：`INFRA` / `AUTH` / `VIDEO` / `SEARCH` / `PLAYER` / `CRAWLER` / `ADMIN` / `USER` / `SOCIAL` / `LIST` / `CONTRIB` / `CHG` / `CHORE` / `DEC` / `UX` / `META` / `IMG`
   - `DEC`：前后台解耦架构任务（来自 frontend_backend_decoupling_plan_20260401.md，2026-04-02 新增）
   - `UX`：后台交互改造任务（来自 admin_console_decoupling_and_ux_plan_20260402.md，2026-04-02 新增）
   - `META`：外部元数据层建设任务（来自 external_metadata_import_plan_20260405.md + 2026-04-14 豆瓣扩展方案，2026-04-14 新增）
+  - `IMG`：图片管线与样板图系统任务（来自 image_pipeline_plan_20260418.md，2026-04-20 新增）
 - `NN` 为两位数字，按同前缀内最大编号递增（例如当前最大 `CHG-335`，下一个必须是 `CHG-336`）
 - 禁止跳号占坑、禁止复用已存在编号
 
@@ -7911,3 +7912,375 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 本卡**不修改**任何 .ts / .tsx / .css 源代码
      - `docs/regression_human_review_log_20260420.md` 必须 `git add` 纳入版本控制（CLAUDE.md 审计类文档规则）
      - 若 REG-CLOSE-01 的 Opus 审计结论为 FAIL，本卡暂停，等 BLOCKER 补救卡处置完成后再开始
+
+---
+
+## SEQ-20260420-IMG-M1 — 图片管线 M1：Schema + 入库治理
+
+- **状态**：🟡 规划中
+- **创建时间**：2026-04-20 10:00
+- **最后更新时间**：2026-04-20 10:00
+- **目标**：扩展 `media_catalog` 图片治理字段、新建 `broken_image_events` / `video_episode_images` 表、实现健康检查与 BlurHash/主色提取 worker、存量回填
+- **范围**：`apps/api/src/db/migrations/`、`apps/api/src/db/queries/`、`apps/api/src/workers/`、`apps/api/src/services/`、`packages/types/src/video.types.ts`、`docs/architecture.md`
+- **依赖**：REG-CLOSE-01 ✅（REGRESSION PHASE COMPLETE）+ IMG-00 ✅
+- **依据**：`docs/image_pipeline_plan_20260418.md` §5、§6、§11.1 阶段 1
+
+### 任务列表（按执行顺序）
+
+1. IMG-01 — media_catalog 图片治理字段扩展 + broken_image_events + video_episode_images 表 + 迁移脚本（状态：⬜ 待开始）
+   - 创建时间：2026-04-20 10:00
+   - 计划开始：待人工排期
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制 — 跨 3+ 消费方 schema 变更，CLAUDE.md 强制升 Opus #2）
+   - 规模：M（~120 min）
+   - 依赖：IMG-00 ✅（校准已完成，可开工）
+   - **文件范围**（依据 IMG-00 C1/C2/C3）：
+     - `apps/api/src/db/migrations/048_image_pipeline.sql`：
+       - `media_catalog` ADD COLUMN：`poster_blurhash TEXT`、`poster_primary_color TEXT`、`poster_width INT`、`poster_height INT`、`poster_status TEXT DEFAULT 'pending_review'`、`poster_source TEXT`、`backdrop_blurhash TEXT`、`backdrop_primary_color TEXT`、`backdrop_status TEXT DEFAULT 'pending_review'`、`logo_url TEXT`、`logo_status TEXT DEFAULT 'missing'`、`banner_backdrop_url TEXT`、`banner_backdrop_blurhash TEXT`、`banner_backdrop_status TEXT DEFAULT 'missing'`、`stills_urls JSONB DEFAULT '[]'`、`stills_meta JSONB DEFAULT '[]'`
+       - `videos` ADD COLUMN：`image_governance_status TEXT DEFAULT 'pending'`（汇总门控，不再存图片 URL）
+       - 新建 `broken_image_events` 表：`id UUID PK`、`video_id UUID FK → videos`（无 `episode_id`，改用 `season_number INT`、`episode_number INT`）、`image_kind TEXT`、`url TEXT`、`url_hash_prefix TEXT NOT NULL`（sha256(url) 前16位，用于 upsert 去重）、`bucket_start TIMESTAMPTZ NOT NULL`（floor(now, 10min)，时间窗口 key）、`event_type TEXT`、`first_seen_at TIMESTAMPTZ`、`last_seen_at TIMESTAMPTZ`、`occurrence_count INT DEFAULT 1`、`resolved_at TIMESTAMPTZ`、`resolution_note TEXT`；UNIQUE `(image_kind, url_hash_prefix, bucket_start)`（支持 IMG-03 upsert 去重，不含 video_id 避免 null 破坏唯一性）
+       - 新建 `video_episode_images` 表：`id UUID PK`、`video_id UUID FK → videos`、`season_number INT NOT NULL DEFAULT 1`、`episode_number INT NOT NULL DEFAULT 1`、`thumbnail_url TEXT`、`thumbnail_blurhash TEXT`、`thumbnail_status TEXT DEFAULT 'pending_review'`、`created_at/updated_at`、UNIQUE `(video_id, season_number, episode_number)`
+     - `apps/api/src/db/queries/imageHealth.ts`：新建——`broken_image_events` upsert（按 `(image_kind, url_hash_prefix, bucket_start)` ON CONFLICT DO UPDATE `occurrence_count += 1`、`last_seen_at = now`）、bulk status update（批量写 `media_catalog.<kind>_status`）、聚合查询（覆盖率、TOP 破损域名）
+     - `apps/api/src/db/queries/mediaCatalog.ts`：扩展——新增治理字段读写（read 增加新列、update 单列 patch）
+     - `apps/api/src/db/queries/videos.ts`：扩展 `VIDEO_FULL_SELECT`（JOIN `media_catalog`，增加 `mc.poster_blurhash`、`mc.poster_status`、`mc.backdrop_blurhash`、`mc.backdrop_status`、`mc.logo_url`、`mc.logo_status`）；更新 `DbVideoRow` 类型以包含新列；更新 `mapVideoRow` / `mapVideoCard`，将新列映射到 camelCase（`posterBlurhash`、`posterStatus`、`backdropBlurhash`、`backdropStatus`、`logoUrl`、`logoStatus`）
+     - `packages/types/src/video.types.ts`：
+       - `Video` 类型追加 `posterBlurhash: string | null`、`posterStatus: ImageStatus | null`、`backdropBlurhash: string | null`、`backdropStatus: ImageStatus | null`、`logoUrl: string | null`、`logoStatus: ImageStatus | null`（前台渲染所需最小集，字段必须存在且可为 null，IMG-04 传给 SafeImage）
+       - `VideoCard` 类型追加 `posterBlurhash: string | null`、`posterStatus: ImageStatus | null`（列表卡所需，字段必须存在且可为 null）
+       - `MediaCatalog` 类型追加完整治理字段（`poster*/backdrop*/logo*/banner*/stills*` 全量）
+       - 新增 `BrokenImageEvent` 类型（含 `urlHashPrefix`、`bucketStart`）；新增 `VideoEpisodeImage` 类型
+     - `docs/architecture.md`：同步新增图片字段章节
+   - **验收要点**：
+     - `npm run typecheck` ✅ / `npm run lint` ✅ / `npm run test -- --run` ✅
+     - migration 幂等（重跑不报错）；新字段默认值不破坏现有查询
+     - `broken_image_events` 含 `url_hash_prefix`、`bucket_start`，UNIQUE `(image_kind, url_hash_prefix, bucket_start)` 约束存在
+     - `broken_image_events.video_id FK → videos`，无 `episode_id` 列
+     - `video_episode_images` UNIQUE 约束在 `(video_id, season_number, episode_number)` 上
+     - `GET /v1/videos/:slug` 响应中包含 `posterBlurhash`、`posterStatus`、`backdropBlurhash`（可为 null，但字段存在）
+     - `VideoCard` 类型中 `posterBlurhash` 字段已定义（前台消费链路完整：DB → mapVideoCard → VideoCard 类型 → API 响应）
+     - `docs/architecture.md` 已更新 Schema 图片字段章节
+     - arch-reviewer Opus 子代理 AUDIT RESULT: PASS
+
+2. IMG-02 — image_health_check job + blurhash_and_color_extract job + 存量回填 job（状态：⬜ 待开始）
+   - 创建时间：2026-04-20 10:00
+   - 计划开始：待 IMG-01 完成后
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：L（~240 min）
+   - 依赖：IMG-01 ✅
+   - **文件范围**（依据 IMG-00 C4，worker 在 apps/api/src/workers/）：
+     - `apps/api/src/workers/imageHealthWorker.ts`：URL 语法合法 → HEAD 请求（300ms 超时）→ 尺寸检查（P0 宽≥300 + 2:3±10%；P1 宽≥640 + 16:9±10%）→ 写 `<kind>_status` + `broken_image_events`；并发度限制 5；同 domain 间隔 ≥ 200ms；连续 3 次失败自动降为 `broken`
+     - `apps/api/src/workers/imageBlurhashWorker.ts`：下载原图 → 缩略 100×100 → 计算 BlurHash → k-means 主色（OKLCH，亮度 L<15 或 L>90 置 null）→ 写回 `media_catalog` 字段；失败不阻断入库
+     - `apps/api/src/workers/imageBackfillWorker.ts`：存量回填（分批 1000/batch，低峰期；失败重试队列）；调用上述两个 worker
+     - `apps/api/src/services/ImageHealthService.ts`：封装 worker 调用、事件聚合写入、状态批量更新
+     - `apps/api/src/db/queries/imageHealth.ts`：（IMG-01 已建）在此基础上扩展 upsert broken_image_events、批量读取 media_catalog 待检图 URL
+     - Job 调度接入现有框架（参考 `apps/api/src/workers/` 下已有 worker 注册方式）
+     - 单元测试：`apps/api/src/workers/__tests__/imageHealthWorker.test.ts`、`imageBlurhashWorker.test.ts`
+   - **验收要点**：
+     - `npm run typecheck` ✅ / `npm run lint` ✅ / `npm run test -- --run` ✅
+     - image_health_check：给一个已知 404 URL → `broken_image_events` 写入 1 条；给合法 URL → status 置 `ok`
+     - blurhash_and_color_extract：合法图 URL → blurhash 长度 ≥ 6 且写回数据库；极暗色（OKLCH L<15）→ primary_color = null
+     - 存量回填：可空运行（无视频时无报错），分批可中断恢复
+     - 不得引入 project 现有技术栈以外的新依赖（触发 BLOCKER）
+
+---
+
+## SEQ-20260420-IMG-M2 — 图片管线 M2：前端全站迁移
+
+- **状态**：🟡 规划中
+- **创建时间**：2026-04-20 10:00
+- **最后更新时间**：2026-04-20 10:00
+- **目标**：beacon 上报端点上线 + 全站 `<img>` 迁移到 `<SafeImage>`（基于 REG-M2-05 已完成的 primitive）
+- **范围**：`apps/api/src/routes/internal/`、`apps/web-next/src/components/**/*.tsx`、`apps/web-next/src/app/[locale]/**/*.tsx`
+- **依赖**：SEQ-20260420-IMG-M1 ✅
+- **依据**：`docs/image_pipeline_plan_20260418.md` §7、§11.1 阶段 2、§15 I6 beacon 上报端点决策
+- **说明**：REG-M2-05 的 SafeImage/FallbackCover primitive 功能不完整（缺 title/seed/type 等），本序列 IMG-03.5 先补齐 primitive 契约，再由 IMG-04 全站迁移
+
+### 任务列表（按执行顺序）
+
+1. IMG-03 — beacon 上报 API 端点（POST /api/internal/image-broken）（状态：⬜ 待开始）
+   - 创建时间：2026-04-20 10:00
+   - 计划开始：待 IMG-01 完成后（需要 broken_image_events 表）
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：S（~60 min）
+   - 依赖：IMG-01 ✅
+   - **文件范围**（依据 IMG-00 C8）：
+     - `apps/api/src/routes/internal/image-broken.ts`：`POST /api/internal/image-broken`；body schema（`video_id: UUID`、`image_kind: enum`、`url: string max 2048`、`reason: 'client_load_error' | 'empty_src'`）；无需鉴权，不查 `users` 表；去重策略：按 `(sha256(url)前16位 + image_kind + floor(now/10min))` upsert——已存在则 `occurrence_count += 1`、`last_seen_at = now`，不存在则插入；`video_id` **不预查 videos 表**，依赖 FK 约束兜底，FK violation 捕获后返回 `204`（静默丢弃，防止遍历 video_id 探测）；IP rate limit：同 IP 10 分钟内 > 50 次则静默丢弃（返回 204，不报 429 以防信息泄露）
+     - `apps/api/src/routes/internal/index.ts`：注册路由
+     - 单元测试：① 重复 URL 去重（10 分钟窗口内只写 1 条）② FK violation → 204 ③ body 校验（url 超长、kind 非法 → 400） ④ reason 仅允许 `client_load_error/empty_src`（服务端写 `fetch_404/fetch_5xx/...`，前端不可直接上报）
+   - **验收要点**：
+     - 同一 URL 10 分钟内重复 POST → DB `occurrence_count += 1`，不新增行
+     - `video_id` 不存在 → FK violation 捕获 → 返回 `204`（不返回 400，不暴露 video_id 是否存在）
+     - `url` 超过 2048 字符 → 返回 `400`
+     - `reason` 填 `fetch_404`（服务端专用）→ 返回 `400`
+     - `npm run typecheck` ✅ / `npm run lint` ✅ / `npm run test -- --run` ✅
+
+2. IMG-03.5 — SafeImage/FallbackCover 契约补齐（插入 IMG-03 与 IMG-04 之间）（状态：⬜ 待开始）
+   - 创建时间：2026-04-20 10:00
+   - 计划开始：待 IMG-03 完成后
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制 — 新建共享组件 API 契约，CLAUDE.md 强制升 Opus #1）
+   - 规模：L（~240 min）
+   - 依赖：IMG-03 ✅（依据 IMG-00 C5/C7）
+   - **文件范围**：
+     - `apps/web-next/src/components/media/types.ts`：扩展 `SafeImageProps`（新增 `aspect: '2:3'|'16:9'|'1:1'|'5:6'|'21:9'`；`fallback` 改为结构化 `{ title: string; originalTitle?: string; type?: VideoType; seed: string }`；`onLoadFail` 替换 `onLoadError`，空 src 不触发）；扩展 `FallbackCoverProps`（新增 `title/originalTitle/type/seed/size` props）
+     - `apps/web-next/src/components/media/SafeImage.tsx`：空 src 静默降级（不触发 `onLoadFail`）；新增 `aspect` prop 控制容器比例（`style={{ aspectRatio }}`）；`fallback` 由结构化对象传给 FallbackCover
+     - `apps/web-next/src/components/media/FallbackCover.tsx`：背景改为 `seed` 哈希 + `useBrand().brand.palette.fallbackSeeds` 选两色斜向渐变；按 `type` 叠加语义装饰（movie→胶片线、tv→天线、anime→点纹、variety→音波、documentary→等高线）；右下角叠印 `brand.logo.urlMono` 或首字角标；主副标题居中渲染；所有颜色用 CSS 变量/品牌 Token
+     - `apps/web-next/src/lib/image/image-loader.ts`：完善 `getLoader()`（读 `IMAGE_LOADER` env）、`cloudflareLoader`（URL 模板与方案 §10.1 一致）、`passthroughLoader`；SafeImage 内部统一通过 `getLoader()` 获取 loader（此为 C7 前移项）
+     - 单元测试：SafeImage 空 src 不触发 onLoadFail；FallbackCover 相同 seed 渲染稳定；cloudflareLoader URL 格式
+     - 决策产出：ADR-046（SafeImage/FallbackCover 最终契约）
+   - **验收要点**：
+     - `<SafeImage src={null} onLoadFail={fn} />` → fn 不被调用，FallbackCover 直接渲染
+     - FallbackCover 背景无硬编码颜色（CSS 变量零硬编码检查）
+     - 相同 seed + type → 多次渲染输出一致（确定性）
+     - arch-reviewer Opus 子代理 AUDIT RESULT: PASS
+     - `npm run typecheck` ✅ / `npm run lint` ✅ / `npm run test -- --run` ✅
+
+3. IMG-04 — 全站业务组件迁移到 `<SafeImage>`（状态：⬜ 待开始）
+   - 创建时间：2026-04-20 10:00
+   - 计划开始：待 IMG-03.5 完成后
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：L（~240 min）
+   - 依赖：IMG-03 ✅ + IMG-03.5 ✅（beacon 端点 + SafeImage 契约补齐均就绪；依据 IMG-00 C5/C6）
+   - **文件范围**：
+     - 扫描 `apps/web-next/src/app/` 和 `apps/web-next/src/components/`（排除 `primitives/lazy-image/`）中所有裸 `<img` 和裸 `<Image`（next/image）调用
+     - 按顺序迁移模块：PosterCard（列表/网格）→ VideoListRow（搜索）→ DetailHero（详情页）→ BannerCarousel（首页 Banner）→ EpisodeCard（剧集）→ 其余业务组件
+     - 每个模块：引入 `<SafeImage>`，传入 `src`（对应 `media_catalog.cover_url/backdrop_url`）、`aspect`、`blurhash`、`fallback={{ title, type, seed: video.id }}`、`onLoadFail` → `reportBrokenImage`
+     - `apps/web-next/src/lib/report-broken-image.ts`：封装 `navigator.sendBeacon()` 调用，客户端同一 URL 去重（Session 级 Set 缓存，不依赖 session cookie）
+     - ESLint disable comment 从 `primitives/lazy-image/LazyImage.tsx` 保留，业务组件目录不得新增
+   - **验收要点**（依据 IMG-00 C6）：
+     - `grep -r "<img " apps/web-next/src/app apps/web-next/src/components --include="*.tsx" --exclude-dir="primitives"` 零命中
+     - `grep -r "from 'next/image'" apps/web-next/src/app apps/web-next/src/components --include="*.tsx" --exclude-dir="primitives"` 零命中
+     - 视频封面加载失败时显示 FallbackCover（不见破图图标）；FallbackCover 颜色零硬编码
+     - `npm run typecheck` ✅ / `npm run lint` ✅ / `npm run test -- --run` ✅ / `npm run test:e2e` ✅
+     - 人工回归：列表页、详情页、Banner 无破图；网络断开时 FallbackCover 正常显示
+
+---
+
+## SEQ-20260420-IMG-M3 — 图片管线 M3：后台治理
+
+- **状态**：🟡 规划中
+- **创建时间**：2026-04-20 10:00
+- **最后更新时间**：2026-04-20 10:00
+- **目标**：图片健康监控 Dashboard + 样板图预览页 + 视频编辑页图片区块 + 视频列表健康角标
+- **范围**：`apps/server/src/components/admin/`、`apps/api/src/routes/admin/`、`apps/web/src/app/[locale]/admin/`（或 web-next admin）
+- **依赖**：SEQ-20260420-IMG-M1 ✅ + SEQ-20260420-IMG-M2 ✅（数据源与 FallbackCover 就绪）
+- **依据**：`docs/image_pipeline_plan_20260418.md` §8、§11.1 阶段 3
+
+### 任务列表（按执行顺序）
+
+1. IMG-05 — /admin/image-health Dashboard + /admin/fallback-preview 预览页（状态：⬜ 待开始）
+   - 创建时间：2026-04-20 10:00
+   - 计划开始：待 IMG-M1 + IMG-M2 完成后
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：L（~240 min）
+   - 依赖：IMG-01 ✅ + IMG-02 ✅ + IMG-03.5 ✅ + IMG-04 ✅
+   - **文件范围**：
+     - `apps/api/src/routes/admin/image-health.ts`：GET `/admin/image-health/stats`（总视频数/P0 覆盖率/P1 覆盖率/7 天新增破损数）；GET `/admin/image-health/broken-domains`（TOP 破损域名）；GET `/admin/image-health/missing-videos`（缺图视频排行，按 sort 参数）
+     - `apps/server/src/services/image-health-stats.service.ts`：封装上述查询逻辑
+     - `apps/server/src/components/admin/image-health/`：`ImageHealthDashboard`（卡片化统计 + 趋势图）、`BrokenDomainTable`、`MissingVideoTable`；必须使用 `ModernDataTable` + `PaginationV2`（后台表格规范）
+     - `apps/server/src/components/admin/fallback-preview/FallbackPreviewPage.tsx`：4 种比例 × 5 种视频类型 × 浅/深主题 = 40 个 FallbackCover 预览格；顶部品牌切换器（复用现有 BrandSwitcher 组件）
+   - **验收要点**：
+     - `/admin/image-health` 页面展示总视频数、P0 覆盖率（百分比）、7 天破损趋势
+     - `/admin/fallback-preview` 页面 40 个样板图均无硬编码颜色
+     - 使用 `ModernDataTable` + `PaginationV2`（后台规范强制）
+     - `npm run typecheck` ✅ / `npm run lint` ✅ / `npm run test -- --run` ✅
+
+2. IMG-06 — 视频编辑页图片区块改造 + 视频列表健康角标（状态：⬜ 待开始）
+   - 创建时间：2026-04-20 10:00
+   - 计划开始：待 IMG-05 完成后
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：M（~120 min）
+   - 依赖：IMG-05 ✅
+   - **文件范围**：
+     - 视频编辑页新增"图片"区块组件（`VideoImageSection.tsx`）：展示 poster/backdrop/logo/banner_backdrop 当前图 + 状态（✓ OK / ⚠ 失败 / ○ 缺失）+ 最近健康检查时间；点击替换 → URL 填写输入框（本轮不做本地上传）
+     - 视频列表每行新增"图片健康"角标：🟢（P0+P1 均 OK）/ 🟡（P0 OK，P1 缺失）/ 🔴（P0 失效）
+     - 对应 API：`PUT /admin/videos/:id/images`（更新指定 kind 的 URL，触发 image_health_check + blurhash_and_color_extract）
+   - **验收要点**：
+     - 修改 poster_url 后，触发健康检查，5 秒内状态更新
+     - 视频列表角标颜色与方案 §8.4 描述一致
+     - 角标不使用硬编码颜色（CSS 变量）
+     - `npm run typecheck` ✅ / `npm run lint` ✅ / `npm run test -- --run` ✅
+
+---
+
+## SEQ-20260420-IMG-M4 — 图片管线 M4：loader 测试 + env 文档
+
+- **状态**：🟡 规划中
+- **创建时间**：2026-04-20 10:00
+- **最后更新时间**：2026-04-20 11:45
+- **目标**：补齐 loader 接口测试与 `IMAGE_LOADER` env 切换文档，明确过渡期多尺寸行为；不接入 next.config.ts custom loader，CDN 实际对接属未来任务不纳入本卡
+- **范围**：`apps/web-next/src/lib/image/`
+- **依赖**：SEQ-20260420-IMG-M3 ✅
+- **依据**：`docs/image_pipeline_plan_20260418.md` §10、§12 M4
+
+### 任务列表（按执行顺序）
+
+1. IMG-07 — loader 接口单元测试 + env 切换文档（不改 next.config.ts）（状态：⬜ 待开始）
+   - 创建时间：2026-04-20 10:00
+   - 计划开始：待 IMG-M3 完成后
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：S（~45 min）
+   - 依赖：IMG-03.5 ✅（loader 函数在 IMG-03.5 已完善；本卡只补测试与文档，依据 IMG-00 C7）
+   - **文件范围**：
+     - `apps/web-next/src/lib/image/__tests__/image-loader.test.ts`：新建——`cloudflareLoader` URL 拼接（含 width/quality/format 参数）；`passthroughLoader` 原样返回 src；`getLoader('passthrough')` / `getLoader('cloudflare')` 返回正确函数
+     - `apps/web-next/src/lib/image/image-loader.ts`：补充 JSDoc，说明 `IMAGE_LOADER` env 切换方式（`passthrough`/`cloudflare`，默认 `passthrough`）和过渡期多尺寸行为（原图直出，浏览器按 `sizes` 选最近尺寸）
+     - **不修改** `apps/web-next/next.config.ts`（SafeImage 当前基于 `<img>`，`next/image custom loader` 对其无效；若未来 SafeImage 改为 `next/image`，届时另立任务卡同步修改）
+   - **验收要点**：
+     - `getLoader('passthrough')` 返回 `passthroughLoader`；`getLoader('cloudflare')` 返回 `cloudflareLoader`
+     - `cloudflareLoader({ src: 'https://x.com/a.jpg', width: 800 })` 输出符合方案 §10.1 URL 模板
+     - `next.config.ts` 无 `images.loader`/`images.loaderFile` 改动（文件未被修改）
+     - `npm run typecheck` ✅ / `npm run lint` ✅ / `npm run test -- --run` ✅
+
+---
+
+## 🚀 exec-M4 图片治理 — 序列规划完成
+
+- **宣告时间**：2026-04-20 10:00
+- **依据**：`docs/image_pipeline_plan_20260418.md`（全文）+ REGRESSION PHASE COMPLETE 下一步指引
+- **执行序列**：SEQ-20260420-IMG-M0（IMG-00 校准）→ SEQ-20260420-IMG-M1 → IMG-M2 → IMG-M3 → IMG-M4（按序解锁）
+- **任务卡合计**：9 张（IMG-00 ~ IMG-07，含 IMG-03.5）
+- **注意**：REG-M2-05 的 SafeImage/FallbackCover primitive 功能不完整（见 IMG-00 C5），IMG-03.5 补齐契约后才可全站迁移；CDN 实际对接属未来任务；IMG-07 不改 next.config.ts（SafeImage 不走 next/image）
+
+---
+
+## SEQ-20260420-IMG-M0 — 图片管线 M0：方案校准（先于 IMG-01 执行）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-04-20 11:00
+- **最后更新时间**：2026-04-20 11:45
+- **完成时间**：2026-04-20 11:45
+- **目标**：修正 image_pipeline_plan 与 IMG-01~IMG-07 任务卡中的 8 处结构性问题，产出可直接执行的校准版任务卡，解锁 IMG-01
+- **范围**：`docs/task-queue.md`（更新 IMG-01~IMG-07 卡片）、`docs/image_pipeline_plan_20260418.md`（追加校准注记）；**不修改任何 .ts/.tsx/.sql 源代码**
+- **依赖**：SEQ-20260420-REGRESSION-CLOSE ✅
+- **建议模型**：claude-sonnet-4-6（纯文档分析与修正，无架构决策，不需升 Opus）
+
+### 任务列表
+
+1. IMG-00 — 方案校准：修正 schema 归属 / 路径 / SafeImage 契约 / API 设计（状态：✅ 已完成）
+   - 创建时间：2026-04-20 11:00
+   - 实际开始：2026-04-20 11:00
+   - 完成时间：2026-04-20 11:45
+   - 建议模型：claude-sonnet-4-6
+   - 规模：S（~90 min，纯文档修正）
+
+   #### 校准点 C1 — Schema 归属：图片字段放 `media_catalog` 而非 `videos`
+
+   **问题**：IMG-01 原卡计划在 `videos` 新增 `poster_url/backdrop_url/logo_url/...`，与 `media_catalog.cover_url`（P0 竖封面）和 `media_catalog.backdrop_url`（P1 横版，META-06 已有）形成两套权威来源（`architecture.md`:220、:231）。
+
+   **校准结论**：治理元数据字段加到 `media_catalog` 同层，与现有 `cover_url/backdrop_url` 并列：
+   - `poster_blurhash TEXT`、`poster_primary_color TEXT`、`poster_width INT`、`poster_height INT`、`poster_status TEXT`（ok|missing|broken|low_quality|pending_review）、`poster_source TEXT` — 对应 `cover_url`（P0）
+   - `backdrop_blurhash TEXT`、`backdrop_primary_color TEXT`、`backdrop_status TEXT` — 对应 `backdrop_url`（P1，已有字段）
+   - `logo_url TEXT`、`logo_status TEXT`（P2）
+   - `banner_backdrop_url TEXT`、`banner_backdrop_blurhash TEXT`、`banner_backdrop_status TEXT`（P2）
+   - `stills_urls JSONB`、`stills_meta JSONB`（P3）
+   - `videos` 层只保留 `image_governance_status TEXT`（汇总发布门控，如 `poster_ok|poster_missing`），不再存图片 URL
+   - 查询层：`apps/api/src/db/queries/mediaCatalog.ts` 扩展，`videos.ts` 查询 JOIN `media_catalog` 读取 poster/backdrop 字段（现状已有 JOIN，扩展列即可）
+
+   #### 校准点 C2 — `episodes` 表不存在：改用 `video_episode_images`
+
+   **问题**：IMG-01 原卡要求扩展 `episodes.thumbnail_*`，但系统无 `episodes` 表；集数靠 `video_sources.season_number/episode_number` 表达（`architecture.md`:234）。
+
+   **校准结论**：新建轻量表 `video_episode_images`：
+   ```
+   video_episode_images
+   ├── id UUID PK
+   ├── video_id UUID FK → videos
+   ├── season_number INT NOT NULL DEFAULT 1
+   ├── episode_number INT NOT NULL DEFAULT 1
+   ├── thumbnail_url TEXT
+   ├── thumbnail_blurhash TEXT
+   ├── thumbnail_status TEXT（ok|missing|broken|pending_review）
+   ├── created_at / updated_at
+   └── UNIQUE (video_id, season_number, episode_number)
+   ```
+   `video_sources` 记录集数逻辑坐标，`video_episode_images` 记录该坐标对应的缩略图元数据，两表通过 `(video_id, season, episode)` 关联，无需引入完整 episodes 领域模型。
+
+   #### 校准点 C3 — 实际迁移路径
+
+   **问题**：原卡写 `packages/db/schema/*` 和 `packages/db/migrations/*`，但仓库实际迁移在 `apps/api/src/db/migrations`，查询在 `apps/api/src/db/queries`。
+
+   **校准结论**：
+   - 迁移脚本：`apps/api/src/db/migrations/048_image_pipeline.sql`（接续当前最大编号 047）
+   - 新增查询文件：`apps/api/src/db/queries/imageHealth.ts`（broken_image_events CRUD + 聚合）
+   - 扩展现有：`apps/api/src/db/queries/mediaCatalog.ts`（读取新增治理字段）
+   - 共享类型同步：`packages/types/src/video.types.ts`（`posterBlurhash/posterStatus/backdropStatus` 等字段追加到 `MediaCatalog` 类型；新增 `BrokenImageEvent`、`VideoEpisodeImage` 类型）
+
+   #### 校准点 C4 — Job 位置：`apps/api/src/workers/` 而非 `apps/server/src/jobs/`
+
+   **问题**：原卡将 job 放到 `apps/server/src/jobs`，但架构文档明确 `apps/api/src/workers` 承担异步任务（`architecture.md`:108）；后台 Next（apps/server）只做管理 UI。
+
+   **校准结论**：
+   - `apps/api/src/workers/imageHealthWorker.ts`：URL 巡检 worker（并发 5，同 domain 间隔 ≥ 200ms，连续 3 次失败降级）
+   - `apps/api/src/workers/imageBackfillWorker.ts`：存量回填 worker（1000/batch，可中断续跑）
+   - `apps/api/src/services/ImageHealthService.ts`：业务编排（事件聚合、去重、状态写回）
+   - `apps/api/src/db/queries/imageHealth.ts`：SQL 读写
+   - apps/server 端只有 Dashboard UI 组件，不运行 worker 逻辑
+
+   #### 校准点 C5 — SafeImage/FallbackCover 契约差距：插入 IMG-03.5
+
+   **问题**：当前 SafeImage（`SafeImage.tsx`:27）对空 src 会调用 `onLoadError`，违反"空 src 是已知状态不应触发上报"的语义；无 `aspect` prop；fallback 无结构化对象。FallbackCover 无 `title/seed/type` 装饰、无品牌 logo/nameShort 角标（`FallbackCover.tsx`:62），与方案 §7.2 差距较大。若直接全站迁移（IMG-04），会把不完整 primitive 扩散到所有页面。
+
+   **校准结论**：在 IMG-03（beacon API）和 IMG-04（全站迁移）之间插入 **IMG-03.5**：
+   - SafeImage 修正：空 src 静默降级，不触发 `onLoadError`；新增 `aspect: '2:3'|'16:9'|'1:1'|'5:6'|'21:9'` prop（控制容器比例，内部用 CSS aspect-ratio）；fallback prop 改为结构化 `{ title, originalTitle?, type?, seed }` 对象（传给 FallbackCover）
+   - FallbackCover 补齐：接受 `title/originalTitle/type/seed/size` props；背景改为基于 `seed` 哈希 + `useBrand().brand.palette.fallbackSeeds` 选两色做斜向渐变；按 `type` 叠加语义装饰（movie→胶片线、tv→天线、anime→点纹、variety→音波、documentary→等高线）；右下角叠印 `brand.logo.urlMono` 或 `brand.nameShort` 首字；主副标题居中渲染；全部颜色用 CSS 变量/品牌 Token，零硬编码
+   - IMG-03.5 完成后，IMG-04 才可启动
+
+   #### 校准点 C6 — 验收条件修正：排除 primitive 内部 `<img>`
+
+   **问题**：IMG-04 验收写"`grep -r '<img '` apps/web-next/src --include='*.tsx' 零命中"，但 `LazyImage.tsx`:80 内部故意使用 `<img>` 并有 eslint disable。
+
+   **校准结论**：验收改为：
+   - 业务组件目录（`apps/web-next/src/app/` 和 `apps/web-next/src/components/` 中排除 `primitives/lazy-image/`）零裸 `<img>` / 零裸 `next/image`
+   - ESLint 规则排除 `primitives/lazy-image/**`、测试夹具（`*.test.tsx`、`*.spec.tsx`）、品牌静态 Logo（`*.svg` inline 用法）
+
+   #### 校准点 C7 — Loader 顺序：`buildImageUrl` 完善前移至 IMG-03.5，`next.config.ts` 不做
+
+   **问题**：SafeImage 内部已通过 `buildImageUrl`（`image-loader.ts`）调用 loader，不走 `next/image`，因此 `next.config.ts images.loaderFile` 对 SafeImage 无效。IMG-07 将 next.config 配置作为核心产出，但实际上它对当前渲染路径无意义。另外 loader 函数是 IMG-04 全站迁移的运行时依赖，应在 IMG-04 前确认。
+
+   **校准结论**：
+   - `buildImageUrl`（`apps/web-next/src/lib/image/image-loader.ts`）的完善（`getLoader()`、`cloudflareLoader` 预留、`passthroughLoader`）前移到 IMG-03.5，作为 SafeImage 补齐的一部分
+   - IMG-07 仅保留：loader 接口单元测试、env 变量切换文档；**不**修改 `next.config.ts images.loaderFile`（若未来 SafeImage 改为基于 `next/image`，届时再添加，需另立任务卡）
+   - 若未来决定 SafeImage 基于 `next/image`，IMG-07 必须前移到 IMG-04 前并与 SafeImage 实现一起修改
+
+   #### 校准点 C8 — Beacon API 防滥用设计
+
+   **问题**：IMG-03 说无需鉴权且直接写 DB，但未定义 session 来源、URL 长度上限、rate limit、精确去重 key、事件类型映射。SafeImage 当前只能给出 `network/empty-src`（`SafeImage.tsx`:44），与方案里的 `fetch_404/fetch_5xx/...`（plan:143）不匹配。
+
+   **校准结论**：
+   - 前端 event_type 枚举：仅 `client_load_error`（onError 触发）和 `empty_src`（空 src，实际IMG-03.5后应不再上报此类）；服务端巡检写 `fetch_404/fetch_5xx/timeout/decode_fail/dimension_too_small/aspect_mismatch`
+   - Beacon body 约束：`video_id` 合法 UUID（不查 DB）、`image_kind` 枚举校验、`url` 最长 2048 chars、`reason` 限制枚举
+   - 去重 key：`(url_sha256_prefix_16 + image_kind + 10min_bucket)` upsert，不依赖 session（`navigator.sendBeacon` 不携带 session cookie）
+   - Rate limit：按客户端 IP，10 min 内同 IP 最多 50 次写入（超过静默丢弃，不报 429）
+   - 不得查询 `users` 表（公开端点，CLAUDE.md 约束）
+
+   ---
+
+   **IMG-00 文件产出（完成标准）**：
+
+   1. 更新 `docs/task-queue.md` 中 IMG-01~IMG-07 的文件范围、依赖、验收条件，使其与 C1~C8 一致；在 IMG-03 与 IMG-04 之间插入 IMG-03.5 卡片
+   2. 在 `docs/image_pipeline_plan_20260418.md` 文件末尾追加 `## 校准注记（2026-04-20）` 章节，简述 C1~C8 决议摘要（不改原文内容）
+   3. 无 .ts/.tsx/.sql/.css 源代码改动
+   4. `git add docs/` 确保所有文档变更纳入版本控制
+
+   **验收（已全部通过，本卡 ✅）**：
+   - ✅ IMG-01 依赖字段已标记 `IMG-00 ✅`
+   - ✅ IMG-01 文件范围无 `packages/db/`，全部指向 `apps/api/src/db/`；含 `videos.ts` 查询扩展和 `Video/VideoCard` 类型扩展
+   - ✅ IMG-01 文件范围无 `episodes.ts`，有 `video_episode_images`；`broken_image_events` 含 `url_hash_prefix/bucket_start` 去重列
+   - ✅ IMG-02 文件范围全部在 `apps/api/src/workers/` 和 `apps/api/src/services/`
+   - ✅ IMG-03.5 卡片存在于 IMG-03 与 IMG-04 之间
+   - ✅ IMG-04 验收改为排除 `primitives/lazy-image` 白名单版本
+   - ✅ IMG-07 不包含 `next.config.ts images.loaderFile` 配置内容
+   - ✅ `docs/image_pipeline_plan_20260418.md` 末尾追加 §17 校准注记（C1~C8）

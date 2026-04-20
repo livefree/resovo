@@ -592,3 +592,51 @@ Loader 抽象保证业务代码零改动。
 - 架构决策：`docs/decisions.md`（需追加图片管线相关 ADR）
 - DB 规范：`docs/rules/db-rules.md`
 - API 规范：`docs/rules/api-rules.md`
+
+---
+
+## 17. 校准注记（2026-04-20）
+
+> 本章节为事后校准，不改原文内容；执行以本章节结论为准。
+
+### C1 — 图片字段归属
+
+原方案（§5.1）将 poster/backdrop/logo/stills 字段加到 `videos` 表。
+
+**校准**：`media_catalog` 已是作品元数据权威层（§5.1a，含 `cover_url`/`backdrop_url`），治理元数据（`*_blurhash`、`*_status`、`*_primary_color` 等）应加到 `media_catalog` 同层。`videos` 只保留 `image_governance_status`（汇总发布门控）。
+
+### C2 — `episodes` 表不存在
+
+原方案（§5.2）扩展 `episodes.thumbnail_*`。
+
+**校准**：系统无独立 `episodes` 表；集数靠 `video_sources.season_number/episode_number` 表达。改用新建轻量表 `video_episode_images(video_id, season_number, episode_number, thumbnail_url, thumbnail_blurhash, thumbnail_status)`，UNIQUE `(video_id, season_number, episode_number)`。`broken_image_events` 不设 `episode_id FK`，改用 `season_number/episode_number` 字段记录集数坐标。
+
+### C3 — 实际迁移路径
+
+原方案（§12 M1）隐含 `packages/db/schema/*` 和 `packages/db/migrations/*`。
+
+**校准**：迁移在 `apps/api/src/db/migrations/048_image_pipeline.sql`；查询在 `apps/api/src/db/queries/imageHealth.ts` + `mediaCatalog.ts`；类型在 `packages/types/src/video.types.ts`。
+
+### C4 — Job 位置
+
+原方案（§6）未明确进程归属。
+
+**校准**：`apps/api/src/workers/`（与现有 worker 注册方式一致）；`apps/server` 只放管理 UI，不跑 worker。
+
+### C5 — SafeImage/FallbackCover 契约差距
+
+原方案（§7.1/§7.2）描述了完整契约，但 REG-M2-05 的实现只达到基础功能（无 `title/seed/type` 装饰，空 src 触发 `onLoadError`）。
+
+**校准**：全站迁移（§11.1 阶段 2）前须先补齐 primitive（对应 IMG-03.5 卡片），包括：结构化 fallback props、品牌 seed 渐变背景、类型语义装饰、brand logo 角标、空 src 静默降级。
+
+### C6 — `grep <img>` 零命中验收排除白名单
+
+`LazyImage.tsx` 内部故意使用 `<img>`，验收应排除 `components/primitives/lazy-image/`、测试夹具、静态 logo。
+
+### C7 — Loader 顺序与 next.config.ts
+
+SafeImage 当前基于 `<img>`（经 LazyImage），`next.config.ts images.loaderFile` 对其无效。`buildImageUrl` 完善（`getLoader`/`cloudflareLoader`）前移至 IMG-03.5。IMG-07 只补单元测试与文档，不改 `next.config.ts`。
+
+### C8 — Beacon API 防滥用
+
+前端 `reason` 枚举限定为 `client_load_error | empty_src`（服务端巡检才写 `fetch_404/fetch_5xx/...`）。去重 key：`sha256(url)前16位 + image_kind + 10min_bucket`；`video_id` 不预查 DB，FK violation 捕获后静默 204；IP rate limit 50次/10min 静默丢弃。
