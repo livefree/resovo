@@ -7348,3 +7348,23 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
 - **验收**：`grep -rn "Resovo\|流光" apps/web-next/src --include="*.tsx" --include="*.ts"` 除 brand-detection.ts 常量定义外零业务命中
 - **注意事项**：Server Component 的 metadata 不可使用 useBrand()（Client-only），统一通过 `DEFAULT_BRAND_NAME` 常量引用。
+
+## REG-M2-03 — PageTransition + SharedElement + RouteStack stub primitives
+
+- **日期**：2026-04-19
+- **执行模型**：claude-sonnet-4-6（主循环）+ arch-reviewer (claude-opus-4-6 子代理)
+- **子代理**：arch-reviewer (claude-opus-4-6) — ADR-044（四类过渡 primitive 契约）
+- **任务 ID**：REG-M2-03 / SEQ-20260420-REGRESSION-M2
+- **变更内容**：
+  - 新增 `apps/web-next/src/components/primitives/page-transition/`（PageTransition RSC wrapper + PageTransitionController Client + types）
+  - 新增 `apps/web-next/src/components/primitives/shared-element/`（SharedElement forwardRef + registry noop + types）
+  - 新增 `apps/web-next/src/components/primitives/route-stack/`（RouteStack noop + useRouteStack + types）
+  - 新增 `apps/web-next/src/components/primitives/index.ts`（统一导出）
+  - 修改 `apps/web-next/src/app/globals.css`（新增动画 token：--transition-page / --transition-page-reduced / --transition-shared / --ease-page / ::view-transition-* / .vt-reduced）
+  - 新增 `apps/web-next/src/app/[locale]/__dev/primitives/page.tsx`（演示页，生产返回 notFound）
+  - 新增 `apps/web-next/src/app/[locale]/__dev/primitives/DemoClient.tsx`
+  - 追加 ADR-044 到 `docs/decisions.md`
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
+- **注意事项**：SharedElement / RouteStack 当前为 noop stub，契约已冻结。FLIP 动画在 REG-M3-01 实装，边缘手势在 M5 实装。

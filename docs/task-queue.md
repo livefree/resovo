@@ -7717,7 +7717,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 依赖：REG-M2-01 ✅
    - 验收要点：grep "Resovo"/"流光" 在 .tsx 中零业务命中，brand token 改名后所有触点更新
 
-3. REG-M2-03 — PageTransition + SharedElement + RouteStack primitives（状态：⬜ 未开始）
+3. REG-M2-03 — PageTransition + SharedElement + RouteStack primitives（状态：✅ 已完成）
    - 创建时间：2026-04-20 00:00
    - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制）
    - 规模：L（~240 min）

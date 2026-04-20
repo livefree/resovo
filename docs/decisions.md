@@ -1086,3 +1086,23 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
   - **D5 CSS**：globals.css 新增 `.app-shell` / `.main-slot` / `#global-player-host-portal` 三条规则；`--z-player-host` fallback 40
 - **不做**：不拆 route group，不改 middleware matcher，不实现 GlobalPlayerHost 本体（REG-M3-01），不处理影院模式 Footer 隐藏（REG-M3）
 - **影响文件**：layout.tsx / page.tsx / detail-page-factory.tsx / watch page / next-placeholder page / globals.css
+
+## ADR-044: View Transitions + Shared Element + Route Stack Primitives
+
+- **状态**: Accepted
+- **日期**: 2026-04-19
+- **关联任务**: REG-M2-03
+- **上游决策**: ADR-040（Root Layout 四件套），ADR-038（BrandProvider/ThemeContext）
+- **下游影响**: REG-M3-01（FLIP 动画实装），M5（Tab Bar + 边缘滑动手势）
+
+### 决策
+
+1. **PageTransition**：封装 CSS View Transitions API，三态降级：支持+允许动画 → startViewTransition；浏览器不支持 → 直接切换；prefers-reduced-motion → opacity-only 80ms。Server Component wrapper（无 `'use client'`）+ Client `PageTransitionController`（含逻辑）分离，保持 RSC 兼容性。
+2. **SharedElement**：本轮（REG-M2-03）仅定义 Props/Ref/Registry 契约并实现 noop，不实装 FLIP；FLIP 实现推迟到 REG-M3-01（需要全局持久 registry Context 归属评估）。
+3. **RouteStack**：本轮仅实现类型定义 + noop hook/component，手势逻辑推迟到 M5 Tab Bar。原因：手势参数需真实场景调参，iOS Safari overscroll 兼容性需真机联调。
+4. **动画时长**：全部通过 CSS 变量（`--transition-page: 240ms`、`--transition-page-reduced: 80ms`、`--transition-shared: 320ms`、`--ease-page`），不硬编码 ms 值。
+
+### 推迟决定
+
+- REG-M2-03 不实现边缘滑动手势；RouteStack stub 注释"TODO: M5 Tab Bar 上线时实装手势"。
+- SharedElement FLIP bridge 注释"TODO: REG-M3-01 填充 FLIP 实现"。

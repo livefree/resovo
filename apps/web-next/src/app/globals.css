@@ -134,6 +134,25 @@
   }
 }
 
+/* REG-M2-03 — 动画 token（ADR-044） */
+:root {
+  --transition-page: 240ms;
+  --transition-page-reduced: 80ms;
+  --transition-shared: 320ms;
+  --ease-page: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--transition-page);
+  animation-timing-function: var(--ease-page);
+}
+
+:root.vt-reduced * {
+  transition: opacity var(--transition-page-reduced) linear !important;
+  animation: none !important;
+}
+
 /* REG-M2-01 — Root layout 四件套常驻化（ADR-040） */
 .app-shell {
   min-height: 100dvh;
