@@ -7961,11 +7961,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - `docs/architecture.md` 已更新 Schema 图片字段章节
      - arch-reviewer Opus 子代理 AUDIT RESULT: PASS
 
-2. IMG-02 — image_health_check job + blurhash_and_color_extract job + 存量回填 job（状态：⬜ 待开始）
+2. IMG-02 — image_health_check job + blurhash_and_color_extract job + 存量回填 job（状态：✅ 已完成）
    - 创建时间：2026-04-20 10:00
    - 计划开始：待 IMG-01 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-04-20 14:08
+   - 完成时间：2026-04-20 14:20
    - 建议模型：claude-sonnet-4-6
    - 规模：L（~240 min）
    - 依赖：IMG-01 ✅

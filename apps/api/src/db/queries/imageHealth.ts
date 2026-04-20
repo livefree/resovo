@@ -284,6 +284,112 @@ export async function listMissingPosterVideos(
   }))
 }
 
+// ── 查询：待检图 URL 批量读取（供 imageHealthWorker / imageBlurhashWorker 使用）────
+
+export interface PendingImageRow {
+  catalogId: string
+  videoId: string
+  kind: 'poster' | 'backdrop' | 'logo' | 'banner_backdrop'
+  url: string
+}
+
+/**
+ * 读取 media_catalog 中状态为 pending_review 的图片 URL，批量供 worker 消费。
+ * 返回最多 limit 条，按 media_catalog.updated_at 升序（最旧优先）。
+ */
+export async function listPendingImageUrls(
+  db: Pool,
+  limit = 100,
+  offset = 0
+): Promise<PendingImageRow[]> {
+  const result = await db.query<{
+    catalog_id: string
+    video_id: string
+    kind: string
+    url: string
+  }>(
+    `SELECT
+       mc.id       AS catalog_id,
+       v.id        AS video_id,
+       'poster'    AS kind,
+       mc.cover_url AS url
+     FROM media_catalog mc
+     JOIN videos v ON v.catalog_id = mc.id
+     WHERE mc.cover_url IS NOT NULL
+       AND mc.poster_status = 'pending_review'
+       AND v.deleted_at IS NULL
+     UNION ALL
+     SELECT
+       mc.id           AS catalog_id,
+       v.id            AS video_id,
+       'backdrop'      AS kind,
+       mc.backdrop_url AS url
+     FROM media_catalog mc
+     JOIN videos v ON v.catalog_id = mc.id
+     WHERE mc.backdrop_url IS NOT NULL
+       AND mc.backdrop_status = 'pending_review'
+       AND v.deleted_at IS NULL
+     ORDER BY url
+     LIMIT $1 OFFSET $2`,
+    [limit, offset]
+  )
+  return result.rows.map(r => ({
+    catalogId: r.catalog_id,
+    videoId: r.video_id,
+    kind: r.kind as PendingImageRow['kind'],
+    url: r.url,
+  }))
+}
+
+/**
+ * 读取 media_catalog 中 blurhash 为空但 URL 有效的图片，供 imageBlurhashWorker 消费。
+ */
+export async function listMissingBlurhashUrls(
+  db: Pool,
+  limit = 100,
+  offset = 0
+): Promise<PendingImageRow[]> {
+  const result = await db.query<{
+    catalog_id: string
+    video_id: string
+    kind: string
+    url: string
+  }>(
+    `SELECT
+       mc.id       AS catalog_id,
+       v.id        AS video_id,
+       'poster'    AS kind,
+       mc.cover_url AS url
+     FROM media_catalog mc
+     JOIN videos v ON v.catalog_id = mc.id
+     WHERE mc.cover_url IS NOT NULL
+       AND mc.poster_blurhash IS NULL
+       AND mc.poster_status = 'ok'
+       AND v.deleted_at IS NULL
+     UNION ALL
+     SELECT
+       mc.id           AS catalog_id,
+       v.id            AS video_id,
+       'backdrop'      AS kind,
+       mc.backdrop_url AS url
+     FROM media_catalog mc
+     JOIN videos v ON v.catalog_id = mc.id
+     WHERE mc.backdrop_url IS NOT NULL
+       AND mc.backdrop_blurhash IS NULL
+       AND mc.backdrop_status = 'ok'
+       AND v.deleted_at IS NULL
+     ORDER BY url
+     LIMIT $1 OFFSET $2`,
+    [limit, offset]
+  )
+  return result.rows.map(r => ({
+    catalogId: r.catalog_id,
+    videoId: r.video_id,
+    kind: r.kind as PendingImageRow['kind'],
+    url: r.url,
+  }))
+}
+
 /** 标记事件为已处理 */
 export async function resolveImageEvents(
   db: Pool | PoolClient,

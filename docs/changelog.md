@@ -7576,3 +7576,31 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 
 - typecheck ✅ / lint ✅ / 1136/1136 unit tests ✅
 - arch-reviewer Opus 子代理 AUDIT RESULT: PASS（6 个决策点全部落地）
+
+---
+
+## IMG-02 — image_health_check + blurhash_and_color_extract + 存量回填 worker（2026-04-20）
+
+- **任务 ID**：IMG-02
+- **完成时间**：2026-04-20 14:20
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理调用**：无
+
+### 变更内容
+
+**新文件**：
+- `apps/api/src/workers/imageHealthWorker.ts`：URL 语法校验 → HEAD 请求（300ms 超时）→ 尺寸检查（P0 poster 2:3±10%；P1 backdrop 16:9±10%）→ domain 限速 200ms → 连续 3 次失败置 broken；并发 5
+- `apps/api/src/workers/imageBlurhashWorker.ts`：下载原图 → 缩略 100×100 → BlurHash 编码 → k-means 2 色 → OKLCH 亮度过滤（L<15/L>90 → null）→ 写回 media_catalog
+- `apps/api/src/workers/imageBackfillWorker.ts`：分批（1000/batch）入队存量 pending_review → health-check + 缺 blurhash → blurhash-extract；可中断恢复
+- `apps/api/src/services/ImageHealthService.ts`：封装 worker 调用、批量入队、统计聚合
+- `tests/unit/api/image-health-worker.test.ts`：5 个测试（无效 URL/404 单次/连续 3 次 broken/200 ok/register）
+- `tests/unit/api/image-blurhash-worker.test.ts`：4 个测试（下载失败静默/网络异常不抛/logo 跳过/极暗不抛）
+
+**修改文件**：
+- `apps/api/src/lib/queue.ts`：新增 `imageHealthQueue`（image-health-queue）
+- `apps/api/src/db/queries/imageHealth.ts`：新增 `listPendingImageUrls` + `listMissingBlurhashUrls` 查询
+
+### 验收结果
+
+- typecheck ✅ / lint ✅ / 1145/1145 unit tests（111 files）✅
+- sharp + blurhash 均为已有依赖，无新引入
