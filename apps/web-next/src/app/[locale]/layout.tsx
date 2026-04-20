@@ -2,7 +2,6 @@ import { cookies } from 'next/headers'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages } from 'next-intl/server'
 import { notFound } from 'next/navigation'
-import dynamic from 'next/dynamic'
 import { RoutePlayerSync } from './_lib/route-player-sync'
 import { routing } from '@/i18n/routing'
 import { THEME_INIT_SCRIPT } from '@/lib/theme-init-script'
@@ -10,12 +9,8 @@ import { parseBrandSlug, parseTheme, DEFAULT_BRAND_SLUG } from '@/lib/brand-dete
 import { BrandProvider } from '@/contexts/BrandProvider'
 import { Nav } from '@/components/layout/Nav'
 import { Footer } from '@/components/layout/Footer'
+import GlobalPlayerHost from './_lib/player/GlobalPlayerHost'
 import type { Brand } from '@/types/brand'
-
-const GlobalPlayerHost = dynamic(
-  () => import('./_lib/player/GlobalPlayerHost'),
-  { ssr: false },
-)
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }))
