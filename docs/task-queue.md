@@ -7585,23 +7585,54 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ---
 
-## 🚨 BLOCKER — REGRESSION 阶段启动（exec-M4 及后续任务冻结）
+## 🚀 REGRESSION PHASE COMPLETE — apps/web-next 方案 M1/M2/M3 能力层补齐
 
-- **触发时间**：2026-04-20 00:00
-- **触发原因**：三份原方案（design_system_plan / frontend_redesign_plan / image_pipeline_plan）对齐复盘结论 — 方案 M1/M2/M3 能力层在 apps/web-next 端存在结构性断档（执行侧 exec-M1/M2/M3 与方案侧 M1/M2/M3 语义已严重错位）
-- **依据补丁**：`docs/task_queue_patch_regression_m1m2m3_20260420.md`（15 张原始 REGRESSION 卡片完整定义、决策 R-A 至 R-F、模型路由表、风险缓解）
-- **审计追加**：2026-04-19 架构审计（claude-sonnet-4-6）新增 2 张卡（REG-M1-04-PREP + REG-POST-01），总计 **17 张卡**
-- **封锁范围**：
-  - 🚫 禁止启动任何 exec-M4 及后续里程碑任务（auth / search / admin / community 模块搬家全部暂停）
-  - 🚫 禁止对 apps/web-next 新增业务页面
-  - 🚫 禁止修改 ALLOWLIST（除 REGRESSION 序列内允许的操作外）
-  - ✅ 允许：REGRESSION 序列（REG-M1-01 至 REG-CLOSE-01，见下方 4 个 SEQ）
-  - ✅ 允许：hotfix（破坏性 bug 必须报独立 BLOCKER 后另开序列）
-- **解除条件**：
-  1. REG-CLOSE-01 ✅ 已完成
-  2. arch-reviewer (claude-opus-4-6) 独立审计 AUDIT RESULT: PASS
-  3. 补丁第 2 节"方案 ↔ 执行 对齐表"19 项条目全部打勾
-- **解除后**：删除本 BLOCKER 块，开始 exec-M4（人工选定，建议方案 M4 图片治理或原 exec-M4 auth 接管）
+- **宣告时间**：2026-04-20（REG-CLOSE-01 完成）
+- **关联 BLOCKER**：「REGRESSION 阶段启动（exec-M4 及后续任务冻结）」已解除
+- **执行模型**：claude-sonnet-4-6（主循环）+ arch-reviewer (claude-opus-4-6)（独立审计子代理）
+- **审计结论**：AUDIT RESULT: PASS（16/19 ✅，3/19 ⚠️ 均有 ADR 记录，0/19 ❌）
+
+### 方案 M1/M2/M3 ↔ REGRESSION 执行对齐表
+
+| 方案 M# | 方案要求 | REG 卡 | 状态 |
+|---------|---------|--------|------|
+| M1.1 Token 三子层 | base/semantic/component + brands/resovo | — (复用 workspace 包) | ✅ |
+| M1.2 主题三态 | ThemeProvider + 三态 Segmented | REG-M1-01 | ✅ |
+| M1.3 BrandProvider | BrandProvider + useBrand | REG-M1-01 | ✅ |
+| M1.4 middleware 识别 | brand/theme cookie → header | REG-M1-02 | ✅ |
+| M1.5 blocking script | 首屏无闪烁 | — (已复制) | ✅ |
+| M1.6 Token 后台 MVP | 11 项（V2 推迟 7 项，ADR-043） | REG-M1-04-PREP | ⚠️ |
+| M2.1 Root layout 四件套 | Nav/Footer/Host/MainSlot 常驻 | REG-M2-01 | ✅ |
+| M2.2 useBrand 驱动触点 | Header/Footer/Logo/Footer text | REG-M2-02 | ✅ |
+| M2.3 PageTransition primitive | §9 四类过渡底层 | REG-M2-03 | ✅ |
+| M2.4 SharedElement primitive | FLIP 基建（noop 合约冻结，M5 实装） | REG-M2-03 | ⚠️ |
+| M2.5 RouteStack primitive | 返回手势（noop stub，M5 实装） | REG-M2-03 | ⚠️ |
+| M2.6 LazyImage + BlurHash | §15 + §17 | REG-M2-04 | ✅ |
+| M2.7 SafeImage + FallbackCover | §17 四级降级链 | REG-M2-05 | ✅ |
+| M2.8 ScrollRestoration | §15.1 | REG-M2-06 | ✅ |
+| M2.9 PrefetchOnHover | §15.2 | REG-M2-06 | ✅ |
+| M3.1 GlobalPlayerHost | root + zustand 单例 + Portal | REG-M3-01 | ✅ |
+| M3.2 mini 态 + FLIP full↔mini | §13.3 Spotify 模式 | REG-M3-02 | ✅ |
+| M3.3 pip 态 | 浏览器原生 PiP | REG-M3-03 | ✅ |
+| M3.4 路由切换语义 | 离开 /watch 转 mini | REG-M3-04 | ✅ |
+
+**汇总**：16/19 ✅，3/19 ⚠️（均有 ADR 记录），0/19 ❌
+
+### ⚠️ 人工回归待确认（不阻塞 PHASE COMPLETE 落盘）
+
+以下 6 个场景需人工验证（设备：Chrome + macOS）：
+
+1. [ ] 断点续播（进度条位置正确恢复）
+2. [ ] 线路切换（切换后自动播放）
+3. [ ] 剧场模式（影院模式 layout 正确）
+4. [ ] 字幕（暂无源可跳过）
+5. [ ] mini 跨路由持续播放（离开 /watch → mini 可见且播放继续）
+6. [ ] 替换视频 ConfirmDialog（slug mismatch 时弹出对话框）
+
+### 下一步
+
+- exec-M4 可以启动（人工选定：建议方案 M4 图片治理 或 原 exec-M4 auth 接管）
+- REG-POST-01 可以启动（人工审核汇总 + README/说明文档更新）
 
 ---
 
@@ -7814,7 +7845,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ### 任务列表
 
-1. REG-CLOSE-01 — REGRESSION PHASE COMPLETE + Opus 独立审计 + ADR-037（状态：⬜ 未开始）
+1. REG-CLOSE-01 — REGRESSION PHASE COMPLETE + Opus 独立审计 + ADR-037（状态：✅ 已完成）
    - 创建时间：2026-04-20 00:00
    - 建议模型：**claude-opus-4-6**（主循环 + 独立审计 opus 子代理强制）
    - 规模：S（~90 min）

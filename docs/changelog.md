@@ -7490,3 +7490,49 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
 - **E2E testid 迁移**：player-shell 等 testid 跟随 PlayerShell 进 Portal，document-wide 选择器无变化；无祖先链断言需修改。
 - **⚠️ 人工回归待完成**：①断点续播 ②线路切换 ③剧场模式 ④字幕 ⑤mini 跨路由持续播放 ⑥替换视频 ConfirmDialog
+
+## REG-CLOSE-01 — REGRESSION PHASE COMPLETE + Opus 独立审计 + ADR-037
+
+- **日期**：2026-04-20
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-6) — ADR-037 起草 + REGRESSION 阶段独立审计
+- **任务 ID**：REG-CLOSE-01 / SEQ-20260420-REGRESSION-CLOSE
+- **审计结论**：AUDIT RESULT: PASS（16/19 ✅，3/19 ⚠️ 均有 ADR 记录，0/19 ❌）
+- **变更内容**：
+  - 新建 `docs/milestone_alignment_20260420.md`（方案 M# ↔ 执行里程碑映射表 + 未来对齐协议 + 历史偏差说明）
+  - 追加 ADR-037 到 `docs/decisions.md`（执行里程碑与方案里程碑对齐协议 — 历史偏差追认与未来约束）
+  - 修改 `docs/decisions.md`：ADR-043 追加"V2 推迟项触发条件"；ADR-045 追加"四级降级层级合并说明"
+  - 追加 `docs/architecture.md` §8（apps/web-next 能力层：BrandProvider / 品牌 middleware / Root layout 四件套 / GlobalPlayerHost 播放器系统）
+  - 修改 `CLAUDE.md`（「绝对禁止」追加 2 条：未含对齐表的 PHASE COMPLETE 视为未完成 + 未经 Opus 审计不得标 ✅）
+  - 修改 `docs/rules/workflow-rules.md`（追加"回归补齐"子条款 + 里程碑启动前对齐确认要求）
+  - 修改 `docs/task-queue.md`（删除 BLOCKER 块 → 替换为 REGRESSION PHASE COMPLETE 块；REG-CLOSE-01 标 ✅）
+  - 修改 `apps/web-next/src/components/primitives/shared-element/SharedElement.tsx:28`（TODO 文案修正：REG-M3-01 → M5 页面重制阶段）
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅（无代码逻辑改动）
+- **⚠️ 人工回归待确认**：①断点续播 ②线路切换 ③剧场模式 ④字幕 ⑤mini 跨路由持续播放 ⑥替换视频 ConfirmDialog（不阻塞 PHASE COMPLETE 宣告）
+
+---
+
+## REGRESSION 阶段汇总（SEQ-20260420-REGRESSION-M1/M2/M3/CLOSE）
+
+- **执行周期**：2026-04-19 至 2026-04-20
+- **总卡片数**：14 张（REG-M1-01 至 REG-M3-04）+ 1 张（REG-CLOSE-01）= 15 张
+- **代码新增**：39 个新文件，核心模块如下：
+
+| 类别 | 关键文件 |
+|------|---------|
+| 品牌/主题 | `contexts/BrandProvider.tsx`、`hooks/useBrand.ts`、`hooks/useTheme.ts`、`lib/brand-detection.ts`（DEFAULT_BRAND_NAME） |
+| middleware | `middleware.ts`（品牌/主题 cookie → header） |
+| Root layout | `app/[locale]/layout.tsx`（四件套）、`globals.css`（layout tokens + animation tokens + mini-player tokens） |
+| Primitives | `page-transition/`、`shared-element/`、`route-stack/`、`lazy-image/`、`scroll-restoration/`、`prefetch-on-hover/` |
+| 图片 | `components/media/SafeImage.tsx`、`FallbackCover.tsx`、`lib/image/image-loader.ts` |
+| 播放器 | `_lib/player/GlobalPlayerHost.tsx`、`MiniPlayer.tsx`、`GlobalPlayerFullFrame.tsx`、`pip.ts`、`_lib/route-player-sync.tsx` |
+| 播放器 store | `stores/playerStore.ts`（hostMode 状态机 + sessionStorage 持久化）、`_lib/player/types.ts` |
+| /watch 接入 | `watch/[slug]/WatchPageClient.tsx`、`_hooks/use-watch-slug-sync.ts`、`components/player/ConfirmReplaceDialog.tsx` |
+| Token 后台 | API PUT 写回 + DiffPanel + InheritanceBadge + TokenEditor（REG-M1-04-PREP） |
+
+- **审计结论**：AUDIT RESULT: PASS（arch-reviewer claude-opus-4-6，2026-04-20）
+- **对齐表**：详见 `docs/milestone_alignment_20260420.md`（16/19 ✅，3/19 ⚠️，0/19 ❌）
+- **已解除 BLOCKER**：REGRESSION 阶段启动 BLOCKER（exec-M4 冻结解除）
+- **下一步**：exec-M4（人工选定方向）+ REG-POST-01（人工审核汇总 + 文档更新）

@@ -549,3 +549,94 @@ apps/web (port 3000) ← 对外唯一入口
 - `x-rewrite-rule: <milestone>:<domain>`
 
 DevTools Network 面板可直接确认是否命中，Playwright 可断言响应头。
+
+---
+
+## 8. apps/web-next 能力层（REGRESSION 阶段补齐，ADR-037）
+
+> 本节记录 REGRESSION 序列（SEQ-20260420-REGRESSION-M1/M2/M3）在 apps/web-next 端补齐的三大能力层。参见 `docs/milestone_alignment_20260420.md` 的完整 19 条对齐表。
+
+### 8.1 品牌与主题系统（方案 M1 → REG-M1-01/02）
+
+**BrandProvider**（`apps/web-next/src/contexts/BrandProvider.tsx`）：
+
+- SSR 安全双 Context：ThemeContext（data-theme 写入）+ BrandContext（slug/name/overrides）
+- `useBrand()` / `useTheme()` / `useSetTheme()` Hook 供消费方调用
+- `DEFAULT_BRAND_NAME = 'Resovo'` 统一品牌名称常量（`lib/brand-detection.ts`）
+- layout 传入 `initialBrand`（从 cookie 读取），避免客户端首帧 flash
+
+**middleware 品牌识别分层**（`apps/web-next/src/middleware.ts`，ADR-039）：
+
+- Edge runtime：读取 `resovo-brand` / `resovo-theme` cookie → 注入 `x-resovo-brand` / `x-resovo-theme` 请求头
+- `parseBrandSlug()` / `parseTheme()` 为纯函数，可在 server component / layout 中直接调用
+- brand/theme 识别与 next-intl 国际化 middleware 分离（先品牌→后 next-intl）
+
+### 8.2 全局骨架 + Primitives（方案 M2 → REG-M2-01～06）
+
+**Root layout 四件套**（`apps/web-next/src/app/[locale]/layout.tsx`，ADR-040）：
+
+```
+BrandProvider
+  └── Nav（顶部导航，消费 useBrand）
+  └── main#main-content.main-slot（页面内容槽）
+  └── div#global-player-host-portal（播放器宿主 Portal，pointer-events: none）
+  └── GlobalPlayerHost（dynamic ssr:false）
+  └── RoutePlayerSync（路由 ↔ 播放器状态同步）
+  └── Footer（底部，消费 useBrand）
+```
+
+**Primitives**（`apps/web-next/src/components/primitives/`）：
+
+| Primitive | 文件 | 状态 |
+|-----------|------|------|
+| PageTransition | `page-transition/{PageTransition,PageTransitionController}.tsx` | ✅ 实装（View Transitions API 三态降级） |
+| SharedElement | `shared-element/{SharedElement,registry}.tsx` | ⚠️ API 合约冻结，FLIP 数学 M5 实装 |
+| RouteStack | `route-stack/RouteStack.tsx` | ⚠️ noop stub，M5 Tab Bar 实装 |
+| LazyImage + BlurHash | `lazy-image/{LazyImage,BlurHashCanvas}.tsx` | ✅ IntersectionObserver + blurhash@2.x |
+| ScrollRestoration | `scroll-restoration/ScrollRestoration.tsx` | ✅ sessionStorage 记忆 |
+| PrefetchOnHover | `prefetch-on-hover/PrefetchOnHover.tsx` | ✅ hover 150ms + matchMedia 能力检测 |
+
+**SafeImage + FallbackCover**（`apps/web-next/src/components/media/`，ADR-045）：
+
+- SafeImage：四级降级链（真实图 → BlurHash 占位 → FallbackCover → CSS 渐变内嵌于 FallbackCover）
+- FallbackCover：纯 CSS + 内联 SVG，颜色全部来自 CSS 变量，零硬编码
+- image-loader：passthrough 实现，预留 Cloudflare Images URL 模板（env: NEXT_PUBLIC_IMAGE_LOADER=cloudflare）
+
+### 8.3 GlobalPlayerHost 播放器系统（方案 M3 → REG-M3-01～04）
+
+**状态机**（`apps/web-next/src/stores/playerStore.ts`，ADR-041）：
+
+```
+HostPlayerMode: 'closed' | 'full' | 'mini' | 'pip'
+
+LEGAL_TRANSITIONS:
+  closed → ['full']
+  full   → ['closed', 'mini', 'pip']
+  mini   → ['closed', 'full', 'pip']
+  pip    → ['closed', 'full', 'mini']
+```
+
+- sessionStorage 持久化（key: `resovo:player-host:v1`）：mini/pip 跨路由保持；full 刷新降级为 closed
+- `isHydrated` flag 防止 SSR 闪烁
+
+**Portal 架构**（`apps/web-next/src/app/[locale]/_lib/player/`，ADR-041）：
+
+```
+layout.tsx
+  └── #global-player-host-portal（position: fixed; z-index: 40; pointer-events: none）
+        └── GlobalPlayerHost（createPortal，dynamic ssr:false）
+              ├── hostMode=full  → GlobalPlayerFullFrame（PlayerShell portalMode）
+              ├── hostMode=mini  → MiniPlayer（固定右下，FLIP CSS transition）
+              └── hostMode=pip   → PipSlot（空容器，浏览器 PiP 窗口控制画面）
+```
+
+**路由切换语义**（ADR-042）：
+
+- `RoutePlayerSync`：usePathname 监听，离开 /watch 且 hostMode=full → setHostMode('mini')
+- `/watch/[slug]` 页：WatchPageClient（thin client）+ useWatchSlugSync（slug mismatch 检测）+ ConfirmReplaceDialog
+- PlayerShell 新增 `slug?` + `portalMode?` prop，支持 Portal 内渲染与传统页面级渲染两种模式
+
+**pip 封装**（`apps/web-next/src/app/[locale]/_lib/player/pip.ts`）：
+
+- `isPipSupported()` / `requestPip(videoEl)` / `exitPip()` / `onPipLeave(videoEl, onClose)` 四 API
+- leavepictureinpicture 事件通过 onPipLeave 回调桥接 → 自动切回 mini/full 态

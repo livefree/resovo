@@ -87,6 +87,8 @@ npm run test:e2e         # PLAYER / AUTH / SEARCH / VIDEO 任务完成后运行
 - ❌ 函数超 80 行非声明性 / 嵌套 3 层 / 多独立逻辑阶段，不先拆分就继续写
 - ❌ 文件超 500 行非声明性 / 导出 2+ 主要概念，不先拆分就继续写
 - ❌ 重写冻结期（M0–M6）接受与三份方案（design_system / frontend_redesign / image_pipeline）目标无关的新业务需求——一律写 BLOCKER 暂停，等人工决定
+- ❌ 未含方案对齐表（`docs/milestone_alignment_20260420.md` 风格）的 PHASE COMPLETE 视为未完成——禁止推进下一里程碑（ADR-037）
+- ❌ 未经 Opus arch-reviewer 子代理审计 PASS 的里程碑在 task-queue.md 中标 ✅（ADR-037）
 
 ---
 

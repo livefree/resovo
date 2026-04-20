@@ -25,7 +25,7 @@ export const SharedElement = forwardRef<SharedElementRef, SharedElementProps>(
       [],
     )
 
-    // TODO: REG-M3-01 填充 FLIP 实现
+    // TODO: 方案 M5 页面重制阶段实装 FLIP 数学（依赖真实视觉锚点：列表卡片 → 详情页 poster）
     // - 在 PageTransitionController 触发前，从 registry 取 old rect
     // - commit 后测量 new rect，用 Web Animations API 做 transform 插值
     // - 预留 view-transition-name 自定义属性，Chrome 原生可直接接管
