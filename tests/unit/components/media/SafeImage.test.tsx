@@ -43,11 +43,20 @@ describe('SafeImage — 空 src 降级', () => {
     expect(screen.queryByTestId('lazy-image')).toBeNull()
   })
 
-  it('src=null → 渲染自定义 fallback', () => {
+  it('src=null + fallback 结构化对象 → 渲染 FallbackCover，不触发回调', () => {
+    const onLoadFail = vi.fn()
     render(
-      <SafeImage src={null} alt="test" width={100} height={100} fallback={<div data-testid="custom-fb" />} />
+      <SafeImage
+        src={null}
+        alt="test"
+        width={100}
+        height={100}
+        fallback={{ title: '测试标题', type: 'movie', seed: 'vid-abc' }}
+        onLoadFail={onLoadFail}
+      />
     )
-    expect(screen.getByTestId('custom-fb')).toBeDefined()
+    expect(onLoadFail).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('lazy-image')).toBeNull()
   })
 
   it('src="" → 渲染 FallbackCover，不触发回调', () => {

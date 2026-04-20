@@ -32,8 +32,8 @@ export interface SafeImageProps extends Omit<LazyImageProps, 'blurHash' | 'src'>
   src: string | undefined | null
   blurHash?: LazyImageProps['blurHash']
   aspect?: MediaAspect
-  fallback?: React.ReactNode
-  fallbackProps?: Omit<FallbackCoverProps, 'className'>
+  /** 结构化降级数据，传给 FallbackCover；典型用法：fallback={{ title, type, seed: video.id }} */
+  fallback?: Omit<FallbackCoverProps, 'className'>
   onLoadFail?: (payload: ImageLoadFailPayload) => void
   /** @deprecated use onLoadFail */
   onLoadError?: (err: { src: string; reason: 'network' | 'empty-src' }) => void

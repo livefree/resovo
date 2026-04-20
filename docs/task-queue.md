@@ -8032,7 +8032,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - `apps/web-next/src/components/media/FallbackCover.tsx`：背景改为 `seed` 哈希 + `useBrand().brand.palette.fallbackSeeds` 选两色斜向渐变；按 `type` 叠加语义装饰（movie→胶片线、tv→天线、anime→点纹、variety→音波、documentary→等高线）；右下角叠印 `brand.logo.urlMono` 或首字角标；主副标题居中渲染；所有颜色用 CSS 变量/品牌 Token
      - `apps/web-next/src/lib/image/image-loader.ts`：完善 `getLoader()`（读 `IMAGE_LOADER` env）、`cloudflareLoader`（URL 模板与方案 §10.1 一致）、`passthroughLoader`；SafeImage 内部统一通过 `getLoader()` 获取 loader（此为 C7 前移项）
      - 单元测试：SafeImage 空 src 不触发 onLoadFail；FallbackCover 相同 seed 渲染稳定；cloudflareLoader URL 格式
-     - 决策产出：ADR-046（SafeImage/FallbackCover 最终契约）
+     - 决策产出：ADR-047（SafeImage/FallbackCover 最终契约）
    - **验收要点**：
      - `<SafeImage src={null} onLoadFail={fn} />` → fn 不被调用，FallbackCover 直接渲染
      - FallbackCover 背景无硬编码颜色（CSS 变量零硬编码检查）

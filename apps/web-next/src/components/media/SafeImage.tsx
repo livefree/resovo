@@ -11,7 +11,6 @@ export function SafeImage({
   blurHash,
   aspect,
   fallback,
-  fallbackProps,
   onLoadFail,
   onLoadError,
   imageLoader,
@@ -28,8 +27,7 @@ export function SafeImage({
   const loader = imageLoader ?? getLoader()
 
   if (!src || errored) {
-    if (fallback !== undefined) return <>{fallback}</>
-    return <FallbackCover variant="generic" aspect={aspect} {...fallbackProps} />
+    return <FallbackCover variant="generic" aspect={aspect} {...(fallback ?? {})} />
   }
 
   const resolvedSrc = loader(src, loaderOptions ?? {})
