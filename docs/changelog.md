@@ -7678,3 +7678,31 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 
 - `grep -r "from 'next/image'" apps/web-next/src/app apps/web-next/src/components --exclude-dir="primitives"` 零命中 ✅
 - typecheck ✅ / lint ✅ / 1192/1192 unit tests（115 files）✅
+
+---
+
+## IMG-05 — /admin/image-health Dashboard + /admin/fallback-preview 预览页
+
+- **完成时间**：2026-04-20 17:00
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **关联序列**：SEQ-20260420-IMG-M3
+- **变更摘要**：新增图片健康监控 Dashboard（统计卡片 + BrokenDomainTable + MissingVideoTable）及样板图预览页；Fastify 新增 3 个 admin-only 路由；AdminSidebar 追加导航项；admin globals.css 追加 --fallback-gradient-* CSS 变量。
+- **修改文件**：
+  - `apps/api/src/routes/admin/image-health.ts` — 新建；3 个 GET 端点（stats / broken-domains / missing-videos）
+  - `apps/api/src/server.ts` — 注册 adminImageHealthRoutes
+  - `apps/server/src/services/image-health-stats.service.ts` — 新建；apiClient 封装
+  - `apps/server/src/components/admin/image-health/ImageHealthDashboard.tsx` — 新建
+  - `apps/server/src/components/admin/image-health/BrokenDomainTable.tsx` — 新建；ModernDataTable
+  - `apps/server/src/components/admin/image-health/MissingVideoTable.tsx` — 新建；ModernDataTable + PaginationV2
+  - `apps/server/src/components/admin/fallback-preview/FallbackPreviewPage.tsx` — 新建；4×5=20 格预览
+  - `apps/server/src/app/admin/image-health/page.tsx` — 新建
+  - `apps/server/src/app/admin/fallback-preview/page.tsx` — 新建
+  - `apps/server/src/components/admin/AdminSidebar.tsx` — 追加图片健康 + 样板图预览导航项
+  - `apps/server/src/app/globals.css` — 追加 --fallback-gradient-{0-5} CSS 变量
+- **新增依赖**：无
+- **数据库变更**：无
+
+### 验收结果
+
+- typecheck ✅ / lint ✅ / 1192/1192 unit tests（115 files）✅

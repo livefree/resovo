@@ -8075,11 +8075,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ### 任务列表（按执行顺序）
 
-1. IMG-05 — /admin/image-health Dashboard + /admin/fallback-preview 预览页（状态：⬜ 待开始）
+1. IMG-05 — /admin/image-health Dashboard + /admin/fallback-preview 预览页（状态：✅ 已完成）
    - 创建时间：2026-04-20 10:00
    - 计划开始：待 IMG-M1 + IMG-M2 完成后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-04-20 16:30
+   - 完成时间：2026-04-20 17:00
    - 建议模型：claude-sonnet-4-6
    - 规模：L（~240 min）
    - 依赖：IMG-01 ✅ + IMG-02 ✅ + IMG-03.5 ✅ + IMG-04 ✅

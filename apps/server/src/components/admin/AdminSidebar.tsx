@@ -24,6 +24,8 @@ const SYSTEM_MENU: MenuItem[] = [
   { href: '/admin/system/settings', label: '站点配置', icon: '⚙️' },
   { href: '/admin/users', label: '用户管理', icon: '👤' },
   { href: '/admin/analytics', label: '数据看板', icon: '📊' },
+  { href: '/admin/image-health', label: '图片健康', icon: '🖼️' },
+  { href: '/admin/fallback-preview', label: '样板图预览', icon: '🎨' },
 ]
 
 function SidebarLink({ item, collapsed }: { item: MenuItem; collapsed: boolean }) {
