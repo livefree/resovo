@@ -7264,3 +7264,13 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 新增 ADR-039 到 `docs/decisions.md`（middleware 分层协议）
 - **测试覆盖**：typecheck ✅ lint ✅ unit tests 1130/1130 ✅
 - **架构沉淀**：ADR-039（middleware 品牌识别分层协议）；解析链一元化；Cookie 为事实源，header 为派生副本；intl-先跑-header-后注入 组合约定；Edge Runtime 约束写入规范
+
+## REG-M1-03 — apps/web-next layout 挂 BrandProvider（collapsed into REG-M1-01）
+
+- **日期**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **任务 ID**：REG-M1-03 / SEQ-20260420-REGRESSION-M1
+- **变更内容**：本卡在 REG-M1-01 执行期间已完成，无独立代码改动。layout.tsx 已正确挂载 BrandProvider：使用 cookies() 读取 resovo-brand/resovo-theme，经 parseBrandSlug/parseTheme 解析后传入 initialBrand/initialTheme；SSR 安全（getServerSnapshot 返回 initial 快照，无 hydration mismatch）。
+- **测试覆盖**：typecheck ✅（同 REG-M1-01/02 基线）
+- **架构沉淀**：无新增（REG-M1-01 的 layout.tsx 改动已覆盖本卡全部验收要点）

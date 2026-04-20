@@ -7637,12 +7637,16 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 决策产出：ADR-039（middleware 分层协议）已追加到 docs/decisions.md
    - 完成备注：middleware.ts 扩展为 next-intl + brand/theme header 注入；Cookie → DEFAULT 两级优先链；layout.tsx 保持 cookies() 读取不改；新增 brand-detection 单元测试 25 cases + E2E 4 cases；typecheck ✅ lint ✅ unit 1130/1130 ✅
 
-3. REG-M1-03 — apps/web-next layout 挂 BrandProvider（状态：⬜ 未开始）
+3. REG-M1-03 — apps/web-next layout 挂 BrandProvider（状态：✅ 已完成）
    - 创建时间：2026-04-20 00:00
+   - 实际开始：2026-04-19 12:00
+   - 完成时间：2026-04-19 12:10
    - 建议模型：claude-sonnet-4-6
+   - 执行模型：claude-sonnet-4-6
    - 规模：S（~45 min）
    - 依赖：REG-M1-01 ✅ + REG-M1-02 ✅
-   - 验收要点：Server Component 渲染时 useBrand().id === 'resovo'，无 hydration mismatch
+   - 验收要点：Server Component 渲染时 useBrand().brand.slug === 'resovo'，无 hydration mismatch
+   - 完成备注：本卡在 REG-M1-01 执行期间已完成（collapsed into REG-M1-01）。layout.tsx 已正确挂载 BrandProvider，使用 cookies() 读取 resovo-brand/resovo-theme 并传入 initialBrand/initialTheme；SSR 安全（getServerSnapshot 返回 initial 快照）；typecheck ✅ / lint ✅
    - 详见补丁 §5.3
 
 4. REG-M1-04-PREP — design-tokens 构建基础设施补全（状态：⬜ 未开始）
