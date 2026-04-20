@@ -1126,3 +1126,23 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
 - CDN 切换为单点修改，调用方零感知。
 - FallbackCover 解决全站"破图"体验，品牌色一致。
 - 本卡只建 primitive 不做全站替换（由后续卡片承接）。
+
+## ADR-041: GlobalPlayerHost 契约设计（M3 阶段）
+
+- **状态**: Accepted
+- **日期**: 2026-04-19
+- **关联任务**: REG-M3-01（full 态落地）/ REG-M3-02（mini）/ REG-M3-03（pip）/ REG-M3-04（/watch 接入）
+- **上游决策**: REG-M2-01（#global-player-host-portal 宿主节点）
+
+### 决策
+
+1. **HostPlayerMode 状态机**：新增 `HostPlayerMode = 'closed' | 'full' | 'mini' | 'pip'`，与现有 `PlayerMode = 'default' | 'theater'` 正交共存。合法转换：closed↔full（本卡），full↔mini（M3-02），full↔pip/mini↔pip（M3-03）。closed→mini/pip 非法（未经 full 初始化）。
+2. **playerStore 扩展**：新增 `hostMode`、`hostOrigin`、`isHydrated` 字段及 `setHostMode/closeHost/hydrateFromSession` actions，向后兼容（原有字段签名不变）。
+3. **sessionStorage 持久化**：key `resovo:player-host:v1`，只持久化 mini/pip（full 刷新降级为 closed），isPlaying 强制 false，currentTime 不恢复。
+4. **GlobalPlayerHost**：`createPortal` 挂入 `#global-player-host-portal`，`dynamic(ssr:false)` 注入 layout。本卡 full 态渲染 GlobalPlayerFullFrame 占位框架，mini/pip 渲染空占位，M3-02/03 填充。
+5. **本卡不做**：/watch 接入（M3-04）、PlayerShell 迁移（M3-04）、mini/pip 视觉（M3-02/03）。
+
+### 后果
+
+- 宿主节点就绪，下游 M3-02/03/04 无需改 layout。
+- PlayerShell 本卡行数变动为 0，/watch 不受影响。

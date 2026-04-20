@@ -7421,3 +7421,21 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **数据库变更**：无
 - **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
 - **注意事项**：PrefetchOnHover 通过 matchMedia('(hover: none)') 检测移动端，不通过 UA 嗅探。
+
+## REG-M3-01 — GlobalPlayerHost + zustand 扩展
+
+- **日期**：2026-04-19
+- **执行模型**：claude-sonnet-4-6（主循环）+ arch-reviewer (claude-opus-4-6 子代理)
+- **子代理**：arch-reviewer (claude-opus-4-6) — ADR-041（GlobalPlayerHost 契约）
+- **任务 ID**：REG-M3-01 / SEQ-20260420-REGRESSION-M3
+- **变更内容**：
+  - 新增 `apps/web-next/src/app/[locale]/_lib/player/types.ts`（HostPlayerMode / PlayerHostOrigin / PersistedPlayerHostV1）
+  - 修改 `apps/web-next/src/stores/playerStore.ts`（新增 hostMode/hostOrigin/isHydrated 字段，setHostMode/closeHost/hydrateFromSession actions，sessionStorage 持久化，原有字段/actions 保持不变）
+  - 新增 `apps/web-next/src/app/[locale]/_lib/player/GlobalPlayerFullFrame.tsx`（full 态占位，REG-M3-04 填充）
+  - 新增 `apps/web-next/src/app/[locale]/_lib/player/GlobalPlayerHost.tsx`（createPortal + ssr:false）
+  - 修改 `apps/web-next/src/app/[locale]/layout.tsx`（dynamic ssr:false 注入 GlobalPlayerHost）
+  - 追加 ADR-041 到 `docs/decisions.md`
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
+- **注意事项**：PlayerShell.tsx 本卡零改动。/watch 仍走现有 PlayerShell。GlobalPlayerFullFrame 是占位框架，REG-M3-04 迁入播放逻辑后替换。

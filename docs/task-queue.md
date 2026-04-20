@@ -7763,7 +7763,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ### 任务列表（按执行顺序）
 
-1. REG-M3-01 — GlobalPlayerHost + zustand 扩展（状态：⬜ 未开始）
+1. REG-M3-01 — GlobalPlayerHost + zustand 扩展（状态：✅ 已完成）
    - 创建时间：2026-04-20 00:00
    - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制，CLAUDE.md 强制升 Opus #4 — 播放器 core/shell 重构）
    - 规模：L（~240 min）

@@ -2,6 +2,7 @@ import { cookies } from 'next/headers'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages } from 'next-intl/server'
 import { notFound } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { routing } from '@/i18n/routing'
 import { THEME_INIT_SCRIPT } from '@/lib/theme-init-script'
 import { parseBrandSlug, parseTheme, DEFAULT_BRAND_SLUG } from '@/lib/brand-detection'
@@ -9,6 +10,11 @@ import { BrandProvider } from '@/contexts/BrandProvider'
 import { Nav } from '@/components/layout/Nav'
 import { Footer } from '@/components/layout/Footer'
 import type { Brand } from '@/types/brand'
+
+const GlobalPlayerHost = dynamic(
+  () => import('./_lib/player/GlobalPlayerHost'),
+  { ssr: false },
+)
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }))
@@ -58,6 +64,7 @@ export default async function LocaleLayout({
                 {children}
               </main>
               <div id="global-player-host-portal" data-testid="global-player-host" />
+              <GlobalPlayerHost />
               <Footer />
             </div>
           </BrandProvider>
