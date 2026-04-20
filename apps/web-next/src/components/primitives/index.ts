@@ -9,3 +9,8 @@ export type { SharedElementProps, SharedElementRef, SharedElementRegistry } from
 
 export { RouteStack, useRouteStack } from './route-stack'
 export type { RouteStackEntry, RouteStackState, RouteStackAPI, RouteStackProps } from './route-stack'
+
+export { ScrollRestoration } from './scroll-restoration'
+
+export { PrefetchOnHover } from './prefetch-on-hover'
+export type { PrefetchOnHoverProps } from './prefetch-on-hover'

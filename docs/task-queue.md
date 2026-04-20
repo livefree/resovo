@@ -7742,7 +7742,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 验收要点：四级降级链生效，FallbackCover 用品牌 token 不硬编码颜色，loader 契约与 Cloudflare URL 模板一致
    - 备注：本卡只建 primitive 不全站替换 <img>
 
-6. REG-M2-06 — ScrollRestoration + PrefetchOnHover primitives（状态：⬜ 未开始）
+6. REG-M2-06 — ScrollRestoration + PrefetchOnHover primitives（状态：✅ 已完成）
    - 创建时间：2026-04-20 00:00
    - 建议模型：claude-sonnet-4-6
    - 规模：S（~60 min）

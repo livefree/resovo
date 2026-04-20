@@ -7404,3 +7404,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **数据库变更**：无
 - **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
 - **注意事项**：本卡只建 primitive，不做全站 img 替换。image-loader 为 passthrough，后续 Cloudflare Images 接入只需改 buildImageUrl 函数体。FallbackCover 颜色零硬编码。
+
+## REG-M2-06 — ScrollRestoration + PrefetchOnHover primitives
+
+- **日期**：2026-04-19
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：无
+- **任务 ID**：REG-M2-06 / SEQ-20260420-REGRESSION-M2
+- **变更内容**：
+  - 新增 `apps/web-next/src/components/primitives/scroll-restoration/ScrollRestoration.tsx`（usePathname + sessionStorage 保存/恢复 scrollY）
+  - 新增 `apps/web-next/src/components/primitives/scroll-restoration/index.ts`
+  - 新增 `apps/web-next/src/components/primitives/prefetch-on-hover/PrefetchOnHover.tsx`（hover 150ms 触发 router.prefetch，移动端 hover:none 跳过）
+  - 新增 `apps/web-next/src/components/primitives/prefetch-on-hover/index.ts`
+  - 修改 `apps/web-next/src/components/primitives/index.ts`（追加导出）
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
+- **注意事项**：PrefetchOnHover 通过 matchMedia('(hover: none)') 检测移动端，不通过 UA 嗅探。
