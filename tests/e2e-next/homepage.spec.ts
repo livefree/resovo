@@ -92,9 +92,6 @@ test.describe('首页', () => {
     await expect(page.getByTestId('footer-disclaimer')).toBeVisible()
   })
 
-  test('未登录时显示"Sign In"按钮', async ({ page }) => {
-    await expect(page.getByTestId('nav-login')).toBeVisible()
-  })
 })
 
 // ═══════════════════════════════════════════════════════════════════
@@ -180,8 +177,4 @@ test.describe('导航跳转', () => {
     await expect(page).toHaveURL('/en')
   })
 
-  test('点击"Sign In"跳转到登录页', async ({ page }) => {
-    await page.getByTestId('nav-login').click()
-    await expect(page).toHaveURL('/en/auth/login')
-  })
 })

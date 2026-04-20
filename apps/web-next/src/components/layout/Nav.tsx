@@ -295,18 +295,6 @@ export function Nav() {
             ) : null}
           </div>
 
-          {/* 登录按钮 */}
-          <Link
-            href="/auth/login"
-            data-testid="nav-login"
-            className="hidden sm:inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium border transition-colors"
-            style={{
-              borderColor: 'var(--border-default)',
-              color: 'var(--fg-muted)',
-            }}
-          >
-            {t('nav.signIn')}
-          </Link>
         </div>
       </div>
     </header>
