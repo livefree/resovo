@@ -30,16 +30,23 @@ export interface ImageHealthJobData {
   url: string
 }
 
-// ── Domain 限速（同 domain 间隔 ≥ 200ms）────────────────────────────
+// ── Domain 限速（同 domain 间隔 ≥ 200ms，per-domain promise 串行锁）───────
 
-const domainLastCall = new Map<string, number>()
+const domainQueue = new Map<string, Promise<void>>()
 const DOMAIN_INTERVAL_MS = 200
 
-async function waitForDomainSlot(domain: string): Promise<void> {
-  const last = domainLastCall.get(domain) ?? 0
-  const wait = last + DOMAIN_INTERVAL_MS - Date.now()
-  if (wait > 0) await new Promise(r => setTimeout(r, wait))
-  domainLastCall.set(domain, Date.now())
+/**
+ * 通过 per-domain promise 链把同一 domain 的请求串行化，保证间隔 ≥ 200ms。
+ * 每个调用挂在前一个 promise 后面，前一个完成 200ms 后才解锁当前调用。
+ */
+function waitForDomainSlot(domain: string): Promise<void> {
+  const prev = domainQueue.get(domain) ?? Promise.resolve()
+  const next = prev.then(
+    () => new Promise<void>(resolve => setTimeout(resolve, DOMAIN_INTERVAL_MS))
+  )
+  // 保存当前任务完成后的 promise（去掉延迟尾巴），供下一个调用挂载
+  domainQueue.set(domain, next.then(() => undefined))
+  return next
 }
 
 function extractDomain(url: string): string {

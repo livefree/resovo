@@ -309,9 +309,9 @@ export async function listPendingImageUrls(
     url: string
   }>(
     `SELECT
-       mc.id       AS catalog_id,
-       v.id        AS video_id,
-       'poster'    AS kind,
+       mc.id        AS catalog_id,
+       v.id         AS video_id,
+       'poster'     AS kind,
        mc.cover_url AS url
      FROM media_catalog mc
      JOIN videos v ON v.catalog_id = mc.id
@@ -328,6 +328,28 @@ export async function listPendingImageUrls(
      JOIN videos v ON v.catalog_id = mc.id
      WHERE mc.backdrop_url IS NOT NULL
        AND mc.backdrop_status = 'pending_review'
+       AND v.deleted_at IS NULL
+     UNION ALL
+     SELECT
+       mc.id      AS catalog_id,
+       v.id       AS video_id,
+       'logo'     AS kind,
+       mc.logo_url AS url
+     FROM media_catalog mc
+     JOIN videos v ON v.catalog_id = mc.id
+     WHERE mc.logo_url IS NOT NULL
+       AND mc.logo_status = 'pending_review'
+       AND v.deleted_at IS NULL
+     UNION ALL
+     SELECT
+       mc.id                   AS catalog_id,
+       v.id                    AS video_id,
+       'banner_backdrop'       AS kind,
+       mc.banner_backdrop_url  AS url
+     FROM media_catalog mc
+     JOIN videos v ON v.catalog_id = mc.id
+     WHERE mc.banner_backdrop_url IS NOT NULL
+       AND mc.banner_backdrop_status = 'pending_review'
        AND v.deleted_at IS NULL
      ORDER BY url
      LIMIT $1 OFFSET $2`,
@@ -356,9 +378,9 @@ export async function listMissingBlurhashUrls(
     url: string
   }>(
     `SELECT
-       mc.id       AS catalog_id,
-       v.id        AS video_id,
-       'poster'    AS kind,
+       mc.id        AS catalog_id,
+       v.id         AS video_id,
+       'poster'     AS kind,
        mc.cover_url AS url
      FROM media_catalog mc
      JOIN videos v ON v.catalog_id = mc.id
@@ -377,6 +399,18 @@ export async function listMissingBlurhashUrls(
      WHERE mc.backdrop_url IS NOT NULL
        AND mc.backdrop_blurhash IS NULL
        AND mc.backdrop_status = 'ok'
+       AND v.deleted_at IS NULL
+     UNION ALL
+     SELECT
+       mc.id                   AS catalog_id,
+       v.id                    AS video_id,
+       'banner_backdrop'       AS kind,
+       mc.banner_backdrop_url  AS url
+     FROM media_catalog mc
+     JOIN videos v ON v.catalog_id = mc.id
+     WHERE mc.banner_backdrop_url IS NOT NULL
+       AND mc.banner_backdrop_blurhash IS NULL
+       AND mc.banner_backdrop_status = 'ok'
        AND v.deleted_at IS NULL
      ORDER BY url
      LIMIT $1 OFFSET $2`,

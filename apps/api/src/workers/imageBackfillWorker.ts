@@ -76,6 +76,7 @@ export async function runImageBackfill(
 /** 手动触发一次存量回填（用于管理员操作或 scheduler 调用） */
 export async function enqueueBackfillJob(): Promise<void> {
   await imageHealthQueue.add(
+    'backfill',
     { type: 'backfill', catalogId: '', videoId: '', kind: 'poster', url: '' },
     { jobId: `backfill-${Date.now()}`, removeOnComplete: 5 }
   )

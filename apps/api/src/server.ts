@@ -28,6 +28,9 @@ import { registerCrawlerScheduler } from '@/api/workers/crawlerScheduler'
 import { registerMaintenanceWorker } from '@/api/workers/maintenanceWorker'
 import { registerMaintenanceScheduler } from '@/api/workers/maintenanceScheduler'
 import { registerEnrichmentWorker } from '@/api/workers/enrichmentWorker'
+import { registerImageHealthWorker } from '@/api/workers/imageHealthWorker'
+import { registerBlurhashWorker } from '@/api/workers/imageBlurhashWorker'
+import { registerBackfillWorker } from '@/api/workers/imageBackfillWorker'
 import { adminStagingRoutes } from '@/api/routes/admin/staging'
 import { adminModerationRoutes } from '@/api/routes/admin/moderation'
 import { adminDesignTokenRoutes } from '@/api/routes/admin/design-tokens'
@@ -88,6 +91,9 @@ async function start() {
   registerCrawlerWorker()
   registerMaintenanceWorker()
   registerEnrichmentWorker()
+  registerImageHealthWorker()
+  registerBlurhashWorker()
+  registerBackfillWorker()
 
   const schedulerEnabled = process.env.CRAWLER_SCHEDULER_ENABLED === 'true'
   if (schedulerEnabled) {

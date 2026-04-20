@@ -31,6 +31,7 @@ export class ImageHealthService {
     await Promise.all(
       rows.map(row =>
         queue.add(
+          'health-check',
           { type: 'health-check', ...row },
           { jobId: `health-check-${row.catalogId}-${row.kind}`, removeOnComplete: 50 }
         )
@@ -50,6 +51,7 @@ export class ImageHealthService {
     await Promise.all(
       rows.map(row =>
         queue.add(
+          'blurhash-extract',
           { type: 'blurhash-extract', ...row },
           { jobId: `blurhash-${row.catalogId}-${row.kind}`, removeOnComplete: 50 }
         )

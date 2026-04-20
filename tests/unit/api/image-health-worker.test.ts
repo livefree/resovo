@@ -142,3 +142,46 @@ describe('imageHealthWorker — checkImageHealth', () => {
     expect(mockProcess).toHaveBeenCalledWith('health-check', 5, expect.any(Function))
   })
 })
+
+// ── ImageHealthService named job 入队签名 ─────────────────────────
+
+describe('ImageHealthService — named job 入队', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('enqueueHealthChecks 使用 named job "health-check"', async () => {
+    // 同一 vi.mock 工厂内的 vi.fn() 实例，通过动态 import 拿到再 override
+    const mod = await import('@/api/db/queries/imageHealth')
+    ;(mod.listPendingImageUrls as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      { catalogId: 'cat-1', videoId: 'vid-1', kind: 'poster', url: 'https://cdn.example.com/p.jpg' },
+    ])
+
+    const { ImageHealthService } = await import('@/api/services/ImageHealthService')
+    const svc = new ImageHealthService({} as import('pg').Pool)
+    await svc.enqueueHealthChecks({ add: mockAdd } as unknown as import('@/api/workers/imageHealthWorker').ImageHealthQueue)
+
+    expect(mockAdd).toHaveBeenCalledWith(
+      'health-check',
+      expect.objectContaining({ type: 'health-check' }),
+      expect.anything()
+    )
+  })
+
+  it('enqueueBlurhashExtract 使用 named job "blurhash-extract"', async () => {
+    const mod = await import('@/api/db/queries/imageHealth')
+    ;(mod.listMissingBlurhashUrls as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      { catalogId: 'cat-2', videoId: 'vid-2', kind: 'backdrop', url: 'https://cdn.example.com/b.jpg' },
+    ])
+
+    const { ImageHealthService } = await import('@/api/services/ImageHealthService')
+    const svc = new ImageHealthService({} as import('pg').Pool)
+    await svc.enqueueBlurhashExtract({ add: mockAdd } as unknown as import('@/api/workers/imageHealthWorker').ImageHealthQueue)
+
+    expect(mockAdd).toHaveBeenCalledWith(
+      'blurhash-extract',
+      expect.objectContaining({ type: 'blurhash-extract' }),
+      expect.anything()
+    )
+  })
+})
