@@ -7274,3 +7274,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **变更内容**：本卡在 REG-M1-01 执行期间已完成，无独立代码改动。layout.tsx 已正确挂载 BrandProvider：使用 cookies() 读取 resovo-brand/resovo-theme，经 parseBrandSlug/parseTheme 解析后传入 initialBrand/initialTheme；SSR 安全（getServerSnapshot 返回 initial 快照，无 hydration mismatch）。
 - **测试覆盖**：typecheck ✅（同 REG-M1-01/02 基线）
 - **架构沉淀**：无新增（REG-M1-01 的 layout.tsx 改动已覆盖本卡全部验收要点）
+
+## REG-M1-04-PREP — design-tokens 构建基础设施补全
+
+- **日期**：2026-04-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **任务 ID**：REG-M1-04-PREP / SEQ-20260420-REGRESSION-M1
+- **变更内容**：
+  - 新增 `packages/design-tokens/scripts/validate-tokens.ts`（4 层校验：primitive 叶值、semantic 叶值、component 叶值、brand 键约束）
+  - 扩展 `packages/design-tokens/scripts/build-css.ts`（在 primitive 输出后追加 semantic 层 76 个 CSS 变量；`:root` 含 light，`[data-theme="dark"]` 含 dark；brand 覆写槽预留）
+  - 更新 `packages/design-tokens/src/brands/default.ts`（添加文件命名约定注释：slug='resovo' 固定使用 default.ts，不新建 resovo.ts）
+  - 更新 `packages/design-tokens/package.json`（新增 `tokens:validate` 脚本）
+- **测试覆盖**：`npm run tokens:validate` ✅ `npm run build` ✅ typecheck ✅ lint ✅ unit 1130/1130 ✅
+- **架构沉淀**：semantic 层 CSS 变量正式纳入构建产物；brand 文件命名约定写入注释；`[data-theme="dark"]` 选择器（ADR-038）在 build-css.ts 中落地

@@ -7649,9 +7649,12 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 完成备注：本卡在 REG-M1-01 执行期间已完成（collapsed into REG-M1-01）。layout.tsx 已正确挂载 BrandProvider，使用 cookies() 读取 resovo-brand/resovo-theme 并传入 initialBrand/initialTheme；SSR 安全（getServerSnapshot 返回 initial 快照）；typecheck ✅ / lint ✅
    - 详见补丁 §5.3
 
-4. REG-M1-04-PREP — design-tokens 构建基础设施补全（状态：⬜ 未开始）
+4. REG-M1-04-PREP — design-tokens 构建基础设施补全（状态：✅ 已完成）
    - 创建时间：2026-04-19（架构审计追加）
+   - 实际开始：2026-04-19 12:15
+   - 完成时间：2026-04-19 12:45
    - 建议模型：claude-sonnet-4-6
+   - 执行模型：claude-sonnet-4-6
    - 规模：S（~60 min）
    - 依赖：REG-M1-01 / 02 / 03 ✅
    - 背景：审计发现 REG-M1-04 依赖的 validate-tokens.ts 不存在；build-css.ts 只处理 primitive 层（不含 semantic/brand 覆写层）；brands/ 目录只有 default.ts（slug='resovo'），无独立 resovo.ts，写回路径与补丁描述不一致
@@ -7665,6 +7668,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - `npm run build` 产出的 dist/tokens.css 包含 semantic 层 CSS 变量（如 `--color-bg-canvas-light`）
      - 修改 defaultBrandOverrides 添加一个测试覆写 → build 后 CSS 变量值被覆盖 → 回滚
      - typecheck ✅ / lint ✅
+   - **完成备注**：新增 validate-tokens.ts（4 层校验：primitive/semantic/component/brand 键约束）；扩展 build-css.ts（输出 semantic 76 个 CSS 变量，`:root` 含 light 值，`[data-theme="dark"]` 含 dark 值，brand 覆写槽位已预留）；default.ts 添加文件命名约定注释；package.json 新增 tokens:validate 脚本；typecheck ✅ lint ✅ unit 1130/1130 ✅
 
 5. REG-M1-04 — Token 后台 MVP 增量补齐 3 项（Diff / 继承指示 / 保存链路）（状态：⬜ 未开始）
    - 创建时间：2026-04-20 00:00
