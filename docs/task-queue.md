@@ -7932,7 +7932,6 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 计划开始：2026-04-20 12:00
    - 实际开始：2026-04-20 12:00
    - 完成时间：2026-04-20 13:00
-   - 完成时间：
    - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制 — 跨 3+ 消费方 schema 变更，CLAUDE.md 强制升 Opus #2）
    - 规模：M（~120 min）
    - 依赖：IMG-00 ✅（校准已完成，可开工）
@@ -7940,9 +7939,9 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - `apps/api/src/db/migrations/048_image_pipeline.sql`：
        - `media_catalog` ADD COLUMN：`poster_blurhash TEXT`、`poster_primary_color TEXT`、`poster_width INT`、`poster_height INT`、`poster_status TEXT DEFAULT 'pending_review'`、`poster_source TEXT`、`backdrop_blurhash TEXT`、`backdrop_primary_color TEXT`、`backdrop_status TEXT DEFAULT 'pending_review'`、`logo_url TEXT`、`logo_status TEXT DEFAULT 'missing'`、`banner_backdrop_url TEXT`、`banner_backdrop_blurhash TEXT`、`banner_backdrop_status TEXT DEFAULT 'missing'`、`stills_urls JSONB DEFAULT '[]'`、`stills_meta JSONB DEFAULT '[]'`
        - `videos` ADD COLUMN：`image_governance_status TEXT DEFAULT 'pending'`（汇总门控，不再存图片 URL）
-       - 新建 `broken_image_events` 表：`id UUID PK`、`video_id UUID FK → videos`（无 `episode_id`，改用 `season_number INT`、`episode_number INT`）、`image_kind TEXT`、`url TEXT`、`url_hash_prefix TEXT NOT NULL`（sha256(url) 前16位，用于 upsert 去重）、`bucket_start TIMESTAMPTZ NOT NULL`（floor(now, 10min)，时间窗口 key）、`event_type TEXT`、`first_seen_at TIMESTAMPTZ`、`last_seen_at TIMESTAMPTZ`、`occurrence_count INT DEFAULT 1`、`resolved_at TIMESTAMPTZ`、`resolution_note TEXT`；UNIQUE `(image_kind, url_hash_prefix, bucket_start)`（支持 IMG-03 upsert 去重，不含 video_id 避免 null 破坏唯一性）
+       - 新建 `broken_image_events` 表：`id UUID PK`、`video_id UUID FK → videos`（无 `episode_id`，改用 `season_number INT`、`episode_number INT`）、`image_kind TEXT`、`url TEXT`、`url_hash_prefix TEXT NOT NULL`（sha256(url) 前16位，用于 upsert 去重）、`bucket_start TIMESTAMPTZ NOT NULL`（floor(now, 10min)，时间窗口 key）、`event_type TEXT`、`first_seen_at TIMESTAMPTZ`、`last_seen_at TIMESTAMPTZ`、`occurrence_count INT DEFAULT 1`、`resolved_at TIMESTAMPTZ`、`resolution_note TEXT`；UNIQUE `(video_id, image_kind, url_hash_prefix, bucket_start)`（ADR-046 D2：含 video_id，同 URL 跨多视频分别记录；另建二级索引 `(image_kind, url_hash_prefix, bucket_start)` 用于跨视频 CDN 聚合）
        - 新建 `video_episode_images` 表：`id UUID PK`、`video_id UUID FK → videos`、`season_number INT NOT NULL DEFAULT 1`、`episode_number INT NOT NULL DEFAULT 1`、`thumbnail_url TEXT`、`thumbnail_blurhash TEXT`、`thumbnail_status TEXT DEFAULT 'pending_review'`、`created_at/updated_at`、UNIQUE `(video_id, season_number, episode_number)`
-     - `apps/api/src/db/queries/imageHealth.ts`：新建——`broken_image_events` upsert（按 `(image_kind, url_hash_prefix, bucket_start)` ON CONFLICT DO UPDATE `occurrence_count += 1`、`last_seen_at = now`）、bulk status update（批量写 `media_catalog.<kind>_status`）、聚合查询（覆盖率、TOP 破损域名）
+     - `apps/api/src/db/queries/imageHealth.ts`：新建——`broken_image_events` upsert（按 `(video_id, image_kind, url_hash_prefix, bucket_start)` ON CONFLICT DO UPDATE `occurrence_count += 1`、`last_seen_at = now`，ADR-046 D2）、bulk status update（批量写 `media_catalog.<kind>_status`）、聚合查询（覆盖率、TOP 破损域名）
      - `apps/api/src/db/queries/mediaCatalog.ts`：扩展——新增治理字段读写（read 增加新列、update 单列 patch）
      - `apps/api/src/db/queries/videos.ts`：扩展 `VIDEO_FULL_SELECT`（JOIN `media_catalog`，增加 `mc.poster_blurhash`、`mc.poster_status`、`mc.backdrop_blurhash`、`mc.backdrop_status`、`mc.logo_url`、`mc.logo_status`）；更新 `DbVideoRow` 类型以包含新列；更新 `mapVideoRow` / `mapVideoCard`，将新列映射到 camelCase（`posterBlurhash`、`posterStatus`、`backdropBlurhash`、`backdropStatus`、`logoUrl`、`logoStatus`）
      - `packages/types/src/video.types.ts`：
@@ -7954,7 +7953,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - **验收要点**：
      - `npm run typecheck` ✅ / `npm run lint` ✅ / `npm run test -- --run` ✅
      - migration 幂等（重跑不报错）；新字段默认值不破坏现有查询
-     - `broken_image_events` 含 `url_hash_prefix`、`bucket_start`，UNIQUE `(image_kind, url_hash_prefix, bucket_start)` 约束存在
+     - `broken_image_events` 含 `url_hash_prefix`、`bucket_start`，UNIQUE `(video_id, image_kind, url_hash_prefix, bucket_start)` 约束存在（ADR-046 D2；二级索引 `(image_kind, url_hash_prefix, bucket_start)` 存在）
      - `broken_image_events.video_id FK → videos`，无 `episode_id` 列
      - `video_episode_images` UNIQUE 约束在 `(video_id, season_number, episode_number)` 上
      - `GET /v1/videos/:slug` 响应中包含 `posterBlurhash`、`posterStatus`、`backdropBlurhash`（可为 null，但字段存在）

@@ -102,12 +102,13 @@ export interface Video {
   /** 元数据完整度评分 0-100 */
   metaScore: number
   // 图片治理字段（IMG-01，ADR-046）——前台渲染最小集，由 media_catalog JOIN 提供
-  posterBlurhash?: string | null
-  posterStatus?: string | null
-  backdropBlurhash?: string | null
-  backdropStatus?: string | null
-  logoUrl?: string | null
-  logoStatus?: string | null
+  // 字段必须存在（API 响应不省略），值可为 null（尚未治理时）
+  posterBlurhash: string | null
+  posterStatus: string | null
+  backdropBlurhash: string | null
+  backdropStatus: string | null
+  logoUrl: string | null
+  logoStatus: string | null
 }
 
 // ── 视频卡片（列表用，字段较少）────────────────────────────────

@@ -131,6 +131,8 @@ export class SearchService {
         title: src.title as string,
         titleEn: (src.title_en as string) ?? null,
         coverUrl: (src.cover_url as string) ?? null,
+        posterBlurhash: (src.poster_blurhash as string) ?? null,
+        posterStatus: (src.poster_status as string) ?? null,
         type: src.type as VideoCard['type'],
         rating: (src.rating as number) ?? null,
         year: (src.year as number) ?? null,
