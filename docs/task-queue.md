@@ -7779,7 +7779,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 依赖：REG-M3-01 ✅ + REG-M2-03 ✅
    - 验收要点：220-360ms FLIP 动画 + 移动端浮于 safe-area-inset-bottom + 桌面右下 320×180
 
-3. REG-M3-03 — pip 态（Picture-in-Picture）（状态：⬜ 未开始）
+3. REG-M3-03 — pip 态（Picture-in-Picture）（状态：✅ 已完成）
    - 创建时间：2026-04-20 00:00
    - 建议模型：claude-sonnet-4-6
    - 规模：S（~60 min）

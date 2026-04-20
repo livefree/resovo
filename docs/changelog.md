@@ -7454,3 +7454,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **数据库变更**：无
 - **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
 - **注意事项**：MiniPlayer 内容区是占位（REG-M3-04 接入播放逻辑后替换）。FLIP 动画通过 CSS transition + requestAnimationFrame 实现，使用 --transition-shared / --ease-page 变量。
+
+## REG-M3-03 — pip 态（Picture-in-Picture）
+
+- **日期**：2026-04-19
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：无
+- **任务 ID**：REG-M3-03 / SEQ-20260420-REGRESSION-M3
+- **变更内容**：
+  - 新增 `apps/web-next/src/app/[locale]/_lib/player/pip.ts`（isPipSupported / requestPip / exitPip / onPipLeave）
+  - 修改 `apps/web-next/src/app/[locale]/_lib/player/GlobalPlayerHost.tsx`（pip 占位 → PipSlot，注释说明 REG-M3-04 接入点）
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
+- **注意事项**：pip 态宿主侧只保留不可见 slot，实际画面由浏览器 PiP 窗口控制。isPipSupported() 用于 REG-M3-04 接入时 button disabled 检测。
