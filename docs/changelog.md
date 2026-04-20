@@ -7536,3 +7536,18 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **对齐表**：详见 `docs/milestone_alignment_20260420.md`（16/19 ✅，3/19 ⚠️，0/19 ❌）
 - **已解除 BLOCKER**：REGRESSION 阶段启动 BLOCKER（exec-M4 冻结解除）
 - **下一步**：exec-M4（人工选定方向）+ REG-POST-01（人工审核汇总 + 文档更新）
+
+## REG-POST-01 — 人工审核点汇总 + README / 说明文档更新
+
+- **日期**：2026-04-20
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：无
+- **任务 ID**：REG-POST-01 / SEQ-20260420-REGRESSION-POST
+- **变更内容**：
+  - 新建 `docs/regression_human_review_log_20260420.md`（REGRESSION 阶段全部人工审核记录 + Opus 审计摘要）
+  - 更新 `apps/web-next/README.md`（当前架构状态 / 核心能力层 / 本地开发快速启动 / 测试策略）
+  - 修改 `CLAUDE.md`（核心架构约束：播放器模块扩展为三态 + apps/web-next 能力层描述 + 共享组件路径补充）
+  - 修改 `docs/architecture.md`（重编号：新增 §16 apps/web-next 能力层，修正编号冲突）
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：无代码改动，typecheck/lint/unit 不受影响
