@@ -7604,3 +7604,25 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 
 - typecheck ✅ / lint ✅ / 1145/1145 unit tests（111 files）✅
 - sharp + blurhash 均为已有依赖，无新引入
+
+---
+
+## IMG-03 — beacon 上报 API 端点（POST /v1/internal/image-broken）（2026-04-20）
+
+- **任务 ID**：IMG-03
+- **完成时间**：2026-04-20 14:20
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理调用**：无
+
+### 变更内容
+
+**新文件**：
+- `apps/api/src/routes/internal/image-broken.ts`：POST /v1/internal/image-broken；zod body 校验（video_id/image_kind/url ≤2048/reason 仅客户端值）；IP 限速 10min/50次静默丢弃；FK violation → 204；upsert broken_image_events
+- `tests/unit/api/image-broken-beacon.test.ts`：7 个测试（合法/重复/FK violation/url超长/服务端reason/非法kind/非UUID）
+
+**修改文件**：
+- `apps/api/src/server.ts`：注册 internalImageBrokenRoutes（prefix /v1）
+
+### 验收结果
+
+- typecheck ✅ / lint ✅ / 1152/1152 unit tests（112 files）✅
