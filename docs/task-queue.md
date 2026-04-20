@@ -7726,7 +7726,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 验收要点：临时 /__dev/primitives 页面演示四类过渡，Safari/Firefox 降级路径有 fallback，prefers-reduced-motion 切换瞬时 opacity
    - **【审计约束】RouteStack 本轮仅实现 stub**：移动端边缘滑动手势逻辑**不在本卡实现**，只建类型定义 + noop 导出 + 注释 "TODO: M5 Tab Bar 上线时实装手势"。理由：手势实现依赖 Tab Bar 布局（方案 §14.1 属 M5 范围），REGRESSION 阶段提前实现会引入未被消费的复杂逻辑。ADR-044 中须记录此推迟决定。
 
-4. REG-M2-04 — LazyImage + BlurHash primitive（状态：⬜ 未开始）
+4. REG-M2-04 — LazyImage + BlurHash primitive（状态：✅ 已完成）
    - 创建时间：2026-04-20 00:00
    - 建议模型：claude-sonnet-4-6
    - 规模：M（~90 min）

@@ -1,3 +1,6 @@
+export { LazyImage, BlurHashCanvas } from './lazy-image'
+export type { LazyImageProps, BlurHashCanvasProps } from './lazy-image'
+
 export { PageTransition } from './page-transition'
 export type { PageTransitionProps, PageTransitionHandle } from './page-transition'
 

@@ -7368,3 +7368,21 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **数据库变更**：无
 - **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
 - **注意事项**：SharedElement / RouteStack 当前为 noop stub，契约已冻结。FLIP 动画在 REG-M3-01 实装，边缘手势在 M5 实装。
+
+## REG-M2-04 — LazyImage + BlurHash primitive
+
+- **日期**：2026-04-19
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：无
+- **任务 ID**：REG-M2-04 / SEQ-20260420-REGRESSION-M2
+- **变更内容**：
+  - 新增 `apps/web-next/src/components/primitives/lazy-image/types.ts`
+  - 新增 `apps/web-next/src/components/primitives/lazy-image/BlurHashCanvas.tsx`（blurhash decode → canvas）
+  - 新增 `apps/web-next/src/components/primitives/lazy-image/LazyImage.tsx`（IntersectionObserver + 占位层 + opacity 淡入）
+  - 新增 `apps/web-next/src/components/primitives/lazy-image/index.ts`
+  - 修改 `apps/web-next/src/components/primitives/index.ts`（追加 LazyImage / BlurHashCanvas 导出）
+  - 修改 `apps/web-next/package.json`（新增 blurhash@^2.0.5）
+- **新增依赖**：`blurhash@^2.0.5`（方案 §17 决策项，不触发 BLOCKER）
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
+- **注意事项**：BlurHashCanvas 解码使用缩放尺寸（max 32px），避免 decode 开销过大。priority=true 跳过 IO 直接加载，适用首屏封面图。

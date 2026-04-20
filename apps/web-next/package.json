@@ -13,6 +13,7 @@
     "@resovo/design-tokens": "*",
     "@resovo/player-core": "*",
     "@resovo/types": "*",
+    "blurhash": "^2.0.5",
     "clsx": "*",
     "next": "*",
     "next-intl": "*",
