@@ -7786,7 +7786,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 依赖：REG-M3-01 ✅
    - 验收要点：Chrome/Edge 进入原生 PiP，关闭后回 full/mini，不支持的浏览器按钮 disabled
 
-4. REG-M3-04 — 路由切换语义 + /watch 接入 GlobalPlayerHost（状态：⬜ 未开始）
+4. REG-M3-04 — 路由切换语义 + /watch 接入 GlobalPlayerHost（状态：✅ 已完成）
    - 创建时间：2026-04-20 00:00
    - 建议模型：**claude-opus-4-6** + arch-reviewer 子代理（强制，决策 R-E）
    - 规模：M（~120 min）

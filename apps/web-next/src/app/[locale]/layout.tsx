@@ -3,6 +3,7 @@ import { NextIntlClientProvider } from 'next-intl'
 import { getMessages } from 'next-intl/server'
 import { notFound } from 'next/navigation'
 import dynamic from 'next/dynamic'
+import { RoutePlayerSync } from './_lib/route-player-sync'
 import { routing } from '@/i18n/routing'
 import { THEME_INIT_SCRIPT } from '@/lib/theme-init-script'
 import { parseBrandSlug, parseTheme, DEFAULT_BRAND_SLUG } from '@/lib/brand-detection'
@@ -65,6 +66,7 @@ export default async function LocaleLayout({
               </main>
               <div id="global-player-host-portal" data-testid="global-player-host" />
               <GlobalPlayerHost />
+              <RoutePlayerSync />
               <Footer />
             </div>
           </BrandProvider>

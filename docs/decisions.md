@@ -1146,3 +1146,24 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
 
 - 宿主节点就绪，下游 M3-02/03/04 无需改 layout。
 - PlayerShell 本卡行数变动为 0，/watch 不受影响。
+
+## ADR-042: /watch 路由与 GlobalPlayerFullFrame Portal 接入方案
+
+- **状态**: Accepted
+- **日期**: 2026-04-19
+- **关联任务**: REG-M3-04
+- **上游决策**: ADR-041（hostMode 状态机），ADR-040（MiniPlayer FLIP）
+
+### 决策
+
+1. **PlayerShell 在 Portal 内渲染**：GlobalPlayerFullFrame 直接 import PlayerShell，传 slug prop，不拆分 core/shell（本卡约束）。PlayerShell 增加可选 `slug` prop + `portalMode` flag。
+2. **路由离开检测**：新建 `RoutePlayerSync`（Root layout 挂载），usePathname 监听，离开 /watch 且 hostMode=full 时自动切 mini。
+3. **ConfirmDialog 触发**：watch page 层，slug mismatch 且 hostMode∈{full,mini} 时弹 `ConfirmReplaceDialog`；confirm→initPlayer + full，cancel→router.replace 回原 href。
+4. **testid 迁移**：PlayerShell 的所有 testid 跟随 DOM 进 Portal，document-wide 选择器无需修改；仅"祖先链断言"需改为两行独立断言。
+5. **与方案 §13.1 一致**：/watch URL 保留，SSR 仍返回 watch-page 骨架，Portal 只影响 CSR DOM 结构。
+
+### 后果
+
+- 跨页播放（离开 /watch → mini 持续播放）得以实现。
+- PlayerShell 改动行数 ≤ 20，其余业务逻辑不变。
+- 需人工回归：①断点续播 ②线路切换 ③剧场模式 ④字幕 ⑤mini 跨路由 ⑥替换视频 ConfirmDialog。

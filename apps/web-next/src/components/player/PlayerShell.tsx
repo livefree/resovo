@@ -21,11 +21,17 @@ const VideoPlayer = dynamic(
 )
 
 interface PlayerShellProps {
-  slug: string
+  /** Portal 模式下可省略（从 store.hostOrigin.slug 读取） */
+  slug?: string
+  /** true 时抑制页面跳转，仅在 GlobalPlayerFullFrame 内使用 */
+  portalMode?: boolean
 }
 
-export function PlayerShell({ slug }: PlayerShellProps) {
+export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellProps) {
+  const hostOriginSlug = usePlayerStore((s) => s.hostOrigin?.slug)
+  const slug = slugProp ?? hostOriginSlug ?? ''
   const searchParams = useSearchParams()
+
   const {
     mode,
     setMode,

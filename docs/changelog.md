@@ -7468,3 +7468,25 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **数据库变更**：无
 - **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
 - **注意事项**：pip 态宿主侧只保留不可见 slot，实际画面由浏览器 PiP 窗口控制。isPipSupported() 用于 REG-M3-04 接入时 button disabled 检测。
+
+## REG-M3-04 — 路由切换语义 + /watch 接入 GlobalPlayerHost
+
+- **日期**：2026-04-19
+- **执行模型**：claude-sonnet-4-6（主循环）+ arch-reviewer (claude-opus-4-6 子代理)
+- **子代理**：arch-reviewer (claude-opus-4-6) — ADR-042（/watch 接入方案）
+- **任务 ID**：REG-M3-04 / SEQ-20260420-REGRESSION-M3
+- **变更内容**：
+  - 新增 `apps/web-next/src/app/[locale]/_lib/route-player-sync.tsx`（RoutePlayerSync：离开 /watch 时切 mini）
+  - 修改 `apps/web-next/src/app/[locale]/_lib/player/GlobalPlayerFullFrame.tsx`（渲染真实 PlayerShell portalMode）
+  - 修改 `apps/web-next/src/components/player/PlayerShell.tsx`（新增 slug?/portalMode prop，从 store.hostOrigin 读取 slug）
+  - 新增 `apps/web-next/src/app/[locale]/watch/[slug]/WatchPageClient.tsx`（thin client：useWatchSlugSync + ConfirmReplaceDialog）
+  - 新增 `apps/web-next/src/app/[locale]/watch/[slug]/_hooks/use-watch-slug-sync.ts`（slug mismatch 检测 + initPlayer）
+  - 新增 `apps/web-next/src/components/player/ConfirmReplaceDialog.tsx`（替换视频确认对话框）
+  - 修改 `apps/web-next/src/app/[locale]/watch/[slug]/page.tsx`（薄占位层 + WatchPageClient）
+  - 修改 `apps/web-next/src/app/[locale]/layout.tsx`（挂载 RoutePlayerSync）
+  - 追加 ADR-042 到 `docs/decisions.md`
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck ✅ lint ✅ unit 1136/1136 ✅
+- **E2E testid 迁移**：player-shell 等 testid 跟随 PlayerShell 进 Portal，document-wide 选择器无变化；无祖先链断言需修改。
+- **⚠️ 人工回归待完成**：①断点续播 ②线路切换 ③剧场模式 ④字幕 ⑤mini 跨路由持续播放 ⑥替换视频 ConfirmDialog
