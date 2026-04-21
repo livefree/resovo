@@ -7901,3 +7901,29 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tag-mapping.ts` 当前仅映射 `status → lifecycle` 和 `rating`，trending/specs 待后端 API 补充后扩展
   - TagLayer 所有颜色通过 CSS 变量引用，零硬编码
   - 所有标签区块均 `aria-hidden="true"`（装饰性信息，屏幕阅读器不读）
+
+---
+
+## M5-CARD-STACK-01 — StackedPosterFrame + hover 堆叠时序
+
+- **任务 ID**：M5-CARD-STACK-01
+- **所属序列**：SEQ-20260420-M5-CARD
+- **完成时间**：2026-04-21
+- **记录时间**：2026-04-21
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/web-next/src/components/primitives/media/StackedPosterFrame.tsx` — 新建：stackLevel 0/1，30ms debounce，0-80ms 主卡 scale，80ms/160ms 阴影层延迟，reduced-motion 降级
+  - `apps/web-next/src/lib/video-stack-level.ts` — 新建：`getStackLevel(type)` series/anime/variety/documentary→1，其余→0
+  - `packages/design-tokens/src/semantic/stack.ts` — 新建：StackToken 16 个 CSS alias（layer1/2 位置+透明度+悬停值+bg，transition 两档）
+  - `packages/design-tokens/src/semantic/index.ts` — 新增 stack 导出
+  - `apps/web-next/src/app/globals.css` — 新增 stack CSS 变量（:root / [data-theme="light"] / [data-theme="dark"] / media 暗色回退，四处）
+  - `apps/web-next/src/components/video/VideoCard.tsx` — SafeImage 替换为 StackedPosterFrame；外层 div 移除 overflow-hidden，overlay div 补 overflow-hidden+rounded-lg
+  - `tests/unit/web-next/StackedPosterFrame.test.tsx` — 新建：9 个单元测试（单/双层、hover debounce、getStackLevel 映射）
+  - `tests/unit/web-next/VideoCard.test.tsx` — 补 window.matchMedia mock
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 阴影层仅为视觉装饰 div（无图片），aria-hidden + pointer-events-none
+  - VideoCard 外层 div 移除 overflow-hidden 使阴影层可溢出显示；主图圆角裁剪由 StackedPosterFrame 内部 overflow-hidden 保证
+  - window.matchMedia mock 已加入 VideoCard.test.tsx 和 StackedPosterFrame.test.tsx

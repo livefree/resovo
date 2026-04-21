@@ -8568,11 +8568,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 所有颜色 Token 化，暗色模式对比度 ≥ 4.5:1
      - typecheck ✅ / lint ✅ / unit ✅
 
-3. M5-CARD-STACK-01 — StackedPosterFrame + hover 堆叠时序（状态：⬜ 未开始）
+3. M5-CARD-STACK-01 — StackedPosterFrame + hover 堆叠时序（状态：✅ 已完成）
    - 创建时间：2026-04-20 19:00
    - 计划开始：M5-PREP-01 ✅ 后（可并行）
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-04-21
+   - 完成时间：2026-04-21
    - 建议模型：claude-sonnet-4-6
    - 规模：S（~60 分钟）
    - 依赖：M5-PREP-01 ✅

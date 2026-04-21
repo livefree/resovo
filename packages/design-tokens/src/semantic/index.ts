@@ -21,3 +21,6 @@ export type { AccentScale } from './derive-accent.js'
 
 export { tag } from './tag.js'
 export type { TagToken, TagTheme } from './tag.js'
+
+export { stack } from './stack.js'
+export type { StackToken, StackTheme } from './stack.js'

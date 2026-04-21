@@ -41,6 +41,23 @@
   --state-info-bg: oklch(90.0% 0.060 250);
   --state-info-fg: oklch(48.0% 0.125 250);
   --state-info-border: oklch(66.0% 0.145 250);
+  /* stacked poster tokens — light defaults */
+  --stack-layer-1-offset-x: 4px;
+  --stack-layer-1-offset-y: -2px;
+  --stack-layer-1-opacity: 0.55;
+  --stack-layer-1-hover-offset-x: 6px;
+  --stack-layer-1-hover-offset-y: -8px;
+  --stack-layer-1-hover-opacity: 0.70;
+  --stack-layer-1-bg: oklch(90.0% 0.004 247);
+  --stack-layer-2-offset-x: 8px;
+  --stack-layer-2-offset-y: -4px;
+  --stack-layer-2-opacity: 0.30;
+  --stack-layer-2-hover-offset-x: 10px;
+  --stack-layer-2-hover-offset-y: -14px;
+  --stack-layer-2-hover-opacity: 0.45;
+  --stack-layer-2-bg: oklch(85.0% 0.004 247);
+  --stack-transition-duration: 80ms;
+  --stack-transition-duration-reverse: 200ms;
   /* tag layer tokens — light defaults */
   --tag-lifecycle-bg: oklch(88.0% 0.090 155);
   --tag-lifecycle-fg: oklch(30.0% 0.120 155);
@@ -94,6 +111,23 @@
   --state-info-bg: oklch(90.0% 0.060 250);
   --state-info-fg: oklch(48.0% 0.125 250);
   --state-info-border: oklch(66.0% 0.145 250);
+  /* stacked poster tokens (light) */
+  --stack-layer-1-offset-x: 4px;
+  --stack-layer-1-offset-y: -2px;
+  --stack-layer-1-opacity: 0.55;
+  --stack-layer-1-hover-offset-x: 6px;
+  --stack-layer-1-hover-offset-y: -8px;
+  --stack-layer-1-hover-opacity: 0.70;
+  --stack-layer-1-bg: oklch(90.0% 0.004 247);
+  --stack-layer-2-offset-x: 8px;
+  --stack-layer-2-offset-y: -4px;
+  --stack-layer-2-opacity: 0.30;
+  --stack-layer-2-hover-offset-x: 10px;
+  --stack-layer-2-hover-offset-y: -14px;
+  --stack-layer-2-hover-opacity: 0.45;
+  --stack-layer-2-bg: oklch(85.0% 0.004 247);
+  --stack-transition-duration: 80ms;
+  --stack-transition-duration-reverse: 200ms;
   /* tag layer tokens */
   --tag-lifecycle-bg: oklch(88.0% 0.090 155);
   --tag-lifecycle-fg: oklch(30.0% 0.120 155);
@@ -146,6 +180,23 @@
   --state-info-bg: oklch(48.0% 0.125 250);
   --state-info-fg: oklch(90.0% 0.060 250);
   --state-info-border: oklch(66.0% 0.145 250);
+  /* stacked poster tokens (dark) */
+  --stack-layer-1-offset-x: 4px;
+  --stack-layer-1-offset-y: -2px;
+  --stack-layer-1-opacity: 0.60;
+  --stack-layer-1-hover-offset-x: 6px;
+  --stack-layer-1-hover-offset-y: -8px;
+  --stack-layer-1-hover-opacity: 0.75;
+  --stack-layer-1-bg: oklch(25.0% 0.004 247);
+  --stack-layer-2-offset-x: 8px;
+  --stack-layer-2-offset-y: -4px;
+  --stack-layer-2-opacity: 0.35;
+  --stack-layer-2-hover-offset-x: 10px;
+  --stack-layer-2-hover-offset-y: -14px;
+  --stack-layer-2-hover-opacity: 0.50;
+  --stack-layer-2-bg: oklch(20.0% 0.004 247);
+  --stack-transition-duration: 80ms;
+  --stack-transition-duration-reverse: 200ms;
   /* tag layer tokens (dark) */
   --tag-lifecycle-bg: oklch(30.0% 0.120 155);
   --tag-lifecycle-fg: oklch(88.0% 0.090 155);
@@ -199,6 +250,23 @@
     --state-info-bg: oklch(48.0% 0.125 250);
     --state-info-fg: oklch(90.0% 0.060 250);
     --state-info-border: oklch(66.0% 0.145 250);
+    /* stacked poster tokens (dark media fallback) */
+    --stack-layer-1-offset-x: 4px;
+    --stack-layer-1-offset-y: -2px;
+    --stack-layer-1-opacity: 0.60;
+    --stack-layer-1-hover-offset-x: 6px;
+    --stack-layer-1-hover-offset-y: -8px;
+    --stack-layer-1-hover-opacity: 0.75;
+    --stack-layer-1-bg: oklch(25.0% 0.004 247);
+    --stack-layer-2-offset-x: 8px;
+    --stack-layer-2-offset-y: -4px;
+    --stack-layer-2-opacity: 0.35;
+    --stack-layer-2-hover-offset-x: 10px;
+    --stack-layer-2-hover-offset-y: -14px;
+    --stack-layer-2-hover-opacity: 0.50;
+    --stack-layer-2-bg: oklch(20.0% 0.004 247);
+    --stack-transition-duration: 80ms;
+    --stack-transition-duration-reverse: 200ms;
     /* tag layer tokens (dark) */
     --tag-lifecycle-bg: oklch(30.0% 0.120 155);
     --tag-lifecycle-fg: oklch(88.0% 0.090 155);

@@ -4,12 +4,13 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { getVideoDetailHref } from '@/lib/video-route'
-import { SafeImage } from '@/components/media'
 import { reportBrokenImage } from '@/lib/report-broken-image'
 import { usePlayerStore } from '@/stores/playerStore'
 import { FloatingPlayButton } from './FloatingPlayButton'
+import { StackedPosterFrame } from '@/components/primitives/media/StackedPosterFrame'
 import { TagLayer } from '@/components/primitives/media/TagLayer'
 import { videoCardToTagProps } from '@/lib/tag-mapping'
+import { getStackLevel } from '@/lib/video-stack-level'
 import type { VideoCard as VideoCardType } from '@resovo/types'
 
 interface VideoCardProps {
@@ -62,30 +63,31 @@ export function VideoCard({ video, className }: VideoCardProps) {
   return (
     <article className={cn('group relative block', className)} data-testid="video-card">
       {/* 图片区 — PosterAction: 点击触发 Fast Takeover 直达播放器 */}
-      <div className="relative rounded-lg overflow-hidden">
-        <SafeImage
+      {/* outer div has no overflow-hidden so StackedPosterFrame shadow layers can peek out */}
+      <div className="relative rounded-lg">
+        <StackedPosterFrame
           src={video.coverUrl}
           alt={video.title}
           width={200}
           height={300}
           aspect="2:3"
           blurHash={video.posterBlurhash ?? undefined}
-          className="pointer-events-none"
-          imgClassName="transition-transform duration-300 group-hover:scale-105"
           fallback={{ title: video.title, type: video.type, seed: video.id }}
           onLoadFail={({ src }) =>
             reportBrokenImage({ videoId: video.id, imageKind: 'poster', url: src })
           }
+          stackLevel={getStackLevel(video.type)}
+          className="w-full"
         />
 
         <button
           type="button"
-          className="absolute inset-0 cursor-pointer"
+          className="absolute inset-0 cursor-pointer z-20"
           aria-label={`播放《${video.title}》第 1 集`}
           onClick={handlePosterClick}
         />
 
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300 pointer-events-none" />
+        <div className="absolute inset-0 rounded-lg overflow-hidden bg-black/0 group-hover:bg-black/40 transition-colors duration-300 pointer-events-none z-20" />
 
         <FloatingPlayButton />
 
