@@ -15,14 +15,17 @@ import {
   getTopBrokenDomains,
   listMissingPosterVideos,
 } from '@/api/db/queries/imageHealth'
+import type { MissingVideoSortField, SortDir } from '@/api/db/queries/imageHealth'
 
 const BrokenDomainsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 })
 
 const MissingVideosQuerySchema = z.object({
-  page:  z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
+  page:      z.coerce.number().int().min(1).default(1),
+  limit:     z.coerce.number().int().min(1).max(100).default(20),
+  sortField: z.enum(['created_at', 'title', 'poster_status']).default('created_at'),
+  sortDir:   z.enum(['asc', 'desc']).default('desc'),
 })
 
 export async function adminImageHealthRoutes(fastify: FastifyInstance) {
@@ -54,11 +57,11 @@ export async function adminImageHealthRoutes(fastify: FastifyInstance) {
         error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Invalid query', status: 400 },
       })
     }
-    const { page, limit } = parsed.data
+    const { page, limit, sortField, sortDir } = parsed.data
     const offset = (page - 1) * limit
 
     const [rows, countResult] = await Promise.all([
-      listMissingPosterVideos(db, limit, offset),
+      listMissingPosterVideos(db, limit, offset, sortField as MissingVideoSortField, sortDir as SortDir),
       db.query<{ total: string }>(
         `SELECT COUNT(v.id)::int AS total
          FROM videos v

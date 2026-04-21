@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { imageHealthService } from '@/services/image-health-stats.service'
-import type { ImageHealthStats, BrokenDomainRow, MissingVideoRow } from '@/services/image-health-stats.service'
+import type { ImageHealthStats, BrokenDomainRow, MissingVideoRow, MissingVideoSortField, SortDir } from '@/services/image-health-stats.service'
 import { BrokenDomainTable } from './BrokenDomainTable'
 import { MissingVideoTable } from './MissingVideoTable'
 import { DashboardShell, DashboardSection } from '@/components/shared/layout/DashboardShell'
@@ -44,6 +44,8 @@ export function ImageHealthDashboard() {
   const [missingTotal, setMissingTotal] = useState(0)
   const [missingPage, setMissingPage] = useState(1)
   const [missingPageSize, setMissingPageSize] = useState(20)
+  const [missingSortField, setMissingSortField] = useState<MissingVideoSortField>('created_at')
+  const [missingSortDir, setMissingSortDir] = useState<SortDir>('desc')
   const [loading, setLoading] = useState(true)
   const [missingLoading, setMissingLoading] = useState(false)
 
@@ -61,7 +63,7 @@ export function ImageHealthDashboard() {
 
   useEffect(() => {
     setMissingLoading(true)
-    imageHealthService.getMissingVideos(missingPage, missingPageSize)
+    imageHealthService.getMissingVideos(missingPage, missingPageSize, missingSortField, missingSortDir)
       .then(({ data, total }) => {
         setMissing(data)
         setMissingTotal(total)
@@ -70,7 +72,7 @@ export function ImageHealthDashboard() {
         // 分页加载失败时保持上一页数据
       })
       .finally(() => setMissingLoading(false))
-  }, [missingPage, missingPageSize])
+  }, [missingPage, missingPageSize, missingSortField, missingSortDir])
 
   return (
     <DashboardShell testId="image-health-dashboard">
@@ -111,9 +113,12 @@ export function ImageHealthDashboard() {
           total={missingTotal}
           page={missingPage}
           pageSize={missingPageSize}
+          sortField={missingSortField}
+          sortDir={missingSortDir}
           loading={missingLoading}
           onPageChange={setMissingPage}
           onPageSizeChange={(size) => { setMissingPage(1); setMissingPageSize(size) }}
+          onSortChange={(field, dir) => { setMissingPage(1); setMissingSortField(field); setMissingSortDir(dir) }}
         />
       </DashboardSection>
     </DashboardShell>

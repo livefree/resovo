@@ -258,11 +258,25 @@ export async function getTopBrokenDomains(
 }
 
 /** 未补图视频列表（后台治理优先排队） */
+export type MissingVideoSortField = 'created_at' | 'title' | 'poster_status'
+export type SortDir = 'asc' | 'desc'
+
+const MISSING_VIDEO_SORT_SQL: Record<MissingVideoSortField, string> = {
+  created_at:   'v.created_at',
+  title:        'v.title',
+  poster_status: 'mc.poster_status',
+}
+
 export async function listMissingPosterVideos(
   db: Pool,
   limit = 20,
-  offset = 0
+  offset = 0,
+  sortField: MissingVideoSortField = 'created_at',
+  sortDir: SortDir = 'desc'
 ): Promise<{ videoId: string; title: string; posterStatus: string }[]> {
+  const orderCol = MISSING_VIDEO_SORT_SQL[sortField] ?? 'v.created_at'
+  const dir = sortDir === 'asc' ? 'ASC' : 'DESC'
+
   const result = await db.query<{
     id: string
     title: string
@@ -273,7 +287,7 @@ export async function listMissingPosterVideos(
      JOIN media_catalog mc ON mc.id = v.catalog_id
      WHERE v.deleted_at IS NULL
        AND mc.poster_status IN ('missing','broken','pending_review')
-     ORDER BY v.created_at DESC
+     ORDER BY ${orderCol} ${dir}
      LIMIT $1 OFFSET $2`,
     [limit, offset]
   )
