@@ -8760,19 +8760,22 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 依赖：SEQ-20260420-M5-CARD ✅
    - **文件范围**：
      - 新增 `apps/web-next/src/components/layout/MobileTabBar.tsx`：三 Tab（首页/分类/搜索）；玻璃底栏（backdrop-filter blur）；180ms 下划线随路由切换；safe-area-inset-bottom 吸收；z-index `--z-tabbar`（40）
-     - 修改 `apps/web-next/src/app/[locale]/layout.tsx`：仅在 `@media (hover: none)` 下挂载 MobileTabBar
-     - 修改 `apps/web-next/src/app/[locale]/_lib/player/MiniPlayer.tsx`：移动端 bottom 值改为 `calc(var(--tabbar-height) + env(safe-area-inset-bottom))`；z-index `--z-mini-player`（50）；移除重复 safe-area-inset 逻辑
+     - 修改 `apps/web-next/src/app/[locale]/layout.tsx`：始终挂载 MobileTabBar（SSR 安全），由 CSS `[data-tabbar]{display:none}` + `@media(hover:none){display:flex}` 控制桌面/移动端显隐
+     - 修改 `apps/web-next/src/app/[locale]/_lib/player/MiniPlayer.tsx`：添加 `data-mini-player` 属性；z-index 改用 `--z-mini-player`（50）；移动端 bottom offset 由 globals.css `@media(hover:none)` 规则覆盖
+     - 修改 `apps/web-next/src/app/[locale]/_lib/player/GlobalPlayerFullFrame.tsx`：z-index 改用 `--z-full-player`（70）
+     - 修改 `apps/web-next/src/app/globals.css`：z-index token 三层 / `--tabbar-height` / portal z 升级 / MiniPlayer mobile bottom 偏移规则
      - 新增 `MobileTabBar.Skeleton`
-     - 新增 `tests/unit/web-next/MobileTabBar.test.tsx` + `tests/e2e-next/mobile-tabbar.spec.ts`
+     - 新增 `tests/unit/web-next/MobileTabBar.test.tsx`（12 tests ✅）
+     - 新增 `tests/e2e-next/mobile-tabbar.spec.ts`（骨架已建，全 test.skip，待 M5-PAGE-DETAIL-01 / M5-PAGE-SEARCH-01 真实页面路径可用后解除 skip）
    - **验收要点**：
-     - 移动端（Playwright mobile emulation）Tab Bar 贴底，切换流畅 180ms
-     - Tab Bar + MiniPlayer 同时渲染时不重叠，MiniPlayer 紧贴 Tab Bar 顶部
-     - iOS 全面屏 safe-area 正确（底部无白条）
-     - 桌面端不渲染 Tab Bar
-     - full 态影院模式（z-index 70）覆盖 Tab Bar（z-index 40）
-     - z-index 全部走 ADR-046 §8.3 Token，无硬编码
-     - Tab Bar 高度走 `--tabbar-height` Token，不硬编码 56px
-     - typecheck ✅ / lint ✅ / unit ✅ / e2e ✅
+     - ✅ MobileTabBar 始终挂载，CSS `@media(hover:none)` 控制显隐（SSR 安全，无 hydration mismatch）
+     - ✅ Tab Bar + MiniPlayer 同时渲染时不重叠（MiniPlayer bottom 由 CSS offset 保证）
+     - ✅ iOS 全面屏 safe-area 正确（--tabbar-height + env(safe-area-inset-bottom)）
+     - ✅ full 态影院模式（z-index 70）覆盖 Tab Bar（z-index 40）
+     - ✅ z-index 全部走 ADR-046 §8.3 Token，无硬编码
+     - ✅ Tab Bar 高度走 `--tabbar-height` Token，不硬编码 56px
+     - ✅ typecheck / lint / unit（12 tests）
+     - ⏳ e2e Playwright mobile emulation：骨架已建，待真实页面路径（M5-PAGE-DETAIL-01 / M5-PAGE-SEARCH-01）解除 skip 后验收
 
 3. M5-PAGE-BANNER-FE-01 — HeroBanner 前端重塑（状态：⬜ 未开始）
    - 创建时间：2026-04-20 19:00
