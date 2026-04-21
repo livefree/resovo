@@ -7745,3 +7745,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - P1 — VideoImageSection 保存后启动轮询（每 2s，最多 6 次），当目标 kind 状态脱离 `pending_review` 或超时后停止，实现"5 秒内状态自动更新"验收项
   - P2 — 角标语义修正：`poster 非 ok → 🔴`；`poster ok + backdrop 非 ok（含 null/missing/pending_review/broken）→ 🟡`；`poster ok + backdrop ok → 🟢`
   - P3 — `GET /admin/videos/:id/images` 新增 `lastStatusUpdatedAt`（来自 `catalog.updatedAt`）；UI 头部展示"最近状态更新"
+
+---
+
+## IMG-07 — loader 接口单元测试 + env 切换文档
+
+- **完成时间**：2026-04-20 17:55
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **关联任务**：IMG-07
+- **变更文件**：
+  - `apps/web-next/src/lib/image/image-loader.ts`：`getLoader` 新增可选 `type` 参数（显式参数优先于 env）；env 降级改用 `||` 处理空字符串；补充模块级 JSDoc（env 切换方式、passthrough 多尺寸行为、`next.config.ts` 不改原因）
+  - `tests/unit/lib/image-loader.test.ts`：新建 14 个单元测试，覆盖 `passthroughLoader` / `cloudflareLoader` URL 拼接 / `getLoader` 参数与 env 优先级
+
+### 验收结果
+
+- typecheck ✅ / lint ✅ / 1206/1206 unit tests（116 files）✅
