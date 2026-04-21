@@ -449,10 +449,11 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
     }
     return reply.send({
       data: {
-        poster:         { url: catalog.coverUrl,          status: catalog.posterStatus },
-        backdrop:       { url: catalog.backdropUrl,       status: catalog.backdropStatus },
-        logo:           { url: catalog.logoUrl,           status: catalog.logoStatus },
-        banner_backdrop:{ url: catalog.bannerBackdropUrl, status: catalog.bannerBackdropStatus },
+        poster:          { url: catalog.coverUrl,          status: catalog.posterStatus },
+        backdrop:        { url: catalog.backdropUrl,       status: catalog.backdropStatus },
+        logo:            { url: catalog.logoUrl,           status: catalog.logoStatus },
+        banner_backdrop: { url: catalog.bannerBackdropUrl, status: catalog.bannerBackdropStatus },
+        lastStatusUpdatedAt: catalog.updatedAt,
       },
     })
   })

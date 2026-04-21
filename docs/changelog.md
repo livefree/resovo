@@ -7733,3 +7733,15 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 ### 验收结果
 
 - typecheck ✅ / lint ✅ / 1192/1192 unit tests（115 files）✅
+
+---
+
+## IMG-06 P1/P2/P3 修复
+
+- **完成时间**：2026-04-20 17:45
+- **执行模型**：claude-sonnet-4-6
+- **关联任务**：IMG-06
+- **变更摘要**：
+  - P1 — VideoImageSection 保存后启动轮询（每 2s，最多 6 次），当目标 kind 状态脱离 `pending_review` 或超时后停止，实现"5 秒内状态自动更新"验收项
+  - P2 — 角标语义修正：`poster 非 ok → 🔴`；`poster ok + backdrop 非 ok（含 null/missing/pending_review/broken）→ 🟡`；`poster ok + backdrop ok → 🟢`
+  - P3 — `GET /admin/videos/:id/images` 新增 `lastStatusUpdatedAt`（来自 `catalog.updatedAt`）；UI 头部展示"最近状态更新"

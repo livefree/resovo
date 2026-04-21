@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { apiClient } from '@/lib/api-client'
 
 // ── 类型 ──────────────────────────────────────────────────────────
@@ -17,6 +17,7 @@ interface ImagesData {
   backdrop: ImageEntry
   logo: ImageEntry
   banner_backdrop: ImageEntry
+  lastStatusUpdatedAt: string | null
 }
 
 // ── 常量 ──────────────────────────────────────────────────────────
@@ -28,7 +29,7 @@ const KIND_LABELS: Record<ImageKind, string> = {
   banner_backdrop: '横幅背景 (banner)',
 }
 
-const STATUS_TONE: Record<string, string> = {
+const STATUS_COLOR: Record<string, string> = {
   ok:             'var(--status-success)',
   pending_review: 'var(--status-warning)',
   broken:         'var(--status-danger)',
@@ -42,16 +43,23 @@ const STATUS_LABELS: Record<string, string> = {
   missing:        '缺图',
 }
 
-// ── 子组件 ────────────────────────────────────────────────────────
+const IMAGE_KINDS: ImageKind[] = ['poster', 'backdrop', 'logo', 'banner_backdrop']
+
+// 轮询参数
+const POLL_INTERVAL_MS = 2000
+const POLL_MAX_ATTEMPTS = 6   // 最多 12 秒
+
+// ── 子组件：单行图片 ──────────────────────────────────────────────
 
 interface ImageRowProps {
   kind: ImageKind
   entry: ImageEntry
+  polling: boolean
   videoId: string
   onSaved: (kind: ImageKind, url: string) => void
 }
 
-function ImageRow({ kind, entry, videoId, onSaved }: ImageRowProps) {
+function ImageRow({ kind, entry, polling, videoId, onSaved }: ImageRowProps) {
   const [editing, setEditing] = useState(false)
   const [inputUrl, setInputUrl] = useState('')
   const [saving, setSaving] = useState(false)
@@ -73,7 +81,7 @@ function ImageRow({ kind, entry, videoId, onSaved }: ImageRowProps) {
     }
   }
 
-  const statusColor = STATUS_TONE[entry.status ?? 'missing'] ?? 'var(--muted)'
+  const statusColor = STATUS_COLOR[entry.status ?? 'missing'] ?? 'var(--muted)'
   const statusLabel = STATUS_LABELS[entry.status ?? 'missing'] ?? (entry.status ?? '—')
 
   return (
@@ -87,9 +95,12 @@ function ImageRow({ kind, entry, videoId, onSaved }: ImageRowProps) {
         </span>
         <span
           className="rounded px-1.5 py-0.5 text-xs font-medium"
-          style={{ color: statusColor, background: `color-mix(in srgb, ${statusColor} 15%, transparent)` }}
+          style={{
+            color: statusColor,
+            background: `color-mix(in srgb, ${statusColor} 15%, transparent)`,
+          }}
         >
-          {statusLabel}
+          {polling && entry.status === 'pending_review' ? '检测中…' : statusLabel}
         </span>
       </div>
 
@@ -108,8 +119,9 @@ function ImageRow({ kind, entry, videoId, onSaved }: ImageRowProps) {
       {!editing ? (
         <button
           type="button"
+          disabled={polling && entry.status === 'pending_review'}
           onClick={() => { setEditing(true); setInputUrl(entry.url ?? '') }}
-          className="rounded border px-2 py-1 text-xs transition-colors"
+          className="rounded border px-2 py-1 text-xs transition-colors disabled:opacity-40"
           style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
         >
           更换 URL
@@ -159,28 +171,78 @@ function ImageRow({ kind, entry, videoId, onSaved }: ImageRowProps) {
 
 // ── 主组件 ────────────────────────────────────────────────────────
 
-const IMAGE_KINDS: ImageKind[] = ['poster', 'backdrop', 'logo', 'banner_backdrop']
-
 export function VideoImageSection({ videoId }: { videoId: string }) {
   const [data, setData] = useState<ImagesData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [polling, setPolling] = useState(false)
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pollAttempts = useRef(0)
+
+  async function fetchImages(): Promise<ImagesData | null> {
+    try {
+      const res = await apiClient.get<{ data: ImagesData }>(`/admin/videos/${videoId}/images`)
+      return res.data
+    } catch {
+      return null
+    }
+  }
 
   useEffect(() => {
-    apiClient
-      .get<{ data: ImagesData }>(`/admin/videos/${videoId}/images`)
-      .then((res) => setData(res.data))
-      .catch(() => {
-        // 加载失败时以空占位渲染，不阻断表单
-      })
+    fetchImages()
+      .then((d) => { if (d) setData(d) })
       .finally(() => setLoading(false))
+    return () => {
+      if (pollTimer.current) clearTimeout(pollTimer.current)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId])
+
+  function startPolling(savedKind: ImageKind) {
+    pollAttempts.current = 0
+    setPolling(true)
+
+    function tick() {
+      pollAttempts.current += 1
+      fetchImages().then((fresh) => {
+        if (!fresh) {
+          if (pollAttempts.current < POLL_MAX_ATTEMPTS) {
+            pollTimer.current = setTimeout(tick, POLL_INTERVAL_MS)
+          } else {
+            setPolling(false)
+          }
+          return
+        }
+        setData(fresh)
+        const stillPending = fresh[savedKind]?.status === 'pending_review'
+        if (stillPending && pollAttempts.current < POLL_MAX_ATTEMPTS) {
+          pollTimer.current = setTimeout(tick, POLL_INTERVAL_MS)
+        } else {
+          setPolling(false)
+        }
+      })
+    }
+
+    pollTimer.current = setTimeout(tick, POLL_INTERVAL_MS)
+  }
 
   function handleSaved(kind: ImageKind, url: string) {
     setData((prev) =>
-      prev
-        ? { ...prev, [kind]: { url, status: 'pending_review' } }
-        : prev
+      prev ? { ...prev, [kind]: { url, status: 'pending_review' } } : prev
     )
+    if (pollTimer.current) clearTimeout(pollTimer.current)
+    startPolling(kind)
+  }
+
+  function formatDate(iso: string | null | undefined): string {
+    if (!iso) return '—'
+    try {
+      return new Date(iso).toLocaleString('zh-CN', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit',
+      })
+    } catch {
+      return iso
+    }
   }
 
   return (
@@ -189,7 +251,14 @@ export function VideoImageSection({ videoId }: { videoId: string }) {
       style={{ borderColor: 'var(--border)', background: 'var(--bg2)' }}
       data-testid="admin-video-image-section"
     >
-      <h2 className="text-sm font-medium" style={{ color: 'var(--text)' }}>图片管理</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-medium" style={{ color: 'var(--text)' }}>图片管理</h2>
+        {data?.lastStatusUpdatedAt && (
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>
+            最近状态更新：{formatDate(data.lastStatusUpdatedAt)}
+          </span>
+        )}
+      </div>
 
       {loading && (
         <p className="text-sm" style={{ color: 'var(--muted)' }}>加载中…</p>
@@ -202,6 +271,7 @@ export function VideoImageSection({ videoId }: { videoId: string }) {
               key={kind}
               kind={kind}
               entry={data?.[kind] ?? { url: null, status: null }}
+              polling={polling}
               videoId={videoId}
               onSaved={handleSaved}
             />

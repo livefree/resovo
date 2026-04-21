@@ -261,12 +261,12 @@ function buildDataColumn(columnId: VideoColumnId, deps: ColumnDeps): TableColumn
       col.cell = ({ row }) => {
         const p = row.poster_status
         const b = row.backdrop_status
-        const isBroken  = p === 'broken'  || b === 'broken'
-        const isPending = p === 'pending_review' || b === 'pending_review'
-        const isOk      = p === 'ok' && b === 'ok'
-        const label = isBroken ? '🔴 有破损' : isPending ? '🟡 待检测' : isOk ? '🟢 正常' : '— 未知'
-        const tone: 'danger' | 'warning' | 'success' | 'info' =
-          isBroken ? 'danger' : isPending ? 'warning' : isOk ? 'success' : 'info'
+        // P0 (poster) 失效 → 🔴；P0 ok + P1 (backdrop) 非 ok → 🟡；P0+P1 均 ok → 🟢
+        const p0ok = p === 'ok'
+        const p1ok = b === 'ok'
+        const label = !p0ok ? '🔴 P0失效' : !p1ok ? '🟡 P1缺失' : '🟢 正常'
+        const tone: 'danger' | 'warning' | 'success' =
+          !p0ok ? 'danger' : !p1ok ? 'warning' : 'success'
         return <TableBadgeCell label={label} tone={tone} />
       }
       break
