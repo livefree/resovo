@@ -8,6 +8,8 @@ import { SafeImage } from '@/components/media'
 import { reportBrokenImage } from '@/lib/report-broken-image'
 import { usePlayerStore } from '@/stores/playerStore'
 import { FloatingPlayButton } from './FloatingPlayButton'
+import { TagLayer } from '@/components/primitives/media/TagLayer'
+import { videoCardToTagProps } from '@/lib/tag-mapping'
 import type { VideoCard as VideoCardType } from '@resovo/types'
 
 interface VideoCardProps {
@@ -15,19 +17,6 @@ interface VideoCardProps {
   className?: string
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  movie:       '电影',
-  series:      '剧集',
-  anime:       '动漫',
-  variety:     '综艺',
-  documentary: '纪录片',
-  short:       '短剧',
-  sports:      '体育',
-  music:       '音乐',
-  news:        '新闻',
-  kids:        '少儿',
-  other:       '其他',
-}
 
 function VideoCardSkeleton({ className }: { className?: string }) {
   return (
@@ -100,21 +89,7 @@ export function VideoCard({ video, className }: VideoCardProps) {
 
         <FloatingPlayButton />
 
-        <span
-          className="absolute top-2 left-2 text-xs px-1.5 py-0.5 rounded font-medium pointer-events-none z-10"
-          style={{ background: 'var(--accent-default)', color: 'var(--accent-fg)' }}
-        >
-          {TYPE_LABELS[video.type] ?? video.type}
-        </span>
-
-        {video.rating !== null && (
-          <span
-            className="absolute top-2 right-2 text-xs px-1.5 py-0.5 rounded font-medium pointer-events-none z-10"
-            style={{ background: 'var(--bg-overlay)', color: 'var(--accent-default)' }}
-          >
-            ★ {video.rating.toFixed(1)}
-          </span>
-        )}
+        <TagLayer {...videoCardToTagProps(video)} />
       </div>
 
       {/* 文字区 — MetaAction: 点击跳详情页 */}

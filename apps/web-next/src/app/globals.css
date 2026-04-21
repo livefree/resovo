@@ -81,6 +81,19 @@
   --state-info-bg: oklch(90.0% 0.060 250);
   --state-info-fg: oklch(48.0% 0.125 250);
   --state-info-border: oklch(66.0% 0.145 250);
+  /* tag layer tokens */
+  --tag-lifecycle-bg: oklch(88.0% 0.090 155);
+  --tag-lifecycle-fg: oklch(30.0% 0.120 155);
+  --tag-lifecycle-border: oklch(62.0% 0.165 155);
+  --tag-trending-bg: oklch(90.0% 0.095 85);
+  --tag-trending-fg: oklch(40.0% 0.135 85);
+  --tag-trending-border: oklch(74.0% 0.160 85);
+  --tag-spec-bg: color-mix(in oklch, oklch(6.5% 0.004 247) 72%, transparent);
+  --tag-spec-fg: oklch(100% 0 0);
+  --tag-spec-border: transparent;
+  --tag-rating-bg: color-mix(in oklch, oklch(6.5% 0.004 247) 56%, transparent);
+  --tag-rating-border: transparent;
+  --tag-border-radius: 4px;
 }
 
 [data-theme="dark"] {
@@ -120,6 +133,19 @@
   --state-info-bg: oklch(48.0% 0.125 250);
   --state-info-fg: oklch(90.0% 0.060 250);
   --state-info-border: oklch(66.0% 0.145 250);
+  /* tag layer tokens (dark) */
+  --tag-lifecycle-bg: oklch(30.0% 0.120 155);
+  --tag-lifecycle-fg: oklch(88.0% 0.090 155);
+  --tag-lifecycle-border: oklch(44.0% 0.135 155);
+  --tag-trending-bg: oklch(40.0% 0.135 85);
+  --tag-trending-fg: oklch(90.0% 0.095 85);
+  --tag-trending-border: oklch(52.0% 0.135 85);
+  --tag-spec-bg: color-mix(in oklch, oklch(6.5% 0.004 247) 80%, transparent);
+  --tag-spec-fg: oklch(98.5% 0.002 247);
+  --tag-spec-border: transparent;
+  --tag-rating-bg: color-mix(in oklch, oklch(6.5% 0.004 247) 75%, transparent);
+  --tag-rating-border: transparent;
+  --tag-border-radius: 4px;
 }
 
 /* 系统深色模式降级（init-script 未运行时的 no-JS 兜底） */
@@ -160,6 +186,19 @@
     --state-info-bg: oklch(48.0% 0.125 250);
     --state-info-fg: oklch(90.0% 0.060 250);
     --state-info-border: oklch(66.0% 0.145 250);
+    /* tag layer tokens (dark) */
+    --tag-lifecycle-bg: oklch(30.0% 0.120 155);
+    --tag-lifecycle-fg: oklch(88.0% 0.090 155);
+    --tag-lifecycle-border: oklch(44.0% 0.135 155);
+    --tag-trending-bg: oklch(40.0% 0.135 85);
+    --tag-trending-fg: oklch(90.0% 0.095 85);
+    --tag-trending-border: oklch(52.0% 0.135 85);
+    --tag-spec-bg: color-mix(in oklch, oklch(6.5% 0.004 247) 80%, transparent);
+    --tag-spec-fg: oklch(98.5% 0.002 247);
+    --tag-spec-border: transparent;
+    --tag-rating-bg: color-mix(in oklch, oklch(6.5% 0.004 247) 75%, transparent);
+    --tag-rating-border: transparent;
+    --tag-border-radius: 4px;
   }
 }
 

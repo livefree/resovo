@@ -18,3 +18,6 @@ export type { SurfaceToken, SurfaceTheme } from './surface.js'
 
 export { deriveAccent } from './derive-accent.js'
 export type { AccentScale } from './derive-accent.js'
+
+export { tag } from './tag.js'
+export type { TagToken, TagTheme } from './tag.js'

@@ -7875,3 +7875,29 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - TagLayer / StackedPosterFrame 在 VideoCard.tsx 中尚未接入，由 M5-CARD-TAG-01 和 M5-CARD-STACK-01 负责
   - vitest.config.ts 中 `@/stores` alias 已改为上下文感知：web-next 上下文 → `apps/web-next/src/stores`，server/其他 → `apps/server/src/stores`
   - FastTakeover 动效目前为 scale+opacity 实现；full FLIP 动效（卡片图片 → 播放器 poster）待 M5-CARD-SHARED-01 的 SharedElement 实装后增强
+
+---
+
+## M5-CARD-TAG-01 — TagLayer primitive + taxonomy + Token
+
+- **任务 ID**：M5-CARD-TAG-01
+- **所属序列**：SEQ-20260420-M5-CARD
+- **完成时间**：2026-04-21
+- **记录时间**：2026-04-21
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `packages/design-tokens/src/semantic/tag.ts` — 新建：TagToken 类型 + light/dark 双主题值（12 CSS alias）
+  - `packages/design-tokens/src/semantic/index.ts` — 新增 tag 导出
+  - `apps/web-next/src/app/globals.css` — 新增 12 个 tag CSS 变量（`:root`、`[data-theme="dark"]`、`@media prefers-color-scheme:dark` 三处）
+  - `apps/web-next/src/types/tag.ts` — 新建：`LifecycleTag`、`TrendingTag`、`SpecTag`、`RatingSource`、`TagLayerProps`
+  - `apps/web-next/src/lib/tag-mapping.ts` — 新建：`videoCardToTagProps()`（VideoCard → TagLayerProps）
+  - `apps/web-next/src/components/primitives/media/TagLayer.tsx` — 新建：四象限标签层组件
+  - `apps/web-next/src/components/video/VideoCard.tsx` — 移除旧 TYPE_LABELS + rating 徽章；接入 TagLayer
+  - `tests/unit/web-next/TagLayer.test.tsx` — 新建：14 个单元测试（lifecycle/trending/spec/rating/a11y）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - `tag-mapping.ts` 当前仅映射 `status → lifecycle` 和 `rating`，trending/specs 待后端 API 补充后扩展
+  - TagLayer 所有颜色通过 CSS 变量引用，零硬编码
+  - 所有标签区块均 `aria-hidden="true"`（装饰性信息，屏幕阅读器不读）

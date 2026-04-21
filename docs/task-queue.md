@@ -8547,11 +8547,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 关键路径回归（断点续播 / 线路切换 / 影院模式 / 字幕开关）PASS
      - typecheck ✅ / lint ✅ / unit ✅ / e2e ✅
 
-2. M5-CARD-TAG-01 — TagLayer primitive + taxonomy + Token（状态：⬜ 未开始）
+2. M5-CARD-TAG-01 — TagLayer primitive + taxonomy + Token（状态：✅ 已完成）
    - 创建时间：2026-04-20 19:00
    - 计划开始：M5-PREP-01 ✅ 后（可与 CTA-01 并行）
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-04-21
+   - 完成时间：2026-04-21
    - 建议模型：claude-sonnet-4-6
    - 规模：M（~90 分钟）
    - 依赖：M5-PREP-01 ✅
