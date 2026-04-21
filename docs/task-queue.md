@@ -8335,3 +8335,488 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - ✅ IMG-04 验收改为排除 `primitives/lazy-image` 白名单版本
    - ✅ IMG-07 不包含 `next.config.ts images.loaderFile` 配置内容
    - ✅ `docs/image_pipeline_plan_20260418.md` 末尾追加 §17 校准注记（C1~C8）
+
+---
+
+## ⚠️ M5 前置门禁 — PREP 阶段 PASS 前禁启 CARD/API/PAGE
+
+- **触发时间**：2026-04-20
+- **触发原因**：方案 §19 M5 定义缺失卡片协议决策（直达路径 / 标签 taxonomy / 多集视觉 / Tab Bar 叠加协议 / primitive 激活归属 / Skeleton 系统 / Banner 全栈三卡拆分）
+- **封锁范围**：
+  - 🚫 禁止启动 M5-CARD-* / M5-API-* / M5-ADMIN-* 序列直到 M5-PREP-01 + M5-PREP-02 全部 ✅
+  - 🚫 禁止启动 M5-PAGE-* 序列直到 M5-CARD-* 全部 ✅（PAGE 卡消费 CARD primitive）
+  - 🚫 禁止 M5-PAGE-BANNER-FE-01 启动在 M5-API-BANNER-01 + M5-ADMIN-BANNER-01 完成之前
+  - ✅ 允许：M5-PREP-01 / M5-PREP-02 / hotfix
+- **解除条件**：
+  1. M5-PREP-01 ✅（ADR-046 §1-§8 全部章节落盘到 `docs/decisions.md`）
+  2. M5-PREP-02 ✅（`docs/frontend_redesign_plan_20260418.md` §9.5/§14.1.1/§15.3.1/§16/§19 更新完成 + primitive 激活归属表落盘 + embla-carousel 依赖核查清单完成）
+  3. Opus arch-reviewer 独立审计 PASS
+- **关联文档**：`docs/task_queue_patch_m5_card_protocol_20260420_v1_1.md`（v1.1，当前版本）
+- **历史版本**：`docs/task_queue_patch_m5_card_protocol_20260420.md`（v1.0，已 superseded，保留不删）
+
+---
+
+## SEQ-20260420-M5-PREP — M5 前置决策
+
+- **状态**：⬜ 未开始
+- **创建时间**：2026-04-20 19:00
+- **最后更新时间**：2026-04-20 19:00
+- **目标**：撰写 ADR-046（卡片协议 + 直达路径 + Tab Bar 叠加 + Skeleton + primitive 激活归属）并回写方案文档，作为 M5 整个序列的决策锚点
+- **范围**：`docs/decisions.md`、`docs/frontend_redesign_plan_20260418.md`、`docs/m5_primitive_activation_20260420.md`（新建）、`docs/m5_dependency_audit_20260420.md`（新建）
+- **依赖**：SEQ-20260420-IMG-PRE-M5 ✅（REGRESSION 完成）
+- **建议模型**：opus（PREP-01 主循环）/ claude-haiku-4-5-20251001（PREP-02 子代理）
+
+### 任务列表
+
+1. M5-PREP-01 — ADR-046 撰写（§1-§8 全章节）（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 19:00
+   - 计划开始：⚠️ M5 BLOCKER 解除后（自动为首卡）
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：**opus**（主循环）+ arch-reviewer (claude-opus-4-6) 子代理（**强制**）
+   - 规模：M（~140 分钟）
+   - 依赖：无
+   - **文件范围**：
+     - 修改 `docs/decisions.md`：文末追加 ADR-046（§1 背景 / §2 交互协议 / §3 动效 / §4 内容+§4.5 Skeleton / §5 多集视觉 / §6 组件边界 / §7 验收清单 / §8 Tab Bar↔MiniPlayer 叠加协议）
+     - 可选：新增 `docs/adr-046-card-protocol-appendix.md`（如 ADR 正文过长）
+   - **验收要点**：
+     - ADR-046 包含 §1-§8 全章节，尤其 §8 含 §8.1-§8.5（布局 / 交互 / z-index 表 / safe-area / 反例）
+     - §8.3 z-index 层级表覆盖全站所有层级（cinema-mode 70 / player-full 60 / mini-player 50 / tabbar 40 / modal 30 / header-collapsed 20 / mega-menu 15）
+     - 引用 ADR-041 / ADR-042 及方案 §9/§12/§13/§14.1/§15.3-§15.4/§16 具体章节号
+     - Fast Takeover 与 Standard Takeover 均有 reduced motion 降级路径
+     - arch-reviewer 子代理独立校对后标 Accepted
+     - typecheck 不涉及，但 Markdown 预览无渲染错误
+
+2. M5-PREP-02 — 方案回写 + primitive 激活归属 + 依赖核查（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 19:00
+   - 计划开始：M5-PREP-01 ✅ 后
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-haiku-4-5-20251001（Haiku 子代理，机械回写 + grep）
+   - 规模：S（~60 分钟）
+   - 依赖：M5-PREP-01 ✅
+   - **文件范围**：
+     - 修改 `docs/frontend_redesign_plan_20260418.md`：§9.5 新增 Cross-Skip Takeover / §14.1 追加 §14.1.1 Tab Bar↔MiniPlayer 协议提示 / §15.3 追加 §15.3.1 Skeleton primitive 契约 / §16 补充 VideoCard/TagLayer/StackedPosterFrame/Skeleton 四条 / §19 整体重写为 PREP/CARD/API/PAGE/CLOSE 五阶段
+     - 新增 `docs/m5_primitive_activation_20260420.md`：primitive 激活归属表（SharedElement/RouteStack/PageTransition-Sibling/PageTransition-Takeover/Skeleton 各含 REGRESSION产物/M5激活卡/消费卡/验收门槛）
+     - 新增 `docs/m5_dependency_audit_20260420.md`：embla-carousel 依赖核查（grep `"embla-carousel"` in `apps/**/package.json`）+ react-dnd + react-spring/framer-motion 等动效库核查，每项二选一（✅已存在 / ❌不存在→BLOCKER）
+   - **验收要点**：
+     - 方案文档 diff 与 `docs/task_queue_patch_m5_card_protocol_20260420_v1_1.md` §6 一致
+     - primitive 激活归属表含 ≥ 5 项 primitive
+     - 依赖核查清单每项明确标注 ✅ 或 ❌
+     - 若核查发现任何 ❌ → 直接报 BLOCKER，不得启动 CARD/API/PAGE
+
+---
+
+## SEQ-20260420-M5-CARD — M5 卡片 primitive 激活（6 张）
+
+- **状态**：⬜ 未开始
+- **创建时间**：2026-04-20 19:00
+- **最后更新时间**：2026-04-20 19:00
+- **目标**：实装 VideoCard 双入口、TagLayer、StackedPosterFrame、SharedElement FLIP、RouteStack 手势、Skeleton primitive，为 PAGE 阶段提供完整 primitive 基础
+- **范围**：`apps/web-next/src/components/`、`apps/web-next/src/app/[locale]/_lib/player/`、`packages/design-tokens/`
+- **依赖**：SEQ-20260420-M5-PREP ✅
+
+### 任务列表
+
+1. M5-CARD-CTA-01 — VideoCard 双入口拆分 + Fast Takeover（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 19:00
+   - 计划开始：M5-PREP-01 ✅ + M5-PREP-02 ✅ 后
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：M（~150 分钟）
+   - 依赖：M5-PREP-01 ✅ + M5-PREP-02 ✅
+   - **文件范围**：
+     - 修改 `apps/web-next/src/components/video/VideoCard.tsx`：外层拆为 `<article>` + `VideoCard.PosterAction`（button，图片区，触发 Fast Takeover）+ `VideoCard.MetaAction`（Link，文字区，跳详情页）；8px 中轴间隙样式；hover 时（`@media (hover: hover)`）显示 FloatingPlayButton
+     - 修改 `apps/web-next/src/app/[locale]/_lib/player/playerStore.ts`：`enter()` 扩展 `transition: 'fast-takeover' | 'standard-takeover'` 参数
+     - 新增 `apps/web-next/src/components/video/FloatingPlayButton.tsx`：44px 悬浮播放按钮，hover 进入 120ms / 离开 90ms
+     - 新增 `apps/web-next/src/components/player/transitions/FastTakeover.ts`：Fast Takeover 动效（移动 200ms / 桌面 240ms）
+     - 修改 `apps/web-next/src/app/[locale]/_lib/player/GlobalPlayerFullFrame.tsx`：识别 transition 参数调用对应动效
+     - 新增 `tests/unit/web-next/VideoCard.test.tsx`（双点击区分、Tab 顺序、reduced motion 降级）
+     - 新增 `tests/e2e-next/card-to-watch.spec.ts`（桌面 hover ▶ / 移动点图片直达 /watch / 点文字进详情）
+   - **验收要点**：
+     - 图片区点击 → 200-240ms 内 GlobalPlayerHost 进入 full 态播放 ep=1
+     - 文字区点击 → 路由跳详情页
+     - 键盘 Tab：PosterAction 先于 MetaAction 获焦
+     - 两个 button 各自独立 aria-label（`播放 {title}` / `{title} 详情页`）
+     - reduced motion 下 Fast Takeover 退化为 opacity 120ms
+     - VideoCard.Skeleton 导出（像素匹配，待 SKELETON-01 后替换真实实现）
+     - 关键路径回归（断点续播 / 线路切换 / 影院模式 / 字幕开关）PASS
+     - typecheck ✅ / lint ✅ / unit ✅ / e2e ✅
+
+2. M5-CARD-TAG-01 — TagLayer primitive + taxonomy + Token（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 19:00
+   - 计划开始：M5-PREP-01 ✅ 后（可与 CTA-01 并行）
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：M（~90 分钟）
+   - 依赖：M5-PREP-01 ✅
+   - **文件范围**：
+     - 新增 `apps/web-next/src/components/primitives/media/TagLayer.tsx`
+     - 新增 `apps/web-next/src/types/tag.ts`：导出 `LifecycleTag`、`TrendingTag`、`SpecTag`、`RatingSource` 类型
+     - 修改 `packages/design-tokens/src/semantic/tag.json`（或等价路径）：新增 12 个 alias（tag-lifecycle-*/tag-trending-*/tag-spec-icon-color/tag-rating-*/tag-border-radius）
+     - 修改 `apps/web-next/src/components/video/VideoCard.tsx`：PosterAction 内嵌 `<TagLayer {...video.tags} />`
+     - 修改 `apps/server/src/lib/videos/tag-mapping.ts`（或等价路径）：DB 字段 → TagLayer props 映射
+     - 新增 `tests/unit/web-next/TagLayer.test.tsx`（lifecycle/trending 互斥、specs 上限 2、rating 渲染）
+   - **验收要点**：
+     - 图片区左上 ≤ 2 文字标签，右下 ≤ 2 规格图标，右上 ≤ 1 评分
+     - lifecycle 与 trending 同屏各最多 1 个
+     - 所有颜色 Token 化，暗色模式对比度 ≥ 4.5:1
+     - typecheck ✅ / lint ✅ / unit ✅
+
+3. M5-CARD-STACK-01 — StackedPosterFrame + hover 堆叠时序（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 19:00
+   - 计划开始：M5-PREP-01 ✅ 后（可并行）
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：S（~60 分钟）
+   - 依赖：M5-PREP-01 ✅
+   - **文件范围**：
+     - 新增 `apps/web-next/src/components/primitives/media/StackedPosterFrame.tsx`：box-shadow 模拟两层后卡，不渲染真实 DOM
+     - 修改 `packages/design-tokens/src/semantic/stack.json`（或等价）：12 个 alias（stack-layer-*/stack-transition-duration/-reverse）
+     - 修改 `apps/web-next/src/components/video/VideoCard.tsx`：PosterAction 内 SafeImage 替换为 `<StackedPosterFrame stackLevel={getStackLevel(video.type)}>`
+     - 新增 `apps/web-next/src/lib/video-helpers.ts`（或复用已有）：`getStackLevel(type)` 映射
+     - 新增 `tests/unit/web-next/StackedPosterFrame.test.tsx`
+   - **验收要点**：
+     - series/anime/tvshow 静置时两层阴影；movie/short/clip 单层
+     - 桌面 hover 时序：0-80ms 主卡 scale / 80-160ms 后卡 1 偏移+透明度 / 160-200ms 后卡 2+▶ 淡入
+     - 阴影层 `aria-hidden="true"`
+     - reduced motion 下 hover 不 scale，仅改阴影
+     - mouseenter 使用 30ms debounce
+     - typecheck ✅ / lint ✅ / unit ✅
+
+4. M5-CARD-SHARED-01 — SharedElement FLIP 实装（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 19:00
+   - 计划开始：M5-PREP-01 ✅ 后（建议 CTA/TAG/STACK 后启动）
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6（主循环）+ arch-reviewer (claude-opus-4-6) 子代理（**强制** code review）
+   - 规模：L（~180 分钟）
+   - 依赖：M5-PREP-01 ✅
+   - **文件范围**：
+     - 修改 `apps/web-next/src/components/shared/primitives/SharedElement.tsx`：替换 noop 实现，新增 `<SharedElement.Source id>` / `<SharedElement.Target id>` 双 API；实现 `useFLIP()` hook（getSnapshotBeforeUpdate 钩子 + rAF FLIP 动画）；跨路由 SharedElementRegistry
+     - 新增 `apps/web-next/src/components/shared/primitives/SharedElementRegistry.tsx`：全局 Map，路由切换时匹配 source/target，cleanup 防 memory leak
+     - 新增 `apps/web-next/src/hooks/useFLIP.ts`
+     - 新增 `tests/unit/web-next/SharedElement.test.tsx`
+     - 新增 `tests/e2e-next/shared-element.spec.ts`（详情页→播放器 / 列表→详情 / reduced motion 降级，≥ 3 条路径）
+   - **验收要点**：
+     - 详情页 Hero → 播放器 poster 过渡中元素平滑 FLIP
+     - reduced motion 降级为 opacity 120ms
+     - Registry 路由切换后正确 cleanup（无 memory leak）
+     - arch-reviewer code review 标 PASS（覆盖：React 18 并发模式钩子正确性 / memory leak / 60fps / reduced motion / SSR 安全）
+     - 过渡帧率 ≥ 55fps（Chrome DevTools performance 验证）
+     - typecheck ✅ / lint ✅ / unit ✅ / e2e ✅
+
+5. M5-CARD-ROUTESTACK-01 — RouteStack 边缘返回手势实装（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 19:00
+   - 计划开始：M5-PREP-01 ✅ 后（可并行）
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：M（~120 分钟）
+   - 依赖：M5-PREP-01 ✅
+   - **文件范围**：
+     - 修改 `apps/web-next/src/components/shared/primitives/RouteStack.tsx`：替换 stub；监听 touchstart/touchmove/touchend（仅 `@media (hover: none)`）；左边缘 20px 触发区；阈值屏宽 30% 或速度 > 0.5px/ms；触发后 `router.back()` + 反向动画
+     - 新增 `apps/web-next/src/hooks/useEdgeSwipeBack.ts`
+     - 新增 `tests/unit/web-next/RouteStack.test.tsx`
+     - 新增 `tests/e2e-next/edge-swipe-back.spec.ts`（Playwright mobile emulation）
+   - **验收要点**：
+     - 移动端详情页 / 搜索页 / 分类页左边缘右滑 > 阈值 → 返回，反向动画 240ms
+     - 桌面端（hover: hover）不触发手势监听
+     - reduced motion 下瞬移返回（无动画）
+     - GlobalPlayerHost full 态时禁用边缘手势
+     - iOS Safari 真机测试不与浏览器原生手势冲突
+     - typecheck ✅ / lint ✅ / unit ✅ / e2e ✅（mobile）
+
+6. M5-CARD-SKELETON-01 — Skeleton primitive + 三档门槛（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 19:00
+   - 计划开始：M5-CARD-CTA-01 ✅ + M5-CARD-TAG-01 ✅ + M5-CARD-STACK-01 ✅ 后（为这些组件补 Skeleton）
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：M（~100 分钟）
+   - 依赖：M5-CARD-CTA-01 ✅ + M5-CARD-TAG-01 ✅ + M5-CARD-STACK-01 ✅
+   - **文件范围**：
+     - 新增 `apps/web-next/src/components/primitives/feedback/Skeleton.tsx`：`shape: 'rect' | 'circle' | 'text'` / `width` / `height` / `delay?: 300 | 800`；1.5s shimmer CSS animation
+     - 修改 `packages/design-tokens/src/semantic/skeleton.json`（或等价）：7 个 alias（skeleton-bg-base/-dark/skeleton-bg-highlight/-dark/skeleton-shimmer-duration/skeleton-delay-tier-1/-tier-2）
+     - 新增 `useSkeletonDelay` hook：`useSkeletonDelay(loading: boolean, delayMs: 300 | 800 | null): boolean`
+     - 修改 `apps/web-next/src/components/video/VideoCard.tsx`：导出 `VideoCard.Skeleton`（像素匹配）
+     - 新增 `apps/web-next/src/components/primitives/feedback/ProgressBar.tsx`（> 1000ms 场景）
+     - 新增 `tests/unit/web-next/Skeleton.test.tsx`
+   - **验收要点**：
+     - `<Skeleton shape="rect" />` 渲染占位块，1.5s shimmer
+     - `useSkeletonDelay(true, 300)` 在 < 300ms 返回 false，> 300ms 返回 true
+     - VideoCard.Skeleton 与实际渲染尺寸像素级一致（DevTools 叠加比对）
+     - 暗色模式 Token 切换无闪烁
+     - **后续所有 M5-PAGE-* 卡 AI-CHECK 六问强制检查"新组件是否导出 Skeleton"**
+     - typecheck ✅ / lint ✅ / unit ✅
+
+---
+
+## SEQ-20260420-M5-API — M5 Banner 全栈后端（2 张）
+
+- **状态**：⬜ 未开始
+- **创建时间**：2026-04-20 19:00
+- **最后更新时间**：2026-04-20 19:00
+- **目标**：新建 home_banners 表 + Banner CRUD API + 后台管理模块，为前端 HeroBanner 提供真实数据源（非 mock）
+- **范围**：`apps/api/src/`、`apps/server/src/app/admin/banners/`、`docs/architecture.md`
+- **依赖**：SEQ-20260420-M5-PREP ✅（可与 SEQ-20260420-M5-CARD 并行）
+
+### 任务列表
+
+1. M5-API-BANNER-01 — home_banners migration + API（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 19:00
+   - 计划开始：M5-PREP-01 ✅ 后
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：M（~120 分钟）
+   - 依赖：M5-PREP-01 ✅
+   - **文件范围**：
+     - 新增 migration `apps/api/migrations/XXXX_create_home_banners.sql`：字段 id/title(jsonb多语言)/image_url/link_type('video'|'external')/link_target/sort_order/active_from/active_to/is_active/brand_scope('brand-specific'|'all-brands')/created_at/updated_at；索引 `(is_active, active_from, active_to, sort_order)`
+     - 修改 `docs/architecture.md`：追加 home_banners schema 说明（**CLAUDE.md 绝对禁止第 1 条约束**）
+     - 新增 `apps/api/src/db/queries/home-banners.ts`
+     - 新增 `apps/api/src/services/banners.ts`
+     - 新增 `apps/api/src/routes/banners.ts`：`GET /api/banners?locale=zh-CN`（公开，时间窗内 is_active=true）+ `POST/PUT/DELETE /api/admin/banners`（admin 权限）
+     - 新增 zod schema（`packages/types` 或 `apps/api/src/schemas/banner.ts`）
+     - 新增 `tests/unit/api/banners.test.ts` + `tests/integration/api/banners.spec.ts`
+   - **验收要点**：
+     - `GET /api/banners` 返回时间窗内 banner 列表，按 sort_order 升序
+     - `POST /api/admin/banners` 校验 admin 权限（requireRole admin）
+     - zod schema 覆盖所有字段（title jsonb 多语言）
+     - migration up/down 均测通
+     - `docs/architecture.md` 已同步
+     - Route→Service→DB queries 分层纪律
+     - typecheck ✅ / lint ✅ / unit ✅ / integration ✅
+
+2. M5-ADMIN-BANNER-01 — Banner 后台管理（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 19:00
+   - 计划开始：M5-API-BANNER-01 ✅ 后
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：M（~150 分钟）
+   - 依赖：M5-API-BANNER-01 ✅
+   - **文件范围**：
+     - 新增 `apps/server/src/app/admin/banners/page.tsx`（列表页）
+     - 新增 `apps/server/src/app/admin/banners/[id]/page.tsx`（编辑页）
+     - 新增 `apps/server/src/components/admin/banners/BannerForm.tsx`
+     - 新增 `apps/server/src/components/admin/banners/BannerDragSort.tsx`（拖拽排序，复用既有拖拽库）
+     - 使用 ModernDataTable + ColumnSettingsPanel + AdminDropdown + SelectionActionBar + PaginationV2（严格遵守 `docs/rules/admin-module-template.md`）
+     - 新增 `tests/unit/server/admin-banners.test.tsx` + `tests/e2e/admin/banners.spec.ts`
+   - **验收要点**：
+     - 列表页：缩略图 / 标题 / 时间窗 / 状态；服务端排序；拖拽排序写回 sort_order
+     - 编辑页：图片上传（复用既有）、多语言 title 表单、时间窗 picker（active_from/active_to）、active toggle
+     - 所有交互符合 admin-module-template.md
+     - 拖拽排序大量 banner（> 50）性能可接受（建议分页内排序）
+     - typecheck ✅ / lint ✅ / unit ✅ / e2e ✅
+
+---
+
+## SEQ-20260420-M5-PAGE — M5 页面重塑（7 张）
+
+- **状态**：⬜ 未开始
+- **创建时间**：2026-04-20 19:00
+- **最后更新时间**：2026-04-20 19:00
+- **目标**：重塑全站 7 个核心页面/组件到"专业视觉 + 完整交互"级别，消费 CARD primitive 与 API 数据
+- **范围**：`apps/web-next/src/app/[locale]/`、`apps/web-next/src/components/layout/`、`apps/web-next/src/components/video/`
+- **依赖**：SEQ-20260420-M5-CARD ✅（全部）；M5-PAGE-BANNER-FE-01 额外依赖 SEQ-20260420-M5-API ✅
+
+### 任务列表
+
+1. M5-PAGE-HEADER-01 — Header/Footer 重塑（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 19:00
+   - 计划开始：SEQ-20260420-M5-CARD ✅ 后
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：M（~120 分钟）
+   - 依赖：SEQ-20260420-M5-CARD ✅
+   - **文件范围**：
+     - 修改 `apps/web-next/src/components/layout/Header.tsx`：scroll-collapse 80px 阈值（h-16→h-12 平滑过渡）；消费 `useBrand()` 驱动 Logo
+     - 修改 `apps/web-next/src/components/layout/Footer.tsx`：消费 `useBrand()` 驱动文案 / 备案 / 版权
+     - 新增 `apps/web-next/src/components/layout/MegaMenu.tsx`：hover 120ms 展开 / 240ms 收起，键盘可达
+     - 新增 `Header.Skeleton` / `Footer.Skeleton` 导出
+   - **验收要点**：
+     - 滚动 80px 内 Header 高度过渡
+     - Mega Menu hover 120ms 展开，离开 240ms 收回；Esc 关闭；Tab/Enter 可达
+     - Header 挂在 root layout（ADR-040 约束，本卡不改挂载位置）
+     - 无硬编码颜色
+     - AI-CHECK 六问检查 Header.Skeleton / Footer.Skeleton 已导出
+     - typecheck ✅ / lint ✅ / unit ✅
+
+2. M5-PAGE-TABBAR-01 — 移动 Tab Bar + MiniPlayer 叠加协议（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 19:00
+   - 计划开始：SEQ-20260420-M5-CARD ✅ 后（可与 HEADER-01 并行）
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：M（~120 分钟）
+   - 依赖：SEQ-20260420-M5-CARD ✅
+   - **文件范围**：
+     - 新增 `apps/web-next/src/components/layout/MobileTabBar.tsx`：三 Tab（首页/分类/搜索）；玻璃底栏（backdrop-filter blur）；180ms 下划线随路由切换；safe-area-inset-bottom 吸收；z-index `--z-tabbar`（40）
+     - 修改 `apps/web-next/src/app/[locale]/layout.tsx`：仅在 `@media (hover: none)` 下挂载 MobileTabBar
+     - 修改 `apps/web-next/src/app/[locale]/_lib/player/MiniPlayer.tsx`：移动端 bottom 值改为 `calc(var(--tabbar-height) + env(safe-area-inset-bottom))`；z-index `--z-mini-player`（50）；移除重复 safe-area-inset 逻辑
+     - 新增 `MobileTabBar.Skeleton`
+     - 新增 `tests/unit/web-next/MobileTabBar.test.tsx` + `tests/e2e-next/mobile-tabbar.spec.ts`
+   - **验收要点**：
+     - 移动端（Playwright mobile emulation）Tab Bar 贴底，切换流畅 180ms
+     - Tab Bar + MiniPlayer 同时渲染时不重叠，MiniPlayer 紧贴 Tab Bar 顶部
+     - iOS 全面屏 safe-area 正确（底部无白条）
+     - 桌面端不渲染 Tab Bar
+     - full 态影院模式（z-index 70）覆盖 Tab Bar（z-index 40）
+     - z-index 全部走 ADR-046 §8.3 Token，无硬编码
+     - Tab Bar 高度走 `--tabbar-height` Token，不硬编码 56px
+     - typecheck ✅ / lint ✅ / unit ✅ / e2e ✅
+
+3. M5-PAGE-BANNER-FE-01 — HeroBanner 前端重塑（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 19:00
+   - 计划开始：M5-API-BANNER-01 ✅ + M5-ADMIN-BANNER-01 ✅ + SEQ-20260420-M5-CARD ✅ 后
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：M（~120 分钟）
+   - 依赖：M5-API-BANNER-01 ✅ + M5-ADMIN-BANNER-01 ✅ + SEQ-20260420-M5-CARD ✅
+   - **文件范围**：
+     - 修改 `apps/web-next/src/components/video/HeroBanner.tsx`：消费 `GET /api/banners`（非 mock）；PC `min(520px, 60vh)` + Ken Burns 6s + 主色染色 1s 过渡；移动端 5:6 比例 + swipe
+     - 新增 `apps/web-next/src/components/video/KenBurnsLayer.tsx`
+     - 新增 `apps/web-next/src/components/video/BannerCarouselMobile.tsx`（embla-carousel，须 M5-PREP-02 依赖核查 ✅）
+     - 保留既有双 CTA（立即观看 + 详情信息）
+     - 新增 `HeroBanner.Skeleton`
+   - **验收要点**：
+     - 首页 HeroBanner 从真实 `/api/banners` 拉数据（非 mock）
+     - PC `min(520px, 60vh)` + Ken Burns 6s 缩放
+     - 移动端 5:6 + swipe 流畅
+     - 切换 slide 时 `--banner-accent` 主色随之 1s 过渡
+     - HeroBanner.Skeleton 导出
+     - e2e（HOME）PASS
+     - **⚠️ 若 M5-PREP-02 依赖核查发现 embla-carousel ❌ → 本卡直接 BLOCKER，不得自行 install**
+     - typecheck ✅ / lint ✅ / unit ✅ / e2e ✅
+
+4. M5-PAGE-GRID-01 — 分类页 Grid 重塑（Sibling 首激活）（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 19:00
+   - 计划开始：SEQ-20260420-M5-CARD ✅ + M5-PAGE-HEADER-01 ✅ 后
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：M（~130 分钟）
+   - 依赖：SEQ-20260420-M5-CARD ✅ + M5-PAGE-HEADER-01 ✅
+   - **文件范围**：
+     - 修改 `apps/web-next/src/app/[locale]/[type]/page.tsx`（及同构分类页）
+     - 新增 `apps/web-next/src/components/video/VideoGrid.tsx`：消费 VideoCard 复合组件；VideoGrid.Skeleton 基于 VideoCard.Skeleton 循环渲染
+     - **修改 `apps/web-next/src/components/shared/primitives/PageTransition.tsx`：激活 Sibling variant（交叉淡入 120/160ms + stagger 40ms，决策 M5-G 首激活卡）**
+     - 激活 TopSlot 接替过渡（§11.1-§11.4，300ms）
+     - 消费 ScrollRestoration + PrefetchOnHover（REGRESSION 已落地）
+     - 消费 RouteStack 边缘返回（M5-CARD-ROUTESTACK-01 产出）
+   - **验收要点**：
+     - 分类切换（variety↔movie↔series）触发 Sibling 过渡（交叉淡入 300ms + stagger 40ms）
+     - 移动端左边缘右滑 → 返回（RouteStack）
+     - 返回列表时 ScrollRestoration 定位精确
+     - VideoGrid.Skeleton 像素级匹配
+     - typecheck ✅ / lint ✅ / unit ✅ / e2e（SEARCH/分类页）✅
+
+5. M5-PAGE-SEARCH-01 — 搜索页重塑（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 19:00
+   - 计划开始：SEQ-20260420-M5-CARD ✅ + M5-PAGE-GRID-01 ✅ 后（消费 VideoGrid）
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：M（~150 分钟）
+   - 依赖：SEQ-20260420-M5-CARD ✅ + M5-PAGE-GRID-01 ✅
+   - **文件范围**：
+     - 修改 `apps/web-next/src/app/[locale]/search/page.tsx`
+     - 新增 `apps/web-next/src/components/search/SearchCircularReveal.tsx`：桌面端圆形扩散进入（clip-path，250ms；Safari 14+ 兼容，旧版降级 opacity 150ms）
+     - 新增 `apps/web-next/src/components/search/SearchSuggestions.tsx`：debounce 120ms 调 `/api/search/suggest`
+     - 新增 `apps/web-next/src/components/search/SearchEmptyState.tsx`：空结果 + 推荐内容
+     - 消费 `<VideoGrid>`（GRID-01 产出）+ RouteStack 边缘返回
+     - 新增 `SearchResults.Skeleton`
+     - 新增 `tests/e2e-next/search-page.spec.ts`
+   - **验收要点**：
+     - 桌面端从 Header 搜索图标触发 → 圆形扩散 250ms 进入全屏搜索
+     - 输入 debounce 120ms 触发建议接口
+     - 空结果显示空状态 UI + 推荐内容
+     - 移动端左边缘右滑 → 返回（RouteStack）
+     - reduced motion 下圆形扩散降级为 opacity 150ms
+     - SearchResults.Skeleton 已导出
+     - typecheck ✅ / lint ✅ / unit ✅ / e2e ✅
+
+6. M5-PAGE-DETAIL-01 — 详情页重塑（消费 SharedElement）（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 19:00
+   - 计划开始：SEQ-20260420-M5-CARD ✅（尤其 M5-CARD-SHARED-01 ✅）后
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：L（~240 分钟）
+   - 依赖：SEQ-20260420-M5-CARD ✅
+   - **文件范围**：
+     - 修改 `apps/web-next/src/app/[locale]/(video-types)/*/[slug]/page.tsx`（5 个类型详情页）
+     - 新增 `apps/web-next/src/components/detail/DetailHero.tsx`（`<SharedElement.Source id="hero-{videoId}">` 包裹 Hero 图）
+     - 新增 `apps/web-next/src/components/detail/DetailMeta.tsx`
+     - 新增 `apps/web-next/src/components/detail/EpisodePicker.tsx`：切集 state 内化，不重载页面
+     - RelatedVideos 消费 VideoCard 复合组件
+     - 播放器 poster 侧包裹 `<SharedElement.Target id="hero-{videoId}">`
+     - 各组件导出 `.Skeleton`
+   - **验收要点**：
+     - 五部分按 80/160/240/320ms 级联入场
+     - "开始播放"触发 Standard Takeover 360ms
+     - EpisodePicker 切集不重新加载页面
+     - SharedElement FLIP 帧率 ≥ 55fps
+     - 所有新组件导出 Skeleton
+     - typecheck ✅ / lint ✅ / unit ✅ / e2e（VIDEO）✅
+
+7. M5-PAGE-PLAYER-01 — 播放页重塑（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 19:00
+   - 计划开始：SEQ-20260420-M5-CARD ✅ 后
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：L（~240 分钟）
+   - 依赖：SEQ-20260420-M5-CARD ✅
+   - **文件范围**：
+     - 修改 `apps/web-next/src/app/[locale]/_lib/player/GlobalPlayerFullFrame.tsx`：full 态布局重塑（桌面右侧剧集侧栏可收起；移动端双层控制条 + 手势层）
+     - 修改 `apps/web-next/src/app/[locale]/_lib/player/MiniPlayer.tsx`：桌面 320×180 右下角；移动 56px 贴 Tab Bar 顶部（由 TABBAR-01 定义的 `calc(var(--tabbar-height) + env(safe-area-inset-bottom))`）
+     - 新增 `apps/web-next/src/app/[locale]/_lib/player/CinemaMode.tsx`：影院模式遮罩（600ms 渐暗）
+     - 重塑 PlayerShell 编排逻辑（字幕/线路/影院模式切换 UI）
+     - z-index 符合 ADR-046 §8.3
+   - **验收要点**：
+     - mini 态桌面 320×180 右下角 / 移动底部 56px 悬浮
+     - full 态影院模式后背景渐暗 600ms
+     - pip 态调用浏览器原生 PiP API
+     - **关键路径全部回归**：断点续播 / 线路切换 / 影院模式 / 字幕开关 / mini↔full↔pip / Fast Takeover
+     - PlayerShell 编排与 core 分离（CLAUDE.md 既有约束）
+     - typecheck ✅ / lint ✅ / unit ✅ / e2e（PLAYER）✅
+
+---
+
+## SEQ-20260420-M5-CLOSE — M5 收尾（1 张）
+
+- **状态**：⬜ 未开始
+- **创建时间**：2026-04-20 19:00
+- **最后更新时间**：2026-04-20 19:00
+- **目标**：M5 全部 18 张卡 Opus 独立审计 + 方案对齐表 + PHASE COMPLETE 签字
+- **范围**：`docs/milestone_alignment_m5_20260420.md`（新建）、`docs/decisions.md`、`docs/changelog.md`、`docs/task-queue.md`
+- **依赖**：SEQ-20260420-M5-PREP ✅ + SEQ-20260420-M5-CARD ✅ + SEQ-20260420-M5-API ✅ + SEQ-20260420-M5-PAGE ✅
+
+### 任务列表
+
+1. M5-CLOSE-01 — M5 PHASE COMPLETE + Opus 独立审计 + 对齐表（状态：⬜ 未开始）
+   - 创建时间：2026-04-20 19:00
+   - 计划开始：所有前置序列全部 ✅ 后
+   - 实际开始：
+   - 完成时间：
+   - 建议模型：**opus**（主循环）+ arch-reviewer (claude-opus-4-6) 子代理（**强制**）
+   - 规模：S（~90 分钟）
+   - 依赖：SEQ-20260420-M5-PREP ✅ + SEQ-20260420-M5-CARD ✅ + SEQ-20260420-M5-API ✅ + SEQ-20260420-M5-PAGE ✅
+   - **文件范围**：
+     - 新增 `docs/milestone_alignment_m5_20260420.md`：≥ 25 项对齐表（方案 §7/§9/§10/§11/§12/§13/§14/§15/§16/§19 逐条对比）+ 15 项红旗检查（见 `docs/task_queue_patch_m5_card_protocol_20260420_v1_1.md` §9）
+     - 修改 `docs/decisions.md`：追加 ADR-047 或 ADR-037 迭代条目（M5 PHASE COMPLETE 门禁）
+     - 修改 `docs/changelog.md`：M5 PHASE COMPLETE 条目
+     - 修改 `docs/task-queue.md`：本 M5 序列全部标 ✅
+   - **验收要点**：
+     - 对齐表每项标 ✅ 或 ⚠️，无未处理项
+     - 红旗检查 15 项（§9.1-§9.15）全部 PASS
+     - arch-reviewer 子代理独立审计 5 点全部 PASS：ADR-046 §1-§8 全部实装 / 18 张卡无越界 / 58 项 Token 全 semantic 层 / E2E 全绿 / 方案文档无漂移
+     - **未经 Opus 审计 PASS 不得在 task-queue.md 标 ✅（CLAUDE.md 绝对禁止第 16 条）**
+     - typecheck ✅ / lint ✅ / unit ✅ / e2e 全通
