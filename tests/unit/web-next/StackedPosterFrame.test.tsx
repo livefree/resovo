@@ -161,9 +161,9 @@ describe('StackedPosterFrame', () => {
       const { getStackLevel } = await import('@/lib/video-stack-level')
       expect(getStackLevel('series')).toBe(1)
       expect(getStackLevel('anime')).toBe(1)
+      expect(getStackLevel('variety')).toBe(1)   // variety routes as /tvshow/ per ADR-048
       expect(getStackLevel('movie')).toBe(0)
       expect(getStackLevel('short')).toBe(0)
-      expect(getStackLevel('variety')).toBe(0)
       expect(getStackLevel('documentary')).toBe(0)
     })
   })
