@@ -63,7 +63,7 @@ export function VideoCard({ video, className }: VideoCardProps) {
   return (
     <article className={cn('group relative block', className)} data-testid="video-card">
       {/* 图片区 — PosterAction: 点击触发 Fast Takeover 直达播放器 */}
-      {/* outer div has no overflow-hidden so StackedPosterFrame shadow layers can peek out */}
+      {/* no overflow-hidden: StackedPosterFrame box-shadow must be visible outside its bounds */}
       <div className="relative rounded-lg">
         <StackedPosterFrame
           src={video.coverUrl}

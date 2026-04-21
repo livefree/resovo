@@ -11,16 +11,16 @@ export interface StackedPosterFrameProps
   className?: string
 }
 
-function layerTransition(delayMs: number, isEntering: boolean): string {
-  if (isEntering) {
-    return [
-      `transform var(--stack-transition-duration) cubic-bezier(0.4,0,0.2,1) ${delayMs}ms`,
-      `opacity var(--stack-transition-duration) ease ${delayMs}ms`,
-    ].join(', ')
-  }
+// Hard box-shadow (blur=0) simulates stacked card edges — no extra DOM nodes
+function buildShadow(hovered: boolean, reduced: boolean): string {
+  const useHover = hovered && !reduced
+  const l1x = useHover ? 'var(--stack-layer-1-hover-offset-x)' : 'var(--stack-layer-1-offset-x)'
+  const l1y = useHover ? 'var(--stack-layer-1-hover-offset-y)' : 'var(--stack-layer-1-offset-y)'
+  const l2x = useHover ? 'var(--stack-layer-2-hover-offset-x)' : 'var(--stack-layer-2-offset-x)'
+  const l2y = useHover ? 'var(--stack-layer-2-hover-offset-y)' : 'var(--stack-layer-2-offset-y)'
   return [
-    'transform var(--stack-transition-duration-reverse) cubic-bezier(0.4,0,0.2,1)',
-    'opacity var(--stack-transition-duration-reverse) ease',
+    `${l1x} ${l1y} 0 0 var(--stack-layer-1-bg)`,
+    `${l2x} ${l2y} 0 0 var(--stack-layer-2-bg)`,
   ].join(', ')
 }
 
@@ -38,9 +38,7 @@ export function StackedPosterFrame({
   }, [])
 
   useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-    }
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
   }, [])
 
   function handleMouseEnter() {
@@ -58,66 +56,39 @@ export function StackedPosterFrame({
   const hasStack = stackLevel > 0
   const animated = isHovered && !prefersReduced
 
+  // reduced-motion: transition: none — shadow + scale snap to final state instantly
+  const wrapperTransition = prefersReduced
+    ? 'none'
+    : isHovered
+      ? 'box-shadow var(--stack-transition-duration) cubic-bezier(0.4,0,0.2,1)'
+      : 'box-shadow var(--stack-transition-duration-reverse) cubic-bezier(0.4,0,0.2,1)'
+
   return (
     <div
-      className={cn('relative', className)}
+      className={cn('relative overflow-hidden rounded-lg', className)}
+      style={{
+        boxShadow: hasStack ? buildShadow(isHovered, prefersReduced) : undefined,
+        transition: wrapperTransition,
+      }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Shadow layers — visual only, no images */}
-      {hasStack && (
-        <>
-          {/* Layer 2: furthest back, delay 160ms on enter */}
-          <div
-            aria-hidden
-            className="absolute inset-0 rounded-lg pointer-events-none"
-            style={{
-              background: 'var(--stack-layer-2-bg)',
-              transform: animated
-                ? 'translate(var(--stack-layer-2-hover-offset-x), var(--stack-layer-2-hover-offset-y))'
-                : 'translate(var(--stack-layer-2-offset-x), var(--stack-layer-2-offset-y))',
-              opacity: isHovered
-                ? 'var(--stack-layer-2-hover-opacity)'
-                : 'var(--stack-layer-2-opacity)',
-              transition: layerTransition(160, isHovered),
-              zIndex: 1,
-            }}
-          />
-          {/* Layer 1: closer to viewer, delay 80ms on enter */}
-          <div
-            aria-hidden
-            className="absolute inset-0 rounded-lg pointer-events-none"
-            style={{
-              background: 'var(--stack-layer-1-bg)',
-              transform: animated
-                ? 'translate(var(--stack-layer-1-hover-offset-x), var(--stack-layer-1-hover-offset-y))'
-                : 'translate(var(--stack-layer-1-offset-x), var(--stack-layer-1-offset-y))',
-              opacity: isHovered
-                ? 'var(--stack-layer-1-hover-opacity)'
-                : 'var(--stack-layer-1-opacity)',
-              transition: layerTransition(80, isHovered),
-              zIndex: 2,
-            }}
-          />
-        </>
-      )}
-
-      {/* Main image — overflow-hidden clips to rounded corners */}
-      <div className="relative overflow-hidden rounded-lg" style={{ zIndex: 3 }}>
-        <SafeImage
-          {...imageProps}
-          className="pointer-events-none"
-          imgClassName={cn(
-            'transition-transform pointer-events-none',
-            animated ? 'scale-[1.03]' : 'scale-100',
-          )}
-          style={{
-            transitionDuration: isHovered
+      <SafeImage
+        {...imageProps}
+        className="pointer-events-none"
+        imgClassName={cn(
+          'pointer-events-none',
+          !prefersReduced && 'transition-transform',
+          animated ? 'scale-[1.03]' : 'scale-100',
+        )}
+        style={{
+          transitionDuration: prefersReduced
+            ? '0ms'
+            : isHovered
               ? 'var(--stack-transition-duration)'
               : 'var(--stack-transition-duration-reverse)',
-          }}
-        />
-      </div>
+        }}
+      />
     </div>
   )
 }
