@@ -438,6 +438,46 @@ export async function listMissingBlurhashUrls(
   }))
 }
 
+// ── 查询：7 天破损趋势（按日聚合）───────────────────────────────
+
+export interface BrokenTrendPoint {
+  date: string   // YYYY-MM-DD
+  count: number
+}
+
+/**
+ * 返回最近 `days` 天（含今天）每天的破损视频数，缺失日期补 0。
+ * 结果按日期升序排列。
+ */
+export async function getBrokenEventsTrend(
+  db: Pool,
+  days = 7
+): Promise<BrokenTrendPoint[]> {
+  const result = await db.query<{ day: string; count: string }>(
+    `SELECT
+       date_trunc('day', first_seen_at)::date::text AS day,
+       COUNT(DISTINCT video_id)::int                AS count
+     FROM broken_image_events
+     WHERE first_seen_at >= NOW() - ($1 || ' days')::interval
+       AND resolved_at IS NULL
+     GROUP BY day
+     ORDER BY day ASC`,
+    [days]
+  )
+
+  // 生成完整日期序列，缺失日补 0
+  const byDay = new Map(result.rows.map(r => [r.day, parseInt(r.count, 10)]))
+  const points: BrokenTrendPoint[] = []
+  const now = new Date()
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(d.getDate() - i)
+    const key = d.toISOString().slice(0, 10)
+    points.push({ date: key, count: byDay.get(key) ?? 0 })
+  }
+  return points
+}
+
 /** 标记事件为已处理 */
 export async function resolveImageEvents(
   db: Pool | PoolClient,

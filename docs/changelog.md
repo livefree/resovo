@@ -7777,3 +7777,39 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 ### 验收结果
 
 - typecheck ✅ / lint ✅ / 1206/1206 unit tests（116 files）✅
+
+---
+
+## IMG-08 — FallbackCover 完整实现：type SVG 装饰 + brandLogoUrl 接口
+
+- **完成时间**：2026-04-20 18:20
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **关联任务**：IMG-08
+- **变更文件**：
+  - `apps/web-next/src/components/media/types.ts`：`FallbackCoverProps` 新增 `brandLogoUrl?: string`
+  - `apps/web-next/src/components/media/FallbackCover.tsx`：添加 5 种 VideoType SVG 装饰（FilmIcon/TVIcon/AnimeIcon/VarietyIcon/DocumentaryIcon）；`brandLogoUrl` 渲染右下角 `<img>` 角标；`getTypeIcon()` 集中选路
+
+### 验收结果
+
+- typecheck ✅ / lint ✅ / 1206/1206 unit tests ✅
+
+---
+
+## IMG-09 — image-health 7 天破损趋势 sparkline
+
+- **完成时间**：2026-04-20 18:55
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **关联任务**：IMG-09
+- **变更文件**：
+  - `apps/api/src/db/queries/imageHealth.ts`：新增 `getBrokenEventsTrend(db, days?)` — SQL 按天聚合 `broken_image_events`，应用层补全缺失日期为 0，保证恰好返回 N 个点（升序）
+  - `apps/api/src/routes/admin/image-health.ts`：`GET /admin/image-health/stats` 并行调用 `getBrokenEventsTrend`，响应追加 `brokenTrend` 字段
+  - `apps/server/src/services/image-health-stats.service.ts`：`BrokenTrendPoint` 接口 + `ImageHealthStats.brokenTrend` 字段
+  - `apps/server/src/components/admin/image-health/TrendSparkline.tsx`：新建纯 SVG sparkline（fill area + polyline + circles），零硬编码颜色，无新依赖，全零时显示平线
+  - `apps/server/src/components/admin/image-health/ImageHealthDashboard.tsx`："7 天新增破损"卡片下挂载 TrendSparkline（height=36）
+  - `tests/unit/api/image-health-trend.test.ts`：4 个单元测试（有数据、全零、升序、days=1）
+
+### 验收结果
+
+- typecheck ✅ / lint ✅ / 1210/1210 unit tests（117 files）✅

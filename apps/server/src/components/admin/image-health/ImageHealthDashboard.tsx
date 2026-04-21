@@ -5,6 +5,7 @@ import { imageHealthService } from '@/services/image-health-stats.service'
 import type { ImageHealthStats, BrokenDomainRow, MissingVideoRow, MissingVideoSortField, SortDir } from '@/services/image-health-stats.service'
 import { BrokenDomainTable } from './BrokenDomainTable'
 import { MissingVideoTable } from './MissingVideoTable'
+import { TrendSparkline } from './TrendSparkline'
 import { DashboardShell, DashboardSection } from '@/components/shared/layout/DashboardShell'
 
 function pct(value: number) {
@@ -95,11 +96,21 @@ export function ImageHealthDashboard() {
             sub={stats ? `${stats.backdropOkCount.toLocaleString()} / ${stats.totalVideos.toLocaleString()}` : undefined}
             tone={stats && stats.backdropCoverage >= 0.7 ? 'success' : 'warning'}
           />
-          <StatCard
-            label="7 天新增破损视频"
-            value={stats ? String(stats.brokenLast7Days) : '—'}
-            tone={stats && stats.brokenLast7Days > 0 ? 'danger' : 'success'}
-          />
+          <div
+            className="rounded-lg border p-4 space-y-2 col-span-2 md:col-span-1"
+            style={{ background: 'var(--bg2)', borderColor: 'var(--border)' }}
+          >
+            <p className="text-xs" style={{ color: 'var(--muted)' }}>7 天新增破损视频</p>
+            <p
+              className="text-2xl font-bold"
+              style={{ color: stats && stats.brokenLast7Days > 0 ? 'var(--status-danger)' : 'var(--status-success)' }}
+            >
+              {stats ? String(stats.brokenLast7Days) : '—'}
+            </p>
+            {stats && stats.brokenTrend.length > 0 && (
+              <TrendSparkline data={stats.brokenTrend} height={36} />
+            )}
+          </div>
         </div>
       </DashboardSection>
 

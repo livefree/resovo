@@ -14,6 +14,7 @@ import {
   getImageHealthStats,
   getTopBrokenDomains,
   listMissingPosterVideos,
+  getBrokenEventsTrend,
 } from '@/api/db/queries/imageHealth'
 import type { MissingVideoSortField, SortDir } from '@/api/db/queries/imageHealth'
 
@@ -33,8 +34,11 @@ export async function adminImageHealthRoutes(fastify: FastifyInstance) {
 
   // ── GET /admin/image-health/stats ─────────────────────────────
   fastify.get('/admin/image-health/stats', { preHandler: auth }, async (_req, reply) => {
-    const stats = await getImageHealthStats(db)
-    return reply.send({ data: stats })
+    const [stats, brokenTrend] = await Promise.all([
+      getImageHealthStats(db),
+      getBrokenEventsTrend(db, 7),
+    ])
+    return reply.send({ data: { ...stats, brokenTrend } })
   })
 
   // ── GET /admin/image-health/broken-domains ─────────────────────

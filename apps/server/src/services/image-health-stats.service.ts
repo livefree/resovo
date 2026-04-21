@@ -1,5 +1,10 @@
 import { apiClient } from '@/lib/api-client'
 
+export interface BrokenTrendPoint {
+  date: string
+  count: number
+}
+
 export interface ImageHealthStats {
   totalVideos: number
   posterOkCount: number
@@ -7,6 +12,7 @@ export interface ImageHealthStats {
   backdropOkCount: number
   backdropCoverage: number
   brokenLast7Days: number
+  brokenTrend: BrokenTrendPoint[]
 }
 
 export interface BrokenDomainRow {
