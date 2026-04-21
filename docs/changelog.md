@@ -8047,3 +8047,30 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：migration 049 新建 home_banners 表
 - **备注**：Route→Service→DB queries 三层严格分层；updateBannerSortOrders 使用 pg client 事务保证批量排序原子性；title 字段使用 jsonb 存多语言，API 层透传不做 locale 过滤（由前端按需取用）
+
+---
+
+## M5-ADMIN-BANNER-01 — Banner 后台管理 UI + SortableList primitive
+
+- **完成时间**：2026-04-21 15:20
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **commit**：8c73f94
+- **变更文件**：
+  - `apps/server/src/app/admin/banners/page.tsx` — 列表页 Shell
+  - `apps/server/src/app/admin/banners/new/page.tsx` — 新建 Banner 页
+  - `apps/server/src/app/admin/banners/[id]/page.tsx` — 编辑 Banner 页
+  - `apps/server/src/components/admin/banners/BannerTable.tsx` — ModernDataTable 列表 + 拖拽排序面板入口
+  - `apps/server/src/components/admin/banners/BannerForm.tsx` — 新建/编辑表单（多语言 title、时间窗、brand_scope）
+  - `apps/server/src/components/admin/banners/BannerDragSort.tsx` — 拖拽排序面板，调用 PATCH /admin/banners/reorder
+  - `apps/server/src/components/admin/banners/BannerEditLoader.tsx` — 客户端懒加载编辑态
+  - `apps/server/src/components/admin/shared/SortableList.tsx` — admin 有序列表 primitive（ADR-049）
+  - `apps/server/src/components/admin/AdminSidebar.tsx` — 添加 Banner 管理侧边栏入口
+  - `apps/server/package.json` — 安装 @dnd-kit/core + @dnd-kit/sortable
+  - `docs/decisions.md` — ADR-049：admin 有序列表 @dnd-kit 封装
+  - `docs/rules/admin-module-template.md` — 追加有序列表规范章节
+  - `tests/unit/components/admin/banners/BannerTable.test.tsx` — 8 个测试
+  - `tests/unit/components/admin/banners/BannerDragSort.test.tsx` — 2 个测试（独立文件，避免 vi.mock 提升冲突）
+- **新增依赖**：@dnd-kit/core@6.3.1、@dnd-kit/sortable@8.0.0（admin 独占，ADR-049 边界约束）
+- **数据库变更**：无
+- **备注**：cell 函数签名遵循 TableCellContext<T> 解构；BannerDragSort 直接测试与 BannerTable mock 测试分离到两个文件以避免 vi.unmock 提升问题
