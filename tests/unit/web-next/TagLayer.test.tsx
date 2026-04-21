@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { TagLayer } from '@/components/primitives/media/TagLayer'
+import { videoCardToTagProps } from '@/lib/tag-mapping'
 import type { TagLayerProps } from '@/types/tag'
 
 function renderTag(props: TagLayerProps) {
@@ -104,6 +105,39 @@ describe('TagLayer', () => {
       })
       const visibleDivs = container.querySelectorAll('[aria-hidden="true"]')
       expect(visibleDivs.length).toBeGreaterThanOrEqual(3)
+    })
+  })
+
+  describe('videoCardToTagProps 映射集成', () => {
+    it('有字幕语言时派生 subtitled spec', () => {
+      const props = videoCardToTagProps({
+        status: 'ongoing',
+        rating: null,
+        subtitleLangs: ['zh-CN'],
+      })
+      renderTag(props)
+      expect(screen.getByText('连载中')).toBeTruthy()
+      expect(screen.getByText('中字')).toBeTruthy()
+    })
+
+    it('无字幕语言时不渲染 spec 区块', () => {
+      const props = videoCardToTagProps({
+        status: 'completed',
+        rating: 8.5,
+        subtitleLangs: [],
+      })
+      renderTag(props)
+      expect(screen.queryByText('中字')).toBeNull()
+      expect(screen.getByText('★ 8.5')).toBeTruthy()
+    })
+
+    it('trending 字段不存在时不渲染 trending 标签', () => {
+      const props = videoCardToTagProps({
+        status: 'ongoing',
+        rating: null,
+        subtitleLangs: [],
+      })
+      expect(props.trending).toBeUndefined()
     })
   })
 })

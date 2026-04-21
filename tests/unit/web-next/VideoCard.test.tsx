@@ -48,6 +48,7 @@ function makeVideo(overrides?: Partial<VideoCardType>): VideoCardType {
     sourceCount: 2,
     posterBlurhash: null,
     posterStatus: 'ok',
+    subtitleLangs: [],
     ...overrides,
   }
 }

@@ -139,6 +139,7 @@ export class SearchService {
         status: src.status as VideoCard['status'],
         episodeCount: src.episode_count as number,
         sourceCount: 0,
+        subtitleLangs: (src.subtitle_langs as string[]) ?? [],
       }
       const hl = (hit.highlight ?? {}) as Record<string, string[] | undefined>
       return {

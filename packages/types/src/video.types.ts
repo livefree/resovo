@@ -118,7 +118,7 @@ export type VideoCard = Pick<
   'id' | 'shortId' | 'slug' | 'title' | 'titleEn' |
   'coverUrl' | 'posterBlurhash' | 'posterStatus' |
   'type' | 'rating' | 'year' | 'status' |
-  'episodeCount' | 'sourceCount'
+  'episodeCount' | 'sourceCount' | 'subtitleLangs'
 >
 
 // ── 播放源 ───────────────────────────────────────────────────────

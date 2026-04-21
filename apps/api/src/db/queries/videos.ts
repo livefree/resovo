@@ -140,6 +140,7 @@ function mapVideoCard(row: DbVideoRow): VideoCard {
     sourceCount: parseInt(row.source_count ?? '0'),
     posterBlurhash: row.poster_blurhash ?? null,
     posterStatus: row.poster_status ?? null,
+    subtitleLangs: row.subtitle_langs ?? [],
   }
 }
 
