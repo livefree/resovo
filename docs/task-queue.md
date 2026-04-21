@@ -8590,11 +8590,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - mouseenter 使用 30ms debounce
      - typecheck ✅ / lint ✅ / unit ✅
 
-4. M5-CARD-SHARED-01 — SharedElement FLIP 实装（状态：⬜ 未开始）
+4. M5-CARD-SHARED-01 — SharedElement FLIP 实装（状态：✅ 已完成）
    - 创建时间：2026-04-20 19:00
    - 计划开始：M5-PREP-01 ✅ 后（建议 CTA/TAG/STACK 后启动）
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-04-21
+   - 完成时间：2026-04-21
    - 建议模型：claude-sonnet-4-6（主循环）+ arch-reviewer (claude-opus-4-6) 子代理（**强制** code review）
    - 规模：L（~180 分钟）
    - 依赖：M5-PREP-01 ✅

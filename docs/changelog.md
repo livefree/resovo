@@ -7927,3 +7927,29 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 阴影层仅为视觉装饰 div（无图片），aria-hidden + pointer-events-none
   - VideoCard 外层 div 移除 overflow-hidden 使阴影层可溢出显示；主图圆角裁剪由 StackedPosterFrame 内部 overflow-hidden 保证
   - window.matchMedia mock 已加入 VideoCard.test.tsx 和 StackedPosterFrame.test.tsx
+
+---
+
+## M5-CARD-SHARED-01 — SharedElement FLIP 实装
+
+- **任务 ID**：M5-CARD-SHARED-01
+- **所属序列**：SEQ-20260420-M5-CARD
+- **完成时间**：2026-04-21
+- **记录时间**：2026-04-21
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-7) — CONDITIONAL PASS（4 个必修问题均已修复）
+- **修改文件**：
+  - `apps/web-next/src/components/primitives/shared-element/registry.tsx` — 真实 Map-based registry；window.__resovoSharedElementMap 单例（SSR 安全）；captureSnapshot/consumeSnapshot（500ms TTL）；LRU 64 条上限
+  - `apps/web-next/src/components/primitives/shared-element/SharedElement.tsx` — 接入 useFLIP + registry.register
+  - `apps/web-next/src/components/primitives/shared-element/SharedElementLink.tsx` — 新建：onPointerDown eager snapshot capture（C1 primary path）
+  - `apps/web-next/src/components/primitives/shared-element/index.ts` — 新增 captureSnapshot/consumeSnapshot/registry/SharedElementLink 导出
+  - `apps/web-next/src/hooks/useFLIP.ts` — 新建：useLayoutEffect + WAAPI fill:'backwards' 防 flash；reduced-motion → opacity 120ms
+  - `tests/unit/web-next/SharedElement.test.tsx` — 新建：8 个单元测试（TTL/消费/断连/64上限/FLIP）
+  - `tests/e2e-next/shared-element.spec.ts` — 新建：4 个 e2e 测试骨架（列表→详情/reduced-motion/播放器/Registry 上限）
+- **新增依赖**：无
+- **数据库变更**：无
+- **arch-reviewer C 级问题处置**：
+  - C1: 快照在 SharedElementLink.onPointerDown 中 eager 捕获，unmount 为 fallback
+  - C2: 'use client' + window.__resovoSharedElementMap 单例，服务端返回 dead Map
+  - C3: useIsoLayoutEffect + WAAPI fill:'backwards'，无 rAF 竞态
+  - C4: 500ms TTL + 消费即清除 + LRU 64 条上限

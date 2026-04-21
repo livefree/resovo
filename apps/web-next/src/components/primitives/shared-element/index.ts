@@ -1,3 +1,11 @@
 export { SharedElement } from './SharedElement'
-export { SharedElementProvider, useSharedElement, useSharedElementRegistry } from './registry'
+export { SharedElementLink } from './SharedElementLink'
+export {
+  SharedElementProvider,
+  useSharedElement,
+  useSharedElementRegistry,
+  captureSnapshot,
+  consumeSnapshot,
+  registry,
+} from './registry'
 export type { SharedElementProps, SharedElementRef, SharedElementRegistry } from './types'
