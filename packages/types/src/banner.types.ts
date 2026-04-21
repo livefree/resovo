@@ -32,6 +32,16 @@ export interface BannerCard {
   sortOrder: number
 }
 
+/** 公开 API 响应结构：title 已按 locale 选取为单一字符串 */
+export interface LocalizedBannerCard {
+  id: string
+  title: string
+  imageUrl: string
+  linkType: BannerLinkType
+  linkTarget: string
+  sortOrder: number
+}
+
 export interface CreateBannerInput {
   title: BannerTitle
   imageUrl: string

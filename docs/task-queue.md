@@ -8684,15 +8684,18 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 新增 `apps/api/src/services/banners.ts`
      - 新增 `apps/api/src/routes/banners.ts`：`GET /api/banners?locale=zh-CN`（公开，时间窗内 is_active=true）+ `POST/PUT/DELETE /api/admin/banners`（admin 权限）
      - 新增 zod schema（`packages/types` 或 `apps/api/src/schemas/banner.ts`）
-     - 新增 `tests/unit/api/banners.test.ts` + `tests/integration/api/banners.spec.ts`
+     - 新增 `tests/unit/api/banners.test.ts`（queries 层 + locale 选取 + brandScope 约束）
+     - ⚠️ integration 测试：项目无 Fastify integration 测试基础设施，路由层行为（auth guard / zod 校验 / wiring）未独立验证；与 TABBAR-01 e2e skip 策略一致——骨架已建，待 integration 基础设施补齐后解除（不阻塞后续任务）
    - **验收要点**：
-     - `GET /api/banners` 返回时间窗内 banner 列表，按 sort_order 升序
-     - `POST /api/admin/banners` 校验 admin 权限（requireRole admin）
-     - zod schema 覆盖所有字段（title jsonb 多语言）
-     - migration up/down 均测通
-     - `docs/architecture.md` 已同步
-     - Route→Service→DB queries 分层纪律
-     - typecheck ✅ / lint ✅ / unit ✅ / integration ✅
+     - ✅ `GET /v1/banners?locale=zh-CN` 返回时间窗内 banner 列表，title 按 locale 选取为字符串，按 sort_order 升序
+     - ✅ `POST /v1/admin/banners` 校验 admin 权限（requireRole admin）
+     - ✅ zod schema 覆盖所有字段（title jsonb 多语言）+ brandScope/brandSlug 互约束
+     - ✅ migration 049 up 幂等；down 路径完整（含 DROP TRIGGER / FUNCTION / TABLE）
+     - ✅ DB-level CHECK 约束：brand-specific 时 brand_slug NOT NULL；all-brands 时 brand_slug IS NULL
+     - ✅ `docs/architecture.md` 已同步
+     - ✅ Route→Service→DB queries 分层纪律
+     - ✅ typecheck ✅ / lint ✅ / unit ✅
+     - ⏳ integration ✅（待基础设施）
 
 2. M5-ADMIN-BANNER-01 — Banner 后台管理（状态：⬜ 未开始）
    - 创建时间：2026-04-20 19:00

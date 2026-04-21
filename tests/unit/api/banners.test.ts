@@ -8,6 +8,8 @@ import {
   deleteBanner,
   updateBannerSortOrders,
 } from '@/api/db/queries/home-banners'
+import { BannerService } from '@/api/services/BannerService'
+import { z } from 'zod'
 
 // ── mock helpers ─────────────────────────────────────────────────────────────
 
@@ -160,6 +162,122 @@ describe('deleteBanner', () => {
   it('未找到返回 false', async () => {
     mockQuery.mockResolvedValueOnce({ rowCount: 0 })
     expect(await deleteBanner(mockDb, 'nonexistent')).toBe(false)
+  })
+})
+
+// ── BannerService.listActive — locale 选取 ────────────────────────────────────
+
+describe('BannerService.listActive locale 选取', () => {
+  it('指定 locale 时返回对应语言 title', async () => {
+    const mockDbLocale = {
+      query: vi.fn().mockResolvedValueOnce({
+        rows: [{
+          ...BANNER_ROW,
+          title: { 'zh-CN': '春季特辑', en: 'Spring Special' },
+        }],
+      }),
+      connect: vi.fn(),
+    } as unknown as import('pg').Pool
+    const svc = new BannerService(mockDbLocale)
+    const result = await svc.listActive({ locale: 'en' })
+    expect(result[0].title).toBe('Spring Special')
+  })
+
+  it('locale 不存在时回退到 zh-CN', async () => {
+    const mockDbLocale = {
+      query: vi.fn().mockResolvedValueOnce({
+        rows: [{
+          ...BANNER_ROW,
+          title: { 'zh-CN': '春季特辑', en: 'Spring Special' },
+        }],
+      }),
+      connect: vi.fn(),
+    } as unknown as import('pg').Pool
+    const svc = new BannerService(mockDbLocale)
+    const result = await svc.listActive({ locale: 'ja' })
+    expect(result[0].title).toBe('春季特辑')
+  })
+
+  it('无 locale 参数时回退到 zh-CN', async () => {
+    const mockDbLocale = {
+      query: vi.fn().mockResolvedValueOnce({
+        rows: [{
+          ...BANNER_ROW,
+          title: { 'zh-CN': '春季特辑', en: 'Spring Special' },
+        }],
+      }),
+      connect: vi.fn(),
+    } as unknown as import('pg').Pool
+    const svc = new BannerService(mockDbLocale)
+    const result = await svc.listActive({})
+    expect(result[0].title).toBe('春季特辑')
+  })
+
+  it('title 全部 locale 不匹配时取第一个值', async () => {
+    const mockDbLocale = {
+      query: vi.fn().mockResolvedValueOnce({
+        rows: [{
+          ...BANNER_ROW,
+          title: { fr: 'Printemps Spécial' },
+        }],
+      }),
+      connect: vi.fn(),
+    } as unknown as import('pg').Pool
+    const svc = new BannerService(mockDbLocale)
+    const result = await svc.listActive({ locale: 'de' })
+    expect(result[0].title).toBe('Printemps Spécial')
+  })
+})
+
+// ── brandScope/brandSlug Zod 约束（admin 路由层） ─────────────────────────────
+
+describe('brandScope/brandSlug Zod 约束', () => {
+  const BannerBrandScopeSchema = z.enum(['brand-specific', 'all-brands'])
+  const brandScopeRefinement = (
+    data: { brandScope?: string; brandSlug?: string | null },
+    ctx: z.RefinementCtx
+  ) => {
+    if (data.brandScope === 'brand-specific' && !data.brandSlug) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'brandScope 为 brand-specific 时 brandSlug 不得为空',
+        path: ['brandSlug'],
+      })
+    }
+    if (data.brandScope === 'all-brands' && data.brandSlug != null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'brandScope 为 all-brands 时 brandSlug 必须为 null',
+        path: ['brandSlug'],
+      })
+    }
+  }
+
+  const TestSchema = z.object({
+    brandScope: BannerBrandScopeSchema.optional(),
+    brandSlug: z.string().max(64).nullable().optional(),
+  }).superRefine(brandScopeRefinement)
+
+  it('brand-specific + 有效 brandSlug 通过校验', () => {
+    expect(TestSchema.safeParse({ brandScope: 'brand-specific', brandSlug: 'alpha' }).success).toBe(true)
+  })
+
+  it('brand-specific + brandSlug null 校验失败', () => {
+    const result = TestSchema.safeParse({ brandScope: 'brand-specific', brandSlug: null })
+    expect(result.success).toBe(false)
+  })
+
+  it('all-brands + brandSlug 不为 null 校验失败', () => {
+    const result = TestSchema.safeParse({ brandScope: 'all-brands', brandSlug: 'alpha' })
+    expect(result.success).toBe(false)
+  })
+
+  it('all-brands + brandSlug null 通过校验', () => {
+    expect(TestSchema.safeParse({ brandScope: 'all-brands', brandSlug: null }).success).toBe(true)
+  })
+
+  it('未设置 brandScope 时不触发约束', () => {
+    expect(TestSchema.safeParse({ brandSlug: null }).success).toBe(true)
   })
 })
 

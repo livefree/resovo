@@ -20,6 +20,26 @@ const BannerTitleSchema = z.record(z.string(), z.string())
 const BannerLinkTypeSchema = z.enum(['video', 'external'])
 const BannerBrandScopeSchema = z.enum(['brand-specific', 'all-brands'])
 
+const brandScopeRefinement = (
+  data: { brandScope?: string; brandSlug?: string | null },
+  ctx: z.RefinementCtx
+) => {
+  if (data.brandScope === 'brand-specific' && !data.brandSlug) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'brandScope 为 brand-specific 时 brandSlug 不得为空',
+      path: ['brandSlug'],
+    })
+  }
+  if (data.brandScope === 'all-brands' && data.brandSlug != null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'brandScope 为 all-brands 时 brandSlug 必须为 null',
+      path: ['brandSlug'],
+    })
+  }
+}
+
 const CreateBannerSchema = z.object({
   title: BannerTitleSchema,
   imageUrl: z.string().url(),
@@ -31,9 +51,20 @@ const CreateBannerSchema = z.object({
   isActive: z.boolean().optional(),
   brandScope: BannerBrandScopeSchema.optional(),
   brandSlug: z.string().max(64).nullable().optional(),
-})
+}).superRefine(brandScopeRefinement)
 
-const UpdateBannerSchema = CreateBannerSchema.partial()
+const UpdateBannerSchema = z.object({
+  title: BannerTitleSchema.optional(),
+  imageUrl: z.string().url().optional(),
+  linkType: BannerLinkTypeSchema.optional(),
+  linkTarget: z.string().max(500).optional(),
+  sortOrder: z.number().int().min(0).optional(),
+  activeFrom: z.string().datetime().nullable().optional(),
+  activeTo: z.string().datetime().nullable().optional(),
+  isActive: z.boolean().optional(),
+  brandScope: BannerBrandScopeSchema.optional(),
+  brandSlug: z.string().max(64).nullable().optional(),
+}).superRefine(brandScopeRefinement)
 
 const ReorderSchema = z.object({
   orders: z.array(

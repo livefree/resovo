@@ -2,11 +2,33 @@
 // 所有查询通过 db/queries/home-banners.ts，不直接拼 SQL
 
 import type { Pool } from 'pg'
-import type { Banner, BannerCard, CreateBannerInput, UpdateBannerInput } from '@/types'
+import type { Banner, BannerCard, BannerTitle, LocalizedBannerCard, CreateBannerInput, UpdateBannerInput } from '@/types'
 import * as bannerQueries from '@/api/db/queries/home-banners'
 
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 100
+
+const FALLBACK_LOCALES = ['zh-CN', 'en', 'zh']
+
+function resolveTitle(title: BannerTitle, locale?: string): string {
+  if (locale && title[locale]) return title[locale]
+  for (const fb of FALLBACK_LOCALES) {
+    if (title[fb]) return title[fb]
+  }
+  const first = Object.values(title)[0]
+  return first ?? ''
+}
+
+function localizeCard(card: BannerCard, locale?: string): LocalizedBannerCard {
+  return {
+    id: card.id,
+    title: resolveTitle(card.title, locale),
+    imageUrl: card.imageUrl,
+    linkType: card.linkType,
+    linkTarget: card.linkTarget,
+    sortOrder: card.sortOrder,
+  }
+}
 
 export class BannerService {
   constructor(private db: Pool) {}
@@ -14,8 +36,9 @@ export class BannerService {
   async listActive(opts: {
     locale?: string
     brandSlug?: string | null
-  }): Promise<BannerCard[]> {
-    return bannerQueries.listActiveBanners(this.db, opts)
+  }): Promise<LocalizedBannerCard[]> {
+    const cards = await bannerQueries.listActiveBanners(this.db, opts)
+    return cards.map((c) => localizeCard(c, opts.locale))
   }
 
   async listAll(opts: {

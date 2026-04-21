@@ -25,7 +25,13 @@ CREATE TABLE IF NOT EXISTS home_banners (
                               CHECK (brand_scope IN ('brand-specific', 'all-brands')),
   brand_slug   TEXT         NULL,
   created_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  updated_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  updated_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  -- brand_scope = 'brand-specific' 时必须指定 brand_slug
+  CONSTRAINT home_banners_brand_slug_required
+    CHECK (brand_scope != 'brand-specific' OR brand_slug IS NOT NULL),
+  -- brand_scope = 'all-brands' 时 brand_slug 必须为 NULL
+  CONSTRAINT home_banners_brand_slug_exclusive
+    CHECK (brand_scope != 'all-brands' OR brand_slug IS NULL)
 );
 
 -- 主查询索引：活跃状态 + 时间窗 + 排序
@@ -54,5 +60,10 @@ COMMIT;
 
 -- ── down ─────────────────────────────────────────────────────────────────────
 
--- DROP TABLE IF EXISTS home_banners;
+-- BEGIN;
+-- DROP TRIGGER IF EXISTS home_banners_set_updated_at_trg ON home_banners;
 -- DROP FUNCTION IF EXISTS home_banners_set_updated_at();
+-- DROP INDEX IF EXISTS home_banners_brand_scope_idx;
+-- DROP INDEX IF EXISTS home_banners_active_window_idx;
+-- DROP TABLE IF EXISTS home_banners;
+-- COMMIT;
