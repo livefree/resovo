@@ -4,6 +4,8 @@ import { useEffect, useRef } from 'react'
 import { usePlayerStore } from '@/stores/playerStore'
 import { PlayerShell } from '@/components/player/PlayerShell'
 import { applyFastTakeoverEntry } from '@/components/player/transitions/FastTakeover'
+import { applyStandardTakeoverEntry } from '@/components/player/transitions/StandardTakeover'
+import { CinemaMode } from './CinemaMode'
 
 export function GlobalPlayerFullFrame() {
   const hostOrigin = usePlayerStore((s) => s.hostOrigin)
@@ -11,16 +13,26 @@ export function GlobalPlayerFullFrame() {
   const setHostMode = usePlayerStore((s) => s.setHostMode)
   const closeHost = usePlayerStore((s) => s.closeHost)
   const transition = usePlayerStore((s) => s.transition)
+  const mode = usePlayerStore((s) => s.mode)
   const frameRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (transition !== 'fast-takeover' || !frameRef.current) return
-    const anim = applyFastTakeoverEntry(frameRef.current)
-    anim.onfinish = () => usePlayerStore.setState({ transition: null })
-    // Cancel animation and clear state on unmount or if transition changes mid-flight
-    return () => {
-      anim.cancel()
-      usePlayerStore.setState({ transition: null })
+    if (!frameRef.current) return
+    if (transition === 'fast-takeover') {
+      const anim = applyFastTakeoverEntry(frameRef.current)
+      anim.onfinish = () => usePlayerStore.setState({ transition: null })
+      return () => {
+        anim.cancel()
+        usePlayerStore.setState({ transition: null })
+      }
+    }
+    if (transition === 'standard-takeover') {
+      const anim = applyStandardTakeoverEntry(frameRef.current)
+      anim.onfinish = () => usePlayerStore.setState({ transition: null })
+      return () => {
+        anim.cancel()
+        usePlayerStore.setState({ transition: null })
+      }
     }
   }, [transition])
 
@@ -67,6 +79,8 @@ export function GlobalPlayerFullFrame() {
           borderBottom: '1px solid var(--border-default)',
           background: 'var(--bg-surface)',
           flexShrink: 0,
+          position: 'relative',
+          zIndex: 2,
         }}
       >
         <button
@@ -89,8 +103,12 @@ export function GlobalPlayerFullFrame() {
         </button>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0 }}>
-        <PlayerShell slug={hostOrigin.slug} portalMode />
+      {/* 内容区：relative 容器用于 CinemaMode 绝对定位 */}
+      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+        <CinemaMode active={mode === 'theater'} />
+        <div style={{ position: 'relative', zIndex: 2, height: '100%' }}>
+          <PlayerShell slug={hostOrigin.slug} portalMode />
+        </div>
       </div>
     </div>
   )

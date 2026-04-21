@@ -6,9 +6,8 @@ import { usePlayerStore } from '@/stores/playerStore'
 
 /**
  * mini 态悬浮播放器。
- * - 桌面：固定右下角，320×180。
- * - 移动：固定底部，宽度 100%，高度 56px（横条形），浮于 safe-area-inset-bottom。
- * - FLIP 动画：full→mini 通过 CSS transition + transform 实现 220-360ms 过渡。
+ * - 桌面：固定右下角，320×180（CSS 变量控制）。
+ * - 移动：固定底部，全宽 56px 条形，贴 Tab Bar 顶部（globals.css @media(hover:none) 覆盖）。
  * - 颜色全部使用 CSS 变量，不硬编码。
  */
 export function MiniPlayer() {
@@ -27,6 +26,11 @@ export function MiniPlayer() {
     return () => cancelAnimationFrame(timer)
   }, [])
 
+  function handleExpand() {
+    const href = hostOrigin?.href ?? (shortId ? `/watch/${shortId}` : null)
+    if (href) router.push(href)
+  }
+
   return (
     <div
       ref={containerRef}
@@ -41,35 +45,72 @@ export function MiniPlayer() {
         borderRadius: 'var(--mini-player-radius)',
         background: 'var(--bg-canvas)',
         border: '1px solid var(--border-default)',
-        boxShadow: '0 8px 32px color-mix(in srgb, var(--bg-canvas) 0%, transparent)',
+        boxShadow: '0 8px 32px color-mix(in srgb, black 40%, transparent)',
         zIndex: 'var(--z-mini-player, 50)',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
         pointerEvents: 'all',
-        // FLIP 动画
+        // FLIP 入场动画
         opacity: visible ? 1 : 0,
         transform: visible ? 'scale(1) translateY(0)' : 'scale(0.92) translateY(8px)',
         transition: `opacity var(--transition-shared, 320ms) var(--ease-page, ease),
                      transform var(--transition-shared, 320ms) var(--ease-page, ease)`,
       }}
     >
-      {/* 占位内容区：REG-M3-04 接入 PlayerShell 后替换 */}
-      <div
+      {/* 内容区：显示当前播放信息 */}
+      <button
+        type="button"
+        aria-label="展开播放器"
+        onClick={handleExpand}
         style={{
           flex: 1,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'black',
-          color: 'color-mix(in srgb, white 60%, transparent)',
-          fontSize: '0.75rem',
-          textAlign: 'center',
-          padding: '0.5rem',
+          background: 'var(--bg-surface-sunken)',
+          cursor: 'pointer',
+          border: 'none',
+          flexDirection: 'column',
+          gap: '4px',
+          padding: '0 12px',
+          minWidth: 0,
         }}
       >
-        {shortId ? `${shortId} · 第 ${currentEpisode} 集` : 'mini 播放器'}
-      </div>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          width: '100%',
+          maxWidth: '100%',
+        }}>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden
+            style={{ color: 'var(--accent-default)', flexShrink: 0 }}
+          >
+            <polygon points="5 3 19 12 5 21 5 3" />
+          </svg>
+          <span
+            style={{
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              color: 'var(--fg-default)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              flex: 1,
+              textAlign: 'left',
+            }}
+          >
+            {shortId ? `第 ${currentEpisode} 集` : '正在播放'}
+          </span>
+        </div>
+      </button>
 
       {/* 控制栏 */}
       <div
@@ -80,15 +121,13 @@ export function MiniPlayer() {
           padding: '0.25rem 0.5rem',
           background: 'var(--bg-surface)',
           borderTop: '1px solid var(--border-default)',
+          flexShrink: 0,
         }}
       >
         <button
           type="button"
           aria-label="展开播放器"
-          onClick={() => {
-            const href = hostOrigin?.href ?? (shortId ? `/watch/${shortId}` : null)
-            if (href) router.push(href)
-          }}
+          onClick={handleExpand}
           style={{
             padding: '0.25rem 0.5rem',
             fontSize: '0.75rem',

@@ -8127,3 +8127,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **备注**：SharedElement 导出类型为 ForwardRefExoticComponent，需转型为 SharedElementComponent 才能访问 .Source；VideoDetailClient 从 VideoDetailHero+EpisodeGrid 迁移到新组件层
+
+## [M5-PAGE-PLAYER-01] 播放页重塑（CinemaMode + StandardTakeover + MiniPlayer）
+- **完成时间**：2026-04-21
+- **记录时间**：2026-04-21 15:55
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/web-next/src/app/[locale]/_lib/player/CinemaMode.tsx` — 新增：影院模式遮罩 600ms 渐暗（WAAPI animate，absolute 定位，z-index 1）
+  - `apps/web-next/src/components/player/transitions/StandardTakeover.ts` — 新增：360ms 标准进场动效（mobile 280ms / desktop 360ms）
+  - `apps/web-next/src/app/[locale]/_lib/player/GlobalPlayerFullFrame.tsx` — 接入 standard-takeover 动效 + CinemaMode 集成
+  - `apps/web-next/src/app/[locale]/_lib/player/MiniPlayer.tsx` — 替换占位文字为带播放图标的集数展示
+- **新增依赖**：无
+- **数据库变更**：无
+- **备注**：MiniPlayer mobile 布局已由 globals.css @media(hover:none) 处理；CinemaMode 在 GlobalPlayerFullFrame 的 relative 容器内（z-index 1），PlayerShell 在 z-index 2，不遮挡播放器控件
