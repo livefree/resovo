@@ -7830,3 +7830,24 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 补丁文档 `task_queue_patch_m5_card_protocol_20260420_v1_1.md` 中引用为"ADR-046"，因 ADR-046/047 已被 IMG 管线占用，实际编号为 **ADR-048**。后续 M5-PREP-02 回写方案文档时需将所有 "ADR-046" 引用更新为 "ADR-048"
   - §8.3 z-index 层级表为全站约束，新增层级必须先在 ADR-048 注册
   - `color-mix(in oklch, ...)` 浏览器兼容性需在 M5-CARD-STACK-01 实装时验证
+
+---
+
+## [M5-PREP-02] 方案回写 + primitive 激活归属 + 依赖核查
+- **完成时间**：2026-04-21
+- **记录时间**：2026-04-21
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `docs/frontend_redesign_plan_20260418.md` — §9.5 新增 Cross-Skip Takeover 章节；§14.1.1 新增 Tab Bar↔MiniPlayer 叠加协议提示；§15.3.1 新增 Skeleton primitive 契约提示；§16 补充 VideoCard/TagLayer/StackedPosterFrame/Skeleton 四条；§19 M5 章节整体重写为 PREP/CARD/API/PAGE/CLOSE 五阶段（18 卡）
+  - `docs/m5_primitive_activation_20260420.md` — 新建：primitive 激活归属表（SharedElement/RouteStack/PageTransition-Sibling/PageTransition-Takeover/Skeleton，含 REGRESSION 产物/激活卡/消费卡/验收门槛）
+  - `docs/m5_dependency_audit_20260420.md` — 新建：依赖核查清单（embla-carousel ❌ → BLOCKER-M5-DEP-01；react-dnd/dnd-kit ❌ → BLOCKER-M5-DEP-02；framer-motion/react-spring/@use-gesture ❌ 但不影响 M5）
+  - `docs/task-queue.md` — M5-PREP-02 状态更新为 ✅；PREP 阶段 BLOCKER 更新为已通过
+  - `docs/tasks.md` — M5-PREP-02 卡片归档
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - BLOCKER-M5-DEP-01（embla-carousel）仅封锁 M5-PAGE-BANNER-FE-01，其余 16 张卡可正常推进
+  - BLOCKER-M5-DEP-02（拖拽库）仅封锁 M5-ADMIN-BANNER-01，M5-API-BANNER-01 不受影响
+  - task-queue.md 中 M5 卡片描述仍写 "ADR-046"，实现时须对照 ADR-048（两者 API 契约完全一致，仅编号差异）
+  - §8.3 z-index Token 名以 ADR-048 为准：`--z-tab-bar` / `--z-player-mini` / `--tab-bar-height`（task-queue.md 中 `--z-tabbar` 等为旧名，实现时以 ADR-048 为准）

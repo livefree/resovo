@@ -266,6 +266,32 @@ Root layout 持久化 **三件套 + 一个容器**：
 
 **共同**：Esc 关闭、点背景关闭、移动端下拉关闭。
 
+### 9.5 Cross-Skip Takeover（跨级直达变体）
+
+**定义**：从列表页卡片直接跳转到播放器，跳过详情页这一层级的过渡变体。
+
+**与 §9.3 Standard Takeover 的差异**：
+
+| 维度 | Standard Takeover（§9.3） | Fast Takeover（§9.5） |
+|------|--------------------------|----------------------|
+| 出发点 | 详情页 hero 图 | 列表卡 poster |
+| 总时长（移动） | 360ms | 200ms |
+| 总时长（桌面） | 360ms | 240ms |
+| mask 深度 | `rgba(0,0,0,0.85)` | `rgba(0,0,0,0.9)` |
+| scale 范围 | 1.0 → 1.0（尺寸匹配） | 1.0 → 1.03（强调瞬移感） |
+| 使用场景 | 用户从详情页明确选择"开始播放" | 用户在列表快速决定观看 |
+
+**时序**：
+
+- 阶段 A（0-60%）：卡片图片层 scale + mask 淡入
+- 阶段 B（60-100%）：卡片 flip 至播放器 poster → 字幕/控件/进度条淡入
+
+**触发**：`VideoCard.PosterAction` 点击，或长按菜单中的"播放"选项。
+
+**降级（`prefers-reduced-motion`）**：opacity 0→1 120ms，跳过 scale 与 flip。
+
+详见 ADR-048 §3。
+
 ---
 
 ## 10. 首页 Banner 设计
@@ -460,6 +486,16 @@ Root layout 持久化 **三件套 + 一个容器**：
 - 长按 Tab 二级快捷菜单（延后）
 - Mini Player 叠加策略：按 13.3 定义，浮于 Tab Bar 之上不替换其位置
 
+#### 14.1.1 与 MiniPlayer 叠加协议
+
+详见 ADR-048 §8。关键约束：
+
+- Tab Bar `z-index: var(--z-tab-bar)`（值 40）；MiniPlayer mini 态 `z-index: var(--z-player-mini)`（值 50）
+- MiniPlayer `bottom: calc(var(--tab-bar-height) + env(safe-area-inset-bottom))`
+- safe-area-inset 由 Tab Bar 唯一吸收，MiniPlayer 不重复声明
+- Tab 切换 180ms 下划线动效不触发 MiniPlayer FLIP
+- 全站 z-index 层级表见 ADR-048 §8.3
+
 ### 14.2 搜索入口
 
 - **移动端**：搜索作为底部 Tab 三格之一，点击直接进入搜索页，不再使用顶栏圆形按钮
@@ -504,6 +540,14 @@ Root layout 持久化 **三件套 + 一个容器**：
 
 时间门槛 Token 化：`motion/loading-threshold-*`
 
+#### 15.3.1 Skeleton primitive 契约
+
+详见 ADR-048 §4.5。
+- `<Skeleton>` primitive：rect / circle / text 三形态
+- 每个 M5 新建组件（VideoCard / HeroBanner / Header 等）必须导出 `.Skeleton` 子组件
+- 三档触发门槛：< 300ms 不展示；300–1000ms Skeleton；> 1000ms Skeleton + 进度条
+- 尺寸与实际组件"像素级匹配"，防止 layout shift
+
 ### 15.4 骨架几何精度
 
 - 骨架形状逐像素匹配实际内容布局
@@ -534,6 +578,15 @@ Root layout 持久化 **三件套 + 一个容器**：
 3. **体验 primitive**（`components/shared/primitives/` 或 `lib/`）：PageTransition、SharedElement、RouteStack、ScrollRestoration、LazyImage、PrefetchOnHover、PullToRefresh、SwipeBack、LongPressMenu、KeyboardShortcuts、ThemeProvider、BrandProvider、I18nProvider
 
 迁移顺序：体验 primitive → 基础原子 → 领域组合。
+
+**M5 新增组件（补充）：**
+
+| 组件 | 层级 | 路径 | 说明 |
+|------|------|------|------|
+| `VideoCard` | 领域组合层 | `components/shared/VideoCard/` | 双出口协议（PosterAction → Fast Takeover；MetaAction → 详情页），含 `.Skeleton` 子组件，详见 ADR-048 §2 |
+| `TagLayer` | 领域组合层 | `components/shared/TagLayer/` | 视频卡右下角标签层（类型、画质、时长），Token 驱动，可独立复用 |
+| `StackedPosterFrame` | 领域组合层 | `components/shared/StackedPosterFrame/` | 3 层叠封面帧（合集/系列卡），CSS box-shadow 实现，无外部库 |
+| `Skeleton` | 基础原子层 | `components/primitives/feedback/Skeleton.tsx` | rect/circle/text 三形态，shimmer 动画，M5 新建组件统一消费，详见 M5-CARD-SKELETON-01 |
 
 ---
 
@@ -577,13 +630,13 @@ Root layout 持久化 **三件套 + 一个容器**：
 
 ## 19. 里程碑拆分
 
-### M1：基础设施（预计 2–3 个任务卡）
+### M1：基础设施（已完成 ✅）
 
 - Design Tokens 分层结构与构建管线（见 `design_system_plan_20260418.md` 任务 1）
 - 主题切换三态 + 首屏无闪烁（任务 2）
 - Token 编辑后台（任务 3）
 
-### M2：品牌上下文与全局骨架（预计 3–4 个任务卡）
+### M2：品牌上下文与全局骨架（已完成 ✅）
 
 - `<BrandProvider>` + `useBrand()` + middleware 识别链
 - Root layout 重构 + Header/Footer 常驻化 + 品牌上下文接入
@@ -592,26 +645,66 @@ Root layout 持久化 **三件套 + 一个容器**：
 - LazyImage + BlurHash 支持
 - `<SafeImage>` + `<FallbackCover>` 组件
 
-### M3：播放器 root 化（预计 2 个任务卡）
+### M3：播放器 root 化（已完成 ✅）
 
 - GlobalPlayerHost + Zustand store
 - mini / full / pip 三态切换 + FLIP 过渡
 - 相关 ADR 写入 `docs/decisions.md`
 
-### M4：图片治理（预计 2–3 个任务卡）
+### M4：图片治理（已完成 ✅）
 
 - 图片健康检查 job + `broken_image_events` 表 + `poster_status` 字段
 - `<SafeImage>` + `<FallbackCover>` 全站替换 `<img>` / `next/image`
 - 图片健康 Dashboard + 样板图预览后台
 
-### M5：页面重制（预计 4–5 个任务卡）
+### M5：页面重制（进行中 🔄）
 
-- Header 重做（hover 展开、滚动紧缩）
-- Footer 重做
-- 首页 Banner（含后台管理模块 + 多品牌字段）
-- 分类页 + 筛选栏 + TopSlot 接替过渡
-- 详情页 + Push 过渡
-- 播放页 + Takeover 过渡
+架构决策：ADR-048（M5 卡片协议）。任务序列：`docs/task-queue.md` SEQ-20260420-M5-*。
+
+#### PREP 阶段（2 卡）
+
+| 卡片 | 说明 | 状态 |
+|------|------|------|
+| M5-PREP-01 | ADR-048 落盘：双出口协议、Fast Takeover、Skeleton 契约、z-index 层级表 | ✅ |
+| M5-PREP-02 | 方案回写 + primitive 激活归属表 + 依赖核查 | ✅ |
+
+#### CARD 阶段（6 卡）— primitive 与卡片组件激活
+
+| 卡片 | 说明 |
+|------|------|
+| M5-CARD-CTA-01 | VideoCard 双出口 + PageTransition Takeover variant 激活 |
+| M5-CARD-TAG-01 | TagLayer（类型/画质/时长标签）|
+| M5-CARD-STACK-01 | StackedPosterFrame（合集叠封面）|
+| M5-CARD-SHARED-01 | SharedElement FLIP 实装（替换 noop）|
+| M5-CARD-ROUTESTACK-01 | RouteStack 手势实装（替换 stub）|
+| M5-CARD-SKELETON-01 | Skeleton primitive 新建 |
+
+#### API 阶段（2 卡）— 后端接口
+
+| 卡片 | 说明 |
+|------|------|
+| M5-API-BANNER-01 | banners 表 + sort_order API |
+| M5-ADMIN-BANNER-01 | Banner 后台管理页（BLOCKER：拖拽库待批准）|
+
+#### PAGE 阶段（7 卡）— 页面级装配
+
+| 卡片 | 说明 |
+|------|------|
+| M5-PAGE-HEADER-01 | Header 重做（hover 展开、滚动紧缩）|
+| M5-PAGE-TABBAR-01 | Tab Bar + MiniPlayer 叠加协议 |
+| M5-PAGE-BANNER-FE-01 | HeroBanner 前端（BLOCKER：embla-carousel 待批准）|
+| M5-PAGE-GRID-01 | 分类网格 + PageTransition Sibling 首激活 |
+| M5-PAGE-SEARCH-01 | 搜索页（圆形扩散入场）|
+| M5-PAGE-DETAIL-01 | 详情页（消费 SharedElement）|
+| M5-PAGE-PLAYER-01 | 播放页（消费 Takeover）|
+
+#### CLOSE 阶段（1 卡）
+
+| 卡片 | 说明 |
+|------|------|
+| M5-CLOSE-01 | 方案对齐验收 + arch-reviewer PASS + 里程碑封闭 |
+
+总计 **18 个任务卡**。BLOCKER 说明：M5-PAGE-BANNER-FE-01 待 embla-carousel 人工批准；M5-ADMIN-BANNER-01 待拖拽库人工批准（见 `docs/m5_dependency_audit_20260420.md`）。
 
 ### M6：CDN 预备（预计 1 个任务卡，不实施对接）
 
@@ -625,7 +718,7 @@ Root layout 持久化 **三件套 + 一个容器**：
 - 视觉回归测试接入
 - 移除残余硬编码与旧组件
 
-总计约 **16–20 个任务卡**，视具体拆分。
+总计约 **21–23 个任务卡**（含 M5 扩展后的 18 卡），视具体拆分。
 
 ---
 

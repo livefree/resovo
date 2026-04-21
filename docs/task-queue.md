@@ -8338,7 +8338,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ---
 
-## ⚠️ M5 前置门禁 — PREP 阶段 PASS 前禁启 CARD/API/PAGE
+## ✅ M5 前置门禁 — PREP 阶段已全部通过（CARD/API/PAGE 可按依赖顺序启动）
 
 - **触发时间**：2026-04-20
 - **触发原因**：方案 §19 M5 定义缺失卡片协议决策（直达路径 / 标签 taxonomy / 多集视觉 / Tab Bar 叠加协议 / primitive 激活归属 / Skeleton 系统 / Banner 全栈三卡拆分）
@@ -8388,11 +8388,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - arch-reviewer 子代理独立校对后标 Accepted
      - typecheck 不涉及，但 Markdown 预览无渲染错误
 
-2. M5-PREP-02 — 方案回写 + primitive 激活归属 + 依赖核查（状态：⬜ 未开始）
+2. M5-PREP-02 — 方案回写 + primitive 激活归属 + 依赖核查（状态：✅ 已完成）
    - 创建时间：2026-04-20 19:00
    - 计划开始：M5-PREP-01 ✅ 后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-04-21
+   - 完成时间：2026-04-21
    - 建议模型：claude-haiku-4-5-20251001（Haiku 子代理，机械回写 + grep）
    - 规模：S（~60 分钟）
    - 依赖：M5-PREP-01 ✅
