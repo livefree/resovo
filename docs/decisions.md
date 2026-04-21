@@ -1543,3 +1543,27 @@ safe-area-inset 的吸收遵循"单一责任"原则，避免重复叠加：
 - 上下文菜单（长按/右键）M5 仅预留不实装，但 PosterAction 的 `onContextMenu` 事件拦截可能与浏览器默认行为冲突，需在 M5-CARD-CTA-01 验证
 
 **Arch-reviewer 审计**：PASS（claude-opus-4-6，2026-04-21）
+
+## ADR-049 — Admin 有序列表组件选型（@dnd-kit）
+
+**日期**：2026-04-21
+**状态**：已接受
+**背景**：M5-ADMIN-BANNER-01 需要 Banner 后台拖拽排序功能；项目此前无任何拖拽库依赖，需首次引入并锁定边界。
+
+**决策**：
+- ✅ 引入 `@dnd-kit/core` + `@dnd-kit/sortable`（两包合计约 14 KB，tree-shakeable）于 `apps/server`
+- ✅ 封装为 admin primitive：`apps/server/src/components/admin/shared/SortableList.tsx`
+- ✅ 所有有序列表模块必须消费 `SortableList`，不得直接使用 `@dnd-kit` 原语
+- ❌ 禁止引入 `@dnd-kit/modifiers`（非必需额外包）
+- ❌ 禁止其他非官方 @dnd-kit 生态包
+- ❌ 禁止在 `apps/web-next`、`apps/api`、`packages/player*` 中引入 @dnd-kit（admin 独占）
+
+**理由**：
+- @dnd-kit 相比 react-beautiful-dnd 和 react-dnd 更轻量、无 React context 全局污染、支持 tree-shaking
+- 封装 SortableList primitive 隔离外部依赖升级影响，确保后续 Banner/CrawlerSite/源排序等模块统一入口
+- admin 独占限制防止 @dnd-kit 扩散到前台消费页（避免首屏 bundle 增大）
+
+**影响**：
+- `apps/server/package.json` 新增 `@dnd-kit/core ^6.3.1` + `@dnd-kit/sortable ^8.0.0`
+- `docs/rules/admin-module-template.md` 追加有序列表章节
+- `SortableList` 作为新 admin shared primitive 维护在 CHG 序列中，不受业务迭代影响
