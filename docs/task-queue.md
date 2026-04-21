@@ -8698,11 +8698,12 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - ✅ typecheck ✅ / lint ✅ / unit ✅
      - ⏳ integration ✅（待基础设施）
 
-2. M5-ADMIN-BANNER-01 — Banner 后台管理（状态：✅ 已完成）
+2. M5-ADMIN-BANNER-01 — Banner 后台管理（状态：⚠️ 核心完成，两个验收项延期）
    - 创建时间：2026-04-20 19:00
    - 计划开始：M5-API-BANNER-01 ✅ 后
    - 实际开始：2026-04-21 15:00
-   - 完成时间：2026-04-21 15:20
+   - 完成时间：2026-04-21 15:20（核心功能）
+   - 延期项：① 图片上传（无基础设施，需单独任务）② Banner 管理 E2E（需单独任务）
    - 建议模型：claude-sonnet-4-6
    - 规模：M（~150 分钟）
    - 依赖：M5-API-BANNER-01 ✅
