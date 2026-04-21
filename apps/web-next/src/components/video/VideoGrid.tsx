@@ -11,7 +11,34 @@ interface VideoGridProps {
   variant?: 'portrait' | 'landscape'
   gridCols?: string
   layout?: 'grid' | 'scroll'
+  /** PC 端 stagger fade（分类页 Sibling 过渡用） */
+  stagger?: boolean
   'data-testid'?: string
+}
+
+function VideoGridSkeleton({
+  variant = 'portrait',
+  gridCols = 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
+  testId,
+}: {
+  variant?: 'portrait' | 'landscape'
+  gridCols?: string
+  testId?: string
+}) {
+  return (
+    <div className={`grid gap-4 ${gridCols}`} data-testid={testId ?? 'video-grid-skeleton'}>
+      {Array.from({ length: 10 }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-lg animate-pulse"
+          style={{
+            aspectRatio: variant === 'portrait' ? '2/3' : '16/9',
+            background: 'var(--bg-surface-sunken)',
+          }}
+        />
+      ))}
+    </div>
+  )
 }
 
 export function VideoGrid({
@@ -19,6 +46,7 @@ export function VideoGrid({
   variant = 'portrait',
   gridCols = 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
   layout = 'grid',
+  stagger = false,
   'data-testid': testId,
 }: VideoGridProps) {
   const [videos, setVideos] = useState<VideoCardType[]>([])
@@ -108,8 +136,10 @@ export function VideoGrid({
     )
   }
 
+  const gridClass = `grid gap-4 ${gridCols}${stagger ? ' video-grid-stagger' : ''}`
+
   return (
-    <div className={`grid gap-4 ${gridCols}`} data-testid={testId}>
+    <div className={gridClass} data-testid={testId}>
       {videos.map((video) =>
         variant === 'portrait' ? (
           <VideoCard key={video.id} video={video} />
@@ -120,3 +150,5 @@ export function VideoGrid({
     </div>
   )
 }
+
+VideoGrid.Skeleton = VideoGridSkeleton

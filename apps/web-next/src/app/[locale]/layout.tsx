@@ -9,6 +9,7 @@ import { BrandProvider } from '@/contexts/BrandProvider'
 import { Nav } from '@/components/layout/Nav'
 import { Footer } from '@/components/layout/Footer'
 import { MobileTabBar } from '@/components/layout/MobileTabBar'
+import { ScrollRestoration } from '@/components/primitives/scroll-restoration/ScrollRestoration'
 import GlobalPlayerHost from './_lib/player/GlobalPlayerHost'
 import type { Brand } from '@/types/brand'
 
@@ -50,6 +51,7 @@ export default async function LocaleLayout({
       <BrandProvider initialBrand={initialBrand} initialTheme={initialTheme}>
         <div className="app-shell">
           <Nav />
+          <ScrollRestoration />
           <main id="main-content" className="main-slot">
             {children}
           </main>

@@ -30,6 +30,7 @@ function useReducedMotion(): boolean {
 
 export function PageTransitionController({
   transitionKey,
+  variant = 'default',
   disabled,
   children,
 }: PageTransitionProps) {
@@ -40,7 +41,7 @@ export function PageTransitionController({
     if (prevKeyRef.current === transitionKey) return
     prevKeyRef.current = transitionKey
 
-    if (disabled) return
+    if (disabled || variant === 'sibling') return
 
     const supportsVT =
       typeof document !== 'undefined' &&
@@ -60,7 +61,20 @@ export function PageTransitionController({
     // React commit 已完成，触发 View Transitions crossfade
     ;(document as Document & { startViewTransition: (cb: () => Promise<void>) => void })
       .startViewTransition(() => Promise.resolve())
-  }, [transitionKey, disabled, reducedMotion])
+  }, [transitionKey, variant, disabled, reducedMotion])
+
+  if (variant === 'sibling') {
+    // key prop 变化时 React 卸载重挂 div，CSS animation 重新触发
+    return (
+      <div
+        key={transitionKey}
+        data-pt-variant="sibling"
+        className={disabled || reducedMotion ? undefined : 'pt-sibling-enter'}
+      >
+        {children}
+      </div>
+    )
+  }
 
   return <>{children}</>
 }
