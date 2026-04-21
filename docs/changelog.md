@@ -8027,3 +8027,23 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **备注**：z 层级协议：--z-tabbar=40 < --z-mini-player=50 < --z-full-player=70（ADR-046 §8.3）；MobileTabBar 通过 CSS @media(hover:none) 实现 SSR 安全的移动端专属显示，无 JS matchMedia
+
+## [M5-API-BANNER-01] home_banners migration + API
+- **完成时间**：2026-04-21
+- **记录时间**：2026-04-21 14:35
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/migrations/049_create_home_banners.sql` — 新建：home_banners 表（id/title jsonb/image_url/link_type/link_target/sort_order/active_from/active_to/is_active/brand_scope/brand_slug）；时间窗索引 + 品牌过滤索引
+  - `apps/api/src/db/queries/home-banners.ts` — 新建：listActiveBanners / listAllBanners / findBannerById / createBanner / updateBanner / deleteBanner / updateBannerSortOrders
+  - `apps/api/src/services/BannerService.ts` — 新建：BannerService 封装业务逻辑
+  - `apps/api/src/routes/banners.ts` — 新建：GET /v1/banners（公开，时间窗过滤）
+  - `apps/api/src/routes/admin/banners.ts` — 新建：GET/POST/PUT/DELETE/PATCH-reorder /v1/admin/banners（requireRole admin）
+  - `apps/api/src/server.ts` — 注册 bannerRoutes + adminBannerRoutes
+  - `packages/types/src/banner.types.ts` — 新建：Banner / BannerCard / CreateBannerInput / UpdateBannerInput
+  - `packages/types/src/index.ts` — 追加 banner.types 导出
+  - `docs/architecture.md` — 新增 §5.9 home_banners schema 说明
+  - `tests/unit/api/banners.test.ts` — 新建：21 个单元测试
+- **新增依赖**：无
+- **数据库变更**：migration 049 新建 home_banners 表
+- **备注**：Route→Service→DB queries 三层严格分层；updateBannerSortOrders 使用 pg client 事务保证批量排序原子性；title 字段使用 jsonb 存多语言，API 层透传不做 locale 过滤（由前端按需取用）
