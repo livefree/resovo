@@ -8074,3 +8074,23 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：@dnd-kit/core@6.3.1、@dnd-kit/sortable@8.0.0（admin 独占，ADR-049 边界约束）
 - **数据库变更**：无
 - **备注**：cell 函数签名遵循 TableCellContext<T> 解构；BannerDragSort 直接测试与 BannerTable mock 测试分离到两个文件以避免 vi.unmock 提升问题
+
+---
+
+## M5-PAGE-GRID-01 — 分类页 Grid + Sibling 过渡首激活
+
+- **完成时间**：2026-04-21 15:45
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **commit**：c709149
+- **变更文件**：
+  - `apps/web-next/src/app/[locale]/[type]/page.tsx` — 分类列表路由（NEW）
+  - `apps/web-next/src/components/layout/TopSlot.tsx` — 顶部内容槽 primitive（NEW）
+  - `apps/web-next/src/components/primitives/page-transition/types.ts` — 添加 `PageTransitionVariant` + `variant` prop
+  - `apps/web-next/src/components/primitives/page-transition/PageTransitionController.tsx` — Sibling 实现（CSS key-mount + fade-in）
+  - `apps/web-next/src/app/globals.css` — `pt-sibling-enter` / `video-grid-stagger` 动画 CSS
+  - `apps/web-next/src/components/video/VideoGrid.tsx` — `VideoGrid.Skeleton` 导出 + `stagger` prop
+  - `apps/web-next/src/app/[locale]/layout.tsx` — 接入 `ScrollRestoration`
+- **新增依赖**：无
+- **数据库变更**：无
+- **备注**：Sibling 交叉淡入通过 key-prop 卸载重挂触发 CSS animation 实现（非 View Transitions API 路径）；TopSlot 已设 view-transition-name 为 §11 接替过渡预留钩子；RouteStack edge return 已在 REGRESSION 落地，本卡复用
