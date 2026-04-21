@@ -8612,7 +8612,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 过渡帧率 ≥ 55fps（Chrome DevTools performance 验证）
      - typecheck ✅ / lint ✅ / unit ✅ / e2e ✅
 
-5. M5-CARD-ROUTESTACK-01 — RouteStack 边缘返回手势实装（状态：⬜ 未开始）
+5. M5-CARD-ROUTESTACK-01 — RouteStack 边缘返回手势实装（状态：✅ 完成）
    - 创建时间：2026-04-20 19:00
    - 计划开始：M5-PREP-01 ✅ 后（可并行）
    - 实际开始：

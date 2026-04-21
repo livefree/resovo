@@ -7953,3 +7953,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - C2: 'use client' + window.__resovoSharedElementMap 单例，服务端返回 dead Map
   - C3: useIsoLayoutEffect + WAAPI fill:'backwards'，无 rAF 竞态
   - C4: 500ms TTL + 消费即清除 + LRU 64 条上限
+
+---
+
+## M5-CARD-ROUTESTACK-01 — RouteStack 边缘返回手势实装
+
+- **所属序列**：SEQ-20260420-M5-CARD
+- **完成时间**：2026-04-21
+- **记录时间**：2026-04-21
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：无
+- **修改文件**：
+  - `apps/web-next/src/hooks/useEdgeSwipeBack.ts` — 新建：`@media (hover: none)` 限定触摸手势；左边缘 20px 触发区；30% 屏宽或 0.5px/ms 速度阈值；router.back() + 240ms 反向 WAAPI 动画；reduced-motion → 瞬移；GlobalPlayerHost full 态禁用
+  - `apps/web-next/src/components/primitives/route-stack/RouteStack.tsx` — 替换 noop stub；接入 useEdgeSwipeBack；display:contents wrapper div
+  - `tests/unit/web-next/RouteStack.test.tsx` — 新建：7 个单元测试（桌面不触发/触摸触发/距离不足/负向滑动/disabled）
+  - `tests/e2e-next/edge-swipe-back.spec.ts` — 新建：5 个 e2e 测试骨架（全部 test.skip，等待 M5-PAGE-DETAIL-01）
+- **新增依赖**：无
+- **数据库变更**：无
