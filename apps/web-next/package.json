@@ -15,6 +15,7 @@
     "@resovo/types": "*",
     "blurhash": "^2.0.5",
     "clsx": "*",
+    "embla-carousel-react": "^8.6.0",
     "next": "*",
     "next-intl": "*",
     "react": "*",

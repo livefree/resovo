@@ -483,3 +483,14 @@
   from { opacity: 0; transform: translateY(-4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ── Banner 轮播主色调色板 ─────────────────────────────────────────── */
+:root {
+  --banner-accent-0: oklch(64.5% 0.165 230); /* 品牌蓝 */
+  --banner-accent-1: oklch(68%   0.18  48);  /* 橙 */
+  --banner-accent-2: oklch(62%   0.20  150); /* 绿 */
+  --banner-accent-3: oklch(65%   0.17  300); /* 紫 */
+  --banner-accent-4: oklch(66%   0.19  25);  /* 红 */
+  --banner-accent-5: oklch(72%   0.16  85);  /* 黄 */
+  --banner-dot-inactive: color-mix(in srgb, white 40%, transparent);
+}
