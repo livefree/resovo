@@ -12,6 +12,7 @@ import { TagLayer } from '@/components/primitives/media/TagLayer'
 import { videoCardToTagProps } from '@/lib/tag-mapping'
 import { getStackLevel } from '@/lib/video-stack-level'
 import type { VideoCard as VideoCardType } from '@resovo/types'
+import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 
 interface VideoCardProps {
   video: VideoCardType
@@ -22,22 +23,13 @@ interface VideoCardProps {
 function VideoCardSkeleton({ className }: { className?: string }) {
   return (
     <div className={cn('block', className)} data-testid="video-card-skeleton" aria-hidden="true">
-      <div
-        className="rounded-lg animate-pulse"
-        style={{
-          aspectRatio: '2/3',
-          background: 'var(--bg-surface-sunken)',
-        }}
-      />
+      {/* Cover — matches StackedPosterFrame 2:3 aspect-ratio + rounded-lg */}
+      <Skeleton shape="rect" className="rounded-lg w-full" style={{ aspectRatio: '2/3' }} />
       <div className="mt-2 space-y-1.5">
-        <div
-          className="rounded animate-pulse"
-          style={{ height: 14, background: 'var(--bg-surface-sunken)' }}
-        />
-        <div
-          className="rounded animate-pulse w-2/3"
-          style={{ height: 12, background: 'var(--bg-surface-sunken)' }}
-        />
+        {/* Title — text-sm line-height ~14px */}
+        <Skeleton shape="text" height={14} delay={300} />
+        {/* Subtitle — text-xs, 2/3 width */}
+        <Skeleton shape="text" height={12} className="w-2/3" delay={300} />
       </div>
     </div>
   )

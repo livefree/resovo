@@ -7970,3 +7970,24 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/e2e-next/edge-swipe-back.spec.ts` — 新建：5 个 e2e 测试骨架（全部 test.skip，等待 M5-PAGE-DETAIL-01）
 - **新增依赖**：无
 - **数据库变更**：无
+
+---
+
+## M5-CARD-SKELETON-01 — Skeleton primitive + 三档门槛
+
+- **所属序列**：SEQ-20260420-M5-CARD
+- **完成时间**：2026-04-21
+- **记录时间**：2026-04-21
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：无
+- **修改文件**：
+  - `packages/design-tokens/src/semantic/skeleton.ts` — 新建：7 个 token（bgBase/bgHighlight 各 light/dark + shimmerDuration/delayTier1/delayTier2）
+  - `packages/design-tokens/src/semantic/index.ts` — 追加 skeleton 导出
+  - `apps/web-next/src/app/globals.css` — 新增 skeleton CSS vars（light/dark 各 2 值）；@keyframes skeleton-shimmer；@keyframes progressbar-indeterminate
+  - `apps/web-next/src/components/primitives/feedback/Skeleton.tsx` — 新建：shape(rect/circle/text) + delay(300/800) + shimmer gradient animation
+  - `apps/web-next/src/hooks/useSkeletonDelay.ts` — 新建：300/800/null 三档门槛延迟 hook
+  - `apps/web-next/src/components/primitives/feedback/ProgressBar.tsx` — 新建：确定/不确定两态；role=progressbar；accent-default 颜色
+  - `apps/web-next/src/components/video/VideoCard.tsx` — VideoCard.Skeleton 替换 animate-pulse 为 Skeleton primitive（像素匹配）
+  - `tests/unit/web-next/Skeleton.test.tsx` — 新建：16 个单元测试
+- **新增依赖**：无
+- **数据库变更**：无

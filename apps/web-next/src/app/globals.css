@@ -361,3 +361,36 @@
   content: var(--brand-initial, '');
   display: block;
 }
+
+/* M5-CARD-SKELETON-01 — Skeleton shimmer tokens */
+:root {
+  --skeleton-bg-base:          oklch(93.0% 0.004 247);
+  --skeleton-bg-highlight:     oklch(98.5% 0.002 247);
+  --skeleton-shimmer-duration: 1.5s;
+  --skeleton-delay-tier-1:     300ms;
+  --skeleton-delay-tier-2:     800ms;
+}
+
+[data-theme="dark"],
+.dark {
+  --skeleton-bg-base:      oklch(22.0% 0.006 247);
+  --skeleton-bg-highlight: oklch(30.0% 0.008 247);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --skeleton-bg-base:      oklch(22.0% 0.006 247);
+    --skeleton-bg-highlight: oklch(30.0% 0.008 247);
+  }
+}
+
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes progressbar-indeterminate {
+  0%   { left: -33%; width: 33%; }
+  50%  { left: 100%; width: 33%; }
+  100% { left: 100%; width: 33%; }
+}

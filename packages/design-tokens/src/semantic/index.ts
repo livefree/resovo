@@ -24,3 +24,6 @@ export type { TagToken, TagTheme } from './tag.js'
 
 export { stack } from './stack.js'
 export type { StackToken, StackTheme } from './stack.js'
+
+export { skeleton } from './skeleton.js'
+export type { SkeletonToken, SkeletonTheme } from './skeleton.js'

@@ -13,7 +13,7 @@
 
 ---
 
-## M5-CARD-ROUTESTACK-01 — RouteStack 边缘返回手势实装
+## M5-CARD-SKELETON-01 — Skeleton primitive + 三档门槛
 
 - **状态**：✅ 完成
 - **开始时间**：2026-04-21
@@ -22,8 +22,12 @@
 - **执行模型**：claude-sonnet-4-6
 - **子代理调用**：无
 - **文件范围**：
-  - `apps/web-next/src/hooks/useEdgeSwipeBack.ts`（新增）
-  - `apps/web-next/src/components/primitives/route-stack/RouteStack.tsx`（修改）
-  - `tests/unit/web-next/RouteStack.test.tsx`（新增）
-  - `tests/e2e-next/edge-swipe-back.spec.ts`（新增）
-- **备注**：e2e 全部 test.skip 等待 M5-PAGE-DETAIL-01；jsdom 中 Touch.clientX 需特殊处理（speed mock + direction check）
+  - `packages/design-tokens/src/semantic/skeleton.ts`（新增）
+  - `packages/design-tokens/src/semantic/index.ts`（修改）
+  - `apps/web-next/src/app/globals.css`（修改，加 skeleton CSS vars + keyframe）
+  - `apps/web-next/src/components/primitives/feedback/Skeleton.tsx`（新增）
+  - `apps/web-next/src/hooks/useSkeletonDelay.ts`（新增）
+  - `apps/web-next/src/components/primitives/feedback/ProgressBar.tsx`（新增）
+  - `apps/web-next/src/components/video/VideoCard.tsx`（修改，VideoCard.Skeleton 用 Skeleton primitive）
+  - `tests/unit/web-next/Skeleton.test.tsx`（新增）
+- **备注**：16 个单元测试全通过；VideoCard.Skeleton 像素匹配实装
