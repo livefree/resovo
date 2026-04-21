@@ -42,6 +42,10 @@ interface PlayerState {
   setHostMode: (next: HostPlayerMode, origin?: PlayerHostOrigin) => void
   closeHost: () => void
   hydrateFromSession: () => void
+
+  // === M5-CARD-CTA-01 新增 ===
+  transition: 'fast-takeover' | 'standard-takeover' | null
+  enter: (params: { shortId: string; slug: string | null; episode?: number; transition: 'fast-takeover' | 'standard-takeover' }) => void
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -54,6 +58,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   hostMode: 'closed',
   hostOrigin: null,
   isHydrated: false,
+  transition: null,
 
   initPlayer: (shortId, episode) =>
     set({ shortId, currentEpisode: episode, isPlaying: false, currentTime: 0, duration: 0 }),
@@ -91,6 +96,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   closeHost: () => {
     get().setHostMode('closed')
+  },
+
+  enter: ({ shortId, slug, episode = 1, transition }) => {
+    const urlSlug = slug ? `${slug}-${shortId}` : shortId
+    set({
+      shortId,
+      currentEpisode: episode,
+      isPlaying: false,
+      currentTime: 0,
+      duration: 0,
+      transition,
+    })
+    get().setHostMode('full', { href: `/watch/${urlSlug}`, slug: urlSlug })
   },
 
   hydrateFromSession: () => {

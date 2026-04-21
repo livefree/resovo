@@ -22,6 +22,7 @@ export default defineConfig({
     environmentMatchGlobs: [
       ['tests/unit/components/**', 'jsdom'],  // 组件测试用 jsdom
       ['tests/unit/hooks/**', 'jsdom'],        // hook 测试用 jsdom（依赖 window/sessionStorage）
+      ['tests/unit/web-next/**', 'jsdom'],    // web-next 组件测试
     ],
     setupFiles: ['./tests/helpers/setup.ts'],
     coverage: {
@@ -49,16 +50,29 @@ export default defineConfig({
       { find: '@/api',              replacement: path.resolve(__dirname, './apps/api/src') },
       { find: '@/components/admin', replacement: path.resolve(__dirname, './apps/server/src/components/admin') },
       { find: '@/components/shared',replacement: path.resolve(__dirname, './apps/server/src/components/shared') },
-      // server app's @/stores resolves to apps/server/src/stores (not web)
-      { find: '@/stores',           replacement: path.resolve(__dirname, './apps/server/src/stores') },
+      // @/stores is context-aware: web-next → apps/web-next/src/stores; server/other → apps/server/src/stores
+      {
+        find: /^@\/stores(\/.*)?$/,
+        replacement: '$1',
+        customResolver(replacedId: string, importer: string | undefined) {
+          const isWebNext =
+            importer?.includes('/apps/web-next/') || importer?.includes('/tests/unit/web-next/')
+          const storesBase = isWebNext
+            ? path.resolve(__dirname, './apps/web-next/src/stores')
+            : path.resolve(__dirname, './apps/server/src/stores')
+          const subPath = replacedId.replace(/^\//, '') || 'index'
+          return resolveWithExtensions(path.resolve(storesBase, subPath))
+        },
+      },
       // Smart @ resolver: web-next source files get apps/web-next/src, others get apps/web/src
       {
         find: /^@\/(.*)/,
         replacement: '$1',
         customResolver(replacedId: string, importer: string | undefined) {
-          const srcBase = importer?.includes('/apps/web-next/')
-            ? path.resolve(__dirname, './apps/web-next/src')
-            : path.resolve(__dirname, './apps/web/src')
+          const srcBase =
+            importer?.includes('/apps/web-next/') || importer?.includes('/tests/unit/web-next/')
+              ? path.resolve(__dirname, './apps/web-next/src')
+              : path.resolve(__dirname, './apps/web/src')
           return resolveWithExtensions(path.resolve(srcBase, replacedId))
         },
       },

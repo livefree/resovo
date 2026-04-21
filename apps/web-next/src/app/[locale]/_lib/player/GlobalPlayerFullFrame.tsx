@@ -1,13 +1,24 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import { usePlayerStore } from '@/stores/playerStore'
 import { PlayerShell } from '@/components/player/PlayerShell'
+import { applyFastTakeoverEntry } from '@/components/player/transitions/FastTakeover'
 
 export function GlobalPlayerFullFrame() {
   const hostOrigin = usePlayerStore((s) => s.hostOrigin)
   const isHydrated = usePlayerStore((s) => s.isHydrated)
   const setHostMode = usePlayerStore((s) => s.setHostMode)
   const closeHost = usePlayerStore((s) => s.closeHost)
+  const transition = usePlayerStore((s) => s.transition)
+  const frameRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (transition === 'fast-takeover' && frameRef.current) {
+      const anim = applyFastTakeoverEntry(frameRef.current)
+      anim.onfinish = () => usePlayerStore.setState({ transition: null })
+    }
+  }, [transition])
 
   if (!isHydrated || !hostOrigin?.slug) return null
 
@@ -28,6 +39,7 @@ export function GlobalPlayerFullFrame() {
 
   return (
     <div
+      ref={frameRef}
       data-testid="player-frame-full"
       style={{
         position: 'fixed',

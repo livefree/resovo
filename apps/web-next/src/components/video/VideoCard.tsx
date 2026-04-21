@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils'
 import { getVideoDetailHref } from '@/lib/video-route'
 import { SafeImage } from '@/components/media'
 import { reportBrokenImage } from '@/lib/report-broken-image'
+import { usePlayerStore } from '@/stores/playerStore'
+import { FloatingPlayButton } from './FloatingPlayButton'
 import type { VideoCard as VideoCardType } from '@resovo/types'
 
 interface VideoCardProps {
@@ -26,14 +28,47 @@ const TYPE_LABELS: Record<string, string> = {
   other:       '其他',
 }
 
+function VideoCardSkeleton({ className }: { className?: string }) {
+  return (
+    <div className={cn('block', className)} data-testid="video-card-skeleton" aria-hidden="true">
+      <div
+        className="rounded-lg animate-pulse"
+        style={{
+          aspectRatio: '2/3',
+          background: 'var(--bg-surface-sunken)',
+        }}
+      />
+      <div className="mt-2 space-y-1.5">
+        <div
+          className="rounded animate-pulse"
+          style={{ height: 14, background: 'var(--bg-surface-sunken)' }}
+        />
+        <div
+          className="rounded animate-pulse w-2/3"
+          style={{ height: 12, background: 'var(--bg-surface-sunken)' }}
+        />
+      </div>
+    </div>
+  )
+}
+
 export function VideoCard({ video, className }: VideoCardProps) {
+  const enter = usePlayerStore((s) => s.enter)
   const detailHref = getVideoDetailHref(video)
-  const watchHref = `/watch/${video.slug ? video.slug + '-' + video.shortId : video.shortId}?ep=1`
+
+  function handlePosterClick() {
+    enter({
+      shortId: video.shortId,
+      slug: video.slug,
+      episode: 1,
+      transition: 'fast-takeover',
+    })
+  }
 
   return (
-    <div className={cn('group relative block', className)} data-testid="video-card">
+    <article className={cn('group relative block', className)} data-testid="video-card">
+      {/* 图片区 — PosterAction: 点击触发 Fast Takeover 直达播放器 */}
       <div className="relative rounded-lg overflow-hidden">
-        {/* SafeImage 设定宽高比并渲染图片；pointer-events-none 使点击穿透到 Link */}
         <SafeImage
           src={video.coverUrl}
           alt={video.title}
@@ -49,21 +84,16 @@ export function VideoCard({ video, className }: VideoCardProps) {
           }
         />
 
-        <Link href={detailHref} className="absolute inset-0" aria-label={video.title} />
+        <button
+          type="button"
+          className="absolute inset-0 cursor-pointer"
+          aria-label={`播放《${video.title}》第 1 集`}
+          onClick={handlePosterClick}
+        />
 
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300 pointer-events-none" />
 
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 z-10 pointer-events-none">
-          <Link
-            href={watchHref}
-            className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 pointer-events-auto hover:bg-[var(--accent-default)] hover:scale-110"
-            aria-label="Play Now"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="white" className="ml-1">
-              <polygon points="5 3 19 12 5 21 5 3"></polygon>
-            </svg>
-          </Link>
-        </div>
+        <FloatingPlayButton />
 
         <span
           className="absolute top-2 left-2 text-xs px-1.5 py-0.5 rounded font-medium pointer-events-none z-10"
@@ -82,10 +112,15 @@ export function VideoCard({ video, className }: VideoCardProps) {
         )}
       </div>
 
+      {/* 文字区 — MetaAction: 点击跳详情页 */}
       <div className="mt-2 space-y-0.5 relative z-10">
-        <Link href={detailHref} className="after:absolute after:inset-0">
+        <Link
+          href={detailHref}
+          aria-label={`${video.title} 详情页`}
+          className="block group-hover:text-[var(--accent-default)] transition-colors"
+        >
           <p
-            className="text-sm font-medium line-clamp-1 group-hover:text-[var(--accent-default)] transition-colors"
+            className="text-sm font-medium line-clamp-1"
             style={{ color: 'var(--fg-default)' }}
           >
             {video.title}
@@ -98,6 +133,8 @@ export function VideoCard({ video, className }: VideoCardProps) {
           </p>
         )}
       </div>
-    </div>
+    </article>
   )
 }
+
+VideoCard.Skeleton = VideoCardSkeleton
