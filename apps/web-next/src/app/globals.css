@@ -394,3 +394,8 @@
   50%  { left: 100%; width: 33%; }
   100% { left: 100%; width: 33%; }
 }
+
+@keyframes menuFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

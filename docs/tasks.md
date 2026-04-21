@@ -13,21 +13,16 @@
 
 ---
 
-## M5-CARD-SKELETON-01 — Skeleton primitive + 三档门槛
+## M5-PAGE-HEADER-01 — Header/Footer 重塑
 
-- **状态**：✅ 完成
+- **状态**：🔄 进行中
 - **开始时间**：2026-04-21
-- **完成时间**：2026-04-21
 - **建议模型**：claude-sonnet-4-6
 - **执行模型**：claude-sonnet-4-6
 - **子代理调用**：无
 - **文件范围**：
-  - `packages/design-tokens/src/semantic/skeleton.ts`（新增）
-  - `packages/design-tokens/src/semantic/index.ts`（修改）
-  - `apps/web-next/src/app/globals.css`（修改，加 skeleton CSS vars + keyframe）
-  - `apps/web-next/src/components/primitives/feedback/Skeleton.tsx`（新增）
-  - `apps/web-next/src/hooks/useSkeletonDelay.ts`（新增）
-  - `apps/web-next/src/components/primitives/feedback/ProgressBar.tsx`（新增）
-  - `apps/web-next/src/components/video/VideoCard.tsx`（修改，VideoCard.Skeleton 用 Skeleton primitive）
-  - `tests/unit/web-next/Skeleton.test.tsx`（新增）
-- **备注**：16 个单元测试全通过；VideoCard.Skeleton 像素匹配实装
+  - `apps/web-next/src/components/layout/Nav.tsx`（修改：scroll-collapse、接入 MegaMenu、Nav.Skeleton 导出）
+  - `apps/web-next/src/components/layout/Footer.tsx`（修改：Footer.Skeleton 导出）
+  - `apps/web-next/src/components/layout/MegaMenu.tsx`（新增：hover 120ms/240ms 时序 + 键盘可达）
+  - `tests/unit/web-next/Header.test.tsx`（新增）
+- **备注**：任务卡写的 Header.tsx 实际文件为 Nav.tsx，功能一致，不重命名（layout.tsx 挂点不变）

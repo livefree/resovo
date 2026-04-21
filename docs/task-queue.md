@@ -8729,7 +8729,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ### 任务列表
 
-1. M5-PAGE-HEADER-01 — Header/Footer 重塑（状态：⬜ 未开始）
+1. M5-PAGE-HEADER-01 — Header/Footer 重塑（状态：✅ 完成）
    - 创建时间：2026-04-20 19:00
    - 计划开始：SEQ-20260420-M5-CARD ✅ 后
    - 实际开始：

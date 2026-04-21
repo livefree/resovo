@@ -7991,3 +7991,22 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `tests/unit/web-next/Skeleton.test.tsx` — 新建：16 个单元测试
 - **新增依赖**：无
 - **数据库变更**：无
+
+---
+
+## M5-PAGE-HEADER-01 — Header/Footer 重塑
+
+- **所属序列**：SEQ-20260420-M5-PAGE
+- **完成时间**：2026-04-21
+- **记录时间**：2026-04-21
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：无
+- **修改文件**：
+  - `apps/web-next/src/components/layout/Nav.tsx` — scroll-collapse（80px 阈值，h-16→h-12 transition-[height]）；More 下拉替换为 MegaMenu；Nav.Skeleton 导出
+  - `apps/web-next/src/components/layout/Footer.tsx` — Footer.Skeleton 导出
+  - `apps/web-next/src/components/layout/MegaMenu.tsx` — 新建：hover 120ms/240ms 时序；Esc 关闭；ArrowDown/Enter 键盘开启并 focus 首项；menuFadeIn 动画
+  - `apps/web-next/src/app/globals.css` — @keyframes menuFadeIn
+  - `tests/unit/web-next/Header.test.tsx` — 新建：11 个单元测试（MegaMenu 时序/Esc/active/scroll-collapse/Skeleton）
+- **新增依赖**：无
+- **数据库变更**：无
+- **备注**：任务卡描述文件为 Header.tsx，实际为 Nav.tsx（layout 挂点不变），MegaMenu.Skeleton 未单独导出（组件无独立骨架需求）
