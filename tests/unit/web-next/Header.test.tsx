@@ -117,7 +117,7 @@ describe('MegaMenu', () => {
     vi.useRealTimers()
   })
 
-  it('ArrowDown 键立即展开并 focus 第一个 menuitem', async () => {
+  it('ArrowDown 键立即展开并将焦点移到第一个 menuitem', async () => {
     vi.useFakeTimers()
     const { MegaMenu } = await import('@/components/layout/MegaMenu')
     const { container } = render(
@@ -130,27 +130,33 @@ describe('MegaMenu', () => {
       />,
     )
     const wrapper = container.firstChild as HTMLElement
-    // Keyboard open via ArrowDown
     fireEvent.keyDown(wrapper, { key: 'ArrowDown' })
-    // rAF flush
-    await act(async () => { vi.advanceTimersByTime(0) })
+    // Flush React state update then rAF (one frame ≈ 16ms)
+    await act(async () => { vi.advanceTimersByTime(16) })
     expect(screen.queryByTestId('mega-menu-panel')).toBeTruthy()
+    // Focus must have moved to the first menuitem
+    expect(document.activeElement).toBe(screen.getByTestId('mega-menu-item-movie'))
     vi.useRealTimers()
   })
 
-  it('Enter 键立即展开菜单', async () => {
+  it('Enter 键立即展开并将焦点移到第一个 menuitem', async () => {
     vi.useFakeTimers()
     const { MegaMenu } = await import('@/components/layout/MegaMenu')
-    const { container } = render(
+    render(
       <MegaMenu
         trigger={<button type="button">更多</button>}
-        items={[{ key: 'a', label: 'A', href: '/a' }]}
+        items={[
+          { key: 'first', label: 'First', href: '/first' },
+          { key: 'second', label: 'Second', href: '/second' },
+        ]}
       />,
     )
-    const wrapper = container.firstChild as HTMLElement
+    // The trigger div is the wrapper; fire keyDown on it
+    const wrapper = document.querySelector('[aria-haspopup="menu"]')!.parentElement as HTMLElement
     fireEvent.keyDown(wrapper, { key: 'Enter' })
-    await act(async () => { vi.advanceTimersByTime(0) })
+    await act(async () => { vi.advanceTimersByTime(16) })
     expect(screen.queryByTestId('mega-menu-panel')).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByTestId('mega-menu-item-first'))
     vi.useRealTimers()
   })
 
