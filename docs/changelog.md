@@ -8010,3 +8010,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **备注**：任务卡描述文件为 Header.tsx，实际为 Nav.tsx（layout 挂点不变），MegaMenu.Skeleton 未单独导出（组件无独立骨架需求）
+
+## [M5-PAGE-TABBAR-01] 移动 Tab Bar + MiniPlayer 叠加协议
+- **完成时间**：2026-04-21
+- **记录时间**：2026-04-21 14:05
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/web-next/src/components/layout/MobileTabBar.tsx` — 新建：三 Tab（首页/分类/搜索）玻璃底栏；data-tabbar CSS 控制显隐；MobileTabBar.Skeleton 导出
+  - `apps/web-next/src/app/[locale]/layout.tsx` — 挂载 MobileTabBar（DOM 位于 portal 之前）
+  - `apps/web-next/src/app/[locale]/_lib/player/MiniPlayer.tsx` — 添加 data-mini-player 属性；z-index 改用 --z-mini-player token
+  - `apps/web-next/src/app/[locale]/_lib/player/GlobalPlayerFullFrame.tsx` — z-index 改用 --z-full-player token
+  - `apps/web-next/src/app/globals.css` — 新增 --z-tabbar/--z-mini-player/--z-full-player/--tabbar-height token；portal z-index 升级；data-tabbar display:none + @media(hover:none) 显示规则；MiniPlayer mobile bottom 偏移
+  - `tests/unit/web-next/MobileTabBar.test.tsx` — 新建：12 个单元测试（渲染/激活状态/CSS token/Skeleton/路径匹配）
+  - `tests/e2e-next/mobile-tabbar.spec.ts` — 新建（全 skip，等待 M5-PAGE-DETAIL-01/SEARCH-01）
+- **新增依赖**：无
+- **数据库变更**：无
+- **备注**：z 层级协议：--z-tabbar=40 < --z-mini-player=50 < --z-full-player=70（ADR-046 §8.3）；MobileTabBar 通过 CSS @media(hover:none) 实现 SSR 安全的移动端专属显示，无 JS matchMedia

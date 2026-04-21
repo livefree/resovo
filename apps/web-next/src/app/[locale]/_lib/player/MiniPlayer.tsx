@@ -30,6 +30,7 @@ export function MiniPlayer() {
   return (
     <div
       ref={containerRef}
+      data-mini-player
       data-testid="mini-player"
       style={{
         position: 'fixed',
@@ -41,7 +42,7 @@ export function MiniPlayer() {
         background: 'var(--bg-canvas)',
         border: '1px solid var(--border-default)',
         boxShadow: '0 8px 32px color-mix(in srgb, var(--bg-canvas) 0%, transparent)',
-        zIndex: 'var(--mini-player-z, 50)',
+        zIndex: 'var(--z-mini-player, 50)',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',

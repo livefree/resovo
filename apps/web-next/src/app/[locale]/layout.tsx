@@ -8,6 +8,7 @@ import { parseBrandSlug, parseTheme, DEFAULT_BRAND_SLUG } from '@/lib/brand-dete
 import { BrandProvider } from '@/contexts/BrandProvider'
 import { Nav } from '@/components/layout/Nav'
 import { Footer } from '@/components/layout/Footer'
+import { MobileTabBar } from '@/components/layout/MobileTabBar'
 import GlobalPlayerHost from './_lib/player/GlobalPlayerHost'
 import type { Brand } from '@/types/brand'
 
@@ -52,6 +53,7 @@ export default async function LocaleLayout({
           <main id="main-content" className="main-slot">
             {children}
           </main>
+          <MobileTabBar />
           <div id="global-player-host-portal" data-testid="global-player-host" />
           <GlobalPlayerHost />
           <RoutePlayerSync />

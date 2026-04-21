@@ -322,6 +322,14 @@
   animation: none !important;
 }
 
+/* M5-PAGE-TABBAR-01 — z-index layer tokens (ADR-046 §8.3) */
+:root {
+  --z-tabbar:      40;
+  --z-mini-player: 50;
+  --z-full-player: 70;
+  --tabbar-height: 56px;
+}
+
 /* REG-M2-01 — Root layout 四件套常驻化（ADR-040） */
 .app-shell {
   min-height: 100dvh;
@@ -338,11 +346,34 @@
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
+/* On touch devices with Tab Bar, main content needs extra bottom clearance */
+@media (hover: none) {
+  .main-slot {
+    padding-bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 #global-player-host-portal {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: var(--z-player-host, 40);
+  /* Elevated to --z-mini-player so MiniPlayer floats above Tab Bar */
+  z-index: var(--z-mini-player, 50);
+}
+
+/* Tab Bar — hidden on hover:hover (desktop), shown on hover:none (touch) */
+[data-tabbar] { display: none; }
+@media (hover: none) { [data-tabbar] { display: flex; } }
+
+/* MiniPlayer mobile override — lift above Tab Bar */
+@media (hover: none) {
+  [data-mini-player] {
+    bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px)) !important;
+    right: 0 !important;
+    width: 100% !important;
+    border-radius: 0 !important;
+    height: 56px !important;
+  }
 }
 
 /* IMG-03.5 — FallbackCover gradient tokens + brand initial */

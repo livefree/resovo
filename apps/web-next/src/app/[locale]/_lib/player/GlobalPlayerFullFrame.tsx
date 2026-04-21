@@ -48,7 +48,7 @@ export function GlobalPlayerFullFrame() {
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 'var(--z-player-host, 40)',
+        zIndex: 'var(--z-full-player, 70)',
         background: 'var(--bg-canvas)',
         overflowY: 'auto',
         pointerEvents: 'all',
