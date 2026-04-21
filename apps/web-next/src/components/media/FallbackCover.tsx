@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils'
 import type { FallbackCoverProps, FallbackVariant, MediaAspect } from './types'
+import type { VideoType } from '@resovo/types'
 
 // ── 常量映射 ──────────────────────────────────────────────────────
 
@@ -25,7 +26,7 @@ const ARIA_LABELS: Record<FallbackVariant, string> = {
   generic: 'Image unavailable',
 }
 
-const TYPE_LABELS: Partial<Record<import('@resovo/types').VideoType, string>> = {
+const TYPE_LABELS: Partial<Record<VideoType, string>> = {
   movie:       '电影',
   series:      '剧集',
   anime:       '动漫',
@@ -54,21 +55,24 @@ function gradientVar(seed?: string): string {
   return `var(--fallback-gradient-${idx}, var(--bg-surface-raised))`
 }
 
-// ── 图标 ──────────────────────────────────────────────────────────
+// ── 类型专属图标 ──────────────────────────────────────────────────
 
-function FilmIcon({ scale }: { scale: number }) {
+interface IconProps { scale: number }
+
+const SVG_BASE = {
+  xmlns: 'http://www.w3.org/2000/svg',
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: '1.5',
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+  'aria-hidden': true as const,
+}
+
+function FilmIcon({ scale }: IconProps) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ width: `${scale * 100}%`, height: 'auto' }}
-      aria-hidden
-    >
+    <svg {...SVG_BASE} style={{ width: `${scale * 100}%`, height: 'auto' }}>
       <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
       <line x1="7" y1="2" x2="7" y2="22" />
       <line x1="17" y1="2" x2="17" y2="22" />
@@ -81,26 +85,72 @@ function FilmIcon({ scale }: { scale: number }) {
   )
 }
 
-function AvatarIcon({ scale }: { scale: number }) {
+/** 剧集：电视机 + 天线 */
+function TVIcon({ scale }: IconProps) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ width: `${scale * 100}%`, height: 'auto' }}
-      aria-hidden
-    >
+    <svg {...SVG_BASE} style={{ width: `${scale * 100}%`, height: 'auto' }}>
+      <rect x="2" y="7" width="20" height="13" rx="2" />
+      <line x1="8" y1="20" x2="16" y2="20" />
+      <line x1="12" y1="20" x2="12" y2="23" />
+      <line x1="8" y1="4" x2="12" y2="7" />
+      <line x1="16" y1="4" x2="12" y2="7" />
+    </svg>
+  )
+}
+
+/** 动漫：星形爆裂 */
+function AnimeIcon({ scale }: IconProps) {
+  return (
+    <svg {...SVG_BASE} style={{ width: `${scale * 100}%`, height: 'auto' }}>
+      <polygon points="12,2 14.5,9 22,9 16,13.5 18.5,21 12,16.5 5.5,21 8,13.5 2,9 9.5,9" />
+    </svg>
+  )
+}
+
+/** 综艺：均衡器音波竖条 */
+function VarietyIcon({ scale }: IconProps) {
+  return (
+    <svg {...SVG_BASE} style={{ width: `${scale * 100}%`, height: 'auto' }}>
+      <rect x="3"  y="12" width="3" height="9"  rx="1" />
+      <rect x="8"  y="7"  width="3" height="14" rx="1" />
+      <rect x="13" y="9"  width="3" height="12" rx="1" />
+      <rect x="18" y="4"  width="3" height="17" rx="1" />
+    </svg>
+  )
+}
+
+/** 纪录片：山峦等高线 */
+function DocumentaryIcon({ scale }: IconProps) {
+  return (
+    <svg {...SVG_BASE} style={{ width: `${scale * 100}%`, height: 'auto' }}>
+      <polyline points="2,20 7,11 12,16 16,8 22,20" />
+      <line x1="2" y1="20" x2="22" y2="20" />
+    </svg>
+  )
+}
+
+/** 头像通用 */
+function AvatarIcon({ scale }: IconProps) {
+  return (
+    <svg {...SVG_BASE} style={{ width: `${scale * 100}%`, height: 'auto' }}>
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
       <circle cx="12" cy="7" r="4" />
     </svg>
   )
 }
 
-// ── 组件 ──────────────────────────────────────────────────────────
+function getTypeIcon(type: VideoType | undefined, scale: number) {
+  switch (type) {
+    case 'movie':       return <FilmIcon scale={scale} />
+    case 'series':      return <TVIcon scale={scale} />
+    case 'anime':       return <AnimeIcon scale={scale} />
+    case 'variety':     return <VarietyIcon scale={scale} />
+    case 'documentary': return <DocumentaryIcon scale={scale} />
+    default:            return <FilmIcon scale={scale} />
+  }
+}
+
+// ── 主组件 ────────────────────────────────────────────────────────
 
 export function FallbackCover({
   aspect,
@@ -115,6 +165,7 @@ export function FallbackCover({
   originalTitle,
   type,
   seed,
+  brandLogoUrl,
   'data-testid': testId,
 }: FallbackCoverProps) {
   const displayTitle = title || originalTitle
@@ -140,17 +191,27 @@ export function FallbackCover({
         color: 'var(--fg-muted)',
       }}
     >
-      {/* 品牌角标（右上）— 通过 CSS var(--brand-initial) 注入文字 */}
-      <span
-        className="fallback-cover__brand absolute right-2 top-2 text-xs font-semibold opacity-40"
-        aria-hidden
-      />
+      {/* 品牌角标：有 brandLogoUrl 时显示图片，否则 CSS --brand-initial 文字回落 */}
+      {brandLogoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={brandLogoUrl}
+          alt=""
+          aria-hidden
+          className="absolute bottom-2 right-2 h-4 w-auto opacity-40 object-contain"
+        />
+      ) : (
+        <span
+          className="fallback-cover__brand absolute right-2 top-2 text-xs font-semibold opacity-40"
+          aria-hidden
+        />
+      )}
 
       {/* 居中图标（无标题时） */}
       {!displayTitle && (
         variant === 'avatar'
           ? <AvatarIcon scale={iconScale} />
-          : <FilmIcon scale={iconScale} />
+          : getTypeIcon(type, iconScale)
       )}
 
       {/* 底部标题遮罩 */}

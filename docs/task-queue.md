@@ -8116,7 +8116,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ## SEQ-20260420-IMG-M4 — 图片管线 M4：loader 测试 + env 文档
 
-- **状态**：🟡 规划中
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-20 10:00
 - **最后更新时间**：2026-04-20 11:45
 - **目标**：补齐 loader 接口测试与 `IMAGE_LOADER` env 切换文档，明确过渡期多尺寸行为；不接入 next.config.ts custom loader，CDN 实际对接属未来任务不纳入本卡
@@ -8143,6 +8143,55 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - `cloudflareLoader({ src: 'https://x.com/a.jpg', width: 800 })` 输出符合方案 §10.1 URL 模板
      - `next.config.ts` 无 `images.loader`/`images.loaderFile` 改动（文件未被修改）
      - `npm run typecheck` ✅ / `npm run lint` ✅ / `npm run test -- --run` ✅
+
+---
+
+## SEQ-20260420-IMG-PRE-M5 — 进入 M5 前的偏离修复
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-04-20 18:00
+- **目标**：在进入 M5（页面重制）之前，闭合 image_pipeline_plan §7.2 / §8.2 与实际实现的三处已知偏离，不留缺口
+- **依赖**：SEQ-20260420-IMG-M4 ✅
+- **建议模型**：claude-sonnet-4-6
+
+### 任务列表
+
+1. IMG-08 — FallbackCover 完整实现：type SVG 装饰 + brandLogoUrl 接口（状态：✅ 已完成）
+   - 创建时间：2026-04-20 18:00
+   - 实际开始：2026-04-20 18:05
+   - 完成时间：2026-04-20 18:20
+   - 建议模型：claude-sonnet-4-6
+   - 规模：S（~50 min）
+   - 依赖：IMG-07 ✅
+   - **文件范围**：
+     - `apps/web-next/src/components/media/types.ts`：`FallbackCoverProps` 新增 `brandLogoUrl?: string`
+     - `apps/web-next/src/components/media/FallbackCover.tsx`：添加 5 种 type SVG 装饰组件（MovieIcon / SeriesIcon / AnimeIcon / VarietyIcon / DocumentaryIcon）；`brandLogoUrl` 有值时渲染 `<img>` 右下角角标
+     - `apps/web-next/src/components/media/SafeImage.tsx`：`fallback` prop 中透传 `brandLogoUrl`
+   - **验收要点**：
+     - 各 `type` 值渲染独立 SVG 图标，未传 `type` 时显示通用 FilmIcon
+     - 传入 `brandLogoUrl` 时右下角渲染 `<img>`，不传时 CSS `--brand-initial` 文字回落
+     - 零硬编码颜色，`currentColor` + CSS 变量
+     - `typecheck` ✅ / `lint` ✅ / `test` ✅
+
+2. IMG-09 — image-health 7 天破损趋势 sparkline（状态：🔄 进行中）
+   - 创建时间：2026-04-20 18:00
+   - 实际开始：2026-04-20 18:20
+   - 完成时间：
+   - 建议模型：claude-sonnet-4-6
+   - 规模：M（~80 min）
+   - 依赖：IMG-08 ✅
+   - **文件范围**：
+     - `apps/api/src/db/queries/imageHealth.ts`：新增 `getBrokenEventsTrend(db, days?)` → `{date: string; count: number}[]`
+     - `apps/api/src/routes/admin/image-health.ts`：`GET /admin/image-health/stats` 响应追加 `brokenTrend` 字段
+     - `apps/server/src/services/image-health-stats.service.ts`：`ImageHealthStats` 扩展 `brokenTrend`
+     - `apps/server/src/components/admin/image-health/TrendSparkline.tsx`：新建纯 SVG sparkline，无外部依赖
+     - `apps/server/src/components/admin/image-health/ImageHealthDashboard.tsx`："7 天新增破损"卡片下挂载 TrendSparkline
+   - **验收要点**：
+     - 7 个日期点全部渲染，缺失日补 0 而非折断
+     - 全量为 0 时显示平线而非报错
+     - 零硬编码颜色，不引入新 npm 依赖
+     - DB 查询函数有单元测试
+     - `typecheck` ✅ / `lint` ✅ / `test` ✅
 
 ---
 

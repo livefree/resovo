@@ -25,6 +25,8 @@ export interface FallbackCoverProps {
   originalTitle?: string
   type?: VideoType
   seed?: string
+  /** 品牌单色 Logo URL；有值时在右下角渲染 <img>，无值时回落到 CSS --brand-initial 文字角标 */
+  brandLogoUrl?: string
   'data-testid'?: string
 }
 

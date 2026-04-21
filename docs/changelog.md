@@ -7748,6 +7748,22 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 
 ---
 
+## IMG-08 — FallbackCover 完整实现：type SVG 装饰 + brandLogoUrl 接口
+
+- **完成时间**：2026-04-20 18:20
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **关联任务**：IMG-08（PRE-M5 偏离修复）
+- **变更文件**：
+  - `apps/web-next/src/components/media/types.ts`：`FallbackCoverProps` 新增 `brandLogoUrl?: string`
+  - `apps/web-next/src/components/media/FallbackCover.tsx`：添加 5 种 type 专属 SVG 图标（TVIcon/AnimeIcon/VarietyIcon/DocumentaryIcon + 原有 FilmIcon）；`getTypeIcon()` 按 type 路由；`brandLogoUrl` 有值时底部右角渲染 `<img>` 替换 CSS 文字角标
+
+### 验收结果
+
+- typecheck ✅ / lint ✅ / 1206/1206 unit tests（116 files）✅
+
+---
+
 ## IMG-07 — loader 接口单元测试 + env 切换文档
 
 - **完成时间**：2026-04-20 17:55
