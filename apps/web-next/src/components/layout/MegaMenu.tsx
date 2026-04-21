@@ -69,12 +69,14 @@ export function MegaMenu({ trigger, items, onOpenChange, className }: MegaMenuPr
     }
   }
 
+  const FOCUSABLE = 'button:not([disabled]),a[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'
+
   function handleMenuKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Escape') {
       cancelTimers()
       setOpen(false)
       onOpenChange?.(false)
-      triggerRef.current?.querySelector<HTMLElement>('[tabindex]')?.focus()
+      triggerRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus()
     }
   }
 

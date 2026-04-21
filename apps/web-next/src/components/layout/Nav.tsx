@@ -80,7 +80,9 @@ export function Nav() {
   const currentType   = pathname.includes('/browse') ? (searchParams.get('type') ?? '') : null
 
   // Scroll-collapse: h-16 → h-12 past 80px
+  // Init from current scrollY so back/restore flows start in the right state
   useEffect(() => {
+    setCollapsed(window.scrollY > SCROLL_COLLAPSE_PX)
     function onScroll() {
       setCollapsed(window.scrollY > SCROLL_COLLAPSE_PX)
     }

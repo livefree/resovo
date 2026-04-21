@@ -117,6 +117,67 @@ describe('MegaMenu', () => {
     vi.useRealTimers()
   })
 
+  it('ArrowDown 键立即展开并 focus 第一个 menuitem', async () => {
+    vi.useFakeTimers()
+    const { MegaMenu } = await import('@/components/layout/MegaMenu')
+    const { container } = render(
+      <MegaMenu
+        trigger={<button type="button" data-testid="trig">更多</button>}
+        items={[
+          { key: 'movie', label: '电影', href: '/browse?type=movie' },
+          { key: 'anime', label: '动漫', href: '/browse?type=anime' },
+        ]}
+      />,
+    )
+    const wrapper = container.firstChild as HTMLElement
+    // Keyboard open via ArrowDown
+    fireEvent.keyDown(wrapper, { key: 'ArrowDown' })
+    // rAF flush
+    await act(async () => { vi.advanceTimersByTime(0) })
+    expect(screen.queryByTestId('mega-menu-panel')).toBeTruthy()
+    vi.useRealTimers()
+  })
+
+  it('Enter 键立即展开菜单', async () => {
+    vi.useFakeTimers()
+    const { MegaMenu } = await import('@/components/layout/MegaMenu')
+    const { container } = render(
+      <MegaMenu
+        trigger={<button type="button">更多</button>}
+        items={[{ key: 'a', label: 'A', href: '/a' }]}
+      />,
+    )
+    const wrapper = container.firstChild as HTMLElement
+    fireEvent.keyDown(wrapper, { key: 'Enter' })
+    await act(async () => { vi.advanceTimersByTime(0) })
+    expect(screen.queryByTestId('mega-menu-panel')).toBeTruthy()
+    vi.useRealTimers()
+  })
+
+  it('菜单内 Escape 将焦点返回触发按钮', async () => {
+    vi.useFakeTimers()
+    const { MegaMenu } = await import('@/components/layout/MegaMenu')
+    const { container } = render(
+      <MegaMenu
+        trigger={<button type="button" data-testid="close-trigger">更多</button>}
+        items={[{ key: 'a', label: 'A', href: '/a' }]}
+      />,
+    )
+    const wrapper = container.firstChild as HTMLElement
+    // Open via hover
+    fireEvent.mouseEnter(wrapper)
+    await act(async () => { vi.advanceTimersByTime(130) })
+    expect(screen.queryByTestId('mega-menu-panel')).toBeTruthy()
+
+    // Focus something inside menu, then press Escape
+    const panel = screen.getByTestId('mega-menu-panel')
+    fireEvent.keyDown(panel, { key: 'Escape' })
+    expect(screen.queryByTestId('mega-menu-panel')).toBeNull()
+    // trigger button should be focused
+    expect(document.activeElement).toBe(screen.getByTestId('close-trigger'))
+    vi.useRealTimers()
+  })
+
   it('active 项 aria 样式正确', async () => {
     vi.useFakeTimers()
     const { MegaMenu } = await import('@/components/layout/MegaMenu')
@@ -150,6 +211,7 @@ describe('Nav scroll-collapse', () => {
   })
 
   it('scrollY > 80px 后高度变为 h-12', async () => {
+    Object.defineProperty(window, 'scrollY', { writable: true, value: 0 })
     const { Nav } = await import('@/components/layout/Nav')
     render(<Nav />)
 
@@ -162,6 +224,19 @@ describe('Nav scroll-collapse', () => {
       const header = screen.getByTestId('global-nav')
       expect(header.className).toContain('h-12')
     })
+  })
+
+  it('挂载时 scrollY 已超 80px → 直接初始化为 h-12', async () => {
+    Object.defineProperty(window, 'scrollY', { writable: true, value: 150 })
+    const { Nav } = await import('@/components/layout/Nav')
+    render(<Nav />)
+
+    await waitFor(() => {
+      const header = screen.getByTestId('global-nav')
+      expect(header.className).toContain('h-12')
+    })
+    // reset
+    Object.defineProperty(window, 'scrollY', { writable: true, value: 0 })
   })
 })
 
