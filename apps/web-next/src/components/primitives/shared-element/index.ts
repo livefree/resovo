@@ -8,4 +8,4 @@ export {
   consumeSnapshot,
   registry,
 } from './registry'
-export type { SharedElementProps, SharedElementRef, SharedElementRegistry } from './types'
+export type { SharedElementProps, SharedElementRef, SharedElementRegistry, SharedElementComponent } from './types'

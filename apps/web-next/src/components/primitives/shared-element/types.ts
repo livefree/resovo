@@ -25,3 +25,11 @@ export interface SharedElementRegistry {
   unregister: (id: string) => void
   query: (id: string) => { element: HTMLElement; role: NonNullable<SharedElementProps['role']> } | null
 }
+
+export interface SharedElementComponent
+  extends React.ForwardRefExoticComponent<SharedElementProps & React.RefAttributes<SharedElementRef>> {
+  /** FLIP origin — captures snapshot on unmount; primary path via SharedElementLink */
+  Source: React.ForwardRefExoticComponent<SharedElementProps & React.RefAttributes<SharedElementRef>>
+  /** FLIP destination — runs FLIP animation on mount from matching Source snapshot */
+  Target: React.ForwardRefExoticComponent<SharedElementProps & React.RefAttributes<SharedElementRef>>
+}

@@ -99,10 +99,10 @@ describe('registry', () => {
   })
 })
 
-// ── SharedElement component ───────────────────────────────────────────────────
+// ── SharedElement / Source / Target ──────────────────────────────────────────
 
 describe('SharedElement', () => {
-  it('渲染 data-shared-element-id 属性', async () => {
+  it('基础组件渲染 data-shared-element-id 属性', async () => {
     const { SharedElement } = await import('@/components/primitives/shared-element/SharedElement')
     render(<SharedElement id="movie:1:cover">内容</SharedElement>)
     expect(screen.getByText('内容').closest('[data-shared-element-id]')).toBeTruthy()
@@ -113,6 +113,28 @@ describe('SharedElement', () => {
     const ref = createRef<import('@/components/primitives/shared-element/types').SharedElementRef>()
     render(<SharedElement id="movie:2:cover" ref={ref}>x</SharedElement>)
     expect(typeof ref.current?.getRect).toBe('function')
+  })
+
+  it('Source 渲染 data-shared-element-role="source"', async () => {
+    const { SharedElement } = await import('@/components/primitives/shared-element/SharedElement')
+    const { container } = render(<SharedElement.Source id="movie:3:cover">封面</SharedElement.Source>)
+    const el = container.querySelector('[data-shared-element-role="source"]')
+    expect(el).toBeTruthy()
+    expect(el!.getAttribute('data-shared-element-id')).toBe('movie:3:cover')
+  })
+
+  it('Target 渲染 data-shared-element-role="target"', async () => {
+    const { SharedElement } = await import('@/components/primitives/shared-element/SharedElement')
+    const { container } = render(<SharedElement.Target id="movie:4:cover">封面</SharedElement.Target>)
+    const el = container.querySelector('[data-shared-element-role="target"]')
+    expect(el).toBeTruthy()
+  })
+
+  it('Source 和 Target 是不同子组件', async () => {
+    const { SharedElement } = await import('@/components/primitives/shared-element/SharedElement')
+    expect(SharedElement.Source).toBeTruthy()
+    expect(SharedElement.Target).toBeTruthy()
+    expect(SharedElement.Source).not.toBe(SharedElement.Target)
   })
 })
 
