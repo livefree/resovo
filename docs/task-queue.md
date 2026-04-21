@@ -8853,11 +8853,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - SearchResults.Skeleton 已导出
      - typecheck ✅ / lint ✅ / unit ✅ / e2e ✅
 
-6. M5-PAGE-DETAIL-01 — 详情页重塑（消费 SharedElement）（状态：⬜ 未开始）
+6. M5-PAGE-DETAIL-01 — 详情页重塑（消费 SharedElement）（状态：✅ 完成）
    - 创建时间：2026-04-20 19:00
    - 计划开始：SEQ-20260420-M5-CARD ✅（尤其 M5-CARD-SHARED-01 ✅）后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-04-21 16:10
+   - 完成时间：2026-04-21
    - 建议模型：claude-sonnet-4-6
    - 规模：L（~240 分钟）
    - 依赖：SEQ-20260420-M5-CARD ✅

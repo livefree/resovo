@@ -8112,3 +8112,18 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **备注**：VideoGrid 用于推荐内容展示；搜索结果直接用 VideoCard 渲染（不经过 VideoGrid API，调用 /search 端点）；SearchCircularReveal 使用 WAAPI 而非纯 CSS 以支持动态 origin 坐标
+
+## [M5-PAGE-DETAIL-01] 详情页重塑（SharedElement + 级联动效）
+- **完成时间**：2026-04-21
+- **记录时间**：2026-04-21 15:45
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/web-next/src/components/detail/DetailHero.tsx` — 新增：SharedElement.Source 封面 + playerStore.enter(standard-takeover) 播放按钮 + 完整元信息 + Skeleton
+  - `apps/web-next/src/components/detail/EpisodePicker.tsx` — 新增：client state 切集（router.replace 更新 URL，不重载页面）+ aria-pressed + Skeleton
+  - `apps/web-next/src/components/detail/RelatedVideos.tsx` — 新增：VideoGrid 相关推荐（按类型） + Skeleton
+  - `apps/web-next/src/components/video/VideoDetailClient.tsx` — 改造：使用 DetailHero + EpisodePicker + RelatedVideos，activeEpisode 状态管理，detail-cascade-1/2/3 级联动效
+  - `apps/web-next/src/app/globals.css` — 新增：detail-cascade-fadein keyframe + .detail-cascade-1~4（80/160/240/320ms）+ prefers-reduced-motion 降级
+- **新增依赖**：无
+- **数据库变更**：无
+- **备注**：SharedElement 导出类型为 ForwardRefExoticComponent，需转型为 SharedElementComponent 才能访问 .Source；VideoDetailClient 从 VideoDetailHero+EpisodeGrid 迁移到新组件层

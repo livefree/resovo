@@ -357,6 +357,24 @@
   }
 }
 
+/* M5-PAGE-DETAIL-01 — 详情页级联入场动效（80/160/240/320ms） */
+@keyframes detail-cascade-fadein {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.detail-cascade-1 { animation: detail-cascade-fadein 320ms var(--ease-page) 80ms both; }
+.detail-cascade-2 { animation: detail-cascade-fadein 320ms var(--ease-page) 160ms both; }
+.detail-cascade-3 { animation: detail-cascade-fadein 320ms var(--ease-page) 240ms both; }
+.detail-cascade-4 { animation: detail-cascade-fadein 320ms var(--ease-page) 320ms both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .detail-cascade-1,
+  .detail-cascade-2,
+  .detail-cascade-3,
+  .detail-cascade-4 { animation: none !important; }
+}
+
 /* M5-PAGE-TABBAR-01 — z-index layer tokens (ADR-046 §8.3) */
 :root {
   --z-tabbar:      40;

@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { extractShortId } from '@/lib/video-detail'
-import { VideoDetailHero } from './VideoDetailHero'
-import { EpisodeGrid } from './EpisodeGrid'
+import { DetailHero } from '@/components/detail/DetailHero'
+import { EpisodePicker } from '@/components/detail/EpisodePicker'
+import { RelatedVideos } from '@/components/detail/RelatedVideos'
 import type { Video, ApiResponse } from '@resovo/types'
 
 interface Props {
@@ -12,9 +13,20 @@ interface Props {
   showEpisodes?: boolean
 }
 
+function VideoDetailClientSkeleton() {
+  return (
+    <div>
+      <div className="detail-cascade-1">
+        <DetailHero.Skeleton />
+      </div>
+    </div>
+  )
+}
+
 export function VideoDetailClient({ slug, showEpisodes }: Props) {
   const [video, setVideo] = useState<Video | null>(null)
   const [notFound, setNotFound] = useState(false)
+  const [activeEpisode, setActiveEpisode] = useState(1)
 
   useEffect(() => {
     const shortId = extractShortId(slug)
@@ -32,18 +44,23 @@ export function VideoDetailClient({ slug, showEpisodes }: Props) {
     )
   }
 
-  if (!video) {
-    return (
-      <div className="animate-pulse max-w-screen-xl mx-auto px-4 py-8">
-        <div className="h-64 rounded-xl" style={{ background: 'var(--bg-surface-sunken)' }} />
-      </div>
-    )
-  }
+  if (!video) return <VideoDetailClientSkeleton />
 
   return (
     <>
-      <VideoDetailHero video={video} />
-      {showEpisodes && <EpisodeGrid video={video} />}
+      <div className="detail-cascade-1">
+        <DetailHero video={video} episode={activeEpisode} />
+      </div>
+      {showEpisodes && video.episodeCount > 1 && (
+        <div className="detail-cascade-2">
+          <EpisodePicker video={video} onEpisodeChange={setActiveEpisode} />
+        </div>
+      )}
+      <div className="detail-cascade-3">
+        <RelatedVideos video={video} />
+      </div>
     </>
   )
 }
+
+VideoDetailClient.Skeleton = VideoDetailClientSkeleton
