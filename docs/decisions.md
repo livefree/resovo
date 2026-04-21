@@ -1270,3 +1270,276 @@ ADR-045 建立了 SafeImage/FallbackCover 的基础契约，但缺少：空 src 
 - **正面**：FallbackCover 具备结构化内容（title + type badge + brand badge + seed 渐变）；SafeImage 空 src 语义明确；loader 体系可运行时切换。
 - **负面**：FallbackCover 的品牌 logo 图片（`--brand-logo-mono-url`）需由 BrandProvider 在 DOM 注入才能生效；本 ADR 只定义变量约定，BrandProvider 注入为后续任务。
 - **Arch-reviewer 审计**：PASS（claude-opus-4-6，2026-04-20）
+
+---
+
+## ADR-048: 列表→播放器直达路径与卡片交互协议（v1.1）
+
+- **状态**: Accepted
+- **日期**: 2026-04-20
+- **决策者**: arch-reviewer (claude-opus-4-6)
+- **执行模型**: claude-opus-4-6（主循环）
+- **关联 ADR**: ADR-041（GlobalPlayerHost 状态机）/ ADR-042（/watch URL + RoutePlayerSync）/ ADR-044（View Transitions + SharedElement + RouteStack primitives）
+- **关联方案章节**: `docs/frontend_redesign_plan_20260418.md` §9（过渡动效）/ §10（HeroBanner）/ §12（详情页）/ §13（播放器三态）/ §14.1（移动 Tab Bar）/ §15.3-§15.4（Skeleton）/ §16（组件清单）
+- **触发上下文**: M5 页面重置前置决策阶段，补齐方案 §19 五类决策缺口
+- **注**: 补丁文档 `task_queue_patch_m5_card_protocol_20260420_v1_1.md` 中引用为"ADR-046"，因 ADR-046/047 已被 IMG 管线占用，实际编号为 ADR-048
+
+### 1. 背景
+
+方案 `docs/frontend_redesign_plan_20260418.md` §19 将 M5 定义为"页面重塑 4-5 张卡片"，但对以下五类关键交互与视觉决策未下结论，若带着缺口进入执行将复现 REGRESSION 阶段"方案与执行错位"的偏差模式：
+
+1. **列表→播放器直达路径丢失**。ADR-042 锁定了 `/watch/[slug]` URL 保留策略，但 apps/web-next 的 VideoCard 当前仅有"点击卡片→详情页"一条出口。apps/web 时期的"卡片右上角悬浮 ▶ 直达播放"能力在迁移过程中丢失，用户从列表页到达播放器必须经过详情页中转，多一次导航。
+
+2. **卡片内容协议空白**。§16 列出了 VideoCard primitive 但未定义标签体系（生命周期/热度/规格/评分的上限、互斥规则）、文字区字段排布（片名行 + 元信息行）、集数显示规则（连载中 vs 已完结 vs 电影时长）。
+
+3. **多集视频卡无视觉差异化**。series/anime/tvshow 与 movie 共用同一卡片视觉，无法在网格浏览阶段传达"此内容包含多集"的信息。
+
+4. **Tab Bar 与 MiniPlayer 叠加协议缺位**。§14.1 定义了移动端三 Tab 玻璃底栏，§13 定义了 GlobalPlayerHost mini 态，但二者在底部 56px 区域同时渲染时的 z-index、safe-area-inset 吸收责任、动画隔离规则均未声明。
+
+5. **Primitive 激活归属不明**。REGRESSION 阶段产出的 SharedElement（noop）、RouteStack（stub）、PageTransition Sibling variant（noop）需要在 M5 真实实装，但"哪张执行卡负责激活哪个 primitive"未分配，存在多卡抢占或无人实装的风险。
+
+本 ADR 作为 M5 序列的决策锚点，一次性锁定上述五项协议，后续 CARD/PAGE 卡片按本 ADR 约束实施。
+
+### 2. 交互协议 — VideoCard 双出口（路径 B' 定制版）
+
+VideoCard 将卡片可交互面积划分为两个语义区域，各自绑定独立目的地：
+
+**图片区（上半区域）**：点击触发 Fast Takeover（见 §3），导航至 `/watch/[slug]?ep=1`，由 GlobalPlayerHost 接管渲染（ADR-041）。此区域由 `<VideoCard.PosterAction>` 承载，语义为"立即播放"。
+
+**文字区（下半区域）**：点击导航至 `/{type}/[slug]` 详情页，走标准路由跳转。此区域由 `<VideoCard.MetaAction>` 承载，语义为"查看详情"。
+
+**容错区**：图片区与文字区之间的 8px 中轴间隙归属文字区（详情页），因为误触播放的代价（启动播放器 + 消耗带宽）高于误触详情页。
+
+**桌面端增强**：hover 时在图片区中央淡入悬浮 ▶ 播放按钮（规格见 §3），提供视觉提示。
+
+**长按/右键**：移动端长按与桌面端右键触发上下文菜单（收藏/分享/稍后观看）。M5 阶段仅预留事件绑定点与 Props 接口，不实装菜单内容。
+
+**键盘无障碍**：Tab 顺序固定为 PosterAction（播放） → MetaAction（详情），与视觉自上而下的阅读顺序一致。两个 action 各自持有独立 `aria-label`（如 "播放《片名》第一集" / "查看《片名》详情"）。
+
+### 3. 动效规格
+
+#### 3.1 Fast Takeover（新增变体，对应方案 §9.5）
+
+从列表页 VideoCard 图片区直达播放器的过渡动效。总时长移动端 200ms / 桌面端 240ms，easing `cubic-bezier(0.4, 0, 0.2, 1)`。
+
+| 阶段 | 时间占比 | 视觉行为 |
+|------|---------|---------|
+| A（0-60%）| 移动 0-120ms / 桌面 0-144ms | 图片层 scale 1.0 → 1.03；遮罩层 `rgba(0,0,0,0.9)` 从 opacity 0 淡入至 1 |
+| B（60-100%）| 移动 120-200ms / 桌面 144-240ms | 卡片图像 flip 过渡至播放器 poster 位；字幕轨道与播放控件 opacity 0 → 1 淡入 |
+
+`prefers-reduced-motion` 降级：跳过 scale 缩放与 flip 翻转，仅执行 opacity 交叉淡入，时长 120ms。
+
+`playerStore.enter()` 扩展 transition 参数以区分来源：`transition: 'fast-takeover' | 'standard-takeover'`。GlobalPlayerHost 根据此参数选择对应动画序列。
+
+#### 3.2 Standard Takeover（保持不变）
+
+从详情页触发播放器接管的过渡动效，总时长 360ms，规格沿用方案 §9.3 既有定义。`prefers-reduced-motion` 降级为 opacity 200ms 交叉淡入。
+
+#### 3.3 悬浮 ▶ 播放按钮（桌面端）
+
+尺寸 44x44px（满足触控最小目标），居中定位于图片区。视觉：背景 `var(--overlay-heavy)` + `backdrop-filter: blur(8px)`，图标使用 `var(--fg-on-overlay)` 颜色。进入动画 opacity 0 → 1 共 120ms，离开动画 opacity 1 → 0 共 90ms（离开快于进入，减少残影感）。
+
+所有颜色值通过 CSS 变量引用，不硬编码 rgba 数字。`--overlay-heavy` 与 `--fg-on-overlay` 在 design-tokens 中定义，暗色模式自动适配。
+
+### 4. 卡片内容协议
+
+#### 4.1 标签上限与位置
+
+图片区内标签按四象限布局，各象限有独立上限：
+
+- **左上**：文字标签 ≤ 2 个，纵向堆叠（生命周期 + 热度/运营）
+- **右上**：评分标签 ≤ 1 个
+- **右下**：规格图标 ≤ 2 个，横向排列
+
+当多维度标签共存时，按上述上限截断，不换行不溢出。截断优先级：热度/运营先于生命周期被丢弃（生命周期对用户决策价值更高）。
+
+#### 4.2 标签维度与互斥规则
+
+| 维度 | 典型值 | 互斥规则 | 视觉形态 |
+|------|--------|---------|---------|
+| 生命周期 | 新片 / 即将上线 / 连载中 / 已完结 / 下架预警 | 五选一，同一视频只能处于一个生命阶段 | 文字标签，左上角 |
+| 热度/运营 | 热门 / 本周 Top / 独家 / 编辑推荐 | 最多选 1 个，运营类标签由后台手动标注 | 文字标签，左上角 |
+| 规格 | 4K / HDR / 杜比 / 中字 / 多语 | 独立判定，不互斥，但展示上限 2 个 | 图标，右下角 |
+| 评分 | 豆瓣 9.1 / IMDb 8.7 | 独立判定，展示上限 1 个（优先豆瓣） | 数字标签，右上角 |
+
+标签颜色通过 CSS 变量（如 `--tag-lifecycle-bg`, `--tag-hot-bg`）定义，暗色模式下自动切换对应暗色 Token，不硬编码任何颜色值。
+
+#### 4.3 文字区规则
+
+文字区固定两行，确保网格中卡片高度对齐：
+
+- **Line 1 — 片名**：`line-clamp: 1`，字号 14-15px，`font-weight: 600`，颜色 `var(--fg-default)`
+- **Line 2 — 元信息**：字号 12px，`font-weight: 400`，颜色 `var(--fg-muted)`，格式为 `{year} · {type_label} · {episodeInfo}`
+
+episodeInfo 按视频类型差异化：
+- `series` / `anime` / `tvshow`：已完结显示"全 {n} 集"，连载中显示"更新至 {n} 集"
+- `movie`：显示时长如"102 min"
+- `short` / `clip`：省略 episodeInfo 字段，Line 2 以 `{year} · {type_label}` 结尾
+
+年份缺失时该位留空并省略前导分隔符。type_label 使用 i18n key 而非硬编码中文。
+
+#### 4.4 新增维度变更约束
+
+标签维度的新增（如"限免"、"付费"、"VIP"等商业标签）属于架构级变更，必须通过 ADR 流程审批后才能实施，不得直接修改代码添加新维度。原因：标签维度影响后端 schema、前端渲染逻辑、design-tokens 三层，单点修改会导致不一致。
+
+#### 4.5 Skeleton 骨架屏契约
+
+M5 阶段所有新建组件必须同时导出 `.Skeleton` 子组件（如 `VideoCard.Skeleton`、`HeroBanner.Skeleton`），作为数据加载中的占位渲染。
+
+**Skeleton primitive**：通用骨架屏原子组件 `<Skeleton>`，支持三种形态：
+- `rect`：矩形占位，可指定 width/height/borderRadius
+- `circle`：圆形占位，指定 diameter
+- `text`：文字行占位，可指定行数与行高
+
+Shimmer 动画使用 CSS 变量定义底色与高光色（浅色模式 `var(--skeleton-base)` / `var(--skeleton-highlight)`，暗色模式对称 Token），1.5s 无限循环。
+
+**三档触发门槛**：
+- 数据在 300ms 内到达：不展示 Skeleton（避免闪烁）
+- 300ms - 1000ms：展示 Skeleton
+- 超过 1000ms：展示 Skeleton + 顶部细进度条
+
+**像素级匹配要求**：每个 `.Skeleton` 子组件的外部尺寸（width, height, margin, padding）必须与对应实际组件精确一致，防止数据到达后产生 layout shift。此项为 AI-CHECK 六问强制检查项 — M5 任何 PR 中新增组件未导出 `.Skeleton` 或 Skeleton 尺寸不匹配，直接判定 FAIL。
+
+### 5. 多集视频卡视觉 — StackedPosterFrame
+
+#### 5.1 触发条件
+
+当 `video.type` 属于 `{'series', 'anime', 'tvshow'}` 时，VideoCard 的图片区使用 `<StackedPosterFrame>` 渲染伪堆叠效果，暗示内容包含多集。`movie`、`short`、`clip` 类型保持单卡片视觉，不渲染堆叠。
+
+#### 5.2 静置态 — 方案 A（阴影暗示）
+
+通过 `box-shadow` 模拟两张底层卡片错位堆叠的视觉效果，不增加实际 DOM 节点：
+
+```css
+.stacked-poster {
+  box-shadow:
+    3px -2px 0 0 color-mix(in oklch, var(--surface-2) 60%, transparent),
+    6px -4px 0 0 color-mix(in oklch, var(--surface-2) 30%, transparent),
+    0 4px 12px var(--shadow-card-rest);
+}
+```
+
+所有颜色引用 CSS 变量：`--surface-2` 为卡片表面色（暗色模式自动切换），`--shadow-card-rest` 为静置阴影色。阴影层使用 `color-mix(in oklch, ...)` 确保色彩空间一致性，不使用 rgba 硬编码。
+
+堆叠阴影层标记 `aria-hidden="true"`，不向屏幕阅读器暴露装饰性信息。
+
+#### 5.3 桌面 hover 态时序（总 200ms）
+
+| 阶段 | 时间区间 | 视觉行为 |
+|------|---------|---------|
+| A | 0 - 80ms | 主卡 `scale(1.0 → 1.02)`；底部阴影 `--shadow-card-rest` → `--shadow-card-hover`（加深） |
+| B | 80 - 160ms | 第一层堆叠阴影偏移扩展至 `6px / -4px`，不透明度提升至 0.5 |
+| C | 160 - 200ms | 第二层堆叠阴影偏移扩展至 `10px / -6px`，不透明度提升至 0.25；悬浮 ▶ 播放按钮同步淡入 |
+
+三阶段使用 CSS `@keyframes` 配合 `animation-delay` 实现渐进展开效果。easing 统一为 `cubic-bezier(0.4, 0, 0.2, 1)`。
+
+#### 5.4 reduced motion 降级
+
+跳过 scale 缩放与分阶段阴影动画，hover 时直接切换至最终阴影状态（无过渡），即 `transition: none`。确保无运动障碍用户仍可感知 hover 反馈（通过阴影变化而非动画）。
+
+### 6. 组件边界
+
+M5 卡片相关组件拆分如下，职责单一，不交叉：
+
+**`<VideoCard>`** — 复合容器组件，渲染为 `<article>` 语义元素。内部编排 PosterAction、MetaAction、TagLayer、StackedPosterFrame。不包含业务逻辑（数据获取、路由构建由调用方传入）。
+
+- **`<VideoCard.PosterAction>`** — 独立 `<button>` 元素，占据图片区域。点击触发 Fast Takeover，调用 `playerStore.enter({ slug, episode: 1, transition: 'fast-takeover' })`。持有独立 `aria-label`。
+- **`<VideoCard.MetaAction>`** — 独立 `<Link>` 元素（Next.js Link），占据文字区域。href 指向 `/{type}/[slug]` 详情页。持有独立 `aria-label`。
+- **`<VideoCard.Skeleton>`** — 骨架屏变体，像素级匹配 VideoCard 实际尺寸。
+
+**`<TagLayer>`** — 标签渲染层 primitive。接收结构化标签数据（生命周期、热度、规格、评分），按 §4.1 四象限规则渲染。不关心标签来源与计算逻辑。
+
+**`<StackedPosterFrame>`** — 多集堆叠视觉 primitive。接收 `isMultiEpisode: boolean` 控制堆叠渲染。内部管理 box-shadow 与 hover 时序动画。非多集类型时渲染为普通容器（无阴影）。
+
+**`<Skeleton>`** — 通用骨架屏 primitive。Props: `shape: 'rect' | 'circle' | 'text'`、`width`、`height`、`delay?: number`。被所有 `.Skeleton` 子组件内部消费。
+
+### 7. 验收清单
+
+以下为 M5 CARD/PAGE 阶段所有涉及卡片交互的 PR 必须通过的门禁项：
+
+- [ ] **a11y — 独立 aria-label**：PosterAction 与 MetaAction 各自持有描述性 `aria-label`，不共用父级标签
+- [ ] **a11y — 装饰隐藏**：StackedPosterFrame 的堆叠阴影层标记 `aria-hidden="true"`
+- [ ] **reduced motion — Fast Takeover**：`prefers-reduced-motion: reduce` 时降级为 opacity 120ms 交叉淡入
+- [ ] **reduced motion — Standard Takeover**：降级为 opacity 200ms 交叉淡入
+- [ ] **reduced motion — 堆叠 hover**：跳过 scale 与分阶段动画，仅切换最终阴影状态
+- [ ] **暗色模式**：所有视觉属性（颜色、阴影、标签背景）通过 CSS 变量引用 design-tokens，不出现 `#hex`、`rgb()`、`rgba()` 硬编码值
+- [ ] **容器查询**：桌面端 vs 移动端的布局判定使用 `@container` 查询（基于父容器宽度），不使用 `@media` viewport 断点
+- [ ] **键盘 Tab 顺序**：Tab 焦点依次经过 PosterAction → MetaAction，与 DOM 顺序一致
+- [ ] **Skeleton 导出**：每个新建组件必须导出 `.Skeleton` 子组件
+- [ ] **Skeleton 尺寸匹配**：`.Skeleton` 外部尺寸与实际组件像素级一致，CLS 为 0
+
+### 8. Tab Bar 与 MiniPlayer 叠加协议
+
+#### 8.1 布局规则
+
+移动端底部同时存在 Tab Bar 与 MiniPlayer（当有播放中内容时），二者的空间分配协议如下：
+
+- **Tab Bar**：固定定位底部，高度 56px，`z-index: var(--z-tab-bar)` (值 40)。Tab Bar 自身通过 `padding-bottom: env(safe-area-inset-bottom)` 吸收 iPhone 等设备的底部安全区，实际占据高度为 `56px + safe-area-inset`。
+- **MiniPlayer mini 态**：紧贴 Tab Bar 顶部，`z-index: var(--z-player-mini)` (值 50)，`bottom: calc(56px + env(safe-area-inset-bottom))`。MiniPlayer 不重复声明 `env(safe-area-inset-bottom)` 作为自身 padding — safe-area 吸收责任归且仅归 Tab Bar。
+- **页面内容区**：底部设置 `padding-bottom: calc(56px + env(safe-area-inset-bottom))` 避让 Tab Bar，确保最末内容不被遮盖。
+
+#### 8.2 交互隔离
+
+Tab Bar 与 MiniPlayer 的交互动效各自独立，互不触发：
+
+- Tab 切换时执行 180ms 下划线滑动动效，此过程不触发 MiniPlayer 的 FLIP 计算
+- MiniPlayer 在 full 态与 mini 态之间切换时，Tab Bar 保持可见且不参与动画（full 态全屏遮盖时 Tab Bar 自然被覆盖，但不执行隐藏/显示逻辑）
+- 路由切换时 Tab Bar 的 active 指示器随当前路由更新；MiniPlayer 不卸载不重挂（遵循 ADR-042 RoutePlayerSync 协议，确保断点续播不中断）
+
+#### 8.3 z-index 全站层级表（M5 治理）
+
+M5 阶段统一治理全站 z-index，所有层级通过 CSS 变量声明，禁止在组件中使用裸数字：
+
+```
+变量名                              值    用途
+--z-player-full-cinema              70    GlobalPlayerHost full 态（影院模式）
+--z-player-full                     60    GlobalPlayerHost full 态（常规）
+--z-player-mini                     50    GlobalPlayerHost mini 态
+--z-tab-bar                         40    移动端 Tab Bar
+--z-modal                           30    Modal 对话框 / 上下文菜单 / ConfirmReplaceDialog
+--z-header                          20    Header（scroll-collapsed 收缩态）
+--z-mega-menu                       15    MegaMenu 展开面板
+--z-content                          0    默认内容层
+```
+
+层级变量在 `globals.css` 的 `:root` 中统一定义。新增层级必须在本表注册并更新 ADR，不得跳号或在组件内自行定义 z-index 数值。
+
+#### 8.4 Safe Area 分工协议
+
+safe-area-inset 的吸收遵循"单一责任"原则，避免重复叠加：
+
+| 组件 | safe-area-inset-bottom 处理方式 |
+|------|-------------------------------|
+| Tab Bar | `padding-bottom: env(safe-area-inset-bottom)` — 作为唯一吸收方 |
+| MiniPlayer | `bottom: calc(56px + env(safe-area-inset-bottom))` — 引用 Tab Bar 总高度定位，不自行吸收 inset |
+| 页面内容区 | `padding-bottom: calc(56px + env(safe-area-inset-bottom))` — 避让 Tab Bar 总高度 |
+
+56px 应通过 CSS 变量 `var(--tab-bar-height)` 引用，不硬编码数字。
+
+#### 8.5 反例（禁止实现）
+
+- **禁止** MiniPlayer 使用硬编码 `bottom: 72px` — 必须引用 `calc(var(--tab-bar-height) + env(safe-area-inset-bottom))`
+- **禁止** Tab Bar 与 MiniPlayer 同时声明 `padding-bottom: env(safe-area-inset-bottom)` — safe-area 仅由 Tab Bar 吸收一次
+- **禁止** 路由切换过程中先卸载 MiniPlayer 再重新挂载 — 破坏 FLIP 动画连续性与断点续播（违反 ADR-042）
+- **禁止** z-index 使用裸数字（如 `z-index: 50`）而非 CSS 变量（如 `z-index: var(--z-player-mini)`）
+
+### 后果
+
+**正面收益**：
+- VideoCard 双出口恢复了从列表页直达播放器的能力，用户省去"列表 → 详情 → 播放"的中间跳转，核心路径缩短一步
+- 卡片内容协议统一了标签体系与文字区规则，防止各页面（首页/分类/搜索）的卡片实现分叉
+- StackedPosterFrame 为多集内容提供即时视觉辨识，无额外 DOM 开销（纯 CSS 实现）
+- z-index 全站治理表消除了 M5 多组件并发实装时的层叠冲突风险
+- Skeleton 契约前置，避免组件上线后再补骨架屏导致 layout shift 回归
+
+**负面成本**：
+- VideoCard 从单入口变为双入口，复杂度增加（两个独立 action + 容错区判定），测试矩阵翻倍
+- Fast Takeover 动效需要与 `playerStore.enter()` 深度协调，增加 GlobalPlayerHost 的条件分支
+- §8 的 z-index 层级表为全站约束，后续任何涉及定位层叠的开发都必须先查表再实施，流程摩擦增加
+
+**风险**：
+- Fast Takeover 的 200ms 时间窗较短，低端移动设备可能无法在此窗口内完成图片到播放器 poster 的 flip 过渡，需在实装阶段（M5-CARD-CTA-01）做真机性能验证，必要时延长至 280ms
+- `color-mix(in oklch, ...)` 的浏览器兼容性需确认（Chrome 111+, Safari 16.2+, Firefox 113+），若 baseline 不满足需准备 fallback 方案
+- 上下文菜单（长按/右键）M5 仅预留不实装，但 PosterAction 的 `onContextMenu` 事件拦截可能与浏览器默认行为冲突，需在 M5-CARD-CTA-01 验证
+
+**Arch-reviewer 审计**：PASS（claude-opus-4-6，2026-04-21）

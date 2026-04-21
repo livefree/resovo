@@ -7813,3 +7813,20 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 ### 验收结果
 
 - typecheck ✅ / lint ✅ / 1210/1210 unit tests（117 files）✅
+
+---
+
+## [M5-PREP-01] ADR-048 撰写（§1-§8 全章节）
+- **完成时间**：2026-04-21
+- **记录时间**：2026-04-21
+- **执行模型**：claude-opus-4-6
+- **子代理**：arch-reviewer (claude-opus-4-6) — ADR-048 全文独立撰写 + 审计 PASS
+- **修改文件**：
+  - `docs/decisions.md` — 文末追加 ADR-048: 列表→播放器直达路径与卡片交互协议（v1.1），含 §1 背景 / §2 交互协议 / §3 动效 / §4 卡片内容+§4.5 Skeleton / §5 多集视觉 / §6 组件边界 / §7 验收清单 / §8 Tab Bar↔MiniPlayer 叠加协议
+  - `docs/task-queue.md` — M5-PREP-01 状态更新为 ✅
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 补丁文档 `task_queue_patch_m5_card_protocol_20260420_v1_1.md` 中引用为"ADR-046"，因 ADR-046/047 已被 IMG 管线占用，实际编号为 **ADR-048**。后续 M5-PREP-02 回写方案文档时需将所有 "ADR-046" 引用更新为 "ADR-048"
+  - §8.3 z-index 层级表为全站约束，新增层级必须先在 ADR-048 注册
+  - `color-mix(in oklch, ...)` 浏览器兼容性需在 M5-CARD-STACK-01 实装时验证
