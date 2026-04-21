@@ -14,9 +14,13 @@ export function GlobalPlayerFullFrame() {
   const frameRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (transition === 'fast-takeover' && frameRef.current) {
-      const anim = applyFastTakeoverEntry(frameRef.current)
-      anim.onfinish = () => usePlayerStore.setState({ transition: null })
+    if (transition !== 'fast-takeover' || !frameRef.current) return
+    const anim = applyFastTakeoverEntry(frameRef.current)
+    anim.onfinish = () => usePlayerStore.setState({ transition: null })
+    // Cancel animation and clear state on unmount or if transition changes mid-flight
+    return () => {
+      anim.cancel()
+      usePlayerStore.setState({ transition: null })
     }
   }, [transition])
 

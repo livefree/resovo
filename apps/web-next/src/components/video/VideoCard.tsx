@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { getVideoDetailHref } from '@/lib/video-route'
 import { SafeImage } from '@/components/media'
@@ -54,7 +55,9 @@ function VideoCardSkeleton({ className }: { className?: string }) {
 
 export function VideoCard({ video, className }: VideoCardProps) {
   const enter = usePlayerStore((s) => s.enter)
+  const router = useRouter()
   const detailHref = getVideoDetailHref(video)
+  const watchHref = `/watch/${video.slug ? `${video.slug}-${video.shortId}` : video.shortId}?ep=1`
 
   function handlePosterClick() {
     enter({
@@ -63,6 +66,8 @@ export function VideoCard({ video, className }: VideoCardProps) {
       episode: 1,
       transition: 'fast-takeover',
     })
+    // Update URL so refresh/share/back land on /watch — ADR-042 + ADR-048 §2
+    router.push(watchHref)
   }
 
   return (

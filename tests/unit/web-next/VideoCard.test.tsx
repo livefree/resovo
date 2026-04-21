@@ -11,10 +11,13 @@ vi.mock('next/link', () => ({
   ),
 }))
 
+const mockPush = vi.fn()
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush }),
+}))
+
 vi.mock('@/components/media', () => ({
-  SafeImage: ({ alt, aspect }: { alt: string; aspect?: string }) => (
-    <img alt={alt} data-aspect={aspect} />
-  ),
+  SafeImage: ({ alt }: { alt: string }) => <img alt={alt} />,
 }))
 
 vi.mock('@/lib/report-broken-image', () => ({
@@ -22,7 +25,6 @@ vi.mock('@/lib/report-broken-image', () => ({
 }))
 
 const mockEnter = vi.fn()
-
 vi.mock('@/stores/playerStore', () => ({
   usePlayerStore: (selector: (s: { enter: typeof mockEnter }) => unknown) =>
     selector({ enter: mockEnter }),
@@ -55,13 +57,13 @@ function makeVideo(overrides?: Partial<VideoCardType>): VideoCardType {
 describe('VideoCard', () => {
   beforeEach(() => {
     mockEnter.mockClear()
+    mockPush.mockClear()
   })
 
   describe('双出口', () => {
     it('点击图片区(PosterAction)调用 playerStore.enter() 携带 fast-takeover', () => {
       render(<VideoCard video={makeVideo()} />)
-      const posterBtn = screen.getByRole('button', { name: '播放《演示视频》第 1 集' })
-      fireEvent.click(posterBtn)
+      fireEvent.click(screen.getByRole('button', { name: '播放《演示视频》第 1 集' }))
       expect(mockEnter).toHaveBeenCalledOnce()
       expect(mockEnter).toHaveBeenCalledWith({
         shortId: 'ab12cd34',
@@ -71,37 +73,36 @@ describe('VideoCard', () => {
       })
     })
 
-    it('文字区(MetaAction)链接指向详情页', () => {
+    it('点击图片区同时 router.push 到 /watch URL（ADR-042 URL 契约）', () => {
       render(<VideoCard video={makeVideo()} />)
-      const metaLink = screen.getByRole('link', { name: '演示视频 详情页' }) as HTMLAnchorElement
-      expect(metaLink.getAttribute('href')).toBe('/movie/demo-title-ab12cd34')
+      fireEvent.click(screen.getByRole('button', { name: '播放《演示视频》第 1 集' }))
+      expect(mockPush).toHaveBeenCalledOnce()
+      expect(mockPush).toHaveBeenCalledWith('/watch/demo-title-ab12cd34?ep=1')
     })
 
-    it('slug 为 null 时 enter() 传 null slug，MetaAction 回退到 shortId 路径', () => {
+    it('slug 为 null 时 watch URL 回退到 shortId', () => {
       render(<VideoCard video={makeVideo({ slug: null })} />)
       fireEvent.click(screen.getByRole('button', { name: '播放《演示视频》第 1 集' }))
-      expect(mockEnter).toHaveBeenCalledWith(
-        expect.objectContaining({ slug: null, shortId: 'ab12cd34' }),
-      )
+      expect(mockPush).toHaveBeenCalledWith('/watch/ab12cd34?ep=1')
+    })
+
+    it('文字区(MetaAction)链接指向详情页，不触发 router.push', () => {
+      render(<VideoCard video={makeVideo()} />)
       const link = screen.getByRole('link', { name: '演示视频 详情页' }) as HTMLAnchorElement
-      expect(link.getAttribute('href')).toBe('/movie/ab12cd34')
+      expect(link.getAttribute('href')).toBe('/movie/demo-title-ab12cd34')
+      // MetaAction 是 <a>，点击由浏览器处理，不调用 router.push
+      fireEvent.click(link)
+      expect(mockPush).not.toHaveBeenCalled()
     })
   })
 
   describe('Tab 顺序 / 无障碍', () => {
-    it('DOM 中 PosterAction 在 MetaAction 之前', () => {
+    it('DOM 中 PosterAction(button) 在 MetaAction(a) 之前', () => {
       render(<VideoCard video={makeVideo()} />)
       const article = screen.getByTestId('video-card')
-      const button = screen.getByRole('button')
-      const link = screen.getByRole('link', { name: '演示视频 详情页' })
-
-      // button 应先于 link 出现在 DOM 中
-      expect(
-        article.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_PRECEDING,
-      ).toBe(0) // button is NOT preceding article (it's inside)
-      const allInteractives = article.querySelectorAll('button, a')
-      expect(allInteractives[0].tagName).toBe('BUTTON')
-      expect(allInteractives[1].tagName).toBe('A')
+      const interactives = article.querySelectorAll('button, a')
+      expect(interactives[0].tagName).toBe('BUTTON')
+      expect(interactives[1].tagName).toBe('A')
     })
 
     it('PosterAction aria-label 包含片名', () => {
@@ -116,7 +117,7 @@ describe('VideoCard', () => {
   })
 
   describe('VideoCard.Skeleton', () => {
-    it('Skeleton 子组件可正常渲染，data-testid 为 video-card-skeleton', () => {
+    it('Skeleton 子组件可正常渲染', () => {
       render(<VideoCard.Skeleton />)
       expect(screen.getByTestId('video-card-skeleton')).toBeTruthy()
     })
