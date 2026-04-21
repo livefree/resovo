@@ -7,6 +7,8 @@ import { usePlayerStore } from '@/stores/playerStore'
 const EDGE_THRESHOLD_PX = 20
 const DISTANCE_RATIO = 0.3
 const VELOCITY_THRESHOLD = 0.5 // px/ms
+// Reject gestures where vertical component exceeds horizontal (scroll intent)
+const MAX_VERTICAL_RATIO = 1.0
 
 export interface EdgeSwipeBackOptions {
   /** Reverse animation duration in ms (default: 240) */
@@ -29,6 +31,7 @@ export function useEdgeSwipeBack(
     startY: number
     startTime: number
     lastX: number
+    lastY: number
     lastTime: number
   } | null>(null)
 
@@ -84,6 +87,7 @@ export function useEdgeSwipeBack(
         startY: touch.clientY,
         startTime: performance.now(),
         lastX: touch.clientX,
+        lastY: touch.clientY,
         lastTime: performance.now(),
       }
     }
@@ -95,6 +99,7 @@ export function useEdgeSwipeBack(
 
       const now = performance.now()
       swipeState.current.lastX = touch.clientX
+      swipeState.current.lastY = touch.clientY
       swipeState.current.lastTime = now
     }
 
@@ -104,8 +109,12 @@ export function useEdgeSwipeBack(
       swipeState.current = null
 
       const dx = state.lastX - state.startX
+      const dy = Math.abs(state.lastY - state.startY)
       const dt = state.lastTime - state.startTime
       if (dx <= 0 || dt <= 0) return
+
+      // Reject if gesture is primarily vertical (scroll intent)
+      if (dy > dx * MAX_VERTICAL_RATIO) return
 
       const velocity = dx / dt
       const screenRatio = dx / window.innerWidth

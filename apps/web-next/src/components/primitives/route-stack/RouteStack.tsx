@@ -22,7 +22,8 @@ export function RouteStack({ rootPathname: _rootPathname, children }: RouteStack
   const value = useMemo(() => NoopAPI, [])
   return (
     <RouteStackContext.Provider value={value}>
-      <div ref={containerRef} style={{ display: 'contents' }}>
+      {/* Real block box required — WAAPI translateX animation needs a rendered surface */}
+      <div ref={containerRef} data-routestack-container style={{ width: '100%' }}>
         {children}
       </div>
     </RouteStackContext.Provider>

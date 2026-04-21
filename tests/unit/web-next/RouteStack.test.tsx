@@ -137,6 +137,32 @@ describe('useEdgeSwipeBack', () => {
     expect(mockBack).not.toHaveBeenCalled()
   })
 
+  it('竖向手势（|dy| > |dx|）: 不触发 back()', async () => {
+    window.matchMedia = makeMatchMedia(true)
+    const { useEdgeSwipeBack } = await import('@/hooks/useEdgeSwipeBack')
+    const ref = createRef<HTMLDivElement>()
+
+    function TestComp() {
+      useEdgeSwipeBack(ref as React.RefObject<HTMLDivElement | null>)
+      return <div ref={ref}>content</div>
+    }
+
+    render(<TestComp />)
+    await act(async () => {
+      // dx = 200px (large), but dy = 300px → primarily vertical scroll
+      fireEvent.touchStart(ref.current!, {
+        touches: [{ clientX: 10, clientY: 200, identifier: 0 }],
+      })
+      fireEvent.touchMove(ref.current!, {
+        touches: [{ clientX: 210, clientY: 500, identifier: 0 }],
+      })
+      fireEvent.touchEnd(ref.current!, { touches: [] })
+      await new Promise((r) => setTimeout(r, 50))
+    })
+
+    expect(mockBack).not.toHaveBeenCalled()
+  })
+
   it('向左滑动（负方向 dx）: 不触发 back()', async () => {
     window.matchMedia = makeMatchMedia(true)
     const { useEdgeSwipeBack } = await import('@/hooks/useEdgeSwipeBack')
@@ -196,6 +222,15 @@ describe('RouteStack', () => {
     const { RouteStack } = await import('@/components/primitives/route-stack/RouteStack')
     render(<RouteStack><span>子内容</span></RouteStack>)
     expect(screen.getByText('子内容')).toBeTruthy()
+  })
+
+  it('容器是真实 box（data-routestack-container，非 display:contents）', async () => {
+    const { RouteStack } = await import('@/components/primitives/route-stack/RouteStack')
+    const { container } = render(<RouteStack><span>x</span></RouteStack>)
+    const box = container.querySelector('[data-routestack-container]')
+    expect(box).toBeTruthy()
+    expect(box!.tagName).toBe('DIV')
+    expect((box as HTMLElement).style.display).not.toBe('contents')
   })
 
   it('useRouteStack 返回 NoopAPI（状态机未实装）', async () => {
