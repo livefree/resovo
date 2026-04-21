@@ -3,9 +3,9 @@
 const FRONTEND_URL =
   process.env['NEXT_PUBLIC_FRONTEND_URL'] ??
   process.env['NEXT_PUBLIC_WEB_URL'] ??
-  'http://localhost:3000'
+  'http://localhost:3002'
 
-const PREVIEW_PATH = '/en/__dev/fallback-preview'
+const PREVIEW_PATH = '/en/dev/fallback-preview'
 
 export function FallbackPreviewPage() {
   const previewUrl = `${FRONTEND_URL.replace(/\/$/, '')}${PREVIEW_PATH}`

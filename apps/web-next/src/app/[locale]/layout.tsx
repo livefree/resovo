@@ -4,7 +4,6 @@ import { getMessages } from 'next-intl/server'
 import { notFound } from 'next/navigation'
 import { RoutePlayerSync } from './_lib/route-player-sync'
 import { routing } from '@/i18n/routing'
-import { THEME_INIT_SCRIPT } from '@/lib/theme-init-script'
 import { parseBrandSlug, parseTheme, DEFAULT_BRAND_SLUG } from '@/lib/brand-detection'
 import { BrandProvider } from '@/contexts/BrandProvider'
 import { Nav } from '@/components/layout/Nav'
@@ -46,27 +45,19 @@ export default async function LocaleLayout({
   const initialBrand: Brand = { ...DEFAULT_BRAND, slug: brandSlug }
 
   return (
-    <html lang={locale} suppressHydrationWarning>
-      <head>
-        {/* eslint-disable-next-line react/no-danger */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
-      </head>
-      <body>
-        <NextIntlClientProvider locale={locale} messages={messages}>
-          <BrandProvider initialBrand={initialBrand} initialTheme={initialTheme}>
-            <div className="app-shell">
-              <Nav />
-              <main id="main-content" className="main-slot">
-                {children}
-              </main>
-              <div id="global-player-host-portal" data-testid="global-player-host" />
-              <GlobalPlayerHost />
-              <RoutePlayerSync />
-              <Footer />
-            </div>
-          </BrandProvider>
-        </NextIntlClientProvider>
-      </body>
-    </html>
+    <NextIntlClientProvider locale={locale} messages={messages}>
+      <BrandProvider initialBrand={initialBrand} initialTheme={initialTheme}>
+        <div className="app-shell">
+          <Nav />
+          <main id="main-content" className="main-slot">
+            {children}
+          </main>
+          <div id="global-player-host-portal" data-testid="global-player-host" />
+          <GlobalPlayerHost />
+          <RoutePlayerSync />
+          <Footer />
+        </div>
+      </BrandProvider>
+    </NextIntlClientProvider>
   )
 }
