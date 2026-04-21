@@ -39,17 +39,21 @@ export interface VideoAdminRow {
   douban_status?: 'pending' | 'matched' | 'candidate' | 'unmatched'
   meta_score?: number
   source_check_status?: string
+  // IMG-06 图片健康状态
+  poster_status?: string | null
+  backdrop_status?: string | null
 }
 
 export type VideoColumnId =
   | 'cover' | 'title' | 'type' | 'source_health' | 'visibility' | 'review_status'
-  | 'douban_status' | 'meta_score' | 'actions'
+  | 'douban_status' | 'meta_score' | 'image_health' | 'actions'
 
 export const VIDEO_COLUMNS: AdminColumnMeta[] = [
   { id: 'cover', visible: true, width: 88, minWidth: 76, maxWidth: 120, resizable: true },
   { id: 'title', visible: true, width: 320, minWidth: 220, maxWidth: 520, resizable: true },
   { id: 'type', visible: true, width: 132, minWidth: 110, maxWidth: 200, resizable: true },
   { id: 'source_health', visible: true, width: 160, minWidth: 140, maxWidth: 240, resizable: true },
+  { id: 'image_health', visible: true, width: 140, minWidth: 120, maxWidth: 200, resizable: true },
   { id: 'visibility', visible: true, width: 132, minWidth: 120, maxWidth: 180, resizable: true },
   { id: 'review_status', visible: true, width: 132, minWidth: 120, maxWidth: 180, resizable: true },
   { id: 'douban_status', visible: false, width: 180, minWidth: 160, maxWidth: 260, resizable: true },
@@ -63,16 +67,16 @@ export const VIDEO_DEFAULT_TABLE_STATE: Omit<SharedAdminTableState, 'columns'> =
 
 export const COLUMN_LABELS: Record<VideoColumnId, string> = {
   cover: '封面', title: '标题', type: '类型',
-  source_health: '源健康度', visibility: '可见性',
-  review_status: '审核状态', douban_status: '豆瓣状态',
-  meta_score: '元数据完整度', actions: '操作',
+  source_health: '源健康度', image_health: '图片健康',
+  visibility: '可见性', review_status: '审核状态',
+  douban_status: '豆瓣状态', meta_score: '元数据完整度', actions: '操作',
 }
 
 // Only fields present in the backend SORT_FIELDS whitelist are sortable
 export const SORTABLE_MAP: Record<VideoColumnId, boolean> = {
   cover: false, title: true, type: true, source_health: false,
-  visibility: false, review_status: false, douban_status: false,
-  meta_score: false, actions: false,
+  image_health: false, visibility: false, review_status: false,
+  douban_status: false, meta_score: false, actions: false,
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -249,6 +253,21 @@ function buildDataColumn(columnId: VideoColumnId, deps: ColumnDeps): TableColumn
             ) : null}
           </div>
         )
+      }
+      break
+    }
+    case 'image_health': {
+      col.accessor = (row) => row.poster_status ?? 'missing'
+      col.cell = ({ row }) => {
+        const p = row.poster_status
+        const b = row.backdrop_status
+        const isBroken  = p === 'broken'  || b === 'broken'
+        const isPending = p === 'pending_review' || b === 'pending_review'
+        const isOk      = p === 'ok' && b === 'ok'
+        const label = isBroken ? '🔴 有破损' : isPending ? '🟡 待检测' : isOk ? '🟢 正常' : '— 未知'
+        const tone: 'danger' | 'warning' | 'success' | 'info' =
+          isBroken ? 'danger' : isPending ? 'warning' : isOk ? 'success' : 'info'
+        return <TableBadgeCell label={label} tone={tone} />
       }
       break
     }

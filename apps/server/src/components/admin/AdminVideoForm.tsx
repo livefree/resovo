@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
 import type { VideoType, VideoStatus, VideoGenre } from '@/types'
 import type { DoubanPreviewFound, DoubanPreviewMiss, DoubanPreview } from '@/types/contracts/v1/admin'
+import { VideoImageSection } from '@/components/admin/videos/VideoImageSection'
 
 const GENRE_OPTIONS: { value: VideoGenre; label: string }[] = [
   { value: 'action',       label: '动作' },
@@ -465,6 +466,8 @@ export function AdminVideoForm({ videoId, returnUrl }: { videoId?: string; retur
         onChange={set('writers')}
         placeholder="多人用逗号分隔"
       />
+
+      {isEdit && videoId && <VideoImageSection videoId={videoId} />}
 
       {isEdit && (
         <>

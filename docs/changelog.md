@@ -7706,3 +7706,30 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 ### 验收结果
 
 - typecheck ✅ / lint ✅ / 1192/1192 unit tests（115 files）✅
+
+---
+
+## IMG-05 P1/P2 修复
+
+- **完成时间**：2026-04-20 17:20
+- **执行模型**：claude-sonnet-4-6
+- **关联任务**：IMG-05
+- **变更摘要**：P1 — web-next 新增真实 FallbackCover + BrandSwitcher 的 __dev/fallback-preview 页面（40 格）；admin 改为 iframe 嵌入；globals.css 补 [data-theme="light"] 强制浅色规则。P2 — listMissingPosterVideos / API route / service / MissingVideoTable 全链路增加 sortField × sortDir 服务端排序。
+
+---
+
+## IMG-06 — 视频编辑页图片区块改造 + 视频列表健康角标
+
+- **完成时间**：2026-04-20 17:40
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **关联任务**：IMG-06
+- **变更文件**：
+  - `apps/api/src/routes/admin/videos.ts`：新增 `GET /admin/videos/:id/images`（返回 4 种图片 url+status）和 `PUT /admin/videos/:id/images`（更新 URL、重置 pending_review、入健康检查队列 + blurhash-extract 队列）
+  - `apps/server/src/components/admin/videos/VideoImageSection.tsx`：新建，展示 poster/backdrop/logo/banner_backdrop 状态 + 替换 URL 输入框
+  - `apps/server/src/components/admin/AdminVideoForm.tsx`：编辑模式挂载 VideoImageSection
+  - `apps/server/src/components/admin/videos/useVideoTableColumns.tsx`：`VideoAdminRow` 新增 `poster_status`/`backdrop_status` 字段；新增 `image_health` 列（🟢/🟡/🔴 角标）
+
+### 验收结果
+
+- typecheck ✅ / lint ✅ / 1192/1192 unit tests（115 files）✅
