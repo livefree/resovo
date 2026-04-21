@@ -8828,11 +8828,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - VideoGrid.Skeleton 像素级匹配
      - typecheck ✅ / lint ✅ / unit ✅ / e2e（SEARCH/分类页）✅
 
-5. M5-PAGE-SEARCH-01 — 搜索页重塑（状态：🔄 进行中）
+5. M5-PAGE-SEARCH-01 — 搜索页重塑（状态：✅ 已完成）
    - 创建时间：2026-04-20 19:00
    - 计划开始：SEQ-20260420-M5-CARD ✅ + M5-PAGE-GRID-01 ✅ 后（消费 VideoGrid）
    - 实际开始：2026-04-21 15:50
-   - 完成时间：
+   - 完成时间：2026-04-21 16:00
    - 建议模型：claude-sonnet-4-6
    - 规模：M（~150 分钟）
    - 依赖：SEQ-20260420-M5-CARD ✅ + M5-PAGE-GRID-01 ✅

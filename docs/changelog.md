@@ -8094,3 +8094,21 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **备注**：Sibling 交叉淡入通过 key-prop 卸载重挂触发 CSS animation 实现（非 View Transitions API 路径）；TopSlot 已设 view-transition-name 为 §11 接替过渡预留钩子；RouteStack edge return 已在 REGRESSION 落地，本卡复用
+
+---
+
+## M5-PAGE-SEARCH-01 — 搜索页重塑
+
+- **完成时间**：2026-04-21 16:00
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **commit**：e9ad32c
+- **变更文件**：
+  - `apps/web-next/src/app/[locale]/search/page.tsx` — Server Component 入口，SearchCircularReveal 包裹
+  - `apps/web-next/src/app/[locale]/search/_components/SearchPage.tsx` — 客户端主逻辑
+  - `apps/web-next/src/components/search/SearchCircularReveal.tsx` — WAAPI clip-path 圆形扩散动效
+  - `apps/web-next/src/components/search/SearchSuggestions.tsx` — debounce 120ms 联想词
+  - `apps/web-next/src/components/search/SearchEmptyState.tsx` — 空结果推荐 + Skeleton 导出
+- **新增依赖**：无
+- **数据库变更**：无
+- **备注**：VideoGrid 用于推荐内容展示；搜索结果直接用 VideoCard 渲染（不经过 VideoGrid API，调用 /search 端点）；SearchCircularReveal 使用 WAAPI 而非纯 CSS 以支持动态 origin 坐标
