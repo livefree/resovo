@@ -7851,3 +7851,27 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - BLOCKER-M5-DEP-02（拖拽库）仅封锁 M5-ADMIN-BANNER-01，M5-API-BANNER-01 不受影响
   - task-queue.md 中 M5 卡片描述仍写 "ADR-046"，实现时须对照 ADR-048（两者 API 契约完全一致，仅编号差异）
   - §8.3 z-index Token 名以 ADR-048 为准：`--z-tab-bar` / `--z-player-mini` / `--tab-bar-height`（task-queue.md 中 `--z-tabbar` 等为旧名，实现时以 ADR-048 为准）
+
+---
+
+## [M5-CARD-CTA-01] VideoCard 双出口拆分 + Fast Takeover 动效
+- **完成时间**：2026-04-21
+- **记录时间**：2026-04-21
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/web-next/src/components/video/VideoCard.tsx` — 重构为 `<article>` + PosterAction(`<button>`) + MetaAction(`<Link>`)；VideoCard.Skeleton 导出
+  - `apps/web-next/src/components/video/FloatingPlayButton.tsx` — 新建：44px 悬浮播放按钮，120ms 进入 / 90ms 离开
+  - `apps/web-next/src/components/player/transitions/FastTakeover.ts` — 新建：Web Animations API 动效，200/240ms，reduced-motion 降级
+  - `apps/web-next/src/stores/playerStore.ts` — 新增 `transition` 状态 + `enter()` action
+  - `apps/web-next/src/app/[locale]/_lib/player/GlobalPlayerFullFrame.tsx` — 挂载时检测 fast-takeover 并应用动效
+  - `vitest.config.ts` — jsdom for tests/unit/web-next/**；@/stores alias 改为上下文感知 resolver
+  - `tests/unit/web-next/VideoCard.test.tsx` — 新建：10 个单元测试（双出口、Tab 顺序、a11y、Skeleton）
+  - `tests/e2e-next/card-to-watch.spec.ts` — 新建：5 个 e2e 测试
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - VideoCard.Skeleton 当前为 animate-pulse 占位实现，待 M5-CARD-SKELETON-01 替换为真实 Skeleton primitive
+  - TagLayer / StackedPosterFrame 在 VideoCard.tsx 中尚未接入，由 M5-CARD-TAG-01 和 M5-CARD-STACK-01 负责
+  - vitest.config.ts 中 `@/stores` alias 已改为上下文感知：web-next 上下文 → `apps/web-next/src/stores`，server/其他 → `apps/server/src/stores`
+  - FastTakeover 动效目前为 scale+opacity 实现；full FLIP 动效（卡片图片 → 播放器 poster）待 M5-CARD-SHARED-01 的 SharedElement 实装后增强

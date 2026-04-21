@@ -5089,7 +5089,8 @@
 > 最后更新时间：2026-04-06 12:10
 > 状态：✅ 已完成
 
-#### CHG-375 — [Fix] short_id 路由正则缺少 _ 和 - 字符（状态：✅ 已完成）
+#### CHG-375 — [Fix] short*id 路由正则缺少 * 和 - 字符（状态：✅ 已完成）
+
 - **创建时间**：2026-04-06 12:00
 - **实际开始**：2026-04-06 12:00
 - **完成时间**：2026-04-06 12:10
@@ -5165,6 +5166,7 @@
 > 状态：✅ 已完成
 
 #### CHG-379 — [Fix] 切集后线路重置：保留用户选中的线路（状态：✅ 已完成）
+
 - **创建时间**：2026-04-08 01:00
 - **实际开始**：2026-04-08 01:00
 - **完成时间**：2026-04-08 01:10
@@ -5181,6 +5183,7 @@
 > 状态：✅ 已完成
 
 #### CHG-380 — 删除审核台顶部无功能统计区块（状态：✅ 已完成）
+
 - **创建时间**：2026-04-09 00:00
 - **实际开始**：2026-04-09 00:00
 - **完成时间**：2026-04-09 00:05
@@ -5204,11 +5207,13 @@
 ---
 
 ### Phase 1：核心流程修正
+
 > 目标：修复"审核通过即上架"的根本问题，建立暂存队列基础设施
 > 里程碑：M1（验收标准见 pipeline-overhaul-plan.md §十一）
 > ⚠ Phase 1 完成后必须暂停，执行里程碑评审，确认再进入 Phase 2
 
 #### CHG-381 — [DB] 新增 videos 辅助状态字段（douban_status / source_check_status / meta_score）
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **实际开始**：2026-04-09 02:00
@@ -5231,6 +5236,7 @@
 - **完成备注**：migration 032 幂等实现（videos +3/crawler_runs +3），类型层新增 DoubanStatus/SourceCheckStatus，Video 接口/DbVideoRow/VIDEO_FULL_SELECT/mapper/PendingReviewVideoRow/listPendingReviewVideos/CrawlerRun/createRun 全部更新，architecture.md 同步。typecheck/lint ✅。
 
 #### CHG-382 — [API] 修改 approve 审核终态：通过→暂存（approved+internal）
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **计划开始**：CHG-381 完成后
@@ -5249,6 +5255,7 @@
 - **完成备注**：transitionVideoState.approve 终态改为 internal+false，新增 approve_and_publish case（public+true）；ReviewSchema/StateTransitionSchema 新增 approve_and_publish；route 层加 admin 权限检查；reviewVideo.test.ts 重写为 mock transitionVideoState 并覆盖 6 个测试用例（含新 approve_and_publish case）。typecheck/lint ✅，reviewVideo.test.ts 6/6 通过，其余失败均为预存。共享层：无需沉淀。
 
 #### CHG-383 — [API] 新增 auto-publish-staging Job 与 maintenance-queue Worker
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **计划开始**：CHG-382 完成后
@@ -5272,6 +5279,7 @@
 - **完成备注**：新增 maintenance-queue（queue.ts）；staging.ts queries（listStagingVideos/getStagingVideoById/listReadyStagingVideoIds/StagingPublishRules）；StagingPublishService（checkReadiness/getRules/saveRules/publishSingle/publishReadyBatch）；maintenanceWorker（auto-publish-staging 处理）；maintenanceScheduler（5min tick）；staging.ts routes（5个端点）；server.ts 注册 worker/scheduler/routes；system.types.ts 新增 3 个 setting key。typecheck ✅ lint ✅，stagingPublish.test.ts 14/14 通过。共享层：StagingPublishRules/DEFAULT_STAGING_RULES 已在 staging.ts 导出。
 
 #### ADMIN-09 — [UI] 暂存发布队列页面（/admin/staging，基础版）
+
 - **状态**：✅ 已完成
 - **实际开始**：2026-04-09 05:00
 - **完成时间**：2026-04-09 06:00
@@ -5300,11 +5308,13 @@
 ---
 
 ### Phase 2：采集能力扩展
+
 > 目标：新增关键词搜索采集、单视频补源采集，改造源 Upsert 策略
 > 里程碑：M2
 > ⚠ Phase 2 完成后必须暂停，执行里程碑评审
 
 #### CRAWLER-01 — [DB/API] crawler_runs 新增模式字段 + CrawlJobData 扩展
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **实际开始**：2026-04-12 10:00
@@ -5325,6 +5335,7 @@
 - **完成备注**：DB 层已在 CHG-381 完成；本任务完成上层扩展。parseCrawlerSources/getEnabledSources 从 CrawlerService 迁入 crawlerWorker（worker 是唯一调用方）以规避 CrawlerService.ts 500 行硬限制。refetchSourcesForVideo 为 stub，CRAWLER-04 实现。typecheck ✅ lint ✅ 89文件/806测试 ✅
 
 #### CRAWLER-02 — [Service] 源 Upsert 策略改造：同站点全量替换
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **实际开始**：2026-04-12 15:40
@@ -5342,6 +5353,7 @@
 - **完成备注**：replaceSourcesForSite 加入 sources.ts（非 videos.ts，语义更正确）。upsertVideo 返回类型扩展 sourcesKept/sourcesRemoved。无 siteKey 时自动退回 append_only 路径，兼容已有测试。sources.ts 约 620 行，超 500 行技术债已记录。typecheck ✅ lint ✅ 90文件/812测试 ✅
 
 #### CRAWLER-03 — [API] 关键词搜索采集：预览模式 + 入库模式
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **实际开始**：2026-04-12 15:55
@@ -5358,6 +5370,7 @@
 - **完成备注**：CrawlerService.ts 超 500 行，将 previewKeywordSearch 拆入新 CrawlerPreviewService.ts（extends CrawlerService，复用 fetchPage/buildApiUrl）。入库模式（crawlMode=keyword）通过 CRAWLER-01 的 POST /admin/crawler/runs 支持。typecheck ✅ lint ✅ 91文件/819测试 ✅
 
 #### CRAWLER-04 — [API] 单视频补源采集 Job
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **实际开始**：2026-04-12 16:05
@@ -5372,6 +5385,7 @@
 - **完成备注**：CrawlerService.ts 超 500 行限制，将 refetchSourcesForVideo 拆入 CrawlerRefetchService.ts（extends CrawlerService，复用 fetchPage）。titleSimilarity 用 bigram Dice 系数实现，阈值 0.8。crawlerKeyword.test.ts stub 测试替换为 titleSimilarity 单元测试（4 tests）。typecheck ✅ lint ✅ 7 new tests ✅
 
 #### UX-08 — [UI] 采集控制台"发起采集" Tab（三模式统一入口）
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **实际开始**：2026-04-12 16:10
@@ -5387,6 +5401,7 @@
 - **完成备注**：`page.tsx` 无需改动（已经通过 AdminCrawlerTabs 引入）。BatchCrawlForm 内联于 CrawlerLaunchPanel 避免不必要的文件碎片化。视频搜索通过 GET /admin/videos?q= 实现。typecheck ✅ lint ✅ 8 new tests ✅
 
 #### UX-09 — [UI] 采集任务详情展开：站点维度结果拆分
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **实际开始**：2026-04-12 16:15
@@ -5402,6 +5417,7 @@
 > 🏁 **M2 里程碑评审节点**（UX-09 完成后触发）
 
 #### CHG-398 — [BUG] Phase 2 M2 审核缺口修复（三项关键路径缺口）
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-12 16:30
 - **实际开始**：2026-04-12 16:30
@@ -5421,6 +5437,7 @@
 - **完成备注**：三个 P1/P2 缺口全部修复。ON CONFLICT DO UPDATE SET deleted_at=NULL 正确恢复软删行并通过 rowCount 精确计数。crawlMode 通过 EnqueueExtras 全链路透传到 processCrawlJob worker 分支。typecheck ✅ lint ✅ 91 tests ✅（2 pre-existing failures in moderationStats.test.ts）
 
 #### CHG-399 — [BUG] 单视频补源 Job 闭环（source-refetch 落库完成态 + UI 改走队列）
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-12 18:00
 - **实际开始**：2026-04-12 18:00
@@ -5436,6 +5453,7 @@
 - **完成备注**：P1 修复后 source-refetch 任务能正确从 running→done 落库；P2 修复后 UI 入队即返回提示，可在任务记录查看进度。typecheck ✅ lint ✅ 4 new tests ✅
 
 #### CHG-400 — [BUG] 两个补源专用 API 改走队列
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-12 19:00
 - **实际开始**：2026-04-12 19:00
@@ -5450,11 +5468,13 @@
 ---
 
 ### Phase 3：自动丰富流水线
+
 > 目标：建立 external_data schema，新增 metadata-enrich Job，实现入库后自动豆瓣匹配
 > 里程碑：M3
 > ⚠ Phase 3 完成后必须暂停，执行里程碑评审
 
 #### CHG-384 — [DB] 创建 external_data schema（douban_entries / bangumi_entries）
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **实际开始**：2026-04-12 20:00
@@ -5474,6 +5494,7 @@
 - **完成备注**：migration 036（原计划 033，因 033~035 已被 Phase 2 占用而顺延）新建 external_data schema + douban_entries/bangumi_entries + 索引。两个导入脚本支持 --limit N 幂等运行。architecture.md 已同步更新迁移列表至 036。typecheck ✅ lint ✅
 
 #### CHG-385 — [Service/Worker] metadata-enrich Job（enrichment-queue Worker）
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **实际开始**：2026-04-12 22:10
@@ -5499,6 +5520,7 @@
 - **完成备注**：typecheck ✅ lint ✅ 7条测试全部通过
 
 #### CHG-386 — [API] 暂存队列新增豆瓣相关操作接口
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **实际开始**：2026-04-12 10:00
@@ -5527,13 +5549,14 @@
 
 ### Phase 3 完成概要
 
-| 任务 | 内容 | 状态 |
-|------|------|------|
-| CHG-384 | external_data schema（Migration 036）+ 导入脚本 | ✅ |
-| CHG-385 | MetadataEnrichService 五步丰富 + enrichmentWorker + CrawlerService 触发 | ✅ |
-| CHG-386 | staging 豆瓣操作 3 条 API + DoubanService 扩展 + 测试 | ✅ |
+| 任务    | 内容                                                                    | 状态 |
+| ------- | ----------------------------------------------------------------------- | ---- |
+| CHG-384 | external_data schema（Migration 036）+ 导入脚本                         | ✅   |
+| CHG-385 | MetadataEnrichService 五步丰富 + enrichmentWorker + CrawlerService 触发 | ✅   |
+| CHG-386 | staging 豆瓣操作 3 条 API + DoubanService 扩展 + 测试                   | ✅   |
 
 **验收要点**（M3）：
+
 - [ ] Migration 036 可在目标环境执行（external_data.douban_entries / bangumi_entries）
 - [ ] 导入脚本 import-douban-dump.ts / import-bangumi-dump.ts 可用
 - [ ] enrichmentQueue 正常连接 Redis，worker 可处理 Job
@@ -5543,11 +5566,13 @@
 ---
 
 ### Phase 4：审核台增强
+
 > 目标：审核台增加元数据内联编辑、豆瓣状态展示、源健康展示、批量通过、审核历史
 > 里程碑：M4
 > ⚠ Phase 4 完成后必须暂停，执行里程碑评审
 
 #### UX-10 — [UI] 审核台左侧列表增强（豆瓣/源/元数据状态指示）
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **实际开始**：2026-04-13
@@ -5568,6 +5593,7 @@
 - **完成备注**：typecheck ✅ lint ✅ 10 条测试全部通过；DB 层新增 doubanStatus/sourceCheckStatus WHERE 条件；API 路由透传；ModerationList 新增 2 个筛选 select + 3 个 badge 组件
 
 #### UX-11 — [UI] 审核台右侧：豆瓣信息区 + 源健康区
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **实际开始**：2026-04-13
@@ -5588,6 +5614,7 @@
 - **完成备注**：typecheck ✅ lint ✅ 9 条测试全部通过；新建 moderation.ts（douban-search/confirm 路由）+ server.ts 注册；ModerationDoubanBlock/ModerationSourceBlock 新建；ModerationDetail 重构为 4 个折叠块（基础信息/豆瓣/源健康/播放器）；测试更新并新增折叠块交互用例
 
 #### UX-12 — [UI] 审核台内联元数据编辑
+
 - **状态**：✅ 已完成
 - **实际开始**：2026-04-13
 - **完成时间**：2026-04-13
@@ -5601,6 +5628,7 @@
 - **完成备注**：PATCH /admin/moderation/:id/meta 路由（zod 校验 + VideoService.update 复用）；ModerationDetail 基础信息块增加标题/年份点击 inline input、类型即时 select、分类标签 chip 编辑器；成功 notify.success/失败 notify.error；11 条 API 单测 + 现有 9 条组件测试全部通过。
 
 #### UX-13 — [UI] 审核台批量操作 + 审核历史 Tab
+
 - **状态**：✅ 已完成
 - **实际开始**：2026-04-13
 - **完成时间**：2026-04-13
@@ -5621,6 +5649,7 @@
 - **完成备注**：typecheck ✅ lint ✅ 21条API单测（moderationBatch）全部通过；ModerationList 加 checkbox 多选 + BatchRejectDialog；新建 ModerationHistory（已审核列表+复审）；ModerationDashboard 加 Tab（待审核/已审核）；新建 queries/moderation.ts（listModerationHistory）；路由新增 batch-approve/batch-reject/history/reopen（/:id/reopen）
 
 #### CHG-387 — [API] 审核台快速操作 API 整合（moderation 路由完整实现）
+
 - **状态**：✅ 已完成
 - **实际开始**：2026-04-13
 - **完成时间**：2026-04-13
@@ -5641,11 +5670,13 @@
 ---
 
 ### Phase 5：暂存队列完善
+
 > 目标：暂存队列增加批量豆瓣同步、侧滑编辑、触发补源、规则配置完善
 > 里程碑：M5
 > ⚠ Phase 5 完成后必须暂停，执行里程碑评审
 
 #### ADMIN-10 — [UI] 暂存队列：批量豆瓣同步 + 侧滑元数据编辑
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **计划开始**：M4 评审通过后
@@ -5665,6 +5696,7 @@
 - **完成备注**：staging.ts 新增 MetaEditSchema + PATCH 路由；StagingEditPanel 为新建侧滑面板；StagingTable 集成[处理]下拉项 + 批量豆瓣同步按钮；单测 12 条全部通过；typecheck + lint 全部通过
 
 #### ADMIN-11 — [UI] 暂存队列：触发补源采集 + 就绪状态联动刷新
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **计划开始**：ADMIN-10 完成后
@@ -5685,11 +5717,13 @@
 ---
 
 ### Phase 6：源管理闭环
+
 > 目标：失效源自动下架、自动补源、孤岛视频 Tab、替换弹窗播放器确认
 > 里程碑：M6
 > ⚠ Phase 6 完成后必须暂停，执行里程碑评审
 
 #### CHG-388 — [Service/Worker] 失效源自动下架 + 自动补源触发
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **计划开始**：M5 评审通过后
@@ -5711,6 +5745,7 @@
 - **完成备注**：source-refetch 成功/失败时写回 health events 的逻辑依赖 CrawlerWorker 回调，在 ADMIN-12 与孤岛 Tab 联动时完善
 
 #### ADMIN-12 — [UI] 源管理：孤岛视频 Tab + 替换源弹窗播放器确认
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **计划开始**：CHG-388 完成后
@@ -5732,11 +5767,13 @@
 ---
 
 ### Phase 7：视频管理整合
+
 > 目标：视频管理页面整合暂存队列入口、元数据质量指标、豆瓣状态列
 > 里程碑：M7
 > ⚠ Phase 7 完成后进行最终全流程验收
 
 #### VIDEO-09 — [UI] 视频管理：新增元数据完整度列 + 豆瓣状态列
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **实际开始**：2026-04-14
@@ -5755,6 +5792,7 @@
 - **完成备注**：VideoAdminRow 补充 douban_status/meta_score/source_check_status 字段；新列默认 visible:false；14 个测试全部通过
 
 #### VIDEO-10 — [UI] 视频管理：复审按钮 + 暂存队列 badge + 补源触发
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 01:00
 - **实际开始**：2026-04-14
@@ -5777,6 +5815,7 @@
 > 🏁 **M7 里程碑评审节点 / 最终全流程验收**（VIDEO-10 完成后触发）
 >
 > 最终验收：执行完整端到端流程测试
+>
 > 1. 采集一批新视频（低信赖源站）→ 确认进入 pending_review
 > 2. 等待5分钟 → 确认 douban_status 更新，meta_score 计算
 > 3. 审核台通过暂存 → 确认变为 approved+internal
@@ -5786,7 +5825,9 @@
 > 7. 整体 npm run test -- --run 通过率与改造前基准持平
 
 ---
+
 #### CHG-389 — [DB+UI] 修复暂存队列空白：StagingTable 错误可见化 + Migration 034 hidden→approve 跃迁
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 08:30
 - **实际开始**：2026-04-09 08:30
@@ -5820,9 +5861,11 @@
   - [ ] 运行 `npm run test` 确认测试状态
   - [ ] 启动本地服务，验证 M1 验收清单
   - [ ] 确认通过后，删除此块即可继续 Phase 2
+
 ---
 
 #### CHG-384 — [DB+UI] 修复 approve 暂存：更新 DB 触发器白名单 + 审核台新增操作按钮
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-09 07:00
 - **实际开始**：2026-04-09 07:00
@@ -5838,6 +5881,7 @@
 - **完成备注**：Migration 033 新建触发器函数重写，补全两条缺失跃迁；ModerationDetail 增加 isAdmin 判断，approve 按钮重命名为"通过（暂存）"，管理员可见"通过并直接上架"；architecture.md 补充跃迁白名单表格；typecheck ✅ lint ✅ 785 tests passing
 
 #### CHG-390 — [UI] 编辑元数据完成/取消后返回来源页面
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-10 00:00
 - **实际开始**：2026-04-10 00:00
@@ -5855,6 +5899,7 @@
 - **完成备注**：typecheck ✅ lint ✅（无新增警告）
 
 #### CHG-391 — [UI+Service] 立即发布失败：友好错误提示 + 无活跃源前置校验
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-10 00:20
 - **实际开始**：2026-04-10 00:20
@@ -5872,6 +5917,7 @@
 - **完成备注**：typecheck ✅ lint ✅
 
 #### CHG-392 — [apiClient] 修复无 body 的 POST 请求触发 Fastify FST_ERR_CTP_EMPTY_JSON_BODY
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-10 00:40
 - **实际开始**：2026-04-10 00:40
@@ -5883,6 +5929,7 @@
 - **完成备注**：typecheck ✅
 
 #### CHG-393 — [Scheduler] auto-publish-staging 30 分钟间隔 + 默认启用
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-10 01:00
 - **实际开始**：2026-04-10 01:00
@@ -5901,6 +5948,7 @@
 - **完成备注**：typecheck ✅
 
 #### CHG-394 — [UI] 暂存页权限一致性：admin-only 操作对 moderator 隐藏/只读
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-10 01:20
 - **实际开始**：2026-04-10 01:20
@@ -5915,6 +5963,7 @@
 - **完成备注**：typecheck ✅
 
 #### CHG-395 — ModernDataTable 补全 selection props，接入 StagingTable 行选择
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-10 01:40
 - **实际开始**：2026-04-10 01:40
@@ -5930,6 +5979,7 @@
 - **完成备注**：typecheck ✅ lint ✅ modern-table 单元测试全通过；selection props 全为可选，向后兼容
 
 #### CHG-396 — 暂存页筛选实现：就绪/警告/阻塞 tab + 类型/站点 filter
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-10 16:50
 - **实际开始**：2026-04-10 16:50
@@ -5945,6 +5995,7 @@
 - **完成备注**：typecheck ✅ lint ✅ stagingPublish.test.ts 全通过（14/14）；pre-existing 失败 20 条不属于本任务范围
 
 #### CHG-397 — M1 测试质量修复：修复 5 个预存测试失败 + 补 CHG-396 组件测试
+
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-10 17:05
 - **实际开始**：2026-04-10 17:10
@@ -6108,13 +6159,14 @@
 - **创建时间**：2026-04-14 19:30
 - **最后更新时间**：2026-04-14 19:45
 - **目标**：将 external-db（豆瓣 dump）和 external-adapter（douban-adapter）从"辅助匹配工具"升级为"统一外部元数据层"，建立原始数据层→标准化候选层→业务写入层三层结构
-- **范围**：external_data schema / MetadataEnrichService / scripts/import-* / ExternalSubjectCandidate 类型 / video_external_refs
+- **范围**：external_data schema / MetadataEnrichService / scripts/import-\* / ExternalSubjectCandidate 类型 / video_external_refs
 - **依赖**：SEQ-20260414-02 已完成（CHG-410/411/412 全部完成）
 - **方案文档**：`docs/external_metadata_import_plan_20260405.md`（原 TMDB/Bangumi 方案，META 系列与其兼容并扩展 Douban 专项）
 
 ### 背景说明
 
 当前 `external_data` schema 存在以下 gap：
+
 1. `external_data.douban_entries` 只同步了 movies.csv 的基础字段（title/year/rating/directors/cast/genres/country），未同步 ALIAS/IMDB_ID/LANGUAGES/MINS/TAGS/DOUBAN_VOTES 等已在 `external_douban_movies_raw` 存在的字段
 2. person.csv（约 10 万人物条目）无对应查询表，导演/演员精确匹配依赖文本数组而非结构化 person 实体
 3. 评分数据（ratings.csv）仅靠 DOUBAN_VOTES 单值，无评分分布
@@ -6284,7 +6336,7 @@
    - 验收要点：
      - `src/api/` 全量迁移到 `apps/api/src/`，原目录已删除 ✅
      - `apps/api/package.json` 包含独立 dev/start 脚本 ✅
-     - 根 tsconfig/@/api/* 别名、vitest alias 均指向 apps/api/src/ ✅
+     - 根 tsconfig/@/api/\* 别名、vitest alias 均指向 apps/api/src/ ✅
      - 根目录 `npm run api` 已指向 apps/api/src/server.ts ✅
      - typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
 
@@ -6306,11 +6358,11 @@
    - 实际开始：2026-04-17 16:00
    - 完成时间：2026-04-17 17:10
    - 验收要点：
-     - admin 路由复制到 apps/server/src/app/admin/**（无 [locale] 层）✅
+     - admin 路由复制到 apps/server/src/app/admin/\*\*（无 [locale] 层）✅
      - admin/shared 组件复制到 apps/server/src/components/ ✅
      - 独立 next.config.ts / middleware.ts / tsconfig.json / tailwind / postcss ✅
      - AdminLoginForm 去 next-intl，后台登录不依赖前台 i18n ✅
-     - middleware 只守卫 /admin/*，无 locale 剥离逻辑 ✅
+     - middleware 只守卫 /admin/\*，无 locale 剥离逻辑 ✅
      - 根目录 typecheck ✅ / lint ✅ / test 通过（预存 3 个失败不变）
 
 6. DEC-14 — 清理 `apps/web`（前台移除 admin 残留）（状态：✅ 已完成）
@@ -6333,7 +6385,7 @@
      - ✅ `docker/nginx.conf`：`/v1/*` → api:4000，`/admin/*` → server:3001，`/*` → web:3000
      - ✅ `docker/docker-compose.dev.yml`：本地通过 localhost:8080 联调三端
      - ✅ refresh_token Cookie（Path=/，HttpOnly，SameSite=Lax）同域三进程正确传递
-     - ✅ `apps/server/next.config.ts` 添加 assetPrefix 支持，生产环境 /admin/_next/ 资源正确路由
+     - ✅ `apps/server/next.config.ts` 添加 assetPrefix 支持，生产环境 /admin/\_next/ 资源正确路由
      - ✅ `docs/architecture.md` 更新部署拓扑图（1a 节）
    - 备注：E2E 测试需真实服务运行环境，通过代理的 E2E 验证留待联调环境就绪后执行
 
@@ -6458,6 +6510,7 @@
 ### 任务卡片
 
 #### BASELINE-01 — 关键路径 E2E 回归基线建档
+
 - **状态**：✅ 已完成
 - **实际开始**：2026-04-18
 - **完成时间**：2026-04-18
@@ -6483,6 +6536,7 @@
 - **完成备注**：E2E 套件 181 测试，85 通过，96 预存失败（auth UI 已由 e601ea2 移除；admin 中间件依赖真实 API 服务）。`npm run test:e2e 全绿` 验收项以"预存失败已归档文档"替代。修复了 `playwright.config.ts` admin webServer URL（`ADMIN_URL` → `` `${ADMIN_URL}/admin` ``，避免 404 导致 EADDRINUSE）。6 张截图与时序数据已建档，可作为 M2–M5 回滚判据。
 
 #### BASELINE-02 — SSR/SEO 风险登记表与降级策略 ADR
+
 - **状态**：✅ 已完成
 - **实际开始**：2026-04-18
 - **完成时间**：2026-04-18
@@ -6507,6 +6561,7 @@
 - **完成备注**：RISK-01/02/03 三项已完整登记于 `docs/risk_register_rewrite_20260418.md`；ADR-030 已追加至 decisions.md（行 750 起）。各风险均含：触发概率/影响等级/检测方式/预案，并固化为 4 条 lint 规则约束（`no-client-in-metadata`/`player-portal-no-head`/`no-edge-side-io`/`view-transitions-scope`）。执行模型：claude-opus-4-6 子代理（ADR 内容）。
 
 #### BASELINE-03 — ESLint `no-hardcoded-color` 自定义规则引入
+
 - **状态**：✅ 已完成
 - **实际开始**：2026-04-18
 - **完成时间**：2026-04-18
@@ -6535,6 +6590,7 @@
 - **完成备注**：插件 `eslint-plugin-resovo` 已创建（`tools/eslint-plugin-resovo/`），6 个单元测试全部通过（hex 3/4/6/8 位、rgb/rgba、hsl/hsla、oklch、color()）。Lint 全局启用为 `warn`，@resovo/web 现有 7 处硬编码颜色（均在播放器组件）已发出警告，不阻断 commit。Root workspace 新增 `tools/*` 支持。
 
 #### BASELINE-04 — 重写期需求冻结通知与 BLOCKER 模板扩展
+
 - **状态**：✅ 已完成
 - **实际开始**：2026-04-18
 - **完成时间**：2026-04-18
@@ -6557,6 +6613,7 @@
 - **完成备注**：三份文件均已完成。`workflow-rules.md` BLOCKER 触发条件追加重写期新需求冻结触发词；`CLAUDE.md` 绝对禁止列表追加一条；`freeze_notice_20260418.md` 含冻结期 M0-M6 时间表（估算至 2026-07-31）、P0 例外规则、积压暂存方式。与 ADR-031 策略完全一致。
 
 #### BASELINE-05 — 重写共存策略 ADR
+
 - **状态**：✅ 已完成
 - **实际开始**：2026-04-18
 - **完成时间**：2026-04-18
@@ -6593,6 +6650,7 @@
 ### 任务卡片
 
 #### TOKEN-01 — `packages/design-tokens` 目录骨架 + 构建工具选型 ADR
+
 - **状态**：✅ 已完成
 - **完成时间**：2026-04-18
 - **执行模型**：claude-sonnet-4-6 + claude-opus-4-6（ADR-032 决策子代理）
@@ -6617,6 +6675,7 @@
 - **完成备注**：_（AI 填写）_
 
 #### TOKEN-02 — Primitive 层原子 Token 定义
+
 - **状态**：✅ 已完成
 - **完成时间**：2026-04-18
 - **执行模型**：claude-sonnet-4-6 + claude-opus-4-6（token 结构契约子代理）
@@ -6649,6 +6708,7 @@
 - **完成备注**：_（AI 填写）_
 
 #### TOKEN-03 — Semantic 层语义映射
+
 - **状态**：✅ 已完成
 - **完成时间**：2026-04-18
 - **执行模型**：claude-sonnet-4-6 + claude-opus-4-6（语义映射子代理）
@@ -6675,6 +6735,7 @@
 - **完成备注**：_（AI 填写）_
 
 #### TOKEN-04 — Component 层组件 Token 定义
+
 - **状态**：✅ 已完成
 - **完成时间**：2026-04-18
 - **执行模型**：claude-sonnet-4-6 + claude-opus-4-6（组件 token 契约子代理）
@@ -6703,6 +6764,7 @@
 - **完成备注**：8 组件 Token 定义完成（button/input/card/tabs/modal/tooltip/table/player）；arch-reviewer 子代理设计 size×state 矩阵 + player 三态；80 单元测试全通过；commit 0d368df
 
 #### TOKEN-05 — Token 构建管线（CSS / JS / Types 三路输出）
+
 - **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
@@ -6726,6 +6788,7 @@
 - **完成备注**：新增 build.ts（手写 TS，零外部依赖，符合 ADR-032）；dist/tokens.css 7.1KB（primitive :root + semantic light :root + .dark override）；dist/tokens.js 8.2KB（嵌套对象）；dist/tokens.d.ts 含 PrimitiveVarName/SemanticVarName 联合类型；typecheck + lint clean
 
 #### TOKEN-06 — Tailwind 桥接（theme.extend 从 Token 生成）
+
 - **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
@@ -6747,6 +6810,7 @@
 - **完成备注**：新增 tailwind-preset.ts（9 个 theme.extend 键：colors/spacing/fontSize/fontFamily/borderRadius/boxShadow/zIndex/transitionDuration/transitionTimingFunction）；颜色双层结构（primitive gray/accent numeric keys + semantic bg/fg/border/accent/surface/state keys）；apps/web/tailwind.config.ts 接入 presets + 移除手写 colors；apps/admin 不存在，跳过；typecheck + lint ✅
 
 #### TOKEN-07 — Base theme 实现（light / dark）
+
 - **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
@@ -6767,6 +6831,7 @@
 - **完成备注**：globals.css 注入 35 个语义层 CSS 变量（bg/fg/border/accent/surface/state light+dark）；color-scheme: light dark；body 过渡 200ms；@media prefers-color-scheme 系统偏好 fallback；build.ts 新增 dist/base-theme.css 构建产物（5.5KB）；admin app 不存在跳过；typecheck + lint ✅
 
 #### TOKEN-08 — Brand 层架构（数据模型 + DB schema + override 约束）
+
 - **状态**：✅ 已完成
 - **建议模型**：opus
 - **创建时间**：2026-04-18
@@ -6790,6 +6855,7 @@
 - **完成备注**：arch-reviewer (claude-opus-4-6) 设计 Brand 层类型体系；brands/types.ts + default.ts + index.ts；migration 047 + brands.ts 查询（getBrandBySlug/listBrands/upsertBrand）；package.json 追加 ./brands 子路径 export；architecture.md §5.8 brand 表条目；typecheck + lint + 80 tests ✅
 
 #### TOKEN-09 — BrandProvider + useBrand / useTheme hooks
+
 - **状态**：✅ 已完成
 - **建议模型**：opus
 - **创建时间**：2026-04-18
@@ -6814,6 +6880,7 @@
 - **完成备注**：arch-reviewer (claude-opus-4-6) 设计 BrandProvider API 契约；BrandProvider.tsx（双 Context + useSyncExternalStore + 系统主题 mql 监听）；useBrand / useTheme hooks（空 context 抛错）；types/brand.ts（本地 Brand 接口，与 design-tokens 结构兼容）；ADR-033 写入 decisions.md；typecheck + lint ✅；Vitest 测试留待 TOKEN-12 Playground 集成阶段补充
 
 #### TOKEN-10 — Cookie + middleware 品牌 / 主题同步
+
 - **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
@@ -6834,6 +6901,7 @@
 - **完成备注**：middleware.ts 读 resovo-brand/resovo-theme cookie → 校验 → 写入 x-resovo-brand/x-resovo-theme header；brand-detection.ts 纯函数工具（slug 格式校验/theme 枚举校验/默认兜底）；layout.tsx 读 headers 并挂载 BrandProvider；当前仅支持默认品牌，TOKEN-14 起扩展非默认品牌 DB 查询；Edge p95 < 50ms（纯 cookie read + header set，无 IO）；typecheck + lint ✅
 
 #### TOKEN-11 — 首屏无闪烁 blocking script
+
 - **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
@@ -6853,6 +6921,7 @@
 - **完成备注**：theme-init-script.ts 导出 IIFE 字符串；读 resovo-brand/resovo-theme cookie → resolveTheme（system/空→matchMedia fallback）→ 设 `document.documentElement.dataset.brand/theme`；layout.tsx 在 providers 之前注入 `<script dangerouslySetInnerHTML>`；typecheck ✅ / lint ✅；无新增依赖
 
 #### TOKEN-12 — Token Playground 页面（dev 环境走查载体）
+
 - **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
@@ -6875,6 +6944,7 @@
 - **完成备注**：新增 @resovo/design-tokens workspace 依赖至 web package.json + tsconfig 路径映射（根 tsconfig + apps/web/tsconfig）；layout.tsx dev-only guard（NODE_ENV !== development → notFound()）；page.tsx Server Component 导入 token 数据传 props；4 个 Client 组件（BrandSwitcher 调 useTheme、PrimitivePanel 展示色块/数值、SemanticPanel 实时 resolvedTheme 适配、ComponentPanel 点击复制 Token 名）；typecheck ✅ / lint ✅ / tests ✅
 
 #### TOKEN-13 — globals.css 23 个硬编码变量迁移 + ESLint 升级 error
+
 - **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
@@ -6896,6 +6966,7 @@
 - **完成备注**：实际迁移 31 个硬编码 CSS 变量（非 23；差异源自任务规划期估算）；所有旧变量在 @layer base :root 中重映射至新 token var()，移除 .dark 覆写区块；5 处 TS/TSX 硬编码颜色修复（black/white 关键字 + var(--bg-overlay)）；no-hardcoded-color 升 error；lint 无任何 warning/error；typecheck ✅ / tests 1087 passed ✅
 
 #### TOKEN-14 — 后台 Token 编辑器 MVP（只读预览）
+
 - **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
@@ -6941,9 +7012,10 @@
   - [ ] `no-hardcoded-color` 已升级为 error 且 lint 无 violation
   - [ ] 确认开始 Phase 2，届时重新拆分下一批任务卡（M2–M6 预估 45–55 张）
 
-
 ---
+
 ✅ PHASE COMPLETE — Phase 0（M0）前置基线已完成，等待确认开始 Phase 1
+
 - **完成时间**：2026-04-18
 - **本 Phase 完成任务数**：5 个（BASELINE-01~05）
 - **已合并到 main**：是（commit 2e5cfdf）
@@ -6955,6 +7027,7 @@
   - [ ] 确认 `docs/baseline_20260418/` 6 张截图与时序数据齐全
   - [ ] 确认 ADR-031 分支策略（原位覆盖，禁 redesign/ 目录）
   - [ ] 回复"继续"以开始 Phase 1（TOKEN-01）
+
 ---
 
 ---
@@ -6972,6 +7045,7 @@
 ### 任务卡片
 
 #### TESTFIX-00 — workflow-rules.md 追加 Phase 基线测试条款
+
 - **状态**：🔄 进行中
 - **建议模型**：haiku
 - **创建时间**：2026-04-18
@@ -6993,6 +7067,7 @@
 - **执行模型**：claude-sonnet-4-6
 
 #### TESTFIX-01 — 修复 2 个 vitest suite import 失败
+
 - **状态**：✅ 已完成
 - **实际开始**：2026-04-18
 - **完成时间**：2026-04-18
@@ -7013,6 +7088,7 @@
 - **完成备注**：根因：`vitest.config.ts` 缺少 `@/stores` 别名，server 组件的 `@/stores/authStore` 解析到 `apps/web/src/stores` 导致找不到。修复：在 `vitest.config.ts` resolve.alias 中添加 `'@/stores': path.resolve(__dirname, './apps/server/src/stores')`。修复后 ModerationDetail（10 tests）+ VideoTable（20 tests）均通过，总测试数 977 → 1007，失败数 16 不变（预存）。
 
 #### TESTFIX-02 — `/watch/` vs `/movie/` 路由真源决策 + ADR-034
+
 - **状态**：✅ 已完成
 - **实际开始**：2026-04-18
 - **完成时间**：2026-04-18
@@ -7030,6 +7106,7 @@
 - **完成备注**：根因确定：并非路由架构冲突（B 类），而是 `MOCK_MOVIE` 缺失 `genres`/`aliases`/`languages`/`tags` 等 21 个 Video 契约字段，导致 `VideoDetailHero` 内访问抛 TypeError。决策：双路由分治不合并（`/movie/` 详情、`/watch/` 播放）。修复：player.spec.ts MOCK_MOVIE/MOCK_ANIME 显式类型为 `Video`，补齐所有字段。player.spec.ts 之前全失败的 22 个电影/动漫详情页测试现在 15 通过，7 个 C/D 类漂移进入 TESTFIX-04/05。ADR-034 已写入。
 
 #### TESTFIX-03 — E2E 失败逐项分类登记 + triage 文档 + 校验脚本
+
 - **状态**：✅ 已完成
 - **建议模型**：opus
 - **创建时间**：2026-04-18
@@ -7047,6 +7124,7 @@
 - **完成备注**：25 条失败归档（unit×16 A×13/D×3，e2e×9 C×9）。verify-baseline 通过。执行模型: claude-sonnet-4-6
 
 #### TESTFIX-04 — 修复 C 类「立即修复」testid / DOM 漂移
+
 - **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
@@ -7057,6 +7135,7 @@
 - **完成备注**：triage 文档中 9 条 C 类失败均为 defer（href 格式/PlayerShell testid/DanmakuBar/search filter），本 Phase 无 C 类 fix 项，任务空操作。执行模型: claude-sonnet-4-6
 
 #### TESTFIX-05 — 修复 D 类「真 bug」（源代码侧）
+
 - **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
@@ -7071,6 +7150,7 @@
 - **完成备注**：修复 A 类 13 条（process.exit 链断），D 类 3 条（db.query mock + safeUpdate 断言更新）。执行模型: claude-sonnet-4-6
 
 #### TESTFIX-06 — 隔离清单 + CI 门禁 + test:guarded 脚本
+
 - **状态**：✅ 已完成
 - **实际开始**：2026-04-18
 - **完成时间**：2026-04-18
@@ -7086,6 +7166,7 @@
 - **完成备注**：执行模型: claude-sonnet-4-6
 
 #### TESTFIX-07 — E2E 全 suite 基线重建 + triage 补全
+
 - **状态**：✅ 已完成
 - **实际开始**：2026-04-18
 - **完成时间**：2026-04-18
@@ -7106,6 +7187,7 @@
   - 隔离清单从 9 条扩展至 54 条，每条绑定里程碑（M2/M3/M4/M5/M6/TESTFIX-08）
 
 #### TESTFIX-08 — 跨 E2E suite 修复 Mock 契约 + 补齐 testid
+
 - **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
@@ -7129,6 +7211,7 @@
   - `npm run typecheck` + `npm run lint` + `npm run test -- --run` 全绿
 
 #### TESTFIX-09 — test-guarded 扩展 E2E 子命令 + 合并 main + PHASE COMPLETE
+
 - **状态**：✅ 已完成
 - **建议模型**：sonnet
 - **创建时间**：2026-04-18
@@ -7166,26 +7249,26 @@
 
 ### Phase 0.5 数字摘要（来源：failing_tests.json）
 
-| 指标 | 数值 |
-|------|------|
-| E2E 失败总数（Phase 基线） | 54 |
-| 单元测试失败数 | 0 |
-| C 类（testid/URL 漂移，defer M2–M6） | 47 |
-| D 类（mock 契约 + 交互，本 Phase 修复） | 7 |
-| 修复后新增失败（回归） | 0 |
+| 指标                                    | 数值 |
+| --------------------------------------- | ---- |
+| E2E 失败总数（Phase 基线）              | 54   |
+| 单元测试失败数                          | 0    |
+| C 类（testid/URL 漂移，defer M2–M6）    | 47   |
+| D 类（mock 契约 + 交互，本 Phase 修复） | 7    |
+| 修复后新增失败（回归）                  | 0    |
 
 ### 各 suite 失败分布
 
-| Suite | 失败数 | 主要类型 |
-|-------|--------|---------|
-| auth.spec.ts | 15 | C（form testid drift，defer M4） |
-| admin.spec.ts | 18 | C/D（URL + testid，D-04~D-06 已修） |
-| homepage.spec.ts | 6 | C（nav testid drift，defer M2） |
-| player.spec.ts | 7 | C（player controls，defer M3/M5） |
-| search.spec.ts | 2 | C（filter testid，defer M5） |
-| admin-source-and-video-flows.spec.ts | 2 | D（D-07/D-08 已修） |
-| publish-flow.spec.ts | 2 | C/D（D-09 已修，C-46 defer M2） |
-| video-governance.spec.ts | 2 | C/D（D-10/C-47 已修） |
+| Suite                                | 失败数 | 主要类型                            |
+| ------------------------------------ | ------ | ----------------------------------- |
+| auth.spec.ts                         | 15     | C（form testid drift，defer M4）    |
+| admin.spec.ts                        | 18     | C/D（URL + testid，D-04~D-06 已修） |
+| homepage.spec.ts                     | 6      | C（nav testid drift，defer M2）     |
+| player.spec.ts                       | 7      | C（player controls，defer M3/M5）   |
+| search.spec.ts                       | 2      | C（filter testid，defer M5）        |
+| admin-source-and-video-flows.spec.ts | 2      | D（D-07/D-08 已修）                 |
+| publish-flow.spec.ts                 | 2      | C/D（D-09 已修，C-46 defer M2）     |
+| video-governance.spec.ts             | 2      | C/D（D-10/C-47 已修）               |
 
 ### 已完成工作
 
@@ -7247,11 +7330,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ### 下一步
 
-**Phase 0.5 正式闭幕**。M1（TOKEN-01..06 design-tokens）与 RW-SETUP（apps/*-next/ scaffold，详见 `task_queue_patch_rewrite_track_20260418.md`）并行启动。
+**Phase 0.5 正式闭幕**。M1（TOKEN-01..06 design-tokens）与 RW-SETUP（apps/\*-next/ scaffold，详见 `task_queue_patch_rewrite_track_20260418.md`）并行启动。
 
 ---
 
-## SEQ-20260418-RW-SETUP — apps/*-next/ 并行重写脚手架
+## SEQ-20260418-RW-SETUP — apps/\*-next/ 并行重写脚手架
 
 - **状态**：✅ 已完成
 - **创建时间**：2026-04-18 00:00
@@ -7354,8 +7437,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   - 模拟 smoke 新失败 → `test:guarded:e2e` 退出码 1
   - coverage-report 显示两个 E2E project 与对应 suite 清单
 - **完成备注**：playwright.config.ts 新增 web-next-chromium project（testDir: tests/e2e-next, baseURL: localhost:3002）+ webServer 条目；tests/e2e-next/ 目录 + smoke.spec.ts（2 tests，locale en/zh-CN 各一）全部绿；test-guarded.ts 扩展：readQuarantine 返回 e2eNext 集合，e2e-next:: 前缀分桶，runE2EGate 签名加参数；verify-baseline.ts coverageReport 增加 web-next-chromium section；typecheck ✅ / 1099 unit tests ✅ / playwright web-next-chromium 2 tests ✅；执行模型：claude-sonnet-4-6
+
 ---
+
 ✅ PHASE COMPLETE — Phase 1（M1）Design Token 里程碑已完成，等待合并到 main 并确认下一步
+
 - **完成时间**：2026-04-18
 - **本 Phase 完成任务数**：14 个（TOKEN-01~14）
 - **已合并到 main**：待人工确认后执行（`git merge dev --ff-only` 或 `git merge dev -m "feat: complete Phase 1 design tokens"`）
@@ -7368,6 +7454,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   - [ ] 人工验收：BASELINE-01 关键路径视觉回归 SSIM ≥ 0.98（可选）
   - [ ] 确认合并 dev → main（执行 `git merge dev -m "feat: complete Phase 1 design tokens"`）
   - [ ] 确认开始 Phase 2，届时拆分 M2–M6 任务卡
+
 ---
 
 ## SEQ-20260419-M2 — M2 Homepage 迁移
@@ -7460,29 +7547,35 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - **目标**：闭合三个未闭合缺口（CSS 变量 / 详情页 URL / 搜索页）+ 关闭 M2 里程碑，准备进入 M3
 
 #### M2-HOMEPAGE-02 — apps/web-next/ 清退旧 CSS 变量名（状态：✅ 已完成）
+
 - **建议模型**：sonnet
 - **文件范围**：apps/web-next/ 所有新增组件（page.tsx / Nav / Footer / ThemeToggle / HeroBanner / VideoGrid / VideoCard / VideoCardWide）
 
 #### M2-TVSHOW-04 — 详情页 URL /variety → /tvshow（状态：✅ 已完成）
+
 - **建议模型**：sonnet
 - **文件范围**：git mv variety→tvshow / video-route.ts URL_SEGMENT_MAP / next.config.ts redirects
 
 #### M2-TVSHOW-05 — search FilterBar + ResultCard variety → tvshow（状态：✅ 已完成）
+
 - **建议模型**：sonnet
 - **依赖**：M2-TVSHOW-04
 - **文件范围**：apps/web FilterBar.tsx / ResultCard.tsx / search.spec.ts 断言同步
 
 #### M2-TVSHOW-06 — apps/web 剩余 variety URL 构造扫尾（状态：✅ 已完成）
+
 - **建议模型**：haiku
 - **依赖**：M2-TVSHOW-04
 - **文件范围**：VideoCard / VideoMeta / VideoDetailHero / Page.template / others/[slug]
 
 #### M2-E2E-01 — M2 E2E 新增覆盖 & 断言同步（状态：✅ 已完成）
+
 - **建议模型**：sonnet
 - **依赖**：HOMEPAGE-02 + TVSHOW-04..06 全部 ✅
 - **文件范围**：tests/e2e-next/browse-tvshow.spec.ts（新增）/ tests/e2e/ 断言同步
 
 #### M2-CLOSE-01 — M2 PHASE COMPLETE + 文档收尾（状态：✅ 已完成）
+
 - **建议模型**：haiku（+ Opus 子代理独立审计）
 - **依赖**：HOMEPAGE-02 + TVSHOW-04..06 + E2E-01 全部 ✅
 - **文件范围**：docs/ 仅
@@ -7517,14 +7610,17 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - **目标**：movie / series / anime / tvshow / others 5 种详情页从 apps/web 迁移到 apps/web-next
 
 #### M3-DETAIL-01 — 详情页共享组件迁移 apps/web-next（状态：✅ 已完成）
+
 - **建议模型**：sonnet
 - **文件范围**：EpisodeGrid / VideoDetailClient / VideoDetailHero / VideoMeta / video-detail.ts / line-display-name.ts
 
 #### M3-DETAIL-02 — 5 种详情页路由新建 apps/web-next（状态：✅ 已完成）
+
 - **建议模型**：sonnet
 - **依赖**：M3-DETAIL-01
 
 #### M3-DETAIL-03 — ALLOWLIST 翻转 + apps/web 详情页删除 + E2E 迁移（状态：✅ 已完成）
+
 - **建议模型**：sonnet
 - **依赖**：M3-DETAIL-02
 
@@ -7536,16 +7632,19 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - **依赖**：M3-DETAIL-03 ✅
 
 #### M3-PLAYER-01 — player core 提升 packages/player-core/ + ADR-036（状态：✅ 已完成）
+
 - **建议模型**：opus（强制 + arch-reviewer 子代理）
 - **依赖**：M3-DETAIL-03
 - **完成时间**：2026-04-19
 
 #### M3-PLAYER-02 — apps/web-next PlayerShell + shell 层 + /watch 路由（状态：✅ 已完成）
+
 - **建议模型**：sonnet
 - **依赖**：M3-PLAYER-01
 - **完成时间**：2026-04-19
 
 #### M3-PLAYER-03 — ALLOWLIST 翻转 /watch + apps/web 清退 + 播放页 E2E 迁移 + 关键路径回归（状态：✅ 已完成）
+
 - **建议模型**：sonnet
 - **依赖**：M3-PLAYER-02
 - **硬阻断**：人工回归 ①断点续播✅ ②线路切换✅ ③剧场模式✅ ④字幕暂无源跳过
@@ -7559,6 +7658,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - **依赖**：M3-DETAIL-03 + M3-PLAYER-03 全部 ✅
 
 #### M3-CLOSE-01 — M3 PHASE COMPLETE + 缩减统计 + 审计挂钩（状态：✅ 已完成）
+
 - **建议模型**：haiku
 - **依赖**：全部 M3 任务 ✅
 - **完成时间**：2026-04-19
@@ -7573,6 +7673,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 > **审计员**：arch-reviewer (claude-opus-4-6) — AUDIT RESULT: PASS（7/7）
 >
 > **关键产出**：
+>
 > - `packages/player-core/`（@resovo/player-core）新建，YTPlayer → Player，ADR-036 已采纳
 > - 5 种详情页（movie/series/anime/tvshow/others）迁移到 apps/web-next，detail-page-factory 复用
 > - apps/web-next PlayerShell + shell 层 + /watch 路由就位
@@ -7595,27 +7696,27 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ### 方案 M1/M2/M3 ↔ REGRESSION 执行对齐表
 
-| 方案 M# | 方案要求 | REG 卡 | 状态 |
-|---------|---------|--------|------|
-| M1.1 Token 三子层 | base/semantic/component + brands/resovo | — (复用 workspace 包) | ✅ |
-| M1.2 主题三态 | ThemeProvider + 三态 Segmented | REG-M1-01 | ✅ |
-| M1.3 BrandProvider | BrandProvider + useBrand | REG-M1-01 | ✅ |
-| M1.4 middleware 识别 | brand/theme cookie → header | REG-M1-02 | ✅ |
-| M1.5 blocking script | 首屏无闪烁 | — (已复制) | ✅ |
-| M1.6 Token 后台 MVP | 11 项（V2 推迟 7 项，ADR-043） | REG-M1-04-PREP | ⚠️ |
-| M2.1 Root layout 四件套 | Nav/Footer/Host/MainSlot 常驻 | REG-M2-01 | ✅ |
-| M2.2 useBrand 驱动触点 | Header/Footer/Logo/Footer text | REG-M2-02 | ✅ |
-| M2.3 PageTransition primitive | §9 四类过渡底层 | REG-M2-03 | ✅ |
-| M2.4 SharedElement primitive | FLIP 基建（noop 合约冻结，M5 实装） | REG-M2-03 | ⚠️ |
-| M2.5 RouteStack primitive | 返回手势（noop stub，M5 实装） | REG-M2-03 | ⚠️ |
-| M2.6 LazyImage + BlurHash | §15 + §17 | REG-M2-04 | ✅ |
-| M2.7 SafeImage + FallbackCover | §17 四级降级链 | REG-M2-05 | ✅ |
-| M2.8 ScrollRestoration | §15.1 | REG-M2-06 | ✅ |
-| M2.9 PrefetchOnHover | §15.2 | REG-M2-06 | ✅ |
-| M3.1 GlobalPlayerHost | root + zustand 单例 + Portal | REG-M3-01 | ✅ |
-| M3.2 mini 态 + FLIP full↔mini | §13.3 Spotify 模式 | REG-M3-02 | ✅ |
-| M3.3 pip 态 | 浏览器原生 PiP | REG-M3-03 | ✅ |
-| M3.4 路由切换语义 | 离开 /watch 转 mini | REG-M3-04 | ✅ |
+| 方案 M#                        | 方案要求                                | REG 卡                | 状态 |
+| ------------------------------ | --------------------------------------- | --------------------- | ---- |
+| M1.1 Token 三子层              | base/semantic/component + brands/resovo | — (复用 workspace 包) | ✅   |
+| M1.2 主题三态                  | ThemeProvider + 三态 Segmented          | REG-M1-01             | ✅   |
+| M1.3 BrandProvider             | BrandProvider + useBrand                | REG-M1-01             | ✅   |
+| M1.4 middleware 识别           | brand/theme cookie → header             | REG-M1-02             | ✅   |
+| M1.5 blocking script           | 首屏无闪烁                              | — (已复制)            | ✅   |
+| M1.6 Token 后台 MVP            | 11 项（V2 推迟 7 项，ADR-043）          | REG-M1-04-PREP        | ⚠️   |
+| M2.1 Root layout 四件套        | Nav/Footer/Host/MainSlot 常驻           | REG-M2-01             | ✅   |
+| M2.2 useBrand 驱动触点         | Header/Footer/Logo/Footer text          | REG-M2-02             | ✅   |
+| M2.3 PageTransition primitive  | §9 四类过渡底层                         | REG-M2-03             | ✅   |
+| M2.4 SharedElement primitive   | FLIP 基建（noop 合约冻结，M5 实装）     | REG-M2-03             | ⚠️   |
+| M2.5 RouteStack primitive      | 返回手势（noop stub，M5 实装）          | REG-M2-03             | ⚠️   |
+| M2.6 LazyImage + BlurHash      | §15 + §17                               | REG-M2-04             | ✅   |
+| M2.7 SafeImage + FallbackCover | §17 四级降级链                          | REG-M2-05             | ✅   |
+| M2.8 ScrollRestoration         | §15.1                                   | REG-M2-06             | ✅   |
+| M2.9 PrefetchOnHover           | §15.2                                   | REG-M2-06             | ✅   |
+| M3.1 GlobalPlayerHost          | root + zustand 单例 + Portal            | REG-M3-01             | ✅   |
+| M3.2 mini 态 + FLIP full↔mini  | §13.3 Spotify 模式                      | REG-M3-02             | ✅   |
+| M3.3 pip 态                    | 浏览器原生 PiP                          | REG-M3-03             | ✅   |
+| M3.4 路由切换语义              | 离开 /watch 转 mini                     | REG-M3-04             | ✅   |
 
 **汇总**：16/19 ✅，3/19 ⚠️（均有 ADR 记录），0/19 ❌
 
@@ -7712,7 +7813,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 依赖：REG-M1-04-PREP ✅（补全 validate-tokens.ts 和 build-css.ts 扩展后方可开始）
    - 决策产出：ADR-043（Token 后台 MVP 增量范围 + V2 推迟项）已追加到 docs/decisions.md
    - 验收要点：生产环境 API 返回 403 ✅（assertWriteAllowed + DesignTokensWriteDisabledError）；继承指示 InheritanceBadge ✅；Diff 面板 ✅；保存链路 PUT API + service ✅；Primitive 层禁改（DesignTokensValidationError）✅
-   - 完成备注：arch-reviewer Opus 子代理产出 ADR-043（5 个决策点：PUT API 契约/生产只读/继承指示算法/落盘策略/Diff 面板）；实现 DesignTokensService（依赖注入设计，assertWriteAllowed/validateOverrides/CAS 乐观锁/temp+rename 原子写/prettier 格式化/history 管理）；PUT+增强GET路由；DiffPanel/TokenEditor/InheritanceBadge/_diff/_paths 组件；service 单元测试 6 cases；typecheck ✅ lint ✅ unit 1136/1136 ✅
+   - 完成备注：arch-reviewer Opus 子代理产出 ADR-043（5 个决策点：PUT API 契约/生产只读/继承指示算法/落盘策略/Diff 面板）；实现 DesignTokensService（依赖注入设计，assertWriteAllowed/validateOverrides/CAS 乐观锁/temp+rename 原子写/prettier 格式化/history 管理）；PUT+增强GET路由；DiffPanel/TokenEditor/InheritanceBadge/\_diff/\_paths 组件；service 单元测试 6 cases；typecheck ✅ lint ✅ unit 1136/1136 ✅
    - 详见补丁 §5.4
 
 ---
@@ -7755,7 +7856,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 规模：L（~240 min）
    - 依赖：REG-M2-01 ✅
    - 决策产出：ADR-044（四类过渡 primitive 契约）
-   - 验收要点：临时 /__dev/primitives 页面演示四类过渡，Safari/Firefox 降级路径有 fallback，prefers-reduced-motion 切换瞬时 opacity
+   - 验收要点：临时 /\_\_dev/primitives 页面演示四类过渡，Safari/Firefox 降级路径有 fallback，prefers-reduced-motion 切换瞬时 opacity
    - **【审计约束】RouteStack 本轮仅实现 stub**：移动端边缘滑动手势逻辑**不在本卡实现**，只建类型定义 + noop 导出 + 注释 "TODO: M5 Tab Bar 上线时实装手势"。理由：手势实现依赖 Tab Bar 布局（方案 §14.1 属 M5 范围），REGRESSION 阶段提前实现会引入未被消费的复杂逻辑。ADR-044 中须记录此推迟决定。
 
 4. REG-M2-04 — LazyImage + BlurHash primitive（状态：✅ 已完成）
@@ -8245,6 +8346,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    **问题**：IMG-01 原卡要求扩展 `episodes.thumbnail_*`，但系统无 `episodes` 表；集数靠 `video_sources.season_number/episode_number` 表达（`architecture.md`:234）。
 
    **校准结论**：新建轻量表 `video_episode_images`：
+
    ```
    video_episode_images
    ├── id UUID PK
@@ -8257,6 +8359,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    ├── created_at / updated_at
    └── UNIQUE (video_id, season_number, episode_number)
    ```
+
    `video_sources` 记录集数逻辑坐标，`video_episode_images` 记录该坐标对应的缩略图元数据，两表通过 `(video_id, season, episode)` 关联，无需引入完整 episodes 领域模型。
 
    #### 校准点 C3 — 实际迁移路径
@@ -8291,7 +8394,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
    #### 校准点 C6 — 验收条件修正：排除 primitive 内部 `<img>`
 
-   **问题**：IMG-04 验收写"`grep -r '<img '` apps/web-next/src --include='*.tsx' 零命中"，但 `LazyImage.tsx`:80 内部故意使用 `<img>` 并有 eslint disable。
+   **问题**：IMG-04 验收写"`grep -r '<img '` apps/web-next/src --include='\*.tsx' 零命中"，但 `LazyImage.tsx`:80 内部故意使用 `<img>` 并有 eslint disable。
 
    **校准结论**：验收改为：
    - 业务组件目录（`apps/web-next/src/app/` 和 `apps/web-next/src/components/` 中排除 `primitives/lazy-image/`）零裸 `<img>` / 零裸 `next/image`
@@ -8317,10 +8420,9 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - Rate limit：按客户端 IP，10 min 内同 IP 最多 50 次写入（超过静默丢弃，不报 429）
    - 不得查询 `users` 表（公开端点，CLAUDE.md 约束）
 
-   ---
+   ***
 
    **IMG-00 文件产出（完成标准）**：
-
    1. 更新 `docs/task-queue.md` 中 IMG-01~IMG-07 的文件范围、依赖、验收条件，使其与 C1~C8 一致；在 IMG-03 与 IMG-04 之间插入 IMG-03.5 卡片
    2. 在 `docs/image_pipeline_plan_20260418.md` 文件末尾追加 `## 校准注记（2026-04-20）` 章节，简述 C1~C8 决议摘要（不改原文内容）
    3. 无 .ts/.tsx/.sql/.css 源代码改动
@@ -8343,12 +8445,12 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - **触发时间**：2026-04-20
 - **触发原因**：方案 §19 M5 定义缺失卡片协议决策（直达路径 / 标签 taxonomy / 多集视觉 / Tab Bar 叠加协议 / primitive 激活归属 / Skeleton 系统 / Banner 全栈三卡拆分）
 - **封锁范围**：
-  - 🚫 禁止启动 M5-CARD-* / M5-API-* / M5-ADMIN-* 序列直到 M5-PREP-01 + M5-PREP-02 全部 ✅
-  - 🚫 禁止启动 M5-PAGE-* 序列直到 M5-CARD-* 全部 ✅（PAGE 卡消费 CARD primitive）
+  - 🚫 禁止启动 M5-CARD-_ / M5-API-_ / M5-ADMIN-\* 序列直到 M5-PREP-01 + M5-PREP-02 全部 ✅
+  - 🚫 禁止启动 M5-PAGE-_ 序列直到 M5-CARD-_ 全部 ✅（PAGE 卡消费 CARD primitive）
   - 🚫 禁止 M5-PAGE-BANNER-FE-01 启动在 M5-API-BANNER-01 + M5-ADMIN-BANNER-01 完成之前
   - ✅ 允许：M5-PREP-01 / M5-PREP-02 / hotfix
 - **解除条件**：
-  1. M5-PREP-01 ✅（ADR-046 §1-§8 全部章节落盘到 `docs/decisions.md`）
+  1. M5-PREP-01 ✅（ADR-048 §1-§8 全部章节落盘到 `docs/decisions.md`）
   2. M5-PREP-02 ✅（`docs/frontend_redesign_plan_20260418.md` §9.5/§14.1.1/§15.3.1/§16/§19 更新完成 + primitive 激活归属表落盘 + embla-carousel 依赖核查清单完成）
   3. Opus arch-reviewer 独立审计 PASS
 - **关联文档**：`docs/task_queue_patch_m5_card_protocol_20260420_v1_1.md`（v1.1，当前版本）
@@ -8358,10 +8460,10 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ## SEQ-20260420-M5-PREP — M5 前置决策
 
-- **状态**：⬜ 未开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-20 19:00
 - **最后更新时间**：2026-04-20 19:00
-- **目标**：撰写 ADR-046（卡片协议 + 直达路径 + Tab Bar 叠加 + Skeleton + primitive 激活归属）并回写方案文档，作为 M5 整个序列的决策锚点
+- **目标**：撰写 ADR-048（卡片协议 + 直达路径 + Tab Bar 叠加 + Skeleton + primitive 激活归属）并回写方案文档，作为 M5 整个序列的决策锚点
 - **范围**：`docs/decisions.md`、`docs/frontend_redesign_plan_20260418.md`、`docs/m5_primitive_activation_20260420.md`（新建）、`docs/m5_dependency_audit_20260420.md`（新建）
 - **依赖**：SEQ-20260420-IMG-PRE-M5 ✅（REGRESSION 完成）
 - **建议模型**：opus（PREP-01 主循环）/ claude-haiku-4-5-20251001（PREP-02 子代理）
@@ -8373,12 +8475,12 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 计划开始：⚠️ M5 BLOCKER 解除后（自动为首卡）
    - 实际开始：2026-04-21
    - 完成时间：2026-04-21
-   - 完成时间：
+   - 完成时间：2026-04-21
    - 建议模型：**opus**（主循环）+ arch-reviewer (claude-opus-4-6) 子代理（**强制**）
    - 规模：M（~140 分钟）
    - 依赖：无
    - **文件范围**：
-     - 修改 `docs/decisions.md`：文末追加 ADR-046（§1 背景 / §2 交互协议 / §3 动效 / §4 内容+§4.5 Skeleton / §5 多集视觉 / §6 组件边界 / §7 验收清单 / §8 Tab Bar↔MiniPlayer 叠加协议）
+     - 修改 `docs/decisions.md`：文末追加 ADR-048（§1 背景 / §2 交互协议 / §3 动效 / §4 内容+§4.5 Skeleton / §5 多集视觉 / §6 组件边界 / §7 验收清单 / §8 Tab Bar↔MiniPlayer 叠加协议）
      - 可选：新增 `docs/adr-046-card-protocol-appendix.md`（如 ADR 正文过长）
    - **验收要点**：
      - ADR-046 包含 §1-§8 全章节，尤其 §8 含 §8.1-§8.5（布局 / 交互 / z-index 表 / safe-area / 反例）
@@ -8419,11 +8521,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ### 任务列表
 
-1. M5-CARD-CTA-01 — VideoCard 双入口拆分 + Fast Takeover（状态：⬜ 未开始）
+1. M5-CARD-CTA-01 — VideoCard 双入口拆分 + Fast Takeover（状态：✅ 已完成）
    - 创建时间：2026-04-20 19:00
    - 计划开始：M5-PREP-01 ✅ + M5-PREP-02 ✅ 后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-04-21
+   - 完成时间：2026-04-21
    - 建议模型：claude-sonnet-4-6
    - 规模：M（~150 分钟）
    - 依赖：M5-PREP-01 ✅ + M5-PREP-02 ✅
@@ -8456,7 +8558,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - **文件范围**：
      - 新增 `apps/web-next/src/components/primitives/media/TagLayer.tsx`
      - 新增 `apps/web-next/src/types/tag.ts`：导出 `LifecycleTag`、`TrendingTag`、`SpecTag`、`RatingSource` 类型
-     - 修改 `packages/design-tokens/src/semantic/tag.json`（或等价路径）：新增 12 个 alias（tag-lifecycle-*/tag-trending-*/tag-spec-icon-color/tag-rating-*/tag-border-radius）
+     - 修改 `packages/design-tokens/src/semantic/tag.json`（或等价路径）：新增 12 个 alias（tag-lifecycle-_/tag-trending-_/tag-spec-icon-color/tag-rating-\*/tag-border-radius）
      - 修改 `apps/web-next/src/components/video/VideoCard.tsx`：PosterAction 内嵌 `<TagLayer {...video.tags} />`
      - 修改 `apps/server/src/lib/videos/tag-mapping.ts`（或等价路径）：DB 字段 → TagLayer props 映射
      - 新增 `tests/unit/web-next/TagLayer.test.tsx`（lifecycle/trending 互斥、specs 上限 2、rating 渲染）
@@ -8476,7 +8578,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 依赖：M5-PREP-01 ✅
    - **文件范围**：
      - 新增 `apps/web-next/src/components/primitives/media/StackedPosterFrame.tsx`：box-shadow 模拟两层后卡，不渲染真实 DOM
-     - 修改 `packages/design-tokens/src/semantic/stack.json`（或等价）：12 个 alias（stack-layer-*/stack-transition-duration/-reverse）
+     - 修改 `packages/design-tokens/src/semantic/stack.json`（或等价）：12 个 alias（stack-layer-\*/stack-transition-duration/-reverse）
      - 修改 `apps/web-next/src/components/video/VideoCard.tsx`：PosterAction 内 SafeImage 替换为 `<StackedPosterFrame stackLevel={getStackLevel(video.type)}>`
      - 新增 `apps/web-next/src/lib/video-helpers.ts`（或复用已有）：`getStackLevel(type)` 映射
      - 新增 `tests/unit/web-next/StackedPosterFrame.test.tsx`
@@ -8551,7 +8653,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - `useSkeletonDelay(true, 300)` 在 < 300ms 返回 false，> 300ms 返回 true
      - VideoCard.Skeleton 与实际渲染尺寸像素级一致（DevTools 叠加比对）
      - 暗色模式 Token 切换无闪烁
-     - **后续所有 M5-PAGE-* 卡 AI-CHECK 六问强制检查"新组件是否导出 Skeleton"**
+     - **后续所有 M5-PAGE-\* 卡 AI-CHECK 六问强制检查"新组件是否导出 Skeleton"**
      - typecheck ✅ / lint ✅ / unit ✅
 
 ---
