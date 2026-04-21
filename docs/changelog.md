@@ -8141,3 +8141,19 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：无
 - **数据库变更**：无
 - **备注**：MiniPlayer mobile 布局已由 globals.css @media(hover:none) 处理；CinemaMode 在 GlobalPlayerFullFrame 的 relative 容器内（z-index 1），PlayerShell 在 z-index 2，不遮挡播放器控件
+
+---
+
+## M5-PAGE-BANNER-FE-01 — HeroBanner 前端重塑
+
+- **完成时间**：2026-04-21
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件列表**：
+  - `apps/web-next/src/components/video/KenBurnsLayer.tsx` — 新增，WAAPI 6s Ken Burns 缩放（slide 切换重启，prefers-reduced-motion 免除）
+  - `apps/web-next/src/components/video/BannerCarouselMobile.tsx` — 新增，embla-carousel 移动端 5:6 swipe 轮播
+  - `apps/web-next/src/components/video/HeroBanner.tsx` — 重写，消费 `/v1/banners?locale=` 真实 API；PC `min(520px,60vh)` + Ken Burns；`--banner-accent` 随 slide 切换 1s 过渡；HeroBanner.Skeleton 导出；双 CTA（立即播放 + 详情信息）
+  - `apps/web-next/src/app/globals.css` — 新增 `--banner-accent-{0..5}` 调色板 token + `--banner-dot-inactive`
+- **新增依赖**：embla-carousel-react（用户预先 install）
+- **数据库变更**：无
+- **备注**：`--banner-accent` 通过 JS `setProperty` 动态指向调色板 token；移动端 swipe 触发 onSelect 回调同步 activeIndex
