@@ -27,6 +27,11 @@ interface DbBannerRow {
   updated_at: string
 }
 
+interface DbBannerCardRow extends DbBannerRow {
+  video_type: string | null
+  video_slug: string | null
+}
+
 // ── Row mappers ──────────────────────────────────────────────────────────────
 
 function mapRow(row: DbBannerRow): Banner {
@@ -47,7 +52,7 @@ function mapRow(row: DbBannerRow): Banner {
   }
 }
 
-function mapCard(row: DbBannerRow): BannerCard {
+function mapCard(row: DbBannerCardRow): BannerCard & { videoType: string | null; videoSlug: string | null } {
   return {
     id: row.id,
     title: row.title,
@@ -55,6 +60,8 @@ function mapCard(row: DbBannerRow): BannerCard {
     linkType: row.link_type as BannerCard['linkType'],
     linkTarget: row.link_target,
     sortOrder: row.sort_order,
+    videoType: row.video_type ?? null,
+    videoSlug: row.video_slug ?? null,
   }
 }
 
@@ -63,25 +70,32 @@ function mapCard(row: DbBannerRow): BannerCard {
 export async function listActiveBanners(
   db: Pool,
   opts: { locale?: string; brandSlug?: string | null } = {}
-): Promise<BannerCard[]> {
+): Promise<ReturnType<typeof mapCard>[]> {
   const now = new Date().toISOString()
   const params: unknown[] = [now, now]
   const conditions: string[] = [
-    'is_active = true',
-    '(active_from IS NULL OR active_from <= $1)',
-    '(active_to IS NULL OR active_to >= $2)',
+    'b.is_active = true',
+    '(b.active_from IS NULL OR b.active_from <= $1)',
+    '(b.active_to IS NULL OR b.active_to >= $2)',
   ]
 
   if (opts.brandSlug) {
     params.push(opts.brandSlug)
-    conditions.push(`(brand_scope = 'all-brands' OR brand_slug = $${params.length})`)
+    conditions.push(`(b.brand_scope = 'all-brands' OR b.brand_slug = $${params.length})`)
   } else {
-    conditions.push(`brand_scope = 'all-brands'`)
+    conditions.push(`b.brand_scope = 'all-brands'`)
   }
 
   const where = conditions.join(' AND ')
-  const result = await db.query<DbBannerRow>(
-    `SELECT * FROM home_banners WHERE ${where} ORDER BY sort_order ASC`,
+  const result = await db.query<DbBannerCardRow>(
+    `SELECT b.*,
+            v.type  AS video_type,
+            v.slug  AS video_slug
+       FROM home_banners b
+       LEFT JOIN videos v
+         ON b.link_type = 'video' AND v.short_id = b.link_target
+      WHERE ${where}
+      ORDER BY b.sort_order ASC`,
     params
   )
   return result.rows.map(mapCard)

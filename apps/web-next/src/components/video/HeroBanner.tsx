@@ -6,9 +6,10 @@ import { useLocale } from 'next-intl'
 import { apiClient } from '@/lib/api-client'
 import { SafeImage } from '@/components/media'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
+import { getVideoDetailHref } from '@/lib/video-route'
 import { KenBurnsLayer } from './KenBurnsLayer'
 import { BannerCarouselMobile } from './BannerCarouselMobile'
-import type { LocalizedBannerCard, ApiListResponse } from '@resovo/types'
+import type { LocalizedBannerCard, ApiListResponse, VideoType } from '@resovo/types'
 
 // 轮播主色调色板索引，对应 globals.css --banner-accent-{N}
 const PALETTE_SIZE = 6
@@ -131,10 +132,29 @@ interface BannerContentProps {
   compact?: boolean
 }
 
+function buildBannerHrefs(banner: LocalizedBannerCard): { watchHref: string; detailHref: string | null } {
+  if (banner.linkType === 'external') {
+    return { watchHref: banner.linkTarget, detailHref: null }
+  }
+  // 内部视频：linkTarget 可能是 shortId 或完整路径
+  if (banner.linkTarget.startsWith('/')) {
+    return { watchHref: banner.linkTarget, detailHref: banner.linkTarget }
+  }
+  const watchHref = `/watch/${banner.linkTarget}?ep=1`
+  // 有 videoType 时用 getVideoDetailHref 构造精确 detail 路径
+  const detailHref = banner.videoType
+    ? getVideoDetailHref({
+        type: banner.videoType as VideoType,
+        slug: banner.videoSlug ?? null,
+        shortId: banner.linkTarget,
+      })
+    : watchHref // 降级：无 videoType 时 detail 也指向 /watch
+  return { watchHref, detailHref }
+}
+
 function BannerContent({ banner, compact }: BannerContentProps) {
   const isExternal = banner.linkType === 'external'
-  const watchHref = banner.linkTarget.startsWith('/') ? banner.linkTarget : `/watch/${banner.linkTarget}?ep=1`
-  const detailHref = banner.linkTarget.startsWith('/') ? banner.linkTarget : null
+  const { watchHref, detailHref } = buildBannerHrefs(banner)
 
   return (
     <div className={compact ? 'space-y-3' : 'max-w-2xl space-y-4'}>
@@ -149,7 +169,7 @@ function BannerContent({ banner, compact }: BannerContentProps) {
       <div className="flex flex-wrap items-center gap-3 pt-2">
         {isExternal ? (
           <a
-            href={banner.linkTarget}
+            href={watchHref}
             target="_blank"
             rel="noopener noreferrer"
             data-testid="hero-watch-btn"
@@ -173,6 +193,7 @@ function BannerContent({ banner, compact }: BannerContentProps) {
             {detailHref && !compact && (
               <Link
                 href={detailHref}
+                data-testid="hero-detail-btn"
                 className="inline-flex items-center px-6 py-3 rounded-full font-bold text-sm text-white bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-colors"
               >
                 详情信息

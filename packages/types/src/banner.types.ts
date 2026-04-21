@@ -40,6 +40,9 @@ export interface LocalizedBannerCard {
   linkType: BannerLinkType
   linkTarget: string
   sortOrder: number
+  /** linkType='video' 时携带，用于前端构造 getVideoDetailHref */
+  videoType?: string | null
+  videoSlug?: string | null
 }
 
 export interface CreateBannerInput {

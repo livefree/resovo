@@ -38,7 +38,38 @@ const MOCK_SERIES = {
   sourceCount: 1,
 }
 
+const MOCK_BANNERS = [
+  {
+    id: 'ban-001',
+    title: '精选推荐电影',
+    imageUrl: '',
+    linkType: 'video',
+    linkTarget: 'aB3kR9x1',
+    sortOrder: 0,
+    videoType: 'movie',
+    videoSlug: 'test-movie-aB3kR9x1',
+  },
+  {
+    id: 'ban-002',
+    title: '热门剧集',
+    imageUrl: '',
+    linkType: 'video',
+    linkTarget: 'bC4lS0y2',
+    sortOrder: 1,
+    videoType: 'series',
+    videoSlug: 'test-series-bC4lS0y2',
+  },
+]
+
 async function mockApiRoutes(page: import('@playwright/test').Page) {
+  await page.route(`${API_BASE}/banners*`, (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: MOCK_BANNERS }),
+    })
+  })
+
   await page.route(`${API_BASE}/videos/trending*`, (route) => {
     const url = route.request().url()
     const type = new URL(url).searchParams.get('type')
@@ -78,6 +109,26 @@ test.describe('首页', () => {
 
   test('Hero Banner 区域存在', async ({ page }) => {
     await expect(page.getByTestId('hero-banner')).toBeVisible()
+  })
+
+  test('HeroBanner 渲染 banner 标题', async ({ page }) => {
+    await expect(page.getByTestId('hero-banner')).toBeVisible()
+    await expect(page.getByTestId('hero-banner')).toContainText('精选推荐电影')
+  })
+
+  test('HeroBanner 视频 banner 显示"立即播放"和"详情信息"双 CTA', async ({ page }) => {
+    await expect(page.getByTestId('hero-watch-btn')).toBeVisible()
+    await expect(page.getByTestId('hero-detail-btn')).toBeVisible()
+  })
+
+  test('HeroBanner 指示点数量与 banner 数量一致', async ({ page }) => {
+    const dots = page.getByTestId(/^banner-dot-/)
+    await expect(dots).toHaveCount(2)
+  })
+
+  test('点击第二个指示点切换到第二条 banner', async ({ page }) => {
+    await page.getByTestId('banner-dot-1').click()
+    await expect(page.getByTestId('hero-banner')).toContainText('热门剧集')
   })
 
   test('电影网格区域存在', async ({ page }) => {

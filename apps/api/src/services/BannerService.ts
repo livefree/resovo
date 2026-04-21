@@ -19,7 +19,10 @@ function resolveTitle(title: BannerTitle, locale?: string): string {
   return first ?? ''
 }
 
-function localizeCard(card: BannerCard, locale?: string): LocalizedBannerCard {
+function localizeCard(
+  card: BannerCard & { videoType?: string | null; videoSlug?: string | null },
+  locale?: string
+): LocalizedBannerCard {
   return {
     id: card.id,
     title: resolveTitle(card.title, locale),
@@ -27,6 +30,8 @@ function localizeCard(card: BannerCard, locale?: string): LocalizedBannerCard {
     linkType: card.linkType,
     linkTarget: card.linkTarget,
     sortOrder: card.sortOrder,
+    videoType: card.videoType ?? null,
+    videoSlug: card.videoSlug ?? null,
   }
 }
 
