@@ -8669,10 +8669,10 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ### 任务列表
 
-1. M5-API-BANNER-01 — home_banners migration + API（状态：⬜ 未开始）
+1. M5-API-BANNER-01 — home_banners migration + API（状态：🔄 进行中）
    - 创建时间：2026-04-20 19:00
    - 计划开始：M5-PREP-01 ✅ 后
-   - 实际开始：
+   - 实际开始：2026-04-21 10:00
    - 完成时间：
    - 建议模型：claude-sonnet-4-6
    - 规模：M（~120 分钟）

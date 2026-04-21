@@ -36,6 +36,8 @@ import { adminModerationRoutes } from '@/api/routes/admin/moderation'
 import { adminDesignTokenRoutes } from '@/api/routes/admin/design-tokens'
 import { internalImageBrokenRoutes } from '@/api/routes/internal/image-broken'
 import { adminImageHealthRoutes } from '@/api/routes/admin/image-health'
+import { bannerRoutes } from '@/api/routes/banners'
+import { adminBannerRoutes } from '@/api/routes/admin/banners'
 import { VerifyService } from '@/api/services/VerifyService'
 import { db } from '@/api/lib/postgres'
 
@@ -88,6 +90,8 @@ async function start() {
   await fastify.register(adminDesignTokenRoutes, { prefix: '/v1' })
   await fastify.register(internalImageBrokenRoutes, { prefix: '/v1' })
   await fastify.register(adminImageHealthRoutes, { prefix: '/v1' })
+  await fastify.register(bannerRoutes, { prefix: '/v1' })
+  await fastify.register(adminBannerRoutes, { prefix: '/v1' })
 
   registerVerifyWorker()
   registerCrawlerWorker()
