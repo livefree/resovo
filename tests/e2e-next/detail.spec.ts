@@ -106,10 +106,11 @@ test.describe('电影详情页', () => {
     await expect(page).toHaveURL(/search\?director=/)
   })
 
-  test('立即播放按钮存在且可点击', async ({ page }) => {
+  test('点击立即播放后 URL 进入 /watch/...', async ({ page }) => {
     const playBtn = page.getByTestId('detail-play-btn')
     await expect(playBtn).toBeVisible()
-    await expect(playBtn).toBeEnabled()
+    await playBtn.click()
+    await expect(page).toHaveURL(new RegExp(`/watch/${MOCK_MOVIE.shortId}`))
   })
 
   test('电影类型不显示选集选择器', async ({ page }) => {

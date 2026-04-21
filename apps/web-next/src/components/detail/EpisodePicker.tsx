@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import type { Video } from '@resovo/types'
 
 interface EpisodePickerProps {
@@ -73,14 +74,10 @@ function EpisodePickerSkeleton() {
       className="max-w-screen-xl mx-auto px-4 py-4 border-t"
       style={{ borderColor: 'var(--border-default)' }}
     >
-      <div className="h-4 w-32 rounded animate-pulse mb-3" style={{ background: 'var(--bg-surface-sunken)' }} />
+      <Skeleton shape="text" width={128} height={16} className="mb-3" />
       <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-12 gap-2">
         {Array.from({ length: 12 }).map((_, i) => (
-          <div
-            key={i}
-            className="h-9 rounded animate-pulse"
-            style={{ background: 'var(--bg-surface-sunken)' }}
-          />
+          <Skeleton key={i} shape="rect" height={36} delay={300} />
         ))}
       </div>
     </div>

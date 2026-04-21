@@ -8,6 +8,7 @@ import { SharedElement as SharedElementBase } from '@/components/primitives/shar
 import type { SharedElementComponent } from '@/components/primitives/shared-element/types'
 import { reportBrokenImage } from '@/lib/report-broken-image'
 import { usePlayerStore } from '@/stores/playerStore'
+import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import type { Video } from '@resovo/types'
 
 const SharedElement = SharedElementBase as SharedElementComponent
@@ -369,17 +370,14 @@ function DetailHeroSkeleton() {
   return (
     <div className="max-w-screen-xl mx-auto px-4 py-10 md:py-16 flex flex-col md:flex-row gap-8 md:gap-12">
       <div className="shrink-0 w-[180px] md:w-[240px] mx-auto md:mx-0 space-y-4">
-        <div
-          className="w-full rounded-2xl animate-pulse"
-          style={{ aspectRatio: '2/3', background: 'var(--bg-surface-sunken)' }}
-        />
-        <div className="h-12 rounded-xl animate-pulse" style={{ background: 'var(--bg-surface-sunken)' }} />
+        <Skeleton shape="rect" className="w-full rounded-2xl" style={{ aspectRatio: '2/3' }} />
+        <Skeleton shape="rect" height={48} className="rounded-xl" />
       </div>
       <div className="flex-1 space-y-4 pt-1">
-        <div className="h-10 w-3/4 rounded animate-pulse" style={{ background: 'var(--bg-surface-sunken)' }} />
-        <div className="h-5 w-1/2 rounded animate-pulse" style={{ background: 'var(--bg-surface-sunken)' }} />
-        <div className="h-4 w-full rounded animate-pulse" style={{ background: 'var(--bg-surface-sunken)' }} />
-        <div className="h-4 w-5/6 rounded animate-pulse" style={{ background: 'var(--bg-surface-sunken)' }} />
+        <Skeleton shape="text" height={40} className="w-3/4" />
+        <Skeleton shape="text" height={20} className="w-1/2" delay={300} />
+        <Skeleton shape="text" height={16} delay={300} />
+        <Skeleton shape="text" height={16} className="w-5/6" delay={300} />
       </div>
     </div>
   )

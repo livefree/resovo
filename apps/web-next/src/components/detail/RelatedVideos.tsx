@@ -1,4 +1,5 @@
 import { VideoGrid } from '@/components/video/VideoGrid'
+import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import type { Video } from '@resovo/types'
 
 interface RelatedVideosProps {
@@ -34,7 +35,7 @@ function RelatedVideosSkeleton() {
       className="max-w-screen-xl mx-auto px-4 py-8 border-t"
       style={{ borderColor: 'var(--border-default)' }}
     >
-      <div className="h-5 w-24 rounded animate-pulse mb-4" style={{ background: 'var(--bg-surface-sunken)' }} />
+      <Skeleton shape="text" width={96} height={20} className="mb-4" />
       <VideoGrid.Skeleton
         gridCols="grid-cols-3 sm:grid-cols-4 md:grid-cols-6"
         testId="related-videos-skeleton"
