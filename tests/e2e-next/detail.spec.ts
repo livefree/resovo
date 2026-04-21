@@ -87,7 +87,7 @@ test.describe('电影详情页', () => {
   })
 
   test('详情页正常加载，显示标题', async ({ page }) => {
-    await expect(page.getByTestId('video-detail-hero')).toBeVisible()
+    await expect(page.getByTestId('detail-hero')).toBeVisible()
     await expect(page.getByTestId('detail-title')).toContainText('测试电影')
   })
 
@@ -96,7 +96,7 @@ test.describe('电影详情页', () => {
   })
 
   test('显示导演/演员 MetaChip', async ({ page }) => {
-    await expect(page.getByTestId('video-detail-meta')).toBeVisible()
+    await expect(page.getByTestId('detail-hero-meta')).toBeVisible()
     await expect(page.getByTestId('meta-chip-director')).toBeVisible()
     await expect(page.getByTestId('meta-chip-actor').first()).toBeVisible()
   })
@@ -106,16 +106,14 @@ test.describe('电影详情页', () => {
     await expect(page).toHaveURL(/search\?director=/)
   })
 
-  test('立即观看按钮指向播放页', async ({ page }) => {
-    const watchBtn = page.getByTestId('detail-watch-btn')
-    await expect(watchBtn).toBeVisible()
-    const href = await watchBtn.getAttribute('href')
-    expect(href).toContain(`/watch/${MOCK_MOVIE.shortId}`)
-    expect(href).toContain('ep=1')
+  test('立即播放按钮存在且可点击', async ({ page }) => {
+    const playBtn = page.getByTestId('detail-play-btn')
+    await expect(playBtn).toBeVisible()
+    await expect(playBtn).toBeEnabled()
   })
 
-  test('电影类型不显示选集网格', async ({ page }) => {
-    await expect(page.getByTestId('episode-grid')).not.toBeVisible()
+  test('电影类型不显示选集选择器', async ({ page }) => {
+    await expect(page.getByTestId('episode-picker')).not.toBeVisible()
   })
 })
 
@@ -128,23 +126,22 @@ test.describe('动漫详情页（多集）', () => {
   })
 
   test('详情页正常加载', async ({ page }) => {
-    await expect(page.getByTestId('video-detail-hero')).toBeVisible()
+    await expect(page.getByTestId('detail-hero')).toBeVisible()
     await expect(page.getByTestId('detail-title')).toContainText('测试动漫')
   })
 
-  test('显示选集网格', async ({ page }) => {
-    await expect(page.getByTestId('episode-grid')).toBeVisible()
+  test('显示选集选择器', async ({ page }) => {
+    await expect(page.getByTestId('episode-picker')).toBeVisible()
   })
 
   test('选集按钮数量正确', async ({ page }) => {
-    const episodes = page.getByTestId(/^episode-\d+$/)
+    const episodes = page.getByTestId(/^episode-btn-\d+$/)
     await expect(episodes).toHaveCount(12)
   })
 
-  test('点击第 3 集跳转到播放页 ep=3', async ({ page }) => {
-    const ep3 = page.getByTestId('episode-3')
-    const href = await ep3.getAttribute('href')
-    expect(href).toContain('ep=3')
-    expect(href).toContain(`/watch/${MOCK_ANIME.shortId}`)
+  test('点击第 3 集更新 URL ep=3（不重载页面）', async ({ page }) => {
+    const ep3 = page.getByTestId('episode-btn-3')
+    await ep3.click()
+    await expect(page).toHaveURL(/ep=3/)
   })
 })

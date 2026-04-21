@@ -10,6 +10,7 @@ import { Nav } from '@/components/layout/Nav'
 import { Footer } from '@/components/layout/Footer'
 import { MobileTabBar } from '@/components/layout/MobileTabBar'
 import { ScrollRestoration } from '@/components/primitives/scroll-restoration/ScrollRestoration'
+import { RouteStack } from '@/components/primitives/route-stack/RouteStack'
 import GlobalPlayerHost from './_lib/player/GlobalPlayerHost'
 import type { Brand } from '@/types/brand'
 
@@ -52,9 +53,11 @@ export default async function LocaleLayout({
         <div className="app-shell">
           <Nav />
           <ScrollRestoration />
-          <main id="main-content" className="main-slot">
-            {children}
-          </main>
+          <RouteStack rootPathname={`/${locale}`}>
+            <main id="main-content" className="main-slot">
+              {children}
+            </main>
+          </RouteStack>
           <MobileTabBar />
           <div id="global-player-host-portal" data-testid="global-player-host" />
           <GlobalPlayerHost />

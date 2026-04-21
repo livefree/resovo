@@ -8,11 +8,12 @@ import type { VideoType } from '@resovo/types'
 
 // ── 类型映射 ──────────────────────────────────────────────────────────────────
 
+// tvshow maps to VideoType 'variety' (ADR-048 §4, aligned with video-route.ts)
 const VALID_TYPES: Record<string, VideoType> = {
   movie:        'movie',
   series:       'series',
   anime:        'anime',
-  variety:      'variety',
+  tvshow:       'variety',
   documentary:  'documentary',
   short:        'short',
   sports:       'sports',
@@ -25,7 +26,7 @@ const NAV_TABS: Array<{ slug: string; i18nKey: string }> = [
   { slug: 'movie',       i18nKey: 'catMovie' },
   { slug: 'series',      i18nKey: 'catSeries' },
   { slug: 'anime',       i18nKey: 'catAnime' },
-  { slug: 'variety',     i18nKey: 'catVariety' },
+  { slug: 'tvshow',      i18nKey: 'catVariety' },
   { slug: 'documentary', i18nKey: 'catDocumentary' },
 ]
 

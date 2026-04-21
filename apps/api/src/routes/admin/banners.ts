@@ -83,8 +83,10 @@ export async function adminBannerRoutes(fastify: FastifyInstance) {
 
   fastify.get('/admin/banners', { preHandler: adminOnly }, async (request, reply) => {
     const QuerySchema = z.object({
-      page: z.coerce.number().int().min(1).default(1),
-      limit: z.coerce.number().int().min(1).max(100).default(20),
+      page:      z.coerce.number().int().min(1).default(1),
+      limit:     z.coerce.number().int().min(1).max(100).default(20),
+      sortField: z.string().optional(),
+      sortDir:   z.enum(['asc', 'desc']).optional(),
     })
     const parsed = QuerySchema.safeParse(request.query)
     if (!parsed.success) {

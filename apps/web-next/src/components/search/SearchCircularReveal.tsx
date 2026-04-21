@@ -17,6 +17,23 @@ interface SearchCircularRevealProps {
  * - reduced-motion：opacity 0→1，150ms
  * - 服务端渲染时内容正常显示（无动画），避免 hydration 闪烁
  */
+const ORIGIN_KEY = 'resovo:search-reveal-origin'
+
+function readStoredOrigin(): { x: string; y: string } | null {
+  try {
+    const raw = sessionStorage.getItem(ORIGIN_KEY)
+    if (!raw) return null
+    sessionStorage.removeItem(ORIGIN_KEY)
+    const parsed = JSON.parse(raw) as { x: number; y: number }
+    if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+      return { x: `${parsed.x}px`, y: `${parsed.y}px` }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
 export function SearchCircularReveal({
   children,
   originX = 'calc(100% - 48px)',
@@ -34,6 +51,11 @@ export function SearchCircularReveal({
     const el = containerRef.current
     if (!el) return
 
+    // 读取 Nav 存储的实际搜索框坐标，降级到 prop 默认值
+    const stored = readStoredOrigin()
+    const ox = stored?.x ?? originX
+    const oy = stored?.y ?? originY
+
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const supportsClipPath = CSS.supports('clip-path', `circle(0% at 0 0)`)
 
@@ -48,8 +70,8 @@ export function SearchCircularReveal({
 
     el.animate(
       [
-        { clipPath: `circle(0% at ${originX} ${originY})` },
-        { clipPath: `circle(150% at ${originX} ${originY})` },
+        { clipPath: `circle(0% at ${ox} ${oy})` },
+        { clipPath: `circle(150% at ${ox} ${oy})` },
       ],
       {
         duration: 250,

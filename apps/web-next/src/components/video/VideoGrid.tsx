@@ -17,7 +17,6 @@ interface VideoGridProps {
 }
 
 function VideoGridSkeleton({
-  variant = 'portrait',
   gridCols = 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
   testId,
 }: {
@@ -28,14 +27,7 @@ function VideoGridSkeleton({
   return (
     <div className={`grid gap-4 ${gridCols}`} data-testid={testId ?? 'video-grid-skeleton'}>
       {Array.from({ length: 10 }).map((_, i) => (
-        <div
-          key={i}
-          className="rounded-lg animate-pulse"
-          style={{
-            aspectRatio: variant === 'portrait' ? '2/3' : '16/9',
-            background: 'var(--bg-surface-sunken)',
-          }}
-        />
+        <VideoCard.Skeleton key={i} />
       ))}
     </div>
   )

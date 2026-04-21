@@ -89,14 +89,27 @@ export async function listActiveBanners(
 
 // ── Admin 查询 ───────────────────────────────────────────────────────────────
 
+// 允许的排序字段白名单（防止 SQL 注入）
+const ALLOWED_SORT_FIELDS: Record<string, string> = {
+  sortOrder: 'sort_order',
+  createdAt: 'created_at',
+  isActive:  'is_active',
+}
+
 export async function listAllBanners(
   db: Pool,
-  opts: { page: number; limit: number }
+  opts: { page: number; limit: number; sortField?: string; sortDir?: string }
 ): Promise<{ rows: Banner[]; total: number }> {
   const offset = (opts.page - 1) * opts.limit
+  const col = ALLOWED_SORT_FIELDS[opts.sortField ?? ''] ?? 'sort_order'
+  const dir = opts.sortDir === 'desc' ? 'DESC' : 'ASC'
+  const orderClause = col === 'sort_order'
+    ? `${col} ${dir}, created_at DESC`
+    : `${col} ${dir}, sort_order ASC`
+
   const [rows, countResult] = await Promise.all([
     db.query<DbBannerRow>(
-      `SELECT * FROM home_banners ORDER BY sort_order ASC, created_at DESC LIMIT $1 OFFSET $2`,
+      `SELECT * FROM home_banners ORDER BY ${orderClause} LIMIT $1 OFFSET $2`,
       [opts.limit, offset]
     ),
     db.query<{ count: string }>(`SELECT COUNT(*) FROM home_banners`),

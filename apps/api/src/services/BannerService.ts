@@ -44,10 +44,17 @@ export class BannerService {
   async listAll(opts: {
     page?: number
     limit?: number
+    sortField?: string
+    sortDir?: string
   }): Promise<{ data: Banner[]; total: number; page: number; limit: number }> {
     const page = Math.max(1, opts.page ?? 1)
     const limit = Math.min(MAX_LIMIT, Math.max(1, opts.limit ?? DEFAULT_LIMIT))
-    const { rows, total } = await bannerQueries.listAllBanners(this.db, { page, limit })
+    const { rows, total } = await bannerQueries.listAllBanners(this.db, {
+      page,
+      limit,
+      sortField: opts.sortField,
+      sortDir: opts.sortDir,
+    })
     return { data: rows, total, page, limit }
   }
 

@@ -75,6 +75,7 @@ export function Nav() {
   const [collapsed, setCollapsed] = useState(false)
   const localeMenuRef = useRef<HTMLDivElement | null>(null)
   const localeTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
 
   const currentLocale = pathname.split('/')[1] ?? 'en'
   const currentType   = pathname.includes('/browse') ? (searchParams.get('type') ?? '') : null
@@ -126,6 +127,13 @@ export function Nav() {
   function handleSearch(e: React.FormEvent) {
     e.preventDefault()
     const q = searchQuery.trim()
+    // 存储搜索框中心位置，供 SearchCircularReveal 做圆形扩散起点
+    if (searchInputRef.current) {
+      const rect = searchInputRef.current.getBoundingClientRect()
+      const x = Math.round(rect.left + rect.width / 2)
+      const y = Math.round(rect.top + rect.height / 2)
+      try { sessionStorage.setItem('resovo:search-reveal-origin', JSON.stringify({ x, y })) } catch { /* ignore */ }
+    }
     router.push(q ? `/search?q=${encodeURIComponent(q)}` : '/search')
   }
 
@@ -233,6 +241,7 @@ export function Nav() {
           {/* 搜索框 */}
           <form onSubmit={handleSearch} className="hidden sm:flex items-center">
             <input
+              ref={searchInputRef}
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}

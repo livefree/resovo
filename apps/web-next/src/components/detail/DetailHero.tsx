@@ -1,15 +1,16 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { MetaChip } from '@/components/search/MetaChip'
 import { SafeImage } from '@/components/media'
 import { SharedElement as SharedElementBase } from '@/components/primitives/shared-element/SharedElement'
 import type { SharedElementComponent } from '@/components/primitives/shared-element/types'
-
-const SharedElement = SharedElementBase as SharedElementComponent
 import { reportBrokenImage } from '@/lib/report-broken-image'
 import { usePlayerStore } from '@/stores/playerStore'
 import type { Video } from '@resovo/types'
+
+const SharedElement = SharedElementBase as SharedElementComponent
 
 const TYPE_LABELS: Record<string, string> = {
   movie:       '电影',
@@ -99,9 +100,15 @@ interface DetailHeroProps {
 export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
   const [descExpanded, setDescExpanded] = useState(false)
   const enter = usePlayerStore((s) => s.enter)
+  const router = useRouter()
 
   function handlePlay() {
+    const watchHref = video.slug
+      ? `/watch/${video.slug}-${video.shortId}?ep=${episode}`
+      : `/watch/${video.shortId}?ep=${episode}`
     enter({ shortId: video.shortId, slug: video.slug, episode, transition: 'standard-takeover' })
+    // Update URL so refresh/share/back land on /watch (same contract as VideoCard)
+    router.push(watchHref)
   }
 
   const hasPersonnel =
@@ -146,7 +153,7 @@ export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
 
         {/* 封面列（SharedElement.Source） */}
         <div className="shrink-0 flex flex-col gap-4 w-[180px] md:w-[240px] mx-auto md:mx-0">
-          <SharedElement.Source
+          <SharedElement.Target
             id={`video-card-${video.id}`}
             as="div"
             className="relative w-full rounded-2xl overflow-hidden shadow-2xl border"
@@ -166,7 +173,7 @@ export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
                 reportBrokenImage({ videoId: video.id, imageKind: 'poster', url: src })
               }
             />
-          </SharedElement.Source>
+          </SharedElement.Target>
 
           <button
             type="button"
