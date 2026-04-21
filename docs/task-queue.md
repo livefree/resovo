@@ -8690,7 +8690,8 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - ✅ `GET /v1/banners?locale=zh-CN` 返回时间窗内 banner 列表，title 按 locale 选取为字符串，按 sort_order 升序
      - ✅ `POST /v1/admin/banners` 校验 admin 权限（requireRole admin）
      - ✅ zod schema 覆盖所有字段（title jsonb 多语言）+ brandScope/brandSlug 互约束
-     - ✅ migration 049 up 幂等；down 路径完整（含 DROP TRIGGER / FUNCTION / TABLE）
+     - ✅ migration 049 up 幂等（IF NOT EXISTS），可重复执行
+     - ✅ migration down SQL 文档化（注释形式）——项目约定（scripts/migrate.ts 将整文件作单条 SQL 执行，不区分 up/down；down 必须保持注释，与 047/048 同约定；需回滚时手动解注释在目标库独立执行）
      - ✅ DB-level CHECK 约束：brand-specific 时 brand_slug NOT NULL；all-brands 时 brand_slug IS NULL
      - ✅ `docs/architecture.md` 已同步
      - ✅ Route→Service→DB queries 分层纪律
