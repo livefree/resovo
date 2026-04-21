@@ -28,7 +28,7 @@
 - **不封锁**：M5-CARD-* / M5-API-* / M5-ADMIN-* / 其他 M5-PAGE-* 任务均不依赖此库，可正常推进
 - **处理路径**：
   1. 人工确认是否批准安装 `embla-carousel-react`（符合 CLAUDE.md 绝对禁止第 2 条审批要求）
-  2. 确认后在 `apps/web-next/package.json` 安装，并在 M5-ADMIN-BANNER-01 验收中记录版本
+  2. 确认后在 `apps/web-next/package.json` 安装，并在 M5-PAGE-BANNER-FE-01 验收中记录版本
   3. 或选择替代方案：用 CSS scroll-snap + touch event 实现轮播（无新依赖），需在 M5-PAGE-BANNER-FE-01 卡片中更新实现方案
 
 ### BLOCKER-M5-DEP-02 — 拖拽排序库未安装

@@ -1,7 +1,7 @@
 # M5 Primitive 激活归属表（2026-04-21）
 
 > 产出卡片：M5-PREP-02
-> 决策来源：ADR-048 §（决策 M5-G）+ `docs/task_queue_patch_m5_card_protocol_20260420_v1_1.md` §1.2
+> 决策来源：ADR-048 §6（组件边界）+ `docs/task_queue_patch_m5_card_protocol_20260420_v1_1.md` §1.2
 > 用途：明确 REGRESSION 阶段产出的 noop/stub primitive 在 M5 各执行卡中的激活责任，防止多卡抢占或无人实装
 
 ---
