@@ -12,21 +12,20 @@ import type { MegaMenuItem } from './MegaMenu'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 
 const MAIN_CATEGORIES = [
-  { key: 'movie',  labelKey: 'nav.catMovie',  href: '/browse?type=movie',  typeParam: 'movie' },
-  { key: 'series', labelKey: 'nav.catSeries', href: '/browse?type=series', typeParam: 'series' },
-  { key: 'anime',  labelKey: 'nav.catAnime',  href: '/browse?type=anime',  typeParam: 'anime' },
+  { key: 'movie',  labelKey: 'nav.catMovie',  typeParam: 'movie' },
+  { key: 'series', labelKey: 'nav.catSeries', typeParam: 'series' },
+  { key: 'anime',  labelKey: 'nav.catAnime',  typeParam: 'anime' },
 ]
 
 const MORE_CATEGORY_KEYS = [
-  { key: 'all',         labelKey: 'nav.catAll',         href: '/browse',                  typeParam: '' },
-  { key: 'tvshow',      labelKey: 'nav.catVariety',     href: '/browse?type=tvshow',      typeParam: 'tvshow' },
-  { key: 'documentary', labelKey: 'nav.catDocumentary', href: '/browse?type=documentary', typeParam: 'documentary' },
-  { key: 'short',       labelKey: 'nav.catShort',       href: '/browse?type=short',       typeParam: 'short' },
-  { key: 'sports',      labelKey: 'nav.catSports',      href: '/browse?type=sports',      typeParam: 'sports' },
-  { key: 'music',       labelKey: 'nav.catMusic',       href: '/browse?type=music',       typeParam: 'music' },
-  { key: 'news',        labelKey: 'nav.catNews',        href: '/browse?type=news',        typeParam: 'news' },
-  { key: 'kids',        labelKey: 'nav.catKids',        href: '/browse?type=kids',        typeParam: 'kids' },
-  { key: 'other',       labelKey: 'nav.catOther',       href: '/browse?type=other',       typeParam: 'other' },
+  { key: 'tvshow',      labelKey: 'nav.catVariety',     typeParam: 'tvshow' },
+  { key: 'documentary', labelKey: 'nav.catDocumentary', typeParam: 'documentary' },
+  { key: 'short',       labelKey: 'nav.catShort',       typeParam: 'short' },
+  { key: 'sports',      labelKey: 'nav.catSports',      typeParam: 'sports' },
+  { key: 'music',       labelKey: 'nav.catMusic',       typeParam: 'music' },
+  { key: 'news',        labelKey: 'nav.catNews',        typeParam: 'news' },
+  { key: 'kids',        labelKey: 'nav.catKids',        typeParam: 'kids' },
+  { key: 'other',       labelKey: 'nav.catOther',       typeParam: 'other' },
 ]
 
 const LOCALES = [
@@ -78,7 +77,8 @@ export function Nav() {
   const searchInputRef = useRef<HTMLInputElement | null>(null)
 
   const currentLocale = pathname.split('/')[1] ?? 'en'
-  const currentType   = pathname.includes('/browse') ? (searchParams.get('type') ?? '') : null
+  // Detect active category from pathname segment (e.g. /en/movie → 'movie')
+  const currentType = pathname.split('/')[2] ?? null
 
   // Scroll-collapse: h-16 → h-12 past 80px
   // Init from current scrollY so back/restore flows start in the right state
@@ -134,13 +134,13 @@ export function Nav() {
       const y = Math.round(rect.top + rect.height / 2)
       try { sessionStorage.setItem('resovo:search-reveal-origin', JSON.stringify({ x, y })) } catch { /* ignore */ }
     }
-    router.push(q ? `/search?q=${encodeURIComponent(q)}` : '/search')
+    router.push(q ? `/${currentLocale}/search?q=${encodeURIComponent(q)}` : `/${currentLocale}/search`)
   }
 
   const moreItems: MegaMenuItem[] = MORE_CATEGORY_KEYS.map((cat) => ({
     key:    cat.key,
     label:  t(cat.labelKey),
-    href:   cat.href,
+    href:   `/${currentLocale}/${cat.typeParam}`,
     active: currentType === cat.typeParam,
   }))
 
@@ -184,11 +184,11 @@ export function Nav() {
           </Link>
 
           {MAIN_CATEGORIES.map((cat) => {
-            const isActive = currentType !== null ? currentType === cat.typeParam : false
+            const isActive = currentType === cat.typeParam
             return (
               <Link
                 key={cat.key}
-                href={cat.href}
+                href={`/${currentLocale}/${cat.typeParam}`}
                 data-testid={`nav-cat-${cat.key}`}
                 className={cn(
                   'px-3 py-1.5 rounded-md text-sm whitespace-nowrap transition-colors',

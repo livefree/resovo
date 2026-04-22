@@ -28,6 +28,7 @@ vi.mock('next/link', () => ({
 const mockPush = vi.fn()
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
+  useParams: () => ({ locale: 'en' }),
 }))
 
 vi.mock('@/components/media', () => ({
@@ -92,13 +93,13 @@ describe('VideoCard', () => {
       render(<VideoCard video={makeVideo()} />)
       fireEvent.click(screen.getByRole('button', { name: '播放《演示视频》第 1 集' }))
       expect(mockPush).toHaveBeenCalledOnce()
-      expect(mockPush).toHaveBeenCalledWith('/watch/demo-title-ab12cd34?ep=1')
+      expect(mockPush).toHaveBeenCalledWith('/en/watch/demo-title-ab12cd34?ep=1')
     })
 
     it('slug 为 null 时 watch URL 回退到 shortId', () => {
       render(<VideoCard video={makeVideo({ slug: null })} />)
       fireEvent.click(screen.getByRole('button', { name: '播放《演示视频》第 1 集' }))
-      expect(mockPush).toHaveBeenCalledWith('/watch/ab12cd34?ep=1')
+      expect(mockPush).toHaveBeenCalledWith('/en/watch/ab12cd34?ep=1')
     })
 
     it('文字区(MetaAction)链接指向详情页，不触发 router.push', () => {

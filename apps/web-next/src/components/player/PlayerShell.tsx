@@ -68,21 +68,22 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
             { skipAuth: true }
           )
           .then((r) => {
-            setSources(
-              deduplicateLabels(
-                r.data.map((s, index) => ({
-                  src: s.sourceUrl,
-                  type: s.type,
-                  label: buildLineDisplayName({
-                    rawName: s.sourceName,
-                    siteDisplayName: s.siteDisplayName,
-                    fallbackIndex: index,
-                    quality: s.quality,
-                  }),
-                }))
-              )
+            const newSources = deduplicateLabels(
+              r.data.map((s, index) => ({
+                src: s.sourceUrl,
+                type: s.type,
+                label: buildLineDisplayName({
+                  rawName: s.sourceName,
+                  siteDisplayName: s.siteDisplayName,
+                  fallbackIndex: index,
+                  quality: s.quality,
+                }),
+              }))
             )
-            setActiveSourceIndex(0)
+            setSources(newSources)
+            // Preserve user-selected source index across mini↔full transitions
+            const prevIdx = usePlayerStore.getState().activeSourceIndex
+            setActiveSourceIndex(prevIdx < newSources.length ? prevIdx : 0)
           })
           .catch(() => setSources([]))
       })

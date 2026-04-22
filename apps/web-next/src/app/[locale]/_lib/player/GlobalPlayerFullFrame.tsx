@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { usePlayerStore } from '@/stores/playerStore'
 import { PlayerShell } from '@/components/player/PlayerShell'
 import { applyFastTakeoverEntry } from '@/components/player/transitions/FastTakeover'
@@ -16,7 +16,6 @@ export function GlobalPlayerFullFrame() {
   const transition = usePlayerStore((s) => s.transition)
   const mode = usePlayerStore((s) => s.mode)
   const frameRef = useRef<HTMLDivElement>(null)
-  const router = useRouter()
   const pathname = usePathname()
   const isWatchPage = /\/watch\//.test(pathname)
 
@@ -72,43 +71,42 @@ export function GlobalPlayerFullFrame() {
         flexDirection: 'column',
       }}
     >
-      {/* 控制栏 */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'flex-end',
-          gap: 4,
-          padding: '6px 12px',
-          borderBottom: '1px solid var(--border-default)',
-          background: 'var(--bg-surface)',
-          flexShrink: 0,
-          position: 'relative',
-          zIndex: 2,
-        }}
-      >
-        <button
-          type="button"
-          aria-label="缩小为迷你播放器"
-          title="缩小"
-          onClick={() => setHostMode('mini')}
-          style={btnStyle}
-        >
-          ⊟
-        </button>
-        <button
-          type="button"
-          aria-label="关闭播放器"
-          title="关闭"
-          onClick={() => {
-            closeHost()
-            if (isWatchPage) router.back()
+      {/* 控制栏：watch 页面内嵌显示时隐藏，其余页面显示 minimize/close */}
+      {!isWatchPage && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: 4,
+            padding: '6px 12px',
+            borderBottom: '1px solid var(--border-default)',
+            background: 'var(--bg-surface)',
+            flexShrink: 0,
+            position: 'relative',
+            zIndex: 2,
           }}
-          style={btnStyle}
         >
-          ✕
-        </button>
-      </div>
+          <button
+            type="button"
+            aria-label="缩小为迷你播放器"
+            title="缩小"
+            onClick={() => setHostMode('mini')}
+            style={btnStyle}
+          >
+            ⊟
+          </button>
+          <button
+            type="button"
+            aria-label="关闭播放器"
+            title="关闭"
+            onClick={() => closeHost()}
+            style={btnStyle}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* 内容区：relative 容器用于 CinemaMode 绝对定位 */}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
