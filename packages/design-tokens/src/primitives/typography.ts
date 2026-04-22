@@ -25,7 +25,11 @@ export const typography = {
     bold: '700',
   },
   fontFamily: {
-    sans: "'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif",
+    // CHORE-08 (2026-04-22): 字体族决策 Noto Sans + Noto Sans SC
+    // 前两项 CSS var 由 next/font/google 在 apps/web-next root layout 注入；
+    // 后续 system fallback 保证加载中与非 web-next 消费者（apps/server / apps/web）
+    // 也有合理字体栈。
+    sans: "var(--font-noto-sans), var(--font-noto-sans-sc), 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif",
     mono: "'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace",
   },
 } as const

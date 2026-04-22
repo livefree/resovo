@@ -13,6 +13,8 @@
 
 ---
 
-<!-- 2026-04-22 SEQ-20260422-POSTFIX-01：CHORE-06 8cb0d01 ✅ / CHORE-07 ✅ 待 commit -->
-<!-- 剩余：字体族决策（需人工设计稿） -->
-<!-- 单任务工作台稳定态：空 -->
+<!-- ★ SEQ-20260422-POSTFIX-01 收官（3/3 ✅，2026-04-22）★ -->
+<!-- CHORE-06 8cb0d01 /search rewrite -->
+<!-- CHORE-07 f32a673 西里尔 bug -->
+<!-- CHORE-08 待 commit 字体族 Noto Sans -->
+<!-- 本地 3 commits 待 push；单任务工作台稳定态：空 -->

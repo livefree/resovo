@@ -9614,9 +9614,10 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ## SEQ-20260422-POSTFIX-01 — M5→M6 前置清场
 
-- **状态**：🔄 执行中（2026-04-22 CHORE-06 启动）
+- **状态**：✅ 完成（3/3，2026-04-22）
 - **创建时间**：2026-04-22
 - **最后更新时间**：2026-04-22
+- **完成时间**：2026-04-22
 - **目标**：收尾 M5 对齐表留白的非阻断清场项（landing_plan_v0 延后后的零碎遗留）
 - **范围**：apps/web 网关、Token 层西里尔字母修复、字体族决策（人工）
 - **依赖**：SEQ-20260422-BUGFIX-01 ✅（2026-04-22 全部完成并合并 main）、M5 真·PHASE COMPLETE v2（2026-04-22，对齐表 §5 checklist 真人打勾仍为可选）
@@ -9666,6 +9667,26 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - `npm -w @resovo/design-tokens run build` 通过，tokens.css 不含西里尔字符
      - typecheck / lint / unit 1447/1447 ✅（alias-coverage 测试通过新键名）
 
-（后续补充 CHORE 卡：字体族决策 BLOCKER 等可追加到本序列）
+3. CHORE-08 — 字体族决策落地：Noto Sans + Noto Sans SC（状态：✅ 已完成 2026-04-22）
+   - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：无（用户直接决策字体族，主循环不擅自选字体）
+   - 建议模型：sonnet
+   - 规模：S（~60 min）
+   - 依赖：用户 2026-04-22 字体族决策（Noto Sans）
+   - 对应留白：M5 对齐表"M6 前置待办（非阻断）"第 1 项 / CLEANUP-08 BLOCKER-FONT 解除
+   - 文件范围：
+     - `apps/web-next/src/app/layout.tsx`（next/font/google 加载 Noto_Sans + Noto_Sans_SC；className 注入）
+     - `packages/design-tokens/src/primitives/typography.ts`（fontFamily.sans 首项 `var(--font-noto-sans)` + `var(--font-noto-sans-sc)`）
+     - `tests/unit/design-tokens/typography-font-family.test.ts`（新增 6 case）
+     - `docs/decisions.md`（ADR-050）
+   - 验收：
+     - `npm run build -w @resovo/web-next` 成功 ✅，`.next/static/media/` 生成 109 个 Noto woff2 文件，CSS 输出含 `@font-face Noto Sans` 声明
+     - typecheck / lint / unit 1453/1453 ✅
+     - 未使用新 npm 依赖（next/font/google 是 Next.js 内建）
+
+（POSTFIX-01 三张已完成：CHORE-06 / 07 / 08；M5 对齐表"M6 前置待办（非阻断）"全部清理完毕，序列可收官）
 
 ---

@@ -1682,3 +1682,37 @@ CLOSE 阶段的代理证据采集如**发现新运行时缺陷**：
 - **溯及既往**：M5 本次即按 v2 条款闭环（由 M5-CLOSE-03 执行）
 - **未来约束**：M6 及后续里程碑所有 PHASE COMPLETE 签字统一走 v2 三维闭环
 - **不溯及**：M1-M4 已完成里程碑不追溯
+
+---
+
+## ADR-050: 字体族决策 — Noto Sans + Noto Sans SC
+
+- **日期**：2026-04-22
+- **状态**：已采纳
+- **子代理**：无（用户直接决策字体族；CLAUDE.md"写 BLOCKER 暂停，禁止擅自定字体"合规）
+- **背景**：`design_system_plan_20260418.md` 未明确具体字体族，CLEANUP-08 阶段将字体加载需求登记为 BLOCKER-FONT（2026-04-22）。前任 `typography.fontFamily.sans` 栈以 `Inter` 为首项但 Inter **实际未加载**，浏览器回退至 system-ui。用户 2026-04-22 决策字体族为 **Noto Sans + Noto Sans SC**（覆盖当前 en + zh-CN locale）
+- **决策**：
+  1. **字体族选择**：`Noto Sans`（拉丁）+ `Noto Sans SC`（简体中文），Google 开源 Sans-serif 家族，SIL OFL 许可，不产生新 npm 依赖
+  2. **加载方式**：`next/font/google`（Next.js 内建 API，非新 npm 依赖，合规 CLAUDE.md §绝对禁止 #2）
+     - self-host：字体文件在 build 时下载到 `.next/static/media/`，线上完全自托管，无第三方请求
+     - zero layout shift：next/font 自动处理 font-display / size-adjust
+     - 按 subset 切片：109 个 woff2 文件自动生成，浏览器按 unicode-range 按需加载
+     - `display: 'swap'`：避免 FOIT
+     - SC 包 `preload: false`：体积大，改为按需加载避免阻塞 LCP；英文页面不会触发 SC 下载
+  3. **CSS 变量暴露**：`--font-noto-sans` / `--font-noto-sans-sc`，由 `apps/web-next/src/app/layout.tsx` 根 RootLayout 注入 `<html className={...}>`
+  4. **Token 层消费**：`packages/design-tokens/src/primitives/typography.ts` `fontFamily.sans` 首项改为 `var(--font-noto-sans), var(--font-noto-sans-sc)`，fallback 保留 `PingFang SC / Hiragino Sans GB / Microsoft YaHei / system-ui`
+  5. **Tailwind 传导**：`tailwind-preset.ts` 消费 `typography.fontFamily.sans`，通过 `theme.fontFamily.sans` 下发给 Tailwind；`globals.css` 的 `@apply font-sans` 继续工作
+- **weights 选择**：`400 / 500 / 700`（与 `typography.fontWeight` 的 `regular / medium / bold` 对齐；`light: 300` / `semibold: 600` 不加载以控制字体包体积）
+- **日韩 locale**：当前平台 `REWRITE_LOCALES = ['en', 'zh-CN']`，不加载 Noto Sans JP / KR；未来扩展 locale 时再起独立 ADR 决策
+- **ICU / RTL**：不在本 ADR 范围
+- **mono 字体**：保持 `JetBrains Mono / SF Mono / Menlo / Consolas / monospace`，本次不调整
+- **影响文件**：
+  - `packages/design-tokens/src/primitives/typography.ts`
+  - `apps/web-next/src/app/layout.tsx`
+  - `tests/unit/design-tokens/typography-font-family.test.ts`（新增）
+- **未修改 `docs/design_system_plan_20260418.md`**（CLAUDE.md §绝对禁止修改规范文件；字体决策以本 ADR 为准）
+- **验收**：
+  - `npm run build -w @resovo/web-next` 成功，`.next/static/media/` 下生成 109 个 Noto Sans woff2 字体文件；CSS 输出含 `@font-face { font-family: Noto Sans ...}` 声明
+  - typecheck / lint / unit 1453/1453 ✅（新增 6 case 在 typography-font-family.test.ts）
+  - 未使用新 npm 依赖
+- **关联**：CLEANUP-08 BLOCKER-FONT 解除；M5 对齐表"M6 前置待办（非阻断）"第 1 项完成

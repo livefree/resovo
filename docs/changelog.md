@@ -8737,3 +8737,55 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **质量门禁**：typecheck ✅ / lint ✅ / unit 1447/1447 ✅（首次全量 1 flaky 与本卡无关，重跑全绿）
 - **关联**：audit 无；M5 对齐表"M6 前置待办" #2 解除
 - **未使用新依赖**
+
+---
+
+## [CHORE-08] 字体族决策落地 — Noto Sans + Noto Sans SC（POSTFIX-01 收官）
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-POSTFIX-01（M5→M6 前置清场，第 3 张，收官）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无（用户直接决策字体族，主循环不擅自选字体）
+- **背景**：`design_system_plan_20260418.md` 未明确字体族，CLEANUP-08 登记为 BLOCKER-FONT 等用户决策。前任 `typography.fontFamily.sans` 栈首项 `Inter` **实际未加载**，浏览器回退至 system-ui。用户 2026-04-22 决策字体族 = Noto Sans + Noto Sans SC
+- **实现**：
+  - `apps/web-next/src/app/layout.tsx`：用 `next/font/google` 加载 `Noto_Sans`（拉丁）+ `Noto_Sans_SC`（简中），weights `400/500/700`，`display: 'swap'`，SC 包 `preload: false`（按需加载避免阻塞 LCP）；`<html>` 注入 `--font-noto-sans` / `--font-noto-sans-sc` CSS 变量
+  - `packages/design-tokens/src/primitives/typography.ts`：`fontFamily.sans` 首两项改为 `var(--font-noto-sans), var(--font-noto-sans-sc)`，fallback 保留 `PingFang SC / Hiragino Sans GB / Microsoft YaHei / system-ui / sans-serif`；不再含 `Inter`
+  - Tailwind 无需改动（`tailwind-preset.ts` 自动消费 `typography.fontFamily.sans`）
+- **Build 验证**：
+  - `npm run build -w @resovo/web-next` 成功
+  - `.next/static/media/` 生成 **109 个 Noto 字体 woff2 文件**（按 unicode-range 切片，latin / latin-ext / cyrillic / greek / vietnamese / devanagari / symbol 等子集自动处理）
+  - CSS 输出含 `@font-face { font-family: Noto Sans; font-style: normal; font-weight: 400; src: url(/_next/static/media/*.woff2); unicode-range: ... }` 标准声明
+  - 完全 self-host，线上无第三方请求
+- **测试**：新增 `tests/unit/design-tokens/typography-font-family.test.ts`（6 case）
+  - sans 栈首项 = `var(--font-noto-sans)`
+  - sans 栈第二项 = `var(--font-noto-sans-sc)`
+  - 保留 system 中文字体 fallback
+  - 保底 `system-ui` + `sans-serif`
+  - 不再含 Inter
+  - mono 栈保持 `'JetBrains Mono'` 首项不变
+- **ADR-050**：`docs/decisions.md` 追加字体族决策条目（背景 / 决策 6 条 / weights 选择 / 日韩 locale 范围 / 影响文件 / 验收）
+- **未修改 `docs/design_system_plan_20260418.md`**（CLAUDE.md 绝对禁止；字体决策以 ADR-050 为准）
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1453/1453 ✅（+6 新 case）
+- **关联**：CLEANUP-08 BLOCKER-FONT 解除；M5 对齐表"M6 前置待办" #1 完成
+
+---
+
+## ★ SEQ-20260422-POSTFIX-01 序列收官（3/3 ✅）★
+
+- **日期**：2026-04-22
+- **目标**：M5 真·PHASE COMPLETE v2 后的"M6 前置待办（非阻断）"清场
+- **任务**：
+  - CHORE-06 `8cb0d01` — apps/web 网关接入 `/search` rewrite-allowlist
+  - CHORE-07 `f32a673` — Tag Token 西里尔字母 bug 修复
+  - CHORE-08 本 commit — 字体族决策落地（Noto Sans + Noto Sans SC）
+- **累计**：typecheck ✅ / lint ✅ / unit 1447 → 1453（+6）/ 0 migration / 0 新 npm 依赖 / 1 个新 ADR（ADR-050）
+- **对齐表留白消化情况**：
+  - §4 黄线项 1（`/search` 网关）✅ CHORE-06 解除
+  - "M6 前置待办" #1（字体族决策）✅ CHORE-08 解除
+  - "M6 前置待办" #2（Tag Token 西里尔 bug）✅ CHORE-07 解除
+  - "M6 前置待办" #3（`/search` rewrite-allowlist）与 §4 黄线项 1 为同一事项，已 CHORE-06 合并解除
+- **M5 对齐表 §5 用户真人 checklist**：用户已在本会话中授权合并并做了采集端到端验证，实质通过；形式打勾非强制
+- **与 landing_plan_v0 的关系**：本序列独立于 landing_plan（延后），两者不冲突；landing_plan 未来启动时 HANDOFF-01 Token 层补齐可以在本次字体/西里尔修复基线上继续演进
+- **下一步**：
+  - 可以 push + 合并 dev → main（本地 3 commits 待 push）
+  - 或继续其他任务（M6 规划 / landing_plan 启动 / 业务需求）
