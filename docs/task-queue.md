@@ -8935,21 +8935,26 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ---
 
-## 🛑 BLOCKER — M5-CLEANUP 启动（M6 及后续任务冻结）【重新激活】
+## 🛑 BLOCKER — M5-CLEANUP 启动（M6 及后续任务冻结）【重新激活 + 纠偏序列规划完成】
 
 - **原触发时间**：2026-04-21
 - **一度解除时间**：2026-04-21（基于 M5-CLOSE-02 arch-reviewer 静态审计 PASS）
-- **重新激活时间**：2026-04-21（PC 端人工回归否决，见文件尾部新 BLOCKER 块）
-- **激活原因**：arch-reviewer 只读静态审计无法覆盖 UI 运行时行为，9 项 PC 端人工测试缺陷（VideoCard 双出口 / 分类路由 / 播放器三态 / 线路状态 / CinemaMode 尺寸 / 文案布局 / 搜索结果 / 详情选集）导致真·PHASE COMPLETE 无效；详情见文件尾部 BLOCKER 块
+- **重新激活时间**：2026-04-21（PC 端人工回归否决，见文件尾部 BLOCKER 块）
+- **纠偏序列规划**：2026-04-21（用户决策 a 启动 SEQ-20260421-M5-CLEANUP-2 — 8 张修复卡 + 1 张 CLOSE-03）
+- **激活原因**：arch-reviewer 只读静态审计无法覆盖 UI 运行时行为，9 项 PC 端人工测试缺陷导致真·PHASE COMPLETE 无效
 - **封锁范围**：
   - 🚫 禁止启动任何 M6 及后续里程碑任务
-  - 🚫 禁止在 M5-CLEANUP 范围以外新增 apps/web-next 组件
-  - ✅ 允许：M5-CLEANUP-01 / 02 / 03、M5-CLOSE-02、后续 M5-CLEANUP-04+ 纠偏卡（待人工规划）、紧急 hotfix（须另报 BLOCKER）
+  - 🚫 禁止在 M5-CLEANUP / M5-CLEANUP-2 范围以外新增 apps/web-next 组件
+  - ✅ 允许：已完成的 CLEANUP-01/02/03；新规划的 **CLEANUP-04 至 CLEANUP-11 + CLOSE-03**（见 SEQ-20260421-M5-CLEANUP-2）；紧急 hotfix（须另报 BLOCKER）
 - **解除条件**（更新）：
   1. M5-CLEANUP-01 / 02 / 03 全部 ✅（已完成）
   2. ~~M5-CLOSE-02 Opus arch-reviewer 独立审计 PASS~~ **失效**：静态审计 PASS 不等于真·PHASE COMPLETE
-  3. **新增**：9 项 PC 端人工回归缺陷全部修复 + 用户手动确认通过 + 重开 CLOSE-0N 卡片做浏览器验收审计
-- **关联文档**：`docs/task_queue_patch_m5_cleanup_20260421.md`、`docs/milestone_alignment_m5_final_20260421.md`（已追加回归否决声明）
+  3. **新增**：SEQ-20260421-M5-CLEANUP-2 全部 ✅（CLEANUP-04 至 11 + CLOSE-03）
+  4. **新增**：CLOSE-03 的 arch-reviewer 11 点 PASS + 主循环浏览器手动验收记录 + 用户二次人工确认通过
+- **关联文档**：
+  - `docs/task_queue_patch_m5_cleanup_20260421.md`（原 CLEANUP 1-3 补丁）
+  - `docs/task_queue_patch_m5_cleanup2_20260421.md`（新 CLEANUP-2 补丁 — 9 张卡拆解 + 风险评估）
+  - `docs/milestone_alignment_m5_final_20260421.md`（v1 闭环文档 — 已追加 §3.5 否决记录）
 
 ---
 
@@ -9061,6 +9066,114 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - **验收**：
      - Opus arch-reviewer 子代理独立审计 PASS → 解除 BLOCKER，允许启动 M6
      - typecheck ✅ / lint ✅ / unit ✅ / e2e 全通
+
+---
+
+## SEQ-20260421-M5-CLEANUP-2 — PC 端人工回归纠偏序列（9 张卡）
+
+- **状态**：⬜ 未开始
+- **创建时间**：2026-04-21
+- **目标**：修复 PC 端人工回归发现的 9 项 UI 运行时缺陷，扩写 e2e 固化，最终由 Opus 主循环 + arch-reviewer 子代理 + 浏览器手动验收三维闭环宣告真·PHASE COMPLETE v2
+- **触发**：用户决策 (a) 启动 / (d) 扩写 e2e
+- **依赖**：SEQ-20260421-M5-CLEANUP ✅（部分，CLOSE-02 ❌）
+- **补丁文档**：`docs/task_queue_patch_m5_cleanup2_20260421.md`（完整拆卡理由 + 依赖 + 风险）
+- **并行策略**：CLEANUP-04 / 05 / 06 / 08 / 09 / 10 互不依赖可并行；07 依赖 06；11 依赖 04-10；CLOSE-03 依赖 11
+
+### 任务列表
+
+1. M5-CLEANUP-04 — VideoCard 双出口反转 + TagLayer 溢出（状态：⬜ 未开始）
+   - 创建时间：2026-04-21
+   - 建议模型：sonnet
+   - 规模：M（~150 min）
+   - 依赖：无
+   - 对应缺陷：#1
+   - 文件范围：`apps/web-next/src/components/video/VideoCard.tsx` / `TagLayer.tsx` / `StackedPosterFrame.tsx`（仅配合修）/ `globals.css`（VideoCard 布局局部）
+   - 验收（强制含浏览器手动验收）：
+     - 浏览器：点击封面→Fast Takeover；点击文字→跳详情；悬浮封面出播放按钮；悬浮文字无；lifecycle 标签不溢出文字区
+     - typecheck / lint / unit ✅；`card-to-watch.spec.ts` 不回退
+
+2. M5-CLEANUP-05 — 分类页面 404 修复（状态：⬜ 未开始）
+   - 创建时间：2026-04-21
+   - 建议模型：sonnet
+   - 规模：M（~120 min）
+   - 依赖：无
+   - 对应缺陷：#2
+   - 文件范围：`apps/web-next/src/app/[locale]/[type]/page.tsx` / `config/rewrite-allowlist.ts` / `middleware.ts`
+   - 验收：6 种 type 路由全部 200 + Grid 真实 API；typecheck/lint/unit ✅；`browse-tvshow.spec.ts` 不回退
+
+3. M5-CLEANUP-06 — 播放器三态 + 线路持久化（状态：⬜ 未开始）
+   - 创建时间：2026-04-21
+   - 建议模型：sonnet（发现架构决策需改 → 写 BLOCKER 升 opus 子代理）
+   - 规模：L（~240 min）
+   - 依赖：无
+   - 对应缺陷：#3 + #4 + #5
+   - 文件范围：`stores/playerStore.ts` / `_lib/player/GlobalPlayerHost.tsx` / `GlobalPlayerFullFrame.tsx` / `MiniPlayer.tsx` / `components/player/shell/PlayerShell.tsx` / `EpisodePicker.tsx` / `LineSwitcher.tsx`
+   - 子代理触发条件：若需改 `LEGAL_TRANSITIONS` 常量或新增状态字段 → 强制 spawn arch-reviewer (opus-4-6) 接口评审
+   - 验收：
+     - 浏览器：`/watch/*` 无关闭按钮；mini↔full 切换保持线路/集数/进度；线路切换后 mini 仍可播放且回 full 线路正确；选集与线路 tab 始终存在
+     - typecheck / lint / unit ✅；`player.spec.ts` 不回退
+
+4. M5-CLEANUP-07 — CinemaMode 容器尺寸（状态：⬜ 未开始）
+   - 创建时间：2026-04-21
+   - 建议模型：sonnet
+   - 规模：S（~60 min）
+   - 依赖：CLEANUP-06 ✅
+   - 对应缺陷：#6
+   - 文件范围：`CinemaMode.tsx` / `GlobalPlayerFullFrame.tsx`（cinema 态容器）/ `globals.css`（如需新 Token 在 CLEANUP-01 分组下补）
+   - 验收：PC ≥1920px 影院模式容器 `min(85vw, 1440px)` 且 16:9；缩放等比；typecheck/lint/unit ✅
+
+5. M5-CLEANUP-08 — 排版 + 字体 + 布局堆叠（状态：⬜ 未开始）
+   - 创建时间：2026-04-21
+   - 建议模型：sonnet
+   - 规模：L（~240 min）
+   - 依赖：无（建议与 CLEANUP-04 错开以免重复改）
+   - 对应缺陷：#7
+   - 文件范围：`globals.css`（Typography Token 引用）/ `packages/design-tokens/src/semantic/typography.ts` / `components/layout/*` / 必要时 VideoCard 的文字间距
+   - 禁止：不动路由、Store、Player
+   - 注意：若方案文档未明确字体 → **写 BLOCKER 暂停**，禁止擅自定字体
+   - 验收：浏览器：Grid 间距合理，文字不溢出不堆叠；字体命中设计稿列表（computedStyle）；typecheck/lint/unit ✅
+
+6. M5-CLEANUP-09 — 搜索结果修复（状态：⬜ 未开始）
+   - 创建时间：2026-04-21
+   - 建议模型：sonnet
+   - 规模：M（~120 min）
+   - 依赖：无
+   - 对应缺陷：#8
+   - 文件范围：`app/[locale]/search/page.tsx` / `components/search/SearchResults.tsx` / 必要时 `hooks/useSearch.ts`；严禁改 ES / 索引 / schema
+   - 验收：浏览器：`?q=abc` 返回含 abc；空 q 走推荐；q 变化结果刷新；`search-page.spec.ts` 不回退并补断言
+
+7. M5-CLEANUP-10 — 详情页选集按钮（状态：⬜ 未开始）
+   - 创建时间：2026-04-21
+   - 建议模型：sonnet
+   - 规模：S（~60 min）
+   - 依赖：无
+   - 对应缺陷：#9
+   - 文件范围：`components/detail/EpisodePicker.tsx` / `components/video/VideoDetailClient.tsx` / `components/detail/DetailHero.tsx`
+   - 验收：浏览器：点选集→URL +高亮同步；点播放→`/watch/...?ep=N` 且播第 N 集；`detail.spec.ts` 不回退并补断言
+
+8. M5-CLEANUP-11 — M5 e2e 扩写（9 场景固化）（状态：⬜ 未开始）
+   - 创建时间：2026-04-21
+   - 建议模型：sonnet
+   - 规模：M（~180 min）
+   - 依赖：CLEANUP-04/05/06/07/08/09/10 全部 ✅
+   - 新增 8 个 spec 文件（≥ 16 test case）于 `tests/e2e-next/`：card-dual-exit / browse-category-routes / player-tri-state / player-option-tabs-stable / cinema-mode-size / typography-layout / search-query（扩写）/ detail-episode-pick
+   - 禁止：不改业务源码（仅在需要 testid 时补 `data-testid`）
+   - 验收：新增 spec 全绿；`npm run test:e2e` 无新增 flaky
+
+9. M5-CLOSE-03 — M5 真·PHASE COMPLETE v2（真·真·闭环）（状态：⬜ 未开始）
+   - 创建时间：2026-04-21
+   - 建议模型：**opus**（主循环）+ arch-reviewer (claude-opus-4-6) 子代理（**强制**）+ **浏览器手动验收（主循环执行）**
+   - 规模：S（~120 min）
+   - 依赖：CLEANUP-04/05/06/07/08/09/10/11 全部 ✅
+   - 文件范围：
+     - 新增 `docs/milestone_alignment_m5_final_v2_<date>.md`（v2 闭环对齐表 + 11 点审计签字 + 手动验收清单）
+     - 修改 `docs/decisions.md`（追加 v2 签字，不修 ADR-037 §4b）
+     - 修改 `docs/changelog.md`（追加 ★ M5 真·PHASE COMPLETE v2 ★）
+     - 修改 `docs/task-queue.md`（解除 BLOCKER）
+   - arch-reviewer 必查 11 点（= CLOSE-02 原 10 点 + 新增第 11 点：手动验收记录审查）
+   - **主循环强制义务**：在卡片完成备注贴出 "dev server 启动记录 + 9 项逐一走查结论 + 关键交互截图或日志摘要"；arch-reviewer 以此为 "非静态审计一维" 判据
+   - 验收：11 点 PASS + typecheck/lint/unit/e2e 全绿 + 用户二次人工确认通过
+   - **解除 BLOCKER**：仅当上述 4 项全部满足
 
 ---
 
