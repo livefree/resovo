@@ -6,7 +6,7 @@
  * 断言：cookie → response header → DOM data-brand/data-theme 的端到端链路。
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './_fixtures'
 
 const VALID_THEMES = new Set(['light', 'dark', 'system'])
 

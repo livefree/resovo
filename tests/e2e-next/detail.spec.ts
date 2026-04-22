@@ -4,7 +4,7 @@
  * 覆盖：电影详情页 + 动漫详情页（多集）
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './_fixtures'
 import type { Video } from '../../apps/web/src/types'
 
 const API_BASE = 'http://localhost:4000/v1'

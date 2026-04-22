@@ -13,7 +13,7 @@
  *   - 切换线路后 source-btn-N 高亮状态稳定（颜色与 accent-default 一致，证明 activeSourceIndex 被应用）
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './_fixtures'
 
 const API_BASE = 'http://localhost:4000/v1'
 

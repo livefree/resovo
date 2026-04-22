@@ -4,7 +4,7 @@
  * 使用 page.route() 拦截 API 请求，不依赖真实后端
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './_fixtures'
 
 const API_BASE = 'http://localhost:4000/v1'
 

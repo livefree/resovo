@@ -7,7 +7,7 @@
  * - 浏览页 ?type=tvshow 请求发送 type=variety 给 API
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './_fixtures'
 
 const API_BASE = 'http://localhost:4000/v1'
 

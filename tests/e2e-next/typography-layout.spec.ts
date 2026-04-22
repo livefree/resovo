@@ -9,7 +9,7 @@
  *    本 spec 只断言命中"无 serif 默认"即可（不锁定具体字体）。
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './_fixtures'
 
 const API_BASE = 'http://localhost:4000/v1'
 

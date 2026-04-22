@@ -9,7 +9,7 @@
  * （short/clip 未在 CLEANUP-05 范围内，本轮不固化。）
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './_fixtures'
 
 const API_BASE = 'http://localhost:4000/v1'
 

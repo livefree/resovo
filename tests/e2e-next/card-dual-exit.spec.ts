@@ -8,7 +8,7 @@
  *   - TagLayer 左上 lifecycle 区的 bounding box 不与 title <p> 的 bounding box 交集
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './_fixtures'
 
 const API_BASE = 'http://localhost:4000/v1'
 

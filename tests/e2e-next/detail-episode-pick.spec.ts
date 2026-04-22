@@ -7,7 +7,7 @@
  *   - DetailHero 从 VideoDetailClient 读 activeEpisode，点"立即播放"跳 /watch/...?ep=N
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './_fixtures'
 
 const API_BASE = 'http://localhost:4000/v1'
 

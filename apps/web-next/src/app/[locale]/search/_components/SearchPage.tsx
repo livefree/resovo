@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
 import { VideoCard } from '@/components/video/VideoCard'
+import { VideoGrid } from '@/components/video/VideoGrid'
 import { SearchSuggestions } from '@/components/search/SearchSuggestions'
 import { SearchEmptyState } from '@/components/search/SearchEmptyState'
 import type { SearchResult } from '@resovo/types'
@@ -149,4 +150,17 @@ export function SearchPage() {
   )
 }
 
-SearchPage.Skeleton = SearchEmptyState.Skeleton
+/**
+ * 具名导出 Skeleton 组件（不通过 SearchPage.Skeleton 静态属性）
+ * 原因：SearchPage 是 'use client'，在 Next 15 server 端被编译为 Client Reference，
+ * 静态属性 `.Skeleton` 在 server 端访问返回 undefined，导致 Suspense fallback SSR 500。
+ * 与 commit 9fcaaf1 的 VideoDetailClientSkeleton 修复同一 pattern。
+ */
+export function SearchPageSkeleton() {
+  return (
+    <VideoGrid.Skeleton
+      gridCols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"
+      testId="search-results-skeleton"
+    />
+  )
+}

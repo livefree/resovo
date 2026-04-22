@@ -9,7 +9,7 @@
  *   - 默认（非剧场）态下 player-shell 内层容器使用 max-w-screen-xl（≤1280px）约束
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './_fixtures'
 
 const API_BASE = 'http://localhost:4000/v1'
 

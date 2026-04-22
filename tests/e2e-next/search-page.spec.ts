@@ -4,7 +4,7 @@
  * 覆盖：搜索输入、URL 同步、结果展示、空态、清除
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './_fixtures'
 
 const API_BASE = 'http://localhost:4000/v1'
 

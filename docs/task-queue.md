@@ -8935,7 +8935,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ---
 
-## 🛑 BLOCKER — M5-CLEANUP 启动（M6 及后续任务冻结）【重新激活 + 纠偏序列规划完成】
+## ~~🛑 BLOCKER — M5-CLEANUP 启动（M6 及后续任务冻结）~~ **【已解除 2026-04-22，M5-CLOSE-03 真·PHASE COMPLETE v2 签字】**
 
 - **原触发时间**：2026-04-21
 - **一度解除时间**：2026-04-21（基于 M5-CLOSE-02 arch-reviewer 静态审计 PASS）
@@ -9173,7 +9173,17 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 验收结果：新增 spec 全绿；`web-next-chromium` project 全量 53 passed + 15 TODO skipped + **0 failed**；typecheck / lint / unit（1380）✅
    - 完成备注：执行模型: claude-opus-4-7
 
-9. M5-CLOSE-03 — M5 真·PHASE COMPLETE v2（真·真·闭环）（状态：🔄 进行中 2026-04-22）
+9. M5-CLOSE-03 — M5 真·PHASE COMPLETE v2（真·真·闭环）（状态：✅ 完成 2026-04-22）
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：arch-reviewer (claude-opus-4-6) — AUDIT RESULT: PASS（10 PASS + 1 NEED_FIX 黄线 + 0 红线）
+   - 产物：`docs/milestone_alignment_m5_final_v2_20260422.md`（三维闭环对齐表 + 11 点审计签字 + 代理证据 + 用户 checklist + CLEANUP-04~10 合并记账附章）
+   - 额外发现：代理证据采集时发现 `/en/search?q=...` SSR 500（Next 15 Client Reference 静态属性 undefined），即时修 SearchPage 具名导出 + 新增 `tests/e2e-next/_fixtures.ts` 框架层 response.status<500 兜底（18 spec 统一 import）
+   - ADR 追加：`docs/decisions.md` ADR-037 迭代 v2（§4d/§4e/§4f 三维闭环条款）
+   - 三 BLOCKER 解除：M5-CLEANUP 启动冻结 / PC 端人工回归否决 / SSR 500 新缺陷
+   - 完成备注：执行模型: claude-opus-4-7；子代理: arch-reviewer (claude-opus-4-6) AUDIT PASS
+
+## 状态：SEQ-20260421-M5-CLEANUP-2 整体 ✅（9 张卡全部完成，2026-04-22）
    - 创建时间：2026-04-21
    - 建议模型：**opus**（主循环）+ arch-reviewer (claude-opus-4-6) 子代理（**强制**）+ **浏览器手动验收（主循环执行）**
    - 规模：S（~120 min）
@@ -9200,7 +9210,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ---
 
-🚨 BLOCKER — M5 PC 端人工回归否决（9 项 UI 缺陷，M6 继续冻结）
+~~🚨 BLOCKER — M5 PC 端人工回归否决（9 项 UI 缺陷，M6 继续冻结）~~ **【已解除 2026-04-22，9 缺陷全修 + e2e 24 test case 固化 + CLOSE-03 v2 签字，历史记录保留为审计案例】**
 - **任务**：M5-CLOSE-02 静态审计 PASS 后真·PHASE COMPLETE 宣告
 - **时间**：2026-04-21
 - **触发方式**：用户 PC 端浏览器手动测试
@@ -9269,7 +9279,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   e. 人工回归是否覆盖全部 M5 功能，或仅 9 项已发现？若全局扫描未完，可能还有更多缺陷待补
 ---
 
-🚨 BLOCKER — M5-CLOSE-03 启动遇新运行时缺陷（搜索页 SSR 500）
+~~🚨 BLOCKER — M5-CLOSE-03 启动遇新运行时缺陷（搜索页 SSR 500）~~ **【已解除 2026-04-22，SearchPage 具名导出修复 + _fixtures.ts 框架层兜底防复发，采用决策 a + d 组合】**
 - **任务**：M5-CLOSE-03 真·PHASE COMPLETE v2
 - **时间**：2026-04-22
 - **发现方式**：CLOSE-03 要求的"dev server + 9 项逐一走查"代理证据采集阶段，`curl -sS -o /dev/null -w "%{http_code}" http://localhost:3002/en/search?q=test` 返回 **500**（空 q 同样 500）
@@ -9289,4 +9299,34 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   c. 是否**先做 M5 全局 SSR 扫描**（全部 route 的 `curl` 状态码 + Next dev error overlay 检查）再启 CLOSE-03，避免再出现"签字后发现下一个缺陷"循环
   d. Playwright e2e 默认加 `response.status() < 500` 基础断言（框架层而非 case 层）以后续兜底
 - **主循环当前状态**：CLOSE-03 task-queue.md 已标 🔄；tasks.md 卡片已写入；但不继续后续对齐表 / arch-reviewer 审计 / BLOCKER 解除动作，等待决策
+- **决策结果（2026-04-22）**：用户采纳 **a + d 组合**。SSR 500 已在本次 CLOSE-03 内即时修复（`SearchPage.tsx` 删静态属性赋值、新增具名导出 `SearchPageSkeleton`；`search/page.tsx` 切 `<SearchPageSkeleton />` fallback；新增 `tests/e2e-next/_fixtures.ts` 框架层 response.status<500 兜底，18 spec 统一 import）。arch-reviewer (claude-opus-4-6) 独立 11 点审计 `AUDIT RESULT: PASS`。M5-CLOSE-03 v2 签字完成，本 BLOCKER 同步解除。
+---
+
+---
+
+## ✅ PHASE COMPLETE — M5 真·PHASE COMPLETE v2（等待用户 PC 端真人二次确认后启动 M6）
+
+- **完成时间**：2026-04-22
+- **本 Phase 完成任务数**：18 张主序列 + 9 张 CLEANUP 纠偏 + 1 张 REGRESSION 附件（历史）
+- **已合并到 main**：否（dev 分支 ahead of origin/dev 7 commits；待 merge PR）
+- **签字维度**（ADR-037 v2 §4f）：
+  1. ✅ arch-reviewer (claude-opus-4-6) 11 点 `AUDIT RESULT: PASS`
+  2. ✅ 代理证据（对齐表 §4 dev server + 9 路由 HTTP + e2e 全量三张表 + SSR 500 修复 before/after）
+  3. ⏳ 用户 PC/移动端真人确认（`docs/milestone_alignment_m5_final_v2_20260422.md` §5 checklist）— **待用户打勾**
+- **已解除 BLOCKER**：
+  - 🛑 M5-CLEANUP 启动（M6 冻结）
+  - 🚨 M5 PC 端人工回归否决
+  - 🚨 M5-CLOSE-03 SSR 500 新缺陷
+- **建议下一步**：
+  1. 用户 PC/移动端真人二次确认（对齐表 §5）→ 打勾 → 签字正式生效
+  2. 确认后，M6 里程碑任务取卡启动；或按计划入队 HANDOFF-V2 序列（`docs/handoff_20260422/landing_plan_v0.md`）
+- **M6 前置待办（非阻断）**：
+  - CLEANUP-08 BLOCKER-FONT（字体族选型决策）
+  - Tag Token Cyrillic Bug（HANDOFF-01 范围）
+  - apps/web 网关 `/search` rewrite-allowlist 接入（HANDOFF-XX 或独立 CHORE）
+- **需要你做的事**：
+  - [ ] 用户 PC 端真人交互验收（对齐表 §5 逐条）
+  - [ ] 确认后 merge dev → main（或批准后主循环协助）
+  - [ ] 删除本 PHASE COMPLETE 块 = 正式启动 M6
+
 ---

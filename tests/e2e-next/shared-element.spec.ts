@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './_fixtures'
 
 /**
  * SharedElement FLIP 集成测试

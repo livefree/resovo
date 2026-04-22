@@ -4,7 +4,7 @@
  * 覆盖：PlayerShell / 多集动漫 / VideoPlayer 集成 / PLAYER-10 完整链路
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './_fixtures'
 import type { Video } from '../../apps/web/src/types'
 
 const API_BASE = 'http://localhost:4000/v1'

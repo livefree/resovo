@@ -4,7 +4,7 @@
  * 覆盖：点图片触发播放器 full 态且 URL 更新至 /watch/；点文字区跳详情页；Tab 顺序
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './_fixtures'
 
 test.describe('VideoCard 双出口', () => {
   test.beforeEach(async ({ page }) => {

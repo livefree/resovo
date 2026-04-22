@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './_fixtures'
 
 /**
  * RouteStack 边缘返回手势 — E2E（移动端模拟）

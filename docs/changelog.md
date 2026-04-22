@@ -8308,3 +8308,64 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `typography-layout.spec.ts:72` VideoGrid gap ≥ 16px conditional skip（skeleton 检测条件在 mock 首页下不命中；实际 gap 断言留给 CLOSE-03 浏览器手动验收）
   - BLOCKER-FONT（CLEANUP-08 的字体族未定）不在本卡片范围，仍待人工决策
 - **后续**：M5-CLOSE-03（真·PHASE COMPLETE v2）可启动
+
+---
+
+## M5-CLOSE-03 — M5 真·PHASE COMPLETE v2（三维闭环签字 + SSR 500 即时修复 + e2e 框架层兜底）
+
+- **任务 ID**：M5-CLOSE-03
+- **所属序列**：SEQ-20260421-M5-CLEANUP-2
+- **完成时间**：2026-04-22
+- **记录时间**：2026-04-22
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-6) — `AUDIT RESULT: PASS`（10 PASS + 1 NEED_FIX 黄线 + 0 红线）
+- **CLEANUP-04~10 合并记账补录**：commit `b557463` 一次性合并 7 张卡片（见 `docs/milestone_alignment_m5_final_v2_20260422.md` 附章节逐卡对照表），补上 changelog 层遗漏
+- **新增文件**：
+  - `docs/milestone_alignment_m5_final_v2_20260422.md`（v2 final 对齐表 + 11 点审计签字 + 4 节代理证据 + 用户 checklist + CLEANUP-04~10 合并附章）
+  - `tests/e2e-next/_fixtures.ts`（e2e 框架层 `response.status < 500` 兜底，18 spec 统一 import）
+- **修改文件**：
+  - `apps/web-next/src/app/[locale]/search/_components/SearchPage.tsx` — 删除 `SearchPage.Skeleton = SearchEmptyState.Skeleton`；新增 `export function SearchPageSkeleton()`（修复 Next 15 Client Reference 静态属性 undefined 导致的 SSR 500，同 pattern 已由 9fcaaf1 在 detail-page 侧修过）
+  - `apps/web-next/src/app/[locale]/search/page.tsx` — `import { SearchPage, SearchPageSkeleton }` 并在 Suspense fallback 使用 `<SearchPageSkeleton />`
+  - `tests/e2e-next/*.spec.ts` × 18 — import 路径由 `@playwright/test` 切换到 `./_fixtures`
+  - `docs/decisions.md` — 追加"ADR-037 迭代 v2 — 三维闭环"章节（4d / 4e / 4f 新条款）
+  - `docs/task-queue.md` — 解除 🚨 BLOCKER（PC 端否决 + SSR 500 两块）；SEQ-20260421-M5-CLEANUP-2 整体标 ✅
+  - `docs/tasks.md` — 删除 M5-CLOSE-03 🔄 卡片
+- **新增依赖**：无
+- **测试**：
+  - `npm run typecheck` ✅
+  - `npm run lint` ✅
+  - `npm run test -- --run` ✅（130 files / 1380 tests passed）
+  - `npx playwright test --project=web-next-chromium` ✅（52 passed + 1 flaky-retry-pass = 53 passed / 15 TODO skipped / 0 failed）
+  - SSR 500 修复前后 curl 对比：`/en/search?q=test` 500 → 200 ✅
+- **三维闭环验证**：
+  - 维度 1（静态审计）：arch-reviewer 11 点 PASS，审计报告归档在对齐表 §3
+  - 维度 2（运行时代理证据）：对齐表 §4 dev server + 9 路由 HTTP + e2e 全量三张表，SSR 新缺陷 before/after 硬证据
+  - 维度 3（固化防复发）：CLEANUP-11 新增 24 test case + `_fixtures.ts` 框架层 SSR ≥500 兜底
+- **黄线项（已登记）**：
+  1. `apps/web/src/lib/rewrite-allowlist.ts` 中 `/search` 条目仍注释未 enable（网关接入待 HANDOFF-XX 或独立 CHORE 卡覆盖；本次 §4.2 HTTP 验证基于 web-next:3002 直连）
+  2. CLEANUP-04~10 changelog 合并记账（已在对齐表附章节补齐）
+  3. e2e 数字口径：对齐表 §4.3 标注 `52 passed + 1 flaky-retry-pass = 53 passed`，CLEANUP-11 changelog 口径 53 passed，二者等价，维持现状
+- **M6 前置待办（非 v2 阻断）**：
+  1. CLEANUP-08 BLOCKER-FONT（字体族选型）
+  2. Tag Token Cyrillic Bug（`packages/design-tokens/src/semantic/tag.ts` `lifecycleDеlisting*` U+0435 → ASCII，HANDOFF-01 范围）
+- **关联 ADR**：ADR-037 v2（本次 commit 追加），明确 v2 三维闭环为 M6+ 所有 PHASE COMPLETE 签字的统一门槛
+
+---
+
+## ★ M5 真·PHASE COMPLETE v2 ★
+
+- **日期**：2026-04-22
+- **签字方式**：三维闭环（ADR-037 v2 §4f）
+- **一次签字（审计）**：arch-reviewer (claude-opus-4-6) `AUDIT RESULT: PASS`
+- **二次签字（代理证据）**：对齐表 §4 三张表全绿 + SSR 500 before/after 硬证据
+- **三次签字（用户真人确认）**：`docs/milestone_alignment_m5_final_v2_20260422.md` §5 checklist 待用户 PC/移动端打勾
+- **主循环**：claude-opus-4-7（M5-CLOSE-03）
+- **解除 BLOCKER**：
+  - `🛑 BLOCKER — M5-CLEANUP 启动（M6 及后续任务冻结）` ✅ 解除
+  - `🚨 BLOCKER — M5 PC 端人工回归否决（9 项 UI 缺陷）` ✅ 解除（9 缺陷 CLEANUP-04~10 全修 + CLEANUP-11 24 test case 固化）
+  - `🚨 BLOCKER — M5-CLOSE-03 启动遇新运行时缺陷（搜索页 SSR 500）` ✅ 解除（SearchPage 具名导出修复 + _fixtures.ts 框架层兜底）
+- **允许**：M6 里程碑任务取卡启动；HANDOFF SEQ-20260423-HANDOFF-V2 可入队
+- **历史镜像**：
+  - `~~M5 真·PHASE COMPLETE（CLOSE-02，2026-04-21）~~` 仍保留为 CANCELED 审计案例
+  - 本签字（CLOSE-03，v2）为 M5 的**唯一有效 PHASE COMPLETE**
+- **待完成（不阻 M6 启动）**：对齐表 §5 用户 checklist 真人打勾；任一未勾 → 本签字转为 CANCELED，需重新闭环

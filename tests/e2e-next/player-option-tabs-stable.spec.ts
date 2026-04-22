@@ -6,7 +6,7 @@
  * 切换 tab 内容区更新但两个 tab 按钮本身不消失（PlayerShell L207-238）。
  */
 
-import { test, expect } from '@playwright/test'
+import { test, expect } from './_fixtures'
 
 const API_BASE = 'http://localhost:4000/v1'
 
