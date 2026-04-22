@@ -8620,3 +8620,21 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **质量门禁**：typecheck ✅ / lint ✅ / unit 1440/1440 ✅（+10 新 case）
 - **关联**：audit §2.4/§2.5 + META-10；至此 audit §2（CMS 字段缺口 5 小节）全部闭环
 - **P1 全部完成**（ADMIN-15 / ADMIN-16 / CRAWLER-07 / CRAWLER-08），剩 P2 两张
+
+---
+
+## [UX-14] 审核区"分类标签" UI 文案改为"题材标签" + tooltip 澄清
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-BUGFIX-01（12 张第 11 张，P2 启动）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无
+- **背景**：audit §3.6 — 审核区"分类标签"与主类型 `type` 概念易混；对应 DB 字段为 `genres`（题材），应明确为"题材标签"
+- **修复**（`apps/server/src/components/admin/moderation/ModerationBasicInfoBlock.tsx`）：
+  - 标签块标题"分类标签" → "题材标签"
+  - 新增 title tooltip："对应视频 genres 字段，可多选；视频主类型由上方'类型'单选决定"
+  - 文件顶部注释 "分类标签" → "题材标签"（标注 UX-14 明确语义 genres）
+  - `saveField` 成功文案 "分类标签已保存" → "题材标签已保存"
+- **DB 影响**：无（仅前端文案）
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1440/1440 ✅
+- **关联**：audit §3.6；与 ADMIN-14（反馈语义修复）配套使审核区 genres 编辑体验完整

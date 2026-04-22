@@ -2,7 +2,7 @@
  * ModerationBasicInfoBlock.tsx — 审核台基础信息内联编辑块（UX-12）
  * 标题：点击切换 input / 年份：点击切换 input
  * 类型：单排单选卡片（立即保存，乐观更新）
- * 分类标签：复选卡片（点击立即保存，乐观更新）
+ * 题材标签：复选卡片（点击立即保存，乐观更新）— UX-14 明确语义 genres
  */
 
 'use client'
@@ -109,7 +109,7 @@ export function ModerationBasicInfoBlock({ video, videoId, onSaved }: Moderation
       ? localGenres.filter((g) => g !== v)
       : [...localGenres, v]
     setLocalGenres(next)
-    void saveField({ genres: next }, '分类标签已保存')
+    void saveField({ genres: next }, '题材标签已保存')
   }, [localGenres, saving, saveField])
 
   return (
@@ -204,9 +204,14 @@ export function ModerationBasicInfoBlock({ video, videoId, onSaved }: Moderation
         </div>
       </div>
 
-      {/* 分类标签：复选卡片（乐观更新） */}
+      {/* 题材标签：复选卡片（乐观更新；UX-14 明确为"题材"与"类型"正交） */}
       <div>
-        <p className="mb-1 text-[10px] text-[var(--muted)]">分类标签</p>
+        <p
+          className="mb-1 text-[10px] text-[var(--muted)]"
+          title="对应视频 genres 字段，可多选；视频主类型由上方'类型'单选决定"
+        >
+          题材标签
+        </p>
         <div className="flex flex-wrap gap-1">
           {Object.entries(GENRE_LABELS).map(([v, label]) => {
             const selected = localGenres.includes(v)

@@ -9564,11 +9564,15 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
       - 单测：无豆瓣数据时 `source_category = '都市爱情'` 能命中 `romance` 等
       - typecheck / lint / unit ✅
 
-11. UX-14 — 审核区"分类标签" UI 文案改为"题材标签"（状态：⬜ 未开始）
+11. UX-14 — 审核区"分类标签" UI 文案改为"题材标签"（状态：✅ 已完成 2026-04-22）
     - 创建时间：2026-04-22
+    - 实际开始：2026-04-22
+    - 完成时间：2026-04-22
+    - 执行模型：claude-opus-4-7
+    - 子代理：无
     - 建议模型：haiku（纯文案 + tooltip）
     - 规模：XS（~15 min）
-    - 依赖：ADMIN-14 ✅（避免同文件 merge 冲突）
+    - 依赖：ADMIN-14 ✅（1568d3c，避免同文件 merge 冲突）
     - 对应 audit 条目：§3.6
     - 文件范围：`apps/server/src/components/admin/moderation/ModerationBasicInfoBlock.tsx` + 相关 i18n（若有）
     - 验收：
