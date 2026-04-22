@@ -9763,8 +9763,12 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - `/dev/fallback-preview` 可切换两种模式预览
      - typecheck / lint / unit ✅
 
-3. IMG-06 — `ImageStorageService` + `POST /admin/upload/image` 接口（状态：⬜ 未开始）
+3. IMG-06 — `ImageStorageService` + `MediaImageService` + `POST /admin/media/images`（状态：✅ 已完成 2026-04-22）
    - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：arch-reviewer (claude-opus-4-7) — AUDIT RESULT: NEED_FIX，11 必改点全部采纳
    - 建议模型：sonnet + **opus arch-reviewer（新 Service + 新 Route 契约）**
    - 规模：M（~120 min）
    - 依赖：CDN-02 ✅（或与 CDN-02 并行，但保守选串行）

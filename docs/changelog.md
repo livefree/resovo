@@ -8854,3 +8854,54 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **质量门禁**：typecheck ✅ / lint ✅ / unit 1475/1475 ✅（+14）/ build ✅
 - **关联**：`image_pipeline_plan §10.2` / ADR-035 / CDN-01 / CLAUDE.md §模型路由 #2（跨 3+ 消费方 schema 设计强制 Opus 审计）
 - **下游**：IMG-06 `ImageStorageService`（本卡实现后，SafeImage 已就位接收上传后的 R2 URL）；M6-CLOSE-01 签字将把本预览页作为真人验收入口之一
+
+---
+
+## [IMG-06] ImageStorageService + MediaImageService + POST /admin/media/images
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-M6-CDN（M6 第 3 张，后台图片管理阶段 2 基础设施）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：arch-reviewer (claude-opus-4-7) — AUDIT RESULT: NEED_FIX，11 必改点全部采纳后实施
+- **背景**：M5 对齐表 / 用户需求指出后台视频/banner 图片只能改 URL，无上传、无预览大图、无健康联动。IMG-06 补齐上传基础设施，为 IMG-07 / IMG-08 UI 改造铺路
+- **arch-reviewer 11 必改点（全部采纳）**：
+  1. API 路径 `POST /admin/upload/image` → **`POST /admin/media/images`**（对齐 `/admin/banners` `/admin/videos` 资源路径，为未来 `/admin/media/subtitles` 等扩展预留命名空间）
+  2. multipart 字段 `kind + videoId|bannerId` → **`ownerType + ownerId`**（泛化；避免 `kind='banner'` 撕裂现有 `ImageKind` 枚举）
+  3. R2 key 覆盖语义 → **带 sha256 前 8 位 hash**（`posters/{videoId}-{hash}.{ext}`；防 CDN/浏览器缓存读旧图）
+  4. R2 未配假域名占位 → **返 503 STORAGE_NOT_CONFIGURED**（避免 broken_image_events 污染；不引入 `@fastify/static`）
+  5. Route 写库 → **拆 `ImageStorageService`（纯存储）+ `MediaImageService`（组合器）**，Route 只编排（对齐 CLAUDE.md Route→Service→DB 分层）
+  6. blurhash 入队 data shape → **含 `catalogId`**（不只 videoId），job 名 `blurhash-extract`
+  7. multipart 全局 2MB → **升 5MB**；SubtitleService 保留路由层 2MB 校验
+  8. **404 前置校验** owner 存在（避免孤立 R2 对象）
+  9. Response 补 **`blurhashJobId: string | null`** 字段供前端轮询
+  10. 权限 **限 admin**（对齐 `/admin/banners` adminOnly）
+  11. 写库失败 → **补偿删除 R2 对象**（防 R2 有对象 + DB 指向旧 URL 不一致）
+- **arch-reviewer 建议点（全部采纳）**：
+  - Response 含 `hash: string` 字段（消费方可用作版本指示）
+  - stderr 结构化日志：`[image-upload] ownerType=... ownerId=... kind=... key=... size=...`
+  - `.env.example` 分桶：`R2_IMAGES_BUCKET=resovo-images`（与 `R2_BUCKET=resovo-subtitles` 分命名空间）
+  - `ImageStorageService.delete()` 的 stderr warn 含 orphan cleanup TODO
+  - 未写 ADR（本卡先 ship；若后续扩 stills/thumbnail 再起 ADR）
+- **实现**：
+  - `apps/api/src/server.ts:66` multipart 全局 `fileSize: 2MB → 5MB`
+  - 新增 `apps/api/src/services/ImageStorageService.ts`（R2 客户端构造 + validate + upload + delete + 5 种 kind → R2 prefix 映射 + sha256 hash key + 503 fallback）
+  - 新增 `apps/api/src/services/MediaImageService.ts`（编排器：前置校验 owner 存在 → ImageStorageService.upload → 写库（updateCatalogFields for video / updateBanner for banner）→ imageHealthQueue 入队（health-check 始终 + blurhash-extract 仅 poster/backdrop/banner_backdrop）→ 写库失败时调 storage.delete 补偿）
+  - 新增 `apps/api/src/routes/admin/media.ts`（`POST /admin/media/images`，multipart，ownerType+ownerId+kind 字段校验，Zod schemas，ImageStorageError 统一映射到对应 HTTP 状态码）
+  - `apps/api/src/server.ts` 注册 `adminMediaRoutes`
+  - `.env.example` 补 `R2_IMAGES_BUCKET`，标注 R2 账号凭据共享、bucket 分桶
+- **测试**（+29 case）：
+  - `tests/unit/api/imageStorageService.test.ts`（18 case）：validate 白名单 / 5MB 边界；R2 未配 `isConfigured=false` + upload 503 + delete 静默；各 ownerType/kind 的 key prefix 正确；相同 buffer 相同 hash（幂等）；不同 buffer 不同 hash（防缓存不一致）；PutObjectCommand / DeleteObjectCommand 调用断言
+  - `tests/unit/api/mediaImageService.test.ts`（11 case）：owner 404 阻断 + 不调 upload / 不入队；kind 缺失 / scope 外（stills/thumbnail）抛 400；video 5 个 kind（poster/backdrop/banner_backdrop/logo）各自的入队数量 + updateCatalogFields 字段；banner 成功路径（无 blurhash）；video/banner 写库失败 → storage.delete 补偿
+- **Route 层未独立单测**（已由 Service 层覆盖；集成 e2e 在 IMG-07 / M6-CLOSE 真人验收）
+- **不在范围**（后续卡）：
+  - `VideoImageSection` UI 接入上传（IMG-07）
+  - `BannerForm` UI 接入上传（IMG-08）
+  - 共享 `<ImageUploadField>` 组件（条件 ADMIN-17）
+  - home_banners 加 blurhash 列（未来 migration + 再扩 MediaImageService）
+  - orphan R2 object cleanup（未来 maintenance job，已留 TODO）
+  - stills/thumbnail kind 的 video_episode_images 关联（IMG-06 scope 外）
+- **未引入新 npm 依赖**（`@aws-sdk/client-s3` + `@fastify/multipart` + `node:crypto` 都已存在）
+- **未触 DB schema**（Migration 048 的字段已就绪）
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1504/1504 ✅（+29）
+- **关联**：`image_pipeline_plan §10` / ADR-046（图片管线）/ CLAUDE.md §模型路由 #1 (共享组件 API 契约) + #2 (跨 3+ 消费方 schema)
+- **下游**：IMG-07 `VideoImageSection` 消费本 API 接入上传按钮 + 进度 + 预览
