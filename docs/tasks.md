@@ -14,5 +14,5 @@
 ---
 
 <!-- M5 SEQ-20260421-M5-CLEANUP-2 整体完成 2026-04-22：CLEANUP-04~10 b557463 / CLEANUP-11 d85bf9e / CLOSE-03 本次 commit -->
-<!-- tasks.md 已清空，历史入 changelog.md，规划入 task-queue.md 尾部 PHASE COMPLETE 通知 -->
-<!-- 单任务工作台稳定态：空，等待用户真人二次确认 + 下一里程碑启动 -->
+<!-- 2026-04-22 META-10（豆瓣分类对齐）已完成 ✅，历史入 changelog.md，下一张 CHORE-05（数据清空）等待用户确认后启动 -->
+<!-- 单任务工作台稳定态：空 -->

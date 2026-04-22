@@ -31,7 +31,13 @@ export type VisibilityStatus = 'public' | 'internal' | 'hidden'
 export type DoubanStatus = 'pending' | 'matched' | 'candidate' | 'unmatched'
 /** 源活性批量检验结果 */
 export type SourceCheckStatus = 'pending' | 'ok' | 'partial' | 'all_dead'
-/** VideoGenre — 内容题材（与 VideoType 内容形式严格正交）*/
+/** VideoGenre — 内容题材（与 VideoType 内容形式严格正交）
+ *
+ * 对齐豆瓣视频分类（2026-04-22 META-10 对齐表）：
+ *   豆瓣"动画 / 纪录片 / 短片 / 儿童"由 VideoType 承载，不占 genre；
+ *   豆瓣"同性 / 情色"不纳入枚举，raw 保留至 source_category，审核区人工处理。
+ *   详见 docs/video_type_genre_alignment_20260422.md
+ */
 export type VideoGenre =
   | 'action'       // 动作
   | 'comedy'       // 喜剧
@@ -39,14 +45,19 @@ export type VideoGenre =
   | 'thriller'     // 惊悚
   | 'horror'       // 恐怖
   | 'sci_fi'       // 科幻
-  | 'fantasy'      // 奇幻 / 魔幻
+  | 'fantasy'      // 奇幻 / 魔幻 / 玄幻
   | 'history'      // 历史 / 古装
   | 'crime'        // 犯罪
-  | 'mystery'      // 悬疑
+  | 'mystery'      // 悬疑 / 黑色电影
   | 'war'          // 战争
   | 'family'       // 家庭 / 亲情
   | 'biography'    // 传记 / 人物
-  | 'martial_arts' // 武侠 / 功夫
+  | 'martial_arts' // 武侠 / 功夫（华语扩展）
+  | 'adventure'    // 冒险
+  | 'disaster'     // 灾难
+  | 'musical'      // 歌舞 / 音乐
+  | 'western'      // 西部
+  | 'sport'        // 运动（注意与 VideoType.sports 区分：前者为题材，后者为形式）
   | 'other'        // 其他
 
 export type VideoQuality  = '4K' | '1080P' | '720P' | '480P' | '360P'

@@ -9330,3 +9330,231 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   - [ ] 删除本 PHASE COMPLETE 块 = 正式启动 M6
 
 ---
+
+## SEQ-20260422-BUGFIX-01 — 后台审核/采集/源线路三链路纠偏（12 张）
+
+- **状态**：🔄 执行中（META-10 启动 2026-04-22）
+- **创建时间**：2026-04-22
+- **最后更新时间**：2026-04-22
+- **目标**：修复 audit 文档列出的 3 条链路共 10 类问题（源线路 5 / CMS 字段 5 / 审核标签 3），同步完成本地分类与豆瓣分类对齐 + 试验期采集数据清空，使审核区与采集入库链路恢复可信数据口径
+- **范围**：
+  - 后端：`apps/api/src/db/queries/sources.ts` / `apps/api/src/services/{CrawlerService,CrawlerRefetchService,SourceParserService,MediaCatalogService,VideoService}.ts` / `apps/api/src/lib/genreMapper.ts` / `apps/api/src/routes/admin/moderation.ts`
+  - 类型：`packages/types/src/video.types.ts`（`VideoType` / `VideoGenre` 枚举）
+  - migration：若 META-10 触及 DB enum 或 `type` 列需新增 migration（按需）
+  - 后台 UI：`apps/server/src/components/admin/moderation/{ModerationDetail,ModerationSourceBlock,ModerationBasicInfoBlock}.tsx`
+  - 数据：采集/入库/外部原始数据全量清空（保留配置表：`crawler_sites` / `crawler_tasks` / `system_settings` / `users` / `home_banners` / `brands` / 用户行为表）
+- **依赖**：SEQ-20260421-M5-CLEANUP-2 ✅（M5 真·PHASE COMPLETE v2 审计已通过，本序列为后端/后台维护，不触碰 web-next M5 锁定文件）
+- **关联审计文档**：[`docs/video_ingest_source_and_moderation_audit_20260422.md`](/Users/livefree/projects/resovo/docs/video_ingest_source_and_moderation_audit_20260422.md)（现象 / 代码定位 / 根因 / 修复建议，P0/P1/P2 优先级来源）
+- **授权声明**：用户 2026-04-22 明确授权：
+  1. `packages/types/src/video.types.ts` 的 `VideoType` / `VideoGenre` 枚举可按豆瓣分类对齐扩展（如需 migration 可执行）
+  2. 采集入库表（videos / video_sources / media_catalog / video_external_refs / video_metadata_* / external_*_raw / douban_entries / douban_people / bangumi_entries / crawler_runs / crawler_task_logs / source_health_events 等）可一次性清空；保留 `crawler_sites` / `crawler_tasks` / `system_settings` / `users` / `home_banners` / `brands` 及用户行为表（`user_favorites` / `watch_history` / `comments` / `danmaku` / `lists` 等）
+- **串行与并行策略**：
+  - 严格串行主线：`META-10 → CHORE-05 → CRAWLER-05 → ADMIN-13 → ADMIN-15 → ADMIN-16`（枚举对齐 → 清数据 → 源站数据口径 → 后台查询 → 审核展示）
+  - 独立分支：`CRAWLER-06` / `ADMIN-14` 可在 CHORE-05 后并行启动
+  - 依赖 META-10：`CRAWLER-07` → `CRAWLER-08`
+  - 收尾：`UX-14`（ADMIN-14 完成后）+ `CHORE-04`（全部 11 张 ✅ 后）
+- **不在范围**：
+  - web-next 前端组件（M5 锁定）
+  - 新增 ADR / 决策文档（除非 META-10 影响 Token 层或跨模块契约，需主循环写 BLOCKER 升 Opus 子代理）
+  - 播放器 core / shell 改动
+
+### 任务列表（按执行顺序）
+
+1. META-10 — 本地 `VideoType` / `VideoGenre` 与豆瓣分类对齐（状态：✅ 已完成 2026-04-22）
+   - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理调用：无（枚举增量扩展，不触发强制 Opus 审计）
+   - 建议模型：sonnet（若豆瓣分类引入跨模块枚举变动 → 写 BLOCKER 升 Opus 子代理审计）
+   - 规模：M（~150 min）
+   - 依赖：无
+   - 对应 audit 条目：用户追加需求（对齐豆瓣）+ §2.3/2.5（类型 + 题材映射偏弱）
+   - 文件范围：
+     - `packages/types/src/video.types.ts`（`VideoType` / `VideoGenre` 枚举）
+     - `apps/api/src/lib/genreMapper.ts`（`DOUBAN_GENRE_MAP` / `SOURCE_CATEGORY_MAP`）
+     - 新增 `docs/video_type_genre_alignment_20260422.md`（豆瓣 vs 本地对齐表 + 决策记录）
+     - 如需新增 migration：`apps/api/src/db/migrations/050_*.sql`（按需）
+   - 验收：
+     - 输出对齐表文档：豆瓣影视类型（电影 / 电视剧 / 综艺 / 纪录片 / 动画 / 短片 …）× 本地 `VideoType`，豆瓣题材（剧情 / 动作 / 喜剧 / 爱情 / 科幻 / 奇幻 / 犯罪 / 悬疑 / 战争 / 历史 / 家庭 / 传记 / 武侠 / 动画 / 运动 / 音乐 / 歌舞 / 儿童 / 灾难 …）× 本地 `VideoGenre`
+     - 枚举缺口补齐（新增值 / 合并 / 保留 `other` 兜底）
+     - `DOUBAN_GENRE_MAP` 覆盖对齐表中全部豆瓣题材（含英文别名），无新缺失项
+     - 若涉及 DB `type` / `genres` 列的 check constraint 或 enum → 配套 migration
+     - typecheck / lint / unit ✅
+   - 禁止：删除既有 `VideoType` 值（若豆瓣无对应项，保留本地值 + 对齐表注明"平台扩展"）
+
+2. CHORE-05 — 采集/入库/外部原始数据全量清空（状态：⬜ 未开始）
+   - 创建时间：2026-04-22
+   - 建议模型：haiku（机械性脚本 + 按列表执行）+ 执行前主循环出清空清单与依赖顺序，用户复核
+   - 规模：S（~60 min）
+   - 依赖：META-10 ✅
+   - 对应 audit 条目：用户追加需求（试验期采集数据清洗）
+   - 文件范围：
+     - 新增 `scripts/db/reset_crawl_data.sql`（或 `.ts`）— 幂等清空脚本
+     - 新增 `docs/crawl_data_reset_20260422.md`（清空清单 + 保留清单 + 执行记录）
+     - 不改业务代码
+   - 清空表（按外键依赖倒序）：
+     - 数据层：`video_tags` → `tags` → `video_aliases` → `video_episode_images` → `video_external_refs` → `video_metadata_provenance` → `video_metadata_locks` → `subtitles` → `video_sources` → `media_catalog_aliases` → `media_catalog` → `videos`
+     - 外部原始：`external_imdb_tmdb_links` → `external_tmdb_movies_raw` → `external_douban_movies_raw` → `external_bangumi_subjects_raw` → `external_import_batches` → `douban_people` → `douban_entries` → `bangumi_entries`
+     - 运行记录：`crawler_runs` → `crawler_task_logs` → `source_health_events` → `video_state_watchdog_runs` → `broken_image_events`
+   - 保留表（**禁止清空**）：`crawler_sites` / `crawler_tasks` / `system_settings` / `users` / `home_banners` / `brands` / `user_favorites` / `watch_history` / `comments` / `danmaku` / `lists` / `list_items` / `list_likes`
+   - 验收：
+     - 脚本 dry-run：列出每张表清空前行数，输出清单供用户二次确认
+     - 执行后：上述目标表 count = 0；保留表 count 不变
+     - 配置层（`crawler_sites` / `crawler_tasks`）完整，可直接触发下一轮采集
+     - 将执行前/后 count 表写入 `docs/crawl_data_reset_20260422.md`
+   - 禁止：
+     - 不得 `DROP TABLE` / 不得 `TRUNCATE CASCADE` 到保留表
+     - 不得使用 `git add -A` 把数据库备份文件误提交
+
+3. CRAWLER-05 — `replaceSourcesForSite()` 按 `source_site_key` 精确匹配旧源（状态：⬜ 未开始）
+   - 创建时间：2026-04-22
+   - 建议模型：sonnet
+   - 规模：S（~60 min）
+   - 依赖：CHORE-05 ✅
+   - 对应 audit 条目：§1.3 C
+   - 文件范围：`apps/api/src/db/queries/sources.ts`（`replaceSourcesForSite` 函数）+ 单测
+   - 验收：
+     - 同站重采时 `WHERE source_site_key = $siteKey` 精确匹配旧源；`source_name` 不再作为站点标识
+     - 旧源软删除 + 新源插入 + 保留不变源的统计正确
+     - 单测覆盖：跨站点聚合视频不同 site 各自清理、同 site 幂等、source_name 相同但 site 不同不误删
+     - typecheck / lint / unit ✅
+
+4. ADMIN-13 — `/admin/sources` 全面切行级 `COALESCE(s.source_site_key, v.site_key)`（状态：⬜ 未开始）
+   - 创建时间：2026-04-22
+   - 建议模型：sonnet
+   - 规模：M（~120 min）
+   - 依赖：CRAWLER-05 ✅
+   - 对应 audit 条目：§1.3 A
+   - 文件范围：`apps/api/src/db/queries/sources.ts`（`listAdminSources` + `ORDER_BY_MAP` + `filters.siteKey` 条件 + 返回字段 `site_key`）
+   - 验收：
+     - filter `siteKey` 使用 `COALESCE(s.source_site_key, v.site_key) = $1`
+     - 排序 `site_key` 使用 `COALESCE(s.source_site_key, v.site_key)`
+     - 返回字段 `site_key` 改为 `COALESCE(s.source_site_key, v.site_key) AS site_key`
+     - 跨站聚合视频在后台源列表可按行级站点正确筛选
+     - typecheck / lint / unit ✅ + 后台源列表回归
+
+5. CRAWLER-06 — `CrawlerRefetchService` 补源链路补传 `sourceSiteKey`（状态：⬜ 未开始）
+   - 创建时间：2026-04-22
+   - 建议模型：haiku（一次性漏传修补）
+   - 规模：XS（~20 min）
+   - 依赖：CHORE-05 ✅（可与 CRAWLER-05 并行）
+   - 对应 audit 条目：§1.3 D
+   - 文件范围：`apps/api/src/services/CrawlerRefetchService.ts`（`sourceMappings` 构造处，~L95）
+   - 验收：
+     - 补源写入的 `video_sources` 行 `source_site_key` 非空且等于采集来源站点 key
+     - 与 `CrawlerService.ts` L226 口径一致
+     - typecheck / lint / unit ✅
+
+6. ADMIN-14 — `MediaCatalogService.safeUpdate` 允许 `manual` 覆盖自锁字段 + 未写入反馈语义（状态：⬜ 未开始）
+   - 创建时间：2026-04-22
+   - 建议模型：sonnet（涉及 API 响应契约 + 前端反馈分支）
+   - 规模：M（~120 min）
+   - 依赖：CHORE-05 ✅（可与 CRAWLER-05/06 并行）
+   - 对应 audit 条目：§3.3 / §3.4
+   - 文件范围：
+     - `apps/api/src/services/MediaCatalogService.ts`（`safeUpdate` L169-212）
+     - `apps/api/src/routes/admin/moderation.ts`（响应格式）
+     - `apps/server/src/components/admin/moderation/ModerationBasicInfoBlock.tsx`（反馈文案分支）
+   - 验收：
+     - 规则调整：`manual` 来源不再被已锁字段阻挡（允许人工继续修改自己锁过的字段）；低优先级来源仍被 `locked_fields` 阻挡
+     - 响应契约：新增 `skippedFields: string[]`（被 hard lock 过滤而未写入的字段），接口返回该字段
+     - 前端：若 `skippedFields.includes(fieldKey)` → toast"该字段已被系统锁定，未保存"；否则正常"已保存"
+     - 单测覆盖：manual 二次编辑生效、hard lock 字段返回 skipped、低优先级来源仍被阻挡
+     - typecheck / lint / unit ✅ + 后台审核区多选 genres 多次编辑回归
+
+7. ADMIN-15 — 审核区线路分组按 `source_name + source_site_key`（状态：⬜ 未开始）
+   - 创建时间：2026-04-22
+   - 建议模型：sonnet
+   - 规模：S（~60 min）
+   - 依赖：ADMIN-13 ✅
+   - 对应 audit 条目：§1.3 B
+   - 文件范围：`apps/server/src/components/admin/moderation/ModerationDetail.tsx`（L173 附近线路分组逻辑）
+   - 验收：
+     - 分组 key = `${row.source_name?.trim() || '默认线路'}::${row.site_key || 'unknown'}`
+     - 线路组 `siteKey` 取该组所有行的公共 `site_key`（若不一致 → 实际上已按 site_key 拆开，取首行即可）
+     - 不同源站同名线路不再合并
+     - typecheck / lint / unit ✅ + 后台审核区多源视频回归
+
+8. ADMIN-16 — 审核区源健康 / 播放器预览复用同一份全量 `/admin/sources` 数据（状态：⬜ 未开始）
+   - 创建时间：2026-04-22
+   - 建议模型：sonnet
+   - 规模：S（~60 min）
+   - 依赖：ADMIN-15 ✅
+   - 对应 audit 条目：§1.3 E
+   - 文件范围：
+     - `apps/server/src/components/admin/moderation/ModerationDetail.tsx`（L99 翻页全量拉取）
+     - `apps/server/src/components/admin/moderation/ModerationSourceBlock.tsx`（L69 `limit=100`）
+   - 验收：
+     - 两个区块共享同一 hook / SWR key / context，单次全量拉取（分页直至 `hasMore=false`）
+     - 源健康区与播放器预览显示的线路数完全一致（不再出现 3 vs 4 差异）
+     - 长剧多源场景不截断
+     - typecheck / lint / unit ✅
+
+9. CRAWLER-07 — `RawVodItem` 字段扩展 + `parseType()` 重写（状态：⬜ 未开始）
+   - 创建时间：2026-04-22
+   - 建议模型：sonnet（若类型映射需跨站点 `type_id → VideoType` schema 决策 → 写 BLOCKER 升 Opus 子代理）
+   - 规模：L（~240 min）
+   - 依赖：META-10 ✅（需基于对齐后的 `VideoType`）
+   - 对应 audit 条目：§2.1 / §2.2 / §2.3
+   - 文件范围：
+     - `apps/api/src/services/SourceParserService.ts`（`RawVodItem` 接口 + `TYPE_MAP` + `parseType` + `parseVodItem`）
+     - 新增单测 `apps/api/tests/services/SourceParserService.type.spec.ts`（或扩写现有）
+   - 验收：
+     - `RawVodItem` 新增字段：`type_id` / `vod_class` / `vod_lang` / `vod_total` / `vod_serial` / `vod_version` / `vod_state` / `vod_note`
+     - `parseType()` 输入由 `type_name` 扩展为 `{ typeName, vodClass, typeId? }`
+     - `TYPE_MAP` 扩充至覆盖：`国产动漫` / `日韩动漫` / `欧美动漫` / `大陆综艺` / `港台综艺` / `日韩综艺` / `剧情片` / `动作片` / `喜剧片` / `爱情片` / `科幻片` / `恐怖片` / `战争片` / `纪录片` / `网络电影` / `网络剧` / `短剧` 等常见苹果 CMS 分类
+     - 单测覆盖 ≥ 20 条常见 CMS 分类值命中正确 `VideoType`，非映射项降级 `other` 有警告日志
+     - typecheck / lint / unit ✅
+
+10. CRAWLER-08 — `source_category` 改存 `vod_class` + 主链路切 `mapSourceCategory()`（状态：⬜ 未开始）
+    - 创建时间：2026-04-22
+    - 建议模型：sonnet
+    - 规模：M（~120 min）
+    - 依赖：CRAWLER-07 ✅
+    - 对应 audit 条目：§2.4 / §2.5
+    - 文件范围：
+      - `apps/api/src/services/SourceParserService.ts`（`parseVodItem` L247-263 附近：`rawCategory` 来源 + `parseGenre` 替换）
+      - `apps/api/src/lib/genreMapper.ts`（仅扩充 `SOURCE_CATEGORY_MAP` 常见分类）
+      - 单测
+    - 验收：
+      - `source_category` 优先取 `vod_class`（分号/逗号分隔时取首项），`vod_class` 为空时回落 `type_name`
+      - 采集主链路 `parseGenre(rawCategory)` → `mapSourceCategory(rawCategory)`
+      - 单测：无豆瓣数据时 `source_category = '都市爱情'` 能命中 `romance` 等
+      - typecheck / lint / unit ✅
+
+11. UX-14 — 审核区"分类标签" UI 文案改为"题材标签"（状态：⬜ 未开始）
+    - 创建时间：2026-04-22
+    - 建议模型：haiku（纯文案 + tooltip）
+    - 规模：XS（~15 min）
+    - 依赖：ADMIN-14 ✅（避免同文件 merge 冲突）
+    - 对应 audit 条目：§3.6
+    - 文件范围：`apps/server/src/components/admin/moderation/ModerationBasicInfoBlock.tsx` + 相关 i18n（若有）
+    - 验收：
+      - 标签块标题"分类标签" → "题材标签"
+      - 悬浮 tooltip 文案："对应视频 `genres` 字段，可多选；视频主类型由上方'类型'单选决定"
+      - typecheck / lint / unit ✅
+
+12. CHORE-04 — 三链路回滚/复发测试补完整（状态：⬜ 未开始）
+    - 创建时间：2026-04-22
+    - 建议模型：sonnet
+    - 规模：M（~120 min）
+    - 依赖：META-10 / CHORE-05 / CRAWLER-05~08 / ADMIN-13~16 / UX-14 全部 ✅
+    - 对应 audit 条目：§五 P2 第 2 条
+    - 文件范围：
+      - `apps/api/tests/db/sources.spec.ts`（`replaceSourcesForSite` 幂等 + 跨站点不误删 + `/admin/sources` 行级口径）
+      - `apps/api/tests/services/MediaCatalogService.spec.ts`（manual 二次编辑 + skippedFields 返回）
+      - `apps/api/tests/services/SourceParserService.spec.ts`（`parseType` + `source_category` + `mapSourceCategory`）
+      - 必要时 `tests/e2e-admin/` 增补审核区多选编辑 / 线路分组 e2e
+    - 验收：
+      - 新增测试全绿
+      - typecheck / lint / unit ✅
+      - 回归：`apps/api` 测试集合无回退
+
+### 验收签字（序列级）
+- [ ] 12 张全部 ✅
+- [ ] 运行一次小规模采集（选 1-2 个 `crawler_sites` 触发 CrawlerService.run）验证端到端：采集 → 入库 → 审核区线路 / 源健康 / 题材标签 / 主类型 显示正确
+- [ ] `docs/changelog.md` 追加 SEQ-20260422-BUGFIX-01 条目（每张卡的 commit / 执行模型 / 子代理）
+- [ ] `docs/architecture.md` 若受 META-10 或 migration 影响 → 同步更新（schema 变更必须同步，见 CLAUDE.md 绝对禁止第 1 条）
+
+---

@@ -8369,3 +8369,31 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - `~~M5 真·PHASE COMPLETE（CLOSE-02，2026-04-21）~~` 仍保留为 CANCELED 审计案例
   - 本签字（CLOSE-03，v2）为 M5 的**唯一有效 PHASE COMPLETE**
 - **待完成（不阻 M6 启动）**：对齐表 §5 用户 checklist 真人打勾；任一未勾 → 本签字转为 CANCELED，需重新闭环
+
+---
+
+## [META-10] 本地 VideoType / VideoGenre 与豆瓣分类对齐
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-BUGFIX-01（12 张第 1 张）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无（枚举增量扩展，不触发强制 Opus 审计）
+- **背景**：audit §2.3/2.5 指出本地类型 / 题材映射偏弱；用户 2026-04-22 追加需求要求本地影视分类对齐豆瓣，为后续 CRAWLER-07/08（parseType 重写 + source_category 切 mapSourceCategory）铺路
+- **产出**：
+  1. `docs/video_type_genre_alignment_20260422.md`（新建，对齐表 + 决策记录，§1-§8）
+  2. `packages/types/src/video.types.ts`：`VideoGenre` 枚举 15 值 → 20 值（新增 `adventure` / `disaster` / `musical` / `western` / `sport`）
+  3. `apps/api/src/lib/genreMapper.ts`：`DOUBAN_GENRE_MAP` 新增 13 个映射项（含英文别名），`SOURCE_CATEGORY_MAP` 新增 8 项（冒险/灾难/歌舞/音乐/西部/运动/体育/传记）
+- **DB 影响**：无 migration（`videos.type` CHECK 未变，`videos.genre` 已在 029 删除，`media_catalog.genres TEXT[]` 无 CHECK 约束）
+- **政策项**：豆瓣"同性 / 情色"不入枚举，raw 保留至 `source_category`，审核区人工处理
+- **质量门禁**：
+  - typecheck：✅ 全栈（api / server / web-next / player-core）
+  - lint：✅ 4 workspace 全绿
+  - unit：✅ 1380/1380（metadataEnrich 20 + stagingDouban 10 直接相关全绿；首次全量 StagingEditPanel 1 flaky，重跑全量 + 单跑均通过，与本卡无关）
+- **关联文档**：
+  - `docs/video_ingest_source_and_moderation_audit_20260422.md`（触发 audit）
+  - `docs/video_type_genre_alignment_20260422.md`（本卡产出）
+  - `docs/tasks.md`（已清空）/ `docs/task-queue.md`（SEQ-20260422-BUGFIX-01 第 1 张 ✅）
+- **下游依赖**：CRAWLER-07 使用新枚举重写 `parseType` / `TYPE_MAP`；CRAWLER-08 使用新 `SOURCE_CATEGORY_MAP` 切主链路
+- **后续待办**（非本卡范围）：
+  1. 5 个新 VideoGenre 的 i18n 键（CRAWLER-07 或前端消费者卡）
+  2. 前端题材筛选下拉若硬编码枚举需同步（后续扫描）
