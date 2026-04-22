@@ -9071,7 +9071,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ## SEQ-20260421-M5-CLEANUP-2 — PC 端人工回归纠偏序列（9 张卡）
 
-- **状态**：⬜ 未开始
+- **状态**：🔄 进行中（CLEANUP-04~10 ✅ / CLEANUP-11 + CLOSE-03 待办）
 - **创建时间**：2026-04-21
 - **目标**：修复 PC 端人工回归发现的 9 项 UI 运行时缺陷，扩写 e2e 固化，最终由 Opus 主循环 + arch-reviewer 子代理 + 浏览器手动验收三维闭环宣告真·PHASE COMPLETE v2
 - **触发**：用户决策 (a) 启动 / (d) 扩写 e2e
@@ -9081,7 +9081,8 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ### 任务列表
 
-1. M5-CLEANUP-04 — VideoCard 双出口反转 + TagLayer 溢出（状态：⬜ 未开始）
+1. M5-CLEANUP-04 — VideoCard 双出口反转 + TagLayer 溢出（状态：✅ 完成 2026-04-22）
+   - commit: b557463；group/poster 作用域修复；FloatingPlayButton 仅封面区触发
    - 创建时间：2026-04-21
    - 建议模型：sonnet
    - 规模：M（~150 min）
@@ -9092,7 +9093,8 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 浏览器：点击封面→Fast Takeover；点击文字→跳详情；悬浮封面出播放按钮；悬浮文字无；lifecycle 标签不溢出文字区
      - typecheck / lint / unit ✅；`card-to-watch.spec.ts` 不回退
 
-2. M5-CLEANUP-05 — 分类页面 404 修复（状态：⬜ 未开始）
+2. M5-CLEANUP-05 — 分类页面 404 修复（状态：✅ 完成 2026-04-22）
+   - commit: b557463；CategoryPageContent 命名导出；movie/anime/series/tvshow page.tsx 新增
    - 创建时间：2026-04-21
    - 建议模型：sonnet
    - 规模：M（~120 min）
@@ -9101,7 +9103,8 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 文件范围：`apps/web-next/src/app/[locale]/[type]/page.tsx` / `config/rewrite-allowlist.ts` / `middleware.ts`
    - 验收：6 种 type 路由全部 200 + Grid 真实 API；typecheck/lint/unit ✅；`browse-tvshow.spec.ts` 不回退
 
-3. M5-CLEANUP-06 — 播放器三态 + 线路持久化（状态：⬜ 未开始）
+3. M5-CLEANUP-06 — 播放器三态 + 线路持久化（状态：✅ 完成 2026-04-22）
+   - commit: b557463；MiniPlayer.expand→setHostMode('full')；GFF close+router.back on watch；activeSourceIndex→store
    - 创建时间：2026-04-21
    - 建议模型：sonnet（发现架构决策需改 → 写 BLOCKER 升 opus 子代理）
    - 规模：L（~240 min）
@@ -9113,7 +9116,8 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 浏览器：`/watch/*` 无关闭按钮；mini↔full 切换保持线路/集数/进度；线路切换后 mini 仍可播放且回 full 线路正确；选集与线路 tab 始终存在
      - typecheck / lint / unit ✅；`player.spec.ts` 不回退
 
-4. M5-CLEANUP-07 — CinemaMode 容器尺寸（状态：⬜ 未开始）
+4. M5-CLEANUP-07 — CinemaMode 容器尺寸（状态：✅ 完成 2026-04-22）
+   - commit: b557463；PlayerShell theater 模式 max-width: min(85vw, 1440px)
    - 创建时间：2026-04-21
    - 建议模型：sonnet
    - 规模：S（~60 min）
@@ -9122,7 +9126,9 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 文件范围：`CinemaMode.tsx` / `GlobalPlayerFullFrame.tsx`（cinema 态容器）/ `globals.css`（如需新 Token 在 CLEANUP-01 分组下补）
    - 验收：PC ≥1920px 影院模式容器 `min(85vw, 1440px)` 且 16:9；缩放等比；typecheck/lint/unit ✅
 
-5. M5-CLEANUP-08 — 排版 + 字体 + 布局堆叠（状态：⬜ 未开始）
+5. M5-CLEANUP-08 — 排版 + 字体 + 布局堆叠（状态：⚠️ 部分完成 2026-04-22）
+   - commit: b557463；body font-sans antialiased（系统字体链）；VideoGrid/SearchPage gap-4 lg:gap-6
+   - ⚠️ BLOCKER-FONT：design_system_plan 未明确具体字体族（Inter/Noto 等），禁止擅自选字体，需人工决策后另起任务
    - 创建时间：2026-04-21
    - 建议模型：sonnet
    - 规模：L（~240 min）
@@ -9133,7 +9139,8 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 注意：若方案文档未明确字体 → **写 BLOCKER 暂停**，禁止擅自定字体
    - 验收：浏览器：Grid 间距合理，文字不溢出不堆叠；字体命中设计稿列表（computedStyle）；typecheck/lint/unit ✅
 
-6. M5-CLEANUP-09 — 搜索结果修复（状态：⬜ 未开始）
+6. M5-CLEANUP-09 — 搜索结果修复（状态：✅ 完成 2026-04-22）
+   - commit: b557463；SearchPage 导航改用 usePathname() 保留 locale
    - 创建时间：2026-04-21
    - 建议模型：sonnet
    - 规模：M（~120 min）
@@ -9142,7 +9149,8 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 文件范围：`app/[locale]/search/page.tsx` / `components/search/SearchResults.tsx` / 必要时 `hooks/useSearch.ts`；严禁改 ES / 索引 / schema
    - 验收：浏览器：`?q=abc` 返回含 abc；空 q 走推荐；q 变化结果刷新；`search-page.spec.ts` 不回退并补断言
 
-7. M5-CLEANUP-10 — 详情页选集按钮（状态：⬜ 未开始）
+7. M5-CLEANUP-10 — 详情页选集按钮（状态：✅ 完成 2026-04-22）
+   - commit: b557463；VideoDetailClient useSearchParams 初始化 ep；Suspense 边界补全
    - 创建时间：2026-04-21
    - 建议模型：sonnet
    - 规模：S（~60 min）
