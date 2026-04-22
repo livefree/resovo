@@ -8932,3 +8932,130 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - arch-reviewer 子代理独立审计 5 点全部 PASS：ADR-046 §1-§8 全部实装 / 18 张卡无越界 / 58 项 Token 全 semantic 层 / E2E 全绿 / 方案文档无漂移
      - **未经 Opus 审计 PASS 不得在 task-queue.md 标 ✅（CLAUDE.md 绝对禁止第 16 条）**
      - typecheck ✅ / lint ✅ / unit ✅ / e2e 全通
+
+---
+
+## 🛑 BLOCKER — M5-CLEANUP 启动（M6 及后续任务冻结）
+
+- **触发时间**：2026-04-21
+- **触发原因**：M5 PHASE 三路独立审计发现结构性偏差（纠偏后）
+  - Token 层：4 个组（takeover / tabbar / shared-element / route-stack）在 design-tokens 包中无对应 TS 文件；tag 细粒度子类型缺失；skeleton dark 变体缺失；player 组件存在内联 fallback（`var(--foo, hardcoded)`）
+  - 组件层：`StackedPosterFrame` 类型签名 `0|1` 未达规格 `0|1|2`；`CinemaMode` 硬编码颜色（`color-mix(in srgb, black 55%, transparent)`）
+  - 文档层：milestone_alignment_m5 arch-reviewer 签字行未填；ADR-049 @dnd-kit 选型未正式落盘；admin-banners 单元测试缺失
+- **纠偏说明**（相较原补丁）：
+  - `--z-cinema-mode` 全局 Token 不加：CinemaMode 绝对定位于 player 容器内，`zIndex:1` 是正确的局部层级，不应提升为全站 Token
+  - `useSkeletonDelay` 已存在（`apps/web-next/src/hooks/useSkeletonDelay.ts`），不在修复范围
+  - MiniPlayer safe-area 已通过 globals.css `@media(hover:none)` CSS override 正确实现，不改 inline CSS
+  - CinemaMode T 快捷键属新功能，重写冻结期（M0–M6）内暂不执行
+  - `SortableList` 已存在（`apps/server/src/components/admin/shared/SortableList.tsx`），CLEANUP-03 仅补文档与测试
+- **封锁范围**：
+  - 🚫 禁止启动任何 M6 及后续里程碑任务
+  - 🚫 禁止在 M5-CLEANUP 范围以外新增 apps/web-next 组件
+  - ✅ 允许：M5-CLEANUP-01 / 02 / 03、M5-CLOSE-02、紧急 hotfix（须另报 BLOCKER）
+- **解除条件**：
+  1. M5-CLEANUP-01 / 02 / 03 全部 ✅
+  2. M5-CLOSE-02 Opus arch-reviewer 独立审计 PASS
+- **关联文档**：`docs/task_queue_patch_m5_cleanup_20260421.md`
+
+---
+
+## SEQ-20260421-M5-CLEANUP — M5 收尾清理（3 张 + 1 签字）
+
+- **状态**：⬜ 未开始
+- **创建时间**：2026-04-21
+- **目标**：补齐 Token 层结构性缺失、修复组件规格偏差、补全文档签字，最终由 Opus 出具真·PHASE COMPLETE 签字
+- **依赖**：SEQ-20260420-M5-CLOSE ✅
+- **串行顺序**：CLEANUP-01 → CLEANUP-02 → CLEANUP-03 → CLOSE-02
+
+### 任务列表
+
+1. M5-CLEANUP-01 — Token 层补齐 + 内联 fallback 清理（状态：⬜ 未开始）
+   - 创建时间：2026-04-21
+   - 建议模型：claude-sonnet-4-6
+   - 规模：M（~150 分钟）
+   - 依赖：无
+   - **文件范围**：
+     - `packages/design-tokens/src/semantic/takeover.ts`（新建）：`--takeover-fast-duration-mobile` 200ms / `--takeover-fast-duration-desktop` 240ms / `--takeover-standard-duration` 360ms / `--takeover-mask-color-fast` / `--takeover-mask-color-standard` / `--floating-play-button-bg` / `--floating-play-button-fg`（7 项）
+     - `packages/design-tokens/src/semantic/tabbar.ts`（新建）：`--tabbar-height` 56px / `--tabbar-bg` / `--tabbar-blur` 12px / `--tabbar-underline-color` / `--tabbar-underline-transition-duration` 180ms（5 项）
+     - `packages/design-tokens/src/semantic/shared-element.ts`（新建）：`--shared-element-duration` 360ms / `--shared-element-easing` / `--shared-element-fallback-duration` 120ms（3 项）
+     - `packages/design-tokens/src/semantic/route-stack.ts`（新建）：`--route-stack-edge-trigger-width` 20px / `--route-stack-threshold-ratio` 0.3 / `--route-stack-velocity-threshold` 0.5 / `--route-stack-back-animation-duration` 240ms（4 项）
+     - `packages/design-tokens/src/semantic/tag.ts`（修改）：拆分 `lifecycle` → `new/upcoming/ongoing/ended/delisting` 五子类型各 `bg/fg`（10 项）；拆分 `trending` → `hot/top-week/exclusive/editor-pick` 四子类型各 `bg/fg`（8 项）；保留聚合值兼容旧消费方
+     - `packages/design-tokens/src/semantic/skeleton.ts`（修改）：补 `dark` 主题 `base/highlight` 两项（已有 light，补 dark）
+     - `packages/design-tokens/src/semantic/index.ts`（修改）：导出上述新增 4 个模块
+     - `packages/design-tokens/src/css/index.ts`（或等价构建入口）：确保新增分组编译入 CSS 输出
+     - `apps/web-next/src/app/globals.css`：将新增 Token 的 CSS 变量声明写入 `:root`（light）和 `.dark`（dark）块；并为 `--cinema-overlay-bg` 补声明（CinemaMode 颜色 Token）
+     - **组件内联 fallback 清理**（修改已有文件，不新增）：
+       - `apps/web-next/src/app/[locale]/_lib/player/GlobalPlayerFullFrame.tsx`：`var(--z-full-player, 70)` → `var(--z-full-player)`
+       - `apps/web-next/src/app/[locale]/_lib/player/MiniPlayer.tsx`：`var(--z-mini-player, 50)` → `var(--z-mini-player)`；`var(--transition-shared, 320ms)` → `var(--transition-shared)`；`var(--ease-page, ease)` → `var(--ease-page)`
+     - `tests/unit/design-tokens/alias-coverage.test.ts`（新建）：断言新增 4 分组的 Token key 均存在于构建产物
+   - **验收**：
+     - design-tokens 包新增 4 个 TS 文件，`npm run build`（design-tokens）无报错
+     - `grep -rn "var(--" apps/web-next/src` 中所有 `var(--foo, non-color-fallback)` 零命中
+     - `grep -rn "z-index:.*[0-9]" apps/web-next/src` 仅命中 design-tokens 声明或 globals.css，不命中组件 TS 文件
+     - `tests/unit/design-tokens/alias-coverage.test.ts` 通过
+     - typecheck ✅ / lint ✅ / unit ✅
+
+2. M5-CLEANUP-02 — 组件规格对齐（状态：⬜ 未开始）
+   - 创建时间：2026-04-21
+   - 建议模型：claude-sonnet-4-6
+   - 规模：M（~90 分钟）
+   - 依赖：M5-CLEANUP-01 ✅
+   - **文件范围**：
+     - `apps/web-next/src/components/primitives/media/StackedPosterFrame.tsx`（修改）：
+       - 类型签名 `stackLevel: 0 | 1` → `stackLevel: 0 | 1 | 2`
+       - `buildShadow` 逻辑：`stackLevel === 0` 无阴影；`stackLevel === 1` 单层阴影（layer-1 仅）；`stackLevel === 2` 双层阴影（layer-1 + layer-2，当前实现）
+       - 保留旧 `0|1` 消费方行为不变（`stackLevel=1` 退化为单层）
+     - `apps/web-next/src/components/video/VideoCard.tsx`（修改）：`getStackLevel()` 映射 `series/anime/variety → 2`；`movie/short/clip → 0`；其余 → 0
+     - `apps/web-next/src/app/[locale]/_lib/player/CinemaMode.tsx`（修改）：`background: 'color-mix(in srgb, black 55%, transparent)'` → `background: 'var(--cinema-overlay-bg)'`（Token 在 CLEANUP-01 globals.css 中定义）
+   - **明确不做**（已确认偏差修正）：
+     - MiniPlayer safe-area inline 化：globals.css L424 已正确覆盖，不改
+     - useSkeletonDelay：hook 已存在，不动
+     - CinemaMode T 快捷键：重写冻结期新功能，不做
+   - **验收**：
+     - `StackedPosterFrame` Props 类型 `stackLevel: 0 | 1 | 2` 可在 TypeScript 中接受 2
+     - series 卡片在 UI 中可见双层堆叠阴影（视觉验收）
+     - `CinemaMode.tsx` 无硬编码颜色（lint `resovo/no-hardcoded-color` 零命中）
+     - typecheck ✅ / lint ✅ / unit ✅
+     - 关键路径回归：断点续播 / 线路切换 / 影院模式 / mini↔full↔pip / Fast Takeover
+
+3. M5-CLEANUP-03 — 文档签字 + ADR-049 + admin-banners 单测（状态：⬜ 未开始）
+   - 创建时间：2026-04-21
+   - 建议模型：claude-sonnet-4-6（主循环）+ claude-haiku-4-5-20251001（机械补写子代理）
+   - 规模：S（~60 分钟）
+   - 依赖：M5-CLEANUP-02 ✅
+   - **文件范围**：
+     - `docs/milestone_alignment_m5_20260420.md`（修改）：L8 `审计签字：待 arch-reviewer` → 填入签字日期 + 结论（CLEANUP 启动前遗留偏差已转入本序列；M5-CLOSE-02 前暂不视为真·PHASE COMPLETE）
+     - `docs/decisions.md`（修改）：追加 ADR-049（@dnd-kit/core 选型）；`SortableList` 已存在，ADR 为补充说明，不改组件代码
+     - `docs/rules/admin-module-template.md`（修改）：追加"有序列表"章节，引用 `SortableList`
+     - `tests/unit/server/admin-banners.test.tsx`（新建）：≥ 6 个 `it()`，覆盖列表渲染 / 拖拽排序 / 创建表单 / 编辑表单 / 时间窗交互 / 删除确认；如发现被测组件 API 偏离规格，只写备注不改组件
+   - **验收**：
+     - `milestone_alignment_m5_20260420.md` L8 签字行已更新
+     - `docs/decisions.md` 末尾含 ADR-049 Accepted 条目
+     - `docs/rules/admin-module-template.md` 含有序列表章节
+     - `tests/unit/server/admin-banners.test.tsx` ≥ 6 it 全部通过
+     - typecheck ✅ / lint ✅ / unit ✅
+
+4. M5-CLOSE-02 — M5 真·PHASE COMPLETE + Opus 审计（状态：⬜ 未开始）
+   - 创建时间：2026-04-21
+   - 建议模型：**claude-opus-4-7**（主循环）+ arch-reviewer (claude-opus-4-6) 子代理（**强制**）
+   - 规模：S（~90 分钟）
+   - 依赖：M5-CLEANUP-01 ✅ + M5-CLEANUP-02 ✅ + M5-CLEANUP-03 ✅
+   - **文件范围**：
+     - 新增 `docs/milestone_alignment_m5_final_20260421.md`：≥ 35 项对齐（主序列 30 项 + CLEANUP 补充项）+ ≥ 18 项红旗检查 + Opus 子代理独立审计签字
+     - 修改 `docs/decisions.md`：追加 ADR-037 迭代条目（M5 真·PHASE COMPLETE 门禁更新）
+     - 修改 `docs/changelog.md`：M5 真·PHASE COMPLETE 条目
+     - 修改 `docs/task-queue.md`：M5-CLEANUP 序列全部 ✅ + BLOCKER 解除说明
+   - **arch-reviewer 子代理必查 10 点**：
+     1. Token 新增 4 组在 design-tokens 构建产物中可 grep
+     2. 组件层无 `var(--foo, non-color-fallback)` 内联 fallback
+     3. StackedPosterFrame `stackLevel: 0|1|2` 类型签名
+     4. CinemaMode 无硬编码颜色
+     5. `--cinema-overlay-bg` Token 已声明
+     6. ADR-049 已落盘且 admin-module-template 已引用
+     7. admin-banners 单测 ≥ 6 it
+     8. milestone_alignment_m5_20260420.md 签字行已更新
+     9. 主序列 15 张 + CLEANUP 3 张 + CLOSE-02 全部 ✅
+     10. 关键路径（断点续播 / 影院模式 / mini↔full↔pip / Fast Takeover）未回退
+   - **验收**：
+     - Opus arch-reviewer 子代理独立审计 PASS → 解除 BLOCKER，允许启动 M6
+     - typecheck ✅ / lint ✅ / unit ✅ / e2e 全通
