@@ -85,7 +85,12 @@ describe('CrawlerRefetchService.refetchSourcesForVideo', () => {
       'video-uuid-1234',
       'site-a',
       expect.arrayContaining([
-        expect.objectContaining({ videoId: 'video-uuid-1234', episodeNumber: 1 }),
+        expect.objectContaining({
+          videoId: 'video-uuid-1234',
+          episodeNumber: 1,
+          // CRAWLER-06: 必须带行级站点 key，避免写入行 source_site_key=NULL
+          sourceSiteKey: 'site-a',
+        }),
       ])
     )
   })

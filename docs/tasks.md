@@ -13,9 +13,10 @@
 
 ---
 
-<!-- 2026-04-22 SEQ-20260422-BUGFIX-01 进度：4/12 张 ✅ -->
+<!-- 2026-04-22 SEQ-20260422-BUGFIX-01 进度：5/12 张 ✅ -->
 <!--   META-10    bbac72a   VideoGenre 对齐豆瓣 -->
 <!--   CHORE-05   59a2a91   40 万行试验数据清空 -->
 <!--   CRAWLER-05 e276b71   replaceSourcesForSite 按 source_site_key -->
-<!--   ADMIN-13   待 commit  /admin/sources 行级 COALESCE -->
-<!-- 单任务工作台稳定态：空，下一张 CRAWLER-06（漏传 sourceSiteKey，XS 规模） -->
+<!--   ADMIN-13   0c237cb   /admin/sources 行级 COALESCE -->
+<!--   CRAWLER-06 待 commit  CrawlerRefetchService 补 sourceSiteKey -->
+<!-- 下一张 ADMIN-14（MediaCatalogService manual 锁修复，M 级 ~120 min，涉及 API 契约 + 前端 toast） -->

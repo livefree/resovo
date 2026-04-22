@@ -8469,3 +8469,17 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **关联**：
   - `docs/video_ingest_source_and_moderation_audit_20260422.md` §1.3 A
   - 下游：ADMIN-15（审核区线路分组按 `source_name + source_site_key`）/ ADMIN-16（数据源统一）
+
+---
+
+## [CRAWLER-06] CrawlerRefetchService 补源链路补传 sourceSiteKey
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-BUGFIX-01（12 张第 5 张）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无
+- **背景**：audit §1.3 D — `CrawlerRefetchService.refetchSourcesForVideo` 构造 `sourceMappings` 时漏传 `sourceSiteKey`，写入的 `video_sources` 行级站点字段会是 NULL，与 `CrawlerService.ts:232` 采集主链路口径不一致
+- **修复**：`apps/api/src/services/CrawlerRefetchService.ts:95` 附近 `sourceMappings.map` 增加 `sourceSiteKey: source.name`（外层循环的 CrawlerSource.name 即站点 key）
+- **测试**：`tests/unit/api/sourceRefetch.test.ts` 扩写第 1 个 case 的 `expect.arrayContaining` 增加 `sourceSiteKey: 'site-a'` 断言，锚定补源行必带行级站点 key
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1385/1385 ✅
+- **关联**：audit §1.3 D；补源路径与 CRAWLER-05 协同——行级站点可正确匹配旧源

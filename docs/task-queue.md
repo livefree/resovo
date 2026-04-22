@@ -9450,8 +9450,12 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 跨站聚合视频在后台源列表可按行级站点正确筛选
      - typecheck / lint / unit ✅ + 后台源列表回归
 
-5. CRAWLER-06 — `CrawlerRefetchService` 补源链路补传 `sourceSiteKey`（状态：⬜ 未开始）
+5. CRAWLER-06 — `CrawlerRefetchService` 补源链路补传 `sourceSiteKey`（状态：✅ 已完成 2026-04-22）
    - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：无
    - 建议模型：haiku（一次性漏传修补）
    - 规模：XS（~20 min）
    - 依赖：CHORE-05 ✅（可与 CRAWLER-05 并行）
