@@ -9466,11 +9466,16 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 与 `CrawlerService.ts` L226 口径一致
      - typecheck / lint / unit ✅
 
-6. ADMIN-14 — `MediaCatalogService.safeUpdate` 允许 `manual` 覆盖自锁字段 + 未写入反馈语义（状态：⬜ 未开始）
+6. ADMIN-14 — `MediaCatalogService.safeUpdate` 允许 `manual` 覆盖自锁字段 + 未写入反馈语义（状态：✅ 已完成 2026-04-22）
    - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：无
    - 建议模型：sonnet（涉及 API 响应契约 + 前端反馈分支）
    - 规模：M（~120 min）
    - 依赖：CHORE-05 ✅（可与 CRAWLER-05/06 并行）
+   - P0 最后一张 ✅，P1 可启动
    - 对应 audit 条目：§3.3 / §3.4
    - 文件范围：
      - `apps/api/src/services/MediaCatalogService.ts`（`safeUpdate` L169-212）

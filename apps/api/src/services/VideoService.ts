@@ -147,7 +147,10 @@ export class VideoService {
     return inserted
   }
 
-  async update(id: string, input: Record<string, unknown>): Promise<unknown | null> {
+  async update(
+    id: string,
+    input: Record<string, unknown>,
+  ): Promise<{ data: unknown; skippedFields: string[] } | null> {
     // Step 1: 获取当前视频（含 catalog_id）
     const video = await videoQueries.findAdminVideoById(this.db, id)
     if (!video) return null
@@ -169,9 +172,11 @@ export class VideoService {
     if (input.writers !== undefined) catalogFields.writers = input.writers as string[]
     if (input.doubanId !== undefined) catalogFields.doubanId = input.doubanId as string | null
 
+    let skippedFields: string[] = []
     if (Object.keys(catalogFields).length > 0) {
       const catalogService = new MediaCatalogService(this.db)
-      await catalogService.safeUpdate(video.catalog_id, catalogFields, 'manual', {})
+      const result = await catalogService.safeUpdate(video.catalog_id, catalogFields, 'manual', {})
+      skippedFields = result.skippedFields
     }
 
     // Step 3: 更新 videos 表冗余副本字段（title/type/episodeCount/slug）
@@ -183,7 +188,10 @@ export class VideoService {
     }
     const row = await videoQueries.updateVideoMeta(this.db, id, adaptedInput)
     if (row) void this.indexSync?.syncVideo(id)
-    return row ?? { id, updated_at: new Date().toISOString() }
+    return {
+      data: row ?? { id, updated_at: new Date().toISOString() },
+      skippedFields,
+    }
   }
 
   async publish(id: string, isPublished: boolean): Promise<unknown | null> {

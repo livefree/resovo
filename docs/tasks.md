@@ -13,10 +13,11 @@
 
 ---
 
-<!-- 2026-04-22 SEQ-20260422-BUGFIX-01 进度：5/12 张 ✅ -->
-<!--   META-10    bbac72a   VideoGenre 对齐豆瓣 -->
-<!--   CHORE-05   59a2a91   40 万行试验数据清空 -->
-<!--   CRAWLER-05 e276b71   replaceSourcesForSite 按 source_site_key -->
-<!--   ADMIN-13   0c237cb   /admin/sources 行级 COALESCE -->
-<!--   CRAWLER-06 待 commit  CrawlerRefetchService 补 sourceSiteKey -->
-<!-- 下一张 ADMIN-14（MediaCatalogService manual 锁修复，M 级 ~120 min，涉及 API 契约 + 前端 toast） -->
+<!-- 2026-04-22 SEQ-20260422-BUGFIX-01 进度：6/12 ✅（P0 全部完成） -->
+<!--   META-10    bbac72a  豆瓣分类对齐 -->
+<!--   CHORE-05   59a2a91  40 万行试验数据清空 -->
+<!--   CRAWLER-05 e276b71  replaceSourcesForSite 按 source_site_key -->
+<!--   ADMIN-13   0c237cb  /admin/sources 行级 COALESCE -->
+<!--   CRAWLER-06 f8f8131  CrawlerRefetchService 补 sourceSiteKey -->
+<!--   ADMIN-14   待 commit safeUpdate manual 覆盖自锁 + 反馈语义 -->
+<!-- 下一阶段 P1：ADMIN-15 / ADMIN-16 / CRAWLER-07 / CRAWLER-08 -->

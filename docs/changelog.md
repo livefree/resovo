@@ -8483,3 +8483,38 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **测试**：`tests/unit/api/sourceRefetch.test.ts` 扩写第 1 个 case 的 `expect.arrayContaining` 增加 `sourceSiteKey: 'site-a'` 断言，锚定补源行必带行级站点 key
 - **质量门禁**：typecheck ✅ / lint ✅ / unit 1385/1385 ✅
 - **关联**：audit §1.3 D；补源路径与 CRAWLER-05 协同——行级站点可正确匹配旧源
+
+---
+
+## [ADMIN-14] MediaCatalogService.safeUpdate 允许 manual 覆盖自锁字段 + 未写入反馈语义
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-BUGFIX-01（12 张第 6 张，P0 最后一张）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无
+- **背景**：audit §3.3/§3.4 — 审核区"分类标签"人工多选表现为"只能选一个/取消无效/都显示已保存"。根因：`safeUpdate` 对所有来源都用统一 `lockedSet` 过滤，manual 首次写入即把字段加锁，第二次 manual 编辑被静默丢弃但接口仍返 200，前端 toast"已保存"但实际未写库，refetch 回来旧数据覆盖乐观状态
+- **后端规则调整**（`apps/api/src/services/MediaCatalogService.ts:safeUpdate`）：
+  - **硬锁**（`video_metadata_locks.hard`）：任何来源（含 manual）都不能覆盖 → skippedFields
+  - **软锁**（`locked_fields`）：仅阻挡 `source !== 'manual'`；manual 允许覆盖自锁字段（修"首次编辑即冻结"）
+  - 返回签名扩展：`Promise<MediaCatalogRow | null>` → `Promise<{ updated: MediaCatalogRow | null; skippedFields: string[] }>`
+  - 来源优先级低于当前 → 全字段 skipped
+- **调用方适配**（5 处）：
+  - `DoubanService.ts` L190/264/422：改为 `const { updated } = await catalogService.safeUpdate(...)`
+  - `VideoService.update` 签名扩展：`Promise<{ data: unknown; skippedFields: string[] } | null>`，聚合 catalogService 的 skippedFields
+  - `MetadataEnrichService.ts`：调用侧忽略返回值（未使用），无需改
+- **Route 响应契约扩展**：
+  - `/admin/moderation/:id/meta`：`{ data: { id, updated, skippedFields }, skippedFields }`
+  - `/admin/videos/:id`：`{ data, skippedFields }`
+  - `/admin/staging/:id`：`{ data, skippedFields }`
+- **前端反馈分支**（`ModerationBasicInfoBlock.tsx`）：
+  - `saveField` 检查 `res.skippedFields`，若 patch 的 key 被 skip → toast "该字段已被系统锁定，未保存" + 精细回滚乐观状态（仅回滚被 skip 的字段）
+  - 否则正常 "已保存"
+- **META-10 下游同步**：`GENRE_LABELS` 补齐 5 个豆瓣对齐后的 VideoGenre 值（adventure/disaster/musical/western/sport）
+- **测试**：
+  - 新增 `tests/unit/api/mediaCatalogSafeUpdate.test.ts`（5 case：manual 覆盖自锁、非 manual 被软锁阻挡、hard lock 阻挡 manual、低优先级全 skipped、catalog 不存在）
+  - 更新 `tests/unit/api/metadataEnrich.test.ts` + `tests/unit/api/stagingDouban.test.ts` mock 返回值：`true` → `{ updated, skippedFields: [] }`（stagingDouban 的 "locked 拒绝" case 改为 `{ updated: null, skippedFields: ['doubanId'] }`）
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1390/1390 ✅（+5 新 case；AdminCrawlerPanel 首次全量 flaky，单跑 + 重跑全量均绿，与本卡无关）
+- **关联**：audit §3.3/§3.4；P0 4 张全部完成，P1 可启动
+- **后续待办**：
+  - 文案 "分类标签" → "题材标签" 在 UX-14 中处理（避免同文件冲突）
+  - 审核区两个区块数据源统一 / 线路分组按 source_name+site_key 在 ADMIN-15/16 中处理

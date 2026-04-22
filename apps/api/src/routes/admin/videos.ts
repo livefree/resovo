@@ -344,7 +344,8 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
         error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
       })
     }
-    return reply.send({ data: result })
+    // ADMIN-14: 响应带 skippedFields，供前端区分"已保存" vs "被锁未保存"
+    return reply.send({ data: result.data, skippedFields: result.skippedFields })
   })
 
   // ── POST /admin/videos ───────────────────────────────────────

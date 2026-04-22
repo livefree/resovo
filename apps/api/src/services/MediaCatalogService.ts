@@ -158,45 +158,63 @@ export class MediaCatalogService {
   /**
    * safeUpdate — 优先级 + locked_fields + video_metadata_locks 三重保护的元数据更新
    *
-   * 规则：
+   * 规则（ADMIN-14 调整）：
    * 1. 若来源优先级 < 当前 catalog 的 metadata_source 优先级 → 跳过所有字段
-   * 2. 对每个字段，若字段名在 locked_fields 或 video_metadata_locks(hard) 中 → 跳过该字段
-   * 3. 若来源为 'manual' → 写入后自动将写入字段加入 locked_fields
-   * 4. 若提供 provenanceCtx → 写入后记录字段来源到 video_metadata_provenance
+   * 2. 硬锁（video_metadata_locks.hard）：任何来源（含 manual）都不能覆盖 → skippedFields
+   * 3. 软锁（locked_fields）：
+   *    - source='manual' 允许覆盖自己锁定的字段（避免"首次编辑即冻结"）
+   *    - 其他来源仍被软锁阻挡（保护人工结果不被低优先级源污染）
+   * 4. 若来源为 'manual' → 写入后自动将写入字段加入 locked_fields（幂等去重）
+   * 5. 若提供 provenanceCtx → 写入后记录字段来源到 video_metadata_provenance
    *
-   * 返回更新后的 catalog（若无字段写入则返回原 catalog）
+   * 返回：
+   *   - updated: 更新后的 catalog（若无字段被写入则返回原 catalog，或 null 表示 catalog 不存在）
+   *   - skippedFields: 因 hard lock 被过滤、未写入的字段名数组（供前端区分"已保存" vs "被锁未保存"）
    */
   async safeUpdate(
     catalogId: string,
     fields: CatalogUpdateData,
     source: CatalogMetadataSource,
     provenanceCtx?: { sourceRef?: string }
-  ): Promise<MediaCatalogRow | null> {
+  ): Promise<{ updated: MediaCatalogRow | null; skippedFields: string[] }> {
     const [current, hardLocked] = await Promise.all([
       catalogQueries.findCatalogById(this.db, catalogId),
       provenanceQueries.getHardLockedFields(this.db, catalogId),
     ])
-    if (!current) return null
+    if (!current) return { updated: null, skippedFields: [] }
 
     const incomingPriority = CATALOG_SOURCE_PRIORITY[source] ?? 0
     const currentPriority = CATALOG_SOURCE_PRIORITY[current.metadataSource] ?? 0
 
-    // 来源优先级低于当前 → 跳过整个更新
-    if (incomingPriority < currentPriority) return current
-
-    // 过滤掉 locked_fields 和 hard lock 字段
-    const lockedSet = new Set([...current.lockedFields, ...hardLocked])
-    const filteredFields: CatalogUpdateData = {}
-
-    for (const [key, value] of Object.entries(fields) as [keyof CatalogUpdateData, unknown][]) {
-      if (!lockedSet.has(key)) {
-        (filteredFields as Record<string, unknown>)[key] = value
-      }
+    // 来源优先级低于当前 → 跳过整个更新（全部视为 skipped）
+    if (incomingPriority < currentPriority) {
+      return { updated: current, skippedFields: Object.keys(fields) }
     }
 
-    if (Object.keys(filteredFields).length === 0) return current
+    const hardLockedSet = new Set(hardLocked)
+    const softLockedSet = new Set(current.lockedFields)
+    const filteredFields: CatalogUpdateData = {}
+    const skippedFields: string[] = []
 
-    // 若来源为 manual，自动锁定写入的字段
+    for (const [key, value] of Object.entries(fields) as [keyof CatalogUpdateData, unknown][]) {
+      // 硬锁：任何来源都阻挡
+      if (hardLockedSet.has(key as string)) {
+        skippedFields.push(key as string)
+        continue
+      }
+      // 软锁：非 manual 来源被阻挡；manual 允许覆盖
+      if (softLockedSet.has(key as string) && source !== 'manual') {
+        skippedFields.push(key as string)
+        continue
+      }
+      ;(filteredFields as Record<string, unknown>)[key] = value
+    }
+
+    if (Object.keys(filteredFields).length === 0) {
+      return { updated: current, skippedFields }
+    }
+
+    // 若来源为 manual，自动锁定写入的字段（幂等去重）
     if (source === 'manual') {
       const newLockedFields = [
         ...current.lockedFields,
@@ -227,7 +245,7 @@ export class MediaCatalogService {
       })
     }
 
-    return updated
+    return { updated, skippedFields }
   }
 
   /**

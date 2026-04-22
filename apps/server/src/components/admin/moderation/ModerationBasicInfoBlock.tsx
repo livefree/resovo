@@ -21,7 +21,10 @@ const GENRE_LABELS: Record<string, string> = {
   action: '动作', comedy: '喜剧', romance: '爱情', thriller: '惊悚',
   horror: '恐怖', sci_fi: '科幻', fantasy: '奇幻', history: '历史',
   crime: '犯罪', mystery: '悬疑', war: '战争', family: '家庭',
-  biography: '传记', martial_arts: '武侠', other: '其他',
+  biography: '传记', martial_arts: '武侠',
+  // META-10: 对齐豆瓣新增
+  adventure: '冒险', disaster: '灾难', musical: '歌舞', western: '西部', sport: '运动',
+  other: '其他',
 }
 
 export interface VideoBasicInfo {
@@ -67,8 +70,22 @@ export function ModerationBasicInfoBlock({ video, videoId, onSaved }: Moderation
   ) => {
     setSaving(true)
     try {
-      await apiClient.patch(`/admin/moderation/${videoId}/meta`, patch)
-      notify.success(successMsg)
+      // ADMIN-14: 响应 skippedFields 报告因 hard lock 未写入的字段
+      const res = await apiClient.patch<{ data?: unknown; skippedFields?: string[] }>(
+        `/admin/moderation/${videoId}/meta`,
+        patch,
+      )
+      const skipped = new Set(res.skippedFields ?? [])
+      const patchedKeys = Object.keys(patch)
+      const anySkipped = patchedKeys.some((k) => skipped.has(k))
+      if (anySkipped) {
+        notify.error('该字段已被系统锁定，未保存')
+        // 回滚乐观更新（仅针对被 skip 的字段）
+        if (skipped.has('type')) setLocalType(video.type)
+        if (skipped.has('genres')) setLocalGenres(video.genres)
+      } else {
+        notify.success(successMsg)
+      }
       onSaved()
     } catch {
       notify.error('保存失败，已恢复原值')
