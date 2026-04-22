@@ -13,9 +13,32 @@
 
 ---
 
-## 任务卡：M5-CLEANUP-02
+## 任务卡：M5-CLEANUP-03
 
 - **状态**：进行中
+- **开始时间**：2026-04-21
+- **建议模型**：claude-sonnet-4-6
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **目标**：milestone_alignment 签字补全 + ADR-049 正式落盘 + admin-banners 单测
+- **文件范围**：
+  - 修改 `docs/milestone_alignment_m5_20260420.md`（签字行）
+  - 修改 `docs/decisions.md`（追加 ADR-049）
+  - 修改 `docs/rules/admin-module-template.md`（有序列表章节）
+  - 新增 `tests/unit/server/admin-banners.test.tsx`（≥ 6 it）
+- **验收要点**：typecheck ✅ / lint ✅ / unit ✅
+
+---
+
+## 已完成任务卡：M5-CLEANUP-02
+
+- **状态**：已完成（2026-04-21）
+
+---
+
+## 已完成任务卡：M5-CLEANUP-01
+
+- **状态**：已完成（2026-04-21）
 - **开始时间**：2026-04-21
 - **建议模型**：claude-sonnet-4-6
 - **执行模型**：claude-sonnet-4-6

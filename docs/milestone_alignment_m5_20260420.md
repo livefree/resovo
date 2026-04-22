@@ -5,7 +5,9 @@
 - **关联 ADR**：ADR-048（M5 卡片协议 v1.1）
 - **关联补丁**：`docs/task_queue_patch_m5_card_protocol_20260420_v1_1.md`
 - **关联方案**：`docs/frontend_redesign_plan_20260418.md`
-- **审计签字**：待 arch-reviewer (claude-opus-4-6) 子代理独立审计
+- **审计签字**：Opus arch-reviewer (claude-opus-4-6) 独立审计
+- **签字日期**：2026-04-21
+- **审计结论**：M5 主序列 30 项对齐 + 15 项红旗全部通过；Token/组件/文档三类结构性偏差已转入 M5-CLEANUP 序列（SEQ-20260421-M5-CLEANUP）；M5-CLOSE-02 Opus 审计 PASS 前本文档为"审计挂起"状态，不视为真·PHASE COMPLETE
 
 ---
 
