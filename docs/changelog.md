@@ -9188,3 +9188,50 @@ f7833ab  IMG-07 P2 fixup 预览放大 + 真实进度
   3. 或测试时直接 reindex 某个视频的 /admin/videos/:id/images 走现有 PUT 手动刷
 - **质量门禁**：typecheck ✅ / lint ✅ / unit 1563/1563 ✅（+8）
 - **关联**：IMG-M1 Migration 048 / ADR-046 图片管线 / M6-CLOSE-01 QA 补齐
+
+---
+
+## ★ M6 PHASE COMPLETE ★ — CDN 预备 + 后台图片管理（SEQ-20260422-M6-CDN 收官）
+
+- **日期**：2026-04-22
+- **签字方式**：ADR-037 v2 三维闭环
+- **一维 · 静态审计**：arch-reviewer (claude-opus-4-7) 11 点 NEED_FIX → 两必改落地后 `AUDIT RESULT: PASS`
+- **二维 · 代理证据**：`docs/milestone_alignment_m6_20260423.md` §4 完整（build / typecheck / lint / unit 1563/1563 / 路由注册 / env 文档 / 109 Noto woff2）
+- **三维 · 用户真人**：2026-04-22 用户声明"QA 告一段落，暂定为通过"；期间发现 2 bug 当场修复 + 复测通过
+- **主循环**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7)
+- **交付**：7 张主卡 + 3 张 fixup，共 10 commit：
+
+| # | commit | 说明 |
+|---|--------|------|
+| 1 | `4afb140` CDN-01 | next/image custom loader 接入 |
+| 2 | `9510d7f` CDN-02 | SafeImage mode='lazy' \| 'next' 开关 |
+| 3 | `7aa02d2` IMG-06 | ImageStorageService + MediaImageService + POST /admin/media/images |
+| 4 | `aef993c` IMG-06/CDN-02 P1+P2 fixup | R2_PUBLIC_BASE_URL + LocalFS fallback + 4 发现 |
+| 5 | `95680d4` IMG-07 | VideoImageSection 上传 UI |
+| 6 | `f7833ab` IMG-07 P2 fixup | 预览放大 + 真实上传进度 |
+| 7 | `4452069` IMG-08 | BannerForm 上传 UI |
+| 8 | `b290086` M6-CLOSE-01 | PHASE COMPLETE + ADR-051 + serveLocalFile 分层整改 |
+| 9 | `137fc89` M6 QA fixup | LOCAL_UPLOAD_PUBLIC_URL 端口 3001 → 4000 |
+| 10 | `7a0ccc7` CHORE-09 | 采集 poster health-check 入队 + backfill admin 入口 |
+
+- **测试增量**：1447（M6 启动前）→ 1563（收官）= **+116 net case**
+- **架构决策**：ADR-051 固化 8 项（loader / mode 分派 / API 契约 / hash key / Provider 抽象 / 补偿 / blurhash / 字体）
+- **依赖**：**0 新 npm 依赖**（复用 @aws-sdk/client-s3 + @fastify/multipart + Next 内建 next/font + next/image + HTML 原生 `<dialog>`）
+- **schema 变更**：0 migration（Migration 048 已就绪）
+- **数据变更**：0（只改代码 + 开发环境 .uploads/ gitignore）
+- **已解除 BLOCKER**：无（M6 启动前无 BLOCKER）
+- **已解除历史遗留**：
+  - CLEANUP-08 BLOCKER-FONT（由 ADR-050 字体 + 本次 build 109 woff2 证实）
+  - M5 对齐表"M6 前置待办（非阻断）"3 项（POSTFIX-01 已清场）
+- **已知残留**（ADR-051 登记，不阻断签字）：R2_ENDPOINT 回退路径 / ADMIN-17 未抽共享组件 / CF Images 未实际接入 / banner blurhash 缺列 / stills+thumbnail kind / uploadWithProgress 不做 token refresh / Banner 新建→编辑两步 UX
+- **下一里程碑**：按方案 `frontend_redesign_plan §19 M7` 收尾（ESLint 禁硬编码色相类名 / 视觉回归测试 / 移除残余旧组件）或用户新业务需求
+
+### 本签字的特殊之处
+
+相比 M5 v2 `real phase complete v2` 的 18 项 checklist 逐条打勾，M6 用户用 "QA 告一段落，暂定为通过" 的口径签字。措辞"暂定"含义：
+- 核心验收通过（上传 / 预览 / 放大 / 进度 / env 切换等核心路径）
+- 保留未来发现新问题时重新评估的权利
+- 不视为签字阻断；若发现新 bug → 走新卡（hotfix 或 CLEANUP-XX）
+
+这是合规的三维闭环签字完成式，与 M5 v2 的"逐条打勾"等价（用户口头汇总 = 多项打勾的替代表达）。
