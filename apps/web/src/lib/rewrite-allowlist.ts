@@ -57,10 +57,10 @@ export const REWRITE_ALLOWLIST: ReadonlyArray<RewriteRule> = [
   { milestone: 'M3', domain: 'player', path: '/others',  mode: 'prefix', localeAware: true, enabled: true, note: 'M3 others detail' },
   // M3 — 播放器（批 2）
   { milestone: 'M3', domain: 'player', path: '/watch',   mode: 'prefix', localeAware: true, enabled: true, note: 'M3 watch player' },
+  // M5 — 搜索（CHORE-06：M5 真·PHASE COMPLETE v2 后接入网关，前置 CLEANUP-09 locale 保留 + CLOSE-03 SSR 500 修复）
+  { milestone: 'M5', domain: 'search', path: '/search',  mode: 'prefix', localeAware: true, enabled: true, note: 'M5 search landing' },
   // M4 示例
   // { milestone: 'M4', domain: 'auth',   path: '/auth',    mode: 'prefix', localeAware: true, enabled: false },
-  // M5 示例
-  // { milestone: 'M5', domain: 'search', path: '/search',  mode: 'prefix', localeAware: true, enabled: false },
 ]
 
 /** kill-switch 环境变量名：设置为任意非空值时禁用所有 rewrite */

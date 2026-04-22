@@ -961,6 +961,11 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
 - **非目标**：CDN 缓存策略、按用户灰度、apps/server 路由、apps/api 路由
 - **影响文件**：`apps/web/middleware.ts`、`apps/web/src/lib/rewrite-allowlist.ts`、`apps/web/src/lib/rewrite-match.ts`、`apps/web/src/lib/__tests__/rewrite-match.test.ts`、`docs/architecture.md`（新增重写期路由拓扑章节）
 - **退役时机**：M6-RENAME 时，连同 `apps/web` 整体退役；本 ADR 状态更新为「已完成并废弃」
+- **Patches（ALLOWLIST 启用记录）**：
+  - 2026-04-19 ALLOWLIST 初始化 + RW-SETUP-02 `/next-placeholder` enabled
+  - 2026-04-XX M2 `/` enabled（homepage）
+  - 2026-04-XX M3 `/movie /series /anime /tvshow /others /watch` enabled（详情 + 播放器）
+  - **2026-04-22 CHORE-06 M5 `/search` enabled**（M5 真·PHASE COMPLETE v2 后接入网关；前置 CLEANUP-09 locale 保留 + CLOSE-03 SSR 500 修复；单测见 `tests/unit/lib/rewrite-match.test.ts` `matchRewrite — M5 /search prefix rule`）
 
 
 ---

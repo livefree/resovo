@@ -9604,9 +9604,49 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
       - 回归：`apps/api` 测试集合无回退
 
 ### 验收签字（序列级）
-- [ ] 12 张全部 ✅
-- [ ] 运行一次小规模采集（选 1-2 个 `crawler_sites` 触发 CrawlerService.run）验证端到端：采集 → 入库 → 审核区线路 / 源健康 / 题材标签 / 主类型 显示正确
-- [ ] `docs/changelog.md` 追加 SEQ-20260422-BUGFIX-01 条目（每张卡的 commit / 执行模型 / 子代理）
-- [ ] `docs/architecture.md` 若受 META-10 或 migration 影响 → 同步更新（schema 变更必须同步，见 CLAUDE.md 绝对禁止第 1 条）
+- [x] 12 张全部 ✅（2026-04-22）
+- [x] 运行一次小规模采集验证端到端（2026-04-22 用户确认无异常）
+- [x] `docs/changelog.md` 追加 SEQ-20260422-BUGFIX-01 条目（每张卡的 commit / 执行模型 / 子代理）
+- [x] `docs/architecture.md` 未受影响（META-10 未新增 migration，0 DB schema 变更）
+- [x] dev → main 合并完成（merge commit `480b6a2`，2026-04-22）
+
+---
+
+## SEQ-20260422-POSTFIX-01 — M5→M6 前置清场
+
+- **状态**：🔄 执行中（2026-04-22 CHORE-06 启动）
+- **创建时间**：2026-04-22
+- **最后更新时间**：2026-04-22
+- **目标**：收尾 M5 对齐表留白的非阻断清场项（landing_plan_v0 延后后的零碎遗留）
+- **范围**：apps/web 网关、Token 层西里尔字母修复、字体族决策（人工）
+- **依赖**：SEQ-20260422-BUGFIX-01 ✅（2026-04-22 全部完成并合并 main）、M5 真·PHASE COMPLETE v2（2026-04-22，对齐表 §5 checklist 真人打勾仍为可选）
+- **关联**：
+  - M5 对齐表 §4 黄线项（`/search` 网关 + CLEANUP-04~10 合并记账 + e2e 数字口径）
+  - M5 对齐表 "M6 前置待办（非阻断）"：字体族 / Tag Token 西里尔 / `/search` rewrite
+
+### 任务列表（按执行顺序）
+
+1. CHORE-06 — apps/web 网关接入 `/search` rewrite-allowlist（状态：✅ 已完成 2026-04-22）
+   - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：无
+   - 建议模型：sonnet
+   - 规模：XS（~30 min）
+   - 依赖：M5 真·PHASE COMPLETE v2 ✅（`/search` 路由已实装 + SSR 500 已修）
+   - 对应留白：M5 final v2 对齐表 §4 黄线项 1
+   - 文件范围：
+     - `apps/web/src/lib/rewrite-allowlist.ts`（取消 M5 示例注释 + `enabled: true`）
+     - `tests/unit/lib/rewrite-match.test.ts`（补 M5 `/search` describe 块）
+     - `docs/decisions.md`（ADR-035 patches 追加）
+     - `docs/changelog.md`（CHORE-06 完成条目）
+   - 验收：
+     - `matchRewrite('/search')` / `/search?q=x` / `/search/sub` / `/en/search` / `/zh-CN/search` 全部 `matched=true`
+     - `/searches` 不误匹配（前缀边界保持）
+     - typecheck / lint / unit 全绿
+     - `x-rewrite-rule` 响应头返回 `M5:search`（契约级，不必 e2e 硬测）
+
+（后续补充 CHORE 卡：Tag Token 西里尔修复 / 字体族决策 BLOCKER 等可追加到本序列）
 
 ---

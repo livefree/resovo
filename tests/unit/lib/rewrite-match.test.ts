@@ -117,3 +117,45 @@ describe('matchRewrite — M3 /watch prefix rule', () => {
     expect(r.matched).toBe(false)
   })
 })
+
+describe('matchRewrite — M5 /search prefix rule (CHORE-06)', () => {
+  it('matches /search exactly', () => {
+    const r = matchRewrite('/search')
+    expect(r.matched).toBe(true)
+    if (r.matched) {
+      expect(r.rule.domain).toBe('search')
+      expect(r.rule.milestone).toBe('M5')
+    }
+  })
+
+  it('matches /search/sub path (prefix)', () => {
+    const r = matchRewrite('/search/advanced')
+    expect(r.matched).toBe(true)
+  })
+
+  it('matches /en/search (locale-aware)', () => {
+    const r = matchRewrite('/en/search')
+    expect(r.matched).toBe(true)
+    if (r.matched) expect(r.rule.domain).toBe('search')
+  })
+
+  it('matches /zh-CN/search (locale-aware)', () => {
+    const r = matchRewrite('/zh-CN/search')
+    expect(r.matched).toBe(true)
+  })
+
+  it('matches /en/search/deep/path (locale-aware prefix)', () => {
+    const r = matchRewrite('/en/search/advanced')
+    expect(r.matched).toBe(true)
+  })
+
+  it('does not match /searches (prefix boundary, no partial)', () => {
+    const r = matchRewrite('/searches')
+    expect(r.matched).toBe(false)
+  })
+
+  it('does not match /search-results (prefix boundary)', () => {
+    const r = matchRewrite('/search-results')
+    expect(r.matched).toBe(false)
+  })
+})

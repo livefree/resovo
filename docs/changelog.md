@@ -8691,3 +8691,29 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 启动一次真实采集（选 1-2 站点触发 CrawlerService.run）验证端到端：采集 → 入库 → 审核区线路 / 源健康 / 题材标签 / 主类型 显示正确
   - 合并 dev → main 或继续 M6 任务取卡
 - **与 M5 PHASE COMPLETE v2 的关系**：本序列为后端/后台维护，不触碰 web-next M5 锁定文件，与"等待 PC 端真人二次确认"状态并行推进，不影响 M6 启动时机
+
+---
+
+## [CHORE-06] apps/web 网关接入 /search rewrite-allowlist
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-POSTFIX-01（M5→M6 前置清场，第 1 张）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无
+- **背景**：M5 真·PHASE COMPLETE v2 对齐表 §4 黄线项 1 记录 `/search` 条目仍作 M5 示例注释保留（L63），`apps/web-next` 的搜索路由已由 CLEANUP-09（locale 保留）+ CLOSE-03（SSR 500 修复）完整实装但网关未命中
+- **修复**：
+  - `apps/web/src/lib/rewrite-allowlist.ts`：取消 M5 示例注释，正式启用 `{ milestone: 'M5', domain: 'search', path: '/search', mode: 'prefix', localeAware: true, enabled: true, note: 'M5 search landing' }`
+- **测试**：`tests/unit/lib/rewrite-match.test.ts` 新增 `matchRewrite — M5 /search prefix rule (CHORE-06)` describe 块，7 个 case：
+  - `/search` 精确命中 + `milestone=M5 / domain=search`
+  - `/search/sub` 前缀命中
+  - `/en/search` / `/zh-CN/search` locale-aware 命中
+  - `/en/search/deep/path` locale-aware 深路径
+  - `/searches` / `/search-results` 前缀边界不误匹配
+- **文档**：
+  - `docs/decisions.md` ADR-035 新增 Patches 段，登记"2026-04-22 CHORE-06 M5 /search enabled"
+  - `docs/changelog.md`（本条目）
+  - `docs/task-queue.md` 新序列 SEQ-20260422-POSTFIX-01 首张卡
+- **预期效果**：`apps/web`（:3000）收到 `/search*` 请求后透明 rewrite 到 `apps/web-next`（:3002），响应头 `x-rewrite-rule: M5:search`；URL 不变，SEO/爬虫零感知
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1447/1447 ✅（+7 新 case）
+- **关联**：audit 无；M5 对齐表 §4 黄线项 1 解除
+- **未使用新依赖**（CLAUDE.md §绝对禁止）
