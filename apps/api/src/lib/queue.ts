@@ -54,6 +54,17 @@ export const enrichmentQueue = new Bull('enrichment-queue', {
   },
 })
 
+/** 图片健康巡检队列（image-health-check / blurhash-extract / backfill） */
+export const imageHealthQueue = new Bull('image-health-queue', {
+  redis: redisOptions,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: RETRY_BACKOFF,
+    removeOnComplete: 100,
+    removeOnFail: 50,
+  },
+})
+
 /** 维护任务队列（auto-publish-staging / verify-published-sources 等低频后台任务） */
 export const maintenanceQueue = new Bull('maintenance-queue', {
   redis: redisOptions,
@@ -80,8 +91,9 @@ attachQueueLogger(crawlerQueue, 'crawler-queue')
 attachQueueLogger(verifyQueue, 'verify-queue')
 attachQueueLogger(maintenanceQueue, 'maintenance-queue')
 attachQueueLogger(enrichmentQueue, 'enrichment-queue')
+attachQueueLogger(imageHealthQueue, 'image-health-queue')
 
-const queues = { crawlerQueue, verifyQueue, maintenanceQueue, enrichmentQueue }
+const queues = { crawlerQueue, verifyQueue, maintenanceQueue, enrichmentQueue, imageHealthQueue }
 export default queues
 
 /** 确认 crawler 队列可用，避免创建任务后因入队失败留下 pending 脏状态 */

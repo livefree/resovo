@@ -17,6 +17,7 @@ const CONTENT_MENU: MenuItem[] = [
   { href: '/admin/videos', label: '视频管理', icon: '🎬' },
   { href: '/admin/sources', label: '播放源管理', icon: '🔗' },
   { href: '/admin/content', label: '内容审核', icon: '📝' },
+  { href: '/admin/banners', label: 'Banner 管理', icon: '🖼️' },
 ]
 
 const SYSTEM_MENU: MenuItem[] = [
@@ -24,6 +25,8 @@ const SYSTEM_MENU: MenuItem[] = [
   { href: '/admin/system/settings', label: '站点配置', icon: '⚙️' },
   { href: '/admin/users', label: '用户管理', icon: '👤' },
   { href: '/admin/analytics', label: '数据看板', icon: '📊' },
+  { href: '/admin/image-health', label: '图片健康', icon: '🖼️' },
+  { href: '/admin/fallback-preview', label: '样板图预览', icon: '🎨' },
 ]
 
 function SidebarLink({ item, collapsed }: { item: MenuItem; collapsed: boolean }) {

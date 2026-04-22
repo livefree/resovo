@@ -50,9 +50,17 @@ npm run test:e2e         # PLAYER / AUTH / SEARCH / VIDEO 任务完成后运行
 
 **后端分层**：Route → Service → DB queries，不得跨层调用。Route 层不含业务逻辑，UI 层不直接调用 DB queries。
 
-**播放器模块**：core 层不写业务逻辑；shell 层负责编排（字幕/线路/影院模式）。不得硬编码颜色，必须使用 CSS 变量。关键路径（断点续播、线路切换、影院模式、字幕开关）每次涉及必须回归。
+**播放器模块**：GlobalPlayerHost（Portal，挂 #global-player-host-portal）管理 full/mini/pip 三态，状态机定义在 `playerStore.hostMode`（LEGAL_TRANSITIONS 守卫）。core 层（packages/player-core）不写业务逻辑；shell 层（PlayerShell）负责编排（字幕/线路/影院模式）。不得硬编码颜色，必须使用 CSS 变量。关键路径（断点续播、线路切换、影院模式、字幕开关）每次涉及必须回归。
 
-**共享组件**：同一 UI 模式 3 处以上必须提取。新建前先确认 `src/components/shared/` 和 `src/components/admin/shared/` 无等价实现。接口设计先于实现。
+**apps/web-next 核心能力层**（REGRESSION 阶段补齐，ADR-037）：
+- BrandProvider + useBrand/useTheme：SSR 安全品牌/主题双 Context（`src/contexts/BrandProvider.tsx`）
+- middleware 品牌识别：cookie → header（`src/middleware.ts`，ADR-039）
+- PageTransition：View Transitions API 三态降级（`src/components/primitives/page-transition/`）
+- SharedElement（noop 合约，M5 实装）+ RouteStack（noop stub，M5 实装）
+- SafeImage + FallbackCover + image-loader：四级降级链，颜色零硬编码（`src/components/media/`）
+- ScrollRestoration + PrefetchOnHover：跨路由记忆 + hover 预取（`src/components/primitives/`）
+
+**共享组件**：同一 UI 模式 3 处以上必须提取。新建前先确认 `src/components/shared/`、`src/components/primitives/`（apps/web-next）和 `src/components/admin/shared/` 无等价实现。接口设计先于实现。
 
 **后台表格**：必须使用 `ModernDataTable` + `ColumnSettingsPanel` + `AdminDropdown` + `SelectionActionBar` + `PaginationV2` + 服务端排序，详见 `docs/rules/admin-module-template.md`。
 
@@ -87,6 +95,8 @@ npm run test:e2e         # PLAYER / AUTH / SEARCH / VIDEO 任务完成后运行
 - ❌ 函数超 80 行非声明性 / 嵌套 3 层 / 多独立逻辑阶段，不先拆分就继续写
 - ❌ 文件超 500 行非声明性 / 导出 2+ 主要概念，不先拆分就继续写
 - ❌ 重写冻结期（M0–M6）接受与三份方案（design_system / frontend_redesign / image_pipeline）目标无关的新业务需求——一律写 BLOCKER 暂停，等人工决定
+- ❌ 未含方案对齐表（`docs/milestone_alignment_20260420.md` 风格）的 PHASE COMPLETE 视为未完成——禁止推进下一里程碑（ADR-037）
+- ❌ 未经 Opus arch-reviewer 子代理审计 PASS 的里程碑在 task-queue.md 中标 ✅（ADR-037）
 
 ---
 

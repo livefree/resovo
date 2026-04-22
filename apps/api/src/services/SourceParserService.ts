@@ -6,6 +6,7 @@
  */
 
 import type { VideoType, VideoGenre, VideoStatus, SourceType, ContentFormat, EpisodePattern } from '@/types'
+import { mapSourceCategory } from '@/api/lib/genreMapper'
 
 // ── 接口原始数据类型 ───────────────────────────────────────────────
 
@@ -14,14 +15,22 @@ export interface RawVodItem {
   vod_name: string
   vod_en?: string
   vod_pic?: string
+  type_id?: string | number    // CRAWLER-07: 苹果CMS 类型 ID（站点特定）
   type_name?: string
+  vod_class?: string           // CRAWLER-07: 细分类标签（逗号/斜杠/竖线分隔），精度高于 type_name
   vod_year?: string | number
   vod_area?: string
+  vod_lang?: string            // CRAWLER-07: 语言（普通话/粤语/日语/英语等）
   vod_actor?: string
   vod_director?: string
   vod_writer?: string
   vod_content?: string
   vod_remarks?: string
+  vod_total?: string | number  // CRAWLER-07: 预计总集数（连载类）
+  vod_serial?: string | number // CRAWLER-07: 当前已更新到第几集
+  vod_version?: string         // CRAWLER-07: 版本（TC/HD/枪版/蓝光等）
+  vod_state?: string           // CRAWLER-07: 剧集状态（正片/预告/花絮）
+  vod_note?: string            // CRAWLER-07: 备注
   vod_play_from?: string  // 线路名称（逗号分隔，对应 vod_play_url 中的多线路）
   vod_play_url?: string   // JSON 格式：线路1$url1#线路2$url2
 }
@@ -57,30 +66,44 @@ export interface ParsedSource {
 
 // ── 类型映射表（ADR-017）─────────────────────────────────────────
 
+// CRAWLER-07: 扩充覆盖苹果 CMS 常见细分类，以及 vod_class 常见值
 const TYPE_MAP: Record<string, VideoType> = {
-  // 电影
+  // ── 电影 ──
   '电影': 'movie', 'movie': 'movie', 'Movie': 'movie',
-  // 连续剧 / 电视剧
+  '剧情片': 'movie', '动作片': 'movie', '喜剧片': 'movie', '爱情片': 'movie',
+  '科幻片': 'movie', '恐怖片': 'movie', '战争片': 'movie', '悬疑片': 'movie',
+  '冒险片': 'movie', '惊悚片': 'movie', '灾难片': 'movie', '犯罪片': 'movie',
+  '奇幻片': 'movie', '武侠片': 'movie', '歌舞片': 'movie', '伦理片': 'movie',
+  '网络电影': 'movie', '微电影': 'movie',
+  // ── 连续剧 / 电视剧 ──
   '电视剧': 'series', '连续剧': 'series', '国产剧': 'series', '剧集': 'series',
-  '美剧': 'series', '韩剧': 'series', '日剧': 'series',
+  '美剧': 'series', '韩剧': 'series', '日剧': 'series', '港剧': 'series', '台剧': 'series',
+  '日韩剧': 'series', '欧美剧': 'series', '海外剧': 'series',
+  '国语剧': 'series', '华语剧': 'series', '网络剧': 'series',
   'series': 'series', 'drama': 'series',
-  // 动漫
+  // ── 动漫 ──
   '动漫': 'anime', '卡通': 'anime', '动画': 'anime', 'anime': 'anime',
-  // 综艺（含游戏类综艺）
+  '国产动漫': 'anime', '日本动漫': 'anime', '日韩动漫': 'anime',
+  '欧美动漫': 'anime', '港台动漫': 'anime', '动画片': 'anime',
+  // ── 综艺（含游戏类综艺）──
   '综艺': 'variety', '真人秀': 'variety', '晚会': 'variety', '综艺节目': 'variety',
   '游戏': 'variety', 'game_show': 'variety',
-  // 短剧 / 短片
+  '大陆综艺': 'variety', '国产综艺': 'variety', '港台综艺': 'variety',
+  '日韩综艺': 'variety', '欧美综艺': 'variety', '海外综艺': 'variety',
+  // ── 短剧 / 短片 ──
   '短剧': 'short', '微剧': 'short', 'short_drama': 'short', 'short': 'short',
-  // 体育
-  '体育': 'sports', 'sports': 'sports',
-  // 音乐
+  '国产短剧': 'short', '海外短剧': 'short', '短视频': 'short',
+  // ── 体育 ──
+  '体育': 'sports', 'sports': 'sports', '足球': 'sports', '篮球': 'sports', '赛事': 'sports',
+  // ── 音乐 ──
   '音乐': 'music', 'MV': 'music', 'music': 'music',
-  // 纪录片
-  '纪录片': 'documentary', 'documentary': 'documentary',
-  // 少儿
-  '少儿': 'kids', '儿童': 'kids', 'children': 'kids', 'kids': 'kids',
-  // 新闻
-  '新闻': 'news', 'news': 'news',
+  '音乐节目': 'music', '音乐会': 'music',
+  // ── 纪录片 ──
+  '纪录片': 'documentary', 'documentary': 'documentary', '纪实': 'documentary', '记录': 'documentary',
+  // ── 少儿 ──
+  '少儿': 'kids', '儿童': 'kids', 'children': 'kids', 'kids': 'kids', '少儿节目': 'kids',
+  // ── 新闻 ──
+  '新闻': 'news', 'news': 'news', '资讯': 'news',
 }
 
 // ── 题材映射表（source_category → VideoGenre）────────────────────
@@ -149,16 +172,66 @@ export function stripTags(html: string | undefined): string | null {
   return html.replace(/<[^>]+>/g, '').trim() || null
 }
 
-/** 解析 VideoType（未匹配返回 'other'，ADR-017） */
-export function parseType(typeName: string | undefined): VideoType {
-  if (!typeName) return 'other'
-  return TYPE_MAP[typeName.trim()] ?? 'other'
+/** CRAWLER-07: parseType 输入对象，支持 vod_class + type_name + type_id 联合推断 */
+export interface ParseTypeInput {
+  typeName?: string
+  vodClass?: string
+  typeId?: string | number
 }
 
-/** 从 source_category 推断 VideoGenre；无匹配返回 null（等待人工核验） */
+function pickFirstClassSegment(vodClass?: string): string | undefined {
+  if (!vodClass) return undefined
+  return vodClass
+    .split(/[,，\/|｜、]/)
+    .map((s) => s.trim())
+    .filter(Boolean)[0]
+}
+
+function matchTypeFromName(name: string | undefined): VideoType | null {
+  if (!name) return null
+  const hit = TYPE_MAP[name.trim()]
+  return hit ?? null
+}
+
+/**
+ * 解析 VideoType（未匹配返回 'other'，ADR-017 / CRAWLER-07）
+ *
+ * 支持两种调用形式（向后兼容）：
+ *   parseType(typeName)                         // 旧形式：仅 type_name
+ *   parseType({ typeName, vodClass, typeId })   // 新形式：优先 vodClass 首项，回落 type_name
+ *
+ * 匹配优先级：
+ *   1. vodClass 首项（细分类，精度最高）
+ *   2. type_name（主分类）
+ *   未来可基于 type_id 做站点级精确映射（schema 决策，另起任务）
+ */
+export function parseType(input: string | ParseTypeInput | undefined): VideoType {
+  if (input === undefined || input === null) return 'other'
+  if (typeof input === 'string') {
+    return matchTypeFromName(input) ?? 'other'
+  }
+  const classFirst = pickFirstClassSegment(input.vodClass)
+  const fromClass = matchTypeFromName(classFirst)
+  if (fromClass) return fromClass
+  return matchTypeFromName(input.typeName) ?? 'other'
+}
+
+/**
+ * 从 source_category 推断 VideoGenre；无匹配返回 null（等待人工核验）。
+ *
+ * CRAWLER-08: 主链路切到 `@/api/lib/genreMapper` 的 `mapSourceCategory()`，
+ * 其 SOURCE_CATEGORY_MAP 表更完整（覆盖豆瓣对齐后的题材）；
+ * 本地 GENRE_MAP 保留仅作为兜底优先级（本地特有项如"爽文短剧"）。
+ */
 export function parseGenre(sourceCategory: string | null | undefined): VideoGenre | null {
   if (!sourceCategory) return null
-  return GENRE_MAP[sourceCategory.trim()] ?? null
+  const trimmed = sourceCategory.trim()
+  // 先查本地 GENRE_MAP（含本地扩展项）
+  const local = GENRE_MAP[trimmed]
+  if (local) return local
+  // 回落到 genreMapper.mapSourceCategory（对齐豆瓣题材）
+  const mapped = mapSourceCategory(trimmed)
+  return mapped[0] ?? null
 }
 
 /** 从 source_category 判断内容分级；成人内容返回 'adult'，其余返回 'general' */
@@ -245,13 +318,20 @@ export function parseVodItem(item: RawVodItem): {
   sources: ParsedSource[]
 } {
   const typeName = (item.type_name ?? '').trim()
-  const type = parseType(typeName)
+  // CRAWLER-07: 传入 { typeName, vodClass, typeId }，优先 vodClass 首项匹配细分类
+  const type = parseType({ typeName, vodClass: item.vod_class, typeId: item.type_id })
   // 保留原始类型字符串；未知类型时 sourceContentType 记录原始值以便溯源
   const sourceContentType = typeName || null
   // 当前 normalizedType 与 type 保持一致；未来可做更细粒度映射
   const normalizedType: string = type
 
-  const rawCategory = typeName || null
+  // CRAWLER-08: source_category 优先取 vod_class（首项），回落 type_name
+  //             细分类信息对后续类型矫正 / 题材推断 / 审核辅助更有用
+  const classSegments = (item.vod_class ?? '')
+    .split(/[,，\/|｜、]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const rawCategory = classSegments[0] ?? (typeName || null)
   const video: ParsedVideo = {
     title: (item.vod_name ?? '').trim(),
     titleEn: item.vod_en?.trim() || null,
@@ -348,14 +428,22 @@ export function parseXmlResponse(xml: string): RawVodItem[] {
       vod_name: extractXmlValue(block, 'vod_name') ?? '',
       vod_en: extractXmlValue(block, 'vod_en') ?? undefined,
       vod_pic: extractXmlValue(block, 'vod_pic') ?? undefined,
+      type_id: extractXmlValue(block, 'type_id') ?? undefined,
       type_name: extractXmlValue(block, 'type_name') ?? undefined,
+      vod_class: extractXmlValue(block, 'vod_class') ?? undefined,
       vod_year: extractXmlValue(block, 'vod_year') ?? undefined,
       vod_area: extractXmlValue(block, 'vod_area') ?? undefined,
+      vod_lang: extractXmlValue(block, 'vod_lang') ?? undefined,
       vod_actor: extractXmlValue(block, 'vod_actor') ?? undefined,
       vod_director: extractXmlValue(block, 'vod_director') ?? undefined,
       vod_writer: extractXmlValue(block, 'vod_writer') ?? undefined,
       vod_content: extractXmlValue(block, 'vod_content') ?? undefined,
       vod_remarks: extractXmlValue(block, 'vod_remarks') ?? undefined,
+      vod_total: extractXmlValue(block, 'vod_total') ?? undefined,
+      vod_serial: extractXmlValue(block, 'vod_serial') ?? undefined,
+      vod_version: extractXmlValue(block, 'vod_version') ?? undefined,
+      vod_state: extractXmlValue(block, 'vod_state') ?? undefined,
+      vod_note: extractXmlValue(block, 'vod_note') ?? undefined,
       vod_play_from: extractXmlValue(block, 'vod_play_from') ?? undefined,
       vod_play_url: extractXmlCdata(block, 'vod_play_url')
         ?? extractXmlTag(block, 'vod_play_url')

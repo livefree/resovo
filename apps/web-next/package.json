@@ -11,13 +11,17 @@
   },
   "dependencies": {
     "@resovo/design-tokens": "*",
+    "@resovo/player-core": "*",
     "@resovo/types": "*",
+    "blurhash": "^2.0.5",
     "clsx": "*",
+    "embla-carousel-react": "^8.6.0",
     "next": "*",
     "next-intl": "*",
     "react": "*",
     "react-dom": "*",
-    "tailwind-merge": "*"
+    "tailwind-merge": "*",
+    "zustand": "*"
   },
   "devDependencies": {
     "@types/node": "*",

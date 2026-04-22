@@ -13,12 +13,16 @@ import type { SearchResult, ApiListResponse } from '@/types'
 
 // ── URL 参数 → API 查询字符串 ──────────────────────────────────────
 
+const TYPE_ALIAS: Record<string, string> = { tvshow: 'variety' }
+
 function buildSearchQuery(params: URLSearchParams): string {
   const parts: string[] = []
   const keys = ['q', 'type', 'year', 'rating_min', 'lang', 'director', 'actor', 'writer', 'country', 'sort', 'page']
   for (const key of keys) {
-    const value = params.get(key)
-    if (value) parts.push(`${key}=${encodeURIComponent(value)}`)
+    let value = params.get(key)
+    if (!value) continue
+    if (key === 'type') value = TYPE_ALIAS[value] ?? value
+    parts.push(`${key}=${encodeURIComponent(value)}`)
   }
   parts.push('limit=20')
   return parts.join('&')

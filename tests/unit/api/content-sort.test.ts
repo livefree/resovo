@@ -84,7 +84,9 @@ describe('listAdminSources — filters and server-side sort (CHG-290)', () => {
     const params: unknown[] = query.mock.calls[0][1]
     expect(sql).toContain('s.source_url ILIKE')
     expect(sql).toContain('v.title ILIKE')
-    expect(sql).toContain('v.site_key =')
+    // ADMIN-13: siteKey filter 切到行级 COALESCE（行级 source_site_key 优先）
+    expect(sql).toContain('COALESCE(s.source_site_key, v.site_key) = $')
+    expect(sql).not.toMatch(/v\.site_key\s*=\s*\$\d+/)
     expect(params).toContain('%m3u8%')
     expect(params).toContain('%Test%')
     expect(params).toContain('site-a')

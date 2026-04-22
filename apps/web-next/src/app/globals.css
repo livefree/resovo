@@ -41,9 +41,109 @@
   --state-info-bg: oklch(90.0% 0.060 250);
   --state-info-fg: oklch(48.0% 0.125 250);
   --state-info-border: oklch(66.0% 0.145 250);
+  /* stacked poster tokens — light defaults */
+  --stack-layer-1-offset-x: 4px;
+  --stack-layer-1-offset-y: -2px;
+  --stack-layer-1-opacity: 0.55;
+  --stack-layer-1-hover-offset-x: 6px;
+  --stack-layer-1-hover-offset-y: -8px;
+  --stack-layer-1-hover-opacity: 0.70;
+  --stack-layer-1-bg: oklch(90.0% 0.004 247);
+  --stack-layer-2-offset-x: 8px;
+  --stack-layer-2-offset-y: -4px;
+  --stack-layer-2-opacity: 0.30;
+  --stack-layer-2-hover-offset-x: 10px;
+  --stack-layer-2-hover-offset-y: -14px;
+  --stack-layer-2-hover-opacity: 0.45;
+  --stack-layer-2-bg: oklch(85.0% 0.004 247);
+  --stack-transition-duration: 80ms;
+  --stack-transition-duration-reverse: 200ms;
+  /* tag layer tokens — light defaults */
+  --tag-lifecycle-bg: oklch(88.0% 0.090 155);
+  --tag-lifecycle-fg: oklch(30.0% 0.120 155);
+  --tag-lifecycle-border: oklch(62.0% 0.165 155);
+  --tag-trending-bg: oklch(90.0% 0.095 85);
+  --tag-trending-fg: oklch(40.0% 0.135 85);
+  --tag-trending-border: oklch(74.0% 0.160 85);
+  --tag-spec-bg: color-mix(in oklch, oklch(6.5% 0.004 247) 72%, transparent);
+  --tag-spec-fg: oklch(100% 0 0);
+  --tag-spec-border: transparent;
+  --tag-rating-bg: color-mix(in oklch, oklch(6.5% 0.004 247) 56%, transparent);
+  --tag-rating-border: transparent;
+  --tag-border-radius: 4px;
 }
 
-.dark {
+/* 强制浅色：用于 __dev/fallback-preview 等需要同时展示双主题的场景 */
+[data-theme="light"] {
+  --bg-canvas: oklch(98.5% 0.002 247);
+  --bg-surface: oklch(100% 0 0);
+  --bg-surface-raised: oklch(100% 0 0);
+  --bg-surface-sunken: oklch(96.8% 0.004 247);
+  --bg-overlay: color-mix(in oklch, oklch(6.5% 0.004 247) 50%, transparent);
+  --fg-default: oklch(11.2% 0.006 247);
+  --fg-muted: oklch(32.8% 0.012 247);
+  --fg-subtle: oklch(55.4% 0.014 247);
+  --fg-on-accent: oklch(100% 0 0);
+  --fg-disabled: oklch(70.8% 0.012 247);
+  --border-default: oklch(92.9% 0.006 247);
+  --border-strong: oklch(70.8% 0.012 247);
+  --border-subtle: oklch(96.8% 0.004 247);
+  --border-focus: oklch(64.5% 0.165 230);
+  --accent-default: oklch(64.5% 0.165 230);
+  --accent-hover: oklch(52.0% 0.155 230);
+  --accent-active: oklch(38.0% 0.120 230);
+  --accent-muted: oklch(92.0% 0.045 230);
+  --accent-fg: oklch(100% 0 0);
+  --surface-canvas: oklch(98.5% 0.002 247);
+  --surface-surface: oklch(100% 0 0);
+  --surface-surface-raised: oklch(100% 0 0);
+  --surface-glass: color-mix(in oklch, oklch(100% 0 0) 70%, transparent);
+  --surface-scrim: linear-gradient(180deg, transparent 0%, oklch(6.5% 0.004 247) 100%);
+  --state-success-bg: oklch(88.0% 0.090 155);
+  --state-success-fg: oklch(44.0% 0.135 155);
+  --state-success-border: oklch(62.0% 0.165 155);
+  --state-warning-bg: oklch(90.0% 0.095 85);
+  --state-warning-fg: oklch(52.0% 0.135 85);
+  --state-warning-border: oklch(74.0% 0.160 85);
+  --state-error-bg: oklch(88.0% 0.080 25);
+  --state-error-fg: oklch(45.0% 0.165 25);
+  --state-error-border: oklch(62.0% 0.195 25);
+  --state-info-bg: oklch(90.0% 0.060 250);
+  --state-info-fg: oklch(48.0% 0.125 250);
+  --state-info-border: oklch(66.0% 0.145 250);
+  /* stacked poster tokens (light) */
+  --stack-layer-1-offset-x: 4px;
+  --stack-layer-1-offset-y: -2px;
+  --stack-layer-1-opacity: 0.55;
+  --stack-layer-1-hover-offset-x: 6px;
+  --stack-layer-1-hover-offset-y: -8px;
+  --stack-layer-1-hover-opacity: 0.70;
+  --stack-layer-1-bg: oklch(90.0% 0.004 247);
+  --stack-layer-2-offset-x: 8px;
+  --stack-layer-2-offset-y: -4px;
+  --stack-layer-2-opacity: 0.30;
+  --stack-layer-2-hover-offset-x: 10px;
+  --stack-layer-2-hover-offset-y: -14px;
+  --stack-layer-2-hover-opacity: 0.45;
+  --stack-layer-2-bg: oklch(85.0% 0.004 247);
+  --stack-transition-duration: 80ms;
+  --stack-transition-duration-reverse: 200ms;
+  /* tag layer tokens */
+  --tag-lifecycle-bg: oklch(88.0% 0.090 155);
+  --tag-lifecycle-fg: oklch(30.0% 0.120 155);
+  --tag-lifecycle-border: oklch(62.0% 0.165 155);
+  --tag-trending-bg: oklch(90.0% 0.095 85);
+  --tag-trending-fg: oklch(40.0% 0.135 85);
+  --tag-trending-border: oklch(74.0% 0.160 85);
+  --tag-spec-bg: color-mix(in oklch, oklch(6.5% 0.004 247) 72%, transparent);
+  --tag-spec-fg: oklch(100% 0 0);
+  --tag-spec-border: transparent;
+  --tag-rating-bg: color-mix(in oklch, oklch(6.5% 0.004 247) 56%, transparent);
+  --tag-rating-border: transparent;
+  --tag-border-radius: 4px;
+}
+
+[data-theme="dark"] {
   --bg-canvas: oklch(6.5% 0.004 247);
   --bg-surface: oklch(11.2% 0.006 247);
   --bg-surface-raised: oklch(16.5% 0.008 247);
@@ -80,10 +180,41 @@
   --state-info-bg: oklch(48.0% 0.125 250);
   --state-info-fg: oklch(90.0% 0.060 250);
   --state-info-border: oklch(66.0% 0.145 250);
+  /* stacked poster tokens (dark) */
+  --stack-layer-1-offset-x: 4px;
+  --stack-layer-1-offset-y: -2px;
+  --stack-layer-1-opacity: 0.60;
+  --stack-layer-1-hover-offset-x: 6px;
+  --stack-layer-1-hover-offset-y: -8px;
+  --stack-layer-1-hover-opacity: 0.75;
+  --stack-layer-1-bg: oklch(25.0% 0.004 247);
+  --stack-layer-2-offset-x: 8px;
+  --stack-layer-2-offset-y: -4px;
+  --stack-layer-2-opacity: 0.35;
+  --stack-layer-2-hover-offset-x: 10px;
+  --stack-layer-2-hover-offset-y: -14px;
+  --stack-layer-2-hover-opacity: 0.50;
+  --stack-layer-2-bg: oklch(20.0% 0.004 247);
+  --stack-transition-duration: 80ms;
+  --stack-transition-duration-reverse: 200ms;
+  /* tag layer tokens (dark) */
+  --tag-lifecycle-bg: oklch(30.0% 0.120 155);
+  --tag-lifecycle-fg: oklch(88.0% 0.090 155);
+  --tag-lifecycle-border: oklch(44.0% 0.135 155);
+  --tag-trending-bg: oklch(40.0% 0.135 85);
+  --tag-trending-fg: oklch(90.0% 0.095 85);
+  --tag-trending-border: oklch(52.0% 0.135 85);
+  --tag-spec-bg: color-mix(in oklch, oklch(6.5% 0.004 247) 80%, transparent);
+  --tag-spec-fg: oklch(98.5% 0.002 247);
+  --tag-spec-border: transparent;
+  --tag-rating-bg: color-mix(in oklch, oklch(6.5% 0.004 247) 75%, transparent);
+  --tag-rating-border: transparent;
+  --tag-border-radius: 4px;
 }
 
+/* 系统深色模式降级（init-script 未运行时的 no-JS 兜底） */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
+  :root:not([data-theme='light']):not([data-theme='dark']) {
     --bg-canvas: oklch(6.5% 0.004 247);
     --bg-surface: oklch(11.2% 0.006 247);
     --bg-surface-raised: oklch(16.5% 0.008 247);
@@ -119,6 +250,36 @@
     --state-info-bg: oklch(48.0% 0.125 250);
     --state-info-fg: oklch(90.0% 0.060 250);
     --state-info-border: oklch(66.0% 0.145 250);
+    /* stacked poster tokens (dark media fallback) */
+    --stack-layer-1-offset-x: 4px;
+    --stack-layer-1-offset-y: -2px;
+    --stack-layer-1-opacity: 0.60;
+    --stack-layer-1-hover-offset-x: 6px;
+    --stack-layer-1-hover-offset-y: -8px;
+    --stack-layer-1-hover-opacity: 0.75;
+    --stack-layer-1-bg: oklch(25.0% 0.004 247);
+    --stack-layer-2-offset-x: 8px;
+    --stack-layer-2-offset-y: -4px;
+    --stack-layer-2-opacity: 0.35;
+    --stack-layer-2-hover-offset-x: 10px;
+    --stack-layer-2-hover-offset-y: -14px;
+    --stack-layer-2-hover-opacity: 0.50;
+    --stack-layer-2-bg: oklch(20.0% 0.004 247);
+    --stack-transition-duration: 80ms;
+    --stack-transition-duration-reverse: 200ms;
+    /* tag layer tokens (dark) */
+    --tag-lifecycle-bg: oklch(30.0% 0.120 155);
+    --tag-lifecycle-fg: oklch(88.0% 0.090 155);
+    --tag-lifecycle-border: oklch(44.0% 0.135 155);
+    --tag-trending-bg: oklch(40.0% 0.135 85);
+    --tag-trending-fg: oklch(90.0% 0.095 85);
+    --tag-trending-border: oklch(52.0% 0.135 85);
+    --tag-spec-bg: color-mix(in oklch, oklch(6.5% 0.004 247) 80%, transparent);
+    --tag-spec-fg: oklch(98.5% 0.002 247);
+    --tag-spec-border: transparent;
+    --tag-rating-bg: color-mix(in oklch, oklch(6.5% 0.004 247) 75%, transparent);
+    --tag-rating-border: transparent;
+    --tag-border-radius: 4px;
   }
 }
 
@@ -129,6 +290,331 @@
   body {
     background-color: var(--bg-canvas);
     color: var(--fg-default);
+    /* system-ui font stack (SF Pro / Segoe UI / Roboto fallback chain) */
+    @apply font-sans antialiased;
     transition: background-color 200ms ease, color 200ms ease;
   }
+}
+
+/* REG-M3-02 — mini 播放器 token */
+:root {
+  --mini-player-w: 320px;
+  --mini-player-h: 180px;
+  --mini-player-radius: 12px;
+  --mini-player-gap: 16px;
+  --mini-player-z: 50;
+}
+
+/* REG-M2-03 — 动画 token（ADR-044） */
+:root {
+  --transition-page: 240ms;
+  --transition-page-reduced: 80ms;
+  --transition-shared: 320ms;
+  --ease-page: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--transition-page);
+  animation-timing-function: var(--ease-page);
+}
+
+:root.vt-reduced * {
+  transition: opacity var(--transition-page-reduced) linear !important;
+  animation: none !important;
+}
+
+/* M5-PAGE-GRID-01 — Sibling variant fade-in（§9.1 交叉淡入 160ms） */
+@keyframes pt-sibling-fadein {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.pt-sibling-enter {
+  animation: pt-sibling-fadein 160ms var(--ease-page) both;
+}
+
+/* M5-PAGE-GRID-01 — VideoGrid 卡片 stagger（PC，每张 15ms，≤ 270ms） */
+@media (hover: hover) {
+  .video-grid-stagger > * {
+    animation: pt-sibling-fadein 160ms var(--ease-page) both;
+  }
+  .video-grid-stagger > *:nth-child(1)  { animation-delay:   0ms; }
+  .video-grid-stagger > *:nth-child(2)  { animation-delay:  15ms; }
+  .video-grid-stagger > *:nth-child(3)  { animation-delay:  30ms; }
+  .video-grid-stagger > *:nth-child(4)  { animation-delay:  45ms; }
+  .video-grid-stagger > *:nth-child(5)  { animation-delay:  60ms; }
+  .video-grid-stagger > *:nth-child(6)  { animation-delay:  75ms; }
+  .video-grid-stagger > *:nth-child(7)  { animation-delay:  90ms; }
+  .video-grid-stagger > *:nth-child(8)  { animation-delay: 105ms; }
+  .video-grid-stagger > *:nth-child(9)  { animation-delay: 120ms; }
+  .video-grid-stagger > *:nth-child(10) { animation-delay: 135ms; }
+  .video-grid-stagger > *:nth-child(n+11) { animation-delay: 150ms; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-sibling-enter,
+  .video-grid-stagger > * {
+    animation: none !important;
+  }
+}
+
+/* M5-PAGE-DETAIL-01 — 详情页级联入场动效（80/160/240/320ms） */
+@keyframes detail-cascade-fadein {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.detail-cascade-1 { animation: detail-cascade-fadein 320ms var(--ease-page) 80ms both; }
+.detail-cascade-2 { animation: detail-cascade-fadein 320ms var(--ease-page) 160ms both; }
+.detail-cascade-3 { animation: detail-cascade-fadein 320ms var(--ease-page) 240ms both; }
+.detail-cascade-4 { animation: detail-cascade-fadein 320ms var(--ease-page) 320ms both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .detail-cascade-1,
+  .detail-cascade-2,
+  .detail-cascade-3,
+  .detail-cascade-4 { animation: none !important; }
+}
+
+/* M5-PAGE-TABBAR-01 — z-index layer tokens (ADR-046 §8.3) */
+:root {
+  --z-tabbar:      40;
+  --z-mini-player: 50;
+  --z-full-player: 70;
+  --tabbar-height: 56px;
+}
+
+/* REG-M2-01 — Root layout 四件套常驻化（ADR-040） */
+.app-shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-canvas);
+}
+
+.main-slot {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* On touch devices with Tab Bar, main content needs extra bottom clearance */
+@media (hover: none) {
+  .main-slot {
+    padding-bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+#global-player-host-portal {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  /* Elevated to --z-mini-player so MiniPlayer floats above Tab Bar */
+  z-index: var(--z-mini-player);
+}
+
+/* Tab Bar — hidden on hover:hover (desktop), shown on hover:none (touch) */
+[data-tabbar] { display: none; }
+@media (hover: none) { [data-tabbar] { display: flex; } }
+
+/* MiniPlayer mobile override — lift above Tab Bar */
+@media (hover: none) {
+  [data-mini-player] {
+    bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px)) !important;
+    right: 0 !important;
+    width: 100% !important;
+    border-radius: 0 !important;
+    height: 56px !important;
+  }
+}
+
+/* IMG-03.5 — FallbackCover gradient tokens + brand initial */
+:root {
+  --fallback-gradient-0: linear-gradient(135deg, var(--accent-muted) 0%, var(--bg-surface-raised) 100%);
+  --fallback-gradient-1: linear-gradient(135deg, var(--state-info-bg) 0%, var(--bg-surface-raised) 100%);
+  --fallback-gradient-2: linear-gradient(135deg, var(--state-success-bg) 0%, var(--bg-surface-raised) 100%);
+  --fallback-gradient-3: linear-gradient(135deg, var(--state-warning-bg) 0%, var(--bg-surface-raised) 100%);
+  --fallback-gradient-4: linear-gradient(135deg, var(--state-error-bg) 0%, var(--bg-surface-raised) 100%);
+  --fallback-gradient-5: linear-gradient(160deg, var(--accent-muted) 0%, var(--state-info-bg) 100%);
+  --brand-logo-mono-url: none;
+  --brand-initial: 'R';
+}
+
+.fallback-cover__brand::before {
+  content: var(--brand-initial, '');
+  display: block;
+}
+
+/* M5-CARD-SKELETON-01 — Skeleton shimmer tokens */
+:root {
+  --skeleton-bg-base:          oklch(93.0% 0.004 247);
+  --skeleton-bg-highlight:     oklch(98.5% 0.002 247);
+  --skeleton-shimmer-duration: 1.5s;
+  --skeleton-delay-tier-1:     300ms;
+  --skeleton-delay-tier-2:     800ms;
+}
+
+[data-theme="dark"],
+.dark {
+  --skeleton-bg-base:      oklch(22.0% 0.006 247);
+  --skeleton-bg-highlight: oklch(30.0% 0.008 247);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --skeleton-bg-base:      oklch(22.0% 0.006 247);
+    --skeleton-bg-highlight: oklch(30.0% 0.008 247);
+  }
+}
+
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes progressbar-indeterminate {
+  0%   { left: -33%; width: 33%; }
+  50%  { left: 100%; width: 33%; }
+  100% { left: 100%; width: 33%; }
+}
+
+@keyframes menuFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Banner 轮播主色调色板 ─────────────────────────────────────────── */
+:root {
+  --banner-accent-0: oklch(64.5% 0.165 230); /* 品牌蓝 */
+  --banner-accent-1: oklch(68%   0.18  48);  /* 橙 */
+  --banner-accent-2: oklch(62%   0.20  150); /* 绿 */
+  --banner-accent-3: oklch(65%   0.17  300); /* 紫 */
+  --banner-accent-4: oklch(66%   0.19  25);  /* 红 */
+  --banner-accent-5: oklch(72%   0.16  85);  /* 黄 */
+  --banner-dot-inactive: color-mix(in srgb, white 40%, transparent);
+}
+
+/* M5-CLEANUP-01 — Takeover + FloatingPlayButton tokens (ADR-048 §3) */
+:root {
+  --takeover-fast-duration-mobile:  200ms;
+  --takeover-fast-duration-desktop: 240ms;
+  --takeover-standard-duration:     360ms;
+  --takeover-reduced-motion-duration: 120ms;
+  --takeover-mask-color-fast:     color-mix(in oklch, oklch(6.5% 0.004 247) 45%, transparent);
+  --takeover-mask-color-standard: color-mix(in oklch, oklch(6.5% 0.004 247) 60%, transparent);
+  --floating-play-button-bg: oklch(64.5% 0.165 230);
+  --floating-play-button-fg: oklch(100% 0 0);
+}
+[data-theme="dark"], .dark {
+  --takeover-mask-color-fast:     color-mix(in oklch, oklch(6.5% 0.004 247) 55%, transparent);
+  --takeover-mask-color-standard: color-mix(in oklch, oklch(6.5% 0.004 247) 70%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --takeover-mask-color-fast:     color-mix(in oklch, oklch(6.5% 0.004 247) 55%, transparent);
+    --takeover-mask-color-standard: color-mix(in oklch, oklch(6.5% 0.004 247) 70%, transparent);
+  }
+}
+
+/* M5-CLEANUP-01 — Tabbar tokens (ADR-048 §8) */
+:root {
+  --tabbar-bg:                        color-mix(in oklch, oklch(100% 0 0) 85%, transparent);
+  --tabbar-blur:                      12px;
+  --tabbar-underline-color:           oklch(64.5% 0.165 230);
+  --tabbar-underline-transition-duration: 180ms;
+}
+[data-theme="dark"], .dark {
+  --tabbar-bg: color-mix(in oklch, oklch(11.2% 0.006 247) 85%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tabbar-bg: color-mix(in oklch, oklch(11.2% 0.006 247) 85%, transparent);
+  }
+}
+
+/* M5-CLEANUP-01 — SharedElement tokens (ADR-048 §4) */
+:root {
+  --shared-element-duration:         360ms;
+  --shared-element-easing:           cubic-bezier(0.4, 0, 0.2, 1);
+  --shared-element-fallback-duration: 120ms;
+}
+
+/* M5-CLEANUP-01 — RouteStack tokens (ADR-048 §6) */
+:root {
+  --route-stack-edge-trigger-width:  20px;
+  --route-stack-threshold-ratio:     0.3;
+  --route-stack-velocity-threshold:  0.5;
+  --route-stack-back-animation-duration: 240ms;
+}
+
+/* M5-CLEANUP-01 — Tag lifecycle sub-types (light defaults) */
+:root {
+  --tag-lifecycle-new-bg:          oklch(88.0% 0.090 155);
+  --tag-lifecycle-new-fg:          oklch(44.0% 0.135 155);
+  --tag-lifecycle-coming-soon-bg:  oklch(90.0% 0.060 250);
+  --tag-lifecycle-coming-soon-fg:  oklch(48.0% 0.125 250);
+  --tag-lifecycle-ongoing-bg:      oklch(88.0% 0.090 155);
+  --tag-lifecycle-ongoing-fg:      oklch(44.0% 0.135 155);
+  --tag-lifecycle-completed-bg:    oklch(92.9% 0.006 247);
+  --tag-lifecycle-completed-fg:    oklch(32.8% 0.012 247);
+  --tag-lifecycle-delisting-bg:    oklch(90.0% 0.095 85);
+  --tag-lifecycle-delisting-fg:    oklch(52.0% 0.135 85);
+  --tag-trending-hot-bg:           oklch(88.0% 0.080 25);
+  --tag-trending-hot-fg:           oklch(45.0% 0.165 25);
+  --tag-trending-weekly-top-bg:    oklch(90.0% 0.095 85);
+  --tag-trending-weekly-top-fg:    oklch(52.0% 0.135 85);
+  --tag-trending-exclusive-bg:     oklch(92.0% 0.045 230);
+  --tag-trending-exclusive-fg:     oklch(52.0% 0.155 230);
+  --tag-trending-editor-pick-bg:   oklch(90.0% 0.060 250);
+  --tag-trending-editor-pick-fg:   oklch(48.0% 0.125 250);
+}
+[data-theme="dark"], .dark {
+  --tag-lifecycle-new-bg:          oklch(44.0% 0.135 155);
+  --tag-lifecycle-new-fg:          oklch(88.0% 0.090 155);
+  --tag-lifecycle-coming-soon-bg:  oklch(48.0% 0.125 250);
+  --tag-lifecycle-coming-soon-fg:  oklch(90.0% 0.060 250);
+  --tag-lifecycle-ongoing-bg:      oklch(44.0% 0.135 155);
+  --tag-lifecycle-ongoing-fg:      oklch(88.0% 0.090 155);
+  --tag-lifecycle-completed-bg:    oklch(23.0% 0.010 247);
+  --tag-lifecycle-completed-fg:    oklch(70.8% 0.012 247);
+  --tag-lifecycle-delisting-bg:    oklch(52.0% 0.135 85);
+  --tag-lifecycle-delisting-fg:    oklch(90.0% 0.095 85);
+  --tag-trending-hot-bg:           oklch(45.0% 0.165 25);
+  --tag-trending-hot-fg:           oklch(88.0% 0.080 25);
+  --tag-trending-weekly-top-bg:    oklch(52.0% 0.135 85);
+  --tag-trending-weekly-top-fg:    oklch(90.0% 0.095 85);
+  --tag-trending-exclusive-bg:     oklch(38.0% 0.120 230);
+  --tag-trending-exclusive-fg:     oklch(92.0% 0.045 230);
+  --tag-trending-editor-pick-bg:   oklch(48.0% 0.125 250);
+  --tag-trending-editor-pick-fg:   oklch(90.0% 0.060 250);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tag-lifecycle-new-bg:          oklch(44.0% 0.135 155);
+    --tag-lifecycle-new-fg:          oklch(88.0% 0.090 155);
+    --tag-lifecycle-coming-soon-bg:  oklch(48.0% 0.125 250);
+    --tag-lifecycle-coming-soon-fg:  oklch(90.0% 0.060 250);
+    --tag-lifecycle-ongoing-bg:      oklch(44.0% 0.135 155);
+    --tag-lifecycle-ongoing-fg:      oklch(88.0% 0.090 155);
+    --tag-lifecycle-completed-bg:    oklch(23.0% 0.010 247);
+    --tag-lifecycle-completed-fg:    oklch(70.8% 0.012 247);
+    --tag-lifecycle-delisting-bg:    oklch(52.0% 0.135 85);
+    --tag-lifecycle-delisting-fg:    oklch(90.0% 0.095 85);
+    --tag-trending-hot-bg:           oklch(45.0% 0.165 25);
+    --tag-trending-hot-fg:           oklch(88.0% 0.080 25);
+    --tag-trending-weekly-top-bg:    oklch(52.0% 0.135 85);
+    --tag-trending-weekly-top-fg:    oklch(90.0% 0.095 85);
+    --tag-trending-exclusive-bg:     oklch(38.0% 0.120 230);
+    --tag-trending-exclusive-fg:     oklch(92.0% 0.045 230);
+    --tag-trending-editor-pick-bg:   oklch(48.0% 0.125 250);
+    --tag-trending-editor-pick-fg:   oklch(90.0% 0.060 250);
+  }
+}
+
+/* M5-CLEANUP-01 — CinemaMode overlay color token */
+:root {
+  --cinema-overlay-bg: color-mix(in srgb, black 55%, transparent);
 }

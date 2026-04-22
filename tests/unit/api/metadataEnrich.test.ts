@@ -37,7 +37,8 @@ vi.mock('@/api/db/queries/mediaCatalog', () => ({
 
 vi.mock('@/api/services/MediaCatalogService', () => ({
   MediaCatalogService: vi.fn().mockImplementation(() => ({
-    safeUpdate: vi.fn().mockResolvedValue(true),
+    // ADMIN-14: safeUpdate 返回 { updated, skippedFields }
+    safeUpdate: vi.fn().mockResolvedValue({ updated: { id: 'catalog-1' }, skippedFields: [] }),
   })),
 }))
 

@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Resovo · Motion Spec（可运行 demo）</title>
+<style>
+  :root {
+    --bg-canvas: oklch(98.5% 0.002 247);
+    --bg-surface: oklch(100% 0 0);
+    --bg-surface-sunken: oklch(96.8% 0.004 247);
+    --fg-default: oklch(11.2% 0.006 247);
+    --fg-muted: oklch(32.8% 0.012 247);
+    --fg-subtle: oklch(55.4% 0.014 247);
+    --border-default: oklch(92.9% 0.006 247);
+    --border-subtle: oklch(96.8% 0.004 247);
+    --accent-default: oklch(64.5% 0.165 230);
+    --accent-muted: oklch(92.0% 0.045 230);
+    --accent-fg: oklch(100% 0 0);
+
+    /* motion tokens from packages/design-tokens */
+    --duration-instant: 0ms;
+    --duration-fast: 120ms;
+    --duration-base: 200ms;
+    --duration-slow: 320ms;
+    --duration-slower: 480ms;
+    --duration-slowest: 720ms;
+    --easing-linear: linear;
+    --easing-ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --easing-ease-out: cubic-bezier(0, 0, 0.2, 1);
+    --easing-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --easing-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* route-stack (mobile) */
+    --route-stack-duration: 240ms;
+    --route-stack-edge-width: 20px;
+
+    /* shared element (view transition) */
+    --shared-duration: 360ms;
+
+    /* takeover */
+    --takeover-fast-desktop: 240ms;
+    --takeover-fast-mobile: 200ms;
+    --takeover-standard: 360ms;
+  }
+  [data-theme="dark"] {
+    --bg-canvas: oklch(6.5% 0.004 247);
+    --bg-surface: oklch(11.2% 0.006 247);
+    --bg-surface-sunken: oklch(9% 0.004 247);
+    --fg-default: oklch(98.5% 0.002 247);
+    --fg-muted: oklch(86.9% 0.009 247);
+    --fg-subtle: oklch(55.4% 0.014 247);
+    --border-default: oklch(23% 0.010 247);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; color: var(--fg-default); background: var(--bg-canvas);
+    background-image: radial-gradient(var(--border-default) 1px, transparent 1px);
+    background-size: 22px 22px; }
+  body.dark { background-image: radial-gradient(oklch(20% 0.008 247) 1px, transparent 1px); }
+
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 48px 24px 96px; }
+  .hero { margin-bottom: 40px; }
+  .hero h1 { font-size: 36px; font-weight: 900; margin: 0 0 8px; letter-spacing: -0.02em; }
+  .hero p { font-size: 15px; color: var(--fg-muted); margin: 0; max-width: 700px; line-height: 1.6; }
+  .hero .toggles { display: flex; gap: 8px; margin-top: 20px; }
+  .hero .toggles button { padding: 6px 14px; font-size: 13px; border-radius: 6px; border: 1px solid var(--border-default); background: var(--bg-surface); color: var(--fg-muted); cursor: pointer; font-weight: 500; }
+  .hero .toggles button.active { background: var(--accent-default); color: var(--accent-fg); border-color: var(--accent-default); font-weight: 600; }
+
+  .section { margin-top: 48px; }
+  .section h2 { font-size: 22px; font-weight: 800; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .section p.sub { font-size: 13px; color: var(--fg-subtle); margin: 0 0 20px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 20px; }
+
+  .demo { position: relative; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: 12px; overflow: hidden; }
+  .demo .stage { position: relative; height: 240px; overflow: hidden; background: var(--bg-surface-sunken); }
+  .demo .meta { padding: 14px 16px; border-top: 1px solid var(--border-subtle); }
+  .demo .title { font-size: 14px; font-weight: 700; margin: 0 0 2px; }
+  .demo .spec { font-size: 11px; color: var(--fg-subtle); font-family: monospace; }
+  .demo .run { position: absolute; top: 12px; right: 12px; padding: 5px 12px; font-size: 12px; border-radius: 6px; border: none; background: var(--accent-default); color: var(--accent-fg); cursor: pointer; font-weight: 600; z-index: 10; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+  .demo .platform { position: absolute; top: 12px; left: 12px; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; background: rgba(0,0,0,.5); color: white; letter-spacing: 0.04em; z-index: 10; }
+
+  /* ===========  DEMO SURFACES  =========== */
+
+  /* Shared poster */
+  .poster { position: absolute; width: 100px; height: 140px; border-radius: 8px;
+    background: linear-gradient(135deg, oklch(55% 0.18 250), oklch(28% 0.12 290));
+    box-shadow: 0 6px 18px rgba(0,0,0,.25); display:flex; align-items:flex-end; padding: 10px; color: white; font-weight: 700; font-size: 13px; }
+
+  /* Page cards for route transitions */
+  .page { position: absolute; inset: 0; padding: 20px; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; font-size: 20px; font-weight: 700; }
+  .page-a { background: linear-gradient(135deg, oklch(60% 0.15 230), oklch(35% 0.12 260)); }
+  .page-b { background: linear-gradient(135deg, oklch(55% 0.18 320), oklch(30% 0.14 30)); }
+
+  /* Fade */
+  .fade-in-out { animation: fadeSwap var(--duration-base) var(--easing-ease-out) forwards; }
+  @keyframes fadeSwap { from { opacity: 0; } to { opacity: 1; } }
+
+  /* Slide push (PC route slide) */
+  .slide-in { animation: slideIn var(--duration-slow) var(--easing-ease-in-out) forwards; }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(32px); } to { opacity: 1; transform: translateX(0); } }
+
+  /* Mobile push (route-stack) */
+  .push-in { animation: pushIn var(--route-stack-duration) var(--easing-ease-out) forwards; }
+  @keyframes pushIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  .push-under { animation: pushUnder var(--route-stack-duration) var(--easing-ease-out) forwards; }
+  @keyframes pushUnder { from { transform: translateX(0); } to { transform: translateX(-30%); filter: brightness(0.7); } }
+
+  /* Edge-swipe back progress */
+  .swipe-back { position: absolute; top: 0; bottom: 0; left: 0; width: var(--route-stack-edge-width); background: linear-gradient(to right, var(--accent-default), transparent); z-index: 5; pointer-events: none; }
+
+  /* Shared element (poster → detail) */
+  .shared-poster-start { top: 50%; left: 20px; transform: translateY(-50%); width: 80px; height: 112px; font-size: 11px; transition: all var(--shared-duration) var(--easing-ease-in-out); }
+  .shared-poster-expanded { top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important; transform: none !important; border-radius: 0 !important; }
+
+  /* Ken Burns */
+  .kb-stage { position: absolute; inset: 0; overflow: hidden; }
+  .kb-img { position: absolute; inset: 0; background: linear-gradient(135deg, oklch(55% 0.18 230), oklch(30% 0.14 290)); animation: kenBurns 10s var(--easing-linear) infinite alternate; }
+  @keyframes kenBurns { from { transform: scale(1.0) translate(0, 0); } to { transform: scale(1.15) translate(-4%, -2%); } }
+
+  /* Skeleton shimmer */
+  .skel { position: absolute; border-radius: 8px; background: linear-gradient(90deg, oklch(92% 0.006 247) 25%, oklch(96% 0.004 247) 50%, oklch(92% 0.006 247) 75%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+  [data-theme="dark"] .skel { background: linear-gradient(90deg, oklch(18% 0.008 247) 25%, oklch(23% 0.010 247) 50%, oklch(18% 0.008 247) 75%); background-size: 200% 100%; }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  /* Stagger grid reveal */
+  .stg { position: absolute; width: 52px; height: 52px; border-radius: 8px;
+    background: linear-gradient(135deg, oklch(60% 0.15 230), oklch(45% 0.12 260)); opacity: 0; transform: translateY(16px); }
+  .stg.on { animation: stgIn 380ms var(--easing-ease-out) forwards; }
+  @keyframes stgIn { to { opacity: 1; transform: translateY(0); } }
+
+  /* Card hover lift (pc) */
+  .card-lift { position: absolute; width: 130px; height: 184px; border-radius: 10px;
+    background: linear-gradient(135deg, oklch(55% 0.18 15), oklch(30% 0.14 55));
+    transition: transform var(--duration-base) var(--easing-ease-out), box-shadow var(--duration-base) var(--easing-ease-out);
+    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    cursor: pointer;
+  }
+  .card-lift:hover { transform: translateY(-6px) scale(1.03); box-shadow: 0 16px 40px -8px rgba(0,0,0,.28); }
+  .card-lift::after { content: "悬停看效果"; position: absolute; left: 0; right: 0; bottom: -26px; text-align: center; font-size: 11px; color: var(--fg-subtle); }
+
+  /* Long-press ring (mobile) */
+  .lp-card { position: absolute; width: 130px; height: 184px; border-radius: 10px;
+    background: linear-gradient(135deg, oklch(55% 0.18 180), oklch(30% 0.14 220));
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+  }
+  .lp-ring { position: absolute; inset: -4px; border-radius: 14px; border: 3px solid var(--accent-default); opacity: 0; transform: scale(1.2); transition: opacity 180ms var(--easing-ease-out), transform 180ms var(--easing-ease-out); }
+  .lp-card.pressing .lp-ring { opacity: 1; transform: scale(1.0); }
+  .lp-card.pressing { transform: scale(0.97); transition: transform 180ms var(--easing-ease-out); }
+
+  /* Takeover — fast mask */
+  .takeover-mask { position: absolute; inset: 0; background: color-mix(in oklch, oklch(6.5% 0.004 247) 45%, transparent); opacity: 0; pointer-events: none; transition: opacity var(--takeover-fast-desktop) var(--easing-ease-out); z-index: 5; }
+  .takeover-mask.on { opacity: 1; }
+  .takeover-mask .play-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.6); width: 56px; height: 56px; border-radius: 50%; background: var(--accent-default); color: white; display: flex; align-items: center; justify-content: center; transition: transform var(--takeover-fast-desktop) var(--easing-spring); }
+  .takeover-mask.on .play-btn { transform: translate(-50%, -50%) scale(1); }
+
+  /* MiniPlayer pop-in */
+  .mini-dock { position: absolute; bottom: 16px; right: 16px; width: 160px; aspect-ratio: 16/9; border-radius: 10px;
+    background: linear-gradient(135deg, oklch(30% 0.12 230), oklch(12% 0.008 247));
+    box-shadow: 0 12px 32px -8px rgba(0,0,0,.4); z-index: 4; opacity: 0; transform: scale(0.3) translate(60px, 40px);
+    transform-origin: bottom right;
+  }
+  .mini-dock.on { animation: miniPop 320ms var(--easing-spring) forwards; }
+  @keyframes miniPop { to { opacity: 1; transform: scale(1) translate(0,0); } }
+  .mini-dock.on::before { content: "▶"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: white; font-size: 22px; }
+  .mini-dock.on::after { content: "MiniPlayer"; position: absolute; bottom: 6px; left: 8px; color: white; font-size: 10px; opacity: 0.8; }
+
+  /* Dropdown micro */
+  .dd { position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+    padding: 8px 20px; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: 8px;
+    font-size: 13px; color: var(--fg-default); cursor: pointer; }
+  .dd-menu { position: absolute; top: 60px; left: 50%; transform: translateX(-50%) translateY(-6px);
+    min-width: 180px; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0,0,0,.15); opacity: 0; pointer-events: none;
+    transition: opacity var(--duration-fast) var(--easing-ease-out), transform var(--duration-fast) var(--easing-ease-out);
+    padding: 6px; z-index: 3;
+  }
+  .dd-menu.on { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+  .dd-menu .item { padding: 8px 12px; font-size: 13px; border-radius: 6px; cursor: pointer; color: var(--fg-muted); }
+  .dd-menu .item:hover { background: var(--bg-surface-sunken); color: var(--fg-default); }
+
+  /* Tab indicator */
+  .tab-row { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); display: flex; gap: 24px; }
+  .tab-item { font-size: 14px; font-weight: 600; color: var(--fg-muted); padding-bottom: 8px; cursor: pointer; position: relative; }
+  .tab-item.active { color: var(--accent-default); }
+  .tab-underline { position: absolute; bottom: 0; height: 2px; background: var(--accent-default); border-radius: 2px; transition: left 180ms var(--easing-ease-in-out), width 180ms var(--easing-ease-in-out); }
+
+  /* Scrubber */
+  .scrub { position: absolute; bottom: 24px; left: 20px; right: 20px; height: 4px; background: oklch(80% 0.01 247); border-radius: 2px; }
+  .scrub-fill { height: 100%; background: var(--accent-default); border-radius: 2px; width: 0; transition: width 1.2s linear; }
+  .scrub.on .scrub-fill { width: 100%; }
+
+  /* Tabbar swap (mobile bottom tabs) */
+  .tb-phone { position: absolute; inset: 24px 80px; background: var(--bg-surface); border-radius: 20px; box-shadow: 0 12px 32px rgba(0,0,0,.12); overflow: hidden; display: flex; flex-direction: column; }
+  .tb-body { flex: 1; position: relative; }
+  .tb-view { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; opacity: 0; transition: opacity 160ms var(--easing-ease-out); }
+  .tb-view.on { opacity: 1; }
+  .tb-bar { height: 48px; display: flex; border-top: 1px solid var(--border-default); }
+  .tb-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 10px; color: var(--fg-subtle); cursor: pointer; }
+  .tb-btn .dot { width: 14px; height: 14px; border-radius: 3px; background: currentColor; opacity: 0.5; transition: transform 180ms var(--easing-spring); }
+  .tb-btn.active { color: var(--accent-default); }
+  .tb-btn.active .dot { opacity: 1; transform: scale(1.15); }
+
+  /* Reduced motion helper */
+  .badge-rm { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 4px; background: var(--accent-muted); color: var(--accent-default); font-weight: 700; margin-left: 8px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>Motion Spec · 可运行 demo</h1>
+    <p>每张卡片点击 <b>播放</b> 即可演示一次动效。参数与 <code>packages/design-tokens/src/primitives/motion.ts</code> 对齐；PC 与移动端差异化的过渡各自单独列出。</p>
+    <div class="toggles">
+      <button id="theme-light" class="active">Light</button>
+      <button id="theme-dark">Dark</button>
+      <button id="reduced">Reduced Motion：关</button>
+    </div>
+  </div>
+
+  <!-- ============  1. 页面切换 ============ -->
+  <section class="section">
+    <h2>1. 页面切换</h2>
+    <p class="sub">PC 与移动端使用不同的过渡语言。reduced motion 模式下所有过渡退化为 80ms fade。</p>
+    <div class="grid" id="grid-routes"></div>
+  </section>
+
+  <!-- ============  2. 交互微动效 ============ -->
+  <section class="section">
+    <h2>2. 交互微动效</h2>
+    <p class="sub">hover / focus / 长按 / 下拉菜单 / tab 切换，时长多用 fast (120ms) 或 base (200ms)。</p>
+    <div class="grid" id="grid-micro"></div>
+  </section>
+
+  <!-- ============  3. 播放与沉浸 ============ -->
+  <section class="section">
+    <h2>3. 播放与沉浸</h2>
+    <p class="sub">Takeover（进播放）、MiniPlayer pop-in、Ken Burns 背景。</p>
+    <div class="grid" id="grid-player"></div>
+  </section>
+
+  <!-- ============  4. 加载与占位 ============ -->
+  <section class="section">
+    <h2>4. 加载与占位</h2>
+    <p class="sub">Skeleton 闪烁 + 网格 stagger 进场，避免"空白-填充"的生硬。</p>
+    <div class="grid" id="grid-loading"></div>
+  </section>
+</div>
+
+<script>
+// ===== Theme toggle =====
+const body = document.body;
+const btnLight = document.getElementById('theme-light');
+const btnDark = document.getElementById('theme-dark');
+btnLight.onclick = () => { body.removeAttribute('data-theme'); body.classList.remove('dark'); btnLight.classList.add('active'); btnDark.classList.remove('active'); };
+btnDark.onclick  = () => { body.setAttribute('data-theme', 'dark'); body.classList.add('dark'); btnDark.classList.add('active'); btnLight.classList.remove('active'); };
+
+// ===== Reduced motion simulation =====
+let reducedMotion = false;
+const btnR = document.getElementById('reduced');
+btnR.onclick = () => {
+  reducedMotion = !reducedMotion;
+  btnR.textContent = 'Reduced Motion：' + (reducedMotion ? '开' : '关');
+  btnR.classList.toggle('active', reducedMotion);
+  document.documentElement.style.setProperty('--duration-base', reducedMotion ? '80ms' : '200ms');
+  document.documentElement.style.setProperty('--duration-slow', reducedMotion ? '80ms' : '320ms');
+  document.documentElement.style.setProperty('--route-stack-duration', reducedMotion ? '80ms' : '240ms');
+  document.documentElement.style.setProperty('--shared-duration', reducedMotion ? '80ms' : '360ms');
+  document.documentElement.style.setProperty('--takeover-fast-desktop', reducedMotion ? '80ms' : '240ms');
+};
+
+// ===== Demo factory =====
+function makeDemo(container, title, spec, platform, build) {
+  const el = document.createElement('div');
+  el.className = 'demo';
+  el.innerHTML = `
+    <div class="platform">${platform}</div>
+    <button class="run">▶ 播放</button>
+    <div class="stage"></div>
+    <div class="meta"><p class="title">${title}</p><p class="spec">${spec}</p></div>
+  `;
+  container.appendChild(el);
+  const stage = el.querySelector('.stage');
+  const btn = el.querySelector('.run');
+  btn.onclick = () => { stage.innerHTML = ''; build(stage); };
+  // Auto-play on first view
+  setTimeout(() => build(stage), 60);
+}
+
+const gRoutes = document.getElementById('grid-routes');
+const gMicro = document.getElementById('grid-micro');
+const gPlayer = document.getElementById('grid-player');
+const gLoading = document.getElementById('grid-loading');
+
+// ---- 1. Routes ----
+makeDemo(gRoutes, 'PC · Fade crossfade', 'opacity: 0→1 · duration-base (200ms) · ease-out', 'PC', (stage) => {
+  stage.innerHTML = '<div class="page page-a">Page A</div>';
+  setTimeout(() => {
+    const b = document.createElement('div');
+    b.className = 'page page-b fade-in-out';
+    b.textContent = 'Page B';
+    stage.appendChild(b);
+  }, 500);
+});
+
+makeDemo(gRoutes, 'PC · Slide 32px', 'translateX(32→0) + fade · duration-slow (320ms) · ease-in-out', 'PC', (stage) => {
+  stage.innerHTML = '<div class="page page-a">Page A</div>';
+  setTimeout(() => {
+    const b = document.createElement('div');
+    b.className = 'page page-b slide-in';
+    b.textContent = 'Page B';
+    stage.appendChild(b);
+  }, 500);
+});
+
+makeDemo(gRoutes, 'Mobile · Push（route-stack）', '新页 100%→0, 旧页 0→-30% + 变暗 · 240ms', 'Mobile', (stage) => {
+  stage.style.overflow = 'hidden';
+  const a = document.createElement('div'); a.className = 'page page-a'; a.textContent = 'Page A';
+  stage.appendChild(a);
+  setTimeout(() => {
+    a.className = 'page page-a push-under';
+    const b = document.createElement('div'); b.className = 'page page-b push-in'; b.textContent = 'Page B';
+    stage.appendChild(b);
+  }, 500);
+});
+
+makeDemo(gRoutes, 'Mobile · 边缘侧滑返回', 'edge 20px 触发 + threshold 30% · velocity 0.5', 'Mobile', (stage) => {
+  stage.innerHTML = '<div class="page page-b">Page B</div><div class="swipe-back"></div>';
+  setTimeout(() => {
+    const page = stage.querySelector('.page');
+    page.style.transition = 'transform 800ms ease-in-out';
+    page.style.transform = 'translateX(35%)';
+    setTimeout(() => {
+      const a = document.createElement('div'); a.className = 'page page-a'; a.textContent = 'Page A'; a.style.zIndex = 0;
+      page.style.zIndex = 1;
+      stage.insertBefore(a, page);
+      page.style.transform = 'translateX(100%)';
+      setTimeout(() => page.remove(), 800);
+    }, 900);
+  }, 400);
+});
+
+makeDemo(gRoutes, 'PC · Shared element（海报 → 详情）', 'View Transitions · 360ms · ease-in-out', 'PC', (stage) => {
+  stage.innerHTML = '<div class="poster shared-poster-start">三体</div>';
+  const p = stage.querySelector('.poster');
+  setTimeout(() => {
+    p.classList.add('shared-poster-expanded');
+  }, 400);
+});
+
+// ---- 2. Micro ----
+makeDemo(gMicro, 'PC · 卡片 hover 浮起', 'translateY(-6px) + scale(1.03) · shadow 升级 · 200ms ease-out', 'PC', (stage) => {
+  stage.innerHTML = '<div class="card-lift" style="top:28px; left:50%; transform:translateX(-50%);"></div>';
+});
+
+makeDemo(gMicro, 'Mobile · 长按呼出', '按下 180ms 显示蓝色环 + scale(0.97) · Haptic 轻震', 'Mobile', (stage) => {
+  stage.innerHTML = '<div class="lp-card" style="top:28px; left:50%; transform:translateX(-50%);"><div class="lp-ring"></div></div>';
+  const card = stage.querySelector('.lp-card');
+  setTimeout(() => card.classList.add('pressing'), 500);
+  setTimeout(() => card.classList.remove('pressing'), 1500);
+});
+
+makeDemo(gMicro, '下拉菜单进出', 'opacity + translateY(-6px) · 120ms ease-out', 'PC', (stage) => {
+  stage.innerHTML = `
+    <div class="dd">更多 ▾</div>
+    <div class="dd-menu">
+      <div class="item">电影</div>
+      <div class="item">剧集</div>
+      <div class="item">动漫</div>
+      <div class="item">综艺</div>
+    </div>`;
+  setTimeout(() => stage.querySelector('.dd-menu').classList.add('on'), 300);
+  setTimeout(() => stage.querySelector('.dd-menu').classList.remove('on'), 1800);
+});
+
+makeDemo(gMicro, 'Tab 下划线过渡', 'left + width transition · 180ms ease-in-out', '通用', (stage) => {
+  stage.innerHTML = `
+    <div class="tab-row">
+      <div class="tab-item active">热门</div>
+      <div class="tab-item">最新</div>
+      <div class="tab-item">评分</div>
+    </div>
+    <div class="tab-underline" style="left:0; width:32px;"></div>`;
+  const tabs = stage.querySelectorAll('.tab-item');
+  const ul = stage.querySelector('.tab-underline');
+  function positionUnderline() {
+    const tr = stage.querySelector('.tab-row').getBoundingClientRect();
+    const active = stage.querySelector('.tab-item.active');
+    const ar = active.getBoundingClientRect();
+    ul.style.left = (ar.left - tr.left + tr.left - stage.getBoundingClientRect().left) + 'px';
+    ul.style.top = (ar.bottom - stage.getBoundingClientRect().top) + 'px';
+    ul.style.width = ar.width + 'px';
+  }
+  setTimeout(positionUnderline, 50);
+  let i = 0;
+  const tick = () => {
+    tabs.forEach(t => t.classList.remove('active'));
+    i = (i + 1) % tabs.length;
+    tabs[i].classList.add('active');
+    positionUnderline();
+  };
+  setTimeout(tick, 900); setTimeout(tick, 1800); setTimeout(tick, 2700);
+});
+
+makeDemo(gMicro, 'Mobile · Tabbar 切换', '淡入淡出 + 图标 scale spring', 'Mobile', (stage) => {
+  stage.innerHTML = `
+    <div class="tb-phone">
+      <div class="tb-body">
+        <div class="tb-view on" style="background:oklch(92% 0.04 230); color:oklch(35% 0.14 230);">首页</div>
+        <div class="tb-view" style="background:oklch(91% 0.08 320); color:oklch(35% 0.14 320);">分类</div>
+        <div class="tb-view" style="background:oklch(90% 0.09 155); color:oklch(30% 0.12 155);">我的</div>
+      </div>
+      <div class="tb-bar">
+        <div class="tb-btn active"><div class="dot"></div>首页</div>
+        <div class="tb-btn"><div class="dot"></div>分类</div>
+        <div class="tb-btn"><div class="dot"></div>我的</div>
+      </div>
+    </div>`;
+  const btns = stage.querySelectorAll('.tb-btn');
+  const views = stage.querySelectorAll('.tb-view');
+  let idx = 0;
+  const tick = () => {
+    idx = (idx + 1) % 3;
+    btns.forEach((b,i) => b.classList.toggle('active', i===idx));
+    views.forEach((v,i) => v.classList.toggle('on', i===idx));
+  };
+  setTimeout(tick, 1000); setTimeout(tick, 2000);
+});
+
+// ---- 3. Player ----
+makeDemo(gPlayer, 'Takeover Fast（进入播放）', '黑色 mask 45% + play 按钮 spring scale · 240ms', 'PC', (stage) => {
+  stage.innerHTML = `
+    <div class="kb-stage"><div class="kb-img"></div></div>
+    <div class="takeover-mask">
+      <div class="play-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg></div>
+    </div>`;
+  setTimeout(() => stage.querySelector('.takeover-mask').classList.add('on'), 400);
+});
+
+makeDemo(gPlayer, 'MiniPlayer Pop-in', 'scale(0.3→1) + translate · 320ms spring · origin 右下角', '通用', (stage) => {
+  stage.innerHTML = `
+    <div style="position:absolute; inset:0; padding:20px; color: var(--fg-muted); font-size: 13px;">
+      播放页 minimize，MiniPlayer 从右下角 spring 弹出。<br/>
+      <b style="color: var(--fg-default);">视频源保持不变</b>，无中断。
+    </div>
+    <div class="mini-dock"></div>`;
+  setTimeout(() => stage.querySelector('.mini-dock').classList.add('on'), 500);
+});
+
+makeDemo(gPlayer, 'Ken Burns 背景', 'scale(1→1.15) + translate · 10s linear alternate', '通用', (stage) => {
+  stage.innerHTML = `
+    <div class="kb-stage"><div class="kb-img"></div></div>
+    <div style="position:absolute; left:24px; bottom:24px; color:white; font-weight:800; font-size:22px; text-shadow:0 2px 12px rgba(0,0,0,.4);">Hero Banner</div>`;
+});
+
+makeDemo(gPlayer, '进度条 fill（scrubber）', 'width 0→100% · 1.2s linear（示例）', '通用', (stage) => {
+  stage.innerHTML = `
+    <div style="position:absolute; inset:0; padding:24px; display:flex; align-items:center; justify-content:center; color:var(--fg-muted); font-size:13px;">播放进度示例</div>
+    <div class="scrub"><div class="scrub-fill"></div></div>`;
+  setTimeout(() => stage.querySelector('.scrub').classList.add('on'), 200);
+});
+
+// ---- 4. Loading ----
+makeDemo(gLoading, 'Skeleton shimmer', 'background-position 200%→-200% · 1.4s linear infinite', '通用', (stage) => {
+  stage.innerHTML = `
+    <div class="skel" style="top:24px; left:24px; width:100px; height:140px;"></div>
+    <div class="skel" style="top:24px; left:140px; width:160px; height:12px;"></div>
+    <div class="skel" style="top:48px; left:140px; width:120px; height:12px;"></div>
+    <div class="skel" style="top:72px; left:140px; width:80px; height:12px;"></div>
+    <div class="skel" style="top:108px; left:140px; width:60px; height:20px; border-radius:10px;"></div>
+    <div class="skel" style="top:180px; left:24px; width:276px; height:12px;"></div>
+  `;
+});
+
+makeDemo(gLoading, '网格 stagger 进场', '每格延迟 30ms · 380ms ease-out · 共 9 格 ≈ 650ms', '通用', (stage) => {
+  stage.innerHTML = '';
+  const cols = 6, rows = 3, cw = 52, gap = 10;
+  const totalW = cols * cw + (cols-1) * gap;
+  const startLeft = (stage.offsetWidth - totalW) / 2;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const el = document.createElement('div');
+      el.className = 'stg';
+      el.style.left = (startLeft + c * (cw + gap)) + 'px';
+      el.style.top = (24 + r * (cw + gap)) + 'px';
+      el.style.animationDelay = ((r * cols + c) * 30) + 'ms';
+      stage.appendChild(el);
+      setTimeout(() => el.classList.add('on'), 30);
+    }
+  }
+});
+
+makeDemo(gLoading, 'BlurHash → 清晰', 'opacity crossfade + scale(1.02→1) · 320ms ease-out', '通用', (stage) => {
+  stage.innerHTML = `
+    <div style="position:absolute; top:30px; left:50%; transform:translateX(-50%); width:180px; height:180px; border-radius:12px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,.2);">
+      <div class="blurred" style="position:absolute; inset:0; background:linear-gradient(135deg, oklch(55% 0.18 15), oklch(30% 0.14 55)); filter: blur(18px); transform: scale(1.1);"></div>
+      <div class="sharp" style="position:absolute; inset:0; background:
+          radial-gradient(circle at 30% 25%, rgba(255,255,255,.3), transparent 50%),
+          linear-gradient(135deg, oklch(55% 0.18 15), oklch(30% 0.14 55));
+        opacity:0; transform: scale(1.02); transition: opacity 320ms var(--easing-ease-out), transform 320ms var(--easing-ease-out);"></div>
+    </div>`;
+  setTimeout(() => {
+    const s = stage.querySelector('.sharp');
+    s.style.opacity = '1';
+    s.style.transform = 'scale(1)';
+  }, 700);
+});
+
+</script>
+</body>
+</html>

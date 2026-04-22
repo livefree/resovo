@@ -33,7 +33,8 @@
     "prebuild": "npm run clean -w @resovo/design-tokens || true",
     "build": "tsx build.ts && tsx scripts/build-css.ts",
     "typecheck": "tsc --noEmit",
-    "dev": "tsx scripts/build-css.ts --watch"
+    "dev": "tsx scripts/build-css.ts --watch",
+    "tokens:validate": "tsx scripts/validate-tokens.ts"
   },
   "devDependencies": {
     "typescript": "*"

@@ -12,6 +12,7 @@
   "dependencies": {
     "@resovo/design-tokens": "*",
     "@resovo/player": "*",
+    "@resovo/player-core": "*",
     "@resovo/types": "*",
     "clsx": "*",
     "dayjs": "*",

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './_fixtures'
 
 test.describe('web-next smoke', () => {
   test('next-placeholder 返回 200 且渲染验收页', async ({ page }) => {

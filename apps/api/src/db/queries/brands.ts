@@ -72,6 +72,30 @@ export async function listBrands(db: Pool): Promise<Brand[]> {
   return result.rows.map(rowToBrand)
 }
 
+/**
+ * updateBrandOverridesIfUnchanged — 乐观锁更新 overrides
+ * expectedUpdatedAt 不匹配时返回 null（版本冲突），调用方映射 409
+ */
+export async function updateBrandOverridesIfUnchanged(
+  db: Pool,
+  slug: string,
+  overrides: BrandOverrides,
+  expectedUpdatedAt: Date,
+): Promise<Brand | null> {
+  const result = await db.query<BrandDbRow>(
+    `UPDATE brands
+        SET overrides   = $1::jsonb,
+            updated_at  = now()
+      WHERE slug        = $2
+        AND deleted_at  IS NULL
+        AND updated_at  = $3
+      RETURNING id, slug, name, overrides, created_at, updated_at, deleted_at`,
+    [JSON.stringify(overrides ?? {}), slug, expectedUpdatedAt],
+  )
+  const row = result.rows[0]
+  return row ? rowToBrand(row) : null
+}
+
 export async function upsertBrand(db: Pool, input: UpsertBrandInput): Promise<Brand> {
   const { slug, name, overrides } = input
   const result = await db.query<BrandDbRow>(

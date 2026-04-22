@@ -1,14 +1,16 @@
 /**
- * ModerationSourceBlock.tsx — 审核台源健康折叠块（UX-11）
+ * ModerationSourceBlock.tsx — 审核台源健康折叠块（UX-11 / ADMIN-16）
  * - snake_case 字段（GET /admin/sources 返回 DB 原始行）
  * - 按 source_name 汇总线路，每条线路内显示集数 chip 标签
  * - chip 颜色表示健康状态（绿/红），点击单条检验
  * - 检验后从已拉取源数据本地计算状态，无需等待父组件 refetch
+ * - ADMIN-16: sources 数据由父组件统一拉取并下发，避免源健康 (limit=100)
+ *   与播放器预览 (全量分页) 出现分页口径分叉
  */
 
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { apiClient } from '@/lib/api-client'
 import type { SourceCheckStatus } from '@/types'
 
@@ -17,6 +19,7 @@ interface SourceRow {
   id: string
   source_url: string
   source_name: string | null
+  site_key?: string | null
   is_active: boolean
   last_checked: string | null
   episode_number?: number | null
@@ -30,6 +33,10 @@ interface LineGroup {
 interface ModerationSourceBlockProps {
   videoId: string
   sourceCheckStatus: SourceCheckStatus
+  /** ADMIN-16: 由父组件统一拉取的全量源数据，与播放器预览共用同一份 */
+  sources: SourceRow[]
+  /** ADMIN-16: 单条/批量检验成功后通知父组件 refetch 全量，保持两区块同步 */
+  onRefetch: () => Promise<void> | void
 }
 
 function computeStatus(rows: SourceRow[]): SourceCheckStatus {
@@ -41,13 +48,16 @@ function computeStatus(rows: SourceRow[]): SourceCheckStatus {
 }
 
 function groupByLine(rows: SourceRow[]): LineGroup[] {
-  const map = new Map<string, SourceRow[]>()
+  // ADMIN-15/16: 分组 key 与 ModerationDetail 保持一致（source_name + site_key）
+  const map = new Map<string, { name: string; sources: SourceRow[] }>()
   for (const row of rows) {
-    const key = row.source_name?.trim() || '默认线路'
-    const list = map.get(key)
-    if (list) { list.push(row) } else { map.set(key, [row]) }
+    const name = row.source_name?.trim() || '默认线路'
+    const siteKey = row.site_key?.trim() || 'unknown'
+    const id = `${name}::${siteKey}`
+    const existing = map.get(id)
+    if (existing) { existing.sources.push(row) } else { map.set(id, { name, sources: [row] }) }
   }
-  return Array.from(map.entries()).map(([name, sources]) => ({
+  return Array.from(map.values()).map(({ name, sources }) => ({
     name,
     sources: sources.slice().sort((a, b) => (a.episode_number ?? 0) - (b.episode_number ?? 0)),
   }))
@@ -57,41 +67,30 @@ const STATUS_LABEL: Record<SourceCheckStatus, string> = {
   ok: '全部可达', partial: '部分可达', all_dead: '全部失效', pending: '未检验',
 }
 
-export function ModerationSourceBlock({ videoId, sourceCheckStatus }: ModerationSourceBlockProps) {
-  const [lines, setLines] = useState<LineGroup[]>([])
-  const [allSources, setAllSources] = useState<SourceRow[]>([])
-  const [computedStatus, setComputedStatus] = useState<SourceCheckStatus>(sourceCheckStatus)
-  const [loading, setLoading] = useState(false)
+export function ModerationSourceBlock({
+  videoId,
+  sourceCheckStatus,
+  sources,
+  onRefetch,
+}: ModerationSourceBlockProps) {
   const [verifying, setVerifying] = useState<string | null>(null)
   const [verifyingAll, setVerifyingAll] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
 
-  const fetchSources = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await apiClient.get<{ data: SourceRow[]; total: number }>(
-        `/admin/sources?videoId=${videoId}&status=all&page=1&limit=100`
-      )
-      setAllSources(res.data)
-      setLines(groupByLine(res.data))
-      setComputedStatus(computeStatus(res.data))
-    } catch {
-      setLines([])
-    } finally {
-      setLoading(false)
-    }
-  }, [videoId])
+  const lines = groupByLine(sources)
+  const computedStatus = sources.length === 0 ? sourceCheckStatus : computeStatus(sources)
+  const allSources = sources
 
-  useEffect(() => {
-    void fetchSources()
-  }, [fetchSources])
+  const refetch = useCallback(async () => {
+    await onRefetch()
+  }, [onRefetch])
 
   async function handleVerifyOne(sourceId: string) {
     setVerifying(sourceId)
     setMsg(null)
     try {
       await apiClient.post(`/admin/sources/${sourceId}/verify`, {})
-      await fetchSources()
+      await refetch()
       setMsg('检验完成')
     } catch {
       setMsg('检验失败')
@@ -107,7 +106,7 @@ export function ModerationSourceBlock({ videoId, sourceCheckStatus }: Moderation
       await apiClient.post('/admin/sources/batch-verify', {
         scope: 'video', videoId, activeOnly: false, limit: 100,
       })
-      await fetchSources()
+      await refetch()
       setMsg('全部检验完成')
     } catch {
       setMsg('批量检验失败')
@@ -136,13 +135,7 @@ export function ModerationSourceBlock({ videoId, sourceCheckStatus }: Moderation
 
       {msg && <p className="text-[10px] text-[var(--muted)]" data-testid="source-msg">{msg}</p>}
 
-      {loading ? (
-        <div className="flex gap-1">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-6 w-10 animate-pulse rounded bg-[var(--bg3)]" />
-          ))}
-        </div>
-      ) : lines.length === 0 ? (
+      {lines.length === 0 ? (
         <p className="text-xs text-[var(--muted)]">暂无播放源</p>
       ) : (
         <div className="space-y-2">

@@ -98,6 +98,10 @@ export class CrawlerRefetchService extends CrawlerService {
           sourceUrl: s.sourceUrl,
           sourceName: s.sourceName,
           type: s.type,
+          // CRAWLER-06: 补源链路必须带行级站点 key，与 CrawlerService.ts:232 一致；
+          //             缺了会导致新写入的源 source_site_key=NULL、后续审核区按行级
+          //             COALESCE 口径将回退到 videos.site_key，跨站聚合视频显示错位。
+          sourceSiteKey: source.name,
         }))
 
         if (sourceMappings.length > 0) {

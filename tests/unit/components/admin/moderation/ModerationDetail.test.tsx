@@ -169,4 +169,53 @@ describe('ModerationDetail', () => {
     const textarea = screen.getByTestId('moderation-reject-reason-input') as HTMLTextAreaElement
     expect(textarea.value).toBe('片源不完整')
   })
+
+  it('ADMIN-15: 不同源站的同名"线路1"按 source_name+site_key 分两组，不误合并', async () => {
+    // 场景：vid-2 同时聚合站 bfzym3u8 与 lzzy，两站都有"线路1"
+    // 期望：groupedLines 产生两个独立按钮，data-testid 按复合 id 命名
+    getMock.mockImplementation(async (url: string) => {
+      if (url === '/admin/videos/vid-2') {
+        return { data: makeVideoDetail({ id: 'vid-2', title: '跨站视频' }) }
+      }
+      if (url.startsWith('/admin/sources') && url.includes('videoId=vid-2')) {
+        return {
+          data: [
+            {
+              id: 'src-bfzym3u8-1',
+              video_id: 'vid-2',
+              source_name: '线路1',
+              site_key: 'bfzym3u8',
+              source_url: 'https://bfzym3u8.example/ep1.mp4',
+              episode_number: 1,
+              type: 'hls',
+              is_active: true,
+              quality: null,
+            },
+            {
+              id: 'src-lzzy-1',
+              video_id: 'vid-2',
+              source_name: '线路1',
+              site_key: 'lzzy',
+              source_url: 'https://lzzy.example/ep1.mp4',
+              episode_number: 1,
+              type: 'hls',
+              is_active: true,
+              quality: null,
+            },
+          ],
+          total: 2,
+        }
+      }
+      return { data: [], total: 0 }
+    })
+
+    render(<ModerationDetail videoId="vid-2" onReviewed={vi.fn()} />)
+    await screen.findByText('跨站视频')
+
+    // 两个独立按钮，各自 id = "线路1::bfzym3u8" / "线路1::lzzy"
+    await waitFor(() => {
+      expect(screen.getByTestId('moderation-source-btn-线路1::bfzym3u8')).toBeTruthy()
+      expect(screen.getByTestId('moderation-source-btn-线路1::lzzy')).toBeTruthy()
+    })
+  })
 })

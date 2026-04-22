@@ -291,7 +291,8 @@ export async function listAdminSources(
     params.push(`%${filters.title}%`)
   }
   if (filters.siteKey) {
-    conditions.push(`v.site_key = $${idx++}`)
+    // ADMIN-13: 切到行级 source_site_key，回落 v.site_key 保留历史兼容
+    conditions.push(`COALESCE(s.source_site_key, v.site_key) = $${idx++}`)
     params.push(filters.siteKey)
   }
 
@@ -303,7 +304,7 @@ export async function listAdminSources(
     is_active: 's.is_active',
     video_title: 'v.title',
     source_url: 's.source_url',
-    site_key: 'v.site_key',
+    site_key: 'COALESCE(s.source_site_key, v.site_key)',  // ADMIN-13: 行级优先
   }
   const orderByColumn = filters.sortField ? ORDER_BY_MAP[filters.sortField] : 's.created_at'
   const orderByDir = filters.sortDir === 'asc' ? 'ASC' : 'DESC'
@@ -312,7 +313,9 @@ export async function listAdminSources(
 
   const [rows, countResult] = await Promise.all([
     db.query(
-      `SELECT s.*, v.title AS video_title, v.site_key AS site_key
+      // ADMIN-13: 返回字段 site_key 改为行级 COALESCE（跨站聚合视频显示各行实际站点）
+      `SELECT s.*, v.title AS video_title,
+              COALESCE(s.source_site_key, v.site_key) AS site_key
        FROM video_sources s
        LEFT JOIN videos v ON s.video_id = v.id
        WHERE ${where}
@@ -569,10 +572,14 @@ export interface ReplaceSourcesStats {
 }
 
 /**
- * CRAWLER-02: 同站点全量替换策略
- * 1. 查询指定 videoId + siteKey（source_name）的现有活跃源 URL
+ * CRAWLER-02 / CRAWLER-05: 同站点全量替换策略
+ *
+ * 1. 查询指定 videoId + siteKey 的现有活跃源 URL
+ *    - 行级 source_site_key 优先；历史数据（migration 046 之前）回落到 videos.site_key（COALESCE）
+ *    - 注意：不再使用 source_name 匹配（source_name 是线路名如"线路1"，不是站点 key）
  * 2. 软删除不在新列表中的旧源
  * 3. 插入不在旧列表中的新源
+ *
  * 返回 sourcesAdded / sourcesKept / sourcesRemoved 统计
  */
 export async function replaceSourcesForSite(
@@ -586,8 +593,12 @@ export async function replaceSourcesForSite(
     await client.query('BEGIN')
 
     const existing = await client.query<{ id: string; source_url: string }>(
-      `SELECT id, source_url FROM video_sources
-       WHERE video_id = $1 AND source_name = $2 AND deleted_at IS NULL`,
+      `SELECT s.id, s.source_url
+         FROM video_sources s
+         LEFT JOIN videos v ON s.video_id = v.id
+         WHERE s.video_id = $1
+           AND COALESCE(s.source_site_key, v.site_key) = $2
+           AND s.deleted_at IS NULL`,
       [videoId, siteKey],
     )
 

@@ -1,6 +1,6 @@
 export default function NextPlaceholderPage() {
   return (
-    <main
+    <section
       data-testid="next-placeholder-root"
       className="min-h-screen p-8"
       style={{ backgroundColor: 'var(--bg-canvas)', color: 'var(--fg-default)' }}
@@ -58,7 +58,7 @@ export default function NextPlaceholderPage() {
           </button>
         </div>
       </div>
-    </main>
+    </section>
   )
 }
 

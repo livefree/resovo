@@ -28,35 +28,43 @@ const DOUBAN_GENRE_MAP: Record<string, VideoGenre> = {
   '恐怖': 'horror', 'Horror': 'horror',
   // 科幻
   '科幻': 'sci_fi', 'Science Fiction': 'sci_fi', 'Sci-Fi': 'sci_fi',
+  '反乌托邦': 'sci_fi', 'Dystopian': 'sci_fi',
   // 奇幻 / 魔幻
   '奇幻': 'fantasy', 'Fantasy': 'fantasy', '魔幻': 'fantasy', '玄幻': 'fantasy',
   // 历史 / 古装
-  '历史': 'history', 'History': 'history', '古装': 'history', '历史剧': 'history',
+  '历史': 'history', 'History': 'history', '古装': 'history', '历史剧': 'history', 'Costume': 'history',
   // 犯罪
   '犯罪': 'crime', 'Crime': 'crime',
-  // 悬疑
+  // 悬疑 / 黑色电影
   '悬疑': 'mystery', 'Mystery': 'mystery', 'Thriller/Mystery': 'mystery',
+  '黑色电影': 'mystery', 'Film-Noir': 'mystery',
   // 战争
   '战争': 'war', 'War': 'war',
   // 家庭 / 亲情
   '家庭': 'family', 'Family': 'family', '亲情': 'family',
-  // 传记 / 人物
-  '传记': 'biography', 'Biography': 'biography', 'Documentary': 'biography',
+  // 传记 / 人物（注：豆瓣 'Documentary' 在题材层同时指"纪录片"，本地由 VideoType 承载，不在此映射）
+  '传记': 'biography', 'Biography': 'biography',
   // 武侠 / 功夫
   '武侠': 'martial_arts', '功夫': 'martial_arts', 'Martial Arts': 'martial_arts', '武打': 'martial_arts',
-  // 剧情（不单独归类，跳过）
-  '剧情': null,
-  'Drama': null,
-  '音乐': null,
-  'Music': null,
-  '歌舞': null,
-  '运动': null,
-  '冒险': null,
-  'Adventure': null,
-  '动画': null,
-  'Animation': null,
-  '短片': null,
-  'Short': null,
+  // 冒险（META-10 新增）
+  '冒险': 'adventure', 'Adventure': 'adventure',
+  // 灾难（META-10 新增）
+  '灾难': 'disaster', 'Disaster': 'disaster',
+  // 歌舞 / 音乐（META-10 新增，合并）
+  '歌舞': 'musical', 'Musical': 'musical',
+  '音乐': 'musical', 'Music': 'musical',
+  // 西部（META-10 新增）
+  '西部': 'western', 'Western': 'western',
+  // 运动（META-10 新增）
+  '运动': 'sport', 'Sport': 'sport', 'Sports': 'sport',
+  // 以下标签不单独归类 genre（由 VideoType 承载或政策敏感）
+  '剧情': null, 'Drama': null,                                   // 万能标签，不携带信息
+  '动画': null, 'Animation': null,                               // 由 VideoType=anime 承载
+  '纪录片': null, 'Documentary': null,                           // 由 VideoType=documentary 承载
+  '短片': null, 'Short': null,                                    // 由 VideoType=short 承载
+  '儿童': null, 'Children': null,                                // 由 VideoType=kids 承载
+  '同性': null, 'Gay': null, 'LGBT': null,                       // 政策敏感，raw 保留至 source_category
+  '情色': null, 'Erotic': null,                                  // 政策敏感，触发审核
 } as unknown as Record<string, VideoGenre>
 
 /**
@@ -109,6 +117,15 @@ const SOURCE_CATEGORY_MAP: Record<string, VideoGenre> = {
   '家庭':     'family',
   '亲情':     'family',
   '喜剧':     'comedy',
+  // META-10 新增（对齐豆瓣）
+  '冒险':     'adventure',
+  '灾难':     'disaster',
+  '歌舞':     'musical',
+  '音乐':     'musical',
+  '西部':     'western',
+  '运动':     'sport',
+  '体育':     'sport',
+  '传记':     'biography',
 }
 
 /**

@@ -45,8 +45,75 @@ describe('matchRewrite — next-placeholder scaffold rule', () => {
     const r = matchRewrite('/en/browse')
     expect(r.matched).toBe(false)
   })
-  it('does not match /', () => {
+})
+
+describe('matchRewrite — M2 homepage rule', () => {
+  it('matches / (exact)', () => {
     const r = matchRewrite('/')
+    expect(r.matched).toBe(true)
+    if (r.matched) expect(r.rule.domain).toBe('home')
+  })
+  it('matches /en (locale-aware exact)', () => {
+    const r = matchRewrite('/en')
+    expect(r.matched).toBe(true)
+    if (r.matched) expect(r.rule.domain).toBe('home')
+  })
+  it('matches /zh-CN (locale-aware exact)', () => {
+    const r = matchRewrite('/zh-CN')
+    expect(r.matched).toBe(true)
+    if (r.matched) expect(r.rule.domain).toBe('home')
+  })
+  it('does not match /en/browse (only / is exact)', () => {
+    const r = matchRewrite('/en/browse')
+    expect(r.matched).toBe(false)
+  })
+})
+
+describe('matchRewrite — M3 detail page prefix rules', () => {
+  const detailPaths = ['/movie', '/series', '/anime', '/tvshow', '/others'] as const
+
+  for (const path of detailPaths) {
+    it(`matches ${path}/some-slug (prefix)`, () => {
+      const r = matchRewrite(`${path}/some-slug-abc123`)
+      expect(r.matched).toBe(true)
+      if (r.matched) expect(r.rule.domain).toBe('player')
+    })
+
+    it(`matches /en${path}/some-slug (locale-aware prefix)`, () => {
+      const r = matchRewrite(`/en${path}/some-slug-abc123`)
+      expect(r.matched).toBe(true)
+    })
+
+    it(`matches /zh-CN${path}/some-slug (locale-aware prefix)`, () => {
+      const r = matchRewrite(`/zh-CN${path}/some-slug-abc123`)
+      expect(r.matched).toBe(true)
+    })
+  }
+
+  it('does not match /movies (no partial prefix match)', () => {
+    const r = matchRewrite('/movies/test')
+    expect(r.matched).toBe(false)
+  })
+})
+
+describe('matchRewrite — M3 /watch prefix rule', () => {
+  it('matches /watch/some-slug', () => {
+    const r = matchRewrite('/watch/test-movie-aB3kR9x1')
+    expect(r.matched).toBe(true)
+  })
+
+  it('matches /en/watch/some-slug (locale-aware)', () => {
+    const r = matchRewrite('/en/watch/test-movie-aB3kR9x1')
+    expect(r.matched).toBe(true)
+  })
+
+  it('matches /zh-CN/watch/some-slug (locale-aware)', () => {
+    const r = matchRewrite('/zh-CN/watch/test-anime-bC4lS0y2')
+    expect(r.matched).toBe(true)
+  })
+
+  it('does not match /watchlist (no partial prefix match)', () => {
+    const r = matchRewrite('/watchlist')
     expect(r.matched).toBe(false)
   })
 })

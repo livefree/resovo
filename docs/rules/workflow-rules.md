@@ -129,6 +129,16 @@ npm run preflight   # 环境 + 迁移 + 类型 + lint + 单测基线
 
 **适用范围**：M2 起至 M6 末。M6 完成后（apps/*-next/ 全部就位，apps/web/ 等删除），恢复「Phase 基线测试条款」§5 单调收敛约束。
 
+#### 回归补齐（REGRESSION 序列）
+
+当执行里程碑与方案里程碑出现能力层断档时，可启动 REGRESSION 序列补齐：
+
+1. **启动条件**：对齐复盘发现 ≥3 个方案条目未在对应执行里程碑落地
+2. **补齐期间**：测试基线例外延续有效；补齐卡片视为"对应里程碑的 REGRESSION 附件"，归属已有里程碑 Phase，不新增 Phase 编号
+3. **收尾条件**：全部补齐卡片通过质量门禁 + Opus arch-reviewer 子代理审计 PASS（AUDIT RESULT: PASS）
+4. **REGRESSION PHASE COMPLETE**：在 task-queue.md 追加 REGRESSION PHASE COMPLETE 块（含对齐表 + 审计结论），同步解除 BLOCKER
+5. **里程碑启动前对齐确认**：自 exec-M4 起，每个执行里程碑启动前必须输出覆盖的方案 M#.X 条目清单，并确认无缺项（ADR-037）
+
 ---
 
 ## 重写期目录约定

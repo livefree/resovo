@@ -44,6 +44,23 @@ interface DbMediaCatalogRow {
   trailer_url: string | null
   created_at: string
   updated_at: string
+  // 图片治理字段（IMG-01，ADR-046）
+  poster_blurhash: string | null
+  poster_primary_color: string | null
+  poster_width: number | null
+  poster_height: number | null
+  poster_status: string | null
+  poster_source: string | null
+  backdrop_blurhash: string | null
+  backdrop_primary_color: string | null
+  backdrop_status: string | null
+  logo_url: string | null
+  logo_status: string | null
+  banner_backdrop_url: string | null
+  banner_backdrop_blurhash: string | null
+  banner_backdrop_status: string | null
+  stills_urls: unknown[]
+  stills_meta: unknown[]
 }
 
 // ── 导出类型（Service 层和调用方使用）────────────────────────────
@@ -84,6 +101,23 @@ export interface MediaCatalogRow {
   trailerUrl: string | null
   createdAt: string
   updatedAt: string
+  // 图片治理字段（IMG-01，ADR-046）
+  posterBlurhash: string | null
+  posterPrimaryColor: string | null
+  posterWidth: number | null
+  posterHeight: number | null
+  posterStatus: string | null
+  posterSource: string | null
+  backdropBlurhash: string | null
+  backdropPrimaryColor: string | null
+  backdropStatus: string | null
+  logoUrl: string | null
+  logoStatus: string | null
+  bannerBackdropUrl: string | null
+  bannerBackdropBlurhash: string | null
+  bannerBackdropStatus: string | null
+  stillsUrls: unknown[]
+  stillsMeta: unknown[]
 }
 
 export interface CatalogInsertData {
@@ -152,6 +186,23 @@ export interface CatalogUpdateData {
   tags?: string[]
   backdropUrl?: string | null
   trailerUrl?: string | null
+  // 图片治理字段（IMG-01，ADR-046）
+  posterBlurhash?: string | null
+  posterPrimaryColor?: string | null
+  posterWidth?: number | null
+  posterHeight?: number | null
+  posterStatus?: string | null
+  posterSource?: string | null
+  backdropBlurhash?: string | null
+  backdropPrimaryColor?: string | null
+  backdropStatus?: string | null
+  logoUrl?: string | null
+  logoStatus?: string | null
+  bannerBackdropUrl?: string | null
+  bannerBackdropBlurhash?: string | null
+  bannerBackdropStatus?: string | null
+  stillsUrls?: unknown[]
+  stillsMeta?: unknown[]
 }
 
 // ── 映射函数 ─────────────────────────────────────────────────────
@@ -192,6 +243,22 @@ function mapCatalogRow(row: DbMediaCatalogRow): MediaCatalogRow {
     trailerUrl: row.trailer_url,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    posterBlurhash: row.poster_blurhash ?? null,
+    posterPrimaryColor: row.poster_primary_color ?? null,
+    posterWidth: row.poster_width ?? null,
+    posterHeight: row.poster_height ?? null,
+    posterStatus: row.poster_status ?? null,
+    posterSource: row.poster_source ?? null,
+    backdropBlurhash: row.backdrop_blurhash ?? null,
+    backdropPrimaryColor: row.backdrop_primary_color ?? null,
+    backdropStatus: row.backdrop_status ?? null,
+    logoUrl: row.logo_url ?? null,
+    logoStatus: row.logo_status ?? null,
+    bannerBackdropUrl: row.banner_backdrop_url ?? null,
+    bannerBackdropBlurhash: row.banner_backdrop_blurhash ?? null,
+    bannerBackdropStatus: row.banner_backdrop_status ?? null,
+    stillsUrls: row.stills_urls ?? [],
+    stillsMeta: row.stills_meta ?? [],
   }
 }
 
@@ -204,7 +271,13 @@ const CATALOG_SELECT = `
     imdb_id, tmdb_id, douban_id, bangumi_subject_id,
     metadata_source, locked_fields,
     aliases, languages, official_site, tags, backdrop_url, trailer_url,
-    created_at, updated_at
+    created_at, updated_at,
+    poster_blurhash, poster_primary_color, poster_width, poster_height,
+    poster_status, poster_source,
+    backdrop_blurhash, backdrop_primary_color, backdrop_status,
+    logo_url, logo_status,
+    banner_backdrop_url, banner_backdrop_blurhash, banner_backdrop_status,
+    stills_urls, stills_meta
   FROM media_catalog
 `
 
@@ -317,7 +390,13 @@ export async function insertCatalog(
        imdb_id, tmdb_id, douban_id, bangumi_subject_id,
        metadata_source, locked_fields,
        aliases, languages, official_site, tags, backdrop_url, trailer_url,
-       created_at, updated_at`,
+       created_at, updated_at,
+       poster_blurhash, poster_primary_color, poster_width, poster_height,
+       poster_status, poster_source,
+       backdrop_blurhash, backdrop_primary_color, backdrop_status,
+       logo_url, logo_status,
+       banner_backdrop_url, banner_backdrop_blurhash, banner_backdrop_status,
+       stills_urls, stills_meta`,
     [
       data.title,
       data.titleEn ?? null,
@@ -399,6 +478,23 @@ export async function updateCatalogFields(
     tags: 'tags',
     backdropUrl: 'backdrop_url',
     trailerUrl: 'trailer_url',
+    // 图片治理字段（IMG-01，ADR-046）
+    posterBlurhash: 'poster_blurhash',
+    posterPrimaryColor: 'poster_primary_color',
+    posterWidth: 'poster_width',
+    posterHeight: 'poster_height',
+    posterStatus: 'poster_status',
+    posterSource: 'poster_source',
+    backdropBlurhash: 'backdrop_blurhash',
+    backdropPrimaryColor: 'backdrop_primary_color',
+    backdropStatus: 'backdrop_status',
+    logoUrl: 'logo_url',
+    logoStatus: 'logo_status',
+    bannerBackdropUrl: 'banner_backdrop_url',
+    bannerBackdropBlurhash: 'banner_backdrop_blurhash',
+    bannerBackdropStatus: 'banner_backdrop_status',
+    stillsUrls: 'stills_urls',
+    stillsMeta: 'stills_meta',
   }
 
   for (const [key, col] of Object.entries(fieldMap) as [keyof CatalogUpdateData, string][]) {
@@ -423,7 +519,13 @@ export async function updateCatalogFields(
        imdb_id, tmdb_id, douban_id, bangumi_subject_id,
        metadata_source, locked_fields,
        aliases, languages, official_site, tags, backdrop_url, trailer_url,
-       created_at, updated_at`,
+       created_at, updated_at,
+       poster_blurhash, poster_primary_color, poster_width, poster_height,
+       poster_status, poster_source,
+       backdrop_blurhash, backdrop_primary_color, backdrop_status,
+       logo_url, logo_status,
+       banner_backdrop_url, banner_backdrop_blurhash, banner_backdrop_status,
+       stills_urls, stills_meta`,
     params
   )
   return result.rows[0] ? mapCatalogRow(result.rows[0]) : null

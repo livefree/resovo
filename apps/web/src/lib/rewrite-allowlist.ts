@@ -47,12 +47,16 @@ export const REWRITE_ALLOWLIST: ReadonlyArray<RewriteRule> = [
     enabled: true,
     note: 'RW-SETUP-02 验收：确认 middleware 路由切分工作正常',
   },
-  // M2 示例（M2 PR 时解注释并设 enabled: true）
-  // { milestone: 'M2', domain: 'home',   path: '/',        mode: 'exact',  localeAware: true, enabled: false, note: 'homepage' },
-  // M3 示例
-  // { milestone: 'M3', domain: 'player', path: '/watch',   mode: 'prefix', localeAware: true, enabled: false },
-  // { milestone: 'M3', domain: 'player', path: '/movie',   mode: 'prefix', localeAware: true, enabled: false },
-  // { milestone: 'M3', domain: 'player', path: '/anime',   mode: 'prefix', localeAware: true, enabled: false },
+  // M2 — homepage
+  { milestone: 'M2', domain: 'home', path: '/', mode: 'exact', localeAware: true, enabled: true, note: 'M2 homepage' },
+  // M3 — 详情页（批 1）
+  { milestone: 'M3', domain: 'player', path: '/movie',   mode: 'prefix', localeAware: true, enabled: true, note: 'M3 movie detail' },
+  { milestone: 'M3', domain: 'player', path: '/series',  mode: 'prefix', localeAware: true, enabled: true, note: 'M3 series detail' },
+  { milestone: 'M3', domain: 'player', path: '/anime',   mode: 'prefix', localeAware: true, enabled: true, note: 'M3 anime detail' },
+  { milestone: 'M3', domain: 'player', path: '/tvshow',  mode: 'prefix', localeAware: true, enabled: true, note: 'M3 tvshow detail' },
+  { milestone: 'M3', domain: 'player', path: '/others',  mode: 'prefix', localeAware: true, enabled: true, note: 'M3 others detail' },
+  // M3 — 播放器（批 2）
+  { milestone: 'M3', domain: 'player', path: '/watch',   mode: 'prefix', localeAware: true, enabled: true, note: 'M3 watch player' },
   // M4 示例
   // { milestone: 'M4', domain: 'auth',   path: '/auth',    mode: 'prefix', localeAware: true, enabled: false },
   // M5 示例

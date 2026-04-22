@@ -239,8 +239,12 @@ export async function adminStagingRoutes(fastify: FastifyInstance) {
     }
     try {
       const videoSvc = new VideoService(db)
-      await videoSvc.update(id, parsed.data)
-      return reply.send({ data: { id, updated: true } })
+      const result = await videoSvc.update(id, parsed.data)
+      // ADMIN-14: 响应带 skippedFields
+      return reply.send({
+        data: { id, updated: true },
+        skippedFields: result?.skippedFields ?? [],
+      })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       return reply.code(500).send({

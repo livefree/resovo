@@ -40,6 +40,7 @@ interface VideoDetail {
 }
 
 // snake_case — 与 GET /admin/sources 返回的 DB 原始行一致
+// ADMIN-16: 与 ModerationSourceBlock 消费的 SourceRow 保持字段兼容（统一数据源契约）
 interface SourceRow {
   id: string
   source_url: string
@@ -48,6 +49,7 @@ interface SourceRow {
   quality?: string | null
   episode_number: number
   is_active: boolean
+  last_checked: string | null
 }
 
 interface ModerationDetailProps {
@@ -128,7 +130,10 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
         if (allSources.length > 0) {
           // 优先选第一个有活跃源的行，无则退回到第一行
           const firstActive = allSources.find((s) => s.is_active) ?? allSources[0]
-          setSelectedLine(firstActive.source_name || '默认线路')
+          // ADMIN-15: selectedLine 改用复合 id（name + '::' + siteKey）
+          const firstName = firstActive.source_name?.trim() || '默认线路'
+          const firstSiteKey = firstActive.site_key?.trim() || 'unknown'
+          setSelectedLine(`${firstName}::${firstSiteKey}`)
           setSelectedEpisode(firstActive.episode_number || 1)
         }
       } catch {
@@ -170,20 +175,29 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
     }
   }, [videoId, onReviewed, rejectReason])
 
+  // ADMIN-15: 线路分组 key 由 source_name + site_key 组成，防止不同源站同名线路被误合并
+  // name = 用于显示的 source_name；id = 唯一标识（name + '::' + siteKey）
   const groupedLines = useMemo(() => {
-    const lines = new Map<string, SourceRow[]>()
+    const lines = new Map<string, { name: string; siteKey: string | null; rows: SourceRow[] }>()
     for (const row of sources) {
       const normalizedName = row.source_name?.trim()
-      const key = normalizedName && normalizedName.length > 0 ? normalizedName : '默认线路'
-      const list = lines.get(key)
-      if (list) { list.push(row) } else { lines.set(key, [row]) }
+      const name = normalizedName && normalizedName.length > 0 ? normalizedName : '默认线路'
+      const siteKey = row.site_key?.trim() || null
+      const id = `${name}::${siteKey ?? 'unknown'}`
+      const existing = lines.get(id)
+      if (existing) {
+        existing.rows.push(row)
+      } else {
+        lines.set(id, { name, siteKey, rows: [row] })
+      }
     }
-    return Array.from(lines.entries()).map(([name, rows], idx) => ({
-      name,
-      displayName: buildLineDisplayName({ rawName: name, fallbackIndex: idx, quality: rows[0]?.quality ?? null }),
-      siteKey: rows[0]?.site_key?.trim() || null,
-      rows: rows.slice().sort((a, b) => a.episode_number - b.episode_number),
-      hasActiveRows: rows.some((r) => r.is_active),
+    return Array.from(lines.entries()).map(([id, group], idx) => ({
+      id,
+      name: group.name,
+      displayName: buildLineDisplayName({ rawName: group.name, fallbackIndex: idx, quality: group.rows[0]?.quality ?? null }),
+      siteKey: group.siteKey,
+      rows: group.rows.slice().sort((a, b) => a.episode_number - b.episode_number),
+      hasActiveRows: group.rows.some((r) => r.is_active),
     }))
   }, [sources])
 
@@ -205,7 +219,8 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
     return Array.from(seen.values()).every((count) => count === 1)
   }, [groupedLines])
 
-  const activeLine = groupedLines.find((line) => line.name === selectedLine) ?? groupedLines[0] ?? null
+  // ADMIN-15: 用复合 id 匹配（原 name 匹配在不同源站同名线路场景会错误）
+  const activeLine = groupedLines.find((line) => line.id === selectedLine) ?? groupedLines[0] ?? null
   const lineEpisodes = activeLine
     ? Array.from(new Set(activeLine.rows.map((row) => row.episode_number))).sort((a, b) => a - b)
     : []
@@ -260,7 +275,7 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
               <div className="flex items-center justify-between">
                 <span className="shrink-0 text-xs text-[var(--muted)]">源站/线路</span>
                 <span className="shrink-0 text-xs text-[var(--muted)]">
-                  {groupedLines.findIndex((line) => line.name === activeLine?.name) + 1} / {groupedLines.length}
+                  {groupedLines.findIndex((line) => line.id === activeLine?.id) + 1} / {groupedLines.length}
                 </span>
               </div>
               {siteKeys.length > 0 && (
@@ -271,16 +286,16 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
               <div className="flex flex-wrap gap-1.5">
                 {groupedLines.map((line) => (
                   <button
-                    key={line.name}
+                    key={line.id}
                     type="button"
                     onClick={() => {
-                      setSelectedLine(line.name)
+                      setSelectedLine(line.id)
                       const episodesInLine = new Set(line.rows.map((row) => row.episode_number))
                       setSelectedEpisode(episodesInLine.has(selectedEpisode) ? selectedEpisode : (line.rows[0]?.episode_number ?? 1))
                     }}
-                    data-testid={`moderation-source-btn-${line.name}`}
+                    data-testid={`moderation-source-btn-${line.id}`}
                     className={`rounded px-2 py-0.5 text-xs transition-colors ${
-                      line.name === activeLine?.name
+                      line.id === activeLine?.id
                         ? 'bg-[var(--accent)] text-white'
                         : line.hasActiveRows
                           ? 'bg-[var(--bg3)] text-[var(--muted)] hover:bg-[var(--bg2)]'
@@ -429,7 +444,12 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
 
       {/* 源健康 */}
       <Collapsible title="源健康" testId="collapsible-sources">
-        <ModerationSourceBlock videoId={video.id} sourceCheckStatus={video.source_check_status} />
+        <ModerationSourceBlock
+          videoId={video.id}
+          sourceCheckStatus={video.source_check_status}
+          sources={sources}
+          onRefetch={() => fetchDetail(video.id)}
+        />
       </Collapsible>
 
       {/* 字段来源追踪（META-09） */}

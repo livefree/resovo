@@ -1,0 +1,36 @@
+import { Suspense } from 'react'
+import type { Metadata } from 'next'
+import { VideoDetailClient, VideoDetailClientSkeleton } from '@/components/video/VideoDetailClient'
+import { fetchVideoMeta } from '@/lib/video-detail'
+import { DEFAULT_BRAND_NAME } from '@/lib/brand-detection'
+
+interface PageProps {
+  params: Promise<{ locale: string; slug: string }>
+}
+
+export async function detailGenerateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { slug } = await params
+  const video = await fetchVideoMeta(slug)
+  if (!video) return { title: `${DEFAULT_BRAND_NAME}视频` }
+  const description = video.description?.slice(0, 150) ?? undefined
+  return {
+    title: `${video.title} - ${DEFAULT_BRAND_NAME}`,
+    description,
+    openGraph: {
+      title: `${video.title} - ${DEFAULT_BRAND_NAME}`,
+      description,
+      images: video.coverUrl ? [{ url: video.coverUrl }] : [],
+    },
+  }
+}
+
+export function createDetailPage(showEpisodes: boolean) {
+  return async function DetailPage({ params }: PageProps) {
+    const { slug } = await params
+    return (
+      <Suspense fallback={<VideoDetailClientSkeleton />}>
+        <VideoDetailClient slug={slug} showEpisodes={showEpisodes} />
+      </Suspense>
+    )
+  }
+}

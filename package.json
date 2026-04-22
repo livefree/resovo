@@ -9,11 +9,12 @@
     "tools/*"
   ],
   "scripts": {
-    "dev": "npx turbo dev",
+    "dev": "node scripts/dev.mjs",
+    "dev:turbo": "npx turbo dev",
     "api": "node --env-file=.env.local --import tsx --watch apps/api/src/server.ts",
     "build": "npx turbo build",
     "start": "npx turbo start",
-    "typecheck": "tsc --noEmit && npm --workspace @resovo/server run typecheck && npm --workspace @resovo/web-next run typecheck",
+    "typecheck": "tsc --noEmit && npm --workspace @resovo/server run typecheck && npm --workspace @resovo/web-next run typecheck && npm --workspace @resovo/player-core run typecheck",
     "lint": "npx turbo lint",
     "test": "vitest",
     "test:run": "vitest run",

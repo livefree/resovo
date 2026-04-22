@@ -310,7 +310,7 @@ test.describe('SEARCH-05: 搜索完整链路', () => {
     if (await firstCard.isVisible()) {
       const href = await firstCard.getAttribute('href')
       // ResultCard 链接格式：/{type}/{slug}-{shortId} 或 /{type}/{shortId}
-      expect(href).toMatch(/\/(movie|anime|series|variety)\//)
+      expect(href).toMatch(/\/(movie|anime|series|tvshow)\//)
     }
   })
 

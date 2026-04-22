@@ -86,3 +86,27 @@ module/
 验收时必须逐项检验。以"typecheck / lint 通过"代替逐项验收，视为验收未完成。
 
 > 来源：CLAUDE.md §"后台表格规范"（2026-04-12 迁入）
+
+
+---
+
+## 有序列表规范（ADR-049，M5-ADMIN-BANNER-01）
+
+所有需要用户手动排序的 admin 模块（Banner、来源优先级、轮播位等）必须遵守：
+
+1. **唯一入口**：使用 `SortableList`（`apps/server/src/components/admin/shared/SortableList.tsx`），不得直接使用 `@dnd-kit` 原语
+2. **依赖边界**：`@dnd-kit/core` + `@dnd-kit/sortable` 仅允许在 `apps/server` 中引入，`❌ web-next / api / player` 禁止引入
+3. **持久化**：拖拽结束后必须立即调用后端排序 API 写回 `sort_order`，不得仅维护前端状态
+4. **性能**：分页内排序（单次请求 ≤ 100 条）；大量 item（> 50）须做虚拟化或分批提示
+5. **无障碍**：`SortableList` 已内置键盘导航（↑↓ 移位）和 `aria-roledescription`，消费方不得覆盖这些属性
+6. **Props 签名**（不得擅自修改 SortableList 的 prop 接口，需走 CHG 流程）：
+
+```tsx
+interface SortableListProps<T extends { id: string }> {
+  items: T[]
+  onReorder: (newItems: T[]) => void
+  renderItem: (item: T, index: number) => React.ReactNode
+  disabled?: boolean
+  'data-testid'?: string
+}
+```

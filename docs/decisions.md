@@ -961,3 +961,719 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
 - **非目标**：CDN 缓存策略、按用户灰度、apps/server 路由、apps/api 路由
 - **影响文件**：`apps/web/middleware.ts`、`apps/web/src/lib/rewrite-allowlist.ts`、`apps/web/src/lib/rewrite-match.ts`、`apps/web/src/lib/__tests__/rewrite-match.test.ts`、`docs/architecture.md`（新增重写期路由拓扑章节）
 - **退役时机**：M6-RENAME 时，连同 `apps/web` 整体退役；本 ADR 状态更新为「已完成并废弃」
+
+
+---
+
+## ADR-036: Player Core 层提升为独立包（packages/player-core）
+
+- **日期**：2026-04-19
+- **状态**：已采纳
+- **子代理**：arch-reviewer (claude-opus-4-6)
+- **背景**：播放器核心实现（HLS 加载、手势控制、快捷键、字幕渲染等）内嵌于 `apps/web/src/components/player/core/`，随 M3-PLAYER-02 开始 `apps/web-next` 需要复用同一份代码。若直接 import 会产生跨 app 直接引用，违反架构约束"禁止 apps 间直接共享代码"。
+- **决策**：将 `apps/web/src/components/player/core/` 通过 `git mv` 整体迁移到 `packages/player-core/src/`，对外发布为内部私有包 `@resovo/player-core`，两个 apps 均通过包名引用。`YTPlayer` 组件重命名为 `Player`（去掉 YouTube 品牌色彩，语义更通用）。
+- **API 契约**（公开导出）：
+  - `Player` — 播放器主组件（前身 YTPlayer）
+  - `PlayerProps` — 组件 Props 类型
+  - `SubtitleTrack` — 字幕轨道描述类型
+  - `QualityLevel` — 画质选项类型
+  - `Chapter` — 章节类型
+  - 上述全部从 `packages/player-core/src/index.ts` 统一导出，消费方只做 `import { Player } from '@resovo/player-core'`
+- **包配置**：
+  - `name: "@resovo/player-core"`，`private: true`
+  - `main` / `types` 均指向 `./src/index.ts`（零构建，workspace path resolve）
+  - `peerDependencies: { react: ">=18", react-dom: ">=18" }`
+  - `tsconfig.json` 的 `paths` 中 `@resovo/types` 指向 `../types/src/index.ts`
+- **迁移方式**：`git mv` 保留完整 git 历史
+- **非目标**：不引入构建步骤（无 tsc emit / rollup）、不改 Player 内部实现逻辑、不触碰 `packages/player/`（legacy mirror，M6 后统一退役）
+- **影响文件**：
+  - 新增：`packages/player-core/package.json`、`packages/player-core/tsconfig.json`、`packages/player-core/src/index.ts`、`packages/player-core/README.md`
+  - git mv：`apps/web/src/components/player/core/` → `packages/player-core/src/`
+  - 修改：`apps/web/src/components/player/VideoPlayer.tsx`（import 改 `@resovo/player-core`）
+  - 修改：`apps/web/package.json`（新增 `@resovo/player-core: *`）
+  - 修改：`apps/web/tsconfig.json`（新增 paths 映射）
+  - 修改：根 `package.json`（typecheck 追加 `--workspace @resovo/player-core`）
+- **退役时机**：长期维护；`packages/player/` 在 M6 末退役，本包继续保留
+
+## ADR-038: 双轨主题统一协议（apps/web-next ThemeContext 迁移）
+
+- **日期**：2026-04-19
+- **状态**：已采纳
+- **子代理**：arch-reviewer (claude-opus-4-6)
+- **背景**：apps/web-next 在 M0 阶段临时沿用 zustand 版 `themeStore`（写 `classList.dark` + localStorage），而 TOKEN-11 的 `theme-init-script` 已基于 cookie 写 `dataset.theme`，两套 DOM/存储通道并存导致：(a) hydration 后 classList 覆盖 data-theme 造成双套同步，(b) cookie 与 localStorage 可产生矛盾值，(c) contexts/ 为空，Client Component 无法通过 React Context 消费 brand/theme。M1 启动前必须收敛为单一事实源，并与 apps/web 的 BrandProvider（ADR-024/ADR-033）对齐。
+- **决策**：
+  1. **DOM 同步通道统一为 `data-theme`**：`document.documentElement.dataset.theme` 是唯一写入点；CSS 变量选择器从 `.dark {}` 改为 `[data-theme="dark"] {}`；Tailwind dark mode 配置从 `'class'` 改为 `['selector', '[data-theme="dark"]']`；`classList.add/remove('dark')` 从 apps/web-next 代码库全部移除。保留 `@media (prefers-color-scheme: dark) { :root:not([data-theme='light']):not([data-theme='dark']) {} }` 作为 no-JS 降级兜底。
+  2. **删除 `apps/web-next/src/stores/themeStore.ts`（路径 A）**：ThemeToggle 改接 `useTheme()`，消费 ThemeContext。BrandProvider 的 `useSyncExternalStore + useRef` 外部 store 取代 zustand 职责。
+  3. **BrandProvider 移植并挂载于 `apps/web-next/src/app/[locale]/layout.tsx`**：Server Component 用 `cookies()` 读 `resovo-brand` / `resovo-theme`，通过 `parseBrandSlug` / `parseTheme` 解析后作为 `initialBrand` / `initialTheme` props 传入 Client 版 BrandProvider。
+  4. **存储通道统一为 Cookie**：移除 `localStorage.getItem/setItem('resovo-theme')` 全部调用；`setTheme` / `setBrand` 在更新 Context 的同时写回对应 Cookie（`max-age=31536000; path=/; samesite=lax`）。
+  5. **ThemeToggle 升级为三态 Segmented Control**：`role="radiogroup"` + 3 个 `role="radio"` 子按钮（light/system/dark），Props 扩展为 `{ className?, variant?: 'icon'|'full' }`，data-testid 扩展为 `theme-toggle`（容器）+ `theme-toggle-{light|system|dark}`（子按钮），图标改用 inline SVG（项目无图标库依赖），配色全部走 CSS 变量。
+- **理由**：data-theme 是 SSR init-script 的唯一通道；双写诱导下游错用 Tailwind `dark:` 变体；删除 themeStore 消除双状态来源（apps/web-next 无外部消费 useThemeStore）；Cookie 是 middleware/Server Component/init-script 唯一共识通道；radiogroup 是 WAI-ARIA 三态互斥选择的标准语义。
+- **后果**：
+  - 正面：DOM/存储/Context 三通道单事实源；apps/web 与 apps/web-next 主题层协议一致；E2E 可按 testid 稳定定位具体态位。
+  - 负面：旧 E2E 中 `click(theme-toggle)` 循环切换用例改写为显式点击子按钮（已在 REG-M1-01 内同步完成）。
+  - 注意：apps/web 的 BrandProvider `setTheme` 未写回 Cookie，已在 apps/web-next 版本中补齐；apps/web 侧修复推迟到 apps/web 退场前（M5）。
+- **涉及文件**：
+  - 新增：`apps/web-next/src/types/brand.ts`、`apps/web-next/src/contexts/BrandProvider.tsx`、`apps/web-next/src/hooks/useBrand.ts`、`apps/web-next/src/hooks/useTheme.ts`、`apps/web-next/src/lib/brand-detection.ts`
+  - 删除：`apps/web-next/src/stores/themeStore.ts`
+  - 修改：`apps/web-next/src/app/[locale]/layout.tsx`（挂 BrandProvider）
+  - 重写：`apps/web-next/src/components/ui/ThemeToggle.tsx`（三态 Segmented Control）
+  - 修改：`apps/web-next/tailwind.config.ts`（darkMode selector）
+  - 修改：`apps/web-next/src/app/globals.css`（`.dark {}` → `[data-theme="dark"] {}`）
+  - 修改：`tests/e2e-next/homepage.spec.ts`（ThemeToggle 测试适配新 testid）
+
+## ADR-039: middleware 品牌/主题识别分层协议（apps/web-next）
+
+- **日期**：2026-04-19
+- **状态**：已采纳
+- **子代理**：arch-reviewer (claude-opus-4-6)
+- **背景**：REG-M1-01 已在 apps/web-next 引入 BrandProvider 并由 `layout.tsx` 直接 `cookies()` 读取，但尚无 middleware 层把 brand/theme 上下文派发给 Route Handler、下游 RSC fetch 及后续埋点链路。同时 `apps/web-next/src/middleware.ts` 当前只挂载 next-intl，缺少链式组合规范。本 ADR 一次性裁定 middleware 的识别协议、优先级链、与 next-intl 的组合方式及 Edge Runtime 约束。
+- **决策**：
+  1. **解析链一元化**：middleware 与 layout 共用 `lib/brand-detection.ts` 的 `parseBrandSlug` / `parseTheme` 纯函数，不重复实现解析逻辑，不 import Server-only 模块。
+  2. **事实源仍是 Cookie，header 仅为派生副本**：`resovo-brand` / `resovo-theme` Cookie 是唯一权威存储（ADR-038）；middleware 在每次请求上读 Cookie → 解析 → 注入 `x-resovo-brand` / `x-resovo-theme` 到 response headers，供下游 RSC / API Route 读取。`layout.tsx` 继续 `cookies()` 读取，不改为读 header，以保持 layout 在无 middleware 场景（单测、直挂 Route Handler）下仍正确。
+  3. **优先级链（M1 定稿）**：`cookie → DEFAULT_BRAND_SLUG('resovo')` / `cookie → DEFAULT_THEME('system')`。不支持 query param（CDN 缓存污染风险）、不支持 hostname 映射（当前单域名，YAGNI）。`resolveBrandContext()` 以函数形态封装，未来新增 hostname 层只在函数内部追加。
+  4. **next-intl 组合采用「intl 先跑、header 后注入」**：`createIntlMiddleware` 返回的 `NextResponse` 可能是 rewrite / redirect / next，必须先由 intl 决定形态，再由我们 `response.headers.set(...)` 追加；不得在 intl 之前预生成 response。
+  5. **Edge Runtime 约束写入规范**：`lib/brand-detection.ts` 及任何被 middleware 传递引入的模块必须 Edge-safe（禁止 `fs` / Node built-ins / 依赖它们的三方库）；middleware 内禁止 import RSC 专用 API（`next/cache`、DB client 等）。
+  6. **Header 命名对齐**：`HEADER_BRAND='x-resovo-brand'`、`HEADER_THEME='x-resovo-theme'`，`x-` 前缀标示应用自定义。
+- **理由**：Cookie 为事实源，header 为派生面，避免 layout 耦合到 middleware 必须执行；`parseBrandSlug` / `parseTheme` 纯函数复用三处；query/hostname 路径在单域名期是纯负担，以专门 ADR 在多品牌落地时评估；next-intl 组合顺序由其可能含 rewrite/redirect 决定，顺序颠倒会吞掉国际化路由决策。
+- **后果**：
+  - 正面：middleware 层契约固化，后续任务新增 header 字段只需追加 `set(...)` 一行；layout 无需随 middleware 变动。
+  - 正面：`lib/brand-detection.ts` 成为 Edge/Node 双可运行的纯函数层。
+  - 负面：每次请求多一次 cookie 解析（两次字符串正则），性能开销可忽略。
+  - 注意：若未来为 middleware 增加 DB/hostname map 查询，必须另发 ADR；不得悄悄加依赖破坏 Edge-safe 属性。
+- **涉及文件**：
+  - 修改：`apps/web-next/src/middleware.ts`（next-intl + brand/theme header 注入）
+  - 复用：`apps/web-next/src/lib/brand-detection.ts`（REG-M1-01 已建立）
+  - 不改：`apps/web-next/src/app/[locale]/layout.tsx`（维持 `cookies()` 读取）
+  - 新增：`tests/unit/lib/brand-detection.test.ts`（parseBrandSlug/parseTheme 纯函数单元测试 25 cases）
+  - 新增：`tests/e2e-next/brand-detection.spec.ts`（middleware header 注入 E2E 验证 4 cases）
+
+---
+
+## ADR-043 — Token 后台 MVP 增量补齐（Diff / 继承指示 / 保存链路）
+
+- **日期**：2026-04-19
+- **决策者**：arch-reviewer (claude-opus-4-6)，主循环 claude-sonnet-4-6 落地
+- **背景**：TOKEN-14 只有只读预览，方案 §5.0 MVP 11 项仅覆盖 4 项。本次补齐 3 项：Diff 辅助、继承指示、保存链路（dev only 写回）。
+- **决策**：
+  - **D1 PUT API**：`PUT /v1/admin/design-tokens/:brandSlug`，整体替换 overrides（非 partial patch），乐观锁通过 `expectedUpdatedAt` CAS
+  - **D2 生产只读**：`assertWriteAllowed()` 在 service 层做唯一判定（NODE_ENV=production || DESIGN_TOKENS_WRITE_DISABLED）；路由层只做错误映射（403）；依赖注入 `readEnv` 使单元可测
+  - **D3 继承指示**：service 返回 `overrideMap: Record<flatPath, 'base'|'brand-override'>`；前端 working-copy 管理 dirty paths；UI 显示 InheritanceBadge
+  - **D4 写回落盘**：slug='resovo' → default.ts，其他 → <slug>.ts；固定字符串模板 + prettier 格式化；temp+rename 原子写；build 同步子进程；失败时 fs 回滚
+  - **D5 Diff 面板**：前端计算 diff（baseline vs working），生成建议 commit message 格式 `tokens(<slug>): <verb> <N> field(s) [<scope>...]`
+- **不做（V2）**：新建 brand UI、版本回滚 UI、多人协作、单字段 PATCH、审计日志落 DB、primitive/base semantic 编辑、ts-morph AST 写回
+- **V2 触发条件**（满足任一即可立项）：需要多人同时编辑 Token、新增 Token 类型（不兼容现有 flat-path）、WCAG 合规审计需求出现、版本回滚出现运营需求
+- **影响文件**：
+  - 新增：`apps/api/src/services/DesignTokensService.ts`（写回编排）
+  - 修改：`apps/api/src/routes/admin/design-tokens.ts`（GET :slug + PUT）
+  - 新增：`apps/server/src/components/admin/design-tokens/{DiffPanel,TokenEditor,InheritanceBadge}.tsx`
+  - 新增：`apps/server/src/components/admin/design-tokens/{_diff,_paths}.ts`
+  - 修改：`apps/server/src/components/admin/design-tokens/DesignTokensView.tsx`（三栏布局）
+  - 新增：`packages/design-tokens/src/brands/{_validate,_patch,_resolve}.ts`
+  - 修改：`apps/api/src/db/queries/brands.ts`（`updateBrandOverridesIfUnchanged` 乐观锁）
+  - 新增：`tests/unit/api/admin-design-tokens-write.test.ts`（service 单元测试 6 cases）
+
+---
+
+## ADR-040 — Root layout 四件套常驻化（Nav/Footer/GlobalPlayerHostPlaceholder/MainSlot）
+
+- **日期**：2026-04-19
+- **决策者**：arch-reviewer (claude-opus-4-6)，主循环 claude-sonnet-4-6 落地
+- **背景**：Nav/Footer 在每个 page.tsx 中独立渲染，跨页 DOM 重新挂载，出现视觉闪烁，且与未来 GlobalPlayerHost 跨页常驻需求冲突。
+- **决策**：
+  - **D1 layout.tsx 结构**：`<div class="app-shell"><Nav/><main id="main-content" class="main-slot">{children}</main><div id="global-player-host-portal"/><Footer/></div>` 在 BrandProvider 内
+  - **D2 pages 改动**：各 page.tsx 移除 Nav/Footer/外层 div；首页直接返回 Fragment；detail-page-factory 直接返回 VideoDetailClient；watch page 返回 data-testid="watch-page" div
+  - **D3 next-placeholder**：接受方案 A（有 Nav/Footer），`<main>` → `<section>` 避免嵌套冲突
+  - **D4 rerender 隔离**：不加 memo，App Router 天然保证 layout 不 remount
+  - **D5 CSS**：globals.css 新增 `.app-shell` / `.main-slot` / `#global-player-host-portal` 三条规则；`--z-player-host` fallback 40
+- **不做**：不拆 route group，不改 middleware matcher，不实现 GlobalPlayerHost 本体（REG-M3-01），不处理影院模式 Footer 隐藏（REG-M3）
+- **影响文件**：layout.tsx / page.tsx / detail-page-factory.tsx / watch page / next-placeholder page / globals.css
+
+## ADR-044: View Transitions + Shared Element + Route Stack Primitives
+
+- **状态**: Accepted
+- **日期**: 2026-04-19
+- **关联任务**: REG-M2-03
+- **上游决策**: ADR-040（Root Layout 四件套），ADR-038（BrandProvider/ThemeContext）
+- **下游影响**: REG-M3-01（FLIP 动画实装），M5（Tab Bar + 边缘滑动手势）
+
+### 决策
+
+1. **PageTransition**：封装 CSS View Transitions API，三态降级：支持+允许动画 → startViewTransition；浏览器不支持 → 直接切换；prefers-reduced-motion → opacity-only 80ms。Server Component wrapper（无 `'use client'`）+ Client `PageTransitionController`（含逻辑）分离，保持 RSC 兼容性。
+2. **SharedElement**：本轮（REG-M2-03）仅定义 Props/Ref/Registry 契约并实现 noop，不实装 FLIP；FLIP 实现推迟到 REG-M3-01（需要全局持久 registry Context 归属评估）。
+3. **RouteStack**：本轮仅实现类型定义 + noop hook/component，手势逻辑推迟到 M5 Tab Bar。原因：手势参数需真实场景调参，iOS Safari overscroll 兼容性需真机联调。
+4. **动画时长**：全部通过 CSS 变量（`--transition-page: 240ms`、`--transition-page-reduced: 80ms`、`--transition-shared: 320ms`、`--ease-page`），不硬编码 ms 值。
+
+### 推迟决定
+
+- REG-M2-03 不实现边缘滑动手势；RouteStack stub 注释"TODO: M5 Tab Bar 上线时实装手势"。
+- SharedElement FLIP bridge 注释"TODO: REG-M3-01 填充 FLIP 实现"。
+
+## ADR-045: 图像基础 Primitive 契约（SafeImage / FallbackCover / image-loader）
+
+- **状态**: Accepted
+- **日期**: 2026-04-19
+- **关联任务**: REG-M2-05（承接 REG-M2-04 LazyImage）
+- **上游决策**: REG-M2-04（LazyImage + BlurHash）
+- **下游影响**: REG-M2-06（全站 img 替换推进）
+
+### 决策
+
+1. **SafeImage**：封装 LazyImage，四级降级链：LazyImage 加载中 → LazyImage blurHash 占位 → FallbackCover（品牌色）→ fallback prop（自定义）。Props 透传 LazyImageProps，blurHash 由必填降为可选，新增 fallback / onLoadError / imageLoader。
+2. **FallbackCover**：纯 CSS + 内联 SVG 组件，无网络请求。颜色**全部**来自 token：背景 --bg-surface，图标 --fg-muted，边框 --border-default，不硬编码任何颜色值。
+3. **image-loader**：导出纯函数 buildImageUrl(src, opts)，当前 passthrough 实现，源文件内 TODO 注释预留 Cloudflare Images URL 模板。类型 ImageLoader 允许消费方注入自定义 loader。
+
+### 后果
+
+- CDN 切换为单点修改，调用方零感知。
+- FallbackCover 解决全站"破图"体验，品牌色一致。
+- 本卡只建 primitive 不做全站替换（由后续卡片承接）。
+
+**四级降级层级说明**（arch-reviewer 审计补充）：方案 §17 描述的四级链为"真实图 → BlurHash → FallbackCover → CSS 渐变兜底"。实现中第四级（CSS 渐变）已内嵌于 FallbackCover 内部（当无 brandSeeds 时 FallbackCover 自动 fallback 到品牌主色渐变），SafeImage 层向调用方只暴露三级 surface。两者实质等价，但层级合并于 FallbackCover，调用方无需感知第四级细节。
+
+## ADR-041: GlobalPlayerHost 契约设计（M3 阶段）
+
+- **状态**: Accepted
+- **日期**: 2026-04-19
+- **关联任务**: REG-M3-01（full 态落地）/ REG-M3-02（mini）/ REG-M3-03（pip）/ REG-M3-04（/watch 接入）
+- **上游决策**: REG-M2-01（#global-player-host-portal 宿主节点）
+
+### 决策
+
+1. **HostPlayerMode 状态机**：新增 `HostPlayerMode = 'closed' | 'full' | 'mini' | 'pip'`，与现有 `PlayerMode = 'default' | 'theater'` 正交共存。合法转换：closed↔full（本卡），full↔mini（M3-02），full↔pip/mini↔pip（M3-03）。closed→mini/pip 非法（未经 full 初始化）。
+2. **playerStore 扩展**：新增 `hostMode`、`hostOrigin`、`isHydrated` 字段及 `setHostMode/closeHost/hydrateFromSession` actions，向后兼容（原有字段签名不变）。
+3. **sessionStorage 持久化**：key `resovo:player-host:v1`，只持久化 mini/pip（full 刷新降级为 closed），isPlaying 强制 false，currentTime 不恢复。
+4. **GlobalPlayerHost**：`createPortal` 挂入 `#global-player-host-portal`，`dynamic(ssr:false)` 注入 layout。本卡 full 态渲染 GlobalPlayerFullFrame 占位框架，mini/pip 渲染空占位，M3-02/03 填充。
+5. **本卡不做**：/watch 接入（M3-04）、PlayerShell 迁移（M3-04）、mini/pip 视觉（M3-02/03）。
+
+### 后果
+
+- 宿主节点就绪，下游 M3-02/03/04 无需改 layout。
+- PlayerShell 本卡行数变动为 0，/watch 不受影响。
+
+## ADR-042: /watch 路由与 GlobalPlayerFullFrame Portal 接入方案
+
+- **状态**: Accepted
+- **日期**: 2026-04-19
+- **关联任务**: REG-M3-04
+- **上游决策**: ADR-041（hostMode 状态机），ADR-040（MiniPlayer FLIP）
+
+### 决策
+
+1. **PlayerShell 在 Portal 内渲染**：GlobalPlayerFullFrame 直接 import PlayerShell，传 slug prop，不拆分 core/shell（本卡约束）。PlayerShell 增加可选 `slug` prop + `portalMode` flag。
+2. **路由离开检测**：新建 `RoutePlayerSync`（Root layout 挂载），usePathname 监听，离开 /watch 且 hostMode=full 时自动切 mini。
+3. **ConfirmDialog 触发**：watch page 层，slug mismatch 且 hostMode∈{full,mini} 时弹 `ConfirmReplaceDialog`；confirm→initPlayer + full，cancel→router.replace 回原 href。
+4. **testid 迁移**：PlayerShell 的所有 testid 跟随 DOM 进 Portal，document-wide 选择器无需修改；仅"祖先链断言"需改为两行独立断言。
+5. **与方案 §13.1 一致**：/watch URL 保留，SSR 仍返回 watch-page 骨架，Portal 只影响 CSR DOM 结构。
+
+### 后果
+
+- 跨页播放（离开 /watch → mini 持续播放）得以实现。
+- PlayerShell 改动行数 ≤ 20，其余业务逻辑不变。
+- 需人工回归：①断点续播 ②线路切换 ③剧场模式 ④字幕 ⑤mini 跨路由 ⑥替换视频 ConfirmDialog。
+
+## ADR-037 — 执行里程碑与方案里程碑对齐协议（历史偏差追认与未来约束）
+
+- **决策日期**：2026-04-20
+- **状态**：已采纳
+- **关联任务**：REG-CLOSE-01
+- **子代理**：arch-reviewer (claude-opus-4-6) — 起草与审计
+- **关联补丁**：`docs/task_queue_patch_regression_m1m2m3_20260420.md`
+- **关联文档**：`docs/milestone_alignment_20260420.md`
+- **关联 ADR**：ADR-031、ADR-035、ADR-038/039/040/041/042/043/044/045（REGRESSION 阶段产出）
+
+### 背景
+
+三份原方案（design_system / frontend_redesign / image_pipeline，2026-04-18）以"能力层"维度划分 M1–M6。执行侧（exec-M1/M2/M3）的实际交付物与方案 M1/M2/M3 语义严重错位：方案侧 M# 描述能力层，执行侧 M# 描述页面搬家进度。ADR-035 引入网关 rewrite 协议后，主循环推进视角默认落到"页面搬家进度"，导致 apps/web-next 端方案 M1/M2/M3 能力层断档（19 项），直到 M3 PHASE COMPLETE 后对齐复盘才被识别。
+
+### 决策
+
+1. **历史偏差追认**：exec-M1/M2/M3 与方案 M1/M2/M3 的语义错位属已发生历史事实。通过 SEQ-20260420-REGRESSION 序列补齐，不回滚已有 exec 产物，不重命名历史命名。
+
+2. **未来对齐要求**：自 exec-M4 起，每个执行里程碑启动前必须有"方案 M# ↔ 执行里程碑对齐确认"，显式声明覆盖的方案条目清单；偏离声明必须写独立 ADR。
+
+3. **PHASE COMPLETE 必须含对齐表**：每个 PHASE COMPLETE 通知块必须包含方案 M# ↔ 执行里程碑映射表（参见 `docs/milestone_alignment_20260420.md` 格式）。未列对齐表视为未完成，下一里程碑不得启动。
+
+4. **未对齐的 exec 里程碑不得标 ✅**：宣告完成前必须满足：①方案条目全 ✅ 或 ⚠️（含 ADR 偏离记录）；②Opus arch-reviewer 子代理审计 PASS；③审计结论与对齐表写入 `docs/changelog.md`。
+
+5. **执行里程碑命名协议**：自 exec-M4 起恢复方案编号对齐（exec-M4 = 方案 M4，exec-M5 = 方案 M5，exec-M6 = 方案 M6）。若命名分歧则写独立 ADR 记录原因。
+
+### 后果
+
+- **正面**：防止"页面搬家进度"vs"能力层完成度"再次错位；每次 PHASE COMPLETE 自带可审计覆盖率报告；ADR 偏离声明强制可见。
+- **负面**：短期开发效率下降（每里程碑 +15–30 min 对齐确认，PHASE COMPLETE +30–60 min 对齐表）；Opus 子代理审计为强约束，小幅增加模型路由成本。
+- **长期收益 >> 短期成本**：本次 REGRESSION 单次成本约 26 小时，若每三个里程碑需一次类似补齐，规模放大 3–5 倍；本协议把成本前置摊平。
+
+---
+
+## ADR-046 图片治理 schema 契约（IMG-01）
+
+- **状态**：已接受
+- **日期**：2026-04-20
+- **决策者**：arch-reviewer（claude-opus-4-6）
+- **执行模型**：claude-sonnet-4-6（主循环）+ arch-reviewer（claude-opus-4-6）子代理
+
+### 背景
+
+Resovo 当前图片字段仅有 `media_catalog.cover_url`（P0 竖版）与 `media_catalog.backdrop_url`（P1 横版，META-06）。REGRESSION 阶段（ADR-037）已引入 SafeImage + FallbackCover + image-loader 四级降级链，但缺少服务端提供的 `blurhash / primaryColor / governance status` 输入。IMG-01 从 DB 侧补齐契约，使 FallbackCover 可使用 blurhash 占位、前台可按 status 判断是否降级到保底图。
+
+### 决策点
+
+**D1 — status 枚举存储**：TEXT + CHECK CONSTRAINT（与 `review_status/visibility_status/douban_status` 现有惯例一致；PG ENUM TYPE 扩展需 ALTER TYPE，运维风险高）
+
+**D2 — `broken_image_events` 去重约束**：`UNIQUE (video_id, image_kind, url_hash_prefix, bucket_start)`（含 video_id，避免同 URL 跨多视频引用时事件错误合并；另建二级索引 `(image_kind, url_hash_prefix, bucket_start)` 服务跨视频 CDN 聚合）
+
+**D3 — FK 级联策略**：`ON DELETE CASCADE`（与 `video_sources/subtitles` 子表家族一致；RESTRICT 增加维护摩擦无额外安全收益）
+
+**D4 — `stills_urls/meta` 默认值**：`JSONB NOT NULL DEFAULT '[]'::jsonb`（空数组 fallback，避免 NULL 引发 jsonb 函数错误；与 `genres/aliases/tags TEXT[] DEFAULT '{}'` 传统一致）
+
+**D5 — VIDEO_FULL_SELECT 扩展**：直接追加 6 列到单一常量（`mc.poster_blurhash/status/backdrop_blurhash/status/logo_url/status`），不新建 VIDEO_IMAGE_SELECT 子集（避免二次往返，维持"JOIN mc 单次取全"模式）
+
+**D6 — VideoCard 图片字段**：仅新增 `posterBlurhash? + posterStatus?`（列表卡只渲染竖封面；backdrop/logo 不进 VideoCard）
+
+### 结论
+
+Migration 048 落实六项约束后可直接执行。后续 M5 若列表卡需要 logo 叠放，需写独立 ADR 扩展 VideoCard 契约。
+
+---
+
+## ADR-047 — SafeImage/FallbackCover 最终契约（IMG-03.5）
+
+- **状态**：已接受
+- **日期**：2026-04-20
+- **决策者**：arch-reviewer（claude-opus-4-6 子代理）
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **关联任务**：IMG-03.5
+- **上游 ADR**：ADR-045（初始契约）
+
+### 背景
+
+ADR-045 建立了 SafeImage/FallbackCover 的基础契约，但缺少：空 src 语义澄清、MediaAspect 类型安全、seed 确定性渐变、品牌角标 CSS 变量注入、cloudflareLoader 实现、onLoadFail 统一回调签名。IMG-03.5 由 arch-reviewer Opus 子代理设计契约后补齐实现。
+
+### 关键决策
+
+**D1 — 空 src 静默降级**：`src=undefined/null/''` 时直接渲染 FallbackCover，不触发 `onLoadFail`（区别于网络错误）。空 src 是已知预期状态，不应触发上报链路。
+
+**D2 — MediaAspect 类型**：`'2:3' | '16:9' | '1:1' | '5:6' | '21:9'`，替代裸字符串 aspectRatio；原 `aspectRatio?: string` 保留为 backward-compat 降级。
+
+**D3 — onLoadFail 回调**：`(payload: { src, reason: 'network'|'decode' }) => void`，替代 `onLoadError`；旧签名 `onLoadError` 保留 deprecated 标注，网络错误时两者同时触发。
+
+**D4 — seed → DJB2 → CSS var**：`hashSeed(seed) % 6` → `var(--fallback-gradient-{idx})`；6 个变量在 globals.css `:root` 中定义（使用现有 token 的渐变组合）；无 JS 颜色值硬编码。
+
+**D5 — 品牌角标 CSS 变量**：`--brand-logo-mono-url: none` + `--brand-initial: 'R'` 在 `:root` 设默认值；`.fallback-cover__brand::before { content: var(--brand-initial, ''); }` 在 globals.css 定义；FallbackCover 保持 RSC（无 'use client'），不读 JS-level Brand 状态。Brand TS 类型不扩展。
+
+**D6 — cloudflareLoader**：URL 格式 `https://imagedelivery.net/{ACCOUNT_HASH}/{imageId}/{w,q,f}`；账号 Hash 通过 `IMAGE_LOADER_CF_ACCOUNT_HASH`/`NEXT_PUBLIC_IMAGE_LOADER_CF_ACCOUNT_HASH` 环境变量注入，在调用时（非模块加载时）读取；`getLoader()` 通过 `IMAGE_LOADER`/`NEXT_PUBLIC_IMAGE_LOADER` 选择 passthrough/cloudflare。
+
+**D7 — vitest 别名**：`vitest.config.ts` 新增 smart `@/` 别名（`customResolver` 基于 importer 路径区分 web-next/web），使 web-next 组件测试可在统一 test suite 中运行。
+
+### 后果
+
+- **正面**：FallbackCover 具备结构化内容（title + type badge + brand badge + seed 渐变）；SafeImage 空 src 语义明确；loader 体系可运行时切换。
+- **负面**：FallbackCover 的品牌 logo 图片（`--brand-logo-mono-url`）需由 BrandProvider 在 DOM 注入才能生效；本 ADR 只定义变量约定，BrandProvider 注入为后续任务。
+- **Arch-reviewer 审计**：PASS（claude-opus-4-6，2026-04-20）
+
+---
+
+## ADR-048: 列表→播放器直达路径与卡片交互协议（v1.1）
+
+- **状态**: Accepted
+- **日期**: 2026-04-20
+- **决策者**: arch-reviewer (claude-opus-4-6)
+- **执行模型**: claude-opus-4-6（主循环）
+- **关联 ADR**: ADR-041（GlobalPlayerHost 状态机）/ ADR-042（/watch URL + RoutePlayerSync）/ ADR-044（View Transitions + SharedElement + RouteStack primitives）
+- **关联方案章节**: `docs/frontend_redesign_plan_20260418.md` §9（过渡动效）/ §10（HeroBanner）/ §12（详情页）/ §13（播放器三态）/ §14.1（移动 Tab Bar）/ §15.3-§15.4（Skeleton）/ §16（组件清单）
+- **触发上下文**: M5 页面重置前置决策阶段，补齐方案 §19 五类决策缺口
+- **注**: 补丁文档 `task_queue_patch_m5_card_protocol_20260420_v1_1.md` 中引用为"ADR-046"，因 ADR-046/047 已被 IMG 管线占用，实际编号为 ADR-048
+
+### 1. 背景
+
+方案 `docs/frontend_redesign_plan_20260418.md` §19 将 M5 定义为"页面重塑 4-5 张卡片"，但对以下五类关键交互与视觉决策未下结论，若带着缺口进入执行将复现 REGRESSION 阶段"方案与执行错位"的偏差模式：
+
+1. **列表→播放器直达路径丢失**。ADR-042 锁定了 `/watch/[slug]` URL 保留策略，但 apps/web-next 的 VideoCard 当前仅有"点击卡片→详情页"一条出口。apps/web 时期的"卡片右上角悬浮 ▶ 直达播放"能力在迁移过程中丢失，用户从列表页到达播放器必须经过详情页中转，多一次导航。
+
+2. **卡片内容协议空白**。§16 列出了 VideoCard primitive 但未定义标签体系（生命周期/热度/规格/评分的上限、互斥规则）、文字区字段排布（片名行 + 元信息行）、集数显示规则（连载中 vs 已完结 vs 电影时长）。
+
+3. **多集视频卡无视觉差异化**。series/anime/tvshow 与 movie 共用同一卡片视觉，无法在网格浏览阶段传达"此内容包含多集"的信息。
+
+4. **Tab Bar 与 MiniPlayer 叠加协议缺位**。§14.1 定义了移动端三 Tab 玻璃底栏，§13 定义了 GlobalPlayerHost mini 态，但二者在底部 56px 区域同时渲染时的 z-index、safe-area-inset 吸收责任、动画隔离规则均未声明。
+
+5. **Primitive 激活归属不明**。REGRESSION 阶段产出的 SharedElement（noop）、RouteStack（stub）、PageTransition Sibling variant（noop）需要在 M5 真实实装，但"哪张执行卡负责激活哪个 primitive"未分配，存在多卡抢占或无人实装的风险。
+
+本 ADR 作为 M5 序列的决策锚点，一次性锁定上述五项协议，后续 CARD/PAGE 卡片按本 ADR 约束实施。
+
+### 2. 交互协议 — VideoCard 双出口（路径 B' 定制版）
+
+VideoCard 将卡片可交互面积划分为两个语义区域，各自绑定独立目的地：
+
+**图片区（上半区域）**：点击触发 Fast Takeover（见 §3），导航至 `/watch/[slug]?ep=1`，由 GlobalPlayerHost 接管渲染（ADR-041）。此区域由 `<VideoCard.PosterAction>` 承载，语义为"立即播放"。
+
+**文字区（下半区域）**：点击导航至 `/{type}/[slug]` 详情页，走标准路由跳转。此区域由 `<VideoCard.MetaAction>` 承载，语义为"查看详情"。
+
+**容错区**：图片区与文字区之间的 8px 中轴间隙归属文字区（详情页），因为误触播放的代价（启动播放器 + 消耗带宽）高于误触详情页。
+
+**桌面端增强**：hover 时在图片区中央淡入悬浮 ▶ 播放按钮（规格见 §3），提供视觉提示。
+
+**长按/右键**：移动端长按与桌面端右键触发上下文菜单（收藏/分享/稍后观看）。M5 阶段仅预留事件绑定点与 Props 接口，不实装菜单内容。
+
+**键盘无障碍**：Tab 顺序固定为 PosterAction（播放） → MetaAction（详情），与视觉自上而下的阅读顺序一致。两个 action 各自持有独立 `aria-label`（如 "播放《片名》第一集" / "查看《片名》详情"）。
+
+### 3. 动效规格
+
+#### 3.1 Fast Takeover（新增变体，对应方案 §9.5）
+
+从列表页 VideoCard 图片区直达播放器的过渡动效。总时长移动端 200ms / 桌面端 240ms，easing `cubic-bezier(0.4, 0, 0.2, 1)`。
+
+| 阶段 | 时间占比 | 视觉行为 |
+|------|---------|---------|
+| A（0-60%）| 移动 0-120ms / 桌面 0-144ms | 图片层 scale 1.0 → 1.03；遮罩层 `rgba(0,0,0,0.9)` 从 opacity 0 淡入至 1 |
+| B（60-100%）| 移动 120-200ms / 桌面 144-240ms | 卡片图像 flip 过渡至播放器 poster 位；字幕轨道与播放控件 opacity 0 → 1 淡入 |
+
+`prefers-reduced-motion` 降级：跳过 scale 缩放与 flip 翻转，仅执行 opacity 交叉淡入，时长 120ms。
+
+`playerStore.enter()` 扩展 transition 参数以区分来源：`transition: 'fast-takeover' | 'standard-takeover'`。GlobalPlayerHost 根据此参数选择对应动画序列。
+
+#### 3.2 Standard Takeover（保持不变）
+
+从详情页触发播放器接管的过渡动效，总时长 360ms，规格沿用方案 §9.3 既有定义。`prefers-reduced-motion` 降级为 opacity 200ms 交叉淡入。
+
+#### 3.3 悬浮 ▶ 播放按钮（桌面端）
+
+尺寸 44x44px（满足触控最小目标），居中定位于图片区。视觉：背景 `var(--overlay-heavy)` + `backdrop-filter: blur(8px)`，图标使用 `var(--fg-on-overlay)` 颜色。进入动画 opacity 0 → 1 共 120ms，离开动画 opacity 1 → 0 共 90ms（离开快于进入，减少残影感）。
+
+所有颜色值通过 CSS 变量引用，不硬编码 rgba 数字。`--overlay-heavy` 与 `--fg-on-overlay` 在 design-tokens 中定义，暗色模式自动适配。
+
+### 4. 卡片内容协议
+
+#### 4.1 标签上限与位置
+
+图片区内标签按四象限布局，各象限有独立上限：
+
+- **左上**：文字标签 ≤ 2 个，纵向堆叠（生命周期 + 热度/运营）
+- **右上**：评分标签 ≤ 1 个
+- **右下**：规格图标 ≤ 2 个，横向排列
+
+当多维度标签共存时，按上述上限截断，不换行不溢出。截断优先级：热度/运营先于生命周期被丢弃（生命周期对用户决策价值更高）。
+
+#### 4.2 标签维度与互斥规则
+
+| 维度 | 典型值 | 互斥规则 | 视觉形态 |
+|------|--------|---------|---------|
+| 生命周期 | 新片 / 即将上线 / 连载中 / 已完结 / 下架预警 | 五选一，同一视频只能处于一个生命阶段 | 文字标签，左上角 |
+| 热度/运营 | 热门 / 本周 Top / 独家 / 编辑推荐 | 最多选 1 个，运营类标签由后台手动标注 | 文字标签，左上角 |
+| 规格 | 4K / HDR / 杜比 / 中字 / 多语 | 独立判定，不互斥，但展示上限 2 个 | 图标，右下角 |
+| 评分 | 豆瓣 9.1 / IMDb 8.7 | 独立判定，展示上限 1 个（优先豆瓣） | 数字标签，右上角 |
+
+标签颜色通过 CSS 变量（如 `--tag-lifecycle-bg`, `--tag-hot-bg`）定义，暗色模式下自动切换对应暗色 Token，不硬编码任何颜色值。
+
+#### 4.3 文字区规则
+
+文字区固定两行，确保网格中卡片高度对齐：
+
+- **Line 1 — 片名**：`line-clamp: 1`，字号 14-15px，`font-weight: 600`，颜色 `var(--fg-default)`
+- **Line 2 — 元信息**：字号 12px，`font-weight: 400`，颜色 `var(--fg-muted)`，格式为 `{year} · {type_label} · {episodeInfo}`
+
+episodeInfo 按视频类型差异化：
+- `series` / `anime` / `variety`（综艺）：已完结显示"全 {n} 集"，连载中显示"更新至 {n} 集"
+- `movie`：显示时长如"102 min"
+- `short` / `clip`：省略 episodeInfo 字段，Line 2 以 `{year} · {type_label}` 结尾
+
+年份缺失时该位留空并省略前导分隔符。type_label 使用 i18n key 而非硬编码中文。
+
+#### 4.4 新增维度变更约束
+
+标签维度的新增（如"限免"、"付费"、"VIP"等商业标签）属于架构级变更，必须通过 ADR 流程审批后才能实施，不得直接修改代码添加新维度。原因：标签维度影响后端 schema、前端渲染逻辑、design-tokens 三层，单点修改会导致不一致。
+
+#### 4.5 Skeleton 骨架屏契约
+
+M5 阶段所有新建组件必须同时导出 `.Skeleton` 子组件（如 `VideoCard.Skeleton`、`HeroBanner.Skeleton`），作为数据加载中的占位渲染。
+
+**Skeleton primitive**：通用骨架屏原子组件 `<Skeleton>`，支持三种形态：
+- `rect`：矩形占位，可指定 width/height/borderRadius
+- `circle`：圆形占位，指定 diameter
+- `text`：文字行占位，可指定行数与行高
+
+Shimmer 动画使用 CSS 变量定义底色与高光色（浅色模式 `var(--skeleton-base)` / `var(--skeleton-highlight)`，暗色模式对称 Token），1.5s 无限循环。
+
+**三档触发门槛**：
+- 数据在 300ms 内到达：不展示 Skeleton（避免闪烁）
+- 300ms - 1000ms：展示 Skeleton
+- 超过 1000ms：展示 Skeleton + 顶部细进度条
+
+**像素级匹配要求**：每个 `.Skeleton` 子组件的外部尺寸（width, height, margin, padding）必须与对应实际组件精确一致，防止数据到达后产生 layout shift。此项为 AI-CHECK 六问强制检查项 — M5 任何 PR 中新增组件未导出 `.Skeleton` 或 Skeleton 尺寸不匹配，直接判定 FAIL。
+
+### 5. 多集视频卡视觉 — StackedPosterFrame
+
+#### 5.1 触发条件
+
+当 `video.type` 属于 `{'series', 'anime', 'variety'}` 时，VideoCard 的图片区使用 `<StackedPosterFrame>` 渲染伪堆叠效果，暗示内容包含多集。`movie`、`short`、`clip` 类型保持单卡片视觉，不渲染堆叠。
+
+> **注**：VideoType 域使用 `variety`（综艺），URL 路径使用 `tvshow`（`video-route.ts` ADR-042 映射）。本 ADR 以域值为准。
+
+#### 5.2 静置态 — 方案 A（阴影暗示）
+
+通过 `box-shadow` 模拟两张底层卡片错位堆叠的视觉效果，不增加实际 DOM 节点：
+
+```css
+.stacked-poster {
+  box-shadow:
+    3px -2px 0 0 color-mix(in oklch, var(--surface-2) 60%, transparent),
+    6px -4px 0 0 color-mix(in oklch, var(--surface-2) 30%, transparent),
+    0 4px 12px var(--shadow-card-rest);
+}
+```
+
+所有颜色引用 CSS 变量：`--surface-2` 为卡片表面色（暗色模式自动切换），`--shadow-card-rest` 为静置阴影色。阴影层使用 `color-mix(in oklch, ...)` 确保色彩空间一致性，不使用 rgba 硬编码。
+
+堆叠阴影层标记 `aria-hidden="true"`，不向屏幕阅读器暴露装饰性信息。
+
+#### 5.3 桌面 hover 态时序（总 200ms）
+
+| 阶段 | 时间区间 | 视觉行为 |
+|------|---------|---------|
+| A | 0 - 80ms | 主卡 `scale(1.0 → 1.02)`；底部阴影 `--shadow-card-rest` → `--shadow-card-hover`（加深） |
+| B | 80 - 160ms | 第一层堆叠阴影偏移扩展至 `6px / -4px`，不透明度提升至 0.5 |
+| C | 160 - 200ms | 第二层堆叠阴影偏移扩展至 `10px / -6px`，不透明度提升至 0.25；悬浮 ▶ 播放按钮同步淡入 |
+
+三阶段使用 CSS `@keyframes` 配合 `animation-delay` 实现渐进展开效果。easing 统一为 `cubic-bezier(0.4, 0, 0.2, 1)`。
+
+#### 5.4 reduced motion 降级
+
+跳过 scale 缩放与分阶段阴影动画，hover 时直接切换至最终阴影状态（无过渡），即 `transition: none`。确保无运动障碍用户仍可感知 hover 反馈（通过阴影变化而非动画）。
+
+### 6. 组件边界
+
+M5 卡片相关组件拆分如下，职责单一，不交叉：
+
+**`<VideoCard>`** — 复合容器组件，渲染为 `<article>` 语义元素。内部编排 PosterAction、MetaAction、TagLayer、StackedPosterFrame。不包含业务逻辑（数据获取、路由构建由调用方传入）。
+
+- **`<VideoCard.PosterAction>`** — 独立 `<button>` 元素，占据图片区域。点击触发 Fast Takeover，调用 `playerStore.enter({ slug, episode: 1, transition: 'fast-takeover' })`。持有独立 `aria-label`。
+- **`<VideoCard.MetaAction>`** — 独立 `<Link>` 元素（Next.js Link），占据文字区域。href 指向 `/{type}/[slug]` 详情页。持有独立 `aria-label`。
+- **`<VideoCard.Skeleton>`** — 骨架屏变体，像素级匹配 VideoCard 实际尺寸。
+
+**`<TagLayer>`** — 标签渲染层 primitive。接收结构化标签数据（生命周期、热度、规格、评分），按 §4.1 四象限规则渲染。不关心标签来源与计算逻辑。
+
+**`<StackedPosterFrame>`** — 多集堆叠视觉 primitive。接收 `isMultiEpisode: boolean` 控制堆叠渲染。内部管理 box-shadow 与 hover 时序动画。非多集类型时渲染为普通容器（无阴影）。
+
+**`<Skeleton>`** — 通用骨架屏 primitive。Props: `shape: 'rect' | 'circle' | 'text'`、`width`、`height`、`delay?: number`。被所有 `.Skeleton` 子组件内部消费。
+
+### 7. 验收清单
+
+以下为 M5 CARD/PAGE 阶段所有涉及卡片交互的 PR 必须通过的门禁项：
+
+- [ ] **a11y — 独立 aria-label**：PosterAction 与 MetaAction 各自持有描述性 `aria-label`，不共用父级标签
+- [ ] **a11y — 装饰隐藏**：StackedPosterFrame 的堆叠阴影层标记 `aria-hidden="true"`
+- [ ] **reduced motion — Fast Takeover**：`prefers-reduced-motion: reduce` 时降级为 opacity 120ms 交叉淡入
+- [ ] **reduced motion — Standard Takeover**：降级为 opacity 200ms 交叉淡入
+- [ ] **reduced motion — 堆叠 hover**：跳过 scale 与分阶段动画，仅切换最终阴影状态
+- [ ] **暗色模式**：所有视觉属性（颜色、阴影、标签背景）通过 CSS 变量引用 design-tokens，不出现 `#hex`、`rgb()`、`rgba()` 硬编码值
+- [ ] **容器查询**：桌面端 vs 移动端的布局判定使用 `@container` 查询（基于父容器宽度），不使用 `@media` viewport 断点
+- [ ] **键盘 Tab 顺序**：Tab 焦点依次经过 PosterAction → MetaAction，与 DOM 顺序一致
+- [ ] **Skeleton 导出**：每个新建组件必须导出 `.Skeleton` 子组件
+- [ ] **Skeleton 尺寸匹配**：`.Skeleton` 外部尺寸与实际组件像素级一致，CLS 为 0
+
+### 8. Tab Bar 与 MiniPlayer 叠加协议
+
+#### 8.1 布局规则
+
+移动端底部同时存在 Tab Bar 与 MiniPlayer（当有播放中内容时），二者的空间分配协议如下：
+
+- **Tab Bar**：固定定位底部，高度 56px，`z-index: var(--z-tabbar)` (值 40)。Tab Bar 自身通过 `padding-bottom: env(safe-area-inset-bottom)` 吸收 iPhone 等设备的底部安全区，实际占据高度为 `56px + safe-area-inset`。
+- **MiniPlayer mini 态**：紧贴 Tab Bar 顶部，`z-index: var(--z-mini-player)` (值 50)，`bottom: calc(56px + env(safe-area-inset-bottom))`。MiniPlayer 不重复声明 `env(safe-area-inset-bottom)` 作为自身 padding — safe-area 吸收责任归且仅归 Tab Bar。
+- **页面内容区**：底部设置 `padding-bottom: calc(56px + env(safe-area-inset-bottom))` 避让 Tab Bar，确保最末内容不被遮盖。
+
+#### 8.2 交互隔离
+
+Tab Bar 与 MiniPlayer 的交互动效各自独立，互不触发：
+
+- Tab 切换时执行 180ms 下划线滑动动效，此过程不触发 MiniPlayer 的 FLIP 计算
+- MiniPlayer 在 full 态与 mini 态之间切换时，Tab Bar 保持可见且不参与动画（full 态全屏遮盖时 Tab Bar 自然被覆盖，但不执行隐藏/显示逻辑）
+- 路由切换时 Tab Bar 的 active 指示器随当前路由更新；MiniPlayer 不卸载不重挂（遵循 ADR-042 RoutePlayerSync 协议，确保断点续播不中断）
+
+#### 8.3 z-index 全站层级表（M5 治理）
+
+M5 阶段统一治理全站 z-index，所有层级通过 CSS 变量声明，禁止在组件中使用裸数字：
+
+```
+变量名                              值    用途
+--z-full-player                     70    GlobalPlayerHost full 态（含影院模式 CinemaMode overlay z:1）
+--z-mini-player                     50    GlobalPlayerHost mini 态
+--z-tabbar                          40    移动端 Tab Bar
+--z-modal                           30    Modal 对话框 / 上下文菜单 / ConfirmReplaceDialog
+--z-header                          20    Header（scroll-collapsed 收缩态）
+--z-mega-menu                       15    MegaMenu 展开面板
+--z-content                          0    默认内容层
+```
+
+> **实装备注**：变量名以 `globals.css` 实装为准（`--z-tabbar`、`--z-mini-player`、`--z-full-player`），ADR §8.1-§8.2 文本中的 `--z-tab-bar`、`--z-player-mini` 等旧写法在本次 M5-CLOSE-01 修订中已统一为上表命名。CinemaMode overlay 位于 full-player 容器内部（`z-index:1`），不占用独立全局层。
+
+层级变量在 `globals.css` 的 `:root` 中统一定义。新增层级必须在本表注册并更新 ADR，不得跳号或在组件内自行定义 z-index 数值。
+
+#### 8.4 Safe Area 分工协议
+
+safe-area-inset 的吸收遵循"单一责任"原则，避免重复叠加：
+
+| 组件 | safe-area-inset-bottom 处理方式 |
+|------|-------------------------------|
+| Tab Bar | `padding-bottom: env(safe-area-inset-bottom)` — 作为唯一吸收方 |
+| MiniPlayer | `bottom: calc(56px + env(safe-area-inset-bottom))` — 引用 Tab Bar 总高度定位，不自行吸收 inset |
+| 页面内容区 | `padding-bottom: calc(56px + env(safe-area-inset-bottom))` — 避让 Tab Bar 总高度 |
+
+56px 应通过 CSS 变量 `var(--tab-bar-height)` 引用，不硬编码数字。
+
+#### 8.5 反例（禁止实现）
+
+- **禁止** MiniPlayer 使用硬编码 `bottom: 72px` — 必须引用 `calc(var(--tab-bar-height) + env(safe-area-inset-bottom))`
+- **禁止** Tab Bar 与 MiniPlayer 同时声明 `padding-bottom: env(safe-area-inset-bottom)` — safe-area 仅由 Tab Bar 吸收一次
+- **禁止** 路由切换过程中先卸载 MiniPlayer 再重新挂载 — 破坏 FLIP 动画连续性与断点续播（违反 ADR-042）
+- **禁止** z-index 使用裸数字（如 `z-index: 50`）而非 CSS 变量（如 `z-index: var(--z-player-mini)`）
+
+### 后果
+
+**正面收益**：
+- VideoCard 双出口恢复了从列表页直达播放器的能力，用户省去"列表 → 详情 → 播放"的中间跳转，核心路径缩短一步
+- 卡片内容协议统一了标签体系与文字区规则，防止各页面（首页/分类/搜索）的卡片实现分叉
+- StackedPosterFrame 为多集内容提供即时视觉辨识，无额外 DOM 开销（纯 CSS 实现）
+- z-index 全站治理表消除了 M5 多组件并发实装时的层叠冲突风险
+- Skeleton 契约前置，避免组件上线后再补骨架屏导致 layout shift 回归
+
+**负面成本**：
+- VideoCard 从单入口变为双入口，复杂度增加（两个独立 action + 容错区判定），测试矩阵翻倍
+- Fast Takeover 动效需要与 `playerStore.enter()` 深度协调，增加 GlobalPlayerHost 的条件分支
+- §8 的 z-index 层级表为全站约束，后续任何涉及定位层叠的开发都必须先查表再实施，流程摩擦增加
+
+**风险**：
+- Fast Takeover 的 200ms 时间窗较短，低端移动设备可能无法在此窗口内完成图片到播放器 poster 的 flip 过渡，需在实装阶段（M5-CARD-CTA-01）做真机性能验证，必要时延长至 280ms
+- `color-mix(in oklch, ...)` 的浏览器兼容性需确认（Chrome 111+, Safari 16.2+, Firefox 113+），若 baseline 不满足需准备 fallback 方案
+- 上下文菜单（长按/右键）M5 仅预留不实装，但 PosterAction 的 `onContextMenu` 事件拦截可能与浏览器默认行为冲突，需在 M5-CARD-CTA-01 验证
+
+**Arch-reviewer 审计**：PASS（claude-opus-4-6，2026-04-21）
+
+## ADR-049 — Admin 有序列表组件选型（@dnd-kit）
+
+**日期**：2026-04-21
+**状态**：已接受
+**背景**：M5-ADMIN-BANNER-01 需要 Banner 后台拖拽排序功能；项目此前无任何拖拽库依赖，需首次引入并锁定边界。
+
+**决策**：
+- ✅ 引入 `@dnd-kit/core` + `@dnd-kit/sortable`（两包合计约 14 KB，tree-shakeable）于 `apps/server`
+- ✅ 封装为 admin primitive：`apps/server/src/components/admin/shared/SortableList.tsx`
+- ✅ 所有有序列表模块必须消费 `SortableList`，不得直接使用 `@dnd-kit` 原语
+- ❌ 禁止引入 `@dnd-kit/modifiers`（非必需额外包）
+- ❌ 禁止其他非官方 @dnd-kit 生态包
+- ❌ 禁止在 `apps/web-next`、`apps/api`、`packages/player*` 中引入 @dnd-kit（admin 独占）
+
+**理由**：
+- @dnd-kit 相比 react-beautiful-dnd 和 react-dnd 更轻量、无 React context 全局污染、支持 tree-shaking
+- 封装 SortableList primitive 隔离外部依赖升级影响，确保后续 Banner/CrawlerSite/源排序等模块统一入口
+- admin 独占限制防止 @dnd-kit 扩散到前台消费页（避免首屏 bundle 增大）
+
+**影响**：
+- `apps/server/package.json` 新增 `@dnd-kit/core ^6.3.1` + `@dnd-kit/sortable ^8.0.0`
+- `docs/rules/admin-module-template.md` 追加有序列表章节
+- `SortableList` 作为新 admin shared primitive 维护在 CHG 序列中，不受业务迭代影响
+
+---
+
+## ADR-037 迭代 — 真·PHASE COMPLETE 门禁更新（M5 闭环）
+
+- **日期**：2026-04-21
+- **状态**：已采纳（迭代条款附加于 ADR-037 主体后，不重编号）
+- **关联任务**：M5-CLOSE-02
+- **主循环**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-6) — 独立审计
+- **关联文档**：`docs/milestone_alignment_m5_final_20260421.md`、`docs/milestone_alignment_m5_20260420.md`、`docs/task_queue_patch_m5_cleanup_20260421.md`
+
+### 背景
+
+ADR-037 原条款（2026-04-20 REG-CLOSE-01 起草）约束"未对齐的 exec 里程碑不得标 ✅，必须有 Opus arch-reviewer 子代理审计 PASS"。M5-CLOSE-01（Sonnet 主循环 + Opus 子代理 CONDITIONAL → PASS）执行后，三路独立审计发现结构性偏差（Token 层 4 组缺失 / 组件规格偏离 / 文档签字未填），虽然 CONDITIONAL 条款已形式上满足，但"真·闭环"定义未明确：**CONDITIONAL 补丁完成后是否需要第二次 Opus 审计**。本次 M5-CLEANUP 序列（01/02/03）+ M5-CLOSE-02 闭环给出答案。
+
+### 迭代条款（附加于 ADR-037 §决策 第 4 条之后）
+
+**4a. 真·PHASE COMPLETE 二次审计门槛**：
+
+当 PHASE COMPLETE 一次审计结论为 **CONDITIONAL** 时：
+
+- ✅ 允许：在 task-queue.md 登记 **CONDITIONAL PASS 一次审计签字**（此时方案对齐文档标 "审计挂起"）
+- ❌ 禁止：在 task-queue.md 把该里程碑标 ✅（"一次审计 PASS + 补丁已启动" 不等于里程碑完成）
+- ❌ 禁止：启动下一里程碑任务（M6 取卡须等 M5 真·PHASE COMPLETE）
+- ✅ 必须：启动 CLEANUP 序列补齐 CONDITIONAL 条件；CLEANUP 完成后新开一张 CLOSE-0N 卡（N ≥ 2），由 **Opus 主循环 + Opus arch-reviewer 子代理**对纠偏内容做**二次独立审计**（PASS 条件全部满足方可解除 BLOCKER）
+- ✅ 产出：新起一份 `milestone_alignment_<milestone>_final_<date>.md`（≥ 35 项对齐 + ≥ 18 项红旗 + 二次审计 10 点签字），作为本里程碑的**最终闭环文档**。原一次审计文档保留为"审计挂起"版本，供回溯
+
+**4b. 二次审计必查 10 点模板**（以 M5 为例，其他里程碑按同构替换字段）：
+
+- Token 新增分组在 design-tokens 构建产物中可 grep
+- 组件层无 `var(--foo, non-color-fallback)` 内联 fallback
+- 组件类型签名与方案规格一致
+- 关键组件无硬编码颜色
+- 新增 Token 在 globals.css 中声明
+- 新 ADR 已落盘且 rule 文档已引用
+- 新增单元测试覆盖 ≥ 目标阈值
+- 一次审计挂起的签字行已更新
+- 主序列 + CLEANUP + CLOSE 全部 ✅
+- 关键路径未回退（静态 + e2e 验证）
+
+**4c. 数字口径澄清**：里程碑任务计数以 **task-queue.md 实际行数**为准，规格补丁中 "主序列 N 张" 若与实际不符，写入 final 对齐文档的 "记账偏差（非阻断 WARN）" 章节，不回滚已登记卡片。
+
+### 后果
+
+- **正面**：消除 CONDITIONAL 审计结论与真·闭环之间的模糊带；强制 CLEANUP 完成后二次独立审计，杜绝"一次 PASS 加补丁"式虚假收官
+- **负面**：CONDITIONAL 情形下里程碑关闭延迟约 1-2 个工作日（CLEANUP 序列 + 二次审计成本）；Opus 主循环 + Opus 子代理组合的模型成本增加一次
+- **长期收益 >> 短期成本**：M5 本轮若不强制二次审计，Token 层 4 组缺失 + 组件 0|1 硬签名会带入 M6 导致连锁补齐；前置成本摊平优于事后回滚
+
+### 适用范围
+
+- **溯及既往**：M5 本次即按本条款闭环（已由 M5-CLOSE-02 执行）
+- **未来约束**：M6 及后续里程碑若 PHASE COMPLETE 审计出现 CONDITIONAL，一律按 4a / 4b / 4c 处置
+- **不溯及**：M1-M4 已完成里程碑不追溯
+
+---
+
+## ADR-037 迭代 v2 — 三维闭环（静态审计 / 运行时代理证据 / e2e 框架层兜底）
+
+- **日期**：2026-04-22
+- **状态**：已采纳（v2 条款附加于 §4c 之后，仍不重编号）
+- **关联任务**：M5-CLOSE-03（真·PHASE COMPLETE v2）
+- **主循环**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-6) — 独立审计 `AUDIT RESULT: PASS`
+- **关联文档**：`docs/milestone_alignment_m5_final_v2_20260422.md`（v2 final 对齐表）；~~`docs/milestone_alignment_m5_final_20260421.md`~~（CLOSE-02 后被人工回归否决的历史版本，保留为审计案例）
+
+### 背景
+
+M5-CLOSE-02 在 2026-04-21 以"arch-reviewer 10 点静态审计 PASS"宣告真·PHASE COMPLETE，当日即被 **PC 端人工回归**否决 —— 9 项 UI 运行时缺陷（VideoCard 双出口反转 / 分类页 404 / 播放器弹窗化 / 线路切换重置 / 选项卡不稳 / CinemaMode 尺寸 / 排版 / 搜索只返热门 / 详情选集失效）。根因是 §4b 10 点必查模板**全部为静态检查**（文件存在 / 类型签名 / Token 声明 / 组件 props / docs 签字 / ADR 落盘 / 单测数量 / task-queue 标 ✅ / 关键路径静态代码面），无法验证 UI 运行时行为。CLOSE-03 本次补齐三维闭环，同时在代理证据采集阶段主动发现并修复一个预存 SSR 500 bug（`SearchPage.Skeleton` 在 Next 15 Client Reference 机制下返回 undefined，与 commit 9fcaaf1 的 `VideoDetailClientSkeleton` 同一 pattern 复发）。
+
+### 迭代条款（附加于 §4c 之后）
+
+**4d. 第 11 点必查：浏览器手动验收 + 运行时代理证据**
+
+原 §4b 10 点必查之外强制追加第 11 点：
+
+- **手动验收记录**：里程碑 final 对齐文档必须含「dev server 启动状态」+「关键路径 HTTP 状态码」+「e2e 完整回归数字」三张表作为运行时代理证据（AI 主循环无法操作浏览器时，以 `curl` 探测 + playwright 完整跑为机器可验证子集）
+- **用户二次确认 checklist**：final 对齐文档必须含"用户 PC/移动端真人操作"逐条 checklist，任一未勾 → 签字 CANCELED
+- **e2e 框架层防复发兜底**：每个里程碑的 e2e project 必须有 `response.status < 500` 基线断言（fixture 或全局 hook 形式），捕获 SSR error page 在 browser hydrate 后被"吞掉"的盲区（参考实现 `tests/e2e-next/_fixtures.ts`）
+
+**4e. 新缺陷处理协议**：
+
+CLOSE 阶段的代理证据采集如**发现新运行时缺陷**：
+
+- ✅ 允许：主循环立即修**同一 pattern 的已知问题**（≤ 5 行改动、有先例 commit 可参照），在 final 对齐文档 §"CLOSE 额外发现 + 修复" 登记
+- ❌ 禁止：对复杂或跨模块缺陷擅自修 → 必须写 BLOCKER 到 task-queue.md，由人工决策起 CLEANUP-NN 或回滚
+
+**4f. 签字三维全绿**：
+
+真·PHASE COMPLETE 签字的必要充分条件：
+1. arch-reviewer 11 点 `AUDIT RESULT: PASS`（红线为空；黄线可用书面登记消化）
+2. final 对齐文档 §"浏览器手动验收代理证据" 三张表全绿 + SSR 新缺陷（如有）的 before/after 对比硬证据
+3. 用户二次确认 checklist 全部打勾
+
+任一未达 → CANCELED。
+
+### 后果
+
+- **正面**：消除"静态 PASS 即真·PHASE COMPLETE"的假设；e2e 框架层兜底防止 Playwright `page.goto` 500 后 hydrate 假复苏的盲区；代理证据使 AI 主循环在无浏览器交互能力下仍能机器可验证一致性
+- **负面**：每次 CLOSE 多 5-15 min 代理证据采集 + fixture 维护成本；未来 e2e spec 统一 import `_fixtures` 是约束
+- **长期**：彻底杜绝"CLOSE-02 签字当日被回归否决"的历史重演
+
+### 适用范围
+
+- **溯及既往**：M5 本次即按 v2 条款闭环（由 M5-CLOSE-03 执行）
+- **未来约束**：M6 及后续里程碑所有 PHASE COMPLETE 签字统一走 v2 三维闭环
+- **不溯及**：M1-M4 已完成里程碑不追溯

@@ -89,7 +89,11 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
           error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
         })
       }
-      return reply.send({ data: { id, updated: true } })
+      // ADMIN-14: 响应带 skippedFields，前端据此区分"已保存" vs "被锁未保存"
+      return reply.send({
+        data: { id, updated: true, skippedFields: result.skippedFields },
+        skippedFields: result.skippedFields,
+      })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       return reply.code(500).send({

@@ -1,5 +1,18 @@
 import { defineConfig } from 'vitest/config'
 import path from 'path'
+import fs from 'fs'
+
+function resolveWithExtensions(base: string): string | undefined {
+  const candidates = [
+    base,
+    base + '.ts', base + '.tsx', base + '.js',
+    base + '/index.ts', base + '/index.tsx', base + '/index.js',
+  ]
+  for (const c of candidates) {
+    if (fs.existsSync(c) && fs.statSync(c).isFile()) return c
+  }
+  return undefined
+}
 
 export default defineConfig({
   test: {
@@ -9,6 +22,7 @@ export default defineConfig({
     environmentMatchGlobs: [
       ['tests/unit/components/**', 'jsdom'],  // 组件测试用 jsdom
       ['tests/unit/hooks/**', 'jsdom'],        // hook 测试用 jsdom（依赖 window/sessionStorage）
+      ['tests/unit/web-next/**', 'jsdom'],    // web-next 组件测试
     ],
     setupFiles: ['./tests/helpers/setup.ts'],
     coverage: {
@@ -32,14 +46,39 @@ export default defineConfig({
     hookTimeout: 30000,
   },
   resolve: {
-    alias: {
-      '@/api': path.resolve(__dirname, './apps/api/src'),
-      '@/components/admin': path.resolve(__dirname, './apps/server/src/components/admin'),
-      '@/components/shared': path.resolve(__dirname, './apps/server/src/components/shared'),
-      // server app's @/stores resolves to apps/server/src/stores (not web)
-      '@/stores': path.resolve(__dirname, './apps/server/src/stores'),
-      '@': path.resolve(__dirname, './apps/web/src'),
-    },
+    alias: [
+      { find: '@/api',              replacement: path.resolve(__dirname, './apps/api/src') },
+      { find: '@/components/admin', replacement: path.resolve(__dirname, './apps/server/src/components/admin') },
+      { find: '@/components/shared',replacement: path.resolve(__dirname, './apps/server/src/components/shared') },
+      // @/stores is context-aware: web-next → apps/web-next/src/stores; server/other → apps/server/src/stores
+      {
+        find: /^@\/stores(\/.*)?$/,
+        replacement: '$1',
+        customResolver(replacedId: string, importer: string | undefined) {
+          const isWebNext =
+            importer?.includes('/apps/web-next/') || importer?.includes('/tests/unit/web-next/')
+          const storesBase = isWebNext
+            ? path.resolve(__dirname, './apps/web-next/src/stores')
+            : path.resolve(__dirname, './apps/server/src/stores')
+          const subPath = replacedId.replace(/^\//, '') || 'index'
+          return resolveWithExtensions(path.resolve(storesBase, subPath))
+        },
+      },
+      // Smart @ resolver: web-next source files get apps/web-next/src, others get apps/web/src
+      {
+        find: /^@\/(.*)/,
+        replacement: '$1',
+        customResolver(replacedId: string, importer: string | undefined) {
+          const srcBase =
+            importer?.includes('/apps/web-next/') || importer?.includes('/tests/unit/web-next/')
+              ? path.resolve(__dirname, './apps/web-next/src')
+              : path.resolve(__dirname, './apps/web/src')
+          return resolveWithExtensions(path.resolve(srcBase, replacedId))
+        },
+      },
+      { find: '@resovo/player-core', replacement: path.resolve(__dirname, './packages/player-core/src/index.ts') },
+      { find: '@resovo/types',       replacement: path.resolve(__dirname, './packages/types/src/index.ts') },
+    ],
   },
   // 自动 JSX 转换（React 17+ automatic runtime，组件测试不需要 import React）
   esbuild: {

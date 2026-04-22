@@ -31,7 +31,13 @@ export type VisibilityStatus = 'public' | 'internal' | 'hidden'
 export type DoubanStatus = 'pending' | 'matched' | 'candidate' | 'unmatched'
 /** 源活性批量检验结果 */
 export type SourceCheckStatus = 'pending' | 'ok' | 'partial' | 'all_dead'
-/** VideoGenre — 内容题材（与 VideoType 内容形式严格正交）*/
+/** VideoGenre — 内容题材（与 VideoType 内容形式严格正交）
+ *
+ * 对齐豆瓣视频分类（2026-04-22 META-10 对齐表）：
+ *   豆瓣"动画 / 纪录片 / 短片 / 儿童"由 VideoType 承载，不占 genre；
+ *   豆瓣"同性 / 情色"不纳入枚举，raw 保留至 source_category，审核区人工处理。
+ *   详见 docs/video_type_genre_alignment_20260422.md
+ */
 export type VideoGenre =
   | 'action'       // 动作
   | 'comedy'       // 喜剧
@@ -39,14 +45,19 @@ export type VideoGenre =
   | 'thriller'     // 惊悚
   | 'horror'       // 恐怖
   | 'sci_fi'       // 科幻
-  | 'fantasy'      // 奇幻 / 魔幻
+  | 'fantasy'      // 奇幻 / 魔幻 / 玄幻
   | 'history'      // 历史 / 古装
   | 'crime'        // 犯罪
-  | 'mystery'      // 悬疑
+  | 'mystery'      // 悬疑 / 黑色电影
   | 'war'          // 战争
   | 'family'       // 家庭 / 亲情
   | 'biography'    // 传记 / 人物
-  | 'martial_arts' // 武侠 / 功夫
+  | 'martial_arts' // 武侠 / 功夫（华语扩展）
+  | 'adventure'    // 冒险
+  | 'disaster'     // 灾难
+  | 'musical'      // 歌舞 / 音乐
+  | 'western'      // 西部
+  | 'sport'        // 运动（注意与 VideoType.sports 区分：前者为题材，后者为形式）
   | 'other'        // 其他
 
 export type VideoQuality  = '4K' | '1080P' | '720P' | '480P' | '360P'
@@ -101,6 +112,14 @@ export interface Video {
   sourceCheckStatus: SourceCheckStatus
   /** 元数据完整度评分 0-100 */
   metaScore: number
+  // 图片治理字段（IMG-01，ADR-046）——前台渲染最小集，由 media_catalog JOIN 提供
+  // 字段必须存在（API 响应不省略），值可为 null（尚未治理时）
+  posterBlurhash: string | null
+  posterStatus: string | null
+  backdropBlurhash: string | null
+  backdropStatus: string | null
+  logoUrl: string | null
+  logoStatus: string | null
 }
 
 // ── 视频卡片（列表用，字段较少）────────────────────────────────
@@ -108,8 +127,9 @@ export interface Video {
 export type VideoCard = Pick<
   Video,
   'id' | 'shortId' | 'slug' | 'title' | 'titleEn' |
-  'coverUrl' | 'type' | 'rating' | 'year' | 'status' |
-  'episodeCount' | 'sourceCount'
+  'coverUrl' | 'posterBlurhash' | 'posterStatus' |
+  'type' | 'rating' | 'year' | 'status' |
+  'episodeCount' | 'sourceCount' | 'subtitleLangs'
 >
 
 // ── 播放源 ───────────────────────────────────────────────────────
@@ -173,6 +193,47 @@ export interface TrendingParams {
 
 export interface SourceReportInput {
   reason: 'broken' | 'low_quality' | 'wrong_episode' | 'other'
+}
+
+// ── 图片治理（IMG-01，ADR-046）─────────────────────────────────
+
+export type ImageKind =
+  | 'poster'
+  | 'backdrop'
+  | 'logo'
+  | 'banner_backdrop'
+  | 'stills'
+  | 'thumbnail'
+
+export type ImageStatus = 'ok' | 'missing' | 'broken' | 'low_quality' | 'pending_review'
+
+export interface BrokenImageEvent {
+  id: string
+  videoId: string
+  seasonNumber: number | null
+  episodeNumber: number | null
+  imageKind: ImageKind
+  url: string
+  urlHashPrefix: string    // sha256(url) 前 16 位十六进制
+  bucketStart: string      // ISO 8601，floor(time, 10min)
+  eventType: string
+  firstSeenAt: string
+  lastSeenAt: string
+  occurrenceCount: number
+  resolvedAt: string | null
+  resolutionNote: string | null
+}
+
+export interface VideoEpisodeImage {
+  id: string
+  videoId: string
+  seasonNumber: number
+  episodeNumber: number
+  thumbnailUrl: string | null
+  thumbnailBlurhash: string | null
+  thumbnailStatus: ImageStatus
+  createdAt: string
+  updatedAt: string
 }
 
 export interface SubtitleUploadInput {

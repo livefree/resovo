@@ -7,7 +7,7 @@ import { DesignTokensView } from '@/components/admin/design-tokens/DesignTokensV
 
 export const metadata = { title: '设计 Token — 管理后台' }
 
-const WEB_BASE_URL = process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3000'
+const WEB_BASE_URL = process.env.NEXT_PUBLIC_WEB_URL ?? 'http://localhost:3002'
 
 export default function DesignTokensPage() {
   return (

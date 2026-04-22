@@ -139,6 +139,77 @@ describe('replaceSourcesForSite — 全量替换策略', () => {
     expect((insertCall![0] as string)).toContain('deleted_at = NULL')
   })
 
+  it('CRAWLER-05: SELECT 使用 COALESCE(source_site_key, v.site_key) 而非 source_name 匹配站点', async () => {
+    const { replaceSourcesForSite } = await import('@/api/db/queries/sources')
+
+    mockClient.query
+      .mockResolvedValueOnce({ rows: [] })                    // BEGIN
+      .mockResolvedValueOnce({ rows: [] })                    // SELECT existing
+      .mockResolvedValueOnce({ rows: [] })                    // COMMIT
+
+    await replaceSourcesForSite(
+      mockDb as unknown as import('pg').Pool,
+      'vid-1',
+      'bfzym3u8',
+      [],
+    )
+
+    const selectCall = mockClient.query.mock.calls.find(
+      (call: unknown[]) =>
+        typeof call[0] === 'string' &&
+        (call[0] as string).toUpperCase().includes('SELECT'),
+    )
+    expect(selectCall).toBeTruthy()
+    const sql = selectCall![0] as string
+    // 必须使用行级 source_site_key（回落到 v.site_key），且 JOIN videos
+    expect(sql).toContain('COALESCE(s.source_site_key, v.site_key)')
+    expect(sql).toMatch(/LEFT JOIN videos/i)
+    // 绝不能再用 source_name 做站点匹配（防回归）
+    expect(sql).not.toMatch(/AND\s+s?\.?source_name\s*=\s*\$2/i)
+    expect(sql).not.toMatch(/AND\s+source_name\s*=/)
+    // 传入的 siteKey 应作为 $2 参数
+    expect(selectCall![1]).toEqual(['vid-1', 'bfzym3u8'])
+  })
+
+  it('CRAWLER-05: 不同站点同 source_name 不误删（跨站聚合视频隔离）', async () => {
+    // 场景：videoId=vid-1 同时聚合站 bfzym3u8 与 lzzy，两站都有"线路1"
+    // 重采 bfzym3u8 时，SELECT 只应返回 source_site_key='bfzym3u8' 的行，
+    // lzzy 的"线路1"行 source_site_key='lzzy'，被 WHERE 过滤，不会进入 toRemoveIds
+    const { replaceSourcesForSite } = await import('@/api/db/queries/sources')
+
+    // SQL WHERE 已加 COALESCE(source_site_key, v.site_key)='bfzym3u8'，
+    // mock 层只返回 bfzym3u8 的既有行，模拟真实 DB 行为
+    mockClient.query
+      .mockResolvedValueOnce({ rows: [] })                    // BEGIN
+      .mockResolvedValueOnce({
+        rows: [
+          { id: 'src-bfzym3u8-line1', source_url: 'https://bfzym3u8.example/ep1.mp4' },
+        ],
+      })                                                       // SELECT existing（仅 bfzym3u8）
+      .mockResolvedValueOnce({ rows: [] })                    // COMMIT
+
+    const stats = await replaceSourcesForSite(
+      mockDb as unknown as import('pg').Pool,
+      'vid-1',
+      'bfzym3u8',
+      [
+        // 新批次同站点，URL 不变 → keep
+        makeSrc('https://bfzym3u8.example/ep1.mp4', 1),
+      ],
+    )
+
+    expect(stats.sourcesKept).toBe(1)
+    expect(stats.sourcesRemoved).toBe(0)
+    expect(stats.sourcesAdded).toBe(0)
+    // 未触发 DELETE（lzzy 的"线路1"不会出现在 SELECT 结果 → 不误删）
+    const deleteCall = mockClient.query.mock.calls.find(
+      (call: unknown[]) =>
+        typeof call[0] === 'string' &&
+        (call[0] as string).toUpperCase().startsWith('UPDATE VIDEO_SOURCES SET DELETED_AT'),
+    )
+    expect(deleteCall).toBeFalsy()
+  })
+
   it('事务回滚：INSERT 失败时 ROLLBACK 被调用', async () => {
     const { replaceSourcesForSite } = await import('@/api/db/queries/sources')
 

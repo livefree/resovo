@@ -17,7 +17,7 @@ const TYPE_OPTIONS = [
   { value: 'movie',   label: '电影' },
   { value: 'series',  label: '剧集' },
   { value: 'anime',   label: '动漫' },
-  { value: 'variety', label: '综艺' },
+  { value: 'tvshow', label: '综艺' },
   { value: 'documentary', label: '纪录片' },
   { value: 'short', label: '短剧' },
   { value: 'sports', label: '体育' },

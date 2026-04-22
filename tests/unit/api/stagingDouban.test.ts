@@ -19,7 +19,8 @@ vi.mock('@/api/db/queries/mediaCatalog', () => ({
 
 vi.mock('@/api/services/MediaCatalogService', () => ({
   MediaCatalogService: vi.fn().mockImplementation(() => ({
-    safeUpdate: vi.fn().mockResolvedValue(true),
+    // ADMIN-14: safeUpdate 返回 { updated, skippedFields }
+    safeUpdate: vi.fn().mockResolvedValue({ updated: { id: 'catalog-1' }, skippedFields: [] }),
   })),
 }))
 
@@ -222,9 +223,9 @@ describe('DoubanService.confirmSubject()', () => {
   it('catalog safeUpdate 被拒绝（locked）→ updated=false', async () => {
     vi.mocked(videoQueries.findAdminVideoById).mockResolvedValue(makeVideo() as never)
     vi.mocked(getDoubanDetailRich).mockResolvedValue(makeDetail() as never)
-    // 让本次实例化的 safeUpdate 返回 false
+    // ADMIN-14: 让本次实例化的 safeUpdate 返回 { updated: null, skippedFields: [...] }
     vi.mocked(MediaCatalogService).mockImplementationOnce(() => ({
-      safeUpdate: vi.fn().mockResolvedValue(false),
+      safeUpdate: vi.fn().mockResolvedValue({ updated: null, skippedFields: ['doubanId'] }),
     }))
 
     const result = await service.confirmSubject('v1', 'db123')
