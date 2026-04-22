@@ -13,8 +13,7 @@
 
 ---
 
-<!-- 2026-04-22 SEQ-20260422-M6-CDN 进度：3/6 -->
-<!-- CDN-01 4afb140 ✅ / CDN-02 9510d7f ✅ / IMG-06 7aa02d2 + P1/P2 fixup 待 commit -->
-<!-- P1+P2 4 发现修复：R2_PUBLIC_BASE_URL + LocalFS fallback + console.warn + loader 集成验证 -->
-<!-- 下一张 IMG-07（VideoImageSection UI 接入，M ~120 min） -->
+<!-- 2026-04-22 SEQ-20260422-M6-CDN 进度：4/6 -->
+<!-- CDN-01 4afb140 ✅ / CDN-02 9510d7f ✅ / IMG-06 7aa02d2 + aef993c fixup ✅ / IMG-07 ✅ 待 commit -->
+<!-- 下一张 IMG-08（BannerForm UI 接入，S ~60 min） -->
 <!-- 单任务工作台稳定态：空 -->

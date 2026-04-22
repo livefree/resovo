@@ -9787,11 +9787,15 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 上传成功后异步入队 `blurhash_and_color_extract` job（视频图用 kind 关联 videoId）
      - typecheck / lint / unit ✅
 
-4. IMG-07 — `VideoImageSection` UI 改造（上传 + 预览 + 健康联动）（状态：⬜ 未开始）
+4. IMG-07 — `VideoImageSection` UI 改造（上传 + 预览 + 健康联动）（状态：✅ 已完成 2026-04-22）
    - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：无（纯前端 UI，非强制）
    - 建议模型：sonnet
    - 规模：M（~120 min）
-   - 依赖：IMG-06 ✅
+   - 依赖：IMG-06 ✅（7aa02d2 + aef993c）
    - 文件范围：
      - `apps/server/src/components/admin/videos/VideoImageSection.tsx`（4 kind 均加"上传新图"按钮 + 进度 + 预览放大 + 上传完自动刷 URL + 触发健康检查）
      - 可能新增 `apps/server/src/components/admin/videos/useImageUpload.ts`（hook）

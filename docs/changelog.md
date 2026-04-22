@@ -8951,3 +8951,39 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **关联 commit 对应**：
   - `7aa02d2` IMG-06 初版
   - 本次 commit IMG-06 P1+P2 fixup
+
+---
+
+## [IMG-07] VideoImageSection UI 接入上传 + 缩略图预览 + 健康联动
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-M6-CDN（M6 第 4 张）
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（纯前端 UI，非强制触发）
+- **背景**：后台 VideoImageSection 4 kind 之前只能"改 URL"（外链），无上传、无缩略图预览。IMG-06 已就位 `POST /admin/media/images` + `apiClient.upload` multipart 能力；本卡接入 UI
+- **实现**（`apps/server/src/components/admin/videos/VideoImageSection.tsx`）：
+  - 每行增加"上传新图"主按钮 + 隐藏 `<input type="file" accept="image/*">`
+  - `handleFileChange` 客户端前置校验（5MB / mimetype 白名单），绕过无效 multipart 触发
+  - `apiClient.upload('/admin/media/images', FormData)` 传 `file + ownerType='video' + ownerId + kind`
+  - 成功 → 复用现有 `onSaved(kind, url)` 触发 pending_review 轮询（MediaImageService 内部已写库 + 入队，UI 不再单独调 PUT）
+  - 错误友好提示：413/415/503/404 → 本地化消息（超过 5MB / 仅支持... / 服务端存储未配置 / 视频不存在）
+  - 保留"改 URL"兜底按钮（外链场景仍可用）
+- **预览增强**：
+  - 有 url 时渲染缩略图 `<img>` 替代纯 URL 文本
+  - 按 kind 设置 aspect / height / object-fit：poster 2:3/120px cover，backdrop+banner_backdrop 16:9/80px cover，logo 1:1/64px contain
+  - `<img onError>` 触发降级：隐藏图 + 显示"⚠ 预览加载失败" + URL 文本
+- **不在范围**：
+  - 拖拽上传 / 批量上传 / 裁切 / 进度条（fetch API 限制）：未来任务
+  - `<ImageUploadField>` 共享组件抽取：条件 ADMIN-17（等 IMG-08 完成后评估重复度）
+- **单测**：`tests/unit/components/admin/videos/VideoImageSection.test.tsx`（+13 case）
+  - 渲染：4 kind 均有"上传新图" + "改 URL"按钮；有/无 url 时缩略图显示状态
+  - 上传流：选文件 → multipart 字段正确（file/ownerType/ownerId/kind）；成功后乐观更新 URL + pending_review 状态
+  - 前置校验：5MB 超限 / mimetype 非白名单 → 不调 upload + 错误文案
+  - 服务端错误映射：413 → 超过 5MB；415 → 仅支持...
+  - 上传中按钮 disabled + "上传中…"
+  - 缩略图破图：onError → 降级为"⚠ 预览加载失败" + URL 文本
+  - 改 URL 兜底：PUT `/admin/videos/:id/images` 调用路径 + payload 正确
+- **未引入新 npm 依赖**（`apiClient.upload` 已在 SUBTITLE-01 实装）
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1532/1532 ✅（+13）
+- **关联**：IMG-06（API 契约） / ADR-046 / `image_pipeline_plan §10.2` §4（治理开启）
+- **下游**：IMG-08 BannerForm 上传流同构改造；ADMIN-17 共享组件评估（等 IMG-08 完成看重复度）
