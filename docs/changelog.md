@@ -8817,3 +8817,40 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **质量门禁**：typecheck ✅ / lint ✅ / unit 1461/1461 ✅（+8）/ build ✅
 - **关联**：`image_pipeline_plan §10.2` / `frontend_redesign_plan §19 M6` / ADR-050 / IMG-M4
 - **下游**：CDN-02 SafeImage mode 开关（将 next 模式 demo 接到 /dev/fallback-preview）
+
+---
+
+## [CDN-02] SafeImage mode='lazy' | 'next' 开关 + /dev/fallback-preview 预览
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-M6-CDN（M6 第 2 张）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：arch-reviewer (claude-opus-4-7) — AUDIT RESULT: NEED_FIX，4 必改点全部采纳后实施
+- **背景**：CDN-01 接入 next/image 的 custom loader，但全仓零 `next/image` 消费者，相当于死代码。CDN-02 在 SafeImage 加 mode 开关提供运行时验证面，并在 `/dev/fallback-preview` 加双模式对比 demo 作为未来 M6-CLOSE-01 的代理证据面
+- **arch-reviewer 必改点（全部采纳）**：
+  1. **mode 枚举命名**：`'img' | 'next'` → **`'lazy' | 'next'`**（原 `'img'` 低估了默认 LazyImage 路径的 IntersectionObserver + blurHash 语义）；导出命名类型 `SafeImageMode`
+  2. **`SafeImageNext` 必须用 `<Image fill>` + 外层 aspect wrapper**（消费者依赖 CSS aspect-ratio 做响应式容器；不用 fill 会在 mode 切换后布局跳变）
+  3. **`imageLoader` prop 在 next 模式下不得静默忽略**（dev 环境 `process.stderr.write` warn，生产静默；避免行为漂移）
+  4. **`/dev/fallback-preview` 颜色必须用 CSS token**（已合规：切换分区背景用 `var(--bg-surface-raised)` / `var(--state-info-bg)`）
+- **arch-reviewer 建议点（全部采纳）**：
+  - `blurDataURL?: string` 作为新 prop 预留，next 模式下消费 `placeholder="blur"`；`blurHash` 在 next 模式下忽略（未来全站切 next 时由服务端预生成 blurDataURL）
+  - `SafeImageProps` 显式加 `'data-testid'?: string`（补既有历史类型漏洞）
+  - `SafeImageNext.tsx` JSDoc 标注"过渡期试点，CDN-03 合并后简化"
+- **实现**：
+  - `types.ts`：新增 `SafeImageMode` 命名类型；`SafeImageProps` 新增 `mode?` / `blurDataURL?` / `sizes?` / `'data-testid'?`
+  - `SafeImage.tsx`：顶层按 `mode` 分派；重构为 `SafeImage` 派发 + `SafeImageLazy` 内部组件（保持既有 LazyImage 路径）
+  - 新增 `SafeImageNext.tsx`：`<Image fill sizes>` + 外层 `<div>` 含 `aspectRatio` + FallbackCover 错误降级 + `onError` → `onLoadFail({reason: 'network'})` 对齐
+  - `index.ts`：导出 `SafeImageNext` + `SafeImageMode`
+  - `/dev/fallback-preview/page.tsx`：新增 SafeImage 双模式对比分区（picsum 演示源 + testid: `cdn02-demo-lazy` / `cdn02-demo-next`）
+- **测试**：新增 `tests/unit/components/media/SafeImageNext.test.tsx`（+14 case）
+  - mode dispatch：默认 / `'lazy'` / `'next'` 各走正确分支（3 case）
+  - `mode='next'` 空 src / 空字符串 → FallbackCover（2 case）
+  - 错误降级：onError → onLoadFail + 切 FallbackCover；deprecated onLoadError 同步触发（2 case）
+  - props 透传：blurDataURL → placeholder='blur'；无 blurDataURL 无 placeholder；priority；sizes override；data-testid（5 case）
+  - aspect 映射：`'16:9'` → `'16 / 9'`；无 aspect 从 width/height 计算（2 case）
+- **6 个 SafeImage 消费者零回归**（默认 `mode='lazy'`）：typecheck + 现有 SafeImage.test 8 case 全绿
+- **lint 修复**：预览页 JSX 文本含 `mode="lazy"` / `mode="next"` 字符串触发 `react/no-unescaped-entities`，改用 JSX expression `{'mode="lazy"..'}` 包裹
+- **未引入新 npm 依赖**（`next/image` 是 Next 内建）
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1475/1475 ✅（+14）/ build ✅
+- **关联**：`image_pipeline_plan §10.2` / ADR-035 / CDN-01 / CLAUDE.md §模型路由 #2（跨 3+ 消费方 schema 设计强制 Opus 审计）
+- **下游**：IMG-06 `ImageStorageService`（本卡实现后，SafeImage 已就位接收上传后的 R2 URL）；M6-CLOSE-01 签字将把本预览页作为真人验收入口之一

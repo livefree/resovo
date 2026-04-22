@@ -13,6 +13,6 @@
 
 ---
 
-<!-- 2026-04-22 SEQ-20260422-M6-CDN：CDN-01 ✅ 待 commit -->
-<!-- 序列进度：1/6（或 7）；下一张 CDN-02（SafeImage mode 开关，S ~60 min，强制 Opus arch-reviewer） -->
+<!-- 2026-04-22 SEQ-20260422-M6-CDN：CDN-01 4afb140 ✅ / CDN-02 ✅ 待 commit -->
+<!-- 序列进度：2/6；下一张 IMG-06（ImageStorageService + 上传 API，M ~120 min，强制 Opus arch-reviewer） -->
 <!-- 单任务工作台稳定态：空 -->

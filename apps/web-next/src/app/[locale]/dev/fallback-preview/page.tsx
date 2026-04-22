@@ -1,8 +1,13 @@
-import { FallbackCover } from '@/components/media'
+import { FallbackCover, SafeImage } from '@/components/media'
 import { BrandSwitcher } from '../tokens/_components/BrandSwitcher'
 import type { VideoType } from '@resovo/types'
 
-export const metadata = { title: 'FallbackCover Preview — Dev Only' }
+export const metadata = { title: 'FallbackCover / SafeImage Preview — Dev Only' }
+
+// CDN-02 验证面：SafeImage 双模式对比
+// 使用 placeholder 图片源（httpbin / picsum）避免依赖真实业务数据
+const DEMO_SRC = 'https://picsum.photos/seed/resovo-cdn/640/360'
+const DEMO_ALT = 'SafeImage 双模式演示图'
 
 const ASPECTS = ['2:3', '16:9', '1:1', '5:6'] as const
 type Aspect = typeof ASPECTS[number]
@@ -89,6 +94,69 @@ export default function FallbackPreviewDevPage() {
         <ThemeSection dark={false} />
         <ThemeSection dark={true} />
       </div>
+
+      {/* CDN-02: SafeImage 双模式对比验证面 */}
+      <section
+        className="border-t p-6 space-y-4 shrink-0"
+        style={{
+          borderColor: 'var(--border-default)',
+          background: 'var(--bg-surface)',
+        }}
+      >
+        <div className="flex items-baseline gap-3">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--fg-muted)' }}>
+            SafeImage 双模式对比（CDN-02）
+          </h2>
+          <span className="text-xs" style={{ color: 'var(--fg-subtle)' }}>
+            验证 CDN-01 custom loader 接入；src 会经过 IMAGE_LOADER env 切换
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <p
+              className="text-xs font-medium inline-block px-2 py-0.5 rounded"
+              style={{ background: 'var(--bg-surface-raised)', color: 'var(--fg-subtle)' }}
+            >
+              {'mode="lazy"（默认 / IntersectionObserver + LazyImage）'}
+            </p>
+            <SafeImage
+              mode="lazy"
+              src={DEMO_SRC}
+              alt={DEMO_ALT}
+              width={320}
+              height={180}
+              aspect="16:9"
+              priority
+              data-testid="cdn02-demo-lazy"
+            />
+            <p className="text-xs" style={{ color: 'var(--fg-subtle)' }}>
+              src 经 getLoader() 手动调用；走 &lt;img&gt; 原生标签
+            </p>
+          </div>
+          <div className="space-y-2">
+            <p
+              className="text-xs font-medium inline-block px-2 py-0.5 rounded"
+              style={{ background: 'var(--state-info-bg)', color: 'var(--state-info-fg)' }}
+            >
+              {'mode="next"（CDN-02 / next/image fill + 外层 aspect wrapper）'}
+            </p>
+            <SafeImage
+              mode="next"
+              src={DEMO_SRC}
+              alt={DEMO_ALT}
+              width={320}
+              height={180}
+              aspect="16:9"
+              priority
+              sizes="320px"
+              data-testid="cdn02-demo-next"
+            />
+            <p className="text-xs" style={{ color: 'var(--fg-subtle)' }}>
+              src 经 next.config.ts loaderFile 自动调用；走 next/image
+            </p>
+          </div>
+        </div>
+      </section>
     </div>
   )
 }

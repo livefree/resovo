@@ -9742,8 +9742,12 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - typecheck / lint / unit ✅
      - 未引入新 npm 依赖
 
-2. CDN-02 — SafeImage `mode: 'img' \| 'next'` 开关 + `/dev/fallback-preview` 预览（状态：⬜ 未开始）
+2. CDN-02 — SafeImage `mode: 'lazy' \| 'next'` 开关 + `/dev/fallback-preview` 预览（状态：✅ 已完成 2026-04-22）
    - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：arch-reviewer (claude-opus-4-7) — AUDIT RESULT: NEED_FIX，4 必改点全部采纳
    - 建议模型：sonnet + **opus arch-reviewer（SafeImage Props 跨消费方扩展）**
    - 规模：S（~60 min）
    - 依赖：CDN-01 ✅
