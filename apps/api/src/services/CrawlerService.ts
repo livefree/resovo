@@ -17,7 +17,7 @@ import * as sourcesQueries from '@/api/db/queries/sources'
 import * as videosQueries from '@/api/db/queries/videos'
 import { nanoid } from 'nanoid'
 import { config } from '@/api/lib/config'
-import { enrichmentQueue } from '@/api/lib/queue'
+import { enrichmentQueue, imageHealthQueue } from '@/api/lib/queue'
 
 // ── 资源站配置 ────────────────────────────────────────────────────
 
@@ -214,6 +214,34 @@ export class CrawlerService {
         siteKey,
       })
       videoId = inserted.id
+
+      // CHORE-09: 新建 video 时若有封面，立即入队 health-check + blurhash-extract
+      // 防止 poster_status 永久留在 pending_review（Migration 048 默认值）
+      if (video.coverUrl) {
+        const url = video.coverUrl
+        void imageHealthQueue.add('health-check', {
+          type: 'health-check',
+          catalogId: catalog.id,
+          videoId,
+          kind: 'poster',
+          url,
+        }).catch((err: unknown) => {
+          process.stderr.write(
+            `[CrawlerService] health-check enqueue failed for ${videoId}: ${err instanceof Error ? err.message : String(err)}\n`,
+          )
+        })
+        void imageHealthQueue.add('blurhash-extract', {
+          type: 'blurhash-extract',
+          catalogId: catalog.id,
+          videoId,
+          kind: 'poster',
+          url,
+        }).catch((err: unknown) => {
+          process.stderr.write(
+            `[CrawlerService] blurhash-extract enqueue failed for ${videoId}: ${err instanceof Error ? err.message : String(err)}\n`,
+          )
+        })
+      }
     }
 
     // Step 5: 写入别名（video_aliases 保持不变，供爬虫归并参考）

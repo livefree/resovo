@@ -9154,3 +9154,37 @@ f7833ab  IMG-07 P2 fixup 预览放大 + 真实进度
 - **用户动作**：
   1. 重启 apps/api dev server 让新默认生效（或在 `.env.local` 显式设 `LOCAL_UPLOAD_PUBLIC_URL=http://localhost:4000/v1/uploads`）
   2. 重新上传图片验证预览是否正常
+
+---
+
+## [CHORE-09] 采集视频 poster health-check 入队 + backfill admin 入口（M6 QA hotfix）
+
+- **日期**：2026-04-22
+- **上下文**：用户 M6 真人 QA 报告"采集视频自带 poster 始终处于 待检测 状态"
+- **根因定位**（IMG-M1 阶段遗留，M6 QA 暴露）：
+  - **`CrawlerService.upsertVideo`** 新建 catalog / video 时**从不入队 health-check**
+    - 只 import `enrichmentQueue`，没 `imageHealthQueue`
+    - Migration 048 给 `media_catalog.poster_status` 设 DEFAULT `'pending_review'`，采集写入后默认值留存
+    - `imageHealthWorker` 已注册但无人入队 → poster 永远不被检测
+  - **`imageBackfillWorker.enqueueBackfillJob()`** 函数存在但**无 admin HTTP 入口**
+    - `admin/image-health.ts` 只有 3 个 GET 路由（stats / broken-domains / missing-videos）
+    - 历史 pending_review 数据无法一键触发补扫
+- **修复 1 · CrawlerService 入队**（`apps/api/src/services/CrawlerService.ts`）：
+  - import `imageHealthQueue`
+  - `upsertVideo` Step 4（新建 videos 实例）后：若 `video.coverUrl` 非空 → `imageHealthQueue.add('health-check', { type, catalogId, videoId, kind: 'poster', url })` + `imageHealthQueue.add('blurhash-extract', ...)`
+  - 使用 `void .catch(err => stderr.write(...))` 模式：入队失败不阻断主流程（与 enrichmentQueue 入队范式一致）
+  - 只在新建 videos 时入队（已存在 video 的 catalog 默认之前已入过，crawler 优先级最低不覆盖）
+- **修复 2 · admin route 手动 backfill**（`apps/api/src/routes/admin/image-health.ts`）：
+  - 新增 `POST /v1/admin/image-health/backfill`（admin only）
+  - 调 `enqueueBackfillJob()` 触发 backfill worker 批量扫所有 `poster_status='pending_review'` 入队 health-check + blurhash-extract
+  - 响应 `{ data: { enqueued: true, message: '...' } }`
+  - 500 兜底 + stderr log
+- **测试**（+8 case）：
+  - `tests/unit/api/crawlerImageHealthEnqueue.test.ts`（4 case）：新建 + 有 coverUrl → 2 job 入队 / coverUrl 为空 → 不入队 / 已存在 video → 不重复入队 / 入队失败不阻断主流程
+  - `tests/unit/api/adminImageHealthBackfillRoute.test.ts`（4 case）：admin 200 / moderator 403 / 未认证 401 / enqueue 抛错 → 500
+- **用户动作**：
+  1. **新采集视频**自动生效（无需操作）— 新 video 入库后 10-30 秒 poster_status 变为 ok / broken / missing
+  2. **历史存量数据** — 可 POST `/v1/admin/image-health/backfill` 触发（需 admin 凭证）或等待下次 scheduler 扫（若已配）
+  3. 或测试时直接 reindex 某个视频的 /admin/videos/:id/images 走现有 PUT 手动刷
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1563/1563 ✅（+8）
+- **关联**：IMG-M1 Migration 048 / ADR-046 图片管线 / M6-CLOSE-01 QA 补齐

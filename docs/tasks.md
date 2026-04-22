@@ -13,10 +13,8 @@
 
 ---
 
-<!-- 2026-04-22 SEQ-20260422-M6-CDN 收官（7/7 ✅，pending-user checklist） -->
-<!-- CDN-01 4afb140 / CDN-02 9510d7f / IMG-06 7aa02d2 + aef993c fixup / IMG-07 95680d4 + f7833ab fixup / IMG-08 4452069 / M6-CLOSE-01 本次 commit -->
-<!-- ADMIN-17 ⏭️ 跳过（2 处未达 3 阈值） -->
-<!-- arch-reviewer NEED_FIX → PASS（ADR-051 落盘 + serveLocalFile 分层整改） -->
-<!-- 待用户真人 QA 18 项打勾 → 对齐表 status: sealed → ★ M6 PHASE COMPLETE ★ -->
-<!-- 单任务工作台稳定态：空 -->
-<!-- 2026-04-22 M6-CLOSE-01 QA 发现 port bug：LOCAL_UPLOAD_PUBLIC_URL 默认 3001 → 4000；已修 + 新增防回归测试 +1 case → unit 1555 ✅ -->
+<!-- 2026-04-22 M6 QA hotfix 已修 2 项 -->
+<!-- 137fc89 LOCAL_UPLOAD_PUBLIC_URL 默认端口 3001 → 4000 -->
+<!-- 待 commit CHORE-09 采集 poster health-check 入队 + backfill admin 入口 -->
+<!-- unit 1555 → 1563（+8） -->
+<!-- 下一步：用户重启 apps/api 继续 QA；或手动 POST /admin/image-health/backfill 刷存量 -->
