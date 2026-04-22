@@ -9173,7 +9173,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 验收结果：新增 spec 全绿；`web-next-chromium` project 全量 53 passed + 15 TODO skipped + **0 failed**；typecheck / lint / unit（1380）✅
    - 完成备注：执行模型: claude-opus-4-7
 
-9. M5-CLOSE-03 — M5 真·PHASE COMPLETE v2（真·真·闭环）（状态：⬜ 未开始）
+9. M5-CLOSE-03 — M5 真·PHASE COMPLETE v2（真·真·闭环）（状态：🔄 进行中 2026-04-22）
    - 创建时间：2026-04-21
    - 建议模型：**opus**（主循环）+ arch-reviewer (claude-opus-4-6) 子代理（**强制**）+ **浏览器手动验收（主循环执行）**
    - 规模：S（~120 min）
@@ -9267,4 +9267,26 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   c. 是否更新 ADR-037 迭代条款 §4b，在 10 点必查项之外强制追加 "**浏览器手动验收（dev server + 关键路径走查）/ 视觉回归截图 / 真实交互 e2e（不只是 DOM 可见）**"为真·PHASE COMPLETE 的独立一维
   d. 是否启动 M5 全局回归 e2e 扩写，把 9 类场景固化为 Playwright 断言防止复发
   e. 人工回归是否覆盖全部 M5 功能，或仅 9 项已发现？若全局扫描未完，可能还有更多缺陷待补
+---
+
+🚨 BLOCKER — M5-CLOSE-03 启动遇新运行时缺陷（搜索页 SSR 500）
+- **任务**：M5-CLOSE-03 真·PHASE COMPLETE v2
+- **时间**：2026-04-22
+- **发现方式**：CLOSE-03 要求的"dev server + 9 项逐一走查"代理证据采集阶段，`curl -sS -o /dev/null -w "%{http_code}" http://localhost:3002/en/search?q=test` 返回 **500**（空 q 同样 500）
+- **根因**：`apps/web-next/src/app/[locale]/search/page.tsx` 的 Suspense fallback 使用 `<SearchPage.Skeleton />`。`SearchPage` 是 `'use client'` 组件，被 Next 15 编译为 Client Reference 后，静态属性 `.Skeleton` 在 server 端返回 undefined，导致 `Element type is invalid: expected a string ... but got: undefined` 的 SSR 500。这正是 commit 9fcaaf1（`fix(detail-page): VideoDetailClientSkeleton 改为具名导出`）修过的同一 pattern 在 search 侧复发 / 遗漏
+- **为何 CLEANUP-11 e2e 未捕获**：Playwright `page.goto` 返回 500 后浏览器仍继续 hydrate，JS 恢复到可用 `search-input` UI；测试断言以"DOM 可见"为主，未 assert `response.status()`。e2e 覆盖有盲区
+- **影响**：
+  - 生产/SSR 场景下用户直接访问 `/search?q=...` 或分享搜索链接会得到 500 错误页
+  - 阻断 M5-CLOSE-03 签字（ADR-037 §4b 要求"浏览器手动验收"不得带已知重大缺陷）
+  - CLEANUP-09 修复（SearchPage 导航 locale 保留）未覆盖 SSR 导入问题
+- **已尝试**：
+  1. curl 直接请求 → 500（`HAS_500_MARKER=true`）
+  2. Playwright page.goto 拿到 response.status()=500，但 `page.content()` 后浏览器自动恢复 → e2e 没挂
+  3. 对比 TagLayer 改动前（59ba813）vs 改动后（d85bf9e）两个 commit，SSR 都 500 → 确认与 CLEANUP-11 改动无关
+- **需要决策**：
+  a. 是否授权主循环**立即修 SearchPage.tsx**（把 `SearchPage.Skeleton` 直接换成 `import { SearchEmptyState } from '@/components/search/SearchEmptyState'` 再用 `SearchEmptyState.Skeleton`；或拆具名导出 `SearchPageSkeleton`），修完继续 CLOSE-03 签字 —— 改动 ≤ 5 行业务代码，复现 9fcaaf1 的修复 pattern
+  b. 是否起一张新卡 **M5-CLEANUP-12**（搜索页 SSR 500 修复 + 扩写 Playwright `response.status() !== 500` 断言）作为 CLOSE-03 的前置，延迟真·PHASE COMPLETE v2 到第二轮
+  c. 是否**先做 M5 全局 SSR 扫描**（全部 route 的 `curl` 状态码 + Next dev error overlay 检查）再启 CLOSE-03，避免再出现"签字后发现下一个缺陷"循环
+  d. Playwright e2e 默认加 `response.status() < 500` 基础断言（框架层而非 case 层）以后续兜底
+- **主循环当前状态**：CLOSE-03 task-queue.md 已标 🔄；tasks.md 卡片已写入；但不继续后续对齐表 / arch-reviewer 审计 / BLOCKER 解除动作，等待决策
 ---
