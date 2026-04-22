@@ -1,4 +1,14 @@
-# M5 真·PHASE COMPLETE 方案 ↔ 执行对齐表（最终版）
+# M5 真·PHASE COMPLETE 方案 ↔ 执行对齐表（最终版）【已被 PC 端人工回归否决，保留为审计案例】
+
+> 🚨 **状态更正（2026-04-21 当日追加）**：
+>
+> 本文档 §3 记录的 arch-reviewer (claude-opus-4-6) 10 点静态审计结论 PASS 在发布当日被 PC 端人工回归测试否决。静态审计覆盖面仅限 Token / 类型 / 文档 / 文件存在性，**无法捕获 UI 运行时行为缺陷**（双出口反转、分类 404、播放器弹窗化、线路重置、CinemaMode 尺寸、排版堆叠、搜索失效、详情选集不响应），共计 9 项。
+>
+> 本文档 §4 "真·PHASE COMPLETE 判定"的成立宣告**无效**。ADR-037 迭代条款 §4a/§4b/§4c 保留但 §4b 需补充"浏览器手动验收 / 真实交互 e2e"一维。
+>
+> 原 BLOCKER `🛑 BLOCKER — M5-CLEANUP 启动（M6 及后续任务冻结）` 已重新激活，详情见 `docs/task-queue.md` 尾部新 BLOCKER 块。
+>
+> 本文档保留于仓库，作为"静态审计边界局限性"案例文档；不得作为 M5 真·PHASE COMPLETE 的有效签字。
 
 - **创建日期**：2026-04-21
 - **关联里程碑**：M5 — 页面重制（含 CLEANUP 收尾序列）
@@ -91,7 +101,27 @@
 
 ---
 
-## 4. 真·PHASE COMPLETE 判定
+## 3.5 人工回归否决记录（2026-04-21 追加）
+
+PC 端浏览器手动测试（用户执行）发现 9 项 UI 运行时缺陷：
+
+| # | 缺陷 | 关联组件 / 模块 |
+|---|------|----------------|
+| 1 | VideoCard 点击图片不触发 Fast Takeover；悬浮文字区出现播放按钮（双出口反转）；TagLayer 文字溢出到文字区与标题重叠 | VideoCard.tsx / PosterAction / MetaAction / TagLayer |
+| 2 | 分类页面全部 404 不可达 | `[locale]/[type]/page.tsx` / rewrite-allowlist |
+| 3 | 播放页呈现为可关闭 + mini 化弹窗，关闭后空白；mini 化后无法展开 | GlobalPlayerHost / Portal / playerStore 状态机 |
+| 4 | 线路切换后状态重置，mini 化后不可播放，展开后线路错 | playerStore / PlayerShell 线路归属 |
+| 5 | 线路/选集选项卡不稳定（存在只有一项的情况），应稳定长存且与播放器容器等高/等宽 | PlayerShell 编排层 / EpisodePicker / LineSwitcher |
+| 6 | 影院模式下播放器容器有时过大 | CinemaMode / GlobalPlayerFullFrame cinema 态样式 |
+| 7 | 文字、卡片堆叠；字体与显示内容不符设计 | Typography Token / 布局栅格 / globals.css |
+| 8 | 搜索结果只返热门内容，q 参数未生效 | 搜索路由 / 搜索 API 契约 |
+| 9 | 详情页选集按钮点击无响应 | EpisodePicker / VideoDetailClient |
+
+**结论**：静态审计 PASS 不足以替代 UI 运行时验收；§3 的 10 点 PASS 不再成立为 "真·PHASE COMPLETE" 的充分条件。
+
+---
+
+## 4. 真·PHASE COMPLETE 判定（作废，保留作审计案例）
 
 依据 ADR-037（迭代：M5 真·PHASE COMPLETE 门禁）：
 
@@ -103,7 +133,9 @@
 | 审计结论 | PASS | PASS（2 WARN 非阻断） | ✅ |
 | 质量门禁 | typecheck ✅ / lint ✅ / unit ✅ / e2e ✅ | 主循环运行记录见 changelog | ✅ |
 
-**M5 里程碑真·PHASE COMPLETE 成立** → 解除 `🛑 BLOCKER — M5-CLEANUP 启动`，允许启动 M6。
+~~**M5 里程碑真·PHASE COMPLETE 成立** → 解除 `🛑 BLOCKER — M5-CLEANUP 启动`，允许启动 M6。~~
+
+**【作废 2026-04-21】** — 见本文档顶部状态更正块与 §3.5 人工回归否决记录；BLOCKER 已重新激活。
 
 ---
 

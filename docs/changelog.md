@@ -8239,10 +8239,22 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **M5 真·总计**：22 张任务卡（主序列 18 张 + CLEANUP 3 张 + CLOSE-02 1 张）
 - **备注**：本卡是 ADR-037 迭代条款首次落地案例；确立了 "CONDITIONAL 一次审计 → CLEANUP 序列 → Opus 二次独立审计" 的闭环协议
 
-## ★ M5 真·PHASE COMPLETE ★
+## ~~★ M5 真·PHASE COMPLETE ★~~ **【CANCELED — 2026-04-21 PC 端人工回归否决】**
 
-- **二次审计签字**：arch-reviewer (claude-opus-4-6)
-- **主循环**：claude-opus-4-7（M5-CLOSE-02）
-- **日期**：2026-04-21
-- **解除**：`🛑 BLOCKER — M5-CLEANUP 启动（M6 及后续任务冻结）` 已解除
-- **允许**：M6 里程碑任务取卡启动
+- ~~二次审计签字：arch-reviewer (claude-opus-4-6)~~
+- ~~主循环：claude-opus-4-7（M5-CLOSE-02）~~
+- ~~日期：2026-04-21~~
+- ~~解除：`🛑 BLOCKER — M5-CLEANUP 启动（M6 及后续任务冻结）` 已解除~~
+- ~~允许：M6 里程碑任务取卡启动~~
+
+> **更正声明（2026-04-21 追加）**：
+>
+> 上方 ★ M5 真·PHASE COMPLETE ★ 签字在发布当日即被 PC 端人工回归测试否决。arch-reviewer (claude-opus-4-6) 的 10 点独立审计结论 PASS 仅覆盖：Token 文件存在 / 类型签名 / Token 声明 / 组件 props / docs 签字 / ADR 落盘 / 单测数量 / task-queue 标 ✅ / 关键路径静态代码面未改 —— **全部为只读静态检查维度**。
+>
+> 用户 PC 端实测发现 9 项严重 UI 运行时缺陷（VideoCard 双出口反转 + 文案堆叠 / 分类页 404 / 播放器弹窗化 + mini 无法恢复 / 线路切换重置 / 线路选集选项卡不稳 / CinemaMode 尺寸异常 / 文字堆叠 / 搜索只返热门 / 详情选集点击无效），见 `docs/task-queue.md` 尾部 BLOCKER 块详细清单。
+>
+> 本条 PHASE COMPLETE 签字**无效**。BLOCKER `M5-CLEANUP 启动（M6 及后续任务冻结）` 已重新激活，解除条件新增"PC 端人工回归全部修复 + 浏览器手动审计 + 真机交互 e2e 固化"。
+>
+> ADR-037 迭代条款 §4a/§4b/§4c 保留，但 §4b 的 10 点必查项模板需在后续卡片中补充强制"浏览器手动验收 / 视觉回归 / 真实交互 e2e"一维（具体修订由 BLOCKER 决策 c 推进）。
+>
+> 主循环违反 CLAUDE.md "UI 或前端变更必须启动 dev server 在浏览器中测试"的约束，未做手动验收即签字，属流程执行漏洞，已记入本次审计案例。

@@ -8935,29 +8935,33 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ---
 
-## ✅ BLOCKER 已解除 — M5-CLEANUP 启动（2026-04-21 解除）
-
-~~🛑 BLOCKER — M5-CLEANUP 启动（M6 及后续任务冻结）~~
+## 🛑 BLOCKER — M5-CLEANUP 启动（M6 及后续任务冻结）【重新激活】
 
 - **原触发时间**：2026-04-21
-- **解除时间**：2026-04-21
-- **解除依据**：
-  1. ✅ M5-CLEANUP-01 / 02 / 03 全部 ✅
-  2. ✅ M5-CLOSE-02 Opus arch-reviewer (claude-opus-4-6) 二次独立审计 10 点全部 PASS（2 项非阻断 WARN：admin-banners 单测路径偏离、主序列数量口径）
-- **关联签字**：`docs/milestone_alignment_m5_final_20260421.md` §3 + §4
-- **封锁范围解除**：✅ 允许 M6 及后续里程碑任务取卡启动
+- **一度解除时间**：2026-04-21（基于 M5-CLOSE-02 arch-reviewer 静态审计 PASS）
+- **重新激活时间**：2026-04-21（PC 端人工回归否决，见文件尾部新 BLOCKER 块）
+- **激活原因**：arch-reviewer 只读静态审计无法覆盖 UI 运行时行为，9 项 PC 端人工测试缺陷（VideoCard 双出口 / 分类路由 / 播放器三态 / 线路状态 / CinemaMode 尺寸 / 文案布局 / 搜索结果 / 详情选集）导致真·PHASE COMPLETE 无效；详情见文件尾部 BLOCKER 块
+- **封锁范围**：
+  - 🚫 禁止启动任何 M6 及后续里程碑任务
+  - 🚫 禁止在 M5-CLEANUP 范围以外新增 apps/web-next 组件
+  - ✅ 允许：M5-CLEANUP-01 / 02 / 03、M5-CLOSE-02、后续 M5-CLEANUP-04+ 纠偏卡（待人工规划）、紧急 hotfix（须另报 BLOCKER）
+- **解除条件**（更新）：
+  1. M5-CLEANUP-01 / 02 / 03 全部 ✅（已完成）
+  2. ~~M5-CLOSE-02 Opus arch-reviewer 独立审计 PASS~~ **失效**：静态审计 PASS 不等于真·PHASE COMPLETE
+  3. **新增**：9 项 PC 端人工回归缺陷全部修复 + 用户手动确认通过 + 重开 CLOSE-0N 卡片做浏览器验收审计
+- **关联文档**：`docs/task_queue_patch_m5_cleanup_20260421.md`、`docs/milestone_alignment_m5_final_20260421.md`（已追加回归否决声明）
 
 ---
 
-## SEQ-20260421-M5-CLEANUP — M5 收尾清理（3 张 + 1 签字）
+## SEQ-20260421-M5-CLEANUP — M5 收尾清理（3 张 + 1 签字）【闭环被否决，重新打开】
 
-- **状态**：✅ 已完成（2026-04-21）
+- **状态**：🔄 已部分完成（CLEANUP-01/02/03 ✅，CLOSE-02 ❌ 有问题）
 - **创建时间**：2026-04-21
-- **完成时间**：2026-04-21
+- ~~完成时间：2026-04-21~~
 - **目标**：补齐 Token 层结构性缺失、修复组件规格偏差、补全文档签字，最终由 Opus 出具真·PHASE COMPLETE 签字
 - **依赖**：SEQ-20260420-M5-CLOSE ✅
-- **串行顺序**：CLEANUP-01 ✅ → CLEANUP-02 ✅ → CLEANUP-03 ✅ → CLOSE-02 ✅
-- **闭环结论**：M5-CLOSE-02 Opus 主循环 (claude-opus-4-7) + arch-reviewer 子代理 (claude-opus-4-6) 二次独立审计 10 点全部 PASS；真·PHASE COMPLETE 成立；BLOCKER 解除
+- **串行顺序**：CLEANUP-01 ✅ → CLEANUP-02 ✅ → CLEANUP-03 ✅ → CLOSE-02 ❌（静态审计 PASS 但 PC 端人工回归否决）
+- **闭环状态**：**失败** — arch-reviewer 静态审计覆盖不到 UI 运行时行为，PC 端人工测试发现 9 项缺陷（详见尾部 BLOCKER 块）；待人工规划 CLEANUP-04+ 纠偏序列或回滚策略
 
 ### 任务列表
 
@@ -9027,11 +9031,14 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - `tests/unit/server/admin-banners.test.tsx` ≥ 6 it 全部通过
      - typecheck ✅ / lint ✅ / unit ✅
 
-4. M5-CLOSE-02 — M5 真·PHASE COMPLETE + Opus 审计（状态：✅ 已完成，2026-04-21）
+4. M5-CLOSE-02 — M5 真·PHASE COMPLETE + Opus 审计（状态：❌ 有问题，2026-04-21 审计后人工否决）
    - 创建时间：2026-04-21
    - 执行模型：claude-opus-4-7（主循环）
-   - 子代理：arch-reviewer (claude-opus-4-6) — 10 点独立审计 AUDIT RESULT: PASS
-   - 完成备注：`docs/milestone_alignment_m5_final_20260421.md` 起草（35 项对齐 + 18 项红旗 + 10 点签字）；`docs/decisions.md` 追加 ADR-037 迭代条款 §4a/§4b/§4c；`docs/changelog.md` 发布 ★ M5 真·PHASE COMPLETE ★；本文件解除 `🛑 BLOCKER — M5-CLEANUP 启动`。执行模型: claude-opus-4-7
+   - 子代理：arch-reviewer (claude-opus-4-6) — 10 点独立静态审计 PASS（**但静态审计无法覆盖 UI 运行时**）
+   - 部分完成内容：`docs/milestone_alignment_m5_final_20260421.md` 起草（35 项对齐 + 18 项红旗 + 10 点签字）；`docs/decisions.md` 追加 ADR-037 迭代条款 §4a/§4b/§4c
+   - 失败原因：PC 端人工回归否决，9 项 UI 缺陷（详见尾部 BLOCKER 块）
+   - 处置：保留 ADR-037 迭代条款 + final 对齐文档（追加否决声明）；`changelog.md` 的 ★ M5 真·PHASE COMPLETE ★ 条目已追加 CANCELED 更正；BLOCKER 重新激活等待 CLEANUP-04+ 规划
+   - 执行模型: claude-opus-4-7
    - 建议模型：**claude-opus-4-7**（主循环）+ arch-reviewer (claude-opus-4-6) 子代理（**强制**）
    - 规模：S（~90 分钟）
    - 依赖：M5-CLEANUP-01 ✅ + M5-CLEANUP-02 ✅ + M5-CLEANUP-03 ✅
@@ -9057,18 +9064,81 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ---
 
-✅ PHASE COMPLETE — M5 真·PHASE COMPLETE（等待确认开始 M6）
-- **完成时间**：2026-04-21
-- **本 Phase 完成任务数**：22 张（主序列 18 + CLEANUP 3 + CLOSE-02 1）
-- **已合并到 main**：待本卡 commit 合并
-- **签字**：arch-reviewer (claude-opus-4-6) 二次独立审计 PASS（10 点全部 PASS，2 项非阻断 WARN）；主循环 claude-opus-4-7
-- **关联文档**：
-  - `docs/milestone_alignment_m5_final_20260421.md`（真·闭环对齐表 + 10 点审计签字）
-  - `docs/milestone_alignment_m5_20260420.md`（一次审计 CONDITIONAL → PASS，挂起版，供回溯）
-  - `docs/decisions.md` ADR-037 迭代条款（§4a/§4b/§4c 真·PHASE COMPLETE 门禁定义）
-- **建议下一步**：从 task-queue.md M6 序列取第一张卡启动（若 M6 序列未撰写，先规划 M6 补丁文档）
-- **需要你做的事**：
-  - [ ] 验收测试（运行 `npm run test -- --run` 和 `npm run test:e2e`）
-  - [ ] 部署到测试环境（如有）
-  - [ ] 确认开始 M6（删除此块即可）
+~~✅ PHASE COMPLETE — M5 真·PHASE COMPLETE（等待确认开始 M6）~~ **【已撤销 2026-04-21】**
+
+> **撤销原因**：PC 端人工回归测试否决。arch-reviewer (claude-opus-4-6) 的 10 点静态审计 PASS 仅覆盖文件存在/类型签名/Token 声明/docs 签字等静态面，**无法验证 UI 运行时行为**。用户实际 PC 端测试发现 9 项核心功能缺陷（卡片双出口、分类路由、播放器三态、线路状态、CinemaMode 尺寸、文案布局、搜索、详情选集），真·PHASE COMPLETE 不成立。详情见下方新 BLOCKER 块。
+>
+> 保留条目：ADR-037 迭代条款 §4a/§4b/§4c 有效（真·PHASE COMPLETE 门禁定义将在下次 CLOSE-0N 复用），但 §4b 必须补充 "**浏览器手动验收 / Playwright 真机 / 视觉回归**" 作为静态审计之外的强制一维。
+>
+> `docs/milestone_alignment_m5_final_20260421.md` 已追加"人工回归否决"声明，作为历史记录保留。
+
+---
+
+🚨 BLOCKER — M5 PC 端人工回归否决（9 项 UI 缺陷，M6 继续冻结）
+- **任务**：M5-CLOSE-02 静态审计 PASS 后真·PHASE COMPLETE 宣告
+- **时间**：2026-04-21
+- **触发方式**：用户 PC 端浏览器手动测试
+- **问题描述**（用户反馈原文，共 9 项）：
+
+  1. **VideoCard 双出口反转 + 文案堆叠**：
+     - 点击卡片图片区没有直达播放页（Fast Takeover 失效 / PosterAction 未触发 `playerStore.enter('fast-takeover')`）
+     - 鼠标悬浮在卡片文字区时才出现播放按钮（与 ADR-048 §5 双出口协议相反：PosterAction 应承载播放意图）
+     - TagLayer 显示的"连载中"等 lifecycle 信息文字溢出到文字区，与标题重叠（布局层或 z-index 问题）
+     - 影响：M5-CARD-CTA-01 / M5-CARD-TAG-01 / M5-CARD-STACK-01 / VideoCard.tsx 双出口协议实装
+
+  2. **分类页面全部 404 不可达**：
+     - 影响路由：`/movie` `/series` `/anime` `/variety(→tvshow)` `/short` `/clip` 等
+     - 可能根因：`apps/web-next/src/app/[locale]/[type]/page.tsx` 路由未正确配置 / rewrite-allowlist 缺失 / middleware 拦截
+     - 影响：M5-PAGE-GRID-01（Sibling 首激活）+ ADR-035 rewrite 协议
+
+  3. **播放页弹窗式显示 + 关闭后空白 + mini 化无法展开**：
+     - 播放器及线路/选集区域呈现为"可关闭/mini 化的弹窗"，关闭后 `/watch/*` 页面没有任何内容
+     - mini 化后无法展开回复 full 状态（GlobalPlayerHost hostMode 状态机 LEGAL_TRANSITIONS 异常 / Portal 挂载错位）
+     - 影响：M5-PAGE-PLAYER-01 / GlobalPlayerHost / GlobalPlayerFullFrame / MiniPlayer / playerStore
+
+  4. **线路切换导致状态重置**：
+     - 切换线路后，mini 化视频不可播放
+     - 展开回 full 后线路错乱（非切换后的线路）
+     - 可能根因：线路状态未归属到 playerStore / useEffect 依赖顺序导致重置
+     - 影响：M5-PAGE-PLAYER-01 / playerStore / PlayerShell
+
+  5. **线路/选集区显示不稳定**：
+     - 存在"有选集无线路"或"有线路无选集"的情况
+     - 设计预期：两个选项卡应稳定长存，大小应与播放器容器等高或等宽（按响应式布局调整）
+     - 影响：PlayerShell 编排层 / EpisodePicker / LineSwitcher
+
+  6. **影院模式容器尺寸异常**：
+     - 影院模式下播放器容器有时过大（超过视口 / 无 max-width / 层叠错误）
+     - 影响：M5-CLEANUP-02 修复的 CinemaMode.tsx / GlobalPlayerFullFrame cinema 态样式
+
+  7. **文案/卡片/字体排版问题**：
+     - 文字与视频卡片堆叠在一起
+     - 字体、显示内容与设计稿不符
+     - 影响：Typography Token / VideoCard 布局 / globals.css
+
+  8. **搜索结果只显示热门内容**：
+     - 搜索 query 未生效，始终返回热门/首页内容
+     - 可能根因：`/search?q=` 参数未透传到 API / 搜索 API 未消费 q 参数
+     - 影响：M5-PAGE-SEARCH-01 / apps/web-next 搜索路由 + API 契约
+
+  9. **详情页选集按钮点击无效**：
+     - 设计预期：点击选集 → `router.replace(?ep=N, scroll:false)` 并切换 iframe 源
+     - 实际：点击无响应 / 不打开对应集
+     - 影响：M5-PAGE-DETAIL-01 / EpisodePicker / VideoDetailClient
+
+- **已尝试**：
+  1. M5-CLOSE-02 arch-reviewer (claude-opus-4-6) 10 点静态审计 → PASS，但仅覆盖 Token/类型/文档层；未触及 UI 运行时
+  2. 主循环质量门禁 typecheck / lint / unit 1380 / e2e 82 passed → 全绿；但 e2e 覆盖不到上述人工测试场景的组合（Fast Takeover 真机触发、mini↔full 状态恢复、线路持久化、详情 ep 切换）
+
+- **为何未更早暴露**：
+  - ❌ arch-reviewer 子代理是"只读静态检查"，设计上不跑浏览器，无法捕获上述 9 类问题
+  - ❌ 主循环（Opus 4.7）没有按 CLAUDE.md"UI 或前端变更必须启动 dev server 并在浏览器中测试关键路径与边缘情况"的要求手动验收
+  - ❌ e2e 套件覆盖 homepage / browse-tvshow / card-to-watch / detail / player / search-page 共 6 套，但断言深度以 DOM 可见 + URL 变化为主，未检查交互后状态一致性（mini 恢复、线路持久、ep 切换生效）
+
+- **需要决策**：
+  a. 是否启动 **SEQ-20260421-M5-CLEANUP-2** 补丁序列，逐卡修复 9 项缺陷（建议拆为 CLEANUP-04 VideoCard / CLEANUP-05 分类路由 / CLEANUP-06 播放器三态 + 线路 / CLEANUP-07 CinemaMode 尺寸 / CLEANUP-08 排版 + 字体 / CLEANUP-09 搜索 / CLEANUP-10 详情选集，共 7 张）
+  b. 是否先回滚 M5-CLOSE-02 的 commit（`eb163fa`）使 changelog / decisions / task-queue 不带虚假"真·PHASE COMPLETE"历史（**需用户确认；默认不回滚，保留 ADR-037 迭代条款与 final 对齐文档 + 否决声明作为审计案例**）
+  c. 是否更新 ADR-037 迭代条款 §4b，在 10 点必查项之外强制追加 "**浏览器手动验收（dev server + 关键路径走查）/ 视觉回归截图 / 真实交互 e2e（不只是 DOM 可见）**"为真·PHASE COMPLETE 的独立一维
+  d. 是否启动 M5 全局回归 e2e 扩写，把 9 类场景固化为 Playwright 断言防止复发
+  e. 人工回归是否覆盖全部 M5 功能，或仅 9 项已发现？若全局扫描未完，可能还有更多缺陷待补
 ---
