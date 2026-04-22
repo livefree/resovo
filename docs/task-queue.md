@@ -8512,7 +8512,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ## SEQ-20260420-M5-CARD — M5 卡片 primitive 激活（6 张）
 
-- **状态**：⬜ 未开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-20 19:00
 - **最后更新时间**：2026-04-20 19:00
 - **目标**：实装 VideoCard 双入口、TagLayer、StackedPosterFrame、SharedElement FLIP、RouteStack 手势、Skeleton primitive，为 PAGE 阶段提供完整 primitive 基础
@@ -8660,7 +8660,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ## SEQ-20260420-M5-API — M5 Banner 全栈后端（2 张）
 
-- **状态**：⬜ 未开始
+- **状态**：⚠️ 核心完成（ADMIN 两项延期）
 - **创建时间**：2026-04-20 19:00
 - **最后更新时间**：2026-04-20 19:00
 - **目标**：新建 home_banners 表 + Banner CRUD API + 后台管理模块，为前端 HeroBanner 提供真实数据源（非 mock）
@@ -8725,7 +8725,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ## SEQ-20260420-M5-PAGE — M5 页面重塑（7 张）
 
-- **状态**：⬜ 未开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-20 19:00
 - **最后更新时间**：2026-04-20 19:00
 - **目标**：重塑全站 7 个核心页面/组件到"专业视觉 + 完整交互"级别，消费 CARD primitive 与 API 数据
@@ -8904,7 +8904,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ## SEQ-20260420-M5-CLOSE — M5 收尾（1 张）
 
-- **状态**：⬜ 未开始
+- **状态**：✅ 已完成
 - **创建时间**：2026-04-20 19:00
 - **最后更新时间**：2026-04-20 19:00
 - **目标**：M5 全部 18 张卡 Opus 独立审计 + 方案对齐表 + PHASE COMPLETE 签字
@@ -8913,11 +8913,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ### 任务列表
 
-1. M5-CLOSE-01 — M5 PHASE COMPLETE + Opus 独立审计 + 对齐表（状态：⬜ 未开始）
+1. M5-CLOSE-01 — M5 PHASE COMPLETE + Opus 独立审计 + 对齐表（状态：✅ 已完成）
    - 创建时间：2026-04-20 19:00
    - 计划开始：所有前置序列全部 ✅ 后
-   - 实际开始：
-   - 完成时间：
+   - 实际开始：2026-04-21
+   - 完成时间：2026-04-21
    - 建议模型：**opus**（主循环）+ arch-reviewer (claude-opus-4-6) 子代理（**强制**）
    - 规模：S（~90 分钟）
    - 依赖：SEQ-20260420-M5-PREP ✅ + SEQ-20260420-M5-CARD ✅ + SEQ-20260420-M5-API ✅ + SEQ-20260420-M5-PAGE ✅

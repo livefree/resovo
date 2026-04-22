@@ -8157,3 +8157,25 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **新增依赖**：embla-carousel-react（用户预先 install）
 - **数据库变更**：无
 - **备注**：`--banner-accent` 通过 JS `setProperty` 动态指向调色板 token；移动端 swipe 触发 onSelect 回调同步 activeIndex
+
+---
+
+## M5-CLOSE-01 — M5 PHASE COMPLETE
+
+- **完成时间**：2026-04-21
+- **执行模型**：claude-sonnet-4-6（主循环）+ claude-opus-4-6（arch-reviewer 子代理）
+- **子代理**：arch-reviewer (claude-opus-4-6) — CONDITIONAL PASS → PASS（P2 修复后）
+- **文件列表**：
+  - `docs/milestone_alignment_m5_20260420.md` — 新增 M5 对齐表（30 项 + 15 项红旗检查 + arch-reviewer 签字）
+  - `docs/decisions.md` — ADR-048 §5.1 枚举值 tvshow→variety；§8.3 z-index Token 名对齐实装
+  - `docs/task-queue.md` — SEQ-M5-CARD/API/PAGE/CLOSE 全部标 ✅；M5-CLOSE-01 完成
+  - `docs/tasks.md` — 清除 CLOSE-01 卡片
+  - `docs/changelog.md` — 追加本条目
+- **arch-reviewer 7 点审计**：全部 PASS（ADR-048 §1-§8 实装 / 卡片范围合规 / Banner 全栈契约 / E2E 全绿 / 方案文档无漂移 / primitive 激活 / SharedElement FLIP code review）
+- **已知延期**：M5-ADMIN-BANNER-01 图片上传 + Banner E2E（基础设施缺失，已登记为后续卡）
+- **M5 总计**：18 张任务卡，PREP 2 / CARD 6 / API 2 / PAGE 7 / CLOSE 1
+
+## ★ M5 PHASE COMPLETE ★
+
+- **签字**：arch-reviewer (claude-opus-4-6)
+- **日期**：2026-04-21
