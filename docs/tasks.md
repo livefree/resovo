@@ -13,7 +13,8 @@
 
 ---
 
-<!-- 2026-04-22 SEQ-20260422-BUGFIX-01 进度：7/12 ✅ -->
-<!-- P0 ✅：META-10 / CHORE-05 / CRAWLER-05 / ADMIN-13 / CRAWLER-06 / ADMIN-14 -->
-<!-- P1：ADMIN-15 ✅ 待 commit（线路分组 source_name+site_key） -->
-<!-- 下一张 ADMIN-16（S ~60 min，审核区数据源统一） -->
+<!-- 2026-04-22 SEQ-20260422-BUGFIX-01 进度：8/12 ✅ -->
+<!-- P0 ✅：META-10 bbac72a / CHORE-05 59a2a91 / CRAWLER-05 e276b71 / ADMIN-13 0c237cb / CRAWLER-06 f8f8131 / ADMIN-14 1568d3c -->
+<!-- P1 进行中：ADMIN-15 056334c / ADMIN-16 待 commit -->
+<!-- audit §1（源线路 5 子问题 A/B/C/D/E）全部闭环 -->
+<!-- 下一张 CRAWLER-07（L 级 ~240 min，RawVodItem 扩展 + parseType 重写） -->

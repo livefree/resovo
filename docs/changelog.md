@@ -8539,3 +8539,23 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **与 ADMIN-13 协同**：ADMIN-13 已让 `/admin/sources` 返回字段 `site_key` 是行级 COALESCE，本卡消费该字段即能得到正确站点归属
 - **质量门禁**：typecheck ✅ / lint ✅ / unit 1391/1391 ✅（+1 新 case）
 - **关联**：audit §1.3 B；下游 ADMIN-16（数据源统一）
+
+---
+
+## [ADMIN-16] 审核区源健康 / 播放器预览复用同一份全量 /admin/sources 数据
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-BUGFIX-01（12 张第 8 张）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无
+- **背景**：audit §1.3 E — ModerationDetail 翻页全量拉取 `/admin/sources`，ModerationSourceBlock 仅拉 `limit=100` 第一页。长剧多源场景下"播放器预览显示 3 条线路 / 源健康显示 4 条"的口径分叉
+- **修复**：
+  - `ModerationSourceBlock.tsx` 拆除内部 `fetchSources` + `useEffect`，改为接收父组件传入的 `sources: SourceRow[]` 与 `onRefetch: () => Promise<void> | void`
+  - `SourceRow` 接口补 `site_key?: string | null`（供 ADMIN-15 相同分组逻辑消费）
+  - `groupByLine` 与 ModerationDetail 同步采用 `source_name + site_key` 复合 id（防止 ADMIN-15 已修过的同名不同站合并问题再发）
+  - 检验成功后调 `onRefetch()` 让父组件重拉全量，保持两区块同步
+  - 移除 loading 骨架（由父组件的 `fetchDetail` 集中管理加载态）
+  - `ModerationDetail.tsx` 的 `SourceRow` 接口补 `last_checked: string | null` 对齐契约，传 `sources` / `onRefetch` 给 `ModerationSourceBlock`
+- **与 ADMIN-15 协同**：两个区块现在完全共用同一 `sources` 数组与分组口径，不再出现行数差异
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1391/1391 ✅
+- **关联**：audit §1.3 E；至此 audit §1 源线路三链路的 5 个子问题（A/B/C/D/E）全部闭环

@@ -40,6 +40,7 @@ interface VideoDetail {
 }
 
 // snake_case — 与 GET /admin/sources 返回的 DB 原始行一致
+// ADMIN-16: 与 ModerationSourceBlock 消费的 SourceRow 保持字段兼容（统一数据源契约）
 interface SourceRow {
   id: string
   source_url: string
@@ -48,6 +49,7 @@ interface SourceRow {
   quality?: string | null
   episode_number: number
   is_active: boolean
+  last_checked: string | null
 }
 
 interface ModerationDetailProps {
@@ -442,7 +444,12 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
 
       {/* 源健康 */}
       <Collapsible title="源健康" testId="collapsible-sources">
-        <ModerationSourceBlock videoId={video.id} sourceCheckStatus={video.source_check_status} />
+        <ModerationSourceBlock
+          videoId={video.id}
+          sourceCheckStatus={video.source_check_status}
+          sources={sources}
+          onRefetch={() => fetchDetail(video.id)}
+        />
       </Collapsible>
 
       {/* 字段来源追踪（META-09） */}
