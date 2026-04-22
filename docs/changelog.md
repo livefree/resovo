@@ -8593,3 +8593,30 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **DB 影响**：无 migration（新字段只读，不落库）
 - **质量门禁**：typecheck ✅ / lint ✅ / unit 1430/1430 ✅（+39 新 case；原 crawler.test 98 条全绿兼容）
 - **关联**：audit §2.1/§2.2/§2.3 + META-10；下游 CRAWLER-08（source_category / mapSourceCategory 切换）
+
+---
+
+## [CRAWLER-08] source_category 改存 vod_class + 主链路切 mapSourceCategory
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-BUGFIX-01（12 张第 10 张，P1 收官）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无
+- **背景**：audit §2.4/§2.5 — `source_category` 原先仅复用 `type_name`，粒度粗；题材推断只走本地 `GENRE_MAP`，未切到更完整的 `@/api/lib/genreMapper.mapSourceCategory`（META-10 已扩充到覆盖豆瓣对齐题材）
+- **修复**（`apps/api/src/services/SourceParserService.ts`）：
+  - `parseVodItem` 的 `rawCategory` 优先取 `vod_class` 首项（按 `,`/`，`/`/`/`|`/`｜`/`、` 分隔），回落 `type_name`
+  - `parseGenre` 保留本地 `GENRE_MAP` 优先（业务特有项如"爽文短剧"/"女频恋爱"），未命中时回落到 `mapSourceCategory()`（对齐豆瓣题材的完整表）
+  - 新增 `import { mapSourceCategory } from '@/api/lib/genreMapper'`
+- **效果**：
+  - 细分类（如"冒险/灾难/歌舞/音乐/西部/运动/体育"）自动识别 genre，不再归入 `other`
+  - 历史命中（爽文短剧→romance，脑洞悬疑→mystery，功夫片→action 等）保持不变，不回归
+- **测试**：新增 `tests/unit/api/sourceParserGenre.test.ts`（+10 case）
+  - 本地 GENRE_MAP 特有项优先
+  - mapSourceCategory 兜底命中豆瓣对齐的新增题材
+  - 原有题材（都市/言情/仙侠/谍战 等）兼容
+  - 未映射 → null
+  - `parseVodItem` 的 `source_category` 按 vod_class 首项、多分隔符、缺失回落、同时决定 type 与 source_category
+- **DB 影响**：无 migration
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1440/1440 ✅（+10 新 case）
+- **关联**：audit §2.4/§2.5 + META-10；至此 audit §2（CMS 字段缺口 5 小节）全部闭环
+- **P1 全部完成**（ADMIN-15 / ADMIN-16 / CRAWLER-07 / CRAWLER-08），剩 P2 两张

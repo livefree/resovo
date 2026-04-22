@@ -13,8 +13,8 @@
 
 ---
 
-<!-- 2026-04-22 SEQ-20260422-BUGFIX-01 进度：9/12 ✅ -->
-<!-- P0 ✅：META-10 bbac72a / CHORE-05 59a2a91 / CRAWLER-05 e276b71 / ADMIN-13 0c237cb / CRAWLER-06 f8f8131 / ADMIN-14 1568d3c -->
-<!-- P1 ✅：ADMIN-15 056334c / ADMIN-16 588aa57 / CRAWLER-07 待 commit -->
-<!-- audit §1（源线路 5 子问题）+ §2.1/2.2/2.3（CMS 字段扩展）完成 -->
-<!-- 下一张 CRAWLER-08（M ~120 min，source_category 存 vod_class + 切 mapSourceCategory） -->
+<!-- 2026-04-22 SEQ-20260422-BUGFIX-01 进度：10/12 ✅ -->
+<!-- P0 ✅：META-10 / CHORE-05 / CRAWLER-05 / ADMIN-13 / CRAWLER-06 / ADMIN-14 -->
+<!-- P1 ✅：ADMIN-15 / ADMIN-16 / CRAWLER-07 / CRAWLER-08 (待 commit) -->
+<!-- audit §1（源线路 5 子问题）+ §2（CMS 字段 5 小节）全部闭环 -->
+<!-- P2：UX-14（XS 文案）/ CHORE-04（M 测试兜底） -->

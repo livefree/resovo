@@ -6,6 +6,7 @@
  */
 
 import type { VideoType, VideoGenre, VideoStatus, SourceType, ContentFormat, EpisodePattern } from '@/types'
+import { mapSourceCategory } from '@/api/lib/genreMapper'
 
 // ── 接口原始数据类型 ───────────────────────────────────────────────
 
@@ -215,10 +216,22 @@ export function parseType(input: string | ParseTypeInput | undefined): VideoType
   return matchTypeFromName(input.typeName) ?? 'other'
 }
 
-/** 从 source_category 推断 VideoGenre；无匹配返回 null（等待人工核验） */
+/**
+ * 从 source_category 推断 VideoGenre；无匹配返回 null（等待人工核验）。
+ *
+ * CRAWLER-08: 主链路切到 `@/api/lib/genreMapper` 的 `mapSourceCategory()`，
+ * 其 SOURCE_CATEGORY_MAP 表更完整（覆盖豆瓣对齐后的题材）；
+ * 本地 GENRE_MAP 保留仅作为兜底优先级（本地特有项如"爽文短剧"）。
+ */
 export function parseGenre(sourceCategory: string | null | undefined): VideoGenre | null {
   if (!sourceCategory) return null
-  return GENRE_MAP[sourceCategory.trim()] ?? null
+  const trimmed = sourceCategory.trim()
+  // 先查本地 GENRE_MAP（含本地扩展项）
+  const local = GENRE_MAP[trimmed]
+  if (local) return local
+  // 回落到 genreMapper.mapSourceCategory（对齐豆瓣题材）
+  const mapped = mapSourceCategory(trimmed)
+  return mapped[0] ?? null
 }
 
 /** 从 source_category 判断内容分级；成人内容返回 'adult'，其余返回 'general' */
@@ -312,7 +325,13 @@ export function parseVodItem(item: RawVodItem): {
   // 当前 normalizedType 与 type 保持一致；未来可做更细粒度映射
   const normalizedType: string = type
 
-  const rawCategory = typeName || null
+  // CRAWLER-08: source_category 优先取 vod_class（首项），回落 type_name
+  //             细分类信息对后续类型矫正 / 题材推断 / 审核辅助更有用
+  const classSegments = (item.vod_class ?? '')
+    .split(/[,，\/|｜、]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const rawCategory = classSegments[0] ?? (typeName || null)
   const video: ParsedVideo = {
     title: (item.vod_name ?? '').trim(),
     titleEn: item.vod_en?.trim() || null,
