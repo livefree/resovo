@@ -8518,3 +8518,24 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **后续待办**：
   - 文案 "分类标签" → "题材标签" 在 UX-14 中处理（避免同文件冲突）
   - 审核区两个区块数据源统一 / 线路分组按 source_name+site_key 在 ADMIN-15/16 中处理
+
+---
+
+## [ADMIN-15] 审核区线路分组按 source_name + source_site_key 复合 id
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-BUGFIX-01（12 张第 7 张，P1 启动）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无
+- **背景**：audit §1.3 B — 审核区播放器预览按纯 `source_name` 分组线路，不同源站恰好同名（如"线路1"/"jsm3u8"）时被错误合并，且线路组 `siteKey` 仅取首行导致展示错位
+- **修复**（`apps/server/src/components/admin/moderation/ModerationDetail.tsx`）：
+  - `groupedLines` 分组 key 从 `source_name` → `${name}::${siteKey ?? 'unknown'}`（复合 id）
+  - 每组新增 `id` 字段作为唯一标识，`name` 保留 source_name 用于显示
+  - `selectedLine` state 从存 `name` 改为存 `id`（初始化、onClick、activeLine 匹配均改用 id）
+  - data-testid 从 `moderation-source-btn-${name}` 改为 `moderation-source-btn-${id}`
+- **测试**：
+  - `tests/unit/components/admin/moderation/ModerationDetail.test.tsx` 新增 1 case：
+    vid-2 聚合 bfzym3u8 与 lzzy 两站各一条"线路1"，期望渲染两个独立按钮且 data-testid 按复合 id 命名
+- **与 ADMIN-13 协同**：ADMIN-13 已让 `/admin/sources` 返回字段 `site_key` 是行级 COALESCE，本卡消费该字段即能得到正确站点归属
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1391/1391 ✅（+1 新 case）
+- **关联**：audit §1.3 B；下游 ADMIN-16（数据源统一）

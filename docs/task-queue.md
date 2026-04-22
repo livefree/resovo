@@ -9488,11 +9488,15 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 单测覆盖：manual 二次编辑生效、hard lock 字段返回 skipped、低优先级来源仍被阻挡
      - typecheck / lint / unit ✅ + 后台审核区多选 genres 多次编辑回归
 
-7. ADMIN-15 — 审核区线路分组按 `source_name + source_site_key`（状态：⬜ 未开始）
+7. ADMIN-15 — 审核区线路分组按 `source_name + source_site_key`（状态：✅ 已完成 2026-04-22）
    - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：无
    - 建议模型：sonnet
    - 规模：S（~60 min）
-   - 依赖：ADMIN-13 ✅
+   - 依赖：ADMIN-13 ✅（0c237cb）
    - 对应 audit 条目：§1.3 B
    - 文件范围：`apps/server/src/components/admin/moderation/ModerationDetail.tsx`（L173 附近线路分组逻辑）
    - 验收：
