@@ -17,11 +17,14 @@ const MOCK_RESULTS = [
     titleEn: 'Search Result Movie',
     type: 'movie',
     coverUrl: null,
+    posterBlurhash: null,
+    posterStatus: null,
     rating: 7.5,
     year: 2024,
     sourceCount: 1,
     episodeCount: 1,
     status: 'completed',
+    subtitleLangs: ['zh-CN'],
   },
   {
     id: 'uuid-s2',
@@ -31,11 +34,14 @@ const MOCK_RESULTS = [
     titleEn: 'Search Result Anime',
     type: 'anime',
     coverUrl: null,
+    posterBlurhash: null,
+    posterStatus: null,
     rating: 8.0,
     year: 2023,
     sourceCount: 2,
     episodeCount: 12,
     status: 'ongoing',
+    subtitleLangs: ['zh-CN'],
   },
 ]
 
@@ -121,5 +127,56 @@ test.describe('搜索输入行为', () => {
     await mockSearchApiEmpty(page)
     await page.goto('/en/search?q=不存在的内容xyzabc')
     await expect(page.getByTestId('search-empty-state')).toBeVisible()
+  })
+})
+
+// ── BLOCKER #8 固化：q 参数透传到 API + 结果反映 q ─────────────────────────
+
+test.describe('搜索 q 参数透传（BLOCKER #8 固化）', () => {
+  test('/search?q=abc → API 收到 q=abc 且结果包含 abc', async ({ page }) => {
+    const MOCK_ABC = [
+      {
+        ...MOCK_RESULTS[0],
+        title: 'abc 搜索命中电影',
+        slug: 'search-abc-hit-A1b2C3d4',
+        shortId: 'A1b2C3d4',
+      },
+    ]
+    let queryReceived: string | null = null
+    await mockSearchApi(page, 'abc', MOCK_ABC)
+    page.on('request', (req) => {
+      if (req.url().includes('/v1/search?q=')) {
+        const u = new URL(req.url())
+        queryReceived = u.searchParams.get('q')
+      }
+    })
+    await page.goto('/en/search?q=abc')
+    await expect(page.getByText('abc 搜索命中电影').first()).toBeVisible({ timeout: 8_000 })
+    expect(queryReceived).toBe('abc')
+  })
+
+  test('q 从 abc 变为 xyz → 结果刷新', async ({ page }) => {
+    await mockSearchApi(page, 'abc', [
+      {
+        ...MOCK_RESULTS[0],
+        title: 'abc 命中',
+        slug: 'abc-hit-A1b2C3d4',
+        shortId: 'A1b2C3d4',
+      },
+    ])
+    await mockSearchApi(page, 'xyz', [
+      {
+        ...MOCK_RESULTS[1],
+        title: 'xyz 命中',
+        slug: 'xyz-hit-X1y2Z3w4',
+        shortId: 'X1y2Z3w4',
+      },
+    ])
+    await page.goto('/en/search?q=abc')
+    await expect(page.getByText('abc 命中').first()).toBeVisible({ timeout: 8_000 })
+
+    await page.goto('/en/search?q=xyz')
+    await expect(page.getByText('xyz 命中').first()).toBeVisible({ timeout: 8_000 })
+    await expect(page.getByText('abc 命中')).toHaveCount(0)
   })
 })

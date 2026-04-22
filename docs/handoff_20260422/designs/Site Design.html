@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Resovo · 站点设计（browse / search / detail / watch）</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --bg-canvas: oklch(98.5% 0.002 247);
+    --bg-surface: oklch(100% 0 0);
+    --bg-surface-raised: oklch(100% 0 0);
+    --bg-surface-sunken: oklch(96.8% 0.004 247);
+    --fg-default: oklch(11.2% 0.006 247);
+    --fg-muted: oklch(32.8% 0.012 247);
+    --fg-subtle: oklch(55.4% 0.014 247);
+    --border-default: oklch(92.9% 0.006 247);
+    --border-subtle: oklch(96.8% 0.004 247);
+    --border-strong: oklch(82% 0.008 247);
+    --accent-default: oklch(64.5% 0.165 230);
+    --accent-hover: oklch(52.0% 0.155 230);
+    --accent-muted: oklch(92.0% 0.045 230);
+    --accent-fg: oklch(100% 0 0);
+
+    --tag-lifecycle-bg: oklch(88.0% 0.090 155);
+    --tag-lifecycle-fg: oklch(30.0% 0.120 155);
+    --tag-trending-bg: oklch(90.0% 0.095 85);
+    --tag-trending-fg: oklch(40.0% 0.135 85);
+
+    --chip-movie-bg:  oklch(92.0% 0.045 230); --chip-movie-fg:  oklch(40% 0.135 230);
+    --chip-series-bg: oklch(90.0% 0.095 85);  --chip-series-fg: oklch(40% 0.135 85);
+    --chip-anime-bg:  oklch(91% 0.08 320);    --chip-anime-fg:  oklch(40% 0.14 320);
+    --chip-tvshow-bg: oklch(90.0% 0.09 155);  --chip-tvshow-fg: oklch(35% 0.12 155);
+    --chip-doc-bg:    oklch(92.9% 0.006 247); --chip-doc-fg:    oklch(32.8% 0.012 247);
+
+    --state-success-bg: oklch(92% 0.08 155); --state-success-fg: oklch(35% 0.13 155);
+    --state-warning-bg: oklch(92% 0.09 85);  --state-warning-fg: oklch(40% 0.14 85);
+    --state-error-bg:   oklch(92% 0.08 25);  --state-error-fg:   oklch(40% 0.16 25);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  body { background: #f0eee9; color: var(--fg-default); }
+  [data-theme="dark"] {
+    --bg-canvas: oklch(6.5% 0.004 247);
+    --bg-surface: oklch(11.2% 0.006 247);
+    --bg-surface-raised: oklch(16.5% 0.008 247);
+    --bg-surface-sunken: oklch(9% 0.004 247);
+    --fg-default: oklch(98.5% 0.002 247);
+    --fg-muted: oklch(86.9% 0.009 247);
+    --fg-subtle: oklch(55.4% 0.014 247);
+    --border-default: oklch(23% 0.010 247);
+    --border-subtle: oklch(16% 0.008 247);
+    --border-strong: oklch(32% 0.012 247);
+    --accent-default: oklch(64.5% 0.165 230);
+    --accent-muted: oklch(30% 0.080 230);
+  }
+  .surface { background: var(--bg-canvas); color: var(--fg-default); height:100%; overflow:hidden; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="site/pages.jsx"></script>
+<script type="text/babel">
+const { BrowsePage, SearchOverlay, SearchPage, DetailPage, WatchPage,
+        PhoneFrame, MobileBrowse, MobileDetail, MobileWatch } = window;
+
+// Wrap PC page to simulate a scrollable, but sized artboard
+function Frame({ dark, children, scroll=false }) {
+  return (
+    <div className="surface" data-theme={dark?'dark':undefined}
+         style={{position:'relative', overflow: scroll ? 'auto' : 'hidden'}}>
+      {children}
+    </div>
+  );
+}
+
+function Root() {
+  return (
+    <DesignCanvas>
+      <DCSection id="intro" title="Resovo · 站点设计" subtitle="沿用 home-b 的中保真风格；所有页面 PC + 移动端双平台。点进任意 artboard 可放大查看。">
+
+        {/* ── BROWSE ───────────────────────────────────────────── */}
+      </DCSection>
+
+      <DCSection id="browse" title="分类页 /browse" subtitle="顶部横向筛选栏 · 类型/地区/年份/题材/排序 · 每行互斥，再次点击取消回落到「全部」">
+        <DCArtboard id="browse-light" label="Light" width={1280} height={1860}>
+          <Frame><BrowsePage/></Frame>
+        </DCArtboard>
+        <DCArtboard id="browse-dark" label="Dark" width={1280} height={1860}>
+          <Frame dark><BrowsePage/></Frame>
+        </DCArtboard>
+        <DCArtboard id="browse-mobile" label="移动端" width={420} height={820}>
+          <div className="surface" style={{padding:'20px 0', height:'100%', display:'flex', justifyContent:'center'}}>
+            <PhoneFrame label="">
+              <MobileBrowse/>
+            </PhoneFrame>
+          </div>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ── SEARCH ───────────────────────────────────────────── */}
+      <DCSection id="search" title="搜索 /search" subtitle="浮层快搜（⌘K 触发） + 完整搜索页。浮层展示即时结果 + 热搜榜；完整页支持 tab 切类型、列表式结果、关键词高亮。">
+        <DCArtboard id="search-overlay" label="浮层 · 快搜" width={1280} height={1550}>
+          <Frame>
+            <div style={{position:'relative', height:'100%'}}>
+              {/* Faded home bg behind overlay */}
+              <div style={{position:'absolute', inset:0, background:'var(--bg-canvas)'}}>
+                <BrowsePage/>
+              </div>
+              <SearchOverlay/>
+            </div>
+          </Frame>
+        </DCArtboard>
+        <DCArtboard id="search-page-light" label="完整搜索页 · Light" width={1280} height={3220}>
+          <Frame><SearchPage/></Frame>
+        </DCArtboard>
+        <DCArtboard id="search-page-dark" label="完整搜索页 · Dark" width={1280} height={3220}>
+          <Frame dark><SearchPage/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ── DETAIL ───────────────────────────────────────────── */}
+      <DCSection id="detail" title="详情页 /movie · /series · /anime" subtitle="分栏：左海报 + 右信息（豆瓣风）· 选集网格 · 简介+演职员 · 相关推荐">
+        <DCArtboard id="detail-light" label="Light" width={1280} height={1720}>
+          <Frame><DetailPage/></Frame>
+        </DCArtboard>
+        <DCArtboard id="detail-dark" label="Dark" width={1280} height={1720}>
+          <Frame dark><DetailPage/></Frame>
+        </DCArtboard>
+        <DCArtboard id="detail-mobile" label="移动端" width={420} height={820}>
+          <div className="surface" style={{padding:'20px 0', height:'100%', display:'flex', justifyContent:'center'}}>
+            <PhoneFrame label=""><MobileDetail/></PhoneFrame>
+          </div>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ── WATCH ────────────────────────────────────────────── */}
+      <DCSection id="watch" title="播放页 /watch" subtitle="默认分栏（播放器 + 右侧选集/播放源/断点）· 可切换只影院模式。">
+        <DCArtboard id="watch-split-light" label="分栏 · Light" width={1440} height={1100}>
+          <Frame><WatchPage/></Frame>
+        </DCArtboard>
+        <DCArtboard id="watch-split-dark" label="分栏 · Dark" width={1440} height={1100}>
+          <Frame dark><WatchPage/></Frame>
+        </DCArtboard>
+        <DCArtboard id="watch-cinema" label="影院模式" width={1600} height={1280}>
+          <Frame dark><WatchPage cinema/></Frame>
+        </DCArtboard>
+        <DCArtboard id="watch-mobile" label="移动端" width={420} height={820}>
+          <div className="surface" style={{padding:'20px 0', height:'100%', display:'flex', justifyContent:'center'}}>
+            <PhoneFrame label=""><MobileWatch/></PhoneFrame>
+          </div>
+        </DCArtboard>
+      </DCSection>
+
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
+</script>
+</body>
+</html>

@@ -110,6 +110,7 @@ export function TagLayer({ lifecycle, trending, specs, rating }: TagLayerProps) 
         <div
           className="absolute top-2 left-2 flex flex-col gap-1 z-10 pointer-events-none"
           aria-hidden="true"
+          data-testid="tag-layer-top-left"
         >
           {topLeftTags}
         </div>

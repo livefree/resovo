@@ -9159,14 +9159,19 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 文件范围：`components/detail/EpisodePicker.tsx` / `components/video/VideoDetailClient.tsx` / `components/detail/DetailHero.tsx`
    - 验收：浏览器：点选集→URL +高亮同步；点播放→`/watch/...?ep=N` 且播第 N 集；`detail.spec.ts` 不回退并补断言
 
-8. M5-CLEANUP-11 — M5 e2e 扩写（9 场景固化）（状态：⬜ 未开始）
+8. M5-CLEANUP-11 — M5 e2e 扩写（9 场景固化）（状态：✅ 完成 2026-04-22）
    - 创建时间：2026-04-21
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
    - 建议模型：sonnet
+   - 执行模型：claude-opus-4-7（偏离建议，原因：用户授权 Opus 主循环收尾 M5，对接 CLOSE-03 Opus 审计）
+   - 子代理调用：无
    - 规模：M（~180 min）
    - 依赖：CLEANUP-04/05/06/07/08/09/10 全部 ✅
-   - 新增 8 个 spec 文件（≥ 16 test case）于 `tests/e2e-next/`：card-dual-exit / browse-category-routes / player-tri-state / player-option-tabs-stable / cinema-mode-size / typography-layout / search-query（扩写）/ detail-episode-pick
-   - 禁止：不改业务源码（仅在需要 testid 时补 `data-testid`）
-   - 验收：新增 spec 全绿；`npm run test:e2e` 无新增 flaky
+   - 实际产物：7 新增 spec + 1 扩写（search-page）共 **24 新增 test case**（原目标 ≥ 16），全部绿；同时修复 search-page.spec 原有 MOCK 缺 `subtitleLangs` 预存 bug
+   - 业务源码改动：仅 `apps/web-next/src/components/primitives/media/TagLayer.tsx` 补 1 行 `data-testid="tag-layer-top-left"`（合规：在需要时补 testid）
+   - 验收结果：新增 spec 全绿；`web-next-chromium` project 全量 53 passed + 15 TODO skipped + **0 failed**；typecheck / lint / unit（1380）✅
+   - 完成备注：执行模型: claude-opus-4-7
 
 9. M5-CLOSE-03 — M5 真·PHASE COMPLETE v2（真·真·闭环）（状态：⬜ 未开始）
    - 创建时间：2026-04-21

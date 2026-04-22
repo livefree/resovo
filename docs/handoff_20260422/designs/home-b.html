@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Resovo 首页重设计 · 方向 B（中等强化）</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root {
+    /* copied from apps/web-next/src/app/globals.css — light */
+    --bg-canvas: oklch(98.5% 0.002 247);
+    --bg-surface: oklch(100% 0 0);
+    --bg-surface-raised: oklch(100% 0 0);
+    --bg-surface-sunken: oklch(96.8% 0.004 247);
+    --fg-default: oklch(11.2% 0.006 247);
+    --fg-muted: oklch(32.8% 0.012 247);
+    --fg-subtle: oklch(55.4% 0.014 247);
+    --border-default: oklch(92.9% 0.006 247);
+    --border-subtle: oklch(96.8% 0.004 247);
+    --accent-default: oklch(64.5% 0.165 230);
+    --accent-hover: oklch(52.0% 0.155 230);
+    --accent-muted: oklch(92.0% 0.045 230);
+
+    --tag-lifecycle-bg: oklch(88.0% 0.090 155);
+    --tag-lifecycle-fg: oklch(30.0% 0.120 155);
+    --tag-trending-bg: oklch(90.0% 0.095 85);
+    --tag-trending-fg: oklch(40.0% 0.135 85);
+    --tag-spec-bg: color-mix(in oklch, oklch(6.5% 0.004 247) 72%, transparent);
+    --tag-spec-fg: oklch(100% 0 0);
+    --tag-rating-bg: color-mix(in oklch, oklch(6.5% 0.004 247) 56%, transparent);
+
+    /* type chips — NEW in direction B (repurposing trending palette per type) */
+    --chip-movie-bg:  oklch(92.0% 0.045 230); --chip-movie-fg:  oklch(40% 0.135 230);
+    --chip-series-bg: oklch(90.0% 0.095 85);  --chip-series-fg: oklch(40% 0.135 85);
+    --chip-anime-bg:  oklch(91% 0.08 320);    --chip-anime-fg:  oklch(40% 0.14 320);
+    --chip-tvshow-bg: oklch(90.0% 0.09 155);  --chip-tvshow-fg: oklch(35% 0.12 155);
+    --chip-doc-bg:    oklch(92.9% 0.006 247); --chip-doc-fg:    oklch(32.8% 0.012 247);
+
+    --shadow-card: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px -12px rgba(0,0,0,.12);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  body { background: #f0eee9; color: var(--fg-default); }
+  [data-theme="dark"] {
+    --bg-canvas: oklch(6.5% 0.004 247);
+    --bg-surface: oklch(11.2% 0.006 247);
+    --bg-surface-raised: oklch(16.5% 0.008 247);
+    --bg-surface-sunken: oklch(6.5% 0.004 247);
+    --fg-default: oklch(98.5% 0.002 247);
+    --fg-muted: oklch(86.9% 0.009 247);
+    --fg-subtle: oklch(55.4% 0.014 247);
+    --border-default: oklch(23% 0.010 247);
+    --accent-default: oklch(64.5% 0.165 230);
+    --accent-muted: oklch(38% 0.120 230);
+    --shadow-card: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+  .surface { background: var(--bg-canvas); color: var(--fg-default); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="home-b/mocks.jsx"></script>
+<script type="text/babel">
+const { HomePageMock, VideoCardStates, HeroV2Variants } = window;
+
+function Root() {
+  return (
+    <DesignCanvas>
+      <DCSection id="overview" title="方向 B · 中等强化" subtitle="保守优化 + 首页节奏重排 + 类型 chip 系统 + Hero 信息层级升级">
+
+        <DCArtboard id="home-full-light" label="首页 · Light · 完整" width={1280} height={3400}>
+          <div className="surface" style={{height:'100%', overflow:'hidden'}}>
+            <HomePageMock theme="light" />
+          </div>
+        </DCArtboard>
+
+        <DCArtboard id="home-full-dark" label="首页 · Dark · 完整" width={1280} height={3400}>
+          <div className="surface" data-theme="dark" style={{height:'100%', overflow:'hidden'}}>
+            <HomePageMock theme="dark" />
+          </div>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="hero" title="Hero v2" subtitle="评分/年份/类型/简介 + 进度指示 + scrim token">
+        <DCArtboard id="hero-light" label="Hero · Light" width={1280} height={560}>
+          <div className="surface" style={{height:'100%', overflow:'hidden'}}>
+            <HeroV2Variants theme="light" />
+          </div>
+        </DCArtboard>
+        <DCArtboard id="hero-dark" label="Hero · Dark" width={1280} height={560}>
+          <div className="surface" data-theme="dark" style={{height:'100%', overflow:'hidden'}}>
+            <HeroV2Variants theme="dark" />
+          </div>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="card" title="VideoCard · hover 升级" subtitle="overlay meta + 类型 chip + 评分/时长">
+        <DCArtboard id="card-states" label="5 态：idle / hover / Top10 / wide / chip-variant" width={1280} height={580}>
+          <div className="surface" style={{height:'100%', overflow:'hidden', padding:'32px'}}>
+            <VideoCardStates theme="light" />
+          </div>
+        </DCArtboard>
+        <DCArtboard id="card-states-dark" label="5 态 · Dark" width={1280} height={580}>
+          <div className="surface" data-theme="dark" style={{height:'100%', overflow:'hidden', padding:'32px'}}>
+            <VideoCardStates theme="dark" />
+          </div>
+        </DCArtboard>
+      </DCSection>
+
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
+</script>
+</body>
+</html>

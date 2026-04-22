@@ -14,5 +14,6 @@
 ---
 
 <!-- M5-CLEANUP-04~10 已完成：commit b557463 -->
-<!-- 剩余：M5-CLEANUP-11（e2e 扩写）+ CLOSE-03（PHASE COMPLETE v2） -->
+<!-- M5-CLEANUP-11 已完成：本次 commit -->
+<!-- 剩余：CLOSE-03（PHASE COMPLETE v2） -->
 <!-- CLEANUP-08 字体规格 BLOCKER：design_system_plan 未明确具体字体族，body 已补 font-sans 系统回退链；具体字体选型（Inter/Noto 等）需人工确认后另起任务 -->

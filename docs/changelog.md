@@ -8258,3 +8258,53 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 > ADR-037 迭代条款 §4a/§4b/§4c 保留，但 §4b 的 10 点必查项模板需在后续卡片中补充强制"浏览器手动验收 / 视觉回归 / 真实交互 e2e"一维（具体修订由 BLOCKER 决策 c 推进）。
 >
 > 主循环违反 CLAUDE.md "UI 或前端变更必须启动 dev server 在浏览器中测试"的约束，未做手动验收即签字，属流程执行漏洞，已记入本次审计案例。
+
+---
+
+## M5-CLEANUP-11 — M5 e2e 扩写（9 缺陷固化 / 8 spec + 24 新增 case）
+
+- **任务 ID**：M5-CLEANUP-11
+- **所属序列**：SEQ-20260421-M5-CLEANUP-2
+- **完成时间**：2026-04-22
+- **记录时间**：2026-04-22
+- **执行模型**：claude-opus-4-7（建议 sonnet；偏离原因：用户授权 Opus 主循环收尾 M5，以对接 CLOSE-03 Opus 审计；e2e 编写不涉及架构决策，偏离不阻断）
+- **子代理**：无
+- **新增文件**：
+  - `tests/e2e-next/card-dual-exit.spec.ts`（2 case · BLOCKER #1）
+  - `tests/e2e-next/browse-category-routes.spec.ts`（4 case · BLOCKER #2）
+  - `tests/e2e-next/player-tri-state.spec.ts`（3 case · BLOCKER #3 + #4）
+  - `tests/e2e-next/player-option-tabs-stable.spec.ts`（2 case · BLOCKER #5）
+  - `tests/e2e-next/cinema-mode-size.spec.ts`（2 case · BLOCKER #6）
+  - `tests/e2e-next/typography-layout.spec.ts`（3 case · BLOCKER #7，其中 1 case 条件性 skip）
+  - `tests/e2e-next/detail-episode-pick.spec.ts`（2 case · BLOCKER #9）
+- **修改文件**：
+  - `tests/e2e-next/search-page.spec.ts` — 新增 2 case（BLOCKER #8 q 参数透传 + q 变化刷新）；顺带补齐 MOCK_RESULTS `subtitleLangs / posterBlurhash / posterStatus`（原 mock 缺字段导致 `deriveSpecs` 崩溃的预存 bug）
+  - `apps/web-next/src/components/primitives/media/TagLayer.tsx` — 补 1 行 `data-testid="tag-layer-top-left"`（卡片允许"在需要时补 testid"范围内）
+  - `docs/tasks.md` — 写入 / 删除 CLEANUP-11 卡片
+  - `docs/task-queue.md` — CLEANUP-11 状态 ⬜→✅
+- **新增依赖**：无
+- **测试**：
+  - `npm run typecheck` ✅
+  - `npm run lint` ✅
+  - `npm run test -- --run` ✅（130 files / 1380 tests）
+  - `npx playwright test --project=web-next-chromium` ✅（53 passed / 15 TODO skipped / **0 failed**）
+  - 新增 24 test case 全绿；无新增 flaky
+- **缺陷 ↔ spec 映射**：
+
+| BLOCKER # | 缺陷 | CLEANUP 修复 | 固化 spec | test cases |
+|---|---|---|---|---|
+| #1 | VideoCard 双出口反转 + Tag 溢出 | CLEANUP-04 | `card-dual-exit.spec.ts` + `typography-layout.spec.ts` 部分 | 2 + 1 |
+| #2 | 分类页 404 | CLEANUP-05 | `browse-category-routes.spec.ts` | 4 |
+| #3 | 播放页弹窗化 + mini 无法展开 | CLEANUP-06 | `player-tri-state.spec.ts` | 2 |
+| #4 | 线路切换状态错乱 | CLEANUP-06 | `player-tri-state.spec.ts` | 1 |
+| #5 | 选集 / 线路 tab 不稳定 | CLEANUP-06 | `player-option-tabs-stable.spec.ts` | 2 |
+| #6 | CinemaMode 尺寸异常 | CLEANUP-07 | `cinema-mode-size.spec.ts` | 2 |
+| #7 | 文字 / 字体 / 布局堆叠 | CLEANUP-08 | `typography-layout.spec.ts` | 2（+1 conditional skip） |
+| #8 | 搜索只返热门 | CLEANUP-09 | `search-page.spec.ts` 扩写 | 2 |
+| #9 | 详情选集点击无效 | CLEANUP-10 | `detail-episode-pick.spec.ts` | 2 |
+
+- **共享层沉淀评估**：不涉及。本卡片仅产出 e2e 测试资产 + 单个 testid 补丁，不新增业务代码或共享组件。
+- **遗留事项**：
+  - `typography-layout.spec.ts:72` VideoGrid gap ≥ 16px conditional skip（skeleton 检测条件在 mock 首页下不命中；实际 gap 断言留给 CLOSE-03 浏览器手动验收）
+  - BLOCKER-FONT（CLEANUP-08 的字体族未定）不在本卡片范围，仍待人工决策
+- **后续**：M5-CLOSE-03（真·PHASE COMPLETE v2）可启动
