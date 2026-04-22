@@ -8559,3 +8559,37 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **与 ADMIN-15 协同**：两个区块现在完全共用同一 `sources` 数组与分组口径，不再出现行数差异
 - **质量门禁**：typecheck ✅ / lint ✅ / unit 1391/1391 ✅
 - **关联**：audit §1.3 E；至此 audit §1 源线路三链路的 5 个子问题（A/B/C/D/E）全部闭环
+
+---
+
+## [CRAWLER-07] RawVodItem 字段扩展 + parseType 重写（接入 vod_class）
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-BUGFIX-01（12 张第 9 张）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无（未触发 type_id → VideoType 跨站点 schema 决策）
+- **背景**：audit §2.1/§2.2/§2.3 — `parseType` 仅消费 `type_name`，`TYPE_MAP` 覆盖窄；许多站点返回的细分类（`国产动漫`/`剧情片`/`网络电影` 等）命不中 → 大量视频降级为 `other`
+- **修复**（`apps/api/src/services/SourceParserService.ts`）：
+  - `RawVodItem` 新增 8 个标准字段：`type_id / vod_class / vod_lang / vod_total / vod_serial / vod_version / vod_state / vod_note`
+  - `parseType` 签名升级：`(input: string | { typeName?, vodClass?, typeId? }) => VideoType`，向后兼容字符串形式；对象形式优先按 `vodClass` 首项（按 `,`/`，`/`/`/`|`/`｜`/`、` 分隔）匹配细分类，回落 `typeName`
+  - `TYPE_MAP` 扩充至 ~70 条映射，覆盖：
+    - 电影细分：剧情片/动作片/喜剧片/爱情片/科幻片/恐怖片/战争片/悬疑片/冒险片/惊悚片/灾难片/犯罪片/奇幻片/武侠片/歌舞片/伦理片/网络电影/微电影
+    - 电视剧细分：国产剧/美剧/韩剧/日剧/港剧/台剧/日韩剧/欧美剧/海外剧/网络剧/国语剧/华语剧
+    - 动漫细分：国产动漫/日本动漫/日韩动漫/欧美动漫/港台动漫
+    - 综艺细分：大陆综艺/国产综艺/港台综艺/日韩综艺/欧美综艺/海外综艺
+    - 短剧/体育/音乐/纪录片/少儿/新闻 扩充
+  - `parseVodItem` 调用改为 `parseType({ typeName, vodClass: item.vod_class, typeId: item.type_id })`
+  - `parseXmlResponse` 同步提取 9 个新字段（type_id / vod_class / vod_lang / vod_total / vod_serial / vod_version / vod_state / vod_note）
+- **测试**：新增 `tests/unit/api/sourceParserTypeMap.test.ts`，39 个 case：
+  - 向后兼容字符串调用（3 case）
+  - 电影细分 14 条 it.each
+  - 动漫/综艺/电视剧细分 15 条 it.each
+  - 未知项降级 `other`
+  - 对象调用：vodClass 优先 / 多值取首项 / vodClass 不命中回落 typeName / 都不命中降级 / 空对象 `other`
+  - `parseVodItem` 接入测试：vod_class 覆盖 type_name / 新字段不破坏解析
+- **不在范围**（CRAWLER-08 处理）：
+  - `source_category` 改存 `vod_class`
+  - `parseGenre` → `mapSourceCategory` 主链路切换
+- **DB 影响**：无 migration（新字段只读，不落库）
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1430/1430 ✅（+39 新 case；原 crawler.test 98 条全绿兼容）
+- **关联**：audit §2.1/§2.2/§2.3 + META-10；下游 CRAWLER-08（source_category / mapSourceCategory 切换）

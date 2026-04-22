@@ -9524,11 +9524,15 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 长剧多源场景不截断
      - typecheck / lint / unit ✅
 
-9. CRAWLER-07 — `RawVodItem` 字段扩展 + `parseType()` 重写（状态：⬜ 未开始）
+9. CRAWLER-07 — `RawVodItem` 字段扩展 + `parseType()` 重写（状态：✅ 已完成 2026-04-22）
    - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：无（未触发 type_id → VideoType 跨站点 schema 决策）
    - 建议模型：sonnet（若类型映射需跨站点 `type_id → VideoType` schema 决策 → 写 BLOCKER 升 Opus 子代理）
    - 规模：L（~240 min）
-   - 依赖：META-10 ✅（需基于对齐后的 `VideoType`）
+   - 依赖：META-10 ✅（bbac72a，需基于对齐后的 `VideoType`）
    - 对应 audit 条目：§2.1 / §2.2 / §2.3
    - 文件范围：
      - `apps/api/src/services/SourceParserService.ts`（`RawVodItem` 接口 + `TYPE_MAP` + `parseType` + `parseVodItem`）
