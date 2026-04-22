@@ -20,7 +20,8 @@
     "catKids": "少儿",
     "catOther": "其他",
     "search": "搜索...",
-    "admin": "管理后台"
+    "admin": "管理后台",
+    "mobileNav": "移动端导航"
   },
   "home": {
     "trendingMovies": "热门电影",
