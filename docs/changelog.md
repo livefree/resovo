@@ -8717,3 +8717,23 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **质量门禁**：typecheck ✅ / lint ✅ / unit 1447/1447 ✅（+7 新 case）
 - **关联**：audit 无；M5 对齐表 §4 黄线项 1 解除
 - **未使用新依赖**（CLAUDE.md §绝对禁止）
+
+---
+
+## [CHORE-07] Tag Token 西里尔字母 bug 修复（lifecycleDеlisting → lifecycleDelisting）
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-POSTFIX-01（M5→M6 前置清场，第 2 张）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无
+- **背景**：`packages/design-tokens/src/semantic/tag.ts` 的 `lifecycleDеlistingBg/Fg` 字段名中间的 `е` 是 U+0435（西里尔小写 ye），非 ASCII `e`。肉眼视觉一致但字面值不同，导致 IDE 跳转 / 全文搜索 `lifecycleDelisting`（ASCII）找不到；新代码若用 ASCII 写引用会编译报错。M5 对齐表"M6 前置待办（非阻断）"第 2 项 / 原 landing_plan HANDOFF-01 §一部分（landing_plan 延后后独立拆）
+- **修复**：
+  - `packages/design-tokens/src/semantic/tag.ts`：light/dark 两主题块各 2 处 `Dеlisting` → `Delisting`（共 4 处 U+0435 → U+0065）
+  - `tests/unit/design-tokens/alias-coverage.test.ts:112`：`'lifecycleDеlistingBg', 'lifecycleDеlistingFg'` 数组元素同步替换（2 处）
+- **预扫描**：全仓 grep `lifecycle[A-Za-z]*[\x{0400}-\x{04FF}]` 找到 6 处全部命中上述文件；修复后 grep 零命中
+- **扩展扫描**：`packages/design-tokens/src /apps/{web,web-next,server,api}/src` 整个源码目录 grep `[\x{0400}-\x{04FF}]` 零命中，确认全仓无其他西里尔残留
+- **Build 验证**：`npm -w @resovo/design-tokens run build` 通过；`tag.ts` 是 runtime module（未在 build.ts 导出），不写入 tokens.css/js，无外部 CSS 变量受影响
+- **影响面**：零外部消费者引用该字段（全仓唯一引用点就是 tag.ts 与 alias-coverage.test.ts），无需同步改前端组件
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1447/1447 ✅（首次全量 1 flaky 与本卡无关，重跑全绿）
+- **关联**：audit 无；M5 对齐表"M6 前置待办" #2 解除
+- **未使用新依赖**

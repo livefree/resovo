@@ -9647,6 +9647,25 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - typecheck / lint / unit 全绿
      - `x-rewrite-rule` 响应头返回 `M5:search`（契约级，不必 e2e 硬测）
 
-（后续补充 CHORE 卡：Tag Token 西里尔修复 / 字体族决策 BLOCKER 等可追加到本序列）
+2. CHORE-07 — Tag Token 西里尔字母 bug 修复（lifecycleDеlisting → lifecycleDelisting）（状态：✅ 已完成 2026-04-22）
+   - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：无
+   - 建议模型：haiku（机械替换）
+   - 规模：XS（~15 min）
+   - 依赖：无
+   - 对应留白：M5 对齐表"M6 前置待办（非阻断）"第 2 项 / 原 landing_plan HANDOFF-01 §一部分
+   - 文件范围：
+     - `packages/design-tokens/src/semantic/tag.ts`（4 处 light/dark 字段名）
+     - `tests/unit/design-tokens/alias-coverage.test.ts`（1 行 2 键）
+   - 验收：
+     - 全仓 grep U+0400-U+04FF 在 `lifecycle*` 标识符内零命中 ✅
+     - 全仓源码目录 grep U+0400-U+04FF 零命中 ✅（不只 lifecycle，顺便扫描全部源码）
+     - `npm -w @resovo/design-tokens run build` 通过，tokens.css 不含西里尔字符
+     - typecheck / lint / unit 1447/1447 ✅（alias-coverage 测试通过新键名）
+
+（后续补充 CHORE 卡：字体族决策 BLOCKER 等可追加到本序列）
 
 ---
