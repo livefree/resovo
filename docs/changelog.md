@@ -8789,3 +8789,31 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **下一步**：
   - 可以 push + 合并 dev → main（本地 3 commits 待 push）
   - 或继续其他任务（M6 规划 / landing_plan 启动 / 业务需求）
+
+---
+
+## [CDN-01] next/image custom loader 接入 + next.config.ts 配置
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-M6-CDN（M6 图片 CDN 预备 + 后台图片管理优化，第 1 张）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无（本卡属配置接入，未触发强制 Opus 情形）
+- **背景**：IMG-M4 已完成 `image-loader.ts` 抽象（passthrough/cloudflare + env 切换），但 `apps/web-next/next.config.ts` 仅有 `remotePatterns`，未挂接 custom loader。M6 预备第 1 步：把抽象挂接到 Next 内建图片管线，为 CDN-02（SafeImage 开关）与未来 Cloudflare 接入铺路
+- **实现**：
+  - 新增 `apps/web-next/src/lib/image/next-image-loader.ts`：默认导出 `(props: { src, width, quality? }) => string` 符合 Next `loaderFile` 约定；内部转接 `getLoader()`，映射 `{width, quality}` 到 `ImageLoaderOptions`，默认 `format: 'auto'`
+  - `apps/web-next/next.config.ts`：`images` 增 `loader: 'custom'` + `loaderFile: './src/lib/image/next-image-loader.ts'`；保留原有 `remotePatterns`
+  - `.env.example` 追加"图片 CDN Loader"配置段（server + client 各 2 项 env）
+- **测试**：新增 `tests/unit/lib/next-image-loader.test.ts`（+8 case）
+  - passthrough 默认：无 env / 显式 passthrough / 空 src / width+quality 不影响 URL
+  - cloudflare 模式：src 包装成 `imagedelivery.net` URL 含 `w=/q=/f=auto`；不传 quality 默认 80；空 hash 时仍构造 URL
+  - NEXT_PUBLIC_ fallback：server env 未设时读客户端 env
+- **Build 验证**：`npm run build -w @resovo/web-next` 成功，无 loader 相关错误/警告；custom loader 生效前提下全站 SSG + SSR 构建全过
+- **不在范围**（后续卡）：
+  - SafeImage `mode: 'img' | 'next'` 开关（CDN-02）
+  - 后台图片上传 + `ImageStorageService`（IMG-06）
+  - VideoImageSection / BannerForm UI 改造（IMG-07 / 08）
+  - 实际 Cloudflare Images 接入（未来）
+- **未引入新 npm 依赖**（`next/image` 是 Next 内建）
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1461/1461 ✅（+8）/ build ✅
+- **关联**：`image_pipeline_plan §10.2` / `frontend_redesign_plan §19 M6` / ADR-050 / IMG-M4
+- **下游**：CDN-02 SafeImage mode 开关（将 next 模式 demo 接到 /dev/fallback-preview）

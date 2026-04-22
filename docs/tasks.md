@@ -13,8 +13,6 @@
 
 ---
 
-<!-- ★ SEQ-20260422-POSTFIX-01 收官（3/3 ✅，2026-04-22）★ -->
-<!-- CHORE-06 8cb0d01 /search rewrite -->
-<!-- CHORE-07 f32a673 西里尔 bug -->
-<!-- CHORE-08 待 commit 字体族 Noto Sans -->
-<!-- 本地 3 commits 待 push；单任务工作台稳定态：空 -->
+<!-- 2026-04-22 SEQ-20260422-M6-CDN：CDN-01 ✅ 待 commit -->
+<!-- 序列进度：1/6（或 7）；下一张 CDN-02（SafeImage mode 开关，S ~60 min，强制 Opus arch-reviewer） -->
+<!-- 单任务工作台稳定态：空 -->
