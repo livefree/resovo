@@ -19,3 +19,4 @@
 <!-- arch-reviewer NEED_FIX → PASS（ADR-051 落盘 + serveLocalFile 分层整改） -->
 <!-- 待用户真人 QA 18 项打勾 → 对齐表 status: sealed → ★ M6 PHASE COMPLETE ★ -->
 <!-- 单任务工作台稳定态：空 -->
+<!-- 2026-04-22 M6-CLOSE-01 QA 发现 port bug：LOCAL_UPLOAD_PUBLIC_URL 默认 3001 → 4000；已修 + 新增防回归测试 +1 case → unit 1555 ✅ -->

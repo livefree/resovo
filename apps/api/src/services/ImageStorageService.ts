@@ -263,7 +263,9 @@ export class ImageStorageService {
       this.provider = new R2StorageProvider(r2, bucket)
     } else {
       const baseDir = process.env.LOCAL_UPLOAD_DIR ?? '.uploads'
-      const baseUrl = process.env.LOCAL_UPLOAD_PUBLIC_URL ?? 'http://localhost:3001/v1/uploads'
+      // 默认指向 apps/api 的 port 4000（与 apps/server 的 NEXT_PUBLIC_API_URL 默认保持一致）
+      // apps/server 跑在 3001（next dev -p 3001），不能作为 uploads base URL
+      const baseUrl = process.env.LOCAL_UPLOAD_PUBLIC_URL ?? 'http://localhost:4000/v1/uploads'
       this.provider = new LocalFsStorageProvider(baseDir, baseUrl)
       process.stderr.write(
         `[ImageStorageService] R2 未配置，使用本地 FS fallback（${baseDir} → ${baseUrl}）；生产环境必须配置 R2 三件套\n`,

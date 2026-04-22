@@ -9127,3 +9127,30 @@ f7833ab  IMG-07 P2 fixup 预览放大 + 真实进度
 - **未决**：对齐表 §5 18 项 checkbox
 - **指南**：`docs/handoff_20260422/manual_qa_m6_20260423.md`
 - **一旦全勾** → 追加 ★ M6 PHASE COMPLETE ★ 签字块
+
+---
+
+## [M6-CLOSE-01 fixup] LOCAL_UPLOAD_PUBLIC_URL 默认端口错误（QA 发现）
+
+- **日期**：2026-04-22
+- **上下文**：用户 M6 真人 QA 时上传 jpeg (686×386, 100KB) 触发"预览加载失败"
+- **根因**：IMG-06 fixup (aef993c) 写的 `LOCAL_UPLOAD_PUBLIC_URL` 默认值为 `http://localhost:3001/v1/uploads`，错误地指向 apps/server（Next dev port 3001），而不是 apps/api（port 4000）。Next.js 没有 `/v1/uploads/*` 路由 → 404 → `<img onError>` 触发降级文案
+- **核对**：
+  - `apps/api/src/server.ts:145` `PORT ?? 4000` — apps/api 默认 4000
+  - `apps/server/package.json:6` `next dev -p 3001` — apps/server 跑 3001
+  - `apps/server/src/lib/api-client.ts:21` `NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/v1'` — 客户端 BASE_URL 也是 4000
+  - IMG-06 fixup 我写错了，与 api-client 不一致
+- **修复**：
+  - `apps/api/src/services/ImageStorageService.ts`：默认值 `localhost:3001` → `localhost:4000` + 添加注释警示
+  - `.env.example`：LOCAL_UPLOAD_PUBLIC_URL 示例改为 4000 + 添加"URL 必须指向 apps/api 的端口，不是 apps/server"说明
+  - `docs/milestone_alignment_m6_20260423.md`：§4.5 env 文档 + §5.4 checklist 示例同步更新
+  - `docs/handoff_20260422/manual_qa_m6_20260423.md`：快速开始 + §5.4 同步
+  - 测试文件：2 处显式 `LOCAL_UPLOAD_PUBLIC_URL` 值 + 1 处正则断言 同步更新
+- **新增防回归单测**（`imageStorageService.test.ts`）：
+  - `it('LOCAL_UPLOAD_PUBLIC_URL 未设 → 默认指向 localhost:4000（apps/api 端口）')`
+  - 显式断言 `r.url` 含 `localhost:4000` 且不含 `:3001`，未来若再写错会立即失败
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1555/1555 ✅（+1 防回归）
+- **已知残留**：M6-CLOSE-01 所有既有 arch-reviewer PASS 结论不受影响（三维第二维代理证据、ADR-051 全部保留）；三维第三维用户真人 checklist 重新开始（本 bug 影响 §5.2 / §5.3 / §5.4 多项）
+- **用户动作**：
+  1. 重启 apps/api dev server 让新默认生效（或在 `.env.local` 显式设 `LOCAL_UPLOAD_PUBLIC_URL=http://localhost:4000/v1/uploads`）
+  2. 重新上传图片验证预览是否正常

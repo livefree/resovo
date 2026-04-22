@@ -55,7 +55,7 @@ describe('GET /uploads/* — LocalFS fallback 文件服务', () => {
     delete process.env.R2_SECRET_ACCESS_KEY
     tmpDir = mkdtempSync(join(tmpdir(), 'resovo-uploads-route-'))
     process.env.LOCAL_UPLOAD_DIR = tmpDir
-    process.env.LOCAL_UPLOAD_PUBLIC_URL = 'http://localhost:3001/v1/uploads'
+    process.env.LOCAL_UPLOAD_PUBLIC_URL = 'http://localhost:4000/v1/uploads'
   })
 
   afterEach(() => {

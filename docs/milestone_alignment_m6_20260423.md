@@ -195,7 +195,7 @@ R2_PUBLIC_BASE_URL=https://pub-<hash>.r2.dev (或 CNAME)
 
 # 本地 FS fallback（R2 未配时）
 LOCAL_UPLOAD_DIR=.uploads
-LOCAL_UPLOAD_PUBLIC_URL=http://localhost:3001/v1/uploads
+LOCAL_UPLOAD_PUBLIC_URL=http://localhost:4000/v1/uploads
 ```
 
 ### 4.6 已知残留（arch-reviewer 审计补充登记，全部不阻断签字）
@@ -244,7 +244,7 @@ LOCAL_UPLOAD_PUBLIC_URL=http://localhost:3001/v1/uploads
 
 ### 5.4 R2 未配置场景（开发环境）
 
-- [ ] 5.4.1 不配 R2（仅 LOCAL_UPLOAD_* 两个变量），上传仍成功，返回 URL 是 `http://localhost:3001/v1/uploads/...` 格式
+- [ ] 5.4.1 不配 R2（仅 LOCAL_UPLOAD_* 两个变量），上传仍成功，返回 URL 是 `http://localhost:4000/v1/uploads/...` 格式
 - [ ] 5.4.2 `apps/api/.uploads/` 目录下确实有文件落地
 - [ ] 5.4.3 浏览器请求 `/v1/uploads/posters/...png` 返回文件内容
 

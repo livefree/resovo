@@ -210,6 +210,39 @@ describe('ImageStorageService — R2 Provider（R2 已配）', () => {
   })
 })
 
+describe('ImageStorageService — LocalFS Provider 默认端口（防回归）', () => {
+  // M6-CLOSE-01 QA 发现：LOCAL_UPLOAD_PUBLIC_URL 默认必须指向 apps/api（4000），
+  // 不能指向 apps/server（3001）；否则浏览器 <img> 会 404 → 预览加载失败
+  beforeEach(() => {
+    mockSend.mockReset()
+    process.env = { ...originalEnv }
+    delete process.env.R2_ENDPOINT
+    delete process.env.R2_ACCESS_KEY_ID
+    delete process.env.R2_SECRET_ACCESS_KEY
+    delete process.env.LOCAL_UPLOAD_PUBLIC_URL // 不设 → 走默认值
+  })
+
+  afterEach(() => {
+    process.env = { ...originalEnv }
+  })
+
+  it('LOCAL_UPLOAD_PUBLIC_URL 未设 → 默认指向 localhost:4000（apps/api 端口）', async () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'resovo-img-default-'))
+    process.env.LOCAL_UPLOAD_DIR = tmp
+    try {
+      const svc = new ImageStorageService()
+      const r = await svc.upload({
+        buffer: Buffer.from('x'), contentType: 'image/jpeg',
+        ownerType: 'video', ownerId: 'v1', kind: 'poster',
+      })
+      expect(r.url).toMatch(/^http:\/\/localhost:4000\/v1\/uploads\//)
+      expect(r.url).not.toContain(':3001')
+    } finally {
+      rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('ImageStorageService — LocalFS Provider（R2 未配）', () => {
   let tmpDir: string
 
@@ -221,7 +254,7 @@ describe('ImageStorageService — LocalFS Provider（R2 未配）', () => {
     delete process.env.R2_SECRET_ACCESS_KEY
     tmpDir = mkdtempSync(join(tmpdir(), 'resovo-img-test-'))
     process.env.LOCAL_UPLOAD_DIR = tmpDir
-    process.env.LOCAL_UPLOAD_PUBLIC_URL = 'http://localhost:3001/v1/uploads'
+    process.env.LOCAL_UPLOAD_PUBLIC_URL = 'http://localhost:4000/v1/uploads'
   })
 
   afterEach(() => {
@@ -242,7 +275,7 @@ describe('ImageStorageService — LocalFS Provider（R2 未配）', () => {
       ownerType: 'video', ownerId: 'vid-1', kind: 'poster',
     })
     // 返回 URL
-    expect(r.url).toMatch(/^http:\/\/localhost:3001\/v1\/uploads\/posters\/vid-1-[a-f0-9]{8}\.png$/)
+    expect(r.url).toMatch(/^http:\/\/localhost:4000\/v1\/uploads\/posters\/vid-1-[a-f0-9]{8}\.png$/)
     expect(r.provider).toBe('local-fs')
     // 实际文件落地
     const fullPath = join(tmpDir, r.key)
