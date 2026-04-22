@@ -1716,3 +1716,159 @@ CLOSE 阶段的代理证据采集如**发现新运行时缺陷**：
   - typecheck / lint / unit 1453/1453 ✅（新增 6 case 在 typography-font-family.test.ts）
   - 未使用新 npm 依赖
 - **关联**：CLEANUP-08 BLOCKER-FONT 解除；M5 对齐表"M6 前置待办（非阻断）"第 1 项完成
+
+
+---
+
+## ADR-051: M6 CDN 预备 + 后台图片管理 — 架构决策固化（SEQ-20260422-M6-CDN）
+
+- **日期**：2026-04-22
+- **状态**：已采纳（签字于 M6 PHASE COMPLETE）
+- **子代理**：arch-reviewer (claude-opus-4-7)，NEED_FIX → 两必改点落地后 PASS（对齐表 `docs/milestone_alignment_m6_20260423.md` §6）
+- **背景**：`frontend_redesign_plan §19` + `image_pipeline_plan §12.M4` 定义的 M6 原 scope "CDN 预备 1 张卡不对接"太窄；用户 2026-04-22 在启动计划时追加后台视频/Banner 图片管理需求（此前仅能改 URL，无上传/预览）。scope 扩展为 6 张主卡（CDN-01 / CDN-02 / IMG-06+fixup / IMG-07+fixup / IMG-08）+ M6-CLOSE-01，+ ADMIN-17 条件跳过。方案层正当性：`image_pipeline_plan §8.3` 运营编辑页改造已明文"点击替换：支持 URL 填写或本地上传（阶段性方案）"，属方案内演进
+- **总决策**：以对齐表 §3 的 8 项决策为 M6 架构基线，固化于本 ADR；ADMIN-17 预警："当第 3 处图片上传消费方出现，必须抽共享组件"
+
+### 决策 1 · `next/image` loader 抽象（CDN-01）
+
+- `apps/web-next/next.config.ts` 设 `images.loader: 'custom'` + `loaderFile: './src/lib/image/next-image-loader.ts'`
+- `next-image-loader.ts` 默认导出 `(props: { src, width, quality? }) => string`（Next loaderFile 约定），内部转接既有 `getLoader()`（IMG-M4 落地的 passthrough / cloudflare 双模式）
+- env 驱动：`IMAGE_LOADER=passthrough|cloudflare` + `IMAGE_LOADER_CF_ACCOUNT_HASH`（server/edge）与 `NEXT_PUBLIC_*` 变体（client 编译期）
+- 与 SafeImage 消费同一 loader，未来接 Cloudflare Images 零代码改动，仅需 env 切换
+
+### 决策 2 · SafeImage `mode: 'lazy' | 'next'` 开关（CDN-02）
+
+- `SafeImageMode` 为命名类型（`types.ts`），导出，避免裸字符串联合
+- 默认 `'lazy'` → 走既有 `LazyImage`（IntersectionObserver + blurHash canvas），6 个现有消费者零回归
+- `'next'` → 分派到 `SafeImageNext.tsx`：`<Image fill sizes>` + 外层 aspect-ratio wrapper + blurDataURL placeholder
+- 预留 `blurDataURL?` / `sizes?` / `'data-testid'?` 三个 props 供未来全站迁移
+- `imageLoader` prop 在 next 模式下被忽略（dev 环境 `console.warn`；不用 `process.stderr` —— `'use client'` 浏览器端会 TypeError）
+- arch-reviewer CDN-02 评审 NEED_FIX → 4 必改点（mode 命名 / fill + aspect wrapper / loader warn / 预览页 CSS token）全部在 commit `9510d7f` 落地
+
+### 决策 3 · 图片上传 API 契约（IMG-06）
+
+```
+POST /v1/admin/media/images
+Content-Type: multipart/form-data
+Auth: admin only（对齐 /admin/banners）
+
+Fields:
+  file:       binary（≤ 5MB，mimetype ∈ image/jpeg|png|webp|avif|gif）
+  ownerType:  'video' | 'banner'
+  ownerId:    string
+  kind:       ImageKind（ownerType='video' 时必填；'banner' 时忽略）
+
+Response 201: { url, key, kind, contentType, size, hash, blurhashJobId, provider }
+Response 400 / 404 / 413 / 415 / 503 各有对应错误码
+```
+
+- **关键**：`ownerType + ownerId` 泛化而非 `kind='banner'`（避免撕裂 `ImageKind` 枚举 poster/backdrop/logo/banner_backdrop/stills/thumbnail，banner 不在其中）
+- `blurhashJobId` 供前端可选轮询
+- `hash` / `provider` 字段供调用方版本追踪 / 环境区分
+
+### 决策 4 · R2 key 命名（防 CDN 缓存不一致）
+
+- 带 sha256(buffer) 前 8 位 hash：`posters/{videoId}-{hash}.{ext}` 等
+- 覆盖上传 → URL 本身变化 → CDN/浏览器缓存天然 invalidate
+- 不依赖 ETag / Last-Modified 协商（协商行为会与 CF Images Transform URL 交互产生未知副作用）
+
+### 决策 5 · Storage Provider 抽象（IMG-06 P1 fixup）
+
+```
+interface StorageProvider
+  R2StorageProvider      ← R2 三件套齐全时（生产）
+    publicUrl(key):
+      优先 R2_PUBLIC_BASE_URL（R2.dev 子域名 / CNAME / CF Images fetch 源）
+      回退 R2_ENDPOINT（API endpoint） + 首次 stderr warn
+  LocalFsStorageProvider ← R2 未配时（开发）
+    write → LOCAL_UPLOAD_DIR（默认 .uploads）
+    publicUrl → LOCAL_UPLOAD_PUBLIC_URL 前缀
+    resolveFilePath → 路径穿越防御（400 INVALID_KEY）
+```
+
+- **原外部 review 发现**：`R2_ENDPOINT` 是 S3 API endpoint，浏览器 `<img src>` 加载会失败；需新增 `R2_PUBLIC_BASE_URL` env 优先读
+- **保留回退路径**：向后兼容 SubtitleService 现有行为，生产需 + stderr warn 引导运营配置
+- **LocalFs 非生产方案**：仅供开发者无 R2 环境下仍可端到端验证上传流；生产部署文档需强调必配 R2
+- `GET /v1/uploads/*` route 由 `ImageStorageService.serveLocalFile()` 提供 stream + content-type；route 只 pipe（ADR-051 签字时的 P1 必改整改项，源码详见 `apps/api/src/services/ImageStorageService.ts:serveLocalFile`）
+
+### 决策 6 · 写库失败补偿删除（IMG-06）
+
+- `MediaImageService.upload()` 在 R2 / LocalFs 写成功 → 写库（`updateCatalogFields` / `updateBanner`）失败 → 立即调 `storage.delete(key)` 清理孤儿对象
+- 避免"R2 有对象 + DB 指向旧 URL"的不一致
+- 写库失败仍向上抛错（route 层返 500），由前端提示用户重试
+
+### 决策 7 · blurhash 入队过滤（IMG-06）
+
+- `imageHealthQueue.add('blurhash-extract', { type, catalogId, videoId, kind, url })`
+- 仅 `kind ∈ { poster, backdrop, banner_backdrop }` 入队（这三个 kind 的 `media_catalog` 有 blurhash 列）
+- `logo`（透明艺术字无主色意义）+ banner 类（`home_banners` 表暂无 blurhash 列）不入
+- 未来为 `home_banners` 加 blurhash 列后，本过滤逻辑需同步放开（见"已知残留"R-banner-blurhash）
+
+### 决策 8 · 前端字体（由 ADR-050 背书，M6 间接依赖）
+
+- ADR-050 已采纳 Noto Sans + Noto Sans SC via `next/font/google`
+- M6 build 附带 109 个 woff2 切片 + CSS `@font-face` 注入
+- 本 ADR 不重复决策，仅声明依赖
+
+---
+
+### 已知残留（arch-reviewer 审计补充登记，签字通过但需后续处置）
+
+| ID | 描述 | 处置计划 |
+|----|------|---------|
+| R-r2-endpoint-fallback | `R2_PUBLIC_BASE_URL` 未设时 `ImageStorageService` 会回退 `R2_ENDPOINT` (S3 API endpoint)；代码有 stderr warn + `.env.example` 说明 | 生产部署文档强调必配 + deploy 前自检脚本（未来 CHORE） |
+| R-admin-17-pending | `VideoImageSection` + `BannerForm` 仅 2 处重复消费上传 UI，未达 3 处提取阈值 | ADMIN-17 预警：第 3 处出现时必须抽 `<ImageUploadField>` 共享组件 |
+| R-cf-images-not-connected | M6 scope 明确"不实施对接"；env 就位后切 `IMAGE_LOADER=cloudflare` 即可启用 | 未来任务（IMG-09 或独立 ADR） |
+| R-banner-blurhash | `home_banners` 无 blurhash 列（Migration 048 未扩），IMG-06 对 banner 不入 blurhash queue | 未来 migration 扩列后放开过滤（非 M6 scope） |
+| R-uploads-route-layering | `GET /v1/uploads/*` 原初版直接 fs I/O 违反分层 | **已在 M6-CLOSE-01 修复**（`ImageStorageService.serveLocalFile()` + route pipe） |
+| R-banner-two-step-ux | 新建 Banner → 保存 → 进入编辑页上传，UX 有摩擦；`CreateBannerInput.imageUrl` required + MediaImageService 要求 bannerId 存在 | 未来 IMG-09：评估 draft banner 或临时上传 key 改签协议 |
+| R-stills-thumbnail-kind | `KindSchema` 允许 stills/thumbnail 传入，但 MediaImageService 对这两个 kind 返 400 | 建议后续把 Zod schema 收紧到 4 个 kind，或 Service 层支持后再开放 |
+| R-upload-progress-no-refresh | `uploadWithProgress` 401 时不走 fetch 版的 token 自动 refresh；长耗时上传中途 token 过期需用户重选文件 | 设计决策，非 bug；UX 摩擦在 5MB 上限下罕见；若成本-价值比反转再 refactor |
+
+---
+
+### 测试覆盖（跨 M6-CDN 序列，+107 net case）
+
+| 任务 | 测试文件 | case 数 |
+|------|---------|---------|
+| CDN-01 | `tests/unit/lib/next-image-loader.test.ts` | 8 |
+| CDN-02 | `tests/unit/components/media/SafeImageNext.test.tsx` | 14 |
+| CDN-02 fixup | `tests/unit/components/media/SafeImageNext.loader-integration.test.tsx` | 4 |
+| IMG-06 storage | `tests/unit/api/imageStorageService.test.ts` | 23 |
+| IMG-06 composer | `tests/unit/api/mediaImageService.test.ts` | 11 |
+| IMG-06 fixup | `tests/unit/api/adminMediaUploadsRoute.test.ts` | 6 |
+| IMG-07 + fixup | `tests/unit/components/admin/videos/VideoImageSection.test.tsx` | 21 |
+| IMG-08 | `tests/unit/components/admin/banners/BannerForm.test.tsx` | +13 |
+| **合计** | | **+107** |
+
+全量：1447（M6 启动前）→ 1554（M6-CLOSE 前） → ADR-051 落盘后 full gate 重跑确认
+
+---
+
+### 历史 review 修复清单
+
+| Review 来源 | 必改数 | 落地 commit |
+|-------------|-------|-------------|
+| arch-reviewer CDN-02 审定 | 4 | `9510d7f` |
+| arch-reviewer IMG-06 审定 | 11 | `7aa02d2` |
+| 外部 review（IMG-06 + CDN-02 4 发现） | 4 | `aef993c` + `f7833ab` |
+| 外部 review（IMG-07 P2 2 发现） | 2 | `f7833ab` |
+| arch-reviewer M6-CLOSE 审定 | 2（ADR-051 + Route 分层） | 本 commit |
+
+---
+
+### 与前序 ADR 的继承关系
+
+- **ADR-035** 重写期路由切分：IMG-06 新 route `/admin/media/images` + `GET /uploads/*` 按现有 adminOnly middleware 挂载，未触动 ALLOWLIST（后台路径本身不经网关 rewrite）
+- **ADR-037 v2** 三维闭环签字门禁：M6-CLOSE-01 严格走三维（arch-reviewer + 代理证据 + 用户真人 checklist）
+- **ADR-045** 图片 url 校验迁移：本次不动
+- **ADR-046** 图片管线（IMG-M1 阶段）：Migration 048 的字段本次全部消费到
+- **ADR-047** Token 体系：M6 不改 Token
+- **ADR-050** 字体族 Noto Sans：M6 间接依赖（build 附 109 woff2）
+
+---
+
+### 适用范围
+
+- **本轮约束**：M6-CDN 6 张卡的所有 commit（4afb140 → 本 commit）
+- **未来延续**：IMG-09（若有）/ ADMIN-17（若第 3 处出现）/ CF Images 实际接入（未来 ADR）均需以本 ADR 为基线
+- **不溯及**：既有 IMG-M1/M2/M3/M4 不重审

@@ -9057,3 +9057,73 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **质量门禁**：typecheck ✅ / lint ✅ / unit 1554/1554 ✅（+14 净增：13 IMG-08 + 1 uploadWithProgressMock mock 补齐）
 - **关联**：IMG-06 / IMG-07 / ADR-046
 - **下游**：M6-CLOSE-01 签字是最后一张
+
+---
+
+## [M6-CLOSE-01] M6 PHASE COMPLETE + ADR-051 + arch-reviewer NEED_FIX → PASS
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-M6-CDN（收官卡）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：arch-reviewer (claude-opus-4-7) 独立 11 点审计 — 初审 `AUDIT RESULT: NEED_FIX`（ADR-051 未落盘 + GET /uploads/* route 分层违例），两必改落地后 `AUDIT RESULT: PASS`
+- **三维闭环状态**：
+  - 一维 · arch-reviewer 静态审计 ✅ PASS
+  - 二维 · 代理证据 ✅ PASS（build / typecheck / lint 0 warnings / unit 1554/1554）
+  - 三维 · 用户真人 checklist ⏳ 待用户打勾（18 项，见 `docs/milestone_alignment_m6_20260423.md` §5 + `docs/handoff_20260422/manual_qa_m6_20260423.md`）
+
+### arch-reviewer 初审的 2 项必改（全部落地）
+
+**P0 必改**：ADR-051 未落盘
+- 对齐表 §3 明文"关键架构决策（ADR-051 记录）"但 `docs/decisions.md` 无该条目
+- 违反 ADR-037 v2 §4a 第一维审计口径
+- **处置**：本卡追加 ADR-051 完整落盘，含 8 项架构决策 + 8 项已知残留（arch-reviewer 补登 4 项）+ 测试覆盖矩阵 + 历史 review 修复清单 + 继承关系
+
+**P1 必改**：GET /v1/uploads/* 分层违例
+- `apps/api/src/routes/admin/media.ts:54-93` 原 route handler 直接 `createReadStream` / `stat` / `extname` + `EXT_TO_CONTENT_TYPE` map
+- 违反"Route → Service → DB"分层（文件系统 I/O + MIME 映射属业务逻辑）
+- **处置**：`ImageStorageService.serveLocalFile(relativePath): Promise<{stream, contentType, size} | null>` 方法提取；route 收敛为解析 path → 调 Service → pipe stream → 404 映射（~15 行）；`EXT_TO_CONTENT_TYPE` 迁移进 Service
+
+### arch-reviewer 建议点（8 项，记入 ADR-051 未来处置段）
+
+B1 Fastify module augmentation / B2 KindSchema 与 Service 一致性 / B3 uploadWithProgress XHR 独立单测 / B4 Banner 两步 UX / B5 banner_backdrop 边界测试 / B6 上传 token refresh 注释 / B7 env 归属图 / B8 ADMIN-17 第 3 处预警
+
+### 产出交付
+
+1. `docs/milestone_alignment_m6_20260423.md`（新建）：方案对齐表 + 3 节架构决策 + 4 节代理证据 + 5 节用户 checklist 18 项 + 6 节审计结论回填 + 7 节签字状态
+2. `docs/decisions.md` ADR-051（新增）：M6-CDN 架构决策固化
+3. `docs/handoff_20260422/manual_qa_m6_20260423.md`（新建）：用户真人 QA 操作指南 + R2 / 本地 FS 两路径
+4. `apps/api/src/services/ImageStorageService.ts`：新增 `serveLocalFile()` 方法；`EXT_TO_CONTENT_TYPE` 迁入
+5. `apps/api/src/routes/admin/media.ts`：GET /uploads/* 简化为 pipe
+
+### 质量门禁
+
+- typecheck ✅ 四 workspace 全绿
+- lint ✅ 4 successful / 0 warnings
+- unit **1554/1554 ✅**（与 M6-CDN 启动前 1447 相比 +107 net case）
+- build ✅ web-next `Compiled successfully` / 23 static pages generated / 109 Noto woff2
+
+### M6-CDN 序列完整 commit 链（7 个功能 commit + 本签字 commit）
+
+```
+4afb140  CDN-01     next/image custom loader 接入
+9510d7f  CDN-02     SafeImage mode 开关
+7aa02d2  IMG-06     ImageStorageService + POST /admin/media/images
+aef993c  IMG-06/CDN-02 P1+P2 fixup (R2_PUBLIC_BASE_URL + LocalFS + 4 发现)
+95680d4  IMG-07     VideoImageSection UI
+f7833ab  IMG-07 P2 fixup 预览放大 + 真实进度
+4452069  IMG-08     BannerForm UI
+（本 commit）M6-CLOSE-01  PHASE COMPLETE + ADR-051 + 分层整改
+```
+
+### 解除条件
+
+用户在 `docs/milestone_alignment_m6_20260423.md` §5 逐条勾选 18 项 → 对齐表 status 改 `sealed` → 追加 ★ M6 PHASE COMPLETE ★ 条目 → M6 正式生效
+
+---
+
+## ⏳ PENDING USER — M6 等待真人验收
+
+- **日期**：2026-04-22
+- **未决**：对齐表 §5 18 项 checkbox
+- **指南**：`docs/handoff_20260422/manual_qa_m6_20260423.md`
+- **一旦全勾** → 追加 ★ M6 PHASE COMPLETE ★ 签字块

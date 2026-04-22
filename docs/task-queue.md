@@ -9693,7 +9693,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ## SEQ-20260422-M6-CDN — M6 图片 CDN 预备 + 后台图片管理优化
 
-- **状态**：🔄 执行中（2026-04-22 CDN-01 启动）
+- **状态**：✅ 已完成（7/7，2026-04-22，等用户真人 checklist 打勾生效）
 - **创建时间**：2026-04-22
 - **最后更新时间**：2026-04-22
 - **目标**：落地 `frontend_redesign_plan §19 M6` + `image_pipeline_plan §12.M4`（同一事）定义的 "图片 CDN 预备"；同步优化后台视频/Banner 的图片管理便利性（从纯 URL 编辑升级为上传 + 预览 + 健康状态）
@@ -9837,11 +9837,15 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 回改 VideoImageSection + BannerForm 消费
    - 验收：共享组件覆盖所有消费场景，无重复代码
 
-7. M6-CLOSE-01 — M6 PHASE COMPLETE + ADR-037 v2 三维闭环（状态：⬜ 未开始）
+7. M6-CLOSE-01 — M6 PHASE COMPLETE + ADR-037 v2 三维闭环（状态：✅ 已完成 2026-04-22，等用户 § 5 checklist 打勾生效）
    - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22（pending-user）
+   - 执行模型：claude-opus-4-7
+   - 子代理：arch-reviewer (claude-opus-4-7) — 初审 NEED_FIX（ADR-051 缺失 + GET /uploads/* 分层违例），两必改落地后二审 PASS
    - 建议模型：**opus 主循环 + opus arch-reviewer**
-   - 规模：S（~60 min）
-   - 依赖：CDN-01/02 + IMG-06/07/08 +（可选 ADMIN-17）全部 ✅
+   - 规模：S（~60 min，实际含必改 ~90 min）
+   - 依赖：CDN-01/02 + IMG-06/07/08 全部 ✅；ADMIN-17 ⏭️ 跳过
    - 强制 Opus 子代理：属 CLAUDE.md §模型路由 #3"撰写 ADR" + #6"高风险 PR code review"
    - 文件范围：
      - 新增 `docs/milestone_alignment_m6_20260423.md`（方案对齐表）

@@ -26,8 +26,9 @@
 
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { createHash } from 'node:crypto'
-import { mkdir, writeFile, unlink } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { createReadStream, type ReadStream } from 'node:fs'
+import { mkdir, stat, writeFile, unlink } from 'node:fs/promises'
+import { dirname, extname, join, resolve } from 'node:path'
 import type { ImageKind } from '@/types'
 
 // ── Provider 抽象 ─────────────────────────────────────────────────
@@ -199,6 +200,17 @@ const KIND_TO_PREFIX: Record<ImageKind, string> = {
   thumbnail:       'thumbnails',
 }
 
+// ADR-051: route 层 `GET /uploads/*` 原本内联了扩展名映射 + fs I/O，
+//          违反"Route 不含业务逻辑"分层；抽出到 Service 层供 route 纯 pipe
+const EXT_TO_CONTENT_TYPE: Record<string, string> = {
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png':  'image/png',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
+  '.gif':  'image/gif',
+}
+
 // ── 类型 ──────────────────────────────────────────────────────────
 
 export type OwnerType = 'video' | 'banner'
@@ -332,6 +344,42 @@ export class ImageStorageService {
       return this.provider.resolveFilePath(relativePath)
     }
     return null
+  }
+
+  /**
+   * ADR-051: 返回本地 fallback 文件的可读流 + content-type + size
+   *
+   * Route 层只做 `reply.header + reply.send(stream)` pipe，不做 fs I/O
+   * 业务逻辑（扩展名 → content-type 映射、路径穿越防御、ENOENT 处理）全在 Service
+   *
+   * @returns `{ stream, contentType, size }` 若文件存在；`null` 若：
+   *   - R2 provider 下本地 fallback 关闭
+   *   - 文件不存在（ENOENT）
+   *   - path 为空
+   * @throws `ImageStorageError(400, INVALID_KEY)` 路径穿越尝试
+   */
+  async serveLocalFile(
+    relativePath: string,
+  ): Promise<{ stream: ReadStream; contentType: string; size: number } | null> {
+    if (!relativePath) return null
+    const fullPath = this.resolveLocalFilePath(relativePath)
+    if (!fullPath) return null // R2 provider 下本地 fallback 关闭
+
+    try {
+      const s = await stat(fullPath)
+      if (!s.isFile()) return null
+      const ext = extname(fullPath).toLowerCase()
+      const contentType = EXT_TO_CONTENT_TYPE[ext] ?? 'application/octet-stream'
+      return {
+        stream: createReadStream(fullPath),
+        contentType,
+        size: s.size,
+      }
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code
+      if (code === 'ENOENT') return null
+      throw err
+    }
   }
 
   private buildKey(
