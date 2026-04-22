@@ -9807,11 +9807,15 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 上传后自动 refetch 图片状态
      - "更换 URL" 流程仍可用（兜底）
 
-5. IMG-08 — `BannerForm` UI 改造（状态：⬜ 未开始）
+5. IMG-08 — `BannerForm` UI 改造（状态：✅ 已完成 2026-04-22）
    - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：无（纯 UI，复用 IMG-07 pattern）
    - 建议模型：sonnet
    - 规模：S（~60 min）
-   - 依赖：IMG-06 ✅
+   - 依赖：IMG-06 ✅ + IMG-07 ✅
    - 文件范围：
      - `apps/server/src/components/admin/banners/BannerForm.tsx`
      - 单测扩写（若有）
@@ -9820,8 +9824,10 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 预览按 Banner 实际宽高比
      - 保留 imageUrl 手动填写（兜底）
 
-6. ADMIN-17 —（条件触发）抽 `<ImageUploadField>` 共享组件（状态：⬜ 未开始）
+6. ADMIN-17 —（条件触发）抽 `<ImageUploadField>` 共享组件（状态：⏭️ 跳过 2026-04-22）
    - 创建时间：2026-04-22
+   - 跳过决策：2026-04-22
+   - 跳过理由：IMG-07 + IMG-08 实装后仅 2 处重复消费（VideoImageSection + BannerForm），未达 CLAUDE.md "3 处以上必须提取"阈值；未来出现第 3 消费者时再起共享组件抽取
    - 建议模型：sonnet + **opus arch-reviewer（新共享组件 API 契约）**
    - 规模：M（~120 min）
    - 依赖：IMG-07 + IMG-08 ✅

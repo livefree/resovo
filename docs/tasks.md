@@ -13,7 +13,8 @@
 
 ---
 
-<!-- 2026-04-22 SEQ-20260422-M6-CDN 进度：4/6 -->
-<!-- CDN-01 4afb140 ✅ / CDN-02 9510d7f ✅ / IMG-06 7aa02d2 + aef993c fixup ✅ / IMG-07 95680d4 + 本次 P2 fixup ✅ -->
-<!-- 下一张 IMG-08（BannerForm UI 接入，S ~60 min，可复用 uploadWithProgress） -->
+<!-- 2026-04-22 SEQ-20260422-M6-CDN 进度：5/6（条件 ADMIN-17 跳过） -->
+<!-- CDN-01 4afb140 ✅ / CDN-02 9510d7f ✅ / IMG-06 7aa02d2 + aef993c fixup ✅ -->
+<!-- IMG-07 95680d4 + f7833ab fixup ✅ / IMG-08 ✅ 待 commit / ADMIN-17 ⏭️ 跳过（2 处重复未达阈值） -->
+<!-- 下一张（最后）M6-CLOSE-01（PHASE COMPLETE 三维闭环，强制 Opus arch-reviewer） -->
 <!-- 单任务工作台稳定态：空 -->

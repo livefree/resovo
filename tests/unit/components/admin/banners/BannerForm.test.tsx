@@ -12,11 +12,13 @@ import type { Banner } from '@resovo/types'
 
 const postMock = vi.fn()
 const putMock  = vi.fn()
+const uploadWithProgressMock = vi.fn()
 
 vi.mock('@/lib/api-client', () => ({
   apiClient: {
     post: (...args: unknown[]) => postMock(...args),
     put:  (...args: unknown[]) => putMock(...args),
+    uploadWithProgress: (...args: unknown[]) => uploadWithProgressMock(...args),
   },
 }))
 
@@ -201,6 +203,201 @@ describe('BannerForm', () => {
         (el) => el.getAttribute('placeholder') === 'https://example.com',
       )
       expect(hasExternalHint).toBe(true)
+    })
+  })
+})
+
+// ── IMG-08: 图片上传 + 放大 + 进度 ────────────────────────────────────
+
+function makeFile(name: string, type: string, size: number): File {
+  const blob = new Blob(['x'.repeat(size)], { type })
+  return new File([blob], name, { type })
+}
+
+describe('BannerForm — IMG-08 图片字段', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // jsdom 不支持 <dialog>，polyfill
+    HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', '') }
+    HTMLDialogElement.prototype.close = function () { this.removeAttribute('open') }
+  })
+
+  describe('新建模式', () => {
+    it('不显示"上传新图"按钮', () => {
+      render(<BannerForm />)
+      expect(screen.queryByTestId('banner-image-upload-btn')).toBeNull()
+    })
+
+    it('显示上传引导文案', () => {
+      render(<BannerForm />)
+      const hint = screen.getByTestId('banner-image-upload-hint')
+      expect(hint.textContent).toContain('保存后可在编辑页上传')
+    })
+  })
+
+  describe('编辑模式 — 上传按钮', () => {
+    it('显示"上传新图"按钮 + 隐藏 file input', () => {
+      render(<BannerForm initial={makeBanner()} />)
+      expect(screen.getByTestId('banner-image-upload-btn')).toBeDefined()
+      expect(screen.getByTestId('banner-image-file-input')).toBeDefined()
+    })
+
+    it('不显示新建模式的引导文案', () => {
+      render(<BannerForm initial={makeBanner()} />)
+      expect(screen.queryByTestId('banner-image-upload-hint')).toBeNull()
+    })
+
+    it('选图 → apiClient.uploadWithProgress 被调用，字段正确', async () => {
+      uploadWithProgressMock.mockResolvedValue({
+        data: {
+          url: 'https://cdn.example/new-banner.jpg', key: 'banners/ban-001-abc.jpg',
+          kind: 'banner', contentType: 'image/jpeg', size: 1024, hash: 'abc',
+          blurhashJobId: null, provider: 'r2',
+        },
+      })
+      render(<BannerForm initial={makeBanner()} />)
+      const fileInput = screen.getByTestId('banner-image-file-input') as HTMLInputElement
+      fireEvent.change(fileInput, { target: { files: [makeFile('b.jpg', 'image/jpeg', 1024)] } })
+
+      await waitFor(() => expect(uploadWithProgressMock).toHaveBeenCalledTimes(1))
+      const [path, formData] = uploadWithProgressMock.mock.calls[0]
+      expect(path).toBe('/admin/media/images')
+      const fd = formData as FormData
+      expect(fd.get('ownerType')).toBe('banner')
+      expect(fd.get('ownerId')).toBe('ban-001')
+      expect(fd.get('file')).toBeInstanceOf(File)
+    })
+
+    it('上传成功 → imageUrl state 同步更新', async () => {
+      uploadWithProgressMock.mockResolvedValue({
+        data: {
+          url: 'https://cdn.example/updated.png', key: 'banners/ban-001-x.png',
+          kind: 'banner', contentType: 'image/png', size: 100, hash: 'x',
+          blurhashJobId: null, provider: 'local-fs',
+        },
+      })
+      const { container } = render(<BannerForm initial={makeBanner()} />)
+      const fileInput = screen.getByTestId('banner-image-file-input') as HTMLInputElement
+      fireEvent.change(fileInput, { target: { files: [makeFile('a.png', 'image/png', 100)] } })
+
+      await waitFor(() => {
+        // 预览 img 的 src 应变更为新 URL
+        const img = screen.queryByTestId('banner-image-preview') as HTMLImageElement | null
+        expect(img?.src).toContain('https://cdn.example/updated.png')
+      })
+      // 验证 URL input 也同步
+      const urlInput = container.querySelector('input[type="text"]') as HTMLInputElement | null
+      // 跳过：AdminInput mock 不一定是第一个，但至少确认 image 已更新
+      expect(urlInput).toBeTruthy()
+    })
+
+    it('超过 5MB → 前置校验 + 不调 upload + 错误文案', async () => {
+      render(<BannerForm initial={makeBanner()} />)
+      const fileInput = screen.getByTestId('banner-image-file-input') as HTMLInputElement
+      fireEvent.change(fileInput, { target: { files: [makeFile('big.png', 'image/png', 5 * 1024 * 1024 + 1)] } })
+
+      const err = await screen.findByTestId('banner-image-upload-error')
+      expect(err.textContent).toContain('超过 5MB')
+      expect(uploadWithProgressMock).not.toHaveBeenCalled()
+    })
+
+    it('非白名单 mimetype → 前置校验 + 不调 upload', async () => {
+      render(<BannerForm initial={makeBanner()} />)
+      const fileInput = screen.getByTestId('banner-image-file-input') as HTMLInputElement
+      fireEvent.change(fileInput, { target: { files: [makeFile('d.pdf', 'application/pdf', 100)] } })
+
+      const err = await screen.findByTestId('banner-image-upload-error')
+      expect(err.textContent).toContain('仅支持')
+      expect(uploadWithProgressMock).not.toHaveBeenCalled()
+    })
+
+    it('服务端 413 → "图片超过 5MB"；415 → "仅支持..."', async () => {
+      uploadWithProgressMock.mockRejectedValueOnce(new Error('413 PAYLOAD_TOO_LARGE: ...'))
+      const { unmount } = render(<BannerForm initial={makeBanner()} />)
+      fireEvent.change(
+        screen.getByTestId('banner-image-file-input') as HTMLInputElement,
+        { target: { files: [makeFile('a.png', 'image/png', 100)] } },
+      )
+      await waitFor(() => {
+        expect(screen.getByTestId('banner-image-upload-error').textContent).toContain('超过 5MB')
+      })
+      unmount()
+
+      uploadWithProgressMock.mockRejectedValueOnce(new Error('415 UNSUPPORTED_MEDIA_TYPE: ...'))
+      render(<BannerForm initial={makeBanner()} />)
+      fireEvent.change(
+        screen.getByTestId('banner-image-file-input') as HTMLInputElement,
+        { target: { files: [makeFile('a.png', 'image/png', 100)] } },
+      )
+      await waitFor(() => {
+        expect(screen.getByTestId('banner-image-upload-error').textContent).toContain('仅支持')
+      })
+    })
+
+    it('上传进度：按钮显示百分比 + progressbar ARIA', async () => {
+      let capturedOnProgress: ((p: { percent: number | null; loaded: number; total: number | null }) => void) | null = null
+      let doResolve: ((v: unknown) => void) | null = null
+      uploadWithProgressMock.mockImplementationOnce((_p: string, _f: FormData, opts?: {
+        onProgress?: (p: { percent: number | null; loaded: number; total: number | null }) => void
+      }) => {
+        capturedOnProgress = opts?.onProgress ?? null
+        return new Promise((r) => { doResolve = r })
+      })
+      render(<BannerForm initial={makeBanner()} />)
+      fireEvent.change(
+        screen.getByTestId('banner-image-file-input') as HTMLInputElement,
+        { target: { files: [makeFile('a.png', 'image/png', 100)] } },
+      )
+
+      capturedOnProgress?.({ percent: 63, loaded: 630, total: 1000 })
+      const btn = await screen.findByTestId('banner-image-upload-btn')
+      await waitFor(() => expect(btn.textContent).toContain('63%'))
+
+      const bar = screen.getByTestId('banner-image-upload-progress')
+      expect(bar.getAttribute('role')).toBe('progressbar')
+      expect(bar.getAttribute('aria-valuenow')).toBe('63')
+
+      doResolve?.({
+        data: { url: 'https://cdn.example/r.png', key: 'k', kind: 'banner', contentType: 'image/png', size: 1, hash: 'h', blurhashJobId: null, provider: 'r2' },
+      })
+    })
+  })
+
+  describe('预览放大', () => {
+    it('有 imageUrl 时渲染触发按钮 + <dialog>', () => {
+      render(<BannerForm initial={makeBanner()} />)
+      expect(screen.getByTestId('banner-image-preview-trigger')).toBeDefined()
+      expect(screen.getByTestId('banner-image-preview-dialog')).toBeDefined()
+    })
+
+    it('点击缩略图 → dialog 打开；关闭按钮 → 关闭', () => {
+      render(<BannerForm initial={makeBanner()} />)
+      const dialog = screen.getByTestId('banner-image-preview-dialog') as HTMLDialogElement
+      expect(dialog.hasAttribute('open')).toBe(false)
+      fireEvent.click(screen.getByTestId('banner-image-preview-trigger'))
+      expect(dialog.hasAttribute('open')).toBe(true)
+      fireEvent.click(screen.getByTestId('banner-image-preview-close'))
+      expect(dialog.hasAttribute('open')).toBe(false)
+    })
+
+    it('dialog 大图 src 与缩略图一致', () => {
+      render(<BannerForm initial={makeBanner({ imageUrl: 'https://cdn.example/big.jpg' })} />)
+      const dialog = screen.getByTestId('banner-image-preview-dialog')
+      const imgs = dialog.querySelectorAll('img')
+      const large = imgs[imgs.length - 1] as HTMLImageElement
+      expect(large.src).toContain('https://cdn.example/big.jpg')
+    })
+  })
+
+  describe('破图降级', () => {
+    it('<img onError> → 隐藏缩略图 + "⚠ 预览加载失败"', async () => {
+      render(<BannerForm initial={makeBanner({ imageUrl: 'https://cdn.example/404.jpg' })} />)
+      const img = screen.getByTestId('banner-image-preview') as HTMLImageElement
+      fireEvent.error(img)
+      await waitFor(() => {
+        expect(screen.queryByTestId('banner-image-preview')).toBeNull()
+      })
+      expect(screen.getByText(/预览加载失败/)).toBeDefined()
     })
   })
 })

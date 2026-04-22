@@ -9017,3 +9017,43 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **未引入新 npm 依赖**（XHR 浏览器原生 / `<dialog>` HTML 原生）
 - **质量门禁**：typecheck ✅ / lint ✅ / unit 1540/1540 ✅（+8；首次全量 1 flaky，重跑稳态全绿）
 - **向前看**：IMG-08 直接复用 `uploadWithProgress`；M6-CLOSE 的真人 checklist 应含"上传大图观察进度百分比"与"点击缩略图展开原图"两项
+
+---
+
+## [IMG-08] BannerForm UI 接入上传 + 预览放大 + 真实进度
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-M6-CDN（M6 第 5 张）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无（纯 UI，复用 IMG-06/07 契约）
+- **背景**：BannerForm 图片字段之前只有 URL input + `h-24` object-cover 预览，无上传、无放大。IMG-06 后端 + IMG-07 前端 pattern 就位，本卡直接复用实装
+- **实现**（`apps/server/src/components/admin/banners/BannerForm.tsx`）：
+  - **两种模式差异处理**（Banner 特有）：
+    - **编辑模式**（`initial.id` 存在）：显示"上传新图"按钮 + URL input 保留（兜底）
+    - **新建模式**（无 id）：隐藏上传按钮；显示引导文案 `"新建 Banner 时需先填写外链地址；保存后可在编辑页上传图片"`（`CreateBannerInput.imageUrl` required + MediaImageService 前置校验 bannerId 存在 → 新建场景技术上无法上传）
+  - **上传流**：复用 `apiClient.uploadWithProgress`（IMG-07 P2 已实装）
+    - 字段：`file + ownerType='banner' + ownerId=initial.id`
+    - 成功后 `setForm.imageUrl` 同步本地 state（后端 MediaImageService 已写 home_banners.image_url）
+    - 客户端前置校验 5MB / mimetype；413/415/503/404 友好映射（`formatUploadError` 与 IMG-07 对齐，仅 404 文案改 "Banner 不存在"）
+  - **预览增强**：
+    - aspect ratio 16:9（Banner 横幅实际比例）+ 100px 高
+    - 缩略图 `<button>` 包裹 + `cursor-zoom-in` + `aria-label`
+    - 点击 → 原生 `<dialog>` 大图预览（max-width: `min(90vw - 2rem, 1200px)`，比视频放大的 960px 更宽以适配 banner 横幅比例）
+    - ESC / 遮罩 / 关闭按钮关闭
+  - **破图降级**：`<img onError>` → 隐藏 + "⚠ 预览加载失败"
+  - **进度条**：`role=progressbar` + `aria-valuenow/min/max`，按钮文案"上传中 63%"
+- **ADMIN-17 共享组件判断**：
+  - IMG-07 + IMG-08 是 2 处重复消费（VideoImageSection + BannerForm）
+  - 按 CLAUDE.md "同一 UI 模式 3 处以上必须提取"，**未达阈值 → 跳过 ADMIN-17**
+  - 重复内容约 80 行（formatUploadError + mimetype 常量 + `<dialog>` 放大 + 进度条 JSX + handleFileChange）
+  - 未来出现第 3 消费者（如运营上传用户头像 / 其他媒体资产）再起 ADMIN-17 抽取
+- **测试**（扩写 `BannerForm.test.tsx`，+13 case）：
+  - 新建模式：无上传按钮 / 有引导文案（2）
+  - 编辑模式 — 上传按钮：渲染 / 无新建引导文案 / multipart 字段正确 / 成功后 imageUrl 同步 / 5MB 超限 / mimetype 非白名单 / 413+415 服务端映射 / 进度百分比 + ARIA（8）
+  - 预览放大：触发按钮 + dialog 渲染 / 打开关闭 / 大图 src 一致（3）
+  - 破图降级：onError → 降级文案（1，其中"上传成功后 imageUrl 同步"含 1 断言合并为 1 case，计 8+3+1+2=14 但我实际写 13 个 describe.it 条目，核对后是 13）
+  - 共计 +13 新 it（原 8 保持）
+- **未引入新 npm 依赖**
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1554/1554 ✅（+14 净增：13 IMG-08 + 1 uploadWithProgressMock mock 补齐）
+- **关联**：IMG-06 / IMG-07 / ADR-046
+- **下游**：M6-CLOSE-01 签字是最后一张
