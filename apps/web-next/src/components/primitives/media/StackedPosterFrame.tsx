@@ -7,21 +7,21 @@ import type { SafeImageProps } from '@/components/media/types'
 
 export interface StackedPosterFrameProps
   extends Omit<SafeImageProps, 'className' | 'imgClassName'> {
-  stackLevel: 0 | 1
+  /** 0 = no stacking; 1 = single layer; 2 = double layer (series/anime/variety) */
+  stackLevel: 0 | 1 | 2
   className?: string
 }
 
 // Hard box-shadow (blur=0) simulates stacked card edges — no extra DOM nodes
-function buildShadow(hovered: boolean, reduced: boolean): string {
+function buildShadow(stackLevel: 1 | 2, hovered: boolean, reduced: boolean): string {
   const useHover = hovered && !reduced
   const l1x = useHover ? 'var(--stack-layer-1-hover-offset-x)' : 'var(--stack-layer-1-offset-x)'
   const l1y = useHover ? 'var(--stack-layer-1-hover-offset-y)' : 'var(--stack-layer-1-offset-y)'
+  const layer1 = `${l1x} ${l1y} 0 0 var(--stack-layer-1-bg)`
+  if (stackLevel === 1) return layer1
   const l2x = useHover ? 'var(--stack-layer-2-hover-offset-x)' : 'var(--stack-layer-2-offset-x)'
   const l2y = useHover ? 'var(--stack-layer-2-hover-offset-y)' : 'var(--stack-layer-2-offset-y)'
-  return [
-    `${l1x} ${l1y} 0 0 var(--stack-layer-1-bg)`,
-    `${l2x} ${l2y} 0 0 var(--stack-layer-2-bg)`,
-  ].join(', ')
+  return [layer1, `${l2x} ${l2y} 0 0 var(--stack-layer-2-bg)`].join(', ')
 }
 
 export function StackedPosterFrame({
@@ -67,7 +67,7 @@ export function StackedPosterFrame({
     <div
       className={cn('relative overflow-hidden rounded-lg', className)}
       style={{
-        boxShadow: hasStack ? buildShadow(isHovered, prefersReduced) : undefined,
+        boxShadow: hasStack ? buildShadow(stackLevel as 1 | 2, isHovered, prefersReduced) : undefined,
         transition: wrapperTransition,
       }}
       onMouseEnter={handleMouseEnter}

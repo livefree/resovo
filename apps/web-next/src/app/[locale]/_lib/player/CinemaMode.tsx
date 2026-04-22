@@ -34,7 +34,7 @@ export function CinemaMode({ active }: CinemaModeProps) {
       style={{
         position: 'absolute',
         inset: 0,
-        background: 'color-mix(in srgb, black 55%, transparent)',
+        background: 'var(--cinema-overlay-bg)',
         pointerEvents: 'none',
         opacity: 0,
         zIndex: 1,

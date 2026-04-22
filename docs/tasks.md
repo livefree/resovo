@@ -13,9 +13,25 @@
 
 ---
 
-## 任务卡：M5-CLEANUP-01
+## 任务卡：M5-CLEANUP-02
 
 - **状态**：进行中
+- **开始时间**：2026-04-21
+- **建议模型**：claude-sonnet-4-6
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **目标**：StackedPosterFrame stackLevel 0|1|2 + CinemaMode 颜色 Token 化
+- **文件范围**：
+  - 修改 `apps/web-next/src/components/primitives/media/StackedPosterFrame.tsx`
+  - 修改 `apps/web-next/src/components/video/VideoCard.tsx`（getStackLevel 映射）
+  - 修改 `apps/web-next/src/app/[locale]/_lib/player/CinemaMode.tsx`（颜色 Token 化）
+- **验收要点**：typecheck ✅ / lint ✅ / unit ✅；StackedPosterFrame 接受 stackLevel=2；CinemaMode 无硬编码颜色
+
+---
+
+## 已完成任务卡：M5-CLEANUP-01
+
+- **状态**：已完成（2026-04-21）
 - **开始时间**：2026-04-21
 - **建议模型**：claude-sonnet-4-6
 - **执行模型**：claude-sonnet-4-6

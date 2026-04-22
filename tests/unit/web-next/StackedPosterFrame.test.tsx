@@ -56,13 +56,13 @@ describe('StackedPosterFrame', () => {
     })
   })
 
-  describe('stackLevel=1（双层 box-shadow）', () => {
-    it('设置 box-shadow（包含两层）', () => {
+  describe('stackLevel=1（单层 box-shadow）', () => {
+    it('设置 box-shadow（仅一层）', () => {
       const { container } = render(<StackedPosterFrame {...defaultProps} stackLevel={1} />)
       const wrapper = container.firstChild as HTMLElement
       expect(wrapper.style.boxShadow).toBeTruthy()
-      // Two shadow layers separated by comma
-      expect(wrapper.style.boxShadow.split(',').length).toBe(2)
+      // Single shadow layer — no comma separator
+      expect(wrapper.style.boxShadow.split(',').length).toBe(1)
     })
 
     it('无额外 DOM 阴影节点', () => {
@@ -74,6 +74,15 @@ describe('StackedPosterFrame', () => {
     it('wrapper 有 overflow-hidden（主图圆角裁剪）', () => {
       const { container } = render(<StackedPosterFrame {...defaultProps} stackLevel={1} />)
       expect((container.firstChild as HTMLElement).className).toContain('overflow-hidden')
+    })
+  })
+
+  describe('stackLevel=2（双层 box-shadow）', () => {
+    it('设置 box-shadow（包含两层）', () => {
+      const { container } = render(<StackedPosterFrame {...defaultProps} stackLevel={2} />)
+      const wrapper = container.firstChild as HTMLElement
+      expect(wrapper.style.boxShadow).toBeTruthy()
+      expect(wrapper.style.boxShadow.split(',').length).toBe(2)
     })
   })
 
@@ -157,11 +166,11 @@ describe('StackedPosterFrame', () => {
   })
 
   describe('getStackLevel 映射', () => {
-    it('series/anime → 1；movie/short/variety/documentary → 0', async () => {
+    it('series/anime/variety → 2；movie/short/documentary → 0', async () => {
       const { getStackLevel } = await import('@/lib/video-stack-level')
-      expect(getStackLevel('series')).toBe(1)
-      expect(getStackLevel('anime')).toBe(1)
-      expect(getStackLevel('variety')).toBe(1)   // variety routes as /tvshow/ per ADR-048
+      expect(getStackLevel('series')).toBe(2)
+      expect(getStackLevel('anime')).toBe(2)
+      expect(getStackLevel('variety')).toBe(2)   // variety routes as /tvshow/ per ADR-048
       expect(getStackLevel('movie')).toBe(0)
       expect(getStackLevel('short')).toBe(0)
       expect(getStackLevel('documentary')).toBe(0)
