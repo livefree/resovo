@@ -8969,7 +8969,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ### 任务列表
 
-1. M5-CLEANUP-01 — Token 层补齐 + 内联 fallback 清理（状态：⬜ 未开始）
+1. M5-CLEANUP-01 — Token 层补齐 + 内联 fallback 清理（状态：✅ 已完成，2026-04-21）
    - 创建时间：2026-04-21
    - 建议模型：claude-sonnet-4-6
    - 规模：M（~150 分钟）
@@ -8995,7 +8995,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - `tests/unit/design-tokens/alias-coverage.test.ts` 通过
      - typecheck ✅ / lint ✅ / unit ✅
 
-2. M5-CLEANUP-02 — 组件规格对齐（状态：⬜ 未开始）
+2. M5-CLEANUP-02 — 组件规格对齐（状态：✅ 已完成，2026-04-21）
    - 创建时间：2026-04-21
    - 建议模型：claude-sonnet-4-6
    - 规模：M（~90 分钟）
@@ -9018,7 +9018,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - typecheck ✅ / lint ✅ / unit ✅
      - 关键路径回归：断点续播 / 线路切换 / 影院模式 / mini↔full↔pip / Fast Takeover
 
-3. M5-CLEANUP-03 — 文档签字 + ADR-049 + admin-banners 单测（状态：⬜ 未开始）
+3. M5-CLEANUP-03 — 文档签字 + ADR-049 + admin-banners 单测（状态：✅ 已完成，2026-04-21）
    - 创建时间：2026-04-21
    - 建议模型：claude-sonnet-4-6（主循环）+ claude-haiku-4-5-20251001（机械补写子代理）
    - 规模：S（~60 分钟）
