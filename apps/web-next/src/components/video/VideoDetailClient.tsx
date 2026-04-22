@@ -14,7 +14,7 @@ interface Props {
   showEpisodes?: boolean
 }
 
-function VideoDetailClientSkeleton() {
+export function VideoDetailClientSkeleton() {
   return (
     <div>
       <div className="detail-cascade-1">

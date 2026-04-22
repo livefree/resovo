@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import type { Metadata } from 'next'
-import { VideoDetailClient } from '@/components/video/VideoDetailClient'
+import { VideoDetailClient, VideoDetailClientSkeleton } from '@/components/video/VideoDetailClient'
 import { fetchVideoMeta } from '@/lib/video-detail'
 import { DEFAULT_BRAND_NAME } from '@/lib/brand-detection'
 
@@ -28,7 +28,7 @@ export function createDetailPage(showEpisodes: boolean) {
   return async function DetailPage({ params }: PageProps) {
     const { slug } = await params
     return (
-      <Suspense fallback={<VideoDetailClient.Skeleton />}>
+      <Suspense fallback={<VideoDetailClientSkeleton />}>
         <VideoDetailClient slug={slug} showEpisodes={showEpisodes} />
       </Suspense>
     )
