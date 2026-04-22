@@ -1570,3 +1570,57 @@ safe-area-inset 的吸收遵循"单一责任"原则，避免重复叠加：
 - `apps/server/package.json` 新增 `@dnd-kit/core ^6.3.1` + `@dnd-kit/sortable ^8.0.0`
 - `docs/rules/admin-module-template.md` 追加有序列表章节
 - `SortableList` 作为新 admin shared primitive 维护在 CHG 序列中，不受业务迭代影响
+
+---
+
+## ADR-037 迭代 — 真·PHASE COMPLETE 门禁更新（M5 闭环）
+
+- **日期**：2026-04-21
+- **状态**：已采纳（迭代条款附加于 ADR-037 主体后，不重编号）
+- **关联任务**：M5-CLOSE-02
+- **主循环**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-6) — 独立审计
+- **关联文档**：`docs/milestone_alignment_m5_final_20260421.md`、`docs/milestone_alignment_m5_20260420.md`、`docs/task_queue_patch_m5_cleanup_20260421.md`
+
+### 背景
+
+ADR-037 原条款（2026-04-20 REG-CLOSE-01 起草）约束"未对齐的 exec 里程碑不得标 ✅，必须有 Opus arch-reviewer 子代理审计 PASS"。M5-CLOSE-01（Sonnet 主循环 + Opus 子代理 CONDITIONAL → PASS）执行后，三路独立审计发现结构性偏差（Token 层 4 组缺失 / 组件规格偏离 / 文档签字未填），虽然 CONDITIONAL 条款已形式上满足，但"真·闭环"定义未明确：**CONDITIONAL 补丁完成后是否需要第二次 Opus 审计**。本次 M5-CLEANUP 序列（01/02/03）+ M5-CLOSE-02 闭环给出答案。
+
+### 迭代条款（附加于 ADR-037 §决策 第 4 条之后）
+
+**4a. 真·PHASE COMPLETE 二次审计门槛**：
+
+当 PHASE COMPLETE 一次审计结论为 **CONDITIONAL** 时：
+
+- ✅ 允许：在 task-queue.md 登记 **CONDITIONAL PASS 一次审计签字**（此时方案对齐文档标 "审计挂起"）
+- ❌ 禁止：在 task-queue.md 把该里程碑标 ✅（"一次审计 PASS + 补丁已启动" 不等于里程碑完成）
+- ❌ 禁止：启动下一里程碑任务（M6 取卡须等 M5 真·PHASE COMPLETE）
+- ✅ 必须：启动 CLEANUP 序列补齐 CONDITIONAL 条件；CLEANUP 完成后新开一张 CLOSE-0N 卡（N ≥ 2），由 **Opus 主循环 + Opus arch-reviewer 子代理**对纠偏内容做**二次独立审计**（PASS 条件全部满足方可解除 BLOCKER）
+- ✅ 产出：新起一份 `milestone_alignment_<milestone>_final_<date>.md`（≥ 35 项对齐 + ≥ 18 项红旗 + 二次审计 10 点签字），作为本里程碑的**最终闭环文档**。原一次审计文档保留为"审计挂起"版本，供回溯
+
+**4b. 二次审计必查 10 点模板**（以 M5 为例，其他里程碑按同构替换字段）：
+
+- Token 新增分组在 design-tokens 构建产物中可 grep
+- 组件层无 `var(--foo, non-color-fallback)` 内联 fallback
+- 组件类型签名与方案规格一致
+- 关键组件无硬编码颜色
+- 新增 Token 在 globals.css 中声明
+- 新 ADR 已落盘且 rule 文档已引用
+- 新增单元测试覆盖 ≥ 目标阈值
+- 一次审计挂起的签字行已更新
+- 主序列 + CLEANUP + CLOSE 全部 ✅
+- 关键路径未回退（静态 + e2e 验证）
+
+**4c. 数字口径澄清**：里程碑任务计数以 **task-queue.md 实际行数**为准，规格补丁中 "主序列 N 张" 若与实际不符，写入 final 对齐文档的 "记账偏差（非阻断 WARN）" 章节，不回滚已登记卡片。
+
+### 后果
+
+- **正面**：消除 CONDITIONAL 审计结论与真·闭环之间的模糊带；强制 CLEANUP 完成后二次独立审计，杜绝"一次 PASS 加补丁"式虚假收官
+- **负面**：CONDITIONAL 情形下里程碑关闭延迟约 1-2 个工作日（CLEANUP 序列 + 二次审计成本）；Opus 主循环 + Opus 子代理组合的模型成本增加一次
+- **长期收益 >> 短期成本**：M5 本轮若不强制二次审计，Token 层 4 组缺失 + 组件 0|1 硬签名会带入 M6 导致连锁补齐；前置成本摊平优于事后回滚
+
+### 适用范围
+
+- **溯及既往**：M5 本次即按本条款闭环（已由 M5-CLOSE-02 执行）
+- **未来约束**：M6 及后续里程碑若 PHASE COMPLETE 审计出现 CONDITIONAL，一律按 4a / 4b / 4c 处置
+- **不溯及**：M1-M4 已完成里程碑不追溯

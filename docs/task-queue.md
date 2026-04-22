@@ -8935,37 +8935,29 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ---
 
-## 🛑 BLOCKER — M5-CLEANUP 启动（M6 及后续任务冻结）
+## ✅ BLOCKER 已解除 — M5-CLEANUP 启动（2026-04-21 解除）
 
-- **触发时间**：2026-04-21
-- **触发原因**：M5 PHASE 三路独立审计发现结构性偏差（纠偏后）
-  - Token 层：4 个组（takeover / tabbar / shared-element / route-stack）在 design-tokens 包中无对应 TS 文件；tag 细粒度子类型缺失；skeleton dark 变体缺失；player 组件存在内联 fallback（`var(--foo, hardcoded)`）
-  - 组件层：`StackedPosterFrame` 类型签名 `0|1` 未达规格 `0|1|2`；`CinemaMode` 硬编码颜色（`color-mix(in srgb, black 55%, transparent)`）
-  - 文档层：milestone_alignment_m5 arch-reviewer 签字行未填；ADR-049 @dnd-kit 选型未正式落盘；admin-banners 单元测试缺失
-- **纠偏说明**（相较原补丁）：
-  - `--z-cinema-mode` 全局 Token 不加：CinemaMode 绝对定位于 player 容器内，`zIndex:1` 是正确的局部层级，不应提升为全站 Token
-  - `useSkeletonDelay` 已存在（`apps/web-next/src/hooks/useSkeletonDelay.ts`），不在修复范围
-  - MiniPlayer safe-area 已通过 globals.css `@media(hover:none)` CSS override 正确实现，不改 inline CSS
-  - CinemaMode T 快捷键属新功能，重写冻结期（M0–M6）内暂不执行
-  - `SortableList` 已存在（`apps/server/src/components/admin/shared/SortableList.tsx`），CLEANUP-03 仅补文档与测试
-- **封锁范围**：
-  - 🚫 禁止启动任何 M6 及后续里程碑任务
-  - 🚫 禁止在 M5-CLEANUP 范围以外新增 apps/web-next 组件
-  - ✅ 允许：M5-CLEANUP-01 / 02 / 03、M5-CLOSE-02、紧急 hotfix（须另报 BLOCKER）
-- **解除条件**：
-  1. M5-CLEANUP-01 / 02 / 03 全部 ✅
-  2. M5-CLOSE-02 Opus arch-reviewer 独立审计 PASS
-- **关联文档**：`docs/task_queue_patch_m5_cleanup_20260421.md`
+~~🛑 BLOCKER — M5-CLEANUP 启动（M6 及后续任务冻结）~~
+
+- **原触发时间**：2026-04-21
+- **解除时间**：2026-04-21
+- **解除依据**：
+  1. ✅ M5-CLEANUP-01 / 02 / 03 全部 ✅
+  2. ✅ M5-CLOSE-02 Opus arch-reviewer (claude-opus-4-6) 二次独立审计 10 点全部 PASS（2 项非阻断 WARN：admin-banners 单测路径偏离、主序列数量口径）
+- **关联签字**：`docs/milestone_alignment_m5_final_20260421.md` §3 + §4
+- **封锁范围解除**：✅ 允许 M6 及后续里程碑任务取卡启动
 
 ---
 
 ## SEQ-20260421-M5-CLEANUP — M5 收尾清理（3 张 + 1 签字）
 
-- **状态**：⬜ 未开始
+- **状态**：✅ 已完成（2026-04-21）
 - **创建时间**：2026-04-21
+- **完成时间**：2026-04-21
 - **目标**：补齐 Token 层结构性缺失、修复组件规格偏差、补全文档签字，最终由 Opus 出具真·PHASE COMPLETE 签字
 - **依赖**：SEQ-20260420-M5-CLOSE ✅
-- **串行顺序**：CLEANUP-01 → CLEANUP-02 → CLEANUP-03 → CLOSE-02
+- **串行顺序**：CLEANUP-01 ✅ → CLEANUP-02 ✅ → CLEANUP-03 ✅ → CLOSE-02 ✅
+- **闭环结论**：M5-CLOSE-02 Opus 主循环 (claude-opus-4-7) + arch-reviewer 子代理 (claude-opus-4-6) 二次独立审计 10 点全部 PASS；真·PHASE COMPLETE 成立；BLOCKER 解除
 
 ### 任务列表
 
@@ -9035,8 +9027,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - `tests/unit/server/admin-banners.test.tsx` ≥ 6 it 全部通过
      - typecheck ✅ / lint ✅ / unit ✅
 
-4. M5-CLOSE-02 — M5 真·PHASE COMPLETE + Opus 审计（状态：⬜ 未开始）
+4. M5-CLOSE-02 — M5 真·PHASE COMPLETE + Opus 审计（状态：✅ 已完成，2026-04-21）
    - 创建时间：2026-04-21
+   - 执行模型：claude-opus-4-7（主循环）
+   - 子代理：arch-reviewer (claude-opus-4-6) — 10 点独立审计 AUDIT RESULT: PASS
+   - 完成备注：`docs/milestone_alignment_m5_final_20260421.md` 起草（35 项对齐 + 18 项红旗 + 10 点签字）；`docs/decisions.md` 追加 ADR-037 迭代条款 §4a/§4b/§4c；`docs/changelog.md` 发布 ★ M5 真·PHASE COMPLETE ★；本文件解除 `🛑 BLOCKER — M5-CLEANUP 启动`。执行模型: claude-opus-4-7
    - 建议模型：**claude-opus-4-7**（主循环）+ arch-reviewer (claude-opus-4-6) 子代理（**强制**）
    - 规模：S（~90 分钟）
    - 依赖：M5-CLEANUP-01 ✅ + M5-CLEANUP-02 ✅ + M5-CLEANUP-03 ✅
@@ -9059,3 +9054,21 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - **验收**：
      - Opus arch-reviewer 子代理独立审计 PASS → 解除 BLOCKER，允许启动 M6
      - typecheck ✅ / lint ✅ / unit ✅ / e2e 全通
+
+---
+
+✅ PHASE COMPLETE — M5 真·PHASE COMPLETE（等待确认开始 M6）
+- **完成时间**：2026-04-21
+- **本 Phase 完成任务数**：22 张（主序列 18 + CLEANUP 3 + CLOSE-02 1）
+- **已合并到 main**：待本卡 commit 合并
+- **签字**：arch-reviewer (claude-opus-4-6) 二次独立审计 PASS（10 点全部 PASS，2 项非阻断 WARN）；主循环 claude-opus-4-7
+- **关联文档**：
+  - `docs/milestone_alignment_m5_final_20260421.md`（真·闭环对齐表 + 10 点审计签字）
+  - `docs/milestone_alignment_m5_20260420.md`（一次审计 CONDITIONAL → PASS，挂起版，供回溯）
+  - `docs/decisions.md` ADR-037 迭代条款（§4a/§4b/§4c 真·PHASE COMPLETE 门禁定义）
+- **建议下一步**：从 task-queue.md M6 序列取第一张卡启动（若 M6 序列未撰写，先规划 M6 补丁文档）
+- **需要你做的事**：
+  - [ ] 验收测试（运行 `npm run test -- --run` 和 `npm run test:e2e`）
+  - [ ] 部署到测试环境（如有）
+  - [ ] 确认开始 M6（删除此块即可）
+---

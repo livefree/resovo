@@ -8179,3 +8179,70 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 
 - **签字**：arch-reviewer (claude-opus-4-6)
 - **日期**：2026-04-21
+
+> ⚠️ 更正：上方 M5 PHASE COMPLETE 签字为 **一次审计 CONDITIONAL → PASS** 结论。真·PHASE COMPLETE 由下方 M5-CLOSE-02 经 CLEANUP 序列（01/02/03）+ 二次 Opus 独立审计后方告成立。参见 ADR-037 迭代条款 §4a / §4b / §4c。
+
+---
+
+## M5-CLEANUP-01 — Token 层补齐 + 内联 fallback 清理
+
+- **完成时间**：2026-04-21
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件列表**：
+  - `packages/design-tokens/src/semantic/takeover.ts`（新建）
+  - `packages/design-tokens/src/semantic/tabbar.ts`（新建）
+  - `packages/design-tokens/src/semantic/shared-element.ts`（新建）
+  - `packages/design-tokens/src/semantic/route-stack.ts`（新建）
+  - `packages/design-tokens/src/semantic/index.ts`（导出新增 4 组）
+  - `apps/web-next/src/app/globals.css`（新增 Token CSS 变量 + `--cinema-overlay-bg`）
+  - `apps/web-next/src/app/[locale]/_lib/player/GlobalPlayerFullFrame.tsx`（清理内联 fallback）
+  - `apps/web-next/src/app/[locale]/_lib/player/MiniPlayer.tsx`（清理内联 fallback）
+- **测试覆盖**：tests/unit/design-tokens/alias-coverage.test.ts（新建，断言新增 4 分组 Token key 存在）
+
+## M5-CLEANUP-02 — 组件规格对齐（StackedPosterFrame 0|1|2 + CinemaMode Token 化）
+
+- **完成时间**：2026-04-21
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件列表**：
+  - `apps/web-next/src/components/primitives/media/StackedPosterFrame.tsx`（`stackLevel: 0 | 1` → `0 | 1 | 2`，buildShadow 支持 1/2 分档）
+  - `apps/web-next/src/lib/video-stack-level.ts`（series/anime/variety → 2，其余 → 0）
+  - `apps/web-next/src/app/[locale]/_lib/player/CinemaMode.tsx`（`color-mix(...)` 硬编码 → `var(--cinema-overlay-bg)`）
+- **备注**：明确不做项：MiniPlayer safe-area inline 化、useSkeletonDelay、CinemaMode T 快捷键
+
+## M5-CLEANUP-03 — 文档签字补全 + ADR-049 + admin-banners 单测
+
+- **完成时间**：2026-04-21
+- **执行模型**：claude-sonnet-4-6（主循环）+ claude-haiku-4-5-20251001（机械补写子代理）
+- **子代理**：haiku 4.5（文档格式化）
+- **文件列表**：
+  - `docs/milestone_alignment_m5_20260420.md`（L8-10 签字行填入）
+  - `docs/decisions.md`（追加 ADR-049 @dnd-kit admin 选型）
+  - `docs/rules/admin-module-template.md`（L93-112 追加"有序列表"章节）
+  - `tests/unit/components/admin/banners/BannerForm.test.tsx`（新建，7 个 it）
+- **备注**：单测路径偏离规格（应为 `tests/unit/server/admin-banners.test.tsx`），内容等价；CLOSE-02 审计 WARN 非阻断
+
+## M5-CLOSE-02 — M5 真·PHASE COMPLETE + Opus 二次独立审计
+
+- **完成时间**：2026-04-21
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-6) — 10 点必查独立审计，AUDIT RESULT: PASS
+- **文件列表**：
+  - `docs/milestone_alignment_m5_final_20260421.md`（新建，35 项对齐 + 18 项红旗 + 10 点审计）
+  - `docs/decisions.md`（追加 ADR-037 迭代条款：真·PHASE COMPLETE 门禁更新 §4a/§4b/§4c）
+  - `docs/changelog.md`（追加本条目 + CLEANUP 三条 + 更正标记）
+  - `docs/task-queue.md`（CLEANUP 序列全 ✅，CLOSE-02 ✅，`🛑 BLOCKER — M5-CLEANUP 启动` 已解除）
+  - `docs/tasks.md`（清除 CLOSE-02 卡片）
+- **测试覆盖**：typecheck ✅ / lint ✅ / unit ✅ / e2e 关键路径（PLAYER / VIDEO / SEARCH）✅
+- **arch-reviewer 10 点审计结论**：全部 PASS（2 项非阻断 WARN：admin-banners 单测路径偏离、主序列数量口径从 15 修正为 18）
+- **M5 真·总计**：22 张任务卡（主序列 18 张 + CLEANUP 3 张 + CLOSE-02 1 张）
+- **备注**：本卡是 ADR-037 迭代条款首次落地案例；确立了 "CONDITIONAL 一次审计 → CLEANUP 序列 → Opus 二次独立审计" 的闭环协议
+
+## ★ M5 真·PHASE COMPLETE ★
+
+- **二次审计签字**：arch-reviewer (claude-opus-4-6)
+- **主循环**：claude-opus-4-7（M5-CLOSE-02）
+- **日期**：2026-04-21
+- **解除**：`🛑 BLOCKER — M5-CLEANUP 启动（M6 及后续任务冻结）` 已解除
+- **允许**：M6 里程碑任务取卡启动

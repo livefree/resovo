@@ -13,4 +13,4 @@
 
 ---
 
-<!-- M5-CLEANUP-01/02/03 已全部完成。下一任务：M5-CLOSE-02（需要 Opus 主循环会话）。 -->
+<!-- M5-CLOSE-02 已完成：M5 真·PHASE COMPLETE（Opus 4.7 主循环 + arch-reviewer 4.6 子代理 10 点 PASS）。BLOCKER 已解除，下一步开始 M6。 -->
