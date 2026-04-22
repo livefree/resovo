@@ -8905,3 +8905,49 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **质量门禁**：typecheck ✅ / lint ✅ / unit 1504/1504 ✅（+29）
 - **关联**：`image_pipeline_plan §10` / ADR-046（图片管线）/ CLAUDE.md §模型路由 #1 (共享组件 API 契约) + #2 (跨 3+ 消费方 schema)
 - **下游**：IMG-07 `VideoImageSection` 消费本 API 接入上传按钮 + 进度 + 预览
+
+---
+
+## [IMG-06 P1+P2 fixup] 外部 review 4 发现修复
+
+- **日期**：2026-04-22
+- **上下文**：IMG-06 初版 commit `7aa02d2` 通过 arch-reviewer NEED_FIX 修复后落地，随即收到外部独立 review 指出 4 个遗留问题。按优先级逐项修复，不改动 CDN-01 (`4afb140`)
+- **P1-a 断点：R2 API endpoint 作为前台 URL 写入 DB**（核心）
+  - 现象：`ImageStorageService.upload()` 组装 URL 为 `${R2_ENDPOINT}/${bucket}/${key}`，但 `R2_ENDPOINT` 是 S3 API endpoint，浏览器 `<img src>` 加载会失败；health-check HEAD 同样不通
+  - 修复：Provider 重构 — 新增 `R2StorageProvider.publicUrl(key)` 优先读 `R2_PUBLIC_BASE_URL`（R2.dev 子域名 / CNAME / CF Images fetch 源），未设时回退 `R2_ENDPOINT` + 首次 stderr warn（向后兼容 SubtitleService 现有行为）
+  - `.env.example` 追加 `R2_PUBLIC_BASE_URL` 说明（生产必配 + 2 个示例形式）
+- **P1-b 断点：IMG-06 卡要求的本地 fallback 未实装**
+  - 现象：初版 R2 未配直接 `503 STORAGE_NOT_CONFIGURED`，任务卡原文"R2 未配走本地 /uploads/*（或占位 URL）"未落地；开发环境无 R2 无法测上传
+  - 修复：`ImageStorageService` 重构为抽象 Provider 模式
+    - `R2StorageProvider` — R2 三件套齐全时启用
+    - `LocalFsStorageProvider` — R2 未配时启用，写入 `LOCAL_UPLOAD_DIR`（默认 `.uploads`）+ 返回 `LOCAL_UPLOAD_PUBLIC_URL` 前缀的 URL
+    - `upload` 返回值新增 `provider: 'r2' | 'local-fs'` 字段便于日志/e2e 断言
+    - 路径穿越防御：`resolveSafePath(key)` 拒绝 `../..` 等越界，抛 `400 INVALID_KEY`
+  - 新增 `GET /v1/uploads/*` route（`adminMediaRoutes` 内）：LocalFs provider 下用 `createReadStream` 返回文件，EXT → content-type 映射 6 种，R2 provider 下返 404
+  - 未引入新 npm 依赖（用 node:fs/promises + node:path）
+  - `.env.example` 追加 `LOCAL_UPLOAD_DIR` / `LOCAL_UPLOAD_PUBLIC_URL` 说明
+- **P2-a 断点：SafeImageNext 在浏览器端 `process.stderr.write` 会抛 TypeError**
+  - 现象：`SafeImageNext` 是 `'use client'` 组件；`useEffect` 里的 `process.stderr.write` 浏览器无此 API，一旦消费者在 dev 下传 `imageLoader` prop 就会 TypeError
+  - 修复：`process.stderr.write` → `console.warn` + `eslint-disable-next-line no-console`
+- **P2-b 断点：CDN-02 测试未真正验证 custom loader 变换**
+  - 现象：`SafeImageNext.test.tsx` 的 next/image mock 直接输出 `<img src={src}>`，不会触发 `next.config.ts loaderFile`，验证面空档
+  - 修复：新增独立集成测试文件 `tests/unit/components/media/SafeImageNext.loader-integration.test.tsx`（+4 case）
+    - 顶层 `vi.mock('next/image')` factory 让 mocked `<Image>` **真实调用** `nextImageLoader` default export，模拟 Next 在渲染时自动调用 `images.loaderFile` 的行为
+    - cloudflare env → 断言 img.src 包含 `imagedelivery.net/{hash}` + `w=` + `f=auto`
+    - IMAGE_LOADER 未设 / 显式 passthrough → 断言 src 原样
+    - `NEXT_PUBLIC_IMAGE_LOADER=cloudflare`（client env）同样生效
+  - 原 `SafeImageNext.test.tsx` 保持不变（14 case 仍覆盖 mode dispatch / error / props / aspect）
+- **测试变动**：
+  - `imageStorageService.test.ts`（18 → 23 case）：删除过时 503 case；新增 5 LocalFs case（provider 标签 / 写 FS / banner 前缀 / ENOENT / resolveLocalFilePath 含路径穿越防御）+ R2_PUBLIC_BASE_URL case
+  - 新增 `adminMediaUploadsRoute.test.ts`（6 case）：LocalFs content-type 映射 6 种 / 文件不存在 → 404 / 空 path → 404 / R2 provider 下 GET /uploads/* → 404
+  - 新增 `SafeImageNext.loader-integration.test.tsx`（4 case）：cloudflare → imagedelivery.net / passthrough 原样 / NEXT_PUBLIC_ 生效
+- **不变**：
+  - `MediaImageService` 接口 0 破坏性变更（upload / delete 签名未动）
+  - `MediaImageService.test.ts` 11 case 全部通过
+  - CDN-01 零改动
+  - API 契约（POST /admin/media/images 请求/响应）零改动
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1519/1519 ✅（1504 → 1519，+15 新 case）
+- **决定提交为独立 commit**（不 amend `7aa02d2`），遵循 CLAUDE.md git 规则"NEVER amend"
+- **关联 commit 对应**：
+  - `7aa02d2` IMG-06 初版
+  - 本次 commit IMG-06 P1+P2 fixup

@@ -12,11 +12,26 @@
 
 import type { FastifyInstance } from 'fastify'
 import type { MultipartFile } from '@fastify/multipart'
+import { createReadStream } from 'node:fs'
+import { stat } from 'node:fs/promises'
+import { extname } from 'node:path'
 import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { MediaImageService } from '@/api/services/MediaImageService'
-import { ImageStorageError } from '@/api/services/ImageStorageService'
+import {
+  ImageStorageService,
+  ImageStorageError,
+} from '@/api/services/ImageStorageService'
 import type { ImageKind } from '@/types'
+
+const EXT_TO_CONTENT_TYPE: Record<string, string> = {
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png':  'image/png',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
+  '.gif':  'image/gif',
+}
 
 const OwnerTypeSchema = z.enum(['video', 'banner'])
 const KindSchema = z.enum([
@@ -30,7 +45,52 @@ const KindSchema = z.enum([
 
 export async function adminMediaRoutes(fastify: FastifyInstance): Promise<void> {
   const adminOnly = [fastify.authenticate, fastify.requireRole(['admin'])]
-  const mediaImageService = new MediaImageService(db)
+  const imageStorage = new ImageStorageService()
+  const mediaImageService = new MediaImageService(db, imageStorage)
+
+  // ── GET /uploads/* — 本地 FS fallback 静态文件服务（仅 R2 未配时使用）────
+  // 不引入 @fastify/static；手写路由用 createReadStream 返回文件
+  // R2 provider 下该路径返 404（R2 公开 URL 由 publicUrl 直接暴露，不经本服务）
+  fastify.get('/uploads/*', async (request, reply) => {
+    const params = request.params as { '*'?: string }
+    const relativePath = params['*'] ?? ''
+    if (!relativePath) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'path required', status: 404 } })
+    }
+    const fullPath = imageStorage.resolveLocalFilePath(relativePath)
+    if (!fullPath) {
+      // R2 provider 下本地 fallback 关闭
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: '本地 fallback 未启用（R2 已配置，请直接用 R2 公开 URL）', status: 404 },
+      })
+    }
+    try {
+      const s = await stat(fullPath)
+      if (!s.isFile()) {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '不是文件', status: 404 } })
+      }
+      const ext = extname(fullPath).toLowerCase()
+      const contentType = EXT_TO_CONTENT_TYPE[ext] ?? 'application/octet-stream'
+      reply.header('content-type', contentType)
+      reply.header('cache-control', 'public, max-age=300')
+      return reply.send(createReadStream(fullPath))
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code
+      if (code === 'ENOENT') {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '文件不存在', status: 404 } })
+      }
+      if (err instanceof ImageStorageError) {
+        return reply.code(err.statusCode).send({
+          error: { code: err.code, message: err.message, status: err.statusCode },
+        })
+      }
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[GET /uploads/*] 500: ${msg}\n`)
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: `读取失败：${msg}`, status: 500 },
+      })
+    }
+  })
 
   // ── POST /admin/media/images ─────────────────────────────────────
   fastify.post('/admin/media/images', { preHandler: adminOnly }, async (request, reply) => {

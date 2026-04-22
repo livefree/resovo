@@ -1,27 +1,159 @@
 /**
- * ImageStorageService.ts — 图片资产 R2 持久化（IMG-06）
+ * ImageStorageService.ts — 图片资产持久化（IMG-06）
  *
  * 职责：
  *   - 接收图片二进制 + ownerType + ownerId + (kind)
  *   - mimetype 白名单 + 大小上限校验
  *   - 计算 sha256(buf).slice(0,8) 作为 key hash 段（防 CDN 缓存不一致）
- *   - R2 PutObject → 返回 { url, key, contentType, size, hash }
- *   - R2 未配时返 503（STORAGE_NOT_CONFIGURED），不使用假域名占位
+ *   - 根据运行时 provider 存储 → 返回前台可展示的 URL
  *   - 提供 delete(key) 供上层补偿删除
+ *
+ * Provider 两种（运行时自动决定）：
+ *   1. R2StorageProvider — R2 三件套 env 齐全时启用
+ *      公开 URL 用 R2_PUBLIC_BASE_URL（R2.dev 子域名 / CNAME / Cloudflare Images fetch 源）
+ *      未配 R2_PUBLIC_BASE_URL 时回退 R2_ENDPOINT 并 stderr warn（注意：R2_ENDPOINT
+ *      是 S3 API endpoint，通常不是浏览器可公开访问的资源域名；仅兼容字幕历史行为）
+ *   2. LocalFsStorageProvider — R2 未配时的本地开发 fallback
+ *      写入 LOCAL_UPLOAD_DIR（默认 .uploads）+ 挂载到 GET /v1/uploads/*
+ *      公开 URL 用 LOCAL_UPLOAD_PUBLIC_URL（默认 http://localhost:3001/v1/uploads）
+ *      不引入 `@fastify/static`，由 adminMediaRoutes 自写路由返回文件
  *
  * 边界：
  *   - 不写 DB（videos / home_banners 字段由 MediaImageService 组合写）
  *   - 不入队 blurhash job（由 MediaImageService 按 ownerType/kind 决策）
  *   - 不做 orphan cleanup（TODO: 未来 maintenance job 清理孤立对象）
- *
- * 复用 SubtitleService 的 R2 客户端构造范式，不引入新依赖。
  */
 
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { createHash } from 'node:crypto'
+import { mkdir, writeFile, unlink } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
 import type { ImageKind } from '@/types'
 
-// ── R2 客户端 ─────────────────────────────────────────────────────
+// ── Provider 抽象 ─────────────────────────────────────────────────
+
+interface StorageProvider {
+  readonly label: 'r2' | 'local-fs'
+  write(key: string, buffer: Buffer, contentType: string): Promise<void>
+  remove(key: string): Promise<void>
+  publicUrl(key: string): string
+}
+
+// ── R2 Provider ───────────────────────────────────────────────────
+
+class R2StorageProvider implements StorageProvider {
+  readonly label = 'r2' as const
+  private publicBaseWarned = false
+
+  constructor(
+    private client: S3Client,
+    private bucket: string,
+  ) {}
+
+  async write(key: string, buffer: Buffer, contentType: string): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+      }),
+    )
+  }
+
+  async remove(key: string): Promise<void> {
+    if (!key) return
+    try {
+      await this.client.send(
+        new DeleteObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+        }),
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(
+        `[ImageStorageService] R2 delete failed key=${key}: ${msg}\n`,
+      )
+      // TODO: orphan cleanup maintenance job 未来兜底
+    }
+  }
+
+  publicUrl(key: string): string {
+    const publicBase = process.env.R2_PUBLIC_BASE_URL?.replace(/\/+$/, '')
+    if (publicBase) {
+      return `${publicBase}/${key}`
+    }
+    if (!this.publicBaseWarned) {
+      process.stderr.write(
+        '[ImageStorageService] R2_PUBLIC_BASE_URL not set; falling back to R2_ENDPOINT. ' +
+        '注意：R2_ENDPOINT 是 S3 API endpoint，通常不是浏览器可公开访问的资源域名。' +
+        '请配置 R2_PUBLIC_BASE_URL（R2.dev 子域名或 CNAME）以让前台能展示图片。\n',
+      )
+      this.publicBaseWarned = true
+    }
+    const endpoint = (process.env.R2_ENDPOINT ?? '').replace(/\/+$/, '')
+    return `${endpoint}/${this.bucket}/${key}`
+  }
+}
+
+// ── 本地 FS Provider ──────────────────────────────────────────────
+
+class LocalFsStorageProvider implements StorageProvider {
+  readonly label = 'local-fs' as const
+
+  constructor(
+    private baseDir: string,
+    private baseUrl: string,
+  ) {}
+
+  async write(key: string, buffer: Buffer, _contentType: string): Promise<void> {
+    const fullPath = this.resolveSafePath(key)
+    await mkdir(dirname(fullPath), { recursive: true })
+    await writeFile(fullPath, buffer)
+  }
+
+  async remove(key: string): Promise<void> {
+    if (!key) return
+    try {
+      const fullPath = this.resolveSafePath(key)
+      await unlink(fullPath)
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code
+      if (code !== 'ENOENT') {
+        const msg = err instanceof Error ? err.message : String(err)
+        process.stderr.write(
+          `[ImageStorageService] local-fs delete failed key=${key}: ${msg}\n`,
+        )
+      }
+    }
+  }
+
+  publicUrl(key: string): string {
+    return `${this.baseUrl.replace(/\/+$/, '')}/${key}`
+  }
+
+  /** 防路径穿越 */
+  private resolveSafePath(key: string): string {
+    const base = resolve(this.baseDir)
+    const joined = resolve(base, key)
+    if (!joined.startsWith(base + '/') && joined !== base) {
+      throw new ImageStorageError(
+        `非法 key（疑似路径穿越）：${key}`,
+        400,
+        'INVALID_KEY',
+      )
+    }
+    return joined
+  }
+
+  /** 供 route 层读文件时共享路径解析逻辑 */
+  resolveFilePath(relativePath: string): string {
+    return this.resolveSafePath(relativePath)
+  }
+}
+
+// ── R2 客户端构造 ─────────────────────────────────────────────────
 
 function buildR2Client(): S3Client | null {
   const { R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY } = process.env
@@ -58,6 +190,15 @@ const MIME_TO_EXT: Record<string, string> = {
   'image/gif':  'gif',
 }
 
+const KIND_TO_PREFIX: Record<ImageKind, string> = {
+  poster:          'posters',
+  backdrop:        'backdrops',
+  logo:            'logos',
+  banner_backdrop: 'banner-backdrops',
+  stills:          'stills',
+  thumbnail:       'thumbnails',
+}
+
 // ── 类型 ──────────────────────────────────────────────────────────
 
 export type OwnerType = 'video' | 'banner'
@@ -77,6 +218,8 @@ export interface ImageUploadResult {
   contentType: string
   size: number
   hash: string
+  /** 识别此次上传落地到哪个 provider，便于日志与 e2e 断言 */
+  provider: 'r2' | 'local-fs'
 }
 
 // ── 错误类型 ──────────────────────────────────────────────────────
@@ -95,18 +238,30 @@ export class ImageStorageError extends Error {
 // ── ImageStorageService ───────────────────────────────────────────
 
 export class ImageStorageService {
-  private r2: S3Client | null
-  private bucket: string
+  private provider: StorageProvider
 
-  constructor() {
-    this.r2 = buildR2Client()
-    // IMG-06: 图片与字幕分桶便于独立 lifecycle / CDN 规则
-    this.bucket = process.env.R2_IMAGES_BUCKET ?? 'resovo-images'
+  constructor(provider?: StorageProvider) {
+    if (provider) {
+      this.provider = provider
+      return
+    }
+    const r2 = buildR2Client()
+    if (r2) {
+      const bucket = process.env.R2_IMAGES_BUCKET ?? 'resovo-images'
+      this.provider = new R2StorageProvider(r2, bucket)
+    } else {
+      const baseDir = process.env.LOCAL_UPLOAD_DIR ?? '.uploads'
+      const baseUrl = process.env.LOCAL_UPLOAD_PUBLIC_URL ?? 'http://localhost:3001/v1/uploads'
+      this.provider = new LocalFsStorageProvider(baseDir, baseUrl)
+      process.stderr.write(
+        `[ImageStorageService] R2 未配置，使用本地 FS fallback（${baseDir} → ${baseUrl}）；生产环境必须配置 R2 三件套\n`,
+      )
+    }
   }
 
-  /** R2 是否已配置；route 层可用此判断返 503 STORAGE_NOT_CONFIGURED */
-  isConfigured(): boolean {
-    return this.r2 !== null
+  /** 当前 provider 标识 */
+  getProviderLabel(): 'r2' | 'local-fs' {
+    return this.provider.label
   }
 
   /**
@@ -131,7 +286,7 @@ export class ImageStorageService {
   }
 
   /**
-   * 上传图片到 R2 并返回访问信息
+   * 上传图片 → 返回前台可展示的公开 URL
    *
    * R2 key 规则（带 sha256 前 8 位 hash 防 CDN 缓存不一致）：
    *   video + poster          → posters/{videoId}-{hash}.{ext}
@@ -145,58 +300,38 @@ export class ImageStorageService {
   async upload(input: ImageUploadInput): Promise<ImageUploadResult> {
     this.validate(input.buffer, input.contentType)
 
-    if (!this.r2) {
-      throw new ImageStorageError(
-        'R2 尚未配置（需要 R2_ENDPOINT / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY）',
-        503,
-        'STORAGE_NOT_CONFIGURED',
-      )
-    }
-
     const hash = createHash('sha256').update(input.buffer).digest('hex').slice(0, 8)
     const ext = MIME_TO_EXT[input.contentType] ?? 'bin'
     const key = this.buildKey(input, hash, ext)
 
-    await this.r2.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: input.buffer,
-        ContentType: input.contentType,
-      }),
-    )
-
-    const url = `${process.env.R2_ENDPOINT ?? ''}/${this.bucket}/${key}`
+    await this.provider.write(key, input.buffer, input.contentType)
 
     return {
-      url,
+      url: this.provider.publicUrl(key),
       key,
       contentType: input.contentType,
       size: input.buffer.length,
       hash,
+      provider: this.provider.label,
     }
   }
 
   /**
-   * 删除 R2 对象（供 MediaImageService 在写库失败后补偿回滚）
-   * R2 未配置或 key 为空时静默返回
+   * 删除对象（供 MediaImageService 在写库失败后补偿回滚）
    */
   async delete(key: string): Promise<void> {
-    if (!this.r2 || !key) return
-    try {
-      await this.r2.send(
-        new DeleteObjectCommand({
-          Bucket: this.bucket,
-          Key: key,
-        }),
-      )
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      process.stderr.write(
-        `[ImageStorageService] delete failed key=${key}: ${msg}\n`,
-      )
-      // TODO: orphan cleanup maintenance job 未来兜底
+    await this.provider.remove(key)
+  }
+
+  /**
+   * 供 route 层读取本地 fallback 文件；仅 LocalFsStorageProvider 有效
+   * R2 provider 返 null，调用方应直接 302 到 provider 的公开 URL
+   */
+  resolveLocalFilePath(relativePath: string): string | null {
+    if (this.provider instanceof LocalFsStorageProvider) {
+      return this.provider.resolveFilePath(relativePath)
     }
+    return null
   }
 
   private buildKey(
@@ -214,11 +349,6 @@ export class ImageStorageService {
   }
 }
 
-const KIND_TO_PREFIX: Record<ImageKind, string> = {
-  poster:          'posters',
-  backdrop:        'backdrops',
-  logo:            'logos',
-  banner_backdrop: 'banner-backdrops',
-  stills:          'stills',
-  thumbnail:       'thumbnails',
-}
+// 导出 LocalFsStorageProvider 供测试 / route 内部类型收窄
+export { LocalFsStorageProvider, R2StorageProvider }
+export { KIND_TO_PREFIX, MIME_TO_EXT, MAX_FILE_SIZE, ALLOWED_MIMETYPES }
