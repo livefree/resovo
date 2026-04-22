@@ -8397,3 +8397,30 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **后续待办**（非本卡范围）：
   1. 5 个新 VideoGenre 的 i18n 键（CRAWLER-07 或前端消费者卡）
   2. 前端题材筛选下拉若硬编码枚举需同步（后续扫描）
+
+---
+
+## [CHORE-05] 采集 / 入库 / 外部原始数据全量清空
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-BUGFIX-01（12 张第 2 张）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无
+- **授权**：用户 2026-04-22 预授权 + dry-run 后二次确认"执行"
+- **背景**：试验期采集了约 2 万条视频 / 33 万条源，为确保 P0 修复（CRAWLER-05/06 / ADMIN-13/14）在干净数据上验证，清空采集 / 入库 / 外部原始数据 / 运行记录
+- **实际清空**（事务 BEGIN..COMMIT 包裹）：
+  - 直接：broken_image_events 18 + crawler_task_logs 4,560 + crawler_tasks 319 + crawler_runs 36 + videos 19,512 + media_catalog 19,512 + media_catalog_aliases 3,510
+  - CASCADE 连带：video_sources 330,838 + video_aliases 21,638
+  - 合计约 **40 万行**
+- **保留表**（核实 Before/After 不变）：users 5 / crawler_sites 75 / system_settings 13 / home_banners 0 / brands 0 / lists 0 / list_likes 0
+- **用户行为表实测全 0**（user_favorites / watch_history / comments / danmaku / list_items），CASCADE 无副作用
+- **副作用**：`crawler_sites.last_crawled_at / last_crawl_status` 重置为 NULL（75 站点全部），使下一轮采集从零开始
+- **脚本升级**：`scripts/clear-crawled-data.ts` 改写
+  - 默认 dry-run（无参数即安全），`--execute` 才实际清空
+  - 表清单补齐：`external_data.*` schema 前缀、`source_health_events` / `video_state_watchdog_runs` / `broken_image_events` / `media_catalog_aliases` / `media_catalog`
+  - 修正 `crawler_tasks` 归属（任务运行实例，应清）
+  - DELETE 代替 TRUNCATE 保留 sequence 审计面
+  - 事务包裹，失败自动 ROLLBACK
+- **关联文档**：`docs/crawl_data_reset_20260422.md`（完整报告 + §7 before/after 对比）
+- **质量门禁**：无代码逻辑改动，typecheck / lint / unit 无须重跑（脚本未被 unit 测试覆盖）
+- **下一步**：进入 SEQ-20260422-BUGFIX-01 第 3 张 CRAWLER-05（`replaceSourcesForSite()` 按 `source_site_key` 匹配）

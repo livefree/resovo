@@ -9383,11 +9383,19 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - typecheck / lint / unit ✅
    - 禁止：删除既有 `VideoType` 值（若豆瓣无对应项，保留本地值 + 对齐表注明"平台扩展"）
 
-2. CHORE-05 — 采集/入库/外部原始数据全量清空（状态：⬜ 未开始）
+2. CHORE-05 — 采集/入库/外部原始数据全量清空（状态：✅ 已完成 2026-04-22）
    - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7（主循环，脚本升级 + dry-run + execute）
+   - 子代理调用：无
    - 建议模型：haiku（机械性脚本 + 按列表执行）+ 执行前主循环出清空清单与依赖顺序，用户复核
    - 规模：S（~60 min）
-   - 依赖：META-10 ✅
+   - 依赖：META-10 ✅（bbac72a）
+   - 实际清空：broken_image_events 18 + crawler_task_logs 4,560 + crawler_tasks 319 + crawler_runs 36 + videos 19,512 + media_catalog 19,512 + media_catalog_aliases 3,510；CASCADE 连带 video_sources 330,838 + video_aliases 21,638；合计 **~40 万行**
+   - 保留表：users 5 / crawler_sites 75 / system_settings 13（行数不变 ✅）
+   - 副作用：crawler_sites 的 last_crawled_at / last_crawl_status 重置为 NULL（75 行）
+   - 关联报告：`docs/crawl_data_reset_20260422.md`（§7 执行记录含 before/after 对比）
    - 对应 audit 条目：用户追加需求（试验期采集数据清洗）
    - 文件范围：
      - 新增 `scripts/db/reset_crawl_data.sql`（或 `.ts`）— 幂等清空脚本
