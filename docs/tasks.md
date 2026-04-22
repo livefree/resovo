@@ -13,7 +13,8 @@
 
 ---
 
-<!-- M5 SEQ-20260421-M5-CLEANUP-2 整体完成 2026-04-22：CLEANUP-04~10 b557463 / CLEANUP-11 d85bf9e / CLOSE-03 本次 commit -->
+<!-- M5 SEQ-20260421-M5-CLEANUP-2 整体完成 2026-04-22：CLEANUP-04~10 b557463 / CLEANUP-11 d85bf9e / CLOSE-03 481d729 -->
 <!-- 2026-04-22 META-10 ✅ commit bbac72a -->
-<!-- 2026-04-22 CHORE-05 ✅ 数据清空 execute 成功（40 万行，事务 COMMIT），待 commit -->
-<!-- 单任务工作台稳定态：空，下一张 CRAWLER-05 -->
+<!-- 2026-04-22 CHORE-05 ✅ commit 59a2a91 -->
+<!-- 2026-04-22 CRAWLER-05 ✅ 待 commit -->
+<!-- 单任务工作台稳定态：空，下一张 ADMIN-13 -->

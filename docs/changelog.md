@@ -8424,3 +8424,25 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **关联文档**：`docs/crawl_data_reset_20260422.md`（完整报告 + §7 before/after 对比）
 - **质量门禁**：无代码逻辑改动，typecheck / lint / unit 无须重跑（脚本未被 unit 测试覆盖）
 - **下一步**：进入 SEQ-20260422-BUGFIX-01 第 3 张 CRAWLER-05（`replaceSourcesForSite()` 按 `source_site_key` 匹配）
+
+---
+
+## [CRAWLER-05] replaceSourcesForSite() 按 source_site_key 精确匹配旧源
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-BUGFIX-01（12 张第 3 张）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无
+- **背景**：audit §1.3 C 指出 `replaceSourcesForSite(db, videoId, siteKey, newSources)` 用 `WHERE source_name=$2` 错列匹配（source_name 是线路名，siteKey 是站点 key），导致同站重采无法匹配旧源、跨站聚合视频可能误伤、历史死链残留
+- **修复**：
+  - `apps/api/src/db/queries/sources.ts`：WHERE 条件改为 `COALESCE(s.source_site_key, v.site_key) = $2`，新增 LEFT JOIN videos 以回落历史空值（与 `findActiveSourcesByVideoId` 同口径）
+  - 函数注释更新，显式标注"不再使用 source_name 匹配"
+- **测试**：
+  - `tests/unit/api/crawlerSourceUpsert.test.ts` 新增 2 个 case：
+    1. SQL 断言：包含 `COALESCE(s.source_site_key, v.site_key)` 与 `LEFT JOIN videos`，不含 `source_name=$2`，$2 实参为 siteKey
+    2. 跨站不误删：同 videoId 聚合两站、两站同有"线路1"，重采 bfzym3u8 时 lzzy 的"线路1"不会出现在 SELECT 结果 → 不触发 DELETE
+- **函数签名不变**：调用方 `CrawlerService.ts:246` 与 `CrawlerRefetchService.ts:104`（后者是 CRAWLER-06 范围）无须改动
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1382/1382 ✅（新增 2 test case）
+- **关联**：
+  - `docs/video_ingest_source_and_moderation_audit_20260422.md` §1.3 C
+  - 下游：ADMIN-13（`/admin/sources` filter/sort/返回字段同口径切换）

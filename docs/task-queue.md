@@ -9415,11 +9415,15 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 不得 `DROP TABLE` / 不得 `TRUNCATE CASCADE` 到保留表
      - 不得使用 `git add -A` 把数据库备份文件误提交
 
-3. CRAWLER-05 — `replaceSourcesForSite()` 按 `source_site_key` 精确匹配旧源（状态：⬜ 未开始）
+3. CRAWLER-05 — `replaceSourcesForSite()` 按 `source_site_key` 精确匹配旧源（状态：✅ 已完成 2026-04-22）
    - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：无
    - 建议模型：sonnet
    - 规模：S（~60 min）
-   - 依赖：CHORE-05 ✅
+   - 依赖：CHORE-05 ✅（59a2a91）
    - 对应 audit 条目：§1.3 C
    - 文件范围：`apps/api/src/db/queries/sources.ts`（`replaceSourcesForSite` 函数）+ 单测
    - 验收：

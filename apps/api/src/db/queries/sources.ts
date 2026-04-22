@@ -569,10 +569,14 @@ export interface ReplaceSourcesStats {
 }
 
 /**
- * CRAWLER-02: 同站点全量替换策略
- * 1. 查询指定 videoId + siteKey（source_name）的现有活跃源 URL
+ * CRAWLER-02 / CRAWLER-05: 同站点全量替换策略
+ *
+ * 1. 查询指定 videoId + siteKey 的现有活跃源 URL
+ *    - 行级 source_site_key 优先；历史数据（migration 046 之前）回落到 videos.site_key（COALESCE）
+ *    - 注意：不再使用 source_name 匹配（source_name 是线路名如"线路1"，不是站点 key）
  * 2. 软删除不在新列表中的旧源
  * 3. 插入不在旧列表中的新源
+ *
  * 返回 sourcesAdded / sourcesKept / sourcesRemoved 统计
  */
 export async function replaceSourcesForSite(
@@ -586,8 +590,12 @@ export async function replaceSourcesForSite(
     await client.query('BEGIN')
 
     const existing = await client.query<{ id: string; source_url: string }>(
-      `SELECT id, source_url FROM video_sources
-       WHERE video_id = $1 AND source_name = $2 AND deleted_at IS NULL`,
+      `SELECT s.id, s.source_url
+         FROM video_sources s
+         LEFT JOIN videos v ON s.video_id = v.id
+         WHERE s.video_id = $1
+           AND COALESCE(s.source_site_key, v.site_key) = $2
+           AND s.deleted_at IS NULL`,
       [videoId, siteKey],
     )
 
