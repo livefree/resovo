@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { usePlayerStore } from '@/stores/playerStore'
 
 /**
@@ -11,12 +10,10 @@ import { usePlayerStore } from '@/stores/playerStore'
  * - 颜色全部使用 CSS 变量，不硬编码。
  */
 export function MiniPlayer() {
-  const router = useRouter()
   const shortId = usePlayerStore((s) => s.shortId)
   const currentEpisode = usePlayerStore((s) => s.currentEpisode)
-  const hostOrigin = usePlayerStore((s) => s.hostOrigin)
+  const setHostMode = usePlayerStore((s) => s.setHostMode)
   const closeHost = usePlayerStore((s) => s.closeHost)
-
   const containerRef = useRef<HTMLDivElement>(null)
   const [visible, setVisible] = useState(false)
 
@@ -27,8 +24,7 @@ export function MiniPlayer() {
   }, [])
 
   function handleExpand() {
-    const href = hostOrigin?.href ?? (shortId ? `/watch/${shortId}` : null)
-    if (href) router.push(href)
+    setHostMode('full')
   }
 
   return (

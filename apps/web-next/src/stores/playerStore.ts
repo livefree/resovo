@@ -46,6 +46,10 @@ interface PlayerState {
   // === M5-CARD-CTA-01 新增 ===
   transition: 'fast-takeover' | 'standard-takeover' | null
   enter: (params: { shortId: string; slug: string | null; episode?: number; transition: 'fast-takeover' | 'standard-takeover' }) => void
+
+  // === M5-CLEANUP-06 新增：选中线路 index，跨 mini↔full 切换持久 ===
+  activeSourceIndex: number
+  setActiveSourceIndex: (index: number) => void
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -59,9 +63,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   hostOrigin: null,
   isHydrated: false,
   transition: null,
+  activeSourceIndex: 0,
+
+  setActiveSourceIndex: (index) => set({ activeSourceIndex: index }),
 
   initPlayer: (shortId, episode) =>
-    set({ shortId, currentEpisode: episode, isPlaying: false, currentTime: 0, duration: 0 }),
+    set({ shortId, currentEpisode: episode, isPlaying: false, currentTime: 0, duration: 0, activeSourceIndex: 0 }),
 
   setEpisode: (episode) => set({ currentEpisode: episode, currentTime: 0 }),
   setPlaying: (playing) => set({ isPlaying: playing }),

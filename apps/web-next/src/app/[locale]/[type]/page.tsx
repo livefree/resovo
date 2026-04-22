@@ -30,15 +30,15 @@ const NAV_TABS: Array<{ slug: string; i18nKey: string }> = [
   { slug: 'documentary', i18nKey: 'catDocumentary' },
 ]
 
-// ── 页面 ──────────────────────────────────────────────────────────────────────
+// ── 共享内容组件（允许 movie/anime/series/tvshow 目录静态路由复用） ─────────────
 
-export default async function CategoryPage({
-  params,
+export async function CategoryPageContent({
+  locale,
+  type,
 }: {
-  params: Promise<{ locale: string; type: string }>
+  locale: string
+  type: string
 }) {
-  const { locale, type } = await params
-
   const videoType = VALID_TYPES[type]
   if (!videoType) notFound()
 
@@ -90,4 +90,15 @@ export default async function CategoryPage({
       </section>
     </PageTransition>
   )
+}
+
+// ── 页面 ──────────────────────────────────────────────────────────────────────
+
+export default async function CategoryPage({
+  params,
+}: {
+  params: Promise<{ locale: string; type: string }>
+}) {
+  const { locale, type } = await params
+  return CategoryPageContent({ locale, type })
 }

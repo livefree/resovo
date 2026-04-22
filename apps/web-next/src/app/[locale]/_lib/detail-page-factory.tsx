@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import type { Metadata } from 'next'
 import { VideoDetailClient } from '@/components/video/VideoDetailClient'
 import { fetchVideoMeta } from '@/lib/video-detail'
@@ -26,6 +27,10 @@ export async function detailGenerateMetadata({ params }: PageProps): Promise<Met
 export function createDetailPage(showEpisodes: boolean) {
   return async function DetailPage({ params }: PageProps) {
     const { slug } = await params
-    return <VideoDetailClient slug={slug} showEpisodes={showEpisodes} />
+    return (
+      <Suspense fallback={<VideoDetailClient.Skeleton />}>
+        <VideoDetailClient slug={slug} showEpisodes={showEpisodes} />
+      </Suspense>
+    )
   }
 }

@@ -56,7 +56,8 @@ export function VideoCard({ video, className }: VideoCardProps) {
     <article className={cn('group relative block', className)} data-testid="video-card">
       {/* 图片区 — PosterAction: 点击触发 Fast Takeover 直达播放器 */}
       {/* no overflow-hidden: StackedPosterFrame box-shadow must be visible outside its bounds */}
-      <div className="relative rounded-lg">
+      {/* group/poster scopes FloatingPlayButton & overlay hover to image area only */}
+      <div className="relative rounded-lg group/poster">
         <StackedPosterFrame
           src={video.coverUrl}
           alt={video.title}
@@ -79,7 +80,7 @@ export function VideoCard({ video, className }: VideoCardProps) {
           onClick={handlePosterClick}
         />
 
-        <div className="absolute inset-0 rounded-lg overflow-hidden bg-black/0 group-hover:bg-black/40 transition-colors duration-300 pointer-events-none z-20" />
+        <div className="absolute inset-0 rounded-lg overflow-hidden bg-black/0 group-hover/poster:bg-black/40 transition-colors duration-300 pointer-events-none z-20" />
 
         <FloatingPlayButton />
 

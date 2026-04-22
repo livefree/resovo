@@ -290,6 +290,8 @@
   body {
     background-color: var(--bg-canvas);
     color: var(--fg-default);
+    /* system-ui font stack (SF Pro / Segoe UI / Roboto fallback chain) */
+    @apply font-sans antialiased;
     transition: background-color 200ms ease, color 200ms ease;
   }
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import { usePlayerStore } from '@/stores/playerStore'
 import { PlayerShell } from '@/components/player/PlayerShell'
 import { applyFastTakeoverEntry } from '@/components/player/transitions/FastTakeover'
@@ -15,6 +16,9 @@ export function GlobalPlayerFullFrame() {
   const transition = usePlayerStore((s) => s.transition)
   const mode = usePlayerStore((s) => s.mode)
   const frameRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
+  const pathname = usePathname()
+  const isWatchPage = /\/watch\//.test(pathname)
 
   useEffect(() => {
     if (!frameRef.current) return
@@ -96,7 +100,10 @@ export function GlobalPlayerFullFrame() {
           type="button"
           aria-label="关闭播放器"
           title="关闭"
-          onClick={closeHost}
+          onClick={() => {
+            closeHost()
+            if (isWatchPage) router.back()
+          }}
           style={btnStyle}
         >
           ✕

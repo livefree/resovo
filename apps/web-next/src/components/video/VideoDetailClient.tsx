@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
 import { extractShortId } from '@/lib/video-detail'
 import { DetailHero } from '@/components/detail/DetailHero'
@@ -24,9 +25,13 @@ function VideoDetailClientSkeleton() {
 }
 
 export function VideoDetailClient({ slug, showEpisodes }: Props) {
+  const searchParams = useSearchParams()
   const [video, setVideo] = useState<Video | null>(null)
   const [notFound, setNotFound] = useState(false)
-  const [activeEpisode, setActiveEpisode] = useState(1)
+  const [activeEpisode, setActiveEpisode] = useState(() => {
+    const ep = Number(searchParams.get('ep'))
+    return ep >= 1 ? ep : 1
+  })
 
   useEffect(() => {
     const shortId = extractShortId(slug)

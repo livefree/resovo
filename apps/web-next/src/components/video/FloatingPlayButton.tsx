@@ -20,9 +20,9 @@ export function FloatingPlayButton({ className }: FloatingPlayButtonProps) {
           'flex items-center justify-center w-11 h-11 rounded-full',
           'opacity-0 translate-y-1',
           'transition-[opacity,transform]',
-          // leave: 90ms (base state), enter: 120ms (group-hover override)
-          'duration-[90ms] group-hover:duration-[120ms]',
-          'group-hover:opacity-100 group-hover:translate-y-0',
+          // leave: 90ms (base state), enter: 120ms (group-hover/poster override)
+          'duration-[90ms] group-hover/poster:duration-[120ms]',
+          'group-hover/poster:opacity-100 group-hover/poster:translate-y-0',
         )}
         style={{
           background: 'color-mix(in oklch, oklch(100% 0 0) 20%, transparent)',

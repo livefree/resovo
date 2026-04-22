@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
 import { VideoCard } from '@/components/video/VideoCard'
 import { SearchSuggestions } from '@/components/search/SearchSuggestions'
@@ -12,6 +12,7 @@ import type { SearchResult } from '@resovo/types'
 
 export function SearchPage() {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
   const initialQuery = searchParams.get('q') ?? ''
 
@@ -59,13 +60,13 @@ export function SearchPage() {
     e.preventDefault()
     setShowSuggestions(false)
     const q = query.trim()
-    router.replace(q ? `/search?q=${encodeURIComponent(q)}` : '/search')
+    router.replace(q ? `${pathname}?q=${encodeURIComponent(q)}` : pathname)
   }
 
   function handleSuggestionSelect(text: string) {
     setQuery(text)
     setShowSuggestions(false)
-    router.replace(`/search?q=${encodeURIComponent(text)}`)
+    router.replace(`${pathname}?q=${encodeURIComponent(text)}`)
   }
 
   const hasQuery = !!query.trim()
@@ -132,7 +133,7 @@ export function SearchPage() {
               找到 {results.length} 个结果
             </p>
             <div
-              className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 video-grid-stagger"
+              className="grid gap-4 lg:gap-6 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 video-grid-stagger"
               data-testid="search-results-grid"
             >
               {results.map((video) => (

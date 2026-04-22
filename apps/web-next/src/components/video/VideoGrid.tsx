@@ -25,7 +25,7 @@ function VideoGridSkeleton({
   testId?: string
 }) {
   return (
-    <div className={`grid gap-4 ${gridCols}`} data-testid={testId ?? 'video-grid-skeleton'}>
+    <div className={`grid gap-4 lg:gap-6 ${gridCols}`} data-testid={testId ?? 'video-grid-skeleton'}>
       {Array.from({ length: 10 }).map((_, i) => (
         <VideoCard.Skeleton key={i} />
       ))}
@@ -85,7 +85,7 @@ export function VideoGrid({
     }
 
     return (
-      <div className={`grid gap-4 ${gridCols}`} data-testid={testId}>
+      <div className={`grid gap-4 lg:gap-6 ${gridCols}`} data-testid={testId}>
         {Array.from({ length: 10 }).map((_, i) => (
           <div
             key={i}
@@ -128,7 +128,7 @@ export function VideoGrid({
     )
   }
 
-  const gridClass = `grid gap-4 ${gridCols}${stagger ? ' video-grid-stagger' : ''}`
+  const gridClass = `grid gap-4 lg:gap-6 ${gridCols}${stagger ? ' video-grid-stagger' : ''}`
 
   return (
     <div className={gridClass} data-testid={testId}>

@@ -41,12 +41,13 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
     setPlaying,
     setCurrentTime,
     setDuration,
+    activeSourceIndex,
+    setActiveSourceIndex,
   } = usePlayerStore()
 
   const [video, setVideo] = useState<Video | null>(null)
   const [sources, setSources] = useState<Array<{ src: string; type: string; label?: string }>>([])
   const [loading, setLoading] = useState(true)
-  const [activeSourceIndex, setActiveSourceIndex] = useState(0)
   const [startTime, setStartTime] = useState<number | undefined>(undefined)
   const [playerVersion, setPlayerVersion] = useState(0)
   const [activePanelTab, setActivePanelTab] = useState<'episodes' | 'sources'>('episodes')
@@ -310,10 +311,8 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
       data-testid="player-shell"
     >
       <div
-        className={cn(
-          'max-w-screen-xl mx-auto px-4 py-4',
-          isTheater && 'max-w-none px-0 py-0'
-        )}
+        className={cn('max-w-screen-xl mx-auto px-4 py-4', isTheater && 'px-0 py-0')}
+        style={isTheater ? { maxWidth: 'min(85vw, 1440px)', marginLeft: 'auto', marginRight: 'auto' } : undefined}
       >
         <div className={cn('mb-4 space-y-1', isTheater && 'px-4 pt-4')}>
           <h1
