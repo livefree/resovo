@@ -8638,3 +8638,56 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **DB 影响**：无（仅前端文案）
 - **质量门禁**：typecheck ✅ / lint ✅ / unit 1440/1440 ✅
 - **关联**：audit §3.6；与 ADMIN-14（反馈语义修复）配套使审核区 genres 编辑体验完整
+
+---
+
+## [CHORE-04] 三链路回滚/复发测试补完整 + 覆盖矩阵（BUGFIX-01 收官）
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-BUGFIX-01（12 张第 12 张，收官）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无
+- **背景**：序列前 11 张各自已补单测，CHORE-04 产出覆盖矩阵将 audit 所有验收项与测试文件/case 一一对应，便于后续回归查阅与防复发
+- **产出**：`docs/bugfix_01_test_coverage_20260422.md`（覆盖矩阵 8 节：§1 源线路 / §2 CMS 字段 / §3 审核标签 / §五 P2 / 数据重置 / 数量统计 / 典型回归场景 / 关联文档）
+- **累计测试变动**：
+  - 新增测试文件 4：`mediaCatalogSafeUpdate.test.ts` / `admin-sources-sql.test.ts` / `sourceParserTypeMap.test.ts` / `sourceParserGenre.test.ts`
+  - 扩写测试文件 5：`crawlerSourceUpsert.test.ts` / `sourceRefetch.test.ts` / `content-sort.test.ts` / `ModerationDetail.test.tsx` / `metadataEnrich.test.ts`+`stagingDouban.test.ts`
+  - 合计 **+60 case**（1380 → 1440）
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1440/1440 ✅
+- **覆盖验证**（audit 验收项 → 测试 case）：
+  - §1.3 A/B/C/D/E（源线路 5 子问题）→ ADMIN-13/15/16 + CRAWLER-05/06 全覆盖
+  - §2.1/2.2/2.3/2.4/2.5（CMS 字段 5 小节）→ CRAWLER-07/08 全覆盖（49 case）
+  - §3.3/3.4/3.5/3.6（审核标签）→ ADMIN-14 + UX-14 覆盖
+  - §五 P2（6 项测试补完）→ 全部 ✅
+
+---
+
+## ★ SEQ-20260422-BUGFIX-01 序列收官 ★
+
+- **日期**：2026-04-22
+- **范围**：audit `docs/video_ingest_source_and_moderation_audit_20260422.md` 三链路 10 类问题 + 用户追加的豆瓣分类对齐与数据清空
+- **任务 12 张全部 ✅**：
+  - META-10 `bbac72a` — VideoGenre 对齐豆瓣（15→20 值）
+  - CHORE-05 `59a2a91` — 40 万行试验数据清空（事务 COMMIT，before/after 全核实）
+  - CRAWLER-05 `e276b71` — replaceSourcesForSite 按 source_site_key 匹配
+  - ADMIN-13 `0c237cb` — /admin/sources 行级 COALESCE（filter/sort/返回）
+  - CRAWLER-06 `f8f8131` — CrawlerRefetchService 补 sourceSiteKey
+  - ADMIN-14 `1568d3c` — safeUpdate 允许 manual 覆盖自锁 + 反馈契约
+  - ADMIN-15 `056334c` — 审核区线路分组按 source_name+site_key
+  - ADMIN-16 `588aa57` — 审核区数据源统一
+  - CRAWLER-07 `1309f14` — RawVodItem 扩 8 字段 + parseType 重写 + TYPE_MAP 扩至 70+
+  - CRAWLER-08 `656efc5` — source_category 存 vod_class + 切 mapSourceCategory
+  - UX-14 `2eaa742` — "分类标签" → "题材标签"
+  - CHORE-04 本 commit — 覆盖矩阵 + 测试兜底
+- **主循环模型**：claude-opus-4-7（全程）
+- **子代理**：无（整个序列均为枚举/逻辑修复，未触发强制 Opus 子代理审计情形）
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1440/1440 ✅（+60 case）
+- **DB 变更**：0 migration；数据层一次性清空（40 万行）
+- **交付文档**：
+  - `docs/video_type_genre_alignment_20260422.md`（对齐表 + 决策）
+  - `docs/crawl_data_reset_20260422.md`（数据清空报告 + before/after）
+  - `docs/bugfix_01_test_coverage_20260422.md`（覆盖矩阵）
+- **下一步**：
+  - 启动一次真实采集（选 1-2 站点触发 CrawlerService.run）验证端到端：采集 → 入库 → 审核区线路 / 源健康 / 题材标签 / 主类型 显示正确
+  - 合并 dev → main 或继续 M6 任务取卡
+- **与 M5 PHASE COMPLETE v2 的关系**：本序列为后端/后台维护，不触碰 web-next M5 锁定文件，与"等待 PC 端真人二次确认"状态并行推进，不影响 M6 启动时机

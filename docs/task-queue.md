@@ -9333,9 +9333,10 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ## SEQ-20260422-BUGFIX-01 — 后台审核/采集/源线路三链路纠偏（12 张）
 
-- **状态**：🔄 执行中（META-10 启动 2026-04-22）
+- **状态**：✅ 全部完成（12/12，2026-04-22）
 - **创建时间**：2026-04-22
 - **最后更新时间**：2026-04-22
+- **完成时间**：2026-04-22
 - **目标**：修复 audit 文档列出的 3 条链路共 10 类问题（源线路 5 / CMS 字段 5 / 审核标签 3），同步完成本地分类与豆瓣分类对齐 + 试验期采集数据清空，使审核区与采集入库链路恢复可信数据口径
 - **范围**：
   - 后端：`apps/api/src/db/queries/sources.ts` / `apps/api/src/services/{CrawlerService,CrawlerRefetchService,SourceParserService,MediaCatalogService,VideoService}.ts` / `apps/api/src/lib/genreMapper.ts` / `apps/api/src/routes/admin/moderation.ts`
@@ -9580,11 +9581,17 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
       - 悬浮 tooltip 文案："对应视频 `genres` 字段，可多选；视频主类型由上方'类型'单选决定"
       - typecheck / lint / unit ✅
 
-12. CHORE-04 — 三链路回滚/复发测试补完整（状态：⬜ 未开始）
+12. CHORE-04 — 三链路回滚/复发测试补完整（状态：✅ 已完成 2026-04-22）
     - 创建时间：2026-04-22
+    - 实际开始：2026-04-22
+    - 完成时间：2026-04-22
+    - 执行模型：claude-opus-4-7
+    - 子代理：无
     - 建议模型：sonnet
     - 规模：M（~120 min）
     - 依赖：META-10 / CHORE-05 / CRAWLER-05~08 / ADMIN-13~16 / UX-14 全部 ✅
+    - 交付：`docs/bugfix_01_test_coverage_20260422.md` 覆盖矩阵（audit 所有验收项 × 测试文件 × case 对应表）
+    - 累计新增/扩写测试：≥ 60 case（1380 → 1440）
     - 对应 audit 条目：§五 P2 第 2 条
     - 文件范围：
       - `apps/api/tests/db/sources.spec.ts`（`replaceSourcesForSite` 幂等 + 跨站点不误删 + `/admin/sources` 行级口径）
