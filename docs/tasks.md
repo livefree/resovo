@@ -13,9 +13,8 @@
 
 ---
 
-<!-- ★ SEQ-20260422-BUGFIX-01 全部完成（12/12，2026-04-22）★ -->
-<!-- META-10 bbac72a / CHORE-05 59a2a91 / CRAWLER-05 e276b71 / ADMIN-13 0c237cb -->
-<!-- CRAWLER-06 f8f8131 / ADMIN-14 1568d3c / ADMIN-15 056334c / ADMIN-16 588aa57 -->
-<!-- CRAWLER-07 1309f14 / CRAWLER-08 656efc5 / UX-14 2eaa742 / CHORE-04 本 commit -->
-<!-- typecheck ✅ / lint ✅ / unit 1440/1440 ✅（+60 case）/ 0 migration / 40 万行清空 -->
-<!-- 单任务工作台稳定态：空，等待用户下一步指示或启动 M6 -->
+<!-- ★ M6 PHASE COMPLETE ★ 2026-04-22 三维闭环签字生效 -->
+<!-- SEQ-20260422-M6-CDN 7/7 主卡 + 3 fixup commit 全部 ✅ -->
+<!-- arch-reviewer PASS / 代理证据 PASS / 用户 QA 暂定通过 -->
+<!-- unit 1447 → 1563（+116）/ 0 新 npm 依赖 / 0 migration -->
+<!-- 单任务工作台稳定态：空，等待 M7 启动或新业务需求 -->

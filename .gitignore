@@ -39,3 +39,8 @@ next-env.d.ts
 
 # 外部元数据原始 dump 文件（GB 级，不入 git）
 external-db/
+
+# IMG-06 本地 FS fallback 运行时产物（ImageStorageService LocalFsStorageProvider）
+# 生产走 R2，开发环境 R2 未配时写入此目录
+.uploads/
+apps/api/.uploads/

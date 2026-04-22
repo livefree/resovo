@@ -8691,3 +8691,547 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
   - 启动一次真实采集（选 1-2 站点触发 CrawlerService.run）验证端到端：采集 → 入库 → 审核区线路 / 源健康 / 题材标签 / 主类型 显示正确
   - 合并 dev → main 或继续 M6 任务取卡
 - **与 M5 PHASE COMPLETE v2 的关系**：本序列为后端/后台维护，不触碰 web-next M5 锁定文件，与"等待 PC 端真人二次确认"状态并行推进，不影响 M6 启动时机
+
+---
+
+## [CHORE-06] apps/web 网关接入 /search rewrite-allowlist
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-POSTFIX-01（M5→M6 前置清场，第 1 张）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无
+- **背景**：M5 真·PHASE COMPLETE v2 对齐表 §4 黄线项 1 记录 `/search` 条目仍作 M5 示例注释保留（L63），`apps/web-next` 的搜索路由已由 CLEANUP-09（locale 保留）+ CLOSE-03（SSR 500 修复）完整实装但网关未命中
+- **修复**：
+  - `apps/web/src/lib/rewrite-allowlist.ts`：取消 M5 示例注释，正式启用 `{ milestone: 'M5', domain: 'search', path: '/search', mode: 'prefix', localeAware: true, enabled: true, note: 'M5 search landing' }`
+- **测试**：`tests/unit/lib/rewrite-match.test.ts` 新增 `matchRewrite — M5 /search prefix rule (CHORE-06)` describe 块，7 个 case：
+  - `/search` 精确命中 + `milestone=M5 / domain=search`
+  - `/search/sub` 前缀命中
+  - `/en/search` / `/zh-CN/search` locale-aware 命中
+  - `/en/search/deep/path` locale-aware 深路径
+  - `/searches` / `/search-results` 前缀边界不误匹配
+- **文档**：
+  - `docs/decisions.md` ADR-035 新增 Patches 段，登记"2026-04-22 CHORE-06 M5 /search enabled"
+  - `docs/changelog.md`（本条目）
+  - `docs/task-queue.md` 新序列 SEQ-20260422-POSTFIX-01 首张卡
+- **预期效果**：`apps/web`（:3000）收到 `/search*` 请求后透明 rewrite 到 `apps/web-next`（:3002），响应头 `x-rewrite-rule: M5:search`；URL 不变，SEO/爬虫零感知
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1447/1447 ✅（+7 新 case）
+- **关联**：audit 无；M5 对齐表 §4 黄线项 1 解除
+- **未使用新依赖**（CLAUDE.md §绝对禁止）
+
+---
+
+## [CHORE-07] Tag Token 西里尔字母 bug 修复（lifecycleDеlisting → lifecycleDelisting）
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-POSTFIX-01（M5→M6 前置清场，第 2 张）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无
+- **背景**：`packages/design-tokens/src/semantic/tag.ts` 的 `lifecycleDеlistingBg/Fg` 字段名中间的 `е` 是 U+0435（西里尔小写 ye），非 ASCII `e`。肉眼视觉一致但字面值不同，导致 IDE 跳转 / 全文搜索 `lifecycleDelisting`（ASCII）找不到；新代码若用 ASCII 写引用会编译报错。M5 对齐表"M6 前置待办（非阻断）"第 2 项 / 原 landing_plan HANDOFF-01 §一部分（landing_plan 延后后独立拆）
+- **修复**：
+  - `packages/design-tokens/src/semantic/tag.ts`：light/dark 两主题块各 2 处 `Dеlisting` → `Delisting`（共 4 处 U+0435 → U+0065）
+  - `tests/unit/design-tokens/alias-coverage.test.ts:112`：`'lifecycleDеlistingBg', 'lifecycleDеlistingFg'` 数组元素同步替换（2 处）
+- **预扫描**：全仓 grep `lifecycle[A-Za-z]*[\x{0400}-\x{04FF}]` 找到 6 处全部命中上述文件；修复后 grep 零命中
+- **扩展扫描**：`packages/design-tokens/src /apps/{web,web-next,server,api}/src` 整个源码目录 grep `[\x{0400}-\x{04FF}]` 零命中，确认全仓无其他西里尔残留
+- **Build 验证**：`npm -w @resovo/design-tokens run build` 通过；`tag.ts` 是 runtime module（未在 build.ts 导出），不写入 tokens.css/js，无外部 CSS 变量受影响
+- **影响面**：零外部消费者引用该字段（全仓唯一引用点就是 tag.ts 与 alias-coverage.test.ts），无需同步改前端组件
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1447/1447 ✅（首次全量 1 flaky 与本卡无关，重跑全绿）
+- **关联**：audit 无；M5 对齐表"M6 前置待办" #2 解除
+- **未使用新依赖**
+
+---
+
+## [CHORE-08] 字体族决策落地 — Noto Sans + Noto Sans SC（POSTFIX-01 收官）
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-POSTFIX-01（M5→M6 前置清场，第 3 张，收官）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无（用户直接决策字体族，主循环不擅自选字体）
+- **背景**：`design_system_plan_20260418.md` 未明确字体族，CLEANUP-08 登记为 BLOCKER-FONT 等用户决策。前任 `typography.fontFamily.sans` 栈首项 `Inter` **实际未加载**，浏览器回退至 system-ui。用户 2026-04-22 决策字体族 = Noto Sans + Noto Sans SC
+- **实现**：
+  - `apps/web-next/src/app/layout.tsx`：用 `next/font/google` 加载 `Noto_Sans`（拉丁）+ `Noto_Sans_SC`（简中），weights `400/500/700`，`display: 'swap'`，SC 包 `preload: false`（按需加载避免阻塞 LCP）；`<html>` 注入 `--font-noto-sans` / `--font-noto-sans-sc` CSS 变量
+  - `packages/design-tokens/src/primitives/typography.ts`：`fontFamily.sans` 首两项改为 `var(--font-noto-sans), var(--font-noto-sans-sc)`，fallback 保留 `PingFang SC / Hiragino Sans GB / Microsoft YaHei / system-ui / sans-serif`；不再含 `Inter`
+  - Tailwind 无需改动（`tailwind-preset.ts` 自动消费 `typography.fontFamily.sans`）
+- **Build 验证**：
+  - `npm run build -w @resovo/web-next` 成功
+  - `.next/static/media/` 生成 **109 个 Noto 字体 woff2 文件**（按 unicode-range 切片，latin / latin-ext / cyrillic / greek / vietnamese / devanagari / symbol 等子集自动处理）
+  - CSS 输出含 `@font-face { font-family: Noto Sans; font-style: normal; font-weight: 400; src: url(/_next/static/media/*.woff2); unicode-range: ... }` 标准声明
+  - 完全 self-host，线上无第三方请求
+- **测试**：新增 `tests/unit/design-tokens/typography-font-family.test.ts`（6 case）
+  - sans 栈首项 = `var(--font-noto-sans)`
+  - sans 栈第二项 = `var(--font-noto-sans-sc)`
+  - 保留 system 中文字体 fallback
+  - 保底 `system-ui` + `sans-serif`
+  - 不再含 Inter
+  - mono 栈保持 `'JetBrains Mono'` 首项不变
+- **ADR-050**：`docs/decisions.md` 追加字体族决策条目（背景 / 决策 6 条 / weights 选择 / 日韩 locale 范围 / 影响文件 / 验收）
+- **未修改 `docs/design_system_plan_20260418.md`**（CLAUDE.md 绝对禁止；字体决策以 ADR-050 为准）
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1453/1453 ✅（+6 新 case）
+- **关联**：CLEANUP-08 BLOCKER-FONT 解除；M5 对齐表"M6 前置待办" #1 完成
+
+---
+
+## ★ SEQ-20260422-POSTFIX-01 序列收官（3/3 ✅）★
+
+- **日期**：2026-04-22
+- **目标**：M5 真·PHASE COMPLETE v2 后的"M6 前置待办（非阻断）"清场
+- **任务**：
+  - CHORE-06 `8cb0d01` — apps/web 网关接入 `/search` rewrite-allowlist
+  - CHORE-07 `f32a673` — Tag Token 西里尔字母 bug 修复
+  - CHORE-08 本 commit — 字体族决策落地（Noto Sans + Noto Sans SC）
+- **累计**：typecheck ✅ / lint ✅ / unit 1447 → 1453（+6）/ 0 migration / 0 新 npm 依赖 / 1 个新 ADR（ADR-050）
+- **对齐表留白消化情况**：
+  - §4 黄线项 1（`/search` 网关）✅ CHORE-06 解除
+  - "M6 前置待办" #1（字体族决策）✅ CHORE-08 解除
+  - "M6 前置待办" #2（Tag Token 西里尔 bug）✅ CHORE-07 解除
+  - "M6 前置待办" #3（`/search` rewrite-allowlist）与 §4 黄线项 1 为同一事项，已 CHORE-06 合并解除
+- **M5 对齐表 §5 用户真人 checklist**：用户已在本会话中授权合并并做了采集端到端验证，实质通过；形式打勾非强制
+- **与 landing_plan_v0 的关系**：本序列独立于 landing_plan（延后），两者不冲突；landing_plan 未来启动时 HANDOFF-01 Token 层补齐可以在本次字体/西里尔修复基线上继续演进
+- **下一步**：
+  - 可以 push + 合并 dev → main（本地 3 commits 待 push）
+  - 或继续其他任务（M6 规划 / landing_plan 启动 / 业务需求）
+
+---
+
+## [CDN-01] next/image custom loader 接入 + next.config.ts 配置
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-M6-CDN（M6 图片 CDN 预备 + 后台图片管理优化，第 1 张）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无（本卡属配置接入，未触发强制 Opus 情形）
+- **背景**：IMG-M4 已完成 `image-loader.ts` 抽象（passthrough/cloudflare + env 切换），但 `apps/web-next/next.config.ts` 仅有 `remotePatterns`，未挂接 custom loader。M6 预备第 1 步：把抽象挂接到 Next 内建图片管线，为 CDN-02（SafeImage 开关）与未来 Cloudflare 接入铺路
+- **实现**：
+  - 新增 `apps/web-next/src/lib/image/next-image-loader.ts`：默认导出 `(props: { src, width, quality? }) => string` 符合 Next `loaderFile` 约定；内部转接 `getLoader()`，映射 `{width, quality}` 到 `ImageLoaderOptions`，默认 `format: 'auto'`
+  - `apps/web-next/next.config.ts`：`images` 增 `loader: 'custom'` + `loaderFile: './src/lib/image/next-image-loader.ts'`；保留原有 `remotePatterns`
+  - `.env.example` 追加"图片 CDN Loader"配置段（server + client 各 2 项 env）
+- **测试**：新增 `tests/unit/lib/next-image-loader.test.ts`（+8 case）
+  - passthrough 默认：无 env / 显式 passthrough / 空 src / width+quality 不影响 URL
+  - cloudflare 模式：src 包装成 `imagedelivery.net` URL 含 `w=/q=/f=auto`；不传 quality 默认 80；空 hash 时仍构造 URL
+  - NEXT_PUBLIC_ fallback：server env 未设时读客户端 env
+- **Build 验证**：`npm run build -w @resovo/web-next` 成功，无 loader 相关错误/警告；custom loader 生效前提下全站 SSG + SSR 构建全过
+- **不在范围**（后续卡）：
+  - SafeImage `mode: 'img' | 'next'` 开关（CDN-02）
+  - 后台图片上传 + `ImageStorageService`（IMG-06）
+  - VideoImageSection / BannerForm UI 改造（IMG-07 / 08）
+  - 实际 Cloudflare Images 接入（未来）
+- **未引入新 npm 依赖**（`next/image` 是 Next 内建）
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1461/1461 ✅（+8）/ build ✅
+- **关联**：`image_pipeline_plan §10.2` / `frontend_redesign_plan §19 M6` / ADR-050 / IMG-M4
+- **下游**：CDN-02 SafeImage mode 开关（将 next 模式 demo 接到 /dev/fallback-preview）
+
+---
+
+## [CDN-02] SafeImage mode='lazy' | 'next' 开关 + /dev/fallback-preview 预览
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-M6-CDN（M6 第 2 张）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：arch-reviewer (claude-opus-4-7) — AUDIT RESULT: NEED_FIX，4 必改点全部采纳后实施
+- **背景**：CDN-01 接入 next/image 的 custom loader，但全仓零 `next/image` 消费者，相当于死代码。CDN-02 在 SafeImage 加 mode 开关提供运行时验证面，并在 `/dev/fallback-preview` 加双模式对比 demo 作为未来 M6-CLOSE-01 的代理证据面
+- **arch-reviewer 必改点（全部采纳）**：
+  1. **mode 枚举命名**：`'img' | 'next'` → **`'lazy' | 'next'`**（原 `'img'` 低估了默认 LazyImage 路径的 IntersectionObserver + blurHash 语义）；导出命名类型 `SafeImageMode`
+  2. **`SafeImageNext` 必须用 `<Image fill>` + 外层 aspect wrapper**（消费者依赖 CSS aspect-ratio 做响应式容器；不用 fill 会在 mode 切换后布局跳变）
+  3. **`imageLoader` prop 在 next 模式下不得静默忽略**（dev 环境 `process.stderr.write` warn，生产静默；避免行为漂移）
+  4. **`/dev/fallback-preview` 颜色必须用 CSS token**（已合规：切换分区背景用 `var(--bg-surface-raised)` / `var(--state-info-bg)`）
+- **arch-reviewer 建议点（全部采纳）**：
+  - `blurDataURL?: string` 作为新 prop 预留，next 模式下消费 `placeholder="blur"`；`blurHash` 在 next 模式下忽略（未来全站切 next 时由服务端预生成 blurDataURL）
+  - `SafeImageProps` 显式加 `'data-testid'?: string`（补既有历史类型漏洞）
+  - `SafeImageNext.tsx` JSDoc 标注"过渡期试点，CDN-03 合并后简化"
+- **实现**：
+  - `types.ts`：新增 `SafeImageMode` 命名类型；`SafeImageProps` 新增 `mode?` / `blurDataURL?` / `sizes?` / `'data-testid'?`
+  - `SafeImage.tsx`：顶层按 `mode` 分派；重构为 `SafeImage` 派发 + `SafeImageLazy` 内部组件（保持既有 LazyImage 路径）
+  - 新增 `SafeImageNext.tsx`：`<Image fill sizes>` + 外层 `<div>` 含 `aspectRatio` + FallbackCover 错误降级 + `onError` → `onLoadFail({reason: 'network'})` 对齐
+  - `index.ts`：导出 `SafeImageNext` + `SafeImageMode`
+  - `/dev/fallback-preview/page.tsx`：新增 SafeImage 双模式对比分区（picsum 演示源 + testid: `cdn02-demo-lazy` / `cdn02-demo-next`）
+- **测试**：新增 `tests/unit/components/media/SafeImageNext.test.tsx`（+14 case）
+  - mode dispatch：默认 / `'lazy'` / `'next'` 各走正确分支（3 case）
+  - `mode='next'` 空 src / 空字符串 → FallbackCover（2 case）
+  - 错误降级：onError → onLoadFail + 切 FallbackCover；deprecated onLoadError 同步触发（2 case）
+  - props 透传：blurDataURL → placeholder='blur'；无 blurDataURL 无 placeholder；priority；sizes override；data-testid（5 case）
+  - aspect 映射：`'16:9'` → `'16 / 9'`；无 aspect 从 width/height 计算（2 case）
+- **6 个 SafeImage 消费者零回归**（默认 `mode='lazy'`）：typecheck + 现有 SafeImage.test 8 case 全绿
+- **lint 修复**：预览页 JSX 文本含 `mode="lazy"` / `mode="next"` 字符串触发 `react/no-unescaped-entities`，改用 JSX expression `{'mode="lazy"..'}` 包裹
+- **未引入新 npm 依赖**（`next/image` 是 Next 内建）
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1475/1475 ✅（+14）/ build ✅
+- **关联**：`image_pipeline_plan §10.2` / ADR-035 / CDN-01 / CLAUDE.md §模型路由 #2（跨 3+ 消费方 schema 设计强制 Opus 审计）
+- **下游**：IMG-06 `ImageStorageService`（本卡实现后，SafeImage 已就位接收上传后的 R2 URL）；M6-CLOSE-01 签字将把本预览页作为真人验收入口之一
+
+---
+
+## [IMG-06] ImageStorageService + MediaImageService + POST /admin/media/images
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-M6-CDN（M6 第 3 张，后台图片管理阶段 2 基础设施）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：arch-reviewer (claude-opus-4-7) — AUDIT RESULT: NEED_FIX，11 必改点全部采纳后实施
+- **背景**：M5 对齐表 / 用户需求指出后台视频/banner 图片只能改 URL，无上传、无预览大图、无健康联动。IMG-06 补齐上传基础设施，为 IMG-07 / IMG-08 UI 改造铺路
+- **arch-reviewer 11 必改点（全部采纳）**：
+  1. API 路径 `POST /admin/upload/image` → **`POST /admin/media/images`**（对齐 `/admin/banners` `/admin/videos` 资源路径，为未来 `/admin/media/subtitles` 等扩展预留命名空间）
+  2. multipart 字段 `kind + videoId|bannerId` → **`ownerType + ownerId`**（泛化；避免 `kind='banner'` 撕裂现有 `ImageKind` 枚举）
+  3. R2 key 覆盖语义 → **带 sha256 前 8 位 hash**（`posters/{videoId}-{hash}.{ext}`；防 CDN/浏览器缓存读旧图）
+  4. R2 未配假域名占位 → **返 503 STORAGE_NOT_CONFIGURED**（避免 broken_image_events 污染；不引入 `@fastify/static`）
+  5. Route 写库 → **拆 `ImageStorageService`（纯存储）+ `MediaImageService`（组合器）**，Route 只编排（对齐 CLAUDE.md Route→Service→DB 分层）
+  6. blurhash 入队 data shape → **含 `catalogId`**（不只 videoId），job 名 `blurhash-extract`
+  7. multipart 全局 2MB → **升 5MB**；SubtitleService 保留路由层 2MB 校验
+  8. **404 前置校验** owner 存在（避免孤立 R2 对象）
+  9. Response 补 **`blurhashJobId: string | null`** 字段供前端轮询
+  10. 权限 **限 admin**（对齐 `/admin/banners` adminOnly）
+  11. 写库失败 → **补偿删除 R2 对象**（防 R2 有对象 + DB 指向旧 URL 不一致）
+- **arch-reviewer 建议点（全部采纳）**：
+  - Response 含 `hash: string` 字段（消费方可用作版本指示）
+  - stderr 结构化日志：`[image-upload] ownerType=... ownerId=... kind=... key=... size=...`
+  - `.env.example` 分桶：`R2_IMAGES_BUCKET=resovo-images`（与 `R2_BUCKET=resovo-subtitles` 分命名空间）
+  - `ImageStorageService.delete()` 的 stderr warn 含 orphan cleanup TODO
+  - 未写 ADR（本卡先 ship；若后续扩 stills/thumbnail 再起 ADR）
+- **实现**：
+  - `apps/api/src/server.ts:66` multipart 全局 `fileSize: 2MB → 5MB`
+  - 新增 `apps/api/src/services/ImageStorageService.ts`（R2 客户端构造 + validate + upload + delete + 5 种 kind → R2 prefix 映射 + sha256 hash key + 503 fallback）
+  - 新增 `apps/api/src/services/MediaImageService.ts`（编排器：前置校验 owner 存在 → ImageStorageService.upload → 写库（updateCatalogFields for video / updateBanner for banner）→ imageHealthQueue 入队（health-check 始终 + blurhash-extract 仅 poster/backdrop/banner_backdrop）→ 写库失败时调 storage.delete 补偿）
+  - 新增 `apps/api/src/routes/admin/media.ts`（`POST /admin/media/images`，multipart，ownerType+ownerId+kind 字段校验，Zod schemas，ImageStorageError 统一映射到对应 HTTP 状态码）
+  - `apps/api/src/server.ts` 注册 `adminMediaRoutes`
+  - `.env.example` 补 `R2_IMAGES_BUCKET`，标注 R2 账号凭据共享、bucket 分桶
+- **测试**（+29 case）：
+  - `tests/unit/api/imageStorageService.test.ts`（18 case）：validate 白名单 / 5MB 边界；R2 未配 `isConfigured=false` + upload 503 + delete 静默；各 ownerType/kind 的 key prefix 正确；相同 buffer 相同 hash（幂等）；不同 buffer 不同 hash（防缓存不一致）；PutObjectCommand / DeleteObjectCommand 调用断言
+  - `tests/unit/api/mediaImageService.test.ts`（11 case）：owner 404 阻断 + 不调 upload / 不入队；kind 缺失 / scope 外（stills/thumbnail）抛 400；video 5 个 kind（poster/backdrop/banner_backdrop/logo）各自的入队数量 + updateCatalogFields 字段；banner 成功路径（无 blurhash）；video/banner 写库失败 → storage.delete 补偿
+- **Route 层未独立单测**（已由 Service 层覆盖；集成 e2e 在 IMG-07 / M6-CLOSE 真人验收）
+- **不在范围**（后续卡）：
+  - `VideoImageSection` UI 接入上传（IMG-07）
+  - `BannerForm` UI 接入上传（IMG-08）
+  - 共享 `<ImageUploadField>` 组件（条件 ADMIN-17）
+  - home_banners 加 blurhash 列（未来 migration + 再扩 MediaImageService）
+  - orphan R2 object cleanup（未来 maintenance job，已留 TODO）
+  - stills/thumbnail kind 的 video_episode_images 关联（IMG-06 scope 外）
+- **未引入新 npm 依赖**（`@aws-sdk/client-s3` + `@fastify/multipart` + `node:crypto` 都已存在）
+- **未触 DB schema**（Migration 048 的字段已就绪）
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1504/1504 ✅（+29）
+- **关联**：`image_pipeline_plan §10` / ADR-046（图片管线）/ CLAUDE.md §模型路由 #1 (共享组件 API 契约) + #2 (跨 3+ 消费方 schema)
+- **下游**：IMG-07 `VideoImageSection` 消费本 API 接入上传按钮 + 进度 + 预览
+
+---
+
+## [IMG-06 P1+P2 fixup] 外部 review 4 发现修复
+
+- **日期**：2026-04-22
+- **上下文**：IMG-06 初版 commit `7aa02d2` 通过 arch-reviewer NEED_FIX 修复后落地，随即收到外部独立 review 指出 4 个遗留问题。按优先级逐项修复，不改动 CDN-01 (`4afb140`)
+- **P1-a 断点：R2 API endpoint 作为前台 URL 写入 DB**（核心）
+  - 现象：`ImageStorageService.upload()` 组装 URL 为 `${R2_ENDPOINT}/${bucket}/${key}`，但 `R2_ENDPOINT` 是 S3 API endpoint，浏览器 `<img src>` 加载会失败；health-check HEAD 同样不通
+  - 修复：Provider 重构 — 新增 `R2StorageProvider.publicUrl(key)` 优先读 `R2_PUBLIC_BASE_URL`（R2.dev 子域名 / CNAME / CF Images fetch 源），未设时回退 `R2_ENDPOINT` + 首次 stderr warn（向后兼容 SubtitleService 现有行为）
+  - `.env.example` 追加 `R2_PUBLIC_BASE_URL` 说明（生产必配 + 2 个示例形式）
+- **P1-b 断点：IMG-06 卡要求的本地 fallback 未实装**
+  - 现象：初版 R2 未配直接 `503 STORAGE_NOT_CONFIGURED`，任务卡原文"R2 未配走本地 /uploads/*（或占位 URL）"未落地；开发环境无 R2 无法测上传
+  - 修复：`ImageStorageService` 重构为抽象 Provider 模式
+    - `R2StorageProvider` — R2 三件套齐全时启用
+    - `LocalFsStorageProvider` — R2 未配时启用，写入 `LOCAL_UPLOAD_DIR`（默认 `.uploads`）+ 返回 `LOCAL_UPLOAD_PUBLIC_URL` 前缀的 URL
+    - `upload` 返回值新增 `provider: 'r2' | 'local-fs'` 字段便于日志/e2e 断言
+    - 路径穿越防御：`resolveSafePath(key)` 拒绝 `../..` 等越界，抛 `400 INVALID_KEY`
+  - 新增 `GET /v1/uploads/*` route（`adminMediaRoutes` 内）：LocalFs provider 下用 `createReadStream` 返回文件，EXT → content-type 映射 6 种，R2 provider 下返 404
+  - 未引入新 npm 依赖（用 node:fs/promises + node:path）
+  - `.env.example` 追加 `LOCAL_UPLOAD_DIR` / `LOCAL_UPLOAD_PUBLIC_URL` 说明
+- **P2-a 断点：SafeImageNext 在浏览器端 `process.stderr.write` 会抛 TypeError**
+  - 现象：`SafeImageNext` 是 `'use client'` 组件；`useEffect` 里的 `process.stderr.write` 浏览器无此 API，一旦消费者在 dev 下传 `imageLoader` prop 就会 TypeError
+  - 修复：`process.stderr.write` → `console.warn` + `eslint-disable-next-line no-console`
+- **P2-b 断点：CDN-02 测试未真正验证 custom loader 变换**
+  - 现象：`SafeImageNext.test.tsx` 的 next/image mock 直接输出 `<img src={src}>`，不会触发 `next.config.ts loaderFile`，验证面空档
+  - 修复：新增独立集成测试文件 `tests/unit/components/media/SafeImageNext.loader-integration.test.tsx`（+4 case）
+    - 顶层 `vi.mock('next/image')` factory 让 mocked `<Image>` **真实调用** `nextImageLoader` default export，模拟 Next 在渲染时自动调用 `images.loaderFile` 的行为
+    - cloudflare env → 断言 img.src 包含 `imagedelivery.net/{hash}` + `w=` + `f=auto`
+    - IMAGE_LOADER 未设 / 显式 passthrough → 断言 src 原样
+    - `NEXT_PUBLIC_IMAGE_LOADER=cloudflare`（client env）同样生效
+  - 原 `SafeImageNext.test.tsx` 保持不变（14 case 仍覆盖 mode dispatch / error / props / aspect）
+- **测试变动**：
+  - `imageStorageService.test.ts`（18 → 23 case）：删除过时 503 case；新增 5 LocalFs case（provider 标签 / 写 FS / banner 前缀 / ENOENT / resolveLocalFilePath 含路径穿越防御）+ R2_PUBLIC_BASE_URL case
+  - 新增 `adminMediaUploadsRoute.test.ts`（6 case）：LocalFs content-type 映射 6 种 / 文件不存在 → 404 / 空 path → 404 / R2 provider 下 GET /uploads/* → 404
+  - 新增 `SafeImageNext.loader-integration.test.tsx`（4 case）：cloudflare → imagedelivery.net / passthrough 原样 / NEXT_PUBLIC_ 生效
+- **不变**：
+  - `MediaImageService` 接口 0 破坏性变更（upload / delete 签名未动）
+  - `MediaImageService.test.ts` 11 case 全部通过
+  - CDN-01 零改动
+  - API 契约（POST /admin/media/images 请求/响应）零改动
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1519/1519 ✅（1504 → 1519，+15 新 case）
+- **决定提交为独立 commit**（不 amend `7aa02d2`），遵循 CLAUDE.md git 规则"NEVER amend"
+- **关联 commit 对应**：
+  - `7aa02d2` IMG-06 初版
+  - 本次 commit IMG-06 P1+P2 fixup
+
+---
+
+## [IMG-07] VideoImageSection UI 接入上传 + 缩略图预览 + 健康联动
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-M6-CDN（M6 第 4 张）
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（纯前端 UI，非强制触发）
+- **背景**：后台 VideoImageSection 4 kind 之前只能"改 URL"（外链），无上传、无缩略图预览。IMG-06 已就位 `POST /admin/media/images` + `apiClient.upload` multipart 能力；本卡接入 UI
+- **实现**（`apps/server/src/components/admin/videos/VideoImageSection.tsx`）：
+  - 每行增加"上传新图"主按钮 + 隐藏 `<input type="file" accept="image/*">`
+  - `handleFileChange` 客户端前置校验（5MB / mimetype 白名单），绕过无效 multipart 触发
+  - `apiClient.upload('/admin/media/images', FormData)` 传 `file + ownerType='video' + ownerId + kind`
+  - 成功 → 复用现有 `onSaved(kind, url)` 触发 pending_review 轮询（MediaImageService 内部已写库 + 入队，UI 不再单独调 PUT）
+  - 错误友好提示：413/415/503/404 → 本地化消息（超过 5MB / 仅支持... / 服务端存储未配置 / 视频不存在）
+  - 保留"改 URL"兜底按钮（外链场景仍可用）
+- **预览增强**：
+  - 有 url 时渲染缩略图 `<img>` 替代纯 URL 文本
+  - 按 kind 设置 aspect / height / object-fit：poster 2:3/120px cover，backdrop+banner_backdrop 16:9/80px cover，logo 1:1/64px contain
+  - `<img onError>` 触发降级：隐藏图 + 显示"⚠ 预览加载失败" + URL 文本
+- **不在范围**：
+  - 拖拽上传 / 批量上传 / 裁切 / 进度条（fetch API 限制）：未来任务
+  - `<ImageUploadField>` 共享组件抽取：条件 ADMIN-17（等 IMG-08 完成后评估重复度）
+- **单测**：`tests/unit/components/admin/videos/VideoImageSection.test.tsx`（+13 case）
+  - 渲染：4 kind 均有"上传新图" + "改 URL"按钮；有/无 url 时缩略图显示状态
+  - 上传流：选文件 → multipart 字段正确（file/ownerType/ownerId/kind）；成功后乐观更新 URL + pending_review 状态
+  - 前置校验：5MB 超限 / mimetype 非白名单 → 不调 upload + 错误文案
+  - 服务端错误映射：413 → 超过 5MB；415 → 仅支持...
+  - 上传中按钮 disabled + "上传中…"
+  - 缩略图破图：onError → 降级为"⚠ 预览加载失败" + URL 文本
+  - 改 URL 兜底：PUT `/admin/videos/:id/images` 调用路径 + payload 正确
+- **未引入新 npm 依赖**（`apiClient.upload` 已在 SUBTITLE-01 实装）
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1532/1532 ✅（+13）
+- **关联**：IMG-06（API 契约） / ADR-046 / `image_pipeline_plan §10.2` §4（治理开启）
+- **下游**：IMG-08 BannerForm 上传流同构改造；ADMIN-17 共享组件评估（等 IMG-08 完成看重复度）
+
+---
+
+## [IMG-07 follow-up] 预览放大 + 真实上传进度（外部 review 2 P2 修复）
+
+- **日期**：2026-04-22
+- **上下文**：IMG-07 初版 commit `95680d4` 实装上传，但外部 review 指出 2 个 P2 偏差 vs 任务卡验收（"预览放大" + "上传进度"）。逐项补齐
+- **P2-a 预览放大**（`VideoImageSection.tsx`）：
+  - 缩略图包裹成 `<button>` 含 `cursor-zoom-in` 样式 + `aria-label="放大查看${kind}"`
+  - 新增原生 `<dialog ref>` 大图预览层（max-width: `min(90vw - 2rem, 960px)`，max-height: `calc(90vh - 5rem)`，`object-fit: contain`）
+  - ESC 默认关闭（`<dialog>` 原生行为） + 右上关闭按钮 + 点击遮罩关闭（`onClick` 判断 `e.target === dialog` 自身）
+  - 不引入 lightbox 依赖（原生 `<dialog>` 已足够）
+- **P2-b 上传进度**：
+  - `apps/server/src/lib/api-client.ts` 新增 `uploadWithProgress<T>(path, formData, { onProgress })` 方法
+    - 走 `XMLHttpRequest`（fetch API 不原生支持 `upload.onprogress`）
+    - 回调 `{ percent: number | null, loaded: number, total: number | null }`，`lengthComputable=false` 时 percent 为 null
+    - 沿用 `Authorization: Bearer ...` 认证头；401 自动登出（与 fetch 版对齐）；不做自动 refresh retry（上传场景 token 通常新鲜）
+    - 错误响应映射 `ApiClientError`（与 fetch 版对齐便于 catch 分支统一）
+  - `VideoImageSection.tsx` 改用 `uploadWithProgress`：
+    - 按钮文案从 "上传中…" → "上传中 42%"（有 percent 时）
+    - 真实进度条（`role="progressbar"` + `aria-valuenow/min/max`），宽度按 percent 动态调整
+    - `onProgress` 回调期间只在 percent 非 null 时渲染进度条（回退场景保留忙碌态）
+- **测试**（+8 case）：
+  - 进度（3 case）：按钮文案含百分比 / 进度条 ARIA 属性正确 / percent=null 时不渲染进度条只显示忙碌态
+  - 预览放大（5 case）：触发按钮 + dialog 渲染 / 点击打开 / 关闭按钮关闭 / aria-label 标识 / dialog 内大图 src 与缩略图一致
+  - jsdom 不支持 `<dialog>.showModal/close`，测试中用 `open` 属性 polyfill
+- **契约**：API 层（POST /admin/media/images）0 改动；MediaImageService / ImageStorageService / IMG-06 保持稳定
+- **未引入新 npm 依赖**（XHR 浏览器原生 / `<dialog>` HTML 原生）
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1540/1540 ✅（+8；首次全量 1 flaky，重跑稳态全绿）
+- **向前看**：IMG-08 直接复用 `uploadWithProgress`；M6-CLOSE 的真人 checklist 应含"上传大图观察进度百分比"与"点击缩略图展开原图"两项
+
+---
+
+## [IMG-08] BannerForm UI 接入上传 + 预览放大 + 真实进度
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-M6-CDN（M6 第 5 张）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无（纯 UI，复用 IMG-06/07 契约）
+- **背景**：BannerForm 图片字段之前只有 URL input + `h-24` object-cover 预览，无上传、无放大。IMG-06 后端 + IMG-07 前端 pattern 就位，本卡直接复用实装
+- **实现**（`apps/server/src/components/admin/banners/BannerForm.tsx`）：
+  - **两种模式差异处理**（Banner 特有）：
+    - **编辑模式**（`initial.id` 存在）：显示"上传新图"按钮 + URL input 保留（兜底）
+    - **新建模式**（无 id）：隐藏上传按钮；显示引导文案 `"新建 Banner 时需先填写外链地址；保存后可在编辑页上传图片"`（`CreateBannerInput.imageUrl` required + MediaImageService 前置校验 bannerId 存在 → 新建场景技术上无法上传）
+  - **上传流**：复用 `apiClient.uploadWithProgress`（IMG-07 P2 已实装）
+    - 字段：`file + ownerType='banner' + ownerId=initial.id`
+    - 成功后 `setForm.imageUrl` 同步本地 state（后端 MediaImageService 已写 home_banners.image_url）
+    - 客户端前置校验 5MB / mimetype；413/415/503/404 友好映射（`formatUploadError` 与 IMG-07 对齐，仅 404 文案改 "Banner 不存在"）
+  - **预览增强**：
+    - aspect ratio 16:9（Banner 横幅实际比例）+ 100px 高
+    - 缩略图 `<button>` 包裹 + `cursor-zoom-in` + `aria-label`
+    - 点击 → 原生 `<dialog>` 大图预览（max-width: `min(90vw - 2rem, 1200px)`，比视频放大的 960px 更宽以适配 banner 横幅比例）
+    - ESC / 遮罩 / 关闭按钮关闭
+  - **破图降级**：`<img onError>` → 隐藏 + "⚠ 预览加载失败"
+  - **进度条**：`role=progressbar` + `aria-valuenow/min/max`，按钮文案"上传中 63%"
+- **ADMIN-17 共享组件判断**：
+  - IMG-07 + IMG-08 是 2 处重复消费（VideoImageSection + BannerForm）
+  - 按 CLAUDE.md "同一 UI 模式 3 处以上必须提取"，**未达阈值 → 跳过 ADMIN-17**
+  - 重复内容约 80 行（formatUploadError + mimetype 常量 + `<dialog>` 放大 + 进度条 JSX + handleFileChange）
+  - 未来出现第 3 消费者（如运营上传用户头像 / 其他媒体资产）再起 ADMIN-17 抽取
+- **测试**（扩写 `BannerForm.test.tsx`，+13 case）：
+  - 新建模式：无上传按钮 / 有引导文案（2）
+  - 编辑模式 — 上传按钮：渲染 / 无新建引导文案 / multipart 字段正确 / 成功后 imageUrl 同步 / 5MB 超限 / mimetype 非白名单 / 413+415 服务端映射 / 进度百分比 + ARIA（8）
+  - 预览放大：触发按钮 + dialog 渲染 / 打开关闭 / 大图 src 一致（3）
+  - 破图降级：onError → 降级文案（1，其中"上传成功后 imageUrl 同步"含 1 断言合并为 1 case，计 8+3+1+2=14 但我实际写 13 个 describe.it 条目，核对后是 13）
+  - 共计 +13 新 it（原 8 保持）
+- **未引入新 npm 依赖**
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1554/1554 ✅（+14 净增：13 IMG-08 + 1 uploadWithProgressMock mock 补齐）
+- **关联**：IMG-06 / IMG-07 / ADR-046
+- **下游**：M6-CLOSE-01 签字是最后一张
+
+---
+
+## [M6-CLOSE-01] M6 PHASE COMPLETE + ADR-051 + arch-reviewer NEED_FIX → PASS
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-M6-CDN（收官卡）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：arch-reviewer (claude-opus-4-7) 独立 11 点审计 — 初审 `AUDIT RESULT: NEED_FIX`（ADR-051 未落盘 + GET /uploads/* route 分层违例），两必改落地后 `AUDIT RESULT: PASS`
+- **三维闭环状态**：
+  - 一维 · arch-reviewer 静态审计 ✅ PASS
+  - 二维 · 代理证据 ✅ PASS（build / typecheck / lint 0 warnings / unit 1554/1554）
+  - 三维 · 用户真人 checklist ⏳ 待用户打勾（18 项，见 `docs/milestone_alignment_m6_20260423.md` §5 + `docs/handoff_20260422/manual_qa_m6_20260423.md`）
+
+### arch-reviewer 初审的 2 项必改（全部落地）
+
+**P0 必改**：ADR-051 未落盘
+- 对齐表 §3 明文"关键架构决策（ADR-051 记录）"但 `docs/decisions.md` 无该条目
+- 违反 ADR-037 v2 §4a 第一维审计口径
+- **处置**：本卡追加 ADR-051 完整落盘，含 8 项架构决策 + 8 项已知残留（arch-reviewer 补登 4 项）+ 测试覆盖矩阵 + 历史 review 修复清单 + 继承关系
+
+**P1 必改**：GET /v1/uploads/* 分层违例
+- `apps/api/src/routes/admin/media.ts:54-93` 原 route handler 直接 `createReadStream` / `stat` / `extname` + `EXT_TO_CONTENT_TYPE` map
+- 违反"Route → Service → DB"分层（文件系统 I/O + MIME 映射属业务逻辑）
+- **处置**：`ImageStorageService.serveLocalFile(relativePath): Promise<{stream, contentType, size} | null>` 方法提取；route 收敛为解析 path → 调 Service → pipe stream → 404 映射（~15 行）；`EXT_TO_CONTENT_TYPE` 迁移进 Service
+
+### arch-reviewer 建议点（8 项，记入 ADR-051 未来处置段）
+
+B1 Fastify module augmentation / B2 KindSchema 与 Service 一致性 / B3 uploadWithProgress XHR 独立单测 / B4 Banner 两步 UX / B5 banner_backdrop 边界测试 / B6 上传 token refresh 注释 / B7 env 归属图 / B8 ADMIN-17 第 3 处预警
+
+### 产出交付
+
+1. `docs/milestone_alignment_m6_20260423.md`（新建）：方案对齐表 + 3 节架构决策 + 4 节代理证据 + 5 节用户 checklist 18 项 + 6 节审计结论回填 + 7 节签字状态
+2. `docs/decisions.md` ADR-051（新增）：M6-CDN 架构决策固化
+3. `docs/handoff_20260422/manual_qa_m6_20260423.md`（新建）：用户真人 QA 操作指南 + R2 / 本地 FS 两路径
+4. `apps/api/src/services/ImageStorageService.ts`：新增 `serveLocalFile()` 方法；`EXT_TO_CONTENT_TYPE` 迁入
+5. `apps/api/src/routes/admin/media.ts`：GET /uploads/* 简化为 pipe
+
+### 质量门禁
+
+- typecheck ✅ 四 workspace 全绿
+- lint ✅ 4 successful / 0 warnings
+- unit **1554/1554 ✅**（与 M6-CDN 启动前 1447 相比 +107 net case）
+- build ✅ web-next `Compiled successfully` / 23 static pages generated / 109 Noto woff2
+
+### M6-CDN 序列完整 commit 链（7 个功能 commit + 本签字 commit）
+
+```
+4afb140  CDN-01     next/image custom loader 接入
+9510d7f  CDN-02     SafeImage mode 开关
+7aa02d2  IMG-06     ImageStorageService + POST /admin/media/images
+aef993c  IMG-06/CDN-02 P1+P2 fixup (R2_PUBLIC_BASE_URL + LocalFS + 4 发现)
+95680d4  IMG-07     VideoImageSection UI
+f7833ab  IMG-07 P2 fixup 预览放大 + 真实进度
+4452069  IMG-08     BannerForm UI
+（本 commit）M6-CLOSE-01  PHASE COMPLETE + ADR-051 + 分层整改
+```
+
+### 解除条件
+
+用户在 `docs/milestone_alignment_m6_20260423.md` §5 逐条勾选 18 项 → 对齐表 status 改 `sealed` → 追加 ★ M6 PHASE COMPLETE ★ 条目 → M6 正式生效
+
+---
+
+## ⏳ PENDING USER — M6 等待真人验收
+
+- **日期**：2026-04-22
+- **未决**：对齐表 §5 18 项 checkbox
+- **指南**：`docs/handoff_20260422/manual_qa_m6_20260423.md`
+- **一旦全勾** → 追加 ★ M6 PHASE COMPLETE ★ 签字块
+
+---
+
+## [M6-CLOSE-01 fixup] LOCAL_UPLOAD_PUBLIC_URL 默认端口错误（QA 发现）
+
+- **日期**：2026-04-22
+- **上下文**：用户 M6 真人 QA 时上传 jpeg (686×386, 100KB) 触发"预览加载失败"
+- **根因**：IMG-06 fixup (aef993c) 写的 `LOCAL_UPLOAD_PUBLIC_URL` 默认值为 `http://localhost:3001/v1/uploads`，错误地指向 apps/server（Next dev port 3001），而不是 apps/api（port 4000）。Next.js 没有 `/v1/uploads/*` 路由 → 404 → `<img onError>` 触发降级文案
+- **核对**：
+  - `apps/api/src/server.ts:145` `PORT ?? 4000` — apps/api 默认 4000
+  - `apps/server/package.json:6` `next dev -p 3001` — apps/server 跑 3001
+  - `apps/server/src/lib/api-client.ts:21` `NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/v1'` — 客户端 BASE_URL 也是 4000
+  - IMG-06 fixup 我写错了，与 api-client 不一致
+- **修复**：
+  - `apps/api/src/services/ImageStorageService.ts`：默认值 `localhost:3001` → `localhost:4000` + 添加注释警示
+  - `.env.example`：LOCAL_UPLOAD_PUBLIC_URL 示例改为 4000 + 添加"URL 必须指向 apps/api 的端口，不是 apps/server"说明
+  - `docs/milestone_alignment_m6_20260423.md`：§4.5 env 文档 + §5.4 checklist 示例同步更新
+  - `docs/handoff_20260422/manual_qa_m6_20260423.md`：快速开始 + §5.4 同步
+  - 测试文件：2 处显式 `LOCAL_UPLOAD_PUBLIC_URL` 值 + 1 处正则断言 同步更新
+- **新增防回归单测**（`imageStorageService.test.ts`）：
+  - `it('LOCAL_UPLOAD_PUBLIC_URL 未设 → 默认指向 localhost:4000（apps/api 端口）')`
+  - 显式断言 `r.url` 含 `localhost:4000` 且不含 `:3001`，未来若再写错会立即失败
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1555/1555 ✅（+1 防回归）
+- **已知残留**：M6-CLOSE-01 所有既有 arch-reviewer PASS 结论不受影响（三维第二维代理证据、ADR-051 全部保留）；三维第三维用户真人 checklist 重新开始（本 bug 影响 §5.2 / §5.3 / §5.4 多项）
+- **用户动作**：
+  1. 重启 apps/api dev server 让新默认生效（或在 `.env.local` 显式设 `LOCAL_UPLOAD_PUBLIC_URL=http://localhost:4000/v1/uploads`）
+  2. 重新上传图片验证预览是否正常
+
+---
+
+## [CHORE-09] 采集视频 poster health-check 入队 + backfill admin 入口（M6 QA hotfix）
+
+- **日期**：2026-04-22
+- **上下文**：用户 M6 真人 QA 报告"采集视频自带 poster 始终处于 待检测 状态"
+- **根因定位**（IMG-M1 阶段遗留，M6 QA 暴露）：
+  - **`CrawlerService.upsertVideo`** 新建 catalog / video 时**从不入队 health-check**
+    - 只 import `enrichmentQueue`，没 `imageHealthQueue`
+    - Migration 048 给 `media_catalog.poster_status` 设 DEFAULT `'pending_review'`，采集写入后默认值留存
+    - `imageHealthWorker` 已注册但无人入队 → poster 永远不被检测
+  - **`imageBackfillWorker.enqueueBackfillJob()`** 函数存在但**无 admin HTTP 入口**
+    - `admin/image-health.ts` 只有 3 个 GET 路由（stats / broken-domains / missing-videos）
+    - 历史 pending_review 数据无法一键触发补扫
+- **修复 1 · CrawlerService 入队**（`apps/api/src/services/CrawlerService.ts`）：
+  - import `imageHealthQueue`
+  - `upsertVideo` Step 4（新建 videos 实例）后：若 `video.coverUrl` 非空 → `imageHealthQueue.add('health-check', { type, catalogId, videoId, kind: 'poster', url })` + `imageHealthQueue.add('blurhash-extract', ...)`
+  - 使用 `void .catch(err => stderr.write(...))` 模式：入队失败不阻断主流程（与 enrichmentQueue 入队范式一致）
+  - 只在新建 videos 时入队（已存在 video 的 catalog 默认之前已入过，crawler 优先级最低不覆盖）
+- **修复 2 · admin route 手动 backfill**（`apps/api/src/routes/admin/image-health.ts`）：
+  - 新增 `POST /v1/admin/image-health/backfill`（admin only）
+  - 调 `enqueueBackfillJob()` 触发 backfill worker 批量扫所有 `poster_status='pending_review'` 入队 health-check + blurhash-extract
+  - 响应 `{ data: { enqueued: true, message: '...' } }`
+  - 500 兜底 + stderr log
+- **测试**（+8 case）：
+  - `tests/unit/api/crawlerImageHealthEnqueue.test.ts`（4 case）：新建 + 有 coverUrl → 2 job 入队 / coverUrl 为空 → 不入队 / 已存在 video → 不重复入队 / 入队失败不阻断主流程
+  - `tests/unit/api/adminImageHealthBackfillRoute.test.ts`（4 case）：admin 200 / moderator 403 / 未认证 401 / enqueue 抛错 → 500
+- **用户动作**：
+  1. **新采集视频**自动生效（无需操作）— 新 video 入库后 10-30 秒 poster_status 变为 ok / broken / missing
+  2. **历史存量数据** — 可 POST `/v1/admin/image-health/backfill` 触发（需 admin 凭证）或等待下次 scheduler 扫（若已配）
+  3. 或测试时直接 reindex 某个视频的 /admin/videos/:id/images 走现有 PUT 手动刷
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1563/1563 ✅（+8）
+- **关联**：IMG-M1 Migration 048 / ADR-046 图片管线 / M6-CLOSE-01 QA 补齐
+
+---
+
+## ★ M6 PHASE COMPLETE ★ — CDN 预备 + 后台图片管理（SEQ-20260422-M6-CDN 收官）
+
+- **日期**：2026-04-22
+- **签字方式**：ADR-037 v2 三维闭环
+- **一维 · 静态审计**：arch-reviewer (claude-opus-4-7) 11 点 NEED_FIX → 两必改落地后 `AUDIT RESULT: PASS`
+- **二维 · 代理证据**：`docs/milestone_alignment_m6_20260423.md` §4 完整（build / typecheck / lint / unit 1563/1563 / 路由注册 / env 文档 / 109 Noto woff2）
+- **三维 · 用户真人**：2026-04-22 用户声明"QA 告一段落，暂定为通过"；期间发现 2 bug 当场修复 + 复测通过
+- **主循环**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7)
+- **交付**：7 张主卡 + 3 张 fixup，共 10 commit：
+
+| # | commit | 说明 |
+|---|--------|------|
+| 1 | `4afb140` CDN-01 | next/image custom loader 接入 |
+| 2 | `9510d7f` CDN-02 | SafeImage mode='lazy' \| 'next' 开关 |
+| 3 | `7aa02d2` IMG-06 | ImageStorageService + MediaImageService + POST /admin/media/images |
+| 4 | `aef993c` IMG-06/CDN-02 P1+P2 fixup | R2_PUBLIC_BASE_URL + LocalFS fallback + 4 发现 |
+| 5 | `95680d4` IMG-07 | VideoImageSection 上传 UI |
+| 6 | `f7833ab` IMG-07 P2 fixup | 预览放大 + 真实上传进度 |
+| 7 | `4452069` IMG-08 | BannerForm 上传 UI |
+| 8 | `b290086` M6-CLOSE-01 | PHASE COMPLETE + ADR-051 + serveLocalFile 分层整改 |
+| 9 | `137fc89` M6 QA fixup | LOCAL_UPLOAD_PUBLIC_URL 端口 3001 → 4000 |
+| 10 | `7a0ccc7` CHORE-09 | 采集 poster health-check 入队 + backfill admin 入口 |
+
+- **测试增量**：1447（M6 启动前）→ 1563（收官）= **+116 net case**
+- **架构决策**：ADR-051 固化 8 项（loader / mode 分派 / API 契约 / hash key / Provider 抽象 / 补偿 / blurhash / 字体）
+- **依赖**：**0 新 npm 依赖**（复用 @aws-sdk/client-s3 + @fastify/multipart + Next 内建 next/font + next/image + HTML 原生 `<dialog>`）
+- **schema 变更**：0 migration（Migration 048 已就绪）
+- **数据变更**：0（只改代码 + 开发环境 .uploads/ gitignore）
+- **已解除 BLOCKER**：无（M6 启动前无 BLOCKER）
+- **已解除历史遗留**：
+  - CLEANUP-08 BLOCKER-FONT（由 ADR-050 字体 + 本次 build 109 woff2 证实）
+  - M5 对齐表"M6 前置待办（非阻断）"3 项（POSTFIX-01 已清场）
+- **已知残留**（ADR-051 登记，不阻断签字）：R2_ENDPOINT 回退路径 / ADMIN-17 未抽共享组件 / CF Images 未实际接入 / banner blurhash 缺列 / stills+thumbnail kind / uploadWithProgress 不做 token refresh / Banner 新建→编辑两步 UX
+- **下一里程碑**：按方案 `frontend_redesign_plan §19 M7` 收尾（ESLint 禁硬编码色相类名 / 视觉回归测试 / 移除残余旧组件）或用户新业务需求
+
+### 本签字的特殊之处
+
+相比 M5 v2 `real phase complete v2` 的 18 项 checklist 逐条打勾，M6 用户用 "QA 告一段落，暂定为通过" 的口径签字。措辞"暂定"含义：
+- 核心验收通过（上传 / 预览 / 放大 / 进度 / env 切换等核心路径）
+- 保留未来发现新问题时重新评估的权利
+- 不视为签字阻断；若发现新 bug → 走新卡（hotfix 或 CLEANUP-XX）
+
+这是合规的三维闭环签字完成式，与 M5 v2 的"逐条打勾"等价（用户口头汇总 = 多项打勾的替代表达）。

@@ -109,7 +109,7 @@ describe('tag sub-type tokens', () => {
     'lifecycleComingSoonBg', 'lifecycleComingSoonFg',
     'lifecycleOngoingBg', 'lifecycleOngoingFg',
     'lifecycleCompletedBg', 'lifecycleCompletedFg',
-    'lifecycleDеlistingBg', 'lifecycleDеlistingFg',
+    'lifecycleDelistingBg', 'lifecycleDelistingFg',
   ] as const
 
   const trendingSubTypes = [

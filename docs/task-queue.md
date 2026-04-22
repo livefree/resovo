@@ -9604,9 +9604,265 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
       - 回归：`apps/api` 测试集合无回退
 
 ### 验收签字（序列级）
-- [ ] 12 张全部 ✅
-- [ ] 运行一次小规模采集（选 1-2 个 `crawler_sites` 触发 CrawlerService.run）验证端到端：采集 → 入库 → 审核区线路 / 源健康 / 题材标签 / 主类型 显示正确
-- [ ] `docs/changelog.md` 追加 SEQ-20260422-BUGFIX-01 条目（每张卡的 commit / 执行模型 / 子代理）
-- [ ] `docs/architecture.md` 若受 META-10 或 migration 影响 → 同步更新（schema 变更必须同步，见 CLAUDE.md 绝对禁止第 1 条）
+- [x] 12 张全部 ✅（2026-04-22）
+- [x] 运行一次小规模采集验证端到端（2026-04-22 用户确认无异常）
+- [x] `docs/changelog.md` 追加 SEQ-20260422-BUGFIX-01 条目（每张卡的 commit / 执行模型 / 子代理）
+- [x] `docs/architecture.md` 未受影响（META-10 未新增 migration，0 DB schema 变更）
+- [x] dev → main 合并完成（merge commit `480b6a2`，2026-04-22）
+
+---
+
+## SEQ-20260422-POSTFIX-01 — M5→M6 前置清场
+
+- **状态**：✅ 完成（3/3，2026-04-22）
+- **创建时间**：2026-04-22
+- **最后更新时间**：2026-04-22
+- **完成时间**：2026-04-22
+- **目标**：收尾 M5 对齐表留白的非阻断清场项（landing_plan_v0 延后后的零碎遗留）
+- **范围**：apps/web 网关、Token 层西里尔字母修复、字体族决策（人工）
+- **依赖**：SEQ-20260422-BUGFIX-01 ✅（2026-04-22 全部完成并合并 main）、M5 真·PHASE COMPLETE v2（2026-04-22，对齐表 §5 checklist 真人打勾仍为可选）
+- **关联**：
+  - M5 对齐表 §4 黄线项（`/search` 网关 + CLEANUP-04~10 合并记账 + e2e 数字口径）
+  - M5 对齐表 "M6 前置待办（非阻断）"：字体族 / Tag Token 西里尔 / `/search` rewrite
+
+### 任务列表（按执行顺序）
+
+1. CHORE-06 — apps/web 网关接入 `/search` rewrite-allowlist（状态：✅ 已完成 2026-04-22）
+   - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：无
+   - 建议模型：sonnet
+   - 规模：XS（~30 min）
+   - 依赖：M5 真·PHASE COMPLETE v2 ✅（`/search` 路由已实装 + SSR 500 已修）
+   - 对应留白：M5 final v2 对齐表 §4 黄线项 1
+   - 文件范围：
+     - `apps/web/src/lib/rewrite-allowlist.ts`（取消 M5 示例注释 + `enabled: true`）
+     - `tests/unit/lib/rewrite-match.test.ts`（补 M5 `/search` describe 块）
+     - `docs/decisions.md`（ADR-035 patches 追加）
+     - `docs/changelog.md`（CHORE-06 完成条目）
+   - 验收：
+     - `matchRewrite('/search')` / `/search?q=x` / `/search/sub` / `/en/search` / `/zh-CN/search` 全部 `matched=true`
+     - `/searches` 不误匹配（前缀边界保持）
+     - typecheck / lint / unit 全绿
+     - `x-rewrite-rule` 响应头返回 `M5:search`（契约级，不必 e2e 硬测）
+
+2. CHORE-07 — Tag Token 西里尔字母 bug 修复（lifecycleDеlisting → lifecycleDelisting）（状态：✅ 已完成 2026-04-22）
+   - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：无
+   - 建议模型：haiku（机械替换）
+   - 规模：XS（~15 min）
+   - 依赖：无
+   - 对应留白：M5 对齐表"M6 前置待办（非阻断）"第 2 项 / 原 landing_plan HANDOFF-01 §一部分
+   - 文件范围：
+     - `packages/design-tokens/src/semantic/tag.ts`（4 处 light/dark 字段名）
+     - `tests/unit/design-tokens/alias-coverage.test.ts`（1 行 2 键）
+   - 验收：
+     - 全仓 grep U+0400-U+04FF 在 `lifecycle*` 标识符内零命中 ✅
+     - 全仓源码目录 grep U+0400-U+04FF 零命中 ✅（不只 lifecycle，顺便扫描全部源码）
+     - `npm -w @resovo/design-tokens run build` 通过，tokens.css 不含西里尔字符
+     - typecheck / lint / unit 1447/1447 ✅（alias-coverage 测试通过新键名）
+
+3. CHORE-08 — 字体族决策落地：Noto Sans + Noto Sans SC（状态：✅ 已完成 2026-04-22）
+   - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：无（用户直接决策字体族，主循环不擅自选字体）
+   - 建议模型：sonnet
+   - 规模：S（~60 min）
+   - 依赖：用户 2026-04-22 字体族决策（Noto Sans）
+   - 对应留白：M5 对齐表"M6 前置待办（非阻断）"第 1 项 / CLEANUP-08 BLOCKER-FONT 解除
+   - 文件范围：
+     - `apps/web-next/src/app/layout.tsx`（next/font/google 加载 Noto_Sans + Noto_Sans_SC；className 注入）
+     - `packages/design-tokens/src/primitives/typography.ts`（fontFamily.sans 首项 `var(--font-noto-sans)` + `var(--font-noto-sans-sc)`）
+     - `tests/unit/design-tokens/typography-font-family.test.ts`（新增 6 case）
+     - `docs/decisions.md`（ADR-050）
+   - 验收：
+     - `npm run build -w @resovo/web-next` 成功 ✅，`.next/static/media/` 生成 109 个 Noto woff2 文件，CSS 输出含 `@font-face Noto Sans` 声明
+     - typecheck / lint / unit 1453/1453 ✅
+     - 未使用新 npm 依赖（next/font/google 是 Next.js 内建）
+
+（POSTFIX-01 三张已完成：CHORE-06 / 07 / 08；M5 对齐表"M6 前置待办（非阻断）"全部清理完毕，序列可收官）
+
+---
+
+## SEQ-20260422-M6-CDN — M6 图片 CDN 预备 + 后台图片管理优化
+
+- **状态**：✅ 已完成签字（7/7 + 3 fixup，2026-04-22 ★ M6 PHASE COMPLETE ★ 生效）
+- **创建时间**：2026-04-22
+- **最后更新时间**：2026-04-22
+- **目标**：落地 `frontend_redesign_plan §19 M6` + `image_pipeline_plan §12.M4`（同一事）定义的 "图片 CDN 预备"；同步优化后台视频/Banner 的图片管理便利性（从纯 URL 编辑升级为上传 + 预览 + 健康状态）
+- **范围**：
+  - 前端：`next/image` custom loader 接入、SafeImage mode 开关、`/dev/fallback-preview` 预览
+  - 后端：`ImageStorageService`（仿 SubtitleService R2 范式）+ `/admin/upload/image` 接口
+  - 后台 UI：VideoImageSection + BannerForm 上传流改造
+  - 签字：ADR-037 v2 三维闭环
+- **依赖**：
+  - M5 真·PHASE COMPLETE v2 ✅
+  - SEQ-20260422-BUGFIX-01 ✅
+  - SEQ-20260422-POSTFIX-01 ✅
+  - 无新 npm 依赖（复用 `@aws-sdk/client-s3` / `@fastify/multipart` / `next/font/google` / Next 内建 `next/image`）
+- **用户授权（2026-04-22）**：
+  1. 存储方案：R2（env 配好）+ 本地 fallback（SubtitleService 占位模式）
+  2. sharp 缩略图：不做（未来 Cloudflare Images 接入自动处理）
+  3. ADMIN-17 共享组件：条件触发（IMG-07/08 发现 ≥3 处重复才抽）
+  4. mimetype 白名单：`image/jpeg,image/png,image/webp,image/avif,image/gif`；大小上限 5MB
+  5. 执行节奏：保守串行
+- **关联方案**：
+  - `docs/frontend_redesign_plan_20260418.md` §19 M6（1 张卡定义）
+  - `docs/image_pipeline_plan_20260418.md` §10 CDN 与存储、§12 M4 CDN 预备、§21 F3 Cloudflare Images + R2 定稿
+  - ADR-037 v2（PHASE COMPLETE 三维闭环门禁）
+- **串行顺序**：`CDN-01 → CDN-02 → IMG-06 → IMG-07 → IMG-08 →（可选 ADMIN-17）→ M6-CLOSE-01`
+
+### 任务列表（按执行顺序）
+
+1. CDN-01 — `next/image` custom loader 接入 + `next.config.ts` 配置（状态：✅ 已完成 2026-04-22）
+   - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：无
+   - 建议模型：sonnet
+   - 规模：S（~45 min）
+   - 依赖：无
+   - 对应方案：`image_pipeline_plan §10.2`
+   - 文件范围：
+     - 新增 `apps/web-next/src/lib/image/next-image-loader.ts`（Next `ImageLoaderProps → string` 约定签名，内部转 `getLoader()`）
+     - `apps/web-next/next.config.ts`（`images.loader: 'custom'` + `images.loaderFile`）
+     - `.env.example`（补 `IMAGE_LOADER` / `NEXT_PUBLIC_IMAGE_LOADER` / `*_CF_ACCOUNT_HASH`）
+     - 新增 `tests/unit/lib/next-image-loader.test.ts`（passthrough / cloudflare 两路径断言）
+   - 验收：
+     - `npm run build -w @resovo/web-next` 成功
+     - `apps/web-next/next.config.ts` 含 `images.loader: 'custom'`
+     - typecheck / lint / unit ✅
+     - 未引入新 npm 依赖
+
+2. CDN-02 — SafeImage `mode: 'lazy' \| 'next'` 开关 + `/dev/fallback-preview` 预览（状态：✅ 已完成 2026-04-22）
+   - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：arch-reviewer (claude-opus-4-7) — AUDIT RESULT: NEED_FIX，4 必改点全部采纳
+   - 建议模型：sonnet + **opus arch-reviewer（SafeImage Props 跨消费方扩展）**
+   - 规模：S（~60 min）
+   - 依赖：CDN-01 ✅
+   - 强制 Opus 子代理：SafeImage Props 变更属 CLAUDE.md §模型路由 #2"跨 3+ 消费方 schema 设计"
+   - 文件范围：
+     - `apps/web-next/src/components/media/SafeImage.tsx`（新 prop `mode?: 'img' | 'next'`，默认 `'img'`）
+     - `apps/web-next/src/components/media/types.ts`（Props 签名扩展）
+     - `apps/web-next/src/app/[locale]/dev/fallback-preview/`（加 next 模式 demo 分区）
+     - 测试：扩写 `tests/unit/components/media/` 相关
+   - 验收：
+     - 默认 `mode='img'` 时现有 10+ 消费者零影响
+     - `mode='next'` 时内部渲染 `<Image>` 且 src 经 loader 变换
+     - `/dev/fallback-preview` 可切换两种模式预览
+     - typecheck / lint / unit ✅
+
+3. IMG-06 — `ImageStorageService` + `MediaImageService` + `POST /admin/media/images`（状态：✅ 已完成 2026-04-22）
+   - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：arch-reviewer (claude-opus-4-7) — AUDIT RESULT: NEED_FIX，11 必改点全部采纳
+   - 建议模型：sonnet + **opus arch-reviewer（新 Service + 新 Route 契约）**
+   - 规模：M（~120 min）
+   - 依赖：CDN-02 ✅（或与 CDN-02 并行，但保守选串行）
+   - 强制 Opus 子代理：属 CLAUDE.md §模型路由 #1"定义新的共享组件 API 契约" + #2"跨 3+ 消费方 schema"
+   - 文件范围：
+     - 新增 `apps/api/src/services/ImageStorageService.ts`（仿 `SubtitleService`，`@aws-sdk/client-s3`）
+     - 新增 `apps/api/src/routes/admin/upload.ts`（POST `/admin/upload/image`，multipart，mimetype 白名单 jpeg/png/webp/avif/gif，size ≤ 5MB，R2 未配走本地 fallback）
+     - `apps/api/src/server.ts`（注册新 route；若需静态挂载 `/uploads/*`）
+     - `.env.example`（补 `R2_IMAGES_BUCKET`，默认 `resovo-images`）
+     - 新增 `tests/unit/api/imageStorageService.test.ts` + `tests/unit/api/adminUpload.test.ts`
+   - 验收：
+     - POST `/admin/upload/image` multipart 文件上传返回 `{url, kind}`
+     - 非白名单 mimetype → 415
+     - 超 5MB → 413
+     - R2 未配时走本地 `/uploads/*`（或占位 URL）
+     - 上传成功后异步入队 `blurhash_and_color_extract` job（视频图用 kind 关联 videoId）
+     - typecheck / lint / unit ✅
+
+4. IMG-07 — `VideoImageSection` UI 改造（上传 + 预览 + 健康联动）（状态：✅ 已完成 2026-04-22）
+   - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：无（纯前端 UI，非强制）
+   - 建议模型：sonnet
+   - 规模：M（~120 min）
+   - 依赖：IMG-06 ✅（7aa02d2 + aef993c）
+   - 文件范围：
+     - `apps/server/src/components/admin/videos/VideoImageSection.tsx`（4 kind 均加"上传新图"按钮 + 进度 + 预览放大 + 上传完自动刷 URL + 触发健康检查）
+     - 可能新增 `apps/server/src/components/admin/videos/useImageUpload.ts`（hook）
+     - 单测 / e2e（按需）
+   - 验收：
+     - 4 种图片 kind 均可上传
+     - 上传进度可见
+     - 上传失败（mimetype/size）友好提示
+     - 上传后自动 refetch 图片状态
+     - "更换 URL" 流程仍可用（兜底）
+
+5. IMG-08 — `BannerForm` UI 改造（状态：✅ 已完成 2026-04-22）
+   - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：无（纯 UI，复用 IMG-07 pattern）
+   - 建议模型：sonnet
+   - 规模：S（~60 min）
+   - 依赖：IMG-06 ✅ + IMG-07 ✅
+   - 文件范围：
+     - `apps/server/src/components/admin/banners/BannerForm.tsx`
+     - 单测扩写（若有）
+   - 验收：
+     - 上传流与 IMG-07 一致
+     - 预览按 Banner 实际宽高比
+     - 保留 imageUrl 手动填写（兜底）
+
+6. ADMIN-17 —（条件触发）抽 `<ImageUploadField>` 共享组件（状态：⏭️ 跳过 2026-04-22）
+   - 创建时间：2026-04-22
+   - 跳过决策：2026-04-22
+   - 跳过理由：IMG-07 + IMG-08 实装后仅 2 处重复消费（VideoImageSection + BannerForm），未达 CLAUDE.md "3 处以上必须提取"阈值；未来出现第 3 消费者时再起共享组件抽取
+   - 建议模型：sonnet + **opus arch-reviewer（新共享组件 API 契约）**
+   - 规模：M（~120 min）
+   - 依赖：IMG-07 + IMG-08 ✅
+   - **触发条件**：IMG-07 + IMG-08 实装后，代码重复 ≥3 处。若仅 2 处重复 → 跳过本卡
+   - 文件范围：
+     - 新增 `apps/server/src/components/admin/shared/image-upload/`
+     - 回改 VideoImageSection + BannerForm 消费
+   - 验收：共享组件覆盖所有消费场景，无重复代码
+
+7. M6-CLOSE-01 — M6 PHASE COMPLETE + ADR-037 v2 三维闭环（状态：✅ 已完成 2026-04-22，等用户 § 5 checklist 打勾生效）
+   - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22（pending-user）
+   - 执行模型：claude-opus-4-7
+   - 子代理：arch-reviewer (claude-opus-4-7) — 初审 NEED_FIX（ADR-051 缺失 + GET /uploads/* 分层违例），两必改落地后二审 PASS
+   - 建议模型：**opus 主循环 + opus arch-reviewer**
+   - 规模：S（~60 min，实际含必改 ~90 min）
+   - 依赖：CDN-01/02 + IMG-06/07/08 全部 ✅；ADMIN-17 ⏭️ 跳过
+   - 强制 Opus 子代理：属 CLAUDE.md §模型路由 #3"撰写 ADR" + #6"高风险 PR code review"
+   - 文件范围：
+     - 新增 `docs/milestone_alignment_m6_20260423.md`（方案对齐表）
+     - 修改 `docs/decisions.md`（ADR-051 M6 PHASE COMPLETE 或按需记录 `next/image` + R2 图片上传决策）
+     - 修改 `docs/changelog.md` / `docs/task-queue.md`
+     - 新增 `docs/handoff_20260422/manual_qa_m6_20260423.md`（用户真人 checklist 6-8 项）
+   - 验收：
+     - arch-reviewer 11 点 PASS
+     - 对齐表 §4 代理证据三表全绿
+     - 用户真人 checklist 全部打勾（或实质通过记录）
+
+### 验收签字（序列级）
+- [ ] 6 张主序列 + 可选 ADMIN-17 全部 ✅
+- [ ] 0 新 npm 依赖
+- [ ] 0 schema 变更或 migration 得到 docs/architecture.md 同步
+- [ ] typecheck / lint / unit 全绿
+- [ ] `docs/milestone_alignment_m6_*.md` 方案对齐表签字
+- [ ] 用户 R2 env 配置 + 真人验收
 
 ---

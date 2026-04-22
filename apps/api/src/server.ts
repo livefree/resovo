@@ -38,6 +38,7 @@ import { internalImageBrokenRoutes } from '@/api/routes/internal/image-broken'
 import { adminImageHealthRoutes } from '@/api/routes/admin/image-health'
 import { bannerRoutes } from '@/api/routes/banners'
 import { adminBannerRoutes } from '@/api/routes/admin/banners'
+import { adminMediaRoutes } from '@/api/routes/admin/media'
 import { VerifyService } from '@/api/services/VerifyService'
 import { db } from '@/api/lib/postgres'
 
@@ -63,7 +64,9 @@ async function start() {
     secret: process.env.COOKIE_SECRET ?? 'dev-cookie-secret-replace-in-production',
   })
 
-  await fastify.register(multipart, { limits: { fileSize: 2 * 1024 * 1024 } })
+  // IMG-06: 全局 multipart 上限 5MB（兼容图片上传 POST /admin/media/images）
+  // 各 route 按需在 service 层收紧（例：SubtitleService.validateFile 仍守 2MB）
+  await fastify.register(multipart, { limits: { fileSize: 5 * 1024 * 1024 } })
 
   setupAuthenticate(fastify)
   setupMetrics(fastify)
@@ -92,6 +95,7 @@ async function start() {
   await fastify.register(adminImageHealthRoutes, { prefix: '/v1' })
   await fastify.register(bannerRoutes, { prefix: '/v1' })
   await fastify.register(adminBannerRoutes, { prefix: '/v1' })
+  await fastify.register(adminMediaRoutes, { prefix: '/v1' })
 
   registerVerifyWorker()
   registerCrawlerWorker()

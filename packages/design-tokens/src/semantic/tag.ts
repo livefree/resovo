@@ -24,8 +24,8 @@ export const tag = {
     lifecycleOngoingFg:     colors.success.dark,
     lifecycleCompletedBg:   'oklch(92.9% 0.006 247)',
     lifecycleCompletedFg:   'oklch(32.8% 0.012 247)',
-    lifecycleDеlistingBg:   colors.warning.light,
-    lifecycleDеlistingFg:   colors.warning.dark,
+    lifecycleDelistingBg:   colors.warning.light,
+    lifecycleDelistingFg:   colors.warning.dark,
 
     // ── trending sub-types ────────────────────────────────────────────────
     trendingHotBg:          colors.error.light,
@@ -63,8 +63,8 @@ export const tag = {
     lifecycleOngoingFg:     colors.success.light,
     lifecycleCompletedBg:   'oklch(23.0% 0.010 247)',
     lifecycleCompletedFg:   'oklch(70.8% 0.012 247)',
-    lifecycleDеlistingBg:   colors.warning.dark,
-    lifecycleDеlistingFg:   colors.warning.light,
+    lifecycleDelistingBg:   colors.warning.dark,
+    lifecycleDelistingFg:   colors.warning.light,
 
     // ── trending sub-types ────────────────────────────────────────────────
     trendingHotBg:          colors.error.dark,

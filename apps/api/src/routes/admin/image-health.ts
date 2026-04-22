@@ -2,9 +2,10 @@
  * admin/image-health.ts — 图片健康监控 API
  * IMG-05: admin only
  *
- * GET /admin/image-health/stats          — 总览统计
- * GET /admin/image-health/broken-domains — TOP 破损域名
- * GET /admin/image-health/missing-videos — 缺图视频列表（分页）
+ * GET  /admin/image-health/stats          — 总览统计
+ * GET  /admin/image-health/broken-domains — TOP 破损域名
+ * GET  /admin/image-health/missing-videos — 缺图视频列表（分页）
+ * POST /admin/image-health/backfill       — 手动触发存量 pending_review 回填（CHORE-09）
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -17,6 +18,7 @@ import {
   getBrokenEventsTrend,
 } from '@/api/db/queries/imageHealth'
 import type { MissingVideoSortField, SortDir } from '@/api/db/queries/imageHealth'
+import { enqueueBackfillJob } from '@/api/workers/imageBackfillWorker'
 
 const BrokenDomainsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
@@ -79,5 +81,27 @@ export async function adminImageHealthRoutes(fastify: FastifyInstance) {
       data: rows,
       total: parseInt(countResult.rows[0]?.total ?? '0'),
     })
+  })
+
+  // ── POST /admin/image-health/backfill ──────────────────────────
+  // CHORE-09: 管理员手动触发存量 pending_review 图片 URL 回填
+  // 触发 imageBackfillWorker 批量扫 media_catalog.poster_status='pending_review'
+  // 等字段，分批入队 health-check + blurhash-extract
+  fastify.post('/admin/image-health/backfill', { preHandler: auth }, async (_req, reply) => {
+    try {
+      await enqueueBackfillJob()
+      return reply.send({
+        data: {
+          enqueued: true,
+          message: '已入队 backfill 任务，worker 分批扫描 pending_review 图片；请 30-60 秒后刷新状态',
+        },
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[POST /admin/image-health/backfill] 500: ${msg}\n`)
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: `触发失败：${msg}`, status: 500 },
+      })
+    }
   })
 }
