@@ -8446,3 +8446,26 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **关联**：
   - `docs/video_ingest_source_and_moderation_audit_20260422.md` §1.3 C
   - 下游：ADMIN-13（`/admin/sources` filter/sort/返回字段同口径切换）
+
+---
+
+## [ADMIN-13] /admin/sources 全面切行级 COALESCE(s.source_site_key, v.site_key)
+
+- **日期**：2026-04-22
+- **序列**：SEQ-20260422-BUGFIX-01（12 张第 4 张）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无
+- **背景**：audit §1.3 A 指出后台 `/admin/sources` 仍按 `v.site_key` 过滤/排序/返回，即使行级 `source_site_key` 已由 Migration 046 引入，跨站聚合视频在审核区展示全部线路成同一主站
+- **修复**（`apps/api/src/db/queries/sources.ts` `listAdminSources`，3 处同步）：
+  1. filter：`filters.siteKey` 条件 `v.site_key = $N` → `COALESCE(s.source_site_key, v.site_key) = $N`
+  2. sort：`ORDER_BY_MAP.site_key` `v.site_key` → `COALESCE(s.source_site_key, v.site_key)`
+  3. SELECT 返回字段：`v.site_key AS site_key` → `COALESCE(s.source_site_key, v.site_key) AS site_key`（审核区消费该字段得到行级站点）
+- **测试**：
+  - 新增 `tests/unit/api/admin-sources-sql.test.ts`（3 case：filter / sort / SELECT 返回字段各断言 COALESCE 存在且不再有 `v.site_key = $N` / `v.site_key AS site_key`）
+  - 更新 `tests/unit/api/content-sort.test.ts:87` 从 `expect(sql).toContain('v.site_key =')` → `expect(sql).toContain('COALESCE(s.source_site_key, v.site_key) = $')` + `not.toMatch(/v\.site_key\s*=\s*\$\d+/)` 防回归
+- **函数签名不变**：`AdminSourceListFilters` 结构保持，route 层 / 前端消费方无须改动
+- **向下兼容**：`s.*` 仍会带回原 `source_site_key` 值，调用方需要原始行级 key 时可直接读；`site_key`（COALESCE 后）是对外主字段
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1385/1385 ✅（+3 新 case）
+- **关联**：
+  - `docs/video_ingest_source_and_moderation_audit_20260422.md` §1.3 A
+  - 下游：ADMIN-15（审核区线路分组按 `source_name + source_site_key`）/ ADMIN-16（数据源统一）

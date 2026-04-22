@@ -9432,11 +9432,15 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 单测覆盖：跨站点聚合视频不同 site 各自清理、同 site 幂等、source_name 相同但 site 不同不误删
      - typecheck / lint / unit ✅
 
-4. ADMIN-13 — `/admin/sources` 全面切行级 `COALESCE(s.source_site_key, v.site_key)`（状态：⬜ 未开始）
+4. ADMIN-13 — `/admin/sources` 全面切行级 `COALESCE(s.source_site_key, v.site_key)`（状态：✅ 已完成 2026-04-22）
    - 创建时间：2026-04-22
+   - 实际开始：2026-04-22
+   - 完成时间：2026-04-22
+   - 执行模型：claude-opus-4-7
+   - 子代理：无
    - 建议模型：sonnet
    - 规模：M（~120 min）
-   - 依赖：CRAWLER-05 ✅
+   - 依赖：CRAWLER-05 ✅（e276b71）
    - 对应 audit 条目：§1.3 A
    - 文件范围：`apps/api/src/db/queries/sources.ts`（`listAdminSources` + `ORDER_BY_MAP` + `filters.siteKey` 条件 + 返回字段 `site_key`）
    - 验收：

@@ -291,7 +291,8 @@ export async function listAdminSources(
     params.push(`%${filters.title}%`)
   }
   if (filters.siteKey) {
-    conditions.push(`v.site_key = $${idx++}`)
+    // ADMIN-13: 切到行级 source_site_key，回落 v.site_key 保留历史兼容
+    conditions.push(`COALESCE(s.source_site_key, v.site_key) = $${idx++}`)
     params.push(filters.siteKey)
   }
 
@@ -303,7 +304,7 @@ export async function listAdminSources(
     is_active: 's.is_active',
     video_title: 'v.title',
     source_url: 's.source_url',
-    site_key: 'v.site_key',
+    site_key: 'COALESCE(s.source_site_key, v.site_key)',  // ADMIN-13: 行级优先
   }
   const orderByColumn = filters.sortField ? ORDER_BY_MAP[filters.sortField] : 's.created_at'
   const orderByDir = filters.sortDir === 'asc' ? 'ASC' : 'DESC'
@@ -312,7 +313,9 @@ export async function listAdminSources(
 
   const [rows, countResult] = await Promise.all([
     db.query(
-      `SELECT s.*, v.title AS video_title, v.site_key AS site_key
+      // ADMIN-13: 返回字段 site_key 改为行级 COALESCE（跨站聚合视频显示各行实际站点）
+      `SELECT s.*, v.title AS video_title,
+              COALESCE(s.source_site_key, v.site_key) AS site_key
        FROM video_sources s
        LEFT JOIN videos v ON s.video_id = v.id
        WHERE ${where}

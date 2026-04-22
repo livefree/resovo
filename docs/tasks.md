@@ -13,8 +13,9 @@
 
 ---
 
-<!-- M5 SEQ-20260421-M5-CLEANUP-2 整体完成 2026-04-22：CLEANUP-04~10 b557463 / CLEANUP-11 d85bf9e / CLOSE-03 481d729 -->
-<!-- 2026-04-22 META-10 ✅ commit bbac72a -->
-<!-- 2026-04-22 CHORE-05 ✅ commit 59a2a91 -->
-<!-- 2026-04-22 CRAWLER-05 ✅ 待 commit -->
-<!-- 单任务工作台稳定态：空，下一张 ADMIN-13 -->
+<!-- 2026-04-22 SEQ-20260422-BUGFIX-01 进度：4/12 张 ✅ -->
+<!--   META-10    bbac72a   VideoGenre 对齐豆瓣 -->
+<!--   CHORE-05   59a2a91   40 万行试验数据清空 -->
+<!--   CRAWLER-05 e276b71   replaceSourcesForSite 按 source_site_key -->
+<!--   ADMIN-13   待 commit  /admin/sources 行级 COALESCE -->
+<!-- 单任务工作台稳定态：空，下一张 CRAWLER-06（漏传 sourceSiteKey，XS 规模） -->
