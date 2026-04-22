@@ -27,3 +27,15 @@ export type { StackToken, StackTheme } from './stack.js'
 
 export { skeleton } from './skeleton.js'
 export type { SkeletonToken, SkeletonTheme } from './skeleton.js'
+
+export { takeover } from './takeover.js'
+export type { TakeoverToken, TakeoverTheme } from './takeover.js'
+
+export { tabbar } from './tabbar.js'
+export type { TabbarToken, TabbarTheme } from './tabbar.js'
+
+export { sharedElement } from './shared-element.js'
+export type { SharedElementToken } from './shared-element.js'
+
+export { routeStack } from './route-stack.js'
+export type { RouteStackToken } from './route-stack.js'

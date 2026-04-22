@@ -73,7 +73,7 @@ describe('MobileTabBar', () => {
     const { MobileTabBar } = await import('@/components/layout/MobileTabBar')
     render(<MobileTabBar />)
     const nav = screen.getByTestId('mobile-tabbar')
-    expect(nav.style.zIndex).toBe('var(--z-tabbar, 40)')
+    expect(nav.style.zIndex).toBe('var(--z-tabbar)')
   })
 
   it('高度包含 tabbar-height + safe-area-inset-bottom', async () => {

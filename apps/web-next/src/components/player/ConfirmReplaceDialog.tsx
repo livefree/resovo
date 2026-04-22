@@ -15,7 +15,7 @@ export function ConfirmReplaceDialog({ onConfirm, onCancel }: ConfirmReplaceDial
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 100,
+        zIndex: 'var(--z-overlay)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -72,7 +72,7 @@ export function ConfirmReplaceDialog({ onConfirm, onCancel }: ConfirmReplaceDial
               borderRadius: '0.375rem',
               border: 'none',
               background: 'var(--accent-default)',
-              color: 'var(--accent-fg, white)',
+              color: 'var(--accent-fg)',
               cursor: 'pointer',
               fontSize: '0.875rem',
               fontWeight: 600,

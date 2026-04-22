@@ -187,7 +187,7 @@ export function FallbackCover({
         height,
         background: gradientVar(seed),
         border: '1px solid var(--border-default)',
-        borderRadius: 'var(--radius-md, 8px)',
+        borderRadius: 'var(--radius-md)',
         color: 'var(--fg-muted)',
       }}
     >

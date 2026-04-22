@@ -411,7 +411,7 @@
   inset: 0;
   pointer-events: none;
   /* Elevated to --z-mini-player so MiniPlayer floats above Tab Bar */
-  z-index: var(--z-mini-player, 50);
+  z-index: var(--z-mini-player);
 }
 
 /* Tab Bar — hidden on hover:hover (desktop), shown on hover:none (touch) */
@@ -493,4 +493,126 @@
   --banner-accent-4: oklch(66%   0.19  25);  /* 红 */
   --banner-accent-5: oklch(72%   0.16  85);  /* 黄 */
   --banner-dot-inactive: color-mix(in srgb, white 40%, transparent);
+}
+
+/* M5-CLEANUP-01 — Takeover + FloatingPlayButton tokens (ADR-048 §3) */
+:root {
+  --takeover-fast-duration-mobile:  200ms;
+  --takeover-fast-duration-desktop: 240ms;
+  --takeover-standard-duration:     360ms;
+  --takeover-reduced-motion-duration: 120ms;
+  --takeover-mask-color-fast:     color-mix(in oklch, oklch(6.5% 0.004 247) 45%, transparent);
+  --takeover-mask-color-standard: color-mix(in oklch, oklch(6.5% 0.004 247) 60%, transparent);
+  --floating-play-button-bg: oklch(64.5% 0.165 230);
+  --floating-play-button-fg: oklch(100% 0 0);
+}
+[data-theme="dark"], .dark {
+  --takeover-mask-color-fast:     color-mix(in oklch, oklch(6.5% 0.004 247) 55%, transparent);
+  --takeover-mask-color-standard: color-mix(in oklch, oklch(6.5% 0.004 247) 70%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --takeover-mask-color-fast:     color-mix(in oklch, oklch(6.5% 0.004 247) 55%, transparent);
+    --takeover-mask-color-standard: color-mix(in oklch, oklch(6.5% 0.004 247) 70%, transparent);
+  }
+}
+
+/* M5-CLEANUP-01 — Tabbar tokens (ADR-048 §8) */
+:root {
+  --tabbar-bg:                        color-mix(in oklch, oklch(100% 0 0) 85%, transparent);
+  --tabbar-blur:                      12px;
+  --tabbar-underline-color:           oklch(64.5% 0.165 230);
+  --tabbar-underline-transition-duration: 180ms;
+}
+[data-theme="dark"], .dark {
+  --tabbar-bg: color-mix(in oklch, oklch(11.2% 0.006 247) 85%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tabbar-bg: color-mix(in oklch, oklch(11.2% 0.006 247) 85%, transparent);
+  }
+}
+
+/* M5-CLEANUP-01 — SharedElement tokens (ADR-048 §4) */
+:root {
+  --shared-element-duration:         360ms;
+  --shared-element-easing:           cubic-bezier(0.4, 0, 0.2, 1);
+  --shared-element-fallback-duration: 120ms;
+}
+
+/* M5-CLEANUP-01 — RouteStack tokens (ADR-048 §6) */
+:root {
+  --route-stack-edge-trigger-width:  20px;
+  --route-stack-threshold-ratio:     0.3;
+  --route-stack-velocity-threshold:  0.5;
+  --route-stack-back-animation-duration: 240ms;
+}
+
+/* M5-CLEANUP-01 — Tag lifecycle sub-types (light defaults) */
+:root {
+  --tag-lifecycle-new-bg:          oklch(88.0% 0.090 155);
+  --tag-lifecycle-new-fg:          oklch(44.0% 0.135 155);
+  --tag-lifecycle-coming-soon-bg:  oklch(90.0% 0.060 250);
+  --tag-lifecycle-coming-soon-fg:  oklch(48.0% 0.125 250);
+  --tag-lifecycle-ongoing-bg:      oklch(88.0% 0.090 155);
+  --tag-lifecycle-ongoing-fg:      oklch(44.0% 0.135 155);
+  --tag-lifecycle-completed-bg:    oklch(92.9% 0.006 247);
+  --tag-lifecycle-completed-fg:    oklch(32.8% 0.012 247);
+  --tag-lifecycle-delisting-bg:    oklch(90.0% 0.095 85);
+  --tag-lifecycle-delisting-fg:    oklch(52.0% 0.135 85);
+  --tag-trending-hot-bg:           oklch(88.0% 0.080 25);
+  --tag-trending-hot-fg:           oklch(45.0% 0.165 25);
+  --tag-trending-weekly-top-bg:    oklch(90.0% 0.095 85);
+  --tag-trending-weekly-top-fg:    oklch(52.0% 0.135 85);
+  --tag-trending-exclusive-bg:     oklch(92.0% 0.045 230);
+  --tag-trending-exclusive-fg:     oklch(52.0% 0.155 230);
+  --tag-trending-editor-pick-bg:   oklch(90.0% 0.060 250);
+  --tag-trending-editor-pick-fg:   oklch(48.0% 0.125 250);
+}
+[data-theme="dark"], .dark {
+  --tag-lifecycle-new-bg:          oklch(44.0% 0.135 155);
+  --tag-lifecycle-new-fg:          oklch(88.0% 0.090 155);
+  --tag-lifecycle-coming-soon-bg:  oklch(48.0% 0.125 250);
+  --tag-lifecycle-coming-soon-fg:  oklch(90.0% 0.060 250);
+  --tag-lifecycle-ongoing-bg:      oklch(44.0% 0.135 155);
+  --tag-lifecycle-ongoing-fg:      oklch(88.0% 0.090 155);
+  --tag-lifecycle-completed-bg:    oklch(23.0% 0.010 247);
+  --tag-lifecycle-completed-fg:    oklch(70.8% 0.012 247);
+  --tag-lifecycle-delisting-bg:    oklch(52.0% 0.135 85);
+  --tag-lifecycle-delisting-fg:    oklch(90.0% 0.095 85);
+  --tag-trending-hot-bg:           oklch(45.0% 0.165 25);
+  --tag-trending-hot-fg:           oklch(88.0% 0.080 25);
+  --tag-trending-weekly-top-bg:    oklch(52.0% 0.135 85);
+  --tag-trending-weekly-top-fg:    oklch(90.0% 0.095 85);
+  --tag-trending-exclusive-bg:     oklch(38.0% 0.120 230);
+  --tag-trending-exclusive-fg:     oklch(92.0% 0.045 230);
+  --tag-trending-editor-pick-bg:   oklch(48.0% 0.125 250);
+  --tag-trending-editor-pick-fg:   oklch(90.0% 0.060 250);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tag-lifecycle-new-bg:          oklch(44.0% 0.135 155);
+    --tag-lifecycle-new-fg:          oklch(88.0% 0.090 155);
+    --tag-lifecycle-coming-soon-bg:  oklch(48.0% 0.125 250);
+    --tag-lifecycle-coming-soon-fg:  oklch(90.0% 0.060 250);
+    --tag-lifecycle-ongoing-bg:      oklch(44.0% 0.135 155);
+    --tag-lifecycle-ongoing-fg:      oklch(88.0% 0.090 155);
+    --tag-lifecycle-completed-bg:    oklch(23.0% 0.010 247);
+    --tag-lifecycle-completed-fg:    oklch(70.8% 0.012 247);
+    --tag-lifecycle-delisting-bg:    oklch(52.0% 0.135 85);
+    --tag-lifecycle-delisting-fg:    oklch(90.0% 0.095 85);
+    --tag-trending-hot-bg:           oklch(45.0% 0.165 25);
+    --tag-trending-hot-fg:           oklch(88.0% 0.080 25);
+    --tag-trending-weekly-top-bg:    oklch(52.0% 0.135 85);
+    --tag-trending-weekly-top-fg:    oklch(90.0% 0.095 85);
+    --tag-trending-exclusive-bg:     oklch(38.0% 0.120 230);
+    --tag-trending-exclusive-fg:     oklch(92.0% 0.045 230);
+    --tag-trending-editor-pick-bg:   oklch(48.0% 0.125 250);
+    --tag-trending-editor-pick-fg:   oklch(90.0% 0.060 250);
+  }
+}
+
+/* M5-CLEANUP-01 — CinemaMode overlay color token */
+:root {
+  --cinema-overlay-bg: color-mix(in srgb, black 55%, transparent);
 }

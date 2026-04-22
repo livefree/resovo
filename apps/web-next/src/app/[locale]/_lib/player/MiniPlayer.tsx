@@ -46,7 +46,7 @@ export function MiniPlayer() {
         background: 'var(--bg-canvas)',
         border: '1px solid var(--border-default)',
         boxShadow: '0 8px 32px color-mix(in srgb, black 40%, transparent)',
-        zIndex: 'var(--z-mini-player, 50)',
+        zIndex: 'var(--z-mini-player)',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
@@ -54,8 +54,8 @@ export function MiniPlayer() {
         // FLIP 入场动画
         opacity: visible ? 1 : 0,
         transform: visible ? 'scale(1) translateY(0)' : 'scale(0.92) translateY(8px)',
-        transition: `opacity var(--transition-shared, 320ms) var(--ease-page, ease),
-                     transform var(--transition-shared, 320ms) var(--ease-page, ease)`,
+        transition: `opacity var(--transition-shared) var(--ease-page),
+                     transform var(--transition-shared) var(--ease-page)`,
       }}
     >
       {/* 内容区：显示当前播放信息 */}
