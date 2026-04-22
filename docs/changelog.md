@@ -8987,3 +8987,33 @@ CrawlerSiteTableHead inline 列设置（带边框绝对定位 div + 手写 check
 - **质量门禁**：typecheck ✅ / lint ✅ / unit 1532/1532 ✅（+13）
 - **关联**：IMG-06（API 契约） / ADR-046 / `image_pipeline_plan §10.2` §4（治理开启）
 - **下游**：IMG-08 BannerForm 上传流同构改造；ADMIN-17 共享组件评估（等 IMG-08 完成看重复度）
+
+---
+
+## [IMG-07 follow-up] 预览放大 + 真实上传进度（外部 review 2 P2 修复）
+
+- **日期**：2026-04-22
+- **上下文**：IMG-07 初版 commit `95680d4` 实装上传，但外部 review 指出 2 个 P2 偏差 vs 任务卡验收（"预览放大" + "上传进度"）。逐项补齐
+- **P2-a 预览放大**（`VideoImageSection.tsx`）：
+  - 缩略图包裹成 `<button>` 含 `cursor-zoom-in` 样式 + `aria-label="放大查看${kind}"`
+  - 新增原生 `<dialog ref>` 大图预览层（max-width: `min(90vw - 2rem, 960px)`，max-height: `calc(90vh - 5rem)`，`object-fit: contain`）
+  - ESC 默认关闭（`<dialog>` 原生行为） + 右上关闭按钮 + 点击遮罩关闭（`onClick` 判断 `e.target === dialog` 自身）
+  - 不引入 lightbox 依赖（原生 `<dialog>` 已足够）
+- **P2-b 上传进度**：
+  - `apps/server/src/lib/api-client.ts` 新增 `uploadWithProgress<T>(path, formData, { onProgress })` 方法
+    - 走 `XMLHttpRequest`（fetch API 不原生支持 `upload.onprogress`）
+    - 回调 `{ percent: number | null, loaded: number, total: number | null }`，`lengthComputable=false` 时 percent 为 null
+    - 沿用 `Authorization: Bearer ...` 认证头；401 自动登出（与 fetch 版对齐）；不做自动 refresh retry（上传场景 token 通常新鲜）
+    - 错误响应映射 `ApiClientError`（与 fetch 版对齐便于 catch 分支统一）
+  - `VideoImageSection.tsx` 改用 `uploadWithProgress`：
+    - 按钮文案从 "上传中…" → "上传中 42%"（有 percent 时）
+    - 真实进度条（`role="progressbar"` + `aria-valuenow/min/max`），宽度按 percent 动态调整
+    - `onProgress` 回调期间只在 percent 非 null 时渲染进度条（回退场景保留忙碌态）
+- **测试**（+8 case）：
+  - 进度（3 case）：按钮文案含百分比 / 进度条 ARIA 属性正确 / percent=null 时不渲染进度条只显示忙碌态
+  - 预览放大（5 case）：触发按钮 + dialog 渲染 / 点击打开 / 关闭按钮关闭 / aria-label 标识 / dialog 内大图 src 与缩略图一致
+  - jsdom 不支持 `<dialog>.showModal/close`，测试中用 `open` 属性 polyfill
+- **契约**：API 层（POST /admin/media/images）0 改动；MediaImageService / ImageStorageService / IMG-06 保持稳定
+- **未引入新 npm 依赖**（XHR 浏览器原生 / `<dialog>` HTML 原生）
+- **质量门禁**：typecheck ✅ / lint ✅ / unit 1540/1540 ✅（+8；首次全量 1 flaky，重跑稳态全绿）
+- **向前看**：IMG-08 直接复用 `uploadWithProgress`；M6-CLOSE 的真人 checklist 应含"上传大图观察进度百分比"与"点击缩略图展开原图"两项

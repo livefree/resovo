@@ -115,9 +115,11 @@ function ImageRow({ kind, entry, polling, videoId, onSaved }: ImageRowProps) {
   const [saveError, setSaveError] = useState<string | null>(null)
   // IMG-07
   const [uploading, setUploading] = useState(false)
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [imgBroken, setImgBroken] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const dialogRef = useRef<HTMLDialogElement>(null)
 
   // url 变化时重置破图状态
   useEffect(() => { setImgBroken(false) }, [entry.url])
@@ -156,6 +158,7 @@ function ImageRow({ kind, entry, polling, videoId, onSaved }: ImageRowProps) {
     }
 
     setUploading(true)
+    setUploadPercent(null)
     setUploadError(null)
     try {
       const form = new FormData()
@@ -163,17 +166,36 @@ function ImageRow({ kind, entry, polling, videoId, onSaved }: ImageRowProps) {
       form.append('ownerType', 'video')
       form.append('ownerId', videoId)
       form.append('kind', kind)
-      const res = await apiClient.upload<UploadResponse>('/admin/media/images', form)
+      // IMG-07: 使用 uploadWithProgress 走 XHR 获取真实字节级进度
+      const res = await apiClient.uploadWithProgress<UploadResponse>(
+        '/admin/media/images',
+        form,
+        {
+          onProgress: ({ percent }) => {
+            if (percent !== null) setUploadPercent(percent)
+          },
+        },
+      )
       onSaved(kind, res.data.url)
     } catch (err) {
       setUploadError(formatUploadError(err))
     } finally {
       setUploading(false)
+      setUploadPercent(null)
     }
   }
 
   function triggerFilePicker() {
     fileInputRef.current?.click()
+  }
+
+  function openPreviewDialog() {
+    // 原生 <dialog>，ESC 自动关闭，点击遮罩关闭由 onClick 实现
+    dialogRef.current?.showModal()
+  }
+
+  function closePreviewDialog() {
+    dialogRef.current?.close()
   }
 
   const statusColor = STATUS_COLOR[entry.status ?? 'missing'] ?? 'var(--muted)'
@@ -212,21 +234,31 @@ function ImageRow({ kind, entry, polling, videoId, onSaved }: ImageRowProps) {
             className="flex items-center gap-3 rounded border p-2"
             style={{ borderColor: 'var(--border)', background: 'var(--bg2)' }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={entry.url}
-              alt={KIND_LABELS[kind]}
-              style={{
-                height: previewHeight,
-                aspectRatio,
-                objectFit,
-                background: 'var(--bg3)',
-                borderRadius: 4,
-                flex: '0 0 auto',
-              }}
-              onError={() => setImgBroken(true)}
-              data-testid={`image-preview-${kind}`}
-            />
+            {/* 点击缩略图 → 打开 <dialog> 查看原图 */}
+            <button
+              type="button"
+              onClick={openPreviewDialog}
+              className="cursor-zoom-in border-0 p-0 bg-transparent"
+              style={{ flex: '0 0 auto' }}
+              data-testid={`image-preview-trigger-${kind}`}
+              aria-label={`放大查看${KIND_LABELS[kind]}`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={entry.url}
+                alt={KIND_LABELS[kind]}
+                style={{
+                  height: previewHeight,
+                  aspectRatio,
+                  objectFit,
+                  background: 'var(--bg3)',
+                  borderRadius: 4,
+                  display: 'block',
+                }}
+                onError={() => setImgBroken(true)}
+                data-testid={`image-preview-${kind}`}
+              />
+            </button>
             <p
               className="break-all text-xs flex-1 min-w-0"
               style={{ color: 'var(--muted)' }}
@@ -235,6 +267,58 @@ function ImageRow({ kind, entry, polling, videoId, onSaved }: ImageRowProps) {
               {entry.url.length > 60 ? `${entry.url.slice(0, 60)}…` : entry.url}
             </p>
           </div>
+          {/* 点击放大弹层：原生 <dialog>，ESC 默认关闭，点击遮罩关闭 */}
+          <dialog
+            ref={dialogRef}
+            onClick={(e) => {
+              // 点击 dialog 本身（遮罩）而非内部内容时关闭
+              if (e.target === dialogRef.current) closePreviewDialog()
+            }}
+            className="p-0 rounded"
+            style={{
+              border: '1px solid var(--border)',
+              background: 'var(--bg2)',
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+            }}
+            data-testid={`image-preview-dialog-${kind}`}
+          >
+            <div className="relative p-4 space-y-3">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>
+                  {KIND_LABELS[kind]}
+                </span>
+                <button
+                  type="button"
+                  onClick={closePreviewDialog}
+                  className="rounded border px-2 py-1 text-xs"
+                  style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}
+                  data-testid={`image-preview-close-${kind}`}
+                >
+                  关闭 (Esc)
+                </button>
+              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={entry.url}
+                alt={KIND_LABELS[kind]}
+                style={{
+                  maxWidth: 'min(90vw - 2rem, 960px)',
+                  maxHeight: 'calc(90vh - 5rem)',
+                  objectFit: 'contain',
+                  background: 'var(--bg3)',
+                  borderRadius: 4,
+                  display: 'block',
+                }}
+              />
+              <p
+                className="break-all text-xs"
+                style={{ color: 'var(--muted)' }}
+              >
+                {entry.url}
+              </p>
+            </div>
+          </dialog>
         </div>
       ) : entry.url && imgBroken ? (
         <div className="space-y-1">
@@ -279,8 +363,34 @@ function ImageRow({ kind, entry, polling, videoId, onSaved }: ImageRowProps) {
             style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
             data-testid={`image-upload-btn-${kind}`}
           >
-            {uploading ? '上传中…' : '上传新图'}
+            {uploading
+              ? uploadPercent !== null
+                ? `上传中 ${uploadPercent}%`
+                : '上传中…'
+              : '上传新图'}
           </button>
+          {/* IMG-07: 进度条（真实字节进度；lengthComputable=false 时不显示） */}
+          {uploading && uploadPercent !== null && (
+            <div
+              className="flex-1 min-w-[4rem] h-1 rounded overflow-hidden self-center"
+              style={{ background: 'var(--bg3)' }}
+              data-testid={`image-upload-progress-${kind}`}
+              role="progressbar"
+              aria-valuenow={uploadPercent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`${KIND_LABELS[kind]} 上传进度`}
+            >
+              <div
+                style={{
+                  width: `${uploadPercent}%`,
+                  height: '100%',
+                  background: 'var(--accent)',
+                  transition: 'width 0.15s linear',
+                }}
+              />
+            </div>
+          )}
           <button
             type="button"
             disabled={isBusy}

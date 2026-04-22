@@ -231,6 +231,93 @@ export const apiClient = {
       body: formData as unknown,  // fetch 原生支持 FormData，绕过 JSON.stringify
     })
   },
+
+  /**
+   * 上传文件并汇报真实进度（XMLHttpRequest，fetch 不原生支持 upload.onprogress）
+   *
+   * - 通过 XHR `upload.onprogress` 事件获取字节级进度
+   * - 认证头自动附加（与 fetch 版 upload 对齐）；401 时清登录态（但不做自动 refresh retry，
+   *   上传场景通常 token 新鲜；若遇 401 由用户重试即可）
+   * - 错误码映射 ApiClientError，与 fetch 版对齐便于调用方 catch 分支统一
+   */
+  uploadWithProgress<T>(
+    path: string,
+    formData: FormData,
+    options?: {
+      onProgress?: (progress: {
+        /** 0-100，若浏览器无法计算则为 null */
+        percent: number | null
+        /** 已上传字节 */
+        loaded: number
+        /** 总字节（若 computable=false 则为 null） */
+        total: number | null
+      }) => void
+      skipAuth?: boolean
+      headers?: Record<string, string>
+    },
+  ): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', `${BASE_URL}${path}`, true)
+      xhr.withCredentials = true
+
+      // 附加认证头（对齐 request() 行为）
+      if (!options?.skipAuth) {
+        const token = useAuthStore.getState().accessToken
+        if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+      }
+      // 自定义头（不设 Content-Type，浏览器自动补 multipart boundary）
+      if (options?.headers) {
+        for (const [k, v] of Object.entries(options.headers)) {
+          if (k.toLowerCase() === 'content-type') continue
+          xhr.setRequestHeader(k, v)
+        }
+      }
+
+      xhr.upload.onprogress = (e: ProgressEvent) => {
+        options?.onProgress?.({
+          percent: e.lengthComputable ? Math.round((e.loaded / e.total) * 100) : null,
+          loaded: e.loaded,
+          total: e.lengthComputable ? e.total : null,
+        })
+      }
+
+      xhr.onerror = () => {
+        reject(new ApiClientError('NETWORK_ERROR', '网络错误', 0))
+      }
+      xhr.onabort = () => {
+        reject(new ApiClientError('ABORTED', '上传被中止', 0))
+      }
+
+      xhr.onload = () => {
+        const status = xhr.status
+        let body: unknown
+        try {
+          body = xhr.responseText ? JSON.parse(xhr.responseText) : null
+        } catch {
+          body = null
+        }
+
+        if (status === 401) {
+          handleUnauthorized()
+          reject(new ApiClientError('UNAUTHORIZED', '认证已过期，请重新登录', 401))
+          return
+        }
+
+        if (status >= 200 && status < 300) {
+          resolve(body as T)
+          return
+        }
+
+        const errBody = body as ApiError | null
+        const code = errBody?.error?.code ?? `HTTP_${status}`
+        const message = errBody?.error?.message ?? xhr.statusText ?? '上传失败'
+        reject(new ApiClientError(code, message, status))
+      }
+
+      xhr.send(formData)
+    })
+  },
 }
 
 // ── 使用示例（供 AI 参考，生产代码中删除）───────────────────────
