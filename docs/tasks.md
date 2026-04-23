@@ -26,4 +26,31 @@
 <!-- HANDOFF-12 ✅ 2026-04-23 完成，typecheck/lint/test 全绿，详见 changelog.md -->
 <!-- HANDOFF-13 ✅ 2026-04-23 完成，typecheck/lint/test 全绿，详见 changelog.md -->
 <!-- HANDOFF-14 ✅ 2026-04-23 完成，typecheck/lint/test 全绿，详见 changelog.md -->
-<!-- 单任务工作台：空，下一个任务 HANDOFF-15（Browse 页） -->
+## HANDOFF-15 — Browse 页：FilterBar + 网格 + 分页
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-04-23 16:35
+- **实际开始**：2026-04-23 16:35
+- **建议模型**：sonnet
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+
+### 问题理解
+
+Browse 页需要 `FilterArea`（6 维筛选）+ `BrowseGrid`（5 列网格 + 分页）两个 Client 组件，
+以及工具函数 `lib/rewrite-match.ts`。测试文件已预存（BrowseGrid / FilterArea / rewrite-match），
+均因对应实现不存在而 FAIL。
+
+### 方案
+
+1. `src/lib/rewrite-match.ts` — `stripLocale` + `matchRewrite` 纯工具函数
+2. `src/components/browse/FilterArea.tsx` — 6 维筛选，前 3 行默认可见，展开后显示全部
+3. `src/components/browse/BrowseGrid.tsx` — 5 列网格 + 分页（URL 驱动）
+4. `src/app/globals.css` — 补充 `--pagination-*` tokens
+
+### 涉及文件
+
+- `apps/web-next/src/lib/rewrite-match.ts`（新建）
+- `apps/web-next/src/components/browse/FilterArea.tsx`（新建）
+- `apps/web-next/src/components/browse/BrowseGrid.tsx`（新建）
+- `apps/web-next/src/app/globals.css`（追加 pagination token）

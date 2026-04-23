@@ -89,6 +89,12 @@
   --footer-bottom-padding: 20px 32px;
   --footer-social-gap:     var(--space-2);    /* 8px  */
   --footer-legal-gap:      var(--space-5);    /* 20px */
+
+  /* browse page alias — spec §12 */
+  --browse-grid-gap:       20px;              /* 网格 gap */
+  --browse-pagination-mt:  var(--space-12);   /* 分页与网格间距 48px */
+  --browse-pagination-gap: var(--space-2);    /* 分页项间距 8px  */
+  --browse-pagination-btn: 36px;              /* 分页按钮尺寸     */
 }
 
 /* ── Design-token semantic vars — synced with packages/design-tokens/src/css/tokens.css */
