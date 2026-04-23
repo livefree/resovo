@@ -10,6 +10,8 @@
 >
 > 本文件由原"前端组件规范"升级而来，适用范围扩展至前台与后台。
 > 升级依据：`docs/ui_governance_conflicts_20260327.md` §4.2 及 §5
+>
+> 前台布局、页面模板、shelf、token 分层与响应式约束以 `docs/frontend_design_spec_20260423.md` 为准。
 
 
 > 适用范围：`apps/web/src/components/`、`apps/web/src/app/`（前台）；`apps/server/src/components/`、`apps/server/src/app/`（后台）

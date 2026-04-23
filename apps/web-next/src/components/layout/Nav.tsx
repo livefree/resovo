@@ -10,27 +10,33 @@ import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 
 /**
- * Nav — UI-REBUILD-02 对齐 docs/handoff_20260422/designs/Global Shell.html:321-357
+ * Nav — HANDOFF-11 对齐 docs/frontend_design_spec_20260423.md §8
  *
  * 结构（从左到右）：
- *   1. Logo：渐变方块 "R" + "Resovo" 文字
- *   2. 5 主分类 nav-link（首页/电影/剧集/动漫/综艺/纪录片）+ "更多 ▼" 下拉
- *      - MAIN_CATEGORIES 5 种（movie/series/anime/tvshow/documentary，含首页共 6 扁平）
+ *   1. Logo：渐变方块 "R" + 品牌名
+ *   2. 主分类 nav-link（首页/电影/剧集/动漫/综艺/纪录片）+ "更多 ▼" 下拉
+ *      - MAIN_CATEGORIES 5 种 + 首页共 6 扁平
  *      - MORE_CATEGORIES 6 种（short/sports/music/news/kids/other）进"更多"下拉
- *      - active 态：accent 色 + 底部 2px underline 贴 header 底部 border
- *      - hover 态：--bg-surface-sunken 浅灰背景
- *   3. 搜索 input：flex-1 max-w-[480px]，40px 高，圆角 10px
- *   4. 右侧：ThemeToggle（三态 radio）+ 齿轮设置按钮（档位 1 仅视觉占位）
+ *      - 单行显示，不允许内部横向滚动；宽度不足由全站 min-width + 横向滚动承接
+ *      - active 态：accent 色 + 底部 underline，贴 header 底部 border
+ *   3. 搜索 input（flex-1，受 max-width 约束，搜索 token 由 HANDOFF-16 补齐）
+ *   4. 右侧：ThemeToggle + 齿轮设置按钮（档位 2 绑 Drawer）
  *
- * 档位 1 不做（留档位 2）：
- *   - 齿轮按钮 Settings Drawer
- *   - locale 切换（按 B 方案进 Settings Drawer）
- *   - 搜索 ⌘K 快捷键
+ * Token 消费：
+ *   height           → var(--header-height)         72px
+ *   容器 max-width   → max-w-shell                  var(--layout-shell-max) 1440px
+ *   左右 padding     → px-8                         var(--space-8) = 32px = --layout-shell-inset
+ *   内部 gap         → gap-6                        var(--space-6) = 24px = --header-main-gap
+ *   nav item gap     → gap-1                        var(--space-1) = 4px  = --header-nav-gap
+ *   右侧 gap         → gap-2                        var(--space-2) = 8px  = --header-right-gap
+ *   underline 偏移   → var(--header-underline-offset) 17px
  *
- * 修订（2026-04-23 用户反馈）：
- *   - 移除 scroll-collapse（让 underline 位置稳定，贴 header 底部 border）
- *   - underline `bottom: -1px` 覆盖 header 1px border
- *   - 加"更多 ▼"下拉覆盖剩余 6 种 VideoType（视频分类不足的反馈）
+ * HANDOFF-11 关键变化：
+ *   - 移除 HEADER_HEIGHT / UNDERLINE_BOTTOM_OFFSET 硬编码常量，改用 CSS 变量
+ *   - 移除 <nav> 的 overflow-x-auto（原用于内部横向滚动的局部对冲）
+ *     → 分类数量由"更多"下拉解决；宽度不足由 .app-shell min-width + 全站横向滚动承接
+ *   - underline 不再被 nav overflow 裁切
+ *   - 档位 2 不做：Settings Drawer / locale 切换 / ⌘K 快捷键
  */
 
 // 5 主分类（扁平显示）
@@ -61,21 +67,21 @@ function NavSkeleton({ className }: { className?: string }) {
     <div
       className={cn('sticky top-0 z-50 border-b', className)}
       style={{
-        height: '72px',
+        height: 'var(--header-height)',
         background: 'var(--bg-canvas)',
         borderColor: 'var(--border-default)',
       }}
       data-testid="nav-skeleton"
       aria-hidden="true"
     >
-      <div className="max-w-[1440px] mx-auto px-10 flex items-center h-full gap-8">
+      <div className="max-w-shell mx-auto px-8 flex items-center h-full gap-6">
         <Skeleton shape="rect" width={120} height={28} />
         <div className="hidden sm:flex gap-3 flex-1">
           {[36, 36, 36, 36, 48, 48].map((w, i) => (
             <Skeleton key={i} shape="text" width={w} height={16} delay={300} />
           ))}
         </div>
-        <Skeleton shape="rect" width={480} height={40} className="hidden md:block" />
+        <Skeleton shape="rect" width={480} height={40} className="hidden md:block flex-1" />
         <div className="flex gap-2">
           <Skeleton shape="rect" width={120} height={40} />
           <Skeleton shape="rect" width={40} height={40} />
@@ -85,25 +91,23 @@ function NavSkeleton({ className }: { className?: string }) {
   )
 }
 
-// ── NavLinkItem（内部复用，active underline 贴 header 底部 border） ────────────
+// ── NavLinkItem（active underline 贴 header 底部 border）──────────────────────
 
 interface NavLinkItemProps {
   readonly href: string
   readonly active: boolean
   readonly label: string
   readonly testId?: string
-  /** header 内容区到 header 底部的距离（px），用于 underline 贴 header 底部 border */
-  readonly bottomOffset: number
 }
 
-function NavLinkItem({ href, active, label, testId, bottomOffset }: NavLinkItemProps) {
+function NavLinkItem({ href, active, label, testId }: NavLinkItemProps) {
   return (
     <Link
       href={href}
       data-testid={testId}
       className="relative transition-colors shrink-0 whitespace-nowrap"
       style={{
-        padding: '8px 14px',
+        padding: 'var(--header-nav-padding)',
         fontSize: '14px',
         fontWeight: 600,
         borderRadius: '8px',
@@ -131,7 +135,9 @@ function NavLinkItem({ href, active, label, testId, bottomOffset }: NavLinkItemP
             position: 'absolute',
             left: '14px',
             right: '14px',
-            bottom: `-${bottomOffset}px`,
+            // underline 延伸到 header 底部 border 内侧
+            // <nav> 无 overflow，underline 不被裁切（HANDOFF-11 核心修复）
+            bottom: 'calc(-1 * var(--header-underline-offset))',
             height: '2px',
             background: 'var(--accent-default)',
             borderRadius: '1px',
@@ -142,16 +148,16 @@ function NavLinkItem({ href, active, label, testId, bottomOffset }: NavLinkItemP
   )
 }
 
-// ── MoreMenu "更多 ▼" 下拉（6 种扩展 VideoType） ──────────────────────────────
+// ── MoreMenu "更多 ▼" 下拉（6 种扩展 VideoType）──────────────────────────────
+// 职责：解决分类数量问题，不负责对冲视口宽度不足。
 
 interface MoreMenuProps {
   readonly locale: string
   readonly currentType: string | null
   readonly label: string
-  readonly bottomOffset: number
 }
 
-function MoreMenu({ locale, currentType, label, bottomOffset }: MoreMenuProps) {
+function MoreMenu({ locale, currentType, label }: MoreMenuProps) {
   const t = useTranslations()
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
@@ -188,7 +194,7 @@ function MoreMenu({ locale, currentType, label, bottomOffset }: MoreMenuProps) {
         onClick={() => setOpen((p) => !p)}
         className="relative flex items-center gap-1 transition-colors shrink-0 whitespace-nowrap"
         style={{
-          padding: '8px 14px',
+          padding: 'var(--header-nav-padding)',
           fontSize: '14px',
           fontWeight: 600,
           borderRadius: '8px',
@@ -237,7 +243,7 @@ function MoreMenu({ locale, currentType, label, bottomOffset }: MoreMenuProps) {
               position: 'absolute',
               left: '14px',
               right: '14px',
-              bottom: `-${bottomOffset}px`,
+              bottom: 'calc(-1 * var(--header-underline-offset))',
               height: '2px',
               background: 'var(--accent-default)',
               borderRadius: '1px',
@@ -300,14 +306,6 @@ function MoreMenu({ locale, currentType, label, bottomOffset }: MoreMenuProps) {
 
 // ── Nav ───────────────────────────────────────────────────────────────────────
 
-// UI-REBUILD 2026-04-23 用户反馈修订：
-//   - header 从 h-16 (64px) → h-[72px]，上下各多 4px buffer（用户反馈"高度太窄
-//     underline 超出 + 无留白"）
-//   - 右侧元素统一 40px（搜索 / ThemeToggle / 齿轮）
-// underline bottom：(72 - linkHeight 36) / 2 - 1 ≈ 17px，贴 header 底部 border 内侧
-const HEADER_HEIGHT = 72
-const UNDERLINE_BOTTOM_OFFSET = 17
-
 export function Nav() {
   const { brand } = useBrand()
   const t = useTranslations()
@@ -336,13 +334,15 @@ export function Nav() {
       data-testid="global-nav"
       className="sticky top-0 z-50 border-b backdrop-blur-md"
       style={{
-        height: `${HEADER_HEIGHT}px`,
+        height: 'var(--header-height)',
         background: 'color-mix(in oklch, var(--bg-canvas) 88%, transparent)',
         borderColor: 'var(--border-default)',
       }}
     >
-      <div className="max-w-[1440px] mx-auto px-10 h-full flex items-center gap-8">
-        {/* 1. Logo — 28px 渐变方块 + Resovo 文字 */}
+      {/* 内容容器：max-w-shell(1440px)，px-8(32px)，gap-6(24px) */}
+      <div className="max-w-shell mx-auto px-8 h-full flex items-center gap-6">
+
+        {/* 1. Logo */}
         <Link
           href={`/${currentLocale}`}
           data-testid="nav-logo"
@@ -361,8 +361,7 @@ export function Nav() {
               width: '28px',
               height: '28px',
               borderRadius: '7px',
-              background:
-                'linear-gradient(135deg, var(--accent-default), oklch(48% 0.22 280))',
+              background: 'linear-gradient(135deg, var(--accent-default), oklch(48% 0.22 280))',
               color: 'var(--color-gray-0)',
               fontSize: '13px',
               fontWeight: 900,
@@ -373,23 +372,18 @@ export function Nav() {
           {brand.name}
         </Link>
 
-        {/* 2. 6 主 nav-link + "更多 ▼" 下拉（6 扩展分类）
-            overflow-x-auto + link shrink-0：宽度不够时横向滚动（不换行/不消失） */}
+        {/* 2. 主导航 + "更多" 下拉
+            shrink-0：不参与 flex 空间压缩；宽度不足由全站 min-width + 横向滚动承接
+            无 overflow：underline 不被裁切（spec §8.3 / §18.3） */}
         <nav
-          className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto [&::-webkit-scrollbar]:hidden"
+          className="flex items-center gap-1 shrink-0"
           aria-label="主导航"
-          style={{
-            // Firefox / IE / 老浏览器隐藏滚动条
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none',
-          }}
         >
           <NavLinkItem
             href={`/${currentLocale}`}
             active={isHomePage}
             label={t('nav.home')}
             testId="nav-home"
-            bottomOffset={UNDERLINE_BOTTOM_OFFSET}
           />
           {MAIN_CATEGORIES.map((cat) => (
             <NavLinkItem
@@ -398,25 +392,25 @@ export function Nav() {
               active={currentType === cat.typeParam}
               label={t(cat.labelKey)}
               testId={`nav-cat-${cat.key}`}
-              bottomOffset={UNDERLINE_BOTTOM_OFFSET}
             />
           ))}
           <MoreMenu
             locale={currentLocale}
             currentType={currentType}
             label={t('nav.more')}
-            bottomOffset={UNDERLINE_BOTTOM_OFFSET}
           />
         </nav>
 
-        {/* 3. 搜索 input（max-480px，Enter 跳 /search?q=） */}
+        {/* 3. 搜索（flex-1 取余下空间，max-width 上限）
+            TODO HANDOFF-16：max-width 替换为 var(--search-input-max-w) */}
         <form
           role="search"
           onSubmit={(e) => {
             e.preventDefault()
             submitSearch(searchQuery)
           }}
-          className="hidden md:block flex-1 max-w-[480px] relative"
+          className="hidden md:flex flex-1 relative"
+          style={{ maxWidth: '480px' }}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -463,8 +457,7 @@ export function Nav() {
           />
         </form>
 
-        {/* 4. 右侧：三态 ThemeToggle + 齿轮；统一高度 40px，gap-2 (8px) 间隔
-             （档位 1 齿轮仅视觉占位，不绑 Drawer） */}
+        {/* 4. 右侧操作区：gap-2(8px) 固定间距，shrink-0 不压缩 */}
         <div className="flex items-center gap-2 shrink-0">
           <ThemeToggle />
 

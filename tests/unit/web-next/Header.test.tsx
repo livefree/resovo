@@ -208,15 +208,16 @@ describe('MegaMenu', () => {
 // ── Nav 固定高度（UI-REBUILD 2026-04-23 修订：移除 scroll-collapse + 高度 72px） ─
 
 describe('Nav 固定高度 72px', () => {
-  it('初始高度为 72px（inline style，对齐设计稿 Global Shell .nav）', async () => {
+  it('初始高度为 var(--header-height)（token 消费，对齐 HANDOFF-11）', async () => {
     const { Nav } = await import('@/components/layout/Nav')
     render(<Nav />)
     const header = screen.getByTestId('global-nav')
-    expect(header.style.height).toBe('72px')
+    // HANDOFF-11：高度已 token 化为 var(--header-height)，不再硬编码 '72px'
+    expect(header.style.height).toBe('var(--header-height)')
     expect(header.className).not.toContain('h-12')
   })
 
-  it('scrollY > 80px 后高度仍为 72px（scroll-collapse 已移除，让 active underline 贴 border 位置稳定）', async () => {
+  it('scrollY > 80px 后高度仍为 var(--header-height)（scroll-collapse 已移除，让 active underline 贴 border 位置稳定）', async () => {
     Object.defineProperty(window, 'scrollY', { writable: true, value: 0 })
     const { Nav } = await import('@/components/layout/Nav')
     render(<Nav />)
@@ -228,7 +229,8 @@ describe('Nav 固定高度 72px', () => {
 
     // scroll 100px 后高度不变
     const header = screen.getByTestId('global-nav')
-    expect(header.style.height).toBe('72px')
+    // HANDOFF-11：高度已 token 化为 var(--header-height)，不再硬编码 '72px'
+    expect(header.style.height).toBe('var(--header-height)')
     expect(header.className).not.toContain('h-12')
   })
 })

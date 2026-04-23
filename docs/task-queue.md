@@ -10159,8 +10159,10 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 建议模型：sonnet
    - 验收要点：`npm run build`（design-tokens）通过；tokens.css 新增 --layout-* / --page-* / --shelf-* 变量；Tailwind preset 含 max-w-shell/page/feature/wide；typecheck + test 全绿
 
-2. HANDOFF-11 — Nav 改造：72px / 32px inset / token 消费 / arbitrary value 清零（状态：⬜）
+2. HANDOFF-11 — Nav 改造：72px / 32px inset / token 消费 / arbitrary value 清零（状态：✅ 已完成）
    - 创建时间：2026-04-23 12:00
+   - 实际开始：2026-04-23
+   - 完成时间：2026-04-23
    - 建议模型：sonnet
    - 验收要点：Nav 无 arbitrary value；高度走 --header-height；inset 走 max-w-shell + px-shell；underline 完整可见；typecheck + test 全绿
 

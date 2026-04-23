@@ -391,6 +391,7 @@
   display: flex;
   flex-direction: column;
   background: var(--bg-canvas);
+  min-width: var(--layout-min-desktop); /* 1200px — 低于此值进入全站横向滚动，spec §7.2 */
 }
 
 .main-slot {

@@ -51,11 +51,15 @@ export const layout: LayoutToken = {
 
   // ── Header component alias（spec §8.2）──────────────────────────
   header: {
-    'header-height':      '72px',
-    'header-main-gap':    'var(--space-6)',   // 24px
-    'header-nav-gap':     'var(--space-1)',   // 4px
-    'header-nav-padding': '8px 14px',
-    'header-right-gap':   'var(--space-2)',   // 8px
+    'header-height':           '72px',
+    'header-main-gap':         'var(--space-6)',   // 24px
+    'header-nav-gap':          'var(--space-1)',   // 4px
+    'header-nav-padding':      '8px 14px',
+    'header-right-gap':        'var(--space-2)',   // 8px
+    // active nav-link underline offset from the link's bottom edge to header bottom border
+    // = (header-height − link-height≈38px) / 2 − 1px border = (72−38)/2−1 = 16px → rounded 17px
+    // update if header-height or nav-padding changes
+    'header-underline-offset': '17px',
   },
 
   // ── Footer component alias（spec §9.3）──────────────────────────

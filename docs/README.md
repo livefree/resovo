@@ -6,7 +6,7 @@
 > source_of_truth: yes
 > supersedes: none
 > superseded_by: none
-> last_reviewed: 2026-04-22
+> last_reviewed: 2026-04-23
 
 本文件用于快速定位“当前生效文档”。执行约束仍以仓库根目录 `CLAUDE.md` 为准。
 
@@ -15,11 +15,12 @@
 1. `CLAUDE.md`（仓库根目录）: 执行规范唯一准则。
 2. `docs/architecture.md`: 系统架构与模块边界。
 3. `docs/decisions.md`: 架构决策记录（ADR）。
-4. `docs/roadmap.md`: 开发阶段目标与里程碑。
-5. `docs/task-queue.md`: 任务序列池与状态追踪。
-6. `docs/tasks.md`: 单任务工作台。
-7. `docs/changelog.md`: 完成任务变更历史。
-8. `docs/run-logs.md`: 运行日志与 BLOCKER 记录。
+4. `docs/frontend_design_spec_20260423.md`: 前台设计系统与布局规范。
+5. `docs/roadmap.md`: 开发阶段目标与里程碑。
+6. `docs/task-queue.md`: 任务序列池与状态追踪。
+7. `docs/tasks.md`: 单任务工作台。
+8. `docs/changelog.md`: 完成任务变更历史。
+9. `docs/run-logs.md`: 运行日志与 BLOCKER 记录。
 
 ## 2. 活跃方案（Active Plans）
 

@@ -9631,3 +9631,54 @@ f7833ab  IMG-07 P2 fixup 预览放大 + 真实进度
 
 HANDOFF-11：Nav 改造，消费 `max-w-shell`、`var(--header-height)`、`var(--layout-shell-inset)` 等新 token，清零 arbitrary value。
 
+
+---
+
+## HANDOFF-11 — Nav 改造（token 消费 + overflow 重构 + 全站 min-width）
+
+- **日期**：2026-04-23
+- **序列**：SEQ-20260423-UI-REBUILD
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+
+### 改动文件
+
+| 文件 | 改动类型 | 说明 |
+|------|---------|------|
+| `packages/design-tokens/src/semantic/layout.ts` | 追加 | header 组追加 `header-underline-offset: 17px` |
+| `apps/web-next/src/components/layout/Nav.tsx` | 完整重写 | token 消费 + overflow 重构 |
+| `apps/web-next/src/app/globals.css` | 追加 | `.app-shell { min-width: var(--layout-min-desktop); }` |
+| `tests/unit/web-next/Header.test.tsx` | 修改断言 | 高度断言从 `'72px'` → `'var(--header-height)'` |
+
+### 核心改动
+
+1. **`layout.ts`**：`header` 组追加 `'header-underline-offset': '17px'`  
+   推导：`(header-height 72px − link-height≈38px) / 2 − 1px border = 16px → 17px（四入）`  
+   随 `--header-height` 联动，两个 token 紧邻定义，易于维护。
+
+2. **`Nav.tsx`（完整重写）**：
+   - 移除 `HEADER_HEIGHT = 72`、`UNDERLINE_BOTTOM_OFFSET = 17` 硬编码常量
+   - 移除 `bottomOffset` prop（`NavLinkItemProps`、`MoreMenuProps`）
+   - header `style.height` → `'var(--header-height)'`
+   - 容器 `max-w-[1440px] px-10 gap-8` → `max-w-shell mx-auto px-8 gap-6`（token-backed）
+   - `<nav>` 移除 `overflow-x-auto / flex-1 / min-w-0 / scrollbarWidth: none`，改为 `shrink-0`  
+     → 分类数量问题由"更多▼"下拉解决；宽度不足由全站 min-width + 横向滚动承接
+   - underline `bottom` → `calc(-1 * var(--header-underline-offset))`，不再被 nav overflow 裁切
+
+3. **`globals.css`**：`.app-shell` 追加 `min-width: var(--layout-min-desktop); /* 1200px */`  
+   viewport < 1200px 时整页横向滚动，内容不被压缩。
+
+### 验收结果
+
+- `npm run typecheck`：✅ 通过（全 workspace）
+- `npm run lint`：✅ 通过（全 workspace）
+- `npm run test -- --run`：✅ 1625 tests passed（3 file-level fails 为 pre-existing，与本次无关）
+
+### 达成的 6 条目标
+
+1. ✅ Nav 在 min-width 阈值内不压缩，整页横向滚动
+2. ✅ underline 完整可见（`<nav>` 无 overflow 上下文）
+3. ✅ nav 单行显示，无内部滚动，无折行
+4. ✅ 右侧操作区固定间距（`gap-2 shrink-0`）
+5. ✅ viewport < 1200px 时全站横向滚动（`.app-shell min-width`）
+6. ✅ 横向滚动状态下 header 结构稳定（`sticky top-0 z-50`）
