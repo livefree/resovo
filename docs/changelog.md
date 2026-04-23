@@ -9452,3 +9452,46 @@ f7833ab  IMG-07 P2 fixup 预览放大 + 真实进度
   - CTA 三按钮 ✅
   - Nav active 背景色 `var(--accent-muted)` ✅
   - Logo 字体 22px / 800 / -0.02em ✅
+
+---
+
+## [HANDOFF-05-REVERT] HANDOFF-05 整卡回滚（2026-04-23）
+
+- **关联任务**：HANDOFF-05 整卡回滚 + LazyImage race condition 独立 hotfix
+- **回滚 commit**：c9cdd9d（revert 5f6c0b8）
+- **独立 hotfix commit**：917c027（LazyImage race fix）
+- **触发**：用户 UI 复核 3 轮连续 🔴 改，触达 landing_plan_v1.md §6.5 BLOCKER 阈值
+- **用户反馈关键信息**：
+  1. "首页/分类页面搜索框不能输入" → Nav 搜索被实装为 button 跳转
+  2. "没有看到 CTA 三按钮" → compact 分支只渲染 WatchCta；其他情况因数据缺失
+  3. "图片不显示，纯色背景" → 多重叠加：LazyImage race + BannerService 未映射 + 视口断点
+  4. "无论视口宽度，背景都是纯色" → 确认不是单一视口问题
+  5. "Nav backdrop blur / active 样式 / Scrim 双层 / Specs 都没看到"
+- **根因总结（作为教训记入，避免 HANDOFF-05-V2 重蹈）**：
+  1. **响应式设计缺失**：HeroV2 采 `hidden md:block` / `md:hidden` 二分而非单一响应式结构，md=768px 断点过高，compact 分支过度简陋（仅标题+1按钮）
+  2. **API 字段映射断层**：LocalizedBannerCard 类型层加了 rating/year/blurb/episodeCount/specs，但 BannerService / home-banners SQL 未同步映射。更深一层：rating/year/description 在 migration 029 已迁到 media_catalog 表，需 `LEFT JOIN media_catalog`，不能直接从 videos 取
+  3. **UX 常识违反**：Nav 顶栏搜索框应该支持原位输入，改成 button 跳转违反用户预期
+  4. **LazyImage race condition**：img 在 ref 绑定前已加载完成（缓存/快速网络/hydration），onLoad 事件错过 → loaded 永远 false → opacity:0（本问题已独立 hotfix 917c027 通用修复）
+  5. **复核机制失效**：arch-reviewer 静态审计 PASS + vitest 1665/1665 全绿，但主循环未实际浏览器验证，测试只断言组件结构不断言运行时视觉
+  6. **连续 3 轮 🔴 改**：FIX-1（Nav）→ FIX-2（BannerService SQL）→ FIX-2b（SQL JOIN media_catalog）→ LazyImage race fix，每轮修 1 个但用户视口不同、数据配置不同，问题持续暴露新面；累计成本已超整卡重写
+- **保留项**：
+  - `docs/changelog.md` / `task-queue.md` / `tasks.md` 历史条目保留（不通过 revert 删除）
+  - Nav 搜索 input 可输入由 revert 自然恢复（HANDOFF-03 末态的 Nav 本就是 input）
+  - `fix(LazyImage): race condition 补 img.complete 兜底` 作为独立通用 hotfix（commit 917c027），与 HANDOFF-05 无关
+- **执行模型**：claude-opus-4-7（主循环承担诊断与回滚决策责任）
+- **基线**：test 1654/1654 ✅（回到 HANDOFF-04 基线），typecheck ✅（5 workspace）
+
+---
+
+## [LazyImage-RACE-FIX] React <img onLoad> race 通用修复（2026-04-23）
+
+- **commit**：917c027
+- **问题**：img 在 React 绑定 ref 前已完成加载（缓存 / 快速网络 / SSR hydration），onLoad 事件在 React 监听器就位前已触发完毕 → loaded state 永远 false → opacity:0 → 200 status 但图片对用户不可见
+- **修复**：
+  - `apps/web-next/src/components/primitives/lazy-image/LazyImage.tsx` 加 imgRef
+  - mount 后检查 `img.complete && img.naturalWidth > 0`，已加载则补触发 setLoaded(true) + onLoad?.()
+  - src 变化时 reset loaded state（防切 banner 残留旧 loaded=true）
+- **影响面**：通用组件修复，所有消费 SafeImage → LazyImage 的组件受益（VideoCard / FallbackCover / BannerCarouselMobile / 未来的 HeroV2-V2 / 等）
+- **关联**：HANDOFF-05 诊断中发现（c9cdd9d revert 后作为独立 hotfix 保留）
+- **执行模型**：claude-opus-4-7
+- test 1654/1654 ✅

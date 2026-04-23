@@ -9960,22 +9960,30 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 验收：typecheck ✅ lint ✅ 1582 tests ✅；三接口 zod 校验 ✅；count-by-type 缓存 TTL 300s ✅；top10 人工置顶优先 ✅；`sortStrategy` 固定 `'manual_plus_rating'` ✅
    - UI 复核：**不触发**
 
-5. HANDOFF-05 — Nav 升级 + HeroV2 升级（状态：✅ 已完成）
-   - 建议模型：**sonnet 主循环**
-   - 执行模型：claude-sonnet-4-6
-   - 子代理调用：无
-   - 实际开始：2026-04-22 23:45
-   - 完成时间：2026-04-22 23:59
-   - 规模：M（~1 d）
-   - 依赖：HANDOFF-01 ✅（消费 tokens）
-   - 文件范围：`apps/web-next/src/components/layout/Nav.tsx` + `components/video/HeroV2.tsx`（新建） + `app/[locale]/page.tsx` + `messages/{zh,en}.json` + `packages/types/src/banner.types.ts`（specs 可选字段扩展）+ `tests/unit/web-next/HeroV2.test.tsx`（新建）
-   - 验收：typecheck ✅ lint ✅ 1665 tests ✅；搜索 pill 240px + ⌘K + backdrop-blur-md(12px) ✅；HeroV2 520px scrim + specs chip + CTA ✅；对标 home-b-2.html:851-887,889-979 ✅
-   - UI 复核：**触发**（Light × Dark × Desktop × Mobile 4 象限 Auto，Focus 态 Manual）— 待用户复核签字
+5. HANDOFF-05 — Nav 升级 + HeroV2 升级（状态：❌ 已回滚 2026-04-23，需重新规划）
+   - 原执行：claude-sonnet-4-6（2026-04-22 23:45-23:59）commit 5f6c0b8
+   - 回滚 commit：c9cdd9d（2026-04-23 01:35）
+   - 回滚原因：UI 复核 3 轮 🔴 改后用户拍板整卡回滚。实装与设计稿严重脱节：
+     * Hero banner 图片无论视口都不显示（纯色背景）
+     * Nav backdrop-blur-md / active 样式视觉未见
+     * Scrim 双层未见（因图片不显示）
+     * Specs chips 未渲染（DB 无 specs 列 + HeroV2 compact 分支根本不渲染）
+     * CTA 三按钮仅显示 1 个（< 768px compact 分支，其他情况因 banner meta 字段缺失）
+     * < 768px 视口 compact 布局遮挡下方内容
+   - 根因教训：① HeroV2 采 `hidden md:block` / `md:hidden` 二分 + md=768px 断点过高 + compact 过简陋；② LocalizedBannerCard 类型扩展但 API 侧 SQL/Service 未同步映射（rating/year/description 在 media_catalog，不在 videos）；③ Nav 搜索 pill 改成 button 违反顶栏 UX 常识；④ LazyImage race condition（已在独立 hotfix 917c027 修复）
+   - 重新规划要求（待另立 HANDOFF-05-V2）：
+     * 规模：**L（≥ 2d）**（非原 M 1d），含完整响应式 + BannerService 字段映射 + 移动端 UI 与桌面一致
+     * 移除 `hidden md:block / md:hidden` 二分，单一响应式结构（`clamp()` / Tailwind 响应式工具）
+     * BannerService / home-banners SQL 扩展 `LEFT JOIN media_catalog` 取 rating/year/description
+     * Nav 搜索保留 input 可输入（回滚后已恢复 HANDOFF-03 末态的 input 版本）
+     * 强制主循环浏览器实际验证（不只 vitest），列出 Auto + Manual 截图清单
+     * 验收门禁要求真人浏览器验收通过方可标 ✅（不只 arch-reviewer 静态审计）
+   - FIX-1 Nav 搜索 input 可输入：由 revert 自然恢复，不需独立任务
 
 6. HANDOFF-06 — 首页组件：TypeShortcuts + FeaturedRow + TopTenRow + ScrollRow variant（状态：⬜ 待启动）
    - 建议模型：**sonnet 主循环**
    - 规模：M（~1.5 d）
-   - 依赖：HANDOFF-01 + HANDOFF-04 + HANDOFF-05 ✅
+   - 依赖：HANDOFF-01 + HANDOFF-04 ✅ + HANDOFF-05 ❌（已回滚）→ **阻塞，必须等 HANDOFF-05-V2 重做完成后再启动**
    - 文件范围：`apps/web-next/src/components/home/{TypeShortcuts,FeaturedRow,TopTenRow,TopTenCard}.tsx` + `components/video/VideoGrid.tsx`（扩 variant）+ `app/[locale]/page.tsx`（组装）+ E2E
    - 验收：对标 `designs/home-b-2.html:1013-1141`；TopTenRow 副标题本卡交付为"编辑推荐 · 基于评分精选"（v2.1 切换 composite 后动态改回）
    - UI 复核：**触发**
