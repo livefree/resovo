@@ -1,10 +1,10 @@
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages } from 'next-intl/server'
 import { notFound } from 'next/navigation'
 import { RoutePlayerSync } from './_lib/route-player-sync'
 import { routing } from '@/i18n/routing'
-import { parseBrandSlug, parseTheme, DEFAULT_BRAND_SLUG } from '@/lib/brand-detection'
+import { parseBrandSlug, parseTheme, DEFAULT_BRAND_SLUG, HEADER_THEME } from '@/lib/brand-detection'
 import { BrandProvider } from '@/contexts/BrandProvider'
 import { Nav } from '@/components/layout/Nav'
 import { Footer } from '@/components/layout/Footer'
@@ -42,8 +42,11 @@ export default async function LocaleLayout({
 
   const messages = await getMessages()
   const cookieStore = await cookies()
+  const headerStore = await headers()
   const brandSlug = parseBrandSlug(cookieStore.get('resovo-brand')?.value)
-  const initialTheme = parseTheme(cookieStore.get('resovo-theme')?.value)
+  // HANDOFF-03：middleware 已把 `?_theme=` query 优先合并写入 HEADER_THEME，
+  // 读 header 而非直接 cookie，确保 server-rendered initialTheme 反映截图 query。
+  const initialTheme = parseTheme(headerStore.get(HEADER_THEME) ?? cookieStore.get('resovo-theme')?.value)
 
   const initialBrand: Brand = { ...DEFAULT_BRAND, slug: brandSlug }
 

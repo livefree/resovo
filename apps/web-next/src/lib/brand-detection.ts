@@ -19,6 +19,10 @@ export const DEFAULT_BRAND_SLUG = 'resovo'
 export const DEFAULT_BRAND_NAME = 'Resovo' as const
 export const DEFAULT_THEME: Theme = 'system'
 
+// UI 复核截图专用 query（HANDOFF-03）：`?_theme=light|dark|system` 覆盖当次渲染主题，
+// 不写 cookie，不污染持久状态；scripts/ui-review-capture.sh 借此在 Playwright 侧切主题。
+export const QUERY_THEME_KEY = '_theme'
+
 export function parseBrandSlug(raw: string | undefined): string {
   if (!raw) return DEFAULT_BRAND_SLUG
   const slug = raw.trim().toLowerCase()
@@ -29,4 +33,14 @@ export function parseBrandSlug(raw: string | undefined): string {
 export function parseTheme(raw: string | undefined): Theme {
   if (raw && VALID_THEMES.has(raw)) return raw as Theme
   return DEFAULT_THEME
+}
+
+/**
+ * 从 URLSearchParams 读取 `?_theme=` query；合法即返回 Theme，否则 undefined。
+ * middleware / theme-init-script 按"query 优先、cookie 次之"合并主题。
+ */
+export function parseThemeFromQuery(params: URLSearchParams): Theme | undefined {
+  const raw = params.get(QUERY_THEME_KEY)
+  if (raw && VALID_THEMES.has(raw)) return raw as Theme
+  return undefined
 }
