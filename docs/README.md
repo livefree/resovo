@@ -6,7 +6,7 @@
 > source_of_truth: yes
 > supersedes: none
 > superseded_by: none
-> last_reviewed: 2026-03-27
+> last_reviewed: 2026-04-22
 
 本文件用于快速定位“当前生效文档”。执行约束仍以仓库根目录 `CLAUDE.md` 为准。
 
@@ -53,3 +53,4 @@
 2. 被替代文档统一维护 `superseded_by`，并归档到 `docs/archive/<quarter>/`。
 3. 新增方案文档必须带日期后缀：`*_YYYYMMDD.md`。
 4. 2026Q1 归档索引见 `docs/archive/2026Q1/README.md`。
+5. 2026Q2 归档索引见 `docs/archive/2026Q2/README.md`（DOC-01，2026-04-22）。

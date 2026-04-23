@@ -9235,3 +9235,24 @@ f7833ab  IMG-07 P2 fixup 预览放大 + 真实进度
 - 不视为签字阻断；若发现新 bug → 走新卡（hotfix 或 CLEANUP-XX）
 
 这是合规的三维闭环签字完成式，与 M5 v2 的"逐条打勾"等价（用户口头汇总 = 多项打勾的替代表达）。
+
+---
+
+## [DOC-01] docs/ 2026Q2 归档 + README 索引更新
+
+- **日期**：2026-04-22
+- **执行模型**：claude-opus-4-7（主循环）+ **doc-janitor 子代理 (claude-haiku-4-5)**
+- **CLAUDE.md 合规**：§模型路由"强制降 Haiku" #2（文档归档 / 文件移动 / README 索引更新）
+- **背景**：M5 + M6 相继 sealed 后 docs/ 根目录堆积 45 个 *.md，包含大量完结的 milestone_alignment / task_queue_patch / audit 产物；新开发者难以定位活跃权威文档
+- **执行**：
+  - `git mv` **21 个完结文档**到 `docs/archive/2026Q2/`（保留 git history，非 delete+add）
+  - 新建 `docs/archive/2026Q2/README.md`（归档索引，6 组分类：对齐表 5 / M5 审计 3 / task_queue_patch 8 / BUGFIX-01 产物 4 / 其他 1 + 前期已归档 2）
+  - 更新 `docs/README.md` 两处：`last_reviewed: 2026-03-27 → 2026-04-22`，§5 追加 "2026Q2 归档索引见..."
+- **结果**：
+  - `docs/` 根目录 *.md：45 → 24（-21）
+  - `docs/archive/2026Q2/`：2 → 24（+21 归档 + 1 README）
+  - 零改动到任何文档内容（只移路径）
+  - 零改动到业务代码 / tests / configs / rules
+- **保留在根目录**（活跃）：8 个 SoT（README / architecture / decisions / roadmap / task-queue / tasks / changelog / run-logs）+ 冻结期方案三件套（frontend_redesign / design_system / image_pipeline）+ risk_register / pipeline-overhaul / freeze_notice + 3 个 future plans（external_metadata / tiered_source_verification / video_source_episode_recovery）
+- **质量门禁**：typecheck ✅ / lint ✅（纯文档改动，不触发）
+- **下游**：M7 或新里程碑规划落地时再更新 `docs/README.md` §2 活跃方案清单
