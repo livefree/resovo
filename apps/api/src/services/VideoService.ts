@@ -4,8 +4,9 @@
  */
 
 import type { Pool } from 'pg'
+import type { Redis } from 'ioredis'
 import type { Client as ESClient } from '@elastic/elasticsearch'
-import type { Video, VideoCard, VideoType, VideoStatus, VisibilityStatus, Pagination } from '@/types'
+import type { Video, VideoCard, VideoType, VideoStatus, VisibilityStatus, Pagination, CountByTypeItem } from '@/types'
 import * as videoQueries from '@/api/db/queries/videos'
 import type {
   UpdateVideoMetaInput,
@@ -15,16 +16,19 @@ import type {
 import { MediaCatalogService } from '@/api/services/MediaCatalogService'
 import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
+import { CACHE_PREFIXES } from '@/api/services/CacheService'
 
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 100
+const COUNT_BY_TYPE_TTL = 300
 
 export class VideoService {
   private readonly indexSync?: VideoIndexSyncService
 
   constructor(
     private db: Pool,
-    private es?: ESClient
+    private es?: ESClient,
+    private redis?: Redis,
   ) {
     if (es) {
       this.indexSync = new VideoIndexSyncService(db, es)
@@ -308,6 +312,36 @@ export class VideoService {
       sourceCheckStatus: params.sourceCheckStatus,
     })
     return { data: rows, total, page, limit }
+  }
+
+  // ── Home 首页原子方法 ──────────────────────────────────────────
+
+  /** 按 rating DESC 取 VideoCard（首页 top10 fallback 补位专用） */
+  async listByRatingDesc(limit: number, excludeIds: string[] = []): Promise<VideoCard[]> {
+    return videoQueries.listVideosByRatingDesc(this.db, limit, excludeIds)
+  }
+
+  /**
+   * 各类型视频数量（含全部 11 种 VideoType，无数据的类型返回 count=0）
+   * Redis 缓存 TTL 300s；未配置 Redis 时降级为直接查询
+   */
+  async countByType(): Promise<CountByTypeItem[]> {
+    const cacheKey = `${CACHE_PREFIXES.home}count-by-type`
+
+    if (this.redis) {
+      const cached = await this.redis.get(cacheKey)
+      if (cached) {
+        return JSON.parse(cached) as CountByTypeItem[]
+      }
+    }
+
+    const result = await videoQueries.countVideosByType(this.db)
+
+    if (this.redis) {
+      await this.redis.setex(cacheKey, COUNT_BY_TYPE_TTL, JSON.stringify(result))
+    }
+
+    return result
   }
 
 }

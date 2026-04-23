@@ -15,6 +15,7 @@ export const CACHE_PREFIXES = {
   video: 'video:',
   danmaku: 'danmaku:',
   analytics: 'analytics:',
+  home: 'home:',
 } as const
 
 /** 不得清除的系统 key 前缀（Bull 队列、token 黑名单） */

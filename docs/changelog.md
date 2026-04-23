@@ -9310,3 +9310,34 @@ f7833ab  IMG-07 P2 fixup 预览放大 + 真实进度
   - metadata 约束靠文档 + Service zod 白名单，DB 无法强制 jsonb 内容
   - HANDOFF-04（HomeService）应追加 metadata zod schema 白名单
   - migration 051 索引不含 CONCURRENTLY（事务限制），生产大表回滚路径见 down 注释
+
+---
+
+## [HANDOFF-04] API：home/top10 + count-by-type + home/modules（2026-04-22）
+
+- **任务 ID**：HANDOFF-04（SEQ-20260422-HANDOFF-V2 第 4 卡）
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-6)，接口契约评审，NEED_FIX→7 条必改项全部落地
+- **修改文件**：
+  - `apps/api/src/db/queries/videos.ts` — 追加 `listVideosByRatingDesc`（excludeIds+limit clamp）、`listVideoCardsByIds`（批量 UUID 查询）、`countVideosByType`（全 11 种类型含零值）
+  - `apps/api/src/services/VideoService.ts` — 构造函数追加 `redis?: Redis`；新增 `listByRatingDesc()`、`countByType()`（含 Redis 缓存 TTL 300s）
+  - `apps/api/src/services/HomeService.ts`（新建）— `topTen()` 编排（人工置顶+rating fallback+Redis TTL 60s）+ `listActiveBySlot()`（合并原 HomeModulesService 功能）
+  - `apps/api/src/services/CacheService.ts` — `CACHE_PREFIXES` 追加 `home: 'home:'`
+  - `apps/api/src/routes/home.ts`（新建）— `GET /home/top10` + `GET /home/modules`，Zod 校验，无认证
+  - `apps/api/src/routes/videos.ts` — 追加 `GET /videos/count-by-type`，注入 Redis，路由顺序在 `:id` 前
+  - `apps/api/src/routes/admin/cache.ts` — `CacheTypeSchema` 追加 `'home'`
+  - `apps/api/src/server.ts` — 注册 `homeRoutes`
+  - `packages/types/src/home.types.ts`（新建）— `SortStrategy`、`Top10Item`、`Top10Response`、`CountByTypeItem`
+  - `packages/types/src/index.ts` — 追加 home.types export
+  - `packages/types/src/contracts/v1/admin.ts` — `CacheType` 追加 `'home'`
+  - `apps/web/src/types/contracts/v1/admin.ts` — 同步 `CacheType` 追加 `'home'`（root tsconfig 路径解析目标）
+- **新增依赖**：无
+- **数据库变更**：无（消费 HANDOFF-02 已建的 home_modules 表）
+- **arch-reviewer 7 条必改决策**：
+  - R1: 删除 `subtitleHint` 硬编码文案，前端按 `sortStrategy` 走 i18n
+  - R2: `HomeModulesService` 取消，逻辑并入 `HomeService.listActiveBySlot()`
+  - R3: 缓存放 Service 层，路由层无 redis 代码
+  - R4: 缓存键 `home:top10:b:<slug>` / `home:top10:none`
+  - R5: `listVideoCardsByIds` 批量查询，无 N+1
+  - R6: `rank` 由 Service 计算（1-based）
+  - R7: `excludeIds` 参数在 DB 层，limit clamp ≤ 100

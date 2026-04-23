@@ -11,7 +11,7 @@ import { z } from 'zod'
 import { redis } from '@/api/lib/redis'
 import { CacheService } from '@/api/services/CacheService'
 
-const CacheTypeSchema = z.enum(['search', 'video', 'danmaku', 'analytics', 'all'])
+const CacheTypeSchema = z.enum(['search', 'video', 'danmaku', 'analytics', 'home', 'all'])
 
 export async function adminCacheRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]

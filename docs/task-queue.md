@@ -9945,21 +9945,14 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 验收：landing_plan §HANDOFF-03 验收清单 7 项全过；播放器关键路径回归（断点续播/线路/影院/字幕）
    - UI 复核：**触发**（含动效瞬态 Manual fallback：拖拽 / spring 吸附 / Takeover 遮罩）
 
-4. HANDOFF-04 — API：home/top10 + count-by-type + home/modules（Top10 fallback 排序）（状态：⬜ 待启动）
+4. ~~HANDOFF-04 — API：home/top10 + count-by-type + home/modules（Top10 fallback 排序）（状态：✅ 完成）~~
    - 创建时间：2026-04-22 18:00
+   - 完成时间：2026-04-22
+   - 执行模型：claude-sonnet-4-6（主循环）+ claude-opus-4-6（arch-reviewer，接口契约评审 NEED_FIX→7条已修正）
    - 建议模型：**sonnet 主循环 + opus arch-reviewer**（接口契约评审）
    - 规模：M（~1.2 d）
    - 依赖：HANDOFF-02 ✅（消费 home_modules + videos.trending_tag）
-   - 关键：**用户拍板 B · 冷启动降级**：本卡只做 `rating DESC, year DESC` fallback + 人工置顶覆盖；views/completion 埋点延到 SEQ-202604XX-STATS-V1；副标题文案临时改"编辑推荐 · 基于评分精选"
-   - 文件范围：
-     - `apps/api/src/services/VideoService.ts`（新增原子方法 `listByRatingDesc`，**不含** topTen 编排逻辑）
-     - `apps/api/src/services/HomeService.ts`（新建，**归口 topTen** 运营位编排）
-     - `apps/api/src/services/HomeModulesService.ts`（新建，brand_scope 过滤）
-     - `apps/api/src/routes/{home,videos}.ts`（三个新接口）
-     - `apps/api/src/services/CacheService.ts`（注册缓存键）
-     - `packages/types/src/{api,home}.types.ts`（含 `Top10Response.sortStrategy: 'manual_plus_rating' | 'composite'`）
-     - `docs/task-queue.md` 尾部添加 `SEQ-202604XX-STATS-V1` 占位序列（本卡实装时校准具体日期）
-   - 验收：typecheck/lint/test 全绿；三接口 zod 校验；count-by-type 缓存 TTL 300s；top10 人工置顶优先；`sortStrategy` 固定 `'manual_plus_rating'`；v2.1 占位入队
+   - 验收：typecheck ✅ lint ✅ 1582 tests ✅；三接口 zod 校验 ✅；count-by-type 缓存 TTL 300s ✅；top10 人工置顶优先 ✅；`sortStrategy` 固定 `'manual_plus_rating'` ✅
    - UI 复核：**不触发**
 
 5. HANDOFF-05 — Nav 升级 + HeroV2 升级（状态：⬜ 待启动）

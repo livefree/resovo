@@ -39,7 +39,7 @@ export interface AnalyticsData {
 }
 
 /** 缓存业务分类 */
-export type CacheType = 'search' | 'video' | 'danmaku' | 'analytics' | 'all'
+export type CacheType = 'search' | 'video' | 'danmaku' | 'analytics' | 'home' | 'all'
 
 /** 单个缓存类型的统计信息 */
 export interface CacheStat {

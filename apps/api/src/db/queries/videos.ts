@@ -1461,3 +1461,84 @@ export async function listVideosByTrendingTag(
   )
   return result.rows.map(mapVideoCard)
 }
+
+// ── Home 首页专用查询 ─────────────────────────────────────────────
+
+/**
+ * 按 rating DESC, year DESC 排序取 VideoCard（首页 top10 fallback 补位）
+ * excludeIds: 已人工置顶的 video.id（UUID），补位时跳过
+ */
+export async function listVideosByRatingDesc(
+  db: Pool,
+  limit: number,
+  excludeIds: string[] = [],
+): Promise<VideoCard[]> {
+  const safeLimit = Math.min(limit, 100)
+  const params: unknown[] = [safeLimit]
+  let excludeClause = ''
+  if (excludeIds.length > 0) {
+    params.push(excludeIds)
+    excludeClause = `AND v.id <> ALL($2::uuid[])`
+  }
+  const result = await db.query<DbVideoRow>(
+    `SELECT ${VIDEO_FULL_SELECT},
+      ${SOURCE_COUNT_SUBQUERY} AS source_count,
+      ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs
+     ${VIDEO_JOIN}
+     WHERE v.is_published = true
+       AND v.deleted_at IS NULL
+       AND v.visibility_status = 'public'
+       ${excludeClause}
+     ORDER BY mc.rating DESC NULLS LAST, mc.year DESC NULLS LAST
+     LIMIT $1`,
+    params,
+  )
+  return result.rows.map(mapVideoCard)
+}
+
+/**
+ * 批量按 UUID 取 VideoCard（首页 top10 人工置顶解析，避免 N+1）
+ * content_ref_id 是 videos.id（UUID），不是 short_id
+ * 返回结果可能少于 ids 长度（已下线 / 未发布条目自动丢弃）
+ */
+export async function listVideoCardsByIds(
+  db: Pool,
+  ids: string[],
+): Promise<VideoCard[]> {
+  if (ids.length === 0) return []
+  const result = await db.query<DbVideoRow>(
+    `SELECT ${VIDEO_FULL_SELECT},
+      ${SOURCE_COUNT_SUBQUERY} AS source_count,
+      ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs
+     ${VIDEO_JOIN}
+     WHERE v.id = ANY($1::uuid[])
+       AND v.is_published = true
+       AND v.deleted_at IS NULL
+       AND v.visibility_status = 'public'`,
+    [ids],
+  )
+  return result.rows.map(mapVideoCard)
+}
+
+/**
+ * 按 type 分组统计已发布公开视频数量
+ * 返回全部 VideoType 枚举值（无视频的类型 count=0，保证前端消费稳定）
+ */
+export async function countVideosByType(
+  db: Pool,
+): Promise<Array<{ type: VideoType; count: number }>> {
+  const ALL_TYPES: VideoType[] = [
+    'movie', 'series', 'anime', 'variety', 'documentary',
+    'short', 'sports', 'music', 'news', 'kids', 'other',
+  ]
+  const result = await db.query<{ type: VideoType; count: string }>(
+    `SELECT v.type, COUNT(*)::int AS count
+     FROM videos v
+     WHERE v.is_published = true
+       AND v.deleted_at IS NULL
+       AND v.visibility_status = 'public'
+     GROUP BY v.type`,
+  )
+  const map = new Map(result.rows.map((r) => [r.type, parseInt(r.count, 10)]))
+  return ALL_TYPES.map((type) => ({ type, count: map.get(type) ?? 0 }))
+}

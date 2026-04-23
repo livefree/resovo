@@ -38,6 +38,7 @@ import { internalImageBrokenRoutes } from '@/api/routes/internal/image-broken'
 import { adminImageHealthRoutes } from '@/api/routes/admin/image-health'
 import { bannerRoutes } from '@/api/routes/banners'
 import { adminBannerRoutes } from '@/api/routes/admin/banners'
+import { homeRoutes } from '@/api/routes/home'
 import { adminMediaRoutes } from '@/api/routes/admin/media'
 import { VerifyService } from '@/api/services/VerifyService'
 import { db } from '@/api/lib/postgres'
@@ -96,6 +97,7 @@ async function start() {
   await fastify.register(bannerRoutes, { prefix: '/v1' })
   await fastify.register(adminBannerRoutes, { prefix: '/v1' })
   await fastify.register(adminMediaRoutes, { prefix: '/v1' })
+  await fastify.register(homeRoutes, { prefix: '/v1' })
 
   registerVerifyWorker()
   registerCrawlerWorker()

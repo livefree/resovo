@@ -1,14 +1,16 @@
 /**
  * videos.ts — 视频路由
- * GET /videos           视频列表（含过滤和分页）
- * GET /videos/trending  热门视频
- * GET /videos/:id       视频详情（by short_id）
+ * GET /videos               视频列表（含过滤和分页）
+ * GET /videos/trending      热门视频
+ * GET /videos/count-by-type 各类型视频数量（TTL 300s）
+ * GET /videos/:id           视频详情（by short_id）
  */
 
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 
 import { db } from '@/api/lib/postgres'
+import { redis } from '@/api/lib/redis'
 import { VideoService } from '@/api/services/VideoService'
 
 const VideoTypeEnum = z.enum([
@@ -20,7 +22,7 @@ const SortEnum = z.enum(['hot', 'rating', 'latest', 'updated'])
 const PeriodEnum = z.enum(['today', 'week', 'month'])
 
 export async function videoRoutes(fastify: FastifyInstance) {
-  const videoService = new VideoService(db)
+  const videoService = new VideoService(db, undefined, redis)
 
   // ── GET /videos/trending ─────────────────────────────────────
   // 注意：trending 必须在 :id 之前注册，否则 "trending" 会被识别为 shortId
@@ -65,6 +67,13 @@ export async function videoRoutes(fastify: FastifyInstance) {
     const { rating_min: ratingMin, ...rest } = parsed.data
     const result = await videoService.list({ ...rest, ratingMin })
     return reply.send(result)
+  })
+
+  // ── GET /videos/count-by-type ────────────────────────────────
+  // 注意：必须在 :id 之前注册，否则 "count-by-type" 会被识别为 shortId
+  fastify.get('/videos/count-by-type', async (_request, reply) => {
+    const data = await videoService.countByType()
+    return reply.send({ data })
   })
 
   // ── GET /videos/:id ──────────────────────────────────────────
