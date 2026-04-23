@@ -9341,3 +9341,14 @@ f7833ab  IMG-07 P2 fixup 预览放大 + 真实进度
   - R5: `listVideoCardsByIds` 批量查询，无 N+1
   - R6: `rank` 由 Service 计算（1-based）
   - R7: `excludeIds` 参数在 DB 层，limit clamp ≤ 100
+
+---
+
+## [HANDOFF-04-TEST] home API 三层测试覆盖补充（2026-04-22）
+
+- **关联任务**：HANDOFF-04 缺口修复
+- **新增文件**：
+  - `tests/unit/api/home-queries.test.ts`（15 cases）— DB 查询层实际实现测试（无 mock）
+  - `tests/unit/api/home.test.ts`（26 cases）— HomeService 编排 + 路由层 Fastify inject 测试
+- **覆盖场景**：3置顶+7补位=10核心场景 / 0置顶冷启动 / 10置顶满位 / 已下线自动丢弃+补位填充 / rank 1-based / sortStrategy固定 / 缓存键命名(none/b:<slug>) / setex TTL 60s/300s / 422 Zod 校验反例
+- **测试总数**：147 test files，1623 tests，全绿
