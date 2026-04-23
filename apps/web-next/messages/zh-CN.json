@@ -33,6 +33,8 @@
     "catKids": "少儿",
     "catOther": "其他",
     "search": "搜索...",
+    "searchPlaceholder": "搜索电影、剧集、演员…",
+    "settings": "设置",
     "admin": "管理后台",
     "mobileNav": "移动端导航"
   },

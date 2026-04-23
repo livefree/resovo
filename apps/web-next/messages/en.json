@@ -33,6 +33,8 @@
     "catKids": "Kids",
     "catOther": "Other",
     "search": "Search...",
+    "searchPlaceholder": "Search movies, series, cast…",
+    "settings": "Settings",
     "admin": "Admin",
     "mobileNav": "Mobile Navigation"
   },
