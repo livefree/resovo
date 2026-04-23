@@ -1,0 +1,1621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Resovo · 站点设计（browse / search / detail / watch）</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --bg-canvas: oklch(98.5% 0.002 247);
+    --bg-surface: oklch(100% 0 0);
+    --bg-surface-raised: oklch(100% 0 0);
+    --bg-surface-sunken: oklch(96.8% 0.004 247);
+    --fg-default: oklch(11.2% 0.006 247);
+    --fg-muted: oklch(32.8% 0.012 247);
+    --fg-subtle: oklch(55.4% 0.014 247);
+    --border-default: oklch(92.9% 0.006 247);
+    --border-subtle: oklch(96.8% 0.004 247);
+    --border-strong: oklch(82% 0.008 247);
+    --accent-default: oklch(64.5% 0.165 230);
+    --accent-hover: oklch(52.0% 0.155 230);
+    --accent-muted: oklch(92.0% 0.045 230);
+    --accent-fg: oklch(100% 0 0);
+
+    --tag-lifecycle-bg: oklch(88.0% 0.090 155);
+    --tag-lifecycle-fg: oklch(30.0% 0.120 155);
+    --tag-trending-bg: oklch(90.0% 0.095 85);
+    --tag-trending-fg: oklch(40.0% 0.135 85);
+
+    --chip-movie-bg:  oklch(92.0% 0.045 230); --chip-movie-fg:  oklch(40% 0.135 230);
+    --chip-series-bg: oklch(90.0% 0.095 85);  --chip-series-fg: oklch(40% 0.135 85);
+    --chip-anime-bg:  oklch(91% 0.08 320);    --chip-anime-fg:  oklch(40% 0.14 320);
+    --chip-tvshow-bg: oklch(90.0% 0.09 155);  --chip-tvshow-fg: oklch(35% 0.12 155);
+    --chip-doc-bg:    oklch(92.9% 0.006 247); --chip-doc-fg:    oklch(32.8% 0.012 247);
+
+    --state-success-bg: oklch(92% 0.08 155); --state-success-fg: oklch(35% 0.13 155);
+    --state-warning-bg: oklch(92% 0.09 85);  --state-warning-fg: oklch(40% 0.14 85);
+    --state-error-bg:   oklch(92% 0.08 25);  --state-error-fg:   oklch(40% 0.16 25);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  body { background: #f0eee9; color: var(--fg-default); }
+  [data-theme="dark"] {
+    --bg-canvas: oklch(6.5% 0.004 247);
+    --bg-surface: oklch(11.2% 0.006 247);
+    --bg-surface-raised: oklch(16.5% 0.008 247);
+    --bg-surface-sunken: oklch(9% 0.004 247);
+    --fg-default: oklch(98.5% 0.002 247);
+    --fg-muted: oklch(86.9% 0.009 247);
+    --fg-subtle: oklch(55.4% 0.014 247);
+    --border-default: oklch(23% 0.010 247);
+    --border-subtle: oklch(16% 0.008 247);
+    --border-strong: oklch(32% 0.012 247);
+    --accent-default: oklch(64.5% 0.165 230);
+    --accent-muted: oklch(30% 0.080 230);
+  }
+  .surface { background: var(--bg-canvas); color: var(--fg-default); height:100%; overflow:hidden; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-source="design-canvas.jsx">
+
+// DesignCanvas.jsx — Figma-ish design canvas wrapper
+// Warm gray grid bg + Sections + Artboards + PostIt notes.
+// Artboards are reorderable (grip-drag), labels/titles are inline-editable,
+// and any artboard can be opened in a fullscreen focus overlay (←/→/Esc).
+// State persists to a .design-canvas.state.json sidecar via the host
+// bridge. No assets, no deps.
+//
+// Usage:
+//   <DesignCanvas>
+//     <DCSection id="onboarding" title="Onboarding" subtitle="First-run variants">
+//       <DCArtboard id="a" label="A · Dusk" width={260} height={480}>…</DCArtboard>
+//       <DCArtboard id="b" label="B · Minimal" width={260} height={480}>…</DCArtboard>
+//     </DCSection>
+//   </DesignCanvas>
+
+const DC = {
+  bg: '#f0eee9',
+  grid: 'rgba(0,0,0,0.06)',
+  label: 'rgba(60,50,40,0.7)',
+  title: 'rgba(40,30,20,0.85)',
+  subtitle: 'rgba(60,50,40,0.6)',
+  postitBg: '#fef4a8',
+  postitText: '#5a4a2a',
+  font: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+};
+
+// One-time CSS injection (classes are dc-prefixed so they don't collide with
+// the hosted design's own styles).
+if (typeof document !== 'undefined' && !document.getElementById('dc-styles')) {
+  const s = document.createElement('style');
+  s.id = 'dc-styles';
+  s.textContent = [
+    '.dc-editable{cursor:text;outline:none;white-space:nowrap;border-radius:3px;padding:0 2px;margin:0 -2px}',
+    '.dc-editable:focus{background:#fff;box-shadow:0 0 0 1.5px #c96442}',
+    '[data-dc-slot]{transition:transform .18s cubic-bezier(.2,.7,.3,1)}',
+    '[data-dc-slot].dc-dragging{transition:none;z-index:10;pointer-events:none}',
+    '[data-dc-slot].dc-dragging .dc-card{box-shadow:0 12px 40px rgba(0,0,0,.25),0 0 0 2px #c96442;transform:scale(1.02)}',
+    '.dc-card{transition:box-shadow .15s,transform .15s}',
+    '.dc-card *{scrollbar-width:none}',
+    '.dc-card *::-webkit-scrollbar{display:none}',
+    '.dc-labelrow{display:flex;align-items:center;gap:4px;height:24px}',
+    '.dc-grip{cursor:grab;display:flex;align-items:center;padding:5px 4px;border-radius:4px;transition:background .12s}',
+    '.dc-grip:hover{background:rgba(0,0,0,.08)}',
+    '.dc-grip:active{cursor:grabbing}',
+    '.dc-labeltext{cursor:pointer;border-radius:4px;padding:3px 6px;display:flex;align-items:center;transition:background .12s}',
+    '.dc-labeltext:hover{background:rgba(0,0,0,.05)}',
+    '.dc-expand{position:absolute;bottom:100%;right:0;margin-bottom:5px;z-index:2;opacity:0;transition:opacity .12s,background .12s;',
+    '  width:22px;height:22px;border-radius:5px;border:none;cursor:pointer;padding:0;',
+    '  background:transparent;color:rgba(60,50,40,.7);display:flex;align-items:center;justify-content:center}',
+    '.dc-expand:hover{background:rgba(0,0,0,.06);color:#2a251f}',
+    '[data-dc-slot]:hover .dc-expand{opacity:1}',
+  ].join('\n');
+  document.head.appendChild(s);
+}
+
+const DCCtx = React.createContext(null);
+
+// ─────────────────────────────────────────────────────────────
+// DesignCanvas — stateful wrapper around the pan/zoom viewport.
+// Owns runtime state (per-section order, renamed titles/labels, focused
+// artboard). Order/titles/labels persist to a .design-canvas.state.json
+// sidecar next to the HTML. Reads go via plain fetch() so the saved
+// arrangement is visible anywhere the HTML + sidecar are served together
+// (omelette preview, direct link, downloaded zip). Writes go through the
+// host's window.omelette bridge — editing requires the omelette runtime.
+// Focus is ephemeral.
+// ─────────────────────────────────────────────────────────────
+const DC_STATE_FILE = '.design-canvas.state.json';
+
+function DesignCanvas({ children, minScale, maxScale, style }) {
+  const [state, setState] = React.useState({ sections: {}, focus: null });
+  // Hold rendering until the sidecar read settles so the saved order/titles
+  // appear on first paint (no source-order flash). didRead gates writes until
+  // the read settles so the empty initial state can't clobber a slow read;
+  // skipNextWrite suppresses the one echo-write that would otherwise follow
+  // hydration.
+  const [ready, setReady] = React.useState(false);
+  const didRead = React.useRef(false);
+  const skipNextWrite = React.useRef(false);
+
+  React.useEffect(() => {
+    let off = false;
+    fetch('./' + DC_STATE_FILE)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((saved) => {
+        if (off || !saved || !saved.sections) return;
+        skipNextWrite.current = true;
+        setState((s) => ({ ...s, sections: saved.sections }));
+      })
+      .catch(() => {})
+      .finally(() => { didRead.current = true; if (!off) setReady(true); });
+    const t = setTimeout(() => { if (!off) setReady(true); }, 150);
+    return () => { off = true; clearTimeout(t); };
+  }, []);
+
+  React.useEffect(() => {
+    if (!didRead.current) return;
+    if (skipNextWrite.current) { skipNextWrite.current = false; return; }
+    const t = setTimeout(() => {
+      window.omelette?.writeFile(DC_STATE_FILE, JSON.stringify({ sections: state.sections })).catch(() => {});
+    }, 250);
+    return () => clearTimeout(t);
+  }, [state.sections]);
+
+  // Build registries synchronously from children so FocusOverlay can read
+  // them in the same render. Only direct DCSection > DCArtboard children are
+  // walked — wrapping them in other elements opts out of focus/reorder.
+  const registry = {};     // slotId -> { sectionId, artboard }
+  const sectionMeta = {};  // sectionId -> { title, subtitle, slotIds[] }
+  const sectionOrder = [];
+  React.Children.forEach(children, (sec) => {
+    if (!sec || sec.type !== DCSection) return;
+    const sid = sec.props.id ?? sec.props.title;
+    if (!sid) return;
+    sectionOrder.push(sid);
+    const persisted = state.sections[sid] || {};
+    const srcIds = [];
+    React.Children.forEach(sec.props.children, (ab) => {
+      if (!ab || ab.type !== DCArtboard) return;
+      const aid = ab.props.id ?? ab.props.label;
+      if (!aid) return;
+      registry[`${sid}/${aid}`] = { sectionId: sid, artboard: ab };
+      srcIds.push(aid);
+    });
+    const kept = (persisted.order || []).filter((k) => srcIds.includes(k));
+    sectionMeta[sid] = {
+      title: persisted.title ?? sec.props.title,
+      subtitle: sec.props.subtitle,
+      slotIds: [...kept, ...srcIds.filter((k) => !kept.includes(k))],
+    };
+  });
+
+  const api = React.useMemo(() => ({
+    state,
+    section: (id) => state.sections[id] || {},
+    patchSection: (id, p) => setState((s) => ({
+      ...s,
+      sections: { ...s.sections, [id]: { ...s.sections[id], ...(typeof p === 'function' ? p(s.sections[id] || {}) : p) } },
+    })),
+    setFocus: (slotId) => setState((s) => ({ ...s, focus: slotId })),
+  }), [state]);
+
+  // Esc exits focus; any outside pointerdown commits an in-progress rename.
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') api.setFocus(null); };
+    const onPd = (e) => {
+      const ae = document.activeElement;
+      if (ae && ae.isContentEditable && !ae.contains(e.target)) ae.blur();
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPd, true);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPd, true);
+    };
+  }, [api]);
+
+  return (
+    <DCCtx.Provider value={api}>
+      <DCViewport minScale={minScale} maxScale={maxScale} style={style}>{ready && children}</DCViewport>
+      {state.focus && registry[state.focus] && (
+        <DCFocusOverlay entry={registry[state.focus]} sectionMeta={sectionMeta} sectionOrder={sectionOrder} />
+      )}
+    </DCCtx.Provider>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// DCViewport — transform-based pan/zoom (internal)
+//
+// Input mapping (Figma-style):
+//   • trackpad pinch  → zoom   (ctrlKey wheel; Safari gesture* events)
+//   • trackpad scroll → pan    (two-finger)
+//   • mouse wheel     → zoom   (notched; distinguished from trackpad scroll)
+//   • middle-drag / primary-drag-on-bg → pan
+//
+// Transform state lives in a ref and is written straight to the DOM
+// (translate3d + will-change) so wheel ticks don't go through React —
+// keeps pans at 60fps on dense canvases.
+// ─────────────────────────────────────────────────────────────
+function DCViewport({ children, minScale = 0.1, maxScale = 8, style = {} }) {
+  const vpRef = React.useRef(null);
+  const worldRef = React.useRef(null);
+  const tf = React.useRef({ x: 0, y: 0, scale: 1 });
+
+  const apply = React.useCallback(() => {
+    const { x, y, scale } = tf.current;
+    const el = worldRef.current;
+    if (el) el.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+  }, []);
+
+  React.useEffect(() => {
+    const vp = vpRef.current;
+    if (!vp) return;
+
+    const zoomAt = (cx, cy, factor) => {
+      const r = vp.getBoundingClientRect();
+      const px = cx - r.left, py = cy - r.top;
+      const t = tf.current;
+      const next = Math.min(maxScale, Math.max(minScale, t.scale * factor));
+      const k = next / t.scale;
+      // keep the world point under the cursor fixed
+      t.x = px - (px - t.x) * k;
+      t.y = py - (py - t.y) * k;
+      t.scale = next;
+      apply();
+    };
+
+    // Mouse-wheel vs trackpad-scroll heuristic. A physical wheel sends
+    // line-mode deltas (Firefox) or large integer pixel deltas with no X
+    // component (Chrome/Safari, typically multiples of 100/120). Trackpad
+    // two-finger scroll sends small/fractional pixel deltas, often with
+    // non-zero deltaX. ctrlKey is set by the browser for trackpad pinch.
+    const isMouseWheel = (e) =>
+      e.deltaMode !== 0 ||
+      (e.deltaX === 0 && Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 40);
+
+    const onWheel = (e) => {
+      e.preventDefault();
+      if (isGesturing) return; // Safari: gesture* owns the pinch — discard concurrent wheels
+      if (e.ctrlKey) {
+        // trackpad pinch (or explicit ctrl+wheel)
+        zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.01));
+      } else if (isMouseWheel(e)) {
+        // notched mouse wheel — fixed-ratio step per click
+        zoomAt(e.clientX, e.clientY, Math.exp(-Math.sign(e.deltaY) * 0.18));
+      } else {
+        // trackpad two-finger scroll — pan
+        tf.current.x -= e.deltaX;
+        tf.current.y -= e.deltaY;
+        apply();
+      }
+    };
+
+    // Safari sends native gesture* events for trackpad pinch with a smooth
+    // e.scale; preferring these over the ctrl+wheel fallback gives a much
+    // better feel there. No-ops on other browsers. Safari also fires
+    // ctrlKey wheel events during the same pinch — isGesturing makes
+    // onWheel drop those entirely so they neither zoom nor pan.
+    let gsBase = 1;
+    let isGesturing = false;
+    const onGestureStart = (e) => { e.preventDefault(); isGesturing = true; gsBase = tf.current.scale; };
+    const onGestureChange = (e) => {
+      e.preventDefault();
+      zoomAt(e.clientX, e.clientY, (gsBase * e.scale) / tf.current.scale);
+    };
+    const onGestureEnd = (e) => { e.preventDefault(); isGesturing = false; };
+
+    // Drag-pan: middle button anywhere, or primary button on canvas
+    // background (anything that isn't an artboard or an inline editor).
+    let drag = null;
+    const onPointerDown = (e) => {
+      const onBg = !e.target.closest('[data-dc-slot], .dc-editable');
+      if (!(e.button === 1 || (e.button === 0 && onBg))) return;
+      e.preventDefault();
+      vp.setPointerCapture(e.pointerId);
+      drag = { id: e.pointerId, lx: e.clientX, ly: e.clientY };
+      vp.style.cursor = 'grabbing';
+    };
+    const onPointerMove = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      tf.current.x += e.clientX - drag.lx;
+      tf.current.y += e.clientY - drag.ly;
+      drag.lx = e.clientX; drag.ly = e.clientY;
+      apply();
+    };
+    const onPointerUp = (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      vp.releasePointerCapture(e.pointerId);
+      drag = null;
+      vp.style.cursor = '';
+    };
+
+    vp.addEventListener('wheel', onWheel, { passive: false });
+    vp.addEventListener('gesturestart', onGestureStart, { passive: false });
+    vp.addEventListener('gesturechange', onGestureChange, { passive: false });
+    vp.addEventListener('gestureend', onGestureEnd, { passive: false });
+    vp.addEventListener('pointerdown', onPointerDown);
+    vp.addEventListener('pointermove', onPointerMove);
+    vp.addEventListener('pointerup', onPointerUp);
+    vp.addEventListener('pointercancel', onPointerUp);
+    return () => {
+      vp.removeEventListener('wheel', onWheel);
+      vp.removeEventListener('gesturestart', onGestureStart);
+      vp.removeEventListener('gesturechange', onGestureChange);
+      vp.removeEventListener('gestureend', onGestureEnd);
+      vp.removeEventListener('pointerdown', onPointerDown);
+      vp.removeEventListener('pointermove', onPointerMove);
+      vp.removeEventListener('pointerup', onPointerUp);
+      vp.removeEventListener('pointercancel', onPointerUp);
+    };
+  }, [apply, minScale, maxScale]);
+
+  const gridSvg = `url("data:image/svg+xml,%3Csvg width='120' height='120' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M120 0H0v120' fill='none' stroke='${encodeURIComponent(DC.grid)}' stroke-width='1'/%3E%3C/svg%3E")`;
+  return (
+    <div
+      ref={vpRef}
+      className="design-canvas"
+      style={{
+        height: '100vh', width: '100vw',
+        background: DC.bg,
+        overflow: 'hidden',
+        overscrollBehavior: 'none',
+        touchAction: 'none',
+        position: 'relative',
+        fontFamily: DC.font,
+        boxSizing: 'border-box',
+        ...style,
+      }}
+    >
+      <div
+        ref={worldRef}
+        style={{
+          position: 'absolute', top: 0, left: 0,
+          transformOrigin: '0 0',
+          willChange: 'transform',
+          width: 'max-content', minWidth: '100%',
+          minHeight: '100%',
+          padding: '60px 0 80px',
+        }}
+      >
+        <div style={{ position: 'absolute', inset: -6000, backgroundImage: gridSvg, backgroundSize: '120px 120px', pointerEvents: 'none', zIndex: -1 }} />
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// DCSection — editable title + h-row of artboards in persisted order
+// ─────────────────────────────────────────────────────────────
+function DCSection({ id, title, subtitle, children, gap = 48 }) {
+  const ctx = React.useContext(DCCtx);
+  const sid = id ?? title;
+  const all = React.Children.toArray(children);
+  const artboards = all.filter((c) => c && c.type === DCArtboard);
+  const rest = all.filter((c) => !(c && c.type === DCArtboard));
+  const srcOrder = artboards.map((a) => a.props.id ?? a.props.label);
+  const sec = (ctx && sid && ctx.section(sid)) || {};
+
+  const order = React.useMemo(() => {
+    const kept = (sec.order || []).filter((k) => srcOrder.includes(k));
+    return [...kept, ...srcOrder.filter((k) => !kept.includes(k))];
+  }, [sec.order, srcOrder.join('|')]);
+
+  const byId = Object.fromEntries(artboards.map((a) => [a.props.id ?? a.props.label, a]));
+
+  return (
+    <div data-dc-section={sid} style={{ marginBottom: 80, position: 'relative' }}>
+      <div style={{ padding: '0 60px 56px' }}>
+        <DCEditable tag="div" value={sec.title ?? title}
+          onChange={(v) => ctx && sid && ctx.patchSection(sid, { title: v })}
+          style={{ fontSize: 28, fontWeight: 600, color: DC.title, letterSpacing: -0.4, marginBottom: 6, display: 'inline-block' }} />
+        {subtitle && <div style={{ fontSize: 16, color: DC.subtitle }}>{subtitle}</div>}
+      </div>
+      <div style={{ display: 'flex', gap, padding: '0 60px', alignItems: 'flex-start', width: 'max-content' }}>
+        {order.map((k) => (
+          <DCArtboardFrame key={k} sectionId={sid} artboard={byId[k]} order={order}
+            label={(sec.labels || {})[k] ?? byId[k].props.label}
+            onRename={(v) => ctx && ctx.patchSection(sid, (x) => ({ labels: { ...x.labels, [k]: v } }))}
+            onReorder={(next) => ctx && ctx.patchSection(sid, { order: next })}
+            onFocus={() => ctx && ctx.setFocus(`${sid}/${k}`)} />
+        ))}
+      </div>
+      {rest}
+    </div>
+  );
+}
+
+// DCArtboard — marker; rendered by DCArtboardFrame via DCSection.
+function DCArtboard() { return null; }
+
+function DCArtboardFrame({ sectionId, artboard, label, order, onRename, onReorder, onFocus }) {
+  const { id: rawId, label: rawLabel, width = 260, height = 480, children, style = {} } = artboard.props;
+  const id = rawId ?? rawLabel;
+  const ref = React.useRef(null);
+
+  // Live drag-reorder: dragged card sticks to cursor; siblings slide into
+  // their would-be slots in real time via transforms. DOM order only
+  // changes on drop.
+  const onGripDown = (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const me = ref.current;
+    // translateX is applied in local (pre-scale) space but pointer deltas and
+    // getBoundingClientRect().left are screen-space — divide by the viewport's
+    // current scale so the dragged card tracks the cursor at any zoom level.
+    const scale = me.getBoundingClientRect().width / me.offsetWidth || 1;
+    const peers = Array.from(document.querySelectorAll(`[data-dc-section="${sectionId}"] [data-dc-slot]`));
+    const homes = peers.map((el) => ({ el, id: el.dataset.dcSlot, x: el.getBoundingClientRect().left }));
+    const slotXs = homes.map((h) => h.x);
+    const startIdx = order.indexOf(id);
+    const startX = e.clientX;
+    let liveOrder = order.slice();
+    me.classList.add('dc-dragging');
+
+    const layout = () => {
+      for (const h of homes) {
+        if (h.id === id) continue;
+        const slot = liveOrder.indexOf(h.id);
+        h.el.style.transform = `translateX(${(slotXs[slot] - h.x) / scale}px)`;
+      }
+    };
+
+    const move = (ev) => {
+      const dx = ev.clientX - startX;
+      me.style.transform = `translateX(${dx / scale}px)`;
+      const cur = homes[startIdx].x + dx;
+      let nearest = 0, best = Infinity;
+      for (let i = 0; i < slotXs.length; i++) {
+        const d = Math.abs(slotXs[i] - cur);
+        if (d < best) { best = d; nearest = i; }
+      }
+      if (liveOrder.indexOf(id) !== nearest) {
+        liveOrder = order.filter((k) => k !== id);
+        liveOrder.splice(nearest, 0, id);
+        layout();
+      }
+    };
+
+    const up = () => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      const finalSlot = liveOrder.indexOf(id);
+      me.classList.remove('dc-dragging');
+      me.style.transform = `translateX(${(slotXs[finalSlot] - homes[startIdx].x) / scale}px)`;
+      // After the settle transition, kill transitions + clear transforms +
+      // commit the reorder in the same frame so there's no visual snap-back.
+      setTimeout(() => {
+        for (const h of homes) { h.el.style.transition = 'none'; h.el.style.transform = ''; }
+        if (liveOrder.join('|') !== order.join('|')) onReorder(liveOrder);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          for (const h of homes) h.el.style.transition = '';
+        }));
+      }, 180);
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+  };
+
+  return (
+    <div ref={ref} data-dc-slot={id} style={{ position: 'relative', flexShrink: 0 }}>
+      <div className="dc-labelrow" style={{ position: 'absolute', bottom: '100%', left: -4, marginBottom: 4, color: DC.label }}>
+        <div className="dc-grip" onPointerDown={onGripDown} title="Drag to reorder">
+          <svg width="9" height="13" viewBox="0 0 9 13" fill="currentColor"><circle cx="2" cy="2" r="1.1"/><circle cx="7" cy="2" r="1.1"/><circle cx="2" cy="6.5" r="1.1"/><circle cx="7" cy="6.5" r="1.1"/><circle cx="2" cy="11" r="1.1"/><circle cx="7" cy="11" r="1.1"/></svg>
+        </div>
+        <div className="dc-labeltext" onClick={onFocus} title="Click to focus">
+          <DCEditable value={label} onChange={onRename} onClick={(e) => e.stopPropagation()}
+            style={{ fontSize: 15, fontWeight: 500, color: DC.label, lineHeight: 1 }} />
+        </div>
+      </div>
+      <button className="dc-expand" onClick={onFocus} onPointerDown={(e) => e.stopPropagation()} title="Focus">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M7 1h4v4M5 11H1V7M11 1L7.5 4.5M1 11l3.5-3.5"/></svg>
+      </button>
+      <div className="dc-card"
+        style={{ borderRadius: 2, boxShadow: '0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06)', overflow: 'hidden', width, height, background: '#fff', ...style }}>
+        {children || <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb', fontSize: 13, fontFamily: DC.font }}>{id}</div>}
+      </div>
+    </div>
+  );
+}
+
+// Inline rename — commits on blur or Enter.
+function DCEditable({ value, onChange, style, tag = 'span', onClick }) {
+  const T = tag;
+  return (
+    <T className="dc-editable" contentEditable suppressContentEditableWarning
+      onClick={onClick}
+      onPointerDown={(e) => e.stopPropagation()}
+      onBlur={(e) => onChange && onChange(e.currentTarget.textContent)}
+      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}
+      style={style}>{value}</T>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Focus mode — overlay one artboard; ←/→ within section, ↑/↓ across
+// sections, Esc or backdrop click to exit.
+// ─────────────────────────────────────────────────────────────
+function DCFocusOverlay({ entry, sectionMeta, sectionOrder }) {
+  const ctx = React.useContext(DCCtx);
+  const { sectionId, artboard } = entry;
+  const sec = ctx.section(sectionId);
+  const meta = sectionMeta[sectionId];
+  const peers = meta.slotIds;
+  const aid = artboard.props.id ?? artboard.props.label;
+  const idx = peers.indexOf(aid);
+  const secIdx = sectionOrder.indexOf(sectionId);
+
+  const go = (d) => { const n = peers[(idx + d + peers.length) % peers.length]; if (n) ctx.setFocus(`${sectionId}/${n}`); };
+  const goSection = (d) => {
+    const ns = sectionOrder[(secIdx + d + sectionOrder.length) % sectionOrder.length];
+    const first = sectionMeta[ns] && sectionMeta[ns].slotIds[0];
+    if (first) ctx.setFocus(`${ns}/${first}`);
+  };
+
+  React.useEffect(() => {
+    const k = (e) => {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); go(1); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); goSection(-1); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); goSection(1); }
+    };
+    document.addEventListener('keydown', k);
+    return () => document.removeEventListener('keydown', k);
+  });
+
+  const { width = 260, height = 480, children } = artboard.props;
+  const [vp, setVp] = React.useState({ w: window.innerWidth, h: window.innerHeight });
+  React.useEffect(() => { const r = () => setVp({ w: window.innerWidth, h: window.innerHeight }); window.addEventListener('resize', r); return () => window.removeEventListener('resize', r); }, []);
+  const scale = Math.max(0.1, Math.min((vp.w - 200) / width, (vp.h - 260) / height, 2));
+
+  const [ddOpen, setDd] = React.useState(false);
+  const Arrow = ({ dir, onClick }) => (
+    <button onClick={(e) => { e.stopPropagation(); onClick(); }}
+      style={{ position: 'absolute', top: '50%', [dir]: 28, transform: 'translateY(-50%)',
+        border: 'none', background: 'rgba(255,255,255,.08)', color: 'rgba(255,255,255,.9)',
+        width: 44, height: 44, borderRadius: 22, fontSize: 18, cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .15s' }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,.18)')}
+      onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,.08)')}>
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <path d={dir === 'left' ? 'M11 3L5 9l6 6' : 'M7 3l6 6-6 6'} /></svg>
+    </button>
+  );
+
+  // Portal to body so position:fixed is the real viewport regardless of any
+  // transform on DesignCanvas's ancestors (including the canvas zoom itself).
+  return ReactDOM.createPortal(
+    <div onClick={() => ctx.setFocus(null)}
+      onWheel={(e) => e.preventDefault()}
+      style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(24,20,16,.6)', backdropFilter: 'blur(14px)',
+        fontFamily: DC.font, color: '#fff' }}>
+
+      {/* top bar: section dropdown (left) · close (right) */}
+      <div onClick={(e) => e.stopPropagation()}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 72, display: 'flex', alignItems: 'flex-start', padding: '16px 20px 0', gap: 16 }}>
+        <div style={{ position: 'relative' }}>
+          <button onClick={() => setDd((o) => !o)}
+            style={{ border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', padding: '6px 8px',
+              borderRadius: 6, textAlign: 'left', fontFamily: 'inherit' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 18, fontWeight: 600, letterSpacing: -0.3 }}>{meta.title}</span>
+              <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" style={{ opacity: .7 }}><path d="M2 4l3.5 3.5L9 4"/></svg>
+            </span>
+            {meta.subtitle && <span style={{ display: 'block', fontSize: 13, opacity: .6, fontWeight: 400, marginTop: 2 }}>{meta.subtitle}</span>}
+          </button>
+          {ddOpen && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: '#2a251f', borderRadius: 8,
+              boxShadow: '0 8px 32px rgba(0,0,0,.4)', padding: 4, minWidth: 200, zIndex: 10 }}>
+              {sectionOrder.map((sid) => (
+                <button key={sid} onClick={() => { setDd(false); const f = sectionMeta[sid].slotIds[0]; if (f) ctx.setFocus(`${sid}/${f}`); }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
+                    background: sid === sectionId ? 'rgba(255,255,255,.1)' : 'transparent', color: '#fff',
+                    padding: '8px 12px', borderRadius: 5, fontSize: 14, fontWeight: sid === sectionId ? 600 : 400, fontFamily: 'inherit' }}>
+                  {sectionMeta[sid].title}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{ flex: 1 }} />
+        <button onClick={() => ctx.setFocus(null)}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,.12)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          style={{ border: 'none', background: 'transparent', color: 'rgba(255,255,255,.7)', width: 32, height: 32,
+            borderRadius: 16, fontSize: 20, cursor: 'pointer', lineHeight: 1, transition: 'background .12s' }}>×</button>
+      </div>
+
+      {/* card centered, label + index below — only the card itself stops
+          propagation so any backdrop click (including the margins around
+          the card) exits focus */}
+      <div
+        style={{ position: 'absolute', top: 64, bottom: 56, left: 100, right: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ width: width * scale, height: height * scale, position: 'relative' }}>
+          <div style={{ width, height, transform: `scale(${scale})`, transformOrigin: 'top left', background: '#fff', borderRadius: 2, overflow: 'hidden',
+            boxShadow: '0 20px 80px rgba(0,0,0,.4)' }}>
+            {children || <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bbb' }}>{aid}</div>}
+          </div>
+        </div>
+        <div onClick={(e) => e.stopPropagation()} style={{ fontSize: 14, fontWeight: 500, opacity: .85, textAlign: 'center' }}>
+          {(sec.labels || {})[aid] ?? artboard.props.label}
+          <span style={{ opacity: .5, marginLeft: 10, fontVariantNumeric: 'tabular-nums' }}>{idx + 1} / {peers.length}</span>
+        </div>
+      </div>
+
+      <Arrow dir="left" onClick={() => go(-1)} />
+      <Arrow dir="right" onClick={() => go(1)} />
+
+      {/* dots */}
+      <div onClick={(e) => e.stopPropagation()}
+        style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 8 }}>
+        {peers.map((p, i) => (
+          <button key={p} onClick={() => ctx.setFocus(`${sectionId}/${p}`)}
+            style={{ border: 'none', padding: 0, cursor: 'pointer', width: 6, height: 6, borderRadius: 3,
+              background: i === idx ? '#fff' : 'rgba(255,255,255,.3)' }} />
+        ))}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Post-it — absolute-positioned sticky note
+// ─────────────────────────────────────────────────────────────
+function DCPostIt({ children, top, left, right, bottom, rotate = -2, width = 180 }) {
+  return (
+    <div style={{
+      position: 'absolute', top, left, right, bottom, width,
+      background: DC.postitBg, padding: '14px 16px',
+      fontFamily: '"Comic Sans MS", "Marker Felt", "Segoe Print", cursive',
+      fontSize: 14, lineHeight: 1.4, color: DC.postitText,
+      boxShadow: '0 2px 8px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08)',
+      transform: `rotate(${rotate}deg)`,
+      zIndex: 5,
+    }}>{children}</div>
+  );
+}
+
+Object.assign(window, { DesignCanvas, DCSection, DCArtboard, DCPostIt });
+
+
+</script>
+<script type="text/babel" data-source="site/pages.jsx">
+// Shared primitives + mocks for Resovo pages (browse / search / detail / watch).
+// Depends on: home-b/mocks.jsx already having exposed MOCK_VIDEOS + cards is NOT used here.
+// Self-contained so this file can be loaded independently.
+
+const SITE_VIDEOS = [
+  { id:'v1',  title:'三体',                year:2023, type:'series', rating:8.7, ep:30, hue: 250, blurb:'基于刘慈欣同名科幻巨著改编的国产剧集。从文革时期的红岸基地开始，人类首次与三体文明接触，引发跨越物种的黑暗森林博弈。',
+    genres:['科幻','悬疑','剧情'], country:'中国大陆', lang:'汉语', duration:'45分/集',
+    director:'杨磊', cast:['张鲁一','于和伟','陈瑾','王子文','林永健'],
+    lifecycle:'ongoing', trending:'hot', specs:['4k','dolby'] },
+  { id:'v2',  title:'流浪地球 2',          year:2023, type:'movie',  rating:8.3, ep:1,  hue: 30,  blurb:'太阳危机前夜，人类孤注一掷启动"移山计划"。', genres:['科幻','灾难','动作'], country:'中国大陆', duration:'173分钟', director:'郭帆', cast:['吴京','刘德华','李雪健'], lifecycle:'new', trending:'weekly_top', specs:['4k','hdr'] },
+  { id:'v3',  title:'间谍过家家',          year:2024, type:'anime',  rating:9.1, ep:12, hue: 320, blurb:'',  genres:['动画','喜剧','动作'], country:'日本', duration:'24分/集', lifecycle:'completed', trending:'editors_pick', specs:['subtitled'] },
+  { id:'v4',  title:'繁花',                year:2024, type:'series', rating:8.4, ep:30, hue: 15,  blurb:'', genres:['剧情','年代'], country:'中国大陆', duration:'50分/集', lifecycle:'completed', trending:null, specs:['4k'] },
+  { id:'v5',  title:'奥本海默',            year:2023, type:'movie',  rating:8.9, ep:1,  hue: 60,  blurb:'', genres:['传记','剧情','历史'], country:'美国', duration:'180分钟', lifecycle:null, trending:'hot', specs:['hdr','dolby'] },
+  { id:'v6',  title:'鱿鱼游戏 S2',         year:2024, type:'series', rating:7.9, ep:7,  hue: 340, blurb:'', genres:['惊悚','剧情'], country:'韩国', duration:'60分/集', lifecycle:'new', trending:'hot', specs:['4k','subtitled'] },
+  { id:'v7',  title:'葬送的芙莉莲',        year:2024, type:'anime',  rating:9.3, ep:28, hue: 180, blurb:'', genres:['动画','奇幻','冒险'], country:'日本', duration:'24分/集', lifecycle:'ongoing', trending:'weekly_top', specs:['subtitled'] },
+  { id:'v8',  title:'周处除三害',          year:2024, type:'movie',  rating:8.1, ep:1,  hue: 0,   blurb:'', genres:['犯罪','动作'], country:'中国台湾', duration:'135分钟', lifecycle:null, trending:'editors_pick', specs:['4k'] },
+  { id:'v9',  title:'黑暗荣耀',            year:2023, type:'series', rating:8.6, ep:16, hue: 280, blurb:'', genres:['惊悚','复仇'], country:'韩国', duration:'55分/集', lifecycle:'completed', trending:null, specs:['4k','dolby'] },
+  { id:'v10', title:'宇宙探索编辑部',      year:2023, type:'movie',  rating:7.6, ep:1,  hue: 200, blurb:'', genres:['喜剧','科幻'], country:'中国大陆', duration:'117分钟', lifecycle:null, trending:null, specs:['subtitled'] },
+  { id:'v11', title:'漫长的季节',          year:2023, type:'series', rating:9.4, ep:12, hue: 100, blurb:'', genres:['悬疑','剧情'], country:'中国大陆', duration:'60分/集', lifecycle:'completed', trending:'editors_pick', specs:['4k'] },
+  { id:'v12', title:'与凤行',              year:2024, type:'series', rating:7.8, ep:40, hue: 340, blurb:'', genres:['古装','奇幻','爱情'], country:'中国大陆', duration:'45分/集', lifecycle:'ongoing', trending:null, specs:['4k'] },
+  { id:'v13', title:'怪奇物语 S5',         year:2025, type:'series', rating:8.5, ep:8,  hue: 260, blurb:'', genres:['科幻','惊悚'], country:'美国', duration:'70分/集', lifecycle:'coming_soon', trending:'hot', specs:['4k','hdr','dolby'] },
+  { id:'v14', title:'沙丘 2',              year:2024, type:'movie',  rating:8.8, ep:1,  hue: 35,  blurb:'', genres:['科幻','史诗'], country:'美国', duration:'166分钟', lifecycle:null, trending:'weekly_top', specs:['4k','hdr'] },
+  { id:'v15', title:'我的阿勒泰',          year:2024, type:'series', rating:8.8, ep:8,  hue: 130, blurb:'', genres:['剧情','治愈'], country:'中国大陆', duration:'50分/集', lifecycle:'completed', trending:'editors_pick', specs:['4k'] },
+];
+
+const TYPE_LABEL_S = { movie:'电影', series:'剧集', anime:'动漫', tvshow:'综艺', doc:'纪录片' };
+const TYPE_CHIP = { movie:{bg:'var(--chip-movie-bg)', fg:'var(--chip-movie-fg)'},
+                    series:{bg:'var(--chip-series-bg)', fg:'var(--chip-series-fg)'},
+                    anime:{bg:'var(--chip-anime-bg)', fg:'var(--chip-anime-fg)'},
+                    tvshow:{bg:'var(--chip-tvshow-bg)', fg:'var(--chip-tvshow-fg)'},
+                    doc:{bg:'var(--chip-doc-bg)', fg:'var(--chip-doc-fg)'}};
+
+// ── Shared Poster ────────────────────────────────────────────────────────
+// Poster2: showTitle defaults to false — if the "image" (or placeholder) exists we do NOT
+// draw the title on top of the image. Titles belong in the card meta row below.
+// Only pass showTitle when rendering placeholders where no separate title row exists
+// (e.g. hero banners where the poster IS the content).
+function Poster2({ v, aspect='2/3', radius=8, showTitle=false }) {
+  const hue = v.hue ?? 220;
+  return (
+    <div style={{
+      position:'relative', width:'100%', aspectRatio:aspect, borderRadius:radius, overflow:'hidden',
+      background: `linear-gradient(135deg, oklch(55% 0.18 ${hue}) 0%, oklch(28% 0.12 ${(hue+40)%360}) 100%)`,
+      boxShadow: showTitle ? 'inset 0 -80px 120px -40px rgba(0,0,0,.55)' : 'none',
+    }}>
+      <div style={{position:'absolute', inset:0, background:'radial-gradient(circle at 30% 25%, rgba(255,255,255,.22), transparent 48%)'}}/>
+      {showTitle && (
+        <div style={{
+          position:'absolute', left:12, right:12, bottom:10,
+          fontSize: aspect==='2/3' ? 18 : 22, fontWeight:800, color:'rgba(255,255,255,.96)',
+          textShadow:'0 2px 8px rgba(0,0,0,.5)', letterSpacing:'-0.01em', lineHeight:1.15,
+        }}>{v.title}</div>
+      )}
+    </div>
+  );
+}
+
+function TypeChipS({ type }) {
+  const c = TYPE_CHIP[type] || TYPE_CHIP.doc;
+  return <span style={{display:'inline-flex', alignItems:'center', fontSize:11, fontWeight:600, padding:'2px 8px', borderRadius:6, background:c.bg, color:c.fg}}>{TYPE_LABEL_S[type]}</span>;
+}
+
+function Rating({ value, size=14 }) {
+  return <span style={{display:'inline-flex', alignItems:'center', gap:4, fontSize:size, fontWeight:700, color:'#d97706', fontVariantNumeric:'tabular-nums'}}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.9L22 10l-5 4.9 1.2 7.1L12 18.8 5.8 22 7 14.9 2 10l7.1-1.1z"/></svg>
+    {value.toFixed(1)}
+  </span>;
+}
+
+// ── Small card ───────────────────────────────────────────────────────────
+function Card({ v, showRating=true }) {
+  return (
+    <div style={{cursor:'pointer'}}>
+      <div style={{position:'relative', borderRadius:8, overflow:'hidden', boxShadow:'0 1px 2px rgba(0,0,0,.04), 0 6px 16px -10px rgba(0,0,0,.2)'}}>
+        <Poster2 v={v} />
+        {showRating && <div style={{position:'absolute', top:8, right:8, fontSize:11, fontWeight:700, padding:'2px 6px', borderRadius:4, background:'rgba(0,0,0,.58)', color:'#fde68a', fontVariantNumeric:'tabular-nums'}}>★ {v.rating.toFixed(1)}</div>}
+        {v.lifecycle === 'new' && <div style={{position:'absolute', top:8, left:8, fontSize:10, fontWeight:700, padding:'2px 6px', borderRadius:4, background:'var(--tag-lifecycle-bg)', color:'var(--tag-lifecycle-fg)'}}>新片</div>}
+      </div>
+      <div style={{marginTop:10, display:'flex', flexDirection:'column', gap:4}}>
+        <div style={{display:'flex', alignItems:'center', gap:6}}>
+          <TypeChipS type={v.type} />
+          <span style={{fontSize:11, color:'var(--fg-subtle)'}}>{v.year}</span>
+        </div>
+        <div style={{fontSize:13, fontWeight:600, color:'var(--fg-default)', lineHeight:1.3,
+          display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden', minHeight:34}}>{v.title}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Nav (shared) ──────────────────────────────────────────────────────────
+function SiteNav({ active='home', onSearchClick }) {
+  const nav = [['首页','home'], ['电影','movie'], ['剧集','series'], ['动漫','anime'], ['综艺','tvshow'], ['更多 ▾','more']];
+  return (
+    <header style={{position:'sticky', top:0, height:64, borderBottom:'1px solid var(--border-default)',
+      background:'color-mix(in srgb, var(--bg-canvas) 88%, transparent)', backdropFilter:'blur(12px)', zIndex:50}}>
+      <div style={{maxWidth:1280, margin:'0 auto', padding:'0 24px', height:'100%', display:'flex', alignItems:'center', gap:24}}>
+        <div style={{fontSize:22, fontWeight:800, color:'var(--accent-default)', letterSpacing:'-0.02em'}}>resovo</div>
+        <nav style={{display:'flex', gap:4, flex:1}}>
+          {nav.map(([l,k]) => {
+            const a = k === active;
+            return <a key={k} style={{padding:'6px 12px', fontSize:14, fontWeight: a?700:500, borderRadius:6, color: a?'var(--accent-default)':'var(--fg-muted)', background: a ? 'var(--accent-muted)' : 'transparent', cursor:'pointer'}}>{l}</a>;
+          })}
+        </nav>
+        <div onClick={onSearchClick} style={{display:'flex', alignItems:'center', gap:8, padding:'0 14px', height:36, width:260, background:'var(--bg-surface-sunken)', border:'1px solid var(--border-default)', borderRadius:18, cursor:'pointer'}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--fg-subtle)" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <span style={{fontSize:13, color:'var(--fg-subtle)'}}>搜索片名、演员…</span>
+          <span style={{marginLeft:'auto', fontSize:10, padding:'2px 6px', borderRadius:4, background:'var(--bg-surface)', border:'1px solid var(--border-default)', color:'var(--fg-subtle)'}}>⌘K</span>
+        </div>
+        <div style={{display:'flex', gap:8}}>
+          <button style={{width:32, height:32, borderRadius:6, border:'1px solid var(--border-default)', background:'transparent', color:'var(--fg-muted)', cursor:'pointer'}}>☾</button>
+          <button style={{width:32, height:32, borderRadius:6, border:'1px solid var(--border-default)', background:'transparent', color:'var(--fg-muted)', cursor:'pointer', fontSize:11, fontWeight:600}}>中</button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BROWSE PAGE
+// ═══════════════════════════════════════════════════════════════════════════
+// FilterBar — 每行一个维度，默认选中"全部"。
+// 再次点击当前已选项会取消并回落到"全部"（反选）。
+// 不再单独渲染"已选 chip"区域：当前状态已经被每一行的选中态完整表达。
+function FilterBar() {
+  const groups = [
+    { key:'type',   label:'类型', options:['全部','电影','剧集','动漫','综艺','纪录片'] },
+    { key:'region', label:'地区', options:['全部','中国大陆','中国香港','中国台湾','日本','韩国','美国','欧洲','其他'] },
+    { key:'year',   label:'年份', options:['全部','2025','2024','2023','2022','2021','2020','2010s','2000s','更早'] },
+    { key:'genre',  label:'题材', options:['全部','剧情','科幻','悬疑','喜剧','动作','爱情','犯罪','惊悚','奇幻','传记'] },
+    { key:'sort',   label:'排序', options:['热门','最新','评分','更新时间'] },
+  ];
+  // demo state：类型=电影，排序=热门，其余=全部
+  const [sel, setSel] = React.useState({ type:'电影', region:'全部', year:'全部', genre:'全部', sort:'热门' });
+  const click = (g, o) => {
+    // 反选：再次点击当前项 → 对于有"全部"的组，回落到"全部"；"排序"组不允许空，保持原值
+    if (sel[g.key] === o) {
+      if (g.options[0] === '全部') setSel(s => ({...s, [g.key]: '全部'}));
+      return;
+    }
+    setSel(s => ({...s, [g.key]: o}));
+  };
+  return (
+    <div style={{background:'var(--bg-surface)', borderRadius:12, border:'1px solid var(--border-default)', padding:'8px 20px', marginBottom:24}}>
+      {groups.map((g, gi) => (
+        <div key={g.key} style={{display:'flex', alignItems:'center', gap:16, padding:'10px 0', borderBottom: gi < groups.length-1 ? '1px solid var(--border-subtle)' : 'none'}}>
+          <span style={{flex:'0 0 48px', fontSize:12, fontWeight:700, color:'var(--fg-subtle)'}}>{g.label}</span>
+          <div style={{display:'flex', gap:4, flexWrap:'wrap'}}>
+            {g.options.map(o => {
+              const a = o === sel[g.key];
+              return (
+                <a key={o} onClick={() => click(g, o)}
+                  title={a && g.options[0]==='全部' && o!=='全部' ? '再次点击取消' : undefined}
+                  style={{padding:'4px 12px', fontSize:13, borderRadius:6,
+                    color: a?'var(--accent-fg)':'var(--fg-muted)',
+                    background: a?'var(--accent-default)':'transparent',
+                    fontWeight: a?600:500, cursor:'pointer',
+                    transition:'background 160ms cubic-bezier(0,0,0.2,1), color 160ms cubic-bezier(0,0,0.2,1)'}}>
+                  {o}
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BrowsePage() {
+  const movies = SITE_VIDEOS.filter(v => v.type==='movie').concat(SITE_VIDEOS.filter(v=>v.type==='movie')).slice(0,15);
+  return (
+    <div style={{minHeight:'100%', background:'var(--bg-canvas)'}}>
+      <SiteNav active="movie" />
+      <div style={{maxWidth:1280, margin:'0 auto', padding:'32px 24px 80px'}}>
+        {/* Breadcrumb + title */}
+        <div style={{marginBottom:24}}>
+          <div style={{fontSize:12, color:'var(--fg-subtle)', marginBottom:8}}>首页 <span style={{margin:'0 6px', opacity:.5}}>›</span> 分类浏览</div>
+          <div style={{display:'flex', alignItems:'flex-end', gap:16}}>
+            <h1 style={{fontSize:32, fontWeight:800, margin:0, letterSpacing:'-0.02em', color:'var(--fg-default)'}}>电影</h1>
+            <span style={{fontSize:14, color:'var(--fg-subtle)', paddingBottom:6}}>共 2,340 部</span>
+          </div>
+        </div>
+
+        <FilterBar />
+
+        {/* Grid */}
+        <div style={{display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:20}}>
+          {movies.map((v,i) => <Card key={i+v.id} v={v} />)}
+        </div>
+
+        {/* Pagination */}
+        <div style={{display:'flex', justifyContent:'center', gap:8, marginTop:48}}>
+          {['‹', '1', '2', '3', '…', '468', '›'].map((n,i) => {
+            const a = n === '1';
+            return <button key={i} style={{width:36, height:36, borderRadius:6, border:'1px solid var(--border-default)', background: a?'var(--accent-default)':'var(--bg-surface)', color: a?'var(--accent-fg)':'var(--fg-muted)', fontSize:13, fontWeight:600, cursor:'pointer'}}>{n}</button>;
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SEARCH — command overlay + full page
+// ═══════════════════════════════════════════════════════════════════════════
+function SearchOverlay() {
+  const suggest = ['三体', '流浪地球', '奥本海默', '葬送的芙莉莲'];
+  const recent = ['漫长的季节', '周处除三害', '黑暗荣耀'];
+  const hot = [['热', 1, '三体'], ['热', 2, '沙丘 2'], ['热', 3, '葬送的芙莉莲'], [null, 4, '我的阿勒泰'], [null, 5, '怪奇物语 S5']];
+  return (
+    <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,.55)', backdropFilter:'blur(6px)', display:'flex', justifyContent:'center', paddingTop:96, overflow:'auto'}}>
+      <div style={{width:640, background:'var(--bg-surface)', border:'1px solid var(--border-default)', borderRadius:16, boxShadow:'0 20px 60px rgba(0,0,0,.3)', overflow:'hidden', height:'fit-content'}}>
+        {/* Input */}
+        <div style={{display:'flex', alignItems:'center', gap:12, padding:'18px 20px', borderBottom:'1px solid var(--border-default)'}}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--fg-subtle)" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input defaultValue="三体" style={{flex:1, border:'none', outline:'none', fontSize:16, background:'transparent', color:'var(--fg-default)'}} />
+          <span style={{fontSize:11, padding:'3px 8px', borderRadius:4, border:'1px solid var(--border-default)', color:'var(--fg-subtle)'}}>Esc</span>
+        </div>
+
+        {/* Live results */}
+        <div style={{padding:'12px 8px'}}>
+          <div style={{fontSize:11, fontWeight:700, color:'var(--fg-subtle)', padding:'8px 12px', textTransform:'uppercase', letterSpacing:'0.08em'}}>搜索结果 · 3</div>
+          {SITE_VIDEOS.slice(0,3).map(v => (
+            <div key={v.id} style={{display:'flex', alignItems:'center', gap:12, padding:'10px 12px', borderRadius:8, cursor:'pointer', background: v.id==='v1' ? 'var(--bg-surface-sunken)' : 'transparent'}}>
+              <div style={{flex:'0 0 40px', width:40, height:56, borderRadius:4, overflow:'hidden'}}><Poster2 v={v}/></div>
+              <div style={{flex:1, minWidth:0}}>
+                <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:2}}>
+                  <span style={{fontSize:14, fontWeight:600, color:'var(--fg-default)'}}>{v.title}</span>
+                  <TypeChipS type={v.type}/>
+                </div>
+                <div style={{fontSize:12, color:'var(--fg-subtle)', display:'flex', gap:8, alignItems:'center'}}>
+                  <Rating value={v.rating} size={11}/>
+                  <span>·</span><span>{v.year}</span><span>·</span><span>{v.country}</span>
+                </div>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--fg-subtle)" strokeWidth="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+            </div>
+          ))}
+          <a style={{display:'block', padding:'10px 12px', fontSize:13, color:'var(--accent-default)', fontWeight:600, cursor:'pointer'}}>查看全部结果 →</a>
+        </div>
+
+        {/* Hot list */}
+        <div style={{padding:'12px 8px', borderTop:'1px solid var(--border-default)'}}>
+          <div style={{fontSize:11, fontWeight:700, color:'var(--fg-subtle)', padding:'8px 12px', textTransform:'uppercase', letterSpacing:'0.08em'}}>热搜榜</div>
+          {hot.map(([tag, i, n]) => (
+            <div key={n} style={{display:'flex', alignItems:'center', gap:12, padding:'8px 12px', cursor:'pointer'}}>
+              <span style={{flex:'0 0 20px', fontSize:14, fontWeight:700, fontVariantNumeric:'tabular-nums', color: i<=3?'#dc2626':'var(--fg-subtle)'}}>{i}</span>
+              <span style={{flex:1, fontSize:13, color:'var(--fg-default)'}}>{n}</span>
+              {tag && <span style={{fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:3, background:'var(--tag-trending-bg)', color:'var(--tag-trending-fg)'}}>HOT</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SearchPage() {
+  const all = SITE_VIDEOS.slice(0,12);
+  return (
+    <div style={{minHeight:'100%', background:'var(--bg-canvas)'}}>
+      <SiteNav active="none" />
+      <div style={{maxWidth:1280, margin:'0 auto', padding:'32px 24px 80px'}}>
+        {/* Search input big */}
+        <div style={{marginBottom:24}}>
+          <div style={{display:'flex', alignItems:'center', gap:12, padding:'14px 20px', height:56, background:'var(--bg-surface)', border:'1px solid var(--border-default)', borderRadius:12, boxShadow:'0 1px 2px rgba(0,0,0,.04)'}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-default)" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input defaultValue="科幻" style={{flex:1, border:'none', outline:'none', fontSize:16, background:'transparent', color:'var(--fg-default)'}} />
+            <span style={{fontSize:12, color:'var(--fg-subtle)'}}>32 个结果</span>
+            <button style={{padding:'6px 16px', borderRadius:8, background:'var(--accent-default)', color:'var(--accent-fg)', border:'none', fontSize:13, fontWeight:600, cursor:'pointer'}}>搜索</button>
+          </div>
+        </div>
+
+        {/* Filter tabs */}
+        <div style={{display:'flex', alignItems:'center', gap:4, marginBottom:24, borderBottom:'1px solid var(--border-default)', paddingBottom:0}}>
+          {[['全部',32, true], ['电影',12,false], ['剧集',14,false], ['动漫',4,false], ['综艺',2,false]].map(([l,c,a]) => (
+            <div key={l} style={{display:'flex', alignItems:'center', gap:6, padding:'10px 14px', borderBottom: a?'2px solid var(--accent-default)':'2px solid transparent', marginBottom:-1, cursor:'pointer'}}>
+              <span style={{fontSize:14, fontWeight: a?700:500, color: a?'var(--accent-default)':'var(--fg-muted)'}}>{l}</span>
+              <span style={{fontSize:11, padding:'1px 6px', borderRadius:999, background:'var(--bg-surface-sunken)', color:'var(--fg-subtle)', fontVariantNumeric:'tabular-nums'}}>{c}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Results */}
+        <div style={{display:'flex', flexDirection:'column', gap:20}}>
+          {all.map(v => (
+            <div key={v.id} style={{display:'flex', gap:20, padding:20, background:'var(--bg-surface)', borderRadius:12, border:'1px solid var(--border-default)', cursor:'pointer'}}>
+              <div style={{flex:'0 0 120px', width:120}}><Poster2 v={v}/></div>
+              <div style={{flex:1, minWidth:0}}>
+                <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:8}}>
+                  <h3 style={{fontSize:20, fontWeight:700, margin:0, color:'var(--fg-default)', letterSpacing:'-0.01em'}}>{v.title}</h3>
+                  <TypeChipS type={v.type}/>
+                  <Rating value={v.rating}/>
+                </div>
+                <div style={{fontSize:13, color:'var(--fg-subtle)', marginBottom:10, display:'flex', gap:12, flexWrap:'wrap'}}>
+                  <span>{v.year}</span>
+                  <span>{v.country}</span>
+                  <span>{v.duration}</span>
+                  {v.genres && <span>{v.genres.join(' / ')}</span>}
+                </div>
+                <p style={{fontSize:13, color:'var(--fg-muted)', margin:0, lineHeight:1.6,
+                  display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden'}}>
+                  {v.blurb || '一段视频的简介将出现在这里，关键词会高亮为 '}<mark style={{background:'var(--accent-muted)', color:'var(--accent-default)', padding:'0 2px', borderRadius:2}}>科幻</mark>{v.blurb ? '' : ' 以便用户快速定位到相关内容。'}
+                </p>
+                <div style={{display:'flex', gap:8, marginTop:12}}>
+                  <button style={{display:'inline-flex', alignItems:'center', gap:6, padding:'6px 14px', borderRadius:6, background:'var(--accent-default)', color:'var(--accent-fg)', border:'none', fontSize:12, fontWeight:600, cursor:'pointer'}}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>
+                    播放
+                  </button>
+                  <button style={{padding:'6px 14px', borderRadius:6, background:'transparent', color:'var(--fg-muted)', border:'1px solid var(--border-default)', fontSize:12, fontWeight:600, cursor:'pointer'}}>详情</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DETAIL PAGE — 豆瓣风：左海报 + 右信息
+// ═══════════════════════════════════════════════════════════════════════════
+function DetailPage() {
+  const v = SITE_VIDEOS[0];
+  return (
+    <div style={{minHeight:'100%', background:'var(--bg-canvas)'}}>
+      <SiteNav active="series" />
+      {/* Ambient bg — subtle gradient tinted from poster */}
+      <div style={{position:'relative'}}>
+        <div style={{position:'absolute', inset:0, height:480, background:`linear-gradient(180deg, oklch(35% 0.12 ${v.hue}) 0%, transparent 100%)`, opacity:.25, pointerEvents:'none'}}/>
+        <div style={{position:'relative', maxWidth:1200, margin:'0 auto', padding:'40px 24px 0'}}>
+          {/* Breadcrumb */}
+          <div style={{fontSize:12, color:'var(--fg-subtle)', marginBottom:20}}>首页 <span style={{margin:'0 6px', opacity:.5}}>›</span> 剧集 <span style={{margin:'0 6px', opacity:.5}}>›</span> {v.title}</div>
+
+          {/* Hero split */}
+          <div style={{display:'grid', gridTemplateColumns:'280px 1fr', gap:40, marginBottom:48}}>
+            <div>
+              <div style={{borderRadius:8, overflow:'hidden', boxShadow:'0 12px 40px -12px rgba(0,0,0,.3)'}}>
+                <Poster2 v={v}/>
+              </div>
+            </div>
+            <div>
+              <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:12}}>
+                <TypeChipS type={v.type}/>
+                <span style={{fontSize:11, fontWeight:700, padding:'2px 8px', borderRadius:4, background:'var(--tag-lifecycle-bg)', color:'var(--tag-lifecycle-fg)'}}>连载中 · 已更至 24 集</span>
+              </div>
+              <h1 style={{fontSize:40, fontWeight:800, margin:'0 0 4px 0', letterSpacing:'-0.02em', lineHeight:1.1, color:'var(--fg-default)'}}>{v.title}</h1>
+              <div style={{fontSize:15, color:'var(--fg-subtle)', marginBottom:20}}>Three-Body · {v.year}</div>
+
+              {/* Rating + buttons */}
+              <div style={{display:'flex', alignItems:'center', gap:24, marginBottom:24}}>
+                <div>
+                  <div style={{display:'flex', alignItems:'center', gap:6, fontSize:32, fontWeight:800, color:'#d97706', fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em'}}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.9 6.9L22 10l-5 4.9 1.2 7.1L12 18.8 5.8 22 7 14.9 2 10l7.1-1.1z"/></svg>
+                    {v.rating.toFixed(1)}
+                  </div>
+                  <div style={{fontSize:11, color:'var(--fg-subtle)', marginTop:2}}>12,438 人评分</div>
+                </div>
+                <div style={{width:1, height:40, background:'var(--border-default)'}}/>
+                <div style={{display:'flex', gap:12}}>
+                  <button style={{display:'inline-flex', alignItems:'center', gap:8, padding:'12px 24px', borderRadius:8, background:'var(--accent-default)', color:'var(--accent-fg)', border:'none', fontSize:14, fontWeight:700, cursor:'pointer'}}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>
+                    开始播放
+                  </button>
+                  <button style={{padding:'12px 20px', borderRadius:8, background:'var(--bg-surface)', color:'var(--fg-muted)', border:'1px solid var(--border-default)', fontSize:14, fontWeight:600, cursor:'pointer'}}>+ 收藏</button>
+                  <button style={{width:44, height:44, borderRadius:8, background:'var(--bg-surface)', color:'var(--fg-muted)', border:'1px solid var(--border-default)', cursor:'pointer'}}>↗</button>
+                </div>
+              </div>
+
+              {/* Meta table */}
+              <div style={{display:'grid', gridTemplateColumns:'80px 1fr', rowGap:8, columnGap:20, fontSize:13, marginBottom:24}}>
+                {[
+                  ['类型', v.genres.join(' / ')],
+                  ['地区', v.country],
+                  ['语言', v.lang || '汉语'],
+                  ['首播', v.year + '-01-15'],
+                  ['集数', v.ep + ' 集'],
+                  ['片长', v.duration],
+                  ['导演', v.director],
+                  ['主演', v.cast.slice(0,5).join(' / ') + ' ...'],
+                ].map(([k,val]) => (
+                  <React.Fragment key={k}>
+                    <div style={{color:'var(--fg-subtle)', fontWeight:500}}>{k}</div>
+                    <div style={{color:'var(--fg-default)'}}>{val}</div>
+                  </React.Fragment>
+                ))}
+              </div>
+
+              {/* Available sources pill row */}
+              <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap'}}>
+                <span style={{fontSize:12, color:'var(--fg-subtle)'}}>播放源：</span>
+                {['线路1 · 腾讯','线路2 · 爱奇艺','线路3 · 优酷'].map((s,i) => (
+                  <span key={s} style={{fontSize:12, padding:'4px 10px', borderRadius:6, background: i===0?'var(--accent-muted)':'var(--bg-surface-sunken)', color: i===0?'var(--accent-default)':'var(--fg-muted)', fontWeight:600, border:'1px solid var(--border-default)'}}>{s}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Episodes */}
+          <section style={{marginBottom:48}}>
+            <div style={{display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:16}}>
+              <h2 style={{fontSize:22, fontWeight:800, margin:0, letterSpacing:'-0.01em', color:'var(--fg-default)'}}>剧集选集</h2>
+              <div style={{display:'flex', gap:4}}>
+                {['1-30','31-60'].map((r,i) => {
+                  const a = i===0;
+                  return <a key={r} style={{padding:'4px 12px', fontSize:12, borderRadius:6, background: a?'var(--accent-muted)':'transparent', color: a?'var(--accent-default)':'var(--fg-muted)', fontWeight:600, cursor:'pointer'}}>{r}</a>;
+                })}
+              </div>
+            </div>
+            <div style={{display:'grid', gridTemplateColumns:'repeat(10, 1fr)', gap:8}}>
+              {Array.from({length:30}).map((_,i) => {
+                const n = i+1, active = n===12, watched = n < 12;
+                return (
+                  <button key={n} style={{
+                    height:42, borderRadius:6, border:'1px solid var(--border-default)', cursor:'pointer',
+                    background: active?'var(--accent-default)':'var(--bg-surface)',
+                    color: active?'var(--accent-fg)':(watched?'var(--fg-subtle)':'var(--fg-default)'),
+                    fontSize:13, fontWeight: active?700:500,
+                    position:'relative', fontVariantNumeric:'tabular-nums',
+                  }}>
+                    {n}
+                    {watched && !active && <div style={{position:'absolute', bottom:3, right:3, width:4, height:4, borderRadius:'50%', background:'var(--accent-default)'}}/>}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Section: Synopsis + cast */}
+          <section style={{marginBottom:48, display:'grid', gridTemplateColumns:'1fr 320px', gap:40}}>
+            <div>
+              <h2 style={{fontSize:22, fontWeight:800, margin:'0 0 16px 0', letterSpacing:'-0.01em', color:'var(--fg-default)'}}>简介</h2>
+              <p style={{fontSize:14, color:'var(--fg-muted)', lineHeight:1.75, margin:0}}>
+                {v.blurb} 本剧严格遵循原著设定，从文革时期红岸基地的初次接触展开，跨越四十余年的叙事，细致呈现三体文明对地球的渗透，以及叶文洁、汪淼、史强等关键角色之间交织的命运线。科幻概念被以极富耐心的笔触展开，同时不失作为悬疑剧的节奏张力。
+              </p>
+              <h3 style={{fontSize:16, fontWeight:700, margin:'28px 0 14px 0', color:'var(--fg-default)'}}>主创阵容</h3>
+              <div style={{display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:16}}>
+                {v.cast.slice(0,5).map((name,i) => (
+                  <div key={name}>
+                    <div style={{aspectRatio:'1/1', borderRadius:'50%', overflow:'hidden', marginBottom:8,
+                      background:`linear-gradient(135deg, oklch(70% 0.08 ${(i*73)%360}) 0%, oklch(50% 0.12 ${(i*73+60)%360}) 100%)`}}/>
+                    <div style={{fontSize:12, fontWeight:600, color:'var(--fg-default)', textAlign:'center'}}>{name}</div>
+                    <div style={{fontSize:11, color:'var(--fg-subtle)', textAlign:'center'}}>{i===0?'导演':'演员'}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h2 style={{fontSize:16, fontWeight:700, margin:'0 0 12px 0', color:'var(--fg-default)'}}>相关作品</h2>
+              <div style={{display:'flex', flexDirection:'column', gap:12}}>
+                {SITE_VIDEOS.slice(3,7).map(r => (
+                  <div key={r.id} style={{display:'flex', gap:12, cursor:'pointer'}}>
+                    <div style={{flex:'0 0 60px', width:60}}><Poster2 v={r}/></div>
+                    <div style={{flex:1, minWidth:0}}>
+                      <div style={{fontSize:13, fontWeight:600, color:'var(--fg-default)', marginBottom:2,
+                        display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden', lineHeight:1.3}}>{r.title}</div>
+                      <div style={{fontSize:11, color:'var(--fg-subtle)', display:'flex', gap:6, alignItems:'center'}}>
+                        <Rating value={r.rating} size={10}/>
+                        <span>·</span><span>{r.year}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WATCH PAGE — default split + cinema toggle
+// ═══════════════════════════════════════════════════════════════════════════
+function WatchPlayerFrame({ cinema=false }) {
+  return (
+    <div style={{position:'relative', aspectRatio:'16/9', background:'#000', borderRadius: cinema?0:12, overflow:'hidden'}}>
+      {/* Fake poster bg */}
+      <Poster2 v={SITE_VIDEOS[0]} aspect="16/9" radius={0}/>
+      <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,.35)'}}/>
+      {/* Play button center */}
+      <div style={{position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center'}}>
+        <button style={{width:72, height:72, borderRadius:'50%', background:'rgba(255,255,255,.15)', border:'2px solid rgba(255,255,255,.4)', color:'white', cursor:'pointer', backdropFilter:'blur(8px)'}}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>
+        </button>
+      </div>
+      {/* Top bar — title + source */}
+      <div style={{position:'absolute', top:0, left:0, right:0, padding:'16px 20px', background:'linear-gradient(to bottom, rgba(0,0,0,.65), transparent)', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+        <div style={{display:'flex', alignItems:'center', gap:10, color:'white'}}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+          <div>
+            <div style={{fontSize:14, fontWeight:600}}>{SITE_VIDEOS[0].title}</div>
+            <div style={{fontSize:11, opacity:.7}}>第 12 集 · 第三体世界的黄昏</div>
+          </div>
+        </div>
+        <div style={{display:'flex', gap:8, alignItems:'center'}}>
+          <span style={{fontSize:11, padding:'4px 10px', borderRadius:999, background:'rgba(255,255,255,.15)', color:'white', backdropFilter:'blur(8px)', fontWeight:600}}>线路1 · 腾讯</span>
+        </div>
+      </div>
+      {/* Bottom — progress + controls */}
+      <div style={{position:'absolute', bottom:0, left:0, right:0, padding:'20px 20px 16px', background:'linear-gradient(to top, rgba(0,0,0,.75), transparent)'}}>
+        <div style={{height:4, background:'rgba(255,255,255,.2)', borderRadius:2, marginBottom:12, position:'relative'}}>
+          <div style={{position:'absolute', left:0, top:0, height:'100%', width:'34%', background:'var(--accent-default)', borderRadius:2}}/>
+          <div style={{position:'absolute', left:'34%', top:'50%', width:12, height:12, borderRadius:'50%', background:'white', transform:'translate(-50%, -50%)'}}/>
+        </div>
+        <div style={{display:'flex', alignItems:'center', gap:14, color:'white'}}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" style={{cursor:'pointer'}}><polygon points="5 3 19 12 5 21"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{cursor:'pointer'}}><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+          <span style={{fontSize:12, opacity:.85, fontVariantNumeric:'tabular-nums'}}>14:32 / 42:18</span>
+          <div style={{flex:1}}/>
+          <span style={{fontSize:11, padding:'3px 8px', borderRadius:4, border:'1px solid rgba(255,255,255,.25)', cursor:'pointer'}}>1.0x</span>
+          <span style={{fontSize:11, padding:'3px 8px', borderRadius:4, border:'1px solid rgba(255,255,255,.25)', cursor:'pointer'}}>中字</span>
+          <span style={{fontSize:11, padding:'3px 8px', borderRadius:4, border:'1px solid rgba(255,255,255,.25)', cursor:'pointer'}}>HD</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{cursor:'pointer'}} title="影院模式"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 10h20"/></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{cursor:'pointer'}}><path d="M3 7V3h4M21 7V3h-4M3 17v4h4M21 17v4h-4"/></svg>
+        </div>
+      </div>
+      {cinema && (
+        <div style={{position:'absolute', top:12, right:20, fontSize:11, padding:'4px 10px', borderRadius:999, background:'rgba(255,255,255,.15)', color:'white', fontWeight:600, backdropFilter:'blur(8px)'}}>影院模式</div>
+      )}
+    </div>
+  );
+}
+
+function EpisodePanel({ current=12 }) {
+  return (
+    <div style={{background:'var(--bg-surface)', borderRadius:12, border:'1px solid var(--border-default)', overflow:'hidden'}}>
+      <div style={{padding:'16px 20px', borderBottom:'1px solid var(--border-default)', display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+        <div>
+          <div style={{fontSize:15, fontWeight:700, color:'var(--fg-default)'}}>选集</div>
+          <div style={{fontSize:11, color:'var(--fg-subtle)', marginTop:2}}>共 30 集 · 已更新至 24 集</div>
+        </div>
+        <div style={{display:'flex', gap:4}}>
+          {['1-30'].map(r => <span key={r} style={{fontSize:11, padding:'3px 10px', borderRadius:6, background:'var(--bg-surface-sunken)', color:'var(--fg-muted)', fontWeight:600}}>{r}</span>)}
+        </div>
+      </div>
+      <div style={{padding:16, display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:8}}>
+        {Array.from({length:24}).map((_,i) => {
+          const n = i+1, active = n===current, watched = n < current;
+          return (
+            <button key={n} style={{
+              height:36, borderRadius:6, border:'1px solid var(--border-default)', cursor:'pointer',
+              background: active?'var(--accent-default)':(watched?'var(--bg-surface-sunken)':'var(--bg-surface)'),
+              color: active?'var(--accent-fg)':(watched?'var(--fg-subtle)':'var(--fg-default)'),
+              fontSize:12, fontWeight: active?700:500,
+              position:'relative', fontVariantNumeric:'tabular-nums',
+            }}>
+              {n}
+            </button>
+          );
+        })}
+      </div>
+      {/* Continue watching strip */}
+      <div style={{borderTop:'1px solid var(--border-default)', padding:'14px 20px', background:'var(--bg-surface-sunken)', display:'flex', alignItems:'center', gap:10}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-default)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <div style={{flex:1, fontSize:12, color:'var(--fg-muted)'}}>上次观看到 <span style={{fontWeight:700, color:'var(--fg-default)'}}>第 12 集 14:32</span></div>
+        <button style={{fontSize:11, padding:'4px 10px', borderRadius:6, background:'var(--accent-default)', color:'var(--accent-fg)', border:'none', fontWeight:600, cursor:'pointer'}}>继续观看</button>
+      </div>
+    </div>
+  );
+}
+
+function SourcePanel() {
+  return (
+    <div style={{background:'var(--bg-surface)', borderRadius:12, border:'1px solid var(--border-default)', padding:16}}>
+      <div style={{fontSize:15, fontWeight:700, color:'var(--fg-default)', marginBottom:12}}>播放源</div>
+      <div style={{display:'flex', flexDirection:'column', gap:6}}>
+        {[
+          {name:'线路 1 · 腾讯视频', speed:'快', active:true},
+          {name:'线路 2 · 爱奇艺', speed:'中', active:false},
+          {name:'线路 3 · 优酷', speed:'中', active:false},
+          {name:'线路 4 · 备用源', speed:'慢', active:false},
+        ].map(s => (
+          <div key={s.name} style={{display:'flex', alignItems:'center', gap:10, padding:'10px 12px', borderRadius:8,
+            background: s.active?'var(--accent-muted)':'transparent', border: s.active?'1px solid transparent':'1px solid var(--border-default)', cursor:'pointer'}}>
+            <div style={{width:8, height:8, borderRadius:'50%', background: s.active?'var(--accent-default)':'var(--border-strong)'}}/>
+            <span style={{flex:1, fontSize:13, fontWeight: s.active?600:500, color: s.active?'var(--accent-default)':'var(--fg-default)'}}>{s.name}</span>
+            <span style={{fontSize:11, padding:'2px 8px', borderRadius:4, background: s.speed==='快'?'var(--state-success-bg)':s.speed==='中'?'var(--state-warning-bg)':'var(--state-error-bg)', color: s.speed==='快'?'var(--state-success-fg)':s.speed==='中'?'var(--state-warning-fg)':'var(--state-error-fg)', fontWeight:600}}>{s.speed}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WatchPage({ cinema=false }) {
+  const v = SITE_VIDEOS[0];
+  if (cinema) {
+    return (
+      <div style={{minHeight:'100%', background:'#000'}}>
+        <SiteNav active="none" />
+        <div style={{background:'#000', padding:'20px 0'}}>
+          <div style={{maxWidth:1600, margin:'0 auto', padding:'0 40px'}}>
+            <WatchPlayerFrame cinema />
+          </div>
+        </div>
+        <div style={{maxWidth:1280, margin:'0 auto', padding:'24px', display:'grid', gridTemplateColumns:'1fr 360px', gap:24}}>
+          <div>
+            <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:8}}>
+              <TypeChipS type={v.type}/>
+              <span style={{fontSize:12, color:'var(--fg-subtle)'}}>第 12 集</span>
+            </div>
+            <h1 style={{fontSize:24, fontWeight:800, margin:'0 0 8px 0', color:'var(--fg-default)'}}>{v.title} · 第三体世界的黄昏</h1>
+            <div style={{fontSize:13, color:'var(--fg-subtle)', marginBottom:12, display:'flex', gap:8}}>
+              <Rating value={v.rating}/><span>·</span><span>{v.year}</span><span>·</span><span>{v.country}</span>
+            </div>
+            <p style={{fontSize:13, color:'var(--fg-muted)', lineHeight:1.7, margin:0}}>{v.blurb}</p>
+          </div>
+          <div><SourcePanel/></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{minHeight:'100%', background:'var(--bg-canvas)'}}>
+      <SiteNav active="none" />
+      <div style={{maxWidth:1440, margin:'0 auto', padding:'24px', display:'grid', gridTemplateColumns:'1fr 380px', gap:24}}>
+        {/* Left column */}
+        <div>
+          <WatchPlayerFrame />
+
+          {/* Video title row */}
+          <div style={{marginTop:20, display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:20}}>
+            <div style={{flex:1, minWidth:0}}>
+              <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:8}}>
+                <TypeChipS type={v.type}/>
+                <span style={{fontSize:12, color:'var(--fg-subtle)'}}>第 12 集 · 共 30 集</span>
+              </div>
+              <h1 style={{fontSize:24, fontWeight:800, margin:'0 0 4px 0', color:'var(--fg-default)', letterSpacing:'-0.01em'}}>{v.title}</h1>
+              <div style={{fontSize:14, color:'var(--fg-default)'}}>第三体世界的黄昏</div>
+            </div>
+            <div style={{display:'flex', gap:8, alignItems:'center'}}>
+              <button style={{display:'inline-flex', alignItems:'center', gap:6, padding:'8px 14px', borderRadius:6, background:'var(--bg-surface)', border:'1px solid var(--border-default)', fontSize:13, fontWeight:600, cursor:'pointer', color:'var(--fg-muted)'}}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 10h20"/></svg>
+                影院模式
+              </button>
+              <button style={{padding:'8px 14px', borderRadius:6, background:'var(--bg-surface)', border:'1px solid var(--border-default)', fontSize:13, fontWeight:600, cursor:'pointer', color:'var(--fg-muted)'}}>+ 收藏</button>
+              <button style={{padding:'8px 14px', borderRadius:6, background:'var(--bg-surface)', border:'1px solid var(--border-default)', fontSize:13, fontWeight:600, cursor:'pointer', color:'var(--fg-muted)'}}>↗</button>
+            </div>
+          </div>
+
+          {/* Rating + meta */}
+          <div style={{display:'flex', alignItems:'center', gap:16, marginTop:12, paddingBottom:16, borderBottom:'1px solid var(--border-default)', fontSize:13, color:'var(--fg-muted)'}}>
+            <Rating value={v.rating}/>
+            <span>·</span><span>{v.year}</span>
+            <span>·</span><span>{v.country}</span>
+            <span>·</span><span>{v.genres.join(' / ')}</span>
+          </div>
+
+          {/* Blurb */}
+          <div style={{marginTop:16}}>
+            <p style={{fontSize:14, color:'var(--fg-muted)', lineHeight:1.75, margin:0,
+              display:'-webkit-box', WebkitLineClamp:3, WebkitBoxOrient:'vertical', overflow:'hidden'}}>{v.blurb}</p>
+            <a style={{fontSize:13, color:'var(--accent-default)', fontWeight:600, marginTop:8, display:'inline-block', cursor:'pointer'}}>查看详情页 →</a>
+          </div>
+        </div>
+
+        {/* Right panel */}
+        <div style={{display:'flex', flexDirection:'column', gap:16}}>
+          <EpisodePanel/>
+          <SourcePanel/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MOBILE — phone 375px frames
+// ═══════════════════════════════════════════════════════════════════════════
+function PhoneFrame({ children, label }) {
+  return (
+    <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:8}}>
+      <div style={{width:390, height:780, borderRadius:40, background:'#111', padding:10, boxShadow:'0 20px 60px -20px rgba(0,0,0,.4)'}}>
+        <div style={{width:'100%', height:'100%', borderRadius:32, overflow:'hidden', background:'var(--bg-canvas)', position:'relative'}}>
+          {/* status bar */}
+          <div style={{height:36, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 24px', fontSize:13, fontWeight:600, color:'var(--fg-default)'}}>
+            <span>9:41</span>
+            <span style={{display:'inline-block', width:88, height:22, borderRadius:12, background:'#000'}}/>
+            <span>●●● 􀛨 􀋨</span>
+          </div>
+          {children}
+        </div>
+      </div>
+      <div style={{fontSize:11, color:'rgba(60,50,40,.7)'}}>{label}</div>
+    </div>
+  );
+}
+
+function MobileBrowse() {
+  return (
+    <div style={{overflow:'auto', height:744}}>
+      {/* Nav */}
+      <div style={{display:'flex', alignItems:'center', gap:12, padding:'8px 16px'}}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--fg-default)" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+        <div style={{flex:1, fontSize:16, fontWeight:700, color:'var(--fg-default)'}}>电影</div>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--fg-default)" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      </div>
+
+      {/* Filter scroll */}
+      <div style={{display:'flex', gap:6, padding:'8px 16px', overflowX:'auto', borderBottom:'1px solid var(--border-default)'}}>
+        {['全部','热门','最新','评分 9.0+','2024','科幻','国产','韩剧'].map((t,i) => {
+          const a = i===1;
+          return <span key={t} style={{flex:'0 0 auto', padding:'6px 14px', fontSize:13, borderRadius:999, background: a?'var(--accent-default)':'var(--bg-surface-sunken)', color: a?'var(--accent-fg)':'var(--fg-muted)', fontWeight:600}}>{t}</span>;
+        })}
+      </div>
+
+      {/* Grid */}
+      <div style={{padding:16, display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:10}}>
+        {SITE_VIDEOS.slice(0,12).map(v => <Card key={v.id} v={v}/>)}
+      </div>
+
+      {/* Tab bar */}
+      <div style={{position:'absolute', bottom:0, left:0, right:0, height:72, borderTop:'1px solid var(--border-default)', background:'color-mix(in srgb, var(--bg-canvas) 92%, transparent)', backdropFilter:'blur(12px)', display:'flex', paddingBottom:16}}>
+        {[['首页','home',false],['分类','grid',true],['搜索','search',false],['我的','user',false]].map(([l,k,a]) => (
+          <div key={k} style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3, color: a?'var(--accent-default)':'var(--fg-subtle)'}}>
+            <div style={{width:22, height:22, borderRadius:4, background:a?'var(--accent-default)':'currentColor', opacity:a?1:.7}}/>
+            <span style={{fontSize:10, fontWeight:a?700:500}}>{l}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MobileDetail() {
+  const v = SITE_VIDEOS[0];
+  return (
+    <div style={{overflow:'auto', height:744, position:'relative'}}>
+      {/* Hero image */}
+      <div style={{position:'relative', height:280}}>
+        <Poster2 v={v} aspect="auto" radius={0}/>
+        <div style={{position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,.45) 0%, transparent 30%, transparent 50%, var(--bg-canvas) 100%)'}}/>
+        <div style={{position:'absolute', top:8, left:16, right:16, display:'flex', justifyContent:'space-between'}}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+          <div style={{display:'flex', gap:14, color:'white'}}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+          </div>
+        </div>
+      </div>
+      <div style={{padding:'0 16px', marginTop:-60, position:'relative'}}>
+        <div style={{display:'flex', gap:12, alignItems:'flex-end'}}>
+          <div style={{flex:'0 0 96px', width:96, borderRadius:6, overflow:'hidden', boxShadow:'0 8px 20px rgba(0,0,0,.3)'}}><Poster2 v={v}/></div>
+          <div style={{flex:1, minWidth:0, color:'white', paddingBottom:6}}>
+            <div style={{display:'flex', gap:6, marginBottom:6}}><TypeChipS type={v.type}/></div>
+            <h1 style={{fontSize:20, fontWeight:800, margin:0, letterSpacing:'-0.01em', lineHeight:1.2, textShadow:'0 2px 6px rgba(0,0,0,.5)'}}>{v.title}</h1>
+            <div style={{fontSize:11, opacity:.85, marginTop:4}}>{v.year} · {v.country}</div>
+          </div>
+        </div>
+        {/* Rating row */}
+        <div style={{display:'flex', alignItems:'center', gap:16, marginTop:16, padding:'12px 0'}}>
+          <div><div style={{fontSize:22, fontWeight:800, color:'#d97706', lineHeight:1}}>★ {v.rating.toFixed(1)}</div><div style={{fontSize:10, color:'var(--fg-subtle)', marginTop:2}}>12,438 人</div></div>
+          <div style={{width:1, height:28, background:'var(--border-default)'}}/>
+          <div><div style={{fontSize:14, fontWeight:700, color:'var(--fg-default)', lineHeight:1}}>{v.ep} 集</div><div style={{fontSize:10, color:'var(--fg-subtle)', marginTop:2}}>连载中</div></div>
+          <div style={{width:1, height:28, background:'var(--border-default)'}}/>
+          <div style={{flex:1}}><div style={{fontSize:12, color:'var(--fg-muted)', lineHeight:1.3}}>{v.genres.slice(0,2).join(' · ')}</div></div>
+        </div>
+        {/* CTA */}
+        <div style={{display:'flex', gap:8, marginBottom:20}}>
+          <button style={{flex:1, padding:'12px', borderRadius:8, background:'var(--accent-default)', color:'var(--accent-fg)', border:'none', fontSize:14, fontWeight:700}}>▶ 开始播放</button>
+          <button style={{padding:'12px 16px', borderRadius:8, background:'var(--bg-surface)', border:'1px solid var(--border-default)', fontSize:14, color:'var(--fg-muted)', fontWeight:600}}>+ 收藏</button>
+        </div>
+        {/* Blurb */}
+        <p style={{fontSize:13, color:'var(--fg-muted)', lineHeight:1.7, margin:'0 0 20px 0',
+          display:'-webkit-box', WebkitLineClamp:3, WebkitBoxOrient:'vertical', overflow:'hidden'}}>{v.blurb}</p>
+        {/* Episodes */}
+        <h3 style={{fontSize:15, fontWeight:700, margin:'0 0 10px 0', color:'var(--fg-default)'}}>选集</h3>
+        <div style={{display:'grid', gridTemplateColumns:'repeat(6, 1fr)', gap:6, marginBottom:20}}>
+          {Array.from({length:12}).map((_,i) => {
+            const n=i+1, a = n===12, w = n<12;
+            return <button key={n} style={{height:34, borderRadius:6, border:'1px solid var(--border-default)', background:a?'var(--accent-default)':(w?'var(--bg-surface-sunken)':'var(--bg-surface)'), color:a?'var(--accent-fg)':(w?'var(--fg-subtle)':'var(--fg-default)'), fontSize:12, fontWeight:a?700:500}}>{n}</button>;
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MobileWatch() {
+  const v = SITE_VIDEOS[0];
+  return (
+    <div style={{height:744, position:'relative', background:'#000'}}>
+      {/* Player at top */}
+      <div style={{position:'relative', aspectRatio:'16/9'}}>
+        <Poster2 v={v} aspect="16/9" radius={0}/>
+        <div style={{position:'absolute', inset:0, background:'rgba(0,0,0,.3)'}}/>
+        <div style={{position:'absolute', top:12, left:12, right:12, display:'flex', justifyContent:'space-between', color:'white'}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
+        </div>
+        <div style={{position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <div style={{width:56, height:56, borderRadius:'50%', background:'rgba(255,255,255,.18)', border:'2px solid rgba(255,255,255,.4)', display:'flex', alignItems:'center', justifyContent:'center', color:'white', backdropFilter:'blur(8px)'}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>
+          </div>
+        </div>
+      </div>
+      {/* Body */}
+      <div style={{background:'var(--bg-canvas)', height:'calc(744px - 220px)', overflow:'auto', padding:16}}>
+        <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:8}}>
+          <TypeChipS type={v.type}/>
+          <span style={{fontSize:11, color:'var(--fg-subtle)'}}>第 12 集</span>
+        </div>
+        <h1 style={{fontSize:18, fontWeight:800, margin:'0 0 4px 0', color:'var(--fg-default)'}}>{v.title}</h1>
+        <div style={{fontSize:13, color:'var(--fg-muted)', marginBottom:14}}>第三体世界的黄昏</div>
+        {/* Tab bar */}
+        <div style={{display:'flex', gap:20, borderBottom:'1px solid var(--border-default)', marginBottom:14}}>
+          {[['选集',true],['介绍',false],['源',false]].map(([l,a]) => (
+            <div key={l} style={{padding:'8px 0', borderBottom: a?'2px solid var(--accent-default)':'2px solid transparent', marginBottom:-1, fontSize:13, fontWeight:a?700:500, color:a?'var(--accent-default)':'var(--fg-muted)'}}>{l}</div>
+          ))}
+        </div>
+        {/* Episode grid */}
+        <div style={{display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:6}}>
+          {Array.from({length:15}).map((_,i) => {
+            const n=i+1, a = n===12, w = n<12;
+            return <button key={n} style={{height:34, borderRadius:6, border:'1px solid var(--border-default)', background:a?'var(--accent-default)':(w?'var(--bg-surface-sunken)':'var(--bg-surface)'), color:a?'var(--accent-fg)':(w?'var(--fg-subtle)':'var(--fg-default)'), fontSize:12, fontWeight:a?700:500}}>{n}</button>;
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, {
+  BrowsePage, SearchOverlay, SearchPage, DetailPage, WatchPage,
+  PhoneFrame, MobileBrowse, MobileDetail, MobileWatch,
+});
+
+</script>
+<script type="text/babel">
+const { BrowsePage, SearchOverlay, SearchPage, DetailPage, WatchPage,
+        PhoneFrame, MobileBrowse, MobileDetail, MobileWatch } = window;
+
+// Wrap PC page to simulate a scrollable, but sized artboard
+function Frame({ dark, children, scroll=false }) {
+  return (
+    <div className="surface" data-theme={dark?'dark':undefined}
+         style={{position:'relative', overflow: scroll ? 'auto' : 'hidden'}}>
+      {children}
+    </div>
+  );
+}
+
+function Root() {
+  return (
+    <DesignCanvas>
+      <DCSection id="intro" title="Resovo · 站点设计" subtitle="沿用 home-b 的中保真风格；所有页面 PC + 移动端双平台。点进任意 artboard 可放大查看。">
+
+        {/* ── BROWSE ───────────────────────────────────────────── */}
+      </DCSection>
+
+      <DCSection id="browse" title="分类页 /browse" subtitle="顶部横向筛选栏 · 类型/地区/年份/题材/排序 · 每行互斥，再次点击取消回落到「全部」">
+        <DCArtboard id="browse-light" label="Light" width={1280} height={1860}>
+          <Frame><BrowsePage/></Frame>
+        </DCArtboard>
+        <DCArtboard id="browse-dark" label="Dark" width={1280} height={1860}>
+          <Frame dark><BrowsePage/></Frame>
+        </DCArtboard>
+        <DCArtboard id="browse-mobile" label="移动端" width={420} height={820}>
+          <div className="surface" style={{padding:'20px 0', height:'100%', display:'flex', justifyContent:'center'}}>
+            <PhoneFrame label="">
+              <MobileBrowse/>
+            </PhoneFrame>
+          </div>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ── SEARCH ───────────────────────────────────────────── */}
+      <DCSection id="search" title="搜索 /search" subtitle="浮层快搜（⌘K 触发） + 完整搜索页。浮层展示即时结果 + 热搜榜；完整页支持 tab 切类型、列表式结果、关键词高亮。">
+        <DCArtboard id="search-overlay" label="浮层 · 快搜" width={1280} height={1550}>
+          <Frame>
+            <div style={{position:'relative', height:'100%'}}>
+              {/* Faded home bg behind overlay */}
+              <div style={{position:'absolute', inset:0, background:'var(--bg-canvas)'}}>
+                <BrowsePage/>
+              </div>
+              <SearchOverlay/>
+            </div>
+          </Frame>
+        </DCArtboard>
+        <DCArtboard id="search-page-light" label="完整搜索页 · Light" width={1280} height={3220}>
+          <Frame><SearchPage/></Frame>
+        </DCArtboard>
+        <DCArtboard id="search-page-dark" label="完整搜索页 · Dark" width={1280} height={3220}>
+          <Frame dark><SearchPage/></Frame>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ── DETAIL ───────────────────────────────────────────── */}
+      <DCSection id="detail" title="详情页 /movie · /series · /anime" subtitle="分栏：左海报 + 右信息（豆瓣风）· 选集网格 · 简介+演职员 · 相关推荐">
+        <DCArtboard id="detail-light" label="Light" width={1280} height={1720}>
+          <Frame><DetailPage/></Frame>
+        </DCArtboard>
+        <DCArtboard id="detail-dark" label="Dark" width={1280} height={1720}>
+          <Frame dark><DetailPage/></Frame>
+        </DCArtboard>
+        <DCArtboard id="detail-mobile" label="移动端" width={420} height={820}>
+          <div className="surface" style={{padding:'20px 0', height:'100%', display:'flex', justifyContent:'center'}}>
+            <PhoneFrame label=""><MobileDetail/></PhoneFrame>
+          </div>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ── WATCH ────────────────────────────────────────────── */}
+      <DCSection id="watch" title="播放页 /watch" subtitle="默认分栏（播放器 + 右侧选集/播放源/断点）· 可切换只影院模式。">
+        <DCArtboard id="watch-split-light" label="分栏 · Light" width={1440} height={1100}>
+          <Frame><WatchPage/></Frame>
+        </DCArtboard>
+        <DCArtboard id="watch-split-dark" label="分栏 · Dark" width={1440} height={1100}>
+          <Frame dark><WatchPage/></Frame>
+        </DCArtboard>
+        <DCArtboard id="watch-cinema" label="影院模式" width={1600} height={1280}>
+          <Frame dark><WatchPage cinema/></Frame>
+        </DCArtboard>
+        <DCArtboard id="watch-mobile" label="移动端" width={420} height={820}>
+          <div className="surface" style={{padding:'20px 0', height:'100%', display:'flex', justifyContent:'center'}}>
+            <PhoneFrame label=""><MobileWatch/></PhoneFrame>
+          </div>
+        </DCArtboard>
+      </DCSection>
+
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
+</script>
+</body>
+</html>

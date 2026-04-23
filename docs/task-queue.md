@@ -24,11 +24,13 @@
 2. 任务编号命名（沿用现有规范）
 
 - 任务 ID 格式：`<PREFIX>-NN`
-- `PREFIX` 必须使用既有前缀：`INFRA` / `AUTH` / `VIDEO` / `SEARCH` / `PLAYER` / `CRAWLER` / `ADMIN` / `USER` / `SOCIAL` / `LIST` / `CONTRIB` / `CHG` / `CHORE` / `DEC` / `UX` / `META` / `IMG`
+- `PREFIX` 必须使用既有前缀：`INFRA` / `AUTH` / `VIDEO` / `SEARCH` / `PLAYER` / `CRAWLER` / `ADMIN` / `USER` / `SOCIAL` / `LIST` / `CONTRIB` / `CHG` / `CHORE` / `DEC` / `UX` / `META` / `IMG` / `HANDOFF` / `STATS`
   - `DEC`：前后台解耦架构任务（来自 frontend_backend_decoupling_plan_20260401.md，2026-04-02 新增）
   - `UX`：后台交互改造任务（来自 admin_console_decoupling_and_ux_plan_20260402.md，2026-04-02 新增）
   - `META`：外部元数据层建设任务（来自 external_metadata_import_plan_20260405.md + 2026-04-14 豆瓣扩展方案，2026-04-14 新增）
   - `IMG`：图片管线与样板图系统任务（来自 image_pipeline_plan_20260418.md，2026-04-20 新增）
+  - `HANDOFF`：前端交付包落地（来自 handoff_20260422/landing_plan_v1.md，M7 扩充首页重设计，2026-04-22 新增）
+  - `STATS`：视频观看埋点 + 综合算分（v2.1 独立跟进，2026-04-22 新增占位）
 - `NN` 为两位数字，按同前缀内最大编号递增（例如当前最大 `CHG-335`，下一个必须是 `CHG-336`）
 - 禁止跳号占坑、禁止复用已存在编号
 
@@ -9864,5 +9866,173 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - [ ] typecheck / lint / unit 全绿
 - [ ] `docs/milestone_alignment_m6_*.md` 方案对齐表签字
 - [ ] 用户 R2 env 配置 + 真人验收
+
+---
+
+## [SEQ-20260422-HANDOFF-V2] 前端交付包落地（M7 扩充：首页重设计 + MiniPlayer + admin 聚合页）
+
+- **状态**：🔄 执行中（2026-04-22 入队）
+- **创建时间**：2026-04-22 18:00
+- **最后更新时间**：2026-04-22 18:00
+- **目标**：落地 `docs/handoff_20260422/` 设计交付包的首页重设计方案，对齐 `frontend_redesign_plan_20260418.md` §M7 扩充。视觉目标：与 `designs/home-b-2.html` + `Site Design-2.html` + `Global Shell.html` 几乎看不出区别
+- **范围**：`packages/design-tokens` / `apps/api/src/db + services + routes` / `packages/types` / `apps/web-next/src/{stores,app/[locale]/_lib/player,components}` / `apps/server/src/app/admin/home-page` / `docs/decisions.md` + `docs/milestone_alignment_m7_*.md`
+- **依赖**：M6-CLOSE-01 sealed ✅（commit `4d9eb35`）
+- **方案文档**：`docs/handoff_20260422/landing_plan_v1.md`（v1.1；两轮 arch-reviewer 评审 PASS，代理 ID `a5035ed3d8dd76dc3`）
+- **关键约束**：
+  - 本序列**禁用 haiku**（除 HANDOFF-09 内 changelog 追加 / 文档归档等机械子步骤允许）
+  - 本序列**不引入任何新依赖**（`framer-motion` / `@use-gesture/react` 明确撤回）
+  - 每卡完成前、commit 前，若命中 `landing_plan §7.1` 触发目录 → 必须按 `§7.2 混合模式`（Playwright 自动 + Hover/Focus/动效瞬态 fallback 手动）提交复核包给真人 → 未收"✅ 过"或"⚠️ 留白"不得 commit
+  - 连续 2 次"🔴 改"且改完仍不达预期 → 触发 `landing_plan §6.5 BLOCKER` 条款
+  - 视觉 7 项硬标尺见 `landing_plan §9`
+- **强制 Opus 子代理触发矩阵**：见 `landing_plan §6`（HANDOFF-01/-02/-03/-04/-07/-09 均需 arch-reviewer 评审）
+
+### 任务列表（按执行顺序，详细规范见 landing_plan_v1.md §4）
+
+1. HANDOFF-01 — tokens-v2 补齐 + `scripts/ui-review-capture.sh` 前置 CHORE（状态：⬜ 待启动）
+   - 创建时间：2026-04-22 18:00
+   - 计划开始：2026-04-23
+   - 建议模型：**sonnet 主循环 + opus arch-reviewer**
+   - 规模：M（~1 d，含前置截图脚本 0.3 d）
+   - 依赖：无（序列首卡）
+   - 文件范围：
+     - `packages/design-tokens/src/semantic/tag.ts`（+10 chip × 2 主题）
+     - `packages/design-tokens/src/components/player.ts`（+12 mini 几何字段）
+     - `packages/design-tokens/src/primitives/shadow.ts`（+cardHover）
+     - `packages/design-tokens/src/primitives/motion.ts`（按需新建 + spring/duration）
+     - `packages/design-tokens/src/semantic/{pattern,route-transition}.ts`（新建）
+     - `packages/design-tokens/src/semantic/index.ts`（exports）
+     - `scripts/build-css.ts`（按需扁平递归重构）
+     - `scripts/ui-review-capture.sh`（新建，Playwright 4 象限截图）
+     - `docs/architecture.md`（token 段落同步）
+   - 验收：Token build 成功；tokens.css diff 只含新增；light/dark 全值；全仓西里尔 е grep = 0；截图脚本可执行
+   - UI 复核：**不触发**（纯 token 层，无消费方组件在本卡内同步改）
+
+2. HANDOFF-02 — DB schema：home_modules 表 + videos.trending_tag 列 + ADR-051/052（状态：⬜ 待启动）
+   - 创建时间：2026-04-22 18:00
+   - 建议模型：**opus 主循环 + opus arch-reviewer**（跨 3+ 消费方 schema + ADR 决策文档，CLAUDE.md §模型路由 #2 + #3）
+   - 规模：M（~1.2 d）
+   - 依赖：无（可在 HANDOFF-01 之后或并行启动，文件范围零重叠）
+   - 文件范围：
+     - `apps/api/src/db/migrations/050_create_home_modules.sql`（新建）
+     - `apps/api/src/db/migrations/051_add_videos_trending_tag.sql`（新建）
+     - `apps/api/src/db/queries/*.ts`（home_modules 查询 + videos trending_tag 读写）
+     - `packages/types/src/{video.types,home-module.types}.ts`
+     - `docs/decisions.md`（**ADR-051** home_modules 运营位模型 + content_ref_type 四 slot 枚举约束 + metadata jsonb 守则；**ADR-052** M7 scope 从 2 卡扩到 11 卡偏离声明）
+     - `docs/architecture.md`（schema 同步，CLAUDE.md §绝对禁止 #1）
+   - 验收：migration up/down 回放；typecheck 全绿（跨 api/types/web-next/server）；home_modules 单元测试；ADR-051/052 落盘 + decisions.md 索引更新
+   - UI 复核：**不触发**
+
+3. HANDOFF-03 — MiniPlayer 交互补齐（状态：⬜ 待启动）
+   - 创建时间：2026-04-22 18:00
+   - 建议模型：**opus 主循环 + opus arch-reviewer**（双触发：跨消费方 schema + 重构播放器 core/shell 接口，#2 + #4）
+   - 规模：L（~3.5 d，最重的一卡）
+   - 依赖：HANDOFF-01 ✅（消费 `player.mini.*` tokens）
+   - 关键：严格遵守 `landing_plan §HANDOFF-03 Storage 协调协议`（sessionStorage/localStorage 职责边界 + hydrate 时序 + 矛盾值解决规则）；实现路径**纯 pointer events + CSS transform + localStorage**，参考 `designs/Global Shell.html:551-820`
+   - 文件范围：
+     - `apps/web-next/src/stores/playerStore.ts`（扩 geometry + takeoverActive，保留 hostMode LEGAL_TRANSITIONS）
+     - `apps/web-next/src/stores/_persist/mini-geometry.ts`（新建，localStorage 纯函数 + corner 枚举校验）
+     - `apps/web-next/src/app/[locale]/_lib/player/GlobalPlayerHost.tsx`（mini 容器 + appendChild DOM 移动）
+     - `apps/web-next/src/components/player/{PlayerShell,MiniPlayer}.tsx`
+     - `apps/web-next/src/lib/mini-player/drag.ts`（pointer events 手写）
+     - 单元：`stores/_persist/mini-geometry.test.ts`（4 矛盾值规则 + corner 枚举损坏降级）
+     - E2E：`tests/e2e-next/mini-player.spec.ts`（含 window.resize 越界 re-snap 场景）
+   - 验收：landing_plan §HANDOFF-03 验收清单 7 项全过；播放器关键路径回归（断点续播/线路/影院/字幕）
+   - UI 复核：**触发**（含动效瞬态 Manual fallback：拖拽 / spring 吸附 / Takeover 遮罩）
+
+4. HANDOFF-04 — API：home/top10 + count-by-type + home/modules（Top10 fallback 排序）（状态：⬜ 待启动）
+   - 创建时间：2026-04-22 18:00
+   - 建议模型：**sonnet 主循环 + opus arch-reviewer**（接口契约评审）
+   - 规模：M（~1.2 d）
+   - 依赖：HANDOFF-02 ✅（消费 home_modules + videos.trending_tag）
+   - 关键：**用户拍板 B · 冷启动降级**：本卡只做 `rating DESC, year DESC` fallback + 人工置顶覆盖；views/completion 埋点延到 SEQ-202604XX-STATS-V1；副标题文案临时改"编辑推荐 · 基于评分精选"
+   - 文件范围：
+     - `apps/api/src/services/VideoService.ts`（新增原子方法 `listByRatingDesc`，**不含** topTen 编排逻辑）
+     - `apps/api/src/services/HomeService.ts`（新建，**归口 topTen** 运营位编排）
+     - `apps/api/src/services/HomeModulesService.ts`（新建，brand_scope 过滤）
+     - `apps/api/src/routes/{home,videos}.ts`（三个新接口）
+     - `apps/api/src/services/CacheService.ts`（注册缓存键）
+     - `packages/types/src/{api,home}.types.ts`（含 `Top10Response.sortStrategy: 'manual_plus_rating' | 'composite'`）
+     - `docs/task-queue.md` 尾部添加 `SEQ-202604XX-STATS-V1` 占位序列（本卡实装时校准具体日期）
+   - 验收：typecheck/lint/test 全绿；三接口 zod 校验；count-by-type 缓存 TTL 300s；top10 人工置顶优先；`sortStrategy` 固定 `'manual_plus_rating'`；v2.1 占位入队
+   - UI 复核：**不触发**
+
+5. HANDOFF-05 — Nav 升级 + HeroV2 升级（状态：⬜ 待启动）
+   - 建议模型：**sonnet 主循环**
+   - 规模：M（~1 d）
+   - 依赖：HANDOFF-01 ✅（消费 tokens）
+   - 文件范围：`apps/web-next/src/components/layout/Nav.tsx` + `components/video/HeroBanner.tsx → HeroV2.tsx` + `app/[locale]/page.tsx` + `messages/{zh,en}.json`
+   - 验收：对标 `designs/home-b-2.html:851-887, 889-979`；搜索 pill 240px + ⌘K + backdrop-filter blur(12px)；HeroV2 520px scrim + specs chip + CTA
+   - UI 复核：**触发**（Light × Dark × Desktop × Mobile 4 象限 Auto，Focus 态 Manual）
+
+6. HANDOFF-06 — 首页组件：TypeShortcuts + FeaturedRow + TopTenRow + ScrollRow variant（状态：⬜ 待启动）
+   - 建议模型：**sonnet 主循环**
+   - 规模：M（~1.5 d）
+   - 依赖：HANDOFF-01 + HANDOFF-04 + HANDOFF-05 ✅
+   - 文件范围：`apps/web-next/src/components/home/{TypeShortcuts,FeaturedRow,TopTenRow,TopTenCard}.tsx` + `components/video/VideoGrid.tsx`（扩 variant）+ `app/[locale]/page.tsx`（组装）+ E2E
+   - 验收：对标 `designs/home-b-2.html:1013-1141`；TopTenRow 副标题本卡交付为"编辑推荐 · 基于评分精选"（v2.1 切换 composite 后动态改回）
+   - UI 复核：**触发**
+
+7. HANDOFF-07 — VideoCard hover overlay + ChipType + CornerTags（状态：⬜ 待启动）
+   - 建议模型：**sonnet 主循环 + opus arch-reviewer**（新共享 primitive API 契约，#1）
+   - 规模：M（~1 d）
+   - 依赖：HANDOFF-01 ✅（消费 chip-{type} tokens）
+   - 文件范围：`apps/web-next/src/components/primitives/{chip-type,corner-tags}/` + `components/video/{VideoCard,VideoCardWide}.tsx` + 全仓替换硬编码 type badge → `<ChipType>` + E2E
+   - 验收：对标 `designs/home-b-2.html:779-849`；hover scale 1.04 + play 按钮 36px + backdrop blur(8px)；色盲模拟可辨；对比度 > 4.5:1
+   - UI 复核：**触发**（Hover 态需 Manual）
+
+8. HANDOFF-08 — Admin 首页推荐统一管理页（4 tab）（状态：⬜ 待启动）
+   - 建议模型：**sonnet 主循环**
+   - 规模：M（~1.5 d）
+   - 依赖：HANDOFF-02 + HANDOFF-04 ✅
+   - 文件范围：`apps/server/src/app/admin/home-page/page.tsx` + `_tabs/{BannersTab,FeaturedTab,TopTenTab,TypeShortcutsTab}.tsx` + `/admin/banners` 302 → `/admin/home-page?tab=banners` + 后台 E2E
+   - 约束：必须按 `docs/rules/admin-module-template.md` —— `ModernDataTable` + `ColumnSettingsPanel` + `AdminDropdown` + `SelectionActionBar` + `PaginationV2`
+   - 验收：4 tab 切换 URL 同步；Banner tab 行为与原 `admin/banners` 1:1；Featured/TopTen 可拖拽排序持久化；302 跳转正确
+   - UI 复核：**触发**（管理员视角 4 tab 截图）
+
+9. HANDOFF-09 — PHASE 对齐 + Opus 审计 + 视觉回归接入 + ESLint 禁色（M7 CLOSE 前置）（状态：⬜ 待启动）
+   - 建议模型：**opus 主循环 + opus arch-reviewer**（#3 ADR + #6 高风险 PR review）
+   - 例外允许 haiku 子代理做：changelog 追加 / ADR 索引更新 / task-queue 状态整理 / 文档归档
+   - 规模：M（~1 d）
+   - 依赖：HANDOFF-01 至 08 全部 ✅
+   - 文件范围：`docs/milestone_alignment_m7_handoff_20260XXX.md`（新建） + `docs/decisions.md`（token-v2 / miniplayer / home-modules / admin-home-page ADR 条目） + `docs/changelog.md`（8 条 HANDOFF + ★ M7 PHASE COMPLETE ★）+ `docs/task-queue.md`（序列全部 ✅）+ `docs/handoff_20260422/manual_qa_m7_20260XXX.md`（手动验收 checklist + 截图）+ ESLint rule `no-hardcoded-color-class` + 视觉回归 baseline（仅 macOS runner 生成，CI threshold 比较 `maxDiffPixelRatio: 0.02`）+ `docs/rules/visual-regression.md`
+   - 验收：arch-reviewer 10+ 点 PASS（含 Storage 协调协议 / content_ref_type 枚举 / v2.1 占位已入队）；浏览器手动验收全绿；用户二次人工确认；视觉回归 baseline 落盘
+
+### 验收签字（序列级）
+- [ ] 9 张主序列任务全部 ✅
+- [ ] 0 新 npm 依赖
+- [ ] home_modules / videos.trending_tag 两个 migration 同步 `docs/architecture.md`
+- [ ] typecheck / lint / unit / e2e 全绿
+- [ ] `docs/milestone_alignment_m7_handoff_*.md` 方案对齐表签字
+- [ ] ADR-051 + ADR-052 落盘，decisions.md 索引更新
+- [ ] SEQ-202604XX-STATS-V1 v2.1 占位序列已写入 task-queue
+- [ ] HANDOFF-09 arch-reviewer 10+ 点 PASS
+- [ ] 用户 §7 UI 复核门禁全程配合，HANDOFF-03/-05/-06/-07/-08 复核包真人签字
+- [ ] 用户 M7 PHASE 二次人工确认
+
+---
+
+## [SEQ-202604XX-STATS-V1] 视频观看埋点 + Top10 综合算分（v2.1 独立跟进占位）
+
+- **状态**：🟡 规划中（占位，待 SEQ-20260422-HANDOFF-V2 完成后校准具体启动日与序列号）
+- **创建时间**：2026-04-22 18:00（占位）
+- **最后更新时间**：2026-04-22 18:00
+- **目标**：补齐 `landing_plan v1.1 HANDOFF-04` 冷启动降级的 v2.1 跟进 —— 埋点聚合表 + Top10 综合算分切换
+- **前置**：SEQ-20260422-HANDOFF-V2 ✅（`HomeService.topTen()` / `home_modules` / `videos.trending_tag` / `Top10Response.sortStrategy` 均就绪）
+- **关键**：本序列**只替换 `HomeService.topTen()` 内部排序逻辑**，不改接口签名、不改前端消费层；完成后 `sortStrategy` 返回 `'composite'`，前端副标题自动切回"基于观看量、完播率与评分综合排序"
+
+### 任务列表（待细化）
+
+1. STATS-01 — video_stats 聚合表 migration + types（建议模型：opus 主循环 + opus arch-reviewer，跨消费方 schema）
+2. STATS-02 — 埋点接口 `POST /stats/view-event` + `POST /stats/completion-event` + 后端批量聚合（建议模型：sonnet + opus arch-reviewer）
+3. STATS-03 — 前端 PlayerShell 接入埋点事件（建议模型：sonnet）
+4. STATS-04 — `HomeService.topTen()` 切换综合算分 `score = 0.4×normalize(views) + 0.4×normalize(completion) + 0.2×normalize(rating)`；`Top10Response.sortStrategy` 改返回 `'composite'`（建议模型：sonnet + opus arch-reviewer，权重评审）
+5. STATS-05 — 前端副标题动态切换 + 回归测试（建议模型：sonnet）
+
+### 验收签字（序列级，待启动时细化）
+- [ ] 5 张任务全部 ✅
+- [ ] `HomeService.topTen()` 接口签名零变动
+- [ ] `sortStrategy` 从 `'manual_plus_rating'` 切换到 `'composite'`
+- [ ] 前端副标题自动切回"基于观看量、完播率与评分综合排序"
+- [ ] 视觉回归 snapshot 更新（仅副标题文案 diff）
 
 ---
