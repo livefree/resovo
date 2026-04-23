@@ -20,6 +20,7 @@
     "catKids": "Kids",
     "catOther": "Other",
     "search": "Search...",
+    "searchPlaceholder": "Search titles, actors…",
     "admin": "Admin",
     "mobileNav": "Mobile Navigation"
   },
@@ -28,5 +29,11 @@
     "trendingSeries": "Popular Series",
     "disclaimer": "Resovo indexes publicly available streaming links and does not host any video content. All rights belong to their respective owners.",
     "viewAll": "View All"
+  },
+  "hero": {
+    "featuredLabel": "Editor's Pick · Weekly Focus",
+    "watchNow": "Watch Now",
+    "details": "Details",
+    "addToWatchlist": "Save"
   }
 }

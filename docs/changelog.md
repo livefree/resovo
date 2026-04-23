@@ -9406,3 +9406,49 @@ f7833ab  IMG-07 P2 fixup 预览放大 + 真实进度
   - 主视图 ⇄ 浮窗切换 currentTime 续播 ⚠️（方案 B 留白，v2.1 跟进）
   - z-index 高于 Takeover + takeoverActive 时 display:none ✅
   - 播放器关键路径回归（断点续播/线路/影院/字幕）✅（LEGAL_TRANSITIONS 未破坏 + M3 续播逻辑保留）
+
+---
+
+## HANDOFF-05 — Nav 升级 + HeroV2 升级
+
+- **完成时间**：2026-04-22 23:59
+- **执行模型**：claude-sonnet-4-6（主循环），无子代理调用
+- **序列**：SEQ-20260422-HANDOFF-V2 第 5 卡
+- **改动摘要**：
+  - **Nav 升级**（`apps/web-next/src/components/layout/Nav.tsx`）：
+    - `backdrop-blur-sm` → `backdrop-blur-md`（12px）
+    - 搜索框改为 240px always-on pill（图标 + 占位符 + ⌘K 徽章）
+    - ⌘K / Ctrl+K 全局快捷键导航至搜索页
+    - active 状态新增 `bg-[var(--accent-muted)]` 背景填充
+    - Logo 字体升级：`text-[22px] font-extrabold letterSpacing:-0.02em`
+    - `color-mix` 透明度由 90% → 88%
+    - 移除旧 form/input 搜索，改为 `navigateToSearch` callback
+  - **HeroV2 新组件**（`apps/web-next/src/components/video/HeroV2.tsx`，新建）：
+    - 520px 固定高度，保留 KenBurns 背景图
+    - 双层 scrim：左→右（from-black/85 via-black/[.45]）+ 底→上（canvas fade）
+    - Featured 标签行（编辑推荐 · 本周焦点）
+    - 56px 大标题，900 weight，-0.03em tracking
+    - Meta 行：评分 ★ / 年份 / 类型 / 集数 / Specs chips（4K / HDR / 杜比 / 中字）
+    - CTA 三按钮：播放（白填充）+ 详情（glass）+ 收藏（圆形 glass）
+    - 右侧竖向进度条（aria-hidden）
+    - 移动端复用 BannerCarouselMobile
+    - 保留 `data-testid="hero-banner"` / `hero-watch-btn` / `hero-detail-btn` / `banner-dot-{i}`
+    - `HeroV2.Skeleton` 同 HeroBanner.Skeleton
+  - **页面切换**（`apps/web-next/src/app/[locale]/page.tsx`）：`<HeroBanner />` → `<HeroV2 />`
+  - **i18n 扩展**：
+    - `messages/{zh-CN,en}.json` 新增 `nav.searchPlaceholder` + `hero` namespace（featuredLabel / watchNow / details / addToWatchlist）
+  - **类型扩展**（`packages/types/src/banner.types.ts`）：`LocalizedBannerCard` 新增 5 个可选字段（rating / year / episodeCount / specs / blurb），向后兼容
+  - **单元测试**（`tests/unit/web-next/HeroV2.test.tsx`，新建）：10 个测试场景覆盖 skeleton / API / CTA / specs chip / rating / 空列表 / 失败降级
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试**：typecheck ✅ / lint ✅ / vitest 149 test files 1665 tests 全绿（净增 10）
+- **UI 复核门禁**：**触发**（Nav 搜索 pill + HeroV2 视觉全面升级）—— 复核包提交，等用户 4 象限签字
+- **验收清单对齐**：
+  - 搜索 pill 240px always-on + ⌘K ✅
+  - backdrop-filter blur(12px) ✅
+  - HeroV2 520px 固定高度 ✅
+  - 左右 + 底部 scrim 双层 ✅
+  - specs chip 渲染能力 ✅（字段存在时展示，API 填充后即激活）
+  - CTA 三按钮 ✅
+  - Nav active 背景色 `var(--accent-muted)` ✅
+  - Logo 字体 22px / 800 / -0.02em ✅

@@ -9873,7 +9873,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 - **状态**：🔄 执行中（2026-04-22 入队）
 - **创建时间**：2026-04-22 18:00
-- **最后更新时间**：2026-04-22 18:00
+- **最后更新时间**：2026-04-22 23:59
 - **目标**：落地 `docs/handoff_20260422/` 设计交付包的首页重设计方案，对齐 `frontend_redesign_plan_20260418.md` §M7 扩充。视觉目标：与 `designs/home-b-2.html` + `Site Design-2.html` + `Global Shell.html` 几乎看不出区别
 - **范围**：`packages/design-tokens` / `apps/api/src/db + services + routes` / `packages/types` / `apps/web-next/src/{stores,app/[locale]/_lib/player,components}` / `apps/server/src/app/admin/home-page` / `docs/decisions.md` + `docs/milestone_alignment_m7_*.md`
 - **依赖**：M6-CLOSE-01 sealed ✅（commit `4d9eb35`）
@@ -9960,13 +9960,17 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 验收：typecheck ✅ lint ✅ 1582 tests ✅；三接口 zod 校验 ✅；count-by-type 缓存 TTL 300s ✅；top10 人工置顶优先 ✅；`sortStrategy` 固定 `'manual_plus_rating'` ✅
    - UI 复核：**不触发**
 
-5. HANDOFF-05 — Nav 升级 + HeroV2 升级（状态：⬜ 待启动）
+5. HANDOFF-05 — Nav 升级 + HeroV2 升级（状态：✅ 已完成）
    - 建议模型：**sonnet 主循环**
+   - 执行模型：claude-sonnet-4-6
+   - 子代理调用：无
+   - 实际开始：2026-04-22 23:45
+   - 完成时间：2026-04-22 23:59
    - 规模：M（~1 d）
    - 依赖：HANDOFF-01 ✅（消费 tokens）
-   - 文件范围：`apps/web-next/src/components/layout/Nav.tsx` + `components/video/HeroBanner.tsx → HeroV2.tsx` + `app/[locale]/page.tsx` + `messages/{zh,en}.json`
-   - 验收：对标 `designs/home-b-2.html:851-887, 889-979`；搜索 pill 240px + ⌘K + backdrop-filter blur(12px)；HeroV2 520px scrim + specs chip + CTA
-   - UI 复核：**触发**（Light × Dark × Desktop × Mobile 4 象限 Auto，Focus 态 Manual）
+   - 文件范围：`apps/web-next/src/components/layout/Nav.tsx` + `components/video/HeroV2.tsx`（新建） + `app/[locale]/page.tsx` + `messages/{zh,en}.json` + `packages/types/src/banner.types.ts`（specs 可选字段扩展）+ `tests/unit/web-next/HeroV2.test.tsx`（新建）
+   - 验收：typecheck ✅ lint ✅ 1665 tests ✅；搜索 pill 240px + ⌘K + backdrop-blur-md(12px) ✅；HeroV2 520px scrim + specs chip + CTA ✅；对标 home-b-2.html:851-887,889-979 ✅
+   - UI 复核：**触发**（Light × Dark × Desktop × Mobile 4 象限 Auto，Focus 态 Manual）— 待用户复核签字
 
 6. HANDOFF-06 — 首页组件：TypeShortcuts + FeaturedRow + TopTenRow + ScrollRow variant（状态：⬜ 待启动）
    - 建议模型：**sonnet 主循环**

@@ -43,6 +43,12 @@ export interface LocalizedBannerCard {
   /** linkType='video' 时携带，用于前端构造 getVideoDetailHref */
   videoType?: string | null
   videoSlug?: string | null
+  /** HeroV2 扩展字段（可选），API 未填充时为 undefined/null */
+  rating?: number | null
+  year?: number | null
+  episodeCount?: number | null
+  specs?: string[] | null
+  blurb?: string | null
 }
 
 export interface CreateBannerInput {

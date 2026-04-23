@@ -20,6 +20,7 @@
     "catKids": "少儿",
     "catOther": "其他",
     "search": "搜索...",
+    "searchPlaceholder": "搜索片名、演员…",
     "admin": "管理后台",
     "mobileNav": "移动端导航"
   },
@@ -28,5 +29,11 @@
     "trendingSeries": "热播剧集",
     "disclaimer": "流光仅索引公开可访问的视频链接，不托管任何视频内容。所有版权归原作者所有。",
     "viewAll": "查看全部"
+  },
+  "hero": {
+    "featuredLabel": "编辑推荐 · 本周焦点",
+    "watchNow": "立即播放",
+    "details": "详情",
+    "addToWatchlist": "收藏"
   }
 }
