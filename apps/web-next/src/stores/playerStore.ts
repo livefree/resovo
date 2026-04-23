@@ -1,7 +1,10 @@
 import { create } from 'zustand'
 import type { HostPlayerMode, PlayerHostOrigin, PersistedPlayerHostV1 } from '@/app/[locale]/_lib/player/types'
+import type { MiniGeometryV1 } from './_persist/mini-geometry'
+import { readMiniGeometry, writeMiniGeometry } from './_persist/mini-geometry'
 
 export type { HostPlayerMode, PlayerHostOrigin } from '@/app/[locale]/_lib/player/types'
+export type { MiniGeometryV1, MiniCorner } from './_persist/mini-geometry'
 
 // PlayerMode 保留在本文件以维持原有导入路径
 export type PlayerMode = 'default' | 'theater'
@@ -29,6 +32,12 @@ interface PlayerState {
   hostOrigin: PlayerHostOrigin | null
   isHydrated: boolean
 
+  // === HANDOFF-03 新增：MiniPlayer 几何 + Takeover 护栏 ===
+  // geometry：null = 未持久化或 hostMode!=mini/pip 不读；消费方 fallback 到 MINI_GEOMETRY_DEFAULTS
+  geometry: MiniGeometryV1 | null
+  // takeoverActive：Takeover 动画期间 MiniPlayer display:none 护栏（优先级最高）
+  takeoverActive: boolean
+
   // === 既有 actions ===
   initPlayer: (shortId: string, episode: number) => void
   setEpisode: (episode: number) => void
@@ -42,6 +51,11 @@ interface PlayerState {
   setHostMode: (next: HostPlayerMode, origin?: PlayerHostOrigin) => void
   closeHost: () => void
   hydrateFromSession: () => void
+
+  // === HANDOFF-03 新增 actions ===
+  // setGeometry：仅在 drag-end / resize-end / close-mini 三事件点调用，同步 writeMiniGeometry 到 localStorage
+  setGeometry: (geom: MiniGeometryV1) => void
+  setTakeoverActive: (active: boolean) => void
 
   // === M5-CARD-CTA-01 新增 ===
   transition: 'fast-takeover' | 'standard-takeover' | null
@@ -62,6 +76,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   hostMode: 'closed',
   hostOrigin: null,
   isHydrated: false,
+  geometry: null,
+  takeoverActive: false,
   transition: null,
   activeSourceIndex: 0,
 
@@ -120,26 +136,39 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   hydrateFromSession: () => {
     if (get().isHydrated) return
+    // 1) sessionStorage 权威决定 hostMode（Storage 协调协议第一条）
+    let nextHostMode: HostPlayerMode = 'closed'
+    let sessionPatch: Partial<PlayerState> = {}
     try {
       const raw = sessionStorage.getItem(STORAGE_KEY)
       if (raw) {
         const parsed = JSON.parse(raw) as PersistedPlayerHostV1
         if (parsed.v === 1 && (parsed.hostMode === 'mini' || parsed.hostMode === 'pip')) {
-          set({
+          nextHostMode = parsed.hostMode
+          sessionPatch = {
             hostMode: parsed.hostMode,
             shortId: parsed.shortId,
             currentEpisode: parsed.currentEpisode,
             hostOrigin: parsed.hostOrigin,
             isPlaying: false,
             currentTime: 0,
-          })
+          }
         }
       }
     } catch {
       // sessionStorage unavailable or parse error — silently ignore
     }
-    set({ isHydrated: true })
+    // 2) 仅在 hostMode=mini/pip 时读 localStorage 几何（Storage 协调协议第三条）；
+    //    closed/full 时忽略 localStorage，避免 closed 态下误触发 mini 容器渲染。
+    const geometry = (nextHostMode === 'mini' || nextHostMode === 'pip') ? readMiniGeometry() : null
+    set({ ...sessionPatch, geometry, isHydrated: true })
   },
+
+  setGeometry: (geom) => {
+    set({ geometry: geom })
+    writeMiniGeometry(geom)
+  },
+  setTakeoverActive: (active) => set({ takeoverActive: active }),
 }))
 
 function persistToSession(state: PlayerState) {

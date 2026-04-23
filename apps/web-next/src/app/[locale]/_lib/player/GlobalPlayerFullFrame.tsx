@@ -14,6 +14,7 @@ export function GlobalPlayerFullFrame() {
   const setHostMode = usePlayerStore((s) => s.setHostMode)
   const closeHost = usePlayerStore((s) => s.closeHost)
   const transition = usePlayerStore((s) => s.transition)
+  const setTakeoverActive = usePlayerStore((s) => s.setTakeoverActive)
   const mode = usePlayerStore((s) => s.mode)
   const frameRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
@@ -21,23 +22,24 @@ export function GlobalPlayerFullFrame() {
 
   useEffect(() => {
     if (!frameRef.current) return
-    if (transition === 'fast-takeover') {
-      const anim = applyFastTakeoverEntry(frameRef.current)
-      anim.onfinish = () => usePlayerStore.setState({ transition: null })
+    if (transition === 'fast-takeover' || transition === 'standard-takeover') {
+      // HANDOFF-03 Takeover 护栏：动画期间 MiniPlayer display:none，防止 z-index 冲突。
+      setTakeoverActive(true)
+      const anim =
+        transition === 'fast-takeover'
+          ? applyFastTakeoverEntry(frameRef.current)
+          : applyStandardTakeoverEntry(frameRef.current)
+      anim.onfinish = () => {
+        setTakeoverActive(false)
+        usePlayerStore.setState({ transition: null })
+      }
       return () => {
         anim.cancel()
+        setTakeoverActive(false)
         usePlayerStore.setState({ transition: null })
       }
     }
-    if (transition === 'standard-takeover') {
-      const anim = applyStandardTakeoverEntry(frameRef.current)
-      anim.onfinish = () => usePlayerStore.setState({ transition: null })
-      return () => {
-        anim.cancel()
-        usePlayerStore.setState({ transition: null })
-      }
-    }
-  }, [transition])
+  }, [transition, setTakeoverActive])
 
   if (!isHydrated || !hostOrigin?.slug) return null
 

@@ -420,14 +420,12 @@
 [data-tabbar] { display: none; }
 @media (hover: none) { [data-tabbar] { display: flex; } }
 
-/* MiniPlayer mobile override — lift above Tab Bar */
-@media (hover: none) {
+/* MiniPlayer 移动端严格屏蔽（HANDOFF-03 用户拍板 A）——
+   iOS Safari PiP 限制与触摸手势冲突，v2.1 再做 docked bar。
+   桌面浮窗行为由 MiniPlayer.tsx 内联 style + pointer events 驱动。 */
+@media (hover: none) and (pointer: coarse) {
   [data-mini-player] {
-    bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px)) !important;
-    right: 0 !important;
-    width: 100% !important;
-    border-radius: 0 !important;
-    height: 56px !important;
+    display: none !important;
   }
 }
 
