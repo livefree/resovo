@@ -9,20 +9,14 @@
   "overrides": [
     {
       "files": [
-        "apps/web/src/app/**/*.ts",
-        "apps/web/src/app/**/*.tsx",
-        "apps/web/src/components/**/*.ts",
-        "apps/web/src/components/**/*.tsx",
-        "apps/web/src/lib/**/*.ts",
-        "apps/web/src/lib/**/*.tsx",
-        "apps/web/src/stores/**/*.ts",
-        "apps/web/src/stores/**/*.tsx",
         "apps/web-next/src/app/**/*.ts",
         "apps/web-next/src/app/**/*.tsx",
         "apps/web-next/src/components/**/*.ts",
         "apps/web-next/src/components/**/*.tsx",
         "apps/web-next/src/lib/**/*.ts",
-        "apps/web-next/src/lib/**/*.tsx"
+        "apps/web-next/src/lib/**/*.tsx",
+        "apps/web-next/src/stores/**/*.ts",
+        "apps/web-next/src/stores/**/*.tsx"
       ],
       "rules": {
         "no-restricted-imports": [

@@ -26,13 +26,6 @@ const tasks = [
     persistent: true,
   },
   {
-    label: 'web',
-    cwd: resolve(rootDir, 'apps/web'),
-    command: node,
-    args: ['--env-file=../../.env.local', nextBin, 'dev', '-p', '3000'],
-    persistent: true,
-  },
-  {
     label: 'admin',
     cwd: resolve(rootDir, 'apps/server'),
     command: node,
@@ -40,10 +33,11 @@ const tasks = [
     persistent: true,
   },
   {
+    // CUTOVER（2026-04-23）：apps/web 退役，apps/web-next 升为对外入口 port 3000
     label: 'web-next',
     cwd: resolve(rootDir, 'apps/web-next'),
     command: node,
-    args: ['--env-file=../../.env.local', nextBin, 'dev', '-p', '3002'],
+    args: ['--env-file=../../.env.local', nextBin, 'dev', '-p', '3000'],
     persistent: true,
   },
 ]

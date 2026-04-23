@@ -1,15 +1,11 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const WEB_URL      = process.env.NEXT_PUBLIC_APP_URL  ?? 'http://localhost:3000'
-const ADMIN_URL    = process.env.ADMIN_APP_URL        ?? 'http://localhost:3001'
-const WEB_NEXT_URL = process.env.WEB_NEXT_APP_URL     ?? 'http://localhost:3002'
+// CUTOVER（2026-04-23）：apps/web 退役，apps/web-next 升为对外入口 port 3000
+const WEB_URL   = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+const ADMIN_URL = process.env.ADMIN_APP_URL       ?? 'http://localhost:3001'
 
-// 前台 E2E：homepage / search / player / auth
-const WEB_SPECS   = ['**/e2e/homepage.spec.ts', '**/e2e/search.spec.ts', '**/e2e/player.spec.ts', '**/e2e/auth.spec.ts']
 // 后台 E2E：admin 访问控制 / 视频治理 / 发布流程（admin 部分）
 const ADMIN_SPECS = ['**/e2e/admin.spec.ts', '**/e2e/admin-source-and-video-flows.spec.ts', '**/e2e/video-governance.spec.ts', '**/e2e/publish-flow.spec.ts']
-// 新前台 E2E（apps/web-next）
-const WEB_NEXT_SPECS = ['**/e2e-next/**/*.spec.ts']
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -25,38 +21,26 @@ export default defineConfig({
   },
 
   projects: [
-    // ── 前台（web:3000） ────────────────────────────────────────────
-    {
-      name: 'web-chromium',
-      use: { ...devices['Desktop Chrome'], baseURL: WEB_URL },
-      testMatch: WEB_SPECS,
-    },
-    {
-      name: 'web-mobile',
-      use: { ...devices['iPhone 14'], baseURL: WEB_URL },
-      testMatch: WEB_SPECS,
-    },
     // ── 后台（server:3001） ─────────────────────────────────────────
     {
       name: 'admin-chromium',
       use: { ...devices['Desktop Chrome'], baseURL: ADMIN_URL },
       testMatch: ADMIN_SPECS,
     },
-    // ── 新前台（web-next:3002） ─────────────────────────────────────
+    // ── 前台（web-next:3000） —— CUTOVER 后唯一前端 ─────────────────
     {
-      name: 'web-next-chromium',
+      name: 'web-chromium',
       testDir: './tests/e2e-next',
-      use: { ...devices['Desktop Chrome'], baseURL: WEB_NEXT_URL },
+      use: { ...devices['Desktop Chrome'], baseURL: WEB_URL },
+    },
+    {
+      name: 'web-mobile',
+      testDir: './tests/e2e-next',
+      use: { ...devices['iPhone 14'], baseURL: WEB_URL },
     },
   ],
 
   webServer: [
-    {
-      command: 'npm --workspace @resovo/web run dev',
-      url: WEB_URL,
-      reuseExistingServer: !process.env.CI,
-      timeout: 60000,
-    },
     {
       command: 'npm --workspace @resovo/server run dev',
       url: `${ADMIN_URL}/admin`,
@@ -64,8 +48,9 @@ export default defineConfig({
       timeout: 60000,
     },
     {
+      // CUTOVER：web-next 是唯一前台，port 3000
       command: 'npm --workspace @resovo/web-next run dev',
-      url: `${WEB_NEXT_URL}/en/next-placeholder`,
+      url: WEB_URL,
       reuseExistingServer: !process.env.CI,
       timeout: 60000,
     },

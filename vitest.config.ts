@@ -32,8 +32,8 @@ export default defineConfig({
         'apps/api/src/services/**',
         'apps/api/src/routes/**',
         'apps/api/src/db/queries/**',
-        'apps/web/src/components/player/**',
-        'apps/web/src/lib/api-client.ts',
+        'apps/web-next/src/components/player/**',
+        'apps/web-next/src/lib/**',
       ],
       thresholds: {
         // 覆盖率低于此值时输出警告（不阻断）
@@ -50,29 +50,43 @@ export default defineConfig({
       { find: '@/api',              replacement: path.resolve(__dirname, './apps/api/src') },
       { find: '@/components/admin', replacement: path.resolve(__dirname, './apps/server/src/components/admin') },
       { find: '@/components/shared',replacement: path.resolve(__dirname, './apps/server/src/components/shared') },
-      // @/stores is context-aware: web-next → apps/web-next/src/stores; server/other → apps/server/src/stores
+      // @/stores is context-aware: web-next → apps/web-next/src/stores; server/admin → apps/server/src/stores
+      // （CUTOVER 2026-04-23 后 apps/web 已退役，apps/web 分支移除）
       {
         find: /^@\/stores(\/.*)?$/,
         replacement: '$1',
         customResolver(replacedId: string, importer: string | undefined) {
-          const isWebNext =
-            importer?.includes('/apps/web-next/') || importer?.includes('/tests/unit/web-next/')
-          const storesBase = isWebNext
-            ? path.resolve(__dirname, './apps/web-next/src/stores')
-            : path.resolve(__dirname, './apps/server/src/stores')
+          const isServer =
+            importer?.includes('/apps/server/') || importer?.includes('/tests/unit/components/admin/')
+          const storesBase = isServer
+            ? path.resolve(__dirname, './apps/server/src/stores')
+            : path.resolve(__dirname, './apps/web-next/src/stores')
           const subPath = replacedId.replace(/^\//, '') || 'index'
           return resolveWithExtensions(path.resolve(storesBase, subPath))
         },
       },
-      // Smart @ resolver: web-next source files get apps/web-next/src, others get apps/web/src
+      // @/types：优先走 packages/types（apps/api 主要消费者），fallback 到 apps/web-next/src/types（brand.ts / tag.ts）
+      // CUTOVER 2026-04-23 与 tsconfig.json paths 同步
+      {
+        find: /^@\/types(\/.*)?$/,
+        replacement: '$1',
+        customResolver(replacedId: string) {
+          const subPath = replacedId.replace(/^\//, '') || 'index'
+          const pkgPath = resolveWithExtensions(path.resolve(__dirname, './packages/types/src', subPath))
+          if (pkgPath) return pkgPath
+          return resolveWithExtensions(path.resolve(__dirname, './apps/web-next/src/types', subPath))
+        },
+      },
+      // @ resolver: 默认 apps/web-next/src（对外入口），server/admin 上下文走 apps/server/src
       {
         find: /^@\/(.*)/,
         replacement: '$1',
         customResolver(replacedId: string, importer: string | undefined) {
-          const srcBase =
-            importer?.includes('/apps/web-next/') || importer?.includes('/tests/unit/web-next/')
-              ? path.resolve(__dirname, './apps/web-next/src')
-              : path.resolve(__dirname, './apps/web/src')
+          const isServer =
+            importer?.includes('/apps/server/') || importer?.includes('/tests/unit/components/admin/')
+          const srcBase = isServer
+            ? path.resolve(__dirname, './apps/server/src')
+            : path.resolve(__dirname, './apps/web-next/src')
           return resolveWithExtensions(path.resolve(srcBase, replacedId))
         },
       },

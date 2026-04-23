@@ -16,7 +16,9 @@
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/api/*": ["./apps/api/src/*"],
-      "@/*": ["./apps/web/src/*"],
+      "@/types": ["./packages/types/src/index.ts"],
+      "@/types/*": ["./packages/types/src/*", "./apps/web-next/src/types/*"],
+      "@/*": ["./apps/web-next/src/*"],
       "@resovo/design-tokens": ["./packages/design-tokens/src/index.ts"],
       "@resovo/player-core": ["./packages/player-core/src/index.ts"],
       "@resovo/types": ["./packages/types/src/index.ts"],
@@ -24,9 +26,9 @@
     }
   },
   "include": [
-    "apps/web/src/**/*.ts",
-    "apps/web/src/**/*.tsx",
-    "apps/web/middleware.ts",
+    "apps/web-next/src/**/*.ts",
+    "apps/web-next/src/**/*.tsx",
+    "apps/web-next/middleware.ts",
     "apps/api/src/**/*.ts",
     "*.ts",
     "*.tsx"
