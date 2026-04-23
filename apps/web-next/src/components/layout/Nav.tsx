@@ -59,22 +59,26 @@ const MORE_KEYS = new Set<string>(MORE_CATEGORIES.map((c) => c.typeParam))
 function NavSkeleton({ className }: { className?: string }) {
   return (
     <div
-      className={cn('sticky top-0 z-50 h-16 border-b', className)}
-      style={{ background: 'var(--bg-canvas)', borderColor: 'var(--border-default)' }}
+      className={cn('sticky top-0 z-50 border-b', className)}
+      style={{
+        height: '72px',
+        background: 'var(--bg-canvas)',
+        borderColor: 'var(--border-default)',
+      }}
       data-testid="nav-skeleton"
       aria-hidden="true"
     >
-      <div className="max-w-[1440px] mx-auto px-8 flex items-center h-full gap-8">
+      <div className="max-w-[1440px] mx-auto px-10 flex items-center h-full gap-8">
         <Skeleton shape="rect" width={120} height={28} />
         <div className="hidden sm:flex gap-3 flex-1">
-          {[36, 36, 36, 36, 48].map((w, i) => (
+          {[36, 36, 36, 36, 48, 48].map((w, i) => (
             <Skeleton key={i} shape="text" width={w} height={16} delay={300} />
           ))}
         </div>
         <Skeleton shape="rect" width={480} height={40} className="hidden md:block" />
         <div className="flex gap-2">
-          <Skeleton shape="rect" width={96} height={36} />
-          <Skeleton shape="rect" width={38} height={38} />
+          <Skeleton shape="rect" width={120} height={40} />
+          <Skeleton shape="rect" width={40} height={40} />
         </div>
       </div>
     </div>
@@ -97,7 +101,7 @@ function NavLinkItem({ href, active, label, testId, bottomOffset }: NavLinkItemP
     <Link
       href={href}
       data-testid={testId}
-      className="relative transition-colors"
+      className="relative transition-colors shrink-0 whitespace-nowrap"
       style={{
         padding: '8px 14px',
         fontSize: '14px',
@@ -182,7 +186,7 @@ function MoreMenu({ locale, currentType, label, bottomOffset }: MoreMenuProps) {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((p) => !p)}
-        className="relative flex items-center gap-1 transition-colors"
+        className="relative flex items-center gap-1 transition-colors shrink-0 whitespace-nowrap"
         style={{
           padding: '8px 14px',
           fontSize: '14px',
@@ -296,11 +300,13 @@ function MoreMenu({ locale, currentType, label, bottomOffset }: MoreMenuProps) {
 
 // ── Nav ───────────────────────────────────────────────────────────────────────
 
-// header 高度 64px + nav-link 在 header 中竖直居中，底部 border 1px
-// 让 active underline 贴 header 底部 border 内侧 → underline bottom = (64 - linkHeight) / 2 - 1
-// linkHeight ≈ 8+8+14*1.4 ≈ 36 → bottom = (64-36)/2 - 1 ≈ 13px
-// 视觉上 underline 覆盖在 header border 位置，和 border 合并
-const UNDERLINE_BOTTOM_OFFSET = 13
+// UI-REBUILD 2026-04-23 用户反馈修订：
+//   - header 从 h-16 (64px) → h-[72px]，上下各多 4px buffer（用户反馈"高度太窄
+//     underline 超出 + 无留白"）
+//   - 右侧元素统一 40px（搜索 / ThemeToggle / 齿轮）
+// underline bottom：(72 - linkHeight 36) / 2 - 1 ≈ 17px，贴 header 底部 border 内侧
+const HEADER_HEIGHT = 72
+const UNDERLINE_BOTTOM_OFFSET = 17
 
 export function Nav() {
   const { brand } = useBrand()
@@ -328,13 +334,14 @@ export function Nav() {
   return (
     <header
       data-testid="global-nav"
-      className="sticky top-0 z-50 h-16 border-b backdrop-blur-md"
+      className="sticky top-0 z-50 border-b backdrop-blur-md"
       style={{
+        height: `${HEADER_HEIGHT}px`,
         background: 'color-mix(in oklch, var(--bg-canvas) 88%, transparent)',
         borderColor: 'var(--border-default)',
       }}
     >
-      <div className="max-w-[1440px] mx-auto px-8 h-full flex items-center gap-8">
+      <div className="max-w-[1440px] mx-auto px-10 h-full flex items-center gap-8">
         {/* 1. Logo — 28px 渐变方块 + Resovo 文字 */}
         <Link
           href={`/${currentLocale}`}
@@ -366,8 +373,17 @@ export function Nav() {
           {brand.name}
         </Link>
 
-        {/* 2. 6 主 nav-link + "更多 ▼" 下拉（6 扩展分类） */}
-        <nav className="hidden sm:flex items-center gap-1 flex-1" aria-label="主导航">
+        {/* 2. 6 主 nav-link + "更多 ▼" 下拉（6 扩展分类）
+            overflow-x-auto + link shrink-0：宽度不够时横向滚动（不换行/不消失） */}
+        <nav
+          className="flex items-center gap-1 flex-1 min-w-0 overflow-x-auto [&::-webkit-scrollbar]:hidden"
+          aria-label="主导航"
+          style={{
+            // Firefox / IE / 老浏览器隐藏滚动条
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+          }}
+        >
           <NavLinkItem
             href={`/${currentLocale}`}
             active={isHomePage}
@@ -447,8 +463,9 @@ export function Nav() {
           />
         </form>
 
-        {/* 4. 右侧：三态 ThemeToggle + 齿轮（档位 1 仅视觉占位） */}
-        <div className="flex items-center gap-1 shrink-0">
+        {/* 4. 右侧：三态 ThemeToggle + 齿轮；统一高度 40px，gap-2 (8px) 间隔
+             （档位 1 齿轮仅视觉占位，不绑 Drawer） */}
+        <div className="flex items-center gap-2 shrink-0">
           <ThemeToggle />
 
           <button
@@ -458,8 +475,8 @@ export function Nav() {
             title={t('nav.settings')}
             className="inline-flex items-center justify-center transition-colors"
             style={{
-              width: '38px',
-              height: '38px',
+              width: '40px',
+              height: '40px',
               borderRadius: '8px',
               background: 'transparent',
               border: 'none',

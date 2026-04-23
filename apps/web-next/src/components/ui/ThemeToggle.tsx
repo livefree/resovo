@@ -64,8 +64,9 @@ export function ThemeToggle({ className, variant = 'icon' }: ThemeToggleProps) {
         className,
       )}
       style={{
-        // 对齐 Global Shell.html `.theme-toggle`：height 36 / radius 10 / pad 2
-        height: '36px',
+        // UI-REBUILD 2026-04-23 修订：统一右侧元素高度到 40px（与搜索 input + 齿轮对齐）
+        // 设计稿 .theme-toggle 原值 36，但与 .search 40 / .icon-btn 38 混合视觉不齐
+        height: '40px',
         borderRadius: '10px',
       }}
     >
@@ -84,9 +85,9 @@ export function ThemeToggle({ className, variant = 'icon' }: ThemeToggleProps) {
             title={label}
             className="flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-default)]"
             style={{
-              // 对齐 `.theme-toggle button`：30×28 / radius 6 / active bg-surface + shadow
-              width: variant === 'full' ? 'auto' : '30px',
-              height: '28px',
+              // container 40 - pad 2×2 - border 2 = 内容区 32，按钮 32×32 铺满
+              width: variant === 'full' ? 'auto' : '32px',
+              height: '32px',
               padding: variant === 'full' ? '0 10px' : 0,
               gap: variant === 'full' ? '6px' : 0,
               borderRadius: '6px',
