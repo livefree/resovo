@@ -20,6 +20,12 @@ export function LazyImage({
   const [loaded, setLoaded] = useState(false)
   const [inView, setInView] = useState(priority)
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const imgRef = useRef<HTMLImageElement>(null)
+
+  // src 变化时复位 loaded（否则切 banner 图片会残留旧 loaded=true）
+  useEffect(() => {
+    setLoaded(false)
+  }, [src])
 
   useEffect(() => {
     if (priority) return
@@ -45,6 +51,19 @@ export function LazyImage({
     observer.observe(el)
     return () => observer.disconnect()
   }, [priority])
+
+  // 补救 React 经典 race：img 在 ref 绑定前已完成加载（缓存 / 快速网络 / hydration）
+  // 导致 onLoad 事件错过 → loaded 永远 false → opacity:0 → 图片"不显示"但 Network 200。
+  // 挂载后主动检查 img.complete 和 naturalWidth，若已加载则补触发 setLoaded(true)。
+  useEffect(() => {
+    if (!inView) return
+    const img = imgRef.current
+    if (!img) return
+    if (img.complete && img.naturalWidth > 0) {
+      setLoaded(true)
+      onLoad?.()
+    }
+  }, [inView, src, onLoad])
 
   const aspectRatio = `${width} / ${height}`
 
@@ -79,6 +98,7 @@ export function LazyImage({
       {inView && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
+          ref={imgRef}
           src={src}
           alt={alt}
           width={width}
