@@ -19,4 +19,6 @@
 <!-- HANDOFF-03 ✅ 2026-04-22 完成（pending-user §7 UI 复核签字 + commit 授权），arch-reviewer NEED_FIX→2必改+B/C加分已修，方案B合规PASS，ADR-054+SEQ-202605XX占位入队，详见 changelog.md -->
 <!-- HANDOFF-05 ❌ 2026-04-23 整卡回滚（commit c9cdd9d revert），UI 复核 3 轮 🔴 改后用户拍板整卡回滚，需以 L 规模重新规划入队，详见 changelog.md HANDOFF-05-REVERT 条目 -->
 <!-- LazyImage race hotfix ✅ 2026-04-23（commit 917c027），与 HANDOFF-05 无关的独立通用修复 -->
-<!-- 单任务工作台稳定态：空，等待 HANDOFF-05 重新规划 / HANDOFF-06/07/08 启动 -->
+<!-- HANDOFF-07 🟡 stash 保留（stash@{0}: handoff-07-wip-before-cutover），tokens + primitives 已就绪但 VideoCard hover 定位 bug 未修；待 CUTOVER 完成 + UI 增量重做启动时决策恢复策略 -->
+<!-- WEB-CUTOVER ✅ 2026-04-23 完成（待 commit），apps/web 退役、apps/web-next 升为 port 3000 对外唯一前端，tag pre-cutover-apps-web-snapshot 保留 snapshot；详见 changelog.md -->
+<!-- 单任务工作台稳定态：空，等待 UI 增量重做（用户拍板：清空 → Nav → Footer → 组件逐个验收）-->

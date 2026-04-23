@@ -10082,3 +10082,60 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - [ ] `docs/handoff_20260422/manual_qa_m7_*.md` 留白项全部回补为 ✅
 
 ---
+
+## [SEQ-20260423-WEB-CUTOVER] apps/web 退役 + apps/web-next 升为对外入口
+
+- **状态**：✅ 已完成 2026-04-23（待 commit）
+- **创建时间**：2026-04-23 01:34
+- **完成时间**：2026-04-23 03:35
+- **目标**：消除 apps/web 和 apps/web-next 双前端并存风险（用户反馈"容易误用废弃组件"），让 apps/web-next 成为唯一对外前端（port 3000），apps/web 物理删除
+- **背景**：ADR-035 原规划 web → web-next 渐进迁移期 apps/web 作为 rewrite gateway 保留；M6 sealed 后 web-next 已承载所有前台功能，apps/web 实际成为空壳 middleware
+- **tag**：`pre-cutover-apps-web-snapshot`（保留 apps/web 完整 git 历史可追溯）
+- **执行模型**：claude-opus-4-7（基础设施改造）
+
+### 任务列表
+
+1. CUTOVER-01 — 打 snapshot tag pre-cutover-apps-web-snapshot（状态：✅）
+2. CUTOVER-02 — 探查 apps/web 残留（grep 引用、业务逻辑、E2E 依赖）（状态：✅；结论：apps/web 仅前端代码，0 业务逻辑跨 app 耦合；apps/api / apps/server 零 apps/web 引用；tests/e2e 仅 auth.spec 需判断）
+3. CUTOVER-03 — apps/web-next port 3002 → 3000（scripts/dev.mjs 删 web 服务 + web-next 改 -p 3000；apps/web-next/package.json 同步）（状态：✅）
+4. CUTOVER-04 — 根配置切换（tsconfig.json `@/*` → apps/web-next/src + `@/types/*` 优先 packages/types；vitest.config.ts alias 同步 + `@/stores` 智能分派精简；.eslintrc.json overrides 去 apps/web）（状态：✅）
+5. CUTOVER-05 — playwright.config.ts 重构（删 web-chromium/web-mobile project + webServer[0]；tests/e2e-next 的 Video 类型 import 从 `apps/web/src/types` 改为 `@resovo/types`）（状态：✅）
+6. CUTOVER-06 — auth.spec 处理（诊断后决定不迁，保留在 tests/e2e/，apps/web-next 暂无 auth 路由实装；auth feature 上线时再迁）（状态：✅，降级为"保留不动"）
+7. CUTOVER-07 — 物理删除 apps/web/ 整目录（状态：✅）
+8. CUTOVER-08 — 验证 + 清理 + docs + commit（状态：🔄 进行中）
+   - typecheck 5 workspace 全绿 ✅
+   - lint 3 task 全绿 ✅
+   - vitest 全套：CUTOVER 触发 4 个旧 apps/web 组件测试失败（tests/unit/components/video/{VideoCard,VideoCardWide,VideoGrid}.test.tsx + tests/unit/components/layout/NavDropdown.test.tsx），已删除（断言行为针对旧 apps/web 版本，tests/unit/web-next/ 已覆盖新版）
+   - `@/types` 解析：tsconfig paths 加 `@/types` + `@/types/*` 双规则；vitest.config.ts 加 `@/types/*` alias（packages/types 优先、apps/web-next/src/types fallback）
+
+### 关键改动汇总
+
+- **代码/配置**：
+  - `scripts/dev.mjs`：3 服务（api + admin + web-next@3000）
+  - `apps/web-next/package.json`：dev/start port 3002 → 3000
+  - `tsconfig.json`：`@/*` → apps/web-next/src；新增 `@/types` / `@/types/*` 显式路径优先 packages/types
+  - `vitest.config.ts`：`@/stores` 和 `@/` 的 customResolver 改按 apps/server 分派（web-next 为默认）；加 `@/types` alias
+  - `.eslintrc.json`：overrides 去 apps/web 分支
+  - `playwright.config.ts`：删 web-chromium/web-mobile 旧 project + webServer[0]；新 web-chromium/mobile 指向 web-next (testDir: tests/e2e-next)
+- **文件删除**：
+  - `apps/web/`（整目录，git tag pre-cutover-apps-web-snapshot 可追溯）
+  - `tests/unit/components/video/VideoCard.test.tsx`（旧版）
+  - `tests/unit/components/video/VideoCardWide.test.tsx`（旧版）
+  - `tests/unit/components/video/VideoGrid.test.tsx`（旧版）
+  - `tests/unit/components/layout/NavDropdown.test.tsx`（旧版）
+- **E2E 类型迁移**：
+  - `tests/e2e-next/player.spec.ts` + `detail.spec.ts`：`import type { Video } from '../../apps/web/src/types'` → `@resovo/types`
+
+### 验收签字
+
+- [ ] 5 workspace typecheck 全绿
+- [ ] 3 task lint 全绿
+- [ ] vitest 套件全绿（net change 相对 pre-CUTOVER：+若干 passing 测试移除 / 0 failing）
+- [ ] 用户本地 `npm run dev` 启动 3 服务（api 4000 / admin 3001 / web-next 3000）正常
+- [ ] 用户浏览器访问 `http://localhost:3000` 验证首页加载
+- [ ] 用户浏览器验证 `/browse` / `/watch` / `/search` 主路由可用
+- [ ] `docs/decisions.md` 追加 ADR-055（apps/web 退役，ADR-035 rewrite gateway 阶段结束）
+- [ ] changelog 完整条目
+- [ ] 3 commit 拆分（snapshot tag 已有 → 1 commit 代码+配置 → 2 commit docs）
+
+---

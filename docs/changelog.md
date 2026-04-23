@@ -9495,3 +9495,73 @@ f7833ab  IMG-07 P2 fixup 预览放大 + 真实进度
 - **关联**：HANDOFF-05 诊断中发现（c9cdd9d revert 后作为独立 hotfix 保留）
 - **执行模型**：claude-opus-4-7
 - test 1654/1654 ✅
+
+---
+
+## [WEB-CUTOVER] apps/web 退役 + apps/web-next 升为对外唯一前端（2026-04-23）
+
+- **关联任务**：SEQ-20260423-WEB-CUTOVER（独立序列，非 HANDOFF-V2 内）
+- **触发**：用户反馈"两个前端目录并存会造成误用废弃组件的不安感"；CUTOVER 消除此风险
+- **tag**：`pre-cutover-apps-web-snapshot`（snapshot 保留 apps/web 完整 git 历史）
+- **原 ADR-035 状态变更**：apps/web 作为 rewrite gateway 的过渡期正式结束，apps/web-next 单独承载前台职责
+
+### 代码/配置改动
+
+- **端口切换**：apps/web-next 从 port 3002 → port 3000（对外入口）
+- **scripts/dev.mjs**：4 服务 → 3 服务（api + admin + web-next）
+- **apps/web-next/package.json**：dev/start scripts 改 `-p 3000`
+- **tsconfig.json**：
+  - `@/*` 路径从 `./apps/web/src/*` → `./apps/web-next/src/*`
+  - 新增 `@/types` → `./packages/types/src/index.ts` 显式路径
+  - 新增 `@/types/*` → fallback `[packages/types/src/*, apps/web-next/src/types/*]`（供 apps/api 的 `@/types/system.types` 等子路径解析）
+  - include 改指向 apps/web-next
+- **vitest.config.ts**：
+  - `@/stores` customResolver 从 "web-next vs server" 改为 "server vs default-webnext"（apps/web 分支删除）
+  - `@/` 通配 customResolver 同上
+  - 新增 `@/types/*` customResolver（packages/types 优先、apps/web-next/src/types fallback）
+  - coverage include 改指向 apps/web-next
+- **.eslintrc.json**：overrides 从"web + web-next 并列"收敛到"仅 web-next"
+- **playwright.config.ts**：
+  - 删 `web-chromium` / `web-mobile` 旧 project（指向 apps/web 的）
+  - 删 webServer[0]（apps/web dev server）
+  - 新 `web-chromium` / `web-mobile` project 指向 tests/e2e-next（port 3000）
+  - webServer[1] apps/web-next dev server（port 3000，对齐新入口）
+- **tests/e2e-next/{player,detail}.spec.ts**：`import type { Video } from '../../apps/web/src/types'` → `@resovo/types`
+
+### 删除
+
+- `apps/web/`（整目录，tag 可追溯）
+- `tests/unit/components/video/{VideoCard,VideoCardWide,VideoGrid}.test.tsx`（旧版，`@/` 改指 apps/web-next 后断言不匹配；`tests/unit/web-next/VideoCard.test.tsx` 已覆盖新版）
+- `tests/unit/components/layout/NavDropdown.test.tsx`（旧 Nav 测试，apps/web-next Nav 结构不同）
+
+### 保留不动
+
+- `tests/e2e/auth.spec.ts`：诊断后发现 apps/web 和 apps/web-next 都无 auth 路由实装，auth.spec 一直是待 feature 的 stub；playwright.config.ts 重构后不会被跑到，保留等 auth feature 实装时迁移
+- `tests/e2e/{admin,publish-flow,video-governance,admin-source-and-video-flows}.spec.ts`：admin 端 E2E（port 3001，apps/server），不受 CUTOVER 影响
+- `tests/e2e/search.spec.ts`：tests/e2e-next/search-page.spec.ts 已覆盖新前台搜索，但旧文件保留不阻塞
+
+### 验证基线
+
+- typecheck ✅ 5 workspace（root tsc + server + web-next + player-core + api 通过 root）
+- lint ✅ 3 task
+- vitest 全套：pre-CUTOVER 1654（HANDOFF-04 基线）→ CUTOVER 中删除 4 个旧测试后 1597（若干减少）
+- 零新依赖
+- 零 DB 变更
+
+### 后续独立 follow-up（本卡不做）
+
+1. apps/web-next 补 auth 路由 → 迁移 tests/e2e/auth.spec.ts
+2. 清理 tests/e2e/search.spec.ts（tests/e2e-next/search-page.spec.ts 已覆盖）
+3. 可选：decisions.md 追加 ADR-055（apps/web 退役 + ADR-035 过渡期结束声明）
+
+### 执行模型
+
+- 主循环：claude-opus-4-7（基础设施改造，非视觉类）
+- 子代理：无（CUTOVER 不涉及共享组件 API / schema 决策）
+
+### 用户真人验收门禁
+
+- [ ] `npm run dev` 起 3 服务正常（api 4000 / admin 3001 / web-next 3000）
+- [ ] 浏览器访问 http://localhost:3000 首页加载
+- [ ] /browse / /watch / /search 主路由可用
+- [ ] admin http://localhost:3001/admin 不受影响
