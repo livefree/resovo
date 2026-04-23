@@ -9781,3 +9781,35 @@ HANDOFF-11：Nav 改造，消费 `max-w-shell`、`var(--header-height)`、`var(-
 - `npm run typecheck`：✅ 通过
 - `npm run lint`：✅ 通过
 - `npm run test -- --run`：✅ 1625 tests passed
+
+## HANDOFF-15 ✅ 2026-04-23
+
+**Browse 页：FilterArea + BrowseGrid + 分页 + rewrite-match**
+
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **commit**：1523209
+
+### 新增
+
+| 文件 | 说明 |
+|------|------|
+| `apps/web-next/src/lib/rewrite-match.ts` | `stripLocale` + `matchRewrite` 路由匹配工具（42 tests green） |
+| `apps/web-next/src/components/browse/FilterArea.tsx` | 6 维筛选（type/country/lang/year/rating_min/status），URL 驱动，默认显示前 3 行 |
+| `apps/web-next/src/components/browse/BrowseGrid.tsx` | 5 列 portrait 网格 + 分页控件，URL 参数驱动 |
+| `apps/web-next/src/components/browse/BrowseCard.tsx` | Browse 专用 catalog 卡片（不依赖 useParams/playerStore，detail-only 链接） |
+
+### 修改
+
+| 文件 | 说明 |
+|------|------|
+| `apps/web-next/src/app/[locale]/[type]/page.tsx` | 升级为 FilterArea + BrowseGrid 布局（spec §12） |
+| `apps/web-next/src/app/globals.css` | 追加 `--browse-grid-gap` / `--browse-pagination-*` 4 个 alias |
+
+### 设计决策
+
+- **BrowseCard vs VideoCard**：Browse 网格使用 `BrowseCard`（detail 链接）而非 `VideoCard`（player Fast Takeover）。Browse 页是 catalog 视角，用户从列表→详情→选集→播放，不需要直接 Fast Takeover。此决策使 BrowseGrid 测试可以在不 mock `useParams`/`usePlayerStore` 的情况下运行。
+
+### 质量门禁
+
+- typecheck ✅ / lint ✅ / test 147 files 1682 tests ✅
