@@ -1,6 +1,6 @@
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
-import { HeroV2 } from '@/components/video/HeroV2'
+import { HeroBanner } from '@/components/video/HeroBanner'
 import { VideoGrid } from '@/components/video/VideoGrid'
 
 export default function HomePage() {
@@ -8,7 +8,7 @@ export default function HomePage() {
 
   return (
     <>
-      <HeroV2 />
+      <HeroBanner />
 
       <div className="max-w-screen-xl mx-auto w-full px-4 py-8 space-y-12">
         <section aria-label={t('trendingMovies')}>

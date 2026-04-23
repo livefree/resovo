@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
@@ -53,7 +53,7 @@ function NavSkeleton({ className }: { className?: string }) {
           ))}
         </div>
         <div className="ml-auto flex gap-2">
-          <Skeleton shape="rect" width={240} height={36} />
+          <Skeleton shape="rect" width={112} height={28} />
           <Skeleton shape="rect" width={32} height={32} />
         </div>
       </div>
@@ -69,16 +69,19 @@ export function Nav() {
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const [searchQuery, setSearchQuery] = useState('')
   const [isLocaleOpen, setIsLocaleOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const localeMenuRef = useRef<HTMLDivElement | null>(null)
   const localeTriggerRef = useRef<HTMLButtonElement | null>(null)
-  const searchPillRef = useRef<HTMLButtonElement | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
 
   const currentLocale = pathname.split('/')[1] ?? 'en'
+  // Detect active category from pathname segment (e.g. /en/movie → 'movie')
   const currentType = pathname.split('/')[2] ?? null
 
   // Scroll-collapse: h-16 → h-12 past 80px
+  // Init from current scrollY so back/restore flows start in the right state
   useEffect(() => {
     setCollapsed(window.scrollY > SCROLL_COLLAPSE_PX)
     function onScroll() {
@@ -121,27 +124,18 @@ export function Nav() {
     setIsLocaleOpen(false)
   }
 
-  const navigateToSearch = useCallback(() => {
-    if (searchPillRef.current) {
-      const rect = searchPillRef.current.getBoundingClientRect()
+  function handleSearch(e: React.FormEvent) {
+    e.preventDefault()
+    const q = searchQuery.trim()
+    // 存储搜索框中心位置，供 SearchCircularReveal 做圆形扩散起点
+    if (searchInputRef.current) {
+      const rect = searchInputRef.current.getBoundingClientRect()
       const x = Math.round(rect.left + rect.width / 2)
       const y = Math.round(rect.top + rect.height / 2)
       try { sessionStorage.setItem('resovo:search-reveal-origin', JSON.stringify({ x, y })) } catch { /* ignore */ }
     }
-    router.push(`/${currentLocale}/search`)
-  }, [router, currentLocale])
-
-  // ⌘K / Ctrl+K global shortcut
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault()
-        navigateToSearch()
-      }
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [navigateToSearch])
+    router.push(q ? `/${currentLocale}/search?q=${encodeURIComponent(q)}` : `/${currentLocale}/search`)
+  }
 
   const moreItems: MegaMenuItem[] = MORE_CATEGORY_KEYS.map((cat) => ({
     key:    cat.key,
@@ -154,12 +148,12 @@ export function Nav() {
     <header
       data-testid="global-nav"
       className={cn(
-        'sticky top-0 z-50 border-b backdrop-blur-md',
+        'sticky top-0 z-50 border-b backdrop-blur-sm',
         'transition-[height] duration-200 ease-out',
         collapsed ? 'h-12' : 'h-16',
       )}
       style={{
-        background: 'color-mix(in srgb, var(--bg-canvas) 88%, transparent)',
+        background: 'color-mix(in srgb, var(--bg-canvas) 90%, transparent)',
         borderColor: 'var(--border-default)',
       }}
     >
@@ -167,8 +161,8 @@ export function Nav() {
         {/* Logo */}
         <Link
           href="/"
-          className="text-[22px] font-extrabold shrink-0"
-          style={{ color: 'var(--accent-default)', letterSpacing: '-0.02em' }}
+          className="text-xl font-bold tracking-tight shrink-0"
+          style={{ color: 'var(--accent-default)' }}
           data-testid="nav-logo"
         >
           {brand.name}
@@ -182,8 +176,8 @@ export function Nav() {
               'px-3 py-1.5 rounded-md text-sm whitespace-nowrap transition-colors',
               'hover:bg-[var(--bg-surface-sunken)] hover:text-[var(--fg-default)]',
               pathname === '/en' || pathname === '/zh-CN' || pathname === '/'
-                ? 'font-bold bg-[var(--accent-muted)] text-[var(--accent-default)]'
-                : 'font-medium text-[var(--fg-muted)]',
+                ? 'font-semibold text-[var(--accent-default)]'
+                : 'text-[var(--fg-muted)]',
             )}
           >
             {t('nav.home')}
@@ -200,8 +194,8 @@ export function Nav() {
                   'px-3 py-1.5 rounded-md text-sm whitespace-nowrap transition-colors',
                   'hover:bg-[var(--bg-surface-sunken)] hover:text-[var(--fg-default)]',
                   isActive
-                    ? 'font-bold bg-[var(--accent-muted)] text-[var(--accent-default)]'
-                    : 'font-medium text-[var(--fg-muted)]',
+                    ? 'font-semibold text-[var(--accent-default)]'
+                    : 'text-[var(--fg-muted)]',
                 )}
               >
                 {t(cat.labelKey)}
@@ -218,7 +212,7 @@ export function Nav() {
                 data-testid="nav-more-trigger"
                 className={cn(
                   'flex items-center gap-1 px-3 py-1.5 rounded-md text-sm transition-colors cursor-pointer',
-                  'hover:bg-[var(--bg-surface-sunken)] hover:text-[var(--fg-default)] font-medium text-[var(--fg-muted)]',
+                  'hover:bg-[var(--bg-surface-sunken)] hover:text-[var(--fg-default)] text-[var(--fg-muted)]',
                 )}
               >
                 {t('nav.more')}
@@ -244,30 +238,23 @@ export function Nav() {
 
         {/* 右侧操作区 */}
         <div className="flex items-center gap-2 shrink-0 ml-auto">
-          {/* 搜索 pill — 240px always-on，⌘K 快捷键触发 */}
-          <button
-            ref={searchPillRef}
-            type="button"
-            data-testid="nav-search"
-            onClick={navigateToSearch}
-            aria-label={t('nav.searchPlaceholder')}
-            className="hidden sm:flex items-center gap-2 h-9 w-60 rounded-full border px-3.5 cursor-pointer transition-colors hover:border-[var(--accent-default)]"
-            style={{ background: 'var(--bg-surface-sunken)', borderColor: 'var(--border-default)' }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--fg-subtle)', flexShrink: 0 }}>
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
-            <span className="flex-1 text-left text-[13px] truncate" style={{ color: 'var(--fg-subtle)' }}>
-              {t('nav.searchPlaceholder')}
-            </span>
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded border shrink-0"
-              style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--fg-subtle)' }}
-            >
-              ⌘K
-            </span>
-          </button>
+          {/* 搜索框 */}
+          <form onSubmit={handleSearch} className="hidden sm:flex items-center">
+            <input
+              ref={searchInputRef}
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('nav.search')}
+              data-testid="nav-search"
+              className="w-28 rounded-md px-2.5 py-1 text-xs border outline-none focus:w-40 transition-all"
+              style={{
+                background: 'var(--bg-surface-sunken)',
+                borderColor: 'var(--border-default)',
+                color: 'var(--fg-default)',
+              }}
+            />
+          </form>
 
           <ThemeToggle />
 
