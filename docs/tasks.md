@@ -25,4 +25,5 @@
 <!-- HANDOFF-11 ✅ 2026-04-23 完成，typecheck/lint/test 全绿，详见 changelog.md -->
 <!-- HANDOFF-12 ✅ 2026-04-23 完成，typecheck/lint/test 全绿，详见 changelog.md -->
 <!-- HANDOFF-13 ✅ 2026-04-23 完成，typecheck/lint/test 全绿，详见 changelog.md -->
-<!-- 单任务工作台：空，下一个任务 HANDOFF-14（Shelf 骨架） -->
+<!-- HANDOFF-14 ✅ 2026-04-23 完成，typecheck/lint/test 全绿，详见 changelog.md -->
+<!-- 单任务工作台：空，下一个任务 HANDOFF-15（Browse 页） -->

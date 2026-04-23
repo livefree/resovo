@@ -19,7 +19,7 @@
 import { getTranslations } from 'next-intl/server'
 import Link from 'next/link'
 import { HeroBanner } from '@/components/video/HeroBanner'
-import { VideoGrid } from '@/components/video/VideoGrid'
+import { ShelfRow } from '@/components/video/Shelf'
 
 // ── 分类捷径 icon SVG（5 种主分类）────────────────────────────────────────────
 
@@ -176,59 +176,25 @@ export default async function HomePage({
         {/* 分类捷径（spec §10.4） */}
         <CategoryShortcuts locale={locale} tNav={tNav} />
 
-        {/* 趋势影片 */}
-        <section aria-label={t('trendingMovies')}>
-          <div
-            className="flex items-center justify-between"
-            style={{ marginBottom: 'var(--page-inline-gap)' }}
-          >
-            <h2
-              style={{ fontSize: '18px', fontWeight: 700, color: 'var(--fg-default)', letterSpacing: '-0.01em' }}
-            >
-              {t('trendingMovies')}
-            </h2>
-            <Link
-              href={`/${locale}/movie`}
-              className="transition-opacity hover:opacity-70"
-              style={{ fontSize: '13px', color: 'var(--accent-default)', textDecoration: 'none', fontWeight: 500 }}
-            >
-              {t('viewAll')} →
-            </Link>
-          </div>
-          <VideoGrid
-            query="type=movie&period=week&limit=10"
-            variant="portrait"
-            layout="scroll"
-            data-testid="movie-grid"
-          />
-        </section>
+        {/* 趋势影片 — poster-row（data-testid 对接 e2e homepage.spec.ts） */}
+        <ShelfRow
+          template="poster-row"
+          query="type=movie&period=week&limit=10"
+          title={t('trendingMovies')}
+          viewAllHref={`/${locale}/movie`}
+          viewAllLabel={t('viewAll')}
+          data-testid="movie-grid"
+        />
 
-        {/* 趋势剧集 */}
-        <section aria-label={t('trendingSeries')}>
-          <div
-            className="flex items-center justify-between"
-            style={{ marginBottom: 'var(--page-inline-gap)' }}
-          >
-            <h2
-              style={{ fontSize: '18px', fontWeight: 700, color: 'var(--fg-default)', letterSpacing: '-0.01em' }}
-            >
-              {t('trendingSeries')}
-            </h2>
-            <Link
-              href={`/${locale}/series`}
-              className="transition-opacity hover:opacity-70"
-              style={{ fontSize: '13px', color: 'var(--accent-default)', textDecoration: 'none', fontWeight: 500 }}
-            >
-              {t('viewAll')} →
-            </Link>
-          </div>
-          <VideoGrid
-            query="type=series&period=week&limit=8"
-            variant="landscape"
-            layout="scroll"
-            data-testid="series-grid"
-          />
-        </section>
+        {/* 趋势剧集 — landscape-row（data-testid 对接 e2e homepage.spec.ts） */}
+        <ShelfRow
+          template="landscape-row"
+          query="type=series&period=week&limit=8"
+          title={t('trendingSeries')}
+          viewAllHref={`/${locale}/series`}
+          viewAllLabel={t('viewAll')}
+          data-testid="series-grid"
+        />
       </div>
     </>
   )

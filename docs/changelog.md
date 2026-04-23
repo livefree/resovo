@@ -9746,3 +9746,38 @@ HANDOFF-11：Nav 改造，消费 `max-w-shell`、`var(--header-height)`、`var(-
 - `npm run typecheck`：✅ 通过
 - `npm run lint`：✅ 通过
 - `npm run test -- --run`：✅ 1625 tests passed
+
+---
+
+## HANDOFF-14 — Shelf 骨架（4 种 template + empty placeholder）
+
+- **日期**：2026-04-23
+- **序列**：SEQ-20260423-UI-REBUILD
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+
+### 改动文件
+
+| 文件 | 改动类型 | 说明 |
+|------|---------|------|
+| `apps/web-next/src/components/video/Shelf.tsx` | 新建 | ShelfRow + 4 种 template + RowHeader + EmptyPlaceholderCard |
+| `apps/web-next/src/app/[locale]/page.tsx` | 修改 import + 替换 section | VideoGrid → ShelfRow（poster-row / landscape-row） |
+
+### 核心改动
+
+1. **Shelf.tsx**（新建）：
+   - `poster-row`：横向滚动，`width: var(--shelf-card-w-portrait)` = 170px，2:3 比例
+   - `landscape-row`：横向滚动，`width: var(--shelf-card-w-landscape)` = 300px，16:9 比例
+   - `top10-row`：横向滚动，170px + 排名数字叠层（80px 字号 + WebkitTextStroke）
+   - `featured-grid`：`repeat(5,1fr)` 网格，portrait 卡
+   - `RowHeader`：title + badge + viewAll，gap 20px/10px（spec §11.4）
+   - `EmptyPlaceholderCard`：静态、`aria-hidden`、`opacity: var(--shelf-empty-opacity)`、不可点击
+   - 数据 < 4 槽时自动补充 EmptyPlaceholderCard 至 MIN_SLOTS=4
+
+2. **首页**：两个 `<section>...VideoGrid...` 替换为 `<ShelfRow>`，`data-testid` 透传保证 e2e 兼容
+
+### 验收结果
+
+- `npm run typecheck`：✅ 通过
+- `npm run lint`：✅ 通过
+- `npm run test -- --run`：✅ 1625 tests passed
