@@ -2,6 +2,95 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Primitive tokens: space / color-primitives / layout / component alias
+      Source: packages/design-tokens/src/css/tokens.css (AUTO-GENERATED)
+      globals.css 负责主题色彩覆盖；此块负责与主题无关的静态变量。
+      下次 build-css.ts 重新生成后需同步更新此块。              ── */
+:root {
+  /* color primitives — required by Tailwind colorExtensions & inline styles */
+  --color-gray-0:    oklch(100% 0 0);
+  --color-gray-50:   oklch(98.5% 0.002 247);
+  --color-gray-100:  oklch(96.8% 0.004 247);
+  --color-gray-200:  oklch(92.9% 0.006 247);
+  --color-gray-300:  oklch(86.9% 0.009 247);
+  --color-gray-400:  oklch(70.8% 0.012 247);
+  --color-gray-500:  oklch(55.4% 0.014 247);
+  --color-gray-600:  oklch(43.9% 0.014 247);
+  --color-gray-700:  oklch(32.8% 0.012 247);
+  --color-gray-800:  oklch(23.0% 0.010 247);
+  --color-gray-900:  oklch(16.5% 0.008 247);
+  --color-gray-950:  oklch(11.2% 0.006 247);
+  --color-gray-1000: oklch(6.5% 0.004 247);
+  --color-accent-100: oklch(92.0% 0.045 230);
+  --color-accent-300: oklch(78.0% 0.110 230);
+  --color-accent-500: oklch(64.5% 0.165 230);
+  --color-accent-700: oklch(52.0% 0.155 230);
+  --color-accent-900: oklch(38.0% 0.120 230);
+
+  /* space scale — ALL Tailwind spacing utilities (gap-*, p-*, m-*, etc.) resolve to these */
+  --space-px:  1px;
+  --space-0:   0;
+  --space-0-5: 0.125rem;   /* gap-0.5 → var(--space-0-5) */
+  --space-1:   0.25rem;
+  --space-1-5: 0.375rem;
+  --space-2:   0.5rem;
+  --space-2-5: 0.625rem;
+  --space-3:   0.75rem;
+  --space-3-5: 0.875rem;
+  --space-4:   1rem;
+  --space-5:   1.25rem;
+  --space-6:   1.5rem;
+  --space-7:   1.75rem;
+  --space-8:   2rem;
+  --space-10:  2.5rem;
+  --space-12:  3rem;
+  --space-14:  3.5rem;
+  --space-16:  4rem;
+  --space-20:  5rem;
+  --space-24:  6rem;
+
+  /* layout container — max-w-shell / max-w-page / max-w-feature / max-w-wide */
+  --layout-shell-max:    1440px;
+  --layout-page-max:     1280px;
+  --layout-feature-max:  1200px;
+  --layout-wide-max:     1600px;
+  --layout-shell-inset:  32px;
+  --layout-page-inset:   24px;
+  --layout-min-desktop:  1200px;
+
+  /* page rhythm — used in inline styles across pages */
+  --page-section-gap:  var(--space-14);  /* 56px */
+  --page-block-gap:    var(--space-12);  /* 48px */
+  --page-subblock-gap: var(--space-6);   /* 24px */
+  --page-stack-gap:    var(--space-5);   /* 20px */
+  --page-inline-gap:   var(--space-4);   /* 16px */
+  --page-caption-gap:  var(--space-2);   /* 8px  */
+
+  /* shelf component alias */
+  --shelf-gap:              var(--space-4);  /* 16px */
+  --shelf-bottom-padding:   var(--space-2);  /* 8px  */
+  --shelf-card-w-portrait:  170px;
+  --shelf-card-w-landscape: 300px;
+  --shelf-card-w-top10:     170px;
+  --shelf-empty-opacity:    0.32;
+  --shelf-empty-min-slots:  4;
+
+  /* header component alias */
+  --header-height:           72px;
+  --header-main-gap:         var(--space-6);   /* 24px */
+  --header-nav-gap:          var(--space-1);   /* 4px  */
+  --header-nav-padding:      8px 14px;
+  --header-right-gap:        var(--space-2);   /* 8px  */
+  --header-underline-offset: 17px;
+
+  /* footer component alias */
+  --footer-col-gap:        var(--space-10);   /* 40px */
+  --footer-top-padding:    48px 32px 32px;
+  --footer-bottom-padding: 20px 32px;
+  --footer-social-gap:     var(--space-2);    /* 8px  */
+  --footer-legal-gap:      var(--space-5);    /* 20px */
+}
+
 /* ── Design-token semantic vars — synced with packages/design-tokens/src/css/tokens.css */
 :root {
   color-scheme: light dark;
