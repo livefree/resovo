@@ -1959,3 +1959,59 @@ ORDER BY ordering ASC, created_at ASC
 | 独立 ADR 记录 | 本 ADR-053 |
 | arch-reviewer 子代理审计 | claude-opus-4-7 HANDOFF-02 审计，DECISION: APPROVED |
 | PHASE COMPLETE 前 signoff | M7 完成前须补 `milestone_alignment_m7_*.md` + 再次 spawn arch-reviewer 验收 |
+
+---
+
+## ADR-054：MiniPlayer v1 不实现 video 跨容器 lift（HANDOFF-03 方案 B）
+
+- **日期**：2026-04-22
+- **状态**：Accepted（偏离声明 + v2.1 跟进）
+- **决策者**：用户拍板 · arch-reviewer (claude-opus-4-7) HANDOFF-03 PASS
+- **关联**：ADR-053（M7 scope 扩展）· landing_plan_v1 §6.5 BLOCKER 条款 · SEQ-202605XX-PLAYER-VIDEO-LIFT（v2.1 占位）
+- **对应交付**：`docs/handoff_20260422/landing_plan_v1.md` §HANDOFF-03
+
+### 背景
+
+landing_plan_v1 §HANDOFF-03 验收清单第 5 项要求"主视图 ⇄ 浮窗切换视频不 reload、不跳进度"。HANDOFF-03 执行期间发现严重架构分歧：
+
+- `<video>` 元素由 `packages/player-core/src/Player.tsx:710` 内部 `videoRef` 管理
+- `<video>` 随 Player 组件 mount/unmount 生命周期
+- 当前架构下**无法在不改 player-core 的前提下**实现 `<video>` 跨容器不 reload
+- 实现该验收需要把 `<video>` 元素从 Player 组件外置到 GlobalPlayerHost 层（单例持有），Player 组件变 controller
+
+按 landing_plan §6.5 BLOCKER 条款，主循环停下讨论，用户拍板**方案 B**。
+
+### 决策
+
+**MiniPlayer v1 接受当前架构限制**：
+- 本卡（HANDOFF-03）交付：浮窗容器 + 拖拽 + 缩放 + 四角吸附 + localStorage 几何持久化 + Takeover 护栏 + 移动端严格屏蔽
+- 验收项 5 "切换不 reload" **调整为**："切换时 video 自然重建，currentTime 由 M3 sessionStorage 续播逻辑（`playerStore.hydrateFromSession`）恢复，允许 ±1s 容差；可能听到短暂静音跳接"
+- 留白项写入 `docs/handoff_20260422/manual_qa_m7_*.md`（M7 PHASE COMPLETE 前补）
+
+**v2.1 独立序列 `SEQ-202605XX-PLAYER-VIDEO-LIFT` 跟进**：
+- 目标：重构 player-core Player 组件，把 `<video>` 元素外置到 GlobalPlayerHost 层
+- 前置：M7 封闭 + ADR-054 在案
+- 依赖：`@resovo/player-core` 跨消费方 schema 决策（需独立 ADR + 双 opus 评审）
+
+### 合法性论证
+
+- 方案 B 不引入新依赖（HANDOFF-V2 0 依赖承诺持守）
+- 不违反已采纳的 ADR（-035/-037/-039/-052/-053）
+- M3 `persistToSession` 续播能力保证用户体验 floor（功能等价，视觉上多一次 loading）
+- v2.1 决策延后不违反冻结期（属 `frontend_redesign_plan` 延续，同 ADR-053 精神）
+
+### 风险与缓解
+
+| 风险 | 缓解 |
+|------|------|
+| full⇄mini 切换 loading 时长过长影响体验 | M3 已有预加载逻辑，实测多在 300-800ms；v2.1 彻底消除 |
+| 用户感知"卡了一下"投诉 | manual_qa_m7 留白声明已记；UI 复核 Manual 项覆盖此动效瞬态 |
+| 与未来 v2.1 架构重构冲突 | `<video>` 的 DOM 位置变化不影响 MiniPlayer 容器/拖拽/几何；v2.1 只替换 video 挂载点，MiniPlayer 的 `data-mini-video-slot` 保持作为 video 的目标容器 |
+
+### ADR-037 §2 偏离声明义务履行
+
+| 义务项 | 履行说明 |
+|--------|---------|
+| 独立 ADR 记录 | 本 ADR-054 |
+| arch-reviewer 子代理审计 | claude-opus-4-7 HANDOFF-03 审计，DECISION: NEED_FIX → 2 条必改落地后 PASS；方案 B 合规性判定 PASS |
+| PHASE COMPLETE 前 signoff | M7 完成前须在 `milestone_alignment_m7_*.md` 与 `manual_qa_m7_*.md` 显式列出本留白 |

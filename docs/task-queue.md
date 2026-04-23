@@ -9928,9 +9928,14 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 验收：migration up/down 回放；typecheck 全绿（跨 api/types/web-next/server）；home_modules 单元测试；ADR-051/052 落盘 + decisions.md 索引更新
    - UI 复核：**不触发**
 
-3. HANDOFF-03 — MiniPlayer 交互补齐（状态：⬜ 待启动）
+3. HANDOFF-03 — MiniPlayer 交互补齐 + ?_theme= query 前置修复（状态：✅ 已完成 2026-04-22，等用户 §7 UI 复核签字生效）
    - 创建时间：2026-04-22 18:00
+   - 实际开始：2026-04-22 22:45
+   - 完成时间：2026-04-22 23:25（pending-user-review：§7 UI 复核门禁）
    - 建议模型：**opus 主循环 + opus arch-reviewer**（双触发：跨消费方 schema + 重构播放器 core/shell 接口，#2 + #4）
+   - 执行模型：claude-opus-4-7（主循环，合规）
+   - 子代理：arch-reviewer (claude-opus-4-7)，NEED_FIX → 2 必改（Esc 关闭 + boxShadow 硬编码）+ 加分建议 B/C 全部落地，复评 PASS
+   - 用户拍板（2026-04-22）：MiniPlayer 保留 `_lib/player/` 路径（偏离 task-queue 原描述）/ 移动端严格 `display:none` 屏蔽浮窗 / `?_theme=` query 一并入本卡（HANDOFF-01 遗留 Nit #2）/ 方案 B（video 跨容器留白到 v2.1，ADR-054 + SEQ-202605XX-PLAYER-VIDEO-LIFT）
    - 规模：L（~3.5 d，最重的一卡）
    - 依赖：HANDOFF-01 ✅（消费 `player.mini.*` tokens）
    - 关键：严格遵守 `landing_plan §HANDOFF-03 Storage 协调协议`（sessionStorage/localStorage 职责边界 + hydrate 时序 + 矛盾值解决规则）；实现路径**纯 pointer events + CSS transform + localStorage**，参考 `designs/Global Shell.html:551-820`
@@ -10033,5 +10038,35 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - [ ] `sortStrategy` 从 `'manual_plus_rating'` 切换到 `'composite'`
 - [ ] 前端副标题自动切回"基于观看量、完播率与评分综合排序"
 - [ ] 视觉回归 snapshot 更新（仅副标题文案 diff）
+
+---
+
+## [SEQ-202605XX-PLAYER-VIDEO-LIFT] MiniPlayer video 跨容器 lift（v2.1 独立跟进占位，ADR-054）
+
+- **状态**：🟡 规划中（占位，待 M7 封闭后校准具体启动日与序列号）
+- **创建时间**：2026-04-22 23:20（占位）
+- **最后更新时间**：2026-04-22 23:20
+- **目标**：补齐 HANDOFF-03 方案 B 留白的 v2.1 跟进 —— 把 `<video>` 元素从 `packages/player-core/src/Player.tsx` 内部外置到 `GlobalPlayerHost` 层（单例持有），Player 组件变 controller；full ⇄ mini 切换时 `appendChild` 移动 DOM，不重建 video，不 reload
+- **前置**：SEQ-20260422-HANDOFF-V2 ✅ + M7 sealed + ADR-054 已在案
+- **关键**：
+  - 改 `packages/player-core/src/Player.tsx`：`<video>` 元素外置接收方式（prop 传入容器 ref 或事件回调）
+  - 改 `apps/web-next/src/app/[locale]/_lib/player/GlobalPlayerHost.tsx`：持有单例 video 实例 + hostMode useEffect 内 appendChild 到目标 slot
+  - 消费 `data-mini-video-slot`（HANDOFF-03 MiniPlayer 已预置此属性）
+  - 属跨消费方 schema 决策，需写独立 ADR + 双 opus 评审
+- **关联**：ADR-054 · HANDOFF-03 方案 B
+
+### 任务列表（待细化）
+
+1. LIFT-01 — player-core Player 组件重构：`<video>` 外置为 prop + controller 模式（建议模型：opus 主循环 + opus arch-reviewer，跨消费方 schema + 重构 core 接口）
+2. LIFT-02 — GlobalPlayerHost 单例 video 实例持有 + hostMode appendChild 编排（建议模型：opus + opus arch-reviewer）
+3. LIFT-03 — E2E `mini-player-video-persist.spec.ts`：切换 video.currentTime 连续 > 0 + 进度连续无跳变断言（建议模型：sonnet）
+4. LIFT-04 — ADR-055 落盘 + 回归 SEQ-20260422-HANDOFF-V2 ✅ 所有 manual_qa 留白项（建议模型：opus）
+
+### 验收签字（序列级，待启动时细化）
+- [ ] 4 张任务全部 ✅
+- [ ] full ⇄ mini 切换 video.currentTime 连续无跳变（±0.1s 容差）
+- [ ] 视频不 reload（网络 tab 无 manifest/segment 重请求）
+- [ ] Takeover / PiP / closed 三态转换回归全绿
+- [ ] `docs/handoff_20260422/manual_qa_m7_*.md` 留白项全部回补为 ✅
 
 ---

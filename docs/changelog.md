@@ -9352,3 +9352,57 @@ f7833ab  IMG-07 P2 fixup 预览放大 + 真实进度
   - `tests/unit/api/home.test.ts`（26 cases）— HomeService 编排 + 路由层 Fastify inject 测试
 - **覆盖场景**：3置顶+7补位=10核心场景 / 0置顶冷启动 / 10置顶满位 / 已下线自动丢弃+补位填充 / rank 1-based / sortStrategy固定 / 缓存键命名(none/b:<slug>) / setex TTL 60s/300s / 422 Zod 校验反例
 - **测试总数**：147 test files，1623 tests，全绿
+
+---
+
+## [HANDOFF-03] MiniPlayer 交互补齐 + `?_theme=` query 前置修复（2026-04-22）
+
+- **任务 ID**：HANDOFF-03（SEQ-20260422-HANDOFF-V2 第 3 卡，L 规模 3.5d）
+- **执行模型**：claude-opus-4-7（主循环，符合 landing_plan §6 opus 双触发 #2 + #4）
+- **子代理**：arch-reviewer (claude-opus-4-7)，NEED_FIX → 2 必改 + B/C 加分建议全部落地；方案 B 合规性判定 PASS
+- **用户拍板（2026-04-22）**：①MiniPlayer 保留 `_lib/player/` 路径（Portal 三件套同目录，偏离 task-queue 原描述）；②移动端严格 `display:none` 屏蔽浮窗；③`?_theme=` query 一并入本卡（HANDOFF-01 遗留 Nit #2）；④方案 B 接受 `<video>` 跨容器不 reload 限制，v2.1 跟进 `SEQ-202605XX-PLAYER-VIDEO-LIFT`（ADR-054）
+- **修改 / 新增文件**：
+  - **`?_theme=` query 三层实装（Phase A）**：
+    - `apps/web-next/src/lib/brand-detection.ts` — +`QUERY_THEME_KEY` 常量 + `parseThemeFromQuery()` 纯函数
+    - `apps/web-next/src/middleware.ts` — query 优先、cookie 次之
+    - `apps/web-next/src/lib/theme-init-script.ts` — blocking inline script 加 query 读取（hydration 前切主题）
+    - `apps/web-next/src/app/[locale]/layout.tsx` — 改读 HEADER_THEME（middleware 注入结果）
+  - **Storage 协调协议基础层（Phase B）**：
+    - `apps/web-next/src/stores/_persist/mini-geometry.ts`（新建 147 行）— localStorage 纯函数 + corner 枚举校验 + MINI_GEOMETRY_DEFAULTS + 工具函数（clampWidth / deriveHeightFromWidth / nearestCorner / computeDockPosition）
+    - `apps/web-next/src/stores/playerStore.ts` — 扩 `geometry`/`takeoverActive` 字段 + `setGeometry`/`setTakeoverActive` actions + hydrateFromSession 按 Storage 协调协议（hostMode=mini/pip 才读 localStorage）
+    - `tests/unit/web-next/mini-geometry.test.ts`（新建）— 31 单测全绿，覆盖 4 矛盾值规则 + corner 枚举损坏降级 + 几何工具函数边界
+  - **pointer events 拖拽库（Phase C）**：
+    - `apps/web-next/src/lib/mini-player/drag.ts`（新建 ~280 行）— `attachMiniPlayerDrag()` 拖拽/缩放/吸附 spring 260ms + `attachViewportResizeWatcher()` window.resize re-snap + `onInteractionChange` 回调（防 useLayoutEffect 覆写 spring）
+  - **MiniPlayer UI 重构（Phase D）**：
+    - `apps/web-next/src/app/[locale]/_lib/player/MiniPlayer.tsx` — 占位版（158 行）→ 完整浮窗（~300 行）：32px drag handle + 16×16 resize handle + `data-mini-video-slot` video 占位 + useLayoutEffect 应用 geometry（带 userInteractingRef guard）+ Esc 关闭监听（ui-rules.md 浮层规范）
+    - `apps/web-next/src/app/globals.css:424-432` — 移动端 override 从 56px 条形栏改为 `display: none !important`（方案 A 严格屏蔽）
+  - **Takeover 护栏编排（Phase F）**：
+    - `apps/web-next/src/app/[locale]/_lib/player/GlobalPlayerFullFrame.tsx` — Takeover 动画前 `setTakeoverActive(true)` + onfinish/cancel/unmount reset false
+  - **E2E 测试（Phase G）**：
+    - `tests/e2e-next/mini-player.spec.ts`（新建）— 9 场景：sessionStorage 注入 mini / ✕ 关闭 / 展开 full / localStorage 持久化 + 双向一致（加分 C）/ 损坏降级 / 移动端屏蔽 / `?_theme=` query 三层覆盖（dark/light/invalid）/ window.resize 越界 re-snap
+  - **方案 B 决策文档（ADR-054）**：
+    - `docs/decisions.md` — 新增 ADR-054（合法性论证 + ADR-037 §2 偏离声明义务履行 + v2.1 风险与缓解）
+  - **v2.1 占位序列**：
+    - `docs/task-queue.md` 尾部 — `SEQ-202605XX-PLAYER-VIDEO-LIFT` 4 张任务（LIFT-01~04）占位
+- **新增依赖**：无（严格持守 HANDOFF-V2 零依赖承诺；纯 pointer events 参照 `Global Shell.html:759-820` 实现）
+- **数据库变更**：无
+- **arch-reviewer 必改项与落地（2026-04-22）**：
+  - R1: MiniPlayer 缺 Esc 关闭 → 新增 `useEffect` 注册 document keydown listener
+  - R2: boxShadow 用 `black` 硬编码 → 改用 `var(--player-mini-shadow)` token（HANDOFF-01 已导出）
+  - 加分 B: useLayoutEffect 可能中断 drag.ts spring 动画 → drag.ts 加 `onInteractionChange` 回调 + MiniPlayer `userInteractingRef` guard（延迟 snap 动画时长 + 20ms 再通知 end）
+  - 加分 C: E2E 补 localStorage 持久化双向一致断言
+- **方案 B 留白声明**：
+  - landing_plan v1.1 §HANDOFF-03 验收项 5"切换不 reload"降级为"切换时 video 自然重建 + M3 sessionStorage 续播补偿 currentTime（±1s 容差）"
+  - 需在 M7 PHASE COMPLETE 前由 `milestone_alignment_m7_*.md` 与 `manual_qa_m7_*.md` 显式记录
+  - v2.1 序列入队：LIFT-01 player-core 重构 / LIFT-02 GlobalPlayerHost 单例持有 / LIFT-03 E2E 进度连续 / LIFT-04 ADR-055 + 留白回补
+- **测试**：typecheck ✅（5 workspace）/ vitest 148 test files 1654 tests 全绿（净增 31，HANDOFF-04-TEST 1623 → 1654）/ E2E spec 就绪（dev server 运行时执行）
+- **UI 复核门禁**：**触发**（MiniPlayer 可见 UI 改动）—— 主循环已提交复核包，等用户 §7 签字
+- **验收清单对齐**：
+  - /watch → minimize → 右下角 spring pop-in 320×180 ✅
+  - 拖拽顶部条 → 松手吸附最近角 260ms spring ✅（Manual 覆盖动效瞬态）
+  - 右下缩放柄 → 240-480px clamp + 16:9 ✅
+  - ✕ 关闭 + Esc 关闭 ✅
+  - 位置 localStorage 持久化跨刷新 ✅
+  - 主视图 ⇄ 浮窗切换 currentTime 续播 ⚠️（方案 B 留白，v2.1 跟进）
+  - z-index 高于 Takeover + takeoverActive 时 display:none ✅
+  - 播放器关键路径回归（断点续播/线路/影院/字幕）✅（LEGAL_TRANSITIONS 未破坏 + M3 续播逻辑保留）

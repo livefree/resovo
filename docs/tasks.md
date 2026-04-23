@@ -16,4 +16,5 @@
 <!-- HANDOFF-01 ✅ 2026-04-22 完成，arch-reviewer PASS，详见 changelog.md -->
 <!-- HANDOFF-02 ✅ 2026-04-22 完成，arch-reviewer APPROVED，详见 changelog.md -->
 <!-- HANDOFF-04 ✅ 2026-04-22 完成，arch-reviewer NEED_FIX→7条已修正，详见 changelog.md -->
-<!-- 单任务工作台稳定态：空，等待 HANDOFF-05/06 启动 -->
+<!-- HANDOFF-03 ✅ 2026-04-22 完成（pending-user §7 UI 复核签字 + commit 授权），arch-reviewer NEED_FIX→2必改+B/C加分已修，方案B合规PASS，ADR-054+SEQ-202605XX占位入队，详见 changelog.md -->
+<!-- 单任务工作台稳定态：空，等待用户 UI 复核签字 / HANDOFF-05/06/07/08 启动 -->
