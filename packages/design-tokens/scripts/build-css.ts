@@ -9,7 +9,8 @@ import { typography } from '../src/primitives/typography.js'
 import { motion } from '../src/primitives/motion.js'
 import { shadow } from '../src/primitives/shadow.js'
 import { zIndex } from '../src/primitives/z-index.js'
-import { bg, fg, border, accent, surface, state } from '../src/semantic/index.js'
+import { bg, fg, border, accent, surface, state, tag, pattern, routeTransition } from '../src/semantic/index.js'
+import { player } from '../src/components/player.js'
 import { defaultBrandOverrides, DEFAULT_BRAND_SLUG } from '../src/brands/default.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -111,7 +112,25 @@ function buildSemanticVars(theme: ThemeKey): Array<[string, string]> {
     ...buildSemanticGroup('accent', accent as SemanticGroup, theme),
     ...buildSemanticGroup('surface', surface as SemanticGroup, theme),
     ...buildSemanticGroup('state', state as SemanticGroup, theme),
+    ...buildSemanticGroup('tag', tag as SemanticGroup, theme),
+    ...buildSemanticGroup('pattern', pattern as SemanticGroup, theme),
   ]
+}
+
+function buildThemeIndependentVars(): Array<[string, string]> {
+  const out: Array<[string, string]> = []
+  const rtEntries = Object.entries(routeTransition) as Array<[string, string]>
+  for (const [key, value] of rtEntries) {
+    out.push([`--route-transition-${toKebab(key)}`, value])
+  }
+  for (const [mode, slots] of Object.entries(player) as Array<[string, Record<string, unknown>]>) {
+    for (const [slot, value] of Object.entries(slots)) {
+      if (typeof value === 'string' || typeof value === 'number') {
+        out.push([`--player-${toKebab(mode)}-${toKebab(slot)}`, String(value)])
+      }
+    }
+  }
+  return out
 }
 
 // ── Brand 覆写层辅助 ────────────────────────────────────────────
@@ -183,7 +202,8 @@ function buildCss(): string {
   // Brand light overrides for default brand (slug='resovo')
   const brandLightOverrides = buildBrandOverrideVars(defaultBrandOverrides, 'light')
 
-  const rootVars = [...primitiveVars, ...semanticLightVars, ...brandLightOverrides]
+  const themeIndependentVars = buildThemeIndependentVars()
+  const rootVars = [...primitiveVars, ...themeIndependentVars, ...semanticLightVars, ...brandLightOverrides]
   const rootBody = rootVars.map(([k, v]) => `  ${k}: ${v};`).join('\n')
 
   // Semantic dark vars

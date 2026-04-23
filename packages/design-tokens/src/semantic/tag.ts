@@ -37,6 +37,18 @@ export const tag = {
     trendingEditorPickBg:   colors.info.light,
     trendingEditorPickFg:   colors.info.dark,
 
+    // ── type chips ────────────────────────────────────────────────────────
+    chipMovieBg:     colors.accent[100],
+    chipMovieFg:     colors.accent[700],
+    chipSeriesBg:    colors.warning.light,
+    chipSeriesFg:    colors.warning.dark,
+    chipAnimeBg:     'oklch(91% 0.08 320)',
+    chipAnimeFg:     'oklch(40% 0.14 320)',
+    chipTvshowBg:    colors.success.light,
+    chipTvshowFg:    colors.success.dark,
+    chipDocBg:       colors.gray[200],
+    chipDocFg:       colors.gray[700],
+
     // ── spec / rating ─────────────────────────────────────────────────────
     specBg:          GLASS_DARK,
     specFg:          WHITE,
@@ -75,6 +87,18 @@ export const tag = {
     trendingExclusiveFg:    colors.accent[100],
     trendingEditorPickBg:   colors.info.dark,
     trendingEditorPickFg:   colors.info.light,
+
+    // ── type chips ────────────────────────────────────────────────────────
+    chipMovieBg:     colors.accent[900],
+    chipMovieFg:     colors.accent[100],
+    chipSeriesBg:    colors.warning.dark,
+    chipSeriesFg:    colors.warning.light,
+    chipAnimeBg:     'oklch(35% 0.12 320)',
+    chipAnimeFg:     'oklch(91% 0.08 320)',
+    chipTvshowBg:    colors.success.dark,
+    chipTvshowFg:    colors.success.light,
+    chipDocBg:       colors.gray[800],
+    chipDocFg:       colors.gray[300],
 
     // ── spec / rating ─────────────────────────────────────────────────────
     specBg:          GLASS_DARK,

@@ -39,3 +39,9 @@ export type { SharedElementToken } from './shared-element.js'
 
 export { routeStack } from './route-stack.js'
 export type { RouteStackToken } from './route-stack.js'
+
+export { pattern } from './pattern.js'
+export type { PatternToken, PatternTheme } from './pattern.js'
+
+export { routeTransition } from './route-transition.js'
+export type { RouteTransitionToken } from './route-transition.js'

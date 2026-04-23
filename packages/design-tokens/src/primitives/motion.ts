@@ -6,6 +6,10 @@ export const motion = {
     slow: '320ms',
     slower: '480ms',
     slowest: '720ms',
+    fade: '200ms',
+    push: '240ms',
+    snap: '260ms',
+    shimmer: '1400ms',
   },
   easing: {
     linear: 'linear',

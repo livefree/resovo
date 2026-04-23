@@ -92,8 +92,8 @@ describe('design-tokens primitives', () => {
   })
 
   describe('shadow', () => {
-    it('has 5 steps', () => {
-      expect(Object.keys(shadow)).toHaveLength(5)
+    it('has 6 steps', () => {
+      expect(Object.keys(shadow)).toHaveLength(6)
     })
     it('none is "none"', () => {
       expect(shadow.none).toBe('none')

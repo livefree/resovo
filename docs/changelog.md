@@ -9256,3 +9256,31 @@ f7833ab  IMG-07 P2 fixup 预览放大 + 真实进度
 - **保留在根目录**（活跃）：8 个 SoT（README / architecture / decisions / roadmap / task-queue / tasks / changelog / run-logs）+ 冻结期方案三件套（frontend_redesign / design_system / image_pipeline）+ risk_register / pipeline-overhaul / freeze_notice + 3 个 future plans（external_metadata / tiered_source_verification / video_source_episode_recovery）
 - **质量门禁**：typecheck ✅ / lint ✅（纯文档改动，不触发）
 - **下游**：M7 或新里程碑规划落地时再更新 `docs/README.md` §2 活跃方案清单
+
+---
+
+## [HANDOFF-01] SEQ-20260422-HANDOFF-V2 tokens-v2 补齐 + ui-review-capture.sh
+
+- **完成时间**：2026-04-22
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-6)，12 点静态审计 AUDIT RESULT: PASS
+- **修改文件**：
+  - `packages/design-tokens/src/semantic/tag.ts` — +10 chip 字段×2主题（movie/series/anime/tvshow/doc bg+fg）
+  - `packages/design-tokens/src/components/player.ts` — mini 扩展 +13 几何/交互字段；radius md→lg，shadow lg→xl
+  - `packages/design-tokens/src/primitives/shadow.ts` — +cardHover
+  - `packages/design-tokens/src/primitives/motion.ts` — +duration.{fade,push,snap,shimmer}
+  - `packages/design-tokens/src/semantic/pattern.ts`（新建）— dots/grid/noise 背景图案×2主题
+  - `packages/design-tokens/src/semantic/route-transition.ts`（新建）— PC 路由过渡 fade/slide/shared/reduced
+  - `packages/design-tokens/src/semantic/index.ts` — +pattern/routeTransition exports
+  - `packages/design-tokens/scripts/build-css.ts` — buildThemeIndependentVars()+buildSemanticVars()扩展
+  - `scripts/ui-review-capture.sh`（新建）— Playwright 4 象限截图脚本
+  - `docs/architecture.md` — §17 Design Tokens v2 新增说明
+  - `tests/unit/design-tokens/primitives.test.ts` — shadow has 5 steps → 6 steps
+  - `tests/unit/design-tokens/components.test.ts` — ALLOWED_PREFIXES+CSS_DIMENSION_RE 扩展
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - tokens.css 新增约 30 个 CSS 变量，零破坏性改动
+  - player.mini.transitionIn/Out 用硬编码字符串（低风险 Nit，可在 HANDOFF-03 消费侧重构）
+  - ui-review-capture.sh 通过 ?_theme= query 切主题，需前端配合
+  - 全仓西里尔 е (U+0435) grep = 0（M5 清场确认）

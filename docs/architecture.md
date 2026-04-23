@@ -694,3 +694,33 @@ layout.tsx
 
 - `isPipSupported()` / `requestPip(videoEl)` / `exitPip()` / `onPipLeave(videoEl, onClose)` 四 API
 - leavepictureinpicture 事件通过 onPipLeave 回调桥接 → 自动切回 mini/full 态
+
+## 17. Design Tokens v2（HANDOFF-01，2026-04-22）
+
+`packages/design-tokens/` 新增以下 token（约 30 个新 CSS 变量，零破坏性改动）：
+
+### 新增语义 token
+
+| 文件 | 新增内容 | CSS 变量前缀 |
+|------|----------|-------------|
+| `semantic/tag.ts` | 5 种类型 chip × 2 主题（movie/series/anime/tvshow/doc）| `--tag-chip-*-bg/fg` |
+| `semantic/pattern.ts`（新建）| dots/grid/noise 背景图案 × 2 主题 | `--pattern-*` |
+| `semantic/route-transition.ts`（新建）| PC 路由切换 fade/slide/shared/reduced 参数 | `--route-transition-*` |
+
+### 新增 primitive token
+
+| 文件 | 新增字段 | 说明 |
+|------|----------|------|
+| `primitives/shadow.ts` | `cardHover` | 卡片 hover 升高阴影，避免消费端用 xl 过重 |
+| `primitives/motion.ts` | `duration.fade/push/snap/shimmer` | 动效语义别名（不改变已有键值） |
+
+### 扩展组件 token
+
+- `components/player.ts` — `mini` 子节点新增 13 个字段：几何（width/height/minWidth/maxWidth/aspectRatio/dockX/dockY/snapThreshold）+ 交互（dragHandleHeight/closeButtonSize/resizeHandleSize/transitionIn/transitionOut）；同步调整 radius `md→lg`、shadow `lg→xl`
+- CSS 变量前缀：`--player-mini-*`（主题无关，写入 `:root`）
+
+### build-css.ts 变更
+
+- 新增 `buildThemeIndependentVars()`：将 `routeTransition` 和 `player` 组件 token 扁平化写入 `:root`（主题无关）
+- `buildSemanticVars()` 扩展：新增 `tag` 和 `pattern` 的 light/dark 生成
+- 所有已有变量值不变（tokens.css diff 只含新增）

@@ -9888,9 +9888,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 
 ### 任务列表（按执行顺序，详细规范见 landing_plan_v1.md §4）
 
-1. HANDOFF-01 — tokens-v2 补齐 + `scripts/ui-review-capture.sh` 前置 CHORE（状态：⬜ 待启动）
+1. HANDOFF-01 — tokens-v2 补齐 + `scripts/ui-review-capture.sh` 前置 CHORE（状态：✅ 已完成）
    - 创建时间：2026-04-22 18:00
-   - 计划开始：2026-04-23
+   - 实际开始：2026-04-22
+   - 实际完成：2026-04-22
+   - 执行模型：claude-sonnet-4-6 主循环 + claude-opus-4-6 arch-reviewer（AUDIT RESULT: PASS，12 点全通过）
    - 建议模型：**sonnet 主循环 + opus arch-reviewer**
    - 规模：M（~1 d，含前置截图脚本 0.3 d）
    - 依赖：无（序列首卡）

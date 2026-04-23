@@ -47,7 +47,9 @@ const SEMANTIC_STRINGS = new Set<string>([
 ])
 
 const ALLOWED_LITERALS = new Set(['transparent', 'none'])
-const ALLOWED_PREFIXES = ['color-mix', 'linear-gradient']
+const ALLOWED_PREFIXES = ['color-mix', 'linear-gradient', 'cubic-bezier']
+// CSS dimension/ratio/transition values are atomic in geometry/motion tokens
+const CSS_DIMENSION_RE = /^\d+(\.\d+)?(px|ms|%)$|^\d+ \/ \d+$|^\d+(ms|px) cubic-bezier\(/
 
 function isAllowedValue(v: unknown): boolean {
   if (typeof v === 'number' && PRIMITIVE_STRINGS.has(v)) return true
@@ -55,6 +57,7 @@ function isAllowedValue(v: unknown): boolean {
   if (PRIMITIVE_STRINGS.has(v) || SEMANTIC_STRINGS.has(v)) return true
   if (ALLOWED_LITERALS.has(v)) return true
   if (ALLOWED_PREFIXES.some((p) => v.startsWith(p))) return true
+  if (CSS_DIMENSION_RE.test(v)) return true
   return false
 }
 
