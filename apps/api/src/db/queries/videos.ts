@@ -5,7 +5,7 @@
  */
 
 import type { Pool, PoolClient } from 'pg'
-import type { Video, VideoCard, VideoType, VideoStatus, VideoGenre, ContentFormat, EpisodePattern, ReviewStatus, VisibilityStatus, DoubanStatus, SourceCheckStatus } from '@/types'
+import type { Video, VideoCard, VideoType, VideoStatus, VideoGenre, ContentFormat, EpisodePattern, ReviewStatus, VisibilityStatus, DoubanStatus, SourceCheckStatus, TrendingTag } from '@/types'
 
 // ── 内部 DB 行类型 ────────────────────────────────────────────────
 
@@ -41,6 +41,8 @@ interface DbVideoRow {
   douban_status: DoubanStatus
   source_check_status: SourceCheckStatus
   meta_score: number
+  // Migration 051 字段
+  trending_tag: TrendingTag | null
   // ── media_catalog JOIN 字段（mc.*）───────────────────────────────
   title_en: string | null
   title_original: string | null
@@ -115,6 +117,7 @@ function mapVideoRow(row: DbVideoRow): Video {
     doubanStatus: row.douban_status ?? 'pending',
     sourceCheckStatus: row.source_check_status ?? 'pending',
     metaScore: row.meta_score ?? 0,
+    trendingTag: row.trending_tag ?? null,
     posterBlurhash: row.poster_blurhash ?? null,
     posterStatus: row.poster_status ?? null,
     backdropBlurhash: row.backdrop_blurhash ?? null,
@@ -169,7 +172,7 @@ const VIDEO_FULL_SELECT = `
   v.source_content_type, v.normalized_type, v.content_format, v.episode_pattern,
   v.review_status, v.visibility_status, v.needs_manual_review,
   v.content_rating, v.site_key, v.source_category,
-  v.douban_status, v.source_check_status, v.meta_score,
+  v.douban_status, v.source_check_status, v.meta_score, v.trending_tag,
   mc.title_en, mc.title_original, mc.description, mc.cover_url,
   mc.rating, mc.rating_votes, mc.runtime_minutes, mc.year, mc.country,
   mc.status, mc.director, mc."cast", mc.writers, mc.genres,
@@ -1407,4 +1410,54 @@ export async function bulkSyncSourceCheckStatus(
     [limit],
   )
   return result.rowCount ?? 0
+}
+
+// ── 榜单标签（Migration 051，ADR-052）─────────────────────────────
+
+export async function setVideoTrendingTag(
+  db: Pool,
+  videoId: string,
+  tag: TrendingTag,
+): Promise<boolean> {
+  const result = await db.query(
+    `UPDATE videos SET trending_tag = $2, updated_at = NOW()
+     WHERE id = $1 AND deleted_at IS NULL
+     RETURNING id`,
+    [videoId, tag],
+  )
+  return (result.rowCount ?? 0) > 0
+}
+
+export async function clearVideoTrendingTag(
+  db: Pool,
+  videoId: string,
+): Promise<boolean> {
+  const result = await db.query(
+    `UPDATE videos SET trending_tag = NULL, updated_at = NOW()
+     WHERE id = $1 AND deleted_at IS NULL
+     RETURNING id`,
+    [videoId],
+  )
+  return (result.rowCount ?? 0) > 0
+}
+
+export async function listVideosByTrendingTag(
+  db: Pool,
+  tag: TrendingTag,
+  limit = 20,
+): Promise<VideoCard[]> {
+  const result = await db.query<DbVideoRow>(
+    `SELECT ${VIDEO_FULL_SELECT},
+      ${SOURCE_COUNT_SUBQUERY} AS source_count,
+      ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs
+     ${VIDEO_JOIN}
+     WHERE v.trending_tag = $1
+       AND v.is_published = true
+       AND v.deleted_at IS NULL
+       AND v.visibility_status = 'public'
+     ORDER BY v.created_at DESC
+     LIMIT $2`,
+    [tag, Math.min(limit, 100)],
+  )
+  return result.rows.map(mapVideoCard)
 }

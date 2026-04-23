@@ -1872,3 +1872,90 @@ interface StorageProvider
 - **本轮约束**：M6-CDN 6 张卡的所有 commit（4afb140 → 本 commit）
 - **未来延续**：IMG-09（若有）/ ADMIN-17（若第 3 处出现）/ CF Images 实际接入（未来 ADR）均需以本 ADR 为基线
 - **不溯及**：既有 IMG-M1/M2/M3/M4 不重审
+
+---
+
+## ADR-052：首页模块化编排表 home_modules
+
+- **日期**：2026-04-22
+- **状态**：Accepted
+- **决策者**：arch-reviewer (claude-opus-4-7) · 主循环 claude-sonnet-4-6
+- **关联**：ADR-037（三方案对齐）· ADR-046（多品牌 brand_scope 协议）· ADR-053（M7 scope 扩展）
+- **对应交付**：`landing_plan_v1.md §M7` / `docs/handoff_20260422/` HANDOFF-02
+
+### 背景
+
+M5 交付的 `home_banners` 仅承载顶部轮播，首页其余模块（featured / top10 / type_shortcuts）此前由写死数据或临时接口供给。`landing_plan_v1.md` 要求以统一的模块化编排承载 4 类 slot，并满足：多品牌隔离（brand_scope 与 home_banners 对齐）、时间窗 + enabled 双重闸门、人工置顶 top10 与 period-based trending 解耦、可扩展承载异构内容（video / url / html / video_type）。
+
+### 决策要点
+
+1. **新建表 `home_modules`**（migration 050）。
+2. **slot 枚举固定为 4 值**：`banner | featured | top10 | type_shortcuts`。新增 slot 必须走新 ADR。
+3. **content_ref_type × slot 在 DB 层用 CHECK 强制**（`home_modules_ref_type_slot_compat`），而非仅文档约定。
+4. **brand_scope 协议完全复用 ADR-046**：前台查询 `WHERE brand_scope = 'all-brands' OR brand_slug = $1`。
+5. **top10 为人工置顶专用**。period-based trending 仍走 `listTrendingVideos`，两者不混用。
+6. **trending_tag（migration 051）与 home_modules.top10 配套**：视频打标后可选择是否进 top10 slot；tag 本身独立可查（`listVideosByTrendingTag`）。
+7. **硬删除而非软删除**：运营下线通过 `enabled=false`；DELETE 仅用于清理错误条目，与 home_banners 一致。
+8. **metadata NOT NULL DEFAULT '{}'**：避免查询端 coalesce 分支；内容约束仅靠文档 + Service 层 zod 白名单。
+
+### slot × content_ref_type 约束
+
+| slot | 允许的 content_ref_type | content_ref_id 语义 |
+|------|------------------------|---------------------|
+| banner | video / external_url / custom_html | 视频 UUID / 外链 URL / 富文本片段 ID |
+| featured | video | 视频 UUID |
+| top10 | video | 视频 UUID（人工置顶） |
+| type_shortcuts | video_type | VideoType 枚举字符串（movie / anime 等） |
+
+### brand_scope 查询协议（继承 ADR-046）
+
+```sql
+WHERE slot = $1
+  AND enabled = true
+  AND (brand_scope = 'all-brands' OR brand_slug = $2)
+  AND (start_at IS NULL OR start_at <= NOW())
+  AND (end_at   IS NULL OR end_at   >  NOW())
+ORDER BY ordering ASC, created_at ASC
+```
+
+### metadata 使用守则
+
+- **允许**：自定义文案（title/subtitle 覆盖）、展示样式标记、custom_html 富文本载荷、埋点 tag
+- **禁止**：enabled/ordering/时间窗（必须走列字段）、需要索引或 WHERE 过滤的字段、跨模块引用
+- **Schema 演进**：metadata 内新增固定字段使用 3+ 次即升级为表列
+
+### 索引策略
+
+| 索引 | 覆盖场景 |
+|------|----------|
+| `(slot, brand_scope, brand_slug, ordering) WHERE enabled` | 前台主查询 |
+| `(start_at, end_at) WHERE enabled` | 后台失效清单/cron |
+| `(content_ref_type, content_ref_id)` | 级联失效反查 |
+
+---
+
+## ADR-053：M7 scope 扩展偏离声明（2→11 卡）
+
+- **日期**：2026-04-22
+- **状态**：Accepted（偏离声明）
+- **决策者**：arch-reviewer (claude-opus-4-7) · 主循环 claude-sonnet-4-6
+- **关联**：ADR-037 §2（偏离声明义务）· ADR-052（home_modules）
+- **对应交付**：`docs/handoff_20260422/landing_plan_v1.md`
+
+### 背景
+
+`frontend_redesign_plan §M7` 原规划仅 2 卡（ESLint 禁色规则 / 视觉回归测试）。进入 M7 实施阶段，`landing_plan_v1.md`（已通过两轮 arch-reviewer PASS）与 `design_system_plan` 延续需求共同识别出首页改造的完整交付包，最终入队 SEQ-20260422-HANDOFF-V2（9 张主序列卡 + 1 张 PHASE 收尾 = 10 卡扩充），合计从 2 卡扩为 11 卡（含原 2 卡）。本 ADR 履行 ADR-037 §2 的偏离声明义务。
+
+### 合法性论证
+
+- 所有扩充内容归属 `landing_plan`（= `frontend_redesign_plan` 首页维度细化）+ `design_system_plan`（BrandProvider/i18n）+ `frontend_redesign_plan`（PageTransition/ESLint/视觉回归）
+- 无任何新业务需求引入；无新依赖
+- `landing_plan_v1.md` 本身经过两轮 arch-reviewer PASS（代理 ID `a5035ed3d8dd76dc3`）
+
+### ADR-037 §2 偏离声明义务履行
+
+| 义务项 | 履行说明 |
+|--------|---------|
+| 独立 ADR 记录 | 本 ADR-053 |
+| arch-reviewer 子代理审计 | claude-opus-4-7 HANDOFF-02 审计，DECISION: APPROVED |
+| PHASE COMPLETE 前 signoff | M7 完成前须补 `milestone_alignment_m7_*.md` + 再次 spawn arch-reviewer 验收 |

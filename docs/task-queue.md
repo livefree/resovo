@@ -9909,8 +9909,12 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 验收：Token build 成功；tokens.css diff 只含新增；light/dark 全值；全仓西里尔 е grep = 0；截图脚本可执行
    - UI 复核：**不触发**（纯 token 层，无消费方组件在本卡内同步改）
 
-2. HANDOFF-02 — DB schema：home_modules 表 + videos.trending_tag 列 + ADR-051/052（状态：⬜ 待启动）
+2. HANDOFF-02 — DB schema：home_modules 表 + videos.trending_tag 列 + ADR-052/053（状态：✅ 已完成）
    - 创建时间：2026-04-22 18:00
+   - 实际开始：2026-04-22
+   - 实际完成：2026-04-22
+   - ADR 编号偏离：原规划 ADR-051/052，实际 ADR-052/053（051 已被 M6-CDN 占用）
+   - 执行模型：claude-sonnet-4-6 主循环 + claude-opus-4-7 arch-reviewer（DECISION: APPROVED）
    - 建议模型：**opus 主循环 + opus arch-reviewer**（跨 3+ 消费方 schema + ADR 决策文档，CLAUDE.md §模型路由 #2 + #3）
    - 规模：M（~1.2 d）
    - 依赖：无（可在 HANDOFF-01 之后或并行启动，文件范围零重叠）

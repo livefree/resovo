@@ -14,4 +14,5 @@
 ---
 
 <!-- HANDOFF-01 ✅ 2026-04-22 完成，arch-reviewer PASS，详见 changelog.md -->
-<!-- 单任务工作台稳定态：空，等待 HANDOFF-02 启动 -->
+<!-- HANDOFF-02 ✅ 2026-04-22 完成，arch-reviewer APPROVED，详见 changelog.md -->
+<!-- 单任务工作台稳定态：空，等待 HANDOFF-03/04/05 启动 -->

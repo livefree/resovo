@@ -26,6 +26,10 @@ export type VideoStatus   = 'ongoing' | 'completed'
 export type ReviewStatus     = 'pending_review' | 'approved' | 'rejected'
 export type VisibilityStatus = 'public' | 'internal' | 'hidden'
 
+// ── 榜单标签（Migration 051，ADR-052）────────────────────────────
+/** 人工运营榜单标签，与 home_modules.top10 slot 配合使用；不与 period-based trending 混淆 */
+export type TrendingTag = 'hot' | 'weekly_top' | 'editors_pick' | 'exclusive'
+
 // ── 流水线辅助状态（Migration 032，Pipeline Overhaul）────────────
 /** 豆瓣匹配状态：自动丰富 Job 写入 */
 export type DoubanStatus = 'pending' | 'matched' | 'candidate' | 'unmatched'
@@ -112,6 +116,8 @@ export interface Video {
   sourceCheckStatus: SourceCheckStatus
   /** 元数据完整度评分 0-100 */
   metaScore: number
+  // 榜单标签（Migration 051，ADR-052）
+  trendingTag: TrendingTag | null
   // 图片治理字段（IMG-01，ADR-046）——前台渲染最小集，由 media_catalog JOIN 提供
   // 字段必须存在（API 响应不省略），值可为 null（尚未治理时）
   posterBlurhash: string | null

@@ -1,5 +1,6 @@
 export type * from './api.types'
 export type * from './banner.types'
+export type * from './home-module.types'
 export type * from './user.types'
 export type * from './video.types'
 export type * from './search.types'

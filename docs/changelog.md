@@ -9284,3 +9284,29 @@ f7833ab  IMG-07 P2 fixup 预览放大 + 真实进度
   - player.mini.transitionIn/Out 用硬编码字符串（低风险 Nit，可在 HANDOFF-03 消费侧重构）
   - ui-review-capture.sh 通过 ?_theme= query 切主题，需前端配合
   - 全仓西里尔 е (U+0435) grep = 0（M5 清场确认）
+
+---
+
+## [HANDOFF-02] SEQ-20260422-HANDOFF-V2 DB schema：home_modules + videos.trending_tag + ADR-052/053
+
+- **完成时间**：2026-04-22
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-7)，schema 设计 + ADR 决策 DECISION: APPROVED
+- **ADR 编号偏离**：原规划 ADR-051/052，实际 ADR-052/053（051 已被 M6-CDN 占用）
+- **修改文件**：
+  - `apps/api/src/db/migrations/050_create_home_modules.sql`（新建）— home_modules 表，4 索引，5 CHECK 约束，updated_at 触发器
+  - `apps/api/src/db/migrations/051_add_videos_trending_tag.sql`（新建）— videos.trending_tag TEXT CHECK，部分索引
+  - `apps/api/src/db/queries/home-modules.ts`（新建）— 8 个查询函数，含事务批量排序
+  - `apps/api/src/db/queries/videos.ts` — 追加 trending_tag 到 DbVideoRow/VIDEO_FULL_SELECT/mapVideoRow + 3 新函数
+  - `packages/types/src/home-module.types.ts`（新建）— HomeModule/HomeModuleSlot/HomeModuleContentRefType 等 6 个类型
+  - `packages/types/src/video.types.ts` — 追加 TrendingTag 类型 + Video.trendingTag 字段
+  - `packages/types/src/index.ts` — 追加 home-module.types export
+  - `docs/decisions.md` — 追加 ADR-052（home_modules 运营位模型）+ ADR-053（M7 scope 偏离声明）
+  - `docs/architecture.md` — 追加 §5.10 home_modules + trending_tag schema 说明
+  - `tests/unit/api/home-modules.test.ts`（新建）— 19 个单元测试
+- **新增依赖**：无
+- **数据库变更**：migration 050（home_modules 表）+ migration 051（videos.trending_tag 列）
+- **注意事项**：
+  - metadata 约束靠文档 + Service zod 白名单，DB 无法强制 jsonb 内容
+  - HANDOFF-04（HomeService）应追加 metadata zod schema 白名单
+  - migration 051 索引不含 CONCURRENTLY（事务限制），生产大表回滚路径见 down 注释
