@@ -9717,3 +9717,32 @@ HANDOFF-11：Nav 改造，消费 `max-w-shell`、`var(--header-height)`、`var(-
 - `npm run typecheck`：✅ 通过
 - `npm run lint`：✅ 通过
 - `npm run test -- --run`：✅ 1625 tests passed
+
+---
+
+## HANDOFF-13 — 首页 Shell + Hero + 分类捷径
+
+- **日期**：2026-04-23
+- **序列**：SEQ-20260423-UI-REBUILD
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+
+### 改动文件
+
+| 文件 | 改动类型 | 说明 |
+|------|---------|------|
+| `apps/web-next/src/components/video/HeroBanner.tsx` | 改动 1 行 | 内容容器 max-w-screen-xl px-4 pb-10 → max-w-feature px-6 pb-14 |
+| `apps/web-next/src/app/[locale]/page.tsx` | 完整重写 | 主内容容器 + 分类捷径 + token 消费 |
+
+### 核心改动
+
+1. **HeroBanner 内容容器**（spec §10.2）：`max-w-feature mx-auto px-6 pb-14`（24px inset，56px 底部留白）
+2. **主内容容器**（spec §10.3）：`max-w-feature mx-auto px-6`，`paddingTop: var(--page-block-gap)`（48px），`paddingBottom: var(--space-20)`（80px），`gap: var(--page-section-gap)`（56px）
+3. **分类捷径**（spec §10.4）：`repeat(5, 1fr)` 网格，gap 12px，卡片 `padding: 16px 18px`，图标盒 44px
+4. section 标题从 Tailwind 字体类（`text-xl font-bold`）改为 inline style token 消费
+
+### 验收结果
+
+- `npm run typecheck`：✅ 通过
+- `npm run lint`：✅ 通过
+- `npm run test -- --run`：✅ 1625 tests passed

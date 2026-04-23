@@ -99,7 +99,8 @@ export function HeroBanner() {
         <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent pointer-events-none" />
         <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-canvas)] via-[var(--bg-canvas)]/20 to-transparent pointer-events-none" />
 
-        <div className="relative w-full max-w-screen-xl mx-auto px-4 pb-10 z-10">
+        {/* HANDOFF-13: max-w-feature(1200px) + px-6(24px) + pb-14(56px) — spec §10.2 */}
+        <div className="relative w-full max-w-feature mx-auto px-6 pb-14 z-10">
           <BannerContent banner={banner} />
           {banners.length > 1 && (
             <BannerDots banners={banners} activeIndex={activeIndex} onSelect={goTo} />

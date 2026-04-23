@@ -10173,8 +10173,10 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 建议模型：sonnet
    - 验收要点：Footer 无硬编码；列间距走 token；桌面端稳定不挤压
 
-4. HANDOFF-13 — 首页 Shell + Hero + 分类捷径（状态：⬜）
+4. HANDOFF-13 — 首页 Shell + Hero + 分类捷径（状态：✅ 已完成）
    - 创建时间：2026-04-23 12:00
+   - 实际开始：2026-04-23
+   - 完成时间：2026-04-23
    - 建议模型：sonnet
    - 验收要点：Hero 520px 高；容器 max-w-feature；分类捷径 5 列；空数据不塌缩
 

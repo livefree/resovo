@@ -24,4 +24,5 @@
 <!-- HANDOFF-10 ✅ 2026-04-23 完成，arch-reviewer NEED_FIX→6条已修正 PASS，详见 changelog.md -->
 <!-- HANDOFF-11 ✅ 2026-04-23 完成，typecheck/lint/test 全绿，详见 changelog.md -->
 <!-- HANDOFF-12 ✅ 2026-04-23 完成，typecheck/lint/test 全绿，详见 changelog.md -->
-<!-- 单任务工作台：空，下一个任务 HANDOFF-13（首页 Shell + Hero + 分类捷径） -->
+<!-- HANDOFF-13 ✅ 2026-04-23 完成，typecheck/lint/test 全绿，详见 changelog.md -->
+<!-- 单任务工作台：空，下一个任务 HANDOFF-14（Shelf 骨架） -->
