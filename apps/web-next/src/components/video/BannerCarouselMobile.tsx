@@ -43,7 +43,7 @@ export function BannerCarouselMobile({ banners, activeIndex, onSelect }: BannerC
     <div
       ref={emblaRef}
       className="overflow-hidden w-full"
-      style={{ aspectRatio: '5/6' }}
+      style={{ aspectRatio: '5/6', maxHeight: 'min(520px, 60vh)' }}
       data-testid="banner-carousel-mobile"
     >
       <div className="flex h-full">

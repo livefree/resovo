@@ -71,7 +71,7 @@ export function HeroBanner() {
     <div
       ref={containerRef}
       data-testid="hero-banner"
-      className="relative w-full"
+      className="relative w-full overflow-hidden"
       style={{ '--banner-accent': 'var(--banner-accent-0)' } as React.CSSProperties}
     >
       {/* ── PC 布局（md 以上） ───────────────────────────────────── */}
@@ -109,7 +109,7 @@ export function HeroBanner() {
       </div>
 
       {/* ── 移动布局（md 以下） ─────────────────────────────────── */}
-      <div className="md:hidden relative">
+      <div className="md:hidden relative overflow-hidden" style={{ maxHeight: 'min(520px, 60vh)' }}>
         <BannerCarouselMobile
           banners={banners}
           activeIndex={activeIndex}
