@@ -205,10 +205,10 @@ describe('MegaMenu', () => {
   })
 })
 
-// ── Nav scroll-collapse ───────────────────────────────────────────────────────
+// ── Nav 固定高度（UI-REBUILD 2026-04-23 修订：移除 scroll-collapse） ──────────
 
-describe('Nav scroll-collapse', () => {
-  it('初始高度为 h-16', async () => {
+describe('Nav 固定高度 h-16', () => {
+  it('初始高度为 h-16，无 h-12', async () => {
     const { Nav } = await import('@/components/layout/Nav')
     render(<Nav />)
     const header = screen.getByTestId('global-nav')
@@ -216,7 +216,7 @@ describe('Nav scroll-collapse', () => {
     expect(header.className).not.toContain('h-12')
   })
 
-  it('scrollY > 80px 后高度变为 h-12', async () => {
+  it('scrollY > 80px 后高度仍为 h-16（scroll-collapse 已移除，让 active underline 贴 border 位置稳定）', async () => {
     Object.defineProperty(window, 'scrollY', { writable: true, value: 0 })
     const { Nav } = await import('@/components/layout/Nav')
     render(<Nav />)
@@ -226,23 +226,10 @@ describe('Nav scroll-collapse', () => {
       window.dispatchEvent(new Event('scroll'))
     })
 
-    await waitFor(() => {
-      const header = screen.getByTestId('global-nav')
-      expect(header.className).toContain('h-12')
-    })
-  })
-
-  it('挂载时 scrollY 已超 80px → 直接初始化为 h-12', async () => {
-    Object.defineProperty(window, 'scrollY', { writable: true, value: 150 })
-    const { Nav } = await import('@/components/layout/Nav')
-    render(<Nav />)
-
-    await waitFor(() => {
-      const header = screen.getByTestId('global-nav')
-      expect(header.className).toContain('h-12')
-    })
-    // reset
-    Object.defineProperty(window, 'scrollY', { writable: true, value: 0 })
+    // scroll 100px 后高度不变
+    const header = screen.getByTestId('global-nav')
+    expect(header.className).toContain('h-16')
+    expect(header.className).not.toContain('h-12')
   })
 })
 

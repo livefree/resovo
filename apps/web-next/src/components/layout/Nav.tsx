@@ -14,8 +14,10 @@ import { Skeleton } from '@/components/primitives/feedback/Skeleton'
  *
  * 结构（从左到右）：
  *   1. Logo：渐变方块 "R" + "Resovo" 文字
- *   2. 6 个 nav-link（首页/电影/剧集/动漫/综艺/纪录片）扁平无子菜单
- *      - active 态：accent 色 + 底部 2px underline
+ *   2. 5 主分类 nav-link（首页/电影/剧集/动漫/综艺/纪录片）+ "更多 ▼" 下拉
+ *      - MAIN_CATEGORIES 5 种（movie/series/anime/tvshow/documentary，含首页共 6 扁平）
+ *      - MORE_CATEGORIES 6 种（short/sports/music/news/kids/other）进"更多"下拉
+ *      - active 态：accent 色 + 底部 2px underline 贴 header 底部 border
  *      - hover 态：--bg-surface-sunken 浅灰背景
  *   3. 搜索 input：flex-1 max-w-[480px]，40px 高，圆角 10px
  *   4. 右侧：ThemeToggle（三态 radio）+ 齿轮设置按钮（档位 1 仅视觉占位）
@@ -24,12 +26,14 @@ import { Skeleton } from '@/components/primitives/feedback/Skeleton'
  *   - 齿轮按钮 Settings Drawer
  *   - locale 切换（按 B 方案进 Settings Drawer）
  *   - 搜索 ⌘K 快捷键
- *   - "更多 ▾" MegaMenu（设计稿扁平 6 链接）
  *
- * 保留（X 方案）：scroll-collapse h-16 → h-12；backdrop-blur-md；Nav.Skeleton
+ * 修订（2026-04-23 用户反馈）：
+ *   - 移除 scroll-collapse（让 underline 位置稳定，贴 header 底部 border）
+ *   - underline `bottom: -1px` 覆盖 header 1px border
+ *   - 加"更多 ▼"下拉覆盖剩余 6 种 VideoType（视频分类不足的反馈）
  */
 
-// 5 个顶层分类 + 首页 = 6 个 nav-link（设计稿扁平结构，无二级菜单）
+// 5 主分类（扁平显示）
 const MAIN_CATEGORIES = [
   { key: 'movie',       labelKey: 'nav.catMovie',       typeParam: 'movie' },
   { key: 'series',      labelKey: 'nav.catSeries',      typeParam: 'series' },
@@ -38,7 +42,17 @@ const MAIN_CATEGORIES = [
   { key: 'documentary', labelKey: 'nav.catDocumentary', typeParam: 'documentary' },
 ] as const
 
-const SCROLL_COLLAPSE_PX = 80
+// 6 扩展分类（"更多 ▼" 下拉内）
+const MORE_CATEGORIES = [
+  { key: 'short',  labelKey: 'nav.catShort',  typeParam: 'short' },
+  { key: 'sports', labelKey: 'nav.catSports', typeParam: 'sports' },
+  { key: 'music',  labelKey: 'nav.catMusic',  typeParam: 'music' },
+  { key: 'news',   labelKey: 'nav.catNews',   typeParam: 'news' },
+  { key: 'kids',   labelKey: 'nav.catKids',   typeParam: 'kids' },
+  { key: 'other',  labelKey: 'nav.catOther',  typeParam: 'other' },
+] as const
+
+const MORE_KEYS = new Set<string>(MORE_CATEGORIES.map((c) => c.typeParam))
 
 // ── Nav.Skeleton ──────────────────────────────────────────────────────────────
 
@@ -67,16 +81,18 @@ function NavSkeleton({ className }: { className?: string }) {
   )
 }
 
-// ── NavLinkItem（内部复用，active underline） ─────────────────────────────────
+// ── NavLinkItem（内部复用，active underline 贴 header 底部 border） ────────────
 
 interface NavLinkItemProps {
   readonly href: string
   readonly active: boolean
   readonly label: string
   readonly testId?: string
+  /** header 内容区到 header 底部的距离（px），用于 underline 贴 header 底部 border */
+  readonly bottomOffset: number
 }
 
-function NavLinkItem({ href, active, label, testId }: NavLinkItemProps) {
+function NavLinkItem({ href, active, label, testId, bottomOffset }: NavLinkItemProps) {
   return (
     <Link
       href={href}
@@ -111,7 +127,7 @@ function NavLinkItem({ href, active, label, testId }: NavLinkItemProps) {
             position: 'absolute',
             left: '14px',
             right: '14px',
-            bottom: '-16px',
+            bottom: `-${bottomOffset}px`,
             height: '2px',
             background: 'var(--accent-default)',
             borderRadius: '1px',
@@ -122,30 +138,181 @@ function NavLinkItem({ href, active, label, testId }: NavLinkItemProps) {
   )
 }
 
+// ── MoreMenu "更多 ▼" 下拉（6 种扩展 VideoType） ──────────────────────────────
+
+interface MoreMenuProps {
+  readonly locale: string
+  readonly currentType: string | null
+  readonly label: string
+  readonly bottomOffset: number
+}
+
+function MoreMenu({ locale, currentType, label, bottomOffset }: MoreMenuProps) {
+  const t = useTranslations()
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  const active = currentType !== null && MORE_KEYS.has(currentType)
+
+  useEffect(() => {
+    if (!open) return
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as Node
+      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    function handleEsc(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleEsc)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEsc)
+    }
+  }, [open])
+
+  return (
+    <div className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        data-testid="nav-more-trigger"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((p) => !p)}
+        className="relative flex items-center gap-1 transition-colors"
+        style={{
+          padding: '8px 14px',
+          fontSize: '14px',
+          fontWeight: 600,
+          borderRadius: '8px',
+          background: 'transparent',
+          border: 'none',
+          textDecoration: 'none',
+          cursor: 'pointer',
+          color: active ? 'var(--accent-default)' : 'var(--fg-muted)',
+        }}
+        onMouseEnter={(e) => {
+          if (!active) {
+            e.currentTarget.style.color = 'var(--fg-default)'
+            e.currentTarget.style.background = 'var(--bg-surface-sunken)'
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!active) {
+            e.currentTarget.style.color = 'var(--fg-muted)'
+            e.currentTarget.style.background = 'transparent'
+          }
+        }}
+      >
+        {label}
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          style={{
+            transition: 'transform 160ms ease-out',
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+            opacity: 0.7,
+          }}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+        {active && (
+          <span
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              left: '14px',
+              right: '14px',
+              bottom: `-${bottomOffset}px`,
+              height: '2px',
+              background: 'var(--accent-default)',
+              borderRadius: '1px',
+            }}
+          />
+        )}
+      </button>
+
+      {open && (
+        <div
+          ref={menuRef}
+          role="menu"
+          data-testid="nav-more-menu"
+          className="absolute z-50 top-full mt-2"
+          style={{
+            left: 0,
+            minWidth: '180px',
+            borderRadius: '10px',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-default)',
+            boxShadow: '0 8px 24px color-mix(in oklch, var(--color-gray-1000) 12%, transparent)',
+            padding: '6px',
+          }}
+        >
+          {MORE_CATEGORIES.map((cat) => {
+            const isActive = currentType === cat.typeParam
+            return (
+              <Link
+                key={cat.key}
+                href={`/${locale}/${cat.typeParam}`}
+                role="menuitem"
+                data-testid={`nav-more-${cat.key}`}
+                onClick={() => setOpen(false)}
+                className="block transition-colors"
+                style={{
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  borderRadius: '6px',
+                  textDecoration: 'none',
+                  color: isActive ? 'var(--accent-default)' : 'var(--fg-default)',
+                  background: isActive ? 'var(--accent-muted)' : 'transparent',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) e.currentTarget.style.background = 'var(--bg-surface-sunken)'
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) e.currentTarget.style.background = 'transparent'
+                }}
+              >
+                {t(cat.labelKey)}
+              </Link>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Nav ───────────────────────────────────────────────────────────────────────
+
+// header 高度 64px + nav-link 在 header 中竖直居中，底部 border 1px
+// 让 active underline 贴 header 底部 border 内侧 → underline bottom = (64 - linkHeight) / 2 - 1
+// linkHeight ≈ 8+8+14*1.4 ≈ 36 → bottom = (64-36)/2 - 1 ≈ 13px
+// 视觉上 underline 覆盖在 header border 位置，和 border 合并
+const UNDERLINE_BOTTOM_OFFSET = 13
 
 export function Nav() {
   const { brand } = useBrand()
   const t = useTranslations()
   const pathname = usePathname()
   const router = useRouter()
-  const [collapsed, setCollapsed] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const searchInputRef = useRef<HTMLInputElement | null>(null)
 
   const currentLocale = pathname.split('/')[1] ?? 'en'
   const currentType = pathname.split('/')[2] ?? null
   const isHomePage = !currentType
-
-  // Scroll-collapse: h-16 → h-12 past 80px（X 方案保留既有体验）
-  useEffect(() => {
-    setCollapsed(window.scrollY > SCROLL_COLLAPSE_PX)
-    function onScroll() {
-      setCollapsed(window.scrollY > SCROLL_COLLAPSE_PX)
-    }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
 
   const submitSearch = useCallback(
     (q: string) => {
@@ -161,11 +328,7 @@ export function Nav() {
   return (
     <header
       data-testid="global-nav"
-      className={cn(
-        'sticky top-0 z-50 border-b backdrop-blur-md',
-        'transition-[height] duration-200 ease-out',
-        collapsed ? 'h-12' : 'h-16',
-      )}
+      className="sticky top-0 z-50 h-16 border-b backdrop-blur-md"
       style={{
         background: 'color-mix(in oklch, var(--bg-canvas) 88%, transparent)',
         borderColor: 'var(--border-default)',
@@ -203,13 +366,14 @@ export function Nav() {
           {brand.name}
         </Link>
 
-        {/* 2. 6 个 nav-link 扁平（首页 + 5 分类） */}
+        {/* 2. 6 主 nav-link + "更多 ▼" 下拉（6 扩展分类） */}
         <nav className="hidden sm:flex items-center gap-1 flex-1" aria-label="主导航">
           <NavLinkItem
             href={`/${currentLocale}`}
             active={isHomePage}
             label={t('nav.home')}
             testId="nav-home"
+            bottomOffset={UNDERLINE_BOTTOM_OFFSET}
           />
           {MAIN_CATEGORIES.map((cat) => (
             <NavLinkItem
@@ -218,8 +382,15 @@ export function Nav() {
               active={currentType === cat.typeParam}
               label={t(cat.labelKey)}
               testId={`nav-cat-${cat.key}`}
+              bottomOffset={UNDERLINE_BOTTOM_OFFSET}
             />
           ))}
+          <MoreMenu
+            locale={currentLocale}
+            currentType={currentType}
+            label={t('nav.more')}
+            bottomOffset={UNDERLINE_BOTTOM_OFFSET}
+          />
         </nav>
 
         {/* 3. 搜索 input（max-480px，Enter 跳 /search?q=） */}

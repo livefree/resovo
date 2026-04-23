@@ -59,10 +59,15 @@ export function ThemeToggle({ className, variant = 'icon' }: ThemeToggleProps) {
       aria-label="主题切换"
       data-testid="theme-toggle"
       className={cn(
-        'inline-flex items-center gap-0.5 rounded-md p-0.5',
-        'bg-[var(--bg-surface-sunken)] border border-[var(--border-subtle)]',
+        'inline-flex items-center p-0.5',
+        'bg-[var(--bg-surface-sunken)] border border-[var(--border-default)]',
         className,
       )}
+      style={{
+        // 对齐 Global Shell.html `.theme-toggle`：height 36 / radius 10 / pad 2
+        height: '36px',
+        borderRadius: '10px',
+      }}
     >
       {SEGMENTS.map(({ value, label, Icon }) => {
         const active = theme === value
@@ -77,16 +82,31 @@ export function ThemeToggle({ className, variant = 'icon' }: ThemeToggleProps) {
             data-testid={`theme-toggle-${value}`}
             onClick={() => setTheme(value)}
             title={label}
-            className={cn(
-              'flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]',
-              active
-                ? 'bg-[var(--bg-surface-raised)] text-[var(--fg-default)] shadow-sm'
-                : 'text-[var(--fg-muted)] hover:text-[var(--fg-default)] hover:bg-[var(--bg-surface)]',
-            )}
+            className="flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-default)]"
+            style={{
+              // 对齐 `.theme-toggle button`：30×28 / radius 6 / active bg-surface + shadow
+              width: variant === 'full' ? 'auto' : '30px',
+              height: '28px',
+              padding: variant === 'full' ? '0 10px' : 0,
+              gap: variant === 'full' ? '6px' : 0,
+              borderRadius: '6px',
+              border: 'none',
+              background: active ? 'var(--bg-surface)' : 'transparent',
+              color: active ? 'var(--fg-default)' : 'var(--fg-subtle)',
+              boxShadow: active
+                ? '0 1px 2px color-mix(in oklch, var(--color-gray-1000) 6%, transparent)'
+                : 'none',
+              cursor: 'pointer',
+            }}
+            onMouseEnter={(e) => {
+              if (!active) e.currentTarget.style.color = 'var(--fg-default)'
+            }}
+            onMouseLeave={(e) => {
+              if (!active) e.currentTarget.style.color = 'var(--fg-subtle)'
+            }}
           >
             <Icon />
-            {variant === 'full' && <span>{label}</span>}
+            {variant === 'full' && <span className="text-xs">{label}</span>}
           </button>
         )
       })}
