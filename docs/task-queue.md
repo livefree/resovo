@@ -10166,8 +10166,10 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 建议模型：sonnet
    - 验收要点：Nav 无 arbitrary value；高度走 --header-height；inset 走 max-w-shell + px-shell；underline 完整可见；typecheck + test 全绿
 
-3. HANDOFF-12 — Footer 改造：两层结构 / token 消费（状态：⬜）
+3. HANDOFF-12 — Footer 改造：两层结构 / token 消费（状态：✅ 已完成）
    - 创建时间：2026-04-23 12:00
+   - 实际开始：2026-04-23
+   - 完成时间：2026-04-23
    - 建议模型：sonnet
    - 验收要点：Footer 无硬编码；列间距走 token；桌面端稳定不挤压
 

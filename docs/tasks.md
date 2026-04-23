@@ -23,4 +23,5 @@
 <!-- WEB-CUTOVER ✅ 2026-04-23 完成（待 commit），apps/web 退役、apps/web-next 升为 port 3000 对外唯一前端，tag pre-cutover-apps-web-snapshot 保留 snapshot；详见 changelog.md -->
 <!-- HANDOFF-10 ✅ 2026-04-23 完成，arch-reviewer NEED_FIX→6条已修正 PASS，详见 changelog.md -->
 <!-- HANDOFF-11 ✅ 2026-04-23 完成，typecheck/lint/test 全绿，详见 changelog.md -->
-<!-- 单任务工作台：空，下一个任务 HANDOFF-12（Footer 改造） -->
+<!-- HANDOFF-12 ✅ 2026-04-23 完成，typecheck/lint/test 全绿，详见 changelog.md -->
+<!-- 单任务工作台：空，下一个任务 HANDOFF-13（首页 Shell + Hero + 分类捷径） -->

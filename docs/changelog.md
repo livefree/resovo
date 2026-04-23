@@ -9682,3 +9682,38 @@ HANDOFF-11：Nav 改造，消费 `max-w-shell`、`var(--header-height)`、`var(-
 4. ✅ 右侧操作区固定间距（`gap-2 shrink-0`）
 5. ✅ viewport < 1200px 时全站横向滚动（`.app-shell min-width`）
 6. ✅ 横向滚动状态下 header 结构稳定（`sticky top-0 z-50`）
+
+---
+
+## HANDOFF-12 — Footer 改造（两层结构 + token 消费）
+
+- **日期**：2026-04-23
+- **序列**：SEQ-20260423-UI-REBUILD
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+
+### 改动文件
+
+| 文件 | 改动类型 | 说明 |
+|------|---------|------|
+| `apps/web-next/src/components/layout/Footer.tsx` | 完整重写 | 两层结构 + token 全消费 |
+
+### 核心改动
+
+1. **两层结构**：
+   - 上半区：`padding: var(--footer-top-padding)` + `max-w-shell mx-auto` + `gap: var(--footer-col-gap)` 的 flex 行
+     - 品牌列：logo + 品牌名 + 免责声明 + 社交图标（gap: `var(--footer-social-gap)`）
+     - 导航列：Help / Privacy / DMCA / About 垂直排列
+   - 下半区：`border-top` + `padding: var(--footer-bottom-padding)` + `max-w-shell mx-auto`
+     - 左：`© {year} {brand.name}`
+     - 右：法务链接横排（gap: `var(--footer-legal-gap)`）
+
+2. **移除硬编码**：`max-w-screen-xl` → `max-w-shell`；`px-4 py-8 gap-4` → token 变量
+
+3. **Token 消费**：`--footer-top-padding` / `--footer-bottom-padding` / `--footer-col-gap` / `--footer-social-gap` / `--footer-legal-gap`
+
+### 验收结果
+
+- `npm run typecheck`：✅ 通过
+- `npm run lint`：✅ 通过
+- `npm run test -- --run`：✅ 1625 tests passed
