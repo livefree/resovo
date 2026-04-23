@@ -1,4 +1,17 @@
 {
+  "videoType": {
+    "movie": "Movie",
+    "series": "Series",
+    "anime": "Anime",
+    "variety": "Variety",
+    "documentary": "Documentary",
+    "short": "Short",
+    "sports": "Sports",
+    "music": "Music",
+    "news": "News",
+    "kids": "Kids",
+    "other": "Other"
+  },
   "nav": {
     "home": "Home",
     "more": "More",

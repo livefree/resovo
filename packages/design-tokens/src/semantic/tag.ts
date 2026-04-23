@@ -37,17 +37,37 @@ export const tag = {
     trendingEditorPickBg:   colors.info.light,
     trendingEditorPickFg:   colors.info.dark,
 
-    // ── type chips ────────────────────────────────────────────────────────
-    chipMovieBg:     colors.accent[100],
-    chipMovieFg:     colors.accent[700],
-    chipSeriesBg:    colors.warning.light,
-    chipSeriesFg:    colors.warning.dark,
-    chipAnimeBg:     'oklch(91% 0.08 320)',
-    chipAnimeFg:     'oklch(40% 0.14 320)',
-    chipTvshowBg:    colors.success.light,
-    chipTvshowFg:    colors.success.dark,
-    chipDocBg:       colors.gray[200],
-    chipDocFg:       colors.gray[700],
+    // ── type chips（HANDOFF-07: 覆盖全部 11 种 VideoType，命名对齐项目 VideoType）──
+    // 设计稿预设 5 种（movie/series/anime/variety/documentary）
+    chipMovieBg:        colors.accent[100],
+    chipMovieFg:        colors.accent[700],
+    chipSeriesBg:       colors.warning.light,
+    chipSeriesFg:       colors.warning.dark,
+    chipAnimeBg:        'oklch(91% 0.08 320)',
+    chipAnimeFg:        'oklch(40% 0.14 320)',
+    chipVarietyBg:      colors.success.light,
+    chipVarietyFg:      colors.success.dark,
+    chipDocumentaryBg:  colors.gray[200],
+    chipDocumentaryFg:  colors.gray[700],
+    // 扩展 6 种（short/sports/music/news/kids/other），palette 策略：
+    //   - short: accent 浅色变体（与 movie 同色系但更浅，体现"短视频是电影/剧集子类型"语义）
+    //   - sports: error 色系（红橙，运动热血联想）
+    //   - music: 340° magenta-pink（音乐艺术独立色相）
+    //   - news: info 色系（蓝灰，严肃/资讯语义）
+    //   - kids: 55° 金黄（比 series 85° 更暖，友好语义；确保色盲可辨）
+    //   - other: gray-scale（比 documentary 更浅，与之区分 + 保守兜底）
+    chipShortBg:        'oklch(95% 0.03 230)',
+    chipShortFg:        'oklch(42% 0.12 230)',
+    chipSportsBg:       colors.error.light,
+    chipSportsFg:       colors.error.dark,
+    chipMusicBg:        'oklch(90% 0.08 340)',
+    chipMusicFg:        'oklch(45% 0.14 340)',
+    chipNewsBg:         colors.info.light,
+    chipNewsFg:         colors.info.dark,
+    chipKidsBg:         'oklch(93% 0.09 55)',
+    chipKidsFg:         'oklch(45% 0.14 55)',
+    chipOtherBg:        colors.gray[100],
+    chipOtherFg:        colors.gray[600],
 
     // ── spec / rating ─────────────────────────────────────────────────────
     specBg:          GLASS_DARK,
@@ -88,17 +108,29 @@ export const tag = {
     trendingEditorPickBg:   colors.info.dark,
     trendingEditorPickFg:   colors.info.light,
 
-    // ── type chips ────────────────────────────────────────────────────────
-    chipMovieBg:     colors.accent[900],
-    chipMovieFg:     colors.accent[100],
-    chipSeriesBg:    colors.warning.dark,
-    chipSeriesFg:    colors.warning.light,
-    chipAnimeBg:     'oklch(35% 0.12 320)',
-    chipAnimeFg:     'oklch(91% 0.08 320)',
-    chipTvshowBg:    colors.success.dark,
-    chipTvshowFg:    colors.success.light,
-    chipDocBg:       colors.gray[800],
-    chipDocFg:       colors.gray[300],
+    // ── type chips（HANDOFF-07: 11 种 VideoType 覆盖，dark 变体）────────────
+    chipMovieBg:        colors.accent[900],
+    chipMovieFg:        colors.accent[100],
+    chipSeriesBg:       colors.warning.dark,
+    chipSeriesFg:       colors.warning.light,
+    chipAnimeBg:        'oklch(35% 0.12 320)',
+    chipAnimeFg:        'oklch(91% 0.08 320)',
+    chipVarietyBg:      colors.success.dark,
+    chipVarietyFg:      colors.success.light,
+    chipDocumentaryBg:  colors.gray[800],
+    chipDocumentaryFg:  colors.gray[300],
+    chipShortBg:        'oklch(32% 0.10 230)',
+    chipShortFg:        'oklch(88% 0.05 230)',
+    chipSportsBg:       colors.error.dark,
+    chipSportsFg:       colors.error.light,
+    chipMusicBg:        'oklch(35% 0.12 340)',
+    chipMusicFg:        'oklch(90% 0.08 340)',
+    chipNewsBg:         colors.info.dark,
+    chipNewsFg:         colors.info.light,
+    chipKidsBg:         'oklch(38% 0.11 55)',
+    chipKidsFg:         'oklch(93% 0.09 55)',
+    chipOtherBg:        colors.gray[800],
+    chipOtherFg:        colors.gray[400],
 
     // ── spec / rating ─────────────────────────────────────────────────────
     specBg:          GLASS_DARK,
