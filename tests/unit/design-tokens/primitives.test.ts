@@ -39,8 +39,8 @@ describe('design-tokens primitives', () => {
   })
 
   describe('space', () => {
-    it('has 11 entries', () => {
-      expect(Object.keys(space)).toHaveLength(11)
+    it('has 20 entries', () => {
+      expect(Object.keys(space)).toHaveLength(20)
     })
     it('0.5 maps to 0.125rem', () => {
       expect(space[0.5]).toBe('0.125rem')

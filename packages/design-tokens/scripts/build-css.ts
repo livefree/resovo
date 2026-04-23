@@ -9,7 +9,7 @@ import { typography } from '../src/primitives/typography.js'
 import { motion } from '../src/primitives/motion.js'
 import { shadow } from '../src/primitives/shadow.js'
 import { zIndex } from '../src/primitives/z-index.js'
-import { bg, fg, border, accent, surface, state, tag, pattern, routeTransition } from '../src/semantic/index.js'
+import { bg, fg, border, accent, surface, state, tag, pattern, routeTransition, layout } from '../src/semantic/index.js'
 import { player } from '../src/components/player.js'
 import { defaultBrandOverrides, DEFAULT_BRAND_SLUG } from '../src/brands/default.js'
 
@@ -119,10 +119,11 @@ function buildSemanticVars(theme: ThemeKey): Array<[string, string]> {
 
 function buildThemeIndependentVars(): Array<[string, string]> {
   const out: Array<[string, string]> = []
-  const rtEntries = Object.entries(routeTransition) as Array<[string, string]>
-  for (const [key, value] of rtEntries) {
+
+  for (const [key, value] of Object.entries(routeTransition) as Array<[string, string]>) {
     out.push([`--route-transition-${toKebab(key)}`, value])
   }
+
   for (const [mode, slots] of Object.entries(player) as Array<[string, Record<string, unknown>]>) {
     for (const [slot, value] of Object.entries(slots)) {
       if (typeof value === 'string' || typeof value === 'number') {
@@ -130,6 +131,14 @@ function buildThemeIndependentVars(): Array<[string, string]> {
       }
     }
   }
+
+  // layout — 叶子 key 即 CSS 变量名（不含 --），直接输出，不加文件前缀
+  for (const group of Object.values(layout)) {
+    for (const [varName, value] of Object.entries(group as Record<string, string>)) {
+      out.push([`--${varName}`, value])
+    }
+  }
+
   return out
 }
 

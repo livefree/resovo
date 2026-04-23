@@ -12,7 +12,7 @@
  */
 
 import { colors, space, size, radius, typography, motion, shadow, zIndex } from '../src/primitives/index.js'
-import { bg, fg, border, accent, surface, state } from '../src/semantic/index.js'
+import { bg, fg, border, accent, surface, state, layout } from '../src/semantic/index.js'
 import { button, card, input, modal, player, table, tabs, tooltip } from '../src/components/index.js'
 import { defaultBrandOverrides } from '../src/brands/default.js'
 import type { BrandOverrides } from '../src/brands/types.js'
@@ -64,6 +64,7 @@ const semantics: Array<[string, unknown]> = [
   ['accent', accent],
   ['surface', surface],
   ['state', state],
+  ['layout', layout],
 ]
 for (const [name, node] of semantics) {
   validateLeaves(node, `semantic.${name}`)

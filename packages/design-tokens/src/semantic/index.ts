@@ -45,3 +45,6 @@ export type { PatternToken, PatternTheme } from './pattern.js'
 
 export { routeTransition } from './route-transition.js'
 export type { RouteTransitionToken } from './route-transition.js'
+
+export { layout } from './layout.js'
+export type { LayoutToken, LayoutGroup } from './layout.js'

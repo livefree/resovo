@@ -9565,3 +9565,69 @@ f7833ab  IMG-07 P2 fixup 预览放大 + 真实进度
 - [ ] 浏览器访问 http://localhost:3000 首页加载
 - [ ] /browse / /watch / /search 主路由可用
 - [ ] admin http://localhost:3001/admin 不受影响
+
+---
+
+## HANDOFF-10 · Token 补齐（space 扩充 + layout token 新建）
+
+- **序列**：SEQ-20260423-UI-REBUILD
+- **完成时间**：2026-04-23
+- **执行模型**：claude-sonnet-4-6（主循环）；claude-opus-4-6（arch-reviewer 子代理，F4 分析 + 结构方案评审）
+- **子代理结论**：NEED_FIX → 6 条修正项已落地，结构方案 PASS
+
+### 改动摘要
+
+#### `packages/design-tokens/src/primitives/space.ts`
+
+扩充 space scale：从 11 步进扩为 20 步进，新增 `1.5 / 2.5 / 3.5 / 5 / 7 / 10 / 14 / 20 / 24`（rem 单位，16px 基准）。Tailwind preset 的 `spacing` 通过现有 `spaceVar()` 机制自动获得对应 utility。
+
+#### `packages/design-tokens/src/semantic/layout.ts`（新建）
+
+静态 layout token 文件，不分 light/dark 主题。采用 arch-reviewer 建议的"叶子 key = CSS 变量名"结构，分 5 个读写分组：
+
+- `container`：`--layout-shell-max / page-max / feature-max / wide-max / shell-inset / page-inset / min-desktop`
+- `page`：`--page-section-gap / block-gap / subblock-gap / stack-gap / inline-gap / caption-gap`（引用 `var(--space-*)` 保留层级引用链）
+- `shelf`：`--shelf-gap / bottom-padding / card-w-portrait / card-w-landscape / card-w-top10 / empty-opacity / empty-min-slots`
+- `header`：`--header-height / main-gap / nav-gap / nav-padding / right-gap`
+- `footer`：`--footer-col-gap / top-padding / bottom-padding / social-gap / legal-gap`
+
+#### `packages/design-tokens/scripts/build-css.ts`
+
+`buildThemeIndependentVars()` 扩充：新增 layout 分组遍历，叶子 key 直接作为 CSS 变量名输出到 `:root`（与 routeTransition / player 同通道）。
+
+#### `packages/design-tokens/build.ts`
+
+新增 `buildLayoutVars()` 函数；`buildCss()` 将 layout vars 写入 `:root`；`buildJs()` 将 layout 纳入 tokens 对象；`buildDts()` 生成 `LayoutVarName` 类型并合入 `TokenVarName`。
+
+#### `packages/design-tokens/tailwind-preset.ts`
+
+`extend.maxWidth` 追加：`shell / page / feature / wide`，分别指向 `var(--layout-shell-max)` 等，消除现有 `max-w-[1440px]` 类 arbitrary value。
+
+#### `packages/design-tokens/src/semantic/index.ts`
+
+追加 `layout` export。
+
+#### `packages/design-tokens/scripts/validate-tokens.ts`
+
+`semantics` 列表追加 `layout`，叶值合法性纳入 validate 覆盖范围。
+
+#### `tests/unit/design-tokens/primitives.test.ts`
+
+更新 space entries 断言：11 → 20。
+
+### 验证基线
+
+- build（tsx build.ts && tsx scripts/build-css.ts）✅
+- tokens:validate ✅
+- typecheck ✅（5 workspace 全绿）
+- lint ✅（3 task）
+- vitest 1625/1625 ✅（3 个预存 collect-error 文件与本次改动无关：BrowseGrid / FilterArea / rewrite-match 均为尚未实现的组件/lib）
+
+### arch-reviewer F4 决策记录
+
+`build.ts`（→ dist/）与 `scripts/build-css.ts`（→ src/css/tokens.css）两者并存，职责不同，均为权威入口，无需合并。layout token 同时写入两处保证 JS/DTS 和 CSS 一致。
+
+### 后续任务
+
+HANDOFF-11：Nav 改造，消费 `max-w-shell`、`var(--header-height)`、`var(--layout-shell-inset)` 等新 token，清零 arbitrary value。
+

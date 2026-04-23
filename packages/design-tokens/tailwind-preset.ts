@@ -97,6 +97,12 @@ const designTokensPreset: Config = {
       transitionTimingFunction: Object.fromEntries(
         Object.entries(motion.easing).map(([k, v]) => [k, v]),
       ),
+      maxWidth: {
+        shell:   'var(--layout-shell-max)',    // 1440px — Header / Footer / Shell 容器
+        page:    'var(--layout-page-max)',     // 1280px — Browse / Search / 标准内容页
+        feature: 'var(--layout-feature-max)', // 1200px — Home / Detail / Feature 型页面
+        wide:    'var(--layout-wide-max)',     // 1600px — Watch 顶部播放器区
+      },
     },
   },
 }

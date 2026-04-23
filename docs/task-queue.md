@@ -10139,3 +10139,73 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - [ ] 3 commit 拆分（snapshot tag 已有 → 1 commit 代码+配置 → 2 commit docs）
 
 ---
+
+## [SEQ-20260423-UI-REBUILD] 前台 UI 增量重做（以 frontend_design_spec_20260423.md 为准）
+
+- **状态**：🔄 执行中
+- **创建时间**：2026-04-23 12:00
+- **最后更新时间**：2026-04-23 12:00
+- **目标**：逐组件按 `docs/frontend_design_spec_20260423.md` 重做前台 UI，零硬编码、全 token 覆盖，替换现有实现
+- **范围**：`packages/design-tokens/`、`apps/web-next/src/`（页面与组件）
+- **依赖**：`SEQ-20260423-WEB-CUTOVER` ✅；`docs/frontend_design_spec_20260423.md` 已锁定
+
+### 任务列表（按执行顺序）
+
+1. HANDOFF-10 — Token 补齐：space 扩充 + semantic/layout.ts + build.ts + tailwind-preset（状态：✅ 已完成）
+   - 创建时间：2026-04-23 12:00
+   - 计划开始：2026-04-23 12:00
+   - 实际开始：2026-04-23 12:00
+   - 完成时间：2026-04-23
+   - 建议模型：sonnet
+   - 验收要点：`npm run build`（design-tokens）通过；tokens.css 新增 --layout-* / --page-* / --shelf-* 变量；Tailwind preset 含 max-w-shell/page/feature/wide；typecheck + test 全绿
+
+2. HANDOFF-11 — Nav 改造：72px / 32px inset / token 消费 / arbitrary value 清零（状态：⬜）
+   - 创建时间：2026-04-23 12:00
+   - 建议模型：sonnet
+   - 验收要点：Nav 无 arbitrary value；高度走 --header-height；inset 走 max-w-shell + px-shell；underline 完整可见；typecheck + test 全绿
+
+3. HANDOFF-12 — Footer 改造：两层结构 / token 消费（状态：⬜）
+   - 创建时间：2026-04-23 12:00
+   - 建议模型：sonnet
+   - 验收要点：Footer 无硬编码；列间距走 token；桌面端稳定不挤压
+
+4. HANDOFF-13 — 首页 Shell + Hero + 分类捷径（状态：⬜）
+   - 创建时间：2026-04-23 12:00
+   - 建议模型：sonnet
+   - 验收要点：Hero 520px 高；容器 max-w-feature；分类捷径 5 列；空数据不塌缩
+
+5. HANDOFF-14 — Shelf 骨架：4 种 template + empty placeholder（状态：⬜）
+   - 创建时间：2026-04-23 12:00
+   - 建议模型：sonnet
+   - 验收要点：featured-grid / top10-row / poster-row / landscape-row 四种 template 就绪；empty slot 静态占位；数据为 0 时仍保留轨道高度
+
+6. HANDOFF-15 — Browse 页：FilterBar + 网格 + 分页（状态：⬜）
+   - 创建时间：2026-04-23 12:00
+   - 建议模型：sonnet
+   - 验收要点：5 列网格；筛选器 token 消费；分页走 --pagination-* alias
+
+7. HANDOFF-16 — Search 浮层 + 搜索页（状态：⬜）
+   - 创建时间：2026-04-23 12:00
+   - 建议模型：sonnet
+   - 验收要点：浮层 640px 宽；搜索页 tab / 结果卡间距走 token；快速跳转与完整搜索分离
+
+8. HANDOFF-17 — Detail 页（状态：⬜）
+   - 创建时间：2026-04-23 12:00
+   - 建议模型：sonnet
+   - 验收要点：双栏 280px + 1fr；Episode grid repeat(10, 1fr)；选集范围切换；侧栏 320px
+
+9. HANDOFF-18 — Watch 页（状态：⬜）
+   - 创建时间：2026-04-23 12:00
+   - 建议模型：sonnet
+   - 验收要点：播放器区 max-w-wide；下半区 1fr + 360px；Episode Panel token 消费；影院模式 radius=0
+
+### 序列验收（全部任务完成后）
+
+- [ ] HANDOFF-10 至 HANDOFF-18 全部 ✅
+- [ ] `npm run typecheck` 全绿
+- [ ] `npm run lint` 全绿
+- [ ] `npm run test -- --run` 全绿
+- [ ] 全站无 Tailwind arbitrary value（`grep -r '\[.*px\]' apps/web-next/src/ = 0`）
+- [ ] 全站无内联硬编码颜色/间距（`grep -r 'style=.*[0-9]px' apps/web-next/src/ = 0`，允许例外附注释）
+- [ ] arch-reviewer 子代理 PASS（HANDOFF-10 token 结构评审）
+

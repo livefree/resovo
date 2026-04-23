@@ -7,7 +7,7 @@
 > source_of_truth: yes
 > supersedes: none
 > superseded_by: none
-> last_reviewed: 2026-04-22
+> last_reviewed: 2026-04-23
 >
 > 单任务工作台：同一时刻只保留 1 个进行中任务。任务完成后删除卡片，历史记录见 `docs/changelog.md`，任务规划见 `docs/task-queue.md`。
 
@@ -21,4 +21,5 @@
 <!-- LazyImage race hotfix ✅ 2026-04-23（commit 917c027），与 HANDOFF-05 无关的独立通用修复 -->
 <!-- HANDOFF-07 🟡 stash 保留（stash@{0}: handoff-07-wip-before-cutover），tokens + primitives 已就绪但 VideoCard hover 定位 bug 未修；待 CUTOVER 完成 + UI 增量重做启动时决策恢复策略 -->
 <!-- WEB-CUTOVER ✅ 2026-04-23 完成（待 commit），apps/web 退役、apps/web-next 升为 port 3000 对外唯一前端，tag pre-cutover-apps-web-snapshot 保留 snapshot；详见 changelog.md -->
-<!-- 单任务工作台稳定态：空，等待 UI 增量重做（用户拍板：清空 → Nav → Footer → 组件逐个验收）-->
+<!-- HANDOFF-10 ✅ 2026-04-23 完成，arch-reviewer NEED_FIX→6条已修正 PASS，详见 changelog.md -->
+<!-- 单任务工作台：空，下一个任务 HANDOFF-11（Nav 改造） -->
