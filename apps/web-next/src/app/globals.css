@@ -124,6 +124,13 @@
   --detail-meta-row-gap:   var(--space-2);    /* meta 行内 gap 8px         */
   --detail-cta-gap:        12px;              /* 播放按钮区 CTA gap        */
   --detail-rating-btn-gap: 24px;              /* 评分与 CTA 按钮间距       */
+
+  /* watch/player page alias — spec §15 */
+  --player-panel-w:     360px;              /* 侧栏宽度                  */
+  --player-panel-gap:   var(--space-4);     /* 播放器-侧栏间距 16px      */
+  --player-ep-h:        36px;              /* 侧栏选集按钮高度           */
+  --player-ep-gap:      var(--space-1-5);   /* 侧栏选集网格间距 6px      */
+  --player-panel-max-h: 360px;             /* 侧栏选集区最大高度         */
 }
 
 /* ── Design-token semantic vars — synced with packages/design-tokens/src/css/tokens.css */
@@ -536,6 +543,51 @@
   .detail-lower-grid {
     grid-template-columns: 1fr var(--detail-sidebar-w);
   }
+}
+
+/* HANDOFF-18 — Player 布局响应式工具类 */
+/* 主布局：mobile=列，≥1024=行（flex 1fr + panel） */
+.player-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--player-panel-gap);
+  transition: all 300ms ease;
+}
+@media (min-width: 1024px) {
+  .player-layout {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+}
+/* 影院模式：强制列方向，gap=0 */
+.player-layout.player-layout--theater {
+  flex-direction: column;
+  gap: 0;
+}
+
+/* 侧栏：mobile=全宽，≥1024=固定 360px */
+.player-side-panel {
+  width: 100%;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--player-panel-gap);
+  transition: all 300ms ease;
+}
+@media (min-width: 1024px) {
+  .player-side-panel {
+    width: var(--player-panel-w);
+    align-self: stretch;
+  }
+}
+/* 影院模式：侧栏隐藏 */
+.player-side-panel.player-side-panel--theater {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  gap: 0;
 }
 
 /* M5-PAGE-TABBAR-01 — z-index layer tokens (ADR-046 §8.3) */

@@ -1,3 +1,10 @@
+/**
+ * playerShell.layout — HANDOFF-18 对齐 docs/frontend_design_spec_20260423.md §15
+ *
+ * 布局工具类使用 globals.css 中定义的 .player-layout / .player-side-panel 工具类，
+ * 响应式行为（1fr + var(--player-panel-w)）由 CSS 驱动，不在 TS 层硬编码。
+ */
+
 import { cn } from '@/lib/utils'
 
 export interface PlayerEpisodeItem {
@@ -5,19 +12,11 @@ export interface PlayerEpisodeItem {
 }
 
 export function getPlayerLayoutClass(isTheater: boolean): string {
-  return cn(
-    'flex transition-all duration-300',
-    isTheater ? 'flex-col gap-0' : 'gap-4 lg:flex-row flex-col'
-  )
+  return cn('player-layout', isTheater && 'player-layout--theater')
 }
 
 export function getSidePanelClass(isTheater: boolean): string {
-  return cn(
-    'transition-all duration-300 flex flex-col gap-4',
-    isTheater
-      ? 'max-h-0 overflow-hidden opacity-0 pointer-events-none lg:w-0'
-      : 'w-full lg:w-72 xl:w-80 shrink-0 opacity-100 self-stretch'
-  )
+  return cn('player-side-panel', isTheater && 'player-side-panel--theater')
 }
 
 export function getInlineEpisodes(

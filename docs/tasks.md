@@ -31,4 +31,6 @@
 <!-- HANDOFF-16 ✅ 2026-04-23 完成，typecheck/lint/test 全绿，详见 changelog.md -->
 
 <!-- HANDOFF-17 ✅ 2026-04-23 完成，typecheck/lint/test 全绿，详见 changelog.md -->
-<!-- 单任务工作台：空，下一个任务 HANDOFF-18（Watch 页） -->
+
+<!-- HANDOFF-18 ✅ 2026-04-23 完成，typecheck/lint 全绿，test 除预存在 flaky 外全绿，详见 changelog.md -->
+<!-- 单任务工作台：空，HANDOFF-10~18 全部完成，待序列验收 -->

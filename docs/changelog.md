@@ -9876,3 +9876,36 @@ HANDOFF-11：Nav 改造，消费 `max-w-shell`、`var(--header-height)`、`var(-
 
 - typecheck ✅ lint ✅ test ✅ (1682 tests passed)
 - 所有 e2e testids 保留：detail-hero, detail-title, detail-description, detail-hero-meta, detail-cover, detail-play-btn, episode-picker, episode-btn-N, related-videos, related-videos-grid
+
+## HANDOFF-18 ✅ 2026-04-23 — Watch 页布局对齐（spec §15）
+
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+
+### 变更摘要
+
+对齐 `docs/frontend_design_spec_20260423.md §15` Watch/Player 页规范：
+
+**globals.css**
+- 新增 5 个 `--player-*` tokens：panel-w(360px)、panel-gap(16px)、ep-h(36px)、ep-gap(6px)、panel-max-h(360px)
+- 新增 2 个响应式工具类：
+  - `.player-layout`（mobile 列 / ≥1024px 行）+ `.player-layout--theater`（影院模式强制列）
+  - `.player-side-panel`（mobile 全宽 / ≥1024px 360px）+ `.player-side-panel--theater`（影院模式隐藏）
+
+**playerShell.layout.ts**
+- `getPlayerLayoutClass` 改用 `.player-layout` CSS 类，移除硬编码 Tailwind flex 类
+- `getSidePanelClass` 改用 `.player-side-panel` CSS 类，移除硬编码 `lg:w-72 xl:w-80`
+
+**PlayerShell.tsx**
+- 容器 `max-w-screen-xl` → `max-w-wide`（1600px）
+- 影院模式移除 inline `maxWidth: 'min(85vw, 1440px)'`，统一用 `max-w-wide`
+- 主列移除 `lg:flex-[2]`，改为纯 `flex-1`（实现 1fr 效果）
+- 视频区：移除 `rounded-lg`，改为 `borderRadius: isTheater ? 0 : '0.5rem'`（影院模式 radius=0）
+- Episode 网격：`max-h-[360px]` → `var(--player-panel-max-h)`；`gap-1.5` → `var(--player-ep-gap)`
+- 选集按钮：`py-2` → `height: var(--player-ep-h)`（36px）
+- loading 骨架：`max-w-screen-xl` → `max-w-wide`
+
+### 质量门禁
+
+- typecheck ✅ lint ✅
+- test: 1682 通过，预存在 flaky（jsdom 并发隔离）StagingPanel/StagingTable 偶发失败，单独运行均 ✅，与本任务无关

@@ -173,7 +173,7 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
 
   if (loading) {
     return (
-      <div className="max-w-screen-xl mx-auto px-4 py-4">
+      <div className="max-w-wide mx-auto px-4 py-4">
         <div
           className="w-full rounded-lg animate-pulse"
           style={{ aspectRatio: '16/9', background: 'var(--bg-surface)' }}
@@ -247,8 +247,12 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
           </div>
         )}
 
+        {/* 选集网格：gap/maxHeight 使用 player tokens */}
         {hasEpisodes && activePanelTab === 'episodes' ? (
-          <div className="p-2 grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-4 xl:grid-cols-5 gap-1.5 max-h-[360px] overflow-y-auto scrollbar-thin">
+          <div
+            className="p-2 grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-4 xl:grid-cols-5 overflow-y-auto scrollbar-thin"
+            style={{ gap: 'var(--player-ep-gap)', maxHeight: 'var(--player-panel-max-h)' }}
+          >
             {Array.from({ length: video!.episodeCount }).map((_, i) => {
               const epNum = i + 1
               const isActive = currentEpisode === epNum
@@ -257,12 +261,14 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
                   key={epNum}
                   type="button"
                   onClick={() => setEpisode(epNum)}
-                  className="py-2 text-center text-sm rounded transition-colors"
-                  style={
-                    isActive
+                  className="flex items-center justify-center text-sm rounded transition-colors"
+                  style={{
+                    height: 'var(--player-ep-h)',
+                    ...(isActive
                       ? { background: 'var(--accent-default)', color: 'var(--accent-fg)', fontWeight: 700 }
                       : { background: 'var(--bg-surface-sunken)', color: 'var(--fg-muted)' }
-                  }
+                    ),
+                  }}
                   data-testid={`side-episode-${epNum}`}
                 >
                   {epNum}
@@ -311,9 +317,9 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
       style={{ background: 'var(--bg-canvas)' }}
       data-testid="player-shell"
     >
+      {/* 播放器容器：max-w-wide(1600px)，影院模式去除 px/py */}
       <div
-        className={cn('max-w-screen-xl mx-auto px-4 py-4', isTheater && 'px-0 py-0')}
-        style={isTheater ? { maxWidth: 'min(85vw, 1440px)', marginLeft: 'auto', marginRight: 'auto' } : undefined}
+        className={cn('max-w-wide mx-auto', !isTheater && 'px-4 py-4')}
       >
         <div className={cn('mb-4 space-y-1', isTheater && 'px-4 pt-4')}>
           <h1
@@ -342,13 +348,20 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
         </div>
 
         <div className={getPlayerLayoutClass(isTheater)}>
+          {/* 主列：flex-1（1fr 效果） */}
           <div
-            className={cn('flex-1 min-w-0 transition-all duration-300', !isTheater && 'lg:flex-[2]')}
+            className="flex-1 min-w-0 transition-all duration-300"
             data-testid="player-main"
           >
+            {/* 视频区：影院模式 radius=0 (spec §15) */}
             <div
-              className="w-full relative rounded-lg overflow-hidden shadow-2xl border"
-              style={{ aspectRatio: '16/9', background: 'black', borderColor: 'var(--border-default)' }}
+              className="w-full relative overflow-hidden shadow-2xl border"
+              style={{
+                aspectRatio: '16/9',
+                background: 'black',
+                borderColor: 'var(--border-default)',
+                borderRadius: isTheater ? 0 : '0.5rem',
+              }}
               data-testid="player-video-area"
             >
               {activeSrc ? (

@@ -10202,8 +10202,10 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 建议模型：sonnet
    - 验收要点：双栏 280px + 1fr；Episode grid repeat(10, 1fr)；选集范围切换；侧栏 320px
 
-9. HANDOFF-18 — Watch 页（状态：⬜）
+9. HANDOFF-18 — Watch 页（状态：✅ 已完成）
    - 创建时间：2026-04-23 12:00
+   - 实际开始：2026-04-23 18:35
+   - 完成时间：2026-04-23 18:50
    - 建议模型：sonnet
    - 验收要点：播放器区 max-w-wide；下半区 1fr + 360px；Episode Panel token 消费；影院模式 radius=0
 
