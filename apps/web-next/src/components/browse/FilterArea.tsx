@@ -17,7 +17,6 @@
 
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useTranslations } from 'next-intl'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -26,13 +25,13 @@ type FilterDim = 'type' | 'country' | 'lang' | 'year' | 'rating_min' | 'status'
 interface FilterOption {
   /** URL param value; '' means "All" (remove param) */
   value: string
-  /** i18n key */
-  tKey: string
+  /** Display label */
+  label: string
 }
 
 interface FilterRow {
   dim: FilterDim
-  dimKey: string
+  dimLabel: string
   options: FilterOption[]
 }
 
@@ -41,72 +40,72 @@ interface FilterRow {
 const BASIC_ROWS: FilterRow[] = [
   {
     dim: 'type',
-    dimKey: 'browse.filter.type',
+    dimLabel: '分类',
     options: [
-      { value: '',        tKey: 'browse.filter.typeAll' },
-      { value: 'movie',   tKey: 'nav.catMovie' },
-      { value: 'series',  tKey: 'nav.catSeries' },
-      { value: 'anime',   tKey: 'nav.catAnime' },
-      { value: 'variety', tKey: 'nav.catVariety' },
+      { value: '',        label: '全部' },
+      { value: 'movie',   label: '电影' },
+      { value: 'series',  label: '剧集' },
+      { value: 'anime',   label: '动漫' },
+      { value: 'variety', label: '综艺' },
     ],
   },
   {
     dim: 'country',
-    dimKey: 'browse.filter.country',
+    dimLabel: '地区',
     options: [
-      { value: '',   tKey: 'browse.filter.countryAll' },
-      { value: 'CN', tKey: 'browse.filter.countryCN' },
-      { value: 'US', tKey: 'browse.filter.countryUS' },
-      { value: 'JP', tKey: 'browse.filter.countryJP' },
-      { value: 'KR', tKey: 'browse.filter.countryKR' },
+      { value: '',   label: '全部' },
+      { value: 'CN', label: '大陆' },
+      { value: 'US', label: '美国' },
+      { value: 'JP', label: '日本' },
+      { value: 'KR', label: '韩国' },
     ],
   },
   {
     dim: 'lang',
-    dimKey: 'browse.filter.lang',
+    dimLabel: '语言',
     options: [
-      { value: '',   tKey: 'browse.filter.langAll' },
-      { value: 'zh', tKey: 'browse.filter.langZh' },
-      { value: 'en', tKey: 'browse.filter.langEn' },
-      { value: 'ja', tKey: 'browse.filter.langJa' },
-      { value: 'ko', tKey: 'browse.filter.langKo' },
+      { value: '',   label: '全部' },
+      { value: 'zh', label: '中文' },
+      { value: 'en', label: '英文' },
+      { value: 'ja', label: '日文' },
+      { value: 'ko', label: '韩文' },
     ],
   },
 ]
 
 const currentYear = new Date().getFullYear()
 const YEAR_OPTIONS: FilterOption[] = [
-  { value: '', tKey: 'browse.filter.yearAll' },
+  { value: '', label: '全部' },
   ...Array.from({ length: 6 }, (_, i) => ({
     value: String(currentYear - i),
-    tKey: String(currentYear - i),
+    label: String(currentYear - i),
   })),
 ]
 
 const EXPANDED_ROWS: FilterRow[] = [
   {
     dim: 'year',
-    dimKey: 'browse.filter.year',
+    dimLabel: '年份',
     options: YEAR_OPTIONS,
   },
   {
     dim: 'rating_min',
-    dimKey: 'browse.filter.rating',
+    dimLabel: '评分',
     options: [
-      { value: '',  tKey: 'browse.filter.ratingAll' },
-      { value: '9', tKey: 'browse.filter.rating9' },
-      { value: '8', tKey: 'browse.filter.rating8' },
-      { value: '7', tKey: 'browse.filter.rating7' },
-      { value: '6', tKey: 'browse.filter.rating6' },
+      { value: '',  label: '全部' },
+      { value: '9', label: '9分以上' },
+      { value: '8', label: '8分以上' },
+      { value: '7', label: '7分以上' },
+      { value: '6', label: '6分以上' },
     ],
   },
   {
     dim: 'status',
-    dimKey: 'browse.filter.status',
+    dimLabel: '状态',
     options: [
-      { value: '',          tKey: 'browse.filter.statusAll' },
-      { value: 'ongoing',   tKey: 'browse.filter.ongoing' },
-      { value: 'completed', tKey: 'browse.filter.completed' },
+      { value: '',          label: '全部' },
+      { value: 'ongoing',   label: '连载中' },
+      { value: 'completed', label: '已完结' },
     ],
   },
 ]
@@ -154,14 +153,13 @@ interface FilterRowItemProps {
   row: FilterRow
   activeValue: string
   onSelect: (dim: FilterDim, value: string) => void
-  t: (key: string) => string
 }
 
-function FilterRowItem({ row, activeValue, onSelect, t }: FilterRowItemProps) {
+function FilterRowItem({ row, activeValue, onSelect }: FilterRowItemProps) {
   return (
     <div
       role="radiogroup"
-      aria-label={t(row.dimKey)}
+      aria-label={row.dimLabel}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -179,7 +177,7 @@ function FilterRowItem({ row, activeValue, onSelect, t }: FilterRowItemProps) {
           color: 'var(--fg-muted)',
         }}
       >
-        {t(row.dimKey)}
+        {row.dimLabel}
       </span>
 
       {/* 选项列 */}
@@ -189,7 +187,7 @@ function FilterRowItem({ row, activeValue, onSelect, t }: FilterRowItemProps) {
             key={opt.value || 'all'}
             dim={row.dim}
             value={opt.value}
-            label={t(opt.tKey)}
+            label={opt.label}
             isActive={activeValue === opt.value}
             onClick={() => onSelect(row.dim, opt.value)}
           />
@@ -204,7 +202,6 @@ function FilterRowItem({ row, activeValue, onSelect, t }: FilterRowItemProps) {
 export function FilterArea() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const t = useTranslations() as (key: string) => string
 
   const [expanded, setExpanded] = useState(false)
 
@@ -223,10 +220,6 @@ export function FilterArea() {
     router.push('?' + params.toString())
   }
 
-  const expandLabel = expanded
-    ? t('browse.filter.collapse')
-    : t('browse.filter.expand')
-
   return (
     <div
       data-testid="filter-area"
@@ -239,7 +232,6 @@ export function FilterArea() {
           row={row}
           activeValue={getActiveValue(row.dim)}
           onSelect={handleSelect}
-          t={t}
         />
       ))}
 
@@ -250,7 +242,6 @@ export function FilterArea() {
           row={row}
           activeValue={getActiveValue(row.dim)}
           onSelect={handleSelect}
-          t={t}
         />
       ))}
 
@@ -270,7 +261,7 @@ export function FilterArea() {
             fontWeight: 500,
           }}
         >
-          {expandLabel} {expanded ? '↑' : '↓'}
+          {expanded ? '收起' : '更多筛选'} {expanded ? '↑' : '↓'}
         </button>
       </div>
     </div>

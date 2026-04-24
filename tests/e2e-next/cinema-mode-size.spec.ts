@@ -69,20 +69,12 @@ test.describe('影院模式容器约束（BLOCKER #6 固化）', () => {
     await page.goto(`/en/watch/${MOCK_VIDEO.slug}-${MOCK_VIDEO.shortId}`)
   })
 
-  test('cinema-mode-overlay 就位且最终 opacity=0（非激活态动画完成后）', async ({
+  test('watch 页内嵌 player-shell 可见（inline 模式）', async ({
     page,
   }) => {
-    await expect(page.getByTestId('player-frame-full')).toBeVisible({ timeout: 10_000 })
-    const overlay = page.getByTestId('cinema-mode-overlay')
-    await expect(overlay).toBeAttached({ timeout: 5_000 })
-    // CinemaMode 非激活态 animate 1→0（600ms）+ fill:forwards；poll 直到稳定到 ≤0.05
-    await expect
-      .poll(
-        async () =>
-          overlay.evaluate((el) => parseFloat(window.getComputedStyle(el).opacity)),
-        { timeout: 3_000, intervals: [100, 300, 500, 700] },
-      )
-      .toBeLessThanOrEqual(0.05)
+    // watch 页使用内嵌 PlayerShell，GlobalPlayerFullFrame 在 watch 路由返回 null
+    await expect(page.getByTestId('player-shell')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByTestId('player-frame-full')).toHaveCount(0)
   })
 
   test('player-video-area 维持 16:9 宽高比', async ({ page }) => {

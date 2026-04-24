@@ -15,7 +15,6 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { useTranslations } from 'next-intl'
 import { apiClient } from '@/lib/api-client'
 import { BrowseCard } from './BrowseCard'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
@@ -144,7 +143,6 @@ export function BrowseGrid() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const t = useTranslations() as (key: string) => string
 
   const searchKey = searchParams.toString()
   const page = Math.max(1, Number(searchParams.get('page') ?? '1'))
@@ -195,7 +193,7 @@ export function BrowseGrid() {
         className="flex items-center justify-center py-12 text-sm"
         style={{ color: 'var(--fg-muted)' }}
       >
-        {t('noResults')}
+        暂无相关内容
       </div>
     )
   }

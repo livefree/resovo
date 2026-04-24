@@ -12,16 +12,16 @@ test.describe('VideoCard 双出口', () => {
     await page.waitForSelector('[data-testid="video-card"]', { timeout: 10_000 })
   })
 
-  test('点击图片区 PosterAction → player-frame-full 出现 + URL 更新为 /watch/', async ({ page }) => {
+  test('点击图片区 PosterAction → player-shell 出现 + URL 更新为 /watch/', async ({ page }) => {
     const card = page.locator('[data-testid="video-card"]').first()
     await card.locator('button[aria-label*="播放"]').click()
 
-    // player overlay 应出现
-    await expect(page.locator('[data-testid="player-frame-full"]')).toBeVisible({ timeout: 5_000 })
-
     // URL 必须更新到 /watch/... （ADR-042 + ADR-048 §2 契约）
-    await expect(page).toHaveURL(/\/watch\//, { timeout: 5_000 })
+    await expect(page).toHaveURL(/\/watch\//, { timeout: 8_000 })
     expect(page.url()).toMatch(/[?&]ep=1/)
+
+    // watch 页内嵌播放器（inline PlayerShell）可见，不再使用全屏覆盖层
+    await expect(page.locator('[data-testid="player-shell"]')).toBeVisible({ timeout: 8_000 })
   })
 
   test('点击文字区 MetaAction → 跳转详情页，URL 不含 /watch/', async ({ page }) => {
@@ -46,7 +46,7 @@ test.describe('VideoCard 双出口', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     const card = page.locator('[data-testid="video-card"]').first()
     await card.locator('button[aria-label*="播放"]').click()
-    await expect(page.locator('[data-testid="player-frame-full"]')).toBeVisible({ timeout: 5_000 })
-    await expect(page).toHaveURL(/\/watch\//, { timeout: 5_000 })
+    await expect(page).toHaveURL(/\/watch\//, { timeout: 8_000 })
+    await expect(page.locator('[data-testid="player-shell"]')).toBeVisible({ timeout: 8_000 })
   })
 })

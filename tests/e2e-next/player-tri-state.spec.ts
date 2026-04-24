@@ -7,9 +7,8 @@
  *   #4 线路切换后状态错乱 → activeSourceIndex 入 store 跨切换持久
  *
  * 断言：
- *   - 进入 /watch/:slug 后 `global-player-host-root[data-host-mode="full"]` 就位
- *   - /watch/* 内**不**渲染"关闭播放器"/"缩小为迷你播放器"按钮
- *   - player-frame-full 在 watch 页内可见
+ *   - 进入 /watch/:slug 后 player-shell 内嵌（inline 模式，nav/footer 可见）
+ *   - /watch/* 内**不**渲染"关闭播放器"/"缩小为迷你播放器"按钮（GlobalPlayerFullFrame 在 watch 路由返回 null）
  *   - 切换线路后 source-btn-N 高亮状态稳定（颜色与 accent-default 一致，证明 activeSourceIndex 被应用）
  */
 
@@ -91,19 +90,19 @@ test.describe('播放器三态护栏（BLOCKER #3 固化）', () => {
     await page.goto(`/en/watch/${MOCK_VIDEO.slug}-${MOCK_VIDEO.shortId}`)
   })
 
-  test('/watch 内 data-host-mode 切至 full 且 player-frame-full 可见', async ({
+  test('/watch 内 player-shell 内嵌可见（inline 模式，nav/footer 可见）', async ({
     page,
   }) => {
-    const root = page.locator('[data-testid="global-player-host-root"]')
-    await expect(root).toBeAttached({ timeout: 8_000 })
-    await expect(root).toHaveAttribute('data-host-mode', 'full')
-    await expect(page.getByTestId('player-frame-full')).toBeVisible({ timeout: 8_000 })
+    // watch 页使用内嵌 PlayerShell，GlobalPlayerFullFrame 在 watch 路由返回 null
+    await expect(page.getByTestId('player-shell')).toBeVisible({ timeout: 8_000 })
+    // player-frame-full 不应出现（避免遮挡 nav/footer）
+    await expect(page.getByTestId('player-frame-full')).toHaveCount(0)
   })
 
   test('/watch 内不渲染"关闭"/"缩小"按钮（CLEANUP-06 弹窗化修复）', async ({
     page,
   }) => {
-    await expect(page.getByTestId('player-frame-full')).toBeVisible({ timeout: 8_000 })
+    await expect(page.getByTestId('player-shell')).toBeVisible({ timeout: 8_000 })
     await expect(page.getByRole('button', { name: '关闭播放器' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: '缩小为迷你播放器' })).toHaveCount(0)
   })

@@ -42,6 +42,8 @@ export function GlobalPlayerFullFrame() {
   }, [transition, setTakeoverActive])
 
   if (!isHydrated || !hostOrigin?.slug) return null
+  // Watch 页面由 WatchPage 内嵌 PlayerShell 负责渲染，此处返回 null 避免 fixed 覆盖层遮挡 Nav/Footer
+  if (isWatchPage) return null
 
   const btnStyle: React.CSSProperties = {
     display: 'flex',
