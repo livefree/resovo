@@ -9813,3 +9813,29 @@ HANDOFF-11：Nav 改造，消费 `max-w-shell`、`var(--header-height)`、`var(-
 ### 质量门禁
 
 - typecheck ✅ / lint ✅ / test 147 files 1682 tests ✅
+
+## HANDOFF-16 ✅ 2026-04-23
+
+**Search 浮层 + 搜索页 token 化 + type tab**
+
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **commit**：ca596d9
+
+### 新增
+
+| 文件 | 说明 |
+|------|------|
+| `apps/web-next/src/components/search/SearchOverlay.tsx` | 640px 搜索浮层（快速跳转），grouped results + 联想词 |
+
+### 修改
+
+| 文件 | 说明 |
+|------|------|
+| `apps/web-next/src/components/layout/Nav.tsx` | 搜索 maxWidth→var(--search-input-max-w)，接入 SearchOverlay |
+| `apps/web-next/src/app/[locale]/search/_components/SearchPage.tsx` | 容器 max-w-page，input 56px，type tab bar，token 化 |
+| `apps/web-next/src/app/globals.css` | 追加 --search-* alias 9 个 |
+
+### 质量门禁
+
+- typecheck ✅ / lint ✅（0 warnings）/ test 147 files 1682 tests ✅
