@@ -85,7 +85,7 @@ function BrowsePagination({ page, totalPages, onPrev, onNext }: BrowsePagination
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          borderRadius: '8px',
+          borderRadius: 'var(--radius-base)',
           border: '1px solid var(--border-default)',
           background: 'var(--bg-surface)',
           color: 'var(--fg-default)',
@@ -103,7 +103,7 @@ function BrowsePagination({ page, totalPages, onPrev, onNext }: BrowsePagination
           fontSize: '14px',
           fontWeight: 500,
           color: 'var(--fg-default)',
-          minWidth: '60px',
+          minWidth: '60px', /* page display 最小宽，无对应 space token */
           textAlign: 'center',
         }}
       >
@@ -122,7 +122,7 @@ function BrowsePagination({ page, totalPages, onPrev, onNext }: BrowsePagination
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          borderRadius: '8px',
+          borderRadius: 'var(--radius-base)',
           border: '1px solid var(--border-default)',
           background: 'var(--bg-surface)',
           color: 'var(--fg-default)',

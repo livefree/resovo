@@ -152,7 +152,7 @@ export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
 
       <div
         className="relative z-10 max-w-feature mx-auto px-6"
-        style={{ paddingTop: '40px', paddingBottom: '40px' }}
+        style={{ paddingTop: 'var(--detail-hero-padding-y)', paddingBottom: 'var(--detail-hero-padding-y)' }}
       >
         {/* 双栏网格：mobile=单列，≥768=280px 1fr */}
         <div className="detail-hero-grid items-start">
@@ -382,7 +382,7 @@ function DetailHeroSkeleton() {
   return (
     <div
       className="max-w-feature mx-auto px-6 detail-hero-grid items-start"
-      style={{ paddingTop: '40px', paddingBottom: '40px' }}
+      style={{ paddingTop: 'var(--detail-hero-padding-y)', paddingBottom: 'var(--detail-hero-padding-y)' }}
     >
       <div
         className="flex flex-col mx-auto md:mx-0"

@@ -44,7 +44,7 @@ export function BrowseCard({ video }: BrowseCardProps) {
       </div>
 
       {/* 标题 */}
-      <div style={{ marginTop: '8px' }}>
+      <div style={{ marginTop: 'var(--space-2)' }}>
         <p
           className="line-clamp-2"
           style={{
@@ -61,7 +61,7 @@ export function BrowseCard({ video }: BrowseCardProps) {
             style={{
               fontSize: '12px',
               color: 'var(--fg-muted)',
-              marginTop: '2px',
+              marginTop: 'var(--space-0-5)',
             }}
           >
             {video.year}

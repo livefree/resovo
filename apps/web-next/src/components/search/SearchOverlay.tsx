@@ -71,10 +71,10 @@ function QuickResultItem({
       onClick={onClick}
       className="w-full text-left transition-colors hover:bg-[var(--bg-surface-sunken)]"
       style={{
-        padding: '10px 12px',
+        padding: 'var(--search-item-pad)',
         display: 'flex',
         alignItems: 'center',
-        gap: '12px',
+        gap: 'var(--search-main-gap)',
         background: 'none',
         border: 'none',
         cursor: 'pointer',
@@ -104,7 +104,7 @@ function QuickResultItem({
         >
           {result.title}
         </p>
-        <p style={{ fontSize: '12px', color: 'var(--fg-muted)', marginTop: '2px' }}>
+        <p style={{ fontSize: '12px', color: 'var(--fg-muted)', marginTop: 'var(--space-0-5)' }}>
           {[TYPE_LABELS[result.type] ?? result.type, result.year].filter(Boolean).join(' · ')}
         </p>
       </div>
@@ -143,10 +143,10 @@ function SuggestionItem({
       onClick={onClick}
       className="w-full text-left transition-colors hover:bg-[var(--bg-surface-sunken)]"
       style={{
-        padding: '10px 12px',
+        padding: 'var(--search-item-pad)',
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
+        gap: 'var(--space-2)',
         background: 'none',
         border: 'none',
         cursor: 'pointer',
@@ -235,21 +235,21 @@ export function SearchOverlay({ query, onNavigate, onClose, locale = 'zh-CN' }: 
       aria-label="搜索快速结果"
     >
       {!hasQuery ? (
-        <div style={{ padding: '24px 20px', textAlign: 'center', color: 'var(--fg-muted)', fontSize: '13px' }}>
+        <div style={{ padding: 'var(--search-empty-pad)', textAlign: 'center', color: 'var(--fg-muted)', fontSize: '13px' }}>
           输入关键词开始搜索
         </div>
       ) : searching ? (
-        <div style={{ padding: '16px 20px', color: 'var(--fg-muted)', fontSize: '13px' }}>
+        <div style={{ padding: 'var(--space-4) var(--space-5)', color: 'var(--fg-muted)', fontSize: '13px' }}>
           搜索中…
         </div>
       ) : (
         <>
           {/* 快速结果分组 */}
           {quickResults.length > 0 && (
-            <div style={{ padding: '12px 8px' }}>
+            <div style={{ padding: 'var(--search-group-pad)' }}>
               <p
                 style={{
-                  padding: '8px 12px',
+                  padding: 'var(--search-group-title-pad)',
                   fontSize: '11px',
                   fontWeight: 600,
                   color: 'var(--fg-subtle)',
@@ -270,13 +270,13 @@ export function SearchOverlay({ query, onNavigate, onClose, locale = 'zh-CN' }: 
           {suggestions.length > 0 && (
             <div
               style={{
-                padding: '12px 8px',
+                padding: 'var(--search-group-pad)',
                 borderTop: quickResults.length > 0 ? '1px solid var(--border-subtle)' : undefined,
               }}
             >
               <p
                 style={{
-                  padding: '8px 12px',
+                  padding: 'var(--search-group-title-pad)',
                   fontSize: '11px',
                   fontWeight: 600,
                   color: 'var(--fg-subtle)',
@@ -299,7 +299,7 @@ export function SearchOverlay({ query, onNavigate, onClose, locale = 'zh-CN' }: 
 
           {/* 无结果 */}
           {quickResults.length === 0 && suggestions.length === 0 && (
-            <div style={{ padding: '24px 20px', textAlign: 'center', color: 'var(--fg-muted)', fontSize: '13px' }}>
+            <div style={{ padding: 'var(--search-empty-pad)', textAlign: 'center', color: 'var(--fg-muted)', fontSize: '13px' }}>
               未找到相关内容
             </div>
           )}
@@ -314,8 +314,8 @@ export function SearchOverlay({ query, onNavigate, onClose, locale = 'zh-CN' }: 
             onClick={() => { onNavigate(query); onClose() }}
             className="w-full transition-colors hover:bg-[var(--bg-surface-sunken)]"
             style={{
-              padding: '8px',
-              borderRadius: '8px',
+              padding: 'var(--space-2)',
+              borderRadius: 'var(--radius-base)',
               fontSize: '13px',
               fontWeight: 500,
               color: 'var(--accent-default)',

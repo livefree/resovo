@@ -102,7 +102,7 @@ export function EpisodePicker({ video, onEpisodeChange }: EpisodePickerProps) {
                     data-testid={`episode-range-${r.start}`}
                     className="rounded text-xs transition-colors border"
                     style={{
-                      padding: '4px 8px',
+                      padding: 'var(--space-1) var(--space-2)',
                       fontWeight: isActive ? 600 : 400,
                       color: isActive ? 'var(--accent-default)' : 'var(--fg-muted)',
                       background: isActive ? 'var(--accent-muted)' : 'transparent',

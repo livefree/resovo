@@ -49,6 +49,13 @@
   --space-20:  5rem;
   --space-24:  6rem;
 
+  /* border radius scale */
+  --radius-sm:   4px;
+  --radius-base: 8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-pill: 9999px;
+
   /* layout container — max-w-shell / max-w-page / max-w-feature / max-w-wide */
   --layout-shell-max:    1440px;
   --layout-page-max:     1280px;
@@ -108,6 +115,11 @@
   --search-result-padding: 20px;              /* 搜索页结果卡 padding   */
   --search-cta-gap:        var(--space-2);    /* 结果卡 CTA 组间距 8px  */
   --search-tab-gap:        var(--space-6);    /* Tab 区与结果区间距 24px*/
+  --search-group-pad:      var(--space-3) var(--space-2);  /* 浮层分组 padding 12px 8px   */
+  --search-group-title-pad:var(--space-2) var(--space-3);  /* 浮层分组标题 padding 8px 12px*/
+  --search-item-pad:       10px var(--space-3);             /* 浮层单条结果 padding 10px 12px*/
+  --search-main-gap:       var(--space-3);    /* 浮层结果主信息 gap 12px*/
+  --search-empty-pad:      var(--space-6) var(--space-5);  /* 浮层空状态 padding 24px 20px */
 
   /* detail page alias — spec §14 */
   --detail-hero-cols:      280px 1fr;         /* 双栏 Hero 列宽            */
@@ -124,6 +136,7 @@
   --detail-meta-row-gap:   var(--space-2);    /* meta 行内 gap 8px         */
   --detail-cta-gap:        12px;              /* 播放按钮区 CTA gap        */
   --detail-rating-btn-gap: 24px;              /* 评分与 CTA 按钮间距       */
+  --detail-hero-padding-y: 40px;              /* Hero 区上下内距            */
 
   /* watch/player page alias — spec §15 */
   --player-panel-w:     360px;              /* 侧栏宽度                  */

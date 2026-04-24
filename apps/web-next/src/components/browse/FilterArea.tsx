@@ -131,8 +131,8 @@ function FilterOptionButton({ dim, value, label, isActive, onClick }: FilterOpti
       data-testid={testId}
       onClick={onClick}
       style={{
-        padding: '4px 12px',
-        borderRadius: '99px',
+        padding: 'var(--space-1) var(--space-3)',
+        borderRadius: 'var(--radius-pill)',
         fontSize: '13px',
         fontWeight: isActive ? 600 : 400,
         border: isActive ? '1px solid var(--accent-default)' : '1px solid transparent',
@@ -165,14 +165,14 @@ function FilterRowItem({ row, activeValue, onSelect, t }: FilterRowItemProps) {
       style={{
         display: 'flex',
         alignItems: 'center',
-        padding: '10px 0',
-        gap: '16px',
+        padding: 'var(--space-2-5) 0',
+        gap: 'var(--space-4)',
       }}
     >
       {/* 维度标签 */}
       <span
         style={{
-          width: '48px',
+          width: '48px', /* dim label 固定宽，无对应 space token */
           flexShrink: 0,
           fontSize: '13px',
           fontWeight: 600,
@@ -183,7 +183,7 @@ function FilterRowItem({ row, activeValue, onSelect, t }: FilterRowItemProps) {
       </span>
 
       {/* 选项列 */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-1)' }}>
         {row.options.map((opt) => (
           <FilterOptionButton
             key={opt.value || 'all'}
@@ -230,7 +230,7 @@ export function FilterArea() {
   return (
     <div
       data-testid="filter-area"
-      style={{ padding: '8px 20px' }}
+      style={{ padding: 'var(--space-2) var(--space-5)' /* spec §12: 8px 20px */ }}
     >
       {/* 基础 3 行 */}
       {BASIC_ROWS.map((row) => (
@@ -255,7 +255,7 @@ export function FilterArea() {
       ))}
 
       {/* 展开/收起按钮 */}
-      <div style={{ padding: '6px 0' }}>
+      <div style={{ padding: 'var(--space-1-5) 0' }}>
         <button
           type="button"
           data-testid="filter-expand"
@@ -266,7 +266,7 @@ export function FilterArea() {
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            padding: '4px 0',
+            padding: 'var(--space-1) 0',
             fontWeight: 500,
           }}
         >
