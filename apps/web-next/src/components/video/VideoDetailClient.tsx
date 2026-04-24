@@ -1,16 +1,17 @@
 'use client'
 
 /**
- * VideoDetailClient — HANDOFF-17/24 对齐 docs/frontend_design_spec_20260423.md §14
+ * VideoDetailClient — HANDOFF-17/24/27 对齐 docs/frontend_design_spec_20260423.md §14
  *
  * 布局：
  *   Hero（max-w-feature，双栏 280px+1fr）
- *   EpisodePicker（max-w-feature，repeat(10,1fr)，选集范围切换）
+ *   EpisodePicker（max-w-feature，repeat(10,1fr)，选集范围切换）→ 点击直接跳 /watch
  *   下方双栏（1fr + --detail-sidebar-w 320px，gap --detail-sidebar-gap 40px）
- *     主列：剧情简介（折叠）+ 演职员列表 + 制作 meta 行
+ *     主列：剧情简介（折叠）+ 演职员列表
  *     侧栏：RelatedVideos（竖向列表）
  *
  * section 间距：var(--detail-section-gap) 48px
+ * 简介↔主创间距：var(--detail-desc-cast-gap) 28px
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -20,7 +21,6 @@ import { extractShortId } from '@/lib/video-detail'
 import { DetailHero } from '@/components/detail/DetailHero'
 import { EpisodePicker } from '@/components/detail/EpisodePicker'
 import { RelatedVideos } from '@/components/detail/RelatedVideos'
-import { ChipType } from '@/components/primitives/chip-type'
 import { SafeImage } from '@/components/media'
 import type { Video, ApiResponse } from '@resovo/types'
 
@@ -40,7 +40,7 @@ function DescriptionBlock({ description }: { description: string | null }) {
   if (!description) return null
 
   return (
-    <section style={{ marginBottom: 'var(--detail-section-gap)' }}>
+    <section style={{ marginBottom: 'var(--detail-desc-cast-gap)' }}>
       <h3
         style={{
           fontSize: '15px',
@@ -183,85 +183,6 @@ function CastBlock({ director, cast }: CastBlockProps) {
   )
 }
 
-// ── MetaInfoBlock ─────────────────────────────────────────────────────────────
-
-function formatLanguages(langs: string[]): string {
-  if (langs.length === 0) return ''
-  try {
-    const names = new Intl.DisplayNames(['zh-Hans'], { type: 'language' })
-    return langs.map((l) => names.of(l) ?? l).join('、')
-  } catch {
-    return langs.join('、')
-  }
-}
-
-function formatCountry(code: string | null): string {
-  if (!code) return ''
-  try {
-    const names = new Intl.DisplayNames(['zh-Hans'], { type: 'region' })
-    return names.of(code) ?? code
-  } catch {
-    return code
-  }
-}
-
-interface MetaRow {
-  label: string
-  value: string
-}
-
-function MetaInfoBlock({ video }: { video: Video }) {
-  const rows: MetaRow[] = []
-
-  if (video.year) rows.push({ label: '年份', value: String(video.year) })
-
-  const country = formatCountry(video.country)
-  if (country) rows.push({ label: '国家/地区', value: country })
-
-  const langs = formatLanguages(video.languages)
-  if (langs) rows.push({ label: '语言', value: langs })
-
-  if (video.runtimeMinutes) {
-    rows.push({ label: '时长', value: `${video.runtimeMinutes} 分钟` })
-  }
-
-  if (rows.length === 0) return null
-
-  return (
-    <section style={{ marginBottom: 'var(--detail-section-gap)' }}>
-      <h3
-        style={{
-          fontSize: '15px',
-          fontWeight: 600,
-          color: 'var(--fg-default)',
-          marginBottom: '12px',
-        }}
-      >
-        制作信息
-      </h3>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {/* 类型 chip */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '13px', color: 'var(--fg-muted)', minWidth: '72px' }}>
-            类型
-          </span>
-          <ChipType type={video.type} size="sm" />
-        </div>
-        {rows.map(({ label, value }) => (
-          <div key={label} style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-            <span
-              style={{ fontSize: '13px', color: 'var(--fg-muted)', minWidth: '72px', flexShrink: 0 }}
-            >
-              {label}
-            </span>
-            <span style={{ fontSize: '13px', color: 'var(--fg-default)' }}>{value}</span>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
 // ── Props & Skeleton ──────────────────────────────────────────────────────────
 
 interface Props {
@@ -306,6 +227,8 @@ export function VideoDetailClient({ slug, showEpisodes }: Props) {
 
   if (!video) return <VideoDetailClientSkeleton />
 
+  const watchSlug = video.slug ? `${video.slug}-${video.shortId}` : video.shortId
+
   return (
     <>
       {/* Hero 区 */}
@@ -316,7 +239,11 @@ export function VideoDetailClient({ slug, showEpisodes }: Props) {
       {/* 选集区 */}
       {showEpisodes && video.episodeCount > 1 && (
         <div className="detail-cascade-2" style={{ marginTop: 0 }}>
-          <EpisodePicker video={video} onEpisodeChange={setActiveEpisode} />
+          <EpisodePicker
+            video={video}
+            watchBase={`/watch/${watchSlug}`}
+            onEpisodeChange={setActiveEpisode}
+          />
         </div>
       )}
 
@@ -331,7 +258,6 @@ export function VideoDetailClient({ slug, showEpisodes }: Props) {
           <div className="min-w-0">
             <DescriptionBlock description={video.description} />
             <CastBlock director={video.director} cast={video.cast} />
-            <MetaInfoBlock video={video} />
           </div>
 
           {/* 侧栏：相关推荐 */}

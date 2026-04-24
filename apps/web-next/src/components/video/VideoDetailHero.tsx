@@ -1,5 +1,10 @@
 'use client'
 
+/**
+ * @deprecated 已由 components/detail/DetailHero.tsx 替代，本文件不再有任何消费方。
+ * 保留仅作历史参考，HANDOFF-28 完成后可安全删除。
+ */
+
 import { useState } from 'react'
 import Link from 'next/link'
 import { MetaChip } from '@/components/search/MetaChip'

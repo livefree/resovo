@@ -138,6 +138,7 @@
   --detail-rating-btn-gap: 24px;              /* 评分与 CTA 按钮间距       */
   --detail-hero-padding-y: 40px;              /* Hero 区上下内距            */
   --detail-play-glow:      0 0 16px color-mix(in oklch, var(--accent-default) 25%, transparent); /* 播放按钮光晕 */
+  --detail-desc-cast-gap:  28px;              /* 简介↔主创区间距 spec §14.3 */
 
   /* watch/player page alias — spec §15 */
   --player-panel-w:     360px;              /* 侧栏宽度                  */

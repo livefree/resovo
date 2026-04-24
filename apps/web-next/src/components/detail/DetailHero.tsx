@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MetaChip } from '@/components/search/MetaChip'
 import { SafeImage } from '@/components/media'
@@ -66,8 +65,6 @@ const LANG_LABELS: Record<string, string> = {
   vi:      '越南语',
 }
 
-const DESC_COLLAPSE_THRESHOLD = 150
-
 interface MetaRowProps {
   label: string
   names: string[]
@@ -77,8 +74,11 @@ interface MetaRowProps {
 function MetaRow({ label, names, type }: MetaRowProps) {
   if (names.length === 0) return null
   return (
-    <div className="flex gap-2 items-start">
-      <span className="text-xs shrink-0 pt-0.5 w-12" style={{ color: 'var(--fg-muted)' }}>
+    <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+      <span
+        className="text-xs shrink-0 pt-0.5"
+        style={{ color: 'var(--fg-muted)', minWidth: '80px' }}
+      >
         {label}
       </span>
       <div className="flex flex-wrap gap-1.5">
@@ -99,7 +99,6 @@ interface DetailHeroProps {
 }
 
 export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
-  const [descExpanded, setDescExpanded] = useState(false)
   const enter = usePlayerStore((s) => s.enter)
   const router = useRouter()
 
@@ -108,20 +107,11 @@ export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
       ? `/watch/${video.slug}-${video.shortId}?ep=${episode}`
       : `/watch/${video.shortId}?ep=${episode}`
     enter({ shortId: video.shortId, slug: video.slug, episode, transition: 'standard-takeover' })
-    // Update URL so refresh/share/back land on /watch (same contract as VideoCard)
     router.push(watchHref)
   }
 
   const hasPersonnel =
     video.director.length > 0 || video.cast.length > 0 || video.writers.length > 0
-
-  const descLong =
-    !!video.description && video.description.length > DESC_COLLAPSE_THRESHOLD
-
-  const displayDesc =
-    descLong && !descExpanded
-      ? video.description!.slice(0, DESC_COLLAPSE_THRESHOLD) + '…'
-      : video.description
 
   const subtitleDisplay = video.subtitleLangs
     .map((lang) => LANG_LABELS[lang] ?? lang)
@@ -281,22 +271,6 @@ export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
               </div>
             )}
 
-            {video.sourceCount > 0 && (
-              <div
-                className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border"
-                style={{
-                  color: 'var(--state-success-fg)',
-                  borderColor: 'var(--state-success-border)',
-                  background: 'var(--state-success-bg)',
-                }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-                {video.sourceCount} 条线路
-              </div>
-            )}
-
             {video.subtitleLangs.length > 0 && (
               <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--fg-muted)' }}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -349,28 +323,6 @@ export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
             </div>
           )}
 
-          {video.description && (
-            <div className="space-y-1 pt-3 border-t" style={{ borderColor: 'var(--border-default)' }}>
-              <h3 className="text-sm font-semibold" style={{ color: 'var(--fg-default)' }}>剧情简介</h3>
-              <p
-                className="text-sm leading-relaxed"
-                style={{ color: 'var(--fg-muted)' }}
-                data-testid="detail-description"
-              >
-                {displayDesc}
-                {descLong && (
-                  <button
-                    type="button"
-                    onClick={() => setDescExpanded((v) => !v)}
-                    className="ml-1 text-xs font-medium underline underline-offset-2 hover:no-underline"
-                    style={{ color: 'var(--accent-default)' }}
-                  >
-                    {descExpanded ? '收起' : '展开'}
-                  </button>
-                )}
-              </p>
-            </div>
-          )}
         </div>
         </div>{/* /grid */}
       </div>

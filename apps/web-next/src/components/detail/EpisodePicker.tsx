@@ -23,10 +23,12 @@ const RANGE_SIZE = 10
 
 interface EpisodePickerProps {
   video: Video
+  /** 跳转前缀，如 '/zh/watch/three-body-abc123'；由父组件提供避免重复计算 */
+  watchBase: string
   onEpisodeChange?: (episode: number) => void
 }
 
-export function EpisodePicker({ video, onEpisodeChange }: EpisodePickerProps) {
+export function EpisodePicker({ video, watchBase, onEpisodeChange }: EpisodePickerProps) {
   const searchParams = useSearchParams()
   const router = useRouter()
 
@@ -65,8 +67,8 @@ export function EpisodePicker({ video, onEpisodeChange }: EpisodePickerProps) {
 
   function handleSelect(ep: number) {
     setActiveEp(ep)
-    router.replace(`?ep=${ep}`, { scroll: false })
     onEpisodeChange?.(ep)
+    router.push(`${watchBase}?ep=${ep}`)
   }
 
   function handleRangeChange(start: number) {
