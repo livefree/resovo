@@ -8,6 +8,8 @@ import type { SharedElementComponent } from '@/components/primitives/shared-elem
 import { reportBrokenImage } from '@/lib/report-broken-image'
 import { usePlayerStore } from '@/stores/playerStore'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
+import { Breadcrumb } from '@/components/primitives/breadcrumb/Breadcrumb'
+import { ALL_CATEGORIES } from '@/lib/categories'
 import type { Video } from '@resovo/types'
 
 const SharedElement = SharedElementBase as SharedElementComponent
@@ -118,6 +120,14 @@ export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
     .slice(0, 4)
     .join(' / ')
 
+  const typeEntry = ALL_CATEGORIES.find((c) => c.videoType === video.type)
+  const typeParam = typeEntry?.typeParam ?? 'others'
+  const breadcrumbItems = [
+    { label: '首页', href: '/' },
+    { label: TYPE_LABELS[video.type] ?? video.type, href: `/${typeParam}` },
+    { label: video.title },
+  ]
+
   return (
     <section
       className="relative"
@@ -144,13 +154,15 @@ export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
         className="relative z-10 max-w-feature mx-auto px-6"
         style={{ paddingTop: 'var(--detail-hero-padding-y)', paddingBottom: 'var(--detail-hero-padding-y)' }}
       >
+        <Breadcrumb items={breadcrumbItems} />
+
         {/* 双栏网格：mobile=单列，≥768=280px 1fr */}
         <div className="detail-hero-grid items-start">
 
-        {/* 封面列（SharedElement.Source） */}
+        {/* 封面列 */}
         <div
-          className="flex flex-col mx-auto md:mx-0"
-          style={{ gap: 'var(--detail-cta-gap)', width: '100%', maxWidth: 'var(--detail-cover-w)' }}
+          className="mx-auto md:mx-0"
+          style={{ width: '100%', maxWidth: 'var(--detail-cover-w)' }}
         >
           <SharedElement.Target
             id={`video-card-${video.id}`}
@@ -173,19 +185,6 @@ export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
               }
             />
           </SharedElement.Target>
-
-          <button
-            type="button"
-            onClick={handlePlay}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-sm font-bold transition-all hover:scale-105"
-            style={{ background: 'var(--accent-default)', color: 'var(--accent-fg)', boxShadow: 'var(--detail-play-glow)' }}
-            data-testid="detail-play-btn"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <polygon points="5 3 19 12 5 21 5 3" />
-            </svg>
-            立即播放
-          </button>
         </div>
 
         {/* 右侧元信息 */}
@@ -281,6 +280,26 @@ export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
             )}
           </div>
 
+          {/* CTA 播放按钮（右栏） */}
+          <button
+            type="button"
+            onClick={handlePlay}
+            className="flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-sm font-bold transition-all hover:scale-105"
+            style={{
+              alignSelf: 'flex-start',
+              background: 'var(--accent-default)',
+              color: 'var(--accent-fg)',
+              boxShadow: 'var(--detail-play-glow)',
+              minWidth: '140px',
+            }}
+            data-testid="detail-play-btn"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            立即播放
+          </button>
+
           {(hasPersonnel || video.aliases.length > 0 || video.languages.length > 0 || video.tags.length > 0) && (
             <div
               className="flex flex-col pt-3 border-t"
@@ -333,21 +352,21 @@ export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
 function DetailHeroSkeleton() {
   return (
     <div
-      className="max-w-feature mx-auto px-6 detail-hero-grid items-start"
+      className="relative z-10 max-w-feature mx-auto px-6"
       style={{ paddingTop: 'var(--detail-hero-padding-y)', paddingBottom: 'var(--detail-hero-padding-y)' }}
     >
-      <div
-        className="flex flex-col mx-auto md:mx-0"
-        style={{ gap: 'var(--detail-cta-gap)', width: '100%', maxWidth: 'var(--detail-cover-w)' }}
-      >
-        <Skeleton shape="rect" className="w-full rounded-2xl" style={{ aspectRatio: '2/3' }} />
-        <Skeleton shape="rect" height={48} className="rounded-xl" />
-      </div>
-      <div className="flex flex-col" style={{ gap: 'var(--detail-meta-gap)' }}>
-        <Skeleton shape="text" height={40} className="w-3/4" />
-        <Skeleton shape="text" height={20} className="w-1/2" delay={300} />
-        <Skeleton shape="text" height={16} delay={300} />
-        <Skeleton shape="text" height={16} className="w-5/6" delay={300} />
+      <Skeleton shape="text" width={200} height={12} style={{ marginBottom: '20px' }} />
+      <div className="detail-hero-grid items-start">
+        <div style={{ width: '100%', maxWidth: 'var(--detail-cover-w)' }}>
+          <Skeleton shape="rect" className="w-full rounded-2xl" style={{ aspectRatio: '2/3' }} />
+        </div>
+        <div className="flex flex-col" style={{ gap: 'var(--detail-meta-gap)' }}>
+          <Skeleton shape="text" height={40} className="w-3/4" />
+          <Skeleton shape="text" height={20} className="w-1/2" delay={300} />
+          <Skeleton shape="text" height={16} delay={300} />
+          <Skeleton shape="rect" height={48} className="rounded-xl w-40" delay={300} />
+          <Skeleton shape="text" height={16} className="w-5/6" delay={300} />
+        </div>
       </div>
     </div>
   )

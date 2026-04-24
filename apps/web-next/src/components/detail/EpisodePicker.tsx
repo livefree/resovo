@@ -80,8 +80,6 @@ export function EpisodePicker({ video, watchBase, onEpisodeChange }: EpisodePick
   return (
     <section
       data-testid="episode-picker"
-      className="border-t"
-      style={{ borderColor: 'var(--border-default)' }}
     >
       <div className="max-w-feature mx-auto px-6 py-6">
         {/* 标题 + 范围切换 */}
@@ -152,7 +150,7 @@ export function EpisodePicker({ video, watchBase, onEpisodeChange }: EpisodePick
 
 function EpisodePickerSkeleton() {
   return (
-    <div className="border-t" style={{ borderColor: 'var(--border-default)' }}>
+    <div>
       <div className="max-w-feature mx-auto px-6 py-6">
         <Skeleton shape="text" width={128} height={16} className="mb-4" />
         <div className="detail-ep-grid">

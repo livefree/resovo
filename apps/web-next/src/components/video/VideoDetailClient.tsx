@@ -99,9 +99,13 @@ interface CastBlockProps {
 }
 
 function CastBlock({ director, cast }: CastBlockProps) {
-  // TODO: 当前 /videos/:slug 的 cast/director 字段仅含名字字符串，无头像 URL。
-  // 待后端提供 /media-catalog/:catalogId/credits 端点后，替换为真实头像图片。
   if (director.length === 0 && cast.length === 0) return null
+
+  const MAX_TOTAL = 10
+  const persons = [
+    ...director.map((name) => ({ name, role: '导演' })),
+    ...cast.slice(0, Math.max(0, MAX_TOTAL - director.length)).map((name) => ({ name, role: '演员' })),
+  ]
 
   return (
     <section style={{ marginBottom: 'var(--detail-section-gap)' }}>
@@ -110,75 +114,75 @@ function CastBlock({ director, cast }: CastBlockProps) {
           fontSize: '15px',
           fontWeight: 600,
           color: 'var(--fg-default)',
-          marginBottom: '12px',
+          marginBottom: '16px',
         }}
       >
-        演职人员
+        主创阵容
       </h3>
 
-      {director.length > 0 && (
-        <div style={{ marginBottom: '12px', fontSize: '13px', color: 'var(--fg-muted)' }}>
-          <span style={{ color: 'var(--fg-default)', fontWeight: 500 }}>导演：</span>
-          {director.join('、')}
-        </div>
-      )}
-
-      {cast.length > 0 && (
-        <div
-          data-testid="cast-list"
-          style={{
-            display: 'flex',
-            gap: '16px',
-            overflowX: 'auto',
-            paddingBottom: '4px',
-            scrollbarWidth: 'none',
-          }}
-        >
-          {cast.map((name) => (
+      <div
+        data-testid="cast-list"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(5, 1fr)',
+          gap: '16px',
+        }}
+      >
+        {persons.map(({ name, role }) => (
+          <div
+            key={`${role}-${name}`}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
             <div
-              key={name}
               style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '6px',
-                flexShrink: 0,
-                width: '56px',
+                width: '100%',
+                aspectRatio: '1 / 1',
+                borderRadius: '50%',
+                overflow: 'hidden',
               }}
             >
-              <div
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  overflow: 'hidden',
-                  flexShrink: 0,
-                }}
-              >
-                <SafeImage
-                  src={undefined}
-                  aspect="1:1"
-                  width={40}
-                  height={40}
-                  alt={name}
-                  fallback={{ variant: 'avatar', ariaLabel: name }}
-                />
-              </div>
-              <span
-                style={{
-                  fontSize: '11px',
-                  color: 'var(--fg-muted)',
-                  textAlign: 'center',
-                  lineHeight: 1.3,
-                  wordBreak: 'break-all',
-                }}
-              >
-                {name}
-              </span>
+              <SafeImage
+                src={undefined}
+                aspect="1:1"
+                width={80}
+                height={80}
+                alt={name}
+                fallback={{ variant: 'avatar', ariaLabel: name }}
+              />
             </div>
-          ))}
-        </div>
-      )}
+            <span
+              style={{
+                fontSize: '12px',
+                fontWeight: 600,
+                color: 'var(--fg-default)',
+                textAlign: 'center',
+                lineHeight: 1.3,
+                wordBreak: 'break-all',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}
+            >
+              {name}
+            </span>
+            <span
+              style={{
+                fontSize: '11px',
+                color: 'var(--fg-subtle)',
+                textAlign: 'center',
+              }}
+            >
+              {role}
+            </span>
+          </div>
+        ))}
+      </div>
     </section>
   )
 }

@@ -10406,9 +10406,64 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
      - meta 信息行显示完整
    - **完成备注**：typecheck/lint/test 全绿（1682 tests PASS）。DescriptionBlock 使用 `-webkit-line-clamp: 4` + `scrollHeight > clientHeight` 溢出检测，无 description 时返回 null。CastBlock：cast/director 均空时返回 null；TODO 注释注明当前无头像 URL（待 /media-catalog/credits 端点实现后替换）。MetaInfoBlock 使用 `Intl.DisplayNames` 转换语言/国家代码，各字段空时跳过行。执行模型: claude-sonnet-4-6
 
+6b. **HANDOFF-27 — 详情页 P1 快速清理修复**（状态：✅ 已完成，commit d26fa72，2026-04-24）
+   - 创建时间：2026-04-24
+   - 建议模型：sonnet
+   - 估时：0.4d
+   - 前置依赖：HANDOFF-24 ✅
+   - 修复范围：G-5 / G-6 / G-8 / G-9 / G-11 / G-12 / G-14
+   - 文件范围：
+     - `apps/web-next/src/components/detail/DetailHero.tsx`：删除 sourceCount pill（G-5）；删除 description 渲染块 lines 352–377（G-9）；Meta 表格列间距改为 `columnGap:20`、标签宽改为 `minWidth:80px`（G-6）
+     - `apps/web-next/src/components/detail/EpisodePicker.tsx`：`handleSelect` 改为 `router.push(/watch/[slug]?ep=N)`（G-8）
+     - `apps/web-next/src/components/video/VideoDetailClient.tsx`：删除 `<MetaInfoBlock>`（G-12）；`DescriptionBlock.marginBottom` 改为 `var(--detail-desc-cast-gap)` 28px（G-11）
+     - `apps/web-next/src/components/video/VideoDetailHero.tsx`：顶部加 `@deprecated` JSDoc（G-14）
+     - `apps/web-next/src/app/globals.css`：新增 `--detail-desc-cast-gap: 28px` token
+   - 验收要点：
+     - DetailHero 不再渲染 description、不再显示 sourceCount pill
+     - 选集按钮点击后跳转到 `/watch/[slug]?ep=N`
+     - MetaInfoBlock 从下半区移除
+     - Meta 表格标签列宽 80px、列间距 20px
+   - 执行模型：claude-sonnet-4-6
+
+6c. **HANDOFF-28 — 详情页结构重构 + 演职员 UI + 相关推荐**（状态：✅ 已完成，2026-04-24）
+   - 创建时间：2026-04-24
+   - 建议模型：sonnet
+   - 估时：0.75d
+   - 前置依赖：HANDOFF-27 ✅
+   - 修复范围：G-1 / G-2 / G-3 / G-10 / G-13
+   - 文件范围：
+     - `apps/web-next/src/components/primitives/breadcrumb/Breadcrumb.tsx`：新建面包屑组件（fontSize:12，color:var(--fg-subtle)，`›` 分隔符）（G-1）
+     - `apps/web-next/src/components/video/VideoDetailClient.tsx`：整合单容器结构（G-2）；`VideoDetailClient` 渲染树重组，内容全在 `max-w-feature` 单容器内
+     - `apps/web-next/src/components/detail/DetailHero.tsx`：CTA 按钮移至右列评分区下方（G-3）；封面列仅保留封面图
+     - `apps/web-next/src/components/video/VideoDetailClient.tsx`：`CastBlock` 重构为 5 列 grid（aspectRatio:1/1 圆形头像 + 姓名 + 职务标签），处理导演/演员混排（G-10）
+     - `apps/web-next/src/components/detail/RelatedVideos.tsx`：sidebar variant 改为 `flex-col gap-3`，每项 `flex gap-3`，左侧 60px poster（G-13）
+   - 验收要点：
+     - 页面顶部有面包屑 `首页 › [类型] › [标题]`
+     - 封面列无播放按钮，CTA 在右列
+     - 演职员为 5 列 grid，每格：圆形头像 + 姓名 + 职务
+     - 相关推荐为竖向列表，每项横排 60px poster + 文字
+   - 执行模型：claude-sonnet-4-6
+
+6d. **HANDOFF-29 — 详情页播放源选择器**（状态：📋 待执行）
+   - 创建时间：2026-04-24
+   - 建议模型：sonnet
+   - 估时：0.4d
+   - 前置依赖：HANDOFF-27 ✅（可与 HANDOFF-28 并行）
+   - 修复范围：G-4
+   - API：`GET /videos/:shortId/sources?episode=N` → `{ data: VideoSource[] }`（`sourceName` / `siteDisplayName` / `id`）
+   - 文件范围：
+     - `apps/web-next/src/components/detail/DetailHero.tsx`：在 Meta 表格下方新增"播放源："标签 + 可点击线路 pill 列表，激活态 `var(--accent-muted)` 背景 + `var(--accent-default)` 文字，非激活态 `var(--bg-surface-sunken)` + `var(--border-default)` 边框；选中 source 状态提升到 `VideoDetailClient`
+     - `apps/web-next/src/components/video/VideoDetailClient.tsx`：请求 `/videos/:shortId/sources?episode=${activeEpisode}`，结果传入 DetailHero；activeSource 切换时更新 `handlePlay` 的 source 参数
+   - 验收要点：
+     - Hero 右列 Meta 下方有播放源 pill 列表
+     - 无源时不渲染该区块
+     - 激活线路高亮，点击切换
+     - "立即播放"按钮跳转携带选中线路
+   - 执行模型：claude-sonnet-4-6
+
 #### REVIEW-B — Batch B 阶段独立审核
 
-- **触发条件**：HANDOFF-22 + HANDOFF-23 + HANDOFF-24 全部 ✅，且 typecheck / lint / test / e2e 全绿
+- **触发条件**：HANDOFF-22 + HANDOFF-23 + HANDOFF-24 + HANDOFF-27 + HANDOFF-28 + HANDOFF-29 全部 ✅，且 typecheck / lint / test / e2e 全绿
 - **模型**：arch-reviewer（`claude-opus-4-6`）
 - **审核要点**（8 项）：
   1. FeaturedRow 数据降级路径（无运营数据时 fallback 不白屏）
