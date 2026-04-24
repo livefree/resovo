@@ -9,57 +9,35 @@ import { useBrand } from '@/hooks/useBrand'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import { SearchOverlay } from '@/components/search/SearchOverlay'
+import { ALL_CATEGORIES, MAIN_TYPE_PARAMS, MORE_TYPE_PARAMS } from '@/lib/categories'
 
 /**
- * Nav — HANDOFF-11 对齐 docs/frontend_design_spec_20260423.md §8
+ * Nav — HANDOFF-21 对齐 docs/frontend_design_spec_20260423.md §8
  *
  * 结构（从左到右）：
  *   1. Logo：渐变方块 "R" + 品牌名
  *   2. 主分类 nav-link（首页/电影/剧集/动漫/综艺/纪录片）+ "更多 ▼" 下拉
- *      - MAIN_CATEGORIES 5 种 + 首页共 6 扁平
- *      - MORE_CATEGORIES 6 种（short/sports/music/news/kids/other）进"更多"下拉
- *      - 单行显示，不允许内部横向滚动；宽度不足由全站 min-width + 横向滚动承接
- *      - active 态：accent 色 + 底部 underline，贴 header 底部 border
- *   3. 搜索 input（flex-1，受 max-width 约束，搜索 token 由 HANDOFF-16 补齐）
- *   4. 右侧：ThemeToggle + 齿轮设置按钮（档位 2 绑 Drawer）
- *
- * Token 消费：
- *   height           → var(--header-height)         72px
- *   容器 max-width   → max-w-shell                  var(--layout-shell-max) 1440px
- *   左右 padding     → px-8                         var(--space-8) = 32px = --layout-shell-inset
- *   内部 gap         → gap-6                        var(--space-6) = 24px = --header-main-gap
- *   nav item gap     → gap-1                        var(--space-1) = 4px  = --header-nav-gap
- *   右侧 gap         → gap-2                        var(--space-2) = 8px  = --header-right-gap
- *   underline 偏移   → var(--header-underline-offset) 17px
- *
- * HANDOFF-11 关键变化：
- *   - 移除 HEADER_HEIGHT / UNDERLINE_BOTTOM_OFFSET 硬编码常量，改用 CSS 变量
- *   - 移除 <nav> 的 overflow-x-auto（原用于内部横向滚动的局部对冲）
- *     → 分类数量由"更多"下拉解决；宽度不足由 .app-shell min-width + 全站横向滚动承接
- *   - underline 不再被 nav overflow 裁切
- *   - 档位 2 不做：Settings Drawer / locale 切换 / ⌘K 快捷键
+ *      - MAIN_TYPE_PARAMS 5 种 + 首页共 6 扁平
+ *      - MORE_TYPE_PARAMS 6 种（short/sports/music/news/kids/other）进"更多"下拉
+ *      - 分类数据单源 lib/categories.ts（I-6）
+ *   3. 搜索 input（flex-1，max-width 240px by --search-input-max-w）
+ *      - ⌘K（Mac）/ Ctrl+K（其他）徽章；键盘监听打开浮层（I-1/I-3）
+ *      - 浮层无输入时展示 nav.hotSearchTerms 热搜列表（I-1）
+ *   4. 右侧：ThemeToggle + 齿轮设置按钮（w-full 保证贴右，I-2）
+ *   5. "更多" 下拉：hover 展开（桌面）/ click 展开（触屏）（I-5）
  */
 
-// 5 主分类（扁平显示）
-const MAIN_CATEGORIES = [
-  { key: 'movie',       labelKey: 'nav.catMovie',       typeParam: 'movie' },
-  { key: 'series',      labelKey: 'nav.catSeries',      typeParam: 'series' },
-  { key: 'anime',       labelKey: 'nav.catAnime',       typeParam: 'anime' },
-  { key: 'tvshow',      labelKey: 'nav.catVariety',     typeParam: 'tvshow' },
-  { key: 'documentary', labelKey: 'nav.catDocumentary', typeParam: 'documentary' },
-] as const
+// 主分类（5 种，扁平显示），单源 lib/categories.ts（I-6）
+const MAIN_CATS = ALL_CATEGORIES.filter((c) =>
+  (MAIN_TYPE_PARAMS as readonly string[]).includes(c.typeParam)
+)
 
-// 6 扩展分类（"更多 ▼" 下拉内）
-const MORE_CATEGORIES = [
-  { key: 'short',  labelKey: 'nav.catShort',  typeParam: 'short' },
-  { key: 'sports', labelKey: 'nav.catSports', typeParam: 'sports' },
-  { key: 'music',  labelKey: 'nav.catMusic',  typeParam: 'music' },
-  { key: 'news',   labelKey: 'nav.catNews',   typeParam: 'news' },
-  { key: 'kids',   labelKey: 'nav.catKids',   typeParam: 'kids' },
-  { key: 'other',  labelKey: 'nav.catOther',  typeParam: 'other' },
-] as const
+// 扩展分类（6 种，"更多 ▼" 下拉内），单源 lib/categories.ts（I-6）
+const MORE_CATS = ALL_CATEGORIES.filter((c) =>
+  (MORE_TYPE_PARAMS as readonly string[]).includes(c.typeParam)
+)
 
-const MORE_KEYS = new Set<string>(MORE_CATEGORIES.map((c) => c.typeParam))
+const MORE_KEYS = new Set<string>(MORE_TYPE_PARAMS)
 
 // ── Nav.Skeleton ──────────────────────────────────────────────────────────────
 
@@ -75,14 +53,14 @@ function NavSkeleton({ className }: { className?: string }) {
       data-testid="nav-skeleton"
       aria-hidden="true"
     >
-      <div className="max-w-shell mx-auto px-8 flex items-center h-full gap-6">
+      <div className="max-w-shell mx-auto px-8 flex items-center h-full gap-6 w-full">
         <Skeleton shape="rect" width={120} height={28} />
         <div className="hidden sm:flex gap-3 flex-1">
           {[36, 36, 36, 36, 48, 48].map((w, i) => (
             <Skeleton key={i} shape="text" width={w} height={16} delay={300} />
           ))}
         </div>
-        <Skeleton shape="rect" width={480} height={40} className="hidden md:block flex-1" />
+        <Skeleton shape="rect" width={240} height={40} className="hidden md:block flex-1" />
         <div className="flex gap-2">
           <Skeleton shape="rect" width={120} height={40} />
           <Skeleton shape="rect" width={40} height={40} />
@@ -136,8 +114,6 @@ function NavLinkItem({ href, active, label, testId }: NavLinkItemProps) {
             position: 'absolute',
             left: '14px',
             right: '14px',
-            // underline 延伸到 header 底部 border 内侧
-            // <nav> 无 overflow，underline 不被裁切（HANDOFF-11 核心修复）
             bottom: 'calc(-1 * var(--header-underline-offset))',
             height: '2px',
             background: 'var(--accent-default)',
@@ -149,8 +125,7 @@ function NavLinkItem({ href, active, label, testId }: NavLinkItemProps) {
   )
 }
 
-// ── MoreMenu "更多 ▼" 下拉（6 种扩展 VideoType）──────────────────────────────
-// 职责：解决分类数量问题，不负责对冲视口宽度不足。
+// ── MoreMenu "更多 ▼" 下拉（I-5：hover 展开桌面 / click 展开触屏）────────────
 
 interface MoreMenuProps {
   readonly locale: string
@@ -159,18 +134,17 @@ interface MoreMenuProps {
 }
 
 function MoreMenu({ locale, currentType, label }: MoreMenuProps) {
-  const t = useTranslations()
+  const t = useTranslations('nav')
   const [open, setOpen] = useState(false)
-  const triggerRef = useRef<HTMLButtonElement | null>(null)
-  const menuRef = useRef<HTMLDivElement | null>(null)
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
 
   const active = currentType !== null && MORE_KEYS.has(currentType)
 
+  // 点击外部 + ESC 关闭（touch 模式下需要）
   useEffect(() => {
     if (!open) return
     function handleClickOutside(e: MouseEvent) {
-      const target = e.target as Node
-      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return
+      if (wrapperRef.current?.contains(e.target as Node)) return
       setOpen(false)
     }
     function handleEsc(e: KeyboardEvent) {
@@ -184,10 +158,27 @@ function MoreMenu({ locale, currentType, label }: MoreMenuProps) {
     }
   }, [open])
 
+  function handleMouseEnter() {
+    // hover 展开仅用于 pointer: fine（桌面鼠标）设备（I-5）
+    if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
+      setOpen(true)
+    }
+  }
+
+  function handleMouseLeave() {
+    if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
+      setOpen(false)
+    }
+  }
+
   return (
-    <div className="relative">
+    <div
+      ref={wrapperRef}
+      className="relative"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       <button
-        ref={triggerRef}
         type="button"
         data-testid="nav-more-trigger"
         aria-haspopup="menu"
@@ -255,7 +246,6 @@ function MoreMenu({ locale, currentType, label }: MoreMenuProps) {
 
       {open && (
         <div
-          ref={menuRef}
           role="menu"
           data-testid="nav-more-menu"
           className="absolute z-50 top-full mt-2"
@@ -269,14 +259,14 @@ function MoreMenu({ locale, currentType, label }: MoreMenuProps) {
             padding: '6px',
           }}
         >
-          {MORE_CATEGORIES.map((cat) => {
+          {MORE_CATS.map((cat) => {
             const isActive = currentType === cat.typeParam
             return (
               <Link
-                key={cat.key}
+                key={cat.typeParam}
                 href={`/${locale}/${cat.typeParam}`}
                 role="menuitem"
-                data-testid={`nav-more-${cat.key}`}
+                data-testid={`nav-more-${cat.typeParam}`}
                 onClick={() => setOpen(false)}
                 className="block transition-colors"
                 style={{
@@ -309,17 +299,38 @@ function MoreMenu({ locale, currentType, label }: MoreMenuProps) {
 
 export function Nav() {
   const { brand } = useBrand()
-  const t = useTranslations()
+  const t = useTranslations('nav')
   const pathname = usePathname()
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
   const [overlayOpen, setOverlayOpen] = useState(false)
+  const [isMac, setIsMac] = useState(false)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const searchFormRef = useRef<HTMLFormElement | null>(null)
 
   const currentLocale = pathname.split('/')[1] ?? 'en'
   const currentType = pathname.split('/')[2] ?? null
   const isHomePage = !currentType
+
+  // OS 检测（SSR 安全：只在 client mount 后读取 navigator）（I-1/I-3）
+  useEffect(() => {
+    if (typeof navigator !== 'undefined') {
+      setIsMac(/Mac|iPhone|iPad|iPod/.test(navigator.platform))
+    }
+  }, [])
+
+  // ⌘K / Ctrl+K 键盘监听（I-1/I-3）
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setOverlayOpen(true)
+        searchInputRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const submitSearch = useCallback(
     (q: string) => {
@@ -332,6 +343,9 @@ export function Nav() {
     [router, currentLocale],
   )
 
+  // 热搜词（来自 messages 的 nav.hotSearchTerms，无 API 调用；?.() 兼容测试 mock）
+  const hotSearchTerms: string[] = (t.raw?.('hotSearchTerms') as string[]) ?? []
+
   return (
     <header
       data-testid="global-nav"
@@ -342,8 +356,8 @@ export function Nav() {
         borderColor: 'var(--border-default)',
       }}
     >
-      {/* 内容容器：max-w-shell(1440px)，px-8(32px)，gap-6(24px) */}
-      <div className="max-w-shell mx-auto px-8 h-full flex items-center gap-6">
+      {/* 内容容器：w-full 保证右侧组件贴右边缘（I-2）*/}
+      <div className="max-w-shell mx-auto px-8 h-full flex items-center gap-6 w-full">
 
         {/* 1. Logo */}
         <Link
@@ -375,9 +389,7 @@ export function Nav() {
           {brand.name}
         </Link>
 
-        {/* 2. 主导航 + "更多" 下拉
-            shrink-0：不参与 flex 空间压缩；宽度不足由全站 min-width + 横向滚动承接
-            无 overflow：underline 不被裁切（spec §8.3 / §18.3） */}
+        {/* 2. 主导航 + "更多" 下拉（单源 lib/categories.ts，I-6）*/}
         <nav
           className="flex items-center gap-1 shrink-0"
           aria-label="主导航"
@@ -385,27 +397,26 @@ export function Nav() {
           <NavLinkItem
             href={`/${currentLocale}`}
             active={isHomePage}
-            label={t('nav.home')}
+            label={t('home')}
             testId="nav-home"
           />
-          {MAIN_CATEGORIES.map((cat) => (
+          {MAIN_CATS.map((cat) => (
             <NavLinkItem
-              key={cat.key}
+              key={cat.typeParam}
               href={`/${currentLocale}/${cat.typeParam}`}
               active={currentType === cat.typeParam}
               label={t(cat.labelKey)}
-              testId={`nav-cat-${cat.key}`}
+              testId={`nav-cat-${cat.typeParam}`}
             />
           ))}
           <MoreMenu
             locale={currentLocale}
             currentType={currentType}
-            label={t('nav.more')}
+            label={t('more')}
           />
         </nav>
 
-        {/* 3. 搜索（flex-1 取余下空间，max-width 由 --search-input-max-w 约束）
-            HANDOFF-16：SearchOverlay 在 focus 时展示 640px 快速跳转浮层 */}
+        {/* 3. 搜索（flex-1 取余下空间，max-width 由 --search-input-max-w 约束）*/}
         <form
           ref={searchFormRef}
           role="search"
@@ -417,6 +428,7 @@ export function Nav() {
           className="hidden md:flex flex-1 relative"
           style={{ maxWidth: 'var(--search-input-max-w)' }}
         >
+          {/* 搜索图标 */}
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="18"
@@ -440,6 +452,7 @@ export function Nav() {
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.3-4.3" />
           </svg>
+
           <input
             ref={searchInputRef}
             type="search"
@@ -448,16 +461,15 @@ export function Nav() {
             onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={() => setOverlayOpen(true)}
             onBlur={() => {
-              // 延迟关闭：允许 SearchOverlay 内按钮的 click 先触发
               setTimeout(() => setOverlayOpen(false), 200)
             }}
-            placeholder={t('nav.searchPlaceholder')}
-            aria-label={t('nav.searchPlaceholder')}
+            placeholder={t('searchPlaceholder')}
+            aria-label={t('searchPlaceholder')}
             enterKeyHint="search"
             className="w-full outline-none focus:border-[var(--accent-default)] focus:bg-[var(--bg-surface)]"
             style={{
               height: '40px',
-              padding: '0 16px 0 42px',
+              padding: '0 56px 0 42px',
               fontSize: '14px',
               borderRadius: '10px',
               border: '1px solid var(--border-default)',
@@ -466,10 +478,35 @@ export function Nav() {
             }}
           />
 
-          {/* SearchOverlay：640px 宽浮层，快速跳转 — HANDOFF-16 spec §13.1 */}
+          {/* ⌘K / Ctrl+K 徽章（I-1/I-3，SSR 安全：isMac 默认 false，mount 后更新）*/}
+          <kbd
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              right: '10px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              padding: '2px 5px',
+              fontSize: '11px',
+              fontWeight: 600,
+              borderRadius: '4px',
+              border: '1px solid var(--border-default)',
+              background: 'var(--bg-surface-sunken)',
+              color: 'var(--fg-subtle)',
+              userSelect: 'none',
+              pointerEvents: 'none',
+              whiteSpace: 'nowrap',
+              lineHeight: '16px',
+            }}
+          >
+            {isMac ? '⌘K' : 'Ctrl+K'}
+          </kbd>
+
+          {/* SearchOverlay：浮层，无输入时展示热搜，有输入时展示结果 */}
           {overlayOpen && (
             <SearchOverlay
               query={searchQuery}
+              hotSearchTerms={hotSearchTerms}
               onNavigate={(q) => {
                 setSearchQuery(q)
                 submitSearch(q)
@@ -480,15 +517,15 @@ export function Nav() {
           )}
         </form>
 
-        {/* 4. 右侧操作区：gap-2(8px) 固定间距，shrink-0 不压缩 */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* 4. 右侧操作区：gap-2(8px) 固定间距，shrink-0 不压缩，w-full 保证贴右（I-2）*/}
+        <div className="flex items-center gap-2 shrink-0 ml-auto">
           <ThemeToggle />
 
           <button
             type="button"
             data-testid="nav-settings"
-            aria-label={t('nav.settings')}
-            title={t('nav.settings')}
+            aria-label={t('settings')}
+            title={t('settings')}
             className="inline-flex items-center justify-center transition-colors"
             style={{
               width: '40px',

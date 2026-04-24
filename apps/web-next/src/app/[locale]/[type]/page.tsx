@@ -3,24 +3,14 @@ import { getTranslations } from 'next-intl/server'
 import { PageTransition } from '@/components/primitives/page-transition/PageTransition'
 import { FilterArea } from '@/components/browse/FilterArea'
 import { BrowseGrid } from '@/components/browse/BrowseGrid'
+import { ALL_CATEGORIES } from '@/lib/categories'
 import type { VideoType } from '@resovo/types'
 
-// ── 类型映射 ──────────────────────────────────────────────────────────────────
+// ── 类型映射（单源：lib/categories.ts，ADR-048 §4）────────────────────────────
 
-// tvshow maps to VideoType 'variety' (ADR-048 §4, aligned with video-route.ts)
-const VALID_TYPES: Record<string, VideoType> = {
-  movie:        'movie',
-  series:       'series',
-  anime:        'anime',
-  tvshow:       'variety',
-  documentary:  'documentary',
-  short:        'short',
-  sports:       'sports',
-  music:        'music',
-  news:         'news',
-  kids:         'kids',
-  other:        'other',
-}
+const VALID_TYPES: Record<string, VideoType> = Object.fromEntries(
+  ALL_CATEGORIES.map((c) => [c.typeParam, c.videoType as VideoType])
+)
 
 // ── 共享内容组件（允许 movie/anime/series/tvshow 目录静态路由复用） ─────────────
 

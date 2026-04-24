@@ -34,6 +34,8 @@ interface SearchOverlayProps {
   onClose: () => void
   /** 当前 locale（用于构建结果链接） */
   locale?: string
+  /** 无输入时展示的热门搜索词（来自 nav.hotSearchTerms，无 API 调用） */
+  hotSearchTerms?: string[]
 }
 
 interface QuickResult {
@@ -165,7 +167,7 @@ function SuggestionItem({
 
 // ── SearchOverlay ─────────────────────────────────────────────────────────────
 
-export function SearchOverlay({ query, onNavigate, onClose, locale = 'zh-CN' }: SearchOverlayProps) {
+export function SearchOverlay({ query, onNavigate, onClose, locale = 'zh-CN', hotSearchTerms }: SearchOverlayProps) {
   const router = useRouter()
   const [quickResults, setQuickResults] = useState<QuickResult[]>([])
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([])
@@ -235,9 +237,60 @@ export function SearchOverlay({ query, onNavigate, onClose, locale = 'zh-CN' }: 
       aria-label="搜索快速结果"
     >
       {!hasQuery ? (
-        <div style={{ padding: 'var(--search-empty-pad)', textAlign: 'center', color: 'var(--fg-muted)', fontSize: '13px' }}>
-          输入关键词开始搜索
-        </div>
+        hotSearchTerms && hotSearchTerms.length > 0 ? (
+          <div style={{ padding: 'var(--search-group-pad)' }}>
+            <p
+              style={{
+                padding: 'var(--search-group-title-pad)',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: 'var(--fg-subtle)',
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                margin: 0,
+              }}
+            >
+              热门搜索
+            </p>
+            {hotSearchTerms.map((term, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => { onNavigate(term); onClose() }}
+                className="w-full text-left transition-colors hover:bg-[var(--bg-surface-sunken)]"
+                style={{
+                  padding: 'var(--search-item-pad)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-2)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    minWidth: '18px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    color: i < 3 ? 'var(--accent-default)' : 'var(--fg-subtle)',
+                    textAlign: 'center',
+                  }}
+                >
+                  {i + 1}
+                </span>
+                <span className="flex-1 truncate" style={{ fontSize: '14px', color: 'var(--fg-default)' }}>
+                  {term}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div style={{ padding: 'var(--search-empty-pad)', textAlign: 'center', color: 'var(--fg-muted)', fontSize: '13px' }}>
+            输入关键词开始搜索
+          </div>
+        )
       ) : searching ? (
         <div style={{ padding: 'var(--space-4) var(--space-5)', color: 'var(--fg-muted)', fontSize: '13px' }}>
           搜索中…

@@ -17,6 +17,8 @@
 
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useTranslations } from 'next-intl'
+import { ALL_CATEGORIES } from '@/lib/categories'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -37,18 +39,8 @@ interface FilterRow {
 
 // ── Filter config ─────────────────────────────────────────────────────────────
 
-const BASIC_ROWS: FilterRow[] = [
-  {
-    dim: 'type',
-    dimLabel: '分类',
-    options: [
-      { value: '',        label: '全部' },
-      { value: 'movie',   label: '电影' },
-      { value: 'series',  label: '剧集' },
-      { value: 'anime',   label: '动漫' },
-      { value: 'variety', label: '综艺' },
-    ],
-  },
+// country / lang 行保持固定（无对应 i18n 键，此处维度独立）
+const STATIC_ROWS: FilterRow[] = [
   {
     dim: 'country',
     dimLabel: '地区',
@@ -207,8 +199,21 @@ interface FilterAreaProps {
 export function FilterArea({ lockedDims = [] }: FilterAreaProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const t = useTranslations('nav')
 
   const [expanded, setExpanded] = useState(false)
+
+  // type 行从 lib/categories.ts 单源生成（I-6，videoType 作为 filter value）
+  const typeRow: FilterRow = {
+    dim: 'type',
+    dimLabel: '分类',
+    options: [
+      { value: '', label: t('catAll') },
+      ...ALL_CATEGORIES.map((c) => ({ value: c.videoType, label: t(c.labelKey) })),
+    ],
+  }
+
+  const basicRows: FilterRow[] = [typeRow, ...STATIC_ROWS]
 
   function getActiveValue(dim: FilterDim): string {
     return searchParams.get(dim) ?? ''
@@ -227,7 +232,7 @@ export function FilterArea({ lockedDims = [] }: FilterAreaProps) {
     router.push('?' + params.toString())
   }
 
-  const visibleBasicRows = BASIC_ROWS.filter((row) => !lockedDims.includes(row.dim))
+  const visibleBasicRows = basicRows.filter((row) => !lockedDims.includes(row.dim))
 
   return (
     <div

@@ -36,7 +36,8 @@
     "searchPlaceholder": "搜索电影、剧集、演员…",
     "settings": "设置",
     "admin": "管理后台",
-    "mobileNav": "移动端导航"
+    "mobileNav": "移动端导航",
+    "hotSearchTerms": ["星际穿越", "进击的巨人", "命运石之门", "权力的游戏", "绝命毒师", "你的名字", "千与千寻", "黑镜"]
   },
   "home": {
     "trendingMovies": "热门电影",

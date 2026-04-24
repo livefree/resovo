@@ -104,7 +104,7 @@
   --browse-pagination-btn: 36px;              /* 分页按钮尺寸     */
 
   /* search alias — spec §13 */
-  --search-input-max-w:    480px;             /* Nav 搜索框最大宽度     */
+  --search-input-max-w:    240px;             /* Nav 搜索框最大宽度     */
   --search-overlay-w:      640px;             /* 搜索浮层宽度           */
   --search-overlay-radius: 16px;              /* 浮层圆角               */
   --search-input-h:        56px;              /* 搜索页输入框高度       */

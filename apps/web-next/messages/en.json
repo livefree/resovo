@@ -36,7 +36,8 @@
     "searchPlaceholder": "Search movies, series, cast…",
     "settings": "Settings",
     "admin": "Admin",
-    "mobileNav": "Mobile Navigation"
+    "mobileNav": "Mobile Navigation",
+    "hotSearchTerms": ["Interstellar", "Attack on Titan", "Steins;Gate", "Game of Thrones", "Breaking Bad", "Your Name", "Spirited Away", "Black Mirror"]
   },
   "home": {
     "trendingMovies": "Trending Movies",
