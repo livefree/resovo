@@ -39,7 +39,7 @@ interface FilterRow {
 
 // ── Filter config ─────────────────────────────────────────────────────────────
 
-// country / lang 行保持固定（无对应 i18n 键，此处维度独立）
+// country 行固定可见；lang 已移除：后端 /videos schema 不接受 lang 参数，选择无效果（REVIEW-A W-1）
 const STATIC_ROWS: FilterRow[] = [
   {
     dim: 'country',
@@ -50,17 +50,6 @@ const STATIC_ROWS: FilterRow[] = [
       { value: 'US', label: '美国' },
       { value: 'JP', label: '日本' },
       { value: 'KR', label: '韩国' },
-    ],
-  },
-  {
-    dim: 'lang',
-    dimLabel: '语言',
-    options: [
-      { value: '',   label: '全部' },
-      { value: 'zh', label: '中文' },
-      { value: 'en', label: '英文' },
-      { value: 'ja', label: '日文' },
-      { value: 'ko', label: '韩文' },
     ],
   },
 ]
@@ -74,6 +63,7 @@ const YEAR_OPTIONS: FilterOption[] = [
   })),
 ]
 
+// status 已移除：后端 /videos schema 不接受 status 参数，选择无效果（REVIEW-A W-1）
 const EXPANDED_ROWS: FilterRow[] = [
   {
     dim: 'year',
@@ -89,15 +79,6 @@ const EXPANDED_ROWS: FilterRow[] = [
       { value: '8', label: '8分以上' },
       { value: '7', label: '7分以上' },
       { value: '6', label: '6分以上' },
-    ],
-  },
-  {
-    dim: 'status',
-    dimLabel: '状态',
-    options: [
-      { value: '',          label: '全部' },
-      { value: 'ongoing',   label: '连载中' },
-      { value: 'completed', label: '已完结' },
     ],
   },
 ]

@@ -62,21 +62,23 @@ describe('FilterArea', () => {
     expect(screen.getByTestId('filter-area')).toBeTruthy()
   })
 
-  it('默认显示前 3 行筛选（类型/地区/字幕）', () => {
+  it('默认显示前 2 行筛选（类型/地区）', () => {
+    // lang 已移除：后端 /videos 不接受 lang 参数（REVIEW-A W-1）
     render(<FilterArea />)
     expect(screen.getByTestId('filter-type-all')).toBeTruthy()
     expect(screen.getByTestId('filter-country-all')).toBeTruthy()
-    expect(screen.getByTestId('filter-lang-all')).toBeTruthy()
+    expect(screen.queryByTestId('filter-lang-all')).toBeNull()
     // 年份筛选默认不可见
     expect(screen.queryByTestId('filter-year-all')).toBeNull()
   })
 
-  it('点击展开按钮后显示所有 6 行筛选', () => {
+  it('点击展开按钮后显示所有 4 行筛选（年份/评分）', () => {
+    // status 已移除：后端 /videos 不接受 status 参数（REVIEW-A W-1）
     render(<FilterArea />)
     fireEvent.click(screen.getByTestId('filter-expand'))
     expect(screen.getByTestId('filter-year-all')).toBeTruthy()
     expect(screen.getByTestId('filter-rating_min-all')).toBeTruthy()
-    expect(screen.getByTestId('filter-status-all')).toBeTruthy()
+    expect(screen.queryByTestId('filter-status-all')).toBeNull()
   })
 
   it('点击类型选项后更新 URL 参数', () => {
