@@ -10354,8 +10354,10 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
 
 #### Batch B — 功能补完
 
-4. **HANDOFF-22 — 首页完整区块补完（FeaturedRow + TopTenRow + 动漫 Shelf）**（状态：📋 待执行）
+4. **HANDOFF-22 — 首页完整区块补完（FeaturedRow + TopTenRow + 动漫 Shelf）**（状态：✅ 已完成）
    - 创建时间：2026-04-24
+   - 实际开始：2026-04-24
+   - 完成时间：2026-04-24
    - 建议模型：sonnet
    - 估时：1.5d
    - 前置依赖：REVIEW-A PASS
@@ -10370,6 +10372,7 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
      - TopTenRow rank badge 位置精确（左下角叠加）
      - FeaturedRow 无运营数据时降级为普通 Shelf，不白屏
      - 所有卡片竖版（2:3）
+   - **完成备注**：typecheck/lint/test 全绿（1682 tests PASS）。FeaturedRow 添加 TODO 注释说明当前 /home/modules?slot=featured 仅返回模块索引（无 UUID→VideoCard 批量端点），无运营数据时降级路径已正确实现。TopTenRow 利用 /home/top10 返回的完整 Top10Response（含 VideoCard）实现 rank badge。执行模型: claude-sonnet-4-6
 
 5. **HANDOFF-23 — 搜索结果页重构（列表式 + 高亮 + 分页）**（状态：📋 待执行）
    - 创建时间：2026-04-24
@@ -10475,7 +10478,7 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
 ### 序列验收（全部任务完成后）
 
 - [ ] HANDOFF-19 至 HANDOFF-26 全部 ✅
-- [ ] REVIEW-A PASS（arch-reviewer）
+- [x] REVIEW-A PASS（arch-reviewer，2026-04-24，claude-opus-4-6）
 - [ ] REVIEW-B PASS（arch-reviewer）
 - [ ] REVIEW-C PASS（arch-reviewer）
 - [ ] `npm run typecheck` 全绿

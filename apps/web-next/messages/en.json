@@ -42,6 +42,10 @@
   "home": {
     "trendingMovies": "Trending Movies",
     "trendingSeries": "Popular Series",
+    "trendingAnime": "Trending Anime",
+    "featured": "Featured",
+    "topTen": "Top 10",
+    "topTenSubtitle": "Curated picks + Rating ranking",
     "disclaimer": "Resovo indexes publicly available streaming links and does not host any video content. All rights belong to their respective owners.",
     "viewAll": "View All"
   },

@@ -1,12 +1,15 @@
 /**
- * HomePage — HANDOFF-13 对齐 docs/frontend_design_spec_20260423.md §10
+ * HomePage — HANDOFF-22 对齐 docs/frontend_design_spec_20260423.md §10
  *
  * 结构（从上到下）：
- *   1. HeroBanner（全宽，height 520px，内容容器 max-w-feature px-6 pb-14）
+ *   1. HeroBanner（全宽，height 520px）
  *   2. 主内容容器（max-w-feature，px-6，pt-block pb-20，section 间距 56px）
- *      a. 分类捷径（repeat(5,1fr) 网格，卡片 padding 16px 18px，图标盒 44px）
- *      b. 趋势影片 VideoGrid row（portrait scroll）
- *      c. 趋势剧集 VideoGrid row（landscape scroll）
+ *      a. 分类捷径（CategoryShortcutsClient）
+ *      b. FeaturedRow（特色推荐，1.6fr + 3×1fr；无数据降级为趋势 Shelf）
+ *      c. TopTenRow（TOP10 排行，水平滚动 + rank badge）
+ *      d. ShelfRow — 热门电影
+ *      e. ShelfRow — 热播剧集
+ *      f. ShelfRow — 热门动漫
  *
  * Token 消费（spec §10.3）：
  *   容器 max-width → max-w-feature      var(--layout-feature-max) 1200px
@@ -20,6 +23,8 @@ import { getTranslations } from 'next-intl/server'
 import { HeroBanner } from '@/components/video/HeroBanner'
 import { ShelfRow } from '@/components/video/Shelf'
 import { CategoryShortcutsClient } from '@/components/home/CategoryShortcutsClient'
+import { FeaturedRow } from '@/components/home/FeaturedRow'
+import { TopTenRow } from '@/components/home/TopTenRow'
 
 // ── HomePage ──────────────────────────────────────────────────────────────────
 
@@ -47,6 +52,22 @@ export default async function HomePage({
         {/* 分类捷径（Client Component，mount 后加载数量角标） */}
         <CategoryShortcutsClient />
 
+        {/* 特色推荐区：有运营数据时 1.6fr + 3×1fr 网格；无数据降级趋势 Shelf */}
+        <FeaturedRow
+          title={t('featured')}
+          viewAllLabel={t('viewAll')}
+          fallbackTitle={t('trendingMovies')}
+          fallbackViewAllHref={`/${locale}/movie`}
+          fallbackViewAllLabel={t('viewAll')}
+        />
+
+        {/* TOP10 排行 — 水平滚动竖版卡片 + rank badge */}
+        <TopTenRow
+          title={t('topTen')}
+          subtitle={t('topTenSubtitle')}
+          viewAllLabel={t('viewAll')}
+        />
+
         {/* 趋势影片 — poster-row */}
         <ShelfRow
           template="poster-row"
@@ -57,7 +78,7 @@ export default async function HomePage({
           data-testid="movie-grid"
         />
 
-        {/* 趋势剧集 — poster-row（统一竖版，HANDOFF-20） */}
+        {/* 趋势剧集 — poster-row */}
         <ShelfRow
           template="poster-row"
           query="type=series&period=week&limit=8"
@@ -65,6 +86,16 @@ export default async function HomePage({
           viewAllHref={`/${locale}/series`}
           viewAllLabel={t('viewAll')}
           data-testid="series-grid"
+        />
+
+        {/* 热门动漫 — poster-row */}
+        <ShelfRow
+          template="poster-row"
+          query="type=anime&period=week&limit=8"
+          title={t('trendingAnime')}
+          viewAllHref={`/${locale}/anime`}
+          viewAllLabel={t('viewAll')}
+          data-testid="anime-grid"
         />
       </div>
     </>
