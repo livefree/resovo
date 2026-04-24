@@ -108,6 +108,22 @@
   --search-result-padding: 20px;              /* 搜索页结果卡 padding   */
   --search-cta-gap:        var(--space-2);    /* 结果卡 CTA 组间距 8px  */
   --search-tab-gap:        var(--space-6);    /* Tab 区与结果区间距 24px*/
+
+  /* detail page alias — spec §14 */
+  --detail-hero-cols:      280px 1fr;         /* 双栏 Hero 列宽            */
+  --detail-hero-gap:       40px;              /* 双栏 Hero 列间距          */
+  --detail-cover-w:        280px;             /* 封面列固定宽              */
+  --detail-section-gap:    var(--space-12);   /* sections 间距 48px        */
+  --detail-sidebar-w:      320px;             /* 侧栏宽度                  */
+  --detail-sidebar-gap:    40px;              /* 主内容与侧栏间距          */
+  --detail-ep-h:           42px;              /* 选集按钮高度              */
+  --detail-ep-gap:         var(--space-2);    /* 选集网格间距 8px          */
+  --detail-ep-range-gap:   var(--space-4);    /* 标题与范围切换间距 16px   */
+  --detail-ep-range-item:  var(--space-1);    /* 范围项之间间距 4px        */
+  --detail-meta-gap:       20px;              /* meta 行间距               */
+  --detail-meta-row-gap:   var(--space-2);    /* meta 行内 gap 8px         */
+  --detail-cta-gap:        12px;              /* 播放按钮区 CTA gap        */
+  --detail-rating-btn-gap: 24px;              /* 评分与 CTA 按钮间距       */
 }
 
 /* ── Design-token semantic vars — synced with packages/design-tokens/src/css/tokens.css */
@@ -483,6 +499,43 @@
   .detail-cascade-2,
   .detail-cascade-3,
   .detail-cascade-4 { animation: none !important; }
+}
+
+/* HANDOFF-17 — Detail 页响应式布局工具类 */
+/* Hero 双栏：mobile=单列，≥768px=280px 1fr */
+.detail-hero-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--detail-hero-gap);
+}
+@media (min-width: 768px) {
+  .detail-hero-grid {
+    grid-template-columns: var(--detail-hero-cols);
+  }
+}
+
+/* Episode 网格：mobile=5列，≥768px=10列 */
+.detail-ep-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--detail-ep-gap);
+}
+@media (min-width: 768px) {
+  .detail-ep-grid {
+    grid-template-columns: repeat(10, 1fr);
+  }
+}
+
+/* 下方区域：mobile=单列，≥1024px=1fr + 侧栏 */
+.detail-lower-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--detail-sidebar-gap);
+}
+@media (min-width: 1024px) {
+  .detail-lower-grid {
+    grid-template-columns: 1fr var(--detail-sidebar-w);
+  }
 }
 
 /* M5-PAGE-TABBAR-01 — z-index layer tokens (ADR-046 §8.3) */

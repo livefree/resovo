@@ -1,5 +1,18 @@
 'use client'
 
+/**
+ * VideoDetailClient — HANDOFF-17 对齐 docs/frontend_design_spec_20260423.md §14
+ *
+ * 布局：
+ *   Hero（max-w-feature，双栏 280px+1fr）
+ *   EpisodePicker（max-w-feature，repeat(10,1fr)，选集范围切换）
+ *   下方双栏（1fr + --detail-sidebar-w 320px，gap --detail-sidebar-gap 40px）
+ *     主列：（占位，HANDOFF-18 Watch 页补充更多区块）
+ *     侧栏：RelatedVideos（竖向列表）
+ *
+ * section 间距：var(--detail-section-gap) 48px
+ */
+
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
@@ -53,16 +66,35 @@ export function VideoDetailClient({ slug, showEpisodes }: Props) {
 
   return (
     <>
+      {/* Hero 区 */}
       <div className="detail-cascade-1">
         <DetailHero video={video} episode={activeEpisode} />
       </div>
+
+      {/* 选集区 */}
       {showEpisodes && video.episodeCount > 1 && (
-        <div className="detail-cascade-2">
+        <div className="detail-cascade-2" style={{ marginTop: 0 }}>
           <EpisodePicker video={video} onEpisodeChange={setActiveEpisode} />
         </div>
       )}
-      <div className="detail-cascade-3">
-        <RelatedVideos video={video} />
+
+      {/* 下方区：主内容 + 侧栏 */}
+      <div
+        className="max-w-feature mx-auto px-6"
+        style={{ paddingTop: 'var(--detail-section-gap)', paddingBottom: 'var(--detail-section-gap)' }}
+      >
+        {/* mobile=单列，≥1024=1fr + 侧栏 */}
+        <div className="detail-lower-grid items-start">
+          {/* 主列 — 未来 HANDOFF-18 可在此添加更多区块（评论/来源列表等） */}
+          <div className="min-w-0">
+            {/* 占位：后续任务补充主列内容 */}
+          </div>
+
+          {/* 侧栏：相关推荐 */}
+          <aside className="detail-cascade-3">
+            <RelatedVideos video={video} variant="sidebar" />
+          </aside>
+        </div>
       </div>
     </>
   )

@@ -9839,3 +9839,40 @@ HANDOFF-11：Nav 改造，消费 `max-w-shell`、`var(--header-height)`、`var(-
 ### 质量门禁
 
 - typecheck ✅ / lint ✅（0 warnings）/ test 147 files 1682 tests ✅
+
+## HANDOFF-17 ✅ 2026-04-23 — Detail 页布局对齐（spec §14）
+
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+
+### 变更摘要
+
+对齐 `docs/frontend_design_spec_20260423.md §14` Detail 页规范：
+
+**globals.css**
+- 新增 16 个 `--detail-*` tokens（hero cols/gap/cover-w, section-gap, sidebar-w/gap, ep-h/gap/range-gap/range-item, meta-gap/meta-row-gap, cta-gap, rating-btn-gap）
+- 新增 3 个响应式布局工具类：`.detail-hero-grid`（mobile 单列/≥768px 双栏）、`.detail-ep-grid`（mobile 5列/≥768px 10列）、`.detail-lower-grid`（mobile 单列/≥1024px 1fr+侧栏）
+
+**DetailHero.tsx**
+- 容器改为 `max-w-feature mx-auto px-6`，paddingTop/Bottom: 40px
+- 使用 `.detail-hero-grid` CSS 类实现双栏布局（280px 1fr），响应式兼容
+- 封面列 gap 使用 `--detail-cta-gap`（12px），mobile 居中
+- 右列 gap 使用 `--detail-meta-gap`（20px），meta section gap 使用 `--detail-meta-row-gap`（8px）
+- 评分-来源行 gap 改为 `--detail-rating-btn-gap`（24px）
+
+**EpisodePicker.tsx**
+- 完整重写：`RANGE_SIZE = 10`，>10 集自动显示范围切换按钮（`episode-range-{N}` testid）
+- Episode 网格使用 `.detail-ep-grid` 工具类（mobile 5列 / desktop 10列）
+- 按钮高度使用 `--detail-ep-h`（42px），gap 使用 `--detail-ep-gap`（8px）
+
+**VideoDetailClient.tsx**
+- 下方区块改为 `max-w-feature mx-auto px-6` + `.detail-lower-grid`（1fr + 320px 侧栏）
+- Section 间距使用 `--detail-section-gap`（48px）
+
+**RelatedVideos.tsx**
+- 新增 `variant` prop（`'grid'` 默认全宽 / `'sidebar'` 侧栏 2列）
+
+### 质量门禁
+
+- typecheck ✅ lint ✅ test ✅ (1682 tests passed)
+- 所有 e2e testids 保留：detail-hero, detail-title, detail-description, detail-hero-meta, detail-cover, detail-play-btn, episode-picker, episode-btn-N, related-videos, related-videos-grid

@@ -150,10 +150,18 @@ export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
         </div>
       )}
 
-      <div className="relative z-10 max-w-screen-xl mx-auto px-4 py-10 md:py-16 flex flex-col md:flex-row gap-8 md:gap-12 items-start">
+      <div
+        className="relative z-10 max-w-feature mx-auto px-6"
+        style={{ paddingTop: '40px', paddingBottom: '40px' }}
+      >
+        {/* 双栏网格：mobile=单列，≥768=280px 1fr */}
+        <div className="detail-hero-grid items-start">
 
         {/* 封面列（SharedElement.Source） */}
-        <div className="shrink-0 flex flex-col gap-4 w-[180px] md:w-[240px] mx-auto md:mx-0">
+        <div
+          className="flex flex-col mx-auto md:mx-0"
+          style={{ gap: 'var(--detail-cta-gap)', width: '100%', maxWidth: 'var(--detail-cover-w)' }}
+        >
           <SharedElement.Target
             id={`video-card-${video.id}`}
             as="div"
@@ -191,7 +199,7 @@ export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
         </div>
 
         {/* 右侧元信息 */}
-        <div className="flex-1 space-y-5 pt-1 min-w-0">
+        <div className="flex flex-col min-w-0" style={{ gap: 'var(--detail-meta-gap)' }}>
 
           <div className="space-y-1">
             <h1
@@ -255,7 +263,10 @@ export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
             </div>
           )}
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm pt-1">
+          <div
+            className="flex flex-wrap items-center gap-y-2 text-sm"
+            style={{ gap: 'var(--detail-rating-btn-gap)' }}
+          >
             {video.rating !== null && (
               <div className="flex items-center gap-1.5">
                 <span style={{ color: 'var(--accent-default)' }}>★</span>
@@ -298,8 +309,8 @@ export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
 
           {(hasPersonnel || video.aliases.length > 0 || video.languages.length > 0 || video.tags.length > 0) && (
             <div
-              className="space-y-2 pt-3 border-t"
-              style={{ borderColor: 'var(--border-default)' }}
+              className="flex flex-col pt-3 border-t"
+              style={{ borderColor: 'var(--border-default)', gap: 'var(--detail-meta-row-gap)' }}
               data-testid="detail-hero-meta"
             >
               <MetaRow label="导演" names={video.director} type="director" />
@@ -361,6 +372,7 @@ export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
             </div>
           )}
         </div>
+        </div>{/* /grid */}
       </div>
     </section>
   )
@@ -368,12 +380,18 @@ export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
 
 function DetailHeroSkeleton() {
   return (
-    <div className="max-w-screen-xl mx-auto px-4 py-10 md:py-16 flex flex-col md:flex-row gap-8 md:gap-12">
-      <div className="shrink-0 w-[180px] md:w-[240px] mx-auto md:mx-0 space-y-4">
+    <div
+      className="max-w-feature mx-auto px-6 detail-hero-grid items-start"
+      style={{ paddingTop: '40px', paddingBottom: '40px' }}
+    >
+      <div
+        className="flex flex-col mx-auto md:mx-0"
+        style={{ gap: 'var(--detail-cta-gap)', width: '100%', maxWidth: 'var(--detail-cover-w)' }}
+      >
         <Skeleton shape="rect" className="w-full rounded-2xl" style={{ aspectRatio: '2/3' }} />
         <Skeleton shape="rect" height={48} className="rounded-xl" />
       </div>
-      <div className="flex-1 space-y-4 pt-1">
+      <div className="flex flex-col" style={{ gap: 'var(--detail-meta-gap)' }}>
         <Skeleton shape="text" height={40} className="w-3/4" />
         <Skeleton shape="text" height={20} className="w-1/2" delay={300} />
         <Skeleton shape="text" height={16} delay={300} />
