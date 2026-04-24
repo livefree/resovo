@@ -95,6 +95,19 @@
   --browse-pagination-mt:  var(--space-12);   /* 分页与网格间距 48px */
   --browse-pagination-gap: var(--space-2);    /* 分页项间距 8px  */
   --browse-pagination-btn: 36px;              /* 分页按钮尺寸     */
+
+  /* search alias — spec §13 */
+  --search-input-max-w:    480px;             /* Nav 搜索框最大宽度     */
+  --search-overlay-w:      640px;             /* 搜索浮层宽度           */
+  --search-overlay-radius: 16px;              /* 浮层圆角               */
+  --search-input-h:        56px;              /* 搜索页输入框高度       */
+  --search-input-padding:  14px 20px;         /* 搜索页输入框 padding   */
+  --search-thumb-w:        40px;              /* 浮层结果缩略图宽       */
+  --search-result-cover-w: 120px;             /* 搜索页结果卡封面宽     */
+  --search-result-gap:     20px;              /* 搜索页结果卡间距       */
+  --search-result-padding: 20px;              /* 搜索页结果卡 padding   */
+  --search-cta-gap:        var(--space-2);    /* 结果卡 CTA 组间距 8px  */
+  --search-tab-gap:        var(--space-6);    /* Tab 区与结果区间距 24px*/
 }
 
 /* ── Design-token semantic vars — synced with packages/design-tokens/src/css/tokens.css */

@@ -8,6 +8,7 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { useBrand } from '@/hooks/useBrand'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
+import { SearchOverlay } from '@/components/search/SearchOverlay'
 
 /**
  * Nav — HANDOFF-11 对齐 docs/frontend_design_spec_20260423.md §8
@@ -312,7 +313,9 @@ export function Nav() {
   const pathname = usePathname()
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
+  const [overlayOpen, setOverlayOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const searchFormRef = useRef<HTMLFormElement | null>(null)
 
   const currentLocale = pathname.split('/')[1] ?? 'en'
   const currentType = pathname.split('/')[2] ?? null
@@ -401,16 +404,18 @@ export function Nav() {
           />
         </nav>
 
-        {/* 3. 搜索（flex-1 取余下空间，max-width 上限）
-            TODO HANDOFF-16：max-width 替换为 var(--search-input-max-w) */}
+        {/* 3. 搜索（flex-1 取余下空间，max-width 由 --search-input-max-w 约束）
+            HANDOFF-16：SearchOverlay 在 focus 时展示 640px 快速跳转浮层 */}
         <form
+          ref={searchFormRef}
           role="search"
           onSubmit={(e) => {
             e.preventDefault()
+            setOverlayOpen(false)
             submitSearch(searchQuery)
           }}
           className="hidden md:flex flex-1 relative"
-          style={{ maxWidth: '480px' }}
+          style={{ maxWidth: 'var(--search-input-max-w)' }}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -441,6 +446,11 @@ export function Nav() {
             data-testid="nav-search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => setOverlayOpen(true)}
+            onBlur={() => {
+              // 延迟关闭：允许 SearchOverlay 内按钮的 click 先触发
+              setTimeout(() => setOverlayOpen(false), 200)
+            }}
             placeholder={t('nav.searchPlaceholder')}
             aria-label={t('nav.searchPlaceholder')}
             enterKeyHint="search"
@@ -455,6 +465,19 @@ export function Nav() {
               color: 'var(--fg-default)',
             }}
           />
+
+          {/* SearchOverlay：640px 宽浮层，快速跳转 — HANDOFF-16 spec §13.1 */}
+          {overlayOpen && (
+            <SearchOverlay
+              query={searchQuery}
+              onNavigate={(q) => {
+                setSearchQuery(q)
+                submitSearch(q)
+              }}
+              onClose={() => setOverlayOpen(false)}
+              locale={currentLocale}
+            />
+          )}
         </form>
 
         {/* 4. 右侧操作区：gap-2(8px) 固定间距，shrink-0 不压缩 */}

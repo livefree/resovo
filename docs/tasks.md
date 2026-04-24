@@ -27,4 +27,31 @@
 <!-- HANDOFF-13 ✅ 2026-04-23 完成，typecheck/lint/test 全绿，详见 changelog.md -->
 <!-- HANDOFF-14 ✅ 2026-04-23 完成，typecheck/lint/test 全绿，详见 changelog.md -->
 <!-- HANDOFF-15 ✅ 2026-04-23 完成，typecheck/lint/test 全绿，详见 changelog.md -->
-<!-- 单任务工作台：空，下一个任务 HANDOFF-16（Search 浮层 + 搜索页） -->
+
+## HANDOFF-16 — Search 浮层 + 搜索页
+
+- **状态**：🔄 进行中
+- **创建时间**：2026-04-23 17:10
+- **实际开始**：2026-04-23 17:10
+- **建议模型**：sonnet
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+
+### 问题理解
+
+搜索分两层：Nav 浮层（快速跳转，640px 宽面板）+ 搜索页（type tab + 结果卡 token 驱动）。
+两层已存在骨架但未对齐 spec §13。Nav search 硬编码 maxWidth:480px 需替换为 token。
+
+### 方案
+
+1. `globals.css` — 追加 `--search-*` token alias
+2. `SearchOverlay.tsx`（新建）— 640px 浮层，grouped results，thumbnail 40px
+3. `Nav.tsx` — 替换 `maxWidth: '480px'` → `var(--search-input-max-w)`，接入 SearchOverlay
+4. `SearchPage.tsx` — 容器 max-w-page，input 56px，加 type tab bar，结果卡间距走 token
+
+### 涉及文件
+
+- `apps/web-next/src/app/globals.css`
+- `apps/web-next/src/components/search/SearchOverlay.tsx`（新建）
+- `apps/web-next/src/components/layout/Nav.tsx`
+- `apps/web-next/src/app/[locale]/search/_components/SearchPage.tsx`
