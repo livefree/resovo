@@ -378,7 +378,7 @@ export function Nav() {
               width: '28px',
               height: '28px',
               borderRadius: '7px',
-              background: 'linear-gradient(135deg, var(--accent-default), oklch(48% 0.22 280))',
+              background: 'linear-gradient(135deg, var(--accent-default), var(--accent-active))',
               color: 'var(--color-gray-0)',
               fontSize: '13px',
               fontWeight: 900,
