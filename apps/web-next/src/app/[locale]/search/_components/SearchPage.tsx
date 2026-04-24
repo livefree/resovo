@@ -1,44 +1,190 @@
 'use client'
 
 /**
- * SearchPage — HANDOFF-16 对齐 docs/frontend_design_spec_20260423.md §13.2
+ * SearchPage — HANDOFF-23 重构
  *
- * 完整搜索页：顶部搜索框 + type tab 切换 + 结果卡列表。
- * 快速跳转浮层（SearchOverlay）在 Nav 中，与本页分离（spec §13.3）。
+ * 对齐 docs/frontend_design_spec_20260423.md §13.2：
+ *   - 列表行布局（封面 var(--search-result-cover-w)=120px 2:3 + 右侧信息区）
+ *   - API 高亮字段渲染（parseHighlight，禁止 dangerouslySetInnerHTML）
+ *   - 服务端分页（limit=20，page 参数由 URL 驱动）
+ *   - Tab 切换触发新 API 请求（不做前端过滤）
  *
  * Token 消费（spec §13.2）：
- *   页面容器     → max-w-page(1280px) + px-6(24px)
- *   输入框高度   → var(--search-input-h)        56px
- *   输入框间距   → var(--search-input-padding)  14px 20px
- *   输入元素 gap → 12px
- *   Tab-结果间距 → var(--search-tab-gap)         24px
- *   Tab padding  → 10px 14px
- *   Tab 文字 gap → 6px
- *   结果卡 gap   → var(--search-result-gap)      20px
- *   结果卡 pad   → var(--search-result-padding)  20px
- *   结果卡封面宽 → var(--search-result-cover-w)  120px
- *   CTA 组 gap   → var(--search-cta-gap)         8px
+ *   输入框高度    → var(--search-input-h)         56px
+ *   输入框 padding → var(--search-input-padding)   14px 20px
+ *   Tab 间距      → var(--search-tab-gap)          24px
+ *   结果卡间距    → var(--search-result-gap)       20px
+ *   结果卡 padding → var(--search-result-padding)  20px
+ *   封面宽度      → var(--search-result-cover-w)   120px
+ *   CTA 组间距    → var(--search-cta-gap)          8px
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname, useParams } from 'next/navigation'
+import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
-import { VideoCard } from '@/components/video/VideoCard'
-import { VideoGrid } from '@/components/video/VideoGrid'
+import { ChipType } from '@/components/primitives/chip-type'
+import { SafeImage } from '@/components/media'
+import { Pagination } from '@/components/primitives/pagination'
 import { SearchEmptyState } from '@/components/search/SearchEmptyState'
-import type { SearchResult } from '@resovo/types'
+import { parseHighlight } from '@/lib/parse-highlight'
+import { getVideoDetailHref } from '@/lib/video-route'
+import { VideoGrid } from '@/components/video/VideoGrid'
+import type { SearchResult, ApiListResponse } from '@resovo/types'
 
-// ── Tab 配置 ──────────────────────────────────────────────────────────────────
+// ── 常量 ──────────────────────────────────────────────────────────────────────
 
-type SearchTab = 'all' | 'movie' | 'series' | 'anime' | 'variety'
+type SearchTab = 'all' | 'movie' | 'series' | 'anime'
 
 const TABS: Array<{ key: SearchTab; label: string }> = [
-  { key: 'all',     label: '全部' },
-  { key: 'movie',   label: '电影' },
-  { key: 'series',  label: '剧集' },
-  { key: 'anime',   label: '动漫' },
-  { key: 'variety', label: '综艺' },
+  { key: 'all',    label: '全部' },
+  { key: 'movie',  label: '电影' },
+  { key: 'series', label: '剧集' },
+  { key: 'anime',  label: '动漫' },
 ]
+
+const PAGE_SIZE = 20
+
+// ── SearchResultRow ──────────────────────────────────────────────────────────
+
+interface SearchResultRowProps {
+  result: SearchResult
+  locale: string
+}
+
+function SearchResultRow({ result, locale }: SearchResultRowProps) {
+  const detailHref = getVideoDetailHref(result)
+  const watchSlug = result.slug ? `${result.slug}-${result.shortId}` : result.shortId
+  const watchHref = `/${locale}/watch/${watchSlug}?ep=1`
+
+  const displayTitle = result.highlight?.title
+    ? parseHighlight(result.highlight.title)
+    : result.title
+
+  return (
+    <article
+      data-testid="search-result-row"
+      style={{
+        display: 'flex',
+        gap: 'var(--search-result-padding)',
+        padding: 'var(--search-result-padding)',
+        borderRadius: 'var(--radius-base)',
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-subtle)',
+      }}
+    >
+      {/* 封面 */}
+      <Link href={detailHref} style={{ flexShrink: 0, display: 'block' }}>
+        <div
+          style={{
+            width: 'var(--search-result-cover-w)',
+            aspectRatio: '2/3',
+            borderRadius: 'var(--radius-sm)',
+            overflow: 'hidden',
+          }}
+        >
+          <SafeImage
+            src={result.coverUrl ?? undefined}
+            blurHash={result.posterBlurhash ?? undefined}
+            aspect="2:3"
+            width={120}
+            height={180}
+            alt={result.title}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        </div>
+      </Link>
+
+      {/* 信息区 */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {/* 标题（含高亮） */}
+        <h3
+          style={{
+            fontSize: '16px',
+            fontWeight: 600,
+            color: 'var(--fg-default)',
+            lineHeight: 1.4,
+            margin: 0,
+          }}
+        >
+          {displayTitle}
+          {result.titleEn && (
+            <span
+              style={{
+                display: 'block',
+                fontSize: '13px',
+                fontWeight: 400,
+                color: 'var(--fg-muted)',
+                marginTop: '2px',
+              }}
+            >
+              {result.titleEn}
+            </span>
+          )}
+        </h3>
+
+        {/* meta 行：类型 Chip + 年份 + 评分 */}
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <ChipType type={result.type} size="sm" />
+          {result.year && (
+            <span style={{ fontSize: '13px', color: 'var(--fg-muted)' }}>{result.year}</span>
+          )}
+          {result.rating !== null && (
+            <span style={{ fontSize: '13px', color: 'var(--gold)', fontWeight: 500 }}>
+              ★ {result.rating.toFixed(1)}
+            </span>
+          )}
+        </div>
+
+        {/* CTA 按钮 */}
+        <div
+          style={{
+            display: 'flex',
+            gap: 'var(--search-cta-gap)',
+            marginTop: 'auto',
+            paddingTop: '4px',
+          }}
+        >
+          <Link
+            href={watchHref}
+            data-testid="search-row-watch"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '6px 14px',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--accent-default)',
+              color: 'var(--fg-on-accent)',
+              fontSize: '13px',
+              fontWeight: 500,
+              textDecoration: 'none',
+            }}
+          >
+            立即观看
+          </Link>
+          <Link
+            href={detailHref}
+            data-testid="search-row-detail"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '6px 14px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border-default)',
+              background: 'transparent',
+              color: 'var(--fg-default)',
+              fontSize: '13px',
+              fontWeight: 400,
+              textDecoration: 'none',
+            }}
+          >
+            详情
+          </Link>
+        </div>
+      </div>
+    </article>
+  )
+}
 
 // ── SearchPage ────────────────────────────────────────────────────────────────
 
@@ -46,71 +192,113 @@ export function SearchPage() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const initialQuery = searchParams.get('q') ?? ''
-  const initialTab = (searchParams.get('type') as SearchTab | null) ?? 'all'
+  const params = useParams()
+  const locale = (params.locale as string) ?? 'zh'
 
-  const [query, setQuery] = useState(initialQuery)
-  const [activeTab, setActiveTab] = useState<SearchTab>(initialTab)
+  const urlQuery = searchParams.get('q') ?? ''
+  const urlTab = (searchParams.get('type') as SearchTab | null) ?? 'all'
+  const urlPage = Math.max(1, Number(searchParams.get('page') ?? '1'))
+
+  const [inputValue, setInputValue] = useState(urlQuery)
   const [results, setResults] = useState<SearchResult[]>([])
-  const [loading, setLoading] = useState(!!initialQuery)
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(!!urlQuery)
+
   const inputRef = useRef<HTMLInputElement>(null)
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
 
-  const doSearch = useCallback(async (q: string, tab: SearchTab) => {
-    if (!q.trim()) { setResults([]); setLoading(false); return }
+  // 同步 URL q → inputValue（外部跳转时）
+  useEffect(() => {
+    setInputValue(urlQuery)
+  }, [urlQuery])
+
+  const doSearch = useCallback(async (q: string, tab: SearchTab, page: number) => {
+    if (!q.trim()) { setResults([]); setTotal(0); setLoading(false); return }
     setLoading(true)
     try {
       const typeParam = tab !== 'all' ? `&type=${tab}` : ''
-      const res = await apiClient.get<{ data: SearchResult[] }>(
-        `/search?q=${encodeURIComponent(q.trim())}&limit=40${typeParam}`,
-        { skipAuth: true }
+      const res = await apiClient.get<ApiListResponse<SearchResult>>(
+        `/search?q=${encodeURIComponent(q.trim())}&limit=${PAGE_SIZE}&page=${page}${typeParam}`,
+        { skipAuth: true },
       )
       setResults(res.data)
+      setTotal(res.pagination.total)
     } catch {
       setResults([])
+      setTotal(0)
     } finally {
       setLoading(false)
     }
   }, [])
 
-  // 初始 query 触发搜索
+  // URL params 变化驱动搜索
   useEffect(() => {
-    if (initialQuery) void doSearch(initialQuery, activeTab)
-  }, [initialQuery, doSearch, activeTab])
+    void doSearch(urlQuery, urlTab, urlPage)
+  }, [urlQuery, urlTab, urlPage, doSearch])
 
-  // 输入防抖 300ms 搜索
-  useEffect(() => {
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
-    if (!query.trim()) { setResults([]); return }
-    searchTimerRef.current = setTimeout(() => void doSearch(query, activeTab), 300)
-    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current) }
-  }, [query, activeTab, doSearch])
+  // 输入防抖 300ms → 更新 URL q，重置 page
+  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value
+    setInputValue(val)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      const p = new URLSearchParams(searchParams.toString())
+      if (val.trim()) {
+        p.set('q', val.trim())
+      } else {
+        p.delete('q')
+      }
+      p.delete('page')
+      router.replace(`${pathname}?${p.toString()}`)
+    }, 300)
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const q = query.trim()
-    const tabParam = activeTab !== 'all' ? `&type=${activeTab}` : ''
-    router.replace(q ? `${pathname}?q=${encodeURIComponent(q)}${tabParam}` : pathname)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    const p = new URLSearchParams(searchParams.toString())
+    if (inputValue.trim()) {
+      p.set('q', inputValue.trim())
+    } else {
+      p.delete('q')
+    }
+    p.delete('page')
+    router.replace(`${pathname}?${p.toString()}`)
   }
 
   function handleTabChange(tab: SearchTab) {
-    setActiveTab(tab)
-    const q = query.trim()
-    const tabParam = tab !== 'all' ? `&type=${tab}` : ''
-    if (q) router.replace(`${pathname}?q=${encodeURIComponent(q)}${tabParam}`)
+    const p = new URLSearchParams(searchParams.toString())
+    if (tab !== 'all') {
+      p.set('type', tab)
+    } else {
+      p.delete('type')
+    }
+    p.delete('page')
+    router.replace(`${pathname}?${p.toString()}`)
   }
 
-  const hasQuery = !!query.trim()
+  function navigate(targetPage: number) {
+    const p = new URLSearchParams(searchParams.toString())
+    if (targetPage <= 1) {
+      p.delete('page')
+    } else {
+      p.set('page', String(targetPage))
+    }
+    router.push(`${pathname}?${p.toString()}`)
+  }
+
+  const hasQuery = !!urlQuery.trim()
   const hasResults = results.length > 0
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
     <div data-testid="search-page" className="min-h-screen" style={{ background: 'var(--bg-canvas)' }}>
 
-      {/* 搜索框区 — height: var(--search-input-h), padding: var(--search-input-padding) */}
+      {/* 搜索框区 */}
       <div
         className="sticky top-0 z-40 border-b"
         style={{
@@ -150,8 +338,8 @@ export function SearchPage() {
             <input
               ref={inputRef}
               type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              value={inputValue}
+              onChange={handleInputChange}
               placeholder="搜索电影、剧集、演员、导演…"
               aria-label="搜索"
               data-testid="search-input"
@@ -160,11 +348,19 @@ export function SearchPage() {
               autoComplete="off"
             />
 
-            {query && (
+            {inputValue && (
               <button
                 type="button"
                 aria-label="清除搜索"
-                onClick={() => { setQuery(''); setResults([]) }}
+                onClick={() => {
+                  setInputValue('')
+                  setResults([])
+                  setTotal(0)
+                  const p = new URLSearchParams(searchParams.toString())
+                  p.delete('q')
+                  p.delete('page')
+                  router.replace(`${pathname}?${p.toString()}`)
+                }}
                 className="shrink-0 p-1 rounded transition-colors hover:bg-[var(--bg-surface-sunken)]"
                 style={{ color: 'var(--fg-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
               >
@@ -178,7 +374,7 @@ export function SearchPage() {
       {/* 内容区 */}
       <div className="max-w-page mx-auto px-6 py-6">
 
-        {/* Type tab 切换 — spec §13.2 Tab padding 10px 14px, 文字-数字 gap 6px */}
+        {/* Tab 切换 */}
         <div
           className="flex items-center gap-1 overflow-x-auto"
           style={{ marginBottom: 'var(--search-tab-gap)', scrollbarWidth: 'none' }}
@@ -186,10 +382,7 @@ export function SearchPage() {
           aria-label="搜索类型"
         >
           {TABS.map((tab) => {
-            const isActive = activeTab === tab.key
-            const count = tab.key !== 'all'
-              ? results.filter((r) => r.type === tab.key).length
-              : results.length
+            const isActive = urlTab === tab.key
             return (
               <button
                 key={tab.key}
@@ -215,15 +408,9 @@ export function SearchPage() {
                 }}
               >
                 {tab.label}
-                {hasQuery && hasResults && count > 0 && (
-                  <span
-                    style={{
-                      fontSize: '12px',
-                      fontWeight: 500,
-                      color: isActive ? 'var(--accent-default)' : 'var(--fg-subtle)',
-                    }}
-                  >
-                    {count}
+                {hasQuery && hasResults && isActive && (
+                  <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--fg-subtle)' }}>
+                    {total}
                   </span>
                 )}
               </button>
@@ -237,16 +424,25 @@ export function SearchPage() {
         ) : hasQuery && hasResults ? (
           <section>
             <p className="mb-4 text-sm" style={{ color: 'var(--fg-muted)' }}>
-              找到 {results.length} 个结果
+              找到 {total} 个结果
             </p>
             <div
-              className="grid gap-4 lg:gap-6 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 video-grid-stagger"
-              data-testid="search-results-grid"
+              data-testid="search-results-list"
+              style={{ display: 'flex', flexDirection: 'column', gap: 'var(--search-result-gap)' }}
             >
-              {results.map((video) => (
-                <VideoCard key={video.id} video={video} />
+              {results.map((result) => (
+                <SearchResultRow key={result.id} result={result} locale={locale} />
               ))}
             </div>
+            {totalPages > 1 && (
+              <Pagination
+                data-testid="search-pagination"
+                page={urlPage}
+                totalPages={totalPages}
+                onPrev={() => navigate(urlPage - 1)}
+                onNext={() => navigate(urlPage + 1)}
+              />
+            )}
           </section>
         ) : (
           <SearchEmptyState hasQuery={hasQuery} />
@@ -257,10 +453,8 @@ export function SearchPage() {
 }
 
 /**
- * 具名导出 Skeleton 组件（不通过 SearchPage.Skeleton 静态属性）
- * 原因：SearchPage 是 'use client'，在 Next 15 server 端被编译为 Client Reference，
- * 静态属性 `.Skeleton` 在 server 端访问返回 undefined，导致 Suspense fallback SSR 500。
- * 与 commit 9fcaaf1 的 VideoDetailClientSkeleton 修复同一 pattern。
+ * 具名导出 Skeleton（SSR 安全，与 SearchPage Client Reference 分离）
+ * 见 commit 9fcaaf1 / SearchPageSkeleton 修复同一 pattern。
  */
 export function SearchPageSkeleton() {
   return (

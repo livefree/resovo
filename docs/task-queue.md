@@ -10374,7 +10374,7 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
      - 所有卡片竖版（2:3）
    - **完成备注**：typecheck/lint/test 全绿（1682 tests PASS）。FeaturedRow 添加 TODO 注释说明当前 /home/modules?slot=featured 仅返回模块索引（无 UUID→VideoCard 批量端点），无运营数据时降级路径已正确实现。TopTenRow 利用 /home/top10 返回的完整 Top10Response（含 VideoCard）实现 rank badge。执行模型: claude-sonnet-4-6
 
-5. **HANDOFF-23 — 搜索结果页重构（列表式 + 高亮 + 分页）**（状态：📋 待执行）
+5. **HANDOFF-23 — 搜索结果页重构（列表式 + 高亮 + 分页）**（状态：✅ 已完成）
    - 创建时间：2026-04-24
    - 建议模型：sonnet
    - 估时：0.75d
@@ -10383,11 +10383,13 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
    - 文件范围：
      - `apps/web-next/src/app/[locale]/search/_components/SearchPage.tsx`：从 VideoCard 网格改为列表行（封面 120px 2:3 + 右侧信息区）；meta 行（类型 Chip + 年份 + 评分）；CTA 按钮（立即观看 / 详情）；分页 limit=20；Tab 切换（全部/电影/剧集/动漫）控制 API type 参数（不做前端过滤）
      - **新建 `apps/web-next/src/lib/parse-highlight.ts`**：`parseHighlight(raw: string): React.ReactNode[]`；用 `raw.split(/(<em>.*?<\/em>)/g)` 分割；`<em>...</em>` 提取纯文本包裹 `<mark>`；**禁止 `dangerouslySetInnerHTML`**；`<mark>` 样式走 CSS 变量
+     - **新建 `apps/web-next/src/components/primitives/pagination/Pagination.tsx`**：共享分页 primitive（REVIEW-B §5 要求），BrowseGrid 和 SearchPage 共用
    - 验收要点：
      - 搜索结果列表行展示（封面 + 信息区）
      - 关键词有 `<mark>` 高亮（API 返回 highlight 字段时）
      - 分页控件可用
      - Tab 切换触发新 API 请求
+   - **完成备注**：typecheck/lint/test 全绿（1682 tests PASS）。SearchPage 重构为列表行（SearchResultRow 子组件），URL 参数（q/type/page）驱动搜索，Tab count 仅显示当前 Tab 的 pagination.total（不做前端过滤）。parse-highlight.ts 使用 createElement 安全替换，零 dangerouslySetInnerHTML。Pagination primitive 从 BrowseGrid 内联版本提取，BrowseGrid 测试 data-testid 同步更新（pagination-prev/next → browse-pagination-prev/next）。执行模型: claude-sonnet-4-6
 
 6. **HANDOFF-24 — 详情页主列补完**（状态：📋 待执行）
    - 创建时间：2026-04-24

@@ -81,8 +81,8 @@ describe('BrowseGrid', () => {
     getMock.mockResolvedValue(makeResponse(50))
     render(<BrowseGrid />)
     await screen.findByTestId('browse-pagination')
-    expect(screen.getByTestId('pagination-prev')).toBeTruthy()
-    expect(screen.getByTestId('pagination-next')).toBeTruthy()
+    expect(screen.getByTestId('browse-pagination-prev')).toBeTruthy()
+    expect(screen.getByTestId('browse-pagination-next')).toBeTruthy()
     expect(screen.getByText('1 / 3')).toBeTruthy()
   })
 
@@ -90,7 +90,7 @@ describe('BrowseGrid', () => {
     getMock.mockResolvedValue(makeResponse(50))
     render(<BrowseGrid />)
     await screen.findByTestId('browse-pagination')
-    const prevBtn = screen.getByTestId('pagination-prev') as HTMLButtonElement
+    const prevBtn = screen.getByTestId('browse-pagination-prev') as HTMLButtonElement
     expect(prevBtn.disabled).toBe(true)
   })
 
@@ -99,7 +99,7 @@ describe('BrowseGrid', () => {
     getMock.mockResolvedValue(makeResponse(50))
     render(<BrowseGrid />)
     await screen.findByTestId('browse-pagination')
-    const nextBtn = screen.getByTestId('pagination-next') as HTMLButtonElement
+    const nextBtn = screen.getByTestId('browse-pagination-next') as HTMLButtonElement
     expect(nextBtn.disabled).toBe(true)
   })
 
@@ -107,7 +107,7 @@ describe('BrowseGrid', () => {
     getMock.mockResolvedValue(makeResponse(50))
     render(<BrowseGrid />)
     await screen.findByTestId('browse-pagination')
-    fireEvent.click(screen.getByTestId('pagination-next'))
+    fireEvent.click(screen.getByTestId('browse-pagination-next'))
     expect(mockPush).toHaveBeenCalledWith('/browse?page=2')
   })
 
@@ -116,7 +116,7 @@ describe('BrowseGrid', () => {
     getMock.mockResolvedValue(makeResponse(50))
     render(<BrowseGrid />)
     await screen.findByTestId('browse-pagination')
-    fireEvent.click(screen.getByTestId('pagination-prev'))
+    fireEvent.click(screen.getByTestId('browse-pagination-prev'))
     expect(mockPush).toHaveBeenCalledWith('/browse?')
   })
 

@@ -18,6 +18,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
 import { BrowseCard } from './BrowseCard'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
+import { Pagination } from '@/components/primitives/pagination'
 import type { VideoCard as VideoCardType, VideoType, ApiListResponse } from '@resovo/types'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -45,94 +46,6 @@ function BrowseGridSkeleton() {
           delay={i >= 4 ? 300 : undefined}
         />
       ))}
-    </div>
-  )
-}
-
-// ── BrowsePagination ──────────────────────────────────────────────────────────
-
-interface BrowsePaginationProps {
-  page: number
-  totalPages: number
-  onPrev: () => void
-  onNext: () => void
-}
-
-function BrowsePagination({ page, totalPages, onPrev, onNext }: BrowsePaginationProps) {
-  return (
-    <div
-      data-testid="browse-pagination"
-      role="navigation"
-      aria-label="分页"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 'var(--browse-pagination-gap)',
-        marginTop: 'var(--browse-pagination-mt)',
-      }}
-    >
-      <button
-        type="button"
-        data-testid="pagination-prev"
-        disabled={page <= 1}
-        onClick={onPrev}
-        aria-label="上一页"
-        style={{
-          width: 'var(--browse-pagination-btn)',
-          height: 'var(--browse-pagination-btn)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderRadius: 'var(--radius-base)',
-          border: '1px solid var(--border-default)',
-          background: 'var(--bg-surface)',
-          color: 'var(--fg-default)',
-          cursor: page <= 1 ? 'not-allowed' : 'pointer',
-          opacity: page <= 1 ? 0.4 : 1,
-          fontSize: '18px',
-          lineHeight: 1,
-        }}
-      >
-        ‹
-      </button>
-
-      <span
-        style={{
-          fontSize: '14px',
-          fontWeight: 500,
-          color: 'var(--fg-default)',
-          minWidth: '60px', /* page display 最小宽，无对应 space token */
-          textAlign: 'center',
-        }}
-      >
-        {page} / {totalPages}
-      </span>
-
-      <button
-        type="button"
-        data-testid="pagination-next"
-        disabled={page >= totalPages}
-        onClick={onNext}
-        aria-label="下一页"
-        style={{
-          width: 'var(--browse-pagination-btn)',
-          height: 'var(--browse-pagination-btn)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderRadius: 'var(--radius-base)',
-          border: '1px solid var(--border-default)',
-          background: 'var(--bg-surface)',
-          color: 'var(--fg-default)',
-          cursor: page >= totalPages ? 'not-allowed' : 'pointer',
-          opacity: page >= totalPages ? 0.4 : 1,
-          fontSize: '18px',
-          lineHeight: 1,
-        }}
-      >
-        ›
-      </button>
     </div>
   )
 }
@@ -221,7 +134,8 @@ export function BrowseGrid({ initialType }: BrowseGridProps) {
       </div>
 
       {totalPages > 1 && (
-        <BrowsePagination
+        <Pagination
+          data-testid="browse-pagination"
           page={page}
           totalPages={totalPages}
           onPrev={() => navigate(page - 1)}
