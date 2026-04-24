@@ -1,15 +1,15 @@
 # 采集到上架全流程改造方案（Pipeline Overhaul）
 
-> status: approved
+> status: archived
 > owner: @engineering
 > scope: crawler console → auto-enrichment → moderation → staging → publish
-> source_of_truth: yes
+> source_of_truth: no
 > supersedes: admin_crawl_control_center_plan.md（采集控制台部分），video_management_flow_20260327.md（视频管理部分）
-> superseded_by: none
+> superseded_by: docs/task-queue.md, docs/decisions.md
 > created: 2026-04-09
-> last_reviewed: 2026-04-09
+> last_reviewed: 2026-04-24
 >
-> 本文档是"采集到上架"完整流水线改造的唯一权威规范。所有实施任务从 `docs/task-queue.md` 的对应序列中选取。
+> 本文档曾是"采集到上架"完整流水线改造的权威规范；归档后仅保留审计参考，当前执行状态以 `docs/task-queue.md` / `docs/decisions.md` 为准。
 
 ---
 

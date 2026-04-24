@@ -1,12 +1,12 @@
 # 外部基础元数据导入方案（TMDB / Bangumi）
 
-> status: proposed
+> status: archived
 > owner: @engineering
 > scope: external metadata ingest and protection
 > source_of_truth: no
 > supersedes: none
-> superseded_by: none
-> last_reviewed: 2026-04-05
+> superseded_by: docs/task-queue.md
+> last_reviewed: 2026-04-24
 
 ---
 
@@ -620,4 +620,3 @@ Bangumi 建议：
 - 采集链路继续以播放源补充为主
 - 基础信息回填有边界、有优先级、有追溯
 - 后续可以逐步扩展到更多外部来源，而不需要重构主内容模型
-

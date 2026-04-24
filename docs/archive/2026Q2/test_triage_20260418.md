@@ -1,5 +1,13 @@
 # 测试失败 Triage 文档 — 2026-04-18
 
+> status: archived
+> owner: @engineering
+> scope: 2026-04-18 test failure triage
+> source_of_truth: no
+> supersedes: none
+> superseded_by: docs/baseline_20260418/, docs/task-queue.md
+> last_reviewed: 2026-04-24
+>
 > 对应 baseline：`docs/baseline_20260418/failing_tests.json`
 > 产出来源：TESTFIX-03（单元测试）/ TESTFIX-07（E2E 全 suite 重建）
 > 适用规范：`docs/rules/workflow-rules.md §Phase 基线测试条款`

@@ -1,5 +1,13 @@
 # 任务队列补丁 — M5 卡片协议与列表→播放器直达路径（2026-04-20）
 
+> status: archived
+> owner: @planning
+> scope: M5 card protocol and list-to-player task queue patch
+> source_of_truth: no
+> supersedes: none
+> superseded_by: docs/task-queue.md, docs/frontend_design_spec_20260423.md
+> last_reviewed: 2026-04-24
+>
 > 适用范围：**M5 页面重置 — 前置决策 + 卡片协议 + 页面重塑序列**
 > 前置补丁：
 > - `docs/task_queue_patch_rewrite_track_20260418.md`（apps/web-next 并行路线 + RW-SETUP）

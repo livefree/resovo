@@ -1,11 +1,14 @@
 # Resovo — M0 + M1 Task Queue 补丁（2026-04-18）
 
-> status: patch
+> status: archived
 > owner: @planning
 > scope: 全面重写方向落地，M0（前置基线）+ M1（设计系统基石）原子任务队列
+> source_of_truth: no
 > target_file: `docs/task-queue.md`
+> supersedes: none
+> superseded_by: docs/task-queue.md
 > append_only: yes（按 workflow-rules 尾部追加）
-> last_reviewed: 2026-04-18
+> last_reviewed: 2026-04-24
 
 ---
 

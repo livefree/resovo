@@ -1,11 +1,14 @@
 # Resovo — 重写期应用并行路线补丁（apps/*-next/）（2026-04-18）
 
-> status: patch
+> status: archived
 > owner: @planning
 > scope: (1) 新增 SEQ-20260418-RW-SETUP 任务链（3 张卡，M1 完后启动）；(2) M2 起里程碑任务模板改版；(3) apps/*-next/ 目录约定；(4) middleware 路由切分协议（ADR-035）；(5) M6 末目录 rename 协议
+> source_of_truth: no
 > target_files: `docs/task-queue.md`、`docs/rules/workflow-rules.md`、`docs/architecture.md`、（RW-SETUP 执行时）`package.json`、`tsconfig.json`、`playwright.config.ts`、`scripts/test-guarded.ts`、`scripts/verify-baseline.ts`
+> supersedes: none
+> superseded_by: docs/task-queue.md, docs/architecture.md, docs/decisions.md
 > append_only: yes（task-queue.md 追加 RW-SETUP 序列；workflow-rules 追加「重写期目录约定」章节）
-> last_reviewed: 2026-04-18
+> last_reviewed: 2026-04-24
 > trigger_reason: 前端「重构后出现大量错误」+ M2–M6 将整体重写前端三应用；原地改 apps/web/ 的半新半旧中间态已被证明不可控。采纳 apps/web-next/ 并行路线，旧应用保持生产可用，新应用逐里程碑搭建，M6 末目录 rename。本补丁规定路线的目录约定、路由切分、E2E 生长协议、里程碑任务模板
 
 ---

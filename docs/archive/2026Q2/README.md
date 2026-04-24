@@ -48,6 +48,24 @@
 - `decisions_patch_20260418.md`
 - `model_routing_patch_20260418.md`
 
+## 归档清单（2026-04-24，DOC-02）
+
+### 流水线 / 元数据 / 视频治理（4）
+- `pipeline-overhaul-plan.md` — 采集到上架全流程改造方案；阶段性权威已沉淀到 `docs/task-queue.md` / `docs/decisions.md`
+- `external_metadata_import_plan_20260405.md` — 外部基础元数据导入方案；META 历史规划输入
+- `video_source_episode_recovery_plan_20260402.md` — 视频源 / 选集一致性修复方案
+- `video_state_machine_matrix_20260402.md` — 视频治理状态机矩阵
+
+### 重写期风险与测试基线（2）
+- `risk_register_rewrite_20260418.md` — 重写期风险登记表；对应风险约束已进入 ADR / rules / task queue 历史
+- `test_triage_20260418.md` — 2026-04-18 测试失败 triage；后续状态以 `docs/baseline_20260418/` 与最新测试记录为准
+
+### 任务队列历史补丁（4）
+- `task_queue_patch_m0_m1_20260418.md`
+- `task_queue_patch_m0_5_20260418.md`
+- `task_queue_patch_rewrite_track_20260418.md`
+- `task_queue_patch_m5_card_protocol_20260420.md`
+
 ## 查找活跃文档
 
-回到 `docs/README.md` 查当前活跃文档索引（SoT + 活跃方案 + rules）。
+回到 `docs/README.md` 查当前活跃文档索引（SoT + 当前执行上下文 + references + rules）。

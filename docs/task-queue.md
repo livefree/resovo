@@ -4779,7 +4779,7 @@
    - 实际开始：2026-04-02 18:30
    - 完成时间：2026-04-02 18:40
    - 文件范围：
-     - `docs/video_state_machine_matrix_20260402.md`（新建）
+     - `docs/archive/2026Q2/video_state_machine_matrix_20260402.md`（新建）
      - `src/api/db/migrations/023_enforce_video_state_machine_trigger.sql`（新建）
    - 变更内容：定义允许组合矩阵；新增 DB 触发器方案并包含历史脏数据保守修复。
    - 完成备注：已落盘，尚未执行迁移。
@@ -4805,7 +4805,7 @@
    - 完成时间：2026-04-02 19:08
    - 文件范围：
      - `src/api/db/migrations/023_enforce_video_state_machine_trigger.sql`
-     - `docs/video_state_machine_matrix_20260402.md`
+     - `docs/archive/2026Q2/video_state_machine_matrix_20260402.md`
    - 变更内容：
      - 触发器加入 `OLD->NEW` 跳转白名单，拦截非法跨级
      - 增加“上架必须存在活跃源”约束
@@ -5202,7 +5202,7 @@
 - **创建时间**：2026-04-09 01:00
 - **最后更新时间**：2026-04-09 01:00
 - **目标**：重构从爬虫采集到内容上架的完整流水线，分离"内容合规审核"与"上架质检"，建立自动丰富机制、关键词/补源采集模式、暂存发布队列，最终实现高质量内容的自动化上架与失效源的自愈闭环
-- **权威规范文档**：`docs/pipeline-overhaul-plan.md`
+- **权威规范文档**：`docs/archive/2026Q2/pipeline-overhaul-plan.md`
 - **里程碑**：M1（Phase 1）→ M2（Phase 2）→ M3（Phase 3）→ M4（Phase 4）→ M5（Phase 5）→ M6（Phase 6）→ M7（Phase 7）
 - **里程碑评审规则**：每个 Milestone 达成后，执行规范文档第十二章"各 Phase 完成后的暂停检查"，确认通过后再进入下一 Phase
 
@@ -6163,7 +6163,7 @@
 - **目标**：将 external-db（豆瓣 dump）和 external-adapter（douban-adapter）从"辅助匹配工具"升级为"统一外部元数据层"，建立原始数据层→标准化候选层→业务写入层三层结构
 - **范围**：external_data schema / MetadataEnrichService / scripts/import-\* / ExternalSubjectCandidate 类型 / video_external_refs
 - **依赖**：SEQ-20260414-02 已完成（CHG-410/411/412 全部完成）
-- **方案文档**：`docs/external_metadata_import_plan_20260405.md`（原 TMDB/Bangumi 方案，META 系列与其兼容并扩展 Douban 专项）
+- **方案文档**：`docs/archive/2026Q2/external_metadata_import_plan_20260405.md`（原 TMDB/Bangumi 方案，META 系列与其兼容并扩展 Douban 专项）
 
 ### 背景说明
 
@@ -6547,7 +6547,7 @@
 - **创建时间**：2026-04-18
 - **依赖**：无
 - **文件范围**：
-  - 新增 `docs/risk_register_rewrite_20260418.md`
+  - 新增 `docs/archive/2026Q2/risk_register_rewrite_20260418.md`
   - 追加 `docs/decisions.md` — ADR-030（SSR / SEO / 边缘函数降级策略）
 - **变更内容**：
   - 登记 3 项重写期风险并给出量化指标：
@@ -6560,7 +6560,7 @@
   - `risk_register_rewrite_20260418.md` 3 项齐全
   - ADR-030 纳入 decisions.md 正常排序（紧接 ADR-029 之后）
   - 与 `docs/decisions_patch_20260418.md` 无内容冲突
-- **完成备注**：RISK-01/02/03 三项已完整登记于 `docs/risk_register_rewrite_20260418.md`；ADR-030 已追加至 decisions.md（行 750 起）。各风险均含：触发概率/影响等级/检测方式/预案，并固化为 4 条 lint 规则约束（`no-client-in-metadata`/`player-portal-no-head`/`no-edge-side-io`/`view-transitions-scope`）。执行模型：claude-opus-4-6 子代理（ADR 内容）。
+- **完成备注**：RISK-01/02/03 三项已完整登记于 `docs/archive/2026Q2/risk_register_rewrite_20260418.md`；ADR-030 已追加至 decisions.md（行 750 起）。各风险均含：触发概率/影响等级/检测方式/预案，并固化为 4 条 lint 规则约束（`no-client-in-metadata`/`player-portal-no-head`/`no-edge-side-io`/`view-transitions-scope`）。执行模型：claude-opus-4-6 子代理（ADR 内容）。
 
 #### BASELINE-03 — ESLint `no-hardcoded-color` 自定义规则引入
 
@@ -7024,7 +7024,7 @@
 - **建议下一步**：SEQ-20260418-M1 TOKEN-01（建议模型：opus）
 - **需要你做的事**：
   - [ ] 验收测试（`npm run test -- --run`：16 预存失败为正常；`npm run test:e2e`：96 预存失败为正常）
-  - [ ] 通读 `docs/risk_register_rewrite_20260418.md`（RISK-01~03 降级策略）
+  - [ ] 通读 `docs/archive/2026Q2/risk_register_rewrite_20260418.md`（RISK-01~03 降级策略）
   - [ ] 确认 ESLint `resovo/no-hardcoded-color` warn 级别生效（7 处播放器警告为存量）
   - [ ] 确认 `docs/baseline_20260418/` 6 张截图与时序数据齐全
   - [ ] 确认 ADR-031 分支策略（原位覆盖，禁 redesign/ 目录）
@@ -7115,7 +7115,7 @@
 - **完成时间**：2026-04-18
 - **依赖**：TESTFIX-01、TESTFIX-02
 - **文件范围**：
-  - 新增 `docs/test_triage_20260418.md`
+  - 新增 `docs/archive/2026Q2/test_triage_20260418.md`
   - 新增 `docs/baseline_20260418/failing_tests.json`
   - 新增 `scripts/verify-baseline.ts`
   - 修改 `package.json`（追加 `verify:baseline` script）
@@ -7177,7 +7177,7 @@
 - **依赖**：TESTFIX-06 已完成
 - **文件范围**：
   - 修改 `docs/baseline_20260418/failing_tests.json`（重建，不是追加）
-  - 修改 `docs/test_triage_20260418.md`（补充 6 个此前未覆盖 suite 的条目 + 重分类 A 类）
+  - 修改 `docs/archive/2026Q2/test_triage_20260418.md`（补充 6 个此前未覆盖 suite 的条目 + 重分类 A 类）
   - 新增 `docs/baseline_20260418/e2e_coverage_report.md`（本次扫描覆盖率说明）
   - 修改 `docs/known_failing_tests_phase0.md`（按新 triage 同步）
   - 修改 `scripts/verify-baseline.ts`（增加 `--coverage-report` 子命令验证 coverage_report.md 与 failing_tests.json 的 suite 列表一致）
@@ -8455,8 +8455,8 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   1. M5-PREP-01 ✅（ADR-048 §1-§8 全部章节落盘到 `docs/decisions.md`）
   2. M5-PREP-02 ✅（`docs/frontend_redesign_plan_20260418.md` §9.5/§14.1.1/§15.3.1/§16/§19 更新完成 + primitive 激活归属表落盘 + embla-carousel 依赖核查清单完成）
   3. Opus arch-reviewer 独立审计 PASS
-- **关联文档**：`docs/task_queue_patch_m5_card_protocol_20260420_v1_1.md`（v1.1，当前版本）
-- **历史版本**：`docs/task_queue_patch_m5_card_protocol_20260420.md`（v1.0，已 superseded，保留不删）
+- **关联文档**：`docs/archive/2026Q2/task_queue_patch_m5_card_protocol_20260420_v1_1.md`（v1.1，当前版本）
+- **历史版本**：`docs/archive/2026Q2/task_queue_patch_m5_card_protocol_20260420.md`（v1.0，已 superseded，保留不删）
 
 ---
 
@@ -8505,7 +8505,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 新增 `docs/m5_primitive_activation_20260420.md`：primitive 激活归属表（SharedElement/RouteStack/PageTransition-Sibling/PageTransition-Takeover/Skeleton 各含 REGRESSION产物/M5激活卡/消费卡/验收门槛）
      - 新增 `docs/m5_dependency_audit_20260420.md`：embla-carousel 依赖核查（grep `"embla-carousel"` in `apps/**/package.json`）+ react-dnd + react-spring/framer-motion 等动效库核查，每项二选一（✅已存在 / ❌不存在→BLOCKER）
    - **验收要点**：
-     - 方案文档 diff 与 `docs/task_queue_patch_m5_card_protocol_20260420_v1_1.md` §6 一致
+     - 方案文档 diff 与 `docs/archive/2026Q2/task_queue_patch_m5_card_protocol_20260420_v1_1.md` §6 一致
      - primitive 激活归属表含 ≥ 5 项 primitive
      - 依赖核查清单每项明确标注 ✅ 或 ❌
      - 若核查发现任何 ❌ → 直接报 BLOCKER，不得启动 CARD/API/PAGE
@@ -8910,7 +8910,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - **创建时间**：2026-04-20 19:00
 - **最后更新时间**：2026-04-20 19:00
 - **目标**：M5 全部 18 张卡 Opus 独立审计 + 方案对齐表 + PHASE COMPLETE 签字
-- **范围**：`docs/milestone_alignment_m5_20260420.md`（新建）、`docs/decisions.md`、`docs/changelog.md`、`docs/task-queue.md`
+- **范围**：`docs/archive/2026Q2/milestone_alignment_m5_20260420.md`（新建）、`docs/decisions.md`、`docs/changelog.md`、`docs/task-queue.md`
 - **依赖**：SEQ-20260420-M5-PREP ✅ + SEQ-20260420-M5-CARD ✅ + SEQ-20260420-M5-API ✅ + SEQ-20260420-M5-PAGE ✅
 
 ### 任务列表
@@ -8924,7 +8924,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 规模：S（~90 分钟）
    - 依赖：SEQ-20260420-M5-PREP ✅ + SEQ-20260420-M5-CARD ✅ + SEQ-20260420-M5-API ✅ + SEQ-20260420-M5-PAGE ✅
    - **文件范围**：
-     - 新增 `docs/milestone_alignment_m5_20260420.md`：≥ 25 项对齐表（方案 §7/§9/§10/§11/§12/§13/§14/§15/§16/§19 逐条对比）+ 15 项红旗检查（见 `docs/task_queue_patch_m5_card_protocol_20260420_v1_1.md` §9）
+     - 新增 `docs/archive/2026Q2/milestone_alignment_m5_20260420.md`：≥ 25 项对齐表（方案 §7/§9/§10/§11/§12/§13/§14/§15/§16/§19 逐条对比）+ 15 项红旗检查（见 `docs/archive/2026Q2/task_queue_patch_m5_card_protocol_20260420_v1_1.md` §9）
      - 修改 `docs/decisions.md`：追加 ADR-047 或 ADR-037 迭代条目（M5 PHASE COMPLETE 门禁）
      - 修改 `docs/changelog.md`：M5 PHASE COMPLETE 条目
      - 修改 `docs/task-queue.md`：本 M5 序列全部标 ✅
@@ -8954,9 +8954,9 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   3. **新增**：SEQ-20260421-M5-CLEANUP-2 全部 ✅（CLEANUP-04 至 11 + CLOSE-03）
   4. **新增**：CLOSE-03 的 arch-reviewer 11 点 PASS + 主循环浏览器手动验收记录 + 用户二次人工确认通过
 - **关联文档**：
-  - `docs/task_queue_patch_m5_cleanup_20260421.md`（原 CLEANUP 1-3 补丁）
+  - `docs/archive/2026Q2/task_queue_patch_m5_cleanup_20260421.md`（原 CLEANUP 1-3 补丁）
   - `docs/task_queue_patch_m5_cleanup2_20260421.md`（新 CLEANUP-2 补丁 — 9 张卡拆解 + 风险评估）
-  - `docs/milestone_alignment_m5_final_20260421.md`（v1 闭环文档 — 已追加 §3.5 否决记录）
+  - `docs/archive/2026Q2/milestone_alignment_m5_final_20260421.md`（v1 闭环文档 — 已追加 §3.5 否决记录）
 
 ---
 
@@ -9027,7 +9027,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 规模：S（~60 分钟）
    - 依赖：M5-CLEANUP-02 ✅
    - **文件范围**：
-     - `docs/milestone_alignment_m5_20260420.md`（修改）：L8 `审计签字：待 arch-reviewer` → 填入签字日期 + 结论（CLEANUP 启动前遗留偏差已转入本序列；M5-CLOSE-02 前暂不视为真·PHASE COMPLETE）
+     - `docs/archive/2026Q2/milestone_alignment_m5_20260420.md`（修改）：L8 `审计签字：待 arch-reviewer` → 填入签字日期 + 结论（CLEANUP 启动前遗留偏差已转入本序列；M5-CLOSE-02 前暂不视为真·PHASE COMPLETE）
      - `docs/decisions.md`（修改）：追加 ADR-049（@dnd-kit/core 选型）；`SortableList` 已存在，ADR 为补充说明，不改组件代码
      - `docs/rules/admin-module-template.md`（修改）：追加"有序列表"章节，引用 `SortableList`
      - `tests/unit/server/admin-banners.test.tsx`（新建）：≥ 6 个 `it()`，覆盖列表渲染 / 拖拽排序 / 创建表单 / 编辑表单 / 时间窗交互 / 删除确认；如发现被测组件 API 偏离规格，只写备注不改组件
@@ -9042,7 +9042,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 创建时间：2026-04-21
    - 执行模型：claude-opus-4-7（主循环）
    - 子代理：arch-reviewer (claude-opus-4-6) — 10 点独立静态审计 PASS（**但静态审计无法覆盖 UI 运行时**）
-   - 部分完成内容：`docs/milestone_alignment_m5_final_20260421.md` 起草（35 项对齐 + 18 项红旗 + 10 点签字）；`docs/decisions.md` 追加 ADR-037 迭代条款 §4a/§4b/§4c
+   - 部分完成内容：`docs/archive/2026Q2/milestone_alignment_m5_final_20260421.md` 起草（35 项对齐 + 18 项红旗 + 10 点签字）；`docs/decisions.md` 追加 ADR-037 迭代条款 §4a/§4b/§4c
    - 失败原因：PC 端人工回归否决，9 项 UI 缺陷（详见尾部 BLOCKER 块）
    - 处置：保留 ADR-037 迭代条款 + final 对齐文档（追加否决声明）；`changelog.md` 的 ★ M5 真·PHASE COMPLETE ★ 条目已追加 CANCELED 更正；BLOCKER 重新激活等待 CLEANUP-04+ 规划
    - 执行模型: claude-opus-4-7
@@ -9050,7 +9050,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 规模：S（~90 分钟）
    - 依赖：M5-CLEANUP-01 ✅ + M5-CLEANUP-02 ✅ + M5-CLEANUP-03 ✅
    - **文件范围**：
-     - 新增 `docs/milestone_alignment_m5_final_20260421.md`：≥ 35 项对齐（主序列 30 项 + CLEANUP 补充项）+ ≥ 18 项红旗检查 + Opus 子代理独立审计签字
+     - 新增 `docs/archive/2026Q2/milestone_alignment_m5_final_20260421.md`：≥ 35 项对齐（主序列 30 项 + CLEANUP 补充项）+ ≥ 18 项红旗检查 + Opus 子代理独立审计签字
      - 修改 `docs/decisions.md`：追加 ADR-037 迭代条目（M5 真·PHASE COMPLETE 门禁更新）
      - 修改 `docs/changelog.md`：M5 真·PHASE COMPLETE 条目
      - 修改 `docs/task-queue.md`：M5-CLEANUP 序列全部 ✅ + BLOCKER 解除说明
@@ -9208,7 +9208,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 >
 > 保留条目：ADR-037 迭代条款 §4a/§4b/§4c 有效（真·PHASE COMPLETE 门禁定义将在下次 CLOSE-0N 复用），但 §4b 必须补充 "**浏览器手动验收 / Playwright 真机 / 视觉回归**" 作为静态审计之外的强制一维。
 >
-> `docs/milestone_alignment_m5_final_20260421.md` 已追加"人工回归否决"声明，作为历史记录保留。
+> `docs/archive/2026Q2/milestone_alignment_m5_final_20260421.md` 已追加"人工回归否决"声明，作为历史记录保留。
 
 ---
 

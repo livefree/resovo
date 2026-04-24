@@ -1,5 +1,13 @@
 # 视频治理状态机矩阵（2026-04-02）
 
+> status: archived
+> owner: @engineering
+> scope: video governance state machine matrix
+> source_of_truth: no
+> supersedes: none
+> superseded_by: docs/architecture.md
+> last_reviewed: 2026-04-24
+
 ## 1. 目的
 
 统一 `review_status`（审核）、`visibility_status`（可见性）、`is_published`（上/下架）三字段的业务语义，禁止不合理组合继续写入数据库。

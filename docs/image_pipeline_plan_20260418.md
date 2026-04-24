@@ -557,7 +557,7 @@ Loader 抽象保证业务代码零改动。
 
 - 决议：**纳入**。`external_metadata_import` 流程需为已有的 `videos.logo_url / logo_status`（5.1 节定义）补齐 TMDB `/images/logos` 抓取实现；不再新增字段
 - 理由：边际成本接近 0（同一次 TMDB API 调用）；视觉回报高（"电影 Logo 贴 backdrop"是现代流媒体详情页标配）；不抓未来补跑代价大
-- 影响章节：5.1（字段已存在，只需实现抓取）、`docs/external_metadata_import_plan_20260405.md`（需补充 logos 端点调用）
+- 影响章节：5.1（字段已存在，只需实现抓取）、`docs/archive/2026Q2/external_metadata_import_plan_20260405.md`（需补充 logos 端点调用）
 
 **I4 · 剧集缩略图来源**
 
@@ -587,7 +587,7 @@ Loader 抽象保证业务代码零改动。
 
 - 前端重新设计总方案：`docs/frontend_redesign_plan_20260418.md`
 - 设计系统与 Token 管理：`docs/design_system_plan_20260418.md`（品牌 Token 来源）
-- 外部元数据导入：`docs/external_metadata_import_plan_20260405.md`（TMDB / Bangumi 图片来源）
+- 外部元数据导入：`docs/archive/2026Q2/external_metadata_import_plan_20260405.md`（TMDB / Bangumi 图片来源）
 - 架构：`docs/architecture.md`（Schema 变更需同步）
 - 架构决策：`docs/decisions.md`（需追加图片管线相关 ADR）
 - DB 规范：`docs/rules/db-rules.md`

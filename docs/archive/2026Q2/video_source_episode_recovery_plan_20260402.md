@@ -1,5 +1,13 @@
 # 视频源/选集一致性修复方案（2026-04-02）
 
+> status: archived
+> owner: @engineering
+> scope: video source and episode consistency recovery plan
+> source_of_truth: no
+> supersedes: none
+> superseded_by: docs/task-queue.md
+> last_reviewed: 2026-04-24
+
 ## 背景
 
 现网出现两类症状：

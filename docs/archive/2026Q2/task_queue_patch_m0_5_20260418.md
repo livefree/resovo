@@ -1,11 +1,14 @@
 # Resovo — M0.5 测试床修复 + 并行执行授权补丁（2026-04-18）
 
-> status: patch
+> status: archived
 > owner: @planning
 > scope: M0 与 M1 之间插入 Phase 0.5（测试床修复与分类）+ workflow-rules BASELINE 协议升级 + M0.5 与 TOKEN-01..06 并行执行规则
+> source_of_truth: no
 > target_files: `docs/task-queue.md`、`docs/rules/workflow-rules.md`
+> supersedes: none
+> superseded_by: docs/task-queue.md, docs/rules/workflow-rules.md
 > append_only: yes（除 workflow-rules 新增章节为定位插入）
-> last_reviewed: 2026-04-18
+> last_reviewed: 2026-04-24
 > trigger_reason: Phase 0 实跑结果与 PHASE COMPLETE 通知失败数不一致；E2E 97/82 失败包含真源冲突与漂移，直接进 M1 会让验收判据失真
 
 ---

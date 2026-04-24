@@ -1,5 +1,13 @@
 # 重写期风险登记表（M0–M6）
 
+> status: archived
+> owner: @engineering
+> scope: rewrite-period risk register
+> source_of_truth: no
+> supersedes: none
+> superseded_by: docs/decisions.md, docs/rules/workflow-rules.md
+> last_reviewed: 2026-04-24
+
 - **创建日期**：2026-04-18
 - **适用阶段**：前端重大重写期（设计系统 + 播放器全局化 + 页面过渡动画）
 - **关联 ADR**：ADR-024（主题/品牌正交）、ADR-026（播放器 Portal）、ADR-027（View Transitions 四分类）、ADR-029（Cloudflare Images + R2）
