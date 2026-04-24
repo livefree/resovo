@@ -9909,3 +9909,37 @@ HANDOFF-11：Nav 改造，消费 `max-w-shell`、`var(--header-height)`、`var(-
 
 - typecheck ✅ lint ✅
 - test: 1682 通过，预存在 flaky（jsdom 并发隔离）StagingPanel/StagingTable 偶发失败，单独运行均 ✅，与本任务无关
+
+---
+
+## SEQ-20260423 HANDOFF-10~18 序列验收 ✅ 2026-04-23
+
+- **arch-reviewer 模型**：claude-opus-4-6
+- **审计轮次**：3 轮
+- **最终结论**：PASS
+
+### 序列概要
+
+HANDOFF-10（CSS Token 三层结构）至 HANDOFF-18（Watch 页布局）全部完成，共修改：
+- globals.css：新增 ~60 个 component alias tokens（shelf/header/browse/search/detail/player）+ radius scale + 响应式工具类
+- 页面/组件：Home/Browse/Search/Detail/Watch 五大页面对齐 frontend_design_spec_20260423.md
+- 测试：1682 tests 全绿；预存在 flaky StagingPanel 与本序列无关
+
+### arch-reviewer 修正历史
+
+**第一轮 NEED_FIX → 修复：**
+- P0-1: DetailHero/VideoDetailHero `--status-success-*` → `--state-success-*`
+- P0-2: DetailHero `rgba(232,184,75,...)` 硬编码 → `var(--detail-play-glow)` token
+- P0-3: PlayerShell `hasEpisodes/hasSources` 声明上移至 useEffect 前，依赖数组修正
+
+**第二轮 NEED_FIX → 修复：**
+- NEW-P0-A: VideoDetailHero 播放按钮 rgba → `var(--detail-play-glow)`（与 DetailHero 对称）
+- NEW-P0-B: PlayerShell 两处 eslint-disable 补充技术债注释及修复路径
+
+**第三轮：PASS**
+
+### 遗留技术债（已记录，非阻塞）
+
+- PlayerShell.tsx L92/L122 两处 exhaustive-deps 豁免（已注释技术债说明）
+- VideoDetailHero.tsx 与 DetailHero.tsx 播放按钮逻辑重复，待后续提取 DetailPlayButton primitive
+- globals.css 已达 ~850 行，建议后续拆分为多文件 @import 结构

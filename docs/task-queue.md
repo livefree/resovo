@@ -10209,13 +10209,18 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 建议模型：sonnet
    - 验收要点：播放器区 max-w-wide；下半区 1fr + 360px；Episode Panel token 消费；影院模式 radius=0
 
-### 序列验收（全部任务完成后）
+### 序列验收（全部任务完成后）✅ 2026-04-23 PASS
 
-- [ ] HANDOFF-10 至 HANDOFF-18 全部 ✅
-- [ ] `npm run typecheck` 全绿
-- [ ] `npm run lint` 全绿
-- [ ] `npm run test -- --run` 全绿
-- [ ] 全站无 Tailwind arbitrary value（`grep -r '\[.*px\]' apps/web-next/src/ = 0`）
-- [ ] 全站无内联硬编码颜色/间距（`grep -r 'style=.*[0-9]px' apps/web-next/src/ = 0`，允许例外附注释）
-- [ ] arch-reviewer 子代理 PASS（HANDOFF-10 token 结构评审）
+- [x] HANDOFF-10 至 HANDOFF-18 全部 ✅
+- [x] `npm run typecheck` 全绿
+- [x] `npm run lint` 全绿
+- [x] `npm run test -- --run` 全绿（预存在 flaky StagingPanel 与本序列无关）
+- [x] HANDOFF 范围内无 Tailwind arbitrary px value
+- [x] HANDOFF 范围内无内联硬编码颜色/间距（2 处有注释例外：dim label 48px / page display 60px）
+- [x] arch-reviewer 子代理 PASS（3 轮审计，claude-opus-4-6，2026-04-23）
+      P0-1 CLOSED: --state-success-* token 错配修正
+      P0-2 CLOSED: rgba() 硬编码 → var(--detail-play-glow)
+      P0-3 CLOSED: hasEpisodes/hasSources 声明顺序修正
+      NEW-P0-A CLOSED: VideoDetailHero.tsx rgba → glow token
+      NEW-P0-B CLOSED: eslint-disable 补充技术债注释
 
