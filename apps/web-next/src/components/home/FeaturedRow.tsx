@@ -1,25 +1,25 @@
 'use client'
 
 /**
- * FeaturedRow — 首页特色推荐区块（HANDOFF-22）
+ * FeaturedRow — 首页精选推荐区块（HANDOFF-22）
  *
  * 数据源：GET /home/modules?slot=featured → HomeModule[]
  * 布局：1.6fr + 3×1fr CSS grid（共 4 列，首列较宽）
  *
- * 加载策略：
- *   1. loading 期间始终渲染 ShelfRow（fallback），避免标题从"精选推荐"跳变为"热门电影"
- *   2. 加载完成：无模块 → 继续保持 ShelfRow；有模块 → 切换为 FeaturedGrid
- *   这样在绝大多数情况（无运营数据）下，用户看到的是一致的 ShelfRow 体验。
+ * 策略：
+ *   - Section 始终以"精选推荐"身份渲染，不替换为其他 section
+ *   - 无运营模块时：以趋势视频填充 grid（保持标题与布局不变）
+ *   - 有运营模块时：显示编辑精选内容（当前仍以趋势填位，TODO: 待后端实现）
+ *   - loading 时：FeaturedGridSkeleton，骨架尺寸与实际 grid 一致，无闪烁
  *
- * TODO(featured-videos-endpoint): 当 featured modules 存在时，当前实现以趋势视频补位
- * 展示 1.6fr + 3×1fr 布局。后续需实现服务端聚合端点（/home/featured-videos）
- * 以返回精确的运营选定视频 VideoCard 列表，类似 /home/top10 的设计。
+ * TODO(featured-videos-endpoint): 待后端实现 /home/featured-videos 批量端点（类似 /home/top10）
+ * 以返回运营选定的 VideoCard 列表，替换当前趋势视频填位逻辑。
  */
 
 import { useEffect, useState } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { VideoCard } from '@/components/video/VideoCard'
-import { ShelfRow } from '@/components/video/Shelf'
+import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import type { HomeModule, VideoCard as VideoCardType, ApiResponse } from '@resovo/types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -28,9 +28,6 @@ interface FeaturedRowProps {
   readonly title: string
   readonly viewAllHref?: string
   readonly viewAllLabel?: string
-  readonly fallbackTitle: string
-  readonly fallbackViewAllHref?: string
-  readonly fallbackViewAllLabel?: string
 }
 
 // ── 子组件 ────────────────────────────────────────────────────────────────────
@@ -73,6 +70,27 @@ function RowHeader({
   )
 }
 
+function FeaturedGridSkeleton() {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '1.6fr 1fr 1fr 1fr',
+        gap: 'var(--shelf-gap)',
+      }}
+    >
+      {Array.from({ length: 4 }).map((_, i) => (
+        <Skeleton
+          key={i}
+          shape="rect"
+          style={{ aspectRatio: '2/3' }}
+          delay={i >= 2 ? 300 : undefined}
+        />
+      ))}
+    </div>
+  )
+}
+
 function FeaturedGrid({ videos }: { readonly videos: VideoCardType[] }) {
   const MIN_SLOTS = 4
   const displayed = videos.slice(0, MIN_SLOTS)
@@ -110,55 +128,30 @@ function FeaturedGrid({ videos }: { readonly videos: VideoCardType[] }) {
 
 // ── FeaturedRow ───────────────────────────────────────────────────────────────
 
-export function FeaturedRow({
-  title,
-  viewAllHref,
-  viewAllLabel,
-  fallbackTitle,
-  fallbackViewAllHref,
-  fallbackViewAllLabel,
-}: FeaturedRowProps) {
-  // null = loading, [] = no modules, non-empty = has modules
-  const [modules, setModules] = useState<HomeModule[] | null>(null)
+export function FeaturedRow({ title, viewAllHref, viewAllLabel }: FeaturedRowProps) {
   const [videos, setVideos] = useState<VideoCardType[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    apiClient
-      .get<ApiResponse<HomeModule[]>>('/home/modules?slot=featured', { skipAuth: true })
-      .then(async (res) => {
-        const activeModules = res.data
-        setModules(activeModules)
-
-        if (activeModules.length > 0) {
-          // TODO(featured-videos-endpoint): 以趋势视频补位展示 1.6fr + 3×1fr 布局
-          const trendingRes = await apiClient.get<{ data: VideoCardType[] }>(
-            '/videos/trending?period=week&limit=4',
-            { skipAuth: true },
-          )
-          setVideos(trendingRes.data)
-        }
+    setLoading(true)
+    // 并行请求：模块检查 + 趋势视频（作为填位内容）
+    Promise.all([
+      apiClient.get<ApiResponse<HomeModule[]>>('/home/modules?slot=featured', { skipAuth: true }),
+      apiClient.get<{ data: VideoCardType[] }>('/videos/trending?period=week&limit=4', { skipAuth: true }),
+    ])
+      .then(([_modulesRes, trendingRes]) => {
+        // TODO(featured-videos-endpoint): 当 _modulesRes.data.length > 0 时
+        // 改用精选端点返回的 VideoCard 列表替换 trendingRes
+        setVideos(trendingRes.data)
       })
-      .catch(() => setModules([]))
+      .catch(() => setVideos([]))
+      .finally(() => setLoading(false))
   }, [])
 
-  // loading 或无模块 → ShelfRow（skeleton 与最终内容尺寸一致，无标题跳变）
-  if (modules === null || modules.length === 0) {
-    return (
-      <ShelfRow
-        template="poster-row"
-        query="period=week&limit=5"
-        title={fallbackTitle}
-        viewAllHref={fallbackViewAllHref}
-        viewAllLabel={fallbackViewAllLabel}
-      />
-    )
-  }
-
-  // 有模块 → 精选推荐 grid
   return (
     <section>
       <RowHeader title={title} viewAllHref={viewAllHref} viewAllLabel={viewAllLabel} />
-      <FeaturedGrid videos={videos} />
+      {loading ? <FeaturedGridSkeleton /> : <FeaturedGrid videos={videos} />}
     </section>
   )
 }

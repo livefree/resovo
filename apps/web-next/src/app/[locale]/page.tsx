@@ -52,13 +52,10 @@ export default async function HomePage({
         {/* 分类捷径（Client Component，mount 后加载数量角标） */}
         <CategoryShortcutsClient />
 
-        {/* 特色推荐区：有运营数据时 1.6fr + 3×1fr 网格；无数据降级趋势 Shelf */}
+        {/* 精选推荐区：1.6fr + 3×1fr 网格，有运营数据时精选，无则趋势填位 */}
         <FeaturedRow
           title={t('featured')}
           viewAllLabel={t('viewAll')}
-          fallbackTitle={t('trendingMovies')}
-          fallbackViewAllHref={`/${locale}/movie`}
-          fallbackViewAllLabel={t('viewAll')}
         />
 
         {/* TOP10 排行 — 水平滚动竖版卡片 + rank badge */}
