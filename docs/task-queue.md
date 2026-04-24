@@ -9186,19 +9186,20 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 完成备注：执行模型: claude-opus-4-7；子代理: arch-reviewer (claude-opus-4-6) AUDIT PASS
 
 ## 状态：SEQ-20260421-M5-CLEANUP-2 整体 ✅（9 张卡全部完成，2026-04-22）
-   - 创建时间：2026-04-21
-   - 建议模型：**opus**（主循环）+ arch-reviewer (claude-opus-4-6) 子代理（**强制**）+ **浏览器手动验收（主循环执行）**
-   - 规模：S（~120 min）
-   - 依赖：CLEANUP-04/05/06/07/08/09/10/11 全部 ✅
-   - 文件范围：
-     - 新增 `docs/milestone_alignment_m5_final_v2_<date>.md`（v2 闭环对齐表 + 11 点审计签字 + 手动验收清单）
-     - 修改 `docs/decisions.md`（追加 v2 签字，不修 ADR-037 §4b）
-     - 修改 `docs/changelog.md`（追加 ★ M5 真·PHASE COMPLETE v2 ★）
-     - 修改 `docs/task-queue.md`（解除 BLOCKER）
-   - arch-reviewer 必查 11 点（= CLOSE-02 原 10 点 + 新增第 11 点：手动验收记录审查）
-   - **主循环强制义务**：在卡片完成备注贴出 "dev server 启动记录 + 9 项逐一走查结论 + 关键交互截图或日志摘要"；arch-reviewer 以此为 "非静态审计一维" 判据
-   - 验收：11 点 PASS + typecheck/lint/unit/e2e 全绿 + 用户二次人工确认通过
-   - **解除 BLOCKER**：仅当上述 4 项全部满足
+
+- 创建时间：2026-04-21
+- 建议模型：**opus**（主循环）+ arch-reviewer (claude-opus-4-6) 子代理（**强制**）+ **浏览器手动验收（主循环执行）**
+- 规模：S（~120 min）
+- 依赖：CLEANUP-04/05/06/07/08/09/10/11 全部 ✅
+- 文件范围：
+  - 新增 `docs/milestone_alignment_m5_final_v2_<date>.md`（v2 闭环对齐表 + 11 点审计签字 + 手动验收清单）
+  - 修改 `docs/decisions.md`（追加 v2 签字，不修 ADR-037 §4b）
+  - 修改 `docs/changelog.md`（追加 ★ M5 真·PHASE COMPLETE v2 ★）
+  - 修改 `docs/task-queue.md`（解除 BLOCKER）
+- arch-reviewer 必查 11 点（= CLOSE-02 原 10 点 + 新增第 11 点：手动验收记录审查）
+- **主循环强制义务**：在卡片完成备注贴出 "dev server 启动记录 + 9 项逐一走查结论 + 关键交互截图或日志摘要"；arch-reviewer 以此为 "非静态审计一维" 判据
+- 验收：11 点 PASS + typecheck/lint/unit/e2e 全绿 + 用户二次人工确认通过
+- **解除 BLOCKER**：仅当上述 4 项全部满足
 
 ---
 
@@ -9213,11 +9214,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 ---
 
 ~~🚨 BLOCKER — M5 PC 端人工回归否决（9 项 UI 缺陷，M6 继续冻结）~~ **【已解除 2026-04-22，9 缺陷全修 + e2e 24 test case 固化 + CLOSE-03 v2 签字，历史记录保留为审计案例】**
+
 - **任务**：M5-CLOSE-02 静态审计 PASS 后真·PHASE COMPLETE 宣告
 - **时间**：2026-04-21
 - **触发方式**：用户 PC 端浏览器手动测试
 - **问题描述**（用户反馈原文，共 9 项）：
-
   1. **VideoCard 双出口反转 + 文案堆叠**：
      - 点击卡片图片区没有直达播放页（Fast Takeover 失效 / PosterAction 未触发 `playerStore.enter('fast-takeover')`）
      - 鼠标悬浮在卡片文字区时才出现播放按钮（与 ADR-048 §5 双出口协议相反：PosterAction 应承载播放意图）
@@ -9279,9 +9280,11 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   c. 是否更新 ADR-037 迭代条款 §4b，在 10 点必查项之外强制追加 "**浏览器手动验收（dev server + 关键路径走查）/ 视觉回归截图 / 真实交互 e2e（不只是 DOM 可见）**"为真·PHASE COMPLETE 的独立一维
   d. 是否启动 M5 全局回归 e2e 扩写，把 9 类场景固化为 Playwright 断言防止复发
   e. 人工回归是否覆盖全部 M5 功能，或仅 9 项已发现？若全局扫描未完，可能还有更多缺陷待补
+
 ---
 
-~~🚨 BLOCKER — M5-CLOSE-03 启动遇新运行时缺陷（搜索页 SSR 500）~~ **【已解除 2026-04-22，SearchPage 具名导出修复 + _fixtures.ts 框架层兜底防复发，采用决策 a + d 组合】**
+~~🚨 BLOCKER — M5-CLOSE-03 启动遇新运行时缺陷（搜索页 SSR 500）~~ **【已解除 2026-04-22，SearchPage 具名导出修复 + \_fixtures.ts 框架层兜底防复发，采用决策 a + d 组合】**
+
 - **任务**：M5-CLOSE-03 真·PHASE COMPLETE v2
 - **时间**：2026-04-22
 - **发现方式**：CLOSE-03 要求的"dev server + 9 项逐一走查"代理证据采集阶段，`curl -sS -o /dev/null -w "%{http_code}" http://localhost:3002/en/search?q=test` 返回 **500**（空 q 同样 500）
@@ -9302,6 +9305,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
   d. Playwright e2e 默认加 `response.status() < 500` 基础断言（框架层而非 case 层）以后续兜底
 - **主循环当前状态**：CLOSE-03 task-queue.md 已标 🔄；tasks.md 卡片已写入；但不继续后续对齐表 / arch-reviewer 审计 / BLOCKER 解除动作，等待决策
 - **决策结果（2026-04-22）**：用户采纳 **a + d 组合**。SSR 500 已在本次 CLOSE-03 内即时修复（`SearchPage.tsx` 删静态属性赋值、新增具名导出 `SearchPageSkeleton`；`search/page.tsx` 切 `<SearchPageSkeleton />` fallback；新增 `tests/e2e-next/_fixtures.ts` 框架层 response.status<500 兜底，18 spec 统一 import）。arch-reviewer (claude-opus-4-6) 独立 11 点审计 `AUDIT RESULT: PASS`。M5-CLOSE-03 v2 签字完成，本 BLOCKER 同步解除。
+
 ---
 
 ---
@@ -9350,7 +9354,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - **关联审计文档**：[`docs/video_ingest_source_and_moderation_audit_20260422.md`](/Users/livefree/projects/resovo/docs/video_ingest_source_and_moderation_audit_20260422.md)（现象 / 代码定位 / 根因 / 修复建议，P0/P1/P2 优先级来源）
 - **授权声明**：用户 2026-04-22 明确授权：
   1. `packages/types/src/video.types.ts` 的 `VideoType` / `VideoGenre` 枚举可按豆瓣分类对齐扩展（如需 migration 可执行）
-  2. 采集入库表（videos / video_sources / media_catalog / video_external_refs / video_metadata_* / external_*_raw / douban_entries / douban_people / bangumi_entries / crawler_runs / crawler_task_logs / source_health_events 等）可一次性清空；保留 `crawler_sites` / `crawler_tasks` / `system_settings` / `users` / `home_banners` / `brands` 及用户行为表（`user_favorites` / `watch_history` / `comments` / `danmaku` / `lists` 等）
+  2. 采集入库表（videos / video*sources / media_catalog / video_external_refs / video_metadata*_ / external\__\_raw / douban_entries / douban_people / bangumi_entries / crawler_runs / crawler_task_logs / source_health_events 等）可一次性清空；保留 `crawler_sites` / `crawler_tasks` / `system_settings` / `users` / `home_banners` / `brands` 及用户行为表（`user_favorites` / `watch_history` / `comments` / `danmaku` / `lists` 等）
 - **串行与并行策略**：
   - 严格串行主线：`META-10 → CHORE-05 → CRAWLER-05 → ADMIN-13 → ADMIN-15 → ADMIN-16`（枚举对齐 → 清数据 → 源站数据口径 → 后台查询 → 审核展示）
   - 独立分支：`CRAWLER-06` / `ADMIN-14` 可在 CHORE-05 后并行启动
@@ -9606,6 +9610,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
       - 回归：`apps/api` 测试集合无回退
 
 ### 验收签字（序列级）
+
 - [x] 12 张全部 ✅（2026-04-22）
 - [x] 运行一次小规模采集验证端到端（2026-04-22 用户确认无异常）
 - [x] `docs/changelog.md` 追加 SEQ-20260422-BUGFIX-01 条目（每张卡的 commit / 执行模型 / 子代理）
@@ -9844,7 +9849,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 实际开始：2026-04-22
    - 完成时间：2026-04-22（pending-user）
    - 执行模型：claude-opus-4-7
-   - 子代理：arch-reviewer (claude-opus-4-7) — 初审 NEED_FIX（ADR-051 缺失 + GET /uploads/* 分层违例），两必改落地后二审 PASS
+   - 子代理：arch-reviewer (claude-opus-4-7) — 初审 NEED_FIX（ADR-051 缺失 + GET /uploads/\* 分层违例），两必改落地后二审 PASS
    - 建议模型：**opus 主循环 + opus arch-reviewer**
    - 规模：S（~60 min，实际含必改 ~90 min）
    - 依赖：CDN-01/02 + IMG-06/07/08 全部 ✅；ADMIN-17 ⏭️ 跳过
@@ -9860,6 +9865,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
      - 用户真人 checklist 全部打勾（或实质通过记录）
 
 ### 验收签字（序列级）
+
 - [ ] 6 张主序列 + 可选 ADMIN-17 全部 ✅
 - [ ] 0 新 npm 依赖
 - [ ] 0 schema 变更或 migration 得到 docs/architecture.md 同步
@@ -9928,7 +9934,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 验收：migration up/down 回放；typecheck 全绿（跨 api/types/web-next/server）；home_modules 单元测试；ADR-051/052 落盘 + decisions.md 索引更新
    - UI 复核：**不触发**
 
-3. HANDOFF-03 — MiniPlayer 交互补齐 + ?_theme= query 前置修复（状态：✅ 已完成 2026-04-22，等用户 §7 UI 复核签字生效）
+3. HANDOFF-03 — MiniPlayer 交互补齐 + ?\_theme= query 前置修复（状态：✅ 已完成 2026-04-22，等用户 §7 UI 复核签字生效）
    - 创建时间：2026-04-22 18:00
    - 实际开始：2026-04-22 22:45
    - 完成时间：2026-04-22 23:25（pending-user-review：§7 UI 复核门禁）
@@ -9964,20 +9970,20 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 原执行：claude-sonnet-4-6（2026-04-22 23:45-23:59）commit 5f6c0b8
    - 回滚 commit：c9cdd9d（2026-04-23 01:35）
    - 回滚原因：UI 复核 3 轮 🔴 改后用户拍板整卡回滚。实装与设计稿严重脱节：
-     * Hero banner 图片无论视口都不显示（纯色背景）
-     * Nav backdrop-blur-md / active 样式视觉未见
-     * Scrim 双层未见（因图片不显示）
-     * Specs chips 未渲染（DB 无 specs 列 + HeroV2 compact 分支根本不渲染）
-     * CTA 三按钮仅显示 1 个（< 768px compact 分支，其他情况因 banner meta 字段缺失）
-     * < 768px 视口 compact 布局遮挡下方内容
+     - Hero banner 图片无论视口都不显示（纯色背景）
+     - Nav backdrop-blur-md / active 样式视觉未见
+     - Scrim 双层未见（因图片不显示）
+     - Specs chips 未渲染（DB 无 specs 列 + HeroV2 compact 分支根本不渲染）
+     - CTA 三按钮仅显示 1 个（< 768px compact 分支，其他情况因 banner meta 字段缺失）
+     - < 768px 视口 compact 布局遮挡下方内容
    - 根因教训：① HeroV2 采 `hidden md:block` / `md:hidden` 二分 + md=768px 断点过高 + compact 过简陋；② LocalizedBannerCard 类型扩展但 API 侧 SQL/Service 未同步映射（rating/year/description 在 media_catalog，不在 videos）；③ Nav 搜索 pill 改成 button 违反顶栏 UX 常识；④ LazyImage race condition（已在独立 hotfix 917c027 修复）
    - 重新规划要求（待另立 HANDOFF-05-V2）：
-     * 规模：**L（≥ 2d）**（非原 M 1d），含完整响应式 + BannerService 字段映射 + 移动端 UI 与桌面一致
-     * 移除 `hidden md:block / md:hidden` 二分，单一响应式结构（`clamp()` / Tailwind 响应式工具）
-     * BannerService / home-banners SQL 扩展 `LEFT JOIN media_catalog` 取 rating/year/description
-     * Nav 搜索保留 input 可输入（回滚后已恢复 HANDOFF-03 末态的 input 版本）
-     * 强制主循环浏览器实际验证（不只 vitest），列出 Auto + Manual 截图清单
-     * 验收门禁要求真人浏览器验收通过方可标 ✅（不只 arch-reviewer 静态审计）
+     - 规模：**L（≥ 2d）**（非原 M 1d），含完整响应式 + BannerService 字段映射 + 移动端 UI 与桌面一致
+     - 移除 `hidden md:block / md:hidden` 二分，单一响应式结构（`clamp()` / Tailwind 响应式工具）
+     - BannerService / home-banners SQL 扩展 `LEFT JOIN media_catalog` 取 rating/year/description
+     - Nav 搜索保留 input 可输入（回滚后已恢复 HANDOFF-03 末态的 input 版本）
+     - 强制主循环浏览器实际验证（不只 vitest），列出 Auto + Manual 截图清单
+     - 验收门禁要求真人浏览器验收通过方可标 ✅（不只 arch-reviewer 静态审计）
    - FIX-1 Nav 搜索 input 可输入：由 revert 自然恢复，不需独立任务
 
 6. HANDOFF-06 — 首页组件：TypeShortcuts + FeaturedRow + TopTenRow + ScrollRow variant（状态：⬜ 待启动）
@@ -10014,6 +10020,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 验收：arch-reviewer 10+ 点 PASS（含 Storage 协调协议 / content_ref_type 枚举 / v2.1 占位已入队）；浏览器手动验收全绿；用户二次人工确认；视觉回归 baseline 落盘
 
 ### 验收签字（序列级）
+
 - [ ] 9 张主序列任务全部 ✅
 - [ ] 0 新 npm 依赖
 - [ ] home_modules / videos.trending_tag 两个 migration 同步 `docs/architecture.md`
@@ -10045,6 +10052,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 5. STATS-05 — 前端副标题动态切换 + 回归测试（建议模型：sonnet）
 
 ### 验收签字（序列级，待启动时细化）
+
 - [ ] 5 张任务全部 ✅
 - [ ] `HomeService.topTen()` 接口签名零变动
 - [ ] `sortStrategy` 从 `'manual_plus_rating'` 切换到 `'composite'`
@@ -10075,6 +10083,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 4. LIFT-04 — ADR-055 落盘 + 回归 SEQ-20260422-HANDOFF-V2 ✅ 所有 manual_qa 留白项（建议模型：opus）
 
 ### 验收签字（序列级，待启动时细化）
+
 - [ ] 4 张任务全部 ✅
 - [ ] full ⇄ mini 切换 video.currentTime 连续无跳变（±0.1s 容差）
 - [ ] 视频不 reload（网络 tab 无 manifest/segment 重请求）
@@ -10157,7 +10166,7 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
    - 实际开始：2026-04-23 12:00
    - 完成时间：2026-04-23
    - 建议模型：sonnet
-   - 验收要点：`npm run build`（design-tokens）通过；tokens.css 新增 --layout-* / --page-* / --shelf-* 变量；Tailwind preset 含 max-w-shell/page/feature/wide；typecheck + test 全绿
+   - 验收要点：`npm run build`（design-tokens）通过；tokens.css 新增 --layout-_ / --page-_ / --shelf-\* 变量；Tailwind preset 含 max-w-shell/page/feature/wide；typecheck + test 全绿
 
 2. HANDOFF-11 — Nav 改造：72px / 32px inset / token 消费 / arbitrary value 清零（状态：✅ 已完成）
    - 创建时间：2026-04-23 12:00
@@ -10218,9 +10227,266 @@ Phase 1 目标：按里程碑逐步修复 C 类 testid 漂移（M2 → homepage/
 - [x] HANDOFF 范围内无 Tailwind arbitrary px value
 - [x] HANDOFF 范围内无内联硬编码颜色/间距（2 处有注释例外：dim label 48px / page display 60px）
 - [x] arch-reviewer 子代理 PASS（3 轮审计，claude-opus-4-6，2026-04-23）
-      P0-1 CLOSED: --state-success-* token 错配修正
+      P0-1 CLOSED: --state-success-\* token 错配修正
       P0-2 CLOSED: rgba() 硬编码 → var(--detail-play-glow)
       P0-3 CLOSED: hasEpisodes/hasSources 声明顺序修正
       NEW-P0-A CLOSED: VideoDetailHero.tsx rgba → glow token
       NEW-P0-B CLOSED: eslint-disable 补充技术债注释
 
+---
+
+## SEQ-20260424-FRONTEND-PHASE2 — 前台 UI 功能补完 · Phase 2
+
+> status: 📋 待执行
+> created: 2026-04-24
+> owner: @engineering
+> 建议启动模型：sonnet
+> 计划文档：`docs/frontend_phase2_plan_20260424.md`（v1.3）
+> 上游序列：SEQ-20260423-UI-REBUILD（HANDOFF-10~18，已完成）
+> 调查来源：`docs/handoff_20260422/manual_qa_m6_20260423.md` + 2026-04-23 人工审查报告 + 用户补充意见（2026-04-24）
+
+### 背景
+
+SEQ-20260423-UI-REBUILD 完成了 Token 补齐、Nav/Footer/HeroBanner/Shelf/Browse/Search/Detail/Watch 骨架重做。本序列针对审查发现的**确定性 Bug、缺失功能区块、交互偏差**进行补完，不改变已通过 arch-reviewer 签字的架构决策。
+
+问题全景：4 项 P0 Bug（B-1~B-4）、6 项 P1 功能缺失（F-1~F-6）、6 项 P2 交互偏差（I-1~I-6）、4 项 P3 视觉/结构问题（V-1~V-4）。
+
+### 执行顺序
+
+```
+Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行）
+  └─ REVIEW-A（arch-reviewer，claude-opus-4-6）
+     └─ Batch B（功能补完）：HANDOFF-22 + HANDOFF-23 + HANDOFF-24（可并行）
+        └─ REVIEW-B（arch-reviewer，claude-opus-4-6）
+           └─ Batch C（交互/Shell）：HANDOFF-25 + HANDOFF-26（可并行）
+              └─ REVIEW-C（arch-reviewer，claude-opus-4-6）→ Phase 2 Close
+```
+
+### 任务列表
+
+#### Batch A — Bug 修复 + 基础整理
+
+1. **HANDOFF-19 — BrowseGrid 接口修正 + FilterArea 交互修复 + 影院模式 CSS Bug**（状态：✅ 完成）
+   - 创建时间：2026-04-24
+   - 建议模型：sonnet
+   - 执行模型：claude-sonnet-4-6
+   - 子代理调用：无
+   - 估时：0.75d
+   - 修复范围：B-1 / B-2 / B-3 / B-4
+   - 文件范围：
+     - `apps/web-next/src/components/browse/BrowseGrid.tsx`：端点 `/videos/trending` → `/videos`；新增 `initialType?: VideoType` prop，强制覆盖 type 参数（唯一权威防线）；读取 `res.pagination.total` 做分页
+     - `apps/web-next/src/app/[locale]/[type]/page.tsx`：`CategoryPageContent` 传 `initialType={videoType}` 给 BrowseGrid、`lockedDims={['type']}` 给 FilterArea（**无需修改 page props 签名**，仅凭 params 已有的 videoType 即可）
+     - `apps/web-next/src/components/browse/FilterArea.tsx`：新增 `lockedDims?: FilterDim[]` prop（隐藏对应维度行）；`handleSelect` 修正空值/同值取消三段式逻辑
+     - `apps/web-next/src/app/globals.css`：`.player-layout--theater` 补 `align-items: stretch`，修复影院模式子元素宽度塌陷
+   - 实现备注：`[type]/page.tsx` 仅接 `params`，不新增 `searchParams` 传递链；BrowseGrid `effectiveParams.set('type', initialType)` 为唯一权威，无条件覆盖 URL 中的 type 参数
+   - 完成备注：typecheck / lint / 1682 unit tests 全部通过；FilterDim 已导出供 page.tsx 使用；lockedDims 过滤 BASIC_ROWS（不影响 EXPANDED_ROWS，year/rating_min/status 维度正常）
+   - 验收要点：
+     - `/en/movie` 显示电影列表 + 分页可用；FilterArea 无 type 行
+     - 点击已选 chip 可取消；点击"全部"清除该维度
+     - `/en/series?country=JP` 正确过滤（URL 中 type=series 不被用户绕开）
+     - 影院模式下播放器全宽铺满，无左侧压缩
+
+2. **HANDOFF-20 — 全站竖版卡片统一 + HeroBanner fallback + TypeShortcuts 计数 + lib/categories.ts**（状态：📋 待执行）
+   - 创建时间：2026-04-24
+   - 建议模型：sonnet
+   - 估时：1d
+   - 修复范围：V-1 / F-4 / F-3；创建 lib/categories.ts（供 HANDOFF-21 直接导入）
+   - 用户决策（2026-04-24）：弃用 VideoCardWide（16:9），全站统一 VideoCard（2:3 竖版）；VideoCardWide.tsx 文件保留但标注 `@deprecated`
+   - 文件范围：
+     - `apps/web-next/src/components/video/Shelf.tsx`：`landscape-row` VideoCardWide → VideoCard，cardWidth → `var(--shelf-card-w-portrait)`，aspectRatio → `2/3`
+     - `apps/web-next/src/components/video/VideoGrid.tsx`：`variant='landscape'` 分支同步替换
+     - `apps/web-next/src/components/video/VideoCardWide.tsx`：文件首行加 `/** @deprecated */` 注释，不删除
+     - `apps/web-next/src/components/video/HeroBanner.tsx`：空数组时渲染静态 fallback（品牌主色背景 + Logo + i18n Slogan），不塌陷，高度保持 `min(520px, 60vh)`
+     - **新建 `apps/web-next/src/lib/categories.ts`**（提前到本卡）：导出 `ALL_CATEGORIES`、`MAIN_TYPE_PARAMS`、`MORE_TYPE_PARAMS`；`typeParam` = 路由 slug，`videoType` = API 参数（对齐 ADR-048 §4，tvshow → variety）
+     - **新建 `apps/web-next/src/components/home/CategoryShortcutsClient.tsx`**（`'use client'`）：mount 时调 `/videos/count-by-type`，渲染数量 badge（`1,234+` / `10K+`）；接口错误时 badge 不渲染，卡片结构不受影响；使用 `useTranslations('nav')` 获取 i18n
+     - `apps/web-next/messages/{zh,en}.json`：补 `hero.fallbackSlogan`
+   - 验收要点：
+     - 所有 ShelfRow 显示竖版卡片（2:3）
+     - 首页无 API 时有品牌色 fallback，不白屏
+     - 分类捷径显示数量角标；接口错误时卡片正常渲染
+     - `lib/categories.ts` 导出三常量，typecheck 通过
+
+3. **HANDOFF-21 — Nav 交互修正（右对齐 + 分类同源 + 搜索宽度 + ⌘K 适配 + 更多展开）**（状态：📋 待执行）
+   - 创建时间：2026-04-24
+   - 建议模型：sonnet
+   - 估时：0.75d
+   - 前置依赖：HANDOFF-20（lib/categories.ts 已创建）
+   - 修复范围：I-1 / I-2 / I-3 / I-5 / I-6 / V-4
+   - 文件范围：
+     - `apps/web-next/src/components/layout/Nav.tsx`：
+       - 内层容器加 `w-full`（右侧组件靠右，I-2）
+       - 移除内部 MAIN_CATEGORIES / MORE_CATEGORIES，改从 `lib/categories.ts` 导入（I-6）
+       - OS 检测 + 键盘监听（metaKey/ctrlKey + K），浮层按平台显示 ⌘K / Ctrl+K badge（I-1/I-3）
+       - 浮层无输入时展示静态热搜列表（来自 `messages/{zh,en}.json` 的 `nav.hotSearchTerms` 数组，无 API 调用）
+       - MoreMenu 改为 CSS group/hover 展开（`@media (hover: none)` 降级点击）（I-5）
+     - `apps/web-next/src/components/browse/FilterArea.tsx`：type options 改从 `lib/categories.ts` 生成（videoType 作为 filter value）（I-6）
+     - `apps/web-next/src/app/[locale]/[type]/page.tsx`：VALID_TYPES 映射改从 `lib/categories.ts` 生成
+     - `apps/web-next/src/app/globals.css:107`：`--search-input-max-w: 480px` → `240px`（V-4）
+     - `apps/web-next/messages/{zh,en}.json`：补 `nav.hotSearchTerms`（各 ≤ 8 条）
+   - 验收要点：
+     - Nav 右侧 ThemeToggle + 设置按钮贴右边缘
+     - 搜索框宽度约 240px
+     - Mac 显示 ⌘K，Windows/Linux 显示 Ctrl+K；键盘触发可打开浮层
+     - "更多" hover 展开（桌面）/ 点击展开（触屏）
+     - Nav 分类与 Browse page type chip 完全一致
+
+#### REVIEW-A — Batch A 阶段独立审核
+
+- **触发条件**：HANDOFF-19 + HANDOFF-20 + HANDOFF-21 全部 ✅，且 typecheck / lint / test 全绿
+- **模型**：arch-reviewer（`claude-opus-4-6`）
+- **审核要点**（8 项）：
+  1. BrowseGrid `/videos` 接口参数格式与后端 schema 一致性
+  2. `lib/categories.ts` 单源常量导出结构合理性，typeParam vs videoType 映射正确性（ADR-048 §4）
+  3. `initialType` prop 接口定义与 VideoType enum 约束
+  4. OS 检测代码 SSR 安全性（`typeof navigator !== 'undefined'` 守卫）
+  5. HeroBanner fallback 颜色零硬编码（CSS 变量全覆盖）
+  6. TypeShortcuts 改 Client Component 后 SSR/CSR 边界合理性
+  7. VideoCardWide 弃用注释合规；无遗漏的 landscape import（全仓 grep 确认）
+  8. `globals.css` token `--search-input-max-w` 变更是否与 design-tokens 层一致
+- **结论写入**：`docs/handoff_20260422/review_phase2_a_20260424.md`
+- **阻塞效果**：NEED_FIX 时 Batch B 不得启动
+
+#### Batch B — 功能补完
+
+4. **HANDOFF-22 — 首页完整区块补完（FeaturedRow + TopTenRow + 动漫 Shelf）**（状态：📋 待执行）
+   - 创建时间：2026-04-24
+   - 建议模型：sonnet
+   - 估时：1.5d
+   - 前置依赖：REVIEW-A PASS
+   - 修复范围：F-1 / F-2
+   - 文件范围：
+     - **新建 `apps/web-next/src/components/home/TopTenRow.tsx`**：调 `GET /home/top10`；水平滚动竖版卡片（2:3，170px）；rank badge 左下角叠加（1-3 号 32px/700，4-10 号 20px/600，颜色 `var(--fg-muted)`）；副标题按 `sortStrategy` 字段驱动；无数据渲染 4 个 EmptyPlaceholderCard
+     - **新建 `apps/web-next/src/components/home/FeaturedRow.tsx`**：调 `GET /home/modules?slot=featured`；`1.6fr + 3×1fr` CSS grid；无数据降级为普通 ShelfRow（`/videos/trending?period=week&limit=5`）
+     - `apps/web-next/src/app/[locale]/page.tsx`：首页节奏改为 HeroBanner → CategoryShortcuts → FeaturedRow → TopTenRow → ShelfRow×3（电影/剧集/动漫）
+     - `apps/web-next/messages/{zh,en}.json`：补 `home.topTen`、`home.featured`、`home.trendingAnime` 等文案
+   - 验收要点：
+     - 首页 6 个内容区块全部渲染
+     - TopTenRow rank badge 位置精确（左下角叠加）
+     - FeaturedRow 无运营数据时降级为普通 Shelf，不白屏
+     - 所有卡片竖版（2:3）
+
+5. **HANDOFF-23 — 搜索结果页重构（列表式 + 高亮 + 分页）**（状态：📋 待执行）
+   - 创建时间：2026-04-24
+   - 建议模型：sonnet
+   - 估时：0.75d
+   - 前置依赖：REVIEW-A PASS
+   - 修复范围：F-6
+   - 文件范围：
+     - `apps/web-next/src/app/[locale]/search/_components/SearchPage.tsx`：从 VideoCard 网格改为列表行（封面 120px 2:3 + 右侧信息区）；meta 行（类型 Chip + 年份 + 评分）；CTA 按钮（立即观看 / 详情）；分页 limit=20；Tab 切换（全部/电影/剧集/动漫）控制 API type 参数（不做前端过滤）
+     - **新建 `apps/web-next/src/lib/parse-highlight.ts`**：`parseHighlight(raw: string): React.ReactNode[]`；用 `raw.split(/(<em>.*?<\/em>)/g)` 分割；`<em>...</em>` 提取纯文本包裹 `<mark>`；**禁止 `dangerouslySetInnerHTML`**；`<mark>` 样式走 CSS 变量
+   - 验收要点：
+     - 搜索结果列表行展示（封面 + 信息区）
+     - 关键词有 `<mark>` 高亮（API 返回 highlight 字段时）
+     - 分页控件可用
+     - Tab 切换触发新 API 请求
+
+6. **HANDOFF-24 — 详情页主列补完**（状态：📋 待执行）
+   - 创建时间：2026-04-24
+   - 建议模型：sonnet
+   - 估时：0.75d
+   - 前置依赖：REVIEW-A PASS
+   - 修复范围：F-5
+   - 文件范围：
+     - `apps/web-next/src/components/video/VideoDetailClient.tsx`：主列填充剧情简介（超 4 行折叠，无 description 时不渲染）、演职员横向列表（`SafeImage` 圆形 40px + 姓名，API 无字段时写 TODO + 条件渲染）、制作信息 meta 行（国家/语言/年份/类型）
+   - 注意：若 `/videos/:slug` 无 cast/director 字段，演职员区块标注 TODO，不造假数据
+   - 验收要点：
+     - 详情页主列有剧情简介区块（有数据时）
+     - 简介超 4 行有折叠/展开
+     - meta 信息行显示完整
+
+#### REVIEW-B — Batch B 阶段独立审核
+
+- **触发条件**：HANDOFF-22 + HANDOFF-23 + HANDOFF-24 全部 ✅，且 typecheck / lint / test / e2e 全绿
+- **模型**：arch-reviewer（`claude-opus-4-6`）
+- **审核要点**（8 项）：
+  1. FeaturedRow 数据降级路径（无运营数据时 fallback 不白屏）
+  2. TopTenRow `sortStrategy` 字段驱动副标题文案（向前兼容性）
+  3. FeaturedRow / TopTenRow 组件 Props 类型定义合理性，是否需要沉淀共享层
+  4. `parseHighlight()` 实现正确性：`dangerouslySetInnerHTML` 零命中（grep 验证）；`<em>` 内部文本已提取为纯字符串，无 XSS 路径
+  5. `Pagination` primitive 是否已提取为共享组件（BrowseGrid / SearchPage 复用同一实现）
+  6. DetailPage 演职员 TODO 标注规范；API 字段缺失时条件渲染逻辑正确
+  7. 首页新区块在 light / dark 双主题下颜色全走变量（arch-reviewer grep 验证）
+  8. `home-b-2.html` 设计稿节奏对照（6 个区块顺序与设计稿一致）
+- **结论写入**：`docs/handoff_20260422/review_phase2_b_20260424.md`
+- **阻塞效果**：NEED_FIX 时 Batch C 不得启动
+
+#### Batch C — 交互 / Shell
+
+7. **HANDOFF-25 — MiniPlayer 交互补齐（范围受限版）**（状态：📋 待执行）
+   - 创建时间：2026-04-24
+   - 建议模型：sonnet
+   - 估时：0.4d
+   - 前置依赖：REVIEW-B PASS
+   - 修复范围：I-4（受限）
+   - 范围说明：进度条和播放/暂停控制**不在本卡范围**（离开 /watch 后 PlayerShell 已卸载，video 元素不存在，需等 SEQ-202605XX-PLAYER-VIDEO-LIFT 完成）
+   - 文件范围：
+     - `apps/web-next/src/app/[locale]/_lib/player/MiniPlayer.tsx`：
+       - 视频区容器加 `onClick` → `router.push(\`/${locale}/watch/${slug}\`)`，locale 来自 `useParams()`
+       - hover 返回 chip：绝对居中覆盖层，hover 时 `opacity: 0 → 1`（CSS transition 150ms），i18n key `miniPlayer.returnToWatch`
+       - 所有颜色走 `var(--player-mini-*)` tokens
+   - 延期至 SEQ-PLAYER-VIDEO-LIFT：进度条、播放/暂停按钮
+   - 验收要点：
+     - 点击视频区跳转到 `/[locale]/watch/[slug]`
+     - hover 视频区出现返回 chip，mouseLeave 消失
+     - 颜色零硬编码
+
+8. **HANDOFF-26 — Footer 重构 + Settings 基础抽屉**（状态：📋 待执行）
+   - 创建时间：2026-04-24
+   - 建议模型：sonnet
+   - 估时：0.75d
+   - 前置依赖：REVIEW-B PASS
+   - 修复范围：V-2 / V-3
+   - 用户决策（2026-04-24）：账户列本阶段不实现；Footer 采用 3 列结构（浏览/帮助/关于）
+   - 文件范围：
+     - `apps/web-next/src/components/layout/Footer.tsx`：3 列 grid（`repeat(3, 1fr)`，桌面端；移动端单列）；浏览列从 `lib/categories.ts` MAIN 部分生成（同 Nav 同源，含 locale 前缀）；帮助列（帮助中心/DMCA/隐私政策，链接暂 `#`）；关于列（关于我们/联系方式，链接暂 `#`）；删除重复底部行，保留 Copyright；所有链接含 `/${locale}` 前缀
+     - **新建 `apps/web-next/src/components/layout/SettingsDrawer.tsx`**：右侧划入，`position: fixed`，`z-index: var(--z-overlay)`；主题选择（Light/Dark/System，写 localStorage + 更新 BrandProvider context）；动效强度滑块（0/1/1.5，驱动 `--motion-scale` CSS 变量）；其余配置项预留"即将推出"占位；ESC / 遮罩关闭
+     - `apps/web-next/src/components/layout/Nav.tsx`：Settings 按钮绑定 SettingsDrawer open state
+   - 验收要点：
+     - Footer 3 列结构，无重复链接，链接含 locale 前缀
+     - Settings 按钮点击打开抽屉，ESC / 遮罩关闭
+     - 主题切换在抽屉内可用
+     - 动效强度滑块改变 `--motion-scale` CSS 变量
+
+#### REVIEW-C — 最终独立审核 + Phase 2 Close
+
+- **触发条件**：HANDOFF-25 + HANDOFF-26 全部 ✅，且 typecheck / lint / test / e2e 全绿
+- **模型**：arch-reviewer（`claude-opus-4-6`）
+- **审核要点**（11 项）：
+  1. MiniPlayer `router.push` locale 来源：必须来自 `useParams()` 或 context，不得硬编码
+  2. MiniPlayer hover chip：`prefers-reduced-motion: reduce` 下 opacity transition 是否被 `--motion-scale: 0` 覆盖
+  3. MiniPlayer 无假播放控件：组件内不得出现 `currentTime`、`duration`、`isPlaying` 订阅（grep 验证）
+  4. Settings Drawer `z-index` 层级：`--z-overlay` > `--z-mini-player`（抽屉覆盖 MiniPlayer）
+  5. Footer 浏览链接来源是否 `lib/categories.ts` 同源，与 Nav 分类一致
+  6. Footer 链接 locale 前缀覆盖完整（无裸 `/movie` 类路径）
+  7. SettingsDrawer `localStorage` 读写 SSR 安全性（`typeof window !== 'undefined'` 守卫）
+  8. `--motion-scale` CSS 变量驱动机制（变量挂在 `:root` 还是 `.app-shell`）
+  9. HANDOFF-19~26 全范围：grep 验证硬编码颜色零遗漏
+  10. HANDOFF-19~26 全范围：`any` 类型零遗漏
+  11. `VideoCardWide.tsx` `@deprecated` 注释已写入；无新增消费点
+- **结论写入**：`docs/handoff_20260422/review_phase2_c_20260424.md`
+- **Phase 2 Close 条件**：全部 PASS 后追加 changelog 条目 + 本序列标 ✅
+
+### 序列验收（全部任务完成后）
+
+- [ ] HANDOFF-19 至 HANDOFF-26 全部 ✅
+- [ ] REVIEW-A PASS（arch-reviewer）
+- [ ] REVIEW-B PASS（arch-reviewer）
+- [ ] REVIEW-C PASS（arch-reviewer）
+- [ ] `npm run typecheck` 全绿
+- [ ] `npm run lint` 全绿
+- [ ] `npm run test -- --run` 全绿
+- [ ] `npm run test:e2e` 全绿（PLAYER 关键路径）
+- [ ] HANDOFF 范围内无硬编码颜色
+- [ ] HANDOFF 范围内无 `any` 类型
+- [ ] `lib/categories.ts` 为 Nav / FilterArea / Footer / CategoryShortcuts 唯一数据来源
+
+### 风险备注
+
+| 风险                                   | 缓解措施                                                                   |
+| -------------------------------------- | -------------------------------------------------------------------------- |
+| `/videos` 接口分页格式                 | HANDOFF-19 开工前先 curl 确认 `pagination.total/page/limit` 字段名         |
+| `typeParam vs videoType` 映射错误      | HANDOFF-21 实施前对照 `docs/decisions.md` ADR-048 核查 ALL_CATEGORIES      |
+| 详情页 API 缺 cast/director 字段       | HANDOFF-24 开工前先 curl 检查实际响应，缺字段时演职员区块写 TODO           |
+| OS 检测 SSR 不安全                     | HANDOFF-21 所有 `navigator` 访问加 `typeof navigator !== 'undefined'` 守卫 |
+| MiniPlayer locale 拼接错误             | locale 来自 `useParams()`，REVIEW-C 审核项 #1 验证                         |
+| FeaturedRow 降级 API 与其他 Shelf 重复 | 降级 ShelfRow 使用明确 query 参数区分，避免内容重复                        |

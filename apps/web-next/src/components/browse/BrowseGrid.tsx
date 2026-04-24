@@ -18,7 +18,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
 import { BrowseCard } from './BrowseCard'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
-import type { VideoCard as VideoCardType, ApiListResponse } from '@resovo/types'
+import type { VideoCard as VideoCardType, VideoType, ApiListResponse } from '@resovo/types'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -139,7 +139,12 @@ function BrowsePagination({ page, totalPages, onPrev, onNext }: BrowsePagination
 
 // ── BrowseGrid ────────────────────────────────────────────────────────────────
 
-export function BrowseGrid() {
+interface BrowseGridProps {
+  /** 分类页传入，强制覆盖 URL 中的 type 参数（唯一权威防线） */
+  initialType?: VideoType
+}
+
+export function BrowseGrid({ initialType }: BrowseGridProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -156,9 +161,11 @@ export function BrowseGrid() {
     const params = new URLSearchParams(searchKey)
     params.set('limit', String(PAGE_SIZE))
     if (!params.has('page')) params.set('page', '1')
+    // initialType 为唯一权威，无条件覆盖 URL 中的 type 参数
+    if (initialType) params.set('type', initialType)
 
     apiClient
-      .get<ApiListResponse<VideoCardType>>(`/videos/trending?${params.toString()}`, { skipAuth: true })
+      .get<ApiListResponse<VideoCardType>>(`/videos?${params.toString()}`, { skipAuth: true })
       .then((res) => {
         setVideos(res.data)
         setTotal(res.pagination.total)
@@ -168,7 +175,7 @@ export function BrowseGrid() {
         setTotal(0)
       })
       .finally(() => setLoaded(true))
-  }, [searchKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchKey, initialType]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 

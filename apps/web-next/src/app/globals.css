@@ -573,10 +573,11 @@
     align-items: flex-start;
   }
 }
-/* 影院模式：强制列方向，gap=0 */
+/* 影院模式：强制列方向，gap=0；align-items:stretch 确保子元素全宽铺满 */
 .player-layout.player-layout--theater {
   flex-direction: column;
   gap: 0;
+  align-items: stretch;
 }
 
 /* 侧栏：mobile=全宽，≥1024=固定 360px */

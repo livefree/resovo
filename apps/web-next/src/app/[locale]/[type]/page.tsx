@@ -74,13 +74,13 @@ export async function CategoryPageContent({
           </h1>
         </div>
 
-        {/* 筛选区 — spec §12.3 */}
+        {/* 筛选区 — spec §12.3（锁定 type 维度，防止用户绕过分类路由） */}
         <div style={{ marginBottom: '24px' }}>
-          <FilterArea />
+          <FilterArea lockedDims={['type']} />
         </div>
 
-        {/* 网格 + 分页 — spec §12.4 */}
-        <BrowseGrid />
+        {/* 网格 + 分页 — spec §12.4（initialType 强制覆盖 URL type 参数） */}
+        <BrowseGrid initialType={videoType} />
       </div>
     </PageTransition>
   )

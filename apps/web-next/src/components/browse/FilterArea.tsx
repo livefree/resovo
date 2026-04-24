@@ -20,7 +20,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type FilterDim = 'type' | 'country' | 'lang' | 'year' | 'rating_min' | 'status'
+export type FilterDim = 'type' | 'country' | 'lang' | 'year' | 'rating_min' | 'status'
 
 interface FilterOption {
   /** URL param value; '' means "All" (remove param) */
@@ -199,7 +199,12 @@ function FilterRowItem({ row, activeValue, onSelect }: FilterRowItemProps) {
 
 // ── FilterArea ────────────────────────────────────────────────────────────────
 
-export function FilterArea() {
+interface FilterAreaProps {
+  /** 隐藏指定维度行（分类页用于锁定 type，防止用户绕过路由层级） */
+  lockedDims?: FilterDim[]
+}
+
+export function FilterArea({ lockedDims = [] }: FilterAreaProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -212,7 +217,9 @@ export function FilterArea() {
   function handleSelect(dim: FilterDim, value: string) {
     const params = new URLSearchParams(searchParams.toString())
     params.delete('page') // reset pagination on filter change
-    if (value === '') {
+    const current = params.get(dim) ?? ''
+    if (value === '' || value === current) {
+      // 点击"全部"或点击已选项 → 取消该维度
       params.delete(dim)
     } else {
       params.set(dim, value)
@@ -220,13 +227,15 @@ export function FilterArea() {
     router.push('?' + params.toString())
   }
 
+  const visibleBasicRows = BASIC_ROWS.filter((row) => !lockedDims.includes(row.dim))
+
   return (
     <div
       data-testid="filter-area"
       style={{ padding: 'var(--space-2) var(--space-5)' /* spec §12: 8px 20px */ }}
     >
-      {/* 基础 3 行 */}
-      {BASIC_ROWS.map((row) => (
+      {/* 基础 3 行（排除锁定维度） */}
+      {visibleBasicRows.map((row) => (
         <FilterRowItem
           key={row.dim}
           row={row}
