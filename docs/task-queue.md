@@ -10391,7 +10391,7 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
      - Tab 切换触发新 API 请求
    - **完成备注**：typecheck/lint/test 全绿（1682 tests PASS）。SearchPage 重构为列表行（SearchResultRow 子组件），URL 参数（q/type/page）驱动搜索，Tab count 仅显示当前 Tab 的 pagination.total（不做前端过滤）。parse-highlight.ts 使用 createElement 安全替换，零 dangerouslySetInnerHTML。Pagination primitive 从 BrowseGrid 内联版本提取，BrowseGrid 测试 data-testid 同步更新（pagination-prev/next → browse-pagination-prev/next）。执行模型: claude-sonnet-4-6
 
-6. **HANDOFF-24 — 详情页主列补完**（状态：📋 待执行）
+6. **HANDOFF-24 — 详情页主列补完**（状态：✅ 已完成）
    - 创建时间：2026-04-24
    - 建议模型：sonnet
    - 估时：0.75d
@@ -10404,6 +10404,7 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
      - 详情页主列有剧情简介区块（有数据时）
      - 简介超 4 行有折叠/展开
      - meta 信息行显示完整
+   - **完成备注**：typecheck/lint/test 全绿（1682 tests PASS）。DescriptionBlock 使用 `-webkit-line-clamp: 4` + `scrollHeight > clientHeight` 溢出检测，无 description 时返回 null。CastBlock：cast/director 均空时返回 null；TODO 注释注明当前无头像 URL（待 /media-catalog/credits 端点实现后替换）。MetaInfoBlock 使用 `Intl.DisplayNames` 转换语言/国家代码，各字段空时跳过行。执行模型: claude-sonnet-4-6
 
 #### REVIEW-B — Batch B 阶段独立审核
 
