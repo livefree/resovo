@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
 import { VideoCard } from '@/components/video/VideoCard'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
@@ -54,8 +55,9 @@ function RowHeader({
         {title}
       </h2>
       {viewAllHref && viewAllLabel && (
-        <a
+        <Link
           href={viewAllHref}
+          className="transition-opacity hover:opacity-70"
           style={{
             fontSize: '13px',
             color: 'var(--accent-default)',
@@ -64,7 +66,7 @@ function RowHeader({
           }}
         >
           {viewAllLabel} →
-        </a>
+        </Link>
       )}
     </div>
   )
