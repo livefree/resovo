@@ -161,8 +161,8 @@ export function VideoDetailHero({ video }: VideoDetailHeroProps) {
 
           <Link
             href={watchHref}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-sm font-bold transition-all shadow-[0_0_16px_rgba(232,184,75,0.25)] hover:shadow-[0_0_28px_rgba(232,184,75,0.55)] hover:scale-105"
-            style={{ background: 'var(--accent-default)', color: 'var(--accent-fg)' }}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl text-sm font-bold transition-all hover:scale-105"
+            style={{ background: 'var(--accent-default)', color: 'var(--accent-fg)', boxShadow: 'var(--detail-play-glow)' }}
             data-testid="detail-watch-btn"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>

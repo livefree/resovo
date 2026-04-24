@@ -89,6 +89,8 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
       })
       .catch(() => setVideo(null))
       .finally(() => setLoading(false))
+    // 技术债(NEW-P0-B)：依赖故意收敛到 shortId，initPlayer/searchParams 等引用稳定引用
+    // 修复方案：提取 fetchVideoAndSources(shortId, ep) 为 useCallback 后移除此 disable
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shortId])
 
@@ -119,6 +121,8 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
         setActiveSourceIndex(matched >= 0 ? matched : 0)
       })
       .catch(() => {/* 无源时保留已有源 */})
+    // 技术债(NEW-P0-B)：依赖收敛到 currentEpisode；sources/activeSourceIndex 通过闭包读取快照
+    // 修复方案：改用 useRef(sources)/useRef(activeSourceIndex) 读取最新值，移除此 disable
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentEpisode])
 
