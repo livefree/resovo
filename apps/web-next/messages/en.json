@@ -51,5 +51,14 @@
   },
   "hero": {
     "fallbackSlogan": "Discover quality global streaming content, all in one place"
+  },
+  "search": {
+    "placeholder": "Search movies, series, actors, directors…",
+    "inputAriaLabel": "Search",
+    "clearAriaLabel": "Clear search",
+    "tablistAriaLabel": "Search type",
+    "foundResults": "Found {count} results",
+    "watchNow": "Watch Now",
+    "details": "Details"
   }
 }

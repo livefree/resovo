@@ -51,5 +51,14 @@
   },
   "hero": {
     "fallbackSlogan": "探索全球优质影视资源，尽在流光"
+  },
+  "search": {
+    "placeholder": "搜索电影、剧集、演员、导演…",
+    "inputAriaLabel": "搜索",
+    "clearAriaLabel": "清除搜索",
+    "tablistAriaLabel": "搜索类型",
+    "foundResults": "找到 {count} 个结果",
+    "watchNow": "立即观看",
+    "details": "详情"
   }
 }

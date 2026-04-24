@@ -20,6 +20,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { useRouter, useSearchParams, usePathname, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
@@ -36,11 +37,11 @@ import type { SearchResult, ApiListResponse } from '@resovo/types'
 
 type SearchTab = 'all' | 'movie' | 'series' | 'anime'
 
-const TABS: Array<{ key: SearchTab; label: string }> = [
-  { key: 'all',    label: '全部' },
-  { key: 'movie',  label: '电影' },
-  { key: 'series', label: '剧集' },
-  { key: 'anime',  label: '动漫' },
+const TABS: Array<{ key: SearchTab; navKey: string }> = [
+  { key: 'all',    navKey: 'catAll' },
+  { key: 'movie',  navKey: 'catMovie' },
+  { key: 'series', navKey: 'catSeries' },
+  { key: 'anime',  navKey: 'catAnime' },
 ]
 
 const PAGE_SIZE = 20
@@ -53,6 +54,7 @@ interface SearchResultRowProps {
 }
 
 function SearchResultRow({ result, locale }: SearchResultRowProps) {
+  const t = useTranslations('search')
   const detailHref = getVideoDetailHref(result)
   const watchSlug = result.slug ? `${result.slug}-${result.shortId}` : result.shortId
   const watchHref = `/${locale}/watch/${watchSlug}?ep=1`
@@ -160,7 +162,7 @@ function SearchResultRow({ result, locale }: SearchResultRowProps) {
               textDecoration: 'none',
             }}
           >
-            立即观看
+            {t('watchNow')}
           </Link>
           <Link
             href={detailHref}
@@ -178,7 +180,7 @@ function SearchResultRow({ result, locale }: SearchResultRowProps) {
               textDecoration: 'none',
             }}
           >
-            详情
+            {t('details')}
           </Link>
         </div>
       </div>
@@ -194,6 +196,8 @@ export function SearchPage() {
   const searchParams = useSearchParams()
   const params = useParams()
   const locale = (params.locale as string) ?? 'zh'
+  const t = useTranslations('search')
+  const tNav = useTranslations('nav')
 
   const urlQuery = searchParams.get('q') ?? ''
   const urlTab = (searchParams.get('type') as SearchTab | null) ?? 'all'
@@ -340,8 +344,8 @@ export function SearchPage() {
               type="search"
               value={inputValue}
               onChange={handleInputChange}
-              placeholder="搜索电影、剧集、演员、导演…"
-              aria-label="搜索"
+              placeholder={t('placeholder')}
+              aria-label={t('inputAriaLabel')}
               data-testid="search-input"
               className="flex-1 bg-transparent outline-none text-sm"
               style={{ color: 'var(--fg-default)', fontSize: '16px' }}
@@ -351,7 +355,7 @@ export function SearchPage() {
             {inputValue && (
               <button
                 type="button"
-                aria-label="清除搜索"
+                aria-label={t('clearAriaLabel')}
                 onClick={() => {
                   setInputValue('')
                   setResults([])
@@ -379,7 +383,7 @@ export function SearchPage() {
           className="flex items-center gap-1 overflow-x-auto"
           style={{ marginBottom: 'var(--search-tab-gap)', scrollbarWidth: 'none' }}
           role="tablist"
-          aria-label="搜索类型"
+          aria-label={t('tablistAriaLabel')}
         >
           {TABS.map((tab) => {
             const isActive = urlTab === tab.key
@@ -407,7 +411,7 @@ export function SearchPage() {
                   transition: 'all 150ms ease',
                 }}
               >
-                {tab.label}
+                {tNav(tab.navKey)}
                 {hasQuery && hasResults && isActive && (
                   <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--fg-subtle)' }}>
                     {total}
@@ -424,7 +428,7 @@ export function SearchPage() {
         ) : hasQuery && hasResults ? (
           <section>
             <p className="mb-4 text-sm" style={{ color: 'var(--fg-muted)' }}>
-              找到 {total} 个结果
+              {t('foundResults', { count: total })}
             </p>
             <div
               data-testid="search-results-list"
