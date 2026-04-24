@@ -63,11 +63,6 @@ export function HeroBanner() {
 
   const banner = banners[activeIndex]
 
-  function buildWatchHref(b: LocalizedBannerCard): string {
-    if (b.linkType === 'external') return b.linkTarget
-    return b.linkTarget.startsWith('/') ? b.linkTarget : `/watch/${b.linkTarget}?ep=1`
-  }
-
   return (
     <div
       ref={containerRef}
@@ -275,7 +270,7 @@ function HeroBannerFallback() {
               width: '48px',
               height: '48px',
               borderRadius: '12px',
-              background: 'linear-gradient(135deg, var(--accent-default), oklch(48% 0.22 280))',
+              background: 'linear-gradient(135deg, var(--accent-default), var(--accent-active))',
               color: 'var(--color-gray-0)',
               fontSize: '20px',
               fontWeight: 900,

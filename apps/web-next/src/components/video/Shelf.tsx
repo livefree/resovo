@@ -5,7 +5,7 @@
  *
  * 4 种 template：
  *   poster-row     — 横向滚动，portrait 卡 170px，2:3 比例
- *   landscape-row  — 横向滚动，landscape 卡 300px，16:9 比例
+ *   landscape-row  — 横向滚动，portrait 卡 170px，2:3 比例（HANDOFF-20 统一竖版）
  *   top10-row      — 横向滚动，portrait 卡 170px + 排名数字叠层
  *   featured-grid  — 5 列网格，portrait 卡
  *
