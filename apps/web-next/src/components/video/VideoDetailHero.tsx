@@ -268,9 +268,9 @@ export function VideoDetailHero({ video }: VideoDetailHeroProps) {
               <div
                 className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border"
                 style={{
-                  color: 'var(--status-success)',
-                  borderColor: 'var(--status-success)',
-                  background: 'var(--status-success-bg)',
+                  color: 'var(--state-success-fg)',
+                  borderColor: 'var(--state-success-border)',
+                  background: 'var(--state-success-bg)',
                 }}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>

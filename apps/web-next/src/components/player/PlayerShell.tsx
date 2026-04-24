@@ -145,6 +145,14 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
     [setEpisode]
   )
 
+  // hasEpisodes / hasSources 必须在 useEffect 前声明，避免 TDZ 风险并确保依赖数组可直接引用
+  const isTheater = mode === 'theater'
+  const activeSrc = sources[activeSourceIndex]?.src ?? ''
+  const hasEpisodes = !!video && video.episodeCount > 1
+  const hasSources = sources.length > 0
+  const inlineEpisodes = getInlineEpisodes(isTheater, video?.episodeCount ?? 0)
+  const hasNext = !!video && video.episodeCount > 1 && currentEpisode < video.episodeCount
+
   useEffect(() => {
     if (hasEpisodes && activePanelTab !== 'episodes' && !hasSources) {
       setActivePanelTab('episodes')
@@ -161,15 +169,7 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
     if (!hasSources && activePanelTab === 'sources' && hasEpisodes) {
       setActivePanelTab('episodes')
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePanelTab, sources.length, video?.episodeCount])
-
-  const isTheater = mode === 'theater'
-  const activeSrc = sources[activeSourceIndex]?.src ?? ''
-  const hasEpisodes = !!video && video.episodeCount > 1
-  const hasSources = sources.length > 0
-  const inlineEpisodes = getInlineEpisodes(isTheater, video?.episodeCount ?? 0)
-  const hasNext = !!video && video.episodeCount > 1 && currentEpisode < video.episodeCount
+  }, [activePanelTab, hasEpisodes, hasSources])
 
   if (loading) {
     return (
