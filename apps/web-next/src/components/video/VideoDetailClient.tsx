@@ -99,13 +99,17 @@ interface CastBlockProps {
 }
 
 function CastBlock({ director, cast }: CastBlockProps) {
+  const [expanded, setExpanded] = useState(false)
+
   if (director.length === 0 && cast.length === 0) return null
 
-  const MAX_TOTAL = 10
-  const persons = [
+  const PREVIEW_COUNT = 10
+  const allPersons = [
     ...director.map((name) => ({ name, role: '导演' })),
-    ...cast.slice(0, Math.max(0, MAX_TOTAL - director.length)).map((name) => ({ name, role: '演员' })),
+    ...cast.map((name) => ({ name, role: '演员' })),
   ]
+  const hasMore = allPersons.length > PREVIEW_COUNT
+  const persons = expanded ? allPersons : allPersons.slice(0, PREVIEW_COUNT)
 
   return (
     <section style={{ marginBottom: 'var(--detail-section-gap)' }}>
@@ -183,6 +187,24 @@ function CastBlock({ director, cast }: CastBlockProps) {
           </div>
         ))}
       </div>
+
+      {hasMore && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          style={{
+            marginTop: '12px',
+            fontSize: '13px',
+            color: 'var(--accent-default)',
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+          }}
+        >
+          {expanded ? `收起（共 ${allPersons.length} 人）` : `展开全部（共 ${allPersons.length} 人）`}
+        </button>
+      )}
     </section>
   )
 }
