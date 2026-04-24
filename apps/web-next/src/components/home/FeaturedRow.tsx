@@ -5,7 +5,11 @@
  *
  * 数据源：GET /home/modules?slot=featured → HomeModule[]
  * 布局：1.6fr + 3×1fr CSS grid（共 4 列，首列较宽）
- * 降级：无运营数据时降级为普通 ShelfRow（/videos/trending?period=week&limit=5）
+ *
+ * 加载策略：
+ *   1. loading 期间始终渲染 ShelfRow（fallback），避免标题从"精选推荐"跳变为"热门电影"
+ *   2. 加载完成：无模块 → 继续保持 ShelfRow；有模块 → 切换为 FeaturedGrid
+ *   这样在绝大多数情况（无运营数据）下，用户看到的是一致的 ShelfRow 体验。
  *
  * TODO(featured-videos-endpoint): 当 featured modules 存在时，当前实现以趋势视频补位
  * 展示 1.6fr + 3×1fr 布局。后续需实现服务端聚合端点（/home/featured-videos）
@@ -16,7 +20,6 @@ import { useEffect, useState } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { VideoCard } from '@/components/video/VideoCard'
 import { ShelfRow } from '@/components/video/Shelf'
-import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import type { HomeModule, VideoCard as VideoCardType, ApiResponse } from '@resovo/types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -42,10 +45,7 @@ function RowHeader({
   readonly viewAllLabel?: string
 }) {
   return (
-    <div
-      className="flex items-center justify-between"
-      style={{ marginBottom: '20px' }}
-    >
+    <div className="flex items-center justify-between" style={{ marginBottom: '20px' }}>
       <h2
         style={{
           fontSize: '18px',
@@ -69,27 +69,6 @@ function RowHeader({
           {viewAllLabel} →
         </a>
       )}
-    </div>
-  )
-}
-
-function FeaturedGridSkeleton() {
-  return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '1.6fr 1fr 1fr 1fr',
-        gap: 'var(--shelf-gap)',
-      }}
-    >
-      {Array.from({ length: 4 }).map((_, i) => (
-        <Skeleton
-          key={i}
-          shape="rect"
-          style={{ aspectRatio: '2/3' }}
-          delay={i >= 2 ? 300 : undefined}
-        />
-      ))}
     </div>
   )
 }
@@ -139,12 +118,11 @@ export function FeaturedRow({
   fallbackViewAllHref,
   fallbackViewAllLabel,
 }: FeaturedRowProps) {
+  // null = loading, [] = no modules, non-empty = has modules
   const [modules, setModules] = useState<HomeModule[] | null>(null)
   const [videos, setVideos] = useState<VideoCardType[]>([])
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    setLoading(true)
     apiClient
       .get<ApiResponse<HomeModule[]>>('/home/modules?slot=featured', { skipAuth: true })
       .then(async (res) => {
@@ -153,7 +131,6 @@ export function FeaturedRow({
 
         if (activeModules.length > 0) {
           // TODO(featured-videos-endpoint): 以趋势视频补位展示 1.6fr + 3×1fr 布局
-          // 待后端实现 /home/featured-videos 批量 UUID→VideoCard 端点后替换
           const trendingRes = await apiClient.get<{ data: VideoCardType[] }>(
             '/videos/trending?period=week&limit=4',
             { skipAuth: true },
@@ -161,15 +138,11 @@ export function FeaturedRow({
           setVideos(trendingRes.data)
         }
       })
-      .catch(() => {
-        setModules([])
-        setVideos([])
-      })
-      .finally(() => setLoading(false))
+      .catch(() => setModules([]))
   }, [])
 
-  // 无运营数据 → 降级为普通 ShelfRow
-  if (!loading && (modules === null || modules.length === 0)) {
+  // loading 或无模块 → ShelfRow（skeleton 与最终内容尺寸一致，无标题跳变）
+  if (modules === null || modules.length === 0) {
     return (
       <ShelfRow
         template="poster-row"
@@ -181,14 +154,11 @@ export function FeaturedRow({
     )
   }
 
+  // 有模块 → 精选推荐 grid
   return (
     <section>
       <RowHeader title={title} viewAllHref={viewAllHref} viewAllLabel={viewAllLabel} />
-      {loading ? (
-        <FeaturedGridSkeleton />
-      ) : (
-        <FeaturedGrid videos={videos} />
-      )}
+      <FeaturedGrid videos={videos} />
     </section>
   )
 }

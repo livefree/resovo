@@ -5,12 +5,13 @@
  *
  * 数据源：GET /home/top10 → Top10Response
  * 布局：水平滚动竖版卡片（2:3 比例，var(--shelf-card-w-portrait) 170px）
- * Rank badge：左下角叠加，1–3 号 32px/700，4–10 号 20px/600，颜色 var(--fg-muted)
+ * Rank badge：图片右下角叠加，1–3 号 32px/700，4–10 号 20px/600，颜色 var(--fg-muted)
+ *   badge 通过 aspectRatio:2/3 的绝对定位层固定在图片范围内，不遮挡标题文字
  * 副标题：由 sortStrategy 字段驱动 i18n key
  * 无数据：渲染 MIN_SLOTS(4) 个 EmptyPlaceholderCard
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
 import { VideoCard } from '@/components/video/VideoCard'
@@ -30,13 +31,40 @@ interface TopTenRowProps {
   readonly viewAllLabel?: string
 }
 
-// ── 子组件 ────────────────────────────────────────────────────────────────────
+// ── 水平滚动 hook ─────────────────────────────────────────────────────────────
 
-interface EmptyCardProps {
-  readonly width: string
+function useScrollTrack() {
+  const trackRef = useRef<HTMLDivElement>(null)
+  const [canLeft, setCanLeft] = useState(false)
+  const [canRight, setCanRight] = useState(false)
+
+  useEffect(() => {
+    const el = trackRef.current
+    if (!el) return
+    const node: HTMLDivElement = el
+    function update() {
+      setCanLeft(node.scrollLeft > 4)
+      setCanRight(node.scrollLeft < node.scrollWidth - node.clientWidth - 4)
+    }
+    update()
+    node.addEventListener('scroll', update, { passive: true })
+    const ro = new ResizeObserver(update)
+    ro.observe(node)
+    return () => {
+      node.removeEventListener('scroll', update)
+      ro.disconnect()
+    }
+  }, [])
+
+  function scrollPrev() { trackRef.current?.scrollBy({ left: -540, behavior: 'smooth' }) }
+  function scrollNext() { trackRef.current?.scrollBy({ left: 540, behavior: 'smooth' }) }
+
+  return { trackRef, canLeft, canRight, scrollPrev, scrollNext }
 }
 
-function EmptyPlaceholderCard({ width }: EmptyCardProps) {
+// ── 子组件 ────────────────────────────────────────────────────────────────────
+
+function EmptyPlaceholderCard({ width }: { readonly width: string }) {
   return (
     <div
       aria-hidden="true"
@@ -55,6 +83,37 @@ function EmptyPlaceholderCard({ width }: EmptyCardProps) {
   )
 }
 
+function TrackNavButton({ direction, onClick }: { direction: 'prev' | 'next'; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={direction === 'prev' ? '向左滚动' : '向右滚动'}
+      style={{
+        position: 'absolute',
+        top: '50%',
+        transform: 'translateY(-50%)',
+        [direction === 'prev' ? 'left' : 'right']: '-16px',
+        width: '32px',
+        height: '32px',
+        borderRadius: '50%',
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-default)',
+        color: 'var(--fg-default)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        zIndex: 10,
+        fontSize: '20px',
+        lineHeight: 1,
+      }}
+    >
+      {direction === 'prev' ? '‹' : '›'}
+    </button>
+  )
+}
+
 function RowHeader({
   title,
   subtitle,
@@ -67,10 +126,7 @@ function RowHeader({
   readonly viewAllLabel?: string
 }) {
   return (
-    <div
-      className="flex items-start justify-between"
-      style={{ marginBottom: '20px' }}
-    >
+    <div className="flex items-start justify-between" style={{ marginBottom: '20px' }}>
       <div>
         <h2
           style={{
@@ -83,13 +139,7 @@ function RowHeader({
           {title}
         </h2>
         {subtitle && (
-          <p
-            style={{
-              fontSize: '12px',
-              color: 'var(--fg-muted)',
-              marginTop: '2px',
-            }}
-          >
+          <p style={{ fontSize: '12px', color: 'var(--fg-muted)', marginTop: '2px' }}>
             {subtitle}
           </p>
         )}
@@ -114,30 +164,6 @@ function RowHeader({
   )
 }
 
-function RankBadge({ rank }: { readonly rank: number }) {
-  const isTop3 = rank <= 3
-  return (
-    <span
-      aria-hidden="true"
-      style={{
-        position: 'absolute',
-        bottom: '4px',
-        left: '4px',
-        fontSize: isTop3 ? '32px' : '20px',
-        fontWeight: isTop3 ? 700 : 600,
-        lineHeight: 1,
-        color: 'var(--fg-muted)',
-        zIndex: 2,
-        userSelect: 'none',
-        pointerEvents: 'none',
-        textShadow: '0 1px 3px rgba(0,0,0,0.6)',
-      }}
-    >
-      {rank}
-    </span>
-  )
-}
-
 function TrackSkeleton() {
   return (
     <div
@@ -152,11 +178,7 @@ function TrackSkeleton() {
         <Skeleton
           key={i}
           shape="rect"
-          style={{
-            width: 'var(--shelf-card-w-portrait)',
-            flexShrink: 0,
-            aspectRatio: '2/3',
-          }}
+          style={{ width: 'var(--shelf-card-w-portrait)', flexShrink: 0, aspectRatio: '2/3' }}
           delay={i >= 2 ? 300 : undefined}
         />
       ))}
@@ -167,51 +189,77 @@ function TrackSkeleton() {
 function Top10Track({ items }: { readonly items: Top10Item[] }) {
   const slots = Math.max(items.length, MIN_SLOTS)
   const empties = Math.max(0, slots - items.length)
+  const { trackRef, canLeft, canRight, scrollPrev, scrollNext } = useScrollTrack()
 
   return (
-    <div
-      data-testid="top10-track"
-      style={{
-        display: 'flex',
-        gap: 'var(--shelf-gap)',
-        overflowX: 'auto',
-        scrollSnapType: 'x mandatory',
-        scrollbarWidth: 'none',
-        paddingBottom: 'var(--shelf-bottom-padding)',
-      }}
-    >
-      {items.map((item) => (
-        <div
-          key={item.video.id}
-          className="relative"
-          style={{
-            width: 'var(--shelf-card-w-portrait)',
-            flexShrink: 0,
-            scrollSnapAlign: 'start',
-          }}
-        >
-          <RankBadge rank={item.rank} />
-          <VideoCard video={item.video} />
-        </div>
-      ))}
-      {Array.from({ length: empties }).map((_, i) => (
-        <EmptyPlaceholderCard
-          key={`empty-${i}`}
-          width="var(--shelf-card-w-portrait)"
-        />
-      ))}
+    <div className="relative">
+      {canLeft && <TrackNavButton direction="prev" onClick={scrollPrev} />}
+      <div
+        ref={trackRef}
+        data-testid="top10-track"
+        style={{
+          display: 'flex',
+          gap: 'var(--shelf-gap)',
+          overflowX: 'auto',
+          scrollSnapType: 'x mandatory',
+          scrollbarWidth: 'none',
+          paddingBottom: 'var(--shelf-bottom-padding)',
+        }}
+      >
+        {items.map((item) => (
+          <div
+            key={item.video.id}
+            style={{
+              width: 'var(--shelf-card-w-portrait)',
+              flexShrink: 0,
+              scrollSnapAlign: 'start',
+              position: 'relative',
+            }}
+          >
+            {/* badge 定位层：仅覆盖图片区域（2:3），确保不遮挡图片下方标题文字 */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                aspectRatio: '2/3',
+                zIndex: 5,
+                pointerEvents: 'none',
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  bottom: '8px',
+                  right: '8px',
+                  fontSize: item.rank <= 3 ? '32px' : '20px',
+                  fontWeight: item.rank <= 3 ? 700 : 600,
+                  lineHeight: 1,
+                  color: 'var(--fg-muted)',
+                  WebkitTextStroke: '1px var(--bg-canvas)',
+                  userSelect: 'none',
+                }}
+              >
+                {item.rank}
+              </span>
+            </div>
+            <VideoCard video={item.video} />
+          </div>
+        ))}
+        {Array.from({ length: empties }).map((_, i) => (
+          <EmptyPlaceholderCard key={`empty-${i}`} width="var(--shelf-card-w-portrait)" />
+        ))}
+      </div>
+      {canRight && <TrackNavButton direction="next" onClick={scrollNext} />}
     </div>
   )
 }
 
 // ── TopTenRow ─────────────────────────────────────────────────────────────────
 
-export function TopTenRow({
-  title,
-  subtitle,
-  viewAllHref,
-  viewAllLabel,
-}: TopTenRowProps) {
+export function TopTenRow({ title, subtitle, viewAllHref, viewAllLabel }: TopTenRowProps) {
   const [items, setItems] = useState<Top10Item[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -226,17 +274,8 @@ export function TopTenRow({
 
   return (
     <section>
-      <RowHeader
-        title={title}
-        subtitle={subtitle}
-        viewAllHref={viewAllHref}
-        viewAllLabel={viewAllLabel}
-      />
-      {loading ? (
-        <TrackSkeleton />
-      ) : (
-        <Top10Track items={items} />
-      )}
+      <RowHeader title={title} subtitle={subtitle} viewAllHref={viewAllHref} viewAllLabel={viewAllLabel} />
+      {loading ? <TrackSkeleton /> : <Top10Track items={items} />}
     </section>
   )
 }

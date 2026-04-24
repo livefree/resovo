@@ -23,7 +23,7 @@
  *   - EmptyPlaceholderCard：静态、不可点击、opacity var(--shelf-empty-opacity)
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
 import { VideoCard } from './VideoCard'
@@ -158,6 +158,70 @@ function RowHeader({ title, badge, viewAllHref, viewAllLabel }: RowHeaderProps) 
   )
 }
 
+// ── 水平滚动 hook ─────────────────────────────────────────────────────────────
+
+function useScrollTrack() {
+  const trackRef = useRef<HTMLDivElement>(null)
+  const [canLeft, setCanLeft] = useState(false)
+  const [canRight, setCanRight] = useState(false)
+
+  useEffect(() => {
+    const el = trackRef.current
+    if (!el) return
+    const node: HTMLDivElement = el
+    function update() {
+      setCanLeft(node.scrollLeft > 4)
+      setCanRight(node.scrollLeft < node.scrollWidth - node.clientWidth - 4)
+    }
+    update()
+    node.addEventListener('scroll', update, { passive: true })
+    const ro = new ResizeObserver(update)
+    ro.observe(node)
+    return () => {
+      node.removeEventListener('scroll', update)
+      ro.disconnect()
+    }
+  }, [])
+
+  function scrollPrev() { trackRef.current?.scrollBy({ left: -540, behavior: 'smooth' }) }
+  function scrollNext() { trackRef.current?.scrollBy({ left: 540, behavior: 'smooth' }) }
+
+  return { trackRef, canLeft, canRight, scrollPrev, scrollNext }
+}
+
+// ── TrackNavButton ────────────────────────────────────────────────────────────
+
+function TrackNavButton({ direction, onClick }: { direction: 'prev' | 'next'; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={direction === 'prev' ? '向左滚动' : '向右滚动'}
+      style={{
+        position: 'absolute',
+        top: '50%',
+        transform: 'translateY(-50%)',
+        [direction === 'prev' ? 'left' : 'right']: '-16px',
+        width: '32px',
+        height: '32px',
+        borderRadius: '50%',
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-default)',
+        color: 'var(--fg-default)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        zIndex: 10,
+        fontSize: '20px',
+        lineHeight: 1,
+      }}
+    >
+      {direction === 'prev' ? '‹' : '›'}
+    </button>
+  )
+}
+
 // ── Skeleton track ────────────────────────────────────────────────────────────
 
 function HorizontalTrackSkeleton({ cardWidth, aspectRatio, testId }: {
@@ -192,65 +256,44 @@ function HorizontalTrackSkeleton({ cardWidth, aspectRatio, testId }: {
 function PosterTrack({ videos, testId }: { readonly videos: VideoCardType[]; readonly testId?: string }) {
   const slots = Math.max(videos.length, MIN_SLOTS)
   const empties = Math.max(0, slots - videos.length)
+  const { trackRef, canLeft, canRight, scrollPrev, scrollNext } = useScrollTrack()
 
   return (
-    <div
-      data-testid={testId}
-      style={{
-        display: 'flex',
-        gap: 'var(--shelf-gap)',
-        overflowX: 'auto',
-        scrollSnapType: 'x mandatory',
-        scrollbarWidth: 'none',
-        paddingBottom: 'var(--shelf-bottom-padding)',
-      }}
-    >
-      {videos.map((video) => (
-        <div
-          key={video.id}
-          style={{ width: 'var(--shelf-card-w-portrait)', flexShrink: 0, scrollSnapAlign: 'start' }}
-        >
-          <VideoCard video={video} />
-        </div>
-      ))}
-      {Array.from({ length: empties }).map((_, i) => (
-        <EmptyPlaceholderCard key={`empty-${i}`} width="var(--shelf-card-w-portrait)" aspectRatio="2/3" />
-      ))}
+    <div className="relative">
+      {canLeft && <TrackNavButton direction="prev" onClick={scrollPrev} />}
+      <div
+        ref={trackRef}
+        data-testid={testId}
+        style={{
+          display: 'flex',
+          gap: 'var(--shelf-gap)',
+          overflowX: 'auto',
+          scrollSnapType: 'x mandatory',
+          scrollbarWidth: 'none',
+          paddingBottom: 'var(--shelf-bottom-padding)',
+        }}
+      >
+        {videos.map((video) => (
+          <div
+            key={video.id}
+            style={{ width: 'var(--shelf-card-w-portrait)', flexShrink: 0, scrollSnapAlign: 'start' }}
+          >
+            <VideoCard video={video} />
+          </div>
+        ))}
+        {Array.from({ length: empties }).map((_, i) => (
+          <EmptyPlaceholderCard key={`empty-${i}`} width="var(--shelf-card-w-portrait)" aspectRatio="2/3" />
+        ))}
+      </div>
+      {canRight && <TrackNavButton direction="next" onClick={scrollNext} />}
     </div>
   )
 }
 
-// ── landscape-row track（统一为竖版，HANDOFF-20）────────────────────────────
+// ── landscape-row track（统一竖版，HANDOFF-20，与 PosterTrack 完全一致）────────
 
 function LandscapeTrack({ videos, testId }: { readonly videos: VideoCardType[]; readonly testId?: string }) {
-  const slots = Math.max(videos.length, MIN_SLOTS)
-  const empties = Math.max(0, slots - videos.length)
-
-  return (
-    <div
-      data-testid={testId}
-      style={{
-        display: 'flex',
-        gap: 'var(--shelf-gap)',
-        overflowX: 'auto',
-        scrollSnapType: 'x mandatory',
-        scrollbarWidth: 'none',
-        paddingBottom: 'var(--shelf-bottom-padding)',
-      }}
-    >
-      {videos.map((video) => (
-        <div
-          key={video.id}
-          style={{ width: 'var(--shelf-card-w-portrait)', flexShrink: 0, scrollSnapAlign: 'start' }}
-        >
-          <VideoCard video={video} />
-        </div>
-      ))}
-      {Array.from({ length: empties }).map((_, i) => (
-        <EmptyPlaceholderCard key={`empty-${i}`} width="var(--shelf-card-w-portrait)" aspectRatio="2/3" />
-      ))}
-    </div>
-  )
+  return <PosterTrack videos={videos} testId={testId} />
 }
 
 // ── top10-row track ───────────────────────────────────────────────────────────
@@ -258,53 +301,58 @@ function LandscapeTrack({ videos, testId }: { readonly videos: VideoCardType[]; 
 function Top10Track({ videos, testId }: { readonly videos: VideoCardType[]; readonly testId?: string }) {
   const slots = Math.max(videos.length, MIN_SLOTS)
   const empties = Math.max(0, slots - videos.length)
+  const { trackRef, canLeft, canRight, scrollPrev, scrollNext } = useScrollTrack()
 
   return (
-    <div
-      data-testid={testId}
-      style={{
-        display: 'flex',
-        gap: 'var(--shelf-gap)',
-        overflowX: 'auto',
-        scrollSnapType: 'x mandatory',
-        scrollbarWidth: 'none',
-        paddingBottom: 'var(--shelf-bottom-padding)',
-      }}
-    >
-      {videos.map((video, rank) => (
-        <div
-          key={video.id}
-          className="relative"
-          style={{ width: 'var(--shelf-card-w-top10)', flexShrink: 0, scrollSnapAlign: 'start' }}
-        >
-          {/* 排名数字叠层 */}
-          <span
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              bottom: '-4px',
-              left: '-8px',
-              fontSize: '80px',
-              fontWeight: 900,
-              lineHeight: 1,
-              color: 'var(--fg-default)',
-              letterSpacing: '-0.06em',
-              WebkitTextStroke: '2px var(--bg-canvas)',
-              zIndex: 2,
-              userSelect: 'none',
-              pointerEvents: 'none',
-            }}
+    <div className="relative">
+      {canLeft && <TrackNavButton direction="prev" onClick={scrollPrev} />}
+      <div
+        ref={trackRef}
+        data-testid={testId}
+        style={{
+          display: 'flex',
+          gap: 'var(--shelf-gap)',
+          overflowX: 'auto',
+          scrollSnapType: 'x mandatory',
+          scrollbarWidth: 'none',
+          paddingBottom: 'var(--shelf-bottom-padding)',
+        }}
+      >
+        {videos.map((video, rank) => (
+          <div
+            key={video.id}
+            className="relative"
+            style={{ width: 'var(--shelf-card-w-top10)', flexShrink: 0, scrollSnapAlign: 'start' }}
           >
-            {rank + 1}
-          </span>
-          <div style={{ paddingLeft: '24px' }}>
-            <VideoCard video={video} />
+            <span
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                bottom: '-4px',
+                left: '-8px',
+                fontSize: '80px',
+                fontWeight: 900,
+                lineHeight: 1,
+                color: 'var(--fg-default)',
+                letterSpacing: '-0.06em',
+                WebkitTextStroke: '2px var(--bg-canvas)',
+                zIndex: 2,
+                userSelect: 'none',
+                pointerEvents: 'none',
+              }}
+            >
+              {rank + 1}
+            </span>
+            <div style={{ paddingLeft: '24px' }}>
+              <VideoCard video={video} />
+            </div>
           </div>
-        </div>
-      ))}
-      {Array.from({ length: empties }).map((_, i) => (
-        <EmptyPlaceholderCard key={`empty-${i}`} width="var(--shelf-card-w-top10)" aspectRatio="2/3" />
-      ))}
+        ))}
+        {Array.from({ length: empties }).map((_, i) => (
+          <EmptyPlaceholderCard key={`empty-${i}`} width="var(--shelf-card-w-top10)" aspectRatio="2/3" />
+        ))}
+      </div>
+      {canRight && <TrackNavButton direction="next" onClick={scrollNext} />}
     </div>
   )
 }
