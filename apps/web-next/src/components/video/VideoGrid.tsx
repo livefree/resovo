@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { VideoCard } from './VideoCard'
-import { VideoCardWide } from './VideoCardWide'
 import { apiClient } from '@/lib/api-client'
 import type { VideoCard as VideoCardType, ApiListResponse } from '@resovo/types'
 
@@ -62,7 +61,7 @@ export function VideoGrid({
     paddingBottom: '4px',
   }
 
-  const cardWidth = variant === 'portrait' ? '160px' : '280px'
+  const cardWidth = '160px'
 
   if (loading) {
     if (layout === 'scroll') {
@@ -74,7 +73,7 @@ export function VideoGrid({
               className="rounded-lg animate-pulse shrink-0"
               style={{
                 width: cardWidth,
-                aspectRatio: variant === 'portrait' ? '2/3' : '16/9',
+                aspectRatio: '2/3',
                 background: 'var(--bg-surface-sunken)',
                 scrollSnapAlign: 'start',
               }}
@@ -91,7 +90,7 @@ export function VideoGrid({
             key={i}
             className="rounded-lg animate-pulse"
             style={{
-              aspectRatio: variant === 'portrait' ? '2/3' : '16/9',
+              aspectRatio: '2/3',
               background: 'var(--bg-surface-sunken)',
             }}
           />
@@ -117,11 +116,7 @@ export function VideoGrid({
             className="shrink-0"
             style={{ width: cardWidth, scrollSnapAlign: 'start' }}
           >
-            {variant === 'portrait' ? (
-              <VideoCard video={video} />
-            ) : (
-              <VideoCardWide video={video} />
-            )}
+            <VideoCard video={video} />
           </div>
         ))}
       </div>
@@ -132,13 +127,9 @@ export function VideoGrid({
 
   return (
     <div className={gridClass} data-testid={testId}>
-      {videos.map((video) =>
-        variant === 'portrait' ? (
-          <VideoCard key={video.id} video={video} />
-        ) : (
-          <VideoCardWide key={video.id} video={video} />
-        )
-      )}
+      {videos.map((video) => (
+        <VideoCard key={video.id} video={video} />
+      ))}
     </div>
   )
 }

@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { useLocale } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { apiClient } from '@/lib/api-client'
 import { SafeImage } from '@/components/media'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import { getVideoDetailHref } from '@/lib/video-route'
+import { useBrand } from '@/hooks/useBrand'
 import { KenBurnsLayer } from './KenBurnsLayer'
 import { BannerCarouselMobile } from './BannerCarouselMobile'
 import type { LocalizedBannerCard, ApiListResponse, VideoType } from '@resovo/types'
@@ -58,7 +59,7 @@ export function HeroBanner() {
   }, [activeIndex, banners.length])
 
   if (!loaded) return <HeroBannerSkeleton />
-  if (banners.length === 0) return null
+  if (banners.length === 0) return <HeroBannerFallback />
 
   const banner = banners[activeIndex]
 
@@ -245,6 +246,68 @@ function BannerDots({ banners, activeIndex, onSelect }: BannerDotsProps) {
           }}
         />
       ))}
+    </div>
+  )
+}
+
+// ── Fallback（空 banners 时渲染，不塌陷）────────────────────────────────────────
+
+function HeroBannerFallback() {
+  const { brand } = useBrand()
+  const t = useTranslations('hero')
+
+  return (
+    <div
+      data-testid="hero-banner-fallback"
+      className="relative w-full flex items-center justify-center"
+      style={{
+        height: 'min(520px, 60vh)',
+        background: 'var(--accent-muted)',
+      }}
+    >
+      <div className="flex flex-col items-center" style={{ gap: '20px' }}>
+        {/* Logo */}
+        <div className="flex items-center" style={{ gap: '12px' }}>
+          <span
+            aria-hidden="true"
+            className="flex items-center justify-center"
+            style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, var(--accent-default), oklch(48% 0.22 280))',
+              color: 'var(--color-gray-0)',
+              fontSize: '20px',
+              fontWeight: 900,
+            }}
+          >
+            R
+          </span>
+          <span
+            style={{
+              fontSize: '28px',
+              fontWeight: 900,
+              letterSpacing: '-0.02em',
+              color: 'var(--fg-default)',
+            }}
+          >
+            {brand.name}
+          </span>
+        </div>
+
+        {/* Slogan */}
+        <p
+          style={{
+            fontSize: '16px',
+            color: 'var(--fg-muted)',
+            textAlign: 'center',
+            maxWidth: '480px',
+            padding: '0 24px',
+          }}
+        >
+          {t('fallbackSlogan')}
+        </p>
+      </div>
     </div>
   )
 }

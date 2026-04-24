@@ -1,3 +1,4 @@
+/** @deprecated 全站已统一为竖版卡片（VideoCard 2:3），此组件保留但不得新引用 */
 'use client'
 
 import Link from 'next/link'

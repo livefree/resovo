@@ -18,6 +18,11 @@ vi.mock('@/lib/api-client', () => ({
 
 vi.mock('next-intl', () => ({
   useLocale: () => 'en',
+  useTranslations: () => (key: string) => key,
+}))
+
+vi.mock('@/hooks/useBrand', () => ({
+  useBrand: () => ({ brand: { id: 'resovo', name: 'Resovo', slug: 'resovo' } }),
 }))
 
 vi.mock('next/navigation', () => ({

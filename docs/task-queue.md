@@ -10286,9 +10286,10 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
      - `/en/series?country=JP` 正确过滤（URL 中 type=series 不被用户绕开）
      - 影院模式下播放器全宽铺满，无左侧压缩
 
-2. **HANDOFF-20 — 全站竖版卡片统一 + HeroBanner fallback + TypeShortcuts 计数 + lib/categories.ts**（状态：📋 待执行）
+2. **HANDOFF-20 — 全站竖版卡片统一 + HeroBanner fallback + TypeShortcuts 计数 + lib/categories.ts**（状态：✅ 已完成，2026-04-24）
    - 创建时间：2026-04-24
    - 建议模型：sonnet
+   - 完成备注：全站竖版统一、HeroBanner fallback、lib/categories.ts、CategoryShortcutsClient 全部完成。执行模型: claude-sonnet-4-6
    - 估时：1d
    - 修复范围：V-1 / F-4 / F-3；创建 lib/categories.ts（供 HANDOFF-21 直接导入）
    - 用户决策（2026-04-24）：弃用 VideoCardWide（16:9），全站统一 VideoCard（2:3 竖版）；VideoCardWide.tsx 文件保留但标注 `@deprecated`

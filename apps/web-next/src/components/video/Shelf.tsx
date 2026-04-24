@@ -27,7 +27,6 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
 import { VideoCard } from './VideoCard'
-import { VideoCardWide } from './VideoCardWide'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import type { VideoCard as VideoCardType, ApiListResponse } from '@resovo/types'
 
@@ -221,7 +220,7 @@ function PosterTrack({ videos, testId }: { readonly videos: VideoCardType[]; rea
   )
 }
 
-// ── landscape-row track ───────────────────────────────────────────────────────
+// ── landscape-row track（统一为竖版，HANDOFF-20）────────────────────────────
 
 function LandscapeTrack({ videos, testId }: { readonly videos: VideoCardType[]; readonly testId?: string }) {
   const slots = Math.max(videos.length, MIN_SLOTS)
@@ -242,13 +241,13 @@ function LandscapeTrack({ videos, testId }: { readonly videos: VideoCardType[]; 
       {videos.map((video) => (
         <div
           key={video.id}
-          style={{ width: 'var(--shelf-card-w-landscape)', flexShrink: 0, scrollSnapAlign: 'start' }}
+          style={{ width: 'var(--shelf-card-w-portrait)', flexShrink: 0, scrollSnapAlign: 'start' }}
         >
-          <VideoCardWide video={video} />
+          <VideoCard video={video} />
         </div>
       ))}
       {Array.from({ length: empties }).map((_, i) => (
-        <EmptyPlaceholderCard key={`empty-${i}`} width="var(--shelf-card-w-landscape)" aspectRatio="16/9" />
+        <EmptyPlaceholderCard key={`empty-${i}`} width="var(--shelf-card-w-portrait)" aspectRatio="2/3" />
       ))}
     </div>
   )
@@ -359,9 +358,8 @@ export function ShelfRow({
       .finally(() => setLoading(false))
   }, [query])
 
-  const cardWidth =
-    template === 'landscape-row' ? 'var(--shelf-card-w-landscape)' : 'var(--shelf-card-w-portrait)'
-  const aspectRatio = template === 'landscape-row' ? '16/9' : '2/3'
+  const cardWidth = 'var(--shelf-card-w-portrait)'
+  const aspectRatio = '2/3'
 
   return (
     <section>
@@ -374,7 +372,7 @@ export function ShelfRow({
 
       {loading ? (
         <HorizontalTrackSkeleton
-          cardWidth={template === 'landscape-row' ? 'var(--shelf-card-w-landscape)' : 'var(--shelf-card-w-portrait)'}
+          cardWidth={cardWidth}
           aspectRatio={aspectRatio}
           testId={testId}
         />

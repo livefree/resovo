@@ -43,5 +43,8 @@
     "trendingSeries": "Popular Series",
     "disclaimer": "Resovo indexes publicly available streaming links and does not host any video content. All rights belong to their respective owners.",
     "viewAll": "View All"
+  },
+  "hero": {
+    "fallbackSlogan": "Discover quality global streaming content, all in one place"
   }
 }

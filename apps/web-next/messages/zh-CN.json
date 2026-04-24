@@ -43,5 +43,8 @@
     "trendingSeries": "热播剧集",
     "disclaimer": "流光仅索引公开可访问的视频链接，不托管任何视频内容。所有版权归原作者所有。",
     "viewAll": "查看全部"
+  },
+  "hero": {
+    "fallbackSlogan": "探索全球优质影视资源，尽在流光"
   }
 }
