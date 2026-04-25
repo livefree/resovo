@@ -10870,6 +10870,12 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
 - **修复项**：原缺陷 #7 / #9 / #10 / #11（P2）
 
 **范围**：
+
+**REVIEW-D P2 技术债（来自审计报告，随本任务一并清理）**：
+- **P2-1 useCallback 缺失**：`MiniPlayer.tsx` 中 `handleReturnToWatch` 与 `handleToggleExpand` 改为 `useCallback` 包裹，与同文件 `handleClose` 风格一致，避免每次 render 产生新引用
+- **P2-2 video 清理方式不一致**：`handleClose` 中 `videoRef.current.src = ''` 改为 `videoRef.current.removeAttribute('src'); videoRef.current.load()`，与 `useMiniPlayerVideo` effect 中 activeSrc=null 的清理路径保持一致
+
+**P2 体验增强**：
 - **full↔mini 过渡动画**：FLIP（记录 mini 容器 getBoundingClientRect → 路由跳转 → full frame 从记录位置 scale + translate 展开）
 - **Safe area 避让**：读取 `--tabbar-height` 和 Nav 高度，初始 dock 位置避开固定元素
 - **resize handle 方向感知**：根据当前 corner 选择对角方向 handle（左上角 → 右下角 handle，右上角 → 左下角 handle 等）
