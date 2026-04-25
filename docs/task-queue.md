@@ -10584,3 +10584,157 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
 | OS 检测 SSR 不安全                     | HANDOFF-21 所有 `navigator` 访问加 `typeof navigator !== 'undefined'` 守卫 |
 | MiniPlayer locale 拼接错误             | locale 来自 `useParams()`，REVIEW-C 审核项 #1 验证                         |
 | FeaturedRow 降级 API 与其他 Shelf 重复 | 降级 ShelfRow 使用明确 query 参数区分，避免内容重复                        |
+
+---
+
+## Phase 3 — MiniPlayer 专项整治序列
+
+> 前置条件：REVIEW-C PASS（Phase 2 正式关闭）后方可开工
+> 产品决策确认时间：2026-04-24
+> 执行顺序：HANDOFF-31 → HANDOFF-32 → REVIEW-D；HANDOFF-33 可独立延后
+
+### 产品语义锚定（已确认，2026-04-24）
+
+| 项 | 决策 |
+|----|------|
+| 视频实例 | **双实例**：mini 自有 `<video>`，离开/进入 /watch 时靠 `playerStore.currentTime` 续播时间戳恢复；不做 DOM `appendChild` 迁移 |
+| 关闭 | **停止 + 释放**：`video.pause()` → `video.src = ''` → 清 store（`shortId=null`, `hostMode='closed'`）→ 清 sessionStorage |
+| 视频区点击 | **单击 = 播放/暂停**；"返回播放页"改为 header 区独立按钮（← 图标），不与视频区点击混用 |
+| 折叠/展开 | Mini 内部双态：**Collapsed**（默认，仅 header + 视频区）/ **Expanded**（新增底部控制栏）；原"展开全屏"按钮重新定义为"返回播放页" |
+| PiP | 原生 PiP **仅限 /watch 页由 PlayerShell 管理**；MiniPlayer 不实现 PiP 入口；store 中 `pip` hostMode 由 PlayerShell 独占，MiniPlayer 只响应 `mini` |
+| MiniPlayer 存在时机 | 仅在**离开 /watch 页后**，由 `GlobalPlayerHost` 渲染；/watch 页内 PlayerShell 全权负责 |
+| 播放进度记录 | mini `onTimeUpdate` 节流写入 `playerStore.currentTime`（与 full 模式同一字段），返回 /watch 时 PlayerShell 从该值续播 |
+
+### 交互模型
+
+**Collapsed（默认）**
+```
+┌──────────────────────────────────────────┐  ← 32px drag handle
+│ ← 返回  标题（截断）…       ▼  ✕        │
+├──────────────────────────────────────────┤
+│                                          │
+│            <video> 区域                  │  ← 单击 = play/pause
+│         （hover 显示 play/pause 图标）   │
+│                                          │
+└──────────────────────────────────────────┘
+```
+
+**Expanded（点击 ▼/▲ 切换）**
+```
+┌──────────────────────────────────────────┐  ← 32px drag handle
+│ ← 返回  标题 · 第N集         ▲  ✕        │
+├──────────────────────────────────────────┤
+│                                          │
+│            <video> 区域                  │  ← 单击 = play/pause
+│                                          │
+├──────────────────────────────────────────┤
+│  ▶/⏸  ━━━━━━━━━━━━━━━━━  00:42/12:30  🔇 │  ← 44px 控制栏
+└──────────────────────────────────────────┘
+```
+
+---
+
+### Batch D — MiniPlayer 整治任务
+
+#### HANDOFF-31 — MiniPlayer 核心重建（双实例 + 双态 + 控制栏）（状态：📋 待执行）
+
+- **创建时间**：2026-04-24
+- **建议模型**：sonnet
+- **估时**：1.0d
+- **前置依赖**：REVIEW-C PASS
+- **修复项**：原缺陷 #1 / #3 / #4 / #5 / #6（P0）
+
+**文件范围**：
+
+- `apps/web-next/src/app/[locale]/_lib/player/MiniPlayer.tsx`（主要改动）：
+  - 新增 `isExpanded` state（折叠/展开双态）
+  - 新增 `isPlaying` / `isMuted` state（本地 UI，通过 `<video>` element ref 控制）
+  - `data-mini-video-slot` 内渲染真实 `<video>` element（`ref={videoRef}`）
+  - mount 时：从 `playerStore.currentTime` 取 `startTime`；从 `playerStore` 取 `activeSrc`（或通过 API 取当集第一条活跃源 URL）
+  - `onTimeUpdate`：节流（250ms）写 `playerStore.setCurrentTime`
+  - 单击视频区：toggle `videoRef.current.play()` / `.pause()`，更新 `isPlaying`
+  - hover 覆盖层改为 play/pause 图标（不再是文字 chip）
+  - header：← 返回按钮（`router.push(\`/${locale}/watch/${hostOrigin.slug}\`)`）；▼/▲ 折叠展开；✕ 关闭
+  - 关闭：`videoRef.current.pause()` → `video.src = ''` → `closeHost()`
+  - Expanded 态：渲染底部控制栏（play/pause + 进度条 + 时间 + 静音）
+  - `data-testid` 补全：`mini-player-return-btn`、`mini-player-toggle-expand`、`mini-player-play-pause`、`mini-player-progress`、`mini-player-mute`
+
+- `apps/web-next/src/stores/playerStore.ts`（小改）：
+  - 确认 `setCurrentTime(t: number)` action 存在；若无则新增（供 mini `onTimeUpdate` 写入）
+  - 确认 `activeSrc: string | null` 或等价字段存在（供 mini 初始化视频源）；若无则新增
+
+- `apps/web-next/src/app/globals.css`（小改）：
+  - 新增 `.mini-player-controls` 工具类：44px 高，flex，颜色全走 `var(--player-mini-*)` tokens
+  - 控制栏按钮：`--player-mini-ctrl-color`（新增 token，light 下 `oklch(100% 0 0 / 0.80)`，dark 同）
+  - 进度条 track/fill：`--player-mini-progress-track` / `--player-mini-progress-fill`（新增 token）
+
+**验收要点**：
+- mini `<video>` 有真实 src，可以播放（不依赖 /watch 页打开）
+- 单击视频区可播放/暂停，控制栏按钮同步状态
+- 导航回 /watch 后 PlayerShell 从中断进度续播（误差 ≤ 3s）
+- 关闭后 mini 消失，playerStore.shortId = null
+- 折叠/展开切换流畅，控制栏在 expanded 时显示
+
+---
+
+#### HANDOFF-32 — MiniPlayer 行为修正（dock + 事件隔离 + PiP 清理）（状态：📋 待执行）
+
+- **创建时间**：2026-04-24
+- **建议模型**：sonnet
+- **估时**：0.4d
+- **前置依赖**：HANDOFF-31 ✅
+- **修复项**：原缺陷 #2 / #8 / #9 / #12（P1）
+
+**文件范围**：
+
+- `apps/web-next/src/lib/mini-player/drag.ts`（改动）：
+  - `attachViewportResizeWatcher`：resize 时**无论是否越界**，若当前处于 corner-dock 状态，均重新按 `(corner, margin)` 计算 `left/top` 并写入 DOM；确保 corner 字段在 `MiniGeometryV1` 中持久化
+  - 拖拽结束 snap 算法：以容器中心点判断最近角，写入 `corner` 字段
+
+- `apps/web-next/src/app/[locale]/_lib/player/MiniPlayer.tsx`（改动）：
+  - Header 内所有按钮加 `onPointerDown={e => e.stopPropagation()}` 防止拖拽事件吞按钮
+  - 视频区：用 `pointerdown` 时间戳区分点击（< 200ms）与拖拽结束误触（防止拖拽松手触发 play/pause）
+  - 移除 MiniPlayer 内对 `pip` hostMode 的任何响应逻辑（PiP 由 PlayerShell 独占）
+
+- `apps/web-next/src/stores/playerStore.ts`（小改，若有）：
+  - 确认 `pip` hostMode 的 `LEGAL_TRANSITIONS` 仅从 `full` 进入，MiniPlayer 无法触发 pip 转换
+
+**验收要点**：
+- 缩放浏览器窗口时，mini player 保持贴角位置（不漂移）
+- header 区按钮点击不会意外触发拖拽
+- 视频区快速拖拽后松手不会误触 play/pause
+- 无 pip 相关代码出现在 MiniPlayer.tsx 中（grep 验证）
+
+---
+
+#### HANDOFF-33 — MiniPlayer 体验增强（P2，可延后）（状态：📋 可延后）
+
+- **创建时间**：2026-04-24
+- **建议模型**：sonnet
+- **估时**：0.6d
+- **前置依赖**：HANDOFF-32 ✅
+- **修复项**：原缺陷 #7 / #9 / #10 / #11（P2）
+
+**范围**：
+- **full↔mini 过渡动画**：FLIP（记录 mini 容器 getBoundingClientRect → 路由跳转 → full frame 从记录位置 scale + translate 展开）
+- **Safe area 避让**：读取 `--tabbar-height` 和 Nav 高度，初始 dock 位置避开固定元素
+- **resize handle 方向感知**：根据当前 corner 选择对角方向 handle（左上角 → 右下角 handle，右上角 → 左下角 handle 等）
+- **完整 sessionStorage 协议**：持久化字段扩展为 `{ hostMode, shortId, currentEpisode, currentTime, isMuted, volume, activeSourceIndex, hostOrigin }`
+
+---
+
+#### REVIEW-D — MiniPlayer 整治专项审核
+
+- **触发条件**：HANDOFF-31 + HANDOFF-32 ✅，且 typecheck / lint / test / e2e 全绿
+- **模型**：arch-reviewer（`claude-opus-4-6`）
+- **审核要点**（8 项）：
+  1. mini `<video>` src 初始化路径：activeSrc 来源是否安全（无 undefined 裸赋值）
+  2. `setCurrentTime` 写入节流：250ms 节流是否实现；PlayerShell 续播时是否读取该值
+  3. 关闭路径：`video.src = ''` 是否在 `closeHost()` 前执行（避免 GC 竞态）
+  4. 事件隔离：`onPointerDown stopPropagation` 是否覆盖所有 header 按钮
+  5. dock recompute：viewport resize 时 corner 计算正确性（四角各一测试用例）
+  6. PiP 零污染：grep 验证 `MiniPlayer.tsx` 无 `pip`、`PiP`、`requestPictureInPicture` 字样
+  7. 颜色 token：新增控制栏所有颜色走 `var(--player-mini-*)` 或通用 token，零 hex/rgb
+  8. 折叠/展开无布局抖动：expanded 态高度变化不影响 mini player 容器的 position（fixed 定位不偏移）
+- **结论写入**：`docs/handoff_mini_player/review_d_mini_player.md`
+
