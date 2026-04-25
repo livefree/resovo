@@ -62,5 +62,8 @@
     "foundResults": "Found {count} results",
     "watchNow": "Watch Now",
     "details": "Details"
+  },
+  "miniPlayer": {
+    "returnToWatch": "Return to watch"
   }
 }

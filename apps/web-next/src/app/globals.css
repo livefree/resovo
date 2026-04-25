@@ -451,6 +451,24 @@
   --mini-player-z: 50;
 }
 
+/* HANDOFF-25 — MiniPlayer 交互 token（overlay 和 chip 叠加在视频上，无需亮/暗变体） */
+:root {
+  --player-mini-shadow:      0 8px 32px oklch(0% 0 0 / 0.32), 0 2px 8px oklch(0% 0 0 / 0.16);
+  --player-mini-overlay-bg:  oklch(0% 0 0 / 0.40);
+  --player-mini-chip-bg:     oklch(0% 0 0 / 0.72);
+  --player-mini-chip-fg:     oklch(100% 0 0);
+}
+
+/* HANDOFF-25 — MiniPlayer hover chip 过渡（支持 --motion-scale，prefers-reduced-motion 强制关闭） */
+.mini-player-return-chip {
+  transition: opacity calc(150ms * var(--motion-scale, 1)) ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mini-player-return-chip {
+    transition: none !important;
+  }
+}
+
 /* REG-M2-03 — 动画 token（ADR-044） */
 :root {
   --transition-page: 240ms;

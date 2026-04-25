@@ -10479,7 +10479,7 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
 
 #### Batch C — 交互 / Shell
 
-7. **HANDOFF-25 — MiniPlayer 交互补齐（范围受限版）**（状态：📋 待执行）
+7. **HANDOFF-25 — MiniPlayer 交互补齐（范围受限版）**（状态：✅ 已完成 2026-04-24）
    - 创建时间：2026-04-24
    - 建议模型：sonnet
    - 估时：0.4d
@@ -10496,6 +10496,7 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
      - 点击视频区跳转到 `/[locale]/watch/[slug]`
      - hover 视频区出现返回 chip，mouseLeave 消失
      - 颜色零硬编码
+   - **完成备注**：所有验收要点已满足。`handleVideoSlotClick` 从 `useParams()` 读 locale、从 `hostOrigin.slug` 读 slug；hover chip 使用 `.mini-player-return-chip` CSS class 驱动 `--motion-scale`-aware transition（`calc(150ms * var(--motion-scale, 1))`）+ `prefers-reduced-motion: reduce` 覆盖；新增 4 个 `--player-mini-*` tokens（shadow/overlay-bg/chip-bg/chip-fg）到 globals.css；i18n key `miniPlayer.returnToWatch` 已写入 zh-CN/en；无 any 类型、无硬编码颜色、无假播放控件订阅。typecheck / lint / test 全绿（1682 tests passed）。执行模型：claude-sonnet-4-6；子代理调用：无。
 
 8. **HANDOFF-26 — Footer 重构 + Settings 基础抽屉**（状态：📋 待执行）
    - 创建时间：2026-04-24

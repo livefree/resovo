@@ -62,5 +62,8 @@
     "foundResults": "找到 {count} 个结果",
     "watchNow": "立即观看",
     "details": "详情"
+  },
+  "miniPlayer": {
+    "returnToWatch": "返回播放页"
   }
 }

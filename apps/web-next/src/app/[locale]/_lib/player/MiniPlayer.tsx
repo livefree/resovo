@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useRouter, useParams } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { usePlayerStore } from '@/stores/playerStore'
 import {
   MINI_GEOMETRY_CONSTRAINTS,
@@ -25,12 +27,20 @@ import { attachMiniPlayerDrag, attachViewportResizeWatcher } from '@/lib/mini-pl
  * 颜色全部走 CSS 变量（player.mini.* tokens 经 tokens.css 映射为 --color-player-mini-*）。
  */
 export function MiniPlayer() {
+  const router = useRouter()
+  const params = useParams()
+  const locale = (params.locale as string) ?? 'zh-CN'
+  const t = useTranslations('miniPlayer')
+
   const shortId = usePlayerStore((s) => s.shortId)
+  const hostOrigin = usePlayerStore((s) => s.hostOrigin)
   const geometry = usePlayerStore((s) => s.geometry)
   const takeoverActive = usePlayerStore((s) => s.takeoverActive)
   const setGeometry = usePlayerStore((s) => s.setGeometry)
   const setHostMode = usePlayerStore((s) => s.setHostMode)
   const closeHost = usePlayerStore((s) => s.closeHost)
+
+  const [videoSlotHovering, setVideoSlotHovering] = useState(false)
 
   const containerRef = useRef<HTMLDivElement | null>(null)
   const dragHandleRef = useRef<HTMLDivElement | null>(null)
@@ -115,6 +125,12 @@ export function MiniPlayer() {
 
   function handleExpand() {
     setHostMode('full')
+  }
+
+  function handleVideoSlotClick() {
+    if (hostOrigin?.slug) {
+      router.push(`/${locale}/watch/${hostOrigin.slug}`)
+    }
   }
 
   return (
@@ -236,8 +252,12 @@ export function MiniPlayer() {
         ref={videoSlotRef}
         data-mini-video-slot
         data-testid="mini-player-video-slot"
+        onClick={handleVideoSlotClick}
+        onMouseEnter={() => setVideoSlotHovering(true)}
+        onMouseLeave={() => setVideoSlotHovering(false)}
         style={{
           flex: 1,
+          position: 'relative',
           background: 'var(--bg-surface-sunken)',
           display: 'flex',
           alignItems: 'center',
@@ -246,10 +266,42 @@ export function MiniPlayer() {
           minHeight: 0,
           color: 'var(--fg-subtle)',
           fontSize: '0.75rem',
+          cursor: hostOrigin?.slug ? 'pointer' : 'default',
         }}
       >
         {/* 当 video 尚未 appendChild 进来时的占位文案 */}
         {shortId ? '' : '无正在播放的视频'}
+
+        {/* hover 返回 chip：绝对居中覆盖层 */}
+        {hostOrigin?.slug && (
+          <div
+            aria-hidden
+            className="mini-player-return-chip"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'var(--player-mini-overlay-bg)',
+              opacity: videoSlotHovering ? 1 : 0,
+              pointerEvents: 'none',
+            }}
+          >
+            <span
+              style={{
+                background: 'var(--player-mini-chip-bg)',
+                color: 'var(--player-mini-chip-fg)',
+                padding: '4px 10px',
+                borderRadius: '20px',
+                fontSize: '0.75rem',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {t('returnToWatch')}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* 右下 resize handle（16×16px） */}
