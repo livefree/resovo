@@ -387,6 +387,8 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
                     onEpisodeChange={inlineEpisodes ? handleEpisodeChange : undefined}
                     onNext={hasNext ? () => setEpisode(currentEpisode + 1) : undefined}
                     onTimeUpdate={handleTimeUpdate}
+                    onPlay={() => setPlaying(true)}
+                    onPause={() => setPlaying(false)}
                     onEnded={() => setPlaying(false)}
                     onTheaterChange={handleTheaterChange}
                     startTime={startTime}

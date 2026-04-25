@@ -76,6 +76,8 @@ export function Player({
   title,
   author,
   chapters = [],
+  onPlay,
+  onPause,
   onEnded,
   onTimeUpdate,
   startTime,
@@ -715,12 +717,16 @@ export function Player({
           onPlay={() => {
             setIsPlaying(true);
             setLoadingState("idle");
+            onPlay?.();
           }}
           onPlaying={() => {
             setIsPlaying(true);
             setLoadingState("idle");
           }}
-          onPause={() => setIsPlaying(false)}
+          onPause={() => {
+            setIsPlaying(false);
+            onPause?.();
+          }}
           onLoadStart={() => {
             setLoadingState("initial");
             setError(null);

@@ -41,6 +41,10 @@ export interface PlayerProps {
   author?: string;
   /** Chapters for progress bar markers */
   chapters?: Chapter[];
+  /** Called when playback starts (play event) */
+  onPlay?: () => void;
+  /** Called when playback pauses */
+  onPause?: () => void;
   /** Called when playback ends */
   onEnded?: () => void;
   /** Called when user clicks Next or presses Shift+N. When omitted the Next button is hidden. */
