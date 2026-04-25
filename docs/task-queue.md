@@ -10514,9 +10514,33 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
      - 主题切换在抽屉内可用
      - 动效强度滑块改变 `--motion-scale` CSS 变量
 
+9. **HANDOFF-30 — 播放页 §15 规格对齐（5 项布局修正）**（状态：📋 待执行）
+   - 创建时间：2026-04-24
+   - 建议模型：sonnet
+   - 估时：0.3d
+   - 前置依赖：REVIEW-B PASS
+   - 修复范围：§15 规格未对齐项（用户决策 2026-04-24 延至 Batch C）
+   - 背景：播放页设计稿 §15 对照检查中发现 5 项未对齐，已延后至 Batch C 处理
+   - 文件范围：
+     - `apps/web-next/src/components/player/PlayerShell.tsx`：
+       1. **容器 inset**：正常模式 `px-4 py-4` → `px-10 py-4`（16px→40px），影院模式 `px-4 pt-4` → `px-10 pt-4`（标题区 inset 同步）；骨架屏同步修改
+       2. **播放器默认圆角**：`borderRadius: isTheater ? 0 : '0.5rem'` → `borderRadius: isTheater ? 0 : '12px'`
+       3. **下方内容区（低于播放器的侧栏/推荐区）**：新增 `max-w-[1280px] mx-auto px-6` 约束容器，wrapping 现有 lower section 内容（暂为"更多推荐内容即将上线"占位 + selection panel）
+     - `apps/web-next/src/app/globals.css`：
+       4. **播放器-侧栏间距**：`--player-panel-gap: var(--space-4)` → `--player-panel-gap: var(--space-6)`（16px→24px）
+   - 验收要点：
+     - 正常模式下播放器容器左右各 40px inset（视觉对比设计稿）
+     - 播放器圆角目测约 12px（与 `rounded-xl` 一致）
+     - 播放区与侧栏之间 gap 约 24px（视觉对比）
+     - 播放区下方内容（有则显示）宽度不超过 1280px，左右各 24px 内边距
+   - 注意：
+     - 影院模式圆角已为 0，不受本改动影响
+     - `--player-panel-gap` 为 CSS token，修改后影院/正常模式下 gap 均通过变量生效
+     - 暂无实际 lower section 内容（HANDOFF-30 范围内仅做容器和占位），等真实内容落地时不需再调整容器结构
+
 #### REVIEW-C — 最终独立审核 + Phase 2 Close
 
-- **触发条件**：HANDOFF-25 + HANDOFF-26 全部 ✅，且 typecheck / lint / test / e2e 全绿
+- **触发条件**：HANDOFF-25 + HANDOFF-26 + HANDOFF-30 全部 ✅，且 typecheck / lint / test / e2e 全绿
 - **模型**：arch-reviewer（`claude-opus-4-6`）
 - **审核要点**（11 项）：
   1. MiniPlayer `router.push` locale 来源：必须来自 `useParams()` 或 context，不得硬编码
@@ -10527,15 +10551,15 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
   6. Footer 链接 locale 前缀覆盖完整（无裸 `/movie` 类路径）
   7. SettingsDrawer `localStorage` 读写 SSR 安全性（`typeof window !== 'undefined'` 守卫）
   8. `--motion-scale` CSS 变量驱动机制（变量挂在 `:root` 还是 `.app-shell`）
-  9. HANDOFF-19~26 全范围：grep 验证硬编码颜色零遗漏
-  10. HANDOFF-19~26 全范围：`any` 类型零遗漏
+  9. HANDOFF-19~26 + HANDOFF-30 全范围：grep 验证硬编码颜色零遗漏
+  10. HANDOFF-19~26 + HANDOFF-30 全范围：`any` 类型零遗漏
   11. `VideoCardWide.tsx` `@deprecated` 注释已写入；无新增消费点
 - **结论写入**：`docs/handoff_20260422/review_phase2_c_20260424.md`
 - **Phase 2 Close 条件**：全部 PASS 后追加 changelog 条目 + 本序列标 ✅
 
 ### 序列验收（全部任务完成后）
 
-- [ ] HANDOFF-19 至 HANDOFF-26 全部 ✅
+- [ ] HANDOFF-19 至 HANDOFF-26 + HANDOFF-30 全部 ✅
 - [x] REVIEW-A PASS（arch-reviewer，2026-04-24，claude-opus-4-6）
 - [x] REVIEW-B PASS（arch-reviewer，2026-04-24，claude-opus-4-6）
 - [ ] REVIEW-C PASS（arch-reviewer）
