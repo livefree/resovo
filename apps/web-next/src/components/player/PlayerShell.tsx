@@ -362,7 +362,7 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
               className="w-full relative overflow-hidden shadow-2xl border"
               style={{
                 aspectRatio: '16/9',
-                background: 'black',
+                background: 'var(--player-video-area-bg)',
                 borderColor: 'var(--border-default)',
                 borderRadius: isTheater ? 0 : '12px',
               }}
@@ -397,7 +397,7 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
               ) : (
                 <div
                   className="absolute inset-0 flex flex-col items-center justify-center gap-2"
-                  style={{ color: 'color-mix(in oklch, white 50%, transparent)' }}
+                  style={{ color: 'var(--player-no-source-fg)' }}
                   data-testid="player-no-source"
                 >
                   <span className="text-4xl">▶</span>

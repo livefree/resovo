@@ -461,7 +461,14 @@
 
 /* HANDOFF-26 — 通用遮罩层 token（drawer / dialog backdrop） */
 :root {
-  --overlay-bg: oklch(0% 0 0 / 0.40);
+  --overlay-bg:    oklch(0% 0 0 / 0.40);
+  --shadow-drawer: -8px 0 32px oklch(0% 0 0 / 0.12);
+}
+
+/* REVIEW-C P0 — PlayerShell 视频区 token（无主题变体：视频外框始终黑色） */
+:root {
+  --player-video-area-bg:  oklch(0% 0 0);
+  --player-no-source-fg:   oklch(100% 0 0 / 0.5);
 }
 
 /* HANDOFF-25 — MiniPlayer hover chip 过渡（支持 --motion-scale，prefers-reduced-motion 强制关闭） */

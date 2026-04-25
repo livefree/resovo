@@ -108,7 +108,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
           zIndex: 'var(--z-overlay)',
           background: 'var(--bg-surface)',
           borderLeft: '1px solid var(--border-default)',
-          boxShadow: '-8px 0 32px oklch(0% 0 0 / 0.12)',
+          boxShadow: 'var(--shadow-drawer)',
           display: 'flex',
           flexDirection: 'column',
           overflowY: 'auto',

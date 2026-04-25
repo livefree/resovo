@@ -10565,13 +10565,13 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
 - [ ] HANDOFF-19 至 HANDOFF-26 + HANDOFF-30 全部 ✅
 - [x] REVIEW-A PASS（arch-reviewer，2026-04-24，claude-opus-4-6）
 - [x] REVIEW-B PASS（arch-reviewer，2026-04-24，claude-opus-4-6）
-- [ ] REVIEW-C PASS（arch-reviewer）
-- [ ] `npm run typecheck` 全绿
-- [ ] `npm run lint` 全绿
-- [ ] `npm run test -- --run` 全绿
+- [x] REVIEW-C PASS（arch-reviewer，2026-04-24，claude-opus-4-6）
+- [x] `npm run typecheck` 全绿
+- [x] `npm run lint` 全绿
+- [x] `npm run test -- --run` 全绿（1682/1682）
 - [ ] `npm run test:e2e` 全绿（PLAYER 关键路径）
-- [ ] HANDOFF 范围内无硬编码颜色
-- [ ] HANDOFF 范围内无 `any` 类型
+- [x] HANDOFF 范围内无硬编码颜色（REVIEW-C P0 修复后）
+- [x] HANDOFF 范围内无 `any` 类型
 - [ ] `lib/categories.ts` 为 Nav / FilterArea / Footer / CategoryShortcuts 唯一数据来源
 
 ### 风险备注
