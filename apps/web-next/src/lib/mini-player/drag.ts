@@ -79,6 +79,8 @@ export function attachMiniPlayerDrag(options: DragAttachOptions): () => void {
   const onDragPointerDown = (e: PointerEvent): void => {
     if (pointerId !== null) return // 已在其他交互中
     if (e.button !== 0) return      // 仅左键 / 主触
+    // 按钮 / 链接等可交互元素发出的事件不启动拖拽（避免 React 合成事件 stopPropagation 竞争问题）
+    if ((e.target as HTMLElement).closest('button, a, [role="button"], [data-no-drag]')) return
     pointerId = e.pointerId
     mode = 'drag'
     dragHandle.setPointerCapture(e.pointerId)
