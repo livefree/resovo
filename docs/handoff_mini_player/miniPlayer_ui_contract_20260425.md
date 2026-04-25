@@ -425,3 +425,137 @@ CSS 侧双保险：
 - Safe area / tabbar 高度避让
 - 完整 sessionStorage 持久化协议（时间戳/音量/线路）
 - PiP 边界清理（HANDOFF-32 范围）
+
+---
+
+## 13. 修订记录（v1.1 — 2026-04-25）
+
+本节补充 7 项缺口，与正文各节共同作为执行基准。
+
+### 13.1 activeSrc 解析规则（补充 §4）
+
+Mini player 的 `<video src>` 必须与用户在 full 模式选择的线路保持一致：
+
+```
+1. 读取 playerStore.activeSourceIndex
+2. 取 sources[activeSourceIndex]?.url
+3. 若 activeSourceIndex 越界 → fallback 到 sources[0]?.url
+4. 若 sources 为空（API 未返回）→ src = null → 进入"无播放源"状态
+```
+
+`sources` 通过 `GET /videos/:shortId/sources?episode=currentEpisode` 获取，mini 在 mount 时独立拉取一次（`isActive=true` 过滤后取全部，由 `activeSourceIndex` 选择）。不得硬编码"第一条"。
+
+### 13.2 Autoplay 语义（补充 §4.3）
+
+双实例方案天然会 reload 新 `<video>`，必须定义 autoplay 行为：
+
+| 场景 | 行为 |
+|------|------|
+| 离开 /watch 时视频正在播放 | mini mount 后立即调用 `video.play()`（best-effort autoplay） |
+| `video.play()` 成功 | 正常播放，overlay 隐藏 |
+| `video.play()` 抛出 `NotAllowedError` | 设 `autoplayBlocked = true`，显示 play 图标 + `点击播放`，**不重试** |
+| 离开 /watch 时视频已暂停 | mini mount 后 **不调用** `video.play()`，直接显示 pause overlay |
+
+`playerStore.isPlaying` 在离开 /watch 时保留最后状态，mini mount 时读取判断是否尝试 autoplay。
+
+### 13.3 续播机制（补充 §4，解决 PlayerShell.tsx 续播路径）
+
+Mini player 必须与 full player 共用同一进度存储路径（`saveProgress` / `useProgressRestoration`）：
+
+```
+mini onTimeUpdate：
+  playerStore.setCurrentTime(t)        // store 同步（UI 实时显示用）
+  saveProgress(shortId, episode, t)    // localStorage 写入（与 full 相同机制）
+  → 节流 250ms
+```
+
+当用户点击"返回播放页"跳回 /watch 时：
+- `initPlayer()` 重置 `currentTime: 0`（不影响续播，因为 startTime 来自 ResumePrompt）
+- `ResumePrompt` 读取 `saveProgress` 写入的 localStorage，自动弹出"继续观看 X:XX"提示
+- 用户点击"继续"→ `setStartTime(t)`→ VideoPlayer 从断点恢复
+
+**PlayerShell.tsx 已有机制无需修改**，HANDOFF-31 范围内只需确认 MiniPlayer 调用 `saveProgress`，以及 `activeSourceIndex` 保留逻辑（PlayerShell 第 85-86 行已处理）。
+
+### 13.4 关闭路径 / store 完整清理（补充 §5 关闭语义）
+
+`closeHost()` 当前只切 `hostMode='closed'`，不清除 `shortId / currentTime / isPlaying` 等字段。MiniPlayer 必须使用新的 `releaseMiniPlayer()` action：
+
+```ts
+// playerStore.ts 新增 action
+releaseMiniPlayer: () => {
+  set({
+    shortId: null,
+    currentTime: 0,
+    duration: 0,
+    isPlaying: false,
+    activeSourceIndex: 0,
+  })
+  get().closeHost()   // 清 sessionStorage + hostMode='closed'
+}
+```
+
+MiniPlayer close handler：
+```ts
+function handleClose() {
+  videoRef.current?.pause()
+  if (videoRef.current) videoRef.current.src = ''
+  releaseMiniPlayer()   // 一步清 store + sessionStorage
+}
+```
+
+### 13.5 折叠/展开时 dock 重算（补充 §6）
+
+`isExpanded` 切换时容器高度改变；若当前吸附在 `bl/br`（底部），高度增加会使底边超出 margin：
+
+```
+切换 isExpanded 后的必要操作：
+  1. 更新容器 height 样式（transition 200ms）
+  2. 读取当前 corner + 新 height → 重新计算 top
+     (br/bl corner: top = viewport.height - margin - newHeight)
+  3. 写入 container.style.top = newTop + 'px'
+```
+
+此逻辑属于 HANDOFF-31 范围（expand toggle handler），不依赖 HANDOFF-32 的 drag.ts 修改。
+
+### 13.6 移动端防护升级（修订 §1 和 §10）
+
+**CSS `display: none` 不足以防止音频播放**。真实 `<video>` 在 CSS 隐藏后仍可能继续播放。
+
+正确实现：
+```tsx
+useEffect(() => {
+  const mq = window.matchMedia('(hover: none) and (pointer: coarse)')
+  if (mq.matches) {
+    // 立即关闭，而非仅 CSS 隐藏
+    videoRef.current?.pause()
+    if (videoRef.current) videoRef.current.src = ''
+    releaseMiniPlayer()
+    return
+  }
+  const handler = (e: MediaQueryListEvent) => {
+    if (e.matches) handleClose()
+  }
+  mq.addEventListener('change', handler)
+  return () => mq.removeEventListener('change', handler)
+}, [])
+```
+
+CSS 侧 `display: none` 保留作视觉双保险，但业务逻辑必须用 `releaseMiniPlayer()`。
+
+### 13.7 测试文件范围（补充验收 §11）
+
+HANDOFF-31 / 32 **必须包含测试文件**：
+
+| 文件 | 类型 | 关键用例 |
+|------|------|---------|
+| `tests/e2e-next/mini-player.spec.ts`（新建） | Playwright | 渲染验证、play/pause、返回 /watch 后 ResumePrompt 出现、关闭 store 清零、viewport resize 四角贴边、header 按钮不触发 drag |
+| `tests/unit/web-next/MiniPlayer.test.tsx`（新建） | Vitest + RTL | autoplay-blocked 状态、无 src 状态、handleClose store 清理、activeSrc fallback 逻辑 |
+
+e2e 四角几何断言（HANDOFF-32）：
+```
+- 拖至 tl → left ≈ 16, top ≈ 16 (±4px)
+- 拖至 tr → right ≈ viewport.width - 16 (±4px)
+- 拖至 bl → bottom ≈ viewport.height - 16 (±4px)
+- 拖至 br → bottom ≈ viewport.height - 16 AND right ≈ viewport.width - 16
+- Expanded 后 bl 仍满足 bottom ≈ viewport.height - 16
+```
