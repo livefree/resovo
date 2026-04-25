@@ -19,10 +19,10 @@ import { MiniPlayerControls } from './MiniPlayerControls'
 /**
  * MiniPlayer — HANDOFF-32 视频交互核心层
  *
- * 几何模型（UI Contract §2）：
+ * 几何模型（UI Contract §2，HANDOFF-36 简化）：
  *   - 容器 position: fixed，overflow: hidden，所有子元素绝对定位
- *   - Collapsed：height = videoH（= width × 9/16）
- *   - Expanded：height = videoH + 44px（控制栏）
+ *   - 高度恒为 videoH（= width × 9/16）
+ *   - Header（顶部 32px）+ Controls（底部 32px）均按 hover 切 opacity 显示
  *
  * 视频逻辑由 useMiniPlayerVideo 钩子封装；Header/Controls 已拆为子组件。
  */
@@ -43,12 +43,12 @@ export function MiniPlayer() {
   const geometry = usePlayerStore((s) => s.geometry)
   const takeoverActive = usePlayerStore((s) => s.takeoverActive)
   const isPlaying = usePlayerStore((s) => s.isPlaying)
+  const currentEpisode = usePlayerStore((s) => s.currentEpisode)
   const setGeometry = usePlayerStore((s) => s.setGeometry)
   const setHostMode = usePlayerStore((s) => s.setHostMode)
   const releaseMiniPlayer = usePlayerStore((s) => s.releaseMiniPlayer)
   const setFlipOrigin = usePlayerStore((s) => s.setFlipOrigin)
 
-  const [isExpanded, setIsExpanded] = useState(false)
   const [headerVisible, setHeaderVisible] = useState(false)
   const [visible, setVisible] = useState(false)
 
@@ -82,6 +82,8 @@ export function MiniPlayer() {
     isMuted,
     localCurrentTime,
     localDuration,
+    videoTitle,
+    videoEpisodeCount,
     handleToggleMute,
     handleTogglePlay,
     handleVideoCanPlay,
@@ -129,7 +131,7 @@ export function MiniPlayer() {
     return () => document.removeEventListener('keydown', onKey)
   }, [handleClose, handleToggleMute])
 
-  // 应用 geometry + isExpanded 到 DOM，同时计算 safe area margins（首次）
+  // 应用 geometry 到 DOM，同时计算 safe area margins（首次）
   useLayoutEffect(() => {
     const el = containerRef.current
     if (!el || userInteractingRef.current) return
@@ -154,15 +156,14 @@ export function MiniPlayer() {
     const geom = geometry ?? MINI_GEOMETRY_DEFAULTS
     const vw = window.innerWidth
     const vh = window.innerHeight
-    const videoH = deriveHeightFromWidth(geom.width)
-    const height = isExpanded ? videoH + 44 : videoH
+    const height = deriveHeightFromWidth(geom.width)
     const dockGeom: MiniGeometryV1 = { ...geom, height }
     const { left, top } = computeDockPosition(dockGeom, vw, vh, margins)
     el.style.left = `${left}px`
     el.style.top = `${top}px`
     el.style.width = `${geom.width}px`
     el.style.height = `${height}px`
-  }, [geometry, isExpanded])
+  }, [geometry])
 
   // attach drag + viewport resize watcher
   useEffect(() => {
@@ -202,27 +203,6 @@ export function MiniPlayer() {
     setHostMode('full')
     router.push(`/${locale}/watch/${hostOrigin.slug}`)
   }, [hostOrigin, locale, setHostMode, setFlipOrigin, router])
-
-  // P1-5: 展开/折叠时直接写 container.style.top，纳入 expanded 有效高度
-  // P2-1: useCallback 包裹；functional update 避免捕获 isExpanded
-  const handleToggleExpand = useCallback(() => {
-    setIsExpanded(prev => {
-      const nextExpanded = !prev
-      const el = containerRef.current
-      const geom = geometryRef.current
-      if (el) {
-        const vw = window.innerWidth
-        const vh = window.innerHeight
-        const videoH = deriveHeightFromWidth(geom.width)
-        const height = nextExpanded ? videoH + 44 : videoH
-        const margins = dockMarginsRef.current ?? MINI_GEOMETRY_CONSTRAINTS.DOCK_MARGIN
-        const { top } = computeDockPosition({ ...geom, height }, vw, vh, margins)
-        el.style.top = `${top}px`
-        el.style.height = `${height}px`
-      }
-      return nextExpanded
-    })
-  }, [])
 
   function handleContainerMouseEnter() {
     if (headerHideTimerRef.current !== null) {
@@ -331,7 +311,7 @@ export function MiniPlayer() {
         left: 0,
         top: 0,
         width: `${geom.width}px`,
-        height: `${isExpanded ? videoH + 44 : videoH}px`,
+        height: `${videoH}px`,
         minWidth: `${MINI_GEOMETRY_CONSTRAINTS.MIN_WIDTH}px`,
         maxWidth: `${MINI_GEOMETRY_CONSTRAINTS.MAX_WIDTH}px`,
         background: 'var(--player-mini-bg)',
@@ -356,7 +336,7 @@ export function MiniPlayer() {
         onPointerUp={handleVideoAreaPointerUp}
         style={{
           position: 'absolute',
-          inset: isExpanded ? '0 0 44px 0' : '0 0 0 0',
+          inset: 0,
           background: 'var(--player-video-area-bg)',
           cursor: !showNoSrc ? 'pointer' : 'default',
         }}
@@ -451,34 +431,34 @@ export function MiniPlayer() {
         </div>
       </div>
 
-      {/* ── Header overlay ───────────────────────────────────── */}
+      {/* ── Header overlay（hover 显示） ───────────────────────── */}
       <MiniPlayerHeader
         dragHandleRef={dragHandleRef}
         headerVisible={headerVisible}
-        isExpanded={isExpanded}
         shortId={shortId}
         hostOrigin={hostOrigin}
+        videoTitle={videoTitle}
+        currentEpisode={currentEpisode}
+        episodeCount={videoEpisodeCount}
         onReturnToWatch={handleReturnToWatch}
-        onToggleExpand={handleToggleExpand}
         onClose={handleClose}
       />
 
-      {/* ── Controls bar（Expanded 态） ───────────────────────── */}
-      {isExpanded && (
-        <MiniPlayerControls
-          isPlaying={isPlaying}
-          localCurrentTime={localCurrentTime}
-          localDuration={localDuration}
-          isMuted={isMuted}
-          videoStatus={videoStatus}
-          onTogglePlay={handleTogglePlay}
-          onToggleMute={handleToggleMute}
-          onProgressPointerDown={handleProgressPointerDown}
-          onProgressPointerMove={handleProgressPointerMove}
-          onProgressPointerUp={handleProgressPointerUp}
-          onProgressKeyDown={handleProgressKeyDown}
-        />
-      )}
+      {/* ── Controls bar（hover 显示，与 header 镜像） ─────────── */}
+      <MiniPlayerControls
+        visible={headerVisible}
+        isPlaying={isPlaying}
+        localCurrentTime={localCurrentTime}
+        localDuration={localDuration}
+        isMuted={isMuted}
+        videoStatus={videoStatus}
+        onTogglePlay={handleTogglePlay}
+        onToggleMute={handleToggleMute}
+        onProgressPointerDown={handleProgressPointerDown}
+        onProgressPointerMove={handleProgressPointerMove}
+        onProgressPointerUp={handleProgressPointerUp}
+        onProgressKeyDown={handleProgressKeyDown}
+      />
 
       {/* ── Resize handle（corner-aware：对角方向）──────────── */}
       {(() => {

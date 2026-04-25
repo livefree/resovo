@@ -3,6 +3,7 @@
 import type { VideoStatus } from './useMiniPlayerVideo'
 
 interface MiniPlayerControlsProps {
+  visible: boolean
   isPlaying: boolean
   localCurrentTime: number
   localDuration: number
@@ -26,6 +27,7 @@ function formatTime(seconds: number): string {
 }
 
 export function MiniPlayerControls({
+  visible,
   isPlaying,
   localCurrentTime,
   localDuration,
@@ -44,17 +46,22 @@ export function MiniPlayerControls({
 
   return (
     <div
+      data-testid="mini-player-controls"
       style={{
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        height: '44px',
-        background: 'var(--player-mini-ctrl-bg)',
+        height: '32px',
+        background: 'color-mix(in srgb, var(--player-mini-ctrl-bg) 75%, transparent)',
         display: 'flex',
         alignItems: 'center',
         padding: '0 8px',
         gap: '8px',
+        opacity: visible ? 1 : 0,
+        pointerEvents: visible ? 'all' : 'none',
+        transition: 'opacity 150ms ease',
+        zIndex: 2,
       }}
     >
       {/* Play/Pause 按钮 */}
@@ -65,8 +72,8 @@ export function MiniPlayerControls({
         onClick={onTogglePlay}
         disabled={!hasSource}
         style={{
-          width: '32px',
-          height: '32px',
+          width: '24px',
+          height: '24px',
           border: 'none',
           borderRadius: '4px',
           background: 'transparent',
@@ -79,7 +86,7 @@ export function MiniPlayerControls({
           flexShrink: 0,
         }}
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
           {isPlaying
             ? <><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></>
             : <path d="M6 4l15 8-15 8V4z" />
@@ -126,9 +133,9 @@ export function MiniPlayerControls({
 
       {/* 时间显示 */}
       <span style={{
-        fontSize: '11px',
+        fontSize: '10px',
         color: 'var(--player-mini-ctrl-fg)',
-        minWidth: '72px',
+        minWidth: '64px',
         textAlign: 'center',
         flexShrink: 0,
       }}>
@@ -154,9 +161,10 @@ export function MiniPlayerControls({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          flexShrink: 0,
         }}
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
           {isMuted
             ? <><path d="M11 5L6 9H2v6h4l5 4V5z" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></>
             : <><path d="M11 5L6 9H2v6h4l5 4V5z" /><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" /></>

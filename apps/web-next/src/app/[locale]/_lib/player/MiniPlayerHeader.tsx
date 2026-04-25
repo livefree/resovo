@@ -5,11 +5,12 @@ import type { PlayerHostOrigin } from '@/stores/playerStore'
 interface MiniPlayerHeaderProps {
   dragHandleRef: React.RefObject<HTMLDivElement | null>
   headerVisible: boolean
-  isExpanded: boolean
   shortId: string | null
   hostOrigin: PlayerHostOrigin | null
+  videoTitle: string | null
+  currentEpisode: number
+  episodeCount: number
   onReturnToWatch: () => void
-  onToggleExpand: () => void
   onClose: () => void
 }
 
@@ -36,15 +37,19 @@ function BtnLeave(e: React.MouseEvent<HTMLButtonElement>) {
 export function MiniPlayerHeader({
   dragHandleRef,
   headerVisible,
-  isExpanded,
   shortId,
   hostOrigin,
+  videoTitle,
+  currentEpisode,
+  episodeCount,
   onReturnToWatch,
-  onToggleExpand,
   onClose,
 }: MiniPlayerHeaderProps) {
   const tabIdx = headerVisible ? 0 : -1
   const canReturn = Boolean(hostOrigin?.slug)
+  // 仅在 shortId 存在时显示视频信息；title 未到位时降级为 shortId（避免 fetch 中显示空白）
+  const titleText = shortId ? (videoTitle ?? '正在加载…') : '迷你播放器'
+  const showEpisode = shortId !== null && episodeCount > 1 && currentEpisode > 0
 
   return (
     <div
@@ -94,42 +99,44 @@ export function MiniPlayerHeader({
         </svg>
       </button>
 
-      {/* 标题区 */}
-      <span
+      {/* 标题区：视频名称 + 集数（多集时）。title 区可截断，集数 flex-shrink:0 永远可见 */}
+      <div
+        data-testid="mini-player-title"
         style={{
           flex: 1,
           minWidth: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
           fontSize: '12px',
           color: 'var(--fg-muted)',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
           pointerEvents: 'none',
         }}
       >
-        {shortId ? '正在播放' : '迷你播放器'}
-      </span>
-
-      {/* 展开/折叠按钮 */}
-      <button
-        type="button"
-        data-testid="mini-player-toggle-expand"
-        aria-label={isExpanded ? '折叠' : '展开'}
-        aria-expanded={isExpanded}
-        tabIndex={tabIdx}
-        onClick={onToggleExpand}
-        onPointerDown={(e) => e.stopPropagation()}
-        onMouseEnter={BtnHover}
-        onMouseLeave={BtnLeave}
-        style={{ ...btnStyle, cursor: 'pointer' }}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-          {isExpanded
-            ? <path d="M18 15l-6-6-6 6" />
-            : <path d="M6 9l6 6 6-6" />
-          }
-        </svg>
-      </button>
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {titleText}
+        </span>
+        {showEpisode && (
+          <span
+            data-testid="mini-player-episode"
+            style={{
+              flexShrink: 0,
+              color: 'var(--accent-default)',
+              fontWeight: 600,
+            }}
+          >
+            第 {currentEpisode} 集
+          </span>
+        )}
+      </div>
 
       {/* 关闭按钮 */}
       <button

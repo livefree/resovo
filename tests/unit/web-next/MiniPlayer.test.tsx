@@ -43,6 +43,7 @@ const { mockPlayerState } = vi.hoisted(() => ({
     isMuted: false,
     volume: 1,
     flipOrigin: null,
+    currentEpisode: 1,
     setGeometry: vi.fn(),
     setHostMode: vi.fn(),
     releaseMiniPlayer: vi.fn(),
@@ -71,6 +72,8 @@ const { mockVideoState } = vi.hoisted(() => ({
     isMuted: false,
     localCurrentTime: 0,
     localDuration: 0,
+    videoTitle: null as string | null,
+    videoEpisodeCount: 0,
     handleToggleMute: vi.fn(),
     handleTogglePlay: vi.fn(),
     handleVideoCanPlay: vi.fn(),
@@ -79,6 +82,7 @@ const { mockVideoState } = vi.hoisted(() => ({
     handleVideoError: vi.fn(),
     handleVideoTimeUpdate: vi.fn(),
     handleVideoLoadedMetadata: vi.fn(),
+    handleVideoLoadedData: vi.fn(),
     handleAutoplayBlockedClick: vi.fn(),
     handleSeek: vi.fn(),
   },
@@ -95,6 +99,7 @@ beforeEach(() => {
   mockPlayerState.hostOrigin = null
   mockPlayerState.takeoverActive = false
   mockPlayerState.isPlaying = false
+  mockPlayerState.currentEpisode = 1
   mockPlayerState.setGeometry.mockReset()
   mockPlayerState.setHostMode.mockReset()
   mockPlayerState.releaseMiniPlayer.mockReset()
@@ -106,6 +111,8 @@ beforeEach(() => {
   mockVideoState.isMuted = false
   mockVideoState.localCurrentTime = 0
   mockVideoState.localDuration = 0
+  mockVideoState.videoTitle = null
+  mockVideoState.videoEpisodeCount = 0
   mockVideoState.handleTogglePlay.mockReset()
   mockVideoState.handleToggleMute.mockReset()
   mockVideoState.handleAutoplayBlockedClick.mockReset()
@@ -172,30 +179,67 @@ describe('MiniPlayer', () => {
     expect(mockPush).toHaveBeenCalledWith('/zh-CN/watch/test-slug')
   })
 
-  it('展开/折叠按钮初始 aria-expanded="false"', async () => {
+  // HANDOFF-36: 展开按钮已移除，控制栏改为 hover 显示且永远在 DOM 中
+  it('HANDOFF-36：控制栏永远在 DOM 中（不再依赖 expand 切换）', async () => {
     const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
     render(<MiniPlayer />)
-    const btn = screen.getByTestId('mini-player-toggle-expand')
-    expect(btn.getAttribute('aria-expanded')).toBe('false')
-    expect(btn.getAttribute('aria-label')).toBe('展开')
-  })
-
-  it('点击展开按钮后 aria-expanded="true"，aria-label 变为"折叠"', async () => {
-    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
-    render(<MiniPlayer />)
-    const btn = screen.getByTestId('mini-player-toggle-expand')
-    await act(async () => { fireEvent.click(btn) })
-    expect(btn.getAttribute('aria-expanded')).toBe('true')
-    expect(btn.getAttribute('aria-label')).toBe('折叠')
-  })
-
-  it('Expanded 时控制栏占位元素存在', async () => {
-    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
-    render(<MiniPlayer />)
-    const btn = screen.getByTestId('mini-player-toggle-expand')
-    await act(async () => { fireEvent.click(btn) })
+    expect(screen.getByTestId('mini-player-controls')).toBeTruthy()
     expect(screen.getByTestId('mini-player-progress')).toBeTruthy()
     expect(screen.getByTestId('mini-player-mute')).toBeTruthy()
+  })
+
+  it('HANDOFF-36：控制栏初始 opacity=0（未 hover），mouseEnter 后 opacity=1', async () => {
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    const controls = screen.getByTestId('mini-player-controls')
+    expect(controls.style.opacity).toBe('0')
+    await act(async () => {
+      fireEvent.mouseEnter(screen.getByTestId('mini-player'))
+    })
+    expect(controls.style.opacity).toBe('1')
+  })
+
+  it('HANDOFF-36：toggle-expand 按钮已被移除', async () => {
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    expect(screen.queryByTestId('mini-player-toggle-expand')).toBeNull()
+  })
+
+  it('HANDOFF-36：无 shortId 时 header 显示"迷你播放器"', async () => {
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    expect(screen.getByTestId('mini-player-title').textContent).toContain('迷你播放器')
+    expect(screen.queryByTestId('mini-player-episode')).toBeNull()
+  })
+
+  it('HANDOFF-36：有 shortId 但 title 未到位时显示"正在加载…"', async () => {
+    mockPlayerState.shortId = 'abc'
+    mockVideoState.videoTitle = null
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    expect(screen.getByTestId('mini-player-title').textContent).toContain('正在加载')
+  })
+
+  it('HANDOFF-36：title 到位 + episodeCount>1 时显示标题 + 第N集', async () => {
+    mockPlayerState.shortId = 'abc'
+    mockPlayerState.currentEpisode = 3
+    mockVideoState.videoTitle = '进击的巨人'
+    mockVideoState.videoEpisodeCount = 25
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    expect(screen.getByTestId('mini-player-title').textContent).toContain('进击的巨人')
+    expect(screen.getByTestId('mini-player-episode').textContent).toContain('第 3 集')
+  })
+
+  it('HANDOFF-36：episodeCount=1（电影）时不显示集数', async () => {
+    mockPlayerState.shortId = 'abc'
+    mockPlayerState.currentEpisode = 1
+    mockVideoState.videoTitle = '某电影'
+    mockVideoState.videoEpisodeCount = 1
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    expect(screen.getByTestId('mini-player-title').textContent).toContain('某电影')
+    expect(screen.queryByTestId('mini-player-episode')).toBeNull()
   })
 
   it('takeoverActive=true 时容器 display:none', async () => {
@@ -210,7 +254,8 @@ describe('MiniPlayer', () => {
     const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
     render(<MiniPlayer />)
     expect(screen.getByTestId('mini-player-return-btn')).toBeTruthy()
-    expect(screen.getByTestId('mini-player-toggle-expand')).toBeTruthy()
+    expect(screen.getByTestId('mini-player-controls')).toBeTruthy()
+    expect(screen.getByTestId('mini-player-title')).toBeTruthy()
     expect(screen.getByTestId('mini-play-overlay')).toBeTruthy()
     expect(screen.getByTestId('mini-loading')).toBeTruthy()
     expect(screen.getByTestId('mini-error')).toBeTruthy()
@@ -286,13 +331,11 @@ describe('MiniPlayer — HANDOFF-32 视频状态', () => {
     })
   })
 
-  it('Expanded 时 play/pause 按钮 aria-label 随 isPlaying 变化', async () => {
+  it('play/pause 按钮 aria-label 随 isPlaying 变化（HANDOFF-36：控制栏永远在 DOM）', async () => {
     mockVideoState.videoStatus = 'idle'
     mockPlayerState.isPlaying = true
     const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
     render(<MiniPlayer />)
-    const toggleBtn = screen.getByTestId('mini-player-toggle-expand')
-    await act(async () => { fireEvent.click(toggleBtn) })
     const playPauseBtn = screen.getByTestId('mini-player-play-pause')
     expect(playPauseBtn.getAttribute('aria-label')).toBe('暂停')
   })
@@ -400,7 +443,6 @@ describe('MiniPlayer — HANDOFF-33 P1-3 键盘 seek 立即调 handleSeek', () =
     mockPlayerState.isPlaying = true
     const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
     render(<MiniPlayer />)
-    fireEvent.click(screen.getByTestId('mini-player-toggle-expand'))
     const progressBar = screen.getByRole('slider')
     fireEvent.keyDown(progressBar, { key: 'ArrowRight' })
     expect(mockVideoState.handleSeek).toHaveBeenCalledTimes(1)
@@ -416,7 +458,6 @@ describe('MiniPlayer — HANDOFF-33 P1-3 键盘 seek 立即调 handleSeek', () =
     mockPlayerState.isPlaying = true
     const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
     render(<MiniPlayer />)
-    fireEvent.click(screen.getByTestId('mini-player-toggle-expand'))
     const progressBar = screen.getByRole('slider')
     fireEvent.keyDown(progressBar, { key: 'ArrowLeft' })
     expect(mockVideoState.handleSeek).toHaveBeenCalledTimes(1)

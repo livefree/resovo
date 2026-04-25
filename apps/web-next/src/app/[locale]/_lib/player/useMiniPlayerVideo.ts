@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { usePlayerStore } from '@/stores/playerStore'
 import { apiClient } from '@/lib/api-client'
 import { saveProgress } from '@/components/player/ResumePrompt'
-import type { VideoSource, ApiListResponse } from '@resovo/types'
+import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@resovo/types'
 
 export type VideoStatus = 'no-src' | 'loading' | 'error' | 'autoplay-blocked' | 'idle'
 
@@ -14,6 +14,8 @@ export interface UseMiniPlayerVideoReturn {
   isMuted: boolean
   localCurrentTime: number
   localDuration: number
+  videoTitle: string | null
+  videoEpisodeCount: number
   handleToggleMute: () => void
   handleTogglePlay: () => void
   handleVideoCanPlay: () => void
@@ -52,6 +54,8 @@ export function useMiniPlayerVideo(
   const [isMuted, setIsMuted] = useState(isMutedStore)
   const [localCurrentTime, setLocalCurrentTime] = useState(0)
   const [localDuration, setLocalDuration] = useState(0)
+  const [videoTitle, setVideoTitle] = useState<string | null>(null)
+  const [videoEpisodeCount, setVideoEpisodeCount] = useState<number>(0)
 
   // Stable refs for callbacks
   const shouldAutoplayRef = useRef(false)
@@ -76,6 +80,29 @@ export function useMiniPlayerVideo(
     videoStatusRef.current = status
     setVideoStatus(status)
   }, [])
+
+  // Fetch video meta（title + episodeCount）on shortId change，仅供 mini header 展示
+  useEffect(() => {
+    if (!shortId) {
+      setVideoTitle(null)
+      setVideoEpisodeCount(0)
+      return
+    }
+    let cancelled = false
+    apiClient
+      .get<ApiResponse<Video>>(`/videos/${shortId}`, { skipAuth: true })
+      .then((res) => {
+        if (cancelled) return
+        setVideoTitle(res.data?.title ?? null)
+        setVideoEpisodeCount(res.data?.episodeCount ?? 0)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setVideoTitle(null)
+        setVideoEpisodeCount(0)
+      })
+    return () => { cancelled = true }
+  }, [shortId])
 
   // Fetch sources on shortId / episode change
   useEffect(() => {
@@ -328,6 +355,8 @@ export function useMiniPlayerVideo(
     isMuted,
     localCurrentTime,
     localDuration,
+    videoTitle,
+    videoEpisodeCount,
     handleToggleMute,
     handleTogglePlay,
     handleVideoCanPlay,
