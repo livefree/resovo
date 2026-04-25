@@ -263,7 +263,7 @@ export function MiniPlayer() {
         border: '1px solid var(--player-mini-border)',
         borderRadius: 'var(--radius-lg, 12px)',
         boxShadow: 'var(--player-mini-shadow)',
-        zIndex: 'var(--z-mini-player, 48)',
+        zIndex: 'var(--z-mini-player)',
         overflow: 'hidden',
         display: takeoverActive ? 'none' : 'block',
         pointerEvents: 'all',
@@ -342,7 +342,7 @@ export function MiniPlayer() {
         {/* Autoplay blocked */}
         {showAutoplayBlocked && (
           <div
-            style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'var(--player-mini-overlay-bg, oklch(0% 0 0 / 0.40))' }}
+            style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'var(--player-mini-overlay-bg)' }}
           >
             <svg width="40" height="40" viewBox="0 0 24 24" fill="var(--player-mini-overlay-icon)" aria-hidden>
               <path d="M6 4l15 8-15 8V4z" />
@@ -362,7 +362,7 @@ export function MiniPlayer() {
             display: (showPauseOverlay || showPlayingOverlay) ? 'flex' : 'none',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'var(--player-mini-overlay-bg, oklch(0% 0 0 / 0.40))',
+            background: 'var(--player-mini-overlay-bg)',
           }}
         >
           <svg width="40" height="40" viewBox="0 0 24 24" fill="var(--player-mini-overlay-icon)" aria-hidden>
