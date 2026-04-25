@@ -11,23 +11,19 @@ import {
   type MiniGeometryV1,
 } from '@/stores/_persist/mini-geometry'
 import { attachMiniPlayerDrag, attachViewportResizeWatcher } from '@/lib/mini-player/drag'
+import { useMiniPlayerVideo } from './useMiniPlayerVideo'
+import { MiniPlayerHeader } from './MiniPlayerHeader'
+import { MiniPlayerControls } from './MiniPlayerControls'
 
 /**
- * MiniPlayer — HANDOFF-31 骨架重构（非交互基础层）
+ * MiniPlayer — HANDOFF-32 视频交互核心层
  *
  * 几何模型（UI Contract §2）：
  *   - 容器 position: fixed，overflow: hidden，所有子元素绝对定位
  *   - Collapsed：height = videoH（= width × 9/16）
  *   - Expanded：height = videoH + 44px（控制栏）
- *   - Header（32px）position: absolute; top:0 叠加视频，不占容器高度
- *   - Header 默认 opacity:0 + pointer-events:none；hover 容器时显现
  *
- * 产品决策变更（2026-04-24）：
- *   - 展开/折叠按钮：切换 isExpanded（不再 setHostMode('full')）
- *   - 返回播放页：独立 ← 按钮，router.push 到 /watch
- *   - 关闭：handleClose() → releaseMiniPlayer()（完整清零 store）
- *   - 移动端：releaseMiniPlayer()（CSS display:none 为双保险，见 globals.css HANDOFF-31）
- *   - PiP：从 MiniPlayer 移除，由 PlayerShell 独占
+ * 视频逻辑由 useMiniPlayerVideo 钩子封装；Header/Controls 已拆为子组件。
  */
 export function MiniPlayer() {
   const router = useRouter()
@@ -38,6 +34,7 @@ export function MiniPlayer() {
   const hostOrigin = usePlayerStore((s) => s.hostOrigin)
   const geometry = usePlayerStore((s) => s.geometry)
   const takeoverActive = usePlayerStore((s) => s.takeoverActive)
+  const isPlaying = usePlayerStore((s) => s.isPlaying)
   const setGeometry = usePlayerStore((s) => s.setGeometry)
   const releaseMiniPlayer = usePlayerStore((s) => s.releaseMiniPlayer)
 
@@ -48,7 +45,6 @@ export function MiniPlayer() {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const dragHandleRef = useRef<HTMLDivElement | null>(null)
   const resizeHandleRef = useRef<HTMLDivElement | null>(null)
-  // videoRef：HANDOFF-32 接入，此阶段始终 null
   const videoRef = useRef<HTMLVideoElement | null>(null)
 
   const geometryRef = useRef<MiniGeometryV1>(geometry ?? MINI_GEOMETRY_DEFAULTS)
@@ -58,12 +54,32 @@ export function MiniPlayer() {
 
   const userInteractingRef = useRef(false)
   const headerHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const videoPointerDownRef = useRef<{ x: number; y: number; time: number } | null>(null)
+  const seekingRef = useRef(false)
 
-  // mount 后下一帧 fade in + spring pop-in
+  // mount 后下一帧 fade in
   useEffect(() => {
     const id = requestAnimationFrame(() => setVisible(true))
     return () => cancelAnimationFrame(id)
   }, [])
+
+  // ── Video logic hook ────────────────────────────────────────────
+  const {
+    activeSrc,
+    videoStatus,
+    isMuted,
+    localCurrentTime,
+    localDuration,
+    handleToggleMute,
+    handleTogglePlay,
+    handleVideoCanPlay,
+    handleVideoPlay,
+    handleVideoPause,
+    handleVideoError,
+    handleVideoTimeUpdate,
+    handleVideoLoadedMetadata,
+    handleAutoplayBlockedClick,
+  } = useMiniPlayerVideo(videoRef)
 
   const handleClose = useCallback(() => {
     videoRef.current?.pause()
@@ -71,31 +87,26 @@ export function MiniPlayer() {
     releaseMiniPlayer()
   }, [releaseMiniPlayer])
 
-  // 移动端防护（UI Contract §13.6）：MQ 匹配时立即 release，不仅靠 CSS display:none
+  // 移动端防护（UI Contract §13.6）
   useEffect(() => {
     const mq = window.matchMedia('(hover: none) and (pointer: coarse)')
-    if (mq.matches) {
-      handleClose()
-      return
-    }
-    const handler = (e: MediaQueryListEvent) => {
-      if (e.matches) handleClose()
-    }
+    if (mq.matches) { handleClose(); return }
+    const handler = (e: MediaQueryListEvent) => { if (e.matches) handleClose() }
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [handleClose])
 
-  // Esc 关闭 + m 键静音占位（HANDOFF-32 接入 videoRef 后实现 toggle mute）
+  // Esc 关闭 + m 键静音（UI Contract §9.2）
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') handleClose()
-      // m 键静音：videoRef.current?.muted = !videoRef.current?.muted（HANDOFF-32）
+      if (e.key === 'Escape') { handleClose(); return }
+      if (e.key === 'm' || e.key === 'M') handleToggleMute()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [handleClose])
+  }, [handleClose, handleToggleMute])
 
-  // 应用 geometry + isExpanded 到 DOM（left/top/width/height）
+  // 应用 geometry + isExpanded 到 DOM
   useLayoutEffect(() => {
     const el = containerRef.current
     if (!el || userInteractingRef.current) return
@@ -133,21 +144,15 @@ export function MiniPlayer() {
       onInteractionChange: (interacting) => { userInteractingRef.current = interacting },
     })
     const detachResizeWatcher = attachViewportResizeWatcher(container, getGeometry, commitGeometry)
-    return () => {
-      detachDrag()
-      detachResizeWatcher()
-    }
+    return () => { detachDrag(); detachResizeWatcher() }
   }, [setGeometry])
 
   function handleReturnToWatch() {
-    if (hostOrigin?.slug) {
-      router.push(`/${locale}/watch/${hostOrigin.slug}`)
-    }
+    if (hostOrigin?.slug) router.push(`/${locale}/watch/${hostOrigin.slug}`)
   }
 
   function handleToggleExpand() {
     setIsExpanded((prev) => !prev)
-    // useLayoutEffect 依赖 isExpanded，会自动重算 top（底角 dock 防超出）
   }
 
   function handleContainerMouseEnter() {
@@ -165,8 +170,77 @@ export function MiniPlayer() {
     }, 200)
   }
 
+  // ── Video area click-vs-drag discrimination (UI Contract §4.3) ─
+  function handleVideoAreaPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    videoPointerDownRef.current = { x: e.clientX, y: e.clientY, time: Date.now() }
+  }
+
+  function handleVideoAreaPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const pd = videoPointerDownRef.current
+    videoPointerDownRef.current = null
+    if (!pd) return
+    const dx = e.clientX - pd.x
+    const dy = e.clientY - pd.y
+    const dist = Math.sqrt(dx * dx + dy * dy)
+    if (dist < 5 && Date.now() - pd.time < 300) {
+      if (videoStatus === 'autoplay-blocked') {
+        handleAutoplayBlockedClick()
+      } else {
+        handleTogglePlay()
+      }
+    }
+  }
+
+  // ── Progress bar seek handlers ──────────────────────────────────
+  function seekFromPointer(e: React.PointerEvent<HTMLDivElement>) {
+    const video = videoRef.current
+    const el = e.currentTarget
+    if (!video || isNaN(video.duration) || video.duration === 0) return
+    const rect = el.getBoundingClientRect()
+    const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+    video.currentTime = fraction * video.duration
+  }
+
+  function handleProgressPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    e.preventDefault()
+    seekingRef.current = true
+    e.currentTarget.setPointerCapture(e.pointerId)
+    seekFromPointer(e)
+  }
+
+  function handleProgressPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!seekingRef.current) return
+    seekFromPointer(e)
+  }
+
+  function handleProgressPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    if (!seekingRef.current) return
+    seekingRef.current = false
+    e.currentTarget.releasePointerCapture(e.pointerId)
+    seekFromPointer(e)
+  }
+
+  function handleProgressKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    const video = videoRef.current
+    if (!video || isNaN(video.duration)) return
+    if (e.key === 'ArrowLeft') video.currentTime = Math.max(0, video.currentTime - 5)
+    else if (e.key === 'ArrowRight') video.currentTime = Math.min(video.duration, video.currentTime + 5)
+    else if (e.key === 'Home') video.currentTime = 0
+    else if (e.key === 'End') video.currentTime = video.duration
+    else return
+    e.preventDefault()
+  }
+
   const geom = geometry ?? MINI_GEOMETRY_DEFAULTS
   const videoH = deriveHeightFromWidth(geom.width)
+
+  // Overlay rendering logic
+  const showNoSrc = videoStatus === 'no-src'
+  const showLoading = videoStatus === 'loading'
+  const showError = videoStatus === 'error'
+  const showAutoplayBlocked = videoStatus === 'autoplay-blocked'
+  const showPauseOverlay = !showNoSrc && !showLoading && !showError && !showAutoplayBlocked && !isPlaying
+  const showPlayingOverlay = !showNoSrc && !showLoading && !showError && !showAutoplayBlocked && isPlaying && headerVisible
 
   return (
     <div
@@ -196,301 +270,140 @@ export function MiniPlayer() {
         opacity: visible ? 1 : 0,
         transform: visible ? 'scale(1) translateY(0)' : 'scale(0.92) translateY(8px)',
         transition: visible
-          ? 'opacity 180ms cubic-bezier(0.4, 0, 1, 1), transform 240ms cubic-bezier(0.34, 1.56, 0.64, 1)'
+          ? 'opacity 180ms cubic-bezier(0.4,0,1,1), transform 240ms cubic-bezier(0.34,1.56,0.64,1)'
           : 'none',
       }}
     >
-      {/* ── 视频区（绝对定位，Expanded 时底部为控制栏让出 44px） ── */}
+      {/* ── 视频区（绝对定位） ────────────────────────────────── */}
       <div
         data-testid="mini-player-video-area"
+        onPointerDown={handleVideoAreaPointerDown}
+        onPointerUp={handleVideoAreaPointerUp}
         style={{
           position: 'absolute',
           inset: isExpanded ? '0 0 44px 0' : '0 0 0 0',
           background: 'var(--player-video-area-bg)',
-          cursor: shortId ? 'pointer' : 'default',
+          cursor: !showNoSrc ? 'pointer' : 'default',
         }}
       >
-        {/* 无播放源占位（HANDOFF-32 接入 video 后替换） */}
-        {!shortId && (
-          <div
-            data-testid="mini-no-source"
+        {/* 真实 video 元素（UI Contract §4.1） */}
+        {activeSrc && (
+          <video
+            ref={videoRef}
+            onCanPlay={handleVideoCanPlay}
+            onPlay={handleVideoPlay}
+            onPause={handleVideoPause}
+            onError={handleVideoError}
+            onTimeUpdate={handleVideoTimeUpdate}
+            onLoadedMetadata={handleVideoLoadedMetadata}
             style={{
               position: 'absolute',
               inset: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '12px',
-              color: 'var(--fg-muted)',
-              cursor: 'default',
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
             }}
+            playsInline
+          />
+        )}
+
+        {/* 无播放源 */}
+        {showNoSrc && (
+          <div
+            data-testid="mini-no-source"
+            style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', color: 'var(--fg-muted)', cursor: 'default' }}
           >
             暂无可用播放源
           </div>
         )}
 
-        {/* Play/Pause overlay 占位（HANDOFF-32 填充，class="mini-video-overlay"） */}
+        {/* 加载中 */}
+        <div
+          data-testid="mini-loading"
+          aria-hidden={!showLoading}
+          style={{ position: 'absolute', inset: 0, display: showLoading ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: '2px solid var(--player-mini-overlay-icon)', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
+        </div>
+
+        {/* 播放错误 */}
+        <div
+          data-testid="mini-error"
+          aria-hidden={!showError}
+          style={{ position: 'absolute', inset: 0, display: showError ? 'flex' : 'none', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--player-mini-danger-fg)' }} aria-hidden>
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          <span style={{ fontSize: '12px', color: 'var(--fg-muted)' }}>播放失败</span>
+        </div>
+
+        {/* Autoplay blocked */}
+        {showAutoplayBlocked && (
+          <div
+            style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'var(--player-mini-overlay-bg, oklch(0% 0 0 / 0.40))' }}
+          >
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="var(--player-mini-overlay-icon)" aria-hidden>
+              <path d="M6 4l15 8-15 8V4z" />
+            </svg>
+            <span style={{ fontSize: '10px', color: 'var(--fg-muted)' }}>点击播放</span>
+          </div>
+        )}
+
+        {/* Play/Pause overlay（UI Contract §4.2） */}
         <div
           data-testid="mini-play-overlay"
           className="mini-video-overlay"
           aria-hidden
-          style={{ position: 'absolute', inset: 0, display: 'none' }}
-        />
-
-        {/* Loading overlay 占位（HANDOFF-32 填充） */}
-        <div
-          data-testid="mini-loading"
-          aria-hidden
-          style={{ position: 'absolute', inset: 0, display: 'none' }}
-        />
-
-        {/* Error overlay 占位（HANDOFF-32 填充） */}
-        <div
-          data-testid="mini-error"
-          aria-hidden
-          style={{ position: 'absolute', inset: 0, display: 'none' }}
-        />
-      </div>
-
-      {/* ── Header overlay（32px，hover 时显现，UI Contract §2 + §3） ── */}
-      <div
-        ref={dragHandleRef}
-        data-mini-drag-handle
-        data-testid="mini-player-drag-handle"
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: '32px',
-          zIndex: 2,
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0 8px',
-          gap: '6px',
-          background: 'var(--player-mini-header-bg)',
-          opacity: headerVisible ? 1 : 0,
-          pointerEvents: headerVisible ? 'all' : 'none',
-          transition: 'opacity 150ms ease',
-          cursor: 'move',
-          touchAction: 'none',
-          userSelect: 'none',
-        }}
-      >
-        {/* 返回播放页按钮（UI Contract §3.3） */}
-        <button
-          type="button"
-          data-testid="mini-player-return-btn"
-          aria-label="返回播放页"
-          aria-disabled={!hostOrigin?.slug}
-          tabIndex={headerVisible ? 0 : -1}
-          onClick={handleReturnToWatch}
-          onPointerDown={(e) => e.stopPropagation()}
-          style={{
-            width: '28px',
-            height: '28px',
-            border: 'none',
-            borderRadius: '4px',
-            background: 'transparent',
-            cursor: hostOrigin?.slug ? 'pointer' : 'default',
-            color: 'var(--player-mini-btn-color)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            opacity: hostOrigin?.slug ? 1 : 0.4,
-            pointerEvents: hostOrigin?.slug ? 'auto' : 'none',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--player-mini-btn-hover-bg)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-            <path d="M19 12H5m0 0l7 7m-7-7l7-7" />
-          </svg>
-        </button>
-
-        {/* 标题区（flex-1，单行截断） */}
-        <span
-          style={{
-            flex: 1,
-            minWidth: 0,
-            fontSize: '12px',
-            color: 'var(--fg-muted)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            pointerEvents: 'none',
-          }}
-        >
-          {shortId ? '正在播放' : '迷你播放器'}
-        </span>
-
-        {/* 展开/折叠按钮（UI Contract §3.3） */}
-        <button
-          type="button"
-          data-testid="mini-player-toggle-expand"
-          aria-label={isExpanded ? '折叠' : '展开'}
-          aria-expanded={isExpanded}
-          tabIndex={headerVisible ? 0 : -1}
-          onClick={handleToggleExpand}
-          onPointerDown={(e) => e.stopPropagation()}
-          style={{
-            width: '28px',
-            height: '28px',
-            border: 'none',
-            borderRadius: '4px',
-            background: 'transparent',
-            cursor: 'pointer',
-            color: 'var(--player-mini-btn-color)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--player-mini-btn-hover-bg)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-            {isExpanded
-              ? <path d="M18 15l-6-6-6 6" />
-              : <path d="M6 9l6 6 6-6" />
-            }
-          </svg>
-        </button>
-
-        {/* 关闭按钮（UI Contract §3.3） */}
-        <button
-          type="button"
-          data-testid="mini-player-close-btn"
-          aria-label="关闭播放器"
-          tabIndex={headerVisible ? 0 : -1}
-          onClick={handleClose}
-          onPointerDown={(e) => e.stopPropagation()}
-          style={{
-            width: '28px',
-            height: '28px',
-            border: 'none',
-            borderRadius: '4px',
-            background: 'transparent',
-            cursor: 'pointer',
-            color: 'var(--player-mini-btn-color)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--player-mini-btn-hover-bg)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
-      {/* ── 控制栏占位（Expanded 态，HANDOFF-32 填充内容） ── */}
-      {isExpanded && (
-        <div
           style={{
             position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: '44px',
-            background: 'var(--player-mini-ctrl-bg)',
-            display: 'flex',
+            inset: 0,
+            display: (showPauseOverlay || showPlayingOverlay) ? 'flex' : 'none',
             alignItems: 'center',
-            padding: '0 8px',
-            gap: '8px',
+            justifyContent: 'center',
+            background: 'var(--player-mini-overlay-bg, oklch(0% 0 0 / 0.40))',
           }}
         >
-          {/* Play/Pause 按钮（HANDOFF-32 激活） */}
-          <button
-            type="button"
-            data-testid="mini-player-play-pause"
-            aria-label="播放"
-            disabled
-            style={{
-              width: '32px',
-              height: '32px',
-              border: 'none',
-              borderRadius: '4px',
-              background: 'transparent',
-              cursor: 'not-allowed',
-              opacity: 0.4,
-              color: 'var(--player-mini-ctrl-fg)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <path d="M6 4l15 8-15 8V4z" />
-            </svg>
-          </button>
-
-          {/* 进度条（HANDOFF-32 激活） */}
-          <div
-            data-testid="mini-player-progress"
-            role="slider"
-            aria-label="播放进度"
-            aria-valuemin={0}
-            aria-valuemax={0}
-            aria-valuenow={0}
-            aria-valuetext="00:00 / --:--"
-            tabIndex={0}
-            style={{
-              flex: 1,
-              height: '4px',
-              background: 'var(--player-mini-progress-track)',
-              borderRadius: '2px',
-              pointerEvents: 'none',
-              opacity: 0.4,
-            }}
-          />
-
-          {/* 时间显示 */}
-          <span
-            style={{
-              fontSize: '11px',
-              color: 'var(--player-mini-ctrl-fg)',
-              minWidth: '72px',
-              textAlign: 'center',
-              flexShrink: 0,
-            }}
-          >
-            00:00 / --:--
-          </span>
-
-          {/* 静音按钮（HANDOFF-32 激活） */}
-          <button
-            type="button"
-            data-testid="mini-player-mute"
-            aria-label="静音"
-            disabled
-            style={{
-              width: '24px',
-              height: '24px',
-              border: 'none',
-              borderRadius: '4px',
-              background: 'transparent',
-              cursor: 'not-allowed',
-              opacity: 0.4,
-              color: 'var(--player-mini-ctrl-fg)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-              <path d="M11 5L6 9H2v6h4l5 4V5z" />
-              <path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" />
-            </svg>
-          </button>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="var(--player-mini-overlay-icon)" aria-hidden>
+            {showPauseOverlay
+              ? <path d="M6 4l15 8-15 8V4z" />
+              : <><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></>
+            }
+          </svg>
         </div>
+      </div>
+
+      {/* ── Header overlay ───────────────────────────────────── */}
+      <MiniPlayerHeader
+        dragHandleRef={dragHandleRef}
+        headerVisible={headerVisible}
+        isExpanded={isExpanded}
+        shortId={shortId}
+        hostOrigin={hostOrigin}
+        onReturnToWatch={handleReturnToWatch}
+        onToggleExpand={handleToggleExpand}
+        onClose={handleClose}
+      />
+
+      {/* ── Controls bar（Expanded 态） ───────────────────────── */}
+      {isExpanded && (
+        <MiniPlayerControls
+          isPlaying={isPlaying}
+          localCurrentTime={localCurrentTime}
+          localDuration={localDuration}
+          isMuted={isMuted}
+          videoStatus={videoStatus}
+          onTogglePlay={handleTogglePlay}
+          onToggleMute={handleToggleMute}
+          onProgressPointerDown={handleProgressPointerDown}
+          onProgressPointerMove={handleProgressPointerMove}
+          onProgressPointerUp={handleProgressPointerUp}
+          onProgressKeyDown={handleProgressKeyDown}
+        />
       )}
 
-      {/* ── Resize handle（右下角，UI Contract §2.3） ── */}
+      {/* ── Resize handle ───────────────────────────────────── */}
       <div
         ref={resizeHandleRef}
         data-mini-resize-handle

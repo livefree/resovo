@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 
 // ── 全局 mock：matchMedia / scrollY ───────────────────────────────
 
@@ -39,6 +39,7 @@ const { mockPlayerState } = vi.hoisted(() => ({
     hostOrigin: null as { href: string; slug: string } | null,
     geometry: null,
     takeoverActive: false,
+    isPlaying: false,
     setGeometry: vi.fn(),
     releaseMiniPlayer: vi.fn(),
   },
@@ -56,18 +57,53 @@ vi.mock('@/lib/mini-player/drag', () => ({
   attachViewportResizeWatcher: () => () => {},
 }))
 
+// ── useMiniPlayerVideo（控制视频状态）────────────────────────────
+
+const { mockVideoState } = vi.hoisted(() => ({
+  mockVideoState: {
+    activeSrc: null as string | null,
+    videoStatus: 'no-src' as import('@/app/[locale]/_lib/player/useMiniPlayerVideo').VideoStatus,
+    isMuted: false,
+    localCurrentTime: 0,
+    localDuration: 0,
+    handleToggleMute: vi.fn(),
+    handleTogglePlay: vi.fn(),
+    handleVideoCanPlay: vi.fn(),
+    handleVideoPlay: vi.fn(),
+    handleVideoPause: vi.fn(),
+    handleVideoError: vi.fn(),
+    handleVideoTimeUpdate: vi.fn(),
+    handleVideoLoadedMetadata: vi.fn(),
+    handleAutoplayBlockedClick: vi.fn(),
+  },
+}))
+
+vi.mock('@/app/[locale]/_lib/player/useMiniPlayerVideo', () => ({
+  useMiniPlayerVideo: () => mockVideoState,
+}))
+
 // ── 测试工具：重置 mock 状态 ──────────────────────────────────────
 
 beforeEach(() => {
   mockPlayerState.shortId = null
   mockPlayerState.hostOrigin = null
   mockPlayerState.takeoverActive = false
+  mockPlayerState.isPlaying = false
   mockPlayerState.setGeometry.mockReset()
   mockPlayerState.releaseMiniPlayer.mockReset()
   mockPush.mockReset()
+  // reset video state
+  mockVideoState.activeSrc = null
+  mockVideoState.videoStatus = 'no-src'
+  mockVideoState.isMuted = false
+  mockVideoState.localCurrentTime = 0
+  mockVideoState.localDuration = 0
+  mockVideoState.handleTogglePlay.mockReset()
+  mockVideoState.handleToggleMute.mockReset()
+  mockVideoState.handleAutoplayBlockedClick.mockReset()
 })
 
-// ── 测试套件 ─────────────────────────────────────────────────────
+// ── HANDOFF-31 基础测试（不变）──────────────────────────────────
 
 describe('MiniPlayer', () => {
   it('渲染 role="region" aria-label="迷你播放器"', async () => {
@@ -76,13 +112,14 @@ describe('MiniPlayer', () => {
     expect(screen.getByRole('region', { name: '迷你播放器' })).toBeTruthy()
   })
 
-  it('无 shortId 时显示 mini-no-source', async () => {
+  it('无 shortId + videoStatus=no-src 时显示 mini-no-source', async () => {
     const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
     render(<MiniPlayer />)
     expect(screen.getByTestId('mini-no-source')).toBeTruthy()
   })
 
-  it('有 shortId 时不显示 mini-no-source', async () => {
+  it('videoStatus=idle 时不显示 mini-no-source', async () => {
+    mockVideoState.videoStatus = 'idle'
     mockPlayerState.shortId = 'abc123'
     const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
     render(<MiniPlayer />)
@@ -165,10 +202,96 @@ describe('MiniPlayer', () => {
     render(<MiniPlayer />)
     expect(screen.getByTestId('mini-player-return-btn')).toBeTruthy()
     expect(screen.getByTestId('mini-player-toggle-expand')).toBeTruthy()
-    // mini-play-overlay = 视频区 overlay（不含控制栏按钮，两者 testid 已分离避免 Expanded 时冲突）
     expect(screen.getByTestId('mini-play-overlay')).toBeTruthy()
     expect(screen.getByTestId('mini-loading')).toBeTruthy()
     expect(screen.getByTestId('mini-error')).toBeTruthy()
     expect(screen.getByTestId('mini-no-source')).toBeTruthy()
+  })
+})
+
+// ── HANDOFF-32 视频交互测试 ──────────────────────────────────────
+
+describe('MiniPlayer — HANDOFF-32 视频状态', () => {
+  it('videoStatus=loading 时显示 mini-loading，不显示 mini-no-source', async () => {
+    mockVideoState.videoStatus = 'loading'
+    mockPlayerState.shortId = 'abc123'
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    const loadingEl = screen.getByTestId('mini-loading')
+    expect(loadingEl.style.display).toBe('flex')
+    expect(screen.queryByTestId('mini-no-source')).toBeNull()
+  })
+
+  it('videoStatus=error 时显示 mini-error overlay（播放失败文案）', async () => {
+    mockVideoState.videoStatus = 'error'
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    const errorEl = screen.getByTestId('mini-error')
+    expect(errorEl.style.display).toBe('flex')
+    expect(errorEl.textContent).toContain('播放失败')
+  })
+
+  it('videoStatus=autoplay-blocked 时显示 play 图标和"点击播放"文案', async () => {
+    mockVideoState.videoStatus = 'autoplay-blocked'
+    mockPlayerState.shortId = 'abc123'
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    expect(screen.getByText('点击播放')).toBeTruthy()
+    expect(screen.queryByTestId('mini-no-source')).toBeNull()
+  })
+
+  it('videoStatus=idle + isPlaying=false 时 mini-play-overlay display:flex（暂停图标）', async () => {
+    mockVideoState.videoStatus = 'idle'
+    mockPlayerState.isPlaying = false
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    const overlay = screen.getByTestId('mini-play-overlay')
+    expect(overlay.style.display).toBe('flex')
+  })
+
+  it('videoStatus=idle + isPlaying=true + 未 hover 时 mini-play-overlay 隐藏', async () => {
+    mockVideoState.videoStatus = 'idle'
+    mockPlayerState.isPlaying = true
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    const overlay = screen.getByTestId('mini-play-overlay')
+    expect(overlay.style.display).toBe('none')
+  })
+
+  it('handleClose 调用后 releaseMiniPlayer 被触发', async () => {
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    fireEvent.click(screen.getByRole('button', { name: '关闭播放器' }))
+    expect(mockPlayerState.releaseMiniPlayer).toHaveBeenCalledTimes(1)
+  })
+
+  it('activeSrc 非空时 video 元素出现在 DOM 中', async () => {
+    // 模拟 hook 已解析出播放地址（含 fallback 到 sources[0] 的情况）
+    mockVideoState.activeSrc = 'http://cdn.example.com/sources0.mp4'
+    mockVideoState.videoStatus = 'loading'
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    await waitFor(() => {
+      const video = document.querySelector('video')
+      expect(video).not.toBeNull()
+    })
+  })
+
+  it('Expanded 时 play/pause 按钮 aria-label 随 isPlaying 变化', async () => {
+    mockVideoState.videoStatus = 'idle'
+    mockPlayerState.isPlaying = true
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    const toggleBtn = screen.getByTestId('mini-player-toggle-expand')
+    await act(async () => { fireEvent.click(toggleBtn) })
+    const playPauseBtn = screen.getByTestId('mini-player-play-pause')
+    expect(playPauseBtn.getAttribute('aria-label')).toBe('暂停')
+  })
+
+  it('m 键触发 handleToggleMute', async () => {
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    fireEvent.keyDown(document, { key: 'm' })
+    expect(mockVideoState.handleToggleMute).toHaveBeenCalledTimes(1)
   })
 })

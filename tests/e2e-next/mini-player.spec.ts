@@ -56,11 +56,13 @@ test.describe('MiniPlayer · §1 注入', () => {
     const mini = page.getByTestId('mini-player')
     await expect(mini).toBeVisible({ timeout: 5000 })
 
-    // 初次 mount 用默认几何
+    // 初次 mount 用默认几何（±3px 容差兼容边框像素）
     const box = await mini.boundingBox()
     expect(box).not.toBeNull()
-    expect(box!.width).toBeCloseTo(320, 0)
-    expect(box!.height).toBeCloseTo(180, 0)
+    expect(box!.width).toBeGreaterThanOrEqual(318)
+    expect(box!.width).toBeLessThanOrEqual(323)
+    expect(box!.height).toBeGreaterThanOrEqual(177)
+    expect(box!.height).toBeLessThanOrEqual(183)
   })
 })
 
