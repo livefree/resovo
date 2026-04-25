@@ -142,7 +142,7 @@
 
   /* watch/player page alias — spec §15 */
   --player-panel-w:     360px;              /* 侧栏宽度                  */
-  --player-panel-gap:   var(--space-4);     /* 播放器-侧栏间距 16px      */
+  --player-panel-gap:   var(--space-6);     /* 播放器-侧栏间距 24px（HANDOFF-30）*/
   --player-ep-h:        36px;              /* 侧栏选集按钮高度           */
   --player-ep-gap:      var(--space-1-5);   /* 侧栏选集网格间距 6px      */
   --player-panel-max-h: 360px;             /* 侧栏选集区最大高度         */

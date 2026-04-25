@@ -177,7 +177,7 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
 
   if (loading) {
     return (
-      <div className="max-w-wide mx-auto px-4 py-4">
+      <div className="max-w-wide mx-auto px-10 py-4">
         <div
           className="w-full rounded-lg animate-pulse"
           style={{ aspectRatio: '16/9', background: 'var(--bg-surface)' }}
@@ -323,9 +323,9 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
     >
       {/* 播放器容器：max-w-wide(1600px)，影院模式去除 px/py */}
       <div
-        className={cn('max-w-wide mx-auto', !isTheater && 'px-4 py-4')}
+        className={cn('max-w-wide mx-auto', !isTheater && 'px-10 py-4')}
       >
-        <div className={cn('mb-4 space-y-1', isTheater && 'px-4 pt-4')}>
+        <div className={cn('mb-4 space-y-1', isTheater && 'px-10 pt-4')}>
           <h1
             className="text-xl md:text-2xl font-bold line-clamp-2"
             style={{ color: 'var(--fg-default)' }}
@@ -364,7 +364,7 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
                 aspectRatio: '16/9',
                 background: 'black',
                 borderColor: 'var(--border-default)',
-                borderRadius: isTheater ? 0 : '0.5rem',
+                borderRadius: isTheater ? 0 : '12px',
               }}
               data-testid="player-video-area"
             >
@@ -419,19 +419,21 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
 
           <div className={getSidePanelClass(isTheater)} data-testid="player-side-panel">
             {!isTheater ? renderSelectionPanel('h-full') : null}
+          </div>
+        </div>
 
-            {!isTheater ? (
-              <div
-                className="p-4 rounded-lg text-xs text-center border"
-                style={{
-                  background: 'var(--bg-surface)',
-                  borderColor: 'var(--border-default)',
-                  color: 'var(--fg-muted)',
-                }}
-              >
-                更多推荐内容即将上线
-              </div>
-            ) : null}
+        {/* 下方内容区约束容器（HANDOFF-30 §15）：max-w-1280px，左右各 24px */}
+        <div className="max-w-[1280px] mx-auto px-6 mt-6">
+          <div
+            className="p-4 rounded-lg text-xs text-center border"
+            style={{
+              background: 'var(--bg-surface)',
+              borderColor: 'var(--border-default)',
+              color: 'var(--fg-muted)',
+            }}
+            data-testid="player-lower-section"
+          >
+            更多推荐内容即将上线
           </div>
         </div>
       </div>

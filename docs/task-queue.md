@@ -10515,7 +10515,7 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
      - 主题切换在抽屉内可用
      - 动效强度滑块改变 `--motion-scale` CSS 变量
 
-9. **HANDOFF-30 — 播放页 §15 规格对齐（5 项布局修正）**（状态：📋 待执行）
+9. **HANDOFF-30 — 播放页 §15 规格对齐（5 项布局修正）**（状态：✅ 已完成 2026-04-24）
    - 创建时间：2026-04-24
    - 建议模型：sonnet
    - 估时：0.3d
@@ -10538,6 +10538,7 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
      - 影院模式圆角已为 0，不受本改动影响
      - `--player-panel-gap` 为 CSS token，修改后影院/正常模式下 gap 均通过变量生效
      - 暂无实际 lower section 内容（HANDOFF-30 范围内仅做容器和占位），等真实内容落地时不需再调整容器结构
+   - **完成备注**：5 项全部实现。骨架屏/正常容器 px-4→px-10；影院标题区 px-4→px-10；圆角 0.5rem→12px；新增 `max-w-[1280px] mx-auto px-6 mt-6` 下方内容区容器（含占位 + data-testid="player-lower-section"）；`--player-panel-gap` var(--space-4)→var(--space-6)；"更多推荐内容即将上线"从侧栏移至下方内容区。typecheck / lint / 1682 tests 全绿。执行模型：claude-sonnet-4-6；子代理调用：无。
 
 #### REVIEW-C — 最终独立审核 + Phase 2 Close
 
