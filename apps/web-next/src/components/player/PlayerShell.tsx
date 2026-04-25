@@ -55,10 +55,15 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
   const shortId = extractShortId(slug)
 
   useEffect(() => {
-    const ep = Number(searchParams.get('ep') ?? '1') || 1
-    // Snapshot mini player position before initPlayer resets currentTime to 0
+    // Snapshot all mini player state BEFORE initPlayer resets them to defaults
     const snap = usePlayerStore.getState()
-    const priorTime = snap.shortId === shortId ? snap.currentTime : 0
+    const isSameVideo = snap.shortId === shortId
+    // Episode: URL param wins if explicit; otherwise inherit from mini player (same video)
+    const urlEp = searchParams.get('ep')
+    const ep = urlEp ? (Number(urlEp) || 1) : (isSameVideo ? snap.currentEpisode : 1)
+    // currentTime and activeSourceIndex are zeroed by initPlayer — must capture now
+    const priorTime = isSameVideo ? snap.currentTime : 0
+    const priorSourceIndex = isSameVideo ? snap.activeSourceIndex : 0
     setLoading(true)
     apiClient
       .get<ApiResponse<Video>>(`/videos/${shortId}`, { skipAuth: true })
@@ -84,9 +89,8 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
               }))
             )
             setSources(newSources)
-            // Preserve user-selected source index across mini↔full transitions
-            const prevIdx = usePlayerStore.getState().activeSourceIndex
-            setActiveSourceIndex(prevIdx < newSources.length ? prevIdx : 0)
+            // Restore source index from snapshot (initPlayer already zeroed it)
+            setActiveSourceIndex(priorSourceIndex < newSources.length ? priorSourceIndex : 0)
             // Seamless mini→full resume: seek to mini position and suppress ResumePrompt
             if (priorTime > 30) {
               setStartTime(priorTime)
