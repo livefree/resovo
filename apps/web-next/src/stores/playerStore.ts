@@ -68,6 +68,12 @@ interface PlayerState {
   // === HANDOFF-31 新增：完整关闭 + 清零 mini 播放状态 ===
   releaseMiniPlayer: () => void
 
+  // === 过渡自动播放意图（transient，不持久化）===
+  // RoutePlayerSync 在切 mini 前置 true；useMiniPlayerVideo activeSrc effect 消费后清零
+  // 目的：绕过 onPause 竞态——full player 卸载时 pause 事件会在 activeSrc 到达前把 isPlaying 置 false
+  miniAutoplay: boolean
+  setMiniAutoplay: (v: boolean) => void
+
   // === HANDOFF-34 新增：isMuted / volume（sessionStorage 协议 v1.1）===
   isMuted: boolean
   volume: number
@@ -96,8 +102,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   isMuted: false,
   volume: 1,
   flipOrigin: null,
+  miniAutoplay: false,
 
   setActiveSourceIndex: (index) => set({ activeSourceIndex: index }),
+  setMiniAutoplay: (v) => set({ miniAutoplay: v }),
   setIsMuted: (muted) => set({ isMuted: muted }),
   setVolume: (vol) => set({ volume: vol }),
   setFlipOrigin: (rect) => set({ flipOrigin: rect }),

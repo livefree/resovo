@@ -50,6 +50,7 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
   const [loading, setLoading] = useState(true)
   const [startTime, setStartTime] = useState<number | undefined>(undefined)
   const [playerVersion, setPlayerVersion] = useState(0)
+  const [autoplayOnResume, setAutoplayOnResume] = useState(false)
   const [activePanelTab, setActivePanelTab] = useState<'episodes' | 'sources'>('episodes')
 
   const shortId = extractShortId(slug)
@@ -91,9 +92,11 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
             setSources(newSources)
             // Restore source index from snapshot (initPlayer already zeroed it)
             setActiveSourceIndex(priorSourceIndex < newSources.length ? priorSourceIndex : 0)
-            // Seamless mini→full resume: seek to mini position and suppress ResumePrompt
+            // Seamless mini→full resume: seek + autoplay + suppress ResumePrompt
             if (priorTime > 30) {
               setStartTime(priorTime)
+              setAutoplayOnResume(true)
+              setPlayerVersion((v) => v + 1)   // 强制 VideoPlayer 以新 startTime+autoplay 重挂
               clearProgress(shortId, ep)
             }
           })
@@ -391,11 +394,12 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
                     onEpisodeChange={inlineEpisodes ? handleEpisodeChange : undefined}
                     onNext={hasNext ? () => setEpisode(currentEpisode + 1) : undefined}
                     onTimeUpdate={handleTimeUpdate}
-                    onPlay={() => setPlaying(true)}
+                    onPlay={() => { setPlaying(true); setAutoplayOnResume(false) }}
                     onPause={() => setPlaying(false)}
                     onEnded={() => setPlaying(false)}
                     onTheaterChange={handleTheaterChange}
                     startTime={startTime}
+                    autoplay={autoplayOnResume}
                     className="absolute inset-0"
                   />
                   <div className="absolute inset-0 z-[120] pointer-events-none flex items-end justify-center pb-20 md:pb-24">

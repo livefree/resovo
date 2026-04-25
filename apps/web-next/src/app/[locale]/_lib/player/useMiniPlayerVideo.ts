@@ -131,8 +131,17 @@ export function useMiniPlayerVideo(
 
     if (activeSrc) {
       destroyHls()
-      shouldAutoplayRef.current = isPlayingStore
-      startTimeRef.current = currentTimeStore
+      // 同步读 store 快照，绕过两个竞态问题：
+      // 1. isPlaying：onPause 在 full player 卸载时早于 activeSrc 到达，闭包值已是 false
+      // 2. miniAutoplay：RoutePlayerSync 在 setHostMode('mini') 前同步写入此标志
+      // 3. currentTime：闭包快照在 activeSrc=null 分支时被清零，需重读最新值
+      const snap = usePlayerStore.getState()
+      const resumeTime = snap.currentTime
+      const autoplay = snap.miniAutoplay
+      if (autoplay) snap.setMiniAutoplay(false)   // 消费后立即清零
+      shouldAutoplayRef.current = autoplay
+      startTimeRef.current = resumeTime
+
       // apply persisted mute/volume from store (restored from sessionStorage)
       video.muted = isMutedRef.current
       video.volume = volumeRef.current
@@ -145,17 +154,18 @@ export function useMiniPlayerVideo(
           if (cancelled || !videoRef.current) return
           if (!Hls.isSupported()) {
             videoRef.current.src = activeSrc
-            if (currentTimeStore > 0) videoRef.current.currentTime = currentTimeStore
+            if (resumeTime > 0) videoRef.current.currentTime = resumeTime
             return
           }
-          const hls = new Hls()
+          // startPosition 让 hls.js 在 manifest 解析后直接跳到目标位置，
+          // 比 loadedmetadata 后再 seek 更可靠（避免 segment 未加载时 currentTime 被重置）
+          const hls = new Hls({ startPosition: resumeTime > 0 ? resumeTime : -1 })
           hlsRef.current = hls
           hls.loadSource(activeSrc)
           hls.attachMedia(videoRef.current)
           hls.on(Hls.Events.ERROR, (_e, data) => {
             if (data.fatal) updateVideoStatus('error')
           })
-          if (currentTimeStore > 0) videoRef.current.currentTime = currentTimeStore
         }).catch(() => {
           if (cancelled || !videoRef.current) return
           videoRef.current.src = activeSrc
@@ -164,7 +174,7 @@ export function useMiniPlayerVideo(
         video.src = activeSrc
         // Best-effort immediate seek; browsers that reset currentTime on loadedmetadata
         // will be corrected in handleVideoLoadedMetadata via startTimeRef
-        if (currentTimeStore > 0) video.currentTime = currentTimeStore
+        if (resumeTime > 0) video.currentTime = resumeTime
       }
     } else {
       destroyHls()

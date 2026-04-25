@@ -21,6 +21,7 @@ export function RoutePlayerSync() {
   const hostMode = usePlayerStore((s) => s.hostMode)
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const setHostMode = usePlayerStore((s) => s.setHostMode)
+  const setMiniAutoplay = usePlayerStore((s) => s.setMiniAutoplay)
 
   // 仅在 watch 页面内更新，离开后冻结，保留导航前的播放状态
   const watchPlayingRef = useRef(false)
@@ -41,6 +42,9 @@ export function RoutePlayerSync() {
 
       if (wasWatch && !isWatch && hostMode === 'full') {
         if (watchPlayingRef.current) {
+          // setMiniAutoplay 在 setHostMode 前同步写入，确保 useMiniPlayerVideo
+          // activeSrc effect 运行时能读到 true（onPause 竞态会在之后才把 isPlaying 置 false）
+          setMiniAutoplay(true)
           setHostMode('mini')
         } else {
           setHostMode('closed')
