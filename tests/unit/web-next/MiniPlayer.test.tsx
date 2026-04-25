@@ -41,6 +41,7 @@ const { mockPlayerState } = vi.hoisted(() => ({
     takeoverActive: false,
     isPlaying: false,
     setGeometry: vi.fn(),
+    setHostMode: vi.fn(),
     releaseMiniPlayer: vi.fn(),
   },
 }))
@@ -90,6 +91,7 @@ beforeEach(() => {
   mockPlayerState.takeoverActive = false
   mockPlayerState.isPlaying = false
   mockPlayerState.setGeometry.mockReset()
+  mockPlayerState.setHostMode.mockReset()
   mockPlayerState.releaseMiniPlayer.mockReset()
   mockPush.mockReset()
   // reset video state
@@ -293,5 +295,72 @@ describe('MiniPlayer — HANDOFF-32 视频状态', () => {
     render(<MiniPlayer />)
     fireEvent.keyDown(document, { key: 'm' })
     expect(mockVideoState.handleToggleMute).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ── HANDOFF-33 主路径治理测试 ────────────────────────────────────
+
+describe('MiniPlayer — HANDOFF-33 P1-1 快捷键守卫', () => {
+  it('input 聚焦时 Esc 不触发 releaseMiniPlayer', async () => {
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(mockPlayerState.releaseMiniPlayer).not.toHaveBeenCalled()
+    document.body.removeChild(input)
+  })
+
+  it('textarea 聚焦时 m 键不触发 handleToggleMute', async () => {
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    const textarea = document.createElement('textarea')
+    document.body.appendChild(textarea)
+    fireEvent.keyDown(textarea, { key: 'm' })
+    expect(mockVideoState.handleToggleMute).not.toHaveBeenCalled()
+    document.body.removeChild(textarea)
+  })
+
+  it('dialog[aria-modal="true"] 打开时 Esc 不触发 releaseMiniPlayer', async () => {
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('aria-modal', 'true')
+    document.body.appendChild(dialog)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(mockPlayerState.releaseMiniPlayer).not.toHaveBeenCalled()
+    document.body.removeChild(dialog)
+  })
+
+  it('非 editable 元素且无 modal 时 Esc 正常触发 releaseMiniPlayer', async () => {
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(mockPlayerState.releaseMiniPlayer).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('MiniPlayer — HANDOFF-33 P1-2 返回按钮竞态修复', () => {
+  it('点击返回按钮 → 先调 setHostMode("full") 再 router.push', async () => {
+    mockPlayerState.hostOrigin = { href: '/watch/test-slug', slug: 'test-slug' }
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    const callOrder: string[] = []
+    mockPlayerState.setHostMode.mockImplementation(() => callOrder.push('setHostMode'))
+    mockPush.mockImplementation(() => callOrder.push('push'))
+    fireEvent.click(screen.getByTestId('mini-player-return-btn'))
+    expect(callOrder).toEqual(['setHostMode', 'push'])
+    expect(mockPlayerState.setHostMode).toHaveBeenCalledWith('full')
+    expect(mockPush).toHaveBeenCalledWith('/zh-CN/watch/test-slug')
+  })
+
+  it('无 hostOrigin 时点击返回按钮不调 setHostMode 和 router.push', async () => {
+    mockPlayerState.hostOrigin = null
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    fireEvent.click(screen.getByTestId('mini-player-return-btn'))
+    expect(mockPlayerState.setHostMode).not.toHaveBeenCalled()
+    expect(mockPush).not.toHaveBeenCalled()
   })
 })

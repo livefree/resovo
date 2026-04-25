@@ -9,3 +9,4 @@
 > last_reviewed: 2026-04-25
 >
 > 单任务工作台：同一时刻只保留 1 个进行中任务。任务完成后删除卡片，历史记录见 `docs/changelog.md`，任务规划见 `docs/task-queue.md`。
+

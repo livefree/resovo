@@ -23,6 +23,7 @@ export interface UseMiniPlayerVideoReturn {
   handleVideoTimeUpdate: () => void
   handleVideoLoadedMetadata: () => void
   handleAutoplayBlockedClick: () => void
+  handleSeek: (time: number) => void
 }
 
 const TIMEUPDATE_THROTTLE_MS = 250
@@ -53,6 +54,8 @@ export function useMiniPlayerVideo(
   const shortIdRef = useRef(shortId)
   const currentEpisodeRef = useRef(currentEpisode)
   const setCurrentTimeRef = useRef(setCurrentTime)
+  // P0-2: HLS instance ref
+  const hlsRef = useRef<import('hls.js').default | null>(null)
 
   useEffect(() => { shortIdRef.current = shortId }, [shortId])
   useEffect(() => { currentEpisodeRef.current = currentEpisode }, [currentEpisode])
@@ -102,20 +105,64 @@ export function useMiniPlayerVideo(
   }, [shortId, currentEpisode])
 
   // Apply src to video element; snapshot autoplay intent and resume position
+  // P0-2: HLS.js support for .m3u8 sources on browsers without native HLS
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
+
+    function destroyHls() {
+      if (hlsRef.current) {
+        hlsRef.current.destroy()
+        hlsRef.current = null
+      }
+    }
+
+    let cancelled = false
+
     if (activeSrc) {
+      destroyHls()
       shouldAutoplayRef.current = isPlayingStore
-      startTimeRef.current = currentTimeStore  // saved for loadedmetadata re-apply
-      video.src = activeSrc
-      // Best-effort immediate seek; browsers that reset currentTime on loadedmetadata
-      // will be corrected in handleVideoLoadedMetadata via startTimeRef
-      if (currentTimeStore > 0) video.currentTime = currentTimeStore
+      startTimeRef.current = currentTimeStore
+
+      const isHls = activeSrc.includes('.m3u8')
+      const nativeHls = video.canPlayType('application/vnd.apple.mpegurl')
+
+      if (isHls && !nativeHls) {
+        import('hls.js').then(({ default: Hls }) => {
+          if (cancelled || !videoRef.current) return
+          if (!Hls.isSupported()) {
+            videoRef.current.src = activeSrc
+            if (currentTimeStore > 0) videoRef.current.currentTime = currentTimeStore
+            return
+          }
+          const hls = new Hls()
+          hlsRef.current = hls
+          hls.loadSource(activeSrc)
+          hls.attachMedia(videoRef.current)
+          hls.on(Hls.Events.ERROR, (_e, data) => {
+            if (data.fatal) updateVideoStatus('error')
+          })
+          if (currentTimeStore > 0) videoRef.current.currentTime = currentTimeStore
+        }).catch(() => {
+          if (cancelled || !videoRef.current) return
+          videoRef.current.src = activeSrc
+        })
+      } else {
+        video.src = activeSrc
+        // Best-effort immediate seek; browsers that reset currentTime on loadedmetadata
+        // will be corrected in handleVideoLoadedMetadata via startTimeRef
+        if (currentTimeStore > 0) video.currentTime = currentTimeStore
+      }
     } else {
+      destroyHls()
       startTimeRef.current = 0
       video.removeAttribute('src')
       video.load()
+    }
+
+    return () => {
+      cancelled = true
+      destroyHls()
     }
   // currentTimeStore / isPlayingStore: intentional snapshot — only on src set, not on every tick
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -203,6 +250,15 @@ export function useMiniPlayerVideo(
     videoRef.current?.play().catch(() => { /* still blocked */ })
   }, [videoRef])
 
+  // P1-3: immediately write store + localStorage after seek, without waiting for timeupdate
+  const handleSeek = useCallback((time: number) => {
+    setLocalCurrentTime(time)
+    setCurrentTimeRef.current(time)
+    const sid = shortIdRef.current
+    const ep = currentEpisodeRef.current
+    if (sid) saveProgress(sid, ep, time)
+  }, [])
+
   return {
     activeSrc,
     videoStatus,
@@ -218,5 +274,6 @@ export function useMiniPlayerVideo(
     handleVideoTimeUpdate,
     handleVideoLoadedMetadata,
     handleAutoplayBlockedClick,
+    handleSeek,
   }
 }

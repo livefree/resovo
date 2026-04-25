@@ -25,6 +25,13 @@ import { MiniPlayerControls } from './MiniPlayerControls'
  *
  * 视频逻辑由 useMiniPlayerVideo 钩子封装；Header/Controls 已拆为子组件。
  */
+
+// P1-1: guard — skip keyboard shortcuts when focus is in an editable element
+function isEditableTarget(e: KeyboardEvent): boolean {
+  const t = e.target as HTMLElement
+  return t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)
+}
+
 export function MiniPlayer() {
   const router = useRouter()
   const params = useParams()
@@ -36,6 +43,7 @@ export function MiniPlayer() {
   const takeoverActive = usePlayerStore((s) => s.takeoverActive)
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const setGeometry = usePlayerStore((s) => s.setGeometry)
+  const setHostMode = usePlayerStore((s) => s.setHostMode)
   const releaseMiniPlayer = usePlayerStore((s) => s.releaseMiniPlayer)
 
   const [isExpanded, setIsExpanded] = useState(false)
@@ -79,6 +87,7 @@ export function MiniPlayer() {
     handleVideoTimeUpdate,
     handleVideoLoadedMetadata,
     handleAutoplayBlockedClick,
+    handleSeek,
   } = useMiniPlayerVideo(videoRef)
 
   const handleClose = useCallback(() => {
@@ -96,10 +105,15 @@ export function MiniPlayer() {
     return () => mq.removeEventListener('change', handler)
   }, [handleClose])
 
-  // Esc 关闭 + m 键静音（UI Contract §9.2）
+  // P1-1: Esc 关闭 + m 键静音（UI Contract §9.2），带 editable target 守卫和 modal 检查
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') { handleClose(); return }
+      if (isEditableTarget(e)) return
+      if (e.key === 'Escape') {
+        const hasOpenModal = Boolean(document.querySelector('[role="dialog"][aria-modal="true"]'))
+        if (!hasOpenModal) handleClose()
+        return
+      }
       if (e.key === 'm' || e.key === 'M') handleToggleMute()
     }
     document.addEventListener('keydown', onKey)
@@ -147,12 +161,29 @@ export function MiniPlayer() {
     return () => { detachDrag(); detachResizeWatcher() }
   }, [setGeometry])
 
+  // P1-2: 先切 hostMode='full' 关闭 MiniPlayer，再 push，消除双 <video> 并行
   function handleReturnToWatch() {
-    if (hostOrigin?.slug) router.push(`/${locale}/watch/${hostOrigin.slug}`)
+    if (hostOrigin?.slug) {
+      setHostMode('full')
+      router.push(`/${locale}/watch/${hostOrigin.slug}`)
+    }
   }
 
+  // P1-5: 展开/折叠时直接写 container.style.top，纳入 expanded 有效高度
   function handleToggleExpand() {
-    setIsExpanded((prev) => !prev)
+    const nextExpanded = !isExpanded
+    const el = containerRef.current
+    const geom = geometryRef.current
+    if (el) {
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      const videoH = deriveHeightFromWidth(geom.width)
+      const height = nextExpanded ? videoH + 44 : videoH
+      const { top } = computeDockPosition({ ...geom, height }, vw, vh)
+      el.style.top = `${top}px`
+      el.style.height = `${height}px`
+    }
+    setIsExpanded(nextExpanded)
   }
 
   function handleContainerMouseEnter() {
@@ -192,13 +223,16 @@ export function MiniPlayer() {
   }
 
   // ── Progress bar seek handlers ──────────────────────────────────
+  // P1-3: call handleSeek after setting video.currentTime for immediate store+progress write
   function seekFromPointer(e: React.PointerEvent<HTMLDivElement>) {
     const video = videoRef.current
     const el = e.currentTarget
     if (!video || isNaN(video.duration) || video.duration === 0) return
     const rect = el.getBoundingClientRect()
     const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-    video.currentTime = fraction * video.duration
+    const nextTime = fraction * video.duration
+    video.currentTime = nextTime
+    handleSeek(nextTime)
   }
 
   function handleProgressPointerDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -223,12 +257,15 @@ export function MiniPlayer() {
   function handleProgressKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     const video = videoRef.current
     if (!video || isNaN(video.duration)) return
-    if (e.key === 'ArrowLeft') video.currentTime = Math.max(0, video.currentTime - 5)
-    else if (e.key === 'ArrowRight') video.currentTime = Math.min(video.duration, video.currentTime + 5)
-    else if (e.key === 'Home') video.currentTime = 0
-    else if (e.key === 'End') video.currentTime = video.duration
+    let nextTime: number | null = null
+    if (e.key === 'ArrowLeft') nextTime = Math.max(0, video.currentTime - 5)
+    else if (e.key === 'ArrowRight') nextTime = Math.min(video.duration, video.currentTime + 5)
+    else if (e.key === 'Home') nextTime = 0
+    else if (e.key === 'End') nextTime = video.duration
     else return
     e.preventDefault()
+    video.currentTime = nextTime
+    handleSeek(nextTime)
   }
 
   const geom = geometry ?? MINI_GEOMETRY_DEFAULTS
