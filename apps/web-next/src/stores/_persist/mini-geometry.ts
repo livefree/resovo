@@ -13,6 +13,14 @@
 
 export type MiniCorner = 'tl' | 'tr' | 'bl' | 'br'
 
+/** per-side dock margins — replaces uniform number where safe area differs per edge */
+export type DockMargins = {
+  top: number
+  right: number
+  bottom: number
+  left: number
+}
+
 export interface MiniGeometryV1 {
   readonly v: 1
   readonly width: number      // px，240–480
@@ -117,20 +125,23 @@ export function clampWidth(width: number): number {
 
 /**
  * 根据 viewport + 几何 + 吸附角计算浮窗左上角的 fixed 定位 (left, top) px。
- * 用于 render 阶段把 corner + width/height → 具体 CSS transform/left/top。
+ * margin 可传统一数字（向后兼容），也可传 DockMargins 结构体（safe area 避让）。
  */
 export function computeDockPosition(
   geom: MiniGeometryV1,
   viewportWidth: number,
   viewportHeight: number,
-  margin: number = MINI_GEOMETRY_CONSTRAINTS.DOCK_MARGIN,
+  margin: number | DockMargins = MINI_GEOMETRY_CONSTRAINTS.DOCK_MARGIN,
 ): { left: number; top: number } {
+  const m: DockMargins = typeof margin === 'number'
+    ? { top: margin, right: margin, bottom: margin, left: margin }
+    : margin
   const { width, height, corner } = geom
   switch (corner) {
-    case 'tl': return { left: margin, top: margin }
-    case 'tr': return { left: viewportWidth - width - margin, top: margin }
-    case 'bl': return { left: margin, top: viewportHeight - height - margin }
-    case 'br': return { left: viewportWidth - width - margin, top: viewportHeight - height - margin }
+    case 'tl': return { left: m.left, top: m.top }
+    case 'tr': return { left: viewportWidth - width - m.right, top: m.top }
+    case 'bl': return { left: m.left, top: viewportHeight - height - m.bottom }
+    case 'br': return { left: viewportWidth - width - m.right, top: viewportHeight - height - m.bottom }
   }
 }
 

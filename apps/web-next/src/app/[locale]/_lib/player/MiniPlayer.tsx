@@ -8,6 +8,7 @@ import {
   MINI_GEOMETRY_DEFAULTS,
   computeDockPosition,
   deriveHeightFromWidth,
+  type DockMargins,
   type MiniGeometryV1,
 } from '@/stores/_persist/mini-geometry'
 import { attachMiniPlayerDrag, attachViewportResizeWatcher } from '@/lib/mini-player/drag'
@@ -45,6 +46,7 @@ export function MiniPlayer() {
   const setGeometry = usePlayerStore((s) => s.setGeometry)
   const setHostMode = usePlayerStore((s) => s.setHostMode)
   const releaseMiniPlayer = usePlayerStore((s) => s.releaseMiniPlayer)
+  const setFlipOrigin = usePlayerStore((s) => s.setFlipOrigin)
 
   const [isExpanded, setIsExpanded] = useState(false)
   const [headerVisible, setHeaderVisible] = useState(false)
@@ -64,6 +66,8 @@ export function MiniPlayer() {
   const headerHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const videoPointerDownRef = useRef<{ x: number; y: number; time: number } | null>(null)
   const seekingRef = useRef(false)
+  // safe area margins — computed once on mount, used for dock positioning and drag commit
+  const dockMarginsRef = useRef<DockMargins | null>(null)
 
   // mount 后下一帧 fade in
   useEffect(() => {
@@ -86,13 +90,17 @@ export function MiniPlayer() {
     handleVideoError,
     handleVideoTimeUpdate,
     handleVideoLoadedMetadata,
+    handleVideoVolumeChange,
     handleAutoplayBlockedClick,
     handleSeek,
   } = useMiniPlayerVideo(videoRef)
 
   const handleClose = useCallback(() => {
     videoRef.current?.pause()
-    if (videoRef.current) videoRef.current.src = ''
+    if (videoRef.current) {
+      videoRef.current.removeAttribute('src')
+      videoRef.current.load()
+    }
     releaseMiniPlayer()
   }, [releaseMiniPlayer])
 
@@ -120,17 +128,35 @@ export function MiniPlayer() {
     return () => document.removeEventListener('keydown', onKey)
   }, [handleClose, handleToggleMute])
 
-  // 应用 geometry + isExpanded 到 DOM
+  // 应用 geometry + isExpanded 到 DOM，同时计算 safe area margins（首次）
   useLayoutEffect(() => {
     const el = containerRef.current
     if (!el || userInteractingRef.current) return
+    // compute safe margins once (CSS vars don't change at runtime)
+    if (!dockMarginsRef.current) {
+      const style = getComputedStyle(document.documentElement)
+      const headerH = parseInt(style.getPropertyValue('--header-height').trim(), 10)
+      const tabbarEl = document.querySelector('[data-tabbar]') as HTMLElement | null
+      const tabbarVisible = tabbarEl != null && getComputedStyle(tabbarEl).display !== 'none'
+      const tabbarH = tabbarVisible
+        ? parseInt(style.getPropertyValue('--tabbar-height').trim(), 10)
+        : 0
+      const base = MINI_GEOMETRY_CONSTRAINTS.DOCK_MARGIN
+      dockMarginsRef.current = {
+        top: base + (isNaN(headerH) ? 0 : headerH),
+        right: base,
+        bottom: base + (isNaN(tabbarH) ? 0 : tabbarH),
+        left: base,
+      }
+    }
+    const margins = dockMarginsRef.current
     const geom = geometry ?? MINI_GEOMETRY_DEFAULTS
     const vw = window.innerWidth
     const vh = window.innerHeight
     const videoH = deriveHeightFromWidth(geom.width)
     const height = isExpanded ? videoH + 44 : videoH
     const dockGeom: MiniGeometryV1 = { ...geom, height }
-    const { left, top } = computeDockPosition(dockGeom, vw, vh)
+    const { left, top } = computeDockPosition(dockGeom, vw, vh, margins)
     el.style.left = `${left}px`
     el.style.top = `${top}px`
     el.style.width = `${geom.width}px`
@@ -149,6 +175,7 @@ export function MiniPlayer() {
       geometryRef.current = g
       setGeometry(g)
     }
+    const getMargins = () => dockMarginsRef.current ?? { top: MINI_GEOMETRY_CONSTRAINTS.DOCK_MARGIN, right: MINI_GEOMETRY_CONSTRAINTS.DOCK_MARGIN, bottom: MINI_GEOMETRY_CONSTRAINTS.DOCK_MARGIN, left: MINI_GEOMETRY_CONSTRAINTS.DOCK_MARGIN }
     const detachDrag = attachMiniPlayerDrag({
       container,
       dragHandle,
@@ -156,35 +183,45 @@ export function MiniPlayer() {
       getGeometry,
       commitGeometry,
       onInteractionChange: (interacting) => { userInteractingRef.current = interacting },
+      getMargins,
     })
-    const detachResizeWatcher = attachViewportResizeWatcher(container, getGeometry, commitGeometry)
+    const detachResizeWatcher = attachViewportResizeWatcher(container, getGeometry, commitGeometry, getMargins)
     return () => { detachDrag(); detachResizeWatcher() }
   }, [setGeometry])
 
   // P1-2: 先切 hostMode='full' 关闭 MiniPlayer，再 push，消除双 <video> 并行
-  function handleReturnToWatch() {
-    if (hostOrigin?.slug) {
-      setHostMode('full')
-      router.push(`/${locale}/watch/${hostOrigin.slug}`)
+  // P2-1: useCallback 包裹（避免每次 render 产生新引用）
+  // FLIP: 路由前记录 mini 容器位置，供 GlobalPlayerFullFrame 展开动画使用
+  const handleReturnToWatch = useCallback(() => {
+    if (!hostOrigin?.slug) return
+    if (containerRef.current) {
+      const r = containerRef.current.getBoundingClientRect()
+      setFlipOrigin({ left: r.left, top: r.top, width: r.width, height: r.height })
     }
-  }
+    setHostMode('full')
+    router.push(`/${locale}/watch/${hostOrigin.slug}`)
+  }, [hostOrigin, locale, setHostMode, setFlipOrigin, router])
 
   // P1-5: 展开/折叠时直接写 container.style.top，纳入 expanded 有效高度
-  function handleToggleExpand() {
-    const nextExpanded = !isExpanded
-    const el = containerRef.current
-    const geom = geometryRef.current
-    if (el) {
-      const vw = window.innerWidth
-      const vh = window.innerHeight
-      const videoH = deriveHeightFromWidth(geom.width)
-      const height = nextExpanded ? videoH + 44 : videoH
-      const { top } = computeDockPosition({ ...geom, height }, vw, vh)
-      el.style.top = `${top}px`
-      el.style.height = `${height}px`
-    }
-    setIsExpanded(nextExpanded)
-  }
+  // P2-1: useCallback 包裹；functional update 避免捕获 isExpanded
+  const handleToggleExpand = useCallback(() => {
+    setIsExpanded(prev => {
+      const nextExpanded = !prev
+      const el = containerRef.current
+      const geom = geometryRef.current
+      if (el) {
+        const vw = window.innerWidth
+        const vh = window.innerHeight
+        const videoH = deriveHeightFromWidth(geom.width)
+        const height = nextExpanded ? videoH + 44 : videoH
+        const margins = dockMarginsRef.current ?? MINI_GEOMETRY_CONSTRAINTS.DOCK_MARGIN
+        const { top } = computeDockPosition({ ...geom, height }, vw, vh, margins)
+        el.style.top = `${top}px`
+        el.style.height = `${height}px`
+      }
+      return nextExpanded
+    })
+  }, [])
 
   function handleContainerMouseEnter() {
     if (headerHideTimerRef.current !== null) {
@@ -333,6 +370,7 @@ export function MiniPlayer() {
             onError={handleVideoError}
             onTimeUpdate={handleVideoTimeUpdate}
             onLoadedMetadata={handleVideoLoadedMetadata}
+            onVolumeChange={handleVideoVolumeChange}
             style={{
               position: 'absolute',
               inset: 0,
@@ -440,25 +478,35 @@ export function MiniPlayer() {
         />
       )}
 
-      {/* ── Resize handle ───────────────────────────────────── */}
-      <div
-        ref={resizeHandleRef}
-        data-mini-resize-handle
-        data-testid="mini-player-resize-handle"
-        aria-label="拖拽调整大小"
-        style={{
-          position: 'absolute',
-          right: 0,
-          bottom: 0,
-          width: '16px',
-          height: '16px',
-          cursor: 'nwse-resize',
-          touchAction: 'none',
-          background:
-            'linear-gradient(135deg, transparent 0%, transparent 40%, var(--fg-subtle) 40%, var(--fg-subtle) 45%, transparent 45%, transparent 60%, var(--fg-subtle) 60%, var(--fg-subtle) 65%, transparent 65%)',
-          zIndex: 3,
-        }}
-      />
+      {/* ── Resize handle（corner-aware：对角方向）──────────── */}
+      {(() => {
+        const corner = geom.corner
+        // handle 位于 dock corner 的对角（tl↔br，tr↔bl）
+        const atBottom = corner === 'tl' || corner === 'tr'
+        const atRight = corner === 'tl' || corner === 'bl'
+        const cursor = (corner === 'tl' || corner === 'br') ? 'nwse-resize' : 'nesw-resize'
+        // gradient 方向随 handle 位置旋转（固定 135deg 对 br，45deg 对 bl，等）
+        const gradientDeg = atRight ? (atBottom ? 135 : 225) : (atBottom ? 45 : 315)
+        return (
+          <div
+            ref={resizeHandleRef}
+            data-mini-resize-handle
+            data-testid="mini-player-resize-handle"
+            aria-label="拖拽调整大小"
+            style={{
+              position: 'absolute',
+              ...(atBottom ? { bottom: 0 } : { top: 0 }),
+              ...(atRight ? { right: 0 } : { left: 0 }),
+              width: '16px',
+              height: '16px',
+              cursor,
+              touchAction: 'none',
+              background: `linear-gradient(${gradientDeg}deg, transparent 0%, transparent 40%, var(--fg-subtle) 40%, var(--fg-subtle) 45%, transparent 45%, transparent 60%, var(--fg-subtle) 60%, var(--fg-subtle) 65%, transparent 65%)`,
+              zIndex: 3,
+            }}
+          />
+        )
+      })()}
     </div>
   )
 }

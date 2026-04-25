@@ -67,6 +67,16 @@ interface PlayerState {
 
   // === HANDOFF-31 新增：完整关闭 + 清零 mini 播放状态 ===
   releaseMiniPlayer: () => void
+
+  // === HANDOFF-34 新增：isMuted / volume（sessionStorage 协议 v1.1）===
+  isMuted: boolean
+  volume: number
+  setIsMuted: (muted: boolean) => void
+  setVolume: (volume: number) => void
+
+  // === HANDOFF-34 新增：FLIP 动画原点（transient，不持久化）===
+  flipOrigin: { left: number; top: number; width: number; height: number } | null
+  setFlipOrigin: (rect: { left: number; top: number; width: number; height: number } | null) => void
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -83,8 +93,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   takeoverActive: false,
   transition: null,
   activeSourceIndex: 0,
+  isMuted: false,
+  volume: 1,
+  flipOrigin: null,
 
   setActiveSourceIndex: (index) => set({ activeSourceIndex: index }),
+  setIsMuted: (muted) => set({ isMuted: muted }),
+  setVolume: (vol) => set({ volume: vol }),
+  setFlipOrigin: (rect) => set({ flipOrigin: rect }),
 
   releaseMiniPlayer: () => {
     set({ shortId: null, currentTime: 0, duration: 0, isPlaying: false, activeSourceIndex: 0 })
@@ -159,7 +175,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
             currentEpisode: parsed.currentEpisode,
             hostOrigin: parsed.hostOrigin,
             isPlaying: false,
-            currentTime: 0,
+            currentTime: parsed.currentTime ?? 0,
+            isMuted: parsed.isMuted ?? false,
+            volume: parsed.volume ?? 1,
+            activeSourceIndex: parsed.activeSourceIndex ?? 0,
           }
         }
       }
@@ -191,6 +210,10 @@ function persistToSession(state: PlayerState) {
       shortId: state.shortId,
       currentEpisode: state.currentEpisode,
       hostOrigin: state.hostOrigin,
+      currentTime: state.currentTime,
+      isMuted: state.isMuted,
+      volume: state.volume,
+      activeSourceIndex: state.activeSourceIndex,
     }
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
   } catch {

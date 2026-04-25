@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { usePathname } from 'next/navigation'
 import { usePlayerStore } from '@/stores/playerStore'
 import { PlayerShell } from '@/components/player/PlayerShell'
@@ -16,9 +16,48 @@ export function GlobalPlayerFullFrame() {
   const transition = usePlayerStore((s) => s.transition)
   const setTakeoverActive = usePlayerStore((s) => s.setTakeoverActive)
   const mode = usePlayerStore((s) => s.mode)
+  const flipOrigin = usePlayerStore((s) => s.flipOrigin)
+  const setFlipOrigin = usePlayerStore((s) => s.setFlipOrigin)
   const frameRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
   const isWatchPage = /\/watch\//.test(pathname)
+
+  // FLIP 动画：mini → full 切换时从 mini 容器位置展开
+  useLayoutEffect(() => {
+    const el = frameRef.current
+    if (!el || !flipOrigin) return
+    const targetRect = el.getBoundingClientRect()
+    const scaleX = flipOrigin.width / targetRect.width
+    const scaleY = flipOrigin.height / targetRect.height
+    const originCX = flipOrigin.left + flipOrigin.width / 2
+    const originCY = flipOrigin.top + flipOrigin.height / 2
+    const targetCX = targetRect.left + targetRect.width / 2
+    const targetCY = targetRect.top + targetRect.height / 2
+    const dx = originCX - targetCX
+    const dy = originCY - targetCY
+
+    el.style.transformOrigin = 'center center'
+    el.style.transform = `translate(${dx}px, ${dy}px) scale(${scaleX}, ${scaleY})`
+    el.style.transition = 'none'
+    setFlipOrigin(null)
+
+    const rafId = requestAnimationFrame(() => {
+      void el.offsetWidth  // force reflow so initial transform is painted
+      el.style.transition = 'transform 360ms cubic-bezier(0.34, 1.56, 0.64, 1)'
+      el.style.transform = 'none'
+      el.addEventListener('transitionend', () => {
+        el.style.transform = ''
+        el.style.transition = ''
+        el.style.transformOrigin = ''
+      }, { once: true })
+    })
+    return () => {
+      cancelAnimationFrame(rafId)
+      el.style.transform = ''
+      el.style.transition = ''
+      el.style.transformOrigin = ''
+    }
+  }, [flipOrigin, setFlipOrigin])
 
   useEffect(() => {
     if (!frameRef.current) return

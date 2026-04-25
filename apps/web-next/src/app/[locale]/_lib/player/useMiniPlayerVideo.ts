@@ -22,6 +22,7 @@ export interface UseMiniPlayerVideoReturn {
   handleVideoError: () => void
   handleVideoTimeUpdate: () => void
   handleVideoLoadedMetadata: () => void
+  handleVideoVolumeChange: () => void
   handleAutoplayBlockedClick: () => void
   handleSeek: (time: number) => void
 }
@@ -39,10 +40,15 @@ export function useMiniPlayerVideo(
   const setCurrentTime = usePlayerStore((s) => s.setCurrentTime)
   const setDuration = usePlayerStore((s) => s.setDuration)
   const setPlaying = usePlayerStore((s) => s.setPlaying)
+  const isMutedStore = usePlayerStore((s) => s.isMuted)
+  const setIsMutedStore = usePlayerStore((s) => s.setIsMuted)
+  const volumeStore = usePlayerStore((s) => s.volume)
+  const setVolumeStore = usePlayerStore((s) => s.setVolume)
 
   const [activeSrc, setActiveSrc] = useState<string | null>(null)
   const [videoStatus, setVideoStatus] = useState<VideoStatus>('no-src')
-  const [isMuted, setIsMuted] = useState(false)
+  // initialize from store (already hydrated from sessionStorage when MiniPlayer mounts)
+  const [isMuted, setIsMuted] = useState(isMutedStore)
   const [localCurrentTime, setLocalCurrentTime] = useState(0)
   const [localDuration, setLocalDuration] = useState(0)
 
@@ -54,12 +60,16 @@ export function useMiniPlayerVideo(
   const shortIdRef = useRef(shortId)
   const currentEpisodeRef = useRef(currentEpisode)
   const setCurrentTimeRef = useRef(setCurrentTime)
+  const isMutedRef = useRef(isMutedStore)
+  const volumeRef = useRef(volumeStore)
   // P0-2: HLS instance ref
   const hlsRef = useRef<import('hls.js').default | null>(null)
 
   useEffect(() => { shortIdRef.current = shortId }, [shortId])
   useEffect(() => { currentEpisodeRef.current = currentEpisode }, [currentEpisode])
   useEffect(() => { setCurrentTimeRef.current = setCurrentTime }, [setCurrentTime])
+  useEffect(() => { isMutedRef.current = isMutedStore }, [isMutedStore])
+  useEffect(() => { volumeRef.current = volumeStore }, [volumeStore])
 
   const updateVideoStatus = useCallback((status: VideoStatus) => {
     videoStatusRef.current = status
@@ -123,6 +133,9 @@ export function useMiniPlayerVideo(
       destroyHls()
       shouldAutoplayRef.current = isPlayingStore
       startTimeRef.current = currentTimeStore
+      // apply persisted mute/volume from store (restored from sessionStorage)
+      video.muted = isMutedRef.current
+      video.volume = volumeRef.current
 
       const isHls = activeSrc.includes('.m3u8')
       const nativeHls = video.canPlayType('application/vnd.apple.mpegurl')
@@ -229,7 +242,8 @@ export function useMiniPlayerVideo(
     if (!video) return
     video.muted = !video.muted
     setIsMuted(video.muted)
-  }, [videoRef])
+    setIsMutedStore(video.muted)
+  }, [videoRef, setIsMutedStore])
 
   const handleTogglePlay = useCallback(() => {
     const video = videoRef.current
@@ -245,6 +259,14 @@ export function useMiniPlayerVideo(
       video.pause()
     }
   }, [videoRef])
+
+  const handleVideoVolumeChange = useCallback(() => {
+    const video = videoRef.current
+    if (!video) return
+    setIsMuted(video.muted)
+    setIsMutedStore(video.muted)
+    setVolumeStore(video.volume)
+  }, [videoRef, setIsMutedStore, setVolumeStore])
 
   const handleAutoplayBlockedClick = useCallback(() => {
     videoRef.current?.play().catch(() => { /* still blocked */ })
@@ -273,6 +295,7 @@ export function useMiniPlayerVideo(
     handleVideoError,
     handleVideoTimeUpdate,
     handleVideoLoadedMetadata,
+    handleVideoVolumeChange,
     handleAutoplayBlockedClick,
     handleSeek,
   }

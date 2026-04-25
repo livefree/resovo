@@ -40,9 +40,13 @@ const { mockPlayerState } = vi.hoisted(() => ({
     geometry: null,
     takeoverActive: false,
     isPlaying: false,
+    isMuted: false,
+    volume: 1,
+    flipOrigin: null,
     setGeometry: vi.fn(),
     setHostMode: vi.fn(),
     releaseMiniPlayer: vi.fn(),
+    setFlipOrigin: vi.fn(),
   },
 }))
 
@@ -94,6 +98,7 @@ beforeEach(() => {
   mockPlayerState.setGeometry.mockReset()
   mockPlayerState.setHostMode.mockReset()
   mockPlayerState.releaseMiniPlayer.mockReset()
+  mockPlayerState.setFlipOrigin.mockReset()
   mockPush.mockReset()
   // reset video state
   mockVideoState.activeSrc = null
@@ -415,5 +420,76 @@ describe('MiniPlayer — HANDOFF-33 P1-3 键盘 seek 立即调 handleSeek', () =
     const progressBar = screen.getByRole('slider')
     fireEvent.keyDown(progressBar, { key: 'ArrowLeft' })
     expect(mockVideoState.handleSeek).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ── HANDOFF-34 P2 体验增强 ────────────────────────────────────────
+
+describe('MiniPlayer — HANDOFF-34 P2-2 video 清理方式', () => {
+  it('关闭按钮触发 releaseMiniPlayer（P2-2 行为不变）', async () => {
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    fireEvent.click(screen.getByRole('button', { name: '关闭播放器' }))
+    expect(mockPlayerState.releaseMiniPlayer).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('MiniPlayer — HANDOFF-34 P2-1 useCallback + FLIP', () => {
+  it('有 hostOrigin 时点击返回按钮先调 setFlipOrigin 再调 setHostMode', async () => {
+    mockPlayerState.hostOrigin = { href: '/watch/test-slug', slug: 'test-slug' }
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    const callOrder: string[] = []
+    mockPlayerState.setFlipOrigin.mockImplementation(() => callOrder.push('setFlipOrigin'))
+    mockPlayerState.setHostMode.mockImplementation(() => callOrder.push('setHostMode'))
+    fireEvent.click(screen.getByTestId('mini-player-return-btn'))
+    expect(callOrder[0]).toBe('setFlipOrigin')
+    expect(callOrder[1]).toBe('setHostMode')
+  })
+
+  it('无 hostOrigin 时点击返回按钮不调 setFlipOrigin', async () => {
+    mockPlayerState.hostOrigin = null
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    fireEvent.click(screen.getByTestId('mini-player-return-btn'))
+    expect(mockPlayerState.setFlipOrigin).not.toHaveBeenCalled()
+  })
+})
+
+describe('MiniPlayer — HANDOFF-34 resize handle 方向感知', () => {
+  it('corner=br 时 resize handle 位于 top-left（bottom/right 未定义）', async () => {
+    mockPlayerState.geometry = { v: 1 as const, width: 320, height: 180, corner: 'br' as const }
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    const handle = screen.getByTestId('mini-player-resize-handle')
+    expect(handle.style.top).toBe('0px')
+    expect(handle.style.left).toBe('0px')
+  })
+
+  it('corner=tl 时 resize handle 位于 bottom-right', async () => {
+    mockPlayerState.geometry = { v: 1 as const, width: 320, height: 180, corner: 'tl' as const }
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    const handle = screen.getByTestId('mini-player-resize-handle')
+    expect(handle.style.bottom).toBe('0px')
+    expect(handle.style.right).toBe('0px')
+  })
+
+  it('corner=tr 时 resize handle 位于 bottom-left', async () => {
+    mockPlayerState.geometry = { v: 1 as const, width: 320, height: 180, corner: 'tr' as const }
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    const handle = screen.getByTestId('mini-player-resize-handle')
+    expect(handle.style.bottom).toBe('0px')
+    expect(handle.style.left).toBe('0px')
+  })
+
+  it('corner=bl 时 resize handle 位于 top-right', async () => {
+    mockPlayerState.geometry = { v: 1 as const, width: 320, height: 180, corner: 'bl' as const }
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    const handle = screen.getByTestId('mini-player-resize-handle')
+    expect(handle.style.top).toBe('0px')
+    expect(handle.style.right).toBe('0px')
   })
 })

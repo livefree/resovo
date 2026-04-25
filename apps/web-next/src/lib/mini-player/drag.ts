@@ -16,6 +16,8 @@ import {
   computeDockPosition,
   deriveHeightFromWidth,
   nearestCorner,
+  type DockMargins,
+  type MiniCorner,
   type MiniGeometryV1,
 } from '@/stores/_persist/mini-geometry'
 
@@ -34,6 +36,8 @@ export interface DragAttachOptions {
    * false 在 commit 完成后延迟 snap 动画时长再触发（避免动画中途被覆盖）。
    */
   readonly onInteractionChange?: (interacting: boolean) => void
+  /** safe area margins — passed to computeDockPosition on commit/snap */
+  readonly getMargins?: () => DockMargins
 }
 
 /**
@@ -42,7 +46,7 @@ export interface DragAttachOptions {
  * 返回 cleanup 函数（必须在 unmount 时调用）。
  */
 export function attachMiniPlayerDrag(options: DragAttachOptions): () => void {
-  const { container, dragHandle, resizeHandle, getGeometry, commitGeometry, onInteractionChange } = options
+  const { container, dragHandle, resizeHandle, getGeometry, commitGeometry, onInteractionChange, getMargins } = options
   let interactionEndTimer: ReturnType<typeof setTimeout> | null = null
 
   // 共用的 drag state（drag 和 resize 互斥，同一时刻只有一种操作）
@@ -53,6 +57,8 @@ export function attachMiniPlayerDrag(options: DragAttachOptions): () => void {
   let startLeft = 0
   let startTop = 0
   let startWidth = 0
+  let startHeight = 0
+  let resizeCorner: MiniCorner = 'br'
   let rafId: number | null = null
   let nextLeft = 0
   let nextTop = 0
@@ -109,6 +115,8 @@ export function attachMiniPlayerDrag(options: DragAttachOptions): () => void {
     startLeft = rect.left
     startTop = rect.top
     startWidth = rect.width
+    startHeight = rect.height
+    resizeCorner = getGeometry().corner
     startPointerX = e.clientX
     startPointerY = e.clientY
 
@@ -124,9 +132,21 @@ export function attachMiniPlayerDrag(options: DragAttachOptions): () => void {
       nextTop = startTop + (e.clientY - startPointerY)
       schedulePaint()
     } else if (mode === 'resize') {
-      // 右下缩放：沿 pointer 移动量调整 width，height 由 16:9 派生
-      const delta = Math.max(e.clientX - startPointerX, e.clientY - startPointerY)
+      // corner-aware delta: 拖动方向指向 corner 的对角方向（远离 dock 边缘）
+      const dx = e.clientX - startPointerX
+      const dy = e.clientY - startPointerY
+      const sdx = (resizeCorner === 'tl' || resizeCorner === 'bl') ? dx : -dx
+      const sdy = (resizeCorner === 'tl' || resizeCorner === 'tr') ? dy : -dy
+      const delta = Math.max(sdx, sdy)
       nextWidth = clampWidth(startWidth + delta)
+      // 维持 dock corner 为锚点，resize 时同步更新 left/top
+      const nextH = deriveHeightFromWidth(nextWidth)
+      nextLeft = (resizeCorner === 'tr' || resizeCorner === 'br')
+        ? startLeft + startWidth - nextWidth
+        : startLeft
+      nextTop = (resizeCorner === 'bl' || resizeCorner === 'br')
+        ? startTop + startHeight - nextH
+        : startTop
       schedulePaint()
     }
   }
@@ -166,6 +186,8 @@ export function attachMiniPlayerDrag(options: DragAttachOptions): () => void {
       } else if (mode === 'resize') {
         container.style.width = `${nextWidth}px`
         container.style.height = `${deriveHeightFromWidth(nextWidth)}px`
+        container.style.left = `${nextLeft}px`
+        container.style.top = `${nextTop}px`
       }
     })
   }
@@ -180,7 +202,8 @@ export function attachMiniPlayerDrag(options: DragAttachOptions): () => void {
     const corner = nearestCorner(centerX, centerY, vw, vh)
     const current = getGeometry()
     const nextGeom: MiniGeometryV1 = { ...current, corner }
-    const { left, top } = computeDockPosition(nextGeom, vw, vh)
+    const margins = getMargins?.() ?? DOCK_MARGIN
+    const { left, top } = computeDockPosition(nextGeom, vw, vh, margins)
 
     // 先应用 spring transition 让浮窗吸附动画生效
     container.style.transition = `left ${SNAP_DURATION_MS}ms ${SNAP_EASING}, top ${SNAP_DURATION_MS}ms ${SNAP_EASING}`
@@ -199,7 +222,8 @@ export function attachMiniPlayerDrag(options: DragAttachOptions): () => void {
     // resize 结束后不改 corner，仅按当前 corner 重新 dock
     const vw = window.innerWidth
     const vh = window.innerHeight
-    const { left, top } = computeDockPosition(nextGeom, vw, vh)
+    const margins = getMargins?.() ?? DOCK_MARGIN
+    const { left, top } = computeDockPosition(nextGeom, vw, vh, margins)
 
     container.style.transition = `left ${SNAP_DURATION_MS}ms ${SNAP_EASING}, top ${SNAP_DURATION_MS}ms ${SNAP_EASING}, width ${SNAP_DURATION_MS}ms ${SNAP_EASING}, height ${SNAP_DURATION_MS}ms ${SNAP_EASING}`
     container.style.left = `${left}px`
@@ -243,6 +267,7 @@ export function attachViewportResizeWatcher(
   container: HTMLElement,
   getGeometry: () => MiniGeometryV1,
   commitGeometry: (geom: MiniGeometryV1) => void,
+  getMargins?: () => DockMargins,
 ): () => void {
   let rafId: number | null = null
 
@@ -265,8 +290,9 @@ export function attachViewportResizeWatcher(
 
       // UI Contract §2.3：无论是否越界，只要 corner 有值，始终按 (corner, margin) 重算 left/top
       // 极小屏场景（越界）额外用 nearestCorner 重新归位
+      const margins = getMargins?.() ?? DOCK_MARGIN
       let nextGeom: MiniGeometryV1 = { ...geom, width: nextWidth, height: nextHeight }
-      const testPos = computeDockPosition(nextGeom, vw, vh)
+      const testPos = computeDockPosition(nextGeom, vw, vh, margins)
       const outOfBounds = testPos.left < 0 || testPos.top < 0
         || testPos.left + nextWidth > vw || testPos.top + nextHeight > vh
 
@@ -278,7 +304,7 @@ export function attachViewportResizeWatcher(
         nextGeom = { ...nextGeom, corner }
       }
 
-      const { left, top } = computeDockPosition(nextGeom, vw, vh)
+      const { left, top } = computeDockPosition(nextGeom, vw, vh, margins)
       const transitionParts = [
         `left ${SNAP_DURATION_MS}ms ${SNAP_EASING}`,
         `top ${SNAP_DURATION_MS}ms ${SNAP_EASING}`,
