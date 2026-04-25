@@ -65,5 +65,27 @@
   },
   "miniPlayer": {
     "returnToWatch": "Return to watch"
+  },
+  "footer": {
+    "browse": "Browse",
+    "help": "Help",
+    "about": "About",
+    "helpCenter": "Help Center",
+    "dmca": "DMCA",
+    "privacyPolicy": "Privacy Policy",
+    "aboutUs": "About Us",
+    "contact": "Contact"
+  },
+  "settings": {
+    "title": "Settings",
+    "theme": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "motionScale": "Motion",
+    "motionNone": "Off",
+    "motionNormal": "Normal",
+    "motionHigh": "Enhanced",
+    "comingSoon": "Coming soon"
   }
 }

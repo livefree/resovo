@@ -459,6 +459,11 @@
   --player-mini-chip-fg:     oklch(100% 0 0);
 }
 
+/* HANDOFF-26 — 通用遮罩层 token（drawer / dialog backdrop） */
+:root {
+  --overlay-bg: oklch(0% 0 0 / 0.40);
+}
+
 /* HANDOFF-25 — MiniPlayer hover chip 过渡（支持 --motion-scale，prefers-reduced-motion 强制关闭） */
 .mini-player-return-chip {
   transition: opacity calc(150ms * var(--motion-scale, 1)) ease;
@@ -629,7 +634,13 @@
   --z-tabbar:      40;
   --z-mini-player: 50;
   --z-full-player: 70;
+  --z-overlay:     80;   /* HANDOFF-26：Settings 抽屉遮罩层，高于 full-player */
   --tabbar-height: 56px;
+}
+
+/* HANDOFF-26 — 动效强度 token（SettingsDrawer 滑块写入 :root，默认正常速度） */
+:root {
+  --motion-scale: 1;
 }
 
 /* REG-M2-01 — Root layout 四件套常驻化（ADR-040） */

@@ -37,6 +37,10 @@ vi.mock('@/hooks/useBrand', () => ({
   useBrand: () => ({ brand: { name: 'Resovo', slug: 'resovo' } }),
 }))
 
+vi.mock('@/hooks/useTheme', () => ({
+  useTheme: () => ({ theme: 'system', resolvedTheme: 'light', setTheme: vi.fn() }),
+}))
+
 vi.mock('@/components/ui/ThemeToggle', () => ({
   ThemeToggle: () => <button type="button">theme</button>,
 }))

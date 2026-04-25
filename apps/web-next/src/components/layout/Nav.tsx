@@ -9,6 +9,7 @@ import { useBrand } from '@/hooks/useBrand'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import { SearchOverlay } from '@/components/search/SearchOverlay'
+import { SettingsDrawer } from '@/components/layout/SettingsDrawer'
 import { ALL_CATEGORIES, MAIN_TYPE_PARAMS, MORE_TYPE_PARAMS } from '@/lib/categories'
 
 /**
@@ -304,6 +305,7 @@ export function Nav() {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
   const [overlayOpen, setOverlayOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [isMac, setIsMac] = useState(false)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const searchFormRef = useRef<HTMLFormElement | null>(null)
@@ -526,14 +528,16 @@ export function Nav() {
             data-testid="nav-settings"
             aria-label={t('settings')}
             title={t('settings')}
+            aria-expanded={settingsOpen}
+            onClick={() => setSettingsOpen(true)}
             className="inline-flex items-center justify-center transition-colors"
             style={{
               width: '40px',
               height: '40px',
               borderRadius: '8px',
-              background: 'transparent',
+              background: settingsOpen ? 'var(--bg-surface-sunken)' : 'transparent',
               border: 'none',
-              color: 'var(--fg-muted)',
+              color: settingsOpen ? 'var(--fg-default)' : 'var(--fg-muted)',
               cursor: 'pointer',
             }}
             onMouseEnter={(e) => {
@@ -541,8 +545,10 @@ export function Nav() {
               e.currentTarget.style.color = 'var(--fg-default)'
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent'
-              e.currentTarget.style.color = 'var(--fg-muted)'
+              if (!settingsOpen) {
+                e.currentTarget.style.background = 'transparent'
+                e.currentTarget.style.color = 'var(--fg-muted)'
+              }
             }}
           >
             <svg
@@ -563,6 +569,8 @@ export function Nav() {
           </button>
         </div>
       </div>
+
+      <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </header>
   )
 }

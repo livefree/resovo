@@ -65,5 +65,27 @@
   },
   "miniPlayer": {
     "returnToWatch": "返回播放页"
+  },
+  "footer": {
+    "browse": "浏览",
+    "help": "帮助",
+    "about": "关于",
+    "helpCenter": "帮助中心",
+    "dmca": "DMCA",
+    "privacyPolicy": "隐私政策",
+    "aboutUs": "关于我们",
+    "contact": "联系方式"
+  },
+  "settings": {
+    "title": "设置",
+    "theme": "主题",
+    "themeLight": "浅色",
+    "themeDark": "深色",
+    "themeSystem": "跟随系统",
+    "motionScale": "动效强度",
+    "motionNone": "关闭",
+    "motionNormal": "正常",
+    "motionHigh": "增强",
+    "comingSoon": "即将推出"
   }
 }

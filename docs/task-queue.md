@@ -10498,7 +10498,7 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
      - 颜色零硬编码
    - **完成备注**：所有验收要点已满足。`handleVideoSlotClick` 从 `useParams()` 读 locale、从 `hostOrigin.slug` 读 slug；hover chip 使用 `.mini-player-return-chip` CSS class 驱动 `--motion-scale`-aware transition（`calc(150ms * var(--motion-scale, 1))`）+ `prefers-reduced-motion: reduce` 覆盖；新增 4 个 `--player-mini-*` tokens（shadow/overlay-bg/chip-bg/chip-fg）到 globals.css；i18n key `miniPlayer.returnToWatch` 已写入 zh-CN/en；无 any 类型、无硬编码颜色、无假播放控件订阅。typecheck / lint / test 全绿（1682 tests passed）。执行模型：claude-sonnet-4-6；子代理调用：无。
 
-8. **HANDOFF-26 — Footer 重构 + Settings 基础抽屉**（状态：📋 待执行）
+8. **HANDOFF-26 — Footer 重构 + Settings 基础抽屉**（状态：✅ 已完成 2026-04-24）
    - 创建时间：2026-04-24
    - 建议模型：sonnet
    - 估时：0.75d
@@ -10514,6 +10514,7 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
      - Settings 按钮点击打开抽屉，ESC / 遮罩关闭
      - 主题切换在抽屉内可用
      - 动效强度滑块改变 `--motion-scale` CSS 变量
+   - **完成备注**：Footer 重写为 3 列 grid（grid-cols-1 md:grid-cols-3），浏览列来自 MAIN_TYPE_PARAMS（5项），useLocale() 提供 locale 前缀；品牌块/社交图标/重复法务行已移除；SettingsDrawer 新建，--z-overlay=80（>--z-mini-player=50）；主题 3 按钮调用 useTheme().setTheme()（Cookie 写入，BrandProvider context 更新）；动效滑块 range[0-2] 映射 [0,1,1.5]，写 :root --motion-scale + localStorage（typeof window 双重守卫）；ESC + 遮罩关闭；Nav 绑定 settingsOpen state；Header.test.tsx 补充 useTheme mock（消除因新增 SettingsDrawer 引起的上下文报错）；新增 `footer` / `settings` i18n 命名空间（zh-CN + en）；`--z-overlay: 80` / `--motion-scale: 1` / `--overlay-bg` 三 token 落地 globals.css。typecheck / lint / 1682 tests 全绿。执行模型：claude-sonnet-4-6；子代理调用：无。
 
 9. **HANDOFF-30 — 播放页 §15 规格对齐（5 项布局修正）**（状态：✅ 已完成 2026-04-24）
    - 创建时间：2026-04-24
