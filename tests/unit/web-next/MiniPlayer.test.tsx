@@ -76,6 +76,7 @@ const { mockVideoState } = vi.hoisted(() => ({
     handleVideoTimeUpdate: vi.fn(),
     handleVideoLoadedMetadata: vi.fn(),
     handleAutoplayBlockedClick: vi.fn(),
+    handleSeek: vi.fn(),
   },
 }))
 
@@ -103,6 +104,7 @@ beforeEach(() => {
   mockVideoState.handleTogglePlay.mockReset()
   mockVideoState.handleToggleMute.mockReset()
   mockVideoState.handleAutoplayBlockedClick.mockReset()
+  mockVideoState.handleSeek.mockReset()
 })
 
 // ── HANDOFF-31 基础测试（不变）──────────────────────────────────
@@ -362,5 +364,56 @@ describe('MiniPlayer — HANDOFF-33 P1-2 返回按钮竞态修复', () => {
     fireEvent.click(screen.getByTestId('mini-player-return-btn'))
     expect(mockPlayerState.setHostMode).not.toHaveBeenCalled()
     expect(mockPush).not.toHaveBeenCalled()
+  })
+})
+
+describe('MiniPlayer — HANDOFF-33 P1-3 键盘 seek 立即调 handleSeek', () => {
+  function setupVideoWithDuration(duration: number) {
+    // JSDOM 不支持 media，需要手动 stub video 元素的 duration
+    const proto = window.HTMLVideoElement.prototype
+    Object.defineProperty(proto, 'duration', { get: () => duration, configurable: true })
+    Object.defineProperty(proto, 'currentTime', {
+      get: () => 30,
+      set: () => {},
+      configurable: true,
+    })
+  }
+
+  afterEach(() => {
+    // 恢复原始描述符，避免污染其他测试
+    delete (window.HTMLVideoElement.prototype as Record<string, unknown>).duration
+    delete (window.HTMLVideoElement.prototype as Record<string, unknown>).currentTime
+  })
+
+  it('进度条 ArrowRight → handleSeek 被调用', async () => {
+    setupVideoWithDuration(120)
+    mockVideoState.activeSrc = 'https://example.com/video.mp4'
+    mockVideoState.videoStatus = 'idle'
+    mockVideoState.localDuration = 120
+    mockVideoState.localCurrentTime = 30
+    mockPlayerState.shortId = 'abc123'
+    mockPlayerState.isPlaying = true
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    fireEvent.click(screen.getByTestId('mini-player-toggle-expand'))
+    const progressBar = screen.getByRole('slider')
+    fireEvent.keyDown(progressBar, { key: 'ArrowRight' })
+    expect(mockVideoState.handleSeek).toHaveBeenCalledTimes(1)
+  })
+
+  it('进度条 ArrowLeft → handleSeek 被调用', async () => {
+    setupVideoWithDuration(120)
+    mockVideoState.activeSrc = 'https://example.com/video.mp4'
+    mockVideoState.videoStatus = 'idle'
+    mockVideoState.localDuration = 120
+    mockVideoState.localCurrentTime = 30
+    mockPlayerState.shortId = 'abc123'
+    mockPlayerState.isPlaying = true
+    const { MiniPlayer } = await import('@/app/[locale]/_lib/player/MiniPlayer')
+    render(<MiniPlayer />)
+    fireEvent.click(screen.getByTestId('mini-player-toggle-expand'))
+    const progressBar = screen.getByRole('slider')
+    fireEvent.keyDown(progressBar, { key: 'ArrowLeft' })
+    expect(mockVideoState.handleSeek).toHaveBeenCalledTimes(1)
   })
 })
