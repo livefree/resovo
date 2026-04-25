@@ -119,7 +119,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setFlipOrigin: (rect) => set({ flipOrigin: rect }),
 
   releaseMiniPlayer: () => {
-    set({ shortId: null, currentTime: 0, duration: 0, isPlaying: false, activeSourceIndex: 0 })
+    set({ shortId: null, currentTime: 0, duration: 0, isPlaying: false, activeSourceIndex: 0, miniAutoplay: false, miniResumeTime: 0 })
     get().closeHost()
   },
 
