@@ -22,6 +22,7 @@ export interface UseMiniPlayerVideoReturn {
   handleVideoError: () => void
   handleVideoTimeUpdate: () => void
   handleVideoLoadedMetadata: () => void
+  handleVideoLoadedData: () => void
   handleVideoVolumeChange: () => void
   handleAutoplayBlockedClick: () => void
   handleSeek: (time: number) => void
@@ -131,16 +132,25 @@ export function useMiniPlayerVideo(
 
     if (activeSrc) {
       destroyHls()
-      // 同步读 store 快照，绕过两个竞态问题：
+      // 同步读 store 快照，绕过竞态：
       // 1. isPlaying：onPause 在 full player 卸载时早于 activeSrc 到达，闭包值已是 false
       // 2. miniAutoplay：RoutePlayerSync 在 setHostMode('mini') 前同步写入此标志
-      // 3. currentTime：闭包快照在 activeSrc=null 分支时被清零，需重读最新值
+      // 3. resumeTime：优先读 miniResumeTime（RoutePlayerSync 切 mini 前显式快照的权威值，
+      //    不会被 fetch sources 期间的中间清零路径污染）；fallback 到 currentTime（hydrate
+      //    场景：刷新后从 sessionStorage 恢复 mini，无 miniResumeTime 但 currentTime 有效）
       const snap = usePlayerStore.getState()
-      const resumeTime = snap.currentTime
+      const resumeTime = snap.miniResumeTime > 0 ? snap.miniResumeTime : snap.currentTime
       const autoplay = snap.miniAutoplay
       if (autoplay) snap.setMiniAutoplay(false)   // 消费后立即清零
+      if (snap.miniResumeTime > 0) snap.setMiniResumeTime(0)   // 消费后立即清零
       shouldAutoplayRef.current = autoplay
       startTimeRef.current = resumeTime
+      // 同步推到 localCurrentTime，避免控件 00:00 闪烁直到首次 timeupdate；
+      // 也同步写回 store.currentTime，让 mini 内的进度显示有正确起点
+      if (resumeTime > 0) {
+        setLocalCurrentTime(resumeTime)
+        setCurrentTimeRef.current(resumeTime)
+      }
 
       // apply persisted mute/volume from store (restored from sessionStorage)
       video.muted = isMutedRef.current
@@ -191,7 +201,25 @@ export function useMiniPlayerVideo(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSrc])
 
+  // 兜底 seek：在 loadedmetadata / loadeddata / canplay 多个事件点尝试恢复 currentTime
+  // native HLS / mp4 path 在 readyState=0 时设置 video.currentTime 可能被浏览器忽略；
+  // loadedmetadata 时第一次 seek 不一定生效，需后续事件兜底
+  const restoreSeekIfNeeded = useCallback(() => {
+    const video = videoRef.current
+    if (!video) return
+    const saved = startTimeRef.current
+    if (saved <= 0) return
+    if (video.currentTime < saved * 0.95) {
+      video.currentTime = saved
+    }
+    // 同步读 video.currentTime 验证：若 seek 已经接近目标则清零标志，停止后续兜底
+    if (video.currentTime >= saved * 0.95) {
+      startTimeRef.current = 0
+    }
+  }, [videoRef])
+
   const handleVideoCanPlay = useCallback(() => {
+    restoreSeekIfNeeded()
     if (videoStatusRef.current !== 'autoplay-blocked') {
       updateVideoStatus('idle')
     }
@@ -203,7 +231,11 @@ export function useMiniPlayerVideo(
         }
       })
     }
-  }, [videoRef, updateVideoStatus])
+  }, [videoRef, updateVideoStatus, restoreSeekIfNeeded])
+
+  const handleVideoLoadedData = useCallback(() => {
+    restoreSeekIfNeeded()
+  }, [restoreSeekIfNeeded])
 
   const handleVideoPlay = useCallback(() => {
     updateVideoStatus('idle')
@@ -223,6 +255,9 @@ export function useMiniPlayerVideo(
     const video = videoRef.current
     if (!video) return
     const t = video.currentTime
+    // startTimeRef > 0 表示尚未完成 resume seek（loadedmetadata 还没修正 video.currentTime）
+    // 此时浏览器 emit 的 timeupdate(0) 不可信，仅更新 localCurrentTime（保持 resumeTime 显示），不写 store
+    if (startTimeRef.current > 0) return
     setLocalCurrentTime(t)
     const now = Date.now()
     if (now - lastThrottleTimeRef.current >= TIMEUPDATE_THROTTLE_MS) {
@@ -237,15 +272,11 @@ export function useMiniPlayerVideo(
   const handleVideoLoadedMetadata = useCallback(() => {
     const video = videoRef.current
     if (!video || isNaN(video.duration)) return
-    // Re-apply start time if browser reset currentTime during loadedmetadata
-    const saved = startTimeRef.current
-    if (saved > 0 && video.currentTime < saved * 0.95) {
-      video.currentTime = saved
-    }
-    startTimeRef.current = 0
     setLocalDuration(video.duration)
     setDuration(video.duration)
-  }, [videoRef, setDuration])
+    // 第一次 seek 兜底（不立即清零 startTimeRef，留给 restoreSeekIfNeeded 判断 seek 是否真的生效）
+    restoreSeekIfNeeded()
+  }, [videoRef, setDuration, restoreSeekIfNeeded])
 
   const handleToggleMute = useCallback(() => {
     const video = videoRef.current
@@ -305,6 +336,7 @@ export function useMiniPlayerVideo(
     handleVideoError,
     handleVideoTimeUpdate,
     handleVideoLoadedMetadata,
+    handleVideoLoadedData,
     handleVideoVolumeChange,
     handleAutoplayBlockedClick,
     handleSeek,

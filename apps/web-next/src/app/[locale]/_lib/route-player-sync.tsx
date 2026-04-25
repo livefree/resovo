@@ -22,14 +22,31 @@ export function RoutePlayerSync() {
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const setHostMode = usePlayerStore((s) => s.setHostMode)
   const setMiniAutoplay = usePlayerStore((s) => s.setMiniAutoplay)
+  const setMiniResumeTime = usePlayerStore((s) => s.setMiniResumeTime)
 
-  // 仅在 watch 页面内更新，离开后冻结，保留导航前的播放状态
+  // 仅在 watch 页面内更新，离开后冻结，保留导航前的播放状态与进度
+  // 用 ref 而不是订阅 store.currentTime：
+  // 1. 避免 timeupdate 高频触发整个 RoutePlayerSync 重渲染
+  // 2. 离开 watch 后的 store.currentTime 写入路径不可信（任何中间清零都会污染快照）
   const watchPlayingRef = useRef(false)
+  const watchCurrentTimeRef = useRef(0)
   useEffect(() => {
     if (pathname.includes('/watch/')) {
       watchPlayingRef.current = isPlaying
     }
   }, [pathname, isPlaying])
+
+  // 在 watch 页面期间持续从 store 拉取最新 currentTime 到 ref，离开后冻结
+  // 用 subscribe 而非 useEffect+订阅：避免 effect cleanup 时序问题
+  useEffect(() => {
+    if (!pathname.includes('/watch/')) return
+    const unsub = usePlayerStore.subscribe((state) => {
+      watchCurrentTimeRef.current = state.currentTime
+    })
+    // 立即同步一次（防止订阅启动前 store 已有值未捕获）
+    watchCurrentTimeRef.current = usePlayerStore.getState().currentTime
+    return unsub
+  }, [pathname])
 
   // 路由跳转检测：读 ref 而非响应式 isPlaying，避免卸载时序竞争
   useEffect(() => {
@@ -42,9 +59,12 @@ export function RoutePlayerSync() {
 
       if (wasWatch && !isWatch && hostMode === 'full') {
         if (watchPlayingRef.current) {
-          // setMiniAutoplay 在 setHostMode 前同步写入，确保 useMiniPlayerVideo
-          // activeSrc effect 运行时能读到 true（onPause 竞态会在之后才把 isPlaying 置 false）
+          // setMiniAutoplay + setMiniResumeTime 在 setHostMode 前同步写入：
+          // 1. miniAutoplay 绕过 onPause 竞态（isPlaying 此时已可能被置 false）
+          // 2. miniResumeTime 显式快照离开瞬间的进度，绕过 store.currentTime 在 mini fetch 期间
+          //    被任何中间路径清零的不确定性（是 video 进度恢复的权威来源）
           setMiniAutoplay(true)
+          setMiniResumeTime(watchCurrentTimeRef.current)
           setHostMode('mini')
         } else {
           setHostMode('closed')

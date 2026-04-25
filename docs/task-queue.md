@@ -10903,3 +10903,56 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
   11. isPlaying 同步：`PlayerShell` 传入 `onPlay/onPause`；离开 /watch 播放中时 `watchPlayingRef.current === true`，mini 可正常唤出
 - **结论写入**：`docs/handoff_mini_player/review_d_mini_player.md`
 
+---
+
+#### HANDOFF-35 — MiniPlayer 唤出进度重置 + mini→full 静音 修复（状态：✅ 已完成 2026-04-25）
+
+- **创建时间**：2026-04-25 15:31
+- **实际开始时间**：2026-04-25 15:31
+- **完成时间**：2026-04-25 15:55
+- **建议模型**：sonnet
+- **执行模型**：claude-opus-4-7（用户在主循环切到 Opus 4.7）
+- **估时**：0.4d
+- **前置依赖**：HANDOFF-34 ✅、c82c381 修复（部分有效）
+
+**问题背景**：
+c82c381 声称修复"full→mini 唤出进度重置"，用户实测仍存在；同时报告 mini→full 切换后视频被静音。
+
+**根因（深入排查后定位）**：
+1. **唤出"进度重置"实际是起播窗口期视觉/状态归零**：
+   - mini 出现瞬间 `localCurrentTime` useState 初始为 0，控件显示 00:00 直到第一次 timeupdate 跳到 resumeTime
+   - native HLS / mp4 path 下 `video.src = url; video.currentTime = resumeTime` 在 readyState=0 时浏览器忽略 currentTime 设置；浏览器 emit `timeupdate(0)` → `handleVideoTimeUpdate` → 节流后 `setCurrentTime(0)` → store.currentTime 被瞬时清零
+   - `handleVideoLoadedMetadata` 最终 seek 回 saved，但起播窗口期仍可见
+2. **mini→full 静音**：`packages/player-core/useSourceLoader.ts` autoplay 失败时自动 `video.muted = true` 重试。mini→full 时 PlayerShell 传 `autoplay=true`，新挂载 video 无 user-gesture 关联（router.push 已破坏 gesture chain），play() 被浏览器拒绝 → 静音重试
+
+**修复范围（用户确认 P0+P1+(c)，不动 player-core）**：
+
+- **P0** `useMiniPlayerVideo.ts`：
+  - activeSrc effect 在设置 `startTimeRef.current = resumeTime` 后同步 `setLocalCurrentTime(resumeTime)`（修控件 00:00 闪烁）
+  - `handleVideoTimeUpdate` 在 `startTimeRef.current > 0` 时仅更新 localCurrentTime，不写 store（防止 loadedmetadata 之前误清零 store.currentTime）
+- **P1** `useMiniPlayerVideo.ts`：native HLS / mp4 path 改造起播 seek 策略
+  - 监听 `loadedmetadata` 之外，同时监听 `loadeddata` / `canplay` 多次重试 seek（直到 startTimeRef 归零）
+  - 已有 `handleVideoLoadedMetadata` 保留作为兜底
+- **(c)** `PlayerShell.tsx`：mini→full 时不再 `setAutoplayOnResume(true)`，video 暂停在 priorTime 等用户点击触发 user-gesture（避免 player-core 静音 fallback）
+  - 不调 `clearProgress`，让 ResumePrompt 自然弹出获得 user-gesture 入口
+  - 未来共享 video 实例后再做完整方案
+
+**文件范围**：
+- `apps/web-next/src/app/[locale]/_lib/player/useMiniPlayerVideo.ts`
+- `apps/web-next/src/components/player/PlayerShell.tsx`
+- `tests/unit/web-next/MiniPlayer.test.tsx`（如需补单测）
+
+**验收**：
+- [x] full→mini：mini 弹出后从 resumeTime 起播（用户实测确认）
+- [x] full→mini：起播全程 store.currentTime 不被瞬时清零（miniResumeTime 显式快照绕过）
+- [x] mini→full：video 暂停在 priorTime，ResumePrompt 弹出；用户点击后有声播放（用户实测确认）
+- [x] mini→full：取消 ResumePrompt 倒计时后，video 仍 paused，需用户主动点击
+- [x] typecheck / lint / test 全绿（1719 单测 PASS）
+
+**完成备注**：
+- 第一轮修复（P0+P1+(c)）按用户确认方案实施后，full→mini 仍未生效——根因是 store.currentTime 在 mini fetch sources 期间被某条未明的中间路径清零，仅靠 activeSrc effect 同步读 store 不够稳定
+- 第二轮加固：playerStore 新增 transient 字段 `miniResumeTime`；RoutePlayerSync 用 zustand `subscribe()` 在 watch 期间持续把 store.currentTime 镜像到 `watchCurrentTimeRef`（离开后冻结），切 mini 前同步 `setMiniResumeTime`；useMiniPlayerVideo activeSrc effect 优先读 miniResumeTime（fallback 到 currentTime 兼容 hydrate 场景），消费后清零
+- (c) 方案：mini→full 不再传 autoplay=true、不再 clearProgress；让 ResumePrompt 弹出承接 user-gesture，绕过 player-core useSourceLoader 的静音 fallback。未来共享 video 实例方案落地后再做无缝衔接（用户已确认延后）
+- 顺手清理：移除 `autoplayOnResume` state、相关 setAutoplayOnResume 调用、clearProgress import
+- **执行模型**：claude-opus-4-7（主循环），无子代理调用
+

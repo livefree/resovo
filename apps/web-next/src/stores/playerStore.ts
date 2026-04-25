@@ -74,6 +74,12 @@ interface PlayerState {
   miniAutoplay: boolean
   setMiniAutoplay: (v: boolean) => void
 
+  // === 过渡进度快照（transient，不持久化）===
+  // RoutePlayerSync 在切 mini 前快照 currentTime；useMiniPlayerVideo activeSrc effect 优先读取并消费清零
+  // 目的：绕过 store.currentTime 在 fetch sources 期间被任何路径意外清零的不确定性
+  miniResumeTime: number
+  setMiniResumeTime: (t: number) => void
+
   // === HANDOFF-34 新增：isMuted / volume（sessionStorage 协议 v1.1）===
   isMuted: boolean
   volume: number
@@ -103,9 +109,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   volume: 1,
   flipOrigin: null,
   miniAutoplay: false,
+  miniResumeTime: 0,
 
   setActiveSourceIndex: (index) => set({ activeSourceIndex: index }),
   setMiniAutoplay: (v) => set({ miniAutoplay: v }),
+  setMiniResumeTime: (t) => set({ miniResumeTime: t }),
   setIsMuted: (muted) => set({ isMuted: muted }),
   setVolume: (vol) => set({ volume: vol }),
   setFlipOrigin: (rect) => set({ flipOrigin: rect }),

@@ -12,7 +12,7 @@ import { getVideoDetailHref } from '@/lib/video-route'
 import { buildLineDisplayName, deduplicateLabels } from '@/lib/line-display-name'
 import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@resovo/types'
 import { SourceBar } from './SourceBar'
-import { ResumePrompt, saveProgress, clearProgress } from './ResumePrompt'
+import { ResumePrompt, saveProgress } from './ResumePrompt'
 import { getInlineEpisodes, getPlayerLayoutClass, getSidePanelClass } from './playerShell.layout'
 
 const VideoPlayer = dynamic(
@@ -50,7 +50,6 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
   const [loading, setLoading] = useState(true)
   const [startTime, setStartTime] = useState<number | undefined>(undefined)
   const [playerVersion, setPlayerVersion] = useState(0)
-  const [autoplayOnResume, setAutoplayOnResume] = useState(false)
   const [activePanelTab, setActivePanelTab] = useState<'episodes' | 'sources'>('episodes')
 
   const shortId = extractShortId(slug)
@@ -92,12 +91,13 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
             setSources(newSources)
             // Restore source index from snapshot (initPlayer already zeroed it)
             setActiveSourceIndex(priorSourceIndex < newSources.length ? priorSourceIndex : 0)
-            // Seamless mini→full resume: seek + autoplay + suppress ResumePrompt
+            // mini→full：仅设 startTime 让 video 暂停在 priorTime，不 autoplay
+            // 不调 clearProgress，让 ResumePrompt 自然弹出，由用户点击继续触发 user-gesture
+            // （否则 player-core useSourceLoader 在 autoplay 失败时会自动 muted=true 重试，造成静音 bug）
+            // 未来共享 video 实例落地后再做无缝衔接
             if (priorTime > 30) {
               setStartTime(priorTime)
-              setAutoplayOnResume(true)
-              setPlayerVersion((v) => v + 1)   // 强制 VideoPlayer 以新 startTime+autoplay 重挂
-              clearProgress(shortId, ep)
+              setPlayerVersion((v) => v + 1)
             }
           })
           .catch(() => setSources([]))
@@ -394,12 +394,11 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
                     onEpisodeChange={inlineEpisodes ? handleEpisodeChange : undefined}
                     onNext={hasNext ? () => setEpisode(currentEpisode + 1) : undefined}
                     onTimeUpdate={handleTimeUpdate}
-                    onPlay={() => { setPlaying(true); setAutoplayOnResume(false) }}
+                    onPlay={() => setPlaying(true)}
                     onPause={() => setPlaying(false)}
                     onEnded={() => setPlaying(false)}
                     onTheaterChange={handleTheaterChange}
                     startTime={startTime}
-                    autoplay={autoplayOnResume}
                     className="absolute inset-0"
                   />
                   <div className="absolute inset-0 z-[120] pointer-events-none flex items-end justify-center pb-20 md:pb-24">

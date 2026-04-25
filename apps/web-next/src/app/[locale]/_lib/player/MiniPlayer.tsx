@@ -90,6 +90,7 @@ export function MiniPlayer() {
     handleVideoError,
     handleVideoTimeUpdate,
     handleVideoLoadedMetadata,
+    handleVideoLoadedData,
     handleVideoVolumeChange,
     handleAutoplayBlockedClick,
     handleSeek,
@@ -370,6 +371,7 @@ export function MiniPlayer() {
             onError={handleVideoError}
             onTimeUpdate={handleVideoTimeUpdate}
             onLoadedMetadata={handleVideoLoadedMetadata}
+            onLoadedData={handleVideoLoadedData}
             onVolumeChange={handleVideoVolumeChange}
             style={{
               position: 'absolute',
