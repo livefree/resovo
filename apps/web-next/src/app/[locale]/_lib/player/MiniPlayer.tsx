@@ -1,64 +1,63 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { useTranslations } from 'next-intl'
 import { usePlayerStore } from '@/stores/playerStore'
 import {
   MINI_GEOMETRY_CONSTRAINTS,
   MINI_GEOMETRY_DEFAULTS,
   computeDockPosition,
+  deriveHeightFromWidth,
   type MiniGeometryV1,
 } from '@/stores/_persist/mini-geometry'
 import { attachMiniPlayerDrag, attachViewportResizeWatcher } from '@/lib/mini-player/drag'
 
 /**
- * MiniPlayer — HANDOFF-03 B 站风浮窗播放器（桌面专属）。
+ * MiniPlayer — HANDOFF-31 骨架重构（非交互基础层）
  *
- * 交互契约：
- *   - 顶部 32px drag handle：pointer events 手写拖拽 → 松手吸附最近角 260ms spring
- *   - 右下 16×16px resize handle：保持 16:9，240–480px clamp
- *   - 关闭按钮 → closeHost() → hostMode='closed'
- *   - 展开（双击容器非控件区 / click 占位）→ setHostMode('full')
- *   - takeoverActive=true 时 display:none（护栏优先级最高，Storage 协调协议）
- *   - @media (hover:none) and (pointer:coarse) → 移动端 display:none（严格屏蔽 iOS PiP 限制冲突）
- *   - data-mini-video-slot：container 里的占位 slot，由 GlobalPlayerHost 在 full⇄mini 切换时 appendChild <video>
+ * 几何模型（UI Contract §2）：
+ *   - 容器 position: fixed，overflow: hidden，所有子元素绝对定位
+ *   - Collapsed：height = videoH（= width × 9/16）
+ *   - Expanded：height = videoH + 44px（控制栏）
+ *   - Header（32px）position: absolute; top:0 叠加视频，不占容器高度
+ *   - Header 默认 opacity:0 + pointer-events:none；hover 容器时显现
  *
- * 颜色全部走 CSS 变量（player.mini.* tokens 经 tokens.css 映射为 --color-player-mini-*）。
+ * 产品决策变更（2026-04-24）：
+ *   - 展开/折叠按钮：切换 isExpanded（不再 setHostMode('full')）
+ *   - 返回播放页：独立 ← 按钮，router.push 到 /watch
+ *   - 关闭：handleClose() → releaseMiniPlayer()（完整清零 store）
+ *   - 移动端：releaseMiniPlayer()（CSS display:none 为双保险，见 globals.css HANDOFF-31）
+ *   - PiP：从 MiniPlayer 移除，由 PlayerShell 独占
  */
 export function MiniPlayer() {
   const router = useRouter()
   const params = useParams()
   const locale = (params.locale as string) ?? 'zh-CN'
-  const t = useTranslations('miniPlayer')
 
   const shortId = usePlayerStore((s) => s.shortId)
   const hostOrigin = usePlayerStore((s) => s.hostOrigin)
   const geometry = usePlayerStore((s) => s.geometry)
   const takeoverActive = usePlayerStore((s) => s.takeoverActive)
   const setGeometry = usePlayerStore((s) => s.setGeometry)
-  const setHostMode = usePlayerStore((s) => s.setHostMode)
-  const closeHost = usePlayerStore((s) => s.closeHost)
+  const releaseMiniPlayer = usePlayerStore((s) => s.releaseMiniPlayer)
 
-  const [videoSlotHovering, setVideoSlotHovering] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [headerVisible, setHeaderVisible] = useState(false)
+  const [visible, setVisible] = useState(false)
 
   const containerRef = useRef<HTMLDivElement | null>(null)
   const dragHandleRef = useRef<HTMLDivElement | null>(null)
   const resizeHandleRef = useRef<HTMLDivElement | null>(null)
-  const videoSlotRef = useRef<HTMLDivElement | null>(null)
+  // videoRef：HANDOFF-32 接入，此阶段始终 null
+  const videoRef = useRef<HTMLVideoElement | null>(null)
 
-  // 保存最新 geometry 的 ref，供 drag.ts 的 getGeometry 回调读取（避免闭包陈旧）
   const geometryRef = useRef<MiniGeometryV1>(geometry ?? MINI_GEOMETRY_DEFAULTS)
   useEffect(() => {
     geometryRef.current = geometry ?? MINI_GEOMETRY_DEFAULTS
   }, [geometry])
 
-  // guard：drag.ts 的 commitGeometry 已经在 drag-end / resize-end 后应用了 spring transition
-  // 并直接写入 container.style.left/top/width/height。useLayoutEffect 此时不得再次覆写
-  // （否则 transition 会被重置为 'none' 样式，spring 动画被打断）。
   const userInteractingRef = useRef(false)
-
-  const [visible, setVisible] = useState(false)
+  const headerHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // mount 后下一帧 fade in + spring pop-in
   useEffect(() => {
@@ -66,33 +65,54 @@ export function MiniPlayer() {
     return () => cancelAnimationFrame(id)
   }, [])
 
-  // 浮层规范（ui-rules.md §浮层组件）：Esc 关闭
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeHost()
-    }
-    document.addEventListener('keydown', handleKey)
-    return () => document.removeEventListener('keydown', handleKey)
-  }, [closeHost])
+  const handleClose = useCallback(() => {
+    videoRef.current?.pause()
+    if (videoRef.current) videoRef.current.src = ''
+    releaseMiniPlayer()
+  }, [releaseMiniPlayer])
 
-  // 初次 mount 应用 geometry 到 DOM（left/top/width/height 由 computeDockPosition 计算）
-  // guard：若用户正在交互（drag / resize），drag.ts 已在 commit 时写入了带 spring
-  // transition 的 style，此处必须跳过，避免覆写 transition 导致 spring 动画中断。
+  // 移动端防护（UI Contract §13.6）：MQ 匹配时立即 release，不仅靠 CSS display:none
+  useEffect(() => {
+    const mq = window.matchMedia('(hover: none) and (pointer: coarse)')
+    if (mq.matches) {
+      handleClose()
+      return
+    }
+    const handler = (e: MediaQueryListEvent) => {
+      if (e.matches) handleClose()
+    }
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [handleClose])
+
+  // Esc 关闭 + m 键静音占位（HANDOFF-32 接入 videoRef 后实现 toggle mute）
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') handleClose()
+      // m 键静音：videoRef.current?.muted = !videoRef.current?.muted（HANDOFF-32）
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [handleClose])
+
+  // 应用 geometry + isExpanded 到 DOM（left/top/width/height）
   useLayoutEffect(() => {
     const el = containerRef.current
-    if (!el) return
-    if (userInteractingRef.current) return
+    if (!el || userInteractingRef.current) return
     const geom = geometry ?? MINI_GEOMETRY_DEFAULTS
     const vw = window.innerWidth
     const vh = window.innerHeight
-    const { left, top } = computeDockPosition(geom, vw, vh)
+    const videoH = deriveHeightFromWidth(geom.width)
+    const height = isExpanded ? videoH + 44 : videoH
+    const dockGeom: MiniGeometryV1 = { ...geom, height }
+    const { left, top } = computeDockPosition(dockGeom, vw, vh)
     el.style.left = `${left}px`
     el.style.top = `${top}px`
     el.style.width = `${geom.width}px`
-    el.style.height = `${geom.height}px`
-  }, [geometry])
+    el.style.height = `${height}px`
+  }, [geometry, isExpanded])
 
-  // attach pointer events（拖拽 + 缩放 + window.resize 越界 re-snap）
+  // attach drag + viewport resize watcher
   useEffect(() => {
     const container = containerRef.current
     const dragHandle = dragHandleRef.current
@@ -104,60 +124,74 @@ export function MiniPlayer() {
       geometryRef.current = g
       setGeometry(g)
     }
-
     const detachDrag = attachMiniPlayerDrag({
       container,
       dragHandle,
       resizeHandle,
       getGeometry,
       commitGeometry,
-      onInteractionChange: (interacting) => {
-        userInteractingRef.current = interacting
-      },
+      onInteractionChange: (interacting) => { userInteractingRef.current = interacting },
     })
     const detachResizeWatcher = attachViewportResizeWatcher(container, getGeometry, commitGeometry)
-
     return () => {
       detachDrag()
       detachResizeWatcher()
     }
   }, [setGeometry])
 
-  function handleExpand() {
-    setHostMode('full')
-  }
-
-  function handleVideoSlotClick() {
+  function handleReturnToWatch() {
     if (hostOrigin?.slug) {
       router.push(`/${locale}/watch/${hostOrigin.slug}`)
     }
   }
 
+  function handleToggleExpand() {
+    setIsExpanded((prev) => !prev)
+    // useLayoutEffect 依赖 isExpanded，会自动重算 top（底角 dock 防超出）
+  }
+
+  function handleContainerMouseEnter() {
+    if (headerHideTimerRef.current !== null) {
+      clearTimeout(headerHideTimerRef.current)
+      headerHideTimerRef.current = null
+    }
+    setHeaderVisible(true)
+  }
+
+  function handleContainerMouseLeave() {
+    headerHideTimerRef.current = setTimeout(() => {
+      headerHideTimerRef.current = null
+      setHeaderVisible(false)
+    }, 200)
+  }
+
+  const geom = geometry ?? MINI_GEOMETRY_DEFAULTS
+  const videoH = deriveHeightFromWidth(geom.width)
+
   return (
     <div
       ref={containerRef}
+      role="region"
+      aria-label="迷你播放器"
       data-mini-player
       data-testid="mini-player"
-      className="mini-player-root"
+      onMouseEnter={handleContainerMouseEnter}
+      onMouseLeave={handleContainerMouseLeave}
       style={{
         position: 'fixed',
-        // left/top/width/height 由 useLayoutEffect 写入；此处仅给兜底值避免初次闪烁
         left: 0,
         top: 0,
-        width: `${MINI_GEOMETRY_DEFAULTS.width}px`,
-        height: `${MINI_GEOMETRY_DEFAULTS.height}px`,
+        width: `${geom.width}px`,
+        height: `${isExpanded ? videoH + 44 : videoH}px`,
         minWidth: `${MINI_GEOMETRY_CONSTRAINTS.MIN_WIDTH}px`,
         maxWidth: `${MINI_GEOMETRY_CONSTRAINTS.MAX_WIDTH}px`,
-        aspectRatio: '16 / 9',
-        background: 'var(--bg-canvas)',
-        border: '1px solid var(--border-default)',
+        background: 'var(--player-mini-bg)',
+        border: '1px solid var(--player-mini-border)',
         borderRadius: 'var(--radius-lg, 12px)',
-        // 使用 player.mini.shadow token（HANDOFF-01 已导出为 --player-mini-shadow）
         boxShadow: 'var(--player-mini-shadow)',
         zIndex: 'var(--z-mini-player, 48)',
         overflow: 'hidden',
-        display: takeoverActive ? 'none' : 'flex',
-        flexDirection: 'column',
+        display: takeoverActive ? 'none' : 'block',
         pointerEvents: 'all',
         opacity: visible ? 1 : 0,
         transform: visible ? 'scale(1) translateY(0)' : 'scale(0.92) translateY(8px)',
@@ -166,145 +200,297 @@ export function MiniPlayer() {
           : 'none',
       }}
     >
-      {/* 顶部 drag handle（32px 可拖拽区） */}
+      {/* ── 视频区（绝对定位，Expanded 时底部为控制栏让出 44px） ── */}
       <div
-        ref={dragHandleRef}
-        data-mini-drag-handle
-        data-testid="mini-player-drag-handle"
+        data-testid="mini-player-video-area"
         style={{
-          height: '32px',
-          flexShrink: 0,
-          background: 'var(--bg-surface)',
-          borderBottom: '1px solid var(--border-default)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 8px',
-          cursor: 'move',
-          touchAction: 'none', // 禁止触摸滚动干扰 pointer events
-          userSelect: 'none',
+          position: 'absolute',
+          inset: isExpanded ? '0 0 44px 0' : '0 0 0 0',
+          background: 'var(--player-video-area-bg)',
+          cursor: shortId ? 'pointer' : 'default',
         }}
       >
-        <span
-          style={{
-            fontSize: '0.75rem',
-            color: 'var(--fg-muted)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            flex: 1,
-            pointerEvents: 'none',
-          }}
-        >
-          {shortId ? '迷你播放器' : '正在播放'}
-        </span>
-        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-          <button
-            type="button"
-            aria-label="展开播放器"
-            title="展开"
-            onClick={handleExpand}
-            style={{
-              width: '24px',
-              height: '24px',
-              padding: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'transparent',
-              border: 'none',
-              borderRadius: '4px',
-              color: 'var(--fg-muted)',
-              cursor: 'pointer',
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-              <path d="M3 3h7v2H5v5H3V3zm18 0v7h-2V5h-5V3h7zM3 21v-7h2v5h5v2H3zm18 0h-7v-2h5v-5h2v7z" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            aria-label="关闭播放器"
-            title="关闭"
-            onClick={closeHost}
-            style={{
-              width: '24px',
-              height: '24px',
-              padding: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'transparent',
-              border: 'none',
-              borderRadius: '4px',
-              color: 'var(--fg-muted)',
-              cursor: 'pointer',
-              fontSize: '14px',
-            }}
-          >
-            ✕
-          </button>
-        </div>
-      </div>
-
-      {/* 视频 slot：GlobalPlayerHost 在 full⇄mini 切换时把 <video> appendChild 到此容器 */}
-      <div
-        ref={videoSlotRef}
-        data-mini-video-slot
-        data-testid="mini-player-video-slot"
-        onClick={handleVideoSlotClick}
-        onMouseEnter={() => setVideoSlotHovering(true)}
-        onMouseLeave={() => setVideoSlotHovering(false)}
-        style={{
-          flex: 1,
-          position: 'relative',
-          background: 'var(--bg-surface-sunken)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-          minHeight: 0,
-          color: 'var(--fg-subtle)',
-          fontSize: '0.75rem',
-          cursor: hostOrigin?.slug ? 'pointer' : 'default',
-        }}
-      >
-        {/* 当 video 尚未 appendChild 进来时的占位文案 */}
-        {shortId ? '' : '无正在播放的视频'}
-
-        {/* hover 返回 chip：绝对居中覆盖层 */}
-        {hostOrigin?.slug && (
+        {/* 无播放源占位（HANDOFF-32 接入 video 后替换） */}
+        {!shortId && (
           <div
-            aria-hidden
-            className="mini-player-return-chip"
+            data-testid="mini-no-source"
             style={{
               position: 'absolute',
               inset: 0,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: 'var(--player-mini-overlay-bg)',
-              opacity: videoSlotHovering ? 1 : 0,
-              pointerEvents: 'none',
+              fontSize: '12px',
+              color: 'var(--fg-muted)',
+              cursor: 'default',
             }}
           >
-            <span
-              style={{
-                background: 'var(--player-mini-chip-bg)',
-                color: 'var(--player-mini-chip-fg)',
-                padding: '4px 10px',
-                borderRadius: '20px',
-                fontSize: '0.75rem',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {t('returnToWatch')}
-            </span>
+            暂无可用播放源
           </div>
         )}
+
+        {/* Play/Pause overlay 占位（HANDOFF-32 填充，class="mini-video-overlay"） */}
+        <div
+          data-testid="mini-player-play-pause"
+          className="mini-video-overlay"
+          aria-hidden
+          style={{ position: 'absolute', inset: 0, display: 'none' }}
+        />
+
+        {/* Loading overlay 占位（HANDOFF-32 填充） */}
+        <div
+          data-testid="mini-loading"
+          aria-hidden
+          style={{ position: 'absolute', inset: 0, display: 'none' }}
+        />
+
+        {/* Error overlay 占位（HANDOFF-32 填充） */}
+        <div
+          data-testid="mini-error"
+          aria-hidden
+          style={{ position: 'absolute', inset: 0, display: 'none' }}
+        />
       </div>
 
-      {/* 右下 resize handle（16×16px） */}
+      {/* ── Header overlay（32px，hover 时显现，UI Contract §2 + §3） ── */}
+      <div
+        ref={dragHandleRef}
+        data-mini-drag-handle
+        data-testid="mini-player-drag-handle"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '32px',
+          zIndex: 2,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 8px',
+          gap: '6px',
+          background: 'var(--player-mini-header-bg)',
+          opacity: headerVisible ? 1 : 0,
+          pointerEvents: headerVisible ? 'all' : 'none',
+          transition: 'opacity 150ms ease',
+          cursor: 'move',
+          touchAction: 'none',
+          userSelect: 'none',
+        }}
+      >
+        {/* 返回播放页按钮（UI Contract §3.3） */}
+        <button
+          type="button"
+          data-testid="mini-player-return-btn"
+          aria-label="返回播放页"
+          aria-disabled={!hostOrigin?.slug}
+          tabIndex={headerVisible ? 0 : -1}
+          onClick={handleReturnToWatch}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{
+            width: '28px',
+            height: '28px',
+            border: 'none',
+            borderRadius: '4px',
+            background: 'transparent',
+            cursor: hostOrigin?.slug ? 'pointer' : 'default',
+            color: 'var(--player-mini-btn-color)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            opacity: hostOrigin?.slug ? 1 : 0.4,
+            pointerEvents: hostOrigin?.slug ? 'auto' : 'none',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--player-mini-btn-hover-bg)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+            <path d="M19 12H5m0 0l7 7m-7-7l7-7" />
+          </svg>
+        </button>
+
+        {/* 标题区（flex-1，单行截断） */}
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: '12px',
+            color: 'var(--fg-muted)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+          }}
+        >
+          {shortId ? '正在播放' : '迷你播放器'}
+        </span>
+
+        {/* 展开/折叠按钮（UI Contract §3.3） */}
+        <button
+          type="button"
+          data-testid="mini-player-toggle-expand"
+          aria-label={isExpanded ? '折叠' : '展开'}
+          aria-expanded={isExpanded}
+          tabIndex={headerVisible ? 0 : -1}
+          onClick={handleToggleExpand}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{
+            width: '28px',
+            height: '28px',
+            border: 'none',
+            borderRadius: '4px',
+            background: 'transparent',
+            cursor: 'pointer',
+            color: 'var(--player-mini-btn-color)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--player-mini-btn-hover-bg)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+            {isExpanded
+              ? <path d="M18 15l-6-6-6 6" />
+              : <path d="M6 9l6 6 6-6" />
+            }
+          </svg>
+        </button>
+
+        {/* 关闭按钮（UI Contract §3.3） */}
+        <button
+          type="button"
+          data-testid="mini-player-close-btn"
+          aria-label="关闭播放器"
+          tabIndex={headerVisible ? 0 : -1}
+          onClick={handleClose}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{
+            width: '28px',
+            height: '28px',
+            border: 'none',
+            borderRadius: '4px',
+            background: 'transparent',
+            cursor: 'pointer',
+            color: 'var(--player-mini-btn-color)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--player-mini-btn-hover-bg)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      {/* ── 控制栏占位（Expanded 态，HANDOFF-32 填充内容） ── */}
+      {isExpanded && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: '44px',
+            background: 'var(--player-mini-ctrl-bg)',
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 8px',
+            gap: '8px',
+          }}
+        >
+          {/* Play/Pause 按钮（HANDOFF-32 激活） */}
+          <button
+            type="button"
+            data-testid="mini-player-play-pause"
+            aria-label="播放"
+            disabled
+            style={{
+              width: '32px',
+              height: '32px',
+              border: 'none',
+              borderRadius: '4px',
+              background: 'transparent',
+              cursor: 'not-allowed',
+              opacity: 0.4,
+              color: 'var(--player-mini-ctrl-fg)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M6 4l15 8-15 8V4z" />
+            </svg>
+          </button>
+
+          {/* 进度条（HANDOFF-32 激活） */}
+          <div
+            data-testid="mini-player-progress"
+            role="slider"
+            aria-label="播放进度"
+            aria-valuemin={0}
+            aria-valuemax={0}
+            aria-valuenow={0}
+            aria-valuetext="00:00 / --:--"
+            tabIndex={0}
+            style={{
+              flex: 1,
+              height: '4px',
+              background: 'var(--player-mini-progress-track)',
+              borderRadius: '2px',
+              pointerEvents: 'none',
+              opacity: 0.4,
+            }}
+          />
+
+          {/* 时间显示 */}
+          <span
+            style={{
+              fontSize: '11px',
+              color: 'var(--player-mini-ctrl-fg)',
+              minWidth: '72px',
+              textAlign: 'center',
+              flexShrink: 0,
+            }}
+          >
+            00:00 / --:--
+          </span>
+
+          {/* 静音按钮（HANDOFF-32 激活） */}
+          <button
+            type="button"
+            data-testid="mini-player-mute"
+            aria-label="静音"
+            disabled
+            style={{
+              width: '24px',
+              height: '24px',
+              border: 'none',
+              borderRadius: '4px',
+              background: 'transparent',
+              cursor: 'not-allowed',
+              opacity: 0.4,
+              color: 'var(--player-mini-ctrl-fg)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <path d="M11 5L6 9H2v6h4l5 4V5z" />
+              <path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* ── Resize handle（右下角，UI Contract §2.3） ── */}
       <div
         ref={resizeHandleRef}
         data-mini-resize-handle
@@ -318,10 +504,9 @@ export function MiniPlayer() {
           height: '16px',
           cursor: 'nwse-resize',
           touchAction: 'none',
-          // 视觉提示：用渐变对角线表达"可调整大小"
           background:
             'linear-gradient(135deg, transparent 0%, transparent 40%, var(--fg-subtle) 40%, var(--fg-subtle) 45%, transparent 45%, transparent 60%, var(--fg-subtle) 60%, var(--fg-subtle) 65%, transparent 65%)',
-          zIndex: 1,
+          zIndex: 3,
         }}
       />
     </div>

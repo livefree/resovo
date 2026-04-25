@@ -459,6 +459,22 @@
   --player-mini-chip-fg:     oklch(100% 0 0);
 }
 
+/* HANDOFF-31 — MiniPlayer 完整 token 集（UI Contract §8，补齐缺失的 12 项） */
+:root {
+  --player-mini-bg:               var(--bg-canvas);
+  --player-mini-border:           var(--border-default);
+  --player-mini-header-bg:        color-mix(in oklch, var(--bg-surface) 92%, transparent);
+  --player-mini-btn-color:        var(--fg-muted);
+  --player-mini-btn-hover-bg:     color-mix(in oklch, var(--fg-default) 8%, transparent);
+  --player-mini-overlay-icon:     oklch(100% 0 0);
+  --player-mini-ctrl-bg:          color-mix(in oklch, var(--bg-canvas) 95%, transparent);
+  --player-mini-ctrl-fg:          var(--fg-muted);
+  --player-mini-progress-track:   color-mix(in oklch, var(--fg-default) 20%, transparent);
+  --player-mini-progress-fill:    var(--accent-default);
+  --player-mini-progress-buffer:  color-mix(in oklch, var(--fg-default) 40%, transparent);
+  --player-mini-danger-fg:        var(--color-danger, oklch(55% 0.2 25));
+}
+
 /* HANDOFF-26 — 通用遮罩层 token（drawer / dialog backdrop） */
 :root {
   --overlay-bg:    oklch(0% 0 0 / 0.40);
@@ -478,6 +494,21 @@
 @media (prefers-reduced-motion: reduce) {
   .mini-player-return-chip {
     transition: none !important;
+  }
+}
+
+/* HANDOFF-31 — MiniPlayer video overlay 淡入淡出（受 --motion-scale，移动端双保险隐藏） */
+.mini-video-overlay {
+  transition: opacity calc(150ms * var(--motion-scale, 1)) ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mini-video-overlay {
+    transition: none !important;
+  }
+}
+@media (hover: none) and (pointer: coarse) {
+  [data-mini-player] {
+    display: none !important;
   }
 }
 

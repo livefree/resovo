@@ -64,6 +64,9 @@ interface PlayerState {
   // === M5-CLEANUP-06 新增：选中线路 index，跨 mini↔full 切换持久 ===
   activeSourceIndex: number
   setActiveSourceIndex: (index: number) => void
+
+  // === HANDOFF-31 新增：完整关闭 + 清零 mini 播放状态 ===
+  releaseMiniPlayer: () => void
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -82,6 +85,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   activeSourceIndex: 0,
 
   setActiveSourceIndex: (index) => set({ activeSourceIndex: index }),
+
+  releaseMiniPlayer: () => {
+    set({ shortId: null, currentTime: 0, duration: 0, isPlaying: false, activeSourceIndex: 0 })
+    get().closeHost()
+  },
 
   initPlayer: (shortId, episode) =>
     set({ shortId, currentEpisode: episode, isPlaying: false, currentTime: 0, duration: 0, activeSourceIndex: 0 }),

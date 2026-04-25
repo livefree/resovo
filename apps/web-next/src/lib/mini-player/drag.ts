@@ -259,28 +259,41 @@ export function attachViewportResizeWatcher(
         nextWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.floor(viewportBudget)))
       }
       const nextHeight = deriveHeightFromWidth(nextWidth)
+      const widthChanged = nextWidth !== geom.width
 
-      // 用当前 geom 的 corner 试 dock，若越界则重新 nearestCorner
-      const testGeom: MiniGeometryV1 = { v: 1, width: nextWidth, height: nextHeight, corner: geom.corner }
-      const { left, top } = computeDockPosition(testGeom, vw, vh)
-      const outOfBounds = left < 0 || top < 0 || left + nextWidth > vw || top + nextHeight > vh
+      // UI Contract §2.3：无论是否越界，只要 corner 有值，始终按 (corner, margin) 重算 left/top
+      // 极小屏场景（越界）额外用 nearestCorner 重新归位
+      let nextGeom: MiniGeometryV1 = { ...geom, width: nextWidth, height: nextHeight }
+      const testPos = computeDockPosition(nextGeom, vw, vh)
+      const outOfBounds = testPos.left < 0 || testPos.top < 0
+        || testPos.left + nextWidth > vw || testPos.top + nextHeight > vh
 
-      if (outOfBounds || nextWidth !== geom.width) {
-        // 以浮窗中心找最近角（极小屏场景下 corner 重新归位）
+      if (outOfBounds) {
         const rect = container.getBoundingClientRect()
         const centerX = rect.left + rect.width / 2
         const centerY = rect.top + rect.height / 2
         const corner = nearestCorner(centerX, centerY, vw, vh)
-        const finalGeom: MiniGeometryV1 = { v: 1, width: nextWidth, height: nextHeight, corner }
-        const finalPos = computeDockPosition(finalGeom, vw, vh)
+        nextGeom = { ...nextGeom, corner }
+      }
 
-        container.style.transition = `left ${SNAP_DURATION_MS}ms ${SNAP_EASING}, top ${SNAP_DURATION_MS}ms ${SNAP_EASING}, width ${SNAP_DURATION_MS}ms ${SNAP_EASING}, height ${SNAP_DURATION_MS}ms ${SNAP_EASING}`
-        container.style.left = `${finalPos.left}px`
-        container.style.top = `${finalPos.top}px`
+      const { left, top } = computeDockPosition(nextGeom, vw, vh)
+      const transitionParts = [
+        `left ${SNAP_DURATION_MS}ms ${SNAP_EASING}`,
+        `top ${SNAP_DURATION_MS}ms ${SNAP_EASING}`,
+      ]
+      if (widthChanged) {
+        transitionParts.push(
+          `width ${SNAP_DURATION_MS}ms ${SNAP_EASING}`,
+          `height ${SNAP_DURATION_MS}ms ${SNAP_EASING}`,
+        )
+      }
+      container.style.transition = transitionParts.join(', ')
+      container.style.left = `${left}px`
+      container.style.top = `${top}px`
+      if (widthChanged) {
         container.style.width = `${nextWidth}px`
         container.style.height = `${nextHeight}px`
-
-        commitGeometry(finalGeom)
+        commitGeometry(nextGeom)
       }
     })
   }

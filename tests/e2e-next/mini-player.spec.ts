@@ -65,29 +65,59 @@ test.describe('MiniPlayer · §1 注入', () => {
 })
 
 // ─── §2 关闭按钮 ────────────────────────────────────────────────
+// HANDOFF-31：header 默认 opacity:0 + pointer-events:none，需先 hover 使 header 可见
 test.describe('MiniPlayer · §2 关闭', () => {
-  test('✕ 按钮点击 → hostMode=closed → MiniPlayer 隐藏', async ({ page }) => {
+  test('hover → ✕ 按钮点击 → releaseMiniPlayer → MiniPlayer 隐藏', async ({ page }) => {
     await seedMiniMode(page)
     const mini = page.getByTestId('mini-player')
     await expect(mini).toBeVisible()
 
+    // hover 使 header 显现（pointer-events: all）
+    await mini.hover()
     await page.getByRole('button', { name: '关闭播放器' }).click()
     await expect(mini).toBeHidden()
   })
 })
 
-// ─── §3 展开按钮 → full ─────────────────────────────────────────
-test.describe('MiniPlayer · §3 展开', () => {
-  test('展开按钮 → hostMode=full → 浮窗消失、全屏 frame 就位', async ({ page }) => {
+// ─── §3 折叠/展开（HANDOFF-31 语义变更：展开按钮改为折叠/展开 isExpanded 切换）────
+// 产品决策 2026-04-24：原"展开全屏"改为 mini 内部双态；返回全屏由"返回播放页"← 按钮实现
+test.describe('MiniPlayer · §3 折叠/展开', () => {
+  test('hover → 展开按钮点击 → 控制栏可见，高度增加', async ({ page }) => {
     await seedMiniMode(page)
-    await expect(page.getByTestId('mini-player')).toBeVisible()
+    const mini = page.getByTestId('mini-player')
+    await expect(mini).toBeVisible()
 
-    await page.getByRole('button', { name: '展开播放器' }).first().click()
+    const boxBefore = await mini.boundingBox()
+    expect(boxBefore).not.toBeNull()
 
-    // 浮窗消失
-    await expect(page.getByTestId('mini-player')).toBeHidden()
-    // 全屏 frame 就位（GlobalPlayerFullFrame 的 data-testid）
-    await expect(page.getByTestId('player-frame-full')).toBeVisible()
+    // hover 使 header 可见，点击展开按钮
+    await mini.hover()
+    await page.getByTestId('mini-player-toggle-expand').click()
+
+    // Expanded 后高度应增加约 44px
+    const boxAfter = await mini.boundingBox()
+    expect(boxAfter).not.toBeNull()
+    expect(boxAfter!.height).toBeGreaterThan(boxBefore!.height + 30)
+
+    // 控制栏中进度条应可见
+    await expect(page.getByTestId('mini-player-progress')).toBeVisible()
+  })
+
+  test('展开后再次点击折叠 → 高度恢复', async ({ page }) => {
+    await seedMiniMode(page)
+    const mini = page.getByTestId('mini-player')
+    const boxCollapsed = await mini.boundingBox()
+
+    // 展开
+    await mini.hover()
+    await page.getByTestId('mini-player-toggle-expand').click()
+    const boxExpanded = await mini.boundingBox()
+    expect(boxExpanded!.height).toBeGreaterThan(boxCollapsed!.height)
+
+    // 折叠
+    await page.getByTestId('mini-player-toggle-expand').click()
+    const boxBack = await mini.boundingBox()
+    expect(boxBack!.height).toBeCloseTo(boxCollapsed!.height, 0)
   })
 })
 

@@ -10591,7 +10591,8 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
 
 > 前置条件：REVIEW-C PASS（Phase 2 正式关闭）后方可开工
 > 产品决策确认时间：2026-04-24
-> 执行顺序：HANDOFF-31 → HANDOFF-32 → REVIEW-D；HANDOFF-33 可独立延后
+> 执行顺序：HANDOFF-31（0.6d 基础层）→ HANDOFF-32（1.2d 视频交互核心）→ REVIEW-D；HANDOFF-33（0.6d P2）可独立延后
+> 任务拆分重构时间：2026-04-25（原 HANDOFF-31 1.5d 单体拆为双层；原 HANDOFF-32 0.4d 并入新 HANDOFF-32 交互核心）
 
 ### 产品语义锚定（已确认，2026-04-24）
 
@@ -10636,52 +10637,18 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
 
 ### Batch D — MiniPlayer 整治任务
 
-#### HANDOFF-31 — MiniPlayer 核心重建（双实例 + 双态 + 控制栏）（状态：📋 待执行）
+#### HANDOFF-31 — MiniPlayer 非交互基础层（状态：✅ 已完成）
 
-- **创建时间**：2026-04-24（UI Contract v1.1 补充：2026-04-25）
+- **创建时间**：2026-04-24（任务拆分重构：2026-04-25）
 - **建议模型**：sonnet
-- **估时**：1.5d
+- **估时**：0.6d
 - **前置依赖**：REVIEW-C PASS
-- **修复项**：原缺陷 #1 / #3 / #4 / #5 / #6（P0）
+- **修复项**：原缺陷 #2 / #9 / #12（P0 基础层）
 - **UI 规格基准**：`docs/handoff_mini_player/miniPlayer_ui_contract_20260425.md`（含 §13 v1.1 修订，**开工前必读**）
 
-**文件范围**：
+> 本任务只建立"容器骨架 + store + token + drag 修正"，**不引入真实 `<video>` 元素**。视频与交互核心在 HANDOFF-32 实现。
 
-- `apps/web-next/src/app/[locale]/_lib/player/MiniPlayer.tsx`（全面重构）：
-  - **几何**（UI Contract §2）：
-    - 容器高度 Collapsed = `videoH`（`width × 9/16`）；Expanded = `videoH + 44px`
-    - Header 32px：`position: absolute; top: 0`，叠加在视频上，不占容器高度
-    - Expanded 时视频区 `bottom: 44px`，控制栏 `position: absolute; bottom: 0`
-  - **Header**（默认隐藏，hover 主体时显示）（UI Contract §3）：
-    - `opacity: 0; pointer-events: none` → hover 时 `opacity: 1; pointer-events: all`（150ms，受 `--motion-scale`）
-    - hover 离开主体有 200ms 延迟消失（防止移到 header 时闪烁）
-    - 按钮 28×28px；`onPointerDown={e => e.stopPropagation()}`；`tabIndex` 随 opacity 切换
-  - **activeSrc 解析**（UI Contract §13.1）：
-    - 读取 `playerStore.activeSourceIndex`，从 sources API 响应取 `sources[idx]?.url`
-    - 越界时 fallback 到 `sources[0]?.url`；sources 空时 src=null → 无播放源状态
-    - sources 通过 `GET /videos/:shortId/sources?episode=currentEpisode` 独立拉取（不复用 full player 的 sources）
-  - **视频区**（UI Contract §4）：
-    - 渲染真实 `<video ref={videoRef}>` element（`position: absolute; inset: 0; object-fit: contain`）
-    - mount 时从 `playerStore.currentTime` 直接设 `video.currentTime`（用于精确续播起点）
-    - `onTimeUpdate`（250ms 节流）：`playerStore.setCurrentTime(t)` + `saveProgress(shortId, episode, t)`（两者都写，保证返回 /watch 时 ResumePrompt 能恢复）
-    - **Autoplay 语义**（UI Contract §13.2）：
-      - `playerStore.isPlaying === true` → 尝试 `video.play()`；`NotAllowedError` → `autoplayBlocked = true`（显示 play 图标 + `点击播放`，不重试）
-      - `playerStore.isPlaying === false` → 不调用 play()，直接显示 pause overlay
-    - **点击防误触**：pointerdown 记录坐标，移动 < 5px 且 duration < 300ms 才判为点击 → toggle play/pause
-    - **Overlay 状态机**：loading / error / 无 src / autoplay-blocked / playing+hover / paused（UI Contract §4.2）
-  - **控制栏 Expanded**（UI Contract §5）：
-    - 32×32 play/pause + 进度条（track 4px，热区 16px，buffered，ARIA slider）+ `mm:ss / mm:ss` + 24×24 静音
-    - duration 未知时禁用进度条（`pointer-events: none; opacity: 0.4`）
-  - **折叠/展开**（UI Contract §6 + §13.5）：
-    - 切换 `isExpanded` 后：更新容器 height → **立即按当前 corner 重新计算 top**（防止 bl/br 底部超出 margin）
-    - 容器 `transition: height 200ms ease`（受 `--motion-scale`）；`isExpanded` **不持久化**
-  - **关闭**（UI Contract §13.4）：`video.pause()` → `video.src = ''` → `releaseMiniPlayer()`（不再用 `closeHost()`）
-  - **移动端防护**（UI Contract §13.6）：
-    - mount 时 MQ 匹配 → 直接调 `handleClose()`（video.pause + src='' + releaseMiniPlayer），不仅靠 CSS 隐藏
-    - MQ 变化事件也触发 `handleClose()`
-  - **Esc 关闭**：更新为调 `handleClose()`（原 `closeHost()` 替换）
-  - **data-testid**：`mini-player-return-btn` / `mini-player-toggle-expand` / `mini-player-play-pause` / `mini-player-progress` / `mini-player-mute` / `mini-loading` / `mini-error` / `mini-no-source`
-  - **ARIA**（UI Contract §9）：`role="region" aria-label="迷你播放器"`；所有按钮有 aria-label；进度条完整 ARIA slider
+**文件范围**：
 
 - `apps/web-next/src/stores/playerStore.ts`（新增 action）：
   - **新增 `releaseMiniPlayer()` action**（UI Contract §13.4）：
@@ -10691,18 +10658,88 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
       get().closeHost()
     }
     ```
-  - 确认 `setCurrentTime(t: number)` 已存在（已有，playerStore line 91）
-  - 确认 `isPlaying` 字段已存在（已有，供 autoplay 语义读取）
-
-- `apps/web-next/src/components/player/PlayerShell.tsx`（范围内，只读确认）：
-  - 确认 `activeSourceIndex` 在 sources 加载后已保留（PlayerShell lines 85-86 已有此逻辑，**无需修改**）
-  - 确认 `ResumePrompt` / `saveProgress` 导入已存在（mini 需复用同一函数）
-  - 续播路径：mini 调 `saveProgress` → 返回 /watch → `ResumePrompt` 弹出 → 用户点继续 → 正确恢复（**无需改动 PlayerShell**）
+  - 确认 `setCurrentTime(t: number)` 已存在（playerStore line 91）
+  - 确认 `isPlaying` 字段已存在
 
 - `apps/web-next/src/app/globals.css`（新增 `/* HANDOFF-31 */` token 区块）：
-  - 新增 UI Contract §8 未存在的 token（全部 14 项，逐一检查 globals.css 后补缺）
+  - 逐一检查 UI Contract §8 全部 14 个 `--player-mini-*` token，补齐 globals.css 中缺失项
   - 新增 `.mini-video-overlay` 工具类（opacity transition，受 `--motion-scale`，`prefers-reduced-motion` 守卫）
   - focus-visible 规则（若全局未定义则新增）
+
+- `apps/web-next/src/lib/mini-player/drag.ts`（改动）：
+  - `attachViewportResizeWatcher`：resize 时无论是否越界，若处于 corner-dock 状态，均按 `(corner, margin)` 重新计算 `left/top` 并写入 DOM
+  - 确保 `MiniGeometryV1` 中持久化 `corner` 字段
+  - 拖拽结束 snap 算法：以容器中心点判断最近角，写入 `corner` 字段
+
+- `apps/web-next/src/app/[locale]/_lib/player/MiniPlayer.tsx`（骨架重构，不含 video）：
+  - **几何骨架**（UI Contract §2）：
+    - 容器高度 Collapsed = `videoH`（`width × 9/16`）；Expanded = `videoH + 44px`
+    - Header 32px：`position: absolute; top: 0`，叠加视频占位区，不占容器高度
+    - Expanded 时视频占位区 `bottom: 44px`，控制栏占位区 `position: absolute; bottom: 0`（HANDOFF-32 填充内容）
+  - **`handleClose()` 实现**：`video.pause()` → `video.src = ''` → `releaseMiniPlayer()`（video ref 在 HANDOFF-32 接入，此阶段 ref 为 null 时跳过 video 操作）
+  - **移动端防护**（UI Contract §13.6）：
+    - mount 时 MQ 匹配 → 调 `handleClose()`
+    - MQ 变化事件也触发 `handleClose()`
+  - **Esc 关闭**：`keydown` 监听调 `handleClose()`（替换原 `closeHost()`）
+  - **m 键静音占位**：`keydown` 监听，HANDOFF-32 接入 video ref 后实现 toggle mute
+  - **移除 PiP 代码**：删除 MiniPlayer.tsx 内任何 `pip` / `requestPictureInPicture` 相关逻辑
+  - **data-testid 占位**：`mini-player-return-btn` / `mini-player-toggle-expand` / `mini-player-play-pause` / `mini-player-progress` / `mini-player-mute` / `mini-loading` / `mini-error` / `mini-no-source`
+  - **ARIA 骨架**（UI Contract §9）：`role="region" aria-label="迷你播放器"`
+
+**验收要点**：
+- [ ] `releaseMiniPlayer()` action 存在于 store，调用后 `shortId === null` 且 `hostMode === 'closed'`
+- [ ] globals.css 中 14 个 `--player-mini-*` token 全部存在，无硬编码颜色
+- [ ] drag.ts：resize 时 corner-dock 位置重新计算，`corner` 字段持久化
+- [ ] MiniPlayer 骨架渲染：Collapsed 高度正确，header 覆盖定位正确（可视化确认）
+- [ ] 移动端 MQ 触发时调 `releaseMiniPlayer()`（非 CSS 隐藏）
+- [ ] Esc 关闭调用 `handleClose()`
+- [ ] MiniPlayer.tsx 无任何 `pip` / `requestPictureInPicture` 字样（grep 验证）
+- [ ] typecheck + lint 通过
+
+---
+
+#### HANDOFF-32 — MiniPlayer 视频交互核心层（状态：📋 待执行）
+
+- **创建时间**：2026-04-25（从原 HANDOFF-31/32 合并重构）
+- **建议模型**：sonnet
+- **估时**：1.2d
+- **前置依赖**：HANDOFF-31 ✅
+- **修复项**：原缺陷 #1 / #3 / #4 / #5 / #6 / #8（P0/P1 交互层）
+- **UI 规格基准**：`docs/handoff_mini_player/miniPlayer_ui_contract_20260425.md`（§13 v1.1，**开工前必读**）
+
+**文件范围**：
+
+- `apps/web-next/src/app/[locale]/_lib/player/MiniPlayer.tsx`（视频与交互核心）：
+  - **真实 `<video>` element**（UI Contract §4）：
+    - `<video ref={videoRef} position: absolute; inset: 0; object-fit: contain>`
+    - mount 时从 `playerStore.currentTime` 设 `video.currentTime`（精确续播起点）
+  - **activeSrc 解析**（UI Contract §13.1）：
+    - 独立调 `GET /videos/:shortId/sources?episode=currentEpisode` 获取 sources
+    - 读取 `playerStore.activeSourceIndex`，取 `sources[idx]?.url`；越界 fallback `sources[0]?.url`；空时 src=null
+  - **Autoplay 语义**（UI Contract §13.2）：
+    - `playerStore.isPlaying === true` → 尝试 `video.play()`；`NotAllowedError` → `autoplayBlocked = true`（play 图标 + 点击播放，不重试）
+    - `playerStore.isPlaying === false` → 不调用 play()，显示 pause overlay
+  - **`onTimeUpdate`**（250ms 节流，UI Contract §13.3）：
+    - `playerStore.setCurrentTime(t)` + `saveProgress(shortId, episode, t)`（两者都写）
+  - **Overlay 状态机**（UI Contract §4.2，6 态）：loading / error / 无 src / autoplay-blocked / playing+hover / paused
+  - **Header hover reveal**（UI Contract §3）：
+    - 默认 `opacity: 0; pointer-events: none`；hover 主体 → `opacity: 1; pointer-events: all`（150ms，受 `--motion-scale`）
+    - 离开主体 200ms 延迟消失（防移到 header 时闪烁）
+    - 所有 header 按钮 `onPointerDown={e => e.stopPropagation()}`；`tabIndex` 随 opacity 切换
+  - **控制栏 Expanded**（UI Contract §5）：
+    - 32×32 play/pause + 进度条（track 4px，热区 16px，buffered，ARIA slider）+ `mm:ss / mm:ss` + 24×24 静音
+    - duration 未知时进度条 `pointer-events: none; opacity: 0.4`
+  - **折叠/展开**（UI Contract §6 + §13.5）：
+    - 切换 `isExpanded` → 更新容器 height → **立即按当前 corner 重新计算 top**（防 bl/br 超出 margin）
+    - `transition: height 200ms ease`（受 `--motion-scale`）；`isExpanded` 不持久化
+  - **点击防误触**（UI Contract §4）：pointerdown 记录坐标，移动 < 5px 且 duration < 300ms → toggle play/pause
+  - **m 键静音**：`keydown` 监听，toggle `video.muted`
+  - **ARIA 完整实现**（UI Contract §9）：所有按钮 aria-label；进度条完整 ARIA slider 属性
+
+- `apps/web-next/src/components/player/PlayerShell.tsx`（只读确认，无需修改）：
+  - `activeSourceIndex` 在 sources 加载后已保留（lines 85-86）
+  - `saveProgress` 导入已存在（mini 复用同一函数）
+  - 续播路径：mini 调 `saveProgress` → 返回 /watch → `ResumePrompt` 弹出 → 用户点继续（**无需改动**）
 
 - `tests/unit/web-next/MiniPlayer.test.tsx`（**新建**，UI Contract §13.7）：
   - autoplay-blocked 状态渲染正确（play 图标 + 文案）
@@ -10718,51 +10755,20 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
   - header 按钮点击不触发 drag（pointerdown stopPropagation 验证）
 
 **验收要点**（以 UI Contract v1.1 为基准）：
-- [ ] 移动端触控屏：`releaseMiniPlayer()` 被调用，video 已释放（非 CSS 隐藏）
-- [ ] Collapsed 容器高度 = `width × 9/16`，header 默认透明不可交互，hover 后可见
+- [ ] 视频区有真实 `<video>`，activeSrc 非空时可播放；mount 时从 `playerStore.currentTime` 续播
 - [ ] activeSrc 来自 `sources[activeSourceIndex]`，越界时取 `sources[0]`
-- [ ] 视频区有真实 `<video>`，src 非空时可播放
 - [ ] autoplay 语义：isPlaying=true 时尝试 play()；NotAllowedError → autoplay-blocked UI
-- [ ] 单击视频区（移动 < 5px）toggle play/pause；拖拽结束不误触
-- [ ] `onTimeUpdate` 同时写 `playerStore.setCurrentTime` 和 `saveProgress`
+- [ ] `onTimeUpdate` 同时写 `playerStore.setCurrentTime` 和 `saveProgress`（节流 250ms）
 - [ ] 返回 /watch 后 ResumePrompt 出现，用户点"继续"从断点恢复（误差 ≤ 3s）
+- [ ] header 默认透明不可交互，hover 主体后可见；按钮 pointerdown stopPropagation
+- [ ] 单击视频区（移动 < 5px）toggle play/pause；拖拽结束不误触
 - [ ] Expanded 容器高度 = videoH + 44px；展开/折叠后底部仍贴 16px margin
 - [ ] 进度条 ARIA slider 属性完整；duration 未知时禁用
-- [ ] loading / error / 无 src / autoplay-blocked overlay 状态正确
+- [ ] loading / error / 无 src / autoplay-blocked overlay 状态正确渲染
 - [ ] 关闭后 `playerStore.shortId === null`，video.src = ''，hostMode = 'closed'
 - [ ] 所有按钮 focus-visible 焦点环可见；Esc 关闭；m 键 toggle mute
-- [ ] 颜色零硬编码（所有走 `var(--player-mini-*)` 或通用 token）
+- [ ] 颜色零硬编码（走 `var(--player-mini-*)` 或通用 token）
 - [ ] unit tests 全部通过；e2e mini-player.spec.ts 所有用例通过
-
----
-
-#### HANDOFF-32 — MiniPlayer 行为修正（dock + 事件隔离 + PiP 清理）（状态：📋 待执行）
-
-- **创建时间**：2026-04-24
-- **建议模型**：sonnet
-- **估时**：0.4d
-- **前置依赖**：HANDOFF-31 ✅
-- **修复项**：原缺陷 #2 / #8 / #9 / #12（P1）
-
-**文件范围**：
-
-- `apps/web-next/src/lib/mini-player/drag.ts`（改动）：
-  - `attachViewportResizeWatcher`：resize 时**无论是否越界**，若当前处于 corner-dock 状态，均重新按 `(corner, margin)` 计算 `left/top` 并写入 DOM；确保 corner 字段在 `MiniGeometryV1` 中持久化
-  - 拖拽结束 snap 算法：以容器中心点判断最近角，写入 `corner` 字段
-
-- `apps/web-next/src/app/[locale]/_lib/player/MiniPlayer.tsx`（改动）：
-  - Header 内所有按钮加 `onPointerDown={e => e.stopPropagation()}` 防止拖拽事件吞按钮
-  - 视频区：用 `pointerdown` 时间戳区分点击（< 200ms）与拖拽结束误触（防止拖拽松手触发 play/pause）
-  - 移除 MiniPlayer 内对 `pip` hostMode 的任何响应逻辑（PiP 由 PlayerShell 独占）
-
-- `apps/web-next/src/stores/playerStore.ts`（小改，若有）：
-  - 确认 `pip` hostMode 的 `LEGAL_TRANSITIONS` 仅从 `full` 进入，MiniPlayer 无法触发 pip 转换
-
-**验收要点**：
-- 缩放浏览器窗口时，mini player 保持贴角位置（不漂移）
-- header 区按钮点击不会意外触发拖拽
-- 视频区快速拖拽后松手不会误触 play/pause
-- 无 pip 相关代码出现在 MiniPlayer.tsx 中（grep 验证）
 
 ---
 
@@ -10786,14 +10792,15 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
 
 - **触发条件**：HANDOFF-31 + HANDOFF-32 ✅，且 typecheck / lint / test / e2e 全绿
 - **模型**：arch-reviewer（`claude-opus-4-6`）
-- **审核要点**（8 项）：
-  1. mini `<video>` src 初始化路径：activeSrc 来源是否安全（无 undefined 裸赋值）
-  2. `setCurrentTime` 写入节流：250ms 节流是否实现；PlayerShell 续播时是否读取该值
-  3. 关闭路径：`video.src = ''` 是否在 `closeHost()` 前执行（避免 GC 竞态）
-  4. 事件隔离：`onPointerDown stopPropagation` 是否覆盖所有 header 按钮
-  5. dock recompute：viewport resize 时 corner 计算正确性（四角各一测试用例）
+- **审核要点**（9 项）：
+  1. mini `<video>` src 初始化路径：activeSrc 来源是否安全（无 undefined 裸赋值）；越界时 fallback sources[0] 有效
+  2. `setCurrentTime` 写入节流：250ms 节流是否实现；`onTimeUpdate` 是否同时调用 `saveProgress`（两者缺一不可）
+  3. 关闭路径：`handleClose()` 内执行顺序为 `video.pause()` → `video.src = ''` → `releaseMiniPlayer()`；`releaseMiniPlayer` 在最后执行，不提前 closeHost
+  4. 事件隔离：`onPointerDown stopPropagation` 是否覆盖所有 header 按钮；点击/拖拽区分逻辑（5px/300ms）是否在视频区实现
+  5. dock recompute：viewport resize 时 corner 重新计算正确（四角各一场景）；展开/折叠后 top 值重新计算（防 bl/br 超出）
   6. PiP 零污染：grep 验证 `MiniPlayer.tsx` 无 `pip`、`PiP`、`requestPictureInPicture` 字样
-  7. 颜色 token：新增控制栏所有颜色走 `var(--player-mini-*)` 或通用 token，零 hex/rgb
+  7. 颜色 token：新增控制栏、overlay 所有颜色走 `var(--player-mini-*)` 或通用 token，零 hex/rgb
   8. 折叠/展开无布局抖动：expanded 态高度变化不影响 mini player 容器的 position（fixed 定位不偏移）
+  9. 移动端：MQ 匹配时 `releaseMiniPlayer()` 实际被调用，video.src 被清空（非仅 CSS display:none）
 - **结论写入**：`docs/handoff_mini_player/review_d_mini_player.md`
 
