@@ -231,7 +231,7 @@ export function MiniPlayer() {
 
         {/* Play/Pause overlay 占位（HANDOFF-32 填充，class="mini-video-overlay"） */}
         <div
-          data-testid="mini-player-play-pause"
+          data-testid="mini-play-overlay"
           className="mini-video-overlay"
           aria-hidden
           style={{ position: 'absolute', inset: 0, display: 'none' }}

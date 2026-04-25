@@ -165,7 +165,8 @@ describe('MiniPlayer', () => {
     render(<MiniPlayer />)
     expect(screen.getByTestId('mini-player-return-btn')).toBeTruthy()
     expect(screen.getByTestId('mini-player-toggle-expand')).toBeTruthy()
-    expect(screen.getByTestId('mini-player-play-pause')).toBeTruthy()
+    // mini-play-overlay = 视频区 overlay（不含控制栏按钮，两者 testid 已分离避免 Expanded 时冲突）
+    expect(screen.getByTestId('mini-play-overlay')).toBeTruthy()
     expect(screen.getByTestId('mini-loading')).toBeTruthy()
     expect(screen.getByTestId('mini-error')).toBeTruthy()
     expect(screen.getByTestId('mini-no-source')).toBeTruthy()

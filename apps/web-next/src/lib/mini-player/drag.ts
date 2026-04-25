@@ -293,6 +293,10 @@ export function attachViewportResizeWatcher(
       if (widthChanged) {
         container.style.width = `${nextWidth}px`
         container.style.height = `${nextHeight}px`
+      }
+      // corner 变更（outOfBounds 重归位）或 width 变更均需持久化
+      const cornerChanged = nextGeom.corner !== geom.corner
+      if (widthChanged || cornerChanged) {
         commitGeometry(nextGeom)
       }
     })
