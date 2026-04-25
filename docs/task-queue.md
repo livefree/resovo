@@ -10591,8 +10591,9 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
 
 > 前置条件：REVIEW-C PASS（Phase 2 正式关闭）后方可开工
 > 产品决策确认时间：2026-04-24
-> 执行顺序：HANDOFF-31（0.6d 基础层）→ HANDOFF-32（1.2d 视频交互核心）→ REVIEW-D；HANDOFF-33（0.6d P2）可独立延后
+> 执行顺序：HANDOFF-31（0.6d 基础层）→ HANDOFF-32（1.2d 视频交互核心）→ HANDOFF-33（1.0d 主路径治理）→ REVIEW-D；HANDOFF-34（P2 体验增强）可独立延后
 > 任务拆分重构时间：2026-04-25（原 HANDOFF-31 1.5d 单体拆为双层；原 HANDOFF-32 0.4d 并入新 HANDOFF-32 交互核心）
+> 计划修订时间：2026-04-25（原 HANDOFF-33 P2 体验增强替换为主路径治理 P0/P1；原 P2 内容后移至 HANDOFF-34；P0-1 isPlaying 同步已于计划修订前单独修复）
 
 ### 产品语义锚定（已确认，2026-04-24）
 
@@ -10772,12 +10773,89 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
 
 ---
 
-#### HANDOFF-33 — MiniPlayer 体验增强（P2，可延后）（状态：📋 可延后）
+#### HANDOFF-33 — MiniPlayer 主路径治理（P0/P1）（状态：📋 待执行）
 
-- **创建时间**：2026-04-24
+- **创建时间**：2026-04-25（替换原 P2 体验增强内容）
+- **建议模型**：sonnet
+- **估时**：1.0d
+- **前置依赖**：HANDOFF-32 ✅
+- **审计依据**：`docs/handoff_mini_player/miniPlayer_status_and_interaction_audit_20260425.md`
+- **已完成（计划外单独修复）**：P0-1 — `player-core` 暴露 `onPlay/onPause`，`PlayerShell` 同步 `isPlaying` 到 store（commit 4adc5b8）
+
+**范围**：
+
+**P0-2 — MiniPlayer HLS 支持**
+- `useMiniPlayerVideo.ts`：当前直接 `video.src = activeSrc`，桌面 Chrome 不支持 `.m3u8`
+- 复用 `player-core/src/hooks/useSourceLoader` 等价逻辑或直接引入 `hls.js`：
+  - 检测 `activeSrc` 是否 `.m3u8` 且 `!video.canPlayType('application/vnd.apple.mpegurl')`
+  - 是则创建 `Hls` 实例，`hls.loadSource(activeSrc)` + `hls.attachMedia(video)`
+  - HLS fatal error → `updateVideoStatus('error')`
+  - 销毁路径：effect cleanup 时 `hls.destroy()`
+- 验收：桌面 Chrome 下 `.m3u8` 源可正常播放；fallback MP4 源不受影响
+
+**P1-1 — 全局快捷键作用域守卫**
+- `MiniPlayer.tsx` 的 `keydown` 监听（`Escape` / `m` 键）增加 `isEditableTarget()` 守卫：
+  ```ts
+  function isEditableTarget(e: KeyboardEvent): boolean {
+    const t = e.target as HTMLElement
+    return t.isContentEditable ||
+      ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)
+  }
+  ```
+- `Escape` 额外检查：仅在无其他 modal/drawer 打开时关闭（读取 `document.querySelector('[role="dialog"][aria-modal="true"]')` 是否存在）
+- 验收：搜索框输入 `m` 不触发静音；dialog 打开时 `Escape` 不关闭播放器
+
+**P1-2 — 返回 /watch 消除双实例竞态**
+- `MiniPlayerHeader.tsx` 返回按钮当前只执行 `router.push(...)`
+- 改为先 `setHostMode('full')` 再 `router.push()`：
+  ```ts
+  function handleReturn() {
+    setHostMode('full')          // 立即关闭 MiniPlayer
+    router.push(returnHref)      // 触发路由跳转
+  }
+  ```
+- 验收：返回 /watch 时不出现双 `<video>` 并行；无音频跳接
+
+**P1-3 — Seek 后立即写 store / progress**
+- `MiniPlayerControls.tsx` 的 `seekFromPointer()` / 键盘 seek handler：
+  - 计算出 `nextTime` 后立即：
+    1. `setLocalCurrentTime(nextTime)`（本地显示）
+    2. `setCurrentTimeRef.current(nextTime)`（写 store）
+    3. `saveProgress(shortId, ep, nextTime)`（写 localStorage）
+  - 不等下一次 `timeupdate`
+- 验收：拖动进度后立即关闭 MiniPlayer，返回 /watch 从正确位置恢复（误差 ≤ 1s）
+
+**P1-5 — Expanded dock 高度修正**
+- `MiniPlayer.tsx` 展开/折叠切换时重新计算 dock position，纳入 expanded 高度（`videoH + 44`）：
+  - 折叠 → 展开：若当前为 `bl`/`br` corner，`top` 减 44px（容器向上扩展）
+  - 展开 → 折叠：`top` 加 44px 还原
+  - 使用 `computeDockPosition(geom, vw, vh)` 以 effective height 重算，直接写 `container.style.top`
+- 验收：底部角 expanded 状态底边不超出 `DOCK_MARGIN`；顶部角 expanded 状态顶边不变
+
+**文件范围**：
+- `apps/web-next/src/app/[locale]/_lib/player/useMiniPlayerVideo.ts`（P0-2 HLS）
+- `apps/web-next/src/app/[locale]/_lib/player/MiniPlayer.tsx`（P1-1 快捷键守卫、P1-5 dock）
+- `apps/web-next/src/app/[locale]/_lib/player/MiniPlayerHeader.tsx`（P1-2 返回按钮）
+- `apps/web-next/src/app/[locale]/_lib/player/MiniPlayerControls.tsx`（P1-3 seek 写盘）
+- `tests/unit/web-next/MiniPlayer.test.tsx`（P1-1/P1-2/P1-3 单测补充）
+
+**验收要点**：
+- [ ] 桌面 Chrome 下 `.m3u8` 源 MiniPlayer 可播（hls.js 路径）；MP4 源不受影响
+- [ ] 搜索框 / input 聚焦时按 `m` 不触发静音；`Escape` 不关闭播放器
+- [ ] dialog 打开时 `Escape` 不关闭播放器
+- [ ] 返回 /watch 无双 `<video>` 并行，音频连续
+- [ ] seek 后立即关闭 MiniPlayer，返回 /watch 恢复位置误差 ≤ 1s
+- [ ] 底部角 expanded 底边不超出 DOCK_MARGIN
+- [ ] typecheck + lint + unit tests 通过
+
+---
+
+#### HANDOFF-34 — MiniPlayer 体验增强（P2，可延后）（状态：📋 可延后）
+
+- **创建时间**：2026-04-25（从原 HANDOFF-33 内容迁移）
 - **建议模型**：sonnet
 - **估时**：0.6d
-- **前置依赖**：HANDOFF-32 ✅
+- **前置依赖**：HANDOFF-33 ✅
 - **修复项**：原缺陷 #7 / #9 / #10 / #11（P2）
 
 **范围**：
@@ -10790,9 +10868,9 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
 
 #### REVIEW-D — MiniPlayer 整治专项审核
 
-- **触发条件**：HANDOFF-31 + HANDOFF-32 ✅，且 typecheck / lint / test / e2e 全绿
+- **触发条件**：HANDOFF-31 + HANDOFF-32 + HANDOFF-33 ✅，且 typecheck / lint / test 全绿
 - **模型**：arch-reviewer（`claude-opus-4-6`）
-- **审核要点**（9 项）：
+- **审核要点**（11 项）：
   1. mini `<video>` src 初始化路径：activeSrc 来源是否安全（无 undefined 裸赋值）；越界时 fallback sources[0] 有效
   2. `setCurrentTime` 写入节流：250ms 节流是否实现；`onTimeUpdate` 是否同时调用 `saveProgress`（两者缺一不可）
   3. 关闭路径：`handleClose()` 内执行顺序为 `video.pause()` → `video.src = ''` → `releaseMiniPlayer()`；`releaseMiniPlayer` 在最后执行，不提前 closeHost
@@ -10802,5 +10880,7 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
   7. 颜色 token：新增控制栏、overlay 所有颜色走 `var(--player-mini-*)` 或通用 token，零 hex/rgb
   8. 折叠/展开无布局抖动：expanded 态高度变化不影响 mini player 容器的 position（fixed 定位不偏移）
   9. 移动端：MQ 匹配时 `releaseMiniPlayer()` 实际被调用，video.src 被清空（非仅 CSS display:none）
+  10. HLS 路径：`.m3u8` 源走 hls.js，effect cleanup 时 `hls.destroy()` 被调用；MP4 源走原生路径不受影响
+  11. isPlaying 同步：`PlayerShell` 传入 `onPlay/onPause`；离开 /watch 播放中时 `watchPlayingRef.current === true`，mini 可正常唤出
 - **结论写入**：`docs/handoff_mini_player/review_d_mini_player.md`
 
