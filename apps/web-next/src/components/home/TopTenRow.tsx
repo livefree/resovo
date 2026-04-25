@@ -13,10 +13,11 @@
 
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { apiClient } from '@/lib/api-client'
 import { VideoCard } from '@/components/video/VideoCard'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
-import type { Top10Response, Top10Item } from '@resovo/types'
+import type { Top10Response, Top10Item, SortStrategy } from '@resovo/types'
 
 // ── 常量 ──────────────────────────────────────────────────────────────────────
 
@@ -24,9 +25,13 @@ const MIN_SLOTS = 4
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+const SUBTITLE_KEY_MAP: Record<SortStrategy, string> = {
+  manual_plus_rating: 'topTenSubtitleManualPlusRating',
+  composite: 'topTenSubtitleComposite',
+}
+
 interface TopTenRowProps {
   readonly title: string
-  readonly subtitle?: string
   readonly viewAllHref?: string
   readonly viewAllLabel?: string
 }
@@ -259,18 +264,25 @@ function Top10Track({ items }: { readonly items: Top10Item[] }) {
 
 // ── TopTenRow ─────────────────────────────────────────────────────────────────
 
-export function TopTenRow({ title, subtitle, viewAllHref, viewAllLabel }: TopTenRowProps) {
+export function TopTenRow({ title, viewAllHref, viewAllLabel }: TopTenRowProps) {
+  const t = useTranslations('home')
   const [items, setItems] = useState<Top10Item[]>([])
   const [loading, setLoading] = useState(true)
+  const [strategy, setStrategy] = useState<SortStrategy>('manual_plus_rating')
 
   useEffect(() => {
     setLoading(true)
     apiClient
       .get<{ data: Top10Response }>('/home/top10', { skipAuth: true })
-      .then((res) => setItems(res.data.items))
+      .then((res) => {
+        setItems(res.data.items)
+        setStrategy(res.data.sortStrategy ?? 'manual_plus_rating')
+      })
       .catch(() => setItems([]))
       .finally(() => setLoading(false))
   }, [])
+
+  const subtitle = t(SUBTITLE_KEY_MAP[strategy] as Parameters<typeof t>[0])
 
   return (
     <section>

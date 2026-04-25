@@ -10537,7 +10537,7 @@ Batch A（Bug 修复）：HANDOFF-19 + HANDOFF-20 + HANDOFF-21（可部分并行
 
 - [ ] HANDOFF-19 至 HANDOFF-26 全部 ✅
 - [x] REVIEW-A PASS（arch-reviewer，2026-04-24，claude-opus-4-6）
-- [ ] REVIEW-B PASS（arch-reviewer）
+- [x] REVIEW-B PASS（arch-reviewer，2026-04-24，claude-opus-4-6）
 - [ ] REVIEW-C PASS（arch-reviewer）
 - [ ] `npm run typecheck` 全绿
 - [ ] `npm run lint` 全绿

@@ -46,6 +46,8 @@
     "featured": "精选推荐",
     "topTen": "TOP 10 排行榜",
     "topTenSubtitle": "人工精选 + 评分综合排行",
+    "topTenSubtitleManualPlusRating": "人工精选 + 评分综合排行",
+    "topTenSubtitleComposite": "综合评分排行",
     "disclaimer": "流光仅索引公开可访问的视频链接，不托管任何视频内容。所有版权归原作者所有。",
     "viewAll": "查看全部"
   },

@@ -61,7 +61,6 @@ export default async function HomePage({
         {/* TOP10 排行 — 水平滚动竖版卡片 + rank badge */}
         <TopTenRow
           title={t('topTen')}
-          subtitle={t('topTenSubtitle')}
           viewAllLabel={t('viewAll')}
         />
 

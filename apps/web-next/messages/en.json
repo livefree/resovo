@@ -46,6 +46,8 @@
     "featured": "Featured",
     "topTen": "Top 10",
     "topTenSubtitle": "Curated picks + Rating ranking",
+    "topTenSubtitleManualPlusRating": "Curated picks + Rating ranking",
+    "topTenSubtitleComposite": "Rating ranking",
     "disclaimer": "Resovo indexes publicly available streaming links and does not host any video content. All rights belong to their respective owners.",
     "viewAll": "View All"
   },
