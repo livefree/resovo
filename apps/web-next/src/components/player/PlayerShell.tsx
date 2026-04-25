@@ -12,7 +12,7 @@ import { getVideoDetailHref } from '@/lib/video-route'
 import { buildLineDisplayName, deduplicateLabels } from '@/lib/line-display-name'
 import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@resovo/types'
 import { SourceBar } from './SourceBar'
-import { ResumePrompt, saveProgress } from './ResumePrompt'
+import { ResumePrompt, saveProgress, clearProgress } from './ResumePrompt'
 import { getInlineEpisodes, getPlayerLayoutClass, getSidePanelClass } from './playerShell.layout'
 
 const VideoPlayer = dynamic(
@@ -56,6 +56,9 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
 
   useEffect(() => {
     const ep = Number(searchParams.get('ep') ?? '1') || 1
+    // Snapshot mini player position before initPlayer resets currentTime to 0
+    const snap = usePlayerStore.getState()
+    const priorTime = snap.shortId === shortId ? snap.currentTime : 0
     setLoading(true)
     apiClient
       .get<ApiResponse<Video>>(`/videos/${shortId}`, { skipAuth: true })
@@ -84,6 +87,11 @@ export function PlayerShell({ slug: slugProp, portalMode = false }: PlayerShellP
             // Preserve user-selected source index across mini↔full transitions
             const prevIdx = usePlayerStore.getState().activeSourceIndex
             setActiveSourceIndex(prevIdx < newSources.length ? prevIdx : 0)
+            // Seamless mini→full resume: seek to mini position and suppress ResumePrompt
+            if (priorTime > 30) {
+              setStartTime(priorTime)
+              clearProgress(shortId, ep)
+            }
           })
           .catch(() => setSources([]))
       })

@@ -47,6 +47,7 @@ export function useMiniPlayerVideo(
 
   // Stable refs for callbacks
   const shouldAutoplayRef = useRef(false)
+  const startTimeRef = useRef<number>(0)
   const lastThrottleTimeRef = useRef(0)
   const videoStatusRef = useRef<VideoStatus>('no-src')
   const shortIdRef = useRef(shortId)
@@ -106,9 +107,13 @@ export function useMiniPlayerVideo(
     if (!video) return
     if (activeSrc) {
       shouldAutoplayRef.current = isPlayingStore
+      startTimeRef.current = currentTimeStore  // saved for loadedmetadata re-apply
       video.src = activeSrc
+      // Best-effort immediate seek; browsers that reset currentTime on loadedmetadata
+      // will be corrected in handleVideoLoadedMetadata via startTimeRef
       if (currentTimeStore > 0) video.currentTime = currentTimeStore
     } else {
+      startTimeRef.current = 0
       video.removeAttribute('src')
       video.load()
     }
@@ -162,6 +167,12 @@ export function useMiniPlayerVideo(
   const handleVideoLoadedMetadata = useCallback(() => {
     const video = videoRef.current
     if (!video || isNaN(video.duration)) return
+    // Re-apply start time if browser reset currentTime during loadedmetadata
+    const saved = startTimeRef.current
+    if (saved > 0 && video.currentTime < saved * 0.95) {
+      video.currentTime = saved
+    }
+    startTimeRef.current = 0
     setLocalDuration(video.duration)
     setDuration(video.duration)
   }, [videoRef, setDuration])

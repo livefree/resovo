@@ -32,6 +32,14 @@ export function saveProgress(shortId: string, episode: number, time: number) {
   }
 }
 
+export function clearProgress(shortId: string, episode: number) {
+  try {
+    localStorage.removeItem(getProgressKey(shortId, episode))
+  } catch {
+    // 静默失败
+  }
+}
+
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
