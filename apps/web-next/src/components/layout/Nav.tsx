@@ -349,6 +349,7 @@ export function Nav() {
   const hotSearchTerms: string[] = (t.raw?.('hotSearchTerms') as string[]) ?? []
 
   return (
+    <>
     <header
       data-testid="global-nav"
       className="sticky top-0 z-50 border-b backdrop-blur-md"
@@ -570,8 +571,9 @@ export function Nav() {
         </div>
       </div>
 
-      <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </header>
+    <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+  </>
   )
 }
 
