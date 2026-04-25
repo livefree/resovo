@@ -10,7 +10,7 @@ import { usePlayerStore } from '@/stores/playerStore'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import { Breadcrumb } from '@/components/primitives/breadcrumb/Breadcrumb'
 import { ALL_CATEGORIES } from '@/lib/categories'
-import type { Video } from '@resovo/types'
+import type { Video, VideoSource } from '@resovo/types'
 
 const SharedElement = SharedElementBase as SharedElementComponent
 
@@ -98,9 +98,12 @@ interface DetailHeroProps {
   video: Video
   /** 当前选中集，用于 standard-takeover 播放 */
   episode?: number
+  sources?: VideoSource[]
+  activeSourceId?: string | null
+  onSourceChange?: (id: string) => void
 }
 
-export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
+export function DetailHero({ video, episode = 1, sources = [], activeSourceId, onSourceChange }: DetailHeroProps) {
   const enter = usePlayerStore((s) => s.enter)
   const router = useRouter()
 
@@ -299,6 +302,58 @@ export function DetailHero({ video, episode = 1 }: DetailHeroProps) {
             </svg>
             立即播放
           </button>
+
+          {/* 播放源选择器 */}
+          {sources.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flexWrap: 'wrap' }}>
+              <span
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--fg-muted)',
+                  flexShrink: 0,
+                  paddingTop: '5px',
+                }}
+              >
+                播放源
+              </span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {sources.map((source) => {
+                  const isActive = source.id === activeSourceId
+                  const label = source.siteDisplayName ?? source.sourceName
+                  return (
+                    <button
+                      key={source.id}
+                      type="button"
+                      onClick={() => onSourceChange?.(source.id)}
+                      data-testid={`source-btn-${source.id}`}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        border: '1px solid',
+                        cursor: 'pointer',
+                        transition: 'background 0.15s, color 0.15s',
+                        ...(isActive
+                          ? {
+                              background: 'var(--accent-muted)',
+                              color: 'var(--accent-default)',
+                              borderColor: 'var(--accent-default)',
+                              fontWeight: 600,
+                            }
+                          : {
+                              background: 'var(--bg-surface-sunken)',
+                              color: 'var(--fg-muted)',
+                              borderColor: 'var(--border-default)',
+                            }),
+                      }}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {(hasPersonnel || video.aliases.length > 0 || video.languages.length > 0 || video.tags.length > 0) && (
             <div

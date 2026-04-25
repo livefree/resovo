@@ -22,7 +22,7 @@ import { DetailHero } from '@/components/detail/DetailHero'
 import { EpisodePicker } from '@/components/detail/EpisodePicker'
 import { RelatedVideos } from '@/components/detail/RelatedVideos'
 import { SafeImage } from '@/components/media'
-import type { Video, ApiResponse } from '@resovo/types'
+import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@resovo/types'
 
 // ── DescriptionBlock ─────────────────────────────────────────────────────────
 
@@ -234,6 +234,8 @@ export function VideoDetailClient({ slug, showEpisodes }: Props) {
     const ep = Number(searchParams.get('ep'))
     return ep >= 1 ? ep : 1
   })
+  const [sources, setSources] = useState<VideoSource[]>([])
+  const [activeSourceId, setActiveSourceId] = useState<string | null>(null)
 
   useEffect(() => {
     const shortId = extractShortId(slug)
@@ -242,6 +244,24 @@ export function VideoDetailClient({ slug, showEpisodes }: Props) {
       .then((res) => setVideo(res.data))
       .catch(() => setNotFound(true))
   }, [slug])
+
+  useEffect(() => {
+    if (!video) return
+    apiClient
+      .get<ApiListResponse<VideoSource>>(
+        `/videos/${video.shortId}/sources?episode=${activeEpisode}`,
+        { skipAuth: true },
+      )
+      .then((res) => {
+        const active = res.data.filter((s) => s.isActive)
+        setSources(active)
+        setActiveSourceId((prev) => {
+          const stillExists = active.some((s) => s.id === prev)
+          return stillExists ? prev : (active[0]?.id ?? null)
+        })
+      })
+      .catch(() => setSources([]))
+  }, [video?.shortId, activeEpisode])
 
   if (notFound) {
     return (
@@ -259,7 +279,13 @@ export function VideoDetailClient({ slug, showEpisodes }: Props) {
     <>
       {/* Hero 区 */}
       <div className="detail-cascade-1">
-        <DetailHero video={video} episode={activeEpisode} />
+        <DetailHero
+          video={video}
+          episode={activeEpisode}
+          sources={sources}
+          activeSourceId={activeSourceId}
+          onSourceChange={setActiveSourceId}
+        />
       </div>
 
       {/* 选集区 */}
