@@ -49,12 +49,16 @@ async function start() {
   const fastify = Fastify({
     logger: createFastifyLoggerOptions(),
     genReqId: () => crypto.randomUUID(),
+    // INFRA-14 F5：把 Fastify 自动注入的 reqId 字段重命名为项目约定的 request_id，
+    // 让 route 内 request.log.error/warn/info(...) 都自动带 request_id 顶层字段
+    requestIdLogLabel: 'request_id',
   })
 
-  // access log: 每个响应输出含 duration_ms / status / request_id / method / url
+  // access log: 每个响应输出含 duration_ms / status / method / url；
+  // request_id 由 pino requestIdLogLabel 自动注入到 child logger（INFRA-14 F5），
+  // 手动写会冗余，直接交给 pino base
   fastify.addHook('onResponse', (request, reply, done) => {
     request.log.info({
-      request_id: request.id,
       method: request.method,
       url: request.url.split('?')[0],
       status: reply.statusCode,

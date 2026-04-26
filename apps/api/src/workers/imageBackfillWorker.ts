@@ -13,7 +13,8 @@ import {
   listPendingImageUrls,
   listMissingBlurhashUrls,
 } from '@/api/db/queries/imageHealth'
-import { baseLogger } from '@/api/lib/logger'
+import { baseLogger, withJob } from '@/api/lib/logger'
+import type pino from 'pino'
 
 const workerLog = baseLogger.child({ worker: 'backfill-worker' })
 
@@ -43,8 +44,11 @@ async function enqueueBatch(
   return rows.length
 }
 
+// INFRA-14 F7：runImageBackfill 接 jobLog 参数；默认 fallback 到 workerLog 兼容
+// 现有调用方（runImageBackfill 也被其他 service 直调，非仅 Bull processor）
 export async function runImageBackfill(
-  batchSize = BATCH_SIZE
+  batchSize = BATCH_SIZE,
+  jobLog: pino.Logger = workerLog,
 ): Promise<BackfillResult> {
   let healthTotal = 0
   let blurhashTotal = 0
@@ -69,25 +73,27 @@ export async function runImageBackfill(
     if (rows.length < batchSize) break
   }
 
-  workerLog.info({ health_check_enqueued: healthTotal, blurhash_enqueued: blurhashTotal }, 'backfill done')
+  jobLog.info({ health_check_enqueued: healthTotal, blurhash_enqueued: blurhashTotal }, 'backfill done')
 
   return { healthCheckEnqueued: healthTotal, blurhashEnqueued: blurhashTotal }
 }
 
 /** 手动触发一次存量回填（用于管理员操作或 scheduler 调用） */
 export async function enqueueBackfillJob(): Promise<void> {
-  await imageHealthQueue.add(
+  // INFRA-14 F7：用 add() 返回的 Bull.Job 取真实 job_id 写日志
+  const bullJob = await imageHealthQueue.add(
     'backfill',
     { type: 'backfill', catalogId: '', videoId: '', kind: 'poster', url: '' },
     { jobId: `backfill-${Date.now()}`, removeOnComplete: 5 }
   )
-  workerLog.info('backfill job enqueued')
+  workerLog.info({ job_id: String(bullJob.id) }, 'backfill job enqueued')
 }
 
 /** 注册 backfill job 处理器（直接在进程内运行，不走网络） */
 export function registerBackfillWorker(): void {
-  imageHealthQueue.process('backfill', 1, async () => {
-    await runImageBackfill()
+  // INFRA-14 F7：processor 接 job → 派生 withJob 传给 runImageBackfill
+  imageHealthQueue.process('backfill', 1, async (job) => {
+    await runImageBackfill(BATCH_SIZE, withJob(workerLog, job))
   })
   workerLog.info('registered')
 }

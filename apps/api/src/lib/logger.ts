@@ -21,10 +21,12 @@ export interface LoggerOptions {
 
 // ── PII redact 表（INFRA-09 移至 @resovo/logger/redact.ts）────────
 
-// 覆盖 11 个 PII 字段在顶层和一级嵌套的路径
+// 覆盖 11 个 PII 字段在顶层 + 一级嵌套 + headers 容器路径
+// INFRA-14 F4：补 set-cookie / url.query（pino 最小样本验证缺失会泄露）
 const REDACT_PATHS: string[] = [
   'authorization',
   'cookie',
+  'set-cookie',
   'password',
   'token',
   'refreshToken',
@@ -32,8 +34,10 @@ const REDACT_PATHS: string[] = [
   'email',
   'phone',
   'ip',
+  'url.query',
   '*.authorization',
   '*.cookie',
+  '*.set-cookie',
   '*.password',
   '*.token',
   '*.refreshToken',
@@ -41,6 +45,9 @@ const REDACT_PATHS: string[] = [
   '*.email',
   '*.phone',
   '*.ip',
+  '*.url.query',
+  'headers.set-cookie',
+  'req.url.query',
 ]
 
 // ── 序列化器（INFRA-09 移至 @resovo/logger/serializers.ts）──────────
