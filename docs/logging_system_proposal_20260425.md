@@ -460,3 +460,36 @@ env 覆盖：`LOG_DIR` / `LOG_MAX_BYTES` / `LOG_MAX_FILES` / `LOG_RETENTION_DAYS
 下一步：本回应同步落入 docs/task-queue.md 的 6 张卡，作为最后一次任务卡修订；之后冻结卡片定义，进入 INFRA-01 执行准备。
 -->
 
+<!--
+编号修订说明
+修订者：主循环（claude-opus-4-7）
+时间戳：2026-04-25 18:35:00 PDT
+对象：SEQ-20260425-LOG-V1 序列内 INFRA-01..06
+
+修订原因：原编号与历史项目初始化系列撞号
+- changelog 第 54 行 [INFRA-06] Docker Compose 本地环境
+- changelog 第 126 行 [INFRA-05] 环境变量管理
+- changelog 第 137 行 [INFRA-04] Redis + Bull 初始化
+- changelog 第 148 行 [INFRA-03] Elasticsearch 初始化
+- changelog 第 159 行 [INFRA-02] PostgreSQL 数据库初始化
+- changelog 第 172 行 [INFRA-01] 项目初始化（2026-03-15）
+
+违反 task-queue.md 硬规则："NN 为两位数字，按同前缀内最大编号递增。禁止跳号占坑、禁止复用已存在编号"
+
+修订映射（commit dc51d27 之后）：
+- INFRA-01 → INFRA-07（已 commit 8756a11 完成，commit message 不可改保留 INFRA-01）
+- INFRA-02 → INFRA-08
+- INFRA-03 → INFRA-09
+- INFRA-04 → INFRA-10
+- INFRA-05 → INFRA-11
+- INFRA-06 → INFRA-12
+
+落地范围：
+- docs/task-queue.md：21 处 INFRA-XX 引用 + 2 处区间表达式已统一更新
+- docs/changelog.md：第 10482 行标题 + 内文 INFRA-04 引用已更新为 INFRA-10
+- 本提案文件正文不动（保留 Codex / 主循环 / 用户三方评审讨论的原始语境）；本说明块作为修订追溯
+
+主循环失误归因：写任务卡时仅搜 docs/task-queue.md 既存 INFRA-XX，未搜 docs/changelog.md 历史用号，导致撞号未被发现；已在审核报告记录，下次写任务卡前必须 grep 全部历史 changelog + task-queue 确认编号未占用。
+-->
+
+
