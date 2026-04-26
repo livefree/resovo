@@ -190,37 +190,60 @@ queue.process('jobName', 1, async (job) => {
 
 ## 5. ServiceName 命名规范
 
-`@resovo/logger/types.ts:ServiceName` 定义：
+`@resovo/logger/types.ts:ServiceName` **类型**定义保留 4 种：
 
 ```ts
 export type ServiceName =
-  | 'api'              // Fastify API 进程
-  | `worker:${string}` // workers（如 worker:crawler-worker）
-  | 'script'           // 一次性脚本（如 migrate / import-sources）
-  | 'client'           // 浏览器上报路径，由 client-log endpoint 派生
+  | 'api'              // Fastify API 进程（实际使用）
+  | `worker:${string}` // 独立 worker 进程（**类型保留，当前未实例化**）
+  | 'script'           // 一次性脚本（如 migrate / import-sources，实际使用）
+  | 'client'           // 浏览器上报路径，由 client-log endpoint 派生（实际使用）
 ```
 
-### 5.1 `worker:` 子格式约束
+> **重要**：`worker:${string}` 是**类型保留**给未来独立 worker 进程，当前 SEQ-20260425-LOG-V1 实施层**未使用**。API 内 Bull workers 与 API 同进程运行，统一用 § 5.1 模式（`service:'api'` + `worker:<name>` child 派生），**不**实例化为 `service:'worker:*'`。
 
-格式为 `worker:<kebab-case-name>`：
+### 5.1 当前 API 内 Bull workers 命名（实际惯例）
 
-| 实例 | 来源 |
+API 进程内的 9 个 Bull workers 与 API 同进程运行，统一用：
+
+- 顶层 `service: 'api'`（由 `baseLogger = createLogger({ service: 'api' })` 一次性绑定，child 不覆盖 base）
+- 子上下文 `worker: '<kebab-case-name>'`（child 派生时附加）
+
+ndjson 实际输出形如：
+
+```json
+{"service":"api","worker":"crawler-worker","job_id":"42","msg":"crawl started"}
+```
+
+**不是** `{"service":"worker:crawler-worker",...}`。
+
+9 个 worker 实例（`worker` child 字段值）：
+
+| `worker` 字段值 | 来源 |
 | --- | --- |
-| `worker:crawler-worker` | `apps/api/src/workers/crawlerWorker.ts` |
-| `worker:maintenance-worker` | `apps/api/src/workers/maintenanceWorker.ts` |
-| `worker:image-health-worker` | `apps/api/src/workers/imageHealthWorker.ts` |
-| `worker:blurhash-worker` | `apps/api/src/workers/imageBlurhashWorker.ts` |
-| `worker:backfill-worker` | `apps/api/src/workers/imageBackfillWorker.ts` |
-| `worker:enrich-worker` | `apps/api/src/workers/enrichmentWorker.ts` |
-| `worker:verify-worker` | `apps/api/src/workers/verifyWorker.ts` |
-| `worker:crawler-scheduler` | `apps/api/src/workers/crawlerScheduler.ts` |
-| `worker:maintenance-scheduler` | `apps/api/src/workers/maintenanceScheduler.ts` |
+| `crawler-worker` | `apps/api/src/workers/crawlerWorker.ts` |
+| `maintenance-worker` | `apps/api/src/workers/maintenanceWorker.ts` |
+| `image-health-worker` | `apps/api/src/workers/imageHealthWorker.ts` |
+| `blurhash-worker` | `apps/api/src/workers/imageBlurhashWorker.ts` |
+| `backfill-worker` | `apps/api/src/workers/imageBackfillWorker.ts` |
+| `enrich-worker` | `apps/api/src/workers/enrichmentWorker.ts` |
+| `verify-worker` | `apps/api/src/workers/verifyWorker.ts` |
+| `crawler-scheduler` | `apps/api/src/workers/crawlerScheduler.ts` |
+| `maintenance-scheduler` | `apps/api/src/workers/maintenanceScheduler.ts` |
 
-新增 worker 时按此命名延续。
+新增 API 内 Bull worker 时按此模式延续：`baseLogger.child({ worker: 'new-worker-name' })`。
 
-### 5.2 client 流分流
+### 5.2 `worker:${string}` 类型保留场景
+
+`worker:${string}` ServiceName 类型保留给未来**独立 worker 进程**（独立部署、独立日志流、独立 stdout）。当前 SEQ-20260425-LOG-V1 实施层未使用此分支。
+
+INFRA-12（实现下沉到 `packages/logger`）或后续任务若需引入独立 worker 进程，需另行决策（修订 dev.mjs 分流逻辑、确认 ServiceName 实例化范围、调整 changelog 字段契约），不得自动套用此类型。
+
+### 5.3 client 流分流
 
 `scripts/dev.mjs:189` 见到 ndjson 中 `service:'client'` 自动分流到 `logs/client/client-<date>.ndjson`，同时也写到 `logs/dev/api.ndjson`（dev.mjs 在 API stdout 入口处理）。
+
+`service:'client'` 由 `apps/api/src/routes/internal/client-log.ts:67` 用 `createLogger({ service: 'client' })` 创建独立 logger 实例显式绑定（不能由 child 派生覆盖 base，参考 § 4.4 派生原则）。
 
 ---
 
@@ -249,16 +272,41 @@ export type ServiceName =
 
 ---
 
-## 7. 浏览器→API 链路硬规则（INFRA-16 起强制）
+## 7. 浏览器→API 链路硬规则（INFRA-16 起强制，INFRA-17 收紧分级）
 
-INFRA-10 完成时用 `curl http://localhost:4000/v1/internal/client-log` 直连 API 端口验证 5 分支，**绕过了**浏览器(`:3000`) → API(`:4000`) 真实跨 origin 路径，导致 F1（相对路径 ENDPOINT）漏检。INFRA-16 修复后正式纳入硬规则：
+INFRA-10 完成时用 `curl http://localhost:4000/v1/internal/client-log` 直连 API 端口验证 5 分支，**绕过了**浏览器(`:3000`) → API(`:4000`) 真实跨 origin 路径，导致 F1（相对路径 ENDPOINT）漏检。INFRA-16 修复后正式纳入硬规则；INFRA-17 进一步收紧"curl+Origin 是否充分"的分级判定（INFRA-11 复审教训：之前措辞写成"二选一等价"会反向降级验收）。
 
-**涉及浏览器→API 链路的任务**，验收必须包含以下二者**至少其一**：
+### 7.0 验收要求按改动类型分级
 
-1. **真实浏览器实测**：dev 启动 → 打开 `http://localhost:3000` → F12 devtools → 触发对应路径 → Network 面板确认 POST 目标 + 检查 ndjson 落盘
-2. **curl 携带 `Origin: http://localhost:3000` 头模拟跨 origin 路径**（与浏览器 sendBeacon / fetch 的 wire 行为等价，除 page-unload 时序由单测覆盖）
+| 改动类型 | 必须真实浏览器 | curl+Origin 是否充分 |
+| --- | --- | --- |
+| 涉及 `sendBeacon` / page lifecycle (`pagehide`/`beforeunload`) flush | ✅ **必须** | ❌ 不充分 |
+| 涉及浏览器 cookie 自动携带（`credentials:'include'`） | ✅ **必须** | ❌ 不充分（curl 不模拟 SameSite/SecureContext） |
+| 仅服务端 CORS / 端点 origin 校验 | ☐ 可选 | ✅ 充分（API/CORS 快速验证） |
+| 仅业务逻辑（端点内部 zod / 限流 / 鉴权） | ☐ 可选 | ✅ 充分 |
 
-**禁止**：仅用 `curl http://localhost:4000/...` 直连 API 端口验证浏览器路径——这会绕过 fastify-cors 与 cookie 携带行为。
+**curl + Origin 头不等价于真实浏览器**，明确 4 项局限：
+
+1. **不模拟 sendBeacon CORS preflight** — sendBeacon 在浏览器侧会触发独立的 preflight 协议路径，curl 仅发简单 POST
+2. **不携带 cookie**（SameSite=Lax / Secure-only 在 prod 模式下浏览器自动管理，curl 必须显式 `--cookie` 且无法准确复现 SameSite 策略）
+3. **不触发 page lifecycle flush** — pagehide/beforeunload 是浏览器关闭/导航的真实事件，curl 不可模拟
+4. **不覆盖 Network 面板真实端口验证** — 真实 bug（如 INFRA-10 P1 相对路径打到 web-next 自身）需要 devtools Network 面板看 POST 目标 host:port 才能直观确认
+
+### 7.1 验收路径选择规则
+
+- **涉及浏览器侧行为**（sendBeacon / cookie / page lifecycle）的任务：**必须**真实浏览器实测，除非任务卡明确降级并记录原因
+- **仅服务端行为**（CORS / origin / 业务逻辑）的任务：curl+Origin 充分作为 API 快速验证手段
+- **禁止**：仅用 `curl http://localhost:4000/...` 直连 API 端口验证浏览器路径（不带 Origin 头会绕过 CORS，无法暴露 INFRA-10 P1 类相对路径 bug）
+
+### 7.2 跨 origin 配置基线
+
+- 服务端 `apps/api/src/server.ts:71-81` 全局 `@fastify/cors` 配置 `credentials: true`
+- 浏览器侧 fetch 必须 `credentials: 'include'`（参考 `apps/web-next/src/lib/logger.client.ts:73-78`）
+- API URL 必须用绝对 URL（`process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/v1'`），**不得**用相对路径
+
+### 7.3 CORS 拒绝映射为 403
+
+`server.ts` 已配全局 `setErrorHandler` 把 `'Not allowed by CORS'` Error 映射为 HTTP 403 + `code: 'FORBIDDEN_ORIGIN'`（参考 INFRA-16 commit）。新增内部端点不需要重复实现 origin 检查——全局 CORS 已统一处理。
 
 ### 7.1 跨 origin 配置基线
 
@@ -291,9 +339,10 @@ INFRA-10 完成时用 `curl http://localhost:4000/v1/internal/client-log` 直连
 - [ ] 新增 PII 字段时，redact 表 + 单测同步（路径表层 + pino 行为层双覆盖）
 - [ ] `grep` 验证：注入唯一 secret 字符串（如 `TEST_SECRET_<TASKID>`）后 `logs/dev/*.ndjson` 0 命中
 
-### 8.4 浏览器→API 链路守门（如适用）
-- [ ] 真实浏览器实测 或 curl 携带 `Origin` 头
-- [ ] 禁止 `curl localhost:4000` 直连 API 端口替代浏览器路径
+### 8.4 浏览器→API 链路守门（如适用，按 § 7.0 分级）
+- [ ] 涉及 sendBeacon / page lifecycle / cookie 携带：**必须**真实浏览器实测（curl+Origin 不充分）
+- [ ] 仅 CORS / 端点 origin 校验 / 业务逻辑：curl+Origin 充分作为 API 快速验证
+- [ ] 禁止 `curl localhost:4000` 直连 API 端口（不带 Origin 头）替代浏览器路径——会绕过 CORS 校验，无法暴露 INFRA-10 P1 类相对路径 bug
 
 ### 8.5 流程守门
 - [ ] tasks.md 工作台卡片先于代码改动落盘（INFRA-14 起硬规则，连续两次违反 P1-3 后根除）
