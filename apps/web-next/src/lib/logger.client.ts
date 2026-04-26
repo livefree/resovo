@@ -24,7 +24,11 @@ interface LogEntry {
   ctx?: Record<string, unknown>
 }
 
-const ENDPOINT = '/v1/internal/client-log'
+// INFRA-16 F1：用 NEXT_PUBLIC_API_URL 拼绝对 URL，对齐现有 web-next API 调用模式
+// （api-client.ts:3 / video-detail.ts:9 / report-broken-image.ts:14）；
+// 浏览器(:3000) → API(:4000) 跨 origin 路径必须用绝对 URL，相对路径会打到 web-next 自身
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/v1'
+const ENDPOINT = `${BASE_URL}/internal/client-log`
 const MAX_BATCH = 50
 const FLUSH_INTERVAL_MS = 2000
 const MAX_RETRY = 1
@@ -67,7 +71,9 @@ async function sendBatch(entries: LogEntry[], attempt = 0): Promise<boolean> {
       headers: { 'Content-Type': 'application/json' },
       body,
       keepalive: true,
-      credentials: 'same-origin',
+      // INFRA-16 F1：跨 origin（web-next:3000 → api:4000）需 'include' 才能携带 cookie；
+      // 配合 server.ts 全局 cors `credentials: true`（server.ts:80）使 prod 登录态能流转
+      credentials: 'include',
     })
     if (res.ok) return true
   } catch {

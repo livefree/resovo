@@ -105,6 +105,9 @@ export async function internalClientLogRoutes(fastify: FastifyInstance) {
       }
 
       // ④ 落地：每条 entry 写一行 ndjson 到 service:'client' logger
+      // INFRA-16 F3：移除 source_ip 字段（PII 隐患——REDACT_PATHS 仅匹配 'ip' / '*.ip'，
+      // 'source_ip' 不在表内会泄露明文 IP）。request_id (UUID) 已足够日志关联；
+      // 如未来需 IP 排障可独立加 hash 字段（INFRA-17）
       const { entries } = parsed.data
       for (const entry of entries) {
         clientLog[entry.level](
@@ -112,7 +115,6 @@ export async function internalClientLogRoutes(fastify: FastifyInstance) {
             client_ts: entry.ts,
             ctx: entry.ctx,
             request_id: request.id,
-            source_ip: request.ip,
           },
           entry.msg,
         )

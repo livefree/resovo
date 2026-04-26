@@ -81,6 +81,18 @@ async function start() {
     credentials: true,
   })
 
+  // INFRA-16 F2：把全局 fastify-cors 抛出的 'Not allowed by CORS' Error 映射为 HTTP 403
+  // + FORBIDDEN_ORIGIN，对齐 client-log 5 分支契约。其他错误继续走 fastify 默认行为
+  // （statusCode-bearing errors / zod 校验 / 路由级 reply.code(...) 等不受影响）
+  fastify.setErrorHandler((error, request, reply) => {
+    if (error.message === 'Not allowed by CORS') {
+      return reply.code(403).send({
+        error: { code: 'FORBIDDEN_ORIGIN', message: 'Origin not allowed', status: 403 },
+      })
+    }
+    reply.send(error)
+  })
+
   await fastify.register(cookie, {
     secret: process.env.COOKIE_SECRET ?? 'dev-cookie-secret-replace-in-production',
   })

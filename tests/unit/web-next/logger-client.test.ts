@@ -95,6 +95,20 @@ describe('clientLogger.pushEntry & flush', () => {
     expect(beaconAttempts).toBe(1)
     expect(fetchCalls.length).toBe(1)
   })
+
+  // INFRA-16 F1: 默认 ENDPOINT 必须用绝对 URL 指向 API 端口（NEXT_PUBLIC_API_URL fallback）
+  // 防止真实浏览器路径退回到相对路径打到 web-next 自身（INFRA-10 P1 真实 bug）
+  it('default ENDPOINT uses absolute URL with NEXT_PUBLIC_API_URL fallback', async () => {
+    const { clientLogger } = await import('@/lib/logger.client')
+    clientLogger.error('endpoint-test')
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(fetchCalls.length).toBe(1)
+    // 默认 fallback 是 http://localhost:4000/v1/internal/client-log
+    expect(fetchCalls[0].url).toBe('http://localhost:4000/v1/internal/client-log')
+    // 显式断言：非相对路径（不会打到 web-next 自身）
+    expect(fetchCalls[0].url.startsWith('http')).toBe(true)
+    expect(fetchCalls[0].url).not.toBe('/v1/internal/client-log')
+  })
 })
 
 // 守门 C 三输入：合并为单 it 串行验证（jsdom window 在 it 间共享）
