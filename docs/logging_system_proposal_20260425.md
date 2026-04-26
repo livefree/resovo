@@ -527,3 +527,193 @@ Finding 3 — [P2] errors 聚合文档仍写错
 文档编号修复完成；INFRA-07 实现仍需修两个 P1，或正式把统一字段与 shutdown drain 降级/后移并写入任务卡验收变更。
 -->
 
+<!--
+INFRA-13 复查结果
+复查者：Codex
+时间戳：2026-04-25 19:06:06 PDT
+对象：INFRA-13（commit d6b70cd）对 Codex 复审意见的修复
+结论：PASS。INFRA-13 已闭环前一轮 2 个 P1 + 1 个 P2 finding；INFRA-07 的实现质量门槛经 INFRA-13 修补后通过。
+
+Finding 1 — [P1] JSON 行仍缺统一字段：已修复
+- `scripts/dev.mjs` 的 JSON 分支已改为 enrich 输出，补齐 `ts/service/stream`，并将 pino numeric level 归一为字符串 level。
+- 实测当前 `logs/dev/api.ndjson`：7/7 行均包含 `ts`、`level`、`service`、`stream`。
+- 示例字段形态：`{"ts":"...","service":"api","stream":"stdout","level":"info","time":...,"pid":...,"msg":"..."}`。
+
+Finding 2 — [P1] shutdown 尾行丢失风险仍在：已修复
+- `shutdown()` 已改为等待 child `close` 后再 `closeAllStreams()`，避免 SIGTERM 后子进程尾行写入时文件流已关闭。
+- 保留 3s SIGKILL 与 5s finalExit 双兜底，竞态风险较上一版已消除到可接受范围。
+
+Finding 3 — [P2] errors 聚合文档仍写错：已修复
+- `docs/changelog.md` 已将 errors 聚合规则修正为 numeric level ≥ 40 或字符串 level ∈ {warn, error, fatal}。
+- 原 ```ndjson 代码块已改为普通代码块，避免“带注释的非法 NDJSON”误导。
+
+复查验证：
+- `node --check scripts/dev.mjs`：PASS
+- `npm run lint`：PASS（存在既有 web-next hook warning，非本次引入）
+- `npm run typecheck`：PASS
+- 日志 schema 抽查：api/admin/web-next/design-tokens 的现有 ndjson 行均包含 `ts/service/stream`；api pino 行额外包含 `level`。
+
+剩余说明：
+- `docs/logging_system_proposal_20260425.md` 中较早的审计评论仍保留 INFRA-01..06 与 CONDITIONAL PASS 语境，作为历史审计记录可接受；当前有效状态以本 INFRA-13 复查结果为准。
+- wrap 行仍不强制补 `pid/level`，但本轮 finding 要求的 `ts/service/stream` 已满足；完整业务日志契约继续由 INFRA-08/09 推进。
+-->
+
+<!--
+INFRA-08 完成质量审核意见
+审核者：Codex
+时间戳：2026-04-25 19:38:46 PDT
+对象：INFRA-08（commit fe97364）API + worker 接入统一结构化 logger
+结论：未通过完成质量验收。主体接入方向正确，`npm run typecheck` / `npm run lint` / `npm run test:run` 均通过，但仍存在 3 个 P1 和 1 个 P2 验收缺口。
+
+Finding 1 — [P1] 脱敏表漏掉 set-cookie 和 url.query
+位置：apps/api/src/lib/logger.ts:24-44
+问题：INFRA-08 验收明确要求 `authorization/cookie/set-cookie/password/token/refreshToken/accessToken/email/phone/ip/url.query` 脱敏，但当前 `REDACT_PATHS` 没有 `set-cookie` 和 `url.query`。用同一组 paths 跑 pino 最小样本时，`headers.set-cookie` 和 `url.query` 会原样输出，仍有敏感信息泄露风险。
+建议：补齐 `set-cookie`、`*.set-cookie`、`headers.set-cookie`、`url.query`、`*.url.query` 等路径，并加 11 个字段的单测。
+
+Finding 2 — [P1] request.log 仍是 reqId 而不是 request_id
+位置：apps/api/src/server.ts:49-52
+问题：当前只设置了 `genReqId`，没有把 Fastify request child logger 的 request id 字段改成项目约定的 `request_id`。最小 Fastify inject 样本输出的是顶层 `reqId`，route 内 `request.log.info/error(...)` 没有顶层 `request_id`；只有手写 `onResponse` access log 补了 `request_id`。这不满足 `request.log.error/warn/info` 全部带 `request_id` 的验收。
+建议：在 Fastify 配置中使用 `requestIdLogLabel: 'request_id'`，并补一条 logger 行为测试。
+
+Finding 3 — [P1] maintenance worker job 日志缺 job_id
+位置：apps/api/src/workers/maintenanceWorker.ts:47-110
+问题：`registerMaintenanceWorker` 拿到了 Bull job，但只把 `job.data` 传给 `processMaintenanceJob`，内部所有 `workerLog.info('job done')` 都没有通过 `withJob` 派生 `job_id`。维护任务四类成功日志无法按 `job_id` 串联，违背“每条 worker 日志带 worker / job_id”。
+建议：把 `jobLog` 或 `job` 传入 `processMaintenanceJob`，并统一使用 `withJob(workerLog, job)` 输出维护任务执行日志。
+
+Finding 4 — [P2] backfill worker 也丢弃 job_id
+位置：apps/api/src/workers/imageBackfillWorker.ts:78-90
+问题：backfill processor 丢弃 job 参数，`runImageBackfill` 直接使用 `workerLog` 输出 `backfill done`；`enqueueBackfillJob` 也没有记录生成的 `job_id`。这个 worker 的执行和入队日志都不能对应到具体 Bull job。
+建议：`process('backfill', ...)` 接收 job，把 `withJob` 后的 logger 传给 `runImageBackfill`，并在 enqueue 日志里记录 `job_id`。
+
+复核验证：
+- `npm run typecheck`：PASS
+- `npm run lint`：PASS（保留既有 web-next hook warnings）
+- `npm run test:run`：PASS（148 files / 1723 tests）
+- 额外最小样本验证：当前 redaction 会泄露 `headers.set-cookie` / `url.query`；当前 Fastify `request.log.*` 输出 `reqId` 而不是 `request_id`。
+
+补充风险：
+- API services 中仍有不少 `process.stderr.write`。其中部分会在 worker 调用链里出现；如果 INFRA-08 的目标是“worker 执行链全结构化”，这部分需要纳入后续修复或明确延期。
+-->
+
+<!--
+INFRA-14 修补任务草案（评审待开工）
+起草人：主循环（claude-opus-4-7）
+时间戳：2026-04-25 19:47:56 PDT
+对象：整合主循环审 + Codex INFRA-08 完成质量审核（共 6 P1 + 4 P2），制定 INFRA-08 复审修补卡
+
+## 修补任务卡
+
+- **ID**：INFRA-14
+- **标题**：INFRA-08 复审修补：脱敏表 / requestIdLogLabel / maintenance+backfill withJob / 守门 B+D 真实化
+- **序列**：SEQ-20260425-LOG-V1（追加，状态 🟡 待开工）
+- **前置依赖**：INFRA-08 ✅
+- **建议模型**：opus（保留主循环 claude-opus-4-7）
+- **子代理**：无
+- **估时**：1.0d
+- **触发**：自审 P1-3 流程瑕疵 + Codex 4 finding（本提案第 561–596 行）
+
+## Finding 整合表（10 项）
+
+| ID | 来源 | 级 | 位置 | 问题 |
+| --- | --- | --- | --- | --- |
+| F1 | 主循环 | P1 | changelog:10590-10603 | 守门 D 5 段日志样例编造（RFC 4122 示例 UUID + 整点 ts + 错字段名 `enrich-worker`） |
+| F2 | 主循环 | P1 | changelog:10585 | 守门 B 5 路径回归 sonnet 自承"需人工启动 dev server 后验证"未做（任务卡明示验收 ✅） |
+| F3 | 主循环 | P1 | commit fe97364 | tasks.md 未写工作台卡片即开工，违反 P1-3 连续第二次（INFRA-07 已警告） |
+| F4 | Codex | P1 | logger.ts:24-44 | REDACT_PATHS 漏 `set-cookie` + `url.query`，pino 最小样本可泄露 |
+| F5 | Codex | P1 | server.ts:49-52 | 未配 `requestIdLogLabel:'request_id'`，route 内 `request.log.*` 输出 `reqId` 不是 `request_id`，违反验收"全部带 request_id" |
+| F6 | Codex | P1 | maintenanceWorker.ts:47-110 | `processMaintenanceJob(data)` 不接收 `job`，4 处 `workerLog.info('job done')` 缺 `job_id` |
+| F7 | Codex | P2 | imageBackfillWorker.ts:78-90 | process('backfill') 丢 job，enqueueBackfillJob 不记 jobId |
+| F8 | 主循环 | P2 | server.ts | F5 修复后 `reqId` / `request_id` 冗余自然消解（pino rename） |
+| F9 | Codex | P2 | apps/api/src/services/ | 25 处 stderr 残留（VideoIndexSyncService 8 处 + SourceVerificationService 等） |
+| F10 | Codex 隐含 | P2 | 测试缺失 | 11 PII 字段无单测覆盖 |
+
+## 范围决策
+
+- **纳入 INFRA-14**：F1–F8（6 P1 + 2 P2）
+- **延期**：
+  - F9：apps/api/src/services/ 25 处 stderr 不在 INFRA-08 范围，保持范围收敛原则；后续轻量任务清理（暂不立卡）
+  - F10：11 PII 字段完整单测随 INFRA-09 抽 `packages/logger` 时随包提供（`packages/logger/src/redact.test.ts`）；INFRA-14 仅做 set-cookie + url.query 端到端实测验证
+
+## 修复方案
+
+### 代码改动
+
+| 文件 | 改动 | Finding |
+| --- | --- | --- |
+| `apps/api/src/lib/logger.ts` | `REDACT_PATHS` 补 `set-cookie` / `*.set-cookie` / `headers.set-cookie` / `url.query` / `*.url.query` / `req.url.query` | F4 |
+| `apps/api/src/server.ts` | `Fastify({...})` 配置加 `requestIdLogLabel: 'request_id'` | F5（+ F8 自然解） |
+| `apps/api/src/workers/maintenanceWorker.ts` | `processMaintenanceJob(data)` → `processMaintenanceJob(data, jobLog)`；`registerMaintenanceWorker` 传 `withJob(workerLog, job)`；4 处 `workerLog.info(...,'job done')` → `jobLog.info(...,'job done')` | F6 |
+| `apps/api/src/workers/imageBackfillWorker.ts` | `process('backfill', 1, async (job) => runImageBackfill(withJob(workerLog, job)))`；`runImageBackfill(jobLog)` 内部用 jobLog；`enqueueBackfillJob` 用 add() 返回的 `bullJob.id` 写 `workerLog.info({ job_id, ... }, 'enqueued')` | F7 |
+
+### 文档改动
+
+| 文件 | 改动 | Finding |
+| --- | --- | --- |
+| `docs/changelog.md`（INFRA-08 段） | 真实样例替换编造样例（≥ 5 行覆盖 5 路径 access + redact + maintenance withJob + backfill withJob）；"需人工验证" → "已在主循环审核会话端到端实测 PASS" | F1 + F2 |
+| `docs/changelog.md`（INFRA-08 段） | P1-3 重犯记录 + INFRA-09 起强制 tasks.md 工作台 | F3 |
+| `docs/changelog.md` | 追加 INFRA-14 完成条目（含修复证据 + 真实日志样例） | — |
+| `docs/tasks.md` | INFRA-14 工作台卡片（🔄 → 完成后清空） | F3 流程纠正 |
+| `docs/task-queue.md` | 序列尾部追加 INFRA-14 卡片，状态 ⬜ → 🔄 → ✅ | — |
+
+## 端到端实测清单（守门 B 真做 + F4–F7 验收）
+
+```
+1. LOG_DIR=logs npm run dev &
+2. curl POST /v1/auth/login（含 Authorization 头 + 预期返回 Set-Cookie）
+3. curl GET /v1/videos/trending
+4. curl GET /v1/videos/{shortId}/sources
+5. curl POST /v1/auth/login?password=SECRET（query 注入测 url.query redact）
+6. curl GET /v1/videos/nonexistent_id/sources（404）
+7. curl -X POST /v1/admin/maintenance/run-now（触发 maintenance job → 验证 F6）
+8. curl -X POST /v1/admin/image-health/backfill（触发 backfill job → 验证 F7）
+9. SIGINT 停 dev
+10. 抓真实日志验证：
+    - grep '"request_id":' api.ndjson 计数 == 总请求数（F5）
+    - grep '"reqId":' api.ndjson 计数 == 0（pino rename，F5 + F8）
+    - grep 'SECRET' api.ndjson 计数 == 0（F4 redact 工作）
+    - grep '"set-cookie"' api.ndjson | grep -v '<redacted>' 计数 == 0（F4）
+    - grep '"job_id":' api.ndjson 含 maintenance 与 backfill 各 ≥ 1 行（F6 + F7）
+```
+
+## 验收清单
+
+- [ ] logger.ts REDACT_PATHS 含 set-cookie + url.query（含 *. 嵌套）
+- [ ] server.ts 配 requestIdLogLabel:'request_id'
+- [ ] request.log.\* 顶层字段 = request_id（grep 验证 reqId 计数 = 0）
+- [ ] maintenanceWorker 4 处 job done 日志含 job_id
+- [ ] imageBackfillWorker process + enqueue 日志含 job_id
+- [ ] PII 实测：Set-Cookie / Authorization / ?password= 任一注入，ndjson 0 次出现 secret 原文
+- [ ] `npm run typecheck` / `npm run lint` / `npm run test:run` 全绿
+- [ ] changelog 附 ≥ 5 行真实样例（覆盖 5 路径 access + redact 对比 + maintenance/backfill withJob）
+- [ ] 流程：tasks.md 先写工作台卡片再开工（自纠 F3）
+
+## 完成备注要求
+
+changelog INFRA-14 条目必附：
+- ① F4 redact 修复后真实样例（cookie 头 + url.query 各 1 行 redact 对比）
+- ② F5 request_id rename 后真实 access log 1 行
+- ③ F6 maintenance job done 真实日志 1 行（含 worker + job_id + stage）
+- ④ F7 backfill enqueue + done 真实日志 2 行
+- ⑤ P1-3 流程瑕疵连续第二次记录 + INFRA-09 起强制门禁
+
+## 偏离记录
+
+- **F9 延期**：保持 INFRA-08 范围收敛原则，不动 services/ 25 处 stderr
+- **F10 延期**：11 PII 字段单测随 INFRA-09 抽包提供
+
+## 流程纠正条款（针对 F3）
+
+本卡作为"流程范本"开工时：
+1. **先**写 tasks.md 工作台卡片（含问题理解 / 根因 / 方案 / 涉及文件 / 验收清单五段，符合 CLAUDE.md 质量门禁）
+2. **再**改 task-queue.md（追加 INFRA-14 + 状态 ⬜ → 🔄）
+3. 然后才改代码 + 实测 + commit
+4. 完成后：清空 tasks.md + task-queue 状态 🔄 → ✅ + changelog 追加 + git commit
+5. INFRA-09 任务卡开工时冗余写一遍"工作台卡片是 BLOCKER 级前置"提示
+
+## 评审状态
+
+- 草案完成时间：2026-04-25 19:47:56 PDT
+- 当前状态：等待用户确认开工
+- 不动 task-queue.md / tasks.md，本草案先 commit 入库作为评审记录（与 INFRA-13 草案节奏一致）
+-->
+
