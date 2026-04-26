@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process'
-import { createReadStream, createWriteStream, existsSync, mkdirSync, renameSync, statSync, readdirSync, unlinkSync } from 'node:fs'
+import { createWriteStream, existsSync, mkdirSync, renameSync, statSync, readdirSync, unlinkSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve, join } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -169,17 +169,30 @@ function handleLine(label, stream, rawLine) {
   }
 
   if (parsed !== null && typeof parsed === 'object') {
-    // JSON 行：直接写 ndjson
-    writeLine(ndjsonPath, rawLine)
+    // JSON 行：补 ts/level/service/stream，原字段经 ...parsed 优先；level 单独后置归一为字符串
+    const tsFromTime =
+      typeof parsed.time === 'number' ? new Date(parsed.time).toISOString() : null
+    const enriched = {
+      ts: parsed.ts ?? tsFromTime ?? new Date().toISOString(),
+      service: parsed.service ?? label,
+      stream: parsed.stream ?? stream,
+      ...parsed,
+      level:
+        typeof parsed.level === 'number'
+          ? pinoLevelStr(parsed.level)
+          : (parsed.level ?? 'info'),
+    }
+    const enrichedLine = JSON.stringify(enriched)
+    writeLine(ndjsonPath, enrichedLine)
 
     // client 流前向兼容：见到 service:'client' 分流到 logs/client/
-    if (parsed.service === 'client') {
-      writeLine(clientPath, rawLine)
+    if (enriched.service === 'client') {
+      writeLine(clientPath, enrichedLine)
     }
 
     // errors 聚合：level >= warn 写 errors（决策 4 选 B）
-    if (isWarnOrAbove(parsed)) {
-      writeLine(errorsPath, rawLine)
+    if (isWarnOrAbove(enriched)) {
+      writeLine(errorsPath, enrichedLine)
     }
   } else {
     // 非 JSON 行：wrap 成最小 ndjson 结构后写
@@ -300,32 +313,38 @@ async function shutdown(exitCode = 0) {
   shuttingDown = true
 
   devLog('stopping dev services')
+
+  let exited = false
+  const finalExit = async () => {
+    if (exited) return
+    exited = true
+    // 等所有 child 'close' 后再 close streams，避免子进程退出前的尾行被丢弃
+    await closeAllStreams()
+    process.exit(exitCode)
+  }
+
+  if (children.size === 0) {
+    await finalExit()
+    return
+  }
+
+  // 子进程 'close' 比 'exit' 晚，stdio 流也已确认关闭；全 close 后才 flush
+  let pending = children.size
   for (const entry of children.values()) {
+    entry.child.once('close', () => {
+      pending--
+      if (pending === 0) finalExit()
+    })
     killChild(entry, 'SIGTERM')
   }
 
-  const forceTimer = setTimeout(() => {
-    for (const entry of children.values()) {
-      killChild(entry, 'SIGKILL')
-    }
-  }, 3000)
-  forceTimer.unref()
+  // 3s SIGKILL 兜底
+  setTimeout(() => {
+    for (const entry of children.values()) killChild(entry, 'SIGKILL')
+  }, 3000).unref()
 
-  // flush + 关闭所有日志 fd
-  await closeAllStreams()
-
-  const exitTimer = setTimeout(() => {
-    process.exit(exitCode)
-  }, 3500)
-  exitTimer.unref()
-
-  const checkTimer = setInterval(() => {
-    if (children.size === 0) {
-      clearInterval(checkTimer)
-      process.exit(exitCode)
-    }
-  }, 100)
-  checkTimer.unref()
+  // 5s finalExit 兜底（即便 close 事件未来）
+  setTimeout(() => finalExit(), 5000).unref()
 }
 
 process.once('SIGINT', () => shutdown(0))

@@ -492,4 +492,38 @@ env 覆盖：`LOG_DIR` / `LOG_MAX_BYTES` / `LOG_MAX_FILES` / `LOG_RETENTION_DAYS
 主循环失误归因：写任务卡时仅搜 docs/task-queue.md 既存 INFRA-XX，未搜 docs/changelog.md 历史用号，导致撞号未被发现；已在审核报告记录，下次写任务卡前必须 grep 全部历史 changelog + task-queue 确认编号未占用。
 -->
 
+<!--
+复审审核意见
+审核者：Codex
+时间戳：2026-04-25 18:47:14 PDT
+对象：INFRA-07 修复后复审（commit 24177c9）
+结论：CONDITIONAL PASS，编号与文档样例已有改善，但两个 P1 代码问题仍未修复；当前变更主要是文档解释与编号修订。
+
+Finding 1 — [P1] JSON 行仍缺统一字段
+位置：scripts/dev.mjs:171-183
+问题：可解析 JSON 仍原样写入 `<service>.ndjson`，没有补 `ts/service/stream`。复查当前 `logs/dev/api.ndjson`，8 行里 8 行都缺 `ts/service/stream`。文档把字段不齐改成“INFRA-07 预期产物”，但这会让 `*.ndjson` 在本阶段仍不是统一机器契约，和日志系统方案固定字段目标不一致。
+建议：若决定延期，需要在 INFRA-07 任务验收中明确降级；否则应在 `handleLine()` 的 JSON 分支 merge 标准字段，例如 `{ ts, service: label, stream, ...parsed }`，并把 pino `time` 转换/保留为规范时间字段。
+
+Finding 2 — [P1] shutdown 尾行丢失风险仍在
+位置：scripts/dev.mjs:302-325
+问题：代码仍然在 SIGTERM 子进程后立即 `closeAllStreams()`。随后子进程退出前如果 stdout/stderr 还有尾行，`handleLine()` 会重新打开流，而最终 `process.exit()` 前不会再次 flush。一次人工 Ctrl+C 样本通过不能证明该竞态不存在。
+建议：等待 child `close` / readline `close` 后再最终 `closeAllStreams()`；或在 `process.exit()` 前再次 drain/flush `openStreams`，并避免 shutdown 期间 close 后重新打开未被最终 flush 的 stream。
+
+Finding 3 — [P2] errors 聚合文档仍写错
+位置：docs/changelog.md:10498-10515
+问题：changelog 仍写 numeric level ≥50 或 error/fatal 才写 errors，但代码和 `docs/task-queue.md` 的 INFRA-07 验收都是 warn 及以上，即 numeric ≥40 或 warn/error/fatal。该记录会误导后续验收。另外，```ndjson 代码块包含 `//` 注释和未加引号的 `<port>`，不是有效 NDJSON。
+建议：修正文档为 numeric ≥40 / warn|error|fatal；日志样例要么改为普通文本代码块，要么保证每一行都是可解析 JSON。
+
+已确认改善：
+- 编号已从 INFRA-01..06 改为 INFRA-07..12，`docs/task-queue.md` 主序列和 `docs/changelog.md` 当前条目已同步。
+- changelog 样例已从纯编造模板换成更接近真实产物的样例。
+- `node --check scripts/dev.mjs` 通过。
+
+残余风险：
+- `docs/logging_system_proposal_20260425.md` 历史评论仍大量引用 INFRA-01..06；若作为历史审计记录保留可以接受，若作为当前索引使用会继续造成混淆。
+- `scripts/dev.mjs` 中 `createReadStream`、`pinoLevelStr`、`isErrorLevel` 未使用，属于清理项，不阻断。
+
+建议状态：
+文档编号修复完成；INFRA-07 实现仍需修两个 P1，或正式把统一字段与 shutdown drain 降级/后移并写入任务卡验收变更。
+-->
 
