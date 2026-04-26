@@ -11076,7 +11076,8 @@ curl + Origin 头不等价于真实浏览器，明确 4 项局限：
 ### 守门
 - `npm run typecheck` ✅（4 workspace 全过）
 - `npm run lint` ✅（FULL TURBO，3 cached）
-- `npm run test:run` ✅ **150 文件 / 1760 测试**（与 INFRA-11/16 同，本卡纯文档无代码改动）
+- `npm run test:run` ✅ **150 文件 / 1760 测试**（主循环本机 Node v20.19.6，与 INFRA-11/16 同，本卡纯文档无代码改动）
+  - **flaky caveat**（INFRA-18 后补充）：Codex 在 bundled Node 环境复跑出现 1 个 flaky 失败 `tests/unit/components/admin/videos/VideoImageSection.test.tsx` 破图降级测试；单独复跑该文件 PASS。指向既有 flaky 或测试隔离问题，与 INFRA-17 文档改动无关。建议未来在独立维护卡（非 SEQ-20260425-LOG-V1 范围）跟进 flaky 根因
 - `npm run verify:docs-format`：`logging-rules.md` 仍通过元信息检查，**不引入新错误**；12 项 pre-existing 历史问题维持（与 INFRA-11 时一致）
 
 ### 流程合规
@@ -11090,3 +11091,135 @@ curl + Origin 头不等价于真实浏览器，明确 4 项局限：
 ### INFRA-11 完成态闭环
 
 F1 + F2 + F3 修订后，`logging-rules.md` 不再有误导措辞、不再隐含验收降级风险；task-queue 验收项与 changelog 历史遗留说明措辞一致。INFRA-11 自 CONDITIONAL PASS 升级为 PASS。SEQ-20260425-LOG-V1 主线（INFRA-07/08/09/10/11/13/14/15/16/17）全部 ✅，仅剩 INFRA-12（LOG-06）实现下沉为隐式后续，触发窗口 2026-05-10。
+
+---
+
+## INFRA-18（LOG-V1 修补）— INFRA-17 残留修补：§ 7 编号去重 / 鉴权行 cookie 限定 / test:run flaky caveat
+
+- **日期**：2026-04-26
+- **序列**：SEQ-20260425-LOG-V1
+- **执行模型**：claude-opus-4-7（用户在本会话连续指挥 INFRA-10 起所有任务直接由主循环执行，本卡延续）
+- **子代理**：无
+- **触发**：Codex INFRA-17 残留复审 3 finding（`docs/logging_system_proposal_20260425.md:1383-1418`）+ 主循环独立审核（同文件 1420+，确认 1 P2 + 2 P3 全成立）
+- **草案 commit**：`c7bdbd2`
+- **修改文件**（2 文档）：
+  - `docs/rules/logging-rules.md:311-319` — 删除 9 行重复（旧 § 7.1 跨 origin 配置基线 + 旧 § 7.2 CORS 拒绝映射；INFRA-17 修订时复制粘贴新版本 § 7.2 / 7.3 但忘了删除原版本）（F1）
+  - `docs/rules/logging-rules.md:281-286` § 7.0 分级表 — 第 4 行「业务逻辑（含鉴权）」拆为 3 行：「业务逻辑（zod / 限流 / IP 白名单）」+「header/token 鉴权（Authorization Bearer）」+「cookie/session 鉴权（SameSite / Secure / credentials:'include'）」（F2）
+  - `docs/changelog.md` INFRA-17 段守门栏 — 追加 flaky caveat（VideoImageSection 既有 flaky 与本卡无关）（F3）
+  - `docs/changelog.md` — 追加本条目
+  - `docs/task-queue.md` — INFRA-18 状态 🔄 → ✅
+  - `docs/tasks.md` — 工作台 INFRA-18 卡片清空
+
+### F1 修复证据：grep 计数前后对比
+
+修复前（重复）：
+```
+$ grep -c "^### 7\." docs/rules/logging-rules.md
+6
+$ grep -n "^### 7\." docs/rules/logging-rules.md
+279:### 7.0 验收要求按改动类型分级
+295:### 7.1 验收路径选择规则
+301:### 7.2 跨 origin 配置基线        ← 新版
+307:### 7.3 CORS 拒绝映射为 403       ← 新版
+311:### 7.1 跨 origin 配置基线        ← 旧版（重复）
+317:### 7.2 CORS 拒绝映射为 403       ← 旧版（重复）
+```
+
+修复后（唯一）：
+```
+$ grep -c "^### 7\." docs/rules/logging-rules.md
+4
+$ grep -n "^### 7\." docs/rules/logging-rules.md
+279:### 7.0 验收要求按改动类型分级
+297:### 7.1 验收路径选择规则
+303:### 7.2 跨 origin 配置基线
+309:### 7.3 CORS 拒绝映射为 403
+
+$ grep -c "### 7\.1" docs/rules/logging-rules.md
+1
+$ grep -c "### 7\.2" docs/rules/logging-rules.md
+1
+```
+
+### F2 修复证据：分级表完整 6 行
+
+修订前（4 行，鉴权笼统归到 curl+Origin 充分）：
+```
+| 涉及 sendBeacon / page lifecycle flush | ✅ 必须 | ❌ 不充分 |
+| 涉及浏览器 cookie 自动携带 | ✅ 必须 | ❌ 不充分 |
+| 仅服务端 CORS / 端点 origin 校验 | ☐ 可选 | ✅ 充分 |
+| 仅业务逻辑（端点内部 zod / 限流 / 鉴权） | ☐ 可选 | ✅ 充分 |
+```
+
+修订后（6 行，鉴权拆为 header/token vs cookie/session）：
+```
+| 涉及 sendBeacon / page lifecycle (pagehide/beforeunload) flush | ✅ 必须 | ❌ 不充分 |
+| 涉及浏览器 cookie 自动携带（credentials:'include'） | ✅ 必须 | ❌ 不充分（curl 不模拟 SameSite/SecureContext） |
+| 仅服务端 CORS / 端点 origin 校验 | ☐ 可选 | ✅ 充分（API/CORS 快速验证） |
+| 仅业务逻辑：zod 校验 / 限流 / IP 白名单 | ☐ 可选 | ✅ 充分 |
+| 鉴权：header/token（如 Authorization: Bearer <jwt>） | ☐ 可选 | ✅ 充分（curl `-H "Authorization: ..."` 完整模拟） |
+| 鉴权：cookie/session（SameSite / Secure / credentials:'include'） | ✅ 必须 | ❌ 不充分（cookie 自动携带不可 curl 准确模拟） |
+```
+
+**拆分理由**：header/token 鉴权（如 `Authorization: Bearer <jwt>`）curl 可显式 `-H "Authorization: ..."` 完整复现浏览器请求；cookie/session 鉴权浏览器侧自动携带受 SameSite/Secure/HttpOnly 策略影响，curl 必须显式 `--cookie` 且无法准确复现策略边界。
+
+### F3 修复证据：INFRA-17 守门段 flaky caveat
+
+```
+- npm run test:run ✅ 150 文件 / 1760 测试（主循环本机 Node v20.19.6...）
+  - flaky caveat（INFRA-18 后补充）：Codex 在 bundled Node 环境复跑出现
+    1 个 flaky 失败 tests/unit/components/admin/videos/VideoImageSection.test.tsx
+    破图降级测试；单独复跑该文件 PASS。指向既有 flaky 或测试隔离问题，
+    与 INFRA-17 文档改动无关。建议未来在独立维护卡（非 SEQ-20260425-LOG-V1
+    范围）跟进 flaky 根因
+```
+
+### 防回归自检：grep 编号唯一
+
+commit 前已跑：
+
+```
+$ grep -c "^### 5\." docs/rules/logging-rules.md
+3   # § 5.1 / § 5.2 / § 5.3 唯一
+
+$ grep -c "^### 7\." docs/rules/logging-rules.md
+4   # § 7.0 / § 7.1 / § 7.2 / § 7.3 唯一
+
+$ grep -c "^### 8\." docs/rules/logging-rules.md
+5   # § 8.1 / § 8.2 / § 8.3 / § 8.4 / § 8.5 唯一
+```
+
+**未来同类任务（文档段落删除/移动操作）必须 commit 前跑此自检**，避免 INFRA-17 → INFRA-18 类编号疏忽再发。
+
+### 守门
+- `npm run typecheck` ✅（4 workspace 全过）
+- `npm run lint` ✅（FULL TURBO，3 cached）
+- `npm run test:run` ✅ **150 文件 / 1760 测试**（主循环本机 Node v20.19.6，与 INFRA-11/16/17 同）
+- `npm run verify:docs-format`：`logging-rules.md` 仍通过元信息检查，**不引入新错误**；12 项 pre-existing 历史问题维持
+
+### 流程合规
+
+第 7 次延续 INFRA-14/15/16/17 范本（草案 commit `c7bdbd2` → 开工时**先**写 `docs/tasks.md` 工作台卡片 → **再**改 `docs/task-queue.md` 状态 ⬜→🔄 → 然后才动文档 → **commit 前 grep 编号自检** → 守门 → 清空 tasks + ✅ + changelog + commit）。
+
+### 偏离记录
+
+- **VideoImageSection flaky 根因不在本卡**：仅 changelog 加 caveat 不掩盖跨环境差异。flaky 根因独立维护卡跟进（非 SEQ-20260425-LOG-V1 范围）
+- **本卡为"修补的修补"（第 7 次范本应用）**：通过引入 grep 编号自检流程 + 改进文档段落操作纪律强化未来同类任务
+
+### INFRA-17 完成态闭环
+
+F1 + F2 + F3 修订后，`logging-rules.md` § 7 编号唯一无重复、§ 7.0 分级表正确区分 header/token vs cookie/session 鉴权、INFRA-17 changelog 守门段含跨环境 flaky caveat。INFRA-17 自 CONDITIONAL PASS 升级为 PASS。
+
+### SEQ-20260425-LOG-V1 主线状态
+
+```
+1. INFRA-07 (LOG-03) dev.mjs 落盘                ✅
+2. INFRA-08 (LOG-02) API/worker logger           ✅
+3. INFRA-09 (LOG-01) packages/logger 抽包        ✅
+4. INFRA-10 (LOG-04) 浏览器 client logger        ✅
+5. INFRA-11 (LOG-05) logging-rules 文档          ✅ (CONDITIONAL → PASS via INFRA-17)
+6. INFRA-12 (LOG-06) 实现下沉                    ⬜ 触发窗口 2026-05-10
+7. INFRA-13/14/15/16/17/18  6 张修补卡          ✅✅✅✅✅✅
+```
+
+主线全 ✅，仅剩 INFRA-12 隐式后续。SEQ-20260425-LOG-V1 实施层闭环（含修补卡）。

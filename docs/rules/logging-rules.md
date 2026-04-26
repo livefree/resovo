@@ -283,7 +283,9 @@ INFRA-10 完成时用 `curl http://localhost:4000/v1/internal/client-log` 直连
 | 涉及 `sendBeacon` / page lifecycle (`pagehide`/`beforeunload`) flush | ✅ **必须** | ❌ 不充分 |
 | 涉及浏览器 cookie 自动携带（`credentials:'include'`） | ✅ **必须** | ❌ 不充分（curl 不模拟 SameSite/SecureContext） |
 | 仅服务端 CORS / 端点 origin 校验 | ☐ 可选 | ✅ 充分（API/CORS 快速验证） |
-| 仅业务逻辑（端点内部 zod / 限流 / 鉴权） | ☐ 可选 | ✅ 充分 |
+| 仅业务逻辑：zod 校验 / 限流 / IP 白名单 | ☐ 可选 | ✅ 充分 |
+| 鉴权：header/token（如 `Authorization: Bearer <jwt>`） | ☐ 可选 | ✅ 充分（curl `-H "Authorization: ..."` 完整模拟） |
+| 鉴权：cookie/session（`SameSite` / `Secure` / `credentials:'include'`） | ✅ **必须** | ❌ 不充分（cookie 自动携带不可 curl 准确模拟） |
 
 **curl + Origin 头不等价于真实浏览器**，明确 4 项局限：
 
@@ -305,16 +307,6 @@ INFRA-10 完成时用 `curl http://localhost:4000/v1/internal/client-log` 直连
 - API URL 必须用绝对 URL（`process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/v1'`），**不得**用相对路径
 
 ### 7.3 CORS 拒绝映射为 403
-
-`server.ts` 已配全局 `setErrorHandler` 把 `'Not allowed by CORS'` Error 映射为 HTTP 403 + `code: 'FORBIDDEN_ORIGIN'`（参考 INFRA-16 commit）。新增内部端点不需要重复实现 origin 检查——全局 CORS 已统一处理。
-
-### 7.1 跨 origin 配置基线
-
-- 服务端 `apps/api/src/server.ts:71-81` 全局 `@fastify/cors` 配置 `credentials: true`
-- 浏览器侧 fetch 必须 `credentials: 'include'`（参考 `apps/web-next/src/lib/logger.client.ts:73-78`）
-- API URL 必须用绝对 URL（`process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/v1'`），**不得**用相对路径
-
-### 7.2 CORS 拒绝映射为 403
 
 `server.ts` 已配全局 `setErrorHandler` 把 `'Not allowed by CORS'` Error 映射为 HTTP 403 + `code: 'FORBIDDEN_ORIGIN'`（参考 INFRA-16 commit）。新增内部端点不需要重复实现 origin 检查——全局 CORS 已统一处理。
 
