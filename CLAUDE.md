@@ -115,6 +115,7 @@ npm run test:e2e         # PLAYER / AUTH / SEARCH / VIDEO 任务完成后运行
 | 任务工作流 | `docs/rules/workflow-rules.md` | 开工、选任务、BLOCKER、PHASE COMPLETE |
 | Git 提交 | `docs/rules/git-rules.md` | commit、branch、merge、TASK-ID |
 | 质量门禁 | `docs/rules/quality-gates.md` | 任务完成前、六问、AI-CHECK、偏离检测 |
+| 日志相关任务 | `docs/rules/logging-rules.md` | logger / log / 日志 / pino / request_id / worker job / PII redact / client-log |
 
 ---
 
