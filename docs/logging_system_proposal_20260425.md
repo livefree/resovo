@@ -913,3 +913,213 @@ Finding 2 — [P2] redact 单测没有验证实际脱敏行为：已修复
 - `git show --check -1` 仅报 `docs/changelog.md:10722` trailing whitespace，属于提交卫生问题，不影响两条 finding 闭环。
 - 当前有效状态：INFRA-09 的 CONDITIONAL PASS 已由 INFRA-15 修补转为 PASS；后续如需记录最终总状态，应以本复核块为准。
 -->
+
+<!--
+INFRA-10 完成质量独立审核意见
+审核者：Codex
+时间戳：2026-04-26 00:30:52 PDT
+对象：INFRA-10（commit 4e76621）浏览器 client logger + /v1/internal/client-log 端点
+结论：CONDITIONAL PASS。client logger、API 端点、server 注册、4 处 console 迁移和新增 jsdom 单测主体成立；但浏览器端默认投递 URL 与现有 web-next API 基址策略不一致，会影响真实浏览器链路，是 P1 阻断。另有 2 个 P2 需要修补。
+
+Finding 1 — [P1] 浏览器 logger 默认打到 web-next 自身而不是 API
+位置：apps/web-next/src/lib/logger.client.ts:27-71
+问题：`ENDPOINT` 固定为相对路径 `/v1/internal/client-log`，而 web-next 现有 API 调用都使用 `NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/v1'`（见 `apps/web-next/src/lib/api-client.ts` 与 `report-broken-image.ts`）。当前 `apps/web-next/next.config.ts` 未配置 `/v1` rewrite；在常规 dev 模式 web-next 跑在 3000、API 跑在 4000 时，浏览器日志会 POST 到 web-next origin 的 `/v1/internal/client-log`，不是 API 端点，导致“浏览器异常 → API endpoint → logs/client”核心链路依赖外部反代才成立。并且 fetch fallback 使用 `credentials:'same-origin'`，若改为跨 origin API URL，prod 登录态也不会随请求携带。
+建议：按现有 web-next API 策略生成端点 URL，例如 `const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/v1'`，endpoint 为 `${BASE_URL}/internal/client-log`；fetch fallback 改为 `credentials:'include'`。同时补一个单测断言默认 URL 指向 `http://localhost:4000/v1/internal/client-log` 或使用 env 覆盖后的 API URL。
+
+Finding 2 — [P2] 非法 Origin 实际返回 500，不是验收要求的 403
+位置：apps/api/src/server.ts:71-80；apps/api/src/routes/internal/client-log.ts:81-85
+问题：任务卡要求 client-log 端点覆盖 5 分支（200/400/401/403/429），其中非法 origin 应为 403。但全局 `@fastify/cors` 在请求进入端点前用 `cb(new Error('Not allowed by CORS'), false)` 拦截，实测最小 Fastify 注入：非法 origin 返回 500 `Not allowed by CORS`，端点内的 `FORBIDDEN_ORIGIN` 403 分支不可达。changelog 已记录“403 不可达”，但这仍未满足验收分支。
+建议：要么把 CORS 拒绝统一映射为 403（全局 error handler 或 cors 配置调整），要么把任务验收从“403 endpoint branch”正式降级为“CORS edge rejects invalid origin”，并补对应单测/文档。若保留 403 契约，应让非法 origin 到达 route 层或由全局 CORS 返回 403。
+
+Finding 3 — [P2] client 日志写入原始 source_ip，绕过 PII redact 规则
+位置：apps/api/src/routes/internal/client-log.ts:107-118
+问题：endpoint 将 `request.ip` 写入 `source_ip` 字段。INFRA-08/09 的 PII 规则覆盖字段名 `ip`，但不会匹配 `source_ip`，因此 client ndjson 会保留原始来源 IP。changelog 样例也显示 `"source_ip":"127.0.0.1"`。这与“ip 作为 PII 字段需 redact”的日志基线不一致。
+建议：如无强需求，删除 `source_ip`；如需排障关联，改为 hash/truncate 后写入，例如 `source_ip_hash` 或 `source_ip_prefix`，并补单测确认不会输出原始 IP。
+
+已确认通过项：
+- `apps/api/src/server.ts` 已注册 `internalClientLogRoutes`，路径为 `/v1/internal/client-log`。
+- `apps/api/src/routes/internal/client-log.ts` 已实现 zod 校验、100 条批量上限、64KB bodyLimit、IP 60 rpm 限流、prod auth gate、service:'client' logger 落 stdout。
+- `apps/web-next/src/lib/logger.client.ts` 已实现 info/warn/error 同步 API、buffer 50、2s flush、error 立即 flush、sendBeacon 优先、fetch fallback、1 次 retry、window error / unhandledrejection / dev console.error / pagehide hooks。
+- `BrandProvider` 安装全局 hooks；`BrandProvider`、`playerStore`、`SafeImageNext` 的 4 处实际 console 调用已替换为 clientLogger。
+- `tests/unit/web-next/logger-client.test.ts` 覆盖 error 立即 flush、info 2s buffer、sendBeacon→fetch fallback、三输入全局 hook 与幂等。
+
+复核验证：
+- `npm run test:run -- tests/unit/web-next/logger-client.test.ts`：PASS（4 tests）
+- 根 `tsc --noEmit`：PASS
+- `npm run lint`：PASS（web-next 仍有既有 hook warnings，非本次引入）
+- `git show --check -1`：PASS
+- 最小 Fastify 注入验证：200 正常与 400 body 校验通过；非法 origin 实际返回 500 `Not allowed by CORS`，不是 403。
+- 全量 `npm run test:run`：当前环境下 FAIL，133 个 localStorage 相关既有前端测试失败（`localStorage.clear/getItem is not a function`）；新增 logger-client 测试本身通过，本失败不作为 INFRA-10 新增实现 finding，但不能用本次运行证明“1759 全绿”。
+
+建议状态：
+INFRA-10 可按 CONDITIONAL PASS 进入修补。优先修 Finding 1，确保真实浏览器链路无需反代假设即可送达 API；随后处理非法 origin 状态码契约与 source_ip PII 问题。
+-->
+
+<!--
+INFRA-16 修补任务草案（评审待开工）
+起草人：主循环（claude-opus-4-7）
+时间戳：2026-04-26 00:36:19 PDT
+对象：整合 Codex INFRA-10 完成质量审核（3 finding）+ 主循环独立确认 F1 是 P1 真实 bug，制定 INFRA-10 复审修补卡
+
+## 修补任务卡
+
+- **ID**：INFRA-16
+- **标题**：INFRA-10 复审修补：浏览器→API 链路打通 + CORS 403 契约 + source_ip PII
+- **序列**：SEQ-20260425-LOG-V1（追加，状态 🟡 待开工）
+- **前置依赖**：INFRA-10 ✅（CONDITIONAL PASS）
+- **建议模型**：sonnet（机械性接线修复 + 单测增量，无新架构决策）
+- **子代理**：无
+- **估时**：0.4d
+- **触发**：Codex INFRA-10 审核 3 finding（本提案第 917–955 行）+ 主循环独立确认 F1 是 P1 阻断（真实浏览器链路 0 工作，curl 直连 :4000 误判通过）
+
+## Finding 整合表（3 项）
+
+| ID | 来源 | 级 | 位置 | 问题 |
+| --- | --- | --- | --- | --- |
+| F1 | Codex + 主循环复核 | P1 真实 bug | `apps/web-next/src/lib/logger.client.ts:27` | `ENDPOINT = '/v1/internal/client-log'` 相对路径，浏览器(:3000) 发请求打到 web-next 自身 → 404；现有 web-next 代码均用 `process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/v1'` 拼绝对 URL（`api-client.ts:3` / `video-detail.ts:9` / `report-broken-image.ts:14`）。INFRA-10 的 5 分支 curl 直连 :4000 实测**绕过**了浏览器→API 真实路径，验证缺口。fetch fallback `credentials:'same-origin'` 跨 origin 不携带 cookie，prod 401 也会因此误判 |
+| F2 | Codex | P2 契约 | `apps/api/src/server.ts:71-80` + `apps/api/src/routes/internal/client-log.ts:81-85` | 任务卡 5 分支验收要求非法 origin 返回 403；实际全局 fastify-cors `cb(new Error('Not allowed by CORS'), false)` 拦截后 fastify 默认转 500。端点内 `FORBIDDEN_ORIGIN` 403 分支不可达。INFRA-10 changelog 已记录但属于"偏离文档化"而非"修复" |
+| F3 | Codex | P2 PII | `apps/api/src/routes/internal/client-log.ts:107-118` | endpoint 写入 `source_ip: request.ip`；INFRA-08/09 PII redact 表覆盖字段名 `ip` / `*.ip`，**不匹配** `source_ip`。INFRA-10 实测 client.ndjson 58 行全部含明文 `127.0.0.1`，与"ip 作为 PII 字段需 redact"基线不一致。dev 不敏感但生产泄露真实用户 IP |
+
+## 范围决策
+
+- **纳入 INFRA-16**：F1（必修）+ F2（必修，选契约修复路径 A）+ F3（必修，选删除 source_ip）
+- **延期 / 不在本卡**：
+  - 跨环境 jsdom localStorage 失败（Codex 复核备注）：与 INFRA-09/15 同环境议题，独立不立卡
+  - logger.server.ts 真实消费方迁移：随 INFRA-12 实现下沉
+
+## 修复方案
+
+### F1 修复（必修，P1）
+
+| 文件 | 改动 |
+| --- | --- |
+| `apps/web-next/src/lib/logger.client.ts` | ① 顶部新增 `const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/v1'` ② `const ENDPOINT = \`${BASE_URL}/internal/client-log\`` ③ fetch fallback `credentials: 'same-origin'` → `credentials: 'include'`（跨 origin cookie 必需） |
+| `apps/api/src/server.ts:71-81` | 验证 `cors({ credentials: true, ... })` 已配置（既有），跨 origin POST 时浏览器要求 `Access-Control-Allow-Credentials: true` 头 |
+| `tests/unit/web-next/logger-client.test.ts` | 新增 1 测试：默认 BASE_URL 为 `http://localhost:4000/v1`，sendBeacon/fetch 调用的 URL 形如 `http://localhost:4000/v1/internal/client-log`；覆盖 NEXT_PUBLIC_API_URL 环境变量场景 |
+
+### F2 修复（必修，P2，选路径 A）
+
+**路径 A（推荐）**：CORS 拒绝映射为 403。在 `server.ts` register cors 之后注册全局 onError hook 或在 cors 配置中改 callback：
+- 选择 1: cors 配置 `hook: 'preHandler'` + 自定义 `origin` 函数返回 false 而不是抛 Error
+- 选择 2: 全局 setErrorHandler 检测 message === 'Not allowed by CORS' 返回 403
+
+主循环倾向**选择 2**：最小侵入，只对 CORS error 做转换，其他错误流不变：
+```ts
+fastify.setErrorHandler((error, request, reply) => {
+  if (error.message === 'Not allowed by CORS') {
+    return reply.code(403).send({
+      error: { code: 'FORBIDDEN_ORIGIN', message: 'Origin not allowed', status: 403 },
+    })
+  }
+  // 委托默认行为
+  reply.send(error)
+})
+```
+
+| 文件 | 改动 |
+| --- | --- |
+| `apps/api/src/server.ts` | 在 cors register 之后追加 `fastify.setErrorHandler(...)` 把 CORS error 映射为 403 |
+| 集成测 | curl 测：`-H "Origin: http://evil.com"` → HTTP 403 + 含 `code: 'FORBIDDEN_ORIGIN'` |
+
+**注意**：setErrorHandler 是全局的，会影响所有路由——需评估对现有 401/404/500 路径无回归。预期：fastify 默认 errorHandler 仍处理 statusCode-bearing errors，仅 message-match 的 CORS error 被特殊处理。
+
+### F3 修复（必修，P2）
+
+**首选**：删除 `source_ip` 字段。理由：
+- `request_id` 已足够关联日志（每请求唯一 UUID）
+- IP 排障价值低于隐私风险
+- 删除最干净，不需 hash 函数维护
+
+| 文件 | 改动 |
+| --- | --- |
+| `apps/api/src/routes/internal/client-log.ts:108-115` | `clientLog[entry.level]({ client_ts, ctx, request_id, source_ip }, msg)` → 删除 `source_ip` 参数 |
+| 集成测 / E2E | curl 测后 grep `logs/client/<date>.ndjson`，断言 `"source_ip"` 字段不存在；也 grep `"127.0.0.1"` 计数 = 0（本机环境） |
+
+### 文档改动
+
+| 文件 | 改动 |
+| --- | --- |
+| `docs/changelog.md`（INFRA-10 段） | 追加 CONDITIONAL PASS 备注：F1 P1 阻断"浏览器链路 0 工作"显式记录 + F2 / F3 + 链接至 INFRA-16；行为差异说明改为"已闭环"指针 |
+| `docs/changelog.md` | 追加 INFRA-16 完成条目（含 F1/F2/F3 修复证据 + 真实浏览器路径实测） |
+| `docs/tasks.md` | 工作台 INFRA-16 卡片（开工时写，完成后清空） |
+| `docs/task-queue.md` | 序列尾部追加 INFRA-16 卡片，状态 ⬜ → 🔄 → ✅ |
+
+## 端到端验证清单
+
+```
+F1 验证（必须真实浏览器，curl 不能替代）：
+1. npm run dev
+2. 浏览器打开 http://localhost:3000
+3. F12 devtools console 跑：
+   throw new Error('INFRA-16 sync test')
+   Promise.reject('INFRA-16 unhandled test')
+   console.error('INFRA-16 console test')
+4. 验证：
+   - devtools Network 面板看 POST 目标是 http://localhost:4000/v1/internal/client-log（非 :3000）
+   - logs/client/<date>.ndjson 出现 3 条新记录，分别带 source: window.onerror / unhandledrejection / console.error
+   - 完整链路：浏览器 → API :4000 → service:'client' → 落盘
+
+F2 验证：
+1. curl -X POST http://localhost:4000/v1/internal/client-log \
+     -H "Content-Type: application/json" -H "Origin: http://evil.com" \
+     -d '{"entries":[{"ts":"...","level":"info","msg":"x"}]}'
+2. expect HTTP 403 + body { error: { code: 'FORBIDDEN_ORIGIN' } }
+3. 同 curl 不带 Origin 头：仍 200（非浏览器请求放行）
+
+F3 验证：
+1. 跑任意 200 路径
+2. grep "source_ip" logs/client/<date>.ndjson == 0
+3. grep "127.0.0.1" logs/client/<date>.ndjson == 0（本机 IP 不出现）
+4. 验证不影响 ctx / request_id / client_ts 字段（仍正常输出）
+
+无回归守门：
+- npm run typecheck / lint / test:run 全绿
+- 全局 setErrorHandler 不影响：curl POST /v1/auth/login 错密码（422）/ GET /nonexistent (404) / 其他 5xx 路径仍按既有 errorResponse 格式返回
+```
+
+## 验收清单
+
+- [ ] `logger.client.ts` 用 `NEXT_PUBLIC_API_URL` BASE 拼绝对 URL；fetch fallback `credentials: 'include'`
+- [ ] 真实浏览器实测：3 输入全部送达 API 端口（:4000）+ logs/client/ 落盘
+- [ ] `server.ts` setErrorHandler 把 CORS error 映射为 403
+- [ ] curl `-H "Origin: http://evil.com"` 返回 HTTP 403 + `code: 'FORBIDDEN_ORIGIN'`
+- [ ] `client-log.ts` 删除 `source_ip` 参数（或 hash/truncate 后写入，需文档化）
+- [ ] grep `"source_ip"` / `"127.0.0.1"` 在 client.ndjson == 0
+- [ ] `tests/unit/web-next/logger-client.test.ts` 新增 BASE_URL 默认值断言（覆盖 F1）
+- [ ] 5 分支真实化：200 / 400 / 401（prod，code review 仍保留）/ 403（本卡新增可 curl 直测）/ 429
+- [ ] 无回归：原 5xx/4xx 路径继续按现有错误格式响应
+- [ ] `npm run typecheck` / `npm run lint` / `npm run test:run` 全绿
+- [ ] 流程：tasks.md 先写工作台卡片再开工（延续 INFRA-14/15/10 范本）
+
+## 完成备注要求
+
+changelog INFRA-16 条目必附：
+- ① F1 修复证据：浏览器实测 Network 面板截图 / curl 等价 POST 含 BASE_URL + 3 输入 ndjson 真实样例（带 source 区分）
+- ② F2 修复证据：curl evil.com origin → 403 真实响应
+- ③ F3 修复证据：grep `"source_ip"` / IP 字面量在 client.ndjson 计数 = 0
+- ④ INFRA-10 段回写指针："F1+F2+F3 已闭环，见 INFRA-16"
+- ⑤ 验收 5 分支真实达成度（含 prod 401 仍 code review 保留）
+
+## 偏离记录
+
+- **prod 401 仍由 code review 验证**：本卡不引入 prod 集成测（NODE_ENV mock + fastify decorator mock 复杂度高）；F1 修复后真实浏览器路径已通，401 接线由 `requireAuth = process.env.NODE_ENV === 'production'` + `preHandler: [fastify.authenticate]` 代码审查覆盖
+- **F2 路径选择**：选 setErrorHandler（最小侵入）；如审核认为 cors 配置层修复更干净，可改路径 A.1（cors origin 返回 false 而非 throw）
+- **F3 选择删除而非 hash**：保守原则，IP 关联价值低于实施 hash 维护成本；如未来需要 IP 关联可独立加 INFRA-17 增加 hash 字段
+
+## 流程纠正条款
+
+延续 INFRA-14/15 范本，本卡开工时：
+1. **先**写 tasks.md 工作台卡片（5 段：问题理解 / 根因 / 方案 / 涉及文件 / 验收清单 + 偏离风险）
+2. **再**改 task-queue.md INFRA-16 状态 ⬜ → 🔄
+3. 然后才动代码 + 测试 + 真实浏览器实测 + commit
+4. 完成后：清空 tasks.md + task-queue 状态 🔄 → ✅ + changelog 追加 + git commit
+5. **强调真实浏览器实测**：本次 INFRA-10 完成时 curl 直连 :4000 误判通过，本卡 F1 验收必须真实浏览器（dev 启动 → 打开 :3000 → devtools 跑 3 输入 → 看 Network 面板 + ndjson）
+
+## 评审状态
+
+- 草案完成时间：2026-04-26 00:36:19 PDT
+- 当前状态：等待用户确认开工
+- 不动 task-queue.md / tasks.md 内容，本草案先 commit 入库作为评审记录（与 INFRA-13/14/15 草案节奏一致）
+- 草案落盘后同步追加 task-queue.md 第 10 张卡片（INFRA-16，状态 ⬜）
+-->
+
