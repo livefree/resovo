@@ -717,3 +717,166 @@ changelog INFRA-14 条目必附：
 - 不动 task-queue.md / tasks.md，本草案先 commit 入库作为评审记录（与 INFRA-13 草案节奏一致）
 -->
 
+<!--
+INFRA-09 完成质量独立审核意见
+审核者：Codex
+时间戳：2026-04-25 23:33:32 PDT
+对象：INFRA-09（commit e844a18）新建 @resovo/logger workspace 包（首期类型 + 序列化器 + redact 表）
+结论：CONDITIONAL PASS。抽包边界、API 迁移和 logger 单测主体通过；但 package-lock 未同步导致 `npm ci` 失败，这是完成质量的 P1 阻断，需修复后才能视为真正完成。
+
+Finding 1 — [P1] package-lock 未纳入新 workspace，干净安装会失败
+位置：package-lock.json:1-76
+问题：INFRA-09 新增 `packages/logger/package.json`，但 `package-lock.json` 没有 `packages/logger` / `node_modules/@resovo/logger` 条目，且当前 `node_modules/@resovo` 下也没有 `logger` symlink。实测 `npm ci --dry-run` 失败，报 `Missing: @resovo/logger@0.1.0 from lock file`。`npm run lint` 虽通过，但 turbo 同时警告 `Workspace 'packages/logger' not found in lockfile`。这会让 CI、fresh clone、干净部署无法安装依赖。
+建议：用项目要求的 Node/npm 版本重新执行 `npm install --package-lock-only` 或一次正常 `npm install`，提交更新后的 `package-lock.json`，确认 `node_modules/@resovo/logger` symlink 可生成，并复跑 `npm ci --dry-run` / lint。
+
+Finding 2 — [P2] redact 单测只验证路径存在，没有验证 pino 实际脱敏
+位置：tests/unit/lib/logger.test.ts:29-47
+问题：INFRA-14 留给 INFRA-09 的 F10 是“11 PII 字段完整单测”。当前测试覆盖了 `REDACT_PATHS` 是否包含 11 个字段及嵌套路径，但没有用 pino 真实写一行日志并断言敏感值被 `<redacted>` 替换。路径存在不等于 pino 语法生效，之前 `headers.set-cookie` / `url.query` 泄露就是实际行为验证才发现的。
+建议：补一个 pino 行为测试：构造包含 11 个字段顶层、`*.field` 嵌套、`headers.set-cookie`、`req.url.query`、`url.query` 的对象，写入内存 stream，断言 secret 原文不存在且对应字段为 `<redacted>`。
+
+已确认通过项：
+- `packages/logger` 首期未导出 `createLogger`，符合决策 7；`apps/api/src/lib/logger.ts` 仅切换类型、序列化器、redact、level import，保留 createLogger / withRequest / withJob。
+- `serializeReq` 会截断 query，`serializeErr` 保留 type/message/stack/statusCode；`computeLevel` 与 INFRA-08 语义一致。
+- `REDACT_PATHS` 已包含 11 个 PII 字段、`*.field` 嵌套、`headers.set-cookie`、`req.url.query`。
+- `tsconfig.json`、`apps/api/tsconfig.json`、`apps/server/tsconfig.json`、`apps/web-next/tsconfig.json`、`vitest.config.ts` 已补 `@resovo/logger` path/alias。
+- `node --import tsx apps/api/src/server.ts` 已越过 `@resovo/logger` 解析阶段，当前失败点是缺 `REDIS_URL`，说明 tsx dev 入口能解析源码 alias。
+
+复核验证：
+- 根 `tsc --noEmit`：PASS
+- `apps/server` / `apps/web-next` / `packages/player-core` typecheck：PASS
+- `npm run lint`（Node 25/npm）：PASS，但有 `packages/logger` 不在 lockfile 的 turbo warning；web-next 仍有既有 hook warnings。
+- `npm run test:run -- tests/unit/lib/logger.test.ts`：PASS（26 tests）
+- `npm ci --dry-run`：FAIL，`Missing: @resovo/logger@0.1.0 from lock file`
+- 全量 `npm run test:run`：当前环境下 FAIL，133 个 localStorage 相关既有前端测试失败（`localStorage.clear/getItem is not a function`，Node/Vitest/jsdom 环境问题），logger 新增单测本身已通过；不作为本任务新增代码 finding，但不能用本次运行证明“1749 全绿”。
+
+建议状态：
+INFRA-09 可按 CONDITIONAL PASS 进入修补：先修 package-lock P1；同时建议补 pino 行为级 redact 单测，避免 F10 只停留在路径枚举层面。
+-->
+
+<!--
+INFRA-15 修补任务草案（评审待开工）
+起草人：主循环（claude-opus-4-7）
+时间戳：2026-04-25 23:42:37 PDT
+对象：整合主循环独立审核 + Codex INFRA-09 完成质量审核（共 1 P1 + 1 P2），制定 INFRA-09 复审修补卡
+
+## 修补任务卡
+
+- **ID**：INFRA-15
+- **标题**：INFRA-09 复审修补：package-lock 同步 + pino 行为级 redact 集成测试
+- **序列**：SEQ-20260425-LOG-V1（追加，状态 🟡 待开工）
+- **前置依赖**：INFRA-09 ✅（CONDITIONAL PASS）
+- **建议模型**：sonnet（机械性 lockfile 修补 + 单测增量，无新架构决策）
+- **子代理**：无
+- **估时**：0.3d
+- **触发**：Codex INFRA-09 审核 2 finding（本提案第 720–753 行）+ 主循环独立审核（确认 F1 阻断）
+
+## Finding 整合表（2 项）
+
+| ID | 来源 | 级 | 位置 | 问题 |
+| --- | --- | --- | --- | --- |
+| F1 | Codex + 主循环复核 | P1 | `package-lock.json` / `node_modules/@resovo/` | INFRA-09 新增 `packages/logger/package.json` 但 `package-lock.json` 未注册 workspace；`node_modules/@resovo/logger` symlink 缺失。当前所有 PASS（typecheck/lint/test/dev）都靠 tsconfig paths + vitest alias 旁路 npm 解析；`npm ci` 路径会 FAIL（CI / fresh clone / 生产部署阻断） |
+| F2 | Codex | P2 | `tests/unit/lib/logger.test.ts:29-47` | INFRA-14 留给 INFRA-09 的 F10 仅完成"路径表枚举"层面：26 个测试只断言 `REDACT_PATHS` 包含 11 字段 + `*.field` + `headers.set-cookie` + `req.url.query`，**未用 pino 真实写日志验证 `<redacted>` 替换语法生效**。历史教训：`headers.set-cookie` / `url.query` 泄露正是端到端实测才发现 |
+
+## 范围决策
+
+- **纳入 INFRA-15**：F1（必修） + F2（建议补）
+- **延期 / 不在本卡**：
+  - 跨环境 jsdom localStorage 失败（Codex 复核备注）：不是 INFRA-09 引入，独立环境议题，不立卡
+  - F9（services 25 处 stderr）：保持 INFRA-08 范围收敛原则，仍延期
+
+## 修复方案
+
+### 代码 / 配置改动
+
+| 文件 | 改动 | Finding |
+| --- | --- | --- |
+| `package-lock.json` | 用项目 `engines: node >=22` + `npm@10.8.2`（root packageManager 字段）跑一次 `npm install`，让 npm 注册 `packages/logger` workspace + 创建 `node_modules/@resovo/logger` symlink + 同步 lockfile | F1 |
+| `tests/unit/lib/logger.test.ts` | 新增 1 个 describe 块「pino integration redact behavior」：构造含 11 PII 字段顶层 + `*.field` 嵌套 + `headers.set-cookie` + `req.url.query` + `url.query` 的对象，用 `pino({ redact: { paths: REDACT_PATHS, censor: '<redacted>' } }, writableStream)` 写入内存 stream（`stream.Writable` 收集），断言：① secret 原文 0 次出现 ② 对应字段值 === `'<redacted>'` | F2 |
+
+### 不需改动的部分
+
+- `packages/logger/**` 源码：契约层 INFRA-09 已正确，不动
+- `apps/api/src/lib/logger.ts`：消费链路正确，不动
+- `tsconfig.json` paths：旁路解析能用是好事（保留 dev 体验），不动；F1 修复后 npm ci 链路也能解析
+- `vitest.config.ts` alias：同上，不动
+
+### 文档改动
+
+| 文件 | 改动 |
+| --- | --- |
+| `docs/changelog.md`（INFRA-09 段） | 追加 P1-Finding-1 "完成态不一致"备注 + 链接至 INFRA-15 修补；F10 关闭描述细化为"路径表层（INFRA-09）+ pino 行为层（INFRA-15）双层覆盖" |
+| `docs/changelog.md` | 追加 INFRA-15 完成条目（含 F1 / F2 修复证据） |
+| `docs/tasks.md` | INFRA-15 工作台卡片（开工时写，完成后清空） |
+| `docs/task-queue.md` | 序列尾部追加 INFRA-15 卡片，状态 ⬜ → 🔄 → ✅ |
+
+## 端到端验证清单
+
+```
+F1 验证：
+1. 当前状态快照：grep -c '"packages/logger"' package-lock.json == 0
+                  ls node_modules/@resovo/ | grep -c '^logger' == 0
+2. npm install（不带 --dry-run，让 npm 真正写入）
+3. 修复后断言：
+   - grep -c '"packages/logger"' package-lock.json ≥ 1
+   - grep '"node_modules/@resovo/logger"' package-lock.json 出现至少 1 次
+   - ls -la node_modules/@resovo/logger 是 symlink → ../../packages/logger
+   - npm ls @resovo/logger 不报错
+   - npm run lint 无 turbo "Workspace 'packages/logger' not found in lockfile" 警告
+4. git diff --stat package-lock.json 应有变更（仅此文件，确保不带其他无关 lockfile drift）
+
+F2 验证：
+1. tests/unit/lib/logger.test.ts 新增 describe 块测试通过
+2. 测试断言至少：
+   - 顶层 11 字段：authorization / cookie / set-cookie / password / token / refreshToken / accessToken / email / phone / ip / url（用 url.query 子路径）
+   - 嵌套：req.headers.set-cookie / req.url.query
+   - 各注入 'PINO_SECRET_TOKEN_XYZ' 字符串后，pino 输出 grep 0 命中
+   - 字段值正则匹配 /<redacted>/
+3. npm run test:run 全绿，logger.test.ts 计数从 26 → 26+N（N ≥ 13：11 字段 + 2 容器路径）
+
+守门：
+- npm run typecheck / lint / test:run 全绿
+- npm ls @resovo/logger 无错误
+- 无 turbo lockfile 警告
+```
+
+## 验收清单
+
+- [ ] `package-lock.json` 含 `packages/logger` workspace 与 `node_modules/@resovo/logger` 节点
+- [ ] `node_modules/@resovo/logger` 物理 symlink 存在
+- [ ] `npm ls @resovo/logger` 解析无错
+- [ ] `npm run lint` 无 turbo "Workspace not found in lockfile" 警告
+- [ ] `tests/unit/lib/logger.test.ts` 新增 pino 集成行为测试，覆盖 11 字段 + 容器路径
+- [ ] `npm run typecheck` / `npm run lint` / `npm run test:run` 全绿（test 数 ≥ 1762）
+- [ ] git diff package-lock.json 仅含本卡相关变更，无无关 drift
+- [ ] 流程：tasks.md 先写工作台卡片再开工（延续 INFRA-14 范本）
+
+## 完成备注要求
+
+changelog INFRA-15 条目必附：
+- ① F1 修复证据：`grep -c '"packages/logger"' package-lock.json` 修复前后对比 + `ls -la node_modules/@resovo/logger` 输出
+- ② F2 修复证据：新增测试块代码片段 + 测试计数 26 → 26+N 对比
+- ③ INFRA-09 段回写指针："F1 已闭环，见 INFRA-15"
+- ④ F10 双层覆盖说明（路径表层 + pino 行为层）
+
+## 偏离记录
+
+- 跨环境 jsdom localStorage 失败：环境议题，不立卡
+- F9（services 25 处 stderr）：仍延期至独立卡或 LOG-V2 里程碑
+
+## 流程纠正条款
+
+延续 INFRA-14 范本，本卡开工时：
+1. **先**写 tasks.md 工作台卡片（5 段：问题理解 / 根因 / 方案 / 涉及文件 / 验收清单）
+2. **再**改 task-queue.md INFRA-15 状态 ⬜ → 🔄
+3. 然后才改 lockfile + 单测 + commit
+4. 完成后：清空 tasks.md + task-queue 状态 🔄 → ✅ + changelog 追加 + git commit
+5. lockfile 修复必须用项目 `engines.node >=22` + `packageManager: npm@10.8.2` 版本（避免不同 npm 版本写出不同的 lockfile shape）
+
+## 评审状态
+
+- 草案完成时间：2026-04-25 23:42:37 PDT
+- 当前状态：等待用户确认开工
+- 不动 task-queue.md / tasks.md 内容，本草案先 commit 入库作为评审记录（与 INFRA-13/INFRA-14 草案节奏一致）
+- 草案落盘后同步追加 task-queue.md 第 9 张卡片（INFRA-15，状态 ⬜）
+-->
+
