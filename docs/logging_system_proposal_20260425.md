@@ -880,3 +880,36 @@ changelog INFRA-15 条目必附：
 - 草案落盘后同步追加 task-queue.md 第 9 张卡片（INFRA-15，状态 ⬜）
 -->
 
+<!--
+INFRA-15 复核结果
+复核者：Codex
+时间戳：2026-04-25 23:59:58 PDT
+对象：INFRA-15（commit d6aa647）对 INFRA-09 审核 finding 的修复
+结论：PASS。INFRA-15 已闭环 INFRA-09 独立审核提出的 1 个 P1 + 1 个 P2；INFRA-09 完成态在 npm workspace 物理层与 pino redact 行为层均已补齐。
+
+Finding 1 — [P1] package-lock 未纳入新 workspace：已修复
+- `package-lock.json` 已包含 `node_modules/@resovo/logger` link 节点与 `packages/logger` workspace 节点。
+- `node_modules/@resovo/logger -> ../../packages/logger` symlink 已存在。
+- `npm ls @resovo/logger` 解析通过：`@resovo/logger@0.1.0 -> ./packages/logger`。
+- `npm ci --dry-run` 已通过。
+- `npm run lint` 已通过，且不再出现 turbo `Workspace 'packages/logger' not found in lockfile` warning。
+
+Finding 2 — [P2] redact 单测没有验证实际脱敏行为：已修复
+- `tests/unit/lib/logger.test.ts` 新增 `pino integration redact behavior` 测试块。
+- 覆盖 11 个 PII 顶层字段、`*.field` 嵌套、`headers.set-cookie`、`req.url.query`、`url.query`。
+- 测试断言注入 secret 原文不出现在 pino 输出中，并验证对应字段值为 `<redacted>`。
+- logger 单测数量从 26 增至 32，`npm run test:run -- tests/unit/lib/logger.test.ts` 通过。
+
+复核验证：
+- `npm ci --dry-run`：PASS
+- `npm ls @resovo/logger`：PASS
+- `npm run lint`：PASS（web-next 仍有既有 hook warnings，非本次引入）
+- `npm run test:run -- tests/unit/lib/logger.test.ts`：PASS（32 tests）
+- 根 `tsc --noEmit`：PASS
+- `require.resolve('@resovo/logger')`：可解析到 `packages/logger/src/index.ts`
+- `package-lock.json` 解析检查：`packages['node_modules/@resovo/logger'] === true` 且 `packages['packages/logger'] === true`
+
+剩余说明：
+- `git show --check -1` 仅报 `docs/changelog.md:10722` trailing whitespace，属于提交卫生问题，不影响两条 finding 闭环。
+- 当前有效状态：INFRA-09 的 CONDITIONAL PASS 已由 INFRA-15 修补转为 PASS；后续如需记录最终总状态，应以本复核块为准。
+-->
