@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { HostPlayerMode, PlayerHostOrigin, PersistedPlayerHostV1 } from '@/app/[locale]/_lib/player/types'
 import type { MiniGeometryV1 } from './_persist/mini-geometry'
 import { readMiniGeometry, writeMiniGeometry } from './_persist/mini-geometry'
+import { clientLogger } from '@/lib/logger.client'
 
 export type { HostPlayerMode, PlayerHostOrigin } from '@/app/[locale]/_lib/player/types'
 export type { MiniGeometryV1, MiniCorner } from './_persist/mini-geometry'
@@ -139,8 +140,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     if (cur === next) return
     if (!LEGAL_TRANSITIONS[cur].includes(next)) {
       if (process.env.NODE_ENV !== 'production') {
-        // eslint-disable-next-line no-console
-      console.warn(`[playerStore] illegal hostMode transition: ${cur} -> ${next}`)
+        clientLogger.warn(`[playerStore] illegal hostMode transition: ${cur} -> ${next}`, {
+          from: cur,
+          to: next,
+        })
       }
       return
     }

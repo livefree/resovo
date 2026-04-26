@@ -37,6 +37,7 @@ import { adminStagingRoutes } from '@/api/routes/admin/staging'
 import { adminModerationRoutes } from '@/api/routes/admin/moderation'
 import { adminDesignTokenRoutes } from '@/api/routes/admin/design-tokens'
 import { internalImageBrokenRoutes } from '@/api/routes/internal/image-broken'
+import { internalClientLogRoutes } from '@/api/routes/internal/client-log'
 import { adminImageHealthRoutes } from '@/api/routes/admin/image-health'
 import { bannerRoutes } from '@/api/routes/banners'
 import { adminBannerRoutes } from '@/api/routes/admin/banners'
@@ -112,6 +113,7 @@ async function start() {
   await fastify.register(adminModerationRoutes, { prefix: '/v1' })
   await fastify.register(adminDesignTokenRoutes, { prefix: '/v1' })
   await fastify.register(internalImageBrokenRoutes, { prefix: '/v1' })
+  await fastify.register(internalClientLogRoutes, { prefix: '/v1' })
   await fastify.register(adminImageHealthRoutes, { prefix: '/v1' })
   await fastify.register(bannerRoutes, { prefix: '/v1' })
   await fastify.register(adminBannerRoutes, { prefix: '/v1' })

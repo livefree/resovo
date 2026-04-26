@@ -26,6 +26,7 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { FallbackCover } from './FallbackCover'
 import type { MediaAspect, SafeImageProps } from './types'
+import { clientLogger } from '@/lib/logger.client'
 
 // ── aspect 字符串 → CSS aspect-ratio 值 ───────────────────────────
 const ASPECT_RATIO_MAP: Record<MediaAspect, string> = {
@@ -76,11 +77,9 @@ export function SafeImageNext({
   }, [src])
 
   // dev 环境警告：imageLoader prop 在 next 模式下不生效
-  // SafeImageNext 是 client component，浏览器无 process.stderr；用 console.warn
   useEffect(() => {
     if (process.env.NODE_ENV !== 'production' && imageLoader) {
-      // eslint-disable-next-line no-console
-      console.warn(
+      clientLogger.warn(
         "[SafeImage] imageLoader prop is ignored when mode='next'; use next.config.ts loaderFile instead.",
       )
     }

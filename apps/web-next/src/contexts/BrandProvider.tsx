@@ -27,6 +27,7 @@ import type {
   Theme,
   ThemeContextValue,
 } from '@/types/brand'
+import { clientLogger, installGlobalHooks } from '@/lib/logger.client'
 
 export const BrandContext = createContext<BrandContextValue | null>(null)
 export const ThemeContext = createContext<ThemeContextValue | null>(null)
@@ -111,6 +112,9 @@ export function BrandProvider({ initialBrand, initialTheme, children }: BrandPro
   useEffect(() => {
     syncDomBrand(state.brand.slug)
     syncDomTheme(resolveTheme(state.theme))
+    // INFRA-10: 浏览器端全局 logger hooks（window error / unhandledrejection
+    // / console.error dev / pagehide）一次性安装，幂等
+    installGlobalHooks()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -127,8 +131,10 @@ export function BrandProvider({ initialBrand, initialTheme, children }: BrandPro
       try {
         const res = await fetch(`/api/brands/${slug}`, { credentials: 'same-origin' })
         if (!res.ok) {
-          // eslint-disable-next-line no-console
-          console.error(`[BrandProvider] fetch brand "${slug}" failed: ${res.status}`)
+          clientLogger.error(`[BrandProvider] fetch brand "${slug}" failed: ${res.status}`, {
+            slug,
+            status: res.status,
+          })
           return
         }
         const next = (await res.json()) as Brand
@@ -136,8 +142,10 @@ export function BrandProvider({ initialBrand, initialTheme, children }: BrandPro
         syncDomBrand(next.slug)
         writeCookie('resovo-brand', next.slug)
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('[BrandProvider] setBrand error', err)
+        clientLogger.error('[BrandProvider] setBrand error', {
+          slug,
+          error: err instanceof Error ? err.message : String(err),
+        })
       }
     })()
   }, [store])
