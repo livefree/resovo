@@ -11,6 +11,9 @@ import { maintenanceQueue } from '@/api/lib/queue'
 import { db } from '@/api/lib/postgres'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import type { MaintenanceJobData } from '@/api/workers/maintenanceWorker'
+import { baseLogger } from '@/api/lib/logger'
+
+const schedulerLog = baseLogger.child({ worker: 'maintenance-scheduler' })
 
 const TICK_MS = 30 * 60_000                  // 30 分钟（auto-publish-staging）
 const VERIFY_TICK_MS = 60 * 60_000           // 60 分钟（verify-published-sources）
@@ -45,10 +48,9 @@ async function runMaintenanceTick(): Promise<void> {
       removeOnComplete: 10,
       removeOnFail: 5,
     })
-    process.stderr.write('[maintenance-scheduler] enqueued auto-publish-staging\n')
+    schedulerLog.info({ stage: 'auto-publish-staging' }, 'enqueued')
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[maintenance-scheduler] tick failed: ${msg}\n`)
+    schedulerLog.warn({ err, stage: 'auto-publish-staging' }, 'tick failed')
   } finally {
     tickRunning = false
   }
@@ -64,10 +66,9 @@ async function runVerifyTick(): Promise<void> {
       removeOnComplete: 10,
       removeOnFail: 5,
     })
-    process.stderr.write('[maintenance-scheduler] enqueued verify-published-sources\n')
+    schedulerLog.info({ stage: 'verify-published-sources' }, 'enqueued')
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[maintenance-scheduler] verify tick failed: ${msg}\n`)
+    schedulerLog.warn({ err, stage: 'verify-published-sources' }, 'tick failed')
   } finally {
     verifyTickRunning = false
   }
@@ -83,10 +84,9 @@ async function runStagingVerifyTick(): Promise<void> {
       removeOnComplete: 10,
       removeOnFail: 5,
     })
-    process.stderr.write('[maintenance-scheduler] enqueued verify-staging-sources\n')
+    schedulerLog.info({ stage: 'verify-staging-sources' }, 'enqueued')
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[maintenance-scheduler] staging verify tick failed: ${msg}\n`)
+    schedulerLog.warn({ err, stage: 'verify-staging-sources' }, 'tick failed')
   } finally {
     stagingVerifyTickRunning = false
   }
@@ -102,10 +102,9 @@ async function runReconcileTick(): Promise<void> {
       removeOnComplete: 10,
       removeOnFail: 5,
     })
-    process.stderr.write('[maintenance-scheduler] enqueued reconcile-search-index\n')
+    schedulerLog.info({ stage: 'reconcile-search-index' }, 'enqueued')
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[maintenance-scheduler] reconcile tick failed: ${msg}\n`)
+    schedulerLog.warn({ err, stage: 'reconcile-search-index' }, 'tick failed')
   } finally {
     reconcileTickRunning = false
   }
@@ -133,23 +132,23 @@ export function registerMaintenanceScheduler(): void {
   schedulerTimer = setInterval(() => {
     void runMaintenanceTick()
   }, TICK_MS)
-  process.stderr.write('[maintenance-scheduler] registered (30min interval)\n')
+  schedulerLog.info({ interval_ms: TICK_MS, stage: 'auto-publish-staging' }, 'registered')
 
   if (verifyTimer) return
   verifyTimer = setInterval(() => {
     void runVerifyTick()
   }, VERIFY_TICK_MS)
-  process.stderr.write('[maintenance-scheduler] verify-published-sources registered (60min interval)\n')
+  schedulerLog.info({ interval_ms: VERIFY_TICK_MS, stage: 'verify-published-sources' }, 'registered')
 
   if (stagingVerifyTimer) return
   stagingVerifyTimer = setInterval(() => {
     void runStagingVerifyTick()
   }, STAGING_VERIFY_TICK_MS)
-  process.stderr.write('[maintenance-scheduler] verify-staging-sources registered (8h interval)\n')
+  schedulerLog.info({ interval_ms: STAGING_VERIFY_TICK_MS, stage: 'verify-staging-sources' }, 'registered')
 
   if (reconcileTimer) return
   reconcileTimer = setInterval(() => {
     void runReconcileTick()
   }, RECONCILE_TICK_MS)
-  process.stderr.write('[maintenance-scheduler] reconcile-search-index registered (24h interval)\n')
+  schedulerLog.info({ interval_ms: RECONCILE_TICK_MS, stage: 'reconcile-search-index' }, 'registered')
 }

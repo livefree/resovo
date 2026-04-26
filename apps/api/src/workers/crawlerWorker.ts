@@ -7,6 +7,9 @@ import type Bull from 'bull'
 import { crawlerQueue } from '@/api/lib/queue'
 import { db } from '@/api/lib/postgres'
 import { es } from '@/api/lib/elasticsearch'
+import { baseLogger, withJob } from '@/api/lib/logger'
+
+const workerLog = baseLogger.child({ worker: 'crawler-worker' })
 import { CrawlerService, type CrawlerSource } from '@/api/services/CrawlerService'
 import { CrawlerRefetchService } from '@/api/services/CrawlerRefetchService'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
@@ -131,8 +134,7 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
         },
       })
     } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`[crawler-worker] failed to persist task log: ${reason}\n`)
+      withJob(workerLog, job).warn({ err }, 'failed to persist task log')
     }
   }
 
@@ -307,9 +309,13 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
       await logTask('info', 'worker.source.start', '开始采集源站', { source: source.name, base: source.base })
 
       try {
-        process.stderr.write(
-          `[crawler-worker] crawling ${source.name} (${source.base}, mode=${crawlMode ?? 'batch'}${keyword ? `, kw=${keyword}` : ''}${targetVideoId ? `, vid=${targetVideoId}` : ''})\n`
-        )
+        withJob(workerLog, job).info({
+          source: source.name,
+          base: source.base,
+          mode: crawlMode ?? 'batch',
+          ...(keyword ? { keyword } : {}),
+          ...(targetVideoId ? { target_video_id: targetVideoId } : {}),
+        }, 'crawling source')
 
         // ── source-refetch 模式：调用 CrawlerRefetchService ─────────
         if (crawlMode === 'source-refetch' && targetVideoId) {
@@ -431,7 +437,7 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
           }
         }
         errors++
-        process.stderr.write(`[crawler-worker] error crawling ${source.name}: ${message}\n`)
+        withJob(workerLog, job).error({ source: source.name, err_message: message }, 'error crawling source')
         await crawlerSitesQueries.updateCrawlStatus(db, source.name, 'failed')
         await logTask('error', 'worker.source.failed', '源站采集失败', {
           source: source.name,
@@ -473,9 +479,7 @@ async function processCrawlJob(job: Bull.Job<CrawlJobData>): Promise<CrawlJobRes
           })
         } catch {
           // 若视频已不在 approved+internal 状态，transition 会拒绝，属正常情况
-          process.stderr.write(
-            `[crawler-worker] auto re-publish skipped for ${targetVideoId} (state mismatch)\n`
-          )
+          withJob(workerLog, job).info({ target_video_id: targetVideoId }, 'auto re-publish skipped (state mismatch)')
         }
       }
     }
@@ -523,11 +527,12 @@ export function registerCrawlerWorker(concurrency = 1): void {
   crawlerQueue.process(concurrency, processCrawlJob)
 
   crawlerQueue.on('completed', (job: Bull.Job<CrawlJobData>, result: CrawlJobResult) => {
-    process.stderr.write(
-      `[crawler-worker] job ${job.id} completed: ` +
-        `${result.videosUpserted} videos, ${result.sourcesUpserted} sources, ` +
-        `${result.errors} errors, ${result.durationMs}ms\n`
-    )
+    withJob(workerLog, job).info({
+      videos_upserted: result.videosUpserted,
+      sources_upserted: result.sourcesUpserted,
+      errors: result.errors,
+      duration_ms: result.durationMs,
+    }, 'job completed')
   })
 }
 

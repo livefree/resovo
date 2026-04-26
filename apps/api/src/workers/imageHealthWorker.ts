@@ -17,6 +17,9 @@ import {
   updateCatalogImageStatus,
 } from '@/api/db/queries/imageHealth'
 import type { ImageKind } from '@/types'
+import { baseLogger, withJob } from '@/api/lib/logger'
+
+const workerLog = baseLogger.child({ worker: 'image-health-worker' })
 
 // ── 类型 ──────────────────────────────────────────────────────────
 
@@ -189,16 +192,12 @@ async function fetchImageDimensions(url: string): Promise<{ width: number; heigh
 export function registerImageHealthWorker(concurrency = 5): void {
   imageHealthQueue.process('health-check', concurrency, async (job: Bull.Job<ImageHealthJobData>) => {
     await checkImageHealth(job.data)
-    process.stderr.write(
-      `[image-health-worker] job ${job.id}: ${job.data.kind} ${job.data.url} done\n`
-    )
+    withJob(workerLog, job).info({ kind: job.data.kind }, 'job done')
   })
 
   imageHealthQueue.on('failed', (job: Bull.Job<ImageHealthJobData>, err: Error) => {
-    process.stderr.write(
-      `[image-health-worker] job ${job.id} failed (attempt ${job.attemptsMade}): ${err.message}\n`
-    )
+    withJob(workerLog, job).warn({ attempt: job.attemptsMade, err }, 'job failed')
   })
 
-  process.stderr.write(`[image-health-worker] registered (concurrency=${concurrency})\n`)
+  workerLog.info({ concurrency }, 'registered')
 }

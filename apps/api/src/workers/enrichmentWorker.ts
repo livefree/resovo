@@ -7,6 +7,9 @@ import type Bull from 'bull'
 import { enrichmentQueue } from '@/api/lib/queue'
 import { db } from '@/api/lib/postgres'
 import { MetadataEnrichService, type EnrichJobData } from '@/api/services/MetadataEnrichService'
+import { baseLogger, withJob } from '@/api/lib/logger'
+
+const workerLog = baseLogger.child({ worker: 'enrich-worker' })
 
 // ── 任务处理 ──────────────────────────────────────────────────────
 
@@ -14,13 +17,12 @@ async function processEnrichJob(job: Bull.Job<EnrichJobData>): Promise<void> {
   const { videoId, catalogId, title, year, type } = job.data
   const service = new MetadataEnrichService(db)
 
-  process.stderr.write(
-    `[enrich-worker] job ${job.id}: video ${videoId} "${title}" (${year ?? '?'}/${type})\n`
-  )
+  const jobLog = withJob(workerLog, job)
+  jobLog.info({ video_id: videoId, title, year: year ?? null, type }, 'job started')
 
   await service.enrich({ videoId, catalogId, title, year, type })
 
-  process.stderr.write(`[enrich-worker] job ${job.id} completed: video ${videoId}\n`)
+  jobLog.info({ video_id: videoId }, 'job completed')
 }
 
 // ── Worker 注册 ───────────────────────────────────────────────────
@@ -34,9 +36,7 @@ export function registerEnrichmentWorker(concurrency = 2): void {
   enrichmentQueue.process(concurrency, processEnrichJob)
 
   enrichmentQueue.on('failed', (job: Bull.Job<EnrichJobData>, err: Error) => {
-    process.stderr.write(
-      `[enrich-worker] job ${job.id} failed (attempt ${job.attemptsMade}): ${err.message}\n`
-    )
+    withJob(workerLog, job).warn({ attempt: job.attemptsMade, err }, 'job failed')
   })
 }
 

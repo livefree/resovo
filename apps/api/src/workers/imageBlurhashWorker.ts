@@ -14,6 +14,9 @@ import { db } from '@/api/lib/postgres'
 import { updateCatalogImageBlurhash } from '@/api/db/queries/imageHealth'
 import type { ImageKind } from '@/types'
 import type { ImageHealthJobData } from '@/api/workers/imageHealthWorker'
+import { baseLogger, withJob } from '@/api/lib/logger'
+
+const workerLog = baseLogger.child({ worker: 'blurhash-worker' })
 
 // ── BlurHash 计算 ─────────────────────────────────────────────────
 
@@ -175,16 +178,12 @@ export async function extractBlurhashAndColor(data: ImageHealthJobData): Promise
 export function registerBlurhashWorker(concurrency = 3): void {
   imageHealthQueue.process('blurhash-extract', concurrency, async (job: Bull.Job<ImageHealthJobData>) => {
     await extractBlurhashAndColor(job.data)
-    process.stderr.write(
-      `[blurhash-worker] job ${job.id}: ${job.data.kind} done\n`
-    )
+    withJob(workerLog, job).info({ kind: job.data.kind }, 'job done')
   })
 
   imageHealthQueue.on('failed', (job: Bull.Job<ImageHealthJobData>, err: Error) => {
-    process.stderr.write(
-      `[blurhash-worker] job ${job.id} failed (attempt ${job.attemptsMade}): ${err.message}\n`
-    )
+    withJob(workerLog, job).warn({ attempt: job.attemptsMade, err }, 'job failed')
   })
 
-  process.stderr.write(`[blurhash-worker] registered (concurrency=${concurrency})\n`)
+  workerLog.info({ concurrency }, 'registered')
 }

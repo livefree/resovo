@@ -13,6 +13,9 @@ import {
   listPendingImageUrls,
   listMissingBlurhashUrls,
 } from '@/api/db/queries/imageHealth'
+import { baseLogger } from '@/api/lib/logger'
+
+const workerLog = baseLogger.child({ worker: 'backfill-worker' })
 
 const BATCH_SIZE = 1000
 
@@ -66,9 +69,7 @@ export async function runImageBackfill(
     if (rows.length < batchSize) break
   }
 
-  process.stderr.write(
-    `[backfill-worker] healthCheckEnqueued=${healthTotal} blurhashEnqueued=${blurhashTotal}\n`
-  )
+  workerLog.info({ health_check_enqueued: healthTotal, blurhash_enqueued: blurhashTotal }, 'backfill done')
 
   return { healthCheckEnqueued: healthTotal, blurhashEnqueued: blurhashTotal }
 }
@@ -80,7 +81,7 @@ export async function enqueueBackfillJob(): Promise<void> {
     { type: 'backfill', catalogId: '', videoId: '', kind: 'poster', url: '' },
     { jobId: `backfill-${Date.now()}`, removeOnComplete: 5 }
   )
-  process.stderr.write('[backfill-worker] backfill job enqueued\n')
+  workerLog.info('backfill job enqueued')
 }
 
 /** 注册 backfill job 处理器（直接在进程内运行，不走网络） */
@@ -88,5 +89,5 @@ export function registerBackfillWorker(): void {
   imageHealthQueue.process('backfill', 1, async () => {
     await runImageBackfill()
   })
-  process.stderr.write('[backfill-worker] registered\n')
+  workerLog.info('registered')
 }

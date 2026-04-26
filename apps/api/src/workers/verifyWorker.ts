@@ -9,6 +9,9 @@ import { verifyQueue } from '@/api/lib/queue'
 import { db } from '@/api/lib/postgres'
 import { updateSourceActiveStatus } from '@/api/db/queries/sources'
 import { syncSourceCheckStatusFromSources } from '@/api/db/queries/videos'
+import { baseLogger, withJob } from '@/api/lib/logger'
+
+const workerLog = baseLogger.child({ worker: 'verify-worker' })
 
 // ── 任务类型 ──────────────────────────────────────────────────────
 
@@ -101,12 +104,13 @@ async function processVerifyJob(job: Bull.Job<VerifyJobData>): Promise<VerifyJob
       await syncSourceCheckStatusFromSources(db, row.rows[0].video_id)
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[verify-worker] syncSourceCheckStatus failed for source ${sourceId}: ${msg}\n`)
+    const jobLog = withJob(workerLog, job)
+    jobLog.warn({ err, source_id: sourceId }, 'syncSourceCheckStatus failed')
   }
 
-  process.stderr.write(
-    `[verify-worker] source ${sourceId}: ${url} → ${isActive ? 'active' : 'inactive'} (${statusCode ?? 'timeout'})\n`
+  withJob(workerLog, job).info(
+    { source_id: sourceId, is_active: isActive, status_code: statusCode ?? null },
+    'source verified'
   )
 
   return {
@@ -129,9 +133,9 @@ export function registerVerifyWorker(concurrency = 5): void {
   verifyQueue.process(concurrency, processVerifyJob)
 
   verifyQueue.on('completed', (job: Bull.Job<VerifyJobData>, result: VerifyJobResult) => {
-    process.stderr.write(
-      `[verify-worker] job ${job.id} completed: source ${result.sourceId} → ` +
-        `${result.isActive ? 'active' : 'inactive'} (${result.durationMs}ms)\n`
+    withJob(workerLog, job).info(
+      { source_id: result.sourceId, is_active: result.isActive, duration_ms: result.durationMs },
+      'job completed'
     )
   })
 }

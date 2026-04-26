@@ -1,8 +1,10 @@
+import crypto from 'node:crypto'
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import cookie from '@fastify/cookie'
 import multipart from '@fastify/multipart'
 
+import { createFastifyLoggerOptions } from '@/api/lib/logger'
 import { setupAuthenticate } from '@/api/plugins/authenticate'
 import { authRoutes } from '@/api/routes/auth'
 import { videoRoutes } from '@/api/routes/videos'
@@ -45,7 +47,20 @@ import { db } from '@/api/lib/postgres'
 
 async function start() {
   const fastify = Fastify({
-    logger: { level: process.env.NODE_ENV === 'test' ? 'silent' : 'info' },
+    logger: createFastifyLoggerOptions(),
+    genReqId: () => crypto.randomUUID(),
+  })
+
+  // access log: 每个响应输出含 duration_ms / status / request_id / method / url
+  fastify.addHook('onResponse', (request, reply, done) => {
+    request.log.info({
+      request_id: request.id,
+      method: request.method,
+      url: request.url.split('?')[0],
+      status: reply.statusCode,
+      duration_ms: Math.round(reply.elapsedTime),
+    }, 'access')
+    done()
   })
 
   await fastify.register(cors, {
@@ -111,7 +126,7 @@ async function start() {
   if (schedulerEnabled) {
     registerCrawlerScheduler()
   } else {
-    process.stderr.write('[crawler-scheduler] disabled (set CRAWLER_SCHEDULER_ENABLED=true to enable)\n')
+    fastify.log.info({ worker: 'crawler-scheduler' }, 'disabled (set CRAWLER_SCHEDULER_ENABLED=true to enable)')
   }
 
   // CHG-393: 改为 opt-out（默认启用）；设 MAINTENANCE_SCHEDULER_ENABLED=false 可在开发环境关闭
@@ -119,7 +134,7 @@ async function start() {
   if (maintenanceSchedulerEnabled) {
     registerMaintenanceScheduler()
   } else {
-    process.stderr.write('[maintenance-scheduler] disabled (MAINTENANCE_SCHEDULER_ENABLED=false)\n')
+    fastify.log.info({ worker: 'maintenance-scheduler' }, 'disabled (MAINTENANCE_SCHEDULER_ENABLED=false)')
   }
 
   // 链接存活定时扫描：每 24h 将所有活跃 sources 批量入队 verify-queue
@@ -135,9 +150,9 @@ async function start() {
         void verifyService.scheduleAllActiveVerification()
       }, VERIFY_INTERVAL_MS)
     }, 5 * 60 * 1000)
-    process.stderr.write('[verify-scheduler] enabled — first scan in 5 min, then every 24h\n')
+    fastify.log.info({ worker: 'verify-scheduler' }, 'enabled — first scan in 5 min, then every 24h')
   } else {
-    process.stderr.write('[verify-scheduler] disabled (set VERIFY_SCHEDULER_ENABLED=true to enable)\n')
+    fastify.log.info({ worker: 'verify-scheduler' }, 'disabled (set VERIFY_SCHEDULER_ENABLED=true to enable)')
   }
 
   fastify.get('/v1/health', async (_request, reply) => {
@@ -149,6 +164,7 @@ async function start() {
 }
 
 start().catch((err: unknown) => {
+  // createLogger 之前的崩溃路径：fallback 到 stderr
   process.stderr.write(`Failed to start API server: ${String(err)}\n`)
   process.exit(1)
 })

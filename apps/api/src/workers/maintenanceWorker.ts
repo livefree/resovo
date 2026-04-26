@@ -12,6 +12,9 @@ import { StagingPublishService } from '@/api/services/StagingPublishService'
 import { SourceVerificationService } from '@/api/services/SourceVerificationService'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { bulkSyncSourceCheckStatus } from '@/api/db/queries/videos'
+import { baseLogger } from '@/api/lib/logger'
+
+const workerLog = baseLogger.child({ worker: 'maintenance-worker' })
 
 // ── 任务类型 ──────────────────────────────────────────────────────
 
@@ -51,19 +54,14 @@ async function processMaintenanceJob(
       const svc = new StagingPublishService(db)
       const { published, skipped } = await svc.publishReadyBatch(data.maxBatch ?? 50)
       const durationMs = Date.now() - startAt
-      process.stderr.write(
-        `[maintenance-worker] auto-publish-staging: published=${published} skipped=${skipped} (${durationMs}ms)\n`,
-      )
+      workerLog.info({ stage: 'auto-publish-staging', published, skipped, duration_ms: durationMs }, 'job done')
       return { type: data.type, durationMs, published, skipped }
     }
     case 'verify-published-sources': {
       const svc = new SourceVerificationService(db)
       const stats = await svc.verifyPublishedSources(data.batchLimit ?? 50)
       const durationMs = Date.now() - startAt
-      process.stderr.write(
-        `[maintenance-worker] verify-published-sources: unpublished=${stats.unpublished} ` +
-        `refetchEnqueued=${stats.refetchEnqueued} skipped=${stats.skipped} failed=${stats.failed} (${durationMs}ms)\n`,
-      )
+      workerLog.info({ stage: 'verify-published-sources', ...stats, duration_ms: durationMs }, 'job done')
       return { type: data.type, durationMs, ...stats }
     }
     case 'verify-staging-sources': {
@@ -71,9 +69,7 @@ async function processMaintenanceJob(
       // 使 StagingTable 的 ready/blocked 状态反映当前真实源状态
       const updated = await bulkSyncSourceCheckStatus(db, 'staging', data.stagingBatchLimit ?? 200)
       const durationMs = Date.now() - startAt
-      process.stderr.write(
-        `[maintenance-worker] verify-staging-sources: updated=${updated} (${durationMs}ms)\n`,
-      )
+      workerLog.info({ stage: 'verify-staging-sources', updated, duration_ms: durationMs }, 'job done')
       return { type: data.type, durationMs, updated }
     }
     case 'reconcile-search-index': {
@@ -85,11 +81,14 @@ async function processMaintenanceJob(
         svc.reconcileStale(),
       ])
       const durationMs = Date.now() - startAt
-      process.stderr.write(
-        `[maintenance-worker] reconcile-search-index: ` +
-        `synced=${publishedResult.synced} fixed=${staleResult.fixed} deleted=${staleResult.deleted} ` +
-        `errors=${publishedResult.errors + staleResult.errors} (${durationMs}ms)\n`,
-      )
+      workerLog.info({
+        stage: 'reconcile-search-index',
+        synced: publishedResult.synced,
+        fixed: staleResult.fixed,
+        deleted: staleResult.deleted,
+        errors: publishedResult.errors + staleResult.errors,
+        duration_ms: durationMs,
+      }, 'job done')
       return {
         type: data.type, durationMs,
         synced: publishedResult.synced,
@@ -110,5 +109,5 @@ export function registerMaintenanceWorker(): void {
     const data = job.data as MaintenanceJobData
     return processMaintenanceJob(data)
   })
-  process.stderr.write('[maintenance-worker] registered (concurrency=1)\n')
+  workerLog.info({ concurrency: 1 }, 'registered')
 }

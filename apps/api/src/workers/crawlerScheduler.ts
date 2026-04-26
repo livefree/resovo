@@ -11,6 +11,9 @@ import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
 import * as crawlerRunsQueries from '@/api/db/queries/crawlerRuns'
 import { CrawlerRunService } from '@/api/services/CrawlerRunService'
+import { baseLogger } from '@/api/lib/logger'
+
+const schedulerLog = baseLogger.child({ worker: 'crawler-scheduler' })
 
 const TICK_MS = 60_000
 let schedulerTimer: NodeJS.Timeout | null = null
@@ -49,10 +52,9 @@ async function runSchedulerTick(): Promise<void> {
       scheduleId: 'auto-crawl-daily',
     })
     await systemSettingsQueries.setSetting(db, 'auto_crawl_last_trigger_date', today)
-    process.stderr.write(`[crawler-scheduler] scheduled run created (${mode}, dailyTime=${config.dailyTime})\n`)
+    schedulerLog.info({ mode, daily_time: config.dailyTime }, 'scheduled run created')
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[crawler-scheduler] tick failed: ${msg}\n`)
+    schedulerLog.warn({ err }, 'tick failed')
   } finally {
     schedulerTickRunning = false
   }
@@ -67,13 +69,13 @@ export async function runTimeoutWatchdogTick(): Promise<void> {
       await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
     }
     if (timedOut.count > 0) {
-      process.stderr.write(`[crawler-scheduler] timeout watchdog marked ${timedOut.count} tasks as timeout\n`)
+      schedulerLog.warn({ count: timedOut.count }, 'timeout watchdog marked tasks as timeout')
     }
     if (stale.count > 0) {
-      process.stderr.write(`[crawler-scheduler] heartbeat watchdog marked ${stale.count} stale running tasks\n`)
+      schedulerLog.warn({ count: stale.count }, 'heartbeat watchdog marked stale running tasks')
     }
     if (affectedRunIds.length > 0) {
-      process.stderr.write(`[crawler-scheduler] watchdog synced ${affectedRunIds.length} affected runs\n`)
+      schedulerLog.info({ count: affectedRunIds.length }, 'watchdog synced affected runs')
     }
 
     // 对所有活跃 run 执行周期性状态同步，消除监控列表滞后（最大 60s）
@@ -82,11 +84,10 @@ export async function runTimeoutWatchdogTick(): Promise<void> {
       await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
     }
     if (activeRunIds.length > 0) {
-      process.stderr.write(`[crawler-scheduler] periodic sync applied to ${activeRunIds.length} active runs\n`)
+      schedulerLog.info({ count: activeRunIds.length }, 'periodic sync applied to active runs')
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    process.stderr.write(`[crawler-scheduler] timeout watchdog failed: ${msg}\n`)
+    schedulerLog.warn({ err }, 'timeout watchdog failed')
   }
 }
 
@@ -97,5 +98,5 @@ export function registerCrawlerScheduler(): void {
     void runSchedulerTick()
     void runTimeoutWatchdogTick()
   }, TICK_MS)
-  process.stderr.write('[crawler-scheduler] interval scheduler registered (60s)\n')
+  schedulerLog.info({ interval_ms: TICK_MS }, 'registered')
 }

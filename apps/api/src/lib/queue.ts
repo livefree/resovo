@@ -1,4 +1,5 @@
 import Bull from 'bull'
+import { baseLogger } from '@/api/lib/logger'
 
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379'
 
@@ -78,12 +79,13 @@ export const maintenanceQueue = new Bull('maintenance-queue', {
 
 // ── 队列事件日志 ──────────────────────────────────────────────────
 
-function attachQueueLogger(queue: Bull.Queue, name: string) {
+function attachQueueLogger(queue: Bull.Queue, queueName: string) {
+  const qlog = baseLogger.child({ worker: `queue:${queueName}` })
   queue.on('error', (err) => {
-    process.stderr.write(`[${name}] queue error: ${err.message}\n`)
+    qlog.error({ err }, 'queue error')
   })
   queue.on('failed', (job, err) => {
-    process.stderr.write(`[${name}] job ${job.id} failed (attempt ${job.attemptsMade}): ${err.message}\n`)
+    qlog.warn({ job_id: String(job.id), attempt: job.attemptsMade, err }, 'job failed')
   })
 }
 
