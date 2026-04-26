@@ -34,6 +34,9 @@
       ],
       "@resovo/player-core": [
         "../../packages/player-core/src/index.ts"
+      ],
+      "@resovo/logger": [
+        "../../packages/logger/src/index.ts"
       ]
     }
   },

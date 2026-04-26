@@ -92,6 +92,7 @@ export default defineConfig({
       },
       { find: '@resovo/player-core', replacement: path.resolve(__dirname, './packages/player-core/src/index.ts') },
       { find: '@resovo/types',       replacement: path.resolve(__dirname, './packages/types/src/index.ts') },
+      { find: '@resovo/logger',      replacement: path.resolve(__dirname, './packages/logger/src/index.ts') },
     ],
   },
   // 自动 JSX 转换（React 17+ automatic runtime，组件测试不需要 import React）

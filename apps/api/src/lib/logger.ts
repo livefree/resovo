@@ -1,83 +1,19 @@
-// INFRA-08: 统一 logger 模块（本地 stub 实现）
-// TODO INFRA-09: 类型 / 序列化器 / redact 表迁移到 @resovo/logger 后，本文件改为 thin re-export
+// INFRA-08: 统一 logger 模块（createLogger / withRequest / withJob 实现保留此处，决策 7）
+// INFRA-09: 类型 / 序列化器 / redact 表已迁移到 @resovo/logger
+// INFRA-12: createLogger 实现迁入 @resovo/logger（监测期满后执行）
 
 import pino from 'pino'
 import type Bull from 'bull'
 import type { FastifyLoggerOptions } from 'fastify'
 import type { PinoLoggerOptions } from 'fastify/types/logger'
+import {
+  serializeReq,
+  serializeErr,
+  REDACT_PATHS,
+  computeLevel,
+} from '@resovo/logger'
 
-// ── 类型 ─────────────────────────────────────────────────────────
-
-export type ServiceName =
-  | 'api'
-  | `worker:${string}`
-  | 'script'
-  | 'client'
-
-export interface LoggerOptions {
-  service: ServiceName
-  level?: string
-}
-
-// ── PII redact 表（INFRA-09 移至 @resovo/logger/redact.ts）────────
-
-// 覆盖 11 个 PII 字段在顶层 + 一级嵌套 + headers 容器路径
-// INFRA-14 F4：补 set-cookie / url.query（pino 最小样本验证缺失会泄露）
-const REDACT_PATHS: string[] = [
-  'authorization',
-  'cookie',
-  'set-cookie',
-  'password',
-  'token',
-  'refreshToken',
-  'accessToken',
-  'email',
-  'phone',
-  'ip',
-  'url.query',
-  '*.authorization',
-  '*.cookie',
-  '*.set-cookie',
-  '*.password',
-  '*.token',
-  '*.refreshToken',
-  '*.accessToken',
-  '*.email',
-  '*.phone',
-  '*.ip',
-  '*.url.query',
-  'headers.set-cookie',
-  'req.url.query',
-]
-
-// ── 序列化器（INFRA-09 移至 @resovo/logger/serializers.ts）──────────
-// 禁止透传原始 req/res/headers 对象（复核 #7 硬规则）
-
-function serializeReq(req: { id?: string; method?: string; url?: string }) {
-  return {
-    request_id: req.id,
-    method: req.method,
-    // 只保留 pathname，去掉 query（避免 query 泄露 PII）
-    url: req.url?.split('?')[0],
-  }
-}
-
-function serializeErr(err: Error & { statusCode?: number }) {
-  return {
-    type: err.constructor?.name ?? 'Error',
-    message: err.message,
-    stack: err.stack ?? '',
-    ...(err.statusCode ? { statusCode: err.statusCode } : {}),
-  }
-}
-
-// ── Level 计算（INFRA-09 移至 @resovo/logger/levels.ts）─────────────
-
-function computeLevel(env: string | undefined): string {
-  if (env === 'test') return 'silent'
-  if (env === 'development') return 'debug'
-  return 'info'
-}
+export type { ServiceName, LoggerOptions, LogContext, LogBase } from '@resovo/logger'
 
 // ── createFastifyLoggerOptions ────────────────────────────────────
 // 配置对象形式传给 Fastify({ logger: ... })，避免 pino.Logger 实例
@@ -93,7 +29,7 @@ export function createFastifyLoggerOptions(): FastifyLoggerOptions & PinoLoggerO
       err: serializeErr,
     },
     redact: {
-      paths: REDACT_PATHS,
+      paths: [...REDACT_PATHS],
       censor: '<redacted>',
     },
   }
@@ -101,7 +37,7 @@ export function createFastifyLoggerOptions(): FastifyLoggerOptions & PinoLoggerO
 
 // ── createLogger（供 workers 直接使用）──────────────────────────────
 
-export function createLogger(opts: LoggerOptions): pino.Logger {
+export function createLogger(opts: { service: string; level?: string }): pino.Logger {
   const level = opts.level ?? computeLevel(process.env.NODE_ENV)
 
   return pino({
@@ -113,7 +49,7 @@ export function createLogger(opts: LoggerOptions): pino.Logger {
       err: serializeErr,
     },
     redact: {
-      paths: REDACT_PATHS,
+      paths: [...REDACT_PATHS],
       censor: '<redacted>',
     },
   })
