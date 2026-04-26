@@ -1380,3 +1380,215 @@ changelog INFRA-17 条目必附：
 - 草案落盘后同步追加 task-queue.md 第 11 张卡片（INFRA-17，状态 ⬜）
 -->
 
+<!--
+Reviewer: Codex
+Review timestamp: 2026-04-26 02:11:38 -0700
+Review target: INFRA-17 完成质量残留复审
+Review status: CONDITIONAL PASS（仍有 1 个 P2 + 2 个 P3 残留）
+
+## 残留发现
+
+### Finding 1 (docs/rules/logging-rules.md:295-319) [P2]
+§7 编号和内容重复。
+
+INFRA-17 新增了 §7.1 / §7.2 / §7.3，但旧的 §7.1 / §7.2 仍保留在下方，导致同一文件里出现重复编号，且跨 origin 配置基线和 CORS 403 映射内容重复。后续引用 §7.1 / §7.2 会变得不确定。建议删除旧块或统一重排编号。
+
+### Finding 2 (docs/rules/logging-rules.md:281-286) [P3]
+鉴权行仍未限定 cookie/session 场景。
+
+分级表仍写“端点内部 zod / 限流 / 鉴权”可用 curl+Origin 充分验证，但涉及浏览器 cookie 自动携带、SameSite、Secure 或 `credentials:'include'` 的 cookie/session 鉴权仍必须真实浏览器。建议改成“非浏览器 cookie/session 的鉴权逻辑”，或拆成 cookie/session 鉴权与 header/token 鉴权两行。
+
+### Finding 3 (docs/changelog.md:11076-11080) [P3]
+test:run 全绿记录未能复现。
+
+完成记录写 `npm run test:run` 150 文件 / 1760 测试全绿，但 Codex 用 bundled Node 复跑全集时出现 1 个失败：`VideoImageSection` 破图降级测试。单独复跑该文件通过，说明更像既有 flaky 或测试隔离问题；它不指向 INFRA-17 文档改动，但完成记录的“全集全绿”当前不可复现。建议记录为 flaky / 复跑备注，或补一次稳定全集结果。
+
+## 已复核通过项
+
+- F1 worker service 命名规则已修正：当前 API 内 Bull workers 明确为 `service:'api' + worker:'<name>'`，`worker:${string}` 仅保留给未来独立 worker 进程。
+- F3 docs-format 验收口径已修正：不再声称全局 `verify:docs-format` 通过，明确为新增文档通过元信息检查、12 项历史问题另立维护卡。
+
+## 守门复核结果
+
+- `git show --check -1`：PASS
+- `npm run typecheck`：PASS
+- `node_modules/.bin/turbo lint`（补齐 PATH 后）：PASS，保留既有 react-hooks warnings
+- `npm run verify:docs-format`：FAIL，12 项历史问题，与任务卡记录一致
+- bundled Node `vitest run`：1 / 1760 flaky 失败；单独复跑 `tests/unit/components/admin/videos/VideoImageSection.test.tsx` PASS
+-->
+
+<!--
+INFRA-18 修补任务草案（评审待开工）
+起草人：主循环（claude-opus-4-7）
+时间戳：2026-04-26 02:15:07 PDT
+对象：整合 Codex INFRA-17 残留复审（1 P2 + 2 P3）+ 主循环独立确认全成立，制定 INFRA-17 复审修补卡
+
+## 修补任务卡
+
+- **ID**：INFRA-18
+- **标题**：INFRA-17 残留修补：§ 7 编号去重 / 鉴权行 cookie 限定 / test:run flaky caveat
+- **序列**：SEQ-20260425-LOG-V1（追加，状态 🟡 待开工）
+- **前置依赖**：INFRA-17 ✅（CONDITIONAL PASS）
+- **建议模型**：sonnet（机械文档去重 + 措辞收紧 + changelog caveat，无新决策）
+- **子代理**：无
+- **估时**：0.1d
+- **触发**：Codex INFRA-17 残留复审 3 finding（本提案第 1383–1418 行）+ 主循环独立确认 1 P2 + 2 P3 全成立
+
+## Finding 整合表（3 项）
+
+| ID | 来源 | 级 | 位置 | 问题 |
+| --- | --- | --- | --- | --- |
+| F1 | Codex + 主循环复核 | P2 文档实质 bug | `docs/rules/logging-rules.md:311-319` | INFRA-17 修订 § 7 时新增 § 7.0 / 7.1（验收路径选择规则）/ 7.2（跨 origin 配置基线，新版）/ 7.3（CORS 拒绝映射为 403，新版），但**忘了删除**原文 § 7.1（跨 origin 配置基线）和 § 7.2（CORS 拒绝映射为 403）。结果同一文件出现 2 个 § 7.1 + 2 个 § 7.2，编号歧义 + 内容重复 9 行。grep `^### 7\.` 输出 6 行（应为 4 行） |
+| F2 | Codex | P3 文档措辞 | `docs/rules/logging-rules.md:281-286`（§ 7.0 分级表第 4 行） | 分级表写"仅业务逻辑（端点内部 zod / 限流 / 鉴权）→ curl+Origin 充分"。但涉及浏览器 cookie 自动携带（SameSite / Secure / `credentials:'include'`）的 cookie/session 鉴权**仍必须**真实浏览器实测。当前措辞会让 prod 401 cookie 验证错误降级 |
+| F3 | Codex | P3 完成记录 | `docs/changelog.md:11076-11080`（INFRA-17 守门段） | 完成记录写"npm run test:run 150 文件 / 1760 测试全绿"。Codex 用 bundled Node 复跑全集时出现 1 个 flaky 失败（`VideoImageSection` 破图降级测试），单跑 PASS——指向既有 flaky，不指向 INFRA-17 改动。但完成记录的"全集全绿"在 Codex 环境不可复现，应补 flaky caveat |
+
+## 范围决策
+
+- **纳入 INFRA-18**：F1（必修 P2）+ F2（必修 P3）+ F3（必修 P3）
+- **延期 / 不在本卡**：
+  - VideoImageSection flaky 测试本身（既有问题，独立环境议题，不在 SEQ-20260425-LOG-V1 范围）
+  - verify:docs-format 12 项历史问题（INFRA-17 已显式延期到独立维护卡）
+
+## 修复方案
+
+### F1 修复（必修，P2）
+
+**`docs/rules/logging-rules.md` 删除行 311-319**（重复的旧 § 7.1 + § 7.2 + 隔离空行）：
+
+修订前结构：
+```
+### 7.0 验收要求按改动类型分级
+### 7.1 验收路径选择规则
+### 7.2 跨 origin 配置基线        ← 新版（保留）
+### 7.3 CORS 拒绝映射为 403       ← 新版（保留）
+### 7.1 跨 origin 配置基线        ← 旧版（删除）
+### 7.2 CORS 拒绝映射为 403       ← 旧版（删除）
+```
+
+修订后结构：
+```
+### 7.0 验收要求按改动类型分级
+### 7.1 验收路径选择规则
+### 7.2 跨 origin 配置基线
+### 7.3 CORS 拒绝映射为 403
+```
+
+验证：`grep -c "^### 7\." docs/rules/logging-rules.md` 输出 4（不再是 6）。
+
+### F2 修复（必修，P3）
+
+**`docs/rules/logging-rules.md` § 7.0 分级表第 4 行**：
+
+修订前：
+```markdown
+| 仅业务逻辑（端点内部 zod / 限流 / 鉴权） | ☐ 可选 | ✅ 充分 |
+```
+
+修订后（拆为两行，区分鉴权类型）：
+```markdown
+| 端点内部 zod 校验 / 限流 | ☐ 可选 | ✅ 充分 |
+| 鉴权：header/token（如 Authorization Bearer） | ☐ 可选 | ✅ 充分 |
+| 鉴权：cookie/session（SameSite / Secure / `credentials:'include'`） | ✅ 必须 | ❌ 不充分 |
+```
+
+理由：
+- header/token 鉴权（如 `Authorization: Bearer <jwt>`）：curl 可显式 `-H "Authorization: ..."` 完整模拟
+- cookie/session 鉴权：浏览器侧自动携带行为（SameSite/Secure/HttpOnly）curl 不能准确模拟，必须真实浏览器
+
+### F3 修复（必修，P3）
+
+**`docs/changelog.md` INFRA-17 段守门栏目**追加 flaky caveat：
+
+修订前：
+```
+- `npm run test:run` ✅ **150 文件 / 1760 测试**（与 INFRA-11/16 同，本卡纯文档无代码改动）
+```
+
+修订后：
+```
+- `npm run test:run` ✅ **150 文件 / 1760 测试**（主循环本机 Node v20.19.6）
+  - **flaky caveat**（INFRA-18 后补充）：Codex 在 bundled Node 环境复跑出现 1 个 flaky 失败 `tests/unit/components/admin/videos/VideoImageSection.test.tsx` 破图降级测试；单独复跑该文件 PASS。指向既有 flaky 或测试隔离问题，与 INFRA-17 文档改动无关。建议未来在独立维护卡（非 SEQ-20260425-LOG-V1 范围）跟进 flaky 根因
+```
+
+### 文档改动汇总
+
+| 文件 | 改动 | Finding |
+| --- | --- | --- |
+| `docs/rules/logging-rules.md:311-319` | 删除重复的旧 § 7.1 + § 7.2（9 行） | F1 |
+| `docs/rules/logging-rules.md:281-286`（§ 7.0 分级表） | 第 4 行「业务逻辑（含鉴权）」拆为「业务逻辑」+「header/token 鉴权」+「cookie/session 鉴权」三行 | F2 |
+| `docs/changelog.md` INFRA-17 段守门栏 | 追加 flaky caveat（VideoImageSection 既有 flaky，与本卡无关） | F3 |
+| `docs/changelog.md` | 追加 INFRA-18 完成条目 | — |
+| `docs/tasks.md` | 工作台 INFRA-18 卡片（开工时写，完成后清空） | 流程 |
+| `docs/task-queue.md` | 序列尾部追加 INFRA-18 第 12 张卡（状态 ⬜→🔄→✅） | 流程 |
+
+## 端到端验证清单
+
+```
+F1 验证：
+1. grep -c "^### 7\." docs/rules/logging-rules.md
+   修复前 == 6（重复）
+   修复后 == 4（唯一）
+2. grep -c "### 7\.1" docs/rules/logging-rules.md == 1（不再是 2）
+3. grep -c "### 7\.2" docs/rules/logging-rules.md == 1（不再是 2）
+4. 修订后 § 7 结构连续：7.0 → 7.1 → 7.2 → 7.3
+
+F2 验证：
+1. § 7.0 分级表第 4 行不再笼统说"鉴权"，而是分为 header/token vs cookie/session
+2. cookie/session 鉴权明确"必须真实浏览器"
+3. 与 INFRA-16 真实浏览器硬规则一致（cookie 自动携带不可 curl 模拟）
+
+F3 验证：
+1. changelog INFRA-17 守门段含 flaky caveat
+2. 明确 VideoImageSection 是既有 flaky，与本卡改动无关
+3. 不声称跨环境"全集全绿"
+
+防回归（针对 F1 类编号重复疏忽）：
+- INFRA-18 验收清单增加自检项「commit 前 grep -c "^### N\." docs/rules/<file>.md 输出唯一编号」
+```
+
+## 验收清单
+
+- [ ] F1 § 7 编号去重：`grep -c "^### 7\." docs/rules/logging-rules.md` 输出 4（不再是 6）
+- [ ] F1 行 311-319 重复块已删除
+- [ ] F1 § 7 结构连续：7.0 → 7.1 → 7.2 → 7.3
+- [ ] F2 分级表第 4 行拆为 header/token vs cookie/session 鉴权两行
+- [ ] F2 cookie/session 鉴权明确"必须真实浏览器"
+- [ ] F3 changelog INFRA-17 守门段补 flaky caveat（VideoImageSection 与本卡无关）
+- [ ] **防回归**：commit 前 `grep -c "^### N\." docs/rules/<file>.md` 验证 § 7 + § 5 + § 8 编号唯一（避免 F1 类疏忽再发）
+- [ ] `npm run typecheck` / `npm run lint` / `npm run test:run` 全绿（本卡纯文档）
+- [ ] `npm run verify:docs-format`：logging-rules.md 仍通过元信息检查；不引入新错误（12 项 pre-existing 历史问题维持）
+- [ ] changelog 附 ① F1 grep 计数前后对比 ② F2 分级表完整 3 行（含 cookie/session vs header/token 区分）③ F3 flaky caveat 内容 ④ INFRA-17 段回写指针
+- [ ] 流程：本卡先写 tasks.md 工作台卡片再开工（延续 INFRA-14/15/16/17 范本，第 7 次应用）
+
+## 完成备注要求
+
+changelog INFRA-18 条目必附：
+- ① F1 grep 计数对比：修复前 6 / 修复后 4，且 §7.1 / §7.2 各自唯一
+- ② F2 分级表完整 3 行（业务逻辑 / header-token 鉴权 / cookie-session 鉴权）+ 拆分理由
+- ③ F3 flaky caveat 完整内容（VideoImageSection 既有 flaky，与本卡无关，建议独立维护卡跟进）
+- ④ INFRA-17 段回写指针："F1+F2+F3 已闭环，见 INFRA-18"
+- ⑤ 防回归自检：commit 前 grep 验证编号唯一的输出截图（或文字记录）
+
+## 偏离记录
+
+- **VideoImageSection flaky 根因不在本卡**：明确为独立维护卡跟进（非 SEQ-20260425-LOG-V1 范围）。本卡仅在 changelog 加 caveat 不掩盖跨环境差异
+- **F1 类疏忽防回归**：通过 INFRA-18 验收清单的 grep 自检项 + 本卡 changelog 的「防回归自检」备注要求强化未来同类任务
+
+## 流程纠正条款
+
+延续 INFRA-14/15/16/17 范本，本卡开工时：
+1. **先**写 tasks.md 工作台卡片（5 段：问题理解 / 根因 / 方案 / 涉及文件 / 验收清单 + 偏离风险）
+2. **再**改 task-queue.md INFRA-18 状态 ⬜ → 🔄
+3. 然后才动 logging-rules.md 去重 + 分级表拆行 + changelog flaky caveat
+4. **commit 前必跑 grep 自检**：`grep -c "^### N\." docs/rules/logging-rules.md` 验证 § 5 / § 7 / § 8 编号唯一（防 F1 类疏忽再发）
+5. 完成后：清空 tasks.md + task-queue 状态 🔄 → ✅ + changelog 追加 + git commit
+6. **本卡为修补的修补**：第 7 次范本应用，建议未来同类任务收紧实施纪律——文档段落删除/移动操作必须 commit 前 grep 编号自检
+
+## 评审状态
+
+- 草案完成时间：2026-04-26 02:15:07 PDT
+- 当前状态：等待用户确认开工
+- 不动 task-queue.md / tasks.md 内容，本草案先 commit 入库作为评审记录（与 INFRA-13/14/15/16/17 草案节奏一致）
+- 草案落盘后同步追加 task-queue.md 第 12 张卡片（INFRA-18，状态 ⬜）
+-->
+
