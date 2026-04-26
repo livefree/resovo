@@ -44,3 +44,6 @@ external-db/
 # 生产走 R2，开发环境 R2 未配时写入此目录
 .uploads/
 apps/api/.uploads/
+
+# INFRA-01 日志落盘目录（本地开发产物，不入 git）
+logs/

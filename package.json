@@ -35,7 +35,9 @@
     "verify:baseline": "tsx scripts/verify-baseline.ts",
     "test:guarded": "tsx scripts/test-guarded.ts",
     "test:guarded:e2e": "tsx scripts/test-guarded.ts --mode e2e",
-    "test:guarded:all": "tsx scripts/test-guarded.ts --mode all"
+    "test:guarded:all": "tsx scripts/test-guarded.ts --mode all",
+    "logs": "tail -F logs/dev/*.log",
+    "logs:errors": "tail -F logs/errors/*.ndjson"
   },
   "dependencies": {
     "@resovo/player": "*",
