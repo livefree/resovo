@@ -1123,3 +1123,260 @@ changelog INFRA-16 条目必附：
 - 草案落盘后同步追加 task-queue.md 第 10 张卡片（INFRA-16，状态 ⬜）
 -->
 
+<!--
+INFRA-11 完成质量独立审核意见
+审核者：Codex
+时间戳：2026-04-26 01:48:22 PDT
+对象：INFRA-11（commit bc03a29）新增 docs/rules/logging-rules.md + CLAUDE.md 索引
+
+结论：CONDITIONAL PASS。规则文档主体结构完整，CLAUDE.md 索引已接入，最终决策表、PII 红线、logger.child 范式、client-log 链路规则与验收清单基本覆盖 LOG-V1 当前知识。但仍有 3 个 P2 需要修补后才能作为后续日志任务的稳定规则入口。
+
+Finding 1 — [P2] worker service 命名规则和当前实现相反
+位置：docs/rules/logging-rules.md:193-219
+问题：文档把 `worker:crawler-worker` 等列为 ServiceName 实例，并写“新增 worker 时按此命名延续”。但当前 API 内所有 Bull workers 实际都是 `baseLogger = createLogger({ service: 'api' })` 后 `baseLogger.child({ worker: 'crawler-worker' })`，ndjson 顶层 service 仍是 `api`，worker 字段也不带 `worker:` 前缀。后续开发者若按本节新建 `service:'worker:*'`，会改变 dev.mjs 分流和既有日志 schema。
+建议：明确当前 API 内 Bull workers 统一使用 `service:'api' + worker:'<name>'`；`worker:${string}` 仅保留给未来独立 worker 进程或 INFRA-12/后续任务另行决策。
+
+Finding 2 — [P2] curl+Origin 被写成等价浏览器验收
+位置：docs/rules/logging-rules.md:256-261
+问题：规则把“真实浏览器实测”和“curl 携带 Origin”列为二选一，并称 curl+Origin 与 sendBeacon/fetch wire 行为等价。但 curl 无法覆盖真实浏览器中的 sendBeacon CORS/preflight、credentials/cookie 携带、Network 目标端口、page lifecycle flush 等行为；这正是 INFRA-16 审核指出的验收降级风险。
+建议：改成 curl+Origin 仅作为 API/CORS 快速验证；涉及 client logger、sendBeacon、cookie 或 page lifecycle 的任务仍必须做真实浏览器验收，除非任务卡明确降级并记录原因。
+
+Finding 3 — [P2] docs-format 验收仍未真正通过
+位置：docs/task-queue.md:11138-11142
+问题：任务卡验收仍写 `npm run verify:docs-format` 通过，但复跑该命令实际退出 1，报告 12 项既有问题。changelog 中说明新建 `logging-rules.md` 本身不在错误列表内，这是合理范围解释；但 task-queue 的验收项仍保留“通过”，会让完成态与真实守门结果不一致。
+建议：把验收改成“新增 logging-rules.md 通过元信息检查；全局 verify:docs-format 仍因历史问题失败，另立文档维护卡”，或先修复历史问题后再声称通过。
+
+复核验证：
+- `git show --check -1`：PASS
+- `npm run lint`：PASS（仅既有 react-hooks/exhaustive-deps warning）
+- `npm run typecheck`：PASS
+- `node node_modules/vitest/vitest.mjs run tests/unit/lib/logger.test.ts tests/unit/web-next/logger-client.test.ts`：PASS（37 tests）
+- `npm run verify:docs-format`：FAIL（12 项历史问题；新增 logging-rules.md 元信息完整，不在错误列表内）
+
+建议状态：INFRA-11 可按 CONDITIONAL PASS 进入修补。优先修正文档规则口径，避免后续 INFRA-12 或新增日志任务被错误的 worker service 与浏览器验收规则带偏。
+-->
+
+<!--
+INFRA-17 修补任务草案（评审待开工）
+起草人：主循环（claude-opus-4-7）
+时间戳：2026-04-26 01:51:22 PDT
+对象：整合 Codex INFRA-11 完成质量审核（3 finding）+ 主循环独立确认 3 P2 全成立，制定 INFRA-11 复审修补卡
+
+## 修补任务卡
+
+- **ID**：INFRA-17
+- **标题**：INFRA-11 复审修补：worker service 命名 / 浏览器验收口径 / docs-format 验收措辞
+- **序列**：SEQ-20260425-LOG-V1（追加，状态 🟡 待开工）
+- **前置依赖**：INFRA-11 ✅（CONDITIONAL PASS）
+- **建议模型**：sonnet（机械文档措辞修正，无新决策）
+- **子代理**：无
+- **估时**：0.2d
+- **触发**：Codex INFRA-11 审核 3 finding（本提案第 1126–1156 行）+ 主循环独立确认 3 P2 全成立（无 P1）
+
+## Finding 整合表（3 项）
+
+| ID | 来源 | 级 | 位置 | 问题 |
+| --- | --- | --- | --- | --- |
+| F1 | Codex + 主循环复核 | P2 文档措辞 | `docs/rules/logging-rules.md:193-219`（§ 5） | ServiceName 命名规范把 `worker:crawler-worker` 等列为实例并写"新增 worker 时按此命名延续"。但实际代码 `apps/api/src/workers/maintenanceWorker.ts:18` 等：`baseLogger = createLogger({ service: 'api' })` + `baseLogger.child({ worker: 'crawler-worker' })` —— ndjson 顶层 `service` 永远是 `'api'`，worker 字段不带 `worker:` 前缀。`worker:${string}` ServiceName 类型实际从未实例化，是保留给未来独立 worker 进程。文档反向写成"惯例"会误导未来开发者破坏 dev.mjs 分流和现有 schema |
+| F2 | Codex | P2 文档措辞 | `docs/rules/logging-rules.md:256-261`（§ 7）+ § 8.4 | 把"真实浏览器实测"与"curl 携带 Origin"列为二选一，并称 curl+Origin "与 sendBeacon/fetch wire 行为等价（除 page-unload 时序由单测覆盖）"。但 curl 不能覆盖 sendBeacon CORS preflight / 浏览器 cookie 自动携带（SameSite/SecureContext）/ Network 目标端口 / page lifecycle（pagehide/beforeunload flush）。这正是 INFRA-16 审核指出的验收降级风险被反向写入规则 |
+| F3 | Codex | P2 验收口径 | `docs/task-queue.md:11138-11142` | INFRA-11 验收项写"`npm run verify:docs-format` 通过"，但脚本实际退出 1（12 项 pre-existing 历史问题）。changelog 已解释新建 logging-rules.md 不在错误列表（合理范围解释），但 task-queue 验收项措辞未同步——完成态与真实守门结果不一致 |
+
+## 范围决策
+
+- **纳入 INFRA-17**：F1 + F2 + F3（3 P2 全文档措辞问题，必修，否则规则文档反向带偏未来任务）
+- **延期 / 不在本卡**：
+  - verify:docs-format 12 项 pre-existing 历史问题（非本卡引入）：`task-queue.md` 时间字段格式 / `docs/archive/` 元信息 / `docs/rules/{git-rules,quality-gates,workflow-rules}.md` 缺 `superseded_by`。如需统一修复另开独立文档维护卡（不在 SEQ-20260425-LOG-V1 范围）
+
+## 修复方案
+
+### F1 修复（必修，§ 5 ServiceName 命名规范）
+
+**`docs/rules/logging-rules.md` § 5**：
+
+修订前（误导）：
+```markdown
+## 5. ServiceName 命名规范
+
+`@resovo/logger/types.ts:ServiceName` 定义：
+| 实例 | 来源 |
+| `worker:crawler-worker` | apps/api/src/workers/crawlerWorker.ts |
+| ... 9 个实例 |
+新增 worker 时按此命名延续。
+```
+
+修订后（澄清现状）：
+```markdown
+## 5. ServiceName 命名规范
+
+`@resovo/logger/types.ts:ServiceName` 类型定义保留 4 种：
+- `api` — Fastify API 进程（实际使用）
+- `worker:${string}` — 独立 worker 进程（**类型保留，当前未实例化**）
+- `script` — 一次性脚本（实际使用）
+- `client` — 浏览器上报路径（实际使用，由 client-log endpoint 派生）
+
+### 5.1 当前 API 内 Bull workers 命名（实际惯例）
+
+API 进程内的 9 个 Bull workers 与 API 同进程运行，统一用：
+- 顶层 `service: 'api'`（由 baseLogger 一次性绑定，child 不覆盖）
+- 子上下文 `worker: '<kebab-case-name>'`（child 派生时附加）
+
+ndjson 输出形如：
+{"service":"api","worker":"crawler-worker","job_id":"42",...}
+
+不是 service:"worker:crawler-worker"。
+
+[9 个 worker 实例表，字段名改为 worker 而非 service]
+
+### 5.2 worker:${string} 类型保留场景
+
+`worker:${string}` 类型保留给未来独立 worker 进程（独立部署、独立日志流），
+当前 SEQ-20260425-LOG-V1 实施层未使用。INFRA-12（实现下沉）或后续任务
+若需引入独立 worker 进程，需另行决策，不得自动套用此类型。
+
+### 5.3 client 流分流
+
+[原内容保留]
+```
+
+### F2 修复（必修，§ 7 浏览器→API 链路 + § 8.4 验收清单）
+
+**§ 7 修订**：
+
+修订前（弱化要求）：
+```
+涉及浏览器→API 链路的任务，验收必须包含以下二者**至少其一**：
+1. 真实浏览器实测：...
+2. curl 携带 `Origin: http://localhost:3000` 头模拟跨 origin 路径
+   （与浏览器 sendBeacon / fetch 的 wire 行为等价，除 page-unload 时序由单测覆盖）
+```
+
+修订后（明确分级）：
+```
+涉及浏览器→API 链路的任务，验收要求按改动范围分级：
+
+| 改动类型 | 必须真实浏览器 | curl+Origin 是否充分 |
+| --- | --- | --- |
+| 涉及 sendBeacon / page lifecycle (pagehide/beforeunload) flush | **必须** | 不充分 |
+| 涉及浏览器 cookie 自动携带（credentials:'include'） | **必须** | 不充分（curl 不模拟 SameSite/SecureContext） |
+| 仅服务端 CORS / 端点 origin 校验 | 可选 | 充分（API/CORS 快速验证） |
+| 仅业务逻辑（端点内部 zod / 限流 / 鉴权） | 可选 | 充分 |
+
+**curl + Origin 头不等价于真实浏览器**：
+- 不模拟 sendBeacon CORS preflight
+- 不携带 cookie（SameSite=Lax / Secure-only 在 prod）
+- 不触发 page lifecycle flush
+- 不覆盖 Network 面板真实端口验证
+
+curl+Origin 仅作 API/CORS 快速验证手段；涉及浏览器侧行为（sendBeacon / cookie / page lifecycle）的任务仍**必须**真实浏览器实测，除非任务卡明确降级并记录原因。
+```
+
+**§ 8.4 修订**（同步）：
+```
+- [ ] 涉及前端→API 链路任务：按 § 7 分级要求执行
+  - sendBeacon / page lifecycle / cookie 携带：必须真实浏览器实测
+  - 仅 CORS / 端点 origin / 业务逻辑：curl+Origin 充分
+- [ ] 禁止 `curl localhost:4000` 直连 API 端口替代浏览器路径（INFRA-16 审计教训）
+```
+
+### F3 修复（必修，task-queue 验收项措辞）
+
+**`docs/task-queue.md` INFRA-11 验收项**：
+
+修订前：
+```
+- `npm run verify:docs-format` 通过
+```
+
+修订后：
+```
+- 新增 `logging-rules.md` 通过元信息检查（7 字段完整：status / owner / scope / source_of_truth / supersedes / superseded_by / last_reviewed），不在 verify:docs-format 12 项错误列表内
+- 全局 `verify:docs-format` 仍因 12 项 pre-existing 历史问题失败（与本卡无关：task-queue 时间字段 / archive 元信息 / 部分 rules 文档缺 superseded_by 字段），另立独立文档维护卡处理
+```
+
+### 文档改动汇总
+
+| 文件 | 改动 | Finding |
+| --- | --- | --- |
+| `docs/rules/logging-rules.md` § 5（ServiceName 命名规范） | 修订为澄清当前实际惯例 + worker:${string} 类型保留场景 | F1 |
+| `docs/rules/logging-rules.md` § 7（浏览器→API 链路） | "二选一"改为按改动类型分级 + 明确 curl+Origin 局限 | F2 |
+| `docs/rules/logging-rules.md` § 8.4（验收清单） | 同步分级要求 | F2 |
+| `docs/task-queue.md` INFRA-11 验收项 | 措辞改为"新增文档通过 + 全局历史问题另立卡" | F3 |
+| `docs/changelog.md` INFRA-11 段 | 追加 CONDITIONAL PASS 备注 + 链接 INFRA-17 | — |
+| `docs/changelog.md` | 追加 INFRA-17 完成条目 | — |
+| `docs/tasks.md` | INFRA-17 工作台卡片（开工时写，完成后清空） | 流程 |
+| `docs/task-queue.md` | 追加 INFRA-17 第 11 张卡（状态 ⬜→🔄→✅） | 流程 |
+
+## 端到端验证清单
+
+```
+F1 验证：
+1. logging-rules.md § 5 不再把 worker:crawler-worker 等列为 ServiceName 实例
+2. § 5.1 明确"service:'api' + worker:'<name>'" 现状惯例
+3. § 5.2 明确 worker:${string} 是类型保留
+4. ndjson 样例输出对齐：{"service":"api","worker":"...",...}
+5. 与 apps/api/src/workers/maintenanceWorker.ts:18 实际代码一致
+
+F2 验证：
+1. logging-rules.md § 7 不再写"二选一等价"措辞
+2. 分级表覆盖 4 种改动类型 + curl 局限说明 (4 项)
+3. § 8.4 验收清单同步分级要求
+4. 与 INFRA-16 审计教训一致（curl 直连不等价于真实浏览器）
+
+F3 验证：
+1. task-queue.md INFRA-11 验收项措辞改为"新增文档通过 + 历史问题另立卡"
+2. 与 changelog INFRA-11 段的"verify:docs-format 历史遗留说明"一致
+3. 完成态与真实守门结果一致（不再声称"通过"）
+
+无回归守门：
+- npm run typecheck / lint / test:run 全绿（本卡纯文档改动）
+- npm run verify:docs-format：新建文档继续通过（不引入新元信息错误）
+```
+
+## 验收清单
+
+- [ ] § 5 ServiceName 命名规范修订完成（F1）：
+  - [ ] worker:${string} 不再被列为"实例"，改为"类型保留"
+  - [ ] 5.1 子节明确 service:'api' + worker:'<name>' 现状
+  - [ ] 9 worker 表格字段名改为 worker（非 service）
+  - [ ] 与代码实际一致（grep apps/api/src/workers/*.ts 验证）
+- [ ] § 7 + § 8.4 浏览器验收口径修订完成（F2）：
+  - [ ] 删除"等价二选一"措辞
+  - [ ] 增分级表（sendBeacon/cookie/lifecycle 必须真实浏览器；CORS/端点逻辑 curl+Origin 充分）
+  - [ ] 明列 curl 4 项局限（preflight / cookie / lifecycle / Network 端口）
+- [ ] task-queue.md INFRA-11 验收项措辞修订完成（F3）：
+  - [ ] 改为"新增文档通过 + 历史问题另立卡"
+- [ ] `npm run typecheck` / `npm run lint` / `npm run test:run` 全绿（本卡纯文档）
+- [ ] `npm run verify:docs-format`：logging-rules.md 仍通过元信息检查；不引入新错误
+- [ ] changelog 附 ① F1 修订前后 § 5 内容对比 ② F2 分级表完整 ③ F3 task-queue 措辞 diff ④ INFRA-11 段回写指针
+- [ ] 流程：本卡先写 tasks.md 工作台卡片再开工（延续 INFRA-14/15/16 范本，第 6 次应用）
+
+## 完成备注要求
+
+changelog INFRA-17 条目必附：
+- ① F1 修订前后 § 5 ServiceName 命名规范关键 diff（特别是 worker:${string} 从"实例"改为"类型保留"）
+- ② F2 分级表完整内容（4 改动类型 × 真实浏览器/curl 充分性矩阵 + curl 4 项局限）
+- ③ F3 task-queue 措辞 diff（"通过"改为"新增通过 + 历史另立卡"）
+- ④ INFRA-11 段回写指针："F1+F2+F3 已闭环，见 INFRA-17"
+- ⑤ ndjson 真实样例 1 行（从 logs/dev/api.ndjson 抓取，确认 service:'api' + worker:'<name>' 现状一致）
+
+## 偏离记录
+
+- **verify:docs-format 12 项 pre-existing 历史问题**：本卡显式不修，措辞改为"另立独立文档维护卡"。如未来需统一修复，独立卡 INFRA-MAINT-DOC-FORMAT 或类似命名，不在 SEQ-20260425-LOG-V1 范围
+
+## 流程纠正条款
+
+延续 INFRA-14/15/16 范本，本卡开工时：
+1. **先**写 tasks.md 工作台卡片（5 段：问题理解 / 根因 / 方案 / 涉及文件 / 验收清单 + 偏离风险）
+2. **再**改 task-queue.md INFRA-17 状态 ⬜ → 🔄
+3. 然后才动 logging-rules.md 措辞修订 + task-queue 验收项 + changelog
+4. 完成后：清空 tasks.md + task-queue 状态 🔄 → ✅ + changelog 追加 + git commit
+5. **本卡纯文档改动**：无代码层 typecheck/test 增量；守门以 verify:docs-format 不引入新错误为重点
+
+## 评审状态
+
+- 草案完成时间：2026-04-26 01:51:22 PDT
+- 当前状态：等待用户确认开工
+- 不动 task-queue.md / tasks.md 内容，本草案先 commit 入库作为评审记录（与 INFRA-13/14/15/16 草案节奏一致）
+- 草案落盘后同步追加 task-queue.md 第 11 张卡片（INFRA-17，状态 ⬜）
+-->
+
