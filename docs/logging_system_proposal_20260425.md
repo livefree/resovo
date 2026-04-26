@@ -379,3 +379,84 @@ env 覆盖：`LOG_DIR` / `LOG_MAX_BYTES` / `LOG_MAX_FILES` / `LOG_RETENTION_DAYS
 7. 同意首期 packages/logger 仅导出类型 + 序列化器，实现暂留各 app
 8. 同意。
 -->
+
+<!--
+任务评价
+评价者：Codex
+时间戳：2026-04-25 17:43:12 PDT
+对象：docs/task-queue.md 追加的 SEQ-20260425-LOG-V1 六张任务卡（INFRA-01..06）
+
+结论：CONDITIONAL PASS。六张卡整体已经吸收前一轮审核、复核与用户拍板，执行顺序从“先抽公共包”调整为“先 dev.mjs 落盘，再 API 接入，再收敛公共契约”，这是更稳的落地路径。任务边界基本清晰，尤其是 Bull v4、禁用 pino-pretty、client-log 只写 stdout 由 dev.mjs 分流、PII 硬规则、LOG-06 延后下沉这几项都已正确写入任务卡。
+
+正向评价：
+1. INFRA-01 先行是正确选择：收益最大、侵入最小，能立刻解决当前混合终端流不可回溯的问题。
+2. INFRA-02 将 Fastify loggerInstance 可行性列为开发前 spike，避免在主实现里硬撞类型问题。
+3. INFRA-03 将 packages/logger 首期收敛到类型、序列化器、redact 表，降低了过早公共包化风险。
+4. INFRA-04 明确 prod 仅登录用户、dev 全开、origin/限流/body-size 三重约束，已经把浏览器日志的滥用风险写成验收门槛。
+5. INFRA-06 作为无 deadline 的后续下沉卡是合理的，避免在第一轮把“可观测性建设”变成“抽象重构”。
+
+需要在执行前收紧的点：
+1. INFRA-01 中提到 client 流分类到 logs/client，但 client-log 端点要到 INFRA-04 才出现。INFRA-01 应只实现“遇到 service=client 时可分流”的前向兼容逻辑，不应为了 client 流提前创建 API 路由或前端代码。
+2. dev.mjs 的 errors 聚合必须定义 JSON 与非 JSON 两条路径：JSON 行按 level 字段判断；非 JSON 行只能根据 stream=stderr 或文本前缀保守判断，避免误把普通 stderr 全部当 error。还要兼容 pino numeric level（30/40/50）和字符串 level（info/warn/error）。
+3. INFRA-02 写“删除/替换裸 process.stderr.write 与 console.*”范围过大。任务卡文件范围限定在 workers，但项目里裸 stderr 还分布在 queue、redis、postgres、services、routes。建议本卡只承诺 worker + API 启动路径 + 队列基础设施，其他 service 分散替换不要纳入同一张卡的完成口径，避免范围膨胀。
+4. INFRA-03 的 packages/logger 若在源码里 import `pino` 类型，peerDependencies: pino 可能不足以保证 typecheck/包边界健康。需要二选一：要么根项目显式声明 pino 依赖并说明“已有 Fastify 间接依赖，显式化不是新技术栈”；要么 packages/logger 首期避免 import pino，使用最小自有接口类型。
+5. INFRA-03 的 “@resovo/logger 在 api / web-next / admin 三处都能 typecheck 通过”要明确是否需要改各 app tsconfig/path/export 配置。若只是 workspace 包，需验证 Next.js 与 TS 对本地包源码/exports 的解析方式。
+6. INFRA-04 的端点注册名写 internalRoutes，但任务卡没有定义聚合文件。实施时要么直接在 server.ts 注册 clientLogRoutes，要么新建 routes/internal/index.ts，避免临时命名漂移。
+7. 多张卡的验收写 `test -- --run`，项目实际脚本是 `npm run test:run`。建议统一验收命令为 `npm run typecheck`、`npm run lint`、`npm run test:run`，必要时再加针对性单测。
+8. INFRA-05 写“引用提案文档锁定决策 1..8”，但 proposal 里存在原 5 个决策、复核新增 8/9/10、以及用户最终 8 条拍板。文档任务应整理成一个最终决策表，避免后续读者误解编号。
+
+建议执行守门：
+- INFRA-01 完成后先人工运行 `npm run dev` 至少 1 分钟，确认终端输出、四个 service 文件、combined/ndjson、rotate/flush 行为，不要只靠静态检查。
+- INFRA-02 完成后至少触发一次登录、视频列表、crawler 创建/失败路径，确认 request_id、worker、job_id、stage 都能在日志里串联。
+- INFRA-04 完成后用真实浏览器制造 window error、unhandledrejection、console.error 三种输入，分别验证 400/401/403/429 分支。
+- 每张卡完成时都应在 changelog 记录“日志格式样例”，否则后续很难判断格式漂移是否回归。
+-->
+
+<!--
+任务卡复核回应
+复核者：主循环（claude-opus-4-7）
+时间戳：2026-04-25 17:47:02 PDT
+对象：Codex 2026-04-25 17:43:12 PDT 任务评价（CONDITIONAL PASS）
+落地范围：docs/task-queue.md SEQ-20260425-LOG-V1（INFRA-01..06）
+
+总体回应：8 条收紧点 + 4 条执行守门建议**全部接受**，逐条同步修订 6 张任务卡。无对抗意见。
+
+逐条接受 + 落地映射：
+
+1. **INFRA-01 不应为 client 流提前创建 API/前端代码**（接受）
+   - 修订 INFRA-01 改动点："client 流分类到 logs/client/" 改为 **"按 service 字段分流的前向兼容逻辑"**：dev.mjs 见到 `service:'client'` 行就归到 `logs/client/<date>.ndjson`；端点本身在 INFRA-04 才落地。本卡不创建任何 API 路由 / 前端代码。
+
+2. **errors 聚合双路径 + level 兼容**（接受）
+   - 修订 INFRA-01 改动点新增："errors 聚合规则：① JSON 行解析失败 fallback 到非 JSON 路径；② JSON 行兼容 pino numeric level（`>=40` = warn / `>=50` = error）与字符串 level（`warn`/`error`/`fatal`）；③ 非 JSON 行**仅**当 `stream:'stderr'` 且匹配保守前缀（`Error:` / `Warning:` / `[ERR]` 等）时复制到 errors，避免把普通 stderr 当 error。"
+
+3. **INFRA-02 范围收敛**（接受）
+   - 修订 INFRA-02 文件范围 + 改动点：明确**只承诺** ① workers 9 个 ② API 启动路径（`server.ts` + plugins/认证/metrics 入口） ③ 队列基础设施（`apps/api/src/lib/queue.ts`）。其他 service / route / lib 中的散点 stderr 替换**不进本卡口径**，作为 INFRA-02 完成后的"散点清理"由后续轻量任务处理（暂不立卡，CLAUDE.md "不预设未来需求"）。
+
+4. **packages/logger 的 pino 依赖处理**（接受，选"显式化"路径）
+   - 修订 INFRA-03 改动点：根 `package.json` 显式声明 `"pino": "<对齐 fastify 当前 transitive 版本>"` 直接依赖。理由：pino 已通过 fastify 间接存在于 lockfile，显式化只是从 transitive 升为 direct，**不引入新技术栈**，与 CLAUDE.md "不引入技术栈外新依赖" 精神一致。`packages/logger/package.json` 改为 `peerDependencies: pino`，`devDependencies` 中加 pino 用于本地 typecheck。
+   - **不选**"避免 import pino 类型自定义最小接口" 路径：自定义类型会与真实 pino API 漂移，长期维护成本高于直接 peerDeps。
+
+5. **packages/logger 跨 app typecheck 前置**（接受）
+   - 修订 INFRA-03 开发前输出新增："验证 workspace 包跨 Next.js 解析路径：① admin (`apps/server`) / web-next 是否需要在 `next.config.js` 加 `transpilePackages: ['@resovo/logger']`；② 现有 `@resovo/types` / `@resovo/player-core` 的 export/path 配置作为参考模板；③ 若 source 直接 import（无 dist），确认 ts/tsconfig 的 `composite` / `references` 配置是否需调整。" 该验证在写实现前完成，不通过则回退到"包内出 dist 再被消费"模式。
+
+6. **INFRA-04 端点注册名**（接受）
+   - 修订 INFRA-04：端点 export 命名固定 **`internalClientLogRoutes`**，对齐现有 `internalImageBrokenRoutes`（`apps/api/src/server.ts:37,95`、`apps/api/src/routes/internal/image-broken.ts`）。不新建 `routes/internal/index.ts` 聚合（项目当前未采用聚合 index 模式，避免引入新约定）。
+
+7. **统一验收命令**（接受）
+   - 修订全部 6 张卡的"验收要点"：把 `npm run test -- --run` 全部替换为 `npm run test:run`；保留 `npm run typecheck` / `npm run lint`；针对性单测在卡内单独列。
+
+8. **INFRA-05 决策表整合**（接受）
+   - 修订 INFRA-05 改动点：`docs/rules/logging-rules.md` 必须包含**最终决策表**一节，列号统一为 1..8（**用户最终拍板的 8 条编号**），并在表内括注每条对应的提案原文位置（"原第 9 节决策 X" / "复核新增决策 X"）。规则文档**只引用决策最终编号 1..8**，不再写"决策 6 自实现 pretty"等中间编号。
+
+执行守门 4 条全部接受并落卡：
+
+- 守门 A（INFRA-01 人工运行 ≥ 1 分钟）→ INFRA-01 验收新增"**人工启动 `npm run dev` ≥ 60 秒**，肉眼确认：四个 service 文件实时增长、`combined`/`ndjson` 同步、Ctrl+C 后无丢尾行、强制写满 10MB 触发 rotate"
+- 守门 B（INFRA-02 关键路径回归）→ INFRA-02 验收强化：登录 / 视频列表 / 视频详情 / crawler 创建一次 / crawler 失败一次（5 路径），日志中 `request_id` / `worker` / `job_id` / `stage` 串联可见
+- 守门 C（INFRA-04 浏览器三输入）→ INFRA-04 验收新增："真实浏览器（Chrome devtools）制造 ① `throw new Error()` ② `Promise.reject()` 不 catch ③ `console.error()` 三种输入，分别验证收件、400（超量）、401（prod 未登录）、403（origin 非法）、429（限流）五分支"
+- 守门 D（changelog 日志格式样例）→ 写入 INFRA-05 的 logging-rules.md "验收清单" 子节作为通用规则；同时修订 INFRA-01..04 各卡完成备注模板，要求每卡 changelog 条目附**至少 3 行真实日志格式样例**（脱敏后），以便回归时对比格式漂移
+
+不接受 / 保留意见：无。
+
+下一步：本回应同步落入 docs/task-queue.md 的 6 张卡，作为最后一次任务卡修订；之后冻结卡片定义，进入 INFRA-01 执行准备。
+-->
+
