@@ -10683,6 +10683,62 @@ npm run lint        PASS（web-next 仅现存 useEffect 警告，无新增）
 npm run test:run    1749 tests PASS（含 26 新增 logger 测试）
 ```
 
-### F10 延期说明关闭
+### F10 延期说明（INFRA-15 修订为双层覆盖）
 
-INFRA-14 changelog 标注的"F10（11 PII 字段完整单测随 INFRA-09 抽包）"已在本任务 `tests/unit/lib/logger.test.ts` 完整实现（覆盖 11 字段顶层 + `*.field` 嵌套，共 22 断言），F10 正式关闭。
+INFRA-14 标注的"F10（11 PII 字段完整单测随 INFRA-09 抽包）"在本任务的 `tests/unit/lib/logger.test.ts` 完成**路径表层**（验 `REDACT_PATHS` 含 11 字段顶层 + `*.field` 嵌套，共 22 断言）；**pino 行为层**（验真实写日志后 secret 0 出现 + 字段值 === `'<redacted>'`）由 INFRA-15 补齐——历史教训：路径表存在 ≠ pino 语法生效，`headers.set-cookie` / `url.query` 泄露正是行为测试发现的（详见 INFRA-15 完成条目）。
+
+### CONDITIONAL PASS 备注（INFRA-15 已闭环）
+
+Codex 审核（`docs/logging_system_proposal_20260425.md:720-753`）+ 主循环独立审核（同文件 754+）发现 1 P1 + 1 P2：
+
+- **P1 [F1]**：`package-lock.json` 未注册 `packages/logger` workspace，`node_modules/@resovo/logger` symlink 缺失。本任务的所有 PASS（typecheck/lint/test:run/dev）都靠 `tsconfig.json paths` + `vitest.config.ts alias` 旁路 npm 解析，`npm ci` / fresh clone / 生产部署路径会 FAIL（`Missing: @resovo/logger@0.1.0 from lock file`）。
+- **P2 [F2]**：26 个新单测仅断言 `REDACT_PATHS` 路径表内容，未用 pino 真实写日志验证 `<redacted>` 替换语法生效。
+
+两项均由 **INFRA-15（commit 待定）** 闭环：F1 通过 `npm install` 注册 workspace + 写入 lockfile + 创建 symlink；F2 补 `pino integration redact behavior` describe 块（6 测试）覆盖 11 字段 + 容器路径 + 反向不误伤断言。INFRA-09 完成态自此一致。
+
+---
+
+## INFRA-15（LOG-V1 修补）— INFRA-09 复审修补：package-lock 同步 + pino 行为级 redact 集成测试
+
+- **日期**：2026-04-25
+- **序列**：SEQ-20260425-LOG-V1
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **触发**：Codex INFRA-09 审核 2 finding（`docs/logging_system_proposal_20260425.md:720-753`）+ 主循环独立审核（同文件 754+，确认 F1 是 P1 阻断）
+- **草案 commit**：`bf1dee3`
+- **修改文件**：
+  - `package-lock.json` — 注册 `packages/logger` workspace 节点 + `node_modules/@resovo/logger` link 节点 + root deps 显式化 `pino: ^9.0.0`（INFRA-09 漏的 lockfile 同步，F1）
+  - `tests/unit/lib/logger.test.ts` — 引入 `pino` + `Writable` stream，新增 `pino integration redact behavior` describe 块共 6 个行为测试（F2）
+  - `docs/changelog.md` — INFRA-09 段追加 CONDITIONAL PASS 备注 + F10 双层覆盖说明 + 链接 INFRA-15；追加本条目
+  - `docs/task-queue.md` — INFRA-15 状态 🔄 → ✅
+  - `docs/tasks.md` — 工作台 INFRA-15 卡片清空
+- **修复证据**：
+  - **F1（package-lock 同步）**：
+    ```
+    修复前：
+      grep -c '"packages/logger"' package-lock.json   == 0
+      ls node_modules/@resovo/ | grep logger          == (不存在)
+      npm ls @resovo/logger                           == FAIL（即使能 typecheck/test:run，因为旁路解析）
+    
+    修复后：
+      grep -c '"packages/logger"' package-lock.json   == 2
+      ls -la node_modules/@resovo/logger              == lrwxr-xr-x logger -> ../../packages/logger
+      npm ls @resovo/logger                           == └── @resovo/logger@0.1.0 -> ./packages/logger
+      npm run lint                                    == 0 turbo "Workspace not found in lockfile" 警告
+    ```
+    `npm install --package-lock-only` diff 严格限定在 logger 相关（16 行变更：root deps `+pino: ^9.0.0` / `node_modules/@resovo/logger` link 节点 / `packages/logger` workspace 节点），无任何无关 lockfile drift。
+  - **F2（pino 行为级 redact 集成测试）**：新增 6 个测试，覆盖维度：
+    1. 11 PII 字段顶层全 redact（authorization / cookie / set-cookie / password / token / refreshToken / accessToken / email / phone / ip）
+    2. `*.field` 嵌套（password / token / authorization 在 `ctx.*` 下）
+    3. `headers.set-cookie` 容器路径
+    4. `req.url.query` 容器路径
+    5. `url.query` 嵌套路径（独立测试，避免 4 与 1 容器路径耦合）
+    6. **反向断言**：`username` / `userId` / `accountType` 等非 PII 字段不被误伤（防止 redact 路径过宽）
+    - 测试计数：26 → 32（+6）
+- **验证**：
+  - `npm run typecheck` ✅（全 4 workspace 零报错）
+  - `npm run lint` ✅（无 turbo lockfile 警告；web-next 仅现存 `react-hooks/exhaustive-deps` 警告，与本卡无关）
+  - `npm run test:run` ✅ **149 文件 / 1755 测试**（INFRA-09 是 1749，本卡 +6 行为测试）
+  - `npm ls @resovo/logger` ✅ 解析无错
+- **流程纠正**：本卡延续 INFRA-14 范本——commit `bf1dee3` 已写 INFRA-15 草案块，本次开工时**先**写 `docs/tasks.md` 工作台卡片（含 5 段：问题理解 / 根因 / 方案 / 涉及文件 / 验收清单 + 偏离风险）→ **再**改 `docs/task-queue.md` 状态 ⬜ → 🔄 → 然后才动 lockfile + 单测 → 完成后清空 tasks.md + 状态 🔄 → ✅ + changelog + commit。INFRA-07/08 连续 2 次 P1-3 流程瑕疵自 INFRA-14 起根除，本卡为第 2 次范本应用。
+- **INFRA-09 完成态闭环**：F1 + F2 修复后，INFRA-09 在 npm workspace 物理层 + redact 行为验证层均一致。`@resovo/logger` 无论从 `tsconfig paths` / `vitest alias` / `npm ci` / fresh clone 任一路径都能正确解析。F10 双层覆盖（路径表层 + pino 行为层）正式关闭。
