@@ -11251,3 +11251,26 @@ F1 + F2 + F3 修订后，`logging-rules.md` § 7 编号唯一无重复、§ 7.0 
   - §8 额外发现 8 条隐性问题（H-1 至 H-8），含 `apps/web/` 完全废弃可删除、`docs/architecture.md` 与现实脱节、banner/home_modules 修改无 cache.invalidate 等
   - 报告附录 A 给出 7 个 CHG 拆分建议（CHG-A 至 CHG-G）作为后续规划参考，**本任务未在 task-queue 创建任何 CHG 卡**
   - 后续启动任意修复任务前，建议先复读本报告对应章节，避免重复调研
+
+---
+
+## [ADMIN-DESIGN-BRIEF-01] Claude Design 后台改进设计 brief（轻量版初稿）
+- **完成时间**：2026-04-26
+- **记录时间**：2026-04-26 05:55
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **修改文件**：
+  - `docs/admin_design_brief_20260426.md`（新建，268 行）— Claude Design 后台改进的轻量版 brief（7 节 + 附录）
+  - `docs/task-queue.md` — SEQ-20260426-01 第 2 卡 ✅
+  - `docs/tasks.md` — 任务卡片完成后已删除（回到空稳定态）
+  - `docs/changelog.md` — 本条目
+- **新增依赖**：无
+- **数据库变更**：无（纯文档）
+- **注意事项**：
+  - **执行模型偏离**：建议 sonnet，实际 opus（延续上一卡 ADMIN-AUDIT-01 同一会话产出，opus 主循环不切换；纯文档撰写无架构决策风险，不需另开 sonnet 会话）
+  - **轻量版定义**：≤350 行，不含 task flows 与页面 anatomy 截图；全量版（含 5 条主流程图 + 5 个高频页面 anatomy）后续单独立项 ADMIN-DESIGN-BRIEF-FULL-01
+  - §5 痛点归属分类（17 项 = 9 痛点 + 8 隐性）：design 主导 7 / design 辅助 4 / 非 design 范围 4 / 与其他合并 2
+  - §6 5 项 ROI 推荐排序：审核台重构（P0+P0+P1 三合一）→ 视频源/线路 → 首页运营位 → 共享表格 v2 → 采集合并/拆分
+  - §7 交付物期望参考 Anthropic design plugin 的 7 个 skills（design-handoff / user-research / accessibility-review / design-critique / design-system / research-synthesis / ux-copy）
+  - 与 ADMIN-AUDIT-01 互为母子文档：audit 是现状真源（不可变快照），brief 是 design 启动包（可迭代）
+  - 后续若进入设计阶段，建议从"审核台重构"起手——P0 双痛点合一，ROI 最高且范围可控
