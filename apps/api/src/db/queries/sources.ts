@@ -309,7 +309,7 @@ export async function listAdminSources(
   const orderByColumn = filters.sortField ? ORDER_BY_MAP[filters.sortField] : 's.created_at'
   const orderByDir = filters.sortDir === 'asc' ? 'ASC' : 'DESC'
   const nullsClause = filters.sortField === 'last_checked' ? ' NULLS LAST' : ''
-  const orderBy = `${orderByColumn} ${orderByDir}${nullsClause}, s.created_at DESC`
+  const orderBy = `${orderByColumn} ${orderByDir}${nullsClause}, s.created_at DESC, s.id ASC`
 
   const [rows, countResult] = await Promise.all([
     db.query(

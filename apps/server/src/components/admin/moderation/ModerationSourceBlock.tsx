@@ -26,6 +26,7 @@ interface SourceRow {
 }
 
 interface LineGroup {
+  key: string  // 复合 key（source_name::site_key），用于 React key
   name: string
   sources: SourceRow[]
 }
@@ -53,11 +54,12 @@ function groupByLine(rows: SourceRow[]): LineGroup[] {
   for (const row of rows) {
     const name = row.source_name?.trim() || '默认线路'
     const siteKey = row.site_key?.trim() || 'unknown'
-    const id = `${name}::${siteKey}`
-    const existing = map.get(id)
-    if (existing) { existing.sources.push(row) } else { map.set(id, { name, sources: [row] }) }
+    const compositeKey = `${name}::${siteKey}`
+    const existing = map.get(compositeKey)
+    if (existing) { existing.sources.push(row) } else { map.set(compositeKey, { name, sources: [row] }) }
   }
-  return Array.from(map.values()).map(({ name, sources }) => ({
+  return Array.from(map.entries()).map(([compositeKey, { name, sources }]) => ({
+    key: compositeKey,
     name,
     sources: sources.slice().sort((a, b) => (a.episode_number ?? 0) - (b.episode_number ?? 0)),
   }))
@@ -140,7 +142,7 @@ export function ModerationSourceBlock({
       ) : (
         <div className="space-y-2">
           {lines.map((group) => (
-            <div key={group.name}>
+            <div key={group.key}>
               {lines.length > 1 && (
                 <p className="mb-1 text-[10px] text-[var(--muted)]">{group.name}</p>
               )}

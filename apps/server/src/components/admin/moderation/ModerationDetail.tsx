@@ -112,7 +112,13 @@ export function ModerationDetail({ videoId, onReviewed }: ModerationDetailProps)
       if (res.data.length === 0) break
       page += 1
     } while (merged.length < total)
-    return merged
+    // 防御分页漂移（爬虫并发写入时 offset 排序不稳定可能返回重复行）
+    const seen = new Set<string>()
+    return merged.filter((r) => {
+      if (seen.has(r.id)) return false
+      seen.add(r.id)
+      return true
+    })
   }, [])
 
   const fetchDetail = useCallback(async (id: string) => {
