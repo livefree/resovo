@@ -11274,3 +11274,33 @@ F1 + F2 + F3 修订后，`logging-rules.md` § 7 编号唯一无重复、§ 7.0 
   - §7 交付物期望参考 Anthropic design plugin 的 7 个 skills（design-handoff / user-research / accessibility-review / design-critique / design-system / research-synthesis / ux-copy）
   - 与 ADMIN-AUDIT-01 互为母子文档：audit 是现状真源（不可变快照），brief 是 design 启动包（可迭代）
   - 后续若进入设计阶段，建议从"审核台重构"起手——P0 双痛点合一，ROI 最高且范围可控
+
+---
+
+## [ADMIN-DESIGN-BRIEF-02] Brief R1 审核 4 MUST + 4 SHOULD 修补
+- **完成时间**：2026-04-26
+- **记录时间**：2026-04-26 06:30
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **修改文件**：
+  - `docs/admin_design_brief_20260426.md`（268 → 415 行，+147）— 4 MUST + 4 SHOULD 修补，状态升级
+  - `docs/task-queue.md` — SEQ-20260426-01 第 3 卡 ✅，序列状态保持 ✅
+  - `docs/tasks.md` — 任务卡片完成后已删除（回到空稳定态）
+  - `docs/changelog.md` — 本条目
+- **新增依赖**：无
+- **数据库变更**：无（纯文档）
+- **注意事项**：
+  - **触发**：ADMIN-DESIGN-BRIEF-01 commit 349c1e5 后，主循环 sonnet 在 brief 文件尾追加 R1 审核（行 270-328），verdict conditional accept；用户选 B 方案（修 4 MUST + SHOULD 3/4/7）
+  - **修复 MUST-1（内链路径）**：主体（行 1-340）`grep -nE '\]\(docs/'` 修复前 5 命中 → 0 命中；策略采用相对 docs/ 的真实路径（`./xxx.md` / `../CLAUDE.md` / `./rules/xxx.md`）
+  - **修复 MUST-2（统计行）**：旧错（主导 6 / 辅助 4 / 非范围 5 / 合并 2 = 17 不自洽）→ 新（主导 7 / 辅助 4 / 非范围 4 / 合并 2 = 17 ✓），改为表格形式提升可读性
+  - **修复 MUST-3（三份方案对齐）**：新增 §0.5 含 5×3 对齐矩阵（推荐 1-5 × design_system_plan / frontend_redesign_plan / image_pipeline_plan）+ 性质澄清（非新业务需求）+ 强约束（不污染 base token / 不进 M7 主轨）+ ADR-037/039 关联
+  - **修复 MUST-4（KPI 基线）**：已可观测基线 4 项写入 §1 + §6 推荐 1/3/4/5；不可测项标 TBD 待埋点（参见 logging-rules）
+  - **采纳 SHOULD-3/4/7 + 顺手 SHOULD-8**：
+    - 5 项推荐均加「前置依赖」字段（关键发现：推荐 1 严格依赖推荐 4 的 useTableQuery，建议落地顺序调整）
+    - 推荐 4 加 ⚠️ ADR 评审强制警告（spawn Opus arch-reviewer 是 §7.2 阶段 4→5 之间硬前置）
+    - §0.6 Non-Goals 8 条边界宣言
+    - §7.3 ADR 直名 ADR-037 + ADR-039
+  - **R1.5 验收推荐采纳分布**：4 MUST 全采纳 + 8 SHOULD 采纳 4 留 4 backlog + 4 DISCUSS 全留 backlog
+  - **brief 状态升级**：`draft-v1 → approved-for-design`，可发给 Claude Design 启动协作
+  - **后续推荐**：按 R1.5 路径——先单独跑"推荐 1 审核台"完整一轮（user-research → wireframes → hi-fi → handoff → 工程实施）作为协作流程试点；推荐 4 ADR 评审同步推进（推荐 1 强依赖）；试点完成后回流补 4 SHOULD + 4 DISCUSS 入 brief v3
+  - **本卡为 R1→R2 修补卡**：与 ADMIN-DESIGN-BRIEF-01 主卡组成"主卡 + 修补卡"模式（延续 INFRA-14~18 范本第 8 次应用）
