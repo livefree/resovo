@@ -11223,3 +11223,31 @@ F1 + F2 + F3 修订后，`logging-rules.md` § 7 编号唯一无重复、§ 7.0 
 ```
 
 主线全 ✅，仅剩 INFRA-12 隐式后续。SEQ-20260425-LOG-V1 实施层闭环（含修补卡）。
+
+---
+
+## [ADMIN-AUDIT-01] 后台现状全面梳理与 9 大痛点定位
+- **完成时间**：2026-04-26
+- **记录时间**：2026-04-26 05:25
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：
+  - Explore (claude-sonnet-4-6) — 视频 + staging + 前台 404（痛点 1/5）
+  - Explore (claude-sonnet-4-6) — 视频源 + 线路 + 视频源管理（痛点 2/8）
+  - Explore (claude-sonnet-4-6) — 审核台 + 验证 + 筛选重置（痛点 3/6）
+  - Explore (claude-sonnet-4-6) — 标签映射 + 首页运营位（痛点 4/7）
+  - Explore (claude-sonnet-4-6) — 表格基建 + 旧 web 残留（痛点 9）
+- **修改文件**：
+  - `docs/admin_audit_20260426.md`（新建，340 行）— 8 章 + 附录的后台现状报告
+  - `docs/task-queue.md` — 追加 SEQ-20260426-01 序列与 ADMIN-AUDIT-01 卡，状态置 ✅
+  - `docs/tasks.md` — 任务卡片完成后已删除（回到空稳定态）
+  - `docs/changelog.md` — 本条目
+- **新增依赖**：无
+- **数据库变更**：无（纯只读调研，未触碰任何 schema / migration）
+- **注意事项**：
+  - **本报告只描述现状，不含修复方案**——按用户指示，修复方案留待后续 CHG 卡分别拆开
+  - §2 模块清单实际覆盖：videos / staging / moderation / submissions / sources / subtitles / banners / home-modules / users / image-health / crawler / system(sites/cache/monitor/config/migration) / design-tokens —— 共 14 个模块（≥10 达标）
+  - §4 接口面覆盖 16 个 admin 路由文件，统计共 122 端点（grep `^\s*(fastify|app)\.(get|post|put|patch|delete)` 全量）
+  - **§7 9 痛点 P0/P1/P2 分布**：P0 × 3（采集错误合并 / 验证-播放不同源 / 审核台筛选重置）+ P1 × 6（多线路展示、标签映射、前台 404、首页运营位、视频源管理、表格统一）+ P2 × 0
+  - §8 额外发现 8 条隐性问题（H-1 至 H-8），含 `apps/web/` 完全废弃可删除、`docs/architecture.md` 与现实脱节、banner/home_modules 修改无 cache.invalidate 等
+  - 报告附录 A 给出 7 个 CHG 拆分建议（CHG-A 至 CHG-G）作为后续规划参考，**本任务未在 task-queue 创建任何 CHG 卡**
+  - 后续启动任意修复任务前，建议先复读本报告对应章节，避免重复调研
