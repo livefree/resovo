@@ -404,3 +404,50 @@
   - children 字段当前 ADMIN_NAV 内 0 使用（system 父项已被替换为站点设置单项），但 AdminNavItem 类型保留 children 以兼容 M-SN-3 后续扩展（如 settings 容器内的子 Tab 路由树）；如 M-SN-2 Sidebar 组件下沉后确认不需要 children 字段，由 ADR 流程裁决移除
   - 5 个 hidden 路由的 PlaceholderPage title 后缀加 "· hidden in IA v1" 是显式标注，便于直链访问的运维同学识别（M-SN-3 改造 Tab 容器后该标注按需移除）
   - `/admin/system` landing 页（page.tsx 物理存在）当前仍为 PlaceholderPage；侧栏不再有"系统"父项指向它；M-SN-3 阶段改 redirect 到 `/admin/system/settings`（防止裸访问产生孤儿页）— 已记入 ADR-100 IA 修订段"影响范围 / M-SN-3 落地任务"
+
+---
+
+## [CHG-SN-1-12] plan §6 M-SN-2 范围扩列 admin-ui Shell + §8 复用矩阵 admin-layout 列拆分（v2.2 → v2.3）
+
+- **完成时间**：2026-04-28
+- **记录时间**：2026-04-28 19:55
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — Shell 公开 API 契约决策强制 Opus（CLAUDE.md 模型路由第 1/3 项）
+- **人工 sign-off**：用户 2026-04-28 接受 4 项决策（Q1-Q4 全部确认）— 触发 plan §0 SHOULD-4-a 重大修订协议
+- **触发**：M-SN-2 启动前发现 plan §6 M-SN-2 范围未列 Shell 编排层组件（10 个），与 layout.tsx 注释口径"完整 shell 下沉到 packages/admin-ui Shell"+ ADR-100 IA 修订段"剩余差异 → M-SN-2 处理"声明形成口径冲突。SEQ-20260428-02 任务 3/4
+- **修改文件**：
+  - `docs/server_next_plan_20260427.md`：
+    - 顶部元信息（version v2.2 → v2.3 / generated_at 加 v2.3）
+    - §3 决策表新增"M-SN-2 范围扩列 Shell"行
+    - §6 M-SN-2 范围（行 404-419）重写为 A/B/C/D 四块结构（Shell 10 组件 + 数据原语沿用 + 公开 API 契约前置 + 演示页）；工时 2.5w → 3w（+20%，未触发 BLOCKER 11）
+    - §6 工时表（M-SN-2 列 2.5 → 3.0；累计 5.0 → 5.5；后续累计列全部 +0.5；总周期 17.5w → 18.0w）
+    - §6 总周期声明（17.5 周 → 18.0 周）
+    - §8 复用矩阵 admin-layout 列拆为 admin-layout token + Shell 两列；19 admin/* 视图 Shell 列 ✅；login 不进 Shell；system 4 子标"（settings 容器内）"
+    - §9 ADR 索引：ADR-103 拆为 ADR-103（DataTable v2 API 契约）+ ADR-103a（Shell 公开 API 契约 — 新增）
+    - 末尾追加修订日志 v2.2 → v2.3 段（4 项决策一览 + 后续卡链 + 元信息）
+- **4 项决策**（Opus arch-reviewer 裁决 + 用户 sign-off）：
+  - **Shell-1** 10 组件公开导出（AdminShell / Sidebar / Topbar / UserMenu / NotificationDrawer / TaskDrawer / CommandPalette / ToastViewport+useToast / HealthBadge / Breadcrumbs / KeyboardShortcuts）+ Props 类型骨架固化
+  - **Shell-2** AdminNavItem 5 字段扩展（icon: ReactNode / count + AdminNavCountProvider 接口 / badge: 'info'|'warn'|'danger' / shortcut: 'mod+x' 规范化 / children）；不引入 id（href 已唯一）
+  - **Shell-3** 工时方案 B：2.5w → 3w（+20%）；保持单 milestone（不拆 M-SN-2.5）；总周期 17.5w → 18.0w
+  - **Shell-4** §8 复用矩阵 admin-layout 列拆为 admin-layout token + Shell 两列
+- **不变约束**：Provider 不下沉（packages/admin-ui 零 BrandProvider/ThemeProvider 声明，ToastViewport 用 zustand 单例非 Context）/ Edge Runtime 兼容 / 零硬编码颜色 / URL slug 不动 / M-SN-1 闭环资产零返工
+- **新增依赖**：无（zustand 已在白名单 / lucide-react 由 server-next 应用层 import；packages/admin-ui 零图标库依赖）
+- **数据库变更**：无
+- **回归**：typecheck（5/5 packages）/ lint（4/4 cached FULL TURBO）/ 1781 unit tests（152 files）全绿
+- **后续卡链**（M-SN-2 启动后）：
+  - CHG-SN-2-01：ADR-103a 起草（Shell 公开 API 契约 + AdminNavItem 5 字段扩展协议 + 4 级 z-index 规范）— Opus 评审 PASS 是 M-SN-2 第一张组件卡前置
+  - CHG-SN-2-02：admin-nav.ts 5 字段扩展 + ADMIN_NAV 改写注入 icon / shortcut
+  - CHG-SN-2-03 ~ CHG-SN-2-12：Shell 10 组件分卡实施（依赖序：ToastViewport → KeyboardShortcuts → Breadcrumbs → HealthBadge → UserMenu → Sidebar → Topbar → 双 Drawer → CommandPalette → AdminShell 装配）
+  - CHG-SN-2-13 ~ CHG-SN-2-20：数据原语层（DataTable v2 + 5 原语 + Storybook demo）
+  - CHG-SN-2-21：M-SN-2 milestone Opus 阶段审计
+- **风险与对账义务**（详见 Opus 评审第 7 段 + ADR-103a 草案）：
+  - shell.jsx 设计稿 §08 弹层规范仍在补完，ADR-103a 起草前主循环再拉一次设计稿对账（避免交互形态变更：Drawer vs Popover）
+  - "切换账号"菜单项设为可选（server-next 鉴权层不支持多账号；undefined 时菜单项隐藏）
+  - 4 级 z-index 规范（业务 Drawer < Shell 抽屉 < CmdK < Toast）由 admin-layout token 第 5 层提供 z-shell-drawer / z-shell-cmdk / z-shell-toast 三个变量（ADR-103a 内显式声明）
+  - cutover（M-SN-7）前最终对账义务（manual_qa_m_sn_7_*.md "Shell API 契约对账"章节）：ADMIN_NAV 5 字段视觉 1:1 / 键盘快捷键 Mac+非 Mac 双平台验证 / Shell 零硬编码颜色 grep / Provider 不下沉 grep
+- **注意事项**：
+  - 本卡仅修订 plan，不实施代码（Shell 组件实施在 M-SN-2 起步）
+  - ADR-103a 是 M-SN-2 第一张组件卡的硬前置门，不构成本卡留账
+  - M-SN-2 第一张组件卡前主循环须再拉一次设计稿 v2.x 最新版做对账（与 ADR-100 IA 修订段 cutover 对账义务呼应）
+  - Shell 列在矩阵中为 19 项 ✅（admin/* 全覆盖）；login 独立 layout 仅消费 ToastViewport（ToastViewport 设计为可独立引入，不依赖 AdminShell）
+  - system 4 子（cache/monitor/config/migration）通过 settings 容器间接消费 Shell（M-SN-3 容器化时落地）

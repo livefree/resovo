@@ -1,7 +1,7 @@
 # Resovo server-next 工程实施 Plan v1
 
 > status: approved-for-execution（M-SN-0 清理工作台前的最终版）
-> version: v2.2（v0 → v1 → v2 → v2.1 → v2.2 修订记录见末尾"修订日志"；v2.2 = CHG-SN-1-10 IA v0 → v1 修订）
+> version: v2.3（v0 → v1 → v2 → v2.1 → v2.2 → v2.3 修订记录见末尾"修订日志"；v2.3 = CHG-SN-1-12 M-SN-2 范围扩列 Shell + 总周期 17.5w → 18.0w）
 > owner: @engineering
 > scope: apps/server-next 工程 + packages/admin-ui 下沉 + packages/design-tokens 三层 + nginx 反代切流 + apps/server 退场
 > source_of_truth: yes（工程视角的"宪法"，所有 server-next 任务卡须引用本 plan §节号）
@@ -10,7 +10,7 @@
 >   - [admin_design_brief_20260426.md](./admin_design_brief_20260426.md)（design 视角 brief）
 >   - [server_next_kickoff_20260427.md](./server_next_kickoff_20260427.md)（R1–R5 决策实录 + 评审报告）
 >   - [docs/designs/backend_design_v2.1/](./designs/backend_design_v2.1/)（设计稿，仍在补完）
-> generated_at: 2026-04-27（v0）/ revised: 2026-04-27（v1）/ 2026-04-28（v2 / v2.1 / v2.2）
+> generated_at: 2026-04-27（v0）/ revised: 2026-04-27（v1）/ 2026-04-28（v2 / v2.1 / v2.2 / v2.3）
 > 主循环模型：claude-opus-4-7
 > 评审：v1 完成后 spawn arch-reviewer (Opus) 二轮评审 PASS 才进入 M-SN-0
 
@@ -98,6 +98,7 @@
 | **ADR-端点先后协议** | ADR-104/051 须在对应端点首个任务卡前完成 Opus PASS；端点逐个落地复用同一 ADR；不允许端点 PR 与 ADR 同卡 | R7 MUST-8 | §4.5 + §6 M-SN-5 |
 | **M-SN-6.5 软上限** | 0.5w 为基线；任一类验收发现 critical >2 项即升至 1w | R7 SHOULD-8 | §6 M-SN-6.5 |
 | **token 重构截图标准** | web-next 视觉回归对照清单：home / search / video detail / player 4 页 × 明暗双模 = 8 张 | R7 DISCUSS-7 | §10.4 |
+| **M-SN-2 范围扩列 Shell**（v2.3 新增）| 方案 B：A2 + Shell 扩列；M-SN-2 工时 2.5w → 3w（+20%，未触发 BLOCKER 11）；总周期 17.5w → 18.0w；新增 ADR-103a（Shell 公开 API 契约） | CHG-SN-1-12 Opus 评审 | §6 M-SN-2 + §8 复用矩阵 + ADR-103a |
 
 ---
 
@@ -401,22 +402,47 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
 - **关联 ADR**：ADR-100（立项）/ ADR-102（token 三层）
 - **阶段审计重点**：token 收编完整性、Provider 协议合规、零 apps/server 依赖、ESLint no-restricted-imports 规则生效
 
-### M-SN-2 · packages/admin-ui v1（地基）· **2.5 周**（A2 方案）
+### M-SN-2 · packages/admin-ui v1（地基 + Shell）· **3 周**（A2 方案 + Shell 扩列，CHG-SN-1-12 修订）
 - **范围**：
-  - DataTable v2（含 useTableQuery URL/sessionStorage 同步）
-  - Toolbar / Filter / ColumnSettings
-  - Pagination v2 客户端 + 服务端两档（**游标 + 虚拟滚动延迟到 M-SN-6 首次 >50k 数据时按需即建**）
-  - Drawer / Modal / Toast / AdminDropdown / SelectionActionBar
-  - Empty / Error / Loading 状态原语
-  - Storybook-style demo 页（在 server-next /admin/dev/components）
+  - **A. Shell 编排层（10 个组件，CHG-SN-1-12 新增）**：
+    - `<AdminShell>` 顶层容器（编排 Sidebar + Topbar + main + ToastViewport + CommandPalette + KeyboardShortcuts）
+    - `<Sidebar>`（Brand 区 / 5 组 NAV 渲染 / 折叠开关 / count 徽章 / 折叠态 tooltip / sb__foot 触发）
+    - `<Topbar>`（面包屑 + 全局搜索触发 + health + 主题切换 + 任务/通知/设置图标）
+    - `<UserMenu>`（用户菜单下拉 6 项动作）
+    - `<NotificationDrawer>` + `<TaskDrawer>`（设计稿 §08，右侧滑入双面板）
+    - `<CommandPalette>` ⌘K 命令面板（导航 + 快捷操作 + 搜索结果三组，键盘导航）
+    - `<ToastViewport>` + `useToast()`（zustand 单例，非 Context；Provider 不下沉约束兼容）
+    - `<HealthBadge>`（Topbar 健康三项指标）
+    - `<Breadcrumbs>`（接受 items 数组；AdminShell 内部 helper 可从 activeHref + nav 推断）
+    - `<KeyboardShortcuts>` + `IS_MAC` / `MOD_KEY_LABEL` / `formatShortcut()` 工具集
+  - **B. 数据原语层（沿用 v1 计划）**：
+    - DataTable v2（含 useTableQuery URL/sessionStorage 同步）
+    - Toolbar / Filter / ColumnSettings
+    - Pagination v2 客户端 + 服务端两档（**游标 + 虚拟滚动延迟到 M-SN-6 首次 >50k 数据时按需即建**）
+    - Drawer / Modal / AdminDropdown / SelectionActionBar
+    - Empty / Error / Loading 状态原语
+  - **C. 公开 API 契约前置**：
+    - `AdminNavItem` 类型扩展 5 字段（icon / count / badge / shortcut / children）+ `AdminNavCountProvider` 接口；admin-nav.ts 改写在 server-next 侧（M-SN-2 第 1 张卡）
+    - Shell 10 组件 Props 公开 API 契约固化（详见 ADR-103a 草案 / Opus 评审 PASS 后定稿）
+  - **D. 演示页**：
+    - Storybook-style demo 页（在 server-next `/admin/dev/components`），覆盖 Shell 10 组件 + 数据原语全集
 - **完成标准**：
-  - 全部原语在 demo 页可交互
+  - Shell 10 组件 + 数据原语全部在 demo 页可交互
   - DataTable v2 客户端 / 服务端分页切换正常
   - useTableQuery URL 同步可验证：刷新后筛选/排序/分页保留
-  - 单元测试覆盖率 ≥70%
-- **关联 ADR**：ADR-103 (DataTable v2 公开 API 契约) — Opus 评审 PASS 后定
+  - `<AdminShell>` 在 server-next admin layout 替换现有极简骨架（13 路由可跳转 → 完整壳层），视觉与设计稿 v2.1 shell.jsx 对齐
+  - 单元测试覆盖率 ≥70%（含 Shell 组件键盘事件 / Toast 队列 / countProvider 求值）
+  - 零硬编码颜色（CI 扫描）/ 零 fetch 副作用（packages/admin-ui 内 grep 校验）
+  - SSR 兼容（admin layout 服务端渲染不报错）
+- **关联 ADR**：ADR-103（DataTable v2 公开 API 契约）+ **ADR-103a（Shell 公开 API 契约，CHG-SN-2-01 起草）** — 两份 ADR 须先于对应组件首个任务卡完成 Opus PASS（参照 §4.5 ADR-端点先后协议精神）
 - **关联 brief**：推荐 4
-- **阶段审计重点**：API 契约稳定性、SSR 兼容、a11y 基线（键盘导航、对比度 ≥4.5:1、aria-* 完整）
+- **阶段审计重点**：
+  - Shell 公开 API 契约稳定性（Props 类型未在 milestone 中期变更）
+  - Provider 不下沉约束（packages/admin-ui 内零 BrandProvider/ThemeProvider 声明，仅消费 hooks）
+  - SSR / Edge Runtime 兼容（无 window/document 直接访问于模块顶层）
+  - a11y 基线（键盘导航全覆盖 ⌘K/⌘1-5/⌘B/⌘,/Esc/↑↓/Enter；焦点环；对比度 ≥4.5:1；aria-* 完整）
+  - 复用矩阵 §8 视图行 admin-layout 列扩展为 Shell 列后，所有视图标 ✅
+  - 设计稿 shell.jsx 视觉对齐（截图对照：折叠态 + 展开态 × 明暗 = 4 张）
 
 ### M-SN-3 · 标杆页：视频库 · **1 周**
 - **范围**：
@@ -496,19 +522,19 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
 - **关联 ADR**：ADR-101
 - **阶段审计**：**人工 final sign-off**（PR 描述签字）
 
-### 总周期：**17.5 周（~4.4 个月）**（v1 16w → v2 17.5w，R7 MUST-7 c 上调 M-SN-6）
+### 总周期：**18.0 周（~4.5 个月）**（v1 16w → v2 17.5w → v2.3 18.0w；v2.3 = CHG-SN-1-12 M-SN-2 范围扩列 Shell +0.5w）
 
 | Milestone | 估算 | 累计 |
 |---|:-:|:-:|
 | M-SN-0 | 1.0 | 1.0 |
 | M-SN-1 | 1.5 | 2.5 |
-| M-SN-2 | 2.5 | 5.0 |
-| M-SN-3 | 1.0 | 6.0 |
-| M-SN-4 | 2.5 | 8.5 |
-| M-SN-5 | 4.0 | 12.5 |
-| **M-SN-6** | **4.0** | 16.5 |
-| M-SN-6.5 | 0.5（软上限 1.0） | 17.0 |
-| M-SN-7 | 0.5 | 17.5 |
+| **M-SN-2** | **3.0**（v2.2 2.5 + Shell 扩列 +0.5）| 5.5 |
+| M-SN-3 | 1.0 | 6.5 |
+| M-SN-4 | 2.5 | 9.0 |
+| M-SN-5 | 4.0 | 13.0 |
+| M-SN-6 | 4.0 | 17.0 |
+| M-SN-6.5 | 0.5（软上限 1.0） | 17.5 |
+| M-SN-7 | 0.5 | 18.0 |
 
 ---
 
@@ -584,31 +610,38 @@ cutover 验收按上表 21 路由占位逐项 diff（路由文件物理存在）
 
 ---
 
-## 8. 复用矩阵（按视图，MUST-2 + SHOULD-5 修订）
+## 8. 复用矩阵（按视图，MUST-2 + SHOULD-5 修订；CHG-SN-1-12 v2.3 修订：admin-layout 列拆为 admin-layout token + Shell 两列）
 
 > 任务卡完成标准要求复用率 ≥80%；自建组件首次跨 2 视图时强制下沉。
+> Shell 列含义：视图是否被 `<AdminShell>` 包裹（消费 Sidebar / Topbar / Toast / CmdK / 键盘快捷键）；
+> admin-layout token 列含义：视图样式是否消费 packages/design-tokens 第 5 层（admin-layout 命名空间，ADR-102 v2.1 修订）。
 
-| 视图 | DataTable | useTableQuery | Drawer | Toast | 双信号 token | admin-layout | 自建组件（下沉里程碑）|
-|---|:-:|:-:|:-:|:-:|:-:|:-:|---|
-| dashboard | — | — | — | ✅ | — | ✅ | 卡片库 / 三态布局（M-SN-3）|
-| moderation | ✅ | ✅ | ✅ | ✅ | ✅（核心）| ✅ | 决策卡 / 三栏 / Tab seg / 双信号双柱图（M-SN-4 下沉）|
-| videos | ✅ | ✅ | ✅ | ✅ | ✅（线路区）| ✅ | 状态原子指示器（M-SN-3 下沉）|
-| sources | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 视频分组表 / 全局别名表（M-SN-5 下沉）|
-| merge | ✅ | ✅ | ✅ | ✅ | — | ✅ | 拆分确认 / 审计时间线 / 合并候选预览（M-SN-5 下沉）|
-| subtitles | ✅ | ✅ | ✅ | ✅ | — | ✅ | — |
-| home | — | — | ✅ | ✅ | — | ✅ | 首页运营位编辑器 / 拖拽排序（M-SN-5 下沉）|
-| submissions | ✅ | ✅ | ✅ | ✅ | — | ✅ | — |
-| crawler | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 站点行展开 / 采集 DAG（M-SN-6 下沉）/ MACCMS 配置面板 |
-| image-health | ✅ | — | — | ✅ | ✅ | ✅ | 矩阵图（评估降级到表格）|
-| analytics | ✅ | — | — | ✅ | — | ✅ | 图表（M-SN-6 触发 recharts/visx 选型）|
-| users | ✅ | ✅ | ✅ | ✅ | — | ✅ | — |
-| audit | ✅ | ✅ | ✅ | ✅ | — | ✅ | 审计时间线（M-SN-6 下沉，与 merge 共享）|
-| system/settings | — | — | ✅ | ✅ | — | ✅ | 表单 |
-| system/cache | ✅ | ✅ | — | ✅ | — | ✅ | — |
-| system/monitor | ✅ | — | — | ✅ | — | ✅ | 实时图表（共享 analytics）|
-| system/config | — | — | ✅ | ✅ | — | ✅ | 表单 |
-| system/migration | ✅ | — | — | ✅ | — | ✅ | — |
-| login | — | — | — | ✅ | — | — | 表单 |
+| 视图 | DataTable | useTableQuery | Drawer | Toast | 双信号 token | admin-layout token | Shell | 自建组件（下沉里程碑）|
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| dashboard | — | — | — | ✅ | — | ✅ | ✅ | 卡片库 / 三态布局（M-SN-3）|
+| moderation | ✅ | ✅ | ✅ | ✅ | ✅（核心）| ✅ | ✅ | 决策卡 / 三栏 / Tab seg / 双信号双柱图（M-SN-4 下沉）|
+| videos | ✅ | ✅ | ✅ | ✅ | ✅（线路区）| ✅ | ✅ | 状态原子指示器（M-SN-3 下沉）|
+| sources | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 视频分组表 / 全局别名表（M-SN-5 下沉）|
+| merge | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | 拆分确认 / 审计时间线 / 合并候选预览（M-SN-5 下沉）|
+| subtitles | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — |
+| home | — | — | ✅ | ✅ | — | ✅ | ✅ | 首页运营位编辑器 / 拖拽排序（M-SN-5 下沉）|
+| submissions | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — |
+| crawler | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 站点行展开 / 采集 DAG（M-SN-6 下沉）/ MACCMS 配置面板 |
+| image-health | ✅ | — | — | ✅ | ✅ | ✅ | ✅ | 矩阵图（评估降级到表格）|
+| analytics | ✅ | — | — | ✅ | — | ✅ | ✅ | 图表（M-SN-6 触发 recharts/visx 选型；IA v1 hidden，内容并入 dashboard）|
+| users | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — |
+| audit | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | 审计时间线（M-SN-6 下沉，与 merge 共享）|
+| system/settings | — | — | ✅ | ✅ | — | ✅ | ✅ | 表单（容器 Tab：cache/monitor/config/migration 4 子内嵌）|
+| system/cache | ✅ | ✅ | — | ✅ | — | ✅ | ✅（settings 容器内）| —（IA v1 hidden）|
+| system/monitor | ✅ | — | — | ✅ | — | ✅ | ✅（settings 容器内）| 实时图表（共享 analytics；IA v1 hidden）|
+| system/config | — | — | ✅ | ✅ | — | ✅ | ✅（settings 容器内）| 表单（IA v1 hidden）|
+| system/migration | ✅ | — | — | ✅ | — | ✅ | ✅（settings 容器内）| —（IA v1 hidden）|
+| login | — | — | — | ✅ | — | — | **— (不进 Shell)** | 表单 |
+
+**Shell 列说明（CHG-SN-1-12 v2.3 新增）**：
+- 全部 `/admin/*` 视图被 `<AdminShell>` 包裹（19 项 ✅）
+- `/login` 不进 Shell（独立 layout，仅消费 ToastViewport，因为登录失败需 toast；ToastViewport 可单独引入而不依赖 AdminShell）
+- system 4 子（cache/monitor/config/migration）路由保留但 IA v1 已折叠为 settings 容器 Tab；Shell 列标注"（settings 容器内）"，表示间接通过 settings 视图消费 Shell
 
 **自建组件下沉时机汇总**：
 - M-SN-3：状态原子指示器、卡片库
@@ -625,7 +658,8 @@ cutover 验收按上表 21 路由占位逐项 diff（路由文件物理存在）
 | ADR-100 | server-next 立项与 IA v0 | Q1–Q10 决策 + IA 修正 + 单语言 + 依赖白名单 | M-SN-0 第三批 |
 | ADR-101 | server-next 切流与 cutover 协议 | E 方案 4 条硬约束 + nginx 反代 + 7 天保留 + 同 commit 改名 | M-SN-0 第三批 |
 | ADR-102 | admin token 三层收编协议 | base / semantic / admin-layout 划分 + 设计稿 v2.1 收编映射 | M-SN-0 第三批 |
-| ADR-103 | DataTable v2 公开 API 契约 | useTableQuery hook + Props v2 + 客户端/服务端两档分页协议 | M-SN-2 完成时 |
+| ADR-103 | DataTable v2 公开 API 契约 | useTableQuery hook + Props v2 + 客户端/服务端两档分页协议 | M-SN-2 数据原语首张卡前（Opus PASS 前置） |
+| ADR-103a | Shell 公开 API 契约（CHG-SN-1-12 v2.3 新增） | `<AdminShell>` 等 10 组件 Props 类型骨架 + AdminNavItem 5 字段扩展（icon/count/badge/shortcut/children）+ AdminNavCountProvider 接口 + 4 级 z-index 规范（业务 Drawer < Shell 抽屉 < CmdK < Toast）+ Provider 不下沉 + Edge Runtime 兼容 + 零硬编码颜色 | M-SN-2 第一张组件卡前（CHG-SN-2-01；Opus PASS 前置） |
 | ADR-104 | home_modules admin API 协议 | 推荐 3 落地所需 6 端点 + 鉴权 + 缓存失效 | M-SN-5 内 |
 | ADR-105 | merge candidate / split / unmerge API 协议 | 推荐 5 落地所需 3-4 端点 + 审计日志 schema | M-SN-5 内 |
 | ADR-候选 | 大数据原语依赖选型（react-virtual / reactflow / recharts 二选一三组）| Q-MUST-5 候选清单决议 | M-SN-6 首次落地前 |
@@ -866,3 +900,46 @@ M-SN-0 完成 = 三批全部 PASS + 三份 ADR 进入 `docs/decisions.md` + 本 
 - 关联序列：SEQ-20260428-02
 
 — END plan v2.2（CHG-SN-1-10 落地）—
+
+### v2.2 → v2.3（2026-04-28）
+
+由 SEQ-20260428-02 任务 3（CHG-SN-1-12）触发：M-SN-2 启动前发现 plan §6 M-SN-2 范围未列 Shell 编排层组件（Sidebar/Topbar/UserMenu/双 Drawer/CmdK/Toast/HealthBadge/Breadcrumbs/KeyboardShortcuts 共 10 个），与 `apps/server-next/src/app/admin/layout.tsx` 文件头注释（"完整 shell 下沉到 packages/admin-ui Shell 组件"）以及 ADR-100 IA 修订段"剩余差异 → M-SN-2 处理"声明形成口径冲突。子代理评审 arch-reviewer (claude-opus-4-7) 独立审计后裁决 4 项决策。**人工 sign-off：用户 2026-04-28 接受方案 B**。
+
+**修订内容（CHG-SN-1-12 落盘，仅修订 plan 不实施代码）**：
+
+- **§3 决策表**：新增"M-SN-2 范围扩列 Shell"行（结论：A2 + Shell 扩列；来源 CHG-SN-1-12；ADR 落地 §6 M-SN-2 + ADR-103a）
+- **§6 M-SN-2 范围（行 404-419）**：重写为 A/B/C/D 四块结构（Shell 编排层 10 组件 + 数据原语层沿用 + 公开 API 契约前置 + 演示页）；工时 **2.5w → 3w**（+20%，未触发 BLOCKER §5.2 第 11 条 +30% 阈值）
+- **§6 工时表**：M-SN-2 列 2.5 → 3.0；累计 5.0 → 5.5；后续累计列全部 +0.5；总周期 **17.5w → 18.0w**
+- **§6 总周期声明**：17.5 周 → **18.0 周**
+- **§8 复用矩阵**：原 `admin-layout` 列拆为 `admin-layout token` + `Shell` 两列；19 admin/* 视图 Shell 列标 ✅；login 标 — ；system 4 子标"（settings 容器内）"
+- **§9 ADR 索引**：ADR-103 拆为 ADR-103（DataTable v2 API 契约）+ **ADR-103a（Shell 公开 API 契约，含 AdminNavItem 5 字段扩展协议 + AdminNavCountProvider 接口 + 4 级 z-index 规范）**；两份 ADR 须先于对应组件首个任务卡完成 Opus PASS
+
+**4 项决策一览**：
+
+| 编号 | 议题 | v2.3 决策 |
+|---|---|---|
+| Shell-1 | Shell 组件清单 | 10 个组件公开导出（AdminShell / Sidebar / Topbar / UserMenu / NotificationDrawer / TaskDrawer / CommandPalette / ToastViewport+useToast / HealthBadge / Breadcrumbs / KeyboardShortcuts）+ Props 类型骨架固化（详见 ADR-103a 草案）|
+| Shell-2 | AdminNavItem 扩展 | 5 字段（icon: ReactNode / count: number / badge: 'info'\|'warn'\|'danger' / shortcut: 'mod+x' 规范化 / children）+ AdminNavCountProvider 接口（runtime 计数运行时优先于静态 count）|
+| Shell-3 | 工时估算 | 方案 B：2.5w → 3w（+20%，未触发 BLOCKER 11）；保持单 milestone（不拆 M-SN-2.5）；总周期 17.5w → 18.0w |
+| Shell-4 | §8 复用矩阵列扩展 | admin-layout 列拆为 admin-layout token + Shell 两列；login 不进 Shell；system 4 子通过 settings 容器间接消费 |
+
+**不变约束**：Provider 不下沉（packages/admin-ui 零 BrandProvider/ThemeProvider 声明）/ Edge Runtime 兼容（无模块顶层 window/document 访问）/ 零硬编码颜色 / URL slug 不动（plan §5.2 BLOCKER 第 8 条仍生效）/ M-SN-1 闭环资产零返工 / Resovo 价值排序顺序不变。
+
+**后续卡链**：
+- CHG-SN-2-01（ADR-103a 起草）：Shell 公开 API 契约 ADR + Opus 评审，须先于 M-SN-2 第一张组件卡 PASS
+- CHG-SN-2-02（admin-nav.ts 5 字段扩展 + ADMIN_NAV 改写注入 icon / shortcut）：M-SN-2 第一张卡，server-next 侧改动
+- CHG-SN-2-03 ~ CHG-SN-2-12：Shell 10 组件分卡实施（按依赖序：ToastViewport → KeyboardShortcuts → Breadcrumbs → HealthBadge → UserMenu → Sidebar → Topbar → 双 Drawer → CommandPalette → AdminShell 装配 + admin layout 替换骨架）
+- CHG-SN-2-13 ~ CHG-SN-2-20：数据原语层（DataTable v2 + 5 原语 + Storybook demo）
+- CHG-SN-2-21（M-SN-2 milestone 验收）：Opus 阶段审计
+
+**修订日志元信息**：
+- Plan-Revision: v2.2 → v2.3
+- 主循环模型：claude-opus-4-7
+- 子代理：arch-reviewer (claude-opus-4-7) — Shell API 契约决策强制 Opus（CLAUDE.md 模型路由规则第 1/3 项）
+- 人工 sign-off：用户 2026-04-28 接受 4 项决策（Q1-Q4 全部确认）
+- 关联 ADR：ADR-103a（草案，待 M-SN-2 第一张卡前完成 Opus PASS）
+- 关联序列：SEQ-20260428-02 任务 3
+- 工时影响：+0.5w（未触发 BLOCKER §5.2 第 11 条）
+- 重大修订标记：是（影响 §6 范围 + 总周期 + §8 矩阵列结构）；按 §0 plan 版本协议须人工 sign-off — 已取得
+
+— END plan v2.3（CHG-SN-1-12 落地）—

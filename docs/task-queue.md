@@ -383,9 +383,9 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
 
 ## [SEQ-20260428-02] M-SN-2 启动前 IA / Shell 范围补全（执行序列）
 
-- **状态**：🔄 执行中（CHG-SN-1-10/-11 ✅；CHG-SN-1-12/-09/-13 待开）
+- **状态**：🔄 执行中（CHG-SN-1-10/-11/-12 ✅；CHG-SN-1-09/-13 待开）
 - **创建时间**：2026-04-28 18:00
-- **最后更新时间**：2026-04-28 19:15
+- **最后更新时间**：2026-04-28 19:55
 - **目标**：闭合 M-SN-1 验收时未发现的两层偏离 —（A）`plan §7 IA tree` 偏离设计稿 v2.1 `shell.jsx`；（B）`CHG-SN-1-05 admin-nav.ts` 又自创分组 / 误用旧词 "工作台"。同时补 plan §6 M-SN-2 范围漏列的 admin-ui Shell 组件，确保 M-SN-2 任务卡起草时不再产生 IA / 视觉壳层缺口。
 - **范围**：plan §6 / §7 / §8 修订；ADR-100 IA 修订段；`apps/server-next/src/lib/admin-nav.ts`；`apps/server-next/src/app/admin/layout.tsx`（仍极简骨架，仅做 IA 文案 / 分组占位修订，不引业务组件）；`docs/changelog.md` M-SN-1 补丁段。
 - **依赖**：M-SN-1 已闭环（B 级 PASS）；M-SN-2 第一卡未起。
@@ -451,9 +451,13 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
     - 子代理调用：无强制 Opus（数据修订 + 文案对齐，非架构决策）；如对 system 子页折叠策略有歧义则升 Opus
     - 主循环模型：sonnet
 
-12. **CHG-SN-1-12** — plan §6 M-SN-2 范围补列 admin-ui Shell 组件（防漏）+ §8 复用矩阵补 Shell 行（状态：⬜ 未开始）
+12. **CHG-SN-1-12** — plan §6 M-SN-2 范围补列 admin-ui Shell 组件（防漏）+ §8 复用矩阵补 Shell 行（状态：✅ 已完成）
     - 创建时间：2026-04-28 18:00
     - 计划开始：CHG-SN-1-10 完成后（与 CHG-SN-1-11 可并行）
+    - 实际开始：2026-04-28 19:25
+    - 完成时间：2026-04-28 19:55
+    - 实际工时：0.04 天（~30min；纯 docs 修订 + Opus 评审一轮 PASS + 人工 sign-off）
+    - review：arch-reviewer (claude-opus-4-7) — Shell API 契约 4 项决策 PASS + 用户 sign-off Q1-Q4 全确认
     - 工时估算：0.4 天
     - 关联 plan §：§6 M-SN-2（行 404-419 范围 / 完成标准 / 关联 brief）/ §8 复用矩阵 / §4.4（Provider 不下沉边界声明）
     - 关联 ADR：ADR-102（admin-layout token 三层）/ ADR-100 IA 修订段
