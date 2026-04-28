@@ -2300,20 +2300,22 @@ ADR-100 IA 修订段（`docs/decisions.md:2104-2117`）已声明"图标字段缺
 
 - **文件**：`packages/admin-ui/src/shell/admin-shell.tsx`
 - **导出**：`AdminShell`（默认导出 + 命名导出）
-- **职责**：编排 Sidebar + Topbar + main 区 + ToastViewport + CommandPalette + KeyboardShortcuts；持有 sidebar 折叠态（受控/非受控双模式）；向子组件透传 onNavigate；不持有业务数据，不直连 apiClient。
-- **不做**：不做面包屑推断（由消费方传 `crumbs` 或用 `<Breadcrumbs>` helper）；不持有路由状态（由 `onNavigate` 外置）；不持久化折叠态（由 server-next 应用层用 cookie 持久化后通过 `defaultCollapsed` 注入，避免 Edge Runtime 顶层 localStorage 副作用）；不内置主题切换逻辑（由 `<Topbar>` 的 `onThemeToggle` 外提）。
+- **职责**：编排 Sidebar + Topbar + main 区 + ToastViewport + CommandPalette + KeyboardShortcuts + NotificationDrawer + TaskDrawer；持有 sidebar 折叠态（受控/非受控双模式）+ Drawer 互斥开闭态（CmdK / NotificationDrawer / TaskDrawer 同时只开一个）；向子组件透传 onNavigate；不持有业务数据本体（数据由 props 注入），不直连 apiClient。
+- **不做**：不做面包屑推断（消费方调 `inferBreadcrumbs(activeHref, nav)` helper 后通过 `crumbs` prop 注入；undefined 时 Topbar 不渲染面包屑）；不持有路由状态（由 `onNavigate` 外置）；不持久化折叠态（由 server-next 应用层用 cookie 持久化后通过 `defaultCollapsed` 注入，避免 Edge Runtime 顶层 localStorage 副作用）；不内置主题切换逻辑（由 `<Topbar>` 的 `onThemeToggle` 外提）；不获取通知/任务数据（由 SWR / RSC 在消费方侧获取后通过 `notifications` / `tasks` prop 注入；本组件仅做编排与回调透传）。
 
 ```typescript
 export interface AdminShellProps {
-  /** 当前激活路由 href（Sidebar 高亮 + Breadcrumbs 推断 + CmdK 默认锚点）*/
+  /** 当前激活路由 href（Sidebar 高亮 + 消费方调 inferBreadcrumbs 的输入 + CmdK 默认锚点）*/
   readonly activeHref: string
   /** 5 组 NAV 数据（透传到 Sidebar / CommandPalette / KeyboardShortcuts）*/
   readonly nav: readonly AdminNavSection[]
-  /** 面包屑节点；为 undefined 时由 AdminShell 内部 helper 从 activeHref + nav 推断 */
+  /** 面包屑节点；为 undefined 时 Topbar 不渲染面包屑（消费方按需调 4.1.9 inferBreadcrumbs 后注入）*/
   readonly crumbs?: readonly BreadcrumbItem[]
+  /** Topbar 5 类按钮图标插槽（必填；零图标库依赖约束 4.4-4 的兑现入口）*/
+  readonly topbarIcons: TopbarIcons
   /** 健康指标（Topbar 渲染）；undefined 时不显示 HealthBadge */
   readonly health?: HealthSnapshot
-  /** count provider（运行时计数；优先于 AdminNavItem.count 静态值）*/
+  /** count provider（运行时计数；返回值优先于 AdminNavItem.count 静态值）*/
   readonly countProvider?: AdminNavCountProvider
   /** 当前用户（UserMenu 渲染）；未登录态由消费方拦截，本组件不做兜底 */
   readonly user: AdminShellUser
@@ -2323,6 +2325,10 @@ export interface AdminShellProps {
   readonly collapsed?: boolean
   /** 折叠态默认值（非受控模式生效）；服务端 cookie 注入用 */
   readonly defaultCollapsed?: boolean
+  /** 通知数据（由消费方 SWR / RSC 注入）；undefined 时 Topbar 通知图标禁用，NotificationDrawer 不挂载 */
+  readonly notifications?: readonly NotificationItem[]
+  /** 任务数据（同 notifications）*/
+  readonly tasks?: readonly TaskItem[]
   /** 路由跳转回调（注入 Next.js router.push 等）；不抛 Promise */
   readonly onNavigate: (href: string) => void
   /** 主题切换回调 */
@@ -2331,6 +2337,14 @@ export interface AdminShellProps {
   readonly onUserMenuAction: (action: UserMenuAction) => void
   /** 折叠态变更回调（受控/非受控双模式都触发，便于持久化）*/
   readonly onCollapsedChange?: (next: boolean) => void
+  /** 通知项点击回调（透传给 NotificationDrawer.onItemClick）；undefined 时通知项不可点击 */
+  readonly onNotificationItemClick?: (item: NotificationItem) => void
+  /** 全部已读回调（透传给 NotificationDrawer.onMarkAllRead）；undefined 时按钮隐藏 */
+  readonly onMarkAllNotificationsRead?: () => void
+  /** 任务取消回调（透传给 TaskDrawer.onCancel）；undefined 时取消按钮隐藏 */
+  readonly onCancelTask?: (taskId: string) => void
+  /** 任务重试回调（透传给 TaskDrawer.onRetry）；undefined 时重试按钮隐藏 */
+  readonly onRetryTask?: (taskId: string) => void
   /** 主区域内容 */
   readonly children: React.ReactNode
 }
@@ -2377,14 +2391,24 @@ export interface SidebarProps {
 ##### 4.1.3 `<Topbar>` — 面包屑 + 全局搜索触发 + 健康指标 + 主题切换 + 任务/通知/设置图标
 
 - **文件**：`packages/admin-ui/src/shell/topbar.tsx`
-- **导出**：`Topbar`
-- **职责**：渲染 `<Breadcrumbs>` + 全局搜索触发器（点击触发 onOpenCommandPalette）+ 可选 `<HealthBadge>` + 主题切换按钮 + 三枚图标按钮（任务 / 通知 / 设置）。
-- **不做**：不实现 CmdK 弹层（由 `<CommandPalette>`）；不持有任务/通知 Drawer 开闭状态（提交回调给 AdminShell 编排层）；不直连 apiClient 拉取 health。
+- **导出**：`Topbar` + `TopbarIcons`
+- **职责**：渲染面包屑（按 `crumbs` prop 直接渲染，本组件不调用 `inferBreadcrumbs`）+ 全局搜索触发器（点击触发 onOpenCommandPalette）+ 可选 `<HealthBadge>` + 主题切换按钮 + 三枚图标按钮（任务 / 通知 / 设置）。所有图标节点（5 类按钮 icon）通过 `icons` prop 由 server-next 应用层注入 ReactNode；本组件零图标库依赖（4.4 硬约束 4）。
+- **不做**：不实现 CmdK 弹层（由 `<CommandPalette>`）；不持有任务/通知 Drawer 开闭状态（提交回调给 AdminShell 编排层）；不直连 apiClient 拉取 health；不内置任何图标库（lucide-react / heroicons 等由 server-next 持有）；不调用 `inferBreadcrumbs`（由 AdminShell 调用方提前注入）。
 
 ```typescript
+/** Topbar 5 类按钮图标插槽（server-next 应用层注入 ReactNode，零图标库依赖）*/
+export interface TopbarIcons {
+  readonly search: React.ReactNode
+  readonly theme: React.ReactNode  // 同一插槽渲染当前态（theme='dark' 时显示 sun，'light' 时显示 moon；切换语义由消费方决定 ReactNode 内容）
+  readonly notifications: React.ReactNode
+  readonly tasks: React.ReactNode
+  readonly settings: React.ReactNode
+}
+
 export interface TopbarProps {
   readonly crumbs: readonly BreadcrumbItem[]
   readonly theme: 'dark' | 'light'
+  readonly icons: TopbarIcons
   readonly health?: HealthSnapshot
   readonly notificationDotVisible?: boolean
   readonly runningTaskCount?: number
@@ -2395,6 +2419,8 @@ export interface TopbarProps {
   readonly onOpenSettings: () => void
 }
 ```
+
+> **图标注入约定**：`icons` prop 为必填，5 个字段必须全部提供（Shell 内部不做 fallback 占位，避免视觉断层）。HealthBadge dot 颜色由 `HealthSnapshot.*.status` 驱动 semantic.status token，不属 icon 注入范畴。Sidebar 内的折叠 chevron + UserMenu 菜单项 icon 用内联 SVG（packages/admin-ui 自持的零依赖矢量），不通过 prop 注入；唯有 Topbar 5 类业务图标因与设计稿语义强相关（lucide-react 形态）必须由消费方注入。
 
 ##### 4.1.4 `<UserMenu>` — 用户菜单下拉 6 项动作
 
@@ -2633,7 +2659,7 @@ export interface AdminNavItem {
   readonly href: string
   /** 图标节点（由 server-next 应用层注入；packages/admin-ui 不依赖 lucide-react）*/
   readonly icon?: React.ReactNode
-  /** 静态计数（编译期注入）；运行时优先于 countProvider 的返回 */
+  /** 静态计数（编译期回退值）；AdminShellProps.countProvider 的 runtime 返回值优先于本字段 */
   readonly count?: number
   /** 角标语义（控制 dot/count 颜色；undefined → neutral）*/
   readonly badge?: 'info' | 'warn' | 'danger'
@@ -2814,3 +2840,18 @@ ADR-100 IA 修订段 `docs/decisions.md:2104-2117` 已声明 cutover 前 `manual
 - **关联序列**：SEQ-20260428-03（M-SN-2 第一阶段 — Shell 公开 API 落地）
 - **评审子代理**：arch-reviewer (claude-opus-4-7) — Shell API 契约决策强制 Opus（CLAUDE.md 模型路由规则第 1 / 3 项）
 - **人工 sign-off**：用户 2026-04-28 接受 plan v2.3 4 项决策（CHG-SN-1-12 决议）后，本 ADR 沿用同一 sign-off 范围，不再单独取签
+
+### 修订记录
+
+#### 2026-04-28 · fix(CHG-SN-2-01) · 文档质量补强（2 处 P1 契约缺口 + 2 处 P2 口径矛盾）
+
+用户复审 ADR-103a 文本时识别 4 处问题，CHG-SN-2-02 起步前必须闭合。本次修订仅修订 ADR 文本，不变更架构决策实质：
+
+- **P1-A 修订**（4.1.3 Topbar）：TopbarProps 新增必填 `icons: TopbarIcons`（5 类按钮图标 ReactNode 插槽 — search / theme / notifications / tasks / settings）；同步导出 `TopbarIcons` 接口 + 增段说明 Sidebar/UserMenu 内部图标用内联 SVG 自持，唯有 Topbar 5 类业务图标必须由消费方注入。闭合"零图标库依赖（4.4-4）"约束与 Topbar 三枚图标渲染需求的契约缺口。
+- **P1-B 修订**（4.1.1 AdminShell）：AdminShellProps 新增 `topbarIcons: TopbarIcons`（透传 Topbar）+ `notifications? / tasks? / onNotificationItemClick? / onMarkAllNotificationsRead? / onCancelTask? / onRetryTask?` 6 个字段；职责段补"编排 NotificationDrawer + TaskDrawer + Drawer 互斥开闭态"；不做段补"不获取通知/任务数据（消费方 SWR/RSC 注入）"。闭合 AdminShell 编排双 Drawer 时无法通过 props 注入 items 的契约缺口。
+- **P2-A 修订**（4.2 AdminNavItem.count）：注释从"静态计数（编译期注入）；运行时优先于 countProvider 的返回"改为"静态计数（编译期回退值）；AdminShellProps.countProvider 的 runtime 返回值优先于本字段"，与 5 字段语义说明表 + plan v2.3 + AdminShellProps.countProvider 注释保持一致。
+- **P2-B 修订**（4.1.1 AdminShell + 4.1.3 Topbar）：AdminShell 选定"不做面包屑推断"语义。AdminShellProps.crumbs 注释改为"undefined 时 Topbar 不渲染面包屑（消费方按需调 4.1.9 inferBreadcrumbs 后注入）"；activeHref 注释从"Breadcrumbs 推断"改为"消费方调 inferBreadcrumbs 的输入"；Topbar 4.1.3 职责段补"按 crumbs prop 直接渲染，本组件不调用 inferBreadcrumbs"+ 不做段补"不调用 inferBreadcrumbs（由 AdminShell 调用方提前注入）"。Breadcrumbs helper（4.1.9）保留为独立可调用工具函数（消费方按需调用），与 AdminShell 解耦。
+
+**修订属性**：纯文本修订；架构决策（10 组件清单 / 5 字段扩展 / 4 级 z-index / 4 项硬约束）零变更；后续卡链不动。
+
+**回归**：typecheck + lint + test 全绿（仅 docs 改动）。

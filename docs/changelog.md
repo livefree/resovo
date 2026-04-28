@@ -569,3 +569,29 @@
   - z-index 4 级具体数值（1000/1100/1200/1300）首次落定，业务 Modal/Drawer/Dropdown 在 M-SN-2 数据原语层落地时 cross-check（建议数值：业务 Drawer 1000 / Modal 1000 / AdminDropdown 980）
   - icon ReactNode 直注的副作用：admin-nav.ts 不再纯 JSON 序列化；如未来 RSC payload 显式传 NAV 数据通过 wire 给 client，需另起 ADR 设计 icon 名 → ReactNode 客户端解析层（M-SN-2 不触发）
   - countProvider 同步求值：server-next 应用层须用 RSC/SWR 提前准备 ReadonlyMap；后端实时性需走客户端轮询 / WebSocket（本 ADR 不规定刷新机制，由 M-SN-3+ 业务卡决定）
+
+---
+
+## [fix(CHG-SN-2-01)] ADR-103a 文档质量补强（2 处 P1 契约缺口 + 2 处 P2 口径矛盾）
+
+- **完成时间**：2026-04-28
+- **记录时间**：2026-04-28 23:05
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（4 处修订均为已识别问题的精确修订，无新决策含量；CHG-SN-2-01 Opus 评审已固化整体架构）
+- **触发**：用户复审 CHG-SN-2-01 ADR-103a 文本时识别 4 处契约缺口/口径矛盾，CHG-SN-2-02 起步前必须闭合
+- **修改文件**：
+  - `docs/decisions.md` ADR-103a 段落（4 处精确修订 + 末尾追加"修订记录 / 2026-04-28 fix(CHG-SN-2-01)"段说明 4 处变更）
+- **4 处修订**：
+  - **P1-A**（4.1.3 Topbar）：TopbarProps 新增必填 `icons: TopbarIcons`（5 类按钮图标 ReactNode 插槽 — search / theme / notifications / tasks / settings）；新增 `TopbarIcons` 接口导出 + 增段说明 Sidebar/UserMenu 内部图标用内联 SVG 自持，唯有 Topbar 5 类业务图标必须由消费方注入。闭合"零图标库依赖（ADR 4.4-4）"约束与 Topbar 三枚图标渲染需求的契约缺口
+  - **P1-B**（4.1.1 AdminShell）：AdminShellProps 新增 `topbarIcons: TopbarIcons`（透传 Topbar）+ `notifications? / tasks?` 数据 + 4 个 action 回调（`onNotificationItemClick? / onMarkAllNotificationsRead? / onCancelTask? / onRetryTask?`）；职责段补"编排 NotificationDrawer + TaskDrawer + Drawer 互斥开闭态"；不做段补"不获取通知/任务数据（消费方 SWR/RSC 注入）"。闭合 AdminShell 编排双 Drawer 时无法通过 props 注入 items 的契约缺口
+  - **P2-A**（4.2 AdminNavItem.count）：注释从"静态计数（编译期注入）；运行时优先于 countProvider 的返回"改为"静态计数（编译期回退值）；AdminShellProps.countProvider 的 runtime 返回值优先于本字段"，与 5 字段语义说明表 + plan v2.3 + AdminShellProps.countProvider 注释保持一致
+  - **P2-B**（4.1.1 AdminShell + 4.1.3 Topbar）：AdminShell 选定"不做面包屑推断"语义统一。AdminShellProps.crumbs 注释 + activeHref 注释修订；Topbar 4.1.3 职责段补"按 crumbs prop 直接渲染，本组件不调用 inferBreadcrumbs"+ 不做段补"不调用 inferBreadcrumbs"。Breadcrumbs helper（4.1.9）保留为独立可调用工具函数（消费方按需调用），与 AdminShell 解耦
+- **新增依赖**：无
+- **数据库变更**：无
+- **回归**：typecheck（5/5 packages）/ lint（4/4 cached FULL TURBO）/ 1781 unit tests 全绿
+- **不变约束**：架构决策（10 组件清单 / 5 字段扩展 / 4 级 z-index / 4 项硬约束）零变更；后续卡链不动；ADR-103a 仍是 M-SN-2 全部 Shell 组件卡的硬前置门
+- **后续影响**：CHG-SN-2-02 起步可放行（按修订后的 ADR-103a §4.2 / §4.3 实施）；CHG-SN-2-12 AdminShell 装配时按修订后的 AdminShellProps 注入 topbarIcons + notifications + tasks + 4 个 action 回调
+- **注意事项**：
+  - 本卡是 ADR 文本质量补强，不是架构修订；commit type 用 `fix` 而非 `chg`（与 plan §0 SHOULD-4-a 重大修订协议无关，无须人工 sign-off）
+  - HealthBadge dot 颜色由 HealthSnapshot.*.status 驱动 semantic.status token，不属 icon 注入范畴（与 TopbarIcons 解耦）
+  - Sidebar 折叠 chevron + UserMenu 菜单项 icon 用内联 SVG 在 packages/admin-ui 自持（零依赖矢量），不通过 prop 注入 — 这是有意的边界划分，仅 Topbar 5 类业务图标因与设计稿语义强相关必须由消费方注入
