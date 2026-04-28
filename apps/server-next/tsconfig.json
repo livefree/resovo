@@ -21,6 +21,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "@resovo/admin-ui": ["../../packages/admin-ui/src/index.ts"],
+      "@resovo/design-tokens": ["../../packages/design-tokens/src/index.ts"],
       "@resovo/types": ["../../packages/types/src/index.ts"]
     }
   },

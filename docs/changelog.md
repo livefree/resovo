@@ -39,6 +39,40 @@
 
 ---
 
+## [CHG-SN-1-04] server-next BrandProvider / ThemeProvider 移植 + admin-layout token 接入
+
+- **完成时间**：2026-04-28
+- **记录时间**：2026-04-28 03:45
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-6) — 首轮 PASS（6/6 子项 ✅，0 MUST 偏差）
+- **修改文件**：
+  - `apps/server-next/src/types/brand.ts`（新建）— Brand / Theme / Context 类型副本，与 apps/web-next 同构（物理副本，非跨 apps import）
+  - `apps/server-next/src/lib/brand-detection.ts`（新建）— 纯函数工具副本；DEFAULT_THEME 改为 'dark'（plan §4.3 / ADR-102 dark-first）
+  - `apps/server-next/src/contexts/BrandProvider.tsx`（新建）— Provider 副本，API 与 web-next 同构；admin 单品牌简化（setBrand 不 fetch /api/brands）+ 去 logger.client（CHG-SN-1-06 补回）+ resolveTheme SSR fallback 改 'dark'
+  - `apps/server-next/src/middleware.ts`（新建）— admin 简版 cookie → header（无 next-intl，单语言 zh-CN）
+  - `apps/server-next/src/app/globals.css`（新建）— `@import '@resovo/design-tokens/css'` + html/body 基础样式（color-scheme: dark）
+  - `apps/server-next/src/app/layout.tsx`（修改）— RootLayout 包裹 BrandProvider；从 cookies/headers 读 initialBrand/initialTheme；`<html data-brand data-theme>` 服务端预设避免 hydration mismatch；引入 globals.css
+  - `apps/server-next/package.json`（修改）— deps 追加 @resovo/design-tokens
+  - `apps/server-next/tsconfig.json`（修改）— paths 追加 @resovo/design-tokens
+  - `package-lock.json`（npm install 自然产物）
+- **新增依赖**：无（@resovo/design-tokens 是 workspace 内部包）
+- **数据库变更**：无
+- **smoke 验证**：
+  - :3003 /admin 返回 200；HTML 含 `data-brand="resovo"` + `data-theme="dark"`
+  - middleware response headers 含 `x-resovo-brand: resovo` + `x-resovo-theme: dark`
+  - Next.js 编译后 layout.css 注入 `--sidebar-w / --topbar-h / --row-h / --dual-signal-probe / --bg-canvas / --fg-default` 全部 admin-layout + dual-signal 变量
+  - dev log 0 hydration warning
+- **三处合理简化偏离**（reviewer PASS）：
+  - DEFAULT_THEME 改 'dark'（dark-first）
+  - setBrand 不 fetch 远程（admin 单品牌内部工具）
+  - 去 logger.client 依赖（CHG-SN-1-06 接入时无缝补回）
+- **回归**：typecheck（7 workspaces）/ lint (4/4) / 1768 tests 全绿
+- **注意事项**：
+  - ADR-102 跨域消费禁令编译期守卫（ESLint + ts-morph）推迟到 CHG-SN-1-07 处理
+  - light 主题不接入 M-SN-1（不阻塞 cutover；SSR fallback 已默认 dark）
+
+---
+
 ## [CHG-SN-1-03] packages/design-tokens 4+1 层结构（admin-layout 新增 + dual-signal 收编）
 
 - **完成时间**：2026-04-28

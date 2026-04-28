@@ -1,0 +1,25 @@
+/**
+ * server-next 全局样式入口
+ * - 引入 packages/design-tokens（4+1 层：primitives/semantic/admin-layout/components/brands）
+ * - dark 主题为默认（plan §4.3 / ADR-102 dark-first）
+ * - admin-layout token（--sidebar-w / --topbar-h / --row-h 等）已在 tokens.css 内 :root 注入
+ *
+ * 跨域消费禁令（ADR-102）：apps/web-next 任何路由 0 消费 dual-signal / admin-layout
+ * 守卫推迟到 CHG-SN-1-07（ESLint no-restricted-imports + ts-morph CI）
+ */
+
+@import '@resovo/design-tokens/css';
+
+html {
+  background: var(--bg-canvas);
+  color: var(--fg-default);
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family-sans, system-ui, -apple-system, sans-serif);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+  min-height: 100vh;
+}
