@@ -28,13 +28,18 @@ import ts from 'typescript'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '..')
-const SCAN_DIR = resolve(ROOT, 'apps/server-next/src')
 
 /**
- * 违规 patterns（按 plan §4.6 字面 + ADR-100 架构约束）
+ * 双扫描配置（CHG-SN-2-02 stage 2/2 扩展）：
+ *   1. apps/server-next/src 用 server-next 边界 patterns（plan §4.6 / ADR-100）
+ *   2. packages/admin-ui/src 用图标库黑名单 patterns（ADR-103a §4.4-4 / ADR-103b §4.4 / plan §4.7 v2.4）
+ */
+
+/**
+ * server-next 违规 patterns（按 plan §4.6 字面 + ADR-100 架构约束）
  * 每条 pattern 是 RegExp，匹配整个 module specifier 字符串
  */
-const FORBIDDEN_PATTERNS = [
+const SERVER_NEXT_FORBIDDEN_PATTERNS = [
   {
     pattern: /(^|\/)apps\/server(\/|$)/,
     reason: 'server-next 不得引用 apps/server（M-SN-7 cutover 后退役）',
@@ -63,11 +68,30 @@ const FORBIDDEN_PATTERNS = [
 ]
 
 /**
+ * packages/admin-ui 图标库黑名单（ADR-103a §4.4-4 packages/admin-ui 零图标库依赖
+ * + ADR-103b §4.4 仅 apps/server-next 安装 + plan §4.7 v2.4 严禁清单）
+ */
+const ADMIN_UI_FORBIDDEN_PATTERNS = [
+  {
+    pattern: /^lucide-react(\/|$)/,
+    reason: 'packages/admin-ui 严禁引入 lucide-react（ADR-103a §4.4-4 零图标库依赖；icon 由 server-next 应用层注入 React.ReactNode）',
+  },
+  {
+    pattern: /^@heroicons\/react(\/|$)/,
+    reason: 'packages/admin-ui 严禁引入 @heroicons/react（同 ADR-103a §4.4-4）',
+  },
+  {
+    pattern: /^react-icons(\/|$)/,
+    reason: 'packages/admin-ui 严禁引入 react-icons（同 ADR-103a §4.4-4）',
+  },
+]
+
+/**
  * 检查单个 module specifier 是否命中违规
  * @returns {string | null} 违规理由或 null
  */
-function checkSpecifier(specifier) {
-  for (const { pattern, reason } of FORBIDDEN_PATTERNS) {
+function checkSpecifier(specifier, patterns) {
+  for (const { pattern, reason } of patterns) {
     if (pattern.test(specifier)) return reason
   }
   return null
@@ -82,7 +106,7 @@ function checkSpecifier(specifier) {
  *   - dynamic: import('foo')
  *   - require('foo')
  */
-function scanFile(filePath, content) {
+function scanFile(filePath, content, patterns) {
   const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true)
   const violations = []
 
@@ -98,7 +122,7 @@ function scanFile(filePath, content) {
       ts.isStringLiteral(node.moduleSpecifier)
     ) {
       const spec = node.moduleSpecifier.text
-      const reason = checkSpecifier(spec)
+      const reason = checkSpecifier(spec, patterns)
       if (reason) violations.push({ file: filePath, line: getLine(node), specifier: spec, reason })
     }
     // dynamic import('...')
@@ -109,7 +133,7 @@ function scanFile(filePath, content) {
       ts.isStringLiteral(node.arguments[0])
     ) {
       const spec = node.arguments[0].text
-      const reason = checkSpecifier(spec)
+      const reason = checkSpecifier(spec, patterns)
       if (reason) violations.push({ file: filePath, line: getLine(node), specifier: spec, reason })
     }
     // require('...')
@@ -121,7 +145,7 @@ function scanFile(filePath, content) {
       ts.isStringLiteral(node.arguments[0])
     ) {
       const spec = node.arguments[0].text
-      const reason = checkSpecifier(spec)
+      const reason = checkSpecifier(spec, patterns)
       if (reason) violations.push({ file: filePath, line: getLine(node), specifier: spec, reason })
     }
     ts.forEachChild(node, visit)
@@ -145,15 +169,26 @@ function main() {
   const allViolations = []
   let scanned = 0
 
-  for (const filePath of walk(SCAN_DIR)) {
+  // 1. apps/server-next/src — 跨 apps 边界守卫
+  const serverNextDir = resolve(ROOT, 'apps/server-next/src')
+  for (const filePath of walk(serverNextDir)) {
     const content = readFileSync(filePath, 'utf-8')
-    const violations = scanFile(filePath, content)
+    const violations = scanFile(filePath, content, SERVER_NEXT_FORBIDDEN_PATTERNS)
+    allViolations.push(...violations)
+    scanned++
+  }
+
+  // 2. packages/admin-ui/src — 图标库黑名单守卫（CHG-SN-2-02 stage 2/2 / ADR-103a §4.4-4 + ADR-103b §4.4）
+  const adminUiDir = resolve(ROOT, 'packages/admin-ui/src')
+  for (const filePath of walk(adminUiDir)) {
+    const content = readFileSync(filePath, 'utf-8')
+    const violations = scanFile(filePath, content, ADMIN_UI_FORBIDDEN_PATTERNS)
     allViolations.push(...violations)
     scanned++
   }
 
   if (allViolations.length === 0) {
-    console.log(`[verify-server-next-isolation] OK: 扫描 ${scanned} 文件，0 违规`)
+    console.log(`[verify-server-next-isolation] OK: 扫描 ${scanned} 文件（apps/server-next/src + packages/admin-ui/src），0 违规`)
     process.exit(0)
   }
 

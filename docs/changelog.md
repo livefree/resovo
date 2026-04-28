@@ -685,3 +685,66 @@
   - lucide-react 实际安装在 CHG-SN-2-02 stage 2/2 卡内 `npm install --workspace=apps/server-next lucide-react@^1.12.0`
   - shell.jsx 真源 12 icon 中 `I.spider` → lucide `Bug` 是同名匹配但 Bug 是否视觉等价 spider 由 cutover 前设计师 sign-off 在 ADR-103a §4.5 对账义务内补丁，本卡不阻塞
   - plan §4.7 v2.4 是 §4.7 第一次正式扩列；后续候选（recharts/visx 等）落地时复用同样的"评审 → 修订 plan + ADR + 人工 sign-off"流程
+
+---
+
+## [CHG-SN-2-02 · stage 2/2] admin-nav.tsx 5 字段扩展 + ADMIN_NAV 注入 + shell-data.tsx + lucide-react 安装 + 守卫双扫描扩展（CHG-SN-2-02 整卡完成）
+
+- **完成时间**：2026-04-29
+- **记录时间**：2026-04-29 00:15
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（本 stage 为 ADR-103a §4.2 / §4.3 + ADR-103b §4.4-4.6 1:1 实施；CHG-SN-2-01 + CHG-SN-2-01.5 Opus 评审已固化全部决策；本 stage 纯实施 + 实测验证）
+- **触发**：CHG-SN-2-01.5 PASS（commit 3271b1c）+ plan v2.4 落盘 → CHG-SN-2-02 stage 2/2 BLOCKER 解除
+- **修改文件**：
+  - `apps/server-next/package.json`（修改）— dependencies 追加 `lucide-react@^1.12.0`（实测最新稳定 minor）
+  - `apps/server-next/next.config.ts`（修改）— `experimental.optimizePackageImports: ['lucide-react']`（ADR-103b §4.6 dev 启动加速 + 不影响生产 tree-shake）
+  - `apps/server-next/src/lib/admin-nav.ts` → `apps/server-next/src/lib/admin-nav.tsx`（git mv 重命名 + 改写）：
+    - 新增 lucide-react named import：Layers / Inbox / Film / Link2 / Merge / FileText / Image / Megaphone / Flag / Bug / Users / Settings 共 12 icon
+    - AdminNavItem 类型 5 字段扩展（icon? / count? / badge? / shortcut? / 原 children）
+    - AdminNavCountProvider 接口导出（同步求值，返 ReadonlyMap<href, count>）
+    - ADMIN_NAV 13 项链接全部注入 icon ReactNode + 6 项 shortcut（管理台站 mod+1 / 内容审核 mod+2 / 视频库 mod+3 / 字幕 mod+4 / 采集 mod+5 / 站点设置 mod+,）+ 5 项 count + badge（内容审核 484 warn / 播放线路 1939 danger / 合并 6 warn / 图片健康 597 warn / 用户投稿 12 info）按设计稿 v2.1 shell.jsx mock 数据
+    - 头注释更新真源链（追加 ADR-103a §4.2 / ADR-103b lucide-react / plan §4.7 v2.4）+ 5 字段扩展说明段
+  - `apps/server-next/src/lib/shell-data.tsx`（新建）— packages/admin-ui Shell stub providers：
+    - `adminNavCountProviderStub`：返 empty Map（M-SN-3+ 接入 RSC/SWR 真数据）
+    - `healthSnapshotStub`：3 项指标 mock（crawler 3/12 ok / invalidRate 1.3% ok / moderationPending 484 warn）
+    - `buildTopbarIconsStub(theme)`：5 类按钮 ReactNode（Search / Sun↔Moon / Bell / Zap / Settings）
+    - 类型本地声明 `HealthSnapshotStub` / `TopbarIconsStub`（packages/admin-ui Shell 导出后可改为 import；当前 M-SN-2 ToastViewport+其余 Shell 组件未落地，stub 自洽即可）
+  - `apps/server-next/src/app/admin/{analytics,system/cache,system/monitor,system/config,system/migration}/page.tsx`（修改）— 5 个 hidden 路由 head 注释 `admin-nav.ts` → `admin-nav.tsx` 文件名同步更新
+  - `scripts/verify-server-next-isolation.mjs`（修改）— 重构为双扫描：
+    - 扫描 1：`apps/server-next/src` × `SERVER_NEXT_FORBIDDEN_PATTERNS`（原 6 条跨 apps 边界规则，零行为变更）
+    - 扫描 2（新增）：`packages/admin-ui/src` × `ADMIN_UI_FORBIDDEN_PATTERNS`（3 条图标库黑名单：lucide-react / @heroicons/react / react-icons）
+    - `checkSpecifier` 增 patterns 形参；`scanFile` 同步透传；main 双循环 + 合并违规打印；OK 信息输出"扫描 X 文件（apps/server-next/src + packages/admin-ui/src）"
+  - `package-lock.json`（自然产物，npm install --workspace=apps/server-next lucide-react@^1.12.0）
+- **新增依赖**：**lucide-react@^1.12.0**（首次扩列图标库类目；按 plan §4.7 v2.4 + ADR-103b 选型）— 仅安装在 `apps/server-next/package.json`；packages/admin-ui 严禁引入（双兜底守卫已生效）
+- **数据库变更**：无
+- **实测验收**：
+  - lucide-react 安装确认：`node_modules/lucide-react/package.json` version: 1.12.0
+  - typecheck（5/5 packages 含新 lucide-react import）/ lint（4/4 cached FULL TURBO）全绿
+  - vitest 1782 tests PASS + 1 pre-existing flaky（StagingTable 'tab summary 计数'，单跑 13/13 全过；与本卡无关）
+  - verify-server-next-isolation 双扫描：38 文件（apps/server-next/src + packages/admin-ui/src）0 违规
+  - verify-token-isolation：152 文件 0 admin 专属 token 跨域消费（z-shell-* 三 token 守卫无回归）
+  - 故意违规验证：在 packages/admin-ui/src 创建 `__test_violation__.tsx` import lucide-react → 脚本捕获 + 精确报错（含路径 + 行号 + import 名 + ADR-103a 引用理由）
+  - :3003 SSR 21 路由全绿（19 admin 307→/login 鉴权 + login + 403 各 200）
+- **不变约束验证**：
+  - packages/admin-ui 零图标库依赖（双扫描守卫 + 故意违规验证 PASS）
+  - AdminNavItem.icon 类型保持 React.ReactNode（ADR-103a §4.1 不变）
+  - shell-data.tsx 零 fetch / Cookie / localStorage 副作用（Edge Runtime 兼容；同步求值）
+  - lucide-react 仅 named import（admin-nav.tsx 12 个 + shell-data.tsx 6 个 = 18 个 named import；零 `import * as` / 异步整库 import）
+  - URL slug 0 改动（21 路由 SSR 全绿）
+  - M-SN-1 闭环资产（token / Provider / apiClient / 鉴权层）零返工
+- **CHG-SN-2-02 整卡完成签字**：
+  - **stage 1/2**（commit f5d5335）：admin-layout z-shell-* token 三新增 + verify-token-isolation 守卫扩展
+  - **CHG-SN-2-01.5**（commit 3271b1c）：BLOCKER 解锁 — ADR-103b 起草 + plan §4.7 v2.4
+  - **stage 2/2**（本卡）：admin-nav.tsx 5 字段扩展 + ADMIN_NAV 注入 + shell-data.tsx + lucide-react 安装 + 双扫描守卫扩展
+  - **整卡 PASS**：M-SN-2 数据层准备完毕；CHG-SN-2-03 ToastViewport 起步可放行
+- **后续动作**：
+  - CHG-SN-2-03（M-SN-2 第一张 Shell 组件卡）：packages/admin-ui ToastViewport + useToast + zustand 单例 store；spawn Opus 评审（首张 Shell 组件 Provider-less 模式新立）
+  - CHG-SN-2-04 ~ CHG-SN-2-12：Shell 9 个组件分卡（KeyboardShortcuts → Breadcrumbs → HealthBadge → UserMenu → Sidebar → Topbar → 双 Drawer → CommandPalette → AdminShell 装配 + admin layout 替换骨架）
+- **注意事项**：
+  - admin-nav.ts → admin-nav.tsx 重命名后，layout.tsx 等消费方 import path `'@/lib/admin-nav'` 自动解析 .tsx 无需改
+  - 5 个 hidden 路由 head 注释中的 `admin-nav.tsx` 文件名引用同步更新（保持文档准确性）
+  - shell-data.tsx 的 `HealthSnapshotStub` / `TopbarIconsStub` 类型是临时本地声明；CHG-SN-2-12 AdminShell 装配卡完成后改为 `import type { HealthSnapshot, TopbarIcons } from '@resovo/admin-ui'`（与 ADR-103a §4.1 契约对齐）
+  - shell-data.tsx 的 stub 函数仅供 M-SN-2 demo 页消费；M-SN-3+ 业务卡按需替换为真数据 hook（如 `useNotifications()` / `useTasks()` / `useNavCounts()` SWR/RSC）
+  - icon 注入虽完成，但视觉层面侧栏渲染需登录 + AdminShell 装配（CHG-SN-2-12）后才能完整呈现；本卡仅完成数据准备 + 类型扩展
+  - lucide-react 1.12.0（实测最新稳定）已安装；如未来出现 1.13.0+ 升级，patch + minor 自动允许；major 升级（2.x+）须新 ADR
+  - 双扫描守卫在 preflight [5b/6] 仍然集成（npm run verify:server-next-isolation），无须独立步骤；script 名保持向后兼容

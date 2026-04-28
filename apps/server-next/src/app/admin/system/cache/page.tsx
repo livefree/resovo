@@ -1,7 +1,7 @@
 /**
  * /admin/system/cache — hidden in IA v1（ADR-100 IA 修订段 IA-4）
  *
- * 路由文件保留但侧栏不暴露（admin-nav.ts 不导出此项）。M-SN-3 阶段
+ * 路由文件保留但侧栏不暴露（admin-nav.tsx 不导出此项）。M-SN-3 阶段
  * 改造为 settings 容器的 Tab 面板（缓存管理）；URL 仍可直链访问，
  * 届时由 settings 容器把 URL 映射到对应 Tab 状态。
  *

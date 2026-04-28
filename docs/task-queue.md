@@ -542,9 +542,9 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
 
 ## [SEQ-20260428-03] M-SN-2 第一阶段 · ADR-103a 起草 + AdminNavItem 字段扩展（执行序列）
 
-- **状态**：🔄 执行中（CHG-SN-2-01 ✅；fix(CHG-SN-2-01) ✅；CHG-SN-2-02 stage 1/2 ✅；CHG-SN-2-01.5 ✅；CHG-SN-2-02 stage 2/2 BLOCKER 已解除可继续；CHG-SN-2-03 ~ -21 待开）
+- **状态**：🔄 执行中（CHG-SN-2-01 ✅；fix(CHG-SN-2-01) ✅；CHG-SN-2-02 整卡 ✅（stage 1/2 + stage 2/2）；CHG-SN-2-01.5 ✅；CHG-SN-2-03 ~ -21 待开）
 - **创建时间**：2026-04-28 22:00
-- **最后更新时间**：2026-04-28 23:55
+- **最后更新时间**：2026-04-29 00:15
 - **目标**：M-SN-2 第一阶段（Shell 公开 API 契约固化 + admin-nav.ts 字段扩展）。落地 ADR-103a 作为 Shell 10 组件 Props / AdminNavItem 5 字段扩展协议 / 4 级 z-index 规范的真源；让 server-next 侧 admin-nav.ts 注入 icon / shortcut / count / badge 字段，准备好被 packages/admin-ui Shell 组件消费。
 - **范围**：`docs/decisions.md`（ADR-103a 新建）/ `apps/server-next/src/lib/admin-nav.ts`（5 字段扩展 + ADMIN_NAV 改写）/ `apps/server-next/src/lib/shell-data.ts`（新建：count provider 接口实现）/ admin-layout token 第 5 层新增 z-shell-* 三变量
 - **依赖**：SEQ-20260428-02 全 5 张卡 PASS（commit da1dafa / 15b3bf7 / 1e6bbb1 / 8975a50 / e1df243 + 修订 e9d2f52）；不留口子检查清单 5/5 [x]
@@ -579,12 +579,16 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
    - 主循环模型：opus
    - 完成判据：ADR-103a 落盘 + Opus 评审 PASS + 序列备注更新
 
-2. **CHG-SN-2-02** — admin-nav.ts 5 字段扩展 + ADMIN_NAV 注入 icon/shortcut/count/badge + admin-layout z-shell-* token（状态：🟠 PARTIAL · stage 1/2 已完成 / stage 2/2 BLOCKER 暂停 · 解锁前置 CHG-SN-2-01.5）
+2. **CHG-SN-2-02** — admin-nav.ts/.tsx 5 字段扩展 + ADMIN_NAV 注入 icon/shortcut/count/badge + admin-layout z-shell-* token（状态：✅ 已完成 · 整卡 stage 1/2 + stage 2/2 全部 PASS）
    - 创建时间：2026-04-28 22:00
    - 计划开始：CHG-SN-2-01 PASS 后
    - 实际开始：2026-04-28 23:15
    - stage 1/2 完成时间：2026-04-28 23:35（commit f5d5335；admin-layout z-shell-* token + verify 扩展 + 单测，与 lucide-react 无关，全绿）
-   - stage 2/2 阻塞时间：2026-04-28 23:30（admin-nav.ts ADMIN_NAV icon 注入触发 BLOCKER §5.2 第 2 条；详见序列尾部 BLOCKER 通知）
+   - stage 2/2 阻塞时间：2026-04-28 23:30（admin-nav.ts ADMIN_NAV icon 注入触发 BLOCKER §5.2 第 2 条）
+   - stage 2/2 解锁时间：2026-04-28 23:55（CHG-SN-2-01.5 PASS + plan v2.4 落盘）
+   - stage 2/2 完成时间：2026-04-29 00:15（admin-nav.tsx + ADMIN_NAV 注入 + shell-data.tsx + lucide-react 安装 + 双扫描守卫扩展）
+   - 整卡完成时间：2026-04-29 00:15
+   - 实际工时：0.06 天（stage 1/2 ~30min + stage 2/2 ~45min；远低于估算 0.5 天）
    - 工时估算：0.5 天
 
 2.5. **CHG-SN-2-01.5** — server-next 图标库选型 ADR-103b + plan §4.7 v2.3 → v2.4 修订（解锁 CHG-SN-2-02 stage 2/2）（状态：✅ 已完成）

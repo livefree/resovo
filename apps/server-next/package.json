@@ -13,6 +13,7 @@
     "@resovo/admin-ui": "*",
     "@resovo/design-tokens": "*",
     "@resovo/types": "*",
+    "lucide-react": "^1.12.0",
     "next": "*",
     "react": "*",
     "react-dom": "*",
