@@ -526,3 +526,46 @@
   - 截图（2 张 PNG）作为 IA 漏检追溯的人工实测视觉证据，纳入版本控制（CLAUDE.md "审计类文档必须纳入版本控制"）
   - 本卡是 SEQ-20260428-02 序列的最后一张卡；序列闭环后 task-queue 中本序列段终结，后续工作由新序列承接
   - cutover（M-SN-7）前的最终 IA 对账义务（详见 ADR-100 IA 修订段 / plan §10.7 / handoff §9）仍待 M-SN-7 任务卡执行；本卡仅闭合 M-SN-1 阶段欠账
+
+---
+
+## [CHG-SN-2-01] ADR-103a 起草（packages/admin-ui Shell 公开 API 契约 + AdminNavItem 5 字段扩展协议 + 4 级 z-index 规范）
+
+- **完成时间**：2026-04-28
+- **记录时间**：2026-04-28 22:30
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — ADR 起草强制 Opus（CLAUDE.md 模型路由第 1/3 条）
+- **触发**：M-SN-2 第一阶段启动；CHG-SN-1-12 plan v2.3 修订 + ADR-100 IA 修订段"剩余差异 → M-SN-2 处理"承诺兑现；M-SN-2 全部 Shell 组件卡（CHG-SN-2-02 ~ CHG-SN-2-12）的硬前置门
+- **修改文件**：
+  - `docs/decisions.md`：末尾追加 ADR-103a 完整段落（约 380 行 markdown / 含 10 组件 Props 类型骨架 + AdminNavItem 5 字段扩展协议 + 4 级 z-index 规范 + 7 项替代方案否决 + 后果分析 + 影响文件清单 + 关联）
+- **ADR-103a 核心决策**：
+  - **Shell 10 组件公开导出**（packages/admin-ui/src/shell/）：AdminShell / Sidebar / Topbar / UserMenu / NotificationDrawer / TaskDrawer / CommandPalette / ToastViewport+useToast / HealthBadge / Breadcrumbs / KeyboardShortcuts；每个组件 Props 全 readonly + `on<Verb>` 事件命名 + union 收敛字面量值域
+  - **AdminNavItem 5 字段扩展**：icon: ReactNode（直注，packages/admin-ui 零图标库依赖）/ count: number 静态 + AdminNavCountProvider 运行时（runtime 优先）/ badge: 'info'|'warn'|'danger' union / shortcut: 'mod+x' 规范化字符串（formatShortcut 渲染期映射 ⌘/Ctrl）/ children 保留
+  - **4 级 z-index 规范**（具体数值首次落定，100 步进留扩展空隙）：L1 业务 Drawer 1000（components/ 层）/ L2 Shell 抽屉 1100（--z-shell-drawer）/ L3 CmdK 1200（--z-shell-cmdk）/ L4 Toast 1300（--z-shell-toast）；admin-layout token 第 5 层新增 3 子项
+  - **4 项硬约束**：Provider 不下沉（zustand 单例 store） / Edge Runtime 兼容（顶层零 window/document/fetch/Cookie/localStorage） / 零硬编码颜色 / 零图标库依赖
+  - **cutover 前最终对账义务**：与 ADR-100 IA 修订段呼应；`manual_qa_m_sn_7_*.md` Shell 章节须做 4 张截图对照（折叠/展开 × dark/light）+ AdminNavItem 5 字段覆盖率 ≥80% 验证 + 4 级 z-index 实战层级链验证
+- **7 项替代方案已否决**（含理由）：
+  - A1 引入 id 字段（双源风险）
+  - A2 icon 收 string 名（违反零图标库依赖 / Provider 不下沉）
+  - A3 ToastViewport 用 Context Provider（违反 §4.4 + AdminShell 之外独立挂载需求）
+  - A4 shortcut 收平台特定字符串（双源 + 跨平台漂移）
+  - A5 Shell 内直接 import next/navigation（耦合 + 丧失 Storybook 兼容）
+  - A6 z-index 10 步进（步进过窄无中间层扩展空隙）
+  - A7 z-index 全部进 admin-layout 命名空间（违反 4+1 层职责划分）
+- **新增依赖**：无（纯 docs 改动；zustand 已在 §4.7 白名单）
+- **数据库变更**：无
+- **回归**：typecheck（5/5 packages）/ lint（4/4 cached FULL TURBO）/ 1781 unit tests 全绿
+- **后续卡链**（SEQ-20260428-03 task 2-N，待逐张起草）：
+  - **CHG-SN-2-02**（M-SN-2 第一张组件卡，本 ADR PASS 后即可放行）：admin-nav.ts 5 字段扩展 + ADMIN_NAV 注入 icon/shortcut/badge + admin-layout z-shell-* token 三新增 + verify-token-isolation FORBIDDEN_TOKENS 扩展
+  - **CHG-SN-2-03 ~ CHG-SN-2-12**（Shell 10 组件分卡实施，依赖序：ToastViewport → KeyboardShortcuts → Breadcrumbs → HealthBadge → UserMenu → Sidebar → Topbar → 双 Drawer → CommandPalette → AdminShell 装配 + admin layout 替换骨架）
+  - **CHG-SN-2-13 ~ CHG-SN-2-20**（数据原语层：DataTable v2 + 5 原语 + Storybook demo）
+  - **CHG-SN-2-21**（M-SN-2 milestone 阶段审计）
+- **关联 ADR**：ADR-100 IA 修订段（IA-1/2/3/4 决策的剩余差异承接）/ ADR-101（cutover）/ ADR-102 v2.1（admin-layout 第 5 层 + token 字段新增按修订段硬约束 2 — milestone 报备而非 ADR）/ ADR-103（DataTable v2 公开 API 契约 — 同 milestone 平行）
+- **关联 plan**：§6 M-SN-2 v2.3 / §4.4 / §4.7 / §4.5 ADR-端点先后协议精神延伸 / §8 复用矩阵 v2.3 / §9 ADR 索引
+- **人工 sign-off**：用户 2026-04-28 接受 plan v2.3 4 项决策（CHG-SN-1-12 决议）时已涵盖本 ADR 范围，不再单独取签
+- **注意事项**：
+  - 本 ADR 是 M-SN-2 全部 Shell 组件卡的硬前置门，已 Opus 评审 PASS；CHG-SN-2-02 起步无阻塞
+  - Shell 组件 Props TypeScript 类型骨架可直接复制为 .tsx stub（M-SN-2 各分卡填充 Body）
+  - z-index 4 级具体数值（1000/1100/1200/1300）首次落定，业务 Modal/Drawer/Dropdown 在 M-SN-2 数据原语层落地时 cross-check（建议数值：业务 Drawer 1000 / Modal 1000 / AdminDropdown 980）
+  - icon ReactNode 直注的副作用：admin-nav.ts 不再纯 JSON 序列化；如未来 RSC payload 显式传 NAV 数据通过 wire 给 client，需另起 ADR 设计 icon 名 → ReactNode 客户端解析层（M-SN-2 不触发）
+  - countProvider 同步求值：server-next 应用层须用 RSC/SWR 提前准备 ReadonlyMap；后端实时性需走客户端轮询 / WebSocket（本 ADR 不规定刷新机制，由 M-SN-3+ 业务卡决定）

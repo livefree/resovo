@@ -538,3 +538,85 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
   - [x] CHG-SN-1-09 PASS：token 跨域守卫 string 级生效（M-SN-1 闭环备忘原欠账）
   - [x] CHG-SN-1-13 PASS：changelog 补丁 + handoff 追溯 + 本序列闭环
 
+---
+
+## [SEQ-20260428-03] M-SN-2 第一阶段 · ADR-103a 起草 + AdminNavItem 字段扩展（执行序列）
+
+- **状态**：🔄 执行中（CHG-SN-2-01 ✅；CHG-SN-2-02 ~ -21 待开）
+- **创建时间**：2026-04-28 22:00
+- **最后更新时间**：2026-04-28 22:30
+- **目标**：M-SN-2 第一阶段（Shell 公开 API 契约固化 + admin-nav.ts 字段扩展）。落地 ADR-103a 作为 Shell 10 组件 Props / AdminNavItem 5 字段扩展协议 / 4 级 z-index 规范的真源；让 server-next 侧 admin-nav.ts 注入 icon / shortcut / count / badge 字段，准备好被 packages/admin-ui Shell 组件消费。
+- **范围**：`docs/decisions.md`（ADR-103a 新建）/ `apps/server-next/src/lib/admin-nav.ts`（5 字段扩展 + ADMIN_NAV 改写）/ `apps/server-next/src/lib/shell-data.ts`（新建：count provider 接口实现）/ admin-layout token 第 5 层新增 z-shell-* 三变量
+- **依赖**：SEQ-20260428-02 全 5 张卡 PASS（commit da1dafa / 15b3bf7 / 1e6bbb1 / 8975a50 / e1df243 + 修订 e9d2f52）；不留口子检查清单 5/5 [x]
+- **不留口子原则**：本序列每张卡 Opus 评审 PASS 才进下一卡；任何卡评审未 PASS → BLOCKER
+
+### 任务列表（按执行顺序）
+
+1. **CHG-SN-2-01** — ADR-103a 起草（Shell 公开 API 契约 + AdminNavItem 5 字段扩展协议 + 4 级 z-index 规范）（状态：✅ 已完成）
+   - 创建时间：2026-04-28 22:00
+   - 计划开始：M-SN-2 启动 Day 1 上午
+   - 实际开始：2026-04-28 22:00
+   - 完成时间：2026-04-28 22:30
+   - 实际工时：0.04 天（~30min；Opus 评审一轮 PASS + 落盘）
+   - review：arch-reviewer (claude-opus-4-7) — ADR 起草 PASS（无开放项 / 无与 plan v2.3 冲突）
+   - 工时估算：0.5 天
+   - 关联 plan §：§6 M-SN-2 v2.3（Shell 10 组件 + 数据原语 + 公开 API 契约前置 + 演示页）/ §4.4 packages/admin-ui 边界 / §4.7 依赖白名单
+   - 关联 ADR：**ADR-103a（本卡新建）**；引用 ADR-100 IA 修订段 / ADR-102 token 4+1 层
+   - 输入文档：CHG-SN-1-12 Opus 评审输出（Shell 10 组件 Props 骨架 + AdminNavItem 5 字段扩展协议 + 7.x 风险声明）—— 已记入会话历史 + plan v2.3 修订日志
+   - 文件范围：
+     - `docs/decisions.md`（ADR-103a 新建段落，追加在 ADR-103 之后或 ADR-100 末尾的合适位置）
+     - 不动代码（实施由 CHG-SN-2-02 起步）
+   - 不在范围：admin-nav.ts 字段扩展（CHG-SN-2-02）/ admin-layout token z-shell-* 添加（CHG-SN-2-02 内含或独立卡）/ Shell 组件实施（CHG-SN-2-03+）
+   - 验收要点：
+     - ADR-103a 含完整段落：日期 / 状态 / 子代理 / 背景 / 决策（10 组件 Props 类型骨架完整 + 5 字段扩展协议 + 4 级 z-index 规范具体值）/ 替代方案（已否决：id 字段 / icon name 字符串 / Context-based Toast）/ 后果（正/负面）/ 影响文件 / 关联 ADR
+     - 10 组件 Props 类型骨架与 CHG-SN-1-12 Opus 评审输出 1:1 对齐（AdminShell / Sidebar / Topbar / UserMenu / NotificationDrawer / TaskDrawer / CommandPalette / ToastViewport+useToast / HealthBadge / Breadcrumbs / KeyboardShortcuts）
+     - AdminNavItem 5 字段扩展协议（icon: ReactNode / count + AdminNavCountProvider / badge: 'info'|'warn'|'danger' / shortcut: 'mod+x' 规范化 / children）
+     - 4 级 z-index 规范具体值（业务 Drawer / Shell 抽屉 / CmdK / Toast）+ admin-layout token z-shell-drawer / z-shell-cmdk / z-shell-toast 三变量声明
+     - Provider 不下沉约束 / Edge Runtime 兼容 / 零硬编码颜色 / 零 fetch 副作用 4 项硬约束写入 ADR
+     - cutover 前最终对账义务（与 ADR-100 IA 修订段呼应）
+     - typecheck + lint + test 全绿
+   - 子代理调用：**arch-reviewer (claude-opus-4-7) — ADR 起草强制 Opus**（CLAUDE.md 模型路由第 1/3 条）
+   - 主循环模型：opus
+   - 完成判据：ADR-103a 落盘 + Opus 评审 PASS + 序列备注更新
+
+2. **CHG-SN-2-02** — admin-nav.ts 5 字段扩展 + ADMIN_NAV 注入 icon/shortcut/count/badge + admin-layout z-shell-* token（状态：⬜ 未开始）
+   - 创建时间：2026-04-28 22:00
+   - 计划开始：CHG-SN-2-01 PASS 后
+   - 工时估算：0.5 天
+   - 关联 ADR：ADR-103a（本卡输入）/ ADR-102（admin-layout token 第 5 层扩展）
+   - 文件范围：
+     - `apps/server-next/src/lib/admin-nav.ts`（AdminNavItem 类型 5 字段扩展 + ADMIN_NAV 注入 icon ReactNode / shortcut 'mod+x' / badge 静态值）
+     - `apps/server-next/src/lib/shell-data.ts`（新建：AdminNavCountProvider 实现 stub，M-SN-3+ 接入 SWR）
+     - `packages/design-tokens/src/admin-layout/z-index.ts`（新建：z-shell-drawer / z-shell-cmdk / z-shell-toast 三 token）
+     - `packages/design-tokens/src/admin-layout/index.ts`（追加导出）
+     - `packages/design-tokens/build.ts`（buildLayoutVars 追加 z-shell-* 三组）
+     - `tests/unit/design-tokens/admin-layout.test.ts`（追加 z-shell-* 断言）
+     - `scripts/verify-token-isolation.mjs`（FORBIDDEN_TOKENS 数组追加 z-shell-drawer / z-shell-cmdk / z-shell-toast，反向守卫扩展）
+   - 不在范围：Shell 组件实施（CHG-SN-2-03+）/ count provider 真数据接入（M-SN-3+）
+   - 验收要点：
+     - admin-nav.ts ADMIN_NAV 13 项链接全部注入 icon ReactNode（lucide-react）+ shortcut（dashboard ⌘1 / moderation ⌘2 / videos ⌘3 / subtitles ⌘4 / crawler ⌘5 / system/settings ⌘,）
+     - AdminNavCountProvider 类型签名导出
+     - admin-layout 三 z-shell-* token 落盘 + 单测 PASS
+     - verify-token-isolation 三新 token 加入禁令清单 + 故意违规可被捕获
+     - typecheck + lint + test 全绿
+   - 子代理调用：arch-reviewer (claude-opus-4-7) — Token 层新增字段（CLAUDE.md 模型路由第 5 条）
+   - 主循环模型：opus
+
+3. **CHG-SN-2-03 ~ CHG-SN-2-12**（10 张卡，Shell 10 组件分卡实施）：
+   - 依赖序：ToastViewport → KeyboardShortcuts → Breadcrumbs → HealthBadge → UserMenu → Sidebar → Topbar → 双 Drawer → CommandPalette → AdminShell 装配 + admin layout 替换骨架
+   - 单卡详细范围由 CHG-SN-2-01 ADR-103a PASS 后逐张起草
+   - 每张卡 Opus 评审（首卡 ToastViewport 强制 Opus 因 zustand 单例非 Context 模式新立；后续可视情况降 Sonnet）
+
+4. **CHG-SN-2-13 ~ CHG-SN-2-20**（数据原语层）：DataTable v2 + Toolbar/Filter/ColumnSettings + Drawer/Modal/AdminDropdown/SelectionActionBar + Empty/Error/Loading + Storybook demo
+   - 详细范围 CHG-SN-2-12 AdminShell 装配后逐张起草
+
+5. **CHG-SN-2-21**（M-SN-2 milestone 验收）：Opus 阶段审计 A/B/C 评级
+
+### 备注
+
+- 序列序号 SEQ-20260428-03 紧邻 SEQ-20260428-02 之后
+- 任务 ID 启用 CHG-SN-2-NN（M-SN-2 milestone 范畴）
+- 每张卡 commit trailer 必含：`Refs:` `Plan:` `Review:` `Executed-By-Model:` `Subagents:` `Co-Authored-By:`
+- ADR-103a 是 M-SN-2 全部组件卡的硬前置门；评审 PASS 前禁止起 CHG-SN-2-02+
+- 设计稿 §08 弹层规范若 cutover 前补完出现交互形态变更（Drawer vs Popover），主循环再 spawn Opus 评审 ADR-103a 修订段
+
