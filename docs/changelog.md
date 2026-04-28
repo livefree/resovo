@@ -812,3 +812,60 @@
   - 颜色 / 间距 / 阴影 / 圆角 / 字号全部 token 化；尺寸字面量（minWidth 280px / maxWidth 420px / lineHeight 1 / fontWeight 600 / opacity 0.85）非颜色，未在 ADR 约束尺寸 token 化范围内
   - 后续 Shell 卡若需 React Context（如 CommandPalette 内部状态共享），优先选 zustand 单例（packages/admin-ui scoped）；Context 仅可在子组件树内部使用且不暴露 Provider 给 server-next
   - shell/index.ts 头注释中的 5 条章法可被 CHG-SN-2-04+ 主循环视为"开工前 self-check 清单"
+
+---
+
+## [CHG-SN-2-04] packages/admin-ui KeyboardShortcuts + platform 工具集（Shell 第 2 张组件 + 二件套范式建立）
+
+- **完成时间**：2026-04-29
+- **记录时间**：2026-04-29 01:30
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — Shell 第 2 张组件实施评审（重点：§4.4-2 trade-off + §4.1.10 字面对齐 + 范式遵守）
+- **触发**：CHG-SN-2-03 PASS（commit f23abc7 含契约修订）→ Shell 范式建立 → SEQ-20260428-03 任务 4 启动 KeyboardShortcuts 落地
+- **修改文件**：
+  - `packages/admin-ui/src/shell/platform.ts`（新建）— 平台检测 + 快捷键 spec 解析与渲染：
+    - 顶层 `IS_MAC: boolean = detectIsMac()`（typeof navigator 防御 + SSR 默认 false）
+    - 顶层 `MOD_KEY_LABEL: '⌘' | 'Ctrl' = IS_MAC ? '⌘' : 'Ctrl'`
+    - `parseShortcut(spec)`：mod / shift / alt(option 同义) 修饰键 + 命名键映射（esc/enter/space/tab/up-down-left-right → KeyboardEvent.key 标准值）+ 大小写不敏感
+    - `formatShortcut(spec)`：Mac 输出 `⌘⇧⌥V`（无分隔符）/ 非 Mac 输出 `Ctrl+Shift+Alt+V`（+ 分隔），符合 macOS HIG 视觉惯例
+    - `matchesEvent(matcher, event)`：mod 自动映射 `metaKey || ctrlKey`；shift / alt / key 比对（key 大小写不敏感）
+    - 头注释明示 §4.4-2 字面 vs 实践 trade-off + Hydration 警告 + 消费方包装范式
+  - `packages/admin-ui/src/shell/keyboard-shortcuts.tsx`（新建）— `KeyboardShortcuts` 组件：
+    - return null 无渲染；useEffect 内挂 window keydown listener（ADR §4.1.10 字面对齐 window vs document）
+    - bindings 数组按 spec 顺序遍历匹配；首个匹配优先（return 跳出）；不调用 stopImmediatePropagation/preventDefault（消费方 handler 自决）
+    - allowInInput 默认 false：input/textarea/contenteditable 聚焦时拦截；button/checkbox/radio/file/image 类型不视输入上下文
+    - bindings 变更时重新注册（依赖数组）
+    - jsdom contenteditable 兼容：优先 isContentEditable / fallback getAttribute('contenteditable')
+  - `packages/admin-ui/src/shell/index.ts`（修改）— 桶导出追加 KeyboardShortcuts / KeyboardShortcutsProps / ShortcutBinding / IS_MAC / MOD_KEY_LABEL / formatShortcut / parseShortcut / matchesEvent / ShortcutMatcher；shell/ 子目录章法补强（章法 1 文件命名二选一 / 章法 5 SSR 安全模式二选一）
+  - `tests/unit/components/admin-ui/shell/platform.test.ts`（新建）— 23 tests：parseShortcut（多 spec 形态）/ formatShortcut（Mac vs 非 Mac 输出）/ matchesEvent（KeyboardEvent 比对 + mod 映射）/ IS_MAC + MOD_KEY_LABEL 顶层值（jsdom 默认非 Mac）
+  - `tests/unit/components/admin-ui/shell/keyboard-shortcuts.test.tsx`（新建）— 13 tests：mount/unmount listener / mod 自动映射 / multi-bindings 派发 / 首个匹配优先 / allowInInput 拦截 vs 放行（input/textarea/contenteditable + button 例外）/ bindings 变更重新注册
+  - `tests/unit/components/admin-ui/shell/keyboard-shortcuts-ssr.test.tsx`（新建）— 3 tests：renderToString 零 throw（空/非空 bindings）+ 输出空字符串（无渲染组件）
+  - `docs/decisions.md` ADR-103a 末尾追加"2026-04-29 · CHG-SN-2-04"修订记录段（matchesEvent 公开 API 收编 + listener target window 字面对齐 + Shell 实施范式补充）
+- **新增依赖**：无（仅消费 react useEffect）
+- **数据库变更**：无
+- **实测验收**：
+  - typecheck / lint 全绿
+  - 1850 unit tests PASS（原 1812 + 38 新增 keyboard-shortcuts/platform tests；含 1812 - 1（toast 默认值断言修订替换） + 39（platform 23 + keyboard-shortcuts 13 + ssr 3）= 1850）
+  - admin-ui shell 67 tests 全过（toast 31 + keyboard-shortcuts/platform 39 - 重复算 = 67）
+  - verify-server-next-isolation 双扫描：44 文件（packages/admin-ui/src 增 2 文件）0 违规
+  - verify-token-isolation：152 文件 0 命中
+- **不变约束验证**：
+  - Provider 不下沉：两文件零 BrandProvider/ThemeProvider/createContext / KeyboardShortcuts return null 不污染 React tree / platform 是纯函数 + 顶层 const 零 React 状态
+  - Edge Runtime 兼容：模块顶层 typeof navigator 防御（platform.ts）；window listener 在 useEffect 内（keyboard-shortcuts.tsx）；renderToString 零 throw（SSR test PASS）
+  - 零硬编码颜色：N/A（两文件不渲染 DOM）
+  - 零图标库依赖：仅 import react useEffect + ./platform；双扫描守卫 PASS
+  - URL 不动 / M-SN-1 闭环资产零返工
+- **Opus 评审 CONDITIONAL → PASS**（1 必修 + 3 建议优化全部合并补齐 / 1 建议登记后续）：
+  - **必修 1**：listener target document → window（字面对齐 ADR-103a §4.1.10 第 2602 行）✓
+  - **建议优化 1**：注释修订（删 stopImmediatePropagation 措辞，改为"return 跳出循环"）✓
+  - **建议优化 2**：shell/index.ts 章法补强（章法 1 文件命名二选一 / 章法 5 SSR 安全模式二选一）✓
+  - **建议优化 3**：ADR-103a 修订记录追加 matchesEvent 公开 API 收编 + listener target window 字面对齐 ✓
+  - **建议优化 4**（登记后续）：补 `usePlatform()` hook 作 hydration-safe 包装；M-SN-3+ 业务卡视 Sidebar/CmdK 消费方实际调用频次决议
+- **§4.4-2 Edge Runtime trade-off 文档化**：platform.ts 头注释主动声明字面 vs 实践 trade-off + Hydration 警告 + 消费方包装范式（useEffect+useState 延迟显示）；Opus 评审认可此实施路径
+- **作为 Shell 9 后续卡的范式补充**：CHG-SN-2-03 建立 store-driven 三件套范式；本卡建立**纯工具 + 无状态副作用组件二件套**范式（utility + component），shell/index.ts 章法 1/5 已纳入；后续卡按组件形态二选一参照
+- **后续动作**：CHG-SN-2-05 Breadcrumbs（按 ADR-103a §4.1.9 实施 Breadcrumbs 组件 + inferBreadcrumbs helper；纯渲染无状态，可按本卡二件套范式实施 / 可降 Sonnet 主循环）
+- **注意事项**：
+  - listener 用 window（ADR §4.1.10 字面对齐）；jsdom 测试用 `document.body.dispatchEvent` 仍工作（事件冒泡到 window listener）
+  - jsdom 不实现 `isContentEditable`；KeyboardShortcuts 用 fallback `getAttribute('contenteditable')` 兼容；浏览器原生 `isContentEditable` 优先
+  - formatShortcut 输出依赖顶层 IS_MAC（SSR 'Ctrl+K' / 客户端 '⌘K'）；消费方需 hydration-safe 时按 platform.ts 头注释示范包装 useEffect+useState
+  - matchesEvent 公开 API：被 KeyboardShortcuts 内部消费 + e2e/单测复用 + 未来 CommandPalette 复用
