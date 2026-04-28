@@ -83,4 +83,227 @@
 
 **重要**：新任务序列号不得与历史归档（`docs/archive/task-queue/task-queue_archive_20260427.md`）中的序号重复。历史已完成序列（SEQ-20260319-* 至 SEQ-20260426-01）已归档。当前及后续任务使用新序列号。
 
+---
+
+## [SEQ-20260428-01] M-SN-1 工程骨架 + Token 三层 + Provider（执行序列）
+
+- **状态**：🟡 规划中
+- **创建时间**：2026-04-28 02:00
+- **最后更新时间**：2026-04-28 02:00
+- **目标**：搭建 apps/server-next 工程骨架 + packages/admin-ui 空骨架 + design-tokens 三层重构 + Provider 移植 + IA v0 27 路由占位 + apiClient + 鉴权 + login → dashboard 通路打通
+- **范围**：`apps/server-next/`（新建）、`packages/admin-ui/`（新建空骨架）、`packages/design-tokens/`（三层重构）、`apps/web-next/`（token 引用面回归验证）、`package.json`（workspaces 追加）、`docker-compose.dev.yml`（server-next 服务）、`docs/architecture.md`（§17 token 三层映射）、`scripts/verify-server-next-isolation.mjs`（新建）
+- **依赖**：M-SN-0 三批清理已 PASS（commit `7c278cc` / `96cde57` / `827b88c`）；ADR-100/101/102 落盘
+- **里程碑参考**：plan §6 M-SN-1（行 375–390）；工时上限 1.5 周（≈ 7.5 工作日）
+- **完成标准（plan §6 M-SN-1）**：
+  - `npm run dev` 起 :3003，登录 → dashboard 通路打通
+  - 所有 27 路由 SSR 不报错（即使内容为占位）
+  - typecheck + lint + 现有 test 全绿
+  - apps/web-next 在 token 三层下视觉无回归（截图对比）
+  - packages/admin-ui 在 root workspaces 注册成功
+  - arch-reviewer 阶段审计 PASS（A 级评级，详见 plan §5.3）
+- **建议主循环模型**：opus（涉及 Provider 协议层 + token 三层 schema + ESLint 边界设计）
+- **review 协议**：每张卡完成后 spawn arch-reviewer（claude-opus-4-6）做自动化 review；CONDITIONAL ≤ 3 轮闭环；REJECT 即 BLOCKER
+
+### 任务列表（按执行顺序）
+
+1. **CHG-SN-1-01** — packages/admin-ui 空骨架 + workspaces 追加（状态：⬜ 未开始）
+   - 创建时间：2026-04-28 02:00
+   - 计划开始：M-SN-1 Day 1 上午
+   - 工时估算：0.5 天
+   - 关联 plan §：§4.4 创建时机 / §11.2 C2 待补条目
+   - 关联 ADR：ADR-100（立项）
+   - 文件范围：`packages/admin-ui/package.json`、`packages/admin-ui/tsconfig.json`、`packages/admin-ui/src/index.ts`、根 `package.json` workspaces
+   - 不在范围：任何业务组件实现（M-SN-2 起步）
+   - 验收要点：
+     - `packages/admin-ui/package.json` 含 `name: @resovo/admin-ui`、`version: 0.0.0`、`private: true`、`main: src/index.ts`
+     - `tsconfig.json` 继承根配置，含 strict 模式
+     - `src/index.ts` 仅 `export {}` 占位
+     - 根 `package.json` workspaces 追加 `packages/admin-ui`
+     - `npm install` 成功识别新 workspace（`npm ls --depth=0` 含 `@resovo/admin-ui`）
+     - `npm run typecheck` 全绿
+   - 子代理调用：arch-reviewer (claude-opus-4-6)
+   - 主循环模型：opus（轻量但属于"共享组件 API 契约准备"）
+
+2. **CHG-SN-1-02** — apps/server-next Next.js 空壳 + workspaces 追加 + dev :3003 起服（状态：⬜ 未开始）
+   - 创建时间：2026-04-28 02:00
+   - 计划开始：M-SN-1 Day 1 下午
+   - 工时估算：1 天
+   - 关联 plan §：§4.1 仓库结构 / §4.2 端口与切流 / §11.2 C2 待补条目
+   - 关联 ADR：ADR-100（单语言 / IA v0）
+   - 文件范围：`apps/server-next/package.json`、`apps/server-next/next.config.mjs`、`apps/server-next/tsconfig.json`、`apps/server-next/src/app/layout.tsx`、`apps/server-next/src/app/page.tsx`（dashboard 占位）、`apps/server-next/.eslintrc.json`、根 `package.json` workspaces + scripts、`docker-compose.dev.yml`
+   - 不在范围：design-tokens 接入（CHG-SN-1-03）/ Provider 移植（CHG-SN-1-04）/ 27 路由（CHG-SN-1-05）/ apiClient（CHG-SN-1-06）
+   - 验收要点：
+     - 单语言 zh-CN，无 next-intl，无 `[locale]` 段
+     - Next.js App Router，端口 3003（开发期）
+     - root `package.json` scripts 追加 `dev:server-next`、scripts/dev.mjs 集成
+     - `npm run dev:server-next` 单独起服成功；`npm run dev` 同时起 api/web-next/server-next
+     - `http://localhost:3003/admin/` 返回 200（dashboard 占位 "Hello server-next"）
+     - typecheck + lint 全绿
+     - docker-compose.dev.yml 添加 server-next service（端口 3003，nginx upstream 暂不指向）
+   - 子代理调用：arch-reviewer (claude-opus-4-6)
+   - 主循环模型：opus
+
+3. **CHG-SN-1-03** — packages/design-tokens 三层重构（base/semantic/admin-layout）+ apps/web-next 引用面回归（状态：⬜ 未开始）
+   - 创建时间：2026-04-28 02:00
+   - 计划开始：M-SN-1 Day 2 上午
+   - 工时估算：2 天（**M-SN-1 最重一卡**）
+   - 关联 plan §：§4.3 token 三层 / §10.4 design-tokens 重构对 web-next 影响
+   - 关联 ADR：ADR-102（token 三层）/ ADR-022 / ADR-023 / ADR-032
+   - 文件范围：
+     - `packages/design-tokens/src/base/`（colors / typography / spacing / radius / shadow / motion 子文件）
+     - `packages/design-tokens/src/semantic/`（status / dual-signal / surface 子文件）
+     - `packages/design-tokens/src/admin-layout/`（shell / table / density 子文件）
+     - `packages/design-tokens/build.ts`（构建脚本扩展三层导出）
+     - `packages/design-tokens/src/index.ts`（导出三层入口）
+     - `apps/web-next/src/styles/globals.css` 引用调整（如有）
+     - `docs/architecture.md` §17（token 三层映射表）
+   - 不在范围：apps/server-next 接入（CHG-SN-1-04）/ admin-layout 命名空间消费（M-SN-2 起步）
+   - 验收要点（plan §4.3 + ADR-102）：
+     - 三层目录结构与 plan §4.3 一致
+     - base 含 colors / typography / spacing / radius / shadow / **motion** 六类
+     - semantic 含 status / dual-signal / **surface bg0~bg4** 三类
+     - admin-layout 含 shell / table / density 三类
+     - 设计稿 v2.1 `styles/tokens.css` 全部字段并入对应层；附 v2.1 → packages 映射表（写入 `docs/architecture.md` §17）
+     - **apps/web-next 视觉无回归**：
+       - 跑 e2e 黄金路径（首页 / 详情 / watch / search / login）截图与 main 分支对比
+       - 任意像素差 → BLOCKER 上报（不得自行调整 token 值）
+     - dual-signal token 在 web-next 0 消费（grep `--probe` `--render` 在 apps/web-next/src 0 命中）
+     - typecheck + lint + unit test 全绿
+     - design-tokens 单元测试（packages/design-tokens/**/*.test.ts）覆盖三层导出
+   - 子代理调用：arch-reviewer (Opus) — token schema 是 ADR-102 落地核心，必须 Opus 审
+   - 主循环模型：opus
+   - **风险点**：apps/web-next 现有 CSS 变量引用面广，可能因层级移动（如 surface 从 base → semantic）出现 SSR/CSR 视觉差；卡内须先 grep 列出所有引用方再迁移
+
+4. **CHG-SN-1-04** — server-next BrandProvider / ThemeProvider 移植 + admin-layout token 接入（状态：⬜ 未开始）
+   - 创建时间：2026-04-28 02:00
+   - 计划开始：M-SN-1 Day 4 上午
+   - 工时估算：1 天
+   - 关联 plan §：§4.4 范围（BrandProvider / ThemeProvider 不下沉） / §6 M-SN-1 完成标准
+   - 关联 ADR：ADR-038（双轨主题）/ ADR-039（middleware 品牌识别）/ ADR-102（admin-layout token）
+   - 文件范围：`apps/server-next/src/contexts/BrandProvider.tsx`、`apps/server-next/src/contexts/ThemeProvider.tsx`、`apps/server-next/src/middleware.ts`（品牌识别）、`apps/server-next/src/app/layout.tsx`（Provider 包裹）、`apps/server-next/src/app/globals.css`（design-tokens 三层引入）
+   - 不在范围：业务路由（CHG-SN-1-05）/ apiClient（CHG-SN-1-06）
+   - 验收要点：
+     - 直接复用 apps/web-next 的 BrandProvider/ThemeProvider 实现（参考 ADR-038/039；不重写 API）
+     - middleware 品牌识别（cookie → header）与 web-next 行为一致
+     - admin-layout token（sidebar-w / topbar-h / row-h 等）在 :root 注入并可被任意子组件消费
+     - dark 主题为默认（plan §4.3 / ADR-102 dark-first），light 主题不接入（M-SN-1 不阻塞 cutover）
+     - SSR 无 hydration mismatch
+     - typecheck + lint + 单元测试全绿
+   - 子代理调用：arch-reviewer (claude-opus-4-6)
+   - 主循环模型：opus
+
+5. **CHG-SN-1-05** — server-next 路由骨架（IA v0 27 路由占位）（状态：⬜ 未开始）
+   - 创建时间：2026-04-28 02:00
+   - 计划开始：M-SN-1 Day 5 上午
+   - 工时估算：1 天
+   - 关联 plan §：§7 IA v0
+   - 关联 ADR：ADR-100（IA v0）
+   - 文件范围：`apps/server-next/src/app/admin/**/page.tsx`（27 路由占位）、`apps/server-next/src/app/admin/layout.tsx`（侧栏 + 顶栏占位）、`apps/server-next/src/app/login/page.tsx`、`apps/server-next/src/app/403/page.tsx`、`apps/server-next/src/app/404.tsx`
+   - 不在范围：任何业务组件 / 数据请求 / 表格（M-SN-2/3+ 起步）
+   - 验收要点（plan §7）：
+     - 27 路由全部存在 SSR 入口：21 顶层 + 5 system 子 + 1 login（403/404 是 Next.js 错误页，不计入 27）
+     - 区段划分对齐 IA v0：
+       - **运营中心**：dashboard / moderation
+       - **内容资产**：videos / sources / merge / subtitles / image-health
+       - **采集中心**：crawler
+       - **系统管理**：home / submissions / analytics / users / settings / audit + 5 system 子（暂列：design-tokens / banners / api-keys / cron / cache）
+     - 每页 SSR 返回 200 + `<h1>` 路由名称（占位文案）
+     - layout.tsx 含侧栏路由树（点击可跳转）+ 顶栏（用户菜单 + 主题切换）
+     - typecheck + lint 全绿
+     - e2e smoke 测试：访问 27 路由全部 200
+   - 子代理调用：arch-reviewer (claude-opus-4-6)
+   - 主循环模型：opus（IA 骨架影响后续所有视图卡）
+
+6. **CHG-SN-1-06** — apiClient + 鉴权层 + login 实现 + dashboard 通路（状态：⬜ 未开始）
+   - 创建时间：2026-04-28 02:00
+   - 计划开始：M-SN-1 Day 6 上午
+   - 工时估算：1 天
+   - 关联 plan §：§4.5 与 apps/api 的耦合面（主通道）
+   - 关联 ADR：ADR-003（JWT 双 Token）/ ADR-010（后台入口与角色权限）
+   - 文件范围：`apps/server-next/src/lib/apiClient.ts`、`apps/server-next/src/lib/auth/`、`apps/server-next/src/app/login/page.tsx`、`apps/server-next/src/app/admin/page.tsx`（dashboard 实装）、`apps/server-next/src/middleware.ts`（追加鉴权）
+   - 不在范围：admin-only 端点 / moderator+ 端点的差异化拦截（M-SN-2+ 视图卡按需）
+   - 验收要点：
+     - apiClient 复用 packages/types 端点签名（不重新发明）
+     - apiClient 集成 refresh_token cookie 自动续签（沿用既有 /v1/auth 流程）
+     - login 页面（POST /v1/auth/login）→ 成功后跳 /admin（dashboard）
+     - 未登录访问 /admin/* 自动重定向 /login
+     - user_role=user 拒绝进入（403 页）
+     - dashboard 占位（暂不调业务端点；M-SN-2+ 视图卡按需）
+     - typecheck + lint + 单元测试全绿
+     - e2e：登录 → dashboard → 登出循环通
+   - 子代理调用：arch-reviewer (claude-opus-4-6)
+   - 主循环模型：opus
+
+7. **CHG-SN-1-07** — ESLint no-restricted-imports 边界 + ts-morph CI 兜底（状态：⬜ 未开始）
+   - 创建时间：2026-04-28 02:00
+   - 计划开始：M-SN-1 Day 7 上午
+   - 工时估算：0.5 天
+   - 关联 plan §：§4.6 编译期边界检查
+   - 关联 ADR：ADR-100（架构约束 ts-morph 脚本路径）
+   - 文件范围：`apps/server-next/.eslintrc.json`（no-restricted-imports 规则）、`scripts/verify-server-next-isolation.mjs`（新建）、`package.json` scripts（追加 `verify:server-next-isolation`）、`.github/workflows/ci.yml`（CI 步骤；如不存在则跳过 CI 装载，本卡仅落地脚本）
+   - 不在范围：apps/server 内部清理（已 cutover 后处理）
+   - 验收要点：
+     - ESLint 规则禁止 server-next 直接 import：
+       - `apps/server/**`
+       - `apps/web-next/**`（除 packages 共享层外）
+     - ts-morph 脚本扫描 server-next 全部 .ts/.tsx，输出 isolation report：
+       - 命中 = 0 → 退出码 0
+       - 命中 ≥ 1 → 退出码 1 + 列出违规文件:行号
+     - `npm run verify:server-next-isolation` 本地可跑
+     - 故意制造 1 处违规 import → 脚本应报错（自测样例可写入 commit message 验证）
+     - typecheck + lint 全绿
+   - 子代理调用：arch-reviewer (claude-opus-4-6)
+   - 主循环模型：opus
+
+8. **CHG-SN-1-08** — M-SN-1 完成标准验收 + arch-reviewer 阶段审计（状态：⬜ 未开始）
+   - 创建时间：2026-04-28 02:00
+   - 计划开始：M-SN-1 Day 7 下午
+   - 工时估算：0.5 天
+   - 关联 plan §：§5.3 milestone 阶段审计（A/B/C 评级）/ §6 M-SN-1 完成标准
+   - 关联 ADR：ADR-100/101/102（全部 M-SN-1 关联）
+   - 文件范围：`docs/changelog.md`（M-SN-1 闭环条目）、`docs/architecture.md` §17（token 三层映射表已在 CHG-SN-1-03 落入）、`docs/server_next_plan_20260427.md`（修订日志追加 v2 → v2.1，工时实际 vs 估算）
+   - 不在范围：M-SN-2 任务卡起草（独立序列）
+   - 验收要点：
+     - plan §6 M-SN-1 完成标准 5 条逐条验证：
+       - [ ] `npm run dev` 起 :3003，登录 → dashboard 通路打通
+       - [ ] 27 路由 SSR 全部 200
+       - [ ] typecheck + lint + test 全绿
+       - [ ] apps/web-next 视觉无回归（截图对比）
+       - [ ] packages/admin-ui 在 root workspaces 注册成功
+     - spawn arch-reviewer (Opus) 阶段审计：
+       - 评级判据 plan §5.3（A/B/C）
+       - 重点：token 收编完整性、Provider 协议合规、零 apps/server 依赖、ESLint 边界生效
+       - **A 级判据**：完成标准 100% + 无 BLOCKER + 无技术债务回流
+       - **B 级判据**：完成标准 ≥90% + 已记录欠账与解决路径
+       - **C 级判据**：< 90% → 触发暂停，强制人工审核清单
+     - 评级 A 或 B（带欠账） → M-SN-1 闭环；评级 C → BLOCKER
+   - 子代理调用：arch-reviewer (Opus) — milestone 阶段审计强制 Opus
+   - 主循环模型：opus
+
+### M-SN-1 整体复用矩阵（按 plan §8 节选）
+
+| 资产 | 来源 | 此 milestone 是否产生 |
+|---|---|---|
+| Next.js App Router 工程模板 | apps/web-next 参考（不复用代码） | ✅ 新建 server-next |
+| BrandProvider / ThemeProvider | apps/web-next 直接复用 | ❌ 复用，不下沉到 packages/admin-ui（plan §4.4） |
+| design-tokens 三层 | packages/design-tokens（重构）| ✅ 重构 |
+| apiClient | packages/types 端点签名（复用）| ✅ 新建 server-next 实例 |
+| ESLint 边界规则 | tools/eslint-plugin-resovo（复用 + 扩展）| ✅ 扩展 |
+| middleware 品牌识别 | apps/web-next/middleware.ts（复用思路 + 重写）| ✅ 新建 server-next |
+
+### 风险与回退
+
+- **CHG-SN-1-03 风险**：apps/web-next token 引用面回归是 M-SN-1 最大风险点（plan §10.4）。一旦截图对比失败：
+  - **小回滚**：仅回退 design-tokens 该卡，apps/server-next 后续卡阻塞
+  - **大回滚**：保留 packages/admin-ui 空骨架，删除 server-next 工程，等 token 重构方案 v2 再起步
+- **CHG-SN-1-05 风险**：27 路由 SSR 全绿对 IA v0 假设的稳健性是验证点；如 IA 命名 / 区段不合理，由本卡输出"IA 修订需求"BLOCKER 给 M-SN-2 开工前裁定
+- **整体兜底**：M-SN-1 完成标准未达 → arch-reviewer 评 C → BLOCKER 暂停；不进 M-SN-2
+
+### 备注
+
+- 本序列序号 SEQ-20260428-01 不与历史归档（SEQ-20260319-* 至 SEQ-20260426-01）重复
+- 本序列任务 ID 全部采用 `CHG-SN-1-NN` 格式（plan §5.4 + git-rules.md trailer 扩展规约）
+- 每张卡 commit trailer 必含：`Refs:` `Plan:` `Review:` `Executed-By-Model:` `Subagents:` `Co-Authored-By:`
+- 每张卡完成 = 主循环修订 + arch-reviewer PASS + commit + 本序列任务状态更新 + changelog 追加
+- 序列完成 = CHG-SN-1-08 阶段审计 PASS + plan 修订日志追加（v2 → v2.1，实际工时 vs 估算）
 
