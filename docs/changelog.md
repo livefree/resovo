@@ -39,6 +39,40 @@
 
 ---
 
+## [CHG-SN-1-06] server-next apiClient + 鉴权层 + login 实装
+
+- **完成时间**：2026-04-28
+- **记录时间**：2026-04-28 04:10
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-6) — 首轮 CONDITIONAL（1 MUST + 1 SHOULD）→ 二轮 PASS
+- **修改文件**：
+  - `apps/server-next/src/lib/api-client.ts`（新建）— apiClient 物理副本（与 web-next 同构简化版，credentials: 'include'）+ ApiClientError 类
+  - `apps/server-next/src/lib/auth/index.ts`（新建）— Cookie 名常量 + UserRole（**直接 import @resovo/types**，避免幽灵角色）+ parseUserRole + canAccessAdmin（null 守卫包装）
+  - `apps/server-next/src/middleware.ts`（修改）— 追加 /admin/** 鉴权拦截（refresh_token + user_role 双因素）；未登录 redirect /login?from=（含 query string）；user role redirect /403
+  - `apps/server-next/src/app/login/LoginForm.tsx`（新建）— 客户端表单（'use client'）；POST /v1/auth/login → router.push(from || /admin)
+  - `apps/server-next/src/app/login/page.tsx`（修改）— Suspense 包裹 LoginForm
+- **新增依赖**：无（@resovo/types 是 workspace 内部包）
+- **数据库变更**：无
+- **smoke 验证**：
+  - 未登录 /admin → 307 → /login?from=%2Fadmin
+  - /admin/videos?page=2&q=test 未登录 → 307 → /login?from=%2Fadmin%2Fvideos%3Fpage%3D2%26q%3Dtest（query 保留）
+  - user_role=user → 307 → /403
+  - user_role=editor → 307 → /login（不合法 role 视为未登录，fail-safe）
+  - user_role=moderator/admin → 200
+  - /403 + /login 无 auth 200
+- **首轮 reviewer MUST 修复**：UserRole 单一真源 → @resovo/types（删本地定义，去 'editor' 幽灵角色）
+- **首轮 reviewer SHOULD 修复**：redirect from 参数保留 query string（middleware loginUrl.search 清空后再 set from = pathname + search）
+- **简化偏离**（reviewer 判定合理）：
+  - 不引入 zustand authStore（M-SN-3 业务卡再决定）
+  - admin-only 子路径细分（/admin/users / /admin/crawler / /admin/analytics 仅 admin）推后 M-SN-2+
+  - 真 e2e 登录测试推后（需 apps/api 在跑）；本卡仅 path smoke
+- **回归**：typecheck (7 ws) / lint (4/4) / 1768 tests 全绿；server-next 0 import apps/web-next
+- **注意事项**：
+  - access token 不在客户端持久化（cookie 自动管理）；M-SN-3 业务卡如需主动持有再引入 zustand
+  - 'editor' role fail-safe → /login（设计选择：未知 role = 未登录，非"已登录无权"）
+
+---
+
 ## [CHG-SN-1-05] server-next 路由骨架（IA v0 占位 / 19 路由按 plan §7 文字清单）
 
 - **完成时间**：2026-04-28
