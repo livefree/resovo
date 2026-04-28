@@ -2889,6 +2889,33 @@ CHG-SN-2-04 完成 §4.1.10 platform.ts（IS_MAC / MOD_KEY_LABEL / formatShortcu
 **后续登记**：
 - usePlatform() hook（建议优化 4）：返回 `{ isMac, modKeyLabel }` 客户端 useEffect 求值，作为 hydration-safe 包装的官方实现；视 CHG-SN-2-08+ Sidebar / CmdK 消费方实际调用频次决定是否落地（M-SN-3+ 业务卡决议）
 
+#### 2026-04-29 · fix(CHG-SN-2-04) · platform.ts hydration-safe 修复（提前落地原"建议优化 4"）
+
+Codex stop-time review 识别 platform.ts 顶层 `detectIsMac()` 直接读 navigator 导致 SSR ('Ctrl+K') vs 客户端水合 ('⌘K') React hydration mismatch；把 hydration-safe 责任推给消费方包装是糟糕的 API 设计。本 fix 在 packages/admin-ui 内解决，将原"后续登记"建议优化 4 提前落地。
+
+**修订内容**（commit 见 git log `fix(CHG-SN-2-04)`）：
+
+- `packages/admin-ui/src/shell/platform.ts`：
+  - 顶层 `IS_MAC: boolean = false`（永远 SSR 默认；移除 `detectIsMac()` 顶层调用）
+  - 顶层 `MOD_KEY_LABEL: '⌘' | 'Ctrl' = 'Ctrl'`（永远 SSR 默认）
+  - `formatShortcut(spec, isMac?)` 增加可选第二参数（默认 IS_MAC=false → SSR 安全；显式传 true 输出 Mac 风格）
+  - 新增 `usePlatform(): { isMac, modKeyLabel }` hook：useState + useEffect navigator 检测 → 客户端 mount 后 setState 触发普通 rerender（非 hydration mismatch）
+  - 新增 `useFormatShortcut(spec): string` hook：基于 usePlatform 自动 hydration-safe 渲染快捷键文案
+  - `detectIsMacFromNavigator()` 私有函数仅在 useEffect / 事件 handler 内调用（§4.4-2 字面对齐）
+- `packages/admin-ui/src/shell/index.ts`：桶导出追加 `usePlatform / useFormatShortcut / UsePlatformReturn`
+- 单测：
+  - `platform.test.ts`：原 IS_MAC/MOD_KEY_LABEL 测试改为"恒为顶层 SSR 默认"断言；formatShortcut 测试拆为"默认/显式 false"（Ctrl 风格）+"显式 true"（Mac 风格）两组
+  - `platform-hooks.test.tsx`（新建）：5 tests — Mac 平台模拟 / 非 Mac 平台模拟 / Mac useFormatShortcut / SSR renderToString 永远输出 'Ctrl+K' / SSR 不抛错
+
+**消费方迁移**：
+- 旧用法 `formatShortcut('mod+k')` 仍可工作（输出永远 'Ctrl+K'，SSR 安全；适用于 Server Component 不在乎平台的场景）
+- 新推荐用法 `useFormatShortcut('mod+k')` 在 Client Component 内自动 hydration-safe（首渲染 'Ctrl+K' / 客户端 mount 后 Mac 上变 '⌘K'，普通 rerender 非 hydration mismatch）
+- 顶层 `IS_MAC` / `MOD_KEY_LABEL` 永远是 SSR 默认，**消费方不应直接读取**做平台分支（应使用 `usePlatform()` hook）
+
+**§4.4-2 字面 vs 实践 trade-off 终结**：本 fix 后 platform.ts **完全字面对齐 §4.4-2**（模块顶层零 navigator 访问）；§4.1.10 第 2603 行"useEffect 内 navigator 检测"通过 `usePlatform` hook 实现；§4.1.10 "Mac 输出 ⌘K / 非 Mac 输出 Ctrl+K" 行为通过 `formatShortcut(spec, isMac)` + hook 包装实现（消费方在 Client Component 内 useFormatShortcut 即得 Mac 风格）。
+
+**回归**：typecheck + lint + 1861 unit tests + 双扫描守卫 + token 跨域守卫全绿。
+
 ---
 
 ## ADR-103b: server-next 图标库选型 — lucide-react

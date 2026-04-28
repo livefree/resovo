@@ -3,47 +3,34 @@
  *
  * 真源（按优先级）：
  *   - ADR-103a §4.1.10 KeyboardShortcuts + 平台检测
- *   - ADR-103a §4.4-2 Edge Runtime 兼容（typeof navigator 防御 + SSR 默认）
- *   - 设计稿 v2.1 `app/shell.jsx:5-7` IS_MAC / MOD / kbd 工具实践
+ *   - ADR-103a §4.4-2 Edge Runtime 兼容（模块顶层零 navigator 访问 — hydration-safe）
  *
- * ── §4.4-2 字面 vs 实践 trade-off ──
- * ADR §4.4-2 要求"模块顶层零 navigator 访问"；ADR §4.1.10 又要求 IS_MAC / MOD_KEY_LABEL
- * 是 `export const`（不可变）。两者直接冲突：常量值需 SSR 默认 false / 'Ctrl'，但客户端
- * 又要求"运行时第一次 mount 时纠正"。
+ * ── Hydration-safe 设计（CHG-SN-2-04 fix · 2026-04-29）──
  *
- * 本文件解决方式：
- *   - 顶层用 `typeof navigator !== 'undefined'` 防御 + 真实平台检测
- *   - SSR (Node.js) 下 typeof 检测为 'undefined' → IS_MAC=false / MOD_KEY_LABEL='Ctrl'
- *   - 客户端 (浏览器) 下 navigator 真实存在 → IS_MAC=真实值 / MOD_KEY_LABEL=真实值
- *   - 模块顶层求值是 ESM ES Module 语义（与设计稿 v2.1 shell.jsx 行 5-6 实践一致）
+ * 关键原则：模块顶层永远是 SSR 默认值（IS_MAC=false / MOD_KEY_LABEL='Ctrl'），
+ * 不直接读 navigator。客户端真实平台值通过 hook（usePlatform / useFormatShortcut）
+ * 在 useEffect 内检测后切换，避免 React hydration mismatch。
  *
- * 接受字面微违反 §4.4-2 顶层零 navigator，但符合 §4.4-2 实际意图（SSR 安全无 throw）。
+ * 旧版本（2026-04-29 早）顶层 detectIsMac() 直接读 navigator，导致：
+ *   - SSR 渲染 'Ctrl+K' / 客户端水合 '⌘K' → React hydration mismatch warning
+ *   - 把责任推给消费方包装 useEffect+useState 是糟糕的 API 设计
+ * Codex stop-time review 识别该问题；本次 fix 在 packages/admin-ui 内解决。
  *
- * ── Hydration 警告 ──
- * SSR 输出 'Ctrl+K'，客户端水合输出 '⌘K' 时 React 会报 hydration mismatch。
- * 消费方（Sidebar / CmdK）若需 hydration-safe 显示快捷键文案，应包装：
- *   const [label, setLabel] = useState('') // SSR 默认空
- *   useEffect(() => setLabel(formatShortcut(spec)), [spec])
- *   return label || <span>...</span>
- * 或在 Server Component 内不显示 shortcut 文案，仅在 Client Component 内消费。
+ * ── 公开 API ──
+ *   - 顶层常量（SSR 默认）：IS_MAC / MOD_KEY_LABEL
+ *   - 纯函数：parseShortcut / formatShortcut（接受可选 isMac） / matchesEvent
+ *   - hooks（hydration-safe）：usePlatform / useFormatShortcut
  *
- * 跨域消费：本文件仅被 packages/admin-ui Shell 内部消费 + server-next 应用层 Sidebar/CmdK
- * 渲染快捷键文案；不暴露到其他包。
+ * 跨域消费：本文件被 packages/admin-ui Shell 内部消费 + server-next 应用层 Sidebar/CmdK
+ * 通过 hook 接入；不暴露到其他包。
  */
+import { useEffect, useState } from 'react'
 
-/** 平台检测 — typeof 防御保 SSR 安全 */
-function detectIsMac(): boolean {
-  if (typeof navigator === 'undefined') return false
-  const platform = (navigator as Navigator).platform || ''
-  const ua = (navigator as Navigator).userAgent || ''
-  return /Mac|iPhone|iPad|iPod/.test(platform) || /Mac OS X/.test(ua)
-}
+/** 当前平台是否为 Mac（顶层 SSR 默认 false；客户端检测需用 usePlatform hook） */
+export const IS_MAC: boolean = false
 
-/** 当前平台是否为 Mac（SSR 默认 false；客户端 navigator 检测） */
-export const IS_MAC: boolean = detectIsMac()
-
-/** Mod 键文案（Mac → '⌘'；其他 → 'Ctrl'） */
-export const MOD_KEY_LABEL: '⌘' | 'Ctrl' = IS_MAC ? '⌘' : 'Ctrl'
+/** Mod 键文案（顶层 SSR 默认 'Ctrl'；客户端检测需用 usePlatform hook） */
+export const MOD_KEY_LABEL: '⌘' | 'Ctrl' = 'Ctrl'
 
 /** 快捷键 spec 解析后的匹配器（KeyboardShortcuts listener 用此与 KeyboardEvent 比对） */
 export interface ShortcutMatcher {
@@ -88,19 +75,19 @@ const NAMED_KEY_MAP: Record<string, string> = {
   right: 'ArrowRight',
 }
 
-/** 渲染期格式化快捷键文案（如 'mod+k' → '⌘K'（Mac）/ 'Ctrl+K'（其他））
- *  - mod → MOD_KEY_LABEL（⌘ Mac / Ctrl 其他）
+/** 渲染期格式化快捷键文案
+ *  - mod → '⌘'（Mac）/ 'Ctrl'（其他）
  *  - shift → '⇧'（Mac）/ 'Shift+'（其他）
  *  - alt → '⌥'（Mac）/ 'Alt+'（其他）
  *  - 命名键（esc/enter/...）显示首字母大写形式（Esc/Enter/...）
  *  - 单字符键 → upper-case
  *
- *  ⚠️ Hydration safety: 输出依赖 IS_MAC（顶层求值）；SSR vs 客户端可能差异。
- *  消费方需要 hydration-safe 时按文件头部说明包装 useEffect + useState。 */
-export function formatShortcut(spec: string): string {
+ *  isMac 参数（默认 false = SSR 安全）：消费方需要 Mac 风格时显式传 true，
+ *  或使用 useFormatShortcut hook（hydration-safe，自动客户端检测）。 */
+export function formatShortcut(spec: string, isMac: boolean = IS_MAC): string {
   const { mod, shift, alt, key } = parseShortcut(spec)
   const parts: string[] = []
-  if (IS_MAC) {
+  if (isMac) {
     if (mod) parts.push('⌘')
     if (shift) parts.push('⇧')
     if (alt) parts.push('⌥')
@@ -132,4 +119,36 @@ export function matchesEvent(matcher: ShortcutMatcher, event: KeyboardEvent): bo
   if (matcher.alt !== event.altKey) return false
   // key 比对：toLowerCase 不敏感（空格/特殊键已映射为标准 KeyboardEvent.key 值）
   return event.key.toLowerCase() === matcher.key.toLowerCase()
+}
+
+/** 客户端平台检测（仅在 useEffect / 事件 handler 内调用，遵守 §4.4-2 顶层零 navigator） */
+function detectIsMacFromNavigator(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const platform = (navigator as Navigator).platform || ''
+  const ua = (navigator as Navigator).userAgent || ''
+  return /Mac|iPhone|iPad|iPod/.test(platform) || /Mac OS X/.test(ua)
+}
+
+export interface UsePlatformReturn {
+  readonly isMac: boolean
+  readonly modKeyLabel: '⌘' | 'Ctrl'
+}
+
+/** Hydration-safe 平台检测 hook
+ *  - SSR + 首渲染：返 { isMac: false, modKeyLabel: 'Ctrl' }（与顶层常量一致 → 不触发 mismatch）
+ *  - 客户端 mount 后：useEffect 检测 navigator 真实值并 setState（普通 rerender，非 hydration） */
+export function usePlatform(): UsePlatformReturn {
+  const [isMac, setIsMac] = useState(false)
+  useEffect(() => {
+    if (detectIsMacFromNavigator()) setIsMac(true)
+  }, [])
+  return { isMac, modKeyLabel: isMac ? '⌘' : 'Ctrl' }
+}
+
+/** Hydration-safe formatShortcut hook
+ *  消费方（Sidebar / CmdK / UserMenu）在 Client Component 内用此 hook 渲染快捷键文案：
+ *    const label = useFormatShortcut('mod+k')  // SSR + 首渲染：'Ctrl+K'；客户端 mount 后 Mac 上变 '⌘K' */
+export function useFormatShortcut(spec: string): string {
+  const { isMac } = usePlatform()
+  return formatShortcut(spec, isMac)
 }

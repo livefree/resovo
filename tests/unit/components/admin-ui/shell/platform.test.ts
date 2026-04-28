@@ -18,9 +18,12 @@ import {
   type ShortcutMatcher,
 } from '../../../../../packages/admin-ui/src/shell/platform'
 
-describe('platform — IS_MAC / MOD_KEY_LABEL（jsdom 默认非 Mac）', () => {
-  it('jsdom 环境下 IS_MAC=false / MOD_KEY_LABEL="Ctrl"（SSR 默认值）', () => {
+describe('platform — IS_MAC / MOD_KEY_LABEL（顶层 SSR 默认值，hydration-safe）', () => {
+  it('IS_MAC 顶层永远 false（SSR 安全；客户端真实值通过 usePlatform hook 获取）', () => {
     expect(IS_MAC).toBe(false)
+  })
+
+  it('MOD_KEY_LABEL 顶层永远 "Ctrl"（SSR 安全；客户端真实值通过 usePlatform hook 获取）', () => {
     expect(MOD_KEY_LABEL).toBe('Ctrl')
   })
 })
@@ -68,7 +71,7 @@ describe('platform — parseShortcut', () => {
   })
 })
 
-describe('platform — formatShortcut（jsdom 非 Mac → "Ctrl+K" 格式）', () => {
+describe('platform — formatShortcut 默认 isMac=false（SSR 安全 / Ctrl 风格）', () => {
   it('mod+k → "Ctrl+K"', () => {
     expect(formatShortcut('mod+k')).toBe('Ctrl+K')
   })
@@ -91,6 +94,30 @@ describe('platform — formatShortcut（jsdom 非 Mac → "Ctrl+K" 格式）', (
 
   it('箭头键 up → "Up"（去 Arrow 前缀）', () => {
     expect(formatShortcut('up')).toBe('Up')
+  })
+})
+
+describe('platform — formatShortcut 显式 isMac=true（Mac 风格）', () => {
+  it('mod+k → "⌘K"（Mac 串接无分隔符）', () => {
+    expect(formatShortcut('mod+k', true)).toBe('⌘K')
+  })
+
+  it('shift+mod+v → "⌘⇧V"', () => {
+    expect(formatShortcut('shift+mod+v', true)).toBe('⌘⇧V')
+  })
+
+  it('mod+, → "⌘,"', () => {
+    expect(formatShortcut('mod+,', true)).toBe('⌘,')
+  })
+
+  it('alt+esc → "⌥Esc"', () => {
+    expect(formatShortcut('alt+esc', true)).toBe('⌥Esc')
+  })
+})
+
+describe('platform — formatShortcut 显式 isMac=false（与默认一致，向后兼容）', () => {
+  it('mod+k 显式 false 与默认一致输出 "Ctrl+K"', () => {
+    expect(formatShortcut('mod+k', false)).toBe(formatShortcut('mod+k'))
   })
 })
 

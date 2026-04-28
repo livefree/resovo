@@ -54,5 +54,5 @@ export type { ToastInput, ToastItem, ToastLevel } from './toast-store'
 export { KeyboardShortcuts } from './keyboard-shortcuts'
 export type { KeyboardShortcutsProps, ShortcutBinding } from './keyboard-shortcuts'
 
-export { IS_MAC, MOD_KEY_LABEL, formatShortcut, parseShortcut, matchesEvent } from './platform'
-export type { ShortcutMatcher } from './platform'
+export { IS_MAC, MOD_KEY_LABEL, formatShortcut, parseShortcut, matchesEvent, usePlatform, useFormatShortcut } from './platform'
+export type { ShortcutMatcher, UsePlatformReturn } from './platform'
