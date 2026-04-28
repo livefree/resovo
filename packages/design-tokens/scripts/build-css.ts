@@ -115,7 +115,7 @@ function buildSemanticVars(theme: ThemeKey): Array<[string, string]> {
     ...buildSemanticGroup('state', state as SemanticGroup, theme),
     ...buildSemanticGroup('dual-signal', dualSignal as SemanticGroup, theme),
     ...buildSemanticGroup('tag', tag as SemanticGroup, theme),
-    ...buildSemanticGroup('pattern', pattern as SemanticGroup, theme),
+    ...buildSemanticGroup('pattern', pattern as unknown as SemanticGroup, theme),
   ]
 }
 
