@@ -1,0 +1,2256 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=1440" />
+  <title>Resovo Admin · 低保真线框 v1</title>
+  <style>
+    :root {
+      --ink: #1a1d23;
+      --ink-2: #4a4f58;
+      --ink-3: #7a808b;
+      --ink-4: #a8aeb8;
+      --line: #cdd2da;
+      --line-2: #e3e6ec;
+      --paper: #f3f4f6;
+      --paper-2: #fafbfc;
+      --paper-3: #ffffff;
+      --hi: #2563eb;
+      /* annotation accent */
+      --hi-soft: rgba(37, 99, 235, .08);
+      --hi-line: rgba(37, 99, 235, .45);
+      --warn: #b45309;
+      --warn-soft: rgba(180, 83, 9, .08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--ink);
+      background: var(--paper);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a {
+      color: var(--hi);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    /* page chrome */
+    .page-header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: var(--paper-3);
+      border-bottom: 1px solid var(--line);
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .page-header h1 {
+      font-size: 13px;
+      margin: 0;
+      font-weight: 700;
+      letter-spacing: .04em;
+    }
+
+    .page-header .meta {
+      color: var(--ink-3);
+      font-size: 11px;
+    }
+
+    .page-header nav {
+      margin-left: auto;
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      font-size: 11px;
+    }
+
+    .page-header nav a {
+      color: var(--ink-2);
+    }
+
+    .page-header nav a:hover {
+      color: var(--hi);
+    }
+
+    .container {
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: 32px 28px 120px;
+    }
+
+    /* section */
+    .sec {
+      margin: 48px 0;
+      border: 1px solid var(--line);
+      background: var(--paper-3);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .sec-head {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--line-2);
+      background: var(--paper-2);
+    }
+
+    .sec-head .num {
+      font-size: 11px;
+      color: var(--hi);
+      font-weight: 700;
+      letter-spacing: .1em;
+    }
+
+    .sec-head h2 {
+      font-size: 14px;
+      margin: 0;
+      font-weight: 700;
+    }
+
+    .sec-head .tag {
+      font-size: 10px;
+      color: var(--ink-3);
+      letter-spacing: .06em;
+      padding: 2px 7px;
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      text-transform: uppercase;
+    }
+
+    .sec-body {
+      padding: 24px 20px;
+    }
+
+    .sec-intent {
+      margin: 0 0 18px;
+      padding: 10px 14px;
+      background: var(--hi-soft);
+      border-left: 3px solid var(--hi-line);
+      color: var(--ink-2);
+      font-size: 11px;
+    }
+
+    /* primitives — frames, blocks */
+    .frame {
+      background: var(--paper-3);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      position: relative;
+    }
+
+    .frame--dashed {
+      border-style: dashed;
+    }
+
+    .frame--dotted {
+      border-style: dotted;
+      border-color: var(--ink-4);
+    }
+
+    .frame--solid-thick {
+      border: 2px solid var(--ink);
+    }
+
+    .frame-label {
+      position: absolute;
+      top: -9px;
+      left: 10px;
+      background: var(--paper-3);
+      padding: 0 6px;
+      font-size: 10px;
+      color: var(--ink-3);
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    .frame-label--hi {
+      color: var(--hi);
+    }
+
+    .block {
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      padding: 8px 10px;
+      background: var(--paper-2);
+      font-size: 11px;
+      color: var(--ink-2);
+    }
+
+    .block--ghost {
+      background: repeating-linear-gradient(135deg,
+          var(--paper-2) 0 8px,
+          transparent 8px 16px);
+      color: var(--ink-3);
+    }
+
+    .block--accent {
+      border-color: var(--hi-line);
+      background: var(--hi-soft);
+      color: var(--hi);
+    }
+
+    .block--warn {
+      border-color: #d4a574;
+      background: var(--warn-soft);
+      color: var(--warn);
+    }
+
+    .block--solid {
+      background: var(--ink);
+      color: var(--paper-3);
+      border-color: var(--ink);
+    }
+
+    .block.center {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .lbl {
+      font-size: 10px;
+      color: var(--ink-3);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    /* annotations */
+    .anno {
+      font-size: 10px;
+      color: var(--hi);
+      margin-top: 6px;
+      display: flex;
+      gap: 6px;
+      align-items: flex-start;
+    }
+
+    .anno::before {
+      content: "※";
+      flex: none;
+    }
+
+    .anno--warn {
+      color: var(--warn);
+    }
+
+    .anno--warn::before {
+      content: "!";
+    }
+
+    .callout {
+      position: absolute;
+      font-size: 10px;
+      color: var(--hi);
+      padding: 3px 7px;
+      border: 1px dashed var(--hi-line);
+      background: var(--paper-3);
+      border-radius: 3px;
+      white-space: nowrap;
+      z-index: 5;
+    }
+
+    /* utilities */
+    .row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .col {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .gap-sm {
+      gap: 6px;
+    }
+
+    .gap-md {
+      gap: 12px;
+    }
+
+    .gap-lg {
+      gap: 20px;
+    }
+
+    .grow {
+      flex: 1;
+    }
+
+    .center {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .between {
+      justify-content: space-between;
+    }
+
+    .stack>*+* {
+      margin-top: 8px;
+    }
+
+    .pad {
+      padding: 14px;
+    }
+
+    .pad-lg {
+      padding: 20px;
+    }
+
+    .small {
+      font-size: 10px;
+      color: var(--ink-3);
+    }
+
+    .strong {
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    /* TOC */
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin: 16px 0 0;
+    }
+
+    .toc a {
+      display: block;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: var(--paper-2);
+      color: var(--ink-2);
+      font-size: 11px;
+      text-decoration: none;
+    }
+
+    .toc a:hover {
+      border-color: var(--hi);
+      background: var(--hi-soft);
+      color: var(--hi);
+    }
+
+    .toc a .n {
+      font-size: 9px;
+      color: var(--ink-3);
+      display: block;
+      letter-spacing: .1em;
+    }
+
+    /* IA tree */
+    .ia-tree {
+      font-size: 12px;
+      background: var(--paper-2);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 18px 22px;
+    }
+
+    .ia-tree ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .ia-tree li {
+      padding: 3px 0;
+      position: relative;
+    }
+
+    .ia-tree>ul>li {
+      padding-left: 0;
+    }
+
+    .ia-tree ul ul {
+      padding-left: 22px;
+      border-left: 1px dashed var(--line);
+      margin-left: 6px;
+    }
+
+    .ia-tree .l1 {
+      font-weight: 700;
+      color: var(--ink);
+      margin-top: 8px;
+    }
+
+    .ia-tree .l2 {
+      color: var(--ink-2);
+    }
+
+    .ia-tree .new {
+      color: var(--hi);
+      font-weight: 600;
+    }
+
+    .ia-tree .moved {
+      color: var(--warn);
+    }
+
+    .ia-tree .removed {
+      color: var(--ink-4);
+      text-decoration: line-through;
+    }
+
+    .ia-tree .note {
+      color: var(--ink-3);
+      font-size: 10px;
+      margin-left: 8px;
+    }
+
+    /* Sidebar mock */
+    .sidebar-mock {
+      background: var(--paper-2);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 8px;
+      width: 220px;
+      flex: none;
+    }
+
+    .sidebar-mock--collapsed {
+      width: 56px;
+      padding: 8px 4px;
+    }
+
+    .sb-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 10px;
+      border-radius: 3px;
+      color: var(--ink-2);
+      font-size: 11px;
+    }
+
+    .sb-item .i {
+      width: 16px;
+      height: 16px;
+      flex: none;
+      border: 1px solid var(--ink-4);
+      border-radius: 2px;
+      display: inline-block;
+    }
+
+    .sb-item.active {
+      background: var(--ink);
+      color: var(--paper-3);
+    }
+
+    .sb-item.active .i {
+      border-color: var(--paper-3);
+    }
+
+    .sb-section {
+      font-size: 9px;
+      color: var(--ink-3);
+      letter-spacing: .1em;
+      padding: 10px 10px 4px;
+      text-transform: uppercase;
+    }
+
+    .sb-collapse-btn {
+      margin-top: 8px;
+      padding: 6px 10px;
+      border-top: 1px dashed var(--line);
+      color: var(--hi);
+      font-size: 10px;
+    }
+
+    /* Tables */
+    table.wf {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      border: 1px solid var(--line);
+      background: var(--paper-3);
+    }
+
+    table.wf th,
+    table.wf td {
+      border-bottom: 1px solid var(--line-2);
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    table.wf th {
+      background: var(--paper-2);
+      font-weight: 600;
+      color: var(--ink-2);
+      font-size: 10px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      position: relative;
+    }
+
+    table.wf th .th-menu {
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 11px;
+      color: var(--ink-4);
+      cursor: pointer;
+    }
+
+    table.wf tr.selected {
+      background: var(--hi-soft);
+    }
+
+    table.wf tr.expanded {
+      background: var(--paper-2);
+    }
+
+    table.wf .checkbox {
+      width: 14px;
+      height: 14px;
+      border: 1px solid var(--ink-3);
+      display: inline-block;
+      border-radius: 2px;
+      vertical-align: middle;
+    }
+
+    table.wf .checkbox.on {
+      background: var(--ink);
+    }
+
+    .grid-12 {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 8px;
+    }
+
+    /* drawer mock — right side */
+    .stage {
+      position: relative;
+      background: var(--paper);
+      border: 1px dashed var(--line);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .drawer-mock {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 62%;
+      background: var(--paper-3);
+      border-left: 1px solid var(--ink);
+      box-shadow: -12px 0 24px rgba(0, 0, 0, .04);
+      padding: 16px;
+      overflow: hidden;
+    }
+
+    /* footer */
+    .footer-strip {
+      margin-top: 80px;
+      padding: 18px 28px;
+      border-top: 1px solid var(--line);
+      color: var(--ink-3);
+      font-size: 11px;
+      text-align: center;
+    }
+
+    /* legend */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 10px;
+      color: var(--ink-3);
+      margin-top: 12px;
+    }
+
+    .legend .k {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      background: var(--paper-3);
+    }
+
+    .legend .k::before {
+      content: "";
+      width: 14px;
+      height: 8px;
+      display: inline-block;
+      border: 1px solid var(--ink-3);
+    }
+
+    .legend .k.solid::before {
+      border: 2px solid var(--ink);
+    }
+
+    .legend .k.dashed::before {
+      border-style: dashed;
+    }
+
+    .legend .k.dotted::before {
+      border-style: dotted;
+      border-color: var(--ink-4);
+    }
+
+    .legend .k.accent::before {
+      border-color: var(--hi-line);
+      background: var(--hi-soft);
+    }
+
+    .legend .k.ghost::before {
+      background: repeating-linear-gradient(135deg, var(--paper-2) 0 6px, transparent 6px 12px);
+    }
+
+    /* kbd */
+    .kbd {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      padding: 1px 5px;
+      font-family: inherit;
+      font-size: 10px;
+      color: var(--ink-2);
+      background: var(--paper-2);
+      border: 1px solid var(--line);
+      border-bottom-width: 2px;
+      border-radius: 3px;
+    }
+
+    /* responsive — keep 1440 baseline */
+    @media (max-width:1100px) {
+      .toc {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="page-header">
+    <h1>RESOVO ADMIN · 低保真线框 v1</h1>
+    <span class="meta">2026-04-27 · 地基模块（导航 / 管理台站 / 表格 / 审核 / 视频编辑 / 采集 / 消息 / 开发者模式 / 弹层）</span>
+    <nav>
+      <a href="#sec-1">IA</a>
+      <a href="#sec-2">导航</a>
+      <a href="#sec-3">管理台站</a>
+      <a href="#sec-4">表格</a>
+      <a href="#sec-5">审核</a>
+      <a href="#sec-6">视频编辑</a>
+      <a href="#sec-7">采集</a>
+      <a href="#sec-8">消息/任务</a>
+      <a href="#sec-9">开发者</a>
+      <a href="#sec-10">弹层</a>
+    </nav>
+  </header>
+
+  <div class="container">
+
+    <!-- INTRO -->
+    <section class="sec" style="margin-top:8px;">
+      <div class="sec-head">
+        <span class="num">00</span>
+        <h2>本文档目的与图例</h2>
+        <span class="tag">LO-FI · GRAYSCALE</span>
+      </div>
+      <div class="sec-body">
+        <p style="margin:0 0 12px; color:var(--ink-2); max-width:780px;">
+          以下为「地基模块」低保真线框，仅描述<strong>结构、信息层级、关键交互点</strong>。配色仅灰阶 + 单一蓝色用于注释 / 交互热区。
+          每个模块附设计意图与待决问题。审过后再进入 hi-fi 阶段，按 导航 → 表格 → 管理台站 → 视频编辑 → 审核 → 采集 → 其他 顺序落实。
+        </p>
+        <div class="legend">
+          <span class="k">实线 = 真实容器</span>
+          <span class="k dashed">虚线 = 拖拽 / 编辑态 / 占位</span>
+          <span class="k dotted">点划线 = 折叠区 / 隐藏</span>
+          <span class="k accent">蓝色填充 = 主操作 / 选中 / 注释</span>
+          <span class="k ghost">斜纹 = 内容占位（图像/图表）</span>
+        </div>
+        <div class="toc">
+          <a href="#sec-1"><span class="n">01</span>信息架构 IA</a>
+          <a href="#sec-2"><span class="n">02</span>导航折叠 / 展开</a>
+          <a href="#sec-3"><span class="n">03</span>管理台站 + 编辑模式</a>
+          <a href="#sec-4"><span class="n">04</span>通用表格规范</a>
+          <a href="#sec-5"><span class="n">05</span>内容审核三栏</a>
+          <a href="#sec-6"><span class="n">06</span>视频编辑统一 Drawer</a>
+          <a href="#sec-7"><span class="n">07</span>采集控制台</a>
+          <a href="#sec-8"><span class="n">08</span>消息 / 后台任务</a>
+          <a href="#sec-9"><span class="n">09</span>开发者模式</a>
+          <a href="#sec-10"><span class="n">10</span>弹层规范</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- 01 IA -->
+    <section class="sec" id="sec-1">
+      <div class="sec-head">
+        <span class="num">01</span>
+        <h2>信息架构 IA · 重组后的导航树</h2>
+        <span class="tag">RENAME · MERGE · MOVE</span>
+      </div>
+      <div class="sec-body">
+        <p class="sec-intent">
+          改动：① 数据看板并入 管理台站（作为可拖拽卡片源）② 图片健康并入 内容资产 ③ 二级中文统一 4 字 ④ 采集控制台 → 采集控制 ⑤ 播放源/线路 → 播放线路。
+          颜色：<span class="strong" style="color:var(--hi);">蓝</span> = 新增 ｜ <span class="strong"
+            style="color:var(--warn);">橙</span> = 移动/合并 ｜ <span class="strong" style="color:var(--ink-4);">删除线</span> =
+          移除一级入口。
+        </p>
+
+        <div class="row gap-lg">
+          <div class="ia-tree" style="flex:1.1;">
+            <ul>
+              <li class="l1">▸ 管理台站
+                <ul>
+                  <li class="l2">运营中心 <span class="note">合并原"数据看板"为可选卡片</span></li>
+                  <li class="l2">内容审核 <span class="new">+ 暂存发布队列子 Tab</span></li>
+                </ul>
+              </li>
+              <li class="l1">▸ 内容资产
+                <ul>
+                  <li class="l2">视频库</li>
+                  <li class="l2">播放线路 <span class="moved">← 播放源/线路（重命名）</span></li>
+                  <li class="l2">合并拆分 <span class="moved">← 合并/拆分</span></li>
+                  <li class="l2">字幕管理 <span class="moved">← 字幕（增加可展开行）</span></li>
+                  <li class="l2">图片健康 <span class="moved">← 系统/图片健康（迁入）</span></li>
+                </ul>
+              </li>
+              <li class="l1">▸ 首页运营
+                <ul>
+                  <li class="l2">首页编辑 <span class="moved">← 首页位编辑器（重命名 + 推荐池）</span></li>
+                  <li class="l2">用户投稿</li>
+                </ul>
+              </li>
+              <li class="l1">▸ 采集中心
+                <ul>
+                  <li class="l2">采集控制 <span class="moved">← 采集控制台</span></li>
+                  <li class="l2">采集任务 <span class="new">+ 任务依赖链 / 历史</span></li>
+                  <li class="l2">站点配置 <span class="new">+ MACCMS 完整支持</span></li>
+                </ul>
+              </li>
+              <li class="l1">▸ 系统管理
+                <ul>
+                  <li class="l2 removed">数据看板</li>
+                  <li class="l2 removed">图片健康</li>
+                  <li class="l2">用户管理</li>
+                  <li class="l2">站点设置</li>
+                  <li class="l2">审计日志</li>
+                  <li class="l2 new">+ 开发者模式（Tokens / Semantic / Components）</li>
+                </ul>
+              </li>
+            </ul>
+          </div>
+
+          <div style="flex:1;">
+            <div class="frame" style="padding:14px;">
+              <span class="frame-label frame-label--hi">命名约束 · 4 字对齐</span>
+              <table class="wf" style="border:none;">
+                <thead>
+                  <tr>
+                    <th>原</th>
+                    <th>新</th>
+                    <th>理由</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>工作台</td>
+                    <td>运营中心</td>
+                    <td>保持</td>
+                  </tr>
+                  <tr>
+                    <td>内容审核台</td>
+                    <td>内容审核</td>
+                    <td>4 字</td>
+                  </tr>
+                  <tr>
+                    <td>视频库</td>
+                    <td>视频库</td>
+                    <td>3 字 · 例外</td>
+                  </tr>
+                  <tr>
+                    <td>播放源 / 线路</td>
+                    <td>播放线路</td>
+                    <td>4 字</td>
+                  </tr>
+                  <tr>
+                    <td>合并 / 拆分</td>
+                    <td>合并拆分</td>
+                    <td>4 字</td>
+                  </tr>
+                  <tr>
+                    <td>字幕</td>
+                    <td>字幕管理</td>
+                    <td>4 字</td>
+                  </tr>
+                  <tr>
+                    <td>首页位编辑器</td>
+                    <td>首页编辑</td>
+                    <td>4 字</td>
+                  </tr>
+                  <tr>
+                    <td>采集控制台</td>
+                    <td>采集控制</td>
+                    <td>4 字</td>
+                  </tr>
+                  <tr>
+                    <td>图片健康</td>
+                    <td>图片健康</td>
+                    <td>保持 · 已迁入"内容资产"</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="anno">3 字"视频库"作为唯一例外保留 — 改成"视频资产"会与一级"内容资产"重名。</p>
+            </div>
+
+            <div class="frame" style="padding:14px; margin-top:14px;">
+              <span class="frame-label">待你确认</span>
+              <ul style="margin:0; padding-left:18px; color:var(--ink-2); font-size:11px;">
+                <li>"采集中心"是否独立为一级，还是仍在"系统管理"下？我建议独立 — 采集是高频、影响内容的关键操作。</li>
+                <li>"开发者模式"的入口位置：① 系统管理 → 开发者 ② 顶栏右上角隐藏入口（仅 ?dev=1）。建议两者皆有。</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 02 NAV -->
+    <section class="sec" id="sec-2">
+      <div class="sec-head">
+        <span class="num">02</span>
+        <h2>导航 · 折叠 / 展开</h2>
+        <span class="tag">PERSISTENT · ICON-ONLY · TOOLTIP</span>
+      </div>
+      <div class="sec-body">
+        <p class="sec-intent">
+          展开 220px / 折叠 56px；状态写入 localStorage。折叠态 hover 出 tooltip（显示中文 + 快捷键）。所有图标按钮全局复用此 tooltip 行为（第 13 条）。
+        </p>
+
+        <div class="row gap-lg">
+          <!-- expanded -->
+          <div class="col">
+            <div class="lbl">展开态 · 220 px</div>
+            <div class="row"
+              style="align-items:flex-start; gap:0; border:1px solid var(--line); border-radius:4px; overflow:hidden;">
+              <div class="sidebar-mock">
+                <div class="sb-section">管理台站</div>
+                <div class="sb-item active"><span class="i"></span>运营中心</div>
+                <div class="sb-item"><span class="i"></span>内容审核</div>
+                <div class="sb-section">内容资产</div>
+                <div class="sb-item"><span class="i"></span>视频库</div>
+                <div class="sb-item"><span class="i"></span>播放线路</div>
+                <div class="sb-item"><span class="i"></span>合并拆分</div>
+                <div class="sb-item"><span class="i"></span>字幕管理</div>
+                <div class="sb-item"><span class="i"></span>图片健康</div>
+                <div class="sb-section">采集中心</div>
+                <div class="sb-item"><span class="i"></span>采集控制</div>
+                <div class="sb-item"><span class="i"></span>采集任务</div>
+                <div class="sb-collapse-btn">‹‹ 收起边栏</div>
+              </div>
+              <div class="grow pad-lg" style="background:var(--paper-2); min-height:300px; align-self:stretch;">
+                <div class="lbl" style="margin-bottom:8px;">主工作区</div>
+                <div class="block block--ghost center" style="height:240px;">主内容区</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- collapsed -->
+          <div class="col">
+            <div class="lbl">折叠态 · 56 px · hover tooltip</div>
+            <div class="row"
+              style="align-items:flex-start; gap:0; border:1px solid var(--line); border-radius:4px; overflow:hidden;">
+              <div class="sidebar-mock sidebar-mock--collapsed">
+                <div class="sb-item active center" style="padding:7px 0;"><span class="i"></span></div>
+                <div class="sb-item center" style="padding:7px 0; position:relative;">
+                  <span class="i"></span>
+                  <span class="callout" style="left:46px; top:4px;">内容审核 · <span class="kbd">⌘2</span></span>
+                </div>
+                <div class="sb-item center" style="padding:7px 0;"><span class="i"></span></div>
+                <div class="sb-item center" style="padding:7px 0;"><span class="i"></span></div>
+                <div class="sb-item center" style="padding:7px 0;"><span class="i"></span></div>
+                <div class="sb-item center" style="padding:7px 0;"><span class="i"></span></div>
+                <div class="sb-item center" style="padding:7px 0;"><span class="i"></span></div>
+                <div class="sb-item center" style="padding:7px 0;"><span class="i"></span></div>
+                <div class="sb-item center" style="padding:7px 0;"><span class="i"></span></div>
+                <div class="sb-collapse-btn center" style="padding:6px 0;">››</div>
+              </div>
+              <div class="grow pad-lg" style="background:var(--paper-2); min-height:300px; align-self:stretch;">
+                <div class="lbl" style="margin-bottom:8px;">主工作区（更宽）</div>
+                <div class="block block--ghost center" style="height:240px;">主内容区</div>
+              </div>
+            </div>
+            <div class="anno">tooltip 延迟 300ms；含中文 + 快捷键；快捷键根据平台显示 ⌘ / Ctrl。</div>
+          </div>
+        </div>
+
+        <div class="frame" style="padding:14px; margin-top:18px;">
+          <span class="frame-label">分组与快捷键</span>
+          <div class="row gap-md" style="font-size:11px; color:var(--ink-2); flex-wrap:wrap;">
+            <div>⌘ 1 管理台站</div>
+            <div>⌘ 2 内容审核</div>
+            <div>⌘ 3 视频库</div>
+            <div>⌘ 4 字幕管理</div>
+            <div>⌘ 5 采集控制</div>
+            <div>⌘ K 全局搜索</div>
+            <div>⌘ B 折叠边栏</div>
+            <div>⌘ , 设置</div>
+          </div>
+          <div class="anno">平台检测：<span class="kbd">navigator.platform</span> 含 "Mac" → 显示 ⌘；否则显示 Ctrl。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 DASHBOARD -->
+    <section class="sec" id="sec-3">
+      <div class="sec-head">
+        <span class="num">03</span>
+        <h2>管理台站 · 编辑模式 + 团队/个人布局 + 卡片全屏化</h2>
+        <span class="tag">12-COL GRID · DRAG · RESIZE · SHARE</span>
+      </div>
+      <div class="sec-body">
+        <p class="sec-intent">
+          默认浏览态紧凑无装饰；右上 "编辑布局" 进入虚线网格。卡片可拖、可 resize（右下角）、可关闭、可全屏化。布局来源切换：团队 / 个人。
+        </p>
+
+        <!-- 浏览态 -->
+        <div class="lbl" style="margin-bottom:8px;">A · 浏览态（默认）</div>
+        <div class="frame pad" style="background:var(--paper-2); margin-bottom:24px;">
+          <div class="row between" style="margin-bottom:10px;">
+            <div class="row gap-sm" style="align-items:center;">
+              <span class="strong">运营中心</span>
+              <span class="block" style="padding:2px 8px; font-size:10px;">布局：团队 · 运营视角 ▾</span>
+            </div>
+            <div class="row gap-sm">
+              <span class="block" style="padding:3px 8px;">⟳ 刷新</span>
+              <span class="block block--accent" style="padding:3px 8px;">⚙ 编辑布局</span>
+            </div>
+          </div>
+          <div class="grid-12">
+            <div class="block" style="grid-column:span 4; height:90px;">实时数据 · 在线 / 播放 / 错误率</div>
+            <div class="block" style="grid-column:span 4; height:90px;">采集状态 · 进行中 3 / 失败 1</div>
+            <div class="block" style="grid-column:span 4; height:90px;">待审核队列 · 28</div>
+
+            <div class="block" style="grid-column:span 8; height:160px; position:relative;">
+              <div class="block--ghost" style="position:absolute; inset:24px; border:none;"></div>
+              近 7 天观看趋势（图表）
+            </div>
+            <div class="block" style="grid-column:span 4; height:160px;">
+              字幕进度 · 多语言堆叠条
+            </div>
+
+            <div class="block" style="grid-column:span 6; height:110px;">最近审计动作（10）</div>
+            <div class="block" style="grid-column:span 6; height:110px;">站点健康度 · 各源成功率</div>
+          </div>
+        </div>
+
+        <!-- 编辑态 -->
+        <div class="lbl" style="margin-bottom:8px;">B · 编辑态</div>
+        <div class="frame pad" style="background:var(--paper-2); position:relative;">
+          <div class="row between" style="margin-bottom:10px;">
+            <div class="row gap-sm" style="align-items:center;">
+              <span class="strong">工作台 · 编辑布局中</span>
+              <span class="block block--accent" style="padding:2px 8px;">布局：团队 ▾</span>
+              <span class="block" style="padding:2px 8px;">+ 新建团队布局</span>
+              <span class="block" style="padding:2px 8px;">克隆为个人</span>
+            </div>
+            <div class="row gap-sm">
+              <span class="block" style="padding:3px 8px;">恢复默认</span>
+              <span class="block" style="padding:3px 8px;">取消</span>
+              <span class="block block--accent" style="padding:3px 8px;">保存布局</span>
+            </div>
+          </div>
+
+          <div class="grid-12">
+            <div class="frame frame--dashed" style="grid-column:span 4; height:90px; padding:8px; position:relative;">
+              <span class="small">::: 实时数据</span>
+              <span class="callout" style="top:4px; right:4px;">✕</span>
+              <span class="callout" style="bottom:4px; right:4px;">↘ resize</span>
+            </div>
+            <div class="frame frame--dashed" style="grid-column:span 4; height:90px; padding:8px; position:relative;">
+              <span class="small">::: 采集状态</span>
+              <span class="callout" style="top:4px; right:4px;">✕</span>
+            </div>
+            <div class="frame frame--dashed" style="grid-column:span 4; height:90px; padding:8px; position:relative;">
+              <span class="small">::: 待审核队列</span>
+              <span class="callout" style="top:4px; right:4px;">✕</span>
+            </div>
+            <div class="frame frame--dashed" style="grid-column:span 8; height:160px; padding:8px; position:relative;">
+              <span class="small">::: 观看趋势</span>
+              <span class="callout" style="top:4px; right:4px;">⛶ 全屏 ｜ ✕</span>
+              <span class="callout" style="bottom:4px; right:4px;">↘ resize</span>
+            </div>
+            <div class="frame frame--dashed" style="grid-column:span 4; height:160px; padding:8px;"><span
+                class="small">::: 字幕进度</span></div>
+          </div>
+
+          <!-- card library drawer hint -->
+          <div class="frame frame--dashed" style="margin-top:14px; padding:10px; background:var(--paper-3);">
+            <span class="lbl">＋ 卡片库（左侧抽屉，编辑态出现）</span>
+            <div class="row gap-sm" style="margin-top:8px; flex-wrap:wrap;">
+              <div class="block" style="width:160px;">实时观看</div>
+              <div class="block" style="width:160px;">采集进度</div>
+              <div class="block" style="width:160px;">待审核</div>
+              <div class="block" style="width:160px;">7日趋势</div>
+              <div class="block" style="width:160px;">字幕进度</div>
+              <div class="block" style="width:160px;">站点健康</div>
+              <div class="block" style="width:160px;">投稿待处理</div>
+              <div class="block" style="width:160px;">服务器负载</div>
+              <div class="block" style="width:160px;">+ 自定义 SQL 卡</div>
+            </div>
+            <div class="anno">拖拽到画布即添加。重复添加同类型卡片 → 实例化（不同筛选条件）。</div>
+          </div>
+        </div>
+
+        <!-- 全屏化 -->
+        <div class="lbl" style="margin:24px 0 8px;">C · 卡片全屏化</div>
+        <div class="frame pad" style="background:var(--paper-2);">
+          <div class="row between" style="margin-bottom:10px;">
+            <span class="strong">管理台站 / 7 日观看趋势 · 全屏视图</span>
+            <span class="block block--accent" style="padding:3px 8px;">⛶ 退出全屏 · Esc</span>
+          </div>
+          <div class="block block--ghost center" style="height:300px;">放大后的图表 + 完整时间轴 + 维度切换 + 导出 CSV</div>
+          <div class="anno">仅"图表 / 趋势 / 队列 / 任务列表"等数据型卡支持全屏。状态卡（数字 KPI）不支持。</div>
+        </div>
+
+        <!-- 预设布局 + 决策 -->
+        <div class="row gap-md" style="margin-top:18px;">
+          <div class="frame pad grow">
+            <span class="frame-label">布局预设（团队）</span>
+            <ul style="margin:6px 0 0; padding-left:18px; font-size:11px; color:var(--ink-2);">
+              <li>运营视角 — 审核 + 投稿 + 首页位</li>
+              <li>技术视角 — 采集 + 健康度 + 错误日志</li>
+              <li>内容审核 — 队列 + 字幕进度 + 拒绝率</li>
+            </ul>
+          </div>
+          <div class="frame pad grow">
+            <span class="frame-label">权限</span>
+            <ul style="margin:6px 0 0; padding-left:18px; font-size:11px; color:var(--ink-2);">
+              <li>团队布局：仅管理员可改 / 发布</li>
+              <li>个人布局：私有，可基于团队布局克隆修改</li>
+              <li>用户切换布局后，下次登录默认回到上次选择</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 04 TABLE -->
+    <section class="sec" id="sec-4">
+      <div class="sec-head">
+        <span class="num">04</span>
+        <h2>通用表格规范 · 表头集成 + 批量浮条 + 分页 + 保存视图 + 乐观更新</h2>
+        <span class="tag">REUSABLE · NO-FLICKER</span>
+      </div>
+      <div class="sec-body">
+        <p class="sec-intent">
+          所有列表页统一沿用此组件。表头集成"排序/过滤/隐藏列/固定"；批量操作浮于底部；行内操作（状态切换、改值）使用乐观更新——不刷新整表，仅高亮变更行 1.5s 后淡出。
+        </p>
+
+        <!-- table head -->
+        <div class="frame pad" style="background:var(--paper-3);">
+          <!-- toolbar -->
+          <div class="row between" style="margin-bottom:10px;">
+            <div class="row gap-sm">
+              <div class="block" style="width:240px;">🔍 搜索 ID / 标题 / 标签</div>
+              <div class="block">视图：默认 ▾</div>
+              <div class="block">+ 保存当前视图</div>
+            </div>
+            <div class="row gap-sm">
+              <div class="block">导出 ▾</div>
+              <div class="block">⚙ 列设置</div>
+              <div class="block block--accent">+ 新建</div>
+            </div>
+          </div>
+
+          <table class="wf">
+            <thead>
+              <tr>
+                <th style="width:32px;"><span class="checkbox"></span></th>
+                <th>ID <span class="th-menu">⋯</span></th>
+                <th>标题 <span class="th-menu">⋯</span></th>
+                <th>分类 <span class="th-menu">⋯</span></th>
+                <th>状态 <span class="th-menu">⋯</span></th>
+                <th>更新时间 ↓ <span class="th-menu">⋯</span></th>
+                <th style="width:90px;">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="selected">
+                <td><span class="checkbox on"></span></td>
+                <td>V·00821</td>
+                <td>夜行列车 · S01E03</td>
+                <td>剧集 / 悬疑</td>
+                <td><span class="block" style="padding:1px 6px;">已发布</span></td>
+                <td>2026-04-26 14:20</td>
+                <td>编辑 ⋯</td>
+              </tr>
+              <tr class="selected">
+                <td><span class="checkbox on"></span></td>
+                <td>V·00822</td>
+                <td>城市夜话 · 第 12 期</td>
+                <td>综艺 / 访谈</td>
+                <td><span class="block" style="padding:1px 6px;">待审核</span></td>
+                <td>2026-04-26 14:11</td>
+                <td>编辑 ⋯</td>
+              </tr>
+              <tr style="background:var(--hi-soft);">
+                <td><span class="checkbox"></span></td>
+                <td>V·00823</td>
+                <td><span
+                    style="text-decoration:underline; text-decoration-style:wavy; text-decoration-color:var(--hi);">微光纪录
+                    · EP05</span></td>
+                <td>纪录片</td>
+                <td><span class="block block--accent" style="padding:1px 6px;">↑ 刚改为 已发布</span></td>
+                <td>刚刚</td>
+                <td>编辑 ⋯</td>
+              </tr>
+              <tr>
+                <td><span class="checkbox"></span></td>
+                <td>V·00824</td>
+                <td>未命名草稿 #4</td>
+                <td>—</td>
+                <td><span class="block" style="padding:1px 6px;">草稿</span></td>
+                <td>2026-04-26 13:50</td>
+                <td>编辑 ⋯</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- pagination -->
+          <div class="row between" style="margin-top:12px; font-size:11px; color:var(--ink-3);">
+            <div>共 1,284 条 · 当前 1–20</div>
+            <div class="row gap-sm">
+              <div class="block">每页 20 ▾</div>
+              <div class="block">‹‹</div>
+              <div class="block">‹</div>
+              <div class="block block--accent">1</div>
+              <div class="block">2</div>
+              <div class="block">3</div>
+              <div class="block">…</div>
+              <div class="block">65</div>
+              <div class="block">›</div>
+              <div class="block">››</div>
+              <div class="block">跳至 [ ]</div>
+            </div>
+          </div>
+
+          <!-- bulk action bar -->
+          <div class="frame frame--solid-thick"
+            style="margin:18px 0 0; padding:10px 14px; display:flex; align-items:center; gap:14px; background:var(--ink); color:var(--paper-3);">
+            <span style="font-weight:700;">已选 2 项</span>
+            <span style="opacity:.5;">|</span>
+            <span>批量审核 ▾</span>
+            <span>移动到分类</span>
+            <span>导出</span>
+            <span style="color:#f5b3b3;">删除</span>
+            <span style="margin-left:auto; opacity:.7;">取消选择 · Esc</span>
+          </div>
+          <div class="anno">批量操作浮条固定在表格底部（粘性），不挤占表头；超过一屏滚动时仍可见。</div>
+        </div>
+
+        <!-- column popover & view save -->
+        <div class="row gap-md" style="margin-top:18px;">
+          <div class="frame pad grow" style="position:relative;">
+            <span class="frame-label">表头 ⋯ 菜单（Popover）</span>
+            <div class="stack" style="margin-top:6px; font-size:11px;">
+              <div class="block">↑ 升序</div>
+              <div class="block">↓ 降序（当前）</div>
+              <div class="block">⌕ 过滤… <span class="small">→ 输入框 / 多选 / 区间</span></div>
+              <div class="block">📌 固定到左侧</div>
+              <div class="block">隱 隐藏此列</div>
+              <div class="block">⇄ 自适应宽度</div>
+            </div>
+          </div>
+          <div class="frame pad grow">
+            <span class="frame-label">保存视图</span>
+            <div class="stack" style="margin-top:6px; font-size:11px;">
+              <div class="block">视图名称 [ 我的待审核-本周 ]</div>
+              <div class="block">范围 ◉ 个人 ○ 团队</div>
+              <div class="block block--ghost">已捕获：过滤 3 项 / 排序 1 项 / 列设置 8/12 / 每页 50</div>
+              <div class="block block--accent">保存视图</div>
+            </div>
+            <div class="anno">视图列表在工具栏"视图 ▾"下；可置顶 / 分享给团队。</div>
+          </div>
+          <div class="frame pad grow">
+            <span class="frame-label">无刷新策略（关键）</span>
+            <ul style="margin:6px 0 0; padding-left:18px; font-size:11px; color:var(--ink-2);">
+              <li>状态切换：先改本地 row state，再发请求；失败回滚 + Toast</li>
+              <li>表头排序/过滤变更：仅 tbody 重排，header 不闪</li>
+              <li>分页：保留 thead；tbody 渐隐 → 渐显（150ms）</li>
+              <li>新增行：插入到顶部，<span class="strong" style="color:var(--hi);">蓝高亮 1.5s 后淡出</span></li>
+              <li>删除行：行内淡出 + 折叠高度，无整表 reflow</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- height & scroll strategy -->
+        <div class="frame pad" style="margin-top:18px;">
+          <span class="frame-label frame-label--hi">高度与滚动策略 · 全站统一</span>
+          <p style="margin:8px 0 12px; font-size:11px; color:var(--ink-2);">
+            一种范式：<strong>页面滚动止于工具栏</strong>；表格容器占剩余高度，<strong>thead 粘顶 / tbody 滚动 / 分页栏粘底</strong>。批量浮条粘在 tbody
+            与分页之间，永远可见。
+          </p>
+
+          <div class="row gap-md">
+            <div class="frame grow" style="background:var(--paper-2); padding:0; overflow:hidden;">
+              <div class="block"
+                style="padding:6px 10px; border-radius:0; border:none; border-bottom:1px solid var(--line);">顶栏（fixed）
+              </div>
+              <div class="block"
+                style="padding:6px 10px; border-radius:0; border:none; border-bottom:1px solid var(--line); background:var(--paper-3);">
+                工具栏 / 筛选 / Tab（页面滚到顶后 sticky）</div>
+              <div style="background:var(--paper-3); border-bottom:1px solid var(--line);">
+                <div class="block"
+                  style="border-radius:0; border:none; border-bottom:1px dashed var(--line); background:var(--paper-2); padding:5px 10px; font-size:10px;">
+                  ▣ thead · sticky top:0</div>
+                <div class="block block--ghost" style="border-radius:0; border:none; height:120px; padding:8px;">tbody ·
+                  overflow:auto（滚动发生在这）</div>
+                <div class="block"
+                  style="border-radius:0; border:none; border-top:1px solid var(--line); background:var(--ink); color:var(--paper-3); padding:5px 10px; font-size:10px;">
+                  ▣ 批量浮条 · sticky bottom（仅选中时出现）</div>
+                <div class="block"
+                  style="border-radius:0; border:none; border-top:1px dashed var(--line); background:var(--paper-2); padding:5px 10px; font-size:10px;">
+                  ▣ 分页 · sticky bottom:0</div>
+              </div>
+              <div class="anno" style="padding:8px 10px;">外层 flex column · height: calc(100vh − topbar) · tbody flex:1 /
+                min-height:0 / overflow:auto</div>
+            </div>
+
+            <div class="frame pad" style="flex:1.1;">
+              <span class="frame-label">分页档位（同一组件，参数切档）</span>
+              <table class="wf" style="margin-top:6px;">
+                <thead>
+                  <tr>
+                    <th>数据量</th>
+                    <th>翻页方式</th>
+                    <th>视觉</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>&lt; 200</td>
+                    <td>客户端分页 50/100</td>
+                    <td>页码栏</td>
+                  </tr>
+                  <tr>
+                    <td>200 – 50,000</td>
+                    <td>服务端分页 20/50/100</td>
+                    <td>页码 + 跳转 + 总数</td>
+                  </tr>
+                  <tr>
+                    <td>&gt; 50,000</td>
+                    <td>游标 + 虚拟滚动</td>
+                    <td>前 N / 后 N，禁跳页</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="anno">DataTable 组件 paginationMode="auto"，按 totalCount 自动选档，使用方无感。</div>
+            </div>
+          </div>
+
+          <div class="row gap-md" style="margin-top:14px;">
+            <div class="frame pad grow">
+              <span class="frame-label">例外</span>
+              <ul style="margin:6px 0 0; padding-left:18px; font-size:11px; color:var(--ink-2);">
+                <li>列表 ≤ 10 行 → auto 高度，无 tbody 滚动</li>
+                <li>展开行内容很长 → 行高扩展走外层滚动；子区超长再嵌套</li>
+                <li>三栏布局（审核）→ 三栏各自滚动，不走表格范式</li>
+              </ul>
+            </div>
+            <div class="frame pad grow">
+              <span class="frame-label">无刷新（再强调）</span>
+              <ul style="margin:6px 0 0; padding-left:18px; font-size:11px; color:var(--ink-2);">
+                <li>翻页 / 排序 / 过滤变更 → 仅 tbody fade，thead / 工具栏不闪</li>
+                <li>行内改值 → 乐观更新 + 蓝高亮 1.5s 淡出</li>
+                <li>新增 / 删除行 → 单行动效，无整表 reflow</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- empty state -->
+        <div class="frame pad" style="margin-top:18px;">
+          <span class="frame-label">空状态规范</span>
+          <div class="row gap-md" style="margin-top:8px;">
+            <div class="frame pad grow center" style="height:140px; flex-direction:column; gap:6px;">
+              <div style="width:32px; height:32px; border:1px dashed var(--ink-3); border-radius:4px;"></div>
+              <div class="strong">还没有视频</div>
+              <div class="small">导入 CSV · 从采集源同步 · 手动新建</div>
+              <div class="block block--accent" style="padding:4px 12px;">+ 新建第一个</div>
+            </div>
+            <div class="frame pad grow center" style="height:140px; flex-direction:column; gap:6px;">
+              <div class="strong">没有匹配的结果</div>
+              <div class="small">当前筛选：分类=纪录片 · 状态=待审核</div>
+              <div class="block">清除筛选</div>
+            </div>
+            <div class="frame pad grow center"
+              style="height:140px; flex-direction:column; gap:6px; border-color:#d4a574;">
+              <div class="strong" style="color:var(--warn);">加载失败</div>
+              <div class="small">服务器连接超时（504）</div>
+              <div class="block">重试 · 查看日志</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 05 MODERATION -->
+    <section class="sec" id="sec-5">
+      <div class="sec-head">
+        <span class="num">05</span>
+        <h2>内容审核 · 三栏 + Tab（待审核 / 待发布 / 已拒绝）</h2>
+        <span class="tag">VIOLATION TAGS · UNDO · KEYBOARD-FIRST</span>
+      </div>
+      <div class="sec-body">
+        <p class="sec-intent">
+          三栏：左队列 / 中预览主舞台 / 右元信息。Tab 三段：待审核 · 待发布（已通过未发） · 已拒绝；后两者支持撤销改判。预置违规标签（多选 + 快捷键）。
+        </p>
+
+        <!-- tabs -->
+        <div class="row gap-sm" style="margin-bottom:10px;">
+          <div class="block block--accent">待审核 · 28</div>
+          <div class="block">待发布 · 12</div>
+          <div class="block">已拒绝 · 134</div>
+          <div class="grow"></div>
+          <div class="block">分配给我 ◉</div>
+          <div class="block">来源筛选 ▾</div>
+        </div>
+
+        <!-- 3-col layout -->
+        <div class="row"
+          style="gap:0; border:1px solid var(--line); border-radius:4px; overflow:hidden; background:var(--paper-3);">
+          <!-- left queue -->
+          <div style="width:240px; flex:none; border-right:1px solid var(--line); background:var(--paper-2);">
+            <div class="lbl pad" style="padding:10px 12px; border-bottom:1px solid var(--line-2);">队列 · 28</div>
+            <div class="stack" style="padding:8px;">
+              <div class="block block--accent" style="display:flex; gap:8px; padding:8px;">
+                <div class="block--ghost" style="width:48px; height:32px; border:none;"></div>
+                <div style="flex:1; min-width:0;">
+                  <div class="strong" style="font-size:11px;">夜行列车 S01E03</div>
+                  <div class="small">07:42 · 综艺</div>
+                </div>
+              </div>
+              <div class="block" style="display:flex; gap:8px; padding:8px;">
+                <div class="block--ghost" style="width:48px; height:32px; border:none;"></div>
+                <div style="flex:1; min-width:0;">
+                  <div class="strong" style="font-size:11px;">城市夜话 12</div>
+                  <div class="small">14:21 · 访谈</div>
+                </div>
+              </div>
+              <div class="block" style="display:flex; gap:8px; padding:8px;">
+                <div class="block--ghost" style="width:48px; height:32px; border:none;"></div>
+                <div style="flex:1; min-width:0;">
+                  <div class="strong" style="font-size:11px;">微光纪录 EP05</div>
+                  <div class="small">22:08 · 纪录片</div>
+                </div>
+              </div>
+              <div class="block" style="display:flex; gap:8px; padding:8px;">
+                <div class="block--ghost" style="width:48px; height:32px; border:none;"></div>
+                <div style="flex:1; min-width:0;">
+                  <div class="strong" style="font-size:11px;">未命名 · UGC #847</div>
+                  <div class="small">02:55 · 投稿</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- center preview -->
+          <div class="grow pad-lg" style="background:var(--paper);">
+            <div class="block block--ghost center" style="height:340px; margin-bottom:12px;">
+              视频预览主舞台（16:9）
+            </div>
+            <div class="row between" style="margin-bottom:12px;">
+              <div class="row gap-sm">
+                <span class="block">⏮ <span class="kbd">J</span></span>
+                <span class="block">⏵ <span class="kbd">K</span></span>
+                <span class="block">⏭ <span class="kbd">L</span></span>
+                <span class="block">⏱ 00:23 / 07:42</span>
+              </div>
+              <div class="small">键盘第一 · 鼠标兜底</div>
+            </div>
+
+            <!-- review actions -->
+            <div class="row gap-sm" style="flex-wrap:wrap;">
+              <div class="block block--accent" style="padding:8px 14px;">✓ 通过 → 待发布 <span class="kbd">A</span></div>
+              <div class="block" style="padding:8px 14px; border-color:#d4a574;">✗ 拒绝 <span class="kbd">R</span></div>
+              <div class="block" style="padding:8px 14px;">⤼ 跳过 <span class="kbd">S</span></div>
+              <div class="block" style="padding:8px 14px;">🚩 标记复看 <span class="kbd">M</span></div>
+            </div>
+
+            <!-- violation tags strip -->
+            <div class="frame pad" style="margin-top:14px;">
+              <span class="frame-label">违规标签（多选 · 拒绝时必填 ≥ 1）</span>
+              <div class="row gap-sm" style="margin-top:6px; flex-wrap:wrap;">
+                <span class="block">① 涉政敏感</span>
+                <span class="block">② 色情低俗</span>
+                <span class="block">③ 暴力血腥</span>
+                <span class="block">④ 版权问题</span>
+                <span class="block block--warn">⑤ 标题党/标错</span>
+                <span class="block">⑥ 画面/音频损坏</span>
+                <span class="block">⑦ 字幕错乱</span>
+                <span class="block">⑧ 广告嫌疑</span>
+                <span class="block">⑨ 其他（手填）</span>
+              </div>
+              <div class="anno">数字键 1–9 切换；可多选；选中后"拒绝"按钮亮起；备注框可补充原因。</div>
+            </div>
+          </div>
+
+          <!-- right meta -->
+          <div style="width:300px; flex:none; border-left:1px solid var(--line); background:var(--paper-2);">
+            <div class="lbl pad" style="padding:10px 12px; border-bottom:1px solid var(--line-2);">元信息 / 历史</div>
+            <div class="stack" style="padding:12px;">
+              <div class="frame pad">
+                <span class="frame-label">▾ 基本信息</span>
+                <div style="margin-top:6px; font-size:11px; line-height:1.7;">
+                  ID · V·00821<br>
+                  时长 · 07:42 · 1080p<br>
+                  来源 · 采集 / Site-A · 2026-04-26<br>
+                  上传者 · admin
+                </div>
+              </div>
+              <div class="frame pad">
+                <span class="frame-label">▸ 字幕（折叠）</span>
+              </div>
+              <div class="frame pad">
+                <span class="frame-label">▸ 播放线路（折叠）</span>
+              </div>
+              <div class="frame pad">
+                <span class="frame-label">▾ 审核历史</span>
+                <div style="margin-top:6px; font-size:10px; color:var(--ink-3);">
+                  · 2026-04-26 14:20 入队<br>
+                  · 自动机扫描 · 无违规<br>
+                  · 上次同 IP 拒绝率 4%
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- secondary tab views -->
+        <div class="row gap-md" style="margin-top:18px;">
+          <div class="frame pad grow">
+            <span class="frame-label">Tab · 待发布</span>
+            <div class="stack" style="margin-top:8px;">
+              <div class="block row between" style="padding:8px 10px;">
+                <span>夜行列车 S01E03 · <span class="small">2 小时前通过</span></span>
+                <span><span class="block" style="padding:1px 6px;">立即发布</span> <span class="block"
+                    style="padding:1px 6px;">↺ 撤销改判</span></span>
+              </div>
+              <div class="block row between" style="padding:8px 10px;">
+                <span>城市夜话 12 · <span class="small">35 分钟前通过</span></span>
+                <span><span class="block" style="padding:1px 6px;">定时发布</span> <span class="block"
+                    style="padding:1px 6px;">↺ 撤销改判</span></span>
+              </div>
+            </div>
+            <div class="anno">"撤销改判" → 回到待审核队列顶部，操作可逆。</div>
+          </div>
+          <div class="frame pad grow">
+            <span class="frame-label">Tab · 已拒绝</span>
+            <div class="stack" style="margin-top:8px;">
+              <div class="block row between" style="padding:8px 10px;">
+                <span>UGC #312 · <span class="small">⑤标题党 ⑧广告</span></span>
+                <span><span class="block" style="padding:1px 6px;">↺ 改判通过</span> <span class="block"
+                    style="padding:1px 6px;">永久删除</span></span>
+              </div>
+              <div class="block row between" style="padding:8px 10px;">
+                <span>UGC #298 · <span class="small">②色情低俗</span></span>
+                <span><span class="block" style="padding:1px 6px;">↺ 改判通过</span> <span class="block"
+                    style="padding:1px 6px;">永久删除</span></span>
+              </div>
+            </div>
+            <div class="anno">改判记录写入审计日志（操作人 / 原标签 / 新决定）。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 06 VIDEO EDITOR DRAWER -->
+    <section class="sec" id="sec-6">
+      <div class="sec-head">
+        <span class="num">06</span>
+        <h2>视频编辑统一 Drawer · 全局复用</h2>
+        <span class="tag">DRAWER · TABS · OPTIMISTIC</span>
+      </div>
+      <div class="sec-body">
+        <p class="sec-intent">
+          从任何视频卡片/行点"编辑"都唤起此 Drawer（右侧滑出，宽 62%）。Tab 分组：基本信息 / 媒体 / 字幕 / 播放线路 / 章节分集 / 采集源 /
+          操作日志。下方常驻"保存"+"取消"。所有写操作乐观更新。
+        </p>
+
+        <div class="stage" style="height:560px;">
+          <!-- list behind -->
+          <div style="position:absolute; inset:0; padding:14px;">
+            <div class="row gap-sm" style="margin-bottom:8px;">
+              <div class="block" style="width:200px;">🔍 视频库</div>
+              <div class="block">视图 ▾</div>
+              <div class="block">⚙ 列设置</div>
+            </div>
+            <div class="block block--ghost" style="height:480px;">视频库列表（背景）</div>
+          </div>
+
+          <!-- drawer -->
+          <div class="drawer-mock">
+            <div class="row between" style="margin-bottom:12px;">
+              <div class="row gap-sm">
+                <span class="block--ghost" style="width:48px; height:32px; display:inline-block;"></span>
+                <div>
+                  <div class="strong">夜行列车 · S01E03</div>
+                  <div class="small">V·00821 · 07:42 · 1080p</div>
+                </div>
+              </div>
+              <div class="row gap-sm">
+                <span class="block">‹ 上一个</span>
+                <span class="block">下一个 ›</span>
+                <span class="block">⛶ 全屏编辑</span>
+                <span class="block">✕</span>
+              </div>
+            </div>
+
+            <!-- tabs -->
+            <div class="row gap-sm" style="border-bottom:1px solid var(--line); padding-bottom:0; margin-bottom:14px;">
+              <div class="block block--accent" style="border-bottom:none; border-radius:3px 3px 0 0;">基本</div>
+              <div class="block" style="border-bottom:none;">媒体</div>
+              <div class="block" style="border-bottom:none;">字幕 · 4</div>
+              <div class="block" style="border-bottom:none;">播放线路 · 3</div>
+              <div class="block" style="border-bottom:none;">章节分集</div>
+              <div class="block" style="border-bottom:none;">采集源</div>
+              <div class="block" style="border-bottom:none;">日志</div>
+            </div>
+
+            <!-- preview + form -->
+            <div class="row gap-md">
+              <div style="flex:1;">
+                <div class="block block--ghost center" style="height:180px;">视频预览 + 时间轴</div>
+                <div class="row gap-sm" style="margin-top:8px;">
+                  <div class="block grow center">封面占位</div>
+                  <div class="block grow center">封面占位 ✓</div>
+                  <div class="block grow center">+ 上传</div>
+                </div>
+              </div>
+              <div style="flex:1.1;">
+                <div class="stack">
+                  <div class="block">标题 [ 夜行列车 · S01E03 ]</div>
+                  <div class="block">副标题 [ ]</div>
+                  <div class="block">分类 ▾ 剧集 / 悬疑</div>
+                  <div class="block">标签 [ 悬疑 × 都市 × 侦探 + ]</div>
+                  <div class="block" style="height:60px;">简介（多行）</div>
+                  <div class="row gap-sm">
+                    <div class="block grow">发布状态 ▾</div>
+                    <div class="block grow">分级 ▾</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- footer -->
+            <div
+              style="position:absolute; left:0; right:0; bottom:0; padding:12px 16px; border-top:1px solid var(--line); background:var(--paper-2); display:flex; justify-content:space-between; align-items:center;">
+              <span class="small">⌘S 保存 · Esc 关闭</span>
+              <div class="row gap-sm">
+                <span class="block">取消</span>
+                <span class="block block--accent">保存</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row gap-md" style="margin-top:18px;">
+          <div class="frame pad grow">
+            <span class="frame-label">入口（全局）</span>
+            <ul style="margin:6px 0 0; padding-left:18px; font-size:11px; color:var(--ink-2);">
+              <li>视频库 · 行内"编辑"</li>
+              <li>内容审核 · 元信息"编辑视频"</li>
+              <li>字幕管理 · 视频主体行"编辑"</li>
+              <li>首页编辑 · banner 卡 ⋯ "编辑视频"</li>
+              <li>播放线路 · 关联视频跳转</li>
+            </ul>
+          </div>
+          <div class="frame pad grow">
+            <span class="frame-label">单视频"全屏编辑"模式</span>
+            <ul style="margin:6px 0 0; padding-left:18px; font-size:11px; color:var(--ink-2);">
+              <li>Drawer 右上"⛶ 全屏编辑" → 占满视口</li>
+              <li>视频预览大区域 + 时间轴 + 字幕同步预览</li>
+              <li>用于深度修订（替换源、重切章节）</li>
+              <li>退出回到 Drawer，状态保留</li>
+            </ul>
+          </div>
+          <div class="frame pad grow">
+            <span class="frame-label">字幕 Tab · 与字幕管理页一致</span>
+            <ul style="margin:6px 0 0; padding-left:18px; font-size:11px; color:var(--ink-2);">
+              <li>多语言列表（语言/来源/时长/状态）</li>
+              <li>上传 · AI 翻译 · 自动生成</li>
+              <li>格式互转（srt / vtt / ass）</li>
+              <li>时间轴预览（视频右侧同步）</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 07 CRAWLER -->
+    <section class="sec" id="sec-7">
+      <div class="sec-head">
+        <span class="num">07</span>
+        <h2>采集控制 · 站点展开 + 任务依赖链 + MACCMS 完整支持</h2>
+        <span class="tag">EXPANDABLE ROWS · DAG · INCREMENTAL</span>
+      </div>
+      <div class="sec-body">
+        <p class="sec-intent">
+          站点列表行可展开 → 显示该站点详情、最近采集、专属配置。"全站增量"为主操作；"全站全量"放二级菜单 + 二次确认。
+        </p>
+
+        <!-- toolbar -->
+        <div class="row gap-sm" style="margin-bottom:10px;">
+          <div class="block" style="width:240px;">🔍 站点 / 标签</div>
+          <div class="block">状态：全部 ▾</div>
+          <div class="block">引擎：MACCMS ▾</div>
+          <div class="grow"></div>
+          <div class="block block--accent">▶ 全站增量（主操作）</div>
+          <div class="block">⋯ 更多 <span class="small">→ 全站全量 · 清空索引 · 重建</span></div>
+        </div>
+
+        <!-- expandable site rows -->
+        <table class="wf">
+          <thead>
+            <tr>
+              <th style="width:32px;"></th>
+              <th>站点 <span class="th-menu">⋯</span></th>
+              <th>引擎</th>
+              <th>状态</th>
+              <th>最近采集</th>
+              <th>成功率(7d)</th>
+              <th>下次执行</th>
+              <th style="width:120px;">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="expanded">
+              <td><span style="color:var(--hi);">▾</span></td>
+              <td><span class="strong">Site-A · 极速影视</span>
+                <div class="small">https://api.site-a.com/maccms</div>
+              </td>
+              <td>MACCMS v10</td>
+              <td><span class="block block--accent" style="padding:1px 6px;">采集中</span></td>
+              <td>2026-04-27 09:22</td>
+              <td>96.4%</td>
+              <td>09:30 +1h</td>
+              <td>暂停 · 编辑</td>
+            </tr>
+            <tr>
+              <td colspan="8" style="background:var(--paper); padding:0;">
+                <!-- expanded panel -->
+                <div style="padding:18px 22px;">
+                  <div class="row gap-md">
+                    <div class="frame pad grow">
+                      <span class="frame-label">分类映射</span>
+                      <table class="wf" style="margin-top:6px;">
+                        <thead>
+                          <tr>
+                            <th>源分类 ID</th>
+                            <th>源名称</th>
+                            <th>本站映射</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>11</td>
+                            <td>动作片</td>
+                            <td>电影 / 动作</td>
+                          </tr>
+                          <tr>
+                            <td>13</td>
+                            <td>科幻片</td>
+                            <td>电影 / 科幻</td>
+                          </tr>
+                          <tr>
+                            <td>20</td>
+                            <td>国产剧</td>
+                            <td>剧集 / 国产</td>
+                          </tr>
+                          <tr>
+                            <td>43</td>
+                            <td>动漫</td>
+                            <td>— <span class="small" style="color:var(--warn);">未映射</span></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div class="frame pad" style="flex:1.1;">
+                      <span class="frame-label frame-label--hi">采集配置 · MACCMS</span>
+                      <div class="stack" style="margin-top:8px;">
+                        <div class="block row between"><span>采集模式</span><span>◉ 增量 ○ 全量 ○ 关键词</span></div>
+                        <div class="block row between"><span>断点续传</span><span>✓ 启用 · 上次断点 page 47</span></div>
+                        <div class="block row between"><span>定时采集</span><span>每 1h · cron <span class="kbd">0 */1 * *
+                              *</span> 选择器…</span></div>
+                        <div class="block row between"><span>关键词采集</span><span>包含 [ 悬疑 × 纪录 ] 排除 [ 试看 ]</span></div>
+                        <div class="block row between"><span>分页范围</span><span>page 1 → 200 · 每页 30</span></div>
+                        <div class="block row between"><span>UA / 代理</span><span>默认 · 代理池 ▾</span></div>
+                        <div class="block row between"><span>冲突策略</span><span>○ 覆盖 ◉ 跳过 ○ 合并源 ○ 副本</span></div>
+                        <div class="block row between"><span>试采预览</span><span class="block block--accent"
+                            style="padding:1px 8px;">采 5 条预览</span></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- NEW: 线路 / 别名 -->
+                  <div class="frame pad" style="margin-top:14px;">
+                    <span class="frame-label frame-label--hi">线路 / 别名（新增）</span>
+                    <div class="row between" style="margin-top:8px;">
+                      <span class="small">3 条线路 · 2 已设别名 · 1 未映射</span>
+                      <div class="row gap-sm">
+                        <span class="block">批量改名（正则）</span>
+                        <span class="block">从全局别名建议</span>
+                        <a href="#" style="font-size:11px;">→ 全局别名表</a>
+                      </div>
+                    </div>
+                    <table class="wf" style="margin-top:8px;">
+                      <thead>
+                        <tr>
+                          <th>原始名</th>
+                          <th>别名（可就地编辑）</th>
+                          <th>协议</th>
+                          <th>Probe</th>
+                          <th>Render</th>
+                          <th>视频数</th>
+                          <th style="width:140px;">操作</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><span class="mono" style="color:var(--ink-3); font-family:inherit;">dplayer</span></td>
+                          <td><span class="block block--accent" style="padding:1px 6px;">主线 · HD</span></td>
+                          <td>m3u8</td>
+                          <td><span class="block" style="padding:1px 6px;">200 OK</span></td>
+                          <td><span class="block" style="padding:1px 6px;">✓ 渲染</span></td>
+                          <td>1,284</td>
+                          <td>测试 · 禁用 · 合并到…</td>
+                        </tr>
+                        <tr>
+                          <td><span style="color:var(--ink-3);">m3u8_8</span></td>
+                          <td><span class="block block--accent" style="padding:1px 6px;">备线 · 8</span></td>
+                          <td>m3u8</td>
+                          <td><span class="block" style="padding:1px 6px;">200 OK</span></td>
+                          <td><span class="block" style="padding:1px 6px;">✓ 渲染</span></td>
+                          <td>1,201</td>
+                          <td>测试 · 禁用 · 合并到…</td>
+                        </tr>
+                        <tr>
+                          <td><span style="color:var(--ink-3);">ckm3u8_2</span></td>
+                          <td><span class="block" style="padding:1px 6px; border-style:dashed; color:var(--ink-3);">[ 留空
+                              → 显示原名 ]</span></td>
+                          <td>m3u8</td>
+                          <td><span class="block block--warn" style="padding:1px 6px;">404</span></td>
+                          <td><span class="block" style="padding:1px 6px; opacity:.6;">— —</span></td>
+                          <td>892</td>
+                          <td>测试 · 禁用 · 合并到…</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <div class="anno">优先级：站点别名 &gt; 全局别名 &gt; 原名。同站点内别名重复 → 红字警告 + 阻止保存。</div>
+                  </div>
+
+                  <div class="row gap-md" style="margin-top:14px;">
+                    <div class="frame pad grow">
+                      <span class="frame-label">最近采集（10）</span>
+                      <table class="wf" style="margin-top:6px;">
+                        <thead>
+                          <tr>
+                            <th>时间</th>
+                            <th>类型</th>
+                            <th>新增/更新</th>
+                            <th>失败</th>
+                            <th>耗时</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>09:22</td>
+                            <td>增量</td>
+                            <td>+34 / ~12</td>
+                            <td>0</td>
+                            <td>2m 11s</td>
+                            <td><a href="#">查看日志</a></td>
+                          </tr>
+                          <tr>
+                            <td>08:22</td>
+                            <td>增量</td>
+                            <td>+18 / ~5</td>
+                            <td>2</td>
+                            <td>1m 47s</td>
+                            <td><a href="#">查看日志</a></td>
+                          </tr>
+                          <tr>
+                            <td>07:22</td>
+                            <td>增量</td>
+                            <td>+22 / ~9</td>
+                            <td>0</td>
+                            <td>1m 58s</td>
+                            <td><a href="#">查看日志</a></td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="frame pad" style="width:340px;">
+                      <span class="frame-label">健康度 · 7d</span>
+                      <div class="block block--ghost center" style="height:120px; margin-top:6px;">成功率折线 · 响应时间柱</div>
+                      <div class="anno">连续失败 ≥ 3 次 → 自动告警 + 暂停。</div>
+                    </div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td><span style="color:var(--ink-3);">▸</span></td>
+              <td><span class="strong">Site-B · 风行资源</span>
+                <div class="small">https://api.site-b.com/inc/api.php</div>
+              </td>
+              <td>MACCMS v10</td>
+              <td><span class="block" style="padding:1px 6px;">空闲</span></td>
+              <td>2026-04-27 08:05</td>
+              <td>89.1%</td>
+              <td>10:00</td>
+              <td>立即采集 · 编辑</td>
+            </tr>
+            <tr>
+              <td><span style="color:var(--ink-3);">▸</span></td>
+              <td><span class="strong">Site-C · 影盟</span>
+                <div class="small">https://api.site-c.com/...</div>
+              </td>
+              <td>MACCMS v10</td>
+              <td><span class="block block--warn" style="padding:1px 6px;">告警 · 连失 3</span></td>
+              <td>2026-04-27 06:11</td>
+              <td>62.0%</td>
+              <td>— 已暂停</td>
+              <td>诊断 · 重启</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- task DAG -->
+        <div class="frame pad" style="margin-top:18px;">
+          <span class="frame-label frame-label--hi">任务依赖链（DAG · 非高频，但关键）</span>
+          <div class="row" style="margin-top:14px; align-items:center; gap:14px; flex-wrap:wrap;">
+            <div class="block block--solid" style="padding:10px 14px;">A · Site-A 增量</div>
+            <span style="color:var(--ink-3);">→</span>
+            <div class="block" style="padding:10px 14px;">B · 字幕匹配</div>
+            <span style="color:var(--ink-3);">→</span>
+            <div class="block" style="padding:10px 14px;">C · 封面拉取</div>
+            <span style="color:var(--ink-3);">→</span>
+            <div class="block" style="padding:10px 14px;">D · 自动审核入队</div>
+            <span style="color:var(--ink-3);">→</span>
+            <div class="block" style="padding:10px 14px;">E · 首页推荐池更新</div>
+          </div>
+          <div class="anno">A 完成（成功 / 部分成功阈值）后触发 B；任意节点失败可配置：① 中断 ② 跳过继续 ③ 重试 N 次。可视化编辑 + cron 触发 A。</div>
+        </div>
+
+        <!-- global alias note -->
+        <div class="frame pad" style="margin-top:18px;">
+          <span class="frame-label frame-label--hi">全局别名表（位于"播放线路"页 · 跨站点共享）</span>
+          <div class="row gap-md" style="margin-top:8px;">
+            <div class="frame pad grow">
+              <table class="wf">
+                <thead>
+                  <tr>
+                    <th>原始名</th>
+                    <th>建议别名</th>
+                    <th>命中站点</th>
+                    <th>覆盖数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>dplayer</td>
+                    <td>主线 · HD</td>
+                    <td>Site-A · B · D</td>
+                    <td>3,402</td>
+                  </tr>
+                  <tr>
+                    <td>m3u8_8</td>
+                    <td>备线 · 8</td>
+                    <td>Site-A · C</td>
+                    <td>2,109</td>
+                  </tr>
+                  <tr>
+                    <td>ckm3u8</td>
+                    <td>CK · 通用</td>
+                    <td>Site-B · C</td>
+                    <td>1,520</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="frame pad" style="width:300px;">
+              <span class="frame-label">规则</span>
+              <ul style="margin:6px 0 0; padding-left:18px; font-size:11px; color:var(--ink-2);">
+                <li>站点级别名 &gt; 全局别名 &gt; 原名</li>
+                <li>新建站点 → 自动套用全局建议</li>
+                <li>支持正则批量改（如 <span class="kbd">^dpl(\d+)$ → 备线$1</span>）</li>
+                <li>修改记录入审计日志</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- log stream -->
+        <div class="row gap-md" style="margin-top:18px;">
+          <div class="frame pad grow">
+            <span class="frame-label">实时日志（流式）</span>
+            <div class="block block--ghost" style="margin-top:6px; height:120px; font-size:10px;">
+              [09:22:01] GET /maccms?ac=videolist&pg=1 200 314ms<br>
+              [09:22:02] parsed 30 items, new 12, updated 5<br>
+              [09:22:03] GET /maccms?ac=videolist&pg=2 200 287ms<br>
+              …
+            </div>
+          </div>
+          <div class="frame pad" style="width:340px;">
+            <span class="frame-label">告警与策略</span>
+            <ul style="margin:6px 0 0; padding-left:18px; font-size:11px; color:var(--ink-2);">
+              <li>连失 ≥ N 次 → 暂停 + Webhook</li>
+              <li>响应 &gt; T ms → 降级到代理池</li>
+              <li>新增 = 0 持续 X 次 → 提示源可能下线</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 08 NOTIFICATIONS -->
+    <section class="sec" id="sec-8">
+      <div class="sec-head">
+        <span class="num">08</span>
+        <h2>消息中心 + 后台任务 · 拆为两个独立入口</h2>
+        <span class="tag">BELL + TASKS</span>
+      </div>
+      <div class="sec-body">
+        <p class="sec-intent">
+          顶栏右侧两个独立入口：🔔 消息中心（系统/@/审核分派/评论）｜ ⌛ 后台任务（采集进度/批量/导出）。完成时铃铛红点 + Toast；任务进行中可点开查看进度并取消。
+        </p>
+
+        <div class="row gap-md">
+          <!-- bell -->
+          <div class="frame pad" style="flex:1.1; position:relative;">
+            <span class="frame-label">🔔 消息中心 (Popover)</span>
+            <div class="row between" style="margin-top:8px;">
+              <div class="row gap-sm">
+                <span class="block block--accent">全部</span>
+                <span class="block">@ 我</span>
+                <span class="block">系统</span>
+                <span class="block">审核</span>
+              </div>
+              <span class="small">全部已读</span>
+            </div>
+            <div class="stack" style="margin-top:10px;">
+              <div class="block">
+                <div class="strong">@张三 在 V·00823 评论了你</div>
+                <div class="small">"画面有问题，建议复审" · 5 分钟前</div>
+              </div>
+              <div class="block">
+                <div class="strong">系统 · 站点 Site-C 连续 3 次采集失败</div>
+                <div class="small">已自动暂停 · 12 分钟前 · 查看 →</div>
+              </div>
+              <div class="block">
+                <div class="strong">审核分派 · 你被分派 8 条新视频</div>
+                <div class="small">来自：王运营 · 30 分钟前</div>
+              </div>
+              <div class="block">
+                <div class="strong">系统 · 升级公告</div>
+                <div class="small">v2.4 计划于 04-30 02:00 发布 · 2 小时前</div>
+              </div>
+            </div>
+            <div class="anno">底部"查看全部" → 完整页（含历史 + 高级筛选）。</div>
+          </div>
+
+          <!-- tasks -->
+          <div class="frame pad" style="flex:1.1; position:relative;">
+            <span class="frame-label">⌛ 后台任务 (Drawer)</span>
+            <div class="row between" style="margin-top:8px;">
+              <div class="row gap-sm">
+                <span class="block block--accent">进行中 · 3</span>
+                <span class="block">已完成</span>
+                <span class="block">失败</span>
+              </div>
+              <span class="small">清理已完成</span>
+            </div>
+            <div class="stack" style="margin-top:10px;">
+              <div class="block">
+                <div class="row between"><span class="strong">采集 · Site-A 增量</span><span class="small">2m11s 已用</span>
+                </div>
+                <div class="block--ghost" style="height:6px; margin-top:6px; background:var(--line-2); border:none;">
+                  <div style="width:62%; height:100%; background:var(--hi);"></div>
+                </div>
+                <div class="row between" style="margin-top:6px;"><span class="small">62% · 已采 124/200 page</span><span
+                    class="small">取消 · 详情</span></div>
+              </div>
+              <div class="block">
+                <div class="row between"><span class="strong">批量审核通过 · 28 项</span><span class="small">17/28</span></div>
+                <div class="block--ghost" style="height:6px; margin-top:6px; background:var(--line-2); border:none;">
+                  <div style="width:60%; height:100%; background:var(--hi);"></div>
+                </div>
+              </div>
+              <div class="block">
+                <div class="row between"><span class="strong">导出 · 视频库 CSV</span><span class="small">排队中</span></div>
+              </div>
+            </div>
+            <div class="anno">浏览器关闭后任务继续；返回登录铃铛会显示完成回执。</div>
+          </div>
+        </div>
+
+        <!-- toast strip -->
+        <div class="frame pad" style="margin-top:18px;">
+          <span class="frame-label">Toast（统一规范）</span>
+          <div class="row gap-md" style="margin-top:8px;">
+            <div class="block grow">✓ 已保存 V·00823</div>
+            <div class="block grow" style="border-color:#d4a574;">⚠ 部分失败 · 3/28 未通过 · 查看</div>
+            <div class="block grow">⌛ 任务已加入后台 · 查看任务面板</div>
+          </div>
+          <div class="anno">右下角堆叠；3s 自动消失（可悬停暂停）；带操作按钮的不自动消失。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 09 DEV MODE -->
+    <section class="sec" id="sec-9">
+      <div class="sec-head">
+        <span class="num">09</span>
+        <h2>开发者模式 · Tokens / Semantic / Components</h2>
+        <span class="tag">INTERNAL · ?dev=1</span>
+      </div>
+      <div class="sec-body">
+        <p class="sec-intent">
+          三栏：Tokens（原始）→ Semantic（语义映射）→ Components（实时预览）。任意 token 改动 → 整个 UI 即时重渲。可导出为 CSS variables / JSON /
+          Tailwind。仅内部开发者可见。
+        </p>
+
+        <div class="row"
+          style="gap:0; border:1px solid var(--line); border-radius:4px; overflow:hidden; min-height:480px;">
+          <!-- left: tokens -->
+          <div style="width:280px; border-right:1px solid var(--line); background:var(--paper-2); padding:12px;">
+            <div class="lbl" style="margin-bottom:8px;">Tokens · 原始</div>
+            <div class="stack">
+              <div class="block">主题：dark / light / hc ▾</div>
+              <div class="block">─ 颜色 ─────</div>
+              <div class="block row between"><span>--bg-0</span><span
+                  style="display:inline-block; width:18px; height:12px; background:#0b0d10; border:1px solid var(--line);"></span>
+              </div>
+              <div class="block row between"><span>--accent</span><span
+                  style="display:inline-block; width:18px; height:12px; background:#f59e0b; border:1px solid var(--line);"></span>
+              </div>
+              <div class="block row between"><span>--ok</span><span
+                  style="display:inline-block; width:18px; height:12px; background:#22c55e; border:1px solid var(--line);"></span>
+              </div>
+              <div class="block">─ 间距 ─────</div>
+              <div class="block">--s-3 · 12px</div>
+              <div class="block">--s-4 · 16px</div>
+              <div class="block">─ 圆角 ─────</div>
+              <div class="block">--r-3 · 8px</div>
+              <div class="block">─ 字号 ─────</div>
+              <div class="block">--fs-13 · 13px</div>
+            </div>
+          </div>
+
+          <!-- mid: semantic -->
+          <div style="width:300px; border-right:1px solid var(--line); background:var(--paper); padding:12px;">
+            <div class="lbl" style="margin-bottom:8px;">Semantic · 语义映射</div>
+            <div class="stack">
+              <div class="block row between"><span>surface.primary</span><span class="small">→ --bg-1</span></div>
+              <div class="block row between"><span>surface.elevated</span><span class="small">→ --bg-4</span></div>
+              <div class="block row between"><span>border.default</span><span class="small">→ --border</span></div>
+              <div class="block row between"><span>text.primary</span><span class="small">→ --text</span></div>
+              <div class="block row between"><span>text.muted</span><span class="small">→ --muted</span></div>
+              <div class="block row between"><span>action.primary</span><span class="small">→ --accent</span></div>
+              <div class="block row between"><span>status.ok</span><span class="small">→ --ok</span></div>
+              <div class="block row between"><span>radius.card</span><span class="small">→ --r-4</span></div>
+            </div>
+            <div class="anno">可拖拽改 mapping，立即在右侧预览中生效。</div>
+          </div>
+
+          <!-- right: components -->
+          <div class="grow" style="background:var(--paper-3); padding:18px;">
+            <div class="row between" style="margin-bottom:10px;">
+              <div class="lbl">Components · 实时预览</div>
+              <div class="row gap-sm">
+                <span class="block">视口：1440 ▾</span>
+                <span class="block">主题：dark</span>
+                <span class="block block--accent">导出 CSS Vars ▾</span>
+              </div>
+            </div>
+            <div class="grid-12">
+              <div class="block" style="grid-column:span 4;">
+                <div class="lbl" style="margin-bottom:6px;">Button</div>
+                <div class="row gap-sm" style="flex-wrap:wrap;">
+                  <span class="block block--accent">Primary</span>
+                  <span class="block">Secondary</span>
+                  <span class="block" style="border-style:dashed;">Ghost</span>
+                  <span class="block" style="opacity:.5;">Disabled</span>
+                </div>
+              </div>
+              <div class="block" style="grid-column:span 4;">
+                <div class="lbl" style="margin-bottom:6px;">Input</div>
+                <div class="stack">
+                  <div class="block">[ placeholder ]</div>
+                  <div class="block" style="border-color:var(--hi);">[ focused ]</div>
+                  <div class="block" style="border-color:#d4a574;">[ error ]</div>
+                </div>
+              </div>
+              <div class="block" style="grid-column:span 4;">
+                <div class="lbl" style="margin-bottom:6px;">Badge</div>
+                <div class="row gap-sm" style="flex-wrap:wrap;">
+                  <span class="block">默认</span>
+                  <span class="block block--accent">主</span>
+                  <span class="block block--warn">警</span>
+                  <span class="block" style="background:var(--ink); color:var(--paper-3);">实心</span>
+                </div>
+              </div>
+              <div class="block" style="grid-column:span 6;">
+                <div class="lbl" style="margin-bottom:6px;">Card</div>
+                <div class="frame pad">
+                  <div class="strong">标题</div>
+                  <div class="small">描述</div>
+                  <div class="block block--ghost" style="height:60px; margin-top:8px;"></div>
+                </div>
+              </div>
+              <div class="block" style="grid-column:span 6;">
+                <div class="lbl" style="margin-bottom:6px;">Table Row（hover/selected/expanded）</div>
+                <div class="stack">
+                  <div class="block row between"><span>普通行</span><span class="small">— —</span></div>
+                  <div class="block row between" style="background:var(--paper-2);"><span>hover</span><span
+                      class="small">— —</span></div>
+                  <div class="block block--accent row between"><span>selected</span><span class="small">— —</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="anno">每个组件附 ▸ 查看代码 / ▸ 复制 token 引用。</div>
+          </div>
+        </div>
+
+        <div class="frame pad" style="margin-top:14px;">
+          <span class="frame-label">入口</span>
+          <ul style="margin:6px 0 0; padding-left:18px; font-size:11px; color:var(--ink-2);">
+            <li>正式入口：系统管理 → 开发者模式（仅"开发者"角色可见）</li>
+            <li>隐藏入口：URL 加 <span class="kbd">?dev=1</span> 任何登录用户均可只读浏览</li>
+            <li>只读 / 编辑切换：写权限严格控制；编辑历史进入审计日志</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 10 OVERLAYS -->
+    <section class="sec" id="sec-10">
+      <div class="sec-head">
+        <span class="num">10</span>
+        <h2>弹层规范 · Modal / Drawer / Popover · 三选一</h2>
+        <span class="tag">DECISION RULE</span>
+      </div>
+      <div class="sec-body">
+        <p class="sec-intent">
+          统一三种弹层语义。混用是当前最大的体验隐患；下表是接下来所有弹层 PR 的判断依据。
+        </p>
+
+        <div class="row gap-md">
+          <div class="frame pad grow">
+            <span class="frame-label">Modal · 中央阻塞</span>
+            <div class="block block--ghost center" style="height:120px; margin-top:8px;">居中弹窗</div>
+            <ul style="margin:8px 0 0; padding-left:18px; font-size:11px; color:var(--ink-2);">
+              <li>危险确认（删除 / 全量采集 / 改判）</li>
+              <li>关键单步表单（&lt; 5 字段）</li>
+              <li>必须用户响应才能继续</li>
+            </ul>
+          </div>
+          <div class="frame pad grow">
+            <span class="frame-label">Drawer · 右侧滑出 · 半阻塞</span>
+            <div class="block block--ghost" style="height:120px; margin-top:8px; padding:8px;">
+              <div
+                style="width:50%; height:100%; background:var(--paper-3); border:1px solid var(--ink); margin-left:50%;">
+              </div>
+            </div>
+            <ul style="margin:8px 0 0; padding-left:18px; font-size:11px; color:var(--ink-2);">
+              <li>详情查看 / 长表单（视频编辑 / 站点配置）</li>
+              <li>需要保留上下文（左侧列表仍可见）</li>
+              <li>支持上一个 / 下一个 切换</li>
+            </ul>
+          </div>
+          <div class="frame pad grow">
+            <span class="frame-label">Popover · 就近 · 非阻塞</span>
+            <div class="block block--ghost" style="height:120px; margin-top:8px; position:relative;">
+              <span class="block" style="position:absolute; top:30%; left:30%; width:120px; padding:6px;">就近浮层</span>
+            </div>
+            <ul style="margin:8px 0 0; padding-left:18px; font-size:11px; color:var(--ink-2);">
+              <li>表头 ⋯ 菜单 / 日期选择 / 颜色选择</li>
+              <li>快捷过滤 / 单字段编辑</li>
+              <li>点外部即关闭，无遮罩</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="frame pad" style="margin-top:18px;">
+          <span class="frame-label frame-label--hi">判断流程</span>
+          <ol style="margin:6px 0 0; padding-left:22px; font-size:11px; color:var(--ink-2); line-height:1.9;">
+            <li>这次操作<strong>需要用户全神贯注响应吗</strong>？是 → Modal</li>
+            <li>否，那这次操作<strong>需要看到背景上下文吗</strong>？是 → Drawer / Popover</li>
+            <li>表单 &gt; 5 字段 / 多 Tab / 需要预览？→ Drawer</li>
+            <li>否则 → Popover</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- next steps -->
+    <section class="sec">
+      <div class="sec-head">
+        <span class="num">»»</span>
+        <h2>审核完成后的 hi-fi 落地顺序</h2>
+        <span class="tag">PROPOSED</span>
+      </div>
+      <div class="sec-body">
+        <ol style="font-size:12px; color:var(--ink-2); line-height:1.9;">
+          <li><strong>导航折叠</strong> + tooltip + 平台快捷键检测 → 接入现有 shell.jsx</li>
+          <li><strong>通用表格组件</strong> · 表头集成 / 批量浮条 / 分页 / 保存视图 / 乐观更新 · 一处实现，全站换皮</li>
+          <li><strong>管理台站</strong> · 编辑模式 + 团队/个人布局 + 卡片库 + 全屏化</li>
+          <li><strong>视频编辑统一 Drawer</strong> · 全局可唤起；先做基本 + 字幕 + 播放线路 三个 Tab</li>
+          <li><strong>内容审核</strong> · 三栏 + 三 Tab + 违规标签 + 撤销改判 + 键盘快捷键</li>
+          <li><strong>采集控制</strong> · 站点展开 + 任务依赖 + MACCMS 增量 / 断点 / 定时 / 关键词</li>
+          <li>消息中心 / 后台任务 / 弹层规范 / 开发者模式（按需穿插）</li>
+        </ol>
+        <div class="anno">每完成一项 hi-fi 立即在 Wireframes 上勾选 ✓，并对照走查偏差。</div>
+      </div>
+    </section>
+  </div>
+
+  <div class="footer-strip">
+    Resovo Admin · 低保真线框 v1 · 灰阶 + 单蓝注释 · 等宽
+  </div>
+
+</body>
+
+</html>

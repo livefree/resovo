@@ -1,0 +1,138 @@
+/* Resovo Admin v2 — design tokens
+   Dark-first, dense-by-default. Light mode optional via [data-theme="light"]. */
+
+:root,
+[data-theme="dark"] {
+  /* Surfaces — neutral slate, slightly cool */
+  --bg0: #0b0d10;             /* canvas */
+  --bg1: #11141a;             /* shell */
+  --bg2: #161a22;             /* card */
+  --bg3: #1d222c;             /* row hover / input */
+  --bg4: #252b37;             /* elevated / popover */
+  --bg-overlay: rgba(8, 10, 14, 0.72);
+
+  /* Borders */
+  --border: #232936;
+  --border-strong: #303847;
+  --border-subtle: #1a1f29;
+
+  /* Text */
+  --text: #e6e9ef;
+  --text-2: #b3b9c5;
+  --muted: #7d8694;
+  --muted-2: #565d6b;
+  --on-accent: #ffffff;
+
+  /* Brand — Resovo amber/orange (matches existing 流光 accent) */
+  --accent: #f59e0b;
+  --accent-hover: #fbbf24;
+  --accent-soft: rgba(245, 158, 11, 0.12);
+  --accent-border: rgba(245, 158, 11, 0.32);
+
+  /* Status — dual-signal palette */
+  --ok: #22c55e;
+  --ok-soft: rgba(34, 197, 94, 0.14);
+  --warn: #f59e0b;
+  --warn-soft: rgba(245, 158, 11, 0.14);
+  --danger: #ef4444;
+  --danger-soft: rgba(239, 68, 68, 0.14);
+  --info: #3b82f6;
+  --info-soft: rgba(59, 130, 246, 0.14);
+  --neutral: #71717a;
+  --neutral-soft: rgba(113, 113, 122, 0.16);
+
+  /* Dual-signal differentiation */
+  --probe: #38bdf8;            /* cyan — link probe (HEAD/Content-Type) */
+  --probe-soft: rgba(56, 189, 248, 0.14);
+  --render: #a855f7;           /* violet — actual playback render */
+  --render-soft: rgba(168, 85, 247, 0.14);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.5);
+  --shadow-lg: 0 24px 60px rgba(0,0,0,.55);
+
+  /* Type scale (px) */
+  --fs-11: 11px; --fs-12: 12px; --fs-13: 13px; --fs-14: 14px;
+  --fs-15: 15px; --fs-16: 16px; --fs-18: 18px; --fs-20: 20px;
+  --fs-24: 24px; --fs-28: 28px; --fs-32: 32px;
+
+  /* Spacing scale */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-7: 32px; --s-8: 40px;
+
+  /* Radii */
+  --r-1: 4px; --r-2: 6px; --r-3: 8px; --r-4: 12px; --r-5: 16px; --r-full: 999px;
+
+  /* Layout */
+  --sidebar-w: 232px;
+  --sidebar-w-collapsed: 60px;
+  --topbar-h: 52px;
+  --row-h: 40px;
+  --row-h-compact: 32px;
+}
+
+[data-theme="light"] {
+  --bg0: #f5f6f8;
+  --bg1: #ffffff;
+  --bg2: #ffffff;
+  --bg3: #f1f3f6;
+  --bg4: #ffffff;
+  --bg-overlay: rgba(15, 18, 22, 0.32);
+  --border: #e3e6ec;
+  --border-strong: #c8cdd6;
+  --border-subtle: #eef0f4;
+  --text: #1a1d23;
+  --text-2: #3d434e;
+  --muted: #6b7280;
+  --muted-2: #9aa3af;
+  --shadow-sm: 0 1px 2px rgba(15,18,22,.06);
+  --shadow-md: 0 4px 12px rgba(15,18,22,.08);
+  --shadow-lg: 0 24px 60px rgba(15,18,22,.14);
+}
+
+/* base */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+               "Microsoft YaHei", "Helvetica Neue", "Source Han Sans CN", sans-serif;
+  font-feature-settings: "tnum" 1, "ss01" 1;
+  background: var(--bg0);
+  color: var(--text);
+  font-size: var(--fs-14);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbars (webkit) */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; border: 2px solid var(--bg1); }
+::-webkit-scrollbar-thumb:hover { background: var(--muted-2); }
+
+/* Mono */
+.mono { font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace; font-size: 12px; }
+
+/* Reusable utility */
+.kbd {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; padding: 1px 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+  color: var(--text-2); background: var(--bg3);
+  border: 1px solid var(--border); border-bottom-width: 2px;
+  border-radius: var(--r-1);
+}
+
+/* Focus */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Pulse for live indicators */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .5; transform: scale(.85); }
+}
+.pulse { animation: pulse-dot 1.6s ease-in-out infinite; }
