@@ -38,3 +38,24 @@
 - 历史条目（本补丁应用前的条目）不强制回填，保持原样
 
 ---
+
+## [CHG-SN-1-01] packages/admin-ui 空骨架 + workspaces 追加
+
+- **完成时间**：2026-04-28
+- **记录时间**：2026-04-28 02:30
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-6) — 首轮 PASS
+- **修改文件**：
+  - `packages/admin-ui/package.json`（新建）— @resovo/admin-ui@0.1.0 / private / main src/index.ts / exports + devDependencies typescript
+  - `packages/admin-ui/tsconfig.json`（新建）— 沿用 packages/types 模板 + jsx: preserve + src/**/*.tsx include（M-SN-2 React 组件准备）
+  - `packages/admin-ui/src/index.ts`（新建）— 仅 `export {};` 占位
+  - `package.json`（修改）— workspaces 追加 `packages/admin-ui`（字母序）
+  - `package-lock.json`（npm install 自然产物）
+- **新增依赖**：无（仅 devDependencies typescript: "*"，已存在于 root）
+- **数据库变更**：无
+- **注意事项**：
+  - admin-ui 当前为空骨架，禁止在 M-SN-1 内部塞业务组件（M-SN-2 起步）
+  - tsconfig 提前配 jsx: preserve 是 reviewer 判定合理的微扩展（不阻塞任何后续）
+  - M-SN-1 后续卡（02–08）按序列计划继续
+
+---

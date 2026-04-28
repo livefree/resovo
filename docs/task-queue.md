@@ -87,9 +87,9 @@
 
 ## [SEQ-20260428-01] M-SN-1 工程骨架 + Token 三层 + Provider（执行序列）
 
-- **状态**：🟡 规划中
+- **状态**：🔄 执行中
 - **创建时间**：2026-04-28 02:00
-- **最后更新时间**：2026-04-28 02:00
+- **最后更新时间**：2026-04-28 02:30
 - **目标**：搭建 apps/server-next 工程骨架 + packages/admin-ui 空骨架 + design-tokens 三层重构 + Provider 移植 + IA v0 27 路由占位 + apiClient + 鉴权 + login → dashboard 通路打通
 - **范围**：`apps/server-next/`（新建）、`packages/admin-ui/`（新建空骨架）、`packages/design-tokens/`（三层重构）、`apps/web-next/`（token 引用面回归验证）、`package.json`（workspaces 追加）、`docker-compose.dev.yml`（server-next 服务）、`docs/architecture.md`（§17 token 三层映射）、`scripts/verify-server-next-isolation.mjs`（新建）
 - **依赖**：M-SN-0 三批清理已 PASS（commit `7c278cc` / `96cde57` / `827b88c`）；ADR-100/101/102 落盘
@@ -106,9 +106,14 @@
 
 ### 任务列表（按执行顺序）
 
-1. **CHG-SN-1-01** — packages/admin-ui 空骨架 + workspaces 追加（状态：⬜ 未开始）
+1. **CHG-SN-1-01** — packages/admin-ui 空骨架 + workspaces 追加（状态：✅ 已完成）
    - 创建时间：2026-04-28 02:00
    - 计划开始：M-SN-1 Day 1 上午
+   - 实际开始：2026-04-28 02:10
+   - 完成时间：2026-04-28 02:30
+   - 实际工时：0.3 天（< 估算 0.5 天）
+   - review：arch-reviewer (claude-opus-4-6) PASS（首轮即过）
+   - 子代理偏离：tsconfig 扩展 jsx: preserve + *.tsx include（提前配 M-SN-2 React 组件 jsx 编译选项）— reviewer 判定合理无风险
    - 工时估算：0.5 天
    - 关联 plan §：§4.4 创建时机 / §11.2 C2 待补条目
    - 关联 ADR：ADR-100（立项）

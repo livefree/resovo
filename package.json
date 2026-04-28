@@ -7,6 +7,7 @@
     "apps/api",
     "apps/server",
     "apps/web-next",
+    "packages/admin-ui",
     "packages/design-tokens",
     "packages/logger",
     "packages/player",
