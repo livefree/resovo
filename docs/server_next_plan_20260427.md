@@ -498,7 +498,7 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
   - 设计稿后续补完的"设置补全 / 采集展开 / 开发者模式 / 弹层规范"对齐
   - 通知 + 后台任务双面板 + Toast 系统
   - **大数据原语**：游标分页 + 虚拟滚动（首次 >50k 数据集出现时按需即建）— 触发 react-virtual vs react-window 选型
-- **完成标准**：21 顶层 + 5 system 子 = 26 路由 + 1 视频编辑子页 = 27 路由占位全集覆盖 ≥95%；剩余视图（如 design-tokens / sandbox 调整）评估保留或退役
+- **完成标准**：13 admin 顶层 + 1 system landing + 5 system 子 + 1 编辑子 + 1 认证 = 21 路由占位全集覆盖 ≥95%；剩余视图（如 design-tokens / sandbox 调整）评估保留或退役
 - **阶段审计重点**：覆盖率 + 设计稿对齐度 + 三类候选依赖选型决议
 
 ### M-SN-6.5 · 非功能验收门 · **0.5 周（软上限 1 周）**（SHOULD-2 新增 + R7 SHOULD-8）
@@ -513,7 +513,7 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
 
 ### M-SN-7 · Cutover · **0.5 周**
 - **范围**：
-  - functional parity 验收清单（apps/server vs apps/server-next 全 27 路由占位逐项 diff）
+  - functional parity 验收清单（apps/server vs apps/server-next 全 21 路由占位逐项 diff）
   - e2e 全绿
   - **同 commit 内**：nginx 反代配置切换（`/admin/*` :3001 → :3003）+ apps/server 删除 + `apps/server-next` → `apps/admin` 改名（DISCUSS-4）
   - 24h 监控期

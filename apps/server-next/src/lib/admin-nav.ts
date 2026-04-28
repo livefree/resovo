@@ -17,10 +17,10 @@
  *     - system 子 5：settings / cache / monitor / config / migration
  *     - 编辑子 1：videos/[id]/edit（M-SN-4 落地）
  *     - 认证 1：/login
- *   - 侧栏暴露 10 项链接（IA v1 修订）：
+ *   - 侧栏暴露 13 项链接（IA v1 修订）：
  *     dashboard / moderation / videos / sources / merge / subtitles / image-health
  *     / home / submissions / crawler / users / system/settings / audit
- *     （= 9 admin 顶层 + 1 system 子 = 10 项；users 在系统管理组内单算）
+ *     （= 12 admin 顶层 + 1 system 子 = 13 项；users 在系统管理组内单算）
  *   - 路由保留但侧栏隐藏（M-SN-3 起按 Tab 容器化策略迁移内容）：
  *     - analytics（→ dashboard 内 Tab/卡片库）
  *     - system/cache · system/monitor · system/config · system/migration
