@@ -33,6 +33,9 @@ npm run typecheck
 echo "[5/6] Lint 检查"
 npm run lint
 
+echo "[5b/6] server-next 边界隔离检查（plan §4.6）"
+npm run verify:server-next-isolation
+
 echo "[6/6] 单元测试"
 npm run test:run
 

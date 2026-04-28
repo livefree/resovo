@@ -89,7 +89,7 @@
 
 - **状态**：🔄 执行中
 - **创建时间**：2026-04-28 02:00
-- **最后更新时间**：2026-04-28 04:10
+- **最后更新时间**：2026-04-28 04:25
 - **目标**：搭建 apps/server-next 工程骨架 + packages/admin-ui 空骨架 + design-tokens 三层重构 + Provider 移植 + IA v0 27 路由占位 + apiClient + 鉴权 + login → dashboard 通路打通
 - **范围**：`apps/server-next/`（新建）、`packages/admin-ui/`（新建空骨架）、`packages/design-tokens/`（三层重构）、`apps/web-next/`（token 引用面回归验证）、`package.json`（workspaces 追加）、`docker-compose.dev.yml`（server-next 服务）、`docs/architecture.md`（§17 token 三层映射）、`scripts/verify-server-next-isolation.mjs`（新建）
 - **依赖**：M-SN-0 三批清理已 PASS（commit `7c278cc` / `96cde57` / `827b88c`）；ADR-100/101/102 落盘
@@ -269,9 +269,15 @@
    - 子代理调用：arch-reviewer (claude-opus-4-6)
    - 主循环模型：opus
 
-7. **CHG-SN-1-07** — ESLint no-restricted-imports 边界 + ts-morph CI 兜底（状态：⬜ 未开始）
+7. **CHG-SN-1-07** — ESLint no-restricted-imports 边界 + ts-morph CI 兜底（状态：✅ 已完成）
    - 创建时间：2026-04-28 02:00
    - 计划开始：M-SN-1 Day 7 上午
+   - 实际开始：2026-04-28 04:15
+   - 完成时间：2026-04-28 04:25
+   - 实际工时：0.15 天（远 < 估算 0.5 天）
+   - review：arch-reviewer (claude-opus-4-6) 首轮 PASS（6/6 子项 ✅，0 MUST 偏差）
+   - 简化偏离：用 TypeScript Compiler API（已有 dep）替代 ts-morph 新依赖；故意违规自测覆盖 4 种 import 形态全部捕获
+   - 同时落实 ADR-102 跨域消费禁令的"编译期守卫"承诺（CHG-SN-1-04 / CHG-SN-1-03 留账闭环）
    - 工时估算：0.5 天
    - 关联 plan §：§4.6 编译期边界检查
    - 关联 ADR：ADR-100（架构约束 ts-morph 脚本路径）

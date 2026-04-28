@@ -39,6 +39,38 @@
 
 ---
 
+## [CHG-SN-1-07] ESLint no-restricted-imports 边界 + verify-server-next-isolation 兜底脚本
+
+- **完成时间**：2026-04-28
+- **记录时间**：2026-04-28 04:25
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-6) — 首轮 PASS（6/6 子项 ✅）
+- **修改文件**：
+  - `apps/server-next/.eslintrc.cjs`（新建）— extends `next/core-web-vitals` + `no-restricted-imports` 三组 patterns（apps/server/** / apps/web/** / apps/web-next/src/**），与 plan §4.6 字面对齐
+  - `scripts/verify-server-next-isolation.mjs`（新建，176 行）— TypeScript Compiler API（已有 typescript devDep）AST 扫描；覆盖 4 种 import 形态（import / export from / dynamic import / require）；6 条 forbidden patterns（绝对路径 + 相对路径跨 apps）；退出码 0/1/2 三档
+  - `package.json`（修改）— scripts 追加 `verify:server-next-isolation`
+  - `scripts/preflight.sh`（修改）— 在 [5/6] Lint 与 [6/6] 测试之间追加 [5b/6] verify-server-next-isolation
+- **新增依赖**：无（typescript 已是 devDep；avoid ts-morph 新依赖 ~10MB）
+- **数据库变更**：无
+- **故意违规自测**（4 种形态全部捕获）：
+  - `import 'apps/server/src/admin'` → 命中 reason 1
+  - `import '../../web-next/src/components/Foo'` → 命中 reason 3
+  - `require('apps/web/old-stuff')` → 命中 reason 2
+  - `await import('../../server/utils')` → 命中 reason 4
+  - exit code: 1
+- **OK 路径**：扫描 server-next 34 文件，0 违规，exit 0
+- **简化偏离**（reviewer 判定合理）：
+  - 用 TypeScript Compiler API 替代 ts-morph（已有 dep，无 ~10MB 新依赖）
+  - 静态 AST 覆盖足以满足 plan §4.6 "模块图遍历"实质意图；递归依赖链分析留 M-SN-3+
+  - 原计划 `node:fs/promises.glob` 在 Node v20.19.6 不可用，改用手动 fs.readdirSync 递归
+- **ADR-102 闭环**：dual-signal + admin-layout 跨域消费禁令的"编译期守卫"承诺至此落实（CHG-SN-1-03 / CHG-SN-1-04 留账闭环）
+- **回归**：typecheck (7 ws) / lint (4/4) / 1768 tests 全绿
+- **注意事项**：
+  - server-next 业务卡新增文件须经过本守卫；如需例外（极少数 type-only 跨 apps 引用），先 BLOCKER 上报
+  - `apps/web` regex `(?!next)` lookahead 是双保险，实际逻辑由 `(\/|$)` 已排除 `apps/web-next`
+
+---
+
 ## [CHG-SN-1-06] server-next apiClient + 鉴权层 + login 实装
 
 - **完成时间**：2026-04-28

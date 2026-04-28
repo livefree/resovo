@@ -33,6 +33,7 @@
     "preflight:e2e": "bash scripts/preflight.sh --with-e2e",
     "verify:docs-format": "bash scripts/check-docs-format.sh",
     "verify:admin-guardrails": "node scripts/verify-admin-guardrails.mjs --staged",
+    "verify:server-next-isolation": "node scripts/verify-server-next-isolation.mjs",
     "verify:admin-guardrails:all": "node scripts/verify-admin-guardrails.mjs --all",
     "migrate": "node --env-file=.env.local --import tsx scripts/migrate.ts",
     "clear:crawled-data": "node --env-file=.env.local --import tsx scripts/clear-crawled-data.ts",
