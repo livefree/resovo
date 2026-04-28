@@ -9,7 +9,8 @@ import { typography } from '../src/primitives/typography.js'
 import { motion } from '../src/primitives/motion.js'
 import { shadow } from '../src/primitives/shadow.js'
 import { zIndex } from '../src/primitives/z-index.js'
-import { bg, fg, border, accent, surface, state, tag, pattern, routeTransition, layout } from '../src/semantic/index.js'
+import { bg, fg, border, accent, surface, state, dualSignal, tag, pattern, routeTransition, layout } from '../src/semantic/index.js'
+import { adminShell, adminTable, adminDensity } from '../src/admin-layout/index.js'
 import { player } from '../src/components/player.js'
 import { defaultBrandOverrides, DEFAULT_BRAND_SLUG } from '../src/brands/default.js'
 
@@ -112,6 +113,7 @@ function buildSemanticVars(theme: ThemeKey): Array<[string, string]> {
     ...buildSemanticGroup('accent', accent as SemanticGroup, theme),
     ...buildSemanticGroup('surface', surface as SemanticGroup, theme),
     ...buildSemanticGroup('state', state as SemanticGroup, theme),
+    ...buildSemanticGroup('dual-signal', dualSignal as SemanticGroup, theme),
     ...buildSemanticGroup('tag', tag as SemanticGroup, theme),
     ...buildSemanticGroup('pattern', pattern as SemanticGroup, theme),
   ]
@@ -134,6 +136,13 @@ function buildThemeIndependentVars(): Array<[string, string]> {
 
   // layout — 叶子 key 即 CSS 变量名（不含 --），直接输出，不加文件前缀
   for (const group of Object.values(layout)) {
+    for (const [varName, value] of Object.entries(group as Record<string, string>)) {
+      out.push([`--${varName}`, value])
+    }
+  }
+
+  // admin-layout — 同 layout 模式，叶子 key 即 CSS 变量名（admin 专属，前台 0 消费 by ESLint）
+  for (const group of [adminShell, adminTable, adminDensity]) {
     for (const [varName, value] of Object.entries(group as Record<string, string>)) {
       out.push([`--${varName}`, value])
     }

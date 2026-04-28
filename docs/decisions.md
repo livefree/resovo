@@ -2175,4 +2175,34 @@ landing_plan_v1 §HANDOFF-03 验收清单第 5 项要求"主视图 ⇄ 浮窗切
   - **admin-layout 新增字段** → 主循环可直接落，但需在 milestone 阶段审计中报备（plan §4.3 硬约束 2）
   - **设计稿与 packages/design-tokens 不一致时**，packages 是真源（plan §4.3 硬约束 3）
 - **退役时机**：admin-layout 第三层与 apps/server-next（cutover 后 apps/admin）生命周期绑定；server-next 退役（不在规划内）一并退役
-- **关联**：ADR-022（token 单一真源）/ ADR-023（CSS 变量 + Tailwind 桥接）/ ADR-032（design-tokens 构建）/ ADR-037（里程碑对齐）/ ADR-100（立项）/ ADR-101（cutover）
+
+### 修订记录 · 与 design-tokens 现状对齐（2026-04-28，CHG-SN-1-03 摸现状阶段）
+
+CHG-SN-1-03 启动时摸清 `packages/design-tokens` 实际为 **4 层成熟系统**（primitives / semantic / components / brands），ADR-102 起草时未深入摸清现状，原"三层（base/semantic/admin-layout）"措辞与现实不符。用户裁定方案 A：保现状 + 新增 admin-layout 层；本节追认。
+
+**修订后的最终结构（4+1 层）**：
+
+| 层 | 现状角色 | 对应 ADR-102 原"3 层" | 由谁支撑 |
+|---|---|---|---|
+| **primitives/** | 原子 token（color / typography / space / radius / shadow / motion / z-index / size） | ≈ base 层（命名差异，语义等价） | ADR-022 / ADR-023 / ADR-032 |
+| **semantic/** | 语义 token（state / tag / surface / border / route-stack / stack；本卡内补 dual-signal） | = semantic 层 | ADR-022 |
+| **admin-layout/** *(本卡新增)* | admin 专属布局变量（shell / table / density） | = admin-layout 层 | ADR-102（本 ADR） |
+| **components/** | 组件级 token（table / modal / input / player / button / card / tooltip / tabs） | ADR-102 原 3 层未涵盖；现状保留 | ADR-022（隐式容纳） |
+| **brands/** | 多品牌 token（default + _validate / _patch / _resolve） | ADR-102 原 3 层未涵盖；现状保留 | ADR-038 / ADR-039 |
+
+**对原 ADR-102 决策的 supersede 关系**：
+- 原"分三层"措辞 → **修订为"在现有 4 层基础上新增 admin-layout 层（4+1 层结构）"**
+- 原 base 层映射 → **保留为 primitives/ 现名**（语义等价；不重命名以避免对 web-next 引用面的冲击）
+- 原"三层结构与字段映射表"（surface 归 semantic / motion 归 base）—— **保留映射意图**，仅落点改为 primitives/motion.ts（如缺）+ semantic/surface.ts（已有）
+- dual-signal token（probe / render）—— **新增到 semantic/dual-signal.ts**（本 ADR 原始设计不变）
+- admin-layout/ 顶级目录新增 —— **本 ADR 原始设计不变**
+
+**未受影响的 ADR-102 决策**：
+- 三条硬约束（base/semantic 新增 → ADR + Opus / admin-layout 新增 → milestone 报备 / 设计稿与 packages 不一致以 packages 为真源）—— 全部保留，仅"base 层"在执行时映射到"primitives 层"
+- dual-signal 跨域消费禁令（前台 0 消费）—— 保留
+- 命名规则、退役时机、影响文件 —— 保留
+- 关联 ADR —— 保留
+
+**结论**：方案 A 让 ADR-102 的核心决策（admin-layout 层独立 / dual-signal 引入 / 三条硬约束 / 跨域禁令）100% 落地，仅"层数与命名"措辞贴合现状；不触发对 ADR-022/023/032/038/039 的级联 supersede。
+
+- **关联**：ADR-022（token 单一真源）/ ADR-023（CSS 变量 + Tailwind 桥接）/ ADR-032（design-tokens 构建）/ ADR-037（里程碑对齐）/ ADR-038（双轨主题，brands 层支撑）/ ADR-039（middleware 品牌识别，brands 层支撑）/ ADR-100（立项）/ ADR-101（cutover）

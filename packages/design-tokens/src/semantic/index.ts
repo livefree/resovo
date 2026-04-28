@@ -13,6 +13,9 @@ export type { AccentToken, AccentTheme } from './accent.js'
 export { state } from './state.js'
 export type { StateKind, StateSlot, StateTheme } from './state.js'
 
+export { dualSignal } from './dual-signal.js'
+export type { DualSignalToken, DualSignalTheme } from './dual-signal.js'
+
 export { surface } from './surface.js'
 export type { SurfaceToken, SurfaceTheme } from './surface.js'
 

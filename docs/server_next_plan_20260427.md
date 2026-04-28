@@ -144,27 +144,39 @@ resovo/
 
 **Cookie / 鉴权**：server-next 与 apps/server 使用相同的 fastify-jwt cookie 名（由 apps/api 签发），cutover 当日运营无需重新登录（cookie 在浏览器侧保持）。**M-SN-3 完成时在 staging 环境做一次 cookie + nginx e2e 端到端演练**（DISCUSS-3）。
 
-### 4.3 Token 三层（详见 ADR-102）
+### 4.3 Token 4+1 层（详见 ADR-102 含修订记录）
+
+> **现状对齐修订（2026-04-28）**：CHG-SN-1-03 摸现状发现 packages/design-tokens 已是 4 层成熟系统（primitives / semantic / components / brands）。ADR-102 原"3 层"措辞贴合现状改为"在 4 层基础上新增 admin-layout 层（4+1 层结构）"。详见 ADR-102 修订记录段。
 
 ```
-packages/design-tokens/
-├── base/         ← 前后台共用，不可 fork
-│   colors.css / typography.css / spacing.css / radius.css / shadow.css / motion.css
-├── semantic/     ← 前后台共用，按场景命名
-│   status.css（ok/warn/danger/info）
-│   dual-signal.css（probe/render，admin 主用，前台预留）
-│   surface.css（bg0..bg4）
-└── admin-layout/ ← admin 专属
-    shell.css（sidebar-w / topbar-h / sidebar-collapsed-w）
-    table.css（row-h / row-h-compact / col-min-w）
-    density.css
+packages/design-tokens/src/
+├── primitives/         ← 原子 token，前后台共用，不可 fork（ADR-022/023/032）
+│   color.ts / typography.ts / space.ts / radius.ts / shadow.ts / motion.ts / z-index.ts / size.ts
+├── semantic/           ← 语义 token，前后台共用，按场景命名（ADR-022）
+│   state.ts / tag.ts / surface.ts（含 bg0..bg4）/ border.ts / route-stack.ts / stack.ts
+│   dual-signal.ts（本卡新增，probe/render，admin 主用，前台预留）
+├── admin-layout/       ← 本卡新增，admin 专属（ADR-102）
+│   shell.ts（sidebar-w / topbar-h / sidebar-collapsed-w）
+│   table.ts（row-h / row-h-compact / col-min-w）
+│   density.ts
+├── components/         ← 组件级 token（ADR-022 隐式容纳）
+│   table / modal / input / player / button / card / tooltip / tabs
+└── brands/             ← 多品牌 token（ADR-038/039）
+    default + _validate / _patch / _resolve / index
 ```
 
-**收编路径**（设计稿 v2.1 `tokens.css` → packages/design-tokens 三层）见 R2.3 详表。
+**收编路径**（设计稿 v2.1 `tokens.css` → packages/design-tokens）：
+- `:root` 基础调色 → primitives（已有，差缺补齐 motion 等）
+- bg0~bg4 surface → semantic/surface.ts（已有；本卡补 v2.1 字段）
+- status (ok/warn/danger/info/neutral + soft) → semantic/state.ts（已有；本卡补 v2.1 字段）
+- dual-signal (probe/render + soft) → **semantic/dual-signal.ts**（本卡新建文件）
+- admin layout 变量（sidebar-w / topbar-h / row-h / row-h-compact）→ **admin-layout/**（本卡新建顶层目录）
+- motion duration / easing → primitives/motion.ts（已有；本卡补 v2.1 字段）
 
 **硬约束**：
-- base / semantic 任何字段新增 → spawn arch-reviewer (Opus) 评审 → ADR 续编
-- admin-layout 新增字段 → 主循环可直接落，但需在 milestone 阶段审计中报备
+- **primitives / semantic** 任何字段新增 → spawn arch-reviewer (Opus) 评审 → ADR 续编（原"base / semantic"映射到现名）
+- **admin-layout** 新增字段 → 主循环可直接落，但需在 milestone 阶段审计中报备
+- **components / brands** 字段新增按各自 ADR 现行规则（ADR-022 / ADR-038 / ADR-039）
 - 设计稿与 packages 不一致时，**packages 是真源**
 
 ### 4.4 packages/admin-ui 下沉边界（MUST-3 修订）

@@ -89,7 +89,7 @@
 
 - **状态**：🔄 执行中
 - **创建时间**：2026-04-28 02:00
-- **最后更新时间**：2026-04-28 02:45
+- **最后更新时间**：2026-04-28 03:05
 - **目标**：搭建 apps/server-next 工程骨架 + packages/admin-ui 空骨架 + design-tokens 三层重构 + Provider 移植 + IA v0 27 路由占位 + apiClient + 鉴权 + login → dashboard 通路打通
 - **范围**：`apps/server-next/`（新建）、`packages/admin-ui/`（新建空骨架）、`packages/design-tokens/`（三层重构）、`apps/web-next/`（token 引用面回归验证）、`package.json`（workspaces 追加）、`docker-compose.dev.yml`（server-next 服务）、`docs/architecture.md`（§17 token 三层映射）、`scripts/verify-server-next-isolation.mjs`（新建）
 - **依赖**：M-SN-0 三批清理已 PASS（commit `7c278cc` / `96cde57` / `827b88c`）；ADR-100/101/102 落盘
@@ -156,9 +156,15 @@
    - 子代理调用：arch-reviewer (claude-opus-4-6)
    - 主循环模型：opus
 
-3. **CHG-SN-1-03** — packages/design-tokens 三层重构（base/semantic/admin-layout）+ apps/web-next 引用面回归（状态：⬜ 未开始）
+3. **CHG-SN-1-03** — packages/design-tokens 三层重构（base/semantic/admin-layout）+ apps/web-next 引用面回归（状态：✅ 已完成）
    - 创建时间：2026-04-28 02:00
    - 计划开始：M-SN-1 Day 2 上午
+   - 实际开始：2026-04-28 02:50
+   - 完成时间：2026-04-28 03:05
+   - 实际工时：0.25 天（远 < 估算 2 天，因 A 方案大幅缩减范围 + design-tokens 现有 build pipeline 设计良好）
+   - review：arch-reviewer (claude-opus-4-6) PASS（首轮即过；3 SHOULD 已记录不阻塞）
+   - 关键事件：摸现状阶段触发 BLOCKER（design-tokens 是 4 层成熟系统，不是 3 层轻量包）→ 用户裁定 A 方案 → ADR-102 patch + plan §4.3 同步 + 4+1 层结构落地
+   - SHOULD 留账（CHG-SN-1-07 处理）：dual-signal + admin-layout 跨域消费禁令的 ESLint + ts-morph 编译期守卫
    - 工时估算：2 天（**M-SN-1 最重一卡**）
    - 关联 plan §：§4.3 token 三层 / §10.4 design-tokens 重构对 web-next 影响
    - 关联 ADR：ADR-102（token 三层）/ ADR-022 / ADR-023 / ADR-032

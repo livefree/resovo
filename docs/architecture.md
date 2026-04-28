@@ -772,3 +772,49 @@ layout.tsx
 - 新增 `buildThemeIndependentVars()`：将 `routeTransition` 和 `player` 组件 token 扁平化写入 `:root`（主题无关）
 - `buildSemanticVars()` 扩展：新增 `tag` 和 `pattern` 的 light/dark 生成
 - 所有已有变量值不变（tokens.css diff 只含新增）
+
+---
+
+## 17a. Token 4+1 层结构（CHG-SN-1-03，2026-04-28，对齐 ADR-102）
+
+CHG-SN-1-03 摸现状发现 `packages/design-tokens` 已是 4 层成熟系统（primitives / semantic / components / brands）。ADR-102 原"3 层（base/semantic/admin-layout）"措辞修订为"在现有 4 层基础上新增 admin-layout 层"。详见 ADR-102 修订记录段。
+
+### 4+1 层结构
+
+| 层 | 角色 | 共享范围 | 由谁支撑 | 本卡变更 |
+|---|---|---|---|---|
+| **primitives/** | 原子 token（color / typography / space / radius / shadow / motion / z-index / size） | web-next + server-next 共享 | ADR-022/023/032 | 无 |
+| **semantic/** | 语义 token（state / tag / surface / border / route-stack / stack 等 18 文件） | web-next + server-next 共享 | ADR-022 | 新增 `dual-signal.ts`（probe/render，admin 主用） |
+| **admin-layout/** *(新增顶层目录)* | admin 专属布局变量（shell / table / density） | server-next 专属（前台 0 消费） | ADR-102 | 全新增（3 子文件 + index.ts） |
+| **components/** | 组件级 token（table / modal / input / player / button / card / tooltip / tabs 等 8 文件） | web-next + server-next 共享 | ADR-022 隐式容纳 | 无 |
+| **brands/** | 多品牌 token（default + _validate / _patch / _resolve） | web-next + server-next 共享 | ADR-038/039 | 无 |
+
+### 设计稿 v2.1 → packages/design-tokens 映射表
+
+设计稿源：`docs/designs/backend_design_v2.1/styles/tokens.css`
+
+| v2.1 字段 | 落点（CHG-SN-1-03 后） | 状态 |
+|---|---|---|
+| `:root` 基础调色（accent / accent-hover / accent-soft / accent-border） | `semantic/accent.ts`（已有，未改）| 现有 token 已等价表达 |
+| `--ok / --warn / --danger / --info / --neutral` + soft 变体 | `semantic/state.ts`（已有，未改）+ `primitives/color.ts`（已有 success/warning/error/info） | 现有 token 已等价表达；admin 设计专属 hex 命名直接由 v2.1 css 注入（不污染前台） |
+| `--probe / --render` + soft 变体 | **`semantic/dual-signal.ts`（本卡新增）** | ✅ 落地 |
+| `--shadow-sm/md/lg` | `primitives/shadow.ts`（已有）| 现有 token 等价 |
+| `--fs-*` / `--s-*` / `--r-*` | `primitives/typography.ts` / `space.ts` / `radius.ts`（已有）| 现有 token 等价 |
+| `--sidebar-w / --sidebar-w-collapsed / --topbar-h` | **`admin-layout/shell.ts`（本卡新增）** | ✅ 落地 |
+| `--row-h / --row-h-compact / --col-min-w` | **`admin-layout/table.ts`（本卡新增）** | ✅ 落地 |
+| `--density-comfortable / --density-compact` | **`admin-layout/density.ts`（本卡新增，M-SN-1 占位）** | ✅ 落地 |
+| `[data-theme="light"]` 主题覆盖 | dark-first 已是默认；light 在 base/semantic 现有覆盖机制中（未改）| 沿用现有 |
+
+### 跨域消费禁令（dual-signal + admin-layout）
+
+- **dual-signal token**（`--dual-signal-probe` / `--dual-signal-render` 及 soft）和 **admin-layout token**（`--sidebar-w` / `--topbar-h` / `--row-h` / `--col-min-w` / `--density-*`）—— apps/web-next 任何路由 0 消费
+- 守卫：CHG-SN-1-07 落 ESLint `no-restricted-imports` + ts-morph CI 兜底脚本（plan §4.6 / ADR-100 架构约束）
+- CHG-SN-1-03 验证：grep 全仓 `apps/web-next/src` 内 0 命中（已验）
+
+### build pipeline 变更
+
+- `build.ts` `buildSemanticVars()` 追加 `dual-signal` source；`buildLayoutVars()` 追加 admin-layout 三组扁平输出（与 layout 同模式）；`buildJs()` `buildDts()` 同步导出 `adminLayout: { adminShell, adminTable, adminDensity }`
+- `scripts/build-css.ts` 同步：`buildSemanticVars()` 加 `dual-signal`；`buildThemeIndependentVars()` 末尾追加 admin-layout 三组
+- `src/index.ts` 顶级导出新增 `./admin-layout/index.js`
+- `src/semantic/index.ts` 追加 `dualSignal` 导出
+- 现有变量值 0 改动；新增 8 个 admin-layout CSS 变量 + 8 个 dual-signal CSS 变量（light + dark 各 4）

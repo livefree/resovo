@@ -39,6 +39,39 @@
 
 ---
 
+## [CHG-SN-1-03] packages/design-tokens 4+1 层结构（admin-layout 新增 + dual-signal 收编）
+
+- **完成时间**：2026-04-28
+- **记录时间**：2026-04-28 03:05
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-6, Opus) — 首轮 PASS（3 SHOULD 不阻塞）
+- **关键事件**：摸现状触发 BLOCKER（design-tokens 是 4 层成熟系统，与 ADR-102 假设的 3 层轻量包不符）→ 用户裁定 A 方案 → ADR-102 patch + plan §4.3 同步
+- **修改文件**：
+  - `docs/decisions.md`（ADR-102 行 ~2178-2210 新增"修订记录 · 与 design-tokens 现状对齐"段；关联段补 ADR-038/039）
+  - `docs/server_next_plan_20260427.md` §4.3（"3 层"→"4+1 层"目录树 + 收编路径表 + 修订前置说明）
+  - `docs/architecture.md` §17a（新增；4+1 层结构表 + v2.1 → packages 字段映射 + 跨域禁令 + build pipeline 变更）
+  - `packages/design-tokens/src/semantic/dual-signal.ts`（新建；light/dark × probe/render + soft；hex 内联 v2.1 设计稿原值，文件头明示偏离与续编出口）
+  - `packages/design-tokens/src/admin-layout/{shell,table,density,index}.ts`（新建顶层目录；sidebar-w / topbar-h / row-h / col-min-w / density-* 共 8 字段）
+  - `packages/design-tokens/src/semantic/index.ts`（追加 dualSignal 导出）
+  - `packages/design-tokens/src/index.ts`（顶级导出追加 admin-layout）
+  - `packages/design-tokens/build.ts`（buildSemanticVars 加 dual-signal source；buildLayoutVars 末尾追加 admin-layout 三组；buildJs/buildDts 顶层导出 adminLayout）
+  - `packages/design-tokens/scripts/build-css.ts`（同步追加 dual-signal + admin-layout）
+  - `packages/design-tokens/src/css/tokens.css`（auto-generated；新增 16 行 = 8 dual-signal × light/dark + 8 admin-layout 主题无关）
+  - `tests/unit/design-tokens/admin-layout.test.ts`（新建，8 tests pass）
+- **新增依赖**：无
+- **数据库变更**：无
+- **跨域消费验证**：
+  - `grep -rn "dual-signal|--probe|--render|--sidebar-w|--topbar-h|--row-h|--col-min-w|--density-" apps/web-next/src/` → 0 命中
+  - server-next 当前 0 消费（M-SN-1-04+ 接入）
+- **回归**：typecheck / lint / 1768 tests（150 files + 新 8 tests）全绿
+- **SHOULD 留账（CHG-SN-1-07 处理）**：dual-signal + admin-layout 跨域消费的 ESLint `no-restricted-imports` + ts-morph CI 兜底脚本（`scripts/verify-server-next-isolation.mjs`）
+- **注意事项**：
+  - dual-signal hex 内联是 admin 业务专属语义层简化偏离（不污染 primitives oklch 调色），未来如需纳入 primitives 颜色层须 ADR 续编
+  - 4+1 层结构 supersede ADR-102 原"3 层"措辞，不触发 ADR-022/023/032/038/039 级联 supersede
+  - admin-layout 第三层与 server-next（cutover 后 apps/admin）生命周期绑定
+
+---
+
 ## [CHG-SN-1-02] apps/server-next Next.js 空壳 + workspaces 追加 + dev :3003 起服
 
 - **完成时间**：2026-04-28
