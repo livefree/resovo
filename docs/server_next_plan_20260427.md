@@ -1,7 +1,7 @@
 # Resovo server-next 工程实施 Plan v1
 
 > status: approved-for-execution（M-SN-0 清理工作台前的最终版）
-> version: v2.3（v0 → v1 → v2 → v2.1 → v2.2 → v2.3 修订记录见末尾"修订日志"；v2.3 = CHG-SN-1-12 M-SN-2 范围扩列 Shell + 总周期 17.5w → 18.0w）
+> version: v2.4（v0 → v1 → v2 → v2.1 → v2.2 → v2.3 → v2.4 修订记录见末尾"修订日志"；v2.4 = CHG-SN-2-01.5 §4.7 依赖白名单扩列 lucide-react + ADR-103b）
 > owner: @engineering
 > scope: apps/server-next 工程 + packages/admin-ui 下沉 + packages/design-tokens 三层 + nginx 反代切流 + apps/server 退场
 > source_of_truth: yes（工程视角的"宪法"，所有 server-next 任务卡须引用本 plan §节号）
@@ -10,7 +10,7 @@
 >   - [admin_design_brief_20260426.md](./admin_design_brief_20260426.md)（design 视角 brief）
 >   - [server_next_kickoff_20260427.md](./server_next_kickoff_20260427.md)（R1–R5 决策实录 + 评审报告）
 >   - [docs/designs/backend_design_v2.1/](./designs/backend_design_v2.1/)（设计稿，仍在补完）
-> generated_at: 2026-04-27（v0）/ revised: 2026-04-27（v1）/ 2026-04-28（v2 / v2.1 / v2.2 / v2.3）
+> generated_at: 2026-04-27（v0）/ revised: 2026-04-27（v1）/ 2026-04-28（v2 / v2.1 / v2.2 / v2.3 / v2.4）
 > 主循环模型：claude-opus-4-7
 > 评审：v1 完成后 spawn arch-reviewer (Opus) 二轮评审 PASS 才进入 M-SN-0
 
@@ -99,6 +99,7 @@
 | **M-SN-6.5 软上限** | 0.5w 为基线；任一类验收发现 critical >2 项即升至 1w | R7 SHOULD-8 | §6 M-SN-6.5 |
 | **token 重构截图标准** | web-next 视觉回归对照清单：home / search / video detail / player 4 页 × 明暗双模 = 8 张 | R7 DISCUSS-7 | §10.4 |
 | **M-SN-2 范围扩列 Shell**（v2.3 新增）| 方案 B：A2 + Shell 扩列；M-SN-2 工时 2.5w → 3w（+20%，未触发 BLOCKER 11）；总周期 17.5w → 18.0w；新增 ADR-103a（Shell 公开 API 契约） | CHG-SN-1-12 Opus 评审 | §6 M-SN-2 + §8 复用矩阵 + ADR-103a |
+| **server-next 图标库选型**（v2.4 新增）| **lucide-react `^1.12.0`**；6 维评估 30/30；与设计稿 shell.jsx 12 NAV icon 同名命中；安装位置仅 apps/server-next（packages/admin-ui 零图标库依赖约束 ADR-103a §4.4-4 不变）；仅允许 named import；Next.js optimizePackageImports + ESLint + ts-morph 三层兜底 | CHG-SN-2-01.5 Opus 评审 + 用户 sign-off | §4.7 + ADR-103b |
 
 ---
 
@@ -254,7 +255,7 @@ rules: {
 
 加入 `npm run lint` 与 `npm run preflight` 流水线，每个 PR 必跑。补充 `scripts/verify-server-next-isolation.mjs` 走 ts-morph 模块图遍历做 CI 兜底。
 
-### 4.7 依赖白名单（MUST-5 新增）
+### 4.7 依赖白名单（MUST-5 新增；v2.4 扩列图标库）
 
 server-next 可使用的 npm 包，超出本表即触发 BLOCKER §5.2 第 2 条。
 
@@ -262,6 +263,7 @@ server-next 可使用的 npm 包，超出本表即触发 BLOCKER §5.2 第 2 条
 - React 18 / Next.js / TypeScript / zod / clsx / tailwind-merge / dayjs / zustand（已在仓库）
 - `@dnd-kit/core` `@dnd-kit/sortable`（apps/server 已用，server-next 复用拖拽场景）
 - `@resovo/types` `@resovo/player-core` `@resovo/admin-ui` `@resovo/design-tokens`（workspaces 内）
+- **`lucide-react@^1.12.0`**（v2.4 扩列；CHG-SN-2-01.5 + ADR-103b）— **安装位置仅 apps/server-next**；packages/admin-ui 严禁引入（ADR-103a §4.4-4 零图标库依赖硬约束 + ADR-103b §4.4 安装位置约束）；仅允许 named import；Next.js `optimizePackageImports` 配置纳入 `lucide-react`
 
 #### 候选（首次落地前 spawn arch-reviewer 二选一）
 | 场景 | 候选 1 | 候选 2 | 决策时机 |
@@ -274,6 +276,9 @@ server-next 可使用的 npm 包，超出本表即触发 BLOCKER §5.2 第 2 条
 - 任何 UI 框架（antd / mui / chakra / shadcn 重型组件库）— 与"复用 packages/admin-ui"硬冲突
 - 任何状态管理替代品（redux / jotai / valtio）— 已用 zustand
 - 任何路由库（react-router）— Next.js App Router 已覆盖
+- **packages/admin-ui 工作区引入任何图标库**（含 `lucide-react` / `@heroicons/react` / `react-icons`）— 违反 ADR-103a §4.4-4 注入约束（v2.4 新增；ESLint `no-restricted-imports` + `scripts/verify-server-next-isolation.mjs` 模块图校验双兜底）
+
+> v2.4 备注：替代图标库（如 `@heroicons/react` / `react-icons`）暂不进入"严禁"列；若未来在 server-next 内出现引入需求，须新起 ADR-103b 续修订评审（避免双图标库混用）。
 
 ---
 
@@ -943,3 +948,40 @@ M-SN-0 完成 = 三批全部 PASS + 三份 ADR 进入 `docs/decisions.md` + 本 
 - 重大修订标记：是（影响 §6 范围 + 总周期 + §8 矩阵列结构）；按 §0 plan 版本协议须人工 sign-off — 已取得
 
 — END plan v2.3（CHG-SN-1-12 落地）—
+
+### v2.3 → v2.4（2026-04-28）
+
+由 SEQ-20260428-03 任务 1.5（CHG-SN-2-01.5）触发：CHG-SN-2-02（admin-nav.ts ADMIN_NAV icon 注入）开工后触发 plan §5.2 BLOCKER 第 2 条 — `lucide-react` 不在 plan §4.7 v2.3 依赖白名单。回溯发现 CHG-SN-2-01（ADR-103a 起草）评审过程虽确立"图标由 server-next 应用层注入"边界，但未驱动 plan §4.7 同步修订（隐性漏洞）。子代理评审 arch-reviewer (claude-opus-4-7) 独立审计 6 维评估 + 3 候选选型后裁决 lucide-react；用户人工 sign-off 后落盘。**人工 sign-off：用户 2026-04-28 接受 4 项决策（Q1-Q4 全部确认）+ 实测 lucide-react 最新稳定版 1.12.0 后版本数字校正为 ^1.12.0**。
+
+**修订内容（CHG-SN-2-01.5 落盘，仅修订 plan 不实施代码）**：
+
+- **§3 决策表**：新增"server-next 图标库选型"行（结论：lucide-react `^1.12.0`；安装位置仅 apps/server-next；packages/admin-ui 零图标库依赖约束沿用；来源 CHG-SN-2-01.5 Opus 评审 + 用户 sign-off；ADR 落地 §4.7 + ADR-103b）
+- **§4.7 依赖白名单**：预批清单追加 `lucide-react@^1.12.0` + 安装位置 / 命名 import / Next.js 配置 三项约束；严禁清单追加"packages/admin-ui 工作区引入任何图标库"项（含双兜底机制说明）；末尾备注其他图标库未严禁但混用须新 ADR
+
+**4 项决策一览**：
+
+| 编号 | 议题 | v2.4 决策 |
+|---|---|---|
+| Icon-1 | 图标库选定 | lucide-react（C1）— 6 维评估 30/30 满分；与设计稿 shell.jsx 12 NAV icon 同名命中；ADR-103a §4.4-4 边界严格兼容 |
+| Icon-2 | 安装位置 | 仅 apps/server-next/package.json；packages/admin-ui 严禁引入（ESLint + ts-morph 双兜底） |
+| Icon-3 | 版本约束 | `^1.12.0`（实测最新稳定版；caret 范围允许 1.x minor + patch 升级；major 升级须新 ADR） |
+| Icon-4 | 替代库严禁策略 | heroicons / react-icons 暂不严禁；未来出现引入需求须 ADR-103b 续修订评审（避免双图标库混用） |
+
+**不变约束**：packages/admin-ui 零图标库依赖（ADR-103a §4.4-4）/ AdminNavItem.icon 类型保持 `React.ReactNode`（ADR-103a §4.1）/ Provider 不下沉（ADR-103a 既定边界）/ Edge Runtime 兼容 / 零硬编码颜色 / URL slug 不动（plan §5.2 BLOCKER 第 8 条仍生效）/ M-SN-1 闭环资产零返工 / Resovo 价值排序顺序不变。
+
+**后续卡链**：
+- CHG-SN-2-01.5 完成（本 plan v2.4 + ADR-103b 落盘 + 人工 sign-off）→ 解锁 CHG-SN-2-02 stage 2/2
+- CHG-SN-2-02 stage 2/2：apps/server-next 安装 `lucide-react@^1.12.0` + admin-nav.ts ADMIN_NAV 5 字段注入（icon / shortcut；count + badge 按 ADR-103a §4.5 IA v1 业务态势注入）+ Next.js optimizePackageImports + ESLint named import 拦截 + verify-server-next-isolation.mjs 扩展
+- CHG-SN-2-03 ~ CHG-SN-2-12：Shell 10 组件分卡时按需消费 lucide-react named import（仅在 server-next 应用层）
+
+**修订日志元信息**：
+- Plan-Revision: v2.3 → v2.4
+- 主循环模型：claude-opus-4-7
+- 子代理：arch-reviewer (claude-opus-4-7) — 依赖白名单修订决策强制 Opus（CLAUDE.md 模型路由规则第 1 / 3 项 + plan §0 SHOULD-4-a 重大修订协议）
+- 人工 sign-off：用户 2026-04-28 接受 4 项决策（Icon-1 ~ Icon-4 全部确认）+ 版本号校正 ^1.12.0
+- 关联 ADR：ADR-103b（server-next 图标库选型）
+- 关联序列：SEQ-20260428-03 任务 1.5
+- 工时影响：0（仅依赖白名单扩列；CHG-SN-2-02 stage 2/2 仍按原工时估算）
+- 重大修订标记：是（影响 §4.7 白名单 + §3 决策表）；按 §0 plan 版本协议须人工 sign-off — 已取得
+
+— END plan v2.4（CHG-SN-2-01.5 落地）—

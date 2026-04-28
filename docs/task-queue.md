@@ -542,9 +542,9 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
 
 ## [SEQ-20260428-03] M-SN-2 第一阶段 · ADR-103a 起草 + AdminNavItem 字段扩展（执行序列）
 
-- **状态**：🔄 执行中（CHG-SN-2-01 ✅；CHG-SN-2-02 ~ -21 待开）
+- **状态**：🔄 执行中（CHG-SN-2-01 ✅；fix(CHG-SN-2-01) ✅；CHG-SN-2-02 stage 1/2 ✅；CHG-SN-2-01.5 ✅；CHG-SN-2-02 stage 2/2 BLOCKER 已解除可继续；CHG-SN-2-03 ~ -21 待开）
 - **创建时间**：2026-04-28 22:00
-- **最后更新时间**：2026-04-28 22:30
+- **最后更新时间**：2026-04-28 23:55
 - **目标**：M-SN-2 第一阶段（Shell 公开 API 契约固化 + admin-nav.ts 字段扩展）。落地 ADR-103a 作为 Shell 10 组件 Props / AdminNavItem 5 字段扩展协议 / 4 级 z-index 规范的真源；让 server-next 侧 admin-nav.ts 注入 icon / shortcut / count / badge 字段，准备好被 packages/admin-ui Shell 组件消费。
 - **范围**：`docs/decisions.md`（ADR-103a 新建）/ `apps/server-next/src/lib/admin-nav.ts`（5 字段扩展 + ADMIN_NAV 改写）/ `apps/server-next/src/lib/shell-data.ts`（新建：count provider 接口实现）/ admin-layout token 第 5 层新增 z-shell-* 三变量
 - **依赖**：SEQ-20260428-02 全 5 张卡 PASS（commit da1dafa / 15b3bf7 / 1e6bbb1 / 8975a50 / e1df243 + 修订 e9d2f52）；不留口子检查清单 5/5 [x]
@@ -579,13 +579,31 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
    - 主循环模型：opus
    - 完成判据：ADR-103a 落盘 + Opus 评审 PASS + 序列备注更新
 
-2. **CHG-SN-2-02** — admin-nav.ts 5 字段扩展 + ADMIN_NAV 注入 icon/shortcut/count/badge + admin-layout z-shell-* token（状态：🟠 PARTIAL · stage 1/2 已完成 / stage 2/2 BLOCKER 暂停）
+2. **CHG-SN-2-02** — admin-nav.ts 5 字段扩展 + ADMIN_NAV 注入 icon/shortcut/count/badge + admin-layout z-shell-* token（状态：🟠 PARTIAL · stage 1/2 已完成 / stage 2/2 BLOCKER 暂停 · 解锁前置 CHG-SN-2-01.5）
    - 创建时间：2026-04-28 22:00
    - 计划开始：CHG-SN-2-01 PASS 后
    - 实际开始：2026-04-28 23:15
-   - stage 1/2 完成时间：2026-04-28 23:30（admin-layout z-shell-* token + verify 扩展 + 单测，与 lucide-react 无关，全绿）
+   - stage 1/2 完成时间：2026-04-28 23:35（commit f5d5335；admin-layout z-shell-* token + verify 扩展 + 单测，与 lucide-react 无关，全绿）
    - stage 2/2 阻塞时间：2026-04-28 23:30（admin-nav.ts ADMIN_NAV icon 注入触发 BLOCKER §5.2 第 2 条；详见序列尾部 BLOCKER 通知）
    - 工时估算：0.5 天
+
+2.5. **CHG-SN-2-01.5** — server-next 图标库选型 ADR-103b + plan §4.7 v2.3 → v2.4 修订（解锁 CHG-SN-2-02 stage 2/2）（状态：✅ 已完成）
+   - 创建时间：2026-04-28 23:40
+   - 计划开始：BLOCKER 用户裁定方案 A 后
+   - 实际开始：2026-04-28 23:40
+   - 完成时间：2026-04-28 23:55
+   - 实际工时：0.02 天（~15min；Opus 评审 + 落盘 + 用户 sign-off）
+   - review：arch-reviewer (claude-opus-4-7) — 6 维评估 30/30 推荐 lucide-react PASS + 用户 sign-off Q1-Q4 全确认 + 版本号校正 ^1.12.0
+   - 工时估算：0.5 天
+   - 触发：CHG-SN-2-02 stage 2/2 BLOCKER §5.2 第 2 条（lucide-react 不在 §4.7 白名单）；用户 2026-04-28 裁定方案 A
+   - 关联 plan §：§4.7 / §0 SHOULD-4-a / §3 决策表
+   - 关联 ADR：**ADR-103b（本卡新建）**
+   - 文件范围：docs/decisions.md（ADR-103b 新建）+ docs/server_next_plan_20260427.md（§4.7 + §3 + 修订日志 + 元信息）
+   - 验收要点：详见 tasks.md
+   - 子代理调用：arch-reviewer (claude-opus-4-7) — ADR 起草 + 依赖选型决策强制 Opus
+   - 人工 sign-off：plan §4.7 修订属重大修订，落盘前提请用户确认（Q1 选型 + Q2 v2.3 → v2.4）
+   - 完成判据：ADR-103b 落盘 + plan §4.7 v2.4 修订落盘 + Opus PASS + 用户 sign-off
+   - 解锁影响：本卡 PASS 后 CHG-SN-2-02 stage 2/2 + CHG-SN-2-03+ Shell 组件分卡可继续
    - 关联 ADR：ADR-103a（本卡输入）/ ADR-102（admin-layout token 第 5 层扩展）
    - 文件范围：
      - `apps/server-next/src/lib/admin-nav.ts`（AdminNavItem 类型 5 字段扩展 + ADMIN_NAV 注入 icon ReactNode / shortcut 'mod+x' / badge 静态值）
@@ -625,7 +643,13 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
 
 ---
 
-## 🚨 BLOCKER · 2026-04-28 23:30 · CHG-SN-2-02 stage 2/2 暂停
+## ✅ BLOCKER 已解除 · 2026-04-28 23:55 · CHG-SN-2-02 stage 2/2 可放行（原 BLOCKER 通知保留作追溯）
+
+**解除路径**：用户 2026-04-28 裁定方案 A → CHG-SN-2-01.5 PASS（commit 待提；plan v2.4 + ADR-103b 落盘 + 4 项 sign-off）→ lucide-react@^1.12.0 加入 §4.7 预批清单 → CHG-SN-2-02 stage 2/2 可继续 admin-nav.ts 字段扩展 + ADMIN_NAV icon 注入。
+
+---
+
+## 🚨 BLOCKER · 2026-04-28 23:30 · CHG-SN-2-02 stage 2/2 暂停（已解除，详见上段）
 
 - **触发条款**：plan §5.2 BLOCKER 第 2 条 — 引入 §4.7 依赖白名单之外的 npm 包
 - **触发位置**：CHG-SN-2-02 实施 admin-nav.ts ADMIN_NAV icon 注入时

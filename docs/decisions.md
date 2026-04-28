@@ -2855,3 +2855,111 @@ ADR-100 IA 修订段 `docs/decisions.md:2104-2117` 已声明 cutover 前 `manual
 **修订属性**：纯文本修订；架构决策（10 组件清单 / 5 字段扩展 / 4 级 z-index / 4 项硬约束）零变更；后续卡链不动。
 
 **回归**：typecheck + lint + test 全绿（仅 docs 改动）。
+
+---
+
+## ADR-103b: server-next 图标库选型 — lucide-react
+
+- **日期**：2026-04-28
+- **状态**：已采纳
+- **子代理**：arch-reviewer (claude-opus-4-7) — 依赖白名单修订决策强制 Opus（CLAUDE.md 模型路由规则第 1 / 3 项 + plan §0 SHOULD-4-a 重大修订协议）
+- **起草模型**：claude-opus-4-7
+- **关联序列**：SEQ-20260428-03（M-SN-2 第一阶段 — Shell 落地）
+- **关联卡**：CHG-SN-2-01.5（本 ADR 起草 + plan §4.7 修订）/ CHG-SN-2-02 stage 2/2（解锁前置）
+- **关联 ADR**：ADR-100（立项 + §4.7 依赖白名单口径）/ ADR-103a（packages/admin-ui Shell 公开 API 契约 §4.4-4 注入约束）
+- **人工 sign-off**：用户 2026-04-28 接受 4 项决策（Q1-Q4 全部确认）+ 版本号校正 ^1.12.0
+
+### 背景
+
+CHG-SN-2-02（admin-nav.ts ADMIN_NAV 5 字段扩展 + icon 注入）开工后触发 plan §5.2 BLOCKER 第 2 条 — `lucide-react` 不在 plan §4.7 v2.3 依赖白名单（行 257-276 预批清单 + 候选清单均无图标库类目）。卡停步取签。
+
+回溯审计发现 CHG-SN-2-01 ADR-103a 起草过程的 Opus 评审虽确立"icon 由 server-next 应用层注入 React.ReactNode、packages/admin-ui 零图标库依赖"的边界协议（ADR-103a §4.4-4），但未对照 plan §4.7 v2.3 实际白名单状态——隐性假设"图标库由 server-next 持有"成立，却未驱动 plan 同步修订。该漏洞在 CHG-SN-2-02 实施阶段才暴露，属 ADR-103a 与 plan §4.7 的口径耦合疏漏。
+
+用户裁定方案 A：起新卡 CHG-SN-2-01.5 完成依赖选型评审 + plan §4.7 修订 + 人工 sign-off；本 ADR PASS 且 plan v2.4 落盘后，CHG-SN-2-02 stage 2/2 才能继续 icon 注入实施。
+
+设计稿 v2.1 `docs/designs/backend_design_v2.1/app/shell.jsx:10-35` 的 NAV 区块通过全局 `I.layers / I.inbox / I.film / I.link / I.merge / I.doc / I.image / I.banner / I.flag / I.spider / I.users / I.settings` 暴露 12 个 icon；CmdK / Topbar / UserMenu / NotificationDrawer / TaskDrawer / HealthBadge 等组件另需若干图标按钮——总即时需求 30-50 icon，M-SN-3+ 业务视图增长至 100+。
+
+### 决策
+
+#### 4.1 选定方案：lucide-react（候选 C1）
+
+#### 4.2 6 维评估表
+
+| 维度 | C1 lucide-react | C2 @heroicons/react | C3 react-icons |
+|---|---|---|---|
+| bundle 体积（gzip / icon） | 5 — ~1KB | 5 — ~1KB | 2 — ~3-5KB（含聚合层） |
+| icon 覆盖度（即时 30-50 / 增长 100+） | 5 — 3000+ | 3 — 300+；缺 Merge/Spider/Banner 同名替代 | 5 — 30000+ 聚合 |
+| SSR / Edge Runtime 兼容 | 5 — 纯 SVG，sideEffects: false，RSC/Edge 友好 | 5 — 同质 | 4 — 聚合源偶有副作用风险 |
+| tree-shake 友好性 | 5 — ESM + named import | 5 — `@heroicons/react/24/outline` 子路径 | 3 — 元包粒度粗 |
+| 维护活跃度 | 5 — lucide org 月级更新 | 5 — Tailwind 团队 | 4 — 取决上游各源 |
+| 与设计稿 v2.1 视觉一致性 | 5 — shell.jsx 12 NAV icon 100% 同名命中 lucide | 2 — 视觉更细线，缺等价图需重映射 | 4 — 聚合含 lucide 子集但走聚合层 |
+| **合计** | **30 / 30** | **25 / 30** | **22 / 30** |
+
+#### 4.3 选定理由（按 Resovo 价值排序）
+
+1. **正确性（价值 1）**：shell.jsx 真源 NAV 12 icon（layers / inbox / film / link / merge / doc / image / banner / flag / spider / users / settings）在 lucide-react 中均有命中映射（`Layers` / `Inbox` / `Film` / `Link2` / `Merge` / `FileText` / `Image` / `Megaphone` / `Flag` / `Bug` / `Users` / `Settings`）；ADR-103a §4.5 cutover 对账义务（icon 100% 覆盖率）零返工可达。
+2. **边界（价值 2）**：单一图标库收敛在 apps/server-next 应用层，与 ADR-103a §4.4-4（packages/admin-ui 零图标库依赖）严格兼容；UI 包仅消费 `React.ReactNode` 注入插槽。
+3. **可扩展性（价值 3）**：3000+ icon 储备远超 M-SN-6 业务视图 100+ 增长预期；新增 icon 不触发架构二次决策。
+4. **一致性（价值 4）**：设计稿 v2.1 视觉风格本身即 lucide 设计语系；选定 C1 即等价于"以真源对齐"，重映射成本归零。
+5. **收敛（价值 5）**：单库 vs 聚合 vs 双套，包数最小、依赖图最浅。
+
+#### 4.4 安装位置约束（硬约束）
+
+- 仅在 `apps/server-next/package.json` 的 `dependencies` 安装 `lucide-react`
+- **`packages/admin-ui` 严禁引入** `lucide-react` 或任何其他图标库依赖（沿用 ADR-103a §4.4-4 边界）；`AdminNavItem.icon` / `CommandItem.icon` / `TopbarIcons` 等字段类型保持 `React.ReactNode`，由 server-next 应用层注入 JSX 节点
+- 任何 packages/* 子包尝试引入 lucide-react → 触发 plan §5.2 BLOCKER 第 2 条
+- 由 `scripts/verify-server-next-isolation.mjs`（ts-morph 模块图遍历）扩展校验；ESLint `no-restricted-imports` 在 packages/admin-ui 工作区追加 `lucide-react` 黑名单
+
+#### 4.5 版本约束
+
+- 安装版本 `lucide-react@^1.12.0`（实测最新稳定 minor，CHG-SN-2-01.5 sign-off 时确认）
+- caret 范围 `"lucide-react": "^1.12.0"`：允许 1.x 的 minor + patch 升级；major 升级（2.x+）须新 ADR
+- 锁版策略沿用项目 `package-lock.json` 既有方案
+
+#### 4.6 tree-shake 配置要求
+
+- 仅允许 named import 形式：`import { Layers, Inbox, Film } from 'lucide-react'`
+- 严禁 `import * as Icons from 'lucide-react'` 或默认聚合 import
+- 严禁 `dynamic(() => import('lucide-react/...'))` 异步整库导入
+- ESLint `no-restricted-syntax` 追加上述模式拦截（落地在 apps/server-next/.eslintrc 或工作区配置）
+- Next.js `experimental.optimizePackageImports` 配置追加 `lucide-react`（提升 dev 启动速度，不影响生产 tree-shake）
+
+### 替代方案（已否决）
+
+- **C2 @heroicons/react**：bundle / SSR / 维护与 C1 持平，但 NAV 12 icon 中 Merge / Spider / Banner 缺同名替代需用 GitMerge / Bug / Megaphone 等映射；视觉风格细线倾向偏离设计稿；cutover 对账多一道重映射表。
+- **C3 react-icons**：聚合层冗余，单 icon ~3-5KB（gzip）；元包模块图大，tree-shake 风险高；混合多源风格违反一致性，违反"严禁 UI 框架"近邻精神（聚合 30000+ icon 实质即大型符号库）。
+- **自建 SVG sprite**：M-SN-2 工时已 +0.5w；自建意味着每个 icon 手工 SVG + 命名 + 测试，30-50 icon 起步成本不低于 1d；无长期维护承诺。否决。
+- **图标 CDN（如 iconify）**：引入运行时网络依赖，违反 SSR / 离线开发约束；Edge Runtime 不友好。否决。
+
+### 后果
+
+#### 正面
+
+- 设计稿 v2.1 视觉对齐零返工成本（shell.jsx → 实装命名零差异）
+- packages/admin-ui 边界保持纯净（ADR-103a §4.4-4 不动摇）
+- M-SN-3+ 业务视图（视频库 / 审核 / 采集等）任意新增 icon 不触发架构决策
+- M-SN-6.5 LCP 验收门基本无影响（30 icon × 1KB ≈ 30KB gzip，远低于 LCP critical path 阈值）
+
+#### 负面
+
+- 引入 1 个新 npm 依赖（首次扩列图标库类目）；plan §4.7 v2.3 → v2.4 修订
+- 未来若设计语言切换至非 lucide 系（如改 Material Symbols），需新 ADR 替换
+- lucide-react 元包未内置类型转换接口，icon 名 typo 仅靠 TS 类型 + 单元测试拦截
+
+### 影响文件
+
+- `apps/server-next/package.json`（dependencies 新增 `lucide-react@^1.12.0`）
+- `apps/server-next/next.config.ts`（experimental.optimizePackageImports 追加）
+- `apps/server-next/.eslintrc.*` 或工作区 ESLint 配置（追加 named import 强制 + packages/admin-ui 黑名单）
+- `apps/server-next/src/lib/admin-nav.ts`（CHG-SN-2-02 stage 2/2 注入 icon 字段）
+- `scripts/verify-server-next-isolation.mjs`（追加 packages/admin-ui 不得引入 lucide-react 的模块图校验）
+- `docs/server_next_plan_20260427.md` §4.7 + §3 决策表 + 修订日志（plan v2.3 → v2.4，本 ADR 配套）
+- 后续 Shell 10 组件卡（CHG-SN-2-03 ~ CHG-SN-2-12）icon 注入位
+
+### 关联
+
+- **ADR-100**（server-next 立项 + 依赖白名单口径源头）
+- **ADR-103a**（packages/admin-ui Shell 公开 API 契约 §4.4-4 — icon 注入约束的契约出处）
+- **plan §4.7**（v2.3 → v2.4 同步修订，本 ADR 配套落盘）
+- **plan §5.2 BLOCKER 第 2 条**（依赖白名单越界的触发源）
+- **关联序列**：SEQ-20260428-03 任务 1.5

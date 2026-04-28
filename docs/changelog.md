@@ -639,3 +639,49 @@
   - tokens.css 是 auto-generated 产物，未来如修改请通过 build.ts / build-css.ts 同步两份脚本（ADR-102 v2.1 双脚本同步约定）
   - ADR-102 v2.1 修订段硬约束 2：admin-layout 第 5 层 token 字段新增是 milestone 报备而非 ADR；本卡新增 3 字段属合规扩展，无须独立 ADR
   - 本卡是 CHG-SN-2-02 的 stage 1/2；stage 2/2 解锁后 admin-nav.ts + shell-data.ts 由 stage 2/2 commit 完成；CHG-SN-2-02 整卡完成签字在 stage 2/2 末尾
+
+---
+
+## [CHG-SN-2-01.5] server-next 图标库选型 ADR-103b + plan §4.7 v2.3 → v2.4 修订（解锁 CHG-SN-2-02 stage 2/2）
+
+- **完成时间**：2026-04-28
+- **记录时间**：2026-04-28 23:55
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — 依赖白名单修订决策强制 Opus（CLAUDE.md 模型路由第 1/3 项 + plan §0 SHOULD-4-a 重大修订协议）
+- **人工 sign-off**：用户 2026-04-28 接受 4 项决策（Q1-Q4 全部确认）+ 实测 lucide-react 最新稳定版 1.12.0 后版本数字校正为 ^1.12.0
+- **触发**：CHG-SN-2-02 实施触发 BLOCKER §5.2 第 2 条（lucide-react 不在 §4.7 白名单）；用户裁定方案 A
+- **修改文件**：
+  - `docs/decisions.md`：末尾新增 ADR-103b 完整段落（约 200 行 markdown / 6 维评估表 30/30 推荐 lucide-react / 4 项硬约束 / 4 项替代方案否决 / 后果分析 / 影响文件 / 关联）
+  - `docs/server_next_plan_20260427.md`：
+    - 顶部元信息 v2.3 → v2.4
+    - §3 决策表新增"server-next 图标库选型"行（v2.4）
+    - §4.7 v2.4 修订（预批清单追加 lucide-react@^1.12.0 + 安装位置 / 命名 import / Next.js 配置三项约束；严禁清单追加"packages/admin-ui 工作区引入任何图标库"项 + 双兜底机制说明；末尾备注其他图标库未严禁但混用须新 ADR）
+    - 末尾追加修订日志 v2.3 → v2.4 段（4 项决策一览 + 后续卡链 + 元信息）
+- **6 维评估**（Opus 评审独立打分）：
+  - C1 lucide-react：bundle 5 / 覆盖度 5 / SSR 5 / tree-shake 5 / 维护 5 / 视觉一致性 5 = **30/30**
+  - C2 @heroicons/react：bundle 5 / 覆盖度 3 / SSR 5 / tree-shake 5 / 维护 5 / 视觉 2 = 25/30
+  - C3 react-icons：bundle 2 / 覆盖度 5 / SSR 4 / tree-shake 3 / 维护 4 / 视觉 4 = 22/30
+- **4 项决策**（Opus arch-reviewer 裁决 + 用户 sign-off）：
+  - **Icon-1** 图标库选定 lucide-react（C1）— shell.jsx 12 NAV icon 100% 同名命中（Layers/Inbox/Film/Link2/Merge/FileText/Image/Megaphone/Flag/Bug/Users/Settings）
+  - **Icon-2** 安装位置仅 apps/server-next；packages/admin-ui 严禁引入（ESLint no-restricted-imports + scripts/verify-server-next-isolation.mjs ts-morph 模块图校验双兜底）
+  - **Icon-3** 版本约束 ^1.12.0（实测最新稳定 minor，Opus 草案 ^0.395.0 已过时跨 major；caret 范围允许 1.x minor + patch；major 升级须新 ADR）
+  - **Icon-4** 替代库严禁策略：heroicons / react-icons 暂不严禁；未来出现引入需求须 ADR-103b 续修订评审（避免双图标库混用）
+- **4 项硬约束**（写入 ADR-103b §4.4-4.6）：
+  - 安装位置仅 apps/server-next；packages/admin-ui 严禁引入
+  - 仅允许 named import（严禁 `import * as` / 异步整库 import）
+  - Next.js experimental.optimizePackageImports 配置追加 lucide-react
+  - ESLint no-restricted-syntax + verify-server-next-isolation.mjs 模块图校验
+- **4 项替代方案已否决**（含理由）：
+  - C2 heroicons（Merge/Spider/Banner 缺同名替代 + 视觉风格偏离）
+  - C3 react-icons（聚合层冗余 + bundle 风险 + 风格混杂违反一致性）
+  - 自建 SVG sprite（30-50 icon 起步成本 ≥1d + 无长期维护）
+  - 图标 CDN 如 iconify（运行时网络依赖 + Edge Runtime 不友好）
+- **新增依赖**：无（纯 docs 改动；lucide-react 实际安装在 CHG-SN-2-02 stage 2/2 落地）
+- **数据库变更**：无
+- **回归**：typecheck（5/5 packages）/ lint（4/4 cached FULL TURBO）/ 1783 unit tests 全绿
+- **隐性漏洞追溯**：CHG-SN-2-01（ADR-103a 起草）评审过程虽确立"图标由 server-next 应用层注入"边界（§4.4-4），但未驱动 plan §4.7 同步修订（隐性假设"图标库由 server-next 持有"成立但未对照实际白名单）；本卡补救该耦合疏漏 + 建立 plan-ADR 同步机制（未来类似情况须在 ADR 起草卡内同步修订对应 plan 章节）
+- **解锁影响**：本卡 PASS + plan v2.4 落盘 → CHG-SN-2-02 stage 2/2 解锁 + CHG-SN-2-03+ Shell 组件分卡可放行
+- **注意事项**：
+  - lucide-react 实际安装在 CHG-SN-2-02 stage 2/2 卡内 `npm install --workspace=apps/server-next lucide-react@^1.12.0`
+  - shell.jsx 真源 12 icon 中 `I.spider` → lucide `Bug` 是同名匹配但 Bug 是否视觉等价 spider 由 cutover 前设计师 sign-off 在 ADR-103a §4.5 对账义务内补丁，本卡不阻塞
+  - plan §4.7 v2.4 是 §4.7 第一次正式扩列；后续候选（recharts/visx 等）落地时复用同样的"评审 → 修订 plan + ADR + 人工 sign-off"流程

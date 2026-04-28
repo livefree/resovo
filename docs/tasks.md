@@ -12,9 +12,7 @@
 
 ---
 
-## CHG-SN-2-02 — admin-nav.ts 5 字段扩展 + ADMIN_NAV 注入 icon/shortcut/badge + admin-layout z-shell-* token 三新增
-
-- **状态**：🟠 PARTIAL · stage 1/2 已完成 / stage 2/2 BLOCKER 暂停（详见 task-queue.md 尾部 BLOCKER 通知）
+（当前无进行中任务）
 - **创建时间**：2026-04-28 22:00
 - **实际开始**：2026-04-28 23:15
 - **建议模型**：opus（Token 层新增字段，CLAUDE.md 模型路由第 5 条）
