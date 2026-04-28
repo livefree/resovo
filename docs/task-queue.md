@@ -364,9 +364,13 @@ reviewer Opus 审计判定 **B 级 PASS**（达成率 90% / 5 条完成标准 4.
 
 CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
 
-9. **CHG-SN-1-09** — verify-server-next-isolation 扩展 string 级 token 跨域守卫（状态：⬜ 未开始）
+9. **CHG-SN-1-09** — verify-server-next-isolation 扩展 string 级 token 跨域守卫（状态：✅ 已完成）
    - 创建时间：2026-04-28 04:35
    - 计划开始：M-SN-2 启动前（**依赖：CHG-SN-1-10/-11/-12 完成**）
+   - 实际开始：2026-04-28 20:05
+   - 完成时间：2026-04-28 20:35
+   - 实际工时：0.04 天（~30min；新建 mjs 脚本 + preflight 集成 + Opus 评审一轮 PASS）
+   - review：arch-reviewer (claude-opus-4-7) — 12 token 清单完整 / 正则安全性 / 三层守卫闭环 / ADR-103a 前置门 PASS（无必须修，3 条建议优化登记后续）
    - 工时估算：0.3 天
    - 关联 plan §：§4.3 硬约束 1 / §4.6
    - 关联 ADR：ADR-102（dual-signal + admin-layout 跨域消费禁令的"完整守卫"）
@@ -383,9 +387,9 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
 
 ## [SEQ-20260428-02] M-SN-2 启动前 IA / Shell 范围补全（执行序列）
 
-- **状态**：🔄 执行中（CHG-SN-1-10/-11/-12 ✅；CHG-SN-1-09/-13 待开）
+- **状态**：🔄 执行中（CHG-SN-1-10/-11/-12/-09 ✅；CHG-SN-1-13 待开）
 - **创建时间**：2026-04-28 18:00
-- **最后更新时间**：2026-04-28 19:55
+- **最后更新时间**：2026-04-28 20:35
 - **目标**：闭合 M-SN-1 验收时未发现的两层偏离 —（A）`plan §7 IA tree` 偏离设计稿 v2.1 `shell.jsx`；（B）`CHG-SN-1-05 admin-nav.ts` 又自创分组 / 误用旧词 "工作台"。同时补 plan §6 M-SN-2 范围漏列的 admin-ui Shell 组件，确保 M-SN-2 任务卡起草时不再产生 IA / 视觉壳层缺口。
 - **范围**：plan §6 / §7 / §8 修订；ADR-100 IA 修订段；`apps/server-next/src/lib/admin-nav.ts`；`apps/server-next/src/app/admin/layout.tsx`（仍极简骨架，仅做 IA 文案 / 分组占位修订，不引业务组件）；`docs/changelog.md` M-SN-1 补丁段。
 - **依赖**：M-SN-1 已闭环（B 级 PASS）；M-SN-2 第一卡未起。

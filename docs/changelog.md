@@ -451,3 +451,43 @@
   - M-SN-2 第一张组件卡前主循环须再拉一次设计稿 v2.x 最新版做对账（与 ADR-100 IA 修订段 cutover 对账义务呼应）
   - Shell 列在矩阵中为 19 项 ✅（admin/* 全覆盖）；login 独立 layout 仅消费 ToastViewport（ToastViewport 设计为可独立引入，不依赖 AdminShell）
   - system 4 子（cache/monitor/config/migration）通过 settings 容器间接消费 Shell（M-SN-3 容器化时落地）
+
+---
+
+## [CHG-SN-1-09] verify-token-isolation 反向跨域守卫（admin 专属 token name string 级，M-SN-1 闭环原欠账）
+
+- **完成时间**：2026-04-28
+- **记录时间**：2026-04-28 20:35
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — 12 token 清单 / 正则安全性 / 三层守卫闭环 / ADR-103a 评审前置门 PASS
+- **触发**：CHG-SN-1-08 milestone 阶段审计 B 级 PASS 备忘明示当前 isolation 守卫是 import path 级，ADR-102 跨域禁令本质是 token name string 级；M-SN-1 闭环原欠账 → SEQ-20260428-02 任务 4 闭环
+- **修改文件**：
+  - `scripts/verify-token-isolation.mjs`（新建）— admin 专属 token name 反向扫描守卫脚本：
+    - 12 个 token name（dual-signal 4 + admin-layout 8）按字符长度降序写入正则，alternation 短路保证最长匹配优先
+    - 词边界负向前瞻 `(?![-_a-zA-Z0-9])` 防止前缀短匹配吃掉长 token / 误命中长 token 子串
+    - 扫描 apps/web-next/src 内 .ts/.tsx/.css/.scss 文件（152 文件）
+    - FAIL 输出含相对路径 + 行号 + 列号 + token 名 + snippet（120 字符）+ 修复指引（提示走 packages/design-tokens base/semantic 升级路径）
+    - 自我引用豁免：脚本位于 /scripts/ 不在 SCAN_DIR，FORBIDDEN_TOKENS 数组天然不会被自我命中
+    - 守卫边界声明：本脚本守 token name string 级；hex 颜色源由 ESLint no-hardcoded-color 兜底；import path 跨域由 verify-server-next-isolation.mjs 兜底（三层互补）
+  - `package.json`（修改）— scripts 追加 `verify:token-isolation`
+  - `scripts/preflight.sh`（修改）— [5c/6] 新增 admin 专属 token 反向跨域守卫步骤，与 [5b/6] verify-server-next-isolation 同级
+- **守卫的 12 个 admin 专属 token name**（按 ADR-102 第 5 层声明 + CHG-SN-1-08 备忘清单 + Opus 评审验证 1:1 对齐 packages/design-tokens 实装）：
+  - **dual-signal**（admin 业务专属语义层）：`--probe` / `--probe-soft` / `--render` / `--render-soft`
+  - **admin-layout**（cutover 后 apps/admin 生命周期绑定）：`--sidebar-w` / `--sidebar-w-collapsed` / `--topbar-h` / `--row-h` / `--row-h-compact` / `--col-min-w` / `--density-comfortable` / `--density-compact`
+- **新增依赖**：无（纯 Node 内置 fs / path / url，无 TS 编译器依赖；本守卫是 string 级而非 AST 级）
+- **数据库变更**：无
+- **实测验收**：
+  - 当前 apps/web-next/src 152 个 .ts/.tsx/.css/.scss 文件扫描 → 0 命中（ADR-102 第 5 层禁令首次具备 string 级运行时证据）
+  - 故意制造 3 处违规（`var(--probe)` / `var(--sidebar-w-collapsed)` / `var(--row-h-compact)`）→ 脚本报错全部捕获；最长匹配优先验证通过（`--sidebar-w-collapsed` 不被 `--sidebar-w` 提前命中；`--row-h-compact` 不被 `--row-h` 提前命中）
+  - typecheck（5/5 packages）/ lint（4/4 cached FULL TURBO）/ 1781 unit tests（152 files）全绿
+- **三层守卫闭环**（首次完整建立，符合 ADR-102 跨域禁令完整守卫要求）：
+  1. **ESLint `no-restricted-imports`**（IDE / 编译期）— admin-only 包/路径禁用提示
+  2. **`verify-server-next-isolation.mjs`**（CI / preflight [5b/6]）— ts-morph 级 import path 守卫，扫 apps/server-next/src
+  3. **`verify-token-isolation.mjs`**（CI / preflight [5c/6]）— string 级 token name 反向守卫，扫 apps/web-next/src
+- **后续优化登记**（Opus 评审建议非阻断，登记为后续卡处理）：
+  - M-SN-2 落地 packages/admin-ui 后增加"反向断言"：admin-layout token 必须至少在 server-next 或 admin-ui 中被消费一次（防止"声明了但无人用"的 dead token 沉淀）
+  - `walk()` 函数对点开头文件名的扫描行为（当前一并跳过；未来若 web-next 引入点开头源文件需细化为"仅对目录跳过"）
+- **注意事项**：
+  - 本卡是 ADR-103 / ADR-103a Opus 评审的硬前置门：M-SN-1 闭环原欠账已偿，**M-SN-2 第一张组件卡（CHG-SN-2-01 ADR-103a Opus 评审）可放行开工**（Opus 评审签字 PASS）
+  - 守卫边界已在脚本头部注释显式声明（dual-signal 颜色源 hex 值由 ESLint no-hardcoded-color 兜底，本脚本不重复覆盖）
+  - 集成到 preflight 而非 npm run lint 流水线：与 verify-server-next-isolation 同等模式（npm run lint 是 turbo workspace 级 lint，root-level 守卫脚本由 preflight 统一调度，避免破坏 turbo cache）
