@@ -491,3 +491,38 @@
   - 本卡是 ADR-103 / ADR-103a Opus 评审的硬前置门：M-SN-1 闭环原欠账已偿，**M-SN-2 第一张组件卡（CHG-SN-2-01 ADR-103a Opus 评审）可放行开工**（Opus 评审签字 PASS）
   - 守卫边界已在脚本头部注释显式声明（dual-signal 颜色源 hex 值由 ESLint no-hardcoded-color 兜底，本脚本不重复覆盖）
   - 集成到 preflight 而非 npm run lint 流水线：与 verify-server-next-isolation 同等模式（npm run lint 是 turbo workspace 级 lint，root-level 守卫脚本由 preflight 统一调度，避免破坏 turbo cache）
+
+---
+
+## [CHG-SN-1-13] M-SN-1 闭环补丁：handoff IA 修订追溯 + task-queue 序列闭环 + 截图归档（SEQ-20260428-02 收尾）
+
+- **完成时间**：2026-04-28
+- **记录时间**：2026-04-28 21:00
+- **执行模型**：claude-opus-4-7（沿用本会话主循环）
+- **子代理**：doc-janitor (claude-haiku-4-5) — 纯文档归档 / 索引更新（CLAUDE.md "强制降 Haiku 子代理"第 1/2/5 条）
+- **触发**：SEQ-20260428-02 任务 4/4 收尾；CHG-SN-1-10/-11/-12/-09 全部 PASS（commit da1dafa / 15b3bf7 / 1e6bbb1 / 8975a50）后的"不留口子"闭环签字
+- **修改文件**：
+  - `docs/server_next_handoff_M-SN-1.md`：新增 §9 "IA 修订追溯（SEQ-20260428-02 闭环，2026-04-28）"段（行 176~238），含触发 / 闭环序列 / 4 项裁决 / plan v2.1 → v2.3 修订履历 / 三层守卫闭环 / 后续 milestone 影响 / 关联文件索引 / 视觉证据（2 张截图）
+  - `docs/task-queue.md`：
+    - 行 359 M-SN-1 闭环备忘段补"经 SEQ-20260428-02 闭环（2026-04-28）"标记
+    - 行 390-396 SEQ-20260428-02 序列状态从 🔄 执行中 → ✅ 已完成；新增"完成时间"+"闭环签字"字段
+    - 行 532-536 "不留口子检查清单" 5 项全部勾选 [x]
+  - `docs/designs/screenshot/Design_Screenshot 2026-04-28 at 12.31.18.png`（git add 纳入版本控制 — 设计稿 IA 视觉证据）
+  - `docs/designs/screenshot/Implement_Screenshot 2026-04-28 at 12.37.00.png`（git add 纳入版本控制 — CHG-SN-1-05 落地实测视觉证据，记录修订前的偏离状态）
+- **新增依赖**：无
+- **数据库变更**：无
+- **回归**：typecheck（5/5 packages）/ lint（4/4 cached FULL TURBO）/ 1781 unit tests 全绿
+- **SEQ-20260428-02 整体闭环签字**：
+  - **5 张卡全部 PASS**：CHG-SN-1-10（plan §7 IA v0 → v1 + ADR-100 IA 修订段）/ CHG-SN-1-11（admin-nav.ts 实施）/ CHG-SN-1-12（plan §6 M-SN-2 Shell 扩列 + 总周期 17.5w → 18.0w）/ CHG-SN-1-09（token name string 级守卫）/ CHG-SN-1-13（本卡）
+  - **plan 修订**：v2.1 → v2.3（v2.2 = IA tree；v2.3 = M-SN-2 范围扩列 Shell + 总周期 17.5w → 18.0w）
+  - **ADR**：ADR-100 IA 修订段（v0 → v1）落盘；ADR-103a（Shell 公开 API 契约 — 新增）登记为 M-SN-2 第一张组件卡硬前置门
+  - **三层守卫**：ESLint no-restricted-imports（IDE）+ verify-server-next-isolation（CI/import path）+ verify-token-isolation（CI/token name string）首次完整建立
+  - **M-SN-1 原欠账已偿**：token name string 级守卫从 CHG-SN-1-08 备忘记录到 CHG-SN-1-09 落地，闭环
+- **M-SN-2 放行声明**：
+  - **第一张组件卡（CHG-SN-2-01 ADR-103a Opus 评审）可放行开工**
+  - 不留口子检查清单 5/5 全部勾选 [x]
+  - 后续 M-SN-2 任务卡按 plan §6 v2.3 范围（A Shell 编排层 + B 数据原语层 + C 公开 API 契约前置 + D 演示页 / 工时 3w）执行
+- **注意事项**：
+  - 截图（2 张 PNG）作为 IA 漏检追溯的人工实测视觉证据，纳入版本控制（CLAUDE.md "审计类文档必须纳入版本控制"）
+  - 本卡是 SEQ-20260428-02 序列的最后一张卡；序列闭环后 task-queue 中本序列段终结，后续工作由新序列承接
+  - cutover（M-SN-7）前的最终 IA 对账义务（详见 ADR-100 IA 修订段 / plan §10.7 / handoff §9）仍待 M-SN-7 任务卡执行；本卡仅闭合 M-SN-1 阶段欠账

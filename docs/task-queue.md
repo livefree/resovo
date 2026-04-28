@@ -356,6 +356,8 @@
 
 ### M-SN-1 闭环备忘（CHG-SN-1-08 audit B 级，2026-04-28）
 
+**经 SEQ-20260428-02 闭环（2026-04-28）**：CHG-SN-1-09（守卫）+ CHG-SN-1-10/-11（IA v0 → v1）+ CHG-SN-1-12（plan §6 M-SN-2 Shell 扩列）+ CHG-SN-1-13（追溯）共 5 张卡 PASS；plan v2.1 → v2.3；ADR-100 IA 修订段落盘；M-SN-1 原欠账（token name string 级守卫）已偿。M-SN-2 第一张组件卡（CHG-SN-2-01 ADR-103a Opus 评审）可放行开工。
+
 reviewer Opus 审计判定 **B 级 PASS**（达成率 90% / 5 条完成标准 4.5 通过 / 0 MUST 阻塞）。三条进入 M-SN-2 前置建议落地策略：
 
 1. **CHG-SN-1-09（M-SN-2 第一卡前置，新增）**：补 ts-morph string 级守卫扩展 verify-server-next-isolation —— 当前守卫是 import path 级，ADR-102 跨域禁令本质是 token name string 级（如 `--probe`/`--render`/`--sidebar-w` 在 web-next 的 CSS 字符串引用）。ADR-103 DataTable v2 公开 API 契约 Opus 评审的硬前置。预计工时 0.3 天。
@@ -387,9 +389,11 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
 
 ## [SEQ-20260428-02] M-SN-2 启动前 IA / Shell 范围补全（执行序列）
 
-- **状态**：🔄 执行中（CHG-SN-1-10/-11/-12/-09 ✅；CHG-SN-1-13 待开）
+- **状态**：✅ 已完成（5/5 PASS；2026-04-28 21:00 闭环）
 - **创建时间**：2026-04-28 18:00
-- **最后更新时间**：2026-04-28 20:35
+- **最后更新时间**：2026-04-28 21:00
+- **完成时间**：2026-04-28 21:00
+- **闭环签字**：5 张卡全部 PASS（commit da1dafa / 15b3bf7 / 1e6bbb1 / 8975a50 + 本卡 CHG-SN-1-13）；M-SN-1 原欠账已偿；plan v2.1 → v2.3；ADR-100 IA 修订段落盘；M-SN-2 第一张组件卡（CHG-SN-2-01 ADR-103a Opus 评审）可放行开工。
 - **目标**：闭合 M-SN-1 验收时未发现的两层偏离 —（A）`plan §7 IA tree` 偏离设计稿 v2.1 `shell.jsx`；（B）`CHG-SN-1-05 admin-nav.ts` 又自创分组 / 误用旧词 "工作台"。同时补 plan §6 M-SN-2 范围漏列的 admin-ui Shell 组件，确保 M-SN-2 任务卡起草时不再产生 IA / 视觉壳层缺口。
 - **范围**：plan §6 / §7 / §8 修订；ADR-100 IA 修订段；`apps/server-next/src/lib/admin-nav.ts`；`apps/server-next/src/app/admin/layout.tsx`（仍极简骨架，仅做 IA 文案 / 分组占位修订，不引业务组件）；`docs/changelog.md` M-SN-1 补丁段。
 - **依赖**：M-SN-1 已闭环（B 级 PASS）；M-SN-2 第一卡未起。
@@ -483,9 +487,13 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
     - 主循环模型：opus
     - 完成判据：Opus PASS + plan §6/§8 落盘 + 序列备注更新；如触发 BLOCKER 11 则等待 Opus 工时裁决再继续
 
-13. **CHG-SN-1-13** — M-SN-1 闭环补丁：changelog + task-queue 备忘（IA 漏检追溯）（状态：⬜ 未开始）
+13. **CHG-SN-1-13** — M-SN-1 闭环补丁：changelog + task-queue 备忘（IA 漏检追溯）（状态：✅ 已完成）
     - 创建时间：2026-04-28 18:00
     - 计划开始：CHG-SN-1-10/-11/-12 全部完成后
+    - 实际开始：2026-04-28 20:45
+    - 完成时间：2026-04-28 21:00
+    - 实际工时：0.02 天（~15min；纯归档，doc-janitor Haiku + 主循环截图归档 + commit）
+    - review：n/a（doc-janitor 归档类无须独立 arch-reviewer 评审）
     - 工时估算：0.2 天
     - 关联 plan §：§5.3 milestone 阶段审计 / §10.8 SHOULD-4-d handoff
     - 关联 ADR：ADR-100 IA 修订段（已在 CHG-SN-1-10 落盘）
@@ -524,9 +532,9 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
 - 每张卡 commit trailer 必含：`Refs:` `Plan:` `Review:` `Executed-By-Model:` `Subagents:` `Co-Authored-By:`
 - 序列完成 = CHG-SN-1-13 PASS + plan v2.2 修订日志追加 + ADR-100 IA 修订段落盘 + admin-nav.ts 实测对齐设计稿 shell.jsx
 - **不留口子检查清单**（M-SN-2 第一卡起草前必须 100% 勾选）：
-  - [ ] CHG-SN-1-10 PASS：plan §7 5 组 IA + ADR-100 IA 修订段落盘
-  - [ ] CHG-SN-1-11 PASS：admin-nav.ts 与 shell.jsx 1:1 对齐 + 路由 SSR 全绿
-  - [ ] CHG-SN-1-12 PASS：plan §6 M-SN-2 范围显式列出 Sidebar/Topbar/Toast/dark-first/快捷键 5 大子项 + §8 Shell 列扩展 + 工时估算复核
-  - [ ] CHG-SN-1-09 PASS：token 跨域守卫 string 级生效（M-SN-1 闭环备忘原欠账）
-  - [ ] CHG-SN-1-13 PASS：changelog 补丁 + handoff 追溯 + 本序列闭环
+  - [x] CHG-SN-1-10 PASS：plan §7 5 组 IA + ADR-100 IA 修订段落盘
+  - [x] CHG-SN-1-11 PASS：admin-nav.ts 与 shell.jsx 1:1 对齐 + 路由 SSR 全绿
+  - [x] CHG-SN-1-12 PASS：plan §6 M-SN-2 范围显式列出 Sidebar/Topbar/Toast/dark-first/快捷键 5 大子项 + §8 Shell 列扩展 + 工时估算复核
+  - [x] CHG-SN-1-09 PASS：token 跨域守卫 string 级生效（M-SN-1 闭环备忘原欠账）
+  - [x] CHG-SN-1-13 PASS：changelog 补丁 + handoff 追溯 + 本序列闭环
 
