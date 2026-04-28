@@ -545,13 +545,24 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
 ★ 待评估：design-tokens / sandbox（M-SN-6 决定是否保留为 dev 入口）
 ```
 
-#### 视图数（MUST-2 修订）
-- **顶层视图**：21（原 22 - staging）
-- **system 子视图**：5（settings / cache / monitor / config / migration）
-- **编辑子视图**：1（videos/[id]/edit）
-- **总路由占位**：**27**
+#### 视图数（v2.1 修订 · 2026-04-28 CHG-SN-1-08 对账）
 
-cutover 验收按 27 路由逐项 diff（替代 v0 错误的"22→21"表述）。
+> v2 原写"顶层 21 / 总 27"与本节文字清单（13 admin 顶层 + 5 system 子 + 1 编辑子 + 1 login）数据不一致。CHG-SN-1-05 落地 19 路由（defer 编辑子 M-SN-4）；CHG-SN-1-08 milestone 验收时按文字清单为真源对账如下。
+
+实际枚举（M-SN-1 落地基线）：
+
+| 类别 | 数量 | 清单 |
+|---|---|---|
+| **admin 顶层** | 13 | dashboard / moderation / videos / sources / merge / subtitles / image-health / crawler / home / submissions / analytics / users / audit |
+| **system 顶层 landing** | 1 | /admin/system（点击侧栏区段标题落点；CHG-SN-1-05 防御性新增）|
+| **system 子** | 5 | settings / cache / monitor / config / migration |
+| **编辑子** | 1 | videos/[id]/edit（M-SN-4 落地，M-SN-1 不占位）|
+| **认证** | 1 | /login |
+| **总路由占位（v2.1 修订）** | **21** | （v2 原"27"为字段错误，已废）|
+
+附加错误页（不计入路由占位但 Next.js 标准）：`/403` + `/not-found`。
+
+cutover 验收按上表 21 路由逐项 diff（替代 v0 错误的"22→21"表述与 v2 错误的"27"）。
 
 ---
 
@@ -753,3 +764,49 @@ M-SN-0 完成 = 三批全部 PASS + 三份 ADR 进入 `docs/decisions.md` + 本 
 - **DISCUSS-7**（截图清单标准化）：`§10.4` 加 8 张截图标准（4 页 × 明暗 2 模式），缺一不可 merge；`§3 决策表`新增"token 重构截图标准"行
 
 — END plan v2 —
+
+### v2 → v2.1（2026-04-28）
+
+由 M-SN-1 实施过程的现状对齐 + CHG-SN-1-08 milestone 阶段审计触发的轻量修订（**无新增决策、无 BLOCKER**；修订仅校正已发现的字段错误 + 沉淀执行实证）。
+
+**字段对账（M-SN-1 实施驱动）**：
+
+- **§4.3 token 三层 → 4+1 层**（CHG-SN-1-03 摸现状触发 BLOCKER + 用户裁定 A 方案）
+  - packages/design-tokens 现状是 4 层成熟系统（primitives / semantic / components / brands），ADR-102 原"3 层"措辞修订为"在 4 层基础上新增 admin-layout 层"
+  - ADR-102 已 patch 修订记录段（`docs/decisions.md` 行 ~2178-2210）
+  - plan §4.3 同步：4+1 层目录树 + 收编路径表 + 现状对齐前置说明
+- **§7 视图数字字段对账**（CHG-SN-1-05 reviewer 标记 → CHG-SN-1-08 修订）
+  - v2 原写"顶层 21 / 总 27"与文字清单（13 admin 顶层 + 5 system 子 + 1 编辑子 + 1 login）不一致
+  - v2.1 修订为枚举数 21 路由占位（含 1 编辑子 M-SN-4 落 / system landing 1 / system 子 5 / login 1 / admin 顶层 13）
+  - cutover 验收按 21 逐项 diff
+
+**M-SN-1 实际工时 vs 估算**（v2.1 沉淀）：
+
+| 卡 | 估算 | 实际 | 差异 |
+|---|---|---|---|
+| CHG-SN-1-01 packages/admin-ui 空骨架 | 0.5d | 0.3d | -40% |
+| CHG-SN-1-02 server-next Next.js 空壳 | 1.0d | 0.2d | -80% |
+| CHG-SN-1-03 design-tokens 4+1 层 | **2.0d** | 0.25d | -88%（A 方案大幅缩范围）|
+| CHG-SN-1-04 BrandProvider 移植 + token 接入 | 1.0d | 0.15d | -85% |
+| CHG-SN-1-05 IA v0 路由骨架 | 1.0d | 0.1d | -90% |
+| CHG-SN-1-06 apiClient + 鉴权 + login | 1.0d | 0.15d | -85% |
+| CHG-SN-1-07 ESLint 边界 + 兜底脚本 | 0.5d | 0.15d | -70% |
+| CHG-SN-1-08 milestone 验收 + Opus 审计 | 0.5d | TBD | — |
+| **M-SN-1 总计** | **7.5d** | **~1.3d**（估）| **-83%** |
+
+实际工时大幅低于估算的核心因素：
+1. M-SN-0 第三批 ADR + plan 已固化大量决策，M-SN-1 是工程落地（决策成本几乎归零）
+2. 物理副本策略（BrandProvider / api-client）缩短调研时间
+3. design-tokens 现状成熟，A 方案让 CHG-SN-1-03 工作量从重构变为增量
+4. arch-reviewer 闭环效率高（首轮 PASS 5/7 卡，1 卡 CONDITIONAL 1 轮修复）
+
+**留账（M-SN-1 不阻塞 cutover；后续卡处理）**：
+- video/[id]/edit 编辑子（M-SN-4 落地）
+- light theme（视需求接入；M-SN-1 dark-first，不阻塞 cutover）
+- 真 e2e 登录测试（需 apps/api 在跑；M-SN-3 业务卡 e2e 时一并补）
+- admin-only 子路径细分（/admin/users / /admin/crawler / /admin/analytics 仅 admin）— M-SN-2+ 视图卡按需
+- apps/web-next 视觉无回归 e2e 截图对比（CHG-SN-1-03 admin-layout 是新增字段 0 现有引用面改动；本卡 milestone 审计判定不阻塞）
+
+**节奏校准建议**：M-SN-2 估算（2.5w）按本 milestone 实测系数粗调约 0.5-1w 实际可完成，但 M-SN-2 是 packages/admin-ui v1 业务原语下沉（DataTable v2 / useTableQuery / Drawer / Modal / Toast 等），新代码量 + 单元测试覆盖率 ≥70% 要求，估算系数不宜直接套用 M-SN-1 比例。M-SN-2 启动时按 plan §6 原估算执行，CHG-SN-2-08 milestone 审计再回看校准。
+
+— END plan v2.1（CHG-SN-1-08 落地）—

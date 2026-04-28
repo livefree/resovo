@@ -39,6 +39,38 @@
 
 ---
 
+## [CHG-SN-1-08] M-SN-1 milestone 完成标准验收 + arch-reviewer (Opus) 阶段审计 · **B 级 PASS**
+
+- **完成时间**：2026-04-28
+- **记录时间**：2026-04-28 04:50
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-6, Opus) — milestone 阶段审计 B 级 PASS
+- **修改文件**：
+  - `docs/server_next_plan_20260427.md`（修改）— §7 视图数字字段 v2.1 对账（21 路由占位枚举）+ 修订日志追加 v2 → v2.1（4+1 层 supersede + 字段对账 + 实际工时 vs 估算 + 节奏校准建议）
+  - `docs/server_next_handoff_M-SN-1.md`（新建）— plan §10.8 SHOULD-4-d 要求；含 milestone 摘要 / 三个核心决策点 / M-SN-2 启动前置任务 / 留账清单 / 任务卡指针 / 复盘结论 / ADR 对账 / M-SN-2 启动 checklist
+  - `docs/task-queue.md`（修改）— SEQ-20260428-01 状态 → ✅ 已完成；新增 CHG-SN-1-09（M-SN-2 第一卡前置：verify-server-next-isolation 扩展 string 级 token 跨域守卫）
+- **新增依赖**：无
+- **数据库变更**：无
+- **milestone 审计结果**（plan §5.3）：
+  - **B 级 PASS** —— 完成标准达成率 90%（5 条 4.5 通过）；0 MUST 阻塞；工时未超
+  - 5 条完成标准：dev 通路 ✅ / 27 路由 ⚠️（v2.1 修订为 21 占位）/ typecheck+lint+test ✅ / 视觉回归截图 ⚠️（豁免：net-new 字段）/ admin-ui workspaces ✅
+  - 阶段重点 4 项：token 收编 ⚠️（hex 内联留账）/ Provider 协议 ✅ / 0 apps/server 依赖 ✅ / ESLint 边界 ⚠️（string 级守卫待 CHG-SN-1-09）
+- **关键风险**（reviewer 排序）：
+  1. ESLint string 级守卫缺位（待 CHG-SN-1-09）
+  2. Provider 物理副本同源化漂移（M-SN-7 cutover 后处理）
+  3. 视觉回归 8 张截图未执行（M-SN-1 期间豁免理由成立；M-SN-7 cutover 前置补做）
+- **M-SN-2 启动前置 3 项**：
+  - CHG-SN-1-09 string 级守卫扩展（ADR-103 评审硬前置）
+  - 视觉回归豁免备忘已落 task-queue
+  - handoff 文档已输出
+- **回归**：typecheck (7 ws) / lint (4/4) / 1768 tests / verify-server-next-isolation 全绿
+- **注意事项**：
+  - M-SN-2 启动按 plan §6 原 2.5w 估算执行；CHG-SN-2-08 milestone 审计再回看校准
+  - plan §7 v2 → v2.1 修订属"现状对齐"非"决策回流"（plan §0 SHOULD-4-a 合规）
+  - dual-signal 内联 hex / Provider 物理副本 / admin-only 子路径细分等留账已在 plan v2.1 + handoff 文档双线索引
+
+---
+
 ## [CHG-SN-1-07] ESLint no-restricted-imports 边界 + verify-server-next-isolation 兜底脚本
 
 - **完成时间**：2026-04-28

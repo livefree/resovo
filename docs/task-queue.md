@@ -87,9 +87,9 @@
 
 ## [SEQ-20260428-01] M-SN-1 工程骨架 + Token 三层 + Provider（执行序列）
 
-- **状态**：🔄 执行中
+- **状态**：✅ 已完成（M-SN-1 milestone B 级 PASS，2026-04-28）
 - **创建时间**：2026-04-28 02:00
-- **最后更新时间**：2026-04-28 04:25
+- **最后更新时间**：2026-04-28 04:50
 - **目标**：搭建 apps/server-next 工程骨架 + packages/admin-ui 空骨架 + design-tokens 三层重构 + Provider 移植 + IA v0 27 路由占位 + apiClient + 鉴权 + login → dashboard 通路打通
 - **范围**：`apps/server-next/`（新建）、`packages/admin-ui/`（新建空骨架）、`packages/design-tokens/`（三层重构）、`apps/web-next/`（token 引用面回归验证）、`package.json`（workspaces 追加）、`docker-compose.dev.yml`（server-next 服务）、`docs/architecture.md`（§17 token 三层映射）、`scripts/verify-server-next-isolation.mjs`（新建）
 - **依赖**：M-SN-0 三批清理已 PASS（commit `7c278cc` / `96cde57` / `827b88c`）；ADR-100/101/102 落盘
@@ -296,9 +296,15 @@
    - 子代理调用：arch-reviewer (claude-opus-4-6)
    - 主循环模型：opus
 
-8. **CHG-SN-1-08** — M-SN-1 完成标准验收 + arch-reviewer 阶段审计（状态：⬜ 未开始）
+8. **CHG-SN-1-08** — M-SN-1 完成标准验收 + arch-reviewer 阶段审计（状态：✅ 已完成）
    - 创建时间：2026-04-28 02:00
    - 计划开始：M-SN-1 Day 7 下午
+   - 实际开始：2026-04-28 04:30
+   - 完成时间：2026-04-28 04:50
+   - 实际工时：0.2 天
+   - review：arch-reviewer (claude-opus-4-6, **Opus**) milestone 审计 — **B 级 PASS**（达成率 90% / 0 MUST 阻塞 / 工时未超）
+   - 输出：plan v2.1 修订日志（§7 字段对账 + 实际工时 vs 估算 + 节奏校准建议）/ docs/server_next_handoff_M-SN-1.md（plan §10.8 SHOULD-4-d 要求）/ task-queue M-SN-2 前置 CHG-SN-1-09 登记
+   - 视觉回归 e2e 截图豁免理由：dual-signal + admin-layout 是 net-new 字段，0 现有引用面变更；M-SN-7 cutover 前置补做
    - 工时估算：0.5 天
    - 关联 plan §：§5.3 milestone 阶段审计（A/B/C 评级）/ §6 M-SN-1 完成标准
    - 关联 ADR：ADR-100/101/102（全部 M-SN-1 关联）
@@ -347,4 +353,29 @@
 - 每张卡 commit trailer 必含：`Refs:` `Plan:` `Review:` `Executed-By-Model:` `Subagents:` `Co-Authored-By:`
 - 每张卡完成 = 主循环修订 + arch-reviewer PASS + commit + 本序列任务状态更新 + changelog 追加
 - 序列完成 = CHG-SN-1-08 阶段审计 PASS + plan 修订日志追加（v2 → v2.1，实际工时 vs 估算）
+
+### M-SN-1 闭环备忘（CHG-SN-1-08 audit B 级，2026-04-28）
+
+reviewer Opus 审计判定 **B 级 PASS**（达成率 90% / 5 条完成标准 4.5 通过 / 0 MUST 阻塞）。三条进入 M-SN-2 前置建议落地策略：
+
+1. **CHG-SN-1-09（M-SN-2 第一卡前置，新增）**：补 ts-morph string 级守卫扩展 verify-server-next-isolation —— 当前守卫是 import path 级，ADR-102 跨域禁令本质是 token name string 级（如 `--probe`/`--render`/`--sidebar-w` 在 web-next 的 CSS 字符串引用）。ADR-103 DataTable v2 公开 API 契约 Opus 评审的硬前置。预计工时 0.3 天。
+2. **视觉回归豁免备忘**：M-SN-1 期间 dual-signal + admin-layout 是 packages/design-tokens 的 net-new 字段，0 现有引用面被触及，plan §10.4 8 张截图豁免理由成立。M-SN-7 cutover 前置检查清单需补做"web-next 视觉确认"以兜底（不阻塞 M-SN-2 启动）。
+3. **handoff 文档**：CHG-SN-1-08 输出 `docs/server_next_handoff_M-SN-1.md`（plan §10.8 SHOULD-4-d 要求），固化 ADR-102 patch / plan v2.1 修订 / Provider 物理副本三个决策点上下文。
+
+CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
+
+9. **CHG-SN-1-09** — verify-server-next-isolation 扩展 string 级 token 跨域守卫（状态：⬜ 未开始）
+   - 创建时间：2026-04-28 04:35
+   - 计划开始：M-SN-2 启动前
+   - 工时估算：0.3 天
+   - 关联 plan §：§4.3 硬约束 1 / §4.6
+   - 关联 ADR：ADR-102（dual-signal + admin-layout 跨域消费禁令的"完整守卫"）
+   - 文件范围：`scripts/verify-server-next-isolation.mjs`（扩展 token name string 扫描）；可选新增 `scripts/verify-token-isolation.mjs` 按消费方向反扫
+   - 验收要点：
+     - 检测 apps/web-next/src 内 CSS / TSX 字符串引用 `--probe` / `--render` / `--probe-soft` / `--render-soft` / `--sidebar-w` / `--sidebar-w-collapsed` / `--topbar-h` / `--row-h` / `--row-h-compact` / `--col-min-w` / `--density-comfortable` / `--density-compact` 全部 0 命中
+     - 故意制造 1 处违规 → 脚本应报错
+     - 集成到 preflight + npm run lint 流水线
+     - typecheck + lint + test 全绿
+   - 子代理调用：arch-reviewer (Opus) — ADR-103 评审前置，强制 Opus
+   - 主循环模型：opus（涉及 ADR-102 完整守卫闭环 + ADR-103 前置）
 
