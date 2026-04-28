@@ -2063,6 +2063,64 @@ landing_plan_v1 §HANDOFF-03 验收清单第 5 项要求"主视图 ⇄ 浮窗切
   - `docs/architecture.md` §1+§1a+§2（已通过 R10 D5 同步）
 - **关联**：ADR-022（token 单一真源）/ ADR-023（CSS 变量 + Tailwind 桥接）/ ADR-031（重写期共存）/ ADR-032（design-tokens 构建脚本）/ ADR-035（重写期路由切分，已 DEPRECATED）/ ADR-037（里程碑对齐）/ ADR-101（cutover 协议）/ ADR-102（token 三层）
 
+### IA 修订段（v0 → v1，2026-04-28）
+
+- **触发**：M-SN-1 milestone 验收（CHG-SN-1-08）在 B 级 PASS 后，M-SN-2 启动前的 IA 三层对齐审计发现 `apps/server-next/src/lib/admin-nav.ts`（CHG-SN-1-05 落地）与设计稿 v2.1 真源 `docs/designs/backend_design_v2.1/app/shell.jsx` 在命名 / 分组 / 暴露策略上存在 4 项偏离，且 plan §7 自身相对设计稿亦有偏离，未在落盘时显式记录。
+- **真源链**：设计稿 v2.1 shell.jsx（行 10-35）+ info.md §01/§03（IA 命名表更新声明）。
+- **子代理评审**：arch-reviewer (claude-opus-4-7)，独立审计 4 项偏离并裁决（CHG-SN-1-10）。
+
+#### 4 项决策
+
+| 编号 | 偏离点 | v0 实施 | v1 决策 | 关键依据 |
+|---|---|---|---|---|
+| IA-1 | dashboard label | "工作台"（admin-nav.ts:40）| **"管理台站"** | shell.jsx:12 + info.md §01/§03 显式声明 |
+| IA-2 | analytics 去留 | 独立顶层 `/admin/analytics` 暴露侧栏 | **路由保留，侧栏不暴露**；M-SN-3 起内容并入 dashboard 内部 Tab/卡片库 | shell.jsx 5 组 NAV 无 analytics；不变约束禁止删 URL |
+| IA-3 | 首页运营分组 | home/submissions 错放系统管理组 | **独立成"首页运营"组**（home + submissions）| shell.jsx:22-25 显式分组；语义边界清晰（对外运营 vs 对内运维）|
+| IA-4 | system 5 子暴露 | 5 子（settings/cache/monitor/config/migration）全部暴露侧栏 | **侧栏只暴露"站点设置"（⌘,）**；其余 4 子路由保留但不暴露，作为 settings 容器的 Tab 面板（M-SN-3 实装容器化）| shell.jsx:32 仅暴露 settings 顶层；不变约束禁止删 URL |
+
+#### 影响范围
+
+- **plan §7**（行 519-565）：IA tree fenced code block + 视图数表同步修订（CHG-SN-1-10 已落盘）
+- **admin-nav.ts**（apps/server-next/src/lib/admin-nav.ts）：ADMIN_NAV 常量 5 组结构改写（CHG-SN-1-11 落地）
+- **路由文件（保留不暴露）**：
+  - `apps/server-next/src/app/admin/analytics/page.tsx`
+  - `apps/server-next/src/app/admin/system/cache/page.tsx`
+  - `apps/server-next/src/app/admin/system/monitor/page.tsx`
+  - `apps/server-next/src/app/admin/system/config/page.tsx`
+  - `apps/server-next/src/app/admin/system/migration/page.tsx`
+  - 5 个文件 head 注释新增："hidden in IA v1，详见 ADR-100 IA 修订段；M-SN-3 阶段改造为容器内嵌 Tab / 内容并入策略"（CHG-SN-1-11 落地）
+- **M-SN-3（dashboard / settings 容器）落地任务**：
+  - dashboard 落地时承接 analytics 卡片库内容（数据看板 Tab/分段）
+  - settings 落地时承接 cache/monitor/config/migration 4 子的 Tab 面板形态（路由 → Tab 状态映射）
+  - `/admin/system` landing 改 redirect 到 `/admin/system/settings`（避免裸访问产生孤儿页）
+
+#### 不变约束（裁决前提）
+
+- URL slug 优先英文，cutover 前禁止改 URL（plan §7 IA 命名声明 + plan §5.2 BLOCKER 第 8 条）
+- 路由占位文件物理保留（避免 SSR 404 与潜在外链失效）
+- 不引入 M-SN-1 已闭环资产（token / Provider / apiClient / 鉴权层）的返工
+- Resovo 价值排序：正确性 > 边界 > 可扩展性 > 一致性 > 收敛
+
+#### 剩余差异（cutover 前最终对账义务）
+
+子代理评审记录的与设计稿 v2.1 的剩余差异（不在 v1 修订范围，由 M-SN-2 Sidebar 组件下沉时按 ADR 流程处理）：
+
+1. **图标字段缺失**：shell.jsx 每个 item 携带 `icon`，admin-nav.ts AdminNavItem 类型无 icon 字段 → M-SN-2 Sidebar 组件下沉补字段
+2. **快捷键标注缺失**：shell.jsx 暴露 ⌘1/⌘2/⌘3/⌘4/⌘5/⌘, 6 个快捷键，admin-nav.ts 未承载 shortcut 字段 → M-SN-2 同步补
+3. **count / type 角标缺失**：shell.jsx NAV item 携带 `count` + `type: "warn" | "danger"` → M-SN-2 设计 count provider 接口
+
+cutover（M-SN-7）前置义务：在 `manual_qa_m_sn_7_*.md` IA 对账小节执行：
+1. 拉取设计稿最新版本 shell.jsx 的 NAV 结构
+2. 与 admin-nav.ts ADMIN_NAV + plan §7 IA tree 三方逐项 diff
+3. 对每条偏离做"采纳 / 拒绝并立 ADR"的二选一裁决
+4. 对账签字写入 `milestone_alignment_m_sn_7_*.md` 的 IA 章节
+
+#### 关联
+
+- 关联卡：CHG-SN-1-05（IA v0 路由骨架，v0 落地）/ CHG-SN-1-08（M-SN-1 milestone 对账，发现偏离）/ CHG-SN-1-10（plan §7 IA v1 修订 + ADR-100 IA 修订段落盘，本卡）/ CHG-SN-1-11（admin-nav.ts IA v1 实装）
+- 关联 plan：§7 IA tree + 视图数表同步修订
+- 评审子代理：arch-reviewer (claude-opus-4-7) — IA 决策强制 Opus
+
 ---
 
 ## ADR-101: server-next cutover 协议（方案 E：独立壳 + nginx 反代 + 7 天保留 + 同 commit 改名）

@@ -366,7 +366,7 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
 
 9. **CHG-SN-1-09** — verify-server-next-isolation 扩展 string 级 token 跨域守卫（状态：⬜ 未开始）
    - 创建时间：2026-04-28 04:35
-   - 计划开始：M-SN-2 启动前
+   - 计划开始：M-SN-2 启动前（**依赖：CHG-SN-1-10/-11/-12 完成**）
    - 工时估算：0.3 天
    - 关联 plan §：§4.3 硬约束 1 / §4.6
    - 关联 ADR：ADR-102（dual-signal + admin-layout 跨域消费禁令的"完整守卫"）
@@ -378,4 +378,144 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
      - typecheck + lint + test 全绿
    - 子代理调用：arch-reviewer (Opus) — ADR-103 评审前置，强制 Opus
    - 主循环模型：opus（涉及 ADR-102 完整守卫闭环 + ADR-103 前置）
+
+---
+
+## [SEQ-20260428-02] M-SN-2 启动前 IA / Shell 范围补全（执行序列）
+
+- **状态**：🔄 执行中（CHG-SN-1-10 ✅；CHG-SN-1-11/-12/-09/-13 待开）
+- **创建时间**：2026-04-28 18:00
+- **最后更新时间**：2026-04-28 18:40
+- **目标**：闭合 M-SN-1 验收时未发现的两层偏离 —（A）`plan §7 IA tree` 偏离设计稿 v2.1 `shell.jsx`；（B）`CHG-SN-1-05 admin-nav.ts` 又自创分组 / 误用旧词 "工作台"。同时补 plan §6 M-SN-2 范围漏列的 admin-ui Shell 组件，确保 M-SN-2 任务卡起草时不再产生 IA / 视觉壳层缺口。
+- **范围**：plan §6 / §7 / §8 修订；ADR-100 IA 修订段；`apps/server-next/src/lib/admin-nav.ts`；`apps/server-next/src/app/admin/layout.tsx`（仍极简骨架，仅做 IA 文案 / 分组占位修订，不引业务组件）；`docs/changelog.md` M-SN-1 补丁段。
+- **依赖**：M-SN-1 已闭环（B 级 PASS）；M-SN-2 第一卡未起。
+- **引发证据**：本次会话经人工对 :3003 实测发现"工作台 vs 管理台站"、"数据看板独立"、"首页编辑/用户投稿错位至系统管理"、"系统 5 子 vs 站点设置"四处偏差（详见会话日志 2026-04-28 下午）。
+- **不留口子原则**：本序列全部完成 → 才允许起 CHG-SN-1-09 → 才允许起 M-SN-2 第一卡。任何卡评审未 PASS → BLOCKER。
+
+### 任务列表（按执行顺序）
+
+10. **CHG-SN-1-10** — plan §7 IA tree 与设计稿 v2.1 shell.jsx 对账修订 + ADR-100 IA 修订段（状态：✅ 已完成）
+    - 创建时间：2026-04-28 18:00
+    - 计划开始：本序列 Day 1 上午
+    - 实际开始：2026-04-28 18:10
+    - 完成时间：2026-04-28 18:40
+    - 实际工时：0.04 天（~0.5h；纯 docs 修订 + Opus 评审一轮 PASS）
+    - review：arch-reviewer (claude-opus-4-7) — 4 项 IA 决策独立裁决 PASS
+    - 工时估算：0.6 天
+    - 关联 plan §：§7（IA tree 与视图清单）/ §6 G4 / §10.4（视觉对齐 cutover 前 100%）
+    - 关联 ADR：ADR-100（立项 + IA v0，需追加"IA 修订段：v0 → v1"）
+    - 真源对照：`docs/designs/backend_design_v2.1/app/shell.jsx:10-35`（5 组 NAV）+ `docs/designs/backend_design_v2.1/info.md` §01 IA "一级 → 运营中心；二级 → 管理台站"
+    - 文件范围：`docs/server_next_plan_20260427.md`（§7 IA tree + §6 G4 + 修订日志 v2.1 → v2.2）、`docs/decisions.md`（ADR-100 追加 "IA 修订段"）；不动代码
+    - 不在范围：`admin-nav.ts` 实施（CHG-SN-1-11）/ `plan §6 M-SN-2 范围补列`（CHG-SN-1-12）/ changelog 补丁（CHG-SN-1-13）
+    - 验收要点：
+      - 修订后 plan §7 IA tree 必须显式声明 5 个分组（运营中心 / 内容资产 / 首页运营 / 采集中心 / 系统管理）+ 每组成员 + 每组排序，与 shell.jsx NAV 1:1 对照
+      - 必须裁定 4 处偏离的去留：
+        1. dashboard label "管理台站" 是真源（非"工作台"）
+        2. analytics 是否保留独立顶层（设计稿无 analytics 项 → 推荐：并入 dashboard "管理台站"，原 `/admin/analytics` 路由从 IA tree 移除或改 hidden）
+        3. home / submissions 必须独立成"首页运营"组（不在系统管理）
+        4. system 5 子页（settings/cache/monitor/config/migration）保留 vs 收敛到 settings 单页 — 推荐：保留 5 子但 IA 显示标签改为"站点设置"作为 system landing 入口（与设计稿 ⌘, "站点设置"对齐，不暴露 5 子页选项给侧栏顶层，仅在 settings 页内部用 Tab/分段切换 cache/monitor/config/migration），后台保留路由不删
+      - 21 路由总数对账后变化记录（如裁掉 analytics 则变 20）
+      - ADR-100 IA 修订段含：决策表（4 项裁决）/ 影响范围 / 不变约束（URL slug 仍英文，§5.2 BLOCKER 第 8 条仍生效）/ 关联 CHG-SN-1-05 偏离闭环
+      - plan §10.4 cutover 前置补"IA 对照已完成（CHG-SN-1-10）"勾项
+      - typecheck + lint + test 全绿（仅 docs 改动，应自动通过）
+    - 子代理调用：**arch-reviewer (claude-opus-4-6, Opus) — IA 决策强制 Opus**（CLAUDE.md "强制升 Opus 子代理"第 3 条：撰写即将成为 ADR 的决策文档；第 2 条：跨多消费方的字段 schema —— admin-nav.ts / shell.jsx / plan §7 / ADR-100 四处真源对账）
+    - 主循环模型：opus
+    - 完成判据：Opus 评审 PASS + plan/ADR 文本落盘 + 序列备注更新
+
+11. **CHG-SN-1-11** — admin-nav.ts 修订 + layout 占位元数据对齐（CHG-SN-1-05 偏离闭环）（状态：⬜ 未开始）
+    - 创建时间：2026-04-28 18:00
+    - 计划开始：CHG-SN-1-10 完成后
+    - 工时估算：0.4 天
+    - 关联 plan §：§7（修订后真源）/ §4.6（ESLint 边界）/ §5.2 BLOCKER 第 8 条（URL slug 不动）
+    - 关联 ADR：ADR-100（IA 修订段为本卡输入）
+    - 依赖：CHG-SN-1-10 PASS（plan §7 修订 + ADR-100 IA 修订段必须先落盘）
+    - 文件范围：
+      - `apps/server-next/src/lib/admin-nav.ts`（5 组重排 + label 修订 + 头注释更新指向 ADR-100 IA 修订段）
+      - `apps/server-next/src/app/admin/layout.tsx`（继续极简骨架，仅消费 admin-nav.ts；不实装 brand / 折叠 / 用户菜单 — 那是 M-SN-2 admin-ui Shell 范围）
+      - `apps/server-next/src/app/admin/page.tsx`（dashboard label 由"工作台"改"管理台站"如有显示文案）
+      - 路由文件不动（URL slug 仍英文，BLOCKER 第 8 条）
+    - 不在范围：删除 `/admin/analytics` 路由占位（即便 IA tree 移除 — 路由保留 hidden 状态，由 admin-nav.ts 不导出该项实现侧栏隐藏）；admin-ui Shell 业务组件下沉（M-SN-2）
+    - 验收要点：
+      - admin-nav.ts 5 组导出顺序：运营中心 → 内容资产 → 首页运营 → 采集中心 → 系统管理
+      - "工作台" 全部替换为 "管理台站"（grep `apps/server-next/src` 0 命中"工作台"）
+      - "首页编辑" + "用户投稿" 移到"首页运营"组
+      - analytics / system 子项按 CHG-SN-1-10 裁决处理
+      - admin-nav.ts 头注释新增"真源：docs/designs/backend_design_v2.1/app/shell.jsx + ADR-100 IA 修订段"
+      - 启动 :3003 实测：侧栏分组顺序 + 文案 100% 对设计稿 shell.jsx
+      - 全部 21（或修订后 20）路由 SSR 200
+      - typecheck + lint + test 全绿
+      - 视觉占位（无 brand / 折叠 / 用户菜单）保留极简骨架不变 — 只改 IA 数据，不动 layout DOM 结构
+    - 子代理调用：无强制 Opus（数据修订 + 文案对齐，非架构决策）；如对 system 子页折叠策略有歧义则升 Opus
+    - 主循环模型：sonnet
+
+12. **CHG-SN-1-12** — plan §6 M-SN-2 范围补列 admin-ui Shell 组件（防漏）+ §8 复用矩阵补 Shell 行（状态：⬜ 未开始）
+    - 创建时间：2026-04-28 18:00
+    - 计划开始：CHG-SN-1-10 完成后（与 CHG-SN-1-11 可并行）
+    - 工时估算：0.4 天
+    - 关联 plan §：§6 M-SN-2（行 404-419 范围 / 完成标准 / 关联 brief）/ §8 复用矩阵 / §4.4（Provider 不下沉边界声明）
+    - 关联 ADR：ADR-102（admin-layout token 三层）/ ADR-100 IA 修订段
+    - 依赖：CHG-SN-1-10 PASS（IA 真源稳定后才能定 Shell 消费的 NAV 契约）
+    - 引发证据：plan §6 M-SN-2 行 405-411 当前只列 DataTable v2 / Toolbar / Filter / Drawer / Modal / Toast / AdminDropdown / SelectionActionBar / Empty/Error/Loading；与 `apps/server-next/src/app/admin/layout.tsx:6-10` 注释口径"M-SN-2 完整 shell 下沉到 packages/admin-ui Shell"冲突；未补列 → M-SN-2 任务卡起草时极易漏掉。
+    - 文件范围：`docs/server_next_plan_20260427.md`（§6 M-SN-2 范围 / 完成标准 / §8 复用矩阵 admin-layout 列扩展为 Shell 列；§6 增加阶段审计重点条目"Shell 视觉与 shell.jsx 对齐 100%"）；不动代码
+    - 不在范围：实施 admin-ui Shell（M-SN-2 起步）/ ADR-103 DataTable v2 公开 API（plan 已规划在 M-SN-2 完成时定）
+    - 验收要点（plan §6 M-SN-2 范围必须显式新增 Shell 子项清单）：
+      1. **Sidebar**：Brand 区（logo + "流光后台 v2"）/ 5 组分隔线 + 区段标题 / 每项 icon + label + 计数徽章（warn/danger 配色，count > 999 缩 k）/ 快捷键提示 + collapsed tooltip / 折叠开关（⌘B）+ collapsed 态 NavTip / 底部用户菜单（avatar / 用户名 / 角色 / 下拉：个人资料 / 偏好 / 主题切换 / 帮助 / 切换账号 / 登出）
+      2. **Topbar**：面包屑（tb__crumbs）/ 全局搜索 + 命令面板（⌘K）/ 系统健康指示（tb__health）/ 通知抽屉（bell）/ 后台任务抽屉（zap，进度条 + 重试）/ 主题切换按钮
+      3. **Toast 系统**：全局 `addToast(msg, type, duration)` API（设计稿 §08）+ 右下角堆叠 + 入场/退场动画 + 手动关闭 — plan §6 M-SN-2 行 197 已列 Toast，本卡补全交互细节
+      4. **dark-first 默认主题落 root**：layout 必须显式 `data-theme="dark"`（M-SN-2 admin-ui Shell 接管时确认 ThemeProvider 挂 RootLayout 链路完整）
+      5. **键盘快捷键全集**：⌘1-5（侧栏切换）/ ⌘,（站点设置）/ ⌘B（折叠）/ ⌘K（命令面板）/ ↵（审核台 accept）/ ⎋（关闭抽屉）— Mac/非 Mac 平台检测 (`IS_MAC`) 必须实现
+      - §8 复用矩阵 `admin-layout` 列扩展为 `admin-layout / Shell`，每行视图标注 Shell 是否消费（dashboard 起全部 ✅）
+      - §6 M-SN-2 阶段审计重点新增条目"Shell 与 shell.jsx 视觉对齐 100% / 键盘流可用 / 命令面板可打开"
+      - §6 M-SN-2 工时估算复核：原 2.5 周（A2 方案）是否需要扩到 3 周吸纳 Shell 工作量 — 如需扩，触发 plan §5.2 BLOCKER 第 11 条阈值审视（+30%），由 Opus 评审决定接受/拆分新 milestone M-SN-2.5
+      - typecheck + lint + test 全绿
+    - 子代理调用：**arch-reviewer (claude-opus-4-6, Opus)** — Shell 公开 API 契约（NAV 数据 schema / 计数徽章 schema / 快捷键 schema / 用户菜单 actions schema 都是跨多消费方的字段定义）触发 CLAUDE.md "强制升 Opus" 第 1/2 条
+    - 主循环模型：opus
+    - 完成判据：Opus PASS + plan §6/§8 落盘 + 序列备注更新；如触发 BLOCKER 11 则等待 Opus 工时裁决再继续
+
+13. **CHG-SN-1-13** — M-SN-1 闭环补丁：changelog + task-queue 备忘（IA 漏检追溯）（状态：⬜ 未开始）
+    - 创建时间：2026-04-28 18:00
+    - 计划开始：CHG-SN-1-10/-11/-12 全部完成后
+    - 工时估算：0.2 天
+    - 关联 plan §：§5.3 milestone 阶段审计 / §10.8 SHOULD-4-d handoff
+    - 关联 ADR：ADR-100 IA 修订段（已在 CHG-SN-1-10 落盘）
+    - 依赖：CHG-SN-1-10 / CHG-SN-1-11 / CHG-SN-1-12 全部 PASS
+    - 文件范围：`docs/changelog.md`（M-SN-1 闭环条目下追加补丁段）/ `docs/server_next_handoff_M-SN-1.md`（追加 IA 漏检追溯 + CHG-SN-1-10/11/12 修订引用）/ `docs/task-queue.md`（本序列备注更新 + M-SN-1 序列闭环备忘补丁）
+    - 不在范围：任何代码改动 / 任何 plan/ADR 文本（已在 1-10/1-12 落盘）
+    - 验收要点：
+      - changelog M-SN-1 闭环条目下新增补丁条目，明示"B 级 PASS 漏检 IA 命名/分组（CHG-SN-1-05 自创分组 + plan §7 自身偏离设计稿）→ SEQ-20260428-02 闭环"
+      - server_next_handoff_M-SN-1.md 新增 §"IA 修订追溯"段，引用 ADR-100 IA 修订段 + 本序列 4 张卡
+      - task-queue M-SN-1 闭环备忘段（行 357-364）补"经 SEQ-20260428-02 闭环"标记
+      - typecheck + lint + test 全绿（docs 改动）
+    - 子代理调用：**doc-janitor (claude-haiku-4-5)** — 纯文档归档 / 索引更新 / changelog 追加，符合 CLAUDE.md "强制降 Haiku 子代理"第 1/2/5 条
+    - 主循环模型：haiku（或 sonnet 直接执行，无强制升降）
+
+### SEQ-20260428-02 整体复用矩阵
+
+| 资产 | 来源 | 此序列是否产生 |
+|---|---|---|
+| 设计稿 v2.1 shell.jsx NAV | docs/designs/backend_design_v2.1/app/shell.jsx | ❌ 真源不动，仅对账 |
+| ADR-100 IA v0 | docs/decisions.md ADR-100 | ✅ 追加"IA 修订段（v0 → v1）" |
+| plan §6 M-SN-2 范围 | docs/server_next_plan_20260427.md | ✅ 补列 Shell 子项 |
+| plan §7 IA tree | docs/server_next_plan_20260427.md | ✅ 修订 5 组结构 |
+| admin-nav.ts | apps/server-next/src/lib | ✅ 修订 |
+| admin-ui Shell 组件 | packages/admin-ui | ❌ M-SN-2 起步实施 |
+
+### 风险与回退
+
+- **CHG-SN-1-10 风险**：Opus IA 决策若与设计稿 v2.1 进一步演进冲突（设计稿仍在补完），按 plan §10.5 SHOULD-4-c "设计稿大改应急"协议处置 — 回滚到本卡修订版 + 任务卡补"未实装入口暂不暴露"声明
+- **CHG-SN-1-12 风险**：Shell 工作量纳入 M-SN-2 后估算可能超 +30% → 触发 BLOCKER 11；备选方案 — 拆分 M-SN-2.5 专做 Shell（1 周），M-SN-2 原范围保持 2.5 周；由 Opus 评审裁决
+- **整体兜底**：本序列任一卡 Opus 评审 C 级 → BLOCKER 暂停，不进 M-SN-2
+
+### 备注
+
+- 本序列序号 SEQ-20260428-02 紧邻 SEQ-20260428-01 之后，不复用历史 SEQ
+- 任务 ID 沿用 `CHG-SN-1-NN` 格式（同属 M-SN-1 闭环范畴的延伸偏离闭环；未启用 CHG-SN-2-NN 是为了保持 M-SN-1 漏检责任归属可追溯）
+- 每张卡 commit trailer 必含：`Refs:` `Plan:` `Review:` `Executed-By-Model:` `Subagents:` `Co-Authored-By:`
+- 序列完成 = CHG-SN-1-13 PASS + plan v2.2 修订日志追加 + ADR-100 IA 修订段落盘 + admin-nav.ts 实测对齐设计稿 shell.jsx
+- **不留口子检查清单**（M-SN-2 第一卡起草前必须 100% 勾选）：
+  - [ ] CHG-SN-1-10 PASS：plan §7 5 组 IA + ADR-100 IA 修订段落盘
+  - [ ] CHG-SN-1-11 PASS：admin-nav.ts 与 shell.jsx 1:1 对齐 + 路由 SSR 全绿
+  - [ ] CHG-SN-1-12 PASS：plan §6 M-SN-2 范围显式列出 Sidebar/Topbar/Toast/dark-first/快捷键 5 大子项 + §8 Shell 列扩展 + 工时估算复核
+  - [ ] CHG-SN-1-09 PASS：token 跨域守卫 string 级生效（M-SN-1 闭环备忘原欠账）
+  - [ ] CHG-SN-1-13 PASS：changelog 补丁 + handoff 追溯 + 本序列闭环
 

@@ -321,3 +321,42 @@
   - M-SN-1 后续卡（02–08）按序列计划继续
 
 ---
+
+## [CHG-SN-1-10] plan §7 IA tree 与设计稿 v2.1 shell.jsx 对账修订 + ADR-100 IA 修订段（v0 → v1）
+
+- **完成时间**：2026-04-28
+- **记录时间**：2026-04-28 18:40
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — IA 决策强制 Opus，独立审计 4 项偏离并裁决
+- **触发**：M-SN-1 闭环（B 级 PASS）后人工对 :3003 实测发现 admin-nav.ts（CHG-SN-1-05 落地）与设计稿 v2.1 shell.jsx 在命名/分组/暴露策略 4 项偏离，且 plan §7 自身亦偏离设计稿；M-SN-2 启动前必须闭环（SEQ-20260428-02 任务 1/4）
+- **修改文件**：
+  - `docs/server_next_plan_20260427.md`：
+    - 顶部元信息（version v2 → v2.2 / generated_at 加 v2.1/v2.2）
+    - §7 IA tree fenced code block（行 519-560）重写为 5 组结构 + hidden 隐藏组 + IA v1 修订点说明
+    - §7 视图数表（行 563-587）新增"侧栏暴露数"列；保持 21 路由占位总数 / 侧栏暴露 13 顶层 → 10 项链接
+    - §10.7 设计稿大改应急追加 IA v1 修订完成勾项 + cutover 对账义务交叉引用 ADR-100
+    - 末尾追加修订日志 v2.1 → v2.2 段（4 项决策一览 + 后续卡链 + 元信息）
+  - `docs/decisions.md`：
+    - ADR-100 末尾追加 "IA 修订段（v0 → v1，2026-04-28）" 完整段落（4 项决策表 / 影响范围 / 不变约束 / 剩余差异 / cutover 对账义务 / 关联卡）
+- **4 项决策**（Opus arch-reviewer 裁决）：
+  - **IA-1** dashboard label "工作台" → **"管理台站"**（设计稿 shell.jsx:12 + info.md §01/§03 显式声明）
+  - **IA-2** analytics 路由保留，**侧栏不暴露**；M-SN-3 起内容并入 dashboard 内部 Tab/卡片库（不变约束禁止删 URL）
+  - **IA-3** home + submissions **独立成"首页运营"组**（从系统管理剥离；shell.jsx:22-25 显式分组）
+  - **IA-4** system 5 子（settings/cache/monitor/config/migration）侧栏只暴露 **"站点设置"（⌘,）**；其余 4 子路由保留作 settings 容器 Tab（M-SN-3 实装容器化）
+- **不变约束**：URL slug 不动（plan §5.2 BLOCKER 第 8 条仍生效）/ 路由占位文件不删 / 不引入 M-SN-1 已闭环资产返工 / Resovo 价值排序顺序不变
+- **新增依赖**：无（纯 docs 改动）
+- **数据库变更**：无
+- **回归**：typecheck（5/5 packages）/ lint（4/4 cached FULL TURBO）/ 1781 unit tests（152 files）全绿
+- **后续卡链**（SEQ-20260428-02 task 2-5）：
+  - CHG-SN-1-11：admin-nav.ts ADMIN_NAV 常量改写 + 5 个 hidden 路由文件 head 注释
+  - CHG-SN-1-12：plan §6 M-SN-2 范围补列 admin-ui Shell 组件
+  - CHG-SN-1-09：token 跨域守卫 string 级（M-SN-1 闭环原欠账）
+  - CHG-SN-1-13：changelog + handoff 补丁（IA 漏检追溯）
+- **剩余差异**（cutover 前最终对账义务，详见 ADR-100 IA 修订段 → 剩余差异）：
+  - icon 字段缺失（M-SN-2 Sidebar 组件下沉补）
+  - shortcut 字段缺失（M-SN-2 同步补）
+  - count / type 角标 provider 接口（M-SN-2 设计）
+- **注意事项**：
+  - admin-nav.ts 实施在 CHG-SN-1-11，本卡仅落 plan/ADR 文本（不动代码）
+  - hidden 5 路由文件物理保留，head 注释由 CHG-SN-1-11 补
+  - cutover（M-SN-7）前置义务：拉取设计稿最新版本 shell.jsx，三方 diff 后对每条偏离做"采纳/拒绝并立 ADR"裁决，写入 manual_qa_m_sn_7_*.md IA 章节
