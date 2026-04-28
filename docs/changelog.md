@@ -39,6 +39,34 @@
 
 ---
 
+## [CHG-SN-1-05] server-next 路由骨架（IA v0 占位 / 19 路由按 plan §7 文字清单）
+
+- **完成时间**：2026-04-28
+- **记录时间**：2026-04-28 03:55
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-6) — 首轮 PASS（7/7 子项 ✅）
+- **修改文件**（25 文件 = 22 page.tsx + layout.tsx + admin-nav.ts + PlaceholderPage.tsx）：
+  - `apps/server-next/src/lib/admin-nav.ts`（新建）— IA 路由树常量（4 区段 / 13 顶层 + 5 system 子）+ flattenAdminRoutes 工具；头部注释记录与 plan §7 数据不一致的偏离
+  - `apps/server-next/src/components/PlaceholderPage.tsx`（新建）— 路由占位通用组件（title/milestone/note）
+  - `apps/server-next/src/app/admin/layout.tsx`（新建）— 极简 admin shell（CSS Grid sidebar+topbar+main，消费 `--sidebar-w / --topbar-h` admin-layout token）
+  - `apps/server-next/src/app/admin/page.tsx`（修改）— dashboard 转 PlaceholderPage 形态
+  - 13 admin 顶层占位：moderation / videos / sources / merge / subtitles / image-health / crawler / home / submissions / analytics / users / audit / system landing
+  - 5 admin/system 子：settings / cache / monitor / config / migration（按 plan §7 文字清单）
+  - `apps/server-next/src/app/login/page.tsx`（新建）
+  - `apps/server-next/src/app/403/page.tsx` + `apps/server-next/src/app/not-found.tsx`（错误页）
+- **新增依赖**：无
+- **数据库变更**：无
+- **关键发现**：plan §7 数据不一致 — 文字清单列 20 路由（13 顶层 + 5 system 子 + 1 编辑子 + 1 login）但视图数行 549 写"顶层 21 / 总 27"。本卡按文字清单落 19 路由（defer videos/[id]/edit 至 M-SN-4），偏离记录在 admin-nav.ts 头部 + 留 CHG-SN-1-08 修订 plan §7 数字字段
+- **任务卡草稿偏离**：completion 字段曾列 design-tokens/banners/api-keys/cron/cache 五 system 子，本卡按 plan §7 真源落 settings/cache/monitor/config/migration
+- **smoke 验证**：22 路由全部 SSR 200（含 /admin/system landing + /login + /403）；不存在路径返回 404
+- **回归**：typecheck (7 ws) / lint (4/4) / 1768 tests 全绿
+- **注意事项**：
+  - admin layout 用 inline style + CSS variables；M-SN-2 起步下沉 packages/admin-ui 时替换为正式组件
+  - PlaceholderPage 在 server-next 本地，M-SN-2 视复用情况决定是否下沉
+  - CHG-SN-1-08 阶段审计时需修订 plan §7 数字字段或补漏视图，统一对账
+
+---
+
 ## [CHG-SN-1-04] server-next BrandProvider / ThemeProvider 移植 + admin-layout token 接入
 
 - **完成时间**：2026-04-28

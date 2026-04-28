@@ -89,7 +89,7 @@
 
 - **状态**：🔄 执行中
 - **创建时间**：2026-04-28 02:00
-- **最后更新时间**：2026-04-28 03:45
+- **最后更新时间**：2026-04-28 03:55
 - **目标**：搭建 apps/server-next 工程骨架 + packages/admin-ui 空骨架 + design-tokens 三层重构 + Provider 移植 + IA v0 27 路由占位 + apiClient + 鉴权 + login → dashboard 通路打通
 - **范围**：`apps/server-next/`（新建）、`packages/admin-ui/`（新建空骨架）、`packages/design-tokens/`（三层重构）、`apps/web-next/`（token 引用面回归验证）、`package.json`（workspaces 追加）、`docker-compose.dev.yml`（server-next 服务）、`docs/architecture.md`（§17 token 三层映射）、`scripts/verify-server-next-isolation.mjs`（新建）
 - **依赖**：M-SN-0 三批清理已 PASS（commit `7c278cc` / `96cde57` / `827b88c`）；ADR-100/101/102 落盘
@@ -216,9 +216,15 @@
    - 子代理调用：arch-reviewer (claude-opus-4-6)
    - 主循环模型：opus
 
-5. **CHG-SN-1-05** — server-next 路由骨架（IA v0 27 路由占位）（状态：⬜ 未开始）
+5. **CHG-SN-1-05** — server-next 路由骨架（IA v0 占位 / 19 路由按 plan §7 文字清单）（状态：✅ 已完成）
    - 创建时间：2026-04-28 02:00
    - 计划开始：M-SN-1 Day 5 上午
+   - 实际开始：2026-04-28 03:50
+   - 完成时间：2026-04-28 03:55
+   - 实际工时：0.1 天（远 < 估算 1 天，PlaceholderPage 复用 + 极简 shell）
+   - review：arch-reviewer (claude-opus-4-6) PASS（首轮即过；7/7 子项 ✅）
+   - 关键发现：plan §7 数据不一致 — 文字清单列 20 路由（13 顶层 + 5 system 子 + 1 编辑 + 1 login）但视图数行 549 写"27"。本卡按文字清单落（19，deferring videos/[id]/edit 至 M-SN-4），偏离记录在 admin-nav.ts 头部 + 留 CHG-SN-1-08 修订 plan §7 数字字段
+   - 任务卡草稿偏离：completion 字段曾列 design-tokens/banners/api-keys/cron/cache 五子，本卡按 plan §7 落 settings/cache/monitor/config/migration（plan 是真源）
    - 工时估算：1 天
    - 关联 plan §：§7 IA v0
    - 关联 ADR：ADR-100（IA v0）
