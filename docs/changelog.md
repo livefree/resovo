@@ -360,3 +360,47 @@
   - admin-nav.ts 实施在 CHG-SN-1-11，本卡仅落 plan/ADR 文本（不动代码）
   - hidden 5 路由文件物理保留，head 注释由 CHG-SN-1-11 补
   - cutover（M-SN-7）前置义务：拉取设计稿最新版本 shell.jsx，三方 diff 后对每条偏离做"采纳/拒绝并立 ADR"裁决，写入 manual_qa_m_sn_7_*.md IA 章节
+
+---
+
+## [CHG-SN-1-11] admin-nav.ts IA v1 实施 + 5 个 hidden 路由 head 注释（CHG-SN-1-05 偏离闭环）
+
+- **完成时间**：2026-04-28
+- **记录时间**：2026-04-28 19:15
+- **执行模型**：claude-opus-4-7（沿用本会话主循环未切换；任务建议模型 sonnet 因数据修订无架构决策）
+- **子代理**：无（CHG-SN-1-10 Opus 评审已固化 4 项决策与常量值，本卡纯实施）
+- **触发**：CHG-SN-1-10（commit da1dafa）落盘 plan §7 v2.2 + ADR-100 IA 修订段后，按 ADR-100 IA 修订段第 4 节"修订后 admin-nav.ts ADMIN_NAV 常量值"实施代码层面修订
+- **修改文件**：
+  - `apps/server-next/src/lib/admin-nav.ts`（重写）：
+    - 头注释从 IA v0 改为 IA v1；新增真源链（shell.jsx → ADR-100 → plan §7 v2.2）+ 4 项决策摘要 + 侧栏暴露策略说明
+    - ADMIN_NAV 常量重排为 5 组（运营中心 / 内容资产 / 首页运营 / 采集中心 / 系统管理）
+    - dashboard label "工作台" → "管理台站"
+    - 系统管理组从 6 项（首页编辑/用户投稿/数据看板/用户管理/审计日志/系统父项 5 子）缩减为 3 项（用户管理/站点设置/审计日志）
+    - 首页编辑 + 用户投稿 上移独立成"首页运营"组
+    - analytics 项删除（路由保留但侧栏不暴露）
+    - system 父项删除 children；侧栏只暴露"站点设置"指向 `/admin/system/settings`
+    - flattenAdminRoutes 函数保持不变（向后兼容；children 字段虽未使用但保留 type 签名以兼容未来扩展）
+  - `apps/server-next/src/app/admin/page.tsx`：dashboard PlaceholderPage title "工作台 · Dashboard" → "管理台站 · Dashboard"；milestone 文案补 M-SN-3 承接 analytics 内容说明
+  - `apps/server-next/src/app/not-found.tsx`：链接文案"返回工作台" → "返回管理台站"；说明文案"IA v0" → "IA v1"
+  - `apps/server-next/src/app/admin/analytics/page.tsx`：head 注释加 hidden in IA v1（IA-2）+ M-SN-3 内容并入 dashboard 说明；title 后缀加 "· hidden in IA v1"
+  - `apps/server-next/src/app/admin/system/cache/page.tsx`：head 注释加 hidden in IA v1（IA-4）+ M-SN-3 改造为 settings 容器 Tab 面板说明
+  - `apps/server-next/src/app/admin/system/monitor/page.tsx`：同上
+  - `apps/server-next/src/app/admin/system/config/page.tsx`：同上
+  - `apps/server-next/src/app/admin/system/migration/page.tsx`：同上
+- **新增依赖**：无
+- **数据库变更**：无
+- **验收实测**：
+  - admin-nav.ts ADMIN_NAV 5 组结构与 ADR-100 IA 修订段第 4 节常量值 1:1 对照（7 个 admin-nav 暴露项 + system/settings 1 项 = 10 项侧栏链接、9 顶层 + 1 system 子）
+  - "工作台" UI 文案 0 命中（admin-nav.ts:30 注释中的修订记录有意保留作审计追溯；属 IA-1 决策的"WHY 非显然"注释）
+  - 21 路由全部 SSR 通过（19 admin 路由 307→/login 鉴权重定向 / /login + /403 各 200）
+  - typecheck（5/5 packages）/ lint（4/4 cached FULL TURBO）/ 1781 unit tests（152 files）全绿
+- **不变约束验证**：
+  - 路由 URL 0 改动（grep `apps/server-next/src/app` 路径树未变）
+  - 5 个 hidden 路由文件物理保留
+  - layout.tsx DOM 结构未改（仍极简骨架，brand / 折叠 / 用户菜单 等待 M-SN-2 admin-ui Shell 下沉）
+  - M-SN-1 闭环资产（token / Provider / apiClient / 鉴权层）零改动
+- **注意事项**：
+  - 视觉层面侧栏渲染需登录后用户实测；CLI 鉴权重定向遮蔽了 layout 渲染输出，已通过 typecheck + admin-nav.ts 与 ADR-100 IA 修订段常量值 1:1 对照间接验证
+  - children 字段当前 ADMIN_NAV 内 0 使用（system 父项已被替换为站点设置单项），但 AdminNavItem 类型保留 children 以兼容 M-SN-3 后续扩展（如 settings 容器内的子 Tab 路由树）；如 M-SN-2 Sidebar 组件下沉后确认不需要 children 字段，由 ADR 流程裁决移除
+  - 5 个 hidden 路由的 PlaceholderPage title 后缀加 "· hidden in IA v1" 是显式标注，便于直链访问的运维同学识别（M-SN-3 改造 Tab 容器后该标注按需移除）
+  - `/admin/system` landing 页（page.tsx 物理存在）当前仍为 PlaceholderPage；侧栏不再有"系统"父项指向它；M-SN-3 阶段改 redirect 到 `/admin/system/settings`（防止裸访问产生孤儿页）— 已记入 ADR-100 IA 修订段"影响范围 / M-SN-3 落地任务"
