@@ -6,7 +6,7 @@
 > source_of_truth: yes  
 > supersedes: none  
 > superseded_by: none  
-> last_reviewed: 2026-04-17
+> last_reviewed: 2026-04-28
 
 ---
 
@@ -14,17 +14,21 @@
 
 Resovo 采用同域多进程独立部署：
 
-- **web**（前台）：Next.js App Router（`apps/web/src/app`，含 `[locale]`，i18n）— 端口 3000
-- **server**（后台）：Next.js App Router（`apps/server/src/app`，无 `[locale]`）— 端口 3001
+- **web-next**（新前台）：Next.js App Router（`apps/web-next/src/app`，含 `[locale]`，i18n）— 端口 3000
+- **server**（旧后台，将退役）：Next.js App Router（`apps/server/src/app`，无 `[locale]`）— 端口 3001
 - **api**：Fastify API（`apps/api/src`，统一前缀 `/v1`）— 端口 4000
 - **数据**：PostgreSQL + Elasticsearch
 - **异步**：Redis + Bull（crawler/verify 队列）
+
+**立项中**：
+- **server-next**（新后台）：Next.js App Router（`apps/server-next/src/app`，无 `[locale]`）— 端口 3003（开发期），M-SN-7 cutover 后接管 /admin/* 并改名为 `apps/admin`
 
 关键边界：
 
 - 前台与后台仅通过 `/v1` API 与数据库建立联系，不共享代码路径。
 - 业务规则收敛在 `services` + `db/queries` + DB 触发器；页面层不做状态机判定。
 - 视频状态（三元组）由数据库触发器强约束（Migration 023）。
+- server-next 工程实施计划详见 `docs/server_next_plan_20260427.md`。
 
 ---
 
@@ -43,7 +47,7 @@ Resovo 采用同域多进程独立部署：
                     ▼              ▼              ▼
              web:3000          server:3001     api:4000
              前台 Next.js      后台 Next.js    Fastify API
-             apps/web/         apps/server/   apps/api/
+             apps/web-next/    apps/server/   apps/api/
              [locale]/*        admin/*        /v1/*
                     │              │              │
                     └──────┬───────┘              │
@@ -66,13 +70,16 @@ Resovo 采用同域多进程独立部署：
 ```text
 resovo/                         ← Turbo + npm workspaces 根
 ├── apps/
-│   ├── web/                    ← 前台 Next.js（@resovo/web，port 3000）
-│   ├── server/                 ← 后台 Next.js（@resovo/server，port 3001）
+│   ├── web-next/               ← 新前台 Next.js（@resovo/web-next，port 3000，已上线）
+│   ├── server/                 ← 旧后台 Next.js（@resovo/server，port 3001，将退役）
+│   ├── server-next/            ← 新后台 Next.js（@resovo/server-next，port 3003，开发中）
 │   └── api/                    ← Fastify API（@resovo/api，port 4000）
 ├── packages/
 │   ├── player/                 ← 共享播放器组件（@resovo/player，legacy）
 │   ├── player-core/            ← 播放器核心层（@resovo/player-core，M3+，ADR-036）
-│   └── types/                  ← 共享类型（@resovo/types）
+│   ├── types/                  ← 共享类型（@resovo/types）
+│   ├── design-tokens/          ← 设计系统 Token（base / semantic / admin-layout 三层）
+│   └── admin-ui/               ← 后台共享组件库（M-SN-1 启动后）
 ├── docker/
 │   ├── nginx.conf              ← 反向代理路由规则
 │   ├── docker-compose.dev.yml  ← 本地三端联调代理
@@ -89,20 +96,28 @@ resovo/                         ← Turbo + npm workspaces 根
 ```text
 resovo/
 ├── apps/
-│   ├── web/                         # 前台 Next.js（@resovo/web）
+│   ├── web-next/                    # 新前台 Next.js（@resovo/web-next，已上线）
 │   │   ├── src/
 │   │   │   ├── app/                 # App Router（[locale]/...）
 │   │   │   ├── components/          # 前台组件（含 player shell）
 │   │   │   ├── lib/                 # api-client、工具函数
 │   │   │   ├── stores/              # Zustand 状态
 │   │   │   ├── types/               # 前台本地类型
-│   │   │   └── i18n/                # next-intl 配置
+│   │   │   └── contexts/            # BrandProvider / ThemeProvider（ADR-038/039）
 │   │   ├── messages/                # i18n 翻译文件（en/zh-CN）
-│   │   └── middleware.ts            # next-intl 国际化中间件
-│   ├── server/                      # 后台 Next.js（@resovo/server）
+│   │   └── middleware.ts            # 品牌识别中间件（cookie → header）
+│   ├── server/                      # 旧后台 Next.js（@resovo/server，将退役）
 │   │   └── src/
 │   │       ├── app/                 # App Router（/admin/...）
-│   │       └── components/admin/    # 后台管理组件
+│   │       └── components/admin/    # 后台管理组件（遗留）
+│   ├── server-next/                 # 新后台 Next.js（@resovo/server-next，开发中，M-SN）
+│   │   └── src/
+│   │       ├── app/                 # App Router（/admin/...）
+│   │       ├── components/          # server-next 业务组件
+│   │       ├── lib/                 # apiClient / 鉴权 / utils
+│   │       ├── stores/              # zustand（如需）
+│   │       ├── contexts/            # BrandProvider / ThemeProvider（沿用 ADR-038/039）
+│   │       └── middleware.ts
 │   └── api/                         # Fastify API（@resovo/api）
 │       └── src/
 │           ├── routes/              # 路由层（参数校验、鉴权）
@@ -112,13 +127,16 @@ resovo/
 ├── packages/
 │   ├── player/                      # 共享播放器组件（@resovo/player，legacy）
 │   ├── player-core/                 # 播放器核心层（@resovo/player-core，M3+，ADR-036）
-│   └── types/                       # 共享类型（@resovo/types）
+│   ├── types/                       # 共享类型（@resovo/types）
+│   ├── design-tokens/               # 设计系统 Token（base / semantic / admin-layout）
+│   └── admin-ui/                    # 后台共享组件库（M-SN-1 创建空骨架）
 ├── docs/
 │   ├── architecture.md
 │   ├── decisions.md
 │   ├── tasks.md
 │   ├── task-queue.md
-│   └── changelog.md
+│   ├── changelog.md
+│   └── server_next_plan_20260427.md # M-SN 工程实施 Plan（source_of_truth）
 └── scripts/
     ├── migrate.ts
     ├── clear-crawled-data.ts
