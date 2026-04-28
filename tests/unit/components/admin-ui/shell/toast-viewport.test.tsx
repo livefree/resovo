@@ -43,7 +43,13 @@ describe('ToastViewport — 渲染', () => {
   })
 
   it('position prop 写入 data-toast-viewport attribute', () => {
-    const { container } = render(<ToastViewport position="bottom-right" />)
+    const { container } = render(<ToastViewport position="top-left" />)
+    const viewport = container.querySelector('[data-toast-viewport]')
+    expect(viewport?.getAttribute('data-toast-viewport')).toBe('top-left')
+  })
+
+  it('position 默认值 = "bottom-right"（ADR-103a §4.1.7 契约不变量）', () => {
+    const { container } = render(<ToastViewport />)
     const viewport = container.querySelector('[data-toast-viewport]')
     expect(viewport?.getAttribute('data-toast-viewport')).toBe('bottom-right')
   })

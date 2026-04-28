@@ -11,7 +11,7 @@
  *   - 订阅 store：useSyncExternalStore 读取 queue（SSR 安全：服务端 snapshot 返 []）
  *   - timer 调度：每条 toast 在 mount 时启动 setTimeout(dismiss, effectiveDuration)；
  *     effectiveDuration === 0 表示永驻不自动消失（level='danger' 默认）
- *   - position：默认 'top-right'（设计稿 §08 默认；ADR-103a §4.1.7 4 角可切换）
+ *   - position：默认 'bottom-right'（ADR-103a §4.1.7 "默认右下；4 角可切换"）
  *   - maxQueue：默认 5（ADR-103a §4.1.7）；溢出 FIFO 由 store push 时根据本组件传入的值裁剪
  *   - level → state token 映射：info → state-info / success → state-success / warn → state-warning / danger → state-error
  *
@@ -30,7 +30,7 @@ export interface ToastViewportProps {
   readonly maxQueue?: number
 }
 
-export function ToastViewport({ position = 'top-right', maxQueue = 5 }: ToastViewportProps) {
+export function ToastViewport({ position = 'bottom-right', maxQueue = 5 }: ToastViewportProps) {
   const queue = useSyncExternalStore(subscribeToStore, getQueueSnapshot, getQueueSnapshotSSR)
 
   // 同步 props.maxQueue 到 store（多 ViewPort 实例时由最后一次 mount 决定全局值）
