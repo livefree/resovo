@@ -542,9 +542,9 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
 
 ## [SEQ-20260428-03] M-SN-2 第一阶段 · ADR-103a 起草 + AdminNavItem 字段扩展（执行序列）
 
-- **状态**：🔄 执行中（CHG-SN-2-01 ✅；fix(CHG-SN-2-01) ✅；CHG-SN-2-02 整卡 ✅（stage 1/2 + stage 2/2）；CHG-SN-2-01.5 ✅；CHG-SN-2-03 ~ -21 待开）
+- **状态**：🔄 执行中（CHG-SN-2-01 ✅；fix(CHG-SN-2-01) ✅；CHG-SN-2-02 整卡 ✅；CHG-SN-2-01.5 ✅；CHG-SN-2-03 ✅ Shell 范式建立；CHG-SN-2-04 ~ -21 待开）
 - **创建时间**：2026-04-28 22:00
-- **最后更新时间**：2026-04-29 00:15
+- **最后更新时间**：2026-04-29 00:55
 - **目标**：M-SN-2 第一阶段（Shell 公开 API 契约固化 + admin-nav.ts 字段扩展）。落地 ADR-103a 作为 Shell 10 组件 Props / AdminNavItem 5 字段扩展协议 / 4 级 z-index 规范的真源；让 server-next 侧 admin-nav.ts 注入 icon / shortcut / count / badge 字段，准备好被 packages/admin-ui Shell 组件消费。
 - **范围**：`docs/decisions.md`（ADR-103a 新建）/ `apps/server-next/src/lib/admin-nav.ts`（5 字段扩展 + ADMIN_NAV 改写）/ `apps/server-next/src/lib/shell-data.ts`（新建：count provider 接口实现）/ admin-layout token 第 5 层新增 z-shell-* 三变量
 - **依赖**：SEQ-20260428-02 全 5 张卡 PASS（commit da1dafa / 15b3bf7 / 1e6bbb1 / 8975a50 / e1df243 + 修订 e9d2f52）；不留口子检查清单 5/5 [x]
@@ -627,10 +627,24 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
    - 子代理调用：arch-reviewer (claude-opus-4-7) — Token 层新增字段（CLAUDE.md 模型路由第 5 条）
    - 主循环模型：opus
 
-3. **CHG-SN-2-03 ~ CHG-SN-2-12**（10 张卡，Shell 10 组件分卡实施）：
-   - 依赖序：ToastViewport → KeyboardShortcuts → Breadcrumbs → HealthBadge → UserMenu → Sidebar → Topbar → 双 Drawer → CommandPalette → AdminShell 装配 + admin layout 替换骨架
-   - 单卡详细范围由 CHG-SN-2-01 ADR-103a PASS 后逐张起草
-   - 每张卡 Opus 评审（首卡 ToastViewport 强制 Opus 因 zustand 单例非 Context 模式新立；后续可视情况降 Sonnet）
+3. **CHG-SN-2-03** — packages/admin-ui ToastViewport + useToast + toast-store（zustand 单例，Provider-less 模式首张落地）（状态：✅ 已完成）
+   - 创建时间：2026-04-29 00:30
+   - 计划开始：CHG-SN-2-02 整卡 PASS 后
+   - 实际开始：2026-04-29 00:30
+   - 完成时间：2026-04-29 00:55
+   - 实际工时：0.03 天（~25min；ADR-103a §4.1.7 1:1 实施 + 29 单测 + Opus 评审 8/8 PASS + 3 条建议优化合并）
+   - review：arch-reviewer (claude-opus-4-7) — 8 项评审重点全 PASS / 无必修 / 3 条建议优化全部合并补齐 / 作为 CHG-SN-2-04 ~ CHG-SN-2-12 实施模板
+   - 工时估算：0.4 天
+   - 关联 plan §：§6 M-SN-2 v2.3 A 块 / §4.4 / §4.7 v2.4
+   - 关联 ADR：ADR-103a §4.1.7 ToastViewport / §4.4-1 Provider 不下沉 / §4.3 z-index
+   - 文件范围：详见 tasks.md
+   - 子代理调用：arch-reviewer (claude-opus-4-7) — Provider-less 模式范式落地强制 Opus
+   - 完成判据：所有文件落盘 + 必跑命令全绿 + 双扫描守卫 PASS + Opus 评审 PASS + commit
+
+4. **CHG-SN-2-04 ~ CHG-SN-2-12**（9 张卡，Shell 9 组件分卡实施）：
+   - 依赖序：KeyboardShortcuts → Breadcrumbs → HealthBadge → UserMenu → Sidebar → Topbar → 双 Drawer → CommandPalette → AdminShell 装配 + admin layout 替换骨架
+   - 单卡详细范围由 CHG-SN-2-03 PASS 后逐张起草
+   - 每张卡 Opus 评审视情况；首卡 ToastViewport 已建立 Provider-less 范式后，纯 React 组件类（Breadcrumbs/HealthBadge）可降 Sonnet
 
 4. **CHG-SN-2-13 ~ CHG-SN-2-20**（数据原语层）：DataTable v2 + Toolbar/Filter/ColumnSettings + Drawer/Modal/AdminDropdown/SelectionActionBar + Empty/Error/Loading + Storybook demo
    - 详细范围 CHG-SN-2-12 AdminShell 装配后逐张起草

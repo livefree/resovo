@@ -748,3 +748,67 @@
   - icon 注入虽完成，但视觉层面侧栏渲染需登录 + AdminShell 装配（CHG-SN-2-12）后才能完整呈现；本卡仅完成数据准备 + 类型扩展
   - lucide-react 1.12.0（实测最新稳定）已安装；如未来出现 1.13.0+ 升级，patch + minor 自动允许；major 升级（2.x+）须新 ADR
   - 双扫描守卫在 preflight [5b/6] 仍然集成（npm run verify:server-next-isolation），无须独立步骤；script 名保持向后兼容
+
+---
+
+## [CHG-SN-2-03] packages/admin-ui ToastViewport + useToast + toast-store（zustand 单例 / Provider-less 模式首张落地 / Shell 9 后续卡范式）
+
+- **完成时间**：2026-04-29
+- **记录时间**：2026-04-29 00:55
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — M-SN-2 首张 Shell 组件 + Provider-less 模式范式落地强制 Opus（CLAUDE.md 模型路由第 1 条共享组件 API 契约）
+- **触发**：CHG-SN-2-02 整卡 PASS（commit c5d0bf0）→ M-SN-2 数据层就绪 → SEQ-20260428-03 任务 3 启动 Shell 10 组件分卡实施
+- **修改文件**：
+  - `packages/admin-ui/package.json`（修改）— dependencies 追加 zustand；peerDependencies 追加 react/react-dom >=18；devDependencies 追加 @types/react
+  - `packages/admin-ui/src/shell/toast-store.ts`（新建）— zustand 单例 store（vanilla createStore，非 Context Provider）
+    - State：queue + nextSeq + maxQueue（默认 5）
+    - Actions：push（生成 toastId / 入队 / FIFO 裁剪）/ dismiss / dismissAll / setMaxQueue（缩小时立即裁剪）
+    - effectiveDuration 解析（resolveEffectiveDuration）：显式 durationMs 优先（含 0 永驻）/ undefined + danger → 0 永驻 / 其他 → DEFAULT_DURATION_MS=4000
+    - 模块顶层导出 `toastStore` 单例（应用全局共享）+ `createToastStore` factory（单测用）
+  - `packages/admin-ui/src/shell/use-toast.ts`（新建）— useToast hook
+    - 返回模块级常量 `USE_TOAST_RETURN`（稳定引用，避免无谓 re-render）
+    - actions 透传 `toastStore.getState()` 三 method（push/dismiss/dismissAll）
+    - 不订阅 store state（订阅由 ToastViewport 内部 useSyncExternalStore 完成）
+  - `packages/admin-ui/src/shell/toast-viewport.tsx`（新建）— React 组件
+    - useSyncExternalStore 订阅 toastStore.queue（含 SSR_EMPTY_QUEUE 稳定常量避免水合不匹配）
+    - props.maxQueue 同步 store（useEffect setMaxQueue）
+    - timer 调度：每条 toast useEffect setTimeout(dismiss, effectiveDuration)；effectiveDuration ≤ 0 不调度
+    - 4 角 position（默认 top-right）；fixed 定位 + var(--z-shell-toast) 取 ADR-103a §4.3 z-index
+    - level → state token 映射（info/success/warn/danger → state-info/state-success/state-warning/state-error）
+    - 关闭按钮 `×` unicode + 可选 action 按钮（触发 onClick + dismiss）
+    - 颜色/间距/阴影/圆角/字号全部读 admin-layout + semantic token（零硬编码）
+  - `packages/admin-ui/src/shell/index.ts`（新建）— Shell 桶导出 + shell/ 子目录章法重述（5 条范式：文件命名 / 不变约束 / 类型导出 / 单测组织 / SSR 安全模式）
+  - `packages/admin-ui/src/index.ts`（修改）— 顶级桶导出 `export * from './shell'` + 头注释含 4 项不变约束声明
+  - `tests/unit/components/admin-ui/shell/toast-store.test.ts`（新建）— 12 tests：push/dismiss/dismissAll / FIFO / setMaxQueue 缩小裁剪 / 三种 effectiveDuration 分支 / DEFAULT 不变量锁定 / action 字段保留 / 单例 SSR 安全
+  - `tests/unit/components/admin-ui/shell/toast-viewport.test.tsx`（新建）— 15 tests：渲染 / data-* attribute / timer 默认+danger 永驻+显式 / 关闭按钮 / action 按钮含回调与 dismiss / useToast 稳定引用 / props.maxQueue 同步 + rerender 裁剪 + setMaxQueue=0 边界 + 多 ViewPort 共享 store
+  - `tests/unit/components/admin-ui/shell/toast-viewport-ssr.test.tsx`（新建）— 2 tests：renderToString 零 throw / SSR 输出含 viewport 容器但 0 toast 卡（getQueueSnapshotSSR empty）
+  - `docs/decisions.md` ADR-103a 末尾追加"2026-04-29 · CHG-SN-2-03 · §4.1.7 ToastViewport 首例落地（Shell 实施范式参照）"修订记录段
+- **新增依赖**：zustand（已在 plan §4.7 预批清单；packages/admin-ui 工作区首次显式声明）
+- **数据库变更**：无
+- **实测验收**：
+  - typecheck（5/5 packages）/ lint（4/4 cached FULL TURBO）全绿
+  - 1812 unit tests PASS（原 1808 + 4 新增 toast 边界 / SSR 测；其中 admin-ui shell 29 tests 全过）
+  - verify-server-next-isolation 双扫描：42 文件（apps/server-next/src + packages/admin-ui/src）0 违规
+  - verify-token-isolation：152 文件 0 命中（无回归）
+- **不变约束验证**：
+  - Provider 不下沉：packages/admin-ui 零 BrandProvider/ThemeProvider/createContext（grep 确认）
+  - Edge Runtime 兼容：模块顶层零 window/document/fetch/Cookie/localStorage/navigator；Date.now() 在 push action 内执行；timer 在 useEffect 内
+  - 零硬编码颜色：所有颜色读 `var(--state-${slot}-bg/-fg/-border)` + `var(--space-*)` + `var(--radius-md)` + `var(--shadow-md)` + `var(--font-size-sm)`
+  - 零图标库依赖：package.json 仅 zustand 1 项 dep；关闭按钮用 `×` unicode；双扫描守卫验证 PASS
+  - URL slug 0 改动 / M-SN-1 闭环资产零返工
+- **Opus 评审 PASS**（8 项重点全 PASS / 无必修 / 3 条建议优化全部合并补齐）：
+  - 3 条建议优化已落地：(1) 边界单测 setMaxQueue=0 + 多 ViewPort 共享 + SSR renderToString；(2) ADR-103a 末尾追加"§4.1.7 首例实装 → CHG-SN-2-03 范式参照"修订记录条目；(3) shell/index.ts 头注释扩展为 5 条章法（文件命名 / 不变约束 / 类型导出 / 单测组织 / SSR 安全模式）
+- **作为 M-SN-2 后续 9 张 Shell 卡（CHG-SN-2-04 ~ CHG-SN-2-12）的实施模板**：
+  - 文件命名：`<component>-store.ts` + `use-<component>.ts` + `<component>.tsx` / `<component>-viewport.tsx` + `index.ts` 桶导出
+  - 类型导出范式：Props 接口 readonly + on<Verb> 事件命名 + 默认值常量 + 内部数据类型
+  - 单测三分：store 纯逻辑 + viewport 渲染 + SSR renderToString
+  - SSR 安全模式：useSyncExternalStore getServerSnapshot 返模块级稳定常量引用（如 SSR_EMPTY_QUEUE）
+  - CHG-SN-2-04 起步前主循环对照 `packages/admin-ui/src/shell/index.ts` 头注释 5 条章法逐项校验
+- **后续动作**：CHG-SN-2-04 KeyboardShortcuts（按 ADR-103a §4.1.10 实施 IS_MAC + MOD_KEY_LABEL + formatShortcut + parseShortcut + KeyboardShortcuts 组件；可降 Sonnet 主循环，按本卡范式实施）
+- **注意事项**：
+  - zustand 单例 toastStore 是模块级常量；测试间共享同一 queue 状态需在 beforeEach dismissAll + setMaxQueue 复位（已在 toast-viewport.test.tsx 实施）
+  - effectiveDuration=0 永驻语义：包含 (a) 显式 durationMs=0 / (b) level='danger' 默认；timer useEffect 用 `<= 0` 判断同时覆盖
+  - 多 ViewPort 实例共享同一 store 是 ADR-103a §4.4-1 关键不变量；单测已锁定（render 两个不同 position viewport，push 一条 → 两个都渲染）
+  - 颜色 / 间距 / 阴影 / 圆角 / 字号全部 token 化；尺寸字面量（minWidth 280px / maxWidth 420px / lineHeight 1 / fontWeight 600 / opacity 0.85）非颜色，未在 ADR 约束尺寸 token 化范围内
+  - 后续 Shell 卡若需 React Context（如 CommandPalette 内部状态共享），优先选 zustand 单例（packages/admin-ui scoped）；Context 仅可在子组件树内部使用且不暴露 Provider 给 server-next
+  - shell/index.ts 头注释中的 5 条章法可被 CHG-SN-2-04+ 主循环视为"开工前 self-check 清单"

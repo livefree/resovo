@@ -2856,6 +2856,19 @@ ADR-100 IA 修订段 `docs/decisions.md:2104-2117` 已声明 cutover 前 `manual
 
 **回归**：typecheck + lint + test 全绿（仅 docs 改动）。
 
+#### 2026-04-29 · CHG-SN-2-03 · §4.1.7 ToastViewport 首例落地（Shell 实施范式参照）
+
+CHG-SN-2-03 完成 §4.1.7 ToastViewport + useToast + toast-store 落地，作为 packages/admin-ui Shell 9 张后续卡（CHG-SN-2-04 ~ CHG-SN-2-12）的实施范式参照。Opus arch-reviewer 评审 PASS（8 项评审重点全 PASS / 无必修 / 3 条建议优化全部合并补齐）。
+
+**首例实装文件**（commit 见 git log `chg(CHG-SN-2-03)`）：
+- `packages/admin-ui/src/shell/toast-store.ts`（zustand 单例 store，§4.4-1 Provider 不下沉范式落地）
+- `packages/admin-ui/src/shell/use-toast.ts`（hook 包装，仅透传 actions 不订阅 state）
+- `packages/admin-ui/src/shell/toast-viewport.tsx`（React 组件 + useSyncExternalStore + SSR_EMPTY_QUEUE）
+- `packages/admin-ui/src/shell/index.ts`（含 shell/ 子目录章法重述：文件命名 / 不变约束 / 类型导出范式 / 单测组织 / SSR 安全模式 5 条）
+- 单测 29 tests：toast-store.test.ts（12） + toast-viewport.test.tsx（15） + toast-viewport-ssr.test.tsx（2）
+
+**Shell 9 后续卡参照本卡**：文件命名规范 / Props readonly / 默认值常量 + 不变量单测锁定 / store-driven 组件 SSR 安全（getServerSnapshot 返稳定常量）/ 单测组织三分（store / viewport / SSR）/ 头注释结构（真源链 → 设计要点 → 不变约束 → 跨域消费）。CHG-SN-2-04 起步前主循环对照 `packages/admin-ui/src/shell/index.ts` 头注释 5 条章法逐项校验。
+
 ---
 
 ## ADR-103b: server-next 图标库选型 — lucide-react
