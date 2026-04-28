@@ -4,9 +4,15 @@
   "private": true,
   "packageManager": "npm@10.8.2",
   "workspaces": [
-    "apps/*",
-    "packages/*",
-    "tools/*"
+    "apps/api",
+    "apps/server",
+    "apps/web-next",
+    "packages/design-tokens",
+    "packages/logger",
+    "packages/player",
+    "packages/player-core",
+    "packages/types",
+    "tools/eslint-plugin-resovo"
   ],
   "scripts": {
     "dev": "node scripts/dev.mjs",
