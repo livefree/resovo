@@ -854,3 +854,33 @@ R1 (审核 + 议题开题)
 完成后 spawn arch-reviewer 复核 PASS → R10 闭环 → 启动 R11 第二批 code 清理。
 
 — END R9 —
+
+---
+
+## 注脚 · ADR 编号修订（R12 落盘时追认）
+
+R12 起草 ADR 前核对 `docs/decisions.md` 发现 plan §9 原分配的 ADR-046 ~ ADR-051 编号区段全部已被前期 ADR 占用：
+
+- ADR-046 = 图片治理 schema 契约（IMG-01）
+- ADR-047 = SafeImage / FallbackCover 最终契约（IMG-03.5）
+- ADR-048 = 列表→播放器直达路径与卡片交互协议
+- ADR-049 = Admin 有序列表组件选型（@dnd-kit）
+- ADR-050 = 字体族决策（Noto Sans + Noto Sans SC）
+- ADR-051 = M6 CDN 预备 + 后台图片管理
+
+用户裁定方案 B：跳号到 ADR-100+ 区段，避开历史冲突，使 server-next 系列 ADR 编号连续可识别。
+
+**编号重映射**（plan v2 已同步替换）：
+
+| Plan 原编号 | 修订后编号 | 主题 |
+|---|---|---|
+| ADR-046 | **ADR-100** | server-next 立项 + IA v0 + 单语言 + 依赖白名单 |
+| ADR-047 | **ADR-101** | cutover 协议（方案 E） |
+| ADR-048 | **ADR-102** | Token 三层收编 + 设计稿 v2.1 映射 |
+| ADR-049 | **ADR-103** | DataTable v2 公开 API 契约（候选，M-SN-2 完成时） |
+| ADR-050 | **ADR-104** | home_modules admin API 协议（M-SN-5 内） |
+| ADR-051 | **ADR-105** | merge candidate / split / unmerge API 协议（M-SN-5 内） |
+
+本 kickoff 实录中 R1–R9 的 ADR-046/047/048/049/050/051 引用为讨论时的历史命名，不修订（保留实录原貌）；如需查阅请按上表映射。
+
+ADR-100/101/102 起草过程：Opus arch-reviewer 首轮 CONDITIONAL（5 MUST + 4 SHOULD）→ 主循环修订 → 二轮 PASS。

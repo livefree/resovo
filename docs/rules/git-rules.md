@@ -100,6 +100,34 @@ Trailer 字段约束：
 
 git 本身支持任意 trailer，CI 可通过 `git log --format="%(trailers:key=Executed-By-Model)"` 聚合统计各模型的 commit 量，便于回溯成本与质量分布。
 
+### server-next 重写期 trailer 扩展（M-SN-0 ~ M-SN-7）
+
+server-next 立项后（ADR-100），M-SN 期间 commit trailer 在前述基础上扩展三条字段，以追溯 plan / 任务 / 评审：
+
+```
+chg(CHG-SN-<milestone>-<seq>): <简短描述>
+
+<可选正文>
+
+Refs: CHG-SN-<milestone>-<seq>
+Plan: docs/server_next_plan_20260427.md §<节号>
+Review: <arch-reviewer commit hash> PASS
+Executed-By-Model: claude-opus-4-7
+Subagents: arch-reviewer (claude-opus-4-6)
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+```
+
+新增字段约束：
+
+- `Refs:` 必填，值为 `CHG-SN-<milestone>-<seq>` 格式（如 `CHG-SN-1-01`），与 `docs/tasks.md` 任务卡 ID 一致
+- `Plan:` 必填，指向 plan 真源文件 + 关联节号；plan 升版时 PR 内同步更新
+- `Review:` 必填；arch-reviewer 二轮 PASS 的 commit hash，无 review 的 chore/docs 例外可写 `n/a`
+- TASK-ID 格式 `CHG-SN-<milestone>-<seq>` 是对既有 `<PREFIX>-<NN>` 模式的延伸，不影响 type 枚举（继续使用 `chg` / `docs` / `chore` / `feat` 等）
+- 三条新字段排在 `Executed-By-Model` 之前；与既有 trailer 协议不冲突（git trailer 协议允许任意 key）
+- M-SN-7 cutover 完成后，新字段是否保留由独立 ADR 决定
+
+适用范围：M-SN-0 第三批 ADR PASS（含本批）起，至 cutover 后 7 天保留期结束（详见 ADR-101）。M-SN 期间非 server-next 范畴的 commit（如前台维护、其他 PREFIX-NN 任务）继续沿用前述基础 trailer，不强制三条新字段。
+
 ---
 
 ## 提交时机

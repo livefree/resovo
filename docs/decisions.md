@@ -2015,3 +2015,164 @@ landing_plan_v1 §HANDOFF-03 验收清单第 5 项要求"主视图 ⇄ 浮窗切
 | 独立 ADR 记录 | 本 ADR-054 |
 | arch-reviewer 子代理审计 | claude-opus-4-7 HANDOFF-03 审计，DECISION: NEED_FIX → 2 条必改落地后 PASS；方案 B 合规性判定 PASS |
 | PHASE COMPLETE 前 signoff | M7 完成前须在 `milestone_alignment_m7_*.md` 与 `manual_qa_m7_*.md` 显式列出本留白 |
+
+---
+
+## ADR-100: server-next 立项 + IA v0 + 单语言 + 依赖白名单
+
+- **日期**：2026-04-28
+- **状态**：已采纳
+- **子代理**：arch-reviewer (claude-opus-4-6)
+- **编号说明**：plan v2 §9 原分配 ADR-046/047/048，落盘前核对 `docs/decisions.md` 发现 046–054 全部已被前期 ADR 占用。用户裁定 B 方案（跳号至 100+ 区段，避开历史冲突，并使 server-next 系列 ADR 编号连续可识别）。
+- **背景**：apps/server（旧后台）累积 9 大痛点（详见 `docs/admin_audit_20260426.md` §7），ModernDataTable 采纳率 58%，22 admin 模块/122 端点工程债务深；继续在 apps/server 内增量修复 ROI 低、风险高。Claude Design 已输出 v2.1 后台设计稿（IA 重排 + 16 视图 mock，详见 `docs/designs/backend_design_v2.1/`）。立项 apps/server-next 独立壳承接重写。
+- **决策**：立项 apps/server-next 作为 admin 重写主体，沿用 ADR-031（重写期代码共存）+ ADR-035（路由切分）+ ADR-037（里程碑对齐）模式；M-SN-7 cutover 后 apps/server 整体退场（详见 ADR-101）。
+- **IA v0（27 路由占位）**：
+  - **运营中心**：dashboard / moderation
+  - **内容资产**：videos / sources / merge / subtitles / image-health
+  - **采集中心**：crawler
+  - **系统管理**：home / submissions / analytics / users / settings / audit + 5 个 system 子路由
+  - **认证**：login
+  - 共 21 主路由 + 5 system 子 + 1 login = 27 路由占位（IA 命名声明：v0 仅作为路由占位，hi-fi 阶段允许根据交互细化但不增减区段）
+- **语言策略**：单语言 zh-CN —— 不引入 next-intl，无 `[locale]` 段，路径直接 `/admin/*`。理由：admin 用户全部为内部运营，无国际化需求；单语言降低工程复杂度（middleware / 路由 / 翻译键）。
+- **依赖白名单**（M-SN 期间允许新增的依赖；超此列表触发 BLOCKER）：
+  - **预批**（直接使用）：`@dnd-kit/core`、`@dnd-kit/sortable`（线路拖拽 / 表格列排序 / 看板拖拽通用基座）
+  - **候选**（首次落地前必须 spawn arch-reviewer 二选一并立 ADR）：
+    - 图表：`recharts` vs `visx`
+    - DAG / 流程图：`reactflow` vs `dagre`
+    - 大数据虚拟滚动：`@tanstack/react-virtual` vs `react-window`
+  - **严禁**：admin 业务专属 design system 包（统一收编到 packages/admin-ui）；新状态管理引擎（Redux / MobX / Jotai）—— 沿用 zustand；CSS-in-JS（沿用 ADR-023 CSS 变量 + Tailwind 桥接）；ORM；GraphQL 客户端
+- **核心理由**：
+  1. apps/server 工程债务的根因是边界腐化（22 模块×122 端点散布），非局部 bug；重写比修复 ROI 高
+  2. 设计稿 v2.1 已完成 IA 重排 + 16 视图，工程实施有完整起点
+  3. 沿用 ADR-031/035/037 模式风险已知、回滚通路存在
+  4. 单语言 + 依赖白名单 + ADR-端点先后协议（详见 plan §4.5）三道闸防止重写期再次失控
+- **架构约束**：
+  - 不复用 `apps/server/src/components/admin/shared/`（避免遗留组件 API 包袱）；新建 `packages/admin-ui` 收编共享组件（M-SN-2 创建空骨架）
+  - 不修改 apps/api 既有端点契约；新端点（如 home_modules CRUD）须先立独立 ADR + Opus 评审（详见 plan §4.5）
+  - 不引入 server-next 专属的设计 token 集（详见 ADR-102 token 三层）
+  - 编译期 ESLint 边界（no-restricted-imports）+ ts-morph CI 兜底脚本 `scripts/verify-server-next-isolation.mjs`（plan §4.6），禁止 server-next 直接 import apps/server 内部模块
+- **Non-Goals**（本 ADR 范围内）：
+  - 不在本 ADR 内固化 cutover 协议（→ ADR-101）
+  - 不在本 ADR 内固化 token 三层（→ ADR-102）
+  - 不重设计前台 / 不改 schema / 不扩张权限模型 / 不接管 prod /admin/* 流量（M-SN-7 cutover 才接管）
+- **影响文件**：
+  - `apps/server-next/`（M-SN-1 创建工程骨架）
+  - `packages/admin-ui/`（M-SN-2 创建空骨架）
+  - `package.json` workspaces（M-SN-1/2 第一卡分别追加）
+  - `docs/server_next_plan_20260427.md`（已落盘 v2，本 ADR 为其法律化）
+  - `docs/architecture.md` §1+§1a+§2（已通过 R10 D5 同步）
+- **关联**：ADR-022（token 单一真源）/ ADR-023（CSS 变量 + Tailwind 桥接）/ ADR-031（重写期共存）/ ADR-032（design-tokens 构建脚本）/ ADR-035（重写期路由切分，已 DEPRECATED）/ ADR-037（里程碑对齐）/ ADR-101（cutover 协议）/ ADR-102（token 三层）
+
+---
+
+## ADR-101: server-next cutover 协议（方案 E：独立壳 + nginx 反代 + 7 天保留 + 同 commit 改名）
+
+- **日期**：2026-04-28
+- **状态**：已采纳
+- **子代理**：arch-reviewer (claude-opus-4-6)
+- **背景**：M-SN-0~6 期间 apps/server-next 在端口 3003 开发，apps/server 仍在 3001 接管 prod `/admin/*`。M-SN-7 需将 prod 流量从 server 切到 server-next，要求"无新链接（URL 不变）、原地接管、可秒级回滚、用户无感登出"。
+- **决策**：方案 E — 独立壳 + nginx 反代 + 一次性切换 + 7 天保留。
+  - 开发期：apps/server（3001）+ apps/server-next（3003）双服并存；nginx upstream 仍指 server:3001
+  - cutover 当晚：单 commit 修改 nginx upstream 从 `server:3001` 切到 `server-next:3003`（实质是 docker-compose service 改名）；同 commit 内 `git mv apps/server-next apps/admin`（命名收尾）；package.json workspaces 同步
+  - 7 天保留：apps/server 整目录物理保留，docker-compose 注释掉 service；7 天内可一键回切
+  - 7 天后：删 apps/server 整目录 + workspaces 删条目 + commit
+- **拒绝方案**：
+  - **方案 A**（apps/server 内渐进重写）：架构债务延续，重写收益归零
+  - **方案 B**（middleware rewrite 灰度，沿用 ADR-035）：admin 无 SEO / 爬虫诉求；admin 是内部运营工具（受众规模远小于前台用户面），原子切换比灰度更简单、回滚通路更短
+  - **方案 C**（仅 cutover 不改名）：`apps/server-next` 名字含 "next" 暗示过渡，长期保留命名混乱
+  - **方案 D**（仅改名不 cutover）：流量未切，改名无业务价值
+- **端口分配**：
+  - 开发期：apps/server 3001（旧）/ apps/server-next 3003（新）
+  - cutover 后：apps/admin 3001（即 server-next 物理改名 + 端口接管；对 nginx 透明）
+- **nginx 切流（ops/nginx.conf）**：
+  - 开发期：`location /admin/ { proxy_pass http://server:3001; }`
+  - cutover：单 commit 改为 `location /admin/ { proxy_pass http://admin:3001; }`（docker-compose service 名同步从 `server-next` → `admin`）
+- **7 天保留期实施细节**：
+  - apps/server 目录不动，仅 docker-compose service 注释（`# server: ... 7-day hold, scheduled removal: <date>`）
+  - 期间 apps/admin 出现重大回归 → 反向 commit 回切 nginx + 取消注释 server service + docker-compose up（5 分钟内可恢复）
+  - 7 天后无问题：发独立 commit 删 apps/server + workspaces 条目；commit message 写明"7 天保留期满，无回归告警"
+- **回滚预案**：
+  - **cutover 前置**：cutover commit 之前打 git tag `pre-server-next-cutover`（M-SN-7 入口动作），用作所有回滚的基线参照
+  - **0–7 天**：nginx 反向单 commit 回切 + apps/server 容器恢复（≤ 5 分钟）
+  - **7 天后**：从 `pre-server-next-cutover` tag 恢复 apps/server commit + 临时新建容器；**RTO ≤ 4h**（plan §10.1 / R7 DISCUSS-5）；前提是 schema/契约未变（详见数据兼容）
+- **cutover 当晚验证窗口**：
+  - 业务 KPI：审核台拒绝率不变 ±10%；采集任务失败率不上升 ±5%；视频库 admin 端 DAU 持平
+  - 性能 KPI：p95 < 200ms（admin 内部页）；错误率 < 0.5%
+  - 验证窗口：cutover 后 30 分钟连续达标 → 维持；任一指标异常 → 立即回滚
+- **数据兼容性**：
+  - apps/server 与 apps/server-next 共用 apps/api（`/v1`）+ 同一 PostgreSQL；cutover 不涉及 schema migration
+  - 用户 session 通过 cookie 共享：`refresh_token` Path=/，Domain 同根，cutover 无登出
+  - 7 天保留期内 schema 不允许变更（如必须变更，需先终止保留期 + 删 apps/server）
+- **架构约束**：
+  - cutover commit 必须是单一 commit（nginx + 改名 + workspaces 同步），便于反向 revert
+  - cutover 前置 git tag `pre-server-next-cutover` 必须在 cutover commit 前推送（M-SN-7 入口动作）
+  - cutover 前需通过 M-SN-6.5 非功能验收门（性能 / 可访问性 / 错误监控）
+  - **M-SN-3 完成时须在 staging 环境完成 cookie + nginx 反代 e2e 演练**（plan §4.2）：验证 refresh_token 跨 server / server-next 透明、nginx upstream 切换不丢 session
+  - 7 天保留期内不得对 apps/admin 做大规模重构（保持回滚可行）
+- **Non-Goals**：
+  - DNS 切换 / CDN 配置变更（同域内反代，对 DNS 透明）
+  - 下沉 apps/server 内业务规则到 apps/api（已通过 services + queries 隔离）
+  - 灰度按用户 / 按地区切分（不必要）
+- **影响文件**：
+  - `ops/nginx.conf`（cutover 单 commit 修改 upstream + service 名）
+  - `docker-compose.dev.yml`、`docker-compose.prod.yml`（service 改名 server-next → admin；server 注释保留 7 天）
+  - `apps/server/`（cutover 后注释保留；7 天后整目录删除）
+  - `apps/server-next/` → `apps/admin/`（同 commit 改名）
+  - `package.json` workspaces（删 apps/server，添加 apps/admin）
+  - `docs/architecture.md` §1+§1a+§2（cutover 后同步：server → admin 改名 / 删 server 条目）
+- **关联**：ADR-100（立项）/ ADR-031（重写期共存）/ ADR-037（里程碑对齐）
+
+---
+
+## ADR-102: server-next 设计 Token 三层收编 + 设计稿 v2.1 映射
+
+- **日期**：2026-04-28
+- **状态**：已采纳
+- **子代理**：arch-reviewer (claude-opus-4-6)
+- **背景**：apps/web-next 已有 `packages/design-tokens`（ADR-022 单一真源 / ADR-023 CSS 变量 + Tailwind 桥接 / ADR-032 手写构建脚本）。Claude Design v2.1 后台设计稿（`docs/designs/backend_design_v2.1/styles/tokens.css`）含 dark-first 五档 surface + dual-signal probe/render 调色板 + admin layout 变量。需明确 server-next 与 web-next 的共享 / 独享边界，避免污染前台 token、避免散落多份 token 真源。
+- **决策**：token 分三层 — base / semantic / admin-layout，全部托管在 `packages/design-tokens`（避免散落）；前两层共享给 web-next + server-next，第三层为 server-next 专属命名空间（前台 0 消费）。
+- **三层结构与字段映射**（来源：v2.1 `styles/tokens.css`，对齐 plan §4.3 三层划分）：
+
+  | 层 | 子文件 / 字段范围 | 共享范围 | 来源 |
+  |---|---|---|---|
+  | **base** | `colors.css`（accent / on-accent / 原色 / 包括 probe/render 颜色源） / `typography.css`（font-family / fs-*） / `spacing.css`（s-*） / `radius.css`（r-*） / `shadow.css`（shadow-sm/md/lg） / `motion.css`（duration / easing） / border / border-strong / border-subtle | web-next + server-next 共享 | v2.1 `:root` + 现有 design-tokens |
+  | **semantic** | `status.css`（ok / warn / danger / info / neutral + soft 变体） / `dual-signal.css`（probe / render 语义角色 + soft 变体；admin 主用、前台预留） / `surface.css`（bg0~bg4 dark-first 五档） / text / text-2 / muted / muted-2 | web-next + server-next 共享 | v2.1 设计稿 + 现有 design-tokens |
+  | **admin-layout** | `shell.css`（sidebar-w / sidebar-w-collapsed / topbar-h） / `table.css`（row-h / row-h-compact / col-min-w） / `density.css` | server-next 专属（前台 0 消费） | v2.1 设计稿 |
+
+  > **层级归属说明**：bg0~bg4 在 plan §4.3 归 `semantic/surface.css`（语义维度的"表面层级"），而非 base 层颜色——本 ADR 与 plan 对齐。motion 子层（duration / easing）属 base 共用层，本 ADR 一并收编（plan §4.3 列项）。
+
+- **双信号 token 重要约束**：
+  - `--probe`（cyan #38bdf8，HEAD/Content-Type 探测信号）+ `--render`（violet #a855f7，实际播放渲染信号）—— admin 业务独有视觉语义
+  - 颜色源在 base/`colors.css`（与其他原色同级），语义角色在 semantic/`dual-signal.css` 暴露给 admin 业务消费
+  - **禁止 apps/web-next 任何路由消费 dual-signal token**（编译期 ESLint 检查 + CI ts-morph 兜底）；前台保留接入位但 M-SN 期间 0 消费
+- **主题策略**：
+  - dark-first，`[data-theme="dark"]` 为默认；`[data-theme="light"]` 提供 base 层覆盖
+  - server-next M-SN-1 仅实现 dark；light 后续视需求接入（不阻塞 cutover）
+- **收编路径**：
+  - **M-SN-1 第一卡**：v2.1 `styles/tokens.css` 的 base/semantic 字段并入 `packages/design-tokens/src/`；按层分文件（`base.ts` / `semantic.ts` / `admin-layout.ts`）；构建脚本（沿用 ADR-032）扩展支持三层导出
+  - apps/web-next 不感知（base/semantic 命名兼容；新增字段不影响现有消费方）
+  - apps/server-next RootLayout 引入 design-tokens CSS（与 web-next 同来源）+ 引入 admin-layout 字段
+- **命名规则**：
+  - base：维持 CSS 变量原名（如 `--bg2`、`--fs-14`）
+  - semantic：维持现有 + 新增 `--ok-soft` / `--probe` / `--probe-soft` 等
+  - admin-layout：顶级 CSS 变量，文档明确 admin-only（如 `--sidebar-w`）；不强制 `--admin-*` 前缀（沿用 design-tokens 现有惯例）；每个字段 CSS 注释 `/* admin-only */` 便于 grep / ESLint scope
+- **影响文件**：
+  - `packages/design-tokens/src/base.ts`（新增或拆分）
+  - `packages/design-tokens/src/semantic.ts`（新增或拆分）
+  - `packages/design-tokens/src/admin-layout.ts`（新增）
+  - `packages/design-tokens/build.ts`（ADR-032 手写脚本扩展三层支持）
+  - `apps/server-next/src/app/globals.css`（M-SN-1 引入）
+  - `docs/architecture.md` §17（HANDOFF-01 后续，附 v2.1 映射表）
+- **Non-Goals**：
+  - 不重设计 packages/design-tokens 浏览页（admin `/system/design-tokens`）
+  - 不引入 CSS-in-JS（沿用 ADR-023）
+  - base/semantic 仅"扩展"非"替换"（apps/web-next 现有调色 100% 兼容）
+  - 不在本 ADR 内固化 token 浏览页 admin 端 UI 改造（属 M-SN-5 视图工作）
+- **架构约束**（plan §4.3 硬约束沉淀）：
+  - server-next 业务组件禁止硬编码颜色 / 字号 / 间距 / 圆角值 —— ESLint `no-hardcoded-color` 已存在，扩展覆盖范围
+  - 三层 token 必须保持向前兼容：删除字段须先 ADR + 全仓 grep 证明 0 消费
+  - **base / semantic 任何字段新增** → 必须 spawn arch-reviewer (Opus) 评审 + ADR 续编（plan §4.3 硬约束 1）
+  - **admin-layout 新增字段** → 主循环可直接落，但需在 milestone 阶段审计中报备（plan §4.3 硬约束 2）
+  - **设计稿与 packages/design-tokens 不一致时**，packages 是真源（plan §4.3 硬约束 3）
+- **退役时机**：admin-layout 第三层与 apps/server-next（cutover 后 apps/admin）生命周期绑定；server-next 退役（不在规划内）一并退役
+- **关联**：ADR-022（token 单一真源）/ ADR-023（CSS 变量 + Tailwind 桥接）/ ADR-032（design-tokens 构建）/ ADR-037（里程碑对齐）/ ADR-100（立项）/ ADR-101（cutover）
