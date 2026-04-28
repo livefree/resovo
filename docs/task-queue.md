@@ -89,7 +89,7 @@
 
 - **状态**：🔄 执行中
 - **创建时间**：2026-04-28 02:00
-- **最后更新时间**：2026-04-28 02:30
+- **最后更新时间**：2026-04-28 02:45
 - **目标**：搭建 apps/server-next 工程骨架 + packages/admin-ui 空骨架 + design-tokens 三层重构 + Provider 移植 + IA v0 27 路由占位 + apiClient + 鉴权 + login → dashboard 通路打通
 - **范围**：`apps/server-next/`（新建）、`packages/admin-ui/`（新建空骨架）、`packages/design-tokens/`（三层重构）、`apps/web-next/`（token 引用面回归验证）、`package.json`（workspaces 追加）、`docker-compose.dev.yml`（server-next 服务）、`docs/architecture.md`（§17 token 三层映射）、`scripts/verify-server-next-isolation.mjs`（新建）
 - **依赖**：M-SN-0 三批清理已 PASS（commit `7c278cc` / `96cde57` / `827b88c`）；ADR-100/101/102 落盘
@@ -129,9 +129,17 @@
    - 子代理调用：arch-reviewer (claude-opus-4-6)
    - 主循环模型：opus（轻量但属于"共享组件 API 契约准备"）
 
-2. **CHG-SN-1-02** — apps/server-next Next.js 空壳 + workspaces 追加 + dev :3003 起服（状态：⬜ 未开始）
+2. **CHG-SN-1-02** — apps/server-next Next.js 空壳 + workspaces 追加 + dev :3003 起服（状态：✅ 已完成）
    - 创建时间：2026-04-28 02:00
    - 计划开始：M-SN-1 Day 1 下午
+   - 实际开始：2026-04-28 02:35
+   - 完成时间：2026-04-28 02:45
+   - 实际工时：0.2 天（远 < 估算 1 天，单语言 + 极简 next.config 大幅缩减工作量）
+   - review：arch-reviewer (claude-opus-4-6) PASS（首轮即过）
+   - 计划外偏离（3 处全部合理）：
+     · 不创建 `.eslintrc.json`（与 web-next/server 一致依赖 next lint 默认）
+     · 不改 `docker/docker-compose.dev.yml`（仅 nginx 容器，无 service 概念；M-SN-7 nginx upstream 切流再处理）
+     · `next.config.ts` 而非 `.mjs`（与 web-next/server 模板一致）
    - 工时估算：1 天
    - 关联 plan §：§4.1 仓库结构 / §4.2 端口与切流 / §11.2 C2 待补条目
    - 关联 ADR：ADR-100（单语言 / IA v0）

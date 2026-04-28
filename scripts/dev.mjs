@@ -26,6 +26,7 @@ const SERVICE_COLORS = {
   'design-tokens': '\x1b[36m', // cyan
   'api': '\x1b[32m',           // green
   'admin': '\x1b[35m',         // magenta
+  'server-next': '\x1b[95m',   // bright magenta
   'web-next': '\x1b[34m',      // blue
   'dev': '\x1b[33m',           // yellow
 }
@@ -249,6 +250,15 @@ const tasks = [
     cwd: resolve(rootDir, 'apps/web-next'),
     command: node,
     args: ['--env-file=../../.env.local', nextBin, 'dev', '-p', '3000'],
+    persistent: true,
+  },
+  {
+    // M-SN-1（2026-04-28）：apps/server-next 工程骨架，开发期与 apps/server 并存；
+    // M-SN-7 cutover 后接管 /admin/* 并改名为 apps/admin（详见 ADR-101）
+    label: 'server-next',
+    cwd: resolve(rootDir, 'apps/server-next'),
+    command: node,
+    args: ['--env-file=../../.env.local', nextBin, 'dev', '-p', '3003'],
     persistent: true,
   },
 ]

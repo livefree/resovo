@@ -6,6 +6,7 @@
   "workspaces": [
     "apps/api",
     "apps/server",
+    "apps/server-next",
     "apps/web-next",
     "packages/admin-ui",
     "packages/design-tokens",
@@ -21,7 +22,8 @@
     "api": "node --env-file=.env.local --import tsx --watch apps/api/src/server.ts",
     "build": "npx turbo build",
     "start": "npx turbo start",
-    "typecheck": "tsc --noEmit && npm --workspace @resovo/server run typecheck && npm --workspace @resovo/web-next run typecheck && npm --workspace @resovo/player-core run typecheck",
+    "typecheck": "tsc --noEmit && npm --workspace @resovo/server run typecheck && npm --workspace @resovo/server-next run typecheck && npm --workspace @resovo/web-next run typecheck && npm --workspace @resovo/player-core run typecheck",
+    "dev:server-next": "npm --workspace @resovo/server-next run dev",
     "lint": "npx turbo lint",
     "test": "vitest",
     "test:run": "vitest run",

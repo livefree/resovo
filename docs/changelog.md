@@ -39,6 +39,39 @@
 
 ---
 
+## [CHG-SN-1-02] apps/server-next Next.js 空壳 + workspaces 追加 + dev :3003 起服
+
+- **完成时间**：2026-04-28
+- **记录时间**：2026-04-28 02:45
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-6) — 首轮 PASS
+- **修改文件**：
+  - `apps/server-next/package.json`（新建）— @resovo/server-next@0.1.0 / dev:3003 / 极简 deps（next/react/react-dom + admin-ui + types）
+  - `apps/server-next/next.config.ts`（新建）— reactStrictMode only，无 next-intl，无 image loader（M-SN-1 后续卡视需要扩展）
+  - `apps/server-next/tsconfig.json`（新建）— 沿用 web-next 模板 + paths 仅 admin-ui/types
+  - `apps/server-next/src/app/layout.tsx`（新建）— 最小 RootLayout，html lang="zh-CN"
+  - `apps/server-next/src/app/page.tsx`（新建）— `redirect('/admin')`
+  - `apps/server-next/src/app/admin/page.tsx`（新建）— dashboard 占位 "Hello server-next"
+  - `package.json`（修改）— workspaces 字母序追加 apps/server-next；scripts 加 dev:server-next；typecheck 串联
+  - `scripts/dev.mjs`（修改）— tasks 数组追加 server-next（apps/server-next:3003，bright magenta 配色）
+  - `package-lock.json`（npm install 自然产物）
+- **新增依赖**：无（next/react/react-dom 已存在 root；admin-ui/types 是 workspace 内部包）
+- **数据库变更**：无
+- **计划外偏离**（3 处全部 reviewer 判定合理）：
+  - 不创建 `.eslintrc.json`：与 apps/server / apps/web-next 一致依赖 next lint 默认配置
+  - 不改 `docker/docker-compose.dev.yml`：仅 nginx 容器，三进程在 host 跑，无"添加 service"对应；nginx upstream 切流是 M-SN-7 cutover (ADR-101) 工作
+  - `next.config.ts` 而非 `.mjs`：与 web-next/server 模板一致
+- **smoke 验证**：
+  - `npm run dev:server-next` 起服 :3003 成功
+  - `/admin/` → 308 → `/admin` 200，body 含 "Hello server-next"
+  - `/` → 307 → `/admin`
+  - typecheck / lint (4/4) / 1760 tests 全绿
+- **注意事项**：
+  - design-tokens 接入 / Provider 移植 / 27 路由 / apiClient 留待 CHG-SN-1-03~06
+  - admin-ui workspace 已在 deps 列出，确保 M-SN-2 业务原语下沉时 import 立即可用
+
+---
+
 ## [CHG-SN-1-01] packages/admin-ui 空骨架 + workspaces 追加
 
 - **完成时间**：2026-04-28
