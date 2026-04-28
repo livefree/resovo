@@ -3,22 +3,23 @@
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { apiClient, ApiClientError } from '@/lib/api-client'
+import { sanitizeAdminRedirect } from '@/lib/safe-redirect'
+import { useAuthStore } from '@/stores/authStore'
 import type { User } from '@resovo/types'
 
 /**
  * server-next LoginForm — admin 登录（ADR-003 / ADR-010）
  *
- * 简化策略：
- *   - 不引入 zustand（M-SN-1 仅打通登录 → dashboard 通路；业务页 access token
- *     主动管理留 M-SN-3 业务卡再决定）
- *   - 凭 apiClient credentials: 'include'，浏览器自动接收 refresh_token /
- *     user_role cookie；登录成功后 router.push 即可
- *   - middleware 后续访问 /admin/** 时基于 cookie 鉴权（CHG-SN-1-06 已落）
+ * - 登录成功后调 authStore.login(user, accessToken) 写入内存态（refresh_token
+ *   cookie 由 apps/api 设置；后续 apiClient 自动注入 Bearer header）
+ * - callbackUrl 必须经 sanitizeAdminRedirect 净化（codex P1 修复：
+ *   拒绝外部 URL / 协议 URL / `//host` / 非 /admin 前缀，fallback /admin）
  */
 export function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const callbackUrl = searchParams.get('from') ?? '/admin'
+  const callbackUrl = sanitizeAdminRedirect(searchParams.get('from'))
+  const login = useAuthStore((s) => s.login)
 
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -34,10 +35,12 @@ export function LoginForm() {
     }
     setSubmitting(true)
     try {
-      await apiClient.post<{ data: { user: User; accessToken: string } }>('/auth/login', {
-        identifier,
-        password,
-      })
+      const response = await apiClient.post<{ data: { user: User; accessToken: string } }>(
+        '/auth/login',
+        { identifier, password },
+        { skipAuth: true },
+      )
+      login(response.data.user, response.data.accessToken)
       router.push(callbackUrl)
     } catch (error) {
       setServerError(error instanceof ApiClientError ? error.message : '登录失败，请稍后重试')

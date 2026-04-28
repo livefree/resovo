@@ -15,7 +15,8 @@
     "@resovo/types": "*",
     "next": "*",
     "react": "*",
-    "react-dom": "*"
+    "react-dom": "*",
+    "zustand": "*"
   },
   "devDependencies": {
     "@types/node": "*",

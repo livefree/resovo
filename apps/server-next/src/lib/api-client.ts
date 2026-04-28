@@ -1,14 +1,23 @@
 /**
- * apiClient — server-next 物理副本（plan §4.5 主通道）
+ * apiClient — server-next（ADR-003 / 沿用 apps/server 实现简化版）
  *
- * 与 apps/web-next/src/lib/api-client.ts 同构（plan §4.6 ESLint 边界禁止跨 apps import）。
- * 凭 credentials: 'include' 让浏览器自动携带 refresh_token / user_role cookie；
- * access token 短寿命由 API 端续签流程自动处理（cookie 自动刷新机制）。
+ * 职责：
+ *   1. 自动注入 Bearer access token（除 skipAuth：登录 / refresh）
+ *   2. 401 自动 refresh + retry（仅 1 次防无限循环）
+ *   3. 并发 refresh 复用同一 Promise 防多次刷新
+ *   4. 401 刷新失败 → 强制 logout + 跳转 /login（保留当前路径作 from）
  *
- * 后续若 server-next 需要主动持有 accessToken（admin 业务调用要求），可在 M-SN-3
- * 起步引入 zustand authStore 副本（沿用 apps/server 模式；ADR-100 zustand 已预批）。
+ * 与 apps/web-next/src/lib/api-client.ts 的差异：
+ *   - admin 内调 /admin/* 受保护端点，必须持有 access token；
+ *     web-next 公开端点不依赖 token（refresh_token cookie 仅供 /auth/refresh）
+ *
+ * 与 apps/server/src/lib/api-client.ts 的差异：
+ *   - locale-aware 跳转移除（server-next 单语言 zh-CN）
+ *   - 跳转目标固定 /login（不含 /admin/login，因 server-next /login 在 admin 外层）
  */
 
+import { useAuthStore } from '@/stores/authStore'
+import { sanitizeAdminRedirect } from '@/lib/safe-redirect'
 import type { ApiError } from '@resovo/types'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/v1'
@@ -30,14 +39,45 @@ interface RequestOptions {
   method?: HttpMethod
   body?: unknown
   headers?: Record<string, string>
+  /** 是否跳过认证头（登录 / refresh 接口） */
+  skipAuth?: boolean
+  /** 是否为重试请求（内部使用，防无限循环） */
+  _isRetry?: boolean
+}
+
+interface RefreshResponse {
+  accessToken?: string
+  data?: { accessToken?: string }
+}
+
+function getLoginRedirectPath(): string | null {
+  if (typeof window === 'undefined') return null
+  const { pathname, search } = window.location
+  if (pathname === '/login' || pathname === '/403') return null
+  if (!pathname.startsWith('/admin')) return null
+  const callback = sanitizeAdminRedirect(`${pathname}${search}`)
+  return `/login?from=${encodeURIComponent(callback)}`
+}
+
+function handleUnauthorized(): void {
+  useAuthStore.getState().logout()
+  const redirect = getLoginRedirectPath()
+  if (redirect && typeof window !== 'undefined') {
+    window.location.assign(redirect)
+  }
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, headers = {} } = options
+  const { method = 'GET', body, headers = {}, skipAuth = false, _isRetry = false } = options
 
   const reqHeaders: Record<string, string> = {
     ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
     ...headers,
+  }
+
+  if (!skipAuth) {
+    const token = useAuthStore.getState().accessToken
+    if (token) reqHeaders['Authorization'] = `Bearer ${token}`
   }
 
   const response = await fetch(`${BASE_URL}${path}`, {
@@ -47,14 +87,23 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     credentials: 'include',
   })
 
-  if (response.status === 204) {
-    return undefined as T
+  // 401 自动 refresh + retry
+  if (response.status === 401 && !_isRetry && !skipAuth) {
+    const refreshed = await tryRefreshToken()
+    if (refreshed) {
+      return request<T>(path, { ...options, _isRetry: true })
+    }
+    handleUnauthorized()
+    throw new ApiClientError('UNAUTHORIZED', '登录已过期，请重新登录', 401)
   }
+
+  if (response.status === 204) return undefined as T
 
   const data = await response.json()
 
   if (!response.ok) {
     const err = data as ApiError
+    if (response.status === 401 && !skipAuth) handleUnauthorized()
     throw new ApiClientError(
       err.error?.code ?? 'INTERNAL_ERROR',
       err.error?.message ?? '请求失败，请稍后重试',
@@ -63,6 +112,33 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   return data as T
+}
+
+let refreshPromise: Promise<boolean> | null = null
+
+async function tryRefreshToken(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise
+
+  refreshPromise = (async () => {
+    try {
+      const response = await fetch(`${BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      })
+      if (!response.ok) return false
+      const data = (await response.json()) as RefreshResponse
+      const accessToken = data.accessToken ?? data.data?.accessToken
+      if (!accessToken) return false
+      useAuthStore.getState().setAccessToken(accessToken)
+      return true
+    } catch {
+      return false
+    } finally {
+      refreshPromise = null
+    }
+  })()
+
+  return refreshPromise
 }
 
 export const apiClient = {

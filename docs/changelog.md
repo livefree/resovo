@@ -39,6 +39,42 @@
 
 ---
 
+## [CHG-SN-1-FIX-01] codex P1×2 修复（apiClient token 内存态 + from 净化）
+
+- **完成时间**：2026-04-28
+- **记录时间**：2026-04-28 05:15
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-6) — 首轮 PASS
+- **触发**：M-SN-1 闭环后 codex review 提出 2 条 P1：(1) apiClient 无 access token 内存态 → M-SN-2 接入 /admin/* 必 401；(2) LoginForm `from` 未净化 → 登录后可能跳外部 URL
+- **修改文件**：
+  - `apps/server-next/package.json`（修改）— deps 追加 zustand（ADR-100 预批沿用，apps/server 已用）
+  - `apps/server-next/src/stores/authStore.ts`（新建）— 精简版 zustand store + persist；user/accessToken/isLoggedIn；只持久化 user+isLoggedIn（ADR-003）
+  - `apps/server-next/src/lib/api-client.ts`（重写）— 注入 Bearer token + 401 自动 refresh + retry（_isRetry 防循环 / refreshPromise 防并发）；refresh 失败 → handleUnauthorized → store.logout + 跳 /login（保留 from）
+  - `apps/server-next/src/lib/safe-redirect.ts`（新建）— sanitizeAdminRedirect 函数（5 条规则：非空 / 控制字符+反斜杠拒绝 / 单 `/` 开头但非 `//` / `/admin` 前缀白名单 / fallback `/admin`）
+  - `apps/server-next/src/app/login/LoginForm.tsx`（修改）— callbackUrl 走 sanitizeAdminRedirect；登录成功 useAuthStore.login(user, accessToken)；apiClient.post 传 skipAuth: true
+  - `tests/unit/server-next/safe-redirect.test.ts`（新建，13 tests）— 5 合法白名单 + 8 OWASP 攻击向量
+- **新增依赖**：无新引入（zustand 已是技术栈内，apps/server / apps/web-next 都在用，ADR-100"沿用 zustand"）
+- **数据库变更**：无
+- **回归**：typecheck (7 ws) / lint (4/4) / verify-server-next-isolation (36 文件 0 违规) / 1781 tests (1768 + 13 new) 全绿
+- **OWASP open-redirect 防护覆盖**（safe-redirect 单测 13/13 PASS）：
+  - 协议 URL：https / http / javascript: / data: → fallback /admin
+  - protocol-relative：`//host` → fallback
+  - 反斜杠绕过：`/\\evil.com` / `\\\\evil.com` → fallback
+  - 前缀欺骗：`/administrative-evil` / `/admin-evil` → fallback
+  - 控制字符注入：`\\n` Set-Cookie / `\\r` / `\\x00` → fallback
+  - 非 admin 路径：`/login` / `/403` / 公开页 → fallback
+  - 相对路径：`admin` / `../admin` → fallback
+- **401 refresh + retry 链路**：
+  - 内存有 token：直接走 Bearer
+  - 内存无 token（页面刷新）/ 过期 → 401 → tryRefresh（HttpOnly cookie）→ setAccessToken → retry 一次
+  - refresh 失败 → handleUnauthorized → store.logout + window.location.assign(/login?from=<sanitized>)
+- **注意事项**：
+  - tryRestoreSession 主动恢复未实装（M-SN-3 业务卡按需启用；当前 401-driven 已覆盖）
+  - apps/api `authenticate` 插件仅接受 Bearer token，无 cookie 兼容性问题
+  - reviewer 判定 PASS 0 MUST 偏差
+
+---
+
 ## [CHG-SN-1-08] M-SN-1 milestone 完成标准验收 + arch-reviewer (Opus) 阶段审计 · **B 级 PASS**
 
 - **完成时间**：2026-04-28
