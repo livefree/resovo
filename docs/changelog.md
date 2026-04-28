@@ -595,3 +595,47 @@
   - 本卡是 ADR 文本质量补强，不是架构修订；commit type 用 `fix` 而非 `chg`（与 plan §0 SHOULD-4-a 重大修订协议无关，无须人工 sign-off）
   - HealthBadge dot 颜色由 HealthSnapshot.*.status 驱动 semantic.status token，不属 icon 注入范畴（与 TopbarIcons 解耦）
   - Sidebar 折叠 chevron + UserMenu 菜单项 icon 用内联 SVG 在 packages/admin-ui 自持（零依赖矢量），不通过 prop 注入 — 这是有意的边界划分，仅 Topbar 5 类业务图标因与设计稿语义强相关必须由消费方注入
+
+---
+
+## [CHG-SN-2-02 · stage 1/2] admin-layout z-shell-* token 三新增 + verify-token-isolation 守卫扩展（ADR-103a §4.3 实施）
+
+- **完成时间**：2026-04-28
+- **记录时间**：2026-04-28 23:35
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（按 ADR-103a §4.3 1:1 实施；CHG-SN-2-01 Opus 评审已固化 token 结构 + 数值 + 引用规则；本卡纯实施 + 单测验证）
+- **触发**：CHG-SN-2-02 任务执行中识别 plan §5.2 BLOCKER 第 2 条（lucide-react 不在 §4.7 依赖白名单），任务拆为 stage 1/2（z-index 部分独立合规）+ stage 2/2（BLOCKER 暂停等用户裁定方案 A 解锁）
+- **修改文件**：
+  - `packages/design-tokens/src/admin-layout/z-index.ts`（新建）— admin shell z-index 4 级层叠规范 token：z-shell-drawer 1100 / z-shell-cmdk 1200 / z-shell-toast 1300；导出 `adminShellZIndex` 常量 + `AdminShellZIndexToken` 类型；header 注释含 ADR-103a §4.3 引用 + 4 级层级不变量声明 + 跨域消费禁令交叉引用
+  - `packages/design-tokens/src/admin-layout/index.ts`（修改）— 桶导出追加 `adminShellZIndex` + `AdminShellZIndexToken`
+  - `packages/design-tokens/build.ts`（修改）— buildLayoutVars 追加 `adminShellZIndex` 到 admin-layout 组（与 adminShell/adminTable/adminDensity 同级）；buildJs adminLayout 字段追加 adminShellZIndex；buildDts 类型描述追加
+  - `packages/design-tokens/scripts/build-css.ts`（修改）— admin-layout 段同步追加 adminShellZIndex（保持 build.ts / build-css.ts 双脚本同步）
+  - `packages/design-tokens/src/css/tokens.css`（auto-generated）— 新增 3 行：`--z-shell-drawer: 1100;` / `--z-shell-cmdk: 1200;` / `--z-shell-toast: 1300;`
+  - `tests/unit/design-tokens/admin-layout.test.ts`（修改）— 追加 2 测：(1) `adminShellZIndex exposes 3 z-shell-* fields`（结构断言）+ (2) `4-tier ordering: drawer < cmdk < toast`（不变量断言：1100 < 1200 < 1300 且 drawer > 1000 业务 Drawer 层）；admin-layout 单测从 8 → 10 全 PASS
+  - `scripts/verify-token-isolation.mjs`（修改）— FORBIDDEN_TOKENS 数组追加 `--z-shell-drawer` / `--z-shell-cmdk` / `--z-shell-toast` 三 token；header 注释更新守卫范围从 12 → 15 个 admin 专属 token；JSDoc 新增 admin-layout z-shell-* 段说明
+  - `docs/task-queue.md`（修改）— SEQ-20260428-03 任务 2 状态置 `🟠 PARTIAL · stage 1/2 已完成 / stage 2/2 BLOCKER 暂停`；尾部追加完整 BLOCKER 通知（触发条款 + 已实施部分 + 3 个备选方案 A/B/C + 子决策 C1/C2）
+  - `docs/tasks.md`（修改）— CHG-SN-2-02 卡片状态同步 PARTIAL
+- **新增依赖**：无（zustand 已在白名单；本 stage 不涉及 lucide-react）
+- **数据库变更**：无
+- **实测验收**：
+  - typecheck（5/5 packages）/ lint（4/4 cached FULL TURBO）/ vitest 1783 tests（152 files；原 1781 + 新增 2 z-shell-* 测）全绿
+  - admin-layout 单测从 8 → 10：3 字段结构 + 4 级层级关系不变量（drawer 1100 < cmdk 1200 < toast 1300 + drawer > 1000 业务 Drawer 层）双断言
+  - verify-token-isolation 实测：当前 152 文件 0 命中（原 12 token 守卫无回归）；故意制造 3 处违规（`var(--z-shell-drawer)` / `var(--z-shell-cmdk)` / `var(--z-shell-toast)`）→ 脚本 3/3 全部捕获（含行号 + 列号 + token 名 + snippet）
+  - tokens.css auto-generated 新增 3 行精确符合 ADR-103a §4.3 数值规范（1100/1200/1300 整数，100 步进）
+- **不变约束验证**：
+  - 4 级 z-index 层级关系硬编码（drawer < cmdk < toast；drawer > 1000 业务 Drawer 层）由单测断言锁定
+  - admin-layout 命名空间收敛（不污染 components/ 层 z-modal 业务 Drawer 范畴）
+  - apps/web-next 0 消费（verify-token-isolation 守卫扩展生效）
+  - M-SN-1 闭环资产（token / Provider / apiClient / 鉴权层）零返工
+- **触发的 BLOCKER 详情**：
+  - CHG-SN-2-02 stage 2/2（admin-nav.ts 5 字段类型扩展 + ADMIN_NAV 注入 icon ReactNode + shell-data.ts）依赖 `import { ... } from 'lucide-react'`，但 `lucide-react` 不在 plan §4.7 依赖白名单（行 261-272 预批 + 候选清单），且 root/web-next/server-next 任何 package.json 未声明
+  - 已写 BLOCKER 通知到 task-queue.md 尾部（触发条款 + 已实施部分 + 3 个备选方案 + 子决策）
+  - 用户裁定：方案 A（补充依赖 ADR + plan §4.7 修订）+ 子决策 C1（先 commit stage 1/2）；本卡为 C1 子决策的落地
+- **后续动作**（按方案 A）：
+  - 起新卡 **CHG-SN-2-01.5**（或 CHG-SN-2-02b）：spawn Opus arch-reviewer 做图标库选型评审（lucide-react vs heroicons-react vs react-icons 三选一），落盘 ADR-103b（server-next 图标库选型）+ plan §4.7 v2.3 → v2.4 修订（图标库加入预批清单）+ 人工 sign-off（plan §0 SHOULD-4-a 重大修订）
+  - PASS 后继续 CHG-SN-2-02 stage 2/2（admin-nav.ts + shell-data.ts + ADMIN_NAV icon 注入）
+- **注意事项**：
+  - z-index 4 级具体数值（1000/1100/1200/1300）已落定，业务 Modal/Drawer/AdminDropdown 在 M-SN-2 数据原语层落地时（CHG-SN-2-13+）按 ADR-103a §4.3 cross-check 不变量
+  - tokens.css 是 auto-generated 产物，未来如修改请通过 build.ts / build-css.ts 同步两份脚本（ADR-102 v2.1 双脚本同步约定）
+  - ADR-102 v2.1 修订段硬约束 2：admin-layout 第 5 层 token 字段新增是 milestone 报备而非 ADR；本卡新增 3 字段属合规扩展，无须独立 ADR
+  - 本卡是 CHG-SN-2-02 的 stage 1/2；stage 2/2 解锁后 admin-nav.ts + shell-data.ts 由 stage 2/2 commit 完成；CHG-SN-2-02 整卡完成签字在 stage 2/2 末尾

@@ -3,6 +3,7 @@ import {
   adminShell,
   adminTable,
   adminDensity,
+  adminShellZIndex,
 } from '../../../packages/design-tokens/src/admin-layout/index.js'
 import { dualSignal } from '../../../packages/design-tokens/src/semantic/dual-signal.js'
 
@@ -33,6 +34,25 @@ describe('admin-layout tokens — structure', () => {
     )
     expect(Number(adminDensity['density-comfortable'])).toBe(1)
     expect(Number(adminDensity['density-compact'])).toBeLessThan(1)
+  })
+
+  it('adminShellZIndex exposes 3 z-shell-* fields (ADR-103a §4.3)', () => {
+    expect(Object.keys(adminShellZIndex).sort()).toEqual(
+      ['z-shell-cmdk', 'z-shell-drawer', 'z-shell-toast'].sort(),
+    )
+  })
+
+  it('adminShellZIndex 4-tier ordering: drawer < cmdk < toast (ADR-103a 不变量)', () => {
+    const drawer = Number(adminShellZIndex['z-shell-drawer'])
+    const cmdk = Number(adminShellZIndex['z-shell-cmdk'])
+    const toast = Number(adminShellZIndex['z-shell-toast'])
+    expect(drawer).toBe(1100)
+    expect(cmdk).toBe(1200)
+    expect(toast).toBe(1300)
+    expect(drawer).toBeLessThan(cmdk)
+    expect(cmdk).toBeLessThan(toast)
+    // L1 业务 Drawer (1000) 由 components/ 层管辖，不在本命名空间，但层级关系上 drawer (1100) > 1000
+    expect(drawer).toBeGreaterThan(1000)
   })
 })
 

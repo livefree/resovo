@@ -579,9 +579,12 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
    - 主循环模型：opus
    - 完成判据：ADR-103a 落盘 + Opus 评审 PASS + 序列备注更新
 
-2. **CHG-SN-2-02** — admin-nav.ts 5 字段扩展 + ADMIN_NAV 注入 icon/shortcut/count/badge + admin-layout z-shell-* token（状态：⬜ 未开始）
+2. **CHG-SN-2-02** — admin-nav.ts 5 字段扩展 + ADMIN_NAV 注入 icon/shortcut/count/badge + admin-layout z-shell-* token（状态：🟠 PARTIAL · stage 1/2 已完成 / stage 2/2 BLOCKER 暂停）
    - 创建时间：2026-04-28 22:00
    - 计划开始：CHG-SN-2-01 PASS 后
+   - 实际开始：2026-04-28 23:15
+   - stage 1/2 完成时间：2026-04-28 23:30（admin-layout z-shell-* token + verify 扩展 + 单测，与 lucide-react 无关，全绿）
+   - stage 2/2 阻塞时间：2026-04-28 23:30（admin-nav.ts ADMIN_NAV icon 注入触发 BLOCKER §5.2 第 2 条；详见序列尾部 BLOCKER 通知）
    - 工时估算：0.5 天
    - 关联 ADR：ADR-103a（本卡输入）/ ADR-102（admin-layout token 第 5 层扩展）
    - 文件范围：
@@ -619,4 +622,52 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
 - 每张卡 commit trailer 必含：`Refs:` `Plan:` `Review:` `Executed-By-Model:` `Subagents:` `Co-Authored-By:`
 - ADR-103a 是 M-SN-2 全部组件卡的硬前置门；评审 PASS 前禁止起 CHG-SN-2-02+
 - 设计稿 §08 弹层规范若 cutover 前补完出现交互形态变更（Drawer vs Popover），主循环再 spawn Opus 评审 ADR-103a 修订段
+
+---
+
+## 🚨 BLOCKER · 2026-04-28 23:30 · CHG-SN-2-02 stage 2/2 暂停
+
+- **触发条款**：plan §5.2 BLOCKER 第 2 条 — 引入 §4.7 依赖白名单之外的 npm 包
+- **触发位置**：CHG-SN-2-02 实施 admin-nav.ts ADMIN_NAV icon 注入时
+- **冲突点**：
+  - **plan §4.7 依赖白名单**（行 257-276）预批列表：`React 18 / Next.js / TypeScript / zod / clsx / tailwind-merge / dayjs / zustand / @dnd-kit/core / @dnd-kit/sortable + workspaces 内包`；候选清单仅含图表/DAG/虚拟滚动 3 类；**未列任何图标库**
+  - **ADR-103a §4.4-4 + §4.7 关联段** 假设 "图标库由 server-next 持有"，未实际确认白名单状态；CHG-SN-2-01 Opus 评审时未检查
+  - **节点状态**：`lucide-react` 未在 root package.json / web-next / server-next 任何一处声明，node_modules 内不存在
+- **影响**：
+  - CHG-SN-2-02 拆分为两阶段：
+    - **stage 1/2（已实施合规）**：admin-layout z-shell-* token 三新增 / build pipeline 同步 / 单测追加 / verify-token-isolation FORBIDDEN_TOKENS 扩展 — 全部与 lucide-react 无关，可单独 commit
+    - **stage 2/2（暂停）**：admin-nav.ts AdminNavItem 5 字段类型扩展 + ADMIN_NAV 注入 icon ReactNode + shell-data.ts 新建 — 涉及 `import { ... } from 'lucide-react'`
+  - CHG-SN-2-03+（Shell 10 组件实施）也将受影响（CommandPalette / Topbar / UserMenu 内部图标策略需重新审视）
+
+### 提请用户决策（3 个备选方案）
+
+**方案 A：补充依赖 ADR + plan §4.7 修订（推荐）**
+- 起新卡 `CHG-SN-2-01.5`（或 `CHG-SN-2-02b`）：spawn Opus arch-reviewer 做依赖选型评审（lucide-react vs heroicons-react vs react-icons 三选一），落盘新 ADR（`ADR-103b: server-next 图标库选型`）+ plan §4.7 v2.3 → v2.4 修订（图标库加入预批清单）+ 人工 sign-off（plan §0 SHOULD-4-a 重大修订）
+- 评审通过后 CHG-SN-2-02 stage 2/2 才能继续
+- 工时增量：~0.5 天（评审 + 文档修订）；总周期不动（M-SN-2 内吸收）
+
+**方案 B：完全去图标化（不引入任何图标库）**
+- ADR-103a 修订：`AdminNavItem.icon` 类型从 `React.ReactNode` 改为可选 emoji unicode 字符串（如 `'🏠'`）或内联 SVG path string；packages/admin-ui Sidebar 渲染时统一用文本节点 / 内联 SVG 占位
+- 与设计稿 v2.1 shell.jsx（lucide 节点）视觉差距大；M-SN-7 cutover 前最终对账义务的"5 字段覆盖率 ≥80%（icon 100%）"难以保证
+- 工时增量：~0.3 天（ADR-103a 二次修订 + Opus 评审）
+
+**方案 C：把图标库下沉到 packages/admin-ui（违反 ADR-103a 4.4-4 硬约束）**
+- ADR-103a "零图标库依赖" 硬约束撤回；packages/admin-ui 直接 import lucide-react；admin-nav.ts 不需要承载 icon 字段
+- 违反 plan §4.4 边界声明 + ADR-103a 已 PASS 的设计；属架构倒退
+- **不推荐**
+
+### 已合规进度（建议先 commit 为 CHG-SN-2-02 stage 1/2）
+
+- `packages/design-tokens/src/admin-layout/z-index.ts`（新建：z-shell-drawer / z-shell-cmdk / z-shell-toast 三 token，1100/1200/1300）
+- `packages/design-tokens/src/admin-layout/index.ts`（追加 export）
+- `packages/design-tokens/build.ts` + `scripts/build-css.ts`（buildLayoutVars 追加 adminShellZIndex；JS/DTS 类型同步）
+- `packages/design-tokens/src/css/tokens.css`（auto-generated；新增 3 行 `--z-shell-*`）
+- `tests/unit/design-tokens/admin-layout.test.ts`（追加 2 测：3 字段结构 + 4 级层级关系不变量；10 测 PASS）
+- `scripts/verify-token-isolation.mjs`（FORBIDDEN_TOKENS 扩展 3 z-shell-*；故意违规验证 PASS）
+
+**实测**：typecheck + admin-layout 10 单测 + verify-token-isolation 全绿。
+
+### 解锁等待
+
+CHG-SN-2-02 stage 2/2 + CHG-SN-2-03+ Shell 组件分卡的开工等待用户裁定方案 A/B/C；裁定后由主循环执行后续动作。
 

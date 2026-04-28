@@ -209,6 +209,9 @@
   --col-min-w: 80px;
   --density-comfortable: 1;
   --density-compact: 0.75;
+  --z-shell-drawer: 1100;
+  --z-shell-cmdk: 1200;
+  --z-shell-toast: 1300;
   --bg-canvas: oklch(98.5% 0.002 247);
   --bg-surface: oklch(100% 0 0);
   --bg-surface-raised: oklch(100% 0 0);

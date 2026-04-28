@@ -13,13 +13,15 @@
  * import path 级，ADR-102 跨域禁令本质是 token name string 级；M-SN-1 闭环原欠账
  * （CHG-SN-1-09，SEQ-20260428-02 任务 4 闭环）。
  *
- * 守卫范围（12 个 admin 专属 token name；按 ADR-102 第 5 层声明）：
+ * 守卫范围（15 个 admin 专属 token name；按 ADR-102 第 5 层声明 + ADR-103a §4.3 z-shell-* 扩展）：
  *   - dual-signal（admin 业务专属语义层）：
  *       --probe / --probe-soft / --render / --render-soft
- *   - admin-layout（cutover 后 apps/admin 生命周期绑定）：
+ *   - admin-layout shell + table + density（cutover 后 apps/admin 生命周期绑定）：
  *       --sidebar-w / --sidebar-w-collapsed / --topbar-h
  *       --row-h / --row-h-compact / --col-min-w
  *       --density-comfortable / --density-compact
+ *   - admin-layout z-shell-*（CHG-SN-2-02 新增；ADR-103a §4.3 4 级 z-index 规范）：
+ *       --z-shell-drawer / --z-shell-cmdk / --z-shell-toast
  *
  * 设计要点：
  *   1. 反向扫描方向：apps/web-next/src 内任何对上述 token name 的字符串引用
@@ -72,6 +74,10 @@ const FORBIDDEN_TOKENS = [
   '--col-min-w',
   '--topbar-h',
   '--row-h',
+  // admin-layout z-shell-*（CHG-SN-2-02 / ADR-103a §4.3）
+  '--z-shell-drawer',
+  '--z-shell-cmdk',
+  '--z-shell-toast',
   // dual-signal base（最短，放最后）
   '--probe',
   '--render',
