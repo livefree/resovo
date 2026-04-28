@@ -1,0 +1,743 @@
+# Resovo server-next 工程实施 Plan v1
+
+> status: approved-for-execution（M-SN-0 清理工作台前的最终版）
+> version: v2（v0 → v1 → v2 修订记录见末尾"修订日志"；R7 二轮评审 CONDITIONAL → 修复 MUST-7/8 + SHOULD-8/9/10 + DISCUSS-7）
+> owner: @engineering
+> scope: apps/server-next 工程 + packages/admin-ui 下沉 + packages/design-tokens 三层 + nginx 反代切流 + apps/server 退场
+> source_of_truth: yes（工程视角的"宪法"，所有 server-next 任务卡须引用本 plan §节号）
+> companion:
+>   - [admin_audit_20260426.md](./admin_audit_20260426.md)（现状 / 9 痛点）
+>   - [admin_design_brief_20260426.md](./admin_design_brief_20260426.md)（design 视角 brief）
+>   - [server_next_kickoff_20260427.md](./server_next_kickoff_20260427.md)（R1–R5 决策实录 + 评审报告）
+>   - [docs/designs/backend_design_v2.1/](./designs/backend_design_v2.1/)（设计稿，仍在补完）
+> generated_at: 2026-04-27（v0）/ revised: 2026-04-27（v1）/ 2026-04-28（v2）
+> 主循环模型：claude-opus-4-7
+> 评审：v1 完成后 spawn arch-reviewer (Opus) 二轮评审 PASS 才进入 M-SN-0
+
+---
+
+## 0. 性质声明
+
+本 plan 是 **工程实施版**，与 admin_design_brief 的 **设计视角** 区分。
+
+**前置事实**：
+- M0–M6 已完成（前端重写主轨结束）；`freeze_notice_20260418.md` 即将退役
+- 旧前台 `apps/web/` 仅余构建产物，将随 M-SN-0 清理删除
+- server-next 立项 **不受重写冻结期约束**，但仍遵守 CLAUDE.md 价值排序与质量门禁
+
+**Plan 版本协议（SHOULD-4-a）**：本 plan 在 M-SN-1～M-SN-6 期间任何修订必须：(1) 主循环 spawn arch-reviewer 评审；(2) 修订项写入末尾"修订日志"；(3) commit trailer 含 `Plan-Revision: vN → vN+1`；(4) 重大修订（含范围 / milestone / Non-Goals）须人工 sign-off。
+
+---
+
+## 1. 项目目标
+
+| # | 目标 | 度量 |
+|---|---|---|
+| G1 | 取代 `apps/server`，成为 admin 控制台唯一壳 | M-SN-7 cutover 完成且 24h 平稳 |
+| G2 | 解决 admin_audit 9 大痛点 | P0×3 在 M-SN-4 验收；P1×6 在 M-SN-5/6 验收（含 admin API 补齐前置，详见 §4.5 / §6 M-SN-5）|
+| G3 | 落地 admin_design_brief 5 项推荐 | 推荐 4 在 M-SN-2；推荐 1 在 M-SN-4；推荐 2/3/5 在 M-SN-5（推荐 3/5 含 API 补齐子任务）|
+| G4 | 落地 backend_design_v2.1 设计稿 | IA / 视觉 token / 交互模式 100% 对齐（设计稿仍在补完，IA 非最终版）|
+| G5 | 工程边界清晰，最大化复用减少一次性设计 | 复用矩阵（§8）每个视图标 ≥80% 共享原语来源 |
+
+---
+
+## 2. 范围与 Non-Goals
+
+### 2.1 In-Scope
+- 新建 `apps/server-next/`（Next.js App Router，端口 3003）
+- 新建 `packages/admin-ui/`（DataTable v2 + useTableQuery + Toolbar/Filter/Drawer/Modal/Toast 等共享原语）
+- 改造 `packages/design-tokens/` 为三层结构（base / semantic / admin-layout）
+- **新增 admin API 端点（仅用于解锁缺位视图）**：home_modules CRUD（推荐 3）/ split-unmerge / candidate-preview（推荐 5）— 每个新增端点须独立 ADR + Opus arch-reviewer 评审
+- 编写 nginx 反代切流配置（cutover 当日生效）
+- M-SN-7 删除 `apps/server/`
+
+### 2.2 Non-Goals（命中即触发 BLOCKER）
+
+> **MUST-4 修订**：第 4 条由"不修改 API 契约"放宽为以下精确措辞。
+
+1. ❌ 修改 `apps/api/` 中已有 Service / DB queries / 业务逻辑（路由层下方所有改动）
+2. ❌ 修改 `apps/web-next/` 业务代码（仅 packages/design-tokens 重构会触及其引用）
+3. ❌ DB schema 变更（含新 migration）
+4. ❌ **修改现有 admin API 端点的 path / 入参 schema / 返回结构 / 鉴权策略**（新增端点用以解锁缺位视图允许，但须独立 ADR + Opus 评审；详见 §4.5）
+5. ❌ 引入 §4.7 依赖白名单之外的 npm 包
+6. ❌ admin 多语言 / i18n（**单语言中文**确认）
+7. ❌ admin 移动端适配（桌面优先 ≥1280px）
+8. ❌ admin 权限模型扩张（auth / adminOnly / moderator+ 三层不增不减）
+9. ❌ 复用 `apps/server/src/components/admin/shared/` 的现有实现（用户裁定：体验不达标，重新设计）
+10. ❌ apps/server-next 直接 import apps/server 任何文件（CI 脚本扫描，命中即 fail）
+
+---
+
+## 3. 决策汇总（R1–R3 + R5）
+
+| 决策 | 结论 | 来源 | ADR 落地 |
+|---|---|---|---|
+| 启动时机 | 方案制定好即启动；不受冻结期约束 | R2.1 Q1 | ADR-046 |
+| 命名 | `apps/server-next`；cutover 同 commit 内改名为 `apps/admin` | R2.1 Q2 + R5 DISCUSS-4 | ADR-046 |
+| 切流策略 | 方案 E：独立壳 + 端口隔离 + 一次性切换；nginx 反代 | R2.2 + R3.1 S1 | ADR-047 |
+| Token 体系 | 三层架构（base / semantic / admin-layout），不独立 | R2.3 | ADR-048 |
+| 共享组件下沉 | 不复用旧实现；新建 `packages/admin-ui/`；M-SN-1 第一个任务卡即创建空骨架 | R2.1 Q5 + R5 MUST-3 | ADR-046 |
+| 骨架优先 | 先地基（packages + DataTable v2 + useTableQuery）后填充 | R2.1 Q6 | M-SN-1/2 划分 |
+| IA 命名 | v2.1 草案为开发期 IA；URL slug 优先英文；中文菜单 cutover 前可调 | R2.1 Q7 + R5 SHOULD-6 | 不立 ADR |
+| IA "待发布" | 移除；并入审核台"已审"Tab | R3.2 | ADR-046 |
+| 采集后未审 | 方案 α：审核台"待审"Tab 覆盖 | R3.4 | ADR-046 |
+| 多语言 | 单语言中文；不装 next-intl | R3.1 S2 | ADR-046 |
+| M-SN-0 清理节奏 | 三批（docs / code / ADR），每批 arch-reviewer 复核 | R3.1 S3 | 本 plan §11 |
+| 自动化 review | 每任务 spawn arch-reviewer，PASS / CONDITIONAL ≤3 轮 / REJECT | R2.4 规约 A | §5.1 |
+| 计划外决策停机 | BLOCKER 清单 10 条命中即停 | R2.4 规约 B | §5.2 |
+| Milestone 审计 | 每 milestone spawn arch-reviewer 出偏差 + 评级 + 人工 checklist；A/B/C 客观判据 | R2.4 规约 C + R5 MUST-6 | §5.3（详见判据表）|
+| **API 契约缺口** | **方案 B3**：放宽 Non-Goals 第 4 条；新增端点（home_modules / split-unmerge / candidate-preview）允许，但须独立 ADR + Opus 评审；M-SN-5 内顺手补 | R5 Q-MUST-4 | ADR-046 + 子 ADR |
+| **M-SN-2 范围** | **方案 A2**：保留单 milestone；游标+虚拟滚动延迟到 M-SN-6 首次 >50k 数据时按需即建 | R5 Q-MUST-1 | §6 M-SN-2 |
+| **依赖白名单** | 预批：`@dnd-kit/core` `@dnd-kit/sortable`；候选 `recharts` `reactflow` `react-window` 首次落地前 spawn arch-reviewer 二选一 | R5 Q-MUST-5 | §4.7 + ADR-046 |
+| **工时估算** | M-SN-0～7 合计 16 周（~4 个月）；单 milestone 超 +30% 触发 BLOCKER | R5 SHOULD-1 | §6 |
+| **性能 / a11y 验收门** | 新增 M-SN-6.5（cutover 前置） | R5 SHOULD-2 | §6 |
+| **apps/server 冻结边界** | 开发期仅 P0 hotfix；hotfix 不反向同步 server-next（避免漂移），但记入 task-queue 方便 cutover 前对账 | R5 DISCUSS-1 | ADR-047 |
+| **cookie + nginx e2e 演练** | M-SN-3 标杆页完成时进行 staging 环境演练 | R5 DISCUSS-3 | ADR-047 |
+| **cutover 后回滚 RTO** | apps/server 物理目录保留 7 天与 git tag 一致；超 7 天回滚走完整 commit revert（RTO ≤ 4h）| R5 DISCUSS-5 | ADR-047 |
+| **M-SN-6 工时上调** | 2.5w → 4w；总周期 16w → 17.5w（吸收大数据原语 + 三组依赖选型 + 9 路由）| R7 MUST-7 (c) | §6 |
+| **ADR-端点先后协议** | ADR-050/051 须在对应端点首个任务卡前完成 Opus PASS；端点逐个落地复用同一 ADR；不允许端点 PR 与 ADR 同卡 | R7 MUST-8 | §4.5 + §6 M-SN-5 |
+| **M-SN-6.5 软上限** | 0.5w 为基线；任一类验收发现 critical >2 项即升至 1w | R7 SHOULD-8 | §6 M-SN-6.5 |
+| **token 重构截图标准** | web-next 视觉回归对照清单：home / search / video detail / player 4 页 × 明暗双模 = 8 张 | R7 DISCUSS-7 | §10.4 |
+
+---
+
+## 4. 工程架构
+
+### 4.1 仓库结构（cutover 前）
+
+```
+resovo/
+├── apps/
+│   ├── api/                 ← 不动业务（M-SN-5 仅追加新端点：home_modules / split-unmerge / candidate-preview）
+│   ├── web-next/            ← 不动（Next.js，3000）
+│   ├── server/              ← 冻结，仅 P0 hotfix；M-SN-7 cutover commit 内删除并改名 server-next → admin
+│   └── server-next/         ← 新建（Next.js App Router，3003）
+│       ├── src/
+│       │   ├── app/         ← App Router（admin 路由树，IA v0 详见 §7）
+│       │   ├── components/  ← server-next 业务组件（成熟原语下沉到 packages/admin-ui）
+│       │   ├── lib/         ← apiClient / 鉴权 / utils
+│       │   ├── stores/      ← zustand（如需）
+│       │   ├── contexts/    ← BrandProvider / ThemeProvider（沿用 ADR-038/039 协议）
+│       │   └── middleware.ts
+│       ├── tests/e2e/       ← 每视图 ≥1 条黄金路径
+│       ├── package.json
+│       ├── next.config.ts
+│       ├── tailwind.config.ts
+│       └── tsconfig.json
+├── packages/
+│   ├── types/               ← 不动（共享类型）
+│   ├── player-core/         ← 不动
+│   ├── logger/              ← 不动
+│   ├── design-tokens/       ← 改造为三层（§4.3）
+│   └── admin-ui/            ← 新建（§4.4，**M-SN-1 第一个任务卡即创建空骨架并加入 workspaces**）
+└── ...
+```
+
+### 4.2 端口与切流
+
+| 阶段 | apps/server :3001 | apps/server-next :3003 | nginx `/admin/*` 指向 |
+|---|---|---|---|
+| 开发期 M-SN-1 ~ M-SN-6.5 | 生产可用，仅 P0 hotfix | 开发中 | :3001 |
+| Cutover 当日 M-SN-7 | 流量已切走 | 接管全部 `/admin/*` | :3003 |
+| Cutover + 24h | 物理目录保留 | 唯一生产壳 | :3003 |
+| Cutover + 7 天 | 物理删除 + git tag `pre-server-next-cutover` 保留 | — | :3003 |
+
+**Cookie / 鉴权**：server-next 与 apps/server 使用相同的 fastify-jwt cookie 名（由 apps/api 签发），cutover 当日运营无需重新登录（cookie 在浏览器侧保持）。**M-SN-3 完成时在 staging 环境做一次 cookie + nginx e2e 端到端演练**（DISCUSS-3）。
+
+### 4.3 Token 三层（详见 ADR-048）
+
+```
+packages/design-tokens/
+├── base/         ← 前后台共用，不可 fork
+│   colors.css / typography.css / spacing.css / radius.css / shadow.css / motion.css
+├── semantic/     ← 前后台共用，按场景命名
+│   status.css（ok/warn/danger/info）
+│   dual-signal.css（probe/render，admin 主用，前台预留）
+│   surface.css（bg0..bg4）
+└── admin-layout/ ← admin 专属
+    shell.css（sidebar-w / topbar-h / sidebar-collapsed-w）
+    table.css（row-h / row-h-compact / col-min-w）
+    density.css
+```
+
+**收编路径**（设计稿 v2.1 `tokens.css` → packages/design-tokens 三层）见 R2.3 详表。
+
+**硬约束**：
+- base / semantic 任何字段新增 → spawn arch-reviewer (Opus) 评审 → ADR 续编
+- admin-layout 新增字段 → 主循环可直接落，但需在 milestone 阶段审计中报备
+- 设计稿与 packages 不一致时，**packages 是真源**
+
+### 4.4 packages/admin-ui 下沉边界（MUST-3 修订）
+
+#### 创建时机
+- **M-SN-1 第一个任务卡**即创建 `packages/admin-ui/` 空骨架（仅 `package.json` / `tsconfig.json` / `src/index.ts` 占位）并加入 root `workspaces`
+- 之后任何"拟下沉原语"在 server-next 内**首次出现时直接落到 packages/admin-ui**，不再有"先放 server-next 再迁"的过渡态
+
+#### 范围
+
+| 原语 | 必须下沉？ | 出现时机 |
+|---|---|---|
+| DataTable v2（带 useTableQuery） | ✅ 必须 | M-SN-2 |
+| Toolbar / Filter / Sort / ColumnSettings | ✅ 必须 | M-SN-2 |
+| Drawer（视频编辑 Drawer 复用） | ✅ 必须 | M-SN-2 |
+| Modal / Dialog | ✅ 必须 | M-SN-2 |
+| Toast（全局 addToast API） | ✅ 必须 | M-SN-2 |
+| AdminDropdown | ✅ 必须 | M-SN-2 |
+| SelectionActionBar | ✅ 必须 | M-SN-2 |
+| Pagination v2（客户端 / 服务端两档） | ✅ 必须 | M-SN-2 |
+| Pagination v2 游标分页 + 虚拟滚动 | ✅ 必须 | **M-SN-6**（首次 >50k 数据时按需即建，A2 方案）|
+| Empty / Error / Loading 状态 | ✅ 必须 | M-SN-2 |
+| Form 控件（Input / Select / Switch / DateRange） | ⚠️ 评估 | 若 web-next 已有同形态可复用，admin-ui 仅做样式适配壳 |
+| Icon set | ⚠️ 评估 | 复用 web-next 已有图标库；admin 专属（如双信号 icon）补到 packages/admin-ui/icons |
+| BrandProvider / ThemeProvider | ⛔ 不下沉 | 直接复用 web-next 的 contexts |
+
+#### 自建业务组件下沉规则（SHOULD-5 修订）
+**首次跨 2 视图复用即强制下沉**到 packages/admin-ui。包括：状态原子指示器、决策卡、双信号双柱图、证据抽屉、视频分组表、全局别名表、首页运营位编辑器、拖拽排序、合并候选预览、拆分确认、采集 DAG、审计时间线。下沉时机记录于 §8 复用矩阵"下沉里程碑"列。
+
+### 4.5 与 apps/api 的耦合面（MUST-4 修订）
+
+#### 主通道
+- 唯一通道：`apiClient`（packages/types 提供 ApiResponse / 端点签名类型）
+- 调用 `/v1/admin/*` 共 122 端点（除 staging 路由的"独立 UI 入口"外，全部沿用）
+- staging 路由的 10 端点保留但 UI 入口仅在审核台"已审"Tab 暴露
+
+#### 新增端点（B3 方案允许的子集）
+
+| 推荐 | 新增端点 | 责任 milestone | 评审要求 |
+|---|---|---|---|
+| 推荐 3（首页运营位） | home_modules CRUD（list / create / update / delete / reorder / publish）— 6 端点 | M-SN-5 内 server-next 主循环顺手补；ADR-050 起草 | Opus arch-reviewer PASS |
+| 推荐 5（合并/拆分） | candidate-preview / split / unmerge / merge-audit-log — 3-4 端点 | M-SN-5 内补；ADR-051 起草 | Opus arch-reviewer PASS |
+
+#### 硬约束
+- 修改**现有**端点的 path / 入参 schema / 返回结构 / 鉴权策略 → BLOCKER §5.2 第 3 条命中
+- 新增端点必须：(1) 独立 ADR；(2) Opus arch-reviewer PASS；(3) packages/types 同步类型；(4) 端点鉴权与现有 admin 三层（auth / moderator+ / adminOnly）保持一致（不扩张权限模型）
+
+#### ADR-端点先后协议（R7 MUST-8）
+- ADR-050（home_modules）/ ADR-051（merge）必须在**对应端点首个任务卡启动前**完成 Opus arch-reviewer PASS
+- 同一 ADR 下的多个端点（如 home_modules CRUD 6 端点）逐个落地时**复用同一 ADR**，不重复评审
+- **不允许端点 PR 与 ADR 同卡**——避免端点实现与 ADR 评审来回循环触发 BLOCKER §5.2 第 7 条
+- 若端点实现期间发现需修改 ADR，触发 plan §0 版本协议（ADR 续编 + spawn arch-reviewer）
+- DISCUSS-6（草稿/发布双态等鉴权粒度）：留待 ADR-050 起草时一并裁定，不在 plan v2 预决
+
+#### apps/api 契约冻结声明（SHOULD-4-b）
+开发期内 `apps/api/src/routes/admin/*.ts` 现有端点禁止改 path / schema / 鉴权；如有 P0 hotfix 必须 ping server-next 主循环并写入 task-queue。
+
+### 4.6 编译期边界检查（SHOULD-3 修订）
+
+不再用 grep；改为 ESLint `no-restricted-imports` 规则：
+
+```js
+// .eslintrc.cjs（apps/server-next）
+rules: {
+  'no-restricted-imports': ['error', {
+    patterns: [
+      { group: ['../../server/**', 'apps/server/**'], message: 'server-next 不得引用 apps/server' },
+      { group: ['../../web/**', 'apps/web/**'], message: 'apps/web 已退役' },
+      { group: ['../../web-next/src/**', 'apps/web-next/src/**'], message: '共享应走 packages/*' },
+    ]
+  }]
+}
+```
+
+加入 `npm run lint` 与 `npm run preflight` 流水线，每个 PR 必跑。补充 `scripts/verify-server-next-isolation.mjs` 走 ts-morph 模块图遍历做 CI 兜底。
+
+### 4.7 依赖白名单（MUST-5 新增）
+
+server-next 可使用的 npm 包，超出本表即触发 BLOCKER §5.2 第 2 条。
+
+#### 预批（直接使用）
+- React 18 / Next.js / TypeScript / zod / clsx / tailwind-merge / dayjs / zustand（已在仓库）
+- `@dnd-kit/core` `@dnd-kit/sortable`（apps/server 已用，server-next 复用拖拽场景）
+- `@resovo/types` `@resovo/player-core` `@resovo/admin-ui` `@resovo/design-tokens`（workspaces 内）
+
+#### 候选（首次落地前 spawn arch-reviewer 二选一）
+| 场景 | 候选 1 | 候选 2 | 决策时机 |
+|---|---|---|---|
+| 图表（analytics） | `recharts` | `visx` | M-SN-6 首次落地前 |
+| DAG 渲染（crawler 任务依赖） | `reactflow` v11 | `dagre-d3` | M-SN-6 首次落地前 |
+| 虚拟滚动（>50k 数据） | `@tanstack/react-virtual` | `react-window` | M-SN-6 首次落地前 |
+
+#### 严禁
+- 任何 UI 框架（antd / mui / chakra / shadcn 重型组件库）— 与"复用 packages/admin-ui"硬冲突
+- 任何状态管理替代品（redux / jotai / valtio）— 已用 zustand
+- 任何路由库（react-router）— Next.js App Router 已覆盖
+
+---
+
+## 5. 工作流规约
+
+### 5.1 自动化 review 闭环（规约 A）
+
+每个 CHG 卡 / Task 卡完成时：
+
+```
+1. 主循环执行任务 → typecheck + lint + test 全绿
+2. 主循环 spawn arch-reviewer (Opus) 子代理
+   输入：任务卡 + diff + 触及契约 + 关联 ADR
+3. 子代理输出 verdict：PASS / CONDITIONAL / REJECT
+4. 处理：
+   - PASS    → 写 changelog + commit + 关闭任务卡
+   - CONDITIONAL → 主循环按 review 项修复 → 再次 spawn arch-reviewer
+                   连续 ≤3 轮；>3 轮升 BLOCKER 等人工
+   - REJECT  → 任务卡退回设计阶段；BLOCKER 等人工
+5. 任务卡字段必填："review 状态：PENDING/PASS/CONDITIONAL(N/3)/REJECT"
+   + "审计 commit hash"
+```
+
+### 5.2 BLOCKER 触发清单（规约 B）
+
+执行中任意一条命中 → 立即写 BLOCKER 暂停会话：
+
+1. 任务文件范围之外的改动需求
+2. 需要新增 §4.7 依赖白名单之外的 npm 包
+3. 需要修改**现有** admin API 端点（path / schema / 鉴权）— **新增端点不触发**（走 ADR + Opus 评审通道）
+4. 需要修改 DB schema（含新 migration）
+5. 需要新增 / 修改 token 层 base / semantic 字段
+6. 需要修改 packages/admin-ui 公开 API（Props / 事件 / 生命周期）
+7. 同一 review 修复 >3 轮仍未 PASS
+8. 计划外的 IA / URL 命名 / 鉴权模型 / 错误降级 / 缓存策略决策
+9. apps/server 与 apps/server-next 出现交叉依赖
+10. cutover 检查清单出现红项（M-SN-7）
+11. 单 milestone 工时超出估算 +30%（SHOULD-1 新增）
+12. plan 本身需要修订（走 plan 版本协议 §0）
+
+### 5.3 Milestone 阶段审计协议（规约 C，MUST-6 修订）
+
+每个 Milestone 完成时：
+
+```
+主循环 spawn arch-reviewer (Opus)
+输入：milestone 范围内全部 commit + 完成标准清单 + 关联 ADR
+输出三件：
+  ① 偏差报告：偏离计划的决策点（合理 / 需追溯 ADR / 必须回滚 三档）
+  ② 质量评级：A / B / C
+  ③ 人工审核 checklist：自动审计无法判定的开放项
+       + 关键页面交互验收路径
+       + 截图建议（设计 vs 实装对照）
+M-SN-7 final 审计必须人工 sign-off（PR 描述显式签字）
+```
+
+#### A / B / C 评级判据
+
+| 评级 | 客观条件（全部满足） | 处理 |
+|:-:|---|---|
+| **A** | 完成标准 100% + 偏差报告 0 项"必须回滚" + e2e 黄金路径全绿 + 工时未超 +10% + a11y 无 critical 项 | 直接进入下一 milestone |
+| **B** | 完成标准 ≥90% + 偏差报告 ≤2 项"需追溯 ADR" + e2e 全绿 + 工时未超 +30% | 补齐 ADR 后进入下一 milestone |
+| **C** | 任一不满足 B：完成标准 <90% / 偏差报告含"必须回滚" / e2e 出红 / 工时超 +30% | 整 milestone 返工；BLOCKER §5.2 第 11 条 |
+
+**两层评级体系**：任务级 §5.1 PASS/CONDITIONAL/REJECT 与 milestone 级 A/B/C 独立。任务级评审检查 diff 局部质量；milestone 级评审检查全 milestone 战略对齐与完成度。
+
+### 5.4 任务卡 / changelog / commit 模板
+
+#### 任务卡（写入 `docs/tasks.md`）必填字段
+
+```markdown
+## CHG-SN-<milestone>-<seq> · <短标题>
+
+- 来源 milestone：M-SN-N
+- 关联 plan §：§4.x / §6.M-SN-N / §7.<view>
+- 关联 ADR：ADR-046 / 047 / 048 / ...
+- 关联 brief 推荐：推荐 N（如适用）
+- 关联痛点：audit §7 痛点 N（如适用）
+- 文件范围：apps/server-next/src/... / packages/admin-ui/...
+- 不在范围（明列防扩张）：
+- 完成标准：
+- 复用矩阵（来源/自建）：
+- 测试要求：typecheck + lint + unit + e2e 黄金路径
+- 主循环模型：claude-opus-4-7（默认）/ claude-sonnet-4-6
+- 子代理调用：arch-reviewer (Opus) 自动化 review
+- review 状态：PENDING
+- 工时估算：N 天 / 实际：N 天
+```
+
+#### commit trailer 必含（SHOULD-7 兼容性声明）
+
+```
+Refs: CHG-SN-<id>
+Plan: docs/server_next_plan_20260427.md §<节号>
+Review: <arch-reviewer commit hash> PASS
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+```
+
+trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 `Co-Authored-By:` 是 git-rules 标准字段；新增 `Plan:` `Review:` 不与现有钩子冲突）。M-SN-0 第三批 ADR 起草时同步在 git-rules.md 中追认 server-next 期间的 trailer 扩展。
+
+---
+
+## 6. Milestone 划分（含工时估算 SHOULD-1）
+
+> 工时阈值：单 milestone 超估算 +30% 触发 BLOCKER §5.2 第 11 条；累计偏差超 +50% 触发 plan 版本修订。
+
+### M-SN-0 · 立项前清理工作台 · **1 周**
+- **范围**：见 §11
+- **完成标准**：docs / code / ADR 三批清理 PASS；ADR-046/047/048 三份 Opus 评审 PASS
+- **阶段审计输入**：清理前后的 git diff + 三份 ADR 文本
+
+### M-SN-1 · 工程骨架 + Token 三层 + Provider · **1.5 周**
+- **范围**：
+  - apps/server-next 工程骨架（Next.js App Router 空壳）
+  - **packages/admin-ui 空骨架（M-SN-1 第一个任务卡）**
+  - packages/design-tokens 三层重构 + 现有引用方迁移（packages/design-tokens 内部 + apps/web-next 引用面）
+  - BrandProvider / ThemeProvider 移植（沿用 ADR-038/039）
+  - 路由骨架（IA v0 §7 全部 21 顶层 + 5 system 子 + login/403/404 占位）
+  - apiClient + 鉴权层
+- **完成标准**：
+  - `npm run dev` 起 :3003，登录 → dashboard 通路打通
+  - 所有路由 SSR 不报错（即使内容为占位）
+  - typecheck + lint + 现有 test 全绿
+  - apps/web-next 在 token 三层下视觉无回归（截图对比）
+  - packages/admin-ui 在 root workspaces 注册成功
+- **关联 ADR**：ADR-046（立项）/ ADR-048（token 三层）
+- **阶段审计重点**：token 收编完整性、Provider 协议合规、零 apps/server 依赖、ESLint no-restricted-imports 规则生效
+
+### M-SN-2 · packages/admin-ui v1（地基）· **2.5 周**（A2 方案）
+- **范围**：
+  - DataTable v2（含 useTableQuery URL/sessionStorage 同步）
+  - Toolbar / Filter / ColumnSettings
+  - Pagination v2 客户端 + 服务端两档（**游标 + 虚拟滚动延迟到 M-SN-6 首次 >50k 数据时按需即建**）
+  - Drawer / Modal / Toast / AdminDropdown / SelectionActionBar
+  - Empty / Error / Loading 状态原语
+  - Storybook-style demo 页（在 server-next /admin/dev/components）
+- **完成标准**：
+  - 全部原语在 demo 页可交互
+  - DataTable v2 客户端 / 服务端分页切换正常
+  - useTableQuery URL 同步可验证：刷新后筛选/排序/分页保留
+  - 单元测试覆盖率 ≥70%
+- **关联 ADR**：ADR-049 (DataTable v2 公开 API 契约) — Opus 评审 PASS 后定
+- **关联 brief**：推荐 4
+- **阶段审计重点**：API 契约稳定性、SSR 兼容、a11y 基线（键盘导航、对比度 ≥4.5:1、aria-* 完整）
+
+### M-SN-3 · 标杆页：视频库 · **1 周**
+- **范围**：
+  - `/admin/videos` 列表（DataTable v2 实战）
+  - `/admin/videos/[id]/edit`（视频编辑 Drawer 复用）
+  - 状态三元组的"前台可见性原子指示器"（admin_audit 痛点 5 解决件）
+  - CRUD + 上下架 + 批量 + 服务端排序/筛选/分页
+  - e2e 黄金路径：登录 → 列表 → 编辑 → 保存 → 列表回归
+  - **末尾：staging 环境 cookie + nginx 反代 e2e 演练（DISCUSS-3）**
+- **完成标准**：
+  - 与 apps/server 现 `/admin/videos` 功能 100% 对齐
+  - 可作为后续视图的"模板"（任务卡复用其文件结构 — 模板路径写入 `docs/server_next_view_template.md`）
+- **关联 brief**：推荐 4 实战、痛点 5
+- **阶段审计重点**：是否真正可作为模板（结构清晰度 + 复用矩阵达标）+ e2e 演练通过
+
+### M-SN-4 · P0 痛点视图：审核台 + 视频编辑 Drawer · **2.5 周**
+- **范围**：
+  - `/admin/moderation` 三栏 + 4 Tab（待审 / 已审 / 已拒绝 / 已发布历史可选）
+  - 双信号展示规范（probe/render 双柱图 + 决策卡 + 证据抽屉）
+  - 已审 Tab 含发布预检清单 + 单/批量发布动作（替代 staging 页）
+  - 状态保留型筛选（URL/sessionStorage 持久化，不再 setListRefreshKey 重挂载）
+  - 视频编辑 Drawer 4 Tab（基础 / 线路 / 图片 / 豆瓣）+ 全屏模式 + 全局入口
+- **完成标准**：
+  - 痛点 1（合并拆分入口）/ 3（双信号）/ 6（筛选保留）解决
+  - 筛选保留率：0% → 100%（可观测）
+  - e2e 黄金路径：审核 → 通过 → 已审 → 发布
+- **关联 brief**：推荐 1
+- **关联痛点**：1（部分）/ 3 / 5（前台可见性）/ 6
+- **阶段审计重点**：双信号显示是否分双轨、状态保留是否经得起 5 步操作压力测试
+
+### M-SN-5 · P1 视图（含 admin API 补齐）· **4 周**
+- **范围**：
+  - **admin API 补齐子任务**：home_modules CRUD（推荐 3，6 端点 + ADR-050）/ split-unmerge / candidate-preview（推荐 5，3-4 端点 + ADR-051）— 每个端点 Opus 评审
+  - **ADR-端点先后协议**（§4.5）：ADR-050/051 必须先于对应端点首个任务卡完成 Opus PASS；同 ADR 下多端点复用评审；不允许端点 PR 与 ADR 同卡
+  - `/admin/sources`（线路矩阵 + 视频维度分组 + 全局别名表，推荐 2）
+  - `/admin/home`（首页运营位统一编辑器：banner + featured + top10 + type_shortcuts，推荐 3，需 home_modules API 就位）
+  - `/admin/merge`（合并 candidate 预览 + 拆分工作台，推荐 5，需 split-unmerge API 就位）
+  - `/admin/submissions`（用户投稿）
+  - `/admin/subtitles`（字幕管理）
+  - `/admin/users`（用户管理）
+- **完成标准**：6 视图全功能对齐 + 新增 9-10 端点 ADR-050/051 PASS + e2e 黄金路径
+- **关联 brief**：推荐 2 / 3 / 5
+- **关联痛点**：1（完整解决）/ 2 / 4 / 7 / 8
+- **阶段审计重点**：复用矩阵达标率、新增端点契约规范、是否引入新原语未下沉
+
+### M-SN-6 · 周边视图 + 设计稿缺口 + 大数据原语 · **4 周**（R7 MUST-7 c 上调）
+- **范围**：
+  - `/admin/crawler`（站点行展开 + 任务依赖 DAG + MACCMS 配置 + 线路别名分组）— 触发 reactflow vs dagre-d3 选型
+  - `/admin/image-health`
+  - `/admin/analytics` — 触发 recharts vs visx 选型
+  - `/admin/system/*`（settings / cache / monitor / config / migration，5 子视图）
+  - `/admin/audit`（审计日志，新增视图）
+  - 设计稿后续补完的"设置补全 / 采集展开 / 开发者模式 / 弹层规范"对齐
+  - 通知 + 后台任务双面板 + Toast 系统
+  - **大数据原语**：游标分页 + 虚拟滚动（首次 >50k 数据集出现时按需即建）— 触发 react-virtual vs react-window 选型
+- **完成标准**：21 顶层 + 5 system 子 = 26 路由 + 1 视频编辑子页 = 27 路由占位全集覆盖 ≥95%；剩余视图（如 design-tokens / sandbox 调整）评估保留或退役
+- **阶段审计重点**：覆盖率 + 设计稿对齐度 + 三类候选依赖选型决议
+
+### M-SN-6.5 · 非功能验收门 · **0.5 周（软上限 1 周）**（SHOULD-2 新增 + R7 SHOULD-8）
+- **范围**：
+  - **a11y 验收**：键盘导航全覆盖 + 焦点环 + 对比度 ≥4.5:1 + aria-* 完整 + screen reader 关键路径验证
+  - **性能验收**：首屏 LCP < 2.5s（dashboard / videos）+ 表格渲染 100 行 < 200ms + 5 万行虚拟滚动 ≥30 FPS
+  - **跨浏览器**：Chrome / Firefox / Safari 最新两版
+  - **断点回归**：1280 / 1440 / 1920 三档
+- **完成标准**：四类验收全 PASS；任一项 critical 退回对应 milestone 修复
+- **软上限协议（R7 SHOULD-8）**：基线 0.5 周；任一类验收发现 critical >2 项即升至 1 周；超 1 周触发 BLOCKER §5.2 第 11 条
+- **阶段审计**：人工抽查（不全自动）
+
+### M-SN-7 · Cutover · **0.5 周**
+- **范围**：
+  - functional parity 验收清单（apps/server vs apps/server-next 全 27 路由占位逐项 diff）
+  - e2e 全绿
+  - **同 commit 内**：nginx 反代配置切换（`/admin/*` :3001 → :3003）+ apps/server 删除 + `apps/server-next` → `apps/admin` 改名（DISCUSS-4）
+  - 24h 监控期
+  - **+ 7 天**：物理目录 + git tag `pre-server-next-cutover` 保留；超 7 天回滚走完整 commit revert（RTO ≤ 4h，DISCUSS-5）
+- **完成标准**：cutover + 24h 平稳；运营 0 报障；同 commit 完成全部退场动作进 main
+- **关联 ADR**：ADR-047
+- **阶段审计**：**人工 final sign-off**（PR 描述签字）
+
+### 总周期：**17.5 周（~4.4 个月）**（v1 16w → v2 17.5w，R7 MUST-7 c 上调 M-SN-6）
+
+| Milestone | 估算 | 累计 |
+|---|:-:|:-:|
+| M-SN-0 | 1.0 | 1.0 |
+| M-SN-1 | 1.5 | 2.5 |
+| M-SN-2 | 2.5 | 5.0 |
+| M-SN-3 | 1.0 | 6.0 |
+| M-SN-4 | 2.5 | 8.5 |
+| M-SN-5 | 4.0 | 12.5 |
+| **M-SN-6** | **4.0** | 16.5 |
+| M-SN-6.5 | 0.5（软上限 1.0） | 17.0 |
+| M-SN-7 | 0.5 | 17.5 |
+
+---
+
+## 7. IA v0 与视图清单（MUST-2 + SHOULD-6 修订）
+
+> **IA 命名声明（SHOULD-6）**：本 IA 为开发期占位；URL slug 优先英文（`/admin/moderation` 等）；中文菜单文案在 cutover 前可调；调整 URL 触发 §5.2 BLOCKER 第 8 条。设计稿 v2.1 仍在补完，cutover 前再做一次 IA 对照。
+
+```
+/admin
+├── dashboard            管理台站
+├── moderation           内容审核（4 Tab：待审 / 已审 / 已拒绝 / 已发布历史）
+│                        ★ R3 修正：含原 staging 发布动作；α 方案：待审 Tab 即"采集后未审"集合
+├── videos               视频库
+│   └── [id]/edit        视频编辑 Drawer 全屏模式
+├── sources              播放线路（含全局别名表）
+├── merge                合并拆分（依赖 split-unmerge / candidate-preview API，M-SN-5 内补）
+├── subtitles            字幕管理
+├── home                 首页运营位编辑器（依赖 home_modules API，M-SN-5 内补）
+├── submissions          用户投稿
+├── crawler              采集控制（站点行展开内嵌"线路/别名"分组）
+├── image-health         图片健康
+├── analytics            数据看板
+├── users                用户管理
+├── audit                审计日志（新增视图）
+├── system/
+│   ├── settings         站点设置
+│   ├── cache            缓存管理
+│   ├── monitor          性能监控
+│   ├── config           运行时配置
+│   └── migration        迁移工具
+└── login                登录页
+
+★ 已移除：staging（合并到 moderation 已审 Tab）
+★ 待评估：design-tokens / sandbox（M-SN-6 决定是否保留为 dev 入口）
+```
+
+#### 视图数（MUST-2 修订）
+- **顶层视图**：21（原 22 - staging）
+- **system 子视图**：5（settings / cache / monitor / config / migration）
+- **编辑子视图**：1（videos/[id]/edit）
+- **总路由占位**：**27**
+
+cutover 验收按 27 路由逐项 diff（替代 v0 错误的"22→21"表述）。
+
+---
+
+## 8. 复用矩阵（按视图，MUST-2 + SHOULD-5 修订）
+
+> 任务卡完成标准要求复用率 ≥80%；自建组件首次跨 2 视图时强制下沉。
+
+| 视图 | DataTable | useTableQuery | Drawer | Toast | 双信号 token | admin-layout | 自建组件（下沉里程碑）|
+|---|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| dashboard | — | — | — | ✅ | — | ✅ | 卡片库 / 三态布局（M-SN-3）|
+| moderation | ✅ | ✅ | ✅ | ✅ | ✅（核心）| ✅ | 决策卡 / 三栏 / Tab seg / 双信号双柱图（M-SN-4 下沉）|
+| videos | ✅ | ✅ | ✅ | ✅ | ✅（线路区）| ✅ | 状态原子指示器（M-SN-3 下沉）|
+| sources | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 视频分组表 / 全局别名表（M-SN-5 下沉）|
+| merge | ✅ | ✅ | ✅ | ✅ | — | ✅ | 拆分确认 / 审计时间线 / 合并候选预览（M-SN-5 下沉）|
+| subtitles | ✅ | ✅ | ✅ | ✅ | — | ✅ | — |
+| home | — | — | ✅ | ✅ | — | ✅ | 首页运营位编辑器 / 拖拽排序（M-SN-5 下沉）|
+| submissions | ✅ | ✅ | ✅ | ✅ | — | ✅ | — |
+| crawler | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 站点行展开 / 采集 DAG（M-SN-6 下沉）/ MACCMS 配置面板 |
+| image-health | ✅ | — | — | ✅ | ✅ | ✅ | 矩阵图（评估降级到表格）|
+| analytics | ✅ | — | — | ✅ | — | ✅ | 图表（M-SN-6 触发 recharts/visx 选型）|
+| users | ✅ | ✅ | ✅ | ✅ | — | ✅ | — |
+| audit | ✅ | ✅ | ✅ | ✅ | — | ✅ | 审计时间线（M-SN-6 下沉，与 merge 共享）|
+| system/settings | — | — | ✅ | ✅ | — | ✅ | 表单 |
+| system/cache | ✅ | ✅ | — | ✅ | — | ✅ | — |
+| system/monitor | ✅ | — | — | ✅ | — | ✅ | 实时图表（共享 analytics）|
+| system/config | — | — | ✅ | ✅ | — | ✅ | 表单 |
+| system/migration | ✅ | — | — | ✅ | — | ✅ | — |
+| login | — | — | — | ✅ | — | — | 表单 |
+
+**自建组件下沉时机汇总**：
+- M-SN-3：状态原子指示器、卡片库
+- M-SN-4：决策卡、双信号双柱图、证据抽屉、三栏布局
+- M-SN-5：视频分组表、全局别名表、首页运营位编辑器、拖拽排序、合并候选预览、拆分确认
+- M-SN-6：采集 DAG、审计时间线、图表
+
+---
+
+## 9. ADR 索引
+
+| ADR | 标题 | 范围 | 起草时机 |
+|---|---|---|---|
+| ADR-046 | server-next 立项与 IA v0 | Q1–Q10 决策 + IA 修正 + 单语言 + 依赖白名单 | M-SN-0 第三批 |
+| ADR-047 | server-next 切流与 cutover 协议 | E 方案 4 条硬约束 + nginx 反代 + 7 天保留 + 同 commit 改名 | M-SN-0 第三批 |
+| ADR-048 | admin token 三层收编协议 | base / semantic / admin-layout 划分 + 设计稿 v2.1 收编映射 | M-SN-0 第三批 |
+| ADR-049 | DataTable v2 公开 API 契约 | useTableQuery hook + Props v2 + 客户端/服务端两档分页协议 | M-SN-2 完成时 |
+| ADR-050 | home_modules admin API 协议 | 推荐 3 落地所需 6 端点 + 鉴权 + 缓存失效 | M-SN-5 内 |
+| ADR-051 | merge candidate / split / unmerge API 协议 | 推荐 5 落地所需 3-4 端点 + 审计日志 schema | M-SN-5 内 |
+| ADR-候选 | 大数据原语依赖选型（react-virtual / reactflow / recharts 二选一三组）| Q-MUST-5 候选清单决议 | M-SN-6 首次落地前 |
+
+---
+
+## 10. 风险与回滚（SHOULD-4 修订）
+
+### 10.1 Cutover 回滚（ADR-047 §回滚）
+- worktree 备份 + git tag `pre-server-next-cutover`
+- nginx 配置 `/admin/* → :3001` 切回（一行 reload）
+- apps/server 物理目录保留 7 天 + git tag 与之一致
+- 超 7 天回滚走完整 commit revert（RTO ≤ 4h）
+
+### 10.2 设计稿未完工的风险
+- 用户已说明 v2.1 仍在补"设置补全 / 采集展开 / 开发者模式 / 弹层规范"
+- M-SN-4 不依赖未完工部分；M-SN-6 才会触及
+- M-SN-6 启动前需要确认设计稿完工度，否则推迟 M-SN-6（可并行做 M-SN-7 cutover 准备的非业务部分）
+- **设计稿大改应急（SHOULD-4-c）**：cutover 前若 IA 大改，回滚到 v2.1 已实现部分 + 任务卡补"未实装入口暂不暴露"声明
+
+### 10.3 工作流规约执行偏差
+- 自动化 review 失败连续 3 次 → BLOCKER（清单第 7 条）
+- milestone 阶段审计 C 评级 → 整 milestone 返工
+- 计划外决策不停机 → 命中 BLOCKER 第 8 条 → review 期检测
+
+### 10.4 packages/design-tokens 重构对 web-next 的影响
+- M-SN-1 token 三层重构会触及 apps/web-next 的引用面
+- **缓解**：重构 PR 必须包含 web-next 视觉回归截图对照
+- **截图标准清单（R7 DISCUSS-7）**：
+  - 4 个关键页面：home（`/`）/ search（`/search`）/ video detail（`/video/[slug]`）/ player（播放器全屏态）
+  - × 2 个主题模式：明色（data-theme="light"）+ 暗色（data-theme="dark"）
+  - = **8 张截图**，重构 PR 描述中按 `<页面>-<模式>.png` 命名顺序粘贴；缺一即 PR 不可 merge
+- **回滚**：token 重构 PR 单独切分，不与 server-next 业务代码混在同一 PR
+
+### 10.5 Plan 版本控制风险（SHOULD-4-a）
+- plan 修订必须走 §0 版本协议（spawn arch-reviewer + 修订日志 + commit trailer）
+- 重大修订（范围 / milestone / Non-Goals）须人工 sign-off
+- 任务卡引用的 plan §节号必须与当前 plan 版本一致；plan 升版后旧任务卡需做兼容性核查
+
+### 10.6 apps/api 契约漂移风险（SHOULD-4-b）
+- 开发期内 `apps/api/src/routes/admin/*.ts` 现有端点禁止改 path / schema / 鉴权
+- 任何 P0 hotfix 必须 ping server-next 主循环并写入 task-queue
+- M-SN-5 新增端点不得修改邻近现有端点（隔离原则）
+
+### 10.7 设计稿大改应急
+- 见 §10.2
+
+### 10.8 Bus factor / 上下文中断（SHOULD-4-d）
+- 每个 milestone 末尾输出"上下文移交文档"（在 docs/server_next_handoff_M-SN-N.md）：当前 milestone 决策点 / 未决议题 / 关键任务卡指针 / 复盘结论
+- BLOCKER 暂停 >7 天自动触发 milestone 中期审计
+
+---
+
+## 11. M-SN-0 · 立项前清理工作台（任务化）
+
+### 11.1 第一批：docs 归档（spawn doc-janitor）
+
+| # | 操作 | 目标 |
+|---|---|---|
+| D1 | 移 `docs/freeze_notice_20260418.md` → `docs/archive/freeze_notice_20260418.md`，原位 stub | freeze_notice 退役 |
+| D2 | 移 `docs/frontend_redesign_plan_20260418.md` `frontend_phase2_plan_20260424.md` `frontend_design_spec_20260423.md` `image_pipeline_plan_20260418.md` `design_system_plan_20260418.md` → `docs/archive/m0-m6/` | 前端方案归档 |
+| D3 | 归档 task-queue 历史：移已完成序列到 `docs/archive/task-queue/task-queue_archive_20260427.md`；保留进行中 + 待启动；顶部加约束声明"新任务序列号不与历史重复" | task-queue 收敛 |
+| D4 | 归档 changelog 历史：按里程碑切到 `docs/archive/changelog/changelog_m0-m6.md`；主 changelog 保留 M-SN 之后条目 | changelog 收敛 |
+| D5 | 修正 `docs/architecture.md` §1 漂移（apps/web → apps/server / apps/web-next）；预告 server-next | 真源对齐 |
+
+**完成标准**：所有归档文件 git add；原位 stub 含跳转链接；spawn arch-reviewer 复核 PASS。
+
+### 11.2 第二批：code 清理（主循环 + arch-reviewer）
+
+| # | 操作 | 目标 |
+|---|---|---|
+| C1 | 删除 `apps/web/` 整个目录（含 .next/ .DS_Store） | 旧前台清退 |
+| C2 | 根 `package.json` workspaces 由 `apps/*` 改为显式列举 `apps/api`、`apps/server`、`apps/server-next`、`apps/web-next`（+ `packages/admin-ui`、其他 packages、tools/*） | workspace 收敛 |
+| C3 | grep 全仓 `apps/web` / `@resovo/web` 引用，确认 0 命中（audit §5.4 已确认） | 防漏 |
+| C4 | 跑 `npm install` + `npm run typecheck` + `npm run lint` + `npm run test -- --run` 全绿 | 不回归 |
+| C5 | 提交 PR；spawn arch-reviewer 复核 | 闭环 |
+
+### 11.3 第三批：ADR 起草（主循环 + Opus 评审）
+
+| # | 操作 | 目标 |
+|---|---|---|
+| A1 | 起草 ADR-046（server-next 立项 + IA v0 + 单语言 + 依赖白名单） | 立项决策固化 |
+| A2 | 起草 ADR-047（cutover 协议 + nginx 反代 + 7 天保留 + 同 commit 改名 + 回滚预案） | 切流协议固化 |
+| A3 | 起草 ADR-048（token 三层收编 + 设计稿 v2.1 映射表） | token 协议固化 |
+| A4 | 三份 ADR 同时 spawn arch-reviewer (Opus) 评审 | PASS 才进 M-SN-1 |
+| A5 | 评审 PASS 后写入 `docs/decisions.md`；`docs/CLAUDE.md` 索引更新；`docs/rules/git-rules.md` 追认 server-next trailer 扩展 | 真源对齐 |
+
+### 11.4 检查点
+
+M-SN-0 完成 = 三批全部 PASS + 三份 ADR 进入 `docs/decisions.md` + 本 plan §6 列出的 milestone 进入 task-queue。
+
+设计稿后续补完的部分（"设置补全 / 采集展开 / 开发者模式 / 弹层规范"）的 ETA 不影响 M-SN-0–M-SN-5；M-SN-6 启动前需要确认设计稿完工度，否则推迟 M-SN-6。
+
+---
+
+## 12. 自检清单（plan v2 完整性）
+
+- [x] §0 性质声明 + plan 版本协议
+- [x] §1 项目目标 + 度量（G2 含 API 补齐前置）
+- [x] §2 In-Scope（含新增端点）+ Non-Goals 10 条（第 4 条精确措辞 / 第 5 条接 §4.7 白名单）
+- [x] §3 R1–R3 + R5 决策汇总表
+- [x] §4 仓库结构 / 端口 / token 三层 / packages/admin-ui 边界 + 创建时机 + 自建下沉规则 / API 耦合 + B3 方案 + **ADR-端点先后协议** / 编译期 ESLint 检查 / **§4.7 依赖白名单**
+- [x] §5 工作流规约（自动化 review + BLOCKER 12 条 + milestone 审计 + A/B/C 客观判据 + 任务卡 / commit 模板 + git-rules 兼容声明）
+- [x] §6 M-SN-0 ~ M-SN-7 + **M-SN-6.5 非功能验收门（含软上限 1w）** + 工时估算 + 总周期 **17.5 周**
+- [x] §7 IA v0 + 视图数 27 路由占位 + IA 命名声明
+- [x] §8 复用矩阵（每视图含下沉里程碑列；system/* 拆 5 子）
+- [x] §9 ADR 索引（046/047/048 + 049/050/051 + 候选）
+- [x] §10 风险与回滚（cutover / 设计稿 / 工作流偏差 / token 影响 **+ 8 张截图标准** / plan 版本 / api 漂移 / 设计稿应急 / bus factor）
+- [x] §11 M-SN-0 三批任务化
+- [x] §12 自检
+
+---
+
+## 修订日志
+
+### v0 → v1（2026-04-27）
+
+由 R5 arch-reviewer 评审 CONDITIONAL 触发，全部采纳建议。
+
+**MUST 修复（6 项）**：
+- MUST-1：M-SN-2 范围采用 A2（保留单 milestone，游标+虚拟滚动延迟到 M-SN-6）
+- MUST-2：视图数公式修正（21 顶层 + 5 system + 1 编辑 = 27 路由占位）；§7 / §8 / M-SN-6 / M-SN-7 口径统一
+- MUST-3：packages/admin-ui 创建时机明确（M-SN-1 第一个任务卡即建空骨架）
+- MUST-4：放宽 Non-Goals 第 4 条（B3 方案）；新增端点允许但须独立 ADR + Opus 评审；M-SN-5 含 ADR-050/051 子任务
+- MUST-5：新增 §4.7 依赖白名单
+- MUST-6：§5.3 增 A/B/C 客观判据 + 任务级 / milestone 级两层评级体系
+
+**SHOULD 修复（7 项）**：
+- SHOULD-1：§6 加工时估算 + §5.2 BLOCKER 第 11 条（超 +30%）
+- SHOULD-2：新增 M-SN-6.5 非功能验收门（a11y / 性能 / 跨浏览器 / 断点）
+- SHOULD-3：§4.6 改用 ESLint no-restricted-imports + ts-morph CI 兜底
+- SHOULD-4：§10 增 4 项（plan 版本 / api 漂移 / 设计稿应急 / bus factor）
+- SHOULD-5：§4.4 自建组件首次跨 2 视图强制下沉；§8 加"下沉里程碑"列
+- SHOULD-6：§7 加 IA 命名声明（URL slug 优先英文）
+- SHOULD-7：§5.4 commit trailer 与 git-rules.md 兼容声明 + M-SN-0 第三批同步追认
+
+**DISCUSS 决议（5 项）**：全部采纳主循环建议（详见 §3 决策汇总表）。
+
+### v1 → v2（2026-04-28）
+
+由 R7 二轮 arch-reviewer 评审 CONDITIONAL 触发，全部采纳建议。
+
+**MUST 修复（2 项）**：
+- **MUST-7（M-SN-6 工时失衡）**：采用方案 (c) 直接上调 — `§6 M-SN-6` 工时由 2.5w → 4w；`§6 工时表`累计调整；`§6 总周期声明` 16w → **17.5w**；`§3 决策表`新增"M-SN-6 工时上调"行
+- **MUST-8（ADR-端点先后协议）**：`§4.5` 新增子节"ADR-端点先后协议"（ADR 必须先于端点首个任务卡完成 Opus PASS / 同 ADR 多端点复用 / 不允许端点 PR 与 ADR 同卡）；`§6 M-SN-5` 范围加协议引用
+
+**SHOULD 修复（3 项）**：
+- **SHOULD-8**：`§6 M-SN-6.5` 加"软上限 1 周"协议（基线 0.5w；任一类 critical >2 项升至 1w；超 1w 触发 BLOCKER §5.2 第 11 条）
+- **SHOULD-9**：`§3 决策表` "Milestone 审计"行 ADR 落地列由"§5.3" → "§5.3（详见判据表）"，明确指向判据表
+- **SHOULD-10**：本修订日志条目按"v1 → v2 章节定位"组织（如本节所示），便于审计员快速 diff
+
+**DISCUSS 决议（2 项）**：
+- **DISCUSS-6**（草稿/发布双态鉴权粒度）：`§4.5 ADR-端点先后协议`末段标注"留待 ADR-050 起草时一并裁定，不在 plan v2 预决"
+- **DISCUSS-7**（截图清单标准化）：`§10.4` 加 8 张截图标准（4 页 × 明暗 2 模式），缺一不可 merge；`§3 决策表`新增"token 重构截图标准"行
+
+— END plan v2 —
