@@ -147,6 +147,7 @@ export function VideoListClient() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | undefined>()
+  const [retryKey, setRetryKey] = useState(0)
   const [sites, setSites] = useState<readonly CrawlerSite[]>([])
   const [colSettingsOpen, setColSettingsOpen] = useState(false)
   const colBtnRef = useRef<HTMLButtonElement | null>(null)
@@ -172,7 +173,7 @@ export function VideoListClient() {
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [snapshot])
+  }, [snapshot, retryKey])
 
   const clearFilter = useCallback((key: string) => {
     const next = new Map(snapshot.filters)
@@ -222,7 +223,7 @@ export function VideoListClient() {
         : (
           <>
             {error
-              ? <ErrorState error={error} title="加载失败" onRetry={() => { setError(undefined); setLoading(true) }} />
+              ? <ErrorState error={error} title="加载失败" onRetry={() => setRetryKey((k) => k + 1)} />
               : (
                 <DataTable<VideoAdminRow>
                   rows={rows}
