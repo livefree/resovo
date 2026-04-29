@@ -39,6 +39,33 @@
 
 ---
 
+## [CHG-SN-2-16] Drawer / Modal 通用业务原语（packages/admin-ui overlay）
+
+- **日期**: 2026-04-29
+- **执行模型**: claude-sonnet-4-6
+- **子代理调用**: arch-reviewer (claude-opus-4-7) — z-index L1 业务原语落地前强制 Opus 评审，返回 BLOCK → 修复后 ALLOW
+
+### 变更摘要
+新增 `packages/admin-ui/src/components/overlay/` 模块，提供 Drawer / Modal 通用业务原语：
+
+- `use-overlay.ts` — 共享 focus trap + ESC 关闭 + backdrop click + scroll lock hook
+  - 修复：ESC handler 加 try/catch 防消费者异常扩散
+  - 修复：focus trap 加 `container.contains(activeElement)` guard gate
+- `drawer.tsx` — placement=left/right/top/bottom；z-index `var(--z-modal)=1000`；SSR mounted gate
+  - 修复（arch-reviewer BLOCK）：backdrop `rgba(0,0,0,0.45)` → `var(--bg-overlay)`
+  - 修复（arch-reviewer BLOCK）：`titleId` 从静态字符串改为 `useId()` 保证并发唯一性
+- `modal.tsx` — size=sm/md/lg；同上两项修复
+- `index.ts` — 导出 useOverlay / Drawer / Modal 及其类型
+- `packages/admin-ui/src/index.ts` — 追加 `export * from './components/overlay'`
+- 新增 40 条单测（drawer.test.tsx + modal.test.tsx）：open/closed / placement / size / title / 关闭按钮 / ESC / backdrop / a11y / SSR
+
+### 质量门禁
+- typecheck ✅ / lint ✅ / test ✅（40 overlay 测试全通过）
+- arch-reviewer ALLOW（修复 2 项 BLOCK 后）
+- z-index 层级不冲突：1000 < Shell 抽屉 1100 < Shell cmdk 1200 < Shell toast 1300
+
+---
+
 ## [CHG-SN-1-FIX-01] codex P1×2 修复（apiClient token 内存态 + from 净化）
 
 - **完成时间**：2026-04-28

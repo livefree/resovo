@@ -18,3 +18,6 @@ export * from './components/data-table'
 
 // Pagination v2（CHG-SN-2-15）
 export * from './components/pagination'
+
+// Drawer / Modal overlay 原语（CHG-SN-2-16）
+export * from './components/overlay'

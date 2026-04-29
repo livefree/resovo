@@ -805,7 +805,7 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
     - 文件范围：`packages/admin-ui/src/table/pagination.tsx` + 单测
     - 子代理调用：可降 Sonnet
 
-17. **CHG-SN-2-16** — Drawer / Modal 通用业务原语（z-index var(--z-modal) = 1000，与 Shell 抽屉 1100 解耦）（状态：⬜ 未开始）
+17. **CHG-SN-2-16** — Drawer / Modal 通用业务原语（z-index var(--z-modal) = 1000，与 Shell 抽屉 1100 解耦）（状态：✅ 完成）
     - 计划开始：CHG-SN-2-15 PASS 后
     - 工时估算：0.4 天
     - 关联 ADR：ADR-103a §4.3 z-index 4 级（业务 Drawer L1）
