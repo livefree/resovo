@@ -869,3 +869,56 @@
   - jsdom 不实现 `isContentEditable`；KeyboardShortcuts 用 fallback `getAttribute('contenteditable')` 兼容；浏览器原生 `isContentEditable` 优先
   - formatShortcut 输出依赖顶层 IS_MAC（SSR 'Ctrl+K' / 客户端 '⌘K'）；消费方需 hydration-safe 时按 platform.ts 头注释示范包装 useEffect+useState
   - matchesEvent 公开 API：被 KeyboardShortcuts 内部消费 + e2e/单测复用 + 未来 CommandPalette 复用
+
+---
+
+## [CHG-SN-2-05] packages/admin-ui Breadcrumbs + inferBreadcrumbs helper + AdminNav 类型 SSOT 迁移（Shell 第 3 张）
+
+- **完成时间**：2026-04-29
+- **记录时间**：2026-04-29 02:30
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — Shell 第 3 张组件评审 + AdminNav 类型 SSOT 迁移评审
+- **触发**：CHG-SN-2-04 PASS（含 fix 32a94b6）→ Shell 范式建立 → 按依赖序起 Breadcrumbs；inferBreadcrumbs helper 需消费 AdminNavSection 类型 → 触发类型 SSOT 上提
+- **修改文件**：
+  - `packages/admin-ui/src/shell/types.ts`（新建）— AdminNav 类型 SSOT：`AdminNavItem`（5 字段：label/href/icon/count/badge/shortcut/children）+ `AdminNavSection`（title/items）+ `AdminNavCountProvider`（() => ReadonlyMap<string, number>）
+  - `packages/admin-ui/src/shell/breadcrumbs.tsx`（新建）— Breadcrumbs 组件 + inferBreadcrumbs helper：
+    - Breadcrumbs：纯渲染（无 useEffect/state）/ items=[] 返 null / 最后一项 `<strong>` / 中间项视 href + onItemClick 三态分支（button vs span vs strong）/ button 显式 `type="button"`（防表单内 submit 误触发）/ 分隔符 `/` aria-hidden / nav role + aria-label="面包屑"
+    - inferBreadcrumbs：5 组遍历 + children 递归一层（grandchildren 不递归，契约锁定）/ 命中返 2 段或 3 段 / 未命中（hidden 路由 / 不存在路径 / 空 nav / 空 activeHref）返 `[]`
+    - 颜色全 token：`var(--fg-default)` / `var(--fg-muted)` / `var(--space-2)` / `var(--font-size-sm)`
+  - `packages/admin-ui/src/shell/index.ts`（修改）— 桶导出追加 Breadcrumbs / BreadcrumbsProps / BreadcrumbItem / inferBreadcrumbs / AdminNavItem / AdminNavSection / AdminNavCountProvider；shell/ 子目录章法 1B 注释追加"helper + component 强耦合时可同文件"补充注解
+  - `apps/server-next/src/lib/admin-nav.tsx`（修改）— 删本地类型声明 + `import type { AdminNavItem, AdminNavSection } from '@resovo/admin-ui'` + `export type { ... }` 透传（保持下游已有 import 路径零改动）；ADMIN_NAV 数据常量值不动；lucide-react named import 不动
+  - `tests/unit/components/admin-ui/shell/breadcrumbs.test.tsx`（新建）— 10 tests：渲染（空/单/多）/ onItemClick（仅 href + onClick 项触发）/ 分隔符 + a11y / data-breadcrumb-index attribute / button type="button" 断言
+  - `tests/unit/components/admin-ui/shell/infer-breadcrumbs.test.ts`（新建）— 12 tests：顶层路径命中 / children 嵌套（父+子）/ hidden 路由 / 不存在路径 / 空字符串 / 空 nav / 返回值 readonly / 递归深度契约（祖孙未命中 + 父子正常命中）
+  - `tests/unit/components/admin-ui/shell/breadcrumbs-ssr.test.tsx`（新建）— 3 tests：renderToString 零 throw（空/非空 items）+ 输出含 strong/label/aria-label
+- **AdminNav 类型 SSOT 迁移说明**（重要）：
+  - **从** apps/server-next/src/lib/admin-nav.tsx **迁移到** packages/admin-ui/src/shell/types.ts
+  - 原因：inferBreadcrumbs 签名 `(activeHref, nav: readonly AdminNavSection[]) => readonly BreadcrumbItem[]` 须在 packages/admin-ui 内部消费 AdminNavSection；packages/admin-ui 不能反向 import server-next（plan §4.6）
+  - 影响：server-next admin-nav.tsx 改 type import + export 透传；ADMIN_NAV 常量值不动 → 行为零变更
+  - **ADR-103a §4.2 真源指针更新**：原文 `apps/server-next/src/lib/admin-nav.ts:43-47` 应同步标注"类型已迁移到 packages/admin-ui/src/shell/types.ts（CHG-SN-2-05），数据常量仍在 server-next admin-nav.tsx"。文档对账由后续卡处理（不阻塞本卡 PASS；Opus 评审认定为"文档对账提示，非阻塞"）
+- **新增依赖**：无
+- **数据库变更**：无
+- **实测验收**：
+  - typecheck（5/5 packages 含 server-next admin-nav.tsx 改 import）/ lint（4/4 cached FULL TURBO）全绿
+  - 1883 unit tests PASS（原 1861 + 新增 25 = breadcrumbs 10 + infer-breadcrumbs 12 + ssr 3）
+  - admin-ui shell 100 tests 全过（原 78 + 新 22）
+  - verify-server-next-isolation 双扫描：46 文件（packages/admin-ui/src 增 2）0 违规
+  - verify-token-isolation：152 文件 0 命中
+- **不变约束验证**：
+  - Provider 不下沉：两文件零 BrandProvider/ThemeProvider/createContext / Breadcrumbs 是纯渲染零 state
+  - Edge Runtime 兼容：模块顶层零 window/document/fetch/Cookie/localStorage/navigator / 纯渲染无 useEffect 客户端纠正逻辑 → **不存在 hydration mismatch 风险**（与 platform.ts 不同）/ SSR renderToString 零 throw + 输出含完整 items
+  - 零硬编码颜色：4 处 style 全部读 token（LINK_STYLE / TEXT_STYLE / ACTIVE_STYLE / SEPARATOR_STYLE）
+  - 零图标库依赖：分隔符用纯文本 `/`（非图标节点）
+  - URL 不动 / M-SN-1 闭环资产零返工
+- **Opus 评审 PASS**（10 项重点全 PASS / 无必修 / 4 条建议优化全部合并补齐）：
+  - 4 条建议优化已落地：(1) shell/index.ts 章法 1B 注释追加"helper + component 强耦合时可同文件" / (2) breadcrumbs.test.tsx 追加 button type="button" 断言 / (3) infer-breadcrumbs.test.ts 追加三层嵌套递归深度契约（祖孙未命中负向 + 父子正常命中正向）/ (4) changelog 显式标注 AdminNav 类型 SSOT 迁移
+- **未复现 CHG-SN-2-03/04 类型问题**：
+  - CHG-SN-2-03 ToastViewport 默认值偏离：本卡 ADR §4.1.9 字面契约 1:1 对齐
+  - CHG-SN-2-04 platform.ts hydration mismatch：本卡纯渲染无 useEffect 副作用，不存在客户端纠正逻辑
+- **作为 CHG-SN-2-06+ 范式参照**：
+  - 单测三分（渲染 + 纯逻辑 + SSR）扩展为 breadcrumbs 10 + infer-breadcrumbs 12 + ssr 3 = 22 tests，作为含 helper 的纯工具二件套范式标准
+  - 类型 SSOT 上提模式：未来 Shell 组件需消费跨域类型时优先迁移到 packages/admin-ui
+- **后续动作**：CHG-SN-2-06 HealthBadge（按 ADR-103a §4.1.8 实施 HealthBadge 组件 + HealthSnapshot 类型；纯渲染单件，可降 Sonnet）
+- **注意事项**：
+  - HealthSnapshot 类型应在 CHG-SN-2-06 也提取到 shell/types.ts（与 AdminNav 同 SSOT）
+  - children 嵌套递归当前仅一层（祖孙未命中返 []）；未来若 system 容器化需多层面包屑，需新 ADR 扩展递归深度契约
+  - 类型 SSOT 迁移不触发 ADR-103a 修订（行为零变化 / 类型 shape 1:1 对齐）；ADR-103a §4.2 真源指针由后续卡顺手对账

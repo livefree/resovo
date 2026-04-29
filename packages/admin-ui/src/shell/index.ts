@@ -17,6 +17,8 @@
  *    B. 纯工具 + 无状态副作用组件（如 KeyboardShortcuts + platform.ts）：
  *       - <utility>.ts                 — 纯函数 + 顶层 const 工具集
  *       - <component>.tsx              — React 组件（return null + useEffect 副作用 / 或纯渲染）
+ *       - 例外：utility helper 与 component 强耦合时（如 inferBreadcrumbs 与 Breadcrumbs
+ *         共享 BreadcrumbItem 类型）可同文件，避免循环类型导出（CHG-SN-2-05 实践）
  *
  * 2. 不变约束（与 ADR-103a §4.4 + 顶层 packages/admin-ui/src/index.ts 一致）：
  *    - 零 BrandProvider / ThemeProvider 声明（Provider 不下沉，§4.4-1）
@@ -56,3 +58,9 @@ export type { KeyboardShortcutsProps, ShortcutBinding } from './keyboard-shortcu
 
 export { IS_MAC, MOD_KEY_LABEL, formatShortcut, parseShortcut, matchesEvent, usePlatform, useFormatShortcut } from './platform'
 export type { ShortcutMatcher, UsePlatformReturn } from './platform'
+
+export { Breadcrumbs, inferBreadcrumbs } from './breadcrumbs'
+export type { BreadcrumbsProps, BreadcrumbItem } from './breadcrumbs'
+
+// AdminNav 数据契约类型 SSOT（CHG-SN-2-05；server-next admin-nav.tsx 消费）
+export type { AdminNavItem, AdminNavSection, AdminNavCountProvider } from './types'

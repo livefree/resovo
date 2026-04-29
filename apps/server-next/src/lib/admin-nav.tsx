@@ -39,7 +39,6 @@
  * 本表既驱动 admin layout 侧栏渲染，也供 packages/admin-ui Sidebar / CommandPalette /
  * KeyboardShortcuts 组件下沉时复用（M-SN-2 CHG-SN-2-03+）。
  */
-import type { ReactNode } from 'react'
 import {
   Layers,
   Inbox,
@@ -55,28 +54,10 @@ import {
   Settings,
 } from 'lucide-react'
 
-export interface AdminNavItem {
-  readonly label: string
-  readonly href: string
-  /** 图标节点（lucide-react named import 直注；packages/admin-ui 零图标库依赖，ADR-103a §4.4-4） */
-  readonly icon?: ReactNode
-  /** 静态计数（编译期回退值）；AdminShellProps.countProvider 的 runtime 返回值优先于本字段 */
-  readonly count?: number
-  /** 角标语义（控制 dot/count 颜色；undefined → neutral） */
-  readonly badge?: 'info' | 'warn' | 'danger'
-  /** 规范化快捷键字符串（'mod+1' / 'mod+,'）；formatShortcut() 渲染期映射平台标签 */
-  readonly shortcut?: string
-  readonly children?: readonly AdminNavItem[]
-}
-
-/** count 运行时供给（ADR-103a §4.2 / CHG-SN-2-02 stage 2/2 新增）
- *  同步求值，返回 ReadonlyMap<href, count>；M-SN-2 落地 stub 返 empty；M-SN-3+ 接入 RSC/SWR */
-export type AdminNavCountProvider = () => ReadonlyMap<string, number>
-
-export interface AdminNavSection {
-  readonly title: string
-  readonly items: readonly AdminNavItem[]
-}
+// AdminNavItem / AdminNavSection / AdminNavCountProvider 类型 SSOT 在 packages/admin-ui
+// （CHG-SN-2-05 类型上提），server-next 仅消费类型 + 维护 ADMIN_NAV 数据常量
+import type { AdminNavItem, AdminNavSection } from '@resovo/admin-ui'
+export type { AdminNavItem, AdminNavSection, AdminNavCountProvider } from '@resovo/admin-ui'
 
 export const ADMIN_NAV: readonly AdminNavSection[] = [
   {
