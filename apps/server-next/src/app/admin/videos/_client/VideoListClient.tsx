@@ -17,6 +17,7 @@ import { VideoStatusIndicator } from '@/components/admin/shared/VideoStatusIndic
 import { VideoTypeChip } from '@/components/admin/shared/VideoTypeChip'
 import { buildVideoFilter, buildFilterChips, VideoFilterBar } from './VideoFilterFields'
 import { VideoRowActions } from './VideoRowActions'
+import { VideoEditDrawer } from './VideoEditDrawer'
 
 // ── batch actions ─────────────────────────────────────────────────
 
@@ -208,14 +209,15 @@ export function VideoListClient() {
   const [sites, setSites] = useState<readonly CrawlerSite[]>([])
   const [colSettingsOpen, setColSettingsOpen] = useState(false)
   const [selection, setSelection] = useState<TableSelectionState>({ selectedKeys: new Set(), mode: 'page' })
+  const [editVideoId, setEditVideoId] = useState<string | null>(null)
   const colBtnRef = useRef<HTMLButtonElement | null>(null)
 
   const handleRowUpdate = useCallback((id: string, patch2: Partial<VideoAdminRow>) => {
     setRows((prev) => prev.map((r) => r.id === id ? { ...r, ...patch2 } : r))
   }, [])
 
-  const handleEditRequest = useCallback((_id: string) => {
-    // CHG-SN-3-07: open VideoEditDrawer
+  const handleEditRequest = useCallback((id: string) => {
+    setEditVideoId(id)
   }, [])
 
   const clearSelection = useCallback(
@@ -342,6 +344,12 @@ export function VideoListClient() {
           pageSizeOptions={[10, 20, 50]}
         />
       )}
+      <VideoEditDrawer
+        open={editVideoId !== null}
+        videoId={editVideoId}
+        onClose={() => setEditVideoId(null)}
+        onSaved={() => { setEditVideoId(null); setRetryKey((k) => k + 1) }}
+      />
     </div>
   )
 }
