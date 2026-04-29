@@ -1737,3 +1737,22 @@
 - **数据库变更**：无
 - **实测验收**：typecheck ✅ | 38 条新测试全通过 ✅ | SSR 零 throw ✅
 - **下一步**：CHG-SN-2-15 Pagination v2
+
+---
+
+## chg(CHG-SN-2-15): packages/admin-ui Pagination v2
+
+- **日期**: 2026-04-29
+- **TASK-ID**: CHG-SN-2-15
+- **主循环模型**: claude-sonnet-4-6
+- **子代理调用**: 无
+- **变更类型**: feat（数据原语层）
+- **摘要**: 按 ADR-103 §4.5 实施 Pagination v2：buildPageWindow 纯函数 + Pagination 组件（页码窗口 / 上下翻页 / 首末页 + ellipsis / pageSize select / 计数信息 / 边界禁用 / aria）。
+
+### 新增/变更文件
+- `packages/admin-ui/src/components/pagination/pagination.tsx`（新建）
+- `packages/admin-ui/src/components/pagination/index.ts`（新建）
+- `packages/admin-ui/src/index.ts`（追加 pagination 导出）
+- `tests/unit/components/admin-ui/table/pagination.test.tsx`（新建：27 测试）
+- **实测验收**：typecheck ✅ | 27 测试全通过 ✅ | SSR 零 throw ✅
+- **下一步**：CHG-SN-2-16 Drawer / Modal 通用业务原语

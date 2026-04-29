@@ -797,7 +797,7 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
     - 文件范围：`packages/admin-ui/src/table/{toolbar,filter,column-settings}.tsx` + 单测
     - 子代理调用：可降 Sonnet（数据原语装饰组件）
 
-16. **CHG-SN-2-15** — Pagination v2 客户端 + 服务端两档（状态：⬜ 未开始）
+16. **CHG-SN-2-15** — Pagination v2 客户端 + 服务端两档（状态：✅ PASS）
     - 计划开始：CHG-SN-2-14 PASS 后
     - 工时估算：0.3 天
     - 关联 ADR：ADR-103
