@@ -1,19 +1,10 @@
 /**
- * /admin/analytics — hidden in IA v1（ADR-100 IA 修订段 IA-2）
+ * /admin/analytics — redirect 到 dashboard 分析 Tab（ADR-100 IA 修订段 IA-2）
  *
- * 路由文件保留但侧栏不暴露（admin-nav.tsx 不导出此项）。M-SN-3 阶段把
- * 数据看板内容并入 dashboard 内部 Tab/卡片库；本文件届时改为 redirect
- * 到 dashboard 或保留作直链入口（M-SN-3 卡决议）。
- *
- * 不变约束：URL 不动（plan §5.2 BLOCKER 第 8 条），路由占位文件不删。
+ * URL 保留（plan §5.2 BLOCKER 第 8 条），但内容合并至 /admin?tab=analytics。
  */
-import { PlaceholderPage } from '@/components/PlaceholderPage'
+import { redirect } from 'next/navigation'
 
 export default function AnalyticsPage() {
-  return (
-    <PlaceholderPage
-      title="数据看板 · hidden in IA v1"
-      milestone="M-SN-3 阶段并入 dashboard 内部 Tab/卡片库（详见 ADR-100 IA 修订段 IA-2）"
-    />
-  )
+  redirect('/admin?tab=analytics')
 }
