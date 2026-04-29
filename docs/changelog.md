@@ -1997,3 +1997,26 @@
 - page.tsx 无 `'use client'`，metadata export ✅
 - **实测验收**：typecheck ✅
 - **下一步**：CHG-SN-3-04 VideoListClient DataTable v2 + useTableQuery + FilterToolbar
+
+---
+
+## chg(CHG-SN-3-04): VideoListClient DataTable v2 + useTableQuery + FilterToolbar
+
+- **日期**: 2026-04-29
+- **TASK-ID**: CHG-SN-3-04
+- **主循环模型**: claude-sonnet-4-6
+- **子代理调用**: 无
+- **变更类型**: chg（M-SN-3 第 4 张）
+- **摘要**: 实现视频库主 Client Component：useTableQuery + 13 列 DataTable server mode + 5 select + search debounce FilterBar + FilterChipBar + ColumnSettingsPanel + Pagination(10/20/50) + loading skeleton / EmptyState / ErrorState。
+
+### 新增/变更文件
+- `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`（实现，替换 stub）
+- `apps/server-next/src/app/admin/videos/_client/VideoFilterFields.tsx`（新建：buildVideoFilter / buildFilterChips / VideoFilterBar）
+- `tests/unit/components/server-next/admin/videos/VideoListClient.test.tsx`（新建：21 测试）
+
+### 验收
+- useTableQuery + useTableRouterAdapter 接入，URL state 同步
+- buildVideoFilter 全字段映射 typecheck ✅
+- buildFilterChips 中文 label 显示 ✅
+- **实测验收**：typecheck ✅ | 2455 单测全通过 ✅
+- **下一步**：CHG-SN-3-05 VideoRowActions
