@@ -50,3 +50,12 @@ export interface AdminNavSection {
  *  同步求值，返回 ReadonlyMap<href, count>；M-SN-2 落地 stub 返 empty；
  *  M-SN-3+ 接入 RSC/SWR 真数据后由消费方实现 */
 export type AdminNavCountProvider = () => ReadonlyMap<string, number>
+
+/** Topbar 健康指标快照（ADR-103a §4.1.8 / CHG-SN-2-06 SSOT 上提）
+ *  3 项指标 × { value + status: 'ok' | 'warn' | 'danger' }；status 驱动 dot 颜色 token 映射
+ *  消费方（server-next）从 /admin/system/monitor + /admin/moderation 真端点构造；M-SN-2 stub 用 mock */
+export interface HealthSnapshot {
+  readonly crawler: { readonly running: number; readonly total: number; readonly status: 'ok' | 'warn' | 'danger' }
+  readonly invalidRate: { readonly rate: number; readonly status: 'ok' | 'warn' | 'danger' }
+  readonly moderationPending: { readonly count: number; readonly status: 'ok' | 'warn' | 'danger' }
+}

@@ -62,5 +62,8 @@ export type { ShortcutMatcher, UsePlatformReturn } from './platform'
 export { Breadcrumbs, inferBreadcrumbs } from './breadcrumbs'
 export type { BreadcrumbsProps, BreadcrumbItem } from './breadcrumbs'
 
-// AdminNav 数据契约类型 SSOT（CHG-SN-2-05；server-next admin-nav.tsx 消费）
-export type { AdminNavItem, AdminNavSection, AdminNavCountProvider } from './types'
+export { HealthBadge } from './health-badge'
+export type { HealthBadgeProps } from './health-badge'
+
+// AdminNav + HealthSnapshot 数据契约类型 SSOT（CHG-SN-2-05/06；server-next admin-nav.tsx + shell-data.tsx 消费）
+export type { AdminNavItem, AdminNavSection, AdminNavCountProvider, HealthSnapshot } from './types'

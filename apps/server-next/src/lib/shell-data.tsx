@@ -30,20 +30,14 @@ import {
   Settings,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
-import type { AdminNavCountProvider } from './admin-nav'
+import type { AdminNavCountProvider, HealthSnapshot } from '@resovo/admin-ui'
 
 /** AdminNavCountProvider stub — M-SN-2 返 empty Map；M-SN-3+ 接入真数据 */
 export const adminNavCountProviderStub: AdminNavCountProvider = () => new Map()
 
-/** HealthSnapshot 类型（与 ADR-103a §4.1.8 HealthSnapshot 契约一致；packages/admin-ui 导出后可改为 import） */
-export interface HealthSnapshotStub {
-  readonly crawler: { readonly running: number; readonly total: number; readonly status: 'ok' | 'warn' | 'danger' }
-  readonly invalidRate: { readonly rate: number; readonly status: 'ok' | 'warn' | 'danger' }
-  readonly moderationPending: { readonly count: number; readonly status: 'ok' | 'warn' | 'danger' }
-}
-
-/** healthSnapshot stub — M-SN-2 mock；M-SN-3+ 接入 /admin/system/monitor + /admin/moderation 真端点 */
-export const healthSnapshotStub: HealthSnapshotStub = {
+/** healthSnapshot stub — M-SN-2 mock；M-SN-3+ 接入 /admin/system/monitor + /admin/moderation 真端点
+ *  HealthSnapshot 类型 SSOT 在 packages/admin-ui/src/shell/types.ts（CHG-SN-2-06 上提） */
+export const healthSnapshotStub: HealthSnapshot = {
   crawler: { running: 3, total: 12, status: 'ok' },
   invalidRate: { rate: 0.013, status: 'ok' },
   moderationPending: { count: 484, status: 'warn' },

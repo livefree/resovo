@@ -922,3 +922,58 @@
   - HealthSnapshot 类型应在 CHG-SN-2-06 也提取到 shell/types.ts（与 AdminNav 同 SSOT）
   - children 嵌套递归当前仅一层（祖孙未命中返 []）；未来若 system 容器化需多层面包屑，需新 ADR 扩展递归深度契约
   - 类型 SSOT 迁移不触发 ADR-103a 修订（行为零变化 / 类型 shape 1:1 对齐）；ADR-103a §4.2 真源指针由后续卡顺手对账
+
+---
+
+## [CHG-SN-2-06] packages/admin-ui HealthBadge + HealthSnapshot 类型 SSOT（Shell 第 4 张 / 纯渲染单件）
+
+- **完成时间**：2026-04-29
+- **记录时间**：2026-04-29 02:50
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — 10 项评审重点全 PASS
+- **触发**：CHG-SN-2-05 PASS（commit e1a7199 含类型 SSOT 范式）→ 按依赖序起 HealthBadge；HealthSnapshot 类型 SSOT 沿用 CHG-SN-2-05 范式上提
+- **修改文件**：
+  - `packages/admin-ui/src/shell/types.ts`（修改）— 追加 HealthSnapshot 类型（3 项指标 × { value + status: 'ok'|'warn'|'danger' }）
+  - `packages/admin-ui/src/shell/health-badge.tsx`（新建）— HealthBadge 组件：
+    - 3 项指标渲染（采集 N/M / 失效率 X.Y% / 待审 N）
+    - dot 颜色按 status 映射 semantic.status token slot（ok→success / warn→warning / danger→error）
+    - 首项（crawler）dot pulse 动画；其余项静态
+    - invalidRate.rate 显示百分比（1 位小数，rate=0.013 → "1.3%"）
+    - @keyframes 通过 React 内联 `<style data-resovo-health-pulse>` 标签注入（SSR 安全 / 模块顶层零副作用 / data-* 属性预留多实例去重 hook）
+    - 颜色全 token：`var(--state-${slot}-border)` / `var(--fg-muted)` / `var(--space-*)` / `var(--font-size-sm)`
+  - `packages/admin-ui/src/shell/index.ts`（修改）— 桶导出追加 HealthBadge / HealthBadgeProps / HealthSnapshot
+  - `apps/server-next/src/lib/shell-data.tsx`（修改）— 删本地 HealthSnapshotStub 类型 + `import type { HealthSnapshot } from '@resovo/admin-ui'` + healthSnapshotStub 常量改用 HealthSnapshot 类型；常量值零变更
+  - `tests/unit/components/admin-ui/shell/health-badge.test.tsx`（新建）— 12 tests：3 项指标渲染 / status → state token slot 映射（ok/warn/danger）/ pulse 动画首项 + 其余项无 / @keyframes `<style>` 标签 / invalidRate 百分比格式（4 个边界）/ a11y attributes（role+aria-label）/ data-health-item attribute
+  - `tests/unit/components/admin-ui/shell/health-badge-ssr.test.tsx`（新建）— 4 tests：renderToString 零 throw / 输出含 3 项指标文本（按子串匹配，避免 React JSX 文本插值 SSR 注释切片）/ @keyframes `<style>` 标签 + data-* attributes / aria-label
+- **HealthSnapshot 类型 SSOT 迁移**：
+  - **从** apps/server-next/src/lib/shell-data.tsx（CHG-SN-2-02 stage 2/2 临时本地声明 HealthSnapshotStub）**迁移到** packages/admin-ui/src/shell/types.ts（公开 API SSOT）
+  - 沿用 CHG-SN-2-05 AdminNav 类型 SSOT 范式：消费方 import type from @resovo/admin-ui；数据常量值不动 → 行为零变更
+- **新增依赖**：无
+- **数据库变更**：无
+- **实测验收**：
+  - typecheck（5/5 packages）/ lint（4/4 cached FULL TURBO）全绿
+  - 1902 unit tests PASS（原 1883 + 19 新增 = health-badge 12 + ssr 4 - 重复算 + 修订 SSR 测试 1 行调整）
+  - admin-ui shell 119 tests 全过（原 100 + 19 = 119）
+  - verify-server-next-isolation 双扫描：47 文件（packages/admin-ui/src 增 1 文件）0 违规
+  - verify-token-isolation：152 文件 0 命中
+- **不变约束验证**：
+  - Provider 不下沉：health-badge.tsx 零 BrandProvider/ThemeProvider/createContext/useState
+  - Edge Runtime 兼容：模块顶层零 window/document/fetch/Cookie/localStorage/navigator / 纯渲染无 useEffect → **无 hydration mismatch 风险**
+  - 零硬编码颜色：所有颜色读 token；8px dot 尺寸 / 2s 动画时长是结构性几何字面量（非颜色，不在 §4.4-3 禁止范围）
+  - 零图标库依赖：dot 用 inline `<span>` + CSS 变量背景，零图标节点
+  - URL 不动 / M-SN-1 闭环资产零返工
+- **Opus 评审 PASS**（10 项重点全 PASS / 无必修 / 2 类建议优化登记后续）：
+  - 建议优化 1（非阻塞，登记 M-SN-3+）：多 HealthBadge 实例场景验证（pulse `<style>` 标签 DOM 重复，CSS 解析正常但可未来通过 head 单例 portal 注入升级；data-resovo-health-pulse 属性已预留 hook）
+  - 建议优化 2（非阻塞，登记后续）：极端值（count=999999 / total=0 除零保护由消费端 stub 守卫）+ status 切换重渲染单测
+- **未复现 CHG-SN-2-03/04 类型问题**：
+  - CHG-SN-2-03 ToastViewport 默认值偏离：本卡 ADR §4.1.8 字段名/嵌套结构/status union 顺序逐字段 1:1 对齐
+  - CHG-SN-2-04 platform.ts hydration mismatch：本卡纯渲染无 useEffect，无客户端纠正逻辑
+- **作为后续 Shell 卡范式参照**：
+  - **第三种形态：纯渲染单件**（无 helper / 无 store）— 适用 HealthBadge / 未来 Empty/Error/Loading 状态原语
+  - 单测二分（渲染 + SSR），与 store-driven 三件套（store + viewport + ssr）/ 含 helper 二件套（component + helper + ssr）形态对应
+  - shell/index.ts 章法 1B 已涵盖"纯渲染"形态，无需新增章法条目
+- **后续动作**：CHG-SN-2-07 UserMenu（按 ADR-103a §4.1.4 实施 + focus trap + outside-click 模式首张落地，强制 Opus 评审）
+- **注意事项**：
+  - pulse @keyframes 多实例 DOM 重复但 CSS 解析正常；M-SN-3+ 若有性能验证需要可通过 head 单例 portal 注入升级（消费方 API 不变更）
+  - SSR 单测中文文本插值需用子串匹配（如 `>3<` 而非 `采集 3/12`），因 React JSX 文本插值 SSR 输出含 `<!-- -->` 注释切片
+  - HealthSnapshot 类型 SSOT 上提是 CHG-SN-2-05 范式的延续，未来 Shell 组件需要的所有公开数据类型应优先放 packages/admin-ui/src/shell/types.ts
