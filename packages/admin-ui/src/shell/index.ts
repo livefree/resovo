@@ -102,6 +102,12 @@ export type { TaskDrawerProps } from './task-drawer'
 export { CommandPalette } from './command-palette'
 export type { CommandPaletteProps } from './command-palette'
 
+export { AdminShell } from './admin-shell'
+export type { AdminShellProps } from './admin-shell'
+
+export { createAdminShellStore } from './admin-shell-store'
+export type { DrawerVariant, AdminShellStoreState, AdminShellStoreActions } from './admin-shell-store'
+
 // Drawer + Command 数据契约类型 SSOT（CHG-SN-2-10/11；server-next 应用层准备 items 注入）
 export type { NotificationItem, TaskItem, CommandItem, CommandGroup } from './types'
 

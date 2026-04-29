@@ -1568,3 +1568,37 @@
   - activeId=undefined 是合法 state（首项 active 的语义），不要把它视作"无 active"
   - 空列表场景下 activeIndex=-1，Enter 守卫 + activeOptionId=undefined 双重防御
   - 重排场景下用户 active 跟随业务身份是升级（前 fix 不具备此能力，是 bonus）
+
+## [chg(CHG-SN-2-12)] packages/admin-ui AdminShell 装配 + apps/server-next admin layout 替换骨架（Shell 第 10 张 / 最后装配）
+
+- **完成时间**：2026-04-29
+- **记录时间**：2026-04-29 05:30
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-6) — AdminShell 装配体 + Drawer 互斥 + 受控/非受控双模式 + admin layout 替换骨架评审；返回 CONDITIONAL（3 MUST 全修）
+- **实现内容**：
+  - `packages/admin-ui/src/shell/admin-shell-store.ts`（新建）：zustand/vanilla createStore 工厂函数（per-instance store，useRef 持有，避免全局单例与 defaultCollapsed 冲突）；三态：collapsed + drawerOpen (DrawerVariant | null) + cmdkOpen；Drawer/CmdK 互斥在 store 层实现（openDrawer 关 CmdK；openCmdk 关 Drawer）
+  - `packages/admin-ui/src/shell/admin-shell.tsx`（新建）：AdminShell 装配体；AdminShellProps 完整接口（ADR-103a §4.1.1 + fix(CHG-SN-2-01) P1-B/P2-B 修订后定义）；useSyncExternalStore<AdminShellStoreState>（泛型精确 + store.getState 直传，无 type assertion）；SSR_STORE_SNAPSHOT 模块级常量；collapsed 受控/非受控双模式；键盘快捷键 nav + mod+b + mod+k 从 nav 自动构建；commandGroups 未提供时从 nav 自动生成导航组
+  - `packages/admin-ui/src/shell/index.ts`（修改）：追加 AdminShell + createAdminShellStore + 相关类型导出
+  - `apps/server-next/src/app/admin/layout.tsx`（替换）：async server component，读 3 枚 cookie（admin-sidebar-collapsed / resovo-theme / user_role），parseAdminTheme 映射 'system' → 'dark'（ADR-102 admin dark-first），派生 serializable props 注入 AdminShellClient
+  - `apps/server-next/src/app/admin/admin-shell-client.tsx`（新建）：'use client' 边界，持 usePathname（null-safe：rawPathname ?? '/admin'）+ useRouter；主题状态 + cookie 持久化；notifications/tasks 不传（undefined = 图标禁用，M-SN-2 stub §4.1.1 契约）
+  - 单测三分：admin-shell-store.test.ts（13 cases）+ admin-shell.test.tsx（collapsed 双模式/Drawer 互斥/CmdK）+ admin-shell-ssr.test.tsx（renderToString 零 throw + data-* 结构 + portal SSR null）
+- **arch-reviewer CONDITIONAL（3 MUST 全修）**：
+  - MUST-1：useSyncExternalStore 泛型精确 + store.getState 直传（AdminShellStoreState & Actions 结构子类型协变，无 `as unknown as` 双重断言）
+  - MUST-2：usePathname null-safe（const pathname = rawPathname ?? '/admin'）
+  - MUST-3：notifications/tasks 改 undefined（stub 阶段图标禁用，空数组≠禁用，违反§4.1.1契约）
+- **修改文件**：
+  - `packages/admin-ui/src/shell/admin-shell-store.ts`（新建）
+  - `packages/admin-ui/src/shell/admin-shell.tsx`（新建）
+  - `packages/admin-ui/src/shell/index.ts`（追加导出）
+  - `apps/server-next/src/app/admin/layout.tsx`（替换）
+  - `apps/server-next/src/app/admin/admin-shell-client.tsx`（新建）
+  - `tests/unit/components/admin-ui/shell/admin-shell-store.test.ts`（新建）
+  - `tests/unit/components/admin-ui/shell/admin-shell.test.tsx`（新建）
+  - `tests/unit/components/admin-ui/shell/admin-shell-ssr.test.tsx`（新建）
+- **新增依赖**：无
+- **数据库变更**：无
+- **实测验收**：
+  - typecheck ✅（全 workspace 通过）
+  - lint ✅（server-next 零警告）
+  - test 2160 passed / 182 files ✅（2 个 pre-existing user-menu-interaction 已知问题不阻塞）
+- **M-SN-2 Shell 序列状态**：CHG-SN-2-01 ～ CHG-SN-2-12 全 10 张 Shell 组件卡全部完成（ToastViewport + KeyboardShortcuts + Platform + Breadcrumbs + HealthBadge + UserMenu + Sidebar + Topbar + NotificationDrawer + TaskDrawer + CommandPalette + AdminShell 装配体）；M-SN-2 Shell 层封装完毕；下一步 CHG-SN-2-12.5 ADR-103 DataTable v2 公开 API 契约

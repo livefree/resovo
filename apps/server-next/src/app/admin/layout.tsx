@@ -1,106 +1,52 @@
-import type { ReactNode } from 'react'
-import Link from 'next/link'
-import { ADMIN_NAV } from '@/lib/admin-nav'
-
 /**
- * admin shell layout — 极简骨架（M-SN-1 占位）
+ * admin layout — AdminShell 装配（CHG-SN-2-12）
  *
- * M-SN-2 起步：完整 shell（用户菜单、主题切换、面包屑、命令面板等）下沉到
- * packages/admin-ui Shell 组件。本卡仅满足 27 路由可跳转 + admin-layout
- * token (--sidebar-w / --topbar-h) 视觉验证。
+ * 服务端组件职责：
+ *   1. 读取 cookie：admin-sidebar-collapsed → defaultCollapsed
+ *   2. 读取 cookie：resovo-theme → initialTheme（'system' 映射为 'dark'，admin dark-first）
+ *   3. 读取 cookie：user_role → initialRole（middleware 鉴权后此 cookie 已存在）
+ *   4. 渲染 <AdminShellClient>（'use client' 边界，持有 usePathname/useRouter）
+ *
+ * 不做：
+ *   - 不调用 API 获取通知/任务（M-SN-2 stub；M-SN-3+ 在 AdminShellClient 或 RSC 边界补齐）
+ *   - 不实现用户详情展示（M-SN-2 使用 mock user；M-SN-3+ 从 session/API 读取）
  */
-export default function AdminLayout({ children }: { children: ReactNode }) {
+import type { ReactNode } from 'react'
+import { cookies } from 'next/headers'
+import { AdminShellClient } from './admin-shell-client'
+import { parseUserRole } from '@/lib/auth'
+import { parseTheme } from '@/lib/brand-detection'
+
+const COOKIE_COLLAPSED = 'admin-sidebar-collapsed'
+const COOKIE_THEME = 'resovo-theme'
+const COOKIE_USER_ROLE = 'user_role'
+
+function parseDefaultCollapsed(raw: string | undefined): boolean {
+  return raw === 'true'
+}
+
+function parseAdminTheme(raw: string | undefined): 'dark' | 'light' {
+  const theme = parseTheme(raw)
+  // 'system' 在 admin 映射为 'dark'（plan §4.3 / ADR-102 dark-first）
+  return theme === 'light' ? 'light' : 'dark'
+}
+
+export default async function AdminLayout({ children }: { children: ReactNode }) {
+  const cookieStore = await cookies()
+
+  const defaultCollapsed = parseDefaultCollapsed(cookieStore.get(COOKIE_COLLAPSED)?.value)
+  const initialTheme = parseAdminTheme(cookieStore.get(COOKIE_THEME)?.value)
+  const rawRole = cookieStore.get(COOKIE_USER_ROLE)?.value
+  const parsedRole = parseUserRole(rawRole)
+  const initialRole: 'admin' | 'moderator' = parsedRole === 'moderator' ? 'moderator' : 'admin'
+
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'var(--sidebar-w) 1fr',
-        gridTemplateRows: 'var(--topbar-h) 1fr',
-        gridTemplateAreas: '"sidebar topbar" "sidebar main"',
-        minHeight: '100vh',
-      }}
+    <AdminShellClient
+      defaultCollapsed={defaultCollapsed}
+      initialTheme={initialTheme}
+      initialRole={initialRole}
     >
-      <header
-        style={{
-          gridArea: 'topbar',
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0 var(--space-4)',
-          borderBottom: '1px solid var(--border-default)',
-          background: 'var(--bg-surface)',
-        }}
-      >
-        <strong>Resovo Admin</strong>
-        <span style={{ marginLeft: 'var(--space-3)', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm)' }}>
-          M-SN-1 工程骨架
-        </span>
-      </header>
-
-      <nav
-        style={{
-          gridArea: 'sidebar',
-          padding: 'var(--space-3) var(--space-2)',
-          borderRight: '1px solid var(--border-default)',
-          background: 'var(--bg-surface-sunken)',
-          overflowY: 'auto',
-        }}
-      >
-        {ADMIN_NAV.map((section) => (
-          <div key={section.title} style={{ marginBottom: 'var(--space-4)' }}>
-            <div
-              style={{
-                fontSize: 'var(--font-size-xs)',
-                color: 'var(--fg-muted)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                padding: 'var(--space-1) var(--space-2)',
-              }}
-            >
-              {section.title}
-            </div>
-            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-              {section.items.map((item) => (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    style={{
-                      display: 'block',
-                      padding: 'var(--space-2)',
-                      color: 'var(--fg-default)',
-                      textDecoration: 'none',
-                      borderRadius: 'var(--radius-sm)',
-                    }}
-                  >
-                    {item.label}
-                  </Link>
-                  {item.children && (
-                    <ul style={{ listStyle: 'none', margin: 0, paddingLeft: 'var(--space-4)' }}>
-                      {item.children.map((c) => (
-                        <li key={c.href}>
-                          <Link
-                            href={c.href}
-                            style={{
-                              display: 'block',
-                              padding: 'var(--space-1) var(--space-2)',
-                              color: 'var(--fg-muted)',
-                              textDecoration: 'none',
-                              fontSize: 'var(--font-size-sm)',
-                            }}
-                          >
-                            {c.label}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </nav>
-
-      <main style={{ gridArea: 'main', padding: 'var(--space-5)', overflow: 'auto' }}>{children}</main>
-    </div>
+      {children}
+    </AdminShellClient>
   )
 }
