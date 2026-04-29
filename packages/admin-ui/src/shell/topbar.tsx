@@ -50,6 +50,10 @@ export interface TopbarProps {
   readonly health?: HealthSnapshot
   readonly notificationDotVisible?: boolean
   readonly runningTaskCount?: number
+  /** notifications prop 未提供时为 true → 按钮 disabled（§4.1.1 图标禁用合约）*/
+  readonly notificationsDisabled?: boolean
+  /** tasks prop 未提供时为 true → 按钮 disabled（§4.1.1 图标禁用合约）*/
+  readonly tasksDisabled?: boolean
   readonly onOpenCommandPalette: () => void
   readonly onThemeToggle: () => void
   readonly onOpenNotifications: () => void
@@ -130,6 +134,8 @@ export function Topbar({
   health,
   notificationDotVisible,
   runningTaskCount,
+  notificationsDisabled,
+  tasksDisabled,
   onOpenCommandPalette,
   onThemeToggle,
   onOpenNotifications,
@@ -178,6 +184,7 @@ export function Topbar({
           dataAttr="tasks"
           onClick={onOpenTasks}
           badgeText={formatTaskCount(runningTaskCount)}
+          disabled={tasksDisabled}
         >
           {icons.tasks}
         </IconButton>
@@ -186,6 +193,7 @@ export function Topbar({
           dataAttr="notifications"
           onClick={onOpenNotifications}
           dotVisible={notificationDotVisible === true}
+          disabled={notificationsDisabled}
         >
           {icons.notifications}
         </IconButton>
@@ -210,16 +218,18 @@ interface IconButtonProps {
   readonly children: ReactNode
   readonly badgeText?: string
   readonly dotVisible?: boolean
+  readonly disabled?: boolean
 }
 
-function IconButton({ ariaLabel, dataAttr, onClick, children, badgeText, dotVisible }: IconButtonProps) {
+function IconButton({ ariaLabel, dataAttr, onClick, children, badgeText, dotVisible, disabled }: IconButtonProps) {
   return (
     <button
       type="button"
       data-topbar-icon-btn={dataAttr}
       aria-label={ariaLabel}
       onClick={onClick}
-      style={ICON_BTN_STYLE}
+      disabled={disabled}
+      style={disabled ? { ...ICON_BTN_STYLE, opacity: 0.4, cursor: 'not-allowed' } : ICON_BTN_STYLE}
     >
       <span aria-hidden="true" style={{ display: 'inline-flex' }}>
         {children}

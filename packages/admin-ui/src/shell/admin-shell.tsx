@@ -102,9 +102,6 @@ export interface AdminShellProps {
   readonly children: ReactNode
 }
 
-// ── SSR 快照常量（AdminShellStoreState 直接复用，无额外 interface）──────────
-const SSR_STORE_SNAPSHOT: AdminShellStoreState = { collapsed: false, drawerOpen: null, cmdkOpen: false }
-
 const EMPTY_CRUMBS: readonly BreadcrumbItem[] = []
 
 const SHELL_STYLE: CSSProperties = {
@@ -148,11 +145,13 @@ export function AdminShell(props: AdminShellProps) {
 
   // store.getState 原生引用：AdminShellStoreState & Actions 是 AdminShellStoreState 的子类型，
   // 函数返回类型协变保证可直接传入而无需类型断言；引用稳定避免无限重渲染
+  // getServerSnapshot = store.getState（与 getSnapshot 相同）：store 以 defaultCollapsed 初始化，
+  // 服务端 snapshot 直接反映真实初值，避免 collapsed=false 硬编码常量与 defaultCollapsed=true 产生水合不匹配
   const store = storeRef.current
   const storeState = useSyncExternalStore<AdminShellStoreState>(
     store.subscribe,
     store.getState,
-    () => SSR_STORE_SNAPSHOT,
+    store.getState,
   )
 
   // ── collapsed 受控/非受控双模式 ───────────────────────────
@@ -260,6 +259,8 @@ export function AdminShell(props: AdminShellProps) {
           health={health}
           notificationDotVisible={notificationDotVisible}
           runningTaskCount={runningTaskCount}
+          notificationsDisabled={notifications === undefined}
+          tasksDisabled={tasks === undefined}
           onOpenCommandPalette={handleOpenCmdk}
           onThemeToggle={onThemeToggle}
           onOpenNotifications={handleOpenNotifications}
