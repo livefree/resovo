@@ -2927,6 +2927,43 @@ export interface UserMenuProps {
 
 **关联**：CHG-SN-2-07 落地 commit / Opus 评审 PASS（11 项 / 1 必修 + 3 建议优化合并）/ 后续 CHG-SN-2-08 Sidebar 集成 UserMenu / CHG-SN-2-12 AdminShell 装配 onUserMenuAction → actions 分派
 
+#### 2026-04-29 · fix(CHG-SN-2-07) · UserMenu popover/visual 契约补全（portal + 定位 + z-index）
+
+Codex stop-time review 识别 CHG-SN-2-07 实施未兑现 ADR §4.1.4 anchorRef 注释中的"**用于定位**"语义，仅实现"点击外部判定"。UserMenu 应为 popover 形态（portal 渲染 + 相对锚点定位 + Shell 抽屉级 z-index），本 fix 补齐。
+
+**补齐内容**（commit 见 git log `fix(CHG-SN-2-07)`）：
+
+- `packages/admin-ui/src/shell/user-menu.tsx`（修改）：
+  - 新增 `useAnchorPosition(anchorRef, open)` hook：useLayoutEffect 计算 anchor rect → setState；resize / scroll(capture) 重新计算；SSR 自动 noop（anchorRef.current 在 SSR 永远 null）
+  - 渲染分支：
+    - **anchorRef 提供 + 位置已计算** → `createPortal` 到 `document.body` + position: fixed + top/left 来自 anchor rect + transform: translateY(calc(-100% - 8px)) 在 anchor 上方 8px 间隙弹出 + z-index: var(--z-shell-drawer)（Shell 抽屉层）
+    - **anchorRef 缺省 / SSR / 位置未计算** → inline 渲染（demo 页 + 单测 fallback；与 CHG-SN-2-07 4 处契约精化中"anchorRef 必填→可选"一致）
+  - 头注释更新真源链 + popover/visual 契约设计要点
+- `packages/admin-ui/src/shell/index.ts`（修改）：章法 1C 头注释追加 popover/visual 契约 5 处实施细节（createPortal / fixed / anchor rect / z-index 4 级 / useLayoutEffect / resize+scroll capture / transform 偏移决定弹出方向）
+- 单测追加 4 测（user-menu-interaction.test.tsx）：
+  - anchorRef 缺省 → inline 渲染（无 portal wrapper）
+  - anchorRef 提供 → portal 启用（DOM 在 document.body）
+  - portal wrapper 含 fixed + z-index var(--z-shell-drawer) + transform translateY
+  - open=false → portal 不渲染
+
+**popover/visual 契约 5 处实施细节**：
+
+| 项 | 实施 |
+|---|---|
+| 渲染层级 | `createPortal(content, document.body)` 避免 Sidebar overflow:hidden 裁剪 + z-index 冲突 |
+| 定位策略 | position: fixed + top/left 来自 anchorRef.current.getBoundingClientRect() |
+| 弹出方向 | transform: `translateY(calc(-100% - 8px))` 在 anchor 上方对齐（设计稿 v2.1 sb__menu 实践）|
+| z-index 层级 | `var(--z-shell-drawer)`（ADR-103a §4.3 Shell 抽屉级，与 NotificationDrawer/TaskDrawer 同级） |
+| 位置同步 | useLayoutEffect 客户端计算（无视觉抖动）+ window resize + 祖先 scroll(capture phase) |
+
+**作为 CHG-SN-2-10/11 范式参照**：NotificationDrawer / TaskDrawer / CommandPalette 浮层实施时复用 useAnchorPosition hook + portal 模式；z-index 按 ADR-103a §4.3 各取对应 token：
+- NotificationDrawer / TaskDrawer → `var(--z-shell-drawer)`（与 UserMenu 同级 1100）
+- CommandPalette → `var(--z-shell-cmdk)`（1200，覆盖 UserMenu）
+
+**回归**：typecheck + lint + 1943 unit tests（原 1939 + 4 新增 popover 路径）+ 双扫描守卫（48 文件 0 违规）+ token 跨域守卫（152 文件 0 命中）全绿。
+
+**未引入新约束变更**：本 fix 仅补 ADR §4.1.4 anchorRef "用于定位"原本就规定的契约；CHG-SN-2-07 4 处契约精化继续有效（onClose→onOpenChange / onAction→actions 拆分 / role union / avatarText 可选 / anchorRef 可选）。
+
 #### 2026-04-29 · fix(CHG-SN-2-04) · platform.ts hydration-safe 修复（提前落地原"建议优化 4"）
 
 Codex stop-time review 识别 platform.ts 顶层 `detectIsMac()` 直接读 navigator 导致 SSR ('Ctrl+K') vs 客户端水合 ('⌘K') React hydration mismatch；把 hydration-safe 责任推给消费方包装是糟糕的 API 设计。本 fix 在 packages/admin-ui 内解决，将原"后续登记"建议优化 4 提前落地。

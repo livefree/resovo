@@ -1047,3 +1047,54 @@
   - try/finally 保护 callback 是 packages/admin-ui Shell 浮层组件标准范式（与 Drawer/CommandPalette 共享）
   - focus trap 焦点门禁是关键 a11y 保护（避免组件外焦点被劫持，CommandPalette 模态浮层不需此门禁因为强制焦点在内）
   - ADR §4.1.4 → 本卡 4 处精化已通过 ADR-103a 修订记录段显式背书；CHG-SN-2-12 AdminShell 装配卡按 onUserMenuAction(union) 编排层 → AdminUserActions 叶子层 dispatch 实施
+
+---
+
+## [fix(CHG-SN-2-07)] UserMenu popover/visual 契约补全（portal + anchorRef 定位 + z-index）
+
+- **完成时间**：2026-04-29
+- **记录时间**：2026-04-29 03:35
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（fix 性质明确，按 ADR §4.1.4 anchorRef "用于定位"注释 1:1 补齐；CHG-SN-2-07 Opus 评审已固化整体范式）
+- **触发**：Codex stop-time review BLOCK（task `019dd6c8...`，3m 1s）— "UserMenu misses required popover/visual contract"
+- **缺失项**：CHG-SN-2-07 实施 anchorRef 仅用于"点击外部判定"，未实现 ADR §4.1.4 注释中明示的"**定位**"语义；UserMenu 应为 popover 形态（portal + 相对锚点定位 + z-index）
+- **修改文件**：
+  - `packages/admin-ui/src/shell/user-menu.tsx`：
+    - 新增 `useAnchorPosition(anchorRef, open)` hook：useLayoutEffect 计算 anchor.getBoundingClientRect()；resize / scroll(capture phase) 重新计算
+    - 渲染分支：anchorRef 提供 + 位置已计算 → createPortal 到 document.body + position: fixed + top/left + transform translateY(calc(-100% - 8px)) 上方 8px 间隙弹出 + z-index var(--z-shell-drawer) / 否则 → inline 渲染（demo + 单测 fallback）
+    - 头注释更新：真源链追加"anchorRef 用于定位"+ 设计要点追加 popover/visual 契约 5 处实施细节
+  - `packages/admin-ui/src/shell/index.ts`：章法 1C 头注释追加 popover/visual 契约（createPortal / fixed / anchor rect / z-index 4 级 / useLayoutEffect / resize+scroll capture / transform 偏移）
+  - `tests/unit/components/admin-ui/shell/user-menu-interaction.test.tsx`：追加 4 测 popover 路径（anchorRef 缺省 inline / anchorRef 提供 portal / portal style fixed+z-index+transform / open=false 不渲染 portal）
+  - `docs/decisions.md` ADR-103a 末尾追加 fix(CHG-SN-2-07) 修订记录段
+- **5 处实施细节**：
+  - **渲染层级**：createPortal 到 document.body（避免 Sidebar overflow:hidden 裁剪 + z-index 冲突）
+  - **定位策略**：position: fixed + top/left 来自 anchorRef.current.getBoundingClientRect()
+  - **弹出方向**：transform translateY(calc(-100% - 8px)) 在 anchor 上方对齐（设计稿 v2.1 sb__menu 实践）
+  - **z-index 层级**：var(--z-shell-drawer) Shell 抽屉级（与未来 NotificationDrawer/TaskDrawer 同级 1100）
+  - **位置同步**：useLayoutEffect 客户端计算（无视觉抖动）+ window resize + 祖先 scroll(capture phase)
+- **新增依赖**：无（react-dom createPortal 已内置）
+- **数据库变更**：无
+- **实测验收**：
+  - typecheck + lint 全绿
+  - admin-ui shell 160 tests 全过（原 156 + 4 popover 路径新增）
+  - 1943 全套 tests（含 1 个 pre-existing flaky StagingEditPanel，单跑 12/12 PASS，与本卡无关）
+  - verify-server-next-isolation 双扫描：48 文件 0 违规
+  - SSR 路径不变（anchorRef.current 在 SSR 永远 null → inline 渲染）
+- **不变约束验证**：
+  - Provider 不下沉：portal 不引入 Provider；状态仍受控外置
+  - Edge Runtime 兼容：useLayoutEffect SSR 自动 noop；anchorRef 在 SSR null → inline fallback
+  - 零硬编码颜色 / 零图标库依赖（z-index 取 token，未硬编码 1100）
+  - URL 不动 / M-SN-1 闭环资产零返工
+- **CHG-SN-2-07 4 处契约精化继续有效**（不被本 fix 推翻）：
+  - onClose → onOpenChange（受控组件惯用模式）
+  - onAction(union) → actions: AdminUserActions 拆分（叶子层提供性渲染）
+  - role: string → union / avatarText 必填 → 可选 / anchorRef 必填 → 可选
+- **作为 CHG-SN-2-10/11 范式参照**：
+  - NotificationDrawer / TaskDrawer / CommandPalette 浮层实施时复用 useAnchorPosition hook + portal 模式
+  - z-index 按 ADR-103a §4.3 各取对应 token：双 Drawer → var(--z-shell-drawer)（与 UserMenu 同级 1100）/ CommandPalette → var(--z-shell-cmdk)（1200 覆盖 UserMenu）
+  - shell/index.ts 章法 1C 已纳入 popover/visual 契约 5 处实施细节
+- **Codex Review Gate 第 3 次精确捕获契约偏离**：CHG-SN-2-03 ToastViewport position（已修）/ CHG-SN-2-04 platform.ts hydration mismatch（已修）/ CHG-SN-2-07 UserMenu popover/visual 契约（本卡修）。Codex stop-time review 与 Opus arch-reviewer 形成"双 review"互补防线
+- **注意事项**：
+  - jsdom getBoundingClientRect 默认返 0,0,0,0；单测断言 portal style top:0px / left:0px 是 jsdom 默认值，不代表真实运行时定位（真实定位需 e2e 测试 — M-SN-3+ 业务卡）
+  - useLayoutEffect 在 React 18 SSR 会输出 warning（"useLayoutEffect does nothing on the server"），但不影响功能；本组件 SSR 路径走 inline（anchorRef.current=null）跳过 useLayoutEffect 副作用
+  - resize/scroll capture phase 监听是必需的 — 祖先元素滚动（如 Sidebar 内部 overflow 滚动）默认不冒泡到 window scroll，需 capture phase 才能监听

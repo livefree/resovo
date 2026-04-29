@@ -209,6 +209,72 @@ describe('UserMenu — callback throw 时菜单仍关闭（try/finally 保护）
   })
 })
 
+describe('UserMenu — popover/visual 契约（fix(CHG-SN-2-07) ADR §4.1.4 anchorRef "用于定位"）', () => {
+  it('anchorRef 缺省 → inline 渲染（在 React tree 内，无 portal wrapper）', () => {
+    const { container } = render(
+      <UserMenu open onOpenChange={vi.fn()} user={USER} actions={makeFullActions()} />,
+    )
+    // 无 portal wrapper（菜单直接在 container 内）
+    expect(container.querySelector('[data-user-menu-portal]')).toBeNull()
+    expect(container.querySelector('[data-user-menu]')).toBeTruthy()
+  })
+
+  it('anchorRef 提供 → portal 启用（DOM 渲染在 document.body 末尾，非 React tree 内）', () => {
+    function Probe() {
+      const anchorRef = useRef<HTMLButtonElement | null>(null)
+      return (
+        <>
+          <button ref={anchorRef} data-testid="anchor">anchor</button>
+          <UserMenu open onOpenChange={vi.fn()} user={USER} actions={makeFullActions()} anchorRef={anchorRef} />
+        </>
+      )
+    }
+    const { container } = render(<Probe />)
+    // container 内不应有菜单（已 portal 到 body）
+    expect(container.querySelector('[data-user-menu]')).toBeNull()
+    // body 内可找到 portal wrapper + 菜单
+    const portal = document.body.querySelector('[data-user-menu-portal]')
+    expect(portal).toBeTruthy()
+    expect(portal?.querySelector('[data-user-menu]')).toBeTruthy()
+  })
+
+  it('portal wrapper 含 fixed 定位 + z-index var(--z-shell-drawer)', () => {
+    function Probe() {
+      const anchorRef = useRef<HTMLButtonElement | null>(null)
+      return (
+        <>
+          <button ref={anchorRef}>anchor</button>
+          <UserMenu open onOpenChange={vi.fn()} user={USER} actions={makeFullActions()} anchorRef={anchorRef} />
+        </>
+      )
+    }
+    render(<Probe />)
+    const portal = document.body.querySelector('[data-user-menu-portal]') as HTMLElement
+    expect(portal).toBeTruthy()
+    expect(portal.style.position).toBe('fixed')
+    expect(portal.style.zIndex).toContain('--z-shell-drawer')
+    // top/left 由 anchorRef.getBoundingClientRect() 计算（jsdom 默认 0,0）
+    expect(portal.style.top).toBe('0px')
+    expect(portal.style.left).toBe('0px')
+    // transform: translateY(calc(-100% - 8px)) 在 anchor 上方对齐
+    expect(portal.style.transform).toContain('translateY')
+  })
+
+  it('open=false → portal 不渲染', () => {
+    function Probe() {
+      const anchorRef = useRef<HTMLButtonElement | null>(null)
+      return (
+        <>
+          <button ref={anchorRef}>anchor</button>
+          <UserMenu open={false} onOpenChange={vi.fn()} user={USER} actions={makeFullActions()} anchorRef={anchorRef} />
+        </>
+      )
+    }
+    render(<Probe />)
+    expect(document.body.querySelector('[data-user-menu-portal]')).toBeNull()
+  })
+})
+
 describe('UserMenu — listener 卸载清理', () => {
   it('unmount 后 ESC + mousedown 都不再触发', () => {
     const onOpenChange = vi.fn()

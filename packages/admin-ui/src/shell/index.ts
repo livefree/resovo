@@ -19,13 +19,21 @@
  *       - <component>.tsx              — React 组件（return null + useEffect 副作用 / 或纯渲染）
  *       - 例外：utility helper 与 component 强耦合时（如 inferBreadcrumbs 与 Breadcrumbs
  *         共享 BreadcrumbItem 类型）可同文件，避免循环类型导出（CHG-SN-2-05 实践）
- *    C. 受控浮层 + focus trap + outside-click 模式（如 UserMenu / 未来 Drawer / CommandPalette）：
+ *    C. 受控浮层 + focus trap + outside-click + portal 定位模式（如 UserMenu / 未来 Drawer / CommandPalette）：
  *       - <component>.tsx              — React 组件单文件
- *       - props：{ open; onOpenChange; ...其他 } 受控开闭
+ *       - props：{ open; onOpenChange; anchorRef?; ...其他 } 受控开闭
  *       - listener（document mousedown / keydown）全在 useEffect 内挂；deps 含 [open, ...]；
  *         open=false 不挂 listener；unmount/rerender 自动 cleanup
  *       - focus trap 焦点门禁：仅当焦点在组件容器内时启用 Tab 循环（避免菜单外焦点被劫持）
  *       - 任意操作触发后调 onOpenChange(false) 自动关闭；callback throw 用 try/finally 保护
+ *       - **popover/visual 契约**（fix(CHG-SN-2-07) 补齐）：
+ *         · anchorRef 提供 → createPortal 到 document.body + position: fixed +
+ *           基于 anchorRef.current.getBoundingClientRect() 计算 top/left +
+ *           z-index: var(--z-shell-{drawer|cmdk}) 按层级取（ADR-103a §4.3 4 级）+
+ *           useLayoutEffect 计算位置（避免一帧抖动），SSR 自动 noop +
+ *           resize / scroll(capture) 重新计算
+ *         · anchorRef 缺省 → inline 渲染（demo/单测 fallback）
+ *         · transform 偏移决定弹出方向（如 UserMenu 上方对齐：translateY(calc(-100% - 8px))）
  *
  * 2. 不变约束（与 ADR-103a §4.4 + 顶层 packages/admin-ui/src/index.ts 一致）：
  *    - 零 BrandProvider / ThemeProvider 声明（Provider 不下沉，§4.4-1）
