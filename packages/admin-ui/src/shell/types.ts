@@ -128,3 +128,28 @@ export interface TaskItem {
   /** 失败原因（status='failed' 时提供）*/
   readonly errorMessage?: string
 }
+
+/** CommandPalette 单条命令（ADR-103a §4.1.6 / CHG-SN-2-11 SSOT 上提）
+ *  消费方（server-next）按 ADMIN_NAV + 自定义 actions 组装；M-SN-2 stub 用 mock */
+export interface CommandItem {
+  readonly id: string
+  readonly label: string
+  readonly icon?: ReactNode
+  /** 规范化快捷键字符串（'mod+k' / 'mod+,'）；formatShortcut() 渲染期映射平台标签 */
+  readonly shortcut?: string
+  /** 右侧灰字提示（如 'G then M' / 'Profile · Settings'） */
+  readonly meta?: string
+  /** action 类型：'navigate' 触发 onAction 后由消费方 router.push；'invoke' 触发自定义副作用 */
+  readonly kind: 'navigate' | 'invoke'
+  /** kind='navigate' 时必填（运行时由消费方负责校验，搜索结果项可能 href 异步注入故未用 discriminated union；
+   *  若 M-SN-3+ 需要强约束，可升级为 discriminated union 不破坏 SSOT 兼容性） */
+  readonly href?: string
+}
+
+/** CommandPalette 命令分组（ADR-103a §4.1.6）
+ *  默认 3 组（导航 / 快捷操作 / 搜索结果），消费方可自定义；空 group 渲染时自动过滤 */
+export interface CommandGroup {
+  readonly id: string
+  readonly label: string
+  readonly items: readonly CommandItem[]
+}

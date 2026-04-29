@@ -542,7 +542,7 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
 
 ## [SEQ-20260428-03] M-SN-2 第一阶段 · ADR-103a 起草 + AdminNavItem 字段扩展（执行序列）
 
-- **状态**：🔄 执行中（CHG-SN-2-01 ✅；fix(CHG-SN-2-01) ✅；CHG-SN-2-02 整卡 ✅；CHG-SN-2-01.5 ✅；CHG-SN-2-03 ✅；CHG-SN-2-04 ✅；fix(CHG-SN-2-04) ✅；CHG-SN-2-05 ✅；CHG-SN-2-06 ✅；CHG-SN-2-07 ✅；fix(CHG-SN-2-07) ✅；CHG-SN-2-08 ✅；CHG-SN-2-09 ✅；fix(CHG-SN-2-09) ✅；CHG-SN-2-10 ✅ Shell 8/10 双 Drawer + DrawerShell base；CHG-SN-2-11 ~ -21 待开）
+- **状态**：🔄 执行中（CHG-SN-2-01 ✅；fix(CHG-SN-2-01) ✅；CHG-SN-2-02 整卡 ✅；CHG-SN-2-01.5 ✅；CHG-SN-2-03 ✅；CHG-SN-2-04 ✅；fix(CHG-SN-2-04) ✅；CHG-SN-2-05 ✅；CHG-SN-2-06 ✅；CHG-SN-2-07 ✅；fix(CHG-SN-2-07) ✅；CHG-SN-2-08 ✅；CHG-SN-2-09 ✅；fix(CHG-SN-2-09) ✅；CHG-SN-2-10 ✅；CHG-SN-2-11 ✅ Shell 9/10 CommandPalette；CHG-SN-2-12 ~ -21 待开）
 - **创建时间**：2026-04-28 22:00
 - **最后更新时间**：2026-04-29 04:50
 - **目标**：M-SN-2 第一阶段（Shell 公开 API 契约固化 + admin-nav.ts 字段扩展）。落地 ADR-103a 作为 Shell 10 组件 Props / AdminNavItem 5 字段扩展协议 / 4 级 z-index 规范的真源；让 server-next 侧 admin-nav.ts 注入 icon / shortcut / count / badge 字段，准备好被 packages/admin-ui Shell 组件消费。
@@ -744,7 +744,7 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
     - 验收要点：双 Drawer 互斥（编排在 AdminShell）/ z-index 取 token 不硬编码 1100 / focus trap / ESC 关闭 / item 渲染 + 行级 action / 零硬编码颜色 / SSR
     - 子代理调用：arch-reviewer (Opus) — Drawer focus trap + 互斥编排策略 + portal/z-index 模式首张落地
 
-11. **CHG-SN-2-11** — packages/admin-ui CommandPalette（Shell 第 9 张 / ⌘K 命令面板 + 键盘导航）（状态：⬜ 未开始）
+11. **CHG-SN-2-11** — packages/admin-ui CommandPalette（Shell 第 9 张 / ⌘K 命令面板 + 键盘导航）（状态：✅ 已完成 2026-04-29）
     - 计划开始：CHG-SN-2-10 PASS 后
     - 工时估算：0.5 天
     - 关联 ADR：ADR-103a §4.1.6 CommandPalette + CommandGroup + CommandItem

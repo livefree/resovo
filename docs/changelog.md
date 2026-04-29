@@ -1390,3 +1390,64 @@
   - article 元素在 `[data-notification-item="..."]` selector 仍可命中（attribute 选择器不依赖 tag），消费方代码无需调整
   - indeterminate keyframes 多实例 DOM 重复但 CSS 解析正常（沿用 HealthBadge pulse 范式）
   - data-task-item-progress-mode attr 便于 e2e 测试 + cutover 视觉对账识别两种 progressbar 形态
+
+---
+
+## [CHG-SN-2-11] packages/admin-ui CommandPalette（Shell 第 9 张 / ⌘K 模态浮层 + query 过滤 + 跨 group 扁平键盘导航）
+
+- **完成时间**：2026-04-29
+- **记录时间**：2026-04-29 05:35
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — Shell 复杂度最高组件强制 Opus 评审；产出 PASS-with-conditions（无 BLOCK / 3 项小修建议已落地）
+- **修改文件**：
+  - `packages/admin-ui/src/shell/types.ts`：追加 `CommandItem` + `CommandGroup` 类型 SSOT（ADR-103a §4.1.6 1:1）
+    - `CommandItem.kind: 'navigate' | 'invoke'` + `href?: string`（注释明示 kind=navigate 时必填运行时校验；未用 discriminated union 因搜索结果项可能 href 异步注入；M-SN-3+ 可升级不破坏 SSOT 兼容性）
+  - `packages/admin-ui/src/shell/command-palette.tsx`（新建 ~404 行）：CommandPalette 主组件 + 内部 CommandRow 子组件 + filterAndFlatten helper
+    - 模态浮层：portal 到 document.body + center 对齐（top:15vh + left:50% + translateX(-50%)）+ width:min(600px,90vw) + maxHeight:60vh
+    - z-index：var(--z-shell-cmdk)（覆盖 Drawer 1100）
+    - 输入框：autoFocus（mount 后）+ onChange 更新 query + role="combobox" + aria-controls + aria-activedescendant + aria-label
+    - 过滤：query.trim().toLowerCase() + label.toLowerCase().includes() 大小写不敏感；空 query fast-path 全显示；空 group 自动隐藏
+    - 跨 group 扁平键盘导航：activeIndex 按 visibleGroups.flatMap(g.items) 扁平索引循环；ArrowDown/Up 模运算；Enter 触发 onAction(flatItems[activeIndex]) + onClose；Esc 触发 onClose；query 变化 reset 到 0
+    - mouse hover：onMouseEnter 通过 findIndex 同步全局 activeIndex
+    - 空态："无匹配结果"（非 listbox 内嵌，与 ul 互斥分支）
+    - shortcut：CommandRow 内每项独立调 useFormatShortcut（hydration-safe，CHG-SN-2-04 范式）
+    - mounted SSR-safe：useState false + useEffect setMounted(true)（DrawerShell CHG-SN-2-10 范式复用）
+    - try/finally 保护：Enter/click 路径 try{onAction} finally{ try{onClose}catch{} }；Esc/backdrop 独立 try{onClose}catch{}
+    - icon 渲染：`item.icon != null` 防御 null/undefined（Opus 评审建议落地）
+  - `packages/admin-ui/src/shell/index.ts`：桶导出 `CommandPalette` / `CommandPaletteProps` + 类型 SSOT 段追加 `CommandItem` / `CommandGroup`
+  - `tests/unit/components/admin-ui/shell/command-palette.test.tsx`（新建，18 tests）：portal + 容器 ARIA(dialog/aria-modal/aria-labelledby) + 输入框 ARIA(combobox/aria-controls/aria-activedescendant) + listbox+option/aria-selected + 3 组渲染含空 group 过滤 + group label + button type+kind + activeIndex 视觉 + shortcut + meta + icon（含 null 防御断言）+ footer 提示 + 空态 + z-index var(--z-shell-cmdk) + placeholder 默认/自定义
+  - `tests/unit/components/admin-ui/shell/command-palette-keyboard.test.tsx`（新建，20 tests）：ArrowDown/Up 跨 group 循环 + Enter 触发 onAction+onClose + Esc + mouse hover 同步 + click button + backdrop click + query 过滤（含 query="   " 仅空白 fast-path） + query 变化 activeIndex reset + try/finally 保护（含 window error listener 抑制 React 事件系统 unhandled error 噪声）+ open 切换时 query 重置
+  - `tests/unit/components/admin-ui/shell/command-palette-ssr.test.tsx`（新建，5 tests）：open=false 输出空 + open=true mounted=false 首帧空 + groups=[] SSR 不抛错 + placeholder 自定义 SSR + renderToString 不抛错
+- **新增依赖**：无
+- **数据库变更**：无
+- **范式遵守**：
+  - shell/index.ts 章法 5C 受控浮层（open + onClose + portal + ESC + mounted SSR-safe）模态浮层变体
+  - DrawerShell mounted SSR-safe 范式复用（CHG-SN-2-10）
+  - useFormatShortcut hydration-safe 范式（CHG-SN-2-04）
+- **§4.4 4 项硬约束验证**：
+  - ✅ 零 BrandProvider/ThemeProvider 声明
+  - ✅ Edge Runtime 兼容（模块顶层零 window/document/fetch；createPortal 调用在 mounted gate 后）
+  - ✅ 零硬编码颜色（var(--bg-overlay) / var(--bg-surface) / var(--bg-surface-elevated) / var(--fg-default) / var(--fg-muted) / var(--border-default) / var(--border-subtle) / var(--shadow-lg) / var(--space-*) / var(--radius-*) / var(--font-size-*) / var(--z-shell-cmdk)）
+  - ✅ 零图标库依赖（icon ReactNode 由消费方注入）
+- **a11y 完整 combobox+listbox 模式**：
+  - 容器 role="dialog" + aria-modal="true" + aria-labelledby（隐藏 sr-only 标题）
+  - 输入框 role="combobox" + aria-expanded="true" + aria-controls=listboxId + aria-activedescendant=optionId（空态下 undefined 符合 WAI-ARIA）
+  - 列表 role="listbox" + 每项 role="option" + aria-selected
+- **Opus arch-reviewer 评审结论（PASS-with-conditions）**：
+  - 11 项重点全部 PASS（query 过滤算法 / 跨 group 扁平键盘 / a11y combobox+listbox / mounted SSR-safe / try/finally / layout 漂浮预防 / UI/a11y 契约 / shortcut hydration-safe / §4.4 4 项硬约束 / 类型 SSOT / 测试覆盖）
+  - 3 项主循环立即修建议（已全部落地）：(1) icon `!== undefined` → `!= null`（兼容 null）+ test 用例；(2) query="   " 空白 fast-path 锁定测试；(3) types.ts CommandItem.href 注释追加 discriminated union 升级路径 trade-off 说明
+- **实测验收**：
+  - typecheck：全绿（@resovo/design-tokens + @resovo/admin-ui + @resovo/api + @resovo/server）
+  - lint：全绿（4 packages cached + FULL TURBO）
+  - test：admin-ui shell command-palette 3 文件 43 tests 全过；全仓 179 文件 2109 tests 全过（2 unhandled error 是 user-menu-interaction 既有同模式，非本卡引入）
+  - verify-server-next-isolation：54 文件 0 违规
+- **不变约束验证**：
+  - ADR-103a §4.1.6 字面契约 1:1 落地（CommandPalette + CommandGroup + CommandItem）
+  - ADR-103a §4.3 z-index 4 级层叠不变量（var(--z-shell-cmdk) 1200 覆盖 Drawer 1100）
+  - 类型 SSOT 在 packages/admin-ui/src/shell/types.ts（11 → 13 类型；server-next 应用层后续 import 装配 groups）
+- **注意事项**：
+  - CommandPalette 不内置 nav 数据 / 不实现远程搜索 / 不与路由耦合：消费方（server-next 应用层）按 ADMIN_NAV + 自定义 actions 组装 groups + onAction 决定 router.push / invoke
+  - mounted=false 首帧 return null：SSR renderToString 输出空字符串；客户端 hydration 后第二次 render 才创建 portal（与 DrawerShell 一致）
+  - try/finally 仅保护 onClose 不被 onAction 抛错连累；onAction 自身抛错仍会向上传播（React 事件系统会处理为 uncaught exception）
+  - data-command-palette-* 系列 attr 均小写（避免 React DOM warning，沿用 CHG-SN-2-10 经验）
+- **Shell 进度**：9/10 完成（剩 CHG-SN-2-12 AdminShell 装配 + admin layout 替换骨架）

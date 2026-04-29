@@ -99,8 +99,11 @@ export type { NotificationDrawerProps } from './notification-drawer'
 export { TaskDrawer } from './task-drawer'
 export type { TaskDrawerProps } from './task-drawer'
 
-// Drawer item 数据契约类型 SSOT（CHG-SN-2-10；server-next 应用层准备 items 注入）
-export type { NotificationItem, TaskItem } from './types'
+export { CommandPalette } from './command-palette'
+export type { CommandPaletteProps } from './command-palette'
+
+// Drawer + Command 数据契约类型 SSOT（CHG-SN-2-10/11；server-next 应用层准备 items 注入）
+export type { NotificationItem, TaskItem, CommandItem, CommandGroup } from './types'
 
 // AdminNav + HealthSnapshot + AdminShellUser + AdminUserActions + UserMenuAction
 // 数据契约类型 SSOT（CHG-SN-2-05/06/07）
