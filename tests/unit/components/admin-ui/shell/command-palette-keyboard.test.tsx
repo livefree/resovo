@@ -277,6 +277,96 @@ describe('CommandPalette — try/finally 保护', () => {
   })
 })
 
+describe('CommandPalette — focus trap (Tab/Shift+Tab 循环)', () => {
+  it('Tab 在末项 button 时循环回 input', () => {
+    render(<CommandPalette open groups={GROUPS} onClose={vi.fn()} onAction={vi.fn()} />)
+    const dialog = getDialog()
+    const input = getInput()
+    // 模拟焦点到末项 button（最后一个 focusable）
+    const lastButton = document.body.querySelector('[data-command-palette-item="a-help"]') as HTMLButtonElement
+    lastButton.focus()
+    expect(document.activeElement).toBe(lastButton)
+    fireEvent.keyDown(dialog, { key: 'Tab' })
+    expect(document.activeElement).toBe(input)
+  })
+
+  it('Shift+Tab 在 input（首项）时循环回末项 button', () => {
+    render(<CommandPalette open groups={GROUPS} onClose={vi.fn()} onAction={vi.fn()} />)
+    const dialog = getDialog()
+    const input = getInput()
+    input.focus()
+    expect(document.activeElement).toBe(input)
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true })
+    const lastButton = document.body.querySelector('[data-command-palette-item="a-help"]')
+    expect(document.activeElement).toBe(lastButton)
+  })
+
+  it('Tab 在中间项不拦截（默认行为，由浏览器处理）', () => {
+    render(<CommandPalette open groups={GROUPS} onClose={vi.fn()} onAction={vi.fn()} />)
+    const dialog = getDialog()
+    const middleButton = document.body.querySelector('[data-command-palette-item="g-moderation"]') as HTMLButtonElement
+    middleButton.focus()
+    const evt = fireEvent.keyDown(dialog, { key: 'Tab' })
+    // 中间项 Tab 不 preventDefault；浏览器走默认顺序
+    expect(evt).toBe(true)  // event 未被消费 → 返回 true
+  })
+
+  it('焦点不在 panel 内 → focus trap 不拦截', () => {
+    render(<CommandPalette open groups={GROUPS} onClose={vi.fn()} onAction={vi.fn()} />)
+    const dialog = getDialog()
+    // 焦点在 body（非 panel 内）
+    document.body.focus()
+    expect(() => fireEvent.keyDown(dialog, { key: 'Tab' })).not.toThrow()
+  })
+})
+
+describe('CommandPalette — groups 异步变化时 activeIndex 夹逼', () => {
+  it('groups 收缩使 activeIndex 越界 → reset 到 0（Enter 选首项不 no-op）', () => {
+    const onAction = vi.fn()
+    const onClose = vi.fn()
+    const { rerender } = render(
+      <CommandPalette open groups={GROUPS} onClose={onClose} onAction={onAction} />,
+    )
+    const dialog = getDialog()
+    // 移到第 4 项（末项 a-help，activeIndex=3）
+    fireEvent.keyDown(dialog, { key: 'ArrowDown' })
+    fireEvent.keyDown(dialog, { key: 'ArrowDown' })
+    fireEvent.keyDown(dialog, { key: 'ArrowDown' })
+    expect(activeId()).toBe('command-option-a-help')
+    // groups 收缩到 1 组 1 项 → 原 activeIndex=3 越界
+    const shrunk: readonly CommandGroup[] = [
+      { id: 'nav', label: '导航', items: [{ id: 'g-dashboard', label: '管理台站', kind: 'navigate', href: '/admin' }] },
+    ]
+    rerender(<CommandPalette open groups={shrunk} onClose={onClose} onAction={onAction} />)
+    // 夹逼后 activeIndex 应为 0
+    expect(activeId()).toBe('command-option-g-dashboard')
+    // Enter 触发首项（不 no-op）
+    fireEvent.keyDown(getDialog(), { key: 'Enter' })
+    expect(onAction).toHaveBeenCalledTimes(1)
+    expect(onAction.mock.calls[0]?.[0]?.id).toBe('g-dashboard')
+  })
+
+  it('groups 扩张（消费方异步注入"搜索结果"组）→ activeIndex 不变（仍指向原项）', () => {
+    const { rerender } = render(
+      <CommandPalette open groups={GROUPS} onClose={vi.fn()} onAction={vi.fn()} />,
+    )
+    const dialog = getDialog()
+    fireEvent.keyDown(dialog, { key: 'ArrowDown' })  // 移到 index=1
+    expect(activeId()).toBe('command-option-g-moderation')
+    const expanded: readonly CommandGroup[] = [
+      ...GROUPS,
+      {
+        id: 'search',
+        label: '搜索结果',
+        items: [{ id: 's-1', label: '搜索匹配项', kind: 'invoke' }],
+      },
+    ]
+    rerender(<CommandPalette open groups={expanded} onClose={vi.fn()} onAction={vi.fn()} />)
+    // 扩张时 activeIndex=1 仍在范围内 → 不夹逼，仍指向 g-moderation
+    expect(activeId()).toBe('command-option-g-moderation')
+  })
+})
+
 describe('CommandPalette — open=true → false 时 query 重置', () => {
   it('再次 open=true 时 query 为空（filterAndFlatten 全显示）', () => {
     const { rerender } = render(<CommandPalette open groups={GROUPS} onClose={vi.fn()} onAction={vi.fn()} />)

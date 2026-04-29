@@ -174,6 +174,7 @@ export function CommandPalette({ open, groups, onClose, onAction, placeholder = 
   const [activeIndex, setActiveIndex] = useState(0)
   const [mounted, setMounted] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
   const titleId = 'command-palette-title'
   const listboxId = 'command-palette-listbox'
 
@@ -193,6 +194,14 @@ export function CommandPalette({ open, groups, onClose, onAction, placeholder = 
     setActiveIndex(0)
   }, [query])
 
+  // groups/flatItems 变化时夹逼 activeIndex（消费方异步注入"搜索结果"组时防越界 / 防选错项）
+  // 当 flatItems.length 变化导致当前 activeIndex 越界 → 重置为 0
+  useEffect(() => {
+    if (activeIndex >= flatItems.length && flatItems.length > 0) {
+      setActiveIndex(0)
+    }
+  }, [flatItems.length, activeIndex])
+
   // open=false → 重置 query（下次 open 时从空查询开始）
   useEffect(() => {
     if (!open) {
@@ -209,6 +218,37 @@ export function CommandPalette({ open, groups, onClose, onAction, placeholder = 
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
+      // focus trap：Tab/Shift+Tab 在 panel 内循环（aria-modal="true" 不变量）
+      // DrawerShell focus trap 范式复用；仅当焦点在 panel 内时启用门禁
+      if (event.key === 'Tab') {
+        const panel = panelRef.current
+        if (!panel) return
+        const activeEl = document.activeElement
+        if (!(activeEl instanceof HTMLElement) || !panel.contains(activeEl)) return
+        const focusables = Array.from(
+          panel.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ),
+        )
+        if (focusables.length === 0) {
+          event.preventDefault()
+          return
+        }
+        const currentIndex = focusables.indexOf(activeEl)
+        if (currentIndex < 0) return
+        if (event.shiftKey) {
+          if (currentIndex === 0) {
+            event.preventDefault()
+            focusables[focusables.length - 1]?.focus()
+          }
+        } else {
+          if (currentIndex === focusables.length - 1) {
+            event.preventDefault()
+            focusables[0]?.focus()
+          }
+        }
+        return
+      }
       if (event.key === 'Escape') {
         event.stopPropagation()
         try {
@@ -265,6 +305,7 @@ export function CommandPalette({ open, groups, onClose, onAction, placeholder = 
         style={BACKDROP_STYLE}
       />
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

@@ -1451,3 +1451,57 @@
   - try/finally 仅保护 onClose 不被 onAction 抛错连累；onAction 自身抛错仍会向上传播（React 事件系统会处理为 uncaught exception）
   - data-command-palette-* 系列 attr 均小写（避免 React DOM warning，沿用 CHG-SN-2-10 经验）
 - **Shell 进度**：9/10 完成（剩 CHG-SN-2-12 AdminShell 装配 + admin layout 替换骨架）
+
+---
+
+## [fix(CHG-SN-2-11)] CommandPalette focus trap + activeIndex 夹逼修复（modal a11y + 异步 groups 选错项）
+
+- **完成时间**：2026-04-29
+- **记录时间**：2026-04-29 03:15
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（Codex stop-time review 已识别问题；focus trap + dependency clamp 实施明确）
+- **触发**：Codex stop-time review BLOCK — "CommandPalette modal has blocking focus/state gaps"
+- **缺失项**：
+  1. **Focus trap 缺失**：`role="dialog"` + `aria-modal="true"` 但 onKeyDown 仅处理 ArrowUp/Down/Enter/Esc，不拦截 Tab；与 DrawerShell focus-trap 模式不一致 → 焦点可逃逸到被遮挡的页面，违反 modal 不变量
+  2. **activeIndex 不夹逼 groups 变化**：query 变化重置到 0 但 groups（消费方异步注入"搜索结果"）变化时不夹逼；用户已 ArrowDown 到末项后 groups 收缩 → activeIndex 越界 → Enter 触发 no-op 或选错项
+- **修改文件**：
+  - `packages/admin-ui/src/shell/command-palette.tsx`：
+    - 新增 `panelRef` 指向 dialog 容器
+    - handleKeyDown 顶部追加 Tab/Shift+Tab focus trap 分支（DrawerShell 范式 1:1 复用）：
+      - 焦点门禁（仅当 `panelRef.current.contains(document.activeElement)` 时启用，避免菜单外焦点被劫持）
+      - querySelector 收集 button/[href]/input/[tabindex]:not([tabindex="-1"]) focusables
+      - shiftKey + currentIndex===0 → 跳到末项；非 shift + currentIndex===末项 → 跳到首项
+      - 中间项不 preventDefault，由浏览器走默认 Tab 顺序
+    - 新增 useEffect：`flatItems.length` 变化时夹逼 `activeIndex`（越界 → reset 0）
+  - `tests/unit/components/admin-ui/shell/command-palette-keyboard.test.tsx`：追加 6 锁定
+    - focus trap 4 锁定：Tab 末项→input 循环 / Shift+Tab input→末项循环 / 中间项默认行为不拦截 / 焦点不在 panel 内 trap 不拦截
+    - activeIndex 夹逼 2 锁定：groups 收缩使原 activeIndex 越界 → 夹逼到 0 + Enter 选首项不 no-op / groups 扩张但 activeIndex 仍在范围内 → 不夹逼
+- **a11y 契约改进**：
+  - aria-modal="true" 不再是空声明：Tab/Shift+Tab 真正循环在 panel 内
+  - panel 内"无可聚焦元素"边界已 preventDefault（防止焦点逃出但同时无法循环）
+- **新增依赖**：无
+- **数据库变更**：无
+- **实测验收**：
+  - typecheck + lint 全绿
+  - admin-ui shell command-palette 3 文件 49 tests 全过（原 43 + 6 新增 fix 锁定）
+  - 全仓 179 文件 2116 tests 全过（previous 2109 + 6 新增 + 1 已修复 flake）
+  - verify-server-next-isolation 54 文件 0 违规
+- **不变约束验证**：
+  - ADR-103a §4.1.6 字面契约不变（Props + 行为不变）
+  - shell/index.ts 章法 5C 受控浮层 popover/visual 契约 focus trap 焦点门禁要求落地
+  - 与 DrawerShell focus trap 实现行为一致（focusables 选择器 + 边界处理 + 焦点门禁）
+- **Codex Review Gate 第 6 次精确捕获**：
+  - CHG-SN-2-03 ToastViewport position（已修 f23abc7）
+  - CHG-SN-2-04 platform.ts hydration mismatch（已修 32a94b6）
+  - CHG-SN-2-07 UserMenu popover/visual（已修 6ed730e）
+  - CHG-SN-2-09 Topbar layout 漂浮（已修 14c54f4）
+  - CHG-SN-2-10 双 Drawer UI/a11y 契约（已修 c72b0b5）
+  - **CHG-SN-2-11 CommandPalette focus trap + activeIndex 夹逼（本卡修）**
+- **双 review 防线分工再次验证**：Opus 评 11 项 PASS-with-conditions（语义层全过 / icon null + 空白 query + types 注释三项小修已落地）；Codex 捕获 a11y 实施细节 + 状态依赖夹逼（runtime/UX 视角）。两类问题需双 review 互补防线 — Opus 偏静态结构合规 + ARIA attr 完整，Codex 偏 runtime 焦点逃逸 + 异步 props 边界
+- **作为后续浮层组件 a11y 范式参照**：
+  - aria-modal="true" 必须配套 focus trap（Tab/Shift+Tab 循环 + 焦点门禁）
+  - 异步注入的 collection props（如 groups）变化时 active 索引必须夹逼，不能仅依赖 query/open 重置
+- **注意事项**：
+  - 中间项 Tab 不拦截：浏览器默认顺序由 DOM 顺序决定（input → group1 buttons → group2 buttons），符合用户预期
+  - Tab 焦点门禁防止焦点不在 panel 内时 trap 误触发（如 jsdom 测试中 `body.focus()` 场景）
+  - flatItems.length 夹逼条件 `activeIndex >= flatItems.length && flatItems.length > 0`：当 flatItems 为空时不夹逼（保留原 activeIndex 状态，下次 groups 重新有内容时按用户操作再设置）
