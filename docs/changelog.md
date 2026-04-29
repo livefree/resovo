@@ -1954,3 +1954,26 @@
 - VIDEO_COLUMN_DESCRIPTORS 含 enableSorting 对齐 VideoSortField
 - **实测验收**：typecheck ✅
 - **下一步**：CHG-SN-3-02 VideoStatusIndicator + VideoTypeChip 原子组件
+
+---
+
+## chg(CHG-SN-3-02): VideoStatusIndicator + VideoTypeChip 原子组件
+
+- **日期**: 2026-04-29
+- **TASK-ID**: CHG-SN-3-02
+- **主循环模型**: claude-sonnet-4-6
+- **子代理调用**: 无
+- **变更类型**: chg（M-SN-3 第 2 张）
+- **摘要**: 新建视频状态徽章 + 类型标签两个纯展示原子组件，覆盖所有 review/visibility/published variant。
+
+### 新增文件
+- `apps/server-next/src/components/admin/shared/VideoStatusIndicator.tsx`（新建：3 枚徽章 / compact 点模式 / CSS 变量零硬编码）
+- `apps/server-next/src/components/admin/shared/VideoTypeChip.tsx`（新建：11 种 VideoType → 中文标签）
+- `tests/unit/components/server-next/admin/VideoStatusIndicator.test.tsx`（新建：27 测试）
+
+### 验收
+- 所有状态 variant 渲染正确（3×3×2）
+- 零硬编码颜色（仅 CSS 变量）
+- data-testid 齐全（badge-review-status / badge-visibility / badge-published / video-type-chip）
+- **实测验收**：typecheck ✅ | 2434 单测全通过 ✅
+- **下一步**：CHG-SN-3-03 视频库列表页骨架（Server Component）
