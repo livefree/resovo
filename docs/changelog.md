@@ -1098,3 +1098,73 @@
   - jsdom getBoundingClientRect 默认返 0,0,0,0；单测断言 portal style top:0px / left:0px 是 jsdom 默认值，不代表真实运行时定位（真实定位需 e2e 测试 — M-SN-3+ 业务卡）
   - useLayoutEffect 在 React 18 SSR 会输出 warning（"useLayoutEffect does nothing on the server"），但不影响功能；本组件 SSR 路径走 inline（anchorRef.current=null）跳过 useLayoutEffect 副作用
   - resize/scroll capture phase 监听是必需的 — 祖先元素滚动（如 Sidebar 内部 overflow 滚动）默认不冒泡到 window scroll，需 capture phase 才能监听
+
+---
+
+## [CHG-SN-2-08] packages/admin-ui Sidebar（Shell 第 6 张 / 视觉核心 + 5 组 NAV + 折叠态 + 计数徽章 + UserMenu 集成）
+
+- **完成时间**：2026-04-29
+- **记录时间**：2026-04-29 03:55
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — Sidebar 视觉核心 + 跨组件集成评审 CONDITIONAL → PASS（12 项 / 1 P1 必修 + 2 P2 建议合并 + 1 保留）
+- **触发**：CHG-SN-2-07 PASS（含 fix popover/visual 契约 6ed730e）→ Shell 5/10 → 按依赖序起 Sidebar（视觉核心组件，需集成 UserMenu + admin-nav.tsx 5 字段 + admin-layout token + useFormatShortcut hydration-safe）
+- **修改文件**：
+  - `packages/admin-ui/src/shell/sidebar.tsx`（新建）— Sidebar 主组件 + 内部子组件 + helper：
+    - `Sidebar` 主组件：`<aside>` 容器 + Brand + 5 组 NAV scroll + Footer + 折叠按钮
+    - `BrandArea` 子组件：流光 logo（"流"字符）+ "流光后台" 标题 + "v2"；折叠态隐藏标题
+    - `NavItem` 子组件：每项 button + icon + label + 计数徽章（展开态）/ pip（折叠态）/ tooltip（折叠态 title attribute 含 label + 平台 shortcut）
+    - `Footer` 子组件：sb__foot button + UserMenu 集成（**P1 必修**：position: relative wrapper 建立稳定 positioned ancestor）
+    - `formatCount` helper：>999 缩 "1.2k"（导出供单测）
+    - `badgeToSlot` helper：'info'/'warn'/'danger' → 'info'/'warning'/'error' state token slot 映射
+    - `buildTooltip` helper：折叠态 tooltip 文案（"label (Ctrl+1)" 等，hydration-safe 由 useFormatShortcut 提供）
+  - `packages/admin-ui/src/shell/index.ts`（修改）— 桶导出追加 Sidebar / SidebarProps / formatCount
+  - `tests/unit/components/admin-ui/shell/sidebar.test.tsx`（新建）— 31 tests 渲染（容器+a11y / Brand / 5 组 / activeHref / counts 优先级 / 计数缩写 / badge 配色 / 折叠态 pip / Footer / 折叠按钮 + 边界场景：count=0 / activeHref 不存在 / children 嵌套不渲染 / Footer wrapper position: relative）
+  - `tests/unit/components/admin-ui/shell/sidebar-interaction.test.tsx`（新建）— 8 tests 交互（onNavigate / onToggleCollapsed / sb__foot 触发 UserMenu portal / 6 项菜单点击触发 onUserMenuAction(union)）
+  - `tests/unit/components/admin-ui/shell/sidebar-ssr.test.tsx`（新建）— 5 tests SSR（renderToString 零 throw 含展开/折叠态 / 输出 5 组+Brand+Footer / UserMenu 默认 closed 不输出 portal / shortcut SSR 走 isMac=false 默认 "Ctrl+1"）
+  - `packages/admin-ui/src/shell/user-menu.tsx`（修改）— P1 修复：UserMenu portal 路径条件放宽（anchorRef.current 存在即走 portal，pos 默认 {0,0} 由 useLayoutEffect 后续更新；避免初次渲染因 anchorPos 未计算回退 inline）
+  - `docs/decisions.md` ADR-103a CHG-SN-2-07 修订段尾追加"编排层 union ↔ 叶子层 actions 取舍说明"（**P2 建议补全**）
+- **Props 类型骨架**（与 ADR-103a §4.1.2 1:1）：
+  ```typescript
+  export interface SidebarProps {
+    readonly nav: readonly AdminNavSection[]
+    readonly activeHref: string
+    readonly collapsed: boolean
+    readonly user: AdminShellUser
+    readonly onToggleCollapsed: () => void
+    readonly onNavigate: (href: string) => void
+    readonly onUserMenuAction: (action: UserMenuAction) => void
+    readonly counts?: ReadonlyMap<string, number>
+  }
+  ```
+- **新增依赖**：无（react useState/useRef/useMemo/useCallback + useFormatShortcut + UserMenu 已落地）
+- **数据库变更**：无
+- **实测验收**：
+  - typecheck（5/5 packages）/ lint（4/4 cached FULL TURBO）全绿
+  - admin-ui shell 199 tests 全过（原 160 + 39 sidebar = 199；UserMenu portal 路径修订后 user-menu interaction 16 tests 仍 PASS）
+  - 全套 1981 unit tests PASS（原 1942 + 39 sidebar；含 1 pre-existing flaky StagingEditPanel 单跑全过，与本卡无关）
+  - verify-server-next-isolation 双扫描：49 文件（packages/admin-ui/src 增 1）0 违规
+  - verify-token-isolation：152 文件 0 命中
+- **不变约束验证**：
+  - Provider 不下沉：零 BrandProvider/ThemeProvider/createContext / 仅 menuOpen 内部 UI state（受控开闭模式）
+  - Edge Runtime 兼容：模块顶层零 navigator/document/window；NavItem 内 useFormatShortcut 走 hydration-safe 路径；UserMenu 默认 closed 不输出 portal SSR
+  - 零硬编码颜色：所有颜色读 token（var(--bg-surface) / var(--accent-default) / var(--state-{warning|error|info}-{bg|fg|border}) / var(--fg-{default|muted}) / var(--border-{default|subtle}) 等）；几何字面量（28px/32px/8px/20px/1px/50%）非颜色合规
+  - 零图标库依赖：icon 由 AdminNavItem.icon ReactNode 注入；折叠按钮纯文本 "‹‹ 折叠"/"››"；Brand logo 用中文字符 "流"
+  - URL 不动 / M-SN-1 闭环资产零返工
+- **Opus 评审 CONDITIONAL → PASS**（12 项重点 / 1 P1 必修 + 2 P2 建议合并 + 1 P2 保留）：
+  - **P1 必修**：Footer 浮层定位锚点稳定性 — Sidebar Footer 用 `<div data-sidebar-foot-wrapper style={{ position: 'relative' }}>` 包裹 sb__foot button + UserMenu 建立稳定 positioned ancestor ✓
+  - **P2 1**：ADR §4.1.4 修订段补编排层 union ↔ 叶子层 actions 取舍说明（直接消费 UserMenu / 通过 Sidebar 间接消费 / AdminShell 装配三种场景的设计取舍）✓
+  - **P2 2**：单测补 4 边界（count=0 / activeHref 不存在 / children 嵌套不渲染 / Footer wrapper position: relative）✓
+  - **P2 3 保留**：formatCount 1000→"1.0k" 含尾零保留（已被单测锁定，与设计稿真源对齐；如设计稿后续要求 "1k" 而非 "1.0k" 由后续 fix 卡处理）
+- **未复现 CHG-SN-2-03/04/07 类型问题**（默认值漂移 / hydration mismatch / popover 契约缺口）；CHG-SN-2-07 popover/visual 契约 inline fallback 路径在 Sidebar 集成时通过 P1 必修 wrapper 闭合
+- **作为 CHG-SN-2-09 Topbar 范式参照**：
+  - 章法 1B 单文件含多内部子组件（Sidebar/NavItem/BrandArea/Footer/helper）
+  - hydration-safe shortcut 渲染（NavItem 子组件内调 useFormatShortcut）
+  - badge 配色映射 semantic.status token slot
+  - position: relative wrapper 浮层稳定锚点（Topbar HealthBadge / 通知 / 任务图标按钮触发 NotificationDrawer/TaskDrawer 时复用此模式）
+- **后续动作**：CHG-SN-2-09 Topbar（按 ADR-103a §4.1.3 实施 + Breadcrumbs/HealthBadge 集成 + TopbarIcons 5 类按钮注入）
+- **注意事项**：
+  - Sidebar 接收 onUserMenuAction(union) 后内部 useMemo 转 AdminUserActions 6 callbacks → UserMenu 全 6 项菜单始终渲染（消费方在 onUserMenuAction 内分派 + 不支持 action 走 noop）；如需细粒度 actions 隐藏直接消费 UserMenu 叶子层
+  - Footer position: relative wrapper 是关键 P1 修复 — UserMenu inline fallback 路径（SSR / anchorRef 未计算）以本 wrapper 为定位锚点，避免漂移
+  - 折叠态 NAV item tooltip 用原生 title attribute（最简洁 + a11y 兼容）；如设计稿要求自定义 NavTip 浮层（含 shortcut kbd 视觉），登记后续 fix
+  - admin-layout token: `var(--sidebar-w)` / `var(--sidebar-w-collapsed)` / `var(--topbar-h)` 已就位（CHG-SN-2-02 stage 1/2）
+  - children 嵌套渲染当前不支持（M-SN-2 契约锁定，单测断言）；未来 CHG-SN-2-12 系统设置容器化或 M-SN-3+ 业务卡需要二级展开时新 ADR 扩展

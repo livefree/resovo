@@ -250,12 +250,14 @@ export function UserMenu({ open, onOpenChange, user, actions, anchorRef }: UserM
     </div>
   )
 
-  // anchorRef 提供且定位已计算 → portal + fixed 定位（popover 形态）
-  if (anchorRef?.current && anchorPos) {
+  // anchorRef 提供 → portal + fixed 定位（popover 形态）
+  // pos 默认 {0,0}（useLayoutEffect 后续更新，避免初次渲染 anchorPos 还未计算完时回退 inline）
+  if (anchorRef?.current) {
+    const pos = anchorPos ?? { top: 0, left: 0 }
     const wrapperStyle: CSSProperties = {
       position: 'fixed',
-      top: `${anchorPos.top}px`,
-      left: `${anchorPos.left}px`,
+      top: `${pos.top}px`,
+      left: `${pos.left}px`,
       // 在 anchor 上方 8px 间隙弹出（设计稿 sb__menu 从 sb__foot 上方弹出）
       transform: 'translateY(calc(-100% - 8px))',
       zIndex: 'var(--z-shell-drawer)' as unknown as number,

@@ -87,6 +87,9 @@ export type { HealthBadgeProps } from './health-badge'
 export { UserMenu, deriveAvatarText } from './user-menu'
 export type { UserMenuProps } from './user-menu'
 
+export { Sidebar, formatCount } from './sidebar'
+export type { SidebarProps } from './sidebar'
+
 // AdminNav + HealthSnapshot + AdminShellUser + AdminUserActions + UserMenuAction
 // 数据契约类型 SSOT（CHG-SN-2-05/06/07）
 export type {

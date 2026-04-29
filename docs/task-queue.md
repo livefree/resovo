@@ -542,9 +542,9 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
 
 ## [SEQ-20260428-03] M-SN-2 第一阶段 · ADR-103a 起草 + AdminNavItem 字段扩展（执行序列）
 
-- **状态**：🔄 执行中（CHG-SN-2-01 ✅；fix(CHG-SN-2-01) ✅；CHG-SN-2-02 整卡 ✅；CHG-SN-2-01.5 ✅；CHG-SN-2-03 ✅；CHG-SN-2-04 ✅；fix(CHG-SN-2-04) ✅；CHG-SN-2-05 ✅；CHG-SN-2-06 ✅；CHG-SN-2-07 ✅ Shell 5/10 + 章法 1C/5C 受控浮层范式；CHG-SN-2-08 ~ -21 待开）
+- **状态**：🔄 执行中（CHG-SN-2-01 ✅；fix(CHG-SN-2-01) ✅；CHG-SN-2-02 整卡 ✅；CHG-SN-2-01.5 ✅；CHG-SN-2-03 ✅；CHG-SN-2-04 ✅；fix(CHG-SN-2-04) ✅；CHG-SN-2-05 ✅；CHG-SN-2-06 ✅；CHG-SN-2-07 ✅；fix(CHG-SN-2-07) ✅；CHG-SN-2-08 ✅ Shell 6/10 视觉核心；CHG-SN-2-09 ~ -21 待开）
 - **创建时间**：2026-04-28 22:00
-- **最后更新时间**：2026-04-29 03:15
+- **最后更新时间**：2026-04-29 03:55
 - **目标**：M-SN-2 第一阶段（Shell 公开 API 契约固化 + admin-nav.ts 字段扩展）。落地 ADR-103a 作为 Shell 10 组件 Props / AdminNavItem 5 字段扩展协议 / 4 级 z-index 规范的真源；让 server-next 侧 admin-nav.ts 注入 icon / shortcut / count / badge 字段，准备好被 packages/admin-ui Shell 组件消费。
 - **范围**：`docs/decisions.md`（ADR-103a 新建）/ `apps/server-next/src/lib/admin-nav.ts`（5 字段扩展 + ADMIN_NAV 改写）/ `apps/server-next/src/lib/shell-data.ts`（新建：count provider 接口实现）/ admin-layout token 第 5 层新增 z-shell-* 三变量
 - **依赖**：SEQ-20260428-02 全 5 张卡 PASS（commit da1dafa / 15b3bf7 / 1e6bbb1 / 8975a50 / e1df243 + 修订 e9d2f52）；不留口子检查清单 5/5 [x]
@@ -699,8 +699,12 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
    - 验收要点：6 项渲染 / onAction 触发携带 union 值 / 外部点击关闭（document mousedown listener）/ ESC 关闭 / focus trap / SSR 零 throw / 零硬编码颜色
    - 子代理调用：arch-reviewer (Opus) — UserMenu focus trap + outside-click 模式首张落地需评审
 
-8. **CHG-SN-2-08** — packages/admin-ui Sidebar（Shell 第 6 张 / 5 组 NAV + 折叠态 + 计数徽章 + UserMenu 集成）（状态：⬜ 未开始）
-   - 计划开始：CHG-SN-2-07 PASS 后（依赖 Breadcrumbs + UserMenu）
+8. **CHG-SN-2-08** — packages/admin-ui Sidebar（Shell 第 6 张 / 5 组 NAV + 折叠态 + 计数徽章 + UserMenu 集成 / 视觉核心）（状态：✅ 已完成）
+   - 计划开始：CHG-SN-2-07 PASS 后（含 fix popover/visual 契约）
+   - 实际开始：2026-04-29 03:40
+   - 完成时间：2026-04-29 03:55
+   - 实际工时：0.04 天（~30min；ADR §4.1.2 实施 + UserMenu 集成 + 44 单测 + Opus CONDITIONAL → PASS 合并 P1 + P2 全部）
+   - review：arch-reviewer (claude-opus-4-7) — 12 项 / 1 P1 必修（Footer position: relative wrapper）+ 2 P2 建议合并（ADR §4.1.4 修订段补 union↔actions 取舍 + 4 边界单测）+ 1 P2 保留（formatCount 1.0k 含尾零）
    - 工时估算：0.5 天
    - 关联 ADR：ADR-103a §4.1.2 Sidebar + AdminNavItem 5 字段（CHG-SN-2-02 admin-nav.tsx 已注入 icon/shortcut/badge）
    - 范式：B 纯工具二件套（sidebar.tsx 单文件，组合 UserMenu）

@@ -2927,6 +2927,17 @@ export interface UserMenuProps {
 
 **关联**：CHG-SN-2-07 落地 commit / Opus 评审 PASS（11 项 / 1 必修 + 3 建议优化合并）/ 后续 CHG-SN-2-08 Sidebar 集成 UserMenu / CHG-SN-2-12 AdminShell 装配 onUserMenuAction → actions 分派
 
+**编排层 union ↔ 叶子层 actions 取舍说明**（CHG-SN-2-08 Sidebar 集成时澄清）：
+
+Sidebar 因接收 `onUserMenuAction(union)`（与 AdminShellProps.onUserMenuAction 编排层一致），内部 useMemo 把 union 转成 AdminUserActions 6 callbacks（全 6 项始终为 truthy 函数）。这与 fix(CHG-SN-2-01) §4.1.4 "actions 提供性渲染"（onProfile=undefined → 个人资料项隐藏）的语义不一致 — 编排层 union 必然丢失提供性。
+
+设计取舍：
+- **直接消费 UserMenu 叶子层**（如未来 demo / 测试 / 脱离 Sidebar 的独立场景）→ 通过 `actions: AdminUserActions` 传 callbacks，可隐藏特定项（onSwitchAccount=undefined → 切换账号项隐藏）
+- **通过 Sidebar 间接消费**（M-SN-2 主路径）→ 全 6 项始终渲染；不支持的 action（如 onSwitchAccount 在 server-next 鉴权层不支持多账号）由消费方在 onUserMenuAction 内 noop 处理
+- **AdminShell 装配（CHG-SN-2-12）**消费 union 后内部分派；如需精细隐藏可在 dispatch 层根据用户 role / 配置动态决定 noop vs 跳转
+
+这是 packages/admin-ui Shell 设计的有意权衡：编排层简化为单一 union 调度，叶子层保留细粒度 actions 拆分形态，Sidebar 这一中间层选择字面 1:1 ADR §4.1.2 union 形态以保持编排层一致性。
+
 #### 2026-04-29 · fix(CHG-SN-2-07) · UserMenu popover/visual 契约补全（portal + 定位 + z-index）
 
 Codex stop-time review 识别 CHG-SN-2-07 实施未兑现 ADR §4.1.4 anchorRef 注释中的"**用于定位**"语义，仅实现"点击外部判定"。UserMenu 应为 popover 形态（portal 渲染 + 相对锚点定位 + Shell 抽屉级 z-index），本 fix 补齐。
