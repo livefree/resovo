@@ -1888,3 +1888,44 @@
 - `tests/unit/components/admin-ui/table/pagination.test.tsx`（新建：27 测试）
 - **实测验收**：typecheck ✅ | 27 测试全通过 ✅ | SSR 零 throw ✅
 - **下一步**：CHG-SN-2-16 Drawer / Modal 通用业务原语
+
+---
+
+## fix(CHG-SN-2-22): stop-gate 质量债清零（P1×2 UserMenu/token + P2×3 a11y/layout）
+
+- **日期**: 2026-04-29
+- **TASK-ID**: CHG-SN-2-22
+- **主循环模型**: claude-sonnet-4-6
+- **子代理调用**: 无
+- **变更类型**: fix（stop-gate adversarial review 质量债）
+- **摘要**: 修复 Codex stop-gate review 在 M-SN-2 闭环后发现的 5 个质量问题。
+
+### 修复明细
+
+**P1 — UserMenu callback throw（user-menu.tsx）**
+- `handleItemClick` 补 `catch` 块，防止 consumer callback 抛出时绕过 finally、以 unhandled exception 透传到 Vitest
+
+**P1 — 3 个 undefined design token（selection-action-bar.tsx）**
+- `--accent-primary` → `--accent-default`（primary button 背景/边框 + link 文字色）
+- `--state-error` → `--state-error-fg`（danger button 文字/边框）/ `--state-error-border`（边框）
+- `--bg-surface-hover` → `--bg-surface-elevated`（default button 背景 + confirm wrap 容器）
+
+**P2 — DataTable 根容器补 role="grid"（data-table.tsx）**
+- 根 `<div data-table>` 无 ARIA 角色，子节点 `role="columnheader/row/rowgroup"` 孤立；补 `role="grid"`
+
+**P2 — 可排序列标题补键盘可达（data-table.tsx）**
+- sortable 列头补 `tabIndex={0}` + `onKeyDown`（Enter/Space 触发排序）
+
+**P2 — Sidebar brand 高度对齐 topbar（sidebar.tsx）**
+- `BRAND_STYLE` 补 `height: var(--topbar-h)`，`padding` 改为 `'0 var(--space-4)'`，补 `boxSizing: 'border-box'`
+
+### 变更文件
+- `packages/admin-ui/src/shell/user-menu.tsx`（fix: catch block）
+- `packages/admin-ui/src/components/data-table/selection-action-bar.tsx`（fix: 3 tokens）
+- `packages/admin-ui/src/components/data-table/data-table.tsx`（fix: ARIA role + keyboard）
+- `packages/admin-ui/src/shell/sidebar.tsx`（fix: brand height）
+
+- **新增依赖**：无
+- **数据库变更**：无
+- **实测验收**：typecheck ✅ | lint ✅ | 2407 单测全通过 ✅
+- **下一步**：M-SN-3 标杆页视频库

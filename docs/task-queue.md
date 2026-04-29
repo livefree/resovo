@@ -852,6 +852,14 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
     - 子代理调用：arch-reviewer (Opus) — milestone 阶段审计强制 Opus（CLAUDE.md 模型路由 + plan §5.3）
     - 完成判据：评级 A 或 B（带欠账） → M-SN-2 闭环；评级 C → BLOCKER 暂停不进 M-SN-3
 
+23. **CHG-SN-2-22** — stop-gate 质量债清零（状态：✅ 完成）
+    - 计划开始：CHG-SN-2-21 完成后（stop-gate adversarial review 后）
+    - 完成时间：2026-04-29
+    - 工时估算：0.3 天
+    - 来源：Codex stop-gate adversarial review 发现 P1×2 + P2×3
+    - 修复：UserMenu catch block / 3 undefined tokens / DataTable role="grid" / 键盘可达排序 / Sidebar brand 高度对齐
+    - 子代理调用：无
+
 4. **CHG-SN-2-13 ~ CHG-SN-2-20**（数据原语层）：DataTable v2 + Toolbar/Filter/ColumnSettings + Drawer/Modal/AdminDropdown/SelectionActionBar + Empty/Error/Loading + Storybook demo
    - 详细范围 CHG-SN-2-12 AdminShell 装配后逐张起草
 
