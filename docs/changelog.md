@@ -1713,3 +1713,27 @@
   - test 69 新增测试全通过；pre-existing user-menu-interaction unhandled error 不变
   - DataTable client/server 两档 mode ✅；URL 同步 + sessionStorage 同步可测试 ✅；SSR 零 throw ✅
 - **下一步**：CHG-SN-2-14 Toolbar / FilterChip / ColumnSettingsPanel
+
+---
+
+## chg(CHG-SN-2-14): packages/admin-ui Toolbar / FilterChip / ColumnSettingsPanel（DataTable v2 配套）
+
+- **日期**: 2026-04-29
+- **TASK-ID**: CHG-SN-2-14
+- **主循环模型**: claude-sonnet-4-6
+- **子代理调用**: 无
+- **变更类型**: feat（数据原语装饰层）
+- **摘要**: 按 ADR-103 §4.4 实施 DataTable v2 配套三组件：Toolbar（三槽位容器）+ FilterChip/FilterChipBar（筛选条件展示 + 清除）+ ColumnSettingsPanel（portal 浮层 + focus trap + ESC/外部点击关闭 + 列可见性 toggle）。
+
+### 新增/变更文件
+- `packages/admin-ui/src/components/data-table/toolbar.tsx`（新建）
+- `packages/admin-ui/src/components/data-table/filter-chip.tsx`（新建）
+- `packages/admin-ui/src/components/data-table/column-settings-panel.tsx`（新建）
+- `packages/admin-ui/src/components/data-table/index.ts`（追加导出）
+- `tests/unit/components/admin-ui/table/toolbar.test.tsx`（新建：9 测试）
+- `tests/unit/components/admin-ui/table/filter-chip.test.tsx`（新建：14 测试）
+- `tests/unit/components/admin-ui/table/column-settings-panel.test.tsx`（新建：15 测试）
+- **新增依赖**：无
+- **数据库变更**：无
+- **实测验收**：typecheck ✅ | 38 条新测试全通过 ✅ | SSR 零 throw ✅
+- **下一步**：CHG-SN-2-15 Pagination v2

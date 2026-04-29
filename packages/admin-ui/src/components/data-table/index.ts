@@ -3,8 +3,14 @@
  * 真源：ADR-103 §4.1 + §4.2（影响文件列表）
  */
 
-// Component
+// Components
 export { DataTable } from './data-table'
+export { Toolbar } from './toolbar'
+export type { ToolbarProps } from './toolbar'
+export { FilterChip, FilterChipBar } from './filter-chip'
+export type { FilterChipProps, FilterChipBarProps } from './filter-chip'
+export { ColumnSettingsPanel } from './column-settings-panel'
+export type { ColumnSettingsPanelProps } from './column-settings-panel'
 
 // Hook
 export { useTableQuery } from './use-table-query'

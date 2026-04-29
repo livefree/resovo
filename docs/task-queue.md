@@ -789,7 +789,7 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
     - 验收要点：客户端分页（≤200 条）/ 服务端分页（200-50k）/ URL 同步 sessionStorage 同步 / 列基础渲染 / 排序 / 行选中 / 单测覆盖率 ≥70% / SSR 零 throw
     - 子代理调用：arch-reviewer (Opus) — DataTable 是数据原语核心，强制 Opus
 
-15. **CHG-SN-2-14** — Toolbar / Filter / ColumnSettings（DataTable v2 配套）（状态：⬜ 未开始）
+15. **CHG-SN-2-14** — Toolbar / Filter / ColumnSettings（DataTable v2 配套）（状态：✅ PASS）
     - 计划开始：CHG-SN-2-13 PASS 后
     - 工时估算：0.5 天
     - 关联 ADR：ADR-103
