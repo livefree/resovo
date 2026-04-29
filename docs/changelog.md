@@ -39,6 +39,22 @@
 
 ---
 
+## [CHG-SN-2-18] Empty / Error / Loading 状态原语（packages/admin-ui state）
+
+- **日期**: 2026-04-29
+- **执行模型**: claude-sonnet-4-6
+- **子代理调用**: 无
+
+### 变更摘要
+新增 `packages/admin-ui/src/components/state/` 模块：
+
+- `empty-state.tsx`：EmptyState — title / description / illustration / action 可选；零硬编码颜色
+- `error-state.tsx`：ErrorState — 接收 Error 对象；默认标题"加载失败"；可选 onRetry 按钮
+- `loading-state.tsx`：LoadingState — variant='spinner'（居中转圈）/ 'skeleton'（骨架行，skeletonRows 可配置，默认 5）；aria-busy=true
+- 追加 25 条单测（7 + 7 + 11）全通过；typecheck ✅
+
+---
+
 ## [CHG-SN-2-17] AdminDropdown / SelectionActionBar（packages/admin-ui 行操作原语）
 
 - **日期**: 2026-04-29

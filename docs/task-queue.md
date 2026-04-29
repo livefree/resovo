@@ -822,7 +822,7 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
     - 文件范围：`packages/admin-ui/src/components/{admin-dropdown,selection-action-bar}.tsx` + 单测
     - 子代理调用：可降 Sonnet
 
-19. **CHG-SN-2-18** — Empty / Error / Loading 状态原语（状态：⬜ 未开始）
+19. **CHG-SN-2-18** — Empty / Error / Loading 状态原语（状态：✅ 完成）
     - 计划开始：CHG-SN-2-17 PASS 后
     - 工时估算：0.2 天
     - 关联 ADR：plan §6 M-SN-2 v2.3 范围 B
