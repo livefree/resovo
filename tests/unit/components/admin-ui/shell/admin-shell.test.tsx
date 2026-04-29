@@ -222,3 +222,23 @@ describe('AdminShell — onNavigate 回调', () => {
     expect(onNavigate).toHaveBeenCalledWith('/admin')
   })
 })
+
+describe('AdminShell — countProvider 求值', () => {
+  it('countProvider 返回 Map → Sidebar 显示运行时计数（覆盖静态值）', () => {
+    const countProvider = vi.fn(() => new Map([
+      ['/admin/moderation', 99],
+    ]) as ReadonlyMap<string, number>)
+    const { container } = renderShell({ countProvider })
+    expect(countProvider).toHaveBeenCalled()
+    // countProvider 返回 99 → Sidebar item-badge 应显示 "99"
+    const item = container.querySelector('[data-sidebar-item="/admin/moderation"]')
+    expect(item?.querySelector('[data-sidebar-item-badge]')?.textContent).toBe('99')
+  })
+
+  it('countProvider=undefined → 回退到静态 count 值', () => {
+    const { container } = renderShell({ countProvider: undefined })
+    // NAV 中 moderation.count=12 静态值
+    const item = container.querySelector('[data-sidebar-item="/admin/moderation"]')
+    expect(item?.querySelector('[data-sidebar-item-badge]')?.textContent).toBe('12')
+  })
+})

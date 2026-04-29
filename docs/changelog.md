@@ -39,6 +39,28 @@
 
 ---
 
+## [CHG-SN-2-20] 数据原语层集成验收
+
+- **日期**: 2026-04-29
+- **执行模型**: claude-sonnet-4-6
+- **子代理调用**: 无
+
+### 验收结果
+| 验收项 | 结果 |
+|---|---|
+| 零硬编码颜色扫描（verify-token-isolation + grep rgba/hex） | ✅ PASS（0 violations） |
+| 零 fetch 副作用（packages/admin-ui 模块顶层） | ✅ PASS |
+| SSR 兼容（149 个 renderToString 测试） | ✅ PASS |
+| a11y 基线（role/aria-* 全覆盖） | ✅ PASS |
+| 全量单测 2407 条 | ✅ PASS |
+
+### 补充测试
+- `admin-shell.test.tsx`：追加 countProvider 求值测试（2 条）
+  - countProvider 返回运行时 Map → Sidebar badge 显示运行时值
+  - countProvider=undefined → 回退到静态 count
+
+---
+
 ## [CHG-SN-2-19] Storybook-style demo 页（/admin/dev/components）
 
 - **日期**: 2026-04-29
