@@ -3144,3 +3144,633 @@ CHG-SN-2-02（admin-nav.ts ADMIN_NAV 5 字段扩展 + icon 注入）开工后触
 - **plan §4.7**（v2.3 → v2.4 同步修订，本 ADR 配套落盘）
 - **plan §5.2 BLOCKER 第 2 条**（依赖白名单越界的触发源）
 - **关联序列**：SEQ-20260428-03 任务 1.5
+
+## ADR-103: packages/admin-ui DataTable v2 公开 API 契约 + useTableQuery + 数据原语层
+
+- **日期**：2026-04-28
+- **状态**：已采纳
+- **子代理**：arch-reviewer (claude-opus-4-7) — DataTable v2 API 契约 + 新共享组件契约强制 Opus（CLAUDE.md 模型路由规则第 1/3 项）
+- **起草模型**：claude-opus-4-7
+- **关联序列**：SEQ-20260428-03（M-SN-2 第二阶段 — 数据原语层落地）
+- **关联卡**：CHG-SN-2-12.5（本 ADR 起草）/ CHG-SN-2-13 ~ CHG-SN-2-18（数据原语分卡实施）
+
+### 背景
+
+ADR-103a 已完成 packages/admin-ui Shell 编排层 10 组件公开 API。M-SN-2 第二阶段进入数据原语层（DataTable v2 + Toolbar / Filter / ColumnSettings + Pagination v2 + Drawer / Modal / AdminDropdown / SelectionActionBar + Empty / Error / Loading），覆盖 M-SN-3 视频库 / 审核台 / 来源 / 字幕 / 合并 / image-health 等 14 个视图的列表/详情共用基座。
+
+apps/server v1 已沉淀的 ModernDataTable + useAdminTableState + useAdminTableSort + useAdminTableColumns + useTableSettings 多套 hook 共存（ADR-021 治理后仍未完全收敛），存在三类历史包袱：
+
+1. 列宽 / 列可见 / 排序 / 分页 / 筛选状态分散在 4 个 hook，存储 key 双轨并存（`admin:table:{route}:{tableId}:v1` + `admin:table:settings:{tableId}:v1`）
+2. URL 同步缺失：刷新页面或分享链接时分页 / 排序 / 筛选状态丢失
+3. 客户端 / 服务端两档分页切换协议未在类型层落定，导致每个 list view 自行重复实现
+
+DataTable v2 + useTableQuery 一次性收编。本 ADR 是 CHG-SN-2-13（DataTable v2 首张代码卡）及后续 CHG-SN-2-14 ~ CHG-SN-2-18 全部数据原语卡的硬前置门：未 PASS 不得开工任何数据原语代码卡。
+
+### 决策
+
+#### 4.1 DataTable v2 — 表格基座
+
+- **文件**：`packages/admin-ui/src/components/data-table/data-table.tsx`
+- **导出**：`DataTable` + `TableColumn` + `TableSortState` + `TableSelectionState` + 配套 union 类型
+- **职责**：渲染列 / 行 / sticky header / row hover / 选区高亮 / 列宽（CSS Grid 模板 + min-width）/ 排序 indicator / 行点击 / 行选择 checkbox。两档分页（`mode: 'client' | 'server'`）由 prop 显式决定；不持有 query 状态本体（query 状态由 `useTableQuery` 管理，结果以 `query` + `onQueryChange` 注入）。
+- **不做**：不内置 ColumnSettingsPanel / Toolbar / Pagination 组件本体（由消费方编排，参见 4.4 / 4.5）；不持有数据获取（不调用 apiClient / fetch / SWR）；不实现虚拟滚动（M-SN-2 不涉及万级数据集，virtual scroll 推迟到 ADR-100 候选依赖 `@tanstack/react-virtual` 评审通过后另立 ADR）；不内置筛选 UI（filterContent 由列槽位透传 ReactNode）；不持久化任何状态（持久化由 `useTableQuery` 集中负责）。
+
+```typescript
+export interface DataTableProps<T> {
+  /** 行数据；mode='client' 时为完整数据集，mode='server' 时为当前页数据 */
+  readonly rows: readonly T[]
+  /** 列定义（不可变）*/
+  readonly columns: readonly TableColumn<T>[]
+  /** row id 抽取器（用于 React key + 选区集合的稳定标识）*/
+  readonly rowKey: (row: T) => string
+  /** 分页模式；client = 客户端 sort/filter/paginate；server = 服务端，DataTable 仅渲染当前页 */
+  readonly mode: 'client' | 'server'
+  /** 当前 query 状态（来自 useTableQuery）*/
+  readonly query: TableQuerySnapshot
+  /** query 状态变更回调（来自 useTableQuery）*/
+  readonly onQueryChange: (next: TableQueryPatch) => void
+  /** 服务端模式必填：远端总行数；客户端模式忽略此字段，由 rows.length 自动推导 */
+  readonly totalRows?: number
+  /** 加载态；true 时表格内部覆盖 LoadingState 原语（见 4.9）*/
+  readonly loading?: boolean
+  /** 错误态；非 undefined 时表格 body 替换为 ErrorState（见 4.9）*/
+  readonly error?: Error | undefined
+  /** 空态；rows.length === 0 且 !loading && !error 时渲染 EmptyState（见 4.9）；undefined 时渲染默认 EmptyState */
+  readonly emptyState?: ReactNode
+  /** 选区状态（受控）；undefined 时表格不渲染 selection checkbox 列 */
+  readonly selection?: TableSelectionState
+  /** 选区变更回调；selection 受控时必填 */
+  readonly onSelectionChange?: (next: TableSelectionState) => void
+  /** 行点击回调；undefined 时行不响应 click（仅 hover 视觉）*/
+  readonly onRowClick?: (row: T, index: number) => void
+  /** 行密度；'comfortable'=40px 行高 / 'compact'=32px；映射 admin-layout/table.ts 的 row-h / row-h-compact */
+  readonly density?: 'comfortable' | 'compact'
+  /** 表格 testid（e2e 必备）*/
+  readonly 'data-testid'?: string
+}
+
+export interface TableColumn<T> {
+  readonly id: string
+  readonly header: ReactNode
+  readonly accessor: (row: T) => unknown
+  /** 像素宽度；undefined 时按 minWidth + flex 1 自适应 */
+  readonly width?: number
+  /** 最小宽度；默认读取 admin-layout/table.ts 的 col-min-w (80px) */
+  readonly minWidth?: number
+  /** 是否允许列宽拖拽（M-SN-2 落地，由 useTableQuery 持久化到 sessionStorage）*/
+  readonly enableResizing?: boolean
+  /** 是否允许排序；为 true 时 header 渲染 sort indicator + 点击触发 onQueryChange.sort */
+  readonly enableSorting?: boolean
+  /** cell 自定义渲染；undefined 时 fallback 为 String(accessor(row)) */
+  readonly cell?: (ctx: TableCellContext<T>) => ReactNode
+  /** Per-column ⋮ 菜单配置；存在时列头右侧渲染 ⋮ 按钮（见 4.4）*/
+  readonly columnMenu?: ColumnMenuConfig
+  /** 列默认可见性；undefined → true；ColumnSettingsPanel 受 useTableQuery 持久化覆盖 */
+  readonly defaultVisible?: boolean
+  /** 列展示固定（不可隐藏）；典型用于操作列 */
+  readonly pinned?: boolean
+  /** cell overflow visible（典型用于行内 dropdown 不被截断）*/
+  readonly overflowVisible?: boolean
+}
+
+export interface TableCellContext<T> {
+  readonly row: T
+  readonly value: unknown
+  readonly rowIndex: number
+}
+
+export interface TableSortState {
+  /** 排序列 id；undefined 表示无排序 */
+  readonly field: string | undefined
+  /** 方向；field === undefined 时本字段语义无效 */
+  readonly direction: 'asc' | 'desc'
+}
+
+export interface TableSelectionState {
+  /** 选中行 rowKey 的不可变集合 */
+  readonly selectedKeys: ReadonlySet<string>
+  /** 全选语义：'page' = 仅当前页 / 'all-matched' = 选中全量匹配（服务端模式下用） */
+  readonly mode: 'page' | 'all-matched'
+}
+
+export interface ColumnMenuConfig {
+  readonly canSort?: boolean
+  readonly canHide?: boolean
+  readonly filterContent?: ReactNode
+  readonly isFiltered?: boolean
+  readonly onClearFilter?: () => void
+}
+```
+
+**字段重要决策**：
+
+- `TableSortState.direction` 字段名统一为 `direction`（与 v1 ModernDataTable 一致）；废弃 v1 useAdminTableState 的 `dir` 命名歧义。
+- `TableSortState.field` 用 `string | undefined` 表达"无排序"，不用 `null` —— 与 readonly + TS 严格模式更对齐，避免 `null` / `undefined` 二元分支。
+- `mode: 'client' | 'server'` 字面常量必填，**禁止由 rows.length 启发式推断** —— 启发式会在数据 < 200 但实际服务端分页的场景误判（如 server 模式但当前页只剩 5 条）。
+- `selection` 受控；`mode: 'page' | 'all-matched'` 暴露给消费方，由 SelectionActionBar 渲染"选中 N 条" / "选中全部 X 条"差异化 UI。
+
+#### 4.2 useTableQuery + table-query-store
+
+- **文件**：
+  - `packages/admin-ui/src/components/data-table/use-table-query.ts`
+  - `packages/admin-ui/src/components/data-table/table-query-store.ts`（zustand 单例 store，与 ToastViewport 同范式）
+  - `packages/admin-ui/src/components/data-table/url-sync.ts`（纯函数：snapshot ↔ URLSearchParams 互转）
+  - `packages/admin-ui/src/components/data-table/storage-sync.ts`（纯函数：snapshot ↔ sessionStorage 互转）
+- **职责**：单 hook 持有 5 类状态（pagination / sort / filters / columns / selection）；自动同步到 URL（pagination / sort / filters）+ sessionStorage（columns / pagination.pageSize / 列宽）；`onQueryChange` patch 形态变更（PATCH 而非 SET，避免覆盖未变字段）。
+- **不做**：不调用 router.push 本体（router 注入由消费方提供 `routerAdapter`，避免 packages/admin-ui 直 import `next/navigation`）；不持有数据本体；不发请求；不持久化 selection（选区是会话内瞬态状态）；不持久化 filters 到 sessionStorage（filters 走 URL，分享/书签语义优于"我上次选了什么"）。
+
+```typescript
+export interface UseTableQueryOptions {
+  /** 表格实例稳定 ID；同一 tableId 共享同一份持久化命名空间；必填 */
+  readonly tableId: string
+  /** 路由适配器（由消费方注入 next/navigation router.push/replace + useSearchParams 等价）；
+   *  packages/admin-ui 不直 import next/navigation，保持 Storybook / 单测 / 跨 framework 兼容 */
+  readonly router: TableRouterAdapter
+  /** 初始/默认状态；URL + sessionStorage 反序列化失败时 fallback */
+  readonly defaults?: Partial<TableQueryDefaults>
+  /** URL 参数命名空间前缀；多表格同页时避免冲突；默认空（单表格场景）*/
+  readonly urlNamespace?: string
+  /** 列定义（用于 columns 状态默认派生 + url-sync 校验排序字段合法性）*/
+  readonly columns: readonly TableColumn<unknown>[]
+}
+
+export interface TableRouterAdapter {
+  /** 同步读取当前 URL 的 search params；SSR 下消费方传入 cookie / header 派生快照 */
+  readonly getSearchParams: () => URLSearchParams
+  /** 同步推送（无历史栈条目；用于内部 query 变更）*/
+  readonly replace: (next: URLSearchParams) => void
+  /** 推入历史栈（用于"打开新筛选 → 浏览器 back 可恢复"）；M-SN-2 默认走 replace，本字段为后续扩展槽 */
+  readonly push?: (next: URLSearchParams) => void
+}
+
+export interface TableQuerySnapshot {
+  readonly pagination: { readonly page: number; readonly pageSize: number }
+  readonly sort: TableSortState
+  readonly filters: ReadonlyMap<string, FilterValue>
+  readonly columns: ReadonlyMap<string, ColumnPreference>
+  readonly selection: TableSelectionState
+}
+
+export interface TableQueryPatch {
+  readonly pagination?: Partial<TableQuerySnapshot['pagination']>
+  readonly sort?: TableSortState
+  readonly filters?: ReadonlyMap<string, FilterValue>
+  readonly columns?: ReadonlyMap<string, ColumnPreference>
+  readonly selection?: TableSelectionState
+}
+
+export interface ColumnPreference {
+  readonly visible: boolean
+  readonly width?: number
+}
+
+/** filter 合法值；any 严禁，受控收敛到以下并集 */
+export type FilterValue =
+  | { readonly kind: 'text'; readonly value: string }
+  | { readonly kind: 'number'; readonly value: number }
+  | { readonly kind: 'bool'; readonly value: boolean }
+  | { readonly kind: 'enum'; readonly value: readonly string[] }
+  | { readonly kind: 'range'; readonly min?: number; readonly max?: number }
+  | { readonly kind: 'date-range'; readonly from?: string; readonly to?: string }
+
+export interface TableQueryDefaults {
+  readonly pagination: { readonly page: number; readonly pageSize: number }
+  readonly sort: TableSortState
+  readonly filters: ReadonlyMap<string, FilterValue>
+}
+
+export function useTableQuery(options: UseTableQueryOptions): {
+  readonly snapshot: TableQuerySnapshot
+  readonly patch: (next: TableQueryPatch) => void
+  readonly reset: () => void
+}
+```
+
+**4.2.1 URL 同步规约**（精确字段表，CHG-SN-2-13 实施基准）
+
+同步到 URL 的状态（影响"分享 / 书签 / 后退-前进"语义的状态）：
+- `pagination.page` → URL key `page`（默认 1 时省略）
+- `pagination.pageSize` → **不进 URL**，归入 sessionStorage（属用户布局偏好）
+- `sort.field` + `sort.direction` → URL keys `sort` + `sortDir`（field 为 undefined 时两 keys 均省略）
+- `filters` → URL key 模式 `f.{filterId}` + 编码规则见下表
+
+URL 命名空间：`urlNamespace='videos'` 时所有 keys 加前缀 `videos.`（如 `videos.page=2&videos.sort=created_at`）；空命名空间时不加前缀。同一页同时挂载 2+ 表格时必须设置不同 namespace。
+
+编码规则：
+- `text` / `number` / `bool` → 字符串 / 数字字符串 / `'true'|'false'`
+- `enum` → 逗号分隔（`enum.value=['a','b']` → `f.status=a,b`）
+- `range` → `f.{id}.min=N` + `f.{id}.max=M`（缺省者省略）
+- `date-range` → `f.{id}.from=ISO` + `f.{id}.to=ISO`（缺省者省略；格式 ISO 8601）
+
+默认值不进 URL（保持 URL 干净，分享时只携带与默认不同的部分）；反序列化时缺失 key fallback 到 defaults。
+
+非法值处理：URL key 解析失败（如 `page=abc` 或 `sortDir=middle`）→ console.warn + fallback 到 defaults，**不抛错**（避免错误 URL 导致页面崩溃）。
+
+Next.js App Router 适配（消费方实现 `TableRouterAdapter`）：
+- `getSearchParams` → `useSearchParams()` 返回值的副本
+- `replace` → `router.replace(\`${pathname}?${next.toString()}\`, { scroll: false })`（`scroll: false` 必填，避免 query 变更引起页面顶部滚动）
+
+**4.2.2 sessionStorage 同步规约**
+
+存储 key：`admin-ui:table:{tableId}:v1`（tableId 由消费方稳定提供；与 v1 双轨命名收敛为单一 namespace）
+
+持久化字段：
+- `pagination.pageSize`（用户喜欢的 20/50/100）
+- `columns`（visible + width；按 column.id 索引）
+
+不持久化字段（走 URL 或瞬态）：
+- `pagination.page`、`sort`、`filters` —— 走 URL
+- `selection` —— 会话瞬态
+
+序列化容错：JSON.parse 失败 / schema 不匹配 → 静默清除该 key + fallback defaults，不阻塞渲染（禁止空 catch，统一 console.warn）。
+
+v1 → v2 迁移：CHG-SN-2-13 不读取 v1 旧 key（`admin:table:{route}:{tableId}:v1` / `admin:table:settings:{tableId}:v1`）—— apps/server 退役路径，v1 用户偏好不迁移；server-next 是新表格首次会话从默认开始。
+
+**4.2.3 store 实现要点**（与 ADR-103a §4.4-1 Provider 不下沉硬约束对齐）
+
+- 模块顶层零副作用：`window` / `document` / `sessionStorage` 访问全部在 `useEffect` 内
+- SSR 安全：`getServerSnapshot` 返回稳定 defaults 派生值
+- 单 store 多 tableId 共存：store 内部以 tableId 为 Map key 持有多份 snapshot，避免多 hook 实例 store collision
+
+#### 4.3 两档分页协议
+
+| 档位 | 触发条件 | 数据契约 | 消费方使用模式 |
+|---|---|---|---|
+| 客户端分页 | `mode='client'` 且数据集 ≤ 200 行 | `rows` 传入完整数据集；DataTable 内部按 `query.sort` + 客户端 filter + slice paginate | RSC/SWR 一次性拉全量 → DataTable client mode 渲染；query 变更不触发再请求 |
+| 服务端分页 | `mode='server'` 或数据集 > 200 行 | `rows` 传入当前页（pageSize 行）；`totalRows` 必填；`onQueryChange` 触发后由消费方按新 snapshot 重新请求 | SWR key 含 query 关键字段 → onQueryChange patch → SWR key 变化 → 自动 refetch |
+
+切换阈值 200 条为基准建议；`mode` 必须由消费方显式声明，DataTable 不做隐式启发式切换。
+
+消费方使用模式（client）：
+
+```typescript
+const banners = useSWR('/admin/banners', fetcher) // 一次拉全量
+const tableQuery = useTableQuery({ tableId: 'banners', router, columns })
+return (
+  <DataTable
+    mode="client"
+    rows={banners.data ?? []}
+    columns={columns}
+    rowKey={r => r.id}
+    query={tableQuery.snapshot}
+    onQueryChange={tableQuery.patch}
+    loading={banners.isLoading}
+  />
+)
+```
+
+消费方使用模式（server）：
+
+```typescript
+const tableQuery = useTableQuery({ tableId: 'videos', router, columns })
+const { data, isLoading } = useSWR(
+  ['/admin/videos', tableQuery.snapshot.pagination, tableQuery.snapshot.sort, serializeFilters(tableQuery.snapshot.filters)],
+  ([url, pagination, sort, filters]) => apiClient.get(url, { ...pagination, ...sort, ...filters }),
+)
+return (
+  <DataTable
+    mode="server"
+    rows={data?.items ?? []}
+    totalRows={data?.total ?? 0}
+    columns={columns}
+    rowKey={r => r.id}
+    query={tableQuery.snapshot}
+    onQueryChange={tableQuery.patch}
+    loading={isLoading}
+  />
+)
+```
+
+API 入参规范（apps/api 侧）：`?page=1&pageSize=20&sort=created_at&sortDir=desc&f.status=approved,pending`
+响应格式：`{ items: T[], total: number, page: number, pageSize: number }`
+
+#### 4.4 Toolbar / Filter / ColumnSettings
+
+- **Toolbar** — `packages/admin-ui/src/components/data-table/toolbar.tsx`
+  - **职责**：表格上方 1 行容器，槽位组合（左：search / 全局 filter trigger；右：refresh / column-settings ⚙ / 自定义 actions）；不持有数据，不调 query.patch（每个 slot 由消费方塞自定义组件）
+
+```typescript
+export interface ToolbarProps {
+  readonly leading?: ReactNode  // search / global filter chip 槽
+  readonly trailing?: ReactNode // 自定义 actions
+  readonly columnSettings?: ReactNode // ⚙ 触发器槽
+  readonly className?: string
+}
+```
+
+- **FilterChip / FilterChipBar** — `packages/admin-ui/src/components/data-table/filter-chip.tsx`
+  - **职责**：单个筛选条件的 Chip（`{label}: {value}` + ✕ 清除）；`FilterChipBar` 容器水平排列多 chip；不内置 filter form / popover（filter form 由消费方按业务自由组装）
+
+```typescript
+export interface FilterChipProps {
+  readonly id: string
+  readonly label: string
+  readonly value: string
+  readonly onClear: () => void
+}
+
+export interface FilterChipBarProps {
+  readonly items: readonly FilterChipProps[]
+  readonly onClearAll?: () => void
+}
+```
+
+- **ColumnSettingsPanel** — `packages/admin-ui/src/components/data-table/column-settings-panel.tsx`
+  - **职责**：portal 渲染（挂 body）的列可见性/列宽设置面板；ESC 关闭 + 点击外部关闭 + focus trap；不持久化（持久化由 useTableQuery 接管）
+
+```typescript
+export interface ColumnSettingsPanelProps {
+  readonly open: boolean
+  readonly columns: readonly TableColumn<unknown>[]
+  readonly value: ReadonlyMap<string, ColumnPreference>
+  readonly onChange: (next: ReadonlyMap<string, ColumnPreference>) => void
+  readonly onClose: () => void
+  readonly anchorRef: React.RefObject<HTMLElement>
+}
+```
+
+#### 4.5 Pagination v2
+
+- **文件**：`packages/admin-ui/src/components/pagination/pagination.tsx`
+- **导出**：`Pagination`
+
+```typescript
+export interface PaginationProps {
+  readonly page: number
+  readonly pageSize: number
+  readonly totalRows: number
+  readonly onPageChange: (next: number) => void
+  readonly onPageSizeChange?: (next: number) => void
+  /** 默认 [20, 50, 100] */
+  readonly pageSizeOptions?: readonly number[]
+  /** 页码窗口大小（前后各显示几个页码）；默认 2 */
+  readonly windowSize?: number
+  readonly className?: string
+}
+```
+
+#### 4.6 Drawer / Modal — 通用业务原语
+
+- **文件**：
+  - `packages/admin-ui/src/components/overlay/drawer.tsx`
+  - `packages/admin-ui/src/components/overlay/modal.tsx`
+  - `packages/admin-ui/src/components/overlay/use-overlay.ts`（共用 focus trap + ESC + backdrop click 逻辑）
+- **职责**：
+  - **Drawer**：从 `placement: 'left' | 'right' | 'bottom' | 'top'` 滑入；典型业务场景：视频编辑、Banner 编辑、来源详情
+  - **Modal**：居中遮罩弹窗 + 三档尺寸（`size: 'sm' | 'md' | 'lg'`）；典型业务场景：Confirm dialog、Form 弹窗、单字段编辑
+  - 共用：focus trap（首次 open 时焦点进入容器，ESC/backdrop click 关闭后焦点归还触发器）、`aria-modal="true"`、`role="dialog"`、`aria-labelledby`、ESC + backdrop click 关闭、滚动锁定 body
+
+```typescript
+export interface DrawerProps {
+  readonly open: boolean
+  readonly placement: 'left' | 'right' | 'bottom' | 'top'
+  readonly onClose: () => void
+  readonly title?: ReactNode
+  readonly width?: number | string  // 仅 left/right；默认 480px
+  readonly height?: number | string // 仅 top/bottom；默认 50vh
+  readonly closeOnEscape?: boolean   // 默认 true
+  readonly closeOnBackdropClick?: boolean // 默认 true
+  readonly children: ReactNode
+  readonly 'data-testid'?: string
+}
+
+export interface ModalProps {
+  readonly open: boolean
+  readonly size?: 'sm' | 'md' | 'lg'  // sm=400px / md=560px / lg=800px
+  readonly onClose: () => void
+  readonly title?: ReactNode
+  readonly closeOnEscape?: boolean
+  readonly closeOnBackdropClick?: boolean
+  readonly children: ReactNode
+  readonly 'data-testid'?: string
+}
+
+export function useOverlay(opts: {
+  readonly open: boolean
+  readonly onClose: () => void
+  readonly closeOnEscape?: boolean
+  readonly closeOnBackdropClick?: boolean
+}): {
+  readonly containerRef: React.RefObject<HTMLDivElement>
+  readonly backdropProps: { readonly onClick: (e: React.MouseEvent) => void }
+}
+```
+
+**z-index**：Drawer / Modal 同档 `var(--z-modal): 1000`（业务原语层 L1，与 ADR-103a §4.3 表对齐）。新增 admin-layout token（`packages/design-tokens/src/admin-layout/z-index.ts` 追加）：
+
+```typescript
+// 追加到 admin-layout/z-index.ts（ADR-103a §4.3 已新建 z-shell-* 三项）
+export const adminLayoutZIndexBusiness = {
+  'z-modal': '1000',           // 业务 Drawer / Modal 共用
+  'z-admin-dropdown': '980',   // AdminDropdown 默认（挂在 Modal 之下）
+} as const
+```
+
+层级关系：`AdminDropdown 980 < Drawer/Modal 1000 < Shell 抽屉 1100 < CmdK 1200 < Toast 1300`（与 ADR-103a §4.3 衔接）。
+
+Drawer vs Modal 决策树（消费方使用指南）：
+- 表单编辑（多字段、长内容）→ Drawer
+- 二次确认（删除/不可逆操作）→ Modal sm
+- 单字段快速编辑 → Modal sm
+- 遮罩选择（图片/视频选择器）→ Modal lg
+
+#### 4.7 AdminDropdown
+
+- **文件**：`packages/admin-ui/src/components/dropdown/admin-dropdown.tsx`
+- **导出**：`AdminDropdown` + `AdminDropdownItem`
+- **职责**：portal 渲染的下拉菜单（行操作菜单 / 列头 ⋮ / Toolbar 自定义菜单）；点击外部关闭 + ESC 关闭 + 上下方向键导航 + Enter 触发；自动定位（trigger 锚定 + 边界回避）
+
+```typescript
+export interface AdminDropdownProps {
+  readonly open: boolean
+  readonly trigger: ReactNode
+  readonly items: readonly AdminDropdownItem[]
+  readonly onOpenChange: (next: boolean) => void
+  readonly align?: 'left' | 'right'  // 默认 right
+  readonly placement?: 'top' | 'bottom'  // 默认 bottom；不足时自动翻转
+  readonly 'data-testid'?: string
+}
+
+export interface AdminDropdownItem {
+  readonly key: string
+  readonly label: ReactNode
+  readonly icon?: ReactNode
+  readonly onClick: () => void
+  readonly danger?: boolean
+  readonly disabled?: boolean
+  readonly shortcut?: string      // 'mod+e' 等；formatShortcut 渲染
+  readonly separator?: boolean    // 上方分隔线
+}
+```
+
+#### 4.8 SelectionActionBar
+
+- **文件**：`packages/admin-ui/src/components/data-table/selection-action-bar.tsx`
+- **导出**：`SelectionActionBar`
+- **职责**：行选中后吸附于表格底部/顶部的批量操作工具栏；显示"已选 N 条"+ 全选切换（page ↔ all-matched）+ 自定义 actions + 清除选择按钮
+
+```typescript
+export interface SelectionActionBarProps {
+  readonly visible: boolean
+  readonly variant?: 'sticky-bottom' | 'sticky-top'  // 默认 'sticky-bottom'
+  readonly selectedCount: number
+  readonly totalMatched?: number  // 服务端模式提供；undefined 时不显示"选择全部 X 条"
+  readonly selectionMode: TableSelectionState['mode']
+  readonly onSelectionModeChange?: (next: TableSelectionState['mode']) => void
+  readonly onClearSelection: () => void
+  readonly actions: readonly SelectionAction[]
+  readonly className?: string
+  readonly 'data-testid'?: string
+}
+
+export interface SelectionAction {
+  readonly key: string
+  readonly label: ReactNode
+  readonly icon?: ReactNode
+  readonly onClick: () => void
+  readonly variant?: 'default' | 'primary' | 'danger'
+  readonly disabled?: boolean
+  readonly confirm?: { readonly title: string; readonly description?: string }
+}
+```
+
+#### 4.9 Empty / Error / Loading 状态原语
+
+- **文件**：
+  - `packages/admin-ui/src/components/state/empty-state.tsx`
+  - `packages/admin-ui/src/components/state/error-state.tsx`
+  - `packages/admin-ui/src/components/state/loading-state.tsx`
+- **导出**：`EmptyState` / `ErrorState` / `LoadingState`
+
+```typescript
+export interface EmptyStateProps {
+  readonly title?: ReactNode
+  readonly description?: ReactNode
+  readonly illustration?: ReactNode
+  readonly action?: { readonly label: ReactNode; readonly onClick: () => void }
+  readonly className?: string
+}
+
+export interface ErrorStateProps {
+  readonly error: Error
+  readonly title?: ReactNode
+  readonly onRetry?: () => void
+  readonly className?: string
+}
+
+export interface LoadingStateProps {
+  /** 'spinner' = 居中转圈 / 'skeleton' = 骨架行（DataTable body 内消费）*/
+  readonly variant?: 'spinner' | 'skeleton'
+  /** skeleton 行数；variant='skeleton' 时生效；默认 5 */
+  readonly skeletonRows?: number
+  readonly label?: ReactNode
+  readonly className?: string
+}
+```
+
+#### 4.10 不变约束（跨全部数据原语组件）
+
+1. **Provider 不下沉**（继承 ADR-103a §4.4-1）：packages/admin-ui 数据原语层零 `BrandProvider` / `ThemeProvider` / `createContext` 声明；所有跨组件状态由 zustand 单例 store 持有（仅 `table-query-store` + `toast-store`）
+2. **Edge Runtime 兼容**（继承 ADR-103a §4.4-2）：模块顶层零 `window` / `document` / `fetch` / `localStorage` / `sessionStorage` / `navigator` 访问；URL 同步 / sessionStorage 读写全部在 `useEffect` 内或事件 handler 内
+3. **零硬编码颜色**（继承 ADR-103a §4.4-3）：颜色 / 间距 / 阴影全部读 admin-layout + semantic + brands token；行高读 `admin-layout/table.row-h` / `row-h-compact`；列最小宽度读 `col-min-w`
+4. **零图标库依赖**（继承 ADR-103a §4.4-4）：所有 icon 槽位类型为 `React.ReactNode`；packages/admin-ui 自持的内联 SVG 仅限 chevron / sort indicator / close × / checkbox check 等结构性微图标
+5. **零 `any`**：FilterValue 用 union 收敛；TableSelectionState.selectedKeys 用 `ReadonlySet<string>`
+6. **零空 catch**：URL/storage 反序列化失败统一走 `console.warn` + fallback defaults
+7. **Props readonly**：所有 Props interface 字段 readonly；数组用 `readonly T[]`；map 用 `ReadonlyMap`；set 用 `ReadonlySet`
+8. **router 反向注入**：packages/admin-ui 不直 `import { useRouter } from 'next/navigation'`；通过 `TableRouterAdapter` 由消费方注入
+9. **禁止 `as unknown as T`**：TableColumn<T> 的 cell ctx.value 类型为 `unknown`，由消费方在 cell 内做窄化
+
+### 替代方案（已否决）
+
+#### B1 — useTableQuery 直 import `next/navigation`（不走 router adapter）
+
+**否决理由**：违反"packages/admin-ui 跨 framework 友好"约束；丧失 Storybook + 单元测试简单 mock 能力；`TableRouterAdapter` 是清晰的依赖反转，server-next 应用层一次封装即可。
+
+#### B2 — 一档分页（统一服务端）
+
+**否决理由**：admin 大量列表数据 ≤ 200（Banner / 运营位 / 来源 / Sites），强制服务端 round-trip 是无谓延迟；客户端模式下 sort/filter 切换瞬时响应（用户感知 0ms）。
+
+#### B3 — 三档分页（client < 200 / server-static 200-50k / server-virtual >50k）
+
+**否决理由**：M-SN-2 范围内无 >50k 单页数据需求；virtual scroll 引入新依赖（`@tanstack/react-virtual`）过早优化；50k+ 数据集场景出现时另立 ADR 升级即可。
+
+#### B4 — Drawer 与 Modal 合并为单一 Overlay 组件
+
+**否决理由**：两者交互 / 视觉 / 尺寸 / 默认 width/height 差异大，合并后 prop 表混乱；分离更清晰；共用逻辑已抽到 `useOverlay` hook 复用，DRY 已满足。
+
+#### B5 — ColumnSettings 持久化复用 v1 双轨 key（兼容 v1 用户偏好迁移）
+
+**否决理由**：apps/server 整目录 cutover 后退役；新 namespace `admin-ui:table:{tableId}:v1` 一次性收敛，避免双轨并存；server-next admin 用户 ≤50 人，迁移成本极低。
+
+#### B6 — selection 持久化到 sessionStorage
+
+**否决理由**：跨页延续选区语义复杂且易错；宁可瞬态丢失也不要错误的"saved selection"；如需持久化批量场景另立 ADR 引入 SavedSelection 概念（含 query 快照 + 选中 keys 时间戳）。
+
+### 后果
+
+#### 正面
+
+- DataTable v2 + useTableQuery 一次性收编 v1 ModernDataTable + 4 套 hook + 双轨 storage key 历史包袱，CHG-SN-2-13 起 14 个视图共享单一基座。
+- URL 同步落定 → 分享 / 书签 / 浏览器后退-前进语义齐全，admin 协作场景零成本。
+- 两档分页协议在 prop 层显式声明，消费方根据数据规模选 mode，不踩隐式陷阱。
+- Drawer / Modal / AdminDropdown / SelectionActionBar 共享 useOverlay focus trap + ESC + backdrop + scroll lock，a11y 基线达标。
+- z-index 业务原语层（1000 / 980）与 ADR-103a Shell 层（1100/1200/1300）+ admin-layout token 一次性落定，cross-component 层叠零冲突。
+- 单元测试覆盖率目标 ≥75%（url-sync / storage-sync 纯函数全覆盖）。
+
+#### 负面
+
+- `TableRouterAdapter` 显式注入 → server-next 应用层需写一次 adapter 包装（约 30 行）。
+- v1 用户偏好不迁移 → server-next 第一次访问从默认开始（M-SN-2 周期内 admin 用户 ~10 人，单次迁移成本极低）。
+- FilterValue union 收敛 → 自定义筛选类型需走 `kind: 'enum'` + 业务侧 encode/decode；与"零 any"权衡选择保 union 严格。
+
+#### 风险
+
+- URL key 命名空间与 next-intl / next/navigation 已使用的 query key 冲突 → CHG-SN-2-13 验证（server-next 单语言 zh-CN，无 locale query；冲突概率低）。
+- 多表格同页需明确 namespace —— 由 `urlNamespace` prop 解决，但消费方易遗漏 → ESLint 自定义规则补强（`useTableQuery` 同文件内出现 2+ 次必须显式传 `urlNamespace`）。
+- sessionStorage 体积 —— 每个 tableId 持久化 columns + pageSize 约 < 1KB；14 视图 ≈ 14KB，远低于 5MB 上限。
+
+### 影响文件
+
+#### packages/admin-ui（M-SN-2 第二阶段新建）
+
+- `packages/admin-ui/src/components/data-table/data-table.tsx`（CHG-SN-2-13）
+- `packages/admin-ui/src/components/data-table/use-table-query.ts`（CHG-SN-2-13）
+- `packages/admin-ui/src/components/data-table/table-query-store.ts`（CHG-SN-2-13）
+- `packages/admin-ui/src/components/data-table/url-sync.ts`（CHG-SN-2-13）
+- `packages/admin-ui/src/components/data-table/storage-sync.ts`（CHG-SN-2-13）
+- `packages/admin-ui/src/components/data-table/types.ts`（CHG-SN-2-13，集中所有 type 导出）
+- `packages/admin-ui/src/components/data-table/toolbar.tsx`（CHG-SN-2-14）
+- `packages/admin-ui/src/components/data-table/filter-chip.tsx`（CHG-SN-2-14）
+- `packages/admin-ui/src/components/data-table/column-settings-panel.tsx`（CHG-SN-2-14）
+- `packages/admin-ui/src/components/data-table/selection-action-bar.tsx`（CHG-SN-2-17）
+- `packages/admin-ui/src/components/pagination/pagination.tsx`（CHG-SN-2-15）
+- `packages/admin-ui/src/components/overlay/drawer.tsx`（CHG-SN-2-16）
+- `packages/admin-ui/src/components/overlay/modal.tsx`（CHG-SN-2-16）
+- `packages/admin-ui/src/components/overlay/use-overlay.ts`（CHG-SN-2-16）
+- `packages/admin-ui/src/components/dropdown/admin-dropdown.tsx`（CHG-SN-2-17）
+- `packages/admin-ui/src/components/state/empty-state.tsx`（CHG-SN-2-18）
+- `packages/admin-ui/src/components/state/error-state.tsx`（CHG-SN-2-18）
+- `packages/admin-ui/src/components/state/loading-state.tsx`（CHG-SN-2-18）
+- `packages/admin-ui/src/index.ts`（追加 components/* 桶导出）
+
+#### packages/design-tokens
+
+- `packages/design-tokens/src/admin-layout/z-index.ts`（追加 `z-modal: 1000` + `z-admin-dropdown: 980`，与 ADR-103a §4.3 z-shell-* 同文件）
+- `packages/design-tokens/build.ts`（buildLayoutVars 追加 z-modal / z-admin-dropdown）
+- `tests/unit/design-tokens/admin-layout.test.ts`（追加 2 项 z-index 数值断言）
+
+#### scripts
+
+- `scripts/verify-token-isolation.mjs`（FORBIDDEN_TOKENS 追加 `z-modal` / `z-admin-dropdown`，禁止 web-next 消费）
+- `scripts/verify-server-next-isolation.mjs`（扩展扫描 `packages/admin-ui/src/components/**` 模块顶层 forbidden globals + Provider 声明）
+
+#### apps/server-next（M-SN-3 起视图卡消费）
+
+- `apps/server-next/src/lib/table-router-adapter.ts`（M-SN-3 第一张列表卡新建：next/navigation 包装为 TableRouterAdapter；建议提前到 CHG-SN-2-13 同卡新建）
+
+### 关联
+
+- **关联 ADR**：ADR-022（token 单一真源）/ ADR-023（CSS 变量 + Tailwind 桥接）/ ADR-100（server-next 立项 + 依赖白名单）/ ADR-102（admin token 4+1 层）/ ADR-103a（Shell 公开 API 契约 + 4 级 z-index 规范上层 L2-L4）/ ADR-021（v1 表格双轨治理；本 ADR 为 v2 一次性收敛）
+- **关联 plan**：§6 M-SN-2 v2.3（数据原语层范围 B 块）/ §4.4（Provider 不下沉）/ §4.7（依赖白名单：zustand 已收编）/ §8 复用矩阵 v2.3（DataTable 列覆盖 14 个 admin/* 视图）
+- **关联序列**：SEQ-20260428-03（M-SN-2 第二阶段 — 数据原语层落地）
+- **评审结论**：arch-reviewer (claude-opus-4-7) — PASS（10 项评审重点全 PASS / 无必修 / 3 条建议优化登记后续）

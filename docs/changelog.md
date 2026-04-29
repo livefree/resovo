@@ -1602,3 +1602,25 @@
   - lint ✅（server-next 零警告）
   - test 2160 passed / 182 files ✅（2 个 pre-existing user-menu-interaction 已知问题不阻塞）
 - **M-SN-2 Shell 序列状态**：CHG-SN-2-01 ～ CHG-SN-2-12 全 10 张 Shell 组件卡全部完成（ToastViewport + KeyboardShortcuts + Platform + Breadcrumbs + HealthBadge + UserMenu + Sidebar + Topbar + NotificationDrawer + TaskDrawer + CommandPalette + AdminShell 装配体）；M-SN-2 Shell 层封装完毕；下一步 CHG-SN-2-12.5 ADR-103 DataTable v2 公开 API 契约
+
+---
+
+## chg(CHG-SN-2-12.5): ADR-103 起草 — DataTable v2 公开 API 契约 + useTableQuery + 数据原语层
+
+- **任务 ID**：CHG-SN-2-12.5
+- **记录时间**：2026-04-28
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-7) — ADR 起草强制 Opus（CLAUDE.md 模型路由规则第 1/3 项）；10 项评审重点全 PASS / 无必修 / 3 条建议优化登记后续
+- **实现内容**：
+  - `docs/decisions.md`（追加 ADR-103）：DataTable v2 + useTableQuery 数据原语层公开 API 契约，覆盖 CHG-SN-2-13 ~ CHG-SN-2-18 六张数据原语卡
+  - 核心决策：DataTable v2（mode='client'|'server' 显式两档 + TableColumn / TableSortState / TableSelectionState 全 readonly 类型）、useTableQuery（URL + sessionStorage 双轨同步 + TableRouterAdapter 反向注入 + FilterValue union 收敛）、两档分页协议（client ≤200 一次全量 / server 每页请求 + onQueryChange → SWR refetch）、useOverlay 共用 focus trap 提取、z-index 业务原语层 z-modal=1000 + z-admin-dropdown=980（与 ADR-103a §4.3 Shell 层 1100/1200/1300 形成完整 4 级梯）
+  - 替代方案 B1-B6 全部否决（含 router 直 import next/navigation / 一档/三档分页 / Drawer+Modal 合并 / v1 双轨 key 迁移 / selection 持久化）
+  - 影响文件列出 19 个数据原语新建文件路径 + design-tokens z-index 追加 + scripts 守卫脚本扩展
+- **修改文件**：
+  - `docs/decisions.md`（ADR-103 追加，约 300 行）
+- **新增依赖**：无（不动代码）
+- **数据库变更**：无
+- **实测验收**：
+  - typecheck ✅ / lint ✅
+  - test 2160 passed / 182 files ✅
+- **下一步**：CHG-SN-2-13 DataTable v2 + useTableQuery 数据原语首张代码卡（ADR-103 PASS 解锁）
