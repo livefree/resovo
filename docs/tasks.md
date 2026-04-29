@@ -12,3 +12,17 @@
 
 ---
 
+## 进行中任务
+
+**任务 ID**：CHG-SN-3-06
+**标题**：批量动作：SelectionActionBar
+**状态**：🔄 进行中
+**开始时间**：2026-04-29
+**执行模型**：claude-sonnet-4-6
+**子代理调用**：无
+
+**文件范围**：
+- `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`（修改：接入 selection 状态 + SelectionActionBar）
+- `tests/unit/components/server-next/admin/videos/SelectionActions.test.tsx`（新建）
+
+**备注**：无

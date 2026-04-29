@@ -5,17 +5,61 @@ import type { CSSProperties } from 'react'
 import {
   DataTable, Toolbar, FilterChipBar, ColumnSettingsPanel, Pagination,
   EmptyState, ErrorState, LoadingState, useTableQuery,
-  type TableColumn, type TableQueryPatch,
+  SelectionActionBar,
+  type TableColumn, type TableQueryPatch, type TableSelectionState, type SelectionAction,
 } from '@resovo/admin-ui'
 import { useTableRouterAdapter } from '@/lib/table-router-adapter'
 import { VIDEO_COLUMN_DESCRIPTORS } from '@/lib/videos/columns'
-import { listVideos } from '@/lib/videos/api'
+import { listVideos, batchPublish, batchUnpublish, reviewVideo } from '@/lib/videos/api'
 import { listCrawlerSites } from '@/lib/crawler/api'
 import type { VideoAdminRow, CrawlerSite } from '@/lib/videos'
 import { VideoStatusIndicator } from '@/components/admin/shared/VideoStatusIndicator'
 import { VideoTypeChip } from '@/components/admin/shared/VideoTypeChip'
 import { buildVideoFilter, buildFilterChips, VideoFilterBar } from './VideoFilterFields'
 import { VideoRowActions } from './VideoRowActions'
+
+// ── batch actions ─────────────────────────────────────────────────
+
+const BATCH_PUBLISH_LIMIT = 100
+const BATCH_DANGER_LIMIT = 50
+
+function buildBatchActions(
+  selectedKeys: ReadonlySet<string>,
+  onComplete: () => void,
+): readonly SelectionAction[] {
+  const ids = Array.from(selectedKeys)
+  const count = ids.length
+  return [
+    {
+      key: 'batch-publish',
+      label: '批量公开',
+      disabled: count > BATCH_PUBLISH_LIMIT,
+      onClick: () => { void batchPublish(ids).then(onComplete) },
+    },
+    {
+      key: 'batch-unpublish',
+      label: '批量隐藏',
+      variant: 'danger',
+      disabled: count > BATCH_DANGER_LIMIT,
+      confirm: { title: `确认隐藏 ${count} 条视频？`, description: '已上架视频将同步下架' },
+      onClick: () => { void batchUnpublish(ids).then(onComplete) },
+    },
+    {
+      key: 'batch-approve',
+      label: '批量通过审核',
+      disabled: count > BATCH_DANGER_LIMIT,
+      onClick: () => { void Promise.all(ids.map((id) => reviewVideo(id, 'approve'))).then(onComplete) },
+    },
+    {
+      key: 'batch-reject',
+      label: '批量拒绝审核',
+      variant: 'danger',
+      disabled: count > BATCH_DANGER_LIMIT,
+      confirm: { title: `确认拒绝 ${count} 条视频审核？` },
+      onClick: () => { void Promise.all(ids.map((id) => reviewVideo(id, 'reject'))).then(onComplete) },
+    },
+  ]
+}
 
 // ── column definitions ────────────────────────────────────────────
 
@@ -163,6 +207,7 @@ export function VideoListClient() {
   const [retryKey, setRetryKey] = useState(0)
   const [sites, setSites] = useState<readonly CrawlerSite[]>([])
   const [colSettingsOpen, setColSettingsOpen] = useState(false)
+  const [selection, setSelection] = useState<TableSelectionState>({ selectedKeys: new Set(), mode: 'page' })
   const colBtnRef = useRef<HTMLButtonElement | null>(null)
 
   const handleRowUpdate = useCallback((id: string, patch2: Partial<VideoAdminRow>) => {
@@ -172,6 +217,16 @@ export function VideoListClient() {
   const handleEditRequest = useCallback((_id: string) => {
     // CHG-SN-3-07: open VideoEditDrawer
   }, [])
+
+  const clearSelection = useCallback(
+    () => setSelection({ selectedKeys: new Set(), mode: 'page' }),
+    [],
+  )
+
+  const handleBatchComplete = useCallback(() => {
+    clearSelection()
+    setRetryKey((k) => k + 1)
+  }, [clearSelection])
 
   const columns = useMemo(
     () => buildVideoColumns(isAdmin, handleRowUpdate, handleEditRequest),
@@ -259,6 +314,8 @@ export function VideoListClient() {
                   onQueryChange={patch}
                   totalRows={total}
                   loading={loading}
+                  selection={selection}
+                  onSelectionChange={setSelection}
                   emptyState={<EmptyState title="暂无视频" description="调整筛选条件后重试" />}
                   data-testid="video-list-table"
                 />
@@ -267,6 +324,14 @@ export function VideoListClient() {
           </>
         )
       }
+      <SelectionActionBar
+        visible={selection.selectedKeys.size > 0}
+        selectedCount={selection.selectedKeys.size}
+        selectionMode={selection.mode}
+        onClearSelection={clearSelection}
+        actions={buildBatchActions(selection.selectedKeys, handleBatchComplete)}
+        data-testid="video-selection-bar"
+      />
       {!error && (
         <Pagination
           page={snapshot.pagination.page}
