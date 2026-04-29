@@ -927,3 +927,340 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
 
 CHG-SN-2-02 stage 2/2 + CHG-SN-2-03+ Shell 组件分卡的开工等待用户裁定方案 A/B/C；裁定后由主循环执行后续动作。
 
+
+---
+
+## [SEQ-20260429-01] M-SN-3 · 标杆页：视频库（执行序列）
+
+- **创建时间**：2026-04-29 09:30
+- **最后更新时间**：2026-04-29 09:30
+- **依赖**：M-SN-2 全部任务 PASS（commit 59061e4，stop-gate 质量债 CHG-SN-2-22 清零）
+- **目标**：完成 `/admin/videos` 视频库标杆页，作为后续 14 个视图的参考实现（template）；同步完成 dashboard 卡片库 + system/settings 容器化两个 M-SN-3 侧任务
+
+### 完成标准（M-SN-3 milestone）
+
+1. `/admin/videos` 功能与 apps/server 现版本 100% 对齐（列表 / 筛选 / 排序 / 分页 / 行操作 / 批量动作 / 编辑 Drawer）
+2. VideoStatusIndicator 原子指示器已下沉到 `apps/server-next/src/components/admin/shared/`，可供 M-SN-4 moderation 复用
+3. `docs/server_next_view_template.md` 文档落地，后续视图卡可直接按模板起草
+4. dashboard 卡片库三态布局 PASS，analytics 内容并入 dashboard Tab
+5. system/settings 容器化 PASS（5 Tab 子路由均可访问）
+6. e2e 黄金路径全绿：login → 视频库列表 → 编辑 Drawer → 保存 → 列表更新
+7. typecheck ✅ lint ✅ 单元测试全绿 ✅ e2e ✅
+
+### 任务列表
+
+---
+
+**1. CHG-SN-3-01 — 视频库 API 层 + 类型定义（建议模型：sonnet）**
+
+- **状态**：⬜ 待开始
+- **计划开始**：序列启动后第 1 张
+- **工时估算**：0.3 天
+- **文件范围**：
+  - `apps/server-next/src/lib/videos/types.ts`（新建：VideoAdminRow + VideoListFilter + VideoListResult 类型）
+  - `apps/server-next/src/lib/videos/api.ts`（新建：listVideos / getVideo / patchVideoMeta / stateTransition / batchPublish / batchUnpublish / doubanSync / refetchSources 函数，均调用 apiClient）
+  - `apps/server-next/src/lib/videos/columns.ts`（新建：COLUMNS `TableColumn<VideoAdminRow>[]` 定义，含 enableSorting）
+  - `apps/server-next/src/lib/videos/index.ts`（新建：re-export）
+- **验收要点**：
+  - VideoAdminRow 与 apps/api `/admin/videos` 返回结构 100% 对齐（字段名 snake_case）
+  - api.ts 所有函数均有 return type（无 any）
+  - typecheck ✅
+- **备注**：无外部依赖，纯类型 + API 函数层；不含 UI 渲染
+
+---
+
+**2. CHG-SN-3-02 — VideoStatusIndicator + VideoTypeChip 原子组件（建议模型：sonnet）**
+
+- **状态**：⬜ 待开始
+- **计划开始**：CHG-SN-3-01 PASS 后
+- **工时估算**：0.4 天
+- **文件范围**：
+  - `apps/server-next/src/components/admin/shared/VideoStatusIndicator.tsx`（新建）
+  - `apps/server-next/src/components/admin/shared/VideoTypeChip.tsx`（新建）
+  - `tests/unit/components/server-next/admin/VideoStatusIndicator.test.tsx`（新建）
+- **组件设计**：
+  - `VideoStatusIndicator` Props：`{ reviewStatus, visibilityStatus, isPublished, compact?: boolean }`
+  - 渲染 3 枚徽章：审核状态（pending_review → 待审 / approved → 通过 / rejected → 拒绝）+ 可见性（public → 公开 / internal → 内部 / hidden → 隐藏）+ 上架状态（已上架 / 未上架）
+  - 颜色：仅用 CSS 变量（`--state-error-fg`, `--state-success-fg` 等），零硬编码
+  - compact 模式：只显示图标/点，不显示文字（用于表格列宽受限时）
+  - `VideoTypeChip`：type → 中文标签映射 badge
+  - data-testid 属性齐全（`data-review-status`, `data-visibility`, `data-published`）
+- **验收要点**：
+  - 全部状态组合渲染正确（3×3×2 = 18 种）
+  - 无 any / 无硬编码颜色（CI verify-token-isolation 通过）
+  - 单元测试：各 variant ≥ 1 测试
+- **备注**：review_status 未传时组件静默不渲染该枚 badge（非必填字段）
+
+---
+
+**3. CHG-SN-3-03 — 视频库列表页骨架（Server Component）（建议模型：sonnet）**
+
+- **状态**：⬜ 待开始
+- **计划开始**：CHG-SN-3-01 PASS 后（可与 CHG-SN-3-02 并行）
+- **工时估算**：0.2 天
+- **文件范围**：
+  - `apps/server-next/src/app/admin/videos/page.tsx`（修改：替换 PlaceholderPage，改为真实 Server Component）
+  - `apps/server-next/src/app/admin/videos/_client/`（新建目录，Client Component 落地位置）
+- **结构设计**（Server Component pattern）：
+  ```tsx
+  // page.tsx — Server Component，无 'use client'
+  export default function VideosPage() {
+    return (
+      <Suspense fallback={<LoadingState variant="skeleton" />}>
+        <VideoListClient />
+      </Suspense>
+    )
+  }
+  ```
+  - 不在 Server Component 侧 fetch 数据（list 数据由 client 组件驱动，URL state 管理分页/筛选）
+  - metadata export: `export const metadata = { title: '视频库 | Resovo Admin' }`
+- **验收要点**：SSR 零 throw，page.tsx 无 `'use client'`，typecheck ✅
+
+---
+
+**4. CHG-SN-3-04 — VideoListClient：DataTable v2 + useTableQuery + FilterToolbar（建议模型：sonnet）**
+
+- **状态**：⬜ 待开始
+- **计划开始**：CHG-SN-3-02 + CHG-SN-3-03 PASS 后
+- **工时估算**：1.0 天
+- **文件范围**：
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`（新建，主 Client Component）
+  - `apps/server-next/src/app/admin/videos/_client/VideoFilterFields.tsx`（新建，filter 定义）
+  - `tests/unit/components/server-next/admin/videos/VideoListClient.test.tsx`（新建）
+- **核心设计**：
+  - `useTableQuery` 接入 `useTableRouterAdapter`（已有 `apps/server-next/src/lib/table-router-adapter.ts`）
+  - tableId: `'admin-videos'`，URL namespace: `'v'`（防止与其他页面参数冲突）
+  - FilterMap keys：`q`（text）/ `type`（select: 11 类型）/ `status`（select: published/pending/all）/ `visibilityStatus`（select: public/internal/hidden）/ `reviewStatus`（select: pending_review/approved/rejected）/ `site`（select: 动态从 /admin/crawler/sites 加载）
+  - Toolbar 布局：`<FilterToolbar>` 左侧 search 槽（q）+ 右侧 filters 槽（type/status/visibility/review/site）
+  - FilterChipBar 显示激活的筛选条件，各 chip 可独立清除
+  - DataTable 列：封面 / 标题 + VideoStatusIndicator / 类型 / 来源健康 / 图片健康 / 可见性 / 审核状态 / 操作
+  - 排序字段白名单：title / type / year / created_at / updated_at（对应 API SORT_FIELDS）
+  - 分页：Pagination 组件，pageSize 可选（10/20/50）
+  - 数据加载：`LoadingState variant="skeleton"`；空状态：`EmptyState`；错误状态：`ErrorState`
+  - `ColumnSettingsPanel` 支持列显/隐控制（默认隐藏 douban_status / meta_score）
+- **验收要点**：
+  - 筛选/排序/分页变化实时更新 URL，浏览器刷新后状态恢复
+  - 服务端分页正确（total / page / pageSize 传入 Pagination）
+  - 加载时 skeleton 可见，空列表显示 EmptyState
+  - typecheck ✅，单元测试 ≥ 8 条
+
+---
+
+**5. CHG-SN-3-05 — VideoRowActions：AdminDropdown + 状态迁移动作（建议模型：sonnet）**
+
+- **状态**：⬜ 待开始
+- **计划开始**：CHG-SN-3-04 PASS 后
+- **工时估算**：0.6 天
+- **文件范围**：
+  - `apps/server-next/src/app/admin/videos/_client/VideoRowActions.tsx`（新建）
+  - `tests/unit/components/server-next/admin/videos/VideoRowActions.test.tsx`（新建）
+- **菜单项设计**（AdminDropdown）：
+
+  | 菜单项 | API | 条件显示 |
+  |---|---|---|
+  | 编辑基础信息 | 打开 VideoEditDrawer | 始终 |
+  | 设为公开 | PATCH /:id/visibility {visibility:'public'} | visibility ≠ 'public' |
+  | 设为内部 | PATCH /:id/visibility {visibility:'internal'} | visibility ≠ 'internal' |
+  | 设为隐藏 | PATCH /:id/visibility {visibility:'hidden'} | visibility ≠ 'hidden' |
+  | 上架 | POST /:id/state-transition {action:'publish'} | !is_published |
+  | 下架 | POST /:id/state-transition {action:'unpublish'} | is_published |
+  | 通过审核 | POST /:id/state-transition {action:'approve'} | review_status='pending_review' |
+  | 拒绝审核 | POST /:id/state-transition {action:'reject'} | review_status='pending_review' |
+  | 重开审核 | POST /:id/state-transition {action:'reopen_pending'} | review_status='rejected' |
+  | 豆瓣同步 | POST /:id/douban-sync | admin only |
+  | 重新采集 | POST /:id/refetch-sources | 始终 |
+  | 查看详情（前台）| 新窗口打开 getVideoDetailHref | 始终 |
+
+- **乐观更新**：visibility/publish 切换先乐观更新表格行，失败时回滚
+- **待处理标记**：操作进行中 row 高亮或 spinner（data-pending 属性）
+- **验收要点**：
+  - 菜单项条件显示逻辑正确
+  - 乐观更新 + 错误回滚可测试（vi.fn mock apiClient）
+  - admin only 操作：`user.role !== 'admin'` 时菜单项 disabled
+
+---
+
+**6. CHG-SN-3-06 — 批量动作：SelectionActionBar（建议模型：sonnet）**
+
+- **状态**：⬜ 待开始
+- **计划开始**：CHG-SN-3-05 PASS 后
+- **工时估算**：0.3 天
+- **文件范围**：
+  - VideoListClient.tsx（修改：接入 DataTable selection 状态 + SelectionActionBar）
+  - `tests/unit/components/server-next/admin/videos/SelectionActions.test.tsx`（新建）
+- **设计**：
+  - DataTable `selection` prop 接入：`{ selectedKeys, mode, onSelectPage, onSelectAllMatched, onClear }`
+  - SelectionActionBar actions：
+    - 批量上架（POST /admin/videos/batch-publish，isPublished:true）
+    - 批量下架（POST /admin/videos/batch-unpublish，危险动作，带 confirm 流程）
+  - 选中 page 所有条目时显示"选择全部 N 条匹配结果"选项
+  - 操作完成后刷新列表 + 清空选中
+- **验收要点**：
+  - SelectionActionBar 仅在 selectedCount > 0 时 visible
+  - confirm 流程（下架）：必须点确认才执行
+  - 单元测试：visible/hidden 切换，action 触发，confirm 流程
+
+---
+
+**7. CHG-SN-3-07 — VideoEditDrawer（基础元数据字段）（建议模型：sonnet）**
+
+- **状态**：⬜ 待开始
+- **计划开始**：CHG-SN-3-05 PASS 后（可与 CHG-SN-3-06 并行）
+- **工时估算**：0.7 天
+- **文件范围**：
+  - `apps/server-next/src/app/admin/videos/_client/VideoEditDrawer.tsx`（新建）
+  - `tests/unit/components/server-next/admin/videos/VideoEditDrawer.test.tsx`（新建）
+- **字段设计**（对应 apps/api VideoMetaSchema）：
+  - 必填：title（text, max:200）
+  - 选填：titleEn / type（select）/ year（number）/ country（text, max:10）/ description（textarea）/ genres（multi-select or comma input）/ episodeCount / status（select: ongoing/completed）/ rating / director（comma-separated）/ cast / writers / doubanId
+  - coverUrl：只读显示当前封面，不在本 Drawer 编辑（图片编辑是 M-SN-4 tabs）
+- **Drawer 设计**：
+  - 使用 packages/admin-ui `<Drawer>` 原语（side='right', width='540px'）
+  - 加载原始数据：挂载时 GET /admin/videos/:id
+  - 提交：PATCH /admin/videos/:id（仅发送变更字段）
+  - `skippedFields` 响应处理：若有跳过字段，Drawer 保持开启并提示"以下字段因锁定未保存：…"
+  - 成功关闭后通知父组件刷新列表（通过 `onSaved` 回调）
+  - data-testid：`data-video-edit-drawer`, `data-video-edit-submit`, `data-video-edit-cancel`
+- **验收要点**：
+  - 加载中显示 LoadingState / 加载失败显示 ErrorState + 重试
+  - 必填 title 为空时阻止提交（前端校验）
+  - skippedFields 非空时给出用户友好提示
+  - 单元测试 ≥ 6 条（加载/提交/校验/skippedFields/关闭/回调）
+
+---
+
+**8. CHG-SN-3-08 — Dashboard 卡片库 + analytics Tab 迁入（三态布局）（建议模型：sonnet）**
+
+- **状态**：⬜ 待开始
+- **计划开始**：CHG-SN-3-03 PASS 后（可与 CHG-SN-3-04 并行启动）
+- **工时估算**：0.5 天
+- **文件范围**：
+  - `apps/server-next/src/app/admin/page.tsx`（修改：替换 PlaceholderPage）
+  - `apps/server-next/src/app/admin/_client/DashboardClient.tsx`（新建）
+  - `apps/server-next/src/app/admin/analytics/page.tsx`（修改：redirect → dashboard#analytics 或 Tabs 实现）
+- **卡片设计**（三态：loading/data/error，GET /admin/videos/moderation-stats）：
+  - 待审视频数（review_status='pending_review'）
+  - 已发布视频数
+  - 活跃采集源数
+  - 图片健康异常数（可选，GET /admin/image-health/stats 或静态占位）
+- **Tab 布局**：
+  - Tab 1：概览（stats cards，默认激活）
+  - Tab 2：分析（原 /admin/analytics 内容，iframe 嵌入或重定向，保持 /admin/analytics URL 有效）
+- **三态布局**：各卡片独立 loading/error，失败卡片显示重试按钮，不阻断其他卡片渲染
+- **analytics 处置**：`/admin/analytics/page.tsx` 改为 `redirect('/admin?tab=analytics')` 保持路由有效（ADR-100 IA 修订 §IA-2：路由保留不暴露侧栏）
+- **验收要点**：
+  - SSR 安全（Server Component 外层，Client Component 加载数据）
+  - analytics 路由不报 404
+  - 卡片加载失败时单独 ErrorState 不影响其他卡片
+
+---
+
+**9. CHG-SN-3-09 — system/settings 容器化（Tab 切换 5 子路由）（建议模型：sonnet）**
+
+- **状态**：⬜ 待开始
+- **计划开始**：CHG-SN-3-03 PASS 后（可与 CHG-SN-3-08 并行）
+- **工时估算**：0.4 天
+- **文件范围**：
+  - `apps/server-next/src/app/admin/system/settings/page.tsx`（修改：改为 Tab 容器）
+  - `apps/server-next/src/app/admin/system/settings/_tabs/`（新建目录：SettingsTab / CacheTab / MonitorTab / ConfigTab / MigrationTab）
+  - 其余 4 子路由 page.tsx（修改：redirect 到 settings Tab 参数，保留路由文件）
+- **Tab 设计**：
+  - Tab ID 对应子路由：settings / cache / monitor / config / migration
+  - URL 参数同步：`?tab=cache` 等（页面刷新后激活对应 Tab）
+  - 各 Tab 初始内容：功能说明 + "本功能正在迁移中" 占位（M-SN-6 全功能实装）
+  - settings Tab：迁移 apps/server GET /admin/system/settings 的核心配置展示
+- **验收要点**：
+  - 5 个子路由均可访问（不报 404）
+  - URL 参数切换 Tab 正确
+  - Tab 容器 SSR 零 throw
+
+---
+
+**10. CHG-SN-3-10 — 集成验收 + e2e 黄金路径（建议模型：sonnet）**
+
+- **状态**：⬜ 待开始
+- **计划开始**：CHG-SN-3-06 + CHG-SN-3-07 PASS 后
+- **工时估算**：0.4 天
+- **文件范围**：
+  - `tests/e2e/admin/videos.spec.ts`（新建：e2e 黄金路径）
+  - 各组件单元测试补齐（覆盖率检查）
+- **e2e 黄金路径**：
+  1. 以 moderator 角色登录（/login → 填写凭据 → 跳转 /admin）
+  2. 侧栏点击"视频库"（⌘3）→ URL 变为 /admin/videos，列表加载
+  3. 筛选：输入 q → 列表更新 → URL 含 q 参数
+  4. 点击行操作"编辑基础信息" → VideoEditDrawer 打开
+  5. 修改 title → 点击保存 → Drawer 关闭 → 列表刷新，标题更新
+  6. 点击行操作"上架"（或"下架"）→ VideoStatusIndicator 状态变化
+  7. 全选当前页 → 批量下架（confirm）→ SelectionActionBar 消失 → 列表更新
+- **验收要点**：
+  - `npm run test:e2e` 全绿（新增 e2e 文件）
+  - `npm run test -- --run` 全绿（单元测试无回归）
+  - typecheck ✅ lint ✅
+
+---
+
+**11. CHG-SN-3-11 — server_next_view_template.md 模板文档（建议模型：haiku 子代理）**
+
+- **状态**：⬜ 待开始
+- **计划开始**：CHG-SN-3-10 PASS 后
+- **工时估算**：0.2 天
+- **文件范围**：
+  - `docs/server_next_view_template.md`（新建）
+- **文档内容**：
+  - 视图文件结构规范（page.tsx Server Component / `_client/` 目录 / lib/[domain]/ 目录）
+  - API 函数层规范（api.ts 命名规范 / return type 要求 / error handling pattern）
+  - DataTable 接入清单（useTableQuery / useTableRouterAdapter / urlNamespace 命名规范）
+  - FilterMap 键名规范（与 API query param 保持一致）
+  - 组件命名规范（XxxListClient / XxxRowActions / XxxEditDrawer / XxxStatusIndicator）
+  - 测试文件命名规范
+  - 复用矩阵更新要求
+- **验收要点**：文档完整，可作为 M-SN-4 任务卡的参考
+
+---
+
+**12. CHG-SN-3-12 — staging 环境 cookie + nginx 反代 e2e 演练（DISCUSS-3）（需人工参与）**
+
+- **状态**：⬜ 待开始（需用户确认 staging 环境就绪）
+- **计划开始**：CHG-SN-3-10 PASS 后，用户确认 staging 可用时
+- **工时估算**：0.3 天
+- **描述**：
+  - 在 staging 环境部署 apps/server-next（:3003）和 apps/server（:3001）
+  - nginx 配置：`/admin/*` → :3001（现状），演练切换到 :3003
+  - 验证 cookie（fastify-jwt refresh_token）跨 server / server-next 透明传递
+  - 验证 nginx upstream 切换不丢 session（切换前已登录用户不需要重新登录）
+  - 切回 :3001 验证回滚无损
+- **验收要点**：cookie 跨服务透明 ✅ / nginx 切换零 session 丢失 ✅ / 回滚成功 ✅
+- **备注**：**此任务需要 staging 环境就绪才能执行，主循环无法自动完成；需用户手动操作 nginx + 确认结果**
+
+---
+
+**13. CHG-SN-3-13 — M-SN-3 milestone 阶段审计（Opus arch-reviewer）**
+
+- **状态**：⬜ 待开始
+- **计划开始**：CHG-SN-3-11 PASS 后（CHG-SN-3-12 可 staging 环境未就绪时并行）
+- **工时估算**：0.3 天
+- **子代理调用**：arch-reviewer (claude-opus-4-7) — milestone 阶段审计强制 Opus（CLAUDE.md 模型路由 + plan §5.3）
+- **审计重点**：
+  1. 视频库是否真正可作为模板（结构清晰度 + 复用矩阵达标）
+  2. VideoStatusIndicator 是否已下沉 shared 并达可复用状态
+  3. apps/server videos 功能 100% parity 验证（逐项 diff）
+  4. e2e 演练通过（若 DISCUSS-3 还未完成，则在 audit 备注中标注欠账）
+  5. DataTable v2 真实场景检验（columns/filter/sort/pagination 逻辑完整性）
+- **完成判据**：评级 A 或 B（带欠账）→ M-SN-3 闭环，可进 M-SN-4；评级 C → BLOCKER 暂停
+
+---
+
+### 关键约束
+
+- CHG-SN-3-01 → CHG-SN-3-02、03（并行可）→ CHG-SN-3-04 → 05 → 06、07（并行可）→ CHG-SN-3-10 → 11 → 13
+- CHG-SN-3-08、09 可在 CHG-SN-3-03 后与主线并行，不阻塞 videos 任务链
+- CHG-SN-3-12（staging 演练）不阻塞 CHG-SN-3-13（audit），但 audit 报告需标注演练完成与否
+- 每张卡 commit trailer 必含：`Refs:` `Plan:` `Executed-By-Model:` `Subagents:` `Co-Authored-By:`
+- 禁止在 CHG-SN-3-07 之前实装 `videos/[id]/edit` 独立全屏页（M-SN-4 范围，本 milestone 只做 Drawer）
+
+### 备注
+
+- 序列序号 SEQ-20260429-01 紧邻 SEQ-20260428-03 之后
+- 任务 ID 启用 CHG-SN-3-NN（M-SN-3 milestone 范畴）
+- `docs/server_next_view_template.md` 落地后即作为 M-SN-4+ 任务卡起草的必读文件
+- VideoStatusIndicator 先在 server-next/src/components/admin/shared/ 落地，若 M-SN-4 moderation 确认复用则已符合"3 处以上下沉 packages/admin-ui"规则
