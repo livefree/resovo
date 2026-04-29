@@ -977,3 +977,73 @@
   - pulse @keyframes 多实例 DOM 重复但 CSS 解析正常；M-SN-3+ 若有性能验证需要可通过 head 单例 portal 注入升级（消费方 API 不变更）
   - SSR 单测中文文本插值需用子串匹配（如 `>3<` 而非 `采集 3/12`），因 React JSX 文本插值 SSR 输出含 `<!-- -->` 注释切片
   - HealthSnapshot 类型 SSOT 上提是 CHG-SN-2-05 范式的延续，未来 Shell 组件需要的所有公开数据类型应优先放 packages/admin-ui/src/shell/types.ts
+
+---
+
+## [CHG-SN-2-07] packages/admin-ui UserMenu + 类型 SSOT 上提（Shell 第 5 张 / focus trap + outside-click 首张落地）
+
+- **完成时间**：2026-04-29
+- **记录时间**：2026-04-29 03:15
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — focus trap + outside-click + ADR 矛盾裁决三处架构决策强制 Opus
+- **触发**：CHG-SN-2-06 PASS（commit 8740ce9）→ Shell 落地 4/10 → 按依赖序 UserMenu（Sidebar 集成前置）
+- **修改文件**：
+  - `packages/admin-ui/src/shell/types.ts`（修改）— 追加 AdminShellUser / AdminUserActions / UserMenuAction 类型 SSOT
+  - `packages/admin-ui/src/shell/user-menu.tsx`（新建）— UserMenu 组件 + deriveAvatarText helper
+    - 受控开闭：open + onOpenChange
+    - 6 项菜单按 actions 提供性渲染（onProfile/onPreferences/onToggleTheme/onHelp/onSwitchAccount 可选；onLogout 必填永远渲染）
+    - logout is-danger（data-menu-item-danger + var(--state-error-fg)）
+    - mount 时 focus 首项；Tab/Shift+Tab 在菜单内循环（首项 Shift+Tab → 最后项 / 最后项 Tab → 首项）
+    - **focus trap 焦点门禁**：仅当焦点在菜单内时启用 trap（避免菜单外 Tab 被劫持）
+    - ESC keydown 触发 onOpenChange(false)；其他键不触发
+    - outside-click（document mousedown）触发 onOpenChange(false)；菜单内 + anchorRef 内点击不触发
+    - 任意菜单项点击：**try/finally** 包裹 callback（throw 时菜单仍关闭，不卡死）
+    - listener 仅 open=true 挂载；unmount/rerender open=false 自动 cleanup
+    - avatarText 默认推断（多词→首字母 / CJK→前两字 / 单字符→自身 / 空→"?"）
+    - 8 处 style 全部读 token（var(--bg-surface-elevated) / var(--border-default) / var(--state-error-fg) 等）
+  - `packages/admin-ui/src/shell/index.ts`（修改）— 桶导出追加 UserMenu / UserMenuProps / deriveAvatarText / AdminShellUser / AdminUserActions / UserMenuAction；shell/ 子目录章法补强 1C（受控浮层 + focus trap + outside-click 模式）+ 章法 5C（受控浮层 SSR 安全模式：open=false return null + open=true 客户端 useEffect 挂载）
+  - `tests/unit/components/admin-ui/shell/user-menu.test.tsx`（新建）— 18 tests：受控开闭 / header 渲染 + role 标签 / deriveAvatarText 4 类边界 / 6 项按 actions 提供性渲染 / logout 必填 + danger 视觉 / actions callback 触发 + 自动关闭 / button type="button"
+  - `tests/unit/components/admin-ui/shell/user-menu-interaction.test.tsx`（新建）— 16 tests：focus trap mount 时 focus 首项 / Tab Shift+Tab 循环 / 中间项透传 / **focus trap 焦点门禁（菜单外焦点不被劫持）** / ESC 关闭 / outside-click 关闭 / anchorRef 内点击不关闭 / **callback throw 菜单仍关闭（try/finally）** / listener 卸载清理（unmount + rerender）
+  - `tests/unit/components/admin-ui/shell/user-menu-ssr.test.tsx`（新建）— 3 tests：open=false renderToString 输出空 / open=true renderToString 零 throw + 输出 menu 容器 + items + a11y attributes
+  - `docs/decisions.md` ADR-103a 末尾追加 CHG-SN-2-07 修订记录段：4 处契约精化显式背书（onClose→onOpenChange / onAction(union)→actions 拆分 callbacks / role string→union / avatarText 必填→可选 / anchorRef 必填→可选）
+- **ADR §4.1.4 字面 vs 实施 4 处精化**（已显式背书 ADR-103a 修订记录）：
+  | 契约项 | ADR §4.1.4 字面 | 本卡精化 |
+  |---|---|---|
+  | 关闭回调 | onClose | onOpenChange（受控组件惯用模式）|
+  | action 调度 | onAction(union 单回调) | actions: AdminUserActions（callbacks 拆分对象，叶子层支持提供性渲染）|
+  | role 类型 | string（§4.1.1） | 'admin' \| 'moderator' union（与 onUserMenuAction 调度 schema 收敛）|
+  | avatarText | 必填（§4.1.1） | 可选（deriveAvatarText helper 兜底推断）|
+  | anchorRef | 必填 RefObject<HTMLElement> | 可选 RefObject<HTMLElement \| null>（单元/SSR 测试 + demo 页复用）|
+- **新增依赖**：无
+- **数据库变更**：无
+- **实测验收**：
+  - typecheck（5/5 packages）/ lint（4/4 cached FULL TURBO）全绿
+  - 1939 unit tests PASS（原 1902 + 37 新增 = user-menu 18 + interaction 16 + ssr 3）
+  - admin-ui shell 156 tests 全过（原 119 + 37 = 156）
+  - verify-server-next-isolation 双扫描：48 文件 0 违规
+  - verify-token-isolation：152 文件 0 命中
+- **不变约束验证**：
+  - Provider 不下沉：零 BrandProvider/ThemeProvider/createContext / 状态全部受控外置
+  - Edge Runtime 兼容：模块顶层零 window/document/fetch/Cookie/localStorage/navigator / 所有 listener 在 useEffect 内
+  - 零硬编码颜色：8 处 style 全部读 token（含几何字面量 32px/50%/220px 非颜色合规）
+  - 零图标库依赖：avatar 用文本节点；零 lucide/heroicons/react-icons import
+  - URL 不动 / M-SN-1 闭环资产零返工
+- **Opus 评审 CONDITIONAL → PASS**（11 项重点 / 1 必修 + 3 建议优化全部合并补齐）：
+  - 必修 1：ADR-103a 修订记录段追加 4 处契约精化背书 ✓
+  - 建议优化 1：shell/index.ts 章法 1C/5C（受控浮层 + focus trap + outside-click 模式）✓
+  - 建议优化 2：user-menu.tsx try/finally 防 callback throw 时菜单卡死 ✓
+  - 建议优化 3：focus trap 焦点门禁（仅菜单内焦点启用 trap）✓
+- **Opus 重要发现**：原任务卡描述的"§4.1.4 vs §4.1.1 ADR 内部矛盾"为事实错位（§4.1.4 实际未重新定义 AdminShellUser）。本次精化是基于 fix(CHG-SN-2-01) 编排层 union 调度思路 + AdminShell §4.1.1 onUserMenuAction 语义的延伸；types.ts 注解已修订为正确叙述
+- **未复现 CHG-SN-2-03/04 类型问题**（hydration mismatch / 默认值偏离）；新发现一类"ADR 文本与实施口径耦合疏漏"（与 CHG-SN-2-01.5 ADR-103b 起草 + plan §4.7 漏修订同构），通过 ADR 修订记录段闭合
+- **作为 CHG-SN-2-08+ Sidebar/Drawer/CommandPalette 范式参照**：
+  - 章法 1C：受控浮层（open + onOpenChange）+ focus trap + outside-click + ESC 关闭 + try/finally 保护 callback
+  - 章法 5C：open=false return null + open=true 客户端 useEffect 挂载（SSR 安全）
+  - 单测三分扩展：渲染 + 交互（focus trap / ESC / outside-click + callback throw + listener cleanup）+ SSR
+  - shell/index.ts 已纳入；CHG-SN-2-08+ 开工时按形态二选一参照
+- **后续动作**：CHG-SN-2-08 Sidebar（按 ADR-103a §4.1.2 实施 5 组 NAV + 折叠态 + 计数徽章 + 集成 UserMenu；强制 Opus 评审）
+- **注意事项**：
+  - UserMenu 内部仅 useRef + useMemo + useCallback + useEffect，无 useState（状态全部受控外置）
+  - listener 在 useEffect 内挂；deps 数组完整 [open, onOpenChange, anchorRef]
+  - try/finally 保护 callback 是 packages/admin-ui Shell 浮层组件标准范式（与 Drawer/CommandPalette 共享）
+  - focus trap 焦点门禁是关键 a11y 保护（避免组件外焦点被劫持，CommandPalette 模态浮层不需此门禁因为强制焦点在内）
+  - ADR §4.1.4 → 本卡 4 处精化已通过 ADR-103a 修订记录段显式背书；CHG-SN-2-12 AdminShell 装配卡按 onUserMenuAction(union) 编排层 → AdminUserActions 叶子层 dispatch 实施

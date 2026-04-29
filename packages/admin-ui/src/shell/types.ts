@@ -59,3 +59,42 @@ export interface HealthSnapshot {
   readonly invalidRate: { readonly rate: number; readonly status: 'ok' | 'warn' | 'danger' }
   readonly moderationPending: { readonly count: number; readonly status: 'ok' | 'warn' | 'danger' }
 }
+
+/** AdminShell 当前用户信息（ADR-103a §4.1.1 + §4.1.4 编排层语义 / CHG-SN-2-07 SSOT 上提）
+ *  ADR §4.1.1 字面定义 role: string + avatarText: string（必填）；
+ *  本 SSOT 按 §4.1.4 编排层 UserMenuAction union 语义精化：
+ *    - role: 'admin' | 'moderator' union（与 onUserMenuAction 调度 schema 对齐，收敛 string 兜底）
+ *    - avatarText 可选（由 deriveAvatarText helper 从 displayName 兜底推断）
+ *  ADR-103a 修订记录段（CHG-SN-2-07 落地）已显式背书此精化。 */
+export interface AdminShellUser {
+  readonly id: string
+  readonly displayName: string
+  readonly email: string
+  readonly role: 'admin' | 'moderator'
+  /** 默认从 displayName 首两字推断（多词→首字母 / CJK→前两字 / 单字符→自身） */
+  readonly avatarText?: string
+}
+
+/** UserMenu 6 项菜单的 callback 集合（ADR-103a §4.1.4）
+ *  - 可选 actions（onProfile / onPreferences / onToggleTheme / onHelp / onSwitchAccount）：
+ *    undefined 时对应菜单项隐藏（如 server-next 鉴权层不支持多账号 → onSwitchAccount=undefined → 切换账号项隐藏）
+ *  - 必填 actions（onLogout）：登出是硬性入口，永远渲染 */
+export interface AdminUserActions {
+  readonly onProfile?: () => void
+  readonly onPreferences?: () => void
+  readonly onToggleTheme?: () => void
+  readonly onHelp?: () => void
+  readonly onSwitchAccount?: () => void
+  readonly onLogout: () => void
+}
+
+/** UserMenu action union schema（fix(CHG-SN-2-01) §4.1.1 修订）
+ *  AdminShell 编排层调度 schema（onUserMenuAction 单一回调消费此 union），
+ *  内部分派到 AdminUserActions 各 callback；UserMenu 叶子层直接消费 actions 对象 */
+export type UserMenuAction =
+  | 'profile'
+  | 'preferences'
+  | 'theme'
+  | 'help'
+  | 'switchAccount'
+  | 'logout'

@@ -2889,6 +2889,44 @@ CHG-SN-2-04 完成 §4.1.10 platform.ts（IS_MAC / MOD_KEY_LABEL / formatShortcu
 **后续登记**：
 - usePlatform() hook（建议优化 4）：返回 `{ isMac, modKeyLabel }` 客户端 useEffect 求值，作为 hydration-safe 包装的官方实现；视 CHG-SN-2-08+ Sidebar / CmdK 消费方实际调用频次决定是否落地（M-SN-3+ 业务卡决议）
 
+#### 2026-04-29 · CHG-SN-2-07 · §4.1.4 UserMenu 落地 + AdminShellUser/AdminUserActions 类型 SSOT 上提
+
+CHG-SN-2-07 完成 §4.1.4 UserMenu 组件 + AdminShellUser / AdminUserActions / UserMenuAction 类型 SSOT 上提。Opus arch-reviewer 评审 CONDITIONAL → PASS（11 项重点 / 1 必修 + 3 建议优化全部合并补齐）；本次评审发现 ADR §4.1.4 字面契约与本卡实施在 4 处有精化偏离，本段为该精化的显式背书。
+
+**4 处契约精化背书**（自 ADR §4.1.4 字面到本卡实施）：
+
+| 契约项 | ADR §4.1.4 字面 | 本卡精化 | 理由 |
+|---|---|---|---|
+| `UserMenuProps` 关闭回调 | `onClose: () => void` | `onOpenChange: (open: boolean) => void` | 与 React 受控组件惯用模式对齐（如 Radix UI / shadcn Dialog）；外部点击 / ESC / 菜单项点击三处都调 `onOpenChange(false)` |
+| `UserMenuProps` action 调度 | `onAction: (action: UserMenuAction) => void`（单一 union 回调） | `actions: AdminUserActions`（callbacks 拆分对象，logout 必填，其余可选） | 叶子层支持"actions 提供性渲染"（onProfile=undefined → 个人资料项隐藏；与 fix(CHG-SN-2-01) AdminShellProps `onSwitchAccount?` 可选 + 菜单项隐藏的语义对齐）；编排层（CHG-SN-2-12 AdminShell 装配）仍消费单一 `onUserMenuAction(action: UserMenuAction)` 回调，AdminShell 内部把 union 分派到 actions 各 callback |
+| `AdminShellUser.role` | `role: string`（§4.1.1） | `role: 'admin' \| 'moderator'` union | 与 onUserMenuAction 6 项 union 调度 schema 同质收敛；string 兜底无业务必要（应用层无第三种角色） |
+| `AdminShellUser.avatarText` | `avatarText: string`（必填，§4.1.1） | `avatarText?: string`（可选，由 deriveAvatarText helper 推断兜底） | 多数登录态消费方不必显式提供 avatar 文本；helper 推断（多词→首字母 / CJK→前两字 / 单字符→自身 / 空→"?"）覆盖 100% displayName 形态 |
+| `UserMenuProps.anchorRef` | 必填 `RefObject<HTMLElement>` | 可选 `RefObject<HTMLElement \| null>` | 单元/SSR 测试场景 + 无 anchor 复用矩阵（如 demo 页直接 mount）允许 anchorRef 缺省；缺省时 outside-click 仅检查菜单内点击 |
+
+**精化的不变约束**：
+- ADR §4.1.4 "6 项菜单（profile / preferences / theme / help / switchAccount / logout）"语义 1:1 对齐
+- ADR §4.1.4 "外部点击关闭 / ESC 关闭 / focus trap"行为 1:1 对齐
+- ADR §4.1.4 "不实现 logout 业务（委托 actions.onLogout）/ 不读取 user 数据"硬约束 1:1 对齐
+- ADR §4.4 4 项硬约束（Provider 不下沉 / Edge Runtime 兼容 / 零硬编码颜色 / 零图标库依赖）100% 对齐
+
+**精化后的 UserMenuProps 完整签名**（packages/admin-ui/src/shell/types.ts SSOT）：
+
+```typescript
+export interface UserMenuProps {
+  readonly open: boolean
+  readonly onOpenChange: (open: boolean) => void
+  readonly user: AdminShellUser
+  readonly actions: AdminUserActions
+  readonly anchorRef?: React.RefObject<HTMLElement | null>
+}
+```
+
+**消费链调用**：
+- 编排层（CHG-SN-2-12 AdminShell）：维护 `dispatch = (action: UserMenuAction) => onUserMenuAction(action)`，构造 `actions = { onProfile: () => dispatch('profile'), ..., onLogout: () => dispatch('logout') }`，传给 `<UserMenu>`
+- 叶子层（UserMenu）：按 actions 提供性渲染对应菜单项；任意菜单项点击触发对应 callback + 自动 onOpenChange(false)
+
+**关联**：CHG-SN-2-07 落地 commit / Opus 评审 PASS（11 项 / 1 必修 + 3 建议优化合并）/ 后续 CHG-SN-2-08 Sidebar 集成 UserMenu / CHG-SN-2-12 AdminShell 装配 onUserMenuAction → actions 分派
+
 #### 2026-04-29 · fix(CHG-SN-2-04) · platform.ts hydration-safe 修复（提前落地原"建议优化 4"）
 
 Codex stop-time review 识别 platform.ts 顶层 `detectIsMac()` 直接读 navigator 导致 SSR ('Ctrl+K') vs 客户端水合 ('⌘K') React hydration mismatch；把 hydration-safe 责任推给消费方包装是糟糕的 API 设计。本 fix 在 packages/admin-ui 内解决，将原"后续登记"建议优化 4 提前落地。
