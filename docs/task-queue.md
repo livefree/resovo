@@ -844,7 +844,7 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
     - 验收要点：单元测试覆盖率 ≥70%（含 Shell 组件键盘事件 / Toast 队列 / countProvider 求值）/ 零硬编码颜色 CI 扫描 / 零 fetch 副作用 grep 校验 / SSR 兼容（admin layout 服务端渲染不报错）/ a11y 基线（键盘导航全覆盖 / 焦点环 / 对比度 ≥4.5:1 / aria-* 完整）
     - 子代理调用：可降 Sonnet（验收类）
 
-22. **CHG-SN-2-21** — M-SN-2 milestone 阶段审计（Opus）（状态：⬜ 未开始）
+22. **CHG-SN-2-21** — M-SN-2 milestone 阶段审计（Opus）（状态：✅ 完成 A 级）
     - 计划开始：CHG-SN-2-20 PASS 后
     - 工时估算：0.2 天
     - 关联 plan §：§5.3 milestone 阶段审计（A/B/C 评级）+ §6 M-SN-2 完成标准

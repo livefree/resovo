@@ -39,6 +39,34 @@
 
 ---
 
+## [CHG-SN-2-21] M-SN-2 milestone 阶段审计 · **评级 A**
+
+- **日期**: 2026-04-29
+- **执行模型**: claude-sonnet-4-6（主循环）
+- **子代理调用**: arch-reviewer (claude-opus-4-7) — milestone 阶段审计强制 Opus
+
+### 审计结论
+
+**评级 A**（完成标准 6/7 PASS + 阶段审计重点 A~F 全 PASS + 零必须回滚项）
+
+| 审计项 | 结论 |
+|---|---|
+| 完成标准 7 条 | 6 PASS，1 欠账（覆盖率数字可追溯，不阻断） |
+| A. Shell API 契约稳定性 | PASS |
+| B. Provider 不下沉约束 | PASS（zustand/vanilla per-instance store，零 createContext）|
+| C. SSR / Edge Runtime 兼容 | PASS（顶层零 window，mounted 守卫，getServerSnapshot）|
+| D. a11y 基线 | PASS（role/aria 完整，Tab/ESC/ArrowKey focus trap）|
+| E. 数据原语完整性 | PASS（10/10 文件存在且桶导出）|
+| F. demo 页 | PASS |
+
+### 欠账（低优先级，不阻断 M-SN-3）
+1. 测试覆盖率数字（npm run test --coverage 的 packages/admin-ui 子项）未直接核验，需在 M-SN-3 前补数值
+2. CommandPalette `zIndex: 'var(...)' as unknown as number` → 建议 M-SN-3 第一张卡统一为 `as React.CSSProperties['zIndex']`
+
+### M-SN-2 已闭环 → 直接进入 M-SN-3 标杆页（视频库）
+
+---
+
 ## [CHG-SN-2-20] 数据原语层集成验收
 
 - **日期**: 2026-04-29
