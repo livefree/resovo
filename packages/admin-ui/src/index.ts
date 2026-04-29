@@ -12,3 +12,6 @@
 
 // Shell 编排层（CHG-SN-2-03+）
 export * from './shell'
+
+// DataTable v2 数据原语层（CHG-SN-2-13+）
+export * from './components/data-table'

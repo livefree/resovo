@@ -13,8 +13,8 @@ export type { AdminTableToken } from './table.js'
 export { adminDensity } from './density.js'
 export type { AdminDensityToken } from './density.js'
 
-export { adminShellZIndex } from './z-index.js'
-export type { AdminShellZIndexToken } from './z-index.js'
+export { adminShellZIndex, adminLayoutZIndexBusiness } from './z-index.js'
+export type { AdminShellZIndexToken, AdminLayoutZIndexBusinessToken } from './z-index.js'
 
 export { adminShellSurfaces } from './surfaces.js'
 export type { AdminShellSurfacesToken } from './surfaces.js'

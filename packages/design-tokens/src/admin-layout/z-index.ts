@@ -24,3 +24,19 @@ export const adminShellZIndex = {
 } as const
 
 export type AdminShellZIndexToken = keyof typeof adminShellZIndex
+
+/**
+ * 业务 Drawer / Modal / AdminDropdown z-index（ADR-103 §4.6）
+ *
+ * 层级关系（完整 4 级）：
+ *   AdminDropdown 980 < Drawer/Modal 1000 < Shell 抽屉 1100 < CmdK 1200 < Toast 1300
+ *
+ * 分离原因：Shell 编排层 z-shell-* 与业务组件层 z-modal / z-admin-dropdown 属不同语义边界；
+ * 单独导出便于消费方按用途 import 而非打包同一常量对象。
+ */
+export const adminLayoutZIndexBusiness = {
+  'z-modal': '1000',
+  'z-admin-dropdown': '980',
+} as const
+
+export type AdminLayoutZIndexBusinessToken = keyof typeof adminLayoutZIndexBusiness

@@ -212,6 +212,8 @@
   --z-shell-drawer: 1100;
   --z-shell-cmdk: 1200;
   --z-shell-toast: 1300;
+  --z-modal: 1000;
+  --z-admin-dropdown: 980;
   --admin-accent-soft: rgba(245, 158, 11, 0.12);
   --admin-warn-soft: rgba(245, 158, 11, 0.14);
   --admin-danger-soft: rgba(239, 68, 68, 0.14);

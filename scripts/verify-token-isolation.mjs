@@ -85,6 +85,9 @@ const FORBIDDEN_TOKENS = [
   '--admin-accent-soft',
   '--admin-avatar-bg',
   '--admin-warn-soft',
+  // admin-layout z-index business（CHG-SN-2-13）：业务 Drawer/Modal + AdminDropdown z-index
+  '--z-admin-dropdown',
+  '--z-modal',
   // dual-signal base（最短，放最后）
   '--probe',
   '--render',

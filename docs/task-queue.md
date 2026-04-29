@@ -780,7 +780,7 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
     - 子代理调用：arch-reviewer (Opus) — ADR 起草强制 Opus（CLAUDE.md 模型路由第 1/3 项）
     - 人工 sign-off：plan §0 SHOULD-4-a 视 ADR 影响范围决定（如不影响 plan §6 范围则无需）
 
-14. **CHG-SN-2-13** — packages/admin-ui DataTable v2 + useTableQuery（数据原语首张）（状态：⬜ 未开始）
+14. **CHG-SN-2-13** — packages/admin-ui DataTable v2 + useTableQuery（数据原语首张）（状态：✅ PASS）
     - 计划开始：CHG-SN-2-12.5 PASS 后
     - 工时估算：0.8 天
     - 关联 ADR：ADR-103

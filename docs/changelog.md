@@ -1674,3 +1674,42 @@
   - test 2160 passed / 182 files ✅（2 个 pre-existing 已知错误不变）
   - verify-token-isolation ✅（152 文件扫描，0 admin token 跨域）
 - **下一步**：CHG-SN-2-13 DataTable v2 + useTableQuery 数据原语首张代码卡
+
+---
+
+## chg(CHG-SN-2-13): packages/admin-ui DataTable v2 + useTableQuery（数据原语首张）
+
+- **日期**: 2026-04-29
+- **TASK-ID**: CHG-SN-2-13
+- **主循环模型**: claude-sonnet-4-6
+- **子代理调用**: arch-reviewer (claude-opus-4-7) — ADR-103 起草阶段强制 Opus（CHG-SN-2-12.5）；本卡实施阶段直接按 ADR-103 落地
+- **变更类型**: feat（数据原语层首张代码卡）
+- **影响范围**: packages/admin-ui + packages/design-tokens + apps/server-next + scripts + tests
+- **摘要**: 按 ADR-103 §4.1/§4.2 实施 DataTable v2 基座 + useTableQuery 状态管理 hook。新增 6 个源文件（types / url-sync / storage-sync / table-query-store / use-table-query / data-table）+ index 桶导出；token 层追加 --z-modal:1000 / --z-admin-dropdown:980（ADR-103 §4.6）；verify-token-isolation 扩展 2 项业务 z-index 守卫；server-next lib/table-router-adapter 提前落地（ADR-103 §4.8.3 建议）。
+
+### 新增/变更文件
+- `packages/admin-ui/src/components/data-table/types.ts`（新建：全量 ADR-103 类型 SSOT）
+- `packages/admin-ui/src/components/data-table/url-sync.ts`（新建：纯函数 URL ↔ snapshot 互转）
+- `packages/admin-ui/src/components/data-table/storage-sync.ts`（新建：纯函数 sessionStorage 互转）
+- `packages/admin-ui/src/components/data-table/table-query-store.ts`（新建：zustand 单例多 tableId）
+- `packages/admin-ui/src/components/data-table/use-table-query.ts`（新建：hook + URL/storage 同步）
+- `packages/admin-ui/src/components/data-table/data-table.tsx`（新建：client/server 两档渲染）
+- `packages/admin-ui/src/components/data-table/index.ts`（新建：桶导出）
+- `packages/admin-ui/src/index.ts`（追加 data-table 桶导出）
+- `packages/design-tokens/src/admin-layout/z-index.ts`（追加 adminLayoutZIndexBusiness）
+- `packages/design-tokens/scripts/build-css.ts`（emit z-modal / z-admin-dropdown）
+- `packages/design-tokens/build.ts`（emit z-modal / z-admin-dropdown）
+- `packages/design-tokens/src/css/tokens.css`（auto-generated rebuild）
+- `scripts/verify-token-isolation.mjs`（FORBIDDEN_TOKENS 追加 --z-modal / --z-admin-dropdown）
+- `apps/server-next/src/lib/table-router-adapter.ts`（新建：next/navigation → TableRouterAdapter）
+- `tests/unit/components/admin-ui/table/url-sync.test.ts`（新建：29 测试）
+- `tests/unit/components/admin-ui/table/table-query-store.test.ts`（新建：15 测试）
+- `tests/unit/components/admin-ui/table/data-table.test.tsx`（新建：25 测试）
+- **新增依赖**：无
+- **数据库变更**：无
+- **实测验收**：
+  - typecheck ✅（全 workspace 零错误）
+  - lint ✅（server-next / server 零警告）
+  - test 69 新增测试全通过；pre-existing user-menu-interaction unhandled error 不变
+  - DataTable client/server 两档 mode ✅；URL 同步 + sessionStorage 同步可测试 ✅；SSR 零 throw ✅
+- **下一步**：CHG-SN-2-14 Toolbar / FilterChip / ColumnSettingsPanel
