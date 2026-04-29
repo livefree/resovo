@@ -257,6 +257,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
     <div
       data-table
       data-testid={testId}
+      role="grid"
       style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', position: 'relative' }}
       aria-label="data table"
       aria-rowcount={effectiveTotalRows}
@@ -295,7 +296,9 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
                 role="columnheader"
                 aria-sort={isSorted ? (query.sort.direction === 'asc' ? 'ascending' : 'descending') : undefined}
                 style={{ ...TH_STYLE, cursor: sortable ? 'pointer' : 'default' }}
+                tabIndex={sortable ? 0 : undefined}
                 onClick={sortable ? () => handleHeaderClick(col.id) : undefined}
+                onKeyDown={sortable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleHeaderClick(col.id) } } : undefined}
               >
                 {col.header}
                 {sortable && <SortIcon direction={sortDir} />}

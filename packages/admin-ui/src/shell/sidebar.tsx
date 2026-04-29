@@ -71,9 +71,11 @@ const BRAND_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 'var(--space-3)',
-  padding: 'var(--space-4)',
+  padding: '0 var(--space-4)',
+  height: 'var(--topbar-h)',
   borderBottom: '1px solid var(--border-subtle)',
   flexShrink: 0,
+  boxSizing: 'border-box',
 }
 
 const LOGO_STYLE: CSSProperties = {

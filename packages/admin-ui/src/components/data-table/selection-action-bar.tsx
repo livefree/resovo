@@ -75,12 +75,12 @@ function actionBtnStyle(variant: SelectionAction['variant'], disabled: boolean):
     flexShrink: 0,
   }
   if (variant === 'primary') {
-    return { ...base, background: 'var(--accent-primary)', color: 'var(--fg-on-accent)', borderColor: 'var(--accent-primary)' }
+    return { ...base, background: 'var(--accent-default)', color: 'var(--fg-on-accent)', borderColor: 'var(--accent-default)' }
   }
   if (variant === 'danger') {
-    return { ...base, background: 'transparent', color: 'var(--state-error)', borderColor: 'var(--state-error)' }
+    return { ...base, background: 'transparent', color: 'var(--state-error-fg)', borderColor: 'var(--state-error-border)' }
   }
-  return { ...base, background: 'var(--bg-surface-hover)', color: 'var(--fg-default)', borderColor: 'var(--border-strong)' }
+  return { ...base, background: 'var(--bg-surface-elevated)', color: 'var(--fg-default)', borderColor: 'var(--border-strong)' }
 }
 
 const GHOST_BTN_STYLE: React.CSSProperties = {
@@ -104,7 +104,7 @@ const LINK_BTN_STYLE: React.CSSProperties = {
   fontSize: '12px',
   border: 0,
   background: 'transparent',
-  color: 'var(--accent-primary)',
+  color: 'var(--accent-default)',
   cursor: 'pointer',
   textDecoration: 'underline',
   flexShrink: 0,
@@ -115,7 +115,7 @@ const CONFIRM_WRAP_STYLE: React.CSSProperties = {
   alignItems: 'center',
   gap: '6px',
   padding: '4px 10px',
-  background: 'var(--bg-surface-hover)',
+  background: 'var(--bg-surface-elevated)',
   border: '1px solid var(--border-subtle)',
   borderRadius: 'var(--radius-sm)',
   fontSize: '13px',
@@ -125,7 +125,7 @@ const CONFIRM_WRAP_STYLE: React.CSSProperties = {
 const CONFIRM_OK_STYLE: React.CSSProperties = {
   padding: '2px 10px',
   fontSize: '12px',
-  background: 'var(--state-error)',
+  background: 'var(--state-error-fg)',
   color: 'var(--fg-on-accent)',
   border: 0,
   borderRadius: 'var(--radius-sm)',

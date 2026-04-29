@@ -172,9 +172,10 @@ export function UserMenu({ open, onOpenChange, user, actions, anchorRef }: UserM
 
   const handleItemClick = useCallback(
     (item: MenuItem) => {
-      // try/finally 防 callback throw 时菜单卡死（onOpenChange 必须执行）
       try {
         item.callback?.()
+      } catch {
+        // consumer callback errors must not block menu close
       } finally {
         onOpenChange(false)
       }
