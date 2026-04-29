@@ -39,6 +39,22 @@
 
 ---
 
+## [CHG-SN-2-17] AdminDropdown / SelectionActionBar（packages/admin-ui 行操作原语）
+
+- **日期**: 2026-04-29
+- **执行模型**: claude-sonnet-4-6
+- **子代理调用**: 无
+
+### 变更摘要
+新增 AdminDropdown（`packages/admin-ui/src/components/dropdown/`）与 SelectionActionBar（`data-table/selection-action-bar.tsx`）：
+
+- `admin-dropdown.tsx`：portal 渲染；trigger ReactNode 包装锚定；ESC + 点击外部关闭；ArrowDown/Up 键盘导航；Enter 触发；z-index `var(--z-admin-dropdown)=980`；separator / icon / shortcut / danger / disabled；SSR mounted gate；formatShortcut（mod+e → ⌘E）
+- `selection-action-bar.tsx`：visible 受控；sticky-bottom/top；已选 N 条；page↔all-matched 切换；SelectionAction 按钮（variant: default/primary/danger）；confirm 内联确认流程；清除选择；零硬编码颜色
+- 追加 44 条单测全通过
+- typecheck ✅ / lint ✅ / test ✅
+
+---
+
 ## [CHG-SN-2-16] Drawer / Modal 通用业务原语（packages/admin-ui overlay）
 
 - **日期**: 2026-04-29

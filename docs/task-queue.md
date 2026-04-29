@@ -814,7 +814,7 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
     - 验收要点：z-index 不硬编码（取 var(--z-modal)）/ Drawer 与 Shell 抽屉层级不冲突 / focus trap / ESC 关闭 / SSR
     - 子代理调用：arch-reviewer (Opus) — z-index L1 业务原语首张落地需评审 4 级层级关系
 
-18. **CHG-SN-2-17** — AdminDropdown / SelectionActionBar（状态：⬜ 未开始）
+18. **CHG-SN-2-17** — AdminDropdown / SelectionActionBar（状态：✅ 完成）
     - 计划开始：CHG-SN-2-16 PASS 后
     - 工时估算：0.3 天
     - 关联 ADR：ADR-103

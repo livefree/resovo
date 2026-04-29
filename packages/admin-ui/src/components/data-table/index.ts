@@ -6,6 +6,8 @@
 // Components
 export { DataTable } from './data-table'
 export { Toolbar } from './toolbar'
+export { SelectionActionBar } from './selection-action-bar'
+export type { SelectionActionBarProps, SelectionAction } from './selection-action-bar'
 export type { ToolbarProps } from './toolbar'
 export { FilterChip, FilterChipBar } from './filter-chip'
 export type { FilterChipProps, FilterChipBarProps } from './filter-chip'
