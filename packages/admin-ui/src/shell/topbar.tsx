@@ -103,6 +103,9 @@ const RIGHT_GROUP_STYLE: CSSProperties = {
   alignItems: 'center',
   gap: 'var(--space-2)',
   flexShrink: 0,
+  // marginLeft: auto 强制 right group 贴 header 右端（fix(CHG-SN-2-09) Codex stop-time review）
+  // 否则 search button 受 maxWidth: 480px 限制后剩余空间形成空白，导致 right group 漂浮在 header 中间
+  marginLeft: 'auto',
 }
 
 const ICON_BTN_STYLE: CSSProperties = {

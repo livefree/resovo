@@ -84,6 +84,12 @@ describe('Topbar — 容器 + 3 区布局', () => {
     expect(container.querySelector('[data-topbar-search]')).toBeTruthy()
     expect(container.querySelector('[data-topbar-right]')).toBeTruthy()
   })
+
+  it('right group 含 marginLeft: auto（fix(CHG-SN-2-09) 视觉契约：贴右端不漂浮 mid-header）', () => {
+    const { container } = renderTopbar()
+    const rightGroup = container.querySelector('[data-topbar-right]') as HTMLElement
+    expect(rightGroup.style.marginLeft).toBe('auto')
+  })
 })
 
 describe('Topbar — Breadcrumbs 直接渲染（不调用 inferBreadcrumbs）', () => {

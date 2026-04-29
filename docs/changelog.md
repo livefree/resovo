@@ -1232,3 +1232,42 @@
   - 5 类图标按钮统一 32×32 几何（geometry consistency；与设计稿 v2.1 shell.jsx 实践对齐）
   - 任务角标用 var(--state-info-bg/-fg)（运行中任务通常是 info 语义；如设计稿要求其他配色由后续 fix 卡处理）
   - useFormatShortcut('mod+k') 输出在 SSR 走 "Ctrl+K"，客户端 mount 后 Mac 自动切换"⌘K"（与 CHG-SN-2-04 fix hydration-safe 一致）
+
+---
+
+## [fix(CHG-SN-2-09)] Topbar layout 视觉契约修复 — right group marginLeft: auto 推贴右端
+
+- **完成时间**：2026-04-29
+- **记录时间**：2026-04-29 04:20
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（Codex stop-time review 已识别视觉契约缺口；修复明确）
+- **触发**：Codex stop-time review BLOCK — "Topbar layout can ship with right controls floating mid-header"
+- **缺失项分析**：
+  - search button `flex: 1 + maxWidth: 480px` → 大屏（>800px header）下 search 仅占 480px
+  - right group `flex-shrink: 0` + 父 flex `justify-content: flex-start` 默认 → search 之后剩余空间形成空白
+  - right controls 漂浮在 header 中间（非贴右端），违反设计稿 v2.1 shell.jsx tb__right 视觉契约
+- **修复**：`packages/admin-ui/src/shell/topbar.tsx` RIGHT_GROUP_STYLE 加 `marginLeft: 'auto'` 强制贴 header 右端；search button 仍居左占 maxWidth: 480px
+- **修改文件**：
+  - `packages/admin-ui/src/shell/topbar.tsx`：RIGHT_GROUP_STYLE 加 `marginLeft: 'auto'` + 内联注释说明 fix 触发原因
+  - `tests/unit/components/admin-ui/shell/topbar.test.tsx`：追加 1 测断言 right group `marginLeft === 'auto'`（视觉契约不变量锁定，防回归）
+- **新增依赖**：无
+- **数据库变更**：无
+- **实测验收**：
+  - typecheck 全绿
+  - admin-ui shell topbar 测试 23 测全过（原 22 + 1 marginLeft auto 锁定）
+- **不变约束验证**：
+  - 零硬编码颜色不变 / 零图标库依赖不变
+  - Provider 不下沉 / Edge Runtime 兼容（marginLeft: auto 为 CSS layout，不影响 SSR）
+  - 视觉契约首次显式锁定（设计稿 v2.1 shell.jsx tb__right 贴右端实践）
+- **Codex Review Gate 第 4 次精确捕获**：
+  - CHG-SN-2-03 ToastViewport position 默认值（已修 f23abc7）
+  - CHG-SN-2-04 platform.ts hydration mismatch（已修 32a94b6）
+  - CHG-SN-2-07 UserMenu popover/visual 契约（已修 6ed730e）
+  - CHG-SN-2-09 Topbar layout right controls 漂浮（本卡修）
+  Codex stop-time review 与 Opus arch-reviewer 形成"双 review"互补：
+  - Opus 评审重点：API 契约 / 范式遵守 / 不变约束（语义层）
+  - Codex 评审重点：视觉契约 / hydration 风险 / 实施细节（运行时层）
+- **作为后续 Shell 浮层 / layout 卡参照**：CSS flex 布局中 maxWidth + flex 1 同时使用时，需注意"flex 1 让步"导致剩余空间未被吸收的问题；解决方案：(a) 兄弟元素 marginLeft: auto / (b) 插入 spacer flex: 1 wrapper / (c) wrap maxWidth 元素到 flex: 1 父容器内
+- **注意事项**：
+  - 单测用 jsdom getComputedStyle 验证 inline style.marginLeft（'auto' 字符串）；真实运行时视觉对齐由 e2e 测试或 cutover 视觉对账（M-SN-7 manual_qa）兜底
+  - search button maxWidth: 480px 保持不变（设计稿原值）；如未来设计稿要求自适应宽度（如 60% header 宽），由后续 fix 卡处理
