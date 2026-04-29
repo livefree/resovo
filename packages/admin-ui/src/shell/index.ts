@@ -93,6 +93,15 @@ export type { SidebarProps } from './sidebar'
 export { Topbar, formatTaskCount } from './topbar'
 export type { TopbarProps, TopbarIcons } from './topbar'
 
+export { NotificationDrawer } from './notification-drawer'
+export type { NotificationDrawerProps } from './notification-drawer'
+
+export { TaskDrawer } from './task-drawer'
+export type { TaskDrawerProps } from './task-drawer'
+
+// Drawer item 数据契约类型 SSOT（CHG-SN-2-10；server-next 应用层准备 items 注入）
+export type { NotificationItem, TaskItem } from './types'
+
 // AdminNav + HealthSnapshot + AdminShellUser + AdminUserActions + UserMenuAction
 // 数据契约类型 SSOT（CHG-SN-2-05/06/07）
 export type {

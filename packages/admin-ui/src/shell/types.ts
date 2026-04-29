@@ -98,3 +98,33 @@ export type UserMenuAction =
   | 'help'
   | 'switchAccount'
   | 'logout'
+
+/** 通知抽屉单项（ADR-103a §4.1.5 / CHG-SN-2-10 SSOT 上提）
+ *  消费方（server-next）从 /admin/notifications 真端点构造；M-SN-2 stub 用 mock */
+export interface NotificationItem {
+  readonly id: string
+  readonly title: string
+  readonly body?: string
+  readonly level: 'info' | 'warn' | 'danger'
+  /** ISO 8601 时间戳（如 '2026-04-29T01:23:45Z'） */
+  readonly createdAt: string
+  readonly read: boolean
+  /** 点击跳转目标；undefined 时仅触发 onItemClick 不导航 */
+  readonly href?: string
+}
+
+/** 后台任务抽屉单项（ADR-103a §4.1.5 / CHG-SN-2-10 SSOT 上提）
+ *  消费方（server-next）从 /admin/system/jobs 真端点 + WebSocket 增量构造；M-SN-2 stub 用 mock */
+export interface TaskItem {
+  readonly id: string
+  readonly title: string
+  readonly status: 'pending' | 'running' | 'success' | 'failed'
+  /** 进度百分比（0-100）；仅 status='running' 时显示 progress bar */
+  readonly progress?: number
+  /** ISO 8601 起始时间 */
+  readonly startedAt: string
+  /** ISO 8601 结束时间（status='success' | 'failed' 时提供）*/
+  readonly finishedAt?: string
+  /** 失败原因（status='failed' 时提供）*/
+  readonly errorMessage?: string
+}

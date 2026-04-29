@@ -1271,3 +1271,70 @@
 - **注意事项**：
   - 单测用 jsdom getComputedStyle 验证 inline style.marginLeft（'auto' 字符串）；真实运行时视觉对齐由 e2e 测试或 cutover 视觉对账（M-SN-7 manual_qa）兜底
   - search button maxWidth: 480px 保持不变（设计稿原值）；如未来设计稿要求自适应宽度（如 60% header 宽），由后续 fix 卡处理
+
+---
+
+## [CHG-SN-2-10] packages/admin-ui NotificationDrawer + TaskDrawer + DrawerShell base（Shell 第 8 张 / 双 Drawer 一卡 / portal + ESC + focus trap 范式扩展）
+
+- **完成时间**：2026-04-29
+- **记录时间**：2026-04-29 04:50
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — 14 项评审重点全 PASS / 无必修 / 4 条 P3 建议优化登记后续
+- **触发**：CHG-SN-2-09 PASS（含 fix marginLeft auto 14c54f4）→ Shell 7/10 → 按依赖序起双 Drawer（CHG-SN-2-12 AdminShell 装配前置）
+- **修改文件**：
+  - `packages/admin-ui/src/shell/types.ts`（修改）— 追加 NotificationItem + TaskItem 类型 SSOT（含 ISO 8601 时间戳约定 + level/status union 完整定义）
+  - `packages/admin-ui/src/shell/drawer-shell.tsx`（新建私有 base，不导出）— DrawerShell 共享组件：
+    - portal 到 document.body + backdrop（var(--bg-overlay) + 点击关闭）+ panel（fixed top var(--topbar-h) right 0 width 360px + var(--bg-surface)）
+    - role="dialog" + aria-modal="true" + aria-labelledby（titleId 由 variant 派生）
+    - close 按钮（unicode ×）位于 panel header
+    - **mounted state SSR-safe**：React 18 react-dom/server 不支持 createPortal，用 useState + useEffect setMounted(true) 标志；SSR 期 mounted=false return null（输出空字符串，hydration-safe）；客户端 mount 后切换为 portal 渲染
+    - ESC keydown listener + try/catch 静默捕获（callback throw 时 listener 仍 cleanup）
+    - focus trap：mount focus close 按钮 / Tab Shift+Tab 可聚焦元素循环 / 焦点门禁（仅 panel 内焦点启用 trap，沿用 CHG-SN-2-07 模式）
+    - z-index var(--z-shell-drawer)（ADR §4.3 Shell 抽屉级 1100）
+    - data-drawer-{backdrop|panel|header|title|close|body} attr + data-drawer-* variant 区分（'notifications' / 'tasks'）
+  - `packages/admin-ui/src/shell/notification-drawer.tsx`（新建）— NotificationDrawer 组件：消费 DrawerShell + 标题"通知" + items.length 计数 + 条件 onMarkAllRead 按钮 + items 列表（每项 button + level 颜色条 var(--state-{slot}-border) + title + body? + createdAt + 已读/未读 opacity 区分）+ try/finally 行级 onItemClick + 空态"暂无通知"
+  - `packages/admin-ui/src/shell/task-drawer.tsx`（新建）— TaskDrawer 组件：消费 DrawerShell + 标题"后台任务" + 运行中数量 + items 列表（每项 status badge 4 配色 + 中文 label + title + progress bar 仅 running+progress 提供 + 时间戳 + errorMessage 仅 failed + 行级 onCancel/onRetry 双条件渲染）+ progressbar role + aria-value*
+  - `packages/admin-ui/src/shell/index.ts`（修改）— 桶导出追加 NotificationDrawer / NotificationDrawerProps / TaskDrawer / TaskDrawerProps / NotificationItem / TaskItem（DrawerShell 私有不导出）
+  - `tests/unit/components/admin-ui/shell/notification-drawer.test.tsx`（新建）— 18 tests：portal 启用 / header / aria-* / onMarkAllRead 条件 / items 渲染 + level + read 视觉 / body 可选 / 空态 / 行级 onItemClick + onMarkAllRead / ESC + backdrop + close 按钮关闭 / open=false listener 卸载
+  - `tests/unit/components/admin-ui/shell/task-drawer.test.tsx`（新建）— 19 tests：portal / header 运行中数 / items 渲染 + status attr / 4 配色映射 / 中文 label / progress bar 仅 running+progress / progress=undefined 不渲染 / errorMessage 仅 failed / cancel 仅 running+onCancel / retry 仅 failed+onRetry / success 无 action / 空态 / ESC + backdrop 关闭
+  - `tests/unit/components/admin-ui/shell/drawer-ssr.test.tsx`（新建共享）— 6 tests：双 Drawer open=false 输出空 / open=true renderToString 不抛错（含 progress + cancel + retry + onMarkAllRead 完整 props）/ items=[] 不抛错
+- **DrawerShell base 设计要点**：
+  - **私有不导出**（仅 NotificationDrawer / TaskDrawer 消费），避免 packages/admin-ui 公开 API 膨胀
+  - **mounted state**：解决 React 18 server createPortal 不支持的核心约束；与 UserMenu 不同（UserMenu 用 anchorRef.current SSR null 走 inline fallback，Drawer 无 anchorRef 必须用 mounted 标志）
+  - **focus trap 焦点门禁**：沿用 CHG-SN-2-07 UserMenu 模式（仅 panel 内焦点启用 Tab 循环，避免外部焦点被劫持）
+  - **try/catch ESC + handleBackdropClick**：静默捕获 callback throw（与 UserMenu try/finally 一致；listener 仍 cleanup）
+- **新增依赖**：无（react createPortal 内置 + react useState/useRef/useEffect/useCallback）
+- **数据库变更**：无
+- **实测验收**：
+  - typecheck（5/5 packages）/ lint（4/4 cached FULL TURBO）全绿
+  - admin-ui shell 275 tests 全过（原 232 + 43 drawer tests）
+  - 全套 2064 unit tests PASS
+  - verify-server-next-isolation 双扫描：53 文件（packages/admin-ui/src 增 3 文件）0 违规
+  - verify-token-isolation：152 文件 0 命中
+- **不变约束验证**：
+  - Provider 不下沉：三文件零 BrandProvider/ThemeProvider/createContext / DrawerShell useState mounted + useRef panelRef 受控浮层惯用模式
+  - Edge Runtime 兼容：模块顶层零 navigator/document/window；createPortal 在 mounted 后才执行；listener 全在 useEffect 内
+  - 零硬编码颜色：所有颜色读 token（含 backdrop var(--bg-overlay) + 4 status slot + level 颜色条）；几何字面量（360px panel / 4px progress bar / 4px level bar）非颜色合规
+  - 零图标库依赖：三文件无任何图标库 import；close 用 unicode "×"
+  - URL 不动 / M-SN-1 闭环资产零返工
+- **Opus 评审 PASS**（14 项重点全 PASS / 无必修 / 4 条 P3 建议优化登记后续）：
+  - **建议优化登记后续**（不阻塞，M-SN-3+ 业务卡或 fix 卡按需处理）：
+    1. ESC 监听冲突 — 当前 互斥编排（AdminShell §4.1.1）保证 Drawer 与 CmdK 不会同时打开，P3
+    2. NotificationDrawer / TaskDrawer COUNT_STYLE 重复（6 行字面相同）— 可在 DrawerShell 暴露 DRAWER_HEADER_COUNT_STYLE 常量，P3
+    3. TaskDrawer progress=0 边界视觉（空 bar）单测显式断言 width="0%"，P3
+    4. DrawerShell mounted 第一次 paint 1 帧 flash — 由 motion-fade-in 动画掩盖（panel 加 CSS opacity 渐入），P3 文档优化
+- **未复现 CHG-SN-2-03/04/07/09 类型问题**（视觉契约 / hydration / portal 模式 / layout 漂浮）：
+  - 颜色全 token + 几何字面量合规
+  - mounted 标志正确解决 React 18 server createPortal
+  - portal+focus trap+ESC+try/finally 范式复用 UserMenu 并按 Drawer 形态裁剪
+  - panel top=var(--topbar-h) 锚定 Topbar 下沿 + backdrop inset 0 全屏，无 layout 漂浮
+- **作为 CHG-SN-2-11 CommandPalette 范式参照**：
+  - DrawerShell base 模式可直接借鉴（CmdK 模态浮层 + portal + focus trap + ESC + mounted SSR-safe）
+  - z-index 按 §4.3 4 级各取对应 token：CommandPalette → var(--z-shell-cmdk)（1200，覆盖 Drawer）
+  - try/finally 保护 callback throw 一致
+- **后续动作**：CHG-SN-2-11 CommandPalette（按 ADR-103a §4.1.6 实施 ⌘K 模态浮层 + 3 组渲染 + 键盘导航 + 静态/异步搜索 + 强制 Opus 评审）
+- **注意事项**：
+  - DrawerShell mounted 标志是 React 18 server createPortal 不支持的标准解决方案；Next.js App Router RSC 兼容（client component "use client" 在客户端 mount）
+  - data-* attribute 全 lowercase（已修订 finishedAt → finishedat 避免 React DOM warning）
+  - DrawerShell 不导出，避免 packages/admin-ui 公开 API 膨胀；通过 NotificationDrawer / TaskDrawer 间接覆盖单测策略合理
+  - 双 Drawer 互斥编排在 AdminShell（CHG-SN-2-12 装配卡），叶子层（本卡）独立性高（各自受控 open + onClose）
