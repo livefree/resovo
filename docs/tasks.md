@@ -11,7 +11,3 @@
 > 单任务工作台：同一时刻只保留 1 个进行中任务。任务完成后删除卡片，历史记录见 `docs/changelog.md`，任务规划见 `docs/task-queue.md`。
 
 ---
-
-_(暂无进行中任务)_
-
-<!-- M-SN-2 milestone 已闭环（评级 A），CHG-SN-2-22 stop-gate 质量债已清零。下一 milestone：M-SN-3 标杆页视频库。 -->

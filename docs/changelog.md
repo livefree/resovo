@@ -1929,3 +1929,28 @@
 - **数据库变更**：无
 - **实测验收**：typecheck ✅ | lint ✅ | 2407 单测全通过 ✅
 - **下一步**：M-SN-3 标杆页视频库
+
+---
+
+## chg(CHG-SN-3-01): 视频库 API 层 + 类型定义
+
+- **日期**: 2026-04-29
+- **TASK-ID**: CHG-SN-3-01
+- **主循环模型**: claude-sonnet-4-6
+- **子代理调用**: 无（纯类型 + API 函数层，无新共享组件 API 契约）
+- **变更类型**: chg（M-SN-3 第 1 张）
+- **摘要**: 为 server-next 视频库页建立完整 API 层：类型定义、API 函数、列描述符、barrel export 及 crawler sites API。
+
+### 新增文件
+- `apps/server-next/src/lib/videos/types.ts`（新建：VideoAdminRow / VideoListFilter / VideoListResult / VideoAdminDetail / VideoMetaPatch / StateTransitionAction / CrawlerSite）
+- `apps/server-next/src/lib/videos/api.ts`（新建：listVideos / getVideo / patchVideoMeta / updateVisibility / stateTransition / reviewVideo / batchPublish / batchUnpublish / doubanSync / refetchSources / getModerationStats）
+- `apps/server-next/src/lib/videos/columns.ts`（新建：VIDEO_COLUMN_DESCRIPTORS / VIDEO_SORT_FIELDS）
+- `apps/server-next/src/lib/videos/index.ts`（新建：barrel re-export）
+- `apps/server-next/src/lib/crawler/api.ts`（新建：listCrawlerSites → GET /admin/crawler/sites）
+
+### 验收
+- VideoAdminRow 与 apps/api `/admin/videos` 返回结构 100% 对齐（snake_case）
+- 所有 api.ts 函数均有 return type，无 any
+- VIDEO_COLUMN_DESCRIPTORS 含 enableSorting 对齐 VideoSortField
+- **实测验收**：typecheck ✅
+- **下一步**：CHG-SN-3-02 VideoStatusIndicator + VideoTypeChip 原子组件
