@@ -212,9 +212,16 @@
   --z-shell-drawer: 1100;
   --z-shell-cmdk: 1200;
   --z-shell-toast: 1300;
+  --admin-accent-soft: rgba(245, 158, 11, 0.12);
+  --admin-warn-soft: rgba(245, 158, 11, 0.14);
+  --admin-danger-soft: rgba(239, 68, 68, 0.14);
+  --admin-avatar-bg: linear-gradient(135deg, #6366f1, #8b5cf6);
+  --admin-input-radius: 6px;
+  --admin-count-font-size: 11px;
   --bg-canvas: oklch(98.5% 0.002 247);
   --bg-surface: oklch(100% 0 0);
   --bg-surface-raised: oklch(100% 0 0);
+  --bg-surface-elevated: oklch(100% 0 0);
   --bg-surface-sunken: oklch(96.8% 0.004 247);
   --bg-overlay: color-mix(in oklch, oklch(6.5% 0.004 247) 50%, transparent);
   --fg-default: oklch(11.2% 0.006 247);
@@ -318,6 +325,7 @@
   --bg-canvas: oklch(6.5% 0.004 247);
   --bg-surface: oklch(11.2% 0.006 247);
   --bg-surface-raised: oklch(16.5% 0.008 247);
+  --bg-surface-elevated: oklch(23.0% 0.010 247);
   --bg-surface-sunken: oklch(6.5% 0.004 247);
   --bg-overlay: color-mix(in oklch, oklch(6.5% 0.004 247) 70%, transparent);
   --fg-default: oklch(98.5% 0.002 247);

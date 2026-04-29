@@ -1624,3 +1624,53 @@
   - typecheck ✅ / lint ✅
   - test 2160 passed / 182 files ✅
 - **下一步**：CHG-SN-2-13 DataTable v2 + useTableQuery 数据原语首张代码卡（ADR-103 PASS 解锁）
+
+---
+
+## fix(CHG-SN-2-12)#vs: Shell 视觉对齐修复 — design token bridge + CSS 注入 + inline style 修正
+
+- **任务 ID**：fix(CHG-SN-2-12)#vs
+- **记录时间**：2026-04-28
+- **执行模型**：claude-sonnet-4-6（主循环）
+- **子代理**：无
+- **背景**：CHG-SN-2-12 AdminShell 装配完成后，用户 diff 出 8 个视觉偏差（P1×3 + P2×5）。根因两个正交缺口：① `--bg-surface-elevated` 从未在 token 系统中定义（所有 shell 组件引用它但为 undefined）；② admin 专属半透明 token（`--admin-accent-soft` / `--admin-warn-soft` 等）不存在，组件误用 solid OKLCH 颜色；③ inline style 无法表达 `:hover` / `::webkit-scrollbar` / `transition`。
+- **实现内容**：
+  - **L1 token 系统**：
+    - `packages/design-tokens/src/semantic/bg.ts`：加 `surfaceElevated`（light: gray[0], dark: gray[800] = `oklch(23.0% 0.010 247)` ≈ design spec bg4）
+    - `packages/design-tokens/src/admin-layout/surfaces.ts`（新建）：6 个 admin 专属 token — `--admin-accent-soft`（rgba amber 12%）/ `--admin-warn-soft`（rgba amber 14%）/ `--admin-danger-soft`（rgba red 14%）/ `--admin-avatar-bg`（indigo-violet 渐变）/ `--admin-input-radius`（6px）/ `--admin-count-font-size`（11px）
+    - `packages/design-tokens/src/admin-layout/index.ts`：导出 adminShellSurfaces
+    - `packages/design-tokens/scripts/build-css.ts` + `build.ts`：emit adminShellSurfaces
+    - rebuild 后 `src/css/tokens.css`（426 行）和 `dist/` 全套同步
+  - **L2 CSS 注入**：
+    - `packages/admin-ui/src/shell/admin-shell-styles.tsx`（新建）：`<style>` tag + data-* 选择器，覆盖 hover / active left indicator (::before) / scrollbar / transition / user-menu item hover；零硬编码颜色
+  - **L3 inline 修复**：
+    - `sidebar.tsx`：height `100vh`（P1）/ NavItem active `--admin-accent-soft` bg + `--state-warning-fg` 文字（P1）/ count badge `--radius-full` + `--admin-count-font-size` + badgeBg/badgeFg helpers（P1）/ collapse 按钮 ⌘B kbd hint + 新文案（P2）/ Footer border shorthand 顺序修复（P2）/ Footer chevron › + avatar `--admin-avatar-bg` 渐变
+    - `topbar.tsx`：search 固定 `width: 420px`（移除 flex: 1）+ spacer div + `--bg-surface-raised` + `--admin-input-radius`（P2）/ RIGHT_GROUP_STYLE 移除 marginLeft: auto
+    - `user-menu.tsx`：CONTAINER_STYLE `--border-strong` + `--shadow-lg`；AVATAR_STYLE `--admin-avatar-bg` + `--fg-on-accent`（P2）
+  - **L4 装配**：`admin-shell.tsx` 引入并渲染 `<AdminShellStyles />`
+  - **isolation 守卫**：`scripts/verify-token-isolation.mjs` FORBIDDEN_TOKENS 追加 6 个 `--admin-*` surface token（防前台误用）
+  - **测试更新**：sidebar.test.tsx 3 条断言更新（warn-soft / danger-soft / bg-surface-raised）；topbar.test.tsx 1 条断言更新（spacer 布局验证）
+- **修改文件**：
+  - `packages/design-tokens/src/semantic/bg.ts`
+  - `packages/design-tokens/src/admin-layout/surfaces.ts`（新建）
+  - `packages/design-tokens/src/admin-layout/index.ts`
+  - `packages/design-tokens/scripts/build-css.ts`
+  - `packages/design-tokens/build.ts`
+  - `packages/design-tokens/src/css/tokens.css`（auto-generated）
+  - `packages/design-tokens/dist/`（auto-generated，rebuild）
+  - `packages/admin-ui/src/shell/admin-shell-styles.tsx`（新建）
+  - `packages/admin-ui/src/shell/sidebar.tsx`
+  - `packages/admin-ui/src/shell/topbar.tsx`
+  - `packages/admin-ui/src/shell/user-menu.tsx`
+  - `packages/admin-ui/src/shell/admin-shell.tsx`
+  - `scripts/verify-token-isolation.mjs`
+  - `tests/unit/components/admin-ui/shell/sidebar.test.tsx`
+  - `tests/unit/components/admin-ui/shell/topbar.test.tsx`
+- **新增依赖**：无
+- **数据库变更**：无
+- **实测验收**：
+  - typecheck ✅（admin-ui / design-tokens 零错误）
+  - lint ✅（server-next / server 零警告）
+  - test 2160 passed / 182 files ✅（2 个 pre-existing 已知错误不变）
+  - verify-token-isolation ✅（152 文件扫描，0 admin token 跨域）
+- **下一步**：CHG-SN-2-13 DataTable v2 + useTableQuery 数据原语首张代码卡

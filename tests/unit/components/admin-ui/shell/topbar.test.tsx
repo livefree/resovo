@@ -85,10 +85,13 @@ describe('Topbar — 容器 + 3 区布局', () => {
     expect(container.querySelector('[data-topbar-right]')).toBeTruthy()
   })
 
-  it('right group 含 marginLeft: auto（fix(CHG-SN-2-09) 视觉契约：贴右端不漂浮 mid-header）', () => {
+  it('search trigger 固定宽度 420px + right group 可渲染（fix(CHG-SN-2-12)#vs 视觉契约：spacer 布局）', () => {
     const { container } = renderTopbar()
     const rightGroup = container.querySelector('[data-topbar-right]') as HTMLElement
-    expect(rightGroup.style.marginLeft).toBe('auto')
+    expect(rightGroup).toBeTruthy()
+    // search trigger 改为固定宽度（width: 420px）而非 flex: 1
+    const search = container.querySelector('[data-topbar-search]') as HTMLElement
+    expect(search.style.width).toBe('420px')
   })
 })
 

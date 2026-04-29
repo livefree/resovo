@@ -19,7 +19,7 @@
  *     · 显示规则：>999 → "1.2k" 缩写（formatCount helper）
  *     · badge 配色：info/warn/danger → semantic.status token slot
  *     · 折叠态：仅 icon + 计数 pip（小圆点 8px）+ tooltip（title attribute + label + shortcut 文案）
- *     · activeHref 高亮：背景 var(--bg-surface-elevated) + 前景 var(--fg-default)
+ *     · activeHref 高亮：背景 var(--admin-accent-soft) + 前景 var(--state-warning-fg)（fix(CHG-SN-2-12)#vs）
  *     · shortcut 渲染用 useFormatShortcut hook（hydration-safe；NavItem 子组件内每项独立调用）
  *   - Brand 区：流光 logo + 标题（折叠态隐藏标题）+ 版本 v2
  *   - Footer：sb__foot 触发 UserMenu 弹出
@@ -59,7 +59,7 @@ export interface SidebarProps {
 const ASIDE_STYLE_BASE: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  height: 'calc(100vh - var(--topbar-h))',
+  height: '100vh',
   background: 'var(--bg-surface)',
   borderRight: '1px solid var(--border-default)',
   color: 'var(--fg-default)',
@@ -129,13 +129,18 @@ const SECTION_DIVIDER_STYLE: CSSProperties = {
 const COLLAPSE_BTN_STYLE: CSSProperties = {
   background: 'transparent',
   border: 0,
+  // borderTop 在 border: 0 后声明，确保 shorthand 不覆盖 longhand
   borderTop: '1px solid var(--border-subtle)',
-  padding: 'var(--space-3) var(--space-4)',
+  padding: 'var(--space-2) var(--space-4)',
   color: 'var(--fg-muted)',
   cursor: 'pointer',
   font: 'inherit',
   textAlign: 'left',
+  fontSize: 'var(--font-size-xs)',
   flexShrink: 0,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 'var(--space-2)',
 }
 
 export function Sidebar({
@@ -148,6 +153,8 @@ export function Sidebar({
   onUserMenuAction,
   counts,
 }: SidebarProps) {
+  const cmdBLabel = useFormatShortcut('mod+b')
+
   // onUserMenuAction(union) → AdminUserActions 拆分（叶子层 UserMenu 消费）
   // 全 6 项 actions 都映射到 onUserMenuAction；消费方在 onUserMenuAction 内分派 + 不支持的 action 走 noop
   const userActions: AdminUserActions = useMemo(
@@ -212,7 +219,25 @@ export function Sidebar({
         onClick={onToggleCollapsed}
         style={COLLAPSE_BTN_STYLE}
       >
-        {collapsed ? '››' : '‹‹ 折叠'}
+        <span aria-hidden="true">{collapsed ? '›' : '‹'}</span>
+        {!collapsed && <span>折叠</span>}
+        {cmdBLabel && (
+          <kbd
+            aria-hidden="true"
+            style={{
+              marginLeft: 'auto',
+              padding: '1px var(--space-1)',
+              background: 'var(--bg-surface-raised)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: 'var(--font-size-xs)',
+              fontFamily: 'monospace',
+              color: 'var(--fg-muted)',
+            }}
+          >
+            {cmdBLabel}
+          </kbd>
+        )}
       </button>
     </aside>
   )
@@ -259,8 +284,8 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate }: NavItemP
     alignItems: 'center',
     gap: collapsed ? 0 : 'var(--space-3)',
     padding: 'var(--space-2) var(--space-4)',
-    color: active ? 'var(--fg-default)' : 'var(--fg-muted)',
-    background: active ? 'var(--bg-surface-elevated)' : 'transparent',
+    color: active ? 'var(--state-warning-fg)' : 'var(--fg-muted)',
+    background: active ? 'var(--admin-accent-soft)' : 'transparent',
     border: 0,
     width: '100%',
     cursor: 'pointer',
@@ -316,11 +341,11 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate }: NavItemP
             <span
               data-sidebar-item-badge
               style={{
-                padding: '0 var(--space-2)',
-                borderRadius: 'var(--radius-sm)',
-                fontSize: 'var(--font-size-xs)',
-                background: badgeSlot ? `var(--state-${badgeSlot}-bg)` : 'var(--bg-surface-elevated)',
-                color: badgeSlot ? `var(--state-${badgeSlot}-fg)` : 'var(--fg-muted)',
+                padding: '1px var(--space-2)',
+                borderRadius: 'var(--radius-full)',
+                fontSize: 'var(--admin-count-font-size)',
+                background: badgeBg(badgeSlot),
+                color: badgeFg(badgeSlot),
                 lineHeight: '1.4em',
                 flexShrink: 0,
               }}
@@ -352,9 +377,10 @@ function Footer({ user, collapsed, userActions }: FooterProps) {
     alignItems: 'center',
     gap: collapsed ? 0 : 'var(--space-3)',
     padding: 'var(--space-3) var(--space-4)',
+    // border: 0 必须在 borderTop 前声明（CSS shorthand 在 longhand 之前）
+    border: 0,
     borderTop: '1px solid var(--border-subtle)',
     background: 'transparent',
-    border: 0,
     width: '100%',
     cursor: 'pointer',
     font: 'inherit',
@@ -381,14 +407,17 @@ function Footer({ user, collapsed, userActions }: FooterProps) {
           {avatar}
         </span>
         {!collapsed && (
-          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-            <span data-sidebar-foot-name style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {user.displayName}
+          <>
+            <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+              <span data-sidebar-foot-name style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {user.displayName}
+              </span>
+              <span data-sidebar-foot-role style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)' }}>
+                {user.role === 'admin' ? '管理员' : '审核员'}
+              </span>
             </span>
-            <span data-sidebar-foot-role style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)' }}>
-              {user.role === 'admin' ? '管理员' : '审核员'}
-            </span>
-          </span>
+            <span aria-hidden="true" style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)', flexShrink: 0 }}>›</span>
+          </>
         )}
       </button>
       <UserMenu
@@ -406,13 +435,14 @@ const AVATAR_STYLE: CSSProperties = {
   width: '28px',
   height: '28px',
   borderRadius: '50%',
-  background: 'var(--bg-surface-elevated)',
-  border: '1px solid var(--border-default)',
+  background: 'var(--admin-avatar-bg)',
+  border: 0,
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
   fontSize: 'var(--font-size-xs)',
-  color: 'var(--fg-default)',
+  fontWeight: 600,
+  color: 'var(--fg-on-accent)',
 }
 
 // ── 工具函数 ────────────────────────────────────────────
@@ -431,6 +461,20 @@ function badgeToSlot(badge: AdminNavItem['badge']): 'info' | 'warning' | 'error'
   if (badge === 'warn') return 'warning'
   if (badge === 'danger') return 'error'
   return undefined
+}
+
+function badgeBg(slot: 'info' | 'warning' | 'error' | undefined): string {
+  if (slot === 'warning') return 'var(--admin-warn-soft)'
+  if (slot === 'error') return 'var(--admin-danger-soft)'
+  if (slot === 'info') return 'var(--state-info-bg)'
+  return 'var(--bg-surface-raised)'
+}
+
+function badgeFg(slot: 'info' | 'warning' | 'error' | undefined): string {
+  if (slot === 'warning') return 'var(--state-warning-fg)'
+  if (slot === 'error') return 'var(--state-error-fg)'
+  if (slot === 'info') return 'var(--state-info-fg)'
+  return 'var(--fg-muted)'
 }
 
 /** 折叠态 tooltip：label + 平台 shortcut 文案（hydration-safe，由 useFormatShortcut 提供） */

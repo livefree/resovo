@@ -78,6 +78,13 @@ const FORBIDDEN_TOKENS = [
   '--z-shell-drawer',
   '--z-shell-cmdk',
   '--z-shell-toast',
+  // admin-layout surfaces（fix(CHG-SN-2-12)#vs）：admin 专属视觉 token，前台禁用
+  '--admin-count-font-size',
+  '--admin-input-radius',
+  '--admin-danger-soft',
+  '--admin-accent-soft',
+  '--admin-avatar-bg',
+  '--admin-warn-soft',
   // dual-signal base（最短，放最后）
   '--probe',
   '--render',

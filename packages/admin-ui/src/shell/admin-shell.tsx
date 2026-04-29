@@ -41,6 +41,7 @@ import { NotificationDrawer } from './notification-drawer'
 import { TaskDrawer } from './task-drawer'
 import { ToastViewport } from './toast-viewport'
 import { KeyboardShortcuts, type ShortcutBinding } from './keyboard-shortcuts'
+import { AdminShellStyles } from './admin-shell-styles'
 import { createAdminShellStore } from './admin-shell-store'
 import type { AdminShellStoreState } from './admin-shell-store'
 import type {
@@ -241,6 +242,7 @@ export function AdminShell(props: AdminShellProps) {
   // ── 渲染 ─────────────────────────────────────────────
   return (
     <div data-admin-shell style={SHELL_STYLE}>
+      <AdminShellStyles />
       <Sidebar
         nav={nav}
         activeHref={activeHref}

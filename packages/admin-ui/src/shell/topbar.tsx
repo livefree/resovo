@@ -75,15 +75,15 @@ const HEADER_STYLE: CSSProperties = {
 }
 
 const SEARCH_TRIGGER_STYLE: CSSProperties = {
-  flex: 1,
-  maxWidth: '480px',
+  width: '420px',
+  flexShrink: 0,
   display: 'flex',
   alignItems: 'center',
   gap: 'var(--space-2)',
   padding: 'var(--space-1) var(--space-3)',
-  background: 'var(--bg-surface-elevated)',
+  background: 'var(--bg-surface-raised)',
   border: '1px solid var(--border-default)',
-  borderRadius: 'var(--radius-md)',
+  borderRadius: 'var(--admin-input-radius)',
   color: 'var(--fg-muted)',
   cursor: 'pointer',
   font: 'inherit',
@@ -107,9 +107,6 @@ const RIGHT_GROUP_STYLE: CSSProperties = {
   alignItems: 'center',
   gap: 'var(--space-2)',
   flexShrink: 0,
-  // marginLeft: auto 强制 right group 贴 header 右端（fix(CHG-SN-2-09) Codex stop-time review）
-  // 否则 search button 受 maxWidth: 480px 限制后剩余空间形成空白，导致 right group 漂浮在 header 中间
-  marginLeft: 'auto',
 }
 
 const ICON_BTN_STYLE: CSSProperties = {
@@ -153,6 +150,8 @@ export function Topbar({
       <div data-topbar-crumbs style={{ flexShrink: 0 }}>
         <Breadcrumbs items={crumbs} />
       </div>
+      {/* spacer — breadcrumbs 与固定宽度 search 之间的弹性空间（design spec shell.jsx 结构） */}
+      <div aria-hidden="true" style={{ flex: 1 }} />
       <button
         type="button"
         data-topbar-search

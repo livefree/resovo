@@ -182,23 +182,23 @@ describe('Sidebar — 计数 >999 缩写规则', () => {
   })
 })
 
-describe('Sidebar — badge 配色映射 semantic.status token', () => {
-  it('badge=warn → background var(--state-warning-bg) + color var(--state-warning-fg)', () => {
+describe('Sidebar — badge 配色映射 token', () => {
+  it('badge=warn → background var(--admin-warn-soft)（半透明 rgba）+ color var(--state-warning-fg)', () => {
     const { container } = renderSidebar()
     const moderationItem = container.querySelector('[data-sidebar-item="/admin/moderation"]') as HTMLElement
     const badge = moderationItem.querySelector('[data-sidebar-item-badge]') as HTMLElement
-    expect(badge.style.background).toContain('--state-warning-bg')
+    expect(badge.style.background).toContain('--admin-warn-soft')
     expect(badge.style.color).toContain('--state-warning-fg')
   })
 
-  it('badge=danger → state-error', () => {
+  it('badge=danger → admin-danger-soft 半透明背景', () => {
     const { container } = renderSidebar()
     const sourcesItem = container.querySelector('[data-sidebar-item="/admin/sources"]') as HTMLElement
     const badge = sourcesItem.querySelector('[data-sidebar-item-badge]') as HTMLElement
-    expect(badge.style.background).toContain('--state-error-bg')
+    expect(badge.style.background).toContain('--admin-danger-soft')
   })
 
-  it('无 badge → 默认背景 var(--bg-surface-elevated) + 颜色 var(--fg-muted)', () => {
+  it('无 badge → 默认背景 var(--bg-surface-raised) + 颜色 var(--fg-muted)', () => {
     const navWithoutBadge: readonly AdminNavSection[] = [
       { title: '组', items: [{ label: '项', href: '/x', count: 5 }] },
     ]
@@ -215,7 +215,7 @@ describe('Sidebar — badge 配色映射 semantic.status token', () => {
     )
     const item = container.querySelector('[data-sidebar-item="/x"]') as HTMLElement
     const badge = item.querySelector('[data-sidebar-item-badge]') as HTMLElement
-    expect(badge.style.background).toContain('--bg-surface-elevated')
+    expect(badge.style.background).toContain('--bg-surface-raised')
   })
 })
 
