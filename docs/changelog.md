@@ -2043,3 +2043,23 @@
 - admin-only（豆瓣同步）disabled 逻辑正确 ✅
 - **实测验收**：typecheck ✅ | 2470 单测全通过 ✅
 - **下一步**：CHG-SN-3-06 SelectionActionBar
+
+## chg(CHG-SN-3-06): SelectionActionBar 批量动作（公开/隐藏/审核通过/拒绝 + confirm）
+
+- **日期**: 2026-04-29
+- **TASK-ID**: CHG-SN-3-06
+- **主循环模型**: claude-sonnet-4-6
+- **子代理调用**: 无
+- **变更类型**: chg（M-SN-3 第 6 张）
+- **摘要**: VideoListClient 接入 TableSelectionState 本地 state + DataTable selection props；buildBatchActions 构建 4 批量动作（公开上限 100 / 危险操作上限 50 / 隐藏+拒绝需 confirm）；操作完成后 clearSelection + retryKey 刷新列表。
+
+### 新增/变更文件
+- `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`（修改：selection state + SelectionActionBar）
+- `tests/unit/components/server-next/admin/videos/SelectionActions.test.tsx`（新建：13 测试）
+
+### 验收
+- SelectionActionBar visible/hidden 逻辑 ✅
+- 批量公开上限 100 / 危险操作上限 50 ✅
+- confirm 流程（隐藏/拒绝）✅
+- **实测验收**：typecheck ✅ | 2483 单测全通过 ✅
+- **下一步**：CHG-SN-3-07 VideoEditDrawer
