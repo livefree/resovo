@@ -1505,3 +1505,66 @@
   - 中间项 Tab 不拦截：浏览器默认顺序由 DOM 顺序决定（input → group1 buttons → group2 buttons），符合用户预期
   - Tab 焦点门禁防止焦点不在 panel 内时 trap 误触发（如 jsdom 测试中 `body.focus()` 场景）
   - flatItems.length 夹逼条件 `activeIndex >= flatItems.length && flatItems.length > 0`：当 flatItems 为空时不夹逼（保留原 activeIndex 状态，下次 groups 重新有内容时按用户操作再设置）
+
+---
+
+## [fix(CHG-SN-2-11)#2] CommandPalette activeIndex 身份化（id-based active）— 异步 groups 全替换不选错项
+
+- **完成时间**：2026-04-29
+- **记录时间**：2026-04-29 03:30
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（Codex stop-time review 已识别问题；id 身份化重构方案明确）
+- **触发**：Codex stop-time review BLOCK — "activeIndex stale after empty async groups"
+- **缺失项**（前一 fix 数值夹逼方案的边界）：
+  - 数值夹逼仅检测 `activeIndex >= flatItems.length` → 越界 reset
+  - 当 groups 走"empty → repopulate 全新 items（≥ activeIndex+1 项）"路径时，索引数值仍合法但内容已变 → Enter 触发 `flatItems[oldIndex]` 选错项（无关命令被执行）
+  - 同长度同索引但不同 id 的内容替换同样存在该问题
+  - 与 ADR-103a §4.1.6 "搜索结果异步注入"的契约矛盾
+- **修复方案**：状态身份化（数值索引 → id 身份）
+  - `useState<number>(0)` activeIndex → `useState<string|undefined>(undefined)` activeId
+  - activeIndex 改为 useMemo 派生：按 activeId 在 flatItems 中 findIndex；不存在则回退 0；空列表 -1
+  - 任意 flatItems 内容变化（替换/收缩/扩张/重排）→ 派生 activeIndex 自动按 id 重定位或回首项；零数值越界 / 零身份错位
+- **修改文件**：
+  - `packages/admin-ui/src/shell/command-palette.tsx`：
+    - state 身份化（activeIndex → activeId；undefined 语义=尚未操作=首项）
+    - activeIndex 由 useMemo 派生（[flatItems, activeId]）
+    - ArrowDown/Up 通过 activeIndex 计算 nextIdx 后 setActiveId(flatItems[nextIdx]?.id)（保持键盘行为不变 + 同步 id）
+    - Enter / hover handler 全部以 activeId 为身份
+    - 空列表分支（activeIndex < 0）守卫 Enter / activeOptionId
+    - 移除 useEffect 数值夹逼（不再需要：派生 useMemo 自动处理所有内容变化）
+  - `tests/unit/components/admin-ui/shell/command-palette-keyboard.test.tsx`：追加 3 锁定
+    - **empty → repopulate 全新 items**：原 activeId 不存在新列表 → 回首项 + Enter 触发首项（不选 stale 末项）
+    - **同长度内容替换（id 全异）**：回首项（避免数值 index 残留指向错位项）
+    - **重排（id 不变顺序变化）**：active 跟随原 id 到新位置（升级行为：保留用户选择）
+- **a11y / UX 升级**：
+  - 选中项跟随用户选择的"对象身份"，不跟随"数值位置"
+  - 异步搜索结果注入时不会突然 Enter 触发某个无关命令
+  - 重排（如服务端推荐排序变化）时用户的视觉焦点不会"跳"到不相关项
+- **新增依赖**：无
+- **数据库变更**：无
+- **实测验收**：
+  - typecheck + lint 全绿
+  - command-palette 3 文件 52 tests 全过（previous 49 + 3 id-based 边界锁定）
+  - 全仓 179 文件 2119 tests 全过（fix#1 后 2116 + 3）
+  - verify-server-next-isolation 54 文件 0 违规
+- **不变约束验证**：
+  - ADR-103a §4.1.6 字面契约不变（Props + 行为不变；仅内部状态模型重构）
+  - keyboard nav 行为相同（ArrowUp/Down/Enter/Esc 视觉表现一致）
+  - aria-activedescendant 在空列表下仍为 undefined（合规）
+- **Codex Review Gate 第 7 次精确捕获**：
+  - CHG-SN-2-03 ToastViewport position（已修 f23abc7）
+  - CHG-SN-2-04 platform.ts hydration mismatch（已修 32a94b6）
+  - CHG-SN-2-07 UserMenu popover/visual（已修 6ed730e）
+  - CHG-SN-2-09 Topbar layout 漂浮（已修 14c54f4）
+  - CHG-SN-2-10 双 Drawer UI/a11y 契约（已修 c72b0b5）
+  - CHG-SN-2-11 fix#1 focus trap + 数值夹逼（已修 236f9ed）
+  - **CHG-SN-2-11 fix#2 activeIndex 身份化（本卡修）**
+- **双 review 防线分工再次验证**：Codex 连续两次精确推进 CHG-SN-2-11 — 第一次捕获静态焦点逃逸 + 显式越界，第二次捕获"修了一半但仍存在"的内容变化身份错位边界。这种"修了一处仍有边界"的迭代是数值索引模型与身份模型的根本张力，必须改 state 模型才能彻底解决，纯打补丁不行
+- **作为后续选中项组件的范式参照**：
+  - 选中项 state 应以"业务身份"（id）为模型，不以"列表位置"（index）为模型
+  - 数值索引仅作为派生量出现（用于键盘算术 + 渲染）
+  - props 中 collection 异步可变时该模型尤为重要（避免任何 "stale index" 类边界）
+- **注意事项**：
+  - activeId=undefined 是合法 state（首项 active 的语义），不要把它视作"无 active"
+  - 空列表场景下 activeIndex=-1，Enter 守卫 + activeOptionId=undefined 双重防御
+  - 重排场景下用户 active 跟随业务身份是升级（前 fix 不具备此能力，是 bonus）

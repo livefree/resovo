@@ -171,7 +171,10 @@ const FOOTER_STYLE: CSSProperties = {
 
 export function CommandPalette({ open, groups, onClose, onAction, placeholder = '输入命令…' }: CommandPaletteProps) {
   const [query, setQuery] = useState('')
-  const [activeIndex, setActiveIndex] = useState(0)
+  // 选中项以"id"为身份（不以数值索引为身份），消费方异步替换/收缩/扩张/重排 groups 时
+  // 自动按 id 重定位；id 在新 flatItems 中不存在 → 回退到首项（fix(CHG-SN-2-11) Codex 边界）
+  // undefined 语义：尚未由用户操作过 / query 重置后初始 → 视为首项 active
+  const [activeId, setActiveId] = useState<string | undefined>(undefined)
   const [mounted, setMounted] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
@@ -189,24 +192,25 @@ export function CommandPalette({ open, groups, onClose, onAction, placeholder = 
     [groups, query],
   )
 
-  // query 变化时重置 activeIndex 为 0
-  useEffect(() => {
-    setActiveIndex(0)
-  }, [query])
+  // 派生 activeIndex：按 activeId 在新 flatItems 中定位；id 缺省或不在列表 → 0（首项）
+  // flatItems 为空时返回 -1（语义：无 active；Enter 守卫 + aria-activedescendant 处理）
+  const activeIndex = useMemo<number>(() => {
+    if (flatItems.length === 0) return -1
+    if (activeId === undefined) return 0
+    const idx = flatItems.findIndex((it) => it.id === activeId)
+    return idx >= 0 ? idx : 0
+  }, [flatItems, activeId])
 
-  // groups/flatItems 变化时夹逼 activeIndex（消费方异步注入"搜索结果"组时防越界 / 防选错项）
-  // 当 flatItems.length 变化导致当前 activeIndex 越界 → 重置为 0
+  // query 变化时重置选中（active=首项）
   useEffect(() => {
-    if (activeIndex >= flatItems.length && flatItems.length > 0) {
-      setActiveIndex(0)
-    }
-  }, [flatItems.length, activeIndex])
+    setActiveId(undefined)
+  }, [query])
 
   // open=false → 重置 query（下次 open 时从空查询开始）
   useEffect(() => {
     if (!open) {
       setQuery('')
-      setActiveIndex(0)
+      setActiveId(undefined)
     }
   }, [open])
 
@@ -261,12 +265,17 @@ export function CommandPalette({ open, groups, onClose, onAction, placeholder = 
       if (flatItems.length === 0) return
       if (event.key === 'ArrowDown') {
         event.preventDefault()
-        setActiveIndex((i) => (i + 1) % flatItems.length)
+        const baseIdx = activeIndex < 0 ? -1 : activeIndex
+        const nextIdx = (baseIdx + 1 + flatItems.length) % flatItems.length
+        setActiveId(flatItems[nextIdx]?.id)
       } else if (event.key === 'ArrowUp') {
         event.preventDefault()
-        setActiveIndex((i) => (i - 1 + flatItems.length) % flatItems.length)
+        const baseIdx = activeIndex < 0 ? flatItems.length : activeIndex
+        const nextIdx = (baseIdx - 1 + flatItems.length) % flatItems.length
+        setActiveId(flatItems[nextIdx]?.id)
       } else if (event.key === 'Enter') {
         event.preventDefault()
+        if (activeIndex < 0) return
         const item = flatItems[activeIndex]
         if (!item) return
         try {
@@ -293,7 +302,7 @@ export function CommandPalette({ open, groups, onClose, onAction, placeholder = 
 
   if (!open || !mounted) return null
 
-  const activeItem = flatItems[activeIndex]
+  const activeItem = activeIndex >= 0 ? flatItems[activeIndex] : undefined
   const activeOptionId = activeItem ? `command-option-${activeItem.id}` : undefined
 
   return createPortal(
@@ -355,8 +364,7 @@ export function CommandPalette({ open, groups, onClose, onAction, placeholder = 
                             }
                           }}
                           onHoverActivate={() => {
-                            const idx = flatItems.findIndex((it) => it.id === item.id)
-                            if (idx >= 0) setActiveIndex(idx)
+                            setActiveId(item.id)
                           }}
                         />
                       </li>

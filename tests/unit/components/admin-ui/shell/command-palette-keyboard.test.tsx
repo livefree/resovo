@@ -346,6 +346,81 @@ describe('CommandPalette — groups 异步变化时 activeIndex 夹逼', () => {
     expect(onAction.mock.calls[0]?.[0]?.id).toBe('g-dashboard')
   })
 
+  it('groups empty → repopulate 全新 items（同长度但 id 不同）→ active 回首项（不选错项）', () => {
+    const onAction = vi.fn()
+    const onClose = vi.fn()
+    const { rerender } = render(
+      <CommandPalette open groups={GROUPS} onClose={onClose} onAction={onAction} />,
+    )
+    const dialog = getDialog()
+    // 移到末项（activeId='a-help'，index=3）
+    fireEvent.keyDown(dialog, { key: 'ArrowUp' })
+    expect(activeId()).toBe('command-option-a-help')
+    // 中间态：groups 全空
+    rerender(<CommandPalette open groups={[]} onClose={onClose} onAction={onAction} />)
+    expect(document.body.querySelector('[data-command-palette-empty]')).toBeTruthy()
+    // 重新注入 4 个完全不同 id 的 items（与原 activeId 'a-help' 无重合）
+    const fresh: readonly CommandGroup[] = [
+      {
+        id: 'search',
+        label: '搜索结果',
+        items: [
+          { id: 's-1', label: '搜索 1', kind: 'invoke' },
+          { id: 's-2', label: '搜索 2', kind: 'invoke' },
+          { id: 's-3', label: '搜索 3', kind: 'invoke' },
+          { id: 's-4', label: '搜索 4', kind: 'invoke' },
+        ],
+      },
+    ]
+    rerender(<CommandPalette open groups={fresh} onClose={onClose} onAction={onAction} />)
+    // 原 activeId 'a-help' 在新 flatItems 中不存在 → 回退首项 's-1'（不指向 's-4' 即不选错项）
+    expect(activeId()).toBe('command-option-s-1')
+    // Enter 触发 's-1'（绝不可能是 's-4' 这个 stale 末项）
+    fireEvent.keyDown(getDialog(), { key: 'Enter' })
+    expect(onAction).toHaveBeenCalledTimes(1)
+    expect(onAction.mock.calls[0]?.[0]?.id).toBe('s-1')
+  })
+
+  it('groups 同长度内容替换（id 全异）→ active 回首项', () => {
+    const { rerender } = render(
+      <CommandPalette open groups={GROUPS} onClose={vi.fn()} onAction={vi.fn()} />,
+    )
+    const dialog = getDialog()
+    fireEvent.keyDown(dialog, { key: 'ArrowDown' })
+    fireEvent.keyDown(dialog, { key: 'ArrowDown' })
+    expect(activeId()).toBe('command-option-a-toggle-theme')
+    // 同长度（4 项）但 id 全异
+    const replaced: readonly CommandGroup[] = [
+      {
+        id: 'g',
+        label: 'g',
+        items: [
+          { id: 'r-1', label: 'A', kind: 'invoke' },
+          { id: 'r-2', label: 'B', kind: 'invoke' },
+          { id: 'r-3', label: 'C', kind: 'invoke' },
+          { id: 'r-4', label: 'D', kind: 'invoke' },
+        ],
+      },
+    ]
+    rerender(<CommandPalette open groups={replaced} onClose={vi.fn()} onAction={vi.fn()} />)
+    // 原 activeId 不在新列表 → 回首项（避免数值 index 残留指向 'r-3'）
+    expect(activeId()).toBe('command-option-r-1')
+  })
+
+  it('groups 重排（id 不变但顺序变化）→ active 跟随原 id 到新位置', () => {
+    const { rerender } = render(
+      <CommandPalette open groups={GROUPS} onClose={vi.fn()} onAction={vi.fn()} />,
+    )
+    const dialog = getDialog()
+    fireEvent.keyDown(dialog, { key: 'ArrowDown' })  // activeId='g-moderation' index=1
+    expect(activeId()).toBe('command-option-g-moderation')
+    // 重排：actions 组提到前面 → g-moderation 仍是 nav 第 2 项，但全局扁平索引变化
+    const reordered: readonly CommandGroup[] = [GROUPS[1]!, GROUPS[0]!]
+    rerender(<CommandPalette open groups={reordered} onClose={vi.fn()} onAction={vi.fn()} />)
+    // activeId 跟随到新位置（不再是数值 index 1，而是 g-moderation 在新顺序中的位置）
+    expect(activeId()).toBe('command-option-g-moderation')
+  })
+
   it('groups 扩张（消费方异步注入"搜索结果"组）→ activeIndex 不变（仍指向原项）', () => {
     const { rerender } = render(
       <CommandPalette open groups={GROUPS} onClose={vi.fn()} onAction={vi.fn()} />,
