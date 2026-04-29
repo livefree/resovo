@@ -830,7 +830,7 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
     - 文件范围：`packages/admin-ui/src/components/state/{empty,error,loading}.tsx` + 单测
     - 子代理调用：可降 Sonnet 或 Haiku
 
-20. **CHG-SN-2-19** — Storybook-style demo 页（apps/server-next /admin/dev/components）（状态：⬜ 未开始）
+20. **CHG-SN-2-19** — Storybook-style demo 页（apps/server-next /admin/dev/components）（状态：✅ 完成）
     - 计划开始：CHG-SN-2-18 PASS 后
     - 工时估算：0.4 天
     - 关联 plan §：§6 M-SN-2 v2.3 范围 D

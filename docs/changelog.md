@@ -39,6 +39,29 @@
 
 ---
 
+## [CHG-SN-2-19] Storybook-style demo 页（/admin/dev/components）
+
+- **日期**: 2026-04-29
+- **执行模型**: claude-sonnet-4-6
+- **子代理调用**: 无
+
+### 变更摘要
+新增 `apps/server-next/src/app/admin/dev/components/` 路由：
+
+- `page.tsx`：服务端包装 + Suspense 边界（避免 useSearchParams 静态渲染问题）
+- `components-demo.tsx`（'use client'）：全量 Admin UI 组件交互 demo
+  - DataTable v2 客户端模式：useTableQuery URL 同步验证（tableId=demo-client）
+  - DataTable v2 服务端模式：外部分页受控（tableId=demo-server, urlNamespace=sv）
+  - Pagination v2 独立使用示例
+  - Drawer 四向 placement 切换
+  - Modal 三档 size（sm/md/lg）
+  - AdminDropdown 行操作菜单
+  - SelectionActionBar 批量操作（含 confirm 流程）
+  - EmptyState / ErrorState / LoadingState（spinner + skeleton）切换
+- typecheck ✅ / lint ✅ / test 2405 pass ✅
+
+---
+
 ## [CHG-SN-2-18] Empty / Error / Loading 状态原语（packages/admin-ui state）
 
 - **日期**: 2026-04-29
