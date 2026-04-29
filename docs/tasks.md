@@ -12,19 +12,3 @@
 
 ---
 
-## 进行中任务
-
-**任务 ID**：CHG-SN-3-05
-**标题**：VideoRowActions：AdminDropdown + 状态迁移动作
-**状态**：🔄 进行中
-**开始时间**：2026-04-29
-**执行模型**：claude-sonnet-4-6
-**子代理调用**：无
-
-**文件范围**：
-- `apps/server-next/src/app/admin/videos/_client/VideoRowActions.tsx`（新建）
-- `tests/unit/components/server-next/admin/videos/VideoRowActions.test.tsx`（新建）
-- `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`（修改：接入 actions 列）
-- `vitest.config.ts`（修改：添加 server-next @ 别名解析，使组件级测试可用）
-
-**备注**：无

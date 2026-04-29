@@ -2020,3 +2020,26 @@
 - buildFilterChips 中文 label 显示 ✅
 - **实测验收**：typecheck ✅ | 2455 单测全通过 ✅
 - **下一步**：CHG-SN-3-05 VideoRowActions
+
+## chg(CHG-SN-3-05): VideoRowActions AdminDropdown + 状态迁移 + 乐观更新
+
+- **日期**: 2026-04-29
+- **TASK-ID**: CHG-SN-3-05
+- **主循环模型**: claude-sonnet-4-6
+- **子代理调用**: 无
+- **变更类型**: chg（M-SN-3 第 5 张）
+- **摘要**: VideoRowActions 实现 12 菜单项行操作（条件显示、乐观更新、error 回滚、admin-only 禁用）；VideoListClient 接入 actions 列；vitest.config.ts 添加 server-next @ 别名使组件级测试可运行；同时修复 admin-ui 26 个组件文件缺少 'use client' 的 Next.js 15 构建错误。
+
+### 新增/变更文件
+- `apps/server-next/src/app/admin/videos/_client/VideoRowActions.tsx`（新建）
+- `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`（修改：接入 VideoRowActions actions 列）
+- `tests/unit/components/server-next/admin/videos/VideoRowActions.test.tsx`（新建：15 测试）
+- `vitest.config.ts`（修改：添加 server-next @ 别名解析）
+- `packages/admin-ui/src/*`（26 文件）：添加 'use client' 指令（fix commit 569c846）
+
+### 验收
+- 12 菜单项条件显示逻辑正确 ✅
+- 乐观更新 + 错误回滚单元测试通过 ✅
+- admin-only（豆瓣同步）disabled 逻辑正确 ✅
+- **实测验收**：typecheck ✅ | 2470 单测全通过 ✅
+- **下一步**：CHG-SN-3-06 SelectionActionBar
