@@ -3260,6 +3260,24 @@ export interface ColumnMenuConfig {
   readonly isFiltered?: boolean
   readonly onClearFilter?: () => void
 }
+
+/**
+ * `TableColumn<T>` 中与行类型 T 无关的纯元数据子集。
+ *
+ * 用途：useTableQuery / ColumnSettingsPanel 只需列 id / header / 可见性 / 排序能力，
+ * 不需要 accessor / cell 等逆变函数字段。
+ * 使用此类型而非 `TableColumn<unknown>[]` 的原因：
+ *   `TableColumn<T>` 含逆变参数位（accessor / cell），
+ *   `TableColumn<Video>` 无法赋值给 `TableColumn<unknown>`，
+ *   但任意 `TableColumn<T>` 在结构子类型下都满足 `ColumnDescriptor`。
+ */
+export interface ColumnDescriptor {
+  readonly id: string
+  readonly header: ReactNode
+  readonly defaultVisible?: boolean
+  readonly pinned?: boolean
+  readonly enableSorting?: boolean
+}
 ```
 
 **字段重要决策**：
@@ -3290,8 +3308,11 @@ export interface UseTableQueryOptions {
   readonly defaults?: Partial<TableQueryDefaults>
   /** URL 参数命名空间前缀；多表格同页时避免冲突；默认空（单表格场景）*/
   readonly urlNamespace?: string
-  /** 列定义（用于 columns 状态默认派生 + url-sync 校验排序字段合法性）*/
-  readonly columns: readonly TableColumn<unknown>[]
+  /** 列元数据（用于 columns 状态默认派生 + url-sync 校验排序字段合法性）；
+   *  类型为 ColumnDescriptor 而非 TableColumn<unknown>：
+   *  TableColumn<T> 含逆变函数字段，TableColumn<Video> 不可赋值给 TableColumn<unknown>；
+   *  任意 TableColumn<T> 满足 ColumnDescriptor 结构子类型，消费方无需类型转换 */
+  readonly columns: readonly ColumnDescriptor[]
 }
 
 export interface TableRouterAdapter {
@@ -3481,7 +3502,9 @@ export interface FilterChipBarProps {
 ```typescript
 export interface ColumnSettingsPanelProps {
   readonly open: boolean
-  readonly columns: readonly TableColumn<unknown>[]
+  /** ColumnDescriptor 而非 TableColumn<unknown>（同 UseTableQueryOptions.columns 同理，
+   *  避免 TableColumn<T> 逆变参数位导致消费方传 TableColumn<Video>[] 报 TS 类型错误）*/
+  readonly columns: readonly ColumnDescriptor[]
   readonly value: ReadonlyMap<string, ColumnPreference>
   readonly onChange: (next: ReadonlyMap<string, ColumnPreference>) => void
   readonly onClose: () => void
@@ -3679,6 +3702,7 @@ export interface LoadingStateProps {
 7. **Props readonly**：所有 Props interface 字段 readonly；数组用 `readonly T[]`；map 用 `ReadonlyMap`；set 用 `ReadonlySet`
 8. **router 反向注入**：packages/admin-ui 不直 `import { useRouter } from 'next/navigation'`；通过 `TableRouterAdapter` 由消费方注入
 9. **禁止 `as unknown as T`**：TableColumn<T> 的 cell ctx.value 类型为 `unknown`，由消费方在 cell 内做窄化
+10. **ColumnDescriptor 隔离逆变**：`useTableQuery` / `ColumnSettingsPanel` 的 `columns` 参数类型为 `ColumnDescriptor`（仅含元数据字段），而非 `TableColumn<unknown>`；原因：`TableColumn<T>` 含逆变函数参数（accessor / cell），`TableColumn<Video>` 无法赋值给 `TableColumn<unknown>`，但满足 `ColumnDescriptor` 结构子类型；DataTable 本体仍使用完整 `TableColumn<T>`（泛型传播）
 
 ### 替代方案（已否决）
 
