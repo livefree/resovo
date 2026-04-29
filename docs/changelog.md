@@ -2063,3 +2063,25 @@
 - confirm 流程（隐藏/拒绝）✅
 - **实测验收**：typecheck ✅ | 2483 单测全通过 ✅
 - **下一步**：CHG-SN-3-07 VideoEditDrawer
+
+## chg(CHG-SN-3-07): VideoEditDrawer（14 字段元数据编辑 + skippedFields + 加载/提交状态）
+
+- **日期**: 2026-04-29
+- **TASK-ID**: CHG-SN-3-07
+- **主循环模型**: claude-sonnet-4-6
+- **子代理调用**: 无
+- **变更类型**: chg（M-SN-3 第 7 张）
+- **摘要**: VideoEditDrawer 实现 14 字段元数据编辑表单（title 必填/差量提交/skippedFields 提示/加载中 skeleton/加载失败重试）；VideoListClient 接入 editVideoId state + VideoEditDrawer。
+
+### 新增/变更文件
+- `apps/server-next/src/app/admin/videos/_client/VideoEditDrawer.tsx`（新建：14 字段表单）
+- `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`（修改：接入 VideoEditDrawer）
+- `tests/unit/components/server-next/admin/videos/VideoEditDrawer.test.tsx`（新建：8 测试）
+
+### 验收
+- getVideo 加载 + LoadingState/ErrorState ✅
+- title 必填前端校验 ✅
+- skippedFields 提示 Drawer 保持开启 ✅
+- 成功时 onSaved + onClose ✅
+- **实测验收**：typecheck ✅ | 2491 单测全通过 ✅
+- **下一步**：CHG-SN-3-08 Dashboard

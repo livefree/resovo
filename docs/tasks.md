@@ -12,18 +12,3 @@
 
 ---
 
-## 进行中任务
-
-**任务 ID**：CHG-SN-3-07
-**标题**：VideoEditDrawer（基础元数据字段）
-**状态**：🔄 进行中
-**开始时间**：2026-04-29
-**执行模型**：claude-sonnet-4-6
-**子代理调用**：无
-
-**文件范围**：
-- `apps/server-next/src/app/admin/videos/_client/VideoEditDrawer.tsx`（新建）
-- `tests/unit/components/server-next/admin/videos/VideoEditDrawer.test.tsx`（新建）
-- `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`（修改：接入 VideoEditDrawer）
-
-**备注**：无
