@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * pagination.tsx — Pagination v2
  * 真源：ADR-103 §4.5（CHG-SN-2-15）

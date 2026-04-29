@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * breadcrumbs.tsx — 面包屑组件 + inferBreadcrumbs helper（ADR-103a §4.1.9）
  *

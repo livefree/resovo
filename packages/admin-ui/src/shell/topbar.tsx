@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * topbar.tsx — admin Shell 顶栏（ADR-103a §4.1.3 + fix(CHG-SN-2-01) 修订）
  *

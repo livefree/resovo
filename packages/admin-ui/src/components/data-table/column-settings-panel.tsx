@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * column-settings-panel.tsx — ColumnSettingsPanel 列可见性设置面板
  * 真源：ADR-103 §4.4 ColumnSettingsPanel（CHG-SN-2-14）

@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * admin-dropdown.tsx — AdminDropdown 通用行操作下拉菜单
  * 真源：ADR-103 §4.7（CHG-SN-2-17）

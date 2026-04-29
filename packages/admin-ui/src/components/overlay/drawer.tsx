@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * drawer.tsx — Drawer 通用业务原语
  * 真源：ADR-103 §4.6（CHG-SN-2-16）

@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * selection-action-bar.tsx — 批量操作工具栏
  * 真源：ADR-103 §4.8（CHG-SN-2-17）

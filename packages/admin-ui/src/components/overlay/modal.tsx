@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * modal.tsx — Modal 通用业务原语（居中遮罩弹窗）
  * 真源：ADR-103 §4.6（CHG-SN-2-16）

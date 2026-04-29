@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * use-overlay.ts — Drawer / Modal 共用 overlay 行为 hook
  * 真源：ADR-103 §4.6（CHG-SN-2-16）

@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * error-state.tsx — ErrorState 错误状态原语
  * 真源：ADR-103 §4.9（CHG-SN-2-18）

@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * user-menu.tsx — 用户菜单下拉（ADR-103a §4.1.4）
  *

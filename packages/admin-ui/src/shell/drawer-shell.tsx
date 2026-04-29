@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * drawer-shell.tsx — Shell 抽屉私有 base 组件（NotificationDrawer + TaskDrawer 共享）
  *

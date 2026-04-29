@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * notification-drawer.tsx — 通知抽屉（ADR-103a §4.1.5）
  *

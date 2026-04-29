@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * platform.ts — Mac/非 Mac 平台检测 + 快捷键 spec 解析与渲染（ADR-103a §4.1.10）
  *

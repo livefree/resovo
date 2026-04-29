@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * task-drawer.tsx — 后台任务抽屉（ADR-103a §4.1.5）
  *

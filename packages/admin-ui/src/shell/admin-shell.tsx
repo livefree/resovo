@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * admin-shell.tsx — packages/admin-ui Shell 顶层装配体（ADR-103a §4.1.1）
  *

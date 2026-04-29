@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * toast-viewport.tsx — packages/admin-ui Toast 渲染视口（订阅 toast-store + 自动 dismiss timer 调度）
  *

@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * use-table-query.ts — DataTable v2 query 状态管理 hook
  * 真源：ADR-103 §4.2（CHG-SN-2-13）

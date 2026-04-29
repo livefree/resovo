@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * keyboard-shortcuts.tsx — 全局快捷键监听器组件（ADR-103a §4.1.10）
  *

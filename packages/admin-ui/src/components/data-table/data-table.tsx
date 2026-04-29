@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * data-table.tsx — DataTable v2 基座组件
  * 真源：ADR-103 §4.1 + §4.3（CHG-SN-2-13）

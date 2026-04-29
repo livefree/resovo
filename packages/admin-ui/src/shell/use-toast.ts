@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * use-toast.ts — useToast hook，包装 toast-store 单例的 push / dismiss / dismissAll
  *

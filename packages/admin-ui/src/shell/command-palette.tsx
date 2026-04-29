@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * command-palette.tsx — ⌘K 命令面板（ADR-103a §4.1.6）
  *

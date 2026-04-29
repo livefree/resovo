@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * storage-sync.ts — snapshot ↔ sessionStorage 互转（纯函数，零副作用）
  * 真源：ADR-103 §4.2.2 sessionStorage 同步规约（CHG-SN-2-13）

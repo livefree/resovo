@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * filter-chip.tsx — FilterChip + FilterChipBar
  * 真源：ADR-103 §4.4 FilterChip / FilterChipBar（CHG-SN-2-14）

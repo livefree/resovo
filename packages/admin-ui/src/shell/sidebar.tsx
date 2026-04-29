@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * sidebar.tsx — admin Shell 侧栏（ADR-103a §4.1.2）
  *
