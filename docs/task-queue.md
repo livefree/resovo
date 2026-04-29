@@ -542,9 +542,9 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
 
 ## [SEQ-20260428-03] M-SN-2 第一阶段 · ADR-103a 起草 + AdminNavItem 字段扩展（执行序列）
 
-- **状态**：🔄 执行中（CHG-SN-2-01 ✅；fix(CHG-SN-2-01) ✅；CHG-SN-2-02 整卡 ✅；CHG-SN-2-01.5 ✅；CHG-SN-2-03 ✅ store-driven 三件套范式；CHG-SN-2-04 ✅ 纯工具二件套范式；CHG-SN-2-05 ~ -21 待开）
+- **状态**：🔄 执行中（CHG-SN-2-01 ✅；fix(CHG-SN-2-01) ✅；CHG-SN-2-02 整卡 ✅；CHG-SN-2-01.5 ✅；CHG-SN-2-03 ✅ store-driven 三件套范式；CHG-SN-2-04 ✅ 纯工具二件套范式；fix(CHG-SN-2-04) ✅ hydration-safe；CHG-SN-2-05 ~ -21 详细卡已起草）
 - **创建时间**：2026-04-28 22:00
-- **最后更新时间**：2026-04-29 01:30
+- **最后更新时间**：2026-04-29 02:00
 - **目标**：M-SN-2 第一阶段（Shell 公开 API 契约固化 + admin-nav.ts 字段扩展）。落地 ADR-103a 作为 Shell 10 组件 Props / AdminNavItem 5 字段扩展协议 / 4 级 z-index 规范的真源；让 server-next 侧 admin-nav.ts 注入 icon / shortcut / count / badge 字段，准备好被 packages/admin-ui Shell 组件消费。
 - **范围**：`docs/decisions.md`（ADR-103a 新建）/ `apps/server-next/src/lib/admin-nav.ts`（5 字段扩展 + ADMIN_NAV 改写）/ `apps/server-next/src/lib/shell-data.ts`（新建：count provider 接口实现）/ admin-layout token 第 5 层新增 z-shell-* 三变量
 - **依赖**：SEQ-20260428-02 全 5 张卡 PASS（commit da1dafa / 15b3bf7 / 1e6bbb1 / 8975a50 / e1df243 + 修订 e9d2f52）；不留口子检查清单 5/5 [x]
@@ -655,10 +655,174 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
    - 子代理调用：arch-reviewer (claude-opus-4-7) — Shell 第 2 张组件实施评审
    - 完成判据：所有文件落盘 + 必跑命令全绿 + 双扫描守卫 PASS + Opus 评审 PASS + commit
 
-5. **CHG-SN-2-05 ~ CHG-SN-2-12**（8 张卡，Shell 8 组件分卡实施）：
-   - 依赖序：Breadcrumbs → HealthBadge → UserMenu → Sidebar → Topbar → 双 Drawer → CommandPalette → AdminShell 装配 + admin layout 替换骨架
-   - 单卡详细范围由 CHG-SN-2-04 PASS 后逐张起草
-   - 每张卡 Opus 评审视情况；首卡 ToastViewport 已建立 Provider-less 范式后，纯 React 组件类（Breadcrumbs/HealthBadge）可降 Sonnet
+5. **CHG-SN-2-05** — packages/admin-ui Breadcrumbs + inferBreadcrumbs helper（Shell 第 3 张 / 纯渲染 + 工具函数）（状态：⬜ 未开始）
+   - 计划开始：CHG-SN-2-04 PASS 后
+   - 工时估算：0.2 天
+   - 关联 ADR：ADR-103a §4.1.9 Breadcrumbs
+   - 范式：B 纯工具二件套（breadcrumbs.tsx 纯渲染 + inferBreadcrumbs helper 纯函数）
+   - 文件范围：`packages/admin-ui/src/shell/breadcrumbs.tsx`（含 inferBreadcrumbs helper）/ `shell/index.ts` 桶导出 / 单测三分（breadcrumbs.test.tsx 渲染 + inferBreadcrumbs.test.ts 纯逻辑 + breadcrumbs-ssr.test.tsx）
+   - Props：`{ items: readonly BreadcrumbItem[]; onItemClick?: (item, index) => void }` + `BreadcrumbItem { label: string; href?: string }`
+   - inferBreadcrumbs(activeHref, nav)：从 ADMIN_NAV 5 组结构 + activeHref 推断 BreadcrumbItem[]（最后一项为 active item label，前面项为 section.title 等链）
+   - 验收要点：items 渲染（最后一项 strong 加粗）/ onItemClick 仅对有 href 的项触发 / inferBreadcrumbs 各种 activeHref 边界（顶层 / 嵌套 / 不存在 → 返空）/ SSR 零 throw / 零硬编码颜色
+   - 子代理调用：可降 Sonnet 评审（纯渲染 + 工具函数无新决策含量）
+
+6. **CHG-SN-2-06** — packages/admin-ui HealthBadge（Shell 第 4 张 / 纯渲染）（状态：⬜ 未开始）
+   - 计划开始：CHG-SN-2-05 PASS 后（与 -05 可并行）
+   - 工时估算：0.2 天
+   - 关联 ADR：ADR-103a §4.1.8 HealthBadge + HealthSnapshot
+   - 范式：B 纯工具二件套（health-badge.tsx 单文件，无 helper）
+   - 文件范围：`packages/admin-ui/src/shell/health-badge.tsx` / 单测二分（health-badge.test.tsx + health-badge-ssr.test.tsx）
+   - Props：`{ snapshot: HealthSnapshot }` + HealthSnapshot 含 crawler/invalidRate/moderationPending 三项指标 × { value + status: 'ok'|'warn'|'danger' }
+   - 验收要点：3 项指标 dot 渲染 + status → semantic.status token 颜色映射 / 首项 dot pulse 动画（CSS @keyframes，零 JS timer）/ invalidRate 显示百分比格式 / SSR 零 throw / 零硬编码颜色
+   - 子代理调用：可降 Sonnet
+
+7. **CHG-SN-2-07** — packages/admin-ui UserMenu（Shell 第 5 张 / 受控 open + focus trap）（状态：⬜ 未开始）
+   - 计划开始：CHG-SN-2-06 PASS 后
+   - 工时估算：0.3 天
+   - 关联 ADR：ADR-103a §4.1.4 UserMenu + AdminShellUser + UserMenuAction（6 项 union）
+   - 范式：B 纯工具二件套（user-menu.tsx 单文件，无 store；状态由 props 受控）
+   - 文件范围：`packages/admin-ui/src/shell/user-menu.tsx` / 单测三分
+   - Props：`{ open: boolean; user: AdminShellUser; onClose: () => void; onAction: (action: UserMenuAction) => void; anchorRef: RefObject<HTMLElement> }`
+   - 行为：6 项菜单（profile / preferences / theme / help / switchAccount / logout）+ 外部点击关闭 + ESC 关闭 + focus trap（mount 时 focus 首项 / Tab/Shift+Tab 循环）
+   - 验收要点：6 项渲染 / onAction 触发携带 union 值 / 外部点击关闭（document mousedown listener）/ ESC 关闭 / focus trap / SSR 零 throw / 零硬编码颜色
+   - 子代理调用：arch-reviewer (Opus) — UserMenu focus trap + outside-click 模式首张落地需评审
+
+8. **CHG-SN-2-08** — packages/admin-ui Sidebar（Shell 第 6 张 / 5 组 NAV + 折叠态 + 计数徽章 + UserMenu 集成）（状态：⬜ 未开始）
+   - 计划开始：CHG-SN-2-07 PASS 后（依赖 Breadcrumbs + UserMenu）
+   - 工时估算：0.5 天
+   - 关联 ADR：ADR-103a §4.1.2 Sidebar + AdminNavItem 5 字段（CHG-SN-2-02 admin-nav.tsx 已注入 icon/shortcut/badge）
+   - 范式：B 纯工具二件套（sidebar.tsx 单文件，组合 UserMenu）
+   - 文件范围：`packages/admin-ui/src/shell/sidebar.tsx` / 单测三分
+   - Props：`{ nav: readonly AdminNavSection[]; activeHref: string; collapsed: boolean; user: AdminShellUser; onToggleCollapsed: () => void; onNavigate: (href) => void; onUserMenuAction: (action) => void; counts?: ReadonlyMap<string, number> }`
+   - 行为：5 组 NAV 渲染（group 标题 + divider 折叠态隐藏 + 链接含 icon + label + badge 计数（>999 缩 1.2k）+ 折叠态 tooltip + 折叠态 pip badge）/ Brand 区（流光 v2）/ sb__foot 触发 UserMenu / collapsed 切换样式（width var(--sidebar-w) ↔ var(--sidebar-w-collapsed)）
+   - 验收要点：5 组渲染对齐 admin-nav.tsx ADMIN_NAV / activeHref 高亮 / counts 优先于 AdminNavItem.count / collapsed 折叠样式 + tooltip 显示 / 零硬编码颜色 / SSR
+   - 子代理调用：arch-reviewer (Opus) — Sidebar 是 Shell 视觉核心组件，需评审组合策略 + admin-layout token 消费 + 与设计稿 v2.1 shell.jsx 视觉对齐
+
+9. **CHG-SN-2-09** — packages/admin-ui Topbar + Breadcrumbs/HealthBadge 集成（Shell 第 7 张）（状态：⬜ 未开始）
+   - 计划开始：CHG-SN-2-08 PASS 后（依赖 Breadcrumbs + HealthBadge）
+   - 工时估算：0.4 天
+   - 关联 ADR：ADR-103a §4.1.3 Topbar + TopbarIcons + TopbarProps
+   - 范式：B 纯工具二件套（topbar.tsx 单文件，组合 Breadcrumbs + HealthBadge）
+   - 文件范围：`packages/admin-ui/src/shell/topbar.tsx` / 单测三分
+   - Props：`{ crumbs; theme; icons: TopbarIcons; health?; notificationDotVisible?; runningTaskCount?; onOpenCommandPalette; onThemeToggle; onOpenNotifications; onOpenTasks; onOpenSettings }`
+   - 行为：渲染 Breadcrumbs + 全局搜索触发器（点击 onOpenCommandPalette）+ HealthBadge（health 非空时）+ 主题切换 button + 3 枚图标按钮（任务 zap / 通知 bell / 设置）+ notificationDotVisible / runningTaskCount 角标
+   - 验收要点：crumbs 渲染（不调用 inferBreadcrumbs）/ icons 5 类按钮 ReactNode 注入 / health 可选 / 三枚按钮触发对应回调 / runningTaskCount 显示 / SSR 零 throw / 零硬编码颜色
+   - 子代理调用：可降 Sonnet（Topbar 是组合层 + 行为简单）
+
+10. **CHG-SN-2-10** — packages/admin-ui NotificationDrawer + TaskDrawer（Shell 第 8 张 / 双 Drawer 一卡）（状态：⬜ 未开始）
+    - 计划开始：CHG-SN-2-09 PASS 后
+    - 工时估算：0.4 天
+    - 关联 ADR：ADR-103a §4.1.5 NotificationDrawer + TaskDrawer
+    - 范式：B 纯工具二件套（notification-drawer.tsx + task-drawer.tsx 双文件）
+    - 文件范围：双 .tsx + 各自单测（4 文件 + ssr 共享 1 文件）
+    - Props 共同：`{ open: boolean; items: readonly Item[]; onClose: () => void; ...action callbacks }`
+    - 行为：右侧滑入抽屉 + ESC 关闭 + 点击遮罩关闭 + focus trap + z-index var(--z-shell-drawer) / 列表渲染 + 行级操作回调（NotificationDrawer onItemClick / onMarkAllRead；TaskDrawer onCancel / onRetry）
+    - 验收要点：双 Drawer 互斥（编排在 AdminShell）/ z-index 取 token 不硬编码 1100 / focus trap / ESC 关闭 / item 渲染 + 行级 action / 零硬编码颜色 / SSR
+    - 子代理调用：arch-reviewer (Opus) — Drawer focus trap + 互斥编排策略 + portal/z-index 模式首张落地
+
+11. **CHG-SN-2-11** — packages/admin-ui CommandPalette（Shell 第 9 张 / ⌘K 命令面板 + 键盘导航）（状态：⬜ 未开始）
+    - 计划开始：CHG-SN-2-10 PASS 后
+    - 工时估算：0.5 天
+    - 关联 ADR：ADR-103a §4.1.6 CommandPalette + CommandGroup + CommandItem
+    - 范式：B 纯工具二件套（command-palette.tsx 单文件，复用 KeyboardShortcuts 思路）
+    - 文件范围：`packages/admin-ui/src/shell/command-palette.tsx` / 单测三分
+    - Props：`{ open; groups: readonly CommandGroup[]; onClose; onAction: (item) => void; placeholder? }` + `CommandItem { id; label; icon?; shortcut?; meta?; kind: 'navigate'|'invoke'; href? }`
+    - 行为：模态浮层（z-index var(--z-shell-cmdk)） + 输入框过滤（label substring 不区分大小写）+ 3 组渲染 + 键盘导航（↑↓ Enter Esc + mouse hover 同步 active）+ ESC / 点击遮罩关闭 + focus 输入框 + onAction 触发后由消费方分派 navigate (router.push) / invoke (callback)
+    - 验收要点：groups 过滤 + 渲染 / 键盘导航完整 / shortcut 显示用 useFormatShortcut（hydration-safe）/ z-index 取 token / SSR 零 throw / 零硬编码颜色
+    - 子代理调用：arch-reviewer (Opus) — CommandPalette 是 Shell 复杂度最高组件，需评审过滤算法 + 键盘导航 + a11y（aria-* 完整）
+
+12. **CHG-SN-2-12** — packages/admin-ui AdminShell 装配 + apps/server-next admin layout 替换骨架（Shell 第 10 张 / 最后装配）（状态：⬜ 未开始）
+    - 计划开始：CHG-SN-2-11 PASS 后
+    - 工时估算：0.5 天
+    - 关联 ADR：ADR-103a §4.1.1 AdminShell（含 fix(CHG-SN-2-01) P1-A/P1-B 修订后的 AdminShellProps）
+    - 范式：A store-driven 三件套（admin-shell-store.ts 持有 collapsed + drawer 互斥开闭态 + cmdk open）+ admin-shell.tsx 装配
+    - 文件范围：`packages/admin-ui/src/shell/admin-shell-store.ts` + `admin-shell.tsx` + `apps/server-next/src/app/admin/layout.tsx`（替换 M-SN-1 极简骨架为 `<AdminShell>` 装配）/ 单测三分
+    - Props：完整 AdminShellProps（按 fix(CHG-SN-2-01) 修订后定义；含 topbarIcons 必填 + notifications? / tasks? + 4 个 action 回调）
+    - 行为：编排 Sidebar + Topbar + main + ToastViewport + CommandPalette + KeyboardShortcuts + NotificationDrawer + TaskDrawer / 持有 collapsed 受控/非受控双模式 / Drawer 互斥（同时只开一个）/ 透传 onNavigate
+    - 验收要点：layout.tsx 替换后 21 路由 SSR 全绿 + 鉴权重定向链路不破 / collapsed 持久化（cookie）+ defaultCollapsed 注入 / Drawer 互斥行为 / topbarIcons 5 类必填校验 / 键盘快捷键 ⌘1-5/⌘,/⌘B/⌘K/Esc 端到端可用 / 视觉对齐设计稿 shell.jsx（4 张截图：折叠/展开 × dark/light）/ 零硬编码颜色 / SSR
+    - 子代理调用：arch-reviewer (Opus) — AdminShell 是装配体核心 + Drawer 互斥 + 受控/非受控双模式 + admin layout 替换骨架（M-SN-1 闭环资产 layout.tsx 改写需确认零回归）
+
+13. **CHG-SN-2-12.5** — ADR-103 起草（DataTable v2 公开 API 契约 + useTableQuery）（数据原语层硬前置门）（状态：⬜ 未开始）
+    - 计划开始：CHG-SN-2-12 PASS 后
+    - 工时估算：0.5 天
+    - 关联 plan §：§9 ADR 索引（ADR-103 v2.4 行 661）
+    - 关联 ADR：**ADR-103（本卡新建）** — DataTable v2 + useTableQuery URL/sessionStorage 同步 + 客户端/服务端两档分页 + 列设置 / 排序 / 筛选规约
+    - 文件范围：`docs/decisions.md`（ADR-103 新建）；不动代码
+    - 验收要点：完整 ADR 段落（10 组件/原语 Props 类型骨架 + 数据契约 + URL 同步规约 + 两档分页协议 + 替代方案否决 + 后果 + 影响文件）
+    - 子代理调用：arch-reviewer (Opus) — ADR 起草强制 Opus（CLAUDE.md 模型路由第 1/3 项）
+    - 人工 sign-off：plan §0 SHOULD-4-a 视 ADR 影响范围决定（如不影响 plan §6 范围则无需）
+
+14. **CHG-SN-2-13** — packages/admin-ui DataTable v2 + useTableQuery（数据原语首张）（状态：⬜ 未开始）
+    - 计划开始：CHG-SN-2-12.5 PASS 后
+    - 工时估算：0.8 天
+    - 关联 ADR：ADR-103
+    - 范式：A store-driven 三件套（table-query-store + use-table-query hook + DataTable 组件）
+    - 文件范围：`packages/admin-ui/src/table/data-table.tsx` + `table-query-store.ts` + `use-table-query.ts` + 单测三分
+    - 验收要点：客户端分页（≤200 条）/ 服务端分页（200-50k）/ URL 同步 sessionStorage 同步 / 列基础渲染 / 排序 / 行选中 / 单测覆盖率 ≥70% / SSR 零 throw
+    - 子代理调用：arch-reviewer (Opus) — DataTable 是数据原语核心，强制 Opus
+
+15. **CHG-SN-2-14** — Toolbar / Filter / ColumnSettings（DataTable v2 配套）（状态：⬜ 未开始）
+    - 计划开始：CHG-SN-2-13 PASS 后
+    - 工时估算：0.5 天
+    - 关联 ADR：ADR-103
+    - 范式：B 纯工具二件套各组件
+    - 文件范围：`packages/admin-ui/src/table/{toolbar,filter,column-settings}.tsx` + 单测
+    - 子代理调用：可降 Sonnet（数据原语装饰组件）
+
+16. **CHG-SN-2-15** — Pagination v2 客户端 + 服务端两档（状态：⬜ 未开始）
+    - 计划开始：CHG-SN-2-14 PASS 后
+    - 工时估算：0.3 天
+    - 关联 ADR：ADR-103
+    - 范式：B 纯工具二件套
+    - 文件范围：`packages/admin-ui/src/table/pagination.tsx` + 单测
+    - 子代理调用：可降 Sonnet
+
+17. **CHG-SN-2-16** — Drawer / Modal 通用业务原语（z-index var(--z-modal) = 1000，与 Shell 抽屉 1100 解耦）（状态：⬜ 未开始）
+    - 计划开始：CHG-SN-2-15 PASS 后
+    - 工时估算：0.4 天
+    - 关联 ADR：ADR-103a §4.3 z-index 4 级（业务 Drawer L1）
+    - 范式：B 纯工具二件套各组件
+    - 文件范围：`packages/admin-ui/src/components/{drawer,modal}.tsx` + 单测；admin-layout token 追加 `--z-modal: 1000`（不在 z-shell-* 命名空间，由 components/ 层管辖）
+    - 验收要点：z-index 不硬编码（取 var(--z-modal)）/ Drawer 与 Shell 抽屉层级不冲突 / focus trap / ESC 关闭 / SSR
+    - 子代理调用：arch-reviewer (Opus) — z-index L1 业务原语首张落地需评审 4 级层级关系
+
+18. **CHG-SN-2-17** — AdminDropdown / SelectionActionBar（状态：⬜ 未开始）
+    - 计划开始：CHG-SN-2-16 PASS 后
+    - 工时估算：0.3 天
+    - 关联 ADR：ADR-103
+    - 范式：B 纯工具二件套各组件
+    - 文件范围：`packages/admin-ui/src/components/{admin-dropdown,selection-action-bar}.tsx` + 单测
+    - 子代理调用：可降 Sonnet
+
+19. **CHG-SN-2-18** — Empty / Error / Loading 状态原语（状态：⬜ 未开始）
+    - 计划开始：CHG-SN-2-17 PASS 后
+    - 工时估算：0.2 天
+    - 关联 ADR：plan §6 M-SN-2 v2.3 范围 B
+    - 范式：B 纯渲染单件（每个一个 .tsx）
+    - 文件范围：`packages/admin-ui/src/components/state/{empty,error,loading}.tsx` + 单测
+    - 子代理调用：可降 Sonnet 或 Haiku
+
+20. **CHG-SN-2-19** — Storybook-style demo 页（apps/server-next /admin/dev/components）（状态：⬜ 未开始）
+    - 计划开始：CHG-SN-2-18 PASS 后
+    - 工时估算：0.4 天
+    - 关联 plan §：§6 M-SN-2 v2.3 范围 D
+    - 文件范围：`apps/server-next/src/app/admin/dev/components/page.tsx` + 各组件 demo 子页
+    - 验收要点：Shell 10 组件 + 数据原语全集在 demo 页可交互 / DataTable v2 客户端/服务端分页切换正常 / useTableQuery URL 同步可验证（刷新后保留）
+    - 子代理调用：可降 Sonnet
+
+21. **CHG-SN-2-20** — 数据原语层集成验收 + e2e（状态：⬜ 未开始）
+    - 计划开始：CHG-SN-2-19 PASS 后
+    - 工时估算：0.3 天
+    - 验收要点：单元测试覆盖率 ≥70%（含 Shell 组件键盘事件 / Toast 队列 / countProvider 求值）/ 零硬编码颜色 CI 扫描 / 零 fetch 副作用 grep 校验 / SSR 兼容（admin layout 服务端渲染不报错）/ a11y 基线（键盘导航全覆盖 / 焦点环 / 对比度 ≥4.5:1 / aria-* 完整）
+    - 子代理调用：可降 Sonnet（验收类）
+
+22. **CHG-SN-2-21** — M-SN-2 milestone 阶段审计（Opus）（状态：⬜ 未开始）
+    - 计划开始：CHG-SN-2-20 PASS 后
+    - 工时估算：0.2 天
+    - 关联 plan §：§5.3 milestone 阶段审计（A/B/C 评级）+ §6 M-SN-2 完成标准
+    - 验收要点：plan §6 M-SN-2 完成标准 5 条逐条验证 / Shell 公开 API 契约稳定性（Props 未在 milestone 中期变更）/ Provider 不下沉约束验证 / SSR/Edge Runtime 兼容验证 / a11y 基线 / 复用矩阵 §8 Shell 列覆盖 / 设计稿对齐截图（折叠/展开 × dark/light = 4 张）
+    - 子代理调用：arch-reviewer (Opus) — milestone 阶段审计强制 Opus（CLAUDE.md 模型路由 + plan §5.3）
+    - 完成判据：评级 A 或 B（带欠账） → M-SN-2 闭环；评级 C → BLOCKER 暂停不进 M-SN-3
 
 4. **CHG-SN-2-13 ~ CHG-SN-2-20**（数据原语层）：DataTable v2 + Toolbar/Filter/ColumnSettings + Drawer/Modal/AdminDropdown/SelectionActionBar + Empty/Error/Loading + Storybook demo
    - 详细范围 CHG-SN-2-12 AdminShell 装配后逐张起草
