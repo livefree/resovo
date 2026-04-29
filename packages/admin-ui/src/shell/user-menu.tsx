@@ -174,8 +174,8 @@ export function UserMenu({ open, onOpenChange, user, actions, anchorRef }: UserM
     (item: MenuItem) => {
       try {
         item.callback?.()
-      } catch {
-        // consumer callback errors must not block menu close
+      } catch (e) {
+        console.error('[UserMenu] menu item callback threw:', e)
       } finally {
         onOpenChange(false)
       }
