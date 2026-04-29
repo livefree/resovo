@@ -79,14 +79,29 @@ describe('NotificationDrawer — open=true 渲染（portal + header + items）',
     expect(document.body.querySelector('[data-notification-mark-all-read]')).toBeNull()
   })
 
-  it('items 列表渲染（每项 button + level + read attribute）', () => {
-    render(<NotificationDrawer open items={ITEMS} onClose={vi.fn()} />)
+  it('onItemClick 提供 → 每项渲染 button + level + read + interactive=true attribute', () => {
+    render(<NotificationDrawer open items={ITEMS} onClose={vi.fn()} onItemClick={vi.fn()} />)
     const item1 = document.body.querySelector('[data-notification-item="n1"]') as HTMLButtonElement
     expect(item1.tagName).toBe('BUTTON')
     expect(item1.getAttribute('data-notification-item-level')).toBe('danger')
     expect(item1.getAttribute('data-notification-item-read')).toBe('false')
-    const item2 = document.body.querySelector('[data-notification-item="n2"]') as HTMLButtonElement
+    expect(item1.getAttribute('data-notification-item-interactive')).toBe('true')
+    const item2 = document.body.querySelector('[data-notification-item="n2"]') as HTMLElement
     expect(item2.getAttribute('data-notification-item-read')).toBe('true')
+  })
+
+  it('fix(CHG-SN-2-10): onItemClick 缺省 → 每项渲染 article（非 button）+ interactive=false + cursor: default', () => {
+    render(<NotificationDrawer open items={ITEMS} onClose={vi.fn()} />)
+    const item1 = document.body.querySelector('[data-notification-item="n1"]') as HTMLElement
+    expect(item1.tagName).toBe('ARTICLE')
+    expect(item1.getAttribute('data-notification-item-interactive')).toBe('false')
+    expect(item1.style.cursor).toBe('default')
+  })
+
+  it('onItemClick 提供 → button 形态 cursor: pointer', () => {
+    render(<NotificationDrawer open items={ITEMS} onClose={vi.fn()} onItemClick={vi.fn()} />)
+    const item1 = document.body.querySelector('[data-notification-item="n1"]') as HTMLElement
+    expect(item1.style.cursor).toBe('pointer')
   })
 
   it('未读项 opacity=1 / 已读项 opacity=0.6（视觉区分）', () => {
@@ -134,9 +149,11 @@ describe('NotificationDrawer — 行级回调', () => {
     expect(onMarkAllRead).toHaveBeenCalledTimes(1)
   })
 
-  it('onItemClick 未提供 → 点击 item 不抛错', () => {
+  it('onItemClick 未提供 → article 元素无 onClick handler（fix(CHG-SN-2-10) no-op rows 修复）', () => {
     render(<NotificationDrawer open items={ITEMS} onClose={vi.fn()} />)
-    const item1 = document.body.querySelector('[data-notification-item="n1"]') as HTMLButtonElement
+    const item1 = document.body.querySelector('[data-notification-item="n1"]') as HTMLElement
+    expect(item1.tagName).toBe('ARTICLE')
+    // article 元素 click 不抛错（无 onClick 绑定）
     expect(() => fireEvent.click(item1)).not.toThrow()
   })
 })

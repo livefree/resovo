@@ -81,6 +81,21 @@ const PROGRESS_FILL_STYLE: CSSProperties = {
   transition: 'width var(--motion-duration-md) var(--motion-easing-standard)',
 }
 
+// fix(CHG-SN-2-10) UI/a11y 契约：indeterminate progressbar 视觉（progress=undefined 但 status='running' 时）
+// 用 keyframes 在 progress bar 内左右滑动指示器（30% 宽度），表示"运行中但进度未知"
+const INDETERMINATE_KEYFRAMES = `@keyframes resovo-task-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}`
+
+const PROGRESS_FILL_INDETERMINATE_STYLE: CSSProperties = {
+  height: '100%',
+  width: '30%',
+  background: 'var(--accent-default)',
+  animation: 'resovo-task-indeterminate 1.5s ease-in-out infinite',
+  willChange: 'transform',
+}
+
 const TIMESTAMP_STYLE: CSSProperties = {
   color: 'var(--fg-muted)',
   fontSize: 'var(--font-size-xs)',
@@ -153,7 +168,13 @@ function TaskItemRow({ item, onCancel, onRetry }: TaskItemRowProps) {
     background: `var(--state-${slot}-bg)`,
     color: `var(--state-${slot}-fg)`,
   }
-  const progressVisible = item.status === 'running' && item.progress !== undefined
+  // fix(CHG-SN-2-10) UI/a11y 契约：status='running' 时始终渲染 progressbar
+  // - progress 提供 → determinate（aria-valuenow + width%）
+  // - progress 缺省 → indeterminate（无 aria-valuenow + 滑动动画 + aria-label="进度未知"）
+  // ARIA 1.1 progressbar 规范：aria-valuenow 缺省即表示 indeterminate
+  const isRunning = item.status === 'running'
+  const isDeterminate = isRunning && item.progress !== undefined
+  const isIndeterminate = isRunning && item.progress === undefined
   const cancelVisible = item.status === 'running' && onCancel !== undefined
   const retryVisible = item.status === 'failed' && onRetry !== undefined
 
@@ -163,18 +184,35 @@ function TaskItemRow({ item, onCancel, onRetry }: TaskItemRowProps) {
         <span data-task-item-status-badge style={statusBadgeStyle}>{STATUS_LABEL[item.status]}</span>
         <span style={TITLE_STYLE} data-task-item-title>{item.title}</span>
       </div>
-      {progressVisible && (
-        <div data-task-item-progress style={PROGRESS_BAR_STYLE}>
-          <div
-            aria-hidden="true"
-            data-task-item-progress-fill
-            role="progressbar"
-            aria-valuenow={item.progress}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            style={{ ...PROGRESS_FILL_STYLE, width: `${item.progress}%` }}
-          />
-        </div>
+      {isRunning && (
+        <>
+          {isIndeterminate && (
+            <style data-resovo-task-indeterminate>{INDETERMINATE_KEYFRAMES}</style>
+          )}
+          <div data-task-item-progress style={{ ...PROGRESS_BAR_STYLE, position: 'relative', overflow: 'hidden' }}>
+            {isDeterminate ? (
+              <div
+                data-task-item-progress-fill
+                data-task-item-progress-mode="determinate"
+                role="progressbar"
+                aria-valuenow={item.progress}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                style={{ ...PROGRESS_FILL_STYLE, width: `${item.progress}%` }}
+              />
+            ) : (
+              <div
+                data-task-item-progress-fill
+                data-task-item-progress-mode="indeterminate"
+                role="progressbar"
+                aria-label="进度未知"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                style={PROGRESS_FILL_INDETERMINATE_STYLE}
+              />
+            )}
+          </div>
+        </>
       )}
       <span style={TIMESTAMP_STYLE} data-task-item-startedat>开始 {item.startedAt}</span>
       {item.finishedAt && (

@@ -1338,3 +1338,55 @@
   - data-* attribute 全 lowercase（已修订 finishedAt → finishedat 避免 React DOM warning）
   - DrawerShell 不导出，避免 packages/admin-ui 公开 API 膨胀；通过 NotificationDrawer / TaskDrawer 间接覆盖单测策略合理
   - 双 Drawer 互斥编排在 AdminShell（CHG-SN-2-12 装配卡），叶子层（本卡）独立性高（各自受控 open + onClose）
+
+---
+
+## [fix(CHG-SN-2-10)] NotificationDrawer no-op rows + TaskDrawer indeterminate progressbar 修复（UI/a11y 契约）
+
+- **完成时间**：2026-04-29
+- **记录时间**：2026-04-29 05:00
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（Codex stop-time review 已识别问题；UI/a11y 契约修复明确）
+- **触发**：Codex stop-time review BLOCK — "No-op notification rows and hidden progressbars break UI/a11y contracts"
+- **缺失项**：
+  1. **No-op notification rows**：notification-drawer.tsx onItemClick 未提供时仍渲染 `<button>`，点击 no-op；视觉暗示可点击但无业务，screen reader 误导
+  2. **Hidden progressbars**：task-drawer.tsx status='running' 但 progress=undefined 时不渲染 progressbar；违反 ARIA 1.1（运行中应显示 indeterminate progressbar）
+- **修改文件**：
+  - `packages/admin-ui/src/shell/notification-drawer.tsx`：NotificationItemRow 双形态分支
+    - `onItemClick !== undefined` → `<button>` + cursor: pointer + data-notification-item-interactive="true"
+    - `onItemClick === undefined` → `<article>` + cursor: default + data-notification-item-interactive="false" + 无 onClick handler
+  - `packages/admin-ui/src/shell/task-drawer.tsx`：progressbar 始终渲染（status='running'）+ indeterminate 分支
+    - status='running' + progress 提供 → determinate（role="progressbar" + aria-valuenow + width% / data-task-item-progress-mode="determinate"）
+    - status='running' + progress=undefined → indeterminate（role="progressbar" + 无 aria-valuenow + aria-label="进度未知" + 30% 宽度滑动动画 / data-task-item-progress-mode="indeterminate"）
+    - INDETERMINATE_KEYFRAMES 通过 `<style data-resovo-task-indeterminate>` 内联注入（沿用 HealthBadge pulse 动画范式）
+  - `tests/unit/components/admin-ui/shell/notification-drawer.test.tsx`：追加 3 锁定（onItemClick 提供 → button + interactive=true / onItemClick 缺省 → article + interactive=false + cursor default / button 形态 cursor: pointer）
+  - `tests/unit/components/admin-ui/shell/task-drawer.test.tsx`：追加 2 锁定（indeterminate progressbar 完整 ARIA + data-mode + keyframes 注入 / determinate data-mode）
+  - `docs/decisions.md` ADR-103a 末尾追加 fix(CHG-SN-2-10) 修订记录段
+- **a11y 契约改进**：
+  - NotificationItem：onItemClick 决定 element role（article 非交互 / button 交互）
+  - TaskItem progressbar：ARIA 1.1 规范严格遵守（aria-valuenow 提供 = determinate / 缺省 + aria-label = indeterminate）
+- **新增依赖**：无
+- **数据库变更**：无
+- **实测验收**：
+  - typecheck + lint 全绿
+  - admin-ui shell 278 tests 全过（原 275 + 3 新增 fix 锁定 — fix 修订调整既有测试 +6 新断言 / 净增 3）
+  - verify-server-next-isolation 双扫描：53 文件 0 违规
+- **不变约束验证**：
+  - ADR §4.1.5 字面契约不变（NotificationItem/TaskItem 类型 + 可选 actions 不变）
+  - CHG-SN-2-10 整体范式继续有效（DrawerShell base + portal + ESC + focus trap + mounted SSR-safe）
+  - 零硬编码颜色（indeterminate 动画用 var(--accent-default) + transform 字面量合规）
+  - 零图标库依赖
+- **Codex Review Gate 第 5 次精确捕获**：
+  - CHG-SN-2-03 ToastViewport position（已修 f23abc7）
+  - CHG-SN-2-04 platform.ts hydration mismatch（已修 32a94b6）
+  - CHG-SN-2-07 UserMenu popover/visual（已修 6ed730e）
+  - CHG-SN-2-09 Topbar layout 漂浮（已修 14c54f4）
+  - **CHG-SN-2-10 双 Drawer UI/a11y 契约（本卡修）**
+- **双 review 防线分工再次验证**：Opus 评 14/14 PASS（语义层全过 / 含 a11y 单测但未覆盖 a11y 契约层细节）；Codex 捕获 a11y 实施细节缺口（runtime/UX 视角）。两类问题需双 review 互补防线
+- **作为后续浮层组件 a11y 范式参照**：
+  - 交互元素的"interactive"属性决定 DOM 节点类型（button vs article/div）
+  - progressbar role 在"运行中"状态始终存在；indeterminate 用 aria-label + 缺省 aria-valuenow
+- **注意事项**：
+  - article 元素在 `[data-notification-item="..."]` selector 仍可命中（attribute 选择器不依赖 tag），消费方代码无需调整
+  - indeterminate keyframes 多实例 DOM 重复但 CSS 解析正常（沿用 HealthBadge pulse 范式）
+  - data-task-item-progress-mode attr 便于 e2e 测试 + cutover 视觉对账识别两种 progressbar 形态

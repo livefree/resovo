@@ -113,12 +113,30 @@ describe('TaskDrawer — progress bar', () => {
     expect(document.body.querySelector('[data-task-item="t2"] [data-task-item-progress]')).toBeNull()
   })
 
-  it('status=running 但 progress=undefined → 不渲染 progress bar', () => {
+  it('fix(CHG-SN-2-10): status=running 但 progress=undefined → 渲染 indeterminate progressbar（ARIA 1.1 规范）', () => {
     const items: readonly TaskItem[] = [{
       id: 'tx', title: 'x', status: 'running', startedAt: '2026-04-29T00:00:00Z',
     }]
     render(<TaskDrawer open items={items} onClose={vi.fn()} />)
-    expect(document.body.querySelector('[data-task-item="tx"] [data-task-item-progress]')).toBeNull()
+    const progressContainer = document.body.querySelector('[data-task-item="tx"] [data-task-item-progress]')
+    expect(progressContainer).toBeTruthy()
+    const fill = document.body.querySelector('[data-task-item="tx"] [data-task-item-progress-fill]') as HTMLElement
+    expect(fill).toBeTruthy()
+    expect(fill.getAttribute('data-task-item-progress-mode')).toBe('indeterminate')
+    expect(fill.getAttribute('role')).toBe('progressbar')
+    // ARIA 1.1: aria-valuenow 缺省即表示 indeterminate；aria-label 提供"进度未知"
+    expect(fill.getAttribute('aria-valuenow')).toBeNull()
+    expect(fill.getAttribute('aria-label')).toBe('进度未知')
+    expect(fill.getAttribute('aria-valuemin')).toBe('0')
+    expect(fill.getAttribute('aria-valuemax')).toBe('100')
+    // indeterminate 视觉：CSS 动画 keyframes 注入
+    expect(document.body.querySelector('style[data-resovo-task-indeterminate]')).toBeTruthy()
+  })
+
+  it('determinate progressbar 含 data-task-item-progress-mode="determinate" attr', () => {
+    render(<TaskDrawer open items={ITEMS} onClose={vi.fn()} />)
+    const fill = document.body.querySelector('[data-task-item="t1"] [data-task-item-progress-fill]') as HTMLElement
+    expect(fill.getAttribute('data-task-item-progress-mode')).toBe('determinate')
   })
 })
 

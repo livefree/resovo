@@ -2975,6 +2975,41 @@ Codex stop-time review 识别 CHG-SN-2-07 实施未兑现 ADR §4.1.4 anchorRef 
 
 **未引入新约束变更**：本 fix 仅补 ADR §4.1.4 anchorRef "用于定位"原本就规定的契约；CHG-SN-2-07 4 处契约精化继续有效（onClose→onOpenChange / onAction→actions 拆分 / role union / avatarText 可选 / anchorRef 可选）。
 
+#### 2026-04-29 · fix(CHG-SN-2-10) · NotificationDrawer no-op rows + TaskDrawer indeterminate progressbar 修复
+
+Codex stop-time review 识别 CHG-SN-2-10 落地的 NotificationDrawer + TaskDrawer 在两处违反 UI/a11y 契约："No-op notification rows and hidden progressbars break UI/a11y contracts"。本 fix 在 packages/admin-ui 内解决，不变更 ADR §4.1.5 字面契约，仅补齐隐含的 a11y 实施细节。
+
+**两处契约缺口**：
+
+1. **No-op notification rows**：`notification-drawer.tsx` onItemClick 未提供时仍渲染 `<button>`，点击 no-op
+   - 视觉违规：button 视觉暗示可点击但无业务（用户困惑）
+   - a11y 违规：`<button>` role 暗示交互性，但实际无交互（screen reader 误导）
+2. **Hidden progressbars**：`task-drawer.tsx` status='running' 但 progress=undefined 时干脆不渲染 progressbar
+   - 视觉违规：用户能看到"运行中"标签但不知是否有进度（无视觉反馈）
+   - a11y 违规：违反 ARIA 1.1 progressbar 规范 — 运行中应显示 indeterminate progressbar（aria-valuenow 缺省即表示不确定进度）
+
+**修复内容**（commit 见 git log `fix(CHG-SN-2-10)`）：
+
+- `packages/admin-ui/src/shell/notification-drawer.tsx`：NotificationItemRow 双形态分支
+  - `onItemClick !== undefined` → `<button>` 形态（cursor: pointer / data-notification-item-interactive="true"）
+  - `onItemClick === undefined` → `<article>` 形态（cursor: default / data-notification-item-interactive="false" / 无 onClick handler）
+- `packages/admin-ui/src/shell/task-drawer.tsx`：progressbar 始终渲染（status='running'）+ indeterminate 分支
+  - status='running' + progress 提供 → determinate（aria-valuenow + width% / data-task-item-progress-mode="determinate"）
+  - status='running' + progress=undefined → indeterminate（无 aria-valuenow + aria-label="进度未知" + 30% 宽度滑动动画 / data-task-item-progress-mode="indeterminate"）
+  - status≠'running' → 不渲染 progressbar（pending/success/failed 不需要进度展示）
+  - INDETERMINATE_KEYFRAMES 通过 `<style data-resovo-task-indeterminate>` 内联注入（沿用 HealthBadge pulse 动画范式）
+- 单测追加 4 锁定（双 Drawer 各 2 测）：article 形态 / cursor: default / cursor: pointer / indeterminate progressbar role + aria-label / determinate vs indeterminate data-* attribute
+
+**a11y 契约改进**：
+- NotificationItem：onItemClick 决定 element role（article 非交互 / button 交互）
+- TaskItem progressbar：ARIA 1.1 规范 — `aria-valuenow` 提供 = determinate / 缺省 + `aria-label` = indeterminate
+
+**回归**：typecheck + lint + admin-ui shell 278 tests（含 3 新增 fix 锁定）+ 双扫描守卫（53 文件 0 违规）全绿。
+
+**未引入 ADR 字面契约变更**：ADR §4.1.5 字面 NotificationItem/TaskItem 类型 + onItemClick/onCancel/onRetry 可选性不变；本 fix 仅补 a11y 实施细节（onItemClick 缺省时 article 形态 / progressbar 始终在 running 状态渲染）。CHG-SN-2-10 整体范式（DrawerShell base + portal + ESC + focus trap + mounted SSR-safe）继续有效。
+
+**Codex Review Gate 第 5 次精确捕获契约偏离**：CHG-SN-2-03 ToastViewport position（已修 f23abc7）/ CHG-SN-2-04 platform.ts hydration mismatch（已修 32a94b6）/ CHG-SN-2-07 UserMenu popover/visual 契约（已修 6ed730e）/ CHG-SN-2-09 Topbar layout 漂浮（已修 14c54f4）/ **CHG-SN-2-10 双 Drawer UI/a11y 契约（本卡修）**。Codex 与 Opus 双 review 互补防线 — Opus 评 14/14 PASS（语义层全过），Codex 捕获 a11y 实施细节缺口（运行时层）。
+
 #### 2026-04-29 · fix(CHG-SN-2-04) · platform.ts hydration-safe 修复（提前落地原"建议优化 4"）
 
 Codex stop-time review 识别 platform.ts 顶层 `detectIsMac()` 直接读 navigator 导致 SSR ('Ctrl+K') vs 客户端水合 ('⌘K') React hydration mismatch；把 hydration-safe 责任推给消费方包装是糟糕的 API 设计。本 fix 在 packages/admin-ui 内解决，将原"后续登记"建议优化 4 提前落地。

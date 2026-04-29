@@ -152,9 +152,36 @@ interface NotificationItemRowProps {
 
 function NotificationItemRow({ item, onItemClick }: NotificationItemRowProps) {
   const slot = LEVEL_TO_SLOT[item.level]
+  const interactive = onItemClick !== undefined
+  // fix(CHG-SN-2-10) UI/a11y 契约：onItemClick 缺省时渲染为 article（非 button），避免视觉暗示可点击但 no-op
   const itemStyle: CSSProperties = {
     ...ITEM_STYLE,
     opacity: item.read ? 0.6 : 1,
+    cursor: interactive ? 'pointer' : 'default',
+  }
+  const innerNodes = (
+    <>
+      <span aria-hidden="true" style={{ ...LEVEL_BAR_STYLE, background: `var(--state-${slot}-border)` }} />
+      <span style={META_STYLE}>
+        <span style={TITLE_STYLE} data-notification-item-title>{item.title}</span>
+        {item.body && <span style={BODY_TEXT_STYLE} data-notification-item-body>{item.body}</span>}
+        <span style={TIMESTAMP_STYLE} data-notification-item-time>{item.createdAt}</span>
+      </span>
+    </>
+  )
+
+  if (!interactive) {
+    return (
+      <article
+        data-notification-item={item.id}
+        data-notification-item-level={item.level}
+        data-notification-item-read={item.read ? 'true' : 'false'}
+        data-notification-item-interactive="false"
+        style={itemStyle}
+      >
+        {innerNodes}
+      </article>
+    )
   }
 
   return (
@@ -163,8 +190,8 @@ function NotificationItemRow({ item, onItemClick }: NotificationItemRowProps) {
       data-notification-item={item.id}
       data-notification-item-level={item.level}
       data-notification-item-read={item.read ? 'true' : 'false'}
+      data-notification-item-interactive="true"
       onClick={() => {
-        if (!onItemClick) return
         try {
           onItemClick(item)
         } finally {
@@ -173,12 +200,7 @@ function NotificationItemRow({ item, onItemClick }: NotificationItemRowProps) {
       }}
       style={itemStyle}
     >
-      <span aria-hidden="true" style={{ ...LEVEL_BAR_STYLE, background: `var(--state-${slot}-border)` }} />
-      <span style={META_STYLE}>
-        <span style={TITLE_STYLE} data-notification-item-title>{item.title}</span>
-        {item.body && <span style={BODY_TEXT_STYLE} data-notification-item-body>{item.body}</span>}
-        <span style={TIMESTAMP_STYLE} data-notification-item-time>{item.createdAt}</span>
-      </span>
+      {innerNodes}
     </button>
   )
 }
