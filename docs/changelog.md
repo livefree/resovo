@@ -2105,3 +2105,32 @@
 - 卡片加载失败单独 ErrorState + 重试 ✅
 - **实测验收**：typecheck ✅ | 2491 单测全通过（StagingEditPanel flake 预存）✅
 - **下一步**：CHG-SN-3-09 system/settings 容器化
+
+## chg(CHG-SN-3-09): system/settings 容器化（Tab 切换 5 子路由）
+
+- **日期**: 2026-04-29
+- **TASK-ID**: CHG-SN-3-09
+- **主循环模型**: claude-sonnet-4-6
+- **子代理调用**: 无
+- **变更类型**: chg（M-SN-3 第 9 张）
+- **摘要**: SettingsContainer 实现 5 Tab（站点设置/缓存管理/系统监控/高级配置/数据迁移）+ URL ?tab 同步；4 个子路由 page.tsx 改为 redirect 到 settings?tab=<name>。
+
+### 新增/变更文件
+- `apps/server-next/src/app/admin/system/settings/page.tsx`（修改：Suspense + SettingsContainer）
+- `apps/server-next/src/app/admin/system/settings/_client/SettingsContainer.tsx`（新建）
+- `apps/server-next/src/app/admin/system/settings/_tabs/SettingsTab.tsx`（新建）
+- `apps/server-next/src/app/admin/system/settings/_tabs/CacheTab.tsx`（新建）
+- `apps/server-next/src/app/admin/system/settings/_tabs/MonitorTab.tsx`（新建）
+- `apps/server-next/src/app/admin/system/settings/_tabs/ConfigTab.tsx`（新建）
+- `apps/server-next/src/app/admin/system/settings/_tabs/MigrationTab.tsx`（新建）
+- `apps/server-next/src/app/admin/system/cache/page.tsx`（修改：redirect）
+- `apps/server-next/src/app/admin/system/config/page.tsx`（修改：redirect）
+- `apps/server-next/src/app/admin/system/migration/page.tsx`（修改：redirect）
+- `apps/server-next/src/app/admin/system/monitor/page.tsx`（修改：redirect）
+
+### 验收
+- 5 子路由均可访问不报 404 ✅
+- URL 参数切换 Tab 正确（settings Tab 不带 param）✅
+- Tab 容器 SSR 零 throw ✅
+- **实测验收**：typecheck ✅ | 2491 单测全通过 ✅
+- **下一步**：CHG-SN-3-10 集成验收 + e2e 黄金路径
