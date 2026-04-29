@@ -47,3 +47,5 @@ apps/api/.uploads/
 
 # INFRA-01 日志落盘目录（本地开发产物，不入 git）
 logs/
+
+.playwright-mcp/
