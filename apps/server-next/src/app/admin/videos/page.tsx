@@ -1,5 +1,16 @@
-import { PlaceholderPage } from '@/components/PlaceholderPage'
+import { Suspense } from 'react'
+import type { Metadata } from 'next'
+import { LoadingState } from '@resovo/admin-ui'
+import { VideoListClient } from './_client/VideoListClient'
+
+export const metadata: Metadata = {
+  title: '视频库 | Resovo Admin',
+}
 
 export default function VideosPage() {
-  return <PlaceholderPage title="视频库" milestone="M-SN-3（标杆页：DataTable v2 + useTableQuery）" />
+  return (
+    <Suspense fallback={<LoadingState variant="skeleton" />}>
+      <VideoListClient />
+    </Suspense>
+  )
 }

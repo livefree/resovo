@@ -1977,3 +1977,23 @@
 - data-testid 齐全（badge-review-status / badge-visibility / badge-published / video-type-chip）
 - **实测验收**：typecheck ✅ | 2434 单测全通过 ✅
 - **下一步**：CHG-SN-3-03 视频库列表页骨架（Server Component）
+
+---
+
+## chg(CHG-SN-3-03): 视频库列表页骨架（Server Component）
+
+- **日期**: 2026-04-29
+- **TASK-ID**: CHG-SN-3-03
+- **主循环模型**: claude-sonnet-4-6
+- **子代理调用**: 无
+- **变更类型**: chg（M-SN-3 第 3 张）
+- **摘要**: 将 /admin/videos PlaceholderPage 替换为真实 Server Component 骨架，Suspense + LoadingState(skeleton) 包裹 VideoListClient stub。
+
+### 变更文件
+- `apps/server-next/src/app/admin/videos/page.tsx`（修改：替换 PlaceholderPage）
+- `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`（新建 stub）
+
+### 验收
+- page.tsx 无 `'use client'`，metadata export ✅
+- **实测验收**：typecheck ✅
+- **下一步**：CHG-SN-3-04 VideoListClient DataTable v2 + useTableQuery + FilterToolbar
