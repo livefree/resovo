@@ -2085,3 +2085,23 @@
 - 成功时 onSaved + onClose ✅
 - **实测验收**：typecheck ✅ | 2491 单测全通过 ✅
 - **下一步**：CHG-SN-3-08 Dashboard
+
+## chg(CHG-SN-3-08): Dashboard 卡片库（三态）+ analytics redirect + Tab URL 同步
+
+- **日期**: 2026-04-29
+- **TASK-ID**: CHG-SN-3-08
+- **主循环模型**: claude-sonnet-4-6
+- **子代理调用**: 无
+- **变更类型**: chg（M-SN-3 第 8 张）
+- **摘要**: DashboardClient 实现概览/分析 Tab（URL ?tab 同步）+ 4 统计卡片三态（pendingReview/published/total/活跃源占位）；analytics/page.tsx 改为 redirect。
+
+### 新增/变更文件
+- `apps/server-next/src/app/admin/_client/DashboardClient.tsx`（新建）
+- `apps/server-next/src/app/admin/page.tsx`（修改：Suspense + DashboardClient）
+- `apps/server-next/src/app/admin/analytics/page.tsx`（修改：redirect）
+
+### 验收
+- analytics 路由不报 404 ✅
+- 卡片加载失败单独 ErrorState + 重试 ✅
+- **实测验收**：typecheck ✅ | 2491 单测全通过（StagingEditPanel flake 预存）✅
+- **下一步**：CHG-SN-3-09 system/settings 容器化
