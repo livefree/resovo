@@ -89,12 +89,17 @@ export function useTableQuery(options: UseTableQueryOptions): {
 
     tableQueryStore.getState().setSnapshot(tid, final)
 
-    // URL sync
+    // URL sync — defaults 必须用用户定义的真实默认值，而非 final.pagination（否则
+    // page !== defaultPage 永远 false，任何非默认页都会被删掉）
     try {
+      const urlDefaults = {
+        pagination: { page: defs?.pagination?.page ?? 1, pageSize: defs?.pagination?.pageSize ?? 20 },
+        sort: defs?.sort ?? { field: undefined, direction: 'asc' as const },
+      }
       const currentParams = r.getSearchParams()
       const nextParams = snapshotToSearchParams(
         { pagination: final.pagination, sort: final.sort, filters: final.filters },
-        { pagination: final.pagination, sort: { field: undefined, direction: 'asc' } },
+        urlDefaults,
         currentParams,
         ns,
       )
@@ -114,10 +119,14 @@ export function useTableQuery(options: UseTableQueryOptions): {
     tableQueryStore.getState().setSnapshot(tid, base)
 
     try {
+      const urlDefaults = {
+        pagination: { page: defs?.pagination?.page ?? 1, pageSize: defs?.pagination?.pageSize ?? 20 },
+        sort: defs?.sort ?? { field: undefined, direction: 'asc' as const },
+      }
       const currentParams = r.getSearchParams()
       const nextParams = snapshotToSearchParams(
         { pagination: base.pagination, sort: base.sort, filters: base.filters },
-        { pagination: base.pagination, sort: { field: undefined, direction: 'asc' } },
+        urlDefaults,
         currentParams,
         ns,
       )

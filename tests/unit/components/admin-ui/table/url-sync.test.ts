@@ -284,6 +284,32 @@ describe('searchParamsToSnapshot — namespace', () => {
   })
 })
 
+// ── regression: page must not be dropped when defaults differ ────
+
+describe('snapshotToSearchParams — page vs defaults regression', () => {
+  it('page=3 defaults.page=1 → 写入 page=3（不得用 final.pagination 作 defaults）', () => {
+    // 这是 CHG-SN-2-13 fix 的回归测试：
+    // patch() 曾将 final.pagination 作为 defaults 传入，导致 page !== defaultPage 永 false
+    const params = snapshotToSearchParams(
+      { pagination: { page: 3, pageSize: 20 }, sort: DEFAULTS.sort, filters: new Map() },
+      { pagination: { page: 1, pageSize: 20 }, sort: DEFAULTS.sort }, // 真实 defaults，page=1
+      makeParams(),
+      undefined,
+    )
+    expect(params.get('page')).toBe('3') // 必须写入，不能因为 final.pagination === defaults 而丢失
+  })
+
+  it('page=1 defaults.page=1 → 省略 page（保持 URL 干净）', () => {
+    const params = snapshotToSearchParams(
+      { pagination: { page: 1, pageSize: 20 }, sort: DEFAULTS.sort, filters: new Map() },
+      { pagination: { page: 1, pageSize: 20 }, sort: DEFAULTS.sort },
+      makeParams(),
+      undefined,
+    )
+    expect(params.has('page')).toBe(false)
+  })
+})
+
 // ── round-trip ───────────────────────────────────────────────────
 
 describe('url-sync round-trip', () => {
