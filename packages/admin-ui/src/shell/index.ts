@@ -90,6 +90,9 @@ export type { UserMenuProps } from './user-menu'
 export { Sidebar, formatCount } from './sidebar'
 export type { SidebarProps } from './sidebar'
 
+export { Topbar, formatTaskCount } from './topbar'
+export type { TopbarProps, TopbarIcons } from './topbar'
+
 // AdminNav + HealthSnapshot + AdminShellUser + AdminUserActions + UserMenuAction
 // 数据契约类型 SSOT（CHG-SN-2-05/06/07）
 export type {

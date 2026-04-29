@@ -1168,3 +1168,67 @@
   - 折叠态 NAV item tooltip 用原生 title attribute（最简洁 + a11y 兼容）；如设计稿要求自定义 NavTip 浮层（含 shortcut kbd 视觉），登记后续 fix
   - admin-layout token: `var(--sidebar-w)` / `var(--sidebar-w-collapsed)` / `var(--topbar-h)` 已就位（CHG-SN-2-02 stage 1/2）
   - children 嵌套渲染当前不支持（M-SN-2 契约锁定，单测断言）；未来 CHG-SN-2-12 系统设置容器化或 M-SN-3+ 业务卡需要二级展开时新 ADR 扩展
+
+---
+
+## [CHG-SN-2-09] packages/admin-ui Topbar（Shell 第 7 张 / 组合 Breadcrumbs + HealthBadge + 5 类图标按钮注入）
+
+- **完成时间**：2026-04-29
+- **记录时间**：2026-04-29 04:10
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — 13 项评审重点全 PASS / 无必修 / 1 类建议优化可推迟
+- **触发**：CHG-SN-2-08 PASS（commit 3fc0fcb）→ Shell 6/10 → 按依赖序起 Topbar（依赖 Breadcrumbs/HealthBadge 已落地）
+- **修改文件**：
+  - `packages/admin-ui/src/shell/topbar.tsx`（新建）— Topbar 主组件 + IconButton 子组件 + formatTaskCount helper：
+    - 3 区布局：左 Breadcrumbs / 中搜索触发器 / 右 HealthBadge + 4 IconButton（theme/tasks/notifications/settings）
+    - height var(--topbar-h) + role="banner" + data-* attribute（data-topbar / data-topbar-crumbs / data-topbar-search / data-topbar-right / data-topbar-icon-btn / data-topbar-icon-badge / data-topbar-icon-dot / data-topbar-search-kbd 等）
+    - **不调用 inferBreadcrumbs**（与 fix(CHG-SN-2-01) §4.1.3 P2-B 修订一致；消费方传 crumbs prop）
+    - 全局搜索触发器：button + icons.search + 文案"搜索视频 / 播放源 / 任务…" + useFormatShortcut('mod+k') hydration-safe ⌘K 提示 + onClick onOpenCommandPalette
+    - HealthBadge 可选：`health !== undefined && <HealthBadge />`（避免 falsy 误判）
+    - 主题按钮 aria-label 随 theme 切换（dark→"切换到浅色主题" / light→"切换到深色主题"）
+    - 任务按钮：runningTaskCount 数字徽章（formatTaskCount helper：undefined/0 → undefined / >99 → "99+"）+ var(--state-info-bg/-fg) 配色
+    - 通知按钮：notificationDotVisible === true → 8px 红点（var(--state-error-border)）+ position absolute top-right
+    - 设置按钮：纯图标无角标
+    - 5 类回调独立触发（onOpenCommandPalette / onThemeToggle / onOpenNotifications / onOpenTasks / onOpenSettings）
+    - 颜色全 token / 零图标库依赖（icons 由消费方注入 ReactNode）
+  - `packages/admin-ui/src/shell/index.ts`（修改）— 桶导出追加 Topbar / TopbarProps / TopbarIcons / formatTaskCount
+  - `tests/unit/components/admin-ui/shell/topbar.test.tsx`（新建）— 22 tests 渲染（容器+a11y / 3 区 / Breadcrumbs 直接渲染 + 空数组 / 全局搜索触发器 / icons.search 节点 / button type="button" / HealthBadge 可选 / 4 类 IconButton + aria-label / 主题按钮 aria-label 切换 / 几何统一 / 任务角标 4 边界 / 通知红点 / formatTaskCount 6 边界）
+  - `tests/unit/components/admin-ui/shell/topbar-interaction.test.tsx`（新建）— 6 tests 5 类回调触发独立性
+  - `tests/unit/components/admin-ui/shell/topbar-ssr.test.tsx`（新建）— 5 tests SSR（renderToString 含 health+角标 / 无 health / 输出 3 区+5 图标+Breadcrumbs+HealthBadge / health=undefined 不渲染 / 角标输出）
+- **Props 类型骨架**（与 ADR-103a §4.1.3 + fix(CHG-SN-2-01) 1:1）：
+  ```typescript
+  export interface TopbarIcons { search/theme/notifications/tasks/settings: ReactNode }
+  export interface TopbarProps {
+    crumbs; theme: 'dark'|'light'; icons; health?; notificationDotVisible?; runningTaskCount?;
+    onOpenCommandPalette; onThemeToggle; onOpenNotifications; onOpenTasks; onOpenSettings
+  }
+  ```
+- **新增依赖**：无
+- **数据库变更**：无
+- **实测验收**：
+  - typecheck（5/5 packages）/ lint（4/4 cached FULL TURBO）全绿
+  - admin-ui shell 232 tests 全过（原 199 + 33 topbar）
+  - 全套 ~2014 unit tests
+  - verify-server-next-isolation 双扫描：50 文件（packages/admin-ui/src 增 1）0 违规
+  - verify-token-isolation：152 文件 0 命中
+- **不变约束验证**：
+  - Provider 不下沉：零 BrandProvider/ThemeProvider/createContext / 无 useState（纯渲染）
+  - Edge Runtime 兼容：模块顶层零 navigator/document/window / 无 useEffect → 无 hydration mismatch / SSR 5 场景零 throw
+  - 零硬编码颜色：所有颜色 + 角标 + 红点全 token；几何字面量（32×32 button / 16×16 badge / 8×8 dot / 480px 搜索框最大宽）非颜色合规
+  - 零图标库依赖：5 类 ReactNode 由 props.icons 注入；无任何图标库 import
+  - URL 不动 / M-SN-1 闭环资产零返工
+- **Opus 评审 PASS**（13 项重点全 PASS / 无必修 / 1 类建议优化登记后续）：
+  - 建议优化（不阻塞，可推迟）：(a) 主题切换 rerender 同 instance 验证 aria-label 动态更新（当前用双 cleanup + rerender 等价覆盖）/ (b) 追加 RTL `getByRole('button', { name })` a11y 命名查询单测（提升可读性）
+- **未复现 CHG-SN-2-03/04/07 类型问题**：
+  - 不调用 inferBreadcrumbs（与 fix(CHG-SN-2-01) P2-B 修订一致）
+  - useFormatShortcut hydration-safe（CHG-SN-2-04 修订后通用）
+  - 无 portal / anchor 视觉契约风险（Topbar 非浮层组件）
+- **作为 CHG-SN-2-10 NotificationDrawer/TaskDrawer 范式参照**：
+  - icons.notifications/tasks 触发对应 onOpenNotifications/onOpenTasks → AdminShell 编排 Drawer 弹出
+  - notificationDotVisible / runningTaskCount 角标驱动外部状态（消费方在 onOpenNotifications 内部决定是否清零）
+- **后续动作**：CHG-SN-2-10 NotificationDrawer + TaskDrawer（按 ADR-103a §4.1.5 实施 + 双 Drawer 一卡 + 强制 Opus 评审）
+- **注意事项**：
+  - Topbar 是纯渲染组件无 useEffect，不存在 hydration mismatch 风险（与 CHG-SN-2-04 platform.ts trade-off 不同形态）
+  - 5 类图标按钮统一 32×32 几何（geometry consistency；与设计稿 v2.1 shell.jsx 实践对齐）
+  - 任务角标用 var(--state-info-bg/-fg)（运行中任务通常是 info 语义；如设计稿要求其他配色由后续 fix 卡处理）
+  - useFormatShortcut('mod+k') 输出在 SSR 走 "Ctrl+K"，客户端 mount 后 Mac 自动切换"⌘K"（与 CHG-SN-2-04 fix hydration-safe 一致）
