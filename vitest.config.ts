@@ -77,16 +77,21 @@ export default defineConfig({
           return resolveWithExtensions(path.resolve(__dirname, './apps/web-next/src/types', subPath))
         },
       },
-      // @ resolver: 默认 apps/web-next/src（对外入口），server/admin 上下文走 apps/server/src
+      // @ resolver: context-aware
+      // server-next → apps/server-next/src; server/admin → apps/server/src; default → apps/web-next/src
       {
         find: /^@\/(.*)/,
         replacement: '$1',
         customResolver(replacedId: string, importer: string | undefined) {
+          const isServerNext =
+            importer?.includes('/apps/server-next/') || importer?.includes('/tests/unit/components/server-next/')
           const isServer =
             importer?.includes('/apps/server/') || importer?.includes('/tests/unit/components/admin/')
-          const srcBase = isServer
-            ? path.resolve(__dirname, './apps/server/src')
-            : path.resolve(__dirname, './apps/web-next/src')
+          const srcBase = isServerNext
+            ? path.resolve(__dirname, './apps/server-next/src')
+            : isServer
+              ? path.resolve(__dirname, './apps/server/src')
+              : path.resolve(__dirname, './apps/web-next/src')
           return resolveWithExtensions(path.resolve(srcBase, replacedId))
         },
       },

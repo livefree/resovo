@@ -15,6 +15,7 @@ import type { VideoAdminRow, CrawlerSite } from '@/lib/videos'
 import { VideoStatusIndicator } from '@/components/admin/shared/VideoStatusIndicator'
 import { VideoTypeChip } from '@/components/admin/shared/VideoTypeChip'
 import { buildVideoFilter, buildFilterChips, VideoFilterBar } from './VideoFilterFields'
+import { VideoRowActions } from './VideoRowActions'
 
 // ── column definitions ────────────────────────────────────────────
 
@@ -34,7 +35,11 @@ const TITLE_TEXT_STYLE: CSSProperties = {
   fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
 }
 
-function buildVideoColumns(): readonly TableColumn<VideoAdminRow>[] {
+function buildVideoColumns(
+  isAdmin: boolean,
+  onRowUpdate: (id: string, patch: Partial<VideoAdminRow>) => void,
+  onEditRequest: (id: string) => void,
+): readonly TableColumn<VideoAdminRow>[] {
   return [
     {
       id: 'cover', header: '封面', accessor: (r) => r.cover_url,
@@ -116,7 +121,14 @@ function buildVideoColumns(): readonly TableColumn<VideoAdminRow>[] {
     {
       id: 'actions', header: '操作', accessor: () => null,
       width: 168, minWidth: 148, enableResizing: false, defaultVisible: true,
-      // CHG-SN-3-05 将替换为 VideoRowActions
+      cell: ({ row }) => (
+        <VideoRowActions
+          row={row}
+          isAdmin={isAdmin}
+          onRowUpdate={onRowUpdate}
+          onEditRequest={onEditRequest}
+        />
+      ),
     },
   ]
 }
@@ -132,6 +144,7 @@ const COL_BTN_STYLE: CSSProperties = {
 
 export function VideoListClient() {
   const router = useTableRouterAdapter()
+  const isAdmin = false // CHG-SN-3-12 将从 session/context 注入
   const { snapshot, patch } = useTableQuery({
     tableId: 'admin-videos',
     router,
@@ -151,7 +164,19 @@ export function VideoListClient() {
   const [sites, setSites] = useState<readonly CrawlerSite[]>([])
   const [colSettingsOpen, setColSettingsOpen] = useState(false)
   const colBtnRef = useRef<HTMLButtonElement | null>(null)
-  const columns = useMemo(() => buildVideoColumns(), [])
+
+  const handleRowUpdate = useCallback((id: string, patch2: Partial<VideoAdminRow>) => {
+    setRows((prev) => prev.map((r) => r.id === id ? { ...r, ...patch2 } : r))
+  }, [])
+
+  const handleEditRequest = useCallback((_id: string) => {
+    // CHG-SN-3-07: open VideoEditDrawer
+  }, [])
+
+  const columns = useMemo(
+    () => buildVideoColumns(isAdmin, handleRowUpdate, handleEditRequest),
+    [isAdmin, handleRowUpdate, handleEditRequest],
+  )
 
   useEffect(() => {
     listCrawlerSites().then(setSites).catch(() => {/* site 加载失败时下拉为空 */})
