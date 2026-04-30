@@ -18,6 +18,7 @@ import type {
 } from './types'
 import { DTStyles } from './dt-styles'
 import { HeaderMenu } from './header-menu'
+import { ViewsMenu } from './views-menu'
 
 // ── client-mode data processing ──────────────────────────────────
 
@@ -165,7 +166,16 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
     density = 'comfortable',
     'data-testid': testId,
     enableHeaderMenu = false,
+    toolbar,
   } = props
+
+  // CHG-DESIGN-02 Step 4：判定 toolbar 是否需要渲染
+  // 只要 toolbar 配置存在且 hidden 不为 true，且至少有一个槽位，渲染容器
+  const shouldRenderToolbar = toolbar !== undefined
+    && toolbar.hidden !== true
+    && (toolbar.search !== undefined
+      || toolbar.trailing !== undefined
+      || toolbar.viewsConfig !== undefined)
 
   const [hoveredKey, setHoveredKey] = useState<string | null>(null)
 
@@ -297,6 +307,16 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
       {/* CHG-DESIGN-02 Step 2/7：自包含 CSS 注入（framed surface + flash keyframe）
         * 模块级 flag 守卫，多个 DataTable 实例只注入一次 */}
       <DTStyles />
+      {/* CHG-DESIGN-02 Step 4/7：内置 toolbar（search / viewsConfig / trailing 三槽位） */}
+      {shouldRenderToolbar && (
+        <div data-table-toolbar role="toolbar" aria-label="表格工具栏">
+          {toolbar?.search && <div data-table-toolbar-search>{toolbar.search}</div>}
+          {toolbar?.viewsConfig && (
+            <ViewsMenu config={toolbar.viewsConfig} data-testid="views-trigger" />
+          )}
+          {toolbar?.trailing && <div data-table-toolbar-trailing>{toolbar.trailing}</div>}
+        </div>
+      )}
       {/* sticky header */}
       <div
         role="rowgroup"

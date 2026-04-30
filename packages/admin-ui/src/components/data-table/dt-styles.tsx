@@ -33,6 +33,28 @@ const DT_CSS = `
   min-height: 0;
 }
 
+/* ── DataTable 内置 toolbar（CHG-DESIGN-02 Step 4，设计稿 .dt__toolbar） ─────── */
+[data-table-toolbar] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-default);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+[data-table-toolbar-search] {
+  flex: 0 0 auto;
+  min-width: 200px;
+}
+[data-table-toolbar-trailing] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 /* ── Row flash 动画（乐观更新场景；Step 5 启用 flashRowKeys 时配套） ─────── */
 @keyframes admin-ui-dt-flash {
   0%   { background: color-mix(in oklch, var(--admin-accent-soft) 100%, transparent); }

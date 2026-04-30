@@ -31,7 +31,54 @@ export interface DataTableProps<T> {
    * 与外置 ColumnSettingsPanel 暂时共存（reference.md §4.4 / arch-reviewer C-2）。
    */
   readonly enableHeaderMenu?: boolean
+
+  /**
+   * 内置 toolbar（CHG-DESIGN-02 Step 4）：framed surface 顶部 search / trailing /
+   * viewsConfig 三槽位。缺省时不渲染内置 toolbar（消费方可继续用外置 Toolbar 组件）。
+   */
+  readonly toolbar?: ToolbarConfig
 }
+
+// ── Toolbar / Saved Views（CHG-DESIGN-02 Step 4）──────────────────
+
+export interface ToolbarConfig {
+  /**
+   * 内置 280px 搜索框 slot。消费方传完整 input 元素，DataTable 仅承载布局。
+   */
+  readonly search?: React.ReactNode
+  /** 工具栏右侧自定义节点（refresh / export / 新建按钮等） */
+  readonly trailing?: React.ReactNode
+  /** Saved views 配置；缺省不渲染视图按钮 */
+  readonly viewsConfig?: ViewsConfig
+  /** 不渲染 toolbar 容器（嵌入式场景；消费方仍可外置 Toolbar） */
+  readonly hidden?: boolean
+}
+
+export interface ViewsConfig {
+  readonly items: readonly TableView[]
+  readonly activeId?: string
+  readonly onChange?: (id: string | null) => void
+  /**
+   * 保存当前 query 为新视图。返回 Promise 时 UI 可显示 loading。
+   * label 由消费方自管（设计稿真源 datatable.jsx DTViewList.onSaveCurrent 仅传 scope）。
+   */
+  readonly onSave?: (scope: ViewScope) => void | Promise<void>
+}
+
+export type ViewScope = 'personal' | 'team'
+
+export interface TableView {
+  readonly id: string
+  readonly label: string
+  readonly scope: ViewScope
+  /** 持久化的 query 状态（不含 selection — 视图与选区无关） */
+  readonly query: PersistedQuery
+  readonly createdAt: string  // ISO
+  readonly updatedAt: string  // ISO
+  readonly createdBy?: string  // team scope 必填；personal scope 可选
+}
+
+export type PersistedQuery = Omit<TableQuerySnapshot, 'selection'>
 
 export interface TableColumn<T> {
   readonly id: string

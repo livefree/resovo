@@ -42,4 +42,10 @@ export type {
   ColumnPreference,
   FilterValue,
   TableQueryDefaults,
+  // CHG-DESIGN-02 Step 4
+  ToolbarConfig,
+  ViewsConfig,
+  ViewScope,
+  TableView,
+  PersistedQuery,
 } from './types'
