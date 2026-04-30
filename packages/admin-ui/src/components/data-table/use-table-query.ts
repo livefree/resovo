@@ -16,15 +16,27 @@
  *   - 零 any
  */
 import { useEffect, useCallback, useSyncExternalStore, useRef } from 'react'
-import type { UseTableQueryOptions, TableQueryPatch, TableQuerySnapshot } from './types'
+import type {
+  UseTableQueryOptions,
+  TableQueryPatch,
+  TableQuerySnapshot,
+  TableView,
+  ViewScope,
+  PersistedQuery,
+} from './types'
 import { tableQueryStore, buildDefaultSnapshot, applyPatch } from './table-query-store'
 import { snapshotToSearchParams, searchParamsToSnapshot } from './url-sync'
-import { readFromStorage, writeToStorage, storedPrefsToColumnMap } from './storage-sync'
+import { readFromStorage, writeToStorage, writeViewsToStorage, storedPrefsToColumnMap } from './storage-sync'
 
 export function useTableQuery(options: UseTableQueryOptions): {
   readonly snapshot: TableQuerySnapshot
   readonly patch: (next: TableQueryPatch) => void
   readonly reset: () => void
+  // CHG-DESIGN-02 Step 6 — saved views API
+  readonly views: readonly TableView[]
+  readonly saveView: (label: string, scope: ViewScope) => TableView
+  readonly applyView: (view: TableView | string) => void
+  readonly deleteView: (viewId: string) => void
 } {
   const { tableId, router, defaults, urlNamespace, columns } = options
 
@@ -48,6 +60,14 @@ export function useTableQuery(options: UseTableQueryOptions): {
       tableQueryStore.getState().snapshots.get(tableId)
         ?? (defaultSnapshotRef.current as TableQuerySnapshot),
     () => defaultSnapshotRef.current as TableQuerySnapshot,
+  )
+
+  // CHG-DESIGN-02 Step 6 — saved views 订阅
+  const emptyViewsRef = useRef<readonly TableView[]>([])
+  const views = useSyncExternalStore(
+    tableQueryStore.subscribe,
+    () => tableQueryStore.getState().views.get(tableId) ?? emptyViewsRef.current,
+    () => emptyViewsRef.current,
   )
 
   // Initialize from URL + sessionStorage on mount
@@ -86,6 +106,11 @@ export function useTableQuery(options: UseTableQueryOptions): {
     }
 
     tableQueryStore.getState().setSnapshot(tid, initial)
+
+    // CHG-DESIGN-02 Step 6 — 把已持久化的 views 加载进 store
+    if (stored?.views && stored.views.length > 0) {
+      tableQueryStore.getState().setViews(tid, stored.views)
+    }
   }, [tableId]) // only tableId is a stable dep; options via ref
 
   // patch: PATCH semantics + URL + storage sync
@@ -151,5 +176,90 @@ export function useTableQuery(options: UseTableQueryOptions): {
     writeToStorage(tid, base)
   }, [])
 
-  return { snapshot, patch, reset }
+  // ── CHG-DESIGN-02 Step 6 — saved views API ──────────────────────
+
+  /**
+   * 把当前 snapshot 转换为 PersistedQuery（剔除 selection；arch-reviewer C-4）。
+   */
+  const buildPersistedQuery = (curr: TableQuerySnapshot): PersistedQuery => ({
+    pagination: curr.pagination,
+    sort: curr.sort,
+    filters: curr.filters,
+    columns: curr.columns,
+  })
+
+  const saveView = useCallback((label: string, scope: ViewScope): TableView => {
+    const { tableId: tid } = optionsRef.current
+    const current = tableQueryStore.getState().snapshots.get(tid)
+      ?? (defaultSnapshotRef.current as TableQuerySnapshot)
+    const now = new Date().toISOString()
+    // crypto.randomUUID 在现代浏览器和 Node 19+ 可用；降级为时间戳 + 随机
+    const id = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `view-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const newView: TableView = {
+      id,
+      label,
+      scope,
+      query: buildPersistedQuery(current),
+      createdAt: now,
+      updatedAt: now,
+    }
+    const existing = tableQueryStore.getState().views.get(tid) ?? []
+    const next = [...existing, newView]
+    tableQueryStore.getState().setViews(tid, next)
+    writeViewsToStorage(tid, next)
+    return newView
+  }, [])
+
+  const applyView = useCallback((view: TableView | string) => {
+    const { tableId: tid, router: r, defaults: defs, urlNamespace: ns, columns: cols } = optionsRef.current
+    const list = tableQueryStore.getState().views.get(tid) ?? []
+    const target = typeof view === 'string'
+      ? list.find((v) => v.id === view)
+      : view
+    if (!target) {
+      console.warn(`[use-table-query] applyView: view not found "${typeof view === 'string' ? view : view.id}"`)
+      return
+    }
+    const current = tableQueryStore.getState().snapshots.get(tid)
+      ?? buildDefaultSnapshot(cols, defs)
+    const next: TableQuerySnapshot = {
+      ...target.query,
+      // selection 保持当前值（视图与选区无关，arch-reviewer C-4）
+      selection: current.selection,
+    }
+    tableQueryStore.getState().setSnapshot(tid, next)
+
+    // URL sync
+    try {
+      const urlDefaults = {
+        pagination: { page: defs?.pagination?.page ?? 1, pageSize: defs?.pagination?.pageSize ?? 20 },
+        sort: defs?.sort ?? { field: undefined, direction: 'asc' as const },
+      }
+      const currentParams = r.getSearchParams()
+      const nextParams = snapshotToSearchParams(
+        { pagination: next.pagination, sort: next.sort, filters: next.filters },
+        urlDefaults,
+        currentParams,
+        ns,
+      )
+      r.replace(nextParams)
+    } catch (err) {
+      console.warn('[use-table-query] applyView URL sync failed:', err)
+    }
+
+    // Storage sync（pageSize/columns 可能变化）
+    writeToStorage(tid, next)
+  }, [])
+
+  const deleteView = useCallback((viewId: string) => {
+    const { tableId: tid } = optionsRef.current
+    const existing = tableQueryStore.getState().views.get(tid) ?? []
+    const next = existing.filter((v) => v.id !== viewId)
+    tableQueryStore.getState().setViews(tid, next)
+    writeViewsToStorage(tid, next)
+  }, [])
+
+  return { snapshot, patch, reset, views, saveView, applyView, deleteView }
 }

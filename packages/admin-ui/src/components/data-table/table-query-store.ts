@@ -10,18 +10,22 @@
  *   - getSnapshot：纯读，供 useSyncExternalStore 使用
  */
 import { createStore } from 'zustand/vanilla'
-import type { TableQuerySnapshot, ColumnDescriptor, TableQueryDefaults } from './types'
+import type { TableQuerySnapshot, ColumnDescriptor, TableQueryDefaults, TableView } from './types'
 
 const DEFAULT_PAGE_SIZE = 20
 
 export interface TableQueryStoreState {
   /** tableId → snapshot */
   readonly snapshots: ReadonlyMap<string, TableQuerySnapshot>
+  /** tableId → saved views（CHG-DESIGN-02 Step 6） */
+  readonly views: ReadonlyMap<string, readonly TableView[]>
 }
 
 export interface TableQueryStoreActions {
   readonly getSnapshot: (tableId: string) => TableQuerySnapshot | undefined
   readonly setSnapshot: (tableId: string, snapshot: TableQuerySnapshot) => void
+  readonly getViews: (tableId: string) => readonly TableView[]
+  readonly setViews: (tableId: string, views: readonly TableView[]) => void
 }
 
 export type TableQueryStoreApi = ReturnType<typeof createTableQueryStore>
@@ -29,12 +33,21 @@ export type TableQueryStoreApi = ReturnType<typeof createTableQueryStore>
 export function createTableQueryStore() {
   return createStore<TableQueryStoreState & TableQueryStoreActions>()((set, get) => ({
     snapshots: new Map(),
+    views: new Map(),
     getSnapshot: (tableId) => get().snapshots.get(tableId),
     setSnapshot: (tableId, snapshot) => {
       set((state) => {
         const next = new Map(state.snapshots)
         next.set(tableId, snapshot)
         return { snapshots: next }
+      })
+    },
+    getViews: (tableId) => get().views.get(tableId) ?? [],
+    setViews: (tableId, views) => {
+      set((state) => {
+        const next = new Map(state.views)
+        next.set(tableId, views)
+        return { views: next }
       })
     },
   }))
