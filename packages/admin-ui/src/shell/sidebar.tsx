@@ -97,7 +97,6 @@ const LOGO_STYLE: CSSProperties = {
   flexShrink: 0,
 }
 
-// 折叠态由 admin-shell-styles 通过 opacity 渐隐（CHG-DESIGN-04 fix #）
 const BRAND_TITLE_STYLE: CSSProperties = {
   fontWeight: 600,
   color: 'var(--fg-default)',
@@ -105,6 +104,27 @@ const BRAND_TITLE_STYLE: CSSProperties = {
   overflow: 'hidden',
   flex: 1,
   minWidth: 0,
+}
+
+/* 折叠态结构重置：放 inline，确保 Sidebar 独立使用（不通过 AdminShell）也正确收 0 占位
+ * 仅处理 layout（width/padding/border/margin/flex/overflow）和 a11y（pointer-events）；
+ * 视觉 fade（opacity transition）由 admin-shell-styles 在合成场景注入，standalone 时 snap */
+const COLLAPSED_HIDDEN_STYLE: CSSProperties = {
+  opacity: 0,
+  pointerEvents: 'none',
+  maxWidth: 0,
+  minWidth: 0,
+  padding: 0,
+  margin: 0,
+  border: 0,
+  overflow: 'hidden',
+  flex: '0 0 auto',
+}
+
+/* section-title 仅收 opacity，保留 padding/height 做等高占位（图标 Y 坐标稳定） */
+const COLLAPSED_OPACITY_ONLY_STYLE: CSSProperties = {
+  opacity: 0,
+  pointerEvents: 'none',
 }
 
 const BRAND_VERSION_STYLE: CSSProperties = {
@@ -193,9 +213,13 @@ export function Sidebar({
       <nav data-sidebar-nav style={NAV_SCROLL_STYLE}>
         {nav.map((section) => (
           <div key={section.title} data-sidebar-section={section.title}>
-            {/* 永远渲染分区标题；折叠态由 admin-shell-styles 通过 opacity 渐隐 */}
-            {/* 保持高度占位 → 切换 collapsed 时图标 Y 坐标稳定（reference.md §4.1.2 问题 B） */}
-            <div data-sidebar-section-title style={SECTION_TITLE_STYLE}>
+            {/* 永远渲染分区标题；折叠态仅收 opacity（保留 height/padding 做等高占位） */}
+            <div
+              data-sidebar-section-title
+              style={collapsed
+                ? { ...SECTION_TITLE_STYLE, ...COLLAPSED_OPACITY_ONLY_STYLE }
+                : SECTION_TITLE_STYLE}
+            >
               {section.title}
             </div>
             <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
@@ -257,14 +281,20 @@ interface BrandAreaProps {
 }
 
 function BrandArea({ collapsed }: BrandAreaProps) {
-  // CHG-DESIGN-04 fix#：title 永远渲染，折叠态由 CSS opacity 渐隐，与 aside width 200ms 同步过渡
-  // collapsed prop 仅作为 aria 兼容；视觉控制权下沉到 admin-shell-styles
+  // CHG-DESIGN-04 fix#5：title 永远渲染（不卸载），折叠态由 inline 收 0 占位 +
+  // admin-shell-styles 提供 opacity transition（合成时平滑 / standalone 时 snap）
+  const brandStyle: CSSProperties = collapsed
+    ? { ...BRAND_STYLE, justifyContent: 'center', gap: 0 }
+    : BRAND_STYLE
+  const titleStyle: CSSProperties = collapsed
+    ? { ...BRAND_TITLE_STYLE, ...COLLAPSED_HIDDEN_STYLE }
+    : BRAND_TITLE_STYLE
   return (
-    <div data-sidebar-brand data-sidebar-brand-collapsed={collapsed ? 'true' : 'false'} style={BRAND_STYLE}>
+    <div data-sidebar-brand style={brandStyle}>
       <span aria-hidden="true" style={LOGO_STYLE} data-sidebar-brand-logo>
         流
       </span>
-      <span data-sidebar-brand-title style={BRAND_TITLE_STYLE}>
+      <span data-sidebar-brand-title style={titleStyle}>
         流光后台
         <span style={BRAND_VERSION_STYLE} data-sidebar-brand-version>v2</span>
       </span>
@@ -289,7 +319,7 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate }: NavItemP
   const linkStyle: CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: 'var(--space-3)',
+    gap: collapsed ? 0 : 'var(--space-3)',
     padding: 'var(--space-2) var(--space-4)',
     color: active ? 'var(--admin-accent-on-soft)' : 'var(--fg-muted)',
     background: active ? 'var(--admin-accent-soft)' : 'transparent',
@@ -298,7 +328,7 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate }: NavItemP
     cursor: 'pointer',
     font: 'inherit',
     textAlign: 'left',
-    // 折叠态 justify/gap 由 admin-shell-styles 接管（CHG-DESIGN-04 fix#）
+    justifyContent: collapsed ? 'center' : 'flex-start',
   }
 
   const iconStyle: CSSProperties = {
@@ -339,22 +369,37 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate }: NavItemP
           />
         )}
       </span>
-      {/* CHG-DESIGN-04 fix#：label + badge 永远渲染，折叠态由 admin-shell-styles 渐隐 */}
-      <span data-sidebar-item-label style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      {/* CHG-DESIGN-04 fix#5：label + badge 永远渲染；折叠态用 inline 条件收 0 占位
+        * （Sidebar 必须自包含；admin-shell-styles 仅作合成场景的 transition 打磨） */}
+      <span
+        data-sidebar-item-label
+        style={collapsed
+          ? { ...COLLAPSED_HIDDEN_STYLE, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+          : { flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+      >
         {item.label}
       </span>
       {effectiveCount !== undefined && effectiveCount > 0 && (
         <span
           data-sidebar-item-badge
-          style={{
-            // padding / flex-shrink 下沉到 admin-shell-styles 基础规则，
-            // 否则 inline 特异性会让折叠态"完全收 0 占位"规则失效（图标被挤出左边界）
-            borderRadius: 'var(--radius-full)',
-            fontSize: 'var(--admin-count-font-size)',
-            background: badgeBg(badgeSlot),
-            color: badgeFg(badgeSlot),
-            lineHeight: '1.4em',
-          }}
+          style={collapsed
+            ? {
+                ...COLLAPSED_HIDDEN_STYLE,
+                borderRadius: 'var(--radius-full)',
+                fontSize: 'var(--admin-count-font-size)',
+                background: badgeBg(badgeSlot),
+                color: badgeFg(badgeSlot),
+                lineHeight: '1.4em',
+              }
+            : {
+                padding: '1px var(--space-2)',
+                flexShrink: 0,
+                borderRadius: 'var(--radius-full)',
+                fontSize: 'var(--admin-count-font-size)',
+                background: badgeBg(badgeSlot),
+                color: badgeFg(badgeSlot),
+                lineHeight: '1.4em',
+              }}
         >
           {formatCount(effectiveCount)}
         </span>
@@ -379,7 +424,7 @@ function Footer({ user, collapsed, userActions }: FooterProps) {
   const footerStyle: CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: 'var(--space-3)',
+    gap: collapsed ? 0 : 'var(--space-3)',
     padding: 'var(--space-3) var(--space-4)',
     // border: 0 必须在 borderTop 前声明（CSS shorthand 在 longhand 之前）
     border: 0,
@@ -391,8 +436,7 @@ function Footer({ user, collapsed, userActions }: FooterProps) {
     textAlign: 'left',
     color: 'var(--fg-default)',
     flexShrink: 0,
-    // 折叠态布局由 [data-sidebar][data-collapsed="true"] [data-sidebar-foot] 接管 justify-content
-    // gap 保持 var(--space-3)，meta wrapper 折叠时 max-width:0 平滑收紧（CHG-DESIGN-04 fix#）
+    justifyContent: collapsed ? 'center' : 'flex-start',
   }
 
   // P1 必修（Opus 评审）：position: relative wrapper 建立稳定 positioned ancestor
@@ -411,8 +455,14 @@ function Footer({ user, collapsed, userActions }: FooterProps) {
         <span aria-hidden="true" style={{ ...AVATAR_STYLE, flexShrink: 0 }} data-sidebar-foot-avatar>
           {avatar}
         </span>
-        {/* CHG-DESIGN-04 fix#：meta + chevron 永远渲染，折叠态由 admin-shell-styles 渐隐 + max-width 收紧 */}
-        <span data-sidebar-foot-meta style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* CHG-DESIGN-04 fix#5：meta + chevron 永远渲染；折叠态 inline 条件收 0
+          * （Sidebar 自包含；admin-shell-styles 仅作合成场景的 transition 打磨） */}
+        <span
+          data-sidebar-foot-meta
+          style={collapsed
+            ? { ...COLLAPSED_HIDDEN_STYLE, display: 'flex', flexDirection: 'column' }
+            : { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+        >
           <span data-sidebar-foot-name style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {user.displayName}
           </span>
@@ -420,7 +470,13 @@ function Footer({ user, collapsed, userActions }: FooterProps) {
             {user.role === 'admin' ? '管理员' : '审核员'}
           </span>
         </span>
-        <span aria-hidden="true" data-sidebar-foot-chevron style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)', flexShrink: 0 }}>›</span>
+        <span
+          aria-hidden="true"
+          data-sidebar-foot-chevron
+          style={collapsed
+            ? { ...COLLAPSED_HIDDEN_STYLE, color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)' }
+            : { color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)', flexShrink: 0 }}
+        >›</span>
       </button>
       <UserMenu
         open={menuOpen}

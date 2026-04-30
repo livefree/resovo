@@ -17,14 +17,6 @@ const SHELL_CSS = `
 [data-sidebar-item] {
   transition: background 120ms ease, color 120ms ease;
 }
-/* NavItem badge 基础布局：padding + flex-shrink 在此声明而非 inline，
- * 否则 inline 特异性 (1,0,0,0) 会盖过折叠态 [data-sidebar][data-collapsed="true"]
- * [data-sidebar-item-badge] 的 padding:0 / flex:0 0 auto 重置规则，
- * 导致 badge 在折叠态仍占 ~16px 横向、把 icon 挤出 sidebar 左边界 */
-[data-sidebar-item-badge] {
-  padding: 1px var(--space-2);
-  flex-shrink: 0;
-}
 [data-sidebar-item]:not([data-sidebar-item-active="true"]):hover {
   background: var(--bg-surface-raised);
 }
@@ -45,14 +37,15 @@ const SHELL_CSS = `
   background: var(--accent-default);
 }
 
-/* ── Sidebar 展开/折叠过渡动效（CHG-DESIGN-04 / reference.md §4.1.2 问题 A+B） ─────── */
+/* ── Sidebar 展开/折叠过渡动效（CHG-DESIGN-04 + fix#5 / reference.md §4.1.2 问题 A+B）
+ * Sidebar 的 layout 重置（折叠态 max-width:0 / padding:0 / justify-center 等）走 inline 条件
+ * 见 sidebar.tsx COLLAPSED_HIDDEN_STYLE / linkStyle / brandStyle / footerStyle 等。
+ * 本处仅声明 transition：当 inline style 在 collapsed 切换时变化，AdminShell 合成路径
+ * 触发平滑过渡；Sidebar 独立使用（不通过 AdminShell）时降级为 instant snap，layout 仍正确。
+ */
 [data-sidebar] {
   transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-
-/* 内容渐隐：所有"折叠态需要消失"的文字/容器，全部用 opacity + max-width 动画 ──────────────
- * 与 aside width 200ms 同步；opacity 150ms 略短，让文字先消失再让宽度收紧
- * 所有元素永远渲染（不卸载），保证 DOM 结构稳定；视觉控制权下沉到 CSS */
 [data-sidebar-section-title],
 [data-sidebar-brand-title],
 [data-sidebar-item-label],
@@ -60,45 +53,6 @@ const SHELL_CSS = `
 [data-sidebar-foot-meta],
 [data-sidebar-foot-chevron] {
   transition: opacity 150ms ease-out, max-width 200ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* 折叠态：opacity 0 + pointer-events:none；
- * 对参与 flex 布局的容器额外把 max-width 收到 0，避免占位影响 logo/avatar 居中 */
-[data-sidebar][data-collapsed="true"] [data-sidebar-section-title],
-[data-sidebar][data-collapsed="true"] [data-sidebar-brand-title],
-[data-sidebar][data-collapsed="true"] [data-sidebar-item-label],
-[data-sidebar][data-collapsed="true"] [data-sidebar-item-badge],
-[data-sidebar][data-collapsed="true"] [data-sidebar-foot-meta],
-[data-sidebar][data-collapsed="true"] [data-sidebar-foot-chevron] {
-  opacity: 0;
-  pointer-events: none;
-}
-/* 折叠态完全收 0 占位：不仅 max-width，还要清掉 padding/min-width/margin/border —
- * 否则 inline padding（如 NavItem badge 的 1px var(--space-2)）或 min-content
- * 会让"已隐藏"元素仍保留横向占位（CHG-DESIGN-04 fix#2 / Codex 第 N 轮 review） */
-[data-sidebar][data-collapsed="true"] [data-sidebar-brand-title],
-[data-sidebar][data-collapsed="true"] [data-sidebar-item-label],
-[data-sidebar][data-collapsed="true"] [data-sidebar-item-badge],
-[data-sidebar][data-collapsed="true"] [data-sidebar-foot-meta],
-[data-sidebar][data-collapsed="true"] [data-sidebar-foot-chevron] {
-  max-width: 0;
-  min-width: 0;
-  flex: 0 0 auto;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  overflow: hidden;
-}
-
-/* 折叠态：brand / item / footer 容器 justify center，让 logo/icon/avatar 视觉居中（gap 自然失效） */
-[data-sidebar][data-collapsed="true"] [data-sidebar-brand],
-[data-sidebar][data-collapsed="true"] [data-sidebar-foot] {
-  justify-content: center;
-  gap: 0;
-}
-[data-sidebar][data-collapsed="true"] [data-sidebar-item] {
-  justify-content: center;
-  gap: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
