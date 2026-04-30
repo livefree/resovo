@@ -2451,3 +2451,18 @@ CHG-DESIGN-11 #2 已修引用方 docs，但未触动**设计源** `docs/designs/
 
 执行模型：claude-opus-4-7
 子代理：无
+
+---
+
+## fix(CHG-DESIGN-11)#4: reference.md §4.4.2 props 列表 + §4.4.3 / §8 差异表补 Step 1–6 已闭合 / Step 7A 待落地标注（Codex stop-time review）
+
+CHG-DESIGN-11 #3 已加 §0a 总览 + §4.4.1 / §6.0 行内标注，但 Codex stop-time review 命中：reference.md §4.4.2 待补 Props 接口 / §4.4.3 当前实现差异表 / §8 当前实现差异清单中"Table language"行仍按"全部待补"叙述，未把 Step 1–6 已闭合的能力（`.dt` framed surface / toolbar / saved views / header menu / `.dt__bulk` / row flash）标为已对齐，会让读者误以为这些都还没做。
+
+修复：
+
+- **§4.4.2** 待补 props 接口块：把原"待补"列表拆 ✅ Step 1–6 已落地（`flashRowKeys` / `toolbar` ToolbarConfig / `bulkActions` BulkActionsConfig / `enableHeaderMenu` / saved views）+ 🔄 Step 7A 计划（`pagination` PaginationConfig / `pinnedSticky` / 隐藏列 chip / filter chips slot / body 独立滚动）；落地名（如 `flashIds` → `flashRowKeys`、`bulkSlot` → `bulkActions`、`searchSlot` 扩为 toolbar）显式标注以避免按拟名调用
+- **§4.4.3** 当前实现差异表：DataTable / Toolbar / ColumnSettingsPanel / Pagination / SelectionActionBar 五行的"差异"列加 `【已闭合 Step N】` / `【待 Step 7A】` 标签
+- **§8** 跨页风险表 Table language 行 + 表格密度行：Step 1–6 已闭合项移到"当前状态"列前段，未闭合项标 🔄 Step 7A
+
+执行模型：claude-opus-4-7
+子代理：无
