@@ -19,7 +19,13 @@ import type { ReactNode } from 'react'
 import { AdminShell, inferBreadcrumbs } from '@resovo/admin-ui'
 import type { AdminShellUser, UserMenuAction } from '@resovo/admin-ui'
 import { ADMIN_NAV } from '@/lib/admin-nav'
-import { buildTopbarIconsStub, healthSnapshotStub, adminNavCountProviderStub } from '@/lib/shell-data'
+import {
+  adminNavCountProviderStub,
+  buildTopbarIconsStub,
+  healthSnapshotStub,
+  mockNotifications,
+  mockTasks,
+} from '@/lib/shell-data'
 
 export interface AdminShellClientProps {
   readonly defaultCollapsed: boolean
@@ -86,6 +92,22 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
     document.cookie = `${COOKIE_COLLAPSED}=${next}; path=/; max-age=31536000; SameSite=Lax`
   }, [])
 
+  // CHG-DESIGN-05：notifications / tasks 接入 mock 数据让 Topbar 图标 + Drawer 通路打通
+  // M-SN-4+ 接入 /admin/notifications + /admin/system/jobs 真端点时替换为 SWR hook 返回值
+  // 4 个交互 callback 在真端点接入前为 noop（点击 / mark-read / cancel / retry 仅日志即可）
+  const handleNotificationItemClick = useCallback(() => {
+    // M-SN-4+ 接入：根据 item.href 跳转或自定义路由
+  }, [])
+  const handleMarkAllNotificationsRead = useCallback(() => {
+    // M-SN-4+ 接入：调用 PATCH /admin/notifications/read-all
+  }, [])
+  const handleCancelTask = useCallback(() => {
+    // M-SN-4+ 接入：调用 POST /admin/system/jobs/:id/cancel
+  }, [])
+  const handleRetryTask = useCallback(() => {
+    // M-SN-4+ 接入：调用 POST /admin/system/jobs/:id/retry
+  }, [])
+
   return (
     <AdminShell
       nav={ADMIN_NAV}
@@ -97,12 +119,16 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
       user={user}
       theme={theme}
       defaultCollapsed={defaultCollapsed}
-      // notifications / tasks 不传（undefined）→ M-SN-2 stub：图标禁用，Drawer 不挂载（§4.1.1 契约）
-      // M-SN-3+ 接入真实端点后将替换为 SWR hook 返回值
+      notifications={mockNotifications}
+      tasks={mockTasks}
       onNavigate={handleNavigate}
       onThemeToggle={handleThemeToggle}
       onUserMenuAction={handleUserMenuAction}
       onCollapsedChange={handleCollapsedChange}
+      onNotificationItemClick={handleNotificationItemClick}
+      onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+      onCancelTask={handleCancelTask}
+      onRetryTask={handleRetryTask}
     >
       {children}
     </AdminShell>

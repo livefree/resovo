@@ -2822,3 +2822,65 @@ bulk bar 与 foot 同等地位：脱离 scroll 内容流，作为 **frame 直接
 
 执行模型：claude-opus-4-7
 子代理：无
+
+---
+
+## [CHG-DESIGN-05] Shell 视觉对齐 — Footer role 文案 / 折叠按钮文案 / 自定义 NavTip / notifications + tasks mock
+
+- **完成时间**：2026-04-30
+- **记录时间**：2026-04-30 05:18
+- **执行模型**：claude-opus-4-7（继承自 CHG-DESIGN-02 收尾 session；任务卡建议模型 sonnet，但本卡逻辑量小，未触发"中途升降级 BLOCKER"约束）
+- **子代理**：无（NavTip 是 Sidebar 内部子组件，不导出公开 API，不触发 Opus 子代理强制规则）
+- **关联序列**：SEQ-20260429-02 第 5 卡
+
+### 范围
+
+按 `docs/designs/backend_design_v2.1/reference.md` §4.1.4 当前实装差异表逐行对照，4 项缺项归零：
+
+1. **Footer role 文案**：`'管理员'` → `'管理员 · admin'`；`'审核员'` → `'审核员 · moderator'`
+2. **折叠按钮文案**：`'折叠'` → `'收起边栏'`（CHG-DESIGN-04 卡曾列但未落地，本卡补齐）
+3. **自定义 NavTip 浮层**：替换原生 HTML `title` attribute，折叠态 hover/focus NavItem 浮出 portal tooltip（label + 平台 shortcut kbd）
+4. **AdminShell 注入 notifications + tasks mock**：让 Topbar 通知/任务图标可点击、Drawer 可挂载（M-SN-4+ 接入真端点前以 mock 演示交互通路）
+
+### NavTip 实施要点
+
+- 单实例由 Sidebar 顶层 `useState<{ item, anchor }>` 持有，避免 N 个 NavItem 各持一份
+- NavItem 折叠态 `onMouseEnter / onFocus` 触发 `setHoveredNav({ item, anchor: e.currentTarget })`；`mouseleave / blur` 卸载
+- 展开态 hover/focus 不触发（label 已可见，无需浮层）
+- NavTip 用 `createPortal(..., document.body)` + `position: fixed` 跨越 sidebar 折叠 60px 宽度限制
+- `getBoundingClientRect` 计算 anchor 中线 + 8px gap，并监听 scroll/resize 跟随更新
+- SSR 安全：`hoveredNav` 初始 null + portal 内 `typeof document` 守卫，SSR 路径下 NavTip 不挂载
+- z-index 1100（与 shell drawer 同层；设计稿 §4.1 浮层无独立 z-token）
+- 样式：`bg-surface-elevated / border-strong / shadow-sm / r-1 / 6 10`，与 §4.1.1「折叠态 hover tooltip」对齐
+
+### 修改文件
+
+- `packages/admin-ui/src/shell/sidebar.tsx`：
+  - Footer role 文案三元更新
+  - 折叠按钮 `<span>折叠</span>` → `<span>收起边栏</span>`
+  - 新增 `<NavTip>` 内部子组件 + Sidebar 顶层 `hoveredNav` state + `handleNavHover/handleNavUnhover` 回调
+  - NavItem props 增加 `onHover / onUnhover`，删除 `title={tooltip}` + `buildTooltip` 工具函数
+  - 删除模块顶层 `useFormatShortcut(item.shortcut ?? '')` 调用（移到 NavTip 内部）
+- `apps/server-next/src/lib/shell-data.tsx`：新增 `mockNotifications` (3 条 mixed level) + `mockTasks` (3 条 mixed status) 导出
+- `apps/server-next/src/app/admin/admin-shell-client.tsx`：`<AdminShell>` 注入 `notifications / tasks` props + 4 个交互 callback（M-SN-4+ 真端点接入前为 noop，注释说明）
+- `tests/unit/components/admin-ui/shell/sidebar.test.tsx`：
+  - footer role 断言 `'管理员'` → `'管理员 · admin'`
+  - 折叠按钮文案断言 `'折叠'` → `'收起边栏'`
+  - 新增 `Sidebar — NavTip 自定义浮层` describe 块（5 项行为断言：原 title 已删 / 折叠态 hover 触发 / mouseleave 卸载 / 展开态不触发 / 无 shortcut 时不渲染 kbd）
+- `tests/unit/components/admin-ui/shell/sidebar-ssr.test.tsx`：原 `'Ctrl+1'` SSR title attribute 断言改为 NavTip 不在 SSR 路径渲染的反向断言
+
+### 验收
+
+- typecheck ✅ 全 7 workspace
+- lint ✅ （仅预存 VideoListClient `<img>` warning 无关）
+- verify:token-references ✅ 65 引用全定义
+- verify:admin-guardrails ✅ in-scope 无 staged 文件
+- 单测：2610/2610 全绿（sidebar 36 + sidebar-ssr 5 全过；admin-ui 包 738+ 不回归）
+- 与 reference.md §4.1.4 当前实装差异表逐行对照：4 项「仍需注意」全部归零
+
+### 不在范围（留账）
+
+- Topbar 主体 token 全面 audit（搜索/icon button bg3/r-2 映射检查为建议性事项）
+- notifications / tasks 真实端点接入（M-SN-4+ /admin/notifications + /admin/system/jobs + WebSocket）
+- Sidebar nav item padding/radius/active indicator 像素级对齐（CHG-DESIGN-04 已修主体，剩余像素差留设计签收）
+- AdminShell main padding（page padding 20/24 与 `--space-5` 接近不完全，差异由各页 page__head 设计兜底）

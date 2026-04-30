@@ -5,7 +5,7 @@
  * collapsed 折叠态（标题隐藏 + divider + pip）/ Brand 区 / Footer / aria attributes
  */
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { fireEvent, render, screen, cleanup } from '@testing-library/react'
 import { Sidebar, formatCount } from '../../../../../packages/admin-ui/src/shell/sidebar'
 import type { AdminNavSection, AdminShellUser } from '../../../../../packages/admin-ui/src/shell/types'
 
@@ -258,7 +258,7 @@ describe('Sidebar — Footer 用户区', () => {
     renderSidebar({ collapsed: false })
     expect(screen.getByText('YL')).toBeTruthy()  // deriveAvatarText("Yan Liu") = "YL"
     expect(screen.getByText('Yan Liu')).toBeTruthy()
-    expect(screen.getByText('管理员')).toBeTruthy()
+    expect(screen.getByText('管理员 · admin')).toBeTruthy()
   })
 
   it('折叠态：name + role 仍渲染（CHG-DESIGN-04 fix# 等高占位 + opacity 渐隐）', () => {
@@ -266,7 +266,7 @@ describe('Sidebar — Footer 用户区', () => {
     expect(screen.getByText('YL')).toBeTruthy()
     // CHG-DESIGN-04 fix#：footer meta 永远渲染，折叠态由 CSS 视觉隐藏
     expect(screen.getByText('Yan Liu')).toBeTruthy()
-    expect(screen.getByText('管理员')).toBeTruthy()
+    expect(screen.getByText('管理员 · admin')).toBeTruthy()
     // DOM 标记位仍存在
     expect(container.querySelector('[data-sidebar-foot-meta]')).toBeTruthy()
     expect(container.querySelector('[data-sidebar-foot-chevron]')).toBeTruthy()
@@ -281,11 +281,11 @@ describe('Sidebar — Footer 用户区', () => {
 })
 
 describe('Sidebar — 折叠按钮', () => {
-  it('展开态 button label "‹‹ 折叠" + aria-label "折叠侧栏"', () => {
+  it('展开态 button label "‹ 收起边栏" + aria-label "折叠侧栏"（CHG-DESIGN-05 文案对齐）', () => {
     const { container } = renderSidebar({ collapsed: false })
     const btn = container.querySelector('[data-sidebar-collapse]') as HTMLButtonElement
     expect(btn.getAttribute('aria-label')).toBe('折叠侧栏')
-    expect(btn.textContent).toContain('折叠')
+    expect(btn.textContent).toContain('收起边栏')
   })
 
   it('折叠态 button label "››" + aria-label "展开侧栏"', () => {
@@ -366,5 +366,69 @@ describe('Sidebar — 边界场景（P2 单测补全 / Opus 评审建议）', ()
     const wrapper = container.querySelector('[data-sidebar-foot-wrapper]') as HTMLElement
     expect(wrapper).toBeTruthy()
     expect(wrapper.style.position).toBe('relative')
+  })
+})
+
+describe('Sidebar — NavTip 自定义浮层（CHG-DESIGN-05）', () => {
+  it('NavItem 不再渲染原生 title 属性（已替换为自定义 NavTip）', () => {
+    const { container } = renderSidebar({ collapsed: true })
+    const item = container.querySelector('[data-sidebar-item="/admin"]') as HTMLButtonElement
+    expect(item.getAttribute('title')).toBeNull()
+  })
+
+  it('折叠态 hover NavItem → portal 渲染 NavTip（label + shortcut kbd）', () => {
+    const { container } = renderSidebar({ collapsed: true })
+    // 初始无 NavTip
+    expect(document.querySelector('[data-sidebar-nav-tip]')).toBeNull()
+
+    const item = container.querySelector('[data-sidebar-item="/admin/moderation"]') as HTMLButtonElement
+    fireEvent.mouseEnter(item)
+
+    const tip = document.querySelector('[data-sidebar-nav-tip]') as HTMLElement
+    expect(tip).toBeTruthy()
+    expect(tip.getAttribute('role')).toBe('tooltip')
+    // label 文案
+    expect(tip.querySelector('[data-sidebar-nav-tip-label]')?.textContent).toBe('内容审核')
+    // shortcut kbd 渲染（mod+2 在 jsdom 默认平台下 useFormatShortcut 输出非空字符串）
+    expect(tip.querySelector('[data-sidebar-nav-tip-kbd]')).toBeTruthy()
+  })
+
+  it('折叠态 mouseleave NavItem → NavTip 卸载', () => {
+    const { container } = renderSidebar({ collapsed: true })
+    const item = container.querySelector('[data-sidebar-item="/admin"]') as HTMLButtonElement
+    fireEvent.mouseEnter(item)
+    expect(document.querySelector('[data-sidebar-nav-tip]')).toBeTruthy()
+    fireEvent.mouseLeave(item)
+    expect(document.querySelector('[data-sidebar-nav-tip]')).toBeNull()
+  })
+
+  it('展开态 hover NavItem → 不渲染 NavTip（label 已可见，无需浮层）', () => {
+    const { container } = renderSidebar({ collapsed: false })
+    const item = container.querySelector('[data-sidebar-item="/admin"]') as HTMLButtonElement
+    fireEvent.mouseEnter(item)
+    expect(document.querySelector('[data-sidebar-nav-tip]')).toBeNull()
+  })
+
+  it('NavItem 无 shortcut → NavTip 仅渲染 label，不渲染 kbd', () => {
+    const navNoShortcut: readonly AdminNavSection[] = [
+      { title: '组', items: [{ label: '无快捷键项', href: '/no-sc' }] },
+    ]
+    const { container } = render(
+      <Sidebar
+        nav={navNoShortcut}
+        activeHref=""
+        collapsed={true}
+        user={USER}
+        onToggleCollapsed={NOOP}
+        onNavigate={NOOP}
+        onUserMenuAction={NOOP}
+      />,
+    )
+    const item = container.querySelector('[data-sidebar-item="/no-sc"]') as HTMLButtonElement
+    fireEvent.mouseEnter(item)
+    const tip = document.querySelector('[data-sidebar-nav-tip]') as HTMLElement
+    expect(tip).toBeTruthy()
+    expect(tip.querySelector('[data-sidebar-nav-tip-label]')?.textContent).toBe('无快捷键项')
+    expect(tip.querySelector('[data-sidebar-nav-tip-kbd]')).toBeNull()
   })
 })

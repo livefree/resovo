@@ -30,7 +30,12 @@ import {
   Settings,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
-import type { AdminNavCountProvider, HealthSnapshot } from '@resovo/admin-ui'
+import type {
+  AdminNavCountProvider,
+  HealthSnapshot,
+  NotificationItem,
+  TaskItem,
+} from '@resovo/admin-ui'
 
 /** AdminNavCountProvider stub — M-SN-2 返 empty Map；M-SN-3+ 接入真数据 */
 export const adminNavCountProviderStub: AdminNavCountProvider = () => new Map()
@@ -62,3 +67,60 @@ export function buildTopbarIconsStub(theme: 'dark' | 'light'): TopbarIconsStub {
     settings: <Settings />,
   }
 }
+
+/** notifications mock — CHG-DESIGN-05；M-SN-4+ 接入 /admin/notifications 真端点替换 */
+export const mockNotifications: readonly NotificationItem[] = [
+  {
+    id: 'n-1',
+    title: '审核队列堆积超阈值',
+    body: '当前待审核 484 条，建议尽快处理',
+    level: 'warn',
+    createdAt: '2026-04-30T08:30:00Z',
+    read: false,
+    href: '/admin/moderation',
+  },
+  {
+    id: 'n-2',
+    title: '采集任务 #1287 失败',
+    body: 'Site: example.com / 失败原因：超时',
+    level: 'danger',
+    createdAt: '2026-04-30T07:15:00Z',
+    read: false,
+    href: '/admin/crawler',
+  },
+  {
+    id: 'n-3',
+    title: '新视频已上架',
+    body: '《流光夜话》已通过审核',
+    level: 'info',
+    createdAt: '2026-04-30T05:42:00Z',
+    read: true,
+  },
+]
+
+/** tasks mock — CHG-DESIGN-05；M-SN-4+ 接入 /admin/system/jobs + WebSocket 真端点替换 */
+export const mockTasks: readonly TaskItem[] = [
+  {
+    id: 't-1',
+    title: '元数据增量同步',
+    status: 'running',
+    progress: 62,
+    startedAt: '2026-04-30T08:50:00Z',
+  },
+  {
+    id: 't-2',
+    title: '缩略图重生成',
+    status: 'success',
+    progress: 100,
+    startedAt: '2026-04-30T07:20:00Z',
+    finishedAt: '2026-04-30T07:48:00Z',
+  },
+  {
+    id: 't-3',
+    title: '搜索索引重建',
+    status: 'failed',
+    startedAt: '2026-04-30T06:10:00Z',
+    finishedAt: '2026-04-30T06:12:00Z',
+    errorMessage: 'Elasticsearch connection refused',
+  },
+]

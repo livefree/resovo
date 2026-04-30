@@ -117,20 +117,23 @@ describe('Sidebar — SSR renderToString（ADR-103a §4.4-2）', () => {
     expect(html).not.toContain('data-user-menu')
   })
 
-  it('SSR shortcut 文案走 SSR 默认（"Ctrl+1" 等，hydration-safe）', () => {
+  it('SSR 折叠态不渲染 NavTip（hover 才挂载 portal，且仅在 client 端）', () => {
+    // CHG-DESIGN-05：自定义 NavTip 替换原生 title attribute
+    // SSR 路径下 hoveredNav 永远为 null → NavTip 不挂载 → SSR 输出无 nav-tip 标记
+    // shortcut kbd 仅在 client mouseenter 触发后渲染（详见 sidebar.test.tsx NavTip 行为单测）
     const html = renderToString(
       <Sidebar
         nav={NAV}
         activeHref="/admin"
-        collapsed={true}  // 折叠态使用 title attribute 显示 shortcut
+        collapsed={true}
         user={USER}
         onToggleCollapsed={NOOP}
         onNavigate={NOOP}
         onUserMenuAction={NOOP}
       />,
     )
-    // 折叠态 title attribute 含 label + (Ctrl+1) 等 — useFormatShortcut SSR 走 isMac=false 默认
-    expect(html).toContain('Ctrl+1')
-    expect(html).toContain('Ctrl+2')
+    expect(html).not.toContain('data-sidebar-nav-tip')
+    // NavItem 不再带 title attribute
+    expect(html).not.toMatch(/data-sidebar-item="\/admin"[^>]*\stitle=/)
   })
 })

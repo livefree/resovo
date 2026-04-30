@@ -44,7 +44,8 @@
  * 跨域消费：本文件被 packages/admin-ui AdminShell 装配编排（CHG-SN-2-12）；
  * server-next 应用层不应直接 import（应通过 AdminShell.props 间接消费）。
  */
-import { useCallback, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FocusEvent as ReactFocusEvent, type MouseEvent as ReactMouseEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { useFormatShortcut } from './platform'
 import { UserMenu, deriveAvatarText } from './user-menu'
 import type { AdminNavItem, AdminNavSection, AdminShellUser, AdminUserActions, UserMenuAction } from './types'
@@ -196,6 +197,22 @@ export function Sidebar({
 }: SidebarProps) {
   const cmdBLabel = useFormatShortcut('mod+b')
 
+  // CHG-DESIGN-05 自定义 NavTip：折叠态 hover/focus 任意 NavItem → 浮出单实例 tooltip
+  // （portal 到 body + fixed 定位 + 跟随 anchor button 中线）
+  // 单一 state 提到 Sidebar 顶层避免 N 个 NavItem 各持一份 tip 实例（性能 + 视觉互斥）
+  const [hoveredNav, setHoveredNav] = useState<{ item: AdminNavItem; anchor: HTMLElement } | null>(null)
+  const handleNavHover = useCallback((item: AdminNavItem, anchor: HTMLElement) => {
+    if (!collapsed) return
+    setHoveredNav({ item, anchor })
+  }, [collapsed])
+  const handleNavUnhover = useCallback(() => {
+    setHoveredNav(null)
+  }, [])
+  // collapsed → false 时立即清理 NavTip（防止展开瞬间残留浮层）
+  useEffect(() => {
+    if (!collapsed) setHoveredNav(null)
+  }, [collapsed])
+
   // onUserMenuAction(union) → AdminUserActions 拆分（叶子层 UserMenu 消费）
   // 全 6 项 actions 都映射到 onUserMenuAction；消费方在 onUserMenuAction 内分派 + 不支持的 action 走 noop
   const userActions: AdminUserActions = useMemo(
@@ -243,6 +260,8 @@ export function Sidebar({
                     collapsed={collapsed}
                     runtimeCount={counts?.get(item.href)}
                     onNavigate={onNavigate}
+                    onHover={handleNavHover}
+                    onUnhover={handleNavUnhover}
                   />
                 </li>
               ))}
@@ -263,7 +282,7 @@ export function Sidebar({
         style={COLLAPSE_BTN_STYLE}
       >
         <span aria-hidden="true">{collapsed ? '›' : '‹'}</span>
-        {!collapsed && <span>折叠</span>}
+        {!collapsed && <span>收起边栏</span>}
         {cmdBLabel && (
           <kbd
             aria-hidden="true"
@@ -282,6 +301,7 @@ export function Sidebar({
           </kbd>
         )}
       </button>
+      {hoveredNav && <NavTip item={hoveredNav.item} anchor={hoveredNav.anchor} />}
     </aside>
   )
 }
@@ -318,13 +338,14 @@ interface NavItemProps {
   readonly collapsed: boolean
   readonly runtimeCount: number | undefined
   readonly onNavigate: (href: string) => void
+  /** 折叠态 hover/focus → 通知 Sidebar 顶层渲染 NavTip（CHG-DESIGN-05） */
+  readonly onHover: (item: AdminNavItem, anchor: HTMLElement) => void
+  readonly onUnhover: () => void
 }
 
-function NavItem({ item, active, collapsed, runtimeCount, onNavigate }: NavItemProps) {
-  const shortcutLabel = useFormatShortcut(item.shortcut ?? '')
+function NavItem({ item, active, collapsed, runtimeCount, onNavigate, onHover, onUnhover }: NavItemProps) {
   const effectiveCount = runtimeCount ?? item.count
   const badgeSlot = badgeToSlot(item.badge)
-  const tooltip = collapsed ? buildTooltip(item.label, item.shortcut, shortcutLabel) : undefined
 
   const linkStyle: CSSProperties = {
     display: 'flex',
@@ -354,13 +375,25 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate }: NavItemP
     position: 'relative',
   }
 
+  // CHG-DESIGN-05：折叠态 hover/focus → 通知 Sidebar 顶层显示 NavTip
+  // 展开态不触发（label 已可见，无需 tooltip 浮层）
+  const handleEnter = (e: ReactMouseEvent<HTMLButtonElement> | ReactFocusEvent<HTMLButtonElement>) => {
+    if (collapsed) onHover(item, e.currentTarget)
+  }
+  const handleLeave = () => {
+    if (collapsed) onUnhover()
+  }
+
   return (
     <button
       type="button"
       data-sidebar-item={item.href}
       data-sidebar-item-active={active ? 'true' : undefined}
-      title={tooltip}
       onClick={() => onNavigate(item.href)}
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+      onFocus={handleEnter}
+      onBlur={handleLeave}
       style={linkStyle}
     >
       <span aria-hidden="true" style={iconStyle} data-sidebar-item-icon>
@@ -482,7 +515,7 @@ function Footer({ user, collapsed, userActions }: FooterProps) {
             {user.displayName}
           </span>
           <span data-sidebar-foot-role style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {user.role === 'admin' ? '管理员' : '审核员'}
+            {user.role === 'admin' ? '管理员 · admin' : '审核员 · moderator'}
           </span>
         </span>
         <span
@@ -550,8 +583,85 @@ function badgeFg(slot: 'info' | 'warning' | 'error' | undefined): string {
   return 'var(--fg-muted)'
 }
 
-/** 折叠态 tooltip：label + 平台 shortcut 文案（hydration-safe，由 useFormatShortcut 提供） */
-function buildTooltip(label: string, shortcut: string | undefined, formattedShortcut: string): string {
-  if (!shortcut || !formattedShortcut) return label
-  return `${label} (${formattedShortcut})`
+// ── NavTip 自定义浮层（CHG-DESIGN-05） ────────────────────
+// 折叠态 NavItem hover/focus 浮出 portal tooltip：label + 平台 shortcut kbd
+// 单实例由 Sidebar 顶层 state 持有；anchor 为触发 button DOM 节点；fixed 定位
+// 跨越 sidebar 60px 折叠宽度。SSR 安全：组件只在 hoveredNav 非 null 时挂载，
+// SSR 路径下永远 null。
+
+interface NavTipProps {
+  readonly item: AdminNavItem
+  readonly anchor: HTMLElement
+}
+
+const NAVTIP_GAP = 8
+
+function NavTip({ item, anchor }: NavTipProps) {
+  const shortcutLabel = useFormatShortcut(item.shortcut ?? '')
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+
+  useEffect(() => {
+    const update = () => {
+      const rect = anchor.getBoundingClientRect()
+      setPos({
+        top: rect.top + rect.height / 2,
+        left: rect.right + NAVTIP_GAP,
+      })
+    }
+    update()
+    // 滚动 / resize 期间跟随 anchor（sidebar nav 自身可滚）
+    window.addEventListener('scroll', update, true)
+    window.addEventListener('resize', update)
+    return () => {
+      window.removeEventListener('scroll', update, true)
+      window.removeEventListener('resize', update)
+    }
+  }, [anchor])
+
+  if (typeof document === 'undefined' || pos === null) return null
+
+  const style: CSSProperties = {
+    position: 'fixed',
+    top: pos.top,
+    left: pos.left,
+    transform: 'translateY(-50%)',
+    // NavTip 浮于 main 内容 + 与 shell drawer 同层（设计稿 §4.1 浮层无独立 z-token）
+    zIndex: 1100,
+    background: 'var(--bg-surface-elevated)',
+    color: 'var(--fg-default)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: 'var(--radius-sm)',
+    boxShadow: 'var(--shadow-sm)',
+    padding: '6px 10px',
+    fontSize: 'var(--font-size-xs)',
+    lineHeight: 1.4,
+    whiteSpace: 'nowrap',
+    pointerEvents: 'none',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 'var(--space-2)',
+  }
+
+  return createPortal(
+    <div role="tooltip" data-sidebar-nav-tip style={style}>
+      <span data-sidebar-nav-tip-label>{item.label}</span>
+      {item.shortcut && shortcutLabel && (
+        <kbd
+          data-sidebar-nav-tip-kbd
+          style={{
+            padding: '1px 6px',
+            background: 'var(--bg-surface-raised)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-sm)',
+            fontFamily: 'monospace',
+            fontSize: 'var(--font-size-xs)',
+            color: 'var(--fg-muted)',
+          }}
+        >
+          {shortcutLabel}
+        </kbd>
+      )}
+    </div>,
+    document.body,
+  )
 }
