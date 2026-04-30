@@ -21,7 +21,7 @@
  *     · 显示规则：>999 → "1.2k" 缩写（formatCount helper）
  *     · badge 配色：info/warn/danger → semantic.status token slot
  *     · 折叠态：仅 icon + 计数 pip（小圆点 8px）+ tooltip（title attribute + label + shortcut 文案）
- *     · activeHref 高亮：背景 var(--admin-accent-soft) + 前景 var(--state-warning-fg)（fix(CHG-SN-2-12)#vs）
+ *     · activeHref 高亮：背景 var(--admin-accent-soft) + 前景 var(--accent-default)（CHG-DESIGN-01 跟随 brand 蓝；reference.md §4.1.2 问题 C）
  *     · shortcut 渲染用 useFormatShortcut hook（hydration-safe；NavItem 子组件内每项独立调用）
  *   - Brand 区：流光 logo + 标题（折叠态隐藏标题）+ 版本 v2
  *   - Footer：sb__foot 触发 UserMenu 弹出
@@ -288,7 +288,7 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate }: NavItemP
     alignItems: 'center',
     gap: collapsed ? 0 : 'var(--space-3)',
     padding: 'var(--space-2) var(--space-4)',
-    color: active ? 'var(--state-warning-fg)' : 'var(--fg-muted)',
+    color: active ? 'var(--accent-default)' : 'var(--fg-muted)',
     background: active ? 'var(--admin-accent-soft)' : 'transparent',
     border: 0,
     width: '100%',

@@ -65,7 +65,9 @@ function itemStyle(danger: boolean, disabled: boolean, active: boolean): React.C
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.45 : 1,
     color: danger ? 'var(--state-error-fg)' : 'var(--fg-default)',
-    background: active && !disabled ? 'var(--bg-surface-elevated)' : 'transparent',
+    background: active && !disabled
+      ? danger ? 'var(--admin-danger-soft)' : 'var(--admin-accent-soft)'
+      : 'transparent',
     userSelect: 'none',
   }
 }
