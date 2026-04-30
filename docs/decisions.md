@@ -3183,22 +3183,30 @@ DataTable v2 + useTableQuery 一次性收编。本 ADR 是 CHG-SN-2-13（DataTab
 > bulk action bar / pagination 全部进入 DataTable **一体化结构**。设计依据：
 > `docs/designs/backend_design_v2.1/reference.md` §4.4 + §6.0 视觉契约。
 >
-> **落地状态（2026-04-30）**：契约分两阶段实施，当前实现进度：
+> **落地状态（2026-04-30 / Step 7A 完成）**：契约一体化骨架已完整落地，包含：
 >
-> - ✅ **已实现**（CHG-DESIGN-02 Step 1–6 / commit 历史在 SEQ-20260429-02）：
+> - ✅ **Step 1–6**（types/framed surface / 表头菜单 / toolbar+views / bulkActions+flashRowKeys / saved views 持久化）：
 >   `toolbar` / `bulkActions`（含 `.dt__bulk` sticky bottom）/ `flashRowKeys` /
 >   `enableHeaderMenu`（表头集成菜单含 sort / hide / clear filter）/ saved views
->   menu（持久化到 sessionStorage）已作为 DataTable Props 落地并有单测覆盖。
-> - 🔄 **计划实现**（CHG-DESIGN-02 Step 7A，仍待开工）：`pagination`（DataTable
->   props 上的 PaginationConfig + 渲染到 `.dt__foot`）/ `.dt__body` 独立滚动
->   （thead sticky + tbody overflow-y）/ 隐藏列 chip / filter chips slot 当前**尚未
->   写入 `packages/admin-ui` 类型与运行时**，消费方暂时仍需外置 PaginationV2 /
->   外置 filter chips；不要按"已存在"假设调用。
+>   menu（持久化到 sessionStorage）。
+> - ✅ **Step 7A**（骨架完整化 / 2026-04-30）：`pagination?: PaginationConfig`（DataTable
+>   props + 渲染到 `.dt__foot`，24px 高页码按钮）/ `.dt__body` 独立滚动（thead sticky +
+>   tbody overflow-y + 防御性 `min-height: 240px`） / 隐藏列 chip + `HiddenColumnsMenu`
+>   popover（toolbar 内 views 之后、trailing 之前；pinned 列显示"已锁定"标签）/
+>   filter chips slot（独立第二 flex row，6 种 FilterValue.kind 默认 formatter +
+>   `column.renderFilterChip` 完全接管逃生口） / `column-visibility.ts` 共享工具。
+>   覆盖 35 单测用例（step-7a-pagination-foot / step-7a-hidden-cols / step-7a-filter-chips /
+>   step-7a-body-scroll）；arch-reviewer (claude-opus-4-7) CONDITIONAL PASS，5 项必修全部
+>   落地（删除 PaginationConfig.total / 缺省渲染最简 foot / FilterChipContext 三参 ctx /
+>   6 种 default formatter / layout 同 PR 切换）。
 >
-> 新模块 / server-next 表格页消费 DataTable 时，已实现项必须走 DataTable 内置
-> props，不再外置编排；计划项在 Step 7A 落地前允许过渡形态（外置组件），落地后
-> 必须切换。Toolbar / Pagination / SelectionActionBar 仍可独立 export 但仅作
-> 嵌入式场景兜底，不作首选。
+> 新模块 / server-next 表格页消费 DataTable 时，**所有 Step 1–6 + 7A 内置 props
+> 必须走 DataTable**，不再外置编排。完整体验"body 独立滚动"需消费方在父级提供
+> height 约束（如 `calc(100vh - topbar-h - footer-h)`），未提供时 DataTable 走
+> `min-height: 240px` 防御性兜底。Toolbar / Pagination / SelectionActionBar 仍可
+> 独立 export 但仅作嵌入式场景兜底，不作首选。
+>
+> 后续阶段（Step 7B 视频库消费切换 / Step 7C cell 沉淀 = CHG-DESIGN-12）见 SEQ-20260429-02。
 >
 > 本 ADR §4.1 ~ §4.5 的"原语分离"叙述保留为 M-SN-2 阶段语义沉淀的**历史
 > 路径**，但**不再作为新模块的实现模板**。落地路径以 reference.md §4.4 +

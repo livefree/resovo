@@ -191,7 +191,7 @@ describe('DataTable — client mode filter', () => {
         onQueryChange={() => {}}
       />,
     )
-    const rows = container.querySelectorAll('[role="rowgroup"]:last-child [role="row"]')
+    const rows = container.querySelectorAll('[data-table-body] [role="row"]')
     expect(rows).toHaveLength(1)
     expect(rows[0].textContent).toContain('Alpha')
   })
@@ -207,7 +207,7 @@ describe('DataTable — client mode filter', () => {
         onQueryChange={() => {}}
       />,
     )
-    const rows = container.querySelectorAll('[role="rowgroup"]:last-child [role="row"]')
+    const rows = container.querySelectorAll('[data-table-body] [role="row"]')
     expect(rows).toHaveLength(2)
   })
 })
@@ -226,7 +226,7 @@ describe('DataTable — client mode pagination', () => {
         onQueryChange={() => {}}
       />,
     )
-    const rows = container.querySelectorAll('[role="rowgroup"]:last-child [role="row"]')
+    const rows = container.querySelectorAll('[data-table-body] [role="row"]')
     expect(rows).toHaveLength(2)
   })
 
@@ -241,7 +241,7 @@ describe('DataTable — client mode pagination', () => {
         onQueryChange={() => {}}
       />,
     )
-    const rows = container.querySelectorAll('[role="rowgroup"]:last-child [role="row"]')
+    const rows = container.querySelectorAll('[data-table-body] [role="row"]')
     expect(rows).toHaveLength(1) // 3 rows total, page 2 has 1
   })
 })
@@ -262,7 +262,7 @@ describe('DataTable — server mode', () => {
         onQueryChange={() => {}}
       />,
     )
-    const rows = container.querySelectorAll('[role="rowgroup"]:last-child [role="row"]')
+    const rows = container.querySelectorAll('[data-table-body] [role="row"]')
     expect(rows).toHaveLength(3)
   })
 })

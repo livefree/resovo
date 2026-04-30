@@ -70,10 +70,17 @@ npm run test:e2e         # PLAYER / AUTH / SEARCH / VIDEO 任务完成后运行
 接口设计先于实现。
 
 **后台表格**：
-- **server-next**（当前真源，CHG-DESIGN-11 / SEQ-20260429-02）：使用 `packages/admin-ui` 的 `DataTable` 一体化组件，详见 `docs/designs/backend_design_v2.1/reference.md` §4.4 + `docs/rules/admin-module-template.md` 头部 2026-04-30 修订。落地状态分两阶段：
-  - ✅ **已实现内置 props**（CHG-DESIGN-02 Step 1–6）：`toolbar` / `bulkActions`（含 `.dt__bulk` sticky bottom）/ `flashRowKeys` / `enableHeaderMenu` / saved views — 必须走内置 prop，不得外置
-  - 🔄 **计划内置 props**（CHG-DESIGN-02 Step 7A 未开工）：`pagination`（PaginationConfig + `.dt__foot`）/ `.dt__body` 独立滚动 / 隐藏列 chip / filter chips slot — Step 7A 落地前允许过渡形态（外置 PaginationV2 等），落地后必须切换；不要按"已存在"假设调用未实现 prop
-  - **禁止**在 server-next 新模块复用 ModernDataTable / 外置 SelectionActionBar 三件套作为新模块模板
+- **server-next**（当前真源，CHG-DESIGN-02 Step 1–6 + 7A 已落地 / SEQ-20260429-02）：使用 `packages/admin-ui` 的 `DataTable` 一体化组件，详见 `docs/designs/backend_design_v2.1/reference.md` §4.4 + `docs/rules/admin-module-template.md` 头部 2026-04-30 修订。一体化内置 props（全部已实现）：
+  - `toolbar?: ToolbarConfig`（search / trailing / viewsConfig + 兜底 `hideHiddenColumnsChip` / `hideFilterChips`）
+  - `bulkActions?: React.ReactNode`（表内 `.dt__bulk` sticky bottom）
+  - `flashRowKeys?: ReadonlySet<string>`（行 flash 动画）
+  - `enableHeaderMenu?: boolean`（表头集成菜单 sort+hide+clear filter）
+  - `pagination?: PaginationConfig`（`.dt__foot` 内置；缺省渲染最简 foot；`{ hidden: true }` 完全不渲染）
+  - 隐藏列 chip + popover（自动启用，pinned 显示"已锁定"）
+  - filter chips slot（自动启用，6 种 FilterValue 默认 formatter + `column.renderFilterChip` 完全接管逃生口）
+  - 完整体验"body 独立滚动"需消费方在父级提供 height 约束；未提供时走 `min-height: 240px` 防御性兜底
+  - **禁止**在 server-next 新模块复用 ModernDataTable / 外置 PaginationV2 / 外置 SelectionActionBar 三件套作为新模块模板
+  - 后续 CHG-DESIGN-08 + Step 7B 完成视频库消费切换 / CHG-DESIGN-12 完成 cell 复合组件沉淀
 - **server v1**（已冻结）：维持 `ModernDataTable` + `ColumnSettingsPanel` + `AdminDropdown` + `SelectionActionBar` + `PaginationV2` + 服务端排序，详见 `docs/rules/admin-module-template.md` v1 章节。仅维护期 bug 修复使用，不作新模块模板。
 
 ---

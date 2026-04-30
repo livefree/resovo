@@ -73,12 +73,17 @@ module/
 ## 后台数据表格六项规范（硬约束）
 
 > **2026-04-30 修订（CHG-DESIGN-11）**：本节六项规范的**适用范围限定为 apps/server v1**（已存在的 admin 模块）。
-> **apps/server-next（M-SN-2+）以 `packages/admin-ui` DataTable + `docs/designs/backend_design_v2.1/reference.md` §4.4 + `docs/task-queue.md` SEQ-20260429-02 为准**，**不再使用** ModernDataTable / 外置 SelectionActionBar 三件套作为新模块模板。DataTable 一体化 props 分两阶段：
+> **apps/server-next（M-SN-2+）以 `packages/admin-ui` DataTable + `docs/designs/backend_design_v2.1/reference.md` §4.4 + `docs/task-queue.md` SEQ-20260429-02 为准**，**不再使用** ModernDataTable / 外置 PaginationV2 / 外置 SelectionActionBar 三件套作为新模块模板。DataTable 一体化骨架 CHG-DESIGN-02 Step 1–6 + 7A 已全部落地（2026-04-30），可调用的内置 props：
 >
-> - ✅ 已实现（CHG-DESIGN-02 Step 1–6）：`toolbar` / `bulkActions`（`.dt__bulk` sticky bottom） / `flashRowKeys` / `enableHeaderMenu` / saved views
-> - 🔄 计划实现（CHG-DESIGN-02 Step 7A 未开工）：`pagination`（PaginationConfig + `.dt__foot`） / `.dt__body` 独立滚动 / 隐藏列 chip / filter chips slot
+> - `toolbar?: ToolbarConfig`（search / trailing / viewsConfig + 兜底 `hideHiddenColumnsChip` / `hideFilterChips`）
+> - `bulkActions?: React.ReactNode`（`.dt__bulk` sticky bottom）
+> - `flashRowKeys?: ReadonlySet<string>`（行 flash 动画）
+> - `enableHeaderMenu?: boolean`（表头集成菜单）
+> - `pagination?: PaginationConfig`（`.dt__foot`；缺省渲染最简 foot；`{ hidden: true }` 才完全不渲染）
+> - 隐藏列 chip + `HiddenColumnsMenu` popover（pinned 显示"已锁定"）
+> - filter chips slot（6 种 FilterValue 默认 formatter + `column.renderFilterChip` 逃生口）
 >
-> Step 7A 落地前允许外置 PaginationV2 作为过渡形态，落地后必须切换为 DataTable.pagination prop。不要把"计划项"当成"已存在"调用。
+> 完整体验"body 独立滚动"需父级提供 height 约束；否则走 `min-height: 240px` 防御性兜底。后续 Step 7B（视频库消费切换）/ CHG-DESIGN-08（视频库视觉对齐）/ CHG-DESIGN-12（cell 复合组件沉淀）。
 >
 > 即：本节规范仅约束 apps/server v1 时代的现存模块；server-next 新增模块禁止套用本节"v1 ModernDataTable"语义。
 

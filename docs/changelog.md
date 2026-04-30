@@ -2481,3 +2481,82 @@ CHG-DESIGN-11 #4 在 §4.4.2 props 接口块写 `bulkActions?: ReactNode | BulkA
 
 执行模型：claude-opus-4-7
 子代理：无
+
+---
+
+## [CHG-DESIGN-02 Step 7A] DataTable 骨架完整化（独立 body 滚动 + 内置 pagination + 隐藏列 chip + filter chips slot）
+
+- **完成时间**：2026-04-30
+- **记录时间**：2026-04-30 02:33
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — S 级模块强制 Opus；审 API 契约草案 → CONDITIONAL PASS（5 项必修 + 6 项建议 + 3 风险点），全部必修项落地
+
+### Arch-reviewer 必修 5 项落地证据
+
+1. **删除 `PaginationConfig.total`**：types.ts 中只保留顶层 `totalRows`；server mode 权威源走 `totalRows`，client mode 由 `processedRows.length` 推导
+2. **`pagination` 缺省渲染最简 foot**：缺省（不传 prop）渲染 summary-only foot；显式 `pagination={{ hidden: true }}` 才完全不渲染（设计稿 §4.4.1 footer 一体性）
+3. **`column.renderFilterChip` 三参 ctx**：签名 `(ctx: { filter, column, onClear }) => ReactNode`，消费方拿到 column.header + 已绑 onClear
+4. **6 种 FilterValue.kind 默认 formatter**：`formatFilterValue()` 覆盖 text / number / bool / enum / range / date-range；禁止 raw `String(filter)` → `[object Object]` 风险
+5. **layout 同 PR 切换**：`[data-table]` 已是 `overflow: hidden + flex column + height: 100%`；新增 `[data-table-body] { overflow-y: auto + flex: 1 + min-height: var(--row-h) }` + 防御性 `[data-table] { min-height: 240px }`
+
+### Arch-reviewer 建议 6 项落地
+
+- ✅ `summaryRender` ctx 含 `selectedCount`
+- ✅ `toolbar.hideHiddenColumnsChip` + `toolbar.hideFilterChips` 兜底关闭
+- ✅ 新建 `hidden-columns-menu.tsx`（不复用 HeaderMenu UI，共享 `column-visibility.ts` 工具）
+- ✅ filter chips 用独立第二 flex row（`[data-table-filter-chips]` 容器）
+- ✅ `pinned: true` 列在 hidden-columns popover 中 disabled + "已锁定"
+- ✅ props 数量监控：≈17（< 20，安全余量充足）
+
+### 修改文件
+
+**新增**：
+- `packages/admin-ui/src/components/data-table/pagination-foot.tsx` — `.dt__foot` 渲染（summary + 翻页器 + pageSize select；page window 算法 ±2 + 首末页 + ellipsis；24px 高复用 `--row-h-compact`）
+- `packages/admin-ui/src/components/data-table/hidden-columns-menu.tsx` — `HiddenColumnsMenu` portal popover；列可见性切换；pinned "已锁定" 禁用
+- `packages/admin-ui/src/components/data-table/filter-chips.tsx` — `FilterChips<T>` 自动从 `query.filters` + `columns` 配对渲染；6 种 FilterValue 默认 formatter；`column.renderFilterChip` 完全接管逃生口
+- `packages/admin-ui/src/components/data-table/column-visibility.ts` — 共享工具（`setColumnVisibility` / `isColumnVisible` / `getHidableColumns` / `countHiddenColumns`），HeaderMenu + HiddenColumnsMenu 共用
+- `tests/unit/components/admin-ui/table/step-7a-pagination-foot.test.tsx`（7 用例）
+- `tests/unit/components/admin-ui/table/step-7a-hidden-cols.test.tsx`（11 用例）
+- `tests/unit/components/admin-ui/table/step-7a-filter-chips.test.tsx`（14 用例）
+- `tests/unit/components/admin-ui/table/step-7a-body-scroll.test.tsx`（3 用例）
+
+**修改**：
+- `packages/admin-ui/src/components/data-table/types.ts` — 新增 `PaginationConfig` / `PaginationSummaryContext` / `FilterChipContext`；`TableColumn<T>.renderFilterChip` 钩子；`ToolbarConfig.hideHiddenColumnsChip` / `hideFilterChips` 兜底；`DataTableProps.pagination?: PaginationConfig`
+- `packages/admin-ui/src/components/data-table/data-table.tsx` — 接入 PaginationFoot / HiddenColumnsMenu / FilterChips；body wrapper 改 `[data-table-body]`；`handleHeaderMenuHide` 改用 `setColumnVisibility`；toolbar 渲染门控加 chip 触发条件
+- `packages/admin-ui/src/components/data-table/dt-styles.tsx` — 加 `[data-table]` `flex column + min-height: 240px`；`[data-table-body]` 独立滚动；`[data-table-foot]` + `[data-table-foot-pagesize]` + `[data-table-foot-pager-btn]` + `[data-table-foot-pager-ellipsis]`；`[data-table-toolbar-hidden-cols-chip]`；`[data-table-filter-chips]` 容器 + `[data-table-filter-chip]` 单 chip
+- `packages/admin-ui/src/components/data-table/index.ts` — export 新类型 + `column-visibility` 工具 + `formatFilterValue`
+- `tests/unit/components/admin-ui/table/data-table.test.tsx` — 旧测 5 处 `[role="rowgroup"]:last-child` 选择器在新结构下失效（foot 追加在末尾），改用 `[data-table-body]` 精准选择
+
+**docs 同步（CHG-DESIGN-11 标注从 🔄 → ✅）**：
+- `docs/designs/backend_design_v2.1/reference.md` — §0a 落地状态（拆分 Step 1–6 + 7A 已落地清单）/ §4.4.1 视觉契约 9 项行内标注 / §4.4.2 props 接口（含完整 PaginationConfig + PaginationSummaryContext + FilterChipContext）/ §4.4.3 实现差异表 5 行 / §6.0 共享视觉契约 / §8 跨页风险表 Table language 行
+- `docs/decisions.md` ADR-103 §4.1 AMENDMENT — 落地状态从两阶段（Step 1–6 已 / Step 7A 计划）合并为一体化全部已实现
+- `CLAUDE.md` 后台表格 server-next bullet — 拆分内置 props 完整清单
+- `docs/rules/admin-module-template.md` 头部 2026-04-30 修订 — 一体化骨架已完整可用
+- `docs/rules/ui-rules.md` 后台共享组件边界规范 server-next 子节
+- `docs/server_next_plan_20260427.md` §4.4/§6 修订 + primitives 表 DataTable v2 / Pagination v2 / Toolbar 行
+- `docs/task-queue.md` SEQ-20260429-02 CHG-DESIGN-02 卡片 ✅；CHG-SN-3-04 被取代说明同步
+
+### 验收
+
+- typecheck ✅（全 7 个 workspace 通过）
+- lint ✅（仅 1 既有 warning：VideoListClient `<img>` 元素，非 Step 7A 引入）
+- verify:token-references ✅（64/322）
+- verify:admin-guardrails ✅
+- 单测 ✅ 2603/2603 全绿（含 Step 7A 35 新增 + 既有 1 处选择器修复）
+
+### 新增依赖
+
+无
+
+### 数据库变更
+
+无
+
+### 注意事项
+
+- **完整 "body 独立滚动" 体验需消费方在父级提供 height 约束**（如 `calc(100vh - topbar-h - footer-h)`）；未提供时 DataTable 走防御性 `min-height: 240px` 兜底，page-level 滚动取代 body 内部滚动。视频库 / dev demo 当前消费点 3 处均未约束 height，本次不修，由 CHG-DESIGN-08 + Step 7B 接入
+- `column.pinned: true` 当前仅"恒可见"标记，不渲染物理 left-sticky；物理 sticky 推迟到 Step 7C / 独立卡
+- 12px 表格密度 / 11px th 收紧由独立 token / 视觉卡处理，不在 7A 范围
+- arch-reviewer R-2（filter chip 与外置 chip 不一致）：视频库当前未外置 filter chip（仅外置 PaginationV2 + ColumnSettingsPanel），无文案双展示风险
+- arch-reviewer R-3（短数据 thead/foot 视觉重叠）：body wrapper `min-height: var(--row-h)` 已兜底
+- DataTable props 数 ≈ 17（< 20 阈值），后续如再追加首选进 ToolbarConfig 而非顶层

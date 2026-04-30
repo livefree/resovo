@@ -48,4 +48,17 @@ export type {
   ViewScope,
   TableView,
   PersistedQuery,
+  // CHG-DESIGN-02 Step 7A
+  PaginationConfig,
+  PaginationSummaryContext,
+  FilterChipContext,
 } from './types'
+
+// CHG-DESIGN-02 Step 7A — 工具与子组件（不在 DataTable 内部使用时也可独立消费）
+export {
+  setColumnVisibility,
+  isColumnVisible,
+  getHidableColumns,
+  countHiddenColumns,
+} from './column-visibility'
+export { formatFilterValue } from './filter-chips'

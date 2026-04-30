@@ -379,12 +379,12 @@ useEffect(() => {
 
 ```
 packages/admin-ui/src/
-  components/data-table/   ← DataTable 一体化（已实现：toolbar / bulkActions / flashRowKeys / enableHeaderMenu / saved views；计划实现：pagination / .dt__body 独立滚动 / 隐藏列 chip / filter chips slot — CHG-DESIGN-02 Step 7A）
+  components/data-table/   ← DataTable 一体化骨架（CHG-DESIGN-02 Step 1–6 + 7A 已全部落地）：toolbar / bulkActions / flashRowKeys / enableHeaderMenu / saved views / pagination(.dt__foot) / .dt__body 独立滚动 / 隐藏列 chip / filter chips slot
   components/             ← 其他 v2 通用原语（reference.md §4 通用组件清单）
   shell/                  ← AdminShell + Sidebar + Breadcrumbs（ADR-103a）
 ```
 
-> **Step 7A 落地前注意**：`pagination` / 独立 body 滚动 / 隐藏列 chip / filter chips slot 暂未写入 `packages/admin-ui` 类型与运行时；消费方暂时仍走外置 PaginationV2 等过渡形态，落地后必须切换。不要按"已存在"假设调用 DataTable.pagination prop。
+> **完整体验需父级 height 约束**：`.dt__body` 独立滚动只有在父容器提供 height 约束（如 `calc(100vh - topbar - footer)`）时才完全生效；未提供时 DataTable 走 `min-height: 240px` 防御性兜底，page-level 滚动取代 body 内部滚动。视频库等消费方在 Step 7B / CHG-DESIGN-08 完成 height 约束接入。
 
 未抽出的业务复合组件（DualSignal / VisChip / Spark / KpiCard / thumb / pill / inline xs actions 等）由 CHG-DESIGN-12 沉淀（详见 `docs/designs/backend_design_v2.1/reference.md` §10）。
 

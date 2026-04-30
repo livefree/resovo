@@ -20,6 +20,10 @@ import { DTStyles } from './dt-styles'
 import { HeaderMenu } from './header-menu'
 import { ViewsMenu } from './views-menu'
 import { useRenderableSlot } from './react-node-utils'
+import { PaginationFoot } from './pagination-foot'
+import { HiddenColumnsMenu } from './hidden-columns-menu'
+import { countHiddenColumns, setColumnVisibility } from './column-visibility'
+import { FilterChips } from './filter-chips'
 
 // ── client-mode data processing ──────────────────────────────────
 
@@ -170,6 +174,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
     toolbar,
     bulkActions,
     flashRowKeys,
+    pagination,
   } = props
 
   // CHG-DESIGN-02 Step 4：toolbar 渲染门控
@@ -182,9 +187,11 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
   // 提供时 ViewsMenu 始终渲染触发按钮（"视图 · {label} ▾"），故 viewsConfig 提供
   // 即视为有内容
   const hasViewsContent = toolbar?.viewsConfig !== undefined
-  const shouldRenderToolbar = toolbar !== undefined
-    && toolbar.hidden !== true
-    && (searchSlot.renderable || trailingSlot.renderable || hasViewsContent)
+  // 注：showHiddenColumnsChip 在下方依赖 colMap 计算后才声明，故此处 toolbar 渲染门控
+  // 计算时不能直接引用；改为在 JSX 中根据 (... || showHiddenColumnsChip) 决定显式包裹。
+  const hasToolbarContent = (
+    searchSlot.renderable || trailingSlot.renderable || hasViewsContent
+  )
 
   // CHG-DESIGN-02 Step 5：bulk bar 渲染门控
   // 仅当 bulkActions 可渲染 + selection 非空时显示
@@ -197,6 +204,10 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
   // 表头菜单 popover 状态（仅 enableHeaderMenu=true 时使用）
   const [menuColId, setMenuColId] = useState<string | null>(null)
   const menuAnchorRef = useRef<HTMLElement | null>(null)
+
+  // CHG-DESIGN-02 Step 7A：隐藏列 chip popover 状态
+  const [hiddenColsOpen, setHiddenColsOpen] = useState(false)
+  const hiddenColsAnchorRef = useRef<HTMLButtonElement | null>(null)
 
   const colMap = query.columns
 
@@ -256,11 +267,23 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
     onQueryChange({ sort: { field: undefined, direction: 'asc' } } satisfies TableQueryPatch)
   }, [onQueryChange])
   const handleHeaderMenuHide = useCallback((colId: string) => {
-    const next = new Map(colMap)
-    const prev = colMap.get(colId)
-    next.set(colId, { visible: false, ...(prev?.width !== undefined ? { width: prev.width } : {}) })
-    onQueryChange({ columns: next } satisfies TableQueryPatch)
+    onQueryChange({ columns: setColumnVisibility(colMap, colId, false) } satisfies TableQueryPatch)
   }, [colMap, onQueryChange])
+
+  // CHG-DESIGN-02 Step 7A：隐藏列 chip 渲染门控 + 计数
+  const hiddenColumnsCount = useMemo(
+    () => countHiddenColumns(columns, colMap),
+    [columns, colMap],
+  )
+  const showHiddenColumnsChip =
+    toolbar?.hideHiddenColumnsChip !== true && hiddenColumnsCount > 0
+
+  const handleHiddenColsChange = useCallback(
+    (next: ReadonlyMap<string, { readonly visible: boolean; readonly width?: number }>) => {
+      onQueryChange({ columns: next } satisfies TableQueryPatch)
+    },
+    [onQueryChange],
+  )
   const closeHeaderMenu = useCallback(() => {
     setMenuColId(null)
     menuAnchorRef.current = null
@@ -322,9 +345,10 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
       {/* CHG-DESIGN-02 Step 2/7：自包含 CSS 注入（framed surface + flash keyframe）
         * 模块级 flag 守卫，多个 DataTable 实例只注入一次 */}
       <DTStyles />
-      {/* CHG-DESIGN-02 Step 4/7：内置 toolbar（search / viewsConfig / trailing 三槽位）
-        * 每个 slot 仅在 renderable 时渲染包裹 div，避免空 wrapper 出现 */}
-      {shouldRenderToolbar && (
+      {/* CHG-DESIGN-02 Step 4 + Step 7A：内置 toolbar
+        * 槽位顺序：search → viewsMenu → 隐藏列 chip（Step 7A）→ trailing
+        * toolbar.hidden=true 显式抑制；否则只要任一槽位有内容就渲染 toolbar 容器 */}
+      {toolbar?.hidden !== true && (hasToolbarContent || showHiddenColumnsChip) && (
         <div data-table-toolbar role="toolbar" aria-label="表格工具栏">
           {searchSlot.renderable && (
             <div data-table-toolbar-search>{searchSlot.node}</div>
@@ -332,10 +356,37 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
           {hasViewsContent && toolbar?.viewsConfig && (
             <ViewsMenu config={toolbar.viewsConfig} data-testid="views-trigger" />
           )}
+          {showHiddenColumnsChip && (
+            <button
+              ref={hiddenColsAnchorRef}
+              type="button"
+              data-table-toolbar-hidden-cols-chip
+              aria-haspopup="menu"
+              aria-expanded={hiddenColsOpen}
+              onClick={() => setHiddenColsOpen((o) => !o)}
+              data-testid="hidden-columns-chip"
+            >
+              已隐藏 <em>{hiddenColumnsCount}</em> 列
+            </button>
+          )}
           {trailingSlot.renderable && (
             <div data-table-toolbar-trailing>{trailingSlot.node}</div>
           )}
         </div>
+      )}
+      <HiddenColumnsMenu
+        open={hiddenColsOpen}
+        columns={columns}
+        columnsValue={colMap}
+        anchorRef={hiddenColsAnchorRef}
+        onColumnsChange={handleHiddenColsChange}
+        onClose={() => setHiddenColsOpen(false)}
+      />
+      {/* CHG-DESIGN-02 Step 7A：filter chips slot（独立第二 flex row，避开与 toolbar 同行 wrap 抖动）
+        * 自动从 query.filters + columns 配对渲染；6 种 FilterValue.kind 默认 formatter；
+        * column.renderFilterChip 完全接管逃生口；toolbar.hideFilterChips 兜底关闭。 */}
+      {toolbar?.hideFilterChips !== true && (
+        <FilterChips columns={columns} filters={query.filters} onChange={onQueryChange} />
       )}
       {/* sticky header */}
       <div
@@ -404,8 +455,10 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
         </div>
       </div>
 
-      {/* body */}
-      <div role="rowgroup" style={{ flex: 1 }}>
+      {/* body — CHG-DESIGN-02 Step 7A：独立滚动（thead sticky + body overflow-y）
+        * 样式从 inline 移到 dt-styles.tsx [data-table-body] 选择器，承载
+        * `flex: 1 1 auto + overflow-y: auto + min-height: 0` 标准组合 */}
+      <div role="rowgroup" data-table-body>
         {loading && (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--fg-muted)' }}>
             加载中…
@@ -502,6 +555,17 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
           </button>
         </div>
       )}
+      {/* CHG-DESIGN-02 Step 7A：内置 .dt__foot pagination
+        * 缺省渲染最简 foot（仅 summary）；显式 pagination={{ hidden: true }} 时不渲染。
+        * page / pageSize 控制态走 query.pagination + onQueryChange。 */}
+      <PaginationFoot
+        config={pagination}
+        page={query.pagination.page}
+        pageSize={query.pagination.pageSize}
+        total={effectiveTotalRows}
+        selectedCount={selectedCount}
+        onChange={onQueryChange}
+      />
     </div>
   )
 }

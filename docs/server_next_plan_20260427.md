@@ -189,16 +189,22 @@ packages/design-tokens/src/
 
 #### 范围
 
-> **2026-04-30 修订（CHG-DESIGN-11 / SEQ-20260429-02）**：
+> **2026-04-30 修订（CHG-DESIGN-11 + Step 7A 完成 / SEQ-20260429-02）**：
 > 本表中"DataTable v2 / Toolbar / Pagination / SelectionActionBar / ColumnSettings"
 > 在 M-SN-2 时代设计为**分离原语 + 消费方编排**。当前真源 `docs/designs/backend_design_v2.1/reference.md`
-> §4.4 + §6.0 已裁定 **DataTable 一体化**。
+> §4.4 + §6.0 已裁定 **DataTable 一体化**，CHG-DESIGN-02 Step 1–6 + 7A 已全部落地。
 >
-> **落地状态**（CHG-DESIGN-02 当前进度）：
-> - ✅ 已实现内置 props（Step 1–6 落地）：`toolbar` / `bulkActions`（`.dt__bulk` sticky bottom） / `flashRowKeys` / `enableHeaderMenu`（含 sort / hide / clear filter） / saved views menu
-> - 🔄 计划内置 props（Step 7A 未开工）：`pagination`（PaginationConfig + `.dt__foot`） / `.dt__body` 独立滚动 / 隐藏列 chip / filter chips slot
+> **当前内置 props（全部已实现）**：
+> - `toolbar?: ToolbarConfig`（search / trailing / viewsConfig + 兜底 `hideHiddenColumnsChip` / `hideFilterChips`）
+> - `bulkActions?: React.ReactNode`（`.dt__bulk` sticky bottom）
+> - `flashRowKeys?: ReadonlySet<string>`
+> - `enableHeaderMenu?: boolean`
+> - `pagination?: PaginationConfig`（`.dt__foot` 内置；缺省渲染最简 foot；`{ hidden: true }` 完全不渲染）
+> - 隐藏列 chip + `HiddenColumnsMenu` popover（自动启用，pinned 显示"已锁定"）
+> - filter chips slot（自动启用，6 种 FilterValue 默认 formatter + `column.renderFilterChip` 逃生口）
+> - `.dt__body` 独立滚动（thead sticky + body overflow-y + 防御性 `min-height: 240px`）
 >
-> 标准列表页对**已实现**的内置 props 必须采用，不得外置编排；对**计划项**在 Step 7A 落地前允许外置 PaginationV2 / 外置 filter chips 作为过渡形态，落地后必须切换为 DataTable 内置 prop。原语本身仍可独立 export 但不强求复用，**不要把"计划项"当成"已存在"prop 调用**。
+> 标准列表页**必须**采用 DataTable 内置 props，不得外置编排。完整"body 独立滚动"体验需消费方在父级提供 height 约束；外置原语（Toolbar / PaginationV2 / SelectionActionBar）仍可独立 export 但仅作嵌入式场景兜底，不作首选。视频库消费切换路径 = CHG-DESIGN-08 + CHG-DESIGN-02 Step 7B。
 >
 > 同样 2026-04-30 修订：原 "Icon set 复用 web-next 已有图标库" 与 "BrandProvider /
 > ThemeProvider 直接复用 web-next 的 contexts" 句子已被 ADR-103a/103b + verify-server-next-isolation
@@ -208,14 +214,14 @@ packages/design-tokens/src/
 
 | 原语 | 必须下沉？ | 出现时机 |
 |---|---|---|
-| DataTable v2（一体化：toolbar / bulk 已内置；body 独立滚动 / foot pagination 计划，CHG-DESIGN-02 Step 7A） | ✅ 必须 | M-SN-2（基座）→ SEQ-20260429-02（一体化骨架；Step 7A 落地 body+foot） |
-| Toolbar / Filter / Sort / ColumnSettings | ✅ 必须（独立 export） | M-SN-2；首选用法是 DataTable.toolbar slot（已实现） |
+| DataTable v2（一体化：toolbar / bulk / pagination / body 独立滚动 / 隐藏列 chip / filter chips 全部已内置，CHG-DESIGN-02 Step 1–6 + 7A 已落地） | ✅ 必须 | M-SN-2（基座）→ SEQ-20260429-02（一体化骨架完整化 2026-04-30） |
+| Toolbar / Filter / Sort / ColumnSettings | ✅ 必须（独立 export） | M-SN-2；首选用法是 DataTable.toolbar slot + 内置隐藏列 chip / filter chips（已实现） |
 | Drawer（视频编辑 Drawer 复用） | ✅ 必须 | M-SN-2 |
 | Modal / Dialog | ✅ 必须 | M-SN-2 |
 | Toast（全局 addToast API） | ✅ 必须 | M-SN-2 |
 | AdminDropdown | ✅ 必须 | M-SN-2 |
 | SelectionActionBar | ✅ 必须（独立 export） | M-SN-2；首选用法是 DataTable.bulkActions slot（嵌入式 sticky-bottom） |
-| Pagination v2（客户端 / 服务端两档） | ✅ 必须（独立 export） | M-SN-2 已落地独立 export；🔄 DataTable 内置 .dt__foot 计划由 CHG-DESIGN-02 Step 7A 实施，落地前消费方暂走外置 PaginationV2 |
+| Pagination v2（客户端 / 服务端两档） | ✅ 必须（独立 export） | M-SN-2 独立 export；✅ DataTable 内置 `.dt__foot` 已由 CHG-DESIGN-02 Step 7A 落地；首选用法是 `DataTable.pagination?: PaginationConfig`，外置 PaginationV2 仅作嵌入式兜底 |
 | Pagination v2 游标分页 + 虚拟滚动 | ✅ 必须 | **M-SN-6**（首次 >50k 数据时按需即建，A2 方案）|
 | Empty / Error / Loading 状态 | ✅ 必须 | M-SN-2 |
 | Form 控件（Input / Select / Switch / DateRange） | ⚠️ 评估 | 若 web-next 已有同形态可复用，admin-ui 仅做样式适配壳 |

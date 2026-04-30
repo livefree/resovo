@@ -52,6 +52,45 @@ export interface DataTableProps<T> {
    * 自行 setTimeout 控制（避免业务 timer 泄漏到组件内）。
    */
   readonly flashRowKeys?: ReadonlySet<string>
+
+  /**
+   * 内置 pagination 渲染配置（CHG-DESIGN-02 Step 7A，设计稿 .dt__foot / .dt__pager）。
+   *
+   * 控制态（page / pageSize / 切换）沿用顶层 `query.pagination` + `onQueryChange`，
+   * 本配置仅承载渲染相关参数（pageSizeOptions / summaryRender / hidden）。
+   * 服务端模式总数权威源是顶层 `totalRows`；客户端模式由 processedRows.length 推导。
+   *
+   * 缺省（不传 pagination）时仍渲染最简 .dt__foot（仅 summary 文本，无翻页器与
+   * pageSize 切换），保证设计稿 §4.4.1 footer 一体性；显式传 `{ hidden: true }` 才
+   * 完全不渲染（嵌入式兜底；消费方仍可外置 PaginationV2 过渡）。
+   */
+  readonly pagination?: PaginationConfig
+}
+
+// ── Pagination（CHG-DESIGN-02 Step 7A）────────────────────────────
+
+export interface PaginationConfig {
+  /** 不渲染 .dt__foot（嵌入式兜底；消费方仍可外置 PaginationV2） */
+  readonly hidden?: boolean
+  /**
+   * pageSize 切换可选项；缺省 `[10, 20, 50, 100]`。
+   * 当 pageSizeOptions 长度 <= 1 时不渲染 pageSize 切换控件。
+   */
+  readonly pageSizeOptions?: readonly number[]
+  /**
+   * 自定义 summary 文案；缺省渲染 `共 {total} 条 · 第 {page}/{totalPages} 页`，
+   * 当 selectedCount > 0 时尾部追加 ` · 已选 {selectedCount} 项`。
+   * 返回 `null` 时不渲染 summary 区域。
+   */
+  readonly summaryRender?: (ctx: PaginationSummaryContext) => ReactNode
+}
+
+export interface PaginationSummaryContext {
+  readonly total: number
+  readonly page: number
+  readonly pageSize: number
+  readonly totalPages: number
+  readonly selectedCount: number
 }
 
 // ── Toolbar / Saved Views（CHG-DESIGN-02 Step 4）──────────────────
@@ -67,6 +106,17 @@ export interface ToolbarConfig {
   readonly viewsConfig?: ViewsConfig
   /** 不渲染 toolbar 容器（嵌入式场景；消费方仍可外置 Toolbar） */
   readonly hidden?: boolean
+  /**
+   * 关闭隐藏列 chip（CHG-DESIGN-02 Step 7A）。缺省启用：
+   * 当 query.columns 中存在不可见且 `pinned !== true` 的列时，
+   * toolbar 内自动渲染 `已隐藏 N 列` chip + 列可见性 popover。
+   */
+  readonly hideHiddenColumnsChip?: boolean
+  /**
+   * 关闭 filter chips slot（CHG-DESIGN-02 Step 7A）。缺省启用：
+   * 当 query.filters 非空时，toolbar 第二行自动渲染 chips（每列 + × 清除）。
+   */
+  readonly hideFilterChips?: boolean
 }
 
 export interface ViewsConfig {
@@ -108,6 +158,24 @@ export interface TableColumn<T> {
   readonly defaultVisible?: boolean
   readonly pinned?: boolean
   readonly overflowVisible?: boolean
+  /**
+   * 自定义 filter chip 渲染（CHG-DESIGN-02 Step 7A）。
+   * 缺省走 DataTable 内置分类型 formatter（覆盖 6 种 FilterValue.kind：
+   * text / number / bool / enum / range / date-range）。
+   * 仅在需要业务化 chip 形态时覆盖；返回 `null` 时不渲染该列 chip。
+   */
+  readonly renderFilterChip?: (ctx: FilterChipContext) => ReactNode
+}
+
+/**
+ * filter chip 渲染上下文（CHG-DESIGN-02 Step 7A）。
+ * 设计原则：消费方拿到 column 自身可访问 header；onClear 已绑定 query 修改路径，
+ * 无需消费方再走 onQueryChange。
+ */
+export interface FilterChipContext {
+  readonly filter: FilterValue
+  readonly column: ColumnDescriptor
+  readonly onClear: () => void
 }
 
 export interface TableCellContext<T> {

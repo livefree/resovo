@@ -30,7 +30,24 @@ const DT_CSS = `
   border-radius: var(--radius-md);
   overflow: hidden;
   height: 100%;
-  min-height: 0;
+  /* CHG-DESIGN-02 Step 7A：防御性兜底
+   * 消费方未提供 height 约束（如父容器无 height: calc(...)）时，
+   * 至少保留 240px 可视高度，避免 flex 链下塌成 0；正确"body 独立滚动"
+   * 体验仍需消费方在父级提供 height 约束（视频库 / 审核台等独立 height 路径）。
+   */
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── DataTable body 独立滚动（CHG-DESIGN-02 Step 7A，设计稿 .dt__body） ─────── */
+[data-table-body] {
+  flex: 1 1 auto;
+  /* min-height: 0 打破 flex item 默认 auto 阻断，让 body 能被 flex container 压缩；
+   * min-height: var(--row-h) 兜底防止短数据时 thead / foot / bulk 视觉重叠（arch-reviewer R-3）。 */
+  min-height: var(--row-h, 40px);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* ── DataTable 内置 toolbar（CHG-DESIGN-02 Step 4，设计稿 .dt__toolbar） ─────── */
@@ -53,6 +70,93 @@ const DT_CSS = `
   gap: 8px;
   margin-left: auto;
   flex-shrink: 0;
+}
+
+/* ── 隐藏列 chip（CHG-DESIGN-02 Step 7A） ─────── */
+[data-table-toolbar-hidden-cols-chip] {
+  height: var(--row-h-compact, 24px);
+  padding: 0 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+[data-table-toolbar-hidden-cols-chip]:hover {
+  color: var(--fg-default);
+  border-color: var(--border-strong);
+}
+[data-table-toolbar-hidden-cols-chip][aria-expanded="true"] {
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent-on-soft);
+  border-color: var(--admin-accent-border);
+}
+[data-table-toolbar-hidden-cols-chip] em {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--admin-accent-on-soft);
+}
+
+/* ── filter chips slot（CHG-DESIGN-02 Step 7A，独立第二 flex row）─────── */
+[data-table-filter-chips] {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  flex-shrink: 0;
+}
+[data-table-filter-chip] {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--row-h-compact, 24px);
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--admin-accent-border);
+  border-radius: 999px;
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent-on-soft);
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+[data-table-filter-chip-label] {
+  font-weight: 500;
+}
+[data-table-filter-chip-sep] {
+  color: var(--fg-muted);
+}
+[data-table-filter-chip-value] {
+  color: var(--fg-default);
+}
+[data-table-filter-chip-clear] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+[data-table-filter-chip-clear]:hover {
+  background: var(--bg-surface);
+  color: var(--fg-default);
 }
 
 /* ── Row flash 动画（乐观更新场景；CHG-DESIGN-02 Step 5 flashRowKeys 配套） ─────── */
@@ -116,6 +220,83 @@ const DT_CSS = `
 [data-table-bulk-clear]:hover {
   color: var(--fg-default);
   border-color: var(--border-strong);
+}
+
+/* ── DataTable foot pagination（CHG-DESIGN-02 Step 7A，设计稿 .dt__foot / .dt__pager）─────── */
+[data-table-foot] {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border-default);
+  background: var(--bg-surface-elevated);
+  font-size: 12px;
+  color: var(--fg-muted);
+  flex-shrink: 0;
+}
+[data-table-foot-summary] {
+  flex: 0 0 auto;
+}
+[data-table-foot-pagesize] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+[data-table-foot-pagesize-label] {
+  color: var(--fg-muted);
+}
+[data-table-foot-pagesize] select {
+  height: var(--row-h-compact, 24px);
+  padding: 0 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--fg-default);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+[data-table-foot-pagesize] select:hover {
+  border-color: var(--border-strong);
+}
+[data-table-foot-pager] {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+[data-table-foot-pager-btn] {
+  min-width: var(--row-h-compact, 24px);
+  height: var(--row-h-compact, 24px);
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+[data-table-foot-pager-btn]:hover:not(:disabled):not([data-active="true"]) {
+  background: var(--bg-surface);
+  color: var(--fg-default);
+}
+[data-table-foot-pager-btn][data-active="true"] {
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent-on-soft);
+  border-color: var(--admin-accent-border);
+  cursor: default;
+}
+[data-table-foot-pager-btn]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+[data-table-foot-pager-ellipsis] {
+  padding: 0 4px;
+  color: var(--fg-muted);
+  user-select: none;
 }
 ` as const
 
