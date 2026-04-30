@@ -75,6 +75,9 @@ const ASIDE_STYLE_BASE: CSSProperties = {
 const BRAND_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
+  // justify-content: center 永远启用 — 展开态 title flex-grow:1 填满 slack，
+  // 视觉等价 flex-start；折叠态 title 收 0 后 logo 自然居中（消除切换瞬间的 justify snap）
+  justifyContent: 'center',
   gap: 'var(--space-3)',
   padding: '0 var(--space-4)',
   height: 'var(--topbar-h)',
@@ -108,7 +111,10 @@ const BRAND_TITLE_STYLE: CSSProperties = {
 
 /* 折叠态结构重置：放 inline，确保 Sidebar 独立使用（不通过 AdminShell）也正确收 0 占位
  * 仅处理 layout（width/padding/border/margin/flex/overflow）和 a11y（pointer-events）；
- * 视觉 fade（opacity transition）由 admin-shell-styles 在合成场景注入，standalone 时 snap */
+ * 视觉 fade（opacity / max-width / padding / gap transition）由 admin-shell-styles
+ * 在合成场景注入，standalone 时 snap。
+ * 关键：max-width 用数值 0 而非 none，配合 expanded 态显式 maxWidth: '100%'，
+ * 让 transition 可从 100% 平滑插值到 0（CHG-DESIGN-04 fix#6） */
 const COLLAPSED_HIDDEN_STYLE: CSSProperties = {
   opacity: 0,
   pointerEvents: 'none',
@@ -281,14 +287,12 @@ interface BrandAreaProps {
 }
 
 function BrandArea({ collapsed }: BrandAreaProps) {
-  // CHG-DESIGN-04 fix#5：title 永远渲染（不卸载），折叠态由 inline 收 0 占位 +
-  // admin-shell-styles 提供 opacity transition（合成时平滑 / standalone 时 snap）
-  const brandStyle: CSSProperties = collapsed
-    ? { ...BRAND_STYLE, justifyContent: 'center', gap: 0 }
-    : BRAND_STYLE
+  // CHG-DESIGN-04 fix#6：justify-content: center 永远启用（BRAND_STYLE 已设），
+  // 仅 gap 随 collapsed 切换；title 永远渲染，折叠态走 COLLAPSED_HIDDEN_STYLE 收 0
+  const brandStyle: CSSProperties = collapsed ? { ...BRAND_STYLE, gap: 0 } : BRAND_STYLE
   const titleStyle: CSSProperties = collapsed
     ? { ...BRAND_TITLE_STYLE, ...COLLAPSED_HIDDEN_STYLE }
-    : BRAND_TITLE_STYLE
+    : { ...BRAND_TITLE_STYLE, maxWidth: '100%' }
   return (
     <div data-sidebar-brand style={brandStyle}>
       <span aria-hidden="true" style={LOGO_STYLE} data-sidebar-brand-logo>
@@ -328,7 +332,9 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate }: NavItemP
     cursor: 'pointer',
     font: 'inherit',
     textAlign: 'left',
-    justifyContent: collapsed ? 'center' : 'flex-start',
+    // justify-content: center 永远启用 — 展开态 label flex-grow:1 填满 slack，
+    // 视觉等价 flex-start；折叠态 label/badge 收 0 后 icon 自然居中（消除 snap）
+    justifyContent: 'center',
   }
 
   const iconStyle: CSSProperties = {
@@ -369,13 +375,13 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate }: NavItemP
           />
         )}
       </span>
-      {/* CHG-DESIGN-04 fix#5：label + badge 永远渲染；折叠态用 inline 条件收 0 占位
-        * （Sidebar 必须自包含；admin-shell-styles 仅作合成场景的 transition 打磨） */}
+      {/* CHG-DESIGN-04 fix#6：label + badge 永远渲染；展开态显式 maxWidth: '100%'
+        * 让 transition 可从 100% 平滑插值到 0（避免 max-width:none → 0 的非动画 snap） */}
       <span
         data-sidebar-item-label
         style={collapsed
           ? { ...COLLAPSED_HIDDEN_STYLE, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
-          : { flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+          : { flex: 1, minWidth: 0, maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
       >
         {item.label}
       </span>
@@ -394,6 +400,7 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate }: NavItemP
             : {
                 padding: '1px var(--space-2)',
                 flexShrink: 0,
+                maxWidth: '100%',
                 borderRadius: 'var(--radius-full)',
                 fontSize: 'var(--admin-count-font-size)',
                 background: badgeBg(badgeSlot),
@@ -436,7 +443,8 @@ function Footer({ user, collapsed, userActions }: FooterProps) {
     textAlign: 'left',
     color: 'var(--fg-default)',
     flexShrink: 0,
-    justifyContent: collapsed ? 'center' : 'flex-start',
+    // justify-content: center 永远启用（消除 snap）
+    justifyContent: 'center',
   }
 
   // P1 必修（Opus 评审）：position: relative wrapper 建立稳定 positioned ancestor
@@ -461,7 +469,7 @@ function Footer({ user, collapsed, userActions }: FooterProps) {
           data-sidebar-foot-meta
           style={collapsed
             ? { ...COLLAPSED_HIDDEN_STYLE, display: 'flex', flexDirection: 'column' }
-            : { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+            : { flex: 1, minWidth: 0, maxWidth: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         >
           <span data-sidebar-foot-name style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {user.displayName}
@@ -475,7 +483,7 @@ function Footer({ user, collapsed, userActions }: FooterProps) {
           data-sidebar-foot-chevron
           style={collapsed
             ? { ...COLLAPSED_HIDDEN_STYLE, color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)' }
-            : { color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)', flexShrink: 0 }}
+            : { color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)', flexShrink: 0, maxWidth: '100%' }}
         >›</span>
       </button>
       <UserMenu
