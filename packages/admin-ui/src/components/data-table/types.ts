@@ -37,6 +37,21 @@ export interface DataTableProps<T> {
    * viewsConfig 三槽位。缺省时不渲染内置 toolbar（消费方可继续用外置 Toolbar 组件）。
    */
   readonly toolbar?: ToolbarConfig
+
+  /**
+   * 表内 sticky bottom bulk action bar 内容（CHG-DESIGN-02 Step 5）。
+   * 仅在 selection.selectedKeys.size > 0 且 bulkActions 可渲染时显示。
+   * 设计稿 .dt__bulk 视觉对应；取代外置 SelectionActionBar 浮条。
+   */
+  readonly bulkActions?: React.ReactNode
+
+  /**
+   * 行 flash 动画触发集合（乐观更新场景，CHG-DESIGN-02 Step 5）。
+   * 集合中的 rowKey 命中行会接收 data-flash="true"，触发 1.5s ease-out 高亮动画。
+   * 时序所有权在消费方：DataTable 仅按当前 prop 渲染；1.5s 后清空集合由消费方
+   * 自行 setTimeout 控制（避免业务 timer 泄漏到组件内）。
+   */
+  readonly flashRowKeys?: ReadonlySet<string>
 }
 
 // ── Toolbar / Saved Views（CHG-DESIGN-02 Step 4）──────────────────

@@ -168,6 +168,8 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
     'data-testid': testId,
     enableHeaderMenu = false,
     toolbar,
+    bulkActions,
+    flashRowKeys,
   } = props
 
   // CHG-DESIGN-02 Step 4：toolbar 渲染门控
@@ -183,6 +185,12 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
   const shouldRenderToolbar = toolbar !== undefined
     && toolbar.hidden !== true
     && (searchSlot.renderable || trailingSlot.renderable || hasViewsContent)
+
+  // CHG-DESIGN-02 Step 5：bulk bar 渲染门控
+  // 仅当 bulkActions 可渲染 + selection 非空时显示
+  const bulkSlot = useRenderableSlot(bulkActions)
+  const selectedCount = selection?.selectedKeys.size ?? 0
+  const shouldRenderBulkBar = bulkSlot.renderable && selectedCount > 0
 
   const [hoveredKey, setHoveredKey] = useState<string | null>(null)
 
@@ -415,11 +423,13 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
         )}
         {!loading && !error && pageRows.map((row, idx) => {
           const key = rowKey(row)
+          const isFlashing = flashRowKeys?.has(key) ?? false
           return (
             <div
               key={key}
               role="row"
               aria-selected={selection?.selectedKeys.has(key)}
+              data-flash={isFlashing ? 'true' : undefined}
               style={rowStyle(key)}
               onMouseEnter={() => setHoveredKey(key)}
               onMouseLeave={() => setHoveredKey(null)}
@@ -471,6 +481,26 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
           onHide={handleHeaderMenuHide}
           onClose={closeHeaderMenu}
         />
+      )}
+      {/* CHG-DESIGN-02 Step 5/7：表内 sticky bottom bulk action bar
+        * 仅在 selection 非空 + bulkActions 可渲染时显示；
+        * 计数 + clear button 由 DataTable 提供，操作区由消费方填充 */}
+      {shouldRenderBulkBar && (
+        <div data-table-bulk role="region" aria-label="批量操作">
+          <span data-table-bulk-count>
+            已选 <em>{selectedCount}</em> 项
+          </span>
+          <span data-table-bulk-sep aria-hidden="true" />
+          <div data-table-bulk-actions>{bulkSlot.node}</div>
+          <span style={{ flex: 1 }} aria-hidden="true" />
+          <button
+            type="button"
+            data-table-bulk-clear
+            onClick={() => onSelectionChange?.({ selectedKeys: new Set(), mode: selection?.mode ?? 'page' })}
+          >
+            清除选择
+          </button>
+        </div>
       )}
     </div>
   )

@@ -55,7 +55,7 @@ const DT_CSS = `
   flex-shrink: 0;
 }
 
-/* ── Row flash 动画（乐观更新场景；Step 5 启用 flashRowKeys 时配套） ─────── */
+/* ── Row flash 动画（乐观更新场景；CHG-DESIGN-02 Step 5 flashRowKeys 配套） ─────── */
 @keyframes admin-ui-dt-flash {
   0%   { background: color-mix(in oklch, var(--admin-accent-soft) 100%, transparent); }
   100% { background: transparent; }
@@ -65,6 +65,57 @@ const DT_CSS = `
 }
 @media (prefers-reduced-motion: reduce) {
   [data-table] [role="row"][data-flash="true"] { animation: none; }
+}
+
+/* ── Bulk action bar（CHG-DESIGN-02 Step 5，设计稿 .dt__bulk）─────── */
+[data-table-bulk] {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: var(--bg-surface-elevated);
+  border-top: 1px solid var(--accent-default);
+  box-shadow: 0 -8px 24px rgb(0 0 0 / 0.4);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+[data-table-bulk-count] {
+  color: var(--fg-default);
+  font-weight: 500;
+}
+[data-table-bulk-count] em {
+  color: var(--admin-accent-on-soft);
+  font-style: normal;
+  font-weight: 700;
+}
+[data-table-bulk-sep] {
+  width: 1px;
+  height: 18px;
+  background: var(--border-strong);
+}
+[data-table-bulk-actions] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+[data-table-bulk-clear] {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+[data-table-bulk-clear]:hover {
+  color: var(--fg-default);
+  border-color: var(--border-strong);
 }
 ` as const
 
