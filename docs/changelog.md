@@ -2762,3 +2762,63 @@ Codex stop-time review 命中根因：DataTable 根节点 inline `style={{ overf
 
 执行模型：claude-opus-4-7
 子代理：无
+
+---
+
+## fix(CHG-DESIGN-02 Step 7B)#3: bulk bar 移出 scrollport 防长表 buried below（Codex stop-time review）
+
+Step 7B fix#2（单一 scrollport 重构）把 bulk bar 留在 [data-table-scroll] 内 + `position: sticky; bottom: 0`。Codex stop-time review 命中：**长表 rows >> viewport 时 bulk bar 被埋没在 row 内容之下**。
+
+根因：`position: sticky` 元素只在"自然位置接近 viewport 底部"时才贴底（"sticky 区"由元素自然位置 + sticky 偏移触发）。bulk bar DOM 中位于所有 rows 之后；rows 多于一屏时，bulk bar 自然位置远在 viewport 之下，sticky 不会"提前贴底"，结果 bulk bar 实际渲染在 rows 之后看不见，必须滚到底部才能看到。这与设计稿"selection 时浮起的常驻浮条"语义违背。
+
+### 修复策略
+
+bulk bar 与 foot 同等地位：脱离 scroll 内容流，作为 **frame 直接子层**的 flex slot。frame `display: flex; flex-direction: column` 让 bulk bar 永远占在 [data-table-scroll] 之下、foot 之上的位置，selection=0 时不渲染。
+
+### 新 DOM 树（fix#3 后）
+
+```
+[data-table] (frame: overflow:hidden, flex column)
+├ toolbar / filter-chips           (固定头部)
+├ [data-table-scroll]              (flex:1, 双轴 scrollport)
+│  ├ thead (sticky top:0)
+│  └ body rows
+├ [data-table-bulk]                ← 移出 scrollport，frame 直接子（selection 时显示，flex-shrink:0）
+└ [data-table-foot]                (frame 直接子，固定底部)
+```
+
+### 关键效果
+
+- bulk bar 永远 visible（不依赖 sticky 触发条件，长表也不会埋没）
+- bulk bar 与 foot 视觉对齐：占 frame 内底部 flex slot；border-top: 1px solid accent 作为视觉分界
+- bulk bar 内容（已选 N 项 + 批量操作）与列宽 / scrollLeft 无关，独立于 scrollport 内容流是合理的语义切分
+- selection=0 时不渲染（DOM 不存在），foot 上移占 frame 内底；selection>0 时 bulk bar 显示，foot 仍在最底
+
+### 修改文件
+
+- `packages/admin-ui/src/components/data-table/data-table.tsx`：
+  - bulk bar `<div data-table-bulk>` 块从 `</div>` (scrollport 关闭) **之前**移到 **之后**
+  - 新位置：scrollport 关闭 → bulk bar → HeaderMenu portal → PaginationFoot
+  - 注释更新解释 sticky 失败与 fix#3 修复路径
+- `packages/admin-ui/src/components/data-table/dt-styles.tsx`：
+  - `[data-table-bulk]` 删除 `position: sticky; bottom:0; left:0; right:0; z-index:5; box-shadow`
+  - 保留 `display: flex + align-items + gap + padding + background + border-top + flex-shrink:0`
+  - 加 `min-width: 0`（与 frame 一起防止内容撑大）
+  - 注释更新说明 fix#3 语义切换
+- `tests/unit/components/admin-ui/table/step-7a-body-scroll.test.tsx`：
+  - 用例 3 改测：bulk **不**在 scrollport 内（`scrollEl.querySelector('[data-table-bulk]')` 应为 null）；frame 直接子顺序 `toolbar → scroll → bulk → foot`
+  - 用例 4 改测 long table（50 rows）+ selection 时 bulk + foot 都是 frame 直接子（`scrollEl.contains(bulk) === false`）；明示 fix#3 语义
+
+### 验收
+
+- typecheck ✅ 全 7 workspace
+- admin-ui 738/738 单测全绿（用例 3 / 4 均改测新 DOM 形态）
+- E2E `tests/e2e/admin/videos.spec.ts` 用 `[data-table-bulk]` 中性选择器（fix#1 已确立），不依赖 frame/scroll 嵌套位置，**fix#3 后无需再改**
+
+### 注意事项
+
+- 设计稿 reference.md §4.4.1 写"批量操作 .dt__bulk sticky bottom 在表格内部"。此处"在表格内部"指视觉位置（frame 内底部），不是 DOM 嵌套层级；fix#3 的 frame 直接子层 + flex slot 实现满足相同视觉契约且更稳定
+- 未来若设计需要 bulk bar 浮在最后一行**之上**而非占据底部空间（重叠覆盖样式），可改用 `position: absolute; bottom: foot高度; left: 0; right: 0` 相对 frame 定位（frame `position: relative` 已成立，因为 fix#2 设了 inline `position: relative`）
+
+执行模型：claude-opus-4-7
+子代理：无

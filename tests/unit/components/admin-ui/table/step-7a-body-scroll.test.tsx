@@ -78,7 +78,7 @@ describe('DataTable Step 7A + 7B fix#2 — scrollport / body / foot layout', () 
     expect(css).toMatch(/\[data-table-body\]\s*\{[^}]*display:\s*contents/)
   })
 
-  it('DOM 顺序（frame 直接子）：toolbar → (filter-chips) → scroll → foot；bulk 在 scroll 内', () => {
+  it('DOM 顺序（frame 直接子）：toolbar → (filter-chips) → scroll → bulk → foot；bulk 在 frame 直接子层', () => {
     const { container } = render(
       <DataTable<Row>
         rows={ROWS}
@@ -97,39 +97,50 @@ describe('DataTable Step 7A + 7B fix#2 — scrollport / body / foot layout', () 
     const children = Array.from(dt.children) as HTMLElement[]
     const toolbar = children.findIndex((c) => c.hasAttribute('data-table-toolbar'))
     const scroll = children.findIndex((c) => c.hasAttribute('data-table-scroll'))
+    const bulk = children.findIndex((c) => c.hasAttribute('data-table-bulk'))
     const foot = children.findIndex((c) => c.hasAttribute('data-table-foot'))
     expect(toolbar).toBeGreaterThanOrEqual(0)
     expect(scroll).toBeGreaterThan(toolbar)
-    expect(foot).toBeGreaterThan(scroll)
+    expect(bulk).toBeGreaterThan(scroll)
+    expect(foot).toBeGreaterThan(bulk)
 
-    // bulk 不在 frame 直接子层
-    expect(children.find((c) => c.hasAttribute('data-table-bulk'))).toBeUndefined()
-
-    // bulk + body 都应在 [data-table-scroll] 容器内
+    // CHG-DESIGN-02 Step 7B fix#3：bulk bar 不再在 scrollport 内（避免 long
+    // table buried below）；body 仍在 scrollport 内
     const scrollEl = container.querySelector('[data-table-scroll]')!
     expect(scrollEl.querySelector('[data-table-body]')).not.toBeNull()
-    expect(scrollEl.querySelector('[data-table-bulk]')).not.toBeNull()
+    expect(scrollEl.querySelector('[data-table-bulk]')).toBeNull()
   })
 
-  it('foot 在 scrollport 之外（frame 直接子，不随横滚漂移）', () => {
+  it('foot + bulk 都在 scrollport 之外（frame 直接子，不被 long table content 埋没/横滚漂移）', () => {
+    // long table：50 rows，模拟比 viewport 高得多的情况
+    const longRows: Row[] = Array.from({ length: 50 }, (_, i) => ({ id: String(i + 1), name: `R${i + 1}` }))
     const { container } = render(
       <DataTable<Row>
-        rows={ROWS}
+        rows={longRows}
         columns={COLUMNS}
         rowKey={(r) => r.id}
         mode="client"
         query={SNAPSHOT}
         onQueryChange={() => {}}
         pagination={{}}
+        selection={{ selectedKeys: new Set(['1']), mode: 'page' }}
+        onSelectionChange={() => {}}
+        bulkActions={<button>批量</button>}
       />,
     )
     const dt = container.querySelector('[data-table]')!
     const scrollEl = container.querySelector('[data-table-scroll]')
     const foot = container.querySelector('[data-table-foot]')
+    const bulk = container.querySelector('[data-table-bulk]')
     expect(scrollEl).not.toBeNull()
     expect(foot).not.toBeNull()
+    expect(bulk).not.toBeNull()
     // foot 是 frame 直接子，不在 scrollport 内
     expect(foot!.parentElement).toBe(dt)
     expect(scrollEl!.contains(foot)).toBe(false)
+    // CHG-DESIGN-02 Step 7B fix#3：bulk 也是 frame 直接子，不在 scrollport 内
+    // → 长表时不被 row 内容埋没（sticky 不依赖"自然位置接近 viewport 底部"）
+    expect(bulk!.parentElement).toBe(dt)
+    expect(scrollEl!.contains(bulk)).toBe(false)
   })
 })

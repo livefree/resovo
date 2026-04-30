@@ -530,9 +530,17 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
           )
         })}
       </div>
-      {/* CHG-DESIGN-02 Step 5/7：表内 sticky bottom bulk action bar
-        * Step 7B fix#2：bulk bar 留在 [data-table-scroll] viewport 内，sticky bottom
-        * 浮在最后一行上方；scrollLeft 与 thead/body 共享同一容器自然同步。 */}
+      </div>
+      {/* CHG-DESIGN-02 Step 5/7 + 7B fix#3：bulk action bar 在 frame 直接子层
+        * 上一轮（fix#2）把 bulk bar 留在 [data-table-scroll] 内 + sticky bottom，
+        * 但 sticky 元素只在"自然位置接近 viewport 底部时"才贴底；长表 rows >>
+        * viewport 时 bulk bar 自然位置远在 viewport 下方，导致 buried below
+        * （Codex stop-time review fix#3）。
+        *
+        * 修复：bulk bar 与 foot 同样作 frame 直接子层（脱离 scroll 内容流），
+        * frame flex column 内永远占 foot 之上一行 flex-shrink:0 slot；selection=0
+        * 时不渲染。bulk bar 内容（已选 N 项 + 批量操作）与列宽 / scrollLeft
+        * 无关，无需进入 scrollport 同步。 */}
       {shouldRenderBulkBar && (
         <div data-table-bulk role="region" aria-label="批量操作">
           <span data-table-bulk-count>
@@ -550,9 +558,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
           </button>
         </div>
       )}
-      </div>
-      {/* HeaderMenu portal — 渲染在 frame 直接子层（不进 scrollport），
-        * 与 portal 容器（document.body）一起脱离 frame 流，无横滚漂移。 */}
+      {/* HeaderMenu portal — 渲染到 document.body，不参与 frame layout */}
       {enableHeaderMenu && (
         <HeaderMenu
           open={menuColId !== null}
@@ -567,8 +573,8 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
           onClose={closeHeaderMenu}
         />
       )}
-      {/* CHG-DESIGN-02 Step 7A + 7B fix#2：foot 在 [data-table-scroll] 之外
-        * 永远固定在 frame 底部，不随 body 横向滚动漂移。 */}
+      {/* CHG-DESIGN-02 Step 7A + 7B fix#2/3：foot 在 [data-table-scroll] 之外，
+        * frame 直接子层最末位，永远固定 frame 底部，不随 body 横向滚动漂移。 */}
       <PaginationFoot
         config={pagination}
         page={query.pagination.page}

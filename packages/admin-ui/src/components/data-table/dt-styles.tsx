@@ -186,22 +186,19 @@ const DT_CSS = `
   [data-table] [role="row"][data-flash="true"] { animation: none; }
 }
 
-/* ── Bulk action bar（CHG-DESIGN-02 Step 5，设计稿 .dt__bulk）─────── */
+/* ── Bulk action bar（CHG-DESIGN-02 Step 5 + 7B fix#3，设计稿 .dt__bulk）─────── *
+ * fix#3：bulk bar 作 frame 直接子层 flex slot（不在 scrollport 内 sticky）；
+ * selection 非空时显示，与 foot 一同永驻 frame 内底部不被 long table content 埋没。 */
 [data-table-bulk] {
-  position: sticky;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 5;
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 8px 14px;
   background: var(--bg-surface-elevated);
   border-top: 1px solid var(--accent-default);
-  box-shadow: 0 -8px 24px rgb(0 0 0 / 0.4);
   font-size: 12px;
   flex-shrink: 0;
+  min-width: 0;
 }
 [data-table-bulk-count] {
   color: var(--fg-default);
