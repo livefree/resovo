@@ -176,6 +176,93 @@ describe('useTableQuery — saveView / applyView / deleteView', () => {
   })
 })
 
+describe('useTableQuery — saveView 不污染消费方非 20 默认 pageSize（Step 6 fix#）', () => {
+  beforeEach(() => {
+    resetStore()
+    clearStorage()
+  })
+
+  it('defaults.pagination.pageSize=50 + saveView（无前置 patch）→ storage.pageSize 为 undefined', () => {
+    const { result } = renderHook(() =>
+      useTableQuery({
+        tableId: 'tbl-50',
+        router: makeRouter(),
+        defaults: { pagination: { page: 1, pageSize: 50 } },
+        columns: COLS,
+      }),
+    )
+    act(() => {
+      result.current.saveView('保存', 'personal')
+    })
+    const stored = readFromStorage('tbl-50')
+    // saveView 前 writeToStorage 未触发 → pageSize 不应被伪造（旧 bug 写 20）
+    expect(stored?.pageSize).toBeUndefined()
+    expect(stored?.views?.length).toBe(1)
+  })
+
+  it('saveView → 重新挂 hook → 应用 defaults.pageSize=50（不被 storage 中假值污染）', () => {
+    // 第一次挂载：保存视图
+    const { unmount } = renderHook(() =>
+      useTableQuery({
+        tableId: 'tbl-50',
+        router: makeRouter(),
+        defaults: { pagination: { page: 1, pageSize: 50 } },
+        columns: COLS,
+      }),
+    )
+    act(() => {
+      tableQueryStore.getState().setSnapshot('tbl-50', buildDefaultSnapshot(COLS, { pagination: { page: 1, pageSize: 50 } }))
+    })
+    // 直接通过 store 触发 saveView 的 hook 实例
+    const { result: r1 } = renderHook(() =>
+      useTableQuery({
+        tableId: 'tbl-50',
+        router: makeRouter(),
+        defaults: { pagination: { page: 1, pageSize: 50 } },
+        columns: COLS,
+      }),
+    )
+    act(() => {
+      r1.current.saveView('My View', 'personal')
+    })
+    unmount()
+
+    // 模拟刷新：清空 store（保留 sessionStorage），重新挂载
+    tableQueryStore.setState({ snapshots: new Map(), views: new Map() })
+    const { result: r2 } = renderHook(() =>
+      useTableQuery({
+        tableId: 'tbl-50',
+        router: makeRouter(),
+        defaults: { pagination: { page: 1, pageSize: 50 } },
+        columns: COLS,
+      }),
+    )
+    // init effect 后 snapshot pageSize 应为 50（消费方默认），而非旧 bug 的 20
+    expect(r2.current.snapshot.pagination.pageSize).toBe(50)
+  })
+
+  it('writeViewsToStorage 在无既有 prefs 时只写 views（不伪造 pageSize/columns）', () => {
+    const view: TableView = {
+      id: 'v',
+      label: 'V',
+      scope: 'personal',
+      query: {
+        pagination: { page: 1, pageSize: 100 },
+        sort: { field: undefined, direction: 'asc' },
+        filters: new Map(),
+        columns: new Map(),
+      },
+      createdAt: '2026-04-29T00:00:00Z',
+      updatedAt: '2026-04-29T00:00:00Z',
+    }
+    writeViewsToStorage('fresh', [view])
+    const stored = readFromStorage('fresh')
+    expect(stored?.views?.length).toBe(1)
+    expect(stored?.pageSize).toBeUndefined()
+    expect(stored?.columns).toBeUndefined()
+  })
+})
+
 describe('storage-sync — views schema 兼容性', () => {
   beforeEach(() => clearStorage())
 

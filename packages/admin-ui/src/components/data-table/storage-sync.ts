@@ -19,15 +19,20 @@
 import type { TableQuerySnapshot, ColumnPreference, TableView } from './types'
 
 const STORAGE_VERSION = 'v1'
-const DEFAULT_PAGE_SIZE = 20
 
 function storageKey(tableId: string): string {
   return `admin-ui:table:${tableId}:${STORAGE_VERSION}`
 }
 
+/**
+ * 持久化字段全部 optional：每个字段独立写入路径（writeToStorage 写 pageSize/columns；
+ * writeViewsToStorage 写 views）；当某路径未触发，对应字段不应被伪造默认值
+ * （Step 6 fix#: 防止 writeViewsToStorage 在无既有 prefs 时硬编码 pageSize=20，
+ * 覆盖消费方实际的非 20 默认值）。
+ */
 export interface StoredPrefs {
-  readonly pageSize: number
-  readonly columns: Readonly<Record<string, { visible: boolean; width?: number }>>
+  readonly pageSize?: number
+  readonly columns?: Readonly<Record<string, { visible: boolean; width?: number }>>
   /** Saved views（CHG-DESIGN-02 Step 6）；缺省即未保存任何视图 */
   readonly views?: readonly TableView[]
 }
@@ -49,12 +54,15 @@ function isPersistedView(val: unknown): val is TableView {
 function isStoredPrefs(val: unknown): val is StoredPrefs {
   if (typeof val !== 'object' || val === null) return false
   const v = val as Record<string, unknown>
-  if (typeof v['pageSize'] !== 'number') return false
-  if (typeof v['columns'] !== 'object' || v['columns'] === null) return false
-  const cols = v['columns'] as Record<string, unknown>
-  for (const entry of Object.values(cols)) {
-    if (typeof entry !== 'object' || entry === null) return false
-    if (typeof (entry as Record<string, unknown>)['visible'] !== 'boolean') return false
+  // 全部字段 optional；如存在必须类型正确
+  if (v['pageSize'] !== undefined && typeof v['pageSize'] !== 'number') return false
+  if (v['columns'] !== undefined) {
+    if (typeof v['columns'] !== 'object' || v['columns'] === null) return false
+    const cols = v['columns'] as Record<string, unknown>
+    for (const entry of Object.values(cols)) {
+      if (typeof entry !== 'object' || entry === null) return false
+      if (typeof (entry as Record<string, unknown>)['visible'] !== 'boolean') return false
+    }
   }
   if (v['views'] !== undefined) {
     if (!Array.isArray(v['views'])) return false
@@ -176,13 +184,16 @@ export function writeToStorage(tableId: string, snapshot: TableQuerySnapshot): v
 }
 
 /**
- * 写入 saved views（CHG-DESIGN-02 Step 6）。先 read + merge 以保留 pageSize / columns。
+ * 写入 saved views（CHG-DESIGN-02 Step 6）。
+ * 仅写入 views 字段；pageSize / columns 通过 read+merge 从既有 prefs 复制（如有），
+ * 不存在时**不写入伪造默认值**（fix#: 防止 writeViewsToStorage 在 saveView
+ * 第一次调用时硬编码 pageSize=20，覆盖消费方实际的非 20 默认值）。
  */
 export function writeViewsToStorage(tableId: string, views: readonly TableView[]): void {
   const existing = readFromStorage(tableId)
   const prefs: StoredPrefs = {
-    pageSize: existing?.pageSize ?? DEFAULT_PAGE_SIZE,
-    columns: existing?.columns ?? {},
+    ...(existing?.pageSize !== undefined ? { pageSize: existing.pageSize } : {}),
+    ...(existing?.columns !== undefined ? { columns: existing.columns } : {}),
     views,
   }
   writeRaw(tableId, prefs)
@@ -191,6 +202,7 @@ export function writeViewsToStorage(tableId: string, views: readonly TableView[]
 export function storedPrefsToColumnMap(
   prefs: StoredPrefs,
 ): ReadonlyMap<string, ColumnPreference> {
+  if (!prefs.columns) return new Map()
   return new Map(
     Object.entries(prefs.columns).map(([id, p]) => [
       id,

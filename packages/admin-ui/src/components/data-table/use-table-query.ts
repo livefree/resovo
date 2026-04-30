@@ -93,9 +93,13 @@ export function useTableQuery(options: UseTableQueryOptions): {
     // 2. Read sessionStorage
     const stored = readFromStorage(tid)
 
-    // 3. Merge: URL wins for page/sort/filters; storage wins for pageSize/columns
+    // 3. Merge: URL wins for page/sort/filters; storage wins for pageSize/columns（如存在）
+    // 注意：StoredPrefs 字段全 optional（Step 6 fix#），仅当对应字段实际存储过才优先；
+    // 否则回退到 base（消费方在 defaults 提供的真实默认）。
     const pageSize = stored?.pageSize ?? base.pagination.pageSize
-    const columnMap = stored ? storedPrefsToColumnMap(stored) : base.columns
+    const columnMap = stored?.columns !== undefined
+      ? storedPrefsToColumnMap(stored)
+      : base.columns
 
     const initial: TableQuerySnapshot = {
       pagination: { page: urlParams.page, pageSize },
