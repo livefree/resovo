@@ -378,6 +378,38 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
     expect(screen.queryByText('过滤')).toBeNull()
   })
 
+  it('filterContent=非空 generator → 物化后真实渲染（不会因检测消耗导致空）', () => {
+    function* gen(): Generator<React.ReactNode> {
+      yield null
+      yield <div key="real" data-testid="filter-gen-real">generator 过滤内容</div>
+      yield false
+    }
+    const cols: TableColumn<Row>[] = [
+      {
+        id: 'name',
+        header: 'Name',
+        accessor: (r) => r.name,
+        enableSorting: true,
+        columnMenu: { filterContent: gen() as unknown as React.ReactNode },
+      },
+    ]
+    render(
+      <DataTable<Row>
+        rows={ROWS}
+        columns={cols}
+        rowKey={(r) => r.id}
+        mode="client"
+        query={makeSnapshot({ columns: new Map([['name', { visible: true }]]) })}
+        onQueryChange={() => {}}
+        enableHeaderMenu
+      />,
+    )
+    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    // section 可见 + 实际内容渲染（generator 物化为 array 后可重复迭代）
+    expect(screen.getByText('过滤')).toBeTruthy()
+    expect(screen.getByTestId('filter-gen-real')).toBeTruthy()
+  })
+
   it('filterContent=Set 含一个可渲染节点 → 渲染过滤区块', () => {
     const cols: TableColumn<Row>[] = [
       {

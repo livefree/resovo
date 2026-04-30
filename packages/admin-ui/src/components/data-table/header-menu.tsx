@@ -12,7 +12,7 @@
  * 范式：完全对照 ColumnSettingsPanel — portal 渲染、ESC + 点击外部关闭、
  *      anchorRef.getBoundingClientRect 计算位置、focus 首项。
  */
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ColumnDescriptor, ColumnMenuConfig, ColumnPreference, TableSortState } from './types'
 
@@ -93,19 +93,34 @@ const FILTER_LABEL_STYLE: React.CSSProperties = {
 }
 
 /**
- * ReactNode 中"渲染为空"的合法值检测（含递归 array + 任意 Iterable）。
- * 用途：决定是否渲染过滤区块——避免 filterContent={[]} / new Set() /
- * generator 等合法但视觉为空的值触发空"过滤"标签 + 空白区块。
+ * 把 filterContent 物化为可重复渲染的形态：单次 iterable（generator / iterator
+ * 等）转 Array，避免"检测时消耗、React 渲染时空"的 single-use 陷阱。
+ * Array / 字符串 / ReactElement / 原始值原样返回（不复制）。
+ */
+function materializeFilterContent(node: React.ReactNode): React.ReactNode {
+  if (node === null || node === undefined) return node
+  if (typeof node !== 'object') return node
+  if (Array.isArray(node)) return node
+  const candidate = node as { [Symbol.iterator]?: unknown }
+  if (typeof candidate[Symbol.iterator] === 'function') {
+    // Set / generator / 自定义 iterable 一次性物化为 Array，下游可重复迭代
+    return Array.from(node as Iterable<React.ReactNode>)
+  }
+  return node
+}
+
+/**
+ * ReactNode 中"渲染为空"的合法值检测（递归数组）。
+ * 用途：决定是否渲染过滤区块——避免合法但视觉为空的值触发空"过滤"标签 + 空白区块。
+ *
+ * 调用前必须先 materializeFilterContent，确保 single-use iterable 已转为 Array。
  *
  * 处理顺序：
  *   1. nullish / boolean → false
  *   2. 字符串 → 仅非空时 renderable
  *   3. number / bigint → true
  *   4. Array → 至少一个元素 renderable（递归）
- *   5. 其他 Iterable（Set / generator / 自定义）→ 迭代检测；
- *      注意：generator 等单次迭代器会被消耗一次，但 React 自身渲染时也会迭代，
- *      消费者若需复用应传 Array。
- *   6. 非 iterable 对象（ReactElement / ReactPortal）→ 视为 renderable
+ *   5. 非 array 对象（ReactElement / ReactPortal）→ 视为 renderable
  *
  * 不覆盖：空 React Fragment <></>（检测需 inspect 内部 children，脆弱）。
  */
@@ -116,15 +131,7 @@ function isRenderableNode(node: React.ReactNode): boolean {
   if (typeof node === 'number' || typeof node === 'bigint') return true
   if (typeof node !== 'object') return true
   if (Array.isArray(node)) return node.some(isRenderableNode)
-  // Symbol.iterator 检测覆盖 Set / generator / 自定义 iterable
-  const candidate = node as { [Symbol.iterator]?: unknown }
-  if (typeof candidate[Symbol.iterator] === 'function') {
-    for (const item of node as Iterable<React.ReactNode>) {
-      if (isRenderableNode(item)) return true
-    }
-    return false
-  }
-  // React element（含 $$typeof 的对象）— 视为 renderable
+  // 非 array object（ReactElement / ReactPortal）— 视为 renderable
   return true
 }
 
@@ -212,6 +219,13 @@ export function HeaderMenu({
     first?.focus()
   }, [open, mounted])
 
+  // 物化 filterContent — 必须在所有早期 return 之前调 useMemo，遵守 Rules of Hooks
+  // 单次 iterable（generator / iterator）转 Array 后可重复迭代，避免检测消耗后 React 渲染空
+  const filterContent = useMemo(
+    () => materializeFilterContent(columnMenu?.filterContent),
+    [columnMenu?.filterContent],
+  )
+
   if (!open || !mounted || !column) return null
 
   // 排序门控：column.enableSorting + columnMenu.canSort（默认允许）
@@ -225,11 +239,7 @@ export function HeaderMenu({
   const isVisible = stored !== undefined ? stored.visible : column.defaultVisible !== false
   const hideable = !isPinned && isVisible && columnMenu?.canHide !== false
 
-  // 过滤门控：filterContent 必须是可渲染节点（排除 ReactNode 中"渲染为空"的合法值
-  //   undefined / null / boolean / 空字符串 / 空数组 / 全部为空的数组）
-  // 否则空"过滤"标签 + 空白区块 = broken menu
-  // OR 当前已过滤（isFiltered=true 单独显示"已过滤"标记也有意义）
-  const filterContent = columnMenu?.filterContent
+  // 过滤门控：filterContent（已物化）renderable OR isFiltered=true（"已过滤"标记单独显示也有意义）
   const hasRenderableFilter = isRenderableNode(filterContent)
   const isFiltered = columnMenu?.isFiltered === true
   const showFilterSection = hasRenderableFilter || isFiltered
