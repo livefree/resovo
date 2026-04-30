@@ -2963,3 +2963,133 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - 审计日志 / 保存所有更改 button 真实功能（当前为占位 button）
 - 8 类 tab 扩张（reference.md §5.11 未明示更多类，留 follow-up）
 - SettingsContainer smoke 单测（待 CHG-SN-3-14 补 server-next 组件单测基础设施）
+
+---
+
+## [CHG-DESIGN-07 7A+7B+7C+7D-1] Dashboard 8 卡片浏览态 — 共享组件契约 + 实装 + 业务集成 + desk review
+
+- **完成时间**：2026-04-30（7A→7B→7C→7D-1 同一 session 推进）
+- **记录时间**：2026-04-30
+- **执行模型**：claude-opus-4-7（继承 SEQ-20260429-02 session）
+- **子代理调用**：
+  - 7A：`arch-reviewer` (claude-opus-4-7) — KpiCard / Spark Props 契约审；CONDITIONAL → 必修 2 项闭环 → PASS（1 轮）
+  - 7B：`arch-reviewer` (claude-opus-4-7) — 实装与契约一致性审；**PASS 直接通过**（P0 8/8 / P1 无 MUST / P2 letter-spacing 顺手修）
+- **关联序列**：SEQ-20260429-02 第 7 卡
+
+### 阶段 1 — 7A：契约（contract only）
+
+**产出**：
+- `packages/admin-ui/src/components/cell/kpi-card.types.ts`：`KpiCardProps / KpiCardDelta / KpiCardVariant / KpiDeltaDirection`
+- `packages/admin-ui/src/components/cell/spark.types.ts`：`SparkProps / SparkVariant`
+- `packages/admin-ui/src/components/cell/index.ts`：type re-export 占位
+
+**契约要点**：
+- `KpiCardVariant`: 4 值 union（`default | is-warn | is-danger | is-ok`）控制容器 border + value 染色；不动整卡背景
+- `KpiDeltaDirection`: 3 值 union（`up | down | flat`）独立控制 delta 文本染色；箭头字符由消费方写入 text，本组件不自动注入
+- variant × direction 维度独立；reference §5.1.2 4 张 KPI 全部覆盖
+- `KpiCardProps.spark`: ReactNode slot；falsy → 不渲染 slot；非 null ReactNode → 60×18 容器（实装可证一致）
+- `KpiCardProps.dataSource`: `'mock' | 'live' | undefined` 三态分别渲染 attribute（防 reference §5.1.4 假绿模式）
+- `SparkProps.data`: 0 数据点 return null（无 a11y 替代）；1 数据点单 dot；N 数据点 polyline / area
+
+**Codex stop-time review fixes（4 处契约内部矛盾全部闭环）**：
+1. variant 映射表错用 "delta is-up / default / is-down" 命名 → 改用 KpiDeltaDirection 实际值
+2. `KpiDeltaDirection` 与 `KpiCardDelta` jsdoc 一处说"渲染 ↑ 前缀"另一处说"不自动注入箭头" → 统一到"direction 仅控制染色"
+3. 状态规则段漏 flat（也染色） → 补 up|down|flat 三值
+4. `Spark` 0 数据点 "return null + a11y 文案" 自相矛盾 → 改为 null 即无 a11y 替代，消费方负责外层占位
+
+### 阶段 2 — 7B：实装 + 单测
+
+**产出**：
+- `packages/admin-ui/src/components/cell/kpi-card.tsx`：3 row 布局（header → value → footer），4 variant 染色，3 delta direction 独立染色，spark slot 60×18，dataSource attribute，onClick → button + role group dual-path
+- `packages/admin-ui/src/components/cell/spark.tsx`：0/1/N 数据点路径，line/area variant，Y 翻转归一化 + min===max 退化，零图表库依赖
+- `tests/unit/components/admin-ui/cell/kpi-card.test.tsx`：37 case
+- `tests/unit/components/admin-ui/cell/spark.test.tsx`：20 case
+- `packages/admin-ui/src/components/cell/index.ts`：追加组件命名导出
+- `packages/admin-ui/src/index.ts`：追加 `export * from './components/cell'`
+
+**Codex stop-time review fixes（2 处契约-实装可证一致 fix 闭环）**：
+1. `KpiCard.spark={<Spark data={[]} />}` slot null 行为 — 父组件无法探测子元素渲染输出，仅判断 prop truthy 性。修：契约改为"slot 渲染随 prop truthy 性，footer min-height: 18px 兜底对齐 4 张 KPI"，与实装可证一致
+2. `dataSource` jsdoc 暗示"不传 = live"但实装显式 `'live'` 与不传 attribute 行为不同；`ariaLabel` 派生策略 jsdoc 简化未表达 string/number vs ReactNode 分支 — 修：扩展 jsdoc 列三态行为 + 三种语义场景
+
+### 阶段 3 — 7C：业务集成 + 数据契约对齐 + regression gate
+
+**步骤 1（数据契约对齐）**：
+- `apps/server-next/src/lib/videos/api.ts` `ModerationStats` 类型修正：
+  - 错：`{ pendingReview / published / rejected / total }`（4 字段全错；CHG-SN-3-08 假绿根因）
+  - 正：`{ pendingCount / todayReviewedCount / interceptRate }`（与后端 `apps/api/src/db/queries/videos.ts` `ModerationStats` 接口一致）
+
+**步骤 2（派生类型 + mock 集中）**：
+- `apps/server-next/src/lib/dashboard-data.ts`：`DashboardKpi / DashboardWorkflowSegment / DashboardAttentionItem / DashboardActivityItem / DashboardSiteHealth / DashboardStats`
+- `buildDashboardStats(ModerationStats | null)`：live + mock 混合派生；live 字段 dataSource='live'；缺字段 fallback mock + dataSource='mock'
+
+**步骤 3（5 类业务卡）**：
+- `AttentionCard`：head warn icon + 4 条 mock + sev icon + xs btn
+- `WorkflowCard`：4 段 progress + 底部 audit/batch-publish
+- `MetricKpiCardRow`：4 张 KpiCard（通过 packages/admin-ui 共享组件）
+- `RecentActivityCard`：28×28 sev icon + who·what + when
+- `SiteHealthCard`：前 8 站 + 18×18 health box + Spark 行级
+
+**步骤 4（DashboardClient 重写）**：
+- 4 行布局：page__head / row1 1.4fr/1fr / row2 repeat(4,1fr) / row3 1fr/1fr
+- 删 StatCard 占位（CHG-SN-3-08 假绿根因）
+
+**步骤 5/6（regression gate）**：
+- unit smoke 24 case（11 DashboardClient + 13 buildDashboardStats）
+- e2e smoke 3 路径（200 完整 / 200 部分 / 500）
+- 断言收紧到 `[data-card-value]` / `[data-source="mock"]`，不在 `[data-page-head]` 上 grep '—'（避免误伤 em-dash 文案）
+
+**步骤 7（grep 验证）**：
+- `data-stat-card` / `import { StatCard }` 0 残留
+- 错误字段（`pendingReview`/`published`/`total`）仅注释中保留作历史背景
+
+**步骤 8（质量门禁）**：
+- typecheck 7 workspace 全绿
+- lint 4 task 全绿
+- verify:token-references PASS (67/322)
+- 单测 2691/2691 全绿（+24 dashboard）
+
+**vitest.config.ts**：`@/components/admin` + `@/components/shared` alias 改 context-aware（server-next importer 走 apps/server-next；historic v1 server importer 仍走 apps/server）
+
+**Codex stop-time review fixes（3 处假数据 / 文档同步闭环）**：
+1. **拦截率 100x too high**：后端 `interceptRate` 已是百分数，server-next dashboard-data.ts 又乘 100 → 显示 1230.0%。修：删除 ×100 + 完整 jsdoc 描述百分数语义 + 13 case interceptRate 边界守门
+2. **stale producer docs + dashboard mocks**：后端生产方 jsdoc 字面读是 ratio (0-1)；本 session 写的 dashboard mocks 用 0.12（ratio 心智）。修：同步生产方 jsdoc 到百分数语义 + dashboard mocks 0.12 → 12.3
+3. **stale cross-file line refs**：jsdoc 引用 `videos.ts:1120-1125` / `videos.ts:1157` 在生产方 jsdoc 扩张后漂移。修：完全删除行号锚点，改引文件 + 类型/函数名（稳定锚点）
+
+### 阶段 4 — 7D-1：9 项视觉 desk review（代码层面字面对照 reference §5.1）
+
+| # | reference §5.1 规格 | 代码事实（文件 / 关键 prop） | desk review |
+|---|---|---|---|
+| 1 | page__head（问候式 title + 最后采集 sub + actions row：「全站全量采集」次按钮 + 「进入审核台」primary） | `DashboardClient.tsx`：`<header data-page-head>` + h1（20px / 700）+ `[data-page-head-sub]` + 双 actions `[data-page-action="full-crawl|enter-moderation"]` | ✅ |
+| 2 | row1: grid 1.4fr/1fr gap 12 → AttentionCard + WorkflowCard | `DashboardClient.tsx` ROW1_STYLE: `gridTemplateColumns: '1.4fr 1fr'`, `gap: '12px'` + `<div data-dashboard-row="1">` 内 AttentionCard + WorkflowCard | ✅ |
+| 3 | row2: grid repeat(4,1fr) gap 12 → 4 张 MetricKpiCard（不允许 auto-fill 折行） | `MetricKpiCardRow.tsx` ROW_STYLE: `gridTemplateColumns: 'repeat(4, 1fr)'`（明确禁止 auto-fill / minmax 折行的注释） | ✅ |
+| 4 | row3: grid 1fr/1fr gap 12 → RecentActivityCard + SiteHealthCard | `DashboardClient.tsx` ROW3_STYLE: `gridTemplateColumns: '1fr 1fr'`, `gap: '12px'` | ✅ |
+| 5 | AttentionCard：head warn icon + sub「按优先级排序的当前异常」+ 右侧 xs btn「全部解决」+ 4 条 mock + border-subtle 分隔 | `AttentionCard.tsx`：head 渲染 `<AlertTriangle size={18} />` + h3 + sub + `[data-card-action="resolve-all"]` 「全部解决」；body 4 条 mock；从第二条起 `borderTop: '1px solid var(--border-subtle)'` | ✅ |
+| 6 | WorkflowCard：head sparkle icon + sub + 4 段 progress（label/数值/6px bar，accent/warn/info/ok 配色）+ 底部 grid 1fr/1fr 「审核」+「批量发布」 | `WorkflowCard.tsx`：head `<Sparkles size={18} />` + h3 + sub；4 段 progress（SEG_LABEL_STYLE 12px / SEG_BAR_TRACK_STYLE height 6px / 4 段独立 color）；FOOT_STYLE `gridTemplateColumns: '1fr 1fr'` + 双 btn `[data-workflow-action="review|batch-publish"]` | ✅ |
+| 7 | MetricKpiCard：label 11px uppercase letter-spacing 1px + value 26px/700 tabular + delta 11px is-up/down + spark 60×18 opacity 0.4 右下 + is-warn/danger/ok 控制 border + value（不改整卡背景） | `kpi-card.tsx`：LABEL_STYLE 11px uppercase letterSpacing 1px / VALUE 26px 700 tabular-nums / DELTA 11px / SPARK_SLOT 60×18 opacity 0.4 / variantBorderStyle + variantValueColor 仅染 border + value 不动 background | ✅ |
+| 8 | RecentActivityCard：每条 28×28 radius 6 bg3 + sev icon + strong who·what 12 + when 11 muted + 行间 border-subtle | `RecentActivityCard.tsx`：ICON_BOX_BASE_STYLE 28×28 radius 6 + sev 配色 icon；TEXT_STYLE 12px + WHEN_STYLE 11px muted；行间 border-subtle | ✅ |
+| 9 | SiteHealthCard：18×18 radius 4 health 数字（>80 ok / >50 warn / else danger）+ name 12/600 + type·format·last 11 muted + spark 60×18 + xs btn（开机=增量/关机=重启）+ 前 8 站 | `SiteHealthCard.tsx`：HEALTH_BOX 18×18 radius 4 + healthBg() 三档；NAME 12/600 + META 11 muted；行级 `<Spark>` 60×18；btn 文案 `site.online ? '增量' : '重启'`；`sites.slice(0, 8)` | ✅ |
+
+**desk review 结论：9/9 全部 ✅**。代码字面对齐 reference §5.1 全部规格。
+
+### 7D-2 留新 session 推进
+
+- 起 dev server（server-next:3003 + api:4000 + 依赖栈）
+- Playwright MCP `browser_navigate` /admin → `browser_snapshot` + `take_screenshot` 三行 + 5 类卡片 close-up
+- 截图入库 `tests/visual/dashboard/` ≥ 8 张 PNG（命名 `<row|card>--<state>.png`），git 提交作为 `INFRA-VISUAL-DIFF-CI` follow-up 基线
+- 实跑 `tests/e2e/admin/dashboard.spec.ts` 3 路径
+
+### 验收
+
+- typecheck / lint / verify:token-references / 2691 单测全绿
+- arch-reviewer 双轮 PASS
+- 7 处 Codex stop-time review fix 全部闭环（4 处契约矛盾 + 2 处契约-实装一致性 + 3 处 7C 假数据/文档同步/stale refs；总计 9 处独立缺陷）
+- 9 项 reference §5.1 视觉规格 desk review 全过
+
+### 不在范围（留账）
+
+- 7D-2 visual baseline 截图入库（新 session 推）
+- 7D-2 e2e smoke 实跑（依赖 dev server）
+- 编辑态（CardLibraryDrawer / FullscreenCard，§A4 决议后做）
+- analytics tab 内容（CHG-DESIGN-09）
+- visual diff CI 集成（follow-up `INFRA-VISUAL-DIFF-CI`）
+- live 数据扩张（follow-up `STATS-EXTEND-DASHBOARD`：源可达率 / 失效源 / 视频总量 / 已上架等）
