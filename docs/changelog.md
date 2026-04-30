@@ -2466,3 +2466,18 @@ CHG-DESIGN-11 #3 已加 §0a 总览 + §4.4.1 / §6.0 行内标注，但 Codex s
 
 执行模型：claude-opus-4-7
 子代理：无
+
+---
+
+## fix(CHG-DESIGN-11)#5: reference.md §4.4.2 删除虚构的 BulkActionsConfig 类型（Codex stop-time review）
+
+CHG-DESIGN-11 #4 在 §4.4.2 props 接口块写 `bulkActions?: ReactNode | BulkActionsConfig`，但 `packages/admin-ui/src/components/data-table/types.ts:46` 实际签名是 `readonly bulkActions?: React.ReactNode`，**没有** `BulkActionsConfig` 类型。Codex stop-time review 命中：reference.md 公开了一个不存在的 API，会让按文档调用的执行者撞 TS 编译失败。
+
+修复：
+
+- `bulkActions?: ReactNode | BulkActionsConfig` → `bulkActions?: React.ReactNode`，注释明示"落地为 ReactNode 直传，**没有** BulkActionsConfig 类型"
+- `toolbar?: ReactNode | ToolbarConfig` → `toolbar?: ToolbarConfig`，注释明示"落地为 ToolbarConfig 单形态，未支持 ReactNode 直传"
+- 整段注释开头加"签名以 packages/admin-ui/src/components/data-table/types.ts 为准"，避免后续再误造 API
+
+执行模型：claude-opus-4-7
+子代理：无
