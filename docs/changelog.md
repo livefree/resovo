@@ -3093,3 +3093,65 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - analytics tab 内容（CHG-DESIGN-09）
 - visual diff CI 集成（follow-up `INFRA-VISUAL-DIFF-CI`）
 - live 数据扩张（follow-up `STATS-EXTEND-DASHBOARD`：源可达率 / 失效源 / 视频总量 / 已上架等）
+
+---
+
+## [CHG-DESIGN-07 7D-2] Dashboard visual baseline 入库 + e2e 实跑 + 整卡闭合
+
+- **完成时间**：2026-04-30
+- **执行模型**：claude-opus-4-7（同 session 推进）
+- **关联序列**：SEQ-20260429-02 第 7 卡 · 阶段 4/4 后半（7D-2）
+
+### 7D-2 产出
+
+**dev 栈启动**：本地 pg :5432 + redis :6379 已在跑；`npm run dev` 启动 design-tokens / api :4000 / server / server-next :3003 / web-next 全栈
+
+**e2e smoke 实跑（3/3 全过）**：
+- `npx playwright test tests/e2e/admin/dashboard.spec.ts --project=admin-next-chromium`
+- case 200 完整 ✅ / 200 部分字段缺失 ✅ / 500 接口失败 ✅
+- 22.8s 完成
+
+**Visual baseline 入库（12 张 PNG）**：
+- 工具：`scripts/capture-dashboard-baseline.mjs`（一次性 Playwright headless chromium，复刻 dashboard.spec.ts 200 完整 mock 路径，dark colorScheme + 1440×900 viewport）
+- 入库到 `tests/visual/dashboard/`：
+  - `dashboard-full.png`（完整页面 fullPage 截图）
+  - `row1.png` / `row2.png` / `row3.png`（三行布局）
+  - `attention-card.png` / `workflow-card.png`（row1 单卡）
+  - `metric-kpi--default.png` / `metric-kpi--is-warn.png` / `metric-kpi--is-ok.png` / `metric-kpi--is-danger.png`（row2 4 张 variant）
+  - `recent-activity-card.png` / `site-health-card.png`（row3 单卡）
+- git 提交作为 `INFRA-VISUAL-DIFF-CI` follow-up 基线
+
+### 9 项视觉规格 visual 二次签收（与 7D-1 desk review 互证）
+
+| # | reference §5.1 规格 | visual 验证 |
+|---|---|---|
+| 1 | page__head（问候式 title + sub + 双 actions） | ✅ "早上好，Yan — 今天有 484 / 23 待处理" + "今日已审 67 条 · 拦截率 12.3%"（live 注入）+ 「全站全量采集」+「进入审核台」|
+| 2 | row1: 1.4fr/1fr → AttentionCard + WorkflowCard | ✅ 左宽右窄 visual 对照 row1.png |
+| 3 | row2: repeat(4,1fr) → 4 张 MetricKpiCard | ✅ row2.png 4 张等宽并排，无折行 |
+| 4 | row3: 1fr/1fr → RecentActivityCard + SiteHealthCard | ✅ row3.png 等宽双列 |
+| 5 | AttentionCard：head warn icon + 4 mock + sev icon + xs btn + border-subtle | ✅ attention-card.png 完整 |
+| 6 | WorkflowCard：sparkle icon + 4 段 progress + 底部双 btn | ✅ workflow-card.png 含 142/200 / 484/600 / 23/50 / 188/200 + 配色（accent/warn/info/ok）+ 「审核」+「批量发布」|
+| 7 | MetricKpiCard：variant border + value 染色 / spark 60×18 opacity 0.4 / 不染整卡背景 | ✅ row2.png 4 张 variant border 染色独立显示，背景仍 bg-surface-raised；delta direction 染色独立（视频总量↑绿 / 待审灰 / 源可达率↑绿 / 失效源↓红） |
+| 8 | RecentActivityCard：28×28 sev icon + who·what + when | ✅ recent-activity-card.png |
+| 9 | SiteHealthCard：18×18 health box 三档 + name + meta + spark + 开机=增量/关机=重启 + 前 8 站 | ✅ site-health-card.png 8 站 + 健康度配色（92/86/78/64/52/38/24/12 三档分布精准）|
+
+**desk review 9 项 + visual 9 项双重签收，全过**。
+
+### CHG-DESIGN-07 整卡闭合标志
+
+- ✅ 7A 契约（arch-reviewer Opus PASS + 4 处 Codex 矛盾闭环）
+- ✅ 7B 实装（arch-reviewer Opus 直接 PASS + 2 处 Codex 一致性闭环）
+- ✅ 7C 业务集成（24 regression gate + 3 处 Codex 假数据/同步/stale refs 闭环）
+- ✅ 7D-1 desk review 9/9
+- ✅ 7D-2 e2e 3/3 + 12 张 visual baseline 入库 + visual 二次签收 9/9
+- ✅ typecheck / lint / verify:token-references / 2691 单测 / 3 e2e 全绿
+- ✅ 反 CHG-SN-3-08 假绿模式 7 道防线全部就位（含拦截率 100x 假数据 fix#1）
+- ✅ 9 处 Codex stop-time review 缺陷全部闭环
+- ✅ 新增 `scripts/capture-dashboard-baseline.mjs`（可重跑）
+
+### 不在范围（留 follow-up）
+
+- visual diff CI 集成（`INFRA-VISUAL-DIFF-CI`，CI 流水线接 baseline 比对）
+- live 数据扩张（`STATS-EXTEND-DASHBOARD`：源可达率 / 失效源 / 视频总量 / 已上架 / 7 天 spark 等真端点）
+- 编辑态（CardLibraryDrawer / FullscreenCard，§A4 决议后做）
+- analytics tab 内容（CHG-DESIGN-09）
