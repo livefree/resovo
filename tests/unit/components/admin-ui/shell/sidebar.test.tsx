@@ -93,11 +93,16 @@ describe('Sidebar — Brand 区', () => {
     expect(screen.getByText('v2')).toBeTruthy()
   })
 
-  it('折叠态：仅 logo（标题隐藏）', () => {
-    renderSidebar({ collapsed: true })
+  it('折叠态：title + version 仍渲染（CHG-DESIGN-04 fix# 等高占位 + opacity 渐隐）', () => {
+    const { container } = renderSidebar({ collapsed: true })
+    // logo 永远显示
     expect(screen.getByText('流')).toBeTruthy()
-    expect(screen.queryByText('流光后台')).toBeNull()
-    expect(screen.queryByText('v2')).toBeNull()
+    // CHG-DESIGN-04 fix#（reference.md §4.1.2 问题 A+B）：title/version 永远渲染，
+    // 折叠态由 admin-shell-styles 的 opacity 0 + max-width 0 + pointer-events:none 视觉隐藏
+    expect(screen.getByText('流光后台')).toBeTruthy()
+    expect(screen.getByText('v2')).toBeTruthy()
+    // DOM 标记位仍存在
+    expect(container.querySelector('[data-sidebar-brand-title]')).toBeTruthy()
   })
 })
 
@@ -256,11 +261,15 @@ describe('Sidebar — Footer 用户区', () => {
     expect(screen.getByText('管理员')).toBeTruthy()
   })
 
-  it('折叠态：仅 avatar（name + role 隐藏）', () => {
-    renderSidebar({ collapsed: true })
+  it('折叠态：name + role 仍渲染（CHG-DESIGN-04 fix# 等高占位 + opacity 渐隐）', () => {
+    const { container } = renderSidebar({ collapsed: true })
     expect(screen.getByText('YL')).toBeTruthy()
-    expect(screen.queryByText('Yan Liu')).toBeNull()
-    expect(screen.queryByText('管理员')).toBeNull()
+    // CHG-DESIGN-04 fix#：footer meta 永远渲染，折叠态由 CSS 视觉隐藏
+    expect(screen.getByText('Yan Liu')).toBeTruthy()
+    expect(screen.getByText('管理员')).toBeTruthy()
+    // DOM 标记位仍存在
+    expect(container.querySelector('[data-sidebar-foot-meta]')).toBeTruthy()
+    expect(container.querySelector('[data-sidebar-foot-chevron]')).toBeTruthy()
   })
 
   it('Footer button 含 aria-haspopup="menu" + aria-expanded="false"（菜单默认关闭）', () => {

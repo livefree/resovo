@@ -41,17 +41,62 @@ const SHELL_CSS = `
 [data-sidebar] {
   transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-/* 分区标题在两态保持相同 height/padding；仅 opacity 渐隐 → 图标 Y 坐标稳定 */
-[data-sidebar-section-title] {
-  transition: opacity 150ms ease-out;
+
+/* 内容渐隐：所有"折叠态需要消失"的文字/容器，全部用 opacity + max-width 动画 ──────────────
+ * 与 aside width 200ms 同步；opacity 150ms 略短，让文字先消失再让宽度收紧
+ * 所有元素永远渲染（不卸载），保证 DOM 结构稳定；视觉控制权下沉到 CSS */
+[data-sidebar-section-title],
+[data-sidebar-brand-title],
+[data-sidebar-item-label],
+[data-sidebar-item-badge],
+[data-sidebar-foot-meta],
+[data-sidebar-foot-chevron] {
+  transition: opacity 150ms ease-out, max-width 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-[data-sidebar][data-collapsed="true"] [data-sidebar-section-title] {
+
+/* 折叠态：opacity 0 + pointer-events:none；
+ * 对参与 flex 布局的容器额外把 max-width 收到 0，避免占位影响 logo/avatar 居中 */
+[data-sidebar][data-collapsed="true"] [data-sidebar-section-title],
+[data-sidebar][data-collapsed="true"] [data-sidebar-brand-title],
+[data-sidebar][data-collapsed="true"] [data-sidebar-item-label],
+[data-sidebar][data-collapsed="true"] [data-sidebar-item-badge],
+[data-sidebar][data-collapsed="true"] [data-sidebar-foot-meta],
+[data-sidebar][data-collapsed="true"] [data-sidebar-foot-chevron] {
   opacity: 0;
   pointer-events: none;
 }
+[data-sidebar][data-collapsed="true"] [data-sidebar-brand-title],
+[data-sidebar][data-collapsed="true"] [data-sidebar-item-label],
+[data-sidebar][data-collapsed="true"] [data-sidebar-item-badge],
+[data-sidebar][data-collapsed="true"] [data-sidebar-foot-meta] {
+  max-width: 0;
+  flex: 0 0 auto;
+}
+[data-sidebar][data-collapsed="true"] [data-sidebar-foot-chevron] {
+  max-width: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+/* 折叠态：brand / item / footer 容器 justify center，让 logo/icon/avatar 视觉居中（gap 自然失效） */
+[data-sidebar][data-collapsed="true"] [data-sidebar-brand],
+[data-sidebar][data-collapsed="true"] [data-sidebar-foot] {
+  justify-content: center;
+  gap: 0;
+}
+[data-sidebar][data-collapsed="true"] [data-sidebar-item] {
+  justify-content: center;
+  gap: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   [data-sidebar],
-  [data-sidebar-section-title] { transition: none; }
+  [data-sidebar-section-title],
+  [data-sidebar-brand-title],
+  [data-sidebar-item-label],
+  [data-sidebar-item-badge],
+  [data-sidebar-foot-meta],
+  [data-sidebar-foot-chevron] { transition: none; }
 }
 
 /* ── Global scrollbar — 全站统一 6px（CHG-DESIGN-03 / reference.md §0-6 §3.4） ─────── */

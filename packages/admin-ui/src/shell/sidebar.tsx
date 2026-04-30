@@ -97,11 +97,14 @@ const LOGO_STYLE: CSSProperties = {
   flexShrink: 0,
 }
 
+// 折叠态由 admin-shell-styles 通过 opacity 渐隐（CHG-DESIGN-04 fix #）
 const BRAND_TITLE_STYLE: CSSProperties = {
   fontWeight: 600,
   color: 'var(--fg-default)',
   whiteSpace: 'nowrap',
   overflow: 'hidden',
+  flex: 1,
+  minWidth: 0,
 }
 
 const BRAND_VERSION_STYLE: CSSProperties = {
@@ -254,17 +257,17 @@ interface BrandAreaProps {
 }
 
 function BrandArea({ collapsed }: BrandAreaProps) {
+  // CHG-DESIGN-04 fix#：title 永远渲染，折叠态由 CSS opacity 渐隐，与 aside width 200ms 同步过渡
+  // collapsed prop 仅作为 aria 兼容；视觉控制权下沉到 admin-shell-styles
   return (
-    <div data-sidebar-brand style={BRAND_STYLE}>
+    <div data-sidebar-brand data-sidebar-brand-collapsed={collapsed ? 'true' : 'false'} style={BRAND_STYLE}>
       <span aria-hidden="true" style={LOGO_STYLE} data-sidebar-brand-logo>
         流
       </span>
-      {!collapsed && (
-        <span data-sidebar-brand-title style={BRAND_TITLE_STYLE}>
-          流光后台
-          <span style={BRAND_VERSION_STYLE} data-sidebar-brand-version>v2</span>
-        </span>
-      )}
+      <span data-sidebar-brand-title style={BRAND_TITLE_STYLE}>
+        流光后台
+        <span style={BRAND_VERSION_STYLE} data-sidebar-brand-version>v2</span>
+      </span>
     </div>
   )
 }
@@ -286,7 +289,7 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate }: NavItemP
   const linkStyle: CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: collapsed ? 0 : 'var(--space-3)',
+    gap: 'var(--space-3)',
     padding: 'var(--space-2) var(--space-4)',
     color: active ? 'var(--admin-accent-on-soft)' : 'var(--fg-muted)',
     background: active ? 'var(--admin-accent-soft)' : 'transparent',
@@ -295,7 +298,7 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate }: NavItemP
     cursor: 'pointer',
     font: 'inherit',
     textAlign: 'left',
-    justifyContent: collapsed ? 'center' : 'flex-start',
+    // 折叠态 justify/gap 由 admin-shell-styles 接管（CHG-DESIGN-04 fix#）
   }
 
   const iconStyle: CSSProperties = {
@@ -336,28 +339,25 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate }: NavItemP
           />
         )}
       </span>
-      {!collapsed && (
-        <>
-          <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {item.label}
-          </span>
-          {effectiveCount !== undefined && effectiveCount > 0 && (
-            <span
-              data-sidebar-item-badge
-              style={{
-                padding: '1px var(--space-2)',
-                borderRadius: 'var(--radius-full)',
-                fontSize: 'var(--admin-count-font-size)',
-                background: badgeBg(badgeSlot),
-                color: badgeFg(badgeSlot),
-                lineHeight: '1.4em',
-                flexShrink: 0,
-              }}
-            >
-              {formatCount(effectiveCount)}
-            </span>
-          )}
-        </>
+      {/* CHG-DESIGN-04 fix#：label + badge 永远渲染，折叠态由 admin-shell-styles 渐隐 */}
+      <span data-sidebar-item-label style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {item.label}
+      </span>
+      {effectiveCount !== undefined && effectiveCount > 0 && (
+        <span
+          data-sidebar-item-badge
+          style={{
+            padding: '1px var(--space-2)',
+            borderRadius: 'var(--radius-full)',
+            fontSize: 'var(--admin-count-font-size)',
+            background: badgeBg(badgeSlot),
+            color: badgeFg(badgeSlot),
+            lineHeight: '1.4em',
+            flexShrink: 0,
+          }}
+        >
+          {formatCount(effectiveCount)}
+        </span>
       )}
     </button>
   )
@@ -379,7 +379,7 @@ function Footer({ user, collapsed, userActions }: FooterProps) {
   const footerStyle: CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: collapsed ? 0 : 'var(--space-3)',
+    gap: 'var(--space-3)',
     padding: 'var(--space-3) var(--space-4)',
     // border: 0 必须在 borderTop 前声明（CSS shorthand 在 longhand 之前）
     border: 0,
@@ -391,7 +391,8 @@ function Footer({ user, collapsed, userActions }: FooterProps) {
     textAlign: 'left',
     color: 'var(--fg-default)',
     flexShrink: 0,
-    justifyContent: collapsed ? 'center' : 'flex-start',
+    // 折叠态布局由 [data-sidebar][data-collapsed="true"] [data-sidebar-foot] 接管 justify-content
+    // gap 保持 var(--space-3)，meta wrapper 折叠时 max-width:0 平滑收紧（CHG-DESIGN-04 fix#）
   }
 
   // P1 必修（Opus 评审）：position: relative wrapper 建立稳定 positioned ancestor
@@ -410,19 +411,16 @@ function Footer({ user, collapsed, userActions }: FooterProps) {
         <span aria-hidden="true" style={{ ...AVATAR_STYLE, flexShrink: 0 }} data-sidebar-foot-avatar>
           {avatar}
         </span>
-        {!collapsed && (
-          <>
-            <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-              <span data-sidebar-foot-name style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {user.displayName}
-              </span>
-              <span data-sidebar-foot-role style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)' }}>
-                {user.role === 'admin' ? '管理员' : '审核员'}
-              </span>
-            </span>
-            <span aria-hidden="true" style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)', flexShrink: 0 }}>›</span>
-          </>
-        )}
+        {/* CHG-DESIGN-04 fix#：meta + chevron 永远渲染，折叠态由 admin-shell-styles 渐隐 + max-width 收紧 */}
+        <span data-sidebar-foot-meta style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <span data-sidebar-foot-name style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {user.displayName}
+          </span>
+          <span data-sidebar-foot-role style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {user.role === 'admin' ? '管理员' : '审核员'}
+          </span>
+        </span>
+        <span aria-hidden="true" data-sidebar-foot-chevron style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)', flexShrink: 0 }}>›</span>
       </button>
       <UserMenu
         open={menuOpen}
