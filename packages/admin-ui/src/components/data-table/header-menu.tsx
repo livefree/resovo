@@ -12,7 +12,7 @@
  * 范式：完全对照 ColumnSettingsPanel — portal 渲染、ESC + 点击外部关闭、
  *      anchorRef.getBoundingClientRect 计算位置、focus 首项。
  */
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ColumnDescriptor, ColumnMenuConfig, ColumnPreference, TableSortState } from './types'
 
@@ -219,12 +219,22 @@ export function HeaderMenu({
     first?.focus()
   }, [open, mounted])
 
-  // 物化 filterContent — 必须在所有早期 return 之前调 useMemo，遵守 Rules of Hooks
-  // 单次 iterable（generator / iterator）转 Array 后可重复迭代，避免检测消耗后 React 渲染空
-  const filterContent = useMemo(
-    () => materializeFilterContent(columnMenu?.filterContent),
-    [columnMenu?.filterContent],
-  )
+  // 物化 filterContent — useRef 缓存（React 不会主动丢弃 ref，比 useMemo 更安全）
+  // 关闭菜单时 columnMenu=undefined，source 变 undefined；此时不动缓存，
+  // 避免重开后丢失已物化的 array 而重新消耗已耗尽的 generator（Codex 第 6 轮 review）
+  // 缓存条目 { source, result }：
+  //   - source nullish → 跳过缓存维护
+  //   - source 同上次 → 复用缓存
+  //   - source 变化为新的非空值 → 重新物化
+  const cacheRef = useRef<{ source: React.ReactNode; result: React.ReactNode } | null>(null)
+  const source = columnMenu?.filterContent
+  let filterContent: React.ReactNode = undefined
+  if (source !== undefined && source !== null) {
+    if (cacheRef.current?.source !== source) {
+      cacheRef.current = { source, result: materializeFilterContent(source) }
+    }
+    filterContent = cacheRef.current.result
+  }
 
   if (!open || !mounted || !column) return null
 

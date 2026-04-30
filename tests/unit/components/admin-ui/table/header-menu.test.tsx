@@ -378,6 +378,44 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
     expect(screen.queryByText('过滤')).toBeNull()
   })
 
+  it('filterContent=同一 generator 引用 open → close → reopen → 内容仍渲染（useRef 缓存防 React useMemo 丢弃）', () => {
+    function makeGen(): Iterable<React.ReactNode> {
+      return (function* () {
+        yield <div key="g" data-testid="filter-stable">stable gen</div>
+      })()
+    }
+    const stableGen = makeGen()
+    const cols: TableColumn<Row>[] = [
+      {
+        id: 'name',
+        header: 'Name',
+        accessor: (r) => r.name,
+        enableSorting: true,
+        columnMenu: { filterContent: stableGen as unknown as React.ReactNode },
+      },
+    ]
+    render(
+      <DataTable<Row>
+        rows={ROWS}
+        columns={cols}
+        rowKey={(r) => r.id}
+        mode="client"
+        query={makeSnapshot({ columns: new Map([['name', { visible: true }]]) })}
+        onQueryChange={() => {}}
+        enableHeaderMenu
+      />,
+    )
+    // 第一次打开
+    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    expect(screen.getByTestId('filter-stable')).toBeTruthy()
+    // 关闭（ESC）
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(document.querySelector('[data-header-menu]')).toBeNull()
+    // 再次打开（同一 generator 引用）
+    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    expect(screen.getByTestId('filter-stable')).toBeTruthy()
+  })
+
   it('filterContent=非空 generator → 物化后真实渲染（不会因检测消耗导致空）', () => {
     function* gen(): Generator<React.ReactNode> {
       yield null
