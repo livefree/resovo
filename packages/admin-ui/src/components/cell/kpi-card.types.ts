@@ -144,11 +144,17 @@ export interface KpiCardProps {
    * 典型用法：`<Spark data={[...]} variant="line" color="var(--accent-default)" />`
    * 但也可以传任意 60×18 ReactNode（自定义 svg / 图标 / 状态指示器）。
    *
-   * **null / undefined 行为契约**（7B 实装必须遵守）：
-   * - `spark` 为 undefined 或渲染结果为 null（如消费方传 `<Spark data={[]} />` 而 Spark 0 数据
-   *   点 return null）时，KpiCard 容器 spark 区域**不渲染占位空白**，footer row 仍保留 delta
-   *   左对齐布局
-   * - 4 张 KPI 并排时若部分卡无 spark，footer 行高仍由 delta 行撑开，**视觉对齐不受影响**
+   * **slot 渲染契约**（实装可证一致；7B 实装必须遵守）：
+   * - `spark` prop 为 `undefined` 或 `null`（falsy）→ KpiCard **不渲染** `[data-kpi-card-spark]`
+   *   节点；footer 仅含 delta（如有），通过 footer 容器 `min-height: 18px` 维持 4 张 KPI 横向对齐
+   * - `spark` prop 为非 null ReactNode（包括 ReactElement 如 `<Spark data={[]} />`，即使该元素
+   *   渲染结果为 null）→ KpiCard 渲染 `[data-kpi-card-spark]` 60×18 容器；容器内由 ReactNode
+   *   自行决定是否产生 svg DOM（消费方传 `<Spark data={[]} />` 时容器存在但内部 svg 为空）
+   * - 该契约源于 React 心智：父组件无法在渲染前/中/后探测子元素的渲染输出，仅能判断 prop 自身的
+   *   truthy 性。消费方按需精确控制：**不需要 spark 时直接不传 prop / 传 null**；**需要 60×18
+   *   占位区（保持视觉一致）时传非 null ReactNode**
+   * - 4 张 KPI 横向对齐保障：footer 容器固定 `min-height: 18px`（无 spark 时 delta 撑高 ≤ 18px，
+   *   仍由 min-height 兜底；有 spark 时 60×18 与 min-height 一致）
    * - spark 容器区域固定 60×18，overflow hidden（消费方传超出尺寸的节点会被裁剪）
    */
   readonly spark?: ReactNode

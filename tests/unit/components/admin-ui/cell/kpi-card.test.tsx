@@ -17,6 +17,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import React from 'react'
 import { KpiCard } from '../../../../../packages/admin-ui/src/components/cell/kpi-card'
+import { Spark } from '../../../../../packages/admin-ui/src/components/cell/spark'
 
 afterEach(() => {
   cleanup()
@@ -219,6 +220,27 @@ describe('KpiCard — spark slot 行为契约', () => {
     const footer = container.querySelector('[data-kpi-card-footer]')!
     expect(footer.querySelector('[data-kpi-card-delta]')).toBeTruthy()
     expect(footer.querySelector('[data-kpi-card-spark]')).toBeTruthy()
+  })
+
+  // 实装可证一致契约：父组件无法探测子 ReactNode 渲染结果，仅判断 prop truthy 性
+  it('spark={<Spark data={[]} />}（ReactElement 渲染 null）→ slot 容器仍渲染（60×18），内部无 svg', () => {
+    const { container } = render(
+      <KpiCard label="L" value="1" spark={<Spark data={[]} />} />,
+    )
+    // slot 容器存在（spark prop 为 ReactElement truthy）
+    const slot = container.querySelector('[data-kpi-card-spark]') as HTMLElement
+    expect(slot).toBeTruthy()
+    expect(slot.style.width).toBe('60px')
+    expect(slot.style.height).toBe('18px')
+    // 内部 svg 不存在（Spark data=[] return null）
+    expect(slot.querySelector('[data-spark]')).toBeNull()
+    expect(slot.querySelector('svg')).toBeNull()
+  })
+
+  it('footer min-height: 18px 兜底（无 spark 时 4 张 KPI 横向对齐）', () => {
+    const { container } = render(<KpiCard label="L" value="1" delta={{ text: '+1' }} />)
+    const footer = container.querySelector('[data-kpi-card-footer]') as HTMLElement
+    expect(footer.style.minHeight).toBe('18px')
   })
 })
 
