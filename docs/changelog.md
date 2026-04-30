@@ -2212,3 +2212,75 @@
 - CHG-DESIGN-02：扩展 DataTable 支持表头集成菜单 / saved views / row flash / 列固定 / framed surface
 - CHG-DESIGN-03：把全站 scrollbar 选择器接入 `--admin-scrollbar-size: 6px`
 - CHG-DESIGN-04：sidebar active 配色由 `--state-warning-fg` 改为 `--accent-default`（本卡未改）
+
+## fix(CHG-DESIGN-01)#: token 替换后 active 状态视觉冲突修复（Codex stop-time review）
+
+- **日期**: 2026-04-29
+- **TASK-ID**: CHG-DESIGN-01 / fix #1 + #2
+- **commits**: `d9dc570`（第 1 轮）+ `bb0e351`（第 2 轮 WCAG AA 对比度）
+- **主循环模型**: claude-opus-4-7
+
+### 第 1 轮（d9dc570）
+
+token 切到蓝 brand 后，三处 active 状态视觉冲突修复：
+
+1. Sidebar nav active：fg `var(--state-warning-fg)`(橙) → `var(--accent-default)`(蓝)，与 admin-accent-soft 蓝底配套
+2. Pagination active page：fg `var(--accent-fg)`(白) → `var(--accent-default)`(蓝)，浅色主题白字在浅蓝底不可读
+3. Dropdown active item：bg `var(--bg-surface-elevated)` → 非 danger=`var(--admin-accent-soft)` / danger=`var(--admin-danger-soft)`；旧值与面板 bg 同色导致 active 不可分辨
+
+### 第 2 轮（bb0e351）— Codex 第 2 次 stop-time review
+
+第 1 轮 fg 改为 `--accent-default`(oklch 64.5%)，但浅色主题下 admin-accent-soft（蓝 18% over 白 ≈ oklch 95%）与 accent-default 对比度仅约 2.6:1，不达 WCAG AA 4.5:1。
+
+改用 `var(--accent-active)`：
+- light: oklch(38% 0.120 230) 深蓝
+- dark : oklch(92% 0.045 230) 亮蓝
+
+与 admin-accent-soft 在两主题下对比度均 ≥7:1（明度差 57+ 点）。涉及 sidebar.tsx + pagination.tsx 两处。Dropdown active 用 `--fg-default`，对比度天然 >9:1，无需修正。
+
+### 后续优化已登记到 CHG-DESIGN-04
+
+token 命名层补 `--accent-on-soft` 别名（指向 `--accent-active`）作为"fg-on-accent-soft 背景"的语义入口，sidebar / pagination 改用该别名。
+
+## chg(CHG-DESIGN-03): 全站 scrollbar 6px 统一（消费 --admin-scrollbar-size）
+
+- **日期**: 2026-04-29
+- **TASK-ID**: CHG-DESIGN-03
+- **所属序列**: SEQ-20260429-02 设计稿对齐改造（第 3 卡 / 共 10 卡，先做 03 暂跳 02）
+- **关联文档**: `docs/designs/backend_design_v2.1/reference.md` §0-6 + §3.4
+- **主循环模型**: claude-opus-4-7
+- **子代理调用**: 无
+- **变更类型**: chg
+- **摘要**: `packages/admin-ui/src/shell/admin-shell-styles.tsx` 注入全局 scrollbar 双轨规则（webkit + Firefox），统一宽度为 `var(--admin-scrollbar-size)` 6px；移除原 `[data-sidebar-nav]` 局部 6px override；thumb 主色 `var(--border-strong)` + hover `var(--fg-disabled)` + 2px `var(--bg-surface)` 视觉 padding；Firefox `scrollbar-width: thin` + `scrollbar-color: var(--border-strong) transparent`。
+
+### 新增/变更文件
+
+- `packages/admin-ui/src/shell/admin-shell-styles.tsx`（替换 `[data-sidebar-nav]` 块为 `*` 全局块；新增 Firefox 双轨）
+- `docs/task-queue.md`（CHG-DESIGN-03 状态 ✅ + CHG-DESIGN-04 追加 `--accent-on-soft` 子项）
+- `docs/changelog.md`（本条目 + CHG-DESIGN-01 follow-up fix 第 1/2 轮记录）
+
+### 验收
+
+- ✅ `grep -rn "::-webkit-scrollbar" packages/admin-ui apps/server-next` 命中 = 1 处全局规则块（admin-shell-styles 内）
+- ✅ 全局规则使用 `var(--admin-scrollbar-size)`，未硬编码 px 值
+- ✅ Firefox `scrollbar-width: thin` + `scrollbar-color: var(--border-strong) transparent`
+- ✅ `npm run typecheck` 全绿
+- ✅ `npm run lint` 全绿
+- ✅ `npm run verify:token-references` PASS（63 引用 / 321 token）
+- ✅ `npm run test -- --run` 2489/2491（2 失败为 StagingTable 预存 flake，独立运行 13 全过；与本卡无关）
+- 📌 视觉签收：sidebar nav 滚动 / main page 滚动 / Drawer body / DataTable body / Notification & Task drawer / Cmd+K list / 任意 admin 路由内 overflow 容器，全部 6px 细滚动条；thumb hover 加深；macOS Safari + Firefox 双引擎一致
+
+### 适用容器（按 reference.md §3.4 全列表）
+
+- AdminShell aside `nav` 滚动
+- AdminShell main `<div class="page">` 滚动
+- Drawer / Modal body 滚动
+- DataTable `dt__body` overflow
+- Notification / Task drawer list
+- Cmd+K cmdk__list
+- 任何自定义 `overflow: auto` 的 card body / split pane body
+
+### 后续
+
+- CHG-DESIGN-02：DataTable frame 扩展（顺延）
+- CHG-DESIGN-04：Sidebar 过渡动效 + 分区标题等高占位 + `--accent-on-soft` 语义化别名补全

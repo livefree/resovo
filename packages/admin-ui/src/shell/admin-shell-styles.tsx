@@ -36,19 +36,31 @@ const SHELL_CSS = `
   background: var(--state-warning-fg);
 }
 
-/* ── Nav scroll — 细化 scrollbar（design spec .sb__scroll） ─────── */
-[data-sidebar-nav]::-webkit-scrollbar {
-  width: 6px;
+/* ── Global scrollbar — 全站统一 6px（CHG-DESIGN-03 / reference.md §0-6 §3.4） ─────── */
+/* AdminShell 是 admin 路由树根 Shell，本 <style> 注入后规则作用于整个 admin 文档；
+ * 适用于：sidebar nav 滚动、main page 滚动、Drawer/Modal body、DataTable body、
+ *         Notification/Task drawer list、Cmd+K cmdk__list、任意 card body 内部 scroll
+ * 禁止在消费方单独 override 宽度（task-queue SEQ-20260429-02 验收要求 grep 仅 1 处） */
+*::-webkit-scrollbar {
+  width: var(--admin-scrollbar-size);
+  height: var(--admin-scrollbar-size);
 }
-[data-sidebar-nav]::-webkit-scrollbar-track {
+*::-webkit-scrollbar-track {
   background: transparent;
 }
-[data-sidebar-nav]::-webkit-scrollbar-thumb {
-  background: var(--border-default);
-  border-radius: var(--radius-full);
-}
-[data-sidebar-nav]::-webkit-scrollbar-thumb:hover {
+*::-webkit-scrollbar-thumb {
   background: var(--border-strong);
+  border-radius: var(--radius-full);
+  /* 2px 视觉 padding 让 6px 不显得过瘦；底色与最常见 surface 对齐 */
+  border: 2px solid var(--bg-surface);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-disabled);
+}
+/* Firefox 双轨：thin = 系统细滚动条；scrollbar-color = thumb / track */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
 /* ── Sidebar footer ─────────────────────────────────────────────── */
