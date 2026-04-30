@@ -8,7 +8,7 @@
  * 不做：不内置 Toolbar/Pagination/ColumnSettingsPanel；不持有数据；不发请求。
  * client mode：内部 filter + sort + paginate；server mode：直接渲染 rows（当前页）。
  */
-import React, { useState, useCallback, useMemo } from 'react'
+import React, { useState, useCallback, useMemo, useRef } from 'react'
 import type {
   DataTableProps,
   TableColumn,
@@ -17,6 +17,7 @@ import type {
   TableSortState,
 } from './types'
 import { DTStyles } from './dt-styles'
+import { HeaderMenu } from './header-menu'
 
 // ── client-mode data processing ──────────────────────────────────
 
@@ -163,9 +164,14 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
     onRowClick,
     density = 'comfortable',
     'data-testid': testId,
+    enableHeaderMenu = false,
   } = props
 
   const [hoveredKey, setHoveredKey] = useState<string | null>(null)
+
+  // 表头菜单 popover 状态（仅 enableHeaderMenu=true 时使用）
+  const [menuColId, setMenuColId] = useState<string | null>(null)
+  const menuAnchorRef = useRef<HTMLElement | null>(null)
 
   const colMap = query.columns
 
@@ -216,6 +222,29 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
     }
     onQueryChange({ sort: next } satisfies TableQueryPatch)
   }, [query.sort, onQueryChange])
+
+  // header menu callbacks
+  const handleHeaderMenuSort = useCallback((field: string, direction: 'asc' | 'desc') => {
+    onQueryChange({ sort: { field, direction } } satisfies TableQueryPatch)
+  }, [onQueryChange])
+  const handleHeaderMenuClearSort = useCallback(() => {
+    onQueryChange({ sort: { field: undefined, direction: 'asc' } } satisfies TableQueryPatch)
+  }, [onQueryChange])
+  const handleHeaderMenuHide = useCallback((colId: string) => {
+    const next = new Map(colMap)
+    const prev = colMap.get(colId)
+    next.set(colId, { visible: false, ...(prev?.width !== undefined ? { width: prev.width } : {}) })
+    onQueryChange({ columns: next } satisfies TableQueryPatch)
+  }, [colMap, onQueryChange])
+  const closeHeaderMenu = useCallback(() => {
+    setMenuColId(null)
+    menuAnchorRef.current = null
+  }, [])
+
+  const menuColumn = useMemo(
+    () => (menuColId ? columns.find((c) => c.id === menuColId) ?? null : null),
+    [menuColId, columns],
+  )
 
   // selection helpers
   const handleSelectAll = useCallback(() => {
@@ -296,18 +325,39 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
             const isSorted = query.sort.field === col.id
             const sortDir = isSorted ? query.sort.direction : 'none'
             const sortable = col.enableSorting
+            // enableHeaderMenu=true 时点击表头开 popover；否则保持原 sort-on-click
+            const interactive = enableHeaderMenu || sortable
+            const onHeaderActivate = (target: HTMLElement) => {
+              if (enableHeaderMenu) {
+                menuAnchorRef.current = target
+                setMenuColId(col.id)
+              } else if (sortable) {
+                handleHeaderClick(col.id)
+              }
+            }
+            const isMenuOpen = menuColId === col.id
             return (
               <div
                 key={col.id}
                 role="columnheader"
                 aria-sort={isSorted ? (query.sort.direction === 'asc' ? 'ascending' : 'descending') : undefined}
-                style={{ ...TH_STYLE, cursor: sortable ? 'pointer' : 'default' }}
-                tabIndex={sortable ? 0 : undefined}
-                onClick={sortable ? () => handleHeaderClick(col.id) : undefined}
-                onKeyDown={sortable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleHeaderClick(col.id) } } : undefined}
+                aria-haspopup={enableHeaderMenu ? 'menu' : undefined}
+                aria-expanded={enableHeaderMenu ? isMenuOpen : undefined}
+                style={{ ...TH_STYLE, cursor: interactive ? 'pointer' : 'default' }}
+                tabIndex={interactive ? 0 : undefined}
+                onClick={interactive ? (e) => onHeaderActivate(e.currentTarget) : undefined}
+                onKeyDown={interactive ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onHeaderActivate(e.currentTarget) }
+                } : undefined}
               >
                 {col.header}
                 {sortable && <SortIcon direction={sortDir} />}
+                {enableHeaderMenu && (
+                  <span
+                    aria-hidden="true"
+                    style={{ marginLeft: '4px', opacity: isMenuOpen ? 1 : 0.45, fontSize: '12px', color: 'var(--fg-muted)' }}
+                  >⋯</span>
+                )}
               </div>
             )
           })}
@@ -376,6 +426,20 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
           )
         })}
       </div>
+      {enableHeaderMenu && (
+        <HeaderMenu
+          open={menuColId !== null}
+          column={menuColumn}
+          anchorRef={menuAnchorRef}
+          currentSort={query.sort}
+          columnsValue={colMap}
+          onSort={handleHeaderMenuSort}
+          onClearSort={handleHeaderMenuClearSort}
+          onHide={handleHeaderMenuHide}
+          onClose={closeHeaderMenu}
+          filterContent={menuColumn?.columnMenu?.filterContent}
+        />
+      )}
     </div>
   )
 }

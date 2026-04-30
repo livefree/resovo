@@ -24,6 +24,13 @@ export interface DataTableProps<T> {
   readonly onRowClick?: (row: T, index: number) => void
   readonly density?: 'comfortable' | 'compact'
   readonly 'data-testid'?: string
+
+  /**
+   * 启用表头集成菜单：表头点击不再直接排序，而是弹出 popover；
+   * popover 内含升序/降序/清除排序/过滤/隐藏列。默认 false（保持现有 sort-on-click）。
+   * 与外置 ColumnSettingsPanel 暂时共存（reference.md §4.4 / arch-reviewer C-2）。
+   */
+  readonly enableHeaderMenu?: boolean
 }
 
 export interface TableColumn<T> {

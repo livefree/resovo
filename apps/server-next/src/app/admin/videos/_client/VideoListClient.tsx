@@ -320,6 +320,7 @@ export function VideoListClient() {
                   onSelectionChange={setSelection}
                   emptyState={<EmptyState title="暂无视频" description="调整筛选条件后重试" />}
                   data-testid="video-list-table"
+                  enableHeaderMenu
                 />
               )
             }
