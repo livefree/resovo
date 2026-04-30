@@ -2436,3 +2436,18 @@ CHG-DESIGN-11 主体合入后 Codex stop-time review 命中：active docs（CLAU
 
 执行模型：claude-opus-4-7
 子代理：无
+
+---
+
+## fix(CHG-DESIGN-11)#3: reference.md 设计稿加 §0a 落地状态读法 + 行内 ✅/🔄 标注（Codex stop-time review）
+
+CHG-DESIGN-11 #2 已修引用方 docs，但未触动**设计源** `docs/designs/backend_design_v2.1/reference.md` 自身。Codex stop-time review 命中：作为 active 设计真源，reference.md §4.4.1（DataTable 视觉契约 §0-1）/ §6.0（表格视觉契约共享项）仍把 `.dt__foot` 内置 pagination / `.dt__body` 独立滚动 / filter chips / 隐藏列 chip 描述为已存在能力，未区分"目标设计"与"当前实现"。
+
+修复：
+
+- 新增 §0a「设计 vs 实现状态读法」block（紧跟 §0 裁决之后），明示本文件是目标设计稿，能力 ≠ 已落地能力；列出 DataTable 一体化契约的 ✅ 已实现 / 🔄 计划实现两阶段（与 ADR-103 §4.1 AMENDMENT、CLAUDE.md、admin-module-template、ui-rules、server_next_plan 同步）
+- §4.4.1 DataTable 视觉契约（线 375–384）每条加行内【✅ ... / 🔄 ...】标注（framed surface / toolbar slot / saved views / 表头菜单 / sticky body / row flash / pagination / bulk bar / select-all）
+- §6.0 表格视觉契约共享项（线 696–707）每条加行内【部分实现 / 🔄 Step 7A】标注（toolbar 模式 / sticky thead / pagination / bulk bar）
+
+执行模型：claude-opus-4-7
+子代理：无
