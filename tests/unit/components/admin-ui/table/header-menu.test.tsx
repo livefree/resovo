@@ -347,6 +347,67 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
     expect(screen.queryByText('过滤')).toBeNull()
   })
 
+  it.each([
+    ['空 Set', new Set() as unknown as React.ReactNode],
+    ['全 null Set', new Set([null, null]) as unknown as React.ReactNode],
+    ['空 generator', (function* (): Generator<React.ReactNode> { /* yields nothing */ })() as unknown as React.ReactNode],
+    ['全 false generator', (function* (): Generator<React.ReactNode> { yield false; yield false })() as unknown as React.ReactNode],
+  ])('filterContent=%s（非数组 iterable，全空）→ 不渲染过滤区块', (_label, value) => {
+    const cols: TableColumn<Row>[] = [
+      {
+        id: 'name',
+        header: 'Name',
+        accessor: (r) => r.name,
+        enableSorting: true,
+        columnMenu: { filterContent: value as React.ReactNode },
+      },
+    ]
+    render(
+      <DataTable<Row>
+        rows={ROWS}
+        columns={cols}
+        rowKey={(r) => r.id}
+        mode="client"
+        query={makeSnapshot({ columns: new Map([['name', { visible: true }]]) })}
+        onQueryChange={() => {}}
+        enableHeaderMenu
+      />,
+    )
+    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    expect(document.querySelector('[data-header-menu]')).toBeTruthy()
+    expect(screen.queryByText('过滤')).toBeNull()
+  })
+
+  it('filterContent=Set 含一个可渲染节点 → 渲染过滤区块', () => {
+    const cols: TableColumn<Row>[] = [
+      {
+        id: 'name',
+        header: 'Name',
+        accessor: (r) => r.name,
+        enableSorting: true,
+        columnMenu: {
+          filterContent: new Set([
+            null,
+            <div key="real" data-testid="filter-set-real">真过滤</div>,
+          ]) as unknown as React.ReactNode,
+        },
+      },
+    ]
+    render(
+      <DataTable<Row>
+        rows={ROWS}
+        columns={cols}
+        rowKey={(r) => r.id}
+        mode="client"
+        query={makeSnapshot({ columns: new Map([['name', { visible: true }]]) })}
+        onQueryChange={() => {}}
+        enableHeaderMenu
+      />,
+    )
+    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    expect(screen.getByText('过滤')).toBeTruthy()
+  })
+
   it('filterContent=数组中含一个可渲染节点 → 渲染过滤区块', () => {
     const cols: TableColumn<Row>[] = [
       {

@@ -93,18 +93,38 @@ const FILTER_LABEL_STYLE: React.CSSProperties = {
 }
 
 /**
- * ReactNode 中"渲染为空"的合法值检测（含递归数组）。
- * 用途：决定是否渲染过滤区块——避免 filterContent={[]} / [null, false]
- * 这类合法但视觉为空的值触发空"过滤"标签 + 空白区块（Codex stop-time review #3）。
+ * ReactNode 中"渲染为空"的合法值检测（含递归 array + 任意 Iterable）。
+ * 用途：决定是否渲染过滤区块——避免 filterContent={[]} / new Set() /
+ * generator 等合法但视觉为空的值触发空"过滤"标签 + 空白区块。
  *
- * 不覆盖：空 React Fragment（<></>）— 检测需 inspect 内部 children，
- * 实现脆弱；这种用法少见，文档级约束。
+ * 处理顺序：
+ *   1. nullish / boolean → false
+ *   2. 字符串 → 仅非空时 renderable
+ *   3. number / bigint → true
+ *   4. Array → 至少一个元素 renderable（递归）
+ *   5. 其他 Iterable（Set / generator / 自定义）→ 迭代检测；
+ *      注意：generator 等单次迭代器会被消耗一次，但 React 自身渲染时也会迭代，
+ *      消费者若需复用应传 Array。
+ *   6. 非 iterable 对象（ReactElement / ReactPortal）→ 视为 renderable
+ *
+ * 不覆盖：空 React Fragment <></>（检测需 inspect 内部 children，脆弱）。
  */
 function isRenderableNode(node: React.ReactNode): boolean {
   if (node === undefined || node === null) return false
   if (typeof node === 'boolean') return false
-  if (node === '') return false
+  if (typeof node === 'string') return node !== ''
+  if (typeof node === 'number' || typeof node === 'bigint') return true
+  if (typeof node !== 'object') return true
   if (Array.isArray(node)) return node.some(isRenderableNode)
+  // Symbol.iterator 检测覆盖 Set / generator / 自定义 iterable
+  const candidate = node as { [Symbol.iterator]?: unknown }
+  if (typeof candidate[Symbol.iterator] === 'function') {
+    for (const item of node as Iterable<React.ReactNode>) {
+      if (isRenderableNode(item)) return true
+    }
+    return false
+  }
+  // React element（含 $$typeof 的对象）— 视为 renderable
   return true
 }
 
