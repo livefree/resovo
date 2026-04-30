@@ -2663,3 +2663,28 @@ CHG-DESIGN-02 Step 1–6 + 7A + 7B 已全部完成，不再需要 Step 7C：
 - 视频库视觉对齐（page__head / 32×48 poster / inline xs row actions）→ CHG-DESIGN-08
 
 下一步推进：CHG-DESIGN-05（Shell 视觉对齐）/ CHG-DESIGN-06（Settings 入口收敛）/ CHG-DESIGN-07（Dashboard 8 卡片）/ CHG-DESIGN-08（视频库视觉对齐）/ CHG-DESIGN-09 / CHG-DESIGN-10 / CHG-DESIGN-12（cell 沉淀）。
+
+---
+
+## fix(CHG-DESIGN-02 Step 7B)#1: 视频库批量 E2E 选择器修复（Codex stop-time review）
+
+Step 7B 主体合入后 Codex stop-time review 命中：`tests/e2e/admin/videos.spec.ts:315`（"批量下架 — 全选 → confirm → SelectionActionBar 消失"测试）仍用 `[data-selection-action-bar]` 选 bulk bar 容器，但 7B 已迁移到 DataTable 内置 `.dt__bulk` (`[data-table-bulk]`)，原选择器永远返回不存在的元素，断言"actionBar 可见 / 不可见"语义破坏。
+
+修复：
+
+- 测试用例标题 "SelectionActionBar 消失" → "bulk bar 消失"
+- `actionBar = page.locator('[data-selection-action-bar]')` → `bulkBar = page.locator('[data-table-bulk]')`
+- 加 inline 注释说明 7B 迁移路径（`[data-selection-action-bar]` → `[data-table-bulk]`）；其他保留的选择器（`[data-action-key]` / `[data-confirm-prompt]`）已在 BatchActionsRow inline 实现中保留，无需修改
+
+涉及文件：
+- `tests/e2e/admin/videos.spec.ts` 单一用例修复
+
+注：剩余 `[data-selection-action-bar]` 引用全部在 `tests/unit/components/admin-ui/table/selection-action-bar.test.tsx`，是 SelectionActionBar 组件自身的单测（外置组件未删除，仍可独立 export 用于嵌入式场景），无需修改。
+
+验收：
+- typecheck ✅ 全 7 workspace
+- 单测 admin-ui 737/737 全绿
+- E2E 仅 playwright 服务下可执行；DOM 选择器已校准至 DataTable 内置 .dt__bulk
+
+执行模型：claude-opus-4-7
+子代理：无

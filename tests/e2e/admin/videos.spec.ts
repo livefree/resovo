@@ -302,7 +302,7 @@ test.describe('视频库黄金路径', () => {
     await expect(page.getByTestId('row-actions-trigger').first()).not.toBeDisabled({ timeout: 5000 })
   })
 
-  test('批量下架 — 全选 → confirm → SelectionActionBar 消失', async ({ context, page }) => {
+  test('批量下架 — 全选 → confirm → bulk bar 消失', async ({ context, page }) => {
     await setModeratorCookies(context)
     const state: MockState = { rows: [makeVideoRow({ is_published: true })] }
     await installVideosMocks(page, state)
@@ -312,8 +312,11 @@ test.describe('视频库黄金路径', () => {
 
     // 全选当前页
     await page.getByLabel('全选当前页').check()
-    const actionBar = page.locator('[data-selection-action-bar]')
-    await expect(actionBar).toBeVisible({ timeout: 3000 })
+    // CHG-DESIGN-02 Step 7B：bulk bar 已从外置 SelectionActionBar
+    // (`[data-selection-action-bar]`) 迁移到 DataTable 内置 .dt__bulk
+    // (`[data-table-bulk]`)；selection 非空时渲染。
+    const bulkBar = page.locator('[data-table-bulk]')
+    await expect(bulkBar).toBeVisible({ timeout: 3000 })
 
     // 点击"批量隐藏"
     await page.locator('[data-action-key="batch-unpublish"]').click()
@@ -328,7 +331,7 @@ test.describe('视频库黄金路径', () => {
     await page.locator('[data-confirm-prompt="batch-unpublish"]').getByText('确认').click()
     await batchReq
 
-    // SelectionActionBar 消失（selection 已清除）
-    await expect(actionBar).not.toBeVisible({ timeout: 5000 })
+    // bulk bar 消失（selection 已清除，DataTable 自动卸载 .dt__bulk）
+    await expect(bulkBar).not.toBeVisible({ timeout: 5000 })
   })
 })
