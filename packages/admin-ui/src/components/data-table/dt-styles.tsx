@@ -36,18 +36,33 @@ const DT_CSS = `
    * 体验仍需消费方在父级提供 height 约束（视频库 / 审核台等独立 height 路径）。
    */
   min-height: 240px;
+  /* min-width: 0 打破 grid/flex 父链 auto 阻断，确保 frame 自身不被宽内容撑大 */
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
 
-/* ── DataTable body 独立滚动（CHG-DESIGN-02 Step 7A，设计稿 .dt__body） ─────── */
-[data-table-body] {
+/* ── DataTable 单一 scrollport（CHG-DESIGN-02 Step 7B fix#2 / Codex review）─────── *
+ * 横向 + 纵向滚动统一在本容器内发生（双轴 overflow:auto）。thead / body rows /
+ * bulk bar 共享同一 scrollLeft，避免横纵 viewport 分裂导致垂直滚动条随 scrollLeft
+ * 漂移。foot 留在 [data-table] frame 直接子层（外层固定底栏，不进 scrollport）。 */
+[data-table-scroll] {
   flex: 1 1 auto;
-  /* min-height: 0 打破 flex item 默认 auto 阻断，让 body 能被 flex container 压缩；
-   * min-height: var(--row-h) 兜底防止短数据时 thead / foot / bulk 视觉重叠（arch-reviewer R-3）。 */
+  /* min-height: var(--row-h) 兜底短数据时 thead/foot/bulk 视觉重叠（arch-reviewer R-3）；
+   * min-height: 0 让 flex item 能被 container 压缩。两者合一取较大值。 */
   min-height: var(--row-h, 40px);
-  overflow-y: auto;
-  overflow-x: hidden;
+  /* min-width: 0 让 scrollport 自身宽度不被内容撑出 frame */
+  min-width: 0;
+  overflow: auto;
+  /* sticky 子（thead / bulk）需要 contain: paint 保证不被横滚带飞，
+   * 主流浏览器 sticky 实现已经处理；此处不强制。 */
+}
+
+/* ── body wrapper（语义 marker，不再独立滚动）─────── *
+ * Step 7B fix#2：纵向滚动迁到父级 [data-table-scroll]，本节点仅承载 role=rowgroup
+ * 语义和测试选择器引用，不重复设置 overflow / flex / min-height（避免与父链冲突）。 */
+[data-table-body] {
+  display: contents;
 }
 
 /* ── DataTable 内置 toolbar（CHG-DESIGN-02 Step 4，设计稿 .dt__toolbar） ─────── */

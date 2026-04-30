@@ -338,7 +338,11 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
       data-table
       data-testid={testId}
       role="grid"
-      style={{ display: 'flex', flexDirection: 'column', overflow: 'auto', position: 'relative' }}
+      // CHG-DESIGN-02 Step 7B fix#2（Codex review）：frame 不承担滚动
+      // 横向 + 纵向滚动统一发到内部 [data-table-scroll] 单一 viewport，避免
+      // 横纵滚动容器分裂导致垂直滚动条随 scrollLeft 漂移。frame 自身保持
+      // overflow:hidden（dt-styles 注入）+ flex column 语义。
+      style={{ position: 'relative' }}
       aria-label="data table"
       aria-rowcount={effectiveTotalRows}
     >
@@ -388,10 +392,15 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
       {toolbar?.hideFilterChips !== true && (
         <FilterChips columns={columns} filters={query.filters} onChange={onQueryChange} />
       )}
+      {/* CHG-DESIGN-02 Step 7B fix#2：单一 scrollport 容器
+        * 横向 + 纵向滚动统一在 [data-table-scroll] 容器内发生，thead/body/bulk
+        * 共享同一 scrollLeft；foot 留在 frame 直接子层（不进 scrollport），永远
+        * 固定在底部不随横向滚动漂移。 */}
+      <div data-table-scroll role="presentation">
       {/* sticky header */}
       <div
         role="rowgroup"
-        style={{ position: 'sticky', top: 0, zIndex: 1, flexShrink: 0 }}
+        style={{ position: 'sticky', top: 0, zIndex: 1 }}
       >
         <div
           role="row"
@@ -455,9 +464,9 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
         </div>
       </div>
 
-      {/* body — CHG-DESIGN-02 Step 7A：独立滚动（thead sticky + body overflow-y）
-        * 样式从 inline 移到 dt-styles.tsx [data-table-body] 选择器，承载
-        * `flex: 1 1 auto + overflow-y: auto + min-height: 0` 标准组合 */}
+      {/* body — CHG-DESIGN-02 Step 7B fix#2：纵向滚动由父级 [data-table-scroll]
+        * 承担，本 wrapper 仅作 row 容器（保留 [data-table-body] 标记供测试 / 选择器
+        * 引用）；不再独立 overflow-y / flex / min-height。 */}
       <div role="rowgroup" data-table-body>
         {loading && (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--fg-muted)' }}>
@@ -521,23 +530,9 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
           )
         })}
       </div>
-      {enableHeaderMenu && (
-        <HeaderMenu
-          open={menuColId !== null}
-          column={menuColumn}
-          columnMenu={menuColumn?.columnMenu}
-          anchorRef={menuAnchorRef}
-          currentSort={query.sort}
-          columnsValue={colMap}
-          onSort={handleHeaderMenuSort}
-          onClearSort={handleHeaderMenuClearSort}
-          onHide={handleHeaderMenuHide}
-          onClose={closeHeaderMenu}
-        />
-      )}
       {/* CHG-DESIGN-02 Step 5/7：表内 sticky bottom bulk action bar
-        * 仅在 selection 非空 + bulkActions 可渲染时显示；
-        * 计数 + clear button 由 DataTable 提供，操作区由消费方填充 */}
+        * Step 7B fix#2：bulk bar 留在 [data-table-scroll] viewport 内，sticky bottom
+        * 浮在最后一行上方；scrollLeft 与 thead/body 共享同一容器自然同步。 */}
       {shouldRenderBulkBar && (
         <div data-table-bulk role="region" aria-label="批量操作">
           <span data-table-bulk-count>
@@ -555,9 +550,25 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
           </button>
         </div>
       )}
-      {/* CHG-DESIGN-02 Step 7A：内置 .dt__foot pagination
-        * 缺省渲染最简 foot（仅 summary）；显式 pagination={{ hidden: true }} 时不渲染。
-        * page / pageSize 控制态走 query.pagination + onQueryChange。 */}
+      </div>
+      {/* HeaderMenu portal — 渲染在 frame 直接子层（不进 scrollport），
+        * 与 portal 容器（document.body）一起脱离 frame 流，无横滚漂移。 */}
+      {enableHeaderMenu && (
+        <HeaderMenu
+          open={menuColId !== null}
+          column={menuColumn}
+          columnMenu={menuColumn?.columnMenu}
+          anchorRef={menuAnchorRef}
+          currentSort={query.sort}
+          columnsValue={colMap}
+          onSort={handleHeaderMenuSort}
+          onClearSort={handleHeaderMenuClearSort}
+          onHide={handleHeaderMenuHide}
+          onClose={closeHeaderMenu}
+        />
+      )}
+      {/* CHG-DESIGN-02 Step 7A + 7B fix#2：foot 在 [data-table-scroll] 之外
+        * 永远固定在 frame 底部，不随 body 横向滚动漂移。 */}
       <PaginationFoot
         config={pagination}
         page={query.pagination.page}

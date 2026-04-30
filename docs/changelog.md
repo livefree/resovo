@@ -2688,3 +2688,77 @@ Step 7B 主体合入后 Codex stop-time review 命中：`tests/e2e/admin/videos.
 
 执行模型：claude-opus-4-7
 子代理：无
+
+---
+
+## fix(CHG-DESIGN-02 Step 7B)#2: DataTable 单一 scrollport 重构 — 横纵滚动统一容器（Codex stop-time review）
+
+Codex stop-time review 命中根因：DataTable 根节点 inline `style={{ overflow: 'auto' }}` 覆盖了 dt-styles 中 `[data-table] { overflow: hidden }`，导致**横向滚动发生在 frame root**，**纵向滚动发生在子级 [data-table-body]**。当宽表产生横向滚动时，body 这个纵向滚动容器本身处在横向 scroll 的内容流里，scrollLeft 改变会让 body 整体向左移动 → 视觉上"垂直滚动条随 scrollLeft 漂移"。
+
+简化：**横向 scrollport 和纵向 scrollport 不是同一个稳定容器，且纵向 scrollport 被放进了横向可滚动内容里。**
+
+### 修复方向（按用户提供的 4 项指南）
+
+1. ✅ 根节点 frame 不再 `overflow: auto`，回到 frame 语义：`overflow: hidden + min-width: 0 + display: flex + flex-direction: column`
+2. ✅ 明确表格内部的横向 viewport — 新增 `[data-table-scroll]` 单一双轴 scrollport
+3. ✅ 纵向滚动条挂在固定宽度 viewport 上（[data-table-scroll]），不挂在随横向内容移动的宽内容层
+4. ✅ thead / body / bulk 共享同一 `scrollLeft`（包在同一 [data-table-scroll] 容器内）
+5. ✅ 保留横向滚动能力（不是简单把 `overflow: auto` 改成 `hidden`）
+
+### 新 DOM 树形
+
+```
+[data-table] (frame, overflow:hidden, flex column, min-width:0, min-height:240px)
+├ DTStyles
+├ [data-table-toolbar]               (flex-shrink:0, frame 内固定头部)
+├ [data-table-filter-chips]          (flex-shrink:0, frame 内固定头部)
+├ [data-table-scroll]                (flex:1, overflow:auto 双轴, min-h/w:0) ← 单一 scrollport
+│  ├ thead rowgroup                  (sticky top:0)
+│  ├ [data-table-body] rowgroup      (display:contents，rows 直接成为 scrollport children)
+│  │  └ row × N                      (display:grid)
+│  └ [data-table-bulk]                (sticky bottom:0，selection 时浮起，scrollLeft 与 thead/body 同步)
+├ HeaderMenu                         (portal 渲染到 document.body)
+└ [data-table-foot]                  (flex-shrink:0, frame 直接子，永远固定底部不随横滚漂移)
+```
+
+### 关键效果
+
+- 水平滚动条：`[data-table-scroll]` 容器底部
+- 垂直滚动条：`[data-table-scroll]` 容器右侧
+- 两轴在同一容器，scrollLeft 改变同时影响 thead / body / bulk（自然同步）
+- foot 在 scrollport 之外，pagination 永远固定在 frame 底部
+- toolbar / filter chips 在 scrollport 之外，永远固定在 frame 顶部
+
+### 修改文件
+
+- `packages/admin-ui/src/components/data-table/data-table.tsx`：
+  - root inline style 删除 `overflow: 'auto'` + `display: 'flex'` + `flexDirection: 'column'`（移交 dt-styles 接管），保留 `position: 'relative'`
+  - thead 之前包 `<div data-table-scroll role="presentation">` 开口
+  - `[data-table-body]` 删除 inline marker 注释中"独立滚动"措辞，改为"语义保留 + 父级承担纵滚"
+  - bulk bar 之后关闭 `</div>`（scrollport 边界）
+  - foot 渲染移到 scrollport 之外，frame 直接子层
+  - HeaderMenu 渲染顺序前移到 foot 之前（portal 不影响 layout，但保持源码可读性）
+  - thead inline style 删除 `flexShrink: 0`（scrollport 内 row 不需要 flex-shrink 语义）
+- `packages/admin-ui/src/components/data-table/dt-styles.tsx`：
+  - `[data-table]` 加 `min-width: 0`
+  - 新增 `[data-table-scroll]` 选择器：`flex: 1 1 auto + min-height: var(--row-h, 40px) + min-width: 0 + overflow: auto`
+  - `[data-table-body]` 改为 `display: contents`（仅作语义 marker，rows 直接成为 scrollport 子）
+- `tests/unit/components/admin-ui/table/step-7a-body-scroll.test.tsx`：
+  - 用例 2 校验断言改：`[data-table-scroll]` 选择器存在 + `overflow: auto` + body wrapper `display: contents`
+  - 用例 3 改测 frame 直接子顺序：`toolbar → (filter-chips) → scroll → foot`；bulk **不**在 frame 直接子；bulk + body 都在 scrollport 内
+  - 新增用例 4：foot 在 scrollport 之外（`scrollEl.contains(foot) === false`）+ foot 是 frame 直接子
+
+### 验收
+
+- typecheck ✅ 全 7 workspace
+- 单测 admin-ui 738/738 全绿（含本次新增 1 个 foot scrollport-out 用例）
+- 全套 2604/2605 测试通过；剩 1 处偶发并发 flake（每次不同 — VideoCard / SubmissionTable / StagingEditPanel / HeroBanner / SourceTable 任一），独立跑全部 pass，与 7B fix#2 无因果关系（各失败测试不依赖 admin-ui DataTable）
+
+### 注意事项
+
+- `display: contents` 在 a11y 树保留 `role="rowgroup"` 语义（W3C / 主流浏览器实现一致），无 a11y 倒退
+- bulk bar 仍 `position: sticky; bottom: 0`，但现在 sticky 的视口是 `[data-table-scroll]`（不是 frame）；selection 浮起的视觉行为不变
+- 未来若需要做"行号列固定"（`column.pinned: true` 物理 left-sticky），可在 row 内部 `position: sticky; left: 0` 实现，因为 scrollLeft 在 [data-table-scroll] 内可被 sticky 子元素正确响应
+
+执行模型：claude-opus-4-7
+子代理：无
