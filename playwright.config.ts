@@ -1,11 +1,14 @@
 import { defineConfig, devices } from '@playwright/test'
 
 // CUTOVER（2026-04-23）：apps/web 退役，apps/web-next 升为对外入口 port 3000
-const WEB_URL   = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-const ADMIN_URL = process.env.ADMIN_APP_URL       ?? 'http://localhost:3001'
+const WEB_URL        = process.env.NEXT_PUBLIC_APP_URL  ?? 'http://localhost:3000'
+const ADMIN_URL      = process.env.ADMIN_APP_URL        ?? 'http://localhost:3001'
+const ADMIN_NEXT_URL = process.env.ADMIN_NEXT_APP_URL   ?? 'http://localhost:3003'
 
 // 后台 E2E：admin 访问控制 / 视频治理 / 发布流程（admin 部分）
-const ADMIN_SPECS = ['**/e2e/admin.spec.ts', '**/e2e/admin-source-and-video-flows.spec.ts', '**/e2e/video-governance.spec.ts', '**/e2e/publish-flow.spec.ts']
+const ADMIN_SPECS      = ['**/e2e/admin.spec.ts', '**/e2e/admin-source-and-video-flows.spec.ts', '**/e2e/video-governance.spec.ts', '**/e2e/publish-flow.spec.ts']
+// server-next 后台 E2E（apps/server-next:3003）
+const ADMIN_NEXT_SPECS = ['**/e2e/admin/**/*.spec.ts']
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -27,6 +30,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], baseURL: ADMIN_URL },
       testMatch: ADMIN_SPECS,
     },
+    // ── 后台 server-next（server-next:3003） ────────────────────────
+    {
+      name: 'admin-next-chromium',
+      use: { ...devices['Desktop Chrome'], baseURL: ADMIN_NEXT_URL },
+      testMatch: ADMIN_NEXT_SPECS,
+    },
     // ── 前台（web-next:3000） —— CUTOVER 后唯一前端 ─────────────────
     {
       name: 'web-chromium',
@@ -46,6 +55,12 @@ export default defineConfig({
       url: `${ADMIN_URL}/admin`,
       reuseExistingServer: !process.env.CI,
       timeout: 60000,
+    },
+    {
+      command: 'npm --workspace @resovo/server-next run dev',
+      url: `${ADMIN_NEXT_URL}/admin`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 90000,
     },
     {
       // CUTOVER：web-next 是唯一前台，port 3000

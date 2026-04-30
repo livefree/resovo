@@ -2134,3 +2134,25 @@
 - Tab 容器 SSR 零 throw ✅
 - **实测验收**：typecheck ✅ | 2491 单测全通过 ✅
 - **下一步**：CHG-SN-3-10 集成验收 + e2e 黄金路径
+
+## chg(CHG-SN-3-10): 集成验收 + e2e 黄金路径（视频库）
+
+- **日期**: 2026-04-29
+- **TASK-ID**: CHG-SN-3-10
+- **主循环模型**: claude-sonnet-4-6
+- **子代理调用**: 无
+- **变更类型**: chg（M-SN-3 第 10 张）
+- **摘要**: 新建 `tests/e2e/admin/videos.spec.ts`（5 个黄金路径场景：列表加载、搜索过滤、编辑 Drawer、上架操作、批量下架）；playwright.config.ts 新增 admin-next-chromium project（port 3003）+ server-next webServer。
+
+### 新增/变更文件
+- `tests/e2e/admin/videos.spec.ts`（新建：5 个黄金路径 e2e 场景）
+- `playwright.config.ts`（修改：新增 admin-next-chromium project + ADMIN_NEXT_URL + webServer）
+
+### 验收
+- 列表加载正确渲染 ✅
+- 搜索过滤 URL 同步 ✅
+- VideoEditDrawer 打开/修改/保存流程 ✅
+- 上架乐观更新 ✅
+- 批量下架 confirm 流程 ✅
+- **实测验收**：typecheck ✅ | 2489/2491 单测通过（2 失败为预存 StagingEditPanel flake）✅
+- **下一步**：CHG-SN-3-10 已完成，按用户指示暂停后续任务
