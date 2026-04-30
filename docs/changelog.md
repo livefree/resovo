@@ -2336,3 +2336,28 @@ token 命名层补 `--accent-on-soft` 别名（指向 `--accent-active`）作为
 
 - CHG-DESIGN-02：DataTable frame 扩展（继续顺延）
 - CHG-DESIGN-05：Shell 视觉对齐（折叠按钮文案 / footer role / NavTip / notification & task drawer 数据接入）
+
+## fix(CHG-DESIGN-04)#1~#7: 折叠/展开动效七轮 stop-gate review 修复（用户 2026-04-29 签收）
+
+CHG-DESIGN-04 主体合入后经 Codex stop-time review + 用户视觉签收，发现多处衍生问题，分七轮 fix# 修复至完美对称：
+
+| # | commit | 问题 | 修复 |
+|---|--------|------|------|
+| 1 | `1e863cf` | BrandArea/Footer/NavItem 折叠态渐隐缺失 | meta/chevron/label/badge 永远渲染 + admin-shell-styles 渐隐规则 |
+| 2 | `afd3fb9` | inline padding 让 badge 折叠态仍占 ~16px，icon 被挤出左边界 | 折叠态完全收 0：`max-width:0 + min-width:0 + padding:0 + margin:0 + border:0 + overflow:hidden` |
+| 3 | `794e3bb` | useTableQuery `getServerSnapshot` 每次返新对象，触发 React infinite loop 警告 | useRef 懒初始化默认 snapshot |
+| 4 | `b460b0e` | 5 个带 count 的 NavItem 图标贴到浏览器边缘；滚动条出现/消失改变布局 | inline padding 下沉到基础 CSS（特异性 0,1,0）；`* { scrollbar-gutter: stable }` |
+| 5 | `232257d` | public Sidebar 依赖私有 admin-shell-styles 才能正确 layout | 折叠态结构性重置全部回归 inline 条件，admin-shell-styles 仅承载 transition |
+| 6 | `3cf46cc` | 折叠不对称（先跳到中间再折叠）；icon 比 brand logo 偏左 3px | `justify-content: center` 永远启用；展开态显式 `maxWidth: '100%'`；sidebar nav `scrollbar-width: none` 隐藏滚动条 |
+| 7 | `4747529` | flex snap：COLLAPSED_HIDDEN_STYLE.flex `0 0 auto` 与 expanded `flex:1` 切换瞬时跳变 | 折叠态保留 expanded flex 值，layout 收缩仅靠 max-width 数值动画驱动 |
+
+### 用户签收
+> "侧边栏问题算作通过"
+
+### 关键收益
+- Sidebar 公共组件自包含（standalone 使用也正确）
+- 折叠/展开两方向动效完全对称平滑
+- icon 与 brand logo 视觉对齐（消除 scrollbar gutter 影响）
+- WCAG AA 对比度 ≥7:1（accent-active 在 light/dark 双主题）
+- 滚动条全站不再 reflow layout
+- 12 个未定义 token 引用清零 + CI 卡门
