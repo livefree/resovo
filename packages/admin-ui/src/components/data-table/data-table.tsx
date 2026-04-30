@@ -16,6 +16,7 @@ import type {
   TableQueryPatch,
   TableSortState,
 } from './types'
+import { DTStyles } from './dt-styles'
 
 // ── client-mode data processing ──────────────────────────────────
 
@@ -264,6 +265,9 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
       aria-label="data table"
       aria-rowcount={effectiveTotalRows}
     >
+      {/* CHG-DESIGN-02 Step 2/7：自包含 CSS 注入（framed surface + flash keyframe）
+        * 模块级 flag 守卫，多个 DataTable 实例只注入一次 */}
+      <DTStyles />
       {/* sticky header */}
       <div
         role="rowgroup"
