@@ -60,9 +60,14 @@ export interface DataTableProps<T> {
    * 本配置仅承载渲染相关参数（pageSizeOptions / summaryRender / hidden）。
    * 服务端模式总数权威源是顶层 `totalRows`；客户端模式由 processedRows.length 推导。
    *
-   * 缺省（不传 pagination）时仍渲染最简 .dt__foot（仅 summary 文本，无翻页器与
-   * pageSize 切换），保证设计稿 §4.4.1 footer 一体性；显式传 `{ hidden: true }` 才
-   * 完全不渲染（嵌入式兜底；消费方仍可外置 PaginationV2 过渡）。
+   * **三态语义**（消费方需明确选择）：
+   *   - `pagination` **省略**（不传 prop）→ 渲染 **summary-only** foot（仅 summary
+   *     文本，**不渲染** pager / pageSize select）。保设计稿 §4.4.1 footer 一体性同时
+   *     与现有外置 `PaginationV2` 消费方零冲突（不出现双 pager）。
+   *   - `pagination={...}`（显式传 config，含空对象 `{}`）→ 渲染 **完整 foot**
+   *     （summary + pager + pageSize select）。消费方明示选用一体化分页，应同时
+   *     移除外置 PaginationV2 编排避免双 pager。
+   *   - `pagination={{ hidden: true }}` → **完全不渲染** foot（嵌入式兜底）。
    */
   readonly pagination?: PaginationConfig
 }

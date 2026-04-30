@@ -3190,15 +3190,17 @@ DataTable v2 + useTableQuery 一次性收编。本 ADR 是 CHG-SN-2-13（DataTab
 >   `enableHeaderMenu`（表头集成菜单含 sort / hide / clear filter）/ saved views
 >   menu（持久化到 sessionStorage）。
 > - ✅ **Step 7A**（骨架完整化 / 2026-04-30）：`pagination?: PaginationConfig`（DataTable
->   props + 渲染到 `.dt__foot`，24px 高页码按钮）/ `.dt__body` 独立滚动（thead sticky +
+>   props + 渲染到 `.dt__foot`，24px 高页码按钮；**三态语义**：省略 prop → summary-only
+>   foot 与外置 PaginationV2 零冲突；显式 `pagination={...}` → 完整 foot；
+>   `pagination={{ hidden: true }}` → 完全不渲染） / `.dt__body` 独立滚动（thead sticky +
 >   tbody overflow-y + 防御性 `min-height: 240px`） / 隐藏列 chip + `HiddenColumnsMenu`
 >   popover（toolbar 内 views 之后、trailing 之前；pinned 列显示"已锁定"标签）/
 >   filter chips slot（独立第二 flex row，6 种 FilterValue.kind 默认 formatter +
 >   `column.renderFilterChip` 完全接管逃生口） / `column-visibility.ts` 共享工具。
->   覆盖 35 单测用例（step-7a-pagination-foot / step-7a-hidden-cols / step-7a-filter-chips /
->   step-7a-body-scroll）；arch-reviewer (claude-opus-4-7) CONDITIONAL PASS，5 项必修全部
->   落地（删除 PaginationConfig.total / 缺省渲染最简 foot / FilterChipContext 三参 ctx /
->   6 种 default formatter / layout 同 PR 切换）。
+>   覆盖 36 单测用例（step-7a-pagination-foot 8 / step-7a-hidden-cols 11 /
+>   step-7a-filter-chips 14 / step-7a-body-scroll 3）；arch-reviewer (claude-opus-4-7)
+>   CONDITIONAL PASS，5 项必修全部落地（删除 PaginationConfig.total / 三态语义缺省
+>   渲染最简 foot / FilterChipContext 三参 ctx / 6 种 default formatter / layout 同 PR 切换）。
 >
 > 新模块 / server-next 表格页消费 DataTable 时，**所有 Step 1–6 + 7A 内置 props
 > 必须走 DataTable**，不再外置编排。完整体验"body 独立滚动"需消费方在父级提供

@@ -1,10 +1,11 @@
 /**
  * DataTable PaginationFoot 单测（CHG-DESIGN-02 Step 7A）
- * 覆盖：
- *   - 缺省（无 pagination prop）→ 渲染最简 foot（仅 summary）
+ * 覆盖（三态语义 — Codex stop-time review fix）：
+ *   - 省略 pagination prop → 渲染 summary-only foot（无 pager / 无 pageSize select），避免与外置 PaginationV2 双 pager
+ *   - 显式 pagination={} → 渲染完整 foot（pager + pageSize 都激活）
  *   - hidden=true → 完全不渲染 foot
- *   - 多页 → 渲染翻页器 + page 切换调 onQueryChange
- *   - pageSizeOptions [10,20] → 渲染 pageSize select + 切换回 page 1
+ *   - 显式 + 多页 → 渲染翻页器 + page 切换调 onQueryChange
+ *   - 显式 + pageSizeOptions [10,20] → 渲染 pageSize select + 切换回 page 1
  *   - summaryRender 自定义 → 替换默认文案，含 selectedCount
  *   - server mode total 走 totalRows，不取 PaginationConfig.total（已删除）
  */
@@ -33,7 +34,9 @@ function makeSnapshot(page = 1, pageSize = 10): TableQuerySnapshot {
 }
 
 describe('DataTable Step 7A — PaginationFoot', () => {
-  it('pagination 缺省 → 渲染最简 foot（含 summary，无 hidden）', () => {
+  it('pagination 缺省（未传 prop）→ summary-only foot（无 pager / 无 pageSize select）', () => {
+    // Codex stop-time review fix：省略 prop 时 foot 不应渲染主动控件，避免
+    // 与现有外置 PaginationV2 消费方（VideoListClient / dev demo）双 pager 冲突
     render(
       <DataTable<Row>
         rows={ROWS}
@@ -46,7 +49,25 @@ describe('DataTable Step 7A — PaginationFoot', () => {
     )
     expect(document.querySelector('[data-table-foot]')).not.toBeNull()
     expect(document.querySelector('[data-table-foot-summary]')?.textContent).toContain('共 35 条')
-    expect(document.querySelector('[data-table-foot-summary]')?.textContent).toContain('第 1/4 页')
+    // 关键断言：缺省模式下 pager 与 pageSize 控件均不渲染
+    expect(document.querySelector('[data-table-foot-pager]')).toBeNull()
+    expect(document.querySelector('[data-table-foot-pagesize]')).toBeNull()
+  })
+
+  it('pagination={} 显式空对象 → 完整 foot（pager + pageSize 激活）', () => {
+    render(
+      <DataTable<Row>
+        rows={ROWS}
+        columns={COLUMNS}
+        rowKey={(r) => r.id}
+        mode="client"
+        query={makeSnapshot(1, 10)}
+        onQueryChange={() => {}}
+        pagination={{}}
+      />,
+    )
+    expect(document.querySelector('[data-table-foot-pager]')).not.toBeNull()
+    expect(document.querySelector('[data-table-foot-pagesize]')).not.toBeNull()
   })
 
   it('pagination={{ hidden: true }} → 完全不渲染 foot', () => {
@@ -64,7 +85,7 @@ describe('DataTable Step 7A — PaginationFoot', () => {
     expect(document.querySelector('[data-table-foot]')).toBeNull()
   })
 
-  it('多页 → 翻页器渲染 + 点击页号触发 onQueryChange({pagination:{page:N}})', () => {
+  it('显式 pagination + 多页 → 翻页器渲染 + 点击页号触发 onQueryChange({pagination:{page:N}})', () => {
     const onQueryChange = vi.fn<(p: TableQueryPatch) => void>()
     render(
       <DataTable<Row>
@@ -74,6 +95,7 @@ describe('DataTable Step 7A — PaginationFoot', () => {
         mode="client"
         query={makeSnapshot(1, 10)}
         onQueryChange={onQueryChange}
+        pagination={{}}
       />,
     )
     const buttons = document.querySelectorAll('[data-table-foot-pager-btn]')
@@ -165,6 +187,7 @@ describe('DataTable Step 7A — PaginationFoot', () => {
         query={makeSnapshot(1, 5)}
         onQueryChange={() => {}}
         totalRows={120}
+        pagination={{}}
       />,
     )
     expect(document.querySelector('[data-table-foot-summary]')?.textContent).toContain('共 120 条')

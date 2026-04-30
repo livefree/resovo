@@ -75,7 +75,7 @@ npm run test:e2e         # PLAYER / AUTH / SEARCH / VIDEO 任务完成后运行
   - `bulkActions?: React.ReactNode`（表内 `.dt__bulk` sticky bottom）
   - `flashRowKeys?: ReadonlySet<string>`（行 flash 动画）
   - `enableHeaderMenu?: boolean`（表头集成菜单 sort+hide+clear filter）
-  - `pagination?: PaginationConfig`（`.dt__foot` 内置；缺省渲染最简 foot；`{ hidden: true }` 完全不渲染）
+  - `pagination?: PaginationConfig`（`.dt__foot` 内置；**三态**：省略 prop → summary-only foot 不冲突外置 PaginationV2；显式 `{...}` → 完整 foot；`{ hidden: true }` → 不渲染）
   - 隐藏列 chip + popover（自动启用，pinned 显示"已锁定"）
   - filter chips slot（自动启用，6 种 FilterValue 默认 formatter + `column.renderFilterChip` 完全接管逃生口）
   - 完整体验"body 独立滚动"需消费方在父级提供 height 约束；未提供时走 `min-height: 240px` 防御性兜底

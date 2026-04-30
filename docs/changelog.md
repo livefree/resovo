@@ -2560,3 +2560,37 @@ CHG-DESIGN-11 #4 在 §4.4.2 props 接口块写 `bulkActions?: ReactNode | BulkA
 - arch-reviewer R-2（filter chip 与外置 chip 不一致）：视频库当前未外置 filter chip（仅外置 PaginationV2 + ColumnSettingsPanel），无文案双展示风险
 - arch-reviewer R-3（短数据 thead/foot 视觉重叠）：body wrapper `min-height: var(--row-h)` 已兜底
 - DataTable props 数 ≈ 17（< 20 阈值），后续如再追加首选进 ToolbarConfig 而非顶层
+
+---
+
+## fix(CHG-DESIGN-02 Step 7A)#1: PaginationFoot 三态语义防止与外置 PaginationV2 双 pager（Codex stop-time review）
+
+Step 7A 主体合入后 Codex stop-time review 命中：`pagination` prop **省略**时 PaginationFoot 仍渲染 page select + pager（默认 `pageSizeOptions ?? [10,20,50,100]` length > 1 + `totalPages > 1`），与 VideoListClient / dev demo 现有外置 PaginationV2 形成**双 pager**。arch-reviewer 必修项 #2 原意"省略 prop 渲染最简 foot 仅 summary"被 PaginationFoot 内部独立 gate 破坏。
+
+修复：实施明确**三态语义**：
+
+- `pagination === undefined`（消费方未传 prop）→ 渲染 **summary-only** foot（仅 summary 文本，**不渲染** pager / pageSize select）。保设计稿 §4.4.1 footer 一体性同时与现有外置 PaginationV2 消费方零冲突
+- `pagination === { ... }`（显式传 config，含空对象 `{}`）→ 渲染 **完整 foot**（summary + pager + pageSize）。消费方明示选用一体化分页
+- `pagination === { hidden: true }` → **完全不渲染** foot（嵌入式兜底）
+
+实施方式：PaginationFoot 内部加 `isExplicit = config !== undefined` 闸门，`showPager` / `showPageSize` 的现有计算前缀加 `isExplicit &&`。
+
+涉及文件：
+
+- `packages/admin-ui/src/components/data-table/pagination-foot.tsx` — 加 `isExplicit` 闸门 + 头部注释三态语义
+- `packages/admin-ui/src/components/data-table/types.ts` — `pagination` 字段 jsdoc 三态语义明示
+- `tests/unit/components/admin-ui/table/step-7a-pagination-foot.test.tsx` — 拆"省略 → summary-only"+"显式 `{}` → 完整 foot"两用例；既有"多页 + 切换 page"用例补 `pagination={}` 显式启用；server mode 用例补 `pagination={}`；测试 7 → 8 用例
+- `docs/decisions.md` ADR-103 §4.1 AMENDMENT — Step 7A 状态描述补三态语义
+- `CLAUDE.md` 后台表格 server-next bullet — `pagination?: PaginationConfig` 行补三态
+- `docs/rules/admin-module-template.md` — `pagination?: PaginationConfig` 行补三态 + "显式传 `{...}` 同时移除外置 PaginationV2" 警示
+- `docs/designs/backend_design_v2.1/reference.md` §4.4.1（视觉契约 page foot 行）+ §4.4.2（props 接口 pagination 注释）补三态语义
+
+验收：
+
+- typecheck ✅ 全 7 workspace
+- 36 Step 7A 单测全绿（新增 1 个"省略 → summary-only"用例）
+- 737 admin-ui 全套单测全绿
+- 现有外置 PaginationV2 消费方（VideoListClient / dev demo）继续工作零回归（DataTable foot 进入 summary-only 模式）
+
+执行模型：claude-opus-4-7
+子代理：无

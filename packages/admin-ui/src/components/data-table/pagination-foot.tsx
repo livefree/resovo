@@ -6,9 +6,16 @@
  * 职责：渲染 sticky bottom footer（summary + 翻页器 + pageSize 切换）。
  * 不持有 page / pageSize 状态：所有切换通过 onQueryChange({ pagination: ... }) 上行。
  *
+ * 三态语义（arch-reviewer 必修项 + Codex stop-time review fix）：
+ *   - `pagination === undefined`（消费方未传 prop）→ 渲染 **summary-only** foot
+ *     （仅 summary 文本，**不渲染** pager / pageSize select），保证 §4.4.1 footer
+ *     一体性同时与现有外置 PaginationV2 消费方零冲突（不出现双 pager）
+ *   - `pagination === { ... }`（显式传入 config，含空对象 `{}`）→ 渲染 **完整 foot**
+ *     （summary + pager + pageSize select），消费方明示选用一体化分页
+ *   - `pagination === { hidden: true }` → 完全不渲染 foot（嵌入式兜底）
+ *
  * 设计契约：reference.md §4.4.1 / §4.4.3 — `.dt__foot` 紧凑 24px 高页码按钮，
- * 复用 `--row-h-compact` token；缺省渲染最简 foot（仅 summary）以保证 §4.4.1
- * footer 一体性，显式 `hidden: true` 才完全不渲染。
+ * 复用 `--row-h-compact` token。
  */
 import React, { useMemo } from 'react'
 import type { PaginationConfig, PaginationSummaryContext, TableQueryPatch } from './types'
@@ -34,6 +41,9 @@ export function PaginationFoot({
 }: PaginationFootProps): React.ReactElement | null {
   if (config?.hidden) return null
 
+  // 显式传 prop（含空对象）→ 完整 foot；省略 prop → summary-only（避免与外置 PaginationV2 双 pager）
+  const isExplicit = config !== undefined
+
   const safePageSize = Math.max(1, pageSize)
   const totalPages = Math.max(1, Math.ceil(total / safePageSize))
   const safePage = Math.min(Math.max(1, page), totalPages)
@@ -55,8 +65,9 @@ export function PaginationFoot({
     [config?.pageSizeOptions],
   )
 
-  const showPager = totalPages > 1
-  const showPageSize = pageSizeOptions.length > 1
+  // summary-only 模式（pagination prop 缺省）禁用所有主动控件
+  const showPager = isExplicit && totalPages > 1
+  const showPageSize = isExplicit && pageSizeOptions.length > 1
 
   const goPage = (next: number) => {
     if (next === safePage || next < 1 || next > totalPages) return

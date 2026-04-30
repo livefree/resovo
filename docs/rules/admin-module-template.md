@@ -79,7 +79,7 @@ module/
 > - `bulkActions?: React.ReactNode`（`.dt__bulk` sticky bottom）
 > - `flashRowKeys?: ReadonlySet<string>`（行 flash 动画）
 > - `enableHeaderMenu?: boolean`（表头集成菜单）
-> - `pagination?: PaginationConfig`（`.dt__foot`；缺省渲染最简 foot；`{ hidden: true }` 才完全不渲染）
+> - `pagination?: PaginationConfig`（`.dt__foot`；三态语义：省略 prop → summary-only foot；显式 `{...}` → 完整 foot；`{ hidden: true }` → 不渲染。**消费方选择一体化分页时显式传 `{...}` 并同时移除外置 PaginationV2，避免双 pager**）
 > - 隐藏列 chip + `HiddenColumnsMenu` popover（pinned 显示"已锁定"）
 > - filter chips slot（6 种 FilterValue 默认 formatter + `column.renderFilterChip` 逃生口）
 >
