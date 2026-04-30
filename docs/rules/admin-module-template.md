@@ -73,7 +73,12 @@ module/
 ## 后台数据表格六项规范（硬约束）
 
 > **2026-04-30 修订（CHG-DESIGN-11）**：本节六项规范的**适用范围限定为 apps/server v1**（已存在的 admin 模块）。
-> **apps/server-next（M-SN-2+）以 `packages/admin-ui` DataTable + `docs/designs/backend_design_v2.1/reference.md` §4.4 + `docs/task-queue.md` SEQ-20260429-02 为准**，**不再使用** ModernDataTable / PaginationV2 / 外置 SelectionActionBar 三件套，而是用 DataTable 一体化 props（`toolbar` / `bulkActions` / `flashRowKeys` / `pagination` 等内置 slot）。
+> **apps/server-next（M-SN-2+）以 `packages/admin-ui` DataTable + `docs/designs/backend_design_v2.1/reference.md` §4.4 + `docs/task-queue.md` SEQ-20260429-02 为准**，**不再使用** ModernDataTable / 外置 SelectionActionBar 三件套作为新模块模板。DataTable 一体化 props 分两阶段：
+>
+> - ✅ 已实现（CHG-DESIGN-02 Step 1–6）：`toolbar` / `bulkActions`（`.dt__bulk` sticky bottom） / `flashRowKeys` / `enableHeaderMenu` / saved views
+> - 🔄 计划实现（CHG-DESIGN-02 Step 7A 未开工）：`pagination`（PaginationConfig + `.dt__foot`） / `.dt__body` 独立滚动 / 隐藏列 chip / filter chips slot
+>
+> Step 7A 落地前允许外置 PaginationV2 作为过渡形态，落地后必须切换为 DataTable.pagination prop。不要把"计划项"当成"已存在"调用。
 >
 > 即：本节规范仅约束 apps/server v1 时代的现存模块；server-next 新增模块禁止套用本节"v1 ModernDataTable"语义。
 

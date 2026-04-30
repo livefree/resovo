@@ -70,7 +70,10 @@ npm run test:e2e         # PLAYER / AUTH / SEARCH / VIDEO 任务完成后运行
 接口设计先于实现。
 
 **后台表格**：
-- **server-next**（当前真源，CHG-DESIGN-11 / SEQ-20260429-02）：使用 `packages/admin-ui` 的 `DataTable` 一体化组件（`toolbar` / `bulkActions` / `flashRowKeys` / `pagination` 等内置 props），详见 `docs/designs/backend_design_v2.1/reference.md` §4.4 + `docs/rules/admin-module-template.md` 头部 2026-04-30 修订。**禁止**在 server-next 新模块复用 ModernDataTable / 外置 PaginationV2 / 外置 SelectionActionBar 三件套。
+- **server-next**（当前真源，CHG-DESIGN-11 / SEQ-20260429-02）：使用 `packages/admin-ui` 的 `DataTable` 一体化组件，详见 `docs/designs/backend_design_v2.1/reference.md` §4.4 + `docs/rules/admin-module-template.md` 头部 2026-04-30 修订。落地状态分两阶段：
+  - ✅ **已实现内置 props**（CHG-DESIGN-02 Step 1–6）：`toolbar` / `bulkActions`（含 `.dt__bulk` sticky bottom）/ `flashRowKeys` / `enableHeaderMenu` / saved views — 必须走内置 prop，不得外置
+  - 🔄 **计划内置 props**（CHG-DESIGN-02 Step 7A 未开工）：`pagination`（PaginationConfig + `.dt__foot`）/ `.dt__body` 独立滚动 / 隐藏列 chip / filter chips slot — Step 7A 落地前允许过渡形态（外置 PaginationV2 等），落地后必须切换；不要按"已存在"假设调用未实现 prop
+  - **禁止**在 server-next 新模块复用 ModernDataTable / 外置 SelectionActionBar 三件套作为新模块模板
 - **server v1**（已冻结）：维持 `ModernDataTable` + `ColumnSettingsPanel` + `AdminDropdown` + `SelectionActionBar` + `PaginationV2` + 服务端排序，详见 `docs/rules/admin-module-template.md` v1 章节。仅维护期 bug 修复使用，不作新模块模板。
 
 ---

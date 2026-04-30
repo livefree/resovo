@@ -379,10 +379,12 @@ useEffect(() => {
 
 ```
 packages/admin-ui/src/
-  components/data-table/   ← DataTable 一体化（toolbar / bulk / flash / pagination 内置 slot）
+  components/data-table/   ← DataTable 一体化（已实现：toolbar / bulkActions / flashRowKeys / enableHeaderMenu / saved views；计划实现：pagination / .dt__body 独立滚动 / 隐藏列 chip / filter chips slot — CHG-DESIGN-02 Step 7A）
   components/             ← 其他 v2 通用原语（reference.md §4 通用组件清单）
   shell/                  ← AdminShell + Sidebar + Breadcrumbs（ADR-103a）
 ```
+
+> **Step 7A 落地前注意**：`pagination` / 独立 body 滚动 / 隐藏列 chip / filter chips slot 暂未写入 `packages/admin-ui` 类型与运行时；消费方暂时仍走外置 PaginationV2 等过渡形态，落地后必须切换。不要按"已存在"假设调用 DataTable.pagination prop。
 
 未抽出的业务复合组件（DualSignal / VisChip / Spark / KpiCard / thumb / pill / inline xs actions 等）由 CHG-DESIGN-12 沉淀（详见 `docs/designs/backend_design_v2.1/reference.md` §10）。
 

@@ -2413,3 +2413,26 @@ CHG-DESIGN-11 主体合入后 Codex stop-time review 命中遗漏：
 
 执行模型：claude-opus-4-7
 子代理：无
+
+---
+
+## fix(CHG-DESIGN-11)#2: DataTable 一体化契约拆"已实现 / 计划"两阶段（Codex stop-time review）
+
+CHG-DESIGN-11 主体合入后 Codex stop-time review 命中：active docs（CLAUDE.md / ADR-103 §4.1 AMENDMENT / admin-module-template.md / ui-rules.md / server_next_plan §4.4 / task-queue CHG-SN-3-04 被取代说明）将 DataTable 的 `pagination` 写为已内置 prop，但 `packages/admin-ui/src/components/data-table/data-table.tsx:8` 明示"不内置 Pagination"，types 里也没有 PaginationConfig prop —— `pagination` 内置是 CHG-DESIGN-02 Step 7A 计划实现，尚未开工。这会让任何执行者按"已存在"假设调用 `DataTable.pagination` 而失败。
+
+修复：所有 active docs 的一体化 props 表述拆为两阶段：
+
+- ✅ 已实现（CHG-DESIGN-02 Step 1–6 落地，单测覆盖）：`toolbar` / `bulkActions`（`.dt__bulk` sticky bottom） / `flashRowKeys` / `enableHeaderMenu`（含 sort / hide / clear filter） / saved views menu —— server-next 新模块必须走内置 prop，不得外置编排
+- 🔄 计划实现（CHG-DESIGN-02 Step 7A 未开工）：`pagination`（PaginationConfig + `.dt__foot`） / `.dt__body` 独立滚动 / 隐藏列 chip / filter chips slot —— Step 7A 落地前消费方暂走外置 PaginationV2 / 外置 filter chips 过渡形态，落地后必须切换；不得按"已存在"调用未实现 prop
+
+涉及文件：
+
+- `CLAUDE.md` 后台表格 server-next bullet
+- `docs/decisions.md` ADR-103 §4.1 AMENDMENT
+- `docs/rules/admin-module-template.md` 头部 2026-04-30 修订
+- `docs/rules/ui-rules.md` 后台共享组件边界规范 server-next 子节
+- `docs/server_next_plan_20260427.md` §4.4/§6 修订 + primitives 表 DataTable v2 / Pagination v2 行
+- `docs/task-queue.md` CHG-SN-3-04 被取代说明
+
+执行模型：claude-opus-4-7
+子代理：无

@@ -3183,14 +3183,25 @@ DataTable v2 + useTableQuery 一次性收编。本 ADR 是 CHG-SN-2-13（DataTab
 > bulk action bar / pagination 全部进入 DataTable **一体化结构**。设计依据：
 > `docs/designs/backend_design_v2.1/reference.md` §4.4 + §6.0 视觉契约。
 >
-> 本 ADR §4.1 ~ §4.5 的"原语分离"叙述保留为 M-SN-2 阶段语义沉淀的**历史
-> 路径**，但**不再作为新模块的实现模板**。新模块 / server-next 表格页消费
-> DataTable 时，搜索 / 视图 / 筛选 chips / 列设置 / 批量 / 分页**必须**走
-> DataTable 内置 props（`toolbar` / `bulkActions` / `flashRowKeys` /
-> `pagination` 等），不再外置编排。Toolbar / Pagination / SelectionActionBar
-> 仍可独立 export 但仅作嵌入式场景兜底，不作首选。
+> **落地状态（2026-04-30）**：契约分两阶段实施，当前实现进度：
 >
-> 本 ADR 的下方原始章节保留以追溯设计演进；落地路径以 reference.md §4.4 +
+> - ✅ **已实现**（CHG-DESIGN-02 Step 1–6 / commit 历史在 SEQ-20260429-02）：
+>   `toolbar` / `bulkActions`（含 `.dt__bulk` sticky bottom）/ `flashRowKeys` /
+>   `enableHeaderMenu`（表头集成菜单含 sort / hide / clear filter）/ saved views
+>   menu（持久化到 sessionStorage）已作为 DataTable Props 落地并有单测覆盖。
+> - 🔄 **计划实现**（CHG-DESIGN-02 Step 7A，仍待开工）：`pagination`（DataTable
+>   props 上的 PaginationConfig + 渲染到 `.dt__foot`）/ `.dt__body` 独立滚动
+>   （thead sticky + tbody overflow-y）/ 隐藏列 chip / filter chips slot 当前**尚未
+>   写入 `packages/admin-ui` 类型与运行时**，消费方暂时仍需外置 PaginationV2 /
+>   外置 filter chips；不要按"已存在"假设调用。
+>
+> 新模块 / server-next 表格页消费 DataTable 时，已实现项必须走 DataTable 内置
+> props，不再外置编排；计划项在 Step 7A 落地前允许过渡形态（外置组件），落地后
+> 必须切换。Toolbar / Pagination / SelectionActionBar 仍可独立 export 但仅作
+> 嵌入式场景兜底，不作首选。
+>
+> 本 ADR §4.1 ~ §4.5 的"原语分离"叙述保留为 M-SN-2 阶段语义沉淀的**历史
+> 路径**，但**不再作为新模块的实现模板**。落地路径以 reference.md §4.4 +
 > task-queue.md SEQ-20260429-02 CHG-DESIGN-02 为准。
 
 #### 4.1 DataTable v2 — 表格基座

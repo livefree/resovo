@@ -192,11 +192,13 @@ packages/design-tokens/src/
 > **2026-04-30 修订（CHG-DESIGN-11 / SEQ-20260429-02）**：
 > 本表中"DataTable v2 / Toolbar / Pagination / SelectionActionBar / ColumnSettings"
 > 在 M-SN-2 时代设计为**分离原语 + 消费方编排**。当前真源 `docs/designs/backend_design_v2.1/reference.md`
-> §4.4 + §6.0 已裁定 **DataTable 一体化**：toolbar / search / filter chips /
-> 表头集成菜单 / saved views / bulk action bar / pagination 全部进入 DataTable
-> 内置 props（CHG-DESIGN-02 落地）。**标准列表页必须通过 DataTable 内置 toolbar / body /
-> bulk / foot 编排**，外置组合（Toolbar / Pagination / SelectionActionBar 单独使用）
-> 仅作为非常规嵌入式场景的兜底，不作首选。原语本身仍可独立 export 但不强求复用。
+> §4.4 + §6.0 已裁定 **DataTable 一体化**。
+>
+> **落地状态**（CHG-DESIGN-02 当前进度）：
+> - ✅ 已实现内置 props（Step 1–6 落地）：`toolbar` / `bulkActions`（`.dt__bulk` sticky bottom） / `flashRowKeys` / `enableHeaderMenu`（含 sort / hide / clear filter） / saved views menu
+> - 🔄 计划内置 props（Step 7A 未开工）：`pagination`（PaginationConfig + `.dt__foot`） / `.dt__body` 独立滚动 / 隐藏列 chip / filter chips slot
+>
+> 标准列表页对**已实现**的内置 props 必须采用，不得外置编排；对**计划项**在 Step 7A 落地前允许外置 PaginationV2 / 外置 filter chips 作为过渡形态，落地后必须切换为 DataTable 内置 prop。原语本身仍可独立 export 但不强求复用，**不要把"计划项"当成"已存在"prop 调用**。
 >
 > 同样 2026-04-30 修订：原 "Icon set 复用 web-next 已有图标库" 与 "BrandProvider /
 > ThemeProvider 直接复用 web-next 的 contexts" 句子已被 ADR-103a/103b + verify-server-next-isolation
@@ -206,14 +208,14 @@ packages/design-tokens/src/
 
 | 原语 | 必须下沉？ | 出现时机 |
 |---|---|---|
-| DataTable v2（一体化：含 toolbar / body / bulk / foot 内置编排，CHG-DESIGN-02 起） | ✅ 必须 | M-SN-2（基座）→ SEQ-20260429-02（一体化骨架） |
-| Toolbar / Filter / Sort / ColumnSettings | ✅ 必须（独立 export） | M-SN-2；首选用法是 DataTable.toolbar slot |
+| DataTable v2（一体化：toolbar / bulk 已内置；body 独立滚动 / foot pagination 计划，CHG-DESIGN-02 Step 7A） | ✅ 必须 | M-SN-2（基座）→ SEQ-20260429-02（一体化骨架；Step 7A 落地 body+foot） |
+| Toolbar / Filter / Sort / ColumnSettings | ✅ 必须（独立 export） | M-SN-2；首选用法是 DataTable.toolbar slot（已实现） |
 | Drawer（视频编辑 Drawer 复用） | ✅ 必须 | M-SN-2 |
 | Modal / Dialog | ✅ 必须 | M-SN-2 |
 | Toast（全局 addToast API） | ✅ 必须 | M-SN-2 |
 | AdminDropdown | ✅ 必须 | M-SN-2 |
 | SelectionActionBar | ✅ 必须（独立 export） | M-SN-2；首选用法是 DataTable.bulkActions slot（嵌入式 sticky-bottom） |
-| Pagination v2（客户端 / 服务端两档） | ✅ 必须（独立 export） | M-SN-2；首选用法是 DataTable 内置 .dt__foot |
+| Pagination v2（客户端 / 服务端两档） | ✅ 必须（独立 export） | M-SN-2 已落地独立 export；🔄 DataTable 内置 .dt__foot 计划由 CHG-DESIGN-02 Step 7A 实施，落地前消费方暂走外置 PaginationV2 |
 | Pagination v2 游标分页 + 虚拟滚动 | ✅ 必须 | **M-SN-6**（首次 >50k 数据时按需即建，A2 方案）|
 | Empty / Error / Loading 状态 | ✅ 必须 | M-SN-2 |
 | Form 控件（Input / Select / Switch / DateRange） | ⚠️ 评估 | 若 web-next 已有同形态可复用，admin-ui 仅做样式适配壳 |
