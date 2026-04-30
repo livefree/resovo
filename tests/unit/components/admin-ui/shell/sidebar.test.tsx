@@ -109,12 +109,16 @@ describe('Sidebar — 5 组 NAV 渲染', () => {
     expect(screen.getByText('系统管理')).toBeTruthy()
   })
 
-  it('折叠态：group title 隐藏；后续组以 divider 替代', () => {
+  it('折叠态：group title 仍渲染（CHG-DESIGN-04 等高占位）；不再使用 divider 替代', () => {
     const { container } = renderSidebar({ collapsed: true })
-    expect(screen.queryByText('运营中心')).toBeNull()
-    // divider 数量 = group 数 - 1（首组无 divider）
+    // CHG-DESIGN-04（reference.md §4.1.2 问题 B）：title 永远渲染保持图标 Y 坐标稳定，
+    // 折叠态由 admin-shell-styles 的 opacity 0 + pointer-events:none 视觉隐藏
+    expect(screen.getByText('运营中心')).toBeTruthy()
+    // section 数应仍为 3（每个 section 包含一个 data-sidebar-section-title）
     const sections = container.querySelectorAll('[data-sidebar-section]')
     expect(sections.length).toBe(3)
+    const titles = container.querySelectorAll('[data-sidebar-section-title]')
+    expect(titles.length).toBe(3)
   })
 
   it('每项渲染 button + data-sidebar-item attribute', () => {

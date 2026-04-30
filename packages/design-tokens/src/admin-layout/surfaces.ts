@@ -23,6 +23,12 @@ export const adminShellSurfaces = {
   // accent 边框（CHG-DESIGN-02 表格 selection 高亮、CHG-DESIGN-04 sidebar active outline 等用途）
   'admin-accent-border': 'color-mix(in oklch, var(--accent-default) 32%, transparent)',
 
+  // "fg-on-accent-soft 背景"语义入口（CHG-DESIGN-04）
+  // 指向 var(--accent-active)：light=oklch(38%) 深蓝 / dark=oklch(92%) 亮蓝；
+  // 与 admin-accent-soft 在两主题下对比度 ≥7:1（WCAG AA Pass）
+  // 消费方：Sidebar active link fg / Pagination active page fg
+  'admin-accent-on-soft': 'var(--accent-active)',
+
   // warn / danger 软背景 — 与状态语义绑定，不跟随 brand
   'admin-warn-soft': 'rgba(245, 158, 11, 0.14)',
   'admin-danger-soft': 'rgba(239, 68, 68, 0.14)',

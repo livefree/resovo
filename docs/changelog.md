@@ -2284,3 +2284,55 @@ token 命名层补 `--accent-on-soft` 别名（指向 `--accent-active`）作为
 
 - CHG-DESIGN-02：DataTable frame 扩展（顺延）
 - CHG-DESIGN-04：Sidebar 过渡动效 + 分区标题等高占位 + `--accent-on-soft` 语义化别名补全
+
+## chg(CHG-DESIGN-04): Sidebar 过渡动效 + 分区标题等高占位 + admin-accent-on-soft 语义别名
+
+- **日期**: 2026-04-29
+- **TASK-ID**: CHG-DESIGN-04
+- **所属序列**: SEQ-20260429-02 设计稿对齐改造（第 4 卡 / 共 10 卡，CHG-DESIGN-02 顺延）
+- **关联文档**: `docs/designs/backend_design_v2.1/reference.md` §0-3 + §4.1.2 + §3.5
+- **主循环模型**: claude-opus-4-7
+- **子代理调用**: 无
+- **变更类型**: chg
+- **摘要**: 解决 reference.md §4.1.2 三大问题：(A) 展开/折叠无过渡动效；(B) 分区标题条件渲染导致图标纵向跳跃；(C) active 配色仍沿用旧 amber `--state-warning-fg`。新增 `--admin-accent-on-soft` 语义别名作为"fg-on-accent-soft"语义入口（指向 `--accent-active`），sidebar / pagination 替换为该别名；分区标题改为永远渲染并通过 CSS opacity 渐隐（高度恒定）；aside 加 200ms width transition；`prefers-reduced-motion: reduce` 命中时全部 0ms。
+
+### 新增/变更文件
+
+**packages/design-tokens/**
+- `src/admin-layout/surfaces.ts`（新增 `admin-accent-on-soft: var(--accent-active)`）
+
+**packages/admin-ui/**
+- `src/shell/sidebar.tsx`：
+  - 移除 `<div sb__divider />` 折叠兜底；section title 改为永远渲染
+  - SECTION_TITLE_STYLE 加 `whiteSpace: nowrap; overflow: hidden; textOverflow: ellipsis`（保证折叠态收紧不溢出）
+  - NavItem active fg `var(--accent-active)` → `var(--admin-accent-on-soft)`
+  - 文件头注释更新（`activeHref` 高亮配色路径）
+- `src/shell/admin-shell-styles.tsx`：
+  - 新增 `[data-sidebar] { transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1) }`
+  - 新增 `[data-sidebar-section-title] { transition: opacity 150ms ease-out }`
+  - 新增 `[data-sidebar][data-collapsed="true"] [data-sidebar-section-title] { opacity: 0; pointer-events: none }`
+  - 新增 `@media (prefers-reduced-motion: reduce) { [data-sidebar], [data-sidebar-section-title] { transition: none } }`
+  - 顺手修：active::before 左侧指示条由 `var(--state-warning-fg)` (amber 遗留) 改为 `var(--accent-default)` (蓝 brand)
+- `src/components/pagination/pagination.tsx`：active fg `var(--accent-active)` → `var(--admin-accent-on-soft)`
+
+**tests/**
+- `tests/unit/components/admin-ui/shell/sidebar.test.tsx`：折叠态断言改为"title 仍渲染但 opacity 隐藏"（DOM count 不变 + getByText 仍可找到）
+
+### 验收
+
+- ✅ `npm run typecheck` 全绿
+- ✅ `npm run lint` 全绿
+- ✅ `npm run verify:token-references` PASS（63 引用 / 322 token，新增 `admin-accent-on-soft`）
+- ✅ `npm run test -- --run` 2491/2491 全绿（含 sidebar.test.tsx 31 测试）
+- 📌 视觉签收：
+  - aside 宽度 200ms 平滑过渡（232 ↔ 60）
+  - 分区标题 150ms 透明度渐隐（折叠时不影响下方图标 Y 坐标）
+  - sidebar nav active 链接：蓝底（admin-accent-soft）+ 蓝字（accent-active），WCAG AA 对比度 ≥7:1
+  - 左侧 2px 指示条蓝色（accent-default），不再橙色
+  - pagination 当前页：同 sidebar 配色逻辑
+  - prefers-reduced-motion 媒体查询命中时无过渡
+
+### 后续
+
+- CHG-DESIGN-02：DataTable frame 扩展（继续顺延）
+- CHG-DESIGN-05：Shell 视觉对齐（折叠按钮文案 / footer role / NavTip / notification & task drawer 数据接入）

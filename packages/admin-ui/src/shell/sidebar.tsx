@@ -21,10 +21,10 @@
  *     · 显示规则：>999 → "1.2k" 缩写（formatCount helper）
  *     · badge 配色：info/warn/danger → semantic.status token slot
  *     · 折叠态：仅 icon + 计数 pip（小圆点 8px）+ tooltip（title attribute + label + shortcut 文案）
- *     · activeHref 高亮：背景 var(--admin-accent-soft) + 前景 var(--accent-active)
- *       —— 用 accent-active 而非 accent-default，因 light 主题下 accent-soft（蓝 18% over 白）
- *       与 accent-default(oklch 64.5%) 对比度仅 ~2.6:1 不达 WCAG AA；
- *       accent-active(light 38% / dark 92%)在两主题下均 ≥7:1（CHG-DESIGN-01 fix 第 2 轮）
+ *     · activeHref 高亮：背景 var(--admin-accent-soft) + 前景 var(--admin-accent-on-soft)
+ *       —— admin-accent-on-soft 是 CHG-DESIGN-04 引入的"fg-on-accent-soft"语义入口，
+ *       指向 var(--accent-active)（light 38% / dark 92%），与 admin-accent-soft 在两
+ *       主题下对比度 ≥7:1（满足 WCAG AA）。
  *     · shortcut 渲染用 useFormatShortcut hook（hydration-safe；NavItem 子组件内每项独立调用）
  *   - Brand 区：流光 logo + 标题（折叠态隐藏标题）+ 版本 v2
  *   - Footer：sb__foot 触发 UserMenu 弹出
@@ -120,17 +120,16 @@ const NAV_SCROLL_STYLE: CSSProperties = {
 }
 
 const SECTION_TITLE_STYLE: CSSProperties = {
+  // height 与 padding 在两态保持一致，CSS 仅切 opacity，确保图标 Y 坐标稳定
+  // 折叠态隐显由 admin-shell-styles 的 [data-sidebar][data-collapsed="true"] [data-sidebar-section-title] 接管
   padding: 'var(--space-1) var(--space-4)',
   color: 'var(--fg-muted)',
   fontSize: 'var(--font-size-xs)',
   textTransform: 'uppercase',
   letterSpacing: '0.05em',
-}
-
-const SECTION_DIVIDER_STYLE: CSSProperties = {
-  margin: 'var(--space-2) var(--space-3)',
-  height: '1px',
-  background: 'var(--border-subtle)',
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
 }
 
 const COLLAPSE_BTN_STYLE: CSSProperties = {
@@ -189,15 +188,13 @@ export function Sidebar({
     >
       <BrandArea collapsed={collapsed} />
       <nav data-sidebar-nav style={NAV_SCROLL_STYLE}>
-        {nav.map((section, sectionIndex) => (
+        {nav.map((section) => (
           <div key={section.title} data-sidebar-section={section.title}>
-            {collapsed ? (
-              sectionIndex > 0 && <div aria-hidden="true" style={SECTION_DIVIDER_STYLE} />
-            ) : (
-              <div data-sidebar-section-title style={SECTION_TITLE_STYLE}>
-                {section.title}
-              </div>
-            )}
+            {/* 永远渲染分区标题；折叠态由 admin-shell-styles 通过 opacity 渐隐 */}
+            {/* 保持高度占位 → 切换 collapsed 时图标 Y 坐标稳定（reference.md §4.1.2 问题 B） */}
+            <div data-sidebar-section-title style={SECTION_TITLE_STYLE}>
+              {section.title}
+            </div>
             <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
               {section.items.map((item) => (
                 <li key={item.href}>
@@ -291,7 +288,7 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate }: NavItemP
     alignItems: 'center',
     gap: collapsed ? 0 : 'var(--space-3)',
     padding: 'var(--space-2) var(--space-4)',
-    color: active ? 'var(--accent-active)' : 'var(--fg-muted)',
+    color: active ? 'var(--admin-accent-on-soft)' : 'var(--fg-muted)',
     background: active ? 'var(--admin-accent-soft)' : 'transparent',
     border: 0,
     width: '100%',

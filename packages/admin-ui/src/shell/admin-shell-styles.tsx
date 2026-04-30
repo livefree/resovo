@@ -33,7 +33,25 @@ const SHELL_CSS = `
   bottom: 8px;
   width: 2px;
   border-radius: var(--radius-full);
-  background: var(--state-warning-fg);
+  /* CHG-DESIGN-04 brand 切蓝后改用 accent-default（饱和蓝条），不沿用旧 amber state-warning-fg */
+  background: var(--accent-default);
+}
+
+/* ── Sidebar 展开/折叠过渡动效（CHG-DESIGN-04 / reference.md §4.1.2 问题 A+B） ─────── */
+[data-sidebar] {
+  transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* 分区标题在两态保持相同 height/padding；仅 opacity 渐隐 → 图标 Y 坐标稳定 */
+[data-sidebar-section-title] {
+  transition: opacity 150ms ease-out;
+}
+[data-sidebar][data-collapsed="true"] [data-sidebar-section-title] {
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-sidebar],
+  [data-sidebar-section-title] { transition: none; }
 }
 
 /* ── Global scrollbar — 全站统一 6px（CHG-DESIGN-03 / reference.md §0-6 §3.4） ─────── */

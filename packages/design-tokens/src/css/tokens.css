@@ -216,6 +216,7 @@
   --z-admin-dropdown: 980;
   --admin-accent-soft: color-mix(in oklch, var(--accent-default) 18%, transparent);
   --admin-accent-border: color-mix(in oklch, var(--accent-default) 32%, transparent);
+  --admin-accent-on-soft: var(--accent-active);
   --admin-warn-soft: rgba(245, 158, 11, 0.14);
   --admin-danger-soft: rgba(239, 68, 68, 0.14);
   --admin-avatar-bg: linear-gradient(135deg, #6366f1, #8b5cf6);
