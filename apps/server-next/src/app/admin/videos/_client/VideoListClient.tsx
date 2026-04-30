@@ -1,12 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import type { CSSProperties } from 'react'
 import {
-  DataTable, Toolbar, FilterChipBar, ColumnSettingsPanel, Pagination,
+  DataTable, FilterChipBar,
   EmptyState, ErrorState, LoadingState, useTableQuery,
-  SelectionActionBar,
-  type TableColumn, type TableQueryPatch, type TableSelectionState, type SelectionAction,
+  type TableColumn, type TableQueryPatch, type TableSelectionState,
 } from '@resovo/admin-ui'
 import { useTableRouterAdapter } from '@/lib/table-router-adapter'
 import { VIDEO_COLUMN_DESCRIPTORS } from '@/lib/videos/columns'
@@ -20,46 +19,139 @@ import { VideoRowActions } from './VideoRowActions'
 import { VideoEditDrawer } from './VideoEditDrawer'
 
 // ── batch actions ─────────────────────────────────────────────────
+//
+// Step 7B：从外置 SelectionActionBar 切到 DataTable.bulkActions ReactNode 直传。
+// 保留 SelectionAction 类型 + confirm 流（pendingConfirm 状态机），inline 渲染 4 个
+// 批量按钮，不抽 admin-ui（多消费方需求出现时再考虑沉淀，CHG-DESIGN-12 评估）。
 
 const BATCH_PUBLISH_LIMIT = 100
 const BATCH_DANGER_LIMIT = 50
 
+interface BatchAction {
+  readonly key: string
+  readonly label: string
+  readonly variant?: 'danger'
+  readonly disabled: boolean
+  readonly confirm?: { readonly title: string; readonly description?: string }
+  readonly onConfirm: () => Promise<unknown>
+}
+
 function buildBatchActions(
   selectedKeys: ReadonlySet<string>,
-  onComplete: () => void,
-): readonly SelectionAction[] {
+): readonly BatchAction[] {
   const ids = Array.from(selectedKeys)
   const count = ids.length
   return [
     {
       key: 'batch-publish',
       label: '批量公开',
-      disabled: count > BATCH_PUBLISH_LIMIT,
-      onClick: () => { void batchPublish(ids).then(onComplete) },
+      disabled: count === 0 || count > BATCH_PUBLISH_LIMIT,
+      onConfirm: () => batchPublish(ids),
     },
     {
       key: 'batch-unpublish',
       label: '批量隐藏',
       variant: 'danger',
-      disabled: count > BATCH_DANGER_LIMIT,
+      disabled: count === 0 || count > BATCH_DANGER_LIMIT,
       confirm: { title: `确认隐藏 ${count} 条视频？`, description: '已上架视频将同步下架' },
-      onClick: () => { void batchUnpublish(ids).then(onComplete) },
+      onConfirm: () => batchUnpublish(ids),
     },
     {
       key: 'batch-approve',
       label: '批量通过审核',
-      disabled: count > BATCH_DANGER_LIMIT,
-      onClick: () => { void Promise.all(ids.map((id) => reviewVideo(id, 'approve'))).then(onComplete) },
+      disabled: count === 0 || count > BATCH_DANGER_LIMIT,
+      onConfirm: () => Promise.all(ids.map((id) => reviewVideo(id, 'approve'))),
     },
     {
       key: 'batch-reject',
       label: '批量拒绝审核',
       variant: 'danger',
-      disabled: count > BATCH_DANGER_LIMIT,
+      disabled: count === 0 || count > BATCH_DANGER_LIMIT,
       confirm: { title: `确认拒绝 ${count} 条视频审核？` },
-      onClick: () => { void Promise.all(ids.map((id) => reviewVideo(id, 'reject'))).then(onComplete) },
+      onConfirm: () => Promise.all(ids.map((id) => reviewVideo(id, 'reject'))),
     },
   ]
+}
+
+const BATCH_BTN_BASE_STYLE: CSSProperties = {
+  height: 'var(--row-h-compact, 24px)',
+  padding: '0 12px',
+  borderRadius: 'var(--radius-sm)',
+  border: '1px solid var(--border-default)',
+  background: 'var(--bg-surface)',
+  color: 'var(--fg-default)',
+  fontSize: '12px',
+  cursor: 'pointer',
+  font: 'inherit',
+}
+const BATCH_BTN_DANGER_STYLE: CSSProperties = {
+  ...BATCH_BTN_BASE_STYLE,
+  borderColor: 'var(--state-error-border)',
+  color: 'var(--state-error-fg)',
+}
+const BATCH_CONFIRM_WRAP_STYLE: CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: '8px',
+  padding: '4px 10px',
+  borderRadius: 'var(--radius-sm)',
+  background: 'var(--bg-surface-elevated)',
+  border: '1px solid var(--border-strong)',
+  fontSize: '12px',
+}
+
+interface BatchActionsRowProps {
+  readonly actions: readonly BatchAction[]
+  readonly onActionResolved: () => void
+}
+
+function BatchActionsRow({ actions, onActionResolved }: BatchActionsRowProps) {
+  const [pendingConfirm, setPendingConfirm] = useState<string | null>(null)
+  const handleClick = (action: BatchAction) => {
+    if (action.disabled) return
+    if (action.confirm) {
+      setPendingConfirm(action.key)
+      return
+    }
+    void action.onConfirm().then(onActionResolved)
+  }
+  const handleConfirmOk = (action: BatchAction) => {
+    setPendingConfirm(null)
+    void action.onConfirm().then(onActionResolved)
+  }
+  return (
+    <>
+      {actions.map((action) => {
+        if (pendingConfirm === action.key && action.confirm) {
+          return (
+            <span key={action.key} style={BATCH_CONFIRM_WRAP_STYLE} data-confirm-prompt={action.key}>
+              <span>{action.confirm.title}</span>
+              <button
+                type="button"
+                style={{ ...BATCH_BTN_BASE_STYLE, borderColor: 'var(--accent-default)', color: 'var(--admin-accent-on-soft)' }}
+                onClick={() => handleConfirmOk(action)}
+              >确认</button>
+              <button
+                type="button"
+                style={{ ...BATCH_BTN_BASE_STYLE, color: 'var(--fg-muted)' }}
+                onClick={() => setPendingConfirm(null)}
+              >取消</button>
+            </span>
+          )
+        }
+        return (
+          <button
+            key={action.key}
+            type="button"
+            style={action.variant === 'danger' ? BATCH_BTN_DANGER_STYLE : BATCH_BTN_BASE_STYLE}
+            disabled={action.disabled}
+            onClick={() => handleClick(action)}
+            data-action-key={action.key}
+          >
+            {action.label}
+          </button>
+        )
+      })}
+    </>
+  )
 }
 
 // ── column definitions ────────────────────────────────────────────
@@ -181,11 +273,6 @@ function buildVideoColumns(
 // ── main component ────────────────────────────────────────────────
 
 const PAGE_STYLE: CSSProperties = { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }
-const COL_BTN_STYLE: CSSProperties = {
-  background: 'transparent', border: '1px solid var(--border-subtle)',
-  borderRadius: 'var(--radius-sm)', padding: '4px 8px', cursor: 'pointer',
-  color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm)',
-}
 
 export function VideoListClient() {
   const router = useTableRouterAdapter()
@@ -207,10 +294,8 @@ export function VideoListClient() {
   const [error, setError] = useState<Error | undefined>()
   const [retryKey, setRetryKey] = useState(0)
   const [sites, setSites] = useState<readonly CrawlerSite[]>([])
-  const [colSettingsOpen, setColSettingsOpen] = useState(false)
   const [selection, setSelection] = useState<TableSelectionState>({ selectedKeys: new Set(), mode: 'page' })
   const [editVideoId, setEditVideoId] = useState<string | null>(null)
-  const colBtnRef = useRef<HTMLButtonElement | null>(null)
 
   const handleRowUpdate = useCallback((id: string, patch2: Partial<VideoAdminRow>) => {
     setRows((prev) => prev.map((r) => r.id === id ? { ...r, ...patch2 } : r))
@@ -267,84 +352,54 @@ export function VideoListClient() {
 
   const handlePatch = useCallback((next: TableQueryPatch) => patch(next), [patch])
 
+  // CHG-DESIGN-02 Step 7B：批量操作 ReactNode（DataTable.bulkActions 直传）
+  // 仅在 selection 非空时构建（DataTable bulk bar 自身也按 selection 渲染门控）
+  const batchActions = useMemo(
+    () => buildBatchActions(selection.selectedKeys),
+    [selection.selectedKeys],
+  )
+  const bulkActionsNode = selection.selectedKeys.size > 0
+    ? <BatchActionsRow actions={batchActions} onActionResolved={handleBatchComplete} />
+    : undefined
+
+  // CHG-DESIGN-02 Step 7B：业务 filter chips（key 命名空间为 q/type/status/...，
+  // 与 column.id 不一致）保留外置 FilterChipBar 走 toolbar.trailing；DataTable
+  // 内置 filter chips 显式关闭（hideFilterChips: true）避免重复渲染空集
+  const trailingNode = chips.length > 0
+    ? <FilterChipBar items={chips} onClearAll={() => patch({ filters: new Map() })} />
+    : undefined
+
   return (
     <div data-video-list-client style={PAGE_STYLE}>
-      <Toolbar
-        leading={
-          <>
-            <VideoFilterBar snapshot={snapshot} sites={sites} onPatch={handlePatch} />
-            {chips.length > 0 && (
-              <FilterChipBar items={chips} onClearAll={() => patch({ filters: new Map() })} />
-            )}
-          </>
-        }
-        columnSettings={
-          <>
-            <button
-              ref={colBtnRef}
-              type="button"
-              onClick={() => setColSettingsOpen((o) => !o)}
-              data-testid="col-settings-btn"
-              style={COL_BTN_STYLE}
-            >
-              列设置
-            </button>
-            <ColumnSettingsPanel
-              open={colSettingsOpen}
-              columns={VIDEO_COLUMN_DESCRIPTORS}
-              value={snapshot.columns}
-              onChange={(cols) => patch({ columns: cols })}
-              onClose={() => setColSettingsOpen(false)}
-              anchorRef={colBtnRef}
-            />
-          </>
-        }
-      />
       {loading && rows.length === 0
         ? <LoadingState variant="skeleton" />
-        : (
-          <>
-            {error
-              ? <ErrorState error={error} title="加载失败" onRetry={() => setRetryKey((k) => k + 1)} />
-              : (
-                <DataTable<VideoAdminRow>
-                  rows={rows}
-                  columns={columns}
-                  rowKey={(row) => row.id}
-                  mode="server"
-                  query={snapshot}
-                  onQueryChange={patch}
-                  totalRows={total}
-                  loading={loading}
-                  selection={selection}
-                  onSelectionChange={setSelection}
-                  emptyState={<EmptyState title="暂无视频" description="调整筛选条件后重试" />}
-                  data-testid="video-list-table"
-                  enableHeaderMenu
-                />
-              )
-            }
-          </>
-        )
+        : error
+          ? <ErrorState error={error} title="加载失败" onRetry={() => setRetryKey((k) => k + 1)} />
+          : (
+            <DataTable<VideoAdminRow>
+              rows={rows}
+              columns={columns}
+              rowKey={(row) => row.id}
+              mode="server"
+              query={snapshot}
+              onQueryChange={handlePatch}
+              totalRows={total}
+              loading={loading}
+              selection={selection}
+              onSelectionChange={setSelection}
+              emptyState={<EmptyState title="暂无视频" description="调整筛选条件后重试" />}
+              data-testid="video-list-table"
+              enableHeaderMenu
+              toolbar={{
+                search: <VideoFilterBar snapshot={snapshot} sites={sites} onPatch={handlePatch} />,
+                trailing: trailingNode,
+                hideFilterChips: true,
+              }}
+              bulkActions={bulkActionsNode}
+              pagination={{ pageSizeOptions: [10, 20, 50] }}
+            />
+          )
       }
-      <SelectionActionBar
-        visible={selection.selectedKeys.size > 0}
-        selectedCount={selection.selectedKeys.size}
-        selectionMode={selection.mode}
-        onClearSelection={clearSelection}
-        actions={buildBatchActions(selection.selectedKeys, handleBatchComplete)}
-        data-testid="video-selection-bar"
-      />
-      {!error && (
-        <Pagination
-          page={snapshot.pagination.page}
-          pageSize={snapshot.pagination.pageSize}
-          totalRows={total}
-          onPageChange={(page) => patch({ pagination: { page } })}
-          onPageSizeChange={(pageSize) => patch({ pagination: { page: 1, pageSize } })}
-          pageSizeOptions={[10, 20, 50]}
-        />
-      )}
       <VideoEditDrawer
         open={editVideoId !== null}
         videoId={editVideoId}
