@@ -2895,3 +2895,71 @@ bulk bar 与 foot 同等地位：脱离 scroll 内容流，作为 **frame 直接
   - `handleRetryTask(id)`: 重置 task 为 running 形态（清 finishedAt / errorMessage / progress=0 / 新 startedAt）
 - **影响**：mock 数据真实可变 → 用户点击立即看到列表样式更新（read 标记 / status 标签 / progress bar 切换 / 取消按钮消失等）；M-SN-4+ 接入 SWR 真端点时数据源切换，本乐观更新逻辑可保留
 - **typecheck / lint / shell 384 单测**：全绿
+
+---
+
+## [CHG-DESIGN-06] Settings 入口收敛 — 180/1fr 双栏 + 垂直 tab + page__head
+
+- **完成时间**：2026-04-30
+- **记录时间**：2026-04-30 05:46
+- **执行模型**：claude-opus-4-7（继承 session；任务卡建议 sonnet 但本卡逻辑量小未触发升降级 BLOCKER）
+- **子代理**：无（纯页面布局，不涉及共享 API 契约层）
+- **关联序列**：SEQ-20260429-02 第 6 卡
+
+### 范围
+
+按 `docs/designs/backend_design_v2.1/reference.md` §5.11 落地 Settings 容器视觉对齐：
+
+1. **Sidebar 入口收敛**：CHG-SN-3-09 已完成 IA v1 收敛（4 个 system 子路由 redirect 进 settings Tab；sidebar 系统管理组当前 3 项「用户管理 / 站点设置 / 审计日志」≤ 4 项验收线 ✅），本卡 verify 后无改动
+2. **SettingsContainer 重构**：顶部水平 tab bar → 180/1fr 双栏垂直 tab + page__head
+
+### SettingsContainer 关键变更
+
+布局：
+- 顶部 `<header data-settings-head>`：标题 / 副标题 + actions（「审计日志」次按钮 + 「保存所有更改」主按钮）
+- 主体 `display: grid; grid-template-columns: 180px 1fr; gap: 16px`：
+  - 左 `<aside data-settings-tablist role="tablist" aria-orientation="vertical">` card：垂直 tab buttons（含 label + description 副标）
+  - 右 `<section data-settings-tabpanel role="tabpanel">` card：当前 Tab 内容（min-height 320px 防短内容塌陷）
+
+Tab 样式（按 §5.11）：
+- active：`background var(--admin-accent-soft) / color var(--admin-accent-on-soft) / radius var(--radius-sm)` + 字重 600
+- inactive：`background transparent / color var(--fg-muted)` + 字重 400
+- description 副标 11px / fg-muted
+
+a11y：
+- tablist `aria-orientation="vertical"` + `aria-label`
+- 每个 tab button 含 `role="tab" / aria-selected / aria-controls / id`
+- tabpanel `role="tabpanel" / id / aria-labelledby` 与 active tab 关联
+
+URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
+- `tab=settings` 时不写 query（URL 干净 `/admin/system/settings`）
+- 其他 tab 写 `?tab=cache` 等
+
+### 修改文件
+
+- `apps/server-next/src/app/admin/system/settings/_client/SettingsContainer.tsx`：完整重写为 180/1fr 双栏布局；保留 5 个 Tab 内容文件 + URL 同步逻辑
+
+不动：
+- `apps/server-next/src/lib/admin-nav.tsx`（系统管理组 3 项已符合 ≤4 项）
+- `apps/server-next/src/app/admin/system/settings/_tabs/{Settings,Cache,Monitor,Config,Migration}Tab.tsx`（5 Tab 内容）
+- `apps/server-next/src/app/admin/system/{cache,config,migration,monitor}/page.tsx`（4 子路由 redirect）
+- `apps/server-next/src/app/admin/system/settings/page.tsx`（Suspense 入口）
+
+### 验收
+
+- typecheck ✅ 全 7 workspace
+- lint ✅（仅预存 VideoListClient `<img>` warning 无关）
+- verify:token-references ✅ 65 引用全定义 / 322 token
+- 单测：2610/2610 全绿（server-next 组件级单测基础设施待 CHG-SN-3-14 配置 vitest @ 别名；本卡未补 SettingsContainer smoke 测试，与 VideoListClient 当前空缺策略一致）
+- 手动验证：
+  - admin-nav 系统管理组 3 项 ≤ 4 项 ✅
+  - SettingsContainer 渲染 180/1fr grid + 双 card + 垂直 tab list ✅
+  - Tab 切换 URL 同步 ✅（CHG-SN-3-09 逻辑保留）
+- 与 reference.md §5.11 当前实装差异：左侧 180px card / 垂直 tab list / 右侧 1fr card / page__head + actions 全部到位
+
+### 不在范围（留账）
+
+- 5 Tab 内容功能实装（M-SN-6 全功能落地）
+- 审计日志 / 保存所有更改 button 真实功能（当前为占位 button）
+- 8 类 tab 扩张（reference.md §5.11 未明示更多类，留 follow-up）
+- SettingsContainer smoke 单测（待 CHG-SN-3-14 补 server-next 组件单测基础设施）
