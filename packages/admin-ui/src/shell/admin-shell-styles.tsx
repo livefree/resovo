@@ -65,16 +65,20 @@ const SHELL_CSS = `
   opacity: 0;
   pointer-events: none;
 }
+/* 折叠态完全收 0 占位：不仅 max-width，还要清掉 padding/min-width/margin/border —
+ * 否则 inline padding（如 NavItem badge 的 1px var(--space-2)）或 min-content
+ * 会让"已隐藏"元素仍保留横向占位（CHG-DESIGN-04 fix#2 / Codex 第 N 轮 review） */
 [data-sidebar][data-collapsed="true"] [data-sidebar-brand-title],
 [data-sidebar][data-collapsed="true"] [data-sidebar-item-label],
 [data-sidebar][data-collapsed="true"] [data-sidebar-item-badge],
-[data-sidebar][data-collapsed="true"] [data-sidebar-foot-meta] {
-  max-width: 0;
-  flex: 0 0 auto;
-}
+[data-sidebar][data-collapsed="true"] [data-sidebar-foot-meta],
 [data-sidebar][data-collapsed="true"] [data-sidebar-foot-chevron] {
   max-width: 0;
+  min-width: 0;
+  flex: 0 0 auto;
   margin: 0;
+  padding: 0;
+  border: 0;
   overflow: hidden;
 }
 
