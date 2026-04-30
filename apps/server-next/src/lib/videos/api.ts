@@ -97,13 +97,22 @@ export async function refetchSources(id: string, siteKeys?: string[]): Promise<v
   await apiClient.post(`/admin/videos/${id}/refetch-sources`, siteKeys ? { siteKeys } : {})
 }
 
-// ── 审核统计（dashboard 用）───────────────────────────────────────
+// ── 审核统计（dashboard 用；CHG-DESIGN-07 7C 步骤 1）───────────────────────────────────────
+//
+// 后端真实契约：apps/api/src/db/queries/videos.ts:1120-1125
+//   { pendingCount: number; todayReviewedCount: number; interceptRate: number | null }
+//
+// 历史 BUG（CHG-SN-3-08 假绿根因）：本文件曾用 { pendingReview / published / rejected / total }
+// 4 个错误字段；TS 编译通过但 runtime 全 undefined → DashboardClient 渲染 '—'，正是
+// reference §5.1.4「不应把接口成功渲染成 —」教训直接复发。本卡修正契约。
 
 export interface ModerationStats {
-  pendingReview: number
-  published: number
-  rejected: number
-  total: number
+  /** 当前 pending_review 视频数（实时 COUNT 查询） */
+  readonly pendingCount: number
+  /** 今日已审视频数（approved + rejected，reviewed_at 在今日） */
+  readonly todayReviewedCount: number
+  /** 最近 7 天拦截率：rejected / (approved + rejected)；无审核数据时为 null */
+  readonly interceptRate: number | null
 }
 
 export async function getModerationStats(): Promise<ModerationStats> {

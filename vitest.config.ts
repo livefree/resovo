@@ -48,8 +48,34 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: '@/api',              replacement: path.resolve(__dirname, './apps/api/src') },
-      { find: '@/components/admin', replacement: path.resolve(__dirname, './apps/server/src/components/admin') },
-      { find: '@/components/shared',replacement: path.resolve(__dirname, './apps/server/src/components/shared') },
+      // CHG-DESIGN-07 7C：context-aware alias — server-next importer 走 apps/server-next；
+      // 历史 v1 server importer 仍走 apps/server。优先级高于通用 @/(.*) 通配
+      {
+        find: /^@\/components\/admin(\/.*)?$/,
+        replacement: '$1',
+        customResolver(replacedId: string, importer: string | undefined) {
+          const isServerNext =
+            importer?.includes('/apps/server-next/') || importer?.includes('/tests/unit/components/server-next/')
+          const base = isServerNext
+            ? path.resolve(__dirname, './apps/server-next/src/components/admin')
+            : path.resolve(__dirname, './apps/server/src/components/admin')
+          const subPath = replacedId.replace(/^\//, '') || 'index'
+          return resolveWithExtensions(path.resolve(base, subPath))
+        },
+      },
+      {
+        find: /^@\/components\/shared(\/.*)?$/,
+        replacement: '$1',
+        customResolver(replacedId: string, importer: string | undefined) {
+          const isServerNext =
+            importer?.includes('/apps/server-next/') || importer?.includes('/tests/unit/components/server-next/')
+          const base = isServerNext
+            ? path.resolve(__dirname, './apps/server-next/src/components/shared')
+            : path.resolve(__dirname, './apps/server/src/components/shared')
+          const subPath = replacedId.replace(/^\//, '') || 'index'
+          return resolveWithExtensions(path.resolve(base, subPath))
+        },
+      },
       // @/stores is context-aware: web-next → apps/web-next/src/stores; server/admin → apps/server/src/stores
       // （CUTOVER 2026-04-23 后 apps/web 已退役，apps/web 分支移除）
       {

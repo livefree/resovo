@@ -115,11 +115,13 @@ async function installVideosMocks(page: Page, state: MockState) {
       return
     }
 
-    // GET /admin/videos/moderation-stats — dashboard (may load)
+    // GET /admin/videos/moderation-stats — dashboard（may load）
+    // CHG-DESIGN-07 7C 步骤 1：契约对齐到后端真实字段
+    // { pendingCount, todayReviewedCount, interceptRate }
     if (path === '/v1/admin/videos/moderation-stats' && method === 'GET') {
       await route.fulfill({
         contentType: 'application/json',
-        body: JSON.stringify({ data: { pendingReview: 0, published: 0, rejected: 0, total: state.rows.length } }),
+        body: JSON.stringify({ data: { pendingCount: 0, todayReviewedCount: 0, interceptRate: null } }),
       })
       return
     }
