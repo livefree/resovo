@@ -32,11 +32,22 @@ export function useTableQuery(options: UseTableQueryOptions): {
   const optionsRef = useRef(options)
   useEffect(() => { optionsRef.current = options })
 
+  // Cache default snapshot via lazy ref —— useSyncExternalStore 要求 getServerSnapshot
+  // 返回稳定引用，否则触发"infinite loop"警告（React 18+ 严格模式下报错）。
+  // 同时 getClientSnapshot 在 store 未初始化时的 fallback 也复用此 ref，避免每次 render 重建。
+  // (fix(CHG-DESIGN-04)#3 / 由 VideoListClient SSR 路径触发)
+  const defaultSnapshotRef = useRef<TableQuerySnapshot | null>(null)
+  if (defaultSnapshotRef.current === null) {
+    defaultSnapshotRef.current = buildDefaultSnapshot(columns, defaults)
+  }
+
   // Subscribe to store
   const snapshot = useSyncExternalStore(
     tableQueryStore.subscribe,
-    () => tableQueryStore.getState().snapshots.get(tableId) ?? buildDefaultSnapshot(columns, defaults),
-    () => buildDefaultSnapshot(columns, defaults),
+    () =>
+      tableQueryStore.getState().snapshots.get(tableId)
+        ?? (defaultSnapshotRef.current as TableQuerySnapshot),
+    () => defaultSnapshotRef.current as TableQuerySnapshot,
   )
 
   // Initialize from URL + sessionStorage on mount
