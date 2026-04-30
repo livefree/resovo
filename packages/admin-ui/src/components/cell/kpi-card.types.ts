@@ -15,11 +15,11 @@
  *   - spark 60×18 svg 在右下角 opacity 0.4
  *   - is-warn / is-danger / is-ok 控制 border + value 染色
  *
- * variant union 覆盖 §5.1.2 4 张 KPI 全部状态：
- *   - 视频总量 695     → variant="default"   delta is-up      "↑ +47 今日"
- *   - 待审/暂存 484/23 → variant="is-warn"   delta default    "较昨日 +18"
- *   - 源可达率 98.7%   → variant="is-ok"     delta is-up      "↑ 0.3pt 7d"
- *   - 失效源 1,939     → variant="is-danger" delta is-down    "↓ -28 较昨日"
+ * variant + delta.direction 两个独立维度组合覆盖 §5.1.2 4 张 KPI 全部状态：
+ *   - 视频总量 695     → variant="default"   delta.direction="up"   text="↑ +47 今日"
+ *   - 待审/暂存 484/23 → variant="is-warn"   delta.direction="flat" text="较昨日 +18"
+ *   - 源可达率 98.7%   → variant="is-ok"     delta.direction="up"   text="↑ 0.3pt 7d"
+ *   - 失效源 1,939     → variant="is-danger" delta.direction="down" text="↓ -28 较昨日"
  *
  * Spark 解耦：通过 ReactNode `spark` slot 注入（而非 `data: number[]` 硬依赖）：
  *   - KpiCard 不强制 KPI 数据形态（避免 SiteHealthCard 之类消费方需要不同 spark 渲染时被锁死）
@@ -58,31 +58,40 @@ import type { ReactNode } from 'react'
 export type KpiCardVariant = 'default' | 'is-warn' | 'is-danger' | 'is-ok'
 
 /**
- * KpiCard.delta 趋势方向（可选）
+ * KpiCard.delta 趋势方向（可选）— **仅控制 delta 文本染色，不注入任何箭头字符**
  *
- * - `up`：渲染 ↑ 前缀 + state-success-fg 染色
- * - `down`：渲染 ↓ 前缀 + state-error-fg 染色
- * - `flat`：渲染中性灰文案，不加箭头（如「较昨日 +18」纯数字 delta）
+ * - `up`：delta 文本染 `var(--state-success-fg)`
+ * - `down`：delta 文本染 `var(--state-error-fg)`
+ * - `flat`：delta 文本染 `var(--fg-muted)`（中性灰，如「较昨日 +18」纯数字 delta）
  * - 省略：等同 `flat`
+ *
+ * **箭头字符策略**（与 KpiCardDelta.text 联合契约）：
+ * 箭头视觉（↑ / ↓）由消费方按本地化 / 文案策略自行写入 `text` 字段，本组件**不**自动注入；
+ * `direction` 仅决定染色 token。这样消费方可以传如：
+ * - `{ text: "↑ +47 今日",  direction: 'up' }`   → 文本含箭头，染绿
+ * - `{ text: "较昨日 +18", direction: 'flat' }`  → 纯数字，染灰
+ * - `{ text: "▲ +0.3pt 7d", direction: 'up' }`  → 用三角符号代替箭头，仍染绿
  */
 export type KpiDeltaDirection = 'up' | 'down' | 'flat'
 
 /**
  * KpiCard delta 子结构
  *
- * 设计稿示例：
- * - `{ text: "↑ +47 今日", direction: 'up' }`
- * - `{ text: "较昨日 +18", direction: 'flat' }`
- * - `{ text: "↑ 0.3pt 7d", direction: 'up' }`
- * - `{ text: "↓ -28 较昨日", direction: 'down' }`
+ * 设计稿示例（reference §5.1.2 4 张 KPI delta 列）：
+ * - `{ text: "↑ +47 今日",  direction: 'up' }`    → 视频总量
+ * - `{ text: "较昨日 +18",  direction: 'flat' }`  → 待审/暂存（容器 is-warn，但 delta 仅 +18 数字）
+ * - `{ text: "↑ 0.3pt 7d", direction: 'up' }`    → 源可达率
+ * - `{ text: "↓ -28 较昨日", direction: 'down' }` → 失效源
  *
- * 注：`text` 中的 ↑/↓ 字符**不**由本组件自动注入（消费方按本地化 / 文案策略自行决定）；
- *     `direction` 仅控制颜色染色，箭头视觉由消费方文案负责。
+ * 渲染契约：
+ * - 本组件渲染 `text` 字段**原样**（11px 字号 / state-* 颜色由 direction 决定）
+ * - 不注入任何箭头 / 三角 / 符号字符（消费方负责文案完整性）
+ * - 详见 KpiDeltaDirection 顶部"箭头字符策略"段
  */
 export interface KpiCardDelta {
-  /** delta 文本，11px / state-* 染色（按 direction） */
+  /** delta 文本（11px；state-* 染色由 direction 决定）；箭头字符由消费方写入此字段 */
   readonly text: string
-  /** 趋势方向（控制颜色染色，不注入箭头） */
+  /** 趋势方向（仅控制颜色染色，不注入任何箭头字符） */
   readonly direction?: KpiDeltaDirection
 }
 
@@ -104,8 +113,8 @@ export interface KpiCardDelta {
  * ```
  *
  * 状态规则：
- * - variant=`is-warn|danger|ok` → 容器 border + value 染色
- * - delta.direction=`up|down` → delta 文本染色（独立于 variant）
+ * - variant=`is-warn|is-danger|is-ok` → 容器 border + value 染色（default 不染）
+ * - delta.direction=`up|down|flat` → delta 文本染色（state-success-fg / state-error-fg / fg-muted），**独立于 variant**
  * - icon slot：可选；reference §5.1.2 KPI 默认无 icon（设计稿 4 张 KPI 都没图标），但开放 slot 给未来新指标或 SiteHealthCard 等复用
  */
 export interface KpiCardProps {

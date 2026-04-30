@@ -18,9 +18,10 @@
  *
  * 数据形态：
  *   - `data: readonly number[]` — 任意非负 / 负数都允许（如趋势可上下波动）
- *   - 0 个数据点 → 不渲染 svg（返回 null + a11y 文案"无趋势数据"）
- *   - 1 个数据点 → 渲染单个 dot（避免线段为 0 长度时浏览器静默丢弃）
- *   - N 个数据点（N ≥ 2）→ 正常 polyline / area
+ *   - 0 个数据点 → **不渲染任何 DOM 节点（return null）**；不提供 a11y 替代节点；
+ *     消费方需要"无趋势数据"占位时应在外层（如 KpiCard 容器或自定义 placeholder）自行处理
+ *   - 1 个数据点 → 渲染单个 dot（避免线段为 0 长度时浏览器静默丢弃）；svg 含 `role="img"` + `aria-label`
+ *   - N 个数据点（N ≥ 2）→ 正常 polyline / area；svg 含 `role="img"` + `aria-label`
  *
  * 与 CHG-DESIGN-12 cell 归属边界：
  *   - 本卡（CHG-DESIGN-07 7B）落地：Spark
@@ -55,8 +56,8 @@ export type SparkVariant = 'line' | 'area'
  * ```
  *
  * a11y：
- * - svg 含 `role="img"` + `aria-label`（消费方按需传；省略时用泛文案"趋势"）
- * - 0 数据点：返回 null + 替代文案
+ * - 1 / N 数据点：svg 含 `role="img"` + `aria-label`（消费方按需传；省略时用泛文案"趋势"）
+ * - 0 数据点：return null（无 DOM 节点 / 无 a11y 替代）；消费方负责外层占位
  */
 export interface SparkProps {
   /**
@@ -99,10 +100,10 @@ export interface SparkProps {
   readonly strokeWidth?: number
 
   /**
-   * a11y 标签（可选）
+   * a11y 标签（可选；仅 1 / N 数据点路径生效）
    *
    * 默认值"趋势"；消费方传如「7 天视频总量趋势」更具体语义。
-   * 0 数据点 fallback："无趋势数据"
+   * 0 数据点路径 return null，本字段不被消费（消费方在外层 placeholder 自行做 a11y）
    */
   readonly ariaLabel?: string
 
