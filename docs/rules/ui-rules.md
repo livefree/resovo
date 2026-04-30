@@ -355,7 +355,9 @@ useEffect(() => {
 {typeof document !== 'undefined' && createPortal(panel, document.body)}
 ```
 
-**参考实现：** `apps/server/src/components/admin/shared/dropdown/AdminDropdown.tsx`
+**参考实现：**
+- server-next（当前真源）：`packages/admin-ui/src/components/dropdown/`（如尚未抽到 admin-ui，CHG-DESIGN-12 cell 沉淀阶段补齐）
+- server v1（仅维护期）：`apps/server/src/components/admin/shared/dropdown/AdminDropdown.tsx`
 
 ### 禁止行为
 
@@ -367,9 +369,26 @@ useEffect(() => {
 
 ## 后台共享组件边界规范
 
+> **2026-04-30 修订（CHG-DESIGN-11）**：本节描述的目录为 **apps/server v1**（已冻结）的历史共享组件清单，仅适用于 v1 维护期 bug 修复。**server-next 新模块禁止套用本节清单**，必须改去 `packages/admin-ui/src/components/` + `packages/admin-ui/src/shell/` 寻找等价实现，未抽出的待 CHG-DESIGN-12 cell 沉淀完成后引用 reference.md §10 业务复合组件清单。
+
 ### 新建共享组件前的强制检查
 
-在 `apps/server/src/components/admin/shared/` 下新建任何组件之前，**必须先确认**以下目录中是否已有等价实现：
+#### server-next（当前真源）
+
+在 `packages/admin-ui` 下新建任何组件之前，**必须先确认**以下目录中是否已有等价实现：
+
+```
+packages/admin-ui/src/
+  components/data-table/   ← DataTable 一体化（toolbar / bulk / flash / pagination 内置 slot）
+  components/             ← 其他 v2 通用原语（reference.md §4 通用组件清单）
+  shell/                  ← AdminShell + Sidebar + Breadcrumbs（ADR-103a）
+```
+
+未抽出的业务复合组件（DualSignal / VisChip / Spark / KpiCard / thumb / pill / inline xs actions 等）由 CHG-DESIGN-12 沉淀（详见 `docs/designs/backend_design_v2.1/reference.md` §10）。
+
+#### apps/server v1（仅维护期）
+
+在 `apps/server/src/components/admin/shared/` 下新建任何组件之前（**仅限 v1 维护期 bug 修复**），**必须先确认**以下目录中是否已有等价实现：
 
 ```
 apps/server/src/components/admin/shared/

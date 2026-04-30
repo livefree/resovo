@@ -62,9 +62,16 @@ npm run test:e2e         # PLAYER / AUTH / SEARCH / VIDEO 任务完成后运行
 - SafeImage + FallbackCover + image-loader：四级降级链，颜色零硬编码（`src/components/media/`）
 - ScrollRestoration + PrefetchOnHover：跨路由记忆 + hover 预取（`src/components/primitives/`）
 
-**共享组件**：同一 UI 模式 3 处以上必须提取。新建前先确认 `src/components/shared/`、`src/components/primitives/`（apps/web-next）和 `src/components/admin/shared/` 无等价实现。接口设计先于实现。
+**共享组件**：同一 UI 模式 3 处以上必须提取。新建前先确认对应应用的共享层无等价实现：
+- 前台 web-next：`apps/web-next/src/components/shared/` + `apps/web-next/src/components/primitives/`
+- 后台 server-next（当前真源）：`packages/admin-ui/src/components/` + `packages/admin-ui/src/shell/`
+- 后台 server v1（已冻结，仅维护期 bug 修复）：`apps/server/src/components/admin/shared/`
 
-**后台表格**：必须使用 `ModernDataTable` + `ColumnSettingsPanel` + `AdminDropdown` + `SelectionActionBar` + `PaginationV2` + 服务端排序，详见 `docs/rules/admin-module-template.md`。
+接口设计先于实现。
+
+**后台表格**：
+- **server-next**（当前真源，CHG-DESIGN-11 / SEQ-20260429-02）：使用 `packages/admin-ui` 的 `DataTable` 一体化组件（`toolbar` / `bulkActions` / `flashRowKeys` / `pagination` 等内置 props），详见 `docs/designs/backend_design_v2.1/reference.md` §4.4 + `docs/rules/admin-module-template.md` 头部 2026-04-30 修订。**禁止**在 server-next 新模块复用 ModernDataTable / 外置 PaginationV2 / 外置 SelectionActionBar 三件套。
+- **server v1**（已冻结）：维持 `ModernDataTable` + `ColumnSettingsPanel` + `AdminDropdown` + `SelectionActionBar` + `PaginationV2` + 服务端排序，详见 `docs/rules/admin-module-template.md` v1 章节。仅维护期 bug 修复使用，不作新模块模板。
 
 ---
 
@@ -111,7 +118,8 @@ npm run test:e2e         # PLAYER / AUTH / SEARCH / VIDEO 任务完成后运行
 | API 接口任务 | `docs/rules/api-rules.md`             | Route、Fastify、zod、分页、响应格式、认证中间件                                |
 | 数据库任务   | `docs/rules/db-rules.md`              | migration、SQL、query、schema、索引、软删除、事务                              |
 | 测试编写     | `docs/rules/test-rules.md`            | Vitest、Playwright、test、spec、覆盖率                                         |
-| 后台模块     | `docs/rules/admin-module-template.md` | ModernDataTable、AdminDropdown、列表页、后台新模块                             |
+| 后台模块（v1） | `docs/rules/admin-module-template.md` | apps/server v1 维护：ModernDataTable、AdminDropdown、列表页（仅维护期）        |
+| 后台模块（v2） | `docs/designs/backend_design_v2.1/reference.md` §4.4 + §10 | server-next 新模块：DataTable 一体化、admin-ui shell、cell 复合组件 |
 | 任务工作流   | `docs/rules/workflow-rules.md`        | 开工、选任务、BLOCKER、PHASE COMPLETE                                          |
 | Git 提交     | `docs/rules/git-rules.md`             | commit、branch、merge、TASK-ID                                                 |
 | 质量门禁     | `docs/rules/quality-gates.md`         | 任务完成前、六问、AI-CHECK、偏离检测                                           |
