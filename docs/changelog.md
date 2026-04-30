@@ -2884,3 +2884,14 @@ bulk bar 与 foot 同等地位：脱离 scroll 内容流，作为 **frame 直接
 - notifications / tasks 真实端点接入（M-SN-4+ /admin/notifications + /admin/system/jobs + WebSocket）
 - Sidebar nav item padding/radius/active indicator 像素级对齐（CHG-DESIGN-04 已修主体，剩余像素差留设计签收）
 - AdminShell main padding（page padding 20/24 与 `--space-5` 接近不完全，差异由各页 page__head 设计兜底）
+
+### Codex stop-time review fix#1：notifications / tasks callback 真实修改 state
+
+- **触发**：原实现 4 个 callback 全 noop，让点击通知项 / 「全部已读」/ 「取消任务」/ 「重试任务」按钮无任何反馈，违反"演示交互通路"的初衷（NotificationDrawer / TaskDrawer 内部 a11y 契约里"onItemClick 缺省时降级为 article"也已绕开 — 我们传了非 undefined 但 noop 的 callback）
+- **修复**：admin-shell-client.tsx 把 `mockNotifications` / `mockTasks` 改 `useState` 初始值持有，4 callback 真实修改 state：
+  - `handleNotificationItemClick(item)`: 标 `read=true`；`item.href` 非空时 `router.push`
+  - `handleMarkAllNotificationsRead`: 全部 `read=true`
+  - `handleCancelTask(id)`: `status='failed' + finishedAt + errorMessage='用户取消'`
+  - `handleRetryTask(id)`: 重置 task 为 running 形态（清 finishedAt / errorMessage / progress=0 / 新 startedAt）
+- **影响**：mock 数据真实可变 → 用户点击立即看到列表样式更新（read 标记 / status 标签 / progress bar 切换 / 取消按钮消失等）；M-SN-4+ 接入 SWR 真端点时数据源切换，本乐观更新逻辑可保留
+- **typecheck / lint / shell 384 单测**：全绿

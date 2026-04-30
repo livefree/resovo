@@ -17,7 +17,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { AdminShell, inferBreadcrumbs } from '@resovo/admin-ui'
-import type { AdminShellUser, UserMenuAction } from '@resovo/admin-ui'
+import type { AdminShellUser, NotificationItem, TaskItem, UserMenuAction } from '@resovo/admin-ui'
 import { ADMIN_NAV } from '@/lib/admin-nav'
 import {
   adminNavCountProviderStub,
@@ -92,20 +92,47 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
     document.cookie = `${COOKIE_COLLAPSED}=${next}; path=/; max-age=31536000; SameSite=Lax`
   }, [])
 
-  // CHG-DESIGN-05：notifications / tasks 接入 mock 数据让 Topbar 图标 + Drawer 通路打通
-  // M-SN-4+ 接入 /admin/notifications + /admin/system/jobs 真端点时替换为 SWR hook 返回值
-  // 4 个交互 callback 在真端点接入前为 noop（点击 / mark-read / cancel / retry 仅日志即可）
-  const handleNotificationItemClick = useCallback(() => {
-    // M-SN-4+ 接入：根据 item.href 跳转或自定义路由
-  }, [])
+  // CHG-DESIGN-05：notifications / tasks 用 useState 持有 mock 数据，4 个交互 callback
+  // 真实修改 state，让点击产生可见反馈（演示完整 UI 交互通路）。
+  // M-SN-4+ 接入 /admin/notifications + /admin/system/jobs 真端点时：
+  //   - 数据源改 SWR hook 返回值（替代 useState 初始值）
+  //   - callback 改调用对应 PATCH/POST 端点 + revalidate；本地乐观更新可保留
+  const [notifications, setNotifications] = useState<readonly NotificationItem[]>(mockNotifications)
+  const [tasks, setTasks] = useState<readonly TaskItem[]>(mockTasks)
+
+  const handleNotificationItemClick = useCallback((item: NotificationItem) => {
+    setNotifications((prev) => prev.map((n) => (n.id === item.id ? { ...n, read: true } : n)))
+    if (item.href) router.push(item.href)
+  }, [router])
+
   const handleMarkAllNotificationsRead = useCallback(() => {
-    // M-SN-4+ 接入：调用 PATCH /admin/notifications/read-all
+    setNotifications((prev) => prev.map((n) => (n.read ? n : { ...n, read: true })))
   }, [])
-  const handleCancelTask = useCallback(() => {
-    // M-SN-4+ 接入：调用 POST /admin/system/jobs/:id/cancel
+
+  const handleCancelTask = useCallback((taskId: string) => {
+    setTasks((prev) => prev.map((t) => {
+      if (t.id !== taskId) return t
+      return {
+        ...t,
+        status: 'failed' as const,
+        finishedAt: new Date().toISOString(),
+        errorMessage: '用户取消',
+      }
+    }))
   }, [])
-  const handleRetryTask = useCallback(() => {
-    // M-SN-4+ 接入：调用 POST /admin/system/jobs/:id/retry
+
+  const handleRetryTask = useCallback((taskId: string) => {
+    setTasks((prev) => prev.map((t) => {
+      if (t.id !== taskId) return t
+      // 重置为 running 形态：清掉 finishedAt / errorMessage，进度归零
+      return {
+        id: t.id,
+        title: t.title,
+        status: 'running' as const,
+        progress: 0,
+        startedAt: new Date().toISOString(),
+      }
+    }))
   }, [])
 
   return (
@@ -119,8 +146,8 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
       user={user}
       theme={theme}
       defaultCollapsed={defaultCollapsed}
-      notifications={mockNotifications}
-      tasks={mockTasks}
+      notifications={notifications}
+      tasks={tasks}
       onNavigate={handleNavigate}
       onThemeToggle={handleThemeToggle}
       onUserMenuAction={handleUserMenuAction}
