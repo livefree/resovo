@@ -430,6 +430,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
         <HeaderMenu
           open={menuColId !== null}
           column={menuColumn}
+          columnMenu={menuColumn?.columnMenu}
           anchorRef={menuAnchorRef}
           currentSort={query.sort}
           columnsValue={colMap}
@@ -437,7 +438,6 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
           onClearSort={handleHeaderMenuClearSort}
           onHide={handleHeaderMenuHide}
           onClose={closeHeaderMenu}
-          filterContent={menuColumn?.columnMenu?.filterContent}
         />
       )}
     </div>

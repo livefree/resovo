@@ -199,3 +199,139 @@ describe('DataTable — enableHeaderMenu=true 弹出 popover', () => {
     expect(screen.getByTestId('filter-slot')).toBeTruthy()
   })
 })
+
+describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
+  it('columnMenu.canSort=false → 升降序按钮不渲染（即使 enableSorting=true）', () => {
+    const cols: TableColumn<Row>[] = [
+      {
+        id: 'name',
+        header: 'Name',
+        accessor: (r) => r.name,
+        enableSorting: true,
+        columnMenu: { canSort: false },
+      },
+    ]
+    render(
+      <DataTable<Row>
+        rows={ROWS}
+        columns={cols}
+        rowKey={(r) => r.id}
+        mode="client"
+        query={makeSnapshot({ columns: new Map([['name', { visible: true }]]) })}
+        onQueryChange={() => {}}
+        enableHeaderMenu
+      />,
+    )
+    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    expect(document.querySelector('[data-header-menu]')).toBeTruthy()
+    expect(screen.queryByText('升序')).toBeNull()
+    expect(screen.queryByText('降序')).toBeNull()
+  })
+
+  it('columnMenu.canHide=false → 隐藏此列按钮不渲染（即使非 pinned）', () => {
+    const cols: TableColumn<Row>[] = [
+      {
+        id: 'name',
+        header: 'Name',
+        accessor: (r) => r.name,
+        enableSorting: true,
+        columnMenu: { canHide: false },
+      },
+    ]
+    render(
+      <DataTable<Row>
+        rows={ROWS}
+        columns={cols}
+        rowKey={(r) => r.id}
+        mode="client"
+        query={makeSnapshot({ columns: new Map([['name', { visible: true }]]) })}
+        onQueryChange={() => {}}
+        enableHeaderMenu
+      />,
+    )
+    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    expect(document.querySelector('[data-header-menu]')).toBeTruthy()
+    expect(screen.queryByText('隐藏此列')).toBeNull()
+  })
+
+  it('columnMenu.isFiltered=true → 显示"已过滤"指示', () => {
+    const cols: TableColumn<Row>[] = [
+      {
+        id: 'name',
+        header: 'Name',
+        accessor: (r) => r.name,
+        enableSorting: true,
+        columnMenu: { isFiltered: true },
+      },
+    ]
+    render(
+      <DataTable<Row>
+        rows={ROWS}
+        columns={cols}
+        rowKey={(r) => r.id}
+        mode="client"
+        query={makeSnapshot({ columns: new Map([['name', { visible: true }]]) })}
+        onQueryChange={() => {}}
+        enableHeaderMenu
+      />,
+    )
+    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    expect(document.querySelector('[data-header-menu-filter-active]')).toBeTruthy()
+  })
+
+  it('isFiltered=true + onClearFilter 提供 → 显示"清除过滤"按钮，点击调用 callback', () => {
+    const onClearFilter = vi.fn()
+    const cols: TableColumn<Row>[] = [
+      {
+        id: 'name',
+        header: 'Name',
+        accessor: (r) => r.name,
+        enableSorting: true,
+        columnMenu: { isFiltered: true, onClearFilter },
+      },
+    ]
+    render(
+      <DataTable<Row>
+        rows={ROWS}
+        columns={cols}
+        rowKey={(r) => r.id}
+        mode="client"
+        query={makeSnapshot({ columns: new Map([['name', { visible: true }]]) })}
+        onQueryChange={() => {}}
+        enableHeaderMenu
+      />,
+    )
+    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    const clearBtn = screen.getByText('清除过滤')
+    expect(clearBtn).toBeTruthy()
+    fireEvent.click(clearBtn)
+    expect(onClearFilter).toHaveBeenCalledTimes(1)
+    // 点击后 menu 关闭
+    expect(document.querySelector('[data-header-menu]')).toBeNull()
+  })
+
+  it('isFiltered=true 但 onClearFilter 未提供 → 不渲染"清除过滤"按钮', () => {
+    const cols: TableColumn<Row>[] = [
+      {
+        id: 'name',
+        header: 'Name',
+        accessor: (r) => r.name,
+        enableSorting: true,
+        columnMenu: { isFiltered: true },
+      },
+    ]
+    render(
+      <DataTable<Row>
+        rows={ROWS}
+        columns={cols}
+        rowKey={(r) => r.id}
+        mode="client"
+        query={makeSnapshot({ columns: new Map([['name', { visible: true }]]) })}
+        onQueryChange={() => {}}
+        enableHeaderMenu
+      />,
+    )
+    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    expect(screen.queryByText('清除过滤')).toBeNull()
+  })
+})

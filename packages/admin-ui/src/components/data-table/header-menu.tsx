@@ -4,21 +4,29 @@
  * header-menu.tsx — DataTable 表头集成菜单 popover（CHG-DESIGN-02 Step 3/7）
  *
  * 真源：reference.md §4.4 + 设计稿 datatable.jsx DTHeaderMenu
- * arch-reviewer 决议：本步只 wire 升降序 / 隐藏列；
+ * arch-reviewer 决议：本步 wire 升降序 / 清除排序 / 过滤区块（含已过滤指示 + 清除过滤）
+ *                  / 隐藏列；honors 现有 ColumnMenuConfig 的全部 4 个 gate
+ *                  （canSort / canHide / isFiltered / onClearFilter）。
  *   - "固定到左" 推迟到 column.stickyLeft 运行时落地（避免 types-only 暴露）
- *   - "过滤" 仅在 column.columnMenu.filterContent 已提供时显示并渲染该 ReactNode
  *
  * 范式：完全对照 ColumnSettingsPanel — portal 渲染、ESC + 点击外部关闭、
  *      anchorRef.getBoundingClientRect 计算位置、focus 首项。
  */
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { ColumnDescriptor, ColumnPreference, TableSortState } from './types'
+import type { ColumnDescriptor, ColumnMenuConfig, ColumnPreference, TableSortState } from './types'
 
 export interface HeaderMenuProps {
   readonly open: boolean
   /** ColumnDescriptor 而非 TableColumn<T>（逆变隔离，与 ColumnSettingsPanel 同惯例） */
   readonly column: ColumnDescriptor | null
+  /**
+   * 列的 columnMenu 配置（gate + filter slot）。
+   * canSort=false 隐藏升降序；canHide=false 隐藏"隐藏此列"按钮；
+   * isFiltered=true 显示"已过滤"指示 + （配合 onClearFilter）"清除过滤" 按钮；
+   * filterContent 提供时渲染过滤区块。
+   */
+  readonly columnMenu?: ColumnMenuConfig
   readonly anchorRef: React.RefObject<HTMLElement | null>
   readonly currentSort: TableSortState
   readonly columnsValue: ReadonlyMap<string, ColumnPreference>
@@ -26,8 +34,6 @@ export interface HeaderMenuProps {
   readonly onClearSort: () => void
   readonly onHide: (field: string) => void
   readonly onClose: () => void
-  /** 列上 columnMenu.filterContent 可选；若提供则渲染过滤区块 */
-  readonly filterContent?: React.ReactNode
 }
 
 interface Pos { top: number; left: number }
@@ -89,6 +95,7 @@ const FILTER_LABEL_STYLE: React.CSSProperties = {
 export function HeaderMenu({
   open,
   column,
+  columnMenu,
   anchorRef,
   currentSort,
   columnsValue,
@@ -96,7 +103,6 @@ export function HeaderMenu({
   onClearSort,
   onHide,
   onClose,
-  filterContent,
 }: HeaderMenuProps): React.ReactElement | null {
   const [mounted, setMounted] = useState(false)
   const [pos, setPos] = useState<Pos>(DEFAULT_POS)
@@ -172,12 +178,26 @@ export function HeaderMenu({
 
   if (!open || !mounted || !column) return null
 
-  const sortable = column.enableSorting === true
+  // 排序门控：column.enableSorting + columnMenu.canSort（默认允许）
+  const sortable = column.enableSorting === true && columnMenu?.canSort !== false
   const isSortedAsc = currentSort.field === column.id && currentSort.direction === 'asc'
   const isSortedDesc = currentSort.field === column.id && currentSort.direction === 'desc'
+
+  // 隐藏门控：pinned 列不可隐藏；columnMenu.canHide 显式 false 也不可隐藏
   const isPinned = column.pinned === true
   const stored = columnsValue.get(column.id)
   const isVisible = stored !== undefined ? stored.visible : column.defaultVisible !== false
+  const hideable = !isPinned && isVisible && columnMenu?.canHide !== false
+
+  // 过滤门控：filterContent 提供 OR 当前已过滤（isFiltered=true）→ 显示过滤区块
+  const filterContent = columnMenu?.filterContent
+  const isFiltered = columnMenu?.isFiltered === true
+  const showFilterSection = filterContent !== undefined || isFiltered
+  const canClearFilter = isFiltered && columnMenu?.onClearFilter !== undefined
+
+  // 分隔线条件
+  const showSepBeforeFilter = sortable && showFilterSection
+  const showSepBeforeHide = (sortable || showFilterSection) && hideable
 
   return createPortal(
     <div
@@ -222,17 +242,39 @@ export function HeaderMenu({
           )}
         </>
       )}
-      {filterContent && (
+      {showFilterSection && (
         <>
-          {sortable && <div style={SEP_STYLE} aria-hidden="true" />}
+          {showSepBeforeFilter && <div style={SEP_STYLE} aria-hidden="true" />}
           <div style={FILTER_WRAP_STYLE}>
-            <div style={FILTER_LABEL_STYLE}>过滤</div>
+            <div style={FILTER_LABEL_STYLE}>
+              <span>过滤</span>
+              {isFiltered && (
+                <span
+                  data-header-menu-filter-active
+                  style={{ marginLeft: '6px', color: 'var(--admin-accent-on-soft)' }}
+                >已过滤</span>
+              )}
+            </div>
             {filterContent}
+            {canClearFilter && (
+              <button
+                type="button"
+                role="menuitem"
+                style={{ ...ITEM_STYLE, padding: '6px 0', marginTop: '4px' }}
+                onClick={() => {
+                  columnMenu?.onClearFilter?.()
+                  onClose()
+                }}
+              >
+                <span aria-hidden="true">×</span>
+                <span>清除过滤</span>
+              </button>
+            )}
           </div>
         </>
       )}
-      {(sortable || filterContent) && !isPinned && isVisible && <div style={SEP_STYLE} aria-hidden="true" />}
-      {!isPinned && isVisible && (
+      {showSepBeforeHide && <div style={SEP_STYLE} aria-hidden="true" />}
+      {hideable && (
         <button
           type="button"
           role="menuitem"
