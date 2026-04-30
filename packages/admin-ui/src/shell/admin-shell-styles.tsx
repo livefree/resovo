@@ -17,6 +17,14 @@ const SHELL_CSS = `
 [data-sidebar-item] {
   transition: background 120ms ease, color 120ms ease;
 }
+/* NavItem badge 基础布局：padding + flex-shrink 在此声明而非 inline，
+ * 否则 inline 特异性 (1,0,0,0) 会盖过折叠态 [data-sidebar][data-collapsed="true"]
+ * [data-sidebar-item-badge] 的 padding:0 / flex:0 0 auto 重置规则，
+ * 导致 badge 在折叠态仍占 ~16px 横向、把 icon 挤出 sidebar 左边界 */
+[data-sidebar-item-badge] {
+  padding: 1px var(--space-2);
+  flex-shrink: 0;
+}
 [data-sidebar-item]:not([data-sidebar-item-active="true"]):hover {
   background: var(--bg-surface-raised);
 }
@@ -124,10 +132,14 @@ const SHELL_CSS = `
 *::-webkit-scrollbar-thumb:hover {
   background: var(--fg-disabled);
 }
-/* Firefox 双轨：thin = 系统细滚动条；scrollbar-color = thumb / track */
+/* Firefox 双轨：thin = 系统细滚动条；scrollbar-color = thumb / track
+ * scrollbar-gutter: stable —— 始终预留 scrollbar 空间，避免出现/消失时
+ * 内容回流（用户反馈："滚动条不应该改变现有布局"）。仅对 overflow:auto/scroll
+ * 容器生效，对其他元素无副作用（CSS Scrollbars Module Level 1） */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
+  scrollbar-gutter: stable;
 }
 
 /* ── Sidebar footer ─────────────────────────────────────────────── */

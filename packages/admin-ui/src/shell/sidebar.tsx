@@ -347,13 +347,13 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate }: NavItemP
         <span
           data-sidebar-item-badge
           style={{
-            padding: '1px var(--space-2)',
+            // padding / flex-shrink 下沉到 admin-shell-styles 基础规则，
+            // 否则 inline 特异性会让折叠态"完全收 0 占位"规则失效（图标被挤出左边界）
             borderRadius: 'var(--radius-full)',
             fontSize: 'var(--admin-count-font-size)',
             background: badgeBg(badgeSlot),
             color: badgeFg(badgeSlot),
             lineHeight: '1.4em',
-            flexShrink: 0,
           }}
         >
           {formatCount(effectiveCount)}
