@@ -51,7 +51,8 @@ async function installStatsMock(page: Page, path: StatsPath) {
       await route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({
-          data: { pendingCount: 484, todayReviewedCount: 67, interceptRate: 0.12 },
+          // 后端契约：interceptRate 是百分数 0-100（不是 ratio 0-1）；12.3 表示 12.3%
+          data: { pendingCount: 484, todayReviewedCount: 67, interceptRate: 12.3 },
         }),
       })
       return

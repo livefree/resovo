@@ -1120,7 +1120,18 @@ export async function upsertVideoAliases(
 export interface ModerationStats {
   pendingCount: number
   todayReviewedCount: number
-  /** 最近 7 天拒绝数 / (通过+拒绝)数；无数据时为 null */
+  /**
+   * 最近 7 天拦截率（**百分数 0-100**，保留 1 位小数；无审核数据时为 null）
+   *
+   * 公式：`Math.round((rejected / (approved + rejected)) * 1000) / 10`
+   * 即 ratio × 100 后保留 1 位小数。例如 rejected=12 / total7d=100 → 12.0（表示 12.0%）。
+   *
+   * **消费方使用约定**：直接拼 "%"，**不要再乘以 100**（典型坑：CHG-DESIGN-07 7C
+   * 曾误乘 100 致 server-next Dashboard 显示 1230.0% 假数据，Codex stop-time fix#1 闭环；
+   * fix#2 同步生产方 jsdoc 防再误读）。
+   *
+   * 任何持有此字段类型的生产方 / 消费方 / 镜像类型必须保持本契约同步。
+   */
   interceptRate: number | null
 }
 
