@@ -315,6 +315,10 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
     ['false', false],
     ['true', true],
     ['空字符串', ''],
+    ['空数组', [] as React.ReactNode],
+    ['全 null 数组', [null, null] as React.ReactNode],
+    ['null + false 数组', [null, false] as React.ReactNode],
+    ['嵌套全空数组', [[null, false], [null]] as React.ReactNode],
   ])('filterContent=%s 且 isFiltered 未设 → 不渲染过滤区块（避免空标签 broken menu）', (_label, value) => {
     const cols: TableColumn<Row>[] = [
       {
@@ -341,6 +345,34 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
     expect(document.querySelector('[data-header-menu]')).toBeTruthy()
     // 过滤标签不存在（"过滤"作为 section label 仅在 section 可见时出现）
     expect(screen.queryByText('过滤')).toBeNull()
+  })
+
+  it('filterContent=数组中含一个可渲染节点 → 渲染过滤区块', () => {
+    const cols: TableColumn<Row>[] = [
+      {
+        id: 'name',
+        header: 'Name',
+        accessor: (r) => r.name,
+        enableSorting: true,
+        columnMenu: {
+          filterContent: [null, false, <div key="real" data-testid="filter-real">真过滤</div>],
+        },
+      },
+    ]
+    render(
+      <DataTable<Row>
+        rows={ROWS}
+        columns={cols}
+        rowKey={(r) => r.id}
+        mode="client"
+        query={makeSnapshot({ columns: new Map([['name', { visible: true }]]) })}
+        onQueryChange={() => {}}
+        enableHeaderMenu
+      />,
+    )
+    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    expect(screen.getByText('过滤')).toBeTruthy()
+    expect(screen.getByTestId('filter-real')).toBeTruthy()
   })
 
   it('filterContent=null + isFiltered=true → 仍渲染过滤区块（仅显示"已过滤"标记）', () => {

@@ -92,6 +92,22 @@ const FILTER_LABEL_STYLE: React.CSSProperties = {
   marginBottom: '4px',
 }
 
+/**
+ * ReactNode 中"渲染为空"的合法值检测（含递归数组）。
+ * 用途：决定是否渲染过滤区块——避免 filterContent={[]} / [null, false]
+ * 这类合法但视觉为空的值触发空"过滤"标签 + 空白区块（Codex stop-time review #3）。
+ *
+ * 不覆盖：空 React Fragment（<></>）— 检测需 inspect 内部 children，
+ * 实现脆弱；这种用法少见，文档级约束。
+ */
+function isRenderableNode(node: React.ReactNode): boolean {
+  if (node === undefined || node === null) return false
+  if (typeof node === 'boolean') return false
+  if (node === '') return false
+  if (Array.isArray(node)) return node.some(isRenderableNode)
+  return true
+}
+
 export function HeaderMenu({
   open,
   column,
@@ -190,14 +206,11 @@ export function HeaderMenu({
   const hideable = !isPinned && isVisible && columnMenu?.canHide !== false
 
   // 过滤门控：filterContent 必须是可渲染节点（排除 ReactNode 中"渲染为空"的合法值
-  //   undefined / null / boolean / 空字符串 — 否则空"过滤"标签 + 空白区块）
+  //   undefined / null / boolean / 空字符串 / 空数组 / 全部为空的数组）
+  // 否则空"过滤"标签 + 空白区块 = broken menu
   // OR 当前已过滤（isFiltered=true 单独显示"已过滤"标记也有意义）
   const filterContent = columnMenu?.filterContent
-  const hasRenderableFilter =
-    filterContent !== undefined
-    && filterContent !== null
-    && typeof filterContent !== 'boolean'
-    && filterContent !== ''
+  const hasRenderableFilter = isRenderableNode(filterContent)
   const isFiltered = columnMenu?.isFiltered === true
   const showFilterSection = hasRenderableFilter || isFiltered
   const canClearFilter = isFiltered && columnMenu?.onClearFilter !== undefined
