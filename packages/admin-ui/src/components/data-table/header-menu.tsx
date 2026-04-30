@@ -15,6 +15,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ColumnDescriptor, ColumnMenuConfig, ColumnPreference, TableSortState } from './types'
+import { useRenderableSlot } from './react-node-utils'
 
 export interface HeaderMenuProps {
   readonly open: boolean
@@ -92,48 +93,8 @@ const FILTER_LABEL_STYLE: React.CSSProperties = {
   marginBottom: '4px',
 }
 
-/**
- * 把 filterContent 物化为可重复渲染的形态：单次 iterable（generator / iterator
- * 等）转 Array，避免"检测时消耗、React 渲染时空"的 single-use 陷阱。
- * Array / 字符串 / ReactElement / 原始值原样返回（不复制）。
- */
-function materializeFilterContent(node: React.ReactNode): React.ReactNode {
-  if (node === null || node === undefined) return node
-  if (typeof node !== 'object') return node
-  if (Array.isArray(node)) return node
-  const candidate = node as { [Symbol.iterator]?: unknown }
-  if (typeof candidate[Symbol.iterator] === 'function') {
-    // Set / generator / 自定义 iterable 一次性物化为 Array，下游可重复迭代
-    return Array.from(node as Iterable<React.ReactNode>)
-  }
-  return node
-}
-
-/**
- * ReactNode 中"渲染为空"的合法值检测（递归数组）。
- * 用途：决定是否渲染过滤区块——避免合法但视觉为空的值触发空"过滤"标签 + 空白区块。
- *
- * 调用前必须先 materializeFilterContent，确保 single-use iterable 已转为 Array。
- *
- * 处理顺序：
- *   1. nullish / boolean → false
- *   2. 字符串 → 仅非空时 renderable
- *   3. number / bigint → true
- *   4. Array → 至少一个元素 renderable（递归）
- *   5. 非 array 对象（ReactElement / ReactPortal）→ 视为 renderable
- *
- * 不覆盖：空 React Fragment <></>（检测需 inspect 内部 children，脆弱）。
- */
-function isRenderableNode(node: React.ReactNode): boolean {
-  if (node === undefined || node === null) return false
-  if (typeof node === 'boolean') return false
-  if (typeof node === 'string') return node !== ''
-  if (typeof node === 'number' || typeof node === 'bigint') return true
-  if (typeof node !== 'object') return true
-  if (Array.isArray(node)) return node.some(isRenderableNode)
-  // 非 array object（ReactElement / ReactPortal）— 视为 renderable
-  return true
-}
+// materializeNode / isRenderableNode / useRenderableSlot 已抽到 react-node-utils.ts
+// （CHG-DESIGN-02 Step 4 fix#: 让 toolbar slots 与 HeaderMenu filterContent 复用同一套）
 
 export function HeaderMenu({
   open,
@@ -219,22 +180,8 @@ export function HeaderMenu({
     first?.focus()
   }, [open, mounted])
 
-  // 物化 filterContent — useRef 缓存（React 不会主动丢弃 ref，比 useMemo 更安全）
-  // 关闭菜单时 columnMenu=undefined，source 变 undefined；此时不动缓存，
-  // 避免重开后丢失已物化的 array 而重新消耗已耗尽的 generator（Codex 第 6 轮 review）
-  // 缓存条目 { source, result }：
-  //   - source nullish → 跳过缓存维护
-  //   - source 同上次 → 复用缓存
-  //   - source 变化为新的非空值 → 重新物化
-  const cacheRef = useRef<{ source: React.ReactNode; result: React.ReactNode } | null>(null)
-  const source = columnMenu?.filterContent
-  let filterContent: React.ReactNode = undefined
-  if (source !== undefined && source !== null) {
-    if (cacheRef.current?.source !== source) {
-      cacheRef.current = { source, result: materializeFilterContent(source) }
-    }
-    filterContent = cacheRef.current.result
-  }
+  // 物化 filterContent + 检测 renderable + useRef 缓存（详见 react-node-utils.ts 注释）
+  const filterSlot = useRenderableSlot(columnMenu?.filterContent)
 
   if (!open || !mounted || !column) return null
 
@@ -250,7 +197,8 @@ export function HeaderMenu({
   const hideable = !isPinned && isVisible && columnMenu?.canHide !== false
 
   // 过滤门控：filterContent（已物化）renderable OR isFiltered=true（"已过滤"标记单独显示也有意义）
-  const hasRenderableFilter = isRenderableNode(filterContent)
+  const hasRenderableFilter = filterSlot.renderable
+  const filterContent = filterSlot.node
   const isFiltered = columnMenu?.isFiltered === true
   const showFilterSection = hasRenderableFilter || isFiltered
   const canClearFilter = isFiltered && columnMenu?.onClearFilter !== undefined

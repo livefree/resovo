@@ -19,6 +19,7 @@ import type {
 import { DTStyles } from './dt-styles'
 import { HeaderMenu } from './header-menu'
 import { ViewsMenu } from './views-menu'
+import { useRenderableSlot } from './react-node-utils'
 
 // ── client-mode data processing ──────────────────────────────────
 
@@ -169,13 +170,19 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
     toolbar,
   } = props
 
-  // CHG-DESIGN-02 Step 4：判定 toolbar 是否需要渲染
-  // 只要 toolbar 配置存在且 hidden 不为 true，且至少有一个槽位，渲染容器
+  // CHG-DESIGN-02 Step 4：toolbar 渲染门控
+  // 每个 ReactNode slot 必须用 useRenderableSlot 检测，避免 null / false / [] /
+  // 空 iterable 等合法但渲染为空的 ReactNode 触发空 toolbar 容器（Step 4 fix#）
+  // useRef cache 同时处理 single-use iterable（generator）的物化
+  const searchSlot = useRenderableSlot(toolbar?.search)
+  const trailingSlot = useRenderableSlot(toolbar?.trailing)
+  // viewsConfig 是 ViewsConfig 对象（非 ReactNode），缺省即 undefined；
+  // 提供时 ViewsMenu 始终渲染触发按钮（"视图 · {label} ▾"），故 viewsConfig 提供
+  // 即视为有内容
+  const hasViewsContent = toolbar?.viewsConfig !== undefined
   const shouldRenderToolbar = toolbar !== undefined
     && toolbar.hidden !== true
-    && (toolbar.search !== undefined
-      || toolbar.trailing !== undefined
-      || toolbar.viewsConfig !== undefined)
+    && (searchSlot.renderable || trailingSlot.renderable || hasViewsContent)
 
   const [hoveredKey, setHoveredKey] = useState<string | null>(null)
 
@@ -307,14 +314,19 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
       {/* CHG-DESIGN-02 Step 2/7：自包含 CSS 注入（framed surface + flash keyframe）
         * 模块级 flag 守卫，多个 DataTable 实例只注入一次 */}
       <DTStyles />
-      {/* CHG-DESIGN-02 Step 4/7：内置 toolbar（search / viewsConfig / trailing 三槽位） */}
+      {/* CHG-DESIGN-02 Step 4/7：内置 toolbar（search / viewsConfig / trailing 三槽位）
+        * 每个 slot 仅在 renderable 时渲染包裹 div，避免空 wrapper 出现 */}
       {shouldRenderToolbar && (
         <div data-table-toolbar role="toolbar" aria-label="表格工具栏">
-          {toolbar?.search && <div data-table-toolbar-search>{toolbar.search}</div>}
-          {toolbar?.viewsConfig && (
+          {searchSlot.renderable && (
+            <div data-table-toolbar-search>{searchSlot.node}</div>
+          )}
+          {hasViewsContent && toolbar?.viewsConfig && (
             <ViewsMenu config={toolbar.viewsConfig} data-testid="views-trigger" />
           )}
-          {toolbar?.trailing && <div data-table-toolbar-trailing>{toolbar.trailing}</div>}
+          {trailingSlot.renderable && (
+            <div data-table-toolbar-trailing>{trailingSlot.node}</div>
+          )}
         </div>
       )}
       {/* sticky header */}

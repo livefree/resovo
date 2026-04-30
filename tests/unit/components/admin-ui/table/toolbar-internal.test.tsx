@@ -57,6 +57,53 @@ describe('DataTable — 内置 toolbar 渲染门控', () => {
     expect(document.querySelector('[data-table-toolbar]')).toBeNull()
   })
 
+  it.each([
+    ['null', null],
+    ['false', false],
+    ['true', true],
+    ['空字符串', ''],
+    ['空数组', [] as React.ReactNode],
+    ['全 null 数组', [null, false] as React.ReactNode],
+    ['空 Set', new Set() as unknown as React.ReactNode],
+  ])('search=%s（合法但渲染为空 ReactNode）→ 不渲染 toolbar 容器', (_label, value) => {
+    render(<DataTable<Row> {...baseProps} toolbar={{ search: value as React.ReactNode }} />)
+    expect(document.querySelector('[data-table-toolbar]')).toBeNull()
+  })
+
+  it.each([
+    ['null', null],
+    ['空数组', [] as React.ReactNode],
+  ])('trailing=%s + 无 search/viewsConfig → 不渲染 toolbar 容器', (_label, value) => {
+    render(<DataTable<Row> {...baseProps} toolbar={{ trailing: value as React.ReactNode }} />)
+    expect(document.querySelector('[data-table-toolbar]')).toBeNull()
+  })
+
+  it('search=null + trailing=有效内容 → 仅渲染 trailing 包裹（不渲染空 search wrapper）', () => {
+    render(
+      <DataTable<Row>
+        {...baseProps}
+        toolbar={{ search: null, trailing: <button data-testid="real-trailing">导出</button> }}
+      />,
+    )
+    expect(document.querySelector('[data-table-toolbar]')).toBeTruthy()
+    expect(document.querySelector('[data-table-toolbar-search]')).toBeNull()
+    expect(document.querySelector('[data-table-toolbar-trailing]')).toBeTruthy()
+  })
+
+  it('search=非空 generator → 物化后真实渲染（不会因检测消耗导致空）', () => {
+    function* gen(): Generator<React.ReactNode> {
+      yield <input key="real" data-testid="search-gen-real" placeholder="搜索…" />
+    }
+    render(
+      <DataTable<Row>
+        {...baseProps}
+        toolbar={{ search: gen() as unknown as React.ReactNode }}
+      />,
+    )
+    expect(document.querySelector('[data-table-toolbar-search]')).toBeTruthy()
+    expect(screen.getByTestId('search-gen-real')).toBeTruthy()
+  })
+
   it('toolbar.search 提供 → 渲染容器 + search 槽位', () => {
     render(
       <DataTable<Row>
