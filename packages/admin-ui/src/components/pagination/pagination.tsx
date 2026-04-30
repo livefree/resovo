@@ -62,7 +62,7 @@ function pageButtonStyle(active: boolean, disabled: boolean): React.CSSPropertie
     padding: '0 4px',
     border: active ? '1px solid var(--accent-default)' : '1px solid var(--border-subtle)',
     borderRadius: 'var(--radius-sm)',
-    background: active ? 'var(--accent-subtle)' : 'transparent',
+    background: active ? 'var(--admin-accent-soft)' : 'transparent',
     color: disabled ? 'var(--fg-muted)' : active ? 'var(--accent-fg)' : 'var(--fg-default)',
     cursor: disabled ? 'not-allowed' : 'pointer',
     fontSize: '12px',

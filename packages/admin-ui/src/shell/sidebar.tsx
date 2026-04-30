@@ -85,12 +85,12 @@ const LOGO_STYLE: CSSProperties = {
   height: '32px',
   borderRadius: 'var(--radius-md)',
   background: 'var(--accent-default)',
-  color: 'var(--accent-on)',
+  color: 'var(--fg-on-accent)',
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
   fontWeight: 700,
-  fontSize: 'var(--font-size-md)',
+  fontSize: 'var(--font-size-base)',
   flexShrink: 0,
 }
 

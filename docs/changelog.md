@@ -2156,3 +2156,59 @@
 - 批量下架 confirm 流程 ✅
 - **实测验收**：typecheck ✅ | 2489/2491 单测通过（2 失败为预存 StagingEditPanel flake）✅
 - **下一步**：CHG-SN-3-10 已完成，按用户指示暂停后续任务
+
+## chg(CHG-DESIGN-01): Token completeness 修复（清理未定义引用 + 补缺 + CI 校验脚本）
+
+- **日期**: 2026-04-29
+- **TASK-ID**: CHG-DESIGN-01
+- **所属序列**: SEQ-20260429-02 设计稿对齐改造（第 1 卡 / 共 10 卡）
+- **关联文档**: `docs/designs/backend_design_v2.1/reference.md` §3.6 + §11 第 1 步
+- **主循环模型**: claude-opus-4-7
+- **子代理调用**: 无
+- **变更类型**: chg（设计稿对齐改造序列首卡）
+- **摘要**: 扫描发现 `packages/admin-ui` + `apps/server-next` 共 12 个未定义 CSS 变量名 / 19 处引用，全部替换为已定义 semantic / admin-layout token；修 `--admin-accent-soft` 由 amber rgba 字面量改为 `color-mix(in oklch, var(--accent-default) 18%, transparent)` 跟随当前蓝 brand；新增 `--admin-accent-border` / `--admin-scrollbar-size`；admin-shell-styles 注入 `.pulse` keyframe + `prefers-reduced-motion` 兜底；新增 `scripts/verify-token-references.mjs` CI 卡门，接入 `npm run verify:token-references` 与 preflight 第 5d 步。
+
+### 新增/变更文件
+
+**packages/design-tokens/**
+- `src/admin-layout/surfaces.ts`（修改：admin-accent-soft 跟随 brand + 新增 admin-accent-border / admin-scrollbar-size + 完善文件头注释）
+
+**packages/admin-ui/**
+- `src/components/data-table/data-table.tsx`（替换 `--accent-subtle` → `--admin-accent-soft`、`--bg-subtle` → `--bg-surface-elevated`）
+- `src/components/data-table/filter-chip.tsx`（替换 `--accent-subtle`）
+- `src/components/dropdown/admin-dropdown.tsx`（替换 `--state-error` → `--state-error-fg`、`--bg-surface-hover` → `--bg-surface-elevated`）
+- `src/components/state/loading-state.tsx`（替换 `--accent-primary` → `--accent-default`、`--bg-surface-hover`）
+- `src/components/state/error-state.tsx`（替换 `--state-error` / `--accent-primary`）
+- `src/components/state/empty-state.tsx`（替换 `--accent-primary`）
+- `src/components/pagination/pagination.tsx`（替换 `--accent-subtle`）
+- `src/shell/sidebar.tsx`（替换 `--accent-on` → `--fg-on-accent`、`--font-size-md` → `--font-size-base`）
+- `src/shell/drawer-shell.tsx`（替换 `--font-size-md`）
+- `src/shell/task-drawer.tsx`（替换 `--motion-duration-md` → `--duration-base`、`--motion-easing-standard` → `--easing-ease-in-out`）
+- `src/shell/admin-shell-styles.tsx`（注入 `.pulse` keyframe + `[data-pulse]` selector + `prefers-reduced-motion` 兜底）
+
+**apps/server-next/**
+- `src/app/globals.css`（替换 `--line-height-base` → `--line-height-normal`）
+- `src/app/admin/dev/components/components-demo.tsx`（替换 `--state-success` / `--state-error` / `--accent-primary`）
+- `src/app/login/LoginForm.tsx`（替换 `--bg-input` → `--bg-surface-raised`）
+
+**scripts/ + 配置**
+- `scripts/verify-token-references.mjs`（新建：扫描 `var(--xxx)` 引用 vs token 输出 diff，未定义即退出码 1）
+- `package.json`（新增 `verify:token-references` script）
+- `scripts/preflight.sh`（新增 5d 步 token 引用完整性校验）
+
+### 验收
+
+- ✅ grep 全仓库 0 命中已知未定义引用（共 12 个 token 名）
+- ✅ `node scripts/verify-token-references.mjs` 退出码 0（60 引用 / 321 token 全定义）
+- ✅ `npm run typecheck` 6 workspace 全绿
+- ✅ `npm run lint` 4 workspace 全绿
+- ✅ `npm run test -- --run` 2491/2491 全绿（含 design-token / alias-coverage / no-hardcoded-color 套件）
+- ✅ `npm run verify:token-isolation` ADR-102 第 5 层守卫继续 PASS
+- 📌 视觉签收：DataTable selected 行 / FilterChip active / Pagination 当前页 / Sidebar active 由 amber → blue（与当前 brand 一致）；Dropdown 错误态 / Loading state spinner / Error state icon&button / Empty state action / LoginForm input 由"undefined fallback 透明"→ 正确染色
+- 📌 跳过项（不构成偏离）：`--bg-surface-popover` 别名（`--bg-surface-elevated` 已对应 bg4 popover 角色）；`--accent-soft / --accent-border` 不带 admin- 前缀的别名（ADR-102 必须用 admin- 前缀）
+
+### 后续
+
+- CHG-DESIGN-02：扩展 DataTable 支持表头集成菜单 / saved views / row flash / 列固定 / framed surface
+- CHG-DESIGN-03：把全站 scrollbar 选择器接入 `--admin-scrollbar-size: 6px`
+- CHG-DESIGN-04：sidebar active 配色由 `--state-warning-fg` 改为 `--accent-default`（本卡未改）

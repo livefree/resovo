@@ -64,8 +64,8 @@ function itemStyle(danger: boolean, disabled: boolean, active: boolean): React.C
     fontSize: '13px',
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.45 : 1,
-    color: danger ? 'var(--state-error)' : 'var(--fg-default)',
-    background: active && !disabled ? 'var(--bg-surface-hover)' : 'transparent',
+    color: danger ? 'var(--state-error-fg)' : 'var(--fg-default)',
+    background: active && !disabled ? 'var(--bg-surface-elevated)' : 'transparent',
     userSelect: 'none',
   }
 }

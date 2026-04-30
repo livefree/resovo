@@ -26,7 +26,7 @@ const WRAP_STYLE: React.CSSProperties = {
 const ICON_STYLE: React.CSSProperties = {
   fontSize: '36px',
   lineHeight: 1,
-  color: 'var(--state-error)',
+  color: 'var(--state-error-fg)',
 }
 
 const TITLE_STYLE: React.CSSProperties = {
@@ -51,8 +51,8 @@ const RETRY_STYLE: React.CSSProperties = {
   fontSize: '13px',
   fontWeight: 500,
   background: 'transparent',
-  color: 'var(--accent-primary)',
-  border: '1px solid var(--accent-primary)',
+  color: 'var(--accent-default)',
+  border: '1px solid var(--accent-default)',
   borderRadius: 'var(--radius-sm)',
   cursor: 'pointer',
   marginTop: '4px',

@@ -27,7 +27,7 @@ const CHIP_STYLE: React.CSSProperties = {
   gap: '4px',
   padding: '2px 8px',
   borderRadius: 'var(--radius-full)',
-  background: 'var(--accent-subtle)',
+  background: 'var(--admin-accent-soft)',
   color: 'var(--fg-default)',
   fontSize: '12px',
   lineHeight: '20px',

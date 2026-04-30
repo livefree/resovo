@@ -27,7 +27,7 @@ const SPINNER_STYLE: React.CSSProperties = {
   width: '28px',
   height: '28px',
   border: '3px solid var(--border-subtle)',
-  borderTopColor: 'var(--accent-primary)',
+  borderTopColor: 'var(--accent-default)',
   borderRadius: '50%',
   animation: 'admin-ui-spin 0.7s linear infinite',
 }
@@ -48,7 +48,7 @@ function skeletonRowStyle(widthPct: number): React.CSSProperties {
   return {
     height: '14px',
     borderRadius: 'var(--radius-sm)',
-    background: 'var(--bg-surface-hover)',
+    background: 'var(--bg-surface-elevated)',
     width: `${widthPct}%`,
     animation: 'admin-ui-pulse 1.5s ease-in-out infinite',
   }

@@ -93,7 +93,7 @@ const CLOSE_BTN_STYLE: CSSProperties = {
   cursor: 'pointer',
   padding: 'var(--space-1) var(--space-2)',
   font: 'inherit',
-  fontSize: 'var(--font-size-md)',
+  fontSize: 'var(--font-size-base)',
   lineHeight: 1,
   flexShrink: 0,
 }

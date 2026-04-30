@@ -80,7 +80,7 @@ const PROGRESS_BAR_STYLE: CSSProperties = {
 const PROGRESS_FILL_STYLE: CSSProperties = {
   height: '100%',
   background: 'var(--accent-default)',
-  transition: 'width var(--motion-duration-md) var(--motion-easing-standard)',
+  transition: 'width var(--duration-base) var(--easing-ease-in-out)',
 }
 
 // fix(CHG-SN-2-10) UI/a11y 契约：indeterminate progressbar 视觉（progress=undefined 但 status='running' 时）

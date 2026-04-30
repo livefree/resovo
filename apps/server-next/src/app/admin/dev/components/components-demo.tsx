@@ -64,7 +64,7 @@ const COLUMNS: TableColumn<DemoRow>[] = [
     accessor: (r) => r.status,
     cell: (ctx) => {
       const v = ctx.value as string
-      const color = v === 'active' ? 'var(--state-success)' : v === 'draft' ? 'var(--fg-muted)' : 'var(--state-error)'
+      const color = v === 'active' ? 'var(--state-success-fg)' : v === 'draft' ? 'var(--fg-muted)' : 'var(--state-error-fg)'
       return <span style={{ color, fontWeight: 500 }}>{v === 'active' ? '已上线' : v === 'draft' ? '草稿' : '已归档'}</span>
     },
   },
@@ -321,7 +321,7 @@ function StateDemo() {
             key={v}
             type="button"
             onClick={() => setVariant(v)}
-            style={{ padding: '5px 12px', border: `1px solid ${variant === v ? 'var(--accent-primary)' : 'var(--border-strong)'}`, borderRadius: 'var(--radius-sm)', background: variant === v ? 'var(--accent-primary)' : 'var(--bg-surface)', cursor: 'pointer', fontSize: 12, color: variant === v ? 'var(--fg-on-accent)' : 'var(--fg-default)' }}
+            style={{ padding: '5px 12px', border: `1px solid ${variant === v ? 'var(--accent-default)' : 'var(--border-strong)'}`, borderRadius: 'var(--radius-sm)', background: variant === v ? 'var(--accent-default)' : 'var(--bg-surface)', cursor: 'pointer', fontSize: 12, color: variant === v ? 'var(--fg-on-accent)' : 'var(--fg-default)' }}
           >
             {v}
           </button>

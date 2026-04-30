@@ -243,9 +243,9 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
       gridTemplateColumns: gridTemplate,
       height: rowHeight,
       background: isSelected
-        ? 'var(--accent-subtle)'
+        ? 'var(--admin-accent-soft)'
         : isHovered
-          ? 'var(--bg-subtle)'
+          ? 'var(--bg-surface-elevated)'
           : 'transparent',
       cursor: onRowClick ? 'pointer' : 'default',
       transition: 'background 80ms',

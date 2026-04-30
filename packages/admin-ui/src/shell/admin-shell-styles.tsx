@@ -79,6 +79,21 @@ const SHELL_CSS = `
 [data-menu-item][data-menu-item-danger="true"]:hover {
   background: var(--admin-danger-soft);
 }
+
+/* ── Pulse keyframe — 实时状态指示器（design spec tokens.css .pulse） ── */
+/* 消费：通知红点 / 后台任务运行 dot / 采集站点健康度 dot 等 */
+@keyframes admin-shell-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: .5; transform: scale(.85); }
+}
+[data-pulse],
+.pulse {
+  animation: admin-shell-pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-pulse],
+  .pulse { animation: none; }
+}
 ` as const
 
 export function AdminShellStyles() {

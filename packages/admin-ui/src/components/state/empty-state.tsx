@@ -50,7 +50,7 @@ const ACTION_STYLE: React.CSSProperties = {
   padding: '7px 16px',
   fontSize: '13px',
   fontWeight: 500,
-  background: 'var(--accent-primary)',
+  background: 'var(--accent-default)',
   color: 'var(--fg-on-accent)',
   border: 0,
   borderRadius: 'var(--radius-sm)',
