@@ -166,17 +166,36 @@ export interface KpiCardProps {
   readonly onClick?: () => void
 
   /**
-   * 数据来源标记（mock | live | 不传）
+   * 数据来源标记（'mock' | 'live' | 不传）
    *
-   * - 不传 / undefined：默认（live 数据，正常渲染）
-   * - `'mock'`：节点带 `data-source="mock"`，便于 regression gate 识别 fallback 字段
-   *   （用于 reference §5.1.4 教训：API 字段缺失时不渲染破折号，必须 fallback mock 并显式标记）
+   * 三种状态的 DOM attribute 行为（实装可证一致；7B 单测覆盖）：
+   * - 不传 / undefined → KpiCard 根节点**不渲染** `data-source` attribute（语义"未声明"）
+   * - `'mock'` → KpiCard 根节点渲染 `data-source="mock"`
+   * - `'live'` → KpiCard 根节点渲染 `data-source="live"`
    *
-   * 视觉上 mock 标记**不**改变渲染；仅作为 e2e / unit 断言钩子和未来 INFRA-VISUAL-DIFF-CI 的语义信号。
+   * 注意：**显式 `'live'` 与不传不等价**（前者带 attribute、后者无 attribute）。消费方语义选择：
+   * - "缺省 / 来源未知"场景 → 不传 prop（多数业务卡）
+   * - "mock fallback"场景 → 传 `'mock'`（reference §5.1.4 教训：API 字段缺失时 fallback
+   *   mock 并显式标记，不渲染破折号 `'—'`）
+   * - "明确声明 live 数据"场景 → 传 `'live'`（用于多源混合卡需要区分时；Dashboard 4 张
+   *   KPI 复用 ModerationStats 真字段时建议显式标 'live' 便于后续 INFRA-VISUAL-DIFF-CI
+   *   按数据来源差异化截图基线）
+   *
+   * 视觉上三种状态**渲染完全相同**（attribute 不影响 CSS 选择器以外的视觉）；attribute 仅作为
+   * e2e / unit / visual-diff CI 断言钩子的语义信号。
    */
   readonly dataSource?: 'mock' | 'live'
 
-  /** a11y aria-label（可选；省略时由 label + value 组合） */
+  /**
+   * a11y aria-label（可选；省略时按 value 类型派生）
+   *
+   * 派生策略（实装可证一致；SSR 安全）：
+   * - 显式传 `ariaLabel` → 直接使用
+   * - 省略 + value 是 `string` 或 `number` → 派生 `${label}: ${value}`（如 "视频总量: 695"）
+   * - 省略 + value 是非 string/number ReactNode（如 `<span>484 / 23</span>`）→ 仅使用 `label`
+   *   并在 dev 环境 `console.warn` 提示消费方应显式传 ariaLabel（SSR 不可靠地从 ReactNode 树
+   *   提取 textContent，强制 string/number 派生）
+   */
   readonly ariaLabel?: string
 
   /** 测试钩子 */
