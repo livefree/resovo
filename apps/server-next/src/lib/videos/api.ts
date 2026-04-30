@@ -111,7 +111,16 @@ export interface ModerationStats {
   readonly pendingCount: number
   /** 今日已审视频数（approved + rejected，reviewed_at 在今日） */
   readonly todayReviewedCount: number
-  /** 最近 7 天拦截率：rejected / (approved + rejected)；无审核数据时为 null */
+  /**
+   * 最近 7 天拦截率（**百分数 0-100**，保留 1 位小数；无审核数据时为 null）
+   *
+   * 后端公式（apps/api/src/db/queries/videos.ts:1157）：
+   *   `Math.round((rejected / total7d) * 1000) / 10`
+   * 即 ratio × 100 后保留 1 位小数。例如 rejected=12, total7d=100 → 12.0（表示 12.0%）。
+   *
+   * **消费方使用约定**：直接拼接 "%"，**不要再乘以 100**（典型坑：CHG-DESIGN-07 7C 曾误乘
+   * 100 致显示 1230.0% 假数据，Codex stop-time review fix#1 闭环）。
+   */
   readonly interceptRate: number | null
 }
 

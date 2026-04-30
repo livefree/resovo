@@ -248,8 +248,10 @@ export function buildDashboardStats(moderationStats: ModerationStats | null): Da
   ]
 
   // page head 副标题：live 字段时显示真数据，否则 mock 文案
+  // 注：interceptRate 后端已是百分数（0-100，保留 1 位小数；详见 ModerationStats 类型 jsdoc），
+  // 直接拼 % 即可；**不要再乘以 100**（曾因误乘致 1230.0% 假数据，Codex 命中后修正）
   const headSub = todayReviewed !== null
-    ? `今日已审 ${todayReviewed} 条${interceptRate !== null ? ` · 拦截率 ${(interceptRate * 100).toFixed(1)}%` : ''}`
+    ? `今日已审 ${todayReviewed} 条${interceptRate !== null ? ` · 拦截率 ${interceptRate.toFixed(1)}%` : ''}`
     : '最近采集 2 分钟前 · 484 条待审堆积'
 
   return {
