@@ -43,8 +43,9 @@ describe('buildDashboardStats — full live 路径', () => {
   })
 
   // ⚠️ Codex stop-time review fix#2 命中根因：
-  // 后端 interceptRate 字段已是百分数（0-100，apps/api/src/db/queries/videos.ts:1157
-  // `Math.round((rejected/total7d) * 1000) / 10`），消费方直接拼 % 即可；不可再 ×100。
+  // 后端 interceptRate 字段已是百分数（0-100），生产方 `getModerationStats()`
+  // 内公式 `Math.round((rejected/total7d) * 1000) / 10`；消费方直接拼 % 即可；不可再 ×100。
+  // 详见 `apps/server-next/src/lib/videos/api.ts` `ModerationStats.interceptRate` jsdoc。
   it('headSub 拦截率显示百分数（不再 ×100）：interceptRate=12.3 → "拦截率 12.3%"', () => {
     const r = buildDashboardStats(stats)
     expect(r.headSub).toContain('拦截率 12.3%')

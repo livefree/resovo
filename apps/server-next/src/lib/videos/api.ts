@@ -99,8 +99,8 @@ export async function refetchSources(id: string, siteKeys?: string[]): Promise<v
 
 // ── 审核统计（dashboard 用；CHG-DESIGN-07 7C 步骤 1）───────────────────────────────────────
 //
-// 后端真实契约：apps/api/src/db/queries/videos.ts:1120-1125
-//   { pendingCount: number; todayReviewedCount: number; interceptRate: number | null }
+// 后端真实契约（生产方真源）：`apps/api/src/db/queries/videos.ts` 中的
+// `ModerationStats` 接口 + `getModerationStats()` 函数；本文件镜像该类型供 server-next 消费方使用。
 //
 // 历史 BUG（CHG-SN-3-08 假绿根因）：本文件曾用 { pendingReview / published / rejected / total }
 // 4 个错误字段；TS 编译通过但 runtime 全 undefined → DashboardClient 渲染 '—'，正是
@@ -114,12 +114,14 @@ export interface ModerationStats {
   /**
    * 最近 7 天拦截率（**百分数 0-100**，保留 1 位小数；无审核数据时为 null）
    *
-   * 后端公式（apps/api/src/db/queries/videos.ts:1157）：
+   * 后端公式（生产方 `getModerationStats()` 内）：
    *   `Math.round((rejected / total7d) * 1000) / 10`
    * 即 ratio × 100 后保留 1 位小数。例如 rejected=12, total7d=100 → 12.0（表示 12.0%）。
    *
    * **消费方使用约定**：直接拼接 "%"，**不要再乘以 100**（典型坑：CHG-DESIGN-07 7C 曾误乘
    * 100 致显示 1230.0% 假数据，Codex stop-time review fix#1 闭环）。
+   *
+   * 详见生产方 jsdoc：`apps/api/src/db/queries/videos.ts` 中 `ModerationStats.interceptRate`。
    */
   readonly interceptRate: number | null
 }
