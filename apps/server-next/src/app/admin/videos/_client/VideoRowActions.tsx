@@ -156,6 +156,7 @@ export function VideoRowActions({ row, isAdmin, onRowUpdate, onEditRequest }: Vi
           data-testid="row-actions-trigger"
           aria-label={`${row.title} 行操作`}
           style={TRIGGER_STYLE}
+          onClick={() => setOpen((o) => !o)}
         >
           ⋯
         </button>
