@@ -1,11 +1,11 @@
 /**
  * data-table types — DataTable v2 + useTableQuery 公开 API 类型
  * 真源：ADR-103 §4.1 + §4.2（CHG-SN-2-13）
- *       reference.md §4.4（CHG-DESIGN-02）— 扩展 framed table 系统
+ *       reference.md §4.4（CHG-DESIGN-02）— 扩展 framed table 系统（按 step 增量交付）
  */
 import type { ReactNode } from 'react'
 
-// ── DataTable v2（§4.1 + reference.md §4.4 扩展）────────────────────────────────
+// ── DataTable v2（§4.1）────────────────────────────────────────────
 
 export interface DataTableProps<T> {
   readonly rows: readonly T[]
@@ -24,84 +24,7 @@ export interface DataTableProps<T> {
   readonly onRowClick?: (row: T, index: number) => void
   readonly density?: 'comfortable' | 'compact'
   readonly 'data-testid'?: string
-
-  // ── CHG-DESIGN-02 扩展（reference.md §4.4 / arch-reviewer 决议）─────
-  // props 数量预算：现 15 + 新 4 = 19 个，处于 ≤ 20 阈值（reference.md §0-7）
-
-  /**
-   * Toolbar 内置配置（search / trailing / viewsConfig）。
-   * 默认渲染 framed surface 内嵌 toolbar；hidden=true 不渲染（嵌入式场景）。
-   */
-  readonly toolbar?: ToolbarConfig
-
-  /**
-   * 启用表头集成菜单 popover（升降序 / 过滤入口 / 固定到左 / 隐藏列）。
-   * 与外置 ColumnSettingsPanel 暂时共存；CHG-DESIGN-XX 决议下线独立列设置入口。
-   */
-  readonly enableHeaderMenu?: boolean
-
-  /**
-   * 行 flash 动画触发集合（乐观更新场景）。
-   * 时序所有权在消费方：DataTable 仅按当前 prop 渲染 `is-flash` className，
-   * 1.5s 动画结束后是否清空 Set 由消费方自行决定（避免业务 timer 泄漏到组件内）。
-   * 命名：rowKey 派生自 rowKey() 函数，不一定是 id（与 selectedKeys 命名对齐）。
-   */
-  readonly flashRowKeys?: ReadonlySet<string>
-
-  /**
-   * 表内 sticky bottom bulk action bar 内容。
-   * 取代外置 SelectionActionBar 浮条（消费方需把 SelectionActionBar 切到
-   * placement="table-inline" 或自渲染）。设计稿 .dt__bulk 视觉对应。
-   */
-  readonly bulkActions?: ReactNode
 }
-
-// ── Toolbar / Views（CHG-DESIGN-02）─────────────────────────────────
-
-export interface ToolbarConfig {
-  /** 280px 内置搜索框（消费方传完整 input 元素，DataTable 不持有 search state） */
-  readonly search?: ReactNode
-  /** 工具栏右侧自定义节点（refresh / export / 新建按钮等） */
-  readonly trailing?: ReactNode
-  /** Saved views（个人/团队作用域）配置；缺省时不渲染 views 切换器 */
-  readonly viewsConfig?: ViewsConfig
-  /** 不渲染 toolbar 容器（外置 toolbar 仍可用；嵌入式场景） */
-  readonly hidden?: boolean
-}
-
-export interface ViewsConfig {
-  readonly items: readonly TableView[]
-  readonly activeId?: string
-  readonly onChange?: (id: string | null) => void
-  /**
-   * 保存当前 query 为新视图。返回 Promise 时 UI 可显示 loading。
-   * personal scope 由 useTableQuery 内部走 storage-sync schema 持久化；
-   * team scope 调用方负责后端 API（CHG-DESIGN-02 第 6 步留 stub callback）。
-   */
-  readonly onSave?: (scope: ViewScope, label: string) => void | Promise<void>
-}
-
-export type ViewScope = 'personal' | 'team'
-
-export interface TableView {
-  readonly id: string
-  readonly label: string
-  readonly scope: ViewScope
-  /**
-   * 视图持久化的 query 状态（不含 selection — 视图与选区无关，
-   * apply 时显式补默认空 selection）。
-   */
-  readonly query: PersistedQuery
-  readonly createdAt: string  // ISO
-  readonly updatedAt: string  // ISO
-  readonly createdBy?: string  // team scope 必填；personal scope 可选
-}
-
-/**
- * 视图持久化用的 snapshot 子集（剔除 selection）。
- * 与 TableQuerySnapshot 同源，但用 Omit 形式表达 selection 不在持久化范围。
- */
-export type PersistedQuery = Omit<TableQuerySnapshot, 'selection'>
 
 export interface TableColumn<T> {
   readonly id: string
@@ -114,17 +37,7 @@ export interface TableColumn<T> {
   readonly cell?: (ctx: TableCellContext<T>) => ReactNode
   readonly columnMenu?: ColumnMenuConfig
   readonly defaultVisible?: boolean
-  /**
-   * 始终可见（不受隐藏列规则影响）。语义：保持显示而非视觉固定。
-   * 与 stickyLeft 互不替代——pinned 控制可见性，stickyLeft 控制 layout。
-   */
   readonly pinned?: boolean
-  /**
-   * CSS sticky 定位到表格左侧。多列同时启用时，按声明顺序累加 left offset，
-   * 由 DataTable 内部计算并注入 inline style。配合 framed surface 工作。
-   * （CHG-DESIGN-02 / reference.md §4.4 列固定）
-   */
-  readonly stickyLeft?: boolean
   readonly overflowVisible?: boolean
 }
 
@@ -163,7 +76,6 @@ export interface ColumnDescriptor {
   readonly header: ReactNode
   readonly defaultVisible?: boolean
   readonly pinned?: boolean
-  readonly stickyLeft?: boolean
   readonly enableSorting?: boolean
 }
 
