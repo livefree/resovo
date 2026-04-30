@@ -189,10 +189,17 @@ export function HeaderMenu({
   const isVisible = stored !== undefined ? stored.visible : column.defaultVisible !== false
   const hideable = !isPinned && isVisible && columnMenu?.canHide !== false
 
-  // 过滤门控：filterContent 提供 OR 当前已过滤（isFiltered=true）→ 显示过滤区块
+  // 过滤门控：filterContent 必须是可渲染节点（排除 ReactNode 中"渲染为空"的合法值
+  //   undefined / null / boolean / 空字符串 — 否则空"过滤"标签 + 空白区块）
+  // OR 当前已过滤（isFiltered=true 单独显示"已过滤"标记也有意义）
   const filterContent = columnMenu?.filterContent
+  const hasRenderableFilter =
+    filterContent !== undefined
+    && filterContent !== null
+    && typeof filterContent !== 'boolean'
+    && filterContent !== ''
   const isFiltered = columnMenu?.isFiltered === true
-  const showFilterSection = filterContent !== undefined || isFiltered
+  const showFilterSection = hasRenderableFilter || isFiltered
   const canClearFilter = isFiltered && columnMenu?.onClearFilter !== undefined
 
   // 分隔线条件
@@ -255,7 +262,7 @@ export function HeaderMenu({
                 >已过滤</span>
               )}
             </div>
-            {filterContent}
+            {hasRenderableFilter && filterContent}
             {canClearFilter && (
               <button
                 type="button"

@@ -310,6 +310,66 @@ describe('DataTable — HeaderMenu 遵守 ColumnMenuConfig 门控', () => {
     expect(document.querySelector('[data-header-menu]')).toBeNull()
   })
 
+  it.each([
+    ['null', null],
+    ['false', false],
+    ['true', true],
+    ['空字符串', ''],
+  ])('filterContent=%s 且 isFiltered 未设 → 不渲染过滤区块（避免空标签 broken menu）', (_label, value) => {
+    const cols: TableColumn<Row>[] = [
+      {
+        id: 'name',
+        header: 'Name',
+        accessor: (r) => r.name,
+        enableSorting: true,
+        // ReactNode 合法值，但渲染为空；不应触发过滤区块
+        columnMenu: { filterContent: value as React.ReactNode },
+      },
+    ]
+    render(
+      <DataTable<Row>
+        rows={ROWS}
+        columns={cols}
+        rowKey={(r) => r.id}
+        mode="client"
+        query={makeSnapshot({ columns: new Map([['name', { visible: true }]]) })}
+        onQueryChange={() => {}}
+        enableHeaderMenu
+      />,
+    )
+    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    expect(document.querySelector('[data-header-menu]')).toBeTruthy()
+    // 过滤标签不存在（"过滤"作为 section label 仅在 section 可见时出现）
+    expect(screen.queryByText('过滤')).toBeNull()
+  })
+
+  it('filterContent=null + isFiltered=true → 仍渲染过滤区块（仅显示"已过滤"标记）', () => {
+    const cols: TableColumn<Row>[] = [
+      {
+        id: 'name',
+        header: 'Name',
+        accessor: (r) => r.name,
+        enableSorting: true,
+        columnMenu: { filterContent: null, isFiltered: true },
+      },
+    ]
+    render(
+      <DataTable<Row>
+        rows={ROWS}
+        columns={cols}
+        rowKey={(r) => r.id}
+        mode="client"
+        query={makeSnapshot({ columns: new Map([['name', { visible: true }]]) })}
+        onQueryChange={() => {}}
+        enableHeaderMenu
+      />,
+    )
+    fireEvent.click(screen.getByRole('columnheader', { name: /Name/ }))
+    // section 仍可见（isFiltered 触发）
+    expect(screen.getByText('过滤')).toBeTruthy()
+    expect(document.querySelector('[data-header-menu-filter-active]')).toBeTruthy()
+  })
+
   it('isFiltered=true 但 onClearFilter 未提供 → 不渲染"清除过滤"按钮', () => {
     const cols: TableColumn<Row>[] = [
       {
