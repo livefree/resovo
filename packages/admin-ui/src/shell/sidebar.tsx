@@ -109,12 +109,19 @@ const BRAND_TITLE_STYLE: CSSProperties = {
   minWidth: 0,
 }
 
-/* 折叠态结构重置：放 inline，确保 Sidebar 独立使用（不通过 AdminShell）也正确收 0 占位
- * 仅处理 layout（width/padding/border/margin/flex/overflow）和 a11y（pointer-events）；
+/* 折叠态结构重置：放 inline，确保 Sidebar 独立使用（不通过 AdminShell）也正确收 0 占位。
+ * 仅处理 layout（width/padding/border/margin/overflow）和 a11y（pointer-events）；
  * 视觉 fade（opacity / max-width / padding / gap transition）由 admin-shell-styles
  * 在合成场景注入，standalone 时 snap。
- * 关键：max-width 用数值 0 而非 none，配合 expanded 态显式 maxWidth: '100%'，
- * 让 transition 可从 100% 平滑插值到 0（CHG-DESIGN-04 fix#6） */
+ *
+ * 关键约束（CHG-DESIGN-04 fix#7 / 解决 collapse flex snap）：
+ *   - max-width 用数值 0 而非 none，配合 expanded 态显式 maxWidth: '100%'，
+ *     让 transition 可从 100% 平滑插值到 0
+ *   - **不重置 flex** —— flex shorthand 切换 (`flex: 1` → `flex: 0 0 auto`) 会让
+ *     flex-grow 瞬时由 1 跳 0，label/title 立即停止填 slack，justify-content:center
+ *     立即生效，icon 在 button 还未收缩时跳到中心（flex snap）。
+ *     正确做法：折叠态保留各元素 expanded 时的 flex 值（label 仍 flex:1 / badge 仍
+ *     flex-shrink:0），让 max-width 的数值动画驱动 layout 平滑收缩。 */
 const COLLAPSED_HIDDEN_STYLE: CSSProperties = {
   opacity: 0,
   pointerEvents: 'none',
@@ -124,7 +131,6 @@ const COLLAPSED_HIDDEN_STYLE: CSSProperties = {
   margin: 0,
   border: 0,
   overflow: 'hidden',
-  flex: '0 0 auto',
 }
 
 /* section-title 仅收 opacity，保留 padding/height 做等高占位（图标 Y 坐标稳定） */
@@ -375,12 +381,12 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate }: NavItemP
           />
         )}
       </span>
-      {/* CHG-DESIGN-04 fix#6：label + badge 永远渲染；展开态显式 maxWidth: '100%'
-        * 让 transition 可从 100% 平滑插值到 0（避免 max-width:none → 0 的非动画 snap） */}
+      {/* CHG-DESIGN-04 fix#7：label flex:1 / badge flex-shrink:0 在两态保持一致，
+        * 仅 max-width / padding / opacity 走数值动画；避免 flex shorthand 切换的 snap */}
       <span
         data-sidebar-item-label
         style={collapsed
-          ? { ...COLLAPSED_HIDDEN_STYLE, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+          ? { ...COLLAPSED_HIDDEN_STYLE, flex: 1, whiteSpace: 'nowrap', textOverflow: 'ellipsis' }
           : { flex: 1, minWidth: 0, maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
       >
         {item.label}
@@ -391,6 +397,7 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate }: NavItemP
           style={collapsed
             ? {
                 ...COLLAPSED_HIDDEN_STYLE,
+                flexShrink: 0,
                 borderRadius: 'var(--radius-full)',
                 fontSize: 'var(--admin-count-font-size)',
                 background: badgeBg(badgeSlot),
@@ -468,7 +475,7 @@ function Footer({ user, collapsed, userActions }: FooterProps) {
         <span
           data-sidebar-foot-meta
           style={collapsed
-            ? { ...COLLAPSED_HIDDEN_STYLE, display: 'flex', flexDirection: 'column' }
+            ? { ...COLLAPSED_HIDDEN_STYLE, flex: 1, display: 'flex', flexDirection: 'column' }
             : { flex: 1, minWidth: 0, maxWidth: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         >
           <span data-sidebar-foot-name style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -482,7 +489,7 @@ function Footer({ user, collapsed, userActions }: FooterProps) {
           aria-hidden="true"
           data-sidebar-foot-chevron
           style={collapsed
-            ? { ...COLLAPSED_HIDDEN_STYLE, color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)' }
+            ? { ...COLLAPSED_HIDDEN_STYLE, flexShrink: 0, color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)' }
             : { color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)', flexShrink: 0, maxWidth: '100%' }}
         >›</span>
       </button>
