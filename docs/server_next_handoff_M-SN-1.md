@@ -1,13 +1,18 @@
 # server-next M-SN-1 Handoff（工程骨架 + Token 三层 + Provider）
 
-> status: active
+> status: archived（M-SN-1 已结案；M-SN-2/3 已推进到 SEQ-20260428-03 / SEQ-20260429-01）
 > owner: @engineering
-> scope: M-SN-1 milestone closure handoff（plan §10.8 SHOULD-4-d 要求）
-> source_of_truth: yes
+> scope: M-SN-1 milestone closure handoff（历史交付物，非当前 source_of_truth）
+> source_of_truth: no（M-SN-2 启动 checklist 已过期；当前真源以 task-queue.md 序列为准）
 > milestone: M-SN-1（2026-04-28）
 > milestone_grade: **B**（arch-reviewer Opus 阶段审计；达成率 90%）
-> next_milestone: M-SN-2（packages/admin-ui v1 业务原语）
-> last_reviewed: 2026-04-28
+> next_milestone: M-SN-2（packages/admin-ui v1 业务原语，已结案）/ M-SN-3（视频库标杆，已结案）/ SEQ-20260429-02（设计稿对齐改造，进行中）
+> last_reviewed: 2026-04-30
+>
+> **2026-04-30 修订（CHG-DESIGN-11）**：本文件作为 M-SN-1 阶段交接产物，状态降级为
+> archived。M-SN-2 启动 checklist 已过期（task-queue / ADR-103 / 第一卡均已完成）；
+> 后续执行者请以 `docs/task-queue.md` SEQ 序列与 `docs/designs/backend_design_v2.1/reference.md`
+> 为当前真源，本 handoff 仅作为 M-SN-1 阶段历史回溯。
 
 ---
 

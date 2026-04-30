@@ -32,14 +32,19 @@ Resovo 采用同域多进程独立部署：
 
 ---
 
-## 1a. 部署拓扑（Monorepo 三进程）
+## 1a. 部署拓扑（Monorepo 多进程；server-next 时代）
+
+> **2026-04-30 修订（CHG-DESIGN-11）**：原拓扑只描述 :3001 旧后台。当前实际有 3 阶段：
+> 开发期 / staging 演练 / 生产 cutover。详见下方分阶段拓扑。
+
+### 1a.1 当前生产（M-SN-7 cutover 之前）
 
 ```
                     ┌─────────────────────────────────────────┐
                     │           Nginx 反向代理（:80）           │
                     │                                         │
                     │  /v1/*    ──→  api:4000   (Fastify)     │
-                    │  /admin/* ──→  server:3001 (Next.js)    │
+                    │  /admin/* ──→  server:3001 (Next.js v1) │
                     │  /*       ──→  web:3000   (Next.js)     │
                     └─────────────────────────────────────────┘
                            │              │              │
@@ -57,12 +62,44 @@ Resovo 采用同域多进程独立部署：
                     └────────────────────────────────────┘
 ```
 
+### 1a.2 开发期（M-SN-2 ~ 当前）
+
+server-next（`apps/server-next`）在本地以独立进程 `:3003` 运行，**不**进入 nginx 转发：
+
+```
+本地开发：
+  /admin/*   ──→  server:3001       （v1 后台，仍是开发期入口）
+  /admin-next 或访问 :3003 直连  ──→  server-next:3003   （重写后台，独立验证）
+```
+
+server-next 不复用 apps/server 的 `/admin/*` 路由空间——开发者通过直连 `:3003` 验证新后台；
+任何 server-next 任务卡的 e2e 测试在 :3003 独立运行（详见 playwright.config.ts admin-next-chromium project）。
+
+### 1a.3 Staging 演练（CHG-SN-3-12，已暂停 → SEQ-20260429-02 收敛后恢复）
+
+在 staging 环境通过 nginx 临时把 `/admin/*` 的 upstream 切到 `:3003`，验证 cookie 透明传递、
+切换零 session 丢失、回滚无损。**不**采用 ADR-035 风格的 ALLOWLIST / 逐页 rewrite。
+
+### 1a.4 生产 cutover（M-SN-7）
+
+一次性 nginx upstream 切换：
+
+```
+                    │  /admin/* ──→  server-next:3003 (Next.js v2，新后台)
+```
+
+切换后 apps/server 停服并退场（详见 ADR-101）。
+
+---
+
 **同域 Cookie 传递**：`refresh_token` 由 API（`/v1/auth/`）设置，`Path=/`，`HttpOnly`，`SameSite=Lax`。
-三个进程共享同一域名，浏览器在所有请求中自动携带该 Cookie，无需额外配置。
+开发期 / cutover 后所有进程共享同一域名，浏览器自动携带该 Cookie。staging 演练验收 cookie
+跨服务（server ↔ server-next）切换时透明。
 
 **静态资源路由**：
-- `server` 应用在生产环境设置 `assetPrefix=/admin`（`NEXT_PUBLIC_ASSET_PREFIX` 环境变量）。
-- 浏览器请求 `/admin/_next/...` → nginx 剥除 `/admin` 前缀 → 转发给 `server:3001/_next/...`。
+- `server`（v1）在生产环境设置 `assetPrefix=/admin`（`NEXT_PUBLIC_ASSET_PREFIX` 环境变量）。
+- `server-next`（v2，cutover 后）继承同一 `assetPrefix=/admin`，nginx 剥除 `/admin` 前缀转发到 `:3003/_next/...`。
+- 浏览器请求 `/admin/_next/...` → nginx 剥除前缀 → server / server-next（视 cutover 状态）。
 - `web` 应用的 `/_next/...` 直接路由到 `web:3000`，互不干扰。
 
 **Monorepo 结构**：
@@ -165,22 +202,42 @@ resovo/
 
 ### 3.2 登录与后台入口
 
-- 后台登录：`/admin/login`（`apps/server` 独立进程，无 `[locale]` 前缀）
+> **2026-04-30 修订（CHG-DESIGN-11）**：登录入口分两套，cutover 状态决定生效路径。
+
+- **apps/server v1（开发期 / cutover 前生产）**：`/admin/login`（独立进程 :3001，无 `[locale]` 前缀）
+- **apps/server-next v2（M-SN-2+，cutover 后生产）**：`/login`（独立路由，**不进入** AdminShell；登录后跳转 `/admin`）
 - 前台登录/注册路由仍存在文件，但已下线为 `notFound()`：
   - `/[locale]/auth/login`
   - `/[locale]/auth/register`
 
-### 3.3 后台路由（`apps/server`，进程 server:3001）
+### 3.3 后台路由
+
+#### 3.3.1 apps/server v1（进程 server:3001，cutover 前生产 / 当前开发期）
 
 - `/admin`（首页）
 - `/admin/{videos,sources,users,content,submissions,subtitles,crawler,analytics,moderation}`
 - `/admin/403`
 
 中间件约束（`apps/server/middleware.ts`）：
-
 - `/admin/**`（除 `/admin/login`、`/admin/403`）要求存在 `refresh_token`。
 - `user_role=user` 拒绝进入后台。
 - moderator 不能访问 admin-only（`/admin/users`、`/admin/crawler`、`/admin/analytics`）。
+
+#### 3.3.2 apps/server-next v2（进程 server-next:3003，开发期独立 / cutover 后生产）
+
+> 当前真源：IA v1（21 主路由 + 5 system 子 + 1 login = 27 路由占位，详见 ADR-100 + plan §4.1）
+> 与 v1 路由命名有差异，详见 `docs/server_next_plan_20260427.md` §4.1（IA 修订段）。
+
+- `/admin`（dashboard）+ `/admin/moderation`（运营中心）
+- `/admin/{videos,sources,merge,subtitles,image-health}`（内容资产）
+- `/admin/{home,submissions}`（首页运营）
+- `/admin/crawler` + `/admin/staging`（采集中心）
+- `/admin/{users,settings,audit}` + 5 个 system 子（系统管理；CHG-DESIGN-06 规划收敛回单入口）
+- `/login`（登录，不进 Shell）
+- `/admin/403`（鉴权拒绝）
+
+中间件约束（`apps/server-next/src/middleware.ts`）：双因素拦截 + 品牌识别 cookie → header（ADR-039 沿用）；
+角色矩阵与 v1 一致（cutover 后行为透明）。
 
 ### 3.4 前台中间件（`apps/web-next/src/middleware.ts`）
 

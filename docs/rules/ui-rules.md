@@ -11,11 +11,21 @@
 > 本文件由原"前端组件规范"升级而来，适用范围扩展至前台与后台。
 > 升级依据：`docs/ui_governance_conflicts_20260327.md` §4.2 及 §5
 >
-> 前台布局、页面模板、shelf、token 分层与响应式约束以 `docs/frontend_design_spec_20260423.md` 为准。
+> 前台布局、页面模板、shelf、token 分层与响应式约束以 `docs/frontend_design_spec_20260423.md`（已归档至 `docs/archive/m0-m6/`）为参考；当前前台 web-next 时代真源以 `apps/web-next` 为准。
+>
+> **2026-04-30 修订（CHG-DESIGN-11）**：适用范围扩到 server-next + admin-ui 时代。
 
-
-> 适用范围：`apps/web/src/components/`、`apps/web/src/app/`（前台）；`apps/server/src/components/`、`apps/server/src/app/`（后台）
-> AI 在编写任何前端组件前必须读取本文件
+> **适用范围**（2026-04-30 修订）：
+> - 前台 v1（历史）：`apps/web/src/components/`、`apps/web/src/app/`
+> - 前台 web-next（当前）：`apps/web-next/src/components/`、`apps/web-next/src/app/`
+> - 后台 v1（历史，cutover 前生产）：`apps/server/src/components/`、`apps/server/src/app/`
+> - **后台 server-next（当前重写主体）**：`apps/server-next/src/`（消费 `packages/admin-ui` 共享层 + `packages/design-tokens` token）
+>
+> AI 在编写任何前端组件前必须读取本文件。
+>
+> **后台 token 来源切换**：server-next 时代后台 CSS 变量来自 `packages/design-tokens`（admin-layout / semantic / primitives 三层 + brand 覆盖；详见 ADR-102），**不再**使用 `apps/server/src/app/globals.css`（v1 后台旧 token）。
+>
+> **后台共享组件**：server-next 任何新建后台 shared 组件先确认 `packages/admin-ui/src/components/` 与 `packages/admin-ui/src/shell/` 无等价实现；**不再**新增 `apps/server/src/components/admin/shared/` 内容（v1 已冻结）。新增共享组件直接落 `packages/admin-ui`（reference.md §4 通用组件 + §10 业务复合组件清单）。
 
 ---
 

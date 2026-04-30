@@ -189,21 +189,36 @@ packages/design-tokens/src/
 
 #### 范围
 
+> **2026-04-30 修订（CHG-DESIGN-11 / SEQ-20260429-02）**：
+> 本表中"DataTable v2 / Toolbar / Pagination / SelectionActionBar / ColumnSettings"
+> 在 M-SN-2 时代设计为**分离原语 + 消费方编排**。当前真源 `docs/designs/backend_design_v2.1/reference.md`
+> §4.4 + §6.0 已裁定 **DataTable 一体化**：toolbar / search / filter chips /
+> 表头集成菜单 / saved views / bulk action bar / pagination 全部进入 DataTable
+> 内置 props（CHG-DESIGN-02 落地）。**标准列表页必须通过 DataTable 内置 toolbar / body /
+> bulk / foot 编排**，外置组合（Toolbar / Pagination / SelectionActionBar 单独使用）
+> 仅作为非常规嵌入式场景的兜底，不作首选。原语本身仍可独立 export 但不强求复用。
+>
+> 同样 2026-04-30 修订：原 "Icon set 复用 web-next 已有图标库" 与 "BrandProvider /
+> ThemeProvider 直接复用 web-next 的 contexts" 句子已被 ADR-103a/103b + verify-server-next-isolation
+> 守卫推翻 —— admin-ui 必须**零图标库依赖**（消费方注入图标），server-next **禁止 import
+> apps/web-next 内部代码**。Brand/Theme **复用接口形态而非 import 实例**，server-next 持有
+> 独立 BrandProvider/ThemeProvider 物理副本（CHG-SN-1-04 已落地）。
+
 | 原语 | 必须下沉？ | 出现时机 |
 |---|---|---|
-| DataTable v2（带 useTableQuery） | ✅ 必须 | M-SN-2 |
-| Toolbar / Filter / Sort / ColumnSettings | ✅ 必须 | M-SN-2 |
+| DataTable v2（一体化：含 toolbar / body / bulk / foot 内置编排，CHG-DESIGN-02 起） | ✅ 必须 | M-SN-2（基座）→ SEQ-20260429-02（一体化骨架） |
+| Toolbar / Filter / Sort / ColumnSettings | ✅ 必须（独立 export） | M-SN-2；首选用法是 DataTable.toolbar slot |
 | Drawer（视频编辑 Drawer 复用） | ✅ 必须 | M-SN-2 |
 | Modal / Dialog | ✅ 必须 | M-SN-2 |
 | Toast（全局 addToast API） | ✅ 必须 | M-SN-2 |
 | AdminDropdown | ✅ 必须 | M-SN-2 |
-| SelectionActionBar | ✅ 必须 | M-SN-2 |
-| Pagination v2（客户端 / 服务端两档） | ✅ 必须 | M-SN-2 |
+| SelectionActionBar | ✅ 必须（独立 export） | M-SN-2；首选用法是 DataTable.bulkActions slot（嵌入式 sticky-bottom） |
+| Pagination v2（客户端 / 服务端两档） | ✅ 必须（独立 export） | M-SN-2；首选用法是 DataTable 内置 .dt__foot |
 | Pagination v2 游标分页 + 虚拟滚动 | ✅ 必须 | **M-SN-6**（首次 >50k 数据时按需即建，A2 方案）|
 | Empty / Error / Loading 状态 | ✅ 必须 | M-SN-2 |
 | Form 控件（Input / Select / Switch / DateRange） | ⚠️ 评估 | 若 web-next 已有同形态可复用，admin-ui 仅做样式适配壳 |
-| Icon set | ⚠️ 评估 | 复用 web-next 已有图标库；admin 专属（如双信号 icon）补到 packages/admin-ui/icons |
-| BrandProvider / ThemeProvider | ⛔ 不下沉 | 直接复用 web-next 的 contexts |
+| Icon set | ⚠️ 零依赖 | admin-ui **零图标库依赖**（ADR-103b）；消费方按需注入；admin 专属（如双信号 icon）补到 packages/admin-ui/icons |
+| BrandProvider / ThemeProvider | 🟰 接口复用 | server-next 持有**独立物理副本**（CHG-SN-1-04），不 import apps/web-next 内部代码（ADR-103b + verify-server-next-isolation 守卫） |
 
 #### 自建业务组件下沉规则（SHOULD-5 修订）
 **首次跨 2 视图复用即强制下沉**到 packages/admin-ui。包括：状态原子指示器、决策卡、双信号双柱图、证据抽屉、视频分组表、全局别名表、首页运营位编辑器、拖拽排序、合并候选预览、拆分确认、采集 DAG、审计时间线。下沉时机记录于 §8 复用矩阵"下沉里程碑"列。
@@ -418,7 +433,7 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
     - `<CommandPalette>` ⌘K 命令面板（导航 + 快捷操作 + 搜索结果三组，键盘导航）
     - `<ToastViewport>` + `useToast()`（zustand 单例，非 Context；Provider 不下沉约束兼容）
     - `<HealthBadge>`（Topbar 健康三项指标）
-    - `<Breadcrumbs>`（接受 items 数组；AdminShell 内部 helper 可从 activeHref + nav 推断）
+    - `<Breadcrumbs>`（接受 items 数组；**消费方调用 `inferBreadcrumbs(activeHref, nav)` helper 后通过 `crumbs` prop 注入 AdminShell**——AdminShell 不在内部推断；2026-04-30 修订 / ADR-103a fix 已裁定）
     - `<KeyboardShortcuts>` + `IS_MAC` / `MOD_KEY_LABEL` / `formatShortcut()` 工具集
   - **B. 数据原语层（沿用 v1 计划）**：
     - DataTable v2（含 useTableQuery URL/sessionStorage 同步）
@@ -452,7 +467,7 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
 ### M-SN-3 · 标杆页：视频库 · **1 周**
 - **范围**：
   - `/admin/videos` 列表（DataTable v2 实战）
-  - `/admin/videos/[id]/edit`（视频编辑 Drawer 复用）
+  - 视频编辑 Drawer（复用，所有入口走 Drawer）—— **独立 `/admin/videos/[id]/edit` 全屏页移出 M-SN-3**：本里程碑只做 Drawer，独立全屏页推迟到 M-SN-4 范围；详见 `docs/task-queue.md` SEQ-20260429-01 关键约束「禁止在 CHG-SN-3-07 之前实装独立全屏页」（2026-04-30 修订 / 与 task-queue 对齐）
   - 状态三元组的"前台可见性原子指示器"（admin_audit 痛点 5 解决件）
   - CRUD + 上下架 + 批量 + 服务端排序/筛选/分页
   - e2e 黄金路径：登录 → 列表 → 编辑 → 保存 → 列表回归

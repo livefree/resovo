@@ -1,15 +1,25 @@
 # Resovo（流光） — 开发路线图
 
-> status: active
+> status: archived（历史 Phase 1/2 真源；已被 server-next 时代序列取代）
 > owner: @engineering
-> scope: product delivery phases and milestones
-> source_of_truth: yes
+> scope: product delivery phases and milestones（历史）
+> source_of_truth: no（不再作为当前里程碑真源）
 > supersedes: none
-> superseded_by: none
-> last_reviewed: 2026-03-27
+> superseded_by: SEQ-20260428-01 ~ SEQ-20260429-02（详见 `docs/task-queue.md`）
+> last_reviewed: 2026-04-30
 >
-> 本文件定义四个开发阶段的目标和功能模块边界。
-> 每个 Phase 完成时在对应里程碑处打勾，并在 changelog.md 记录。
+> **2026-04-30 修订（CHG-DESIGN-11）**：本文件作为 Phase 1/2 时代的产品路线图，
+> 内容停留在 2026-03 旧 MVP/Phase 2 清单（ADMIN-01~05 等）。当前 server-next 重开发
+> 由 task-queue.md 内的 SEQ-20260428-01（M-SN-1 工程骨架）/ SEQ-20260428-02（M-SN-2
+> Shell 范围补全）/ SEQ-20260428-03（M-SN-2 第一阶段）/ SEQ-20260429-01（M-SN-3 视频库）
+> / SEQ-20260429-02（设计稿对齐改造）承载，并以 `docs/designs/backend_design_v2.1/reference.md`
+> 为设计真源。
+>
+> 本文件保留为历史参考，**不再作为当前里程碑真源**。新执行者请直接读 task-queue.md
+> 与 reference.md。
+>
+> 本文件原定义四个开发阶段的目标和功能模块边界。每个 Phase 完成时在对应里程碑
+> 处打勾，并在 changelog.md 记录。
 
 ---
 

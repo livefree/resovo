@@ -72,7 +72,12 @@ module/
 
 ## 后台数据表格六项规范（硬约束）
 
-所有后台数据表格必须同时满足以下 6 项（每项均为硬约束，不允许部分完成却标记已完成）：
+> **2026-04-30 修订（CHG-DESIGN-11）**：本节六项规范的**适用范围限定为 apps/server v1**（已存在的 admin 模块）。
+> **apps/server-next（M-SN-2+）以 `packages/admin-ui` DataTable + `docs/designs/backend_design_v2.1/reference.md` §4.4 + `docs/task-queue.md` SEQ-20260429-02 为准**，**不再使用** ModernDataTable / PaginationV2 / 外置 SelectionActionBar 三件套，而是用 DataTable 一体化 props（`toolbar` / `bulkActions` / `flashRowKeys` / `pagination` 等内置 slot）。
+>
+> 即：本节规范仅约束 apps/server v1 时代的现存模块；server-next 新增模块禁止套用本节"v1 ModernDataTable"语义。
+
+所有 **apps/server v1** 后台数据表格必须同时满足以下 6 项（每项均为硬约束，不允许部分完成却标记已完成）：
 
 | # | 规范项 | 要求 | 禁止 |
 |---|--------|------|------|

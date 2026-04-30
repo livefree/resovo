@@ -2021,11 +2021,19 @@ landing_plan_v1 §HANDOFF-03 验收清单第 5 项要求"主视图 ⇄ 浮窗切
 ## ADR-100: server-next 立项 + IA v0 + 单语言 + 依赖白名单
 
 - **日期**：2026-04-28
-- **状态**：已采纳
+- **状态**：已采纳（2026-04-30 修订：路由切分语义见下方 amendment block）
 - **子代理**：arch-reviewer (claude-opus-4-6)
 - **编号说明**：plan v2 §9 原分配 ADR-046/047/048，落盘前核对 `docs/decisions.md` 发现 046–054 全部已被前期 ADR 占用。用户裁定 B 方案（跳号至 100+ 区段，避开历史冲突，并使 server-next 系列 ADR 编号连续可识别）。
 - **背景**：apps/server（旧后台）累积 9 大痛点（详见 `docs/admin_audit_20260426.md` §7），ModernDataTable 采纳率 58%，22 admin 模块/122 端点工程债务深；继续在 apps/server 内增量修复 ROI 低、风险高。Claude Design 已输出 v2.1 后台设计稿（IA 重排 + 16 视图 mock，详见 `docs/designs/backend_design_v2.1/`）。立项 apps/server-next 独立壳承接重写。
-- **决策**：立项 apps/server-next 作为 admin 重写主体，沿用 ADR-031（重写期代码共存）+ ADR-035（路由切分）+ ADR-037（里程碑对齐）模式；M-SN-7 cutover 后 apps/server 整体退场（详见 ADR-101）。
+- **决策**：立项 apps/server-next 作为 admin 重写主体，沿用 ADR-031（重写期代码共存）+ ADR-037（里程碑对齐）模式；M-SN-7 cutover 后 apps/server 整体退场（详见 ADR-101）。
+
+> **AMENDMENT 2026-04-30（CHG-DESIGN-11）**：
+> 原决策段落"沿用 ADR-035（路由切分）"语义已被 server_next_plan_20260427.md §4.2 + kickoff R2 修订：
+> - **开发期**：`/admin/*` 仍由 apps/server（:3001）承接；server-next 在 :3003 独立运行（hash route 或 /admin-next 占位入口，由开发自行选择）。**不**采用 ADR-035 风格的 ALLOWLIST / 逐页 nginx rewrite 切流；
+> - **Staging 演练（CHG-SN-3-12，已暂停）**：在 staging nginx 把 `/admin/*` 的 upstream 临时切到 :3003，验证 cookie / refresh_token 跨服务透明；
+> - **生产 cutover（M-SN-7）**：一次性 nginx upstream 切换，从 :3001 → :3003，apps/server 停服。
+>
+> 新的执行真源以 `docs/server_next_plan_20260427.md` §4.2（运行期路由策略）+ `docs/architecture.md` 部署拓扑章节为准。本段保留原文以追溯改写演进。
 - **IA v0（27 路由占位）**：
   - **运营中心**：dashboard / moderation
   - **内容资产**：videos / sources / merge / subtitles / image-health
@@ -3168,12 +3176,29 @@ DataTable v2 + useTableQuery 一次性收编。本 ADR 是 CHG-SN-2-13（DataTab
 
 ### 决策
 
+> **AMENDMENT 2026-04-30（CHG-DESIGN-11 / SEQ-20260429-02）**：
+> 本 ADR §4.1 中"不内置 ColumnSettingsPanel / Toolbar / Pagination 组件本体"
+> 的边界**已被 CHG-DESIGN-02 撤销**。当前真源裁定：DataTable 是**完整 .dt
+> framed surface**——toolbar / search / filter chips / 表头集成菜单 / saved views /
+> bulk action bar / pagination 全部进入 DataTable **一体化结构**。设计依据：
+> `docs/designs/backend_design_v2.1/reference.md` §4.4 + §6.0 视觉契约。
+>
+> 本 ADR §4.1 ~ §4.5 的"原语分离"叙述保留为 M-SN-2 阶段语义沉淀的**历史
+> 路径**，但**不再作为新模块的实现模板**。新模块 / server-next 表格页消费
+> DataTable 时，搜索 / 视图 / 筛选 chips / 列设置 / 批量 / 分页**必须**走
+> DataTable 内置 props（`toolbar` / `bulkActions` / `flashRowKeys` /
+> `pagination` 等），不再外置编排。Toolbar / Pagination / SelectionActionBar
+> 仍可独立 export 但仅作嵌入式场景兜底，不作首选。
+>
+> 本 ADR 的下方原始章节保留以追溯设计演进；落地路径以 reference.md §4.4 +
+> task-queue.md SEQ-20260429-02 CHG-DESIGN-02 为准。
+
 #### 4.1 DataTable v2 — 表格基座
 
 - **文件**：`packages/admin-ui/src/components/data-table/data-table.tsx`
 - **导出**：`DataTable` + `TableColumn` + `TableSortState` + `TableSelectionState` + 配套 union 类型
 - **职责**：渲染列 / 行 / sticky header / row hover / 选区高亮 / 列宽（CSS Grid 模板 + min-width）/ 排序 indicator / 行点击 / 行选择 checkbox。两档分页（`mode: 'client' | 'server'`）由 prop 显式决定；不持有 query 状态本体（query 状态由 `useTableQuery` 管理，结果以 `query` + `onQueryChange` 注入）。
-- **不做**：不内置 ColumnSettingsPanel / Toolbar / Pagination 组件本体（由消费方编排，参见 4.4 / 4.5）；不持有数据获取（不调用 apiClient / fetch / SWR）；不实现虚拟滚动（M-SN-2 不涉及万级数据集，virtual scroll 推迟到 ADR-100 候选依赖 `@tanstack/react-virtual` 评审通过后另立 ADR）；不内置筛选 UI（filterContent 由列槽位透传 ReactNode）；不持久化任何状态（持久化由 `useTableQuery` 集中负责）。
+- **不做**：（M-SN-2 阶段定义；2026-04-30 已被 CHG-DESIGN-02 amendment 撤销）不内置 ColumnSettingsPanel / Toolbar / Pagination 组件本体（由消费方编排，参见 4.4 / 4.5）；不持有数据获取（不调用 apiClient / fetch / SWR）；不实现虚拟滚动（M-SN-2 不涉及万级数据集，virtual scroll 推迟到 ADR-100 候选依赖 `@tanstack/react-virtual` 评审通过后另立 ADR）；不内置筛选 UI（filterContent 由列槽位透传 ReactNode）；不持久化任何状态（持久化由 `useTableQuery` 集中负责）。
 
 ```typescript
 export interface DataTableProps<T> {

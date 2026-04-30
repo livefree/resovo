@@ -1,13 +1,22 @@
 # Resovo 后台改进设计 Brief（Claude Design 启动包·轻量版）
 
-> status: approved-for-design
+> status: historical-input-only（不作 server-next 实现模板；仅作历史 design 输入）
 > owner: @engineering
 > audience: Claude Design（design-handoff / design-system / design-critique / accessibility-review / ux-copy / user-research / research-synthesis 七项 skills）
 > task: ADMIN-DESIGN-BRIEF-01（SEQ-20260426-01） + ADMIN-DESIGN-BRIEF-02 修补（4 MUST + 3 SHOULD）
 > generated_at: 2026-04-26 05:35
 > last_revised: 2026-04-26 06:05（R1 conditional accept → R2 修补完毕，可发给 Design）
+> last_reviewed: 2026-04-30
 > review_round: R1 (conditional accept by claude-sonnet-4-6) → R2 (4 MUST + 3 SHOULD 已修)
 > companion: [admin_audit_20260426.md](./admin_audit_20260426.md)（现状报告，本 brief 不重复其内容，只引用章节号）
+> superseded_by: `docs/designs/backend_design_v2.1/reference.md`（server-next 时代后台真源） + `docs/task-queue.md` SEQ-20260429-02（CHG-DESIGN 序列）
+
+> **2026-04-30 修订（CHG-DESIGN-11）**：本 brief 作为后台 v1（apps/server）时代的设计输入。
+> 其中提及的 ModernDataTable / PaginationV2 / SelectionActionBar / apps/server shared 等组件
+> **不再作为 server-next 实现模板**——server-next 走 `packages/admin-ui` DataTable 一体化路线
+> （reference.md §4.4 + SEQ-20260429-02 已裁定）。
+> 本文件保留为历史 design 输入（题目方向 / 痛点诊断 / 对齐矩阵），但**任何具体组件 / token /
+> 复用引用必须以 reference.md 为准**，不得作为 server-next 验收依据。
 >
 > **本 brief 是轻量版**：不含 task flows 与页面 anatomy 截图（全量版后续单独立项）。
 > 目标：让 Claude Design 在 30 分钟内具备介入"审核台 / 视频源管理 / 首页运营位 / 表格基建 / 采集合并拆分"5 个题目的领域知识与边界。
