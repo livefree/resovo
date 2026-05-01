@@ -14,6 +14,7 @@ import {
   loadTeamViews,
   makePersonalView,
   removePersonalView,
+  DEFAULT_VIEWS,
 } from '../../../../../../apps/server-next/src/lib/videos/saved-views'
 import type { PersistedQuery } from '@resovo/admin-ui'
 
@@ -138,5 +139,59 @@ describe('saved-views — makePersonalView', () => {
 describe('saved-views — loadTeamViews', () => {
   it('暂返空数组（VIDEO-TEAM-VIEWS-API follow-up）', () => {
     expect(loadTeamViews()).toEqual([])
+  })
+})
+
+describe('saved-views — DEFAULT_VIEWS（reference §5.3 4 默认 views）', () => {
+  it('含 4 默认 views，id 全部 default- 前缀', () => {
+    expect(DEFAULT_VIEWS.length).toBe(4)
+    DEFAULT_VIEWS.forEach((v) => {
+      expect(v.id).toMatch(/^default-/)
+    })
+  })
+
+  it('label 与 reference §5.3 完全一致：我的待审 / 本周 / 封面失效 / 团队新增上架', () => {
+    expect(DEFAULT_VIEWS.map((v) => v.label)).toEqual([
+      '我的待审', '本周', '封面失效', '团队新增上架',
+    ])
+  })
+
+  it('我的待审：reviewStatus=pending_review enum filter（精确匹配业务 filter）', () => {
+    const view = DEFAULT_VIEWS.find((v) => v.id === 'default-my-pending-review')!
+    expect(view.scope).toBe('personal')
+    expect(view.query.filters.get('reviewStatus')).toEqual({
+      kind: 'enum', value: ['pending_review'],
+    })
+    expect(view.query.sort).toEqual({ field: 'created_at', direction: 'desc' })
+  })
+
+  it('团队新增上架：status=published + sort created_at desc（精确匹配）', () => {
+    const view = DEFAULT_VIEWS.find((v) => v.id === 'default-team-published')!
+    expect(view.scope).toBe('team')
+    expect(view.query.filters.get('status')).toEqual({
+      kind: 'enum', value: ['published'],
+    })
+    expect(view.query.sort).toEqual({ field: 'created_at', direction: 'desc' })
+  })
+
+  it('本周：sort created_at desc + pageSize 50 近似（业务 filter 不支持时间区间）', () => {
+    const view = DEFAULT_VIEWS.find((v) => v.id === 'default-this-week')!
+    expect(view.query.pagination.pageSize).toBe(50)
+    expect(view.query.sort).toEqual({ field: 'created_at', direction: 'desc' })
+    // VIDEO-FILTER-TIME-RANGE follow-up 前不应有时间字段 filter
+    expect(view.query.filters.size).toBe(0)
+  })
+
+  it('封面失效：image_health 列强制可见（视觉突出 P0 Pill）', () => {
+    const view = DEFAULT_VIEWS.find((v) => v.id === 'default-image-broken')!
+    expect(view.scope).toBe('team')
+    expect(view.query.columns.get('image_health')).toEqual({ visible: true })
+  })
+
+  it('默认 views 不与 user views 共享 id 命名空间（personal-* / team-* 隔离）', () => {
+    DEFAULT_VIEWS.forEach((v) => {
+      expect(v.id).not.toMatch(/^personal-\d+/)
+      expect(v.id).not.toMatch(/^team-\d+/)
+    })
   })
 })

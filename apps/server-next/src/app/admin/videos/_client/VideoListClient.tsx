@@ -15,6 +15,7 @@ import { listCrawlerSites } from '@/lib/crawler/api'
 import type { VideoAdminRow, CrawlerSite, VideoType } from '@/lib/videos'
 import {
   loadPersonalViews, loadTeamViews, appendPersonalView, makePersonalView,
+  DEFAULT_VIEWS,
 } from '@/lib/videos/saved-views'
 import { buildVideoFilter, buildFilterChips, VideoFilterBar } from './VideoFilterFields'
 import { VideoRowActions } from './VideoRowActions'
@@ -584,8 +585,10 @@ export function VideoListClient() {
     setActiveViewId(view.id)
   }, [snapshot])
 
+  // viewsItems 合并顺序：默认 4 views 放最前（用户高频使用 + reference §5.3 标杆）→
+  // 个人 saved views → 团队 views（M-SN-4+ 真端点接入后填充）
   const viewsItems = useMemo(
-    () => [...personalViews, ...teamViews],
+    () => [...DEFAULT_VIEWS, ...personalViews, ...teamViews],
     [personalViews, teamViews],
   )
 

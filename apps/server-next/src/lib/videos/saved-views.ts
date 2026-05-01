@@ -167,3 +167,71 @@ export function makePersonalView(label: string, query: PersistedQuery): TableVie
 export function loadTeamViews(): readonly TableView[] {
   return []
 }
+
+// ── 4 默认 views（reference §5.3 视频库标杆）───────────────────────
+
+/**
+ * 4 默认 views（reference §5.3「我的待审 / 本周 / 封面失效 / 团队新增上架」）。
+ *
+ * 业务 filter 命名空间（VideoFilterFields.buildVideoFilter）：q / type / status /
+ * visibilityStatus / reviewStatus / site —— 不直接覆盖时间区间 / image_health 字段。
+ * 故对不到的 view 语义用最接近的近似 + 标 follow-up：
+ *
+ * - **我的待审**（精确）：filters reviewStatus=pending_review + sort created_at desc
+ * - **本周**（近似）：sort created_at desc + pageSize 50（"近期"近似；精确时间区间需后端
+ *   支持 createdSince filter，留 follow-up `VIDEO-FILTER-TIME-RANGE`）
+ * - **封面失效**（近似）：sort created_at desc + columns 强制 image_health visible（视觉突出
+ *   P0 失效列；精确 image_health filter 需后端 image-health enum 支持，留 follow-up
+ *   `VIDEO-FILTER-IMAGE-HEALTH`）
+ * - **团队新增上架**（精确）：filters status=published + sort created_at desc
+ *
+ * 默认 views 不可删除：id 用 `default-*` 前缀，与用户 view（`personal-*` / `team-*`）隔离。
+ * 消费方在 viewsItems 合并时把默认放最前。
+ */
+const DEFAULT_VIEW_TIMESTAMP = '2026-04-30T00:00:00.000Z'
+
+function makeDefaultView(
+  id: string,
+  label: string,
+  scope: ViewScope,
+  query: PersistedQuery,
+): TableView {
+  return {
+    id: `default-${id}`,
+    label,
+    scope,
+    query,
+    createdAt: DEFAULT_VIEW_TIMESTAMP,
+    updatedAt: DEFAULT_VIEW_TIMESTAMP,
+  }
+}
+
+export const DEFAULT_VIEWS: readonly TableView[] = [
+  makeDefaultView('my-pending-review', '我的待审', 'personal', {
+    pagination: { page: 1, pageSize: 20 },
+    sort: { field: 'created_at', direction: 'desc' },
+    filters: new Map([['reviewStatus', { kind: 'enum', value: ['pending_review'] }]]),
+    columns: new Map(),
+  }),
+  makeDefaultView('this-week', '本周', 'personal', {
+    pagination: { page: 1, pageSize: 50 },
+    sort: { field: 'created_at', direction: 'desc' },
+    // VIDEO-FILTER-TIME-RANGE follow-up：补 createdSince filter 后改精确时间区间
+    filters: new Map(),
+    columns: new Map(),
+  }),
+  makeDefaultView('image-broken', '封面失效', 'team', {
+    pagination: { page: 1, pageSize: 20 },
+    sort: { field: 'created_at', direction: 'desc' },
+    // VIDEO-FILTER-IMAGE-HEALTH follow-up：补 imageHealth enum filter 后改精确过滤
+    filters: new Map(),
+    // 强制 image_health 列可见（reference §6.1 P0 Pill）；其他列保留默认可见性
+    columns: new Map([['image_health', { visible: true }]]),
+  }),
+  makeDefaultView('team-published', '团队新增上架', 'team', {
+    pagination: { page: 1, pageSize: 20 },
+    sort: { field: 'created_at', direction: 'desc' },
+    filters: new Map([['status', { kind: 'enum', value: ['published'] }]]),
+    columns: new Map(),
+  }),
+]
