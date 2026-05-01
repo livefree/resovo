@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * inline-row-actions-styles.tsx — 全局 CSS 注入（CHG-DESIGN-12 12B fix#1→#2→#3）
+ * inline-row-actions-styles.tsx — 全局 CSS 注入（CHG-DESIGN-12 12B fix#1→#2→#3→#4）
  *
  * 设计原则：
  *   - InlineRowActions 是 packages/admin-ui 公共导出组件，**禁止依赖 admin-shell-styles 私有注入**
@@ -16,11 +16,17 @@
  * 反"useEffect 注入时机延迟导致 FOUC"教训（fix#2 → fix#3）：
  *   - fix#2 用 useEffect 注入 → useEffect 在组件 mount **后**才运行（首次 paint 之后）
  *     → 第一帧 actions 默认 opacity 1（CSS 还没注入），违反 reference §6.0「默认隐藏」契约
- *   - fix#3 改**模块顶层 eager inject**：模块 import 时（client-only）立即注入 CSS 到
- *     `document.head`，**早于** React 第一次渲染；首次 paint 时 CSS 已就位，无 FOUC
- *   - SSR 路径：`typeof document === 'undefined'` 守卫跳过；浏览器 hydration 时模块再次
- *     执行触发注入；server-rendered HTML 第一帧仍可能短暂闪现（一帧），但远好于
- *     useEffect 路径的两帧延迟
+ *   - fix#3 改模块顶层 eager inject：仅 client-only（typeof document 守卫）→ 模块 import 时
+ *     注入；client-only paint 路径无 FOUC
+ *
+ * 反"SSR 路径仍 FOUC"教训（fix#3 → fix#4，本卡当前形态）：
+ *   - fix#3 module-level eager inject 有 typeof document 守卫 → SSR 路径跳过
+ *     → server-rendered HTML 不含 <style> → 浏览器解析 HTML（display 已就位）到
+ *     JS 加载执行 module-level inject 之间，actions 显示 opacity 1（仍 FOUC）
+ *   - fix#4 改 SSR-safe `<style>` JSX 元素：React SSR 会把 CSS 字符串渲染到 HTML 里
+ *     → 浏览器收到含 CSS 的 server HTML → 第一帧解析时规则已就位 → 真正无 FOUC
+ *   - 每个 InlineRowActions 实例渲染一份 <style>（DOM 体积 ~600B × N 实例可接受）；
+ *     浏览器 CSSOM 自动合并多份相同规则，语义等价
  *
  * CSS 规则：
  *   - `[data-row-actions]:not([data-always-visible="true"])` 默认 opacity 0 + pointer-events none
@@ -32,10 +38,8 @@
  * 命名空间：所有选择器以 `[data-row-actions]` 后代起步，不污染外层 page 样式。
  */
 
-const STYLE_ID = 'admin-ui-inline-row-actions-styles'
-
 const CSS = `
-/* ── InlineRowActions 默认隐藏 + hover 浮现（reference §6.0 + CHG-DESIGN-12 12B fix#2/#3） ─────── */
+/* ── InlineRowActions 默认隐藏 + hover 浮现（reference §6.0 + CHG-DESIGN-12 12B fix#2/#3/#4） ─────── */
 [data-row-actions]:not([data-always-visible="true"]) {
   opacity: 0;
   pointer-events: none;
@@ -64,37 +68,31 @@ tr:hover [data-row-actions]:not([data-always-visible="true"]),
 ` as const
 
 /**
- * 模块顶层 eager inject — client-only，模块 import 时立即注入 CSS。
+ * SSR-safe `<style>` JSX 元素 — 每个 InlineRowActions 实例渲染一份。
  *
- * **关键 fix#3**：早于 React 第一次渲染，避免 useEffect 注入路径下的两帧 FOUC。
+ * **关键 fix#4**（反 fix#3 SSR 第一帧 FOUC）：
+ *   - fix#3 用 module-level eager inject + `typeof document` 守卫
+ *     → SSR 路径跳过 → server-rendered HTML 不含 <style>
+ *     → 浏览器解析 HTML 到 JS 执行模块加载之间，actions 显示 opacity 1（FOUC）
+ *   - fix#4 改 SSR-safe JSX `<style>`：React SSR 会把 CSS 渲染到 HTML 字符串里
+ *     → 浏览器解析 HTML 时 CSS 已生效 → 第一帧无 FOUC
  *
- * 守卫层：
- *   1. `typeof document !== 'undefined'`：SSR 路径跳过（document 不存在）
- *   2. `!document.getElementById(STYLE_ID)`：HMR / 多次模块加载时去重
+ * 多实例策略：
+ *   - 每个 InlineRowActions 实例渲染一个 `<style>` 节点（CSS ~600B × N 实例）
+ *   - 浏览器 CSSOM 自动合并：多份相同规则解析后语义等价（最终样式一致）
+ *   - data-admin-ui-cell-row-actions attribute 便于 e2e / DevTools 识别来源
  *
- * 卸载时不撤回 — 模块级 CSS 残留无副作用，下次挂载可立即生效。
+ * 兼容性：
+ *   - SSR + CSR 双路径生效
+ *   - HMR：React 重渲染时 style 节点保留
+ *   - prefers-reduced-motion / focus-within / hover 全部由 CSS 选择器覆盖
  */
-function injectStyles(): void {
-  if (typeof document === 'undefined') return
-  if (document.getElementById(STYLE_ID)) return
-  const el = document.createElement('style')
-  el.id = STYLE_ID
-  el.textContent = CSS
-  document.head.appendChild(el)
-}
-
-// 模块加载时立即执行（client-only by typeof document 守卫）
-injectStyles()
-
-/**
- * 兼容 React tree 渲染入口（noop 组件）。
- *
- * 实际注入由模块顶层 `injectStyles()` 完成；本组件保留是为了：
- *   1. InlineRowActions 渲染树语义清晰（"我用全局 CSS"）
- *   2. 测试可显式 mount 触发模块加载验证
- *   3. 未来若需要 React state / hook 介入（如 nonce / CSP），有改造点
- */
-export function InlineRowActionsStyles(): null {
-  // noop：实际注入已在模块顶层完成
-  return null
+export function InlineRowActionsStyles(): React.ReactElement {
+  return (
+    <style
+      data-admin-ui-cell-row-actions=""
+      // eslint-disable-next-line react/no-danger
+      dangerouslySetInnerHTML={{ __html: CSS }}
+    />
+  )
 }

@@ -3,6 +3,7 @@
  */
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
+import { renderToString } from 'react-dom/server'
 import React from 'react'
 import { InlineRowActions } from '../../../../../packages/admin-ui/src/components/cell/inline-row-actions'
 import type { InlineRowAction } from '../../../../../packages/admin-ui/src/components/cell/inline-row-actions.types'
@@ -137,15 +138,17 @@ describe('InlineRowActions — alwaysVisible / a11y', () => {
     expect(root.style.opacity).toBe('') // 不设置 → 默认空字符串
   })
 
-  it('全局 style 注入：admin-ui-inline-row-actions-styles 标签存在', () => {
-    render(<InlineRowActions actions={[]} />)
-    expect(document.getElementById('admin-ui-inline-row-actions-styles')).toBeTruthy()
+  it('SSR-safe <style> 元素渲染（fix#4：每个组件实例渲染 <style>，避免 SSR 第一帧 FOUC）', () => {
+    const { container } = render(<InlineRowActions actions={[]} />)
+    const styleEl = container.querySelector('style[data-admin-ui-cell-row-actions]')
+    expect(styleEl).toBeTruthy()
+    expect(styleEl?.tagName.toLowerCase()).toBe('style')
   })
 
   it('全局 CSS 含 :not([data-always-visible]) 默认 opacity 0 + tr:hover override 规则', () => {
-    render(<InlineRowActions actions={[]} />)
-    const styleEl = document.getElementById('admin-ui-inline-row-actions-styles')!
-    const css = styleEl.textContent ?? ''
+    const { container } = render(<InlineRowActions actions={[]} />)
+    const styleEl = container.querySelector('style[data-admin-ui-cell-row-actions]')!
+    const css = styleEl.innerHTML ?? ''
     // 默认 opacity 0（不带 data-always-visible 时）
     expect(css).toMatch(/\[data-row-actions\]:not\(\[data-always-visible="true"\]\)\s*\{[^}]*opacity:\s*0/)
     // tr:hover 与 [role=row]:hover 双 selector 兜底
@@ -159,6 +162,15 @@ describe('InlineRowActions — alwaysVisible / a11y', () => {
     expect(css).toMatch(/\[data-row-actions\]\[data-always-visible="true"\]\s*\{[^}]*opacity:\s*1/)
     // prefers-reduced-motion 去 transition
     expect(css).toContain('prefers-reduced-motion')
+  })
+
+  it('SSR 路径：renderToString HTML 含 <style> + 完整 CSS 规则（fix#4 防 SSR 第一帧 FOUC）', () => {
+    const html = renderToString(<InlineRowActions actions={[]} />)
+    // SSR HTML 含 style 元素 + CSS 规则，浏览器解析时即生效
+    expect(html).toContain('data-admin-ui-cell-row-actions')
+    expect(html).toMatch(/\[data-row-actions\]:not\(\[data-always-visible="true"\]\)/)
+    expect(html).toContain('opacity: 0')
+    expect(html).toContain('tr:hover')
   })
 
   it('action.title 渲染为 button.title attribute', () => {
