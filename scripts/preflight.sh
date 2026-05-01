@@ -42,6 +42,9 @@ npm run verify:token-isolation
 echo "[5d/6] token 引用完整性校验（CHG-DESIGN-01 / SEQ-20260429-02）"
 npm run verify:token-references
 
+echo "[5e/6] 浮层透明遮罩守卫（SEQ-20260501-01 / CHG-DESIGN-17）"
+npm run verify:no-bare-backdrop
+
 echo "[6/6] 单元测试"
 npm run test:run
 
