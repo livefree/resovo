@@ -3570,3 +3570,27 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 ### 质量门禁
 
 - 文档修订任务，无代码改动，无 typecheck / test 要求
+
+## [CHG-SN-4-01] SplitPane admin-ui 多栏布局原语
+- **完成时间**：2026-05-01
+- **记录时间**：2026-05-01
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-7) — 新共享组件 API 契约强制 Opus（CLAUDE.md 模型路由规则第 1 项）
+- **修改文件**：
+  - `packages/admin-ui/src/components/layout/split-pane.tsx`（新建）— 多栏布局原语，2–4 栏 grid，每栏独立 overflow-y:auto，CSS 变量零硬编码颜色
+  - `packages/admin-ui/src/components/layout/index.ts`（新建）— layout 模块出口
+  - `packages/admin-ui/src/index.ts`（追加）— `export * from './components/layout'`
+  - `tests/unit/components/admin-ui/split-pane/split-pane.test.tsx`（新建）— 19 个测试用例（基础渲染 / gridTemplateColumns / hidden 过滤 / header / noPadding / a11y / dev 警告）
+- **新增依赖**：无
+- **数据库变更**：无
+- **arch-reviewer 结论**：CONDITIONAL PASS，R1–R6 全处理（R1 height由消费方传入 / R2 panes.length运行时校验 / R3 resizable预留API / R4 不注入scrollbar全局样式 / R5 role枚举限定 / R6 layout目录出口）
+- **注意事项**：
+  - scrollbar 6px 由 `admin-shell-styles.tsx` 全局 `*::-webkit-scrollbar` 覆盖，SplitPane 无需注入
+  - StagingTable 失败为预存在 bug（stash 验证：回退至本卡之前同样失败），不属于本卡引入
+  - 本卡完成后，CHG-SN-4-02 审核台三栏业务页（`/admin/moderation`）可开始
+
+### 质量门禁
+
+- typecheck ✅ 通过（tsc --noEmit 零报错）
+- lint ✅ 通过（VideoEditDrawer img 警告为预存在，不在本卡范围）
+- unit ✅ 19/19 通过（≥3 case 要求满足）

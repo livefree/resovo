@@ -30,3 +30,6 @@ export * from './components/state'
 
 // Cell 共享组件（CHG-DESIGN-07 7B：KpiCard + Spark；CHG-DESIGN-12 扩张其余 cell）
 export * from './components/cell'
+
+// Layout 多栏布局原语（CHG-SN-4-01）
+export * from './components/layout'
