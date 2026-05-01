@@ -49,48 +49,43 @@ interface CrawlerTask {
 
 // ── mock data (deterministic) ──────────────────────────────────────
 
-const KPIS: readonly AnalyticsKpi[] = [
-  {
-    id: 'video-total',
-    label: '视频总数',
-    value: '695',
-    deltaText: '↑ +47 7d',
-    deltaDir: 'up',
-    variant: 'default',
-    sparkData: [620, 638, 651, 662, 670, 680, 695],
-    sparkColor: 'var(--accent-default)',
-  },
-  {
-    id: 'published',
-    label: '已上架',
-    value: '13',
-    deltaText: '↑ +3 今日',
-    deltaDir: 'up',
-    variant: 'is-ok',
-    sparkData: [8, 9, 10, 10, 11, 12, 13],
-    sparkColor: 'var(--state-success-fg)',
-  },
-  {
-    id: 'pending-staging',
-    label: '待审 / 暂存',
-    value: '484 / 23',
-    deltaText: '较昨日 +18',
-    deltaDir: 'flat',
-    variant: 'is-warn',
-    sparkData: [430, 450, 462, 470, 478, 480, 484],
-    sparkColor: 'var(--state-warning-fg)',
-  },
-  {
-    id: 'source-rate',
-    label: '源可达率',
-    value: '98.7%',
-    deltaText: '↑ 0.3pt',
-    deltaDir: 'up',
-    variant: 'is-ok',
-    sparkData: [98.4, 98.5, 98.6, 98.5, 98.7, 98.6, 98.7],
-    sparkColor: 'var(--state-success-fg)',
-  },
+interface KpiBase {
+  readonly id: string
+  readonly label: string
+  readonly value: string
+  readonly variant: AnalyticsKpi['variant']
+  readonly sparkData: readonly number[]
+  readonly sparkColor: string
+}
+
+const KPI_BASES: readonly KpiBase[] = [
+  { id: 'video-total',    label: '视频总数',    value: '695',      variant: 'default', sparkData: [620, 638, 651, 662, 670, 680, 695], sparkColor: 'var(--accent-default)' },
+  { id: 'published',      label: '已上架',      value: '13',       variant: 'is-ok',   sparkData: [8, 9, 10, 10, 11, 12, 13],           sparkColor: 'var(--state-success-fg)' },
+  { id: 'pending-staging', label: '待审 / 暂存', value: '484 / 23', variant: 'is-warn', sparkData: [430, 450, 462, 470, 478, 480, 484],  sparkColor: 'var(--state-warning-fg)' },
+  { id: 'source-rate',    label: '源可达率',    value: '98.7%',    variant: 'is-ok',   sparkData: [98.4, 98.5, 98.6, 98.5, 98.7, 98.6, 98.7], sparkColor: 'var(--state-success-fg)' },
 ] as const
+
+// delta 文案按 period 独立，避免与 period select 产生跨组件矛盾
+const KPI_DELTAS: Record<Period, readonly Pick<AnalyticsKpi, 'deltaText' | 'deltaDir'>[]> = {
+  '7d':  [
+    { deltaText: '↑ +47 近 7d',   deltaDir: 'up'   },
+    { deltaText: '↑ +3 近 7d',    deltaDir: 'up'   },
+    { deltaText: '近 7d +18',     deltaDir: 'flat' },
+    { deltaText: '↑ 0.3pt 近 7d', deltaDir: 'up'   },
+  ],
+  '30d': [
+    { deltaText: '↑ +183 近 30d',  deltaDir: 'up'   },
+    { deltaText: '↑ +12 近 30d',   deltaDir: 'up'   },
+    { deltaText: '近 30d +72',     deltaDir: 'flat' },
+    { deltaText: '↑ 1.1pt 近 30d', deltaDir: 'up'   },
+  ],
+  '90d': [
+    { deltaText: '↑ +521 近 90d',  deltaDir: 'up'   },
+    { deltaText: '↑ +34 近 90d',   deltaDir: 'up'   },
+    { deltaText: '近 90d +215',    deltaDir: 'flat' },
+    { deltaText: '↑ 3.0pt 近 90d', deltaDir: 'up'   },
+  ],
+}
 
 // 28 点 deterministic wave（对应设计稿 wave(120, 40, 28)）
 const CHART_POINTS: readonly number[] = [
@@ -341,13 +336,17 @@ export function AnalyticsView() {
   const [period, setPeriod] = useState<Period>('7d')
   const gradientId = useId().replace(/:/g, '-')
   const periodLabel = PERIOD_LABEL[period]
+  const kpis: readonly AnalyticsKpi[] = KPI_BASES.map((base, i) => ({
+    ...base,
+    ...KPI_DELTAS[period][i],
+  }))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }} data-analytics-view>
       <header style={PAGE_HEAD} data-page-head>
         <div>
           <h1 style={HEAD_TITLE}>数据看板</h1>
-          <p style={HEAD_SUB}>视频 · 源 · 用户 · 采集任务 — 最近 {periodLabel} 运营观测</p>
+          <p style={HEAD_SUB}>视频 · 源 · 用户 · 采集任务 — 多维度运营观测</p>
         </div>
         <div style={HEAD_ACTIONS}>
           <select
@@ -367,7 +366,7 @@ export function AnalyticsView() {
       </header>
 
       <div style={KPI_GRID} data-analytics-kpi-grid>
-        {KPIS.map((kpi) => (
+        {kpis.map((kpi) => (
           <KpiCard
             key={kpi.id}
             label={kpi.label}
