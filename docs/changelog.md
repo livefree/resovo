@@ -3551,3 +3551,22 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 
 - `npm --workspace @resovo/server-next run typecheck` ✅
 - `npm test -- tests/unit/components/server-next/admin/admin-shell-client.test.tsx tests/unit/components/admin-ui/shell/topbar.test.tsx tests/unit/components/admin-ui/shell/admin-shell.test.tsx` ✅（45 tests）
+
+## [CHG-PLAN-01] server_next_plan v2.5 设计稿对齐修订
+- **完成时间**：2026-05-01
+- **记录时间**：2026-05-01
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无（轻量现状对齐修订，无新决策）
+- **修改文件**：
+  - `docs/server_next_plan_20260427.md` — v2.4 → v2.5，标注 M-SN-3 完成、M-SN-4 VideoEditDrawer 闭合、设计稿新内容对齐、§10.2 风险解除、§11.4 检查点更新、v2.5 修订日志写入末尾
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - M-SN-3 已完成（SEQ-20260429-01 + SEQ-20260429-02 全 17 张卡闭合）
+  - M-SN-4 剩余工作 = 审核台三栏（需先落地 admin-ui `SplitPane` 原语）
+  - 设计稿"设置补全 / 采集展开 / 开发者模式 / 弹层规范"已完工，M-SN-6 启动条件满足
+  - VideoEditDrawer 线路/图片/豆瓣三 Tab 目前 mock，等待后端 VideoAdminDetail API 扩展
+
+### 质量门禁
+
+- 文档修订任务，无代码改动，无 typecheck / test 要求
