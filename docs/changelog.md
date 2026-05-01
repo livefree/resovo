@@ -3369,3 +3369,37 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 ### 质量门禁
 
 - typecheck ✅ / lint ✅ / 2759 单测全绿 ✅ / verify:token-references PASS ✅
+
+## [CHG-DESIGN-10] VideoEditDrawer 扩张
+- **完成时间**：2026-04-30
+- **记录时间**：2026-04-30
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-7) — S级模块 Drawer Shell 接口扩张审查（CONDITIONAL → 4条件全闭环 → PASS）
+- **修改文件**：
+  - `packages/admin-ui/src/components/overlay/drawer.tsx`（扩展）— 新增 `noPadding?: boolean` prop；body wrapper 在 noPadding=true 时为 `{flex:1, minHeight:0}`，向后兼容
+  - `tests/unit/components/admin-ui/overlay/drawer.test.tsx`（扩展）— 新增 noPadding 分支 2 个测试用例
+  - `apps/server-next/src/app/admin/videos/_client/VideoEditDrawer.tsx`（重写）— 540→680px；自绘 header（fullscreen toggle + close）；4 Tab 切换；quick header（poster/title/ID/type/year/N源/VisChip/DualSignal）；footer 含 updated_at 最后编辑时间；249 行
+  - `apps/server-next/src/app/admin/videos/_client/_videoEdit/types.ts`（新建）— TabKey + FormState + EMPTY_FORM
+  - `apps/server-next/src/app/admin/videos/_client/_videoEdit/form-helpers.ts`（新建）— videoToForm / splitComma / formToPatch
+  - `apps/server-next/src/app/admin/videos/_client/_videoEdit/TabBasicInfo.tsx`（新建）— 现有 14 字段真实表单，Row 2 列 grid
+  - `apps/server-next/src/app/admin/videos/_client/_videoEdit/TabLines.tsx`（新建）— 拖拽排序 mock UI，4 条线路
+  - `apps/server-next/src/app/admin/videos/_client/_videoEdit/TabImages.tsx`（新建）— 6 槽 2×3 grid mock UI
+  - `apps/server-next/src/app/admin/videos/_client/_videoEdit/TabDouban.tsx`（新建）— 豆瓣匹配 + 字段差异对比 mock UI
+- **新增依赖**：无
+
+### 验收对照（reference.md §4.5）
+
+- [x] width=680px（正常态），fullscreen 时 100vw（通过 `width={fullscreen ? '100vw' : 680}`）
+- [x] 顶部 self-rendered header：标题 `编辑 · {video.title}` + fullscreen 按钮 + 关闭按钮
+- [x] 4 Tab：基础信息 / 线路管理 / 图片素材 / 豆瓣·元数据（role=tablist + aria-selected）
+- [x] Quick header：32×48 poster img + title + ID/type/year/N源 + VisChip + DualSignal('unknown')
+- [x] Footer：`最后编辑 · {updated_at|—}` + 取消 + 保存更改
+- [x] 基础信息 Tab：14 字段真实表单（loadVideo + patchVideoMeta），保留 skippedFields / submitError 提示
+- [x] 线路 / 图片 / 豆瓣 Tab：mock UI，视觉完整，无真实 API 调用
+- [x] 全色值 CSS 变量，无硬编码色
+- [x] VideoEditDrawerProps 外部接口不变（open/videoId/onClose/onSaved）
+
+### 质量门禁
+
+- typecheck ✅ / lint ✅（<img> warning 管理后台可接受）/ 单测全绿 ✅
+- arch-reviewer CONDITIONAL 4条件：① Drawer noPadding 独立 commit ✅ ② VideoEditDrawer 自绘 header ✅ ③ 主文件 249 行 ≤ 250 行 ✅ ④ mock UI 零硬编码色 ✅
