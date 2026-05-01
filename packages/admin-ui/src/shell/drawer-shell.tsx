@@ -33,6 +33,7 @@
  */
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { OverlayBackdrop } from '../components/overlay/overlay-backdrop'
 
 export interface DrawerShellProps {
   readonly open: boolean
@@ -44,13 +45,6 @@ export interface DrawerShellProps {
   readonly children: ReactNode
   /** 数据 attr 标识（'notifications' / 'tasks'）便于单测 + e2e 选择 */
   readonly variant: 'notifications' | 'tasks'
-}
-
-const BACKDROP_STYLE: CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  background: 'var(--bg-overlay)',
-  zIndex: 'var(--z-shell-drawer)' as unknown as number,
 }
 
 const PANEL_STYLE: CSSProperties = {
@@ -181,11 +175,10 @@ export function DrawerShell({ open, onClose, title, headerActions, children, var
 
   return createPortal(
     <>
-      <div
-        aria-hidden="true"
+      <OverlayBackdrop
+        zIndex={'var(--z-shell-drawer)' as unknown as CSSProperties['zIndex']}
         data-drawer-backdrop={variant}
         onClick={handleBackdropClick}
-        style={BACKDROP_STYLE}
       />
       <div
         ref={panelRef}

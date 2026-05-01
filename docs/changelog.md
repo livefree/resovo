@@ -3406,6 +3406,25 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 
 ---
 
+## [CHG-DESIGN-15] DrawerShell 接入 OverlayBackdrop（透明遮罩）
+
+- **完成时间**：2026-05-01
+- **记录时间**：2026-05-01 03:21
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `packages/admin-ui/src/shell/drawer-shell.tsx` — 删除 `BACKDROP_STYLE`（含 `background: var(--bg-overlay)`），改用 `<OverlayBackdrop zIndex="var(--z-shell-drawer)" data-drawer-backdrop={variant}>`；无 children → ariaHidden 默认 true，原 aria-hidden="true" 语义不变
+- **新增依赖**：无
+- **数据库变更**：无
+- **效果**：通知抽屉 / 任务抽屉打开时背景透明
+
+### 质量门禁
+
+- `npm run typecheck` ✅
+- `npm run test -- --run tests/unit/components/admin-ui/shell/` ✅ 387 tests passed（全无回归）
+
+---
+
 ## [CHG-DESIGN-14] Drawer + Modal 接入 OverlayBackdrop（透明遮罩）
 
 - **完成时间**：2026-05-01
