@@ -138,6 +138,25 @@ describe('Drawer — z-index 不硬编码', () => {
   })
 })
 
+// ── noPadding ─────────────────────────────────────────────────────
+
+describe('Drawer — noPadding', () => {
+  it('默认情况下 body 含 padding:20px', () => {
+    const { container } = makeDrawer()
+    const drawer = container.ownerDocument.querySelector('[data-drawer]') as HTMLElement
+    const body = drawer?.querySelector('[data-drawer] > div:last-child') as HTMLElement
+    expect(body?.style.padding).toBe('20px')
+  })
+
+  it('noPadding=true 时 body 无 padding 无 overflow', () => {
+    const { container } = makeDrawer({ noPadding: true })
+    const drawer = container.ownerDocument.querySelector('[data-drawer]') as HTMLElement
+    const body = drawer?.querySelector('[data-drawer] > div:last-child') as HTMLElement
+    expect(body?.style.padding).toBe('')
+    expect(body?.style.overflow).toBe('')
+  })
+})
+
 // ── SSR ──────────────────────────────────────────────────────────
 
 describe('Drawer — SSR 零 throw', () => {

@@ -23,6 +23,12 @@ export interface DrawerProps {
   readonly closeOnBackdropClick?: boolean
   readonly children: React.ReactNode
   readonly 'data-testid'?: string
+  /**
+   * true 时 body 容器仅保留 `flex:1; min-height:0`，不施加 padding / overflow。
+   * 由消费方自己控制内容布局与滚动（Tab+Footer 三段式等场景）。
+   * 默认 false（保留 padding:20px + overflow:auto 兼容所有现有消费方）。
+   */
+  readonly noPadding?: boolean
 }
 
 const BACKDROP_STYLE: React.CSSProperties = {
@@ -82,6 +88,11 @@ const BODY_STYLE: React.CSSProperties = {
   padding: '20px',
 }
 
+const BODY_NO_PADDING_STYLE: React.CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+}
+
 export function Drawer({
   open,
   placement,
@@ -93,6 +104,7 @@ export function Drawer({
   closeOnBackdropClick = true,
   children,
   'data-testid': testId,
+  noPadding = false,
 }: DrawerProps): React.ReactElement | null {
   const [mounted, setMounted] = useState(false)
   useEffect(() => { setMounted(true) }, [])
@@ -135,7 +147,7 @@ export function Drawer({
             </button>
           </div>
         )}
-        <div style={BODY_STYLE}>{children}</div>
+        <div style={noPadding ? BODY_NO_PADDING_STYLE : BODY_STYLE}>{children}</div>
       </div>
     </div>,
     document.body,
