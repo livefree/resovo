@@ -1,70 +1,140 @@
-# Backend Design v2.1 实现差异报告
+# Backend Design v2.1 实现差异报告（更新版）
 
-日期：2026-04-30  
-范围：`docs/designs/backend_design_v2.1` 更新稿 vs `packages/admin-ui` 与 `apps/server-next` 当前后台实现  
-结论口径：本报告只描述当前差异，不把设计稿中尚未落地的能力视为已完成。
+日期：2026-05-01（原版：2026-04-30，SEQ-20260429-02 全部完成后重新评估）  
+范围：`docs/designs/backend_design_v2.1` 设计稿 vs `packages/admin-ui` + `apps/server-next` 当前实现  
+口径：只描述当前差异；已闭合项标注完成卡号。
+
+---
 
 ## 1. 总结
 
-当前实现已经从 2026-04-28 截图中的“M-SN-1 极简骨架”推进到可运行的 AdminShell、Dashboard、视频库 DataTable、设置页容器、通知/任务抽屉、基础 Modal/Drawer/Dropdown 原语。但与 v2.1 最新设计稿相比，视觉完成度仍不均衡：Shell 与 DataTable 的工程基座较接近目标，业务页面和弹层规范页面缺口明显，设置/采集/开发者模式/弹层规范这次设计新增内容大多尚未被页面消费。
+**SEQ-20260429-02（12 张设计对齐卡）已于 2026-05-01 全部完成。** 原报告的大多数高优先级差异已闭合。当前实现在 Shell / DataTable / 视频库 / Dashboard / AnalyticsView / VideoEditDrawer / Cell 共享层的工程基座与设计稿基本对齐。
 
-最大降级点不是单个颜色或间距，而是“设计稿的组件化视觉语言没有完整下沉到业务页面”。目前很多页面仍用 inline style 或占位页承接，导致 surface 层级、密度、页头、卡片、按钮、表单、空态等视觉合同没有统一来源。
+**剩余差距主要集中在两个维度：**
+1. **10 个占位页面**尚未启动（milestone M-SN-4 至 M-SN-6 范围）——路由 IA 完整但点入后均为 PlaceholderPage；
+2. **admin-ui 共享原语层** 仍缺少 Popover、PageHeader、AdminButton 等通用原语，导致新业务页面只能走 inline style 拼凑。
 
-## 2. 验证依据
+---
 
-- 设计真源：`docs/designs/backend_design_v2.1/reference.md` 已明确 `index.html` 与 `app/*.jsx` 渲染结果优先，且“目标设计稿不等于已落地能力”。
-- 运行探测：`npm run dev:server-next` 未能新开服务，因为 `3003` 已被占用；复用已有服务后，未带 cookie 的 `/admin*` 返回 307 到 `/login`，带 `refresh_token=dev; user_role=admin` 后 `/admin`、`/admin/videos`、`/admin/system/settings`、`/admin/crawler` 均返回 200。
-- 代码抽样：重点检查 `packages/admin-ui/src/shell`、`packages/admin-ui/src/components/data-table`、`packages/admin-ui/src/components/overlay`、`apps/server-next/src/app/admin`。
+## 2. SEQ-20260429-02 完成状态（已闭合原差异）
 
-## 3. 模块差异
+| 原差异 | 修复卡 | 状态 |
+|---|---|---|
+| Token 未定义引用（12 个）| CHG-DESIGN-01 | ✅ 完成 |
+| DataTable 无 toolbar / saved views / header menu / bulk bar / pagination / filter chips | CHG-DESIGN-02 Steps 1-7B | ✅ 完成 |
+| Scrollbar 10px/6px 混用 | CHG-DESIGN-03 | ✅ 完成（全局 6px） |
+| Sidebar 无过渡动效 / 折叠时 icon Y 跳跃 | CHG-DESIGN-04 | ✅ 完成 |
+| Shell NavTip / footer 文案 / 折叠按钮文案 | CHG-DESIGN-05 | ✅ 完成 |
+| Settings 多入口暴露（monitor/cache/config/migration） | CHG-DESIGN-06 | ✅ 完成（收敛单入口 + 双栏容器） |
+| Dashboard 通用 StatCard 占位 | CHG-DESIGN-07（7A→7D） | ✅ 完成（8 卡浏览态 + KpiCard/Spark 入 admin-ui） |
+| 视频库无 page__head / 无 32×48 poster / 无 DualSignal / 无 VisChip / 无 inline actions | CHG-DESIGN-08（8A→8C） | ✅ 完成 |
+| Analytics tab 仍为 redirect 占位 | CHG-DESIGN-09 | ✅ 完成（AnalyticsView：KPI×4 + SVG 图表 + 爬虫任务表） |
+| VideoEditDrawer 540px 仅基础信息 | CHG-DESIGN-10（10A→10B） | ✅ 完成（680px + fullscreen + 4 Tab + quick header + footer） |
+| 文档真源不一致 | CHG-DESIGN-11 | ✅ 完成 |
+| Cell 共享组件分散 / 无共享层 | CHG-DESIGN-12（12A→12B） | ✅ 完成（DualSignal / VisChip / Pill / Thumb / InlineRowActions 入 admin-ui） |
 
-| 模块 | 设计稿目标 | 当前实现 | 差异等级 |
+---
+
+## 3. 当前剩余差距
+
+### 3.1 占位页面（高优）
+
+27 个路由中 **10 个仍为 PlaceholderPage**：
+
+| 路由 | 标题 | 里程碑 | 优先级 |
 |---|---|---|---|
-| Shell / 导航 | 232/60 侧栏、顶栏搜索、健康状态、消息/任务入口、折叠过渡、6px 滚动条 | AdminShell 已接入，折叠过渡、等高分区、顶栏入口和全局滚动条已有实现 | 中 |
-| Dashboard / 管理台站 | 异常关注、工作流、KPI、活动、站点健康、分析 Tab，后续有编辑/卡片库/全屏态 | 浏览态卡片已落地；分析 Tab 仍占位；编辑态/卡片库/全屏态未落地 | 中 |
-| 视频库 / DataTable | 旗舰表格：内置 toolbar、保存视图、表头菜单、sticky header、bulk bar、分页、行闪烁 | DataTable 已内置 toolbar/header menu/hidden cols/filter chips/bulk/pagination；视频库已消费主要 props | 中 |
-| 设置页 | 8 类设置：基础、豆瓣、过滤、图片、通知、API/Webhook、缓存/CDN、登录会话；内容是实际表单 | 当前只有 5 个 Tab 容器，所有 Tab 内容仍是迁移占位文案 | 高 |
-| 采集控制 | KPI + 实时任务时间轴 + 站点列表展开 + 线路/别名 + 分类映射 + MACCMS 配置 | `/admin/crawler` 仍是 `PlaceholderPage` | 高 |
-| 播放线路 | 按视频分组、线路矩阵、失效源批量替换、全局别名表 | `/admin/sources` 仍是 `PlaceholderPage` | 高 |
-| 内容审核 | 三栏审核台、Tab、决策卡、线路网格、证据抽屉、发布预检、拒绝历史 | `/admin/moderation` 仍是 `PlaceholderPage` | 高 |
-| 开发者模式 | Tokens / Semantic / Components 三栏，正式入口 + `?dev=1` 只读入口 | 只有 `/admin/dev/components` 组件 Demo；未实现设计稿三栏 DevMode 页面和导航入口 | 高 |
-| 弹层规范 | 独立规范页：Modal / Drawer / Popover 选择流程 + 实例演示 | 有 Modal/Drawer/AdminDropdown 原语和组件 Demo；没有“弹层规范”页面，也没有 Popover 规范原语 | 高 |
-| 用户/审计/投稿/字幕/图片健康/合并/首页 | 设计稿给出各自页面方向 | 多数仍为占位页或重定向 | 高 |
+| `/admin/moderation` | 内容审核 | M-SN-4 | P0（设计稿三栏审核台；需 SplitPane 原语） |
+| `/admin/crawler` | 采集控制 | M-SN-5 | P1 |
+| `/admin/sources` | 播放线路 | M-SN-5 | P1 |
+| `/admin/subtitles` | 字幕管理 | M-SN-5 | P1 |
+| `/admin/image-health` | 图片健康 | M-SN-5 | P1 |
+| `/admin/merge` | 合并/拆分 | M-SN-5（依赖 ADR-105） | P1 |
+| `/admin/home` | 首页编辑 | M-SN-5（依赖 ADR-104） | P1 |
+| `/admin/users` | 用户管理 | M-SN-6 | P2 |
+| `/admin/submissions` | 用户投稿 | M-SN-6 | P2 |
+| `/admin/audit` | 审计日志 | M-SN-6 | P2 |
 
-## 4. 视觉降级点
+**已有路由但内容为占位的模块：**
 
-1. Surface 层级被压平。设计稿要求 `bg0..bg4` 五档 surface，并强调不能一个页面全用同一 surface。当前实现侧大量使用 `--bg-surface / --bg-surface-raised / --bg-surface-elevated`，在 light theme 下这些变量接近或相同，卡片、表格、浮层的层级感弱于设计稿。
+- `/admin/system/settings`：容器已重构（双栏布局 CHG-DESIGN-06），但所有 5 个 Tab 内容均为"正在迁移中"占位文案（reference §5.11 要求 8 类真实表单：基础 / 豆瓣 / 过滤 / 图片 / 通知 / API·Webhook / 缓存·CDN / 登录会话）
 
-2. 密度不稳定。设计稿的后台工具密度以 11/12/13px 为主；当前 token 只有 `xs=12px`、`sm=14px`、`base=16px`，部分 Shell 和页面继续使用 `--font-size-sm` 或 14px，占位页还使用 24px 标题，整体比设计稿松。
+### 3.2 admin-ui 共享原语层缺口（中优）
 
-3. 页面级样式仍分散。Settings、Dashboard、视频库批量按钮、Placeholder 等都在业务文件里定义局部 style；这符合快速接入，但和设计稿“缺组件能力先补 admin-ui，不在业务页局部拼凑”的要求冲突。
+| 缺失原语 | 设计稿出处 | 当前状况 | 影响 |
+|---|---|---|---|
+| `Popover` | reference §4.5；filter popover / column visibility | 无共享实现；HiddenColumnsMenu 是 DataTable 内置私有实现 | 未来 filter chip popover / select-like 控件无通用壳 |
+| `SplitPane` | reference §4.6（moderation 三栏） | 无 | Moderation 页无法实现 |
+| `PageHeader` | reference §5 各页 page__head | 各页自实现 inline style；无统一来源 | 视觉碎片化，标题/副标题/actions 区样式不一致 |
+| `AdminButton` | reference §4.2 Button 规范 | `<button>` + inline style 散落；admin-ui 无 Button 组件 | 页面按钮样式无法统一管理 |
+| `AdminInput / AdminSelect` | reference §4.2 | `<input>` / `<select>` + inline style | Settings 表单一旦落地需大量样式复制 |
+| `AdminCard` | reference §4.3 Card 规范 | Dashboard 各卡片独立实现样式 | 卡片边距、阴影、surface 层级无统一来源 |
 
-4. 弹层只完成底层可用性，未完成规范视觉。Modal/Drawer 具备 portal、遮罩、ESC、focus trap 等能力，但 header/body/footer 密度、入场动画、按钮区、Popover 选择流程页尚未对齐。Drawer 目前默认 480px，设计稿视频编辑 Drawer 是更完整的 480-720px/全屏/多 Tab 语义。
+### 3.3 视频库已知妥协点（低优）
 
-5. 表格基座已进展，但仍有视觉妥协。DataTable 已统一单一 scrollport、toolbar、bulk、pagination，但注释仍保留早期“不内置 Toolbar/Pagination”的旧描述；视频库业务 filter chips 仍走外置 `FilterChipBar`，内置 filter chips 被关闭，说明一体化合同和业务筛选模型还没完全合并。
+| 妥协点 | 原因 | 状态 |
+|---|---|---|
+| FilterChipBar 外置 | filter chips 与 toolbar.search 在同一行时 DataTable 内置 chip slot 布局冲突；视频库使用 `hideFilterChips: true` + `toolbar.trailing` 注入外置 FilterChipBar | follow-up 待 CHG-DESIGN-02 Step 7C 或专项卡处理 |
+| DualSignal 显示 `unknown/unknown` | API `/admin/videos` 响应 `VideoAdminRow` 无 probe/render 字段；需后端扩展 | 视觉正确（灰色未测）但无实际链路信息；follow-up 待后端 M-SN-4+ |
 
-6. 新增设计稿重点尚未被路由承接。设置补全、采集展开、开发者模式、弹层规范是本次更新核心，但当前只有设置容器和组件 Demo 有部分承接，采集、开发者、弹层规范均没有同等页面实现。
+### 3.4 密度与视觉精调（低优）
 
-## 5. 已接近设计稿的部分
+| 项目 | 设计稿目标 | 当前状态 |
+|---|---|---|
+| DataTable body 字体 | 12px | 13px（接近但未精对齐） |
+| DataTable `th` 字体 | 11px | 无独立 th token（继承 body） |
+| VideoEditDrawer 线路/图片/豆瓣 Tab | 真实 API 集成 | mock UI（follow-up 待 M-SN-4+） |
+| Dashboard 编辑态 / CardLibrary | 参见 reference §5.1 编辑态蓝图 | 未实现（M-SN-3+ 后置） |
+| 通知/任务 Shell 入口 | 接入真实 API | 仍为 mock 数据（M-SN-4+） |
 
-- Shell 的关键妥协已经被工程化：侧栏宽度过渡、分区标题保留高度、active indicator、全局 6px 滚动条均已接入。
-- DataTable 已从“纯表格”推进到“表格框架”：内置 toolbar、表头菜单、隐藏列 chip、bulk bar、pagination 和 sticky header。
-- 视频库已经是当前最接近设计稿表格语言的标杆消费方。
-- Dashboard 已经不再是普通 KPI 堆叠，而是按异常关注、工作流、指标、活动、站点健康拆出了具体卡片。
-- 通知和后台任务抽屉已接入 Shell，并具备进度、重试、取消、全部已读等基础交互。
+### 3.5 开发者模式（低优）
 
-## 6. 建议优先级
+| 项目 | 设计稿目标 | 当前状态 |
+|---|---|---|
+| DevMode 三栏（Tokens / Semantic / Components） | reference §0a、`?dev=1` 只读入口 | 只有 `/admin/dev/components` 组件 Demo |
+| Tokens 面板 | design token 可视化浏览 | 未实现 |
+| Semantic 面板 | 语义 token 映射查看 | 未实现 |
 
-1. 先补 `packages/admin-ui` 的基础视觉原语：`PageHeader`、`AdminButton`、`AdminInput`、`AdminCard`、`Pill/Badge`、`Popover`、`SettingsFormSection`。否则继续做业务页会扩大 inline style 分裂。
-2. 把设置页从“5 Tab 占位”补到设计稿最低可用形态：至少落地基础信息、豆瓣、过滤、图片、通知、API/Webhook、缓存/CDN、登录会话 8 项导航和真实表单 skeleton。
-3. 以采集控制作为下一张复杂页面标杆：站点列表展开 + 线路/别名先落地，再补任务时间轴和 MACCMS 配置。
-4. 单独实现“开发者模式”和“弹层规范”页面，作为设计系统自检入口；不要把 `/admin/dev/components` 组件 Demo 当作设计稿 §09 的等价实现。
-5. 清理 DataTable 文档和消费方式：同步旧注释，明确内置 filter chips 与业务 filter chips 的边界，避免后续页面继续外置编排。
-6. 做一次真实截图验收：设计稿 `index.html` 与 `server-next` 同视口、同主题、同路由逐页截图，对 Dashboard / Videos / Settings / Crawler 四页先建立 baseline。
+---
 
-## 7. 当前风险
+## 4. 更新后的视觉完成度评估
 
-- 如果继续按页面局部 style 补齐功能，短期能出页面，但视觉会继续偏离，后续统一成本更高。
-- 当前 light/dark token 与设计稿 dark-first 层级存在结构性差异，单靠替换颜色无法恢复设计稿层次。
-- 占位页数量较多，侧栏 IA 看起来完整，但用户点击后会进入工程占位，这会放大“实现降级”的体感。
-- 设计稿新增页面没有落地路由入口前，报告中的开发者模式/弹层规范只能按“未实现”处理，不能进入视觉验收。
+| 模块 | 完成度 | 备注 |
+|---|---|---|
+| Shell / 导航 / 侧栏 | **高**（85%） | 过渡 / NavTip / 折叠 / footer 已对齐；Notifications/Tasks 仍 mock |
+| Dashboard 浏览态 | **高**（90%） | 8 卡 + KPI + Analytics 全部落地；编辑态/全屏后置 |
+| 视频库 DataTable | **高**（85%） | toolbar / saved views / header menu / bulk / flash / poster / VisChip / DualSignal / InlineRowActions 全落地；FilterChipBar 外置妥协 |
+| VideoEditDrawer | **高**（80%） | 4 Tab / fullscreen / quick header / footer 落地；线路/图片/豆瓣为 mock |
+| Analytics 分析 | **高**（80%） | AnalyticsView 落地（period select / KPI / SVG 图表 / 爬虫任务表）；全 mock 数据 |
+| Settings 容器 | **中**（40%） | 双栏布局落地；所有 Tab 内容仍为占位 |
+| 内容审核 | **未实现**（0%） | M-SN-4 P0；需 SplitPane 原语 |
+| 采集控制 / 播放线路 | **未实现**（0%） | M-SN-5 |
+| 其余 7 个占位页 | **未实现**（0%） | M-SN-5~6 |
+| admin-ui 通用原语 | **中**（60%） | DataTable / Drawer / Modal / Dropdown / Cell 组件已完整；Popover / SplitPane / AdminButton / PageHeader 缺失 |
+
+---
+
+## 5. 建议下一步优先级
+
+1. **内容审核 Moderation**（M-SN-4，P0）— 设计稿 §5.2 三栏审核台是最高优先级业务视图；需先在 admin-ui 落地 `SplitPane` 原语，再做业务页。
+2. **Settings 真实表单**（M-SN-5/6 前导）— 设置页是运营最频繁入口之一；8 类 Tab 内容补全（尤其"基础信息 / 豆瓣 / 过滤"前 3 项）。
+3. **SplitPane / Popover 原语**（admin-ui 补充）— 这两项是多个业务页的前置依赖（Moderation / filter popover），优先于直接写业务页面。
+4. **采集控制 + 播放线路**（M-SN-5，P1）— 站点展开 + 线路别名是运营核心流程。
+5. **表格密度精调**（低优）— body 13px→12px + th 11px token；视觉改动小、影响全局，单独小卡处理。
+
+---
+
+## 6. 无需再关注的项目（已闭合）
+
+以下原报告中的差异项已通过 SEQ-20260429-02 完全解决，不需要再次评估：
+
+- Token 未定义引用（CHG-DESIGN-01 ✅）
+- Sidebar 过渡 / icon Y 跳跃（CHG-DESIGN-04 ✅）
+- Shell 视觉对齐（CHG-DESIGN-05 ✅）
+- Settings 多入口（CHG-DESIGN-06 ✅）
+- DataTable 框架扩展（CHG-DESIGN-02 ✅）
+- 滚动条统一（CHG-DESIGN-03 ✅）
+- 视频库 poster / DualSignal / VisChip / InlineRowActions（CHG-DESIGN-08 ✅）
+- Dashboard StatCard 占位（CHG-DESIGN-07 ✅）
+- Analytics 空内容（CHG-DESIGN-09 ✅）
+- VideoEditDrawer 540px 仅基础表单（CHG-DESIGN-10 ✅）
+- Cell 共享组件无统一层（CHG-DESIGN-12 ✅）
