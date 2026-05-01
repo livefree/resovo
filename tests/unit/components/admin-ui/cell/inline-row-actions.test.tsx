@@ -118,27 +118,47 @@ describe('InlineRowActions — 点击 + e.stopPropagation', () => {
 })
 
 describe('InlineRowActions — alwaysVisible / a11y', () => {
-  it('alwaysVisible=true → opacity:1 + data-always-visible="true"', () => {
+  it('alwaysVisible=true → data-always-visible="true"（全局 CSS 据此 opacity 1）', () => {
     const { container } = render(<InlineRowActions actions={[]} alwaysVisible />)
     const root = container.querySelector('[data-row-actions]') as HTMLElement
     expect(root.getAttribute('data-always-visible')).toBe('true')
-    expect(root.style.opacity).toBe('1')
   })
 
-  // reference §6.0 + 12A 契约硬约束："行内 actions 默认 opacity 0，hover 行后出现"
-  // 消费方在父表格 CSS 写 `tr:hover [data-row-actions] { opacity: 1 }` 触发 hover 浮现
-  it('alwaysVisible 默认 false → opacity:0 + 不渲染 data-always-visible（reference §6.0 hover 浮现契约）', () => {
+  it('alwaysVisible 默认 false → 不渲染 data-always-visible（全局 CSS :not([data-always-visible]) 据此 opacity 0）', () => {
     const { container } = render(<InlineRowActions actions={[]} />)
     const root = container.querySelector('[data-row-actions]') as HTMLElement
     expect(root.getAttribute('data-always-visible')).toBeNull()
-    expect(root.style.opacity).toBe('0')
   })
 
-  it('opacity transition 200ms cubic-bezier（hover 切换平滑）', () => {
+  // CHG-DESIGN-12 12B fix#2：inline opacity 阻止 hover override → 改全局 CSS 注入
+  it('组件不写 inline opacity（防止 inline 优先级 1000 阻止消费方 tr:hover override）', () => {
     const { container } = render(<InlineRowActions actions={[]} />)
     const root = container.querySelector('[data-row-actions]') as HTMLElement
-    expect(root.style.transition).toContain('opacity')
-    expect(root.style.transition).toContain('200ms')
+    expect(root.style.opacity).toBe('') // 不设置 → 默认空字符串
+  })
+
+  it('全局 style 注入：admin-ui-inline-row-actions-styles 标签存在', () => {
+    render(<InlineRowActions actions={[]} />)
+    expect(document.getElementById('admin-ui-inline-row-actions-styles')).toBeTruthy()
+  })
+
+  it('全局 CSS 含 :not([data-always-visible]) 默认 opacity 0 + tr:hover override 规则', () => {
+    render(<InlineRowActions actions={[]} />)
+    const styleEl = document.getElementById('admin-ui-inline-row-actions-styles')!
+    const css = styleEl.textContent ?? ''
+    // 默认 opacity 0（不带 data-always-visible 时）
+    expect(css).toMatch(/\[data-row-actions\]:not\(\[data-always-visible="true"\]\)\s*\{[^}]*opacity:\s*0/)
+    // tr:hover 与 [role=row]:hover 双 selector 兜底
+    expect(css).toContain('tr:hover [data-row-actions]')
+    expect(css).toContain('[role="row"]:hover [data-row-actions]')
+    // focus-within 键盘可访问性
+    expect(css).toContain(':focus-within')
+    // transition 200ms cubic-bezier
+    expect(css).toContain('transition: opacity 200ms')
+    // alwaysVisible="true" 强制 opacity 1
+    expect(css).toMatch(/\[data-row-actions\]\[data-always-visible="true"\]\s*\{[^}]*opacity:\s*1/)
+    // prefers-reduced-motion 去 transition
+    expect(css).toContain('prefers-reduced-motion')
   })
 
   it('action.title 渲染为 button.title attribute', () => {

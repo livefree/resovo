@@ -3,18 +3,27 @@
 /**
  * inline-row-actions.tsx — InlineRowActions 共享组件实装（CHG-DESIGN-12 12B）
  *
- * 真源：inline-row-actions.types.ts（12A Opus PASS 契约）
+ * 真源：inline-row-actions.types.ts（12A Opus PASS 契约 + Codex stop-time fix#1/#2）
  *
  * 实装契约（12A 一致性硬约束）：
  *   - actions 数组顺序即渲染顺序
  *   - primary / danger 互斥；同时传 primary 优先 + dev warn
- *   - alwaysVisible=false（默认）→ 表格 tr:hover 由消费方控制 opacity；本组件渲染 opacity:1（让消费方 CSS 切换）
+ *   - alwaysVisible=false（默认）→ 默认 opacity 0 + pointer-events none；
+ *     hover 行 / focus-within 后浮现（reference §6.0 + CHG-DESIGN-12 12B fix#2）
+ *   - alwaysVisible=true → 永远 opacity 1
  *   - 每个按钮 type=button + e.stopPropagation（防冒泡触发行点击）
  *   - 横排 flex gap 3px
+ *
+ * opacity 行为由全局 CSS（InlineRowActionsStyles 注入）控制，**不**用 inline style
+ *   - inline opacity 优先级 1000 会阻止消费方 `tr:hover` override（fix#1 教训）
+ *   - 全局 CSS 选择器优先级 0,2,1，消费方 `tr:hover [data-row-actions]:not(...)` 同等优先级
+ *     可直接 override；admin-ui 注入的 CSS 已包含 tr:hover / [role=row]:hover / :focus-within
+ *     三 selector 兜底
  *
  * 固定 data attribute：data-row-actions + data-action-key={action.key}
  */
 import React from 'react'
+import { InlineRowActionsStyles } from './inline-row-actions-styles'
 import type { InlineRowActionsProps, InlineRowAction } from './inline-row-actions.types'
 
 const ROOT_STYLE: React.CSSProperties = {
@@ -91,25 +100,20 @@ export function InlineRowActions({
   }
 
   // 12A 契约硬约束（reference §6.0 行内 actions 默认 opacity 0，hover 行后出现）：
-  //   - alwaysVisible=true：永远 opacity 1（不依赖父表格 hover）
-  //   - alwaysVisible=false（默认）：opacity 0；消费方在父表格 CSS 写
-  //     `tr:hover [data-row-actions] { opacity: 1 }` 触发 hover 浮现
-  // transition 200ms 让 hover 切换平滑（CHG-DESIGN-04 sidebar 同款 cubic-bezier）
-  const rootStyle: React.CSSProperties = {
-    ...ROOT_STYLE,
-    opacity: alwaysVisible ? 1 : 0,
-    transition: 'opacity 200ms cubic-bezier(0.4, 0, 0.2, 1)',
-  }
-
+  // opacity / transition / hover override 全部由 InlineRowActionsStyles 注入的全局 CSS 控制
+  // （fix#2 教训：inline opacity 优先级 1000 阻止消费方 tr:hover override，必须走全局 CSS）。
+  // 本组件仅设 layout（display/flex/gap）；data-always-visible 标记交给 CSS 选择器分支。
   return (
-    <span
-      data-row-actions
-      data-always-visible={alwaysVisible ? 'true' : undefined}
-      data-testid={testId}
-      role="group"
-      aria-label={ariaLabel}
-      style={rootStyle}
-    >
+    <>
+      <InlineRowActionsStyles />
+      <span
+        data-row-actions
+        data-always-visible={alwaysVisible ? 'true' : undefined}
+        data-testid={testId}
+        role="group"
+        aria-label={ariaLabel}
+        style={ROOT_STYLE}
+      >
       {actions.map((action) => {
         const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
           e.stopPropagation()
@@ -131,6 +135,7 @@ export function InlineRowActions({
           </button>
         )
       })}
-    </span>
+      </span>
+    </>
   )
 }
