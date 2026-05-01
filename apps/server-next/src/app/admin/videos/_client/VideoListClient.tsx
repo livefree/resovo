@@ -6,13 +6,16 @@ import {
   DataTable, FilterChipBar,
   EmptyState, ErrorState, LoadingState, useTableQuery,
   Pill, VisChip, Thumb, DualSignal,
-  type TableColumn, type TableQueryPatch, type TableSelectionState,
+  type TableColumn, type TableQueryPatch, type TableSelectionState, type TableView, type ViewScope,
 } from '@resovo/admin-ui'
 import { useTableRouterAdapter } from '@/lib/table-router-adapter'
 import { VIDEO_COLUMN_DESCRIPTORS } from '@/lib/videos/columns'
 import { listVideos, batchPublish, batchUnpublish, reviewVideo } from '@/lib/videos/api'
 import { listCrawlerSites } from '@/lib/crawler/api'
 import type { VideoAdminRow, CrawlerSite, VideoType } from '@/lib/videos'
+import {
+  loadPersonalViews, loadTeamViews, appendPersonalView, makePersonalView,
+} from '@/lib/videos/saved-views'
 import { buildVideoFilter, buildFilterChips, VideoFilterBar } from './VideoFilterFields'
 import { VideoRowActions } from './VideoRowActions'
 import { VideoEditDrawer } from './VideoEditDrawer'
@@ -444,9 +447,35 @@ export function VideoListClient() {
   const [selection, setSelection] = useState<TableSelectionState>({ selectedKeys: new Set(), mode: 'page' })
   const [editVideoId, setEditVideoId] = useState<string | null>(null)
 
+  // CHG-DESIGN-08 8B：saved views（personal localStorage / team mock 暂空）
+  // 4 默认 views（reference §5.3「我的待审/本周/封面失效/团队新增上架」）留 follow-up
+  // VIDEO-DEFAULT-VIEWS-PRESET（query 形态需业务调研后预置）
+  const [personalViews, setPersonalViews] = useState<readonly TableView[]>([])
+  const [teamViews] = useState<readonly TableView[]>(loadTeamViews())
+  const [activeViewId, setActiveViewId] = useState<string | undefined>(undefined)
+
+  // SSR-safe：首次 mount 后加载 localStorage（loadPersonalViews 内有 typeof localStorage 守卫）
+  useEffect(() => { setPersonalViews(loadPersonalViews()) }, [])
+
+  // CHG-DESIGN-08 8B：flash row（reference §6.1 + DataTable.flashRowKeys）
+  // publish/unpublish 等 row 写操作完成后调 flashRow(id) → 1.5s 视觉确认 → 自动清除
+  const [flashRowKeys, setFlashRowKeys] = useState<ReadonlySet<string>>(new Set())
+  const flashRow = useCallback((id: string) => {
+    setFlashRowKeys((prev) => new Set(prev).add(id))
+    setTimeout(() => {
+      setFlashRowKeys((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }, 1500)
+  }, [])
+
   const handleRowUpdate = useCallback((id: string, patch2: Partial<VideoAdminRow>) => {
     setRows((prev) => prev.map((r) => r.id === id ? { ...r, ...patch2 } : r))
-  }, [])
+    // 视觉确认乐观更新；失败回滚时再 flash 一次提示用户（rollback 也调 onRowUpdate）
+    flashRow(id)
+  }, [flashRow])
 
   const handleEditRequest = useCallback((id: string) => {
     setEditVideoId(id)
@@ -516,6 +545,50 @@ export function VideoListClient() {
     ? <FilterChipBar items={chips} onClearAll={() => patch({ filters: new Map() })} />
     : undefined
 
+  // ── CHG-DESIGN-08 8B saved views handlers ─────────────────────
+  // viewsConfig 切换：activeId 同步到 query state（不含 selection — view scope 与选区无关）
+  const handleViewChange = useCallback((id: string | null) => {
+    setActiveViewId(id ?? undefined)
+    if (!id) return
+    const all = [...personalViews, ...teamViews]
+    const view = all.find((v) => v.id === id)
+    if (!view) return
+    patch({
+      pagination: view.query.pagination,
+      sort: view.query.sort,
+      filters: view.query.filters,
+      columns: view.query.columns,
+    })
+  }, [personalViews, teamViews, patch])
+
+  // viewsConfig 保存：当前 query snapshot → 新 view（personal localStorage 持久化；
+  // team scope 暂返空 — VIDEO-TEAM-VIEWS-API follow-up）。label 由 prompt 取（最简实装；
+  // 后续可改 modal）。
+  const handleViewSave = useCallback((scope: ViewScope) => {
+    if (scope === 'team') {
+      // VIDEO-TEAM-VIEWS-API follow-up：M-SN-4+ 接入 POST /admin/views/team
+      // eslint-disable-next-line no-console
+      console.warn('[VideoListClient] team scope save 暂未接入真端点（follow-up VIDEO-TEAM-VIEWS-API）')
+      return
+    }
+    if (typeof window === 'undefined') return
+    const label = window.prompt('为当前视图命名：')?.trim()
+    if (!label) return
+    const view = makePersonalView(label, {
+      pagination: snapshot.pagination,
+      sort: snapshot.sort,
+      filters: snapshot.filters,
+      columns: snapshot.columns,
+    })
+    setPersonalViews((prev) => appendPersonalView(prev, view))
+    setActiveViewId(view.id)
+  }, [snapshot])
+
+  const viewsItems = useMemo(
+    () => [...personalViews, ...teamViews],
+    [personalViews, teamViews],
+  )
+
   return (
     <div data-video-list-client style={PAGE_STYLE}>
       {/* reference §5.3 视频库 page__head（CHG-DESIGN-08 8A） */}
@@ -569,10 +642,17 @@ export function VideoListClient() {
               emptyState={<EmptyState title="暂无视频" description="调整筛选条件后重试" />}
               data-testid="video-list-table"
               enableHeaderMenu
+              flashRowKeys={flashRowKeys}
               toolbar={{
                 search: <VideoFilterBar snapshot={snapshot} sites={sites} onPatch={handlePatch} />,
                 trailing: trailingNode,
                 hideFilterChips: true,
+                viewsConfig: {
+                  items: viewsItems,
+                  activeId: activeViewId,
+                  onChange: handleViewChange,
+                  onSave: handleViewSave,
+                },
               }}
               bulkActions={bulkActionsNode}
               pagination={{ pageSizeOptions: [10, 20, 50] }}
