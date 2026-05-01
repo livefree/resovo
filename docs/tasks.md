@@ -14,59 +14,50 @@
 
 ## 进行中任务
 
-### CHG-DESIGN-08 8A — 视频库列重构 + 32×48 thumb + page__head（SEQ-20260429-02 第 8 卡 · 阶段 1/3）
+### CHG-DESIGN-08 8B — saved views + 表头菜单 + flash row 接入（SEQ-20260429-02 第 8 卡 · 阶段 2/3）
 
-- **状态**：🔄 待启动（CHG-DESIGN-12 12A ✅ + 12B ✅ 全部完成 → 5 cell 共享组件就位 → 进入 CHG-DESIGN-08）
+- **状态**：🔄 待启动（8A 已完成；建议新 session 推）
 - **关联序列**：SEQ-20260429-02
 - **创建时间**：2026-04-30
 - **建议主循环模型**：sonnet
-- **前置依赖**：CHG-DESIGN-12（5 cell 共享组件全部就位）+ CHG-DESIGN-02（DataTable Step 7A API 已就位）
+- **前置依赖**：CHG-DESIGN-02 Step 7A（DataTable saved views / 表头菜单 / flash row API 已就位）+ CHG-DESIGN-08 8A（视觉对齐已完成）
 
-#### CHG-DESIGN-12 累计闭合标志
+#### 8B 阶段范围
 
-- 12A ✅ 5 个 .types.ts 契约 + arch-reviewer (Opus) PASS + 2 处 Codex stop-time fix（VisChip enum drift / 真源优先级）
-- 12B ✅ 5 个 .tsx 实装 + 72 case 单测 + arch-reviewer (Opus) **第二轮 PASS 直接通过** + 1 处 P1-1 jsdoc 措辞顺修
-- cell 共享组件总览 7 个：KpiCard / Spark / Pill / DualSignal / VisChip / Thumb / InlineRowActions
-- 单测累计 129 case（KpiCard 37 + Spark 20 + Pill 18 + DualSignal 13 + VisChip 10 + Thumb 17 + InlineRowActions 14）
+VideoListClient 接入 DataTable Step 7A 已就位的三个 API：
 
-#### 8A 阶段范围（消费方落地）
+1. **saved views**（个人 / 团队）：
+   - 个人 views：localStorage 持久化（namespace `admin-videos-views`）
+   - 团队 views：暂用 mock（M-SN-4+ 接入真端点）
+   - 4 默认 views（reference §5.3）：「我的待审」/「本周」/「封面失效」/「团队新增上架」
+   - 接入 DataTable.toolbar.viewsConfig
 
-按 reference §6.1 视频库标杆列规范，重构 VideoListClient 列定义；接入 12B 落地的 5 cell + KpiCard/Spark 风格。
+2. **表头菜单**（已 enableHeaderMenu）：
+   - 验证当前实装在 8A 重构后仍工作（sort + hide + clear filter）
+   - 加 Playwright MCP smoke 验证
 
-#### 8A 推进顺序
+3. **flash row**（reference §6.1 + DataTable.flashRowKeys）：
+   - publish/unpublish 后 flash 当前行（视觉确认乐观更新）
+   - 接入 VideoRowActions 内的 onRowUpdate 后 setTimeout flash 1.5s
 
-1. 重构 `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx` 列定义按 §6.1 10 列：
-   `_select`(40) / `thumb`(60, 32×48 竖版) / `title`(flex pinned, 标题+meta) / `type`(90, Pill) /
-   `sources`(100, dot+文案) / `probe`(140, DualSignal) / `image`(100, P0 Pill) / `visibility`(120, VisChip) /
-   `review`(90, 单 Pill) / `actions`(170, InlineRowActions ×5: 编辑/前台/播放/补源/上架(primary))
-2. 删除 `VideoStatusIndicator` + `VideoTypeChip`（被共享 Pill / VisChip 取代；grep 无外部引用后删除）
-3. 补 `page__head`（标题"视频库" / sub "X 条视频..." / 双 actions: 导出 CSV / 手动添加视频）
-4. 封面 64×36 横图改 32×48 竖版（直接消费 `<Thumb size="poster-sm">`）
-5. typecheck / lint / verify scripts 全绿
+#### 8B 文件范围
 
-#### 8A 文件范围
+- `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`（接入 viewsConfig + flashRowKeys）
+- `apps/server-next/src/lib/videos/saved-views.ts`（新建：localStorage 持久化 + 4 默认 views）
+- 不动：admin-ui DataTable / 5 cell / 列定义（8A 已就位）
 
-- `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`（列定义重构 + page__head）
-- `apps/server-next/src/lib/videos/columns.ts`（如需调整 ColumnDescriptor）
-- `apps/server-next/src/components/admin/shared/VideoStatusIndicator.tsx`（删除 / 删用法）
-- `apps/server-next/src/components/admin/shared/VideoTypeChip.tsx`（删除 / 删用法）
+#### 8B 不在范围
 
-#### 8A 不在范围
+- VIDEO-INLINE-ROW-ACTIONS-MIGRATE（actions 列 inline btn 重构，依赖 CHG-DESIGN-10 VideoEditDrawer 增强）
+- visual baseline + e2e — 8C
+- 团队 views 真端点 — M-SN-4+（saved views 后端 schema 留 §A4 决议）
 
-- saved views（个人/团队） — 8B
-- 表头菜单 / flash row 接入 — 8B
-- visual baseline + e2e + Playwright MCP 截图 — 8C
-
-#### 8A 验收标准
+#### 8B 验收标准
 
 - typecheck / lint / verify:token-references / verify:admin-guardrails 全绿
-- VideoListClient 渲染 10 列结构与 §6.1 标杆完全一致
-- VideoStatusIndicator / VideoTypeChip 全仓 grep 0 残留
-- 单测：现有 cell 129 case 不回归 + dashboard 24 case 不回归
-
-#### 后续阶段预览（参考用，非本卡范围）
-
-- **8B**：saved views（个人/团队）+ 表头菜单 + flash row + bulk action（DataTable Step 7A API 已就位）
-- **8C**：unit smoke + e2e dashboard.spec.ts 风格守门 + Playwright MCP visual baseline 入库到 `tests/visual/videos/`
+- 现有单测 2740 不回归
+- 4 默认 saved views 切换工作；个人 view 持久化跨会话生效
+- flash row 1.5s 视觉确认（reference §6.1 flash 动画）
+- 表头菜单 sort+hide+clear filter 在 8A 重构后仍工作
 
 ---

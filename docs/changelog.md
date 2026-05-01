@@ -3155,3 +3155,86 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - live 数据扩张（`STATS-EXTEND-DASHBOARD`：源可达率 / 失效源 / 视频总量 / 已上架 / 7 天 spark 等真端点）
 - 编辑态（CardLibraryDrawer / FullscreenCard，§A4 决议后做）
 - analytics tab 内容（CHG-DESIGN-09）
+
+---
+
+## [CHG-DESIGN-12 12A+12B] 5 cell 共享组件契约 + 实装 + 单测
+
+- **完成时间**：2026-04-30（同 session 推进；CHG-DESIGN-07 7D 后接 12A → 12B → 8A）
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：
+  - 12A：`arch-reviewer` (claude-opus-4-7) → CONDITIONAL → 必修 3 项闭环 → PASS
+  - 12B：`arch-reviewer` (claude-opus-4-7) → **PASS 直接通过**（P0 8/8 / P1 无 MUST）
+- **关联序列**：SEQ-20260429-02 第 12 卡
+
+### 12A 阶段产出（5 个 .types.ts 契约）
+
+- `pill.types.ts`：8 值 PillVariant union（neutral / ok / warn / danger / info / accent / probe / render）+ 必含 6px dot
+- `dual-signal.types.ts`：4 值 DualSignalState（ok / partial / dead / unknown）+ 视觉对齐 Pill 但独立渲染三段式
+- `vis-chip.types.ts`：VisibilityStatus + ReviewStatus 镜像 packages/types 真源 + 5 派生分支按优先级
+- `thumb.types.ts`：4 值 ThumbSize（poster-sm 32×48 / poster-md 38×56 / banner-sm 64×36 / square-sm 28×28）+ decorative=true 默认
+- `inline-row-actions.types.ts`：primary/danger 互斥 + alwaysVisible 逃生口
+
+### 12B 阶段产出（5 个 .tsx 实装 + 单测）
+
+- 5 个组件实装（PASS 直接通过 arch-reviewer）
+- 单测：Pill 18 / DualSignal 13 / VisChip 10 / Thumb 17 / InlineRowActions 18 = **76 case**
+- cell 共享组件总览 7 个：KpiCard + Spark（CHG-DESIGN-07 7B）+ Pill + DualSignal + VisChip + Thumb + InlineRowActions（CHG-DESIGN-12 12B）
+
+### Codex stop-time review fixes（共 8 处闭环）
+
+12A 阶段：
+1. PillVariant 缺 probe/render → 增加 + jsdoc 映射
+2. pill.types.ts CSS variable 命名歧义 → 改用 design-tokens 真源
+3. dual-signal.types.ts var(--probe) 未对齐真源 → 改用 var(--dual-signal-probe)
+4. VisChip enum drift（'pending'/'private'）→ 对齐 packages/types 真源（'pending_review'/'hidden'）
+5. VisChip 真源优先级 stale enum source → 重排 packages/types > reference > icons-data.jsx
+
+12B 阶段：
+6. InlineRowActions 默认 opacity 1（违反 reference §6.0 hover 浮现） → fix#1 inline opacity:0
+7. inline opacity 阻止 hover override → fix#2 useEffect 全局 CSS / fix#3 module-level eager inject /
+   fix#4 SSR-safe `<style>` JSX（最终方案，无 FOUC）
+8. DualSignal 复用 Pill 措辞与实装"独立渲染"不一致 → 改"视觉对齐 + 独立渲染"
+
+### 验收
+
+- typecheck / lint / verify:token-references (71/322) / 单测 129/129（含 cell 76 + 既有 53）全绿
+- arch-reviewer (Opus) 双轮通过
+- token 引用 +4：`--dual-signal-probe(-soft)` / `--dual-signal-render(-soft)`
+
+---
+
+## [CHG-DESIGN-08 8A 第一阶段] VideoListClient 列重构 + 32×48 thumb + page__head
+
+- **完成时间**：2026-04-30
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：无
+- **关联序列**：SEQ-20260429-02 第 8 卡 · 阶段 1/3
+
+### 产出
+
+- VideoListClient 列结构按 reference §6.1 标杆 10 列重构（thumb 32×48 / title+meta / Pill / dot+文案 sources / DualSignal probe / P0 Pill / VisChip / review Pill）
+- 内联 TYPE_LABELS 11 种类型映射（VideoTypeChip 取代）
+- page__head（标题「视频库」+ sub「{total} 条视频...」+ 双 actions）
+- 删除被取代文件：VideoStatusIndicator / VideoTypeChip / 对应单测
+- 副修：`var(--font-mono)` 未定义 → ui-monospace fallback stack
+
+### Codex stop-time review fix（1 处闭环）
+
+- page__head 「导出 CSV」+「手动添加视频」可见但 onClick 未绑定 → disabled + opacity 0.5 +
+  cursor: not-allowed + title 提示「功能开发中（follow-up VIDEO-EXPORT-CSV / VIDEO-MANUAL-ADD）」
+
+### 验收
+
+- typecheck / lint / verify:token-references (71/322) / 单测 2740/2740 全绿
+- VideoStatusIndicator / VideoTypeChip 全仓 grep 0 引用残留
+
+### 不在范围（留 follow-up / 8B / 8C）
+
+- **`VIDEO-INLINE-ROW-ACTIONS-MIGRATE`**（8A 第二阶段降级）：actions 列 inline xs btn ×5 重构
+  （VideoRowActions AdminDropdown → InlineRowActions）；触发条件：CHG-DESIGN-10 VideoEditDrawer
+  扩张含 visibility / review / publish 工作流后启动，避免业务退化
+- **8B**：saved views（个人/团队）+ 表头菜单 + flash row 接入（DataTable Step 7A API 已就位）
+- **8C**：unit smoke + e2e + Playwright MCP visual baseline 入库 `tests/visual/videos/`
+- **VIDEO-EXPORT-CSV**：导出 CSV blob 下载实装
+- **VIDEO-MANUAL-ADD**：新视频创建路由
