@@ -36,6 +36,7 @@
     "verify:server-next-isolation": "node scripts/verify-server-next-isolation.mjs",
     "verify:token-isolation": "node scripts/verify-token-isolation.mjs",
     "verify:token-references": "node scripts/verify-token-references.mjs",
+    "verify:no-bare-backdrop": "node scripts/verify-no-bare-backdrop.mjs",
     "verify:admin-guardrails:all": "node scripts/verify-admin-guardrails.mjs --all",
     "migrate": "node --env-file=.env.local --import tsx scripts/migrate.ts",
     "clear:crawled-data": "node --env-file=.env.local --import tsx scripts/clear-crawled-data.ts",

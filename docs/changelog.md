@@ -3406,6 +3406,35 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 
 ---
 
+## [CHG-DESIGN-17] grep 防回归脚本 + CI 接入
+
+- **完成时间**：2026-05-01
+- **记录时间**：2026-05-01 03:26
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `scripts/verify-no-bare-backdrop.mjs`（新增）— ripgrep 扫描 apps/server-next/src + packages/admin-ui/src，命中 `background.*var(--bg-overlay)` / `bg-black/40` / `bg-black/50` 时非零退出；豁免 overlay-backdrop.tsx + overlay-backdrop.test.tsx
+  - `package.json`（追加 `verify:no-bare-backdrop` 脚本）
+- **新增依赖**：无
+- **数据库变更**：无
+- **效果**：`npm run verify:no-bare-backdrop` 在当前代码库零命中；后续 PR 裸写 dim backdrop 会在 CI 被拦截
+
+### SEQ-20260501-01 防回归检查清单
+
+- [x] `overlay-backdrop.tsx` 是仓库内唯一含 `var(--bg-overlay)` dim 逻辑的实现文件
+- [x] `verify-no-bare-backdrop.mjs` 在当前代码库零命中（通过）
+- [x] `overlay-backdrop.test.tsx`：`backdropTone` 默认 = `transparent`；`backdropTone="dim"` = `var(--bg-overlay)`（17 项断言）
+- [x] typecheck / lint / 全量 2781 单测全绿
+- [x] SEQ-20260501-01 全部 5 卡完成
+
+### 质量门禁
+
+- `npm run typecheck` ✅
+- `npm run verify:no-bare-backdrop` ✅ 零命中
+- `npm run test -- --run` ✅ 2781 tests passed
+
+---
+
 ## [CHG-DESIGN-16] CommandPalette 接入 OverlayBackdrop（透明遮罩）
 
 - **完成时间**：2026-05-01
