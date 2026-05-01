@@ -1,5 +1,7 @@
 export { useOverlay } from './use-overlay'
 export type { UseOverlayOptions, UseOverlayReturn } from './use-overlay'
+export { OverlayBackdrop } from './overlay-backdrop'
+export type { OverlayBackdropProps, BackdropTone } from './overlay-backdrop'
 export { Drawer } from './drawer'
 export type { DrawerProps } from './drawer'
 export { Modal } from './modal'

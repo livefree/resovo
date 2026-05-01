@@ -3406,6 +3406,28 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 
 ---
 
+## [CHG-DESIGN-13] OverlayBackdrop primitive 新增 + 配套单测
+
+- **完成时间**：2026-05-01
+- **记录时间**：2026-05-01 03:14
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `packages/admin-ui/src/components/overlay/overlay-backdrop.tsx`（新增）— `OverlayBackdrop` 原语；`backdropTone?: 'none'|'dim'`，默认 `transparent`；style 合并顺序 `{ ...BASE, ...style, background, zIndex }` 确保调用方只能补 layout；`ariaHidden` 默认 `= (children == null)`
+  - `packages/admin-ui/src/components/overlay/index.ts`（追加导出）— `OverlayBackdrop` + `BackdropTone` 类型
+  - `tests/unit/components/admin-ui/overlay/overlay-backdrop.test.tsx`（新增）— 17 项断言覆盖默认透明 / dim opt-in / ariaHidden 三态 / onClick MouseEventHandler 签名 / legacy data attr 透传 / style 合并保护
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：测试文件路径在 `tests/unit/components/admin-ui/overlay/`，匹配 vitest `include: ['tests/unit/**']`。防回归脚本（CHG-DESIGN-17）豁免列表需含此测试文件。
+
+### 质量门禁
+
+- `npm run typecheck` ✅
+- `npm run lint` ✅
+- `npm run test -- --run` ✅ 2781 tests passed（新增 17 项）
+
+---
+
 ## [CHG-DESIGN-11] Admin Sidebar 折叠抖动修复
 - **完成时间**：2026-05-01
 - **记录时间**：2026-05-01 01:52
