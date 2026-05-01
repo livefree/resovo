@@ -472,9 +472,11 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
   - 复用矩阵 §8 视图行 admin-layout 列扩展为 Shell 列后，所有视图标 ✅
   - 设计稿 shell.jsx 视觉对齐（截图对照：折叠态 + 展开态 × 明暗 = 4 张）
 
-### M-SN-3 · 标杆页：视频库 · **1 周** ✅ 已完成（2026-05-01）
+### M-SN-3 · 标杆页：视频库 · **1 周** ✅ 核心实现闭合（2026-05-01）
 
-> **执行实证（v2.5 沉淀）**：M-SN-3 通过 SEQ-20260429-01（CHG-SN-3-01 ~ CHG-SN-3-05 视频库基座）+ SEQ-20260429-02（CHG-DESIGN-01 ~ CHG-DESIGN-12 共 12 张设计对齐卡）全部闭合。实际完成范围超出原 M-SN-3 边界：DataTable 一体化骨架（toolbar / saved views / header menu / bulk bar / pagination / filter chips / flash row）、Dashboard StatCard 浏览态（8 卡 + KpiCard/Spark）、Analytics 分析视图（KPI×4 + SVG 图表 + 爬虫任务表）、Settings 容器（双栏布局）、Cell 共享组件层（DualSignal / VisChip / Pill / Thumb / InlineRowActions）均已落地。详见 `docs/designs/backend_design_v2.1/implementation-gap-report-2026-04-30.md`（更新版，2026-05-01 重新评估）。
+> **执行实证（v2.5 沉淀）**：M-SN-3 核心实现通过 SEQ-20260429-01（CHG-SN-3-01 ~ CHG-SN-3-10 视频库基座）+ SEQ-20260429-02（CHG-DESIGN-01 ~ CHG-DESIGN-12 共 12 张设计对齐卡）闭合。实际完成范围超出原 M-SN-3 边界：DataTable 一体化骨架（toolbar / saved views / header menu / bulk bar / pagination / filter chips / flash row）、Dashboard StatCard 浏览态（8 卡 + KpiCard/Spark）、Analytics 分析视图（KPI×4 + SVG 图表 + 爬虫任务表）、Settings 容器（双栏布局）、Cell 共享组件层（DualSignal / VisChip / Pill / Thumb / InlineRowActions）均已落地。详见 `docs/designs/backend_design_v2.1/implementation-gap-report-2026-04-30.md`（更新版，2026-05-01 重新评估）。
+>
+> **残余 3 张卡 ⏸ 暂停**（已于 2026-04-29 暂停，优先 SEQ-20260429-02）：CHG-SN-3-11（server_next_view_template.md 模板文档）/ CHG-SN-3-12（staging 环境 cookie + nginx 反代 e2e 演练，需人工参与）/ CHG-SN-3-13（M-SN-3 milestone 阶段审计，Opus arch-reviewer）。进入 M-SN-4 须用户就上述残余卡写入豁免声明或恢复执行（CHG-SN-3-12 参见 `staging-waiver:` 协议）。
 
 - **范围**：
   - `/admin/videos` 列表（DataTable v2 实战）
@@ -491,7 +493,7 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
 
 ### M-SN-4 · P0 痛点视图：审核台 + 视频编辑 Drawer · **2.5 周**
 
-> **执行进度更新（v2.5）**：**视频编辑 Drawer 4 Tab + 全屏模式已于 2026-05-01 完成（CHG-DESIGN-10）**，交付物：680px 宽 + fullscreen toggle + 4 Tab（基础信息 / 播放线路 / 图片管理 / 豆瓣同步）+ quick header（poster / title / VisChip / DualSignal）+ footer（最后编辑 + cancel + 保存更改）。线路 / 图片 / 豆瓣三 Tab 当前为 mock UI——等待 `VideoAdminDetail` API 扩展 probe/render/sources/images 字段（M-SN-4+ 后端工作）。**M-SN-4 剩余工作 = 审核台三栏实现**（参见 `reference §5.2`）。
+> **执行进度更新（v2.5）**：**视频编辑 Drawer 4 Tab + 全屏模式已于 2026-05-01 完成（CHG-DESIGN-10）**，交付物：680px 宽 + fullscreen toggle + 4 Tab（基础信息 / 播放线路 / 图片管理 / 豆瓣同步）+ quick header（poster / title / VisChip / DualSignal）+ footer（最后编辑 + cancel + 保存更改）。**M-SN-4 主要剩余业务视图 = 审核台三栏**（`reference §5.2`，本期核心）；另有 VideoEditDrawer 线路/图片/豆瓣三 Tab 真实 API 集成（当前为 mock UI，等待后端扩展 `VideoAdminDetail` 字段 probe/render/sources/images，可与审核台并行推进）。
 
 > **前置 admin-ui 原语（v2.5 新增）**：审核台 `/admin/moderation` 三栏布局需要 `SplitPane` 原语（`reference §4.6` 弹层规范，左侧内容列表 / 中间正文 / 右侧元数据三栏）。SplitPane 目前在 admin-ui 缺失（见 `implementation-gap-report-2026-04-30.md` §3.2）。**M-SN-4 首张审核台任务卡启动前，须先在 `packages/admin-ui` 落地 `SplitPane` 原语。**
 
@@ -528,15 +530,15 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
 
 ### M-SN-6 · 周边视图 + 设计稿缺口 + 大数据原语 · **4 周**（R7 MUST-7 c 上调）
 
-> **v2.5 更新（2026-05-01）**：设计稿"设置补全 / 采集展开 / 开发者模式 / 弹层规范"四项已完成，M-SN-6 启动条件（§10.2 / §11.4 原"确认设计稿完工度"）已满足。具体规范：`reference §5.11`（Settings 8 类 Tab 完整表单）/ `reference §5.6`（Crawler 站点行展开 + DAG）/ `reference §0a`（DevMode 三栏：Tokens / Semantic / Components）/ `reference §4.5/§4.6`（Popover + SplitPane 弹层规范）。另需注意：`Popover` 原语目前在 admin-ui 缺失（见 `implementation-gap-report-2026-04-30.md` §3.2），M-SN-6 内 filter popover / select-like 控件启动前须先落地。
+> **v2.5 更新（2026-05-01）**：设计稿"设置补全 / 采集展开 / 开发者模式 / 弹层规范"四项**设计规范已补齐**，M-SN-6 启动条件（§10.2 / §11.4 原"确认设计稿完工度"）已满足；实现对齐在本 milestone 落实。具体规范出处：`reference §5.11`（Settings 8 类 Tab 完整表单）/ `reference §5.6`（Crawler 采集控制站点行展开布局；**站点任务依赖 DAG 仍列于 reference 待明确项 A2，设计稿尚未给出完整 DAG 规范，"采集展开"对齐不含 DAG 部分**）/ `reference §0a`（DevMode 三栏：Tokens / Semantic / Components）/ `reference §4.5/§4.6`（Popover + SplitPane 弹层规范）。另需注意：`Popover` 原语目前在 admin-ui 缺失（见 `implementation-gap-report-2026-04-30.md` §3.2），M-SN-6 内 filter popover / select-like 控件启动前须先落地。
 
 - **范围**：
-  - `/admin/crawler`（站点行展开 + 任务依赖 DAG + MACCMS 配置 + 线路别名分组，参见 `reference §5.6`）— 触发 reactflow vs dagre-d3 选型
+  - `/admin/crawler`（站点行展开 + MACCMS 配置 + 线路别名分组，参见 `reference §5.6`；任务依赖 DAG 视 reference 待明确项 A2 确认后落地）— 触发 reactflow vs dagre-d3 选型（DAG 确认后方生效）
   - `/admin/image-health`
   - `/admin/analytics` — 触发 recharts vs visx 选型
   - `/admin/system/*`（settings / cache / monitor / config / migration，5 子视图）— **Settings 8 类 Tab 真实表单**（基础 / 豆瓣 / 过滤 / 图片 / 通知 / API·Webhook / 缓存·CDN / 登录会话，参见 `reference §5.11`）
   - `/admin/audit`（审计日志，新增视图）
-  - 设计稿新内容对齐（设置补全 `reference §5.11` / 采集展开 `reference §5.6` / 开发者模式 `reference §0a` / 弹层规范 `reference §4.5/§4.6`）— 设计稿已完成，本 milestone 落实对齐
+  - 设计规范对齐实现（设置补全 `reference §5.11` / 采集展开布局 `reference §5.6` / 开发者模式 `reference §0a` / 弹层规范 `reference §4.5/§4.6`）— 设计规范已补齐（DAG 除外，reference 待明确项 A2）；实现对齐在本 milestone 落实
   - 通知 + 后台任务双面板 + Toast 系统
   - **Popover 原语**（admin-ui 补充，先于 filter popover / select-like 控件任务卡启动）
   - **大数据原语**：游标分页 + 虚拟滚动（首次 >50k 数据集出现时按需即建）— 触发 react-virtual vs react-window 选型
@@ -1036,14 +1038,14 @@ M-SN-0 完成 = 三批全部 PASS + 三份 ADR 进入 `docs/decisions.md` + 本 
 
 ### v2.4 → v2.5（2026-05-01）
 
-由用户指令触发：SEQ-20260429-01 + SEQ-20260429-02 全部完成（2026-05-01）后，设计稿新内容（设置补全 / 采集展开 / 开发者模式 / 弹层规范 / Dashboard 卡片）确认已完工；计划暂停于 M-SN-3-10 后，恢复启动前需将 plan 与设计稿 + 执行进度对齐。本次修订为轻量现状对齐（**无新决策、无范围变更、无 Non-Goals 修改**），仅沉淀执行实证 + 解除已满足的前置条件约束。
+由用户指令触发：SEQ-20260429-01 + SEQ-20260429-02 全部完成（2026-05-01）后，设计稿新内容（设置补全 / 采集展开 / 开发者模式 / 弹层规范 / Dashboard 卡片）确认已完工；计划暂停于 M-SN-3-10 后，恢复启动前需将 plan 与设计稿 + 执行进度对齐。本次修订性质：**现状对齐 + 前置依赖约束追加**（无新功能决策、无 Non-Goals 修改；M-SN-4/M-SN-6 新增 SplitPane / Popover 前置依赖属范围约束澄清而非新范围扩张，但仍属 §0 需要 arch-reviewer 的"范围"修订）。
 
 **修订内容**：
 
 - **§1 文件头**：version v2.4 → v2.5；generated_at 追加 2026-05-01（v2.5）
-- **§6 M-SN-3**：标注 ✅ 已完成（2026-05-01），追加执行实证段（SEQ-20260429-01/02 完成范围 + 超出原 M-SN-3 边界的落地内容：DataTable 一体化 / Dashboard / Analytics / Settings 容器 / Cell 共享层；指向 `implementation-gap-report-2026-04-30.md` 更新版）
-- **§6 M-SN-4**：追加执行进度更新段（VideoEditDrawer 4 Tab + 全屏已完成，CHG-DESIGN-10，剩余 = 审核台三栏实现）；追加前置依赖段（`SplitPane` admin-ui 原语需先于审核台首张任务卡落地，`reference §4.6`，见 `implementation-gap-report-2026-04-30.md` §3.2）；在范围列表中将"视频编辑 Drawer 4 Tab"标为 ✅ 已完成，追加"VideoEditDrawer 线路/图片/豆瓣三 Tab 真实 API 集成"为剩余工作
-- **§6 M-SN-6**：追加 v2.5 更新段（设计稿四项已完工，M-SN-6 启动条件已满足，具体规范出处 reference §5.11 / §5.6 / §0a / §4.5/§4.6）；范围条目中将"设计稿后续补完对齐"措辞修订为"设计稿新内容对齐（已完成）"；追加 Settings 8 类 Tab 真实表单 + Popover 原语两项前置
+- **§6 M-SN-3**：标题改为"核心实现闭合"；追加执行实证段（SEQ-20260429-01/02 完成范围 + 超出原 M-SN-3 边界的落地内容）；追加残余 3 张卡暂停说明（CHG-SN-3-11/12/13 ⏸，进入 M-SN-4 须用户豁免声明或恢复）
+- **§6 M-SN-4**：追加执行进度更新段（VideoEditDrawer 4 Tab 已完成，剩余 = 主要审核台三栏 + Drawer 三 Tab API 集成，表述区分主次）；追加前置依赖段（`SplitPane` admin-ui 原语，`reference §4.6`，`implementation-gap-report-2026-04-30.md` §3.2）
+- **§6 M-SN-6**：追加 v2.5 更新段（设计规范已补齐，DAG 除外 reference 待明确项 A2；M-SN-6 启动条件已满足）；crawler 范围条目 DAG 加"待 A2 确认"注；新增"设计规范对齐实现"条目措辞区分"规范已补齐 / 实现在本 milestone 落实"
 - **§10.2**：标题增"（v2.5 更新：风险已解除）"；追加 v2.5 更新段（设计稿五项完工确认 + M-SN-6 启动条件已满足）；原"M-SN-6 启动前确认"文本保留但加删除线标记
 - **§11.4**：原"确认设计稿完工度"文本加删除线；追加 v2.5 更新段（条件已满足，下一步优先级：M-SN-4 SplitPane → 审核台 → M-SN-5 → M-SN-6）
 
@@ -1052,11 +1054,11 @@ M-SN-0 完成 = 三批全部 PASS + 三份 ADR 进入 `docs/decisions.md` + 本 
 **修订日志元信息**：
 - Plan-Revision: v2.4 → v2.5
 - 主循环模型：claude-sonnet-4-6
-- 子代理：无（轻量现状对齐修订，无新决策；无需强制 Opus 的 CLAUDE.md 触发情形）
-- 人工 sign-off：用户指令触发（"这一步先修订 docs/server_next_plan_20260427.md"，2026-05-01）
+- 子代理：无（前置依赖追加不涉及新 API 契约定义或 ADR 撰写；CLAUDE.md 强制 Opus 六情形均未命中；但按 §0 协议本次修订属范围约束修订，arch-reviewer 本应评审——以用户人工 sign-off 代替）
+- 人工 sign-off：用户指令触发（"这一步先修订 docs/server_next_plan_20260427.md"，2026-05-01）；用户反馈 5 处问题并指定修正方向，已全部采纳（v2.5 第二轮修正，同日）
 - 关联任务：CHG-PLAN-01
 - 关联文档：`docs/designs/backend_design_v2.1/implementation-gap-report-2026-04-30.md`（更新版）
 - 工时影响：0（无范围变更）
-- 重大修订标记：否（仅现状对齐 + 前置条件状态更新；不含范围 / milestone / Non-Goals 变更）
+- 重大修订标记：是（M-SN-4/M-SN-6 新增前置依赖约束属范围类修订）；按 §0 plan 版本协议须人工 sign-off — 用户指令 + 反馈修正确认（2026-05-01）即为 sign-off
 
 — END plan v2.5（CHG-PLAN-01 落地）—
