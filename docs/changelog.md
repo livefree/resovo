@@ -3594,3 +3594,28 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - typecheck ✅ 通过（tsc --noEmit 零报错）
 - lint ✅ 通过（VideoEditDrawer img 警告为预存在，不在本卡范围）
 - unit ✅ 19/19 通过（≥3 case 要求满足）
+
+## [CHG-SN-4-02] 审核台 `/admin/moderation` 三栏业务页
+- **完成时间**：2026-05-01
+- **记录时间**：2026-05-01
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/page.tsx`（替换 PlaceholderPage）
+  - `apps/server-next/src/app/admin/moderation/_client/` 下 10 个新文件（ModerationConsole / mock-data / ModListRow / DecisionCard / EpisodeSelector / LinesPanel / PendingCenter / StagingTabContent / RejectedTabContent）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 全 mock data（实际 API 等 VideoAdminDetail 扩展后接入）
+  - 键盘 J/K（切换）/ A（通过）/ R（拒绝）/ S（跳过）已接线，console.log 占位
+  - 三栏布局：SplitPane 280px / 1fr / 300px；右栏 window.innerWidth < 1280 自动隐藏
+  - 播放占位区用 player token（`--player-full-bg` / `--player-full-overlay` 等），零硬编码
+  - Staging tab：就绪检查清单 + 发布设置 segment
+  - Rejected tab：拒绝原因 banner + 时间线历史 + 操作按钮
+  - no-console 使用文件级 `/* eslint-disable no-console */`（mock 阶段合理；接入真实 API 后移除）
+
+### 质量门禁
+
+- typecheck ✅ 通过（tsc --noEmit 零报错）
+- lint ✅ 通过
+- unit：本期不写单测（mock data 层无逻辑单元，视觉验收 UI 页面）

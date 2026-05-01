@@ -1767,3 +1767,23 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 - **主循环模型**：claude-sonnet-4-6
 - **子代理**：arch-reviewer (claude-opus-4-7)
 - **备注**：StagingTable 失败为预存在 bug，与本卡无关（已 stash 验证）
+
+### CHG-SN-4-02 · 审核台 `/admin/moderation` 三栏业务页 ✅ 完成（2026-05-01）
+
+- **来源**：M-SN-4，plan §5.2 内容审核 Moderation Console
+- **状态**：✅ 完成（2026-05-01）
+- **交付物**：
+  - `apps/server-next/src/app/admin/moderation/page.tsx`（替换 PlaceholderPage）
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`
+  - `apps/server-next/src/app/admin/moderation/_client/mock-data.ts`
+  - `apps/server-next/src/app/admin/moderation/_client/ModListRow.tsx`
+  - `apps/server-next/src/app/admin/moderation/_client/DecisionCard.tsx`
+  - `apps/server-next/src/app/admin/moderation/_client/EpisodeSelector.tsx`
+  - `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx`
+  - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx`
+  - `apps/server-next/src/app/admin/moderation/_client/StagingTabContent.tsx`
+  - `apps/server-next/src/app/admin/moderation/_client/RejectedTabContent.tsx`
+- **质量门禁**：typecheck ✅ / lint ✅（mock阶段 no-console 文件级 disable；硬编码颜色换 player 令牌）
+- **主循环模型**：claude-sonnet-4-6
+- **子代理**：无（复用已有 admin-ui 组件，无新共享 API 契约）
+- **备注**：全 mock data；键盘 J/K/A/R/S 已接线；三 tab（待审核/待发布/已拒绝）已实现；右栏 <1280px 自动隐藏；真实 API 等 VideoAdminDetail 扩展后接入
