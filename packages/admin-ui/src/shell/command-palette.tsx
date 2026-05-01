@@ -41,6 +41,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
+import { OverlayBackdrop } from '../components/overlay/overlay-backdrop'
 import { useFormatShortcut } from './platform'
 import type { CommandGroup, CommandItem } from './types'
 
@@ -50,13 +51,6 @@ export interface CommandPaletteProps {
   readonly onClose: () => void
   readonly onAction: (item: CommandItem) => void
   readonly placeholder?: string
-}
-
-const BACKDROP_STYLE: CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  background: 'var(--bg-overlay)',
-  zIndex: 'var(--z-shell-cmdk)' as unknown as number,
 }
 
 const PANEL_WRAPPER_STYLE: CSSProperties = {
@@ -309,11 +303,10 @@ export function CommandPalette({ open, groups, onClose, onAction, placeholder = 
 
   return createPortal(
     <>
-      <div
-        aria-hidden="true"
+      <OverlayBackdrop
+        zIndex={'var(--z-shell-cmdk)' as unknown as CSSProperties['zIndex']}
         data-command-palette-backdrop
         onClick={handleBackdropClick}
-        style={BACKDROP_STYLE}
       />
       <div
         ref={panelRef}

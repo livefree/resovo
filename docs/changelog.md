@@ -3406,6 +3406,25 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 
 ---
 
+## [CHG-DESIGN-16] CommandPalette 接入 OverlayBackdrop（透明遮罩）
+
+- **完成时间**：2026-05-01
+- **记录时间**：2026-05-01 03:23
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `packages/admin-ui/src/shell/command-palette.tsx` — 删除 `BACKDROP_STYLE`（含 `background: var(--bg-overlay)`），改用 `<OverlayBackdrop zIndex="var(--z-shell-cmdk)" data-command-palette-backdrop>`；无 children → ariaHidden 默认 true，aria-hidden="true" 语义不变
+- **新增依赖**：无
+- **数据库变更**：无
+- **效果**：⌘K 打开时背景透明
+
+### 质量门禁
+
+- `npm run typecheck` ✅
+- `npm run test -- --run` (command-palette 三文件) ✅ 52 tests passed
+
+---
+
 ## [CHG-DESIGN-15] DrawerShell 接入 OverlayBackdrop（透明遮罩）
 
 - **完成时间**：2026-05-01
