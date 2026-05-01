@@ -118,17 +118,27 @@ describe('InlineRowActions — 点击 + e.stopPropagation', () => {
 })
 
 describe('InlineRowActions — alwaysVisible / a11y', () => {
-  it('alwaysVisible=true → 渲染 opacity:1 + data-always-visible="true"', () => {
+  it('alwaysVisible=true → opacity:1 + data-always-visible="true"', () => {
     const { container } = render(<InlineRowActions actions={[]} alwaysVisible />)
     const root = container.querySelector('[data-row-actions]') as HTMLElement
     expect(root.getAttribute('data-always-visible')).toBe('true')
     expect(root.style.opacity).toBe('1')
   })
 
-  it('alwaysVisible 默认 false → 不渲染 data-always-visible', () => {
+  // reference §6.0 + 12A 契约硬约束："行内 actions 默认 opacity 0，hover 行后出现"
+  // 消费方在父表格 CSS 写 `tr:hover [data-row-actions] { opacity: 1 }` 触发 hover 浮现
+  it('alwaysVisible 默认 false → opacity:0 + 不渲染 data-always-visible（reference §6.0 hover 浮现契约）', () => {
     const { container } = render(<InlineRowActions actions={[]} />)
     const root = container.querySelector('[data-row-actions]') as HTMLElement
     expect(root.getAttribute('data-always-visible')).toBeNull()
+    expect(root.style.opacity).toBe('0')
+  })
+
+  it('opacity transition 200ms cubic-bezier（hover 切换平滑）', () => {
+    const { container } = render(<InlineRowActions actions={[]} />)
+    const root = container.querySelector('[data-row-actions]') as HTMLElement
+    expect(root.style.transition).toContain('opacity')
+    expect(root.style.transition).toContain('200ms')
   })
 
   it('action.title 渲染为 button.title attribute', () => {

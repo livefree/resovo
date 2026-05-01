@@ -90,9 +90,15 @@ export function InlineRowActions({
     })
   }
 
+  // 12A 契约硬约束（reference §6.0 行内 actions 默认 opacity 0，hover 行后出现）：
+  //   - alwaysVisible=true：永远 opacity 1（不依赖父表格 hover）
+  //   - alwaysVisible=false（默认）：opacity 0；消费方在父表格 CSS 写
+  //     `tr:hover [data-row-actions] { opacity: 1 }` 触发 hover 浮现
+  // transition 200ms 让 hover 切换平滑（CHG-DESIGN-04 sidebar 同款 cubic-bezier）
   const rootStyle: React.CSSProperties = {
     ...ROOT_STYLE,
-    opacity: alwaysVisible ? 1 : undefined, // 由消费方控制 hover 切换；本组件不强制 opacity:0
+    opacity: alwaysVisible ? 1 : 0,
+    transition: 'opacity 200ms cubic-bezier(0.4, 0, 0.2, 1)',
   }
 
   return (
