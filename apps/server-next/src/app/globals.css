@@ -13,7 +13,14 @@
 html {
   background: var(--bg-canvas);
   color: var(--fg-default);
+}
+
+html[data-theme="dark"] {
   color-scheme: dark;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
 }
 
 body {

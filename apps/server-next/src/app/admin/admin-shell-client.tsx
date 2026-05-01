@@ -13,11 +13,12 @@
  *   - 函数回调不可从 server component 直接传入；必须在此 'use client' 边界层构建
  *   - 数据 stub（notifications / tasks / user）在 M-SN-2 阶段使用 mock；M-SN-3+ 接入真实端点
  */
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useContext, useMemo, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { AdminShell, inferBreadcrumbs } from '@resovo/admin-ui'
 import type { AdminShellUser, NotificationItem, TaskItem, UserMenuAction } from '@resovo/admin-ui'
+import { ThemeContext } from '@/contexts/BrandProvider'
 import { ADMIN_NAV } from '@/lib/admin-nav'
 import {
   adminNavCountProviderStub,
@@ -41,14 +42,14 @@ const MOCK_USER_BASE = {
 } satisfies Omit<AdminShellUser, 'role'>
 
 const COOKIE_COLLAPSED = 'admin-sidebar-collapsed'
-const COOKIE_THEME = 'resovo-theme'
 
 export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, children }: AdminShellClientProps) {
   const rawPathname = usePathname()
   const pathname = rawPathname ?? '/admin'
   const router = useRouter()
+  const themeContext = useContext(ThemeContext)
 
-  const [theme, setTheme] = useState<'dark' | 'light'>(initialTheme)
+  const theme = themeContext?.resolvedTheme ?? initialTheme
 
   const user: AdminShellUser = useMemo(() => ({
     ...MOCK_USER_BASE,
@@ -64,12 +65,8 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
   }, [router])
 
   const handleThemeToggle = useCallback(() => {
-    setTheme((prev) => {
-      const next = prev === 'dark' ? 'light' : 'dark'
-      document.cookie = `${COOKIE_THEME}=${next}; path=/; max-age=31536000; SameSite=Lax`
-      return next
-    })
-  }, [])
+    themeContext?.setTheme(theme === 'dark' ? 'light' : 'dark')
+  }, [theme, themeContext])
 
   const handleUserMenuAction = useCallback((action: UserMenuAction) => {
     switch (action) {

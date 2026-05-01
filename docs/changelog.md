@@ -14,8 +14,6 @@
 格式固定，便于追踪变更历史和排查问题。
 追加规则：新记录统一追加到文件尾部，不做头部插入。
 
----
-
 ## 记录格式模板
 
 ```
@@ -3532,3 +3530,24 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 
 - `npm --workspace @resovo/admin-ui run typecheck` ✅
 - `npm test -- tests/unit/components/admin-ui/shell/sidebar.test.tsx tests/unit/components/admin-ui/shell/admin-shell.test.tsx tests/unit/components/admin-ui/shell/sidebar-ssr.test.tsx` ✅（3 files / 64 tests）
+
+---
+
+## [CHG-DESIGN-18] 后台主题按钮接入 ThemeContext
+
+- **完成时间**：2026-05-01
+- **记录时间**：2026-05-01 03:47
+- **执行模型**：gpt-5-codex
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/admin-shell-client.tsx` — Topbar 主题按钮不再只改本地 state/cookie，改为读取 `ThemeContext.resolvedTheme` 并调用 `ThemeContext.setTheme()`，由 BrandProvider 统一同步 `html[data-theme]` 与 `resovo-theme` cookie。
+  - `apps/server-next/src/app/globals.css` — `color-scheme` 跟随 `html[data-theme="dark"|"light"]` 切换，避免浅色主题仍声明 dark color-scheme。
+  - `tests/unit/components/server-next/admin/admin-shell-client.test.tsx` — 新增主题按钮调用 ThemeContext 的回归测试。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：设计稿 v2.1 与当前实现保持“dark-first + 五档 surface”角色一致；主强调色差异是既定取舍，设计稿 amber 不强制回退，当前实现继续使用 packages/design-tokens/server-next 的品牌蓝 accent。
+
+### 质量门禁
+
+- `npm --workspace @resovo/server-next run typecheck` ✅
+- `npm test -- tests/unit/components/server-next/admin/admin-shell-client.test.tsx tests/unit/components/admin-ui/shell/topbar.test.tsx tests/unit/components/admin-ui/shell/admin-shell.test.tsx` ✅（45 tests）
