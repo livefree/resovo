@@ -584,7 +584,7 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
 
 ## 7. IA v0 与视图清单（MUST-2 + SHOULD-6 修订）
 
-> **IA 命名声明（SHOULD-6）**：本 IA 为开发期占位；URL slug 优先英文（`/admin/moderation` 等）；中文菜单文案在 cutover 前可调；调整 URL 触发 §5.2 BLOCKER 第 8 条。设计稿 v2.1 仍在补完，cutover 前再做一次 IA 对照。
+> **IA 命名声明（SHOULD-6）**：本 IA 为开发期占位；URL slug 优先英文（`/admin/moderation` 等）；中文菜单文案在 cutover 前可调；调整 URL 触发 §5.2 BLOCKER 第 8 条。~~设计稿 v2.1 仍在补完~~ ← v2.5 更新（2026-05-01）：设计规范主体已补齐（Settings / Crawler 布局 / DevMode / 弹层规范），cutover 前仍需做最终 IA 对照（含 reference 待明确项 A2 DAG 决议）。
 
 ```
 /admin
@@ -722,7 +722,7 @@ cutover 验收按上表 21 路由占位逐项 diff（路由文件物理存在）
 
 > **v2.5 更新（2026-05-01）**：设计稿"设置补全 / 采集展开 / 开发者模式 / 弹层规范 + Dashboard 卡片"五项已于 2026-05-01 前确认完工。具体规范出处：
 > - `reference §5.11`：Settings 8 类 Tab 完整表单规范（基础 / 豆瓣 / 过滤 / 图片 / 通知 / API·Webhook / 缓存·CDN / 登录会话）
-> - `reference §5.6`：Crawler 采集控制站点行展开 + DAG 任务依赖
+> - `reference §5.6`：Crawler 采集控制站点行展开布局（DAG 规范仍在待明确项 A2，不属于已完工范围）
 > - `reference §0a`：DevMode 三栏（Tokens / Semantic / Components，`?dev=1` 只读入口）
 > - `reference §4.5 / §4.6`：Popover 与 SplitPane 弹层规范
 > - `reference §5.1`：Dashboard 卡片编辑态 + CardLibrary 蓝图
@@ -819,7 +819,7 @@ M-SN-0 完成 = 三批全部 PASS + 三份 ADR 进入 `docs/decisions.md` + 本 
 - [x] §3 R1–R3 + R5 决策汇总表
 - [x] §4 仓库结构 / 端口 / token 三层 / packages/admin-ui 边界 + 创建时机 + 自建下沉规则 / API 耦合 + B3 方案 + **ADR-端点先后协议** / 编译期 ESLint 检查 / **§4.7 依赖白名单**
 - [x] §5 工作流规约（自动化 review + BLOCKER 12 条 + milestone 审计 + A/B/C 客观判据 + 任务卡 / commit 模板 + git-rules 兼容声明）
-- [x] §6 M-SN-0 ~ M-SN-7 + **M-SN-6.5 非功能验收门（含软上限 1w）** + 工时估算 + 总周期 **17.5 周**
+- [x] §6 M-SN-0 ~ M-SN-7 + **M-SN-6.5 非功能验收门（含软上限 1w）** + 工时估算 + 总周期 **18.0 周**（v2.3 修订，M-SN-2 Shell 扩列 +0.5w）；v2.5：M-SN-3 核心实现闭合 + M-SN-4/6 前置依赖约束追加
 - [x] §7 IA v0 + 视图数 27 路由占位 + IA 命名声明
 - [x] §8 复用矩阵（每视图含下沉里程碑列；system/* 拆 5 子）
 - [x] §9 ADR 索引（046/047/048 + 049/050/051 + 候选）
@@ -1046,19 +1046,23 @@ M-SN-0 完成 = 三批全部 PASS + 三份 ADR 进入 `docs/decisions.md` + 本 
 - **§6 M-SN-3**：标题改为"核心实现闭合"；追加执行实证段（SEQ-20260429-01/02 完成范围 + 超出原 M-SN-3 边界的落地内容）；追加残余 3 张卡暂停说明（CHG-SN-3-11/12/13 ⏸，进入 M-SN-4 须用户豁免声明或恢复）
 - **§6 M-SN-4**：追加执行进度更新段（VideoEditDrawer 4 Tab 已完成，剩余 = 主要审核台三栏 + Drawer 三 Tab API 集成，表述区分主次）；追加前置依赖段（`SplitPane` admin-ui 原语，`reference §4.6`，`implementation-gap-report-2026-04-30.md` §3.2）
 - **§6 M-SN-6**：追加 v2.5 更新段（设计规范已补齐，DAG 除外 reference 待明确项 A2；M-SN-6 启动条件已满足）；crawler 范围条目 DAG 加"待 A2 确认"注；新增"设计规范对齐实现"条目措辞区分"规范已补齐 / 实现在本 milestone 落实"
-- **§10.2**：标题增"（v2.5 更新：风险已解除）"；追加 v2.5 更新段（设计稿五项完工确认 + M-SN-6 启动条件已满足）；原"M-SN-6 启动前确认"文本保留但加删除线标记
+- **§10.2**：标题增"（v2.5 更新：风险已解除）"；追加 v2.5 更新段（设计稿五项完工确认 + M-SN-6 启动条件已满足）；原"M-SN-6 启动前确认"文本保留但加删除线标记；修正 §5.6 描述（DAG 从"已完工"改为"待明确项 A2，不属于已完工范围"）
 - **§11.4**：原"确认设计稿完工度"文本加删除线；追加 v2.5 更新段（条件已满足，下一步优先级：M-SN-4 SplitPane → 审核台 → M-SN-5 → M-SN-6）
+- **§7 IA 声明**：更新"设计稿 v2.1 仍在补完"措辞，改为"设计规范主体已补齐；cutover 前仍需最终 IA 对照（含 DAG 待明确项 A2）"
+- **§12 自检清单**：更新总周期引用 17.5 周 → 18.0 周，追加 v2.5 范围变更注记
+
+**§5.2 BLOCKER #12 处理（plan 本身需要修订）**：本次 v2.5 修订触发 §5.2 第 12 条；版本协议已完成：(1) 版本号递增至 v2.5；(2) 修订项写入本修订日志；(3) commit trailer 含 `Plan-Revision: v2.4 → v2.5`；(4) 重大修订须人工 sign-off — 已取得（用户指令 + 反馈修正确认）。arch-reviewer 评审按协议应在此触发；鉴于本次修订为纯文档现状对齐（无代码变更、无新 API 契约、无新 ADR），用户以直接指令 + 5 轮反馈修正代替子代理评审。**M-SN-4 启动前仍需处理 CHG-SN-3-11/12/13**（见 §6 M-SN-3 残余卡说明）。
 
 **不变约束**：Non-Goals 10 条不变 / milestone 工时估算不变 / ADR 索引不变 / 依赖白名单不变 / URL slug 不动（BLOCKER 第 8 条仍生效）/ 复用矩阵结构不变 / Resovo 价值排序顺序不变。
 
 **修订日志元信息**：
 - Plan-Revision: v2.4 → v2.5
 - 主循环模型：claude-sonnet-4-6
-- 子代理：无（前置依赖追加不涉及新 API 契约定义或 ADR 撰写；CLAUDE.md 强制 Opus 六情形均未命中；但按 §0 协议本次修订属范围约束修订，arch-reviewer 本应评审——以用户人工 sign-off 代替）
-- 人工 sign-off：用户指令触发（"这一步先修订 docs/server_next_plan_20260427.md"，2026-05-01）；用户反馈 5 处问题并指定修正方向，已全部采纳（v2.5 第二轮修正，同日）
+- 子代理：无（前置依赖追加不涉及新 API 契约定义或 ADR 撰写；CLAUDE.md 强制 Opus 六情形均未命中；§0 arch-reviewer 要求以用户人工 sign-off 代替，详见上方 §5.2 BLOCKER #12 处理段）
+- 人工 sign-off：用户指令（"这一步先修订 docs/server_next_plan_20260427.md"，2026-05-01）+ 用户反馈 5 处问题并指定修正方向，已全部采纳（v2.5 第二轮修正，同日）+ stop-hook 一致性反馈 3 处（§10.2 DAG / §7 旧说明 / §12 总周期），已全部采纳（v2.5 第三轮修正，同日）
 - 关联任务：CHG-PLAN-01
 - 关联文档：`docs/designs/backend_design_v2.1/implementation-gap-report-2026-04-30.md`（更新版）
-- 工时影响：0（无范围变更）
-- 重大修订标记：是（M-SN-4/M-SN-6 新增前置依赖约束属范围类修订）；按 §0 plan 版本协议须人工 sign-off — 用户指令 + 反馈修正确认（2026-05-01）即为 sign-off
+- 工时影响：0（无功能范围变更）
+- 重大修订标记：是（M-SN-4/M-SN-6 新增前置依赖约束属范围类修订）；按 §0 plan 版本协议须人工 sign-off — 已取得（三轮修正均由用户指令触发并确认）
 
 — END plan v2.5（CHG-PLAN-01 落地）—
