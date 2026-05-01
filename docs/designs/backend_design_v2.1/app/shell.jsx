@@ -25,12 +25,13 @@ const NAV = [
   ]},
   { group: "采集中心", items: [
     { id: "crawler",     icon: I.spider, label: "采集控制", count: null,           shortcut: "⌘5" },
-    { id: "staging",     icon: I.upload, label: "待发布",   count: 23 },
   ]},
   { group: "系统管理", items: [
     { id: "users",       icon: I.users,    label: "用户管理", count: null },
     { id: "settings",    icon: I.settings, label: "站点设置", count: null,         shortcut: "⌘," },
     { id: "audit",       icon: I.doc,      label: "审计日志", count: null },
+    { id: "devmode",     icon: I.bot,      label: "开发者模式", count: null },
+    { id: "modalspec",   icon: I.layers,   label: "弹层规范", count: null },
   ]},
 ];
 
@@ -181,7 +182,7 @@ const Topbar = ({ crumbs = [], onSearch, theme, onTheme, health }) => {
 const CMDS = [
   { group: "导航", items: [
     { icon: I.inbox, label: "前往 内容审核台", meta: "G then M", action: "moderation" },
-    { icon: I.upload, label: "前往 暂存发布队列", meta: "G then S", action: "staging" },
+    { icon: I.upload, label: "前往 待发布 (审核台 Tab)", meta: "G then M", action: "moderation" },
     { icon: I.film, label: "前往 视频库", meta: "G then V", action: "videos" },
     { icon: I.link, label: "前往 播放源 / 线路", meta: "G then L", action: "sources" },
     { icon: I.spider, label: "前往 采集控制台", meta: "G then C", action: "crawler" },

@@ -30,6 +30,7 @@ import { WorkflowCard } from '@/components/admin/dashboard/WorkflowCard'
 import { MetricKpiCardRow } from '@/components/admin/dashboard/MetricKpiCardRow'
 import { RecentActivityCard } from '@/components/admin/dashboard/RecentActivityCard'
 import { SiteHealthCard } from '@/components/admin/dashboard/SiteHealthCard'
+import { AnalyticsView } from './AnalyticsView'
 
 // ── types ─────────────────────────────────────────────────────────
 
@@ -112,11 +113,6 @@ const ROW3_STYLE: React.CSSProperties = {
   gap: '12px',
 }
 
-const ANALYTICS_PLACEHOLDER_STYLE: React.CSSProperties = {
-  color: 'var(--fg-muted)',
-  fontSize: '14px',
-  padding: '24px 0',
-}
 
 function tabBtnStyle(active: boolean): React.CSSProperties {
   return {
@@ -210,11 +206,7 @@ export function DashboardClient() {
         </>
       )}
 
-      {activeTab === 'analytics' && (
-        <div data-testid="analytics-tab" style={ANALYTICS_PLACEHOLDER_STYLE}>
-          数据看板功能正在迁移中，将于 CHG-DESIGN-09 全功能实装。
-        </div>
-      )}
+      {activeTab === 'analytics' && <AnalyticsView />}
     </div>
   )
 }

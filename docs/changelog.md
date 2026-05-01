@@ -3336,3 +3336,36 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **VIDEO-TEAM-VIEWS-API**：team scope save/load 真端点（M-SN-4+）
 - **VIDEO-EXPORT-CSV** / **VIDEO-MANUAL-ADD**：page__head actions 真实化
 - **VIDEO-E2E-BATCH-FLAKE**：批量下架 e2e flake 修复
+
+---
+
+## [CHG-DESIGN-09] Analytics tab 内容迁入
+
+- **完成时间**：2026-04-30
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **关联序列**：SEQ-20260429-02 第 9 卡
+
+### 产出
+
+- `apps/server-next/src/app/admin/_client/AnalyticsView.tsx`（新建）
+  · page__head（标题「数据看板」+ sub + period select + 导出报表 disabled btn）
+  · 4 KPI 卡 `repeat(4, 1fr)` grid（复用 `KpiCard` + `Spark` from admin-ui）
+  · 2fr/1fr grid：采集任务量折线面积图（SVG inline）+ 源类型分布（进度条列表）
+  · 爬虫最近任务 card + 内联 table（§6.9 7 列：资源站/状态/开始/结束/新增视频/新增源/耗时）
+  · 全 mock deterministic（follow-up `STATS-EXTEND-ANALYTICS`）
+- `apps/server-next/src/app/admin/_client/DashboardClient.tsx`（修改）
+  · analytics 分支 `<AnalyticsView />` 替换占位 div；删除 `ANALYTICS_PLACEHOLDER_STYLE`
+
+### 验收对照（reference.md §5.15）
+
+- [x] page__head：标题「数据看板」+ sub「视频 · 源 · 用户 · 采集任务 — 多维度运营观测」+ period select + 导出报表 btn
+- [x] 4 KPI（视频总数 695 / 已上架 13 / 待审·暂存 484/23 / 源可达率 98.7%），各含 Spark
+- [x] 2fr/1fr：采集任务量折线面积图（正弦波形 + accent 渐变填充）+ 源类型分布（4 条进度条）
+- [x] 爬虫最近任务表 6 行（成功/运行中/失败三态，Pill 颜色正确）
+- [x] 全色值 CSS 变量；verify:token-references PASS (71/322)
+- [x] Playwright visual baseline 入库 `tests/visual/analytics/`（analytics-tab-full.png + analytics-crawler-table-bottom.png）
+
+### 质量门禁
+
+- typecheck ✅ / lint ✅ / 2759 单测全绿 ✅ / verify:token-references PASS ✅

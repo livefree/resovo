@@ -238,11 +238,108 @@ const StagingView = () => (
 );
 
 /* ── Crawler Control Center ────────────────────────────── */
-const CrawlerView = () => (
+const SITE_ROUTES = {
+  iqiy:  [{id:"r1",name:"线路1",alias:"高清",proto:"m3u8",probe:"ok",render:"ok",videos:312,ms:142},{id:"r2",name:"线路2",alias:"",proto:"mp4",probe:"partial",render:"ok",videos:89,ms:280}],
+  bdzy:  [{id:"r3",name:"线路1",alias:"",proto:"m3u8",probe:"all_dead",render:"all_dead",videos:201,ms:null},{id:"r4",name:"线路2",alias:"备线",proto:"m3u8",probe:"ok",render:"ok",videos:201,ms:312}],
+  dbzy:  [{id:"r5",name:"线路1",alias:"主线",proto:"m3u8",probe:"ok",render:"ok",videos:445,ms:88},{id:"r6",name:"线路2",alias:"",proto:"m3u8",probe:"ok",render:"ok",videos:445,ms:96}],
+};
+
+const SiteRouteRow = ({ route, onTestPlay }) => {
+  const [alias, setAlias] = React.useState(route.alias);
+  const [editing, setEditing] = React.useState(false);
+  const probeC = route.probe === "ok" ? "ok" : route.probe === "partial" ? "warn" : "danger";
+  const renderC = route.render === "ok" ? "ok" : route.render === "partial" ? "warn" : "danger";
+  return (
+    <div style={{display:"grid", gridTemplateColumns:"1fr 120px 70px 70px 70px 100px", gap:0, padding:"8px 12px", alignItems:"center", fontSize:12, borderBottom:"1px solid var(--border-subtle)"}}>
+      <div>
+        <div style={{fontWeight:600}}>{route.name}</div>
+        <div className="mono" style={{fontSize:10, color:"var(--muted)"}}>{route.proto.toUpperCase()}</div>
+      </div>
+      <div>
+        {editing ? (
+          <input className="inp inp--sm" defaultValue={alias} autoFocus
+            onBlur={(e) => { setAlias(e.target.value); setEditing(false); }}
+            onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
+            style={{width:"100%"}}
+          />
+        ) : (
+          <span onClick={() => setEditing(true)} style={{fontSize:11, color: alias ? "var(--text-2)" : "var(--muted-2)", cursor:"pointer", padding:"2px 4px", borderRadius:3, border:"1px dashed var(--border)"}}>
+            {alias || "设别名"}
+          </span>
+        )}
+      </div>
+      <span className={`pill pill--${probeC}`} style={{fontSize:10}}><span className="dot"/>探</span>
+      <span className={`pill pill--${renderC}`} style={{fontSize:10}}><span className="dot"/>播</span>
+      <span style={{color:"var(--muted)"}}>{route.ms ? `${route.ms}ms` : "—"}</span>
+      <div style={{display:"flex", gap:3}}>
+        <button className="btn btn--xs">{I.play}</button>
+        <button className="btn btn--xs">{I.refresh}</button>
+        <button className="btn btn--xs btn--danger">{I.trash}</button>
+      </div>
+    </div>
+  );
+};
+
+const SiteExpandRow = ({ site }) => {
+  const routes = SITE_ROUTES[site.key] || [];
+  const [mapExpanded, setMapExpanded] = React.useState(false);
+  return (
+    <div style={{background:"var(--bg1)", borderBottom:"1px solid var(--border)"}}>
+      {/* Routes section */}
+      <div style={{padding:"10px 14px 4px", display:"flex", alignItems:"center", gap:8}}>
+        <span style={{fontSize:11, fontWeight:700, color:"var(--accent)", textTransform:"uppercase", letterSpacing:.8}}>线路 / 别名</span>
+        <span style={{fontSize:11, color:"var(--muted)"}}>{routes.length} 条</span>
+        <span style={{flex:1}}/>
+        <button className="btn btn--xs">+ 添加线路</button>
+      </div>
+      {routes.length > 0 ? (
+        <div style={{margin:"0 14px 10px", border:"1px solid var(--border)", borderRadius:6, overflow:"hidden"}}>
+          <div style={{display:"grid", gridTemplateColumns:"1fr 120px 70px 70px 70px 100px", gap:0, padding:"6px 12px", background:"var(--bg3)", fontSize:10, fontWeight:600, color:"var(--muted)", textTransform:"uppercase", letterSpacing:.5}}>
+            <span>线路名</span><span>别名</span><span>探测</span><span>播放</span><span>延迟</span><span>操作</span>
+          </div>
+          {routes.map(r => <SiteRouteRow key={r.id} route={r} />)}
+        </div>
+      ) : (
+        <div style={{margin:"0 14px 10px", padding:"10px 12px", background:"var(--bg3)", borderRadius:6, fontSize:11, color:"var(--muted)"}}>暂无线路数据</div>
+      )}
+
+      {/* Category mapping */}
+      <div style={{padding:"4px 14px 10px"}}>
+        <div
+          onClick={() => setMapExpanded(e => !e)}
+          style={{display:"flex", alignItems:"center", gap:8, cursor:"pointer", marginBottom: mapExpanded ? 8 : 0}}
+        >
+          <span style={{fontSize:11, fontWeight:700, color:"var(--text-2)", textTransform:"uppercase", letterSpacing:.8}}>分类映射</span>
+          <span style={{color:"var(--muted)", fontSize:11}}>{mapExpanded ? "▴" : "▾"}</span>
+        </div>
+        {mapExpanded && (
+          <div style={{display:"flex", flexDirection:"column", gap:4}}>
+            {[["动作片","action"],["喜剧片","comedy"],["剧情片","drama"]].map(([src, tgt]) => (
+              <div key={src} style={{display:"flex", alignItems:"center", gap:8, fontSize:12}}>
+                <span className="mono" style={{color:"var(--muted)", width:80, flexShrink:0}}>{src}</span>
+                <span style={{color:"var(--muted-2)"}}>→</span>
+                <select className="inp inp--sm" defaultValue={tgt} style={{flex:1}}>
+                  <option value="action">动作</option><option value="comedy">喜剧</option><option value="drama">剧情</option><option value="sci-fi">科幻</option>
+                </select>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ── Crawler Site List — full-width expandable table ──── */
+const CrawlerView = () => {
+  const [expanded, setExpanded] = React.useState({iqiy: true});
+  const toggle = (key) => setExpanded(e => ({...e, [key]: !e[key]}));
+
+  return (
   <>
     <div className="page__head">
-      <div><h1 className="page__title">采集控制台</h1>
-      <div className="page__sub">40 个站点 · 实时任务时间轴 · 一键诊断失败源</div></div>
+      <div><h1 className="page__title">采集控制</h1>
+      <div className="page__sub">40 个站点 · 实时任务时间轴 · 一键诊断失败源 · 展开查看线路/分类映射</div></div>
       <div className="page__actions">
         <button className="btn">{I.download} 导出</button>
         <button className="btn">+ 新增站点</button>
@@ -250,6 +347,7 @@ const CrawlerView = () => (
       </div>
     </div>
 
+    {/* KPI row */}
     <div style={{display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:12, marginBottom:12}}>
       <div className="kpi"><span className="kpi__label">站点</span><span className="kpi__value">40</span><span className="kpi__delta is-up">33 健康</span></div>
       <div className="kpi is-warn"><span className="kpi__label">运行中</span><span className="kpi__value">7</span><span className="kpi__delta">实时</span></div>
@@ -258,63 +356,172 @@ const CrawlerView = () => (
       <div className="kpi"><span className="kpi__label">平均时长</span><span className="kpi__value">60s</span><span className="kpi__delta">/ 站点</span></div>
     </div>
 
-    <div style={{display:"grid", gridTemplateColumns:"1fr 360px", gap:12}}>
-      <div className="card">
-        <div className="card__head">
-          <div className="card__title">实时任务时间轴</div>
-          <span style={{marginLeft:"auto", display:"flex", gap:6}}>
-            <button className="btn btn--xs">{I.pause}</button>
-            <span className="pill pill--ok"><span className="dot pulse"/>实时</span>
-          </span>
-        </div>
-        <div className="card__body" style={{padding:0}}>
-          <div style={{padding:"8px 14px", borderBottom:"1px solid var(--border-subtle)", fontSize:11, color:"var(--muted)", display:"flex", gap:24}}>
-            <span>00:00</span><span>00:15</span><span>00:30</span><span>00:45</span><span>01:00</span><span>01:15</span><span>01:30</span><span>01:45</span><span style={{marginLeft:"auto", color:"var(--accent)"}}>NOW</span>
-          </div>
-          {SITES.slice(0,8).map((s, i) => {
-            const start = (i * 8 + 5) % 90;
-            const dur = 30 + (i % 4) * 15;
-            const status = s.health > 80 ? "ok" : s.health > 50 ? "warn" : "danger";
-            return (
-              <div key={s.key} style={{display:"flex", alignItems:"center", borderBottom:"1px solid var(--border-subtle)", padding:"8px 14px"}}>
-                <div style={{width:120, fontSize:12, fontWeight:600, display:"flex", gap:6, alignItems:"center"}}>
-                  <span style={{width:6, height:6, borderRadius:"50%", background:`var(--${status})`, animation: status === "ok" ? "pulse-dot 1.6s infinite" : "none"}}/>
-                  {s.name}
-                </div>
-                <div style={{flex:1, height:18, background:"var(--bg3)", borderRadius:3, position:"relative"}}>
-                  <div style={{position:"absolute", left:`${start}%`, width:`${dur}%`, height:"100%", background:`var(--${status}-soft)`, border:`1px solid var(--${status})`, borderRadius:3, fontSize:10, color:`var(--${status})`, padding:"2px 6px", overflow:"hidden", whiteSpace:"nowrap"}}>
-                    {Math.round(dur*1.5)}s · {Math.round(s.health*1.2)} 视频
-                  </div>
-                </div>
-                <div style={{width:60, textAlign:"right", fontSize:11, color:"var(--muted)"}}>{s.last}</div>
-              </div>
-            );
-          })}
-        </div>
+    {/* Timeline card — full width */}
+    <div className="card" style={{marginBottom:12}}>
+      <div className="card__head">
+        <div className="card__title">实时任务时间轴</div>
+        <span style={{marginLeft:"auto", display:"flex", gap:6}}>
+          <button className="btn btn--xs">{I.pause}</button>
+          <span className="pill pill--ok"><span className="dot pulse"/>实时</span>
+        </span>
       </div>
-
-      <div className="card">
-        <div className="card__head">
-          <div className="card__title">站点列表 · 75 条</div>
-          <span style={{marginLeft:"auto"}}><button className="btn btn--xs">{I.filter}</button></span>
+      <div className="card__body" style={{padding:0}}>
+        <div style={{padding:"8px 14px", borderBottom:"1px solid var(--border-subtle)", fontSize:11, color:"var(--muted)", display:"flex", gap:24}}>
+          <span>00:00</span><span>00:15</span><span>00:30</span><span>00:45</span><span>01:00</span><span>01:15</span><span>01:30</span><span>01:45</span><span style={{marginLeft:"auto", color:"var(--accent)"}}>NOW</span>
         </div>
-        <div className="card__body" style={{padding:0, maxHeight:520, overflowY:"auto"}}>
-          {SITES.map((s,i) => (
-            <div key={s.key} style={{display:"flex", alignItems:"center", gap:8, padding:"8px 14px", borderTop: i ? "1px solid var(--border-subtle)" : "0"}}>
-              <span style={{width:8, height:8, borderRadius:"50%", background: s.on ? "var(--ok)" : "var(--muted-2)"}}/>
-              <div style={{flex:1, minWidth:0}}>
-                <div style={{fontSize:12, fontWeight:600}}>{s.name}</div>
-                <div style={{fontSize:10, color:"var(--muted)", fontFamily:"monospace"}}>{s.key} · {s.weight}权</div>
+        {SITES.slice(0,8).map((s, i) => {
+          const start = (i * 8 + 5) % 90;
+          const dur = 30 + (i % 4) * 15;
+          const status = s.health > 80 ? "ok" : s.health > 50 ? "warn" : "danger";
+          return (
+            <div key={s.key} style={{display:"flex", alignItems:"center", borderBottom:"1px solid var(--border-subtle)", padding:"8px 14px"}}>
+              <div style={{width:140, fontSize:12, fontWeight:600, display:"flex", gap:6, alignItems:"center", flexShrink:0}}>
+                <span style={{width:6, height:6, borderRadius:"50%", background:`var(--${status})`, animation: status === "ok" ? "pulse-dot 1.6s infinite" : "none", flexShrink:0}}/>
+                {s.name}
               </div>
-              <button className="btn btn--xs">增量</button>
-              <button className="btn btn--xs">全量</button>
+              <div style={{flex:1, height:18, background:"var(--bg3)", borderRadius:3, position:"relative"}}>
+                <div style={{position:"absolute", left:`${start}%`, width:`${dur}%`, height:"100%", background:`var(--${status}-soft)`, border:`1px solid var(--${status})`, borderRadius:3, fontSize:10, color:`var(--${status})`, padding:"2px 6px", overflow:"hidden", whiteSpace:"nowrap"}}>
+                  {Math.round(dur*1.5)}s · {Math.round(s.health*1.2)} 视频
+                </div>
+              </div>
+              <div style={{width:70, textAlign:"right", fontSize:11, color:"var(--muted)", flexShrink:0}}>{s.last}</div>
             </div>
-          ))}
+          );
+        })}
+      </div>
+    </div>
+
+    {/* Site list — full-width expandable table (aligns with wireframe §07) */}
+    <div className="card">
+      <div className="card__head">
+        <div className="card__title">站点列表</div>
+        <span style={{fontSize:11, color:"var(--muted)"}}>点击行展开查看线路 / 分类映射</span>
+        <span style={{marginLeft:"auto", display:"flex", gap:6}}>
+          <input className="inp" placeholder="搜索站点名 / key" style={{width:200, height:30}}/>
+          <button className="btn btn--xs">{I.filter} 筛选</button>
+        </span>
+      </div>
+      <div className="card__body" style={{padding:0}}>
+        {/* Table header */}
+        <div style={{
+          display:"grid",
+          gridTemplateColumns:"32px 32px 1fr 80px 80px 80px 80px 90px 140px",
+          gap:0,
+          padding:"7px 14px",
+          background:"var(--bg3)",
+          borderBottom:"1px solid var(--border)",
+          fontSize:10,
+          fontWeight:600,
+          color:"var(--muted)",
+          textTransform:"uppercase",
+          letterSpacing:.5,
+        }}>
+          <span></span>
+          <span></span>
+          <span>站点</span>
+          <span>类型</span>
+          <span>线路</span>
+          <span>健康度</span>
+          <span>权重</span>
+          <span>最近采集</span>
+          <span>操作</span>
         </div>
+
+        {SITES.map((s, i) => (
+          <React.Fragment key={s.key}>
+            {/* Main row */}
+            <div
+              onClick={() => toggle(s.key)}
+              style={{
+                display:"grid",
+                gridTemplateColumns:"32px 32px 1fr 80px 80px 80px 80px 90px 140px",
+                gap:0,
+                padding:"9px 14px",
+                alignItems:"center",
+                borderTop: i ? "1px solid var(--border-subtle)" : "0",
+                background: expanded[s.key] ? "var(--accent-soft)" : "transparent",
+                cursor:"pointer",
+                transition:"background .1s",
+              }}
+            >
+              {/* Chevron */}
+              <span style={{
+                display:"inline-block",
+                transform: expanded[s.key] ? "rotate(90deg)" : "rotate(0)",
+                transition:"transform .15s",
+                color:"var(--muted)",
+                fontSize:12,
+              }}>{I.chevR}</span>
+
+              {/* Status dot */}
+              <span style={{
+                width:8, height:8, borderRadius:"50%",
+                background: s.on ? (s.health > 80 ? "var(--ok)" : s.health > 50 ? "var(--warn)" : "var(--danger)") : "var(--muted-2)",
+                display:"inline-block",
+                animation: s.on && s.health > 80 ? "pulse-dot 1.6s infinite" : "none",
+              }}/>
+
+              {/* Name + key */}
+              <div>
+                <div style={{fontSize:13, fontWeight:600}}>{s.name}</div>
+                <div style={{fontSize:10, color:"var(--muted)", fontFamily:"monospace", marginTop:1}}>{s.key} · {s.format}</div>
+              </div>
+
+              {/* Type */}
+              <span className="pill" style={{fontSize:10, width:"fit-content"}}>
+                <span className="dot"/>{s.type}
+              </span>
+
+              {/* Routes count */}
+              <span style={{fontSize:12, fontWeight:600}}>
+                {(SITE_ROUTES[s.key] || []).length || "—"}
+                <span style={{color:"var(--muted)", fontWeight:400, fontSize:10}}> 条</span>
+              </span>
+
+              {/* Health bar */}
+              <div style={{display:"flex", alignItems:"center", gap:6}}>
+                <div style={{width:40, height:5, background:"var(--bg3)", borderRadius:999, overflow:"hidden"}}>
+                  <div style={{
+                    width:`${s.health}%`, height:"100%",
+                    background: s.health > 80 ? "var(--ok)" : s.health > 50 ? "var(--warn)" : "var(--danger)",
+                    borderRadius:999,
+                  }}/>
+                </div>
+                <span style={{fontSize:11, color: s.health > 80 ? "var(--ok)" : s.health > 50 ? "var(--warn)" : "var(--danger)", fontWeight:600}}>{s.health}%</span>
+              </div>
+
+              {/* Weight */}
+              <span style={{fontSize:12, color:"var(--text-2)"}}>{s.weight}</span>
+
+              {/* Last crawl */}
+              <span style={{fontSize:11, color:"var(--muted)"}}>{s.last}</span>
+
+              {/* Actions */}
+              <div style={{display:"flex", gap:4}} onClick={e => e.stopPropagation()}>
+                <button className="btn btn--xs">{I.zap} 增量</button>
+                <button className="btn btn--xs">全量</button>
+                <button className="btn btn--xs">{I.more}</button>
+              </div>
+            </div>
+
+            {/* Expanded detail row */}
+            {expanded[s.key] && (
+              <div style={{
+                background:"var(--bg1)",
+                borderTop:"1px solid var(--border)",
+                borderBottom:"1px solid var(--border)",
+                padding:"0 14px 14px",
+              }}>
+                <SiteExpandRow site={s} />
+              </div>
+            )}
+          </React.Fragment>
+        ))}
       </div>
     </div>
   </>
-);
+  );
+};
 
 /* ── Home Operations (Banner + Modules unified) ───────── */
 const HomeOpsView = () => (

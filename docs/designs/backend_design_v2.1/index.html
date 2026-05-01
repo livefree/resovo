@@ -43,6 +43,7 @@
 <script type="text/babel" src="app/screens-3.jsx"></script>
 <script type="text/babel" src="app/video-edit-drawer.jsx"></script>
 <script type="text/babel" src="app/notifications.jsx"></script>
+<script type="text/babel" src="app/screens-4.jsx"></script>
 
 <script type="text/babel" data-presets="env,react">
 const { useState, useEffect } = React;
@@ -50,7 +51,6 @@ const { useState, useEffect } = React;
 const ROUTES = {
   dashboard:     { label: "管理台站",      crumb: ["运营中心", "管理台站"],          comp: () => <Dashboard/> },
   moderation:    { label: "内容审核",      crumb: ["运营中心", "内容审核"],          comp: () => <ModerationConsole/> },
-  staging:       { label: "待发布",        crumb: ["采集中心", "待发布"],            comp: () => <StagingView/> },
   videos:        { label: "视频库",        crumb: ["内容资产", "视频库"],            comp: () => <VideosView/> },
   sources:       { label: "播放线路",      crumb: ["内容资产", "播放线路"],          comp: () => <SourcesView/> },
   merge:         { label: "合并拆分",      crumb: ["内容资产", "合并拆分"],          comp: () => <MergeView/> },
@@ -64,6 +64,8 @@ const ROUTES = {
   settings:      { label: "站点设置",      crumb: ["系统管理", "站点设置"],          comp: () => <SettingsView/> },
   audit:         { label: "审计日志",      crumb: ["系统管理", "审计日志"],          comp: () => <AuditView/> },
   login:         { label: "登录",          crumb: [],                                comp: () => <LoginView/> },
+  devmode:       { label: "开发者模式",    crumb: ["系统管理", "开发者模式"],          comp: () => <DevModeView/> },
+  modalspec:     { label: "弹层规范",      crumb: ["系统管理", "弹层规范"],            comp: () => <ModalSpecView/> },
 };
 
 /* Global drawer state — shared via window so all screens can open it */
