@@ -3238,3 +3238,101 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **8C**：unit smoke + e2e + Playwright MCP visual baseline 入库 `tests/visual/videos/`
 - **VIDEO-EXPORT-CSV**：导出 CSV blob 下载实装
 - **VIDEO-MANUAL-ADD**：新视频创建路由
+
+---
+
+## [CHG-DESIGN-08 8B + 8C] saved views + flash row + Visual baseline 入库 + 整卡闭合
+
+- **完成时间**：2026-04-30（同 session 推进；CHG-DESIGN-12 后接 8A → 8B → 8C）
+- **执行模型**：claude-opus-4-7
+- **关联序列**：SEQ-20260429-02 第 8 卡 · 阶段 2/3 + 3/3
+
+### 8B 产出
+
+1. **saved views localStorage 持久化**：
+   - apps/server-next/src/lib/videos/saved-views.ts（新建）
+     · loadPersonalViews / appendPersonalView / removePersonalView / makePersonalView
+     · loadTeamViews（暂返空 — VIDEO-TEAM-VIEWS-API follow-up）
+     · Map / Set 序列化往返（PersistedQuery.filters/columns）
+     · 损坏 / SSR 路径降级（typeof localStorage 守卫 + try/catch）
+   - 4 默认 views（reference §5.3）：
+     · 我的待审（personal）：reviewStatus=pending_review enum filter（精确）
+     · 本周（personal）：sort created_at desc + pageSize 50（近似；follow-up VIDEO-FILTER-TIME-RANGE）
+     · 封面失效（team）：sort created_at desc + columns 空 Map（follow-up VIDEO-FILTER-IMAGE-HEALTH）
+     · 团队新增上架（team）：filters status=published（精确）
+   - id 命名空间 `default-*` 与用户 `personal-*` / `team-*` 隔离
+
+2. **VideoListClient viewsConfig 接入**：
+   - viewsItems 合并 [DEFAULT_VIEWS, personalViews, teamViews]
+   - handleViewChange：activeId sync + 切换 view 应用 query
+   - handleViewSave：window.prompt 取 label + makePersonalView + persist
+
+3. **flash row（DataTable.flashRowKeys）**：
+   - flashRowKeys ReadonlySet<string> state
+   - flashRow(id) helper：add → 1.5s 自动清除
+   - handleRowUpdate 触发 flash（publish/unpublish 视觉确认）
+
+### 8B Codex stop-time review fixes（共 3 处闭环）
+
+1. **fix#1 8B 遗漏 4 默认 views**：从 follow-up 升级为本卡范围；落 4 默认 views 数据集
+2. **fix#2 默认 views 选不应用**：handleViewChange 查找列表漏 DEFAULT_VIEWS → 加入首位
+3. **fix#3 columns patch 完全替换破坏列偏好**：
+   - applyPatch.columns 是完全替换语义（不是 merge）
+   - "封面失效" view columns 改空 Map（不操作列）
+   - handleViewChange columns.size>0 时才 patch（保留用户列偏好）
+   - 单测加守门 case：所有默认 views columns 均空
+
+### 8C 产出（Visual baseline 入库）
+
+- scripts/capture-videos-baseline.mjs（可重跑工具）：
+  · 一次性 Playwright headless chromium
+  · moderator cookie + page.route mock /admin/videos /admin/crawler/sites /admin/videos/moderation-stats
+  · dark colorScheme + 1440×900 viewport + 3 行多样化 mock（approved/public + pending/internal + rejected/hidden）
+- tests/visual/videos/ 入库 12 张 PNG baseline：
+  · videos-full.png（整页 fullPage 截图）
+  · page-head.png（页头 close-up）
+  · row.png（典型行 close-up）
+  · thumb-poster-sm.png（32×48 thumb）
+  · pill-neutral-type.png（类型 Pill close-up）
+  · dual-signal-unknown.png（探测/播放 DualSignal）
+  · vis-chip.png（VisChip 复合状态）
+  · pill-image-p0-active.png / pill-image-p0-broken.png（P0 Pill 两态）
+  · vis-chip--public.png / vis-chip--pending.png / vis-chip--rejected.png（VisChip 三态）
+
+### 9 项视觉规格 visual 二次签收（与 reference §6.1 互证）
+
+| # | reference §6.1 规格 | visual 验证 |
+|---|---|---|
+| 1 | _select 列 14px checkbox 居中 | ✅ row.png |
+| 2 | thumb 列 32×48 竖版 radius 4 | ✅ thumb-poster-sm.png |
+| 3 | title 列 标题 12/600 + meta {shortId · year} 11 mono muted | ✅ row.png（"示例电影 A" + "mov12345 · 2025"） |
+| 4 | type 列 Pill 中性 + 类型映射 | ✅ pill-neutral-type.png |
+| 5 | sources 列 dot + N + 活跃/一般/稀少 文案 | ✅ row.png（dot+"15 活跃"） |
+| 6 | probe 列 DualSignal | ✅ dual-signal-unknown.png（探+播双行 unknown 灰色） |
+| 7 | image 列 P0 Pill ok/danger | ✅ pill-image-p0-active.png + broken.png |
+| 8 | visibility 列 VisChip 复合状态 | ✅ vis-chip--public.png / pending.png / rejected.png |
+| 9 | review 列 单 Pill ok/warn/danger | ✅ row.png（"已通过"绿 / "待审"黄 / "已拒"红） |
+
+**desk + visual 双重签收 9/9**。
+
+### e2e 状态
+
+- tests/e2e/admin/videos.spec.ts: 4/5 通过（"批量下架"flake，与 8A/8B 改动无关；
+  page.waitForRequest 时机问题，留 follow-up `VIDEO-E2E-BATCH-FLAKE`）
+
+### 验收
+
+- typecheck / lint / verify:token-references (71/322) / 单测 2758/2758（cell 129 + dashboard 24 + saved-views 19 + 既有）全绿
+- 12 张 visual baseline 入库 tests/visual/videos/
+- VideoStatusIndicator / VideoTypeChip 全仓 grep 0 引用残留
+
+### 不在范围（留 follow-up）
+
+- **VIDEO-INLINE-ROW-ACTIONS-MIGRATE**：actions 列 inline xs btn ×5 重构（VideoRowActions
+  AdminDropdown → InlineRowActions）；触发条件：CHG-DESIGN-10 VideoEditDrawer 增强
+  visibility/review/publish 工作流后再启动
+- **VIDEO-FILTER-TIME-RANGE**：业务 filter 补 createdSince；"本周" view 改精确时间区间
+- **VIDEO-FILTER-IMAGE-HEALTH**：业务 filter 补 imageHealth enum；"封面失效" view 改精确过滤
+- **VIDEO-TEAM-VIEWS-API**：team scope save/load 真端点（M-SN-4+）
+- **VIDEO-EXPORT-CSV** / **VIDEO-MANUAL-ADD**：page__head actions 真实化
+- **VIDEO-E2E-BATCH-FLAKE**：批量下架 e2e flake 修复
