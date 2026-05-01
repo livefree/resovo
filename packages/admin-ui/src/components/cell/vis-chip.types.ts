@@ -12,10 +12,10 @@
  *
  * 派生规则（按设计稿 jsx 优先级，行 130-134）：
  * 1. `review === 'rejected'` → "已拒" pill--danger
- * 2. `review === 'pending'`  → "待审" pill--warn
+ * 2. `review === 'pending_review'` → "待审" pill--warn
  * 3. `visibility === 'public'`   → "前台可见" pill--ok
  * 4. `visibility === 'internal'` → "仅内部" pill (neutral)
- * 5. 其他（包括 visibility='private'）→ "隐藏" pill--danger
+ * 5. 其他（包括 visibility='hidden'）→ "隐藏" pill--danger
  *
  * 与 reference §6.1 视频库列的关系：
  *   - 单独的 visibility 列（120 宽）渲染 `<VisChip visibility review />`
@@ -31,22 +31,30 @@
  */
 
 /**
- * 后端 visibility_status 三态（与 packages/types 视频契约对齐）
+ * 后端 visibility_status 三态
  *
- * - `public`：前台可见（is_published 为 true 的常规上架状态）
+ * **真源镜像**：`packages/types/src/video.types.ts` 的 `VisibilityStatus`。
+ * admin-ui 是零业务依赖纯 UI 库，不直接 import packages/types；本类型镜像真源字面值，
+ * 任何 drift 由 typecheck 在消费方边界自动暴露（消费方一般直接传 packages/types 的 enum
+ * 给本组件，类型不匹配会立即编译失败）。
+ *
+ * - `public`：前台可见（is_published=true 的常规上架状态）
  * - `internal`：仅内部可见（编辑态 / 暂存待发布）
- * - `private`：隐藏 / 下架（管理员主动隐藏）
+ * - `hidden`：隐藏 / 下架（管理员主动隐藏）
  */
-export type VisibilityStatus = 'public' | 'internal' | 'private'
+export type VisibilityStatus = 'public' | 'internal' | 'hidden'
 
 /**
  * 后端 review_status 三态
  *
- * - `pending`：待审
+ * **真源镜像**：`packages/types/src/video.types.ts` 的 `ReviewStatus`。
+ * 同上 drift 守门策略。
+ *
+ * - `pending_review`：待审
  * - `approved`：已通过
  * - `rejected`：已拒
  */
-export type ReviewStatus = 'pending' | 'approved' | 'rejected'
+export type ReviewStatus = 'pending_review' | 'approved' | 'rejected'
 
 /**
  * VisChip Props
@@ -58,15 +66,15 @@ export type ReviewStatus = 'pending' | 'approved' | 'rejected'
  * - 屏幕阅读器读出复合语义而非纯文案
  *
  * 派生表（5 种结果）：
- * | review     | visibility  | 渲染              | variant   |
- * | ---------- | ----------- | ----------------- | --------- |
- * | rejected   | *           | "已拒"            | danger    |
- * | pending    | *           | "待审"            | warn      |
- * | approved   | public      | "前台可见"        | ok        |
- * | approved   | internal    | "仅内部"          | neutral   |
- * | approved   | private     | "隐藏"            | danger    |
+ * | review          | visibility  | 渲染              | variant   |
+ * | --------------- | ----------- | ----------------- | --------- |
+ * | rejected        | *           | "已拒"            | danger    |
+ * | pending_review  | *           | "待审"            | warn      |
+ * | approved        | public      | "前台可见"        | ok        |
+ * | approved        | internal    | "仅内部"          | neutral   |
+ * | approved        | hidden      | "隐藏"            | danger    |
  *
- * 注：`approved` + `private` 是合法状态（已通过审核但管理员主动隐藏）；渲染 "隐藏 danger" 与
+ * 注：`approved` + `hidden` 是合法状态（已通过审核但管理员主动隐藏）；渲染 "隐藏 danger" 与
  * `rejected` 的 "已拒 danger" 视觉相同 — 消费方需要区分时通过 ariaLabel 中的 raw 值识别。
  */
 export interface VisChipProps {
