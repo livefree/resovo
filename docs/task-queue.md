@@ -542,7 +542,7 @@ CHG-SN-1-09 任务卡（M-SN-2 第一卡前置）：
 
 ## [SEQ-20260428-03] M-SN-2 第一阶段 · ADR-103a 起草 + AdminNavItem 字段扩展（执行序列）
 
-- **状态**：🔄 执行中（CHG-SN-2-01 ✅；fix(CHG-SN-2-01) ✅；CHG-SN-2-02 整卡 ✅；CHG-SN-2-01.5 ✅；CHG-SN-2-03 ✅；CHG-SN-2-04 ✅；fix(CHG-SN-2-04) ✅；CHG-SN-2-05 ✅；CHG-SN-2-06 ✅；CHG-SN-2-07 ✅；fix(CHG-SN-2-07) ✅；CHG-SN-2-08 ✅；CHG-SN-2-09 ✅；fix(CHG-SN-2-09) ✅；CHG-SN-2-10 ✅；CHG-SN-2-11 ✅ Shell 9/10 CommandPalette；CHG-SN-2-12 ✅ Shell 10/10 AdminShell 装配；CHG-SN-2-12.5 ✅ ADR-103 DataTable v2 契约；-13 ~ -21 待开）
+- **状态**：✅ 已完成（CHG-SN-2-01 ~ CHG-SN-2-22 全部 PASS，含 stop-gate 质量债清零，2026-04-29）
 - **创建时间**：2026-04-28 22:00
 - **最后更新时间**：2026-04-28
 - **目标**：M-SN-2 第一阶段（Shell 公开 API 契约固化 + admin-nav.ts 字段扩展）。落地 ADR-103a 作为 Shell 10 组件 Props / AdminNavItem 5 字段扩展协议 / 4 级 z-index 规范的真源；让 server-next 侧 admin-nav.ts 注入 icon / shortcut / count / badge 字段，准备好被 packages/admin-ui Shell 组件消费。
@@ -1787,3 +1787,17 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 - **主循环模型**：claude-sonnet-4-6
 - **子代理**：无（复用已有 admin-ui 组件，无新共享 API 契约）
 - **备注**：全 mock data；键盘 J/K/A/R/S 已接线；三 tab（待审核/待发布/已拒绝）已实现；右栏 <1280px 自动隐藏；真实 API 等 VideoAdminDetail 扩展后接入
+
+---
+
+## 欠账登记（Cutover 前必须清零）
+
+> 以下欠账由豁免决策产生，与对应任务卡的"⏸ 豁免"状态同步。cutover（M-SN-7）启动前须逐项关闭或转为 BLOCKER。
+
+### M-SN-3 欠账（用户 2026-05-01 授权豁免，进入 M-SN-4）
+
+| 欠账 ID | 原任务 | 描述 | 截止节点 |
+|---------|--------|------|---------|
+| DEBT-SN-3-A | CHG-SN-3-11 | `docs/server_next_view_template.md` 模板文档（后续视图卡参考实现模板）| M-SN-4 milestone 完成时补做 |
+| DEBT-SN-3-B | CHG-SN-3-12 | staging 环境 cookie + nginx 反代 e2e 演练（需人工参与）| cutover 前，需用户确认 staging 可用 |
+| DEBT-SN-3-C | CHG-SN-3-13 | M-SN-3 milestone 阶段审计（Opus arch-reviewer A/B/C 评级）| cutover 前，依赖 DEBT-SN-3-B 完成或书面 staging-waiver |

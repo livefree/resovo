@@ -536,6 +536,12 @@ function DoubanStatusBadge({ status }: { status: DoubanStatus }) {
 
 批量操作必须遵循"选择→确认→执行→反馈"的完整流程，不能让用户误触。
 
+> **2026-05-01 修订（形态说明）**：
+> - **server-next（当前真源）**：批量操作走 `DataTable.bulkActions` prop，渲染为**表内 sticky bottom**（`.dt__bulk`），由 DataTable 一体化管理。**不得**在 server-next 新模块外置独立 `SelectionActionBar` 浮条。
+> - **apps/server v1（已冻结）**：批量操作仍使用外置 `SelectionActionBar variant="sticky-bottom"` 浮条形态（见下方描述），仅适用于 v1 维护期 bug 修复。
+>
+> 以下流程描述适用于 v1 外置形态；server-next 交互意图相同，但实现入口是 `DataTable.bulkActions`。
+
 ```
 1. 选择阶段：
    - checkbox 列默认隐藏，鼠标悬停行时出现（或固定显示，取决于页面密度）
