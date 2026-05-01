@@ -3403,3 +3403,23 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 
 - typecheck ✅ / lint ✅（<img> warning 管理后台可接受）/ 单测全绿 ✅
 - arch-reviewer CONDITIONAL 4条件：① Drawer noPadding 独立 commit ✅ ② VideoEditDrawer 自绘 header ✅ ③ 主文件 249 行 ≤ 250 行 ✅ ④ mock UI 零硬编码色 ✅
+
+---
+
+## [CHG-DESIGN-11] Admin Sidebar 折叠抖动修复
+- **完成时间**：2026-05-01
+- **记录时间**：2026-05-01 01:52
+- **执行模型**：gpt-5-codex
+- **子代理**：无
+- **修改文件**：
+  - `packages/admin-ui/src/shell/sidebar.tsx` — 将 Brand/NavItem/Footer/Collapse button 改为固定 `var(--sidebar-w-collapsed)` 图标轨的 grid 布局；图标/logo/avatar/折叠箭头在 60px rail 内居中，文字、徽章、快捷键只在右侧列裁切隐藏，避免展开/收起时图标坐标抖动。
+  - `packages/admin-ui/src/shell/admin-shell-styles.tsx` — 收敛侧栏过渡规则，保留 sidebar width 与文字区 `opacity/max-width/padding` 动画，并纳入 collapse label/kbd 的 reduced-motion 处理。
+  - `tests/unit/components/admin-ui/shell/sidebar.test.tsx` — 增加 Brand、NavItem、折叠按钮固定图标轨与折叠态裁切行为测试。
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：后台实际浏览器视觉测量受本地登录 cookie/水合状态影响，本次以组件结构测试锁定“不让文字区参与图标定位”的实现约束。
+
+### 质量门禁
+
+- `npm --workspace @resovo/admin-ui run typecheck` ✅
+- `npm test -- tests/unit/components/admin-ui/shell/sidebar.test.tsx tests/unit/components/admin-ui/shell/admin-shell.test.tsx tests/unit/components/admin-ui/shell/sidebar-ssr.test.tsx` ✅（3 files / 64 tests）

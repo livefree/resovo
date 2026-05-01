@@ -104,6 +104,15 @@ describe('Sidebar — Brand 区', () => {
     // DOM 标记位仍存在
     expect(container.querySelector('[data-sidebar-brand-title]')).toBeTruthy()
   })
+
+  it('Brand 使用固定 60px 图标轨，logo 展开/折叠 X 坐标不依赖标题宽度', () => {
+    const { container } = renderSidebar({ collapsed: false })
+    const brand = container.querySelector('[data-sidebar-brand]') as HTMLElement
+    const logo = container.querySelector('[data-sidebar-brand-logo]') as HTMLElement
+    expect(brand.style.display).toBe('grid')
+    expect(brand.style.gridTemplateColumns).toBe('var(--sidebar-w-collapsed) minmax(0, 1fr)')
+    expect(logo.style.justifySelf).toBe('center')
+  })
 })
 
 describe('Sidebar — 5 组 NAV 渲染', () => {
@@ -131,6 +140,15 @@ describe('Sidebar — 5 组 NAV 渲染', () => {
     expect(container.querySelector('[data-sidebar-item="/admin"]')).toBeTruthy()
     expect(container.querySelector('[data-sidebar-item="/admin/moderation"]')).toBeTruthy()
     expect(container.querySelector('[data-sidebar-item="/admin/videos"]')).toBeTruthy()
+  })
+
+  it('NavItem 使用固定 60px 图标轨，折叠/展开时图标位置锚定', () => {
+    const { container } = renderSidebar({ collapsed: false })
+    const item = container.querySelector('[data-sidebar-item="/admin"]') as HTMLElement
+    const icon = item.querySelector('[data-sidebar-item-icon]') as HTMLElement
+    expect(item.style.display).toBe('grid')
+    expect(item.style.gridTemplateColumns).toBe('var(--sidebar-w-collapsed) minmax(0, 1fr) auto')
+    expect(icon.style.justifySelf).toBe('center')
   })
 
   it('button type="button"（防 submit 误触发，沿用 CHG-SN-2-05/07 范式）', () => {
@@ -299,6 +317,19 @@ describe('Sidebar — 折叠按钮', () => {
     const btn = container.querySelector('[data-sidebar-collapse]') as HTMLButtonElement
     expect(btn.tagName).toBe('BUTTON')
     expect(btn.getAttribute('type')).toBe('button')
+  })
+
+  it('折叠按钮也使用固定 60px 图标轨，label/kbd 折叠态裁切隐藏', () => {
+    const { container } = renderSidebar({ collapsed: true })
+    const btn = container.querySelector('[data-sidebar-collapse]') as HTMLButtonElement
+    const icon = btn.querySelector('[data-sidebar-collapse-icon]') as HTMLElement
+    const label = btn.querySelector('[data-sidebar-collapse-label]') as HTMLElement
+    const kbd = btn.querySelector('[data-sidebar-collapse-kbd]') as HTMLElement
+    expect(btn.style.display).toBe('grid')
+    expect(btn.style.gridTemplateColumns).toBe('var(--sidebar-w-collapsed) minmax(0, 1fr) auto')
+    expect(icon.style.justifySelf).toBe('center')
+    expect(label.style.maxWidth).toBe('0')
+    if (kbd) expect(kbd.style.maxWidth).toBe('0')
   })
 })
 

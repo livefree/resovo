@@ -46,12 +46,6 @@ const SHELL_CSS = `
 [data-sidebar] {
   transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-/* 容器 gap 也参与动画：collapsed 切换时 var(--space-3) ↔ 0，保证 icon 间距平滑收缩 */
-[data-sidebar-brand],
-[data-sidebar-foot],
-[data-sidebar-item] {
-  transition: gap 200ms cubic-bezier(0.4, 0, 0.2, 1);
-}
 /* 内容渐隐元素：opacity + max-width + padding 全部参与动画
  * （CHG-DESIGN-04 fix#6：max-width 数值 100% ↔ 0 让插值连续；padding 1px 8px ↔ 0 同理） */
 [data-sidebar-section-title],
@@ -59,7 +53,9 @@ const SHELL_CSS = `
 [data-sidebar-item-label],
 [data-sidebar-item-badge],
 [data-sidebar-foot-meta],
-[data-sidebar-foot-chevron] {
+[data-sidebar-foot-chevron],
+[data-sidebar-collapse-label],
+[data-sidebar-collapse-kbd] {
   transition:
     opacity 150ms ease-out,
     max-width 200ms cubic-bezier(0.4, 0, 0.2, 1),
@@ -77,15 +73,14 @@ const SHELL_CSS = `
 
 @media (prefers-reduced-motion: reduce) {
   [data-sidebar],
-  [data-sidebar-brand],
-  [data-sidebar-foot],
-  [data-sidebar-item],
   [data-sidebar-section-title],
   [data-sidebar-brand-title],
   [data-sidebar-item-label],
   [data-sidebar-item-badge],
   [data-sidebar-foot-meta],
-  [data-sidebar-foot-chevron] { transition: none; }
+  [data-sidebar-foot-chevron],
+  [data-sidebar-collapse-label],
+  [data-sidebar-collapse-kbd] { transition: none; }
 }
 
 /* ── Global scrollbar — 全站统一 6px（CHG-DESIGN-03 / reference.md §0-6 §3.4） ─────── */
