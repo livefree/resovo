@@ -414,6 +414,12 @@ const HEAD_BTN_PRIMARY_STYLE: CSSProperties = {
   border: '1px solid var(--accent-default)',
   fontWeight: 500,
 }
+// disabled 态：opacity 0.5 + cursor:not-allowed，明确表达"暂不可用"语义（与 CHG-DESIGN-05 fix#1
+// 防 inert 范式一致 — 按钮可见但 disabled，配 title 提示原因，不构成"看似能点但点击无反馈"）
+const HEAD_BTN_DISABLED_OVERLAY: CSSProperties = {
+  opacity: 0.5,
+  cursor: 'not-allowed',
+}
 
 export function VideoListClient() {
   const router = useTableRouterAdapter()
@@ -521,10 +527,25 @@ export function VideoListClient() {
           </p>
         </div>
         <div style={HEAD_ACTIONS_STYLE} data-page-head-actions>
-          <button type="button" style={HEAD_BTN_STYLE} data-page-action="export-csv">
+          {/* CHG-DESIGN-08 8A 第一阶段 + Codex stop-time fix：actions 暂未实装 →
+              disabled + title 提示，明确表达"暂不可用"，避免 inert（visible 但 onClick 无反馈）。
+              follow-up：VIDEO-EXPORT-CSV（导出 CSV blob 下载）/ VIDEO-MANUAL-ADD（新视频路由）*/}
+          <button
+            type="button"
+            style={{ ...HEAD_BTN_STYLE, ...HEAD_BTN_DISABLED_OVERLAY }}
+            data-page-action="export-csv"
+            disabled
+            title="功能开发中（follow-up VIDEO-EXPORT-CSV）"
+          >
             导出 CSV
           </button>
-          <button type="button" style={HEAD_BTN_PRIMARY_STYLE} data-page-action="add-video">
+          <button
+            type="button"
+            style={{ ...HEAD_BTN_PRIMARY_STYLE, ...HEAD_BTN_DISABLED_OVERLAY }}
+            data-page-action="add-video"
+            disabled
+            title="功能开发中（follow-up VIDEO-MANUAL-ADD）"
+          >
             手动添加视频
           </button>
         </div>
