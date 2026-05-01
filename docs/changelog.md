@@ -3406,6 +3406,26 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 
 ---
 
+## [CHG-DESIGN-14] Drawer + Modal 接入 OverlayBackdrop（透明遮罩）
+
+- **完成时间**：2026-05-01
+- **记录时间**：2026-05-01 03:19
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `packages/admin-ui/src/components/overlay/drawer.tsx` — 删除 `BACKDROP_STYLE`（含 `background: var(--bg-overlay)`），改用 `<OverlayBackdrop role="presentation" ariaHidden={false} data-drawer-backdrop>`；保留 `display:flex` layout 通过 `style` prop 传入
+  - `packages/admin-ui/src/components/overlay/modal.tsx` — 删除 `BACKDROP_STYLE`，新增 `MODAL_LAYOUT_STYLE`（flex 居中，不含 background），改用 `<OverlayBackdrop role="presentation" ariaHidden={false} data-modal-backdrop>`；dialog 作为 children
+- **新增依赖**：无
+- **数据库变更**：无
+- **效果**：VideoEditDrawer / Modal 打开时背景透明，视觉层级由阴影和边框表达
+
+### 质量门禁
+
+- `npm run typecheck` ✅
+- `npm run test -- --run tests/unit/components/admin-ui/overlay/` ✅ 59 tests passed（drawer 22 + modal 20 + overlay-backdrop 17，全无回归）
+
+---
+
 ## [CHG-DESIGN-13] OverlayBackdrop primitive 新增 + 配套单测
 
 - **完成时间**：2026-05-01

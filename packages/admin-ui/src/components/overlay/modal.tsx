@@ -10,6 +10,7 @@
 import React, { useState, useEffect, useId } from 'react'
 import { createPortal } from 'react-dom'
 import { useOverlay } from './use-overlay'
+import { OverlayBackdrop } from './overlay-backdrop'
 
 export interface ModalProps {
   readonly open: boolean
@@ -24,11 +25,7 @@ export interface ModalProps {
 
 const SIZE_MAP = { sm: 400, md: 560, lg: 800 } as const
 
-const BACKDROP_STYLE: React.CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  background: 'var(--bg-overlay)',
-  zIndex: 'var(--z-modal)' as React.CSSProperties['zIndex'],
+const MODAL_LAYOUT_STYLE: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -105,11 +102,13 @@ export function Modal({
   if (!open || !mounted) return null
 
   return createPortal(
-    <div
+    <OverlayBackdrop
       role="presentation"
-      style={BACKDROP_STYLE}
-      {...backdropProps}
+      zIndex={'var(--z-modal)' as React.CSSProperties['zIndex']}
+      ariaHidden={false}
       data-modal-backdrop
+      onClick={backdropProps.onClick}
+      style={MODAL_LAYOUT_STYLE}
     >
       <div
         ref={containerRef}
@@ -138,7 +137,7 @@ export function Modal({
         )}
         <div style={BODY_STYLE}>{children}</div>
       </div>
-    </div>,
+    </OverlayBackdrop>,
     document.body,
   )
 }

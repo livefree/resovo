@@ -11,6 +11,7 @@
 import React, { useState, useEffect, useId } from 'react'
 import { createPortal } from 'react-dom'
 import { useOverlay } from './use-overlay'
+import { OverlayBackdrop } from './overlay-backdrop'
 
 export interface DrawerProps {
   readonly open: boolean
@@ -31,11 +32,7 @@ export interface DrawerProps {
   readonly noPadding?: boolean
 }
 
-const BACKDROP_STYLE: React.CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  background: 'var(--bg-overlay)',
-  zIndex: 'var(--z-modal)' as React.CSSProperties['zIndex'],
+const BACKDROP_LAYOUT_STYLE: React.CSSProperties = {
   display: 'flex',
 }
 
@@ -116,11 +113,13 @@ export function Drawer({
   if (!open || !mounted) return null
 
   return createPortal(
-    <div
+    <OverlayBackdrop
       role="presentation"
-      style={BACKDROP_STYLE}
-      {...backdropProps}
+      zIndex={'var(--z-modal)' as React.CSSProperties['zIndex']}
+      ariaHidden={false}
       data-drawer-backdrop
+      onClick={backdropProps.onClick}
+      style={BACKDROP_LAYOUT_STYLE}
     >
       <div
         ref={containerRef}
@@ -149,7 +148,7 @@ export function Drawer({
         )}
         <div style={noPadding ? BODY_NO_PADDING_STYLE : BODY_STYLE}>{children}</div>
       </div>
-    </div>,
+    </OverlayBackdrop>,
     document.body,
   )
 }
