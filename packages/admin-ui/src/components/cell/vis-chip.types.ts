@@ -1,16 +1,22 @@
 /**
  * vis-chip.types.ts — VisChip 共享组件 Props 契约（CHG-DESIGN-12 12A）
  *
- * 真源（按优先级）：
- *   1. `docs/designs/backend_design_v2.1/app/icons-data.jsx` `VisChip` 实装（行 128-135）
+ * 真源（按优先级 — **enum 字面值真源 > 视觉渲染参考**）：
+ *   1. **enum 字面值真源**：`packages/types/src/video.types.ts` 的 `VisibilityStatus` + `ReviewStatus`
+ *      （后端契约 `'public' | 'internal' | 'hidden'` + `'pending_review' | 'approved' | 'rejected'`）
  *   2. `docs/designs/backend_design_v2.1/reference.md` §6.1 visibility 列「`<VisChip visibility review />`」
- *   3. CHG-DESIGN-12 任务卡（SEQ-20260429-02 第 12 卡 · 12A 阶段）
+ *      （组件用法真源；reference §6.1 不规定 enum 字面，仅描述用法）
+ *   3. **视觉渲染参考（不取 enum 字面）**：`docs/designs/backend_design_v2.1/app/icons-data.jsx` `VisChip` 实装
+ *      （行 128-135）— ⚠️ 设计稿原型用 stale enum 字面 `'pending'` / `'private'`，与后端真源
+ *      `'pending_review'` / `'hidden'` 不一致；本契约**仅取设计稿派生分支结构与视觉映射**，enum 字面值
+ *      以 packages/types 真源为准
+ *   4. CHG-DESIGN-12 任务卡（SEQ-20260429-02 第 12 卡 · 12A 阶段）
  *
  * 业务语义：
  *   把视频的「visibility 可见性」+「review 审核」两个状态字段融合成**单一前台可见性 chip**，
  *   消除消费方在多列分别展示两个状态导致视觉冗余 + 用户认知负担过重。
  *
- * 派生规则（按设计稿 jsx 优先级，行 130-134）：
+ * 派生规则（分支优先级；enum 字面取 packages/types 真源，与设计稿 jsx 视觉映射等价）：
  * 1. `review === 'rejected'` → "已拒" pill--danger
  * 2. `review === 'pending_review'` → "待审" pill--warn
  * 3. `visibility === 'public'`   → "前台可见" pill--ok
