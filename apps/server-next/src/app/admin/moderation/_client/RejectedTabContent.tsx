@@ -7,9 +7,9 @@ import { MOCK_REJECTED_VIDEOS } from './mock-data'
 
 const BTN_SM: React.CSSProperties = {
   padding: '5px 10px',
-  border: '1px solid var(--border)',
+  border: '1px solid var(--border-default)',
   borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg2)',
+  background: 'var(--bg-surface-elevated)',
   color: 'var(--fg-default)',
   cursor: 'pointer',
   fontSize: 12,
@@ -32,9 +32,9 @@ function historyBg(c: string): string {
 
 const BTN_XS: React.CSSProperties = {
   padding: '3px 8px',
-  border: '1px solid var(--border)',
+  border: '1px solid var(--border-default)',
   borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg2)',
+  background: 'var(--bg-surface-elevated)',
   color: 'var(--fg-muted)',
   cursor: 'pointer',
   fontSize: 11,
@@ -57,9 +57,9 @@ export function RejectedTabContent(): React.ReactElement {
         style={{
           width: 280,
           flexShrink: 0,
-          background: 'var(--bg2)',
+          background: 'var(--bg-surface-elevated)',
           border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-3)',
+          borderRadius: 'var(--radius-md)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -89,8 +89,8 @@ export function RejectedTabContent(): React.ReactElement {
                 gap: 10,
                 padding: '10px 12px',
                 borderBottom: '1px solid var(--border-subtle)',
-                background: i === activeIdx ? 'var(--accent-soft)' : 'transparent',
-                borderLeft: `2px solid ${i === activeIdx ? 'var(--accent)' : 'transparent'}`,
+                background: i === activeIdx ? 'var(--admin-accent-soft)' : 'transparent',
+                borderLeft: `2px solid ${i === activeIdx ? 'var(--accent-default)' : 'transparent'}`,
                 cursor: 'pointer',
               }}
             >
@@ -99,7 +99,7 @@ export function RejectedTabContent(): React.ReactElement {
                   width: 44,
                   height: 62,
                   borderRadius: 4,
-                  background: 'var(--bg3)',
+                  background: 'var(--bg-surface-raised)',
                   flexShrink: 0,
                   display: 'flex',
                   alignItems: 'center',
@@ -112,7 +112,7 @@ export function RejectedTabContent(): React.ReactElement {
                 封{it.thumb}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: i === activeIdx ? 'var(--accent)' : 'var(--fg-default)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: i === activeIdx ? 'var(--accent-default)' : 'var(--fg-default)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
                 <div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>{it.type} · {it.year}</div>
                 <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 999, background: 'var(--state-error-bg)', color: 'var(--state-error-fg)', display: 'inline-block', marginTop: 4 }}>
                   已拒绝
@@ -129,9 +129,9 @@ export function RejectedTabContent(): React.ReactElement {
         style={{
           flex: 1,
           minWidth: 0,
-          background: 'var(--bg2)',
+          background: 'var(--bg-surface-elevated)',
           border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-3)',
+          borderRadius: 'var(--radius-md)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -182,7 +182,7 @@ export function RejectedTabContent(): React.ReactElement {
                 width: 80,
                 height: 120,
                 borderRadius: 6,
-                background: 'var(--bg3)',
+                background: 'var(--bg-surface-raised)',
                 flexShrink: 0,
                 display: 'flex',
                 alignItems: 'center',
@@ -206,7 +206,7 @@ export function RejectedTabContent(): React.ReactElement {
           {/* History timeline */}
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>操作历史</div>
           <div style={{ position: 'relative', paddingLeft: 18 }}>
-            <div style={{ position: 'absolute', left: 5, top: 6, bottom: 6, width: 1, background: 'var(--border)' }} />
+            <div style={{ position: 'absolute', left: 5, top: 6, bottom: 6, width: 1, background: 'var(--border-default)' }} />
             {history.map((h, i) => (
               <div key={i} style={{ position: 'relative', paddingBottom: 14 }}>
                 <span
@@ -218,7 +218,7 @@ export function RejectedTabContent(): React.ReactElement {
                     height: 9,
                     borderRadius: '50%',
                     background: historyBg(h.c),
-                    border: '2px solid var(--bg2)',
+                    border: '2px solid var(--bg-surface-elevated)',
                   }}
                 />
                 <div style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
@@ -233,7 +233,7 @@ export function RejectedTabContent(): React.ReactElement {
           </div>
 
           {/* Actions */}
-          <div style={{ marginTop: 14, padding: 12, background: 'var(--bg3)', borderRadius: 6 }}>
+          <div style={{ marginTop: 14, padding: 12, background: 'var(--bg-surface-raised)', borderRadius: 6 }}>
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>可执行操作</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
               <button style={BTN_SM} onClick={() => console.log('重新审核')}>↻ 重新审核</button>

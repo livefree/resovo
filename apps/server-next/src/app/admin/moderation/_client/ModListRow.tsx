@@ -24,7 +24,7 @@ const THUMB_STYLE: React.CSSProperties = {
   borderRadius: 4,
   objectFit: 'cover',
   flexShrink: 0,
-  background: 'var(--bg3)',
+  background: 'var(--bg-surface-raised)',
 }
 
 export function ModListRow({ it, active, onClick }: ModListRowProps): React.ReactElement {
@@ -35,8 +35,8 @@ export function ModListRow({ it, active, onClick }: ModListRowProps): React.Reac
       onClick={onClick}
       style={{
         ...ROW_BASE,
-        background: active ? 'var(--accent-soft)' : 'transparent',
-        borderLeft: `2px solid ${active ? 'var(--accent)' : 'transparent'}`,
+        background: active ? 'var(--admin-accent-soft)' : 'transparent',
+        borderLeft: `2px solid ${active ? 'var(--accent-default)' : 'transparent'}`,
       }}
       data-mod-list-row
       data-video-id={it.id}
@@ -58,7 +58,7 @@ export function ModListRow({ it, active, onClick }: ModListRowProps): React.Reac
           style={{
             fontSize: 13,
             fontWeight: 600,
-            color: active ? 'var(--accent)' : 'var(--fg-default)',
+            color: active ? 'var(--accent-default)' : 'var(--fg-default)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',

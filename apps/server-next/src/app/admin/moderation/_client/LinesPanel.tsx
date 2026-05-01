@@ -8,9 +8,9 @@ import { MOCK_LINES } from './mock-data'
 
 const BTN_XS: React.CSSProperties = {
   padding: '3px 8px',
-  border: '1px solid var(--border)',
+  border: '1px solid var(--border-default)',
   borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg2)',
+  background: 'var(--bg-surface-elevated)',
   color: 'var(--fg-muted)',
   cursor: 'pointer',
   fontSize: 11,
@@ -28,7 +28,7 @@ const LINE_ROW: React.CSSProperties = {
   gap: 8,
   padding: '6px 8px',
   borderRadius: 4,
-  background: 'var(--bg3)',
+  background: 'var(--bg-surface-raised)',
   fontSize: 11,
 }
 
@@ -43,8 +43,8 @@ function LineRow({ line, onToggle }: { line: MockLine; onToggle: (id: string) =>
           width: 28,
           height: 16,
           borderRadius: 999,
-          background: line.enabled ? 'var(--accent)' : 'var(--bg-subtle)',
-          border: '1px solid var(--border)',
+          background: line.enabled ? 'var(--accent-default)' : 'var(--bg-surface-sunken)',
+          border: '1px solid var(--border-default)',
           cursor: 'pointer',
           flexShrink: 0,
           position: 'relative',

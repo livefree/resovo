@@ -7,9 +7,9 @@ import { MOCK_STAGING_VIDEOS } from './mock-data'
 
 const BTN_SM: React.CSSProperties = {
   padding: '5px 10px',
-  border: '1px solid var(--border)',
+  border: '1px solid var(--border-default)',
   borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg2)',
+  background: 'var(--bg-surface-elevated)',
   color: 'var(--fg-default)',
   cursor: 'pointer',
   fontSize: 12,
@@ -17,9 +17,9 @@ const BTN_SM: React.CSSProperties = {
 
 const BTN_SM_PRIMARY: React.CSSProperties = {
   ...BTN_SM,
-  background: 'var(--accent)',
+  background: 'var(--accent-default)',
   color: 'var(--fg-on-accent)',
-  borderColor: 'var(--accent)',
+  borderColor: 'var(--accent-default)',
 }
 
 const BTN_SM_DANGER: React.CSSProperties = {
@@ -30,9 +30,9 @@ const BTN_SM_DANGER: React.CSSProperties = {
 
 const BTN_XS: React.CSSProperties = {
   padding: '3px 8px',
-  border: '1px solid var(--border)',
+  border: '1px solid var(--border-default)',
   borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg2)',
+  background: 'var(--bg-surface-elevated)',
   color: 'var(--fg-muted)',
   cursor: 'pointer',
   fontSize: 11,
@@ -40,9 +40,9 @@ const BTN_XS: React.CSSProperties = {
 
 const BTN_XS_PRIMARY: React.CSSProperties = {
   ...BTN_XS,
-  background: 'var(--accent)',
+  background: 'var(--accent-default)',
   color: 'var(--fg-on-accent)',
-  borderColor: 'var(--accent)',
+  borderColor: 'var(--accent-default)',
 }
 
 const CHECK_ITEM: React.CSSProperties = {
@@ -50,7 +50,7 @@ const CHECK_ITEM: React.CSSProperties = {
   alignItems: 'center',
   gap: 8,
   padding: '6px 10px',
-  background: 'var(--bg3)',
+  background: 'var(--bg-surface-raised)',
   borderRadius: 4,
   marginBottom: 4,
   fontSize: 12,
@@ -75,9 +75,9 @@ export function StagingTabContent(): React.ReactElement {
         style={{
           width: 280,
           flexShrink: 0,
-          background: 'var(--bg2)',
+          background: 'var(--bg-surface-elevated)',
           border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-3)',
+          borderRadius: 'var(--radius-md)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -107,8 +107,8 @@ export function StagingTabContent(): React.ReactElement {
                 gap: 10,
                 padding: '10px 12px',
                 borderBottom: '1px solid var(--border-subtle)',
-                background: i === activeIdx ? 'var(--accent-soft)' : 'transparent',
-                borderLeft: `2px solid ${i === activeIdx ? 'var(--accent)' : 'transparent'}`,
+                background: i === activeIdx ? 'var(--admin-accent-soft)' : 'transparent',
+                borderLeft: `2px solid ${i === activeIdx ? 'var(--accent-default)' : 'transparent'}`,
                 cursor: 'pointer',
               }}
             >
@@ -117,7 +117,7 @@ export function StagingTabContent(): React.ReactElement {
                   width: 44,
                   height: 62,
                   borderRadius: 4,
-                  background: 'var(--bg3)',
+                  background: 'var(--bg-surface-raised)',
                   flexShrink: 0,
                   display: 'flex',
                   alignItems: 'center',
@@ -129,7 +129,7 @@ export function StagingTabContent(): React.ReactElement {
                 封{it.thumb}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: i === activeIdx ? 'var(--accent)' : 'var(--fg-default)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: i === activeIdx ? 'var(--accent-default)' : 'var(--fg-default)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
                 <div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>{it.type} · {it.year} · {it.sources} 源</div>
                 <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 999, background: 'var(--state-success-bg)', color: 'var(--state-success-fg)', display: 'inline-block', marginTop: 4 }}>
                   已通过审核
@@ -145,9 +145,9 @@ export function StagingTabContent(): React.ReactElement {
         style={{
           flex: 1,
           minWidth: 0,
-          background: 'var(--bg2)',
+          background: 'var(--bg-surface-elevated)',
           border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-3)',
+          borderRadius: 'var(--radius-md)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -190,7 +190,7 @@ export function StagingTabContent(): React.ReactElement {
                 width: 80,
                 height: 120,
                 borderRadius: 6,
-                background: 'var(--bg3)',
+                background: 'var(--bg-surface-raised)',
                 flexShrink: 0,
                 display: 'flex',
                 alignItems: 'center',
@@ -209,7 +209,7 @@ export function StagingTabContent(): React.ReactElement {
               </div>
             </div>
           </div>
-          <div style={{ marginTop: 16, padding: 12, background: 'var(--bg3)', borderRadius: 6 }}>
+          <div style={{ marginTop: 16, padding: 12, background: 'var(--bg-surface-raised)', borderRadius: 6 }}>
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>发布设置</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
@@ -226,9 +226,9 @@ export function StagingTabContent(): React.ReactElement {
                           padding: '4px 10px',
                           fontSize: 12,
                           cursor: 'pointer',
-                          background: i === 0 ? 'var(--accent)' : 'var(--bg2)',
+                          background: i === 0 ? 'var(--accent-default)' : 'var(--bg-surface-elevated)',
                           color: i === 0 ? 'var(--fg-on-accent)' : 'var(--fg-muted)',
-                          border: '1px solid var(--border)',
+                          border: '1px solid var(--border-default)',
                           borderRadius: i === 0 ? '4px 0 0 4px' : row.opts.length - 1 === i ? '0 4px 4px 0' : 0,
                         }}
                       >

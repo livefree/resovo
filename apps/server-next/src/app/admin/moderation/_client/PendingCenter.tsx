@@ -14,9 +14,9 @@ interface PendingCenterProps {
 
 const BTN_SM: React.CSSProperties = {
   padding: '5px 10px',
-  border: '1px solid var(--border)',
+  border: '1px solid var(--border-default)',
   borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg2)',
+  background: 'var(--bg-surface-elevated)',
   color: 'var(--fg-default)',
   cursor: 'pointer',
   fontSize: 12,
@@ -24,7 +24,7 @@ const BTN_SM: React.CSSProperties = {
 
 const SECTION: React.CSSProperties = {
   padding: 12,
-  background: 'var(--bg3)',
+  background: 'var(--bg-surface-raised)',
   borderRadius: 6,
   marginBottom: 14,
 }
@@ -109,7 +109,7 @@ export function PendingCenter({ v }: PendingCenterProps): React.ReactElement {
             width: 100,
             height: 150,
             borderRadius: 6,
-            background: 'var(--bg3)',
+            background: 'var(--bg-surface-raised)',
             flexShrink: 0,
             display: 'flex',
             alignItems: 'center',

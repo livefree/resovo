@@ -26,7 +26,7 @@ const STYLES = {
 } as const
 
 const BASE_CARD: React.CSSProperties = {
-  borderRadius: 'var(--radius-3)',
+  borderRadius: 'var(--radius-md)',
   padding: '10px 14px',
   marginBottom: 14,
   display: 'flex',

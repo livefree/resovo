@@ -12,9 +12,9 @@ const PER_PAGE = 20
 
 const BTN: React.CSSProperties = {
   padding: '3px 8px',
-  border: '1px solid var(--border)',
+  border: '1px solid var(--border-default)',
   borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg2)',
+  background: 'var(--bg-surface-elevated)',
   color: 'var(--fg-muted)',
   cursor: 'pointer',
   fontSize: 11,
@@ -62,9 +62,9 @@ export function EpisodeSelector({ total, current, onSelect }: EpisodeSelectorPro
                 fontSize: 11,
                 fontWeight: isCurrent ? 700 : 500,
                 cursor: 'pointer',
-                background: isCurrent ? 'var(--accent)' : 'var(--bg3)',
+                background: isCurrent ? 'var(--accent-default)' : 'var(--bg-surface-raised)',
                 color: isCurrent ? 'var(--fg-on-accent)' : 'var(--fg-muted)',
-                border: `1px solid ${isCurrent ? 'var(--accent)' : 'var(--border)'}`,
+                border: `1px solid ${isCurrent ? 'var(--accent-default)' : 'var(--border-default)'}`,
               }}
             >
               {ep}

@@ -35,25 +35,25 @@ const RIGHT_TABS: readonly { id: RightTabId; label: string; count?: number; warn
 
 const BTN_SM: React.CSSProperties = {
   padding: '5px 10px',
-  border: '1px solid var(--border)',
+  border: '1px solid var(--border-default)',
   borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg2)',
+  background: 'var(--bg-surface-elevated)',
   color: 'var(--fg-default)',
   cursor: 'pointer',
   fontSize: 12,
 }
 
-const BTN_PRIMARY: React.CSSProperties = { ...BTN_SM, background: 'var(--accent)', color: 'var(--fg-on-accent)', borderColor: 'var(--accent)' }
+const BTN_PRIMARY: React.CSSProperties = { ...BTN_SM, background: 'var(--accent-default)', color: 'var(--fg-on-accent)', borderColor: 'var(--accent-default)' }
 const BTN_DANGER: React.CSSProperties = { ...BTN_SM, color: 'var(--state-error-fg)', borderColor: 'var(--state-error-border)' }
-const KBD: React.CSSProperties = { display: 'inline-block', padding: '1px 5px', border: '1px solid var(--border)', borderRadius: 3, fontSize: 10, fontFamily: 'monospace', background: 'var(--bg3)', color: 'var(--fg-muted)' }
+const KBD: React.CSSProperties = { display: 'inline-block', padding: '1px 5px', border: '1px solid var(--border-default)', borderRadius: 3, fontSize: 10, fontFamily: 'monospace', background: 'var(--bg-surface-raised)', color: 'var(--fg-muted)' }
 
 function segBtnStyle(active: boolean, danger?: boolean): React.CSSProperties {
   return {
     padding: '5px 12px',
-    border: '1px solid var(--border)',
+    border: '1px solid var(--border-default)',
     borderRadius: 'var(--radius-sm)',
-    background: active ? 'var(--accent-soft)' : 'var(--bg2)',
-    color: active ? (danger ? 'var(--state-error-fg)' : 'var(--accent)') : 'var(--fg-muted)',
+    background: active ? 'var(--admin-accent-soft)' : 'var(--bg-surface-elevated)',
+    color: active ? (danger ? 'var(--state-error-fg)' : 'var(--accent-default)') : 'var(--fg-muted)',
     cursor: 'pointer',
     fontSize: 12,
     fontWeight: active ? 600 : 400,
@@ -68,7 +68,7 @@ function badgeStyle(danger?: boolean): React.CSSProperties {
     padding: '0 5px',
     borderRadius: 999,
     fontSize: 10,
-    background: danger ? 'var(--state-error-bg)' : 'var(--bg3)',
+    background: danger ? 'var(--state-error-bg)' : 'var(--bg-surface-raised)',
     color: danger ? 'var(--state-error-fg)' : 'var(--fg-muted)',
   }
 }
@@ -80,7 +80,7 @@ function rightTabStyle(active: boolean, warn?: boolean): React.CSSProperties {
     textAlign: 'center' as const,
     fontSize: 12,
     cursor: 'pointer',
-    borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
+    borderBottom: active ? '2px solid var(--accent-default)' : '2px solid transparent',
     color: active ? 'var(--fg-default)' : 'var(--fg-muted)',
     fontWeight: active ? 600 : 400,
     display: 'flex',
@@ -114,7 +114,7 @@ function RightPaneContent({ v, rightTab, setRightTab }: {
           <div key={t.id} onClick={() => setRightTab(t.id)} style={rightTabStyle(rightTab === t.id, t.warn)}>
             {t.label}
             {t.count != null && (
-              <span style={{ background: t.warn ? 'var(--state-warning-bg)' : 'var(--bg3)', color: t.warn ? 'var(--state-warning-fg)' : 'var(--fg-muted)', padding: '1px 6px', borderRadius: 8, fontSize: 10 }}>
+              <span style={{ background: t.warn ? 'var(--state-warning-bg)' : 'var(--bg-surface-raised)', color: t.warn ? 'var(--state-warning-fg)' : 'var(--fg-muted)', padding: '1px 6px', borderRadius: 8, fontSize: 10 }}>
                 {t.count}
               </span>
             )}
@@ -127,8 +127,8 @@ function RightPaneContent({ v, rightTab, setRightTab }: {
           {/* Douban match */}
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 10, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>豆瓣匹配</div>
-            <div style={{ display: 'flex', gap: 8, padding: 8, background: 'var(--bg3)', borderRadius: 6 }}>
-              <div style={{ width: 36, height: 54, background: 'var(--bg2)', borderRadius: 3, flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: 9, color: 'var(--fg-muted)' }}>封{v.thumb}</div>
+            <div style={{ display: 'flex', gap: 8, padding: 8, background: 'var(--bg-surface-raised)', borderRadius: 6 }}>
+              <div style={{ width: 36, height: 54, background: 'var(--bg-surface-elevated)', borderRadius: 3, flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: 9, color: 'var(--fg-muted)' }}>封{v.thumb}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600 }}>{v.title}</div>
                 <div style={{ color: 'var(--fg-muted)', fontSize: 11, marginTop: 2 }}>豆瓣 ID 26277285 · 置信度 <span style={{ color: 'var(--state-success-fg)' }}>92%</span></div>
@@ -148,7 +148,7 @@ function RightPaneContent({ v, rightTab, setRightTab }: {
                 ['visibility', v.visibility === 'public', v.visibility],
                 ['review', v.review === 'approved', v.review],
               ] as [string, boolean, string][]).map(([k, ok, val]) => (
-                <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', background: 'var(--bg3)', borderRadius: 4 }}>
+                <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', background: 'var(--bg-surface-raised)', borderRadius: 4 }}>
                   <code style={{ fontFamily: 'monospace', color: 'var(--fg-muted)', fontSize: 11 }}>{k}</code>
                   <span style={{ color: ok ? 'var(--state-success-fg)' : 'var(--state-warning-fg)' }}>{val}</span>
                 </div>
@@ -177,10 +177,10 @@ function RightPaneContent({ v, rightTab, setRightTab }: {
 
       {rightTab === 'history' && (
         <div style={{ position: 'relative', paddingLeft: 18 }}>
-          <div style={{ position: 'absolute', left: 5, top: 6, bottom: 6, width: 1, background: 'var(--border)' }} />
+          <div style={{ position: 'absolute', left: 5, top: 6, bottom: 6, width: 1, background: 'var(--border-default)' }} />
           {MOCK_HISTORY_ITEMS.map((h, i) => (
             <div key={i} style={{ position: 'relative', paddingBottom: 14 }}>
-              <span style={{ position: 'absolute', left: -17, top: 4, width: 9, height: 9, borderRadius: '50%', background: historyDotColor(h.c), border: '2px solid var(--bg2)' }} />
+              <span style={{ position: 'absolute', left: -17, top: 4, width: 9, height: 9, borderRadius: '50%', background: historyDotColor(h.c), border: '2px solid var(--bg-surface-elevated)' }} />
               <div style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
                 <span style={{ fontSize: 11, fontWeight: 600 }}>{h.e}</span>
                 <span style={{ fontSize: 10, color: 'var(--fg-muted)' }}>· {h.who}</span>
@@ -199,8 +199,8 @@ function RightPaneContent({ v, rightTab, setRightTab }: {
             根据标题、年份、演员相似度找出可能<strong style={{ color: 'var(--fg-default)' }}>重复</strong>的视频。
           </div>
           {MOCK_SIMILAR_VIDEOS.map((s, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, padding: 8, background: 'var(--bg3)', borderRadius: 6, marginBottom: 8 }}>
-              <div style={{ width: 40, height: 60, background: 'var(--bg2)', borderRadius: 3, flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: 9, color: 'var(--fg-muted)' }}>封{s.thumb}</div>
+            <div key={i} style={{ display: 'flex', gap: 8, padding: 8, background: 'var(--bg-surface-raised)', borderRadius: 6, marginBottom: 8 }}>
+              <div style={{ width: 40, height: 60, background: 'var(--bg-surface-elevated)', borderRadius: 3, flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: 9, color: 'var(--fg-muted)' }}>封{s.thumb}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontWeight: 600, fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</span>
@@ -253,8 +253,8 @@ function CenterHeader({ activeIdx, total, v, onApprove, onReject, onSkip, onTogg
       <span style={KBD}>J</span>
       <span style={KBD}>K</span>
       <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>第 {activeIdx + 1} / {total}</span>
-      <div style={{ flex: 1, height: 4, background: 'var(--bg3)', borderRadius: 2, minWidth: 40 }}>
-        <div style={{ height: '100%', width: `${((activeIdx + 1) / total) * 100}%`, background: 'var(--accent)', borderRadius: 2 }} />
+      <div style={{ flex: 1, height: 4, background: 'var(--bg-surface-raised)', borderRadius: 2, minWidth: 40 }}>
+        <div style={{ height: '100%', width: `${((activeIdx + 1) / total) * 100}%`, background: 'var(--accent-default)', borderRadius: 2 }} />
       </div>
       <button style={BTN_DANGER} onClick={onReject}>✕ 拒绝 <span style={KBD}>R</span></button>
       <button style={BTN_SM} onClick={onSkip}>跳过 <span style={KBD}>S</span></button>
@@ -309,7 +309,7 @@ export function ModerationConsole(): React.ReactElement {
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg-default)' }}>内容审核台</h1>
           <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginTop: 4, fontSize: 12, color: 'var(--fg-muted)', flexWrap: 'wrap' }}>
             <span>今天已处理 <strong style={{ color: 'var(--fg-default)' }}>27</strong> 条 · 通过率 <strong style={{ color: 'var(--state-success-fg)' }}>81%</strong> · 平均决策 <strong>14s</strong></span>
-            <span style={{ color: 'var(--border)' }}>|</span>
+            <span style={{ color: 'var(--border-default)' }}>|</span>
             <span><span style={KBD}>J</span> <span style={KBD}>K</span> 切换 · <span style={KBD}>A</span> 通过 · <span style={KBD}>R</span> 拒 · <span style={KBD}>S</span> 跳过</span>
           </div>
         </div>

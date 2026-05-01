@@ -6,7 +6,7 @@
  * arch-reviewer CONDITIONAL → PASS（R1-R6 均已处理）
  *
  * 约束：
- *   - 零硬编码颜色（var(--bg2) / var(--border-subtle) / var(--radius-3)）
+ *   - 零硬编码颜色（var(--bg-surface-elevated) / var(--border-subtle) / var(--radius-md)）
  *   - height 由消费方传入（推荐 `calc(100vh - var(--topbar-h) - 40px)`）
  *   - 三栏各自独立滚动；scrollbar 6px 由 admin-shell-styles 全局覆盖（R4）
  *   - resizable/onResize API 预留，本期不实装（R3）
@@ -65,9 +65,9 @@ function toCSSLength(v: number | string): string {
 }
 
 const PANE_BASE: React.CSSProperties = {
-  background: 'var(--bg2)',
+  background: 'var(--bg-surface-elevated)',
   border: '1px solid var(--border-subtle)',
-  borderRadius: 'var(--radius-3)',
+  borderRadius: 'var(--radius-md)',
   display: 'flex',
   flexDirection: 'column',
   overflow: 'hidden',
