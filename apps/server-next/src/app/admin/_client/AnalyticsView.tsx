@@ -209,7 +209,7 @@ const CARD_BODY: React.CSSProperties = {
 
 // ── sub-renderers ─────────────────────────────────────────────────
 
-function AreaChart({ gradientId }: { readonly gradientId: string }) {
+function AreaChart({ gradientId, periodLabel }: { readonly gradientId: string; readonly periodLabel: string }) {
   const w = 700
   const h = 200
   const n = CHART_POINTS.length
@@ -221,7 +221,7 @@ function AreaChart({ gradientId }: { readonly gradientId: string }) {
     <svg
       viewBox={`0 0 ${w} ${h}`}
       style={{ width: '100%', height: 200, display: 'block' }}
-      aria-label="采集任务量折线面积图（7 天）"
+      aria-label={`采集任务量折线面积图（${periodLabel}）`}
     >
       <defs>
         <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
@@ -331,16 +331,23 @@ function CrawlerTaskTable() {
 
 type Period = '7d' | '30d' | '90d'
 
+const PERIOD_LABEL: Record<Period, string> = {
+  '7d': '7 天',
+  '30d': '30 天',
+  '90d': '90 天',
+}
+
 export function AnalyticsView() {
   const [period, setPeriod] = useState<Period>('7d')
   const gradientId = useId().replace(/:/g, '-')
+  const periodLabel = PERIOD_LABEL[period]
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }} data-analytics-view>
       <header style={PAGE_HEAD} data-page-head>
         <div>
           <h1 style={HEAD_TITLE}>数据看板</h1>
-          <p style={HEAD_SUB}>视频 · 源 · 用户 · 采集任务 — 多维度运营观测</p>
+          <p style={HEAD_SUB}>视频 · 源 · 用户 · 采集任务 — 最近 {periodLabel} 运营观测</p>
         </div>
         <div style={HEAD_ACTIONS}>
           <select
@@ -384,10 +391,10 @@ export function AnalyticsView() {
       <div style={CHARTS_GRID}>
         <div style={CARD} data-analytics-card="chart">
           <header style={CARD_HEAD}>
-            <h2 style={CARD_TITLE}>采集任务量 · 7 天</h2>
+            <h2 style={CARD_TITLE}>采集任务量 · {periodLabel}</h2>
           </header>
           <div style={CARD_BODY}>
-            <AreaChart gradientId={gradientId} />
+            <AreaChart gradientId={gradientId} periodLabel={periodLabel} />
           </div>
         </div>
 
