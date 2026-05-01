@@ -182,10 +182,18 @@ describe('saved-views — DEFAULT_VIEWS（reference §5.3 4 默认 views）', ()
     expect(view.query.filters.size).toBe(0)
   })
 
-  it('封面失效：image_health 列强制可见（视觉突出 P0 Pill）', () => {
+  it('封面失效：scope=team + sort created_at desc + columns 空（columns patch 完全替换语义守门）', () => {
     const view = DEFAULT_VIEWS.find((v) => v.id === 'default-image-broken')!
     expect(view.scope).toBe('team')
-    expect(view.query.columns.get('image_health')).toEqual({ visible: true })
+    expect(view.query.sort).toEqual({ field: 'created_at', direction: 'desc' })
+    // fix#3：columns 空 Map（applyPatch.columns 是完全替换语义；写单列会清空用户偏好）
+    expect(view.query.columns.size).toBe(0)
+  })
+
+  it('所有默认 views 的 columns 均为空 Map（防 columns patch 替换破坏用户列偏好）', () => {
+    DEFAULT_VIEWS.forEach((v) => {
+      expect(v.query.columns.size).toBe(0)
+    })
   })
 
   it('默认 views 不与 user views 共享 id 命名空间（personal-* / team-* 隔离）', () => {

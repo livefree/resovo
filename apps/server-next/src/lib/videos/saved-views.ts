@@ -225,8 +225,11 @@ export const DEFAULT_VIEWS: readonly TableView[] = [
     sort: { field: 'created_at', direction: 'desc' },
     // VIDEO-FILTER-IMAGE-HEALTH follow-up：补 imageHealth enum filter 后改精确过滤
     filters: new Map(),
-    // 强制 image_health 列可见（reference §6.1 P0 Pill）；其他列保留默认可见性
-    columns: new Map([['image_health', { visible: true }]]),
+    // columns 空 Map（不操作列可见性）：useTableQuery 的 applyPatch.columns 是完全替换
+    // 语义（不是 merge），单独写 image_health 会清空其他列可见性。视觉突出 P0 Pill 改由
+    // VIDEO-FILTER-IMAGE-HEALTH follow-up 加 imageHealth filter 实现，本视图当前仅做
+    // sort + label 标记。
+    columns: new Map(),
   }),
   makeDefaultView('team-published', '团队新增上架', 'team', {
     pagination: { page: 1, pageSize: 20 },

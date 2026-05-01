@@ -548,18 +548,32 @@ export function VideoListClient() {
 
   // ── CHG-DESIGN-08 8B saved views handlers ─────────────────────
   // viewsConfig 切换：activeId 同步到 query state（不含 selection — view scope 与选区无关）
+  // 查找列表必须含 DEFAULT_VIEWS（CHG-DESIGN-08 8B fix#2 防 regression：上轮漏掉默认
+  // views 致点击后 find() 返 undefined → patch 不调 → 用户看到 view 选中但 query 不变）
+  // columns 字段语义守门（fix#3）：useTableQuery applyPatch.columns 是**完全替换**语义，
+  // 不是 merge。空 Map 会清空用户已设的列偏好；只有 view 显式声明列可见性时才 patch。
   const handleViewChange = useCallback((id: string | null) => {
     setActiveViewId(id ?? undefined)
     if (!id) return
-    const all = [...personalViews, ...teamViews]
+    const all = [...DEFAULT_VIEWS, ...personalViews, ...teamViews]
     const view = all.find((v) => v.id === id)
     if (!view) return
-    patch({
-      pagination: view.query.pagination,
-      sort: view.query.sort,
-      filters: view.query.filters,
-      columns: view.query.columns,
-    })
+    // columns 仅在非空时 patch（保留用户当前列可见性偏好；reference §5.3 默认 views 视图意图
+    // 是改 filter / sort 不动列；如未来某 view 真的需要操作列可见性，直接传完整 columns Map
+    // 包含所有列状态，不能只传差异化）
+    const next: TableQueryPatch = view.query.columns.size > 0
+      ? {
+          pagination: view.query.pagination,
+          sort: view.query.sort,
+          filters: view.query.filters,
+          columns: view.query.columns,
+        }
+      : {
+          pagination: view.query.pagination,
+          sort: view.query.sort,
+          filters: view.query.filters,
+        }
+    patch(next)
   }, [personalViews, teamViews, patch])
 
   // viewsConfig 保存：当前 query snapshot → 新 view（personal localStorage 持久化；
