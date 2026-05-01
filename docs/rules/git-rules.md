@@ -12,9 +12,12 @@
 ## 分支策略
 
 ```
-main  ← 每个 Phase 完成后合并，稳定版本
-dev   ← 日常开发，所有任务在此分支工作
+main              ← 稳定版本；Track 集成、Phase 完成后合并至此
+dev               ← 单轨日常开发（无并行 Track 时使用）
+track/<track-id>  ← 并行开发：每条 Track 的独立分支（从 main 切出）
 ```
+
+### 单轨模式（默认）
 
 所有工作在 `dev` 分支进行，不创建 feature 分支。
 
@@ -25,6 +28,16 @@ git merge dev --no-ff -m "feat: complete Phase N MVP"
 git checkout dev
 ```
 合并后写入 PHASE COMPLETE 通知（格式见 workflow-rules.md）。
+
+### 并行模式（Track 启用时）
+
+并行规则见 `docs/rules/parallel-dev-rules.md`。要点：
+
+- Track 分支从 **`main` 的当前 HEAD** 切出，不从其他 Track 分支切出。
+- 集成采用 **PR**（non-fast-forward），PR 标题格式：`track(<track-id>): <Track 目标一句话描述>`。
+- PR 合并后立即删除 `track/<id>` 分支。
+- Track 之间禁止互相 merge（会产生交叉依赖，导致集成顺序不可控）。
+- 所有 Track 集成完毕后，并行模式结束，恢复单轨工作流。
 
 ---
 

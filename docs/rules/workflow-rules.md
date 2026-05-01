@@ -253,9 +253,10 @@ tasks.md 最终稳定态为**空文件（仅保留标题行）**。
 ## 任务记录一致性约束
 
 - 多任务规划统一写入 task-queue.md，不得临时"走一步看一步"
-- 同一时刻 tasks.md 只允许 1 个 `🔄 进行中` 卡片
-- task-queue.md 状态必须由 tasks.md 的开始/完成动作触发更新，不得直接修改
-- changelog.md / task-queue.md 新记录一律**尾部追加**，禁止头部插入
+- **单轨模式**：同一时刻 tasks.md 只允许 1 个 `🔄 进行中` 卡片
+- **并行模式**：约束范围缩小到 Track 内（每条 Track 的 `docs/tasks-<id>.md` 各自保持单活）；`docs/tasks.md` 降级为协调器视图（详见 `docs/rules/parallel-dev-rules.md`）
+- task-queue.md 状态必须由 tasks.md（或 tasks-<id>.md）的开始/完成动作触发更新，不得直接修改
+- changelog.md / task-queue.md 新记录一律**尾部追加**，禁止头部插入；并行模式下 changelog 条目须含 Track ID
 - 新任务编号：`<PREFIX>-NN`，同前缀按最大编号递增
 
 ---

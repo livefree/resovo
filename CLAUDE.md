@@ -131,6 +131,7 @@ npm run test:e2e         # PLAYER / AUTH / SEARCH / VIDEO 任务完成后运行
 | 后台模块（v1） | `docs/rules/admin-module-template.md` | apps/server v1 维护：ModernDataTable、AdminDropdown、列表页（仅维护期）        |
 | 后台模块（v2） | `docs/designs/backend_design_v2.1/reference.md` §4.4 + §10 | server-next 新模块：DataTable 一体化、admin-ui shell、cell 复合组件 |
 | 任务工作流   | `docs/rules/workflow-rules.md`        | 开工、选任务、BLOCKER、PHASE COMPLETE                                          |
+| 并行开发     | `docs/rules/parallel-dev-rules.md`    | 并行、多轨道、Track、同时开发、并发任务、track 分支                            |
 | Git 提交     | `docs/rules/git-rules.md`             | commit、branch、merge、TASK-ID                                                 |
 | 质量门禁     | `docs/rules/quality-gates.md`         | 任务完成前、六问、AI-CHECK、偏离检测                                           |
 | 日志相关任务 | `docs/rules/logging-rules.md`         | logger / log / 日志 / pino / request_id / worker job / PII redact / client-log |
