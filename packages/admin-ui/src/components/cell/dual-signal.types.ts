@@ -27,11 +27,15 @@
  *   - `dead`   → 红点 / "失效"（设计稿 jsx 用 `all_dead`，本契约简化为 `dead`）
  *   - `unknown`→ 灰点 / "未测"
  *
- * 与 Pill 关系：
- *   DualSignal **复用** Pill 渲染（每行是一个 Pill 实例 + variant=`probe`/`render`）；
- *   DualSignal 只负责"双信号布局 + 状态映射"，不重新实现 pill 视觉。
- *   PillVariant 中的 `probe` / `render` 变体即为 DualSignal 专属（packages/design-tokens
- *   `--dual-signal-probe` + `--dual-signal-probe-soft` / `--dual-signal-render` + `--dual-signal-render-soft` 已就位）。
+ * 与 Pill 关系（**视觉对齐 + 独立渲染**；12B arch-reviewer P1-1 修正）：
+ *   DualSignal **视觉对齐** Pill 规格（行级布局 / 6px dot / 1px 7px padding / 11px 字号 /
+ *   radius full），但**独立渲染**三段式内部结构（dot + "探"/"播" 标签 + 状态文案）—
+ *   不通过 `import { Pill }` 嵌套调用。理由：Pill 是「dot + children」两段式契约，DualSignal
+ *   每行需要「dot + 标签 + 文案」三段独立染色（标签用 `--dual-signal-probe/render`，文案用
+ *   `--fg-muted`），强行复用 Pill 会失去染色控制 + 增加 wrapper 层。
+ *   PillVariant 中的 `probe` / `render` 变体保留供消费方按需独立用（如表格简单状态列只需
+ *   单行 probe pill），DualSignal 内部不依赖。
+ *   packages/design-tokens 已就位 `--dual-signal-probe(-soft)` / `--dual-signal-render(-soft)`。
  *
  * 不变约束：
  *   - 颜色仅消费 packages/design-tokens
