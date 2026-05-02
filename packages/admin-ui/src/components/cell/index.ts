@@ -42,6 +42,14 @@ export type {
   BarSignalSize,
 } from './bar-signal.types'
 
+// ── DecisionCard（CHG-SN-4-04 D-14 第 5 件 · 跨层下沉例外 ADR-106）
+
+export { DecisionCard } from './decision-card'
+export type {
+  DecisionCardProps,
+  DecisionCardVideo,
+} from './decision-card.types'
+
 // ── DualSignal ──────────────────────────────────────────────────
 // CHG-SN-4-04 R2：DualSignalState 类型源收敛至 `@resovo/types`；本包不再 own 类型 owner。
 // 旧消费方迁移：`import type { DualSignalDisplayState } from '@resovo/types'`

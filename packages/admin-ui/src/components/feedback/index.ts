@@ -11,3 +11,20 @@
 
 export { StaffNoteBar } from './staff-note-bar'
 export type { StaffNoteBarProps } from './staff-note-bar.types'
+
+// ── LineHealthDrawer ────────────────────────────────────────────
+
+export { LineHealthDrawer } from './line-health-drawer'
+export type {
+  LineHealthDrawerProps,
+  LineHealthDrawerError,
+  LineHealthDrawerPagination,
+} from './line-health-drawer.types'
+
+// ── RejectModal ─────────────────────────────────────────────────
+
+export { RejectModal } from './reject-modal'
+export type {
+  RejectModalProps,
+  RejectModalSubmitPayload,
+} from './reject-modal.types'

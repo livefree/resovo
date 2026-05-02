@@ -2,11 +2,30 @@
 /* eslint-disable no-console */
 
 import React, { useState } from 'react'
-import { VisChip } from '@resovo/admin-ui'
-import { DecisionCard } from './DecisionCard'
+import { VisChip, DecisionCard } from '@resovo/admin-ui'
+import type { DecisionCardVideo } from '@resovo/admin-ui'
 import { EpisodeSelector } from './EpisodeSelector'
 import { LinesPanel } from './LinesPanel'
 import type { MockVideo } from './mock-data'
+
+/**
+ * MockVideo → DecisionCardVideo 适配（CHG-SN-4-04 D-14 第 5 件上移：
+ * mock-data.MockVideo 字段集与 DecisionCardVideo Pick 列表不完全对齐，
+ * 调用方负责构造适配层；待 CHG-SN-4-07 真实 API 集成后此函数下线）。
+ */
+function toDecisionCardVideo(v: MockVideo): DecisionCardVideo {
+  return {
+    id: v.id,
+    title: v.title,
+    reviewStatus: v.review,
+    visibilityStatus: v.visibility,
+    isPublished: false,           // mock 阶段 pending 卡均为未发布
+    staffNote: v.staffNote ?? null,
+    reviewLabelKey: null,         // mock 不含 reviewLabelKey
+    sourceCheckStatus: 'pending', // mock 不携带；占位以满足契约
+    doubanStatus: 'pending',      // mock 不携带；占位以满足契约
+  }
+}
 
 interface PendingCenterProps {
   readonly v: MockVideo
@@ -34,7 +53,11 @@ export function PendingCenter({ v }: PendingCenterProps): React.ReactElement {
 
   return (
     <>
-      <DecisionCard v={v} />
+      <DecisionCard
+        video={toDecisionCardVideo(v)}
+        probeState={v.probe}
+        renderState={v.render}
+      />
 
       {/* Video player placeholder */}
       <div
