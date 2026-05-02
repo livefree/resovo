@@ -105,6 +105,7 @@ export type StateTransitionAction =
   | 'unpublish'
   | 'set_internal'
   | 'set_hidden'
+  | 'staging_revert'  // M-SN-4 D-01：暂存退回待审核（approved+internal/hidden+0 → pending_review）
 
 // ── 采集站点 ──────────────────────────────────────────────────────
 

@@ -1757,7 +1757,7 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 
 ### CHG-SN-4-03 · DB schema：052 audit_log + 053 状态机 + 054–060 字段 🚧 进行中（2026-05-01）
 
-- **来源**：plan v1.3 §8.1 第 1 张 / SEQ-20260501-01（v1.3 重排：编号映射详见 plan §12 v1.3 段）
+- **来源**：plan v1.4 §8.1 第 1 张 / SEQ-20260501-01（v1.3 编号重排 + v1.4 NOT NULL 强化；映射详见 plan §12 修订日志）
 - **状态**：🚧 进行中（卡片详情见 `docs/tasks.md`）
 - **建议主循环**：claude-sonnet-4-6
 - **实际主循环**：claude-opus-4-7（偏离登记，详见 tasks.md 卡片）

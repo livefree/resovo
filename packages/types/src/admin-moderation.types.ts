@@ -190,7 +190,7 @@ export interface VideoQueueRow {
   readonly staffNote: string | null           // 055 新增：videos.staff_note
   readonly reviewLabelKey: string | null      // 055 新增：videos.review_label_key
   readonly doubanStatus: DoubanStatus         // 032 既有：CHECK 4 值
-  readonly reviewSource: ReviewSource | null  // 060 新增：videos.review_source TEXT CHECK 3 值 DEFAULT 'manual'（NULL 允许；DEFAULT 仅作用于不指定值的 INSERT，存量行 backfill 后仍可被显式置 NULL）
+  readonly reviewSource: ReviewSource         // 060 新增：videos.review_source TEXT NOT NULL DEFAULT 'manual'（v1.4 强化为 NOT NULL；schema 强制非空，types 同步收紧）
   readonly trendingTag: string | null         // 051 既有：trending_tag CHECK ('hot'/'weekly_top'/'editors_pick'/'exclusive') NULL
   readonly createdAt: string                  // DB: created_at TIMESTAMPTZ NOT NULL
   readonly updatedAt: string                  // DB: updated_at TIMESTAMPTZ NOT NULL
@@ -255,7 +255,7 @@ export interface VideoSourceLine {
   readonly lastProbedAt: string | null              // 054 新增
   readonly lastRenderedAt: string | null            // 054 新增
   readonly qualityDetected: ResolutionTier | null   // 059 新增 CHECK 7 值
-  readonly qualitySource: QualitySource | null      // 059 新增 CHECK 4 值 DEFAULT 'crawler'（NULL 允许；DEFAULT 仅作用于不指定值的 INSERT）
+  readonly qualitySource: QualitySource              // 059 新增 NOT NULL DEFAULT 'crawler' CHECK 4 值（v1.4 强化为 NOT NULL；schema 强制非空，types 同步收紧）
   readonly resolutionWidth: number | null           // 059 新增
   readonly resolutionHeight: number | null          // 059 新增
   readonly detectedAt: string | null                // 059 新增

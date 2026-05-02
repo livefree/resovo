@@ -556,6 +556,7 @@ export type VideoStateTransitionAction =
   | 'unpublish'
   | 'set_internal'
   | 'set_hidden'
+  | 'staging_revert'  // M-SN-4 D-01：暂存退回待审核（approved+internal/hidden+0 → pending_review）
 
 export interface TransitionVideoStateInput {
   action: VideoStateTransitionAction
@@ -697,6 +698,20 @@ export async function transitionVideoState(
       case 'set_hidden': {
         nextVisibility = 'hidden'
         nextPublished = false
+        break
+      }
+      case 'staging_revert': {
+        // M-SN-4 D-01：暂存（approved + internal|hidden + unpublished）→ 退回待审核
+        // 已发布视频不可直接退回（必须先 unpublish），由 trigger 白名单兜底拒绝
+        if (current.review_status !== 'approved' || current.is_published) {
+          throw new Error('INVALID_TRANSITION')
+        }
+        nextReview = 'pending_review'
+        nextVisibility = current.visibility_status  // 保持 internal | hidden
+        nextPublished = false
+        reviewReason = null
+        reviewedBy = null
+        reviewedAt = null
         break
       }
       default:
