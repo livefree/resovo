@@ -8,8 +8,6 @@
  * GET    /admin/videos/:id          获取单条详情（含未发布，需 moderator+）
  * PATCH  /admin/videos/:id          编辑元数据（需 moderator+）
  * POST   /admin/videos              手动新增视频（需 moderator+）
- * GET    /admin/videos/:id/images   获取视频图片状态（IMG-06）
- * PUT    /admin/videos/:id/images   更新视频图片 URL，触发健康检查（IMG-06）
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -18,12 +16,10 @@ import { db } from '@/api/lib/postgres'
 import { es } from '@/api/lib/elasticsearch'
 import { VideoService } from '@/api/services/VideoService'
 import { DoubanService } from '@/api/services/DoubanService'
-import { CrawlerRunService } from '@/api/services/CrawlerRunService'
-import { findAdminVideoById } from '@/api/db/queries/videos'
-import { findCatalogById, updateCatalogFields } from '@/api/db/queries/mediaCatalog'
-import { imageHealthQueue } from '@/api/lib/queue'
+import { ModerationService } from '@/api/services/ModerationService'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
-import type { VideoType, VideoStatus, VideoGenre, VisibilityStatus, ImageKind } from '@/types'
+import { isAppError } from '@/api/lib/errors'
+import type { VisibilityStatus } from '@/types'
 
 // ── Zod Schema ────────────────────────────────────────────────────
 
@@ -38,6 +34,8 @@ const VisibilitySchema = z.object({
 const ReviewSchema = z.object({
   action: z.enum(['approve', 'approve_and_publish', 'reject'] as const),
   reason: z.string().max(500).optional(),
+  labelKey: z.string().max(64).optional(),
+  expectedUpdatedAt: z.string().datetime().optional(),
 })
 
 const StateTransitionSchema = z.object({
@@ -104,16 +102,16 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
   const adminOnly = [fastify.authenticate, fastify.requireRole(['admin'])]
   const videoService = new VideoService(db, es)
   const doubanService = new DoubanService(db)
-  const runService = new CrawlerRunService(db)
+  const moderationSvc = new ModerationService(db, es)
   async function shouldIncludeAdultInAdminContent(): Promise<boolean> {
     const raw = await systemSettingsQueries.getSetting(db, 'show_adult_content')
     return raw === 'true'
   }
   function mapTransitionError(err: unknown): { status: number; code: string; message: string } {
-    if (err instanceof Error && err.message === 'STATE_CONFLICT') {
+    if (isAppError(err, 'STATE_CONFLICT')) {
       return { status: 409, code: 'STATE_CONFLICT', message: '状态已被其他操作更新，请刷新后重试' }
     }
-    if (err instanceof Error && err.message === 'INVALID_TRANSITION') {
+    if (isAppError(err, 'INVALID_TRANSITION')) {
       return { status: 422, code: 'INVALID_TRANSITION', message: '非法状态跃迁，请按审核流程操作' }
     }
     return { status: 500, code: 'INTERNAL_ERROR', message: '状态更新失败' }
@@ -229,6 +227,20 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
     }
 
     try {
+      if (parsed.data.action === 'reject' && parsed.data.labelKey) {
+        const result = await moderationSvc.rejectLabeled({
+          videoId: id,
+          labelKey: parsed.data.labelKey,
+          reason: parsed.data.reason,
+          expectedUpdatedAt: parsed.data.expectedUpdatedAt,
+          actorId: request.user!.userId,
+          requestId: request.id,
+        })
+        if (!result) {
+          return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 } })
+        }
+        return reply.send({ data: result })
+      }
       const result = await videoService.review(id, {
         action: parsed.data.action,
         reason: parsed.data.reason,
@@ -433,134 +445,5 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
     return reply.send({ data: result })
   })
 
-  // ── GET /admin/videos/:id/images ────────────────────────────
-  // IMG-06: 返回视频 4 种图片的 url + status（backdrop/banner_backdrop 不在标准响应中）
-  fastify.get('/admin/videos/:id/images', { preHandler: auth }, async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const video = await findAdminVideoById(db, id)
-    if (!video) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
-      })
-    }
-    const catalog = await findCatalogById(db, video.catalog_id)
-    if (!catalog) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: '关联 catalog 不存在', status: 404 },
-      })
-    }
-    return reply.send({
-      data: {
-        poster:          { url: catalog.coverUrl,          status: catalog.posterStatus },
-        backdrop:        { url: catalog.backdropUrl,       status: catalog.backdropStatus },
-        logo:            { url: catalog.logoUrl,           status: catalog.logoStatus },
-        banner_backdrop: { url: catalog.bannerBackdropUrl, status: catalog.bannerBackdropStatus },
-        lastStatusUpdatedAt: catalog.updatedAt,
-      },
-    })
-  })
-
-  // ── PUT /admin/videos/:id/images ─────────────────────────────
-  // IMG-06: 更新指定 kind 的 URL，重置 status 为 pending_review，入健康检查队列
-  const ImageUpdateSchema = z.object({
-    kind: z.enum(['poster', 'backdrop', 'logo', 'banner_backdrop'] as const),
-    url:  z.string().url(),
-  })
-
-  type ImageKindFields = {
-    urlField: keyof import('@/api/db/queries/mediaCatalog').CatalogUpdateData
-    statusField: keyof import('@/api/db/queries/mediaCatalog').CatalogUpdateData
-  }
-
-  const IMAGE_KIND_FIELDS: Record<string, ImageKindFields> = {
-    poster:          { urlField: 'coverUrl',          statusField: 'posterStatus' },
-    backdrop:        { urlField: 'backdropUrl',        statusField: 'backdropStatus' },
-    logo:            { urlField: 'logoUrl',            statusField: 'logoStatus' },
-    banner_backdrop: { urlField: 'bannerBackdropUrl',  statusField: 'bannerBackdropStatus' },
-  }
-
-  fastify.put('/admin/videos/:id/images', { preHandler: adminOnly }, async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const parsed = ImageUpdateSchema.safeParse(request.body)
-    if (!parsed.success) {
-      return reply.code(422).send({
-        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
-      })
-    }
-    const { kind, url } = parsed.data
-
-    const video = await findAdminVideoById(db, id)
-    if (!video) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
-      })
-    }
-
-    const fields = IMAGE_KIND_FIELDS[kind]!
-    await updateCatalogFields(db, video.catalog_id, {
-      [fields.urlField]:    url,
-      [fields.statusField]: 'pending_review',
-    })
-
-    await imageHealthQueue.add('health-check', {
-      type: 'health-check',
-      catalogId: video.catalog_id,
-      videoId: id,
-      kind: kind as ImageKind,
-      url,
-    })
-    await imageHealthQueue.add('blurhash-extract', {
-      type: 'blurhash-extract',
-      catalogId: video.catalog_id,
-      videoId: id,
-      kind: kind as ImageKind,
-      url,
-    })
-
-    return reply.send({ data: { kind, url, status: 'pending_review' } })
-  })
-
-  // ── POST /admin/videos/:id/refetch-sources ────────────────────
-  // CRAWLER-04: 创建 source-refetch run，进入 run/task/queue，不同步执行
-  fastify.post('/admin/videos/:id/refetch-sources', { preHandler: auth }, async (request, reply) => {
-    const { id } = request.params as { id: string }
-
-    if (!/^[0-9a-f-]{36}$/.test(id)) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
-      })
-    }
-
-    const BodySchema = z.object({
-      siteKeys: z.array(z.string().min(1)).optional(),
-    })
-    const parsed = BodySchema.safeParse(request.body)
-    if (!parsed.success) {
-      return reply.code(422).send({
-        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
-      })
-    }
-
-    const video = await findAdminVideoById(db, id)
-    if (!video) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },
-      })
-    }
-
-    const siteKeys = parsed.data.siteKeys
-    const hasSiteFilter = (siteKeys ?? []).length > 0
-    const result = await runService.createAndEnqueueRun({
-      triggerType: hasSiteFilter ? 'batch' : 'all',
-      mode: 'incremental',
-      crawlMode: 'source-refetch',
-      targetVideoId: id,
-      ...(hasSiteFilter ? { siteKeys } : {}),
-    })
-    return reply.code(202).send({ data: result })
-  })
 }
 
-// ── 类型导出（供其他模块使用） ─────────────────────────────────────
-
-export type { VideoType, VideoStatus, VideoGenre }

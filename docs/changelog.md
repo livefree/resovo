@@ -3708,3 +3708,75 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - visual baseline：DEBT-SN-4-A 欠账登记（截止 -10）
 - 硬编码颜色 grep ✅ 0 命中（`#[0-9a-fA-F]{3,8}` / `rgb(` 在 cell/{bar-signal,decision-card}.tsx + feedback/ 全部 0）
 - 零图标库依赖 grep ✅ 0 命中（`from 'lucide-react'` 在 5 件新文件 0）
+
+## [CHG-SN-4-05] 后端 API：8 新端点 + 4 改端点 + 058a schema patch
+
+- **完成时间**：2026-05-02
+- **记录时间**：2026-05-02 05:15
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **计划文档**：`docs/designs/backend_design_v2.1/M-SN-4-05-api-endpoints-plan_20260502.md` v1.1
+
+### 变更内容
+
+#### Schema
+- 新增 `apps/api/src/db/migrations/058a_source_health_events_processed_at.sql`：为 `source_health_events` 添加 `processed_at TIMESTAMPTZ NULL` 列 + 偏索引（`WHERE processed_at IS NULL AND origin='feedback_driven'`）
+- 更新 `docs/architecture.md` §5.12 同步 058a patch
+
+#### 新端点（8 新 + 4 改）
+- `GET  /admin/moderation/pending-queue`（cursor 分页 + todayStats）
+- `POST /admin/moderation/:id/reject-labeled`（labelKey 状态机 + REVIEW_RACE 409）
+- `PATCH /admin/moderation/:id/staff-note`（备注清空支持 null）
+- `GET  /admin/moderation/:id/line-health/:sourceId`（分页信封对齐 api-rules.md）
+- `POST /admin/staging/:id/revert`（staging 退回待审核）
+- `PATCH /admin/videos/:id/sources/:sourceId`（线路 toggle is_active）
+- `POST /admin/videos/:id/sources/disable-dead`（批量禁用 dead 线路）
+- `POST /v1/feedback/playback`（前台播放反馈；rate-limit + PII hash + 副作用 fire-and-forget）
+- `GET  /admin/review-labels`（审核标签字典）
+- 改：`POST /admin/videos/:id/review`（action=reject + labelKey 路由到 rejectLabeled）
+- 改：`POST /admin/videos/:id/state-transition`（追加 staging_revert action）
+- 改：批量拒绝 + staging 发布路径
+
+#### 新增服务/查询层
+- `apps/api/src/services/ModerationService.ts`：orchestration（rejectLabeled / updateStaffNote / stagingRevert / toggleSource / disableDead）
+- `apps/api/src/services/AuditLogService.ts`：fire-and-forget audit log writer
+- `apps/api/src/services/VideoIndexSyncService.ts`：新增 `unindexVideo()`（404 幂等）
+- `apps/api/src/db/queries/auditLog.ts`：insertAuditLog
+- `apps/api/src/db/queries/reviewLabels.ts`：listActiveReviewLabels / findReviewLabelByKey
+- `apps/api/src/db/queries/sourceHealthEvents.ts`：listLineHealthEvents / insertHealthEvent
+- `apps/api/src/db/queries/video_sources.ts`：listVideoSources / findVideoSourceById / toggleVideoSource / disableDeadSources
+- `apps/api/src/db/queries/moderation.ts`：新增 listPendingQueue（cursor 分页 + todayStats）
+- `apps/api/src/lib/errors.ts`：新增 STATE_INVALID / LABEL_UNKNOWN / STAGING_NOT_READY / REVIEW_RACE / RATE_LIMITED / SOURCE_PROBE_FAILED
+
+#### 路由文件重构
+- `apps/api/src/routes/admin/videos.ts`：从 629 行拆分至 448 行（移出图片路由 + 线路路由）
+- 新增 `apps/api/src/routes/admin/videoImages.ts`：GET+PUT /admin/videos/:id/images
+- 新增 `apps/api/src/routes/admin/videoSources.ts`：PATCH /sources/:sourceId + POST /sources/disable-dead + POST /refetch-sources
+- 新增 `apps/api/src/routes/admin/reviewLabels.ts`：GET /admin/review-labels
+- 新增 `apps/api/src/routes/feedback.ts`：POST /feedback/playback
+
+#### 新增测试（+10 测试文件 / +62 cases）
+- `tests/unit/api/auditLogService.test.ts`（fire-and-forget 成功/失败）
+- `tests/unit/api/videoIndexSyncUnindex.test.ts`（404 幂等 / 非 404 降级）
+- `tests/unit/api/moderationService.test.ts`（rejectLabeled / stagingRevert / disableDead / toggleSource）
+- `tests/unit/api/reviewLabelsQuery.test.ts`（listActiveReviewLabels / findReviewLabelByKey）
+- `tests/unit/api/sourceHealthEventsQuery.test.ts`（listLineHealthEvents / insertHealthEvent）
+- `tests/unit/api/moderationQueueRoutes.test.ts`（4 新端点合约测试）
+- `tests/unit/api/stagingRevertRoute.test.ts`（revert 端点合约测试）
+- `tests/unit/api/videoSourcesRoutes.test.ts`（toggle + disable-dead 合约测试）
+- `tests/unit/api/reviewLabelsRoute.test.ts`（review-labels 合约测试）
+- `tests/unit/api/feedbackRoute.test.ts`（rate-limit + PII hash + 副作用）
+
+### 质量门禁
+
+- typecheck ✅ 通过（全工作区 8 个 workspace 零报错）
+- lint ✅ 通过（turbo lint 5 tasks，pre-existing warning 排除）
+- unit ✅ 通过（237 文件 / 2997 测试全绿；新增 62 cases；零回归）
+- e2e：不在本任务范围（非 PLAYER/AUTH/SEARCH/VIDEO）
+- 审计日志守门 ✅：5 写操作全部对应 AuditLogService.write 调用
+- 文件行数 ✅：videos.ts 448 行；moderation.ts 474 行（均 < 500）
+
+### 后续解锁
+
+- CHG-SN-4-07（审核台前端接入）
+- CHG-SN-4-08（VideoEditDrawer 三 Tab 真实 API 接入）

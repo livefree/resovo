@@ -229,7 +229,7 @@ describe('VideoIndexSyncService.reconcileStale', () => {
     } as unknown as import('pg').Pool
     const es = {
       index: vi.fn(),
-      delete: vi.fn().mockRejectedValue(new Error('404 not_found')),
+      delete: vi.fn().mockRejectedValue(Object.assign(new Error('not_found'), { meta: { statusCode: 404 } })),
     } as unknown as import('@elastic/elasticsearch').Client
     const svc = new VideoIndexSyncService(db, es)
 

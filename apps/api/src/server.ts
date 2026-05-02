@@ -12,6 +12,8 @@ import { sourceRoutes } from '@/api/routes/sources'
 import { searchRoutes } from '@/api/routes/search'
 import { subtitleRoutes } from '@/api/routes/subtitles'
 import { adminVideoRoutes } from '@/api/routes/admin/videos'
+import { adminVideoImagesRoutes } from '@/api/routes/admin/videoImages'
+import { adminVideoSourcesRoutes } from '@/api/routes/admin/videoSources'
 import { adminContentRoutes } from '@/api/routes/admin/content'
 import { adminUserRoutes } from '@/api/routes/admin/users'
 import { adminAnalyticsRoutes } from '@/api/routes/admin/analytics'
@@ -35,6 +37,8 @@ import { registerBlurhashWorker } from '@/api/workers/imageBlurhashWorker'
 import { registerBackfillWorker } from '@/api/workers/imageBackfillWorker'
 import { adminStagingRoutes } from '@/api/routes/admin/staging'
 import { adminModerationRoutes } from '@/api/routes/admin/moderation'
+import { adminReviewLabelsRoutes } from '@/api/routes/admin/reviewLabels'
+import { feedbackRoutes } from '@/api/routes/feedback'
 import { adminDesignTokenRoutes } from '@/api/routes/admin/design-tokens'
 import { internalImageBrokenRoutes } from '@/api/routes/internal/image-broken'
 import { internalClientLogRoutes } from '@/api/routes/internal/client-log'
@@ -110,6 +114,8 @@ async function start() {
   await fastify.register(searchRoutes, { prefix: '/v1' })
   await fastify.register(subtitleRoutes, { prefix: '/v1' })
   await fastify.register(adminVideoRoutes, { prefix: '/v1' })
+  await fastify.register(adminVideoImagesRoutes, { prefix: '/v1' })
+  await fastify.register(adminVideoSourcesRoutes, { prefix: '/v1' })
   await fastify.register(adminContentRoutes, { prefix: '/v1' })
   await fastify.register(adminUserRoutes, { prefix: '/v1' })
   await fastify.register(adminAnalyticsRoutes, { prefix: '/v1' })
@@ -123,6 +129,8 @@ async function start() {
   await fastify.register(adminCrawlerSitesRoutes, { prefix: '/v1' })
   await fastify.register(adminStagingRoutes, { prefix: '/v1' })
   await fastify.register(adminModerationRoutes, { prefix: '/v1' })
+  await fastify.register(adminReviewLabelsRoutes, { prefix: '/v1' })
+  await fastify.register(feedbackRoutes, { prefix: '/v1' })
   await fastify.register(adminDesignTokenRoutes, { prefix: '/v1' })
   await fastify.register(internalImageBrokenRoutes, { prefix: '/v1' })
   await fastify.register(internalClientLogRoutes, { prefix: '/v1' })

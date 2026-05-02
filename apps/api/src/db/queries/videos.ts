@@ -6,6 +6,7 @@
 
 import type { Pool, PoolClient } from 'pg'
 import type { Video, VideoCard, VideoType, VideoStatus, VideoGenre, ContentFormat, EpisodePattern, ReviewStatus, VisibilityStatus, DoubanStatus, SourceCheckStatus, TrendingTag } from '@/types'
+import { AppError } from '@/api/lib/errors'
 
 // ── 内部 DB 行类型 ────────────────────────────────────────────────
 
@@ -43,6 +44,11 @@ interface DbVideoRow {
   meta_score: number
   // Migration 051 字段
   trending_tag: TrendingTag | null
+  // Migration 055 — 审核台字段（CHG-SN-4-03）
+  staff_note: string | null
+  review_label_key: string | null
+  // Migration 060 — 审核来源（CHG-SN-4-03）
+  review_source: string | null
   // ── media_catalog JOIN 字段（mc.*）───────────────────────────────
   title_en: string | null
   title_original: string | null
@@ -173,6 +179,7 @@ const VIDEO_FULL_SELECT = `
   v.review_status, v.visibility_status, v.needs_manual_review,
   v.content_rating, v.site_key, v.source_category,
   v.douban_status, v.source_check_status, v.meta_score, v.trending_tag,
+  v.staff_note, v.review_label_key, v.review_source,
   mc.title_en, mc.title_original, mc.description, mc.cover_url,
   mc.rating, mc.rating_votes, mc.runtime_minutes, mc.year, mc.country,
   mc.status, mc.director, mc."cast", mc.writers, mc.genres,
@@ -563,6 +570,7 @@ export interface TransitionVideoStateInput {
   reviewedBy?: string
   reason?: string
   expectedUpdatedAt?: string
+  reviewLabelKey?: string
 }
 
 export interface TransitionVideoStateResult {
@@ -610,7 +618,7 @@ export async function transitionVideoState(
     }
 
     if (input.expectedUpdatedAt && new Date(current.updated_at).toISOString() !== new Date(input.expectedUpdatedAt).toISOString()) {
-      throw new Error('STATE_CONFLICT')
+      throw new AppError('STATE_CONFLICT', 'Optimistic lock conflict', 409)
     }
 
     let nextReview = current.review_status
@@ -623,7 +631,7 @@ export async function transitionVideoState(
     switch (input.action) {
       case 'approve': {
         if (current.review_status !== 'pending_review') {
-          throw new Error('INVALID_TRANSITION')
+          throw new AppError('INVALID_TRANSITION', 'Invalid state transition', 422)
         }
         nextReview = 'approved'
         nextVisibility = 'internal'
@@ -635,7 +643,7 @@ export async function transitionVideoState(
       }
       case 'approve_and_publish': {
         if (current.review_status !== 'pending_review') {
-          throw new Error('INVALID_TRANSITION')
+          throw new AppError('INVALID_TRANSITION', 'Invalid state transition', 422)
         }
         nextReview = 'approved'
         nextVisibility = 'public'
@@ -651,7 +659,7 @@ export async function transitionVideoState(
         // approved 视频不可直接 reject（即便允许，DB trigger 也会拒绝 approved → rejected_hidden
         // 转换；旧版应用层放行造成跨层不一致）。
         if (current.review_status !== 'pending_review') {
-          throw new Error('INVALID_TRANSITION')
+          throw new AppError('INVALID_TRANSITION', 'Invalid state transition', 422)
         }
         nextReview = 'rejected'
         nextVisibility = 'hidden'
@@ -663,7 +671,7 @@ export async function transitionVideoState(
       }
       case 'reopen_pending': {
         if (current.review_status !== 'rejected') {
-          throw new Error('INVALID_TRANSITION')
+          throw new AppError('INVALID_TRANSITION', 'Invalid state transition', 422)
         }
         nextReview = 'pending_review'
         nextVisibility = 'hidden'
@@ -675,7 +683,7 @@ export async function transitionVideoState(
       }
       case 'publish': {
         if (current.review_status !== 'approved') {
-          throw new Error('INVALID_TRANSITION')
+          throw new AppError('INVALID_TRANSITION', 'Invalid state transition', 422)
         }
         nextReview = 'approved'
         nextVisibility = 'public'
@@ -684,7 +692,7 @@ export async function transitionVideoState(
       }
       case 'unpublish': {
         if (current.review_status !== 'approved') {
-          throw new Error('INVALID_TRANSITION')
+          throw new AppError('INVALID_TRANSITION', 'Invalid state transition', 422)
         }
         nextReview = 'approved'
         nextVisibility = 'internal'
@@ -693,7 +701,7 @@ export async function transitionVideoState(
       }
       case 'set_internal': {
         if (current.review_status === 'rejected') {
-          throw new Error('INVALID_TRANSITION')
+          throw new AppError('INVALID_TRANSITION', 'Invalid state transition', 422)
         }
         nextVisibility = 'internal'
         nextPublished = false
@@ -708,7 +716,7 @@ export async function transitionVideoState(
         // M-SN-4 D-01：暂存（approved + internal|hidden + unpublished）→ 退回待审核
         // 已发布视频不可直接退回（必须先 unpublish），由 trigger 白名单兜底拒绝
         if (current.review_status !== 'approved' || current.is_published) {
-          throw new Error('INVALID_TRANSITION')
+          throw new AppError('INVALID_TRANSITION', 'Invalid state transition', 422)
         }
         nextReview = 'pending_review'
         nextVisibility = current.visibility_status  // 保持 internal | hidden
@@ -719,7 +727,7 @@ export async function transitionVideoState(
         break
       }
       default:
-        throw new Error('INVALID_TRANSITION')
+        throw new AppError('INVALID_TRANSITION', 'Invalid state transition', 422)
     }
 
     const result = await client.query<TransitionVideoStateResult>(
@@ -730,11 +738,12 @@ export async function transitionVideoState(
            review_reason = $4,
            reviewed_by = $5,
            reviewed_at = $6::timestamptz,
+           review_label_key = CASE WHEN $8::text IS NOT NULL THEN $8 ELSE review_label_key END,
            needs_manual_review = false,
            updated_at = NOW()
        WHERE id = $7 AND deleted_at IS NULL
        RETURNING id, review_status, visibility_status, is_published, updated_at`,
-      [nextReview, nextVisibility, nextPublished, reviewReason, reviewedBy, reviewedAt, id],
+      [nextReview, nextVisibility, nextPublished, reviewReason, reviewedBy, reviewedAt, id, input.reviewLabelKey ?? null],
     )
     await client.query('COMMIT')
     return result.rows[0] ?? null
