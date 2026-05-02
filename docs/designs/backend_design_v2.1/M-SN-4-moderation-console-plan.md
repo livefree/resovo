@@ -117,7 +117,7 @@ stop hook 二次反馈"060-first migration order is not enforceable"。核实 `s
 | **D-13** | **状态保留型筛选选型**（v1.1 新增；v1.2 命名统一）| 复用现有 `useTableQuery`（已落地 `VideoListClient.tsx:431`）；不引入 `nuqs` 等新依赖。URL params 主轨 + sessionStorage 兜底；**key 命名规范统一为点分小写 `.v1`**（详见 §5.0.1 表）；bump `.v1` → `.v2` 走破坏性升级协议（旧 key 数据回退到 default，不做迁移）。审核台 tab/筛选/activeIdx 全部纳入；右栏 rightTab 仅 sessionStorage（避免 URL 噪声）|
 | **D-14** | **admin-ui 共享组件下沉清单**（v1.1 新增；v1.2 修订下沉触发协议）| **本期下沉 5 件**：(1) `BarSignal` 双信号双柱图（plan §3 复用矩阵明列）/ (2) `LineHealthDrawer` 证据抽屉（plan §3 复用矩阵明列）/ (3) `RejectModal` 预设标签 + 附言 / (4) `StaffNoteBar` amber 备注信息条 / (5) `DecisionCard` 由 `apps/server-next/src/app/admin/moderation/_client/` **上移** `packages/admin-ui/src/components/cell/`。**下沉触发协议**：CLAUDE.md 项目级通用规则为"3 处以上必须提取"；`docs/server_next_plan_20260427.md` §3 admin 子项目额外规则为"首次跨 2 视图复用即强制下沉"。`BarSignal` / `LineHealthDrawer` 在 plan §3 复用矩阵已明列"M-SN-4 下沉"，无需此协议判定。`DecisionCard` 跨 moderation + VideoEditDrawer = 2 处，仅满足 admin 子项目规则；本期下沉为**例外**，依据：(a) admin 子项目规则较严，covers 该场景；(b) 跨应用层（business `apps/server-next` ↔ shared `packages/admin-ui`）下沉天然受 Opus 评审约束；(c) 例外协议在 ADR 中登记。**强制升 Opus**：`arch-reviewer` 评审 5 件组件 Props 契约 + DecisionCard 下沉例外审议 |
 | **D-15** | **拆分入口痛点 1**（v1.1 新增；原 D-08 偏离登记）| 本期**整体推迟 M-SN-5**（合并/拆分功能模块完整实装）；原 D-08 仅保留路由跳转 `PlaceholderPage` 不变。**plan §6 M-SN-4 完成判据偏离登记**：痛点 1（合并拆分入口）→ 推迟 M-SN-5；痛点 3（双信号）/ 痛点 6（筛选保留）保持本期解决。需 commit trailer + plan §6 备注同步 |
-| **D-16** | **worker 部署归属**（v1.1 新增；v1.2 复核 + 实例数澄清）| **新建 `apps/worker` 独立 service**（实测 `apps/` 当前 4 个：api / server / server-next / web-next；`pnpm workspaces` 同步，详见 §4.0.1 复核段）。理由：(a) Level 2 渲染验证 CPU/IO 重，与 apps/api 实时请求隔离更稳；(b) 与 logging-rules.md "worker job" 段已规划路径一致；(c) 独立部署便于后续水平扩展。**本期单实例运行**（v1.2 澄清）：本期采用单实例，熔断状态可存内存；多实例水平扩展为后续优化（须把熔断 / advisory lock 协调状态外移到 Redis 或 DB，纳入 M-SN-6 性能门或独立卡）。技术栈：Node.js + node-cron；DB 直连复用 `apps/api/src/db/pool.ts`；不允许跨层调用 apps/api 业务函数，须经 `apps/api/src/services/*` 暴露的纯函数。**仓内同步清单**：CHG-SN-4-06 任务卡须同步更新 (a) 根 `package.json` workspaces 列表 / (b) `CLAUDE.md`（如必要）/ (c) `TEMPLATES.md` / (d) `pnpm-lock.yaml` / (e) CI workflow（typecheck/lint/test 矩阵） |
+| **D-16** | **worker 部署归属**（v1.1 新增；v1.5 修订）| **新建 `apps/worker` 独立 service**（实测 `apps/` 当前 4 个：api / server / server-next / web-next；根 `package.json` 使用 npm workspaces）。理由：(a) Level 2 渲染验证 CPU/IO 重，与 apps/api 实时请求隔离更稳；(b) 与 logging-rules.md "worker job" 段已规划路径一致；(c) 独立部署便于后续水平扩展。**本期单实例运行**：本期采用单实例，熔断状态可存内存；多实例水平扩展为后续优化（须把熔断 / advisory lock 协调状态外移到 Redis 或 DB，纳入 M-SN-6 性能门或独立卡）。技术栈：Node.js + node-cron；worker 自建轻量 `pg.Pool`，复用 `DATABASE_URL` 等 env，不 import `apps/api` 内部文件。**仓内同步清单**：CHG-SN-4-06 任务卡须同步更新 (a) 根 `package.json` workspaces 列表 / (b) `CLAUDE.md`（如必要）/ (c) `TEMPLATES.md` / (d) `package-lock.json` / (e) CI 配置如存在则覆盖 apps/worker，不存在则 README 记录未配置 |
 | **D-17** | **player_feedback 客户端实装位置**（v1.1 新增）| `packages/player-core` 新增 `feedback-reporter.ts` 事件埋点：(a) `onFirstFrame` → 上报 resolutionWidth/Height + success=true / (b) `onError` → 上报 errorCode + success=false / (c) `onBufferingEnd` → 累计 bufferingCount。客户端去抖：同一 (videoId, sourceId) 60s 内只上报最近一次最严重事件；shell 层 `PlayerShell` 注入实例。**PII 红线**：不上报 userId / IP，仅 hash(IP) 头 8 字节 + cookie session id 由后端解析 |
 | **D-18** | **admin_audit_log 前置补建**（v1.1 新增；M-SN-2 欠账登记；v1.3 编号重排）| M-SN-2 阶段未实装审计日志 schema（核实结果：仓内 grep `admin_audit_log` 0 命中）。本期 **Migration 052** 前置补建（CHG-SN-4-03 任务卡内；v1.3 重排自原 060，使 runner 字典序 = 部署顺序）。schema 包含：actor_id / action_type / target_kind / target_id / before_jsonb / after_jsonb / request_id / created_at；写入位点详见 §3.0.5 |
 
@@ -433,21 +433,21 @@ CLAUDE.md 绝对禁止"schema 变更不同步 `docs/architecture.md`"。CHG-SN-4
 |---|---|---|
 | `/admin/moderation/*` / `/admin/staging/*` / `/admin/videos/*` | `apps/api/src/routes/admin/{moderation,staging,videos}.ts` 扩展 | apps/api v1 内（既有 admin 路由扩展，**非新建独立后端**）|
 | `/admin/review-labels` | `apps/api/src/routes/admin/reviewLabels.ts`（新建） | 本期新建 |
-| `/api/v1/feedback/playback` | `apps/api/src/routes/feedback.ts`（新建） | 前台路由，**不进 admin 鉴权**，走前台 rate-limit |
+| `/v1/feedback/playback`（route 内部 `/feedback/playback`） | `apps/api/src/routes/feedback.ts`（新建） | 前台路由，**不进 admin 鉴权**，走前台 rate-limit |
 | `apps/server-next` proxy 层 | 复用现有 admin BFF / SWR 接入模式 | 仅做转发与 cookie 透传，不写业务逻辑 |
 
-#### 3.0.2 ApiResponse 信封
+#### 3.0.2 响应格式
 
-所有端点响应**必须**走 `packages/types/src/api.types.ts` 的 `ApiResponse<T>`（成功）/ `ApiError`（失败）信封：
+所有端点响应沿用 `docs/rules/api-rules.md` 现行规范，不引入新的 `{ success: true/false }` 信封：
 
 ```typescript
 // 成功
-ApiResponse<T> = { success: true, data: T, meta?: { traceId, ... } }
+{ data: T }
 // 失败
-ApiError       = { success: false, error: { code: ErrorCode, message: string, details?: unknown } }
+{ error: { code: ErrorCode, message: string, status: number } }
 ```
 
-不允许裸返业务对象 / 裸返数组。
+不允许裸返业务对象 / 裸返数组；既有 4 个改端点只扩展 `data` 字段，不改变外层响应形态。
 
 #### 3.0.3 errorCode 枚举（本期新增）
 
@@ -460,7 +460,7 @@ ApiError       = { success: false, error: { code: ErrorCode, message: string, de
 | `RATE_LIMITED` | 429 | feedback / 重测全部 / 补源超频 | 操作过于频繁，请稍候 |
 | `SOURCE_PROBE_FAILED` | 502 | refetch-sources 触发 worker 失败 | 探测服务暂不可用 |
 
-新错误码必须在 `apps/api/src/types/error-codes.ts` 集中维护（如不存在则本期新建）。
+新错误码扩展在既有 `apps/api/src/lib/errors.ts`，不新建 `apps/api/src/types/error-codes.ts`。
 
 #### 3.0.4 RBAC 矩阵
 
@@ -476,7 +476,7 @@ ApiError       = { success: false, error: { code: ErrorCode, message: string, de
 | GET review-labels | ✅ | ✅ | ✅ |
 | GET line-health/:sourceId | ✅ | ✅ | ✅ |
 
-复用 M-SN-2 已建立的 `requireStaff` / `requireRole('moderator' | 'admin')` 中间件；如缺失角色枚举须先补齐（不属本期新建协议范围）。
+复用 apps/api 现行 `fastify.requireRole(['moderator', 'admin'])`；当前不存在 `requireStaff` 别名，本期不新增 staff 角色。
 
 #### 3.0.5 audit log 写入位点
 
@@ -498,13 +498,13 @@ ApiError       = { success: false, error: { code: ErrorCode, message: string, de
 
 **写入失败不阻塞主操作**（log warn + sentry breadcrumb）；request_id 来自 pino 中间件透传。
 
-> **前台端点不入 admin_audit_log**（v1.2 澄清）：`POST /api/v1/feedback/playback` 属前台用户路由（非 admin），不写入 `admin_audit_log`；其副作用经 worker / DB query 留痕，前台调用频率走 rate-limit + Sentry 即可。
+> **前台端点不入 admin_audit_log**（v1.5 修订）：`POST /v1/feedback/playback` 属前台用户路由（非 admin），不写入 `admin_audit_log`；其副作用经 worker / DB query 留痕，前台调用频率走 rate-limit + Sentry 即可。
 
 #### 3.0.6 并发保护
 
 | 端点 | 策略 |
 |---|---|
-| approve / reject-labeled / reopen | `WHERE id = $1 AND review_status = $expected_old` 行级条件更新；0 行更新 → `REVIEW_RACE` |
+| approve / reject-labeled / reopen | 复用 `transitionVideoState(..., { expectedUpdatedAt })`，基于 `videos.updated_at` 乐观锁；不一致 → `REVIEW_RACE` |
 | staging publish | `WHERE id = $1 AND is_published = false AND review_status = 'approved'`（v1.2 加 `review_status='approved'` 防御"被退回 + 同时点发布"极端 race）|
 | sources toggle / disable-dead | 不需要乐观锁（is_active 幂等） |
 | staff-note | 末写入胜出（操作员意图明确） |
@@ -629,7 +629,7 @@ interface SourcePatchBody {
 
 ### 3.3 前台反馈端点（apps/api 新增）
 
-#### POST /api/v1/feedback/playback
+#### POST /v1/feedback/playback（route 内部 `/feedback/playback`）
 
 用户播放成功/失败回报，用于被动获取分辨率和信号状态。
 
@@ -678,7 +678,7 @@ apps/worker/
 │   │   │   └── aggregate-source-check-status.ts
 │   │   └── feedback-driven-recheck.ts
 │   ├── lib/
-│   │   ├── db.ts                # 直连复用 apps/api/src/db/pool.ts
+│   │   ├── db.ts                # 自建轻量 pg.Pool；零 apps/api 内部 import
 │   │   ├── advisory-lock.ts     # pg_advisory_xact_lock 封装
 │   │   ├── circuit-breaker.ts   # 站点级熔断
 │   │   └── parsers/             # m3u8 / mp4 moov / mpd manifest
@@ -694,7 +694,7 @@ apps/worker/
 | `source-health.level1-probe` | `0 */6 * * *`（每 6h）| node-cron + DB queue |
 | `source-health.level2-render` | 触发驱动（无固定 cron）| 接 §4.1 Level 2 触发条件 a–e |
 | `aggregate-source-check-status` | 入队驱动（任意 probe_status 变化）| `LISTEN/NOTIFY` 或轻量轮询 |
-| `feedback-driven-recheck` | 入队驱动 | `/api/v1/feedback/playback` 连续 3 次失败 |
+| `feedback-driven-recheck` | 入队驱动 | `/v1/feedback/playback` 连续 3 次失败 |
 
 cron 表达式集中在 `apps/worker/src/config.ts`，env 覆盖；不在代码里硬编码。
 
@@ -1225,6 +1225,39 @@ CI 守门：`grep -r "setListRefreshKey" apps/server-next/src/app/admin/moderati
 | **DEBT-SN-3-A** | `docs/server_next_view_template.md` 模板文档（M-SN-3 欠账，截止节点 M-SN-4 milestone 完成时）| `claude-haiku-4-5`（模板化文档）| 否 | docs lint + 索引更新 | 4（与 -07/-08 并行）|
 | **CHG-SN-4-10**（M-SN-4 收口）| e2e 黄金路径 4 用例 + 状态保留 5 步压力测试 + arch-reviewer A/B/C milestone 评级 + DEBT-SN-3-A 关闭确认 | `claude-sonnet-4-6` | **`arch-reviewer` (claude-opus-4-7)**：milestone 评级 | 全栈 typecheck + lint + unit + e2e（PLAYER/AUTH/SEARCH/VIDEO + moderation 黄金路径）+ visual diff | 5（最后串行）|
 
+### 8.1.1 子方案文档索引（v1.5 patch — 2026-05-02 审核闭环）
+
+每张卡执行真源以本节链接的子方案文档为准，task-queue / tasks 卡片须引用对应文档：
+
+| 卡 | 子方案文档 | 文档 revision | 状态 |
+|---|---|---|---|
+| CHG-SN-4-04 | `docs/designs/backend_design_v2.1/M-SN-4-04-admin-ui-shared-components-plan_20260502.md` | v1.1 | active（条件通过：路径 + 视觉验收 + trailer 已修订） |
+| CHG-SN-4-05 | `docs/designs/backend_design_v2.1/M-SN-4-05-api-endpoints-plan_20260502.md` | v1.1 | active（5 项阻塞已闭环：信封 / RBAC / 状态机参数 / DB 字段 / ES 方法） |
+| CHG-SN-4-06 | `docs/designs/backend_design_v2.1/M-SN-4-06-worker-source-health-plan_20260502.md` | v1.1 | active（DB pool 路径 / 058a 上移 -05 / CI 条件化） |
+
+**v1.5 patch 关键调整**：
+
+1. **058a schema patch 责任上移到 -05**：`source_health_events.processed_at` + partial index 由 -05 在自身范围内补齐（feedback 入队信号产生方应同时建表）；-06 的 Step 10 feedback-driven-recheck 必须等待 058a 上线，Step 1–9 可与 -05 并行
+2. **响应信封回归 api-rules.md 现行规范**：成功 `{ data }` / 失败 `{ error: { code, message, status } }`；不引入新 `ApiResponse<T>` 信封；4 改端点响应外壳不变
+3. **RBAC 实装真源**：apps/api 现行原语为 `fastify.requireRole(roles: string[])`，**不存在** `requireStaff`；本卡 8 admin 端点全部使用 `requireRole(['moderator', 'admin'])`
+4. **状态机乐观锁参数对齐**：`expectedOld` → `expectedUpdatedAt`（与 `transitionVideoState` 现行签名一致）
+5. **worker 跨 workspace 解耦**：apps/worker 自建轻量 pg.Pool，不 import apps/api 内部文件
+6. **commit trailer 改用 git-rules.md §M-SN 扩展协议**（`Refs:` / `Plan:` / `Review:` / `Executed-By-Model:` / `Subagents:`）
+
+**执行序**（用户 2026-05-02 裁定·两阶段·两轨并行）：
+
+```
+阶段 A（单卡）：CHG-SN-4-04（arch-reviewer Opus 契约冻结）
+  ↓
+阶段 B（双轨）：CHG-SN-4-05  ‖  CHG-SN-4-06
+  ↓
+阶段 C（多轨）：CHG-SN-4-07 + CHG-SN-4-08 + DEBT-SN-3-A
+  ↓
+阶段 D（收口）：CHG-SN-4-10
+```
+
+理由：-04 共享组件 Props 契约先冻结，消除 -05/-07/-08 返工根因（plan §9 风险条 "arch-reviewer milestone 评级 C → BLOCKER" 缓解策略）。
+
 ### 8.2 顺序与并行轨道
 
 ```
@@ -1252,12 +1285,11 @@ CI 守门：`grep -r "setListRefreshKey" apps/server-next/src/app/admin/moderati
 ```
 <type>(<TASK-ID>): <summary>
 
-Plan-Source: docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md v1.4
-Main-Model: claude-sonnet-4-6
-Sub-Agents: arch-reviewer (claude-opus-4-7)        # 仅在调用时
-Migration: 052,053,054,055,056,057,058,059,060      # 仅 DB 卡（v1.3 重排：052=audit_log）
-Architecture-Sync: docs/architecture.md             # 仅 schema 卡
-Deviation: D-15-defer-merge-split-to-M-SN-5         # 偏离登记
+Refs: CHG-SN-<milestone>-<seq>
+Plan: docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md v1.5
+Review: <arch-reviewer commit hash> PASS  # 无评审写 n/a
+Executed-By-Model: claude-sonnet-4-6
+Subagents: arch-reviewer (claude-opus-4-7) # 未调用写 none
 ```
 
 ### 8.4 任务卡共性约束（每卡均须满足）
