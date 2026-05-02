@@ -50,6 +50,7 @@ const StateTransitionSchema = z.object({
     'unpublish',
     'set_internal',
     'set_hidden',
+    'staging_revert',  // M-SN-4 D-01：暂存退回待审核（approved+internal/hidden+0 → pending_review）
   ] as const),
   reason: z.string().max(500).optional(),
   expectedUpdatedAt: z.string().datetime().optional(),
