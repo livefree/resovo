@@ -1,7 +1,7 @@
 -- 058_source_health_events_line_detail.sql
 -- 描述：source_health_events 扩展 — 关联单条线路 + 错误细节，支持"证据"面板按线路查询健康历史
 -- 日期：2026-05-01
--- ADR：ADR-109 关联 / M-SN-4 plan v1.3 §2.7
+-- ADR：ADR-109 关联 / M-SN-4 plan v1.4 §2.7
 -- 任务卡：CHG-SN-4-03 / SEQ-20260501-01
 -- 幂等：是（ADD COLUMN IF NOT EXISTS / CREATE INDEX IF NOT EXISTS）
 --

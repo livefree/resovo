@@ -1,7 +1,7 @@
 -- 055_videos_moderation_fields.sql
 -- 描述：videos 新增 staff_note（审核员过程备注）和 review_label_key（预设拒绝标签 key）
 -- 日期：2026-05-01
--- ADR：ADR-109 关联 / M-SN-4 plan v1.3 §2.4
+-- ADR：ADR-109 关联 / M-SN-4 plan v1.4 §2.4
 -- 任务卡：CHG-SN-4-03 / SEQ-20260501-01
 -- 幂等：是（ADD COLUMN IF NOT EXISTS / CREATE INDEX IF NOT EXISTS）
 --
@@ -23,7 +23,7 @@ ALTER TABLE videos
   ADD COLUMN IF NOT EXISTS review_label_key TEXT;
 
 COMMENT ON COLUMN videos.staff_note
-  IS '审核员过程备注；不随状态迁移清空，可多次编辑（plan v1.3 §5.1 staffNote 编辑流）';
+  IS '审核员过程备注；不随状态迁移清空，可多次编辑（plan v1.4 §5.1 staffNote 编辑流）';
 COMMENT ON COLUMN videos.review_label_key
   IS '拒绝/标记时选用的预设标签 key，软引用 review_labels.label_key（056 创建）；不加 FK 防演进锁死';
 

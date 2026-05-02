@@ -1,11 +1,11 @@
 -- 052_admin_audit_log.sql
 -- 描述：admin 写操作审计日志表（M-SN-2 欠账 + M-SN-4 前置补建）
 -- 日期：2026-05-01
--- ADR：ADR-109（admin_audit_log schema 前置补建；M-SN-4 plan v1.3 §2.1 + §3.0.5）
+-- ADR：ADR-109（admin_audit_log schema 前置补建；M-SN-4 plan v1.4 §2.1 + §3.0.5）
 -- 任务卡：CHG-SN-4-03 / SEQ-20260501-01
 -- 幂等：是（CREATE TABLE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS）
 --
--- 部署顺序约束（plan v1.3 §2.10）：
+-- 部署顺序约束（plan v1.4 §2.10）：
 --   audit_log 占用编号 052 = M-SN-4 序列首位；scripts/migrate.ts:50–52 按文件名字典序
 --   遍历执行 → 052 必先于 053–060 落地；与 runner 行为天然一致，无需额外协调。
 --   设计意图：M-SN-4 任何写端点上线时（CHG-SN-4-05），admin_audit_log 已就位，避免审计断链。
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
 );
 
 COMMENT ON TABLE admin_audit_log
-  IS 'admin 写操作审计日志；M-SN-4 D-18 前置补建（M-SN-2 欠账）；plan v1.2 §3.0.5 写入位点表为唯一真源';
+  IS 'admin 写操作审计日志；M-SN-4 D-18 前置补建（M-SN-2 欠账）；plan v1.4 §3.0.5 写入位点表为唯一真源';
 COMMENT ON COLUMN admin_audit_log.actor_id
   IS '执行操作的 admin 用户 id（users.id）；ON DELETE RESTRICT 防止用户删除导致审计断链';
 COMMENT ON COLUMN admin_audit_log.action_type

@@ -3619,3 +3619,44 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - typecheck ✅ 通过（tsc --noEmit 零报错）
 - lint ✅ 通过
 - unit：本期不写单测（mock data 层无逻辑单元，视觉验收 UI 页面）
+
+## [CHG-SN-4-03] DB schema：052 audit_log + 053 状态机 + 054–060 字段 + types/architecture/ADR 同步
+- **完成时间**：2026-05-01
+- **记录时间**：2026-05-01
+- **执行模型**：claude-opus-4-7（偏离 plan §8.1 sonnet-4-6 建议；理由：跨 3+ 消费方 schema + 4 项 ADR 草拟，Opus 主循环对架构决策稳定性更高；偏离登记于 commit trailer Main-Model）
+- **子代理**：arch-reviewer (claude-opus-4-7) — CLAUDE.md 强制升 Opus 第 2 条（跨 3+ 消费方 schema：apps/api / apps/server-next / apps/worker / packages/types）；评级 CONDITIONAL PASS（1 项非阻塞修订），1 轮闭环
+- **修改/新增文件**：
+  - 新增 `apps/api/src/db/migrations/052_admin_audit_log.sql`（D-18 audit_log 前置补建；序列首位 = runner 字典序保证 audit 全程覆盖）
+  - 新增 `apps/api/src/db/migrations/053_state_machine_add_staging_revert.sql`（D-01 状态机白名单扩展 + 三层守门）
+  - 新增 `apps/api/src/db/migrations/054_video_sources_signal_columns.sql`（probe/render 双轨信号 + latency + last_probed/rendered_at）
+  - 新增 `apps/api/src/db/migrations/055_videos_moderation_fields.sql`（staff_note / review_label_key）
+  - 新增 `apps/api/src/db/migrations/056_review_labels.sql`（预设标签字典 + 8 项种子，ON CONFLICT DO NOTHING）
+  - 新增 `apps/api/src/db/migrations/057_crawler_sites_user_label.sql`（D-11 user_label fallback 链）
+  - 新增 `apps/api/src/db/migrations/058_source_health_events_line_detail.sql`（source_id + http_code + latency_ms）
+  - 新增 `apps/api/src/db/migrations/059_video_sources_resolution_detection.sql`（实测分辨率四列 + 三步幂等终态 NOT NULL）
+  - 新增 `apps/api/src/db/migrations/060_videos_review_source.sql`（review_source 来源 + 三步幂等终态 NOT NULL）
+  - 新增 `packages/types/src/admin-moderation.types.ts`（ReviewLabel / SourceHealthEvent / AdminAuditLog / VideoQueueRow / DualSignalState 等，跨 4 消费方共享）
+  - 修改 `packages/types/src/index.ts`（追加 export type * from './admin-moderation.types'）
+  - 修改 `apps/api/src/db/queries/videos.ts`（VideoStateTransitionAction 联合类型加 'staging_revert' 分支 + 三层守门：current.review_status === 'approved' && !current.is_published）
+  - 修改 `apps/server-next/src/lib/videos/types.ts`（StateTransitionAction re-alias 同步）
+  - 新增 `tests/unit/db/migrations/053_state_machine_regression.test.ts`（27 it：旧 8 action × 多状态 18 + staging_revert 6 + 白名单文档化占位 3，全绿）
+  - 修改 `docs/architecture.md`（§5.12 schema 章节追加 9 张 migration 字段说明 + §6 状态机段更新 + 053 守门 + 回归测试 cross-link）
+  - 修改 `docs/decisions.md`（追加 ADR-106~109 草案：D-14 admin-ui 下沉清单 + DecisionCard 跨应用层例外协议 / D-16 apps/worker 部署归属 + 单实例约束 / D-17 player_feedback packages/player-core 实装位置 / D-18 admin_audit_log 前置补建关闭 M-SN-2 欠账）
+- **新增依赖**：无
+- **数据库变更**：9 张 migration（052–060）；052 序列首位由 `scripts/migrate.ts:50–52` 字典序加载自动保证 audit 优先 deploy；052/053/054/056 幂等（CREATE … IF NOT EXISTS / ON CONFLICT DO NOTHING / CREATE OR REPLACE）；059/060 走三步幂等模式（ADD COLUMN+DEFAULT+CHECK → 全表 UPDATE WHERE col IS NULL → SET DEFAULT + SET NOT NULL）；053 状态机白名单完整保留 6 簇 18 条既有合法转换 + 新增 2 条 staging_revert；every migration 含注释形式 down 节（独立执行回滚），与 047/048/049 等迁移同协议
+- **arch-reviewer 结论**：CONDITIONAL PASS — 6 维度评分（migration 完整性 / 状态机白名单 / audit 字段对齐 / types 契约 / ADR 完整性 / architecture.md 同步）中 5 维度 PASS + ADR 维度 1 项非阻塞修订（ADR-109 头尾 plan 引用 v1.3 vs v1.2 自相矛盾且 plan 实际为 v1.4）；修订项已 1 轮闭环，5 处 plan 引用版本号（ADR-106/107/108/109 头部 + 052 migration 头部 COMMENT）+ 后续顺手统一 8 处（053–060 migration 头部 + types/admin-moderation.types.ts + 053 状态机回归测试）全部对齐 v1.4
+- **后续解锁**：CHG-SN-4-04（admin-ui 下沉）/ CHG-SN-4-05（API）/ CHG-SN-4-06（worker）三轨可并行启动；arch-reviewer 评审报告结论显式确认三卡准入条件全部满足
+- **注意事项**：
+  - 053 状态机白名单完整保留 034 既有 6 簇 18 条转换；trigger 实际 DB-level 准入由 staging deploy 时 transitionVideoState 实地触发联调（测试集为应用层 mock 验证守门逻辑）
+  - admin_audit_log 写入位点 11 项 action_type（含 v1.2 新增 video.reopen / video.refetch_sources）已在 packages/types/src/admin-moderation.types.ts:114–125 集中导出，CHG-SN-4-05 端点实装时直接消费枚举
+  - apps/worker 目录由 CHG-SN-4-06 任务卡创建（本卡不创建该目录）；ADR-107 已登记单实例约束 + 仓内同步清单 5 项
+  - down 路径保持注释形式（与 047/048/049 同约定）；scripts/migrate.ts 整文件单条 SQL 执行不区分 up/down 节，需要回滚时手动解注释 down 节独立执行
+  - 修订后再次跑 typecheck/lint/test 全绿，确认版本号修订纯文本变更不引入回归
+
+### 质量门禁
+
+- typecheck ✅ 通过（tsc --noEmit 零报错；7 workspace 全绿：root / server / server-next / web-next / player-core / design-tokens / admin-ui）
+- lint ✅ 通过（仅预存在 react-hooks/exhaustive-deps + no-img-element 警告，不在本卡范围）
+- unit ✅ 通过（222 文件 / 2826 测试全绿；含 053 状态机回归集 27 it 全绿）
+- e2e：本卡范围内不需跑（属 CHG-SN-4-10 收口卡）
+- migration up/down：staging 部署验证由本卡完成判据延伸到 CHG-SN-4-05 / -06 端点上线前一并完成（plan §2.10）

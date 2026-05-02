@@ -109,7 +109,7 @@ export interface SourceHealthEvent {
 
 /**
  * audit log action_type 完整枚举。
- * 写入位点真源：plan v1.2 §3.0.5 表。新增前必须先改 plan + 本枚举。
+ * 写入位点真源：plan v1.4 §3.0.5 表。新增前必须先改 plan + 本枚举。
  */
 export type AdminAuditActionType =
   | 'video.approve'
@@ -153,8 +153,8 @@ export interface AdminAuditLog {
 //   016_review_visibility.sql：review_status / visibility_status
 //   032_videos_pipeline_status_fields.sql：douban_status / source_check_status / meta_score
 //   051_add_videos_trending_tag.sql：trending_tag
-//   055_videos_moderation_fields.sql（M-SN-4 plan v1.3 §2.4）：staff_note / review_label_key
-//   060_videos_review_source.sql（M-SN-4 plan v1.3 §2.9）：review_source
+//   055_videos_moderation_fields.sql（M-SN-4 plan v1.4 §2.4）：staff_note / review_label_key
+//   060_videos_review_source.sql（M-SN-4 plan v1.4 §2.9）：review_source
 // probe / render 为视频级聚合（plan §4.3 由 worker 写回 source_check_status；
 //   probe / render 字段是端点 join 后投影 video_sources 取最差状态，非视频表持久列）
 // badges / needsManualReview 是端点投影计算字段（不直接对应单列）
@@ -213,14 +213,14 @@ export interface PendingQueueResponse {
 //     source_name / quality(5 值) / type(hls/mp4/dash) / is_active / submitted_by /
 //     last_checked / created_at
 //   046_video_sources_source_site_key.sql：source_site_key
-//   054_video_sources_signal_columns.sql（M-SN-4 plan v1.3 §2.3）：probe_status /
+//   054_video_sources_signal_columns.sql（M-SN-4 plan v1.4 §2.3）：probe_status /
 //     render_status / latency_ms / last_probed_at / last_rendered_at
-//   059_video_sources_resolution_detection.sql（M-SN-4 plan v1.3 §2.8）：quality_detected /
+//   059_video_sources_resolution_detection.sql（M-SN-4 plan v1.4 §2.8）：quality_detected /
 //     quality_source / resolution_width / resolution_height / detected_at
 //   057_crawler_sites_user_label.sql：crawler_sites.user_label
 //
 // quality（既有 5 值 CHECK）与 quality_detected（新增 7 值 CHECK）是两个独立列，前端
-// 展示按 fallback 链 quality_detected ?? quality 取值（plan v1.3 §2.8 应用层映射规则）。
+// 展示按 fallback 链 quality_detected ?? quality 取值（plan v1.4 §2.8 应用层映射规则）。
 
 /**
  * 059 新增 quality_detected CHECK 7 值（含 2K / 240P）；前端高精度展示用。
@@ -316,7 +316,7 @@ export interface PlaybackFeedbackBody {
   readonly errorCode?: string
 }
 
-// ── errorCode 枚举（plan v1.2 §3.0.3）────────────────────────────────────────
+// ── errorCode 枚举（plan v1.4 §3.0.3）────────────────────────────────────────
 
 export type ModerationErrorCode =
   | 'STATE_INVALID'

@@ -1750,33 +1750,32 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 
 ## M-SN-4 · 审核台 + VideoEditDrawer API 集成
 
-> 状态：🚧 进行中（CHG-SN-4-01/02 已完成，CHG-SN-4-03 进行中，2026-05-01）
+> 状态：🚧 进行中（CHG-SN-4-01/02/03 已完成，CHG-SN-4-04 / -05 / -06 解锁待开，2026-05-01）
 > 前置：M-SN-3 核心实现闭合（CHG-SN-3-11/12/13 豁免至 cutover 前）
-> Plan 真源：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.2 §8.1 任务卡总览
+> Plan 真源：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.4 §8.1 任务卡总览
 > 任务卡序列：SEQ-20260501-01（CHG-SN-4-03 ～ -10 + DEBT-SN-3-A）
 
-### CHG-SN-4-03 · DB schema：052 audit_log + 053 状态机 + 054–060 字段 🚧 进行中（2026-05-01）
+### CHG-SN-4-03 · DB schema：052 audit_log + 053 状态机 + 054–060 字段 ✅ 完成（2026-05-01）
 
 - **来源**：plan v1.4 §8.1 第 1 张 / SEQ-20260501-01（v1.3 编号重排 + v1.4 NOT NULL 强化；映射详见 plan §12 修订日志）
-- **状态**：🚧 进行中（卡片详情见 `docs/tasks.md`）
-- **建议主循环**：claude-sonnet-4-6
-- **实际主循环**：claude-opus-4-7（偏离登记，详见 tasks.md 卡片）
-- **强制子代理**：arch-reviewer (claude-opus-4-7)
-- **后续阻塞**：本卡 PASS 前不得开 CHG-SN-4-04 / -05 / -06
+- **完成**：9 张 migration（052–060）+ packages/types 新类型 + apps/api/server-next 双侧 staging_revert + 053 状态机回归集（27 it 全绿）+ docs/architecture.md §5.12 + ADR-106~109 草案
+- **实际主循环**：claude-opus-4-7（偏离 plan §8.1 sonnet-4-6 建议；理由：跨 3+ 消费方 schema + 4 项 ADR 草拟）
+- **子代理调用**：arch-reviewer (claude-opus-4-7) — CONDITIONAL PASS（1 项非阻塞修订，已闭环 — plan 引用版本号统一为 v1.4）
+- **后续解锁**：CHG-SN-4-04 / -05 / -06 准入条件全部满足
 
-### CHG-SN-4-04 · admin-ui 共享组件下沉 5 件（D-14）⏳ 待开
+### CHG-SN-4-04 · admin-ui 共享组件下沉 5 件（D-14）⏳ 待开（前置已 PASS）
 
 - 范围：BarSignal / LineHealthDrawer / RejectModal / StaffNoteBar / DecisionCard 上移
 - 前置：CHG-SN-4-03 PASS（依赖 packages/types 新类型）
 - 强制子代理：arch-reviewer (claude-opus-4-7) — 共享组件 API 契约 + DecisionCard 例外审议
 
-### CHG-SN-4-05 · 后端 API：8 新端点 + 4 改端点 ⏳ 待开
+### CHG-SN-4-05 · 后端 API：8 新端点 + 4 改端点 ⏳ 待开（前置已 PASS）
 
-- 前置：CHG-SN-4-03 PASS
+- 前置：CHG-SN-4-03 ✅
 
-### CHG-SN-4-06 · apps/worker 新建 + SourceHealthWorker Level 1+2 ⏳ 待开
+### CHG-SN-4-06 · apps/worker 新建 + SourceHealthWorker Level 1+2 ⏳ 待开（前置已 PASS）
 
-- 前置：CHG-SN-4-03 PASS（仓内同步：package.json workspaces / pnpm-lock / CI workflow）
+- 前置：CHG-SN-4-03 ✅（仓内同步：package.json workspaces / pnpm-lock / CI workflow）
 
 ### CHG-SN-4-07 · 审核台前端接入（useTableQuery + Gmail 流 + RejectModal/Drawer 接线）⏳ 待开
 

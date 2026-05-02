@@ -1,7 +1,7 @@
 -- 054_video_sources_signal_columns.sql
 -- 描述：video_sources 新增每条线路独立的 probe / render 信号列（双轨健康验证）
 -- 日期：2026-05-01
--- ADR：ADR-109 关联 / M-SN-4 plan v1.3 §2.3
+-- ADR：ADR-109 关联 / M-SN-4 plan v1.4 §2.3
 -- 任务卡：CHG-SN-4-03 / SEQ-20260501-01
 -- 幂等：是（ADD COLUMN IF NOT EXISTS / CREATE INDEX IF NOT EXISTS）
 --
@@ -35,7 +35,7 @@ ALTER TABLE video_sources
   ADD COLUMN IF NOT EXISTS last_rendered_at TIMESTAMPTZ;
 
 COMMENT ON COLUMN video_sources.probe_status
-  IS '探测态（reachability，HEAD / m3u8 manifest）；CHECK 4 值；M-SN-4 plan v1.3 §2.3';
+  IS '探测态（reachability，HEAD / m3u8 manifest）；CHECK 4 值；M-SN-4 plan v1.4 §2.3';
 COMMENT ON COLUMN video_sources.render_status
   IS '渲染态（playability，manifest parse + segment 验证）；CHECK 4 值；同上';
 COMMENT ON COLUMN video_sources.latency_ms

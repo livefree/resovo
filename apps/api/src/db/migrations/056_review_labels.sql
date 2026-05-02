@@ -1,7 +1,7 @@
 -- 056_review_labels.sql
 -- 描述：预设审核标签表，支持结构化拒绝标签 + 审核数据分析
 -- 日期：2026-05-01
--- ADR：ADR-109 关联 / M-SN-4 plan v1.3 §2.5
+-- ADR：ADR-109 关联 / M-SN-4 plan v1.4 §2.5
 -- 任务卡：CHG-SN-4-03 / SEQ-20260501-01
 -- 幂等：是（CREATE TABLE IF NOT EXISTS / INSERT … ON CONFLICT DO NOTHING）
 --
@@ -14,7 +14,7 @@
 --   is_active     BOOLEAN NOT NULL（停用旧标签时置 false，保留历史可读性）
 --   created_at    TIMESTAMPTZ NOT NULL
 --
--- 种子数据（plan v1.3 §2.5）：8 个标签，display_order 1–7 + 99（other 兜底）。
+-- 种子数据（plan v1.4 §2.5）：8 个标签，display_order 1–7 + 99（other 兜底）。
 --
 -- ⚠️  Down 路径说明（项目约定）：注释形式留存。
 
@@ -36,9 +36,9 @@ CREATE TABLE IF NOT EXISTS review_labels (
 );
 
 COMMENT ON TABLE review_labels
-  IS '预设审核标签字典；videos.review_label_key 软引用 label_key（不加 FK 防演进锁死）；plan v1.3 §2.5';
+  IS '预设审核标签字典；videos.review_label_key 软引用 label_key（不加 FK 防演进锁死）；plan v1.4 §2.5';
 
--- 种子数据（plan v1.3 §2.5）
+-- 种子数据（plan v1.4 §2.5）
 INSERT INTO review_labels (label_key, label, applies_to, display_order) VALUES
   ('all_dead',        '全线路失效',   'reject',  1),
   ('duplicate',       '重复内容',     'reject',  2),

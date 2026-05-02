@@ -1,7 +1,7 @@
 -- 057_crawler_sites_user_label.sql
 -- 描述：crawler_sites 新增 user_label（面向前端用户的线路别名）
 -- 日期：2026-05-01
--- ADR：ADR-109 关联 / M-SN-4 plan v1.3 §2.6
+-- ADR：ADR-109 关联 / M-SN-4 plan v1.4 §2.6
 -- 任务卡：CHG-SN-4-03 / SEQ-20260501-01
 -- 幂等：是（ADD COLUMN IF NOT EXISTS）
 --
@@ -25,7 +25,7 @@ ALTER TABLE crawler_sites
   ADD COLUMN IF NOT EXISTS user_label TEXT;
 
 COMMENT ON COLUMN crawler_sites.user_label
-  IS '面向前端用户的线路别名（如"主线"/"超清线"/"备用线"）；NULL 时降级到 display_name；plan v1.3 §1 D-11 fallback 链';
+  IS '面向前端用户的线路别名（如"主线"/"超清线"/"备用线"）；NULL 时降级到 display_name；plan v1.4 §1 D-11 fallback 链';
 
 COMMIT;
 

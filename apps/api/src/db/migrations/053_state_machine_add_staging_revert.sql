@@ -1,7 +1,7 @@
 -- 053_state_machine_add_staging_revert.sql
 -- 描述：状态机白名单新增"暂存退回待审"两条转换（M-SN-4 D-01）
 -- 日期：2026-05-01
--- ADR：ADR-109 关联 / M-SN-4 plan v1.3 §2.2
+-- ADR：ADR-109 关联 / M-SN-4 plan v1.4 §2.2
 -- 任务卡：CHG-SN-4-03 / SEQ-20260501-01
 -- 幂等：是（CREATE OR REPLACE FUNCTION + DROP/CREATE TRIGGER）
 --

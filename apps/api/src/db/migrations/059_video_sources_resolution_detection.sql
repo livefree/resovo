@@ -31,7 +31,7 @@
 --   3. ALTER COLUMN SET DEFAULT + SET NOT NULL（幂等收敛终态）
 --
 -- 前端 fallback 链（plan §1 D-12）：quality_detected ?? quality
--- 应用层档位映射规则（plan v1.3 §2.8）：
+-- 应用层档位映射规则（plan v1.4 §2.8）：
 --   resolution_height ≥ 2160  → '4K'
 --   resolution_height ≥ 1440  → '2K'
 --   resolution_height ≥ 1080  → '1080P'

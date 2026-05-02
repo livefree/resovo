@@ -7,7 +7,7 @@
  *   - apps/api/src/db/migrations/053_state_machine_add_staging_revert.sql（trigger 白名单）
  *   - apps/api/src/db/migrations/034_fix_approve_hidden_to_internal.sql（既有 trigger 基线）
  *   - apps/api/src/db/queries/videos.ts:550 VideoStateTransitionAction（9 action）
- *   - M-SN-4 plan v1.3 §1 D-01 + §2.2
+ *   - M-SN-4 plan v1.4 §1 D-01 + §2.2
  *
  * 覆盖范围（任务卡完成判据"053 状态机回归测试集 100% 通过"）：
  *   1. 应用层 transitionVideoState 全 9 个 action 计算逻辑：旧 8 + 新 1（staging_revert）
@@ -336,7 +336,7 @@ describe('053 状态机回归集 — staging_revert（M-SN-4 D-01 暂存退回�
 
 describe('053 状态机白名单 — DB trigger 联调清单（应用层不直接断言；staging 跑 transitionVideoState 触发）', () => {
   /**
-   * 完整白名单（plan v1.3 §2.10 + 053 SQL trigger）：
+   * 完整白名单（plan v1.4 §2.10 + 053 SQL trigger）：
    *
    * pending_review|internal|0 → pending_review|hidden|0 / approved|public|1 / approved|internal|0 / rejected|hidden|0
    * pending_review|hidden|0   → pending_review|internal|0 / approved|public|1 / approved|internal|0 / approved|hidden|0 / rejected|hidden|0
