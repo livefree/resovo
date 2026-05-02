@@ -19,12 +19,12 @@
  *   └──┘ └──┘
  *    探   播
  *
- * 状态映射：
- *   - 'ok'      → 绿（`--admin-status-ok` / `--dual-signal-probe` ok 变体）
- *   - 'partial' → 黄（`--admin-status-warning`）
- *   - 'dead'    → 红（`--admin-status-danger`）
- *   - 'pending' → 灰（`--admin-status-pending` 或 muted；DB 4 值之一）
- *   - 'unknown' → 灰虚线（仅前端展示态；接口失败 / 未加载占位）
+ * 状态映射（与 dual-signal.tsx 同 token 系，实测 admin-ui 真源 `--state-*`）：
+ *   - 'ok'      → 绿（`--state-success-fg`）
+ *   - 'partial' → 黄（`--state-warning-fg`）
+ *   - 'dead'    → 红（`--state-error-fg`）
+ *   - 'pending' → 灰（`--fg-muted`；DB 4 值之一）
+ *   - 'unknown' → 灰半透明（`--fg-muted` + opacity；仅前端展示态，接口失败 / 未加载占位）
  *
  * 不变约束（packages/admin-ui v1）：
  *   - 颜色仅消费 packages/design-tokens（CSS 变量；零硬编码 hex）

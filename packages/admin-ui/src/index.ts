@@ -28,8 +28,11 @@ export * from './components/dropdown'
 // Empty / Error / Loading 状态原语（CHG-SN-2-18）
 export * from './components/state'
 
-// Cell 共享组件（CHG-DESIGN-07 7B：KpiCard + Spark；CHG-DESIGN-12 扩张其余 cell）
+// Cell 共享组件（CHG-DESIGN-07 7B：KpiCard + Spark；CHG-DESIGN-12 扩张其余 cell；CHG-SN-4-04 D-14：BarSignal / DecisionCard）
 export * from './components/cell'
 
 // Layout 多栏布局原语（CHG-SN-4-01）
 export * from './components/layout'
+
+// Feedback 共享组件（CHG-SN-4-04 D-14：StaffNoteBar / LineHealthDrawer / RejectModal）
+export * from './components/feedback'

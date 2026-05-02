@@ -34,6 +34,14 @@ export type {
   PillVariant,
 } from './pill.types'
 
+// ── BarSignal（CHG-SN-4-04 D-14 第 1 件）────────────────────────
+
+export { BarSignal } from './bar-signal'
+export type {
+  BarSignalProps,
+  BarSignalSize,
+} from './bar-signal.types'
+
 // ── DualSignal ──────────────────────────────────────────────────
 // CHG-SN-4-04 R2：DualSignalState 类型源收敛至 `@resovo/types`；本包不再 own 类型 owner。
 // 旧消费方迁移：`import type { DualSignalDisplayState } from '@resovo/types'`
