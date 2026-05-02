@@ -3849,9 +3849,9 @@ export interface LoadingStateProps {
 
 ## ADR-106: M-SN-4 admin-ui 共享组件下沉清单 + DecisionCard 跨应用层例外协议
 
-> 状态：草案（CHG-SN-4-03 草拟；CHG-SN-4-04 落地时由 arch-reviewer 评审 PASS 后正式生效）
-> 日期：2026-05-01
-> 任务卡：CHG-SN-4-03 / SEQ-20260501-01
+> 状态：proposed（CHG-SN-4-03 草拟；CHG-SN-4-04 arch-reviewer (claude-opus-4-7) 预审 CONDITIONAL PASS 闭环后转 accepted）
+> 日期：2026-05-01（草拟）/ 2026-05-02（CHG-SN-4-04 评审反馈补反向兜底条款）
+> 任务卡：CHG-SN-4-03 / CHG-SN-4-04 / SEQ-20260501-01
 > 关联 plan：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.4 §1 D-14 + §7
 
 ### 上下文
@@ -3867,6 +3867,7 @@ export interface LoadingStateProps {
    - DecisionCard 在 plan §6 M-SN-4 复用矩阵已隐含（决策卡 + 三栏布局 同列下沉）。
 3. **协议外推**：今后跨应用层下沉 admin-ui 共享组件时，"2 处即下沉"作为 admin 子项目内部协议成立；其他子项目（前台 web-next / packages/player-core）仍维持 CLAUDE.md "3 处规则"。
 4. **5 件 Props 契约**统一在 CHG-SN-4-04 任务卡内由 arch-reviewer (claude-opus-4-7) 评审；评审范围含 DecisionCard 例外审议。
+5. **反向兜底（2026-05-02 CHG-SN-4-04 预审补充）**：DecisionCard 下沉后跟踪期 12 个月；若至 2027-05-02 仍维持 ≤ 2 处消费方（即未触达 CLAUDE.md "3 处规则"），则触发**收编回 admin 应用层**的迁移评估卡（任务卡新开），把 DecisionCard 退回 `apps/server-next/src/app/admin/` 业务层；本兜底防止"例外"长期占据共享层名额而无实质复用收益。跟踪期内每完成 1 个 admin milestone（M-SN-X） 须在 changelog 内记录 DecisionCard 当前消费方数量。
 
 ### 后果
 

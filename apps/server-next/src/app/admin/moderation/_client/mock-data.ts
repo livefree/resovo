@@ -1,4 +1,4 @@
-import type { DualSignalState } from '@resovo/admin-ui'
+import type { DualSignalDisplayState } from '@resovo/types'
 import type { VisibilityStatus, ReviewStatus } from '@resovo/admin-ui'
 
 export interface MockVideo {
@@ -9,8 +9,8 @@ export interface MockVideo {
   readonly episodes: number
   readonly country: string
   readonly score: number
-  readonly probe: DualSignalState
-  readonly render: DualSignalState
+  readonly probe: DualSignalDisplayState
+  readonly render: DualSignalDisplayState
   readonly visibility: VisibilityStatus
   readonly review: ReviewStatus
   readonly sources: number
@@ -31,8 +31,8 @@ export interface MockLine {
   readonly site: string
   readonly url: string
   readonly enabled: boolean
-  readonly probe: DualSignalState
-  readonly render: DualSignalState
+  readonly probe: DualSignalDisplayState
+  readonly render: DualSignalDisplayState
   readonly latency?: number
 }
 

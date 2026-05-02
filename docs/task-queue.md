@@ -1763,10 +1763,11 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 - **子代理调用**：arch-reviewer (claude-opus-4-7) — CONDITIONAL PASS（1 项非阻塞修订，已闭环 — plan 引用版本号统一为 v1.4）
 - **后续解锁**：CHG-SN-4-04 / -05 / -06 准入条件全部满足
 
-### CHG-SN-4-04 · admin-ui 共享组件下沉 5 件（D-14）⏳ 待开（前置已 PASS）
+### CHG-SN-4-04 · admin-ui 共享组件下沉 5 件（D-14）🚧 进行中（2026-05-02 启动）
 
 - 范围：BarSignal / LineHealthDrawer / RejectModal / StaffNoteBar / DecisionCard 上移
 - 前置：CHG-SN-4-03 PASS（依赖 packages/types 新类型）
+- 执行真源：`docs/designs/backend_design_v2.1/M-SN-4-04-admin-ui-shared-components-plan_20260502.md` v1.1
 - 强制子代理：arch-reviewer (claude-opus-4-7) — 共享组件 API 契约 + DecisionCard 例外审议
 
 ### CHG-SN-4-05 · 后端 API：8 新端点 + 4 改端点 ⏳ 待开（前置已 PASS）

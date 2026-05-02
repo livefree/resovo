@@ -1,14 +1,14 @@
 'use client'
 
 /**
- * dual-signal.tsx — DualSignal 共享组件实装（CHG-DESIGN-12 12B）
+ * dual-signal.tsx — DualSignal 共享组件实装（CHG-DESIGN-12 12B；CHG-SN-4-04 R2 类型源切换）
  *
  * 真源：dual-signal.types.ts（12A Opus PASS 契约）
  *
  * 实装契约（12A 一致性硬约束）：
  *   - 复用 Pill 渲染（每行一个 Pill 实例）；不重新实现 pill 视觉
- *   - DualSignalState (ok/partial/dead/unknown) → Pill variant + 状态标签 文案
- *   - probe pill: variant='probe' + dot 颜色按状态映射（ok/warn/danger/muted）
+ *   - DualSignalDisplayState (pending/ok/partial/dead/unknown) → Pill variant + 状态标签 文案
+ *   - probe pill: variant='probe' + dot 颜色按状态映射（ok/warn/danger/muted/pending）
  *   - render pill: variant='render' + 同上
  *   - 垂直堆叠 column flex / gap 3px
  *   - 每个 pill min-width 62px（设计稿对齐）
@@ -16,18 +16,20 @@
  * 固定 data attribute：data-dual-signal + 内部 [data-dual-signal-row="probe|render"]
  */
 import React from 'react'
-import type { DualSignalProps, DualSignalState } from './dual-signal.types'
+import type { DualSignalDisplayState } from '@resovo/types'
+import type { DualSignalProps } from './dual-signal.types'
 
 interface StateMap {
   readonly label: string
   readonly dotColor: string
 }
 
-function stateMap(state: DualSignalState): StateMap {
+function stateMap(state: DualSignalDisplayState): StateMap {
   switch (state) {
     case 'ok':       return { label: '可用',  dotColor: 'var(--state-success-fg)' }
     case 'partial':  return { label: '部分',  dotColor: 'var(--state-warning-fg)' }
     case 'dead':     return { label: '失效',  dotColor: 'var(--state-error-fg)' }
+    case 'pending':  return { label: '待测',  dotColor: 'var(--fg-muted)' }
     case 'unknown':
     default:
       return { label: '未测', dotColor: 'var(--fg-muted)' }

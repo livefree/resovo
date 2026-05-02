@@ -43,14 +43,20 @@
  */
 
 /**
- * DualSignal 单路状态值
+ * DualSignal 单路状态值（CHG-SN-4-04 R2 收敛真源至 `@resovo/types`）
  *
- * 后端真实契约可能用 `'all_dead'`（与设计稿 jsx 一致），本契约简化为 `'dead'`；
- * 消费方按需在派生层映射（如 `apiState === 'all_dead' ? 'dead' : apiState`）。
+ * 真源：`packages/types/src/admin-moderation.types.ts` `DualSignalDisplayState`
+ * （5 值 = DB 4 值 'pending' / 'ok' / 'partial' / 'dead' + 前端展示态 'unknown'）。
  *
- * `unknown` 用于尚未探测的视频源（避免渲染空白）。
+ * 历史：本文件原先自定义 `DualSignalState = 'ok' | 'partial' | 'dead' | 'unknown'`（4 值，
+ * 缺 'pending'），与 `@resovo/types` 同名类型语义重叠但定义不同；CHG-SN-4-04 D-14 下沉
+ * 前置稳定性收敛中，admin-ui cell 层不再 own DualSignal 状态类型，统一消费 `@resovo/types`。
+ *
+ * 消费方迁移指引：
+ * - 旧：`import type { DualSignalState } from '@resovo/admin-ui'`（4 值）
+ * - 新：`import type { DualSignalDisplayState } from '@resovo/types'`（5 值；现有 'ok'/'partial'/'dead'/'unknown' 字面量兼容）
  */
-export type DualSignalState = 'ok' | 'partial' | 'dead' | 'unknown'
+import type { DualSignalDisplayState } from '@resovo/types'
 
 /**
  * DualSignal Props
@@ -69,11 +75,11 @@ export type DualSignalState = 'ok' | 'partial' | 'dead' | 'unknown'
  * - 状态文案 fontSize / color: `var(--fg-muted)`
  */
 export interface DualSignalProps {
-  /** 链接探测状态（`pendingReview` 视频未探测时传 `'unknown'`） */
-  readonly probe: DualSignalState
+  /** 链接探测状态（DB 'pending' / 'ok' / 'partial' / 'dead' + 前端 'unknown' 占位） */
+  readonly probe: DualSignalDisplayState
 
-  /** 实际播放状态 */
-  readonly render: DualSignalState
+  /** 实际播放状态（DB 'pending' / 'ok' / 'partial' / 'dead' + 前端 'unknown' 占位） */
+  readonly render: DualSignalDisplayState
 
   /**
    * 每个 pill 的最小宽度（px；默认 62）

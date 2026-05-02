@@ -35,12 +35,11 @@ export type {
 } from './pill.types'
 
 // ── DualSignal ──────────────────────────────────────────────────
+// CHG-SN-4-04 R2：DualSignalState 类型源收敛至 `@resovo/types`；本包不再 own 类型 owner。
+// 旧消费方迁移：`import type { DualSignalDisplayState } from '@resovo/types'`
 
 export { DualSignal } from './dual-signal'
-export type {
-  DualSignalProps,
-  DualSignalState,
-} from './dual-signal.types'
+export type { DualSignalProps } from './dual-signal.types'
 
 // ── VisChip ─────────────────────────────────────────────────────
 
