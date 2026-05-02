@@ -1871,7 +1871,7 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 | DEBT-SN-4-05-B | CHG-SN-4-05 | `feedback.ts` 的 `getClientIp` 直接读 `x-forwarded-for` 未限白名单；生产部署须配 Fastify `trustProxy` 或 nginx/cloudflare XFF 白名单（IP 欺骗可绕过 rate-limit） | cutover（M-SN-7）前 |
 | DEBT-SN-4-05-C | CHG-SN-4-05 | ApiResponse 信封 / ErrorCode 真源归属决策 → **部分关闭**（ADR-110 已 accepted 2026-05-02）；剩余"方案 B 迁移实施"（packages/types 提取 ERRORS 字典 + 三源漂移合并）转 CHG-SN-4-05a | CHG-SN-4-07 启动前（含 CHG-SN-4-05a 完成）|
 
-### CHG-SN-4-05a · ADR-110 方案 B 迁移实施（待开 / 阻塞 -07/-08）
+### CHG-SN-4-05a · ADR-110 方案 B 迁移实施 🔄 进行中（卡片 docs/tasks.md，2026-05-02）
 
 - **来源**：DEBT-SN-4-05-C 剩余实施 / ADR-110 决策落地
 - **范围**：
