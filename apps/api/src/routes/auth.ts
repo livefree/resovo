@@ -14,6 +14,7 @@ import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { redis } from '@/api/lib/redis'
 import { UserService, ConflictError, UnauthorizedError } from '@/api/services/UserService'
+import { ERRORS, makeError } from '@/api/lib/errors'
 
 // Cookie 名称（统一管理）
 const REFRESH_COOKIE = 'refresh_token'
@@ -81,9 +82,9 @@ export async function authRoutes(fastify: FastifyInstance) {
       return reply.code(201).send({ data: { user, accessToken } })
     } catch (error) {
       if (error instanceof ConflictError) {
-        return reply.code(422).send({
-          error: { code: 'CONFLICT', message: error.message, status: 422 },
-        })
+        return reply
+          .code(ERRORS.CONFLICT.status)
+          .send(makeError(ERRORS.CONFLICT.code, error.message, ERRORS.CONFLICT.status))
       }
       request.log.error({ error }, 'register failed')
       return reply.code(500).send({

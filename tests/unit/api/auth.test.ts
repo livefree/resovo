@@ -331,26 +331,28 @@ describe('POST /v1/auth/register', () => {
     expect(setCookies).toContain('HttpOnly')
   })
 
-  it('重复 email → 422 CONFLICT', async () => {
+  it('重复 email → 409 CONFLICT', async () => {
     mockQueries.findUserByEmail.mockResolvedValue(MOCK_USER)
     const res = await app.inject({
       method: 'POST',
       url: '/v1/auth/register',
       payload: { username: 'newuser', email: 'test@example.com', password: 'password123' },
     })
-    expect(res.statusCode).toBe(422)
+    expect(res.statusCode).toBe(409)
     expect(res.json().error.code).toBe('CONFLICT')
+    expect(res.json().error.status).toBe(409)
   })
 
-  it('重复 username → 422 CONFLICT', async () => {
+  it('重复 username → 409 CONFLICT', async () => {
     mockQueries.findUserByUsername.mockResolvedValue(MOCK_USER)
     const res = await app.inject({
       method: 'POST',
       url: '/v1/auth/register',
       payload: { username: 'testuser', email: 'new@example.com', password: 'password123' },
     })
-    expect(res.statusCode).toBe(422)
+    expect(res.statusCode).toBe(409)
     expect(res.json().error.code).toBe('CONFLICT')
+    expect(res.json().error.status).toBe(409)
   })
 
   it('密码少于 8 位 → 422 VALIDATION_ERROR', async () => {

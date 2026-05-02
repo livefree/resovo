@@ -3865,6 +3865,33 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **数据库变更**：无
 - **注意事项**：
   - ERRORS 实际为 14 码（ADR-110 规划 13 码；BLOCKER 复评新增 CONFLICT 码覆盖 auth 注册冲突语义）
-  - auth.ts 目前对 CONFLICT 使用 HTTP 422（正确应为 409）；属预存不一致，已识别，可单独列 cleanup 卡处理
+  - auth.ts 目前对 CONFLICT 使用 HTTP 422（正确应为 409）；属预存不一致，已识别，可单独列 cleanup 卡处理 — **由 CHG-SN-4-05b 完成（2026-05-02）**
   - apps/api 内 `from '@/api/lib/errors'` 5 处调用方通过 re-export 保持零改动
   - CHG-SN-4-07 / CHG-SN-4-08 准入条件现已全部满足
+
+---
+
+## [CHG-SN-4-05b] auth.ts CONFLICT status 422 → 409 对齐 ERRORS.CONFLICT
+
+- **完成时间**：2026-05-02
+- **记录时间**：2026-05-02 16:15
+- **执行模型**：claude-opus-4-7（**偏离任务卡建议 sonnet-4-6**；理由：会话连续性 + 任务规模 < 15 行代码 + 6 处测试更新，新会话切换成本高于偏离记录成本）
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/routes/auth.ts` — register 路由 catch 块改用 `reply.code(ERRORS.CONFLICT.status).send(makeError(ERRORS.CONFLICT.code, error.message, ERRORS.CONFLICT.status))`，消除硬编码 422；新增 `ERRORS / makeError` import from `@/api/lib/errors`（实质来自 `@resovo/types` re-export）
+  - `tests/unit/api/auth.test.ts` — 2 个 it 块（`重复 email/username → CONFLICT`）statusCode 断言 422 → 409 + 标题更新 + 新增 `error.status === 409` 断言
+  - `tests/e2e/auth.spec.ts` — `重复邮箱` test 标题 + mock fulfill status 与 body status 同步 422 → 409
+- **新增依赖**：无
+- **数据库变更**：无
+- **API 契约变更**：⚠️ Breaking — POST /v1/auth/register 重复邮箱/用户名响应 status 由 422 → 409。影响：仓库未 push origin（pre-launch 阶段，68+ commits ahead）；server-next/web-next grep 0 命中 status===422 CONFLICT 特定逻辑；release notes 须标注（外部 API 消费方）
+- **注意事项**：
+  - 关闭 CHG-SN-4-05a 注意事项段登记的"auth.ts CONFLICT 422 漂移"
+  - UserService.ts ConflictError class 不动（`code = 'CONFLICT'` 保留与 ERRORS.CONFLICT.code 一致）
+  - 仅触碰 register 路由 catch 块；login / refresh / logout / dev-login 不变
+
+### 质量门禁
+
+- typecheck ✅ 通过（全 8 workspace 零报错）
+- lint ✅ 通过（turbo lint 5 tasks pass）
+- unit ✅ 通过（246 文件 / 3045 测试全绿；零回归；auth.test.ts 38 cases 单独验证全过）
+- grep 校验 ✅：`'CONFLICT'.*422\|422.*'CONFLICT'` 在 apps/api/ + tests/ 中 0 命中

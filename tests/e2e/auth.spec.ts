@@ -172,13 +172,13 @@ test.describe('注册页', () => {
     await expect(page.getByTestId('nav-username')).toHaveText(MOCK_USER.username)
   })
 
-  test('重复邮箱（422 CONFLICT）：显示冲突错误', async ({ page }) => {
+  test('重复邮箱（409 CONFLICT）：显示冲突错误', async ({ page }) => {
     await page.route(`${API_BASE}/auth/register`, (route) => {
       route.fulfill({
-        status: 422,
+        status: 409,
         contentType: 'application/json',
         body: JSON.stringify({
-          error: { code: 'CONFLICT', message: '该邮箱已被注册', status: 422 },
+          error: { code: 'CONFLICT', message: '该邮箱已被注册', status: 409 },
         }),
       })
     })
