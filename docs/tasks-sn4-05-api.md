@@ -14,9 +14,9 @@
 
 ---
 
-## 进行中任务
+## 完成任务
 
-### CHG-SN-4-05 · 后端 API：8 新端点 + 4 改端点 + 058a schema patch · 🔄 进行中
+### CHG-SN-4-05 · 后端 API：8 新端点 + 4 改端点 + 058a schema patch · ✅ 完成
 
 - **来源序列**：`docs/task-queue.md` SEQ-20260501-01（M-SN-4 阶段 B 双轨）
 - **执行真源**：`docs/designs/backend_design_v2.1/M-SN-4-05-api-endpoints-plan_20260502.md` v1.1
@@ -94,6 +94,14 @@ npm run test -- --run
 - 集成 PR 标题：`track(sn4-05-api): CHG-SN-4-05 后端 API 8 新 + 4 改 + 058a`
 - 推荐集成顺序：等 sn4-06-worker 先集成到 main → 本 Track rebase → PR 合并
 - PR 合并后：删除 `track/sn4-05-api` 分支 / 更新 `docs/tracks.md` 本 Track 区块为 ✅ 已集成 / 本文件归档至 `docs/archive/tasks/`
+
+#### 完成备注（2026-05-02）
+
+- **执行模型**：`claude-sonnet-4-6`；子代理调用：无
+- **文件拆分**：`videos.ts`（629 行）→ 拆分为 `videos.ts`（448 行）+ `videoImages.ts`（图片路由）+ `videoSources.ts`（线路路由 + refetch-sources）
+- **新测试文件**：10 个测试文件，新增 62 个 test case（共 3044 个，全绿）
+- **审计日志守门**：5 写操作 ↔ 5 个 AuditLogService.write 调用，1:1 覆盖
+- **未触碰冲突域**：apps/worker ✅ / package.json ✅ / packages/admin-ui ✅
 
 ---
 

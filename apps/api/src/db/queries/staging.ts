@@ -22,6 +22,7 @@ export interface StagingVideo {
   sourceCheckStatus: 'pending' | 'ok' | 'partial' | 'all_dead'
   metaScore: number
   activeSourceCount: number
+  qualityHighest: string | null  // CHG-SN-4-05: 最高实测分辨率档位
   approvedAt: string | null   // reviewed_at 作为进入暂存的时间
   updatedAt: string
 }
@@ -62,6 +63,7 @@ interface DbStagingRow {
   source_check_status: 'pending' | 'ok' | 'partial' | 'all_dead'
   meta_score: number
   active_source_count: string
+  quality_highest: string | null
   reviewed_at: string | null
   updated_at: string
 }
@@ -80,6 +82,7 @@ function mapStagingRow(row: DbStagingRow): StagingVideo {
     sourceCheckStatus: row.source_check_status,
     metaScore: row.meta_score ?? 0,
     activeSourceCount: parseInt(row.active_source_count ?? '0', 10),
+    qualityHighest: row.quality_highest ?? null,
     approvedAt: row.reviewed_at,
     updatedAt: row.updated_at,
   }
@@ -144,7 +147,13 @@ export async function listStagingVideos(
         mc.title_en, mc.cover_url, mc.year,
         (SELECT COUNT(*)::text FROM video_sources vs
          WHERE vs.video_id = v.id AND vs.is_active = true AND vs.deleted_at IS NULL
-        ) AS active_source_count
+        ) AS active_source_count,
+        (SELECT quality_detected FROM video_sources
+         WHERE video_id = v.id AND deleted_at IS NULL AND quality_detected IS NOT NULL
+         ORDER BY CASE quality_detected WHEN '4K' THEN 7 WHEN '2K' THEN 6 WHEN '1080P' THEN 5
+                   WHEN '720P' THEN 4 WHEN '480P' THEN 3 WHEN '360P' THEN 2 ELSE 1 END DESC
+         LIMIT 1
+        ) AS quality_highest
       FROM videos v
       LEFT JOIN media_catalog mc ON mc.id = v.catalog_id
       WHERE ${baseConditions.join(' AND ')}

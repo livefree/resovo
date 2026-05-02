@@ -43,6 +43,11 @@ interface DbVideoRow {
   meta_score: number
   // Migration 051 字段
   trending_tag: TrendingTag | null
+  // Migration 055 — 审核台字段（CHG-SN-4-03）
+  staff_note: string | null
+  review_label_key: string | null
+  // Migration 060 — 审核来源（CHG-SN-4-03）
+  review_source: string | null
   // ── media_catalog JOIN 字段（mc.*）───────────────────────────────
   title_en: string | null
   title_original: string | null
@@ -173,6 +178,7 @@ const VIDEO_FULL_SELECT = `
   v.review_status, v.visibility_status, v.needs_manual_review,
   v.content_rating, v.site_key, v.source_category,
   v.douban_status, v.source_check_status, v.meta_score, v.trending_tag,
+  v.staff_note, v.review_label_key, v.review_source,
   mc.title_en, mc.title_original, mc.description, mc.cover_url,
   mc.rating, mc.rating_votes, mc.runtime_minutes, mc.year, mc.country,
   mc.status, mc.director, mc."cast", mc.writers, mc.genres,

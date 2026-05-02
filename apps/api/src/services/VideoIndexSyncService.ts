@@ -186,6 +186,21 @@ export class VideoIndexSyncService {
   }
 
   /**
+   * CHG-SN-4-05: 从 ES 删除单条视频文档（reject-labeled / disable-dead 调用）。
+   * 404（文档不存在）视为成功（幂等）；其他错误写 stderr，不抛异常（不阻塞主流程）。
+   */
+  async unindexVideo(videoId: string): Promise<void> {
+    try {
+      await this.es.delete({ index: ES_INDEX, id: videoId })
+    } catch (err) {
+      const status = (err as { meta?: { statusCode?: number } })?.meta?.statusCode
+      if (status === 404) return
+      const message = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[VideoIndexSyncService] unindexVideo failed for ${videoId}: ${message}\n`)
+    }
+  }
+
+  /**
    * 批量补全已上架视频的 ES 索引（reconcile job 用）。
    * 只处理 is_published=true + public + approved 的视频，最多 batchLimit 条。
    * 返回成功同步数和失败数。

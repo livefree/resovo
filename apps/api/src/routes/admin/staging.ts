@@ -8,9 +8,11 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
+import { es } from '@/api/lib/elasticsearch'
 import { StagingPublishService } from '@/api/services/StagingPublishService'
 import { DoubanService } from '@/api/services/DoubanService'
 import { VideoService } from '@/api/services/VideoService'
+import { ModerationService } from '@/api/services/ModerationService'
 import * as stagingQueries from '@/api/db/queries/staging'
 
 const ListQuerySchema = z.object({
@@ -47,11 +49,14 @@ const MetaEditSchema = z.object({
   genres: z.array(z.string().min(1).max(50)).max(10).optional(),
 })
 
+const StagingRevertBodySchema = z.object({}).strict()
+
 export async function adminStagingRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['moderator', 'admin'])]
   const adminOnly = [fastify.authenticate, fastify.requireRole(['admin'])]
   const svc = new StagingPublishService(db)
   const doubanSvc = new DoubanService(db)
+  const moderationSvc = new ModerationService(db, es)
 
   // ── GET /admin/staging — 暂存队列列表 ────────────────────────
   fastify.get('/admin/staging', { preHandler: auth }, async (request, reply) => {
@@ -281,6 +286,35 @@ export async function adminStagingRoutes(fastify: FastifyInstance) {
       return reply.code(500).send({
         error: { code: 'INTERNAL_ERROR', message: `确认失败: ${msg}`, status: 500 },
       })
+    }
+  })
+
+  // ── POST /admin/staging/:id/revert — 暂存退回待审核（CHG-SN-4-05）─
+  fastify.post('/admin/staging/:id/revert', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const parsed = StagingRevertBodySchema.safeParse(request.body ?? {})
+    if (!parsed.success) {
+      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
+    }
+    try {
+      const result = await moderationSvc.stagingRevert({
+        videoId: id,
+        actorId: request.user!.userId,
+        requestId: request.id,
+      })
+      if (!result) {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 } })
+      }
+      return reply.send({ data: result })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg === 'STATE_CONFLICT') {
+        return reply.code(409).send({ error: { code: 'REVIEW_RACE', message: '已被其他审核员处理，请刷新', status: 409 } })
+      }
+      if (msg === 'INVALID_TRANSITION') {
+        return reply.code(409).send({ error: { code: 'STATE_INVALID', message: '当前状态不允许此操作', status: 409 } })
+      }
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: msg, status: 500 } })
     }
   })
 }
