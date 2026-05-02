@@ -34,6 +34,7 @@ export default defineConfig({
         'apps/api/src/db/queries/**',
         'apps/web-next/src/components/player/**',
         'apps/web-next/src/lib/**',
+        'apps/worker/src/**',
       ],
       thresholds: {
         // 覆盖率低于此值时输出警告（不阻断）
@@ -124,6 +125,7 @@ export default defineConfig({
       { find: '@resovo/player-core', replacement: path.resolve(__dirname, './packages/player-core/src/index.ts') },
       { find: '@resovo/types',       replacement: path.resolve(__dirname, './packages/types/src/index.ts') },
       { find: '@resovo/logger',      replacement: path.resolve(__dirname, './packages/logger/src/index.ts') },
+      { find: '@resovo/worker',      replacement: path.resolve(__dirname, './apps/worker/src') },
     ],
   },
   // 自动 JSX 转换（React 17+ automatic runtime，组件测试不需要 import React）

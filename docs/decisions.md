@@ -3885,10 +3885,11 @@ export interface LoadingStateProps {
 
 ## ADR-107: M-SN-4 apps/worker 部署归属 + 单实例约束
 
-> 状态：草案（CHG-SN-4-03 草拟；CHG-SN-4-06 落地时由 arch-reviewer 评审 PASS 后正式生效）
+> 状态：正式（CHG-SN-4-03 草拟；CHG-SN-4-06 落地实装并正式生效；2026-05-02）
 > 日期：2026-05-01
-> 任务卡：CHG-SN-4-03 / SEQ-20260501-01
-> 关联 plan：M-SN-4 plan v1.4 §1 D-16 + §4.0
+> 落地日期：2026-05-02
+> 任务卡：CHG-SN-4-03 / CHG-SN-4-06 / SEQ-20260501-01
+> 关联 plan：M-SN-4 plan v1.4 §1 D-16 + §4.0 / M-SN-4-06-worker plan v1.1
 
 ### 上下文
 
@@ -3898,10 +3899,10 @@ M-SN-4 引入 `SourceHealthWorker`（Level 1 探测 + Level 2 渲染验证 + 分
 
 1. **新建 `apps/worker` 独立 service**：理由 (a) Level 2 渲染验证 CPU/IO 重，与 apps/api 实时请求隔离更稳；(b) `docs/rules/logging-rules.md` "worker job" 段已规划相应路径；(c) 独立部署便于后续水平扩展。
 2. **本期单实例运行**：熔断状态可存内存；advisory lock 视频级聚合并发够用；多实例水平扩展须把熔断 / 协调状态外移到 Redis 或 DB，列入后续优化（M-SN-6 性能门或独立卡）。
-3. **目录结构**：见 plan §4.0.1 的 `apps/worker/src/{jobs,lib,observability,config.ts,index.ts}`。
-4. **依赖关系**：DB 直连复用 `apps/api/src/db/pool.ts`；不允许跨层调用 apps/api 业务函数，须经 `apps/api/src/services/*` 暴露的纯函数。
-5. **仓内同步清单**：CHG-SN-4-06 任务卡须同步更新 (a) 根 `package.json` workspaces / (b) `pnpm-lock.yaml` / (c) CI workflow（typecheck/lint/test 矩阵）/ (d) `CLAUDE.md` `apps/web` 旧表述（如必要）/ (e) `TEMPLATES.md`。
-6. **可观测**：每个 job 入口生成 `request_id = 'worker:'+ uuid()`，按 logging-rules.md 透传 child logger；6 项 metric 走 pino structured log（cutover 后接入 metrics backend）。
+3. **目录结构**：`apps/worker/src/{jobs,lib,observability,config.ts,index.ts,types.ts}`；测试在根 `tests/unit/worker/`。
+4. **DB 连接**：worker 在 `apps/worker/src/lib/db.ts` 自建轻量 `pg.Pool`（直接消费 `DATABASE_URL` 等 env 变量名与 apps/api 共享）；**禁止** import `apps/api` 内部任何文件，零跨 workspace 代码耦合。
+5. **仓内同步清单（已落地）**：(a) 根 `package.json` workspaces 追加 `apps/worker` / (b) `package-lock.json` npm install 同步 / (c) CI 未配置（仓库无 `.github/workflows/`，README 已记录）/ (d) `TEMPLATES.md` worker 章节追加 / (e) 根 typecheck 脚本追加 `apps/worker`。
+6. **可观测**：每个 job 入口生成 `requestId = 'worker:' + uuid()`，按 logging-rules.md 透传 child logger；6 项 metric 走 pino structured log（`metric` 字段 + `value` + labels；cutover 后接入 metrics backend）。
 
 ### 后果
 
