@@ -3,6 +3,7 @@ import type pino from 'pino'
 import { config } from '../../config'
 import { shouldSkipSite, recordFailure, recordSuccess } from '../../lib/circuit-breaker'
 import { parseM3u8, parseMp4Moov, parseMpd } from '../../lib/parsers'
+import { withRetry } from '../../lib/retry-backoff'
 import { emitMetric } from '../../observability/metrics'
 import type { VideoSource, QualityDetected, ProbeStatus } from '../../types'
 
@@ -39,7 +40,10 @@ async function renderOneSource(
   siteId: string,
 ): Promise<void> {
   try {
-    const result = await renderCheck(source)
+    const result = await withRetry(
+      () => renderCheck(source),
+      (attempt, err) => log.warn({ source_id: source.id, attempt, err }, 'render retry'),
+    )
 
     if (result.status === 'ok') {
       recordSuccess(siteId)

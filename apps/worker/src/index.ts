@@ -25,6 +25,12 @@ const level1Task = cron.schedule(
   { scheduled: false },
 )
 
+const level2Task = cron.schedule(
+  config.cron.level2Render,
+  () => runWithLogger('level2-render', () => runSourceHealthLevel2(db, jobLogger('level2-render'))),
+  { scheduled: false },
+)
+
 const feedbackTask = cron.schedule(
   config.cron.feedbackDriven,
   () => runWithLogger('feedback-recheck', () => runFeedbackDrivenRecheck(db, jobLogger('feedback-recheck'))),
@@ -38,18 +44,26 @@ async function startup(): Promise<void> {
   log.info('db connection verified')
 
   level1Task.start()
+  level2Task.start()
   feedbackTask.start()
   log.info(
-    { level1_cron: config.cron.level1Probe, feedback_cron: config.cron.feedbackDriven },
+    {
+      level1_cron: config.cron.level1Probe,
+      level2_cron: config.cron.level2Render,
+      feedback_cron: config.cron.feedbackDriven,
+    },
     'cron tasks started',
   )
 
-  await runWithLogger('level2-render-boot', () => runSourceHealthLevel2(db, jobLogger('level2-render')))
+  runWithLogger('level2-render-boot', () => runSourceHealthLevel2(db, jobLogger('level2-render'))).catch(
+    (err) => log.error({ err }, 'level2-render boot failed'),
+  )
 }
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, 'worker shutting down')
   level1Task.stop()
+  level2Task.stop()
   feedbackTask.stop()
   await db.end()
   log.info('worker stopped')

@@ -11,8 +11,8 @@ type FeedbackEvent = {
 const BATCH_LIMIT = 100
 
 export async function runFeedbackDrivenRecheck(pool: Pool, log: pino.Logger): Promise<void> {
-  const events = await fetchUnprocessed(pool)
-  if (events.length === 0) return
+  const events = await fetchUnprocessed(pool, log)
+  if (events === null || events.length === 0) return
 
   log.info({ count: events.length }, 'feedback-driven recheck: processing events')
 
@@ -36,14 +36,25 @@ export async function runFeedbackDrivenRecheck(pool: Pool, log: pino.Logger): Pr
   log.info({ count: events.length }, 'feedback-driven recheck: events marked processed')
 }
 
-async function fetchUnprocessed(pool: Pool): Promise<FeedbackEvent[]> {
-  const result = await pool.query<FeedbackEvent>(
-    `SELECT id, source_id, video_id
-     FROM source_health_events
-     WHERE origin = 'feedback_driven' AND processed_at IS NULL
-     ORDER BY created_at ASC
-     LIMIT $1`,
-    [BATCH_LIMIT],
-  )
-  return result.rows
+async function fetchUnprocessed(pool: Pool, log: pino.Logger): Promise<FeedbackEvent[] | null> {
+  try {
+    const result = await pool.query<FeedbackEvent>(
+      `SELECT id, source_id, video_id
+       FROM source_health_events
+       WHERE origin = 'feedback_driven' AND processed_at IS NULL
+       ORDER BY created_at ASC
+       LIMIT $1`,
+      [BATCH_LIMIT],
+    )
+    return result.rows
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('column "processed_at" does not exist')) {
+      log.warn(
+        { metric: 'probe.skipped_circuit', value: 1, reason: '058a_not_applied' },
+        'feedback-driven-recheck skipped: processed_at column missing (058a migration not yet applied — wait for CHG-SN-4-05 to integrate first)',
+      )
+      return null
+    }
+    throw err
+  }
 }

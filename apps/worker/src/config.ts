@@ -1,6 +1,7 @@
 export const config = {
   cron: {
     level1Probe: process.env.WORKER_CRON_LEVEL1 ?? '0 */6 * * *',
+    level2Render: process.env.WORKER_CRON_LEVEL2 ?? '0 */2 * * *',
     feedbackDriven: process.env.WORKER_CRON_FEEDBACK ?? '*/1 * * * *',
   },
   rateLimit: {
