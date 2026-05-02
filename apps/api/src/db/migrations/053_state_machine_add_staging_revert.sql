@@ -10,7 +10,7 @@
 --   approved|hidden|0   → pending_review|hidden|0  （暂存退回待审，从 hidden）
 -- 注意：approved|public|1（已发布）**不允许**直接退回 — 必须先 unpublish 再退回（两步）。
 --
--- 完整白名单（v1.3 053 后）：
+-- 完整白名单（053 落地后；plan v1.4 §2.2 真源）：
 --   pending_internal → pending_hidden | approved_public | approved_internal | rejected_hidden
 --   pending_hidden   → pending_internal | approved_public | approved_internal | approved_hidden | rejected_hidden
 --   approved_public  → approved_internal | approved_hidden

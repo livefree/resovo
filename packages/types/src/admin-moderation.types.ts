@@ -1,7 +1,7 @@
 /**
  * admin-moderation.types.ts — M-SN-4 审核台 / 暂存 / 拒绝 + 共享 cell 类型
  *
- * 真源：docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md v1.2
+ * 真源：docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md v1.4
  * 任务卡：CHG-SN-4-03 / SEQ-20260501-01
  * 关联 ADR：ADR-106（admin-ui 下沉）/ ADR-109（admin_audit_log）
  *
@@ -61,7 +61,7 @@ export interface ReviewLabel {
 // ── source_health_events（037 既有表 + 058 扩展）──────────────────────────────
 //
 // 037 既有字段：id / video_id / origin / old_status / new_status / triggered_by / created_at
-// 058 扩展（plan §2.7 v1.3）：source_id / error_detail / http_code / latency_ms
+// 058 扩展（plan v1.4 §2.7）：source_id / error_detail / http_code / latency_ms
 // origin 列在 037 为无 CHECK 约束的 TEXT，注释列举三种值；plan §4 worker 新增多种来源不需要 DB
 // 迁移即可写入。下方 union 包含**现存持久值 + plan 新增值**全集，禁止 apps 内重复定义。
 
