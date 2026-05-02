@@ -1750,8 +1750,51 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 
 ## M-SN-4 · 审核台 + VideoEditDrawer API 集成
 
-> 状态：🚧 进行中（CHG-SN-4-01 已完成，2026-05-01）
+> 状态：🚧 进行中（CHG-SN-4-01/02 已完成，CHG-SN-4-03 进行中，2026-05-01）
 > 前置：M-SN-3 核心实现闭合（CHG-SN-3-11/12/13 豁免至 cutover 前）
+> Plan 真源：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.2 §8.1 任务卡总览
+> 任务卡序列：SEQ-20260501-01（CHG-SN-4-03 ～ -10 + DEBT-SN-3-A）
+
+### CHG-SN-4-03 · DB schema：060 audit_log + 052 状态机 + 053–059 字段 🚧 进行中（2026-05-01）
+
+- **来源**：plan v1.2 §8.1 第 1 张 / SEQ-20260501-01
+- **状态**：🚧 进行中（卡片详情见 `docs/tasks.md`）
+- **建议主循环**：claude-sonnet-4-6
+- **实际主循环**：claude-opus-4-7（偏离登记，详见 tasks.md 卡片）
+- **强制子代理**：arch-reviewer (claude-opus-4-7)
+- **后续阻塞**：本卡 PASS 前不得开 CHG-SN-4-04 / -05 / -06
+
+### CHG-SN-4-04 · admin-ui 共享组件下沉 5 件（D-14）⏳ 待开
+
+- 范围：BarSignal / LineHealthDrawer / RejectModal / StaffNoteBar / DecisionCard 上移
+- 前置：CHG-SN-4-03 PASS（依赖 packages/types 新类型）
+- 强制子代理：arch-reviewer (claude-opus-4-7) — 共享组件 API 契约 + DecisionCard 例外审议
+
+### CHG-SN-4-05 · 后端 API：8 新端点 + 4 改端点 ⏳ 待开
+
+- 前置：CHG-SN-4-03 PASS
+
+### CHG-SN-4-06 · apps/worker 新建 + SourceHealthWorker Level 1+2 ⏳ 待开
+
+- 前置：CHG-SN-4-03 PASS（仓内同步：package.json workspaces / pnpm-lock / CI workflow）
+
+### CHG-SN-4-07 · 审核台前端接入（useTableQuery + Gmail 流 + RejectModal/Drawer 接线）⏳ 待开
+
+- 前置：CHG-SN-4-04 + CHG-SN-4-05 PASS
+
+### CHG-SN-4-08 · VideoEditDrawer 三 Tab 真实 API ⏳ 待开
+
+- 前置：CHG-SN-4-04 + CHG-SN-4-05 PASS（与 -07 并行）
+
+### CHG-SN-4-09（编号空置 / 已退出本期）
+
+- D-15 拆分入口推迟 M-SN-5；编号不复用，M-SN-5 拆分实装新开 CHG-SN-5-XX
+
+### CHG-SN-4-10 · M-SN-4 milestone 收口（e2e + 状态保留 5 步 + arch-reviewer 评级）⏳ 待开
+
+- 前置：-03 ～ -08 + DEBT-SN-3-A 全部完成
+- 强制子代理：arch-reviewer (claude-opus-4-7) — milestone A/B/C 评级
+
 
 ### CHG-SN-4-01 · SplitPane admin-ui 原语 ✅ 完成（2026-05-01）
 

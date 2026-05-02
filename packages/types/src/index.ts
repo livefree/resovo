@@ -12,4 +12,6 @@ export type * from './crawler.types'
 export type * from './system.types'
 export type * from './external.types'
 
+export type * from './admin-moderation.types'
+
 export { DEFAULT_INGEST_POLICY } from './system.types'

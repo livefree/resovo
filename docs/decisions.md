@@ -3844,3 +3844,146 @@ export interface LoadingStateProps {
 - **关联 plan**：§6 M-SN-2 v2.3（数据原语层范围 B 块）/ §4.4（Provider 不下沉）/ §4.7（依赖白名单：zustand 已收编）/ §8 复用矩阵 v2.3（DataTable 列覆盖 14 个 admin/* 视图）
 - **关联序列**：SEQ-20260428-03（M-SN-2 第二阶段 — 数据原语层落地）
 - **评审结论**：arch-reviewer (claude-opus-4-7) — PASS（10 项评审重点全 PASS / 无必修 / 3 条建议优化登记后续）
+
+---
+
+## ADR-106: M-SN-4 admin-ui 共享组件下沉清单 + DecisionCard 跨应用层例外协议
+
+> 状态：草案（CHG-SN-4-03 草拟；CHG-SN-4-04 落地时由 arch-reviewer 评审 PASS 后正式生效）
+> 日期：2026-05-01
+> 任务卡：CHG-SN-4-03 / SEQ-20260501-01
+> 关联 plan：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.2 §1 D-14 + §7
+
+### 上下文
+
+`docs/server_next_plan_20260427.md` §3 admin 子项目"复用矩阵"明确 M-SN-4 阶段须下沉 5 件共享组件到 `packages/admin-ui`：BarSignal 双柱图 / LineHealthDrawer 证据抽屉 / RejectModal / StaffNoteBar / DecisionCard 上移。其中 DecisionCard 当前位于 `apps/server-next/src/app/admin/moderation/_client/`（CHG-SN-4-02 实装），跨 moderation + VideoEditDrawer = **2 处**复用，仅满足 admin 子项目"首次跨 2 视图复用即强制下沉"规则，不满足 CLAUDE.md 项目级"3 处以上必须提取"通用规则。两条规则的强弱对照需协议化处理。
+
+### 决策
+
+1. **5 件下沉**纳入 CHG-SN-4-04 实施范围；BarSignal / LineHealthDrawer / RejectModal / StaffNoteBar 4 件由 plan §3 复用矩阵直接列出，无需例外协议。
+2. **DecisionCard 上移**为**例外协议下沉**，依据：
+   - admin 子项目"2 处规则"较 CLAUDE.md "3 处规则"严格，covers 该场景；
+   - 跨应用层（business `apps/server-next` ↔ shared `packages/admin-ui`）下沉天然受 Opus arch-reviewer 评审约束（单实例下沉成本 ≈ 跨应用层成本）；
+   - DecisionCard 在 plan §6 M-SN-4 复用矩阵已隐含（决策卡 + 三栏布局 同列下沉）。
+3. **协议外推**：今后跨应用层下沉 admin-ui 共享组件时，"2 处即下沉"作为 admin 子项目内部协议成立；其他子项目（前台 web-next / packages/player-core）仍维持 CLAUDE.md "3 处规则"。
+4. **5 件 Props 契约**统一在 CHG-SN-4-04 任务卡内由 arch-reviewer (claude-opus-4-7) 评审；评审范围含 DecisionCard 例外审议。
+
+### 后果
+
+- **正向**：admin 子项目复用速度提升，避免"等满 3 处"造成的重复实装；契约稳定性靠 Opus 评审保障。
+- **风险**：admin-ui 包外开销提前累积；mitigated by Opus 评审 PASS 闸门 + visual baseline 守门。
+- **不可逆性**：低；DecisionCard 上移后若发现 API 契约缺陷，CHG-SN-4-10 milestone 评级前可回滚（成本可控）。
+
+### 关联
+
+- **关联 plan**：M-SN-4 plan v1.2 §1 D-14 / §7 / §8.1
+- **关联任务卡**：CHG-SN-4-03（本卡草拟）/ CHG-SN-4-04（落地 + 正式 PASS）
+- **关联序列**：SEQ-20260501-01
+
+---
+
+## ADR-107: M-SN-4 apps/worker 部署归属 + 单实例约束
+
+> 状态：草案（CHG-SN-4-03 草拟；CHG-SN-4-06 落地时由 arch-reviewer 评审 PASS 后正式生效）
+> 日期：2026-05-01
+> 任务卡：CHG-SN-4-03 / SEQ-20260501-01
+> 关联 plan：M-SN-4 plan v1.2 §1 D-16 + §4.0
+
+### 上下文
+
+M-SN-4 引入 `SourceHealthWorker`（Level 1 探测 + Level 2 渲染验证 + 分辨率采集 + 视频级聚合），需要决定部署归属：(a) 内嵌 `apps/api`（cron 进程 + 共享路由）/ (b) `pg_cron` 数据库触发 / (c) 新建 `apps/worker` 独立 service。仓内 `apps/` 实测当前 4 个：`api / server / server-next / web-next`，无既有 worker app。同时需澄清单实例 vs 多实例对熔断状态、advisory lock 等的影响。
+
+### 决策
+
+1. **新建 `apps/worker` 独立 service**：理由 (a) Level 2 渲染验证 CPU/IO 重，与 apps/api 实时请求隔离更稳；(b) `docs/rules/logging-rules.md` "worker job" 段已规划相应路径；(c) 独立部署便于后续水平扩展。
+2. **本期单实例运行**：熔断状态可存内存；advisory lock 视频级聚合并发够用；多实例水平扩展须把熔断 / 协调状态外移到 Redis 或 DB，列入后续优化（M-SN-6 性能门或独立卡）。
+3. **目录结构**：见 plan §4.0.1 的 `apps/worker/src/{jobs,lib,observability,config.ts,index.ts}`。
+4. **依赖关系**：DB 直连复用 `apps/api/src/db/pool.ts`；不允许跨层调用 apps/api 业务函数，须经 `apps/api/src/services/*` 暴露的纯函数。
+5. **仓内同步清单**：CHG-SN-4-06 任务卡须同步更新 (a) 根 `package.json` workspaces / (b) `pnpm-lock.yaml` / (c) CI workflow（typecheck/lint/test 矩阵）/ (d) `CLAUDE.md` `apps/web` 旧表述（如必要）/ (e) `TEMPLATES.md`。
+6. **可观测**：每个 job 入口生成 `request_id = 'worker:'+ uuid()`，按 logging-rules.md 透传 child logger；6 项 metric 走 pino structured log（cutover 后接入 metrics backend）。
+
+### 后果
+
+- **正向**：worker 独立部署 = 故障隔离 + 资源限额可控；与 apps/api 实时请求互不干扰。
+- **风险**：本期单实例 = 单点故障；mitigated by node-cron 内置 retry + Sentry 告警 + 容器重启策略。多实例升级路径已留协议接口（熔断状态外移）。
+- **不可逆性**：低；如发现独立 service 维护成本过高可降级为 apps/api 内嵌（仅需路径重定向，业务代码不变）。
+
+### 关联
+
+- **关联 plan**：M-SN-4 plan v1.2 §1 D-16 / §4.0
+- **关联任务卡**：CHG-SN-4-03（本卡草拟）/ CHG-SN-4-06（落地 + 正式 PASS）
+- **关联规范**：`docs/rules/logging-rules.md`（worker job 段）
+
+---
+
+## ADR-108: M-SN-4 player_feedback 客户端实装位置（packages/player-core 事件埋点）
+
+> 状态：草案（CHG-SN-4-03 草拟；CHG-SN-4-05/-06/前台播放器消费时由 arch-reviewer 评审 PASS 后正式生效）
+> 日期：2026-05-01
+> 任务卡：CHG-SN-4-03 / SEQ-20260501-01
+> 关联 plan：M-SN-4 plan v1.2 §1 D-17 + §3.3 + §4.2
+
+### 上下文
+
+M-SN-4 D-12 决策"分辨率获取双轨制"：热门视频主动采集（manifest parse）+ 普通视频被动获取（前端播放回报）。后者需要前端在播放成功 / 失败时上报 resolution / errorCode / bufferingCount，对应端点 `POST /api/v1/feedback/playback`（plan §3.3）。需要决定客户端实装位置（packages/player-core 抽象层 vs PlayerShell 业务层 vs apps/web-next 应用层）+ 埋点时机 + PII 边界。
+
+### 决策
+
+1. **实装位置：`packages/player-core` 抽象层**新增 `feedback-reporter.ts` 事件埋点；shell 层 `PlayerShell` 注入实例。理由：埋点需对接播放器内部事件（onFirstFrame / onError / onBufferingEnd），与 player-core API 紧耦合；放抽象层避免每个消费方重复实装。
+2. **埋点时机**：
+   - `onFirstFrame` → 上报 `resolutionWidth/Height` + `success=true`
+   - `onError` → 上报 `errorCode` + `success=false`
+   - `onBufferingEnd` → 累计 `bufferingCount`（debounce 后随下一次事件上报）
+3. **客户端去抖**：同一 `(videoId, sourceId)` 60s 内只上报最近一次最严重事件（success=false 优先于 success=true）；防止刷流冲量。
+4. **PII 红线**：客户端**不上报** userId / IP；后端按 `apps/api` 路由侧 cookie session 解析 actor，存 `hash(IP)` 头 8 字节（与 ADR-109 admin_audit_log 同协议；logging-rules.md PII redact）。
+5. **失败兜底**：feedback 上报失败 fire-and-forget，不影响播放体验；429 / 5xx 静默 retry（指数退避，上限 3 次）。
+
+### 后果
+
+- **正向**：分辨率被动采集覆盖 100% 播放视频，无需热门视频外的主动采集；同时获得线路健康反馈数据，触发 §4.1 Level 2 渲染验证。
+- **风险**：高并发播放可能造成 feedback 端点流量压力；mitigated by `apps/api` 端 rate-limit（同一 (userId|IP, sourceId) 每分钟 1 次）+ Sentry 告警。
+- **不可逆性**：低；埋点位置如需调整可平滑迁移到 shell 层。
+
+### 关联
+
+- **关联 plan**：M-SN-4 plan v1.2 §1 D-17 / §3.3 / §4.2
+- **关联 ADR**：ADR-109（admin_audit_log；同 PII 协议）
+- **关联任务卡**：CHG-SN-4-03（本卡草拟）/ CHG-SN-4-05（端点落地）/ CHG-SN-4-06（worker 消费触发 Level 2）
+- **关联包**：`packages/player-core`（前台播放器抽象）/ apps/web-next（业务集成）
+
+---
+
+## ADR-109: M-SN-4 admin_audit_log schema 前置补建（M-SN-2 欠账）
+
+> 状态：草案（CHG-SN-4-03 落地实装；arch-reviewer Opus 评审 PASS 后正式生效）
+> 日期：2026-05-01
+> 任务卡：CHG-SN-4-03 / SEQ-20260501-01 / Migration 060
+> 关联 plan：M-SN-4 plan v1.2 §1 D-18 + §2.9 + §3.0.5
+
+### 上下文
+
+M-SN-2 阶段 admin Shell 落地时未实装审计日志 schema（核实：仓内 `grep admin_audit_log` 0 命中）。M-SN-4 plan v1.0 §3 audit log 写入位点表暗含"M-SN-2 已就绪"假设不成立，需在 M-SN-4 任何写端点上线前前置补建。同时本 schema 须服务后续所有 admin milestones 的写操作审计（M-SN-5 / M-SN-6 / cutover），不允许 ad-hoc。
+
+### 决策
+
+1. **前置补建**：Migration 060 创建 `admin_audit_log` 表，部署顺序优先于 052–059（plan §2.10）。
+2. **schema 字段**：`id BIGSERIAL` / `actor_id UUID` / `action_type TEXT` / `target_kind TEXT (CHECK 6 种)` / `target_id UUID` / `before_jsonb JSONB` / `after_jsonb JSONB` / `request_id TEXT` / `ip_hash TEXT` / `created_at TIMESTAMPTZ`。
+3. **写入位点**：plan v1.2 §3.0.5 表为唯一真源，新增写端点必须先扩枚举再写实装。
+4. **写入失败不阻塞主操作**：fire-and-forget + log warn + Sentry breadcrumb；request_id 来自 pino 中间件透传。
+5. **PII 红线**：`ip_hash` = `hash(IP)` 头 8 字节（不存 IP 原值）；与 ADR-108 同协议。
+6. **前台不入 audit**：`POST /api/v1/feedback/playback` 不写 `admin_audit_log`（属前台路由，非 admin 操作）。
+7. **类型契约**：`AdminAuditLog` / `AdminAuditActionType` / `AdminAuditTargetKind` 在 `packages/types/src/admin-moderation.types.ts` 集中定义，所有消费方共享。
+
+### 后果
+
+- **正向**：M-SN-4 写端点上线即审计；M-SN-5 / M-SN-6 / cutover 复用同 schema 无需重新立项；运营合规 + 安全审查闭环。
+- **风险**：写量随 admin 操作量线性增长；mitigated by 索引设计（按 actor / target / action 三轴），M-SN-6.5 性能门会复审；如需归档（cold storage）列入后续优化。
+- **不可逆性**：高（已写入数据），但 schema 演进通过新字段 ADD COLUMN IF NOT EXISTS 兼容；不允许破坏性 ALTER（DROP COLUMN / 改类型）。
+
+### 关联
+
+- **关联 plan**：M-SN-4 plan v1.2 §1 D-18 / §2.9 / §3.0.5
+- **关联 ADR**：ADR-108（player_feedback；同 PII 协议）
+- **关联任务卡**：CHG-SN-4-03（本卡草拟 + 落地实装）/ CHG-SN-4-05（写入位点接线）/ CHG-SN-4-10（覆盖率验收）
+- **关联序列**：SEQ-20260501-01
+- **欠账登记**：M-SN-2 欠账由本 ADR 关闭
