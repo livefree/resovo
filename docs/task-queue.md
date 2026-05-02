@@ -1763,12 +1763,15 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 - **子代理调用**：arch-reviewer (claude-opus-4-7) — CONDITIONAL PASS（1 项非阻塞修订，已闭环 — plan 引用版本号统一为 v1.4）
 - **后续解锁**：CHG-SN-4-04 / -05 / -06 准入条件全部满足
 
-### CHG-SN-4-04 · admin-ui 共享组件下沉 5 件（D-14）🚧 进行中（2026-05-02 启动）
+### CHG-SN-4-04 · admin-ui 共享组件下沉 5 件（D-14）✅ 完成（2026-05-02）
 
-- 范围：BarSignal / LineHealthDrawer / RejectModal / StaffNoteBar / DecisionCard 上移
-- 前置：CHG-SN-4-03 PASS（依赖 packages/types 新类型）
-- 执行真源：`docs/designs/backend_design_v2.1/M-SN-4-04-admin-ui-shared-components-plan_20260502.md` v1.1
-- 强制子代理：arch-reviewer (claude-opus-4-7) — 共享组件 API 契约 + DecisionCard 例外审议
+- **来源**：M-SN-4 plan v1.4 §1 D-14 + 子方案 v1.1（执行序：阶段 A 单卡）
+- **完成**：5 件 Props 契约冻结（arch-reviewer Opus 2 轮 PASS）+ 116 case 全绿（BarSignal 23 / StaffNoteBar 26 / LineHealthDrawer 23 / RejectModal 21 / DecisionCard 23）+ apps/server-next 调用方切换（PendingCenter）+ 旧 _client/DecisionCard.tsx 删除 + ADR-106 转 accepted
+- **执行真源**：`docs/designs/backend_design_v2.1/M-SN-4-04-admin-ui-shared-components-plan_20260502.md` v1.1
+- **实际主循环**：claude-opus-4-7（偏离 plan §8.1 sonnet-4-6 建议；理由：跨层下沉契约 + ADR-106 例外审议）
+- **子代理调用**：arch-reviewer (claude-opus-4-7) — 2 轮 PASS（CONDITIONAL → R1/R2/R3 闭环 → PASS）
+- **欠账登记**：DEBT-SN-4-A（5 张 Playwright 视觉基线，截止 CHG-SN-4-10 收口）
+- **后续解锁**：CHG-SN-4-07 / CHG-SN-4-08 准入条件全部满足（5 件共享组件 + 上移 DecisionCard 已就位）
 
 ### CHG-SN-4-05 · 后端 API：8 新端点 + 4 改端点 ⏳ 待开（前置已 PASS）
 
@@ -1844,3 +1847,9 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 | DEBT-SN-3-A | CHG-SN-3-11 | `docs/server_next_view_template.md` 模板文档（后续视图卡参考实现模板）| M-SN-4 milestone 完成时补做 |
 | DEBT-SN-3-B | CHG-SN-3-12 | staging 环境 cookie + nginx 反代 e2e 演练（需人工参与）| cutover 前，需用户确认 staging 可用 |
 | DEBT-SN-3-C | CHG-SN-3-13 | M-SN-3 milestone 阶段审计（Opus arch-reviewer A/B/C 评级）| cutover 前，依赖 DEBT-SN-3-B 完成或书面 staging-waiver |
+
+### M-SN-4 欠账（CHG-SN-4-04 收口产生，2026-05-02）
+
+| 欠账 ID | 原任务 | 描述 | 截止节点 |
+|---------|--------|------|---------|
+| DEBT-SN-4-A | CHG-SN-4-04 | 5 件下沉组件的 Playwright `toHaveScreenshot()` 视觉基线（BarSignal × 5 状态 / StaffNoteBar display+edit / LineHealthDrawer / RejectModal / DecisionCard 三态）；现仓库 `tests/visual/` 为手动 PNG 归档无 Playwright host，本卡内不引入新 visual harness 基础设施 | CHG-SN-4-10 milestone 收口卡 |

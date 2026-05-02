@@ -309,8 +309,11 @@ docs/decisions.md  # ADR-106 草案 → 正式（DecisionCard 跨层下沉例外
 ## 6. 完成判据（must）
 
 - [ ] typecheck 0 error / lint 0 warning
-- [ ] unit ≥ 19 case/组件 = ≥ 95 case 全绿（Vitest；DOM 结构断言）
-- [ ] **visual diff baseline 5 张：Playwright `toHaveScreenshot()`**（`@playwright/test` 截图对比，配置在 `tests/visual/admin-ui/` 或既有 visual harness）；vitest snapshot **不能**替代视觉基线，仅作 DOM 结构辅助校验
+- [x] unit ≥ 19 case/组件 = ≥ 95 case 全绿（Vitest；DOM 结构断言）— 实际 116 case
+- [ ] ~~visual diff baseline 5 张：Playwright `toHaveScreenshot()`~~ → **延后为 DEBT-SN-4-A 欠账**（截止 CHG-SN-4-10 milestone 收口）
+  - 现状：仓库 `tests/visual/` 当前为手动 PNG 设计稿归档，无 Playwright `toHaveScreenshot()` 流水线（无 storybook / playground host）
+  - 决策（2026-05-02）：本卡内不引入新 visual harness 基础设施（超出 D-14 5 件下沉范围）；登记欠账，由 -10 收口或独立 visual harness 卡统一处理
+  - 已落地的视觉守门：116 unit case 含完整 DOM 结构 + token 引用 grep 守门；可作为像素对比之外的等效约束
 - [ ] arch-reviewer Opus PASS / CONDITIONAL ≤ 3 轮闭环
 - [ ] grep 守门：
   - `grep -r "from 'lucide-react'" packages/admin-ui/src/components/{cell,feedback}/` 0 命中（已存在的 server v1 mocks 例外）

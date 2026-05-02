@@ -3660,3 +3660,51 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - unit ✅ 通过（222 文件 / 2826 测试全绿；含 053 状态机回归集 27 it 全绿）
 - e2e：本卡范围内不需跑（属 CHG-SN-4-10 收口卡）
 - migration up/down：staging 部署验证由本卡完成判据延伸到 CHG-SN-4-05 / -06 端点上线前一并完成（plan §2.10）
+
+
+## [CHG-SN-4-04] admin-ui 共享组件下沉 5 件（D-14）+ ADR-106 跨应用层例外协议落地
+
+- **完成时间**：2026-05-02
+- **记录时间**：2026-05-02
+- **执行模型**：claude-opus-4-7（偏离 plan §8.1 sonnet-4-6 建议；理由：跨层下沉 Props 契约 + ADR-106 例外审议 + 5 件 unit 设计需求复杂度，Opus 主循环对契约稳定性更高；偏离登记于 commit trailer Executed-By-Model）
+- **子代理**：arch-reviewer (claude-opus-4-7) — CLAUDE.md 强制升 Opus 第 1 条（共享组件 API 契约）；2 轮评审：第 1 轮 CONDITIONAL PASS / 3 项必修（R1 ADR-106 反向兜底 / R2 dual-signal 类型双源收敛 / R3 admin-ui 显式 @resovo/types 依赖）→ 第 2 轮 PASS / 0 残余
+- **修改/新增文件**：
+  - 新增 `packages/admin-ui/src/components/cell/bar-signal.{tsx,types.ts}`（probe + render 双柱 SVG，5 值状态颜色映射，size 'sm'/'md'，forwardRef button/span 双路径；138 行 + 73 行 types）
+  - 新增 `packages/admin-ui/src/components/cell/decision-card.{tsx,types.ts}`（上移完整版：标题 + 决策建议条 + BarSignal + 可选 StaffNoteBar + header/actions slot；ADR-106 跨层例外；182 行 + 95 行 types）
+  - 新增 `packages/admin-ui/src/components/feedback/staff-note-bar.{tsx,types.ts}`（display + edit 两态受控；amber 信息条复用 --state-warning-{bg,fg,border}；246 行 + 96 行 types）
+  - 新增 `packages/admin-ui/src/components/feedback/line-health-drawer.{tsx,types.ts}`（包壳 Drawer 原语；头部 BarSignal + events 时间线 + 分页守门；229 行 + 89 行 types）
+  - 新增 `packages/admin-ui/src/components/feedback/reject-modal.{tsx,types.ts}`（包壳 Modal 原语；ReviewLabel radio + reason textarea + submit 守门；215 行 + 95 行 types）
+  - 新增 `packages/admin-ui/src/components/feedback/index.ts`（feedback 子目录 export）
+  - 修改 `packages/admin-ui/src/components/cell/index.ts`（追加 BarSignal + DecisionCard export；删除 DualSignalState re-export 收敛 R2）
+  - 修改 `packages/admin-ui/src/index.ts`（追加 feedback 子目录 export）
+  - 修改 `packages/admin-ui/src/components/cell/dual-signal.{tsx,types.ts}`（R2：删除自定义 4 值 DualSignalState；改用 @resovo/types 的 DualSignalDisplayState 5 值；stateMap 增加 'pending' case）
+  - 修改 `packages/admin-ui/package.json`（R3：dependencies 显式 "@resovo/types": "*"）
+  - 修改 `package-lock.json`（npm install 同步 R3 admin-ui 依赖；1 行 diff 无其他漂移）
+  - 修改 `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx`（import 切到 @resovo/admin-ui；新增 toDecisionCardVideo(MockVideo) 适配函数，CHG-SN-4-07 真实 API 集成后下线）
+  - 修改 `apps/server-next/src/app/admin/moderation/_client/mock-data.ts`（DualSignalState → DualSignalDisplayState 5 值兼容）
+  - 删除 `apps/server-next/src/app/admin/moderation/_client/DecisionCard.tsx`（67 行简版退役；上移完整版替代）
+  - 修改 `docs/decisions.md`（ADR-106 决策第 5 项新增反向兜底：12 月跟踪期 + 截止 2027-05-02 退回 admin 应用层评估；状态 草案 → proposed → accepted）
+  - 新增 5 件单测 `tests/unit/components/admin-ui/{cell/{bar-signal,decision-card},feedback/{staff-note-bar,line-health-drawer,reject-modal}}.test.tsx`（116 case 总计：BarSignal 23 + StaffNoteBar 26 + LineHealthDrawer 23 + RejectModal 21 + DecisionCard 23）
+  - 修改 `docs/designs/backend_design_v2.1/M-SN-4-04-admin-ui-shared-components-plan_20260502.md`（§6 完成判据：visual baseline 改为 DEBT-SN-4-A 欠账登记）
+  - 修改 `docs/tasks.md`（任务卡删除）
+  - 修改 `docs/task-queue.md`（CHG-SN-4-04 状态 🚧 → ✅ 完成 + DEBT-SN-4-A 欠账登记）
+- **新增依赖**：`@resovo/types` 由隐式 hoist 改为 admin-ui 显式 dependency（R3 修订；与 server-next 等 workspace 风格一致）
+- **数据库变更**：无
+- **arch-reviewer 结论**：第 1 轮 CONDITIONAL PASS — 6 项审议中 5 项 PASS + 3 项必修（R1 ADR-106 登记完整度 / R2 dual-signal 类型双源 / R3 admin-ui 显式依赖）；R1 实际为 Opus 误判（ADR-106 已存在），借机补反向兜底条款；R2/R3 真实修订；第 2 轮 PASS / 0 残余 / 5 件 Props 契约可冻结
+- **欠账登记**：DEBT-SN-4-A（5 件 Playwright `toHaveScreenshot()` 视觉基线，截止 CHG-SN-4-10 milestone 收口卡；本卡内不引入新 visual harness 基础设施 — 现仓库 tests/visual/ 为手动 PNG 归档无 Playwright host）
+- **后续解锁**：CHG-SN-4-07（审核台前端接入）+ CHG-SN-4-08（VideoEditDrawer 三 Tab）准入条件全部满足（5 件共享组件 + DecisionCard 上移就位）；CHG-SN-4-05 / CHG-SN-4-06 双轨并行启动条件不变（前置仅依赖 -03 schema）
+- **注意事项**：
+  - PendingCenter `toDecisionCardVideo` 适配函数为临时桥接（mock-data MockVideo 字段集与 DecisionCardVideo Pick 列表不完全对齐）；CHG-SN-4-07 真实 API 集成后该函数下线，调用方直传 VideoQueueRow 派生
+  - DecisionCardVideo Pick 列表硬约束：实装期 .tsx 内若需消费 Pick 列表外字段（如 coverUrl / year / country / episodeCount），必须先回 decision-card.types.ts 扩展 Pick 列表并经 arch-reviewer 复审；禁止 ad hoc 接收非 Pick 字段或拓宽为 Partial<VideoQueueRow>
+  - 6 commit 节奏：f8b7f65 契约冻结 + R1/R2/R3 闭环 → c6f3883 lockfile sync → da07a2a Step 3+4 BarSignal+StaffNoteBar → 3ada067 Step 5+6+7 LineHealthDrawer+RejectModal+DecisionCard → 收口 commit（本次）
+  - ADR-106 状态由 proposed 转 accepted；反向兜底条款要求每个 admin milestone 在 changelog 登记 DecisionCard 当前消费方数量；本卡完成时消费方 = 1（PendingCenter；待 -07 审核台 + -08 VideoEditDrawer 接线后扩展）
+
+### 质量门禁
+
+- typecheck ✅ 通过（tsc --noEmit 零报错；7 workspace 全绿）
+- lint ✅ 通过（仅预存在 next/no-img-element 警告，不在本卡范围）
+- unit ✅ 通过（227 文件 / 2942 测试全绿；前 2826 + 新增 116 case；admin-ui 套件 1033/1033 全绿）
+- e2e：本卡范围内不需跑（属 CHG-SN-4-10 收口卡）
+- visual baseline：DEBT-SN-4-A 欠账登记（截止 -10）
+- 硬编码颜色 grep ✅ 0 命中（`#[0-9a-fA-F]{3,8}` / `rgb(` 在 cell/{bar-signal,decision-card}.tsx + feedback/ 全部 0）
+- 零图标库依赖 grep ✅ 0 命中（`from 'lucide-react'` 在 5 件新文件 0）

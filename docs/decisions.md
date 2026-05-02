@@ -3849,8 +3849,8 @@ export interface LoadingStateProps {
 
 ## ADR-106: M-SN-4 admin-ui 共享组件下沉清单 + DecisionCard 跨应用层例外协议
 
-> 状态：proposed（CHG-SN-4-03 草拟；CHG-SN-4-04 arch-reviewer (claude-opus-4-7) 预审 CONDITIONAL PASS 闭环后转 accepted）
-> 日期：2026-05-01（草拟）/ 2026-05-02（CHG-SN-4-04 评审反馈补反向兜底条款）
+> 状态：accepted（CHG-SN-4-04 实装 PASS + 5 件下沉全部就位，2026-05-02）
+> 日期：2026-05-01（草拟）/ 2026-05-02（CHG-SN-4-04 评审反馈补反向兜底 + 实装 PASS 转 accepted）
 > 任务卡：CHG-SN-4-03 / CHG-SN-4-04 / SEQ-20260501-01
 > 关联 plan：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.4 §1 D-14 + §7
 
