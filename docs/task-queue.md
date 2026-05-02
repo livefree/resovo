@@ -1784,9 +1784,10 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 - **欠账登记**：DEBT-SN-4-05-A（toggleSource 并发保护）/ DEBT-SN-4-05-B（XFF trustProxy 白名单）/ DEBT-SN-4-05-C（ApiResponse 信封 ADR-110，截止 -07 启动前）
 - **后续解锁**：CHG-SN-4-07 / CHG-SN-4-08 准入条件全部满足（5 件共享组件 + 后端 API 已就位）；ADR-110 须先于 -07 启动完成
 
-### CHG-SN-4-06 · apps/worker 新建 + SourceHealthWorker Level 1+2 ⏳ 待开（前置已 PASS）
+### CHG-SN-4-06 · apps/worker 新建 + SourceHealthWorker Level 1+2 ✅ 完成（2026-05-02）
 
 - 前置：CHG-SN-4-03 ✅（仓内同步：package.json workspaces / pnpm-lock / CI workflow）
+- 执行模型：claude-sonnet-4-6 / 子代理：无
 
 ### CHG-SN-4-07 · 审核台前端接入（useTableQuery + Gmail 流 + RejectModal/Drawer 接线）⏳ 待开
 

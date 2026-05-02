@@ -81,6 +81,56 @@ src/
 
 ---
 
+## Worker 模板（apps/worker）
+
+### Cron Job
+
+适用于：`apps/worker/src/jobs/` 下的 cron 任务函数
+
+```typescript
+// [job-name].ts
+import type { Pool } from 'pg'
+import type pino from 'pino'
+
+export async function run[JobName](pool: Pool, log: pino.Logger): Promise<void> {
+  // 1. load data
+  // 2. process
+  // 3. write results
+}
+```
+
+### Parser（无外依赖）
+
+适用于：`apps/worker/src/lib/parsers/` 下的格式解析
+
+```typescript
+export type [Format]ParseResult = { /* fields */ }
+
+export function parse[Format](input: string | Buffer): [Format]ParseResult {
+  // pure function, no side effects, no dependencies
+}
+```
+
+### Circuit Breaker 消费
+
+```typescript
+import { shouldSkipSite, recordFailure, recordSuccess } from '../../lib/circuit-breaker'
+
+if (shouldSkipSite(siteId)) {
+  // skip and log
+  return
+}
+try {
+  // do work
+  recordSuccess(siteId)
+} catch (err) {
+  recordFailure(siteId)
+  throw err
+}
+```
+
+---
+
 ## 不使用模板的情形
 
 以下情形可以不使用模板，直接编写：

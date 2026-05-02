@@ -3773,10 +3773,74 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - lint ✅ 通过（turbo lint 5 tasks，pre-existing warning 排除）
 - unit ✅ 通过（237 文件 / 2997 测试全绿；新增 62 cases；零回归）
 - e2e：不在本任务范围（非 PLAYER/AUTH/SEARCH/VIDEO）
-- 审计日志守门 ✅：5 写操作全部对应 AuditLogService.write 调用
+- 审计日志守门 ✅：5 写操作全部对应 AuditLogService.write 调用（video.reject_labeled / video.staff_note / staging.revert / video_source.toggle / video_source.disable_dead_batch）
 - 文件行数 ✅：videos.ts 448 行；moderation.ts 474 行（均 < 500）
 
 ### 后续解锁
 
 - CHG-SN-4-07（审核台前端接入）
 - CHG-SN-4-08（VideoEditDrawer 三 Tab 真实 API 接入）
+
+## [CHG-SN-4-06] apps/worker 新建 + SourceHealthWorker Level 1+2
+
+- **完成时间**：2026-05-02
+- **记录时间**：2026-05-02 14:50
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - 新增 `apps/worker/package.json`（@resovo/worker 独立 service，node-cron + pino + pg + zod + @resovo/logger 依赖）
+  - 新增 `apps/worker/tsconfig.json`（Node.js 兼容 commonjs + node moduleResolution，isolatedModules）
+  - 新增 `apps/worker/README.md`（部署说明 + 单实例约束 + CI 未配置记录）
+  - 新增 `apps/worker/src/config.ts`（集中 env / cron 表达式 level1 + level2 + feedbackDriven / circuitBreaker / retry 参数）
+  - 新增 `apps/worker/src/types.ts`（worker-local 类型）
+  - 新增 `apps/worker/src/lib/db.ts`（自建 pg.Pool；零 apps/api import；DATABASE_URL env 复用）
+  - 新增 `apps/worker/src/lib/advisory-lock.ts`（withVideoLock：pg_advisory_xact_lock + BEGIN/COMMIT/ROLLBACK）
+  - 新增 `apps/worker/src/lib/circuit-breaker.ts`（站点级内存熔断；5min 滑窗 + 30min cooldown；单实例约束）
+  - 新增 `apps/worker/src/lib/retry-backoff.ts`（指数退避 1/2/4/8/16s × 5 次；接入 level2-render renderCheck）
+  - 新增 `apps/worker/src/lib/parsers/{m3u8,mp4-moov,mpd,index}.ts`（HLS / MP4 / DASH parsers；无外依赖）
+  - 新增 `apps/worker/src/observability/{logger,metrics}.ts`（pino + 6 项结构化 metric 埋点）
+  - 新增 `apps/worker/src/jobs/source-health/level1-probe.ts`（HEAD/GET probe + m3u8 manifest 检查；circuit-breaker 集成）
+  - 新增 `apps/worker/src/jobs/source-health/level2-render.ts`（HLS/MP4/DASH render check + 分辨率采集 + withRetry 包装）
+  - 新增 `apps/worker/src/jobs/source-health/aggregate-source-check-status.ts`（视频级 advisory lock 聚合）
+  - 新增 `apps/worker/src/jobs/source-health/index.ts`（Level1 + aggregate + Level2 入口组合）
+  - 新增 `apps/worker/src/jobs/feedback-driven-recheck.ts`（消费 source_health_events.processed_at IS NULL；058a 缺失时优雅降级 log.warn 跳过）
+  - 新增 `apps/worker/src/index.ts`（node-cron 调度 level1Task + level2Task + feedbackTask 三独立 cron + signal handlers + boot Level 2 fire-and-forget）
+  - 修改 `package.json`（workspaces 追加 apps/worker；根 typecheck 追加 @resovo/worker）
+  - 修改 `package-lock.json`（npm install 同步：新增 node-cron + @types/node-cron）
+  - 修改 `vitest.config.ts`（coverage.include 追加 apps/worker/src；resolve.alias 追加 @resovo/worker）
+  - 修改 `TEMPLATES.md`（追加 worker cron job / parser / circuit-breaker 消费模板章节）
+  - 修改 `docs/decisions.md`（ADR-107 状态 草案 → 正式；修正 DB pool 描述：worker 自建而非复用 apps/api；落地日期记录）
+  - 新增 `tests/unit/worker/lib/{circuit-breaker,retry-backoff,advisory-lock}.test.ts`（13 cases）
+  - 新增 `tests/unit/worker/lib/parsers/{m3u8,mpd,mp4-moov}.test.ts`（10 cases）
+  - 新增 `tests/unit/worker/jobs/source-health/{level1-probe,level2-render,aggregate-source-check-status}.test.ts`（24 cases）
+- **新增依赖**：`node-cron@^3.0.3`（plan §4.0.1 预选技术栈；commit trailer 标注）/ `@types/node-cron@^3.0.11`（devDependency）
+- **数据库变更**：无（CHG-SN-4-03 已落地 054/058/059/060 schema；058a 由 CHG-SN-4-05 落地，本卡通过 feedback-driven-recheck 消费）
+- **审核修复（2026-05-02 第二轮，commit 7d74519）**：
+  - R-1 🔴 `feedback-driven-recheck.fetchUnprocessed` 改返 `Promise<FeedbackEvent[] \| null>`，catch `'column "processed_at" does not exist'` → log.warn + 返回 null（058a 缺失场景优雅降级，不阻塞 worker 启动）
+  - R-2 🟡 `config.cron.level2Render = '0 */2 * * *'`（每 2 小时）+ index.ts 注册独立 `level2Task` cron + shutdown 中 stop
+  - R-3 🟡 startup 末尾 `runWithLogger(...).catch(err => log.error)` 不再 await — Level 2 boot fire-and-forget
+  - R-4 🟢 `level2-render.renderOneSource` 引入 `withRetry` 包 `renderCheck`，onRetry → log.warn（孤立 retry-backoff 工具接入主路径）
+  - R-5: 接受决策（worker lint = tsc --noEmit 与 apps/api 约定一致，无需新增 ESLint 配置）
+  - R-6: 接受决策（origin='circuit_breaker' 已由 CHG-SN-4-05 architecture.md §5.12 涵盖）
+- **注意事项**：
+  - 单实例约束已在 README.md + ADR-107 双重登记；多实例升级须把熔断/advisory lock 协调状态外移 Redis 或 DB（M-SN-6 性能门）
+  - 仓库无 .github/workflows/ CI；README.md 已记录"CI 未配置"
+  - 本地验证命令：`npm run -w @resovo/worker typecheck && npm run -w @resovo/worker lint && npm run test -- --run "tests/unit/worker"`
+  - feedback-driven-recheck（Step 10）依赖 058a migration（CHG-SN-4-05 已落地）；缺失时 R-1 优雅降级保证 worker 不崩溃
+
+### 质量门禁
+
+- typecheck ✅ 通过（@resovo/worker tsc --noEmit 零报错；根 typecheck 7+1 workspace 全绿）
+- lint ✅ 通过（turbo lint 5 tasks cached/pass）
+- unit ✅ 通过（236 文件 / 2989 测试全绿；新增 47 worker cases；零回归）
+- e2e：不在本任务范围（非 PLAYER/AUTH/SEARCH/VIDEO）
+- 零 apps/api import ✅ 0 命中（grep `from '@resovo/api\|apps/api/'` apps/worker/src/）
+- 零新依赖（除 plan 预批准 node-cron）✅ 仅 pino + pg + zod + @resovo/logger（已有）+ node-cron（预批准）
+
+### 后续解锁
+
+- CHG-SN-4-10 milestone 收口卡（含 e2e + arch-reviewer A/B/C 评级）
+
+### 复核结论（arch-reviewer claude-opus-4-7，2026-05-02 第二轮）
+
+- 评级：A−（4 项 R 修复完整 + 2 项接受决策合理；唯一扣分：修复无新测试覆盖 R-1 catch 路径）
