@@ -3844,3 +3844,27 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 ### 复核结论（arch-reviewer claude-opus-4-7，2026-05-02 第二轮）
 
 - 评级：A−（4 项 R 修复完整 + 2 项接受决策合理；唯一扣分：修复无新测试覆盖 R-1 catch 路径）
+
+---
+
+## [CHG-SN-4-05a] ADR-110 方案 B 迁移 — ErrorCode 真源归一
+
+- **完成时间**：2026-05-02
+- **记录时间**：2026-05-02 15:50
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `packages/types/src/api-errors.ts` — 新建；ErrorCode 唯一真源，ERRORS 14 码（含 BLOCKER 补入的 CONFLICT 注册冲突码）+ ApiErrorBody interface + ErrorCode type
+  - `packages/types/src/index.ts` — 追加 `export * from './api-errors'`（值导出，保障 ERRORS 字典 runtime 可用）
+  - `apps/api/src/lib/errors.ts` — 删本地 ApiErrorBody / ERRORS / ErrorCode；改为 import from @resovo/types + 同名 re-export；保留 AppError class + isAppError + makeError
+  - `packages/types/src/admin-moderation.types.ts` — 删除 ModerationErrorCode union（6 码子集，全仓 0 消费方，完全由 ErrorCode 覆盖）
+  - `packages/types/src/api.types.ts` — 删旧 7 码 ErrorCode union；改为 import type + re-export from ./api-errors；ApiError interface 继续使用 ErrorCode
+  - `docs/rules/api-rules.md` — line 98 更新 ErrorCode 真源位置注释（ADR-110）
+  - `docs/task-queue.md` — CHG-SN-4-05a ✅ 完成 + DEBT-SN-4-05-C 完全关闭
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - ERRORS 实际为 14 码（ADR-110 规划 13 码；BLOCKER 复评新增 CONFLICT 码覆盖 auth 注册冲突语义）
+  - auth.ts 目前对 CONFLICT 使用 HTTP 422（正确应为 409）；属预存不一致，已识别，可单独列 cleanup 卡处理
+  - apps/api 内 `from '@/api/lib/errors'` 5 处调用方通过 re-export 保持零改动
+  - CHG-SN-4-07 / CHG-SN-4-08 准入条件现已全部满足

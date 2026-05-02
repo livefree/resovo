@@ -1,3 +1,4 @@
+export * from './api-errors'
 export type * from './api.types'
 export type * from './banner.types'
 export type * from './home-module.types'

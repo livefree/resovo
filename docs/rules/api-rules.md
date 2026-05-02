@@ -95,7 +95,7 @@ export async function videoRoutes(fastify: FastifyInstance) {
 
 ### 错误码规范
 ```typescript
-// 在 apps/api/src/lib/errors.ts 中统一定义
+// 在 packages/types/src/api-errors.ts 中统一定义（ADR-110 决策；apps/api/src/lib/errors.ts 仅保留 AppError class + isAppError + makeError 工具）
 export const ErrorCodes = {
   NOT_FOUND: 404,
   UNAUTHORIZED: 401,

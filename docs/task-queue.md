@@ -1869,20 +1869,19 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 | DEBT-SN-4-A | CHG-SN-4-04 | 5 件下沉组件的 Playwright `toHaveScreenshot()` 视觉基线（BarSignal × 5 状态 / StaffNoteBar display+edit / LineHealthDrawer / RejectModal / DecisionCard 三态）；现仓库 `tests/visual/` 为手动 PNG 归档无 Playwright host，本卡内不引入新 visual harness 基础设施 | CHG-SN-4-10 milestone 收口卡 |
 | DEBT-SN-4-05-A | CHG-SN-4-05 | `toggleSource` 无 `expectedUpdatedAt` 乐观锁，相比 `transitionVideoState` 缺少并发保护；建议加 ETag/version 列 | cutover（M-SN-7）前 |
 | DEBT-SN-4-05-B | CHG-SN-4-05 | `feedback.ts` 的 `getClientIp` 直接读 `x-forwarded-for` 未限白名单；生产部署须配 Fastify `trustProxy` 或 nginx/cloudflare XFF 白名单（IP 欺骗可绕过 rate-limit） | cutover（M-SN-7）前 |
-| DEBT-SN-4-05-C | CHG-SN-4-05 | ApiResponse 信封 / ErrorCode 真源归属决策 → **部分关闭**（ADR-110 已 accepted 2026-05-02）；剩余"方案 B 迁移实施"（packages/types 提取 ERRORS 字典 + 三源漂移合并）转 CHG-SN-4-05a | CHG-SN-4-07 启动前（含 CHG-SN-4-05a 完成）|
+| DEBT-SN-4-05-C | CHG-SN-4-05 | ~~ApiResponse 信封 / ErrorCode 真源归属决策~~ → **完全关闭**（ADR-110 accepted + CHG-SN-4-05a 迁移完成 2026-05-02；ERRORS 14 码真源 = packages/types/src/api-errors.ts）| ✅ 已关闭 |
 
-### CHG-SN-4-05a · ADR-110 方案 B 迁移实施 🔄 进行中（卡片 docs/tasks.md，2026-05-02）
+### CHG-SN-4-05a · ADR-110 方案 B 迁移实施 ✅ 完成（2026-05-02）
 
 - **来源**：DEBT-SN-4-05-C 剩余实施 / ADR-110 决策落地
-- **范围**：
-  1. 新建 `packages/types/src/api-errors.ts`（ApiErrorBody + ERRORS 字典 13 码 + ErrorCode union）
-  2. `packages/types/src/index.ts` 追加 `export * from './api-errors'`（值 + 类型导出）
-  3. `apps/api/src/lib/errors.ts` 改 `import { ERRORS, ApiErrorBody, ErrorCode } from '@resovo/types'`，仅留 AppError class + isAppError + makeError
-  4. `packages/types/src/admin-moderation.types.ts:321-327` 删 `ModerationErrorCode` union（改 import + Pick 收窄或全删）
-  5. `packages/types/src/api.types.ts` 旧 `ErrorCode` 7 码 union 改为 re-export from api-errors（消除三源漂移）
-  6. `docs/rules/api-rules.md:98` "在 apps/api/src/lib/errors.ts 中统一定义" 改为 "在 packages/types/src/api-errors.ts 中统一定义"
-  7. apps/api 内 ~11 处 `from './errors'` import 验证（typecheck + 全量 unit 不回归）
-- **建议主循环模型**：`claude-sonnet-4-6`（机械迁移 + 字典移位，无新决策）
-- **强制子代理**：否
-- **质量门禁**：typecheck ✅ + lint ✅ + 全量 unit ✅（验收 246 文件 / 3045 测试 + 不回归）
+- **执行模型**：`claude-sonnet-4-6`
+- **子代理**：无
+- **完成结果**：
+  - 新建 `packages/types/src/api-errors.ts`（ApiErrorBody + ERRORS **14 码** + ErrorCode union；含 BLOCKER 补入的 CONFLICT 注册冲突码）
+  - `packages/types/src/index.ts` 追加 `export * from './api-errors'`（值 + 类型导出）
+  - `apps/api/src/lib/errors.ts` 改 import，删本地字典，re-export 保持调用方零改动
+  - `admin-moderation.types.ts` 删 ModerationErrorCode union（全仓 0 消费方）
+  - `api.types.ts` 删旧 7 码 ErrorCode union，改 import + re-export
+  - `docs/rules/api-rules.md:98` 更新真源位置
+- **质量门禁**：typecheck ✅（8 workspace）+ lint ✅（5 tasks）+ 全量 unit ✅（246f / 3045t 零回归）
 - **后续解锁**：CHG-SN-4-07 / CHG-SN-4-08 准入条件全部满足（DEBT-SN-4-05-C 完全关闭）

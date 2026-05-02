@@ -23,6 +23,9 @@ export interface Pagination {
 
 // ── 错误结构 ─────────────────────────────────────────────────────
 
+import type { ErrorCode, ApiErrorBody } from './api-errors'
+export type { ErrorCode, ApiErrorBody }
+
 export interface ApiError {
   error: {
     code: ErrorCode
@@ -30,15 +33,6 @@ export interface ApiError {
     status: number
   }
 }
-
-export type ErrorCode =
-  | 'NOT_FOUND'
-  | 'UNAUTHORIZED'
-  | 'FORBIDDEN'
-  | 'VALIDATION_ERROR'
-  | 'CONFLICT'
-  | 'RATE_LIMITED'
-  | 'INTERNAL_ERROR'
 
 // ── 请求通用参数 ─────────────────────────────────────────────────
 

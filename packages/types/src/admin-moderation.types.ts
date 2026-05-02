@@ -315,13 +315,3 @@ export interface PlaybackFeedbackBody {
   readonly bufferingCount?: number
   readonly errorCode?: string
 }
-
-// ── errorCode 枚举（plan v1.4 §3.0.3）────────────────────────────────────────
-
-export type ModerationErrorCode =
-  | 'STATE_INVALID'
-  | 'LABEL_UNKNOWN'
-  | 'STAGING_NOT_READY'
-  | 'REVIEW_RACE'
-  | 'RATE_LIMITED'
-  | 'SOURCE_PROBE_FAILED'
