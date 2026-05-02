@@ -646,7 +646,11 @@ export async function transitionVideoState(
         break
       }
       case 'reject': {
-        if (current.review_status !== 'pending_review' && current.review_status !== 'approved') {
+        // M-SN-4 D-01：reject 限制为 pending_review 入参，与 trigger 白名单 + plan §1 D-01
+        // 设计意图（暂存撤回须经 staging_revert 两步走）三层守门一致。
+        // approved 视频不可直接 reject（即便允许，DB trigger 也会拒绝 approved → rejected_hidden
+        // 转换；旧版应用层放行造成跨层不一致）。
+        if (current.review_status !== 'pending_review') {
           throw new Error('INVALID_TRANSITION')
         }
         nextReview = 'rejected'
