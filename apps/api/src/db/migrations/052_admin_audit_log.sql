@@ -1,12 +1,14 @@
--- 060_admin_audit_log.sql
+-- 052_admin_audit_log.sql
 -- 描述：admin 写操作审计日志表（M-SN-2 欠账 + M-SN-4 前置补建）
 -- 日期：2026-05-01
--- ADR：ADR-109（admin_audit_log schema 前置补建；M-SN-4 plan v1.2 §2.9 + §3.0.5）
+-- ADR：ADR-109（admin_audit_log schema 前置补建；M-SN-4 plan v1.3 §2.1 + §3.0.5）
 -- 任务卡：CHG-SN-4-03 / SEQ-20260501-01
 -- 幂等：是（CREATE TABLE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS）
 --
--- 部署顺序约束（plan v1.2 §2.10）：
---   060 必须先于 052–059 部署，确保 M-SN-4 写端点上线即可写入审计。
+-- 部署顺序约束（plan v1.3 §2.10）：
+--   audit_log 占用编号 052 = M-SN-4 序列首位；scripts/migrate.ts:50–52 按文件名字典序
+--   遍历执行 → 052 必先于 053–060 落地；与 runner 行为天然一致，无需额外协调。
+--   设计意图：M-SN-4 任何写端点上线时（CHG-SN-4-05），admin_audit_log 已就位，避免审计断链。
 --
 -- ⚠️  Down 路径说明（项目约定）：
 --   scripts/migrate.ts 将整个文件内容作为单条 SQL 执行，不区分 up/down 节。

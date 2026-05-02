@@ -33,7 +33,7 @@ import type {
 
 /**
  * DualSignal / BarSignal 单路状态值（DB 持久值）。
- * **严格对齐** Migration 053 video_sources.probe_status / render_status CHECK 约束的 4 值；
+ * **严格对齐** Migration 054 video_sources.probe_status / render_status CHECK 约束的 4 值；
  * 用于 API 入参 / 出参 / DB 投影类型。前端 UI 可能需要"未加载"占位，使用 DualSignalDisplayState。
  */
 export type DualSignalState = 'pending' | 'ok' | 'partial' | 'dead'
@@ -44,7 +44,7 @@ export type DualSignalState = 'pending' | 'ok' | 'partial' | 'dead'
  */
 export type DualSignalDisplayState = DualSignalState | 'unknown'
 
-// ── review_labels（Migration 055）─────────────────────────────────────────────
+// ── review_labels（Migration 056）─────────────────────────────────────────────
 
 export type ReviewLabelAppliesTo = 'reject' | 'approve' | 'any'
 
@@ -58,10 +58,10 @@ export interface ReviewLabel {
   readonly createdAt: string  // ISO 8601
 }
 
-// ── source_health_events（037 既有表 + 057 扩展）──────────────────────────────
+// ── source_health_events（037 既有表 + 058 扩展）──────────────────────────────
 //
 // 037 既有字段：id / video_id / origin / old_status / new_status / triggered_by / created_at
-// 057 扩展（plan §2.6）：source_id / error_detail / http_code / latency_ms
+// 058 扩展（plan §2.7 v1.3）：source_id / error_detail / http_code / latency_ms
 // origin 列在 037 为无 CHECK 约束的 TEXT，注释列举三种值；plan §4 worker 新增多种来源不需要 DB
 // 迁移即可写入。下方 union 包含**现存持久值 + plan 新增值**全集，禁止 apps 内重复定义。
 
@@ -88,24 +88,24 @@ export type SourceHealthEventOrigin =
   | SourceHealthEventOriginWorker
 
 /**
- * source_health_events 行类型（037 + 057 扩展全集）。
+ * source_health_events 行类型（037 + 058 扩展全集）。
  * 字段命名按 DB 列 snake → camel 映射；可选性严格对齐 NOT NULL / NULL。
  */
 export interface SourceHealthEvent {
   readonly id: string
   readonly videoId: string                              // 037：NOT NULL
-  readonly sourceId: string | null                      // 057：可空（存量 NULL）
+  readonly sourceId: string | null                      // 058：可空（存量 NULL）
   readonly origin: SourceHealthEventOrigin              // 037：NOT NULL，无 CHECK，按 union 解释
   readonly oldStatus: string | null                     // 037：NULL 允许
   readonly newStatus: string | null                     // 037：NULL 允许
   readonly triggeredBy: string | null                   // 037：NULL 允许
-  readonly errorDetail: string | null                   // 057：NULL 允许
-  readonly httpCode: number | null                      // 057：NULL 允许
-  readonly latencyMs: number | null                     // 057：NULL 允许
+  readonly errorDetail: string | null                   // 058：NULL 允许
+  readonly httpCode: number | null                      // 058：NULL 允许
+  readonly latencyMs: number | null                     // 058：NULL 允许
   readonly createdAt: string
 }
 
-// ── admin_audit_log（Migration 060）───────────────────────────────────────────
+// ── admin_audit_log（Migration 052 — M-SN-4 序列首位）────────────────────────
 
 /**
  * audit log action_type 完整枚举。
@@ -153,14 +153,14 @@ export interface AdminAuditLog {
 //   016_review_visibility.sql：review_status / visibility_status
 //   032_videos_pipeline_status_fields.sql：douban_status / source_check_status / meta_score
 //   051_add_videos_trending_tag.sql：trending_tag
-//   054_videos_moderation_fields.sql（M-SN-4 plan §2.3）：staff_note / review_label_key
-//   059_videos_review_source.sql（M-SN-4 plan §2.8）：review_source
+//   055_videos_moderation_fields.sql（M-SN-4 plan v1.3 §2.4）：staff_note / review_label_key
+//   060_videos_review_source.sql（M-SN-4 plan v1.3 §2.9）：review_source
 // probe / render 为视频级聚合（plan §4.3 由 worker 写回 source_check_status；
 //   probe / render 字段是端点 join 后投影 video_sources 取最差状态，非视频表持久列）
 // badges / needsManualReview 是端点投影计算字段（不直接对应单列）
 
 /**
- * 059_videos_review_source.sql 新增 review_source CHECK 3 值 DEFAULT 'manual'。
+ * 060_videos_review_source.sql 新增 review_source CHECK 3 值 DEFAULT 'manual'。
  * DoubanStatus 已在 video.types 定义，从顶部 import 复用。
  */
 export type ReviewSource = 'auto' | 'manual' | 'crawler'
@@ -187,10 +187,10 @@ export interface VideoQueueRow {
   readonly metaScore: number                  // 032：meta_score SMALLINT NOT NULL DEFAULT 0 (0–100)
   readonly needsManualReview: boolean         // 016：needs_manual_review BOOLEAN NOT NULL DEFAULT false
   readonly badges: readonly string[]          // 端点投影计算字段（不直接对应单列）
-  readonly staffNote: string | null           // 054 新增：videos.staff_note
-  readonly reviewLabelKey: string | null      // 054 新增：videos.review_label_key
+  readonly staffNote: string | null           // 055 新增：videos.staff_note
+  readonly reviewLabelKey: string | null      // 055 新增：videos.review_label_key
   readonly doubanStatus: DoubanStatus         // 032 既有：CHECK 4 值
-  readonly reviewSource: ReviewSource | null  // 059 新增：videos.review_source TEXT CHECK 3 值 DEFAULT 'manual'（NULL 允许；DEFAULT 仅作用于不指定值的 INSERT，存量行 backfill 后仍可被显式置 NULL）
+  readonly reviewSource: ReviewSource | null  // 060 新增：videos.review_source TEXT CHECK 3 值 DEFAULT 'manual'（NULL 允许；DEFAULT 仅作用于不指定值的 INSERT，存量行 backfill 后仍可被显式置 NULL）
   readonly trendingTag: string | null         // 051 既有：trending_tag CHECK ('hot'/'weekly_top'/'editors_pick'/'exclusive') NULL
   readonly createdAt: string                  // DB: created_at TIMESTAMPTZ NOT NULL
   readonly updatedAt: string                  // DB: updated_at TIMESTAMPTZ NOT NULL
@@ -208,22 +208,22 @@ export interface PendingQueueResponse {
 
 // ── 线路面板（GET /admin/videos/:id/sources）──────────────────────────────────
 //
-// 字段命名严格对齐 video_sources 表 + 058 新增 + crawler_sites JOIN：
+// 字段命名严格对齐 video_sources 表 + 059 新增 + crawler_sites JOIN：
 //   001_init_tables.sql video_sources：id / video_id / episode_number / source_url /
 //     source_name / quality(5 值) / type(hls/mp4/dash) / is_active / submitted_by /
 //     last_checked / created_at
 //   046_video_sources_source_site_key.sql：source_site_key
-//   053_video_sources_signal_columns.sql（M-SN-4 plan §2.2）：probe_status /
+//   054_video_sources_signal_columns.sql（M-SN-4 plan v1.3 §2.3）：probe_status /
 //     render_status / latency_ms / last_probed_at / last_rendered_at
-//   058_video_sources_resolution_detection.sql（M-SN-4 plan §2.7）：quality_detected /
+//   059_video_sources_resolution_detection.sql（M-SN-4 plan v1.3 §2.8）：quality_detected /
 //     quality_source / resolution_width / resolution_height / detected_at
-//   056_crawler_sites_user_label.sql：crawler_sites.user_label
+//   057_crawler_sites_user_label.sql：crawler_sites.user_label
 //
 // quality（既有 5 值 CHECK）与 quality_detected（新增 7 值 CHECK）是两个独立列，前端
-// 展示按 fallback 链 quality_detected ?? quality 取值（plan §2.7 应用层映射规则）。
+// 展示按 fallback 链 quality_detected ?? quality 取值（plan v1.3 §2.8 应用层映射规则）。
 
 /**
- * 058 新增 quality_detected CHECK 7 值（含 2K / 240P）；前端高精度展示用。
+ * 059 新增 quality_detected CHECK 7 值（含 2K / 240P）；前端高精度展示用。
  */
 export type ResolutionTier = '4K' | '2K' | '1080P' | '720P' | '480P' | '360P' | '240P'
 
@@ -233,7 +233,7 @@ export type ResolutionTier = '4K' | '2K' | '1080P' | '720P' | '480P' | '360P' | 
 export type VideoSourceType = 'hls' | 'mp4' | 'dash'
 
 /**
- * 058 新增 quality_source CHECK 4 值。
+ * 059 新增 quality_source CHECK 4 值。
  */
 export type QualitySource = 'crawler' | 'manifest_parse' | 'player_feedback' | 'admin_review'
 
@@ -244,21 +244,21 @@ export interface VideoSourceLine {
   readonly sourceUrl: string                        // DB: source_url TEXT NOT NULL
   readonly sourceName: string                       // DB: source_name TEXT NOT NULL DEFAULT '线路1'
   readonly sourceSiteKey: string | null             // DB: 046 新增 source_site_key
-  readonly userLabel: string | null                 // JOIN crawler_sites.user_label（056 新增）
+  readonly userLabel: string | null                 // JOIN crawler_sites.user_label（057 新增）
   readonly displayName: string | null               // JOIN crawler_sites.display_name fallback
   readonly type: VideoSourceType                    // DB: type CHECK 3 值
   readonly quality: VideoQuality | null             // DB: quality CHECK 5 值（既有 4K/1080P/720P/480P/360P）
   readonly isActive: boolean                        // DB: is_active BOOLEAN NOT NULL
-  readonly probeStatus: DualSignalState             // 053 新增 CHECK 4 值
-  readonly renderStatus: DualSignalState            // 053 新增 CHECK 4 值
-  readonly latencyMs: number | null                 // 053 新增
-  readonly lastProbedAt: string | null              // 053 新增
-  readonly lastRenderedAt: string | null            // 053 新增
-  readonly qualityDetected: ResolutionTier | null   // 058 新增 CHECK 7 值
-  readonly qualitySource: QualitySource | null      // 058 新增 CHECK 4 值 DEFAULT 'crawler'（NULL 允许；DEFAULT 仅作用于不指定值的 INSERT）
-  readonly resolutionWidth: number | null           // 058 新增
-  readonly resolutionHeight: number | null          // 058 新增
-  readonly detectedAt: string | null                // 058 新增
+  readonly probeStatus: DualSignalState             // 054 新增 CHECK 4 值
+  readonly renderStatus: DualSignalState            // 054 新增 CHECK 4 值
+  readonly latencyMs: number | null                 // 054 新增
+  readonly lastProbedAt: string | null              // 054 新增
+  readonly lastRenderedAt: string | null            // 054 新增
+  readonly qualityDetected: ResolutionTier | null   // 059 新增 CHECK 7 值
+  readonly qualitySource: QualitySource | null      // 059 新增 CHECK 4 值 DEFAULT 'crawler'（NULL 允许；DEFAULT 仅作用于不指定值的 INSERT）
+  readonly resolutionWidth: number | null           // 059 新增
+  readonly resolutionHeight: number | null          // 059 新增
+  readonly detectedAt: string | null                // 059 新增
   readonly lastChecked: string | null               // DB: last_checked TIMESTAMPTZ NULL
   readonly submittedBy: string | null               // DB: submitted_by UUID NULL
   readonly createdAt: string                        // DB: created_at TIMESTAMPTZ NOT NULL
