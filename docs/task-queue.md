@@ -1786,8 +1786,14 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 
 ### CHG-SN-4-06 · apps/worker 新建 + SourceHealthWorker Level 1+2 ✅ 完成（2026-05-02）
 
-- 前置：CHG-SN-4-03 ✅（仓内同步：package.json workspaces / pnpm-lock / CI workflow）
-- 执行模型：claude-sonnet-4-6 / 子代理：无
+- **来源**：M-SN-4 plan v1.4 §8.1 第 3 张 / SEQ-20260501-01 阶段 B 双轨
+- **执行真源**：`docs/designs/backend_design_v2.1/M-SN-4-06-worker-source-health-plan_20260502.md` v1.1
+- **完成**：apps/worker 独立 service + Level 1 probe + Level 2 render（独立 cron 每 2h）+ advisory lock 视频级聚合 + 站点熔断 + pino 6 项 metric + node-cron 三任务调度（level1Task + level2Task + feedbackTask）+ feedback-driven-recheck（058a 缺失优雅降级）+ withRetry 指数退避；ADR-107 草案 → 正式
+- **执行 Track**：`track/sn4-06-worker`（并行模式 / 集成 PR `cc27eef`）
+- **实际主循环**：claude-sonnet-4-6（与 plan §8.1 建议一致）
+- **子代理调用**：无（feat + fix commit）；arch-reviewer (claude-opus-4-7) — 复核 2 轮（B → A− 级 PASS，2026-05-02）
+- **欠账登记**：无（R-1 catch 路径无 unit / R-1 metric 命名 'probe.skipped_circuit' 在 058a-missing 场景误导 — 列入 -10 milestone 收口可选优化项）
+- **后续解锁**：CHG-SN-4-10 milestone 收口卡（含 e2e + arch-reviewer A/B/C 评级）
 
 ### CHG-SN-4-07 · 审核台前端接入（useTableQuery + Gmail 流 + RejectModal/Drawer 接线）⏳ 待开
 

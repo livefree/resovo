@@ -8,20 +8,18 @@
 > superseded_by: none
 > last_reviewed: 2026-05-02
 >
-> **并行模式**：当前有 2 条 Track 活跃（`sn4-05-api` + `sn4-06-worker`），工作台见各 `docs/tasks-<id>.md`。本文件仅用于 BLOCKER 监控与 Track 间仲裁。Track 注册表见 `docs/tracks.md`。
->
 > 单任务工作台：同一时刻只保留 1 个进行中任务。任务完成后删除卡片，历史记录见 `docs/changelog.md`，任务规划见 `docs/task-queue.md`。
 
 ---
 
 ## 进行中任务
 
-> 当前主干 main 无进行中任务（已激活并行模式，2026-05-02）。
+> 当前无进行中任务。CHG-SN-4-05 + CHG-SN-4-06 已于 2026-05-02 双轨并行集成完成（A / A− 级，详见 `docs/changelog.md`）。并行模式已关闭，恢复单轨工作台。
 >
-> 活跃 Track（详见 `docs/tracks.md`）：
-> - **sn4-05-api**（`track/sn4-05-api`）→ CHG-SN-4-05 后端 API；工作台 `docs/tasks-sn4-05-api.md`
-> - **sn4-06-worker**（`track/sn4-06-worker`）→ CHG-SN-4-06 apps/worker；工作台 `docs/tasks-sn4-06-worker.md`
+> 下一张可入队任务（M-SN-4 阶段 C 已解锁）：
+> - **CHG-SN-4-07**（审核台前端接入：useTableQuery + Gmail 流 + RejectModal/Drawer 接线）— 前置 `ADR-110 ApiResponse 信封策略` 必须先完成（DEBT-SN-4-05-C）
+> - **CHG-SN-4-08**（VideoEditDrawer 三 Tab 真实 API）— 与 -07 并行
 >
-> 本文件 Track 仲裁规则：仅当出现 Track 间冲突域争用 / 跨 Track BLOCKER 升级时在此追加协调记录；正常任务执行不写入本文件。
+> 入队规则：先读 `docs/task-queue.md` BLOCKER 段（无）→ 按 ADR-110 评审完成后写入卡片再执行。
 
 ---
