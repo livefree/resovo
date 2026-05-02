@@ -11,6 +11,15 @@ vi.mock('@/api/db/queries/auditLog', () => ({
   insertAuditLog: vi.fn(),
 }))
 
+const mockWarn = vi.hoisted(() => vi.fn())
+vi.mock('@/api/lib/logger', () => ({
+  baseLogger: { warn: mockWarn, error: vi.fn(), info: vi.fn() },
+  createLogger: vi.fn(() => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn() })),
+  createFastifyLoggerOptions: vi.fn(() => ({})),
+  withRequest: vi.fn(),
+  withJob: vi.fn(),
+}))
+
 const mockInsert = auditLogQueries.insertAuditLog as ReturnType<typeof vi.fn>
 
 function makeDb() {
@@ -20,7 +29,6 @@ function makeDb() {
 describe('AuditLogService.write', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
   })
 
   it('成功写入审计日志（fire-and-forget，异步）', async () => {
@@ -41,7 +49,7 @@ describe('AuditLogService.write', () => {
     })
   })
 
-  it('写入失败时写 stderr，不抛异常（不阻塞主路径）', async () => {
+  it('写入失败时调用 baseLogger.warn，不抛异常（不阻塞主路径）', async () => {
     mockInsert.mockRejectedValue(new Error('DB connection lost'))
     const svc = new AuditLogService(makeDb())
     expect(() => svc.write({
@@ -49,10 +57,9 @@ describe('AuditLogService.write', () => {
       actionType: 'video.staff_note',
       targetKind: 'video',
     })).not.toThrow()
-    await vi.waitFor(() => expect(process.stderr.write).toHaveBeenCalled())
-    const output = (process.stderr.write as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
-    expect(output).toContain('video.staff_note')
-    expect(output).toContain('DB connection lost')
+    await vi.waitFor(() => expect(mockWarn).toHaveBeenCalled())
+    const [ctx] = mockWarn.mock.calls[0] as [Record<string, unknown>, string]
+    expect(ctx).toMatchObject({ actionType: 'video.staff_note' })
   })
 
   it('写入失败不影响外部调用方（完全异步）', async () => {

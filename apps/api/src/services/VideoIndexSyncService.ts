@@ -9,11 +9,12 @@
  * - syncVideo: upsert 一条视频到 ES（不判断状态，由调用方决定时机）
  * - reconcilePublished: 批量补全 DB 已上架但可能缺少 ES 文档的视频（reconcile job 用）
  * - reconcileStale: 批量修复最近下架/隐藏/软删除的视频，使其 ES 文档与 DB 保持一致
- * - 同步失败只记录 stderr，不抛异常（不阻塞主流程）
+ * - 同步失败只记录 warn，不抛异常（不阻塞主流程）
  */
 
 import type { Pool } from 'pg'
 import type { Client as ESClient } from '@elastic/elasticsearch'
+import { baseLogger } from '@/api/lib/logger'
 const ES_INDEX = 'resovo_videos'
 
 // ── subtitle_langs 子查询（与 videos.ts 保持一致）──────────────────
@@ -180,14 +181,13 @@ export class VideoIndexSyncService {
         document: buildDocument(result.rows[0]),
       })
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`[VideoIndexSyncService] syncVideo failed for ${videoId}: ${message}\n`)
+      baseLogger.warn({ err, videoId }, '[VideoIndexSyncService] syncVideo failed')
     }
   }
 
   /**
    * CHG-SN-4-05: 从 ES 删除单条视频文档（reject-labeled / disable-dead 调用）。
-   * 404（文档不存在）视为成功（幂等）；其他错误写 stderr，不抛异常（不阻塞主流程）。
+   * 404（文档不存在）视为成功（幂等）；其他错误写 warn，不抛异常（不阻塞主流程）。
    */
   async unindexVideo(videoId: string): Promise<void> {
     try {
@@ -195,8 +195,7 @@ export class VideoIndexSyncService {
     } catch (err) {
       const status = (err as { meta?: { statusCode?: number } })?.meta?.statusCode
       if (status === 404) return
-      const message = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`[VideoIndexSyncService] unindexVideo failed for ${videoId}: ${message}\n`)
+      baseLogger.warn({ err, videoId }, '[VideoIndexSyncService] unindexVideo failed')
     }
   }
 
@@ -220,15 +219,11 @@ export class VideoIndexSyncService {
           synced++
         } catch (err) {
           errors++
-          const message = err instanceof Error ? err.message : String(err)
-          process.stderr.write(
-            `[VideoIndexSyncService] reconcile failed for ${row.id}: ${message}\n`,
-          )
+          baseLogger.warn({ err, videoId: row.id }, '[VideoIndexSyncService] reconcile failed')
         }
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`[VideoIndexSyncService] reconcilePublished query failed: ${message}\n`)
+      baseLogger.warn({ err }, '[VideoIndexSyncService] reconcilePublished query failed')
     }
     return { synced, errors }
   }
@@ -264,15 +259,11 @@ export class VideoIndexSyncService {
           fixed++
         } catch (err) {
           errors++
-          const message = err instanceof Error ? err.message : String(err)
-          process.stderr.write(
-            `[VideoIndexSyncService] reconcileStale upsert failed for ${row.id}: ${message}\n`,
-          )
+          baseLogger.warn({ err, videoId: row.id }, '[VideoIndexSyncService] reconcileStale upsert failed')
         }
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`[VideoIndexSyncService] reconcileStale unpublished query failed: ${message}\n`)
+      baseLogger.warn({ err }, '[VideoIndexSyncService] reconcileStale unpublished query failed')
     }
 
     // 2. 删除软删除的视频文档
@@ -284,20 +275,17 @@ export class VideoIndexSyncService {
           deleted++
         } catch (err) {
           // 404 表示文档不存在，视为成功（幂等）
-          const message = err instanceof Error ? err.message : String(err)
-          if (!message.includes('404') && !message.includes('not_found')) {
-            errors++
-            process.stderr.write(
-              `[VideoIndexSyncService] reconcileStale delete failed for ${row.id}: ${message}\n`,
-            )
-          } else {
+          const status = (err as { meta?: { statusCode?: number } })?.meta?.statusCode
+          if (status === 404) {
             deleted++
+          } else {
+            errors++
+            baseLogger.warn({ err, videoId: row.id }, '[VideoIndexSyncService] reconcileStale delete failed')
           }
         }
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`[VideoIndexSyncService] reconcileStale deleted query failed: ${message}\n`)
+      baseLogger.warn({ err }, '[VideoIndexSyncService] reconcileStale deleted query failed')
     }
 
     return { fixed, deleted, errors }

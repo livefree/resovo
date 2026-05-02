@@ -12,6 +12,7 @@ import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { redis } from '@/api/lib/redis'
 import { insertHealthEvent } from '@/api/db/queries/sourceHealthEvents'
+import { baseLogger } from '@/api/lib/logger'
 
 const PlaybackFeedbackBodySchema = z.object({
   videoId: z.string().uuid(),
@@ -104,7 +105,7 @@ export async function feedbackRoutes(fastify: FastifyInstance) {
          WHERE id = $1 AND deleted_at IS NULL`,
         [sourceId],
       ).catch((e: unknown) => {
-        process.stderr.write(`[feedback] probe update failed: ${String(e)}\n`)
+        baseLogger.warn({ err: e, sourceId }, '[feedback] probe update failed')
       })
 
       if (resolutionHeight !== undefined) {
@@ -119,7 +120,7 @@ export async function feedbackRoutes(fastify: FastifyInstance) {
            WHERE id = $4 AND deleted_at IS NULL AND quality_detected IS NULL`,
           [qualityDetected, resolutionWidth ?? null, resolutionHeight, sourceId],
         ).catch((e: unknown) => {
-          process.stderr.write(`[feedback] quality update failed: ${String(e)}\n`)
+          baseLogger.warn({ err: e, sourceId }, '[feedback] quality update failed')
         })
       }
     } else {
@@ -130,7 +131,7 @@ export async function feedbackRoutes(fastify: FastifyInstance) {
         errorDetail: errorCode ?? null,
         processedAt: new Date().toISOString(),
       }).catch((e: unknown) => {
-        process.stderr.write(`[feedback] health event insert failed: ${String(e)}\n`)
+        baseLogger.warn({ err: e, videoId, sourceId }, '[feedback] health event insert failed')
       })
 
       const failCount = await incrementFailureCount(ipHash, sourceId).catch(() => 0)
@@ -142,7 +143,7 @@ export async function feedbackRoutes(fastify: FastifyInstance) {
           errorDetail: errorCode ?? null,
           processedAt: null,
         }).catch((e: unknown) => {
-          process.stderr.write(`[feedback] queue signal insert failed: ${String(e)}\n`)
+          baseLogger.warn({ err: e, videoId, sourceId }, '[feedback] queue signal insert failed')
         })
       }
     }

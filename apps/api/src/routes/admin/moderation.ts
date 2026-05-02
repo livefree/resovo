@@ -15,6 +15,7 @@ import { DoubanService } from '@/api/services/DoubanService'
 import { VideoService } from '@/api/services/VideoService'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { ModerationService } from '@/api/services/ModerationService'
+import { isAppError } from '@/api/lib/errors'
 import * as videoQueries from '@/api/db/queries/videos'
 import * as moderationQueries from '@/api/db/queries/moderation'
 import * as provenanceQueries from '@/api/db/queries/metadataProvenance'
@@ -101,8 +102,8 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       const result = await moderationQueries.listPendingQueue(db, parsed.data, request.user!.userId)
       return reply.send(result)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: msg, status: 500 } })
+      request.log.error({ err }, 'pending-queue unexpected error')
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
     }
   })
 
@@ -127,14 +128,17 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       }
       return reply.send({ data: result })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      if (msg === 'STATE_CONFLICT') {
+      if (isAppError(err, 'LABEL_UNKNOWN')) {
+        return reply.code(400).send({ error: { code: 'LABEL_UNKNOWN', message: '拒绝标签不存在', status: 400 } })
+      }
+      if (isAppError(err, 'STATE_CONFLICT')) {
         return reply.code(409).send({ error: { code: 'REVIEW_RACE', message: '已被其他审核员处理，请刷新', status: 409 } })
       }
-      if (msg === 'INVALID_TRANSITION') {
+      if (isAppError(err, 'INVALID_TRANSITION')) {
         return reply.code(409).send({ error: { code: 'STATE_INVALID', message: '当前状态不允许此操作', status: 409 } })
       }
-      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: msg, status: 500 } })
+      request.log.error({ err }, 'reject-labeled unexpected error')
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
     }
   })
 
@@ -157,8 +161,8 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       }
       return reply.send({ data: result })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: msg, status: 500 } })
+      request.log.error({ err }, 'staff-note unexpected error')
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
     }
   })
 
@@ -173,8 +177,8 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       const result = await listLineHealthEvents(db, { sourceId, ...parsed.data })
       return reply.send({ data: result.rows, pagination: { total: result.total, page: parsed.data.page, limit: parsed.data.limit, hasNext: result.total > parsed.data.page * parsed.data.limit } })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: msg, status: 500 } })
+      request.log.error({ err }, 'line-health unexpected error')
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
     }
   })
 
@@ -212,9 +216,9 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
         skippedFields: result.skippedFields,
       })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+      request.log.error({ err }, 'meta save unexpected error')
       return reply.code(500).send({
-        error: { code: 'INTERNAL_ERROR', message: `保存失败: ${msg}`, status: 500 },
+        error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 },
       })
     }
   })
@@ -238,9 +242,9 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       const candidates = await svc.searchByKeyword(parsed.data.keyword)
       return reply.send({ data: { videoId: id, candidates } })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+      request.log.error({ err }, 'douban-search unexpected error')
       return reply.code(500).send({
-        error: { code: 'SEARCH_FAILED', message: `豆瓣搜索失败: ${msg}`, status: 500 },
+        error: { code: 'SEARCH_FAILED', message: '豆瓣搜索失败', status: 500 },
       })
     }
   })
@@ -270,9 +274,9 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       }
       return reply.send({ data: { id, confirmed: true } })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+      request.log.error({ err }, 'douban-confirm unexpected error')
       return reply.code(500).send({
-        error: { code: 'INTERNAL_ERROR', message: `确认失败: ${msg}`, status: 500 },
+        error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 },
       })
     }
   })
@@ -294,9 +298,9 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       })
       return reply.send({ data: { id, ignored: true } })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+      request.log.error({ err }, 'douban-ignore unexpected error')
       return reply.code(500).send({
-        error: { code: 'INTERNAL_ERROR', message: `操作失败: ${msg}`, status: 500 },
+        error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 },
       })
     }
   })
@@ -316,8 +320,8 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       }
       return reply.send({ data })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: msg, status: 500 } })
+      request.log.error({ err }, 'douban-candidate unexpected error')
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
     }
   })
 
@@ -344,8 +348,8 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       void indexSync.syncVideo(id)
       return reply.send({ data: { id, confirmed: true } })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: msg, status: 500 } })
+      request.log.error({ err }, 'confirm-fields unexpected error')
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
     }
   })
 
@@ -371,8 +375,7 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
         })
         if (result) { approved++ } else { skipped++ }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        if (msg === 'STATE_CONFLICT' || msg === 'INVALID_TRANSITION') { skipped++ }
+        if (isAppError(err, 'STATE_CONFLICT') || isAppError(err, 'INVALID_TRANSITION')) { skipped++ }
         else { failed++ }
       }
     }
@@ -412,8 +415,7 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
           if (result) { rejected++ } else { skipped++ }
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        if (msg === 'STATE_CONFLICT' || msg === 'INVALID_TRANSITION') { skipped++ }
+        if (isAppError(err, 'STATE_CONFLICT') || isAppError(err, 'INVALID_TRANSITION')) { skipped++ }
         else { failed++ }
       }
     }
@@ -456,9 +458,12 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       await videoQueries.transitionVideoState(db, id, { action: 'reopen_pending' })
       return reply.send({ data: { id, reopened: true } })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+      if (isAppError(err, 'INVALID_TRANSITION')) {
+        return reply.code(409).send({ error: { code: 'STATE_INVALID', message: '当前状态不允许复审', status: 409 } })
+      }
+      request.log.error({ err }, 'reopen unexpected error')
       return reply.code(500).send({
-        error: { code: 'INTERNAL_ERROR', message: `复审失败: ${msg}`, status: 500 },
+        error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 },
       })
     }
   })
@@ -478,8 +483,8 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       ])
       return reply.send({ data: { provenance, locks } })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: msg, status: 500 } })
+      request.log.error({ err }, 'metadata-provenance unexpected error')
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
     }
   })
 }

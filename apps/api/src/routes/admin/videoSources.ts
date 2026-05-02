@@ -43,8 +43,8 @@ export async function adminVideoSourcesRoutes(fastify: FastifyInstance) {
       }
       return reply.send({ data: result })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: msg, status: 500 } })
+      request.log.error({ err }, 'source toggle unexpected error')
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
     }
   })
 
@@ -59,8 +59,8 @@ export async function adminVideoSourcesRoutes(fastify: FastifyInstance) {
       })
       return reply.send({ data: result })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: msg, status: 500 } })
+      request.log.error({ err }, 'disable-dead unexpected error')
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
     }
   })
 

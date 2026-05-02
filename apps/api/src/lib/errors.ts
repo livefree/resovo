@@ -16,6 +16,23 @@ export function makeError(code: string, message: string, status: number): { erro
   return { error: { code, message, status } }
 }
 
+/** 带 code + httpStatus 的域异常，替代 `new Error('STATE_CONFLICT')` 等字符串约定。 */
+export class AppError extends Error {
+  constructor(
+    public readonly code: string,
+    message: string,
+    public readonly httpStatus: number,
+  ) {
+    super(message)
+    this.name = 'AppError'
+  }
+}
+
+/** 类型安全的 AppError 判断，替代 `err.message === 'STATE_CONFLICT'` 字符串匹配。 */
+export function isAppError(err: unknown, code: string): err is AppError {
+  return err instanceof AppError && err.code === code
+}
+
 // ── 既有通用码 ──────────────────────────────────────────────────────────────
 
 export const ERRORS = {

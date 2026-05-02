@@ -12,6 +12,7 @@ import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
 import { setupAuthenticate } from '@/api/plugins/authenticate'
 import { signAccessToken } from '@/api/lib/auth'
+import { AppError } from '@/api/lib/errors'
 
 // ── Mocks ────────────────────────────────────────────────────────
 
@@ -128,7 +129,7 @@ describe('POST /v1/admin/moderation/batch-approve', () => {
   it('STATE_CONFLICT → 计入 skipped，不失败', async () => {
     mockTransitionVideoState
       .mockResolvedValueOnce({ id: 'v1', review_status: 'approved' })
-      .mockRejectedValueOnce(new Error('STATE_CONFLICT'))
+      .mockRejectedValueOnce(new AppError('STATE_CONFLICT', 'Optimistic lock conflict', 409))
     const res = await app.inject({
       method: 'POST',
       url: '/v1/admin/moderation/batch-approve',

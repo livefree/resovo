@@ -10,7 +10,8 @@ import { AuditLogService } from '@/api/services/AuditLogService'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { findReviewLabelByKey } from '@/api/db/queries/reviewLabels'
 import { toggleVideoSource, disableDeadSources } from '@/api/db/queries/video_sources'
-import { ERRORS } from '@/api/lib/errors'
+import { AppError, ERRORS } from '@/api/lib/errors'
+import { baseLogger } from '@/api/lib/logger'
 
 export interface RejectLabeledInput {
   videoId: string
@@ -63,33 +64,34 @@ export class ModerationService {
 
   async rejectLabeled(input: RejectLabeledInput) {
     const label = await findReviewLabelByKey(this.db, input.labelKey)
-    const resolvedLabelKey = label?.is_active ? input.labelKey : 'other'
-    const resolvedReason = input.reason ?? (label?.label ?? '其他')
+    if (!label || !label.is_active) {
+      throw new AppError('LABEL_UNKNOWN', ERRORS.LABEL_UNKNOWN.message, ERRORS.LABEL_UNKNOWN.status)
+    }
+
+    const resolvedReason = input.reason ?? label.label
 
     const result = await transitionVideoState(this.db, input.videoId, {
       action: 'reject',
       reviewedBy: input.actorId,
       reason: resolvedReason,
       expectedUpdatedAt: input.expectedUpdatedAt,
+      reviewLabelKey: label.label_key,
     })
 
     if (!result) return null
-
-    await this.db.query(
-      `UPDATE videos SET review_label_key = $1, review_reason = $2 WHERE id = $3`,
-      [resolvedLabelKey, resolvedReason, input.videoId],
-    )
 
     this.auditSvc.write({
       actorId: input.actorId,
       actionType: 'video.reject_labeled',
       targetKind: 'video',
       targetId: input.videoId,
-      afterJsonb: { labelKey: resolvedLabelKey, reason: resolvedReason },
+      afterJsonb: { labelKey: label.label_key, reason: resolvedReason },
       requestId: input.requestId,
     })
 
-    void this.indexSync.unindexVideo(input.videoId)
+    this.indexSync.unindexVideo(input.videoId).catch((err: unknown) => {
+      baseLogger.warn({ err, videoId: input.videoId }, 'ES unindexVideo failed after rejectLabeled')
+    })
 
     return result
   }
@@ -148,7 +150,9 @@ export class ModerationService {
       requestId: input.requestId,
     })
 
-    void this.indexSync.syncVideo(input.videoId)
+    this.indexSync.syncVideo(input.videoId).catch((err: unknown) => {
+      baseLogger.warn({ err, videoId: input.videoId }, 'ES syncVideo failed after source toggle')
+    })
     return result
   }
 
@@ -164,7 +168,9 @@ export class ModerationService {
       requestId: input.requestId,
     })
 
-    void this.indexSync.syncVideo(input.videoId)
+    this.indexSync.syncVideo(input.videoId).catch((err: unknown) => {
+      baseLogger.warn({ err, videoId: input.videoId }, 'ES syncVideo failed after disableDead')
+    })
     return result
   }
 }

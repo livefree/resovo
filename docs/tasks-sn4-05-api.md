@@ -99,9 +99,33 @@ npm run test -- --run
 
 - **执行模型**：`claude-sonnet-4-6`；子代理调用：无
 - **文件拆分**：`videos.ts`（629 行）→ 拆分为 `videos.ts`（448 行）+ `videoImages.ts`（图片路由）+ `videoSources.ts`（线路路由 + refetch-sources）
-- **新测试文件**：10 个测试文件，新增 62 个 test case（共 3044 个，全绿）
+- **新测试文件**：10 个测试文件，新增 62 个 test case（共 2997 个，全绿）
 - **审计日志守门**：5 写操作 ↔ 5 个 AuditLogService.write 调用，1:1 覆盖
 - **未触碰冲突域**：apps/worker ✅ / package.json ✅ / packages/admin-ui ✅
+- **审核修复（2026-05-02 第二轮）**：
+  - A-1 ✅ AppError + isAppError 替代字符串匹配（errors.ts / videos.ts / moderation.ts / staging.ts / videos-routes.ts）
+  - A-2 ✅ LABEL_UNKNOWN 正确抛出（ModerationService.rejectLabeled；label missing/inactive → throw AppError）
+  - A-3 ✅ 500 响应不再泄漏 err.message（全路由 catch 块改为 `'服务器内部错误'` + request.log.error）
+  - A-5 ✅ ES fire-and-forget 加 `.catch()` + `baseLogger.warn`（ModerationService）
+  - A-6 ✅ rejectLabeled 三步合一：reviewLabelKey 写入 transitionVideoState 原子 UPDATE
+  - A-8 ✅ process.stderr.write → baseLogger.warn（AuditLogService / feedback.ts / VideoIndexSyncService）
+  - A-10 ✅ changelog 测试计数修正为 237/2997
+
+#### DEBT 登记（不修复项，已评估）
+
+- **DEBT-SN-4-05-A（A-4 toggleSource 并发保护）**
+  `toggleSource` 当前无 `expectedUpdatedAt` 乐观锁，相比 `transitionVideoState` 缺少并发保护。
+  建议后续添加 `version` 列或 ETag 机制。需要 migration，影响 API 契约，超出本期范围。
+  对应 plan §1.6 未覆盖项。
+
+- **DEBT-SN-4-05-B（A-7 XFF 信任未限白名单）**
+  `feedback.ts` 的 `getClientIp` 直接读取 `x-forwarded-for`，未验证来源 IP 是否为受信代理。
+  生产部署前须在 Fastify 配置 `trustProxy`，或明确文档化反向代理拓扑（nginx/cloudflare 白名单）。
+  风险：IP 欺骗导致 rate-limit 绕过。
+
+- **DEBT-SN-4-05-C（A-9 ApiResponse 信封偏差）**
+  多数端点未使用 `packages/types` 中 `ApiResponse<T>` 泛型包裹，而是直接 `{ data: T }`。
+  与 ADR pre-07 评估（非标准信封）存在偏差。需 ADR-110 正式决策后在 CHG-SN-4-07 前端接入时统一对齐。
 
 ---
 

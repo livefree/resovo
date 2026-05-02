@@ -206,7 +206,7 @@ describe('PATCH /v1/admin/moderation/:id/meta', () => {
     expect(res.statusCode).toBe(500)
     const body = res.json()
     expect(body.error.code).toBe('INTERNAL_ERROR')
-    expect(body.error.message).toContain('db timeout')
+    expect(body.error.message).toBe('服务器内部错误')
   })
 
   it('未认证 → 401', async () => {

@@ -133,7 +133,7 @@ async function expectInvalidTransition(
   current: CurrentState,
   action: VideoStateTransitionAction,
 ): Promise<void> {
-  await expect(runTransition(current, action)).rejects.toThrow('INVALID_TRANSITION')
+  await expect(runTransition(current, action)).rejects.toMatchObject({ code: 'INVALID_TRANSITION' })
 }
 
 // ── 既有 8 action 回归（034 trigger 后白名单覆盖路径）──────────────────────────

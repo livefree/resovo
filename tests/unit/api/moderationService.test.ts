@@ -52,7 +52,7 @@ describe('ModerationService.rejectLabeled', () => {
     mockAudit.mockResolvedValue(undefined)
   })
 
-  it('已知 labelKey → 使用该 key 拒绝，触发 audit + unindex', async () => {
+  it('已知 labelKey → 使用该 key 原子写入 transitionVideoState，触发 audit + unindex', async () => {
     mockFindLabel.mockResolvedValue({ id: 'lbl-1', label_key: 'all_dead', label: '全线路失效', is_active: true })
     mockTransition.mockResolvedValue(transitionResult)
     const db = makeDb()
@@ -60,19 +60,30 @@ describe('ModerationService.rejectLabeled', () => {
     const svc = new ModerationService(db, es)
     const result = await svc.rejectLabeled({ videoId: 'vid-1', labelKey: 'all_dead', actorId: 'user-1' })
     expect(result).toMatchObject({ id: 'vid-1', review_status: 'rejected' })
-    expect(mockTransition).toHaveBeenCalledWith(db, 'vid-1', expect.objectContaining({ action: 'reject' }))
-    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('review_label_key'), expect.arrayContaining(['all_dead']))
+    expect(mockTransition).toHaveBeenCalledWith(db, 'vid-1', expect.objectContaining({
+      action: 'reject',
+      reviewLabelKey: 'all_dead',
+    }))
+    // A-6: review_label_key 原子写入 transitionVideoState，不再有单独的 db.query
+    expect(db.query).not.toHaveBeenCalled()
     await vi.waitFor(() => expect(mockAudit).toHaveBeenCalled())
     await vi.waitFor(() => expect(es.delete).toHaveBeenCalled())
   })
 
-  it('未知 labelKey (is_active=false) → fallback 到 other', async () => {
+  it('未知 labelKey (is_active=false) → 抛出 LABEL_UNKNOWN (A-2)', async () => {
     mockFindLabel.mockResolvedValue({ id: 'lbl-x', label_key: 'deprecated_key', is_active: false })
-    mockTransition.mockResolvedValue(transitionResult)
-    const db = makeDb()
-    const svc = new ModerationService(db, makeEs())
-    await svc.rejectLabeled({ videoId: 'vid-1', labelKey: 'deprecated_key', actorId: 'user-1' })
-    expect(db.query).toHaveBeenCalledWith(expect.anything(), expect.arrayContaining(['other']))
+    const svc = new ModerationService(makeDb(), makeEs())
+    await expect(
+      svc.rejectLabeled({ videoId: 'vid-1', labelKey: 'deprecated_key', actorId: 'user-1' }),
+    ).rejects.toMatchObject({ code: 'LABEL_UNKNOWN' })
+  })
+
+  it('labelKey 不存在 (findLabel returns null) → 抛出 LABEL_UNKNOWN', async () => {
+    mockFindLabel.mockResolvedValue(null)
+    const svc = new ModerationService(makeDb(), makeEs())
+    await expect(
+      svc.rejectLabeled({ videoId: 'vid-1', labelKey: 'no_such_key', actorId: 'user-1' }),
+    ).rejects.toMatchObject({ code: 'LABEL_UNKNOWN' })
   })
 
   it('视频不存在 → 返回 null', async () => {
@@ -83,11 +94,12 @@ describe('ModerationService.rejectLabeled', () => {
     expect(result).toBeNull()
   })
 
-  it('STATE_CONFLICT 异常正常向上抛', async () => {
+  it('STATE_CONFLICT 异常（AppError）正常向上抛', async () => {
     mockFindLabel.mockResolvedValue({ label_key: 'other', is_active: true, label: '其他' })
-    mockTransition.mockRejectedValue(new Error('STATE_CONFLICT'))
+    const { AppError } = await import('@/api/lib/errors')
+    mockTransition.mockRejectedValue(new AppError('STATE_CONFLICT', 'Optimistic lock conflict', 409))
     const svc = new ModerationService(makeDb(), makeEs())
-    await expect(svc.rejectLabeled({ videoId: 'vid-1', labelKey: 'other', actorId: 'user-1' })).rejects.toThrow('STATE_CONFLICT')
+    await expect(svc.rejectLabeled({ videoId: 'vid-1', labelKey: 'other', actorId: 'user-1' })).rejects.toMatchObject({ code: 'STATE_CONFLICT' })
   })
 })
 

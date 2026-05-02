@@ -3771,7 +3771,7 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 
 - typecheck ✅ 通过（全工作区 8 个 workspace 零报错）
 - lint ✅ 通过（turbo lint 5 tasks，pre-existing warning 排除）
-- unit ✅ 通过（246 文件 / 3044 测试全绿；新增 62 cases；零回归）
+- unit ✅ 通过（237 文件 / 2997 测试全绿；新增 62 cases；零回归）
 - e2e：不在本任务范围（非 PLAYER/AUTH/SEARCH/VIDEO）
 - 审计日志守门 ✅：5 写操作全部对应 AuditLogService.write 调用
 - 文件行数 ✅：videos.ts 448 行；moderation.ts 474 行（均 < 500）

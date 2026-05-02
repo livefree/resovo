@@ -8,6 +8,7 @@ import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
 import { setupAuthenticate } from '@/api/plugins/authenticate'
 import { signAccessToken } from '@/api/lib/auth'
+import { AppError } from '@/api/lib/errors'
 
 vi.mock('@/api/lib/redis', () => ({
   redis: { get: vi.fn().mockResolvedValue(null), set: vi.fn().mockResolvedValue('OK') },
@@ -113,7 +114,7 @@ describe('POST /admin/staging/:id/revert', () => {
   })
 
   it('STATE_CONFLICT → 409', async () => {
-    mockModerationSvc.stagingRevert.mockRejectedValue(new Error('STATE_CONFLICT'))
+    mockModerationSvc.stagingRevert.mockRejectedValue(new AppError('STATE_CONFLICT', 'Optimistic lock conflict', 409))
     const res = await app.inject({
       method: 'POST',
       url: '/v1/admin/staging/vid-1/revert',

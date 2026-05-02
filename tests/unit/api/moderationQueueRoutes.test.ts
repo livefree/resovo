@@ -8,6 +8,7 @@ import Fastify from 'fastify'
 import cookie from '@fastify/cookie'
 import { setupAuthenticate } from '@/api/plugins/authenticate'
 import { signAccessToken } from '@/api/lib/auth'
+import { AppError } from '@/api/lib/errors'
 
 vi.mock('@/api/lib/redis', () => ({
   redis: { get: vi.fn().mockResolvedValue(null), set: vi.fn().mockResolvedValue('OK') },
@@ -146,7 +147,7 @@ describe('POST /admin/moderation/:id/reject-labeled', () => {
   })
 
   it('STATE_CONFLICT → 409 REVIEW_RACE', async () => {
-    mockModerationSvc.rejectLabeled.mockRejectedValue(new Error('STATE_CONFLICT'))
+    mockModerationSvc.rejectLabeled.mockRejectedValue(new AppError('STATE_CONFLICT', 'Optimistic lock conflict', 409))
     const res = await app.inject({
       method: 'POST',
       url: '/v1/admin/moderation/vid-1/reject-labeled',
