@@ -15,18 +15,18 @@
 
 | Track ID | 状态 | 分支 | 任务文件 | 持有冲突域 | Open 时间 | 集成时间 |
 |---|---|---|---|---|---|---|
-| sn4-05-api | 🔄 活跃 | `track/sn4-05-api` | `docs/tasks-sn4-05-api.md` | `architecture` | 2026-05-02 | — |
+| sn4-05-api | ✅ 已集成 | `track/sn4-05-api`（已删除）| `docs/archive/tasks/tasks-sn4-05-api.md` | 无（已释放） | 2026-05-02 | 2026-05-02 |
 | sn4-06-worker | 🔄 活跃 | `track/sn4-06-worker` | `docs/tasks-sn4-06-worker.md` | `workspace-root` | 2026-05-02 | — |
 
-**当前活跃 Track 数：2 / 3**（上限 3，含主干）
+**当前活跃 Track 数：1 / 3**（上限 3，含主干）
 
 ---
 
 ## sn4-05-api
 
-- **状态**：🔄 活跃
-- **分支**：`track/sn4-05-api`
-- **任务文件**：`docs/tasks-sn4-05-api.md`
+- **状态**：✅ 已集成（2026-05-02，PR commit `8a797ec`）
+- **分支**：`track/sn4-05-api`（已删除）
+- **任务文件**：`docs/archive/tasks/tasks-sn4-05-api.md`（已归档）
 - **文件作用域**：
   - `apps/api/src/routes/admin/moderation/**`
   - `apps/api/src/routes/admin/videos/**`
@@ -39,12 +39,13 @@
   - `apps/server-next/src/lib/api/**`（前端 API 客户端层）
   - `packages/types/src/api/**`（ApiResponse 信封 / errorCode 枚举 / DTO）
   - `docs/architecture.md` §5.12（058a 列 + ApiResponse 信封段）
-- **持有冲突域**：`architecture`
+- **持有冲突域**：无（已释放，集成时 architecture.md §5.12 已落 main）
 - **创建时间**：2026-05-02
-- **集成时间**：—
+- **集成时间**：2026-05-02
 - **建议模型**：`claude-sonnet-4-6`（plan §8.1）
 - **执行真源**：`docs/designs/backend_design_v2.1/M-SN-4-05-api-endpoints-plan_20260502.md` v1.1
 - **说明**：CHG-SN-4-05 后端 API（8 新端点 + 4 改端点 + 058a schema patch + ApiResponse 信封 + RBAC + audit log + 并发保护）。关键路径：解锁 CHG-SN-4-07 / -08 前端卡。
+- **集成评级**：A 级（arch-reviewer claude-opus-4-7 复核 2 轮 PASS；237 文件 / 2998 测试全绿；DEBT-SN-4-05-A/B/C 已登记）
 
 ---
 

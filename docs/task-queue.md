@@ -1773,9 +1773,16 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 - **欠账登记**：DEBT-SN-4-A（5 张 Playwright 视觉基线，截止 CHG-SN-4-10 收口）
 - **后续解锁**：CHG-SN-4-07 / CHG-SN-4-08 准入条件全部满足（5 件共享组件 + 上移 DecisionCard 已就位）
 
-### CHG-SN-4-05 · 后端 API：8 新端点 + 4 改端点 ⏳ 待开（前置已 PASS）
+### CHG-SN-4-05 · 后端 API：8 新端点 + 4 改端点 + 058a schema patch ✅ 完成（2026-05-02）
 
-- 前置：CHG-SN-4-03 ✅
+- **来源**：M-SN-4 plan v1.4 §8.1 第 2 张 / SEQ-20260501-01 阶段 B 双轨
+- **执行真源**：`docs/designs/backend_design_v2.1/M-SN-4-05-api-endpoints-plan_20260502.md` v1.1
+- **完成**：8 新端点 + 4 改端点 + 058a migration（processed_at + partial index）+ ApiResponse 信封三形态 + RBAC（moderator/admin）+ AuditLogService（5 写 1:1 覆盖）+ AppError 类型守卫 + LABEL_UNKNOWN 严格校验 + 237 文件 / 2998 测试全绿
+- **执行 Track**：`track/sn4-05-api`（并行模式 / 集成 PR `8a797ec`）
+- **实际主循环**：claude-sonnet-4-6（与 plan §8.1 建议一致）
+- **子代理调用**：无（complete commit）；arch-reviewer (claude-opus-4-7) — 复核 2 轮（B+ → A 级 PASS，2026-05-02）
+- **欠账登记**：DEBT-SN-4-05-A（toggleSource 并发保护）/ DEBT-SN-4-05-B（XFF trustProxy 白名单）/ DEBT-SN-4-05-C（ApiResponse 信封 ADR-110，截止 -07 启动前）
+- **后续解锁**：CHG-SN-4-07 / CHG-SN-4-08 准入条件全部满足（5 件共享组件 + 后端 API 已就位）；ADR-110 须先于 -07 启动完成
 
 ### CHG-SN-4-06 · apps/worker 新建 + SourceHealthWorker Level 1+2 ⏳ 待开（前置已 PASS）
 
