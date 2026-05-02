@@ -1170,12 +1170,12 @@ CI 守门：`grep -r "setListRefreshKey" apps/server-next/src/app/admin/moderati
 
 | 卡号 | 范围 | 建议主循环模型 | 强制子代理 | 必跑命令 | 顺序 |
 |---|---|---|---|---|:-:|
-| **CHG-SN-4-03** | DB schema：060 audit_log + 052 状态机 + 053–059 字段；types 同步 + architecture.md 同步 + ADR 草案 | `claude-sonnet-4-6` | **`arch-reviewer` (claude-opus-4-7)**：跨 3+ 消费方 schema（CLAUDE.md 强制升 Opus 第 2 条）| typecheck + lint + unit + db migration test（含 052 状态机回归集）| 1 |
+| **CHG-SN-4-03** | DB schema：052 audit_log + 053 状态机 + 054–060 字段（v1.3 重排：052=audit_log 序列首位 / 053=状态机 / 054=signal / 055=fields / 056=review_labels / 057=user_label / 058=health_events / 059=resolution / 060=review_source）；types 同步 + architecture.md 同步 + ADR 草案 | `claude-sonnet-4-6` | **`arch-reviewer` (claude-opus-4-7)**：跨 3+ 消费方 schema（CLAUDE.md 强制升 Opus 第 2 条）| typecheck + lint + unit + db migration test（含 053 状态机回归集）| 1 |
 | **CHG-SN-4-04** | admin-ui 共享组件下沉 5 件（D-14）：BarSignal / LineHealthDrawer / RejectModal / StaffNoteBar + DecisionCard 上移 | `claude-sonnet-4-6` | **`arch-reviewer` (claude-opus-4-7)**：新共享组件 API 契约（CLAUDE.md 强制升 Opus 第 1 条）| typecheck + lint + unit (≥ 19 case/组件) + visual diff baseline（5 件）| 2 |
 | **CHG-SN-4-05** | 后端 API：8 新端点 + 4 改动端点 + ApiResponse 信封 + errorCode 枚举 + RBAC + audit log + 并发保护 + zod schema → @/types | `claude-sonnet-4-6` | 否（每端点 zod schema 自审；如出现新 ADR 级决策再升 Opus）| typecheck + lint + unit + API contract test | 3 |
 | **CHG-SN-4-06** | `apps/worker` 新建 + SourceHealthWorker Level 1+2 + 分辨率采集 + advisory lock 视频级聚合 + 站点熔断 + pino 可观测 | `claude-sonnet-4-6` | 否 | typecheck + lint + unit + worker integration test | 3（与 -05 并行）|
 | **CHG-SN-4-07** | 审核台前端接入：useTableQuery 状态保留 + Gmail 流虚拟滚动 + 键盘流作用域 + RejectModal 接线 + LinesPanel 真实数据 + LineHealthDrawer 接线 + StaffNoteBar + i18n + a11y + visual baseline | `claude-sonnet-4-6` | 否 | typecheck + lint + unit + visual diff（7 张）| 4（依赖 -04 + -05）|
-| **CHG-SN-4-08** | VideoEditDrawer 三 Tab 真实 API：线路 / 图片 / 豆瓣（依赖 053/058 字段 + apps/api admin/videos GET 扩展）| `claude-sonnet-4-6` | 否 | typecheck + lint + unit + visual diff（1 张）| 4（依赖 -04 + -05；可与 -07 并行）|
+| **CHG-SN-4-08** | VideoEditDrawer 三 Tab 真实 API：线路 / 图片 / 豆瓣（依赖 054/059 字段 + apps/api admin/videos GET 扩展；v1.3 重排：原 053→054 / 058→059）| `claude-sonnet-4-6` | 否 | typecheck + lint + unit + visual diff（1 张）| 4（依赖 -04 + -05；可与 -07 并行）|
 | **CHG-SN-4-09**（**编号空置 / 已退出本期**）| 拆分入口痛点 1（D-15 偏离登记 → 推迟 M-SN-5）| — | — | — | — |
 
 > **编号空置协议（v1.2 新增）：** `CHG-SN-4-09` 编号**空置**，不重新分配；M-SN-5 拆分实装首张卡新开 `CHG-SN-5-XX`（具体编号由 M-SN-5 启动时 task-queue.md 当时序列决定）。task-queue.md 排队 M-SN-5 时不可复用 09 编号。
