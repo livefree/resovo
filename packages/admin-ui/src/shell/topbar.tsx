@@ -118,7 +118,7 @@ const ICON_BTN_STYLE: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  background: 'transparent',
+  // background 由 [data-interactive="icon"] 全局规则接管（CHG-UX-05b）
   border: 0,
   borderRadius: 'var(--radius-sm)',
   cursor: 'pointer',

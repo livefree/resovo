@@ -112,7 +112,7 @@ const TH_STYLE: React.CSSProperties = {
   fontSize: '12px',
   fontWeight: 600,
   color: 'var(--fg-muted)',
-  background: 'transparent',
+  // background 由 [data-interactive="icon"] 全局规则接管（interactive=true 时 hover；CHG-UX-05b）
   borderBottom: '1px solid var(--border-subtle)',
   cursor: 'default',
   userSelect: 'none',

@@ -4903,3 +4903,23 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **测试**：typecheck / lint / unit 252f / 3141t / tokens:validate / verify-token-references 全绿
 - **变更摘要**：DataTable 6 类交互元素（表头 / 行 / 4 chip）hover 反馈完成接入；序列只剩 CHG-UX-06 走查 + 收口
 
+---
+
+## 2026-05-03 · CHG-UX-05b：修复 inline background 覆盖 stylesheet hover（紧急修复）
+
+- **序列**：SEQ-20260504-01 增补卡（CHG-UX-05 之后）
+- **依赖**：CHG-UX-01..05 ✅
+- **执行模型**：claude-opus-4-7
+- **触发**：用户验收反馈"hover 没有任何变化"
+- **根因**：React inline `style={{ background: 'transparent' }}` 的 CSS specificity 高于 stylesheet 规则；CHG-UX-01..05 注入的 `[data-interactive="icon"]:hover { background: var(--interactive-hover-soft) }` 等被消费方 inline transparent 覆盖。CHG-UX-01 方案 §6.3 已写"inline 不得写死 default background"，但 CHG-UX-02..05 实施只加 data-attr 标记，未同步删除既有 inline transparent
+- **改动文件**（6 处 `background: 'transparent'` 删除）：
+  - `packages/admin-ui/src/shell/topbar.tsx` — ICON_BTN_STYLE
+  - `packages/admin-ui/src/shell/user-menu.tsx` — ITEM_STYLE
+  - `packages/admin-ui/src/shell/sidebar.tsx` — COLLAPSE_BTN_STYLE / footerStyle / NavItem linkStyle
+    · linkStyle 从 `active ? 'var(--admin-accent-soft)' : 'transparent'` 改为 `active ? 'var(--admin-accent-soft)' : undefined`（active 保留 inline 高优先级，inactive 让 stylesheet 接管）
+  - `packages/admin-ui/src/components/feedback/staff-note-bar.tsx` — BUTTON_BASE_STYLE
+  - `packages/admin-ui/src/components/data-table/data-table.tsx` — TH_STYLE
+- **设计修订**：方案 §6.3 红线 2 在本卡执行后明确"inline 不得显式声明 default background（让 user agent default + stylesheet 接管）"
+- **测试**：typecheck / lint / unit 252f / 3140t / tokens:validate / verify-token-references 全绿；1 flaky StagingEditPanel act warning（与本卡无关，单跑通过）
+- **变更摘要**：删 6 处 inline `background: 'transparent'`；`[data-interactive]:hover` 全局规则现在能真正接管视觉反馈；用户实测可见 hover 变化
+

@@ -168,7 +168,7 @@ const SECTION_TITLE_STYLE: CSSProperties = {
 }
 
 const COLLAPSE_BTN_STYLE: CSSProperties = {
-  background: 'transparent',
+  // background 由 [data-interactive="nav"] 全局规则接管（CHG-UX-05b）
   border: 0,
   // borderTop 在 border: 0 后声明，确保 shorthand 不覆盖 longhand
   borderTop: '1px solid var(--border-subtle)',
@@ -377,7 +377,8 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate, onHover, o
     gap: 0,
     padding: 'var(--space-2) 0',
     color: active ? 'var(--admin-accent-on-soft)' : 'var(--fg-muted)',
-    background: active ? 'var(--admin-accent-soft)' : 'transparent',
+    // active 保留 inline accent-soft；inactive 让 [data-interactive="nav"]:hover 接管（CHG-UX-05b）
+    background: active ? 'var(--admin-accent-soft)' : undefined,
     border: 0,
     width: '100%',
     cursor: 'pointer',
@@ -502,7 +503,7 @@ function Footer({ user, collapsed, userActions }: FooterProps) {
     // border: 0 必须在 borderTop 前声明（CSS shorthand 在 longhand 之前）
     border: 0,
     borderTop: '1px solid var(--border-subtle)',
-    background: 'transparent',
+    // background 由 [data-interactive="nav"] 全局规则接管（CHG-UX-05b）
     width: '100%',
     cursor: 'pointer',
     font: 'inherit',

@@ -118,7 +118,7 @@ const EMAIL_STYLE: CSSProperties = {
 }
 
 const ITEM_STYLE: CSSProperties = {
-  background: 'transparent',
+  // background 由 [data-interactive="nav"] 全局规则接管（CHG-UX-05b）
   border: 0,
   padding: 'var(--space-2) var(--space-3)',
   font: 'inherit',

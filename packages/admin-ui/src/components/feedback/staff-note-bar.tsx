@@ -93,7 +93,7 @@ const BUTTON_BASE_STYLE: React.CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   cursor: 'pointer',
   border: '1px solid transparent',
-  background: 'transparent',
+  // background 由 [data-interactive] 全局规则接管（CHG-UX-05b）
   color: 'inherit',
 }
 
