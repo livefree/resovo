@@ -57,7 +57,7 @@ function variantTokens(variant: PillVariant): VariantTokens {
     case 'render': return { bg: 'var(--dual-signal-render-soft)', fg: 'var(--dual-signal-render)' }
     case 'neutral':
     default:
-      return { bg: 'var(--bg-surface-raised)', fg: 'var(--fg-muted)' }
+      return { bg: 'var(--bg-surface-row)', fg: 'var(--fg-muted)' }
   }
 }
 

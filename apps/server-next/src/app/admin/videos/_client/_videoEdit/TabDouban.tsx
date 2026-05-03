@@ -106,7 +106,7 @@ export function TabDouban({
       {/* 匹配状态 */}
       <div>
         <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>{m.matchStatus}</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: 'var(--bg-inset)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: 'var(--bg-surface-raised)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
           <span style={STATUS_CHIP[currentStatus]}>{statusLabel}</span>
           {doubanId && (
             <span style={{ fontSize: '11px', color: 'var(--fg-muted)' }}>豆瓣 ID <code>{doubanId}</code></span>
@@ -127,7 +127,7 @@ export function TabDouban({
             <ErrorState error={state.candidateError} title={m.errors.loadCandidateFailed} onRetry={actions.loadCandidate} />
           )}
           {state.candidate && (
-            <div style={{ background: 'var(--bg-inset)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+            <div style={{ background: 'var(--bg-surface-raised)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
               <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ flex: 1 }}>
                   <span style={{ fontSize: '11px', color: 'var(--fg-muted)' }}>
@@ -153,7 +153,7 @@ export function TabDouban({
               {/* 字段差异 */}
               {state.candidate.diffs.length > 0 && (
                 <div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr 1fr 72px', padding: '5px 12px', background: 'var(--bg-inset)', fontSize: '10px', fontWeight: 600, color: 'var(--fg-muted)', letterSpacing: '.5px', textTransform: 'uppercase', borderBottom: '1px solid var(--border-subtle)' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr 1fr 72px', padding: '5px 12px', background: 'var(--bg-surface-raised)', fontSize: '10px', fontWeight: 600, color: 'var(--fg-muted)', letterSpacing: '.5px', textTransform: 'uppercase', borderBottom: '1px solid var(--border-subtle)' }}>
                     <span>{m.columns.field}</span><span>{m.columns.local}</span><span>{m.columns.douban}</span><span />
                   </div>
                   {state.candidate.diffs.map((d, i) => (

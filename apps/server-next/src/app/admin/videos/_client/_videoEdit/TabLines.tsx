@@ -20,7 +20,7 @@ const TABLE_WRAP: React.CSSProperties = {
 }
 const TABLE_HEAD: React.CSSProperties = {
   display: 'grid', gridTemplateColumns: '24px 1fr 80px 72px 60px 48px',
-  padding: '6px 12px', background: 'var(--bg-inset)',
+  padding: '6px 12px', background: 'var(--bg-surface-raised)',
   fontSize: '10px', fontWeight: 600, color: 'var(--fg-muted)',
   letterSpacing: '.5px', textTransform: 'uppercase',
   borderBottom: '1px solid var(--border-subtle)',

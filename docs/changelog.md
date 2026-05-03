@@ -4651,3 +4651,49 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **关联 ADR**：ADR-111（accepted；后果与 border 槽位决策记录已回填）
 - **后续解锁**：CHG-UI-05 可启动（消费方 token 槽位全栈审计 + 修正；本卡完成后可一并审计 pill 消费方）
 
+---
+
+## [CHG-UI-05] 消费方 token 槽位全栈审计 + 修正 + DataTable 行分割线落地
+
+- **日期**：2026-05-03
+- **来源序列**：SEQ-20260503-01
+- **执行模型**：claude-opus-4-7（建议 sonnet；偏离原因：主循环已 opus 不可降级，本卡需逐条判断槽位语义）
+- **子代理**：无
+- **扫描范围**：`packages/admin-ui/src/**` + `apps/server-next/src/**`，56 个文件 / 130 处 `--bg-*` 引用
+- **文件清单**（13 个改动文件）：
+  - `packages/admin-ui/src/shell/topbar.tsx`：全局搜索 trigger `--bg-surface-raised → --bg-surface-row`（input 槽位）
+  - `packages/admin-ui/src/components/data-table/data-table.tsx`：row hover `--bg-surface-elevated → --bg-surface-row`
+  - `packages/admin-ui/src/components/data-table/dt-styles.tsx`：4 处修正
+    - 隐藏列 chip + filter-chips slot：`--bg-surface → transparent`（继承 raised 容器底）
+    - pager hover：`--bg-surface → --bg-surface-row`
+    - **新增** `tbody tr { border-bottom: 1px solid var(--border-default) }` + `tr:last-child { border-bottom: none }`
+  - `packages/admin-ui/src/components/cell/pill.tsx`：neutral default `--bg-surface-raised → --bg-surface-row`（与其他 chip 同档）
+  - `packages/admin-ui/src/components/pagination/pagination.tsx`：select `--bg-surface-elevated → --bg-surface-row`（input 类）
+  - `packages/admin-ui/src/components/state/loading-state.tsx`：skeleton `--bg-surface-elevated → --bg-surface-row`
+  - `packages/admin-ui/src/shell/task-drawer.tsx`：progress bar `--bg-surface-elevated → --bg-surface-row`
+  - `apps/server-next/src/app/login/LoginForm.tsx`：input 2 处 `--bg-surface-raised → --bg-surface-row`
+  - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx`：BTN_SM `elevated → row`
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`：BTN_SM + segBtn `elevated → row` 2 处
+  - `apps/server-next/src/app/admin/videos/_client/VideoEditDrawer.tsx`：3 处 `--bg-inset → --bg-surface-raised`（DEBT 闭环）
+  - `apps/server-next/src/app/admin/videos/_client/_videoEdit/{TabImages,TabLines,TabDouban}.tsx`：5 处 `--bg-inset → --bg-surface-raised`
+  - `tests/unit/components/admin-ui/cell/pill.test.tsx`：neutral pill 期望 token 同步 `surface-raised → surface-row`
+- **新建文档**：`docs/designs/backend_design_v2.1/token-slot-audit-report-20260503.md`（审计报告：判定依据 + 18 项修正 + 17 项已审核保留 + 7 项观察项 follow-up）
+- **测试覆盖**：
+  - typecheck ✅ / lint ✅ / unit 252f / 3123t 全绿 / tokens:validate OK
+  - **verify-token-references PASS**：77 引用全部已定义（324 token），**DEBT-UI-BG-INSET 闭环**
+- **设计对齐复核**（5 项全 ✅）：
+  - 已确认 7 项基线错位全部修正（实际扩为 18 项含 BG-INSET 闭环）
+  - DataTable 行级 `border-bottom` + `tr:last-child` reset
+  - DataTable row hover 用 `--bg-surface-row`
+  - sidebar/topbar/搜索/信息区 dark 模式层级反差恢复
+  - verify-token-references 全绿
+- **共享层沉淀评估**：本卡是消费方层修正，token 共享层零改动；新增 dt-styles `tbody tr` border-bottom 规则下沉到所有 admin DataTable 消费方（视频库 / 审核台 / 节目库 / 播放线路等）
+- **变更摘要**：全栈扫描修正消费方在 CHG-UI-02 之前（无 surface-row 中间档时）误把 input/row hover/skeleton 等"中间档"元素选到了 surface-raised 或 surface-elevated 的问题；DataTable 行分割线显式落地；DEBT-UI-BG-INSET 8 处顺手闭环
+- **欠账闭环**：DEBT-UI-BG-INSET ✅
+- **观察项 follow-up**（不阻塞 CHG-UI-06）：
+  - O1/O4：TabDouban / TabLines status chip 应消费 `--state-*-bg`（待第三批 tag-chip 11 色饱和度回收）
+  - O2/O3：StagingTabContent / TabHistory / TabDetail row/tag 类应 transparent + hover row（待 list-row 业务重构）
+  - O5：SettingsContainer content panel 应 raised（业务低频，留观察）
+  - O7：command-palette row item 应 transparent + hover row（待 command-palette 改造）
+- **后续解锁**：CHG-UI-06（视觉走查 + 序列收口；最后一张卡）
+

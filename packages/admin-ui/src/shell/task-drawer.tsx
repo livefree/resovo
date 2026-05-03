@@ -73,7 +73,7 @@ const TITLE_STYLE: CSSProperties = {
 const PROGRESS_BAR_STYLE: CSSProperties = {
   height: '4px',
   borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg-surface-elevated)',
+  background: 'var(--bg-surface-row)',
   overflow: 'hidden',
 }
 

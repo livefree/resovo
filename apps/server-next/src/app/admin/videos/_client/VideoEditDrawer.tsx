@@ -27,11 +27,11 @@ const ICON_BTN: React.CSSProperties = {
 }
 const TAB_BAR: React.CSSProperties = {
   display: 'flex', padding: '0 18px', borderBottom: '1px solid var(--border-subtle)',
-  background: 'var(--bg-inset)', flexShrink: 0,
+  background: 'var(--bg-surface-raised)', flexShrink: 0,
 }
 const QUICK_HEAD: React.CSSProperties = {
   display: 'flex', gap: '10px', padding: '10px 18px',
-  background: 'var(--bg-inset)', borderBottom: '1px solid var(--border-subtle)',
+  background: 'var(--bg-surface-raised)', borderBottom: '1px solid var(--border-subtle)',
   flexShrink: 0, alignItems: 'center',
 }
 const POSTER: React.CSSProperties = {
@@ -42,7 +42,7 @@ const CONTENT: React.CSSProperties = { flex: 1, overflowY: 'auto', padding: '18p
 const FOOTER: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: '8px',
   padding: '10px 18px', borderTop: '1px solid var(--border-subtle)',
-  background: 'var(--bg-inset)', flexShrink: 0,
+  background: 'var(--bg-surface-raised)', flexShrink: 0,
 }
 const BTN_PRIMARY: React.CSSProperties = {
   padding: '6px 16px', background: 'var(--accent-default)', color: 'var(--fg-on-accent)',

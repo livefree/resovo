@@ -83,7 +83,7 @@ const SEARCH_TRIGGER_STYLE: CSSProperties = {
   alignItems: 'center',
   gap: 'var(--space-2)',
   padding: 'var(--space-1) var(--space-3)',
-  background: 'var(--bg-surface-raised)',
+  background: 'var(--bg-surface-row)',
   border: '1px solid var(--border-default)',
   borderRadius: 'var(--admin-input-radius)',
   color: 'var(--fg-muted)',

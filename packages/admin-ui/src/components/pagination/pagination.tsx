@@ -85,7 +85,7 @@ const SELECT_STYLE: React.CSSProperties = {
   padding: '2px 6px',
   border: '1px solid var(--border-subtle)',
   borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg-surface-elevated)',
+  background: 'var(--bg-surface-row)',
   color: 'var(--fg-default)',
   fontSize: '12px',
   cursor: 'pointer',

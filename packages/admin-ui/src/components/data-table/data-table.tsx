@@ -323,7 +323,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
       background: isSelected
         ? 'var(--admin-accent-soft)'
         : isHovered
-          ? 'var(--bg-surface-elevated)'
+          ? 'var(--bg-surface-row)'
           : 'transparent',
       cursor: onRowClick ? 'pointer' : 'default',
       transition: 'background 80ms',

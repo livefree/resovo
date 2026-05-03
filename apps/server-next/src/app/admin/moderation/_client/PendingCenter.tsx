@@ -18,7 +18,7 @@ const BTN_SM: React.CSSProperties = {
   padding: '5px 10px',
   border: '1px solid var(--border-default)',
   borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg-surface-elevated)',
+  background: 'var(--bg-surface-row)',
   color: 'var(--fg-default)',
   cursor: 'pointer',
   fontSize: 12,

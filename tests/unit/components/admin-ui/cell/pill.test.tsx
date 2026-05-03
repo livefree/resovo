@@ -38,7 +38,7 @@ describe('Pill — 基础渲染', () => {
 
 describe('Pill — 8 variant 染色', () => {
   const cases: Array<['neutral' | 'ok' | 'warn' | 'danger' | 'info' | 'accent' | 'probe' | 'render', string, string]> = [
-    ['neutral', '--bg-surface-raised', '--fg-muted'],
+    ['neutral', '--bg-surface-row', '--fg-muted'],
     ['ok', '--state-success-bg', '--state-success-fg'],
     ['warn', '--state-warning-bg', '--state-warning-fg'],
     ['danger', '--state-error-bg', '--state-error-fg'],

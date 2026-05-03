@@ -73,7 +73,7 @@ export function LoginForm() {
           disabled={submitting}
           style={{
             padding: 'var(--space-2) var(--space-3)',
-            background: 'var(--bg-surface-raised)',
+            background: 'var(--bg-surface-row)',
             color: 'var(--fg-default)',
             border: '1px solid var(--border-default)',
             borderRadius: 'var(--radius-sm)',
@@ -90,7 +90,7 @@ export function LoginForm() {
           disabled={submitting}
           style={{
             padding: 'var(--space-2) var(--space-3)',
-            background: 'var(--bg-surface-raised)',
+            background: 'var(--bg-surface-row)',
             color: 'var(--fg-default)',
             border: '1px solid var(--border-default)',
             borderRadius: 'var(--radius-sm)',

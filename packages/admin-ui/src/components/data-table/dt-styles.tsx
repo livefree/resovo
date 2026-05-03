@@ -93,7 +93,7 @@ const DT_CSS = `
   padding: 0 10px;
   border: 1px solid var(--border-default);
   border-radius: 999px;
-  background: var(--bg-surface);
+  background: transparent;
   color: var(--fg-muted);
   font: inherit;
   font-size: 12px;
@@ -127,7 +127,7 @@ const DT_CSS = `
   gap: 6px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border-default);
-  background: var(--bg-surface);
+  background: transparent;
   flex-shrink: 0;
 }
 [data-table-filter-chip] {
@@ -172,6 +172,16 @@ const DT_CSS = `
 [data-table-filter-chip-clear]:hover {
   background: var(--bg-surface);
   color: var(--fg-default);
+}
+
+/* ── Row 分割线（CHG-UI-05 显式落地；arch-reviewer C-3 约束 row hover/selected 仍走 inline） ─────── *
+ * 行分割线 + 最后一行 reset，避免与 foot/bulk 顶边重线；hover/selected 仍由 data-table.tsx
+ * rowStyle 内联控制（var(--bg-surface-row) / var(--admin-accent-soft)）。 */
+[data-table] [role="rowgroup"] [role="row"] {
+  border-bottom: 1px solid var(--border-default);
+}
+[data-table] [role="rowgroup"] [role="row"]:last-child {
+  border-bottom: none;
 }
 
 /* ── Row flash 动画（乐观更新场景；CHG-DESIGN-02 Step 5 flashRowKeys 配套） ─────── */
@@ -292,7 +302,7 @@ const DT_CSS = `
   cursor: pointer;
 }
 [data-table-foot-pager-btn]:hover:not(:disabled):not([data-active="true"]) {
-  background: var(--bg-surface);
+  background: var(--bg-surface-row);
   color: var(--fg-default);
 }
 [data-table-foot-pager-btn][data-active="true"] {

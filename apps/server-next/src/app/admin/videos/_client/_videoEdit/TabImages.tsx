@@ -10,7 +10,7 @@ import type { VideoImageKind, ImageSlotInfo } from '@/lib/videos/types'
 
 const SLOT_CARD: React.CSSProperties = {
   border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)',
-  overflow: 'hidden', background: 'var(--bg-inset)',
+  overflow: 'hidden', background: 'var(--bg-surface-raised)',
 }
 const SLOT_BTN: React.CSSProperties = {
   flex: 1, padding: '4px 0', fontSize: '11px', border: '1px solid var(--border-subtle)',

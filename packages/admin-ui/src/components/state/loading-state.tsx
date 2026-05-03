@@ -48,7 +48,7 @@ function skeletonRowStyle(widthPct: number): React.CSSProperties {
   return {
     height: '14px',
     borderRadius: 'var(--radius-sm)',
-    background: 'var(--bg-surface-elevated)',
+    background: 'var(--bg-surface-row)',
     width: `${widthPct}%`,
     animation: 'admin-ui-pulse 1.5s ease-in-out infinite',
   }
