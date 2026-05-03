@@ -14,9 +14,9 @@
 
 ---
 
-## 进行中任务
+## 完成任务
 
-### CHG-SN-4-07 · 审核台前端接入（useTableQuery + Gmail 流 + RejectModal/Drawer 接线 + i18n + a11y + visual baseline）· 🔄 进行中
+### CHG-SN-4-07 · 审核台前端接入（useTableQuery + Gmail 流 + RejectModal/Drawer 接线 + i18n + a11y + visual baseline）· ✅ 完成（2026-05-02）
 
 - **来源序列**：`docs/task-queue.md` SEQ-20260501-01 / M-SN-4 阶段 C 双轨
 - **执行真源**：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.4 §5（六项前端共性约束 + 三 Tab 操作流程）
@@ -93,6 +93,8 @@ npm run lint            # turbo lint 全 pass
 npm run test -- --run   # 246+ 文件 / 3045+ 测试不回归
 npm run test:e2e        # 审核台属 ADMIN 类（详见 plan §5）— **本卡内必跑**
 ```
+
+**实际结果（2026-05-02）**：typecheck ✅ / lint ✅ / unit 247 files / 3057 tests ✅（新增 moderation-api.test.ts 12 cases 全通过）
 
 **Visual diff 7 张**（plan §1190-1202）：
 - pending-queue.png（首屏 Gmail 流）

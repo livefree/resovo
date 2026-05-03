@@ -1,10 +1,13 @@
 'use client'
-/* eslint-disable no-console */
 
-import React, { useState } from 'react'
-import { DualSignal } from '@resovo/admin-ui'
-import type { MockLine } from './mock-data'
-import { MOCK_LINES } from './mock-data'
+import React, { useState, useEffect, useCallback } from 'react'
+import { DualSignal, LineHealthDrawer } from '@resovo/admin-ui'
+import type { SourceHealthEvent } from '@resovo/types'
+import type { ContentSourceRow } from '@/lib/moderation/api'
+import * as api from '@/lib/moderation/api'
+import { M } from '@/i18n/messages/zh-CN/moderation'
+
+// ── Styles ────────────────────────────────────────────────────────
 
 const BTN_XS: React.CSSProperties = {
   padding: '3px 8px',
@@ -32,54 +35,165 @@ const LINE_ROW: React.CSSProperties = {
   fontSize: 11,
 }
 
-function LineRow({ line, onToggle }: { line: MockLine; onToggle: (id: string) => void }): React.ReactElement {
+// ── Health drawer state ───────────────────────────────────────────
+
+interface HealthDrawerState {
+  open: boolean
+  sourceId: string | null
+  title: string
+  probeState: string
+  renderState: string
+  events: SourceHealthEvent[]
+  loading: boolean
+  error: string | null
+  page: number
+  total: number
+}
+
+const DRAWER_CLOSED: HealthDrawerState = {
+  open: false, sourceId: null, title: '', probeState: 'unknown', renderState: 'unknown',
+  events: [], loading: false, error: null, page: 1, total: 0,
+}
+
+// ── LineRow sub-component ─────────────────────────────────────────
+
+interface LineRowProps {
+  line: ContentSourceRow
+  toggling: boolean
+  onToggle: (id: string, current: boolean) => void
+  onHealth: (line: ContentSourceRow) => void
+}
+
+function LineRow({ line, toggling, onToggle, onHealth }: LineRowProps): React.ReactElement {
+  const probeState = api.toDisplayState(line.probe_status)
+  const renderState = api.toDisplayState(line.render_status)
+
   return (
     <div style={LINE_ROW} data-line-row={line.id}>
-      <span
+      <button
         role="switch"
-        aria-checked={line.enabled}
-        onClick={() => onToggle(line.id)}
+        aria-checked={line.is_active}
+        aria-label={line.is_active ? '停用线路' : '启用线路'}
+        disabled={toggling}
+        onClick={() => onToggle(line.id, line.is_active)}
         style={{
-          width: 28,
-          height: 16,
-          borderRadius: 999,
-          background: line.enabled ? 'var(--accent-default)' : 'var(--bg-surface-sunken)',
+          width: 28, height: 16, borderRadius: 999,
+          background: line.is_active ? 'var(--accent-default)' : 'var(--bg-surface-sunken)',
           border: '1px solid var(--border-default)',
-          cursor: 'pointer',
+          cursor: toggling ? 'not-allowed' : 'pointer',
           flexShrink: 0,
           position: 'relative',
+          padding: 0,
+          opacity: toggling ? 0.6 : 1,
         }}
       >
         <span style={{
-          position: 'absolute',
-          top: 2,
-          left: line.enabled ? 14 : 2,
-          width: 10,
-          height: 10,
+          position: 'absolute', top: 2,
+          left: line.is_active ? 14 : 2,
+          width: 10, height: 10,
           borderRadius: '50%',
           background: 'var(--fg-on-accent)',
           transition: 'left .1s',
         }} />
-      </span>
+      </button>
       <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--fg-muted)' }}>
-        {line.site}
+        {line.source_name}
       </span>
-      <DualSignal probe={line.probe} render={line.render} />
-      {line.latency != null && (
-        <span style={{ fontSize: 10, color: 'var(--fg-muted)', flexShrink: 0 }}>{line.latency}ms</span>
+      <DualSignal probe={probeState} render={renderState} />
+      {line.latency_ms != null && (
+        <span style={{ fontSize: 10, color: 'var(--fg-muted)', flexShrink: 0 }}>{line.latency_ms}ms</span>
       )}
+      <button style={{ ...BTN_XS, fontSize: 10 }} onClick={() => onHealth(line)} aria-label="查看线路证据">证据</button>
     </div>
   )
 }
 
-export function LinesPanel({ videoId: _videoId }: { videoId: string }): React.ReactElement {
-  const [lines, setLines] = useState<MockLine[]>([...MOCK_LINES])
+// ── LinesPanel ────────────────────────────────────────────────────
 
-  const toggleLine = (id: string) => {
-    setLines(ls => ls.map(l => l.id === id ? { ...l, enabled: !l.enabled } : l))
+export function LinesPanel({ videoId }: { videoId: string }): React.ReactElement {
+  const [lines, setLines] = useState<ContentSourceRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set())
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [drawer, setDrawer] = useState<HealthDrawerState>(DRAWER_CLOSED)
+
+  useEffect(() => {
+    setLoading(true)
+    setError(null)
+    api.fetchVideoSources(videoId)
+      .then(setLines)
+      .catch(() => setError(M.errors.loadFailed))
+      .finally(() => setLoading(false))
+  }, [videoId])
+
+  const openHealth = useCallback(async (line: ContentSourceRow) => {
+    const title = `${line.source_name} · EP${line.episode_number ?? '全集'}`
+    setDrawer({ open: true, sourceId: line.id, title, probeState: api.toDisplayState(line.probe_status), renderState: api.toDisplayState(line.render_status), events: [], loading: true, error: null, page: 1, total: 0 })
+    try {
+      const res = await api.fetchLineHealth(videoId, line.id, 1)
+      setDrawer(d => ({ ...d, events: res.data as SourceHealthEvent[], loading: false, total: res.pagination.total, page: 1 }))
+    } catch {
+      setDrawer(d => ({ ...d, loading: false, error: '加载失败' }))
+    }
+  }, [videoId])
+
+  const handleHealthPage = useCallback(async (page: number) => {
+    if (!drawer.sourceId) return
+    setDrawer(d => ({ ...d, loading: true }))
+    try {
+      const res = await api.fetchLineHealth(videoId, drawer.sourceId, page)
+      setDrawer(d => ({ ...d, events: res.data as SourceHealthEvent[], loading: false, page }))
+    } catch {
+      setDrawer(d => ({ ...d, loading: false, error: '加载失败' }))
+    }
+  }, [videoId, drawer.sourceId])
+
+  const handleToggle = useCallback(async (id: string, currentActive: boolean) => {
+    setTogglingIds(s => new Set(s).add(id))
+    setActionError(null)
+    try {
+      await api.toggleSource(videoId, id, !currentActive)
+      setLines(prev => prev.map(l => l.id === id ? { ...l, is_active: !currentActive } : l))
+    } catch {
+      setActionError('切换失败，请重试')
+    } finally {
+      setTogglingIds(s => { const next = new Set(s); next.delete(id); return next })
+    }
+  }, [videoId])
+
+  const handleDisableDead = useCallback(async () => {
+    setActionError(null)
+    try {
+      const res = await api.disableDeadSources(videoId)
+      if (res.disabled > 0) {
+        setLines(prev => prev.map(l =>
+          (l.probe_status === 'dead' && l.render_status === 'dead') ? { ...l, is_active: false } : l
+        ))
+      }
+    } catch {
+      setActionError('批量禁用失败')
+    }
+  }, [videoId])
+
+  const handleRefetch = useCallback(async () => {
+    setActionError(null)
+    try {
+      await api.refetchSources(videoId)
+    } catch {
+      setActionError('触发抓取失败')
+    }
+  }, [videoId])
+
+  const enabledCount = lines.filter(l => l.is_active).length
+
+  if (loading) {
+    return <div style={{ fontSize: 12, color: 'var(--fg-muted)', padding: '8px 0' }}>加载线路…</div>
   }
 
-  const enabledCount = lines.filter(l => l.enabled).length
+  if (error) {
+    return <div style={{ fontSize: 12, color: 'var(--state-error-fg)', padding: '8px 0' }}>{error}</div>
+  }
 
   return (
     <div data-lines-panel>
@@ -87,18 +201,47 @@ export function LinesPanel({ videoId: _videoId }: { videoId: string }): React.Re
         <span style={{ fontSize: 12, fontWeight: 600 }}>线路</span>
         <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{enabledCount}/{lines.length} 启用</span>
         <span style={{ flex: 1 }} />
-        <button style={BTN_XS} onClick={() => console.log('重测全部')}>↻ 重测全部</button>
+        <button style={BTN_XS} onClick={handleRefetch} aria-label="重新抓取线路">↻ 重新抓取</button>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        {lines.map(line => (
-          <LineRow key={line.id} line={line} onToggle={toggleLine} />
-        ))}
-      </div>
+
+      {actionError && (
+        <div style={{ fontSize: 11, color: 'var(--state-error-fg)', marginBottom: 6, padding: '4px 8px', background: 'var(--state-error-bg)', borderRadius: 4 }}>
+          {actionError}
+        </div>
+      )}
+
+      {lines.length === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--fg-muted)', padding: '8px 0' }}>暂无线路</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {lines.map(line => (
+            <LineRow
+              key={line.id}
+              line={line}
+              toggling={togglingIds.has(line.id)}
+              onToggle={handleToggle}
+              onHealth={openHealth}
+            />
+          ))}
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-        <button style={BTN_XS} onClick={() => console.log('证据')}>证据</button>
         <span style={{ flex: 1 }} />
-        <button style={BTN_XS_DANGER} onClick={() => console.log('删除全失效')}>✕ 删除全失效</button>
+        <button style={BTN_XS_DANGER} onClick={handleDisableDead} aria-label="禁用全失效线路">禁用全失效</button>
       </div>
+
+      <LineHealthDrawer
+        open={drawer.open}
+        onClose={() => setDrawer(DRAWER_CLOSED)}
+        title={drawer.title}
+        probeState={drawer.probeState as Parameters<typeof LineHealthDrawer>[0]['probeState']}
+        renderState={drawer.renderState as Parameters<typeof LineHealthDrawer>[0]['renderState']}
+        events={drawer.events}
+        loading={drawer.loading}
+        error={drawer.error ? { message: drawer.error, onRetry: () => drawer.sourceId && void handleHealthPage(drawer.page) } : null}
+        pagination={drawer.total > 20 ? { page: drawer.page, total: drawer.total, limit: 20, onPageChange: handleHealthPage } : undefined}
+      />
     </div>
   )
 }
