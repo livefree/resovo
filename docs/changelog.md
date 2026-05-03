@@ -4756,3 +4756,49 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **变更摘要**：3 处槽位精修 — 表头 elevated → transparent、视频库 input raised → row、views-menu trigger elevated → row；让"所有用户可输入/可触发的元素"都落在同一个 `--bg-surface-row` 槽位，满足设计语义一致性
 - **关联 ADR**：ADR-111（同上）
 
+---
+
+## [CHG-UI-06] 视觉走查 + 序列收口 + arch-reviewer 全序列评级 — SEQ-20260503-01 关闭
+
+- **日期**：2026-05-03
+- **来源序列**：SEQ-20260503-01（最后一卡）
+- **执行模型**：claude-opus-4-7（建议 sonnet；偏离原因：主循环已 opus 不可降级）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 全序列评级
+- **文件清单**（4 文件）：
+  - `docs/audit_seq_20260503_01_20260503.md`：新建 — arch-reviewer 全序列评级报告（B+ / PASS CONDITIONAL；红线 0；黄线 Y1/Y2；观察项 O1-O6；改进建议 S1-S4）
+  - `docs/decisions.md`：ADR-111 §决策第 1 条同步实装值（CHG-UI-02a 校准后值）+ §后果增补段（CHG-UI-02a/05/05a/06 增量）+ §后续序列触发清单 + §关联段补全 8 张卡 + 4 份关联文档
+  - `docs/designs/backend_design_v2.1/ui-token-alignment-plan.md`：§4.1 同步 CHG-UI-02a 校准实装值注脚
+  - `docs/designs/backend_design_v2.1/token-slot-audit-report-20260503.md`：§6 commit hash 回填（09e8233 / 125d095 / 7f1a392 / 本卡）
+- **arch-reviewer 评级结论**：
+  - AUDIT RESULT: **B+ / PASS CONDITIONAL**
+  - 红线 0
+  - 黄线 Y1（实装值与文档承诺漂移）：✅ 已同步落地（ADR-111 §决策第 1 条 + plan §4.1）
+  - 黄线 Y2（缺 OKLCH → 设计 hex 对齐快照单测）：记入下批序列
+  - 改进建议 S4（audit report commit hash 回填）：✅ 已落地
+  - 改进建议 S1/S2/S3：记入下批序列
+- **观察项登记**（全部写入 ADR-111 §后续序列触发清单）：
+  - O1 light + warning contrast 2.3:1 < AA → 触发后立 CHG-UI-04a
+  - O2 selection-action-bar 删除按钮 contrast 边缘
+  - O3 KpiCard light is-warn 大字阈值边缘
+  - O4 用户接受的"surface 反差仍不够明显" → 第二批密度序列
+  - O5 hover/focus/active 交互反馈缺失（用户 2026-05-03 显式登记）→ UX 完整性独立序列
+  - O6 audit report O1-O7 业务页 row/chip 槽位 → 第三批
+- **遗留交付**（不阻塞收口）：视觉基线截图（本会话无浏览器；用户后续在 dev server 截图后可补归档至 `tests/visual/admin-ui-tokens/`）
+- **序列产出汇总**：
+  - 8 张 commit（CHG-UI-01..06 + CHG-UI-02a + CHG-UI-05a）
+  - 总改动：+1100 行 / -150 行（含审计报告 / 走查清单 / ADR / changelog）
+  - 真源代码改动：4 个 semantic 文件 + 1 个 primitive 文件 + 21 处消费方修正 + 1 处 dt-styles 行级 CSS 新增 + 25 项单测断言新增
+  - 关键产出文档：方案 / 走查清单 / 审计报告 / arch-reviewer 评级报告 4 份
+  - DEBT-UI-BG-INSET 闭环 ✅
+  - verify-token-references PASS（77 引用 / 324 token）✅
+- **变更摘要**：序列收口；token 值层（CHG-UI-02/03/04/02a）+ 消费方层（CHG-UI-05/05a）全部对齐设计稿；arch-reviewer 全序列评级 B+ PASS CONDITIONAL；ADR-111 收口为 accepted；观察项与后续序列触发清单全部登记；SEQ-20260503-01 关闭。
+
+---
+
+## ✅ SEQ-20260503-01 序列关闭
+
+- **完成时间**：2026-05-03
+- **总卡数**：8 张（含 2 张增补 02a / 05a）
+- **arch-reviewer 评级**：B+ / PASS CONDITIONAL
+- **后续解锁**：第二批密度 / 第三批 chip 11 色 / 第四批工具栏改造 / UX 完整性序列（hover/focus/active）/ 触发型 CHG-UI-04a
+

@@ -4060,7 +4060,20 @@ CHG-SN-4-05 任务卡范围声明 `packages/types/src/api/**`（信封 / errorCo
 
 落定（CHG-UI-04 PASS 后回填）：
 
-1. **不动 primitives 既有 ramp**：`colors.gray.*` / `colors.success.*` / `colors.accent.*` 等已发布档位不变；本期新增一档 `gray.925: oklch(13.5% 0.007 247)`（CHG-UI-02），对应设计 `--bg2 #161a22`。
+1. **primitives 既有 ramp 校准 + 新增 1 档**（CHG-UI-02 + CHG-UI-02a）：
+   - **新增 `gray.925`**（CHG-UI-02 引入，CHG-UI-02a 校准至最终值）
+   - **dark 段五档校准**（CHG-UI-02a — 用户截图反馈触发的 OKLCH → sRGB 渲染对齐）：
+
+     | step | 旧 OKLCH（CHG-UI-02 初稿） | 新 OKLCH（CHG-UI-02a 终态） | sRGB ≈ 设计 hex |
+     |---|---|---|---|
+     | 1000 | `oklch(6.5% .004 247)` | `oklch(8.0% .005 247)` | `#0b0d10` |
+     | 950  | `oklch(11.2% .006 247)` | `oklch(12.0% .008 247)` | `#11141a` |
+     | 925  | `oklch(13.5% .007 247)` | `oklch(15.0% .009 247)` | `#161a22` |
+     | 900  | `oklch(16.5% .008 247)` | `oklch(18.0% .010 247)` | `#1d222c` |
+     | 800  | `oklch(23.0% .010 247)` | `oklch(21.0% .011 247)` | `#252b37` |
+
+   - light 段（gray.0-700）零改动；ramp 13 档 + 1 新增 = 14 档；hue 247 全 ramp 保持
+   - 校准属"修复 OKLCH-sRGB 渲染映射误差"，不是 ramp 结构变更，符合 plan §2.1 不破例约束
 2. **semantic 重映射**（CHG-UI-02 + CHG-UI-03）：
    - `bg.ts`：dark.surfaceRaised → `gray.925`；新增 `surfaceRow` 双主题（dark `gray.900` / light `gray.100`）填补 row hover/input 缺档；light.canvas → `gray.100`
    - `fg.ts`：dark.default `gray.50` → `gray.200`；dark.muted `gray.300` → `gray.400`
@@ -4098,11 +4111,32 @@ CHG-SN-4-05 任务卡范围声明 `packages/types/src/api/**`（信封 / errorCo
   - KpiCard `is-warn` light 模式 value 文本染浅黄 (`oklch(74%)`) 在白卡底配合 26px/700 大字阈值 3:1 边缘（O3 观察项）
 - **不可逆性**：低。state.ts / fg.ts / bg.ts / border.ts / color.ts 单文件改动；变量名只增不删；git revert 即可回滚，消费方零调整。
 
-### 关联
+### 后果增补（CHG-UI-02a / 05 / 05a / 06 增量）
+
+- **CHG-UI-02a 校准**：dark 五档 OKLCH lightness 从初稿 6.5/11.2/13.5/16.5/23 校准至 8/12/15/18/21（用户截图反馈触发 OKLCH → sRGB 渲染对齐设计 hex；ramp 间距 8→12→15→18→21 单调连续）；本卡的"OKLCH-sRGB 映射误差"修复属"修复实装值"，不是 ramp 结构变更
+- **CHG-UI-05 + 05a 消费方修正**：累计 21 项槽位错位 + DEBT-UI-BG-INSET 8 处闭环；DataTable 行级 `border-bottom` + `tr:last-child` reset + `tr:hover { background: var(--bg-surface-row) }` 显式落地；扫描 56 文件 / 130 处 `--bg-*` 全栈 var() 引用（audit report 已归档）
+- **CHG-UI-06 序列评级**：arch-reviewer (claude-opus-4-7) 全序列评级 **B+ / PASS CONDITIONAL**（红线 0；黄线 Y1 已在本 ADR §决策第 1 条同步实装值；黄线 Y2「缺自动化 OKLCH → 设计 hex 对齐快照单测」记入下批序列；详见 `docs/audit_seq_20260503_01_20260503.md`）
+
+### 后续序列触发清单
+
+| 触发条件 | 后续序列 |
+|---|---|
+| 审核台 pending / 警告条出现"看不清"反馈 | CHG-UI-04a — light warning fg 切到 `colors.warning.dark` |
+| 业务页 list-row / chip 类（StagingTabContent / TabHistory / TabDetail / TabDouban / TabLines 等）需统一 token 槽位 | 第三批：tag-chip 11 色饱和度回收 + list-row chip 统一槽位 |
+| 行密度（row-h / row-h-compact）/ 封面尺寸 / 间距 token 与设计 `--s-*` 对齐 | 第二批：密度 / 间距 token 对齐 |
+| hover / focus / active 等交互反馈缺失（导航栏 / topbar IconButton / 表头 / dropdown trigger / 表头按钮等） | 后续 UX 完整性序列（独立批次；用户 2026-05-03 显式登记） |
+| primitive ramp 任何下次微调 | 必须先行落地"OKLCH → 设计 hex"对齐快照单测（Y2 / S2） |
+| `gray-ramp-calibration.md` / build-css OKLCH→sRGB diff warn | S1 / S2 改进建议（下批附带） |
 
 ### 关联
 
 - **关联 ADR**：ADR-102（设计 Token 三层收编 + 设计稿 v2.1 映射 — 本 ADR 是其增量修订）
-- **关联任务卡**：CHG-UI-01（占位）✅ / CHG-UI-02（surfaces & border）✅ / CHG-UI-03（fg）✅ / CHG-UI-04（state pill；强制 opus + arch-reviewer）✅ PASS (CONDITIONAL) / CHG-UI-05（消费方 token 槽位全栈审计 + 修正 + 行分割线）⬜ / CHG-UI-06（视觉走查 + 序列收口）⬜
+- **关联任务卡**：
+  - CHG-UI-01（占位）✅ / CHG-UI-02（surfaces & border）✅ / CHG-UI-02a（gray ramp 校准）✅ / CHG-UI-03（fg）✅ / CHG-UI-04（state pill；强制 opus + arch-reviewer）✅ PASS (CONDITIONAL) / CHG-UI-05（消费方 token 槽位全栈审计 + 修正 + 行分割线）✅ / CHG-UI-05a（DataTable 表头 + Trigger 槽位精修）✅ / CHG-UI-06（视觉走查 + 序列收口；arch-reviewer 全序列 B+ PASS CONDITIONAL）✅
 - **关联序列**：SEQ-20260503-01
+- **关联文档**：
+  - `docs/designs/backend_design_v2.1/ui-token-alignment-plan.md`（方案真源）
+  - `docs/designs/backend_design_v2.1/state-pill-soft-walkthrough_20260503.md`（CHG-UI-04 走查清单）
+  - `docs/designs/backend_design_v2.1/token-slot-audit-report-20260503.md`（CHG-UI-05/05a 审计报告）
+  - `docs/audit_seq_20260503_01_20260503.md`（CHG-UI-06 arch-reviewer 全序列评级）
 - **关联规范**：`docs/rules/ui-rules.md`（CSS 变量使用约束）/ CLAUDE.md §"绝对禁止"硬编码颜色值条款

@@ -133,7 +133,11 @@ CHG-UI-05 第一轮审计未覆盖的 3 处遗漏：
 - [x] typecheck / lint / unit / tokens:validate 全绿
 - [x] audit report 归档
 
-修正 commit hash：_（commit 后回填）_
+修正 commit hash：
+- CHG-UI-05（13 项 + DEBT-UI-BG-INSET 5 项 = 18 项主修正 + DataTable 行级 CSS）：`09e8233`
+- CHG-UI-05a（19-21 项追加：表头 + Trigger 槽位精修）：`125d095`
+- CHG-UI-02a（gray ramp 校准支撑本审计的实装基线）：`7f1a392`
+- CHG-UI-06 收口（arch-reviewer 全序列评级）：本卡待 commit
 
 ---
 
