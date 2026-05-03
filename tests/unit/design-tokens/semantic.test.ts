@@ -82,9 +82,45 @@ describe('semantic tokens — primitive reference integrity', () => {
     }
   })
 
-  it('state values are primitive refs', () => {
+  it('state values are primitive refs or allowed computed values (CHG-UI-04: alpha-soft via color-mix)', () => {
     for (const v of collectLeafStrings(state)) {
-      expect(PRIMITIVE_VALUES.has(v), `state value not a primitive ref: "${v}"`).toBe(true)
+      const ok = PRIMITIVE_VALUES.has(v) || isAllowedNonPrimitive(v)
+      expect(ok, `state value not a primitive ref or allowed: "${v}"`).toBe(true)
+    }
+  })
+})
+
+describe('state tokens — alpha-soft 形态硬约束（CHG-UI-04 / ADR-111）', () => {
+  const KINDS = ['success', 'warning', 'error', 'info'] as const
+  const THEMES = ['light', 'dark'] as const
+  const SOFT_MIX_RE = /^color-mix\(in oklch, oklch\([^)]+\) 14%, transparent\)$/
+
+  it.each(THEMES.flatMap((t) => KINDS.map((k) => [t, k] as const)))(
+    'state.%s.%s.bg matches color-mix(in oklch, <base> 14%, transparent)',
+    (theme, kind) => {
+      const slot = state[theme][kind]
+      expect(slot.bg).toMatch(SOFT_MIX_RE)
+      expect(slot.bg).toContain(colors[kind].base)
+    },
+  )
+
+  it.each(THEMES.flatMap((t) => KINDS.map((k) => [t, k] as const)))(
+    'state.%s.%s.fg === colors.%s.base (鲜亮文字)',
+    (theme, kind) => {
+      expect(state[theme][kind].fg).toBe(colors[kind].base)
+    },
+  )
+
+  it.each(THEMES.flatMap((t) => KINDS.map((k) => [t, k] as const)))(
+    'state.%s.%s.border === colors.%s.base (保留给 KpiCard/DiffPanel/InheritanceBadge/selection-action-bar 显式边框消费方)',
+    (theme, kind) => {
+      expect(state[theme][kind].border).toBe(colors[kind].base)
+    },
+  )
+
+  it('dark 与 light 双主题完全等价（alpha-soft 同映射策略）', () => {
+    for (const kind of KINDS) {
+      expect(state.dark[kind]).toEqual(state.light[kind])
     }
   })
 })

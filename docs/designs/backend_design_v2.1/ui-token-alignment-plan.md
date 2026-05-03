@@ -148,10 +148,10 @@ light: {
 const softMix = (color: string) => `color-mix(in oklch, ${color} 14%, transparent)`
 
 const sharedSlots = {
-  success: { bg: softMix(colors.success.base), fg: colors.success.base, border: 'transparent' },
-  warning: { bg: softMix(colors.warning.base), fg: colors.warning.base, border: 'transparent' },
-  error:   { bg: softMix(colors.error.base),   fg: colors.error.base,   border: 'transparent' },
-  info:    { bg: softMix(colors.info.base),    fg: colors.info.base,    border: 'transparent' },
+  success: { bg: softMix(colors.success.base), fg: colors.success.base, border: colors.success.base },
+  warning: { bg: softMix(colors.warning.base), fg: colors.warning.base, border: colors.warning.base },
+  error:   { bg: softMix(colors.error.base),   fg: colors.error.base,   border: colors.error.base },
+  info:    { bg: softMix(colors.info.base),    fg: colors.info.base,    border: colors.info.base },
 }
 
 export const state = {
@@ -159,6 +159,21 @@ export const state = {
   dark:  sharedSlots,
 } as const
 ```
+
+**border 槽位决策记录**（CHG-UI-04 落地时确认）：
+
+`border` 保留 `colors.<status>.base` 而非 `'transparent'` 的折中决策来源——以下消费方依赖事实清单显式读取 `--state-*-border`：
+
+| 消费方 | 文件:行 | 用法 |
+|---|---|---|
+| KpiCard `is-warn / is-danger / is-ok` | `packages/admin-ui/src/components/cell/kpi-card.tsx:115-117` | 卡片整体 1px 边框 |
+| DiffPanel 警告条 | `apps/server/src/components/admin/design-tokens/DiffPanel.tsx:88` | 警告 Banner 1px 边框 |
+| InheritanceBadge | `apps/server/src/components/admin/design-tokens/InheritanceBadge.tsx:18` | 徽标 1px 边框 |
+| selection-action-bar 删除按钮 | `packages/admin-ui/src/components/data-table/selection-action-bar.tsx:83` | hover 描边 |
+
+`Pill` 自身**不消费** border（仅读 bg/fg + dot 派生 fg），保持 borderless 与设计稿等价。
+
+**未来回收条件**：若上述 4 个消费方任一改为不消费 border，应回到 `transparent` 选项重审，避免决策依据被遗忘后无法 revert。
 
 **视觉效果**：
 - dark：14% 绿色 alpha 叠在 `surfaceRow` (#1a1f28) 上 ≈ #1f3a2a 软底 + 鲜亮 #22c55e 文字

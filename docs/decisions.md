@@ -4041,7 +4041,7 @@ CHG-SN-4-05 任务卡范围声明 `packages/types/src/api/**`（信封 / errorCo
 
 ## ADR-111: 后台 token 颜色对齐设计稿（surfaces / border / fg / state pill）
 
-> 状态：placeholder（CHG-UI-01 占位；正式决策内容由 CHG-UI-04 完成时回填）
+> 状态：accepted（CHG-UI-04 完成 + arch-reviewer (claude-opus-4-7) PASS CONDITIONAL；CHG-UI-05/06 收口前可能补订增量）
 > 日期：2026-05-03
 > 任务卡：SEQ-20260503-01（CHG-UI-01..06）
 > 关联：`docs/designs/backend_design_v2.1/ui-token-alignment-plan.md`（方案真源）/ `docs/designs/backend_design_v2.1/styles/tokens.css`（设计真源）/ `packages/design-tokens/src/{primitives,semantic}/*.ts`（实现真源）
@@ -4058,22 +4058,51 @@ CHG-SN-4-05 任务卡范围声明 `packages/types/src/api/**`（信封 / errorCo
 
 ### 决策
 
-_（CHG-UI-04 完成时回填正式决策；以下为 CHG-UI-01 占位时的预定方向）_
+落定（CHG-UI-04 PASS 后回填）：
 
-预定方向（待 CHG-UI-04 arch-reviewer 评审通过后落定）：
-1. **不动 primitives 既有 ramp**：`colors.gray.*` / `colors.success.*` / `colors.accent.*` 等已发布档位不变；最多在 `gray.925` 中间档不可避免时新增一档
-2. **semantic 重映射**：`bg.ts` 新增 `surfaceRow` 角色（替代 row hover 缺档）；`fg.ts` dark.default 改 `gray.200`、dark.muted 改 `gray.400`；`border.ts` strong 收紧
-3. **state pill 双主题统一**：dark + light 共用 `color-mix(in oklch, <base> 14%, transparent)` 软底 + `<base>` 鲜亮文字，废除 dark/light 实色 bg/fg 对调
-4. **CSS 变量名只增不删**：保持向后兼容；新增槽位须有语义名（禁裸 hex / oklch 硬编码）
-5. **DataTable 行级 CSS 显式声明 `border-bottom: 1px solid var(--border-default)` + `tr:hover { background: var(--bg-surface-row) }`**：消费方零硬编码
+1. **不动 primitives 既有 ramp**：`colors.gray.*` / `colors.success.*` / `colors.accent.*` 等已发布档位不变；本期新增一档 `gray.925: oklch(13.5% 0.007 247)`（CHG-UI-02），对应设计 `--bg2 #161a22`。
+2. **semantic 重映射**（CHG-UI-02 + CHG-UI-03）：
+   - `bg.ts`：dark.surfaceRaised → `gray.925`；新增 `surfaceRow` 双主题（dark `gray.900` / light `gray.100`）填补 row hover/input 缺档；light.canvas → `gray.100`
+   - `fg.ts`：dark.default `gray.50` → `gray.200`；dark.muted `gray.300` → `gray.400`
+   - `border.ts`：dark.strong `gray.600` → `gray.700`；light.strong `gray.400` → `gray.300`
+3. **state pill 双主题统一**（CHG-UI-04）：dark + light 共用同一 `sharedSlots`：
+   - `bg = color-mix(in oklch, <colors.<status>.base> 14%, transparent)` 软底
+   - `fg = colors.<status>.base` 鲜亮文字（同时是 Pill 的 dot 颜色）
+   - `border = colors.<status>.base` 鲜亮边框（**保留给显式边框消费方**——KpiCard `is-warn/is-danger/is-ok` / DiffPanel 警告条 / InheritanceBadge / selection-action-bar；Pill 自身不消费 border，符合设计稿 borderless 意图）
+   - 废除原 dark 暗底+亮文字 / light 浅底+深文字的实色 bg/fg 对调（Material 风）
+4. **CSS 变量名只增不删**：保持向后兼容；新增槽位须有语义名（禁裸 hex / oklch 硬编码）。本期新增 `--bg-surface-row` + `--color-gray-925`，无任何变量改名 / 删除。
+5. **DataTable 行级 CSS 显式声明**（CHG-UI-05 落地）：`tbody tr { border-bottom: 1px solid var(--border-default) }` + `tr:last-child { border-bottom: none }` + `tr:hover { background: var(--bg-surface-row) }`，消费方零硬编码。
+
+### border 槽位决策（CHG-UI-04 arch-reviewer Y2 落地）
+
+`--state-*-border` 保留 `colors.<status>.base` 而非 `'transparent'` 的依据 — 4 个消费方文件显式读取该 token：
+
+- `packages/admin-ui/src/components/cell/kpi-card.tsx:115-117`
+- `apps/server/src/components/admin/design-tokens/DiffPanel.tsx:88`
+- `apps/server/src/components/admin/design-tokens/InheritanceBadge.tsx:18`
+- `packages/admin-ui/src/components/data-table/selection-action-bar.tsx:83`
+
+未来若上述 4 个消费方任一改为不消费 border，应回到 `transparent` 选项重审，避免决策依据被遗忘后无法 revert。
 
 ### 后果
 
-_（CHG-UI-04 完成时回填实测影响 + 视觉基线对比结论）_
+- **正向**：
+  - dark 模式 surfaces 五档梯度（canvas / surface / raised / row / elevated）齐备，行分割线 / row hover / 表格容器层级反差肉眼可见
+  - light 模式 canvas 暗一档，与 surface 反差恢复
+  - 文字层 fg.default / fg.muted 收回，去除"偏白发涩"观感
+  - state pill dark + light 共享同一 alpha-soft 映射，与设计 `--*-soft` 系列等价；Pill 自身从 Material 风转为设计风（软底 + 鲜亮 dot + 鲜亮文字）
+  - 25 项 alpha-soft 形态硬约束单测覆盖（`tests/unit/design-tokens/semantic.test.ts`）
+- **风险**：
+  - **light + warning 文字 contrast ≈ 2.3:1，不达 WCAG AA 4.5:1 正文**（O1 观察项）。这是 alpha-soft 双主题统一的固有代价；warning 不应承载关键正文信息（应配合 icon + 上下文 fg-default 文字）；CHG-UI-06 视觉走查时若审核台 `pending` / 警告条等场景出现"看不清"反馈，立 follow-up CHG-UI-04a 把 light warning fg 切到 `colors.warning.dark` (`oklch(52% .135 85)`)
+  - selection-action-bar 删除按钮 (selection-action-bar.tsx:130) bg = state-error-fg：现 fg 是 base 鲜亮红，按钮底色更鲜艳；contrast ≈ 4.6:1 勉强达 AA（O2 观察项）
+  - KpiCard `is-warn` light 模式 value 文本染浅黄 (`oklch(74%)`) 在白卡底配合 26px/700 大字阈值 3:1 边缘（O3 观察项）
+- **不可逆性**：低。state.ts / fg.ts / bg.ts / border.ts / color.ts 单文件改动；变量名只增不删；git revert 即可回滚，消费方零调整。
+
+### 关联
 
 ### 关联
 
 - **关联 ADR**：ADR-102（设计 Token 三层收编 + 设计稿 v2.1 映射 — 本 ADR 是其增量修订）
-- **关联任务卡**：CHG-UI-01（占位）/ CHG-UI-02（surfaces & border）/ CHG-UI-03（fg）/ CHG-UI-04（state pill；强制 opus + arch-reviewer）/ CHG-UI-05（DataTable 行分割线）/ CHG-UI-06（视觉走查 + 序列收口）
+- **关联任务卡**：CHG-UI-01（占位）✅ / CHG-UI-02（surfaces & border）✅ / CHG-UI-03（fg）✅ / CHG-UI-04（state pill；强制 opus + arch-reviewer）✅ PASS (CONDITIONAL) / CHG-UI-05（消费方 token 槽位全栈审计 + 修正 + 行分割线）⬜ / CHG-UI-06（视觉走查 + 序列收口）⬜
 - **关联序列**：SEQ-20260503-01
 - **关联规范**：`docs/rules/ui-rules.md`（CSS 变量使用约束）/ CLAUDE.md §"绝对禁止"硬编码颜色值条款

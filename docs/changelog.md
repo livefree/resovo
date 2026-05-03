@@ -4614,3 +4614,40 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **变更摘要**：dark 文字层从 gray.50 / gray.300 收回到 gray.200 / gray.400，整体正文/副标对比度对齐设计稿，去除"偏白发涩"观感
 - **不动**：light fg.* 已对齐设计；accent / 品牌主色未触动；disabled 一档暂留观察
 
+---
+
+## [CHG-UI-04] state pill 切换 alpha-soft（双主题统一）
+
+- **日期**：2026-05-03
+- **来源序列**：SEQ-20260503-01
+- **执行模型**：claude-opus-4-7（强制 opus — 跨 3+ 消费方语义契约变更，CLAUDE.md §模型路由第 2 条）
+- **子代理**：arch-reviewer (claude-opus-4-7) — PASS (CONDITIONAL on observation tracking)
+- **文件清单**（5 文件）：
+  - `packages/design-tokens/src/semantic/state.ts`：重写为双主题统一 — `sharedSlots = { bg: color-mix(... 14%, transparent), fg: <base>, border: <base> }`，dark/light 共用同一映射
+  - `packages/design-tokens/src/css/tokens.css`：重新生成（line 255-266 light + 360-371 dark 4 色 × 3 槽位完全一致）
+  - `docs/designs/backend_design_v2.1/state-pill-soft-walkthrough_20260503.md`：新建走查清单 12 项消费组件 + 双主题 contrast 预估表
+  - `docs/designs/backend_design_v2.1/ui-token-alignment-plan.md`：§4.4 同步实装代码 + 新增 border 槽位决策记录段（落实 arch-reviewer Y2）
+  - `tests/unit/design-tokens/semantic.test.ts`：新增 25 项 alpha-soft 形态硬约束单测（落实 arch-reviewer S1）
+- **测试覆盖**：
+  - typecheck ✅ / lint ✅ / unit 252f / **3123t**（+25 alpha-soft 硬约束） / tokens:validate OK
+  - 新增单测覆盖：每个 `state.<theme>.<kind>.bg` match `/^color-mix\(in oklch, oklch\([^)]+\) 14%, transparent\)$/`；fg/border === `colors.<kind>.base`；dark/light 双主题等价
+- **arch-reviewer 评审结论**：
+  - AUDIT RESULT: **PASS (CONDITIONAL on O1/O2/O3 写入 CHG-UI-06 强制截图项)**
+  - 红线项：0
+  - 黄线项 Y2（plan §4.4 文档与实装一致 + border 槽位决策记录）：✅ 已落地
+  - 黄线项 Y1（tokens.css dark/light 字面重复 24 行）：留 CHG-UI-06 顺手优化（不阻断本卡）
+  - 改进建议 S1（state alpha-soft 形态独立单测）：✅ 已落地（+25 测试）
+  - 观察项 O1：light + warning 文字 contrast ≈ 2.3:1 不达 AA（已知 trade-off）
+  - 观察项 O2：selection-action-bar 删除按钮 bg 更鲜艳，contrast ≈ 4.6:1 边缘 AA
+  - 观察项 O3：light + KpiCard `is-warn` value 大字阈值 3:1 边缘
+- **设计对齐复核**（5 项全 ✅）：
+  - dark/light 共享同一 alpha-soft 映射 ✅
+  - bg 形态 = 14% alpha 软底 ✅
+  - fg = base 鲜亮文字 ✅（≈ 设计 #22c55e/#f59e0b/#ef4444/#3b82f6）
+  - Pill 自身 borderless ✅
+  - KpiCard / DiffPanel / InheritanceBadge / selection-action-bar 显式边框消费方保留 base 鲜亮边框 ✅
+- **共享层沉淀评估**：本卡触动 token 共享层，59 个消费方文件零硬编码、零改动；新增 alpha-soft 形态硬约束测试为后续重构防回归
+- **变更摘要**：state.ts 从 dark/light 实色对调（Material 风）切换为双主题统一 alpha-soft（设计风）；border 槽位保留 base 满足显式边框消费方；走查清单为 CHG-UI-06 视觉收口提供强制核对清单
+- **关联 ADR**：ADR-111（accepted；后果与 border 槽位决策记录已回填）
+- **后续解锁**：CHG-UI-05 可启动（消费方 token 槽位全栈审计 + 修正；本卡完成后可一并审计 pill 消费方）
+
