@@ -11,6 +11,7 @@ import { M } from '@/i18n/messages/zh-CN/moderation'
 interface PendingCenterProps {
   readonly v: VideoQueueRow
   readonly onStaffNoteChange: (videoId: string, note: string | null) => void
+  readonly onEditVideo: (videoId: string) => void
 }
 
 const BTN_SM: React.CSSProperties = {
@@ -30,7 +31,7 @@ const SECTION: React.CSSProperties = {
   marginBottom: 14,
 }
 
-export function PendingCenter({ v, onStaffNoteChange }: PendingCenterProps): React.ReactElement {
+export function PendingCenter({ v, onStaffNoteChange, onEditVideo }: PendingCenterProps): React.ReactElement {
   const [currentEp, setCurrentEp] = useState(1)
   const [noteEditing, setNoteEditing] = useState(false)
   const [noteSubmitting, setNoteSubmitting] = useState(false)
@@ -130,8 +131,8 @@ export function PendingCenter({ v, onStaffNoteChange }: PendingCenterProps): Rea
             </div>
           )}
           <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-            <button style={BTN_SM} onClick={() => window.open(`/admin/videos?q=${encodeURIComponent(v.title)}`, '_blank')}>✎ 编辑视频</button>
-            <button style={BTN_SM} onClick={() => window.open(`/video/${v.id}`, '_blank')}>↗ 前台</button>
+            <button style={BTN_SM} onClick={() => onEditVideo(v.id)} aria-label={M.aria.editVideo}>✎ 编辑视频</button>
+            <button style={BTN_SM} onClick={() => window.open(`/video/${v.id}`, '_blank')} aria-label={M.aria.openFrontend}>↗ 前台</button>
           </div>
         </div>
       </div>

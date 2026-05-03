@@ -1915,3 +1915,301 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
   - `docs/rules/api-rules.md:98` 更新真源位置
 - **质量门禁**：typecheck ✅（8 workspace）+ lint ✅（5 tasks）+ 全量 unit ✅（246f / 3045t 零回归）
 - **后续解锁**：CHG-SN-4-07 / CHG-SN-4-08 准入条件全部满足（DEBT-SN-4-05-C 完全关闭）
+
+---
+
+## [SEQ-20260502-01] M-SN-4 收口扫尾：审核台投产对齐（执行序列）
+
+> 创建时间：2026-05-02 22:00
+> 最后更新时间：2026-05-02 22:00
+> 状态：🟡 规划中
+> 负责人：@engineering
+> 里程碑：M-SN-4 投产可用 · CHG-SN-4-10 收口前置
+> Plan 真源：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.6 patch（待起草）
+
+### 背景
+
+CHG-SN-4-07 / -08 完成后，用户人工试用发现审核台距离投入使用仍有 **7 项实装偏差**（详见 plan v1.6 patch §1）。问题集中在：
+1. 视频编辑跳转错误（→ 视频库列表，应打开 VideoEditDrawer）
+2. 线路展示按 video_sources 行平铺（10 集 × 3 站 = 30 行），未按"线路"维度聚合，且信息密度严重低于设计稿
+3. DecisionCard 顶部 BarSignal "探测/渲染聚合"位置不合理（与播放器/标题区状态信息重叠）
+4. 右栏只剩"详情"1 个 Tab（设计稿要求 详情/历史/类似 三 Tab）
+5. 中央播放器仍是静态 ▶ 占位（未接入 player-core）
+6. 缩略图直接 `<img>` 无 fallback（未用 admin-ui Thumb）
+7. "筛选预设/保存预设"两按钮无功能
+
+### 决策（用户 2026-05-02 拍板）
+
+- **方案 B**：线路聚合键 = `(source_site_key, source_name)` — 跨站不合并；line_key 一级建模推迟 M-SN-5（DEBT-LINE-KEY-01）
+- **G3 取消**：决策卡按钮维持现状 2 个（编辑视频 + 前台），未来再考虑快捷按钮
+- **G5 极简**：审核台播放器仅播放/进度/集数切换，不接入 GlobalPlayerHost；feedback-reporter（D-17）顺带接入
+- **筛选预设**：纯 localStorage，不跨设备；URL params 主轨原则（用户显式覆盖时不应用预设）
+- **similar Tab**：本期占位 "M-SN-5 实装中"
+- **DecisionCard 顶部 BarSignal 删除**（packages/admin-ui/cell/decision-card.tsx）
+- **设计对齐复核（强制）**：每张卡完成时除常规质量门禁外，**必须对照截图/设计要求做"设计对齐复核"**——不仅是无错即通过，要逐项核对视觉密度、信息字段、交互态、token 使用是否符合设计稿。复核结果写入卡片"设计对齐复核结论"段。
+
+### 设计真源
+
+- 截图：`docs/designs/screenshot/Screenshot 2026-05-02 at 20.15.54.png`（线路面板信息密度 + 行结构 + 选中态 + 工具栏布局参考）
+- 视觉密度规约：plan v1.6 patch §2（FIX-B 强制约束）
+
+### 序列共性门禁（每张卡必须通过）
+
+1. **设计对齐复核**（核心新增门）：对照截图/规约逐项核对，输出 ≥ 5 项核对结论（行高、信息字段、chip 样式、选中态、token 使用…），不允许"实现了即通过"
+2. typecheck + lint + unit test 全绿
+3. 涉及视觉的卡：visual baseline PNG（手动归档至 `tests/visual/moderation/`，与现有 baseline 同协议）
+4. 涉及 admin-ui 共享组件 Props 契约新增的卡：强制升 Opus 子代理（CLAUDE.md 模型路由第 1 条）
+5. CHG-SN-4-FIX-CLOSE 收口卡：arch-reviewer (claude-opus-4-7) 全序列 PASS
+
+### 任务列表（按执行顺序 / 阶段并行）
+
+#### Phase 1（5 张并行轨）
+
+1. **CHG-SN-4-FIX-A** — 视频编辑跳转修复 + DecisionCard BarSignal 删除（状态：✅ 完成 2026-05-02）
+   - 创建时间：2026-05-02 22:00
+   - 计划开始：2026-05-03
+   - 实际开始：2026-05-02 22:30
+   - 完成时间：2026-05-02 21:10
+   - 实际工时：~40 min（< 估算 2h）
+   - 实际主循环：claude-opus-4-7（偏离 sonnet 建议；已记录 changelog）
+   - 子代理：无
+   - 质量门禁：typecheck ✅ / lint ✅ / unit 250f / 3074t 全绿（DecisionCard 21/21）
+   - 设计对齐复核：6 项 checkbox 全 ✅（详见 changelog）
+   - 后续解锁：阶段 1 并行 4 张（FIX-B / FIX-C / FIX-E / FIX-F）
+   - 工时估算：2h
+   - 建议主循环模型：sonnet（claude-sonnet-4-6）
+   - 子代理：无（无新共享 API 契约）
+   - 文件范围：
+     - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx`（删除 window.open 跳转）
+     - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`（引入 VideoEditDrawer 受控状态）
+     - `packages/admin-ui/src/components/cell/decision-card.tsx`（删除 BarSignal 信号行 + caption "探测/渲染聚合"）
+     - `packages/admin-ui/src/components/cell/decision-card.types.ts`（评估 onSignalClick prop 是否仍需要 — 若无消费方则删除）
+     - `tests/unit/.../decision-card.test.tsx`（同步删除 BarSignal 相关 case）
+   - 完成判据：
+     - 审核台中央"✎ 编辑视频"打开 VideoEditDrawer（含 4 Tab）；不再跳到 `/admin/videos?q=`
+     - DecisionCard 视觉验收：仅"标题 → 决策建议 banner → 可选 StaffNoteBar → actions"四段，无 BarSignal 行
+     - typecheck + lint + unit 全绿；DecisionCard 23 case 调整后保持全绿
+   - **设计对齐复核**：
+     - [ ] DecisionCard 渲染高度 ≤ 80px（无 BarSignal 行后应明显紧凑）
+     - [ ] VideoEditDrawer 打开时背景透明（CHG-DESIGN-13 协议保持）
+     - [ ] "编辑视频"按钮点击响应 < 200ms（drawer 打开动画）
+     - [ ] 关闭 drawer 后回到 PendingCenter，activeIdx 与 staffNote 状态保持
+     - [ ] decision-card 单测无 BarSignal 引用残留
+
+2. **CHG-SN-4-FIX-B** — 线路面板按"线路"聚合 + 信息密度对齐设计稿（状态：⬜）
+   - 创建时间：2026-05-02 22:00
+   - 计划开始：2026-05-03
+   - 工时估算：1d（含 mockup + 评审 + 实装 + visual baseline）
+   - 建议主循环模型：sonnet
+   - **强制升 Opus 子代理**：`arch-reviewer` (claude-opus-4-7) — 评审 SignalChip 新组件 Props 契约 + LinesPanel 聚合策略（满足 CLAUDE.md "新共享组件 API 契约" 强制条件）
+   - 文件范围：
+     - `packages/admin-ui/src/components/cell/signal-chip.tsx`（**新增**，文字 chip 形态：`probe|render` × `ok|partial|dead|pending|unknown`）
+     - `packages/admin-ui/src/components/cell/signal-chip.types.ts`（新增）
+     - `packages/admin-ui/src/components/cell/index.ts`（追加 export）
+     - `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx`（重写为聚合视图）
+     - `apps/server-next/src/app/admin/moderation/_client/LinesPanel.module.css`（**新建** — 复杂行布局抽到 CSS module，避免 inline style 失控）
+     - `apps/server-next/src/lib/moderation/api.ts`（追加 `groupSourcesByLine` 工具函数）
+     - `apps/server-next/src/lib/moderation/lines-aggregate.ts`（**新建** — 聚合纯函数 + 单测）
+     - `tests/unit/admin-moderation/lines-aggregate.test.ts`（新建，≥ 8 case 覆盖：单线路 / 多集 / 跨站同名 / 全 dead / 全 pending / 部分 active）
+     - `tests/unit/components/admin-ui/cell/signal-chip.test.tsx`（新增，≥ 10 case 覆盖 5 状态 × 2 类型）
+     - `tests/visual/moderation/lines-panel-collapsed.png`（手动归档）
+     - `tests/visual/moderation/lines-panel-expanded-line2.png`（手动归档）
+   - 数据模型决策（plan v1.6 patch §3 方案 B）：
+     - 聚合键 = `(source_site_key, source_name)` 复合
+     - 聚合函数：每组返回 `{ key, siteKey, lineName, hostname, totalEpisodes, activeCount, probeAggregate, renderAggregate, latencyMedianMs, qualityHighest, episodes: VideoSource[] }`
+     - 状态聚合规则：全 ok→ok / 任意 ok 且非全 ok → partial / 全 dead → dead / 全 pending → pending / 其他 → unknown
+   - 视觉规约（plan v1.6 patch §2 强制对齐）：
+     - 单行 height: 32px；行结构 10 列 grid（指示点 12 / 线路名 56 / 域名 1fr / 延迟 48 / 探 chip 56 / 渲 chip 56 / 质量 40 / 禁用 24 / 展开 24）
+     - 选中线路：`bg: var(--admin-accent-soft)` + `border-left: 2px solid var(--accent-default)`
+     - SignalChip：圆角 4 / padding 2px 6px / fontSize 10 / bg+fg 双色 token
+     - 行间：1px solid `var(--border-subtle)`，无 gap
+     - 展开后：padding-left 28px，集数级 mini grid（每 cell 56×24，复用现有 DualSignal 圆点）
+     - 工具栏底部 32px：左 "📜 证据"（chip btn）+ 右 "✕ 禁用全部失效"（chip btn danger）
+     - 头部："线路 N/M 启用" + spacer + "↻ 重新抓取"（chip btn）
+     - **零硬编码颜色**（CSS module + var(--*)，grep 验证）
+   - 完成判据：
+     - LinesPanel 渲染示例视频（10 集 × 3 站点）→ 显示线路条数 = `distinct(source_site_key, source_name)` 数（典型 ≤ 5）
+     - 选中线路状态可被父组件读取（为 FIX-D Player 提供选中源 URL）
+     - SignalChip 5 状态 × 2 类型共 10 种文字 + 配色全部覆盖
+     - typecheck + lint + unit 全绿（lines-aggregate ≥ 8 case + signal-chip ≥ 10 case）
+   - **设计对齐复核**（FIX-B 复核门最严，对应"信息密度"用户硬约束）：
+     - [ ] 单行高度 ≤ 36px（实测；超过即返工）
+     - [ ] 单行可见信息字段 ≥ 7（线路名 / 域名 / 延迟 / 探 chip / 渲 chip / 质量 tag / 禁用 / 展开 — 至少 7 项可见）
+     - [ ] 当前选中线路视觉态在视图内一眼可识（橙色边框 + soft 背景双重提示）
+     - [ ] SignalChip 三态颜色全部走 token，0 硬编码（grep `#[0-9a-f]{3,6}` 在 LinesPanel + signal-chip 命中数 = 0）
+     - [ ] 工具栏左"证据"/ 右"禁用全失效"分置同一行（不再像现状错位）
+     - [ ] 展开 1 条线路后 → 集数级 mini grid 显示对应集的 DualSignal，点击进入 LineHealthDrawer
+     - [ ] 与 `Screenshot 2026-05-02 at 20.15.54.png` 对比信息密度差距 < 10%（人工或 Playwright 叠加）
+
+3. **CHG-SN-4-FIX-C** — 右栏 RightPaneTabs（详情/历史/类似）三态化（状态：⬜）
+   - 创建时间：2026-05-02 22:00
+   - 计划开始：2026-05-03
+   - 工时估算：4h
+   - 建议主循环模型：sonnet
+   - 子代理：无
+   - 文件范围：
+     - `apps/server-next/src/app/admin/moderation/_client/RightPane/index.tsx`（新增）
+     - `apps/server-next/src/app/admin/moderation/_client/RightPane/TabDetail.tsx`（迁移现有 RightPaneDetail）
+     - `apps/server-next/src/app/admin/moderation/_client/RightPane/TabHistory.tsx`（新增 — 调 `/admin/videos/:id/review-log` 已有端点 + audit_log 该视频条目）
+     - `apps/server-next/src/app/admin/moderation/_client/RightPane/TabSimilar.tsx`（新增 — 占位"M-SN-5 实装中"，无 API 调用）
+     - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`（替换 RightPaneDetail 为 RightPane + 持久化 storageKey）
+     - `apps/server-next/src/lib/moderation/use-review-history.ts`（新建 hook + ≥ 4 case 单测）
+     - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts`（追加 history/similar 文案 keys）
+   - 持久化：`admin.moderation.rightTab.v1` (sessionStorage) — 不进 URL（plan §5.0.1 D-13 已规约）
+   - 完成判据：
+     - 三 Tab segment 切换；history Tab 显示该视频的审核动作时间线（review_log + audit_log 合并去重）
+     - similar Tab 渲染 "M-SN-5 实装中" + 灰度图标，无 API 请求
+     - typecheck + lint + unit 全绿
+   - **设计对齐复核**：
+     - [ ] 三 Tab segment 风格与左栏 ModerationConsole 主 Tab 风格一致（segBtnStyle 复用）
+     - [ ] history Tab 时间线行高 ≤ 36px（密度对齐设计稿 column）
+     - [ ] history 空状态文案使用 i18n key（不硬编码）
+     - [ ] similar 占位文案 + 设计 token 灰度图标使用 `var(--fg-subtle)`
+     - [ ] 切 Tab 不丢 activeIdx；刷新页面后 rightTab 还原
+
+4. **CHG-SN-4-FIX-E** — 缩略图统一接入 admin-ui Thumb（状态：⬜）
+   - 创建时间：2026-05-02 22:00
+   - 计划开始：2026-05-03
+   - 工时估算：1h
+   - 建议主循环模型：haiku（claude-haiku-4-5）— 模板化替换工作
+   - 子代理：无
+   - 文件范围：
+     - `apps/server-next/src/app/admin/moderation/_client/ModListRow.tsx`（替换裸 `<img>` → `<Thumb>`）
+     - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx`（替换裸 `<img>` → `<Thumb>`）
+     - `packages/admin-ui/src/components/cell/thumb.tsx`（评估 — 若现有 Thumb 不支持 36×54 + 80×120 双尺寸预设，追加 `size?: 'sm' | 'md'` prop）
+     - `packages/admin-ui/src/components/cell/thumb.types.ts`（同步）
+     - `tests/unit/components/admin-ui/cell/thumb.test.tsx`（追加新 size 预设的 case，若有改动）
+   - 完成判据：
+     - 列表行缩略图：36×54 / 中央海报：80×120，coverUrl null/error 时显示 type icon fallback（沿用现有视频库 Thumb 规约）
+     - typecheck + lint + unit 全绿
+   - **设计对齐复核**：
+     - [ ] 缩略图边框圆角 4px（与设计稿截图一致）
+     - [ ] coverUrl null 时 fallback 显示视频类型 icon（不是空灰块）
+     - [ ] 加载失败时 error 状态优雅降级（无控制台报错）
+     - [ ] 不再使用 `// eslint-disable-next-line @next/next/no-img-element`
+
+5. **CHG-SN-4-FIX-F** — 筛选预设功能（保存/应用/默认/删除）（状态：⬜）
+   - 创建时间：2026-05-02 22:00
+   - 计划开始：2026-05-03
+   - 工时估算：4h
+   - 建议主循环模型：sonnet
+   - 子代理：无
+   - 文件范围：
+     - `apps/server-next/src/lib/moderation/use-filter-presets.ts`（新建 hook，localStorage CRUD + 默认应用逻辑）
+     - `apps/server-next/src/app/admin/moderation/_client/FilterPresetPopover.tsx`（新建）
+     - `apps/server-next/src/app/admin/moderation/_client/SavePresetModal.tsx`（新建）
+     - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`（接线两按钮 + URL 主轨判定 + 默认应用）
+     - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts`（追加 preset.* keys）
+     - `tests/unit/admin-moderation/use-filter-presets.test.ts`（新建，≥ 6 case：CRUD + 默认应用 + URL 覆盖优先 + 跨 Tab 隔离）
+   - 数据模型（localStorage `admin.moderation.presets.v1`）：
+     ```typescript
+     {
+       version: 'v1',
+       presets: Array<{
+         id: string,        // uuid
+         name: string,
+         tab: 'pending' | 'staging' | 'rejected' | 'all',
+         query: { type?, sourceCheckStatus?, doubanStatus?, hasStaffNote?, needsManualReview? },
+         isDefault: boolean,
+         createdAt: string,
+         updatedAt: string,
+       }>
+     }
+     ```
+   - 默认应用规则：
+     - 进入审核台时检查 URL params 是否有筛选参数
+     - 无 URL params 且当前 Tab 有 `isDefault=true` 预设 → 自动应用
+     - 有 URL params → 不应用预设（用户显式覆盖优先）
+   - 完成判据：
+     - 保存预设：弹出 Modal 输入名称 → localStorage 持久化 → Popover 即时显示
+     - 应用预设：单击预设名 → useTableQuery 当前 snapshot 替换 → URL params 同步更新
+     - 设为默认：⭐ 标记，每个 Tab 最多 1 个 default
+     - 删除预设：×按钮 + toast "已删除「{name}」 [撤销]"（5s）
+     - typecheck + lint + unit 全绿（≥ 6 case）
+   - **设计对齐复核**：
+     - [ ] Popover 单条预设行 ≤ 40px（标题 13px + 简述 11px 双行）
+     - [ ] 默认预设⭐图标颜色 = `var(--state-warning-fg)`
+     - [ ] 删除 toast 撤销机制可用（5s 内点击撤销恢复）
+     - [ ] URL params 优先级：用户带参访问时不应用默认预设（验证）
+     - [ ] localStorage 失效（隐私模式）时降级为内存态，无报错
+     - [ ] Popover 关闭走 useOverlay 协议（与 admin-ui Modal/Drawer 一致）
+
+#### Phase 2（串行依赖）
+
+6. **CHG-SN-4-FIX-D** — 极简 Player 接入 + feedback-reporter（状态：⬜）
+   - 前置：CHG-SN-4-FIX-B 完成（依赖选中线路状态契约）
+   - 创建时间：2026-05-02 22:00
+   - 计划开始：FIX-B 完成后
+   - 工时估算：5h
+   - 建议主循环模型：sonnet
+   - 子代理：无（player-core 已有 Player export，无新契约）
+   - 文件范围：
+     - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx`（替换 ▶ 占位为 `<AdminPlayer>`）
+     - `apps/server-next/src/app/admin/moderation/_client/AdminPlayer.tsx`（新建 — 包装 player-core 的极简播放器，处理选中源切换 + episode 切换）
+     - `packages/player-core/src/feedback-reporter.ts`（新建 — D-17 客户端实装）
+     - `packages/player-core/src/index.ts`（追加 export）
+     - `apps/server-next/src/lib/moderation/use-selected-line.ts`（新建 — 与 LinesPanel 共享选中态）
+     - `tests/unit/admin-moderation/admin-player.test.tsx`（新建，≥ 5 case：源切换 / 集数切换 / 错误降级 / feedback 上报去抖 / null 源占位）
+   - Player 范围（极简）：
+     - **包含**：播放/暂停 / 进度条 / 当前集数显示 / 错误降级
+     - **不包含**：字幕 / 多线路切换 UI（线路切换由 LinesPanel 控制）/ 影院模式 / 画中画 / 镜头切换
+   - feedback 上报（D-17）：
+     - onFirstFrame → POST /v1/feedback/playback {success: true, resolutionWidth/Height}
+     - onError → POST /v1/feedback/playback {success: false, errorCode}
+     - onBufferingEnd → 累计 bufferingCount，去抖 60s
+     - PII 红线：不上报 userId / IP（plan §1 D-17）
+   - 完成判据：
+     - 中央 player 区域加载选中线路当前集 source_url，可播放
+     - 切换 LinesPanel 选中线路 → player 重新加载新源
+     - 切换集数（EpisodeSelector）→ player 重新加载该线路对应集
+     - 无可播放源（选中线路 dead 或 episode 缺失）→ 显示错误占位 + 提示
+     - feedback 上报：手动验证 onFirstFrame / onError 各触发一次
+   - **设计对齐复核**：
+     - [ ] Player 边框圆角 6px、aspect-ratio 16/9（与设计稿一致）
+     - [ ] Player toolbar 高度 ≤ 32px（与 LinesPanel 单行高度对齐）
+     - [ ] 错误占位走 token 颜色（`var(--state-error-bg)` / `var(--state-error-fg)`）
+     - [ ] 切换源时 loading 状态显示（不闪屏）
+     - [ ] feedback 上报无控制台 console.log（生产环境）
+     - [ ] 不使用 GlobalPlayerHost（grep 验证 admin/moderation 无引用）
+
+#### Phase 3（收口卡）
+
+7. **CHG-SN-4-FIX-CLOSE** — 投产对齐收口（e2e + arch-reviewer 评级）（状态：⬜）
+   - 前置：FIX-A ～ FIX-F 全部完成
+   - 创建时间：2026-05-02 22:00
+   - 计划开始：Phase 1+2 完成后
+   - 工时估算：3h
+   - 建议主循环模型：sonnet
+   - **强制升 Opus 子代理**：`arch-reviewer` (claude-opus-4-7) — 全序列 milestone 复评级（满足 CLAUDE.md 强制升 Opus 第 6 条 "高风险 PR 的独立 code review"）
+   - 文件范围：
+     - `tests/e2e/admin/moderation/edit-drawer-open.spec.ts`（新建 — FIX-A 黄金路径）
+     - `tests/e2e/admin/moderation/lines-aggregate-display.spec.ts`（新建 — FIX-B 黄金路径）
+     - `tests/e2e/admin/moderation/right-pane-tabs.spec.ts`（新建 — FIX-C 黄金路径）
+     - `tests/e2e/admin/moderation/filter-presets.spec.ts`（新建 — FIX-F 黄金路径）
+     - `tests/e2e/admin/moderation/player-integration.spec.ts`（新建 — FIX-D 黄金路径）
+     - `tests/visual/moderation/`（汇总 ≥ 9 张 baseline，FIX-B/-C/-D/-F 产出归档）
+     - `docs/changelog.md`（追加 SEQ-20260502-01 完成条目）
+     - `docs/M-SN-4-milestone-audit-{date}.md`（新建 — arch-reviewer 评级文档）
+   - 完成判据：
+     - 5 个 e2e spec 全绿
+     - visual baseline 9 张归档（含 lines-panel-collapsed/expanded、right-pane-history/similar、filter-preset-popover、player-loaded、edit-drawer-open）
+     - typecheck + lint + 全量 unit 全绿
+     - arch-reviewer 评级 ≥ B+（A 进 M-SN-5；B 带欠账进；C 暂停）
+   - **设计对齐复核**（最终验收门）：
+     - [ ] 7 项原始偏差（G1/G2/G2'/G4/G5/G6/G7）逐项核对设计稿，输出"对齐 / 偏离 + 偏离原因"清单
+     - [ ] visual diff 9 张 PNG 与设计稿截图对比，密度差距 < 10%
+     - [ ] e2e 5 spec 覆盖所有用户原始报告问题
+     - [ ] DEBT-LINE-KEY-01 已登记到欠账表，M-SN-5 接续
+
+### 欠账登记（本序列产生 / 推迟）
+
+| 欠账 ID | 来源 | 描述 | 截止节点 |
+|---------|------|------|---------|
+| DEBT-LINE-KEY-01 | SEQ-20260502-01 决策（方案 B 短期妥协）| `video_sources.line_key` 一级建模 + 跨站合并 UI（Z01.X02 = Z02.X02 等价合并）；本期使用 `(source_site_key, source_name)` 复合键聚合，逻辑上每站独立线路 | M-SN-5 启动时新开 CHG-SN-5-LINE-KEY-XX |
+| DEBT-PLAYER-FEEDBACK-PII | CHG-SN-4-FIX-D | feedback-reporter 上报路径未走后端 hash(IP) 处理；`apps/api` 当前无 hash 中间件，需配 trustProxy 白名单 + 后端 `getClientIpHash` util；与 DEBT-SN-4-05-B 关联 | cutover（M-SN-7）前 |
+
+### 后续解锁
+
+- CHG-SN-4-10 milestone 收口卡（待本序列 FIX-CLOSE 完成 + DEBT-SN-4-A / -07-A / -08-A visual baseline 9 张全部归档）
+
+

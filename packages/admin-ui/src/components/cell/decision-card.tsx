@@ -5,13 +5,17 @@
  *
  * 真源：decision-card.types.ts（arch-reviewer Opus 2 轮 PASS 契约）+ ADR-106
  *
+ * v1.6 patch（CHG-SN-4-FIX-A）：删除 BarSignal 行 + onSignalClick prop —
+ *   plan v1.6 §1 G2'：用户判定 "探测/渲染聚合" 与播放器/标题区状态信息重叠；
+ *   视频整体信号通过 LinesPanel 头部 + VisChip 表达更直观。probeState/renderState 仍保留，
+ *   驱动决策建议 banner 三态。
+ *
  * 实装契约（契约一致性硬约束）：
  *   - video Pick 列表 = DecisionCardVideo（id / title / reviewStatus / visibilityStatus /
  *     isPublished / staffNote / reviewLabelKey / sourceCheckStatus / doubanStatus）；
  *     **禁止 ad hoc 接收非 Pick 字段或拓宽为 Partial<VideoQueueRow>**（Opus 观察项硬约束）
- *   - 视觉骨架：header slot → 标题 → 决策建议条（ok/warn/danger 三态）→ BarSignal +
- *     双信号 caption → StaffNoteBar（仅 staffNote 非空 + onStaffNoteEdit 已传时渲染）→
- *     actions slot
+ *   - 视觉骨架（v1.6）：header slot → 标题 → 决策建议条（ok/warn/danger 三态）→
+ *     StaffNoteBar（仅 staffNote 非空 + onStaffNoteEdit 已传时渲染）→ actions slot
  *   - 决策建议三态推算（基于 probeState + renderState）：
  *     · 'dead' + 'dead'                         → danger（全线路失效——建议拒绝）
  *     · probeState !== renderState（信号冲突）  → warn（信号冲突，建议核查）
@@ -29,7 +33,6 @@
  */
 import React, { forwardRef } from 'react'
 import type { DualSignalDisplayState } from '@resovo/types'
-import { BarSignal } from './bar-signal'
 import { StaffNoteBar } from '../feedback/staff-note-bar'
 import type { DecisionCardProps } from './decision-card.types'
 
@@ -123,14 +126,6 @@ const BANNER_ICON_STYLE: React.CSSProperties = {
   lineHeight: 1,
 }
 
-const SIGNAL_ROW_STYLE: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '10px',
-  fontSize: '12px',
-  color: 'var(--fg-muted)',
-}
-
 type Ref = HTMLDivElement
 
 export const DecisionCard = forwardRef<Ref, DecisionCardProps>(function DecisionCard(
@@ -141,7 +136,6 @@ export const DecisionCard = forwardRef<Ref, DecisionCardProps>(function Decision
     actions,
     header,
     onStaffNoteEdit,
-    onSignalClick,
     testId,
   },
   ref,
@@ -168,16 +162,6 @@ export const DecisionCard = forwardRef<Ref, DecisionCardProps>(function Decision
       <div data-decision-card-banner style={bannerStyle(decision.tone)}>
         <span data-decision-card-icon style={BANNER_ICON_STYLE}>{decision.icon}</span>
         <span data-decision-card-text>{decision.text}</span>
-      </div>
-
-      <div style={SIGNAL_ROW_STYLE} data-decision-card-signal>
-        <BarSignal
-          probeState={probeState}
-          renderState={renderState}
-          onClick={onSignalClick}
-          ariaLabel="点击查看线路健康详情"
-        />
-        <span>探测 / 渲染聚合</span>
       </div>
 
       {showStaffNote && onStaffNoteEdit && (

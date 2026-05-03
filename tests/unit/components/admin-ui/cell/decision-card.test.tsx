@@ -1,13 +1,16 @@
 /**
  * DecisionCard 单测（CHG-SN-4-04 D-14 第 5 件 · 跨层下沉例外 ADR-106）
  *
+ * v1.6 patch（CHG-SN-4-FIX-A · plan v1.6 §1 G2'）：删除 BarSignal 渲染行 + onSignalClick
+ *   prop；本测试同步移除 BarSignal / onSignalClick 相关 case。probeState/renderState 仍
+ *   保留驱动决策建议 banner 三态推算（覆盖未变）。
+ *
  * 覆盖契约硬约束：
  *   - DecisionCardVideo Pick 列表消费（id / title / reviewStatus / staffNote 等）
  *   - 决策建议三态推算（ok / warn / danger）
- *   - BarSignal 集成（probeState / renderState 透传）
  *   - StaffNoteBar 条件渲染（仅 staffNote 非空 + onStaffNoteEdit 已传）
  *   - actions / header slot 渲染
- *   - onSignalClick / onStaffNoteEdit 回调
+ *   - onStaffNoteEdit 回调
  *   - forwardRef / testId / data-* 钩子
  *   - 颜色仅 var(--*) token（零硬编码）
  */
@@ -41,14 +44,12 @@ describe('DecisionCard — 基础渲染', () => {
     expect(screen.getByText('测试')).toBeTruthy()
   })
 
-  it('始终渲染 BarSignal（probeState / renderState 透传）', () => {
+  it('v1.6 删除 BarSignal 渲染行 — 不渲染任何 [data-bar-signal] 节点', () => {
     const { container } = render(
       <DecisionCard video={mkVideo()} probeState="partial" renderState="dead" />,
     )
-    const probeBar = container.querySelector('[data-bar-signal-bar="probe"]')
-    const renderBar = container.querySelector('[data-bar-signal-bar="render"]')
-    expect(probeBar?.getAttribute('data-bar-signal-state')).toBe('partial')
-    expect(renderBar?.getAttribute('data-bar-signal-state')).toBe('dead')
+    expect(container.querySelector('[data-bar-signal]')).toBeNull()
+    expect(container.querySelector('[data-decision-card-signal]')).toBeNull()
   })
 
   it('始终渲染决策建议条', () => {
@@ -228,29 +229,6 @@ describe('DecisionCard — slot + 回调', () => {
     expect(container.querySelector('[data-decision-card-actions]')).toBeNull()
   })
 
-  it('onSignalClick 透传到 BarSignal → 点击触发回调', () => {
-    const onSignalClick = vi.fn()
-    const { container } = render(
-      <DecisionCard
-        video={mkVideo()}
-        probeState="ok"
-        renderState="ok"
-        onSignalClick={onSignalClick}
-      />,
-    )
-    const barBtn = container.querySelector('[data-bar-signal]') as HTMLButtonElement
-    expect(barBtn.tagName.toLowerCase()).toBe('button')
-    fireEvent.click(barBtn)
-    expect(onSignalClick).toHaveBeenCalledTimes(1)
-  })
-
-  it('未传 onSignalClick → BarSignal 根元素是 span', () => {
-    const { container } = render(
-      <DecisionCard video={mkVideo()} probeState="ok" renderState="ok" />,
-    )
-    const bar = container.querySelector('[data-bar-signal]')
-    expect(bar?.tagName.toLowerCase()).toBe('span')
-  })
 })
 
 describe('DecisionCard — token + forwardRef + testId', () => {

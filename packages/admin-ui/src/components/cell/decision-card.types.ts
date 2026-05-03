@@ -27,7 +27,12 @@
  *   - `video` 字段仅 Pick `VideoQueueRow` 的展示子集，不接受全量行（避免下沉层因 schema
  *     扩展被动升级）
  *   - 不接受任何业务 handler（如 `onApprove` / `onReject`）；本卡只暴露通用交互回调
- *     （`onSignalClick` / `onStaffNoteEdit`），其余通过 `actions` slot 由消费方实装
+ *     （`onStaffNoteEdit`），其余通过 `actions` slot 由消费方实装
+ *
+ * v1.6 patch（CHG-SN-4-FIX-A · plan v1.6 §1 G2'）：
+ *   删除 `onSignalClick` prop —— DecisionCard 不再渲染 BarSignal 信号行；视频整体信号
+ *   通过 LinesPanel 头部 + VisChip 表达。probeState/renderState 仍保留，驱动决策建议
+ *   banner 三态推算。
  */
 
 import type { ReactNode } from 'react'
@@ -85,11 +90,6 @@ export interface DecisionCardProps {
    * 本卡仅传递"进入编辑"信号，编辑态 UI 由内部嵌入的 StaffNoteBar 处理。
    */
   readonly onStaffNoteEdit?: () => void
-
-  /**
-   * 点击双信号回调；典型场景：打开 LineHealthDrawer。
-   */
-  readonly onSignalClick?: () => void
 
   /** 测试钩子 */
   readonly testId?: string

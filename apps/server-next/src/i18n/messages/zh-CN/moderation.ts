@@ -125,5 +125,7 @@ export const M = {
     consoleApproveVideo: '通过视频',
     consolePreviewPane: '视频审核预览',
     consoleDetailPane: '视频详情',
+    editVideo: '打开视频编辑',
+    openFrontend: '在前台预览',
   },
 } as const

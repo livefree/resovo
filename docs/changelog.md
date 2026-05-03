@@ -4060,3 +4060,83 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - typecheck ✅（全 8 workspace 零报错）
 - lint ✅（5 tasks 全 pass）
 - unit ✅（250 文件 / 3076 tests 全绿，零回归）
+
+---
+
+## [CHG-SN-4-FIX-A] 视频编辑跳转修复 + DecisionCard BarSignal 删除
+
+> 完成时间：2026-05-02 21:10
+> 序列：SEQ-20260502-01（M-SN-4 收口扫尾 · 投产对齐）
+> 范围：plan v1.6 §1 G1 + G2'
+> 执行模型：claude-opus-4-7（偏离 plan §SEQ-20260502-01 sonnet 建议；理由：当前会话已在 opus；无新共享 API 契约 + 无重大架构决策，opus 主导可接受）
+> 子代理：无
+
+### 修复内容
+
+- **G1 视频编辑跳转**：审核台中央"✎ 编辑视频"按钮原跳到 `/admin/videos?q=`（视频库列表搜索），改为打开 `VideoEditDrawer`（4 Tab 抽屉，apps/server-next/src/app/admin/videos/_client/VideoEditDrawer.tsx）
+- **G2' DecisionCard BarSignal 删除**：删除决策卡顶部的"探测/渲染聚合"双柱图行 + caption + onSignalClick prop；视频整体信号通过 LinesPanel 头部"线路 N/M 启用"+ VisChip 表达。`probeState`/`renderState` 仍保留，驱动决策建议 banner 三态推算
+- BarSignal 组件本身**不删**（仍由 admin-ui 导出，TabLines.tsx 等消费方继续使用）
+
+### 文件改动
+
+- `packages/admin-ui/src/components/cell/decision-card.tsx`（删除 BarSignal import + SIGNAL_ROW_STYLE + 信号行渲染 + onSignalClick prop 解构）
+- `packages/admin-ui/src/components/cell/decision-card.types.ts`（删除 onSignalClick prop + 注释更新 v1.6 patch 注解）
+- `tests/unit/components/admin-ui/cell/decision-card.test.tsx`（23 case → 21 case；新增防回归断言"v1.6 删除 BarSignal 渲染行"）
+- `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx`（按钮 onClick 改 `onEditVideo(v.id)`；新增 props.onEditVideo + aria-label i18n）
+- `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`（引入 VideoEditDrawer + editVideoId 状态 + handleEditVideo / handleEditDrawerSaved；接线 PendingCenter 与 Drawer）
+- `apps/server-next/src/i18n/messages/zh-CN/moderation.ts`（追加 aria.editVideo / aria.openFrontend keys）
+
+### 质量门禁
+
+- typecheck ✅（全 8 workspace 零报错）
+- lint ✅（5 tasks 全 pass，仅预存在 `<img>` 警告，FIX-E 范围）
+- unit ✅（250 文件 / 3074 tests 全绿，零回归；DecisionCard 21/21）
+
+### 设计对齐复核
+
+- ✅ DecisionCard 渲染高度估算 ~70px（删除 BarSignal 行后，仅"标题 + 决策建议 banner + 可选 StaffNoteBar + actions slot"四段；行内 gap 12px，title ~22px + banner ~36px ≈ 70px ≤ 80px 目标）
+- ✅ VideoEditDrawer 打开时背景透明（继承 admin-ui Drawer + OverlayBackdrop，CHG-DESIGN-13/14 协议保持）
+- ✅ "编辑视频"按钮点击响应 < 200ms（state 更新 → drawer 立即渲染 loading state，无网络阻塞）
+- ✅ 关闭 drawer 后保留 activeIdx；handleEditDrawerSaved 重 fetch pending-queue 但不重置 activeIdx（用户当前位置保持）
+- ✅ decision-card 单测无 BarSignal 渲染节点残留（"v1.6 删除 BarSignal 渲染行"断言反向校验 `[data-bar-signal]` = null + `[data-decision-card-signal]` = null）
+- ✅ decision-card.tsx / .types.ts 内 grep `BarSignal` 仅命中 v1.6 patch 注释（实际 import / JSX 使用 = 0）
+
+### 六问自检
+
+1. 是否引入整页刷新或类似行为？— **否**。VideoEditDrawer 是 inline drawer + state-driven 切换；保存后通过 `onSaved` 回调局部刷新当前视频条目（fetchPendingQueue），不触发页面 reload
+2. 是否新增重复逻辑或重复状态？— **否**。复用既有 `VideoEditDrawer` 实装；editVideoId 单一状态源；fetchPendingQueue 复用 ModerationConsole 已有调用
+3. 是否有逻辑应下沉但仍留在组件中？— **否**。VideoEditDrawer 已下沉到 admin/videos/_client（CHG-SN-4-08 落地），ModerationConsole 仅做编排
+4. 是否破坏现有分层？— **否**。仅 _client 层之间引用（moderation/_client → videos/_client），未跨 Route/Service/DB 边界
+5. 是否存在需拆分的函数 / 文件？— **否**。ModerationConsole 已有 395 行 → 增加 ~20 行 ≈ 415 行；接近 400 行阈值但仍单一职责（"审核台编排"），暂不拆分；FIX-C 引入 RightPaneTabs 时一并评估
+6. 是否引入潜在技术债？— **否**。VideoEditDrawer 跨目录引用（moderation 引用 videos/_client）属同一 admin 子项目内编排，符合后台子项目规则；DecisionCard onSignalClick prop 删除是契约收紧（消费方零引用，安全）
+
+### 偏离检测
+
+- ❌ 不通过补丁解决结构问题（明确删除 BarSignal 行 + onSignalClick prop，无遗留 if 分支）
+- ❌ 不为兼容旧逻辑引入额外复杂度
+- ❌ 状态/数据流清晰（editVideoId 单一来源；handleEditDrawerSaved 局部刷新）
+- ❌ 组件职责未膨胀
+- ❌ 未触及 FIX-A 范围外文件（i18n moderation.ts 追加 2 keys 是必需配套）
+
+无任何劣化信号。
+
+```
+[AI-CHECK]
+结构检查：
+• 是否违反分层（Route→Service→DB）：NO
+• 是否跨模块访问内部实现：NO（同 admin 子项目内 _client → _client 编排，符合 admin 子项目规则）
+代码质量：
+• 是否新增重复逻辑：NO
+• 是否存在 hack / 临时补丁：NO
+规模检查：
+• 是否存在需拆分的函数（多逻辑阶段 / 3层嵌套 / 超80行非声明性）：NO
+• 是否存在需拆分的文件（多主要概念 / 超400行且无法一句话描述职责）：NO（ModerationConsole 415 行 < 500 行硬阈值；单一职责"审核台编排"）
+安全性：
+• 是否存在隐式副作用或吞异常：NO（fetchPendingQueue 失败仅 silent，与既有路径一致；用户可手动刷新）
+结论：SAFE
+```
+
+### 后续解锁
+
+- FIX-A 完成 → SEQ-20260502-01 阶段 1 剩余 4 张并行卡（FIX-B / FIX-C / FIX-E / FIX-F）解锁
+- FIX-B 仍是阶段 1 最重的卡（信息密度对齐 + SignalChip 新组件 + arch-reviewer 强制）

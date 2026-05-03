@@ -9,6 +9,7 @@ import { ModListRow } from './ModListRow'
 import { PendingCenter } from './PendingCenter'
 import { StagingTabContent } from './StagingTabContent'
 import { RejectedTabContent } from './RejectedTabContent'
+import { VideoEditDrawer } from '../../videos/_client/VideoEditDrawer'
 import * as api from '@/lib/moderation/api'
 import { M } from '@/i18n/messages/zh-CN/moderation'
 
@@ -106,6 +107,7 @@ export function ModerationConsole(): React.ReactElement {
   const [rejectOpen, setRejectOpen] = useState(false)
   const [rejectSubmitting, setRejectSubmitting] = useState(false)
   const [rightOpen, setRightOpen] = useState(true)
+  const [editVideoId, setEditVideoId] = useState<string | null>(null)
 
   const tabRef = useRef<TabId>(tab)
   useEffect(() => { tabRef.current = tab }, [tab])
@@ -224,6 +226,22 @@ export function ModerationConsole(): React.ReactElement {
 
   const handleStaffNoteChange = useCallback((videoId: string, note: string | null) => {
     setPendingVideos(prev => prev.map(item => item.id === videoId ? { ...item, staffNote: note } : item))
+  }, [])
+
+  const handleEditVideo = useCallback((videoId: string) => {
+    setEditVideoId(videoId)
+  }, [])
+
+  const handleEditDrawerSaved = useCallback(() => {
+    // 编辑保存后刷新当前条目；保持 activeIdx 不变
+    setEditVideoId(null)
+    api.fetchPendingQueue({})
+      .then(res => {
+        setPendingVideos(res.data as VideoQueueRow[])
+        setNextCursor(res.nextCursor)
+        setTotalPending(res.total)
+      })
+      .catch(() => { /* silent — 用户仍可手动刷新 */ })
   }, [])
 
   const handleKey = useCallback((e: KeyboardEvent) => {
@@ -359,7 +377,7 @@ export function ModerationConsole(): React.ReactElement {
                   role: 'main',
                   'aria-label': M.aria.consolePreviewPane,
                   children: v ? (
-                    <PendingCenter v={v} onStaffNoteChange={handleStaffNoteChange} />
+                    <PendingCenter v={v} onStaffNoteChange={handleStaffNoteChange} onEditVideo={handleEditVideo} />
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--fg-muted)', fontSize: 13 }}>{M.pending.empty}</div>
                   ),
@@ -388,6 +406,14 @@ export function ModerationConsole(): React.ReactElement {
         onSubmit={handleRejectSubmit}
         submitting={rejectSubmitting}
         title={M.rejectModal.title}
+      />
+
+      {/* Video edit drawer (CHG-SN-4-FIX-A · plan v1.6 §1 G1) */}
+      <VideoEditDrawer
+        open={editVideoId !== null}
+        videoId={editVideoId}
+        onClose={() => setEditVideoId(null)}
+        onSaved={handleEditDrawerSaved}
       />
 
     </div>

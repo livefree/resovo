@@ -1,9 +1,9 @@
 # M-SN-4 内容审核台上线实施方案
 
-> 版本：v1.4（v1.0 → v1.1 → v1.2 → v1.3 → v1.4 修订日志见文末 §12）  
-> 日期：2026-05-01（v1.0 ～ v1.4 同日）  
-> 作者：Engineering（claude-sonnet-4-6 辅助生成；v1.1 缺漏补全；v1.2 审核意见 12 项；v1.3 runner 字典序对齐；v1.4 修复 059/060 NOT NULL ineffective 硬伤）  
-> 状态：待工程确认 → 实施  
+> 版本：v1.6（v1.0 → v1.1 → v1.2 → v1.3 → v1.4 → v1.5 → v1.6 修订日志见文末 §12）  
+> 日期：2026-05-02（v1.6 投产对齐 patch — 7 项实装偏差修复）；v1.0 ～ v1.4 = 2026-05-01；v1.5 = 2026-05-02  
+> 作者：Engineering（claude-sonnet-4-6 辅助生成；v1.1 缺漏补全；v1.2 审核意见 12 项；v1.3 runner 字典序对齐；v1.4 修复 059/060 NOT NULL ineffective；v1.5 子方案锚点；v1.6 投产对齐 7 项偏差）  
+> 状态：CHG-SN-4-03 ～ -08 已完成；v1.6 收口序列 SEQ-20260502-01（FIX-A ～ FIX-CLOSE 共 7 张）入队待开 → 实施  
 > 依赖：CHG-SN-4-01（SplitPane）、CHG-SN-4-02（ModerationConsole mock）均已落地  
 > 上游真源：`docs/server_next_plan_20260427.md` §6 M-SN-4（v2.5）  
 
@@ -1409,6 +1409,114 @@ CHG-SN-4-10 收口卡 PR 描述显式列"DEBT-SN-3-A 已关闭"+ 链接。
 ---
 
 ## 12. 修订日志
+
+### v1.6 — 2026-05-02（patch — 投产对齐 · 7 项实装偏差修复）
+
+**性质：** plan patch 级修订；用户人工试用 CHG-SN-4-07/-08 完成态后发现审核台距离投产仍有 7 项偏差，本次 patch 登记决策 + 视觉密度规约 + 设计对齐复核协议，落地序列 SEQ-20260502-01（task-queue.md）。无新功能决策（除筛选预设属本期补完）；无新 ADR。
+
+#### §1 实装偏差清单（用户 2026-05-02 试用反馈）
+
+| ID | 偏差 | 现状文件锚点 | 期望（设计稿/plan） | 修复卡 |
+|---|---|---|---|---|
+| G1 | "✎ 编辑视频"跳转到 `/admin/videos?q=` 视频库列表 | `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx:133` | 打开 VideoEditDrawer（已实装的 4 Tab 抽屉，apps/server-next/src/app/admin/videos/_client/VideoEditDrawer.tsx）| FIX-A |
+| G2 | LinesPanel 按 `video_sources` 行平铺（10 集 × 3 站 = 30 行），信息密度低，无选中态 | `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx` | 按"线路"维度聚合，每条线路一行（典型 ≤ 5 行），32px 行高，7 字段信息密度，橙色选中态 | FIX-B |
+| G2' | DecisionCard 顶部 BarSignal "探测/渲染聚合" 位置不合理（与播放器/标题区状态信息重叠）| `packages/admin-ui/src/components/cell/decision-card.tsx:174-181` | 删除 BarSignal 行 + caption；视频整体信号通过 LinesPanel 头部"线路 N/M 启用" + VisChip 已充分表达 | FIX-A |
+| G3 | 决策卡按钮从 4 缩到 2（仅"编辑视频"+"前台"）| `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx:132-135` | **本期决策保持现状 2 个**，未来再考虑快捷按钮 | ~~取消~~ |
+| G4 | 右栏只有"详情"1 个 Tab（plan §5.0.1 D-13 storageKey 表明应有 detail/history/similar 三态）| `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx:68-87` (RightPaneDetail) | 三 Tab segment：详情 / 历史（review_log + audit_log）/ 类似（占位）；持久化 `admin.moderation.rightTab.v1` | FIX-C |
+| G5 | 中央播放器仍是静态 ▶ 占位 div | `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx:73-104` | 接入 packages/player-core 的 `Player`，**极简范围**（播放/进度/集数切换，不接 GlobalPlayerHost）；feedback-reporter D-17 顺带接入 | FIX-D |
+| G6 | 缩略图直接 `<img>` 无 fallback / 无降级链 | `apps/server-next/src/app/admin/moderation/_client/{ModListRow,PendingCenter}.tsx` | 使用 packages/admin-ui/cell/Thumb 共享组件（已实装于视频库）| FIX-E |
+| G7 | "筛选预设 / 保存预设"两按钮无 onClick | `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx:266-267` | 完整 CRUD（Popover 应用 / Modal 保存 / ⭐默认 / 删除 + 撤销）；纯 localStorage 不跨设备；URL params 主轨原则 | FIX-F |
+
+#### §2 视觉密度规约（FIX-B 强制约束 — 参照 `docs/designs/screenshot/Screenshot 2026-05-02 at 20.15.54.png`）
+
+**LinesPanel 单行结构（10 列 grid）：**
+
+```
+┌─┬───────┬─────────────┬──────┬──────┬──────┬──────┬──┬──┐
+│●│ 线路N │ domain.com  │ NNms │ 探chip │渲chip │ 720P │✕│▶│
+└─┴───────┴─────────────┴──────┴──────┴──────┴──────┴──┴──┘
+ 12  56     1fr           48     56      56     40   24 24
+```
+
+- **行 height**：32px（紧凑）；行间 1px solid `var(--border-subtle)`，无 gap
+- **● 当前播放指示点**：仅选中行渲染，颜色 `var(--accent-default)`
+- **选中行视觉态**：`background: var(--admin-accent-soft)` + `border-left: 2px solid var(--accent-default)`
+- **SignalChip**（**新增 admin-ui/cell 组件，FIX-B 内交付**）：
+  - 圆角 4 / padding 2px 6px / fontSize 10
+  - 5 状态 × 2 类型 = 10 种文字 + 配色（全部 token，零硬编码）：
+    - "探可达" / "渲可达" → `state-success-bg + state-success-fg`
+    - "探部分" / "渲部分" → `state-warning-bg + state-warning-fg`
+    - "探失败" / "渲失败" → `state-error-bg + state-error-fg`
+    - "探待测" / "渲待测" → `bg-surface-raised + fg-muted`
+    - "探未知" / "渲未知" → `bg-surface-raised + fg-muted` + opacity 0.6
+- **域名提取**：从 `source_url` 解析 hostname，首条非空（fallback "—"）
+- **延迟显示**：取活跃集中位数；NULL 显示 "—"
+- **质量 tag**：取该线路下 `quality_detected` 最高档位（`4K > 2K > 1080P > 720P > 480P > 360P > 240P`）；无值不显示
+
+**展开（▶ → ▼）**：
+
+- padding-left: 28px
+- 集数级 mini grid：每 cell 56×24，复用现有 `DualSignal`（dot variant）
+- hover 显示 latency / 错误（title attribute）
+- 点击集 cell 进入 LineHealthDrawer 该集事件
+
+**工具栏底部（panel footer，height 32px）**：
+
+- 左：📜 证据（chip btn，触发当前选中线路的 LineHealthDrawer）
+- 中：spacer
+- 右：✕ 禁用全部失效（chip btn danger style）
+
+**头部**："线路 N/M 启用" + spacer + "↻ 重新抓取"（chip btn）
+
+**零硬编码颜色**：CSS module + `var(--*)`，grep `#[0-9a-f]{3,6}` 在 LinesPanel + signal-chip 命中数 = 0
+
+#### §3 数据模型决策（方案 B — 短期妥协）
+
+**问题**：`video_sources` 表无 `line_key` 字段；用户场景"两站同名线路 X02 视觉合并"无 schema 支持。
+
+**决策（用户 2026-05-02 拍板）**：
+
+- **聚合键 = `(source_site_key, source_name)` 复合**（前端聚合，schema 不动）
+- 视觉效果：每个 `(site, name)` 对一条线路，跨站不合并
+- 截图证据：`Screenshot 2026-05-02 at 20.15.54.png` 中 5 条线路各对应一个独立域名，未见跨站合并场景，符合方案 B
+- **DEBT-LINE-KEY-01 推迟 M-SN-5**：新增 `video_sources.line_key` + 运维合并 UI，实现真正的跨站线路合并；本期不动
+
+#### §4 设计对齐复核协议（强制）
+
+**触发**：每张 SEQ-20260502-01 任务卡完成时，除常规质量门禁外必须执行。
+
+**协议**：
+
+1. 卡片"完成判据"段后追加"**设计对齐复核**"段，列出 ≥ 5 项 checkbox
+2. 复核维度覆盖：
+   - **视觉密度**（行高、单元间距、单行信息字段数）
+   - **token 使用**（grep 硬编码颜色 / 字号 / 间距 = 0）
+   - **交互态**（hover / focus-visible / 选中 / disabled）
+   - **a11y**（aria-label / aria-selected / 键盘可达）
+   - **i18n**（无中文硬编码 — 沿用 plan §5.0.5 + DEBT-SN-4-07-C 协议）
+3. 不允许"实现了即通过"——必须对照 `docs/designs/screenshot/` 截图 + plan v1.6 §2 视觉规约逐项核对
+4. 复核结果写入卡片"设计对齐复核结论"段（落卡同时落 changelog）；若复核发现偏差但卡内无法修复，登记新欠账（DEBT-SN-4-FIX-X-XX）
+
+**违反协议判定**：CHG-SN-4-FIX-CLOSE 收口卡的 arch-reviewer 评级若发现某张前置卡片未做设计对齐复核或复核流于形式（< 3 项 checkbox），降一档评级（A→B / B→C）。
+
+#### §5 修订项
+
+1. **plan §0 方案范围** 标注 v1.6 投产对齐 patch
+2. **plan §6 显示补全表**：
+   - "probe/render 聚合分布 / 中央面板 DecisionCard 上方" 行 → **删除**（v1.6 patch §1 G2'）
+   - 改为：聚合分布通过 LinesPanel 头部"线路 N/M 启用" + VisChip 表达；DecisionCard 内不再渲染 BarSignal 行
+3. **plan §7 mock→真实 API 接入清单**：
+   - `LinesPanel.tsx` 行 → 标注"v1.6 重写为聚合视图（方案 B 复合键）"
+   - 追加新增组件：`SignalChip`（admin-ui/cell，FIX-B 交付）/ `AdminPlayer`（server-next，FIX-D 交付）/ `RightPaneTabs`（server-next，FIX-C 交付）/ `FilterPresetPopover` + `SavePresetModal`（server-next，FIX-F 交付）
+4. **plan §11.5 收口准入**：
+   - 第 7 项"visual baseline 9 张 PNG 已 commit"维持，但内容更新 — 包含 lines-panel-collapsed/expanded（FIX-B）/ right-pane-{history,similar}（FIX-C）/ filter-preset-popover（FIX-F）/ player-loaded（FIX-D）/ edit-drawer-open（FIX-A）
+5. **新增 plan §12 v1.6 段**（本段）
+
+**人工 sign-off：** 已取得（用户 2026-05-02 19:30 ～ 21:00 试用反馈 + 三轮决策："方案 B / G3 取消 / G5 极简 / Player 极简 / similar 占位 / 设计对齐复核强制" 6 项确认）。
+
+**arch-reviewer 评审：** 仅文本 patch 修订 + 序列任务卡入队，无代码改动；落地任务卡 CHG-SN-4-FIX-B 仍**强制走 `arch-reviewer` (claude-opus-4-7)**（SignalChip 新共享组件 Props 契约 + LinesPanel 聚合策略）；CHG-SN-4-FIX-CLOSE **强制走 `arch-reviewer` (claude-opus-4-7)** 全序列 milestone 复评级。
+
+---
 
 ### v1.4 — 2026-05-01（patch — 059/060 三步幂等 + safe convergence）
 
