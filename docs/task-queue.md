@@ -1891,6 +1891,19 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 | DEBT-SN-4-07-C | CHG-SN-4-07 | 硬编码中文 ~15 处（toast / readiness 字典 / aria-label）违反 plan §5.0.5 "全部 t() 调用 + CI grep 守门"明文（LinesPanel 10 / Staging 4 / Rejected 2 / ModerationConsole 8 处）| ✅ 已关闭（CHG-SN-4-09a 完成，2026-05-02）|
 | DEBT-SN-4-09c-A | CHG-SN-4-09c | 后端 `StagingPublishService.checkReadiness` 仅返回 `{ ready, blockers }`，与 plan §6 / sn4-07 i18n 设想的 5 项 check items（reviewStatus / linesMin / cover / douban / signal）落差；前端 -09c hotfix 已适配为简化 ready+blockers 渲染，5 项 check 升级须改 apps/api（共享层冻结） | CHG-SN-4-10 milestone 收口或独立卡 |
 
+### CHG-SN-4-09d · pending-queue 响应字段命名 hotfix（snake_case → camelCase）✅ 完成（2026-05-02）
+
+- **来源**：FIX-E 完成后用户运行验证发现"缩略图位显示视频类型英文（fallback）"
+- **类型**：hotfix（与 09b/09c 同类前后端契约不匹配）
+- **范围**：仅 `apps/api/src/db/queries/moderation.ts` 1 文件（DbPendingQueueRow interface + listPendingQueue SQL alias + cursor 拼接 last.createdAt）
+- **执行模型**：claude-opus-4-7（hotfix 紧急路径）
+- **子代理**：无
+- **质量门禁**：typecheck ✅ / lint ✅ / unit moderationQueueRoutes 12/12 + stagingRevertRoute 4/4 关键路径全绿
+- **影响清单**（被本卡修复后恢复正常）：coverUrl / episodeCount / isPublished / visibilityStatus / reviewStatus / reviewReason / reviewedBy / reviewedAt / sourceCheckStatus / metaScore / needsManualReview / staffNote / reviewLabelKey / doubanStatus / reviewSource / trendingTag / createdAt / updatedAt（共 18 字段）
+- **同类 bug 范围复评**：7 端点全清单写入 changelog；其中 fetchVideoSources / fetchRejectedVideos / listModerationHistory 故意保 snake_case 与消费方一致（不是 bug）
+- **设计对齐复核**：5 项 checkbox 全 ✅
+- **后续解锁**：FIX-E 实际效果生效（之前 Thumb fallback 是 bug 表现）；继续 FIX-C / FIX-F
+
 ### CHG-SN-4-09a · DEBT-SN-4-07-C 修复：审核台 i18n 硬编码中文清理 ✅ 完成（2026-05-02）
 
 - **来源**：DEBT-SN-4-07-C 闭环卡（CHG-SN-4-07 复核发现）

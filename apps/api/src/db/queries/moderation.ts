@@ -94,35 +94,38 @@ export interface PendingQueueFilters {
   needsManualReview?: boolean
 }
 
+// CHG-SN-4-09d hotfix（2026-05-02）：响应字段统一 camelCase（PG 双引号 alias 保留大小写）。
+//   原 snake_case 与前端 VideoQueueRow camelCase 契约不匹配，导致 v.coverUrl 等字段
+//   运行时 undefined（同 09b/09c 同类前后端契约不一致）。
 interface DbPendingQueueRow {
   id: string
   title: string
   type: string
   year: number | null
   country: string | null
-  episode_count: number
-  cover_url: string | null
+  episodeCount: number
+  coverUrl: string | null
   rating: number | null
   category: string | null
-  is_published: boolean
-  visibility_status: string
-  review_status: string
-  review_reason: string | null
-  reviewed_by: string | null
-  reviewed_at: string | null
+  isPublished: boolean
+  visibilityStatus: string
+  reviewStatus: string
+  reviewReason: string | null
+  reviewedBy: string | null
+  reviewedAt: string | null
   probe: string
   render: string
-  source_check_status: string
-  meta_score: number
-  needs_manual_review: boolean
+  sourceCheckStatus: string
+  metaScore: number
+  needsManualReview: boolean
   badges: string[] | null
-  staff_note: string | null
-  review_label_key: string | null
-  douban_status: string
-  review_source: string
-  trending_tag: string | null
-  created_at: string
-  updated_at: string
+  staffNote: string | null
+  reviewLabelKey: string | null
+  doubanStatus: string
+  reviewSource: string
+  trendingTag: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 interface CursorPayload {
@@ -195,9 +198,18 @@ export async function listPendingQueue(
 
   const [rows, countResult, todayResult] = await Promise.all([
     db.query<DbPendingQueueRow>(
-      `SELECT v.id, v.title, v.type, mc.year, mc.country, v.episode_count, mc.cover_url,
-              mc.rating, v.source_category AS category, v.is_published,
-              v.visibility_status, v.review_status, v.review_reason, v.reviewed_by, v.reviewed_at,
+      // CHG-SN-4-09d hotfix：snake_case → camelCase alias（前端 VideoQueueRow 契约）
+      `SELECT v.id, v.title, v.type, mc.year, mc.country,
+              v.episode_count AS "episodeCount",
+              mc.cover_url AS "coverUrl",
+              mc.rating,
+              v.source_category AS category,
+              v.is_published AS "isPublished",
+              v.visibility_status AS "visibilityStatus",
+              v.review_status AS "reviewStatus",
+              v.review_reason AS "reviewReason",
+              v.reviewed_by AS "reviewedBy",
+              v.reviewed_at AS "reviewedAt",
               COALESCE(
                 (SELECT probe_status FROM video_sources
                  WHERE video_id = v.id AND deleted_at IS NULL AND is_active = true
@@ -212,11 +224,17 @@ export async function listPendingQueue(
                            WHEN 'pending' THEN 2 ELSE 3 END LIMIT 1),
                 'pending'
               ) AS render,
-              v.source_check_status, v.meta_score, v.needs_manual_review,
+              v.source_check_status AS "sourceCheckStatus",
+              v.meta_score AS "metaScore",
+              v.needs_manual_review AS "needsManualReview",
               ARRAY[]::text[] AS badges,
-              v.staff_note, v.review_label_key, v.douban_status,
-              COALESCE(v.review_source, 'manual') AS review_source,
-              v.trending_tag, v.created_at, v.updated_at
+              v.staff_note AS "staffNote",
+              v.review_label_key AS "reviewLabelKey",
+              v.douban_status AS "doubanStatus",
+              COALESCE(v.review_source, 'manual') AS "reviewSource",
+              v.trending_tag AS "trendingTag",
+              v.created_at AS "createdAt",
+              v.updated_at AS "updatedAt"
        FROM videos v
        JOIN media_catalog mc ON mc.id = v.catalog_id
        WHERE ${where}${cursorCond}
@@ -243,7 +261,7 @@ export async function listPendingQueue(
   const data = hasNext ? rows.rows.slice(0, limit) : rows.rows
   const last = data[data.length - 1]
   const nextCursor = hasNext && last
-    ? encodeCursor({ createdAt: last.created_at, id: last.id })
+    ? encodeCursor({ createdAt: last.createdAt, id: last.id })
     : null
 
   const todayRow = todayResult.rows[0]

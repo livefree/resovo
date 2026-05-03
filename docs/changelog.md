@@ -4230,3 +4230,102 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 
 - FIX-E 完成 → SEQ-20260502-01 阶段 1 剩余 3 张并行卡（FIX-B / FIX-C / FIX-F）继续
 - 下一卡建议：FIX-C（4h，RightPaneTabs 三态化，无新共享组件契约）或 FIX-F（4h，筛选预设）—— FIX-B 留到最后（最重，arch-reviewer Opus 强制）
+
+---
+
+## [CHG-SN-4-09d] pending-queue 响应字段命名 hotfix（snake_case → camelCase）
+
+> 完成时间：2026-05-02 22:40
+> 触发：FIX-E 完成后用户运行验证发现"视频卡片缩略图位显示视频类型英文（fallback）"
+> 类型：hotfix（与 CHG-SN-4-09b / 09c 同类前后端契约不匹配）
+> 执行模型：claude-opus-4-7
+> 子代理：无
+
+### Bug 根因
+
+后端 `listPendingQueue`（`apps/api/src/db/queries/moderation.ts:198-225`）SQL 返回 snake_case 字段（cover_url / episode_count / visibility_status / is_published / staff_note 等 18 列），路由 `reply.send(result)` 不做 case 转换；前端 `VideoQueueRow`（packages/types/src/admin-moderation.types.ts:168）类型声明 camelCase。`fetchPendingQueue` 用 `as VideoQueueRow[]` 类型断言，TS 编译通过但**运行时所有 camelCase 字段返回 undefined**。
+
+### 影响
+
+- **显式视觉**（用户报告）：`v.coverUrl` undefined → Thumb fallback 显示 v.type
+- **隐式 broken**（同样 undefined，但视觉不显著或不渲染）：
+  - `v.episodeCount` → EpisodeSelector 永不渲染（`v.episodeCount > 1` 永远 false）
+  - `v.isPublished` → DetailRow 显示 'undefined'
+  - `v.visibilityStatus` / `v.reviewStatus` → VisChip 异常
+  - `v.staffNote` → StaffNoteBar 永不显示
+  - `v.needsManualReview` / `v.doubanStatus` / `v.reviewSource` / `v.trendingTag` / `v.metaScore` / `v.sourceCheckStatus` / `v.reviewLabelKey` → 全部 undefined
+
+### 修复
+
+`apps/api/src/db/queries/moderation.ts`：
+1. `listPendingQueue` SQL 给 18 列添加 PG 双引号 alias `AS "camelName"` 保留大小写
+2. `DbPendingQueueRow` interface 字段命名同步 snake_case → camelCase
+3. cursor 拼接处 `last.created_at` → `last.createdAt`（DbRow 改名后随动）
+
+**保持不变**（已是 camelCase 单词或非映射字段）：id / title / type / year / country / rating / category / probe / render / badges
+
+### 文件改动
+
+- `apps/api/src/db/queries/moderation.ts`（仅此 1 文件 — DbPendingQueueRow interface + SQL alias + cursor 拼接处）
+
+### 同类 bug 范围复评
+
+| 端点 | 状态 |
+|---|---|
+| `/admin/moderation/pending-queue` | ✅ 本卡修 |
+| `/admin/sources?videoId=` (fetchVideoSources) | ⚠️ 前端 ContentSourceRow 故意保 snake_case，使用方 LinesPanel 读 snake_case 字段（一致；不是 bug）|
+| `/admin/staging` (fetchStagingQueue) | ✅ StagingApiRow 是 camelCase；CHG-SN-4-09c 已确认契约对齐 |
+| `/admin/videos?reviewStatus=rejected` (fetchRejectedVideos) | ⚠️ RejectedVideoRow 是 snake_case，使用方 RejectedTabContent 读 snake_case（一致；不是 bug）|
+| `/admin/moderation/:id/line-health/:sourceId` (fetchLineHealth) | ✅ SourceHealthEvent / pagination 形态正常 |
+| `/admin/review-labels` (fetchReviewLabels) | ✅ ReviewLabel 已对齐 |
+| `/admin/moderation/history` (listModerationHistory) | ⚠️ ModerationHistoryRow snake_case，前端待 FIX-C 接入时同步检查 |
+
+### 质量门禁
+
+- typecheck ✅（全 8 workspace 零报错）
+- lint ✅（无新增警告）
+- unit ✅（moderationQueueRoutes 12/12 + stagingRevertRoute 4/4 关键路径全绿；StagingTable.test.tsx 1 个并发 flaky 单跑通过，与本卡无关）
+
+### 设计对齐复核
+
+- ✅ DbPendingQueueRow interface 字段命名与 SQL alias 完全一致（grep 无残留 snake_case）
+- ✅ cursor 拼接处使用 `last.createdAt`（与改名后的 row 一致）
+- ✅ 修复范围最小：仅 listPendingQueue + DbPendingQueueRow + cursor 拼接（其他 query 不动）
+- ✅ 同类 bug 范围复评清单（7 端点）写入 changelog 防遗漏
+- ✅ 所有 PG 双引号 alias 保留大小写（jsonb_build / row_to_json 工具未引入，最小改动）
+
+### 六问自检
+
+1. 整页刷新？— **否**。仅后端 SQL alias 改动，前端无改动
+2. 重复逻辑/状态？— **否**。SQL 单点修复
+3. 逻辑应下沉？— **否**。后端 query 层改动，符合分层
+4. 破坏现有分层？— **否**。Route → Service / Query → DB 边界保持
+5. 需拆分函数 / 文件？— **否**。listPendingQueue 长度未变，DbPendingQueueRow 字段数量未变
+6. 引入潜在技术债？— **否**。修复契约不一致是降低技术债
+
+### 偏离检测
+
+无任何劣化信号。此卡是契约修复（消除已存在的运行时不一致），属于债务清零。
+
+```
+[AI-CHECK]
+结构检查：
+• 是否违反分层（Route→Service→DB）：NO
+• 是否跨模块访问内部实现：NO
+代码质量：
+• 是否新增重复逻辑：NO
+• 是否存在 hack / 临时补丁：NO（PG AS alias 是标准 SQL，不是 hack）
+规模检查：
+• 是否存在需拆分的函数（多逻辑阶段 / 3层嵌套 / 超80行非声明性）：NO
+• 是否存在需拆分的文件（多主要概念 / 超400行且无法一句话描述职责）：NO
+安全性：
+• 是否存在隐式副作用或吞异常：NO
+结论：SAFE
+```
+
+### 后续
+
+- FIX-E 修复的"缩略图统一接入 Thumb"现在可以真正显示图片（之前是 fallback 显示 type）
+- ModerationConsole 内 EpisodeSelector / VisChip / StaffNoteBar / DecisionCard 决策建议等隐式 broken 全部恢复
+- 推荐用户重新刷新审核台 `/admin/moderation` 验证 6 个修复点
+- 解锁继续推进 FIX-C / FIX-F
