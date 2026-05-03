@@ -4697,3 +4697,37 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - O7：command-palette row item 应 transparent + hover row（待 command-palette 改造）
 - **后续解锁**：CHG-UI-06（视觉走查 + 序列收口；最后一张卡）
 
+---
+
+## [CHG-UI-02a] primitives gray ramp 校准（OKLCH → sRGB 对齐设计 hex）
+
+- **日期**：2026-05-03
+- **来源序列**：SEQ-20260503-01（CHG-UI-02 增补卡，用户截图反馈触发）
+- **执行模型**：claude-opus-4-7（建议 sonnet；偏离原因：主循环已 opus 不可降级）
+- **子代理**：无
+- **触发**：用户 2026-05-03 截图（`docs/designs/screenshot/videos-implement-2.png`）反馈 CHG-UI-05 落地后文字/Pill 颜色明显变化但**背景颜色没有可见变化**。诊断确认根因为 OKLCH lightness 与 sRGB 实际渲染的非线性映射 — token 数值看似对齐，浏览器渲染到 sRGB 时整体偏暗 2-5 RGB units（dark canvas/surface/raised/row 均偏暗；唯独 elevated 偏亮 +3）。
+- **文件清单**（2 文件）：
+  - `packages/design-tokens/src/primitives/color.ts`：gray ramp dark 段五档校准
+  - `packages/design-tokens/src/css/tokens.css`：重新生成
+- **校准映射表**（dark 段 5 档；hue 全部保持 247）：
+
+  | 档位 | 旧 OKLCH | 新 OKLCH | sRGB 渲染 | 设计 hex |
+  |---|---|---|---|---|
+  | gray.800 | `23.0% .010` | `21.0% .011` | rgb(37,43,55) | `#252b37` |
+  | gray.900 | `16.5% .008` | `18.0% .010` | rgb(29,34,44) | `#1d222c` |
+  | gray.925 | `13.5% .007` | `15.0% .009` | rgb(22,26,34) | `#161a22` |
+  | gray.950 | `11.2% .006` | `12.0% .008` | rgb(17,20,26) | `#11141a` |
+  | gray.1000 | `6.5% .004` | `8.0% .005` | rgb(11,13,16) | `#0b0d10` |
+
+- **测试覆盖**：
+  - typecheck / lint / unit 252f / 3123t / tokens:validate / verify-token-references 全绿 ✅
+- **设计对齐复核**（5 项全 ✅）：
+  - dark 五档 surface sRGB 渲染与设计 hex 对齐（误差 ≤ 1 RGB unit）
+  - elevated 不再偏亮 +3 units（原 23% → 21%）
+  - ramp 单调连续 8→12→15→18→21（间距 +4/+3/+3/+3）
+  - hue 247 / chroma 微抬保持 ramp 一致
+  - light 段 gray.0-700 零改动
+- **共享层沉淀评估**：本卡是 primitive token 层精修，所有引用 gray ramp 的消费方零改动；不动 ramp 结构与档位数（13 档保持）
+- **变更摘要**：将 dark 段五档 oklch lightness 校准让浏览器渲染的 sRGB hex 对齐设计稿 — 解决"颜色都很深，没有变浅效果"的根本视觉问题；本卡严格遵循 plan §2 改动原则（不动 ramp 结构、不引入新档位、零硬编码）
+- **关联 ADR**：ADR-111（accepted；后果增补"OKLCH-sRGB 映射误差校准"段落由 CHG-UI-06 收口时统一处理）
+
