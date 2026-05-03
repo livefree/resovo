@@ -5,7 +5,6 @@ import type {
   VideoSourceLine,
   SourceHealthEvent,
   ReviewLabel,
-  StagingReadinessCheck,
   DualSignalDisplayState,
 } from '@resovo/types'
 
@@ -47,7 +46,7 @@ export interface StagingApiRow {
   readonly qualityHighest: string | null
   readonly approvedAt: string | null
   readonly updatedAt: string
-  readonly readiness: readonly StagingReadinessCheck[]
+  readonly readiness: { readonly ready: boolean; readonly blockers: readonly string[] }
 }
 
 export interface StagingQueueResponse {

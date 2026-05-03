@@ -66,6 +66,9 @@ export const M = {
     empty: '暂无待发布视频',
     loading: '加载中…',
     readiness: {
+      allOk: '已就绪可发布',
+      hasBlockers: '存在发布阻塞项',
+      // 以下 5 项为后端 checkReadiness 升级到 5 项 check items 后启用（CHG-SN-4-09c-A 欠账）
       reviewStatus: '审核状态',
       linesMin: '有效线路 ≥ 1',
       cover: '封面 P0',

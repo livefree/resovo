@@ -35,19 +35,6 @@ const CHECK_ITEM: React.CSSProperties = {
   background: 'var(--bg-surface-raised)', borderRadius: 4, marginBottom: 4, fontSize: 12,
 }
 
-// ── ReadinessLabel ────────────────────────────────────────────────
-
-function ReadinessKey({ val }: { val: string }): string {
-  const map: Record<string, string> = {
-    review_status: M.staging.readiness.reviewStatus,
-    lines_min: M.staging.readiness.linesMin,
-    cover: M.staging.readiness.cover,
-    douban: M.staging.readiness.douban,
-    signal: M.staging.readiness.signal,
-  }
-  return map[val] ?? val
-}
-
 // ── Main component ────────────────────────────────────────────────
 
 export function StagingTabContent(): React.ReactElement {
@@ -183,13 +170,19 @@ export function StagingTabContent(): React.ReactElement {
               )}
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>{M.staging.readinessChecks}</div>
-                {v.readiness.map(c => (
-                  <div key={c.key} style={CHECK_ITEM}>
-                    <span style={{ color: c.ok ? 'var(--state-success-fg)' : 'var(--state-warning-fg)' }}>{c.ok ? '✓' : '⚠'}</span>
-                    <span style={{ flex: 1 }}>{ReadinessKey({ val: c.key })}</span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: c.ok ? 'var(--state-success-fg)' : 'var(--state-warning-fg)' }}>{c.value}</span>
-                  </div>
-                ))}
+                <div style={CHECK_ITEM}>
+                  <span style={{ color: v.readiness.ready ? 'var(--state-success-fg)' : 'var(--state-warning-fg)' }}>{v.readiness.ready ? '✓' : '⚠'}</span>
+                  <span style={{ flex: 1, fontWeight: 600, color: v.readiness.ready ? 'var(--state-success-fg)' : 'var(--state-warning-fg)' }}>
+                    {v.readiness.ready ? M.staging.readiness.allOk : M.staging.readiness.hasBlockers}
+                  </span>
+                </div>
+                {!v.readiness.ready && v.readiness.blockers.length > 0 && (
+                  <ul style={{ margin: '8px 0 0', paddingLeft: 20, fontSize: 12, color: 'var(--state-warning-fg)' }}>
+                    {v.readiness.blockers.map((b, i) => (
+                      <li key={i} style={{ marginBottom: 4 }}>{b}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <div style={{ display: 'flex', gap: 14 }}>
                 <div style={{ width: 80, height: 120, borderRadius: 6, background: 'var(--bg-surface-raised)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--fg-muted)', overflow: 'hidden' }}>

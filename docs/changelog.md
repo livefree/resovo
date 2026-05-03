@@ -4028,3 +4028,35 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - typecheck ✅（全 8 workspace 零报错）
 - lint ✅（5 tasks 全 pass）
 - unit ✅（250 文件 / 3076 tests 全绿，零回归）
+
+---
+
+## [CHG-SN-4-09c] StagingTabContent runtime crash hotfix（readiness 契约不匹配）
+
+- **完成时间**：2026-05-02
+- **记录时间**：2026-05-02 18:50
+- **执行模型**：claude-opus-4-7（**偏离任务卡建议 sonnet-4-6**；理由：runtime crash 紧急 hotfix + 已确认根因 + 会话连续性）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/lib/moderation/api.ts` — `StagingApiRow.readiness` 类型 `readonly StagingReadinessCheck[]` → `{ ready: boolean; blockers: readonly string[] }`（与后端 `StagingPublishService.ReadinessResult` 真源对齐）+ 删除未用的 `StagingReadinessCheck` import
+  - `apps/server-next/src/app/admin/moderation/_client/StagingTabContent.tsx` — 删除 `ReadinessKey` 函数；重写 readiness 渲染为"总状态 + blockers 列表"模式
+  - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts` — `M.staging.readiness` 追加 `allOk / hasBlockers` 2 keys（5 项 check keys 保留待 -10 后端升级时启用）
+- **新增依赖**：无
+- **数据库变更**：无
+- **Bug 根因**：CHG-SN-4-07 写 `StagingApiRow.readiness` 时假设响应形态 `StagingReadinessCheck[]`（5 项 check items 数组），但后端 `StagingPublishService.checkReadiness` 实际返回 `ReadinessResult = { ready: boolean; blockers: string[] }` 对象 → `v.readiness.map` 在对象上 crash → `StagingTabContent.tsx:186` runtime TypeError
+- **影响范围**：仅 `StagingApiRow.readiness` 类型 + `StagingTabContent.tsx` readiness 渲染；`StagingReadinessCheck` 类型在 packages/types 保留（未来后端升级时启用）
+- **DEBT 登记**：DEBT-SN-4-09c-A — 后端 `checkReadiness` 升级到 5 项 check items（reviewStatus / linesMin / cover / douban / signal）与 plan §6 设想对齐 → 转 CHG-SN-4-10 milestone 收口或独立卡
+- **同类 bug 风险点复评**：grep `lib/moderation/api.ts` 全部 fetch 函数响应形态对照后端契约：
+  - ✅ fetchPendingQueue（`{ data, nextCursor, total, todayStats }` 与 `listPendingQueue` 真源一致）
+  - ✅ fetchVideoSources（CHG-SN-4-09b 已修）
+  - ✅ fetchLineHealth（`{ data, pagination }` 与路由响应一致）
+  - ✅ fetchReviewLabels（`res.data` ✓）
+  - ✅ disableDeadSources / batchPublishVideos（`res.data` ✓）
+  - ⚠️ fetchStagingQueue（本卡修）
+  - ⚠️ fetchRejectedVideos（待用户运行验证；GET /admin/videos snake_case 响应字段对齐已在 sn4-07 commit 注意事项段标注）
+
+### 质量门禁
+
+- typecheck ✅（全 8 workspace 零报错）
+- lint ✅（5 tasks 全 pass）
+- unit ✅（250 文件 / 3076 tests 全绿，零回归）

@@ -1889,6 +1889,7 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 | DEBT-SN-4-07-A | CHG-SN-4-07 | Visual baseline 7 张占位 PNG（69-byte 单像素文件，非真实截图；同 DEBT-SN-4-A 性质：仓库无 Playwright `toHaveScreenshot()` harness）| CHG-SN-4-10 milestone 收口卡 |
 | DEBT-SN-4-07-B | CHG-SN-4-07 | 审核台 e2e 关键流回归未自报（任务卡明文"必跑 ADMIN 类"）| CHG-SN-4-10 milestone 收口卡 |
 | DEBT-SN-4-07-C | CHG-SN-4-07 | 硬编码中文 ~15 处（toast / readiness 字典 / aria-label）违反 plan §5.0.5 "全部 t() 调用 + CI grep 守门"明文（LinesPanel 10 / Staging 4 / Rejected 2 / ModerationConsole 8 处）| ✅ 已关闭（CHG-SN-4-09a 完成，2026-05-02）|
+| DEBT-SN-4-09c-A | CHG-SN-4-09c | 后端 `StagingPublishService.checkReadiness` 仅返回 `{ ready, blockers }`，与 plan §6 / sn4-07 i18n 设想的 5 项 check items（reviewStatus / linesMin / cover / douban / signal）落差；前端 -09c hotfix 已适配为简化 ready+blockers 渲染，5 项 check 升级须改 apps/api（共享层冻结） | CHG-SN-4-10 milestone 收口或独立卡 |
 
 ### CHG-SN-4-09a · DEBT-SN-4-07-C 修复：审核台 i18n 硬编码中文清理 ✅ 完成（2026-05-02）
 
