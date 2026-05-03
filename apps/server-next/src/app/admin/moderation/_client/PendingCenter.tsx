@@ -1,34 +1,16 @@
 'use client'
-/* eslint-disable no-console */
 
 import React, { useState } from 'react'
-import { VisChip, DecisionCard } from '@resovo/admin-ui'
-import type { DecisionCardVideo } from '@resovo/admin-ui'
+import { VisChip, DecisionCard, StaffNoteBar } from '@resovo/admin-ui'
+import type { VideoQueueRow } from '@resovo/types'
 import { EpisodeSelector } from './EpisodeSelector'
 import { LinesPanel } from './LinesPanel'
-import type { MockVideo } from './mock-data'
-
-/**
- * MockVideo → DecisionCardVideo 适配（CHG-SN-4-04 D-14 第 5 件上移：
- * mock-data.MockVideo 字段集与 DecisionCardVideo Pick 列表不完全对齐，
- * 调用方负责构造适配层；待 CHG-SN-4-07 真实 API 集成后此函数下线）。
- */
-function toDecisionCardVideo(v: MockVideo): DecisionCardVideo {
-  return {
-    id: v.id,
-    title: v.title,
-    reviewStatus: v.review,
-    visibilityStatus: v.visibility,
-    isPublished: false,           // mock 阶段 pending 卡均为未发布
-    staffNote: v.staffNote ?? null,
-    reviewLabelKey: null,         // mock 不含 reviewLabelKey
-    sourceCheckStatus: 'pending', // mock 不携带；占位以满足契约
-    doubanStatus: 'pending',      // mock 不携带；占位以满足契约
-  }
-}
+import * as api from '@/lib/moderation/api'
+import { M } from '@/i18n/messages/zh-CN/moderation'
 
 interface PendingCenterProps {
-  readonly v: MockVideo
+  readonly v: VideoQueueRow
+  readonly onStaffNoteChange: (videoId: string, note: string | null) => void
 }
 
 const BTN_SM: React.CSSProperties = {
@@ -48,16 +30,44 @@ const SECTION: React.CSSProperties = {
   marginBottom: 14,
 }
 
-export function PendingCenter({ v }: PendingCenterProps): React.ReactElement {
+export function PendingCenter({ v, onStaffNoteChange }: PendingCenterProps): React.ReactElement {
   const [currentEp, setCurrentEp] = useState(1)
+  const [noteEditing, setNoteEditing] = useState(false)
+  const [noteSubmitting, setNoteSubmitting] = useState(false)
+
+  const handleNoteSubmit = async (note: string | null) => {
+    setNoteSubmitting(true)
+    try {
+      await api.updateStaffNote(v.id, note)
+      onStaffNoteChange(v.id, note)
+      setNoteEditing(false)
+    } catch {
+      throw new Error(M.errors.staffNoteFailed)
+    } finally {
+      setNoteSubmitting(false)
+    }
+  }
 
   return (
     <>
       <DecisionCard
-        video={toDecisionCardVideo(v)}
+        video={v}
         probeState={v.probe}
         renderState={v.render}
+        onStaffNoteEdit={() => setNoteEditing(true)}
       />
+
+      {/* Staff note bar */}
+      <div style={{ marginBottom: 14 }}>
+        <StaffNoteBar
+          note={v.staffNote}
+          onEdit={() => setNoteEditing(true)}
+          editing={noteEditing}
+          onSubmit={handleNoteSubmit}
+          onCancelEdit={() => setNoteEditing(false)}
+          submitting={noteSubmitting}
+        />
+      </div>
 
       {/* Video player placeholder */}
       <div
@@ -86,118 +96,50 @@ export function PendingCenter({ v }: PendingCenterProps): React.ReactElement {
         >
           <span style={{ color: 'white', fontSize: 18 }}>▶</span>
         </div>
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 8,
-            left: 10,
-            right: 10,
-            display: 'flex',
-            gap: 6,
-            alignItems: 'center',
-          }}
-        >
-          <span
-            style={{
-              fontSize: 10,
-              color: 'white',
-              background: 'var(--player-mini-overlay)',
-              padding: '2px 6px',
-              borderRadius: 4,
-            }}
-          >
-            线路 1 / {v.lines} · EP{currentEp}
-          </span>
-          <span style={{ flex: 1 }} />
-          <span
-            style={{
-              fontSize: 10,
-              color: 'white',
-              background: 'var(--player-full-overlay)',
-              border: '1px solid var(--player-full-progress-track)',
-              padding: '2px 5px',
-              borderRadius: 3,
-              fontFamily: 'monospace',
-            }}
-          >
-            space
+        <div style={{ position: 'absolute', bottom: 8, left: 10, right: 10, display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ fontSize: 10, color: 'white', background: 'var(--player-mini-overlay)', padding: '2px 6px', borderRadius: 4 }}>
+            EP{currentEp}
           </span>
         </div>
       </div>
 
       {/* Video info */}
       <div style={{ display: 'flex', gap: 14, marginBottom: 14 }}>
-        <div
-          style={{
-            width: 100,
-            height: 150,
-            borderRadius: 6,
-            background: 'var(--bg-surface-raised)',
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 11,
-            color: 'var(--fg-muted)',
-          }}
-        >
-          封{v.thumb}
+        <div style={{ width: 100, height: 150, borderRadius: 6, background: 'var(--bg-surface-raised)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'var(--fg-muted)', overflow: 'hidden' }}>
+          {v.coverUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={v.coverUrl} alt={v.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : <span>{v.type}</span>}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg-default)' }}>{v.title}</h2>
             <span style={{ color: 'var(--fg-muted)', fontSize: 13 }}>{v.year}</span>
-            <VisChip visibility={v.visibility} review={v.review} />
+            <VisChip visibility={v.visibilityStatus} review={v.reviewStatus} />
           </div>
           <div style={{ marginTop: 4, fontSize: 12, color: 'var(--fg-muted)' }}>
-            {v.type} · {v.episodes} 集 · {v.country} · ⭐ {v.score} · ID <code style={{ fontFamily: 'monospace', fontSize: 11 }}>{v.id}</code>
+            {v.type} · {v.episodeCount} 集 · {v.country ?? '—'} · ⭐ {v.rating ?? '—'} · ID <code style={{ fontFamily: 'monospace', fontSize: 11 }}>{v.id}</code>
           </div>
           {v.badges.length > 0 && (
             <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {v.badges.map(b => (
-                <span
-                  key={b}
-                  style={{
-                    fontSize: 11,
-                    padding: '2px 8px',
-                    borderRadius: 999,
-                    background: 'var(--state-warning-bg)',
-                    color: 'var(--state-warning-fg)',
-                    border: '1px solid var(--state-warning-border)',
-                  }}
-                >
+                <span key={b} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', border: '1px solid var(--state-warning-border)' }}>
                   {b}
                 </span>
               ))}
-              {v.staffNote && (
-                <span
-                  style={{
-                    fontSize: 11,
-                    padding: '2px 8px',
-                    borderRadius: 999,
-                    background: 'var(--state-info-bg)',
-                    color: 'var(--state-info-fg)',
-                    border: '1px solid var(--state-info-border)',
-                  }}
-                >
-                  备注: {v.staffNote}
-                </span>
-              )}
             </div>
           )}
           <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-            <button style={BTN_SM} onClick={() => console.log('edit', v.id)}>✎ 编辑视频</button>
-            <button style={BTN_SM} onClick={() => console.log('cover', v.id)}>🖼 修封面</button>
-            <button style={BTN_SM} onClick={() => console.log('split', v.id)}>⊕ 拆分</button>
+            <button style={BTN_SM} onClick={() => window.open(`/admin/videos?q=${encodeURIComponent(v.title)}`, '_blank')}>✎ 编辑视频</button>
             <button style={BTN_SM} onClick={() => window.open(`/video/${v.id}`, '_blank')}>↗ 前台</button>
           </div>
         </div>
       </div>
 
       {/* Episode selector */}
-      {v.episodes > 1 && (
+      {v.episodeCount > 1 && (
         <div style={SECTION}>
-          <EpisodeSelector total={v.episodes} current={currentEp} onSelect={setCurrentEp} />
+          <EpisodeSelector total={v.episodeCount} current={currentEp} onSelect={setCurrentEp} />
         </div>
       )}
 

@@ -1795,9 +1795,16 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 - **欠账登记**：无（R-1 catch 路径无 unit / R-1 metric 命名 'probe.skipped_circuit' 在 058a-missing 场景误导 — 列入 -10 milestone 收口可选优化项）
 - **后续解锁**：CHG-SN-4-10 milestone 收口卡（含 e2e + arch-reviewer A/B/C 评级）
 
-### CHG-SN-4-07 · 审核台前端接入（useTableQuery + Gmail 流 + RejectModal/Drawer 接线）⏳ 待开
+### CHG-SN-4-07 · 审核台前端接入（useTableQuery + Gmail 流 + RejectModal/Drawer 接线）✅ 完成（2026-05-02）
 
-- 前置：CHG-SN-4-04 + CHG-SN-4-05 PASS
+- **来源**：M-SN-4 plan v1.4 §8.1 第 5 张 / SEQ-20260501-01 阶段 C 双轨
+- **执行真源**：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.4 §5（六项前端共性约束 + 三 Tab 操作流程）
+- **完成**：URL Tab 状态 + sessionStorage activeIdx + 光标分页 load-more + 键盘 J/K/A/R/S + RejectModal 接线 + 乐观 approve 删行/rollback；新建 `lib/moderation/api.ts` + `i18n/messages/zh-CN/moderation.ts` + 12 cases；7 文件 _client/ 改写；247 文件 / 3057 测试全绿
+- **执行 Track**：`track/sn4-07-fe-moderation`（并行模式 / 集成 PR 待提交）
+- **实际主循环**：claude-sonnet-4-6
+- **子代理调用**：无；arch-reviewer (claude-opus-4-7) — 复核 1 轮（**B+ 级 PASS**，2026-05-02）
+- **欠账登记**：DEBT-SN-4-07-A（visual baseline 7 张占位 PNG）+ DEBT-SN-4-07-B（e2e 未自报）→ CHG-SN-4-10 收口；DEBT-SN-4-07-C（硬编码中文 ~15 处违反 plan §5.0.5）→ CHG-SN-4-09a 单独修复
+- **后续解锁**：CHG-SN-4-10 milestone 收口卡（待 CHG-SN-4-09a 完成）
 
 ### CHG-SN-4-08 · VideoEditDrawer 三 Tab 真实 API ✅ 完成（2026-05-02）
 
@@ -1879,6 +1886,9 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 | DEBT-SN-4-05-C | CHG-SN-4-05 | ~~ApiResponse 信封 / ErrorCode 真源归属决策~~ → **完全关闭**（ADR-110 accepted + CHG-SN-4-05a 迁移完成 2026-05-02；ERRORS 14 码真源 = packages/types/src/api-errors.ts）| ✅ 已关闭 |
 | DEBT-SN-4-08-A | CHG-SN-4-08 | Visual baseline 1 张 `tests/visual/admin-videos/video-edit-drawer-lines-tab.png` 缺失（同 DEBT-SN-4-A 性质：仓库无 Playwright `toHaveScreenshot()` harness，本卡未引入新基础设施）| CHG-SN-4-10 milestone 收口卡 |
 | DEBT-SN-4-08-B | CHG-SN-4-08 | VIDEO 类 e2e 关键流回归未跑 / 未自报（任务卡明文"必跑 admin/videos 关键流"）| CHG-SN-4-10 milestone 收口卡 |
+| DEBT-SN-4-07-A | CHG-SN-4-07 | Visual baseline 7 张占位 PNG（69-byte 单像素文件，非真实截图；同 DEBT-SN-4-A 性质：仓库无 Playwright `toHaveScreenshot()` harness）| CHG-SN-4-10 milestone 收口卡 |
+| DEBT-SN-4-07-B | CHG-SN-4-07 | 审核台 e2e 关键流回归未自报（任务卡明文"必跑 ADMIN 类"）| CHG-SN-4-10 milestone 收口卡 |
+| DEBT-SN-4-07-C | CHG-SN-4-07 | 硬编码中文 ~15 处（toast / readiness 字典 / aria-label）违反 plan §5.0.5 "全部 t() 调用 + CI grep 守门"明文（LinesPanel 10 / Staging 4 / Rejected 2 / ModerationConsole 8 处）| CHG-SN-4-09a 单独修复（不阻塞集成）|
 
 ### CHG-SN-4-05a · ADR-110 方案 B 迁移实施 ✅ 完成（2026-05-02）
 

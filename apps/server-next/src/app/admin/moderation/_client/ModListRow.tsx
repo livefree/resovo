@@ -2,10 +2,10 @@
 
 import React from 'react'
 import { DualSignal } from '@resovo/admin-ui'
-import type { MockVideo } from './mock-data'
+import type { VideoQueueRow } from '@resovo/types'
 
 interface ModListRowProps {
-  readonly it: MockVideo
+  readonly it: VideoQueueRow
   readonly active: boolean
   readonly onClick: () => void
 }
@@ -41,18 +41,14 @@ export function ModListRow({ it, active, onClick }: ModListRowProps): React.Reac
       data-mod-list-row
       data-video-id={it.id}
     >
-      <div
-        style={{
-          ...THUMB_STYLE,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 10,
-          color: 'var(--fg-muted)',
-        }}
-      >
-        封{it.thumb}
-      </div>
+      {it.coverUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={it.coverUrl} alt={it.title} style={THUMB_STYLE} />
+      ) : (
+        <div style={{ ...THUMB_STYLE, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--fg-muted)' }}>
+          {it.type}
+        </div>
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
@@ -67,10 +63,15 @@ export function ModListRow({ it, active, onClick }: ModListRowProps): React.Reac
           {it.title}
         </div>
         <div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>
-          {it.type} · {it.year} · {it.sources} 源
+          {it.type} · {it.year ?? '—'}
         </div>
-        <div style={{ marginTop: 4 }}>
+        <div style={{ marginTop: 4, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           <DualSignal probe={it.probe} render={it.render} />
+          {it.badges.length > 0 && (
+            <span style={{ fontSize: 10, color: 'var(--state-warning-fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {it.badges[0]}
+            </span>
+          )}
         </div>
       </div>
     </div>

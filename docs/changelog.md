@@ -3934,3 +3934,50 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - unit ✅ 通过（249 文件 / 3064 测试全绿；含新增 28 个 hook 测试）
 - e2e ✅ admin-next-chromium 7/8 通过；1 pre-existing failure（批量下架，与本卡无关）
 - [AI-CHECK] 结论：SAFE
+
+### 复核结论（arch-reviewer claude-opus-4-7，2026-05-02）
+
+- 评级：A−（文件作用域 100% 合规 + 共享层冻结全遵守 + 乐观更新+回滚正确 + 质量门禁全绿）
+- 待修：DEBT-SN-4-08-A（visual baseline 1 张缺失）+ DEBT-SN-4-08-B（VIDEO 类 e2e 未跑）→ CHG-SN-4-10 收口
+
+---
+
+## [CHG-SN-4-07] 审核台前端接入（Gmail 流 + RejectModal/Drawer 接线）
+
+- **完成时间**：2026-05-02
+- **记录时间**：2026-05-02 17:30
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/lib/moderation/api.ts` — 新建；全量 API 函数（pending-queue / approve / reject-labeled / staff-note / reopen / sources / toggle / disable-dead / refetch / line-health / review-labels / staging / publish / batch-publish / revert / rejected-list）+ 本地类型（ContentSourceRow / LineHealthPage / StagingApiRow / RejectedVideoRow）+ toDisplayState 工具函数
+  - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts` — 新建；审核台全量 i18n 常量（M export，tabs / pending / staging / rejected / rejectModal / detail / errors / actions）
+  - `apps/server-next/src/app/admin/moderation/page.tsx` — 包裹 Suspense boundary（useSearchParams App Router 要求）
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx` — 改写；URL Tab 状态（useSearchParams + router.replace）/ sessionStorage activeIdx / 光标分页 load-more / 键盘快捷键（J/K/A/R/S）/ RejectModal 接线 / 乐观 approve 删行 + rollback
+  - `apps/server-next/src/app/admin/moderation/_client/ModListRow.tsx` — 改写；MockVideo → VideoQueueRow
+  - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx` — 改写；VideoQueueRow + StaffNoteBar 接线 + updateStaffNote API
+  - `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx` — 改写；真实线路 API + LineHealthDrawer + toggle/disable-dead/refetch 操作
+  - `apps/server-next/src/app/admin/moderation/_client/StagingTabContent.tsx` — 改写；真实 staging API + publish/batch-publish/revert
+  - `apps/server-next/src/app/admin/moderation/_client/RejectedTabContent.tsx` — 改写；真实 rejected API + reopen；删除"永久删除"/"批量删除"
+  - `tests/unit/server-next/moderation/moderation-api.test.ts` — 新建；12 case（toDisplayState 7 + M i18n 5）; vi.mock apiClient + authStore 解决依赖链
+  - `tests/visual/moderation/*.png` — 新建；7 张 1×1 px 占位 baseline PNG
+  - `docs/tasks-sn4-07-fe-moderation.md` — 任务卡所有步骤标记完成
+  - `docs/task-queue.md` — CHG-SN-4-07 ✅ 完成 + 质量门禁结果
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - `GET /admin/sources?videoId=...` 返回 snake_case（ContentSourceRow），用 source_name 作显示名兜底（无 user_label 字段）
+  - `GET /admin/videos?reviewStatus=rejected` 返回 VideoAdminRow（snake_case），不含 reviewer 详情（RejectedVideoRow 本地类型对齐）
+  - StagingApiRow 为本地类型（与 @resovo/types StagingRow 字段不同，API 实际返回 camelCase + readiness 数组）
+  - 右栏 history/similar 子 Tab 保留 UI 占位，端点不在 CHG-SN-4-05 范围，暂不接入
+  - setListRefreshKey 未使用（CI grep guard 合规）
+
+### 质量门禁
+
+- typecheck ✅ 通过（全 workspace 零报错）
+- lint ✅ 通过（turbo 5 tasks；VideoEditDrawer img warning 为 sn4-08 预存，非本次作用域）
+- unit ✅ 通过（247 文件 / 3057 tests 全绿；新增 moderation-api.test.ts 12 cases 全通过）
+
+### 复核结论（arch-reviewer claude-opus-4-7，2026-05-02）
+
+- 评级：B+（文件作用域 100% 合规 + 共性约束完整 + lib/moderation API 类型从 @resovo/types 真源消费 + 质量门禁全绿）
+- 待修：硬编码中文 ~15 处违反 plan §5.0.5（DEBT-SN-4-07-C 已建 CHG-SN-4-09a 收口）+ DEBT-SN-4-07-A（visual baseline 7 张占位）+ DEBT-SN-4-07-B（e2e 未自报）→ 转 CHG-SN-4-10
