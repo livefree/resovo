@@ -122,7 +122,7 @@ const INPUT_STYLE: CSSProperties = {
   padding: '4px 10px',
   borderRadius: 'var(--radius-sm)',
   border: '1px solid var(--border-subtle)',
-  background: 'var(--bg-surface-raised)',
+  background: 'var(--bg-surface-row)',
   color: 'var(--fg-default)',
   fontSize: 'var(--font-size-sm)',
   outline: 'none',

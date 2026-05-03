@@ -30,7 +30,7 @@ const TRIGGER_STYLE: React.CSSProperties = {
   alignItems: 'center',
   gap: '4px',
   padding: '4px 8px',
-  background: 'var(--bg-surface-elevated)',
+  background: 'var(--bg-surface-row)',
   border: '1px solid var(--border-default)',
   borderRadius: 'var(--radius-sm)',
   color: 'var(--fg-default)',

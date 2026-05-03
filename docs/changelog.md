@@ -4731,3 +4731,28 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **变更摘要**：将 dark 段五档 oklch lightness 校准让浏览器渲染的 sRGB hex 对齐设计稿 — 解决"颜色都很深，没有变浅效果"的根本视觉问题；本卡严格遵循 plan §2 改动原则（不动 ramp 结构、不引入新档位、零硬编码）
 - **关联 ADR**：ADR-111（accepted；后果增补"OKLCH-sRGB 映射误差校准"段落由 CHG-UI-06 收口时统一处理）
 
+---
+
+## [CHG-UI-05a] DataTable 表头 + Trigger 槽位精修
+
+- **日期**：2026-05-03
+- **来源序列**：SEQ-20260503-01（CHG-UI-05 增补卡，用户反馈触发）
+- **执行模型**：claude-opus-4-7（建议 sonnet；偏离原因：主循环已 opus 不可降级）
+- **子代理**：无
+- **触发**：用户 2026-05-03 反馈两点：① 表格表头列名称行与表格其他位置颜色不一致；② 下拉菜单 / 表格内搜索框 / 全局搜索框颜色各不相同
+- **文件清单**（4 文件）：
+  - `packages/admin-ui/src/components/data-table/data-table.tsx`：TH_STYLE.background `--bg-surface-elevated → transparent`（表头继承 raised 容器底；之前 elevated 21% 比容器 raised 15% 浮起 +6%）
+  - `apps/server-next/src/app/admin/videos/_client/VideoFilterFields.tsx`：INPUT_STYLE.background `--bg-surface-raised → --bg-surface-row`（toolbar 内 input/select 与 topbar 全局搜索同档）
+  - `packages/admin-ui/src/components/data-table/views-menu.tsx`：TRIGGER_STYLE.background `--bg-surface-elevated → --bg-surface-row`（dropdown trigger 是 input 类）
+  - `docs/designs/backend_design_v2.1/token-slot-audit-report-20260503.md`：新增 §2.1 段（追加 19-21 项 + 修正后视觉效果说明）
+- **测试覆盖**：typecheck / lint / unit 252f 3123t / tokens:validate / verify-token-references 全绿（首跑 1 flaky act warning，重跑稳定通过）
+- **设计对齐复核**（5 项全 ✅）：
+  - DataTable 表头与容器同色（transparent 继承 raised）
+  - 视频库 toolbar input/select 与全局搜索同色（surface-row）
+  - views-menu trigger 与 input 同档（surface-row）
+  - dropdown panel 仍 elevated（popover 槽位正确，不动）
+  - 测试全绿
+- **共享层沉淀评估**：本卡聚焦修正 CHG-UI-05 第一轮审计未覆盖的 3 处遗漏；audit report 增补段固化"trigger/input 都应是 surface-row、popover panel 才是 elevated"判定原则
+- **变更摘要**：3 处槽位精修 — 表头 elevated → transparent、视频库 input raised → row、views-menu trigger elevated → row；让"所有用户可输入/可触发的元素"都落在同一个 `--bg-surface-row` 槽位，满足设计语义一致性
+- **关联 ADR**：ADR-111（同上）
+

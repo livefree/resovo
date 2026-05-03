@@ -112,7 +112,7 @@ const TH_STYLE: React.CSSProperties = {
   fontSize: '12px',
   fontWeight: 600,
   color: 'var(--fg-muted)',
-  background: 'var(--bg-surface-elevated)',
+  background: 'transparent',
   borderBottom: '1px solid var(--border-subtle)',
   cursor: 'default',
   userSelect: 'none',

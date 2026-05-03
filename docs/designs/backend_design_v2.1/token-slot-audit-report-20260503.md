@@ -52,6 +52,27 @@
 
 > **DEBT-UI-BG-INSET 闭环**：本卡顺手关闭。`--bg-inset` 8 处全部替换为 `--bg-surface-raised`（drawer-elevated 内回落一档的"凹陷子区"语义）。`verify-token-references.mjs` 现 PASS — 77 个引用全部已定义（324 token）。
 
+---
+
+## 2.1 CHG-UI-05a 增补修正（用户 2026-05-03 反馈触发）
+
+CHG-UI-05 第一轮审计未覆盖的 3 处遗漏：
+
+| # | 文件:行 | 当前引用 | 应改为 | 设计依据 |
+|---|---|---|---|---|
+| 19 | `packages/admin-ui/src/components/data-table/data-table.tsx:115` TH_STYLE | `--bg-surface-elevated` | `transparent` | 表头应继承表格容器 raised 底色（`--bg-surface-elevated` 浮起 +6% 是错位 — 那是 popover 槽位） |
+| 20 | `apps/server-next/src/app/admin/videos/_client/VideoFilterFields.tsx:125` INPUT_STYLE | `--bg-surface-raised` | `--bg-surface-row` | toolbar 内 input/select 与 topbar 全局搜索（也是 row）一致 |
+| 21 | `packages/admin-ui/src/components/data-table/views-menu.tsx:33` TRIGGER_STYLE | `--bg-surface-elevated` | `--bg-surface-row` | dropdown trigger 是 input 类，与 input 同档；dropdown panel 自身保留 elevated 不变 |
+
+**修正后视觉效果**：
+- 表头与表格其他位置同色（continous）
+- 视频库 toolbar 搜索 + select / topbar 全局搜索 / views-menu trigger 三者同色（`--bg-surface-row` 18%）
+- popover panel 仍保持 elevated 21%（设计正确）
+
+**未触动**：
+- header-menu / hidden-columns-menu / admin-dropdown / dropdown panel 等 popover 自身仍 `--bg-surface-elevated`（正确）
+- DataTable bulk / foot 等 sticky 浮起底栏仍 elevated
+
 > **判定备注**：经实施过程的逐项研判，#7-12 实际语义都不是"卡片面板"而是"按钮 / input / progress / skeleton 类"——它们应消费 `--bg-surface-row`（一档浮起的小元素），**不是** `--bg-surface-raised`（页面级卡片）。本表已修订对齐实施结论。
 >
 > **未列入修正**：
