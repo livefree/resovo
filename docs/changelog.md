@@ -4543,3 +4543,20 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 6. 点击预设的"删除" → 立即从列表消失 → toast "已删除「测试预设」 [撤销]" → 5s 内点击撤销恢复
 7. 关闭浏览器 → 重新打开审核台（无 URL params）→ 应自动应用默认预设（URL 写入 + 列表筛选）
 8. 直接访问 `/admin/moderation?type=movie` → 不应用默认预设（用户显式覆盖优先）
+
+---
+
+## [CHG-UI-01] 方案文档归档 + ADR 占位
+
+- **日期**：2026-05-03
+- **来源序列**：SEQ-20260503-01（UI 优化 · 第一批：颜色 token 对齐设计稿）
+- **执行模型**：claude-opus-4-7（建议 haiku；偏离原因：主循环已 opus + 工作量极小，spawn haiku ROI 偏低）
+- **子代理**：无
+- **文件清单**（2 文件）：
+  - `docs/designs/backend_design_v2.1/ui-token-alignment-plan.md`：frontmatter `status: draft → active`；同步 ADR 引用 `ADR-UI-001 → ADR-111`
+  - `docs/decisions.md`：尾部追加 ADR-111 占位（标题 / 上下文 / 预定决策方向 / 关联 ADR-102 / 关联任务卡 CHG-UI-01..06 / 关联序列 SEQ-20260503-01）
+- **测试覆盖**：纯文档卡，无 typecheck / lint / unit / e2e 触发
+- **设计对齐复核**：N/A（本卡为方案归档，无视觉改动）
+- **共享层沉淀评估**：方案文档已就位作为 SEQ-20260503-01 真源；后续 CHG-UI-02..06 可直接引用
+- **变更摘要**：把上一步起草的 UI token 对齐方案从 draft 升 active；在 decisions.md 追加 ADR-111 占位（编号沿现行连续 ADR-NNN 约定，原方案文档"ADR-UI-001"已对齐为 ADR-111；正式决策内容由 CHG-UI-04 完成时回填）
+

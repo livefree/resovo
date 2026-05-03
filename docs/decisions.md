@@ -4036,3 +4036,44 @@ CHG-SN-4-05 任务卡范围声明 `packages/types/src/api/**`（信封 / errorCo
 - **关联任务卡**：CHG-SN-4-05（DEBT-SN-4-05-C 部分关闭）/ CHG-SN-4-05a（待立 / 方案 B 迁移实施）/ CHG-SN-4-07（前置依赖本 ADR）/ CHG-SN-4-08（同 -07）
 - **关联规范**：`docs/rules/api-rules.md` §响应格式规范（line 63-107，line 98 待 CHG-SN-4-05a 同步修订）/ `docs/architecture.md` §5.12（line 525 已修订）
 - **未关闭欠账**：DEBT-SN-4-05-C 中"迁移实施"部分由 CHG-SN-4-05a 关闭；本 ADR 仅关闭"决策待评审"部分
+
+---
+
+## ADR-111: 后台 token 颜色对齐设计稿（surfaces / border / fg / state pill）
+
+> 状态：placeholder（CHG-UI-01 占位；正式决策内容由 CHG-UI-04 完成时回填）
+> 日期：2026-05-03
+> 任务卡：SEQ-20260503-01（CHG-UI-01..06）
+> 关联：`docs/designs/backend_design_v2.1/ui-token-alignment-plan.md`（方案真源）/ `docs/designs/backend_design_v2.1/styles/tokens.css`（设计真源）/ `packages/design-tokens/src/{primitives,semantic}/*.ts`（实现真源）
+
+### 上下文
+
+视频库（`/admin/videos`）页面截图与设计稿逐项比对识别 4 类 token 偏离：
+1. surfaces 缺 row hover 中间档（dark `--bg2/--bg3` 之间梯度断档），dark 表格"整片黑"，light canvas 偏亮 +2.5%
+2. `border.default` 与 `surface-elevated` 同值（两者都是 `gray.800`），DataTable 行分割线被淹没
+3. dark `fg.default` 比设计 `--text` 亮 +7.5%，`fg.muted` 偏亮 +13%
+4. state pill 用 dark/light `bg/fg` 实色对调（Material 风），与设计 alpha-soft 软底 + 鲜亮 base 文字双主题统一策略反转
+
+详见方案文档 §1。
+
+### 决策
+
+_（CHG-UI-04 完成时回填正式决策；以下为 CHG-UI-01 占位时的预定方向）_
+
+预定方向（待 CHG-UI-04 arch-reviewer 评审通过后落定）：
+1. **不动 primitives 既有 ramp**：`colors.gray.*` / `colors.success.*` / `colors.accent.*` 等已发布档位不变；最多在 `gray.925` 中间档不可避免时新增一档
+2. **semantic 重映射**：`bg.ts` 新增 `surfaceRow` 角色（替代 row hover 缺档）；`fg.ts` dark.default 改 `gray.200`、dark.muted 改 `gray.400`；`border.ts` strong 收紧
+3. **state pill 双主题统一**：dark + light 共用 `color-mix(in oklch, <base> 14%, transparent)` 软底 + `<base>` 鲜亮文字，废除 dark/light 实色 bg/fg 对调
+4. **CSS 变量名只增不删**：保持向后兼容；新增槽位须有语义名（禁裸 hex / oklch 硬编码）
+5. **DataTable 行级 CSS 显式声明 `border-bottom: 1px solid var(--border-default)` + `tr:hover { background: var(--bg-surface-row) }`**：消费方零硬编码
+
+### 后果
+
+_（CHG-UI-04 完成时回填实测影响 + 视觉基线对比结论）_
+
+### 关联
+
+- **关联 ADR**：ADR-102（设计 Token 三层收编 + 设计稿 v2.1 映射 — 本 ADR 是其增量修订）
+- **关联任务卡**：CHG-UI-01（占位）/ CHG-UI-02（surfaces & border）/ CHG-UI-03（fg）/ CHG-UI-04（state pill；强制 opus + arch-reviewer）/ CHG-UI-05（DataTable 行分割线）/ CHG-UI-06（视觉走查 + 序列收口）
+- **关联序列**：SEQ-20260503-01
+- **关联规范**：`docs/rules/ui-rules.md`（CSS 变量使用约束）/ CLAUDE.md §"绝对禁止"硬编码颜色值条款
