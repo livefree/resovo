@@ -20,6 +20,7 @@ import * as videoQueries from '@/api/db/queries/videos'
 import * as moderationQueries from '@/api/db/queries/moderation'
 import * as provenanceQueries from '@/api/db/queries/metadataProvenance'
 import { listLineHealthEvents } from '@/api/db/queries/sourceHealthEvents'
+import { listAuditLogByTarget } from '@/api/db/queries/auditLog'
 
 const PendingQueueQuerySchema = z.object({
   cursor: z.string().optional(),
@@ -43,6 +44,11 @@ const StaffNoteBodySchema = z.object({
 })
 
 const LineHealthQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+})
+
+const AuditLogQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 })
@@ -178,6 +184,36 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       return reply.send({ data: result.rows, pagination: { total: result.total, page: parsed.data.page, limit: parsed.data.limit, hasNext: result.total > parsed.data.page * parsed.data.limit } })
     } catch (err) {
       request.log.error({ err }, 'line-health unexpected error')
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
+    }
+  })
+
+  // ── GET /admin/moderation/:id/audit-log ─────────────────────────
+  // CHG-SN-4-FIX-C: 审核台 RightPane.History 时间线数据源
+  fastify.get('/admin/moderation/:id/audit-log', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const parsed = AuditLogQuerySchema.safeParse(request.query)
+    if (!parsed.success) {
+      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
+    }
+    try {
+      const result = await listAuditLogByTarget(db, {
+        targetKind: 'video',
+        targetId: id,
+        page: parsed.data.page,
+        limit: parsed.data.limit,
+      })
+      return reply.send({
+        data: result.rows,
+        pagination: {
+          total: result.total,
+          page: parsed.data.page,
+          limit: parsed.data.limit,
+          hasNext: result.total > parsed.data.page * parsed.data.limit,
+        },
+      })
+    } catch (err) {
+      request.log.error({ err }, 'audit-log unexpected error')
       return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
     }
   })

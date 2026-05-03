@@ -169,6 +169,41 @@ export async function fetchLineHealth(
   )
 }
 
+// ── 视频审计日志（RightPane.History · CHG-SN-4-FIX-C）─────────────────
+
+export interface AuditLogQueryRow {
+  readonly id: string
+  readonly actorId: string
+  readonly actorUsername: string | null
+  readonly actionType: string  // AdminAuditActionType union；前端宽松接收
+  readonly targetKind: string
+  readonly targetId: string | null
+  readonly beforeJsonb: Readonly<Record<string, unknown>> | null
+  readonly afterJsonb: Readonly<Record<string, unknown>> | null
+  readonly requestId: string | null
+  readonly createdAt: string
+}
+
+export interface AuditLogPage {
+  readonly data: readonly AuditLogQueryRow[]
+  readonly pagination: {
+    readonly total: number
+    readonly page: number
+    readonly limit: number
+    readonly hasNext: boolean
+  }
+}
+
+export async function fetchVideoAuditLog(
+  videoId: string,
+  page = 1,
+  limit = 20,
+): Promise<AuditLogPage> {
+  return apiClient.get<AuditLogPage>(
+    `/admin/moderation/${videoId}/audit-log?page=${page}&limit=${limit}`,
+  )
+}
+
 // ── 拒绝标签 ──────────────────────────────────────────────────────────
 
 export async function fetchReviewLabels(): Promise<ReviewLabel[]> {

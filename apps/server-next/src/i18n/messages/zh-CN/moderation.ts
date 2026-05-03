@@ -1,9 +1,21 @@
 /**
- * moderation.ts — 审核台 i18n 文案字典（CHG-SN-4-07）
+ * moderation.ts — 审核台 i18n 文案字典（CHG-SN-4-07 + CHG-SN-4-FIX-C 扩展）
  *
  * 使用方式：`import { M } from '@/i18n/messages/zh-CN/moderation'`
  * 零 i18n 框架依赖；待后续接入 next-intl 时迁移为标准 messages JSON。
  */
+
+function formatRelativeTime(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  const diffMs = Date.now() - date.getTime()
+  const diffSec = Math.floor(diffMs / 1000)
+  if (diffSec < 60) return '刚刚'
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} 分钟前`
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} 小时前`
+  if (diffSec < 86400 * 7) return `${Math.floor(diffSec / 86400)} 天前`
+  return date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
 
 export const M = {
   title: '内容审核台',
@@ -11,6 +23,39 @@ export const M = {
     pending: '待审核',
     staging: '待发布',
     rejected: '已拒绝',
+  },
+  rightTab: {
+    detail: '详情',
+    history: '历史',
+    similar: '类似',
+  },
+  history: {
+    empty: '该视频尚无审核记录',
+    loading: '加载中…',
+    failed: '历史记录加载失败',
+    prevPage: '上一页',
+    nextPage: '下一页',
+    pageInfo: (current: number, total: number) => `第 ${current} / ${total} 页`,
+    actor: (username: string | null) => username ?? '系统',
+    relativeTime: (iso: string) => formatRelativeTime(iso),
+    action: {
+      'video.approve': '通过',
+      'video.reject_labeled': '拒绝',
+      'video.staff_note': '更新备注',
+      'video.visibility_patch': '修改可见性',
+      'video.reopen': '重新开审',
+      'video.refetch_sources': '触发补源',
+      'video_source.toggle': '切换线路',
+      'video_source.disable_dead_batch': '禁用全失效',
+      'staging.revert': '退回审核',
+      'staging.publish': '发布上架',
+      'staging.batch_publish': '批量发布',
+      unknown: '未知操作',
+    } as Record<string, string>,
+  },
+  similar: {
+    placeholder: '类似视频功能将于 M-SN-5 上线',
+    note: '届时将基于类型 / 国家 / 年份召回相似视频，辅助跨视频审核决策。',
   },
   todayStats: (reviewed: number, approveRate: number | null) =>
     `今天已处理 ${reviewed} 条 · 通过率 ${approveRate != null ? approveRate.toFixed(0) + '%' : '—'}`,

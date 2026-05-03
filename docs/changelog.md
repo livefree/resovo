@@ -4329,3 +4329,114 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - ModerationConsole 内 EpisodeSelector / VisChip / StaffNoteBar / DecisionCard 决策建议等隐式 broken 全部恢复
 - 推荐用户重新刷新审核台 `/admin/moderation` 验证 6 个修复点
 - 解锁继续推进 FIX-C / FIX-F
+
+---
+
+## [CHG-SN-4-FIX-C] 右栏 RightPaneTabs（详情/历史/类似）三态化
+
+> 完成时间：2026-05-02 22:55
+> 序列：SEQ-20260502-01（M-SN-4 收口扫尾 · 投产对齐）
+> 范围：plan v1.6 §1 G4
+> 执行模型：claude-opus-4-7（偏离 sonnet 建议；范围扩张到后端轻量端点新增）
+> 子代理：无
+
+### 修复内容
+
+- **后端轻量补建**：新增 `GET /admin/moderation/:id/audit-log` 端点（plan §3 未列；FIX-C 实装时发现 admin_audit_log 仅有 INSERT 无读端点 → 新建轻量 query + 路由）
+  - `auditLog.ts` 追加 `listAuditLogByTarget(db, { targetKind, targetId, page, limit })` query
+  - 字段 camelCase（教训自 09d）：PG SQL `AS "camelName"` 双引号 alias 保留大小写
+  - LEFT JOIN users 取 `actorUsername`（actor 删除场景下保留 audit 行）
+  - 路由：`fastify.get('/admin/moderation/:id/audit-log', { preHandler: auth })` (moderator/admin)
+  - 响应 pagination 信封对齐 line-health 端点风格（`{ data, pagination: { total, page, limit, hasNext } }`）
+- **前端 RightPane 三态编排**：
+  - 新建 `_client/RightPane/index.tsx`：segment Tab + 持久化 `admin.moderation.rightTab.v1` (sessionStorage) + 默认 'detail'
+  - 新建 `_client/RightPane/TabDetail.tsx`：从 ModerationConsole 迁移 RightPaneDetail 函数到独立文件
+  - 新建 `_client/RightPane/TabHistory.tsx`：渲染 audit_log 时间线（actor + actionType chip + 相对时间）
+  - 新建 `_client/RightPane/TabSimilar.tsx`：M-SN-5 占位（零 API 调用）
+- **hook**：新建 `lib/moderation/use-review-history.ts`（loading/data/error/pagination 状态机；videoId 切换时自动重置）
+- **i18n**：追加 `M.rightTab.{detail,history,similar}` + `M.history.{empty,loading,failed,prevPage,nextPage,pageInfo,actor,relativeTime,action.*}` + `M.similar.{placeholder,note}` keys；新增 `formatRelativeTime` 工具函数
+- **ModerationConsole 接入**：删除内联 `RightPaneDetail` + `DetailRow` 函数（迁移至 TabDetail.tsx），SplitPane 第三栏渲染 `<RightPane v={v} />`
+
+### 文件改动
+
+后端：
+- `apps/api/src/db/queries/auditLog.ts`（追加 `listAuditLogByTarget` 函数 + `AdminAuditLogQueryRow` interface camelCase）
+- `apps/api/src/routes/admin/moderation.ts`（追加 audit-log 路由 + AuditLogQuerySchema zod schema + listAuditLogByTarget import）
+- `tests/unit/api/moderationQueueRoutes.test.ts`（追加 5 case：401/200 信封/参数透传/camelCase 字段验证/viewer→403）
+
+前端：
+- `apps/server-next/src/app/admin/moderation/_client/RightPane/index.tsx`（新建）
+- `apps/server-next/src/app/admin/moderation/_client/RightPane/TabDetail.tsx`（新建，迁移）
+- `apps/server-next/src/app/admin/moderation/_client/RightPane/TabHistory.tsx`（新建）
+- `apps/server-next/src/app/admin/moderation/_client/RightPane/TabSimilar.tsx`（新建）
+- `apps/server-next/src/lib/moderation/use-review-history.ts`（新建）
+- `apps/server-next/src/lib/moderation/api.ts`（追加 `fetchVideoAuditLog` + `AuditLogQueryRow` / `AuditLogPage` types）
+- `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`（删除 RightPaneDetail/DetailRow 内函数 + RightPane import + SplitPane 第三栏改用 RightPane）
+- `apps/server-next/src/i18n/messages/zh-CN/moderation.ts`（追加 rightTab + history + similar keys + formatRelativeTime 工具）
+- `tests/unit/server-next/admin-moderation/use-review-history.test.ts`（新建，5 case：null videoId / 自动加载 / fetch 失败 / loadPage 切页 / videoId 切换重置）
+
+### 质量门禁
+
+- typecheck ✅（全 8 workspace 零报错）
+- lint ✅（5 tasks 全 pass，无新增警告）
+- unit ✅（251 文件 / 3085 tests 全绿；moderationQueueRoutes 17/17 + use-review-history 5/5）
+
+### 设计对齐复核
+
+- ✅ 三 Tab segment 风格与 ModerationConsole 主 Tab 风格一致（border + bg + accent-default + admin-accent-soft 组合相同）
+- ✅ history Tab 单条时间线行高 ~32-36px（padding 8px + 单行 fontSize 11 内容）
+- ✅ history Tab loading/empty/failed 状态全使用 i18n key（M.history.empty / .loading / .failed）
+- ✅ similar 占位文案 + 设计 token 灰度图标（`var(--fg-subtle)` + opacity 0.5）；零硬编码颜色
+- ✅ 切 Tab 不丢 activeIdx（rightTab storage key 与 activeIdx storage key 独立；测试场景：右栏切到 history 不影响左栏队列状态）
+- ✅ history Tab API 字段全部 camelCase（PG `AS "camelName"` alias + 单测显式断言不存在 `actor_id` / `action_type` snake_case）
+- ✅ 后端 audit-log RBAC 正确（auth = `[authenticate, requireRole(['moderator', 'admin'])]`；viewer → 403 测试覆盖）
+
+### 六问自检
+
+1. 是否引入整页刷新或类似行为？— **否**。RightPane Tab 切换是 state-driven，无路由 navigation
+2. 是否新增重复逻辑或重复状态？— **否**。RightPane.tab 与 ModerationConsole.tab 独立 sessionStorage key，分别持久化
+3. 是否有逻辑应下沉但仍留在组件中？— **否**。useReviewHistory hook 独立文件；TabDetail/History/Similar 各自独立文件
+4. 是否破坏现有分层？— **否**。后端 Route → Query 标准分层；前端 _client → lib/hook 标准分层
+5. 是否存在需拆分的函数 / 文件？— **否**。RightPane index.tsx ~110 行单一职责（Tab 编排）；ModerationConsole.tsx 删除 ~30 行 RightPaneDetail 后规模缩减；listAuditLogByTarget 50 行单查询
+6. 是否引入潜在技术债？— **否**。新增 audit-log 端点是 plan §3 缺漏的补建（应有未有），不是新债
+
+### 偏离检测
+
+- ❌ 不通过补丁解决结构问题（RightPane 是独立编排组件 + 三 Tab 完整拆分）
+- ❌ 不为兼容旧逻辑引入复杂度
+- ❌ 状态/数据流清晰（rightTab sessionStorage / useReviewHistory hook）
+- ❌ 组件职责未膨胀（ModerationConsole 删除 ~30 行内联函数后更精简）
+- ❌ 未触及 FIX-C 范围外文件（i18n 追加是必需配套；audit-log 后端端点是 history Tab 强依赖）
+
+无任何劣化信号。
+
+```
+[AI-CHECK]
+结构检查：
+• 是否违反分层（Route→Service→DB）：NO
+• 是否跨模块访问内部实现：NO（前端 _client → lib hook → api fetcher 标准链路）
+代码质量：
+• 是否新增重复逻辑：NO
+• 是否存在 hack / 临时补丁：NO
+规模检查：
+• 是否存在需拆分的函数（多逻辑阶段 / 3层嵌套 / 超80行非声明性）：NO
+• 是否存在需拆分的文件（多主要概念 / 超400行且无法一句话描述职责）：NO（RightPane 110 / TabDetail 90 / TabHistory 130 / TabSimilar 45 / use-review-history 80 / listAuditLogByTarget 50）
+安全性：
+• 是否存在隐式副作用或吞异常：NO（hook cancelledRef + RBAC + zod schema 全套）
+结论：SAFE
+```
+
+### 后续解锁
+
+- FIX-C 完成 → SEQ-20260502-01 阶段 1 剩余 2 张并行卡（FIX-B / FIX-F）
+- 推荐下一卡：**FIX-F**（4h，筛选预设；纯前端 localStorage CRUD，无 arch-reviewer 强制）
+- FIX-B 留到最后（最重，arch-reviewer Opus 强制 SignalChip 新组件契约 + 信息密度规约）
+
+### 用户验证步骤
+
+1. 重启 apps/api（新增 audit-log 路由）
+2. 刷新 `/admin/moderation`
+3. 中央选择视频后，右栏 segment Tab 应显示 详情 / 历史 / 类似 三按钮
+4. 历史 Tab：显示该视频的审核动作时间线（如已通过过 → 看到 "video.approve"）；空数据 → "该视频尚无审核记录"
+5. 类似 Tab：显示 "类似视频功能将于 M-SN-5 上线" 占位
+6. 切到 history → 刷新页面 → 应停留在 history Tab（sessionStorage 持久化）

@@ -49,6 +49,11 @@ vi.mock('@/api/db/queries/metadataProvenance', () => ({
   getProvenanceByCatalogId: vi.fn(),
   getLocksByCatalogId: vi.fn(),
 }))
+const mockListAuditLogByTarget = vi.fn()
+vi.mock('@/api/db/queries/auditLog', () => ({
+  insertAuditLog: vi.fn(),
+  listAuditLogByTarget: (...args: unknown[]) => mockListAuditLogByTarget(...args),
+}))
 
 async function buildApp() {
   const { adminModerationRoutes } = await import('@/api/routes/admin/moderation')
@@ -233,5 +238,93 @@ describe('GET /admin/moderation/:id/line-health/:sourceId', () => {
     expect(body.pagination.total).toBe(1)
     expect(body.pagination.page).toBe(1)
     expect(body.pagination.limit).toBe(20)
+  })
+})
+
+describe('GET /admin/moderation/:id/audit-log (CHG-SN-4-FIX-C)', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockListAuditLogByTarget.mockResolvedValue({ rows: [], total: 0 })
+    app = await buildApp()
+  })
+  afterEach(() => app.close())
+
+  it('未认证返回 401', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/moderation/vid-1/audit-log',
+    })
+    expect(res.statusCode).toBe(401)
+  })
+
+  it('moderator 返回 200 + pagination 信封', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/moderation/vid-1/audit-log',
+      headers: { authorization: await tokenFor('moderator') },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body).toHaveProperty('data')
+    expect(body).toHaveProperty('pagination')
+    expect(body.pagination).toHaveProperty('total')
+    expect(body.pagination).toHaveProperty('hasNext')
+  })
+
+  it('targetKind 固定为 video，targetId = path :id', async () => {
+    await app.inject({
+      method: 'GET',
+      url: '/v1/admin/moderation/vid-42/audit-log?page=2&limit=10',
+      headers: { authorization: await tokenFor('admin') },
+    })
+    expect(mockListAuditLogByTarget).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        targetKind: 'video',
+        targetId: 'vid-42',
+        page: 2,
+        limit: 10,
+      }),
+    )
+  })
+
+  it('返回的 row 字段全部 camelCase（教训自 09d）', async () => {
+    mockListAuditLogByTarget.mockResolvedValue({
+      rows: [{
+        id: '1',
+        actorId: 'u-1',
+        actorUsername: 'alice',
+        actionType: 'video.approve',
+        targetKind: 'video',
+        targetId: 'vid-1',
+        beforeJsonb: null,
+        afterJsonb: null,
+        requestId: null,
+        createdAt: '2026-05-02T00:00:00Z',
+      }],
+      total: 1,
+    })
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/moderation/vid-1/audit-log',
+      headers: { authorization: await tokenFor('admin') },
+    })
+    const body = res.json()
+    expect(body.data[0]).toHaveProperty('actorId')
+    expect(body.data[0]).toHaveProperty('actorUsername')
+    expect(body.data[0]).toHaveProperty('actionType')
+    expect(body.data[0]).toHaveProperty('createdAt')
+    expect(body.data[0]).not.toHaveProperty('actor_id')
+    expect(body.data[0]).not.toHaveProperty('action_type')
+  })
+
+  it('viewer 角色被拒绝（403）', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/moderation/vid-1/audit-log',
+      headers: { authorization: await tokenFor('viewer') },
+    })
+    expect(res.statusCode).toBe(403)
   })
 })

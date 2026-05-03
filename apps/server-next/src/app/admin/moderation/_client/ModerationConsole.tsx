@@ -9,6 +9,7 @@ import { ModListRow } from './ModListRow'
 import { PendingCenter } from './PendingCenter'
 import { StagingTabContent } from './StagingTabContent'
 import { RejectedTabContent } from './RejectedTabContent'
+import { RightPane } from './RightPane'
 import { VideoEditDrawer } from '../../videos/_client/VideoEditDrawer'
 import * as api from '@/lib/moderation/api'
 import { M } from '@/i18n/messages/zh-CN/moderation'
@@ -53,38 +54,6 @@ function segBtnStyle(active: boolean, danger?: boolean): React.CSSProperties {
 
 function badgeStyle(danger?: boolean): React.CSSProperties {
   return { padding: '0 5px', borderRadius: 999, fontSize: 10, background: danger ? 'var(--state-error-bg)' : 'var(--bg-surface-raised)', color: danger ? 'var(--state-error-fg)' : 'var(--fg-muted)' }
-}
-
-// ── Right pane detail ─────────────────────────────────────────────
-
-function DetailRow({ label, value, ok }: { label: string; value: string; ok?: boolean }): React.ReactElement {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', background: 'var(--bg-surface-raised)', borderRadius: 4, marginBottom: 3 }}>
-      <code style={{ fontFamily: 'monospace', color: 'var(--fg-muted)', fontSize: 11 }}>{label}</code>
-      <span style={{ color: ok === true ? 'var(--state-success-fg)' : ok === false ? 'var(--state-warning-fg)' : 'var(--fg-muted)', fontSize: 12 }}>{value}</span>
-    </div>
-  )
-}
-
-function RightPaneDetail({ v }: { v: VideoQueueRow }): React.ReactElement {
-  const doubanLabel = M.detail[v.doubanStatus as keyof typeof M.detail] ?? v.doubanStatus
-  return (
-    <div style={{ fontSize: 12 }}>
-      <div style={{ fontSize: 10, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>{M.detail.statusTriad}</div>
-      <DetailRow label={M.detail.isPublished} value={String(v.isPublished)} ok={v.isPublished} />
-      <DetailRow label={M.detail.visibility} value={v.visibilityStatus} ok={v.visibilityStatus === 'public'} />
-      <DetailRow label={M.detail.reviewStatus} value={v.reviewStatus} ok={v.reviewStatus === 'approved'} />
-      <div style={{ marginTop: 12, fontSize: 10, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>{M.detail.doubanStatus}</div>
-      <DetailRow label="douban_status" value={String(doubanLabel)} ok={v.doubanStatus === 'matched'} />
-      <div style={{ marginTop: 12, fontSize: 10, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>信息</div>
-      <DetailRow label="type" value={v.type} />
-      <DetailRow label="year" value={String(v.year ?? '—')} />
-      <DetailRow label="country" value={v.country ?? '—'} />
-      <DetailRow label="episodeCount" value={String(v.episodeCount)} />
-      <DetailRow label="meta_score" value={String(v.metaScore)} />
-      <DetailRow label="source_check" value={v.sourceCheckStatus} />
-    </div>
-  )
 }
 
 // ── Main component ────────────────────────────────────────────────
@@ -388,7 +357,7 @@ export function ModerationConsole(): React.ReactElement {
                   hidden: !rightOpen,
                   role: 'complementary',
                   'aria-label': M.aria.consoleDetailPane,
-                  children: v ? <RightPaneDetail v={v} /> : null,
+                  children: v ? <RightPane v={v} /> : null,
                 },
               ]}
             />
