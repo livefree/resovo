@@ -226,9 +226,17 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDr
                     skippedFields={skippedFields} submitError={submitError}
                   />
                 )}
-                {tab === 'lines' && <TabLines />}
-                {tab === 'images' && <TabImages />}
-                {tab === 'douban' && <TabDouban />}
+                {tab === 'lines' && videoId && <TabLines videoId={videoId} />}
+                {tab === 'images' && videoId && <TabImages videoId={videoId} />}
+                {tab === 'douban' && videoId && (
+                  <TabDouban
+                    videoId={videoId}
+                    doubanStatus={video.douban_status}
+                    doubanId={video.douban_id}
+                    reviewStatus={video.review_status}
+                    onRefresh={onSaved}
+                  />
+                )}
               </div>
               <div style={FOOTER}>
                 <span style={{ fontSize: '11px', color: 'var(--fg-muted)' }}>
