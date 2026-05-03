@@ -4440,3 +4440,106 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 4. 历史 Tab：显示该视频的审核动作时间线（如已通过过 → 看到 "video.approve"）；空数据 → "该视频尚无审核记录"
 5. 类似 Tab：显示 "类似视频功能将于 M-SN-5 上线" 占位
 6. 切到 history → 刷新页面 → 应停留在 history Tab（sessionStorage 持久化）
+
+---
+
+## [CHG-SN-4-FIX-F] 筛选预设功能（保存/应用/默认/删除）
+
+> 完成时间：2026-05-02 23:05
+> 序列：SEQ-20260502-01（M-SN-4 收口扫尾 · 投产对齐）
+> 范围：plan v1.6 §1 G7
+> 执行模型：claude-opus-4-7
+> 子代理：无
+
+### 修复内容
+
+- **筛选 state 管理**：ModerationConsole 引入 `currentFilters: FilterPresetQuery` state；`fetchPendingQueue(currentFilters)` 接通后端 filter 参数（之前 `fetchPendingQueue({})` 无任何筛选）
+- **URL params 主轨**：`useSearchParams` → `currentFilters` 单向同步；`router.replace` 写回 URL；FILTER_KEYS = `[type, sourceCheckStatus, doubanStatus, hasStaffNote, needsManualReview]`
+- **localStorage 预设 CRUD**（`useFilterPresets` hook）：
+  - storageKey: `admin.moderation.presets.v1`
+  - schema: `{ version: 'v1', presets: FilterPreset[] }`
+  - FilterPreset 字段：id / name / tab (pending|staging|rejected|all) / query / isDefault / createdAt / updatedAt
+  - 暴露：save / update / remove / restore / setDefault
+  - **Tab 隔离**：`applicablePresets` 仅返回 `tab === currentTab || tab === 'all'`
+  - **默认互斥**：同一 Tab（含 'all'）最多 1 个 isDefault=true；新设默认时清除已有默认
+  - **降级**：localStorage 失效（隐私模式 / quota）→ 内存态保留，无报错
+- **默认预设自动应用**：进入审核台时如 URL 无任何筛选参数 → 检查当前 Tab 默认预设 → router.replace 写入 URL；URL 有筛选参数 → 不应用（用户显式覆盖优先）；defaultAppliedRef 防止 effect 多次触发
+- **UI 三件套**：
+  - `FilterPresetPopover.tsx`：popover 列表（每条预设：⭐default chip / name / 简述 / [应用] [设默认/取消默认] [删除]）；底部 "+ 保存当前筛选为预设"；ESC + 透明 backdrop 关闭
+  - `SavePresetModal.tsx`：admin-ui Modal 包装；字段（名称必填 / 适用 Tab select / ☐ 设默认）+ 当前筛选简述提示
+  - Toast（fixed bottom-right）：撤销机制 — 删除预设 → "已删除「{name}」 [撤销]"，5s 内点击恢复（lastDeleted state + setTimeout）
+
+### 文件改动
+
+- `apps/server-next/src/lib/moderation/use-filter-presets.ts`（新建 — hook 核心数据层 + summarizeQuery 工具）
+- `apps/server-next/src/app/admin/moderation/_client/FilterPresetPopover.tsx`（新建）
+- `apps/server-next/src/app/admin/moderation/_client/SavePresetModal.tsx`（新建）
+- `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`（接入：currentFilters state + URL 同步 effect + 默认预设 effect + 6 个 handlers + popover/modal/toast 渲染 + 头部按钮接 onClick + readFiltersFromSearchParams/hasFilterParamsInUrl/writeFiltersToSearchParams 工具）
+- `apps/server-next/src/i18n/messages/zh-CN/moderation.ts`（追加 M.preset.* keys）
+- `tests/unit/server-next/admin-moderation/use-filter-presets.test.ts`（新建，12 case：初始化 3 / CRUD 4 / Tab 隔离 2 / summarizeQuery 3）
+
+### 质量门禁
+
+- typecheck ✅（全 8 workspace 零报错）
+- lint ✅（5 tasks 全 pass，无新增警告）
+- unit ✅（252 文件 / 3097 tests 全绿，零回归；use-filter-presets 12/12）
+
+### 设计对齐复核
+
+- ⚠️ Popover 单条预设行实测 ~77px（标题 17px + summary 14px + actions 22px + padding 16px + gap 4×2）— **超过 plan §2 设定的 40px 目标**。权衡：3 行结构（标题 / 简述 / 操作）比单行 hover-action 更直观（多操作场景一目了然）；40px 在 3 行 + 多操作下不可达。**记入 FIX-CLOSE arch-reviewer 复评点**：是否折叠 actions 到 hover menu。
+- ✅ 默认预设 ⭐ 颜色 `var(--state-warning-fg)`；非默认 `var(--fg-subtle) opacity 0.4`
+- ✅ 删除 toast 撤销机制可用（5s 内点击 button 恢复，setTimeout 自动消失）
+- ✅ URL params 优先级：用户带 `?type=movie` 访问时不应用默认预设（hasFilterParamsInUrl 守卫 + defaultAppliedRef 防多次）
+- ✅ localStorage 失效降级（safeRead / safeWrite try/catch + 内存态保留）
+- ✅ Modal 走 admin-ui Modal 原语（继承 OverlayBackdrop 协议；不重复实装 backdrop）
+- ✅ 颜色全部 token，零硬编码（grep `#[0-9a-f]{3,6}` 在 4 新文件命中数 = 0）
+
+### 六问自检
+
+1. 整页刷新？— **否**。filters 变化通过 router.replace + state，无 navigation
+2. 重复逻辑/状态？— **否**。currentFilters 单一来源；URL 同步 effect 单向；默认应用 ref 守卫去重
+3. 逻辑应下沉？— **否**。useFilterPresets / FilterPresetPopover / SavePresetModal 各自独立；summarizeQuery 工具函数同源 hook
+4. 破坏现有分层？— **否**。前端 _client → lib/hook → localStorage 标准链路；后端不改
+5. 需拆分函数 / 文件？— **否**。useFilterPresets 220 行单一职责（CRUD）；ModerationConsole 增加 ~80 行 ≈ 480 行（接近 500 行硬阈值，FIX-CLOSE 时再评估拆分）
+6. 引入潜在技术债？— **轻微**。ModerationConsole 总行数接近 500 行硬阈值；如再扩展须拆分（待 FIX-D Player 接入时一并评估）
+
+### 偏离检测
+
+- ⚠️ Popover 行高超过设计目标（77px vs 40px）— 记入 FIX-CLOSE 评级
+- ❌ 状态/数据流清晰
+- ❌ 组件职责未膨胀（ModerationConsole 是审核台编排根节点，接入新功能合理）
+- ❌ 未触及 FIX-F 范围外文件
+
+```
+[AI-CHECK]
+结构检查：
+• 是否违反分层（Route→Service→DB）：NO
+• 是否跨模块访问内部实现：NO
+代码质量：
+• 是否新增重复逻辑：NO
+• 是否存在 hack / 临时补丁：NO
+规模检查：
+• 是否存在需拆分的函数（多逻辑阶段 / 3层嵌套 / 超80行非声明性）：NO
+• 是否存在需拆分的文件（多主要概念 / 超400行且无法一句话描述职责）：⚠️ ModerationConsole.tsx ~480 行接近 500 行阈值；目前仍单一职责"审核台编排"；FIX-D 引入 Player 时如再扩展须拆分
+安全性：
+• 是否存在隐式副作用或吞异常：NO（safeRead / safeWrite catch 是必要降级）
+结论：SAFE（带 1 项视觉密度跟踪 + 1 项规模观察）
+```
+
+### 后续解锁
+
+- FIX-F 完成 → 阶段 1 全部完成（A / E / C / F）
+- 阶段 2 串行：**FIX-B**（最重，arch-reviewer Opus 强制 SignalChip 新组件契约 + 信息密度规约）
+- 阶段 3 串行：FIX-D（依赖 FIX-B 选中线路状态契约）
+- 阶段 4 收口：FIX-CLOSE
+
+### 用户验证步骤
+
+1. 刷新 `/admin/moderation` 待审核 Tab
+2. 头部右上"筛选预设 ▾"按钮点击 → Popover 打开（首次为空，显示"尚无保存的预设"）
+3. 点击 Popover 底部"+ 保存当前筛选为预设" → Modal 弹出 → 输入名称（如"测试预设"）→ 保存 → toast "已保存预设「测试预设」"
+4. 再次点击"筛选预设 ▾" → 看到刚保存的预设 → 点击"应用"→ URL params 同步（`?type=...&...`） → 列表按筛选重新加载 → toast "已应用「测试预设」"
+5. 点击预设的"设为默认" → ⭐ 高亮（`var(--state-warning-fg)`）→ toast "已设「测试预设」为默认"
+6. 点击预设的"删除" → 立即从列表消失 → toast "已删除「测试预设」 [撤销]" → 5s 内点击撤销恢复
+7. 关闭浏览器 → 重新打开审核台（无 URL params）→ 应自动应用默认预设（URL 写入 + 列表筛选）
+8. 直接访问 `/admin/moderation?type=movie` → 不应用默认预设（用户显式覆盖优先）

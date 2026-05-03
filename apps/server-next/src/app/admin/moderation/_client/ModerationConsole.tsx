@@ -10,9 +10,13 @@ import { PendingCenter } from './PendingCenter'
 import { StagingTabContent } from './StagingTabContent'
 import { RejectedTabContent } from './RejectedTabContent'
 import { RightPane } from './RightPane'
+import { FilterPresetPopover } from './FilterPresetPopover'
+import { SavePresetModal } from './SavePresetModal'
 import { VideoEditDrawer } from '../../videos/_client/VideoEditDrawer'
 import * as api from '@/lib/moderation/api'
 import { M } from '@/i18n/messages/zh-CN/moderation'
+import { useFilterPresets } from '@/lib/moderation/use-filter-presets'
+import type { FilterPreset, FilterPresetQuery, FilterPresetTab } from '@/lib/moderation/use-filter-presets'
 
 // ── Types & constants ──────────────────────────────────────────────
 
@@ -56,6 +60,39 @@ function badgeStyle(danger?: boolean): React.CSSProperties {
   return { padding: '0 5px', borderRadius: 999, fontSize: 10, background: danger ? 'var(--state-error-bg)' : 'var(--bg-surface-raised)', color: danger ? 'var(--state-error-fg)' : 'var(--fg-muted)' }
 }
 
+// ── 筛选 URL 同步工具（CHG-SN-4-FIX-F）─────────────────────────────────
+
+const FILTER_KEYS = ['type', 'sourceCheckStatus', 'doubanStatus', 'hasStaffNote', 'needsManualReview'] as const
+
+function readFiltersFromSearchParams(sp: URLSearchParams | ReturnType<typeof useSearchParams>): FilterPresetQuery {
+  const get = (k: string) => sp.get(k)
+  const filters: FilterPresetQuery = {}
+  if (get('type')) filters.type = get('type') as string
+  if (get('sourceCheckStatus')) filters.sourceCheckStatus = get('sourceCheckStatus') as string
+  if (get('doubanStatus')) filters.doubanStatus = get('doubanStatus') as string
+  const hasStaffNote = get('hasStaffNote')
+  if (hasStaffNote === 'true') filters.hasStaffNote = true
+  else if (hasStaffNote === 'false') filters.hasStaffNote = false
+  const needsManualReview = get('needsManualReview')
+  if (needsManualReview === 'true') filters.needsManualReview = true
+  return filters
+}
+
+function hasFilterParamsInUrl(sp: URLSearchParams | ReturnType<typeof useSearchParams>): boolean {
+  return FILTER_KEYS.some((k) => sp.get(k) != null && sp.get(k) !== '')
+}
+
+function writeFiltersToSearchParams(sp: URLSearchParams, filters: FilterPresetQuery): URLSearchParams {
+  const next = new URLSearchParams(sp.toString())
+  FILTER_KEYS.forEach((k) => next.delete(k))
+  if (filters.type) next.set('type', filters.type)
+  if (filters.sourceCheckStatus) next.set('sourceCheckStatus', filters.sourceCheckStatus)
+  if (filters.doubanStatus) next.set('doubanStatus', filters.doubanStatus)
+  if (filters.hasStaffNote != null) next.set('hasStaffNote', String(filters.hasStaffNote))
+  if (filters.needsManualReview != null) next.set('needsManualReview', String(filters.needsManualReview))
+  return next
+}
+
 // ── Main component ────────────────────────────────────────────────
 
 export function ModerationConsole(): React.ReactElement {
@@ -77,6 +114,15 @@ export function ModerationConsole(): React.ReactElement {
   const [rejectSubmitting, setRejectSubmitting] = useState(false)
   const [rightOpen, setRightOpen] = useState(true)
   const [editVideoId, setEditVideoId] = useState<string | null>(null)
+
+  // CHG-SN-4-FIX-F：筛选预设
+  const [currentFilters, setCurrentFilters] = useState<FilterPresetQuery>(() => readFiltersFromSearchParams(searchParams))
+  const [presetPopoverOpen, setPresetPopoverOpen] = useState(false)
+  const [savePresetOpen, setSavePresetOpen] = useState(false)
+  const [toast, setToast] = useState<{ message: string; undo?: () => void; key: number } | null>(null)
+  const presetAnchorRef = useRef<HTMLDivElement>(null)
+  const presetTab: FilterPresetTab = tab === 'pending' || tab === 'staging' || tab === 'rejected' ? tab : 'pending'
+  const { applicablePresets, defaultPreset, save: savePreset, remove: removePreset, restore: restorePreset, setDefault: setPresetDefault, update: updatePreset } = useFilterPresets(presetTab)
 
   const tabRef = useRef<TabId>(tab)
   useEffect(() => { tabRef.current = tab }, [tab])
@@ -113,12 +159,12 @@ export function ModerationConsole(): React.ReactElement {
     return () => window.removeEventListener('resize', update)
   }, [])
 
-  // load pending queue
+  // load pending queue (CHG-SN-4-FIX-F：传入 currentFilters)
   useEffect(() => {
     if (tab !== 'pending') return
     setLoading(true)
     setError(null)
-    api.fetchPendingQueue({})
+    api.fetchPendingQueue(currentFilters)
       .then(res => {
         setPendingVideos(res.data as VideoQueueRow[])
         setNextCursor(res.nextCursor)
@@ -127,7 +173,7 @@ export function ModerationConsole(): React.ReactElement {
       })
       .catch(() => setError(M.errors.loadFailed))
       .finally(() => setLoading(false))
-  }, [tab])
+  }, [tab, currentFilters])
 
   // load review labels once
   useEffect(() => {
@@ -137,7 +183,7 @@ export function ModerationConsole(): React.ReactElement {
   const loadMore = useCallback(() => {
     if (!nextCursor || loadingMore) return
     setLoadingMore(true)
-    api.fetchPendingQueue({ cursor: nextCursor })
+    api.fetchPendingQueue({ ...currentFilters, cursor: nextCursor })
       .then(res => {
         setPendingVideos(prev => [...prev, ...(res.data as VideoQueueRow[])])
         setNextCursor(res.nextCursor)
@@ -145,7 +191,7 @@ export function ModerationConsole(): React.ReactElement {
       })
       .catch(() => { /* silent */ })
       .finally(() => setLoadingMore(false))
-  }, [nextCursor, loadingMore])
+  }, [nextCursor, loadingMore, currentFilters])
 
   // auto-load more when near end
   useEffect(() => {
@@ -204,14 +250,80 @@ export function ModerationConsole(): React.ReactElement {
   const handleEditDrawerSaved = useCallback(() => {
     // 编辑保存后刷新当前条目；保持 activeIdx 不变
     setEditVideoId(null)
-    api.fetchPendingQueue({})
+    api.fetchPendingQueue(currentFilters)
       .then(res => {
         setPendingVideos(res.data as VideoQueueRow[])
         setNextCursor(res.nextCursor)
         setTotalPending(res.total)
       })
       .catch(() => { /* silent — 用户仍可手动刷新 */ })
-  }, [])
+  }, [currentFilters])
+
+  // CHG-SN-4-FIX-F：URL → filters 单向同步（route 变化时）
+  useEffect(() => {
+    setCurrentFilters(readFiltersFromSearchParams(searchParams))
+  }, [searchParams])
+
+  // 默认预设自动应用（仅当 URL 无任何筛选参数时）
+  const defaultAppliedRef = useRef(false)
+  useEffect(() => {
+    if (defaultAppliedRef.current) return
+    if (hasFilterParamsInUrl(searchParams)) {
+      defaultAppliedRef.current = true
+      return
+    }
+    if (defaultPreset) {
+      defaultAppliedRef.current = true
+      const p = writeFiltersToSearchParams(new URLSearchParams(searchParams.toString()), defaultPreset.query)
+      router.replace(`?${p}`, { scroll: false })
+    }
+  }, [defaultPreset, searchParams, router])
+
+  const applyFiltersToUrl = useCallback((filters: FilterPresetQuery) => {
+    const next = writeFiltersToSearchParams(new URLSearchParams(searchParams.toString()), filters)
+    router.replace(`?${next}`, { scroll: false })
+  }, [router, searchParams])
+
+  // toast 自动消失
+  useEffect(() => {
+    if (!toast) return
+    const id = window.setTimeout(() => setToast(null), 5000)
+    return () => window.clearTimeout(id)
+  }, [toast])
+
+  // 预设动作 handlers
+  const handleApplyPreset = useCallback((preset: FilterPreset) => {
+    applyFiltersToUrl(preset.query)
+    setPresetPopoverOpen(false)
+    setToast({ message: M.preset.toast.applied(preset.name), key: Date.now() })
+  }, [applyFiltersToUrl])
+
+  const handleRemovePreset = useCallback((preset: FilterPreset) => {
+    const removed = removePreset(preset.id)
+    if (!removed) return
+    setToast({
+      message: M.preset.toast.deleted(preset.name),
+      undo: () => { restorePreset(removed); setToast(null) },
+      key: Date.now(),
+    })
+  }, [removePreset, restorePreset])
+
+  const handleSetPresetDefault = useCallback((preset: FilterPreset) => {
+    setPresetDefault(preset.id)
+    setToast({ message: M.preset.toast.defaultSet(preset.name), key: Date.now() })
+  }, [setPresetDefault])
+
+  const handleUnsetPresetDefault = useCallback((preset: FilterPreset) => {
+    updatePreset(preset.id, { isDefault: false })
+    setToast({ message: M.preset.toast.defaultUnset(preset.name), key: Date.now() })
+  }, [updatePreset])
+
+  const handleSavePresetSubmit = useCallback((input: { name: string; tab: FilterPresetTab; isDefault: boolean }) => {
+    const saved = savePreset({ name: input.name, tab: input.tab, isDefault: input.isDefault, query: currentFilters })
+    setSavePresetOpen(false)
+    setPresetPopoverOpen(false)
+    setToast({ message: M.preset.toast.saved(saved.name), key: Date.now() })
+  }, [savePreset, currentFilters])
 
   const handleKey = useCallback((e: KeyboardEvent) => {
     if (tab !== 'pending') return
@@ -249,9 +361,35 @@ export function ModerationConsole(): React.ReactElement {
             <span><span style={KBD}>J</span> <span style={KBD}>K</span> 切换 · <span style={KBD}>A</span> 通过 · <span style={KBD}>R</span> 拒 · <span style={KBD}>S</span> 跳过</span>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button style={BTN_SM}>{M.actions.filterPreset}</button>
-          <button style={BTN_SM}>{M.actions.savePreset}</button>
+        <div ref={presetAnchorRef} style={{ display: 'flex', gap: 8, position: 'relative' }}>
+          <button
+            style={BTN_SM}
+            onClick={() => setPresetPopoverOpen(o => !o)}
+            aria-expanded={presetPopoverOpen}
+            aria-haspopup="dialog"
+            data-filter-preset-trigger
+          >
+            {M.actions.filterPreset}{defaultPreset ? ' ⭐' : ''}
+          </button>
+          <button
+            style={BTN_SM}
+            onClick={() => { setSavePresetOpen(true); setPresetPopoverOpen(false) }}
+            data-save-preset-trigger
+          >
+            {M.actions.savePreset}
+          </button>
+
+          <FilterPresetPopover
+            open={presetPopoverOpen}
+            anchorRef={presetAnchorRef}
+            presets={applicablePresets}
+            onApply={handleApplyPreset}
+            onSetDefault={handleSetPresetDefault}
+            onUnsetDefault={handleUnsetPresetDefault}
+            onRemove={handleRemovePreset}
+            onSaveCurrent={() => { setSavePresetOpen(true); setPresetPopoverOpen(false) }}
+            onClose={() => setPresetPopoverOpen(false)}
+          />
         </div>
       </div>
 
@@ -384,6 +522,61 @@ export function ModerationConsole(): React.ReactElement {
         onClose={() => setEditVideoId(null)}
         onSaved={handleEditDrawerSaved}
       />
+
+      {/* Save preset modal (CHG-SN-4-FIX-F · plan v1.6 §1 G7) */}
+      <SavePresetModal
+        open={savePresetOpen}
+        onClose={() => setSavePresetOpen(false)}
+        onSubmit={handleSavePresetSubmit}
+        currentTab={presetTab}
+        currentQuery={currentFilters}
+      />
+
+      {/* Toast (preset 操作反馈 + 撤销) */}
+      {toast && (
+        <div
+          key={toast.key}
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            padding: '10px 14px',
+            background: 'var(--bg-surface-elevated)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: 'var(--shadow-lg)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            fontSize: 12,
+            color: 'var(--fg-default)',
+            zIndex: 60,
+          }}
+          data-preset-toast
+        >
+          <span>{toast.message}</span>
+          {toast.undo && (
+            <button
+              type="button"
+              style={{
+                padding: '2px 8px',
+                border: '1px solid var(--accent-default)',
+                borderRadius: 'var(--radius-sm)',
+                background: 'transparent',
+                color: 'var(--accent-default)',
+                cursor: 'pointer',
+                fontSize: 11,
+              }}
+              onClick={toast.undo}
+              data-preset-toast-undo
+            >
+              {M.preset.toast.undo}
+            </button>
+          )}
+        </div>
+      )}
 
     </div>
   )
