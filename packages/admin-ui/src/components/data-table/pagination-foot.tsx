@@ -107,6 +107,7 @@ export function PaginationFoot({
           <button
             type="button"
             data-table-foot-pager-btn
+            data-interactive="chip"
             disabled={safePage <= 1}
             onClick={() => goPage(safePage - 1)}
             aria-label="上一页"
@@ -119,6 +120,7 @@ export function PaginationFoot({
                 key={p}
                 type="button"
                 data-table-foot-pager-btn
+                data-interactive="chip"
                 data-active={p === safePage ? 'true' : undefined}
                 aria-current={p === safePage ? 'page' : undefined}
                 onClick={() => goPage(p)}
@@ -128,6 +130,7 @@ export function PaginationFoot({
           <button
             type="button"
             data-table-foot-pager-btn
+            data-interactive="chip"
             disabled={safePage >= totalPages}
             onClick={() => goPage(safePage + 1)}
             aria-label="下一页"

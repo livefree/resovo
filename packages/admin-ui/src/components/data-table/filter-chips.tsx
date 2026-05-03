@@ -88,6 +88,7 @@ function DefaultFilterChip({ column, filter, onClear }: DefaultFilterChipProps):
       <button
         type="button"
         data-table-filter-chip-clear
+        data-interactive="chip"
         onClick={onClear}
         aria-label={`清除 ${typeof column.header === 'string' ? column.header : '此'} 筛选`}
       >×</button>

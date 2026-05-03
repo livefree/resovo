@@ -4885,3 +4885,21 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **测试**：typecheck / lint / unit 252f / 3141t / tokens:validate / verify-token-references 全绿
 - **变更摘要**：3 类 trigger 在 DataTable toolbar / 详情区 / 视频库 toolbar hover 反馈一致接入
 
+---
+
+## 2026-05-03 · CHG-UX-05：DataTable 表头 + foot 内 hover 收尾
+
+- **序列**：SEQ-20260504-01 第 5 卡
+- **依赖**：CHG-UX-01..04 ✅
+- **执行模型**：claude-opus-4-7
+- **改动文件**：
+  - `packages/admin-ui/src/components/data-table/data-table.tsx`：
+    · 表头 columnheader div 在 `interactive=true`（sortable 或 enableHeaderMenu）时加 `data-interactive="icon"` → §5.1 接管透明叠加（用户痛点："表头按钮没 hover"）
+    · 行 hover transition `80ms` → `var(--duration-fast) var(--easing-ease-out)` 完全 token 化
+    · hidden-cols-chip + bulk-clear button 加 `data-interactive="chip"`
+  - `packages/admin-ui/src/components/data-table/pagination-foot.tsx`：3 个 pager-btn（prev / numbered / next）加 `data-interactive="chip"`
+  - `packages/admin-ui/src/components/data-table/filter-chips.tsx`：filter-chip-clear button 加 `data-interactive="chip"`
+- **范围调整**：方案/卡片原列"pagesize 容器整体 trigger 触发面"改为不做 — 维持原 `select:hover` 即可，扩大触发面无明显交互价值
+- **测试**：typecheck / lint / unit 252f / 3141t / tokens:validate / verify-token-references 全绿
+- **变更摘要**：DataTable 6 类交互元素（表头 / 行 / 4 chip）hover 反馈完成接入；序列只剩 CHG-UX-06 走查 + 收口
+

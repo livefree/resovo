@@ -326,7 +326,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
           ? 'var(--bg-surface-row)'
           : 'transparent',
       cursor: onRowClick ? 'pointer' : 'default',
-      transition: 'background 80ms',
+      transition: 'background var(--duration-fast) var(--easing-ease-out)',
     }
   }
 
@@ -365,6 +365,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
               ref={hiddenColsAnchorRef}
               type="button"
               data-table-toolbar-hidden-cols-chip
+              data-interactive="chip"
               aria-haspopup="menu"
               aria-expanded={hiddenColsOpen}
               onClick={() => setHiddenColsOpen((o) => !o)}
@@ -443,6 +444,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
                 aria-sort={isSorted ? (query.sort.direction === 'asc' ? 'ascending' : 'descending') : undefined}
                 aria-haspopup={enableHeaderMenu ? 'menu' : undefined}
                 aria-expanded={enableHeaderMenu ? isMenuOpen : undefined}
+                data-interactive={interactive ? 'icon' : undefined}
                 style={{ ...TH_STYLE, cursor: interactive ? 'pointer' : 'default' }}
                 tabIndex={interactive ? 0 : undefined}
                 onClick={interactive ? (e) => onHeaderActivate(e.currentTarget) : undefined}
@@ -552,6 +554,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
           <button
             type="button"
             data-table-bulk-clear
+            data-interactive="chip"
             onClick={() => onSelectionChange?.({ selectedKeys: new Set(), mode: selection?.mode ?? 'page' })}
           >
             清除选择
