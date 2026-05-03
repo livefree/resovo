@@ -1,9 +1,9 @@
 # M-SN-4 内容审核台上线实施方案
 
-> 版本：v1.6（v1.0 → v1.1 → v1.2 → v1.3 → v1.4 → v1.5 → v1.6 修订日志见文末 §12）  
-> 日期：2026-05-02（v1.6 投产对齐 patch — 7 项实装偏差修复）；v1.0 ～ v1.4 = 2026-05-01；v1.5 = 2026-05-02  
-> 作者：Engineering（claude-sonnet-4-6 辅助生成；v1.1 缺漏补全；v1.2 审核意见 12 项；v1.3 runner 字典序对齐；v1.4 修复 059/060 NOT NULL ineffective；v1.5 子方案锚点；v1.6 投产对齐 7 项偏差）  
-> 状态：CHG-SN-4-03 ～ -08 已完成；v1.6 收口序列 SEQ-20260502-01（FIX-A ～ FIX-CLOSE 共 7 张）入队待开 → 实施  
+> 版本：v1.7（v1.0 → v1.1 → v1.2 → v1.3 → v1.4 → v1.5 → v1.6 → v1.7 修订日志见文末 §12）  
+> 日期：2026-05-03（v1.7 FIX-B 治理升级 → LinesPanel 共享组件提取 · 暂停执行）；v1.6 = 2026-05-02；v1.0 ～ v1.5 = 2026-05-01 ～ 02  
+> 作者：Engineering（claude-sonnet-4-6 辅助生成；v1.1 缺漏补全；v1.2 审核意见 12 项；v1.3 runner 字典序对齐；v1.4 修复 059/060 NOT NULL ineffective；v1.5 子方案锚点；v1.6 投产对齐 7 项偏差；v1.7 FIX-B 治理升级 + 提取草案）  
+> 状态：CHG-SN-4-03 ～ -08 + SEQ-20260502-01 阶段 1（FIX-A/E/C/F + 09d hotfix）已完成；FIX-B ⏸ 暂停（提取草案见 v1.7 §1 链接）；FIX-D / FIX-CLOSE 待 FIX-B 治理结论  
 > 依赖：CHG-SN-4-01（SplitPane）、CHG-SN-4-02（ModerationConsole mock）均已落地  
 > 上游真源：`docs/server_next_plan_20260427.md` §6 M-SN-4（v2.5）  
 
@@ -1409,6 +1409,65 @@ CHG-SN-4-10 收口卡 PR 描述显式列"DEBT-SN-3-A 已关闭"+ 链接。
 ---
 
 ## 12. 修订日志
+
+### v1.7 — 2026-05-03（patch — FIX-B 治理升级 → LinesPanel 共享组件提取 · 暂停执行）
+
+**性质：** plan patch 级修订；用户 2026-05-03 调研 FIX-B 范围后判定"线路面板在多处可用（审核三 Tab + VideoEditDrawer + M-SN-5 合并/拆分），计划提取为 admin-ui 共享组件 + 暂停执行待 M-SN-5 / 前台播放页落地后敲定"。本 patch 仅记录治理决策 + 提取草案链接，无代码改动。
+
+#### §1 决策（用户 2026-05-03 拍板）
+
+原 FIX-B（1d，moderation 模块内重写）→ 升级为：
+1. `packages/admin-ui` 新增 `composite/lines-panel/` + `cell/signal-chip` 共享组件（D-14 下沉清单 5 → 7 件）
+2. 双消费方迁移：审核台 `LinesPanel.tsx`（247 行）+ VideoEditDrawer `TabLines.tsx`（214 行）
+3. M-SN-5 合并/拆分页预留第 3 消费方契约空间
+4. **执行暂停** — 待 M-SN-5 合并/拆分页面 + 前台播放页线路切换需求落地后再返回敲定
+
+**提取草案文档（详细契约 + 视觉规约 + 风险）**：
+
+> `docs/designs/backend_design_v2.1/M-SN-4-FIX-B-lines-panel-extraction-plan.md` v0.1
+
+**已敲定决策点**（草案 §1 LP-01/03/04）：
+
+| 编号 | 决策 |
+|---|---|
+| LP-01 | 共享组件位置 = `packages/admin-ui/src/components/composite/lines-panel/`（新建 composite 目录）|
+| LP-03 | LineAggregate 字段命名 = camelCase（与 admin-ui 现有共享组件一致）|
+| LP-04 | density variant 范围 = `'compact' \| 'regular' \| 'comfortable'`（含 M-SN-5 预留）|
+
+**待敲定决策点**（草案 §1 LP-02/05/06）：
+
+| 编号 | 待敲定 |
+|---|---|
+| LP-02 | 聚合工具函数位置（同包 vs 独立 utils）|
+| LP-05 | 任务卡拆分方式（3 张串行 vs 单张大卡）|
+| LP-06 | plan 版本同步（v1.7 单段记录 vs 单独 ADR-111）|
+
+#### §2 同步影响
+
+1. **task-queue.md SEQ-20260502-01 阶段 2**：FIX-B 状态 ⬜ → ⏸ 暂停 + 引用草案文档
+2. **D-14 下沉清单**：原 5 件（BarSignal / LineHealthDrawer / RejectModal / StaffNoteBar / DecisionCard）→ 计划扩张至 7 件（追加 LinesPanel composite + SignalChip cell）；待 FIX-B 启动时 plan 同步
+3. **FIX-CLOSE 收口卡**：需登记 v1.6 §2 视觉密度规约暂未对齐审核台 LinesPanel（FIX-B 暂停期间保持原状）作为已知偏离
+
+#### §3 暂停期间观察清单
+
+待以下事件之一落地后返回敲定：
+
+1. M-SN-5 合并/拆分页面规划落地（D-15 推迟卡转入实装）
+2. 前台播放页线路切换需求定型
+3. DEBT-LINE-KEY-01 决策（是否在本提取期一并落地 line_key 一级概念）
+
+#### §4 修订项
+
+1. **plan §0 头部** 标注 v1.7 治理升级 + 状态更新（FIX-B ⏸ 暂停）
+2. **新增 plan §12 v1.7 段**（本段）
+3. **新建 `docs/designs/backend_design_v2.1/M-SN-4-FIX-B-lines-panel-extraction-plan.md` v0.1**（提取草案 — 完整 Props 契约 + 视觉规约 + 消费方迁移路径 + 风险清单 + 决策汇总表）
+4. **task-queue.md SEQ-20260502-01 阶段 2 FIX-B 状态调整**
+
+**人工 sign-off：** 已取得（用户 2026-05-03 决策"提取为共享组件 + 暂停 FIX-B 实装，待播放线路页面完成后再敲定"）。
+
+**arch-reviewer 评审：** v1.7 仅治理决策记录 + 提取草案，无代码改动；FIX-B 启动时（FIX-B1 契约卡）走 `arch-reviewer (claude-opus-4-7)` 强制评审 LinesPanel + SignalChip + LineAggregate 共 3 件 Props 契约。
+
+---
 
 ### v1.6 — 2026-05-02（patch — 投产对齐 · 7 项实装偏差修复）
 
