@@ -9,8 +9,8 @@ export const fg = {
     disabled: colors.gray[400],
   },
   dark: {
-    default: colors.gray[50],
-    muted: colors.gray[300],
+    default: colors.gray[200],
+    muted: colors.gray[400],
     subtle: colors.gray[500],
     onAccent: colors.gray[0],
     disabled: colors.gray[600],

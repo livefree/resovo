@@ -336,8 +336,8 @@
   --bg-surface-elevated: oklch(23.0% 0.010 247);
   --bg-surface-sunken: oklch(6.5% 0.004 247);
   --bg-overlay: color-mix(in oklch, oklch(6.5% 0.004 247) 70%, transparent);
-  --fg-default: oklch(98.5% 0.002 247);
-  --fg-muted: oklch(86.9% 0.009 247);
+  --fg-default: oklch(92.9% 0.006 247);
+  --fg-muted: oklch(70.8% 0.012 247);
   --fg-subtle: oklch(55.4% 0.014 247);
   --fg-on-accent: oklch(100% 0 0);
   --fg-disabled: oklch(43.9% 0.014 247);

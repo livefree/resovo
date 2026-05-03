@@ -4591,3 +4591,26 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **变更摘要**：补 dark/light 双主题 row hover 中间档；dark surfaceRaised 用新增 `gray.925` 对齐设计 `--bg2`；border-strong dark/light 各收回一档，避免与 surface-elevated 同值导致行分割线被淹没
 - **欠账登记**：DEBT-UI-BG-INSET（`--bg-inset` 8 处未定义引用，VideoEditDrawer 系列；CHG-UI-06 视觉走查时确认是否需补 token 或替换为已有 surface 角色）
 
+---
+
+## [CHG-UI-03] fg 文字对齐设计稿
+
+- **日期**：2026-05-03
+- **来源序列**：SEQ-20260503-01
+- **执行模型**：claude-opus-4-7（建议 sonnet；偏离原因：主循环已 opus 不可降级、token 单行改动）
+- **子代理**：无
+- **文件清单**（2 文件）：
+  - `packages/design-tokens/src/semantic/fg.ts`：dark.default `gray.50` → `gray.200`（92.9% ≈ 设计 `--text #e6e9ef`）；dark.muted `gray.300` → `gray.400`（70.8% ≈ 设计 `--text-2 #b3b9c5`）
+  - `packages/design-tokens/src/css/tokens.css`：重新生成（dark `--fg-default` / `--fg-muted` 同步收暗）
+- **测试覆盖**：
+  - typecheck ✅ / lint ✅ / unit 252f / 3098t 全绿 / tokens:validate OK
+- **设计对齐复核**（5 项）：
+  - ✅ dark `--fg-default` Δ +1.9%（92.9% vs 设计 91%）
+  - ✅ dark `--fg-muted` Δ -3.2%（70.8% vs 设计 74%）
+  - ✅ dark `--fg-subtle` Δ ≈ 0（55.4%，未改）
+  - ⚠️ dark `--fg-disabled` 偏亮 +7%（gray.600 = 43.9%，设计 ~37%；不在本卡范围以避免与 muted 反转）
+  - ✅ light fg.* 全部保持原值（已对齐）
+- **共享层沉淀评估**：本卡是 token 层（共享层）改动，所有消费方零硬编码、零改动
+- **变更摘要**：dark 文字层从 gray.50 / gray.300 收回到 gray.200 / gray.400，整体正文/副标对比度对齐设计稿，去除"偏白发涩"观感
+- **不动**：light fg.* 已对齐设计；accent / 品牌主色未触动；disabled 一档暂留观察
+
