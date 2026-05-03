@@ -8,7 +8,7 @@ import { Thumb } from '../../../../../packages/admin-ui/src/components/cell/thum
 
 afterEach(() => cleanup())
 
-describe('Thumb — 4 size variant', () => {
+describe('Thumb — 5 size variant', () => {
   it('poster-sm 默认 → 32×48', () => {
     const { container } = render(<Thumb src="x.png" />)
     const root = container.querySelector('[data-thumb]') as HTMLElement
@@ -22,6 +22,14 @@ describe('Thumb — 4 size variant', () => {
     const root = container.querySelector('[data-thumb]') as HTMLElement
     expect(root.style.width).toBe('38px')
     expect(root.style.height).toBe('56px')
+  })
+
+  it('poster-lg → 80×120（v1.6 G6 审核台中央海报 / 详情页主图）', () => {
+    const { container } = render(<Thumb src="x.png" size="poster-lg" />)
+    const root = container.querySelector('[data-thumb]') as HTMLElement
+    expect(root.getAttribute('data-size')).toBe('poster-lg')
+    expect(root.style.width).toBe('80px')
+    expect(root.style.height).toBe('120px')
   })
 
   it('banner-sm → 64×36', () => {

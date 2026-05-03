@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { DualSignal } from '@resovo/admin-ui'
+import { DualSignal, Thumb } from '@resovo/admin-ui'
 import type { VideoQueueRow } from '@resovo/types'
 
 interface ModListRowProps {
@@ -18,13 +18,9 @@ const ROW_BASE: React.CSSProperties = {
   cursor: 'pointer',
 }
 
-const THUMB_STYLE: React.CSSProperties = {
-  width: 44,
-  height: 62,
-  borderRadius: 4,
-  objectFit: 'cover',
-  flexShrink: 0,
-  background: 'var(--bg-surface-raised)',
+const THUMB_FALLBACK_STYLE: React.CSSProperties = {
+  fontSize: 10,
+  color: 'var(--fg-muted)',
 }
 
 export function ModListRow({ it, active, onClick }: ModListRowProps): React.ReactElement {
@@ -41,14 +37,13 @@ export function ModListRow({ it, active, onClick }: ModListRowProps): React.Reac
       data-mod-list-row
       data-video-id={it.id}
     >
-      {it.coverUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={it.coverUrl} alt={it.title} style={THUMB_STYLE} />
-      ) : (
-        <div style={{ ...THUMB_STYLE, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--fg-muted)' }}>
-          {it.type}
-        </div>
-      )}
+      <Thumb
+        src={it.coverUrl}
+        size="poster-sm"
+        decorative={false}
+        alt={it.title}
+        fallback={<span style={THUMB_FALLBACK_STYLE}>{it.type}</span>}
+      />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{

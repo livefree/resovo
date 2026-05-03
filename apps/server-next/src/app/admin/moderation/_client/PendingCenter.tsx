@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { VisChip, DecisionCard, StaffNoteBar } from '@resovo/admin-ui'
+import { VisChip, DecisionCard, StaffNoteBar, Thumb } from '@resovo/admin-ui'
 import type { VideoQueueRow } from '@resovo/types'
 import { EpisodeSelector } from './EpisodeSelector'
 import { LinesPanel } from './LinesPanel'
@@ -106,12 +106,13 @@ export function PendingCenter({ v, onStaffNoteChange, onEditVideo }: PendingCent
 
       {/* Video info */}
       <div style={{ display: 'flex', gap: 14, marginBottom: 14 }}>
-        <div style={{ width: 100, height: 150, borderRadius: 6, background: 'var(--bg-surface-raised)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'var(--fg-muted)', overflow: 'hidden' }}>
-          {v.coverUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={v.coverUrl} alt={v.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          ) : <span>{v.type}</span>}
-        </div>
+        <Thumb
+          src={v.coverUrl}
+          size="poster-lg"
+          decorative={false}
+          alt={v.title}
+          fallback={<span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{v.type}</span>}
+        />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg-default)' }}>{v.title}</h2>

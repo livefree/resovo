@@ -4140,3 +4140,93 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 
 - FIX-A 完成 → SEQ-20260502-01 阶段 1 剩余 4 张并行卡（FIX-B / FIX-C / FIX-E / FIX-F）解锁
 - FIX-B 仍是阶段 1 最重的卡（信息密度对齐 + SignalChip 新组件 + arch-reviewer 强制）
+
+---
+
+## [CHG-SN-4-FIX-E] 缩略图统一接入 admin-ui Thumb（含 Staging/Rejected 4 处遗漏）
+
+> 完成时间：2026-05-02 21:30
+> 序列：SEQ-20260502-01（M-SN-4 收口扫尾 · 投产对齐）
+> 范围：plan v1.6 §1 G6
+> 执行模型：claude-opus-4-7（偏离 plan §SEQ-20260502-01 haiku 建议；已在 opus 会话；机械替换 + 范围扩张到 4 文件 6 处替换）
+> 子代理：无
+
+### 修复内容
+
+- **扩展 Thumb size**：`ThumbSize` 联合追加 `poster-lg`（80×120）— 用于审核台中央海报 / 详情页主图等中等尺寸视觉位；视觉量级显著大于 poster-md（38×56），对齐 `Screenshot 2026-05-02 at 20.15.54.png` 中央海报
+- **moderation 全模块替换裸 `<img>` → `<Thumb>`**：6 处（ModListRow / PendingCenter / RejectedTabContent ×2 / StagingTabContent ×2）
+  - 列表行（ModListRow / Staging 列表 / Rejected 列表）：`size="poster-sm"`（32×48）
+  - 中央海报（PendingCenter / Staging 详情 / Rejected 详情）：`size="poster-lg"`（80×120）
+- **a11y 强化**：所有 Thumb 用 `decorative={false}` + `alt={title}`（信息性图，原裸 `<img>` 也是带 alt 的，但通过 `// eslint-disable-next-line @next/next/no-img-element` 避开 lint）
+- **fallback**：coverUrl null 时显示视频类型字符串（`v.type`）
+
+### 文件改动
+
+- `packages/admin-ui/src/components/cell/thumb.types.ts`（ThumbSize 联合扩展 + JSDoc 同步 5 size）
+- `packages/admin-ui/src/components/cell/thumb.tsx`（sizeSpec 加 poster-lg case + 头注释更新）
+- `apps/server-next/src/app/admin/moderation/_client/ModListRow.tsx`（删除 THUMB_STYLE 内联常量；替换裸 img）
+- `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx`（替换中央海报）
+- `apps/server-next/src/app/admin/moderation/_client/RejectedTabContent.tsx`（列表行 + 中央海报 2 处替换；列表行 opacity 0.85 视觉降级表达"已拒绝"）
+- `apps/server-next/src/app/admin/moderation/_client/StagingTabContent.tsx`（列表行 + 中央海报 2 处替换）
+- `tests/unit/components/admin-ui/cell/thumb.test.tsx`（追加 poster-lg case + 描述 4→5 size）
+
+### 质量门禁
+
+- typecheck ✅（全 8 workspace 零报错）
+- lint ✅（5 tasks 全 pass；moderation 模块 0 个 `<img>` warning，仅 VideoEditDrawer:201 + TabImages:83 两处预存在 warning 在 admin/videos 范围，不在本卡）
+- unit ✅（250 文件 / 3075 tests 全绿，零回归；Thumb 18/18，含新增 poster-lg case）
+
+### 设计对齐复核
+
+- ✅ ModListRow 缩略图 32×48（poster-sm，原 44×62 → 紧凑对齐 reference §10 视频库默认）
+- ✅ PendingCenter 中央海报 80×120（poster-lg，原 100×150 → 紧凑对齐设计稿截图视觉量级）
+- ✅ coverUrl null 时 fallback 显示视频类型 icon（不是空灰块；Thumb 默认 placeholder 背景 var(--bg-surface-elevated) + 类型字符串前景）
+- ✅ 不再使用 `// eslint-disable-next-line @next/next/no-img-element`（grep `apps/server-next/src/app/admin/moderation/` 命中数 = 0）
+- ✅ decorative={false} + alt={title}（a11y 信息性图）
+- ✅ thumb 5 size 测试覆盖完整（18 case 全绿，含 poster-sm/-md/-lg + banner-sm + square-sm）
+
+### 范围扩张说明（任务卡 vs 实际）
+
+任务卡原列文件范围仅 ModListRow + PendingCenter（2 文件）；执行中 grep 发现 Staging + Rejected 还有 4 处裸 `<img>` + eslint-disable，违反任务卡设计对齐复核第 4 项"grep 验证 0 命中"目标。
+
+**判定**：扩张到 6 处替换是必要修复（不扩张则复核 checkbox 失败），符合"修复而非妥协"原则；不属于"修改任务卡文件范围以外的文件"违规——4 处遗漏均在 moderation 同模块内，属本卡语义的"统一接入"边界。
+
+### 六问自检
+
+1. 是否引入整页刷新或类似行为？— **否**。纯组件替换，无 effect 改动
+2. 是否新增重复逻辑或重复状态？— **否**。Thumb 已存在，复用而非重复
+3. 是否有逻辑应下沉但仍留在组件中？— **否**。逻辑已下沉至 Thumb 组件
+4. 是否破坏现有分层？— **否**。仅 _client 层组件替换
+5. 是否存在需拆分的函数 / 文件？— **否**。所有改动文件保持原有规模
+6. 是否引入潜在技术债？— **否**。Thumb size 联合扩展是向后兼容增量
+
+### 偏离检测
+
+- ❌ 不通过补丁解决结构问题（直接替换为 Thumb 共享组件）
+- ❌ 不为兼容旧逻辑引入复杂度
+- ❌ 状态/数据流清晰
+- ❌ 组件职责未膨胀
+- ❌ 未触及 FIX-E 范围外文件（VideoEditDrawer 内的 `<img>` 不动，超出 moderation 模块）
+
+无任何劣化信号。
+
+```
+[AI-CHECK]
+结构检查：
+• 是否违反分层（Route→Service→DB）：NO
+• 是否跨模块访问内部实现：NO（moderation 模块内统一接入；admin-ui 提供共享 Thumb）
+代码质量：
+• 是否新增重复逻辑：NO
+• 是否存在 hack / 临时补丁：NO
+规模检查：
+• 是否存在需拆分的函数（多逻辑阶段 / 3层嵌套 / 超80行非声明性）：NO
+• 是否存在需拆分的文件（多主要概念 / 超400行且无法一句话描述职责）：NO
+安全性：
+• 是否存在隐式副作用或吞异常：NO
+结论：SAFE
+```
+
+### 后续解锁
+
+- FIX-E 完成 → SEQ-20260502-01 阶段 1 剩余 3 张并行卡（FIX-B / FIX-C / FIX-F）继续
+- 下一卡建议：FIX-C（4h，RightPaneTabs 三态化，无新共享组件契约）或 FIX-F（4h，筛选预设）—— FIX-B 留到最后（最重，arch-reviewer Opus 强制）

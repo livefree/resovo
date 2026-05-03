@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
+import { Thumb } from '@resovo/admin-ui'
 import type { StagingApiRow } from '@/lib/moderation/api'
 import * as api from '@/lib/moderation/api'
 import { M } from '@/i18n/messages/zh-CN/moderation'
@@ -128,12 +129,13 @@ export function StagingTabContent(): React.ReactElement {
           ) : (
             videos.map((it, i) => (
               <div key={it.id} onClick={() => setActiveIdx(i)} style={{ display: 'flex', gap: 10, padding: '10px 12px', borderBottom: '1px solid var(--border-subtle)', background: i === activeIdx ? 'var(--admin-accent-soft)' : 'transparent', borderLeft: `2px solid ${i === activeIdx ? 'var(--accent-default)' : 'transparent'}`, cursor: 'pointer' }}>
-                <div style={{ width: 44, height: 62, borderRadius: 4, background: 'var(--bg-surface-raised)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--fg-muted)', overflow: 'hidden' }}>
-                  {it.coverUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={it.coverUrl} alt={it.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : it.type}
-                </div>
+                <Thumb
+                  src={it.coverUrl}
+                  size="poster-sm"
+                  decorative={false}
+                  alt={it.title}
+                  fallback={<span style={{ fontSize: 10, color: 'var(--fg-muted)' }}>{it.type}</span>}
+                />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: i === activeIdx ? 'var(--accent-default)' : 'var(--fg-default)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
                   <div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>{it.type} · {it.year ?? '—'}</div>
@@ -185,12 +187,13 @@ export function StagingTabContent(): React.ReactElement {
                 )}
               </div>
               <div style={{ display: 'flex', gap: 14 }}>
-                <div style={{ width: 80, height: 120, borderRadius: 6, background: 'var(--bg-surface-raised)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--fg-muted)', overflow: 'hidden' }}>
-                  {v.coverUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={v.coverUrl} alt={v.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : v.type}
-                </div>
+                <Thumb
+                  src={v.coverUrl}
+                  size="poster-lg"
+                  decorative={false}
+                  alt={v.title}
+                  fallback={<span style={{ fontSize: 10, color: 'var(--fg-muted)' }}>{v.type}</span>}
+                />
                 <div style={{ flex: 1 }}>
                   <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--fg-default)' }}>{v.title}</h3>
                   <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{v.type} · {v.year ?? '—'} · {v.activeSourceCount} 源</div>

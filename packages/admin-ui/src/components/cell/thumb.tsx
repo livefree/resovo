@@ -1,12 +1,13 @@
 'use client'
 
 /**
- * thumb.tsx — Thumb 共享组件实装（CHG-DESIGN-12 12B）
+ * thumb.tsx — Thumb 共享组件实装（CHG-DESIGN-12 12B；v1.6 patch · CHG-SN-4-FIX-E 加 poster-lg）
  *
- * 真源：thumb.types.ts（12A Opus PASS 契约）
+ * 真源：thumb.types.ts（12A Opus PASS 契约 + v1.6 poster-lg 扩展）
  *
  * 实装契约（12A 一致性硬约束）：
- *   - 4 size variant：poster-sm 32×48 / poster-md 38×56 / banner-sm 64×36 / square-sm 28×28
+ *   - 5 size variant：poster-sm 32×48 / poster-md 38×56 / poster-lg 80×120 /
+ *     banner-sm 64×36 / square-sm 28×28
  *   - src 非空 → <img object-fit:cover>；空 → placeholder span
  *   - decorative=true（默认） → alt='' + aria-hidden=true
  *   - decorative=false + alt 缺失 → dev warn
@@ -27,6 +28,7 @@ interface SizeSpec {
 function sizeSpec(size: ThumbSize): SizeSpec {
   switch (size) {
     case 'poster-md': return { width: 38, height: 56, radius: 'var(--radius-sm)' }
+    case 'poster-lg': return { width: 80, height: 120, radius: 'var(--radius-sm)' }
     case 'banner-sm': return { width: 64, height: 36, radius: 'var(--radius-sm)' }
     case 'square-sm': return { width: 28, height: 28, radius: 'var(--radius-md)' }
     case 'poster-sm':

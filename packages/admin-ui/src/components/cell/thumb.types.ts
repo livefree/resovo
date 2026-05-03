@@ -17,6 +17,8 @@
  * size variant 设计稿映射：
  *   - `poster-sm`（默认）：**32×48 竖版**（reference §10 视频类素材默认）；用于视频库表格行 thumb 列
  *   - `poster-md`：38×56 竖版（components.css `.tbl-thumb` 不带 `--sm` 修饰符的基础尺寸）；预留给详情页 / Drawer header
+ *   - `poster-lg`：**80×120 竖版**（CHG-SN-4-FIX-E · plan v1.6 §1 G6 引入）；用于审核台中央海报 / 详情页主图
+ *     等中等尺寸视觉位；视觉量级显著大于 poster-md，对齐 `Screenshot 2026-05-02 at 20.15.54.png` 中央海报
  *   - `banner-sm`：64×36 横版（CHG-DESIGN-08 之前 VideoListClient 沿用的旧规格）；用于 Home Ops banner / 前台预览
  *   - `square-sm`：28×28 正方形 radius 6；用于 RecentActivityCard 行级 sev icon box（CHG-DESIGN-07 已用 inline；
  *     12B Thumb 实装后可在 7C dashboard 业务卡复用，统一视觉规格）
@@ -32,14 +34,15 @@ import type { ReactNode } from 'react'
 /**
  * Thumb 尺寸变体
  *
- * 设计稿 §10 + components.css 映射；4 种规格满足视频库 / banner / dashboard 全场景。
+ * 设计稿 §10 + components.css 映射；5 种规格满足视频库 / 审核台 / banner / dashboard 全场景。
  *
- * - `poster-sm`（默认）：32×48 竖版 radius 4 — reference §6.1 视频库 thumb 列
- * - `poster-md`：38×56 竖版 radius 4 — Drawer header / 详情页
+ * - `poster-sm`（默认）：32×48 竖版 radius 4 — reference §6.1 视频库 thumb 列 + 审核台列表行
+ * - `poster-md`：38×56 竖版 radius 4 — Drawer header
+ * - `poster-lg`：80×120 竖版 radius 4 — 审核台中央海报 / 详情页主图（v1.6 G6 引入）
  * - `banner-sm`：64×36 横版 radius 4 — Home Ops banner / 横向运营位
  * - `square-sm`：28×28 正方形 radius 6 — sev icon box / 头像类圆角方块
  */
-export type ThumbSize = 'poster-sm' | 'poster-md' | 'banner-sm' | 'square-sm'
+export type ThumbSize = 'poster-sm' | 'poster-md' | 'poster-lg' | 'banner-sm' | 'square-sm'
 
 /**
  * Thumb Props
