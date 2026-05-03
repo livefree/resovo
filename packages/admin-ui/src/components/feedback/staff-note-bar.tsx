@@ -184,6 +184,7 @@ export const StaffNoteBar = forwardRef<Ref, StaffNoteBarProps>(function StaffNot
           <button
             type="button"
             data-staff-note-edit-trigger
+            data-interactive="icon"
             onClick={onEdit}
             style={EDIT_TRIGGER_STYLE}
           >

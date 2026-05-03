@@ -4870,3 +4870,18 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **测试**：typecheck / lint / unit 252f / 3141t / tokens:validate / verify-token-references 全绿
 - **变更摘要**：用户首要痛点解决；topbar 5 个交互元素 hover 反馈接入统一选择器
 
+---
+
+## 2026-05-03 · CHG-UX-04：dropdown trigger / staff-note edit / VideoFilterFields hover
+
+- **序列**：SEQ-20260504-01 第 4 卡
+- **依赖**：CHG-UX-01..03 ✅
+- **执行模型**：claude-opus-4-7
+- **改动文件**：
+  - `packages/admin-ui/src/components/data-table/views-menu.tsx`：TRIGGER button 加 `data-interactive="trigger"`（hover border → strong）
+  - `packages/admin-ui/src/components/feedback/staff-note-bar.tsx`：EDIT_TRIGGER button 加 `data-interactive="icon"`（warning fg currentColor 跟色叠加，保持语义）
+  - `apps/server-next/src/app/admin/videos/_client/VideoFilterFields.tsx`：1 input（filter-q）+ 5 select（type/status/visibility/reviewStatus/site）共 6 个 form 元素加 `data-interactive="trigger"`
+- **业务层合规性**：VideoFilterFields 是业务文件（apps/server-next）；本卡仅加 `data-interactive` 标记属性，未写任何 :hover/:focus CSS（符合方案 §10 红线 1）
+- **测试**：typecheck / lint / unit 252f / 3141t / tokens:validate / verify-token-references 全绿
+- **变更摘要**：3 类 trigger 在 DataTable toolbar / 详情区 / 视频库 toolbar hover 反馈一致接入
+

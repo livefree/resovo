@@ -180,27 +180,28 @@ export function VideoFilterBar({ snapshot, sites, onPatch }: VideoFilterBarProps
         defaultValue={qText}
         onChange={handleSearch}
         data-testid="filter-q"
+        data-interactive="trigger"
         style={INPUT_STYLE}
         aria-label="搜索视频"
       />
-      <select value={getEnum('type')} onChange={(e) => setFilter('type', e.target.value)} data-testid="filter-type" style={SELECT_STYLE} aria-label="类型">
+      <select value={getEnum('type')} onChange={(e) => setFilter('type', e.target.value)} data-testid="filter-type" data-interactive="trigger" style={SELECT_STYLE} aria-label="类型">
         <option value="">全部类型</option>
         {VIDEO_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
-      <select value={getEnum('status')} onChange={(e) => setFilter('status', e.target.value)} data-testid="filter-status" style={SELECT_STYLE} aria-label="上架状态">
+      <select value={getEnum('status')} onChange={(e) => setFilter('status', e.target.value)} data-testid="filter-status" data-interactive="trigger" style={SELECT_STYLE} aria-label="上架状态">
         <option value="">全部状态</option>
         {VIDEO_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
-      <select value={getEnum('visibilityStatus')} onChange={(e) => setFilter('visibilityStatus', e.target.value)} data-testid="filter-visibility" style={SELECT_STYLE} aria-label="可见性">
+      <select value={getEnum('visibilityStatus')} onChange={(e) => setFilter('visibilityStatus', e.target.value)} data-testid="filter-visibility" data-interactive="trigger" style={SELECT_STYLE} aria-label="可见性">
         <option value="">全部可见性</option>
         {VISIBILITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
-      <select value={getEnum('reviewStatus')} onChange={(e) => setFilter('reviewStatus', e.target.value)} data-testid="filter-review-status" style={SELECT_STYLE} aria-label="审核状态">
+      <select value={getEnum('reviewStatus')} onChange={(e) => setFilter('reviewStatus', e.target.value)} data-testid="filter-review-status" data-interactive="trigger" style={SELECT_STYLE} aria-label="审核状态">
         <option value="">全部审核状态</option>
         {REVIEW_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
       {sites.length > 0 && (
-        <select value={getEnum('site')} onChange={(e) => setFilter('site', e.target.value)} data-testid="filter-site" style={SELECT_STYLE} aria-label="来源站点">
+        <select value={getEnum('site')} onChange={(e) => setFilter('site', e.target.value)} data-testid="filter-site" data-interactive="trigger" style={SELECT_STYLE} aria-label="来源站点">
           <option value="">全部站点</option>
           {sites.map((s) => <option key={s.key} value={s.key}>{s.name}</option>)}
         </select>

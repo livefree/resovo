@@ -199,6 +199,7 @@ export function ViewsMenu({ config, 'data-testid': testId }: ViewsMenuProps): Re
         ref={triggerRef}
         type="button"
         data-views-trigger
+        data-interactive="trigger"
         data-testid={testId}
         aria-haspopup="menu"
         aria-expanded={open}
