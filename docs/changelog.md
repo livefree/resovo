@@ -4854,3 +4854,19 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **测试**：typecheck / lint / unit 252f / 3140t / tokens:validate / verify-token-references 全绿（1 flaky test 与本卡无关，单跑通过）
 - **变更摘要**：sidebar / menu hover 迁移完成；admin-shell-styles 旧 4 块规则收敛到 InteractionStyles 全局规则；双轨期结束
 
+---
+
+## 2026-05-03 · CHG-UX-03：topbar IconButton + 全局搜索 trigger hover
+
+- **序列**：SEQ-20260504-01 第 3 卡（用户首要痛点）
+- **依赖**：CHG-UX-01 ✅ / CHG-UX-02 ✅
+- **执行模型**：claude-opus-4-7
+- **变更原因**：用户验收时首要反馈"top bar 按钮大多没有 hover 颜色变化" — topbar 4 个 IconButton + 全局搜索框 SEARCH_TRIGGER 当前 inline style，完全没有 hover 反馈
+- **改动文件**：
+  - `packages/admin-ui/src/shell/topbar.tsx`：
+    · IconButton（theme / tasks / notifications / settings 4 类共用）button 加 `data-interactive="icon"` → 由 §5.1 接管 currentColor 6%/8% 透明叠加
+    · 全局搜索 button 加 `data-interactive="trigger"` → 由 §5.1 接管 hover border-color → strong
+- **完成判据达成**：仅加 2 处属性，零样式值改动；视觉反馈由 InteractionStyles 全局规则提供
+- **测试**：typecheck / lint / unit 252f / 3141t / tokens:validate / verify-token-references 全绿
+- **变更摘要**：用户首要痛点解决；topbar 5 个交互元素 hover 反馈接入统一选择器
+

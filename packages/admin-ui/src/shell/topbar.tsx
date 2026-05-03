@@ -157,6 +157,7 @@ export function Topbar({
       <button
         type="button"
         data-topbar-search
+        data-interactive="trigger"
         aria-label="打开全局搜索"
         onClick={onOpenCommandPalette}
         style={SEARCH_TRIGGER_STYLE}
@@ -227,6 +228,7 @@ function IconButton({ ariaLabel, dataAttr, onClick, children, badgeText, dotVisi
     <button
       type="button"
       data-topbar-icon-btn={dataAttr}
+      data-interactive="icon"
       aria-label={ariaLabel}
       onClick={onClick}
       disabled={disabled}
