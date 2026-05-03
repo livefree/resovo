@@ -7,7 +7,13 @@ import type {
   VideoMetaPatch,
   StateTransitionAction,
   VisibilityStatus,
+  VideoSource,
+  VideoImagesData,
+  VideoImageKind,
+  DoubanSuggestItem,
+  DoubanCandidateData,
 } from './types'
+import type { SourceHealthEvent } from '@resovo/types'
 
 // ── 列表 ──────────────────────────────────────────────────────────
 
@@ -95,6 +101,96 @@ export async function doubanSync(id: string): Promise<void> {
 
 export async function refetchSources(id: string, siteKeys?: string[]): Promise<void> {
   await apiClient.post(`/admin/videos/${id}/refetch-sources`, siteKeys ? { siteKeys } : {})
+}
+
+// ── 线路管理（CHG-SN-4-08）───────────────────────────────────────
+
+export interface VideoSourceListResult {
+  data: VideoSource[]
+  total: number
+  page: number
+  limit: number
+}
+
+export async function listVideoSources(videoId: string): Promise<VideoSource[]> {
+  const params = new URLSearchParams({ videoId, active: 'all', limit: '100', page: '1' })
+  const res = await apiClient.get<VideoSourceListResult>(`/admin/sources?${params}`)
+  return res.data
+}
+
+export async function toggleVideoSource(
+  videoId: string,
+  sourceId: string,
+  isActive: boolean,
+): Promise<{ data: VideoSource }> {
+  return apiClient.patch<{ data: VideoSource }>(`/admin/videos/${videoId}/sources/${sourceId}`, { isActive })
+}
+
+export async function disableDeadSources(videoId: string): Promise<{ data: { disabled: number } }> {
+  return apiClient.post<{ data: { disabled: number } }>(`/admin/videos/${videoId}/sources/disable-dead`, {})
+}
+
+export interface LineHealthResult {
+  data: SourceHealthEvent[]
+  pagination: { total: number; page: number; limit: number; hasNext: boolean }
+}
+
+export async function getLineHealthEvents(
+  videoId: string,
+  sourceId: string,
+  page = 1,
+  limit = 20,
+): Promise<LineHealthResult> {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) })
+  return apiClient.get<LineHealthResult>(`/admin/moderation/${videoId}/line-health/${sourceId}?${params}`)
+}
+
+// ── 图片管理（CHG-SN-4-08）────────────────────────────────────────
+
+export async function getVideoImages(videoId: string): Promise<VideoImagesData> {
+  const res = await apiClient.get<{ data: VideoImagesData }>(`/admin/videos/${videoId}/images`)
+  return res.data
+}
+
+export async function updateVideoImage(
+  videoId: string,
+  kind: VideoImageKind,
+  url: string,
+): Promise<{ data: { kind: VideoImageKind; url: string; status: string } }> {
+  return apiClient.put<{ data: { kind: VideoImageKind; url: string; status: string } }>(
+    `/admin/videos/${videoId}/images`,
+    { kind, url },
+  )
+}
+
+// ── 豆瓣匹配（CHG-SN-4-08）───────────────────────────────────────
+
+export async function searchDoubanForVideo(
+  videoId: string,
+  keyword: string,
+): Promise<{ videoId: string; candidates: DoubanSuggestItem[] }> {
+  const res = await apiClient.post<{ data: { videoId: string; candidates: DoubanSuggestItem[] } }>(
+    `/admin/moderation/${videoId}/douban-search`,
+    { keyword },
+  )
+  return res.data
+}
+
+export async function confirmDoubanMatch(videoId: string, subjectId: string): Promise<void> {
+  await apiClient.post(`/admin/moderation/${videoId}/douban-confirm`, { subjectId })
+}
+
+export async function ignoreDoubanMatch(videoId: string): Promise<void> {
+  await apiClient.post(`/admin/moderation/${videoId}/douban-ignore`, {})
+}
+
+export async function getDoubanCandidate(videoId: string): Promise<DoubanCandidateData | null> {
+  try {
+    const res = await apiClient.get<{ data: DoubanCandidateData }>(`/admin/moderation/${videoId}/douban-candidate`)
+    return res.data
+  } catch {
+    return null
+  }
 }
 
 // ── 审核统计（dashboard 用；CHG-DESIGN-07 7C 步骤 1）───────────────────────────────────────

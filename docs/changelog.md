@@ -3895,3 +3895,42 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - lint ✅ 通过（turbo lint 5 tasks pass）
 - unit ✅ 通过（246 文件 / 3045 测试全绿；零回归；auth.test.ts 38 cases 单独验证全过）
 - grep 校验 ✅：`'CONFLICT'.*422\|422.*'CONFLICT'` 在 apps/api/ + tests/ 中 0 命中
+
+---
+
+## [CHG-SN-4-08] VideoEditDrawer 三 Tab 真实 API：线路 / 图片 / 豆瓣
+
+- **完成时间**：2026-05-02
+- **记录时间**：2026-05-02
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/i18n/messages/zh-CN/videos-edit.ts` — 新建；i18n keys `VE.lines / VE.images / VE.douban` 三命名空间，零硬编码中文
+  - `apps/server-next/src/lib/videos/types.ts` — 扩展；新增 `SignalStatus / ImageStatus / VideoImageKind / VideoSource / VideoImagesData / ImageSlotInfo / DoubanSuggestItem / DoubanFieldDiff / DoubanCandidateData` 9 个类型
+  - `apps/server-next/src/lib/videos/api.ts` — 扩展；新增 10 个 API 函数：`listVideoSources / toggleVideoSource / disableDeadSources / getLineHealthEvents / getVideoImages / updateVideoImage / searchDoubanForVideo / confirmDoubanMatch / ignoreDoubanMatch / getDoubanCandidate`
+  - `apps/server-next/src/lib/videos/use-sources.ts` — 新建；`useVideoSources` hook（含乐观更新 toggle + 失败回滚 + line-health 分页）+ `toDisplayState` 工具
+  - `apps/server-next/src/lib/videos/use-images.ts` — 新建；`useVideoImages` hook（含 updatePending Set 跟踪）
+  - `apps/server-next/src/lib/videos/use-douban.ts` — 新建；`useDoubanTab` hook（search/confirm/ignore + candidate 自动加载）
+  - `apps/server-next/src/app/admin/videos/_client/_videoEdit/TabLines.tsx` — 重写；接入 useVideoSources；BarSignal 聚合头部 + DualSignal 行 + LineHealthDrawer 分页展开
+  - `apps/server-next/src/app/admin/videos/_client/_videoEdit/TabImages.tsx` — 重写；接入 useVideoImages；4 类图片 slot（poster/backdrop/banner_backdrop/logo）+ URL 替换流程
+  - `apps/server-next/src/app/admin/videos/_client/_videoEdit/TabDouban.tsx` — 重写；接入 useDoubanTab；匹配状态 chip + 候选差异对比 + 搜索/确认/忽略
+  - `apps/server-next/src/app/admin/videos/_client/VideoEditDrawer.tsx` — 小幅扩展；三 Tab 传入 videoId + 相关字段
+  - `tests/unit/server-next/videos/video-edit-drawer/use-sources.test.ts` — 新建；19 个测试（toDisplayState + useVideoSources 加载/失败/toggle 乐观更新/回滚/disableDead）
+  - `tests/unit/server-next/videos/video-edit-drawer/use-images.test.ts` — 新建；4 个测试（加载/失败/update/updatePending）
+  - `tests/unit/server-next/videos/video-edit-drawer/use-douban.test.ts` — 新建；5 个测试（candidate 加载/pending 不加载/search/confirm/ignore）
+- **新增依赖**：无（全部使用已有 @resovo/admin-ui 组件 + @testing-library/react）
+- **数据库变更**：无
+- **API 契约**：消费既有端点（CHG-SN-4-05 已上线）；`GET /admin/sources?videoId=<id>` 按视频过滤；`GET /admin/moderation/:id/douban-candidate` 失败返回 null（降级）
+- **注意事项**：
+  - `getApiCode` 鸭子类型函数：避免 import ApiClientError（会拉入 authStore 导致测试环境失败）
+  - 测试文件使用相对路径 vi.mock（`@/` alias 在 tests/unit/server-next/ 路径下解析到 web-next）
+  - `tests/unit/server-next/` 需 `// @vitest-environment jsdom` per-file 注解（非 components/ 路径不自动启用 jsdom）
+  - e2e 预存失败：`批量下架` test 在本卡前后均失败，与本卡无关；7/8 通过
+
+### 质量门禁
+
+- typecheck ✅ 通过（全 8 workspace 零报错；exit 0）
+- lint ✅ 通过（5 tasks successful；仅 `<img>` warning，非错误）
+- unit ✅ 通过（249 文件 / 3064 测试全绿；含新增 28 个 hook 测试）
+- e2e ✅ admin-next-chromium 7/8 通过；1 pre-existing failure（批量下架，与本卡无关）
+- [AI-CHECK] 结论：SAFE

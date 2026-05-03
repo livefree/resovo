@@ -18,9 +18,9 @@
 | sn4-05-api | ✅ 已集成 | `track/sn4-05-api`（已删除）| `docs/archive/tasks/tasks-sn4-05-api.md` | 无（已释放） | 2026-05-02 | 2026-05-02 |
 | sn4-06-worker | ✅ 已集成 | `track/sn4-06-worker`（已删除）| `docs/archive/tasks/tasks-sn4-06-worker.md` | 无（已释放） | 2026-05-02 | 2026-05-02 |
 | sn4-07-fe-moderation | 🔄 活跃 | `track/sn4-07-fe-moderation` | `docs/tasks-sn4-07-fe-moderation.md` | `app:server-next:moderation` | 2026-05-02 | — |
-| sn4-08-video-edit-drawer | 🔄 活跃 | `track/sn4-08-video-edit-drawer` | `docs/tasks-sn4-08-video-edit-drawer.md` | `app:server-next:videos` | 2026-05-02 | — |
+| sn4-08-video-edit-drawer | ✅ 待集成 | `track/sn4-08-video-edit-drawer` | `docs/tasks-sn4-08-video-edit-drawer.md` | 无（已释放） | 2026-05-02 | — |
 
-**当前活跃 Track 数：2 / 3**（上限 3，含主干）— M-SN-4 阶段 C 双轨启动
+**当前活跃 Track 数：1 / 3**（sn4-08 已完成待集成；sn4-07 仍活跃）
 
 ---
 
@@ -131,20 +131,19 @@
 
 ## sn4-08-video-edit-drawer
 
-- **状态**：🔄 活跃
+- **状态**：✅ 待集成（CHG-SN-4-08 完成，PR 待提交）
 - **分支**：`track/sn4-08-video-edit-drawer`
 - **任务文件**：`docs/tasks-sn4-08-video-edit-drawer.md`
 - **文件作用域**：
   - `apps/server-next/src/app/admin/videos/_client/**`（仅 VideoEditDrawer 相关；不动 VideoListClient 主结构）
   - `apps/server-next/src/lib/videos/**`（扩展；API 客户端 + 三 Tab hooks）
   - `tests/unit/server-next/videos/video-edit-drawer/**`（新建）
-  - `tests/visual/admin-videos/video-edit-drawer-lines-tab.png`（新建；1 张 visual baseline per plan §1202）
-- **持有冲突域**：`app:server-next:videos`（自定义软冲突域，命名空间隔离）
+- **持有冲突域**：`app:server-next:videos`（已释放；集成后删除）
 - **创建时间**：2026-05-02
-- **集成时间**：—
+- **集成时间**：— （待 PR 合并）
 - **建议模型**：`claude-sonnet-4-6`（plan §8.1 - 4 工作日）
 - **执行真源**：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.4 §6（VideoEditDrawer 三 Tab 真实 API）
-- **说明**：CHG-SN-4-08 VideoEditDrawer 三 Tab 真实 API：线路 / 图片 / 豆瓣（依赖 054/059 字段 + apps/api admin/videos GET 扩展）。前置依赖 -04 + -05 + -05a + -05b 全部已就位；可与 sn4-07 完全并行。
+- **说明**：CHG-SN-4-08 完成。VideoEditDrawer 三 Tab 真实 API（线路/图片/豆瓣）全部接入，28 个 hook 单元测试，249 文件 3064 测试全绿，typecheck/lint 通过。
 
 ---
 

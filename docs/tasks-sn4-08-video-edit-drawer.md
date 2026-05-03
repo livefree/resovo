@@ -16,7 +16,12 @@
 
 ## 进行中任务
 
-### CHG-SN-4-08 · VideoEditDrawer 三 Tab 真实 API：线路 / 图片 / 豆瓣 · 🔄 进行中
+### CHG-SN-4-08 · VideoEditDrawer 三 Tab 真实 API：线路 / 图片 / 豆瓣 · ✅ 完成
+
+- **完成时间**：2026-05-02
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+- **备注**：三 Tab 全部接入真实 API。use-sources / use-images / use-douban 三个 feature hook 新建，28 个单元测试通过。关键设计决策：getApiCode 鸭子类型（避免 authStore 测试环境失败）；测试文件相对路径 vi.mock；tests/unit/server-next/ 需 jsdom 注解。e2e admin-next 7/8 通过，1 pre-existing failure（批量下架，与本卡无关）。
 
 - **来源序列**：`docs/task-queue.md` SEQ-20260501-01 / M-SN-4 阶段 C 双轨
 - **执行真源**：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.4 §6（数据显示补全）+ §7（mock → 真实 API 接入清单）+ §8.1 第 6 张卡

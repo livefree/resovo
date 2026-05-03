@@ -113,3 +113,79 @@ export interface CrawlerSite {
   key: string
   name: string
 }
+
+// ── 视频线路（GET /admin/sources?videoId=<id> 行结构）────────────
+// 字段命名保持 snake_case 与 API 响应一致
+
+export type SignalStatus = 'pending' | 'ok' | 'partial' | 'dead'
+export type ImageStatus = 'pending_review' | 'ok' | 'broken' | 'unknown'
+export type VideoImageKind = 'poster' | 'backdrop' | 'logo' | 'banner_backdrop'
+
+export interface VideoSource {
+  readonly id: string
+  readonly video_id: string
+  readonly source_url: string
+  readonly source_name: string
+  readonly is_active: boolean
+  readonly last_checked: string | null
+  readonly created_at: string
+  readonly episode_number: number
+  readonly season_number: number
+  readonly source_site_key: string | null
+  readonly site_key: string | null
+  readonly type: string
+  readonly probe_status: SignalStatus
+  readonly render_status: SignalStatus
+  readonly latency_ms: number | null
+  readonly last_probed_at: string | null
+  readonly last_rendered_at: string | null
+  readonly quality_detected: string | null
+  readonly quality_source: string
+  readonly resolution_width: number | null
+  readonly resolution_height: number | null
+  readonly detected_at: string | null
+  readonly video_title: string | null
+}
+
+// ── 视频图片（GET /admin/videos/:id/images 响应）─────────────────
+
+export interface ImageSlotInfo {
+  readonly url: string | null
+  readonly status: ImageStatus | null
+}
+
+export interface VideoImagesData {
+  readonly poster: ImageSlotInfo
+  readonly backdrop: ImageSlotInfo
+  readonly logo: ImageSlotInfo
+  readonly banner_backdrop: ImageSlotInfo
+  readonly lastStatusUpdatedAt: string | null
+}
+
+// ── 豆瓣搜索候选（POST /admin/moderation/:id/douban-search 响应）
+
+export interface DoubanSuggestItem {
+  readonly id: string
+  readonly title: string
+  readonly year: string
+  readonly sub_title: string
+}
+
+// ── 豆瓣字段对比（GET /admin/moderation/:id/douban-candidate 响应）
+
+export interface DoubanFieldDiff {
+  readonly field: string
+  readonly label: string
+  readonly current: string | null
+  readonly proposed: string | null
+  readonly changed: boolean
+}
+
+export interface DoubanCandidateData {
+  readonly externalRefId: string
+  readonly externalId: string
+  readonly confidence: number | null
+  readonly matchMethod: string | null
+  readonly breakdown: Record<string, number> | null
+  readonly diffs: readonly DoubanFieldDiff[]
+}
