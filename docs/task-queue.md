@@ -1888,7 +1888,16 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 | DEBT-SN-4-08-B | CHG-SN-4-08 | VIDEO 类 e2e 关键流回归未跑 / 未自报（任务卡明文"必跑 admin/videos 关键流"）| CHG-SN-4-10 milestone 收口卡 |
 | DEBT-SN-4-07-A | CHG-SN-4-07 | Visual baseline 7 张占位 PNG（69-byte 单像素文件，非真实截图；同 DEBT-SN-4-A 性质：仓库无 Playwright `toHaveScreenshot()` harness）| CHG-SN-4-10 milestone 收口卡 |
 | DEBT-SN-4-07-B | CHG-SN-4-07 | 审核台 e2e 关键流回归未自报（任务卡明文"必跑 ADMIN 类"）| CHG-SN-4-10 milestone 收口卡 |
-| DEBT-SN-4-07-C | CHG-SN-4-07 | 硬编码中文 ~15 处（toast / readiness 字典 / aria-label）违反 plan §5.0.5 "全部 t() 调用 + CI grep 守门"明文（LinesPanel 10 / Staging 4 / Rejected 2 / ModerationConsole 8 处）| CHG-SN-4-09a 单独修复（不阻塞集成）|
+| DEBT-SN-4-07-C | CHG-SN-4-07 | 硬编码中文 ~15 处（toast / readiness 字典 / aria-label）违反 plan §5.0.5 "全部 t() 调用 + CI grep 守门"明文（LinesPanel 10 / Staging 4 / Rejected 2 / ModerationConsole 8 处）| CHG-SN-4-09a 修复中（卡片 docs/tasks.md，2026-05-02）|
+
+### CHG-SN-4-09a · DEBT-SN-4-07-C 修复：审核台 i18n 硬编码中文清理 🔄 进行中（卡片 docs/tasks.md，2026-05-02）
+
+- **来源**：DEBT-SN-4-07-C 闭环卡（CHG-SN-4-07 复核发现）
+- **范围**：4 文件 ~24 处中文字面量（含 aria-label）→ `i18n/messages/zh-CN/moderation.ts` 扩展键空间
+- **建议主循环模型**：`claude-sonnet-4-6`（机械字面量替换）
+- **强制子代理**：否
+- **质量门禁**：typecheck + lint + 全量 unit（250f / 3076t 不回归）+ grep 校验 0 命中
+- **后续解锁**：DEBT-SN-4-07-C 完全关闭 → CHG-SN-4-10 milestone 收口卡
 
 ### CHG-SN-4-05a · ADR-110 方案 B 迁移实施 ✅ 完成（2026-05-02）
 

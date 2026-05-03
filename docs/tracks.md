@@ -17,10 +17,10 @@
 |---|---|---|---|---|---|---|
 | sn4-05-api | ✅ 已集成 | `track/sn4-05-api`（已删除）| `docs/archive/tasks/tasks-sn4-05-api.md` | 无（已释放） | 2026-05-02 | 2026-05-02 |
 | sn4-06-worker | ✅ 已集成 | `track/sn4-06-worker`（已删除）| `docs/archive/tasks/tasks-sn4-06-worker.md` | 无（已释放） | 2026-05-02 | 2026-05-02 |
-| sn4-07-fe-moderation | 🔄 活跃 | `track/sn4-07-fe-moderation` | `docs/tasks-sn4-07-fe-moderation.md` | `app:server-next:moderation` | 2026-05-02 | — |
+| sn4-07-fe-moderation | ✅ 已集成 | `track/sn4-07-fe-moderation`（已删除）| `docs/archive/tasks/tasks-sn4-07-fe-moderation.md` | 无（已释放） | 2026-05-02 | 2026-05-02 |
 | sn4-08-video-edit-drawer | ✅ 已集成 | `track/sn4-08-video-edit-drawer`（已删除）| `docs/archive/tasks/tasks-sn4-08-video-edit-drawer.md` | 无（已释放） | 2026-05-02 | 2026-05-02 |
 
-**当前活跃 Track 数：1 / 3**（sn4-07 仍活跃）
+**当前活跃 Track 数：0 / 3**（M-SN-4 阶段 C 双轨闭环；并行模式已关闭，恢复单轨工作台）
 
 ---
 
@@ -111,21 +111,22 @@
 
 ## sn4-07-fe-moderation
 
-- **状态**：🔄 活跃
-- **分支**：`track/sn4-07-fe-moderation`
-- **任务文件**：`docs/tasks-sn4-07-fe-moderation.md`
+- **状态**：✅ 已集成（2026-05-02，PR commit `2c45b98`）
+- **分支**：`track/sn4-07-fe-moderation`（已删除）
+- **任务文件**：`docs/archive/tasks/tasks-sn4-07-fe-moderation.md`（已归档）
 - **文件作用域**：
   - `apps/server-next/src/app/admin/moderation/**`（page.tsx + _client/* 全部）
   - `apps/server-next/src/lib/moderation/**`（新建；API 客户端 + hooks）
   - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts`（新建；i18n keys per plan §5.0.5）
   - `tests/unit/server-next/moderation/**`（新建）
   - `tests/visual/moderation/**`（新建；7 张 visual baseline per plan §1190-1202）
-- **持有冲突域**：`app:server-next:moderation`（自定义软冲突域，命名空间隔离）
+- **持有冲突域**：无（已释放，集成时全部落 main）
 - **创建时间**：2026-05-02
-- **集成时间**：—
+- **集成时间**：2026-05-02
 - **建议模型**：`claude-sonnet-4-6`（plan §8.1 - 4 工作日）
 - **执行真源**：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.4 §5（六项前端共性约束 + 三 Tab 操作流程）
-- **说明**：CHG-SN-4-07 审核台前端接入：useTableQuery 状态保留 + Gmail 流虚拟滚动 + 键盘流作用域 + RejectModal 接线 + LinesPanel 真实数据 + LineHealthDrawer 接线 + StaffNoteBar + i18n + a11y + visual baseline。前置依赖 -04（admin-ui 5 件）+ -05（后端 API）+ -05a（ErrorCode 真源）+ -05b（CONFLICT status）全部已就位。
+- **说明**：CHG-SN-4-07 审核台前端接入：URL Tab 状态 + sessionStorage activeIdx + 光标分页 + 键盘 J/K/A/R/S + RejectModal 接线 + 真实 staging/rejected/lines API + LineHealthDrawer + StaffNoteBar；新建 lib/moderation/api.ts + i18n keys + 12 cases；250 文件 / 3076 测试全绿。
+- **集成评级**：B+ 级（arch-reviewer claude-opus-4-7 复核 1 轮 PASS；零越界 + 共享层冻结全遵守 + 共性约束完整；扣分项：硬编码中文 ~15 处违反 plan §5.0.5 → 转 CHG-SN-4-09a 单独修复 + DEBT-SN-4-07-A/B 已登记）
 
 ---
 
