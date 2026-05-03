@@ -1934,11 +1934,30 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 ## [SEQ-20260502-01] M-SN-4 收口扫尾：审核台投产对齐（执行序列）
 
 > 创建时间：2026-05-02 22:00
-> 最后更新时间：2026-05-02 22:00
-> 状态：🟡 规划中
+> 最后更新时间：2026-05-03（FIX-B 治理升级 → 整序列⏸暂停）
+> 状态：⏸ 暂停（FIX-B 治理升级阻塞 FIX-D / FIX-CLOSE；待 M-SN-5 + 前台播放页落地后返回）
 > 负责人：@engineering
 > 里程碑：M-SN-4 投产可用 · CHG-SN-4-10 收口前置
-> Plan 真源：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.6 patch（待起草）
+> Plan 真源：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.7
+
+### 阶段进度（2026-05-03 暂停时点）
+
+- ✅ 阶段 1 全部完成：FIX-A / FIX-E / FIX-C / FIX-F + 09d hotfix（5 张并行卡 + 1 张 hotfix）
+- ⏸ 阶段 2 FIX-B：治理升级为 admin-ui 共享组件提取（草案 `M-SN-4-FIX-B-lines-panel-extraction-plan.md` v0.1） — 暂停待观察清单触发
+- ⏸ 阶段 3 FIX-D：依赖 FIX-B 选中线路状态契约 → 同步暂停
+- ⏸ 阶段 4 FIX-CLOSE：依赖 FIX-B / FIX-D 完成 → 同步暂停
+
+### 暂停期间已知偏离（FIX-CLOSE 评级时登记）
+
+- 审核台 LinesPanel 视觉密度未对齐 plan v1.6 §2 规约（按 video_sources 行平铺 30 行问题保留）
+- 中央播放器仍为 ▶ 静态占位（FIX-D 未实装）
+- 信息密度截图比对差距 > 10%（设计稿 `Screenshot 2026-05-02 at 20.15.54.png`）
+
+### 返回触发（观察清单 — 任一落地后重新评估 FIX-B 治理方案）
+
+1. M-SN-5 合并/拆分页面规划落地（D-15 推迟卡转入实装）
+2. 前台播放页线路切换需求定型
+3. DEBT-LINE-KEY-01 决策（line_key 一级概念建模 schema 决策）
 
 ### 背景
 
