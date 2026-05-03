@@ -9,7 +9,7 @@ import { typography } from '../src/primitives/typography.js'
 import { motion } from '../src/primitives/motion.js'
 import { shadow } from '../src/primitives/shadow.js'
 import { zIndex } from '../src/primitives/z-index.js'
-import { bg, fg, border, accent, surface, state, dualSignal, tag, pattern, routeTransition, layout } from '../src/semantic/index.js'
+import { bg, fg, border, accent, surface, state, dualSignal, tag, pattern, routeTransition, layout, interactive } from '../src/semantic/index.js'
 import { adminShell, adminTable, adminDensity, adminShellZIndex, adminLayoutZIndexBusiness, adminShellSurfaces } from '../src/admin-layout/index.js'
 import { player } from '../src/components/player.js'
 import { defaultBrandOverrides, DEFAULT_BRAND_SLUG } from '../src/brands/default.js'
@@ -116,6 +116,7 @@ function buildSemanticVars(theme: ThemeKey): Array<[string, string]> {
     ...buildSemanticGroup('dual-signal', dualSignal as SemanticGroup, theme),
     ...buildSemanticGroup('tag', tag as SemanticGroup, theme),
     ...buildSemanticGroup('pattern', pattern as unknown as SemanticGroup, theme),
+    ...buildSemanticGroup('interactive', interactive as SemanticGroup, theme),
   ]
 }
 

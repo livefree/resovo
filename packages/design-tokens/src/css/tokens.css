@@ -325,6 +325,12 @@
   --pattern-noise-bg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9'/%3E%3CfeColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --pattern-dots-size: 20px 20px;
   --pattern-grid-size: 40px 40px;
+  --interactive-hover-soft: color-mix(in oklch, currentColor 6%, transparent);
+  --interactive-hover-strong: var(--bg-surface-row);
+  --interactive-press-soft: color-mix(in oklch, currentColor 12%, transparent);
+  --interactive-focus-ring-color: var(--border-focus);
+  --interactive-focus-ring-width: 2px;
+  --interactive-focus-ring-offset: 2px;
 }
 
 /* dark theme — triggered by [data-theme="dark"] on <html> */
@@ -430,4 +436,10 @@
   --pattern-noise-bg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.03 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --pattern-dots-size: 20px 20px;
   --pattern-grid-size: 40px 40px;
+  --interactive-hover-soft: color-mix(in oklch, currentColor 8%, transparent);
+  --interactive-hover-strong: var(--bg-surface-row);
+  --interactive-press-soft: color-mix(in oklch, currentColor 16%, transparent);
+  --interactive-focus-ring-color: var(--border-focus);
+  --interactive-focus-ring-width: 2px;
+  --interactive-focus-ring-offset: 2px;
 }

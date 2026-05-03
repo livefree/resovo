@@ -51,3 +51,6 @@ export type { RouteTransitionToken } from './route-transition.js'
 
 export { layout } from './layout.js'
 export type { LayoutToken, LayoutGroup } from './layout.js'
+
+export { interactive } from './interactive.js'
+export type { InteractiveTheme, InteractiveSlot } from './interactive.js'

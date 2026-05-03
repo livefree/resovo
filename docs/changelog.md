@@ -4802,3 +4802,39 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **arch-reviewer 评级**：B+ / PASS CONDITIONAL
 - **后续解锁**：第二批密度 / 第三批 chip 11 色 / 第四批工具栏改造 / UX 完整性序列（hover/focus/active）/ 触发型 CHG-UI-04a
 
+---
+
+## 2026-05-03 · CHG-UX-01：interactive token 槽位 + admin-ui 全局规则注入
+
+- **序列**：SEQ-20260504-01（UX 完整性 · 第一批：交互反馈统一）首卡
+- **方案文档**：`docs/designs/backend_design_v2.1/ux-interactive-feedback-plan.md`
+- **执行模型**：claude-opus-4-7（继承 sequence 主循环；不可降级）
+- **子代理调用**：arch-reviewer (claude-opus-4-7) — A- / PASS（红线 0；4 黄线不阻塞）
+- **变更原因**：建立 SEQ-20260504-01 的 token 与全局选择器基座，后续 5 卡只做迁移与标记。当前 admin-ui 多处可点击元素（topbar IconButton / 全局搜索 / dropdown trigger / 表头按钮等）完全没有 hover 反馈；既有 hover 槽位写死、duration 写裸值，分散在 3 个 styles 文件
+- **改动文件**：
+  - `packages/design-tokens/src/semantic/interactive.ts`（新建，6 槽位 × 2 主题）
+  - `packages/design-tokens/src/semantic/index.ts`（导出）
+  - `packages/design-tokens/scripts/build-css.ts`（buildSemanticVars 加入 interactive）
+  - `packages/design-tokens/src/css/tokens.css`（重生成 — 446 行，含 12 个 `--interactive-*`）
+  - `packages/admin-ui/src/shell/interaction-styles.tsx`（新建，注入 5 类全局规则 + focus-visible 兜底 + reduced-motion）
+  - `packages/admin-ui/src/shell/admin-shell.tsx`（挂 `<InteractionStyles />`，line 248-249）
+  - `packages/admin-ui/src/shell/index.ts`（导出 InteractionStyles）
+  - `tests/unit/design-tokens/semantic.test.ts`（+18 个测试：11 形态 + 7 CSS 变量产出）
+- **设计要点**：
+  - hoverSoft：`color-mix(in oklch, currentColor 6%/8%, transparent)` — 跟随消费方 fg 色，state-error 元素 hover 出红叠加
+  - hoverStrong：`var(--bg-surface-row)` — 复用既有槽位，主题切换自动跟随
+  - pressSoft：currentColor 12%/16%，强度 ≈ 2× hover
+  - focusRing：color/width/offset 三槽位，全站 a11y 兜底
+  - 消费方契约：`data-interactive="icon|trigger|nav|chip"` 标记属性，admin-ui 全局规则 5 条匹配；业务层禁写 `:hover`
+  - 双轨期：本卡不删既有 admin-shell-styles 规则，CHG-UX-02 才迁移 sidebar / menu
+- **arch-reviewer 关键反馈**：
+  - **A- / PASS**（红线 0）
+  - Y1 currentColor 选择：合规
+  - Y2 双轨期 sidebar 色阶下沉：CHG-UX-02 迁移后 sidebar/menu hover 从 `--bg-surface-raised` 切到 `--bg-surface-row`（一档色阶下沉，dark `oklch(15%)` → `oklch(18%)` 肉眼可辨）— **是有意的语义统一**（nav hover ≡ row hover），非回归。视觉走查时不要把这当作 bug；CHG-UX-02 卡内已添加该告警备注
+  - Y3 focus-visible 全站兜底：合理 a11y 默认（不阻塞）
+  - Y4 interactive vs accent vs button.ts 边界清晰
+  - S1 CSS 变量产出快照测试 → ✅ 本卡顺手补齐（7 个新测试）
+  - S2 focusRingWidth/Offset 归 size primitive → 登记为 CHG-UX-EXT-D
+- **测试**：typecheck / lint / unit 252f / 3140t / tokens:validate / verify-token-references 全绿
+- **变更摘要**：建立 UX 完整性序列基座；新增 `interactive` 语义槽位（6 槽 × 2 主题）+ admin-ui 全局规则注入器（4 类标记属性 + focus-visible 兜底 + reduced-motion）；零业务层改动；arch-reviewer A- PASS；为 CHG-UX-02..06 解锁基础设施
+

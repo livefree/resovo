@@ -105,6 +105,8 @@ export type { CommandPaletteProps } from './command-palette'
 export { AdminShell } from './admin-shell'
 export type { AdminShellProps } from './admin-shell'
 
+export { InteractionStyles } from './interaction-styles'
+
 export { createAdminShellStore } from './admin-shell-store'
 export type { DrawerVariant, AdminShellStoreState, AdminShellStoreActions } from './admin-shell-store'
 

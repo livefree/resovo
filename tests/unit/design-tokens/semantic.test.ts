@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { bg, fg, border, accent, state, surface, deriveAccent } from '../../../packages/design-tokens/src/semantic/index.js'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { bg, fg, border, accent, state, surface, deriveAccent, interactive } from '../../../packages/design-tokens/src/semantic/index.js'
 import { colors } from '../../../packages/design-tokens/src/primitives/color.js'
 
 const PRIMITIVE_VALUES = new Set<string>(
@@ -121,6 +123,90 @@ describe('state tokens — alpha-soft 形态硬约束（CHG-UI-04 / ADR-111）',
   it('dark 与 light 双主题完全等价（alpha-soft 同映射策略）', () => {
     for (const kind of KINDS) {
       expect(state.dark[kind]).toEqual(state.light[kind])
+    }
+  })
+})
+
+describe('interactive tokens — 形态约束（CHG-UX-01 / SEQ-20260504-01）', () => {
+  const THEMES = ['light', 'dark'] as const
+  const REQUIRED_SLOTS = [
+    'hoverSoft',
+    'hoverStrong',
+    'pressSoft',
+    'focusRingColor',
+    'focusRingWidth',
+    'focusRingOffset',
+  ] as const
+
+  it('has light and dark themes with identical slot keys', () => {
+    expect(Object.keys(interactive)).toEqual(['light', 'dark'])
+    expect(Object.keys(interactive.light)).toEqual(Object.keys(interactive.dark))
+  })
+
+  it.each(THEMES)('%s theme has all 6 required slots', (theme) => {
+    for (const slot of REQUIRED_SLOTS) {
+      expect(interactive[theme]).toHaveProperty(slot)
+      expect(typeof interactive[theme][slot]).toBe('string')
+    }
+  })
+
+  it.each(THEMES)('%s.hoverSoft uses currentColor + color-mix', (theme) => {
+    expect(interactive[theme].hoverSoft).toMatch(/^color-mix\(in oklch, currentColor \d+%, transparent\)$/)
+  })
+
+  it.each(THEMES)('%s.pressSoft uses currentColor + color-mix and is stronger than hoverSoft', (theme) => {
+    expect(interactive[theme].pressSoft).toMatch(/^color-mix\(in oklch, currentColor \d+%, transparent\)$/)
+    const extract = (s: string) => parseInt(s.match(/(\d+)%/)![1], 10)
+    expect(extract(interactive[theme].pressSoft)).toBeGreaterThan(extract(interactive[theme].hoverSoft))
+  })
+
+  it('dark theme has higher hover/press percentage than light (低对比环境补偿)', () => {
+    const extract = (s: string) => parseInt(s.match(/(\d+)%/)![1], 10)
+    expect(extract(interactive.dark.hoverSoft)).toBeGreaterThan(extract(interactive.light.hoverSoft))
+    expect(extract(interactive.dark.pressSoft)).toBeGreaterThan(extract(interactive.light.pressSoft))
+  })
+
+  it('hoverStrong references --bg-surface-row via var() in both themes', () => {
+    expect(interactive.light.hoverStrong).toBe('var(--bg-surface-row)')
+    expect(interactive.dark.hoverStrong).toBe('var(--bg-surface-row)')
+  })
+
+  it('focusRingColor references --border-focus via var() in both themes', () => {
+    expect(interactive.light.focusRingColor).toBe('var(--border-focus)')
+    expect(interactive.dark.focusRingColor).toBe('var(--border-focus)')
+  })
+
+  it('focusRing width / offset are px values', () => {
+    for (const theme of THEMES) {
+      expect(interactive[theme].focusRingWidth).toMatch(/^\d+px$/)
+      expect(interactive[theme].focusRingOffset).toMatch(/^\d+px$/)
+    }
+  })
+})
+
+describe('interactive CSS 变量产出（CHG-UX-01 / arch-reviewer S1）', () => {
+  const TOKENS_CSS = readFileSync(
+    resolve(__dirname, '../../../packages/design-tokens/src/css/tokens.css'),
+    'utf-8',
+  )
+
+  const SLOTS = [
+    'hover-soft',
+    'hover-strong',
+    'press-soft',
+    'focus-ring-color',
+    'focus-ring-width',
+    'focus-ring-offset',
+  ] as const
+
+  it.each(SLOTS)('tokens.css contains --interactive-%s', (slot) => {
+    expect(TOKENS_CSS).toMatch(new RegExp(`--interactive-${slot}:`))
+  })
+
+  it('all 6 interactive variables appear in both :root and [data-theme="dark"]', () => {
+    for (const slot of SLOTS) {
+      const matches = TOKENS_CSS.match(new RegExp(`--interactive-${slot}:`, 'g'))
+      expect(matches?.length, `--interactive-${slot} expected 2 occurrences (light + dark)`).toBe(2)
     }
   })
 })

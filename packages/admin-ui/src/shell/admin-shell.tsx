@@ -44,6 +44,7 @@ import { TaskDrawer } from './task-drawer'
 import { ToastViewport } from './toast-viewport'
 import { KeyboardShortcuts, type ShortcutBinding } from './keyboard-shortcuts'
 import { AdminShellStyles } from './admin-shell-styles'
+import { InteractionStyles } from './interaction-styles'
 import { createAdminShellStore } from './admin-shell-store'
 import type { AdminShellStoreState } from './admin-shell-store'
 import type {
@@ -245,6 +246,7 @@ export function AdminShell(props: AdminShellProps) {
   return (
     <div data-admin-shell style={SHELL_STYLE}>
       <AdminShellStyles />
+      <InteractionStyles />
       <Sidebar
         nav={nav}
         activeHref={activeHref}
