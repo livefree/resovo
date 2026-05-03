@@ -1799,9 +1799,16 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 
 - 前置：CHG-SN-4-04 + CHG-SN-4-05 PASS
 
-### CHG-SN-4-08 · VideoEditDrawer 三 Tab 真实 API ⏳ 待开
+### CHG-SN-4-08 · VideoEditDrawer 三 Tab 真实 API ✅ 完成（2026-05-02）
 
-- 前置：CHG-SN-4-04 + CHG-SN-4-05 PASS（与 -07 并行）
+- **来源**：M-SN-4 plan v1.4 §8.1 第 6 张 / SEQ-20260501-01 阶段 C 双轨
+- **执行真源**：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.4 §6 + §7
+- **完成**：TabLines / TabImages / TabDouban 三 Tab 真实 API 接入；新建 `lib/videos/{api,types,use-sources,use-images,use-douban}.ts` + `i18n/messages/zh-CN/videos-edit.ts` + 3 个 hook test 文件（19 cases）；249 文件 / 3064 测试全绿
+- **执行 Track**：`track/sn4-08-video-edit-drawer`（并行模式 / 集成 PR `165fdf3`）
+- **实际主循环**：claude-sonnet-4-6（与 plan §8.1 建议一致）
+- **子代理调用**：无；arch-reviewer (claude-opus-4-7) — 复核 1 轮（**A− 级 PASS**，2026-05-02）
+- **欠账登记**：DEBT-SN-4-08-A（visual baseline 1 张 `video-edit-drawer-lines-tab.png` 缺失）/ DEBT-SN-4-08-B（VIDEO 类 e2e 未跑/未自报）→ 转 CHG-SN-4-10 milestone 收口（同 DEBT-SN-4-A 性质）
+- **后续解锁**：CHG-SN-4-10 milestone 收口卡
 
 ### CHG-SN-4-09（编号空置 / 已退出本期）
 
@@ -1870,6 +1877,8 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 | DEBT-SN-4-05-A | CHG-SN-4-05 | `toggleSource` 无 `expectedUpdatedAt` 乐观锁，相比 `transitionVideoState` 缺少并发保护；建议加 ETag/version 列 | cutover（M-SN-7）前 |
 | DEBT-SN-4-05-B | CHG-SN-4-05 | `feedback.ts` 的 `getClientIp` 直接读 `x-forwarded-for` 未限白名单；生产部署须配 Fastify `trustProxy` 或 nginx/cloudflare XFF 白名单（IP 欺骗可绕过 rate-limit） | cutover（M-SN-7）前 |
 | DEBT-SN-4-05-C | CHG-SN-4-05 | ~~ApiResponse 信封 / ErrorCode 真源归属决策~~ → **完全关闭**（ADR-110 accepted + CHG-SN-4-05a 迁移完成 2026-05-02；ERRORS 14 码真源 = packages/types/src/api-errors.ts）| ✅ 已关闭 |
+| DEBT-SN-4-08-A | CHG-SN-4-08 | Visual baseline 1 张 `tests/visual/admin-videos/video-edit-drawer-lines-tab.png` 缺失（同 DEBT-SN-4-A 性质：仓库无 Playwright `toHaveScreenshot()` harness，本卡未引入新基础设施）| CHG-SN-4-10 milestone 收口卡 |
+| DEBT-SN-4-08-B | CHG-SN-4-08 | VIDEO 类 e2e 关键流回归未跑 / 未自报（任务卡明文"必跑 admin/videos 关键流"）| CHG-SN-4-10 milestone 收口卡 |
 
 ### CHG-SN-4-05a · ADR-110 方案 B 迁移实施 ✅ 完成（2026-05-02）
 

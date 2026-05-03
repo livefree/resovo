@@ -18,9 +18,9 @@
 | sn4-05-api | ✅ 已集成 | `track/sn4-05-api`（已删除）| `docs/archive/tasks/tasks-sn4-05-api.md` | 无（已释放） | 2026-05-02 | 2026-05-02 |
 | sn4-06-worker | ✅ 已集成 | `track/sn4-06-worker`（已删除）| `docs/archive/tasks/tasks-sn4-06-worker.md` | 无（已释放） | 2026-05-02 | 2026-05-02 |
 | sn4-07-fe-moderation | 🔄 活跃 | `track/sn4-07-fe-moderation` | `docs/tasks-sn4-07-fe-moderation.md` | `app:server-next:moderation` | 2026-05-02 | — |
-| sn4-08-video-edit-drawer | ✅ 待集成 | `track/sn4-08-video-edit-drawer` | `docs/tasks-sn4-08-video-edit-drawer.md` | 无（已释放） | 2026-05-02 | — |
+| sn4-08-video-edit-drawer | ✅ 已集成 | `track/sn4-08-video-edit-drawer`（已删除）| `docs/archive/tasks/tasks-sn4-08-video-edit-drawer.md` | 无（已释放） | 2026-05-02 | 2026-05-02 |
 
-**当前活跃 Track 数：1 / 3**（sn4-08 已完成待集成；sn4-07 仍活跃）
+**当前活跃 Track 数：1 / 3**（sn4-07 仍活跃）
 
 ---
 
@@ -131,19 +131,20 @@
 
 ## sn4-08-video-edit-drawer
 
-- **状态**：✅ 待集成（CHG-SN-4-08 完成，PR 待提交）
-- **分支**：`track/sn4-08-video-edit-drawer`
-- **任务文件**：`docs/tasks-sn4-08-video-edit-drawer.md`
+- **状态**：✅ 已集成（2026-05-02，PR commit `165fdf3`）
+- **分支**：`track/sn4-08-video-edit-drawer`（已删除）
+- **任务文件**：`docs/archive/tasks/tasks-sn4-08-video-edit-drawer.md`（已归档）
 - **文件作用域**：
   - `apps/server-next/src/app/admin/videos/_client/**`（仅 VideoEditDrawer 相关；不动 VideoListClient 主结构）
   - `apps/server-next/src/lib/videos/**`（扩展；API 客户端 + 三 Tab hooks）
   - `tests/unit/server-next/videos/video-edit-drawer/**`（新建）
-- **持有冲突域**：`app:server-next:videos`（已释放；集成后删除）
+- **持有冲突域**：无（已释放，集成时全部落 main）
 - **创建时间**：2026-05-02
-- **集成时间**：— （待 PR 合并）
+- **集成时间**：2026-05-02
 - **建议模型**：`claude-sonnet-4-6`（plan §8.1 - 4 工作日）
 - **执行真源**：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.4 §6（VideoEditDrawer 三 Tab 真实 API）
-- **说明**：CHG-SN-4-08 完成。VideoEditDrawer 三 Tab 真实 API（线路/图片/豆瓣）全部接入，28 个 hook 单元测试，249 文件 3064 测试全绿，typecheck/lint 通过。
+- **说明**：CHG-SN-4-08 完成。VideoEditDrawer 三 Tab 真实 API（线路/图片/豆瓣）全部接入，249 文件 / 3064 测试全绿。
+- **集成评级**：A− 级（arch-reviewer claude-opus-4-7 复核 1 轮 PASS；零越界 + 共享层冻结全遵守 + 乐观更新+回滚正确；扣分项：DEBT-SN-4-08-A/B 已登记）
 
 ---
 
