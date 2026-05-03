@@ -4921,5 +4921,29 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - `packages/admin-ui/src/components/data-table/data-table.tsx` — TH_STYLE
 - **设计修订**：方案 §6.3 红线 2 在本卡执行后明确"inline 不得显式声明 default background（让 user agent default + stylesheet 接管）"
 - **测试**：typecheck / lint / unit 252f / 3140t / tokens:validate / verify-token-references 全绿；1 flaky StagingEditPanel act warning（与本卡无关，单跑通过）
-- **变更摘要**：删 6 处 inline `background: 'transparent'`；`[data-interactive]:hover` 全局规则现在能真正接管视觉反馈；用户实测可见 hover 变化
+- **变更摘要**：删 6 处 inline `background: 'transparent'`；`[data-interactive]:hover` 全局规则现在能真正接管视觉反馈；用户实测可见 hover 变化（**❌ 验收失败 — 见 CHG-UX-05c 回滚**）
+
+---
+
+## 2026-05-03 · CHG-UX-05c：回滚 CHG-UX-05b，改用 !important 让 stylesheet hover 赢 inline
+
+- **序列**：SEQ-20260504-01 二次修复
+- **依赖**：CHG-UX-01..05 ✅ / CHG-UX-05b ⏪ 回滚
+- **执行模型**：claude-opus-4-7
+- **触发**：CHG-UX-05b 用户验收失败 — "侧边栏和按钮背景色相比修正之前发生变化，鼠标 hover 背景色变浅"
+- **根因**：CHG-UX-05b 删 inline `background: 'transparent'` 后，`<button>` 元素 fall back 到 user-agent default（`buttonface` 浅灰），不再透明继承父容器；用户看到的"按钮背景变浅"是 user-agent default，不是设计意图
+- **方案**（两步合并）：
+  1. **回滚** CHG-UX-05b：恢复 6 处 inline `background: 'transparent'`（topbar ICON_BTN_STYLE / user-menu ITEM_STYLE / staff-note BUTTON_BASE_STYLE / sidebar COLLAPSE_BTN_STYLE / sidebar footerStyle / sidebar NavItem linkStyle / data-table TH_STYLE）
+  2. **interaction-styles.tsx 改 !important**：hover/active background + trigger hover border-color 全部加 `!important`，让 stylesheet 强制赢 React inline default
+- **设计决策（写入 interaction-styles.tsx 注释）**：React inline `style={{ background: ... }}` 的 CSS specificity 高于 stylesheet 规则；不用 !important 的话，stylesheet 的 :hover background 永远被 inline default 覆盖。业界共识：React inline + stylesheet hover 共存，hover 状态规则用 !important。本文件仅在 hover/active 等"瞬态"规则上用，default 规则不用 — 消费方 inline default 仍受尊重（语义：default 由消费方决定，hover 由设计系统决定）
+- **改动文件**：
+  - `packages/admin-ui/src/shell/topbar.tsx`（恢复）
+  - `packages/admin-ui/src/shell/user-menu.tsx`（恢复）
+  - `packages/admin-ui/src/shell/sidebar.tsx`（恢复 3 处）
+  - `packages/admin-ui/src/components/feedback/staff-note-bar.tsx`（恢复）
+  - `packages/admin-ui/src/components/data-table/data-table.tsx`（恢复）
+  - `packages/admin-ui/src/shell/interaction-styles.tsx`（hover/active background + trigger hover border 加 !important + 注释）
+- **同时登记 CHG-UX-07**（用户验收问题 2）：业务页面元素 hover 接入 — apps/server-next 业务页 tab / 按钮 / 列表项均未标 `data-interactive`，需要单独调研清单后批量加标记
+- **测试**：typecheck / lint / unit 252f / 3141t / tokens:validate / verify-token-references 全绿
+- **变更摘要**：CHG-UX-05b 路线错误（删 inline 引入 user-agent default 视觉回归）已回滚；新方案用 !important 在 hover 状态强制赢 inline default，default 视觉恢复 + hover 反馈生效
 

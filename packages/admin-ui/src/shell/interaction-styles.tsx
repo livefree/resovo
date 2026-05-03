@@ -28,6 +28,14 @@
  *   - 同为 AdminShell 渲染的 <style> 注入；同时挂载，规则不冲突（选择器互斥）
  *   - admin-shell-styles 负责 sidebar layout / scrollbar / pulse 等"基础设施"
  *   - 本文件负责"交互反馈语义层"
+ *
+ * 关于 !important（CHG-UX-05c 设计决策）：
+ *   - React inline `style={{ background: ... }}` 的 CSS specificity（author inline）
+ *     高于任何 stylesheet 规则；不用 !important 的话，stylesheet 的 :hover background
+ *     会被消费方 inline default background（如 'transparent'）覆盖
+ *   - 业界共识：React inline + stylesheet hover 共存，hover 状态规则需 !important
+ *   - 本文件仅在 hover/active 等"瞬态"规则上用 !important，default 规则不用；
+ *     消费方 inline default 仍受尊重（语义：default 由消费方决定，hover 由设计系统决定）
  */
 
 const INTERACTION_CSS = `
@@ -40,10 +48,10 @@ const INTERACTION_CSS = `
   transition: background var(--duration-fast) var(--easing-ease-out);
 }
 [data-interactive="icon"]:not(:disabled):hover {
-  background: var(--interactive-hover-soft);
+  background: var(--interactive-hover-soft) !important;
 }
 [data-interactive="icon"]:not(:disabled):active {
-  background: var(--interactive-press-soft);
+  background: var(--interactive-press-soft) !important;
 }
 
 /* ── 2. trigger：input / select / dropdown 触发器 ───────────────── *
@@ -54,7 +62,7 @@ const INTERACTION_CSS = `
               background var(--duration-fast) var(--easing-ease-out);
 }
 [data-interactive="trigger"]:not(:disabled):hover {
-  border-color: var(--border-strong);
+  border-color: var(--border-strong) !important;
 }
 
 /* ── 3. nav-item：sidebar / menu / 列表型导航项 ──────────────────── *
@@ -67,10 +75,10 @@ const INTERACTION_CSS = `
               color var(--duration-fast) var(--easing-ease-out);
 }
 [data-interactive="nav"]:not([data-active="true"]):not(:disabled):hover {
-  background: var(--interactive-hover-strong);
+  background: var(--interactive-hover-strong) !important;
 }
 [data-interactive="nav"][data-danger="true"]:not(:disabled):hover {
-  background: var(--admin-danger-soft);
+  background: var(--admin-danger-soft) !important;
 }
 
 /* ── 4. chip：filter-chip-clear / hidden-cols-chip / pager-btn 等 ─ *
