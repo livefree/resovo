@@ -103,7 +103,7 @@ export function RejectedTabContent(): React.ReactElement {
                 style={{ ...BTN_SM, opacity: reopening !== null ? 0.6 : 1 }}
                 onClick={handleReopen}
                 disabled={reopening !== null}
-                aria-label="重新开审"
+                aria-label={M.aria.rejectedReopen}
               >
                 {M.rejected.reopen}
               </button>
@@ -152,7 +152,7 @@ export function RejectedTabContent(): React.ReactElement {
               {/* Actions */}
               <div style={{ marginTop: 14, padding: 12, background: 'var(--bg-surface-raised)', borderRadius: 6 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>可执行操作</div>
-                <button style={{ ...BTN_SM, opacity: reopening !== null ? 0.6 : 1 }} onClick={handleReopen} disabled={reopening !== null} aria-label="重新开审">
+                <button style={{ ...BTN_SM, opacity: reopening !== null ? 0.6 : 1 }} onClick={handleReopen} disabled={reopening !== null} aria-label={M.aria.rejectedReopen}>
                   ↻ {M.rejected.reopen}
                 </button>
               </div>

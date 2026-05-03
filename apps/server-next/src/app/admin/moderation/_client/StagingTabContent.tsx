@@ -39,7 +39,11 @@ const CHECK_ITEM: React.CSSProperties = {
 
 function ReadinessKey({ val }: { val: string }): string {
   const map: Record<string, string> = {
-    review_status: '审核状态', lines_min: '有效线路 ≥ 1', cover: '封面 P0', douban: '豆瓣匹配', signal: '探测/播放信号',
+    review_status: M.staging.readiness.reviewStatus,
+    lines_min: M.staging.readiness.linesMin,
+    cover: M.staging.readiness.cover,
+    douban: M.staging.readiness.douban,
+    signal: M.staging.readiness.signal,
   }
   return map[val] ?? val
 }
@@ -127,7 +131,7 @@ export function StagingTabContent(): React.ReactElement {
         <div style={{ padding: '10px 12px', flexShrink: 0, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{M.staging.listHeader(videos.length)}</span>
           <span style={{ flex: 1 }} />
-          <button style={BTN_XS_PRIMARY} onClick={handleBatchPublish} disabled={actioning !== null || videos.length === 0} aria-label="批量发布">
+          <button style={BTN_XS_PRIMARY} onClick={handleBatchPublish} disabled={actioning !== null || videos.length === 0} aria-label={M.aria.stagingBatchPublish}>
             {M.staging.publishAll}
           </button>
         </div>
@@ -164,10 +168,10 @@ export function StagingTabContent(): React.ReactElement {
               <span style={{ fontSize: 12, fontWeight: 600 }}>{M.staging.title}</span>
               <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{v.title}</span>
               <span style={{ flex: 1 }} />
-              <button style={{ ...BTN_SM_DANGER, opacity: actioning !== null ? 0.6 : 1 }} onClick={handleRevert} disabled={actioning !== null} aria-label="退回审核">
+              <button style={{ ...BTN_SM_DANGER, opacity: actioning !== null ? 0.6 : 1 }} onClick={handleRevert} disabled={actioning !== null} aria-label={M.aria.stagingRevert}>
                 {M.staging.revert}
               </button>
-              <button style={{ ...BTN_SM_PRIMARY, opacity: actioning !== null ? 0.6 : 1 }} onClick={handlePublish} disabled={actioning !== null} aria-label="发布上架">
+              <button style={{ ...BTN_SM_PRIMARY, opacity: actioning !== null ? 0.6 : 1 }} onClick={handlePublish} disabled={actioning !== null} aria-label={M.aria.stagingPublishOne}>
                 {M.staging.publishOne}
               </button>
             </div>

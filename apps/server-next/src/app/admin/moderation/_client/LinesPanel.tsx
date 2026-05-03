@@ -73,7 +73,7 @@ function LineRow({ line, toggling, onToggle, onHealth }: LineRowProps): React.Re
       <button
         role="switch"
         aria-checked={line.is_active}
-        aria-label={line.is_active ? '停用线路' : '启用线路'}
+        aria-label={line.is_active ? M.aria.lineDisable : M.aria.lineEnable}
         disabled={toggling}
         onClick={() => onToggle(line.id, line.is_active)}
         style={{
@@ -103,7 +103,7 @@ function LineRow({ line, toggling, onToggle, onHealth }: LineRowProps): React.Re
       {line.latency_ms != null && (
         <span style={{ fontSize: 10, color: 'var(--fg-muted)', flexShrink: 0 }}>{line.latency_ms}ms</span>
       )}
-      <button style={{ ...BTN_XS, fontSize: 10 }} onClick={() => onHealth(line)} aria-label="查看线路证据">证据</button>
+      <button style={{ ...BTN_XS, fontSize: 10 }} onClick={() => onHealth(line)} aria-label={M.aria.lineEvidence}>证据</button>
     </div>
   )
 }
@@ -128,13 +128,13 @@ export function LinesPanel({ videoId }: { videoId: string }): React.ReactElement
   }, [videoId])
 
   const openHealth = useCallback(async (line: ContentSourceRow) => {
-    const title = `${line.source_name} · EP${line.episode_number ?? '全集'}`
+    const title = `${line.source_name} · EP${line.episode_number ?? M.lines.fullEpisode}`
     setDrawer({ open: true, sourceId: line.id, title, probeState: api.toDisplayState(line.probe_status), renderState: api.toDisplayState(line.render_status), events: [], loading: true, error: null, page: 1, total: 0 })
     try {
       const res = await api.fetchLineHealth(videoId, line.id, 1)
       setDrawer(d => ({ ...d, events: res.data as SourceHealthEvent[], loading: false, total: res.pagination.total, page: 1 }))
     } catch {
-      setDrawer(d => ({ ...d, loading: false, error: '加载失败' }))
+      setDrawer(d => ({ ...d, loading: false, error: M.lines.loadFailed }))
     }
   }, [videoId])
 
@@ -145,7 +145,7 @@ export function LinesPanel({ videoId }: { videoId: string }): React.ReactElement
       const res = await api.fetchLineHealth(videoId, drawer.sourceId, page)
       setDrawer(d => ({ ...d, events: res.data as SourceHealthEvent[], loading: false, page }))
     } catch {
-      setDrawer(d => ({ ...d, loading: false, error: '加载失败' }))
+      setDrawer(d => ({ ...d, loading: false, error: M.lines.loadFailed }))
     }
   }, [videoId, drawer.sourceId])
 
@@ -156,7 +156,7 @@ export function LinesPanel({ videoId }: { videoId: string }): React.ReactElement
       await api.toggleSource(videoId, id, !currentActive)
       setLines(prev => prev.map(l => l.id === id ? { ...l, is_active: !currentActive } : l))
     } catch {
-      setActionError('切换失败，请重试')
+      setActionError(M.lines.toggleFailed)
     } finally {
       setTogglingIds(s => { const next = new Set(s); next.delete(id); return next })
     }
@@ -172,7 +172,7 @@ export function LinesPanel({ videoId }: { videoId: string }): React.ReactElement
         ))
       }
     } catch {
-      setActionError('批量禁用失败')
+      setActionError(M.lines.disableDeadFailed)
     }
   }, [videoId])
 
@@ -181,7 +181,7 @@ export function LinesPanel({ videoId }: { videoId: string }): React.ReactElement
     try {
       await api.refetchSources(videoId)
     } catch {
-      setActionError('触发抓取失败')
+      setActionError(M.lines.refetchFailed)
     }
   }, [videoId])
 
@@ -201,7 +201,7 @@ export function LinesPanel({ videoId }: { videoId: string }): React.ReactElement
         <span style={{ fontSize: 12, fontWeight: 600 }}>线路</span>
         <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{enabledCount}/{lines.length} 启用</span>
         <span style={{ flex: 1 }} />
-        <button style={BTN_XS} onClick={handleRefetch} aria-label="重新抓取线路">↻ 重新抓取</button>
+        <button style={BTN_XS} onClick={handleRefetch} aria-label={M.aria.lineRefetch}>↻ 重新抓取</button>
       </div>
 
       {actionError && (
@@ -228,7 +228,7 @@ export function LinesPanel({ videoId }: { videoId: string }): React.ReactElement
 
       <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
         <span style={{ flex: 1 }} />
-        <button style={BTN_XS_DANGER} onClick={handleDisableDead} aria-label="禁用全失效线路">禁用全失效</button>
+        <button style={BTN_XS_DANGER} onClick={handleDisableDead} aria-label={M.aria.lineDisableDead}>禁用全失效</button>
       </div>
 
       <LineHealthDrawer

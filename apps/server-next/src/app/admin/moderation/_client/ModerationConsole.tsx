@@ -301,7 +301,7 @@ export function ModerationConsole(): React.ReactElement {
               height="100%"
               gap={12}
               role="region"
-              aria-label="审核台三栏"
+              aria-label={M.aria.consoleSplitRegion}
               data-testid="moderation-split"
               panes={[
                 {
@@ -319,9 +319,9 @@ export function ModerationConsole(): React.ReactElement {
                   ),
                   noPadding: true,
                   role: 'complementary',
-                  'aria-label': '审核队列',
+                  'aria-label': M.aria.consoleQueuePane,
                   children: (
-                    <div role="listbox" aria-label="审核队列">
+                    <div role="listbox" aria-label={M.aria.consoleQueuePane}>
                       {pendingVideos.length === 0 ? (
                         <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 13 }}>{M.pending.empty}</div>
                       ) : (
@@ -350,14 +350,14 @@ export function ModerationConsole(): React.ReactElement {
                       <div style={{ flex: 1, height: 4, background: 'var(--bg-surface-raised)', borderRadius: 2, minWidth: 40 }}>
                         <div style={{ height: '100%', width: `${Math.min(100, ((activeIdx + 1) / Math.max(1, totalPending)) * 100)}%`, background: 'var(--accent-default)', borderRadius: 2 }} />
                       </div>
-                      <button style={BTN_DANGER} onClick={() => setRejectOpen(true)} aria-label="拒绝视频">✕ {M.actions.reject} <span style={KBD}>R</span></button>
-                      <button style={BTN_SM} onClick={() => setActiveIdx(i => Math.min(i + 1, pendingVideos.length - 1))} aria-label="跳过视频">{M.actions.skip} <span style={KBD}>S</span></button>
-                      <button style={BTN_PRIMARY} onClick={() => void handleApprove()} aria-label="通过视频">✓ {M.actions.approve} <span style={KBD}>A</span></button>
+                      <button style={BTN_DANGER} onClick={() => setRejectOpen(true)} aria-label={M.aria.consoleRejectVideo}>✕ {M.actions.reject} <span style={KBD}>R</span></button>
+                      <button style={BTN_SM} onClick={() => setActiveIdx(i => Math.min(i + 1, pendingVideos.length - 1))} aria-label={M.aria.consoleSkipVideo}>{M.actions.skip} <span style={KBD}>S</span></button>
+                      <button style={BTN_PRIMARY} onClick={() => void handleApprove()} aria-label={M.aria.consoleApproveVideo}>✓ {M.actions.approve} <span style={KBD}>A</span></button>
                       <button style={BTN_SM} onClick={() => setRightOpen(o => !o)} aria-expanded={rightOpen}>{rightOpen ? '›' : '‹'} {M.actions.detail}</button>
                     </div>
                   ) : <span />,
                   role: 'main',
-                  'aria-label': '视频审核预览',
+                  'aria-label': M.aria.consolePreviewPane,
                   children: v ? (
                     <PendingCenter v={v} onStaffNoteChange={handleStaffNoteChange} />
                   ) : (
@@ -369,7 +369,7 @@ export function ModerationConsole(): React.ReactElement {
                   minWidth: 260,
                   hidden: !rightOpen,
                   role: 'complementary',
-                  'aria-label': '视频详情',
+                  'aria-label': M.aria.consoleDetailPane,
                   children: v ? <RightPaneDetail v={v} /> : null,
                 },
               ]}

@@ -3981,3 +3981,25 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 
 - 评级：B+（文件作用域 100% 合规 + 共性约束完整 + lib/moderation API 类型从 @resovo/types 真源消费 + 质量门禁全绿）
 - 待修：硬编码中文 ~15 处违反 plan §5.0.5（DEBT-SN-4-07-C 已建 CHG-SN-4-09a 收口）+ DEBT-SN-4-07-A（visual baseline 7 张占位）+ DEBT-SN-4-07-B（e2e 未自报）→ 转 CHG-SN-4-10
+
+## [CHG-SN-4-09a] DEBT-SN-4-07-C 修复：审核台 i18n 硬编码中文清理
+- **完成时间**：2026-05-02
+- **记录时间**：2026-05-02 18:16
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts` — 新增 `M.lines.*`（5 键）+ `M.staging.readiness.*`（5 键）+ `M.aria.*`（16 键），扩展 i18n 键空间
+  - `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx` — 替换 11 处硬编码中文（toast 5 处 / aria-label 5 处 / 全集 backtick 1 处）→ M.lines.* + M.aria.*
+  - `apps/server-next/src/app/admin/moderation/_client/StagingTabContent.tsx` — 替换 8 处（ReadinessKey 字典 5 条 → M.staging.readiness.* + 3 aria-label → M.aria.*）
+  - `apps/server-next/src/app/admin/moderation/_client/RejectedTabContent.tsx` — 替换 2 处 aria-label "重新开审" → M.aria.rejectedReopen
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx` — 替换 8 处 aria-label（审核台三栏 / 审核队列 ×2 / 拒绝跳过通过 ×3 / 视频审核预览 / 视频详情）→ M.aria.*
+  - `docs/changelog.md` — 追加本条目
+  - `docs/task-queue.md` — CHG-SN-4-09a 状态 ✅ 完成 + DEBT-SN-4-07-C ✅ 已关闭
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：DEBT-SN-4-07-C 完全关闭；CHG-SN-4-10 milestone 收口卡现已解锁（无前置阻塞）
+- **质量门禁**：
+  - typecheck ✅（全 8 workspace 零报错）
+  - lint ✅（5 tasks 全 pass；img warning 为预存非本次作用域）
+  - unit ✅（250 文件 / 3076 tests 全绿，零回归）
+  - grep 校验 ✅（`['\"][一-龥]` 在 _client/ 0 命中，除 mock-data.ts）
