@@ -132,10 +132,10 @@ export async function updateStaffNote(id: string, note: string | null): Promise<
 // ── 线路 ──────────────────────────────────────────────────────────────
 
 export async function fetchVideoSources(videoId: string): Promise<ContentSourceRow[]> {
-  const res = await apiClient.get<{ rows: ContentSourceRow[]; total: number }>(
+  const res = await apiClient.get<{ data: ContentSourceRow[]; total: number; page: number; limit: number }>(
     `/admin/sources?videoId=${encodeURIComponent(videoId)}&limit=100`,
   )
-  return res.rows
+  return res.data
 }
 
 export async function toggleSource(

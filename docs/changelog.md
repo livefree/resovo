@@ -4003,3 +4003,28 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - lint ✅（5 tasks 全 pass；img warning 为预存非本次作用域）
   - unit ✅（250 文件 / 3076 tests 全绿，零回归）
   - grep 校验 ✅（`['\"][一-龥]` 在 _client/ 0 命中，除 mock-data.ts）
+
+---
+
+## [CHG-SN-4-09b] LinesPanel runtime crash hotfix（fetchVideoSources 解构错误）
+
+- **完成时间**：2026-05-02
+- **记录时间**：2026-05-02 18:30
+- **执行模型**：claude-opus-4-7（**偏离任务卡建议 sonnet-4-6**；理由：runtime crash 紧急 hotfix + 已确认根因 + 单点修复 ~3 行 + 会话连续性）
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/lib/moderation/api.ts` — `fetchVideoSources` 类型 `{ rows, total }` → `{ data, total, page, limit }` + `return res.rows` → `return res.data`（与 `apps/api/src/services/ContentService.ts:28` 真源签名对齐）
+- **新增依赖**：无
+- **数据库变更**：无
+- **Bug 根因**：CHG-SN-4-07 写 `fetchVideoSources` 时假设响应形态 `{ rows, total }`，但 `/admin/sources` 实际返回 `{ data, total, page, limit }`（`ContentService.listSources` 真源），导致 `res.rows = undefined` → `setLines(undefined)` → `LinesPanel.tsx:188 lines.filter` runtime TypeError
+- **影响范围**：仅 `fetchVideoSources` 一处；同文件其他 3 处 `res.data` 用法（disableDeadSources / fetchReviewLabels / batchPublishVideos）已确认正确；其他端点不受影响
+- **关联**：sn4-08 同源 API `lib/videos/api.ts:listVideoSources` 已用正确 `res.data` 形态，本卡使 sn4-07 与 sn4-08 对齐
+- **注意事项**：
+  - 任务卡测试无法直接覆盖 fetch 解构（apiClient 在测试中 mock）；用户 runtime 验证为最终验收
+  - 同类 bug 风险点：已 grep `lib/moderation/api.ts` 全 4 处 fetch 函数响应形态，确认仅本处与契约不一致
+
+### 质量门禁
+
+- typecheck ✅（全 8 workspace 零报错）
+- lint ✅（5 tasks 全 pass）
+- unit ✅（250 文件 / 3076 tests 全绿，零回归）
