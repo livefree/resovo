@@ -288,6 +288,7 @@ export function Sidebar({
       <button
         type="button"
         data-sidebar-collapse
+        data-interactive="nav"
         aria-label={collapsed ? '展开侧栏' : '折叠侧栏'}
         onClick={onToggleCollapsed}
         style={COLLAPSE_BTN_STYLE}
@@ -411,6 +412,8 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate, onHover, o
       type="button"
       data-sidebar-item={item.href}
       data-sidebar-item-active={active ? 'true' : undefined}
+      data-interactive="nav"
+      data-active={active ? 'true' : undefined}
       onClick={() => onNavigate(item.href)}
       onMouseEnter={handleEnter}
       onMouseLeave={handleLeave}
@@ -516,6 +519,7 @@ function Footer({ user, collapsed, userActions }: FooterProps) {
         ref={anchorRef}
         type="button"
         data-sidebar-foot
+        data-interactive="nav"
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         onClick={onClick}

@@ -4838,3 +4838,19 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **测试**：typecheck / lint / unit 252f / 3140t / tokens:validate / verify-token-references 全绿
 - **变更摘要**：建立 UX 完整性序列基座；新增 `interactive` 语义槽位（6 槽 × 2 主题）+ admin-ui 全局规则注入器（4 类标记属性 + focus-visible 兜底 + reduced-motion）；零业务层改动；arch-reviewer A- PASS；为 CHG-UX-02..06 解锁基础设施
 
+---
+
+## 2026-05-03 · CHG-UX-02：sidebar / menu hover 迁移到统一选择器
+
+- **序列**：SEQ-20260504-01 第 2 卡
+- **依赖**：CHG-UX-01 ✅
+- **执行模型**：claude-opus-4-7
+- **变更原因**：CHG-UX-01 注入了统一全局规则但消费方未加标记；本卡完成 4 类 button 标记 + 删除 admin-shell-styles 旧 hover 规则，结束双轨期
+- **改动文件**：
+  - `packages/admin-ui/src/shell/sidebar.tsx`（NavItem / Collapse / SidebarFoot 共 3 个 button 加 `data-interactive="nav"`；NavItem 加 `data-active`）
+  - `packages/admin-ui/src/shell/user-menu.tsx`（MenuItem button 加 `data-interactive="nav"` + `data-danger`；ITEM_STYLE inline 接管 `width: 100%`）
+  - `packages/admin-ui/src/shell/admin-shell-styles.tsx`（删 4 块旧 hover/transition：data-sidebar-item / data-sidebar-foot / data-sidebar-collapse / data-menu-item，约 28 行；保留 active indicator + 折叠过渡 + scrollbar + pulse）
+- **设计意图（CHG-UX-01 Y2 告警）**：sidebar / menu / collapse / sidebar-foot 的 hover 背景从 `--bg-surface-raised` 切到 `--bg-surface-row`（一档色阶下沉，dark `oklch(15%)` → `oklch(18%)` 肉眼可辨）— 是有意的语义统一（nav hover ≡ row hover），方案 §4.1 hoverStrong 槽位决策；视觉走查时不当作回归
+- **测试**：typecheck / lint / unit 252f / 3140t / tokens:validate / verify-token-references 全绿（1 flaky test 与本卡无关，单跑通过）
+- **变更摘要**：sidebar / menu hover 迁移完成；admin-shell-styles 旧 4 块规则收敛到 InteractionStyles 全局规则；双轨期结束
+

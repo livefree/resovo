@@ -126,6 +126,7 @@ const ITEM_STYLE: CSSProperties = {
   textAlign: 'left',
   cursor: 'pointer',
   borderRadius: 'var(--radius-sm)',
+  width: '100%',
 }
 
 const DANGER_ITEM_STYLE: CSSProperties = {
@@ -245,6 +246,8 @@ export function UserMenu({ open, onOpenChange, user, actions, anchorRef }: UserM
           role="menuitem"
           data-menu-item={item.action}
           data-menu-item-danger={item.danger ? 'true' : undefined}
+          data-interactive="nav"
+          data-danger={item.danger ? 'true' : undefined}
           style={item.danger ? DANGER_ITEM_STYLE : ITEM_STYLE}
           onClick={() => handleItemClick(item)}
         >

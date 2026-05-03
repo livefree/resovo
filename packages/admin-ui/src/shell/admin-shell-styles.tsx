@@ -13,13 +13,10 @@
  */
 
 const SHELL_CSS = `
-/* ── Sidebar nav item — hover / active 状态 ─────────────────────── */
-[data-sidebar-item] {
-  transition: background 120ms ease, color 120ms ease;
-}
-[data-sidebar-item]:not([data-sidebar-item-active="true"]):hover {
-  background: var(--bg-surface-raised);
-}
+/* ── Sidebar nav item — hover/transition 已迁至 interaction-styles.tsx
+ * （CHG-UX-02 / SEQ-20260504-01；消费方在 NavItem button 加 data-interactive="nav"
+ *  + data-active 后由统一选择器 [data-interactive="nav"]:not([data-active="true"]):hover
+ *  接管，hover 背景从 surface-raised → surface-row 一档色阶下沉，是有意的语义统一）─── */
 
 /* NavItem active — left indicator bar（design spec .sb__link::before） */
 [data-sidebar-item-active="true"] {
@@ -114,34 +111,12 @@ const SHELL_CSS = `
   scrollbar-gutter: stable;
 }
 
-/* ── Sidebar footer ─────────────────────────────────────────────── */
-[data-sidebar-foot] {
-  transition: background 120ms ease;
-}
-[data-sidebar-foot]:hover {
-  background: var(--bg-surface-raised);
-}
-
-/* ── Collapse button ────────────────────────────────────────────── */
-[data-sidebar-collapse] {
-  transition: background 120ms ease;
-}
-[data-sidebar-collapse]:hover {
-  background: var(--bg-surface-raised);
-}
-
-/* ── UserMenu items ─────────────────────────────────────────────── */
-[data-menu-item] {
-  transition: background 120ms ease;
-  width: 100%;
-  border-radius: var(--radius-sm);
-}
-[data-menu-item]:hover {
-  background: var(--bg-surface-raised);
-}
-[data-menu-item][data-menu-item-danger="true"]:hover {
-  background: var(--admin-danger-soft);
-}
+/* ── Sidebar footer / Collapse button / UserMenu items
+ * hover/transition 已迁至 interaction-styles.tsx（CHG-UX-02）
+ * 消费方在 button 加 data-interactive="nav" 后由统一选择器接管；
+ * UserMenu danger 项加 data-danger="true" 触发 --admin-danger-soft；
+ * data-menu-item 旧 width: 100% 已迁到 user-menu.tsx ITEM_STYLE inline；
+ * border-radius 一直由 ITEM_STYLE inline 提供 ─── */
 
 /* ── Pulse keyframe — 实时状态指示器（design spec tokens.css .pulse） ── */
 /* 消费：通知红点 / 后台任务运行 dot / 采集站点健康度 dot 等 */
