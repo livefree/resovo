@@ -169,14 +169,65 @@ export const state = {
 - 视频库 / 节目库 chip 列
 - BarSignal、DualSignal、Pill 共享组件
 
-### 4.5 DataTable row 分割线落地（CHG-UI-05）
+### 4.5 消费方 token 槽位全栈审计 + 修正 + DataTable 行分割线落地（CHG-UI-05）
 
-**文件**：`packages/admin-ui/src/components/data-table/*.tsx` 或对应 styles 文件
+> **范围扩展记录（2026-05-03 用户反馈）**：原计划仅做 DataTable 行级 CSS；CHG-UI-02 落地后用户反馈 dark 模式 sidebar / topbar / 全局搜索 / topbar 右侧信息区 / 表格背景"颜色都很深，没有变浅效果"，浅色模式同存在搜索 / 信息区 token 选错；pill 文字 / 背景对比度不达预期。诊断（见 §4.5.1）确认根因是**消费方层在 CHG-UI-02 引入新 `--bg-surface-row` 槽位之前，把本应落在中间档的 input / row hover / 信息区元素，错误地选到了 `--bg-surface-raised` 或 `--bg-surface-elevated`**。本卡范围扩展为：扫描全部消费方 var() 引用，对照设计稿槽位语义逐条修正。
 
-**改动**：
-- 给 `tbody tr` 显式补 `border-bottom: 1px solid var(--border-default)`
-- 给 `tbody tr:hover` 补 `background: var(--bg-surface-row)`
-- 不在消费方 (apps/server-next) 加 CSS
+#### 4.5.1 已确认错位（基线）
+
+| # | 文件:行 | 当前引用 | 应改为 | 设计依据 |
+|---|---|---|---|---|
+| 1 | `admin-ui/shell/topbar.tsx:86` | `var(--bg-surface-raised)` | `var(--bg-surface-row)` | 设计 `--bg3` 是 input 槽位 |
+| 2 | `admin-ui/components/data-table/data-table.tsx:326` | `var(--bg-surface-elevated)` | `var(--bg-surface-row)` | 设计 `--bg3` 是 row hover 槽位 |
+| 3 | `admin-ui/components/data-table/dt-styles.tsx:96` | `var(--bg-surface)` | `transparent` | 表头应继承表格容器底色 |
+| 4 | `admin-ui/components/data-table/dt-styles.tsx:130` | `var(--bg-surface)` | `transparent` | filter-chips slot 同上 |
+| 5 | dark 模式 topbar 右侧信息区 | 待精确扫描定位 | 据语义评估 | 用户报告 |
+| 6 | light 模式搜索 / 信息区 | 待精确扫描定位 | 据语义评估 | 用户报告 |
+| 7 | pill 消费方对 `--state-*-bg/fg` 的引用（含潜在硬编码） | 待 CHG-UI-04 落地后精确扫描 | 对齐 alpha-soft 双主题策略 | 用户报告 |
+
+#### 4.5.2 全栈扫描方法
+
+扫描脚本 / 命令：
+
+```bash
+# 1. 列出全部 var() 引用（按消费方）
+rg -n 'var\(--' packages/admin-ui/src/ apps/server-next/src/ \
+  --type-add 'tsx:*.{tsx,ts,css}' --type tsx \
+  > /tmp/token-refs.txt
+
+# 2. 按 token 名分组聚合
+rg -No 'var\(\s*(--[a-z][a-z0-9-]+)' -r '$1' packages/admin-ui/src/ apps/server-next/src/ \
+  --type-add 'tsx:*.{tsx,ts,css}' --type tsx | sort | uniq -c | sort -rn
+```
+
+扫描目标 token 类（聚焦本批关心的）：
+- `--bg-canvas` / `--bg-surface` / `--bg-surface-raised` / `--bg-surface-row` / `--bg-surface-elevated` / `--bg-surface-sunken`
+- `--border-default` / `--border-strong` / `--border-subtle`
+- `--fg-default` / `--fg-muted` / `--fg-subtle`
+- `--state-{success,warning,error,info}-{bg,fg,border}`
+
+#### 4.5.3 对照判定表（设计稿槽位语义 → 应消费 token）
+
+| 设计槽位 | 用例 | 应消费 token |
+|---|---|---|
+| `--bg0` page canvas | 整壳最底层 / 主内容区 padding | `--bg-canvas` |
+| `--bg1` shell | 侧边栏 / 顶栏 / 浮窗壳 | `--bg-surface` |
+| `--bg2` card | 卡片 / 表格容器 / 内容卡 | `--bg-surface-raised` |
+| `--bg3` row hover / input | input / row hover / chip 默认底 | `--bg-surface-row` |
+| `--bg4` popover | dropdown / popover / modal / drawer | `--bg-surface-elevated` |
+| 表头 / 容器内子区 | thead / filter-chips / footer 内层 | `transparent`（继承父） |
+
+#### 4.5.4 输出物
+
+- `docs/designs/backend_design_v2.1/token-slot-audit-report-20260503.md`（新建）— 槽位错位清单（每条含：文件:行 / 现引用 / 应引用 / 设计依据 / 修正后 commit hash）
+- 修正后所有受扫描的消费方文件
+- DataTable 行分割线显式落地：`tbody tr { border-bottom: 1px solid var(--border-default) }` + `tbody tr:last-child { border-bottom: none }` + `tbody tr:hover { background: var(--bg-surface-row) }`（与 #2 错位修正同源）
+
+#### 4.5.5 工作量估算
+
+预估 30–60 处错位，2.5–4 工时（不含 pill 消费方 — pill 部分依赖 CHG-UI-04 完成）。如扫描后错位 > 60 处，拆 CHG-UI-05a / CHG-UI-05b 分批处理。
+
+**不在 server-next / web-next 业务文件加 CSS 变量定义**——仅修正 var() 引用槽位选择。
 
 ### 4.6 视觉走查 + 基线归档（CHG-UI-06）
 
@@ -200,10 +251,10 @@ export const state = {
 | CHG-UI-02 | surfaces & border 对齐 | sonnet | `packages/design-tokens/src/primitives/color.ts`（新增 gray.925）、`semantic/bg.ts`、`semantic/border.ts`、生成产物 `dist/tokens.css` + `src/css/tokens.css` | CHG-UI-01 |
 | CHG-UI-03 | fg 文字对齐 | sonnet | `semantic/fg.ts`、生成产物 | CHG-UI-02 |
 | CHG-UI-04 | state pill 切换 alpha-soft（双主题统一） | **opus**（共享语义层契约变更） | `semantic/state.ts`、生成产物、消费方走查清单 | CHG-UI-03 |
-| CHG-UI-05 | DataTable row 分割线显式落地 | sonnet | `packages/admin-ui/src/components/data-table/*` | CHG-UI-04 |
+| CHG-UI-05 | 消费方 token 槽位全栈审计 + 修正 + DataTable 行分割线落地 | sonnet | `packages/admin-ui/src/**`、`apps/server-next/src/**`、`docs/designs/backend_design_v2.1/token-slot-audit-report-20260503.md` | CHG-UI-04 |
 | CHG-UI-06 | 视觉走查 + 基线归档 + arch-reviewer 评级 | sonnet（评级 spawn opus arch-reviewer） | `tests/visual/admin-ui-tokens/*`、`docs/audit_seq_20260503_01_<date>.md` | CHG-UI-02..05 |
 
-总规模：6 张卡，估算 12–16 工时。
+总规模：6 张卡，估算 14–20 工时（CHG-UI-05 范围扩展后上调）。
 
 **模型路由说明**：CHG-UI-04 触动 state.ts 是**跨 3+ 消费方的语义契约变更**（CLAUDE.md §模型路由规则第 2 条），强制 opus 主循环或 spawn opus 子代理出方案。
 
@@ -231,6 +282,8 @@ export const state = {
 | DataTable border-bottom 与最后一行视觉冲突（双线） | `tbody tr:last-child { border-bottom: none }` 保险措施 |
 | dark `--fg-default` 收暗后旧截图视觉 diff 失败 | 视觉基线全量重录（在 CHG-UI-06 内统一处理） |
 | 与未来 brand override（其他品牌色）冲突 | 本期不动 `accent.*` 与品牌主色，仅动 gray/status/border 中性轴 |
+| CHG-UI-05 范围扩展后 commit 体积过大、不可逆性升级 | 强制按文件类拆分 commit（topbar / data-table / sidebar / pill-consumers 各独立 commit）；scan report 先行归档作为 PR 描述；超 60 处错位拆 CHG-UI-05a/b 分批 |
+| CHG-UI-05 扫描发现 pill 消费方依赖 CHG-UI-04 已落地的 state token 形态 | CHG-UI-05 启动前确认 CHG-UI-04 已 PASS；如未完成，CHG-UI-05 仅做 surface/border/fg 槽位修正，pill 部分推迟到 CHG-UI-04 完成后追加（独立 commit） |
 
 ---
 
@@ -259,5 +312,6 @@ export const state = {
 - arch-reviewer 评级 ≥ B+
 - 视觉基线 ≥ 8 张归档（4 页 × 2 主题）
 - 设计稿截图与实现截图肉眼差距 < 5%（颜色与边框层）
+- `docs/designs/backend_design_v2.1/token-slot-audit-report-20260503.md` 全部条目 ✅ 修正（来自 CHG-UI-05 扫描）
 - changelog.md 追加完整记录
 - 在 `docs/decisions.md` 追加 ADR-111（state pill alpha-soft 双主题统一决策；编号沿现行 ADR-NNN 连续约定，CHG-UI-04 完成时回填正式决策内容）
