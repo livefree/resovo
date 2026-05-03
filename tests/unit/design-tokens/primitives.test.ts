@@ -23,8 +23,8 @@ describe('design-tokens primitives', () => {
       expect(OKLCH_PATTERN.test(value as string)).toBe(true)
     })
 
-    it('gray scale has 13 steps', () => {
-      expect(Object.keys(colors.gray)).toHaveLength(13)
+    it('gray scale has 14 steps (incl. 925 中间档 — CHG-UI-02)', () => {
+      expect(Object.keys(colors.gray)).toHaveLength(14)
     })
 
     it('accent scale has 5 steps', () => {

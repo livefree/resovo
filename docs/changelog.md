@@ -4560,3 +4560,34 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **共享层沉淀评估**：方案文档已就位作为 SEQ-20260503-01 真源；后续 CHG-UI-02..06 可直接引用
 - **变更摘要**：把上一步起草的 UI token 对齐方案从 draft 升 active；在 decisions.md 追加 ADR-111 占位（编号沿现行连续 ADR-NNN 约定，原方案文档"ADR-UI-001"已对齐为 ADR-111；正式决策内容由 CHG-UI-04 完成时回填）
 
+---
+
+## [CHG-UI-02] surfaces & border 对齐设计稿
+
+- **日期**：2026-05-03
+- **来源序列**：SEQ-20260503-01
+- **执行模型**：claude-opus-4-7（建议 sonnet；偏离原因：主循环已 opus，token 单点改动 + 重生成 CSS 工作量边界清晰）
+- **子代理**：无
+- **文件清单**（5 文件）：
+  - `packages/design-tokens/src/primitives/color.ts`：新增 `gray.925: oklch(13.5% 0.007 247)` 中间档（≈ 设计 `--bg2 #161a22`）
+  - `packages/design-tokens/src/semantic/bg.ts`：dark.surfaceRaised → `gray.925`；新增 `surfaceRow` 双主题（dark `gray.900` / light `gray.100`）；light.canvas → `gray.100`
+  - `packages/design-tokens/src/semantic/border.ts`：dark.strong → `gray.700`（32.8%）；light.strong → `gray.300`（86.9%）；default/subtle 不动
+  - `packages/design-tokens/src/css/tokens.css`：重新生成（434 行，含新增 `--color-gray-925` + `--bg-surface-row` 双主题 + 收紧 border-strong）
+  - `tests/unit/design-tokens/primitives.test.ts`：gray scale 期望值 13 → 14（同步新增档位）
+- **测试覆盖**：
+  - typecheck：全 5 包通过 ✅
+  - lint：通过（仅 2 个预存 img warning，与本卡无关）✅
+  - unit：252 files / 3098 tests 全绿 ✅
+  - tokens:validate：OK ✅
+  - verify-token-references：报 `--bg-inset` 8 处预存欠账（main HEAD 同等问题，**非本卡引入**；登记为 DEBT-UI-BG-INSET）
+- **设计对齐复核**（10 项）：
+  - ✅ dark surfaces canvas / surface / surfaceRaised / surfaceElevated 与设计 `--bg0..bg4` 对齐
+  - ✅ 新增 dark `--bg-surface-row` 填补 row hover 缺档
+  - ✅ light canvas / surfaceRow / border-strong 全部 Δ ≈ 0
+  - ✅ dark border-default 落在 surfaceRaised 上反差 +9.5%（行分割线足够明显）
+  - ⚠️ dark surfaceRow 偏暗 3%（设计 ~13.7% vs 实现 16.5%）— 在不引入 gray.875 更细 ramp 的前提下可接受
+  - ⚠️ dark border-strong 偏亮 +12%（设计 ~21% vs 实现 32.8%）— 同上，gray.750 不在本卡范围
+- **共享层沉淀评估**：本卡是 token 层（共享层）改动，所有消费方零硬编码、零改动；新增 `gray.925` + `surfaceRow` 是合理的下沉
+- **变更摘要**：补 dark/light 双主题 row hover 中间档；dark surfaceRaised 用新增 `gray.925` 对齐设计 `--bg2`；border-strong dark/light 各收回一档，避免与 surface-elevated 同值导致行分割线被淹没
+- **欠账登记**：DEBT-UI-BG-INSET（`--bg-inset` 8 处未定义引用，VideoEditDrawer 系列；CHG-UI-06 视觉走查时确认是否需补 token 或替换为已有 surface 角色）
+

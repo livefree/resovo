@@ -11,6 +11,7 @@
   --color-gray-700: oklch(32.8% 0.012 247);
   --color-gray-800: oklch(23.0% 0.010 247);
   --color-gray-900: oklch(16.5% 0.008 247);
+  --color-gray-925: oklch(13.5% 0.007 247);
   --color-gray-950: oklch(11.2% 0.006 247);
   --color-gray-1000: oklch(6.5% 0.004 247);
   --color-accent-100: oklch(92.0% 0.045 230);
@@ -223,9 +224,10 @@
   --admin-input-radius: 6px;
   --admin-count-font-size: 11px;
   --admin-scrollbar-size: 6px;
-  --bg-canvas: oklch(98.5% 0.002 247);
+  --bg-canvas: oklch(96.8% 0.004 247);
   --bg-surface: oklch(100% 0 0);
   --bg-surface-raised: oklch(100% 0 0);
+  --bg-surface-row: oklch(96.8% 0.004 247);
   --bg-surface-elevated: oklch(100% 0 0);
   --bg-surface-sunken: oklch(96.8% 0.004 247);
   --bg-overlay: color-mix(in oklch, oklch(6.5% 0.004 247) 50%, transparent);
@@ -235,7 +237,7 @@
   --fg-on-accent: oklch(100% 0 0);
   --fg-disabled: oklch(70.8% 0.012 247);
   --border-default: oklch(92.9% 0.006 247);
-  --border-strong: oklch(70.8% 0.012 247);
+  --border-strong: oklch(86.9% 0.009 247);
   --border-subtle: oklch(96.8% 0.004 247);
   --border-focus: oklch(64.5% 0.165 230);
   --accent-default: oklch(64.5% 0.165 230);
@@ -329,7 +331,8 @@
 [data-theme="dark"] {
   --bg-canvas: oklch(6.5% 0.004 247);
   --bg-surface: oklch(11.2% 0.006 247);
-  --bg-surface-raised: oklch(16.5% 0.008 247);
+  --bg-surface-raised: oklch(13.5% 0.007 247);
+  --bg-surface-row: oklch(16.5% 0.008 247);
   --bg-surface-elevated: oklch(23.0% 0.010 247);
   --bg-surface-sunken: oklch(6.5% 0.004 247);
   --bg-overlay: color-mix(in oklch, oklch(6.5% 0.004 247) 70%, transparent);
@@ -339,7 +342,7 @@
   --fg-on-accent: oklch(100% 0 0);
   --fg-disabled: oklch(43.9% 0.014 247);
   --border-default: oklch(23.0% 0.010 247);
-  --border-strong: oklch(43.9% 0.014 247);
+  --border-strong: oklch(32.8% 0.012 247);
   --border-subtle: oklch(16.5% 0.008 247);
   --border-focus: oklch(64.5% 0.165 230);
   --accent-default: oklch(64.5% 0.165 230);
