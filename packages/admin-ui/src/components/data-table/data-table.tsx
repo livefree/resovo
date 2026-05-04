@@ -109,7 +109,7 @@ const TH_STYLE: React.CSSProperties = {
   alignItems: 'center',
   gap: '4px',
   padding: '0 12px',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   fontWeight: 600,
   color: 'var(--fg-muted)',
   // CHG-UX-05d：bg 必须不透明（sticky 表头滚动时下方 row 不能穿透）；
@@ -126,7 +126,7 @@ const TD_STYLE: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   padding: '0 12px',
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   color: 'var(--fg-default)',
   borderBottom: '1px solid var(--border-subtle)',
   overflow: 'hidden',
@@ -461,7 +461,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
                     aria-hidden="true"
                     data-th-menu-icon
                     data-open={isMenuOpen ? 'true' : undefined}
-                    style={{ marginLeft: '4px', fontSize: '12px', color: 'var(--fg-muted)' }}
+                    style={{ marginLeft: '4px', fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}
                   >⋯</span>
                 )}
               </div>

@@ -121,7 +121,7 @@ const PAGE_HEAD: React.CSSProperties = {
 
 const HEAD_TITLE: React.CSSProperties = {
   margin: 0,
-  fontSize: '20px',
+  fontSize: 'var(--font-size-xl)',
   fontWeight: 700,
   color: 'var(--fg-default)',
   lineHeight: 1.3,
@@ -129,7 +129,7 @@ const HEAD_TITLE: React.CSSProperties = {
 
 const HEAD_SUB: React.CSSProperties = {
   margin: '4px 0 0',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   color: 'var(--fg-muted)',
 }
 
@@ -147,7 +147,7 @@ const SELECT_STYLE: React.CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   background: 'var(--bg-surface)',
   color: 'var(--fg-default)',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   cursor: 'pointer',
 }
 
@@ -158,7 +158,7 @@ const BTN_STYLE: React.CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   background: 'var(--bg-surface)',
   color: 'var(--fg-default)',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   cursor: 'pointer',
 }
 
@@ -192,7 +192,7 @@ const CARD_HEAD: React.CSSProperties = {
 
 const CARD_TITLE: React.CSSProperties = {
   margin: 0,
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   fontWeight: 600,
   color: 'var(--fg-default)',
 }
@@ -246,7 +246,7 @@ function SourceDistribution() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       {SOURCE_TYPES.map(({ label, pct, color }) => (
         <div key={label}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '3px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-size-xs)', marginBottom: '3px' }}>
             <span style={{ color: 'var(--fg-default)' }}>{label}</span>
             <span style={{ fontWeight: 600, color: 'var(--fg-default)' }}>{pct}%</span>
           </div>
@@ -262,7 +262,7 @@ function SourceDistribution() {
 function CrawlerTaskTable() {
   const TH: React.CSSProperties = {
     padding: '6px 10px',
-    fontSize: '11px',
+    fontSize: 'var(--font-size-xxs)',
     fontWeight: 500,
     color: 'var(--fg-muted)',
     textAlign: 'left',
@@ -274,7 +274,7 @@ function CrawlerTaskTable() {
   }
   const TD: React.CSSProperties = {
     padding: '8px 10px',
-    fontSize: '12px',
+    fontSize: 'var(--font-size-xs)',
     borderBottom: '1px solid var(--border-subtle)',
     verticalAlign: 'middle',
     whiteSpace: 'nowrap',
@@ -299,8 +299,8 @@ function CrawlerTaskTable() {
             <tr key={task.id}>
               <td style={TD}><strong style={{ fontWeight: 600 }}>{task.site}</strong></td>
               <td style={TD}><Pill variant={task.status}>{task.statusLabel}</Pill></td>
-              <td style={{ ...TD, color: 'var(--fg-muted)', fontSize: '11px' }}>{task.start}</td>
-              <td style={{ ...TD, color: 'var(--fg-muted)', fontSize: '11px' }}>{task.end}</td>
+              <td style={{ ...TD, color: 'var(--fg-muted)', fontSize: 'var(--font-size-xxs)' }}>{task.start}</td>
+              <td style={{ ...TD, color: 'var(--fg-muted)', fontSize: 'var(--font-size-xxs)' }}>{task.end}</td>
               <td style={{ ...TD, textAlign: 'right' }}>
                 {task.videos > 0
                   ? <strong style={{ color: 'var(--state-success-fg)', fontWeight: 600 }}>+{task.videos}</strong>
@@ -410,7 +410,7 @@ export function AnalyticsView() {
       <div style={CARD} data-analytics-card="crawler-tasks">
         <header style={CARD_HEAD}>
           <h2 style={CARD_TITLE}>爬虫最近任务</h2>
-          <span style={{ marginLeft: 'auto', fontSize: '11px', color: 'var(--fg-muted)' }}>实时</span>
+          <span style={{ marginLeft: 'auto', fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>实时</span>
         </header>
         <CrawlerTaskTable />
       </div>

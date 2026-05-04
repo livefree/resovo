@@ -47,7 +47,7 @@ const CONTAINER_STYLE: React.CSSProperties = {
   alignItems: 'center',
   gap: '8px',
   padding: '8px 0',
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   color: 'var(--fg-default)',
   userSelect: 'none',
 }
@@ -65,7 +65,7 @@ function pageButtonStyle(active: boolean, disabled: boolean): React.CSSPropertie
     background: active ? 'var(--admin-accent-soft)' : 'transparent',
     color: disabled ? 'var(--fg-muted)' : active ? 'var(--admin-accent-on-soft)' : 'var(--fg-default)',
     cursor: disabled ? 'not-allowed' : 'pointer',
-    fontSize: '12px',
+    fontSize: 'var(--font-size-xs)',
     fontWeight: active ? 600 : 400,
     opacity: disabled ? 0.4 : 1,
   }
@@ -78,7 +78,7 @@ const ELLIPSIS_STYLE: React.CSSProperties = {
   width: '28px',
   height: '28px',
   color: 'var(--fg-muted)',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
 }
 
 const SELECT_STYLE: React.CSSProperties = {
@@ -87,14 +87,14 @@ const SELECT_STYLE: React.CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   background: 'var(--bg-surface-row)',
   color: 'var(--fg-default)',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   cursor: 'pointer',
   marginLeft: '8px',
 }
 
 const INFO_STYLE: React.CSSProperties = {
   color: 'var(--fg-muted)',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   marginLeft: 'auto',
 }
 

@@ -61,7 +61,7 @@ function itemStyle(danger: boolean, disabled: boolean, active: boolean): React.C
     alignItems: 'center',
     gap: '8px',
     padding: '7px 14px',
-    fontSize: '13px',
+    fontSize: 'var(--font-size-sm-tight)',
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.45 : 1,
     color: danger ? 'var(--state-error-fg)' : 'var(--fg-default)',
@@ -221,7 +221,7 @@ export function AdminDropdown({
             {item.icon && <span aria-hidden="true">{item.icon}</span>}
             <span style={{ flex: 1 }}>{item.label}</span>
             {item.shortcut && (
-              <span style={{ fontSize: '11px', color: 'var(--fg-muted)', flexShrink: 0 }}>
+              <span style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)', flexShrink: 0 }}>
                 {formatShortcut(item.shortcut)}
               </span>
             )}

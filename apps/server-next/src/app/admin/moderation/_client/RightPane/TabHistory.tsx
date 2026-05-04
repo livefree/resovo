@@ -32,11 +32,11 @@ const ROW_HEAD_STYLE: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 6,
-  fontSize: 11,
+  fontSize: 'var(--font-size-xxs)',
 }
 
 const ACTION_CHIP_STYLE: React.CSSProperties = {
-  fontSize: 10,
+  fontSize: 'var(--font-size-2xs)',
   padding: '1px 6px',
   borderRadius: 999,
   background: 'var(--bg-surface-raised)',
@@ -46,19 +46,19 @@ const ACTION_CHIP_STYLE: React.CSSProperties = {
 
 const TIME_STYLE: React.CSSProperties = {
   color: 'var(--fg-muted)',
-  fontSize: 11,
+  fontSize: 'var(--font-size-xxs)',
 }
 
 const ACTOR_STYLE: React.CSSProperties = {
   color: 'var(--fg-default)',
   fontWeight: 500,
-  fontSize: 11,
+  fontSize: 'var(--font-size-xxs)',
 }
 
 const STATE_STYLE: React.CSSProperties = {
   textAlign: 'center',
   color: 'var(--fg-muted)',
-  fontSize: 12,
+  fontSize: 'var(--font-size-xs)',
   padding: '24px 12px',
 }
 
@@ -69,7 +69,7 @@ const PAGE_BTN_STYLE: React.CSSProperties = {
   background: 'var(--bg-surface-elevated)',
   color: 'var(--fg-default)',
   cursor: 'pointer',
-  fontSize: 11,
+  fontSize: 'var(--font-size-xxs)',
 }
 
 export function TabHistory({ videoId }: TabHistoryProps): React.ReactElement {
@@ -106,7 +106,7 @@ export function TabHistory({ videoId }: TabHistoryProps): React.ReactElement {
       })}
 
       {totalPages > 1 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 11 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 'var(--font-size-xxs)' }}>
           <button
             style={{ ...PAGE_BTN_STYLE, opacity: state.page === 1 ? 0.5 : 1 }}
             disabled={state.page === 1 || state.loading}

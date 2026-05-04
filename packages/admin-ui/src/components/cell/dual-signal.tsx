@@ -49,7 +49,7 @@ function rowStyle(minPillWidth: number): React.CSSProperties {
     alignItems: 'center',
     gap: '4px',
     padding: '1px 7px',
-    fontSize: '11px',
+    fontSize: 'var(--font-size-xxs)',
     fontWeight: 500,
     borderRadius: 'var(--radius-full)',
     whiteSpace: 'nowrap',

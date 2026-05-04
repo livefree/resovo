@@ -40,7 +40,7 @@ const HEAD_ICON_STYLE: React.CSSProperties = {
 }
 
 const HEAD_TITLE_STYLE: React.CSSProperties = {
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   fontWeight: 600,
   color: 'var(--fg-default)',
   margin: 0,
@@ -65,7 +65,7 @@ const HEALTH_BOX_BASE_STYLE: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  fontSize: '10px',
+  fontSize: 'var(--font-size-2xs)',
   fontWeight: 700,
   color: 'var(--fg-on-accent)',
   flexShrink: 0,
@@ -80,7 +80,7 @@ const META_STYLE: React.CSSProperties = {
 }
 
 const NAME_STYLE: React.CSSProperties = {
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   fontWeight: 600,
   color: 'var(--fg-default)',
   margin: 0,
@@ -90,7 +90,7 @@ const NAME_STYLE: React.CSSProperties = {
 }
 
 const META_TEXT_STYLE: React.CSSProperties = {
-  fontSize: '11px',
+  fontSize: 'var(--font-size-xxs)',
   color: 'var(--fg-muted)',
   margin: 0,
 }
@@ -113,7 +113,7 @@ const ROW_ACTION_STYLE: React.CSSProperties = {
   background: 'var(--bg-surface)',
   color: 'var(--fg-muted)',
   font: 'inherit',
-  fontSize: '11px',
+  fontSize: 'var(--font-size-xxs)',
   cursor: 'pointer',
   flexShrink: 0,
 }

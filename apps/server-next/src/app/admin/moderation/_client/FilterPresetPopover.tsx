@@ -35,7 +35,7 @@ const POPOVER_STYLE: React.CSSProperties = {
 const HEADER_STYLE: React.CSSProperties = {
   padding: '10px 14px',
   borderBottom: '1px solid var(--border-subtle)',
-  fontSize: 12,
+  fontSize: 'var(--font-size-xs)',
   fontWeight: 600,
   color: 'var(--fg-default)',
   flexShrink: 0,
@@ -53,7 +53,7 @@ const ROW_STYLE: React.CSSProperties = {
   gap: 4,
   padding: '8px 14px',
   borderBottom: '1px solid var(--border-subtle)',
-  fontSize: 12,
+  fontSize: 'var(--font-size-xs)',
 }
 
 const ROW_HEAD_STYLE: React.CSSProperties = {
@@ -65,7 +65,7 @@ const ROW_HEAD_STYLE: React.CSSProperties = {
 const NAME_STYLE: React.CSSProperties = {
   flex: 1,
   fontWeight: 600,
-  fontSize: 13,
+  fontSize: 'var(--font-size-sm-tight)',
   color: 'var(--fg-default)',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
@@ -73,7 +73,7 @@ const NAME_STYLE: React.CSSProperties = {
 }
 
 const SUMMARY_STYLE: React.CSSProperties = {
-  fontSize: 11,
+  fontSize: 'var(--font-size-xxs)',
   color: 'var(--fg-muted)',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
@@ -82,13 +82,13 @@ const SUMMARY_STYLE: React.CSSProperties = {
 
 const STAR_STYLE: React.CSSProperties = {
   color: 'var(--state-warning-fg)',
-  fontSize: 12,
+  fontSize: 'var(--font-size-xs)',
   flexShrink: 0,
 }
 
 const STAR_INACTIVE_STYLE: React.CSSProperties = {
   color: 'var(--fg-subtle)',
-  fontSize: 12,
+  fontSize: 'var(--font-size-xs)',
   flexShrink: 0,
   opacity: 0.4,
 }
@@ -106,7 +106,7 @@ const CHIP_BTN_STYLE: React.CSSProperties = {
   background: 'var(--bg-surface)',
   color: 'var(--fg-muted)',
   cursor: 'pointer',
-  fontSize: 11,
+  fontSize: 'var(--font-size-xxs)',
 }
 
 const CHIP_BTN_PRIMARY_STYLE: React.CSSProperties = {
@@ -125,7 +125,7 @@ const CHIP_BTN_DANGER_STYLE: React.CSSProperties = {
 const EMPTY_STYLE: React.CSSProperties = {
   padding: '20px 14px',
   textAlign: 'center',
-  fontSize: 12,
+  fontSize: 'var(--font-size-xs)',
   color: 'var(--fg-muted)',
 }
 
@@ -143,7 +143,7 @@ const SAVE_BTN_STYLE: React.CSSProperties = {
   background: 'transparent',
   color: 'var(--fg-muted)',
   cursor: 'pointer',
-  fontSize: 12,
+  fontSize: 'var(--font-size-xs)',
 }
 
 const BACKDROP_STYLE: React.CSSProperties = {

@@ -37,7 +37,7 @@ const ROOT_STYLE: React.CSSProperties = {
   color: 'var(--state-warning-fg)',
   border: '1px solid var(--state-warning-border)',
   borderRadius: 'var(--radius-md)',
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   lineHeight: 1.5,
 }
 
@@ -54,7 +54,7 @@ const TEXTAREA_STYLE: React.CSSProperties = {
   width: '100%',
   minHeight: '64px',
   padding: '6px 8px',
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   lineHeight: 1.5,
   fontFamily: 'inherit',
   color: 'var(--fg-default)',
@@ -81,13 +81,13 @@ const FOOTER_STYLE: React.CSSProperties = {
 }
 
 const CHAR_COUNT_STYLE: React.CSSProperties = {
-  fontSize: '11px',
+  fontSize: 'var(--font-size-xxs)',
   color: 'var(--fg-muted)',
 }
 
 const BUTTON_BASE_STYLE: React.CSSProperties = {
   padding: '4px 10px',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   lineHeight: 1.4,
   fontFamily: 'inherit',
   borderRadius: 'var(--radius-sm)',
@@ -112,7 +112,7 @@ const GHOST_BUTTON_STYLE: React.CSSProperties = {
 
 const EDIT_TRIGGER_STYLE: React.CSSProperties = {
   ...BUTTON_BASE_STYLE,
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   borderColor: 'var(--state-warning-border)',
   color: 'var(--state-warning-fg)',
 }

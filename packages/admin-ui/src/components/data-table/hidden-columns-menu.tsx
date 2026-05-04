@@ -48,7 +48,7 @@ const ITEM_STYLE: React.CSSProperties = {
   gap: '10px',
   padding: '6px 14px',
   cursor: 'pointer',
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   color: 'var(--fg-default)',
   background: 'transparent',
   border: 0,
@@ -59,7 +59,7 @@ const ITEM_STYLE: React.CSSProperties = {
 
 const LOCKED_TAG_STYLE: React.CSSProperties = {
   marginLeft: 'auto',
-  fontSize: '11px',
+  fontSize: 'var(--font-size-xxs)',
   color: 'var(--fg-muted)',
   background: 'var(--bg-surface)',
   border: '1px solid var(--border-default)',
@@ -69,7 +69,7 @@ const LOCKED_TAG_STYLE: React.CSSProperties = {
 
 const HEADER_STYLE: React.CSSProperties = {
   padding: '6px 14px 4px',
-  fontSize: '11px',
+  fontSize: 'var(--font-size-xxs)',
   fontWeight: 600,
   color: 'var(--fg-muted)',
   textTransform: 'uppercase',

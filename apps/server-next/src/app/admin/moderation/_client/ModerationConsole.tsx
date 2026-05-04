@@ -34,11 +34,11 @@ const BTN_SM: React.CSSProperties = {
   background: 'var(--bg-surface-row)',
   color: 'var(--fg-default)',
   cursor: 'pointer',
-  fontSize: 12,
+  fontSize: 'var(--font-size-xs)',
 }
 const BTN_PRIMARY: React.CSSProperties = { ...BTN_SM, background: 'var(--accent-default)', color: 'var(--fg-on-accent)', borderColor: 'var(--accent-default)' }
 const BTN_DANGER: React.CSSProperties = { ...BTN_SM, color: 'var(--state-error-fg)', borderColor: 'var(--state-error-border)' }
-const KBD: React.CSSProperties = { display: 'inline-block', padding: '1px 5px', border: '1px solid var(--border-default)', borderRadius: 3, fontSize: 10, fontFamily: 'monospace', background: 'var(--bg-surface-raised)', color: 'var(--fg-muted)' }
+const KBD: React.CSSProperties = { display: 'inline-block', padding: '1px 5px', border: '1px solid var(--border-default)', borderRadius: 3, fontSize: 'var(--font-size-2xs)', fontFamily: 'monospace', background: 'var(--bg-surface-raised)', color: 'var(--fg-muted)' }
 
 function segBtnStyle(active: boolean, danger?: boolean): React.CSSProperties {
   return {
@@ -48,7 +48,7 @@ function segBtnStyle(active: boolean, danger?: boolean): React.CSSProperties {
     background: active ? 'var(--admin-accent-soft)' : 'var(--bg-surface-row)',
     color: active ? (danger ? 'var(--state-error-fg)' : 'var(--accent-default)') : 'var(--fg-muted)',
     cursor: 'pointer',
-    fontSize: 12,
+    fontSize: 'var(--font-size-xs)',
     fontWeight: active ? 600 : 400,
     display: 'flex',
     alignItems: 'center',
@@ -57,7 +57,7 @@ function segBtnStyle(active: boolean, danger?: boolean): React.CSSProperties {
 }
 
 function badgeStyle(danger?: boolean): React.CSSProperties {
-  return { padding: '0 5px', borderRadius: 999, fontSize: 10, background: danger ? 'var(--state-error-bg)' : 'var(--bg-surface-raised)', color: danger ? 'var(--state-error-fg)' : 'var(--fg-muted)' }
+  return { padding: '0 5px', borderRadius: 999, fontSize: 'var(--font-size-2xs)', background: danger ? 'var(--state-error-bg)' : 'var(--bg-surface-raised)', color: danger ? 'var(--state-error-fg)' : 'var(--fg-muted)' }
 }
 
 // ── 筛选 URL 同步工具（CHG-SN-4-FIX-F）─────────────────────────────────
@@ -354,8 +354,8 @@ export function ModerationConsole(): React.ReactElement {
       {/* Page head */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8, flexShrink: 0 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg-default)' }}>{M.title}</h1>
-          <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginTop: 4, fontSize: 12, color: 'var(--fg-muted)', flexWrap: 'wrap' }}>
+          <h1 style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 700, color: 'var(--fg-default)' }}>{M.title}</h1>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginTop: 4, fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', flexWrap: 'wrap' }}>
             <span dangerouslySetInnerHTML={{ __html: M.todayStats(todayStats.reviewed, todayStats.approveRate).replace(/(\d+)/g, '<strong style="color:var(--fg-default)">$1</strong>').replace(/\d+%/g, m => `<strong style="color:var(--state-success-fg)">${m}</strong>`) }} />
             <span style={{ color: 'var(--border-default)' }}>|</span>
             <span><span style={KBD}>J</span> <span style={KBD}>K</span> 切换 · <span style={KBD}>A</span> 通过 · <span style={KBD}>R</span> 拒 · <span style={KBD}>S</span> 跳过</span>
@@ -395,9 +395,9 @@ export function ModerationConsole(): React.ReactElement {
 
       {/* Error banner */}
       {error && (
-        <div style={{ padding: '8px 12px', background: 'var(--state-error-bg)', border: '1px solid var(--state-error-border)', borderRadius: 6, marginBottom: 8, fontSize: 12, color: 'var(--state-error-fg)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ padding: '8px 12px', background: 'var(--state-error-bg)', border: '1px solid var(--state-error-border)', borderRadius: 6, marginBottom: 8, fontSize: 'var(--font-size-xs)', color: 'var(--state-error-fg)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <span style={{ flex: 1 }}>{error}</span>
-          <button style={{ ...BTN_SM, fontSize: 11, padding: '2px 8px' }} onClick={() => setError(null)}>✕</button>
+          <button style={{ ...BTN_SM, fontSize: 'var(--font-size-xxs)', padding: '2px 8px' }} onClick={() => setError(null)}>✕</button>
         </div>
       )}
 
@@ -420,7 +420,7 @@ export function ModerationConsole(): React.ReactElement {
       <div style={{ flex: 1, minHeight: 0 }}>
         {tab === 'pending' && (
           loading ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--fg-muted)', fontSize: 13 }}>{M.pending.loading}</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>{M.pending.loading}</div>
           ) : (
             <SplitPane
               height="100%"
@@ -434,9 +434,9 @@ export function ModerationConsole(): React.ReactElement {
                   minWidth: 200,
                   header: (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{M.totalCount(totalPending, 0)}</span>
+                      <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>{M.totalCount(totalPending, 0)}</span>
                       <span style={{ flex: 1 }} />
-                      <span style={{ fontSize: 11, color: 'var(--state-success-fg)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--state-success-fg)', display: 'flex', alignItems: 'center', gap: 4 }}>
                         <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--state-success-fg)', display: 'inline-block' }} />
                         {M.kbdFlowLabel}
                       </span>
@@ -448,15 +448,15 @@ export function ModerationConsole(): React.ReactElement {
                   children: (
                     <div role="listbox" aria-label={M.aria.consoleQueuePane}>
                       {pendingVideos.length === 0 ? (
-                        <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 13 }}>{M.pending.empty}</div>
+                        <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>{M.pending.empty}</div>
                       ) : (
                         <>
                           {pendingVideos.map((it, i) => (
                             <ModListRow key={it.id} it={it} active={i === activeIdx} onClick={() => setActiveIdx(i)} />
                           ))}
-                          <div style={{ padding: 14, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 11 }}>
+                          <div style={{ padding: 14, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 'var(--font-size-xxs)' }}>
                             {loadingMore ? M.pending.loadingMore : nextCursor ? (
-                              <button style={{ ...BTN_SM, fontSize: 11 }} onClick={loadMore}>{M.pending.loadingMore}</button>
+                              <button style={{ ...BTN_SM, fontSize: 'var(--font-size-xxs)' }} onClick={loadMore}>{M.pending.loadingMore}</button>
                             ) : M.pending.noMore}
                           </div>
                         </>
@@ -471,7 +471,7 @@ export function ModerationConsole(): React.ReactElement {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const }}>
                       <span style={KBD}>J</span>
                       <span style={KBD}>K</span>
-                      <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{M.counter(activeIdx + 1, totalPending)}</span>
+                      <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>{M.counter(activeIdx + 1, totalPending)}</span>
                       <div style={{ flex: 1, height: 4, background: 'var(--bg-surface-raised)', borderRadius: 2, minWidth: 40 }}>
                         <div style={{ height: '100%', width: `${Math.min(100, ((activeIdx + 1) / Math.max(1, totalPending)) * 100)}%`, background: 'var(--accent-default)', borderRadius: 2 }} />
                       </div>
@@ -486,7 +486,7 @@ export function ModerationConsole(): React.ReactElement {
                   children: v ? (
                     <PendingCenter v={v} onStaffNoteChange={handleStaffNoteChange} onEditVideo={handleEditVideo} />
                   ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--fg-muted)', fontSize: 13 }}>{M.pending.empty}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>{M.pending.empty}</div>
                   ),
                 },
                 {
@@ -550,7 +550,7 @@ export function ModerationConsole(): React.ReactElement {
             display: 'flex',
             alignItems: 'center',
             gap: 10,
-            fontSize: 12,
+            fontSize: 'var(--font-size-xs)',
             color: 'var(--fg-default)',
             zIndex: 60,
           }}
@@ -567,7 +567,7 @@ export function ModerationConsole(): React.ReactElement {
                 background: 'transparent',
                 color: 'var(--accent-default)',
                 cursor: 'pointer',
-                fontSize: 11,
+                fontSize: 'var(--font-size-xxs)',
               }}
               onClick={toast.undo}
               data-preset-toast-undo

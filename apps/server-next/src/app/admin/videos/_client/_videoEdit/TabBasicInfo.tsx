@@ -13,16 +13,16 @@ const VIDEO_TYPE_OPTIONS: ReadonlyArray<{ value: VideoType; label: string }> = [
 const INPUT: React.CSSProperties = {
   width: '100%', padding: '6px 8px',
   border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)',
-  fontSize: '13px', background: 'var(--bg-surface)', color: 'var(--fg-default)',
+  fontSize: 'var(--font-size-sm-tight)', background: 'var(--bg-surface)', color: 'var(--fg-default)',
   boxSizing: 'border-box',
 }
 const TEXTAREA: React.CSSProperties = { ...INPUT, minHeight: '72px', resize: 'vertical' }
 const SELECT: React.CSSProperties = { ...INPUT }
-const LABEL: React.CSSProperties = { fontSize: '12px', fontWeight: 500, color: 'var(--fg-muted)', marginBottom: '3px' }
+const LABEL: React.CSSProperties = { fontSize: 'var(--font-size-xs)', fontWeight: 500, color: 'var(--fg-muted)', marginBottom: '3px' }
 const FIELD: React.CSSProperties = { display: 'flex', flexDirection: 'column' }
 const ROW: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }
 const SKIPPED: React.CSSProperties = {
-  padding: '8px 12px', borderRadius: 'var(--radius-sm)', fontSize: '12px',
+  padding: '8px 12px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--font-size-xs)',
   background: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)',
 }
 const ERROR: React.CSSProperties = {

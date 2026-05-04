@@ -41,7 +41,7 @@ const BTN_BASE_STYLE: React.CSSProperties = {
   background: 'var(--bg-surface)',
   color: 'var(--fg-default)',
   font: 'inherit',
-  fontSize: '11px',
+  fontSize: 'var(--font-size-xxs)',
   cursor: 'pointer',
   display: 'inline-flex',
   alignItems: 'center',

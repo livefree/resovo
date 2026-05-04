@@ -15,7 +15,7 @@ const BTN_SM: React.CSSProperties = {
   background: 'var(--bg-surface-elevated)',
   color: 'var(--fg-default)',
   cursor: 'pointer',
-  fontSize: 12,
+  fontSize: 'var(--font-size-xs)',
 }
 
 const BTN_SM_PRIMARY: React.CSSProperties = {
@@ -28,12 +28,12 @@ const BTN_SM_DANGER: React.CSSProperties = {
 
 const BTN_XS_PRIMARY: React.CSSProperties = {
   padding: '3px 8px', border: '1px solid var(--accent-default)', borderRadius: 'var(--radius-sm)',
-  background: 'var(--accent-default)', color: 'var(--fg-on-accent)', cursor: 'pointer', fontSize: 11,
+  background: 'var(--accent-default)', color: 'var(--fg-on-accent)', cursor: 'pointer', fontSize: 'var(--font-size-xxs)',
 }
 
 const CHECK_ITEM: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
-  background: 'var(--bg-surface-raised)', borderRadius: 4, marginBottom: 4, fontSize: 12,
+  background: 'var(--bg-surface-raised)', borderRadius: 4, marginBottom: 4, fontSize: 'var(--font-size-xs)',
 }
 
 // ── Main component ────────────────────────────────────────────────
@@ -105,11 +105,11 @@ export function StagingTabContent(): React.ReactElement {
   }, [v, videos.length])
 
   if (loading) {
-    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--fg-muted)', fontSize: 13 }}>{M.staging.loading}</div>
+    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>{M.staging.loading}</div>
   }
 
   if (error) {
-    return <div style={{ padding: 16, color: 'var(--state-error-fg)', fontSize: 13 }}>{error}</div>
+    return <div style={{ padding: 16, color: 'var(--state-error-fg)', fontSize: 'var(--font-size-sm-tight)' }}>{error}</div>
   }
 
   return (
@@ -117,7 +117,7 @@ export function StagingTabContent(): React.ReactElement {
       {/* Left list */}
       <div style={{ width: 280, flexShrink: 0, background: 'var(--bg-surface-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '10px 12px', flexShrink: 0, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{M.staging.listHeader(videos.length)}</span>
+          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>{M.staging.listHeader(videos.length)}</span>
           <span style={{ flex: 1 }} />
           <button style={BTN_XS_PRIMARY} onClick={handleBatchPublish} disabled={actioning !== null || videos.length === 0} aria-label={M.aria.stagingBatchPublish}>
             {M.staging.publishAll}
@@ -125,7 +125,7 @@ export function StagingTabContent(): React.ReactElement {
         </div>
         <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           {videos.length === 0 ? (
-            <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 13 }}>{M.staging.empty}</div>
+            <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>{M.staging.empty}</div>
           ) : (
             videos.map((it, i) => (
               <div key={it.id} onClick={() => setActiveIdx(i)} style={{ display: 'flex', gap: 10, padding: '10px 12px', borderBottom: '1px solid var(--border-subtle)', background: i === activeIdx ? 'var(--admin-accent-soft)' : 'transparent', borderLeft: `2px solid ${i === activeIdx ? 'var(--accent-default)' : 'transparent'}`, cursor: 'pointer' }}>
@@ -134,12 +134,12 @@ export function StagingTabContent(): React.ReactElement {
                   size="poster-sm"
                   decorative={false}
                   alt={it.title}
-                  fallback={<span style={{ fontSize: 10, color: 'var(--fg-muted)' }}>{it.type}</span>}
+                  fallback={<span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--fg-muted)' }}>{it.type}</span>}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: i === activeIdx ? 'var(--accent-default)' : 'var(--fg-default)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
-                  <div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>{it.type} · {it.year ?? '—'}</div>
-                  <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 999, background: 'var(--state-success-bg)', color: 'var(--state-success-fg)', display: 'inline-block', marginTop: 4 }}>
+                  <div style={{ fontSize: 'var(--font-size-sm-tight)', fontWeight: 600, color: i === activeIdx ? 'var(--accent-default)' : 'var(--fg-default)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
+                  <div style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)', marginTop: 2 }}>{it.type} · {it.year ?? '—'}</div>
+                  <span style={{ fontSize: 'var(--font-size-2xs)', padding: '1px 6px', borderRadius: 999, background: 'var(--state-success-bg)', color: 'var(--state-success-fg)', display: 'inline-block', marginTop: 4 }}>
                     {M.staging.approved}
                   </span>
                 </div>
@@ -154,8 +154,8 @@ export function StagingTabContent(): React.ReactElement {
         {v ? (
           <>
             <div style={{ padding: '10px 12px', flexShrink: 0, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600 }}>{M.staging.title}</span>
-              <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{v.title}</span>
+              <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600 }}>{M.staging.title}</span>
+              <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>{v.title}</span>
               <span style={{ flex: 1 }} />
               <button style={{ ...BTN_SM_DANGER, opacity: actioning !== null ? 0.6 : 1 }} onClick={handleRevert} disabled={actioning !== null} aria-label={M.aria.stagingRevert}>
                 {M.staging.revert}
@@ -166,12 +166,12 @@ export function StagingTabContent(): React.ReactElement {
             </div>
             <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 14 }}>
               {actionError && (
-                <div style={{ marginBottom: 12, padding: '8px 12px', background: 'var(--state-error-bg)', border: '1px solid var(--state-error-border)', borderRadius: 6, fontSize: 12, color: 'var(--state-error-fg)' }}>
+                <div style={{ marginBottom: 12, padding: '8px 12px', background: 'var(--state-error-bg)', border: '1px solid var(--state-error-border)', borderRadius: 6, fontSize: 'var(--font-size-xs)', color: 'var(--state-error-fg)' }}>
                   {actionError}
                 </div>
               )}
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>{M.staging.readinessChecks}</div>
+                <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, marginBottom: 8 }}>{M.staging.readinessChecks}</div>
                 <div style={CHECK_ITEM}>
                   <span style={{ color: v.readiness.ready ? 'var(--state-success-fg)' : 'var(--state-warning-fg)' }}>{v.readiness.ready ? '✓' : '⚠'}</span>
                   <span style={{ flex: 1, fontWeight: 600, color: v.readiness.ready ? 'var(--state-success-fg)' : 'var(--state-warning-fg)' }}>
@@ -179,7 +179,7 @@ export function StagingTabContent(): React.ReactElement {
                   </span>
                 </div>
                 {!v.readiness.ready && v.readiness.blockers.length > 0 && (
-                  <ul style={{ margin: '8px 0 0', paddingLeft: 20, fontSize: 12, color: 'var(--state-warning-fg)' }}>
+                  <ul style={{ margin: '8px 0 0', paddingLeft: 20, fontSize: 'var(--font-size-xs)', color: 'var(--state-warning-fg)' }}>
                     {v.readiness.blockers.map((b, i) => (
                       <li key={i} style={{ marginBottom: 4 }}>{b}</li>
                     ))}
@@ -192,15 +192,15 @@ export function StagingTabContent(): React.ReactElement {
                   size="poster-lg"
                   decorative={false}
                   alt={v.title}
-                  fallback={<span style={{ fontSize: 10, color: 'var(--fg-muted)' }}>{v.type}</span>}
+                  fallback={<span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--fg-muted)' }}>{v.type}</span>}
                 />
                 <div style={{ flex: 1 }}>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--fg-default)' }}>{v.title}</h3>
-                  <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{v.type} · {v.year ?? '—'} · {v.activeSourceCount} 源</div>
-                  <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>meta_score: {v.metaScore} · 豆瓣: {v.doubanStatus}</div>
+                  <h3 style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 700, color: 'var(--fg-default)' }}>{v.title}</h3>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', marginTop: 4 }}>{v.type} · {v.year ?? '—'} · {v.activeSourceCount} 源</div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', marginTop: 4 }}>meta_score: {v.metaScore} · 豆瓣: {v.doubanStatus}</div>
                   {v.qualityHighest && (
                     <div style={{ marginTop: 4 }}>
-                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: 'var(--state-success-bg)', color: 'var(--state-success-fg)' }}>
+                      <span style={{ fontSize: 'var(--font-size-xxs)', padding: '2px 8px', borderRadius: 999, background: 'var(--state-success-bg)', color: 'var(--state-success-fg)' }}>
                         {v.qualityHighest}
                       </span>
                     </div>
@@ -210,7 +210,7 @@ export function StagingTabContent(): React.ReactElement {
             </div>
           </>
         ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-muted)', fontSize: 13 }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>
             {M.staging.empty}
           </div>
         )}

@@ -47,7 +47,7 @@ const BAR_STYLE_BASE: React.CSSProperties = {
 }
 
 const COUNT_STYLE: React.CSSProperties = {
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   fontWeight: 600,
   color: 'var(--fg-default)',
   flexShrink: 0,
@@ -68,7 +68,7 @@ function actionBtnStyle(variant: SelectionAction['variant'], disabled: boolean):
     alignItems: 'center',
     gap: '4px',
     padding: '5px 12px',
-    fontSize: '13px',
+    fontSize: 'var(--font-size-sm-tight)',
     fontWeight: 500,
     border: '1px solid transparent',
     borderRadius: 'var(--radius-sm)',
@@ -90,7 +90,7 @@ const GHOST_BTN_STYLE: React.CSSProperties = {
   alignItems: 'center',
   gap: '4px',
   padding: '4px 8px',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   border: 0,
   borderRadius: 'var(--radius-sm)',
   background: 'transparent',
@@ -103,7 +103,7 @@ const LINK_BTN_STYLE: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   padding: '4px 8px',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   border: 0,
   background: 'transparent',
   color: 'var(--accent-default)',
@@ -120,13 +120,13 @@ const CONFIRM_WRAP_STYLE: React.CSSProperties = {
   background: 'var(--bg-surface-elevated)',
   border: '1px solid var(--border-subtle)',
   borderRadius: 'var(--radius-sm)',
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   flexShrink: 0,
 }
 
 const CONFIRM_OK_STYLE: React.CSSProperties = {
   padding: '2px 10px',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   background: 'var(--state-error-fg)',
   color: 'var(--fg-on-accent)',
   border: 0,
@@ -136,7 +136,7 @@ const CONFIRM_OK_STYLE: React.CSSProperties = {
 
 const CONFIRM_CANCEL_STYLE: React.CSSProperties = {
   padding: '2px 8px',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   background: 'transparent',
   border: 0,
   color: 'var(--fg-muted)',
@@ -204,7 +204,7 @@ export function SelectionActionBar({
 
       {totalMatched !== undefined && selectionMode === 'all-matched' && (
         <>
-          <span style={{ fontSize: '12px', color: 'var(--fg-muted)' }}>
+          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
             已选全部 {totalMatched} 条
           </span>
           {onSelectionModeChange && (

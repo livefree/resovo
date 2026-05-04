@@ -62,7 +62,7 @@ const HEAD_STYLE: React.CSSProperties = {
 
 const HEAD_TITLE_STYLE: React.CSSProperties = {
   margin: 0,
-  fontSize: '20px',
+  fontSize: 'var(--font-size-xl)',
   fontWeight: 700,
   color: 'var(--fg-default)',
   lineHeight: 1.3,
@@ -70,7 +70,7 @@ const HEAD_TITLE_STYLE: React.CSSProperties = {
 
 const HEAD_SUB_STYLE: React.CSSProperties = {
   margin: '6px 0 0',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   color: 'var(--fg-muted)',
 }
 
@@ -89,7 +89,7 @@ const HEAD_BTN_STYLE: React.CSSProperties = {
   background: 'var(--bg-surface)',
   color: 'var(--fg-default)',
   font: 'inherit',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   cursor: 'pointer',
 }
 
@@ -122,7 +122,7 @@ function tabBtnStyle(active: boolean): React.CSSProperties {
     background: 'transparent',
     color: active ? 'var(--accent-default)' : 'var(--fg-muted)',
     fontWeight: active ? 600 : 400,
-    fontSize: '14px',
+    fontSize: 'var(--font-size-sm)',
     cursor: 'pointer',
     marginBottom: '-1px',
   }

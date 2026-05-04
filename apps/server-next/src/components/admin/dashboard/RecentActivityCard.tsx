@@ -38,7 +38,7 @@ const HEAD_ICON_STYLE: React.CSSProperties = {
 }
 
 const HEAD_TITLE_STYLE: React.CSSProperties = {
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   fontWeight: 600,
   color: 'var(--fg-default)',
   margin: 0,
@@ -76,7 +76,7 @@ const META_STYLE: React.CSSProperties = {
 }
 
 const TEXT_STYLE: React.CSSProperties = {
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   color: 'var(--fg-default)',
   margin: 0,
   whiteSpace: 'nowrap',
@@ -89,7 +89,7 @@ const TEXT_WHO_STYLE: React.CSSProperties = {
 }
 
 const WHEN_STYLE: React.CSSProperties = {
-  fontSize: '11px',
+  fontSize: 'var(--font-size-xxs)',
   color: 'var(--fg-muted)',
   margin: 0,
 }

@@ -54,7 +54,7 @@ const LABEL_OPTION_STYLE: React.CSSProperties = {
   borderColor: 'var(--border-subtle)',
   borderRadius: 'var(--radius-sm)',
   cursor: 'pointer',
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   color: 'var(--fg-default)',
   background: 'var(--bg-surface)',
 }
@@ -75,7 +75,7 @@ const TEXTAREA_STYLE: React.CSSProperties = {
   width: '100%',
   minHeight: '88px',
   padding: '8px 10px',
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   lineHeight: 1.5,
   fontFamily: 'inherit',
   color: 'var(--fg-default)',
@@ -87,7 +87,7 @@ const TEXTAREA_STYLE: React.CSSProperties = {
 }
 
 const CHAR_COUNT_STYLE: React.CSSProperties = {
-  fontSize: '11px',
+  fontSize: 'var(--font-size-xxs)',
   color: 'var(--fg-muted)',
   alignSelf: 'flex-end',
 }
@@ -102,7 +102,7 @@ const FOOTER_STYLE: React.CSSProperties = {
 
 const BUTTON_BASE_STYLE: React.CSSProperties = {
   padding: '6px 14px',
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   lineHeight: 1.4,
   fontFamily: 'inherit',
   borderRadius: 'var(--radius-sm)',

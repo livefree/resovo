@@ -21,12 +21,12 @@ const TABLE_WRAP: React.CSSProperties = {
 const TABLE_HEAD: React.CSSProperties = {
   display: 'grid', gridTemplateColumns: '24px 1fr 80px 72px 60px 48px',
   padding: '6px 12px', background: 'var(--bg-surface-raised)',
-  fontSize: '10px', fontWeight: 600, color: 'var(--fg-muted)',
+  fontSize: 'var(--font-size-2xs)', fontWeight: 600, color: 'var(--fg-muted)',
   letterSpacing: '.5px', textTransform: 'uppercase',
   borderBottom: '1px solid var(--border-subtle)',
 }
 const BTN_XS: React.CSSProperties = {
-  padding: '2px 8px', fontSize: '11px', border: '1px solid var(--border-subtle)',
+  padding: '2px 8px', fontSize: 'var(--font-size-xxs)', border: '1px solid var(--border-subtle)',
   borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface)', color: 'var(--fg-muted)',
   cursor: 'pointer',
 }
@@ -68,18 +68,18 @@ function SourceRow({
         opacity: source.is_active ? 1 : 0.45, transition: 'opacity .1s',
       }}
     >
-      <span style={{ color: 'var(--fg-muted)', fontSize: '13px', userSelect: 'none' }}>⠿</span>
+      <span style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)', userSelect: 'none' }}>⠿</span>
       <div>
-        <div style={{ fontSize: '12px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {siteName}{qualityTag}{latencyTag}
         </div>
-        <div style={{ fontSize: '10px', color: 'var(--fg-muted)', fontFamily: 'monospace' }}>
+        <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--fg-muted)', fontFamily: 'monospace' }}>
           {source.source_url.slice(0, 40)}{source.source_url.length > 40 ? '…' : ''}
         </div>
       </div>
       <DualSignal probe={probeState} render="unknown" />
       <DualSignal probe="unknown" render={renderState} />
-      <span style={{ fontSize: '11px', color: 'var(--fg-muted)' }}>{m.episodes(source.episode_number)}</span>
+      <span style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>{m.episodes(source.episode_number)}</span>
       <div style={{ display: 'flex', gap: '4px' }}>
         <button
           type="button" style={BTN_XS} disabled={pending}
@@ -156,8 +156,8 @@ export function TabLines({ videoId }: TabLinesProps): React.ReactElement {
           size="sm"
           ariaLabel={m.barSignalAriaLabel(aggProbe, aggRender)}
         />
-        <span style={{ fontSize: '13px', fontWeight: 600 }}>{m.title}</span>
-        <span style={{ fontSize: '11px', color: 'var(--fg-muted)' }}>{m.enabledCount(enabled, total)}</span>
+        <span style={{ fontSize: 'var(--font-size-sm-tight)', fontWeight: 600 }}>{m.title}</span>
+        <span style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>{m.enabledCount(enabled, total)}</span>
         <span style={{ flex: 1 }} />
         <button type="button" style={BTN_XS} disabled={state.refetchPending} onClick={handleRefetch}>
           {state.refetchPending ? '…' : m.actions.refetch}
@@ -168,7 +168,7 @@ export function TabLines({ videoId }: TabLinesProps): React.ReactElement {
       </div>
 
       {state.sources.length === 0 ? (
-        <p style={{ fontSize: '12px', color: 'var(--fg-muted)' }}>暂无线路数据。</p>
+        <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>暂无线路数据。</p>
       ) : (
         <div style={TABLE_WRAP}>
           <div style={TABLE_HEAD} aria-hidden="true">
@@ -189,7 +189,7 @@ export function TabLines({ videoId }: TabLinesProps): React.ReactElement {
         </div>
       )}
 
-      <p style={{ fontSize: '11px', color: 'var(--fg-muted)', marginTop: '8px' }}>{m.hints.dragHint}</p>
+      <p style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)', marginTop: '8px' }}>{m.hints.dragHint}</p>
 
       <LineHealthDrawer
         open={state.healthSourceId !== null}

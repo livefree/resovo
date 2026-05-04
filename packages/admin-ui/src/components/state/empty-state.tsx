@@ -31,14 +31,14 @@ const ILLUSTRATION_STYLE: React.CSSProperties = {
 }
 
 const TITLE_STYLE: React.CSSProperties = {
-  fontSize: '15px',
+  fontSize: 'var(--font-size-sm-loose)',
   fontWeight: 600,
   color: 'var(--fg-default)',
   margin: 0,
 }
 
 const DESC_STYLE: React.CSSProperties = {
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   color: 'var(--fg-muted)',
   margin: 0,
   maxWidth: '320px',
@@ -48,7 +48,7 @@ const ACTION_STYLE: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   padding: '7px 16px',
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   fontWeight: 500,
   background: 'var(--accent-default)',
   color: 'var(--fg-on-accent)',

@@ -15,7 +15,7 @@ const BTN_SM: React.CSSProperties = {
   background: 'var(--bg-surface-elevated)',
   color: 'var(--fg-default)',
   cursor: 'pointer',
-  fontSize: 12,
+  fontSize: 'var(--font-size-xs)',
 }
 
 // ── Main component ────────────────────────────────────────────────
@@ -55,11 +55,11 @@ export function RejectedTabContent(): React.ReactElement {
   }, [v, videos.length])
 
   if (loading) {
-    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--fg-muted)', fontSize: 13 }}>{M.rejected.loading}</div>
+    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>{M.rejected.loading}</div>
   }
 
   if (error) {
-    return <div style={{ padding: 16, color: 'var(--state-error-fg)', fontSize: 13 }}>{error}</div>
+    return <div style={{ padding: 16, color: 'var(--state-error-fg)', fontSize: 'var(--font-size-sm-tight)' }}>{error}</div>
   }
 
   return (
@@ -67,11 +67,11 @@ export function RejectedTabContent(): React.ReactElement {
       {/* Left list */}
       <div style={{ width: 280, flexShrink: 0, background: 'var(--bg-surface-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '10px 12px', flexShrink: 0, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{M.rejected.listHeader(videos.length)}</span>
+          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>{M.rejected.listHeader(videos.length)}</span>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           {videos.length === 0 ? (
-            <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 13 }}>{M.rejected.empty}</div>
+            <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>{M.rejected.empty}</div>
           ) : (
             videos.map((it, i) => (
               <div key={it.id} onClick={() => setActiveIdx(i)} style={{ display: 'flex', gap: 10, padding: '10px 12px', borderBottom: '1px solid var(--border-subtle)', background: i === activeIdx ? 'var(--admin-accent-soft)' : 'transparent', borderLeft: `2px solid ${i === activeIdx ? 'var(--accent-default)' : 'transparent'}`, cursor: 'pointer', opacity: 0.85 }}>
@@ -80,12 +80,12 @@ export function RejectedTabContent(): React.ReactElement {
                   size="poster-sm"
                   decorative={false}
                   alt={it.title}
-                  fallback={<span style={{ fontSize: 10, color: 'var(--fg-muted)' }}>{it.type}</span>}
+                  fallback={<span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--fg-muted)' }}>{it.type}</span>}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: i === activeIdx ? 'var(--accent-default)' : 'var(--fg-default)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
-                  <div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>{it.type} · {it.year ?? '—'}</div>
-                  <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 999, background: 'var(--state-error-bg)', color: 'var(--state-error-fg)', display: 'inline-block', marginTop: 4 }}>已拒绝</span>
+                  <div style={{ fontSize: 'var(--font-size-sm-tight)', fontWeight: 600, color: i === activeIdx ? 'var(--accent-default)' : 'var(--fg-default)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.title}</div>
+                  <div style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)', marginTop: 2 }}>{it.type} · {it.year ?? '—'}</div>
+                  <span style={{ fontSize: 'var(--font-size-2xs)', padding: '1px 6px', borderRadius: 999, background: 'var(--state-error-bg)', color: 'var(--state-error-fg)', display: 'inline-block', marginTop: 4 }}>已拒绝</span>
                 </div>
               </div>
             ))
@@ -98,8 +98,8 @@ export function RejectedTabContent(): React.ReactElement {
         {v ? (
           <>
             <div style={{ padding: '10px 12px', flexShrink: 0, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--state-error-fg)' }}>{M.rejected.title}</span>
-              <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{v.title}</span>
+              <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--state-error-fg)' }}>{M.rejected.title}</span>
+              <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>{v.title}</span>
               <span style={{ flex: 1 }} />
               <button
                 style={{ ...BTN_SM, opacity: reopening !== null ? 0.6 : 1 }}
@@ -112,20 +112,20 @@ export function RejectedTabContent(): React.ReactElement {
             </div>
             <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 14 }}>
               {actionError && (
-                <div style={{ marginBottom: 12, padding: '8px 12px', background: 'var(--state-error-bg)', border: '1px solid var(--state-error-border)', borderRadius: 6, fontSize: 12, color: 'var(--state-error-fg)' }}>
+                <div style={{ marginBottom: 12, padding: '8px 12px', background: 'var(--state-error-bg)', border: '1px solid var(--state-error-border)', borderRadius: 6, fontSize: 'var(--font-size-xs)', color: 'var(--state-error-fg)' }}>
                   {actionError}
                 </div>
               )}
 
               {/* Rejection info */}
               <div style={{ padding: '10px 14px', background: 'var(--state-error-bg)', border: '1px solid var(--state-error-border)', borderRadius: 6, marginBottom: 14, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                <span style={{ color: 'var(--state-error-fg)', fontSize: 18, marginTop: 2 }}>✕</span>
+                <span style={{ color: 'var(--state-error-fg)', fontSize: 'var(--font-size-lg)', marginTop: 2 }}>✕</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, color: 'var(--state-error-fg)' }}>拒绝标签</div>
-                  <div style={{ color: 'var(--fg-muted)', marginTop: 4, fontSize: 12 }}>
+                  <div style={{ color: 'var(--fg-muted)', marginTop: 4, fontSize: 'var(--font-size-xs)' }}>
                     {v.review_label_key ?? M.rejected.noLabel}
                   </div>
-                  <div style={{ color: 'var(--fg-subtle)', marginTop: 4, fontSize: 11 }}>
+                  <div style={{ color: 'var(--fg-subtle)', marginTop: 4, fontSize: 'var(--font-size-xxs)' }}>
                     更新时间：{v.updated_at ?? v.created_at}
                   </div>
                 </div>
@@ -138,15 +138,15 @@ export function RejectedTabContent(): React.ReactElement {
                   size="poster-lg"
                   decorative={false}
                   alt={v.title}
-                  fallback={<span style={{ fontSize: 10, color: 'var(--fg-muted)' }}>{v.type}</span>}
+                  fallback={<span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--fg-muted)' }}>{v.type}</span>}
                 />
                 <div style={{ flex: 1 }}>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--fg-muted)' }}>{v.title}</h3>
-                  <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{v.type} · {v.year ?? '—'}</div>
-                  <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>
+                  <h3 style={{ margin: 0, fontSize: 'var(--font-size-base)', fontWeight: 700, color: 'var(--fg-muted)' }}>{v.title}</h3>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', marginTop: 4 }}>{v.type} · {v.year ?? '—'}</div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', marginTop: 4 }}>
                     visibility: {v.visibility_status} · source_check: {v.source_check_status ?? '—'}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 4 }}>
+                  <div style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)', marginTop: 4 }}>
                     ID: <code style={{ fontFamily: 'monospace' }}>{v.id}</code>
                   </div>
                 </div>
@@ -154,7 +154,7 @@ export function RejectedTabContent(): React.ReactElement {
 
               {/* Actions */}
               <div style={{ marginTop: 14, padding: 12, background: 'var(--bg-surface-raised)', borderRadius: 6 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>可执行操作</div>
+                <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, marginBottom: 8 }}>可执行操作</div>
                 <button style={{ ...BTN_SM, opacity: reopening !== null ? 0.6 : 1 }} onClick={handleReopen} disabled={reopening !== null} aria-label={M.aria.rejectedReopen}>
                   ↻ {M.rejected.reopen}
                 </button>
@@ -162,7 +162,7 @@ export function RejectedTabContent(): React.ReactElement {
             </div>
           </>
         ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-muted)', fontSize: 13 }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>
             {M.rejected.empty}
           </div>
         )}

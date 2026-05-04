@@ -19,7 +19,7 @@ const ROW_BASE: React.CSSProperties = {
 }
 
 const THUMB_FALLBACK_STYLE: React.CSSProperties = {
-  fontSize: 10,
+  fontSize: 'var(--font-size-2xs)',
   color: 'var(--fg-muted)',
 }
 
@@ -47,7 +47,7 @@ export function ModListRow({ it, active, onClick }: ModListRowProps): React.Reac
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
-            fontSize: 13,
+            fontSize: 'var(--font-size-sm-tight)',
             fontWeight: 600,
             color: active ? 'var(--accent-default)' : 'var(--fg-default)',
             overflow: 'hidden',
@@ -57,13 +57,13 @@ export function ModListRow({ it, active, onClick }: ModListRowProps): React.Reac
         >
           {it.title}
         </div>
-        <div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>
+        <div style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)', marginTop: 2 }}>
           {it.type} · {it.year ?? '—'}
         </div>
         <div style={{ marginTop: 4, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           <DualSignal probe={it.probe} render={it.render} />
           {it.badges.length > 0 && (
-            <span style={{ fontSize: 10, color: 'var(--state-warning-fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--state-warning-fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {it.badges[0]}
             </span>
           )}

@@ -30,14 +30,14 @@ const ICON_STYLE: React.CSSProperties = {
 }
 
 const TITLE_STYLE: React.CSSProperties = {
-  fontSize: '15px',
+  fontSize: 'var(--font-size-sm-loose)',
   fontWeight: 600,
   color: 'var(--fg-default)',
   margin: 0,
 }
 
 const MESSAGE_STYLE: React.CSSProperties = {
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   color: 'var(--fg-muted)',
   margin: 0,
   maxWidth: '360px',
@@ -48,7 +48,7 @@ const RETRY_STYLE: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   padding: '6px 14px',
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   fontWeight: 500,
   background: 'transparent',
   color: 'var(--accent-default)',

@@ -19,7 +19,7 @@ const FIELD_GROUP_STYLE: React.CSSProperties = {
 }
 
 const LABEL_STYLE: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 'var(--font-size-xs)',
   fontWeight: 600,
   color: 'var(--fg-default)',
 }
@@ -30,11 +30,11 @@ const INPUT_STYLE: React.CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   background: 'var(--bg-surface)',
   color: 'var(--fg-default)',
-  fontSize: 13,
+  fontSize: 'var(--font-size-sm-tight)',
 }
 
 const ERROR_STYLE: React.CSSProperties = {
-  fontSize: 11,
+  fontSize: 'var(--font-size-xxs)',
   color: 'var(--state-error-fg)',
 }
 
@@ -52,7 +52,7 @@ const BTN_GHOST_STYLE: React.CSSProperties = {
   background: 'var(--bg-surface-elevated)',
   color: 'var(--fg-muted)',
   cursor: 'pointer',
-  fontSize: 13,
+  fontSize: 'var(--font-size-sm-tight)',
 }
 
 const BTN_PRIMARY_STYLE: React.CSSProperties = {
@@ -66,7 +66,7 @@ const CHECKBOX_LABEL_STYLE: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 8,
-  fontSize: 12,
+  fontSize: 'var(--font-size-xs)',
   color: 'var(--fg-default)',
   cursor: 'pointer',
 }
@@ -157,7 +157,7 @@ export function SavePresetModal({
           </label>
         </div>
 
-        <div style={{ marginTop: 6, padding: '8px 10px', background: 'var(--bg-surface-raised)', borderRadius: 4, fontSize: 11, color: 'var(--fg-muted)' }}>
+        <div style={{ marginTop: 6, padding: '8px 10px', background: 'var(--bg-surface-raised)', borderRadius: 4, fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>
           当前筛选：{summarize(currentQuery)}
         </div>
 

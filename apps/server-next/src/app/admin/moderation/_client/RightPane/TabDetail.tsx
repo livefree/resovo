@@ -24,11 +24,11 @@ const ROW_STYLE: React.CSSProperties = {
 const LABEL_STYLE: React.CSSProperties = {
   fontFamily: 'monospace',
   color: 'var(--fg-muted)',
-  fontSize: 11,
+  fontSize: 'var(--font-size-xxs)',
 }
 
 const SECTION_HEADER_STYLE: React.CSSProperties = {
-  fontSize: 10,
+  fontSize: 'var(--font-size-2xs)',
   color: 'var(--fg-muted)',
   textTransform: 'uppercase',
   letterSpacing: 1,
@@ -50,7 +50,7 @@ function DetailRow({ label, value, ok }: DetailRowProps): React.ReactElement {
   return (
     <div style={ROW_STYLE}>
       <code style={LABEL_STYLE}>{label}</code>
-      <span style={{ color: valueColor, fontSize: 12 }}>{value}</span>
+      <span style={{ color: valueColor, fontSize: 'var(--font-size-xs)' }}>{value}</span>
     </div>
   )
 }
@@ -62,7 +62,7 @@ export interface TabDetailProps {
 export function TabDetail({ v }: TabDetailProps): React.ReactElement {
   const doubanLabel = M.detail[v.doubanStatus as keyof typeof M.detail] ?? v.doubanStatus
   return (
-    <div style={{ fontSize: 12 }} data-right-tab="detail">
+    <div style={{ fontSize: 'var(--font-size-xs)' }} data-right-tab="detail">
       <div style={SECTION_HEADER_STYLE}>{M.detail.statusTriad}</div>
       <DetailRow label={M.detail.isPublished} value={String(v.isPublished)} ok={v.isPublished} />
       <DetailRow label={M.detail.visibility} value={v.visibilityStatus} ok={v.visibilityStatus === 'public'} />

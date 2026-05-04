@@ -84,7 +84,7 @@ const TRIGGER_STYLE: React.CSSProperties = {
   padding: '4px 8px',
   borderRadius: 'var(--radius-sm)',
   color: 'var(--fg-muted)',
-  fontSize: '16px',
+  fontSize: 'var(--font-size-base)',
   lineHeight: 1,
 }
 

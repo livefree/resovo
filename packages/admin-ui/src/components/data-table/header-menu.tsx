@@ -59,7 +59,7 @@ const ITEM_STYLE: React.CSSProperties = {
   gap: '8px',
   padding: '6px 14px',
   cursor: 'pointer',
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   color: 'var(--fg-default)',
   background: 'transparent',
   border: 0,
@@ -85,7 +85,7 @@ const FILTER_WRAP_STYLE: React.CSSProperties = {
 }
 
 const FILTER_LABEL_STYLE: React.CSSProperties = {
-  fontSize: '11px',
+  fontSize: 'var(--font-size-xxs)',
   color: 'var(--fg-muted)',
   fontWeight: 600,
   textTransform: 'uppercase',

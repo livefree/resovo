@@ -23,14 +23,14 @@ const ICON_STYLE: React.CSSProperties = {
 }
 
 const TITLE_STYLE: React.CSSProperties = {
-  fontSize: 13,
+  fontSize: 'var(--font-size-sm-tight)',
   fontWeight: 600,
   color: 'var(--fg-muted)',
   marginBottom: 6,
 }
 
 const NOTE_STYLE: React.CSSProperties = {
-  fontSize: 11,
+  fontSize: 'var(--font-size-xxs)',
   color: 'var(--fg-subtle)',
   lineHeight: 1.5,
 }

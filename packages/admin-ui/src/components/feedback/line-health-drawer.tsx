@@ -38,7 +38,7 @@ const HEADER_AGGREGATE_STYLE: React.CSSProperties = {
 }
 
 const HEADER_LABEL_STYLE: React.CSSProperties = {
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   color: 'var(--fg-muted)',
 }
 
@@ -66,7 +66,7 @@ const EVENT_HEADER_STYLE: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'space-between',
   gap: '8px',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
 }
 
 const EVENT_TIME_STYLE: React.CSSProperties = {
@@ -82,12 +82,12 @@ const EVENT_ORIGIN_STYLE: React.CSSProperties = {
 const EVENT_META_STYLE: React.CSSProperties = {
   display: 'flex',
   gap: '12px',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   color: 'var(--fg-muted)',
 }
 
 const EVENT_ERROR_STYLE: React.CSSProperties = {
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   color: 'var(--state-error-fg)',
   whiteSpace: 'pre-wrap',
   wordBreak: 'break-word',
@@ -101,13 +101,13 @@ const PAGINATION_STYLE: React.CSSProperties = {
   marginTop: '16px',
   paddingTop: '12px',
   borderTop: '1px solid var(--border-subtle)',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   color: 'var(--fg-muted)',
 }
 
 const PAGE_BUTTON_STYLE: React.CSSProperties = {
   padding: '4px 10px',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   border: '1px solid var(--border-subtle)',
   borderRadius: 'var(--radius-sm)',
   background: 'transparent',

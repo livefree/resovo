@@ -83,7 +83,7 @@ const BATCH_BTN_BASE_STYLE: CSSProperties = {
   border: '1px solid var(--border-default)',
   background: 'var(--bg-surface)',
   color: 'var(--fg-default)',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   cursor: 'pointer',
   font: 'inherit',
 }
@@ -98,7 +98,7 @@ const BATCH_CONFIRM_WRAP_STYLE: CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   background: 'var(--bg-surface-elevated)',
   border: '1px solid var(--border-strong)',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
 }
 
 interface BatchActionsRowProps {
@@ -179,11 +179,11 @@ const TITLE_CELL_STYLE: CSSProperties = {
   display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0,
 }
 const TITLE_TEXT_STYLE: CSSProperties = {
-  fontSize: '12px', fontWeight: 600, color: 'var(--fg-default)',
+  fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--fg-default)',
   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
 }
 const TITLE_META_STYLE: CSSProperties = {
-  fontSize: '11px', color: 'var(--fg-muted)',
+  fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)',
   // mono 字体用浏览器默认 stack（design-tokens 暂未定义 --font-mono；reference.md §6.1 仅
   // 描述 .tbl-meta.mono 视觉，未规定 token；保留扩展位由 STATS-EXTEND-VIDEOS follow-up 决定）
   fontFamily: 'ui-monospace, "SF Mono", Consolas, monospace',
@@ -198,10 +198,10 @@ const SOURCES_DOT_STYLE: CSSProperties = {
   width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0,
 }
 const SOURCES_NUM_STYLE: CSSProperties = {
-  fontSize: '12px', fontWeight: 600, color: 'var(--fg-default)',
+  fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--fg-default)',
 }
 const SOURCES_LABEL_STYLE: CSSProperties = {
-  fontSize: '10px', color: 'var(--fg-muted)',
+  fontSize: 'var(--font-size-2xs)', color: 'var(--fg-muted)',
 }
 
 function sourcesDotColor(active: number): string {
@@ -384,14 +384,14 @@ const HEAD_STYLE: CSSProperties = {
 }
 const HEAD_TITLE_STYLE: CSSProperties = {
   margin: 0,
-  fontSize: '18px',
+  fontSize: 'var(--font-size-lg)',
   fontWeight: 700,
   color: 'var(--fg-default)',
   lineHeight: 1.3,
 }
 const HEAD_SUB_STYLE: CSSProperties = {
   margin: '4px 0 0',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   color: 'var(--fg-muted)',
 }
 const HEAD_ACTIONS_STYLE: CSSProperties = {
@@ -408,7 +408,7 @@ const HEAD_BTN_STYLE: CSSProperties = {
   background: 'var(--bg-surface)',
   color: 'var(--fg-default)',
   font: 'inherit',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   cursor: 'pointer',
 }
 const HEAD_BTN_PRIMARY_STYLE: CSSProperties = {

@@ -29,7 +29,7 @@ const CHIP_STYLE: React.CSSProperties = {
   borderRadius: 'var(--radius-full)',
   background: 'var(--admin-accent-soft)',
   color: 'var(--fg-default)',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   lineHeight: '20px',
   border: '1px solid var(--border-subtle)',
   whiteSpace: 'nowrap',
@@ -47,7 +47,7 @@ const CLEAR_BTN_STYLE: React.CSSProperties = {
   background: 'transparent',
   color: 'var(--fg-muted)',
   cursor: 'pointer',
-  fontSize: '11px',
+  fontSize: 'var(--font-size-xxs)',
   lineHeight: 1,
 }
 
@@ -66,7 +66,7 @@ const CLEAR_ALL_BTN_STYLE: React.CSSProperties = {
   borderRadius: 'var(--radius-full)',
   background: 'transparent',
   color: 'var(--fg-muted)',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   cursor: 'pointer',
   textDecoration: 'underline',
   textUnderlineOffset: '2px',

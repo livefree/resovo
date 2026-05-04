@@ -33,7 +33,7 @@ const SPINNER_STYLE: React.CSSProperties = {
 }
 
 const LABEL_STYLE: React.CSSProperties = {
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   color: 'var(--fg-muted)',
 }
 

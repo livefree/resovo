@@ -39,7 +39,7 @@ function tabBtnStyle(active: boolean): React.CSSProperties {
     background: active ? 'var(--admin-accent-soft)' : 'var(--bg-surface-elevated)',
     color: active ? 'var(--accent-default)' : 'var(--fg-muted)',
     cursor: 'pointer',
-    fontSize: 12,
+    fontSize: 'var(--font-size-xs)',
     fontWeight: active ? 600 : 400,
   }
 }

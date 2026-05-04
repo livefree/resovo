@@ -38,14 +38,14 @@ const HEAD_ICON_STYLE: React.CSSProperties = {
 }
 
 const HEAD_TITLE_STYLE: React.CSSProperties = {
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   fontWeight: 600,
   color: 'var(--fg-default)',
   margin: 0,
 }
 
 const HEAD_SUB_STYLE: React.CSSProperties = {
-  fontSize: '11px',
+  fontSize: 'var(--font-size-xxs)',
   color: 'var(--fg-muted)',
   margin: 0,
 }
@@ -59,7 +59,7 @@ const HEAD_ACTION_STYLE: React.CSSProperties = {
   background: 'var(--bg-surface)',
   color: 'var(--fg-muted)',
   font: 'inherit',
-  fontSize: '11px',
+  fontSize: 'var(--font-size-xxs)',
   cursor: 'pointer',
   flexShrink: 0,
 }
@@ -95,7 +95,7 @@ const ROW_META_STYLE: React.CSSProperties = {
 }
 
 const ROW_TITLE_STYLE: React.CSSProperties = {
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   fontWeight: 600,
   color: 'var(--fg-default)',
   margin: 0,
@@ -105,7 +105,7 @@ const ROW_TITLE_STYLE: React.CSSProperties = {
 }
 
 const ROW_META_TEXT_STYLE: React.CSSProperties = {
-  fontSize: '11px',
+  fontSize: 'var(--font-size-xxs)',
   color: 'var(--fg-muted)',
   margin: 0,
 }
@@ -118,7 +118,7 @@ const ROW_ACTION_STYLE: React.CSSProperties = {
   background: 'var(--bg-surface)',
   color: 'var(--fg-muted)',
   font: 'inherit',
-  fontSize: '11px',
+  fontSize: 'var(--font-size-xxs)',
   cursor: 'pointer',
   flexShrink: 0,
 }

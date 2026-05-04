@@ -16,7 +16,7 @@ const BTN_XS: React.CSSProperties = {
   background: 'var(--bg-surface-elevated)',
   color: 'var(--fg-muted)',
   cursor: 'pointer',
-  fontSize: 11,
+  fontSize: 'var(--font-size-xxs)',
 }
 
 const BTN_XS_DANGER: React.CSSProperties = {
@@ -32,7 +32,7 @@ const LINE_ROW: React.CSSProperties = {
   padding: '6px 8px',
   borderRadius: 4,
   background: 'var(--bg-surface-raised)',
-  fontSize: 11,
+  fontSize: 'var(--font-size-xxs)',
 }
 
 // ── Health drawer state ───────────────────────────────────────────
@@ -101,9 +101,9 @@ function LineRow({ line, toggling, onToggle, onHealth }: LineRowProps): React.Re
       </span>
       <DualSignal probe={probeState} render={renderState} />
       {line.latency_ms != null && (
-        <span style={{ fontSize: 10, color: 'var(--fg-muted)', flexShrink: 0 }}>{line.latency_ms}ms</span>
+        <span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--fg-muted)', flexShrink: 0 }}>{line.latency_ms}ms</span>
       )}
-      <button style={{ ...BTN_XS, fontSize: 10 }} onClick={() => onHealth(line)} aria-label={M.aria.lineEvidence}>证据</button>
+      <button style={{ ...BTN_XS, fontSize: 'var(--font-size-2xs)' }} onClick={() => onHealth(line)} aria-label={M.aria.lineEvidence}>证据</button>
     </div>
   )
 }
@@ -188,30 +188,30 @@ export function LinesPanel({ videoId }: { videoId: string }): React.ReactElement
   const enabledCount = lines.filter(l => l.is_active).length
 
   if (loading) {
-    return <div style={{ fontSize: 12, color: 'var(--fg-muted)', padding: '8px 0' }}>加载线路…</div>
+    return <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', padding: '8px 0' }}>加载线路…</div>
   }
 
   if (error) {
-    return <div style={{ fontSize: 12, color: 'var(--state-error-fg)', padding: '8px 0' }}>{error}</div>
+    return <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--state-error-fg)', padding: '8px 0' }}>{error}</div>
   }
 
   return (
     <div data-lines-panel>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 600 }}>线路</span>
-        <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{enabledCount}/{lines.length} 启用</span>
+        <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600 }}>线路</span>
+        <span style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>{enabledCount}/{lines.length} 启用</span>
         <span style={{ flex: 1 }} />
         <button style={BTN_XS} onClick={handleRefetch} aria-label={M.aria.lineRefetch}>↻ 重新抓取</button>
       </div>
 
       {actionError && (
-        <div style={{ fontSize: 11, color: 'var(--state-error-fg)', marginBottom: 6, padding: '4px 8px', background: 'var(--state-error-bg)', borderRadius: 4 }}>
+        <div style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--state-error-fg)', marginBottom: 6, padding: '4px 8px', background: 'var(--state-error-bg)', borderRadius: 4 }}>
           {actionError}
         </div>
       )}
 
       {lines.length === 0 ? (
-        <div style={{ fontSize: 12, color: 'var(--fg-muted)', padding: '8px 0' }}>暂无线路</div>
+        <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', padding: '8px 0' }}>暂无线路</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           {lines.map(line => (

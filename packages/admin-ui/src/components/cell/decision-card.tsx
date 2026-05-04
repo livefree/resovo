@@ -95,7 +95,7 @@ const ROOT_STYLE: React.CSSProperties = {
 
 const TITLE_STYLE: React.CSSProperties = {
   margin: 0,
-  fontSize: '15px',
+  fontSize: 'var(--font-size-sm-loose)',
   fontWeight: 600,
   color: 'var(--fg-default)',
   lineHeight: 1.4,
@@ -115,14 +115,14 @@ function bannerStyle(tone: Tone): React.CSSProperties {
     borderColor: palette.border,
     background: palette.background,
     color: palette.color,
-    fontSize: '13px',
+    fontSize: 'var(--font-size-sm-tight)',
     fontWeight: 600,
     lineHeight: 1.4,
   }
 }
 
 const BANNER_ICON_STYLE: React.CSSProperties = {
-  fontSize: '16px',
+  fontSize: 'var(--font-size-base)',
   lineHeight: 1,
 }
 

@@ -39,14 +39,14 @@ const HEAD_ICON_STYLE: React.CSSProperties = {
 }
 
 const HEAD_TITLE_STYLE: React.CSSProperties = {
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   fontWeight: 600,
   color: 'var(--fg-default)',
   margin: 0,
 }
 
 const HEAD_SUB_STYLE: React.CSSProperties = {
-  fontSize: '11px',
+  fontSize: 'var(--font-size-xxs)',
   color: 'var(--fg-muted)',
   margin: 0,
 }
@@ -73,13 +73,13 @@ const SEG_HEAD_STYLE: React.CSSProperties = {
 }
 
 const SEG_LABEL_STYLE: React.CSSProperties = {
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   color: 'var(--fg-default)',
   margin: 0,
 }
 
 const SEG_VALUE_STYLE: React.CSSProperties = {
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   fontVariantNumeric: 'tabular-nums',
   color: 'var(--fg-muted)',
   margin: 0,
@@ -109,7 +109,7 @@ const FOOT_BTN_BASE_STYLE: React.CSSProperties = {
   background: 'var(--bg-surface)',
   color: 'var(--fg-default)',
   font: 'inherit',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   cursor: 'pointer',
 }
 

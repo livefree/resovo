@@ -92,7 +92,7 @@ const SELECTION_ACTIONS: SelectionAction[] = [
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section style={{ marginBottom: 48 }}>
-      <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--fg-default)', margin: '0 0 16px', paddingBottom: 8, borderBottom: '1px solid var(--border-subtle)' }}>
+      <h2 style={{ fontSize: 'var(--font-size-base)', fontWeight: 700, color: 'var(--fg-default)', margin: '0 0 16px', paddingBottom: 8, borderBottom: '1px solid var(--border-subtle)' }}>
         {title}
       </h2>
       {children}
@@ -129,7 +129,7 @@ function ClientTableDemo() {
               type="search"
               placeholder="搜索标题…"
               value={filterText}
-              style={{ padding: '5px 10px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)', fontSize: 13, background: 'var(--bg-surface)', color: 'var(--fg-default)', width: 200 }}
+              style={{ padding: '5px 10px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--font-size-sm-tight)', background: 'var(--bg-surface)', color: 'var(--fg-default)', width: 200 }}
               onChange={(e) => {
                 const next = new Map<string, import('@resovo/admin-ui').FilterValue>(snapshot.filters)
                 next.set('title', { kind: 'text', value: e.target.value })
@@ -147,7 +147,7 @@ function ClientTableDemo() {
             ref={settingsAnchor}
             type="button"
             onClick={() => setSettingsOpen((o) => !o)}
-            style={{ padding: '5px 10px', fontSize: 12, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface)', color: 'var(--fg-muted)', cursor: 'pointer' }}
+            style={{ padding: '5px 10px', fontSize: 'var(--font-size-xs)', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface)', color: 'var(--fg-muted)', cursor: 'pointer' }}
           >
             列设置
           </button>
@@ -156,7 +156,7 @@ function ClientTableDemo() {
           <button
             type="button"
             onClick={reset}
-            style={{ padding: '5px 10px', fontSize: 12, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface)', color: 'var(--fg-muted)', cursor: 'pointer' }}
+            style={{ padding: '5px 10px', fontSize: 'var(--font-size-xs)', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface)', color: 'var(--fg-muted)', cursor: 'pointer' }}
           >
             重置
           </button>
@@ -251,7 +251,7 @@ function DropdownDemo() {
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            style={{ padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface)', cursor: 'pointer', fontSize: 13, color: 'var(--fg-default)' }}
+            style={{ padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface)', cursor: 'pointer', fontSize: 'var(--font-size-sm-tight)', color: 'var(--fg-default)' }}
           >
             操作菜单 ▾
           </button>
@@ -260,7 +260,7 @@ function DropdownDemo() {
         onOpenChange={setOpen}
         align="left"
       />
-      <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>open={String(open)}</span>
+      <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>open={String(open)}</span>
     </div>
   )
 }
@@ -280,7 +280,7 @@ function PaginationDemo() {
         onPageSizeChange={setPageSize}
         pageSizeOptions={[10, 20, 50, 100]}
       />
-      <p style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 8 }}>page={page} pageSize={pageSize}</p>
+      <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', marginTop: 8 }}>page={page} pageSize={pageSize}</p>
     </div>
   )
 }
@@ -297,7 +297,7 @@ function DrawerDemo() {
           key={p}
           type="button"
           onClick={() => { setPlacement(p); setOpen(true) }}
-          style={{ padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface)', cursor: 'pointer', fontSize: 13, color: 'var(--fg-default)' }}
+          style={{ padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface)', cursor: 'pointer', fontSize: 'var(--font-size-sm-tight)', color: 'var(--fg-default)' }}
         >
           {p} Drawer
         </button>
@@ -321,7 +321,7 @@ function StateDemo() {
             key={v}
             type="button"
             onClick={() => setVariant(v)}
-            style={{ padding: '5px 12px', border: `1px solid ${variant === v ? 'var(--accent-default)' : 'var(--border-strong)'}`, borderRadius: 'var(--radius-sm)', background: variant === v ? 'var(--accent-default)' : 'var(--bg-surface)', cursor: 'pointer', fontSize: 12, color: variant === v ? 'var(--fg-on-accent)' : 'var(--fg-default)' }}
+            style={{ padding: '5px 12px', border: `1px solid ${variant === v ? 'var(--accent-default)' : 'var(--border-strong)'}`, borderRadius: 'var(--radius-sm)', background: variant === v ? 'var(--accent-default)' : 'var(--bg-surface)', cursor: 'pointer', fontSize: 'var(--font-size-xs)', color: variant === v ? 'var(--fg-on-accent)' : 'var(--fg-default)' }}
           >
             {v}
           </button>
@@ -350,14 +350,14 @@ export function ComponentsDemo() {
       </h1>
 
       <Section title="1. DataTable v2 — 客户端模式（useTableQuery + URL 同步）">
-        <p style={{ fontSize: 12, color: 'var(--fg-muted)', marginBottom: 12 }}>
+        <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', marginBottom: 12 }}>
           URL 参数同步验证：调整排序/分页后刷新页面，参数应保留。tableId=demo-client
         </p>
         <ClientTableDemo />
       </Section>
 
       <Section title="2. DataTable v2 — 服务端模式（外部分页受控）">
-        <p style={{ fontSize: 12, color: 'var(--fg-muted)', marginBottom: 12 }}>
+        <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', marginBottom: 12 }}>
           分页由外部 state 控制，DataTable 渲染传入的 rows slice。tableId=demo-server (urlNamespace=sv)
         </p>
         <ServerTableDemo />
@@ -378,7 +378,7 @@ export function ComponentsDemo() {
               key={s}
               type="button"
               onClick={() => { setModalSize(s); setModalOpen(true) }}
-              style={{ padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface)', cursor: 'pointer', fontSize: 13, color: 'var(--fg-default)' }}
+              style={{ padding: '6px 14px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface)', cursor: 'pointer', fontSize: 'var(--font-size-sm-tight)', color: 'var(--fg-default)' }}
             >
               Modal {s}
             </button>

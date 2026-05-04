@@ -21,7 +21,7 @@ const BTN_SM: React.CSSProperties = {
   background: 'var(--bg-surface-row)',
   color: 'var(--fg-default)',
   cursor: 'pointer',
-  fontSize: 12,
+  fontSize: 'var(--font-size-xs)',
 }
 
 const SECTION: React.CSSProperties = {
@@ -95,10 +95,10 @@ export function PendingCenter({ v, onStaffNoteChange, onEditVideo }: PendingCent
             placeItems: 'center',
           }}
         >
-          <span style={{ color: 'white', fontSize: 18 }}>▶</span>
+          <span style={{ color: 'white', fontSize: 'var(--font-size-lg)' }}>▶</span>
         </div>
         <div style={{ position: 'absolute', bottom: 8, left: 10, right: 10, display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: 10, color: 'white', background: 'var(--player-mini-overlay)', padding: '2px 6px', borderRadius: 4 }}>
+          <span style={{ fontSize: 'var(--font-size-2xs)', color: 'white', background: 'var(--player-mini-overlay)', padding: '2px 6px', borderRadius: 4 }}>
             EP{currentEp}
           </span>
         </div>
@@ -111,21 +111,21 @@ export function PendingCenter({ v, onStaffNoteChange, onEditVideo }: PendingCent
           size="poster-lg"
           decorative={false}
           alt={v.title}
-          fallback={<span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{v.type}</span>}
+          fallback={<span style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>{v.type}</span>}
         />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg-default)' }}>{v.title}</h2>
-            <span style={{ color: 'var(--fg-muted)', fontSize: 13 }}>{v.year}</span>
+            <h2 style={{ margin: 0, fontSize: 'var(--font-size-xl)', fontWeight: 700, color: 'var(--fg-default)' }}>{v.title}</h2>
+            <span style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>{v.year}</span>
             <VisChip visibility={v.visibilityStatus} review={v.reviewStatus} />
           </div>
-          <div style={{ marginTop: 4, fontSize: 12, color: 'var(--fg-muted)' }}>
-            {v.type} · {v.episodeCount} 集 · {v.country ?? '—'} · ⭐ {v.rating ?? '—'} · ID <code style={{ fontFamily: 'monospace', fontSize: 11 }}>{v.id}</code>
+          <div style={{ marginTop: 4, fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
+            {v.type} · {v.episodeCount} 集 · {v.country ?? '—'} · ⭐ {v.rating ?? '—'} · ID <code style={{ fontFamily: 'monospace', fontSize: 'var(--font-size-xxs)' }}>{v.id}</code>
           </div>
           {v.badges.length > 0 && (
             <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {v.badges.map(b => (
-                <span key={b} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', border: '1px solid var(--state-warning-border)' }}>
+                <span key={b} style={{ fontSize: 'var(--font-size-xxs)', padding: '2px 8px', borderRadius: 999, background: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', border: '1px solid var(--state-warning-border)' }}>
                   {b}
                 </span>
               ))}

@@ -34,14 +34,14 @@ const TRIGGER_STYLE: React.CSSProperties = {
   border: '1px solid var(--border-default)',
   borderRadius: 'var(--radius-sm)',
   color: 'var(--fg-default)',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   cursor: 'pointer',
   font: 'inherit',
 }
 
 const TRIGGER_LABEL_PREFIX_STYLE: React.CSSProperties = {
   color: 'var(--fg-muted)',
-  fontSize: '11px',
+  fontSize: 'var(--font-size-xxs)',
 }
 
 const TRIGGER_LABEL_VALUE_STYLE: React.CSSProperties = {
@@ -51,7 +51,7 @@ const TRIGGER_LABEL_VALUE_STYLE: React.CSSProperties = {
 
 const TRIGGER_CHEVRON_STYLE: React.CSSProperties = {
   color: 'var(--fg-muted)',
-  fontSize: '10px',
+  fontSize: 'var(--font-size-2xs)',
 }
 
 // ── Dropdown popover ────────────────────────────────────────────────
@@ -74,7 +74,7 @@ const ROW_STYLE: React.CSSProperties = {
   gap: '8px',
   padding: '7px 12px',
   cursor: 'pointer',
-  fontSize: '12px',
+  fontSize: 'var(--font-size-xs)',
   color: 'var(--fg-default)',
   background: 'transparent',
   border: 0,
@@ -91,7 +91,7 @@ const ACTIVE_ROW_STYLE: React.CSSProperties = {
 
 const SCOPE_BADGE_STYLE: React.CSSProperties = {
   marginLeft: 'auto',
-  fontSize: '10px',
+  fontSize: 'var(--font-size-2xs)',
   padding: '1px 6px',
   borderRadius: 'var(--radius-sm)',
   background: 'var(--bg-surface-raised)',

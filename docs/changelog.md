@@ -5113,3 +5113,20 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **测试**：typecheck / lint / unit 252f / 3194t / tokens:validate / verify-token-references 全绿（1 flaky 与本卡无关，与 CHG-UX2-01 同一现象）
 - **变更摘要**：thumb 数值真源迁移到 design-tokens；新增 poster-xl variant；为 -03 视频库消费方升级解锁
 
+---
+
+## 2026-05-04 · CHG-UX2-02b：业务 inline fontSize 全量迁移到 token
+
+- **序列**：SEQ-20260505-01 第 2b 卡（CHG-UX2-02 之后）
+- **依赖**：CHG-UX2-01 ✅ / CHG-UX2-02 ✅
+- **执行模型**：claude-opus-4-7
+- **改动规模**：56 个文件 / 305 处迁移（远多于方案估算 99 处）
+  - 分布：10px×30 → 2xs / 11px×77 → xxs / 12px×109 → xs / 13px×60 → sm-tight / 14px×8 → sm / 15px×5 → sm-loose / 16px×6 → base / 18px×6 → lg / 20px×4 → xl
+- **方法**：批量 sed 替换（带引号 `'NNpx'` / 不带引号 `NN`两种形式），后置 grep 验证 0 命中
+- **改动范围**：
+  - `packages/admin-ui/src/**/*.tsx`（共享组件层）
+  - `apps/server-next/src/app/admin/**/*.tsx`（业务页层）
+- **不动**：测试文件 / `font-size:` CSS 字符串（已 var 化）
+- **测试**：typecheck / lint / unit 252f / 3194t / tokens:validate / verify-token-references（103 引用 / 358 token）全绿
+- **变更摘要**：业务零 fontSize 裸值；UI 全局视觉对齐设计稿 --fs-* 系列；为后续 UI 第二批列宽弹性化 / VideoEditDrawer 接入 Thumb 解锁
+

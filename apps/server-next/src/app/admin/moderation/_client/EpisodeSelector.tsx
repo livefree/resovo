@@ -17,7 +17,7 @@ const BTN: React.CSSProperties = {
   background: 'var(--bg-surface-elevated)',
   color: 'var(--fg-muted)',
   cursor: 'pointer',
-  fontSize: 11,
+  fontSize: 'var(--font-size-xxs)',
 }
 
 export function EpisodeSelector({ total, current, onSelect }: EpisodeSelectorProps): React.ReactElement {
@@ -29,13 +29,13 @@ export function EpisodeSelector({ total, current, onSelect }: EpisodeSelectorPro
   return (
     <div data-episode-selector>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 600 }}>选集</span>
-        <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{total} 集</span>
+        <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600 }}>选集</span>
+        <span style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>{total} 集</span>
         {total > PER_PAGE && (
           <>
             <span style={{ flex: 1 }} />
             <button style={BTN} disabled={page === 0} onClick={() => setPage(p => p - 1)}>‹</button>
-            <span style={{ fontSize: 10, color: 'var(--fg-muted)' }}>{start}-{end}</span>
+            <span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--fg-muted)' }}>{start}-{end}</span>
             <button style={BTN} disabled={page === maxPage} onClick={() => setPage(p => p + 1)}>›</button>
           </>
         )}
@@ -59,7 +59,7 @@ export function EpisodeSelector({ total, current, onSelect }: EpisodeSelectorPro
                 display: 'grid',
                 placeItems: 'center',
                 borderRadius: 4,
-                fontSize: 11,
+                fontSize: 'var(--font-size-xxs)',
                 fontWeight: isCurrent ? 700 : 500,
                 cursor: 'pointer',
                 background: isCurrent ? 'var(--accent-default)' : 'var(--bg-surface-raised)',

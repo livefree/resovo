@@ -57,7 +57,7 @@ const HEADER_STYLE: React.CSSProperties = {
 }
 
 const TITLE_STYLE: React.CSSProperties = {
-  fontSize: '15px',
+  fontSize: 'var(--font-size-sm-loose)',
   fontWeight: 600,
   color: 'var(--fg-default)',
 }
@@ -73,7 +73,7 @@ const CLOSE_BTN_STYLE: React.CSSProperties = {
   background: 'transparent',
   color: 'var(--fg-muted)',
   cursor: 'pointer',
-  fontSize: '18px',
+  fontSize: 'var(--font-size-lg)',
 }
 
 const BODY_STYLE: React.CSSProperties = {

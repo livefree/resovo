@@ -19,11 +19,11 @@ const SELF_HEADER: React.CSSProperties = {
   padding: '12px 18px', borderBottom: '1px solid var(--border-subtle)',
   flexShrink: 0,
 }
-const SELF_TITLE: React.CSSProperties = { fontSize: '14px', fontWeight: 700, flex: 1 }
+const SELF_TITLE: React.CSSProperties = { fontSize: 'var(--font-size-sm)', fontWeight: 700, flex: 1 }
 const ICON_BTN: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   width: '28px', height: '28px', border: 0, borderRadius: 'var(--radius-sm)',
-  background: 'transparent', color: 'var(--fg-muted)', cursor: 'pointer', fontSize: '16px',
+  background: 'transparent', color: 'var(--fg-muted)', cursor: 'pointer', fontSize: 'var(--font-size-base)',
 }
 const TAB_BAR: React.CSSProperties = {
   display: 'flex', padding: '0 18px', borderBottom: '1px solid var(--border-subtle)',
@@ -46,7 +46,7 @@ const FOOTER: React.CSSProperties = {
 }
 const BTN_PRIMARY: React.CSSProperties = {
   padding: '6px 16px', background: 'var(--accent-default)', color: 'var(--fg-on-accent)',
-  border: 0, borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: '13px', fontWeight: 500,
+  border: 0, borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: 'var(--font-size-sm-tight)', fontWeight: 500,
 }
 const BTN_GHOST: React.CSSProperties = { ...BTN_PRIMARY, background: 'transparent', color: 'var(--fg-muted)', border: '1px solid var(--border-subtle)' }
 
@@ -54,7 +54,7 @@ function tabBtnStyle(active: boolean): React.CSSProperties {
   return {
     padding: '8px 12px', border: 0, borderBottom: active ? '2px solid var(--accent-default)' : '2px solid transparent',
     background: 'transparent', color: active ? 'var(--accent-default)' : 'var(--fg-muted)',
-    fontWeight: active ? 600 : 400, fontSize: '13px', cursor: 'pointer', marginBottom: '-1px',
+    fontWeight: active ? 600 : 400, fontSize: 'var(--font-size-sm-tight)', cursor: 'pointer', marginBottom: '-1px',
   }
 }
 
@@ -202,10 +202,10 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDr
                 : <div style={POSTER} aria-hidden="true" />
               }
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '13px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: 'var(--font-size-sm-tight)', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {video.title}
                 </div>
-                <div style={{ fontSize: '11px', color: 'var(--fg-muted)' }}>
+                <div style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>
                   ID <code>{video.id}</code> · {video.type} · {video.year ?? '—'} · {video.source_count} 源
                 </div>
               </div>
@@ -239,7 +239,7 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDr
                 )}
               </div>
               <div style={FOOTER}>
-                <span style={{ fontSize: '11px', color: 'var(--fg-muted)' }}>
+                <span style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>
                   {lastEdit ? `最后编辑 · ${lastEdit}` : '最后编辑 · —'}
                 </span>
                 <span style={{ flex: 1 }} />

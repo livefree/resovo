@@ -49,7 +49,7 @@ const ITEM_STYLE: React.CSSProperties = {
   gap: '8px',
   padding: '6px 16px',
   cursor: 'pointer',
-  fontSize: '13px',
+  fontSize: 'var(--font-size-sm-tight)',
   color: 'var(--fg-default)',
   userSelect: 'none',
 }
@@ -74,7 +74,7 @@ const CLOSE_BTN_STYLE: React.CSSProperties = {
   background: 'transparent',
   color: 'var(--fg-muted)',
   cursor: 'pointer',
-  fontSize: '14px',
+  fontSize: 'var(--font-size-sm)',
 }
 
 export function ColumnSettingsPanel({
@@ -188,7 +188,7 @@ export function ColumnSettingsPanel({
       data-column-settings-panel
     >
       <div style={HEADER_STYLE}>
-        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--fg-muted)' }}>列显示</span>
+        <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--fg-muted)' }}>列显示</span>
         <button
           type="button"
           style={CLOSE_BTN_STYLE}
@@ -221,7 +221,7 @@ export function ColumnSettingsPanel({
             />
             <span style={{ flex: 1 }}>
               {col.header}
-              {isPinned && <span style={{ fontSize: '10px', color: 'var(--fg-muted)', marginLeft: '4px' }}>固定</span>}
+              {isPinned && <span style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--fg-muted)', marginLeft: '4px' }}>固定</span>}
             </span>
           </label>
         )

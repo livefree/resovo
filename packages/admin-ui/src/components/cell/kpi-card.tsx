@@ -63,7 +63,7 @@ const ICON_STYLE: React.CSSProperties = {
 }
 
 const LABEL_STYLE: React.CSSProperties = {
-  fontSize: '11px',
+  fontSize: 'var(--font-size-xxs)',
   fontWeight: 500,
   // reference.md §4.3 / kpi-card.types.ts 第 13 行约定 "letter spacing 1px"
   letterSpacing: '1px',
@@ -91,7 +91,7 @@ const FOOTER_STYLE: React.CSSProperties = {
 }
 
 const DELTA_BASE_STYLE: React.CSSProperties = {
-  fontSize: '11px',
+  fontSize: 'var(--font-size-xxs)',
   fontWeight: 500,
   margin: 0,
   lineHeight: 1.2,
