@@ -4971,3 +4971,39 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **测试**：typecheck / lint / unit 252f / 3141t / tokens:validate / verify-token-references 全绿
 - **变更摘要**：表头 sticky 滚动不穿透；hover 反馈从背景灰化改为文字高亮；⋯ 默认隐藏，hover/menu open 时显示
 
+---
+
+## 2026-05-03 · CHG-UX-05d hotfix：表头文字高亮加 !important
+
+- **触发**：用户验收"文字高亮在明暗主题下均无体现"
+- **根因**：TH_STYLE inline `color: 'var(--fg-muted)'` specificity 高于 stylesheet hover `color: var(--fg-default)`；与 CHG-UX-05c inline background 覆盖问题同源
+- **改动**：`dt-styles.tsx` 表头 hover 规则的 color 加 `!important`（与 interaction-styles.tsx hover/active background !important 同一设计决策）
+- **测试**：252f / 3141t 全绿；用户实测 light/dark 双主题文字高亮生效
+
+---
+
+## 2026-05-03 · CHG-UX-07：业务页未标记可点击元素 catch-all hover
+
+- **序列**：SEQ-20260504-01 第 7 卡（解决用户验收问题 2）
+- **依赖**：CHG-UX-05c ✅ / CHG-UX-05d ✅
+- **执行模型**：claude-opus-4-7
+- **触发**：用户 2026-05-03 验收"除 sidebar / topbar 4 按钮外，其他元素均无 hover：tab / 按钮 / 列表项"
+- **调研结果**：apps/server-next 业务页 ~112 处 onClick / 20 个文件含 button；inline style 五花八门（BTN_PRIMARY / BTN_GHOST / ICON_BTN / tabBtnStyle 等）
+- **方案权衡**：
+  - ❌ 逐个加 `data-interactive`：100+ 处改动，PR 巨大；新代码易遗漏
+  - ❌ background/color/border 修改：与业务 inline 冲突（要 !important，破坏 accent / danger / ghost 等 variant 视觉协调）
+  - ❌ outline：与 focus-visible 视觉语言混淆
+  - ✅ **opacity 0.85**：兼容所有 variant，不冲击 inline 任何颜色属性，业界常见（Stripe / Linear / Notion）
+- **改动文件**：
+  - `packages/admin-ui/src/shell/interaction-styles.tsx`：新增 §6 catch-all 规则块
+    · `[data-admin-shell] button:not(:disabled):not([data-interactive]):not([data-th-interactive]):hover` + role="button" + role="tab" → `opacity: 0.85` + transition
+    · §7 reduced-motion 同步扩展兜底
+- **零业务文件改动**：业务方零成本获得 hover 反馈
+- **设计原则确认**：
+  - 已标记 `data-interactive` 元素：精准反馈（专属规则）
+  - 未标记 + 满足 button/role="button"/role="tab" 选择器：catch-all opacity（最小可见性反馈）
+  - DataTable row：不命中（不是 button）；走原有 hoveredKey state inline 反馈
+  - DataTable 表头：不命中（`:not([data-th-interactive])`）；走 CHG-UX-05d 文字高亮反馈
+- **测试**：typecheck / lint / unit 252f / 3141t / tokens:validate / verify-token-references 全绿
+- **变更摘要**：catch-all 兜底让业务页所有可点击 button / role=tab / role=button 自动获得 hover 反馈；用户验收问题 2 解决
+

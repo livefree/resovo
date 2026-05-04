@@ -101,9 +101,30 @@ const INTERACTION_CSS = `
   outline-offset: var(--interactive-focus-ring-offset);
 }
 
-/* ── 6. prefers-reduced-motion：去 transition 不去反馈 ─────────── */
+/* ── 6. catch-all：admin Shell 内未标记可点击元素的 hover 兜底（CHG-UX-07） ─── *
+ * 用户验收痛点："除 sidebar / topbar 外，业务页 tab / 按钮 / 列表项无 hover"。
+ * 业务页 ~100 处 onClick 元素 inline style 五花八门，逐个加 data-interactive 不现实。
+ * 折中方案：catch-all 用 opacity 0.85 — 兼容所有 variant，不冲击 inline 任何颜色属性
+ * （业界常见：Stripe / Linear / Notion）。已标记 data-interactive 的元素由专属规则接管。
+ *
+ * 选择器排除条件：
+ *   - :disabled — 禁用元素不响应 hover
+ *   - [data-interactive] — 已标记，由 §1-3 专属规则接管
+ *   - [data-th-interactive] — DataTable 表头列（CHG-UX-05d）
+ */
+[data-admin-shell] button:not(:disabled):not([data-interactive]):not([data-th-interactive]):hover,
+[data-admin-shell] [role="button"]:not([data-interactive]):hover,
+[data-admin-shell] [role="tab"]:not([data-interactive]):hover {
+  opacity: 0.85;
+  transition: opacity var(--duration-fast) var(--easing-ease-out);
+}
+
+/* ── 7. prefers-reduced-motion：去 transition 不去反馈 ─────────── */
 @media (prefers-reduced-motion: reduce) {
-  [data-interactive] {
+  [data-interactive],
+  [data-admin-shell] button:not(:disabled):not([data-interactive]):not([data-th-interactive]),
+  [data-admin-shell] [role="button"]:not([data-interactive]),
+  [data-admin-shell] [role="tab"]:not([data-interactive]) {
     transition: none;
   }
 }
