@@ -327,8 +327,11 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
       display: 'grid',
       gridTemplateColumns: gridTemplate,
       height: rowHeight,
-      // CHG-UX2-03d 修订：与 thead row 同步，强制不被 grid 压缩
-      minWidth: 'max-content',
+      // CHG-UX2-03d 终极修复：用 width: max-content 让 row 强制撑到 grid 总宽
+      // （min-width: max-content 在 flex 父压缩 dt-scroll 时被破坏，width 才是终止压缩的硬约束）
+      // 容器不足时 dt-scroll overflow:auto 横滚，cell width 永远 = grid template fixed
+      width: 'max-content',
+      minWidth: '100%',
       background: isSelected
         ? 'var(--admin-accent-soft)'
         : isHovered
@@ -418,10 +421,10 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
             display: 'grid',
             gridTemplateColumns: gridTemplate,
             height: rowHeight,
-            // CHG-UX2-03d 修订：min-width: max-content 强制 row 撑到 grid 总宽
-            // 容器不足时由 [data-table-scroll] overflow:auto 提供横滚；
-            // 不再让 grid 压缩 fixed track（实测 minmax(w,w) 也会被压缩）
-            minWidth: 'max-content',
+            // CHG-UX2-03d 终极修复：width: max-content 强制 row 撑到 grid 总宽
+            // 容器不足时由 [data-table-scroll] overflow:auto 提供横滚
+            width: 'max-content',
+            minWidth: '100%',
           }}
         >
           {hasSelection && (
