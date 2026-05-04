@@ -185,7 +185,10 @@ const DT_CSS = `
   transition: color var(--duration-fast) var(--easing-ease-out);
 }
 [data-table] [role="columnheader"][data-th-interactive="true"]:hover {
-  color: var(--fg-default);
+  /* TH_STYLE inline color: var(--fg-muted) specificity 高于本规则；
+     需 !important 让 hover 文字高亮赢 inline default（与 interaction-styles.tsx
+     hover/active background !important 同一设计决策，CHG-UX-05c）*/
+  color: var(--fg-default) !important;
 }
 [data-table] [role="columnheader"] [data-th-menu-icon] {
   opacity: 0;
