@@ -282,9 +282,10 @@ function buildVideoColumns(
       width: 100, minWidth: 80, enableResizing: true, enableSorting: true, defaultVisible: false,
     },
     // ── sources 列：reference §6.1 dot + 数字 + 活跃/一般/稀少 文案 ──
+    // CHG-UX2-03b 收窄 100 → 90（消除横滚 → frame 圆角完整）
     {
       id: 'source_health', header: '源活跃', accessor: (r) => r.active_source_count ?? r.source_count,
-      width: 100, minWidth: 90, enableResizing: true, defaultVisible: true,
+      width: 90, minWidth: 80, enableResizing: true, defaultVisible: true,
       cell: ({ row }) => {
         const active = parseInt(row.active_source_count ?? row.source_count ?? '0', 10)
         return (
@@ -298,15 +299,17 @@ function buildVideoColumns(
     },
     // ── probe 列：reference §6.1 DualSignal 探测/播放双信号 ──
     // 后端暂未提供 probe / render 字段；先传 'unknown' / 'unknown' 占位（STATS-EXTEND-VIDEOS follow-up）
+    // CHG-UX2-03b 收窄 140 → 110（消除横滚）
     {
       id: 'probe', header: '探测/播放', accessor: () => 'probe-render',
-      width: 140, minWidth: 120, enableResizing: true, defaultVisible: true,
+      width: 110, minWidth: 100, enableResizing: true, defaultVisible: true,
       cell: () => <DualSignal probe="unknown" render="unknown" />,
     },
     // ── image 列：reference §6.1 P0 失效|活跃 Pill ──
+    // CHG-UX2-03b 默认隐藏（消除横滚 → 用户可手动开）
     {
       id: 'image_health', header: '图片', accessor: (r) => `${r.poster_status ?? '-'}/${r.backdrop_status ?? '-'}`,
-      width: 100, minWidth: 90, enableResizing: true, defaultVisible: true,
+      width: 100, minWidth: 90, enableResizing: true, defaultVisible: false,
       cell: ({ row }) => {
         const variant = imageHealthVariant(row)
         return (
@@ -348,11 +351,12 @@ function buildVideoColumns(
       id: 'updated_at', header: '更新时间', accessor: (r) => r.updated_at ?? '',
       width: 160, minWidth: 140, enableResizing: true, enableSorting: true, defaultVisible: false,
     },
-    // ── actions 列：reference §6.1 170 宽 ──
+    // ── actions 列：reference §6.1 ──
     // 8A 第一阶段保留 VideoRowActions（AdminDropdown 形态）；inline xs btn ×5 重构留 8A 第二阶段
+    // CHG-UX2-03b 收窄 170 → 150（消除横滚）
     {
       id: 'actions', header: '操作', accessor: () => null,
-      width: 170, minWidth: 148, enableResizing: false, defaultVisible: true,
+      width: 150, minWidth: 130, enableResizing: false, defaultVisible: true,
       cell: ({ row }) => (
         <VideoRowActions
           row={row}
@@ -662,6 +666,7 @@ export function VideoListClient() {
               emptyState={<EmptyState title="暂无视频" description="调整筛选条件后重试" />}
               data-testid="video-list-table"
               enableHeaderMenu
+              density="poster"
               flashRowKeys={flashRowKeys}
               toolbar={{
                 search: <VideoFilterBar snapshot={snapshot} sites={sites} onPatch={handlePatch} />,

@@ -26,19 +26,22 @@ describe('admin-layout tokens — structure', () => {
     }
   })
 
-  it('adminTable exposes row + col fields (含 CHG-UX2-01 row-h-relaxed)', () => {
+  it('adminTable exposes row + col fields (含 CHG-UX2-01 row-h-relaxed + CHG-UX2-03b row-h-poster)', () => {
     expect(Object.keys(adminTable).sort()).toEqual(
-      ['col-min-w', 'row-h', 'row-h-compact', 'row-h-relaxed'].sort(),
+      ['col-min-w', 'row-h', 'row-h-compact', 'row-h-poster', 'row-h-relaxed'].sort(),
     )
   })
 
-  it('adminTable row-h ramp: compact < default < relaxed (CHG-UX2-01)', () => {
+  it('adminTable row-h ramp: compact < default < relaxed < poster (CHG-UX2-01/03b)', () => {
     const compact = parseInt(adminTable['row-h-compact'], 10)
     const def = parseInt(adminTable['row-h'], 10)
     const relaxed = parseInt(adminTable['row-h-relaxed'], 10)
+    const poster = parseInt(adminTable['row-h-poster'], 10)
     expect(compact).toBeLessThan(def)
     expect(def).toBeLessThan(relaxed)
+    expect(relaxed).toBeLessThan(poster)
     expect(relaxed).toBe(48)
+    expect(poster).toBe(80)  // 容纳 poster-md 48×72 封面（72 + ~8 padding）
   })
 
   it('adminDensity exposes comfortable / compact ratios', () => {

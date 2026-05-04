@@ -243,7 +243,10 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
     ? (totalRows ?? rows.length)
     : processedRows.length
 
-  const rowHeight = density === 'compact' ? 'var(--row-h-compact)' : 'var(--row-h)'
+  const rowHeight =
+    density === 'compact' ? 'var(--row-h-compact)' :
+    density === 'poster'  ? 'var(--row-h-poster)'  :
+    'var(--row-h)'
   const hasSelection = selection !== undefined
   const gridTemplate = buildGridTemplate(columns, colMap, hasSelection)
 

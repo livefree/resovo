@@ -5150,5 +5150,30 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **不动**：其他 11 列（type/probe/visibility/...）保留固定 width（业务密度需要）
 - **测试**：typecheck / lint / 视频相关 unit 5f / 76t 全绿
 - **视觉验收**：待用户 dev server 实测（playwright session 过期）
-- **变更摘要**：视频库 3 个用户痛点连锁修复；为 -04 VideoEditDrawer 接入 Thumb 铺路
+- **变更摘要**：视频库 3 个用户痛点连锁修复；为 -04 VideoEditDrawer 接入 Thumb 铺路（**用户验收发现 2 遗留问题 → CHG-UX2-03b 修复**）
+
+---
+
+## 2026-05-04 · CHG-UX2-03b：视频库行高扩展 + 列宽收缩（修复 -03 遗留两痛点）
+
+- **序列**：SEQ-20260505-01 第 3b 卡（CHG-UX2-03 之后）
+- **依赖**：CHG-UX2-03 ✅
+- **执行模型**：claude-opus-4-7
+- **触发**：用户验收 CHG-UX2-03 反馈两遗留问题
+- **改动文件**：
+  - `packages/design-tokens/src/admin-layout/table.ts`：加 `row-h-poster: 80px`（容纳 poster-md 48×72 封面 + ~8 padding）
+  - `packages/design-tokens/src/css/tokens.css`：重生成
+  - `packages/admin-ui/src/components/data-table/data-table.tsx`：rowHeight 计算扩展支持 `'poster'`
+  - `packages/admin-ui/src/components/data-table/types.ts`：density union 加 `'poster'`，注释说明 3 档 density 用途
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`：
+    · 传 `density="poster"` → row-h-poster 80px
+    · 列宽收缩：source_health 100→90 / probe 140→110 / actions 170→150
+    · image_health defaultVisible: true → false（用户可手动开）
+  - `tests/unit/design-tokens/admin-layout.test.ts`：同步 row-h ramp 4 档断言
+- **设计意图**：
+  - **问题 1 修复（封面被裁切）**：row-h 40 → row-h-poster 80，容纳 poster-md 72 高度
+  - **问题 3 修复（frame 右直角）**：默认可见列总宽从 1150 → **990**（容器 1011），横滚消除 → frame 4 角圆角完整
+- **新默认可见列总宽计算**：80 + 220(min) + 90 + 90 + 110 + 120 + 90 + 150 + 40 = 990
+- **测试**：typecheck / lint / 视频 unit 6f / 134t / tokens:validate / verify-token-references（107 引用 / 359 token）全绿
+- **变更摘要**：行高 + 列宽两步收口 -03 遗留；视频库视觉痛点全部修复
 

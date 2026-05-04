@@ -22,7 +22,13 @@ export interface DataTableProps<T> {
   readonly selection?: TableSelectionState
   readonly onSelectionChange?: (next: TableSelectionState) => void
   readonly onRowClick?: (row: T, index: number) => void
-  readonly density?: 'comfortable' | 'compact'
+  /**
+   * 行密度（CHG-UX2-03b 新增 'poster'）：
+   * - compact: row-h-compact 32px
+   * - comfortable: row-h 40px（默认）
+   * - poster: row-h-poster 80px（含 Thumb poster-md 48×72 封面的列表）
+   */
+  readonly density?: 'comfortable' | 'compact' | 'poster'
   readonly 'data-testid'?: string
 
   /**
