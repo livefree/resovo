@@ -125,7 +125,7 @@ const INPUT_STYLE: CSSProperties = {
   background: 'var(--bg-surface-row)',
   color: 'var(--fg-default)',
   fontSize: 'var(--font-size-sm)',
-  outline: 'none',
+  // outline 由 InteractionStyles §5 focus-visible 兜底（CHG-UX-06）
   minWidth: '180px',
 }
 

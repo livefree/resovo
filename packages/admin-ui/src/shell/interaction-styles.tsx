@@ -96,7 +96,11 @@ const INTERACTION_CSS = `
 [data-admin-shell] button:focus-visible,
 [data-admin-shell] [role="button"]:focus-visible,
 [data-admin-shell] [role="menuitem"]:focus-visible,
-[data-admin-shell] a:focus-visible {
+[data-admin-shell] [role="tab"]:focus-visible,
+[data-admin-shell] a:focus-visible,
+[data-admin-shell] input:focus-visible,
+[data-admin-shell] select:focus-visible,
+[data-admin-shell] textarea:focus-visible {
   outline: var(--interactive-focus-ring-width) solid var(--interactive-focus-ring-color);
   outline-offset: var(--interactive-focus-ring-offset);
 }
@@ -112,9 +116,11 @@ const INTERACTION_CSS = `
  *   - [data-interactive] — 已标记，由 §1-3 专属规则接管
  *   - [data-th-interactive] — DataTable 表头列（CHG-UX-05d）
  */
-[data-admin-shell] button:not(:disabled):not([data-interactive]):not([data-th-interactive]):hover,
-[data-admin-shell] [role="button"]:not([data-interactive]):hover,
-[data-admin-shell] [role="tab"]:not([data-interactive]):hover {
+/* 排除 [aria-disabled="true"] / [data-loading="true"] 防止与已减弱视觉叠加放大模糊度
+ * （arch-reviewer Y2，CHG-UX-06 收紧）*/
+[data-admin-shell] button:not(:disabled):not([aria-disabled="true"]):not([data-loading="true"]):not([data-interactive]):not([data-th-interactive]):hover,
+[data-admin-shell] [role="button"]:not([aria-disabled="true"]):not([data-loading="true"]):not([data-interactive]):hover,
+[data-admin-shell] [role="tab"]:not([aria-disabled="true"]):not([data-loading="true"]):not([data-interactive]):hover {
   opacity: 0.85;
   transition: opacity var(--duration-fast) var(--easing-ease-out);
 }
@@ -122,9 +128,9 @@ const INTERACTION_CSS = `
 /* ── 7. prefers-reduced-motion：去 transition 不去反馈 ─────────── */
 @media (prefers-reduced-motion: reduce) {
   [data-interactive],
-  [data-admin-shell] button:not(:disabled):not([data-interactive]):not([data-th-interactive]),
-  [data-admin-shell] [role="button"]:not([data-interactive]),
-  [data-admin-shell] [role="tab"]:not([data-interactive]) {
+  [data-admin-shell] button:not(:disabled):not([aria-disabled="true"]):not([data-loading="true"]):not([data-interactive]):not([data-th-interactive]),
+  [data-admin-shell] [role="button"]:not([aria-disabled="true"]):not([data-loading="true"]):not([data-interactive]),
+  [data-admin-shell] [role="tab"]:not([aria-disabled="true"]):not([data-loading="true"]):not([data-interactive]) {
     transition: none;
   }
 }
@@ -133,3 +139,12 @@ const INTERACTION_CSS = `
 export function InteractionStyles() {
   return <style data-admin-interaction-styles dangerouslySetInnerHTML={{ __html: INTERACTION_CSS }} />
 }
+
+/**
+ * 消费方标记 data-interactive 的合法值（CHG-UX-01 方案 §6.2 契约）
+ * - icon: 透明背景 ghost 类（topbar IconButton / staff-note edit / 等）
+ * - trigger: 带边框触发器（input/select/dropdown trigger）
+ * - nav: 列表型导航项（sidebar / menu）
+ * - chip: 圆角小元素（filter chip / pager btn）
+ */
+export type InteractiveKind = 'icon' | 'trigger' | 'nav' | 'chip'

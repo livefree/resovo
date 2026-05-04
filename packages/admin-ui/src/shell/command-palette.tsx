@@ -79,7 +79,7 @@ const INPUT_STYLE: CSSProperties = {
   borderBottom: '1px solid var(--border-subtle)',
   color: 'var(--fg-default)',
   font: 'inherit',
-  outline: 'none',
+  // outline 由 InteractionStyles §5 focus-visible 兜底（CHG-UX-06）
   flexShrink: 0,
 }
 

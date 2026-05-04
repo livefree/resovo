@@ -23,7 +23,10 @@ import { useEffect } from 'react'
 const STYLE_ID = 'admin-ui-dt-styles'
 
 const DT_CSS = `
-/* ── DataTable framed surface（reference.md §4.4 + 设计稿 .dt） ─────── */
+/* ── DataTable framed surface（reference.md §4.4 + 设计稿 .dt） ─────── *
+ * 与 data-table.tsx TH_STYLE.background 显式同步（CHG-UX-05d）：表头是 sticky
+ * 元素，必须不透明；改本变量时记得同步 inline 表头背景。长期方案见 ADR-112
+ * §后续序列触发清单（迁 TH_STYLE 背景到 dt-styles）。 */
 [data-table] {
   background: var(--bg-surface-raised);
   border: 1px solid var(--border-default);

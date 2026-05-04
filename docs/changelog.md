@@ -5007,3 +5007,48 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **测试**：typecheck / lint / unit 252f / 3141t / tokens:validate / verify-token-references 全绿
 - **变更摘要**：catch-all 兜底让业务页所有可点击 button / role=tab / role=button 自动获得 hover 反馈；用户验收问题 2 解决
 
+---
+
+## 2026-05-03 · CHG-UX-06：focus-visible 全站走查 + SEQ-20260504-01 序列收口
+
+- **序列**：SEQ-20260504-01 收口卡
+- **依赖**：CHG-UX-01..05 ✅ + 05c / 05d / 05d hotfix / 07 ✅
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：arch-reviewer (claude-opus-4-7) — **A- / PASS CONDITIONAL**（红线 0；6 黄线均不阻塞）
+- **改动文件**：
+  - 代码：
+    · `packages/admin-ui/src/shell/command-palette.tsx`（删 INPUT_STYLE.outline 'none'）
+    · `apps/server-next/.../VideoFilterFields.tsx`（删 INPUT_STYLE.outline 'none'）
+    · `packages/admin-ui/src/shell/interaction-styles.tsx`（§5 focus-visible 扩展加 input/select/textarea/role=tab；§6 catch-all selector 收紧加 aria-disabled/data-loading 排除；末尾导出 InteractiveKind 类型）
+    · `packages/admin-ui/src/shell/index.ts`（导出 InteractiveKind）
+    · `packages/admin-ui/src/components/data-table/views-menu.tsx`（删 PANEL_STYLE.outline 'none'）
+    · `packages/admin-ui/src/components/data-table/dt-styles.tsx`（[data-table] 加 TH_STYLE 同步契约注释）
+  - 文档：
+    · `docs/decisions.md`（新增 ADR-112，7 项决策 + 后果 + 后续清单 7 条）
+    · `docs/audit_seq_20260504_01_20260503.md`（新建，arch-reviewer 全序列评级报告）
+    · `docs/designs/backend_design_v2.1/ux-interactive-feedback-plan.md`（status → ✅ 已完成）
+- **arch-reviewer 全序列评级 A-/PASS CONDITIONAL** — 红线 0；6 黄线（Y1-Y6）+ 5 改进建议（S1-S5）：
+  - 已闭环（本卡顺手）：Y2 catch-all selector 收紧 / Y3 PANEL outline 删除 / Y4 TH_STYLE 同步注释 / S3 InteractiveKind 导出 / S4 ADR §后续清单补 5 条 / S5 dt-styles 注释
+  - 已登记 ADR §后续清单：Y1 !important 治理债（EXT-A 触发） / Y5 details/summary 复审（触发型） / Y6 5b 失败教训（已闭环写入 ADR §3） / S1 a11y contrast 测试（下批） / S2 e2e hover 视觉基线（触发型）
+- **测试**：typecheck / lint / unit 252f / 3141t / tokens:validate / verify-token-references 全绿
+- **变更摘要**：CHG-UX-06 收口完成；ADR-112 落盘；序列正式关闭
+
+---
+
+## ✅ SEQ-20260504-01 序列关闭
+
+- **完成时间**：2026-05-03
+- **总卡数**：10 张（含 5b 失败 / 5c 回滚 / 5d hotfix）
+- **arch-reviewer 评级**：A- / PASS CONDITIONAL
+- **总改动**：
+  - 代码：interactive 语义槽位（6×2）+ admin-ui 全局规则注入器（7 类规则）+ 5 处 inline → data-attr 标记 + 8 处消费方 data-interactive 接入 + DataTable 表头专属规则 + outline:none 3 处清理
+  - 测试：18 个 interactive 形态/CSS 变量产出测试
+  - 文档：方案文档 + ADR-112 + audit report
+- **关键产出**：
+  - 全栈 hover 反馈层级：精准（5 类 data-interactive） + 兜底（catch-all opacity）
+  - 全站 focus-visible 兜底（含 input/select/textarea）
+  - prefers-reduced-motion 全覆盖
+  - !important 治理边界明确（仅瞬态规则；EXT-A 触发后可去）
+  - 用户验收问题 1（背景色非预期变化）+ 问题 2（业务页无 hover）+ 问题 3（表头需求）全部解决
+- **后续解锁**：第二批密度 / 第三批 chip / 第四批工具栏 / CHG-UX-EXT-A..D（触发型）/ details/summary 复审 / a11y contrast 测试 / e2e hover 视觉基线
+

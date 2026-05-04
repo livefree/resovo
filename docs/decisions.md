@@ -4140,3 +4140,116 @@ CHG-SN-4-05 任务卡范围声明 `packages/types/src/api/**`（信封 / errorCo
   - `docs/designs/backend_design_v2.1/token-slot-audit-report-20260503.md`（CHG-UI-05/05a 审计报告）
   - `docs/audit_seq_20260503_01_20260503.md`（CHG-UI-06 arch-reviewer 全序列评级）
 - **关联规范**：`docs/rules/ui-rules.md`（CSS 变量使用约束）/ CLAUDE.md §"绝对禁止"硬编码颜色值条款
+
+
+## ADR-112: 后台交互反馈语义槽位 + admin Shell 全局规则注入器
+
+> 状态：accepted（CHG-UX-01..07 全部完成 + arch-reviewer 待评级；评级 PASS 后正式收口）
+> 日期：2026-05-03
+> 任务卡：SEQ-20260504-01（CHG-UX-01..07）
+> 关联：`docs/designs/backend_design_v2.1/ux-interactive-feedback-plan.md`（方案真源）
+
+### 上下文
+
+SEQ-20260503-01 收口阶段用户反馈："除了表格行，其他可点击按钮（导航栏 / topbar / 表头按钮）大多没有 hover 颜色变化"。颜色 token 序列只对齐静态语义；交互反馈（hover / focus / active）当时显式排除，登记为独立批次（ADR-111 §后续序列触发清单 O5）。本 ADR 落定本批次产出。
+
+调研发现：
+
+1. admin-ui 多处可点击元素（topbar IconButton / 全局搜索 / dropdown trigger / 表头按钮等）完全无 hover 反馈
+2. 既有 hover 选择器分散在 admin-shell-styles / dt-styles / inline-row-actions-styles 三个文件，槽位写死、duration 写裸值
+3. business 层 apps/server-next 有 ~112 处 onClick / 20 个文件含 button，inline style 五花八门
+4. 无统一 focus-visible 兜底；零 a11y 焦点环
+
+### 决策
+
+#### 1. 新增 `interactive` 语义槽位（CHG-UX-01）
+
+`packages/design-tokens/src/semantic/interactive.ts` 定义 6 槽位 × 2 主题：
+
+| slot | 用途 | light | dark |
+|---|---|---|---|
+| hoverSoft | ghost/icon button hover 透明叠加 | `color-mix(currentColor 6%)` | `color-mix(currentColor 8%)` |
+| hoverStrong | nav/menu/row hover 实色 | `var(--bg-surface-row)` | `var(--bg-surface-row)` |
+| pressSoft | active mouse-down 反馈（≈ 2× hover） | 12% | 16% |
+| focusRingColor | focus-visible 焦点环颜色 | `var(--border-focus)` | `var(--border-focus)` |
+| focusRingWidth | 焦点环宽度 | `2px` | `2px` |
+| focusRingOffset | 焦点环 offset | `2px` | `2px` |
+
+设计要点：
+
+- **currentColor 选择**：hoverSoft / pressSoft 用 `color-mix(in oklch, currentColor X%, transparent)` 跟随消费方 `color` — state-error fg 元素 hover 出红叠加，warning fg 元素 hover 出黄叠加，避免 "红色 danger 按钮 hover 出蓝色叠加" 的语义错配
+- **dark 8% / light 6%**：补偿 dark 模式低对比度环境的视觉权重
+- **var() 引用复用**：hoverStrong / focusRingColor 用 var() 引用上层槽位，主题切换自动跟随，避免值重复
+- **与既有槽位边界**：accent.hover/active 是 brand 色 5 阶（color 层）；button.ts 是组件级状态包（5 状态 × 4 variant × 3 size，预留未消费）；interactive 是叠加层 — 三层语义独立无重复
+
+#### 2. admin Shell 全局规则注入器（CHG-UX-01..07）
+
+新建 `packages/admin-ui/src/shell/interaction-styles.tsx` 由 AdminShell 渲染。注入 7 类规则：
+
+1. **icon**：`[data-interactive="icon"]:hover` → bg = hoverSoft（!important）；`:active` → pressSoft
+2. **trigger**：`[data-interactive="trigger"]:hover` → border-color = strong（!important）
+3. **nav**：`[data-interactive="nav"]:not([data-active="true"]):hover` → bg = hoverStrong（!important）；danger → admin-danger-soft
+4. **chip**：`[data-interactive="chip"]` → 仅注入统一 transition；视觉由 dt-styles 既有规则提供
+5. **focus-visible 全站兜底**：`[data-interactive] / [data-admin-shell] (button|role=button|role=tab|role=menuitem|a|input|select|textarea):focus-visible` → outline = focus-ring-color/width/offset
+6. **catch-all**：admin Shell 内未标记 button / role=button / role=tab → `opacity: 0.85` hover（CHG-UX-07）
+7. **prefers-reduced-motion**：所有上述 transition → none
+
+#### 3. !important 决策（CHG-UX-05c）
+
+React inline `style={{ background: ... }}` 的 CSS specificity 高于任何 stylesheet 规则；不用 !important 的话，stylesheet 的 :hover background 永远被消费方 inline default 覆盖。CHG-UX-05b 尝试删 inline transparent 让 stylesheet 接管失败（删后元素 fall back 到 user-agent default `buttonface` 浅灰），CHG-UX-05c 回滚并改用 !important。
+
+仅在 hover/active 等 "瞬态" 规则上用 !important，default 规则不用：
+- 语义：default 由消费方决定（消费方 inline 受尊重）
+- 语义：hover 由设计系统决定（强制赢 inline）
+
+#### 4. DataTable 表头专属交互（CHG-UX-05d）
+
+表头是 sticky 元素 + 用户期望 "文字高亮（非灰化背景）+ 三点 hover 显隐"，不归 `data-interactive="icon"` 通用类。dt-styles 单独维护：
+
+- `[role="columnheader"][data-th-interactive="true"]:hover` → `color: var(--fg-default) !important`（文字高亮，非背景）
+- `[role="columnheader"] [data-th-menu-icon]` 默认 opacity 0；`:hover` 整列 / `[data-open="true"]` 时 opacity 1
+- TH_STYLE.background 必须不透明（`var(--bg-surface-raised)`），sticky 滚动时不漏行
+
+#### 5. 消费方契约
+
+`data-interactive="icon|trigger|nav|chip"` 标记属性接入；admin-ui 导出 `InteractiveKind` union type；业务层禁写 `:hover` / `:focus` CSS。未标记元素由 catch-all 兜底（opacity 0.85）。
+
+### 后果
+
+- **正向**：
+  - admin Shell 范围内所有可点击元素均有 hover 反馈（精准 + catch-all 双层）
+  - focus-visible 全站兜底，a11y 焦点环统一（含 input/select/textarea）
+  - hover/active/focus 时长与缓动统一走 motion token
+  - 业务层零改动；新代码只需加 `data-interactive` 即获得精准反馈，不加也有兜底
+  - dropdown / sidebar / topbar / DataTable 表头 / 表格 chip 5 大场景反馈一致
+- **风险**：
+  - **!important 维护成本**：interaction-styles + dt-styles 共 6 处 !important（hover/active background + trigger border + 表头 color）；如果未来引入 React 19+ 的 CSS-in-JS 新方案，需重新评估必要性
+  - **catch-all opacity 0.85 反馈较弱**：用户体感 "虽然微弱但可接受"；如果某些高频场景反馈不足，可后续把对应元素改用 `data-interactive="icon"` 精准反馈
+  - **TH_STYLE 不透明背景**：CHG-UI-05a 曾改 transparent 让表头继承容器底，本批 CHG-UX-05d 改回 surface-raised；视觉等效但语义不同（继承 → 显式声明），未来若 [data-table] 容器底色变化需同步
+- **不可逆性**：低。interactive.ts / interaction-styles.tsx 单文件 + 6 处消费方 data-attr 标记；git revert 即可回滚
+
+### 后续序列触发清单
+
+| 触发条件 | 后续序列 |
+|---|---|
+| admin-ui Button 组件正式立项 | CHG-UX-EXT-A — button.ts / input.ts 5 状态契约真实接入 |
+| admin 移动端体验立项 | CHG-UX-EXT-B — 移动端 touch 反馈（pressSoft 已埋点） |
+| 用户体验度量后明确需求 | CHG-UX-EXT-C — spring/ripple 等高级动效 |
+| 第二处需要 2px focus-ring-width 的消费方 | CHG-UX-EXT-D — focusRingWidth/Offset 归 size primitive（arch-reviewer S2） |
+| catch-all opacity 反馈不足 | 提升为 `data-interactive="icon"` 精准反馈 |
+| 业务侧首次出现 `<details>` / `<summary>` / `[contenteditable="true"]` | 复审 focus-ring 兜底覆盖（CHG-UX-06 arch-reviewer Y5） |
+| catch-all opacity 与 disabled/loading 状态实测出现叠加放大模糊度 | 进一步收紧选择器或精细化兜底（CHG-UX-06 arch-reviewer Y2 后续观察项） |
+| TH_STYLE.background inline 与 [data-table] 容器底显式同步成本累积 | 长期方案：迁 TH_STYLE 背景到 dt-styles 全局规则（CHG-UX-06 arch-reviewer Y4） |
+| hover 后视觉对比度 a11y 自动化测试 | 下批序列：补 light + warning 等高风险组合的 hover 后 contrast 断言（CHG-UX-06 arch-reviewer S1） |
+| Playwright e2e hover 视觉回归 | 触发型：CHG-UX-EXT-A button.ts 真实接入时建立视觉基线（CHG-UX-06 arch-reviewer S2） |
+
+### 关联
+
+- **关联 ADR**：ADR-111（后台 token 颜色对齐 — 本 ADR 是其后续 UX 完整性序列；ADR-111 §后续序列触发清单 O5 已落地）
+- **关联任务卡**：CHG-UX-01..07（含 05b 回滚 / 05c / 05d / 05d hotfix；详见 SEQ-20260504-01）
+- **关联序列**：SEQ-20260504-01
+- **关联文档**：
+  - `docs/designs/backend_design_v2.1/ux-interactive-feedback-plan.md`（方案真源）
+  - `docs/audit_seq_20260504_01_20260503.md`（CHG-UX-06 arch-reviewer 全序列评级）
+- **关联规范**：`docs/rules/ui-rules.md`（CSS 变量使用约束）/ CLAUDE.md §"绝对禁止" 硬编码颜色值条款
+

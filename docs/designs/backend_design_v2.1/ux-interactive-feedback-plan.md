@@ -1,10 +1,11 @@
 # UX 完整性序列 · 第一批：交互反馈（hover / focus / active）统一方案
 
 > sequence_id: SEQ-20260504-01
-> status: draft（方案）
+> status: ✅ 已完成（CHG-UX-01..07 全部合并；CHG-UX-06 收口）
 > owner: @engineering
 > created: 2026-05-03
-> 关联：SEQ-20260503-01 收口 §独立批次登记 / ADR-111 §后续序列触发清单
+> last_updated: 2026-05-03
+> 关联：SEQ-20260503-01 收口 §独立批次登记 / ADR-111 §后续序列触发清单 / ADR-112（本序列产出）
 
 ---
 

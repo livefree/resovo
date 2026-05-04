@@ -65,7 +65,7 @@ const PANEL_STYLE: React.CSSProperties = {
   boxShadow: 'var(--shadow-lg)',
   padding: '4px 0',
   minWidth: '240px',
-  outline: 'none',
+  // outline 由 InteractionStyles §5 focus-visible 兜底；浮层根非 tab target，子级 menuitem 才需 ring（CHG-UX-06 / arch-reviewer Y3）
 }
 
 const ROW_STYLE: React.CSSProperties = {
