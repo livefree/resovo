@@ -94,14 +94,14 @@ function buildGridTemplate<T>(
   hasSelection: boolean,
 ): string {
   const tracks: string[] = []
-  // CHG-UX2-03d：fixed track 改 minmax(${w}px, ${w}px) 防 grid 容器不足时压缩列；
-  // 容器不足时由 [data-table-scroll] overflow:auto 提供横滚（而非破坏列宽）
-  if (hasSelection) tracks.push(`minmax(${SELECTION_COL_W}px, ${SELECTION_COL_W}px)`)
+  // CHG-UX2-03d 修订：fixed track 用单值 ${w}px；防压缩通过 row 的 min-width: max-content 实现
+  // （minmax(w,w) 等价于 w，不能阻止 grid 压缩 fixed track）
+  if (hasSelection) tracks.push(`${SELECTION_COL_W}px`)
   for (const col of columns) {
     const pref = colMap.get(col.id)
     if (pref ? !pref.visible && !col.pinned : col.defaultVisible === false && !col.pinned) continue
     const width = pref?.width ?? col.width
-    tracks.push(width ? `minmax(${width}px, ${width}px)` : `minmax(${col.minWidth ?? 80}px, 1fr)`)
+    tracks.push(width ? `${width}px` : `minmax(${col.minWidth ?? 80}px, 1fr)`)
   }
   return tracks.join(' ')
 }
@@ -327,6 +327,8 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
       display: 'grid',
       gridTemplateColumns: gridTemplate,
       height: rowHeight,
+      // CHG-UX2-03d 修订：与 thead row 同步，强制不被 grid 压缩
+      minWidth: 'max-content',
       background: isSelected
         ? 'var(--admin-accent-soft)'
         : isHovered
@@ -416,6 +418,10 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
             display: 'grid',
             gridTemplateColumns: gridTemplate,
             height: rowHeight,
+            // CHG-UX2-03d 修订：min-width: max-content 强制 row 撑到 grid 总宽
+            // 容器不足时由 [data-table-scroll] overflow:auto 提供横滚；
+            // 不再让 grid 压缩 fixed track（实测 minmax(w,w) 也会被压缩）
+            minWidth: 'max-content',
           }}
         >
           {hasSelection && (
