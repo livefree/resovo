@@ -5175,5 +5175,22 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - **问题 3 修复（frame 右直角）**：默认可见列总宽从 1150 → **990**（容器 1011），横滚消除 → frame 4 角圆角完整
 - **新默认可见列总宽计算**：80 + 220(min) + 90 + 90 + 110 + 120 + 90 + 150 + 40 = 990
 - **测试**：typecheck / lint / 视频 unit 6f / 134t / tokens:validate / verify-token-references（107 引用 / 359 token）全绿
-- **变更摘要**：行高 + 列宽两步收口 -03 遗留；视频库视觉痛点全部修复
+- **变更摘要**：行高 + 列宽两步收口 -03 遗留；视频库视觉痛点全部修复（**用户验收发现 2 遗留视觉问题 → CHG-UX2-03c 修复**）
+
+---
+
+## 2026-05-04 · CHG-UX2-03c：修复封面图片偏左 + frame 右侧直角根因
+
+- **序列**：SEQ-20260505-01 第 3c 卡（CHG-UX2-03b 之后）
+- **依赖**：CHG-UX2-03b ✅
+- **执行模型**：claude-opus-4-7
+- **触发**：用户验收 -03b 反馈两遗留视觉问题
+- **根因诊断**：
+  1. cover 列 width 80 > 图片宽 48，cell 内默认 `justifyContent: flex-start` 让 Thumb left-align → 32px 空白靠右 → 视觉"图片左圆右直角"错觉
+  2. dt computed width 998 ≠ 期望容器宽 1011（13px 差）— `[data-table]` 是 flex column 容器但未显式 `width: 100%`，flex stretch 在某些场景下出现异常 → frame 右边离容器右边 13px → 视觉"frame 右侧无圆角"
+- **改动文件**：
+  - `packages/admin-ui/src/components/data-table/dt-styles.tsx`：`[data-table]` 加 `width: 100%`
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`：cover cell 包 `<div flex justify-center width:100%>` 居中 Thumb
+- **测试**：typecheck / lint / 视频 + thumb unit 6f / 95t 全绿
+- **变更摘要**：两步根因修复；frame 4 角圆角应完整可见；封面在 cell 内对称居中
 

@@ -33,6 +33,10 @@ const DT_CSS = `
   border-radius: var(--radius-md);
   overflow: hidden;
   height: 100%;
+  /* CHG-UX2-03c：强制 frame 撑满父容器宽度
+   * 修复 flex column 父下 dt computed width < 容器宽（实测 998 vs 期望 1011）
+   * 视觉表现为"frame 右侧直角"（右边 13px 空白让圆角看起来不到容器边） */
+  width: 100%;
   /* CHG-DESIGN-02 Step 7A：防御性兜底
    * 消费方未提供 height 约束（如父容器无 height: calc(...)）时，
    * 至少保留 240px 可视高度，避免 flex 链下塌成 0；正确"body 独立滚动"

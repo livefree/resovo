@@ -250,10 +250,16 @@ function buildVideoColumns(
 ): readonly TableColumn<VideoAdminRow>[] {
   return [
     // ── thumb 列：CHG-UX2-03 升级 poster-sm 32×48 → poster-md 48×72（解决"视频库列表过小"）──
+    // CHG-UX2-03c：cell 包一层 flex justify-center 让 thumb 在 cell 内居中
+    // （列宽 80 > 图片 48；不居中会 left-align 留白靠右，视觉"左圆右直角"错觉）
     {
       id: 'cover', header: '封面', accessor: (r) => r.cover_url,
       width: 80, minWidth: 64, enableResizing: false, defaultVisible: true,
-      cell: ({ row }) => <Thumb src={row.cover_url} size="poster-md" />,
+      cell: ({ row }) => (
+        <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+          <Thumb src={row.cover_url} size="poster-md" />
+        </div>
+      ),
     },
     // ── title 列：标题 + meta（shortId · year）──
     // CHG-UX2-03 改弹性：删 width 保留 minWidth → buildGridTemplate 走 minmax(220px, 1fr) 撑满，
