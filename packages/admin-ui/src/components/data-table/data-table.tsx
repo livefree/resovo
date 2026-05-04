@@ -94,12 +94,14 @@ function buildGridTemplate<T>(
   hasSelection: boolean,
 ): string {
   const tracks: string[] = []
-  if (hasSelection) tracks.push(`${SELECTION_COL_W}px`)
+  // CHG-UX2-03d：fixed track 改 minmax(${w}px, ${w}px) 防 grid 容器不足时压缩列；
+  // 容器不足时由 [data-table-scroll] overflow:auto 提供横滚（而非破坏列宽）
+  if (hasSelection) tracks.push(`minmax(${SELECTION_COL_W}px, ${SELECTION_COL_W}px)`)
   for (const col of columns) {
     const pref = colMap.get(col.id)
     if (pref ? !pref.visible && !col.pinned : col.defaultVisible === false && !col.pinned) continue
     const width = pref?.width ?? col.width
-    tracks.push(width ? `${width}px` : `minmax(${col.minWidth ?? 80}px, 1fr)`)
+    tracks.push(width ? `minmax(${width}px, ${width}px)` : `minmax(${col.minWidth ?? 80}px, 1fr)`)
   }
   return tracks.join(' ')
 }

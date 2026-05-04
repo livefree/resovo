@@ -5192,5 +5192,32 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - `packages/admin-ui/src/components/data-table/dt-styles.tsx`：`[data-table]` 加 `width: 100%`
   - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`：cover cell 包 `<div flex justify-center width:100%>` 居中 Thumb
 - **测试**：typecheck / lint / 视频 + thumb unit 6f / 95t 全绿
-- **变更摘要**：两步根因修复；frame 4 角圆角应完整可见；封面在 cell 内对称居中
+- **变更摘要**：两步根因修复；frame 4 角圆角应完整可见；封面在 cell 内对称居中（**用户实测 wrapper 引入新 bug → CHG-UX2-03d 修正**）
+
+---
+
+## 2026-05-04 · CHG-UX2-03d：删 wrapper + cover 列宽贴合 + grid fixed track 不压缩
+
+- **序列**：SEQ-20260505-01 第 3d 卡（CHG-UX2-03c 之后）
+- **依赖**：CHG-UX2-03c ✅
+- **执行模型**：claude-opus-4-7
+- **触发**：用户提供 devtools computed 数据揭示 -03c wrapper bug
+- **真因诊断**（user devtools 实测）：
+  - inline `width: var(--cover-poster-md-w)` 没生效，computed = 37×72（应 48×72）
+  - flex-shrink:0 失效 — `wrapper div` 让 Thumb 成 flex item，传递 grid 压缩
+  - grid 容器不足时压缩 fixed track（cover 列从 80 → ~65），传递到 wrapper（45）→ Thumb（37）
+  - frame 4 角已 8px radius ✓（CHG-UX2-03c width:100% 修好了 frame，无关）
+- **改动文件**：
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`：
+    · 删 cover cell 的 wrapper div（彻底回滚 -03c 引入的伪装）
+    · cover width 80 → 72（Thumb 48 + cell padding 24 = 72，贴合 cell content）
+  - `packages/admin-ui/src/components/data-table/data-table.tsx`：
+    · `buildGridTemplate` fixed width 输出从 `${w}px` 改 `minmax(${w}px, ${w}px)`
+    · selection 列同样改 minmax（`SELECTION_COL_W` 不被 grid 压缩）
+    · 设计意图：grid 容器不足时由 dt-scroll overflow:auto 提供横滚（保留列宽）而非破坏列宽
+- **设计权衡**：
+  - 之前：grid 自动压缩 fixed track → 列宽不保 + 视觉错乱
+  - 现在：grid 保持列宽 → viewport 不足时横滚（用户已接受 frame 圆角 + scrollbar 共存）
+- **测试**：typecheck / lint / unit 22f / 367t（含 VideoListClient + DataTable + 全部 table 测试）全绿
+- **变更摘要**：cover 列 = 72px 紧贴 Thumb；grid fixed track 不再被压缩；Thumb width-shrink 保护恢复
 
