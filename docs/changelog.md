@@ -5130,3 +5130,25 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **测试**：typecheck / lint / unit 252f / 3194t / tokens:validate / verify-token-references（103 引用 / 358 token）全绿
 - **变更摘要**：业务零 fontSize 裸值；UI 全局视觉对齐设计稿 --fs-* 系列；为后续 UI 第二批列宽弹性化 / VideoEditDrawer 接入 Thumb 解锁
 
+---
+
+## 2026-05-04 · CHG-UX2-03：VideoListClient title 列弹性化 + cover 列 poster-md（核心痛点修复）
+
+- **序列**：SEQ-20260505-01 第 3 卡（视频库核心痛点修复）
+- **依赖**：CHG-UX2-01 ✅ / CHG-UX2-02 ✅ / CHG-UX2-02b ✅
+- **执行模型**：claude-opus-4-7
+- **核心痛点**：用户反馈"页面变宽时表格列头展开有问题" + "视频库列表封面过小" + 表格"左圆右直角"
+- **改动文件**：
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`：
+    · cover 列 `width: 60 → 80` / `minWidth: 56 → 64`；`<Thumb size="poster-sm">` → `<Thumb size="poster-md">`（32×48 → 48×72）
+    · title 列**删 `width: 320`** 保留 `minWidth: 220` → `buildGridTemplate` 走 `minmax(220px, 1fr)` 弹性
+    · PAGE_STYLE padding/gap 接入 admin-layout/spacing token
+- **核心痛点连锁修复（设计意图）**：
+  - 用户痛点 ① "封面过小" — cover 升级 poster-md 48×72（视觉量级 1.5×）
+  - 用户痛点 ② "页面宽时表格列头展开问题" — title 弹性 1fr 撑满剩余空间
+  - 用户痛点 ③ "frame 左圆右直角" — title 弹性后列总宽 ≤ 容器宽 → 横向 scrollbar 消失 → frame 4 角圆角完整可见（根因连锁修复）
+- **不动**：其他 11 列（type/probe/visibility/...）保留固定 width（业务密度需要）
+- **测试**：typecheck / lint / 视频相关 unit 5f / 76t 全绿
+- **视觉验收**：待用户 dev server 实测（playwright session 过期）
+- **变更摘要**：视频库 3 个用户痛点连锁修复；为 -04 VideoEditDrawer 接入 Thumb 铺路
+

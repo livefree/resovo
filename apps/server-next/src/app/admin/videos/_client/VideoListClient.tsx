@@ -249,16 +249,18 @@ function buildVideoColumns(
   onEditRequest: (id: string) => void,
 ): readonly TableColumn<VideoAdminRow>[] {
   return [
-    // ── thumb 列：reference §6.1 32×48 竖版 poster ──
+    // ── thumb 列：CHG-UX2-03 升级 poster-sm 32×48 → poster-md 48×72（解决"视频库列表过小"）──
     {
       id: 'cover', header: '封面', accessor: (r) => r.cover_url,
-      width: 60, minWidth: 56, enableResizing: false, defaultVisible: true,
-      cell: ({ row }) => <Thumb src={row.cover_url} size="poster-sm" />,
+      width: 80, minWidth: 64, enableResizing: false, defaultVisible: true,
+      cell: ({ row }) => <Thumb src={row.cover_url} size="poster-md" />,
     },
     // ── title 列：标题 + meta（shortId · year）──
+    // CHG-UX2-03 改弹性：删 width 保留 minWidth → buildGridTemplate 走 minmax(220px, 1fr) 撑满，
+    // 消除右侧空白 + 消除横向溢出（frame "圆角右直角"根因连锁修复）
     {
       id: 'title', header: '标题', accessor: (r) => r.title,
-      width: 320, minWidth: 220, enableResizing: true, enableSorting: true, defaultVisible: true, pinned: true,
+      minWidth: 220, enableResizing: true, enableSorting: true, defaultVisible: true, pinned: true,
       cell: ({ row }) => (
         <div style={TITLE_CELL_STYLE}>
           <span style={TITLE_TEXT_STYLE}>{row.title}</span>
@@ -370,8 +372,9 @@ const PAGE_STYLE: CSSProperties = {
   flexDirection: 'column',
   height: '100%',
   minHeight: 0,
-  gap: '12px',
-  padding: '20px 24px 0',
+  // CHG-UX2-03 接入 admin-layout/spacing.ts token
+  gap: 'var(--section-gap)',
+  padding: 'var(--page-padding-y) var(--page-padding-x) 0',
 }
 
 // reference §5.3 视频库 page__head：title「视频库」+ sub「N 条视频 · ...」+ actions
