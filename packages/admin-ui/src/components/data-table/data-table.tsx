@@ -450,6 +450,8 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
               }
             }
             const isMenuOpen = menuColId === col.id
+            // CHG-UX2-03d 真修复：columnheader 同样加 minWidth = col.width 防 grid 压缩
+            const headerMinWidth = col.width !== undefined ? `${col.width}px` : undefined
             return (
               <div
                 key={col.id}
@@ -458,7 +460,11 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
                 aria-haspopup={enableHeaderMenu ? 'menu' : undefined}
                 aria-expanded={enableHeaderMenu ? isMenuOpen : undefined}
                 data-th-interactive={interactive ? 'true' : undefined}
-                style={{ ...TH_STYLE, cursor: interactive ? 'pointer' : 'default' }}
+                style={{
+                  ...TH_STYLE,
+                  cursor: interactive ? 'pointer' : 'default',
+                  ...(headerMinWidth ? { minWidth: headerMinWidth } : {}),
+                }}
                 tabIndex={interactive ? 0 : undefined}
                 onClick={interactive ? (e) => onHeaderActivate(e.currentTarget) : undefined}
                 onKeyDown={interactive ? (e) => {
@@ -530,6 +536,10 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
                 const content = col.cell
                   ? col.cell({ row, value, rowIndex: idx })
                   : String(value ?? '')
+                // CHG-UX2-03d 真修复：给 fixed-width cell 加 minWidth = col.width
+                // grid track sizing 必须尊重 grid item min-width，无法压缩 fixed track
+                // 弹性列（无 col.width）保持 minmax(minWidth, 1fr) 弹性行为
+                const cellMinWidth = col.width !== undefined ? `${col.width}px` : undefined
                 return (
                   <div
                     key={col.id}
@@ -537,6 +547,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
                     style={{
                       ...TD_STYLE,
                       ...(col.overflowVisible ? { overflow: 'visible' } : {}),
+                      ...(cellMinWidth ? { minWidth: cellMinWidth } : {}),
                     }}
                   >
                     {content}
