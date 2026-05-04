@@ -5087,3 +5087,29 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **测试**：typecheck / lint / unit 252f / 3193t / tokens:validate / verify-token-references 全绿（1 flaky StagingTable，单跑通过；与本卡无关）
 - **变更摘要**：第二批序列 token 基座建立完成；为 CHG-UX2-02..05 消费方迁移解锁基础设施；零业务文件改动
 
+---
+
+## 2026-05-04 · CHG-UX2-02：thumb.tsx 接入 admin-layout/cover token + 加 poster-xl
+
+- **序列**：SEQ-20260505-01 第 2 卡
+- **依赖**：CHG-UX2-01 ✅
+- **执行模型**：claude-opus-4-7
+- **改动文件**：
+  - `packages/admin-ui/src/components/cell/thumb.tsx`：
+    · `sizeSpec` 函数 6 case 全部改 `var(--cover-*-{w|h})` 引用
+    · `SizeSpec` 接口 width/height 类型 `number → string`（CSS 变量字符串）
+    · root style.width/height 直接消费 var() 字符串
+  - `packages/admin-ui/src/components/cell/thumb.types.ts`：
+    · `ThumbSize` union 加 `'poster-xl'`
+    · 文档同步 poster-md 38×56 → 48×72（CHG-UX2-01 校准）
+    · 6 size 描述更新（含 poster-xl 触发场景 CHG-UX2-EXT-A）
+  - `tests/unit/components/admin-ui/cell/thumb.test.tsx`：
+    · 6 size 断言改 `var(--cover-*-{w|h})` 字符串
+    · 新增 poster-xl 渲染断言（含 borderRadius radius-md）
+    · 19 tests pass（+1）
+- **设计要点**：
+  - jsdom 不解析 CSS 变量 → inline style.width 保留 var() 字符串，运行时浏览器才解析为 px
+  - 视觉变化：poster-md 在所有消费方实测从 38×56 升到 48×72（VideoEditDrawer 等；视频库列表升级留 -03）
+- **测试**：typecheck / lint / unit 252f / 3194t / tokens:validate / verify-token-references 全绿（1 flaky 与本卡无关，与 CHG-UX2-01 同一现象）
+- **变更摘要**：thumb 数值真源迁移到 design-tokens；新增 poster-xl variant；为 -03 视频库消费方升级解锁
+

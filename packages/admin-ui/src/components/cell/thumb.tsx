@@ -1,13 +1,15 @@
 'use client'
 
 /**
- * thumb.tsx — Thumb 共享组件实装（CHG-DESIGN-12 12B；v1.6 patch · CHG-SN-4-FIX-E 加 poster-lg）
+ * thumb.tsx — Thumb 共享组件实装（CHG-DESIGN-12 12B；v1.6 patch · CHG-SN-4-FIX-E 加 poster-lg；
+ *   CHG-UX2-01/02 接入 admin-layout/cover.ts token + 加 poster-xl）
  *
- * 真源：thumb.types.ts（12A Opus PASS 契约 + v1.6 poster-lg 扩展）
+ * 真源：thumb.types.ts（12A Opus PASS 契约 + v1.6 poster-lg 扩展 + CHG-UX2-01 poster-xl）；
+ *       数值真源 packages/design-tokens/src/admin-layout/cover.ts（CHG-UX2-01）
  *
  * 实装契约（12A 一致性硬约束）：
- *   - 5 size variant：poster-sm 32×48 / poster-md 38×56 / poster-lg 80×120 /
- *     banner-sm 64×36 / square-sm 28×28
+ *   - 6 size variant：poster-sm 32×48 / poster-md 48×72 / poster-lg 80×120 /
+ *     poster-xl 120×180 / banner-sm 64×36 / square-sm 28×28
  *   - src 非空 → <img object-fit:cover>；空 → placeholder span
  *   - decorative=true（默认） → alt='' + aria-hidden=true
  *   - decorative=false + alt 缺失 → dev warn
@@ -20,20 +22,23 @@ import React from 'react'
 import type { ThumbProps, ThumbSize } from './thumb.types'
 
 interface SizeSpec {
-  readonly width: number
-  readonly height: number
+  /** width 走 CSS 变量字符串（var(--cover-*-w)） */
+  readonly width: string
+  /** height 走 CSS 变量字符串（var(--cover-*-h)） */
+  readonly height: string
   readonly radius: string
 }
 
 function sizeSpec(size: ThumbSize): SizeSpec {
   switch (size) {
-    case 'poster-md': return { width: 38, height: 56, radius: 'var(--radius-sm)' }
-    case 'poster-lg': return { width: 80, height: 120, radius: 'var(--radius-sm)' }
-    case 'banner-sm': return { width: 64, height: 36, radius: 'var(--radius-sm)' }
-    case 'square-sm': return { width: 28, height: 28, radius: 'var(--radius-md)' }
+    case 'poster-md': return { width: 'var(--cover-poster-md-w)', height: 'var(--cover-poster-md-h)', radius: 'var(--radius-sm)' }
+    case 'poster-lg': return { width: 'var(--cover-poster-lg-w)', height: 'var(--cover-poster-lg-h)', radius: 'var(--radius-sm)' }
+    case 'poster-xl': return { width: 'var(--cover-poster-xl-w)', height: 'var(--cover-poster-xl-h)', radius: 'var(--radius-md)' }
+    case 'banner-sm': return { width: 'var(--cover-banner-sm-w)', height: 'var(--cover-banner-sm-h)', radius: 'var(--radius-sm)' }
+    case 'square-sm': return { width: 'var(--cover-square-sm-w)', height: 'var(--cover-square-sm-h)', radius: 'var(--radius-md)' }
     case 'poster-sm':
     default:
-      return { width: 32, height: 48, radius: 'var(--radius-sm)' }
+      return { width: 'var(--cover-poster-sm-w)', height: 'var(--cover-poster-sm-h)', radius: 'var(--radius-sm)' }
   }
 }
 
@@ -57,8 +62,8 @@ export function Thumb({
 
   const spec = sizeSpec(size)
   const rootStyle: React.CSSProperties = {
-    width: `${spec.width}px`,
-    height: `${spec.height}px`,
+    width: spec.width,
+    height: spec.height,
     borderRadius: spec.radius,
     background: 'var(--bg-surface-elevated)',
     overflow: 'hidden',

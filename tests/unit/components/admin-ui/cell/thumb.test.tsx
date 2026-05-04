@@ -8,42 +8,52 @@ import { Thumb } from '../../../../../packages/admin-ui/src/components/cell/thum
 
 afterEach(() => cleanup())
 
-describe('Thumb — 5 size variant', () => {
-  it('poster-sm 默认 → 32×48', () => {
+describe('Thumb — 6 size variant（CHG-UX2-02 接入 admin-layout/cover token + 加 poster-xl）', () => {
+  it('poster-sm 默认 → var(--cover-poster-sm-{w|h}) (32×48)', () => {
     const { container } = render(<Thumb src="x.png" />)
     const root = container.querySelector('[data-thumb]') as HTMLElement
     expect(root.getAttribute('data-size')).toBe('poster-sm')
-    expect(root.style.width).toBe('32px')
-    expect(root.style.height).toBe('48px')
+    expect(root.style.width).toBe('var(--cover-poster-sm-w)')
+    expect(root.style.height).toBe('var(--cover-poster-sm-h)')
   })
 
-  it('poster-md → 38×56', () => {
+  it('poster-md → var(--cover-poster-md-{w|h}) (CHG-UX2-01 校准 38×56 → 48×72)', () => {
     const { container } = render(<Thumb src="x.png" size="poster-md" />)
     const root = container.querySelector('[data-thumb]') as HTMLElement
-    expect(root.style.width).toBe('38px')
-    expect(root.style.height).toBe('56px')
+    expect(root.style.width).toBe('var(--cover-poster-md-w)')
+    expect(root.style.height).toBe('var(--cover-poster-md-h)')
   })
 
-  it('poster-lg → 80×120（v1.6 G6 审核台中央海报 / 详情页主图）', () => {
+  it('poster-lg → var(--cover-poster-lg-{w|h}) (80×120; v1.6 G6 审核台中央海报)', () => {
     const { container } = render(<Thumb src="x.png" size="poster-lg" />)
     const root = container.querySelector('[data-thumb]') as HTMLElement
     expect(root.getAttribute('data-size')).toBe('poster-lg')
-    expect(root.style.width).toBe('80px')
-    expect(root.style.height).toBe('120px')
+    expect(root.style.width).toBe('var(--cover-poster-lg-w)')
+    expect(root.style.height).toBe('var(--cover-poster-lg-h)')
   })
 
-  it('banner-sm → 64×36', () => {
+  it('poster-xl → var(--cover-poster-xl-{w|h}) (120×180; CHG-UX2-01 新增详情页 hero)', () => {
+    const { container } = render(<Thumb src="x.png" size="poster-xl" />)
+    const root = container.querySelector('[data-thumb]') as HTMLElement
+    expect(root.getAttribute('data-size')).toBe('poster-xl')
+    expect(root.style.width).toBe('var(--cover-poster-xl-w)')
+    expect(root.style.height).toBe('var(--cover-poster-xl-h)')
+    // poster-xl borderRadius 改 md（其余 sm）
+    expect(root.style.borderRadius).toBe('var(--radius-md)')
+  })
+
+  it('banner-sm → var(--cover-banner-sm-{w|h}) (64×36)', () => {
     const { container } = render(<Thumb src="x.png" size="banner-sm" />)
     const root = container.querySelector('[data-thumb]') as HTMLElement
-    expect(root.style.width).toBe('64px')
-    expect(root.style.height).toBe('36px')
+    expect(root.style.width).toBe('var(--cover-banner-sm-w)')
+    expect(root.style.height).toBe('var(--cover-banner-sm-h)')
   })
 
-  it('square-sm → 28×28', () => {
+  it('square-sm → var(--cover-square-sm-{w|h}) (28×28)', () => {
     const { container } = render(<Thumb src="x.png" size="square-sm" />)
     const root = container.querySelector('[data-thumb]') as HTMLElement
-    expect(root.style.width).toBe('28px')
-    expect(root.style.height).toBe('28px')
+    expect(root.style.width).toBe('var(--cover-square-sm-w)')
+    expect(root.style.height).toBe('var(--cover-square-sm-h)')
   })
 })
 
