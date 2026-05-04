@@ -112,7 +112,9 @@ const TH_STYLE: React.CSSProperties = {
   fontSize: '12px',
   fontWeight: 600,
   color: 'var(--fg-muted)',
-  background: 'transparent',
+  // CHG-UX-05d：bg 必须不透明（sticky 表头滚动时下方 row 不能穿透）；
+  // 与 [data-table] 容器同色（surface-raised），视觉与 CHG-UI-05a 透明继承等效
+  background: 'var(--bg-surface-raised)',
   borderBottom: '1px solid var(--border-subtle)',
   cursor: 'default',
   userSelect: 'none',
@@ -444,7 +446,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
                 aria-sort={isSorted ? (query.sort.direction === 'asc' ? 'ascending' : 'descending') : undefined}
                 aria-haspopup={enableHeaderMenu ? 'menu' : undefined}
                 aria-expanded={enableHeaderMenu ? isMenuOpen : undefined}
-                data-interactive={interactive ? 'icon' : undefined}
+                data-th-interactive={interactive ? 'true' : undefined}
                 style={{ ...TH_STYLE, cursor: interactive ? 'pointer' : 'default' }}
                 tabIndex={interactive ? 0 : undefined}
                 onClick={interactive ? (e) => onHeaderActivate(e.currentTarget) : undefined}
@@ -457,7 +459,9 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
                 {enableHeaderMenu && (
                   <span
                     aria-hidden="true"
-                    style={{ marginLeft: '4px', opacity: isMenuOpen ? 1 : 0.45, fontSize: '12px', color: 'var(--fg-muted)' }}
+                    data-th-menu-icon
+                    data-open={isMenuOpen ? 'true' : undefined}
+                    style={{ marginLeft: '4px', fontSize: '12px', color: 'var(--fg-muted)' }}
                   >⋯</span>
                 )}
               </div>

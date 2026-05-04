@@ -174,6 +174,32 @@ const DT_CSS = `
   color: var(--fg-default);
 }
 
+/* ── 表头行交互（CHG-UX-05d）─────── *
+ * 表头是 sticky 元素 + 用户期望"文字高亮（非灰化背景）+ 三点 hover 显隐"；
+ * 不归 [data-interactive="icon"] 通用类，单独维护本规则块。
+ *
+ * data-th-interactive="true"：sortable 或 enableHeaderMenu（data-table.tsx 计算）
+ * data-th-menu-icon：enableHeaderMenu 渲染的 ⋯ 图标
+ * data-th-menu-icon[data-open="true"]：菜单展开时（即使未 hover 也保持可见） */
+[data-table] [role="columnheader"][data-th-interactive="true"] {
+  transition: color var(--duration-fast) var(--easing-ease-out);
+}
+[data-table] [role="columnheader"][data-th-interactive="true"]:hover {
+  color: var(--fg-default);
+}
+[data-table] [role="columnheader"] [data-th-menu-icon] {
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--easing-ease-out);
+}
+[data-table] [role="columnheader"]:hover [data-th-menu-icon],
+[data-table] [role="columnheader"] [data-th-menu-icon][data-open="true"] {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-table] [role="columnheader"][data-th-interactive="true"],
+  [data-table] [role="columnheader"] [data-th-menu-icon] { transition: none; }
+}
+
 /* ── Row 分割线（CHG-UI-05 显式落地；arch-reviewer C-3 约束 row hover/selected 仍走 inline） ─────── *
  * 行分割线 + 最后一行 reset，避免与 foot/bulk 顶边重线；hover/selected 仍由 data-table.tsx
  * rowStyle 内联控制（var(--bg-surface-row) / var(--admin-accent-soft)）。 */

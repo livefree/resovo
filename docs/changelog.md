@@ -4947,3 +4947,27 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **测试**：typecheck / lint / unit 252f / 3141t / tokens:validate / verify-token-references 全绿
 - **变更摘要**：CHG-UX-05b 路线错误（删 inline 引入 user-agent default 视觉回归）已回滚；新方案用 !important 在 hover 状态强制赢 inline default，default 视觉恢复 + hover 反馈生效
 
+---
+
+## 2026-05-03 · CHG-UX-05d：DataTable 表头行专属交互（不透明 + 文字高亮 + 三点 hover 显隐）
+
+- **序列**：SEQ-20260504-01 第 5 卡补充（CHG-UX-05c 之后）
+- **依赖**：CHG-UX-05c ✅
+- **执行模型**：claude-opus-4-7
+- **触发**：用户验收 3 项反馈 ——
+  1. 表头 sticky 透明导致滚动时被 row 内容穿透重叠
+  2. hover 当前是"灰化"（CHG-UX-05 给 columnheader 加 `data-interactive="icon"` 触发 §5.1 透明叠加），应改为**文字高亮**
+  3. 文字旁的 ⋯（enableHeaderMenu 时渲染）默认 opacity 0.45 已可见，应**仅 hover 时显示**（菜单展开时保持显示）
+- **方案**：表头是特殊场景（sticky + 文字高亮 + 子元素显隐），不归 `data-interactive="icon"` 通用类，改用 dt-styles 专属规则
+- **改动文件**：
+  - `packages/admin-ui/src/components/data-table/data-table.tsx`：
+    · TH_STYLE.background: `'transparent'` → `'var(--bg-surface-raised)'`（不透明，与 [data-table] 容器同色，sticky 滚动时不漏；视觉等效 CHG-UI-05a 透明继承）
+    · columnheader div 移除 `data-interactive="icon"`，改 `data-th-interactive={interactive ? 'true' : undefined}`
+    · 三点 span：去 inline `opacity: isMenuOpen ? 1 : 0.45`；加 `data-th-menu-icon` + `data-open={isMenuOpen ? 'true' : undefined}`
+  - `packages/admin-ui/src/components/data-table/dt-styles.tsx`（新增 23 行规则块）：
+    · `[data-th-interactive="true"]:hover { color: var(--fg-default) }` — 文字高亮
+    · `[data-th-menu-icon] { opacity: 0 }` 默认 + `:hover ... [data-th-menu-icon]` / `[data-open="true"]` 时 opacity 1
+    · prefers-reduced-motion 兜底
+- **测试**：typecheck / lint / unit 252f / 3141t / tokens:validate / verify-token-references 全绿
+- **变更摘要**：表头 sticky 滚动不穿透；hover 反馈从背景灰化改为文字高亮；⋯ 默认隐藏，hover/menu open 时显示
+
