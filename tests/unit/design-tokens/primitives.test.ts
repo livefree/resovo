@@ -65,8 +65,33 @@ describe('design-tokens primitives', () => {
   })
 
   describe('typography', () => {
-    it('fontSize has 9 steps', () => {
-      expect(Object.keys(typography.fontSize)).toHaveLength(9)
+    it('fontSize has 13 steps (CHG-UX2-01: +4 新档 2xs/xxs/sm-tight/sm-loose)', () => {
+      expect(Object.keys(typography.fontSize)).toHaveLength(13)
+    })
+    it('fontSize 包含设计稿对齐的 4 新增档', () => {
+      expect(typography.fontSize['2xs']).toBe('0.625rem')
+      expect(typography.fontSize.xxs).toBe('0.6875rem')
+      expect(typography.fontSize['sm-tight']).toBe('0.8125rem')
+      expect(typography.fontSize['sm-loose']).toBe('0.9375rem')
+    })
+    it('fontSize 3xl/4xl 校准对齐设计稿 --fs-28/--fs-32（CHG-UX2-01）', () => {
+      expect(typography.fontSize['3xl']).toBe('1.75rem')   // 28px
+      expect(typography.fontSize['4xl']).toBe('2rem')      // 32px
+    })
+    it('既有 6 个抽象 key 数值零变化（向后兼容）', () => {
+      expect(typography.fontSize.xs).toBe('0.75rem')        // 12px
+      expect(typography.fontSize.sm).toBe('0.875rem')       // 14px
+      expect(typography.fontSize.base).toBe('1rem')         // 16px
+      expect(typography.fontSize.lg).toBe('1.125rem')       // 18px
+      expect(typography.fontSize.xl).toBe('1.25rem')        // 20px
+      expect(typography.fontSize['2xl']).toBe('1.5rem')     // 24px
+    })
+    it('fontSize ramp 严格单调递增（10/11/12/13/14/15/16/18/20/24/28/32/48）', () => {
+      const order = ['2xs', 'xxs', 'xs', 'sm-tight', 'sm', 'sm-loose', 'base', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl'] as const
+      const values = order.map(k => parseFloat(typography.fontSize[k]))
+      for (let i = 1; i < values.length; i++) {
+        expect(values[i]).toBeGreaterThan(values[i - 1])
+      }
     })
     it('lineHeight values are unitless strings', () => {
       for (const v of Object.values(typography.lineHeight)) {

@@ -40,6 +40,9 @@ export const adminShellSurfaces = {
   'admin-input-radius': '6px',
 
   // 11px 字号（design spec --fs-11，用于 count badge）
+  // @deprecated CHG-UX2-01：与 --font-size-xxs (0.6875rem=11px) 同值；
+  //             新代码优先消费 --font-size-xxs；本别名保留作为 admin-shell 命名空间兼容入口
+  //             直到 CHG-UX-EXT-E 全量清理（task-queue 已登记触发型 follow-up）
   'admin-count-font-size': '11px',
 
   // 全站统一滚动条宽度（reference.md §0-6 / §3.4）

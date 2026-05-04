@@ -5052,3 +5052,38 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 用户验收问题 1（背景色非预期变化）+ 问题 2（业务页无 hover）+ 问题 3（表头需求）全部解决
 - **后续解锁**：第二批密度 / 第三批 chip / 第四批工具栏 / CHG-UX-EXT-A..D（触发型）/ details/summary 复审 / a11y contrast 测试 / e2e hover 视觉基线
 
+---
+
+## 2026-05-04 · CHG-UX2-01：token 层 spacing / cover / table 扩展 / typography fontSize
+
+- **序列**：SEQ-20260505-01（UI 优化第二批）首卡 — token 基座
+- **方案文档**：`docs/designs/backend_design_v2.1/density-spacing-cover-alignment-plan.md`
+- **执行模型**：claude-opus-4-7
+- **子代理调用**：arch-reviewer (claude-opus-4-7) — **A- / PASS**（红线 0；8 黄线不阻塞）
+- **变更原因**：用户反馈 4 项痛点（间距裸值散落 / 列头展开 / 封面尺寸 / 字体缺档），第二批序列建立 token 真源
+- **改动文件**：
+  - `packages/design-tokens/src/admin-layout/spacing.ts`（新建，11 槽位：page/section-gap/list-row/card/toolbar/foot 5 类场景）
+  - `packages/design-tokens/src/admin-layout/cover.ts`（新建，12 槽位：5 size × {w,h}，含 poster-md 校准 38→48 + 新增 poster-xl 120×180）
+  - `packages/design-tokens/src/admin-layout/table.ts`（扩展 row-h-relaxed: 48px）
+  - `packages/design-tokens/src/admin-layout/index.ts`（导出 adminSpacing / adminCover）
+  - `packages/design-tokens/src/admin-layout/surfaces.ts`（admin-count-font-size 加 deprecation 注释 → 优先消费 --font-size-xxs；arch-reviewer S1）
+  - `packages/design-tokens/src/primitives/typography.ts`（fontSize +4 新档：2xs(10) / xxs(11) / sm-tight(13) / sm-loose(15) / 校准 3xl: 30→28 / 4xl: 36→32）
+  - `packages/design-tokens/scripts/build-css.ts`（adminSpacing/adminCover 加入 themeIndependent 数组）
+  - `packages/design-tokens/src/css/tokens.css`（重生成 474 行，新增 28 行 var）
+  - `tests/unit/design-tokens/admin-layout.test.ts`（+29 测试：spacing/cover/table-relaxed/CSS 变量产出快照）
+  - `tests/unit/design-tokens/primitives.test.ts`（+4 测试：fontSize 13 档 / 4 新档 / 校准 / 既有 6 抽象 key 零变化 / 单调性）
+- **设计要点**：
+  - 6 个抽象 fontSize key（xs/sm/base/lg/xl/2xl）数值零变化（向后兼容）
+  - 13 档对齐设计稿 `--fs-11/12/13/14/15/16/18/20/24/28/32` 11 档（被动对齐而非主动设计）
+  - poster ramp 严格 2:3 比例 + 单调递增（sm < md < lg < xl）
+  - spacing 5 类场景命名层（page/section/list-row/card/toolbar/foot），与 primitives space 原子刻度协同
+- **arch-reviewer 关键反馈**：
+  - **A- / PASS**（红线 0）
+  - Y1 typography 校准 deprecation 真空 → CHG-UX2-06 ADR-113 显式记录
+  - Y2 admin-count-font-size 与 --font-size-xxs 重复 → 本卡顺手补 @deprecated 注释（已应用）
+  - Y3-Y8 均不阻塞（选型负担 / spacing 缺 drawer 槽位 / cover poster-md 校准向后兼容 / poster-xl 未消费等），登记触发型 follow-up
+  - S1 deprecation 注释 → 本卡顺手处理
+  - S2-S5 选型指引 / ADR-113 §X.1-X.2 校准记录 / spacing ADR 沉淀 / 业务零消费断言 → 登记 CHG-UX2-06 收口
+- **测试**：typecheck / lint / unit 252f / 3193t / tokens:validate / verify-token-references 全绿（1 flaky StagingTable，单跑通过；与本卡无关）
+- **变更摘要**：第二批序列 token 基座建立完成；为 CHG-UX2-02..05 消费方迁移解锁基础设施；零业务文件改动
+

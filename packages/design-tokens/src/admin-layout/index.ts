@@ -18,3 +18,9 @@ export type { AdminShellZIndexToken, AdminLayoutZIndexBusinessToken } from './z-
 
 export { adminShellSurfaces } from './surfaces.js'
 export type { AdminShellSurfacesToken } from './surfaces.js'
+
+export { adminSpacing } from './spacing.js'
+export type { AdminSpacingToken } from './spacing.js'
+
+export { adminCover } from './cover.js'
+export type { AdminCoverToken } from './cover.js'

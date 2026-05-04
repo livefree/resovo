@@ -10,7 +10,7 @@ import { motion } from '../src/primitives/motion.js'
 import { shadow } from '../src/primitives/shadow.js'
 import { zIndex } from '../src/primitives/z-index.js'
 import { bg, fg, border, accent, surface, state, dualSignal, tag, pattern, routeTransition, layout, interactive } from '../src/semantic/index.js'
-import { adminShell, adminTable, adminDensity, adminShellZIndex, adminLayoutZIndexBusiness, adminShellSurfaces } from '../src/admin-layout/index.js'
+import { adminShell, adminTable, adminDensity, adminShellZIndex, adminLayoutZIndexBusiness, adminShellSurfaces, adminSpacing, adminCover } from '../src/admin-layout/index.js'
 import { player } from '../src/components/player.js'
 import { defaultBrandOverrides, DEFAULT_BRAND_SLUG } from '../src/brands/default.js'
 
@@ -146,7 +146,7 @@ function buildThemeIndependentVars(): Array<[string, string]> {
   // adminShellZIndex（CHG-SN-2-02 新增）：ADR-103a §4.3 4 级 z-index 规范
   // adminLayoutZIndexBusiness（CHG-SN-2-13）：ADR-103 §4.6 业务 Drawer/Modal/AdminDropdown z-index
   // adminShellSurfaces（fix(CHG-SN-2-12)#vs）：admin 专属视觉 token（accent-soft / warn-soft / avatar-bg 等）
-  for (const group of [adminShell, adminTable, adminDensity, adminShellZIndex, adminLayoutZIndexBusiness, adminShellSurfaces]) {
+  for (const group of [adminShell, adminTable, adminDensity, adminShellZIndex, adminLayoutZIndexBusiness, adminShellSurfaces, adminSpacing, adminCover]) {
     for (const [varName, value] of Object.entries(group as Record<string, string>)) {
       out.push([`--${varName}`, value])
     }
