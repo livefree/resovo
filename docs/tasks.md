@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- CHG-SN-4-10-C ✅ 已完成（2026-05-05）；最后一卡 CHG-SN-4-10-D（arch-reviewer milestone 评级 + audit 文档落盘）等待用户确认开工 -->
+<!-- 当前无进行中任务；M-SN-4 milestone ✅ 已闭环（2026-05-05，arch-reviewer B+ / PASS），M-SN-5 可启动 -->

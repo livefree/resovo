@@ -1900,13 +1900,24 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
   - ✅ setListRefreshKey grep 0 命中
 - **风险结论**：本卡 e2e 跑通过程**未暴露 ModerationConsole 实装漏洞** → -10-D milestone 评级阶段无 BLOCKER 风险来源
 
-#### CHG-SN-4-10-D · arch-reviewer milestone 评级 + audit 文档落盘 ⏳ 待开
+#### CHG-SN-4-10-D · arch-reviewer milestone 评级 + audit 文档落盘 ✅ 完成（2026-05-05）
 
-- **依赖**：-10-A / -10-A2 / -10-B / -10-C 全部 ✅
 - **执行模型**：claude-opus-4-7
-- **强制子代理**：arch-reviewer (claude-opus-4-7)
-- **工作量**：~1.5h
-- **交付物**：`docs/M-SN-4-milestone-audit-{date}.md`
+- **强制子代理**：arch-reviewer (claude-opus-4-7) — **B+ / PASS**（5/5 必检 + 8/9 准入达 + 1/9 显式登记 cutover 前 + 0 红线 / 4 黄线）
+- **交付物**：
+  - `docs/M-SN-4-milestone-audit-2026-05-05.md`（完整 milestone audit + 5 项审核 + 9 项准入核对 + cutover 前必清欠账 §6 总清单 + Y1-Y4 处理路径）
+  - `docs/rules/api-rules.md`：追加"admin_audit_log 写入规范"章节（Y2 闭合 — 字面量调用约束 + 守卫机制 + 新增流程）
+- **黄线处理**：
+  - Y1 cutover-blocker 子序列母卡 → 转登记到 task-queue（建议 M-SN-5 第一周立卡）
+  - Y2 audit 守卫正则约束 → 本卡 docs/rules/api-rules.md 闭合
+  - Y3 DEBT-SN-4-05-A 标 🔴 cutover-blocker → milestone audit §6 已标记
+  - Y4 visual harness 建立后回溯 baseline → milestone audit §6 已写入 DEBT-SN-4-A 触发条件
+- **CHG-SN-4-10 父卡总收口**：M-SN-4 milestone 闭环 → 解锁 M-SN-5 启动
+- **完成判据达成**：
+  - ✅ arch-reviewer 评级 B+（A 或 B 通过准入）
+  - ✅ milestone audit 文档落盘 + 引用关系正确
+  - ✅ 4 黄线全部处理（1 闭合 / 3 转登记）
+  - ✅ task-queue / changelog 同步
 
 
 ### CHG-SN-4-01 · SplitPane admin-ui 原语 ✅ 完成（2026-05-01）
@@ -1957,6 +1968,19 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 | DEBT-SN-3-A | CHG-SN-3-11 | `docs/server_next_view_template.md` 模板文档（后续视图卡参考实现模板）| M-SN-4 milestone 完成时补做 |
 | DEBT-SN-3-B | CHG-SN-3-12 | staging 环境 cookie + nginx 反代 e2e 演练（需人工参与）| cutover 前，需用户确认 staging 可用 |
 | DEBT-SN-3-C | CHG-SN-3-13 | M-SN-3 milestone 阶段审计（Opus arch-reviewer A/B/C 评级）| cutover 前，依赖 DEBT-SN-3-B 完成或书面 staging-waiver |
+
+### 后续触发型 follow-up（M-SN-5 启动建议）
+
+- **M-SN-5-PRE-01 · cutover-blocker 子序列母卡**：M-SN-4 milestone audit Y1 触发；建议 M-SN-5 第一周立卡，覆盖以下子项：
+  - 🔴 DEBT-SN-3-B（staging cookie + nginx e2e 演练，需人工）
+  - 🔴 DEBT-SN-3-C（M-SN-3 milestone 阶段审计，依赖 -3-B 或 staging-waiver）
+  - 🔴 DEBT-SN-4-05-A（toggleSource 乐观锁缺失，并发安全）
+  - 🔴 DEBT-SN-4-05-B（feedback.ts XFF trustProxy 白名单，IP 欺骗绕过 rate-limit）
+  - 🟠 DEBT-SN-4-A（5 件下沉组件 ~12 张 Playwright `toHaveScreenshot()` baseline + 建立后必须回溯 M-SN-4 改动 baseline）
+  - 🟠 DEBT-SN-4-07-A（visual baseline 7 张占位 PNG 替换为真截图）
+  - 🟡 DEBT-SN-4-09c-A（StagingPublishService.checkReadiness 5 项 check 升级，可选）
+  - 触发：M-SN-5 启动后第一周；不晚于 cutover 前两周清零
+  - 真源：`docs/M-SN-4-milestone-audit-2026-05-05.md` §6
 
 ### M-SN-4 欠账（CHG-SN-4-04 收口产生，2026-05-02）
 

@@ -5496,3 +5496,30 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - unit 253f / 3225t ✓
 - **风险结论**：本卡 e2e 跑通过程**未暴露 ModerationConsole 实装漏洞** → -10-D milestone 评级阶段无 BLOCKER 风险来源
 - **变更摘要**：M-SN-4 milestone plan §11.1 黄金路径 4 用例 + §11.2 状态保留压力测试 全部落地；解锁 -10-D（arch-reviewer milestone 评级 + audit 文档落盘）
+
+---
+
+## 2026-05-05 · CHG-SN-4-10-D：M-SN-4 milestone arch-reviewer 评级 + audit 文档落盘 → milestone 闭环
+
+- **来源**：CHG-SN-4-10 拆 4 子卡方案 B 第 4（最后）子卡
+- **执行模型**：claude-opus-4-7
+- **强制子代理**：arch-reviewer (claude-opus-4-7) — **B+ / PASS**
+- **触发**：plan §11.3 + §11.5 milestone 收口 must
+- **arch-reviewer 评级结果**：
+  - 5 项必检全 PASS：双信号双轨 / 状态保留压力测试（带可接受权衡）/ 5 件下沉契约稳定性 / audit log 覆盖率 / DEBT-SN-3-A 模板
+  - 9 项准入条件 8/9 ✅ + 1/9 显式登记 cutover 前（第 8 项全 admin visual diff 无回归 → DEBT-SN-4-A 转 cutover 前；plan + CHG-SN-4-04 已豁免本期）
+  - 红线 0 / 黄线 4
+- **黄线处理**：
+  - Y1（cutover-blocker 子序列）→ 登记 task-queue M-SN-5-PRE-01 母卡（含 5 🔴 + 2 🟠 + 1 🟡 子项）
+  - Y2（audit 守卫正则字面量约束）→ 本卡 `docs/rules/api-rules.md` 闭合（追加 admin_audit_log 写入规范章节，含字面量调用 / 设计原则 / 守卫机制 / 新增流程）
+  - Y3（DEBT-SN-4-05-A toggleSource 乐观锁标 🔴 cutover-blocker）→ milestone audit §6 + M-SN-5-PRE-01 已标
+  - Y4（visual harness 建立后回溯 M-SN-4 改动 baseline）→ DEBT-SN-4-A 描述追加该触发条件
+- **改动文件**：
+  - 新建 `docs/M-SN-4-milestone-audit-2026-05-05.md`（§1 评级 + §2 5 项必检 + §3 9 项准入 + §4 红线 + §5 黄线处理 + §6 cutover 前必清欠账总清单 + §7 已闭环 DEBT 总览 + §8 后续动作 + §9 审计追溯）
+  - 追加 `docs/rules/api-rules.md`：admin_audit_log 写入规范章节（Y2 闭合）
+  - 更新 `docs/task-queue.md`：CHG-SN-4-10-D 状态 ✅ + 新增 M-SN-5-PRE-01 触发型 follow-up
+  - 更新 `docs/tasks.md`：清空进行中卡片
+  - 更新 `docs/changelog.md`：本条目
+- **CHG-SN-4-10 父卡总收口**：4 子卡全部 ✅ → M-SN-4 milestone 闭环
+- **后续动作**：M-SN-5 可启动；建议第一周立 M-SN-5-PRE-01 母卡
+- **变更摘要**：M-SN-4（审核台 + SourceHealthWorker + VideoEditDrawer 实装）milestone 完整收口；arch-reviewer B+ PASS；解锁 M-SN-5；4 黄线 1 闭合 + 3 转登记

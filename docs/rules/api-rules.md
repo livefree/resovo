@@ -207,3 +207,50 @@ const response = {
 - **不得重命名**响应字段（新增字段可以）
 - **不得改变**字段类型（string 不能改成 number）
 - 需要破坏性变更时，在新路径下实现（如 `/v2/videos`），旧路径保留至少 3 个月
+
+---
+
+## admin_audit_log 写入规范（CHG-SN-4-10-D Y2）
+
+所有 admin 写操作（POST/PATCH/DELETE）成功路径上必须 fire-and-forget 写入 `admin_audit_log`。
+真源：M-SN-4 plan v1.4 §3.0.5（11 个 action_type union 在 `packages/types/src/admin-moderation.types.ts` `AdminAuditActionType`）。
+
+### 调用契约（强约束 — 守卫测试依赖）
+
+```typescript
+// ✅ 必须用 actionType 字面量调用（守卫正则 actionType:\s*['"]([a-z_.]+)['"] 依赖此格式）
+this.auditSvc.write({
+  actorId: input.actorId,
+  actionType: 'video.approve',  // ← 字面量，不允许动态拼接
+  targetKind: 'video',
+  targetId: input.videoId,
+  requestId: input.requestId,
+})
+
+// ❌ 禁止：动态拼接（守卫扫不到）
+const type = `video.${action}`
+this.auditSvc.write({ actionType: type, ... })
+
+// ❌ 禁止：snake_case key（不是 AdminAuditActionType union 字段名）
+this.auditSvc.write({ action_type: 'video.approve', ... })
+```
+
+### 写入位点设计原则
+
+- **service 层 audit**（业务编排型操作）：ModerationService / VideoService / StagingPublishService 等
+- **路由层 audit**（异步入队型操作）：refetch-sources 等"管理员触发 → worker 异步消费"场景，audit 应在路由层入队成功后写，不在 service（service 是 worker 异步执行体，与"触发事件"解耦）
+- **audit 参数 optional**：同时支持 admin 显式调用（传 audit）与 worker 自动 Job（不传不写）
+
+### 守卫
+
+- `tests/unit/api/audit-log-coverage.test.ts` 三层断言：
+  - 11 个 plan §3.0.5 action_type 必须有写入位点
+  - 不允许出现 plan 未声明的 action_type（防漂移）
+  - 总覆盖断言（防有人删测试 + 删 audit）
+
+### 新增 action_type 流程
+
+1. 改 plan §3.0.5 表（before/after 字段）
+2. 改 `packages/types/src/admin-moderation.types.ts` `AdminAuditActionType` union
+3. 改 `tests/unit/api/audit-log-coverage.test.ts` `REQUIRED_ACTION_TYPES`
+4. 在 service 或路由层加 `auditSvc.write({ actionType: '...', ... })` 字面量调用
