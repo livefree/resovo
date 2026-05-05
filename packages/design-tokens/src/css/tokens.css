@@ -241,6 +241,9 @@
   --toolbar-padding-y: 10px;
   --foot-padding-x: 12px;
   --foot-padding-y: 6px;
+  --panel-padding-x: 12px;
+  --panel-padding-y: 12px;
+  --button-padding-x: 12px;
   --cover-poster-sm-w: 32px;
   --cover-poster-sm-h: 48px;
   --cover-poster-md-w: 48px;

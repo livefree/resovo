@@ -4359,13 +4359,19 @@ CHG-UX-06 收口阶段用户反馈 4 项痛点 + 一审遗留闭环项：
 
 5 处还原（commit `507a28b6` + `7ceb6015`）作为后续审查参考：
 
-| 位置 | 还原原因 | 长期目标 token |
-|---|---|---|
-| VideoListClient BATCH_BTN/HEAD_BTN `0 12px` | component scope ≠ layout token | `button-padding-x` (components/button.ts) |
-| PendingCenter SECTION `padding: 12` | section-gap 是 gap 语义不是 padding | `panel-padding-x/y` |
-| RejectedTabContent rejection info `10px 14px` | card-padding-y(14) 用作 x 方向混淆 | `panel-padding-x/y` 或新增 alert 槽位 |
-| RejectedTabContent card body `padding: 14` | card-padding-y 当 4 边 shorthand 是滥用 | 评估 `card-padding` shorthand |
-| RejectedTabContent actions `padding: 12` | 同 PendingCenter SECTION | `panel-padding-x/y` |
+| 位置 | 还原原因 | 长期目标 token | EXT-F 状态 |
+|---|---|---|---|
+| VideoListClient BATCH_BTN/HEAD_BTN `0 12px` | component scope ≠ layout token | `button-padding-x` (components/button.ts) | ✅ EXT-F 第 1 阶段已迁回 `0 var(--button-padding-x)`（admin-layout 临时占位，待 button.ts 落地后再迁） |
+| PendingCenter SECTION `padding: 12` | section-gap 是 gap 语义不是 padding | `panel-padding-x/y` | ✅ EXT-F 第 1 阶段已迁回 `var(--panel-padding-y) var(--panel-padding-x)` |
+| RejectedTabContent rejection info `10px 14px` | card-padding-y(14) 用作 x 方向混淆 | `panel-padding-x/y` 或新增 alert 槽位 | ⏳ EXT-F 第 2 阶段（10/14 数值不匹配现有 panel-padding=12，需 alert 专属槽位评估） |
+| RejectedTabContent card body `padding: 14` | card-padding-y 当 4 边 shorthand 是滥用 | 评估 `card-padding` shorthand | ⏳ EXT-F 第 2 阶段（需评估 card-padding-x=18 是否调整为 14） |
+| RejectedTabContent actions `padding: 12` | 同 PendingCenter SECTION | `panel-padding-x/y` | ✅ EXT-F 第 1 阶段已迁回 `var(--panel-padding-y) var(--panel-padding-x)` |
+
+**EXT-F 第 1 阶段实施记录**（2026-05-05）：
+- spacing.ts 新增 3 槽位：`panel-padding-x/y` (12/12) + `button-padding-x` (12 临时占位) → 11 → 14
+- 4 处业务消费方迁回 token（PendingCenter SECTION / RejectedTabContent actions / VideoListClient BATCH + HEAD）
+- admin-layout.test.ts +2 sanity test
+- 其余 2 处（rejection info / card body）触发条件不达 → 推迟 EXT-F 第 2 阶段
 
 ### 备选方案（已评估）
 

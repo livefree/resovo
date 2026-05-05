@@ -72,16 +72,19 @@ describe('admin-layout tokens — structure', () => {
   })
 })
 
-describe('admin-layout spacing tokens (CHG-UX2-01 / SEQ-20260505-01)', () => {
+describe('admin-layout spacing tokens (CHG-UX2-01 / SEQ-20260505-01 + CHG-UX2-EXT-F)', () => {
   const REQUIRED_KEYS = [
     'page-padding-x', 'page-padding-y', 'section-gap',
     'list-row-padding-x', 'list-row-padding-y',
     'card-padding-x', 'card-padding-y',
     'toolbar-padding-x', 'toolbar-padding-y',
     'foot-padding-x', 'foot-padding-y',
+    // CHG-UX2-EXT-F 新增
+    'panel-padding-x', 'panel-padding-y',
+    'button-padding-x',
   ] as const
 
-  it('exposes 11 named slots (5 类场景 × 2 轴 + section-gap)', () => {
+  it('exposes 14 named slots (5 类场景 × 2 轴 + section-gap + panel × 2 + button-x)', () => {
     expect(Object.keys(adminSpacing).sort()).toEqual([...REQUIRED_KEYS].sort())
   })
 
@@ -96,6 +99,15 @@ describe('admin-layout spacing tokens (CHG-UX2-01 / SEQ-20260505-01)', () => {
     expect(px(adminSpacing['foot-padding-y'])).toBeLessThan(px(adminSpacing['toolbar-padding-y']))
     expect(px(adminSpacing['toolbar-padding-y'])).toBeLessThan(px(adminSpacing['card-padding-y']))
     expect(px(adminSpacing['card-padding-y'])).toBeLessThan(px(adminSpacing['page-padding-y']))
+  })
+
+  it('panel-padding 双轴一致 12（CHG-UX2-EXT-F）', () => {
+    expect(adminSpacing['panel-padding-x']).toBe(adminSpacing['panel-padding-y'])
+    expect(adminSpacing['panel-padding-x']).toBe('12px')
+  })
+
+  it('button-padding-x 仅 x 轴（component scope 临时占位，CHG-UX2-EXT-F）', () => {
+    expect(adminSpacing['button-padding-x']).toBe('12px')
   })
 })
 

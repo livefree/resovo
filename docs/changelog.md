@@ -5331,3 +5331,31 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - `docs/task-queue.md`：CHG-UX2-06 状态 → 已完成；序列状态 → 已完成
 - **测试**：typecheck / lint / thumb 32/32 全绿（含本次 +1 对称性测试）/ admin-ui unit 全套全绿
 - **变更摘要**：SEQ-20260505-01 正式收口；ADR-113 沉淀本批所有架构决策（含 cover bug 真因 + 业务零裸值断言）；4 项用户痛点全部闭环；EXT-A..F 触发型 follow-up 固化进 ADR
+
+---
+
+## 2026-05-05 · CHG-UX2-EXT-F 第 1 阶段：spacing token 真源补缺（panel-padding + button-padding 槽位）
+
+- **来源**：CHG-UX2-06 收口决议 + ADR-113 §5 候选清单
+- **执行模型**：claude-opus-4-7
+- **触发**：CHG-UX2-05 还原的 5 处弱语义裸值需要 token 槽位承接；ADR-113 §5 已预设方案 + 候选名
+- **改动文件**：
+  - `packages/design-tokens/src/admin-layout/spacing.ts`：新增 3 槽位
+    · `panel-padding-x: 12px`、`panel-padding-y: 12px`（panel-in-page 内 padding，区别于 section-gap 的 gap 语义）
+    · `button-padding-x: 12px`（components/button.ts 真源未来落地前的临时占位）
+  - `packages/design-tokens/dist/tokens.css` + `src/css/tokens.css`：build-css 自动重新生成（13 spacing var → 14 with new 3）
+  - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx`：SECTION padding 12 → `var(--panel-padding-y) var(--panel-padding-x)`
+  - `apps/server-next/src/app/admin/moderation/_client/RejectedTabContent.tsx`：actions section padding 12 → 同上
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`：BATCH_BTN_BASE_STYLE / HEAD_BTN_STYLE `padding: '0 12px'` → `'0 var(--button-padding-x)'`
+  - `tests/unit/design-tokens/admin-layout.test.ts`：REQUIRED_KEYS 加 3 项 + 描述更新（11 → 14 槽位） + +2 specific 断言（panel 双轴一致 / button 临时占位）
+  - `docs/decisions.md` ADR-113 §6：5 处还原决策表加 EXT-F 状态列 + 第 1 阶段实施记录
+  - `docs/task-queue.md` CHG-UX2-EXT-F：状态从"未启动 follow-up"更新为"第 1 阶段已完成 + 第 2 阶段遗留"
+- **不做**（推迟到 EXT-F 第 2 阶段）：
+  · RejectedTabContent rejection info `'10px 14px'` — 数值不匹配 panel-padding=12，需 alert 专属槽位
+  · RejectedTabContent card body `padding: 14` — 4 边等值需评估 card-padding-x=18 是否调整
+  · `button-padding-x` 长期目标：迁到 components/button.ts（admin-ui Button 立项后）
+- **设计权衡**：
+  - `button-padding-x` 放 admin-layout 是**临时占位**（components scope 在 admin-layout 真源是错配），但 admin-ui Button 立项前别无去处；ADR-113 §6 + spacing.ts 注释明确"待迁"
+  - `panel-padding` 双轴一致 12 — PendingCenter + RejectedTabContent 既有值即如此；与 toolbar-padding (12/10) 故意区分（panel 是嵌入式，无水平条 y 轴需要更紧凑的语义）
+- **测试**：typecheck / lint / admin-layout.test 63/63（含本次 +2）/ design-tokens + server-next admin 14f / 322t 全绿 / tokens:validate / verify-token-references (116 引用 / 362 token) PASS
+- **变更摘要**：4 处业务裸值迁回 token；spacing 槽位 11 → 14；ADR-113 §6 5 处还原决策 3 处闭环 / 2 处推迟第 2 阶段；视觉零回归（数值前后等价）
