@@ -5,6 +5,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import React from 'react'
 import { Thumb } from '../../../../../packages/admin-ui/src/components/cell/thumb'
+import { adminCover } from '../../../../../packages/design-tokens/src/admin-layout/cover'
 
 afterEach(() => cleanup())
 
@@ -141,4 +142,38 @@ describe('Thumb — loading 策略 + 测试钩子', () => {
     const { container } = render(<Thumb src="x.png" testId="thumb-1" />)
     expect(container.querySelector('[data-testid="thumb-1"]')).toBeTruthy()
   })
+})
+
+/**
+ * CHG-UX2-03f：img 必须带 HTML width/height attribute（intrinsic size），
+ * 否则浏览器 fallback 到图源 naturalWidth/Height，flex algorithm 据此算 main size，
+ * 导致 img 在 flex item 位置 width 退化。SIZE_PX 真源是 design-tokens cover.ts，
+ * thumb 内部 number 表必须与之对齐 — 本组测试是同步守卫。
+ */
+describe('Thumb — img HTML width/height attribute（CHG-UX2-03f intrinsic size 修复）', () => {
+  const cases: Array<{ size: Parameters<typeof Thumb>[0]['size']; w: number; h: number }> = [
+    { size: 'poster-sm', w: 32, h: 48 },
+    { size: 'poster-md', w: 48, h: 72 },
+    { size: 'poster-lg', w: 80, h: 120 },
+    { size: 'poster-xl', w: 120, h: 180 },
+    { size: 'banner-sm', w: 64, h: 36 },
+    { size: 'square-sm', w: 28, h: 28 },
+  ]
+
+  for (const c of cases) {
+    it(`${c.size} → img width=${c.w} height=${c.h}`, () => {
+      const { container } = render(<Thumb src="x.png" size={c.size} />)
+      const img = container.querySelector('img')!
+      expect(img.getAttribute('width')).toBe(String(c.w))
+      expect(img.getAttribute('height')).toBe(String(c.h))
+    })
+
+    it(`${c.size} number 与 design-tokens cover.ts ${c.size === 'poster-sm' ? 'cover-poster-sm' : `cover-${c.size}`}-{w,h} 一致`, () => {
+      const sizeKey = c.size
+      const wToken = adminCover[`cover-${sizeKey}-w` as keyof typeof adminCover]
+      const hToken = adminCover[`cover-${sizeKey}-h` as keyof typeof adminCover]
+      expect(parseInt(wToken, 10)).toBe(c.w)
+      expect(parseInt(hToken, 10)).toBe(c.h)
+    })
+  }
 })

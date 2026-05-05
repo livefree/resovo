@@ -102,12 +102,26 @@ const SHELL_CSS = `
   background: var(--fg-disabled);
 }
 /* Firefox 双轨：thin = 系统细滚动条；scrollbar-color = thumb / track
- * scrollbar-gutter: stable —— 始终预留 scrollbar 空间，避免出现/消失时
- * 内容回流（用户反馈："滚动条不应该改变现有布局"）。仅对 overflow:auto/scroll
- * 容器生效，对其他元素无副作用（CSS Scrollbars Module Level 1） */
+ * 这两个属性只影响滚动条自身视觉，不影响 layout，可安全应用到 *。 */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
+}
+/* scrollbar-gutter: stable —— 始终预留 scrollbar 空间，避免出现/消失时内容回流。
+ *
+ * CHG-UX2-03f 修订：原放在 * 选择器内（注释里假设"对非滚动容器无副作用"）。
+ * 实测 Chrome 把 scrollbar-gutter 应用到 <img> replaced element 时触发 layout
+ * bug：当 img 用 width/height: 100% 且其父是 <span> + flex/block 容器嵌套时，
+ * img 的 used width 退化（从 48 → 37），反向回吞 span 的 used width。
+ * 命中 admin-ui Thumb 组件结构（span > img w/h:100%），导致视频库 / 内容审核
+ * 等所有页面所有尺寸的封面被压扁。完整调试见 video-table-cell-compression-debug.md。
+ *
+ * 修法：scrollbar-gutter 仅应用到真实滚动容器，避开 img / span 等非滚动元素。
+ * 列表覆盖：admin shell main、DataTable scrollport、Drawer body、Cmd+K list。 */
+[data-admin-shell-main],
+[data-table-scroll],
+[data-drawer-body],
+.cmdk__list {
   scrollbar-gutter: stable;
 }
 

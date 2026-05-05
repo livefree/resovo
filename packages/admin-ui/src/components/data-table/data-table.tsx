@@ -94,8 +94,6 @@ function buildGridTemplate<T>(
   hasSelection: boolean,
 ): string {
   const tracks: string[] = []
-  // CHG-UX2-03d 修订：fixed track 用单值 ${w}px；防压缩通过 row 的 min-width: max-content 实现
-  // （minmax(w,w) 等价于 w，不能阻止 grid 压缩 fixed track）
   if (hasSelection) tracks.push(`${SELECTION_COL_W}px`)
   for (const col of columns) {
     const pref = colMap.get(col.id)
@@ -327,11 +325,6 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
       display: 'grid',
       gridTemplateColumns: gridTemplate,
       height: rowHeight,
-      // CHG-UX2-03d 终极修复：用 width: max-content 让 row 强制撑到 grid 总宽
-      // （min-width: max-content 在 flex 父压缩 dt-scroll 时被破坏，width 才是终止压缩的硬约束）
-      // 容器不足时 dt-scroll overflow:auto 横滚，cell width 永远 = grid template fixed
-      width: 'max-content',
-      minWidth: '100%',
       background: isSelected
         ? 'var(--admin-accent-soft)'
         : isHovered
@@ -421,10 +414,6 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
             display: 'grid',
             gridTemplateColumns: gridTemplate,
             height: rowHeight,
-            // CHG-UX2-03d 终极修复：width: max-content 强制 row 撑到 grid 总宽
-            // 容器不足时由 [data-table-scroll] overflow:auto 提供横滚
-            width: 'max-content',
-            minWidth: '100%',
           }}
         >
           {hasSelection && (
@@ -453,8 +442,6 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
               }
             }
             const isMenuOpen = menuColId === col.id
-            // CHG-UX2-03d 真修复：columnheader 同样加 minWidth = col.width 防 grid 压缩
-            const headerMinWidth = col.width !== undefined ? `${col.width}px` : undefined
             return (
               <div
                 key={col.id}
@@ -463,11 +450,7 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
                 aria-haspopup={enableHeaderMenu ? 'menu' : undefined}
                 aria-expanded={enableHeaderMenu ? isMenuOpen : undefined}
                 data-th-interactive={interactive ? 'true' : undefined}
-                style={{
-                  ...TH_STYLE,
-                  cursor: interactive ? 'pointer' : 'default',
-                  ...(headerMinWidth ? { minWidth: headerMinWidth } : {}),
-                }}
+                style={{ ...TH_STYLE, cursor: interactive ? 'pointer' : 'default' }}
                 tabIndex={interactive ? 0 : undefined}
                 onClick={interactive ? (e) => onHeaderActivate(e.currentTarget) : undefined}
                 onKeyDown={interactive ? (e) => {
@@ -539,10 +522,6 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
                 const content = col.cell
                   ? col.cell({ row, value, rowIndex: idx })
                   : String(value ?? '')
-                // CHG-UX2-03d 真修复：给 fixed-width cell 加 minWidth = col.width
-                // grid track sizing 必须尊重 grid item min-width，无法压缩 fixed track
-                // 弹性列（无 col.width）保持 minmax(minWidth, 1fr) 弹性行为
-                const cellMinWidth = col.width !== undefined ? `${col.width}px` : undefined
                 return (
                   <div
                     key={col.id}
@@ -550,7 +529,6 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
                     style={{
                       ...TD_STYLE,
                       ...(col.overflowVisible ? { overflow: 'visible' } : {}),
-                      ...(cellMinWidth ? { minWidth: cellMinWidth } : {}),
                     }}
                   >
                     {content}

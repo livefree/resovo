@@ -5221,3 +5221,46 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **测试**：typecheck / lint / unit 22f / 367t（含 VideoListClient + DataTable + 全部 table 测试）全绿
 - **变更摘要**：cover 列 = 72px 紧贴 Thumb；grid fixed track 不再被压缩；Thumb width-shrink 保护恢复
 
+
+---
+
+## 2026-05-04 · CHG-UX2-03f：admin-shell `* { scrollbar-gutter: stable }` 触发 cover 压扁真根因修复
+
+- **序列**：SEQ-20260505-01 第 3f 卡（CHG-UX2-03d 暂停 → -03e 中间方案 → -03f 真因）
+- **依赖**：CHG-UX2-03d ✅
+- **执行模型**：claude-opus-4-7
+- **子代理**：codex-rescue（关键提示"测试页不在 /admin 下不注入 admin-shell 全局 CSS"是定位转折点；codex 配额限制下完成单次诊断）
+- **触发**：用户报告"内容审核台所有封面（不在表格内的 ModListRow 普通 flex 行也命中）都被裁切" → 推翻 CHG-UX2-03d 全部"grid 压缩"假设；主循环连续 5 次推断错根因（grid 压缩 / wrapper / inline-flex / intrinsic ratio / HTML attr）
+- **真根因**：`packages/admin-ui/src/shell/admin-shell-styles.tsx` 内 universal selector
+  ```css
+  * { scrollbar-gutter: stable; }
+  ```
+  原 CHG-DESIGN-03 假设"对非滚动容器无副作用"是错的。Chrome 实际把 scrollbar-gutter 应用到 `<img>` replaced element，触发 layout 算法 bug：当 img 是 `<span>` 子且用 `width:100% height:100%` 时，img used width 退化（48 → ~37px），反向回吞 span 的 used width。admin-ui Thumb 组件 `<span> + <img w/h:100%>` 模式全线踩雷。
+- **隔离测试证据**：临时建 `apps/server-next/src/app/cover-test/page.tsx` (T1~T10 涵盖 9 种渲染组合)：
+  - 默认环境：T1~T10 全部 spanW=48 ✓
+  - 注入 `* { scrollbar-gutter: stable }`：T4~T6 / T8~T10（含 span+img w/h:100%）退化 spanW=37 ❌（完美复现）
+  - T1~T3 (裸 img / 直接 flex item)、T7 (background-image) 不受影响
+- **改动文件**：
+  - `packages/admin-ui/src/shell/admin-shell-styles.tsx`：
+    · `*` 上保留 `scrollbar-width: thin; scrollbar-color: ...`（仅视觉，不影响 layout）
+    · `scrollbar-gutter: stable` 移到具体滚动容器：`[data-admin-shell-main], [data-table-scroll], [data-drawer-body], .cmdk__list`
+  - `packages/admin-ui/src/components/cell/thumb.tsx`（CHG-UX2-03e 起持续）：
+    · has-src 分支 root: inline-flex → block（无害简化）
+    · 内加 `SIZE_PX` number map + img 加 HTML `width`/`height` attribute（与旧版 server next/image 行为对齐，多一层稳定性）
+  - `packages/admin-ui/src/components/data-table/data-table.tsx`（CHG-UX2-03e 回滚 -03d 4 处污染）：
+    · 删 thead/body row `width: max-content + minWidth: 100%`
+    · 删 cell `cellMinWidth` 注入
+    · 删 columnheader `headerMinWidth` 注入
+    · `buildGridTemplate` 过期注释清理（fixed track 已是单值 `${w}px`）
+  - `tests/unit/components/admin-ui/cell/thumb.test.tsx`：+12 测试断言 SIZE_PX 与 design-tokens cover.ts 数值同步
+  - `docs/designs/backend_design_v2.1/video-table-cell-compression-debug.md`：标 ✅ 已结案 + §10 真因 + 修复 + 教训
+- **临时调试代码清理**：删除 `apps/server-next/src/app/cover-test/page.tsx`
+- **设计权衡**：
+  - scrollbar-gutter 范围由 `*` 收紧到具体容器：精准、符合 spec 本意，不再误伤非滚动元素
+  - 副作用：理论上某些未列入清单的小型滚动容器（如 cmdk__list 之外某些自定义 popover body）会回到"出现/消失时回流"行为；如有反馈可后续逐个加入清单
+- **测试**：typecheck / lint / admin-ui unit 66f / 1045t 全绿；浏览器 playwright 实测 + 用户实测视频库 / 内容审核两处 spanW=48 视觉完整 ✓
+- **教训**：
+  - "spec 注释里说不影响"≠"实际不影响"；CSS spec 与 Chrome 实现存在 gap，universal selector 应用要极度警惕
+  - 主循环连续 5 次推断错根因，耗时 1+ 天。**应更早建隔离测试页对比"工作场景 vs 故障场景"的最小差异**，而不是反复在故障场景内调试
+  - 共享层（admin-ui shell 全局 CSS）的 universal rule 修改必须配套写"故障域"测试断言
+- **变更摘要**：admin shell 全局 `*` selector 内 scrollbar-gutter 移除（移到具体滚动容器）；Thumb 组件全场景恢复正常 width；CHG-UX2-03 痛点序列彻底闭环

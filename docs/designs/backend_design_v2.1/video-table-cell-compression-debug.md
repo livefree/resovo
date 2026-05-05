@@ -1,7 +1,7 @@
-# 视频库 Cover Cell 压缩问题 · 调试记录（暂停）
+# 视频库 Cover Cell 压缩问题 · 调试记录（已结案）
 
-> 状态：⏸ 暂停（多次修法失败，根因未定位）
-> 序列：SEQ-20260505-01 / CHG-UX2-03d
+> 状态：✅ 已结案（CHG-UX2-03f 真根因锁定 + 修复，详见 §10）
+> 序列：SEQ-20260505-01 / CHG-UX2-03d → -03e → -03f
 > 创建：2026-05-04
 > 最后更新：2026-05-04
 
@@ -226,5 +226,72 @@ console.log('cssVar:', getComputedStyle(document.documentElement).getPropertyVal
 - 用户反馈对话：本次会话 2026-05-04（多轮）
 - DevTools 数据：见 §2
 - CSS Grid spec: <https://www.w3.org/TR/css-grid-1/#track-sizing>
-- 相关任务卡：CHG-UX2-03 / 03b / 03c / 03d（多次失败）
+- CSS Scrollbars Module Level 1: <https://www.w3.org/TR/css-scrollbars-1/#scrollbar-gutter>
+- 相关任务卡：CHG-UX2-03 / 03b / 03c / 03d（推断错根因）→ 03e（HTML attr 中间方案）→ 03f（真因 + 修复）
 - 序列方案：`docs/designs/backend_design_v2.1/density-spacing-cover-alignment-plan.md`
+
+---
+
+## §10 真因 + 修复（CHG-UX2-03f 结案）
+
+### §10.1 真根因（2026-05-04 末轮锁定）
+
+罪魁祸首：`packages/admin-ui/src/shell/admin-shell-styles.tsx` 内的 universal selector
+
+```css
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-gutter: stable;   /* ← 这一行 */
+}
+```
+
+原 CHG-DESIGN-03 设计假设："scrollbar-gutter 仅对 overflow:auto/scroll 容器生效，对其他元素无副作用（CSS Scrollbars Module Level 1）"。**这个理解是错的**。
+
+Chrome 实际把 `scrollbar-gutter: stable` 应用到 `<img>` replaced element（即使 img 不滚动），触发 layout 算法 bug：
+
+- 当 img 是 `<span>` 的子（且 img 用 `width:100% height:100%` + `object-fit: cover`）时
+- img 的 used width 退化（48 → ~37px，与图源 intrinsic ratio 弱相关）
+- 反向回吞 `<span>` 容器的 used width（span 显式 width:48px 也被压成 37px）
+- 即使 span 加 `min-width: 48px / max-width: 48px / flex-shrink: 0` 三重约束都无法挽回
+
+admin-ui Thumb 组件正好是 `<span> + <img w/h:100%>` 模式 → **全线踩雷**。
+
+### §10.2 锁定证据链
+
+1. 用户报告"所有页面所有尺寸的封面都被裁切"（不仅视频库 DataTable，内容审核 ModListRow 普通 flex 行也命中）→ 排除 grid 压缩 / DataTable / cell 嵌套
+2. 隔离测试页 `/cover-test` (T1~T10) 在 `apps/server-next/src/app/cover-test/page.tsx`：T6 (display:flex 父 + Thumb)、T9/T10 (严格复现 DataTable grid 配置 + 195×260 竖海报) → **全部正常 spanW=48** ✓
+3. 关键洞察（codex rescue 提示）：测试页不在 `/admin/*` 下，**不经过 AdminLayout，不注入 AdminShellStyles**
+4. 把 `* { scrollbar-gutter: stable }` 手动注入测试页 → **完美复现** spanW=37 ❌（T1~T3、T7 不受影响：T1~T3 是裸 img/img 是 flex 直接 child，T7 用 background-image）
+5. 把 `scrollbar-gutter: stable` 从 `*` 移到具体滚动容器 → admin shell 内 Thumb 恢复 48 ✓
+
+### §10.3 修复（packages/admin-ui/src/shell/admin-shell-styles.tsx）
+
+```css
+/* scrollbar-width / scrollbar-color 只影响视觉，安全应用到 * */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+/* scrollbar-gutter 仅在真实滚动容器上启用，避开 img / span 等非滚动元素 */
+[data-admin-shell-main],
+[data-table-scroll],
+[data-drawer-body],
+.cmdk__list {
+  scrollbar-gutter: stable;
+}
+```
+
+### §10.4 配套保留改动
+
+- `thumb.tsx`：has-src 分支 root 用 `display: block`（无害简化，不再依赖 inline-flex）
+- `thumb.tsx`：img 加 HTML `width`/`height` attribute（与旧版 server `next/image` 行为对齐，多一层稳定性）
+- `thumb.test.tsx`：+12 测试断言 SIZE_PX 与 design-tokens cover.ts 数值同步（防漂移）
+- `dt-styles.tsx [data-table] width: 100%`：保留（修 frame 撑满，独立有效）
+- `VideoListClient.tsx` 删 wrapper div + cover 列 width 80→72：保留（合理改进）
+
+### §10.5 教训
+
+- "spec 注释里说不影响"≠"实际不影响"。CSS spec 与 Chrome 实现存在 gap，universal selector 应用要极度警惕。
+- 主循环连续 5 次推断错根因（grid 压缩 / wrapper / inline-flex / intrinsic ratio / HTML attr），耗时 1+ 天。**应该更早建隔离测试页对比"工作场景 vs 故障场景"的最小差异**，而不是反复在故障场景内调试。
+- 共享层（admin-ui shell 全局 CSS）的 universal rule 修改必须配套写"故障域"测试断言（如 cover-test 类回归页或 unit test snapshot）。
