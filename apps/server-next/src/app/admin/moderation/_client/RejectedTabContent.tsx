@@ -110,7 +110,7 @@ export function RejectedTabContent(): React.ReactElement {
                 {M.rejected.reopen}
               </button>
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 'var(--card-padding-y)' }}>
+            <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 14 }}>
               {actionError && (
                 <div style={{ marginBottom: 12, padding: '8px var(--toolbar-padding-x)', background: 'var(--state-error-bg)', border: '1px solid var(--state-error-border)', borderRadius: 6, fontSize: 'var(--font-size-xs)', color: 'var(--state-error-fg)' }}>
                   {actionError}
@@ -118,7 +118,7 @@ export function RejectedTabContent(): React.ReactElement {
               )}
 
               {/* Rejection info */}
-              <div style={{ padding: 'var(--list-row-padding-y) var(--card-padding-y)', background: 'var(--state-error-bg)', border: '1px solid var(--state-error-border)', borderRadius: 6, marginBottom: 14, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <div style={{ padding: '10px 14px', background: 'var(--state-error-bg)', border: '1px solid var(--state-error-border)', borderRadius: 6, marginBottom: 14, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                 <span style={{ color: 'var(--state-error-fg)', fontSize: 'var(--font-size-lg)', marginTop: 2 }}>✕</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, color: 'var(--state-error-fg)' }}>拒绝标签</div>

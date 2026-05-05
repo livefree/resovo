@@ -25,7 +25,7 @@ const BTN_SM: React.CSSProperties = {
 }
 
 const SECTION: React.CSSProperties = {
-  padding: 'var(--section-gap)',
+  padding: 12,
   background: 'var(--bg-surface-raised)',
   borderRadius: 6,
   marginBottom: 14,
