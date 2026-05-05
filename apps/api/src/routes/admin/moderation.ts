@@ -405,9 +405,11 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
         // 仅 pending_review 视频可批量通过；其他状态直接计入 skipped
         const video = await videoQueries.findAdminVideoById(db, id)
         if (!video || video.review_status !== 'pending_review') { skipped++; continue }
-        const result = await videoQueries.transitionVideoState(db, id, {
-          action: 'approve',
-          reviewedBy: userId,
+        // CHG-SN-4-10-A2：走 ModerationService.approve 以记 audit log（video.approve）
+        const result = await moderationSvc.approve({
+          videoId: id,
+          actorId: userId,
+          requestId: request.id,
         })
         if (result) { approved++ } else { skipped++ }
       } catch (err) {
@@ -491,7 +493,12 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       })
     }
     try {
-      await videoQueries.transitionVideoState(db, id, { action: 'reopen_pending' })
+      // CHG-SN-4-10-A2：走 ModerationService.reopen 以记 audit log（video.reopen）
+      await moderationSvc.reopen({
+        videoId: id,
+        actorId: request.user!.userId,
+        requestId: request.id,
+      })
       return reply.send({ data: { id, reopened: true } })
     } catch (err) {
       if (isAppError(err, 'INVALID_TRANSITION')) {

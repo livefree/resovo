@@ -55,6 +55,9 @@ export class CrawlerRefetchService extends CrawlerService {
    *   4. 过滤 title_normalized 相似度 >= 0.8 的结果
    *   5. 取最佳匹配，用 replaceSourcesForSite 全量替换
    *   6. 记录未找到匹配的站点列表（notFound）
+   *
+   * 注：admin 触发的 audit log（video.refetch_sources）在**路由层入队成功后**写入，
+   *     不在本 service（service 是 worker 异步消费的执行体，与触发事件解耦）。
    */
   async refetchSourcesForVideo(
     videoId: string,

@@ -194,7 +194,12 @@ export async function adminVideoRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const result = await videoService.updateVisibility(id, parsed.data.visibility as VisibilityStatus)
+      // CHG-SN-4-10-A2：传 audit 让 service 记 video.visibility_patch
+      const result = await videoService.updateVisibility(
+        id,
+        parsed.data.visibility as VisibilityStatus,
+        { actorId: request.user!.userId, requestId: request.id },
+      )
       if (!result) {
         return reply.code(404).send({
           error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 },

@@ -118,7 +118,7 @@ export async function adminStagingRoutes(fastify: FastifyInstance) {
         })
       }
 
-      const ok = await svc.publishSingle(id, request.user!.userId)
+      const ok = await svc.publishSingle(id, request.user!.userId, request.id)
       if (!ok) {
         return reply.code(422).send({
           error: { code: 'PUBLISH_FAILED', message: '发布失败，状态可能已变更', status: 422 },
@@ -137,7 +137,11 @@ export async function adminStagingRoutes(fastify: FastifyInstance) {
   // ── POST /admin/staging/batch-publish — 批量发布就绪视频 ───
   // admin only：批量操作影响范围大
   fastify.post('/admin/staging/batch-publish', { preHandler: adminOnly }, async (request, reply) => {
-    const { published, skipped } = await svc.publishReadyBatch(100)
+    // CHG-SN-4-10-A2：传 audit 让 service 记 staging.batch_publish
+    const { published, skipped } = await svc.publishReadyBatch(100, {
+      actorId: request.user!.userId,
+      requestId: request.id,
+    })
     return reply.send({ data: { published, skipped } })
   })
 

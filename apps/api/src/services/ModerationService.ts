@@ -50,6 +50,21 @@ export interface DisableDeadInput {
   requestId?: string
 }
 
+/** CHG-SN-4-10-A2 audit 补全 */
+export interface ApproveInput {
+  videoId: string
+  actorId: string
+  expectedUpdatedAt?: string
+  requestId?: string
+}
+
+/** CHG-SN-4-10-A2 audit 补全 */
+export interface ReopenInput {
+  videoId: string
+  actorId: string
+  requestId?: string
+}
+
 export class ModerationService {
   private auditSvc: AuditLogService
   private indexSync: VideoIndexSyncService
@@ -153,6 +168,53 @@ export class ModerationService {
     this.indexSync.syncVideo(input.videoId).catch((err: unknown) => {
       baseLogger.warn({ err, videoId: input.videoId }, 'ES syncVideo failed after source toggle')
     })
+    return result
+  }
+
+  /**
+   * 单条审核通过（pending_review → approved）
+   * CHG-SN-4-10-A2：替代路由层裸调 transitionVideoState，封装 audit log 写入
+   * 返回 null 表示未进行状态切换（如非 pending_review / 乐观锁冲突）
+   */
+  async approve(input: ApproveInput) {
+    const result = await transitionVideoState(this.db, input.videoId, {
+      action: 'approve',
+      reviewedBy: input.actorId,
+      expectedUpdatedAt: input.expectedUpdatedAt,
+    })
+
+    if (!result) return null
+
+    this.auditSvc.write({
+      actorId: input.actorId,
+      actionType: 'video.approve',
+      targetKind: 'video',
+      targetId: input.videoId,
+      requestId: input.requestId,
+    })
+
+    return result
+  }
+
+  /**
+   * 复审：rejected → pending_review
+   * CHG-SN-4-10-A2：替代路由层裸调 transitionVideoState，封装 audit log 写入
+   */
+  async reopen(input: ReopenInput) {
+    const result = await transitionVideoState(this.db, input.videoId, {
+      action: 'reopen_pending',
+    })
+
+    if (!result) return null
+
+    this.auditSvc.write({
+      actorId: input.actorId,
+      actionType: 'video.reopen',
+      targetKind: 'video',
+      targetId: input.videoId,
+      requestId: input.requestId,
+    })
+
     return result
   }
 

@@ -10,6 +10,7 @@ import * as stagingQueries from '@/api/db/queries/staging'
 import * as videoQueries from '@/api/db/queries/videos'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
+import { AuditLogService } from '@/api/services/AuditLogService'
 
 export interface ReadinessResult {
   ready: boolean
@@ -18,6 +19,8 @@ export interface ReadinessResult {
 
 export class StagingPublishService {
   private readonly indexSync?: VideoIndexSyncService
+  /** CHG-SN-4-10-A2：admin audit log（fire-and-forget） */
+  private readonly auditSvc: AuditLogService
 
   constructor(
     private readonly db: Pool,
@@ -26,6 +29,7 @@ export class StagingPublishService {
     if (es) {
       this.indexSync = new VideoIndexSyncService(db, es)
     }
+    this.auditSvc = new AuditLogService(db)
   }
 
   /** 从 system_settings 读取自动发布规则 */
@@ -81,7 +85,7 @@ export class StagingPublishService {
   }
 
   /** 手动发布单条暂存视频 */
-  async publishSingle(videoId: string, publishedBy: string): Promise<boolean> {
+  async publishSingle(videoId: string, publishedBy: string, requestId?: string): Promise<boolean> {
     // 预检：发布必须有活跃源，提前抛出友好错误（避免 DB 触发器技术性异常信息暴露给前端）
     const { rows: [sourceRow] } = await this.db.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM video_sources
@@ -98,16 +102,37 @@ export class StagingPublishService {
     })
     if (!row) return false
     void this.indexSync?.syncVideo(videoId)
+    // CHG-SN-4-10-A2：审计日志（staging.publish）
+    // published_at 由 DB trigger 写入，此处仅记 isPublished + 状态切换时刻
+    this.auditSvc.write({
+      actorId: publishedBy,
+      actionType: 'staging.publish',
+      targetKind: 'staging',
+      targetId: videoId,
+      afterJsonb: { isPublished: true, transitionedAt: row.updated_at },
+      requestId,
+    })
     return true
   }
 
-  /** 自动批量发布就绪视频（Job 调用） */
-  async publishReadyBatch(maxBatch = 50): Promise<{ published: number; skipped: number }> {
+  /**
+   * 批量发布就绪视频
+   * - 后台 Job 触发：triggeredBy 省略 → 不写 audit（系统操作走 Job log）
+   * - 管理员手动触发（POST /admin/staging/batch-publish）：传 actorId → 写 audit
+   * CHG-SN-4-10-A2：actor + audit 写 staging.batch_publish（按 plan §3.0.5
+   * after = { ids: [], skipped: [] }）
+   */
+  async publishReadyBatch(
+    maxBatch = 50,
+    audit?: { actorId: string; requestId?: string },
+  ): Promise<{ published: number; skipped: number; publishedIds: string[]; skippedIds: string[] }> {
     const rules = await this.getRules()
     const ids = await stagingQueries.listReadyStagingVideoIds(this.db, rules, maxBatch)
 
     let published = 0
     let skipped = 0
+    const publishedIds: string[] = []
+    const skippedIds: string[] = []
     for (const id of ids) {
       try {
         const row = await videoQueries.transitionVideoState(this.db, id, {
@@ -115,12 +140,15 @@ export class StagingPublishService {
         })
         if (row) {
           published++
+          publishedIds.push(id)
           void this.indexSync?.syncVideo(id)
         } else {
           skipped++
+          skippedIds.push(id)
         }
       } catch {
         skipped++
+        skippedIds.push(id)
       }
     }
 
@@ -130,7 +158,19 @@ export class StagingPublishService {
       new Date().toISOString(),
     )
 
-    return { published, skipped }
+    // CHG-SN-4-10-A2：admin 显式手动批量发布时写 audit log（system 自动 Job 不写）
+    if (audit) {
+      this.auditSvc.write({
+        actorId: audit.actorId,
+        actionType: 'staging.batch_publish',
+        targetKind: 'staging',
+        targetId: 'batch',
+        afterJsonb: { ids: publishedIds, skipped: skippedIds },
+        requestId: audit.requestId,
+      })
+    }
+
+    return { published, skipped, publishedIds, skippedIds }
   }
 
 }

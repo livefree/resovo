@@ -12,6 +12,7 @@ import { db } from '@/api/lib/postgres'
 import { es } from '@/api/lib/elasticsearch'
 import { ModerationService } from '@/api/services/ModerationService'
 import { CrawlerRunService } from '@/api/services/CrawlerRunService'
+import { AuditLogService } from '@/api/services/AuditLogService'
 import { findAdminVideoById } from '@/api/db/queries/videos'
 
 const SourcePatchSchema = z.object({
@@ -22,6 +23,7 @@ export async function adminVideoSourcesRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['moderator', 'admin'])]
   const moderationSvc = new ModerationService(db, es)
   const runService = new CrawlerRunService(db)
+  const auditSvc = new AuditLogService(db)  // CHG-SN-4-10-A2：refetch-sources 入队 audit
 
   // ── PATCH /admin/videos/:id/sources/:sourceId — 线路 toggle（CHG-SN-4-05）──
   fastify.patch('/admin/videos/:id/sources/:sourceId', { preHandler: auth }, async (request, reply) => {
@@ -100,6 +102,15 @@ export async function adminVideoSourcesRoutes(fastify: FastifyInstance) {
       crawlMode: 'source-refetch',
       targetVideoId: id,
       ...(hasSiteFilter ? { siteKeys } : {}),
+    })
+    // CHG-SN-4-10-A2：admin 触发补源采集 → 写 audit（video.refetch_sources）
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'video.refetch_sources',
+      targetKind: 'video',
+      targetId: id,
+      afterJsonb: { triggeredAt: new Date().toISOString(), siteKeys: siteKeys ?? null },
+      requestId: request.id,
     })
     return reply.code(202).send({ data: result })
   })

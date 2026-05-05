@@ -16,6 +16,7 @@ import { CrawlerService } from '@/api/services/CrawlerService'
 import { CrawlerPreviewService } from '@/api/services/CrawlerPreviewService'
 import { CrawlerRefetchService } from '@/api/services/CrawlerRefetchService'
 import { ContentService } from '@/api/services/ContentService'
+import { AuditLogService } from '@/api/services/AuditLogService'
 import { getEnabledSources } from '@/api/workers/crawlerWorker'
 import {
   listTasks,
@@ -90,6 +91,7 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
   const refetchService = new CrawlerRefetchService(db, es)
   const contentService = new ContentService(db)
   const runService = new CrawlerRunService(db)
+  const auditSvc = new AuditLogService(db)  // CHG-SN-4-10-A2：refetch-sources 入队 audit
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
   const logTask = async (input: Parameters<typeof createCrawlerTaskLog>[1]) => {
     try {
@@ -817,6 +819,15 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
       crawlMode: 'source-refetch',
       targetVideoId: videoId,
       ...(hasSiteFilter ? { siteKeys } : {}),
+    })
+    // CHG-SN-4-10-A2：admin 触发补源采集 → 写 audit（video.refetch_sources）
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'video.refetch_sources',
+      targetKind: 'video',
+      targetId: videoId,
+      afterJsonb: { triggeredAt: new Date().toISOString(), siteKeys: siteKeys ?? null },
+      requestId: request.id,
     })
     return reply.code(202).send({ data: result })
   })

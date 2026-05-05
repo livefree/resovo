@@ -1,9 +1,15 @@
 # Admin Audit Log 覆盖率审计 · 2026-05-05
 
-> 任务卡：CHG-SN-4-10-A（M-SN-4 milestone 收口预备）
+> 任务卡：CHG-SN-4-10-A（发现）→ CHG-SN-4-10-A2（修复）已闭环
 > 真源：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.4 §3.0.5 + §11.5 第 5 项
 
-## 结论
+## 结论（2026-05-05 终态）
+
+**✅ 已达标** — CHG-SN-4-10-A2 完成补全，plan §3.0.5 11 个 action_type 全部覆盖（11/11）。
+
+plan §11.5 收口准入第 5 项硬约束已闭环。仓库新增 `tests/unit/api/audit-log-coverage.test.ts` 守卫（13 个断言），防回归。
+
+## 发现期初始态（CHG-SN-4-10-A 阶段，已修复）
 
 **❌ 不达标** — plan §3.0.5 要求 11 个 `action_type` 全覆盖，实测**只 5 个落地，漏 6 个**。
 
@@ -25,12 +31,12 @@
 
 | # | action_type | plan §3.0.5 before/after 字段 | 路由实装位置 | 状态 |
 |---|---|---|---|---|
-| 1 | `video.approve` | `review_status / visibility / is_published` | `routes/admin/moderation.ts:394` POST `/admin/moderation/batch-approve`（单条 approve 路径在 ModerationService 内部分支） | ❌ 漏 |
-| 2 | `video.visibility_patch` | `visibility` | `routes/admin/videos.ts:187` PATCH `/admin/videos/:id/visibility` | ❌ 漏 |
-| 3 | `staging.publish` | `is_published / published_at` | `routes/admin/staging.ts:110` POST `/admin/staging/:id/publish` | ❌ 漏 |
-| 4 | `staging.batch_publish` | `{ ids: [], skipped: [] }` | `routes/admin/staging.ts:139` POST `/admin/staging/batch-publish` | ❌ 漏 |
-| 5 | `video.reopen` | `review_status` (rejected → pending_review) | `routes/admin/moderation.ts` POST `/:id/reopen`（plan v1.2 新增） | ❌ 漏 |
-| 6 | `video.refetch_sources` | `{ triggered_at, source_count }` | `routes/admin/videoSources.ts:69` POST `/admin/videos/:id/refetch-sources` + `routes/admin/crawler.ts:793` POST `/admin/crawler/refetch-sources`（plan v1.2 新增） | ❌ 漏 |
+| 1 | `video.approve` | `review_status / visibility / is_published` | `routes/admin/moderation.ts:394` POST `/admin/moderation/batch-approve`（单条 approve 路径在 ModerationService 内部分支） | ✅ 已补（ModerationService.approve） |
+| 2 | `video.visibility_patch` | `visibility` | `routes/admin/videos.ts:187` PATCH `/admin/videos/:id/visibility` | ✅ 已补（VideoService.updateVisibility 加 audit 参数） |
+| 3 | `staging.publish` | `is_published / published_at` | `routes/admin/staging.ts:110` POST `/admin/staging/:id/publish` | ✅ 已补（StagingPublishService.publishSingle 内 audit） |
+| 4 | `staging.batch_publish` | `{ ids: [], skipped: [] }` | `routes/admin/staging.ts:139` POST `/admin/staging/batch-publish` | ✅ 已补（StagingPublishService.publishReadyBatch 加 audit 参数；维护 worker 不传 → 不写） |
+| 5 | `video.reopen` | `review_status` (rejected → pending_review) | `routes/admin/moderation.ts` POST `/:id/reopen`（plan v1.2 新增） | ✅ 已补（ModerationService.reopen） |
+| 6 | `video.refetch_sources` | `{ triggered_at, source_count }` | `routes/admin/videoSources.ts:69` POST `/admin/videos/:id/refetch-sources` + `routes/admin/crawler.ts:793` POST `/admin/crawler/refetch-sources`（plan v1.2 新增） | ✅ 已补（路由层入队成功后 audit；service 不耦合 audit — 与 worker 异步消费解耦） |
 
 ## 影响评估
 

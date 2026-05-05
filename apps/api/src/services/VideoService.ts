@@ -17,6 +17,7 @@ import { MediaCatalogService } from '@/api/services/MediaCatalogService'
 import type { CatalogUpdateData } from '@/api/db/queries/mediaCatalog'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { CACHE_PREFIXES } from '@/api/services/CacheService'
+import { AuditLogService } from '@/api/services/AuditLogService'
 
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 100
@@ -24,6 +25,8 @@ const COUNT_BY_TYPE_TTL = 300
 
 export class VideoService {
   private readonly indexSync?: VideoIndexSyncService
+  /** CHG-SN-4-10-A2：admin audit log（fire-and-forget） */
+  private readonly auditSvc: AuditLogService
 
   constructor(
     private db: Pool,
@@ -33,6 +36,7 @@ export class VideoService {
     if (es) {
       this.indexSync = new VideoIndexSyncService(db, es)
     }
+    this.auditSvc = new AuditLogService(db)
   }
 
   async list(params: {
@@ -208,7 +212,9 @@ export class VideoService {
 
   async updateVisibility(
     id: string,
-    visibility: VisibilityStatus
+    visibility: VisibilityStatus,
+    /** CHG-SN-4-10-A2：actor + request 用于 audit log；optional 兼容旧调用方（非 admin 路径不写 audit） */
+    audit?: { actorId: string; requestId?: string },
   ): Promise<{ id: string; visibility_status: string; is_published: boolean } | null> {
     const action = visibility === 'public'
       ? 'publish'
@@ -216,7 +222,20 @@ export class VideoService {
         ? 'set_internal'
         : 'set_hidden'
     const row = await videoQueries.transitionVideoState(this.db, id, { action })
-    if (row) void this.indexSync?.syncVideo(id)
+    if (row) {
+      void this.indexSync?.syncVideo(id)
+      // CHG-SN-4-10-A2：admin 显式调用时写入 audit log（video.visibility_patch）
+      if (audit) {
+        this.auditSvc.write({
+          actorId: audit.actorId,
+          actionType: 'video.visibility_patch',
+          targetKind: 'video',
+          targetId: id,
+          afterJsonb: { visibility },
+          requestId: audit.requestId,
+        })
+      }
+    }
     return row
   }
 

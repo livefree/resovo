@@ -1843,13 +1843,24 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
   - DEBT-SN-3-C：M-SN-3 milestone 阶段审计（cutover 前，依赖 DEBT-SN-3-B 或 staging-waiver）— 本 milestone 不阻塞
   - 两者将在 -10-D milestone audit 文档显式登记为"延后至 cutover 前清零"
 
-#### CHG-SN-4-10-A2 · audit log 6 处补全（候选 BLOCKER 修补卡）
+#### CHG-SN-4-10-A2 · audit log 6 处补全 ✅ 完成（2026-05-05，路径 B）
 
-- **状态**：📝 待用户裁定（路径 A BLOCKER / 路径 B 立卡修补 / 路径 C 豁免登记）
-- **触发**：CHG-SN-4-10-A 发现 audit 覆盖率 5/11
-- **建议执行模型**：claude-sonnet-4-6（机械性补 audit 调用）
-- **工作量**：~3-4h（6 个端点 × service 层加 5 行 + 单测）
-- **完成判据**：audit 覆盖率 11/11 + grep 重检脚本 PASS
+- **执行模型**：claude-opus-4-7
+- **改动范围**：
+  - `apps/api/src/services/ModerationService.ts`：+2 方法（approve / reopen，封装 transitionVideoState + audit）
+  - `apps/api/src/services/VideoService.ts`：构造器加 `auditSvc` + `updateVisibility(...)` 加可选 `audit` 参数
+  - `apps/api/src/services/StagingPublishService.ts`：构造器加 `auditSvc` + `publishSingle` 内 audit + `publishReadyBatch(...)` 加可选 `audit` 参数（自动 Job 不传 → 不写）
+  - `apps/api/src/routes/admin/moderation.ts`：batch-approve 循环 / `/:id/reopen` 切换走 ModerationService 新方法
+  - `apps/api/src/routes/admin/videos.ts`：PATCH `/:id/visibility` 传 `{ actorId, requestId }`
+  - `apps/api/src/routes/admin/staging.ts`：`/:id/publish` 传 `requestId` / `/batch-publish` 传 audit
+  - `apps/api/src/routes/admin/videoSources.ts` + `crawler.ts`：`refetch-sources` 入队成功后写 audit（与 worker 异步消费解耦）
+  - `tests/unit/api/audit-log-coverage.test.ts`：新建覆盖率守卫（13 断言；防回归 + 防漂移）
+- **完成判据达成**：
+  - ✅ 11/11 action_type 覆盖（grep 校验：`actionType:` 字面量分布）
+  - ✅ typecheck / lint / unit 253f / 3225t 全绿
+  - ✅ audit-log-coverage 守卫加入仓库
+  - ✅ `docs/audit_log_coverage_2026-05-05.md` 标"已达标"
+- **变更摘要**：plan §11.5 第 5 项硬约束闭环；解锁 -10-D milestone 评级阶段；后续视图模块新建必须遵守新模式（admin 显式调用 service 时传 `audit` 参数；worker 自动 Job 不传）
 
 #### CHG-SN-4-10-B · DEBT-SN-4-A 5 件共享组件 visual baseline + DEBT-SN-4-08-A 1 张 ⏳ 待开
 

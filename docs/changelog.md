@@ -5384,3 +5384,34 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 改 `docs/tasks.md`（-10-A 卡片清空，等待用户裁定路径）
 - **测试**：本卡纯文档，无代码改动；不需 typecheck/lint/unit
 - **变更摘要**：M-SN-4 milestone 收口拆 4 子卡推进；-10-A 预备完成；-10-A2 audit 修补待用户裁定开工方案；server_next 视图开发模板沉淀（M-SN-3 欠账 DEBT-SN-3-A 闭环）
+
+---
+
+## 2026-05-05 · CHG-SN-4-10-A2：audit log 6 处补全（plan §11.5 第 5 项硬约束闭环）
+
+- **来源**：CHG-SN-4-10-A 发现 audit 覆盖率 5/11 → 用户裁定路径 B（立卡修补）
+- **执行模型**：claude-opus-4-7
+- **触发**：milestone 准入硬约束失败 → 修补成 11/11
+- **6 个 action_type 补全**：
+  - `video.approve` → `ModerationService.approve` 新增方法
+  - `video.visibility_patch` → `VideoService.updateVisibility` 加可选 `audit` 参数
+  - `staging.publish` → `StagingPublishService.publishSingle` 内嵌 audit
+  - `staging.batch_publish` → `StagingPublishService.publishReadyBatch` 加可选 `audit` 参数（worker 自动 Job 不传 → 不写）
+  - `video.reopen` → `ModerationService.reopen` 新增方法
+  - `video.refetch_sources` → 路由层 `videoSources.ts` + `crawler.ts` 入队成功后写 audit（与 worker 异步消费解耦）
+- **设计决策**：
+  - `audit` 参数 optional：service 同时支持"admin 显式触发（传 audit）"和"worker 自动 Job（不传）"两种场景，避免误写系统操作
+  - `refetch_sources` audit 在路由层而非 service 层：service 是 worker 异步执行体，与"管理员触发"事件解耦；audit 应在入队成功时立即记录
+  - ModerationService 新增 approve/reopen 方法（替代路由层裸调 transitionVideoState）：保持 service 层 audit pattern 一致
+- **守卫**：新增 `tests/unit/api/audit-log-coverage.test.ts`（13 断言）
+  - 11 个 action_type 必须有写入位点（plan §3.0.5 真源）
+  - 不允许出现 plan 未声明的 action_type（防"私自加 type 不改 plan"漂移）
+  - 总覆盖断言（防有人删测试 + 删 audit）
+- **改动文件**：
+  - 4 个 service：ModerationService / VideoService / StagingPublishService / CrawlerRefetchService（CrawlerRefetchService 撤回 audit 注入，原因见上面 refetch 设计决策）
+  - 4 个路由：admin/moderation.ts / admin/videos.ts / admin/staging.ts / admin/videoSources.ts / admin/crawler.ts（共 5 处入口修改）
+  - 新建 `tests/unit/api/audit-log-coverage.test.ts`
+  - 更新 `docs/audit_log_coverage_2026-05-05.md`（"不达标"→"已达标"+ 修复定位列）
+  - 更新 `docs/task-queue.md`（CHG-SN-4-10-A2 状态 → 已完成）
+- **测试**：typecheck / lint / API unit 76f / 896t / 全套 253f / 3225t 全绿
+- **变更摘要**：M-SN-4 milestone plan §11.5 第 5 项硬约束闭环；audit 11/11 全覆盖 + 守卫防回归；解锁 CHG-SN-4-10-D milestone 评级阶段
