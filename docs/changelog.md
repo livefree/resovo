@@ -5415,3 +5415,28 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 更新 `docs/task-queue.md`（CHG-SN-4-10-A2 状态 → 已完成）
 - **测试**：typecheck / lint / API unit 76f / 896t / 全套 253f / 3225t 全绿
 - **变更摘要**：M-SN-4 milestone plan §11.5 第 5 项硬约束闭环；audit 11/11 全覆盖 + 守卫防回归；解锁 CHG-SN-4-10-D milestone 评级阶段
+
+---
+
+## 2026-05-05 · CHG-SN-4-10-B 主循环阶段：visual baseline 路径 X 决议 + DEBT-SN-4-A 转登记
+
+- **来源**：CHG-SN-4-10 拆 4 子卡方案 B 第 3 子卡，用户裁定路径 X
+- **执行模型**：claude-opus-4-7
+- **方案**：路径 X — 最小满足 plan §11.5 第 6 项 9 张要求 + DEBT-SN-4-A 转 cutover 前
+- **决策依据**：
+  - plan + CHG-SN-4-04 明确豁免"本卡不引入 Playwright visual harness 基础设施"
+  - 当前 8 张已 commit（7 moderation + 1 video-edit-drawer/01-videos-list）
+  - 缺 1 张：DEBT-SN-4-08-A 要求的 `video-edit-drawer-lines-tab.png`
+  - DEBT-SN-4-A（5 件下沉组件 ~12 张 baseline）涉及"建 Playwright visual harness"基础设施工作（1.5-2 天），超出 -10 收口范围
+- **主循环已做**：
+  - 验收 8 张已存 PNG 命名规范一致 + 内容代表性
+  - task-queue.md M-SN-4 欠账区 DEBT-SN-4-A 标"转登记 cutover 前"+ 决议条件（建 harness + 跑 ~12 张）
+  - tasks.md 写入待用户截图说明（路径 / 内容 / 操作步骤 / 验收标准）
+  - task-queue.md CHG-SN-4-10-B 状态 → 🚧 部分完成
+- **待用户操作**：截 1 张 `tests/visual/video-edit-drawer/video-edit-drawer-lines-tab.png`（详细操作见 tasks.md）
+- **改动文件**：
+  - `docs/task-queue.md`：DEBT-SN-4-A 转登记 + CHG-SN-4-10-B 状态升级
+  - `docs/tasks.md`：CHG-SN-4-10-B 待办卡片
+  - `docs/changelog.md`：本条目
+- **测试**：纯文档无代码改动，无门禁
+- **变更摘要**：CHG-SN-4-10-B 主循环阶段闭环；待用户截 1 张图后转 -10-B ✅，解锁 -10-C

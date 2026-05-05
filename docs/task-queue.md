@@ -1862,11 +1862,20 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
   - ✅ `docs/audit_log_coverage_2026-05-05.md` 标"已达标"
 - **变更摘要**：plan §11.5 第 5 项硬约束闭环；解锁 -10-D milestone 评级阶段；后续视图模块新建必须遵守新模式（admin 显式调用 service 时传 `audit` 参数；worker 自动 Job 不传）
 
-#### CHG-SN-4-10-B · DEBT-SN-4-A 5 件共享组件 visual baseline + DEBT-SN-4-08-A 1 张 ⏳ 待开
+#### CHG-SN-4-10-B · visual baseline 第 9 张补全（路径 X · 最小满足 plan §11.5 第 6 项）
 
-- **依赖**：-10-A2（如选路径 B）
-- **建议执行模型**：claude-sonnet-4-6
-- **工作量**：~3h（需 dev server + 5 组件状态截图）
+- **状态**：🚧 部分完成（主循环已做，等待用户截 1 张 lines-tab.png）
+- **执行模型**：claude-opus-4-7
+- **方案决议**（2026-05-05）：路径 X — 不建 Playwright visual harness 基础设施（plan + CHG-SN-4-04 明确豁免）
+- **DEBT-SN-4-A 转登记**：5 件下沉组件 ~12 张 baseline 转 cutover（M-SN-7）前任务（与 DEBT-SN-3-B/C 同模式不阻塞）
+- **主循环已做**：
+  - ✅ 验收 8 张已存 PNG 命名规范一致 + 内容覆盖 plan §11.5 第 6 项语义
+  - ✅ DEBT-SN-4-A 转登记到 cutover 前（task-queue M-SN-4 欠账区已标注）
+  - ✅ 待办说明 + 截图操作指引写入 tasks.md
+- **待用户操作**：
+  - 截 1 张 `tests/visual/video-edit-drawer/video-edit-drawer-lines-tab.png`（DEBT-SN-4-08-A 文件名严格匹配）
+  - 操作步骤详见 tasks.md
+- **完成判据**：9 张 PNG 全部 commit + 大小 > 10KB + 命名规范一致 → -10-B 状态 ✅
 
 #### CHG-SN-4-10-C · e2e 黄金路径 4 用例 + 状态保留 5 步压力测试 ⏳ 待开
 
@@ -1936,7 +1945,7 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 
 | 欠账 ID | 原任务 | 描述 | 截止节点 |
 |---------|--------|------|---------|
-| DEBT-SN-4-A | CHG-SN-4-04 | 5 件下沉组件的 Playwright `toHaveScreenshot()` 视觉基线（BarSignal × 5 状态 / StaffNoteBar display+edit / LineHealthDrawer / RejectModal / DecisionCard 三态）；现仓库 `tests/visual/` 为手动 PNG 归档无 Playwright host，本卡内不引入新 visual harness 基础设施 | CHG-SN-4-10 milestone 收口卡 |
+| DEBT-SN-4-A | CHG-SN-4-04 | 5 件下沉组件的 Playwright `toHaveScreenshot()` 视觉基线（BarSignal × 5 状态 / StaffNoteBar display+edit / LineHealthDrawer / RejectModal / DecisionCard 三态）；现仓库 `tests/visual/` 为手动 PNG 归档无 Playwright host，本卡内不引入新 visual harness 基础设施 | ~~CHG-SN-4-10 milestone 收口卡~~ → cutover（M-SN-7）前（CHG-SN-4-10-B 路径 X 决议转登记，2026-05-05；条件：建立 Playwright visual harness 基础设施 + 跑 ~12 张组件状态 baseline；与 DEBT-SN-3-B/C 同模式不阻塞 milestone） |
 | DEBT-SN-4-05-A | CHG-SN-4-05 | `toggleSource` 无 `expectedUpdatedAt` 乐观锁，相比 `transitionVideoState` 缺少并发保护；建议加 ETag/version 列 | cutover（M-SN-7）前 |
 | DEBT-SN-4-05-B | CHG-SN-4-05 | `feedback.ts` 的 `getClientIp` 直接读 `x-forwarded-for` 未限白名单；生产部署须配 Fastify `trustProxy` 或 nginx/cloudflare XFF 白名单（IP 欺骗可绕过 rate-limit） | cutover（M-SN-7）前 |
 | DEBT-SN-4-05-C | CHG-SN-4-05 | ~~ApiResponse 信封 / ErrorCode 真源归属决策~~ → **完全关闭**（ADR-110 accepted + CHG-SN-4-05a 迁移完成 2026-05-02；ERRORS 14 码真源 = packages/types/src/api-errors.ts）| ✅ 已关闭 |
