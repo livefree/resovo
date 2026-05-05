@@ -5253,7 +5253,7 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
     · 删 columnheader `headerMinWidth` 注入
     · `buildGridTemplate` 过期注释清理（fixed track 已是单值 `${w}px`）
   - `tests/unit/components/admin-ui/cell/thumb.test.tsx`：+12 测试断言 SIZE_PX 与 design-tokens cover.ts 数值同步
-  - `docs/designs/backend_design_v2.1/video-table-cell-compression-debug.md`：标 ✅ 已结案 + §10 真因 + 修复 + 教训
+  - `docs/designs/backend_design_v2.1/video-table-cell-compression-debug.md`：标 ✅ 已结案 + §10 真因 + 修复 + 教训（CHG-UX2-03f 收尾后归档至 `docs/archive/2026Q2/video-table-cell-compression-debug-20260504.md`）
 - **临时调试代码清理**：删除 `apps/server-next/src/app/cover-test/page.tsx`
 - **设计权衡**：
   - scrollbar-gutter 范围由 `*` 收紧到具体容器：精准、符合 spec 本意，不再误伤非滚动元素
