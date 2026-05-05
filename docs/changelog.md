@@ -5264,3 +5264,21 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 主循环连续 5 次推断错根因，耗时 1+ 天。**应更早建隔离测试页对比"工作场景 vs 故障场景"的最小差异**，而不是反复在故障场景内调试
   - 共享层（admin-ui shell 全局 CSS）的 universal rule 修改必须配套写"故障域"测试断言
 - **变更摘要**：admin shell 全局 `*` selector 内 scrollbar-gutter 移除（移到具体滚动容器）；Thumb 组件全场景恢复正常 width；CHG-UX2-03 痛点序列彻底闭环
+
+---
+
+## [CHG-UX2-04] VideoEditDrawer POSTER 接入 Thumb — 2026-05-04
+
+- **任务 ID**：CHG-UX2-04
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件**：
+  - `apps/server-next/src/app/admin/videos/_client/VideoEditDrawer.tsx`
+- **变更内容**：
+  - 导入 `Thumb` 组件（来自 `@resovo/admin-ui`）
+  - 删除 `POSTER: React.CSSProperties` inline style 常量（32×48 裸值）
+  - quick header poster 区域从 `{video.cover_url ? <img ...> : <div ...>}` 三元表达式替换为 `<Thumb src={video.cover_url} size="poster-sm" loading="eager" />`
+  - Thumb 内置 src=null 降级（placeholder span），无需外层 ternary
+- **关闭欠账**：CHG-DESIGN-12 遗留 — VideoEditDrawer 未接入共享 Thumb 组件
+- **测试**：typecheck / lint / 252f / 3206t 全绿
+- **变更摘要**：VideoEditDrawer quick header poster 完成从裸 img/div 到 Thumb 共享组件的迁移，CHG-DESIGN-12 欠账彻底闭环

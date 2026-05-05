@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Drawer, LoadingState, ErrorState, VisChip, DualSignal } from '@resovo/admin-ui'
+import { Drawer, LoadingState, ErrorState, VisChip, DualSignal, Thumb } from '@resovo/admin-ui'
 import type { VideoAdminDetail } from '@/lib/videos'
 import { getVideo, patchVideoMeta } from '@/lib/videos/api'
 import type { TabKey, FormState } from './_videoEdit/types'
@@ -33,10 +33,6 @@ const QUICK_HEAD: React.CSSProperties = {
   display: 'flex', gap: '10px', padding: '10px 18px',
   background: 'var(--bg-surface-raised)', borderBottom: '1px solid var(--border-subtle)',
   flexShrink: 0, alignItems: 'center',
-}
-const POSTER: React.CSSProperties = {
-  width: '32px', height: '48px', borderRadius: 'var(--radius-sm)', objectFit: 'cover',
-  background: 'var(--bg-surface)', flexShrink: 0,
 }
 const CONTENT: React.CSSProperties = { flex: 1, overflowY: 'auto', padding: '18px 18px 100px' }
 const FOOTER: React.CSSProperties = {
@@ -197,10 +193,7 @@ export function VideoEditDrawer({ open, videoId, onClose, onSaved }: VideoEditDr
 
             {/* quick header */}
             <div style={QUICK_HEAD}>
-              {video.cover_url
-                ? <img src={video.cover_url} alt="" style={POSTER} />
-                : <div style={POSTER} aria-hidden="true" />
-              }
+              <Thumb src={video.cover_url} size="poster-sm" loading="eager" />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 'var(--font-size-sm-tight)', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {video.title}
