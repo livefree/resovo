@@ -5359,3 +5359,28 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - `panel-padding` 双轴一致 12 — PendingCenter + RejectedTabContent 既有值即如此；与 toolbar-padding (12/10) 故意区分（panel 是嵌入式，无水平条 y 轴需要更紧凑的语义）
 - **测试**：typecheck / lint / admin-layout.test 63/63（含本次 +2）/ design-tokens + server-next admin 14f / 322t 全绿 / tokens:validate / verify-token-references (116 引用 / 362 token) PASS
 - **变更摘要**：4 处业务裸值迁回 token；spacing 槽位 11 → 14；ADR-113 §6 5 处还原决策 3 处闭环 / 2 处推迟第 2 阶段；视觉零回归（数值前后等价）
+
+---
+
+## 2026-05-05 · CHG-SN-4-10-A：M-SN-4 收口预备（DEBT-SN-3-A 模板 + audit log grep + DEBT 登记）
+
+- **来源**：CHG-SN-4-10 拆 4 子卡方案 B 第 1 子卡
+- **执行模型**：claude-opus-4-7
+- **触发**：M-SN-4 milestone 收口准入预检
+- **交付物**：
+  - `docs/server_next_view_template.md` — DEBT-SN-3-A 模板文档（8 章节：任务卡卡头 / 视图骨架 / 数据接入 / 测试 / i18n+a11y / 共享组件优先 / token 严禁 / lifecycle）
+  - `docs/audit_log_coverage_2026-05-05.md` — audit log 覆盖率审计报告（11 应有 vs 5 实有）
+- **关键发现**：🚨 audit log 覆盖率 5/11 不达标 → plan §11.5 第 5 项硬约束失败
+  - 已覆盖 5：video.reject_labeled / video.staff_note / staging.revert / video_source.toggle / video_source.disable_dead_batch
+  - 漏 6：video.approve / video.visibility_patch / staging.publish / staging.batch_publish / video.reopen / video.refetch_sources
+  - 漏点全部位于路由层（apps/api/src/routes/admin/{moderation,videos,staging,videoSources,crawler}.ts）；service 层未走 AuditLogService.write
+  - 影响：milestone 评级阶段（-10-D）arch-reviewer 极可能 C 评级 → BLOCKER
+- **建议处理路径**：路径 B = 立 CHG-SN-4-10-A2 修补卡（~3-4h，与 -10-B/C 并行）；用户待裁定 A/B/C
+- **DEBT 登记**：DEBT-SN-3-B / DEBT-SN-3-C 为 cutover 前任务（非本 milestone 阻塞），将在 -10-D milestone audit 显式记录
+- **改动文件**：
+  - 新建 `docs/server_next_view_template.md`
+  - 新建 `docs/audit_log_coverage_2026-05-05.md`
+  - 改 `docs/task-queue.md`（CHG-SN-4-10 父卡拆 4 子卡 + -10-A 完成 + -10-A2..D 状态登记）
+  - 改 `docs/tasks.md`（-10-A 卡片清空，等待用户裁定路径）
+- **测试**：本卡纯文档，无代码改动；不需 typecheck/lint/unit
+- **变更摘要**：M-SN-4 milestone 收口拆 4 子卡推进；-10-A 预备完成；-10-A2 audit 修补待用户裁定开工方案；server_next 视图开发模板沉淀（M-SN-3 欠账 DEBT-SN-3-A 闭环）

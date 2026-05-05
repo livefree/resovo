@@ -1821,10 +1821,55 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 
 - D-15 拆分入口推迟 M-SN-5；编号不复用，M-SN-5 拆分实装新开 CHG-SN-5-XX
 
-### CHG-SN-4-10 · M-SN-4 milestone 收口（e2e + 状态保留 5 步 + arch-reviewer 评级）⏳ 待开
+### CHG-SN-4-10 · M-SN-4 milestone 收口（拆 4 子卡 · 方案 B）
 
-- 前置：-03 ～ -08 + DEBT-SN-3-A 全部完成
-- 强制子代理：arch-reviewer (claude-opus-4-7) — milestone A/B/C 评级
+> 状态：🚧 进行中（拆 4 子卡执行；2026-05-05 起）
+> 真源：M-SN-4 plan v1.4 §11
+> 强制子代理（最终 -10-D）：arch-reviewer (claude-opus-4-7) — milestone A/B/C 评级
+
+#### CHG-SN-4-10-A · 收口预备（DEBT-SN-3-A 模板 + audit log grep + DEBT-SN-3-B/C 登记）✅ 完成（2026-05-05）
+
+- **执行模型**：claude-opus-4-7
+- **交付物**：
+  - ✅ `docs/server_next_view_template.md`（DEBT-SN-3-A 模板文档落地，8 章节覆盖任务卡卡头 / 视图骨架 / 数据接入 / 测试 / i18n+a11y / 共享组件 / token / lifecycle）
+  - ✅ `docs/audit_log_coverage_2026-05-05.md`（audit log 覆盖率审计报告）
+  - ✅ DEBT-SN-3-B/C 登记预备（M-SN-3 cutover 前任务，本卡范围内只列出，最终落盘 -10-D milestone audit）
+- **关键发现**：
+  - 🚨 **audit log 覆盖率不达标**：plan §3.0.5 要求 11 个 action_type，实测只 5 个落地（在 ModerationService.ts），**漏 6 个**：video.approve / video.visibility_patch / staging.publish / staging.batch_publish / video.reopen / video.refetch_sources
+  - **影响**：plan §11.5 第 5 项硬约束失败 → arch-reviewer 极可能 C 评级 → milestone BLOCKER
+  - **建议路径**：立 CHG-SN-4-10-A2 修补卡，6 个端点服务层补 audit fire-and-forget 调用（~3-4h），与 -10-B/C 并行
+- **DEBT-SN-3-B/C 现状**：
+  - DEBT-SN-3-B：staging 环境 cookie + nginx 反代 e2e 演练（cutover 前，需人工参与）— 本 milestone 不阻塞
+  - DEBT-SN-3-C：M-SN-3 milestone 阶段审计（cutover 前，依赖 DEBT-SN-3-B 或 staging-waiver）— 本 milestone 不阻塞
+  - 两者将在 -10-D milestone audit 文档显式登记为"延后至 cutover 前清零"
+
+#### CHG-SN-4-10-A2 · audit log 6 处补全（候选 BLOCKER 修补卡）
+
+- **状态**：📝 待用户裁定（路径 A BLOCKER / 路径 B 立卡修补 / 路径 C 豁免登记）
+- **触发**：CHG-SN-4-10-A 发现 audit 覆盖率 5/11
+- **建议执行模型**：claude-sonnet-4-6（机械性补 audit 调用）
+- **工作量**：~3-4h（6 个端点 × service 层加 5 行 + 单测）
+- **完成判据**：audit 覆盖率 11/11 + grep 重检脚本 PASS
+
+#### CHG-SN-4-10-B · DEBT-SN-4-A 5 件共享组件 visual baseline + DEBT-SN-4-08-A 1 张 ⏳ 待开
+
+- **依赖**：-10-A2（如选路径 B）
+- **建议执行模型**：claude-sonnet-4-6
+- **工作量**：~3h（需 dev server + 5 组件状态截图）
+
+#### CHG-SN-4-10-C · e2e 黄金路径 4 用例 + 状态保留 5 步压力测试 ⏳ 待开
+
+- **依赖**：-10-A2（audit 全覆盖才能跑 e2e 验证 audit 写入）
+- **建议执行模型**：claude-sonnet-4-6（plan §8.1）
+- **工作量**：~1.5 天（最重）
+
+#### CHG-SN-4-10-D · arch-reviewer milestone 评级 + audit 文档落盘 ⏳ 待开
+
+- **依赖**：-10-A / -10-A2 / -10-B / -10-C 全部 ✅
+- **执行模型**：claude-opus-4-7
+- **强制子代理**：arch-reviewer (claude-opus-4-7)
+- **工作量**：~1.5h
+- **交付物**：`docs/M-SN-4-milestone-audit-{date}.md`
 
 
 ### CHG-SN-4-01 · SplitPane admin-ui 原语 ✅ 完成（2026-05-01）
