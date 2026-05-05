@@ -5440,3 +5440,25 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - `docs/changelog.md`：本条目
 - **测试**：纯文档无代码改动，无门禁
 - **变更摘要**：CHG-SN-4-10-B 主循环阶段闭环；待用户截 1 张图后转 -10-B ✅，解锁 -10-C
+
+---
+
+## 2026-05-05 · CHG-SN-4-10-B 闭环：visual baseline 9 张达标（plan §11.5 第 6 项）
+
+- **来源**：CHG-SN-4-10-B 主循环阶段后用户截图补全
+- **执行模型**：claude-opus-4-7
+- **截图文件**：`tests/visual/video-edit-drawer/video-edit-drawer-lines-tab.png`（532KB / 1358×1934 / PNG）
+- **内容验收**：
+  - ✅ Drawer 容器完整（"编辑·乔治和曼迪的头婚生活第二季"）
+  - ✅ "线路管理" Tab 激活态（蓝色下划线）
+  - ✅ 线路列表 17/17 启用 + 17 条真实 sources 行
+  - ✅ 完整列：采集 / 播放 / 集数 / 状态 / 操作
+- **9 张 PNG 总清单达标**（plan §11.5 第 6 项）：
+  - moderation/ 7 张（pending-list / pending-detail / staging / rejected / lines-panel / line-health-drawer / reject-modal）
+  - video-edit-drawer/ 2 张（01-videos-list / video-edit-drawer-lines-tab）
+- **DEBT-SN-4-08-A 闭环**：单 PNG 缺失欠账消除
+- **DEBT-SN-4-A 仍开放**：5 件下沉组件 ~12 张 Playwright `toHaveScreenshot()` baseline 转 cutover（M-SN-7）前
+- **改动文件**：
+  - 新增 `tests/visual/video-edit-drawer/video-edit-drawer-lines-tab.png`
+  - 更新 `docs/task-queue.md` CHG-SN-4-10-B 状态 → ✅
+- **变更摘要**：CHG-SN-4-10-B 完整闭环；解锁 -10-C（e2e 4 用例 + 状态保留 5 步压力测试）

@@ -1862,20 +1862,16 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
   - ✅ `docs/audit_log_coverage_2026-05-05.md` 标"已达标"
 - **变更摘要**：plan §11.5 第 5 项硬约束闭环；解锁 -10-D milestone 评级阶段；后续视图模块新建必须遵守新模式（admin 显式调用 service 时传 `audit` 参数；worker 自动 Job 不传）
 
-#### CHG-SN-4-10-B · visual baseline 第 9 张补全（路径 X · 最小满足 plan §11.5 第 6 项）
+#### CHG-SN-4-10-B · visual baseline 第 9 张补全（路径 X · 最小满足 plan §11.5 第 6 项）✅ 完成（2026-05-05）
 
-- **状态**：🚧 部分完成（主循环已做，等待用户截 1 张 lines-tab.png）
 - **执行模型**：claude-opus-4-7
-- **方案决议**（2026-05-05）：路径 X — 不建 Playwright visual harness 基础设施（plan + CHG-SN-4-04 明确豁免）
+- **方案决议**：路径 X — 不建 Playwright visual harness 基础设施（plan + CHG-SN-4-04 明确豁免）
 - **DEBT-SN-4-A 转登记**：5 件下沉组件 ~12 张 baseline 转 cutover（M-SN-7）前任务（与 DEBT-SN-3-B/C 同模式不阻塞）
-- **主循环已做**：
-  - ✅ 验收 8 张已存 PNG 命名规范一致 + 内容覆盖 plan §11.5 第 6 项语义
-  - ✅ DEBT-SN-4-A 转登记到 cutover 前（task-queue M-SN-4 欠账区已标注）
-  - ✅ 待办说明 + 截图操作指引写入 tasks.md
-- **待用户操作**：
-  - 截 1 张 `tests/visual/video-edit-drawer/video-edit-drawer-lines-tab.png`（DEBT-SN-4-08-A 文件名严格匹配）
-  - 操作步骤详见 tasks.md
-- **完成判据**：9 张 PNG 全部 commit + 大小 > 10KB + 命名规范一致 → -10-B 状态 ✅
+- **DEBT-SN-4-08-A 闭环**：用户截图 `tests/visual/video-edit-drawer/video-edit-drawer-lines-tab.png`（532KB / 1358×1934 / 含 Drawer + 线路管理 Tab 激活态 + 17 条 sources 行）
+- **9 张 PNG 完整清单**：
+  - moderation/ 7 张（pending-list / pending-detail / staging / rejected / lines-panel / line-health-drawer / reject-modal）
+  - video-edit-drawer/ 2 张（01-videos-list 入口 + video-edit-drawer-lines-tab Tab 激活态）
+- **完成判据达成**：plan §11.5 第 6 项 9 张 PNG 已 commit ✓
 
 #### CHG-SN-4-10-C · e2e 黄金路径 4 用例 + 状态保留 5 步压力测试 ⏳ 待开
 
