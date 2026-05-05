@@ -5282,3 +5282,29 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **关闭欠账**：CHG-DESIGN-12 遗留 — VideoEditDrawer 未接入共享 Thumb 组件
 - **测试**：typecheck / lint / 252f / 3206t 全绿
 - **变更摘要**：VideoEditDrawer quick header poster 完成从裸 img/div 到 Thumb 共享组件的迁移，CHG-DESIGN-12 欠账彻底闭环
+
+---
+
+## [CHG-UX2-05] 高频 inline padding 裸值收敛 — 2026-05-05
+
+- **任务 ID**：CHG-UX2-05
+- **完成时间**：2026-05-05
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件**：
+  - `packages/admin-ui/src/components/data-table/dt-styles.tsx` — toolbar/filter-chips/foot padding 换 token
+  - `apps/server-next/src/app/admin/moderation/_client/ModListRow.tsx` — row padding 换 list-row token
+  - `apps/server-next/src/app/admin/moderation/_client/RejectedTabContent.tsx` — 左侧列表行/面板 header/内容区/rejection info card/actions 换 token
+  - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx` — SECTION padding 换 section-gap token
+  - `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx` — BATCH_BTN/HEAD_BTN 水平 padding 换 toolbar-x token
+- **Token 映射落地**：
+  - `10px 12px` → `var(--toolbar-padding-y) var(--toolbar-padding-x)` 或 `var(--list-row-padding-y) var(--list-row-padding-x)`（语义择优）
+  - `6px 12px` → `var(--foot-padding-y) var(--foot-padding-x)`
+  - `8px 12px` → `8px var(--toolbar-padding-x)`（12 token，8 无匹配保留）
+  - `14` → `var(--card-padding-y)`
+  - `10px 14px` → `var(--list-row-padding-y) var(--card-padding-y)`
+  - `12` → `var(--section-gap)`
+  - `0 12px` → `0 var(--toolbar-padding-x)`
+- **残余裸值**：小尺寸 2px/3px/4px/5px/8px（button 内边距、badge、player overlay）无语义匹配 token，合理保留
+- **测试**：typecheck / lint / 252f / 3206t 全绿
+- **变更摘要**：高频 padding 裸值全部收敛到 CHG-UX2-01 建立的 admin-layout spacing token；CHG-UX2 序列进入 CHG-UX2-06 收口阶段

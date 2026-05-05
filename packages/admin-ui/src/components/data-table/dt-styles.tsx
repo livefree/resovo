@@ -77,7 +77,7 @@ const DT_CSS = `
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
+  padding: var(--toolbar-padding-y) var(--toolbar-padding-x);
   border-bottom: 1px solid var(--border-default);
   flex-wrap: wrap;
   flex-shrink: 0;
@@ -132,7 +132,7 @@ const DT_CSS = `
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 8px var(--toolbar-padding-x);
   border-bottom: 1px solid var(--border-default);
   background: transparent;
   flex-shrink: 0;
@@ -285,7 +285,7 @@ const DT_CSS = `
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 6px 12px;
+  padding: var(--foot-padding-y) var(--foot-padding-x);
   border-top: 1px solid var(--border-default);
   background: var(--bg-surface-elevated);
   font-size: 12px;

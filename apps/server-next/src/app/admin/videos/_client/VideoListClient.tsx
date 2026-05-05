@@ -78,7 +78,7 @@ function buildBatchActions(
 
 const BATCH_BTN_BASE_STYLE: CSSProperties = {
   height: 'var(--row-h-compact, 24px)',
-  padding: '0 12px',
+  padding: '0 var(--toolbar-padding-x)',
   borderRadius: 'var(--radius-sm)',
   border: '1px solid var(--border-default)',
   background: 'var(--bg-surface)',
@@ -411,7 +411,7 @@ const HEAD_ACTIONS_STYLE: CSSProperties = {
 }
 const HEAD_BTN_STYLE: CSSProperties = {
   height: '28px',
-  padding: '0 12px',
+  padding: '0 var(--toolbar-padding-x)',
   border: '1px solid var(--border-default)',
   borderRadius: 'var(--radius-sm)',
   background: 'var(--bg-surface)',

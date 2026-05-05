@@ -13,7 +13,7 @@ interface ModListRowProps {
 const ROW_BASE: React.CSSProperties = {
   display: 'flex',
   gap: 10,
-  padding: '10px 12px',
+  padding: 'var(--list-row-padding-y) var(--list-row-padding-x)',
   borderBottom: '1px solid var(--border-subtle)',
   cursor: 'pointer',
 }

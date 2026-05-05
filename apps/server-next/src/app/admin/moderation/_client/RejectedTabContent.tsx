@@ -66,7 +66,7 @@ export function RejectedTabContent(): React.ReactElement {
     <div style={{ display: 'flex', gap: 12, flex: 1, minHeight: 0 }}>
       {/* Left list */}
       <div style={{ width: 280, flexShrink: 0, background: 'var(--bg-surface-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '10px 12px', flexShrink: 0, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ padding: 'var(--toolbar-padding-y) var(--toolbar-padding-x)', flexShrink: 0, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>{M.rejected.listHeader(videos.length)}</span>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
@@ -74,7 +74,7 @@ export function RejectedTabContent(): React.ReactElement {
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)' }}>{M.rejected.empty}</div>
           ) : (
             videos.map((it, i) => (
-              <div key={it.id} onClick={() => setActiveIdx(i)} style={{ display: 'flex', gap: 10, padding: '10px 12px', borderBottom: '1px solid var(--border-subtle)', background: i === activeIdx ? 'var(--admin-accent-soft)' : 'transparent', borderLeft: `2px solid ${i === activeIdx ? 'var(--accent-default)' : 'transparent'}`, cursor: 'pointer', opacity: 0.85 }}>
+              <div key={it.id} onClick={() => setActiveIdx(i)} style={{ display: 'flex', gap: 10, padding: 'var(--list-row-padding-y) var(--list-row-padding-x)', borderBottom: '1px solid var(--border-subtle)', background: i === activeIdx ? 'var(--admin-accent-soft)' : 'transparent', borderLeft: `2px solid ${i === activeIdx ? 'var(--accent-default)' : 'transparent'}`, cursor: 'pointer', opacity: 0.85 }}>
                 <Thumb
                   src={it.cover_url}
                   size="poster-sm"
@@ -97,7 +97,7 @@ export function RejectedTabContent(): React.ReactElement {
       <div style={{ flex: 1, minWidth: 0, background: 'var(--bg-surface-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {v ? (
           <>
-            <div style={{ padding: '10px 12px', flexShrink: 0, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ padding: 'var(--toolbar-padding-y) var(--toolbar-padding-x)', flexShrink: 0, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--state-error-fg)' }}>{M.rejected.title}</span>
               <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>{v.title}</span>
               <span style={{ flex: 1 }} />
@@ -110,15 +110,15 @@ export function RejectedTabContent(): React.ReactElement {
                 {M.rejected.reopen}
               </button>
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 14 }}>
+            <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: 'var(--card-padding-y)' }}>
               {actionError && (
-                <div style={{ marginBottom: 12, padding: '8px 12px', background: 'var(--state-error-bg)', border: '1px solid var(--state-error-border)', borderRadius: 6, fontSize: 'var(--font-size-xs)', color: 'var(--state-error-fg)' }}>
+                <div style={{ marginBottom: 12, padding: '8px var(--toolbar-padding-x)', background: 'var(--state-error-bg)', border: '1px solid var(--state-error-border)', borderRadius: 6, fontSize: 'var(--font-size-xs)', color: 'var(--state-error-fg)' }}>
                   {actionError}
                 </div>
               )}
 
               {/* Rejection info */}
-              <div style={{ padding: '10px 14px', background: 'var(--state-error-bg)', border: '1px solid var(--state-error-border)', borderRadius: 6, marginBottom: 14, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <div style={{ padding: 'var(--list-row-padding-y) var(--card-padding-y)', background: 'var(--state-error-bg)', border: '1px solid var(--state-error-border)', borderRadius: 6, marginBottom: 14, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                 <span style={{ color: 'var(--state-error-fg)', fontSize: 'var(--font-size-lg)', marginTop: 2 }}>✕</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, color: 'var(--state-error-fg)' }}>拒绝标签</div>
@@ -153,7 +153,7 @@ export function RejectedTabContent(): React.ReactElement {
               </div>
 
               {/* Actions */}
-              <div style={{ marginTop: 14, padding: 12, background: 'var(--bg-surface-raised)', borderRadius: 6 }}>
+              <div style={{ marginTop: 14, padding: 'var(--section-gap)', background: 'var(--bg-surface-raised)', borderRadius: 6 }}>
                 <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, marginBottom: 8 }}>可执行操作</div>
                 <button style={{ ...BTN_SM, opacity: reopening !== null ? 0.6 : 1 }} onClick={handleReopen} disabled={reopening !== null} aria-label={M.aria.rejectedReopen}>
                   ↻ {M.rejected.reopen}
