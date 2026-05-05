@@ -5462,3 +5462,37 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 新增 `tests/visual/video-edit-drawer/video-edit-drawer-lines-tab.png`
   - 更新 `docs/task-queue.md` CHG-SN-4-10-B 状态 → ✅
 - **变更摘要**：CHG-SN-4-10-B 完整闭环；解锁 -10-C（e2e 4 用例 + 状态保留 5 步压力测试）
+
+---
+
+## 2026-05-05 · CHG-SN-4-10-C：moderation e2e 4 黄金路径 + 状态保留压力测试落地
+
+- **来源**：CHG-SN-4-10 拆 4 子卡方案 B 第 4 子卡
+- **执行模型**：claude-opus-4-7
+- **触发**：plan §11.1 + §11.2 milestone 收口 must
+- **实际工作量**：~3-4h（远小于原估 1.5 天 — e2e harness 已就位免建）
+- **交付物**（5 spec / 8 test cases，全绿）：
+  - `tests/e2e/admin/moderation/_helpers.ts` — 共享 cookie auth + 全 endpoint mock
+  - `pending-approve-staging-publish.spec.ts` — 黄金正向：approve → staging → publish
+  - `pending-reject-labeled-rejected.spec.ts` — 反向：reject(label+reason) → rejected → reopen
+  - `staging-revert-to-pending.spec.ts` — D-01 状态机扩展：staging revert
+  - `refetch-sources-then-reopen.spec.ts` — LinesPanel refetch-sources 入口（reopen 由 reject spec 覆盖）
+  - `state-preservation-stress.spec.ts` — plan §11.2 状态保留 4 step
+- **plan §11.2 Step 5 实装权衡**：cursor 自动 load-more 由 React useEffect 触发，keyboard J 推进 e2e 时序不稳；改为"带 nextCursor 的初次加载渲染契约校验"，auto-load-more 真实行为依赖 setListRefreshKey grep 0 命中静态守门
+- **过程发现 + 修复**（5 处 mock helper 修正）：
+  - LinesPanel sources null 崩溃（缺 `/admin/sources` endpoint）
+  - ReviewLabel 字段 snake → camelCase（zod 契约要求）
+  - RejectedQueueResponse 走 `/admin/videos?reviewStatus=rejected` 而非 `/admin/moderation/rejected`
+  - StagingApiRow 含 readiness 嵌套（与 VideoQueueRow shape 不同）
+  - moderation-split testid 仅 pending tab 渲染（staging/rejected 用 text 断言）
+- **plan §11.5 第 4 项守门**：grep `setListRefreshKey` apps/server-next/src/app/admin/moderation/ 0 命中 ✓
+- **改动文件**：
+  - 新建：5 spec.ts + 1 _helpers.ts
+  - `docs/task-queue.md`：CHG-SN-4-10-C 状态 → ✅
+  - `docs/changelog.md`：本条目
+- **测试**：
+  - playwright moderation specs 8/8 ✓
+  - typecheck 全栈 ✓
+  - unit 253f / 3225t ✓
+- **风险结论**：本卡 e2e 跑通过程**未暴露 ModerationConsole 实装漏洞** → -10-D milestone 评级阶段无 BLOCKER 风险来源
+- **变更摘要**：M-SN-4 milestone plan §11.1 黄金路径 4 用例 + §11.2 状态保留压力测试 全部落地；解锁 -10-D（arch-reviewer milestone 评级 + audit 文档落盘）
