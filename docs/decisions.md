@@ -4253,3 +4253,149 @@ React inline `style={{ background: ... }}` 的 CSS specificity 高于任何 styl
   - `docs/audit_seq_20260504_01_20260503.md`（CHG-UX-06 arch-reviewer 全序列评级）
 - **关联规范**：`docs/rules/ui-rules.md`（CSS 变量使用约束）/ CLAUDE.md §"绝对禁止" 硬编码颜色值条款
 
+
+---
+
+## ADR-113: admin UI 间距/封面/字号 token 沉淀 + cover 真根因修复 + 业务零裸值断言
+
+> 状态：accepted（CHG-UX2-01..06 全部完成 + arch-reviewer A- / PASS）
+> 日期：2026-05-05
+> 任务卡：SEQ-20260505-01（CHG-UX2-01..06）
+> 关联：`docs/designs/backend_design_v2.1/density-spacing-cover-alignment-plan.md`（方案真源）
+>       `docs/archive/2026Q2/video-table-cell-compression-debug-20260504.md`（cover bug 调试归档）
+
+### 上下文
+
+CHG-UX-06 收口阶段用户反馈 4 项痛点 + 一审遗留闭环项：
+
+1. 容器/组件间距 inline 裸值散落（业务层 99+ 处 fontSize 裸值 + 多处 padding 裸值）
+2. 表格列头展开 + 列宽弹性化问题
+3. 视频库列表封面过小 / 审核台封面"裁剪"显示异常
+4. 封面 + 表格"左圆右直角"frame 圆角错位
+5. （CHG-UX2-01 一审 Y1）typography 3xl/4xl 校准 deprecation 真空
+6. （CHG-UX2-01 一审 S2-S5）选型指引 / ADR / 业务零消费断言 / spacing ADR 缺位
+
+序列产出 5 实施卡（-01..05） + 1 收口卡（-06），新增 26 个 token 槽位 + 56 文件 305 处 fontSize 全量迁移 + 锁定并修复一个 Chrome layout 算法 bug。
+
+### 决策
+
+#### 1. typography 3xl / 4xl 数值校准（设计稿对齐）
+
+- **校准**：`--font-size-3xl` 30px → 28px、`--font-size-4xl` 36px → 32px（向 reference design --fs-28 / --fs-32 对齐）
+- **合法性**：grep 业务 0 处直接消费 `var(--font-size-3xl)` / `var(--font-size-4xl)` 断言成立
+- **6 个 stable key 不动**（xs/sm/base/lg/xl/2xl）— 数值漂移会破窗
+- **未来防御**（Y1 长期建议）：
+  - 短期：typography.ts 加 `@deprecated-on-numeric-change` 注释，提示新增消费方需重新评估
+  - 长期：触发型 follow-up — 当业务出现 ≥ 3 处 `var(--font-size-3xl)` 直接消费时，立项 stylelint 自定义规则禁止"裸 var consumption"或要求显式 alias
+
+#### 2. admin-layout/spacing 5 类槽位选型指引
+
+5 类槽位（共 10 var）+ section-gap：
+
+| 槽位 | 真源值 | 用途 | 反例（不要这样用） |
+|---|---|---|---|
+| `page-padding-x/y` | 24/20 | 页面级最外层 padding（PAGE_STYLE） | 不用于 panel 内部 |
+| `section-gap` | 12 | **段间间距（gap）**，不是 padding | 严禁当 panel padding 用 |
+| `list-row-padding-x/y` | 12/10 | ModListRow / NotificationItem / 紧凑列表行 | 不用于 toolbar |
+| `card-padding-x/y` | 18/14 | 卡片型容器（KpiCard / DecisionCard） | 不用 -y 当 horizontal padding；不用 4 边 shorthand |
+| `toolbar-padding-x/y` | 12/10 | dt__toolbar / 详情区 toolbar | 不用于 component scope（如按钮） |
+| `foot-padding-x/y` | 12/6 | dt__foot 等紧凑底栏 | — |
+
+**选型决策树**：
+1. 是页面最外层？→ page-padding
+2. 是段与段之间间距（margin/gap 语义）？→ section-gap
+3. 是列表行（紧凑高度 ≤ 32）？→ list-row-padding
+4. 是中等密度卡片（独立 surface）？→ card-padding
+5. 是 toolbar 类水平条？→ toolbar-padding
+6. 是 foot 类紧凑底栏？→ foot-padding
+7. 都不匹配 → **保留裸值 + 登记 EXT-F**（见 §5）
+
+**component-internal padding 不归 layout 真源**（如 button / chip / pill 等）— 应在 `packages/design-tokens/src/components/*.ts` 真源管理。CHG-UX2-05 的"button padding 不应消费 toolbar token"的还原决策依此条。
+
+#### 3. admin-layout/cover 槽位 + thumb.tsx SIZE_PX 双源同步约束
+
+**真源**：`packages/design-tokens/src/admin-layout/cover.ts` 12 槽位（6 size × {w,h}）。
+
+**双源存在的不可避免性**：
+- HTML `<img width height>` attribute **不接受** CSS var()，必须 number
+- thumb.tsx 内部维护 `SIZE_PX: Record<ThumbSize, {w, h}>` number 投影是必要的
+- CSS layout 仍走 `var(--cover-*-w/h)` — 视觉真源不变
+
+**同步守卫**（thumb.test.tsx 三层）：
+- 每个 size：HTML attribute = SIZE_PX 数值（强）
+- 每个 size：SIZE_PX 数值 = parseInt(adminCover[`cover-*-w/h`])（强）
+- 双向集合相等：design-tokens 槽位数 / 命名 = SIZE_PX entries（CHG-UX2-06 Y4 加固，防"真源补 token 但 thumb 漏跟进"漂移）
+
+**长期演进**（Y5 长期建议）：评估 design-tokens 暴露 numeric 视图（如 `adminCoverPx['poster-md'].w === 48`），让 admin-ui 直接消费消除双源 — 触发型 follow-up，不在本次范围。
+
+#### 4. scrollbar-gutter 从 `*` 收紧到具体滚动容器（CHG-UX2-03f 真因修复）
+
+**根因**：admin-shell-styles.tsx 原 `* { scrollbar-gutter: stable }` 被 Chrome 应用到 `<img>` replaced element，触发 layout 算法 bug，让 `<span> + <img w/h:100%>` 模式（即 admin-ui Thumb）的 img used width 退化（48 → ~37px），反向回吞 span used width。完整调试见归档文档。
+
+**修法**：scrollbar-gutter 仅应用到真实滚动容器：`[data-admin-shell-main]`、`[data-table-scroll]`、`[data-drawer-body]`、`.cmdk__list`。
+
+**已知豁免**（短内容场景）：admin Modal body / Popover 长列表 / 自定义 card body 内部 scroll —— 当前未触发抖动，未来出现长内容时按下条规则纳入。
+
+**触发条件 / 升级规则**：
+- **新增 admin 滚动容器** → 必须加入 admin-shell-styles.tsx scrollbar-gutter selector 清单，**或**带 `data-scrollport` hook attribute（待长期方案落地）
+- **长期方案**（Y3 触发型）：admin-ui Modal/Popover/Drawer 共享层统一带 `data-scrollport`，selector 升级为 `[data-scrollport]` 一处统一
+- 修改 admin-shell-styles.tsx scrollbar-gutter 块前必读本 ADR §4 + 调试归档
+
+#### 5. 业务零裸值断言 + EXT-F 触发条件
+
+**断言**：业务文件（apps/server-next/src/app/admin/**）padding / fontSize 必须使用 token var()，不写裸值 px。
+- fontSize：CHG-UX2-02b 305 处全量迁移已达成 0 裸值
+- padding：CHG-UX2-05 关键高频（toolbar/foot/list-row/list-row）已 token 化；剩余低频小尺寸（2/3/4/5/8 px）无匹配语义槽位，**保留为合理残余**
+
+**EXT-F 触发条件**（spacing token 真源补缺）：
+- **同语义裸值在 3+ 文件出现** → 必须新增 token 槽位，**不再走 EXT-F 排队**
+- **同语义裸值在 1-2 文件** → 保留裸值 + 评估是否归入 EXT-F 候选
+- 候选新槽位：
+  - `panel-padding-x/y`（PendingCenter SECTION / RejectedTabContent actions section 等 panel-in-page 内 padding；区别于 section-gap 的 gap 语义）
+  - `button-padding-x`（VideoListClient BATCH_BTN/HEAD_BTN 等；应在 components/button.ts 真源）
+  - `card-padding` shorthand（4 边等值场景，需评估 card-padding-x=18 是否调整）
+
+#### 6. CHG-UX2-05 弱语义还原决策记录
+
+5 处还原（commit `507a28b6` + `7ceb6015`）作为后续审查参考：
+
+| 位置 | 还原原因 | 长期目标 token |
+|---|---|---|
+| VideoListClient BATCH_BTN/HEAD_BTN `0 12px` | component scope ≠ layout token | `button-padding-x` (components/button.ts) |
+| PendingCenter SECTION `padding: 12` | section-gap 是 gap 语义不是 padding | `panel-padding-x/y` |
+| RejectedTabContent rejection info `10px 14px` | card-padding-y(14) 用作 x 方向混淆 | `panel-padding-x/y` 或新增 alert 槽位 |
+| RejectedTabContent card body `padding: 14` | card-padding-y 当 4 边 shorthand 是滥用 | 评估 `card-padding` shorthand |
+| RejectedTabContent actions `padding: 12` | 同 PendingCenter SECTION | `panel-padding-x/y` |
+
+### 备选方案（已评估）
+
+- **方案 A：全部走 primitives space（4/8/12/16/20/24...）** — 拒绝。失去场景命名语义；admin 全局调整密度时无法批量改一处生效
+- **方案 B：每个消费方完全自由 inline px** — 拒绝。无法防裸值漂移；设计稿调整不可批量同步
+- **方案 C（采纳）**：admin-layout 层提供"场景命名槽位"（page / section / list-row / card / toolbar / foot），primitives space 仍是底层原子；component 内部 padding 单独归 components 真源
+
+### 后续触发型 follow-up
+
+| ID | 内容 | 触发 |
+|---|---|---|
+| CHG-UX2-EXT-A | PendingCenter 中央海报升 poster-xl 120×180 | 用户实测 80×120 仍嫌小 |
+| CHG-UX2-EXT-B | 业务 inline padding 全量收敛剩余 ~70% | 视觉走查发现剩余裸值过多 |
+| CHG-UX2-EXT-C | 行密度运行时切换（comfortable ↔ compact） | admin Settings 立项 |
+| CHG-UX2-EXT-D | 审核台 < 1100px 响应式断点 RightPane 折叠 | 移动端体验立项 |
+| CHG-UX2-EXT-E | admin-count-font-size deprecation 清理 | 本批所有消费方迁到 --font-size-xxs 后 |
+| CHG-UX2-EXT-F | spacing token 真源补缺（panel-padding / button-padding 等） | 同语义裸值在 3+ 文件出现，或 -06 后视觉走查发现新缺口 |
+
+### 验证
+
+- ✅ typecheck / lint 全绿
+- ✅ unit 全套 252f / 3206t（含 thumb.test.tsx 32 测试 / admin-layout +29 / primitives +4）
+- ✅ tokens:validate / verify-token-references 全绿
+- ✅ arch-reviewer (claude-opus-4-7) 全序列评级 **A- / PASS**（红线 0 / 黄线 6 已 ADR 内闭合 4 项 + 长期 follow-up 2 项）
+- ✅ 浏览器实测视频库 + 内容审核所有封面恢复正常 48×72 完整渲染
+- ✅ Chrome scrollbar-gutter Chrome layout bug 在隔离测试页 (`/cover-test` 已删) 用 9 个 case + 注入对照实验完整复现 + 修法验证
+
+### 关联
+
+- **关联 ADR**：ADR-111（后台 token 颜色对齐 — admin token 体系前序）/ ADR-112（后台交互反馈语义槽位 — 同期 SEQ-20260504-01 收口）
+- **关联方案**：`docs/designs/backend_design_v2.1/density-spacing-cover-alignment-plan.md`（过程文档；ADR-113 是结论）
+- **关联归档**：`docs/archive/2026Q2/video-table-cell-compression-debug-20260504.md`（cover bug 真因调试链路全记录 + §10 教训）
+- **关联规范**：`docs/rules/ui-rules.md`（CSS 变量使用约束）/ `CLAUDE.md` §"绝对禁止" 硬编码颜色 / 越层调用 / 任何裸 fontSize/padding 条款

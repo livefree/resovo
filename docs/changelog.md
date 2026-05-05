@@ -5308,3 +5308,26 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **残余裸值**：小尺寸 2px/3px/4px/5px/8px（button 内边距、badge、player overlay）无语义匹配 token，合理保留
 - **测试**：typecheck / lint / 252f / 3206t 全绿
 - **变更摘要**：高频 padding 裸值全部收敛到 CHG-UX2-01 建立的 admin-layout spacing token；CHG-UX2 序列进入 CHG-UX2-06 收口阶段
+
+---
+
+## 2026-05-05 · CHG-UX2-06：SEQ-20260505-01 序列收口 + arch-reviewer 全序列评级 + ADR-113
+
+- **序列**：SEQ-20260505-01 收口卡（CHG-UX2-01..05 全部 ✅ 之后）
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — **A- / PASS**（红线 0 / 黄线 6）
+- **触发**：序列实施 5 张卡完成；按 -01 卡登记的 S2-S5 + Y1 收口项进入 -06
+- **arch-reviewer 反馈处理**：
+  - Y1 typography 3xl/4xl deprecation 真空 → ADR-113 §1 + 触发型 lint follow-up
+  - Y2 5 处弱语义还原 token 缺槽位 → ADR-113 §5 给"3+ 文件出现 → 必须升 token"触发条件 + EXT-F 候选清单
+  - Y3 scrollbar-gutter 容器豁免清单 → admin-shell-styles.tsx 注释加豁免列表 + 升级建议 + ADR-113 §4 收纳规则
+  - Y4 thumb.tsx SIZE_PX 对称性守卫 → thumb.test.tsx +1 测试（双向集合相等断言，防"真源补槽位但 thumb 漏跟进"）
+  - Y5 admin-ui 反向耦合 design-tokens 数值（消除双源）→ ADR-113 §3 长期评估
+  - Y6 EXT-F 触发条件可追溯性 → ADR-113 §5+§6 完整记录 5 处还原决策
+- **改动文件**：
+  - `docs/decisions.md`：追加 ADR-113（6 必须章节：typography 校准 / spacing 选型指引 / cover 双源同步 / scrollbar-gutter 收紧规则 / 业务零裸值断言 + EXT-F 触发条件 / 5 处还原决策记录）
+  - `packages/admin-ui/src/shell/admin-shell-styles.tsx`：scrollbar-gutter 注释扩充（4 个覆盖容器清单 + 已知豁免 + 升级建议指向 ADR-113 §4）
+  - `tests/unit/components/admin-ui/cell/thumb.test.tsx`：+1 对称性断言（design-tokens cover.ts 槽位数 / 命名 = SIZE_PX entries）
+  - `docs/task-queue.md`：CHG-UX2-06 状态 → 已完成；序列状态 → 已完成
+- **测试**：typecheck / lint / thumb 32/32 全绿（含本次 +1 对称性测试）/ admin-ui unit 全套全绿
+- **变更摘要**：SEQ-20260505-01 正式收口；ADR-113 沉淀本批所有架构决策（含 cover bug 真因 + 业务零裸值断言）；4 项用户痛点全部闭环；EXT-A..F 触发型 follow-up 固化进 ADR

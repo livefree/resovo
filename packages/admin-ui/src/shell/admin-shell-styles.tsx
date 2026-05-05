@@ -114,10 +114,27 @@ const SHELL_CSS = `
  * bug：当 img 用 width/height: 100% 且其父是 <span> + flex/block 容器嵌套时，
  * img 的 used width 退化（从 48 → 37），反向回吞 span 的 used width。
  * 命中 admin-ui Thumb 组件结构（span > img w/h:100%），导致视频库 / 内容审核
- * 等所有页面所有尺寸的封面被压扁。完整调试见 video-table-cell-compression-debug.md。
+ * 等所有页面所有尺寸的封面被压扁。完整调试见
+ * docs/archive/2026Q2/video-table-cell-compression-debug-20260504.md。
  *
  * 修法：scrollbar-gutter 仅应用到真实滚动容器，避开 img / span 等非滚动元素。
- * 列表覆盖：admin shell main、DataTable scrollport、Drawer body、Cmd+K list。 */
+ *
+ * 当前覆盖容器（按需扩展）：
+ *   ✓ [data-admin-shell-main]  — main page 滚动
+ *   ✓ [data-table-scroll]      — DataTable 双轴滚动 viewport
+ *   ✓ [data-drawer-body]       — Drawer 正文滚动（含 NotificationDrawer / TaskDrawer）
+ *   ✓ .cmdk__list              — Cmd+K Command Palette 列表
+ *
+ * 已知豁免（短内容场景，未触发出现/消失抖动）：
+ *   - admin Modal body / confirm dialog 长内容（如未来出现 → 加入清单）
+ *   - Popover 长列表（如 ColumnSettings / FilterPicker）
+ *   - 任意自定义 card body 内部 scroll
+ *
+ * 升级建议（ADR-113 §4 触发条件）：
+ *   - 新增 admin 滚动容器 → 必须加入本清单或带 data-scrollport hook attribute
+ *   - 长期方案：admin-ui Modal/Popover/Drawer 共享层统一带 data-scrollport，
+ *     selector 升级为 [data-scrollport] 一处统一
+ *   - 修改本块前必读 ADR-113 §4 + 调试归档文档 */
 [data-admin-shell-main],
 [data-table-scroll],
 [data-drawer-body],

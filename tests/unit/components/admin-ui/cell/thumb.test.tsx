@@ -176,4 +176,20 @@ describe('Thumb — img HTML width/height attribute（CHG-UX2-03f intrinsic size
       expect(parseInt(hToken, 10)).toBe(c.h)
     })
   }
+
+  /**
+   * CHG-UX2-06 Y4 加固：对称性断言 — design-tokens cover.ts 新增 size 槽位时
+   * thumb.tsx SIZE_PX 必须同步加 entry，否则本断言 fail（防"真源补 token 但
+   * thumb 漏跟进"漂移场景）。配合上面"逐 size value 等价"测试 = 双向守卫。
+   */
+  it('design-tokens adminCover 槽位数 / 命名 与 thumb.tsx SIZE_PX 对称（防漏增）', () => {
+    const tokenSizes = new Set(
+      Object.keys(adminCover)
+        .filter((k) => k.endsWith('-w'))
+        .map((k) => k.replace(/^cover-/, '').replace(/-w$/, ''))
+    )
+    const thumbSizes = new Set(cases.map((c) => c.size))
+    // 双向集合相等
+    expect([...tokenSizes].sort()).toEqual([...thumbSizes].sort())
+  })
 })
