@@ -5606,3 +5606,27 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 乐观锁向后兼容（expectedUpdatedAt 全链路 optional）；前端 wire-up（apps/server-next/src/lib/moderation/api.ts toggleSource）留 M-SN-5 视图卡
   - probe 后台路径（SourceHealthWorker / sources.ts updateSourceActiveStatus / setSourceStatus / batchSetSourceStatus）只写 last_checked / probe_status，不触发 updated_at — 写路径解耦在代码上结构性成立
   - disableDeadSources 不加 ETag（批量幂等：filter `is_active=true AND probe_status='dead'`，并发收敛同结果）
+
+---
+
+## [CHG-SN-5-PRE-01-D] feedback.ts XFF trustProxy 白名单（DEBT-SN-4-05-B，🔴 cutover-blocker）
+
+- **完成时间**：2026-05-06
+- **记录时间**：2026-05-06
+- **执行模型**：claude-opus-4-7（主循环；建议模型 sonnet，单 session 全 SEQ 推进）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 评级 A- / 结论 PASS / 0 红线 / 2 黄线（startup 日志 + 测试加固）留给 PRE-01-A 演练卡
+- **来源序列**：SEQ-20260506-02（M-SN-5.5 启动准入门 A 段第 4/6 子卡）
+- **修改文件**：
+  - `apps/api/src/server.ts` — 新增 `parseTrustedProxies()` 解析 CSV env `TRUSTED_PROXY_IPS`（未配返回 false 默认 fail-secure）；Fastify 构造 `trustProxy: parseTrustedProxies()`
+  - `apps/api/src/routes/feedback.ts` — 删除手动 `getClientIp` helper（直接 split XFF）；改用 `request.ip`（Fastify 内置受 trustProxy 保护）
+  - `docker/nginx.conf` — XFF proxy_set_header 行加注释说明：nginx 改写 + 上游白名单只信任本 nginx 出口 IP
+  - `tests/unit/api/feedbackRoute.test.ts` — buildApp 新增 trustProxy? 选项；新增 2 用例：(a) trustProxy=false → 同 socket 不同 XFF 仍 hash 相同（绕过失败）；(b) trustProxy='127.0.0.1' → 不同 XFF 解析为不同 ipHash（合法多客户端）
+  - `docs/rules/api-rules.md` — §速率限制 新增"客户端 IP 解析（trustProxy 白名单）"小节，登记 `TRUSTED_PROXY_IPS` env 契约 + 涉及 IP 路由清单
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck 全绿 / lint 全绿 / unit 254 files 3238 tests **全部 PASS**（本卡新增 2 用例）
+- **注意事项**：
+  - 默认 fail-secure：未配 `TRUSTED_PROXY_IPS` → trustProxy=false → request.ip = socket.remoteAddress → XFF 全部忽略 → 攻击者无法通过伪造头绕过 rate-limit
+  - 生产部署须设 `TRUSTED_PROXY_IPS=<nginx 出口 IP CSV>`，否则所有客户端共享同一 ipHash 会**误锁正常用户**（可用性降级，非安全漏洞，部署演练卡 PRE-01-A 须验证）
+  - 涉及 IP 的路由（feedback.ts / internal/client-log.ts / internal/image-broken.ts）已统一使用 `request.ip`，自动继承 trustProxy 白名单语义
+  - 黄线 2 条留给 PRE-01-A 演练卡：(1) start() 加 `fastify.log.info({ trustProxy }, ...)` 让运维确认；(2) 端到端 rate-limit 触发 + XFF 伪造闭环测试

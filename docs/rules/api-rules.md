@@ -199,6 +199,17 @@ const response = {
 // POST /admin/sources/submit → 50条/天/用户
 ```
 
+### 客户端 IP 解析（trustProxy 白名单）
+
+CHG-SN-5-PRE-01-D / DEBT-SN-4-05-B：所有依赖客户端 IP 的路径必须用 `request.ip`（Fastify 内置），**不得**手动解析 `X-Forwarded-For` 头。
+
+- `apps/api/src/server.ts` 启动时根据环境变量 `TRUSTED_PROXY_IPS`（CSV）配置 Fastify `trustProxy`：
+  - 未设置 → `trustProxy: false` → `request.ip = socket.remoteAddress`，XFF 全部忽略；攻击者无法通过伪造 XFF 绕过 rate-limit
+  - 设置 → `trustProxy: ['ip1', 'ip2', ...]` → 仅信任白名单上游解析的 XFF 链
+- 生产部署须配置 `TRUSTED_PROXY_IPS` 为反向代理（nginx / cloudflare）的实际出口 IP，例：`127.0.0.1,::1,172.20.0.1`
+- nginx 必须用 `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for` 改写头，防止上游伪造头链路（详见 `docker/nginx.conf`）
+- 涉及 IP 的路由（`feedback.ts` / `internal/client-log.ts` / `internal/image-broken.ts`）已统一使用 `request.ip`
+
 ---
 
 ## 向后兼容原则

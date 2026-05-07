@@ -30,9 +30,9 @@ vi.mock('@/api/db/queries/sourceHealthEvents', () => ({
   insertHealthEvent: (...args: unknown[]) => mockInsertHealthEvent(...args),
 }))
 
-async function buildApp() {
+async function buildApp(opts?: { trustProxy?: boolean | string | string[] }) {
   const { feedbackRoutes } = await import('@/api/routes/feedback')
-  const app = Fastify({ logger: false })
+  const app = Fastify({ logger: false, trustProxy: opts?.trustProxy ?? false })
   await app.register(cookie, { secret: 'test-secret' })
   setupAuthenticate(app)
   await app.register(feedbackRoutes, { prefix: '/v1' })
@@ -149,5 +149,69 @@ describe('POST /feedback/playback', () => {
     // key 格式: fb:rl:{8字节ipHash}:{sourceId}
     expect(rateLimitKey).toMatch(/^fb:rl:[0-9a-f]{8}:/)
     expect(rateLimitKey).not.toContain('192.168')
+  })
+
+  // CHG-SN-5-PRE-01-D（DEBT-SN-4-05-B）
+  it('trustProxy=false（默认）→ 客户端伪造的 XFF 被忽略，rate-limit 不可绕过', async () => {
+    // 同一 socket.remoteAddress + 不同 XFF → ipHash 相同 → 共享 rate-limit key
+    const key1Promise = app.inject({
+      method: 'POST',
+      url: '/v1/feedback/playback',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': '1.1.1.1' },
+      body: JSON.stringify(validBody),
+    })
+    const key2Promise = app.inject({
+      method: 'POST',
+      url: '/v1/feedback/playback',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': '2.2.2.2' },
+      body: JSON.stringify(validBody),
+    })
+    await Promise.all([key1Promise, key2Promise])
+
+    const calls = mockRedis.set.mock.calls
+    const keys = calls.map((c) => c[0] as string)
+    expect(keys).toHaveLength(2)
+    // 两个请求生成的 ipHash 段相同（因为 XFF 被忽略，都用 socket 默认 IP）
+    const hash1 = keys[0].match(/^fb:rl:([0-9a-f]+):/)?.[1]
+    const hash2 = keys[1].match(/^fb:rl:([0-9a-f]+):/)?.[1]
+    expect(hash1).toBeDefined()
+    expect(hash1).toBe(hash2)
+  })
+})
+
+// CHG-SN-5-PRE-01-D（DEBT-SN-4-05-B）
+describe('POST /feedback/playback — trustProxy 启用时', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockRedis.set.mockResolvedValue('OK')
+    mockRedis.get.mockResolvedValue('0')
+    mockRedis.incr.mockResolvedValue(1)
+    mockRedis.expire.mockResolvedValue(1)
+    mockInsertHealthEvent.mockResolvedValue('ev-1')
+    // app.inject 模拟连接来自 127.0.0.1，将其加入信任白名单
+    app = await buildApp({ trustProxy: '127.0.0.1' })
+  })
+  afterEach(() => app.close())
+
+  it('白名单上游 → 不同 XFF 解析为不同 request.ip → 不同 ipHash', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/v1/feedback/playback',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': '3.3.3.3' },
+      body: JSON.stringify(validBody),
+    })
+    await app.inject({
+      method: 'POST',
+      url: '/v1/feedback/playback',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': '4.4.4.4' },
+      body: JSON.stringify(validBody),
+    })
+    const keys = mockRedis.set.mock.calls.map((c) => c[0] as string)
+    const hash1 = keys[0].match(/^fb:rl:([0-9a-f]+):/)?.[1]
+    const hash2 = keys[1].match(/^fb:rl:([0-9a-f]+):/)?.[1]
+    expect(hash1).toBeDefined()
+    expect(hash2).toBeDefined()
+    expect(hash1).not.toBe(hash2)  // 信任 XFF 后两次 IP 不同 → 两个独立 rate-limit bucket
   })
 })

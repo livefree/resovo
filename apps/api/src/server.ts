@@ -50,6 +50,21 @@ import { adminMediaRoutes } from '@/api/routes/admin/media'
 import { VerifyService } from '@/api/services/VerifyService'
 import { db } from '@/api/lib/postgres'
 
+/**
+ * 解析 TRUSTED_PROXY_IPS 环境变量为 trustProxy 白名单。
+ * CHG-SN-5-PRE-01-C-D（DEBT-SN-4-05-B）：未配置时默认 false（不信任任何 XFF），
+ * 防止 IP 欺骗绕过 feedback.ts rate-limit。
+ *
+ * 生产部署须设置为反向代理（nginx / cloudflare）的实际出口 IP，CSV 列表。
+ * 例：TRUSTED_PROXY_IPS=127.0.0.1,::1,172.20.0.1
+ */
+function parseTrustedProxies(): string[] | false {
+  const raw = process.env.TRUSTED_PROXY_IPS?.trim()
+  if (!raw) return false
+  const list = raw.split(',').map((s) => s.trim()).filter(Boolean)
+  return list.length > 0 ? list : false
+}
+
 async function start() {
   const fastify = Fastify({
     logger: createFastifyLoggerOptions(),
@@ -57,6 +72,9 @@ async function start() {
     // INFRA-14 F5：把 Fastify 自动注入的 reqId 字段重命名为项目约定的 request_id，
     // 让 route 内 request.log.error/warn/info(...) 都自动带 request_id 顶层字段
     requestIdLogLabel: 'request_id',
+    // CHG-SN-5-PRE-01-D（DEBT-SN-4-05-B）：仅信任白名单上游解析 X-Forwarded-For；
+    // 默认 false 时 request.ip = socket.remoteAddress，XFF 全部忽略，rate-limit 不可被欺骗绕过
+    trustProxy: parseTrustedProxies(),
   })
 
   // access log: 每个响应输出含 duration_ms / status / method / url；

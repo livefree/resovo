@@ -4,6 +4,9 @@
  * - rate-limit: (hash(IP), sourceId) 每分钟 1 次
  * - PII: 只存 hash(IP) 头 8 字节，不存 userId / IP 原值
  * - 副作用 fire-and-forget: probe_status 更新 / quality_detected 写入 / health event 入队
+ *
+ * CHG-SN-5-PRE-01-D（DEBT-SN-4-05-B）：客户端 IP 改用 Fastify request.ip（受 trustProxy 白名单保护），
+ * 不再手动解析 X-Forwarded-For；攻击者无法通过伪造 XFF 头绕过 rate-limit。
  */
 
 import crypto from 'node:crypto'
@@ -26,12 +29,6 @@ const PlaybackFeedbackBodySchema = z.object({
 
 function hashIp(ip: string): string {
   return crypto.createHash('sha256').update(ip).digest('hex').slice(0, 8)
-}
-
-function getClientIp(request: { headers: Record<string, string | string[] | undefined>; socket: { remoteAddress?: string } }): string {
-  const xff = request.headers['x-forwarded-for']
-  const raw = Array.isArray(xff) ? xff[0] : xff
-  return (raw?.split(',')[0]?.trim()) ?? request.socket?.remoteAddress ?? 'unknown'
 }
 
 function mapHeightToQuality(h: number): string {
@@ -73,8 +70,8 @@ export async function feedbackRoutes(fastify: FastifyInstance) {
     }
 
     const { videoId, sourceId, success, resolutionWidth, resolutionHeight, errorCode } = parsed.data
-    const ip = getClientIp(request as Parameters<typeof getClientIp>[0])
-    const ipHash = hashIp(ip)
+    // request.ip 由 Fastify 根据 trustProxy 白名单解析；未配置时回落到 socket.remoteAddress（XFF 被忽略）
+    const ipHash = hashIp(request.ip)
 
     const allowed = await checkRateLimit(ipHash, sourceId).catch(() => true)
     if (!allowed) {
