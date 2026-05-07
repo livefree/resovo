@@ -178,6 +178,7 @@ export const M = {
   lines: {
     loadFailed: '加载失败',
     toggleFailed: '切换失败，请重试',
+    toggleRace: '已被其他审核员处理，已为你刷新最新状态',
     disableDeadFailed: '批量禁用失败',
     refetchFailed: '触发抓取失败',
     fullEpisode: '全集',

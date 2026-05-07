@@ -21,6 +21,8 @@ export interface ContentSourceRow {
   readonly source_site_key: string | null
   readonly source_url: string
   readonly video_title: string | null
+  /** Migration 061 行级乐观锁版本字段（CHG-SN-5-PRE-01-C） */
+  readonly updated_at: string
 }
 
 export interface LineHealthPage {
@@ -141,8 +143,17 @@ export async function toggleSource(
   videoId: string,
   sourceId: string,
   isActive: boolean,
-): Promise<void> {
-  await apiClient.patch<unknown>(`/admin/videos/${videoId}/sources/${sourceId}`, { isActive })
+  /** CHG-SN-5-PRE-01-C：行级乐观锁；从 ContentSourceRow.updated_at 透传，server 不匹配抛 409 REVIEW_RACE。*/
+  expectedUpdatedAt?: string,
+): Promise<{ id: string; is_active: boolean; updated_at: string }> {
+  const res = await apiClient.patch<{ data: { id: string; is_active: boolean; updated_at: string } }>(
+    `/admin/videos/${videoId}/sources/${sourceId}`,
+    {
+      isActive,
+      ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}),
+    },
+  )
+  return res.data
 }
 
 export async function disableDeadSources(videoId: string): Promise<{ disabled: number }> {

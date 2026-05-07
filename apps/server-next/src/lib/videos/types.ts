@@ -129,6 +129,8 @@ export interface VideoSource {
   readonly is_active: boolean
   readonly last_checked: string | null
   readonly created_at: string
+  /** Migration 061 行级乐观锁版本字段（CHG-SN-5-PRE-01-C） */
+  readonly updated_at: string
   readonly episode_number: number
   readonly season_number: number
   readonly source_site_key: string | null

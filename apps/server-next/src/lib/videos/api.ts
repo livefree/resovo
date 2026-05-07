@@ -118,12 +118,23 @@ export async function listVideoSources(videoId: string): Promise<VideoSource[]> 
   return res.data
 }
 
+/** CHG-SN-5-PRE-01-C：server 路由 RETURNING 仅含 id/is_active/updated_at 三字段（非完整 VideoSource）；显式精确类型避免类型契约撒谎。 */
+export type ToggleVideoSourceResult = Pick<VideoSource, 'id' | 'is_active' | 'updated_at'>
+
 export async function toggleVideoSource(
   videoId: string,
   sourceId: string,
   isActive: boolean,
-): Promise<{ data: VideoSource }> {
-  return apiClient.patch<{ data: VideoSource }>(`/admin/videos/${videoId}/sources/${sourceId}`, { isActive })
+  /** CHG-SN-5-PRE-01-C：行级乐观锁；从 VideoSource.updated_at 透传，server 不匹配抛 409 REVIEW_RACE。*/
+  expectedUpdatedAt?: string,
+): Promise<{ data: ToggleVideoSourceResult }> {
+  return apiClient.patch<{ data: ToggleVideoSourceResult }>(
+    `/admin/videos/${videoId}/sources/${sourceId}`,
+    {
+      isActive,
+      ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}),
+    },
+  )
 }
 
 export async function disableDeadSources(videoId: string): Promise<{ data: { disabled: number } }> {

@@ -5,6 +5,7 @@ import { DualSignal, LineHealthDrawer } from '@resovo/admin-ui'
 import type { SourceHealthEvent } from '@resovo/types'
 import type { ContentSourceRow } from '@/lib/moderation/api'
 import * as api from '@/lib/moderation/api'
+import { ApiClientError } from '@/lib/api-client'
 import { M } from '@/i18n/messages/zh-CN/moderation'
 
 // ── Styles ────────────────────────────────────────────────────────
@@ -150,17 +151,30 @@ export function LinesPanel({ videoId }: { videoId: string }): React.ReactElement
   }, [videoId, drawer.sourceId])
 
   const handleToggle = useCallback(async (id: string, currentActive: boolean) => {
+    const target = lines.find(l => l.id === id)
+    if (!target) return
     setTogglingIds(s => new Set(s).add(id))
     setActionError(null)
     try {
-      await api.toggleSource(videoId, id, !currentActive)
-      setLines(prev => prev.map(l => l.id === id ? { ...l, is_active: !currentActive } : l))
-    } catch {
-      setActionError(M.lines.toggleFailed)
+      // CHG-SN-5-PRE-01-C：透传 updated_at 启用乐观锁
+      const result = await api.toggleSource(videoId, id, !currentActive, target.updated_at)
+      // 用 server 返回的最新 updated_at 覆盖本地 token，下一次 toggle 用新版本号
+      setLines(prev => prev.map(l => l.id === id ? { ...l, is_active: result.is_active, updated_at: result.updated_at } : l))
+    } catch (e: unknown) {
+      // 409 REVIEW_RACE：另一个审核员已改过 → 拉新数据 + 用户友好提示
+      if (e instanceof ApiClientError && (e.code === 'REVIEW_RACE' || e.status === 409)) {
+        setActionError(M.lines.toggleRace)
+        // 强制重载，让 UI 显示最新真实状态；重载失败显式回退到 loadFailed 提示，不吞异常
+        api.fetchVideoSources(videoId)
+          .then(setLines)
+          .catch(() => setActionError(M.lines.loadFailed))
+      } else {
+        setActionError(M.lines.toggleFailed)
+      }
     } finally {
       setTogglingIds(s => { const next = new Set(s); next.delete(id); return next })
     }
-  }, [videoId])
+  }, [videoId, lines])
 
   const handleDisableDead = useCallback(async () => {
     setActionError(null)

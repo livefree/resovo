@@ -28,6 +28,7 @@ function makeSource(overrides: Partial<VideoSource> = {}): VideoSource {
     is_active: true,
     last_checked: null,
     created_at: '2024-01-01T00:00:00Z',
+    updated_at: '2024-01-01T00:00:00Z',
     episode_number: 1,
     season_number: 1,
     source_site_key: 'testsite',
@@ -82,10 +83,11 @@ describe('useVideoSources', () => {
     expect(result.current[0].error?.message).toBe('网络错误')
   })
 
-  it('toggle：乐观更新 + 成功', async () => {
-    const src = makeSource({ is_active: true })
+  it('toggle：乐观更新 + 成功（CHG-SN-5-PRE-01-C：透传 updated_at + 用 server 返回新版本号）', async () => {
+    const src = makeSource({ is_active: true, updated_at: '2024-01-01T00:00:00Z' })
+    const fresh = { ...src, is_active: false, updated_at: '2024-01-01T00:00:01Z' }
     vi.mocked(api.listVideoSources).mockResolvedValue([src])
-    vi.mocked(api.toggleVideoSource).mockResolvedValue({ data: { ...src, is_active: false } as VideoSource })
+    vi.mocked(api.toggleVideoSource).mockResolvedValue({ data: fresh as VideoSource })
 
     const { result } = renderHook(() => useVideoSources('v1'))
     await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
@@ -95,7 +97,9 @@ describe('useVideoSources', () => {
     })
 
     expect(result.current[0].sources[0]!.is_active).toBe(false)
-    expect(api.toggleVideoSource).toHaveBeenCalledWith('v1', 's1', false)
+    expect(result.current[0].sources[0]!.updated_at).toBe('2024-01-01T00:00:01Z')
+    // CHG-SN-5-PRE-01-C：第 4 个参数是当前 updated_at，启用乐观锁
+    expect(api.toggleVideoSource).toHaveBeenCalledWith('v1', 's1', false, '2024-01-01T00:00:00Z')
   })
 
   it('toggle：API 失败时回滚', async () => {
@@ -111,6 +115,44 @@ describe('useVideoSources', () => {
     })).rejects.toThrow()
 
     expect(result.current[0].sources[0]!.is_active).toBe(true)
+  })
+
+  // CHG-SN-5-PRE-01-C：UI 路径乐观锁失败 → 拉新数据 + 抛出异常供消费方提示
+  it('toggle：409 REVIEW_RACE 时调用 listVideoSources 拉新列表 + 异常向上抛', async () => {
+    const stale = makeSource({ is_active: true, updated_at: '2024-01-01T00:00:00Z' })
+    vi.mocked(api.listVideoSources).mockResolvedValue([stale])
+    const raceErr = Object.assign(new Error('race'), { code: 'REVIEW_RACE', status: 409 })
+    vi.mocked(api.toggleVideoSource).mockRejectedValue(raceErr)
+
+    const { result } = renderHook(() => useVideoSources('v1'))
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
+
+    // 初始加载时已调用 1 次
+    const initialCalls = vi.mocked(api.listVideoSources).mock.calls.length
+
+    await expect(act(async () => {
+      await result.current[1].toggle('s1', false)
+    })).rejects.toMatchObject({ code: 'REVIEW_RACE', status: 409 })
+
+    // race 触发重载 → listVideoSources 又被调用至少 1 次
+    expect(vi.mocked(api.listVideoSources).mock.calls.length).toBeGreaterThan(initialCalls)
+    expect(api.toggleVideoSource).toHaveBeenCalledWith('v1', 's1', false, '2024-01-01T00:00:00Z')
+  })
+
+  // 非 race 错误 → 回滚乐观更新到 snapshot
+  it('toggle：非 race 错误回滚到调用前 snapshot', async () => {
+    const src = makeSource({ is_active: true, updated_at: '2024-01-01T00:00:00Z' })
+    vi.mocked(api.listVideoSources).mockResolvedValue([src])
+    vi.mocked(api.toggleVideoSource).mockRejectedValue(new Error('network'))
+
+    const { result } = renderHook(() => useVideoSources('v1'))
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
+
+    await expect(act(async () => {
+      await result.current[1].toggle('s1', false)
+    })).rejects.toThrow('network')
+
+    expect(result.current[0].sources[0]!.is_active).toBe(true)  // 回滚成功
   })
 
   it('disableDead：调用 API 并刷新列表', async () => {

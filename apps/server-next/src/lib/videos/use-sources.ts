@@ -70,13 +70,31 @@ export function useVideoSources(videoId: string): [SourcesState, SourcesActions]
   useEffect(() => { reload() }, [reload])
 
   const toggle = useCallback(async (sourceId: string, isActive: boolean) => {
+    const target = sources.find((s) => s.id === sourceId)
     setTogglePending((prev) => new Set(prev).add(sourceId))
     const snapshot = sources
     setSources((prev) => prev.map((s) => s.id === sourceId ? { ...s, is_active: isActive } : s))
     try {
-      await toggleVideoSource(videoId, sourceId, isActive)
+      // CHG-SN-5-PRE-01-C：透传 updated_at 启用乐观锁；server 不匹配抛 409 REVIEW_RACE
+      const res = await toggleVideoSource(videoId, sourceId, isActive, target?.updated_at)
+      // 用 server 返回的新 updated_at 同步本地版本，下次 toggle 用最新版本
+      const fresh = res.data
+      setSources((prev) => prev.map((s) => s.id === sourceId ? { ...s, ...fresh } : s))
     } catch (e: unknown) {
-      setSources(snapshot)
+      const isRace = typeof e === 'object' && e !== null
+        && (('code' in e && (e as { code: unknown }).code === 'REVIEW_RACE')
+        || ('status' in e && (e as { status: unknown }).status === 409))
+      if (isRace) {
+        // 409 REVIEW_RACE：用 server 真相覆盖，避免落到 snapshot（已被对方改过的旧值）
+        try {
+          const fresh = await listVideoSources(videoId)
+          setSources(fresh)
+        } catch {
+          setSources(snapshot)  // 重载也失败 → 回滚到调用前
+        }
+      } else {
+        setSources(snapshot)  // 非 race 错误 → 回滚乐观更新
+      }
       throw e
     } finally {
       setTogglePending((prev) => { const next = new Set(prev); next.delete(sourceId); return next })

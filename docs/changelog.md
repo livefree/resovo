@@ -5768,3 +5768,32 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - **Y-3（同卡修）**：SEQ-20260502-01 watchlist 第 3 项标"已决议"而非物理删除（保留审计轨迹）
 - **新增依赖**：无 / **数据库变更**：无 / **测试**：N/A（纯文档决策卡）
 - **后续触发（不在本卡）**：方案 B 路径不启动；如未来重新评估触发条件命中，起 PRE-02-V2 决策卡 → ADR-114 起草卡 → migration / 端点修订独立 SEQ
+
+---
+
+## [CHG-SN-5-PRE-01-C-followup] toggleSource 乐观锁 UI 路径接入（修 Codex stop-time review functional gap）
+
+- **完成时间**：2026-05-06
+- **记录时间**：2026-05-06
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — 评级 B+ / 结论 PASS / 0 红线 / 2 黄线（返回类型不诚实 + 空 catch）**全部同卡修复**
+- **触发**：Codex stop-time review 反馈 "toggleSource optimistic lock is not enforced by the active UI path" — 主卡 PRE-01-C 服务端有锁但前端 UI 未透传 expectedUpdatedAt，并发安全 bug 在生产路径上仍未消除
+- **修改文件（仅 apps/server-next + i18n + tests，零 apps/api 改动）**：
+  - `apps/server-next/src/lib/moderation/api.ts` — `ContentSourceRow.updated_at: string` 字段补；`toggleSource(videoId, sourceId, isActive, expectedUpdatedAt?)` 第 4 个 optional 参；返回 `{ id, is_active, updated_at }` 精确类型
+  - `apps/server-next/src/lib/videos/api.ts` — `toggleVideoSource(...expectedUpdatedAt?)` 同模式；新增 `ToggleVideoSourceResult = Pick<VideoSource, 'id' \| 'is_active' \| 'updated_at'>` 精确返回类型（避免类型契约撒谎）
+  - `apps/server-next/src/lib/videos/types.ts` — `VideoSource.updated_at: string` 字段补
+  - `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx` — `handleToggle` 透传 `target.updated_at`；catch ApiClientError code='REVIEW_RACE' 或 status=409 → 拉新 fetchVideoSources + 用户提示；race 重载失败显式回退到 loadFailed 提示**不吞异常**
+  - `apps/server-next/src/lib/videos/use-sources.ts` `toggle` callback — 透传 `target?.updated_at`；race 时 `await listVideoSources` 拉新覆盖（不回 snapshot 旧值）；非 race 错误回滚 snapshot；race 重载失败也回滚 snapshot 不吞异常
+  - `apps/server-next/src/i18n/messages/zh-CN/moderation.ts` — `lines.toggleRace: '已被其他审核员处理，已为你刷新最新状态'` 新 key
+  - `tests/unit/server-next/videos/video-edit-drawer/use-sources.test.ts` — makeSource fixture 加 updated_at；现有 toggle 成功测试改写（验证透传 + server 返回新版本号同步）；新增 2 用例（race 触发 listVideoSources 重载 + 非 race 错误回滚）
+- **arch-reviewer 红黄线处理**：
+  - 0 红线：核心 functional gap 已消除（端到端链路完整：ContentSourceRow/VideoSource updated_at → 客户端透传 → server 比对 → 409 → UI 拉新覆盖 + 用户提示）
+  - **Y-1（同卡修）**：`videos/api.ts toggleVideoSource` 返回类型从 `{ data: VideoSource }`（声明全字段）改为 `{ data: Pick<VideoSource, 'id' \| 'is_active' \| 'updated_at'> }`（与 server 实际 RETURNING 一致），消除类型契约撒谎
+  - **Y-2（同卡修）**：LinesPanel race 重载 `.catch(() => {})` 空 catch（违反 CLAUDE.md 禁止项）→ 改为 `.catch(() => setActionError(M.lines.loadFailed))` 显式回退提示
+- **范围合规**：仅 server-next 客户端 + i18n + tests；零 apps/api 改动（服务端已主卡完成）；零 schema 变更
+- **新增依赖**：无 / **数据库变更**：无
+- **测试覆盖**：typecheck + lint + 259 files **3372 tests 全部 PASS**（本卡净增 2 用例）
+- **端到端链路（两条 UI 路径均完整接入）**：
+  - LinesPanel（审核台）：ContentSourceRow.updated_at → toggleSource 第 4 参 → server 比对 → 409 REVIEW_RACE → fetchVideoSources 重载 + M.lines.toggleRace 提示
+  - useVideoSources（视频编辑 Drawer）：VideoSource.updated_at → toggleVideoSource 第 4 参 → server 比对 → 409 → listVideoSources await 重载覆盖 + throw 供 TabLines 上层提示
+- **DEBT-SN-4-05-A 完整闭环**：服务端 schema + 锁 + 错误码（主卡）+ UI 路径透传 + race 重载 + 用户提示（本 follow-up）= 端到端并发安全 bug 在生产路径**实际消除**
