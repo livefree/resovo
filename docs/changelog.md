@@ -5523,3 +5523,57 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **CHG-SN-4-10 父卡总收口**：4 子卡全部 ✅ → M-SN-4 milestone 闭环
 - **后续动作**：M-SN-5 可启动；建议第一周立 M-SN-5-PRE-01 母卡
 - **变更摘要**：M-SN-4（审核台 + SourceHealthWorker + VideoEditDrawer 实装）milestone 完整收口；arch-reviewer B+ PASS；解锁 M-SN-5；4 黄线 1 闭合 + 3 转登记
+
+---
+
+## CHG-PLAN-02 · plan v2.5 → v2.6 修订段起草 + 3 轮 Opus 评审 + 用户 sign-off + 落盘 ✅ 完成（2026-05-06）
+
+- **执行模型**：claude-opus-4-7
+- **来源**：SEQ-20260505-02（M-SN-5 启动前置评估）；M-SN-4 audit Y1 触发的 cutover-blocker 子序列母卡建议
+- **目标**：M-SN-4 milestone B+ PASS 闭环后，对 M-SN-5（plan §6 原范围 4w / 6 视图 + 9-10 端点）启动前置评估；起草 plan v2.6 修订段，3 轮 spawn arch-reviewer (Opus) 独立评审，取得用户 sign-off 后落盘
+- **强制子代理**：arch-reviewer (claude-opus-4-7) — plan 重大修订强制 Opus（CLAUDE.md 模型路由规则第 3/6 项 + plan §0 SHOULD-4-a）
+- **3 轮评审历程**：
+  - **第 1 轮 verdict CONDITIONAL（4 红线 + 6 黄线 + 卡链合规 3 项）**：R1 修订日志不能提前断言 sign-off / R2 方案 B 的 M-SN-5.5 未在 §6 / 工时表 / §12 / §9 ADR 索引同步刷新 / R3 R-M-SN-5-01 缓解未涵盖 BLOCKER §5.2 第 3 条 / R4 完成标准"M-SN-7 final 前 close"逃生口与 audit Y1 + §5.3 A 评级语气不一致；卡链 K1 PRE-03 必拆 6 子卡 / K2 PRE-01 改母序列 / K3 PRE-02 文件范围不含 migration；推荐方案 B'（拆 M-SN-5.5 + cutover-blocker 并行）
+  - **第 2 轮 verdict PASS（建议 Y7 润色不阻塞）**：rev2 修复全 4 红 + 6 黄 + 3 卡链；新发现 Y7（PRE-03-F Popover "可升 sub-ADR" → "必须先升"）
+  - **用户决策回合 1**（sign-off rev2 阶段）识别 5 项口径偏差 + Y8 staging-waiver 注记 + 用户最终方案 B' 调整（cutover-blocker 进 M-SN-5.5，不再独立并行 SEQ）
+  - **第 3 轮 verdict PASS（建议 Y8 不阻塞）**：rev3 修复全 5 项偏差 + Y7 + Y8；4 项连锁影响（M-SN-5.5 工时 / SEQ-20260506-01 取消 / 总周期 +50% 阈值 / BLOCKER §5.2 第 11 条判定）全部合规
+- **方案 B' 最终确定**：
+  - M-SN-5 主体 4w 不变（保留 v2.5 范围：6 视图 + 9-10 端点）
+  - 新增 **M-SN-5.5 独立 milestone 2.0w（软上限 3.0w）** 承载三类工作：(a) cutover-blocker 4🔴+2🟠 共 6 子卡 / (b) DEBT-LINE-KEY-01 决策（仅立决策卡）/ (c) admin-ui 通用原语/Popover 6 子卡前置（零业务视图消费）
+  - SEQ-20260506-01 取消（rev2 设计的独立并行 cutover-blocker SEQ）
+  - 总周期 18.0w → **20.0w**（v1 16w → v2.6 = +25%，软上限 21.0w）
+- **5 项用户偏差全采修复**：
+  1. 前置范围口径漂移（tasks.md / task-queue.md / 底部三方案文本）→ rev3 统一单一权威清单
+  2. DEBT 数量错（5🔴+2🟠 → 严格按 audit §6 = 4🔴+2🟠+1🟡）；DEBT-LINE-KEY-01 单独列 PRE-02 决策卡
+  3. ADR 编号漂移（v2.5 4 处 "ADR-104/051" → 统一 "ADR-104/105"；ADR-051 实为 IMG-01 图片治理 schema）
+  4. line_key 与 Non-Goals 冲突未收束 → PRE-02 + R-M-SN-5-01 强化"仅立决策卡 + 方案 B 必须先 ADR + Non-Goals 豁免 + 不允许直接进实现卡"
+  5. Popover 边界 → M-SN-6 整行删除（不留删除线痕迹）+ PRE-03 强约束"只下沉原语，不接业务视图"
+- **黄线处理**：Y7（PRE-03-F Popover "必须先升 sub-ADR" 强约束）+ Y8（PRE-01-A staging-waiver 协议注记）全采纳
+- **plan 落盘改动**（12 处 Edit）：
+  - §1 文件头：version v2.5 → v2.6 + generated_at 追加 2026-05-06
+  - §3 决策表：新增 3 行（M-SN-5 启动前置工作 + DEBT-LINE-KEY-01 决策路径强约束 + Popover 原语提前 + ADR-104/051 → ADR-104/105 编号修正注记）；ADR-端点先后协议行就地修正 ADR-104/051 → ADR-104/105
+  - §6 M-SN-5：v2.6 表述清理段（4w 不变；前置工作分流为 M-SN-5.5）+ ADR 编号修正（行 519/526 两处）+ 启动准入新增段
+  - §6 **新增 M-SN-5.5 段**（2.0w 软上限 3.0w；体例参 M-SN-6.5；含 staging-waiver 协议）
+  - §6 工时表：新增 M-SN-5.5 行；总周期 18.0w → 20.0w（软上限 21.0w）+ 累计偏差 +25% < +50% 阈值声明
+  - §6 M-SN-6：v2.6 更新段（Popover 整行删除 + 移至 M-SN-5.5）
+  - §9 ADR 索引：追加 ADR-114 候选（PRE-02 方案 B 触发）
+  - §10 风险与回滚：新增 §10.9 R-M-SN-5-01（涵盖 BLOCKER §5.2 第 3/4 条 + Non-Goals 第 3 条 + ADR-端点先后协议）
+  - §12 自检清单：总周期 20.0w + milestone 数 10 + M-SN-5.5 验收门 + SEQ-20260506-01 取消注记
+  - §修订日志 v0→v1 段：MUST-4 行 ADR-104/051 → ADR-104/105（同源漂移就地修正）
+  - 修订日志末尾：追加 v2.5 → v2.6 段（含 5 项偏差核对 + Y7 + Y8 采纳 + SEQ-20260506-01 取消说明 + 元信息）
+- **完成判据达成**：
+  - ✅ v2.6 草案完整（3 轮迭代 rev1 / rev2 / rev3）
+  - ✅ 3 轮 arch-reviewer Opus PASS（仅 Y7 + Y8 黄线，全部不阻塞落盘）
+  - ✅ 用户 sign-off：方案 B' + 5 项偏差全采 + Y7 + Y8 全采 + 跑第 3 轮复评 + 落盘指令
+  - ✅ plan 文件落盘（12 处 Edit）+ grep 残留确认（ADR-104/051 真实使用点 0；SEQ-20260506-01 真实使用点 0）
+  - ✅ commit trailer 含 `Plan-Revision: v2.5 → v2.6`
+- **改动文件**：
+  - `docs/server_next_plan_20260427.md`（v2.5 → v2.6，12 处 Edit）
+  - `docs/tasks.md`：CHG-PLAN-02 卡片清空（任务完成）
+  - `docs/task-queue.md`：SEQ-20260505-02 标 ✅ + 新增 SEQ-20260506-02（M-SN-5.5 启动准入门母序列 + 13 子卡）
+  - `docs/changelog.md`：本条目
+- **后续序列**（已立 SEQ-20260506-02）：
+  - CHG-SN-5-PRE-01-A..F（cutover-blocker 6 子卡）
+  - CHG-SN-5-PRE-02（DEBT-LINE-KEY-01 决策卡）
+  - CHG-SN-5-PRE-03-A..F（admin-ui 通用原语/Popover 6 子卡）
+- **变更摘要**：plan v2.5 → v2.6 落地；方案 B' 新增 M-SN-5.5 独立 milestone（2.0w 软上限 3.0w）承载 cutover-blocker + line_key 决策 + 通用原语前置三类工作；总周期 18.0w → 20.0w；5 项用户偏差全采修复 + 3 轮 Opus 评审 PASS；解锁 SEQ-20260506-02 起 13 子卡；M-SN-5 主体启动须等 M-SN-5.5 PASS

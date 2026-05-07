@@ -1,7 +1,7 @@
 # Resovo server-next 工程实施 Plan v1
 
 > status: approved-for-execution（M-SN-0 清理工作台前的最终版）
-> version: v2.5（v0 → v1 → v2 → v2.1 → v2.2 → v2.3 → v2.4 → v2.5 修订记录见末尾"修订日志"；v2.5 = M-SN-3 完成标注 + M-SN-4 VideoEditDrawer 闭合 + 设计稿新内容对齐 + §10.2 设计稿风险解除）
+> version: v2.6（v0 → v1 → v2 → v2.1 → v2.2 → v2.3 → v2.4 → v2.5 → v2.6 修订记录见末尾"修订日志"；v2.6 = 方案 B' 新增 M-SN-5.5 独立 milestone（承载 cutover-blocker 4🔴+2🟠 + DEBT-LINE-KEY-01 决策 + admin-ui 通用原语/Popover 前置）+ ADR-104/051 编号漂移修正 + Popover 从 M-SN-6 提前至 M-SN-5.5）
 > owner: @engineering
 > scope: apps/server-next 工程 + packages/admin-ui 下沉 + packages/design-tokens 三层 + nginx 反代切流 + apps/server 退场
 > source_of_truth: yes（工程视角的"宪法"，所有 server-next 任务卡须引用本 plan §节号）
@@ -10,7 +10,7 @@
 >   - [admin_design_brief_20260426.md](./admin_design_brief_20260426.md)（design 视角 brief）
 >   - [server_next_kickoff_20260427.md](./server_next_kickoff_20260427.md)（R1–R5 决策实录 + 评审报告）
 >   - [docs/designs/backend_design_v2.1/](./designs/backend_design_v2.1/)（设计稿，仍在补完）
-> generated_at: 2026-04-27（v0）/ revised: 2026-04-27（v1）/ 2026-04-28（v2 / v2.1 / v2.2 / v2.3 / v2.4）/ 2026-05-01（v2.5）
+> generated_at: 2026-04-27（v0）/ revised: 2026-04-27（v1）/ 2026-04-28（v2 / v2.1 / v2.2 / v2.3 / v2.4）/ 2026-05-01（v2.5）/ 2026-05-06（v2.6）
 > 主循环模型：claude-opus-4-7
 > 评审：v1 完成后 spawn arch-reviewer (Opus) 二轮评审 PASS 才进入 M-SN-0
 
@@ -95,11 +95,14 @@
 | **cookie + nginx e2e 演练** | M-SN-3 标杆页完成时进行 staging 环境演练 | R5 DISCUSS-3 | ADR-101 |
 | **cutover 后回滚 RTO** | apps/server 物理目录保留 7 天与 git tag 一致；超 7 天回滚走完整 commit revert（RTO ≤ 4h）| R5 DISCUSS-5 | ADR-101 |
 | **M-SN-6 工时上调** | 2.5w → 4w；总周期 16w → 17.5w（吸收大数据原语 + 三组依赖选型 + 9 路由）| R7 MUST-7 (c) | §6 |
-| **ADR-端点先后协议** | ADR-104/051 须在对应端点首个任务卡前完成 Opus PASS；端点逐个落地复用同一 ADR；不允许端点 PR 与 ADR 同卡 | R7 MUST-8 | §4.5 + §6 M-SN-5 |
+| **ADR-端点先后协议** | ADR-104/105 须在对应端点首个任务卡前完成 Opus PASS；端点逐个落地复用同一 ADR；不允许端点 PR 与 ADR 同卡（v2.6 ADR-051 编号漂移修正：ADR-051 实为 IMG-01 图片治理 schema） | R7 MUST-8 | §4.5 + §6 M-SN-5 |
 | **M-SN-6.5 软上限** | 0.5w 为基线；任一类验收发现 critical >2 项即升至 1w | R7 SHOULD-8 | §6 M-SN-6.5 |
 | **token 重构截图标准** | web-next 视觉回归对照清单：home / search / video detail / player 4 页 × 明暗双模 = 8 张 | R7 DISCUSS-7 | §10.4 |
 | **M-SN-2 范围扩列 Shell**（v2.3 新增）| 方案 B：A2 + Shell 扩列；M-SN-2 工时 2.5w → 3w（+20%，未触发 BLOCKER 11）；总周期 17.5w → 18.0w；新增 ADR-103a（Shell 公开 API 契约） | CHG-SN-1-12 Opus 评审 | §6 M-SN-2 + §8 复用矩阵 + ADR-103a |
 | **server-next 图标库选型**（v2.4 新增）| **lucide-react `^1.12.0`**；6 维评估 30/30；与设计稿 shell.jsx 12 NAV icon 同名命中；安装位置仅 apps/server-next（packages/admin-ui 零图标库依赖约束 ADR-103a §4.4-4 不变）；仅允许 named import；Next.js optimizePackageImports + ESLint + ts-morph 三层兜底 | CHG-SN-2-01.5 Opus 评审 + 用户 sign-off | §4.7 + ADR-103b |
+| **M-SN-5 启动前置工作纳入**（v2.6 新增）| 方案 B'：M-SN-5 主体 4w 不变 + 新增 **M-SN-5.5 独立 milestone 2.0w（软上限 3.0w）** 承载三类工作：(a) cutover-blocker 4🔴+2🟠 共 6 子卡（M-SN-4 audit §6） / (b) DEBT-LINE-KEY-01 决策（仅立决策卡，方案 B 选定后须先 ADR + Non-Goals 豁免）/ (c) admin-ui 通用原语/Popover 前置 6 子卡（只下沉原语不接业务视图）；🟡 DEBT-SN-4-09c-A 不计入本 milestone（cutover 前可选）；总周期 18.0w → 20.0w（软上限 21.0w）| CHG-PLAN-02 用户 sign-off + 3 轮 arch-reviewer Opus 评审 | §6 M-SN-5 + §6 M-SN-5.5（v2.6 新增）|
+| **DEBT-LINE-KEY-01 决策路径**（v2.6 新增）| 方案 A（维持复合键 `(source_site_key, source_name)`）vs 方案 B（line_key 一级建模 + 跨站合并，触发 schema 变更）；M-SN-5.5 入口由 **CHG-SN-5-PRE-02 仅立决策卡裁定**；选方案 B 同时触发 Non-Goals 第 3 条 + §5.2 BLOCKER 第 3/4 条，**必须先独立 ADR-114（line_key schema + 跨站合并 UI 契约 + migration 时序）+ Non-Goals 第 3 条豁免人工 sign-off + §4.5 ADR-端点先后协议 PASS，然后才能起 migration 卡 + 端点修订卡；不允许 PRE-02 决策卡内含 migration 或端点 schema 修订** | SEQ-20260502-01 推迟决策 + 3 轮 arch-reviewer Opus 评审 | §6 M-SN-5.5 + §10 R-M-SN-5-01 + §9 ADR-114 候选 |
+| **Popover 原语提前 + ADR 编号漂移修正**（v2.6 新增）| Popover 从 M-SN-6 范围移至 M-SN-5.5（CHG-SN-5-PRE-03-F），起草时 API 契约复杂度（Portal / focus-trap / dismiss 协议）若超 Drawer **必须先升独立 sub-ADR + Opus PASS 才能起实施卡**；同时修正 v2.5 §3 决策表 / §6 M-SN-5 ADR-端点先后协议段 / 完成标准段 / §修订日志 v0→v1 段中 "ADR-104/051" 漂移 → 统一为 "ADR-104/105"（ADR-051 实为 IMG-01 图片治理 schema） | implementation-gap §3.2 + 用户偏差核对 + 3 轮 arch-reviewer Opus 评审 | §6 M-SN-5（编号修正）+ §6 M-SN-5.5（Popover 落地）+ §6 M-SN-6（移除条目）|
 
 ---
 
@@ -513,24 +516,95 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
 - **关联痛点**：1（部分）/ 3 / 5（前台可见性）/ 6
 - **阶段审计重点**：双信号显示是否分双轨、状态保留是否经得起 5 步操作压力测试
 
-### M-SN-5 · P1 视图（含 admin API 补齐）· **4 周**
-- **范围**：
+### M-SN-5 · P1 视图（含 admin API 补齐）· **4 周**（v2.6 表述清理 — 工时不变）
+
+> **v2.6 更新（2026-05-06）**：M-SN-5 主体范围与 v2.5 完全一致（6 视图 + 9-10 端点），工时 4w 不变。CHG-PLAN-02 评估发现的前置工作已分流为 M-SN-5.5 独立 milestone 承载（详见 §6 M-SN-5.5）。同时修正 v2.5 中 "ADR-104/051" 编号漂移为 "ADR-104/105"（ADR-051 实为 IMG-01 图片治理 schema，与 home_modules 无关）。
+
+- **范围**（v2.5 完全保留 + ADR 编号修正）：
   - **admin API 补齐子任务**：home_modules CRUD（推荐 3，6 端点 + ADR-104）/ split-unmerge / candidate-preview（推荐 5，3-4 端点 + ADR-105）— 每个端点 Opus 评审
-  - **ADR-端点先后协议**（§4.5）：ADR-104/051 必须先于对应端点首个任务卡完成 Opus PASS；同 ADR 下多端点复用评审；不允许端点 PR 与 ADR 同卡
-  - `/admin/sources`（线路矩阵 + 视频维度分组 + 全局别名表，推荐 2）
+  - **ADR-端点先后协议**（§4.5）：**ADR-104/105**（v2.6 修正 ADR-104/051 漂移）必须先于对应端点首个任务卡完成 Opus PASS；同 ADR 下多端点复用评审；不允许端点 PR 与 ADR 同卡
+  - `/admin/sources`（线路矩阵 + 视频维度分组 + 全局别名表，推荐 2；**依赖 M-SN-5.5 PRE-02 决策落盘**）
   - `/admin/home`（首页运营位统一编辑器：banner + featured + top10 + type_shortcuts，推荐 3，需 home_modules API 就位）
-  - `/admin/merge`（合并 candidate 预览 + 拆分工作台，推荐 5，需 split-unmerge API 就位）
+  - `/admin/merge`（合并 candidate 预览 + 拆分工作台，推荐 5，需 split-unmerge API 就位；**依赖 M-SN-5.5 PRE-02 决策落盘**）
   - `/admin/submissions`（用户投稿）
   - `/admin/subtitles`（字幕管理）
   - `/admin/users`（用户管理）
-- **完成标准**：6 视图全功能对齐 + 新增 9-10 端点 ADR-104/051 PASS + e2e 黄金路径
+- **完成标准**（v2.5 保留 + ADR 编号修正）：6 视图全功能对齐 + 新增 9-10 端点 **ADR-104/105**（v2.6 修正 ADR-104/051 漂移）PASS + e2e 黄金路径
+- **启动准入**（v2.6 新增）：**M-SN-5.5 milestone 完整 PASS**（含 cutover-blocker 4🔴 全 close + 2🟠 显式标 M-SN-7 final 前 close 不晚于 cutover 前两周 + line_key 决策落盘 + 通用原语 6 件 Opus PASS）
 - **关联 brief**：推荐 2 / 3 / 5
 - **关联痛点**：1（完整解决）/ 2 / 4 / 7 / 8
 - **阶段审计重点**：复用矩阵达标率、新增端点契约规范、是否引入新原语未下沉
 
-### M-SN-6 · 周边视图 + 设计稿缺口 + 大数据原语 · **4 周**（R7 MUST-7 c 上调）
+### M-SN-5.5 · 启动准入门：cutover-blocker + line_key 决策 + admin-ui 通用原语前置 · **2.0 周（软上限 3.0 周）**（v2.6 新增）
 
-> **v2.5 更新（2026-05-01）**：设计稿"设置补全 / 采集展开 / 开发者模式 / 弹层规范"四项**设计规范已补齐**，M-SN-6 启动条件（§10.2 / §11.4 原"确认设计稿完工度"）已满足；实现对齐在本 milestone 落实。具体规范出处：`reference §5.11`（Settings 8 类 Tab 完整表单）/ `reference §5.6`（Crawler 采集控制站点行展开布局；**站点任务依赖 DAG 仍列于 reference 待明确项 A2，设计稿尚未给出完整 DAG 规范，"采集展开"对齐不含 DAG 部分**）/ `reference §0a`（DevMode 三栏：Tokens / Semantic / Components）/ `reference §4.5/§4.6`（Popover + SplitPane 弹层规范）。另需注意：`Popover` 原语目前在 admin-ui 缺失（见 `implementation-gap-report-2026-04-30.md` §3.2），M-SN-6 内 filter popover / select-like 控件启动前须先落地。
+> **v2.6 引入**：用户最终方案 B'：M-SN-5 启动前置三类工作（cutover-blocker / line_key 决策 / 通用原语前置）全部纳入本独立 milestone，与 M-SN-6.5（非功能验收门）体例一致作为 M-SN-5 主体启动前的 milestone 级验收门。
+
+#### 范围
+
+**A. cutover-blocker（6 子卡，每卡独立 Opus 评审）**
+
+按 `docs/M-SN-4-milestone-audit-2026-05-05.md` §6 严格核对：4🔴 + 2🟠 共 6 项强制；🟡 DEBT-SN-4-09c-A 不计入本 milestone（cutover 前可选）。
+
+- **CHG-SN-5-PRE-01-A** · DEBT-SN-3-B（staging cookie + nginx e2e 演练，需人工，🔴）
+- **CHG-SN-5-PRE-01-B** · DEBT-SN-3-C（M-SN-3 milestone 阶段审计，🔴；依赖 -A 完成或 staging-waiver）
+- **CHG-SN-5-PRE-01-C** · DEBT-SN-4-05-A（toggleSource 乐观锁缺失，🔴 并发安全）
+- **CHG-SN-5-PRE-01-D** · DEBT-SN-4-05-B（feedback.ts XFF trustProxy 白名单，🔴 IP 欺骗绕过 rate-limit）
+- **CHG-SN-5-PRE-01-E** · DEBT-SN-4-A（5 件下沉组件 ~12 张 Playwright `toHaveScreenshot()` baseline + 回溯 M-SN-4 改动校验，🟠）
+- **CHG-SN-5-PRE-01-F** · DEBT-SN-4-07-A（visual baseline 7 张占位 PNG（69-byte 单像素）替换为真截图，🟠）
+- **staging-waiver 协议**（Y8 采纳）：DEBT-SN-3-B 如人工演练受阻可走 staging-waiver（由用户 sign-off 触发，登记到 task-queue 欠账段，不阻塞 -B 关闭判定但触发 DEBT-SN-3-C 审计材料中显式声明）
+- 工时估算：1.0–1.5w（人工演练 ~0.3w + 4 项 bug fix ~0.3w + 2 张 baseline ~0.4–0.7w）
+- 真源：`docs/M-SN-4-milestone-audit-2026-05-05.md` §6
+
+**B. DEBT-LINE-KEY-01 决策（CHG-SN-5-PRE-02，单卡）**
+
+- 议题：line_key 是否一级建模 + 跨站合并支持
+- 方案 A（维持现状）：复合键 `(source_site_key, source_name)`，跨站不合并；CHG-SN-5-XX 视图实施按现有 schema
+- 方案 B（一级建模）：触发 Non-Goals 第 3 条 + §5.2 BLOCKER 第 3/4 条
+- **本次仅立决策卡，不含 migration / 不含端点 schema 修订 / 不含 ADR-114 实施**
+- 若选方案 B：**必须先**：
+  1. 独立 ADR-114（line_key schema + 跨站合并 UI 契约 + migration 时序）取得 Opus arch-reviewer PASS
+  2. Non-Goals 第 3 条豁免人工 sign-off
+  3. §4.5 ADR-端点先后协议 PASS（现有 admin sources / merge 端点契约变更走 ADR-114 同评审）
+  4. 然后才能起 migration 卡 + 端点修订卡
+- 文件范围：决策本身落 `docs/decisions.md`（方案 A → 否定 ADR / 方案 B → ADR-114 候选占位）+ `docs/server_next_plan_20260427.md` 修订；**不含 migration 文件**（方案 B 选定后由后续独立卡承担）
+- 工时估算：~0.3w
+
+**C. admin-ui 通用原语/Popover 前置（6 子卡，每件独立 Opus 评审）**
+
+- **CHG-SN-5-PRE-03-A** · `PageHeader`（reference §5 各页 page__head 统一壳）
+- **CHG-SN-5-PRE-03-B** · `AdminButton`（reference §4.2 Button 规范）
+- **CHG-SN-5-PRE-03-C** · `AdminInput`（reference §4.2 Input 规范）
+- **CHG-SN-5-PRE-03-D** · `AdminSelect`（reference §4.2 Select 规范）
+- **CHG-SN-5-PRE-03-E** · `AdminCard`（reference §4.3 Card 规范）
+- **CHG-SN-5-PRE-03-F** · `Popover`（reference §4.5 弹层规范；**API 契约复杂度（Portal / focus-trap / dismiss 协议）若超 Drawer，必须先升独立 sub-ADR + Opus arch-reviewer PASS 才能起实施卡**）
+- **强约束（v2.6 新增）**：本类卡只下沉原语到 packages/admin-ui，**不接业务视图**（业务视图消费由 M-SN-5 主体或 M-SN-6 各业务卡承担）
+- 工时估算：每件 ~0.1-0.15w，合计 0.6-0.9w；总计含 PRE-02 ≈ 0.9-1.2w
+
+#### 完成标准
+- A 段 cutover-blocker：4🔴 全部 close（M-SN-5 主体启动前必清）+ 2🟠 显式标"M-SN-7 final 前 close（不晚于 cutover 前两周）"
+- B 段 line_key 决策：方案 A 写入 decisions.md 否定 ADR / 方案 B 写入 ADR-114 候选占位 + Non-Goals 豁免 sign-off 待办登记
+- C 段通用原语：6 件全部下沉到 packages/admin-ui，每张卡 arch-reviewer Opus PASS（§5.1 自动化 review）+ **零业务视图消费**（仅原语）
+- typecheck + lint + unit + Storybook demo（如已搭建）全绿
+
+#### 启动准入（M-SN-5 主体启动前必须 PASS）
+- 完成标准 100% 达成
+- 6 通用原语公开 API 契约稳定（任一回归触发 BLOCKER §5.2 第 6 条）
+
+#### 软上限协议（沿用 M-SN-6.5 SHOULD-8 体例）
+- 基线 2.0w；任一子卡 arch-reviewer CONDITIONAL 修复轮次 >2 即升至 3.0w；超 3.0w 触发 BLOCKER §5.2 第 11 条
+- A+B+C 工时合计 ~1.9-2.7w，位于 2.0-3.0w 软上限范围内
+
+#### 关联 ADR / brief / 痛点
+- **关联 ADR**：ADR-103a（packages/admin-ui Shell 公开 API 契约协议沿用）/ ADR-114 候选（PRE-02 方案 B 触发）/ 可能的 PRE-03-F sub-ADR（Popover 复杂度触发）
+- **关联 brief**：reference §4.2 / §4.3 / §4.5 / §5
+- **关联痛点**：implementation-gap-report-2026-04-30.md §3.2 admin-ui 共享原语层缺口 + M-SN-4 audit §6 cutover 前必清欠账
+- **阶段审计重点**：cutover-blocker 4🔴 完成度 + 通用原语 6 件契约稳定性 + line_key 决策完整性 + 通用原语零业务视图消费
+
+### M-SN-6 · 周边视图 + 设计稿缺口 + 大数据原语 · **4 周**（R7 MUST-7 c 上调；v2.6 调整）
+
+> **v2.5 更新（2026-05-01）**：设计稿"设置补全 / 采集展开 / 开发者模式 / 弹层规范"四项**设计规范已补齐**，M-SN-6 启动条件（§10.2 / §11.4 原"确认设计稿完工度"）已满足；实现对齐在本 milestone 落实。具体规范出处：`reference §5.11`（Settings 8 类 Tab 完整表单）/ `reference §5.6`（Crawler 采集控制站点行展开布局；**站点任务依赖 DAG 仍列于 reference 待明确项 A2，设计稿尚未给出完整 DAG 规范，"采集展开"对齐不含 DAG 部分**）/ `reference §0a`（DevMode 三栏：Tokens / Semantic / Components）/ `reference §4.5/§4.6`（Popover + SplitPane 弹层规范）。
+>
+> **v2.6 更新（2026-05-06）**：`Popover` 原语已由 M-SN-5.5 CHG-SN-5-PRE-03-F 提前落地；本 milestone 范围条目"Popover 原语 + 先于 filter popover 启动"整行删除（不留删除线痕迹）。其余范围不变。
 
 - **范围**：
   - `/admin/crawler`（站点行展开 + MACCMS 配置 + 线路别名分组，参见 `reference §5.6`；任务依赖 DAG 视 reference 待明确项 A2 确认后落地）— 触发 reactflow vs dagre-d3 选型（DAG 确认后方生效）
@@ -540,7 +614,6 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
   - `/admin/audit`（审计日志，新增视图）
   - 设计规范对齐实现（设置补全 `reference §5.11` / 采集展开布局 `reference §5.6` / 开发者模式 `reference §0a` / 弹层规范 `reference §4.5/§4.6`）— 设计规范已补齐（DAG 除外，reference 待明确项 A2）；实现对齐在本 milestone 落实
   - 通知 + 后台任务双面板 + Toast 系统
-  - **Popover 原语**（admin-ui 补充，先于 filter popover / select-like 控件任务卡启动）
   - **大数据原语**：游标分页 + 虚拟滚动（首次 >50k 数据集出现时按需即建）— 触发 react-virtual vs react-window 选型
 - **完成标准**：13 admin 顶层 + 1 system landing + 5 system 子 + 1 编辑子 + 1 认证 = 21 路由占位全集覆盖 ≥95%；剩余视图（如 design-tokens / sandbox 调整）评估保留或退役
 - **阶段审计重点**：覆盖率 + 设计稿对齐度 + 三类候选依赖选型决议
@@ -566,7 +639,7 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
 - **关联 ADR**：ADR-101
 - **阶段审计**：**人工 final sign-off**（PR 描述签字）
 
-### 总周期：**18.0 周（~4.5 个月）**（v1 16w → v2 17.5w → v2.3 18.0w；v2.3 = CHG-SN-1-12 M-SN-2 范围扩列 Shell +0.5w）
+### 总周期：**20.0 周（~5 个月）**（v1 16w → v2 17.5w → v2.3 18.0w → v2.6 20.0w；v2.6 = M-SN-5.5 新增 +2.0w 软上限 +3.0w；软上限触顶总周期 21.0w）
 
 | Milestone | 估算 | 累计 |
 |---|:-:|:-:|
@@ -576,9 +649,12 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
 | M-SN-3 | 1.0 | 6.5 |
 | M-SN-4 | 2.5 | 9.0 |
 | M-SN-5 | 4.0 | 13.0 |
-| M-SN-6 | 4.0 | 17.0 |
-| M-SN-6.5 | 0.5（软上限 1.0） | 17.5 |
-| M-SN-7 | 0.5 | 18.0 |
+| **M-SN-5.5** | **2.0（软上限 3.0）**（v2.6 新增；cutover-blocker 4🔴+2🟠 共 6 子卡 + line_key 决策 1 卡 + admin-ui 通用原语/Popover 6 子卡前置）| 15.0 |
+| M-SN-6 | 4.0 | 19.0 |
+| M-SN-6.5 | 0.5（软上限 1.0） | 19.5 |
+| M-SN-7 | 0.5 | 20.0 |
+
+> **总周期变化**：v2.5 18.0w → v2.6 20.0w（+2.0w 来自 M-SN-5.5）。M-SN-5.5 内承载所有 cutover-blocker 工作（不再独立并行 SEQ）；M-SN-5.5 软上限触顶（3.0w）总周期 21.0w。v1 16w → v2.6 20w = +25%，未触发"累计偏差超 +50% 触发更高级别 plan 修订"门槛（plan §6 行首工时阈值声明）。
 
 ---
 
@@ -706,6 +782,7 @@ cutover 验收按上表 21 路由占位逐项 diff（路由文件物理存在）
 | ADR-103a | Shell 公开 API 契约（CHG-SN-1-12 v2.3 新增） | `<AdminShell>` 等 10 组件 Props 类型骨架 + AdminNavItem 5 字段扩展（icon/count/badge/shortcut/children）+ AdminNavCountProvider 接口 + 4 级 z-index 规范（业务 Drawer < Shell 抽屉 < CmdK < Toast）+ Provider 不下沉 + Edge Runtime 兼容 + 零硬编码颜色 | M-SN-2 第一张组件卡前（CHG-SN-2-01；Opus PASS 前置） |
 | ADR-104 | home_modules admin API 协议 | 推荐 3 落地所需 6 端点 + 鉴权 + 缓存失效 | M-SN-5 内 |
 | ADR-105 | merge candidate / split / unmerge API 协议 | 推荐 5 落地所需 3-4 端点 + 审计日志 schema | M-SN-5 内 |
+| ADR-114 候选 | line_key 一级建模 schema + 跨站合并 UI 契约 + migration 时序 | DEBT-LINE-KEY-01 PRE-02 决策选方案 B 时触发 | M-SN-5.5 PRE-02 决策选方案 B 时（不晚于 M-SN-5 主体启动前）|
 | ADR-候选 | 大数据原语依赖选型（react-virtual / reactflow / recharts 二选一三组）| Q-MUST-5 候选清单决议 | M-SN-6 首次落地前 |
 
 ---
@@ -765,6 +842,24 @@ cutover 验收按上表 21 路由占位逐项 diff（路由文件物理存在）
 - 每个 milestone 末尾输出"上下文移交文档"（在 docs/server_next_handoff_M-SN-N.md）：当前 milestone 决策点 / 未决议题 / 关键任务卡指针 / 复盘结论
 - BLOCKER 暂停 >7 天自动触发 milestone 中期审计
 
+### 10.9 R-M-SN-5-01 · DEBT-LINE-KEY-01 方案 B 触发双 schema 变更 + 端点契约变更（v2.6 新增）
+
+- **风险**：M-SN-5.5 CHG-SN-5-PRE-02 若选方案 B（line_key 一级建模），同时命中：
+  - plan §2.2 Non-Goals 第 3 条（DB schema 变更含新 migration）
+  - §5.2 BLOCKER 第 3 条（修改现有 admin sources/merge 端点 path / schema / 鉴权 / 返回结构）
+  - §5.2 BLOCKER 第 4 条（DB schema 变更）
+- **触发条件**：用户在 CHG-SN-5-PRE-02 决策中选方案 B
+- **缓解措施**：
+  1. **PRE-02 仅立决策卡**（DEBT-LINE-KEY-01 选 A 还是 B）；若选方案 B 必须**先**完成以下三步**才能**起 migration 卡 + 端点修订卡：
+     - (i) 独立 ADR-114（line_key schema + 跨站合并 UI 契约 + migration 时序）走 §4.5 ADR-端点先后协议先 Opus arch-reviewer PASS
+     - (ii) Non-Goals 第 3 条豁免人工 sign-off（plan §0 重大修订协议）
+     - (iii) 现有 admin sources / merge 端点契约变更走同一 ADR-114 评审（不重复立 ADR）
+     - **不允许 PRE-02 决策卡内含 migration 或端点 schema 修订**
+  2. Migration 回滚预案：双写期 + 旧字段保留 ≥1 个 milestone 周期；可独立 revert
+  3. 工时风险：方案 B 比方案 A 多 ~1w（migration + 数据回填 + 端点 schema 修订），不计入 M-SN-5.5 工时（属 M-SN-5 主体或独立后续卡范畴）；如发现回滚成本高 / SEQ-20260502-01 ⏸ 状态需联动恢复
+- **回退路径**：方案 B 落地后发现回归 → revert migration + 切回方案 A 复合键（apps/api `getLinesAggregation` 回退）；apps/server-next 视图层 schema 通过 `packages/types` 单源切换
+- **关联**：SEQ-20260502-01（FIX-B 治理升级暂停）/ DEBT-LINE-KEY-01 / Non-Goals 第 3 条 / BLOCKER §5.2 第 3/4 条 / §4.5 ADR-端点先后协议 / ADR-114 候选
+
 ---
 
 ## 11. M-SN-0 · 立项前清理工作台（任务化）
@@ -819,7 +914,7 @@ M-SN-0 完成 = 三批全部 PASS + 三份 ADR 进入 `docs/decisions.md` + 本 
 - [x] §3 R1–R3 + R5 决策汇总表
 - [x] §4 仓库结构 / 端口 / token 三层 / packages/admin-ui 边界 + 创建时机 + 自建下沉规则 / API 耦合 + B3 方案 + **ADR-端点先后协议** / 编译期 ESLint 检查 / **§4.7 依赖白名单**
 - [x] §5 工作流规约（自动化 review + BLOCKER 12 条 + milestone 审计 + A/B/C 客观判据 + 任务卡 / commit 模板 + git-rules 兼容声明）
-- [x] §6 M-SN-0 ~ M-SN-7 + **M-SN-6.5 非功能验收门（含软上限 1w）** + 工时估算 + 总周期 **18.0 周**（v2.3 修订，M-SN-2 Shell 扩列 +0.5w）；v2.5：M-SN-3 核心实现闭合 + M-SN-4/6 前置依赖约束追加
+- [x] §6 M-SN-0 ~ M-SN-7 + **M-SN-5.5 启动准入门（v2.6 新增；含软上限 3w）** + **M-SN-6.5 非功能验收门（含软上限 1w）** + 工时估算 + 总周期 **20.0 周**（v2.6 修订，M-SN-5.5 +2.0w；软上限触顶 21.0w；v1 16w → v2.6 20w = +25%）；milestone 数量 10 个；v2.5：M-SN-3 核心实现闭合 + M-SN-4/6 前置依赖约束追加；v2.6：方案 B' 新增 M-SN-5.5（cutover-blocker + line_key 决策 + 通用原语前置）；SEQ-20260506-01 取消（cutover-blocker 直接进 M-SN-5.5 不立独立并行 SEQ）
 - [x] §7 IA v0 + 视图数 27 路由占位 + IA 命名声明
 - [x] §8 复用矩阵（每视图含下沉里程碑列；system/* 拆 5 子）
 - [x] §9 ADR 索引（046/047/048 + 049/050/051 + 候选）
@@ -839,7 +934,7 @@ M-SN-0 完成 = 三批全部 PASS + 三份 ADR 进入 `docs/decisions.md` + 本 
 - MUST-1：M-SN-2 范围采用 A2（保留单 milestone，游标+虚拟滚动延迟到 M-SN-6）
 - MUST-2：视图数公式修正（21 顶层 + 5 system + 1 编辑 = 27 路由占位）；§7 / §8 / M-SN-6 / M-SN-7 口径统一
 - MUST-3：packages/admin-ui 创建时机明确（M-SN-1 第一个任务卡即建空骨架）
-- MUST-4：放宽 Non-Goals 第 4 条（B3 方案）；新增端点允许但须独立 ADR + Opus 评审；M-SN-5 含 ADR-104/051 子任务
+- MUST-4：放宽 Non-Goals 第 4 条（B3 方案）；新增端点允许但须独立 ADR + Opus 评审；M-SN-5 含 ADR-104/105 子任务（v2.6 ADR 编号漂移修正：原文 "ADR-104/051" 中 ADR-051 实为 IMG-01 图片治理 schema，与 home_modules 无关）
 - MUST-5：新增 §4.7 依赖白名单
 - MUST-6：§5.3 增 A/B/C 客观判据 + 任务级 / milestone 级两层评级体系
 
@@ -1066,3 +1161,49 @@ M-SN-0 完成 = 三批全部 PASS + 三份 ADR 进入 `docs/decisions.md` + 本 
 - 重大修订标记：是（M-SN-4/M-SN-6 新增前置依赖约束属范围类修订）；按 §0 plan 版本协议须人工 sign-off — 已取得（三轮修正均由用户指令触发并确认）
 
 — END plan v2.5（CHG-PLAN-01 落地）—
+
+### v2.5 → v2.6（2026-05-06）
+
+由 CHG-PLAN-02（SEQ-20260505-02）触发：M-SN-4 milestone B+ PASS 闭环后（2026-05-05），主循环对 M-SN-5（原 4w / 6 视图 + 9-10 端点）启动前置评估。M-SN-4 audit §6 cutover 前必清欠账（按 `docs/M-SN-4-milestone-audit-2026-05-05.md` §6 严格核对：**4🔴 + 2🟠 + 1🟡**，🟡 DEBT-SN-4-09c-A 不计入本期）+ DEBT-LINE-KEY-01（SEQ-20260502-01 推迟项）+ implementation-gap-report §3.2 admin-ui 通用原语缺口 共三类前置工作叠加，原 4w 不再适配。
+
+**修订内容（rev3，按 3 轮 Opus 评审 + 用户 sign-off 5 项偏差全采修复 + Y7 润色采纳 + Y8 staging-waiver 注记采纳）**：
+- §1 文件头：version v2.5 → v2.6 + generated_at 追加 2026-05-06
+- §3 决策表：新增 3 行（M-SN-5 启动前置工作 + DEBT-LINE-KEY-01 决策路径强约束 + Popover 原语提前 + ADR-104/051 → ADR-104/105 编号修正注记）
+- §3 决策表 ADR-端点先后协议行：ADR-104/051 → ADR-104/105（v2.5 漂移就地修正）
+- §6 M-SN-5：v2.6 表述清理段（4w 不变；前置工作分流为 M-SN-5.5 独立 milestone）+ ADR-104/051 → ADR-104/105 编号修正（行 519/526 两处）+ 启动准入新增段
+- §6 M-SN-5.5：**全新 milestone 段插入**（2.0w 软上限 3.0w；承载三类工作：cutover-blocker 6 子卡 + line_key 决策 1 卡 + 通用原语/Popover 6 子卡；体例参 M-SN-6.5；含 staging-waiver 协议 Y8 采纳）
+- §6 工时表：新增 M-SN-5.5 行；总周期 18.0w → 20.0w（软上限 21.0w）+ 累计偏差 +25% < +50% 阈值声明
+- §6 M-SN-6：v2.6 更新段（Popover 整行删除 + 移至 M-SN-5.5）
+- §9 ADR 索引：追加 ADR-114 候选（PRE-02 方案 B 触发）
+- §10 风险与回滚：新增 §10.9 R-M-SN-5-01（涵盖 BLOCKER §5.2 第 3/4 条 + Non-Goals 第 3 条 + ADR-端点先后协议；缓解 1 强化"PRE-02 仅立决策卡 + 不允许内含 migration"）
+- §12 自检清单：总周期 20.0w + milestone 数 10 + M-SN-5.5 验收门记录 + SEQ-20260506-01 取消注记
+- 修订日志 v0→v1 段：MUST-4 行 ADR-104/051 → ADR-104/105（同源漂移就地修正）
+
+**§5.2 BLOCKER 处理**：
+- 第 11 条（单 milestone +30%）：方案 B' 不触发（M-SN-5 主体 4w 不变；M-SN-5.5 是新独立 milestone 非原 milestone 扩张；二者均未超 +30% 阈值；M-SN-5.5 自身 2w 软上限 3w 由其自身的软上限协议管辖而非第 11 条）
+- 第 12 条（plan 本身需要修订）：本次走版本协议（v2.5 → v2.6 + 3 轮 arch-reviewer Opus 评审 + 用户 sign-off + commit trailer `Plan-Revision: v2.5 → v2.6`）
+
+**rev3 用户偏差核对修复**：
+- 偏差 1（前置范围口径漂移）：rev3 统一单一权威清单（方案 B'）；tasks.md / task-queue.md 落盘时严格对齐 rev3
+- 偏差 2（DEBT 数量错）：rev3 严格按 audit §6 = 4🔴 + 2🟠 + 1🟡（🟡 不计入）；DEBT-LINE-KEY-01 单独列 PRE-02 决策卡，不混入 cutover-blocker
+- 偏差 3（ADR 编号漂移）：rev3 修正 v2.5 行 98（§3 决策表）/ 519 / 526（§6 M-SN-5）/ 842（修订日志 v0→v1）共 4 处 "ADR-104/051" → "ADR-104/105"（051 是 IMG-01 图片治理 schema）
+- 偏差 4（line_key 与 Non-Goals 冲突）：rev3 PRE-02 + R-M-SN-5-01 强化"仅立决策卡 + 方案 B 必须先 ADR + Non-Goals 豁免 + 不允许直接进实现卡"
+- 偏差 5（Popover 边界）：rev3 M-SN-6 整行删除（不留删除线痕迹）+ PRE-03 强约束"只下沉原语，不接业务视图"
+- Y7 润色采纳：PRE-03-F Popover 段"可升 sub-ADR" → "**必须先升独立 sub-ADR + Opus PASS 才能起实施卡**"
+- Y8 staging-waiver 注记采纳：M-SN-5.5 A 段加 "DEBT-SN-3-B 如人工演练受阻可走 staging-waiver（由用户 sign-off 触发，登记到 task-queue 欠账段）"
+
+**SEQ-20260506-01 取消说明**：rev2 曾设计 cutover-blocker 为独立并行 SEQ，rev3 按用户最终方案 B' 调整为合并入 M-SN-5.5 milestone（不再独立并行）；SEQ 编号 SEQ-20260506-01 在 task-queue.md 不立。
+
+**不变约束**：Non-Goals 10 条不变（方案 B 触发第 3 条豁免走独立 ADR 不视为 plan 层 Non-Goals 修订）/ §4.7 依赖白名单不变 / URL slug 不动（BLOCKER 第 8 条仍生效）/ ADR-端点先后协议不变 / Resovo 价值排序顺序不变。
+
+**修订日志元信息**：
+- Plan-Revision: v2.5 → v2.6
+- 主循环模型：claude-opus-4-7
+- 子代理：arch-reviewer (claude-opus-4-7) — 第 1 轮 verdict CONDITIONAL（4 红+6 黄+卡链 3 项）；第 2 轮 verdict PASS（建议 Y7 润色不阻塞）；第 3 轮 verdict PASS（建议 Y8 staging-waiver 注记不阻塞）
+- 人工 sign-off：用户 2026-05-06 选定方案 B'（cutover-blocker 进 M-SN-5.5）+ 全采 5 项偏差修复 + Y7 + Y8 全采纳 + 跑第 3 轮复评 + 落盘指令（CHG-PLAN-02 决策回合 2 + 落盘回合 3）
+- 关联任务：CHG-PLAN-02（SEQ-20260505-02）
+- 关联文档：`docs/M-SN-4-milestone-audit-2026-05-05.md` / `docs/designs/backend_design_v2.1/implementation-gap-report-2026-04-30.md` / SEQ-20260502-01
+- 工时影响：M-SN-5 主体 4w 不变 + 新增 M-SN-5.5 2.0w（软上限 3.0w）；总周期 18.0w → 20.0w（软上限 21.0w）；v1 16w → v2.6 20w = +25% < +50% 阈值
+- 重大修订标记：是（影响 §6 范围 + 总周期 + 新增 milestone + 新增 ADR 候选 + §3 决策表 + ADR 编号修正）；按 §0 plan 版本协议须人工 sign-off — 已取得
+
+— END plan v2.6（CHG-PLAN-02 落地）—
