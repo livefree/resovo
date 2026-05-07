@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 当前无进行中任务；CHG-SN-5-PRE-03-A 已闭环（2026-05-06，arch-reviewer Opus B+ / CONDITIONAL → PASS（Y-1/2/3 同卡修复，Y-4 Storybook infra 转登记），typecheck+lint+test 255 files 3253 全绿）；SEQ-20260506-02 进度 3/13 → A 段还剩 PRE-01-A/B/E/F、B 段 PRE-02、C 段 PRE-03-B..F -->
+<!-- 当前无进行中任务；CHG-SN-5-PRE-03-B 已闭环（2026-05-06，arch-reviewer Opus B+ / CONDITIONAL → PASS（R-1+Y-1+Y-3 同卡修复，Y-2 hover 转登记），typecheck+lint+test 256 files 3283 全绿）；SEQ-20260506-02 进度 4/13 → A 段还剩 PRE-01-A/B/E/F、B 段 PRE-02、C 段 PRE-03-C..F -->

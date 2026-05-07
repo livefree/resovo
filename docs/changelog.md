@@ -5655,3 +5655,28 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - Y-2：增加 `as?: 'div' | 'header' | 'section'`（默认 'header'，对齐既有消费方 VideoListClient line 621）→ 容器自带正确隐式语义
   - Y-4：Storybook infra 缺失 → 登记 DEBT-ADMIN-UI-STORYBOOK-MISSING（task-queue 欠账段），独立 admin-ui infra 卡承担，不阻塞 PRE-03 系列
 - **后续触发**：PRE-03-B..F 5 件原语下沉同模式；后续视图卡（M-SN-5 主体）按需切换业务页面到 PageHeader 消费
+
+---
+
+## [CHG-SN-5-PRE-03-B] AdminButton 通用原语下沉到 packages/admin-ui
+
+- **完成时间**：2026-05-06
+- **记录时间**：2026-05-06
+- **执行模型**：claude-opus-4-7（主循环；建议模型 sonnet）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 评级 B+ / 结论 CONDITIONAL → PASS（R-1 红线 + Y-1/Y-3 黄线同卡修复；Y-2 hover 转登记）
+- **来源序列**：SEQ-20260506-02（M-SN-5.5 启动准入门 C 段第 2/6 子卡）
+- **修改文件**：
+  - `packages/admin-ui/src/components/admin-button/admin-button.tsx`（新建）— 5 variant（default/secondary/primary/ghost/danger，secondary 同源引用 default 避免漂移）+ 3 size（24/28/32px）+ loading（自注入 @keyframes spinner SVG，零图标库依赖）+ leftIcon/rightIcon ReactNode slot；type 默认 'button' 防 form 误提交；零硬编码颜色（var(--bg-surface) / var(--fg-default) / var(--fg-on-accent) / var(--fg-danger) / var(--accent-default) / var(--border-default) / var(--font-size-xs|sm)）；'use client' + Edge 兼容
+  - `packages/admin-ui/src/components/admin-button/index.ts`（新建桶导出）
+  - `packages/admin-ui/src/index.ts` — 新增 `export * from './components/admin-button'`
+  - `tests/unit/components/admin-ui/admin-button/admin-button.test.tsx`（新建）— 26 用例
+  - `docs/task-queue.md` — M-SN-5.5 PRE 欠账段新增 DEBT-ADMIN-UI-BUTTON-HOVER
+- **arch-reviewer 红黄线处理**：
+  - **R-1（红线必修）**：loading 时未设原生 disabled，键盘 Enter / 程式化 .click() / AT 激活可绕过 React onClick 守卫 → 改为 `disabled={disabled || loading}`，aria-busy 表达"加载中" + aria-disabled 表达"不可激活"，浏览器层硬阻断
+  - **Y-1（强烈建议）**：spinner @keyframes 仅导出常量，消费方未注入 → silent UI 退化（静止 SVG）→ 改为组件内 inject `<style>` 自带 keyframes，零消费方协调
+  - **Y-3（low cost）**：secondary === default 双对象同步漂移风险 → 同源引用（DEFAULT_VARIANT 单常量），secondary 显式注释为"语义别名"
+  - **Y-2（转登记）**：reference §4.2 hover 状态（bg4/danger-soft 等）inline style 无法表达 → DEBT-ADMIN-UI-BUTTON-HOVER 转登记到 task-queue M-SN-5.5 PRE 欠账段，等待 admin-ui CSS 范式升级独立卡
+- **范围合规**：仅 packages/admin-ui + tests/unit；零业务视图修改
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck 全绿（8 workspace）/ lint 全绿 / unit 256 files 3283 tests **全部 PASS**（本卡新增 26 用例：基础渲染 3 / variant 4 / size 3 / loading 5（含 R-1 R-1+Y-1 验证）/ disabled 2 / icon slot 4 / a11y+props 4 / secondary 别名 1）

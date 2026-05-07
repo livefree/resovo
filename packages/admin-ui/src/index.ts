@@ -37,5 +37,8 @@ export * from './components/layout'
 // PageHeader 页面顶栏通用原语（CHG-SN-5-PRE-03-A）
 export * from './components/page-header'
 
+// AdminButton 后台按钮通用原语（CHG-SN-5-PRE-03-B）
+export * from './components/admin-button'
+
 // Feedback 共享组件（CHG-SN-4-04 D-14：StaffNoteBar / LineHealthDrawer / RejectModal）
 export * from './components/feedback'
