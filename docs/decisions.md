@@ -4485,3 +4485,262 @@ video_sources 线路聚合键设计：
 - **关联 plan**：§2.2 Non-Goals 第 3 条 / §5.2 BLOCKER 第 3/4 条 / §6 M-SN-5.5 B 段 / §9 ADR 索引 / §10.9 R-M-SN-5-01 / §4.5 ADR-端点先后协议
 - **关联欠账**：DEBT-LINE-KEY-01（task-queue M-SN-4 欠账段，line 2394）状态推进为"已决议方案 A"
 - **关联 SEQ**：SEQ-20260502-01（用户 2026-05-02 拍板临时方案 B = 复合键 + 推迟 line_key 一级建模；本 ADR 将临时决策转为正式裁决）
+
+---
+
+## ADR-115：admin-ui Popover 通用原语 API 契约（CHG-SN-5-PRE-03-F-ADR）
+
+**决策日期**：2026-05-07
+**决策卡**：CHG-SN-5-PRE-03-F-ADR（SEQ-20260506-02 / M-SN-5.5 启动准入门 C 段第 6/6 件原语 sub-ADR 前置）
+**决策模型**：claude-opus-4-7（主循环）+ arch-reviewer (claude-opus-4-7) 强制独立评审
+**触发**：PRE-03-F 强约束（task-queue line 3222）"API 契约复杂度（Portal / focus-trap / dismiss 协议）若超 Drawer，必须先升独立 sub-ADR + Opus arch-reviewer PASS 才能起实施卡"；2026-05-06 主循环复杂度评估明确 Popover 超 Drawer（placement 算法 / trigger-content 关联 / arrow / 11+ props vs Drawer 8 props），触发 sub-ADR 前置约束。
+
+**状态**：✅ **采纳**（2026-05-07，3 轮 arch-reviewer Opus 评审通过：轮 1 B+ CONDITIONAL → 轮 2 B+ CONDITIONAL → 轮 3 **A- PASS**；3 红线 + 6 黄线全部修订；PRE-03-F 实施卡解锁条件满足）
+
+**评审轨迹**：
+- 轮 1（2026-05-07，agentId a8开头）：B+ CONDITIONAL；3 红线 R-1 useOverlay scroll lock 副作用 / R-2 trigger toggle 关闭 + cloneElement 注入机制 / R-3 z-index 980 被 Modal 遮挡；6 黄线
+- 轮 2（agentId aa开头）：B+ CONDITIONAL；R-1/R-2 PASS；R-3 残留 §5 design-tokens 行 980 vs §2.5 1050 文档自矛盾；2 新黄线 NEW-Y-1（§5 关联组件段 modal=true 复用残留）+ NEW-Y-2（trigger forwardRef 约束未声明）
+- 轮 3（agentId a3开头）：**A- PASS**；R-3 残留 + NEW-Y-1 + NEW-Y-2 全部清零；ADR 文档内自一致；2 项观察级 Y-OBS 不阻塞
+
+### 1. Context
+
+#### 1.1 设计真源
+- reference §4.5 弹层规范：Drawer / Modal / Popover 同章节，但具体 Popover 视觉规范未单列详细，仅在 line 910 标"admin-ui Popover ⚠️ 缺失 | HiddenColumnsMenu 私有实现；无通用 Popover 原语"
+- M-SN-6 原计划包含 Popover 原语 + filter popover；v2.6 plan 修订将 Popover 提前至 M-SN-5.5（PRE-03-F），消除 M-SN-6 的"先建 Popover 再做 filter popover 串行依赖"
+
+#### 1.2 既有 inline popover 模式调研
+
+| 实现 | 文件 | 行数 | 复杂度 | 共性 |
+|---|---|---|---|---|
+| AdminDropdown | `packages/admin-ui/src/components/dropdown/admin-dropdown.tsx` | 240 | 行操作菜单（items 数组）| portal `document.body` + position fixed + scroll/resize 重定位 + outside mousedown 关闭 + ESC + ArrowUp/Down/Enter 键盘导航 + role="menu" + items role="menuitem" |
+| AdminSelect listbox（CHG-SN-5-PRE-03-D） | `packages/admin-ui/src/components/admin-select/admin-select.tsx` | 484 | 表单选择器（options + 单/多选 + 搜索 + 异步 + 键盘）| portal + position fixed + scroll/resize + outside mousedown + ESC/Tab + ARIA combobox/listbox + aria-activedescendant |
+| HiddenColumnsMenu（私有） | DataTable 内部，未独立 export | — | 列设置 | private inline 实现，未对外可复用 |
+
+**结论**：3 处已有 inline portal popover 模式，均**未使用通用 Popover 原语**——证实 reference §4.5 + line 910 的"⚠️ 缺失"诊断。Popover 通用原语下沉将让这 3 处后续 refactor 复用，消除"3 份相似 inline 代码"重复（违反 CLAUDE.md 价值排序 #2 边界与复用）。
+
+#### 1.3 复杂度对比
+
+| 维度 | Drawer | Popover |
+|---|---|---|
+| 文件行数 | 154 | 估 280-350 |
+| Props 数量 | 8 | 估 11-13 |
+| Placement 算法 | 无（固定 4 方位 left/right/top/bottom）| **必需**（auto-flip + shift 防 viewport overflow，6-12 placement 方位）|
+| Trigger 关联模式 | 无 trigger 概念（open prop 受控）| **必需**（trigger 元素 + content 关联，引用 trigger.getBoundingClientRect()）|
+| Arrow 子组件 | 无 | 可选 |
+| Portal target | document.body 固定 | document.body 默认 + portalContainer prop 逃生口 |
+| Focus-trap | modal=true（所有 Drawer 都是 modal）| 双模（modal=focus trap / non-modal=不抢焦点）|
+| Dismiss 协议 | ESC + backdrop click | ESC + outside click + Tab out + programmatic |
+| ARIA | role="dialog" aria-modal | aria-haspopup + aria-controls + aria-expanded（多种 popup type）|
+
+Popover 在 7 个维度上严格超过 Drawer（Drawer 仅 placement 简单 / Trigger 无 / Arrow 无 / Focus-trap 单模 / Dismiss 简单 / ARIA 单 role）。**API 契约复杂度明确超 Drawer**，触发 PRE-03-F 强约束的 sub-ADR 前置要求。
+
+### 2. Decision
+
+#### 2.1 API 契约（PopoverProps）
+
+```typescript
+export type PopoverPlacement =
+  | 'top' | 'top-start' | 'top-end'
+  | 'bottom' | 'bottom-start' | 'bottom-end'
+  | 'left' | 'left-start' | 'left-end'
+  | 'right' | 'right-start' | 'right-end'
+
+export interface PopoverProps {
+  /**
+   * 触发元素（必须是单个 React 元素，非 string 或 fragment），用于 Popover 通过
+   * `React.cloneElement` 注入 `onClick`（toggle open）/ `onKeyDown`（Enter/Space 打开）/ `ref`
+   * （getBoundingClientRect 定位）/ `aria-haspopup` / `aria-expanded` / `aria-controls`。
+   * 消费方在 trigger 元素上自定义的 onClick 会被 Popover 包装（先调用消费方 onClick，
+   * 再 toggle open；toggle 不依赖消费方实现）。
+   *
+   * **trigger 必须支持 ref forwarding**（arch-reviewer 复评 NEW-Y-2）：原生 HTML 元素
+   * 如 `<button>` 天然支持；自定义函数组件须使用 `React.forwardRef` 暴露 ref。
+   * v1 实施对 ref 注入失败做 `console.warn` 降级（开发模式提示消费方修复，
+   * 生产模式定位回退到 trigger 父容器的 getBoundingClientRect 防 crash）。
+   */
+  readonly trigger: React.ReactElement
+  /** 弹层内容（任意 ReactNode）*/
+  readonly content: React.ReactNode
+  /** 受控开关；省略 → 内部状态自管（非受控）*/
+  readonly open?: boolean
+  /** 受控变更回调（受控模式必传）；非受控也可监听 open 状态变化 */
+  readonly onOpenChange?: (next: boolean) => void
+  /** 默认非受控初始 open；默认 false */
+  readonly defaultOpen?: boolean
+  /** 弹层位置；默认 'bottom-start' */
+  readonly placement?: PopoverPlacement
+  /** trigger 到 content 距离（px）；默认 4 */
+  readonly offset?: number
+  /** modal 模式：focus-trap + 阻止背景滚动；默认 false（non-modal 不抢焦点）*/
+  readonly modal?: boolean
+  /** ESC 关闭；默认 true */
+  readonly closeOnEscape?: boolean
+  /** outside click 关闭；默认 true */
+  readonly closeOnOutsideClick?: boolean
+  /** Tab 离开 content 时关闭；默认 true */
+  readonly closeOnTabOut?: boolean
+  /** 自定义 portal 容器；默认 document.body */
+  readonly portalContainer?: HTMLElement | null
+  /** 显示箭头（指向 trigger）；默认 false */
+  readonly arrow?: boolean
+  /** ARIA aria-haspopup 类型；默认 'dialog'。可选 'menu' / 'listbox' / 'tree' / 'grid' */
+  readonly hasPopup?: 'dialog' | 'menu' | 'listbox' | 'tree' | 'grid'
+  /** content a11y 标签 */
+  readonly 'aria-label'?: string
+  /** content 测试 id（trigger 自身 testid 由消费方在 trigger ReactNode 上挂）*/
+  readonly 'data-testid'?: string
+}
+```
+
+Props 共 13 个（>Drawer 8 个，符合复杂度评估）。
+
+#### 2.2 Placement 算法策略
+
+**采纳：手写最小 flip + shift，不引入 floating-ui 依赖**
+
+理由：
+1. **依赖白名单约束**：ADR-100 §依赖白名单将依赖分三类——预批（@dnd-kit/core/sortable）/ 候选（recharts、visx、reactflow、dagre、react-virtual、react-window）/ 严禁（admin 业务 design system、新状态管理、CSS-in-JS、ORM、GraphQL）。`floating-ui` 不在三类任何一个中 → 属"超出白名单即触发 BLOCKER"灰区，引入须独立 ADR 评审；项目级 BLOCKER 不应为单原语触发
+2. **既有模式参考**：AdminDropdown / AdminSelect 已手写"trigger.getBoundingClientRect() + position:fixed"模式，证明手写可行
+3. **算法范围**：Popover 需扩展为 12 placement 方位 + flip（首选 placement 出 viewport 时翻转到对侧）+ shift（沿轴向移动避免溢出）；**不**实现 size 调整 / virtual element / middleware 等 floating-ui 高级特性（YAGNI）
+4. **回退路径**：未来若 placement 算法复杂度超出手写阈值（例如 nested popover 或 RTL 全面支持），可独立 ADR 重新评估引入 floating-ui
+
+算法伪代码：
+```typescript
+function computePosition(triggerRect, contentSize, viewport, placement, offset):
+  primary = computePrimary(triggerRect, contentSize, placement, offset)
+  if primary fits in viewport: return primary
+  flipped = flipPlacement(placement)  // bottom→top, right→left, etc.
+  candidate = computePrimary(triggerRect, contentSize, flipped, offset)
+  if candidate fits: return candidate
+  return shift(primary, viewport)  // 沿轴向夹紧到 viewport 内
+```
+
+#### 2.3 Focus-trap 协议（双模）
+
+| 模式 | 行为 | 应用场景 |
+|---|---|---|
+| `modal: false`（默认）| 不 trap focus；trigger 保持焦点，content 可被键盘穿越 | filter popover、column settings、tooltips |
+| `modal: true` | content 内 focus trap（首个 tabbable 元素自动聚焦，Tab 循环不出 content）+ outside click 仍关闭；**不锁背景滚动** | 表单 popup、确认框、多步操作 popup |
+
+**non-modal 默认**理由：
+- AdminDropdown / AdminSelect 现有模式都是 non-modal（trigger 保持焦点）
+- modal 行为更接近 Modal/Drawer 而非 Popover
+- 滥用 modal=true 会破坏键盘流畅性
+
+**arch-reviewer R-1 修订（2026-05-07）**：modal=true **不复用 `useOverlay` hook**——`useOverlay` 第 50-55 行硬编码 `document.body.style.overflow = 'hidden'` scroll lock 是给 Drawer/Modal 的全屏遮罩设计，对 Popover modal=true（局部弹层）属语义错位（用户在长列表打开 modal popover 时锁滚动会丢失位置）。改用独立 `usePopoverFocusTrap` hook（实施卡内创建），仅含：
+- focus trap（首个 tabbable 自动聚焦 + Tab 循环约束在 content 内）
+- ESC 监听（已由 closeOnEscape prop 暴露）
+- 关闭时焦点回 trigger（`triggerRef.current?.focus()`）
+- **零** `body.style.overflow` 副作用
+
+non-modal 不调用任何 focus-trap hook。v1 实施 scope 标 modal 为 `@experimental`（见 §3.1），首版仅实现 focus trap 主路径，scroll-lock 永不引入。
+
+#### 2.4 Dismiss 协议
+
+**arch-reviewer R-2 修订（2026-05-07）**：原 4 类 dismiss 遗漏 trigger 再次 click toggle 关闭——这是 AdminDropdown / AdminSelect / HiddenColumnsMenu 三处既有 inline 模式都实现的核心行为。补第 5 类：
+
+| 触发 | 默认 | prop | 行为 |
+|---|---|---|---|
+| trigger 再次 click | 开（始终）| N/A（Popover 内部经 `React.cloneElement` 注入 trigger 的 onClick 自动 toggle）| `open ? onOpenChange(false) : onOpenChange(true)`；消费方原 onClick 会被先调用再 toggle |
+| ESC 键 | 开 | `closeOnEscape` | 全局 keydown 监听，关闭 + 焦点回 trigger |
+| outside click | 开 | `closeOnOutsideClick` | document mousedown 监听，target 不在 trigger 或 content → 关闭 |
+| Tab 离开 content | 开（modal=false 时）| `closeOnTabOut` | content blur + relatedTarget 不在 content 内 → 关闭 |
+| programmatic | 始终可用 | `onOpenChange(false)` | 受控模式消费方主动关闭 |
+
+#### 2.5 Z-index 层级
+
+**arch-reviewer R-3 修订（2026-05-07）**：原方案 `--z-admin-popover: 980`（admin-dropdown 同层）在 Modal 内消费场景下被 Modal 1000 遮挡——"DOM 后置自然 stack" 仅在同 z-index + 同 stacking context 时生效；Modal 若使用 transform / will-change 会建立独立 stacking context，依赖隐性约束脆弱。
+
+**采纳方案 C（调整 z-index 介于 Modal 与 Shell drawer 之间）**：
+
+新增 design-tokens 槽位 `--z-admin-popover: 1050`（介于 Modal 1000 与 Shell drawer 1100 之间）；ADR-103a §4.3 4 级 z-index 不变量**追加第 5 级 1050**（保持序数关系不破坏既有不变量）：
+
+- Shell toast 1300 > Shell cmdk 1200 > Shell drawer 1100 > **admin-popover 1050（新）** > Modal 1000 > admin-dropdown 980
+
+理由：
+- Popover 在 Modal 之上是合理需求（如 Modal 内表单的字段帮助 popover），1050 让 Popover 自然覆盖 Modal
+- 1050 < Shell drawer 1100：Shell 抽屉（NotificationDrawer / TaskDrawer）打开时仍覆盖 Popover（Shell 操作优先级高于业务 Popover）
+- admin-dropdown 980 不动（行操作菜单与 Modal 对话框不应同时出现，980 在 Modal 之下不会有冲突）
+
+**与 ADR-103a 4 级不变量的兼容性声明**：本 ADR 视为 ADR-103a §4.3 的"5 级扩展"——在 Modal 1000 与 Shell drawer 1100 之间插入 admin-popover 1050；ADR-103a 原 4 级 stacking 序仍保持有效（Toast > CmdK > Shell drawer > Modal），仅新增"业务 popover 1050 ∈ (Modal, Shell drawer)"。如评审认为应单独修订 ADR-103a，可在本 ADR PASS 后另起 ADR-103a-rev 文档同步。
+
+#### 2.6 Portal + portalContainer 逃生口
+
+默认 `createPortal(content, document.body)`（避免 sidebar/topbar overflow:hidden 裁剪）；SSR 阶段 `typeof document === 'undefined'` 守卫不渲染。
+
+**arch-reviewer Y-1 修订（2026-05-07）**：`portalContainer` prop 标 `@experimental`——项目内 grep 既有 portal 消费方（AdminDropdown / AdminSelect / HiddenColumnsMenu / UserMenu / CommandPalette / NotificationDrawer / TaskDrawer）全部直接 portal 到 `document.body`，零自定义 portal 容器需求。v1 实施保留 prop type 定义（向前兼容）但**实施卡不实现该路径**（直接传仍走 document.body 默认）；测试不覆盖此 prop。后续若出现 fullscreen iframe / Shadow DOM 真实需求，独立卡解锁实施。
+
+#### 2.7 ARIA hasPopup 多类型语义边界
+
+`hasPopup?: 'dialog' | 'menu' | 'listbox' | 'tree' | 'grid'`（默认 'dialog'）— 让 Popover 通用原语可承载 dropdown menu（hasPopup='menu'）/ filter（'dialog'）/ select-like（'listbox'）多种语义。
+
+**arch-reviewer Y-4 修订（2026-05-07，明确语义边界）**：`hasPopup` **仅控制以下 ARIA 属性输出**，不影响内部键盘逻辑：
+
+- trigger 元素 `aria-haspopup={hasPopup}` 自动注入
+- content 容器 `role={hasPopup}` 自动注入（'dialog' / 'menu' / 'listbox' / 'tree' / 'grid'）
+
+**Popover 原语不介入 content 内部子元素键盘行为**：
+- hasPopup='menu' 时，菜单项 role="menuitem" + ArrowUp/Down 导航 + first-char 跳转 → 由消费方（AdminDropdown 等）自行实现
+- hasPopup='listbox' 时，选项 role="option" + aria-selected + aria-activedescendant → 由消费方（AdminSelect 等）自行实现
+- 这避免 Popover 原语膨胀为"通用弹层 + 键盘导航引擎"，与既有 AdminDropdown / AdminSelect 各自维护的键盘逻辑产生职责重叠
+
+Popover 仅承担：portal / 定位 / 5 类 dismiss / ARIA 属性桩。键盘导航是"在 popup 内"的事，由 popup content 的消费方实现。
+
+### 3. Consequences
+
+#### 3.1 立即生效 + v1 实施 scope 收窄（arch-reviewer Y-6）
+
+1. PRE-03-F 实施卡解锁条件：本 ADR-115 经 Opus arch-reviewer PASS（候选 → 采纳）
+2. 实施卡范围：`packages/admin-ui/src/components/popover/*` + tests/unit + design-tokens 新增 `--z-admin-popover: 1050`
+3. 实施卡**不**含：AdminDropdown / AdminSelect / HiddenColumnsMenu refactor（独立后续卡，复用 Popover 原语）
+4. **v1 minimum viable subset**（arch-reviewer Y-6 / Y-1 / Y-2 收窄；type 定义保留向前兼容，实施卡不实现 / 不测试以下子集）：
+   - **v1 实现** ✅：trigger / content / open / onOpenChange / defaultOpen / placement（6 基础方位 `'top' | 'bottom' | 'left' | 'right' | 'bottom-start' | 'bottom-end'` + flip）/ offset / closeOnEscape / closeOnOutsideClick / hasPopup（仅控制 aria-haspopup + role 属性，见 §2.7）/ aria-label / data-testid
+   - **v1 标 `@experimental` 不实现** ⏸：modal / closeOnTabOut / portalContainer / arrow / placement 12 方位的 -start / -end 变体（剩余 8 个，仅保留 6 基础方位 + bottom-start/bottom-end 共 6 个）
+   - 已知 3 处既有 inline 模式（AdminDropdown / AdminSelect / HiddenColumnsMenu）全部 non-modal + 无 arrow + portal 到 document.body + 不需 Tab out 关闭，v1 子集已覆盖
+   - 后续按需求驱动以 ADR-115a 扩展（modal 表单 popup / arrow 提示性 popover / 12 方位精细对齐 / portalContainer Shadow DOM）
+5. **行数估算修正**（arch-reviewer Y-3）：原估 280-350 行偏低；实际 placement 算法应作为独立文件 `packages/admin-ui/src/components/popover/compute-position.ts` 拆出（120-180 行），主组件 `popover.tsx`（200-280 行），共 320-460 行；CLAUDE.md 文件行数约束（500 行非声明性）保持，单文件不破。工时估算 PRE-03-F 实施卡 0.15-0.25w → 0.25-0.40w（含拆分单元）。
+
+#### 3.2 后续后续触发
+
+- M-SN-6 filter popover 等业务消费基于 Popover 原语
+- 后续可独立卡 refactor AdminDropdown 内部使用 Popover 原语（消除 inline portal 重复）
+- 同模式 refactor AdminSelect listbox 内部 portal 逻辑（CHG-SN-5-PRE-03-D 已稳定，refactor 留 M-SN-5 后期）
+
+#### 3.3 Non-Goals（明列防扩张）
+
+- ❌ floating-ui 依赖引入（触发 BLOCKER）
+- ❌ size middleware（动态调整 popover 大小）
+- ❌ nested popover focus 管理（可后续独立 ADR）
+- ❌ RTL（right-to-left）布局支持（项目当前 zh-CN 单语言，不需要）
+- ❌ AdminDropdown / AdminSelect 同 PR refactor（独立后续卡）
+- ❌ **hover / focus trigger（tooltip 模式）**（arch-reviewer 新增）：Popover 仅支持 click / Enter / Space 触发；hover-trigger 是 Tooltip 独立原语职责（ARIA `role="tooltip"` + delay timing + 鼠标穿越），未来由独立 Tooltip ADR 承载
+- ❌ **`closeOnTabOut` 与 `modal` 与 `arrow` 与 `portalContainer` 与 12 placement 完整集合**（v1 标 `@experimental`，见 §3.1 v1 minimum viable subset；按需求驱动以 ADR-115a 解锁）
+
+#### 3.4 风险与回滚
+
+- **风险 1**：手写 placement 算法在 viewport 边缘场景出 bug → 缓解：单测覆盖 6 v1 placement × 3 viewport 位置（near-top / near-bottom / near-edge）+ flip 触发条件
+- **风险 2**：modal=true focus-trap（v1 不实施，标 @experimental） → 风险延后：v1 仅 non-modal，零 focus-trap 复杂度风险；实施 ADR-115a modal 时再独立 `usePopoverFocusTrap` hook（不复用 useOverlay 避免 scroll lock 副作用）
+- **风险 3**：未来 nested popover 需求出现 → 回滚：可独立卡引入 floating-ui，本 ADR 不锁路径
+- **风险 4（新）**：z-index 1050 与 ADR-103a 4 级不变量需要追加文档同步 → 缓解：本 ADR §2.5 已声明"5 级扩展"兼容性；如评审认为需正式修订 ADR-103a，PASS 后另起 ADR-103a-rev
+
+### 4. 与现有约束的对齐
+
+| 约束 | 状态 |
+|---|---|
+| ADR-100 依赖白名单（三类：预批 / 候选 / 严禁；floating-ui 不在三类任一即触发 BLOCKER）| 通过（手写实现，不引入 floating-ui） |
+| ADR-103a packages/admin-ui 4 级 z-index 不变量 | **5 级扩展**（在 Modal 1000 与 Shell drawer 1100 间插入 admin-popover 1050）—— 4 级原序保持有效；详见 §2.5 与 §3.4 风险 4 |
+| CLAUDE.md 绝对禁止"引入技术栈以外新依赖" | 通过（手写算法）|
+| CLAUDE.md "同一 UI 模式 3 处以上必须提取" | 触发（AdminDropdown / AdminSelect / HiddenColumnsMenu 已 3 处 inline）→ 本 ADR 即提取动作 |
+| CLAUDE.md "接口设计先于实现" | 通过（本 ADR 即接口契约设计，落盘后才能起实施卡）|
+| CLAUDE.md "文件超 500 行非声明性须拆分" | 通过（实施卡 placement 算法独立 `compute-position.ts` 文件拆分，主组件 + 算法各 < 300 行）|
+| reference §4.5 弹层规范 | 通过（Popover 与 Drawer/Modal 同章节统一管理）|
+| SEQ-20260506-02 PRE-03-F 强约束 | 通过（sub-ADR 前置 + Opus arch-reviewer PASS 后才起实施卡）|
+| 零业务视图消费 C 段强约束 | 通过（实施卡仅 packages/admin-ui + tests，零业务视图改动）|
+
+### 5. 关联
+
+- **关联 ADR**：ADR-100（依赖白名单）/ ADR-103a（packages/admin-ui 4 级 z-index 不变量 + 5 级扩展声明，见 §2.5）/ ADR-103（DataTable v2，HiddenColumnsMenu 私有实现来源）/ ADR-110（ApiResponse 信封 — 不涉及，列入仅做交叉索引）
+- **关联组件**：AdminDropdown（240 行 inline portal pattern）/ AdminSelect（484 行 inline portal + listbox + 键盘）/ Drawer（154 行，Popover 复杂度对比基线）/ useOverlay hook（focus-trap + ESC 既有逻辑；**Popover modal=true 不复用，见 §2.3**——避开 useOverlay 的 body.style.overflow scroll lock 副作用）
+- **关联 plan**：§6 M-SN-5.5 C 段 / §6 M-SN-6 删除 "Popover 原语 + 先于 filter popover" 行 / §9 ADR 索引 ADR-115 候选
+- **关联 task-queue**：SEQ-20260506-02 子卡 13（PRE-03-F）状态 ⏸ 触发 sub-ADR 前置 → 本 ADR PASS 后转入 PRE-03-F 实施卡可起卡
+- **关联 design-tokens**：新增 `--z-admin-popover: 1050` 槽位（实施卡内同 PR 落地；见 §2.5 z-index 5 级扩展决策）

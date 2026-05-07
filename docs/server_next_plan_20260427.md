@@ -784,6 +784,7 @@ cutover 验收按上表 21 路由占位逐项 diff（路由文件物理存在）
 | ADR-104 | home_modules admin API 协议 | 推荐 3 落地所需 6 端点 + 鉴权 + 缓存失效 | M-SN-5 内 |
 | ADR-105 | merge candidate / split / unmerge API 协议 | 推荐 5 落地所需 3-4 端点 + 审计日志 schema | M-SN-5 内 |
 | ADR-114-NEGATED | line_key 一级建模 schema + 跨站合并 UI 契约 — **2026-05-06 PRE-02 已否定方案 B（采纳方案 A 维持复合键）** | （已决议否定，不再触发）；重新评估触发条件 4 项见 `docs/decisions.md` ADR-114-NEGATED 后果段 | 不立卡（已否定）；如重启评估则起 PRE-02-V2 决策卡 |
+| ADR-115 | admin-ui Popover 通用原语 API 契约 + placement 策略 + portal/focus-trap/dismiss 协议 — **2026-05-07 PRE-03-F-ADR 已采纳（A- PASS / 3 轮 Opus 评审 / 3 红线 + 6 黄线全修）** | PRE-03-F 实施卡解锁条件 = ADR-115 PASS（已满足） | PRE-03-F 实施卡（packages/admin-ui/src/components/popover/* + tests + design-tokens `--z-admin-popover: 1050`，估算 0.25-0.40w） |
 | ADR-候选 | 大数据原语依赖选型（react-virtual / reactflow / recharts 二选一三组）| Q-MUST-5 候选清单决议 | M-SN-6 首次落地前 |
 
 ---

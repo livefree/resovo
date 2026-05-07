@@ -5797,3 +5797,31 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - LinesPanel（审核台）：ContentSourceRow.updated_at → toggleSource 第 4 参 → server 比对 → 409 REVIEW_RACE → fetchVideoSources 重载 + M.lines.toggleRace 提示
   - useVideoSources（视频编辑 Drawer）：VideoSource.updated_at → toggleVideoSource 第 4 参 → server 比对 → 409 → listVideoSources await 重载覆盖 + throw 供 TabLines 上层提示
 - **DEBT-SN-4-05-A 完整闭环**：服务端 schema + 锁 + 错误码（主卡）+ UI 路径透传 + race 重载 + 用户提示（本 follow-up）= 端到端并发安全 bug 在生产路径**实际消除**
+
+---
+
+## [CHG-SN-5-PRE-03-F-ADR] Popover sub-ADR 起草 — ADR-115 采纳
+
+- **完成时间**：2026-05-07
+- **记录时间**：2026-05-07
+- **执行模型**：claude-opus-4-7（决策性 schema/API 契约设计强制 Opus）
+- **子代理**：arch-reviewer (claude-opus-4-7) × **3 轮迭代评审** — 轮 1 B+ CONDITIONAL → 轮 2 B+ CONDITIONAL → 轮 3 **A- PASS**
+- **来源序列**：SEQ-20260506-02（M-SN-5.5 启动准入门 C 段第 6/6 件原语 sub-ADR 前置卡，强约束 task-queue line 3222 触发）
+- **决议结果**：**ADR-115 采纳**（Popover 通用原语 API 契约 + placement 手写策略 + portal/focus-trap/dismiss 协议 + z-index 5 级扩展）；PRE-03-F 实施卡解锁条件满足
+- **修改文件（零代码变更，纯 governance + ADR 落盘）**：
+  - `docs/decisions.md` — 新增 ADR-115（约 250 行）：5 段（Context / Decision / Consequences / 与现有约束对齐 / 关联）；含 v1 minimum viable subset + 4 props @experimental 标记
+  - `docs/server_next_plan_20260427.md` §9 ADR 索引 — 追加 ADR-115 采纳行
+  - `docs/task-queue.md` — SEQ-20260506-02 子卡 13（PRE-03-F）状态推进：sub-ADR 前置触发 → ⏸ sub-ADR 已 PASS / 待起实施卡
+  - `docs/tasks.md` — SEQ 进度 8/13 → 9/13（sub-ADR 计入 SEQ 进度）
+- **范围合规**：明列"不在范围"全部遵守 — 零 packages/admin-ui 实施代码 / 零 popover.tsx 编写 / 零 design-tokens 实际写入（仅 ADR 内声明 1050 数值）
+- **arch-reviewer 3 轮迭代红黄线全部修复**：
+  - **轮 1（3 红线）**：R-1 useOverlay scroll lock 副作用与 Popover modal=true 语义错位 → 改用独立 usePopoverFocusTrap hook + v1 modal 标 @experimental；R-2 trigger toggle 关闭缺失 + 注入机制不明 → trigger 类型收窄 React.ReactElement + 明确 cloneElement 注入 + Dismiss 协议从 4 类升 5 类；R-3 z-index 980 被 Modal 1000 遮挡 → 采纳方案 C 调到 1050（Modal 与 Shell drawer 间）+ 5 级扩展兼容性声明
+  - **轮 2（残留 R-3 + 2 新黄线）**：§5 design-tokens 行残留 980 → 改 1050；§5 关联组件段 modal=true 复用残留措辞 → 修订与 §2.3 R-1 一致；§2.1 trigger forwardRef 约束未声明 → 追加完整 forwardRef + 降级提示
+  - **轮 3 PASS**：3 红线清零 + 2 新黄线清零 + ADR 文档内自一致性达成
+- **关键决策摘要**（arch-reviewer 全程认可）：
+  - **手写 placement 算法不引入 floating-ui**：ADR-100 依赖白名单灰区，引入触发 BLOCKER；项目级 BLOCKER 不应为单原语触发
+  - **z-index 1050 5 级扩展**：Modal 1000 < admin-popover 1050 < Shell drawer 1100；ADR-103a 4 级原序保持有效；PRE-03-F 实施卡同 PR 可追加 ADR-103a 脚注引用闭合双文档
+  - **v1 minimum viable subset**：6 placement + 12 props（6 实施 + 4 @experimental + 2 type 桩）+ hasPopup 仅 ARIA 不键盘，覆盖既有 3 处 inline 模式（AdminDropdown / AdminSelect / HiddenColumnsMenu）重构需求
+  - **trigger React.ReactElement + cloneElement 注入**：明确机制 + forwardRef 约束 + ref 注入失败 console.warn 降级
+- **新增依赖**：无 / **数据库变更**：无 / **测试**：N/A（纯文档 ADR 卡）
+- **后续触发（不在本 ADR 范围）**：起 **PRE-03-F 实施卡**（packages/admin-ui/src/components/popover/* + compute-position.ts 拆分 + tests + design-tokens `--z-admin-popover: 1050`，估算 0.25-0.40w）；该实施卡不在 SEQ-20260506-02 范围内，独立后续卡承担
