@@ -40,6 +40,8 @@ export interface SourceToggleInput {
   videoId: string
   sourceId: string
   isActive: boolean
+  /** CHG-SN-5-PRE-01-C：可选乐观锁，提供时 query 层比对 video_sources.updated_at。 */
+  expectedUpdatedAt?: string
   actorId: string
   requestId?: string
 }
@@ -153,7 +155,11 @@ export class ModerationService {
   }
 
   async toggleSource(input: SourceToggleInput) {
-    const result = await toggleVideoSource(this.db, input.sourceId, input.isActive)
+    const result = await toggleVideoSource(this.db, {
+      sourceId: input.sourceId,
+      isActive: input.isActive,
+      expectedUpdatedAt: input.expectedUpdatedAt,
+    })
     if (!result) return null
 
     this.auditSvc.write({

@@ -143,7 +143,7 @@ describe('ModerationService.toggleSource', () => {
   })
 
   it('toggle is_active → 触发 audit video_source.toggle + ES sync', async () => {
-    mockToggle.mockResolvedValue({ id: 's1', is_active: false })
+    mockToggle.mockResolvedValue({ id: 's1', is_active: false, updated_at: '2026-05-06T00:00:00Z' })
     const es = makeEs()
     const svc = new ModerationService(makeDb(), es)
     await svc.toggleSource({ videoId: 'vid-1', sourceId: 's1', isActive: false, actorId: 'user-1' })
@@ -156,5 +156,45 @@ describe('ModerationService.toggleSource', () => {
     const svc = new ModerationService(makeDb(), makeEs())
     const result = await svc.toggleSource({ videoId: 'v', sourceId: 's-missing', isActive: true, actorId: 'u' })
     expect(result).toBeNull()
+  })
+
+  // CHG-SN-5-PRE-01-C
+  it('expectedUpdatedAt 透传到 toggleVideoSource query 层', async () => {
+    mockToggle.mockResolvedValue({ id: 's1', is_active: true, updated_at: '2026-05-06T00:00:01Z' })
+    const svc = new ModerationService(makeDb(), makeEs())
+    await svc.toggleSource({
+      videoId: 'vid-1',
+      sourceId: 's1',
+      isActive: true,
+      expectedUpdatedAt: '2026-05-06T00:00:00Z',
+      actorId: 'user-1',
+    })
+    expect(mockToggle).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        sourceId: 's1',
+        isActive: true,
+        expectedUpdatedAt: '2026-05-06T00:00:00Z',
+      }),
+    )
+  })
+
+  // CHG-SN-5-PRE-01-C
+  it('query 层抛 STATE_CONFLICT → service 透传不吞掉，audit/ES 不写', async () => {
+    const { AppError } = await import('@/api/lib/errors')
+    mockToggle.mockRejectedValue(new AppError('STATE_CONFLICT', 'Optimistic lock conflict on video source', 409))
+    const es = makeEs()
+    const svc = new ModerationService(makeDb(), es)
+    await expect(
+      svc.toggleSource({
+        videoId: 'vid-1',
+        sourceId: 's1',
+        isActive: false,
+        expectedUpdatedAt: '2026-05-06T00:00:00Z',
+        actorId: 'user-1',
+      }),
+    ).rejects.toMatchObject({ code: 'STATE_CONFLICT' })
+    expect(mockAudit).not.toHaveBeenCalled()
+    expect(es.index).not.toHaveBeenCalled()
   })
 })

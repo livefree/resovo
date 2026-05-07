@@ -13,10 +13,13 @@ import { es } from '@/api/lib/elasticsearch'
 import { ModerationService } from '@/api/services/ModerationService'
 import { CrawlerRunService } from '@/api/services/CrawlerRunService'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import { isAppError } from '@/api/lib/errors'
 import { findAdminVideoById } from '@/api/db/queries/videos'
 
 const SourcePatchSchema = z.object({
   isActive: z.boolean(),
+  // CHG-SN-5-PRE-01-C：可选乐观锁；前端从 GET 响应携带，并发场景下后写者收 409 REVIEW_RACE。
+  expectedUpdatedAt: z.string().datetime().optional(),
 })
 
 export async function adminVideoSourcesRoutes(fastify: FastifyInstance) {
@@ -37,6 +40,7 @@ export async function adminVideoSourcesRoutes(fastify: FastifyInstance) {
         videoId: id,
         sourceId,
         isActive: parsed.data.isActive,
+        expectedUpdatedAt: parsed.data.expectedUpdatedAt,
         actorId: request.user!.userId,
         requestId: request.id,
       })
@@ -45,6 +49,9 @@ export async function adminVideoSourcesRoutes(fastify: FastifyInstance) {
       }
       return reply.send({ data: result })
     } catch (err) {
+      if (isAppError(err, 'STATE_CONFLICT')) {
+        return reply.code(409).send({ error: { code: 'REVIEW_RACE', message: '已被其他审核员处理，请刷新', status: 409 } })
+      }
       request.log.error({ err }, 'source toggle unexpected error')
       return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
     }

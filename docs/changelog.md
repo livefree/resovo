@@ -5577,3 +5577,32 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - CHG-SN-5-PRE-02（DEBT-LINE-KEY-01 决策卡）
   - CHG-SN-5-PRE-03-A..F（admin-ui 通用原语/Popover 6 子卡）
 - **变更摘要**：plan v2.5 → v2.6 落地；方案 B' 新增 M-SN-5.5 独立 milestone（2.0w 软上限 3.0w）承载 cutover-blocker + line_key 决策 + 通用原语前置三类工作；总周期 18.0w → 20.0w；5 项用户偏差全采修复 + 3 轮 Opus 评审 PASS；解锁 SEQ-20260506-02 起 13 子卡；M-SN-5 主体启动须等 M-SN-5.5 PASS
+
+---
+
+## [CHG-SN-5-PRE-01-C] toggleSource 乐观锁（DEBT-SN-4-05-A，🔴 cutover-blocker）
+
+- **完成时间**：2026-05-06
+- **记录时间**：2026-05-06
+- **执行模型**：claude-opus-4-7（主循环；建议模型 sonnet，单 session 全 SEQ 推进未中途换会话）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 评级 A- / 结论 PASS / 1 黄线项已修
+- **来源序列**：SEQ-20260506-02（M-SN-5.5 启动准入门 A 段第 3/6 子卡）
+- **修改文件**：
+  - `apps/api/src/db/migrations/061_video_sources_updated_at.sql`（新建）— 加 `updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` 列；存量回填 `COALESCE(last_checked, created_at)`
+  - `apps/api/src/db/queries/video_sources.ts` — toggleVideoSource 改 tx + SELECT FOR UPDATE + expectedUpdatedAt 比对；mapper 暴露 updatedAt；disableDeadSources 同步 SET updated_at = NOW()
+  - `apps/api/src/services/ModerationService.ts` — SourceToggleInput 新增 expectedUpdatedAt?: string，透传 query
+  - `apps/api/src/routes/admin/videoSources.ts` — SourcePatchSchema 新增可选 expectedUpdatedAt（z.string().datetime()）；STATE_CONFLICT → 409 REVIEW_RACE（镜像 reject-labeled 模式）
+  - `packages/types/src/admin-moderation.types.ts` — VideoSourceLine.updatedAt: string + SourcePatchBody.expectedUpdatedAt?
+  - `tests/unit/api/video_sources_queries.test.ts`（新建，6 用例）
+  - `tests/unit/api/moderationService.test.ts` — 新增 2 用例（透传 + STATE_CONFLICT 不吞掉 audit/ES 不写）
+  - `tests/unit/api/videoSourcesRoutes.test.ts` — 新增 3 用例（转发 / 409 REVIEW_RACE / 422 invalid datetime）
+  - `docs/architecture.md` §5.2 — 新增 updated_at 列说明 + 写路径解耦说明
+  - `docs/tasks.md` / `docs/task-queue.md` — 任务卡 + 状态推进 + 范围偏离登记
+- **范围偏离登记**：原 task-queue 卡误标文件范围 `apps/api/src/services/SourceService.ts`，实际 toggleSource 位于 `ModerationService` → `toggleVideoSource` query；按真源实施，不影响验收
+- **新增依赖**：无
+- **数据库变更**：Migration 061 — `video_sources.updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`；存量行回填 COALESCE(last_checked, created_at)；幂等
+- **测试覆盖**：typecheck 全绿（8 workspace）/ lint 全绿 / unit 254 files 3236 tests **全部 PASS**（本卡新增 11 用例）
+- **注意事项**：
+  - 乐观锁向后兼容（expectedUpdatedAt 全链路 optional）；前端 wire-up（apps/server-next/src/lib/moderation/api.ts toggleSource）留 M-SN-5 视图卡
+  - probe 后台路径（SourceHealthWorker / sources.ts updateSourceActiveStatus / setSourceStatus / batchSetSourceStatus）只写 last_checked / probe_status，不触发 updated_at — 写路径解耦在代码上结构性成立
+  - disableDeadSources 不加 ETag（批量幂等：filter `is_active=true AND probe_status='dead'`，并发收敛同结果）

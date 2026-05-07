@@ -311,6 +311,10 @@ META-06 新增字段：
 - `season_number INT NOT NULL DEFAULT 1`
 - `episode_number INT NOT NULL DEFAULT 1`（Migration 014 已将 NULL 统一回填为 1）
 - `source_site_key VARCHAR(100) NULL`：行级源站 key（Migration 046，CHG-414）。爬虫写入时记录当前源站；JOIN 路径优先用此字段，NULL 时 fallback 到 `videos.site_key`，支持同一视频聚合多个源站线路时精确显示各自名称。
+- `updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`：admin 写路径乐观锁版本字段（Migration 061，CHG-SN-5-PRE-01-C / DEBT-SN-4-05-A）。
+  - 写路径：`toggleVideoSource`（tx + SELECT FOR UPDATE + 比对 expectedUpdatedAt + STATE_CONFLICT 409 REVIEW_RACE）/ `disableDeadSources` 批量。两条路径都显式 `SET updated_at = NOW()`。
+  - 不触发：probe 后台路径（SourceHealthWorker）继续只写 `last_checked` / `probe_status` / `latency_ms` 等信号列；与 admin 写路径解耦，避免 probe 异步抢占 ETag 导致乐观锁误报。
+  - 路由契约：`PATCH /admin/videos/:id/sources/:sourceId` 接受可选 `expectedUpdatedAt`（ISO 8601）。
 - 唯一去重约束：`uq_sources_video_episode_url`
 
 ### 5.3 crawler_sites

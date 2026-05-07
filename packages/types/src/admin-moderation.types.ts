@@ -262,6 +262,7 @@ export interface VideoSourceLine {
   readonly lastChecked: string | null               // DB: last_checked TIMESTAMPTZ NULL
   readonly submittedBy: string | null               // DB: submitted_by UUID NULL
   readonly createdAt: string                        // DB: created_at TIMESTAMPTZ NOT NULL
+  readonly updatedAt: string                        // 061 新增：admin 写路径乐观锁版本字段（CHG-SN-5-PRE-01-C / DEBT-SN-4-05-A）
 }
 
 // ── 暂存就绪检查（GET /admin/staging）─────────────────────────────────────────
@@ -302,6 +303,8 @@ export interface StaffNoteBody {
 
 export interface SourcePatchBody {
   readonly isActive?: boolean
+  /** 乐观锁；提供时 server 比对 video_sources.updated_at（CHG-SN-5-PRE-01-C / DEBT-SN-4-05-A）。 */
+  readonly expectedUpdatedAt?: string
 }
 
 // ── 前台 player_feedback（apps/api /api/v1/feedback/playback；ADR-108）────────

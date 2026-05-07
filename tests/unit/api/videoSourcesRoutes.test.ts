@@ -55,7 +55,7 @@ describe('PATCH /admin/videos/:id/sources/:sourceId', () => {
   afterEach(() => app.close())
 
   it('moderator toggle is_active=false → 200 + data', async () => {
-    mockModerationSvc.toggleSource.mockResolvedValue({ id: 's1', is_active: false })
+    mockModerationSvc.toggleSource.mockResolvedValue({ id: 's1', is_active: false, updated_at: '2026-05-06T00:00:00Z' })
     const res = await app.inject({
       method: 'PATCH',
       url: '/v1/admin/videos/vid-1/sources/s1',
@@ -64,6 +64,7 @@ describe('PATCH /admin/videos/:id/sources/:sourceId', () => {
     })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toHaveProperty('data')
+    expect(res.json().data).toHaveProperty('updated_at')
   })
 
   it('source 不存在 → 404', async () => {
@@ -76,6 +77,52 @@ describe('PATCH /admin/videos/:id/sources/:sourceId', () => {
     })
     expect(res.statusCode).toBe(404)
     expect(res.json().error.code).toBe('NOT_FOUND')
+  })
+
+  // CHG-SN-5-PRE-01-C
+  it('expectedUpdatedAt 转发到 service 层', async () => {
+    mockModerationSvc.toggleSource.mockResolvedValue({ id: 's1', is_active: true, updated_at: '2026-05-06T00:00:01Z' })
+    await app.inject({
+      method: 'PATCH',
+      url: '/v1/admin/videos/vid-1/sources/s1',
+      headers: { authorization: await tokenFor('moderator'), 'content-type': 'application/json' },
+      body: JSON.stringify({ isActive: true, expectedUpdatedAt: '2026-05-06T00:00:00Z' }),
+    })
+    expect(mockModerationSvc.toggleSource).toHaveBeenCalledWith(
+      expect.objectContaining({
+        videoId: 'vid-1',
+        sourceId: 's1',
+        isActive: true,
+        expectedUpdatedAt: '2026-05-06T00:00:00Z',
+      }),
+    )
+  })
+
+  // CHG-SN-5-PRE-01-C
+  it('service 抛 STATE_CONFLICT → 409 REVIEW_RACE', async () => {
+    const { AppError } = await import('@/api/lib/errors')
+    mockModerationSvc.toggleSource.mockRejectedValue(
+      new AppError('STATE_CONFLICT', 'Optimistic lock conflict on video source', 409),
+    )
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/admin/videos/vid-1/sources/s1',
+      headers: { authorization: await tokenFor('moderator'), 'content-type': 'application/json' },
+      body: JSON.stringify({ isActive: false, expectedUpdatedAt: '2026-05-06T00:00:00Z' }),
+    })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe('REVIEW_RACE')
+  })
+
+  // CHG-SN-5-PRE-01-C
+  it('expectedUpdatedAt 非 ISO → 422', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/admin/videos/vid-1/sources/s1',
+      headers: { authorization: await tokenFor('moderator'), 'content-type': 'application/json' },
+      body: JSON.stringify({ isActive: false, expectedUpdatedAt: 'not-a-date' }),
+    })
+    expect(res.statusCode).toBe(422)
   })
 
   it('body 缺少 isActive → 422', async () => {
