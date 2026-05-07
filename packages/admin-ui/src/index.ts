@@ -43,5 +43,8 @@ export * from './components/admin-button'
 // AdminInput 后台输入框通用原语（CHG-SN-5-PRE-03-C）
 export * from './components/admin-input'
 
+// AdminCard 后台卡片通用原语（CHG-SN-5-PRE-03-E）
+export * from './components/admin-card'
+
 // Feedback 共享组件（CHG-SN-4-04 D-14：StaffNoteBar / LineHealthDrawer / RejectModal）
 export * from './components/feedback'
