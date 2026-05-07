@@ -5680,3 +5680,23 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **新增依赖**：无
 - **数据库变更**：无
 - **测试覆盖**：typecheck 全绿（8 workspace）/ lint 全绿 / unit 256 files 3283 tests **全部 PASS**（本卡新增 26 用例：基础渲染 3 / variant 4 / size 3 / loading 5（含 R-1 R-1+Y-1 验证）/ disabled 2 / icon slot 4 / a11y+props 4 / secondary 别名 1）
+
+---
+
+## [CHG-SN-5-PRE-03-C] AdminInput 通用原语下沉到 packages/admin-ui
+
+- **完成时间**：2026-05-06
+- **记录时间**：2026-05-06
+- **执行模型**：claude-opus-4-7（主循环；建议模型 sonnet）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 评级 A- / 结论 PASS / 0 红线 / 4 黄线（Y-2 token fallback canonical 注释 + Y-4 wrapperClassName JSDoc 同卡修复；Y-1 aria-invalid 三态信息性保留；Y-3 focus 伪类 → DEBT-ADMIN-UI-FOCUS-PSEUDO 与 BUTTON-HOVER 同源转登记）
+- **来源序列**：SEQ-20260506-02（M-SN-5.5 启动准入门 C 段第 3/6 子卡）
+- **修改文件**：
+  - `packages/admin-ui/src/components/admin-input/admin-input.tsx`（新建）— 7 type（text/email/password/number/search/tel/url）+ 3 size（24/28/32px）+ prefix/suffix ReactNode slot + error 态（border-danger + aria-invalid）+ disabled + focus 状态切换（onFocus/onBlur → wrapper border-color + box-shadow accent-soft 高亮环）；border 拆分非 shorthand 避免 React warning；零硬编码颜色；'use client' + Edge 兼容
+  - `packages/admin-ui/src/components/admin-input/index.ts`（新建桶导出）
+  - `packages/admin-ui/src/index.ts` — 新增 export
+  - `tests/unit/components/admin-ui/admin-input/admin-input.test.tsx`（新建，27 用例）
+  - `docs/task-queue.md` — M-SN-5.5 PRE 欠账段新增 DEBT-ADMIN-UI-FOCUS-PSEUDO（与 BUTTON-HOVER 同因）
+- **范围合规**：仅 packages/admin-ui + tests/unit；零业务视图修改
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck + lint + 257 files **3310 tests 全部 PASS**（本卡新增 27 用例）；零 React warning
