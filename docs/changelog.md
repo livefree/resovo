@@ -5740,3 +5740,31 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - **R-2（必修 functional bug）**：search input keydown 冒泡到 panel 触发双重 handleKeyDown → wrapper handleSearchKeyDown 调用主处理器后 stopPropagation；listbox panel 移除 onKeyDown（focus 永远在 trigger 或 search input，panel 不需要）
   - **R-1（强烈建议 a11y）**：useId() 生成实例 id + 每个 option id={`as-${instanceId}-${value}`} + trigger aria-activedescendant 指向 active option id + aria-controls 指向 listbox id（ARIA 1.2 combobox 推荐模式）
   - 3 advisory 测试补充：Space 打开 / Tab 关闭 / disabled option Enter 不 commit
+
+---
+
+## [CHG-SN-5-PRE-02] DEBT-LINE-KEY-01 决策卡 — 方案 A 采纳（ADR-114-NEGATED 落盘）
+
+- **完成时间**：2026-05-06
+- **记录时间**：2026-05-06
+- **执行模型**：claude-opus-4-7（决策性 schema 设计强制 Opus 主循环）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 评级 A- / 结论 PASS / 独立第二意见与主循环一致采纳方案 A
+- **来源序列**：SEQ-20260506-02（M-SN-5.5 启动准入门 B 段唯一卡）
+- **决议结果**：**方案 A 采纳**（维持复合键 `(source_site_key, source_name)`）；方案 B（line_key 一级建模 + 跨站合并）否定，路径不启动
+- **修改文件（零代码变更，纯 governance）**：
+  - `docs/decisions.md` — 新增 ADR-114-NEGATED 完整 ADR（议题 / 理由架构+业务+工程三轴 / 立即生效后果 / 4 项重新评估触发条件 / plan 同步清单）
+  - `docs/server_next_plan_20260427.md` — §3 决策表（DEBT-LINE-KEY-01 行更新"PRE-02 已决议方案 A"）+ §6 M-SN-5.5 B 段（决策结果落盘）+ §9 ADR 索引（ADR-114 状态 候选 → NEGATED）+ §10.9 R-M-SN-5-01（风险消除）
+  - `docs/task-queue.md` — DEBT-LINE-KEY-01（M-SN-4 欠账段 line 2394）状态推进 + SEQ-20260502-01 返回触发观察清单第 3 项标"已决议"（保留历史审计轨迹）+ SEQ-20260506-02 子卡 7 状态完成
+  - `docs/changelog.md` — 本条目
+- **范围合规**：明列"不在范围"全部遵守 — 零 migration / 零端点 schema 修订 / 零 ADR-114 实施细节 / 零代码变更
+- **裁决理由摘要**（详见 ADR-114-NEGATED）：
+  - **业务轴**：SEQ-20260502-01 返回触发观察清单第 1/2 项（M-SN-5 合并/拆分页面规划 + 前台播放页线路切换需求）均未触发，是 line_key 一级建模的实际业务前置；用户已实际使用复合键 ~4 天无明确合并需求反馈
+  - **架构轴**：方案 B 三重 BLOCKER 触发（Non-Goals 第 3 条 + §5.2 BLOCKER 第 3/4 条）+ D-14 共享组件契约稳定性（LineHealthDrawerProps.title site-scoped 假设需 rework）+ 跨站合并 UI 设计稿不齐违反"接口设计先于实现"
+  - **工程轴**：方案 B 实际工时 1.5-2w（被 1w 估算低估）+ 不计入 milestone 工时但实际推迟 M-SN-5 启动 1.5-2w + 总周期 20w → 21.5w+ 突破软上限 21w + 双写期回滚成本不对称
+- **arch-reviewer 红黄线处理**：
+  - 0 红线
+  - **Y-1（同卡修）**：ADR-114-NEGATED 含 4 项显式重新评估触发条件（用户反馈 / 跨站重叠率 30% / M-SN-5 视图限制 / M-SN-6 自动重评）
+  - **Y-2（同卡修）**：plan §3 决策表（line 104）DEBT-LINE-KEY-01 行同步更新
+  - **Y-3（同卡修）**：SEQ-20260502-01 watchlist 第 3 项标"已决议"而非物理删除（保留审计轨迹）
+- **新增依赖**：无 / **数据库变更**：无 / **测试**：N/A（纯文档决策卡）
+- **后续触发（不在本卡）**：方案 B 路径不启动；如未来重新评估触发条件命中，起 PRE-02-V2 决策卡 → ADR-114 起草卡 → migration / 端点修订独立 SEQ

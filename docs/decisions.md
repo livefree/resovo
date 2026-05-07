@@ -4405,3 +4405,83 @@ CHG-UX-06 收口阶段用户反馈 4 项痛点 + 一审遗留闭环项：
 - **关联方案**：`docs/designs/backend_design_v2.1/density-spacing-cover-alignment-plan.md`（过程文档；ADR-113 是结论）
 - **关联归档**：`docs/archive/2026Q2/video-table-cell-compression-debug-20260504.md`（cover bug 真因调试链路全记录 + §10 教训）
 - **关联规范**：`docs/rules/ui-rules.md`（CSS 变量使用约束）/ `CLAUDE.md` §"绝对禁止" 硬编码颜色 / 越层调用 / 任何裸 fontSize/padding 条款
+
+---
+
+## ADR-114-NEGATED：line_key 一级建模 + 跨站合并 — 暂不实施（CHG-SN-5-PRE-02）
+
+**决策日期**：2026-05-06
+**决策卡**：CHG-SN-5-PRE-02（SEQ-20260506-02 / M-SN-5.5 启动准入门 B 段）
+**决策模型**：claude-opus-4-7（主循环）+ arch-reviewer (claude-opus-4-7) 独立第二意见 PASS
+**前置历史**：SEQ-20260502-01（用户 2026-05-02 拍板"方案 B"= 维持复合键 + 推迟 line_key 一级建模到 M-SN-5；DEBT-LINE-KEY-01）
+
+### 议题
+
+video_sources 线路聚合键设计：
+- **方案 A（采纳）**：维持现状复合键 `(source_site_key, source_name)` — 跨站不合并；同名线路在不同源站独立展示
+- **方案 B（否定）**：line_key 一级建模 + 跨站合并 UI（`Z01.X02 = Z02.X02` 等价合并为单一逻辑线路）
+
+### 决策
+
+**方案 A 采纳，方案 B 否定（暂不实施）**。
+
+### 理由（架构 + 业务 + 工程三轴）
+
+#### 业务轴
+
+1. **业务触发条件未满足**：SEQ-20260502-01 "返回触发观察清单" 三项中（M-SN-5 合并/拆分页面规划落地 / 前台播放页线路切换需求定型 / DEBT-LINE-KEY-01 决策），前两项都是 line_key 一级建模的**实际业务前置条件**——它们提供"是否真的需要跨站合并"的证据。在它们触发之前作出方案 B 选择属于 premature optimization。
+2. **用户实际使用反馈**：用户已在复合键模式下使用 ~4 天（2026-05-02 拍板至 2026-05-06）无明确"必须合并"反馈；密度问题可通过 line-dimension 聚合（GROUP BY source_name within each site）解决，无需 line_key 一级建模。
+
+#### 架构轴
+
+1. **三重 BLOCKER 触发**：方案 B 同时命中 plan §2.2 Non-Goals 第 3 条（DB schema 变更）+ §5.2 BLOCKER 第 3 条（修改现有 admin sources/merge 端点契约）+ §5.2 BLOCKER 第 4 条（DB schema 变更）— 是项目级三重风险类，所有其他单一架构决策无可比性。
+2. **D-14 共享组件契约稳定**：CHG-SN-4-04 已下沉的 5 件组件（BarSignal / StaffNoteBar / LineHealthDrawer / RejectModal / DecisionCard，116 测试稳定）契约假设 site-scoped 线路身份。例如 `LineHealthDrawerProps.title` 设计为 `${siteName} . ${lineLabel}` — 方案 B 必须 rework 此契约，引发已稳定 admin-ui 通用层的连锁修订。
+3. **现有端点契约稳定**：`apps/api` `/admin/sources` 等端点契约（CHG-SN-4-05 / -05a 后稳定）方案 A 零修订；方案 B 需重新评审整个 sources/merge 端点系列。
+4. **跨站合并 UI 设计稿不齐**：reference §5 现有规范都是 source-level 视图，**没有跨站合并 UI 设计稿**。方案 B 实施会出现"schema 先于 UI"违反"接口设计先于实现"项目原则。
+
+#### 工程轴
+
+1. **工时不对称**：方案 A 零工时（保持现状）；方案 B ~1.5-2w（migration 双写期 + 数据回填 + 端点 schema 修订 + types 更新 + apps/server-next 消费方更新 + D-14 契约 rework + Opus 评审 ~2 轮）— 主循环初估 1w 偏低。
+2. **不计入 milestone 工时但锁路径**：方案 B 工时不计入 M-SN-5.5（属 M-SN-5 主体或独立后续卡），实际推迟 M-SN-5 主体启动 ~1.5-2w，让总周期 20w → 21.5w+ 突破软上限 21w。
+3. **可逆性不对称**：方案 A 不锁定路径，未来可独立 SEQ 重启（M-SN-5 后期或 M-SN-6）；方案 B 落地后双写期 + 旧字段保留 ≥1 milestone 周期是硬性回滚成本。
+
+### 后果
+
+#### 立即生效
+
+1. M-SN-5.5 B 段决策落盘 = 方案 A；M-SN-5 视图卡按现有复合键 schema 实施
+2. SEQ-20260502-01 "返回触发观察清单" 第 3 项（DEBT-LINE-KEY-01 决策）状态推进为"已决议（PRE-02, 2026-05-06）"，保留历史审计轨迹（不删除条目，标记决议状态）
+3. plan §10.9 R-M-SN-5-01 风险条目状态：**风险消除**（方案 A 路径，BLOCKER §5.2 第 3/4 条 + Non-Goals 第 3 条均不触发）
+4. plan §3 决策表（v2.6 line 104）"DEBT-LINE-KEY-01 决策路径"行状态更新："PRE-02 已决议方案 A（2026-05-06）"
+5. plan §9 ADR 索引："ADR-114 候选" → "ADR-114-NEGATED（PRE-02 已否定 2026-05-06）"
+6. ADR-114 实施路径不启动（不立 ADR-114 实施 SEQ；不立 migration 卡；不立端点 schema 修订卡；Non-Goals 第 3 条豁免 sign-off 不需要）
+
+#### 重新评估触发条件（arch-reviewer Y-1：避免决策永久性遗忘）
+
+以下任一条件触发，必须重新评估方案 B 必要性（可重新立 PRE-02-V2 决策卡或进入 ADR-114 起草卡路径）：
+
+1. **用户明确反馈**：用户在 admin 审核台使用过程中明确反馈"跨站同名线路重复展示"是阻塞问题，提出明确的合并业务需求
+2. **跨站重叠率阈值**：实测数据显示跨站同名线路（`source_name` 相同，`source_site_key` 不同）的重叠率超过 30%（即超过 30% 的视频含 2+ 源站的同名线路）— 触发自动重新评估
+3. **M-SN-5 视图实施暴露结构限制**：M-SN-5 主体卡（`/admin/sources` 线路矩阵 + 视频库视图等）实施过程中暴露复合键聚合无法满足结构性需求
+4. **M-SN-6 planning 自动重评**：M-SN-6 启动前 milestone planning 自动 re-evaluate 此 ADR 状态（约 8-12 周后），届时可基于积累数据/反馈做信息更充分的决策
+
+### 与 plan 的同步
+
+- §3 决策表（line 104）：DEBT-LINE-KEY-01 决策路径行更新"PRE-02 已决议方案 A"
+- §6 M-SN-5.5 B 段（line 558-570）：决策结果落盘 = 方案 A；不触发 ADR-114 实施 / Non-Goals 豁免 / migration / 端点修订
+- §9 ADR 索引（line 785）：ADR-114 状态 候选 → 否定（NEGATED, PRE-02, 2026-05-06）
+- §10.9 R-M-SN-5-01（line 845-861）：风险状态 "未触发（已决议方案 A，BLOCKER §5.2 第 3/4 条 + Non-Goals 第 3 条均不触发）"
+
+### 不在本 ADR 范围（明列防扩张）
+
+- ❌ migration 文件（方案 A 零 migration；方案 B 否定不启动）
+- ❌ 端点 schema 修订（方案 A 零端点变更；方案 B 否定不启动）
+- ❌ ADR-114 实施内容（方案 B 否定，ADR-114 候选位置标 NEGATED 占位，无实施细节）
+- ❌ apps/api / apps/server-next / packages/types 任何代码改动（PRE-02 是纯文档/governance 决策卡）
+
+### 关联
+
+- **关联 ADR**：ADR-110（ApiResponse 信封 / ErrorCode 真源 — 端点契约稳定性背景）/ ADR-103a（packages/admin-ui Shell 公开 API 契约协议 — D-14 下沉组件契约稳定性背景）
+- **关联 plan**：§2.2 Non-Goals 第 3 条 / §5.2 BLOCKER 第 3/4 条 / §6 M-SN-5.5 B 段 / §9 ADR 索引 / §10.9 R-M-SN-5-01 / §4.5 ADR-端点先后协议
+- **关联欠账**：DEBT-LINE-KEY-01（task-queue M-SN-4 欠账段，line 2394）状态推进为"已决议方案 A"
+- **关联 SEQ**：SEQ-20260502-01（用户 2026-05-02 拍板临时方案 B = 复合键 + 推迟 line_key 一级建模；本 ADR 将临时决策转为正式裁决）

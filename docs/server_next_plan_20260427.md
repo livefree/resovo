@@ -101,7 +101,7 @@
 | **M-SN-2 范围扩列 Shell**（v2.3 新增）| 方案 B：A2 + Shell 扩列；M-SN-2 工时 2.5w → 3w（+20%，未触发 BLOCKER 11）；总周期 17.5w → 18.0w；新增 ADR-103a（Shell 公开 API 契约） | CHG-SN-1-12 Opus 评审 | §6 M-SN-2 + §8 复用矩阵 + ADR-103a |
 | **server-next 图标库选型**（v2.4 新增）| **lucide-react `^1.12.0`**；6 维评估 30/30；与设计稿 shell.jsx 12 NAV icon 同名命中；安装位置仅 apps/server-next（packages/admin-ui 零图标库依赖约束 ADR-103a §4.4-4 不变）；仅允许 named import；Next.js optimizePackageImports + ESLint + ts-morph 三层兜底 | CHG-SN-2-01.5 Opus 评审 + 用户 sign-off | §4.7 + ADR-103b |
 | **M-SN-5 启动前置工作纳入**（v2.6 新增）| 方案 B'：M-SN-5 主体 4w 不变 + 新增 **M-SN-5.5 独立 milestone 2.0w（软上限 3.0w）** 承载三类工作：(a) cutover-blocker 4🔴+2🟠 共 6 子卡（M-SN-4 audit §6） / (b) DEBT-LINE-KEY-01 决策（仅立决策卡，方案 B 选定后须先 ADR + Non-Goals 豁免）/ (c) admin-ui 通用原语/Popover 前置 6 子卡（只下沉原语不接业务视图）；🟡 DEBT-SN-4-09c-A 不计入本 milestone（cutover 前可选）；总周期 18.0w → 20.0w（软上限 21.0w）| CHG-PLAN-02 用户 sign-off + 3 轮 arch-reviewer Opus 评审 | §6 M-SN-5 + §6 M-SN-5.5（v2.6 新增）|
-| **DEBT-LINE-KEY-01 决策路径**（v2.6 新增）| 方案 A（维持复合键 `(source_site_key, source_name)`）vs 方案 B（line_key 一级建模 + 跨站合并，触发 schema 变更）；M-SN-5.5 入口由 **CHG-SN-5-PRE-02 仅立决策卡裁定**；选方案 B 同时触发 Non-Goals 第 3 条 + §5.2 BLOCKER 第 3/4 条，**必须先独立 ADR-114（line_key schema + 跨站合并 UI 契约 + migration 时序）+ Non-Goals 第 3 条豁免人工 sign-off + §4.5 ADR-端点先后协议 PASS，然后才能起 migration 卡 + 端点修订卡；不允许 PRE-02 决策卡内含 migration 或端点 schema 修订** | SEQ-20260502-01 推迟决策 + 3 轮 arch-reviewer Opus 评审 | §6 M-SN-5.5 + §10 R-M-SN-5-01 + §9 ADR-114 候选 |
+| **DEBT-LINE-KEY-01 决策路径**（v2.6 新增 / **PRE-02 已决议方案 A 2026-05-06**）| 方案 A（维持复合键 `(source_site_key, source_name)`）vs 方案 B（line_key 一级建模 + 跨站合并）；CHG-SN-5-PRE-02 决策卡 2026-05-06 裁决采纳**方案 A**（ADR-114-NEGATED 落盘）— 业务触发条件未满足 + D-14 契约稳定 + 跨站合并 UI 设计稿不齐 + 三重 BLOCKER 触发不对称风险；方案 B 路径不启动（ADR-114 实施 / Non-Goals 豁免 / migration / 端点修订卡均不立卡）；重新评估触发条件见 ADR-114-NEGATED 后果段 | SEQ-20260502-01 推迟决策 + CHG-SN-5-PRE-02 决策卡 + arch-reviewer Opus 独立第二意见 PASS | `docs/decisions.md` ADR-114-NEGATED + §6 M-SN-5.5 B 段决策落盘 + §10.9 风险消除 + §9 ADR 索引状态 |
 | **Popover 原语提前 + ADR 编号漂移修正**（v2.6 新增）| Popover 从 M-SN-6 范围移至 M-SN-5.5（CHG-SN-5-PRE-03-F），起草时 API 契约复杂度（Portal / focus-trap / dismiss 协议）若超 Drawer **必须先升独立 sub-ADR + Opus PASS 才能起实施卡**；同时修正 v2.5 §3 决策表 / §6 M-SN-5 ADR-端点先后协议段 / 完成标准段 / §修订日志 v0→v1 段中 "ADR-104/051" 漂移 → 统一为 "ADR-104/105"（ADR-051 实为 IMG-01 图片治理 schema） | implementation-gap §3.2 + 用户偏差核对 + 3 轮 arch-reviewer Opus 评审 | §6 M-SN-5（编号修正）+ §6 M-SN-5.5（Popover 落地）+ §6 M-SN-6（移除条目）|
 
 ---
@@ -555,19 +555,20 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
 - 工时估算：1.0–1.5w（人工演练 ~0.3w + 4 项 bug fix ~0.3w + 2 张 baseline ~0.4–0.7w）
 - 真源：`docs/M-SN-4-milestone-audit-2026-05-05.md` §6
 
-**B. DEBT-LINE-KEY-01 决策（CHG-SN-5-PRE-02，单卡）**
+**B. DEBT-LINE-KEY-01 决策（CHG-SN-5-PRE-02，单卡）— ✅ 已决议（2026-05-06，方案 A）**
 
 - 议题：line_key 是否一级建模 + 跨站合并支持
-- 方案 A（维持现状）：复合键 `(source_site_key, source_name)`，跨站不合并；CHG-SN-5-XX 视图实施按现有 schema
-- 方案 B（一级建模）：触发 Non-Goals 第 3 条 + §5.2 BLOCKER 第 3/4 条
-- **本次仅立决策卡，不含 migration / 不含端点 schema 修订 / 不含 ADR-114 实施**
-- 若选方案 B：**必须先**：
-  1. 独立 ADR-114（line_key schema + 跨站合并 UI 契约 + migration 时序）取得 Opus arch-reviewer PASS
-  2. Non-Goals 第 3 条豁免人工 sign-off
-  3. §4.5 ADR-端点先后协议 PASS（现有 admin sources / merge 端点契约变更走 ADR-114 同评审）
-  4. 然后才能起 migration 卡 + 端点修订卡
-- 文件范围：决策本身落 `docs/decisions.md`（方案 A → 否定 ADR / 方案 B → ADR-114 候选占位）+ `docs/server_next_plan_20260427.md` 修订；**不含 migration 文件**（方案 B 选定后由后续独立卡承担）
-- 工时估算：~0.3w
+- 方案 A（**采纳**）：复合键 `(source_site_key, source_name)`，跨站不合并；CHG-SN-5-XX 视图实施按现有 schema
+- 方案 B（**否定**）：line_key 一级建模 + 跨站合并；本次不实施
+- **决议结果**：方案 A 落盘 = ADR-114-NEGATED（`docs/decisions.md`，PRE-02 决策卡 2026-05-06，arch-reviewer Opus A- / PASS 独立第二意见一致）
+- **重新评估触发条件**（参 ADR-114-NEGATED 后果段）：
+  1. 用户明确反馈跨站同名线路重复展示是阻塞问题
+  2. 跨站重叠率超过 30%（实测数据驱动）
+  3. M-SN-5 视图实施暴露复合键聚合结构性限制
+  4. M-SN-6 planning 自动重评（约 8-12 周后基于积累数据/反馈）
+- **方案 B 路径不启动**：ADR-114 实施 SEQ / Non-Goals 豁免 / migration 卡 / 端点修订卡均不立卡
+- 文件范围（实际）：`docs/decisions.md`（ADR-114-NEGATED）+ 本 plan 修订（§3/§6/§9/§10.9 同步）+ task-queue.md DEBT-LINE-KEY-01 状态推进
+- 工时（实际）：~0.3w（决策分析 + 文档落盘 + Opus 第二意见评审）
 
 **C. admin-ui 通用原语/Popover 前置（6 子卡，每件独立 Opus 评审）**
 
@@ -782,7 +783,7 @@ cutover 验收按上表 21 路由占位逐项 diff（路由文件物理存在）
 | ADR-103a | Shell 公开 API 契约（CHG-SN-1-12 v2.3 新增） | `<AdminShell>` 等 10 组件 Props 类型骨架 + AdminNavItem 5 字段扩展（icon/count/badge/shortcut/children）+ AdminNavCountProvider 接口 + 4 级 z-index 规范（业务 Drawer < Shell 抽屉 < CmdK < Toast）+ Provider 不下沉 + Edge Runtime 兼容 + 零硬编码颜色 | M-SN-2 第一张组件卡前（CHG-SN-2-01；Opus PASS 前置） |
 | ADR-104 | home_modules admin API 协议 | 推荐 3 落地所需 6 端点 + 鉴权 + 缓存失效 | M-SN-5 内 |
 | ADR-105 | merge candidate / split / unmerge API 协议 | 推荐 5 落地所需 3-4 端点 + 审计日志 schema | M-SN-5 内 |
-| ADR-114 候选 | line_key 一级建模 schema + 跨站合并 UI 契约 + migration 时序 | DEBT-LINE-KEY-01 PRE-02 决策选方案 B 时触发 | M-SN-5.5 PRE-02 决策选方案 B 时（不晚于 M-SN-5 主体启动前）|
+| ADR-114-NEGATED | line_key 一级建模 schema + 跨站合并 UI 契约 — **2026-05-06 PRE-02 已否定方案 B（采纳方案 A 维持复合键）** | （已决议否定，不再触发）；重新评估触发条件 4 项见 `docs/decisions.md` ADR-114-NEGATED 后果段 | 不立卡（已否定）；如重启评估则起 PRE-02-V2 决策卡 |
 | ADR-候选 | 大数据原语依赖选型（react-virtual / reactflow / recharts 二选一三组）| Q-MUST-5 候选清单决议 | M-SN-6 首次落地前 |
 
 ---
@@ -842,23 +843,20 @@ cutover 验收按上表 21 路由占位逐项 diff（路由文件物理存在）
 - 每个 milestone 末尾输出"上下文移交文档"（在 docs/server_next_handoff_M-SN-N.md）：当前 milestone 决策点 / 未决议题 / 关键任务卡指针 / 复盘结论
 - BLOCKER 暂停 >7 天自动触发 milestone 中期审计
 
-### 10.9 R-M-SN-5-01 · DEBT-LINE-KEY-01 方案 B 触发双 schema 变更 + 端点契约变更（v2.6 新增）
+### 10.9 R-M-SN-5-01 · DEBT-LINE-KEY-01 方案 B 触发双 schema 变更 + 端点契约变更 — **风险消除（PRE-02 已决议方案 A，2026-05-06）**
 
-- **风险**：M-SN-5.5 CHG-SN-5-PRE-02 若选方案 B（line_key 一级建模），同时命中：
+- **状态**：✅ **已消除**（PRE-02 决策卡 2026-05-06 采纳方案 A，方案 B 路径不触发；BLOCKER §5.2 第 3/4 条 + Non-Goals 第 3 条均不命中）
+- **历史风险描述**（保留供未来重新评估参考）：M-SN-5.5 CHG-SN-5-PRE-02 若选方案 B（line_key 一级建模），同时命中：
   - plan §2.2 Non-Goals 第 3 条（DB schema 变更含新 migration）
   - §5.2 BLOCKER 第 3 条（修改现有 admin sources/merge 端点 path / schema / 鉴权 / 返回结构）
   - §5.2 BLOCKER 第 4 条（DB schema 变更）
-- **触发条件**：用户在 CHG-SN-5-PRE-02 决策中选方案 B
-- **缓解措施**：
-  1. **PRE-02 仅立决策卡**（DEBT-LINE-KEY-01 选 A 还是 B）；若选方案 B 必须**先**完成以下三步**才能**起 migration 卡 + 端点修订卡：
-     - (i) 独立 ADR-114（line_key schema + 跨站合并 UI 契约 + migration 时序）走 §4.5 ADR-端点先后协议先 Opus arch-reviewer PASS
-     - (ii) Non-Goals 第 3 条豁免人工 sign-off（plan §0 重大修订协议）
-     - (iii) 现有 admin sources / merge 端点契约变更走同一 ADR-114 评审（不重复立 ADR）
-     - **不允许 PRE-02 决策卡内含 migration 或端点 schema 修订**
-  2. Migration 回滚预案：双写期 + 旧字段保留 ≥1 个 milestone 周期；可独立 revert
-  3. 工时风险：方案 B 比方案 A 多 ~1w（migration + 数据回填 + 端点 schema 修订），不计入 M-SN-5.5 工时（属 M-SN-5 主体或独立后续卡范畴）；如发现回滚成本高 / SEQ-20260502-01 ⏸ 状态需联动恢复
-- **回退路径**：方案 B 落地后发现回归 → revert migration + 切回方案 A 复合键（apps/api `getLinesAggregation` 回退）；apps/server-next 视图层 schema 通过 `packages/types` 单源切换
-- **关联**：SEQ-20260502-01（FIX-B 治理升级暂停）/ DEBT-LINE-KEY-01 / Non-Goals 第 3 条 / BLOCKER §5.2 第 3/4 条 / §4.5 ADR-端点先后协议 / ADR-114 候选
+- **PRE-02 决议依据**（参 ADR-114-NEGATED 完整理由）：业务触发条件未满足（SEQ-20260502-01 返回触发观察清单第 1/2 项均未触发）+ D-14 共享组件契约稳定（LineHealthDrawerProps 等 site-scoped 假设）+ 跨站合并 UI 设计稿不齐 + 三重 BLOCKER 触发不对称风险 + 工时不对称（方案 B ~1.5-2w 不计入 milestone 但实际推迟 M-SN-5 启动）
+- **重新评估触发条件**（4 项，详见 ADR-114-NEGATED 后果段）：
+  1. 用户明确反馈跨站同名线路合并业务需求
+  2. 跨站重叠率实测超过 30%
+  3. M-SN-5 视图实施暴露复合键聚合结构性限制
+  4. M-SN-6 planning 自动 re-evaluate
+- **关联**：ADR-114-NEGATED（决策真源）/ SEQ-20260502-01（用户 2026-05-02 拍板临时方案 B = 复合键）/ DEBT-LINE-KEY-01（task-queue M-SN-4 欠账段，状态推进为"已决议方案 A"）/ §3 决策表 / §6 M-SN-5.5 B 段 / §9 ADR 索引
 
 ---
 
