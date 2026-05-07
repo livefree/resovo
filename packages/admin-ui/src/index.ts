@@ -34,5 +34,8 @@ export * from './components/cell'
 // Layout 多栏布局原语（CHG-SN-4-01）
 export * from './components/layout'
 
+// PageHeader 页面顶栏通用原语（CHG-SN-5-PRE-03-A）
+export * from './components/page-header'
+
 // Feedback 共享组件（CHG-SN-4-04 D-14：StaffNoteBar / LineHealthDrawer / RejectModal）
 export * from './components/feedback'

@@ -5630,3 +5630,28 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 生产部署须设 `TRUSTED_PROXY_IPS=<nginx 出口 IP CSV>`，否则所有客户端共享同一 ipHash 会**误锁正常用户**（可用性降级，非安全漏洞，部署演练卡 PRE-01-A 须验证）
   - 涉及 IP 的路由（feedback.ts / internal/client-log.ts / internal/image-broken.ts）已统一使用 `request.ip`，自动继承 trustProxy 白名单语义
   - 黄线 2 条留给 PRE-01-A 演练卡：(1) start() 加 `fastify.log.info({ trustProxy }, ...)` 让运维确认；(2) 端到端 rate-limit 触发 + XFF 伪造闭环测试
+
+---
+
+## [CHG-SN-5-PRE-03-A] PageHeader 通用原语下沉到 packages/admin-ui
+
+- **完成时间**：2026-05-06
+- **记录时间**：2026-05-06
+- **执行模型**：claude-opus-4-7（主循环；建议模型 sonnet，单 session 全 SEQ 推进）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 评级 B+ / 结论 CONDITIONAL → PASS（Y-1/Y-2/Y-3 三黄线同卡修复后达 PASS；Y-4 Storybook infra 缺失登记到欠账段）
+- **来源序列**：SEQ-20260506-02（M-SN-5.5 启动准入门 C 段第 1/6 子卡）
+- **修改文件**：
+  - `packages/admin-ui/src/components/page-header/page-header.tsx`（新建）— 三 slot：title / subtitle / actions；headingLevel 1-6（默认 1）；as 'div'/'header'/'section'（默认 'header'，对齐 reference §5）；role 可选 prop（默认不设，由 as 元素隐式语义承载）；零硬编码颜色（var(--fg-default) / var(--fg-muted) / var(--font-size-lg|xs)）；data-page-header* 属性钩子；'use client' + Edge Runtime 兼容
+  - `packages/admin-ui/src/components/page-header/index.ts`（新建）— 桶导出
+  - `packages/admin-ui/src/index.ts` — 新增 `export * from './components/page-header'`
+  - `tests/unit/components/admin-ui/page-header/page-header.test.tsx`（新建）— 19 用例覆盖：基础渲染（4）/ 三 slot（5）/ a11y（7：默认 header / as=div/section / 无默认 role / 显式 role / aria-label / data-testid）/ 零硬编码颜色 token-only（3）
+  - `docs/task-queue.md` — M-SN-5.5 PRE 欠账段新增 DEBT-ADMIN-UI-STORYBOOK-MISSING（PRE-03-A..F 共用）
+- **范围合规**：仅 packages/admin-ui + tests/unit；零业务视图修改（reference §5 既有 inline page__head 实例 VideoListClient / DashboardClient / AnalyticsView / SettingsContainer 等留给后续 CHG-SN-5-VIEW-* 视图卡切换消费）
+- **新增依赖**：无
+- **数据库变更**：无
+- **测试覆盖**：typecheck 全绿（8 workspace）/ lint 全绿 / unit 255 files 3253 tests **全部 PASS**（本卡新增 19 用例）
+- **arch-reviewer 红黄线处理**：
+  - Y-1 / Y-3：移除 `role="banner"` 硬编码默认（语义过强 + 与 admin Shell 冲突）→ 改为可选 prop，默认不设；测试同步
+  - Y-2：增加 `as?: 'div' | 'header' | 'section'`（默认 'header'，对齐既有消费方 VideoListClient line 621）→ 容器自带正确隐式语义
+  - Y-4：Storybook infra 缺失 → 登记 DEBT-ADMIN-UI-STORYBOOK-MISSING（task-queue 欠账段），独立 admin-ui infra 卡承担，不阻塞 PRE-03 系列
+- **后续触发**：PRE-03-B..F 5 件原语下沉同模式；后续视图卡（M-SN-5 主体）按需切换业务页面到 PageHeader 消费
