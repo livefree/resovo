@@ -5718,3 +5718,25 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **范围合规**：仅 packages/admin-ui + tests/unit；零业务视图修改
 - **新增依赖**：无 / **数据库变更**：无
 - **测试覆盖**：typecheck + lint + 全量 unit **3339 tests 全部 PASS**（本卡新增 29 用例：基础渲染 4 / surface 3 / padding 4 / header slot 5 / footer 1 / status 4 / a11y 2 / 扩展槽位 6）
+
+---
+
+## [CHG-SN-5-PRE-03-D] AdminSelect 通用原语下沉到 packages/admin-ui
+
+- **完成时间**：2026-05-06
+- **记录时间**：2026-05-06
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — 评级 B+ / 结论 CONDITIONAL → PASS（R-2 search keyboard 双处理 functional bug + R-1 aria-activedescendant 全部同卡修复 + 3 advisory 测试补充）
+- **来源序列**：SEQ-20260506-02（M-SN-5.5 启动准入门 C 段第 4/6 子卡，C 段最复杂的一件）
+- **修改文件**：
+  - `packages/admin-ui/src/components/admin-select/admin-select.tsx`（新建，~390 行）— discriminated union props（multiple? false → string|null / multiple: true → readonly string[]）；options + size/disabled/error + searchable（client-filter 默认 + onSearch 异步模式互斥）+ loading 占位 + 多选 chip + 完整键盘导航（Enter/Space/Arrow/Escape/Tab）+ portal `position:fixed` + 滚动/resize 重定位 + 点击外部关闭 + ARIA 1.2 combobox/listbox 完整模式（role + aria-haspopup + aria-expanded + aria-multiselectable + aria-activedescendant + aria-controls，useId() 生成实例唯一 id 防 DOM 冲突）；零硬编码颜色；'use client' + Edge 兼容（typeof document 守卫 portal）
+  - `packages/admin-ui/src/components/admin-select/index.ts`（新建桶导出）
+  - `packages/admin-ui/src/index.ts` — 新增 export
+  - `tests/unit/components/admin-ui/admin-select/admin-select.test.tsx`（新建，31 用例）
+- **范围合规**：仅 packages/admin-ui + tests/unit；零业务视图修改
+- **新增依赖**：无 / **数据库变更**：无
+- **测试覆盖**：typecheck + lint + 259 files 3370 tests **全部 PASS**（本卡新增 31 用例）；零 React warning（chip × 用 span role=button 避免嵌套 button）
+- **arch-reviewer 红黄线处理**：
+  - **R-2（必修 functional bug）**：search input keydown 冒泡到 panel 触发双重 handleKeyDown → wrapper handleSearchKeyDown 调用主处理器后 stopPropagation；listbox panel 移除 onKeyDown（focus 永远在 trigger 或 search input，panel 不需要）
+  - **R-1（强烈建议 a11y）**：useId() 生成实例 id + 每个 option id={`as-${instanceId}-${value}`} + trigger aria-activedescendant 指向 active option id + aria-controls 指向 listbox id（ARIA 1.2 combobox 推荐模式）
+  - 3 advisory 测试补充：Space 打开 / Tab 关闭 / disabled option Enter 不 commit
