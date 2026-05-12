@@ -297,6 +297,10 @@
   --state-info-bg: color-mix(in oklch, oklch(66.0% 0.145 250) 14%, transparent);
   --state-info-fg: oklch(66.0% 0.145 250);
   --state-info-border: oklch(66.0% 0.145 250);
+  --state-fg-on-soft-success: oklch(44.0% 0.135 155);
+  --state-fg-on-soft-warning: oklch(52.0% 0.135 85);
+  --state-fg-on-soft-error: oklch(45.0% 0.165 25);
+  --state-fg-on-soft-info: oklch(48.0% 0.125 250);
   --dual-signal-probe: #0284c7;
   --dual-signal-probe-soft: rgba(2, 132, 199, 0.14);
   --dual-signal-render: #9333ea;
@@ -408,6 +412,10 @@
   --state-info-bg: color-mix(in oklch, oklch(66.0% 0.145 250) 14%, transparent);
   --state-info-fg: oklch(66.0% 0.145 250);
   --state-info-border: oklch(66.0% 0.145 250);
+  --state-fg-on-soft-success: oklch(88.0% 0.090 155);
+  --state-fg-on-soft-warning: oklch(90.0% 0.095 85);
+  --state-fg-on-soft-error: oklch(88.0% 0.080 25);
+  --state-fg-on-soft-info: oklch(90.0% 0.060 250);
   --dual-signal-probe: #38bdf8;
   --dual-signal-probe-soft: rgba(56, 189, 248, 0.14);
   --dual-signal-render: #a855f7;

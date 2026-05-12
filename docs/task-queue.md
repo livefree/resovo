@@ -1975,11 +1975,11 @@ staging-waiver: staging 环境暂未就绪；优先推进 M-SN-4 审核台开发
 |---------|------|------|---------|
 | Risk-PRE-01-A-1 | CHG-SN-5-PRE-01-A 演练（2026-05-12） | refresh_token cookie SameSite=Strict：演练 same-origin 切换通过；若 cutover 后域名跨子域（如 admin.xxx → app.xxx），Strict 会阻挡 cookie 跨子域携带 | cutover-pre（M-SN-7 启动前）— PRE-01-B 审计材料显式声明 + 候选缓解：调 SameSite=Lax 或保持同域名结构 |
 
-### 新增 admin-ui 视觉债（PRE-01-E-2 baseline 截图发现）
+### admin-ui 视觉债（PRE-01-E-2 baseline 截图发现，followup-4 已闭环）
 
-| DEBT ID | 来源 | 描述 | 截止节点 |
-|---------|------|------|---------|
-| DEBT-ADMIN-UI-BUTTON-CONTRAST-LIGHT | CHG-SN-5-PRE-01-E-2-followup-3（2026-05-12 / Codex stop-time review round 9） | admin-ui RejectModal "确认拒绝" / StaffNoteBar "保存" PRIMARY_BUTTON 在 light theme 下 contrast 不达 WCAG AA：state-error-fg oklch 62% 红 on near-white 软底 ≈ contrast 3-4；state-warning-fg oklch 74% 黄 on near-white 软底 ≈ contrast 2（严重 fail）。dark theme（admin 默认）下 contrast ~5 AA pass，但用户切到 light theme 时不可读。根因：admin-ui 缺 theme-aware button text token；admin-layout/surfaces.ts 现有 admin-* token 是固定 hex 不响应 theme。 | M-SN-6/M-SN-7 cutover 前评估：候选方案 (a) design-tokens 加 admin-button-{danger,warning}-{bg,fg,border} semantic token + light/dark theme override；(b) admin-ui 组件内用 currentColor 配合 inherited theme；(c) 强制 PRIMARY_BUTTON outline-only 不再用 soft fill。需独立 ADR-117（admin-ui theme-aware button contrast token）评审决定 |
+| DEBT ID | 来源 | 状态 |
+|---------|------|------|
+| ~~DEBT-ADMIN-UI-BUTTON-CONTRAST-LIGHT~~ | CHG-SN-5-PRE-01-E-2-followup-3（2026-05-12 / Codex stop-time review round 9） | ✅ **已关闭**（followup-4 / Codex round 10 后修复）：design-tokens semantic/state.ts 加 `fgOnSoft` 槽位（theme-aware）；admin-ui RejectModal / StaffNoteBar PRIMARY_BUTTON 用 `--state-{error,warning}-fg-on-soft` token；light theme 用 oklch 45%/52% 深色 / dark theme 用 oklch 88%/90% 浅色 → 两 theme contrast ≥ 5 AA pass |
 
 ### 后续触发型 follow-up（M-SN-5 启动建议）
 
