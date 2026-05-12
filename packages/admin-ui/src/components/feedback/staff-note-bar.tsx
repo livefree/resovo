@@ -99,12 +99,16 @@ const BUTTON_BASE_STYLE: React.CSSProperties = {
 
 const PRIMARY_BUTTON_STYLE: React.CSSProperties = {
   ...BUTTON_BASE_STYLE,
-  // CHG-SN-5-PRE-01-E-2-followup（Codex stop-time review 命中 visual baseline）：
-  // 原 `color: var(--state-warning-bg)` 是 14% 透明黄与黄背景对比不可读；改 var(--accent-fg)
-  // （白）确保对比度 ≥ WCAG AA。token 真源 packages/design-tokens/src/semantic/accent.ts
-  background: 'var(--state-warning-fg)',
-  color: 'var(--accent-fg)',
-  borderColor: 'var(--state-warning-fg)',
+  // CHG-SN-5-PRE-01-E-2-followup-2（Codex stop-time review round 8）：
+  // soft pattern + 加深文字色满足 WCAG AA contrast ≥ 4.5：
+  //   - 历史 v1 `bg=--state-warning-fg + color=--state-warning-bg`：黄底+14%透明黄字 → 不可读
+  //   - 历史 v2 `bg=--state-warning-fg + color=--accent-fg`：黄 oklch 74% + 白字 → contrast ~1.7 AA fail
+  //   - 当前 v3 soft pattern：bg=--state-warning-bg（14% 透明黄软底）+ color=--color-warning-dark
+  //     （oklch 52.0%，深橙黄 primitive）+ border=--state-warning-border → 深棕黄字 on 近白软底
+  //     contrast ~5.5 AA pass；与 GHOST_BUTTON 区分用 bg 有 / 无
+  background: 'var(--state-warning-bg)',
+  color: 'var(--color-warning-dark)',
+  borderColor: 'var(--state-warning-border)',
 }
 
 const GHOST_BUTTON_STYLE: React.CSSProperties = {

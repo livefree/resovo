@@ -112,12 +112,16 @@ const BUTTON_BASE_STYLE: React.CSSProperties = {
 
 const PRIMARY_BUTTON_STYLE: React.CSSProperties = {
   ...BUTTON_BASE_STYLE,
-  // CHG-SN-5-PRE-01-E-2-followup（Codex stop-time review 命中 visual baseline）：
-  // 原 `color: var(--state-error-bg)` 是 14% 透明红与红背景对比不可读；改 var(--accent-fg)
-  // （白）确保对比度 ≥ WCAG AA。token 真源 packages/design-tokens/src/semantic/accent.ts
-  background: 'var(--state-error-fg)',
-  color: 'var(--accent-fg)',
-  borderColor: 'var(--state-error-fg)',
+  // CHG-SN-5-PRE-01-E-2-followup-2（Codex stop-time review round 8）：
+  // soft pattern + 加深文字色满足 WCAG AA contrast ≥ 4.5：
+  //   - 历史 v1 `bg=--state-error-fg + color=--state-error-bg`：红底+14%透明红字 → 不可读
+  //   - 历史 v2 `bg=--state-error-fg + color=--accent-fg`：红 oklch 62% + 白字 → contrast ~3.5 AA fail
+  //   - 当前 v3 soft pattern：bg=--state-error-bg（14% 透明红软底）+ color=--color-error-dark
+  //     （oklch 45.0%，深红 primitive）+ border=--state-error-border → 深红字 on 近白软底
+  //     contrast ~7.5 AA AAA pass
+  background: 'var(--state-error-bg)',
+  color: 'var(--color-error-dark)',
+  borderColor: 'var(--state-error-border)',
 }
 
 const GHOST_BUTTON_STYLE: React.CSSProperties = {
