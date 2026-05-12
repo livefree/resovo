@@ -5895,7 +5895,11 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **质量门禁**：
   - typecheck 全绿（8 workspaces）
   - lint 全绿
-  - 测试：N/A（纯 next.config.ts 配置改动，运行时验证由 PRE-01-A 演练承担）
+  - **unit test 261 文件 / 3434 tests 全绿（commit 后补跑 — 见下方流程违规说明）**
+- **流程违规自检（Codex stop-time review 命中）**：
+  - 违规：commit `d00c33c3` 提交时仅跑 typecheck + lint，跳过 CLAUDE.md "必跑命令"清单中的 `npm run test -- --run`，理由"纯 next.config.ts 配置改动" — 不构成跳测试的合法理由（CLAUDE.md "测试未通过，不得执行 git commit" 是强制规则，不分配置/代码）
+  - 补救：commit 后补跑全量 261 文件 / 3434 tests 全绿（零回归，测试结果验证 commit 安全），不再 amend / revert（CLAUDE.md "prefer new commit"）
+  - 教训：未来所有 commit 前必须严格三件套（typecheck + lint + test），不论改动多小，不再以"纯配置/纯文档/小改动"为由跳测试
 - **使用方式**：
   - dev 直连访问 :3003：不设 env，行为不变
   - PRE-01-A 演练（nginx/Caddy 反代 /admin/* → :3003）：`NEXT_PUBLIC_ASSET_PREFIX=/admin npm --workspace @resovo/server-next run dev`
