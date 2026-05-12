@@ -4848,7 +4848,14 @@ export default function VisualLayout({ children }: { children: React.ReactNode }
 if (process.env.NODE_ENV === 'production') notFound()
 ```
 
-双层守卫：layout 守卫一次性拦截整个 `admin/dev/visual/*` 子树；单页守卫防御性兜底（若 layout 被绕过）。同时 middleware 现有的 admin 鉴权（refresh_token + 非 user role）对 dev/visual 仍生效（任何无效用户 redirect /login），属第 3 重防御。
+双层守卫：layout 守卫一次性拦截整个 `admin/dev/visual/*` 子树；单页守卫防御性兜底（若 layout 被绕过）。
+
+**middleware 豁免协议（rev3 / followup-5）**：dev 模式下 middleware 对 `/admin/dev/visual/*` 豁免 admin 鉴权，让 Playwright visual baseline 自动化跑无需先登录（rev2 原写的"第 3 重 middleware 防御"实际会阻断 visual update 跑空截图 — 用户实测命中 followup-5 修订）。生产模式下豁免不生效（因为生产模式由 layout/page 双层 notFound 直接 404，middleware 是否拦截已无意义）。
+
+防御矩阵（修订后）：
+- **生产**：layout `notFound()` + page `notFound()`（双层）= 任何 `/admin/dev/visual/*` 请求直接 404
+- **dev**：middleware 鉴权豁免 + layout/page 守卫被 NODE_ENV 关掉 = 自由访问（visual baseline 跑通）
+- **业务路由（非 dev/visual）**：middleware admin 鉴权不变（dev 模式下登录态仍要求，生产模式 admin 鉴权由 middleware 兜底）
 
 **OBS-2 强约束（rev2 补充）**：`admin/dev/visual/` 下的组件 **必须纯 props 驱动、零服务端数据依赖**（不得调用 server actions / API / DB）— 若未来需要带服务端逻辑的视觉验证，须独立 ADR 决议并隔离命名空间，避免模糊"测试基础设施 ≠ 业务视图"边界。
 
