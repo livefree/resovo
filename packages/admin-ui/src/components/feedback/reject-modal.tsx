@@ -112,8 +112,11 @@ const BUTTON_BASE_STYLE: React.CSSProperties = {
 
 const PRIMARY_BUTTON_STYLE: React.CSSProperties = {
   ...BUTTON_BASE_STYLE,
+  // CHG-SN-5-PRE-01-E-2-followup（Codex stop-time review 命中 visual baseline）：
+  // 原 `color: var(--state-error-bg)` 是 14% 透明红与红背景对比不可读；改 var(--accent-fg)
+  // （白）确保对比度 ≥ WCAG AA。token 真源 packages/design-tokens/src/semantic/accent.ts
   background: 'var(--state-error-fg)',
-  color: 'var(--state-error-bg)',
+  color: 'var(--accent-fg)',
   borderColor: 'var(--state-error-fg)',
 }
 
