@@ -66,6 +66,27 @@
 - `task_queue_patch_rewrite_track_20260418.md`
 - `task_queue_patch_m5_card_protocol_20260420.md`
 
+## 归档清单（2026-05-12，DOC-03）
+
+> 触发：M-SN-5 主体启动前 docs 清理（user 决策 Tier 1+2+3+4+5(a)+8(a)）
+
+本次归档（9 单文件 + 3 目录）：
+- `roadmap.md` — 早期 Phase 1/2 真源，已被 SEQ-20260428~29 取代
+- `server_next_handoff_M-SN-1.md` — M-SN-1 阶段交接，已结案
+- `server_next_kickoff_20260427.md` — R1-R5 决策实录，M-SN-2 已 audit PASS
+- `audit_log_coverage_2026-05-05.md` — CHG-SN-4-10-A 闭环依据快照
+- `audit_seq_20260503_01_20260503.md` — SEQ-20260503-01 评审报告（**ADR-111 引用，root 留 stub**）
+- `audit_seq_20260504_01_20260503.md` — SEQ-20260504-01 评审报告（**ADR-112 引用，root 留 stub**）
+- `stability_fix_plan_20260414.md` — P0-P3 稳定性修复计划（旧时代，零现引用）
+- `player_control_layout_matrix_20260425.md` — 播放器布局矩阵现状记录
+- `tiered_source_verification_future_plan_20260402.md` — 分级验证未来扩展提案（未拆卡）
+- `handoff_mini_player/` — mini player 交接产物
+- `baseline_20260418/` — 2026-04-18 基线测试产物（**decisions.md line 810/831 引用 critical_paths.md，root 留同名目录 + README stub**）
+- `handoff_20260422/` — 前端设计交接 + token 包 + 人工 QA（**ADR-058+ 多处引用，root 留同名目录 + README stub**）
+
+stub 协议：以上文件移到 archive 但被 ADR / 历史决策引用的，在 root 留 stub
+（同名文件或同名目录含 README.md），指向 archive 版，保持引用链不破。
+
 ## 查找活跃文档
 
 回到 `docs/README.md` 查当前活跃文档索引（SoT + 当前执行上下文 + references + rules）。

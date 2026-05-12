@@ -23,25 +23,25 @@
 7. `docs/tasks.md`：单任务工作台。
 8. `docs/changelog.md`：完成任务变更历史。
 9. `docs/run-logs.md`：运行日志与 BLOCKER 记录。
-10. `docs/roadmap.md`：早期 Phase 1/2 阶段记录（已被 SEQ-20260428/29 系列取代为执行真源；保留为历史里程碑参考）。
+10. `docs/logging_system_proposal_20260425.md`：日志系统方案（与 `docs/rules/logging-rules.md` 配对）。
 
 ## 2. 当前执行上下文（Current Context）
 
 1. `docs/designs/backend_design_v2.1/reference.md`：后台 admin 重开发设计真源（CHG-DESIGN-01 起所有任务卡的设计依据）。设计稿源在同目录 index.html / Wireframes.html / styles/ / app/。
 2. `docs/server_next_plan_20260427.md`：server-next 工程主计划（已含 ADR-103a Shell + ADR-103b admin-ui 边界落地）。
-3. `docs/server_next_kickoff_20260427.md`：M-SN-2 启动文档。
-4. `docs/image_pipeline_plan_20260418.md`：图片管线方案；当前仍保留在根目录。
-5. `docs/freeze_notice_20260418.md`：重写期需求冻结通知；M6 结束后仅作为历史约束参考。
 
 ## 3. 保留参考（References）
 
 1. `docs/archive/m0-m6/frontend_design_spec_20260423.md`：前台设计 spec（M0-M6 时代真源，已归档；当前前台 Web 仍有部分执行价值，但作为历史输入）。
 2. `docs/admin_design_brief_20260426.md`：后台 v1 设计 brief（**仅作历史输入，不作 server-next 实现模板**；ModernDataTable / apps/server shared 引用已被 reference.md / SEQ-20260429-02 取代）。
 3. `docs/admin_audit_20260426.md`：后台 v1 审计报告（历史）。
-4. `docs/server_next_handoff_M-SN-1.md`：M-SN-1 阶段交接（已结案归档）。
-5. `docs/archive/`：早期归档文件（含 frontend_redesign / design_system_plan / stability_fix 等）。
-6. `docs/baseline_20260418/`：2026-04-18 基线测试与截图产物。
-7. `docs/handoff_20260422/`：前端设计交接、token 包与人工 QA 产物。
+4. `docs/M-SN-3-milestone-audit-2026-05-12.md`：M-SN-3 milestone 阶段审计报告（B+ PASS / CHG-SN-5-PRE-01-B 完成判定依据）。
+5. `docs/M-SN-4-milestone-audit-2026-05-05.md`：M-SN-4 milestone 阶段审计报告（B+ PASS / CHG-SN-4-10-D 闭环依据）。
+6. `docs/server_next_PRE-01-A-drill-2026-05-12.md`：staging cookie + nginx e2e 演练记录（CHG-SN-5-PRE-01-A 完成判定依据）。
+7. `docs/server_next_view_template.md`：server-next 视图开发模板（DEBT-SN-3-A 交付物 / M-SN-5 视图卡参考）。
+8. `docs/archive/`：早期归档文件（含 frontend_redesign / design_system_plan / stability_fix 等）。
+9. `docs/baseline_20260418/`：2026-04-18 基线测试与截图产物。
+10. `docs/handoff_20260422/`：前端设计交接、token 包与人工 QA 产物。
 
 ## 4. 规则文档（Rules）
 
@@ -62,5 +62,5 @@
 2. 被替代文档统一维护 `superseded_by`，并归档到 `docs/archive/<quarter>/`。
 3. 新增方案文档必须带日期后缀：`*_YYYYMMDD.md`。
 4. 2026Q1 归档索引见 `docs/archive/2026Q1/README.md`。
-5. 2026Q2 归档索引见 `docs/archive/2026Q2/README.md`（DOC-01，2026-04-22；DOC-02，2026-04-24）。
+5. 2026Q2 归档索引见 `docs/archive/2026Q2/README.md`（DOC-01，2026-04-22；DOC-02，2026-04-24；DOC-03，2026-05-12 — docs 整理：9 单文件 + 3 目录归档 + 4 项 stub 保留）。
 6. `docs/archive/` 根目录仍保留早期归档文件；新增归档应优先进入季度目录。

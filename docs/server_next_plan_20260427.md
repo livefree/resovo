@@ -8,7 +8,7 @@
 > companion:
 >   - [admin_audit_20260426.md](./admin_audit_20260426.md)（现状 / 9 痛点）
 >   - [admin_design_brief_20260426.md](./admin_design_brief_20260426.md)（design 视角 brief）
->   - [server_next_kickoff_20260427.md](./server_next_kickoff_20260427.md)（R1–R5 决策实录 + 评审报告）
+>   - [server_next_kickoff_20260427.md](./archive/2026Q2/server_next_kickoff_20260427.md)（R1–R5 决策实录 + 评审报告；2026-05-12 归档）
 >   - [docs/designs/backend_design_v2.1/](./designs/backend_design_v2.1/)（设计稿，仍在补完）
 > generated_at: 2026-04-27（v0）/ revised: 2026-04-27（v1）/ 2026-04-28（v2 / v2.1 / v2.2 / v2.3 / v2.4）/ 2026-05-01（v2.5）/ 2026-05-06（v2.6）
 > 主循环模型：claude-opus-4-7

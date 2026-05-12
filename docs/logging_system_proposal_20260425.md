@@ -1,8 +1,17 @@
-# 日志系统方案（提案）
+# 日志系统方案
+
+> status: active
+> owner: @engineering
+> scope: logging system proposal + decided implementation guidance
+> source_of_truth: yes（与 docs/rules/logging-rules.md 配对）
+> last_reviewed: 2026-05-12
+>
+> 2026-05-12 整理：原标题"日志系统方案（提案）"+ 状态"待评审 / 未拆任务卡"。
+> rules/logging-rules.md 已将本文档列为"规则原文"，因此本文事实上已生效；
+> 状态固化为 active；后续日志相关规则演进与本文同步。
 
 创建时间：2026-04-25
 作者：主循环（claude-opus-4-7）
-状态：待评审 / 未拆任务卡
 
 本提案规划 Resovo 本地开发与未来生产环境的日志体系：从混合终端流升级为「分类、结构化、可回溯」的日志，并为浏览器端引入轻量上报通道。本文档只描述方案，不含落地代码。
 
