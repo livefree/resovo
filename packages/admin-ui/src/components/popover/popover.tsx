@@ -293,12 +293,30 @@ export function Popover({
    *   2. preventDefault 阻断浏览器键盘 → click 转换 → 消费方 onClick 被绕过
    * 仍包装消费方 onKeyDown（不破坏消费方既有键盘 handler），仅不做 toggle。
    * 仅对非原生 trigger（如 <div role="button">）由 Popover 接管 Enter/Space → toggle。
+   *
+   * 检测策略（运行时）：优先用 triggerRef.current 实际 DOM 的 tagName 判断 —
+   * 覆盖消费方用 React.forwardRef 包装 <button> 的场景（此时 trigger.type 是函数引用，
+   * 静态 trigger.type 判断会漏判）。ref 注入失败时回退到静态 trigger.type 判断。
    */
-  const triggerTagName = typeof trigger.type === 'string' ? trigger.type : null
-  const triggerInputType = triggerTagName === 'input' ? (triggerProps.type as string | undefined) : undefined
-  const isNativeButtonLike =
-    triggerTagName === 'button' ||
-    (triggerTagName === 'input' && (triggerInputType === 'button' || triggerInputType === 'submit' || triggerInputType === 'reset'))
+  const triggerStaticTag = typeof trigger.type === 'string' ? trigger.type : null
+  const triggerStaticInputType = triggerStaticTag === 'input' ? (triggerProps.type as string | undefined) : undefined
+  const isNativeButtonLikeAtRuntime = (): boolean => {
+    // 1) 优先用实际 DOM tagName（覆盖 forwardRef 包装 / 自定义组件最终渲染原生 button 的场景）
+    const el = triggerRef.current
+    if (el) {
+      const tag = el.tagName.toLowerCase()
+      if (tag === 'button') return true
+      if (tag === 'input') {
+        const type = el.getAttribute('type')
+        return type === 'button' || type === 'submit' || type === 'reset'
+      }
+      return false
+    }
+    // 2) ref 注入失败 fallback：静态 trigger.type 判断（仅对 string element 生效）
+    if (triggerStaticTag === 'button') return true
+    if (triggerStaticTag === 'input' && (triggerStaticInputType === 'button' || triggerStaticInputType === 'submit' || triggerStaticInputType === 'reset')) return true
+    return false
+  }
 
   const mergedTrigger = cloneElement(trigger as React.ReactElement<Record<string, unknown>>, {
     onClick: (e: React.MouseEvent) => {
@@ -326,7 +344,7 @@ export function Popover({
           console.warn('[admin-ui Popover] consumer onKeyDown 抛出异常，已吞掉以保 keyboard toggle', err)
         }
       }
-      if (isNativeButtonLike) return  // 原生 button 类：让浏览器原生 keyboard activation 走完
+      if (isNativeButtonLikeAtRuntime()) return  // 原生 button 类（含 forwardRef 包装）：让浏览器原生 keyboard activation 走完
       if (e.defaultPrevented) return  // 消费方主动消费了 → 不再 toggle
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault()  // 阻止 Space 默认滚动
