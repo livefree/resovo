@@ -221,6 +221,7 @@
   --z-shell-toast: 1300;
   --z-modal: 1000;
   --z-admin-dropdown: 980;
+  --z-admin-popover: 1050;
   --admin-accent-soft: color-mix(in oklch, var(--accent-default) 18%, transparent);
   --admin-accent-border: color-mix(in oklch, var(--accent-default) 32%, transparent);
   --admin-accent-on-soft: var(--accent-active);
