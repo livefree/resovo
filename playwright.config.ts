@@ -13,6 +13,11 @@ const ADMIN_NEXT_SPECS = ['**/e2e/admin/**/*.spec.ts']
 // 隔离 testDir + testMatch，不与上述 e2e specs 混跑
 const ADMIN_VISUAL_TEST_DIR = './tests/visual'
 const ADMIN_VISUAL_TEST_MATCH = '**/*.visual.spec.ts'
+// admin-visual 默认**不**加入 projects 数组（baseline 部分为占位 / 未入库，跑会全失败阻塞 e2e gate）
+// 只有 PLAYWRIGHT_VISUAL=1 env 触发才注册（与 npm scripts `test:visual` / `test:visual:update` 配合）
+// 双重防御：(1) npm `test:e2e` 显式列 4 个 e2e projects 不含 admin-visual
+//          (2) 本 env gate 防 `npx playwright test` 默认拉 admin-visual
+const VISUAL_ENABLED = process.env.PLAYWRIGHT_VISUAL === '1'
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -54,7 +59,9 @@ export default defineConfig({
     // ── admin-visual project (ADR-116 / CHG-SN-5-PRE-01-E-1) ─────────────
     // Playwright visual baseline 跑 admin-ui 5 件下沉组件 ~12 状态 + moderation 7 张整页
     // 复用 admin-next-chromium 的 webServer 条目（server-next dev :3003），不新增 webServer
-    {
+    // **默认不注册**（baseline 未入库会全失败阻塞 e2e gate）；用 `npm run test:visual` 或
+    // `PLAYWRIGHT_VISUAL=1 npx playwright test` 触发
+    ...(VISUAL_ENABLED ? [{
       name: 'admin-visual',
       use: { ...devices['Desktop Chrome'], baseURL: ADMIN_NEXT_URL },
       testDir: ADMIN_VISUAL_TEST_DIR,
@@ -65,7 +72,7 @@ export default defineConfig({
         // threshold: 10% per-pixel 颜色差异容忍（catches color regression，比 20% 严）
         toHaveScreenshot: { maxDiffPixelRatio: 0.02, threshold: 0.1 },
       },
-    },
+    }] : []),
   ],
 
   webServer: [

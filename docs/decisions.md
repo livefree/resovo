@@ -4769,6 +4769,7 @@ Popover 仅承担：portal / 定位 / 5 类 dismiss / ARIA 属性桩。键盘导
   - OBS-4：@playwright/test 已在 devDeps 确认通过
 - rev2 修订（2026-05-12，同日）：R-1 + Y-1/Y-2/Y-3/Y-4 + OBS-1/2/3 全部同 ADR 修；OBS-4 无需动作（确认通过）
 - 轮 2（2026-05-12，agentId af6开头）：**A- / PASS 无条件** — 9 项命中全 PASS；新 1 黄线 Y-NEW-1（`.gitignore` 加 `tests/visual/.auth/` 是实施 deliverable gap 非设计缺陷）→ 同 ADR §3.1 deliverables 补足 → 评审建议直接采纳，无需第 3 轮
+- followup（2026-05-12，Codex stop-time review 命中）：默认 e2e gate（`npx playwright test` / `npm test:e2e`）会拉 admin-visual 未入库 baseline → 全失败阻塞；rev3 §2.5 双重防御：(1) npm scripts 显式列 4 个 e2e projects + 新增 `test:visual` / `test:visual:update`；(2) playwright.config.ts admin-visual 条件 spread 由 `PLAYWRIGHT_VISUAL=1` env 触发 — 默认 0 admin-visual tests 注册
 
 ### 1. Context
 
@@ -4905,6 +4906,14 @@ URL 解析：`/admin/dev/visual/bar-signal?state=ok` → 查 REGISTRY['bar-signa
 **Y-1 修订**：admin-visual project 的 dev server **由现有 webServer 条目覆盖**（`npm --workspace @resovo/server-next run dev`，端口 3003，playwright.config.ts line 59-64）— 无需新增 webServer。多 project 共用同一 webServer 是 Playwright 标准模式。
 
 testDir 与 testMatch 隔离：`tests/visual/**/*.visual.spec.ts` 才被 admin-visual 跑；`tests/e2e/**/*.spec.ts` 不混入。
+
+**默认 e2e gate 隔离双重防御（Codex stop-time review followup，2026-05-12）**：admin-visual project 在 baseline 未入库期间跑 `toHaveScreenshot()` 会全失败 — 若加入默认 projects 数组，`npx playwright test`（不带 `--project=`）或未列项的 `npm test:e2e` 会被 admin-visual 拖累阻塞。修订两层隔离：
+
+1. **package.json npm scripts 显式列项**：
+   - `test:e2e`: `playwright test --project=admin-chromium --project=admin-next-chromium --project=web-chromium --project=web-mobile`（4 个 e2e projects 显式，admin-visual 不在内）
+   - `test:visual`: `PLAYWRIGHT_VISUAL=1 playwright test --project=admin-visual`
+   - `test:visual:update`: `PLAYWRIGHT_VISUAL=1 playwright test --project=admin-visual --update-snapshots`
+2. **playwright.config.ts env gate**：admin-visual 用 `...(process.env.PLAYWRIGHT_VISUAL === '1' ? [{...}] : [])` 条件 spread 加入 projects 数组 — 默认 env 不带时 admin-visual **完全不注册**，`npx playwright test` 拉到 0 admin-visual tests；只有 `npm run test:visual` 或 `PLAYWRIGHT_VISUAL=1 npx playwright test` 才会注册并选定。
 
 **baseline 文件落位策略**：默认 Playwright 落在 `tests/visual/<feature>/<spec-name>.visual.spec.ts-snapshots/<test-name>-1-<browser>-<platform>.png`。本卡显式指定 `expect(...).toHaveScreenshot('<name>.png')` 控制文件名，baseline 路径形如 `tests/visual/admin-ui/bar-signal.visual.spec.ts-snapshots/bar-signal-ok-1-chromium-darwin.png`。这与现有 `tests/visual/dashboard/dashboard-full.png` 等手动归档目录（直接落顶层 PNG，无 `-snapshots/` 后缀）**并行不冲突** — Playwright 只读 `-snapshots/` 后缀目录，手动归档继续作为参考截图。
 
