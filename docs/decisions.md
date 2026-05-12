@@ -4984,10 +4984,14 @@ test('moderation — reject-modal', async ({ page }) => {
 
 #### 3.2 后续触发
 
-- **PRE-01-E-2**（用户卡）：本地启 server-next dev → `npm run test:visual:update -- --grep "admin-ui"` → 12 张 baseline 入库（5 件组件）
-- **PRE-01-F**（用户卡）：复用 harness → `npm run test:visual:update -- --grep "admin-moderation"` → 7 张 moderation 真截图（替换占位 PNG）
+- **PRE-01-E-2**（用户卡）：本地启 server-next dev → `npm run test:visual:update -- tests/visual/admin-ui` → 12 张 baseline 入库（5 件组件）
+- **PRE-01-F**（用户卡）：复用 harness → `npm run test:visual:update -- tests/visual/admin-moderation.visual.spec.ts` → 7 张 moderation 真截图（替换占位 PNG）
 
-> **Playwright CLI 注意**：`--update-snapshots` 接收可选 mode 参数（`all` / `changed` / `missing` / `none`）；不能在其后直接跟 spec 名（会被误识为 mode）。正确语法用 `--grep` 过滤，或把 spec 路径放在 `--update-snapshots` **之前**（positional argument）。npm scripts 已配齐 `test:visual` / `test:visual:update`，env gate `PLAYWRIGHT_VISUAL=1` 自动设。
+> **Playwright CLI 命令语法（rev3 followup-3，2026-05-12）**：
+> 1. `--update-snapshots` 接收可选 mode 参数（`all` / `changed` / `missing` / `none`）；如不显式给 mode 值，紧随其后的 positional 参数会被误识为 mode → npm script 已用 `--update-snapshots=all` 显式 mode 形式
+> 2. spec 过滤优先用 **positional 路径**（test file path / directory），明确无歧义
+> 3. `--grep` 实测对 test ID（含路径）匹配，但 Playwright 文档说仅匹配 test title — 文档与实测灰区，避免使用
+> 4. npm scripts 已配齐 `test:visual` / `test:visual:update`，env gate `PLAYWRIGHT_VISUAL=1` 自动带
 - **未来**：admin-ui 新增下沉组件时同模式扩展 component-registry + 加 visual.spec.ts spec
 - **回溯校验**（DEBT-SN-4-A Y4）：baseline 入库后，对 M-SN-4 期 5 件组件改动跑一次 visual diff，确认无视觉回归
 

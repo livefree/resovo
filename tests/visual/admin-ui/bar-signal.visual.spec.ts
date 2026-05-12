@@ -5,8 +5,10 @@
  *
  * 跑法（用户在 PRE-01-E-2 执行）：
  *   1. 启 server-next dev: `NEXT_PUBLIC_ASSET_PREFIX="" npm --workspace @resovo/server-next run dev`
- *   2. 跑 update-snapshots: `npm run test:visual:update -- --grep "bar-signal"`
- *      （PLAYWRIGHT_VISUAL=1 env gate 已在 npm script 中带）
+ *   2. 跑 update-snapshots（用 positional 路径过滤）:
+ *      - 单文件: `npm run test:visual:update -- tests/visual/admin-ui/bar-signal.visual.spec.ts`
+ *      - 5 件组件全部: `npm run test:visual:update -- tests/visual/admin-ui`
+ *      （PLAYWRIGHT_VISUAL=1 env gate + --update-snapshots=all 已在 npm script 中带）
  *   3. git add tests/visual/admin-ui/bar-signal.visual.spec.ts-snapshots/*.png
  *
  * 注：dev/visual 路由 dev-only，生产 notFound 双层守卫；ADR-116 §2.3。

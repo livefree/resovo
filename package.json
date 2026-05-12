@@ -31,7 +31,7 @@
     "test:e2e": "playwright test --project=admin-chromium --project=admin-next-chromium --project=web-chromium --project=web-mobile",
     "test:e2e:ui": "playwright test --ui --project=admin-chromium --project=admin-next-chromium --project=web-chromium --project=web-mobile",
     "test:visual": "PLAYWRIGHT_VISUAL=1 playwright test --project=admin-visual",
-    "test:visual:update": "PLAYWRIGHT_VISUAL=1 playwright test --project=admin-visual --update-snapshots",
+    "test:visual:update": "PLAYWRIGHT_VISUAL=1 playwright test --project=admin-visual --update-snapshots=all",
     "preflight": "bash scripts/preflight.sh",
     "preflight:e2e": "bash scripts/preflight.sh --with-e2e",
     "verify:docs-format": "bash scripts/check-docs-format.sh",
