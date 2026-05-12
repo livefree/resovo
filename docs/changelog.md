@@ -6049,3 +6049,47 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - dev/visual 路由 dev-only：生产 build 自动 notFound（3 重防御）；演练或开发期访问 http://localhost:8080/admin/dev/visual（走 Caddy）或 http://localhost:3003/admin/dev/visual（直连，需 NEXT_PUBLIC_ASSET_PREFIX 空）
   - admin-visual project 不在 CI 跑（package.json 默认 npm test:e2e 不含 admin-visual project；future CI 接入需 Linux runner 重新 --update-snapshots 生成 Linux baseline，详见 ADR-116 §3.4 风险 4）
   - moderation spec 中的 `[data-row]` / 拒绝按钮 / 线路健康指示器等 selector 在 PRE-01-F 实施时按当前 moderation page DOM 调整（本卡仅落骨架）
+
+## [CHG-SN-5-PRE-01-E-2] admin-ui 5 件组件 12 状态 visual baseline 入库
+
+- **完成时间**：2026-05-12
+- **记录时间**：2026-05-12 02:55
+- **执行模型**：claude-opus-4-7（主循环 / 落盘）+ 用户本地 macOS（跑 update-snapshots）
+- **子代理**：无
+- **关联序列**：SEQ-20260506-02（M-SN-5.5 A 段第 4 件 cutover-blocker / DEBT-SN-4-A 第 2 阶段）
+- **依赖**：CHG-SN-5-PRE-01-E-1（ADR-116 harness 基础设施）✅ 已完成
+- **修改文件**：
+  - `tests/visual/admin-ui/bar-signal.visual.spec.ts-snapshots/`（5 张：bar-signal-{ok,partial,dead,pending,unknown}-admin-visual-darwin.png）
+  - `tests/visual/admin-ui/staff-note-bar.visual.spec.ts-snapshots/`（2 张：staff-note-bar-{display,edit}-admin-visual-darwin.png）
+  - `tests/visual/admin-ui/line-health-drawer.visual.spec.ts-snapshots/`（1 张：line-health-drawer-default-admin-visual-darwin.png，fullPage）
+  - `tests/visual/admin-ui/reject-modal.visual.spec.ts-snapshots/`（1 张：reject-modal-default-admin-visual-darwin.png，fullPage）
+  - `tests/visual/admin-ui/decision-card.visual.spec.ts-snapshots/`（3 张：decision-card-{pending,approved,rejected}-admin-visual-darwin.png）
+  - `docs/task-queue.md` SEQ-20260506-02 子卡 PRE-01-E-2 状态 ⏸ → ✅
+  - `docs/changelog.md` 本条目
+- **新增依赖**：无
+- **数据库变更**：无
+- **质量门禁**：
+  - typecheck + lint + 3434/3434 unit tests 全绿（CHG-SN-5-PRE-01-E-1 末次跑确认）
+  - visual baseline：12/12 全部生成（首跑 8/12 因 RSC 边界错误失败 → followup-8 修后 12/12）
+- **执行过程**（CHG-SN-5-PRE-01-E-1 落地后 followup 链）：
+  - **followup-5**：用户首跑 baseline 0/12 — middleware admin 鉴权拦截 → Playwright 截到 /login 页 → middleware dev 模式豁免 dev/visual
+  - **followup-6**（Codex stop-time review）：契约不一致 — followup-5 仅 dev 豁免，生产仍 redirect /login（不是 404）违反 ADR 契约 → 改生产+dev 统一豁免
+  - **followup-7**（Codex stop-time review）：`startsWith('/admin/dev/visual')` 误匹配 `/admin/dev/visualxyz` → 改严格路径段匹配（`=== exact || startsWith('/.../visual/')`）
+  - **followup-8**（用户实测）：首跑 8/12 通过，4/12 失败（StaffNoteBar/LineHealthDrawer/RejectModal）— "Event handlers cannot be passed to Client Component props" RSC 边界 → [component]/page.tsx 转 Client Component + React 19 `use()` 解 promise params
+  - 用户重跑 → 12/12 baseline 全生成
+- **抽检验收**（视觉规范对齐）：
+  - LineHealthDrawer fullPage：Drawer 标题"示例站点 · Line 1" + 双信号头部 + 4 events 时间线（scheduled_probe/render_check/feedback_driven/circuit_breaker，含 HTTP code + latency + error_detail）✓
+  - RejectModal fullPage：Modal 标题"拒绝该视频" + 4 ReviewLabel 单选 + 附加说明 textarea 0/500 + 取消/确认拒绝（red danger）✓
+  - StaffNoteBar edit：编辑 textarea + 文本 "封面有水印，先 hold" + 字数 12 + 取消/保存（warning yellow）✓
+  - BarSignal 5 状态：probe/render 小柱图，颜色 token 与 dual-signal 一致 ✓
+  - DecisionCard 3 状态（pending/approved/rejected）：卡片 + video 字段 + 双信号 ✓
+- **已知 visual flake 隐患**（不阻塞入库，留 future）：
+  - LineHealthDrawer / RejectModal fullPage 截图含 admin shell（sidebar 动态数字"内容审核 484"/"图片健康 597"/"播放线路 1.9k" + topbar "采集 3/12" / "失效率 1.3%" / "待审 484"）— 这些数字在 admin-shell mock 数据中可能变动 → visual diff flake 源
+  - 缓解方案候选（PRE-01-E-2-followup 卡未来卡定）：(a) 改 spec 用 page.locator('[data-visual-demo-area]') 局部截图（modal/drawer 仍 portal 到 body 需特殊处理）/ (b) admin shell mock 数据冻结（NEXT_PUBLIC_VISUAL_TEST=1 env 触发 deterministic mock）
+- **DEBT-SN-4-A Y4 回溯校验**（M-SN-4 audit）：本期 baseline 入库即满足"建立后必须回溯 M-SN-4 改动 baseline"硬约束 — 12 张状态截图等价于 BarSignal/StaffNoteBar/LineHealthDrawer/RejectModal/DecisionCard 5 件下沉契约的视觉 regression 基线（后续这 5 件改动需要同步 update-snapshots 或确认无视觉变化）
+- **后续触发**：
+  - **CHG-SN-5-PRE-01-F**（用户卡 / 复用 -E-1 harness）：7 张 moderation 整页 baseline 替换占位 PNG；需先生成 admin storageState（codegen --save-storage）+ seed dev DB + 按 moderation page DOM 调整 spec selectors；命令 `npm run test:visual:update -- tests/visual/admin-moderation.visual.spec.ts`
+  - **SEQ-20260506-02 进度**：13/13 → **预计 14/13 (overflow)**（-E-2 计入 SEQ 完成，超出原 13 子卡范围因 -E 拆为 -E-1 + -E-2；M-SN-5.5 A 段剩 -F 1 卡）
+- **注意事项**：
+  - baseline PNG 入库后，未来跑 `npm run test:visual` 会做 visual diff 校验（无 --update-snapshots，仅 compare）；若 5 件组件视觉变更，须显式跑 `npm run test:visual:update -- <spec-path>` 重新生成 baseline 入库
+  - admin-visual project 仍 env-gated（`PLAYWRIGHT_VISUAL=1` 触发；npm scripts 已带），默认 e2e gate 不会拉 — followup-1 双重防御
