@@ -155,6 +155,14 @@ export function Popover({
 
   const triggerRef = useRef<HTMLElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
+  /**
+   * trigger sibling marker（display:none，零尺寸不影响 layout）
+   * 作用：当 cloneElement 注入 ref 失败（trigger 是非 forwardRef 函数组件）时，
+   * `markerRef.current.parentElement` 即"trigger 的父容器" — 给 calcPos 一个生产模式
+   * fallback 定位源（ADR-115 §2.1 "生产模式定位回退到 trigger 父容器的
+   * getBoundingClientRect 防 crash"），避免 popover 完全无定位（回落到 viewport 0,0）
+   */
+  const markerRef = useRef<HTMLSpanElement | null>(null)
   const popoverId = useId()
 
   // 客户端 mount 标记（SSR 守卫）
@@ -171,8 +179,8 @@ export function Popover({
   }, [modal, closeOnTabOut, portalContainer, arrow])
 
   // ref forwarding 失败诊断（dev 模式）：open 时若 triggerRef 仍为 null，说明 trigger 是
-  // 不支持 ref 的函数组件，cloneElement 注入的 ref 被忽略 → calcPos 短路，popover 定位回落
-  // 到 (0, 0)。提示消费方用 React.forwardRef 修复。
+  // 不支持 ref 的函数组件，cloneElement 注入的 ref 被忽略。生产模式 calcPos 已 fallback 到
+  // marker.parentElement（trigger 父容器）防 crash，但定位精度降低；dev 模式提示消费方修复。
   useEffect(() => {
     if (!open) return
     if (typeof process === 'undefined' || process.env.NODE_ENV === 'production') return
@@ -180,7 +188,7 @@ export function Popover({
     // eslint-disable-next-line no-console
     console.warn(
       '[admin-ui Popover] trigger ref 注入失败 — 自定义函数组件须用 React.forwardRef 暴露 ref；' +
-      '否则 popover 定位回落到 viewport 原点 (0, 0)',
+      '生产模式定位已 fallback 到 trigger 父容器（精度降低），dev 模式建议立即修复',
     )
   }, [open])
 
@@ -194,9 +202,13 @@ export function Popover({
 
   // 计算定位（基于 trigger + content 测量尺寸）
   const calcPos = useCallback(() => {
+    // 优先用 trigger 自身 rect；ref 注入失败时 fallback 到 marker 的 parentElement（trigger 父容器）
+    // — ADR-115 §2.1 fallback 协议，防 crash 让生产模式仍有近似定位
     const triggerEl = triggerRef.current
-    if (!triggerEl) return
-    const triggerRect = triggerEl.getBoundingClientRect()
+    const fallbackEl = !triggerEl ? markerRef.current?.parentElement ?? null : null
+    const sourceEl = triggerEl ?? fallbackEl
+    if (!sourceEl) return
+    const triggerRect = sourceEl.getBoundingClientRect()
     // contentRef 在 useLayoutEffect 时机已挂载（React 在 layout effect 之前完成 portal DOM mutations）；
     // 仅 offsetWidth/Height 为 0（如未渲染或被 display:none 遮蔽）时才回落到预估尺寸
     const contentEl = contentRef.current
@@ -270,6 +282,7 @@ export function Popover({
 
   const triggerProps = (trigger.props ?? {}) as Record<string, unknown>
   const consumerOnClick = triggerProps.onClick as ((e: React.MouseEvent) => void) | undefined
+  const consumerOnKeyDown = triggerProps.onKeyDown as ((e: React.KeyboardEvent) => void) | undefined
   const consumerRef = (trigger as unknown as { ref?: React.Ref<HTMLElement> }).ref
 
   const mergedTrigger = cloneElement(trigger as React.ReactElement<Record<string, unknown>>, {
@@ -283,6 +296,26 @@ export function Popover({
         }
       }
       setOpen(!open)
+    },
+    /**
+     * Enter / Space 触发 toggle（ADR-115 §2.1）— 原生 <button> 自然把 Enter/Space
+     * 转 click，但 trigger 是 <div role="button"> 等非原生元素时需此 fallback。
+     * 包装消费方 onKeyDown：先调用消费方 → 再判定 Enter/Space 触发。
+     */
+    onKeyDown: (e: React.KeyboardEvent) => {
+      try {
+        consumerOnKeyDown?.(e)
+      } catch (err) {
+        if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'production') {
+          // eslint-disable-next-line no-console
+          console.warn('[admin-ui Popover] consumer onKeyDown 抛出异常，已吞掉以保 keyboard toggle', err)
+        }
+      }
+      if (e.defaultPrevented) return  // 消费方主动消费了 → 不再 toggle
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()  // 阻止 Space 默认滚动
+        setOpen(!open)
+      }
     },
     ref: (node: HTMLElement | null) => {
       triggerRef.current = node
@@ -320,6 +353,9 @@ export function Popover({
   return (
     <>
       {mergedTrigger}
+      {/* marker span：仅在 ref 注入失败时通过 markerRef.parentElement 提供 fallback 定位源；
+          display:none 不占布局、不渲染、aria-hidden 不入 a11y tree */}
+      <span ref={markerRef} aria-hidden="true" style={{ display: 'none' }} data-popover-marker />
       {mounted && open && createPortal(popoverEl, document.body)}
     </>
   )

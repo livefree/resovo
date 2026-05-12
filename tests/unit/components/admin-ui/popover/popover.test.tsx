@@ -144,6 +144,118 @@ describe('Popover — consumer onClick 包装', () => {
   })
 })
 
+// ── onKeyDown Enter/Space 触发（ADR-115 §2.1 trigger 注入）──────
+
+describe('Popover — 键盘 Enter / Space 触发 toggle', () => {
+  it('Enter on trigger → 打开 popover', () => {
+    const { container } = render(
+      <Popover trigger={<div role="button" tabIndex={0} data-testid="trigger">x</div>} content={<div data-testid="kb-x">x</div>} />,
+    )
+    const trigger = container.querySelector('[data-testid="trigger"]') as HTMLElement
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+    expect(document.body.querySelector('[data-testid="kb-x"]')).toBeTruthy()
+  })
+
+  it('Space on trigger → 打开 popover + preventDefault（防 Space 滚动）', () => {
+    // 用消费方 onKeyDown 间接观察 e.defaultPrevented（Popover 后置逻辑会 preventDefault）
+    let observedDefaultPrevented = false
+    function Wrap() {
+      // 消费方 onKeyDown 在 Popover 之后无法直接观察；改用 ref 暴露
+      return (
+        <Popover
+          trigger={<div role="button" tabIndex={0} data-testid="trigger">x</div>}
+          content={<div data-testid="kb-y">x</div>}
+        />
+      )
+    }
+    const { container } = render(<Wrap />)
+    const trigger = container.querySelector('[data-testid="trigger"]') as HTMLElement
+    // fireEvent.keyDown 走 React synthetic event 系统，能正确触发 cloneElement 注入的 onKeyDown
+    const result = fireEvent.keyDown(trigger, { key: ' ' })
+    // fireEvent 返回 false 表示 default 被 prevented
+    observedDefaultPrevented = result === false
+    expect(document.body.querySelector('[data-testid="kb-y"]')).toBeTruthy()
+    expect(observedDefaultPrevented).toBe(true)
+  })
+
+  it('其它键（如 ArrowDown）不触发 toggle', () => {
+    const { container } = render(
+      <Popover trigger={<div role="button" tabIndex={0} data-testid="trigger">x</div>} content={<div data-testid="kb-z">x</div>} />,
+    )
+    const trigger = container.querySelector('[data-testid="trigger"]') as HTMLElement
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+    expect(document.body.querySelector('[data-testid="kb-z"]')).toBeNull()
+  })
+
+  it('再次 Enter → 关闭（toggle）', () => {
+    const { container } = render(
+      <Popover trigger={<div role="button" tabIndex={0} data-testid="trigger">x</div>} content={<div data-testid="kb-toggle">x</div>} />,
+    )
+    const trigger = container.querySelector('[data-testid="trigger"]') as HTMLElement
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+    expect(document.body.querySelector('[data-testid="kb-toggle"]')).toBeNull()
+  })
+
+  it('消费方 onKeyDown 先调用 + 抛异常被吞 + toggle 仍执行', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const consumerKD = vi.fn(() => { throw new Error('consumer kd error') })
+    const { container } = render(
+      <Popover trigger={<div role="button" tabIndex={0} data-testid="trigger" onKeyDown={consumerKD}>x</div>} content={<div data-testid="kb-w">x</div>} />,
+    )
+    const trigger = container.querySelector('[data-testid="trigger"]') as HTMLElement
+    expect(() => fireEvent.keyDown(trigger, { key: 'Enter' })).not.toThrow()
+    expect(consumerKD).toHaveBeenCalled()
+    expect(document.body.querySelector('[data-testid="kb-w"]')).toBeTruthy()
+    warn.mockRestore()
+  })
+
+  it('消费方 e.preventDefault() → Popover 不再 toggle（消费方主动消费）', () => {
+    const consumerKD = vi.fn((e: React.KeyboardEvent) => e.preventDefault())
+    const { container } = render(
+      <Popover trigger={<div role="button" tabIndex={0} data-testid="trigger" onKeyDown={consumerKD}>x</div>} content={<div data-testid="kb-skip">x</div>} />,
+    )
+    const trigger = container.querySelector('[data-testid="trigger"]') as HTMLElement
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+    expect(document.body.querySelector('[data-testid="kb-skip"]')).toBeNull()
+  })
+})
+
+// ── ref 注入失败 fallback 到父容器（ADR-115 §2.1 防 crash）─────
+
+describe('Popover — ref 注入失败时 fallback 定位到 trigger 父容器', () => {
+  it('marker span 始终渲染且 display:none + aria-hidden（不影响 layout / a11y）', () => {
+    const { container } = render(
+      <Popover trigger={<button data-testid="trigger">x</button>} content={<div />} />,
+    )
+    const marker = container.querySelector('[data-popover-marker]') as HTMLElement
+    expect(marker).toBeTruthy()
+    expect(marker.style.display).toBe('none')
+    expect(marker.getAttribute('aria-hidden')).toBe('true')
+  })
+
+  it('非 forwardRef 函数组件作 trigger → popover 仍渲染（不 crash），dev 模式 console.warn 提示', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // 函数组件不 forwardRef → cloneElement 注入的 ref 被忽略，triggerRef.current = null
+    function PlainTrigger(props: { children: React.ReactNode }) {
+      return <button data-testid="non-forwarded">{props.children}</button>
+    }
+    expect(() =>
+      render(
+        <div data-testid="parent-wrap">
+          <Popover defaultOpen trigger={<PlainTrigger>打开</PlainTrigger>} content={<div data-testid="fb-content">x</div>} />
+        </div>,
+      ),
+    ).not.toThrow()
+    expect(document.body.querySelector('[data-testid="fb-content"]')).toBeTruthy()
+    // dev 模式应有 ref 失败警告
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('trigger ref 注入失败'),
+    )
+    warn.mockRestore()
+  })
+})
+
 // ── ESC 关闭（dismiss 第 2 类）──────────────────────────────────
 
 describe('Popover — ESC 关闭', () => {
