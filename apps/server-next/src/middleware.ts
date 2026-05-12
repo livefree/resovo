@@ -36,14 +36,19 @@ export default function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname
 
   // admin 鉴权拦截（ADR-010）
-  // dev/visual 路由统一豁免（ADR-116 §2.3 / followup-6）：layout/page 的 NODE_ENV
-  // 守卫成为唯一守门，契约统一：
+  // dev/visual 路由统一豁免（ADR-116 §2.3 / followup-6 / followup-7）：layout/page
+  // 的 NODE_ENV 守卫成为唯一守门，契约统一：
   //   - 生产：layout `notFound()` 第一行直接 404（无 redirect 中转）
   //   - dev：layout 不 notFound，进入 demo 容器，Playwright visual baseline 跑通
   // 不再依赖"未登录用户 → middleware redirect /login"作为生产防御（rev2 → rev3 修订），
   // 因为 redirect /login 不等于 404，违反"任何 /admin/dev/visual/* 请求直接 404"契约；
   // 且 dev/visual 组件展厅是纯 props 驱动 mock 数据（OBS-2 强约束），无业务数据可泄露。
-  const isDevVisualPath = pathname.startsWith('/admin/dev/visual')
+  //
+  // **followup-7（Codex stop-time review 命中）**：豁免谓词严格限定为路径段
+  // 完全匹配，避免 `/admin/dev/visualxyz` 等"以 visual 为前缀的同名业务路径"被
+  // 误豁免（startsWith 不带尾斜杠会过度匹配）。
+  const isDevVisualPath =
+    pathname === '/admin/dev/visual' || pathname.startsWith('/admin/dev/visual/')
 
   if (pathname.startsWith('/admin') && !isDevVisualPath) {
     const refreshToken = req.cookies.get(COOKIE_REFRESH_TOKEN)?.value

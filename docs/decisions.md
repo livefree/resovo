@@ -4772,6 +4772,7 @@ Popover 仅承担：portal / 定位 / 5 类 dismiss / ARIA 属性桩。键盘导
 - followup（2026-05-12，Codex stop-time review 命中）：默认 e2e gate（`npx playwright test` / `npm test:e2e`）会拉 admin-visual 未入库 baseline → 全失败阻塞；rev3 §2.5 双重防御：(1) npm scripts 显式列 4 个 e2e projects + 新增 `test:visual` / `test:visual:update`；(2) playwright.config.ts admin-visual 条件 spread 由 `PLAYWRIGHT_VISUAL=1` env 触发 — 默认 0 admin-visual tests 注册
 - followup-5（2026-05-12，用户实测命中）：middleware admin 鉴权对 dev/visual 仍生效 → Playwright 截图截到 /login 页；初版仅 dev 模式豁免
 - followup-6（2026-05-12，Codex stop-time review 命中）：production guard contract 与 middleware behavior 不一致 — ADR 契约写"生产任何请求直接 404"，但 followup-5 仅 dev 豁免后，生产未登录用户被 middleware redirect /login（不是 404）；rev3 §2.3 改为生产+dev 统一豁免，layout/page NODE_ENV 守卫成为唯一守门
+- followup-7（2026-05-12，Codex stop-time review 命中）：auth bypass predicate 比 visual route contract 更广 — `startsWith('/admin/dev/visual')` 会误匹配 `/admin/dev/visualxyz` 等任何以 "visual" 为前缀的同名业务路径，给未来"visual" 前缀业务路由自动豁免鉴权（真安全漏洞）；rev3 §2.3 改为严格路径段匹配 `pathname === '/admin/dev/visual' || pathname.startsWith('/admin/dev/visual/')`
 
 ### 1. Context
 
@@ -4852,12 +4853,27 @@ if (process.env.NODE_ENV === 'production') notFound()
 
 双层守卫：layout 守卫一次性拦截整个 `admin/dev/visual/*` 子树；单页守卫防御性兜底（若 layout 被绕过）。
 
-**middleware 豁免协议（rev3 / followup-6）**：middleware 对 `/admin/dev/visual/*` **统一豁免** admin 鉴权（生产 + dev 相同行为），让 layout/page 的 NODE_ENV 守卫成为唯一守门。
+**middleware 豁免协议（rev3 / followup-7）**：middleware 对 `/admin/dev/visual/*` **统一豁免** admin 鉴权（生产 + dev 相同行为），让 layout/page 的 NODE_ENV 守卫成为唯一守门。豁免谓词使用**严格路径段匹配**（不依赖宽松 startsWith）。
+
+谓词实现：
+```ts
+const isDevVisualPath =
+  pathname === '/admin/dev/visual' || pathname.startsWith('/admin/dev/visual/')
+```
 
 历史演进：
 - rev2：middleware 鉴权写为"第 3 重防御"，但用户实测（followup-5）发现 Playwright 无登录 cookies 被 redirect /login，visual baseline 全跑空
 - followup-5：仅 dev 模式豁免，生产仍走 admin 鉴权
-- **followup-6（Codex stop-time review 命中）**：生产模式下未登录用户被 middleware redirect /login（**不是 404**），违反 ADR-116 "任何 `/admin/dev/visual/*` 请求生产直接 404" 契约 → 改为生产+dev 统一豁免
+- followup-6（Codex stop-time review）：生产未登录用户被 middleware redirect /login（不是 404），违反契约 → 改为生产+dev 统一豁免
+- **followup-7（Codex stop-time review）**：`startsWith('/admin/dev/visual')` 会误匹配 `/admin/dev/visualxyz` 等任何以 "visual" 为前缀的同名业务路径（潜在安全漏洞），改为严格路径段匹配（exact + 带尾斜杠的 startsWith）
+
+豁免边界（实测验收）：
+| 路径 | 期望 | 验收 |
+|---|---|---|
+| `/admin/dev/visual` (exact) | 豁免（200）| ✓ |
+| `/admin/dev/visual/bar-signal?state=ok` (子路径) | 豁免（200） | ✓ |
+| `/admin/dev/visualxyz` (误匹配测试) | 不豁免（307 /login） | ✓ |
+| `/admin/videos` (业务路由) | 不豁免（307 /login） | ✓ |
 
 防御矩阵（rev3 最终）：
 - **生产**：middleware 豁免 → 直接进入 layout `notFound()` 第一行 → **404**（契约：任何请求统一 404，无 redirect 中转）
