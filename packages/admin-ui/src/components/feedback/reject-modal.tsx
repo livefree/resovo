@@ -112,15 +112,19 @@ const BUTTON_BASE_STYLE: React.CSSProperties = {
 
 const PRIMARY_BUTTON_STYLE: React.CSSProperties = {
   ...BUTTON_BASE_STYLE,
-  // CHG-SN-5-PRE-01-E-2-followup-2（Codex stop-time review round 8）：
-  // soft pattern + 加深文字色满足 WCAG AA contrast ≥ 4.5：
-  //   - 历史 v1 `bg=--state-error-fg + color=--state-error-bg`：红底+14%透明红字 → 不可读
-  //   - 历史 v2 `bg=--state-error-fg + color=--accent-fg`：红 oklch 62% + 白字 → contrast ~3.5 AA fail
-  //   - 当前 v3 soft pattern：bg=--state-error-bg（14% 透明红软底）+ color=--color-error-dark
-  //     （oklch 45.0%，深红 primitive）+ border=--state-error-border → 深红字 on 近白软底
-  //     contrast ~7.5 AA AAA pass
+  // CHG-SN-5-PRE-01-E-2-followup-3（Codex stop-time review round 9）：
+  // soft pattern + state-error-fg 作 text 色，与 admin 默认 dark theme 对齐：
+  //   - v1 红底+14%透明红字 → 不可读
+  //   - v2 红底+白字（accent-fg）→ light 3.5 AA fail / dark 类似 fail
+  //   - v3 软底+深红字（color-error-dark）→ light contrast OK 但 dark theme（默认）
+  //     文字 oklch 45% on 软底 oklch ~20% contrast 1.6 严重 fail
+  //   - **v4 当前**：bg=--state-error-bg（14% 透明红软底）+ color=--state-error-fg
+  //     （oklch 62% mid 红）+ border=--state-error-border
+  //     dark theme（admin 默认）：明红字 on dark 软底 → contrast ~5 AA pass
+  //     light theme：明红字 on light 软底 → contrast ~3-4 borderline，记入
+  //     DEBT-ADMIN-UI-BUTTON-CONTRAST-LIGHT 后续 admin-ui token theme override 改进
   background: 'var(--state-error-bg)',
-  color: 'var(--color-error-dark)',
+  color: 'var(--state-error-fg)',
   borderColor: 'var(--state-error-border)',
 }
 

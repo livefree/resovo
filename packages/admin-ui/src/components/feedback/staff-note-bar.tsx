@@ -99,15 +99,16 @@ const BUTTON_BASE_STYLE: React.CSSProperties = {
 
 const PRIMARY_BUTTON_STYLE: React.CSSProperties = {
   ...BUTTON_BASE_STYLE,
-  // CHG-SN-5-PRE-01-E-2-followup-2（Codex stop-time review round 8）：
-  // soft pattern + 加深文字色满足 WCAG AA contrast ≥ 4.5：
-  //   - 历史 v1 `bg=--state-warning-fg + color=--state-warning-bg`：黄底+14%透明黄字 → 不可读
-  //   - 历史 v2 `bg=--state-warning-fg + color=--accent-fg`：黄 oklch 74% + 白字 → contrast ~1.7 AA fail
-  //   - 当前 v3 soft pattern：bg=--state-warning-bg（14% 透明黄软底）+ color=--color-warning-dark
-  //     （oklch 52.0%，深橙黄 primitive）+ border=--state-warning-border → 深棕黄字 on 近白软底
-  //     contrast ~5.5 AA pass；与 GHOST_BUTTON 区分用 bg 有 / 无
+  // CHG-SN-5-PRE-01-E-2-followup-3（Codex stop-time review round 9）：
+  // 历史演进同 reject-modal PRIMARY_BUTTON_STYLE v4：
+  //   - v3 (color-warning-dark oklch 52%) on dark theme 软底 contrast 严重 fail
+  //   - **v4 当前**：bg=--state-warning-bg（14% 透明黄软底）+ color=--state-warning-fg
+  //     （oklch 74% mid 黄）+ border=--state-warning-border
+  //     dark theme（admin 默认）：明黄字 on dark 软底 → contrast ~5 AA pass
+  //     light theme：明黄字 on light 软底 → contrast ~2 AA fail；记入
+  //     DEBT-ADMIN-UI-BUTTON-CONTRAST-LIGHT 后续 admin-ui token theme override 改进
   background: 'var(--state-warning-bg)',
-  color: 'var(--color-warning-dark)',
+  color: 'var(--state-warning-fg)',
   borderColor: 'var(--state-warning-border)',
 }
 
