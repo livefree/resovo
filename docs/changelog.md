@@ -6182,3 +6182,66 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 5 项黄线全部转登记到 cutover-pre 卡 / M-SN-5 主体首批视图卡监控清单 / DEBT 段（task-queue.md 欠账段已有对应条目）
   - M-SN-5 第一张视图卡 ADR-104 / ADR-105 sub-ADR 起草前必须先完成 CHG-PLAN-03 SEQ 规划 + Opus 评审 + 用户 sign-off（§5.2 BLOCKER 8 条 ADR-端点先后协议预备工作硬约束）
   - DOC-03 整理批次（commit 28959ab3）由本审计判定归属 M-SN-5.5 收尾（清理 docs/ Tier 1+2+3+4+5a+8a，属 milestone 完成态清理）
+
+---
+
+## CHG-PLAN-03 · M-SN-5 主体 SEQ 起草完成（arch-reviewer Opus 2 轮 PASS，待用户 sign-off）— 2026-05-12
+
+- **任务 ID**：CHG-PLAN-03（SEQ-20260512-01 第 2 张子卡）
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) × 2 轮
+- **变更内容**：
+  - 在 `docs/task-queue.md` 尾部新增 SEQ-20260512-02 段（M-SN-5 主体执行序列，14 子卡完整规划）
+  - 含 Phase A（3 视图）+ Phase B（ADR-104 + 2 端点批 + 1 视图）+ Phase C（ADR-105 + 2 端点 + 2 视图）+ Phase D（milestone audit）
+  - 含 5 并行批次（Y4 修正：ADR-104/105 起草串行）+ 工时合计 4.45w（基线 4.0w / 软上限 5.2w +30%）
+  - 含 8 项 BLOCKER 关键约束（§4.5 ADR-端点先后 / ADR-114-NEGATED 复合键 / §5.2 第 6 条 API 稳定 / Popover ADR-115a 升级 / 新原语未下沉 / 顺手扩张 M-SN-6 等）
+  - 含 5 项风险登记 R-M-SN-5-A..E
+- **文件范围**：
+  - `docs/task-queue.md`（SEQ-20260512-01 收尾 + SEQ-20260512-02 起草段）
+  - `docs/tasks.md`（CHG-PLAN-03 状态标 🟢 待 sign-off）
+  - `docs/changelog.md`（本条目）
+- **新增依赖**：无
+- **数据库变更**：无
+- **质量门禁**：
+  - typecheck 全绿（8 workspaces）
+  - lint 全绿（1 pre-existing useEffect deps warning 非本卡引入）
+  - unit baseline 维持（仅 docs 改动）
+- **arch-reviewer 评审轨迹**：
+  - **第 1 轮 (claude-opus-4-7) CONDITIONAL**：
+    - 红线：R1 subtitles 端点命名空间偏差核验 / R2 Popover ADR-115a 升级路径未提升为 BLOCKER 关键约束 / R3 CHG-SN-5-07 "sonnet 中途升 opus" 措辞违反 CLAUDE.md 模型路由
+    - 黄线：Y1 视图卡 e2e 黄金路径未显式登记 / Y2 "新原语未下沉" BLOCKER 缺位 / Y3 milestone audit 验收范围缺复用矩阵达标率 / Y4 ADR 起草不应并行
+    - advisory：A1 audit Y2 衔接 / A2 ADR-105 性能基线 / A3 sources 视图拆分（advisory）
+  - **主循环修订**：
+    - R1 实际证据修正：独立 grep 发现 admin `/admin/subtitles` 端点实际位于 `apps/api/src/routes/admin/content.ts:269-296`（非 `apps/api/src/routes/subtitles.ts`），CHG-SN-5-02 范围修正为审核队列 + 通过/拒绝（与 v1 行为对齐），R1 普适化覆盖 -01/-03 同补端点核验证据
+    - R2：关键约束清单升格 Popover ADR-115a + 澄清 6 原语 props 反向扩展不得主循环擅自启动 sub-ADR
+    - R3：-07/-11/-12 三视图卡建议模型字段改为"sonnet → BLOCKER 暂停 → 用户 sign-off 后另启 opus 会话"
+    - Y1：5 张视图卡（-02/-03/-07/-11/-12）+ -01 全 6 卡补 "e2e 黄金路径" 行
+    - Y2：关键约束新增 "视图卡内新建 admin-ui 通用组件不下沉 → BLOCKER"
+    - Y3：CHG-SN-5-13 审计范围补 "复用矩阵 §8 达标率 + 新原语未下沉核验"
+    - Y4：并行批次拆分"批次 2a -04 串行"+ "批次 2b -08 串行"；-08 依赖字段 "依赖 -04 PASS"
+    - A1：SEQ 备注衔接 audit Y2 admin-ui 视觉债转 DEBT 路径
+    - A2：ADR-105 完成判据补 candidate 评分函数 v1 + 性能基线 ≤100 候选 + p95 ≤200ms + R-M-SN-5-B retest 入口
+    - A3：CHG-SN-5-11 工时段附 advisory 拆分选项（不强制）
+    - A-RESIDUAL-1：优化空间段措辞 polish（避免与 Y4 串行硬约束并列误读）
+  - **第 2 轮 (claude-opus-4-7) PASS 无条件**：
+    - 3 红线全 PASS（独立核验证据链完整）
+    - 4 黄线全 PASS
+    - 3 advisory 全实施
+    - 无新结构性破缺；仅 1 起草级措辞 polish 已主循环顺手修
+    - 工时合计 4.45w < 软上限 5.2w，未触发 §5.2 第 11 条
+    - 关键约束清单 8 条 + 风险登记 5 条全面覆盖 M-SN-5 主体执行路径
+- **完成判据达成情况**：
+  - ✅ SEQ 起草完成
+  - ✅ arch-reviewer Opus PASS（2 轮闭环，≤ 3 轮上限）
+  - ⏸ 用户 sign-off（待用户显式批准触发 CHG-SN-5-01 启动）
+- **关键发现**：
+  - **R1 案例：独立审计发现 → 修正声明**：第 1 轮 arch-reviewer 基于 `apps/api/src/routes/subtitles.ts`（video 维度）推断 admin subtitles 端点可能缺位 → 主循环独立 grep 发现 admin 端点实际在 admin/content.ts 内（命名空间混淆是 v1 实际结构），证据链完整后修正 CHG-SN-5-02 范围对齐现有端点。**主循环未盲从 arch-reviewer 推断，独立证据驱动修正**
+  - **R3 模型路由强制 sign-off 机制**：CLAUDE.md "主循环模型中途不可升级"硬约束首次显式贯彻到 SEQ 起草阶段，预防执行期主循环擅自升 opus 偏差（M-SN-3 / M-SN-4 历史曾出现类似争议，CHG-SN-3-02 stage 2/2 BLOCKER 即此因）
+  - **Y4 ADR 串行收紧**：ADR-104（home_modules）与 ADR-105（merge）虽然范围正交，但都消耗 Opus 子代理 + 用户 sign-off 注意力，且 ADR-105 涉及 ADR-114-NEGATED 二次表态，串行可避免 sign-off 时序错乱
+- **后续触发**：
+  - **路径 A（默认推进）**：用户回复 sign-off / 批准 / 启动 CHG-SN-5-01 → 主循环标 CHG-PLAN-03 ✅ 已完成 + SEQ-20260512-01 闭环 + 启动 CHG-SN-5-01 `/admin/submissions` Phase A 首张视图卡
+  - **路径 B（修订）**：用户提出修订意见 → 主循环更新 SEQ-20260512-02（如修订幅度大触发第 3 轮 Opus 评审 ≤ 3 轮上限）→ 重新等待 sign-off
+- **注意事项**：
+  - 用户 sign-off 之前 SEQ-20260512-02 状态保持 🟡 规划中；首张代码改动卡 CHG-SN-5-01 不得在 sign-off 前启动
+  - 如用户长时间未 sign-off 且无修订意见，主循环不得擅自推进；属 CLAUDE.md "Carefully consider reversibility" + "Authorization stands for the scope specified" 约束
+  - 第 3 轮 Opus 评审若被触发但仍 CONDITIONAL → REJECT → BLOCKER §5.2（M-SN-5 整体规划返工）
