@@ -221,6 +221,67 @@ describe('Popover — 键盘 Enter / Space 触发 toggle', () => {
   })
 })
 
+// ── 原生 button 键盘 activation 不绕过消费方 onClick（Codex stop-time review 修复）
+
+describe('Popover — 原生 button trigger 键盘路径走 onClick（不绕过消费方）', () => {
+  it('原生 <button> + Enter → 走浏览器 keyboard→click → 消费方 onClick 被调用 + popover 切开', () => {
+    // 模拟浏览器原生行为：原生 button + Enter keydown 不被 preventDefault → 紧跟 click
+    const consumerClick = vi.fn()
+    const { container } = render(
+      <Popover trigger={<button data-testid="native-btn" onClick={consumerClick}>x</button>} content={<div data-testid="native-kb">x</div>} />,
+    )
+    const trigger = container.querySelector('[data-testid="native-btn"]') as HTMLElement
+    // 1) Popover onKeyDown 包装 — 不应 preventDefault（让浏览器 keyboard→click 转换走完）
+    const kdResult = fireEvent.keyDown(trigger, { key: 'Enter' })
+    expect(kdResult).toBe(true)  // 默认未被 prevented（浏览器仍会转 click）
+    // 2) 模拟浏览器把 Enter 转 click（jsdom 不自动做此转换 → 测试中显式 fireEvent.click）
+    fireEvent.click(trigger)
+    expect(consumerClick).toHaveBeenCalledTimes(1)
+    expect(document.body.querySelector('[data-testid="native-kb"]')).toBeTruthy()
+  })
+
+  it('原生 <button> + Space → keyDown 不抢 toggle（toggle 仅 click 路径触发一次，无双触发）', () => {
+    const consumerClick = vi.fn()
+    const { container } = render(
+      <Popover trigger={<button data-testid="native-btn" onClick={consumerClick}>x</button>} content={<div data-testid="native-sp">x</div>} />,
+    )
+    const trigger = container.querySelector('[data-testid="native-btn"]') as HTMLElement
+    // Space keydown：不应触发 toggle（让浏览器走 click 路径）
+    fireEvent.keyDown(trigger, { key: ' ' })
+    expect(document.body.querySelector('[data-testid="native-sp"]')).toBeNull()  // 未 toggle
+    // 模拟浏览器把 Space → click
+    fireEvent.click(trigger)
+    expect(consumerClick).toHaveBeenCalledTimes(1)
+    expect(document.body.querySelector('[data-testid="native-sp"]')).toBeTruthy()
+    // 再次 click 关闭（验证 toggle 净效果正确，而非双触发归零）
+    fireEvent.click(trigger)
+    expect(document.body.querySelector('[data-testid="native-sp"]')).toBeNull()
+  })
+
+  it('原生 <button> + 消费方 onKeyDown → 仍被调用（包装链不破坏消费方）', () => {
+    const consumerKD = vi.fn()
+    const { container } = render(
+      <Popover trigger={<button data-testid="native-btn" onKeyDown={consumerKD}>x</button>} content={<div />} />,
+    )
+    const trigger = container.querySelector('[data-testid="native-btn"]') as HTMLElement
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+    expect(consumerKD).toHaveBeenCalledTimes(1)
+  })
+
+  it('<input type="button"> 同样走原生 keyboard activation（不抢 toggle）', () => {
+    const { container } = render(
+      <Popover
+        trigger={<input type="button" data-testid="native-input" value="x" />}
+        content={<div data-testid="native-input-content">x</div>}
+      />,
+    )
+    const trigger = container.querySelector('[data-testid="native-input"]') as HTMLElement
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+    // input[type=button] 也是原生 → keyDown 不触发 toggle
+    expect(document.body.querySelector('[data-testid="native-input-content"]')).toBeNull()
+  })
+})
+
 // ── ref 注入失败 fallback 到父容器（ADR-115 §2.1 防 crash）─────
 
 describe('Popover — ref 注入失败时 fallback 定位到 trigger 父容器', () => {

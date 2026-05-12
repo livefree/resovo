@@ -285,6 +285,21 @@ export function Popover({
   const consumerOnKeyDown = triggerProps.onKeyDown as ((e: React.KeyboardEvent) => void) | undefined
   const consumerRef = (trigger as unknown as { ref?: React.Ref<HTMLElement> }).ref
 
+  /**
+   * 原生 button 类元素（button / input[type=button|submit|reset]）— 浏览器自身会把
+   * Enter / Space 转成 click 事件 → 走我们注入的 onClick 包装链路（消费方 onClick + toggle）。
+   * 因此这些 trigger 类型上**不注入键盘 toggle**，避免：
+   *   1. 双触发（onKeyDown setOpen 一次 + 后续 click setOpen 又一次 = 净效果归零）
+   *   2. preventDefault 阻断浏览器键盘 → click 转换 → 消费方 onClick 被绕过
+   * 仍包装消费方 onKeyDown（不破坏消费方既有键盘 handler），仅不做 toggle。
+   * 仅对非原生 trigger（如 <div role="button">）由 Popover 接管 Enter/Space → toggle。
+   */
+  const triggerTagName = typeof trigger.type === 'string' ? trigger.type : null
+  const triggerInputType = triggerTagName === 'input' ? (triggerProps.type as string | undefined) : undefined
+  const isNativeButtonLike =
+    triggerTagName === 'button' ||
+    (triggerTagName === 'input' && (triggerInputType === 'button' || triggerInputType === 'submit' || triggerInputType === 'reset'))
+
   const mergedTrigger = cloneElement(trigger as React.ReactElement<Record<string, unknown>>, {
     onClick: (e: React.MouseEvent) => {
       try {
@@ -298,9 +313,9 @@ export function Popover({
       setOpen(!open)
     },
     /**
-     * Enter / Space 触发 toggle（ADR-115 §2.1）— 原生 <button> 自然把 Enter/Space
-     * 转 click，但 trigger 是 <div role="button"> 等非原生元素时需此 fallback。
-     * 包装消费方 onKeyDown：先调用消费方 → 再判定 Enter/Space 触发。
+     * Enter / Space 触发 toggle（ADR-115 §2.1）— 仅对非原生 trigger 接管：
+     * 原生 <button> / <input type=button|submit|reset> 由浏览器把 Enter/Space 转 click，
+     * 走 onClick 包装链路（消费方 onClick + toggle），此处仅包装消费方 onKeyDown 不抢 toggle。
      */
     onKeyDown: (e: React.KeyboardEvent) => {
       try {
@@ -311,6 +326,7 @@ export function Popover({
           console.warn('[admin-ui Popover] consumer onKeyDown 抛出异常，已吞掉以保 keyboard toggle', err)
         }
       }
+      if (isNativeButtonLike) return  // 原生 button 类：让浏览器原生 keyboard activation 走完
       if (e.defaultPrevented) return  // 消费方主动消费了 → 不再 toggle
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault()  // 阻止 Space 默认滚动
