@@ -13,6 +13,9 @@ export type { AccentToken, AccentTheme } from './accent.js'
 export { state } from './state.js'
 export type { StateKind, StateSlot, StateTheme } from './state.js'
 
+export { stateFgOnSoft } from './state-fg-on-soft.js'
+export type { StateFgOnSoftKind, StateFgOnSoftTheme } from './state-fg-on-soft.js'
+
 export { dualSignal } from './dual-signal.js'
 export type { DualSignalToken, DualSignalTheme } from './dual-signal.js'
 

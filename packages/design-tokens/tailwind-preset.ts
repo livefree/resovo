@@ -65,6 +65,11 @@ const colorExtensions = {
     'info-bg': 'var(--state-info-bg)',
     'info-fg': 'var(--state-info-fg)',
     'info-border': 'var(--state-info-border)',
+    // theme-aware text on alpha-soft 软底（CHG-SN-5-PRE-01-E-2-followup-4 / Codex round 10）
+    'fg-on-soft-success': 'var(--state-fg-on-soft-success)',
+    'fg-on-soft-warning': 'var(--state-fg-on-soft-warning)',
+    'fg-on-soft-error': 'var(--state-fg-on-soft-error)',
+    'fg-on-soft-info': 'var(--state-fg-on-soft-info)',
   },
 } as const
 
