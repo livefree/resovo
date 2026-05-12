@@ -5991,3 +5991,61 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **注意事项**：
   - M-SN-3 milestone 自此正式闭环（B+ PASS），不再有 cutover-blocker 阻塞 cutover（M-SN-7）— M-SN-3 范畴
   - 剩余 PRE-01-E/-F 均涉及 Playwright visual harness + 真截图，需本地启 dev server，非纯 AI 自动卡
+
+## [CHG-SN-5-PRE-01-E-1] admin-ui Playwright visual harness 基础设施 + ADR-116 协议 — 落地
+
+- **完成时间**：2026-05-12
+- **记录时间**：2026-05-12 01:10
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 2 轮独立评审 → **A- PASS 无条件**
+  - 轮 1：C / CONDITIONAL — 1 红线（Next.js App Router 私有文件夹）+ 3 黄线 + 4 OBS
+  - rev2 修订：路径 `_visual/` → `dev/visual/`（复用 `/admin/dev/components` 先例）+ Y-1/Y-2/Y-3/Y-4 + OBS-1/2/3 全部同 ADR 修
+  - 轮 2：**A- PASS 无条件** — 9 项命中全闭环 + 1 新黄线 Y-NEW-1（.gitignore deliverable）同 ADR §3.1 补足
+- **关联 ADR**：**ADR-116（admin-ui Playwright visual harness 协议）— 候选 → 采纳**
+- **关联序列**：SEQ-20260506-02（M-SN-5.5 A 段第 3 件 cutover-blocker / DEBT-SN-4-A 拆分为 -E-1 基础设施 + -E-2 真截图）
+- **用户决策路径**：C（dev-only `_visual/` 路由 + props 注入 query param），2026-05-12 用户裁定 — 排除 A（@playwright/experimental-ct-react 新依赖触发 BLOCKER）/ B（状态难全覆盖）
+- **修改文件**：
+  - `docs/decisions.md` — 新增 ADR-116（~260 行 5 段：Context / Decision 7 子节 / Consequences / 与现有约束对齐 / 关联）+ 2 轮评审轨迹段
+  - `docs/server_next_plan_20260427.md` §9 ADR 索引 — 追加 ADR-116 采纳行
+  - `apps/server-next/src/app/admin/dev/visual/layout.tsx`（新建）— 生产 notFound 守卫第 1 层 + demo 容器
+  - `apps/server-next/src/app/admin/dev/visual/page.tsx`（新建）— 索引页（5 件组件 + 12 状态入口）
+  - `apps/server-next/src/app/admin/dev/visual/[component]/page.tsx`（新建）— 动态分发：从 registry 取注册项渲染 + 生产 notFound 第 2 层
+  - `apps/server-next/src/app/admin/dev/visual/_lib/component-registry.ts`（新建）— 5 件组件展厅注册（BarSignal × 5 / StaffNoteBar × 2 / LineHealthDrawer × 1 / RejectModal × 1 / DecisionCard × 3）
+  - `apps/server-next/src/app/admin/dev/visual/_lib/mock-data.ts`（新建）— SourceHealthEvent[] / ReviewLabel[] / DecisionCardVideo × 3 mock 数据
+  - `playwright.config.ts` — 新增 admin-visual project（testDir `tests/visual` + testMatch `**/*.visual.spec.ts` + toHaveScreenshot 容差 maxDiffPixelRatio 0.02 / threshold 0.1；复用既有 server-next webServer，不新增）
+  - `tests/visual/admin-ui/bar-signal.visual.spec.ts`（新建，5 状态）
+  - `tests/visual/admin-ui/staff-note-bar.visual.spec.ts`（新建，2 变体）
+  - `tests/visual/admin-ui/line-health-drawer.visual.spec.ts`（新建，1 状态 + fullPage）
+  - `tests/visual/admin-ui/reject-modal.visual.spec.ts`（新建，1 状态 + fullPage）
+  - `tests/visual/admin-ui/decision-card.visual.spec.ts`（新建，3 状态）
+  - `tests/visual/admin-moderation.visual.spec.ts`（新建，7 张整页截图骨架 + storageState + 前置数据协议注释）
+  - `.gitignore` — 追加 `tests/visual/.auth/` 条目（防止 admin storageState cookies 快照泄露 / Y-NEW-1）
+  - `docs/tasks.md` / `docs/task-queue.md` — 任务流水
+- **新增依赖**：无（用既有 @playwright/test 已在 devDeps）
+- **数据库变更**：无
+- **质量门禁**：
+  - typecheck 全绿（8 workspaces，含 server-next visual 路由 + component-registry 类型推断）
+  - lint 全绿
+  - unit test 3434/3434 全绿（首跑 1 失败为预存 StagingEditPanel flake — CHG-SN-3-10 changelog line 2155 已标注 "2 失败为预存 StagingEditPanel flake" / 重跑全绿，本卡纯文档+配置+dev-only 路由零代码触碰既有 unit test 范围）
+  - 严格三件套 commit 前执行（吸取 CHG-SN-5-PRE-01-A-pre 流程违规教训）
+- **ADR-116 关键决策摘要**（详见 docs/decisions.md）：
+  - 路径选型：路径 C（dev-only 路由）— 无新依赖 / 状态精细可控 / 工程量小
+  - URL 结构：`/admin/dev/visual/<component-id>?state=<slug>`（复用 `/admin/dev/components` CHG-SN-2-19 先例命名空间）
+  - 生产守卫：3 重防御（layout notFound + 单页 notFound + middleware admin 鉴权）
+  - component-registry：5 件组件 + 12 状态注册，复杂 mock 独立 _lib/mock-data.ts（Y-4）
+  - playwright admin-visual project：testDir + testMatch 隔离不与 e2e 混跑；复用既有 server-next webServer（Y-1）
+  - 容差：maxDiffPixelRatio 0.02 / threshold 0.1（Y-3 修订平衡 flake / 真 regression 捕获）
+  - PRE-01-F moderation 整页截图前置数据协议（Y-2）：storageState + seed + modal/drawer click 触发 + fixture data 隔离
+  - CI 接入触发条件（OBS-1）：Linux baseline 双平台覆盖 / snapshotPathTemplate {platform}
+  - "纯 props 驱动" 强约束（OBS-2）：dev/visual 组件零服务端依赖
+- **后续触发**：
+  - **CHG-SN-5-PRE-01-E-2**（用户卡）：本地启 server-next dev → `NEXT_PUBLIC_ASSET_PREFIX="" npm --workspace @resovo/server-next run dev` → `npx playwright test --project=admin-visual --update-snapshots admin-ui` → 12 张 baseline 入库
+  - **CHG-SN-5-PRE-01-F**（用户卡 / 复用 -E-1 harness）：
+    1. 生成 admin storageState：`npx playwright codegen --save-storage tests/visual/.auth/admin.json http://localhost:3003/login`
+    2. 准备 seed 数据：dev DB 至少有 pending/rejected/staging 视频各 1+ 条
+    3. PRE-01-F 实施时按 moderation 页面 DOM 调整 spec selectors（[data-row] / 拒绝按钮 / 线路健康指示器）+ click+waitForSelector 触发 modal/drawer 状态
+    4. 跑 `npx playwright test --project=admin-visual --update-snapshots admin-moderation` → 7 张真截图入库替换 69-byte 占位 PNG
+- **注意事项**：
+  - dev/visual 路由 dev-only：生产 build 自动 notFound（3 重防御）；演练或开发期访问 http://localhost:8080/admin/dev/visual（走 Caddy）或 http://localhost:3003/admin/dev/visual（直连，需 NEXT_PUBLIC_ASSET_PREFIX 空）
+  - admin-visual project 不在 CI 跑（package.json 默认 npm test:e2e 不含 admin-visual project；future CI 接入需 Linux runner 重新 --update-snapshots 生成 Linux baseline，详见 ADR-116 §3.4 风险 4）
+  - moderation spec 中的 `[data-row]` / 拒绝按钮 / 线路健康指示器等 selector 在 PRE-01-F 实施时按当前 moderation page DOM 调整（本卡仅落骨架）

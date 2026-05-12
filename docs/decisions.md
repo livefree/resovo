@@ -4744,3 +4744,279 @@ Popover 仅承担：portal / 定位 / 5 类 dismiss / ARIA 属性桩。键盘导
 - **关联 plan**：§6 M-SN-5.5 C 段 / §6 M-SN-6 删除 "Popover 原语 + 先于 filter popover" 行 / §9 ADR 索引 ADR-115 候选
 - **关联 task-queue**：SEQ-20260506-02 子卡 13（PRE-03-F）状态 ⏸ 触发 sub-ADR 前置 → 本 ADR PASS 后转入 PRE-03-F 实施卡可起卡
 - **关联 design-tokens**：新增 `--z-admin-popover: 1050` 槽位（实施卡内同 PR 落地；见 §2.5 z-index 5 级扩展决策）
+
+---
+
+## ADR-116：admin-ui Playwright visual harness 协议（CHG-SN-5-PRE-01-E-1）
+
+**决策日期**：2026-05-12（候选）
+**决策卡**：CHG-SN-5-PRE-01-E-1（SEQ-20260506-02 M-SN-5.5 A 段第 3 件 cutover-blocker / DEBT-SN-4-A 前置基础设施部分）
+**决策模型**：claude-opus-4-7（主循环）+ arch-reviewer (claude-opus-4-7) 强制独立评审
+**用户裁定路径**：C（dev-only `_visual/` 路由），2026-05-12 — 排除 A（新依赖触发 BLOCKER）/ B（状态难全覆盖）
+
+**状态**：✅ **采纳**（2026-05-12，2 轮 arch-reviewer Opus 评审 → 第 2 轮 A- / PASS 无条件 / 9 项第 1 轮命中全部闭环 + Y-NEW-1 同 ADR 修）
+
+**评审轨迹**：
+- 轮 1（2026-05-12，agentId a36开头）：**C / CONDITIONAL** — 1 红线 + 3 黄线 + 4 OBS
+  - R-1（致命）：`_visual/` 目录在 Next.js App Router 下不可路由（私有文件夹约定）
+  - Y-1：admin-visual project 缺少 webServer 配置说明
+  - Y-2：PRE-01-F moderation 整页截图前置数据协议过于模糊
+  - Y-3：toHaveScreenshot 容差组合冲突（maxDiffPixelRatio 0.01 / threshold 0.2 语义不匹配）
+  - Y-4：mock 数据持久化策略未说明
+  - OBS-1：CI 接入触发条件未定义
+  - OBS-2："零业务视图消费" 豁免边界需注意
+  - OBS-3：与 /admin/dev/components 关系未厘清
+  - OBS-4：@playwright/test 已在 devDeps 确认通过
+- rev2 修订（2026-05-12，同日）：R-1 + Y-1/Y-2/Y-3/Y-4 + OBS-1/2/3 全部同 ADR 修；OBS-4 无需动作（确认通过）
+- 轮 2（2026-05-12，agentId af6开头）：**A- / PASS 无条件** — 9 项命中全 PASS；新 1 黄线 Y-NEW-1（`.gitignore` 加 `tests/visual/.auth/` 是实施 deliverable gap 非设计缺陷）→ 同 ADR §3.1 deliverables 补足 → 评审建议直接采纳，无需第 3 轮
+
+### 1. Context
+
+#### 1.1 真源
+- M-SN-4-milestone-audit-2026-05-05.md §6（DEBT-SN-4-A：5 件下沉组件 ~12 张 Playwright `toHaveScreenshot()` baseline + 建立后必须回溯 M-SN-4 改动校验）
+- task-queue.md line 1995（DEBT-SN-4-A：现仓库 `tests/visual/` 是**手动 PNG 归档无 Playwright host**，本期豁免 baseline 入库要求）
+- task-queue.md line 2001（DEBT-SN-4-07-A：moderation 7 张占位 PNG 69-byte 单像素 placeholder）
+
+#### 1.2 仓库现状
+- `tests/visual/` 下有 ~30+ 真截图 PNG（dashboard / videos / video-edit-drawer / analytics），均为**手动归档**（设计稿对齐时 commit），非 Playwright 流程
+- `tests/visual/moderation/` 7 张全部 69-byte 占位（DEBT-SN-4-07-A 登记）
+- `grep toHaveScreenshot` 在仓库 **0 命中** — 零 Playwright visual harness 测试代码
+- playwright.config.ts 现 4 project：admin-chromium / admin-next-chromium / web-chromium / web-mobile — 都是 e2e，无 visual project
+
+#### 1.3 5 件下沉组件清单（task-queue line 1995）
+| # | 组件 | 状态 / 变体 | 路径 |
+|---|---|---|---|
+| 1 | BarSignal | 5 状态（ok / partial / dead / pending / unknown） | packages/admin-ui/src/components/cell/bar-signal.tsx |
+| 2 | StaffNoteBar | 2 变体（display / edit） | packages/admin-ui/src/components/feedback/staff-note-bar.tsx |
+| 3 | LineHealthDrawer | 1 状态（events 时间线） | packages/admin-ui/src/components/feedback/line-health-drawer.tsx |
+| 4 | RejectModal | 1 状态（标签单选 + 备注） | packages/admin-ui/src/components/feedback/reject-modal.tsx |
+| 5 | DecisionCard | 3 状态（approve / reject / pending） | packages/admin-ui/src/components/cell/decision-card.tsx |
+
+合计 ~12 个截图场景。
+
+#### 1.4 路径选型对比（用户 2026-05-12 裁决路径 C）
+| 路径 | 引入依赖 | 状态控制 | 工程量 | 选定 |
+|---|---|---|---|---|
+| A · `@playwright/experimental-ct-react` | 新依赖 / 触发 plan §5.2 BLOCKER 12 项 | 精细 | 中 | ❌ |
+| B · server-next 真实页面 + seed/mock 数据 | 无 | 粗（Modal/Drawer 状态难触发） | 大 | ❌ |
+| **C · server-next dev-only `_visual/` 路由 + props 注入** | **无** | **精细（URL query param）** | **小** | **✅ 用户裁定** |
+
+### 2. Decision
+
+#### 2.1 URL 结构（rev2，arch-reviewer R-1 修订）
+
+```
+/admin/dev/visual/<component-id>?<state-params>
+```
+
+- **路径选型修订（rev2）**：原方案 `/admin/_visual/` 错误使用 Next.js App Router 私有文件夹约定 — `_` 前缀目录会被框架从路由树中**完全排除**（不可路由）。改用 `admin/dev/visual/`，复用项目既有 `admin/dev/components/` 先例（CHG-SN-2-19 落地的 admin-ui 全量组件 demo 页），路径语义清晰且与 dev/ 路径协议对齐。
+- 严格 dev-only：生产模式 `notFound()` 守卫（双层：layout 路由组守卫 + 单页 page.tsx 内 env check）
+- `<component-id>` enum：`bar-signal` / `staff-note-bar` / `line-health-drawer` / `reject-modal` / `decision-card`
+- query param 注入 props（每个组件独立 enum 表，见 §2.4 component-registry）
+- 与 `/admin/dev/components`（CHG-SN-2-19）分工：
+  - `dev/components`：交互功能验收（手动浏览，不做自动化截图）
+  - `dev/visual`：Playwright visual regression baseline（自动化截图，状态精细控制）
+
+#### 2.2 路由结构（rev2）
+
+```
+apps/server-next/src/app/admin/dev/visual/
+├── layout.tsx                        # 路由组守卫（生产 notFound）+ 通用 demo 容器（白底 + 固定 viewport）
+├── page.tsx                          # 索引页（列出 5 件组件链接）
+├── [component]/
+│   └── page.tsx                      # 动态分发：从 component-registry 取注册项渲染
+└── _lib/                             # 私有文件夹（_前缀，不可路由，存放工具/mock 数据）
+    ├── component-registry.ts         # 5 件组件展厅注册 + props 表（state enum + 默认 props）
+    └── mock-data.ts                  # mock 数据：SourceHealthEvent[] / ReviewLabel[] / DecisionCardVideo（Y-4 修订）
+```
+
+#### 2.3 生产守卫策略（双层）
+
+**第 1 层（layout.tsx）**：
+```tsx
+import { notFound } from 'next/navigation'
+
+export default function VisualLayout({ children }: { children: React.ReactNode }) {
+  if (process.env.NODE_ENV === 'production') notFound()
+  return <div data-visual-demo style={{ background: 'var(--bg-surface)', padding: 24 }}>{children}</div>
+}
+```
+
+**第 2 层（每个 [component]/page.tsx）**：
+```tsx
+if (process.env.NODE_ENV === 'production') notFound()
+```
+
+双层守卫：layout 守卫一次性拦截整个 `admin/dev/visual/*` 子树；单页守卫防御性兜底（若 layout 被绕过）。同时 middleware 现有的 admin 鉴权（refresh_token + 非 user role）对 dev/visual 仍生效（任何无效用户 redirect /login），属第 3 重防御。
+
+**OBS-2 强约束（rev2 补充）**：`admin/dev/visual/` 下的组件 **必须纯 props 驱动、零服务端数据依赖**（不得调用 server actions / API / DB）— 若未来需要带服务端逻辑的视觉验证，须独立 ADR 决议并隔离命名空间，避免模糊"测试基础设施 ≠ 业务视图"边界。
+
+#### 2.4 component-registry 接口契约（rev2）
+
+```typescript
+// apps/server-next/src/app/admin/dev/visual/_lib/component-registry.ts
+
+export interface VisualComponentEntry<TProps> {
+  /** 组件 ID（URL 路径段） */
+  readonly id: string
+  /** 展示标题 */
+  readonly title: string
+  /** 状态枚举：query param → props mapping */
+  readonly states: ReadonlyArray<{
+    /** state slug（baseline 文件名后缀） */
+    readonly slug: string
+    /** 标题（索引页展示） */
+    readonly label: string
+    /** props 注入（每个 state 独立 props） */
+    readonly props: TProps
+  }>
+  /** 渲染函数（接收 state.props 返回 JSX） */
+  readonly render: (props: TProps) => React.ReactNode
+}
+
+export const REGISTRY: ReadonlyArray<VisualComponentEntry<unknown>> = [
+  // 5 entries: bar-signal / staff-note-bar / line-health-drawer / reject-modal / decision-card
+]
+```
+
+URL 解析：`/admin/dev/visual/bar-signal?state=ok` → 查 REGISTRY['bar-signal'].states[state='ok'].props → render。
+
+**mock 数据持久化（Y-4 修订）**：复杂 mock（SourceHealthEvent[] / ReviewLabel[] / DecisionCardVideo Pick）必须放独立文件 `_lib/mock-data.ts`，registry 仅 import 引用 — 避免 registry 文件膨胀 / mock 与注册逻辑耦合。项目既有先例：`apps/server-next/src/app/admin/moderation/_client/mock-data.ts`。
+
+#### 2.5 playwright.config.ts 配置（rev2 — Y-1 + Y-3 修订）
+
+新增 project：
+```typescript
+{
+  name: 'admin-visual',
+  use: { ...devices['Desktop Chrome'], baseURL: ADMIN_NEXT_URL },
+  testDir: './tests/visual',
+  testMatch: '**/*.visual.spec.ts',
+  expect: {
+    // Y-3 修订：容差组合从 (0.01, 0.2) 调整为 (0.02, 0.1)
+    // - maxDiffPixelRatio: 2% 像素差异容忍（vs 1% 太严易 flaky）
+    // - threshold: 10% per-pixel 颜色差异容忍（vs 20% 过松会掩盖颜色 regression）
+    // v1 经验初始值；PRE-01-E-2 真截图入库后根据实际 flaky 率调整
+    toHaveScreenshot: { maxDiffPixelRatio: 0.02, threshold: 0.1 },
+  },
+}
+```
+
+**Y-1 修订**：admin-visual project 的 dev server **由现有 webServer 条目覆盖**（`npm --workspace @resovo/server-next run dev`，端口 3003，playwright.config.ts line 59-64）— 无需新增 webServer。多 project 共用同一 webServer 是 Playwright 标准模式。
+
+testDir 与 testMatch 隔离：`tests/visual/**/*.visual.spec.ts` 才被 admin-visual 跑；`tests/e2e/**/*.spec.ts` 不混入。
+
+**baseline 文件落位策略**：默认 Playwright 落在 `tests/visual/<feature>/<spec-name>.visual.spec.ts-snapshots/<test-name>-1-<browser>-<platform>.png`。本卡显式指定 `expect(...).toHaveScreenshot('<name>.png')` 控制文件名，baseline 路径形如 `tests/visual/admin-ui/bar-signal.visual.spec.ts-snapshots/bar-signal-ok-1-chromium-darwin.png`。这与现有 `tests/visual/dashboard/dashboard-full.png` 等手动归档目录（直接落顶层 PNG，无 `-snapshots/` 后缀）**并行不冲突** — Playwright 只读 `-snapshots/` 后缀目录，手动归档继续作为参考截图。
+
+#### 2.6 visual.spec.ts 模板
+
+```typescript
+// tests/visual/admin-ui/bar-signal.visual.spec.ts
+import { test, expect } from '@playwright/test'
+
+const STATES = ['ok', 'partial', 'dead', 'pending', 'unknown'] as const
+
+for (const state of STATES) {
+  test(`bar-signal — ${state}`, async ({ page }) => {
+    await page.goto(`/admin/dev/visual/bar-signal?state=${state}`)
+    await page.waitForSelector('[data-bar-signal]')
+    await expect(page.locator('[data-bar-signal]')).toHaveScreenshot(`bar-signal-${state}.png`)
+  })
+}
+```
+
+#### 2.7 PRE-01-F moderation 整页截图（rev2 — Y-2 修订补充前置数据协议）
+
+PRE-01-F 的 7 张占位 PNG 真截图不通过 `dev/visual/` 路由，而是直接走 `/admin/moderation` 真实页面截图（与既有 `tests/visual/moderation/*.png` 手动归档对齐）。spec 模板需要包含完整的前置数据 + 交互操作链：
+
+```typescript
+// tests/visual/admin-moderation.visual.spec.ts
+import { test, expect } from '@playwright/test'
+
+// 前置：admin storageState（已登录的 cookies 快照）
+// 由 tests/visual/.auth/admin.json 提供（首次跑前用户手动登录生成）
+test.use({ storageState: 'tests/visual/.auth/admin.json' })
+
+test('moderation — pending-list', async ({ page }) => {
+  await page.goto('/admin/moderation?tab=pending')
+  await page.waitForSelector('[data-moderation-list]')
+  await expect(page).toHaveScreenshot('moderation-pending-list.png')
+})
+
+test('moderation — reject-modal', async ({ page }) => {
+  await page.goto('/admin/moderation?tab=pending')
+  await page.waitForSelector('[data-moderation-list]')
+  // 点击行操作 → 打开拒绝 Modal
+  await page.click('[data-reject-button]')
+  await page.waitForSelector('[data-reject-modal]')
+  await expect(page).toHaveScreenshot('moderation-reject-modal.png')
+})
+// 5 more: pending-detail / lines-panel / rejected / staging / line-health-drawer
+```
+
+**前置数据协议（Y-2 修订）**：
+
+1. **登录态**：使用 Playwright `storageState`（admin 已登录的 cookies 快照），路径 `tests/visual/.auth/admin.json`（git ignore，每个开发者本地生成）
+   - 首次生成：用户跑 `npx playwright codegen --save-storage tests/visual/.auth/admin.json http://localhost:3003/login` 手动登录一次
+2. **seed 策略**：依赖 dev 环境的真实数据库（开发者手动创建测试视频 — pending / rejected / staging 各 1+ 条）；后续若需稳定 seed，独立卡 `scripts/seed-moderation-visual-test-data.ts`
+3. **modal/drawer 截图**：spec 必须包含 `page.click('[data-trigger]')` + `waitForSelector('[data-modal-or-drawer]')` 才能截到打开状态（不能仅 `goto` + `screenshot`）
+4. **fixture data 隔离**：visual spec 不应 mutate 数据库（只读截图）；如需写操作（如 reject），用 `test.afterEach` 清理或在测试数据集外操作
+
+### 3. Consequences
+
+#### 3.1 立即生效（PRE-01-E-1 实施卡内同 PR 落地）
+
+1. ADR-116 PASS → harness 基础设施同 PR 落地：
+   - `apps/server-next/src/app/admin/dev/visual/` 路由组（layout + 索引 + [component]/page + _lib/component-registry + _lib/mock-data）
+   - `playwright.config.ts` 加 admin-visual project
+   - `tests/visual/admin-ui/*.visual.spec.ts` 5 个骨架 + `tests/visual/admin-moderation.visual.spec.ts` 1 个骨架
+2. **`.gitignore` 追加 `tests/visual/.auth/` 条目**（Y-NEW-1：防止 admin storageState cookies 快照意外入库）
+3. 占位 baseline 保留不动（PRE-01-E-2 + PRE-01-F 由用户跑 `--update-snapshots` 替换）
+
+#### 3.2 后续触发
+
+- **PRE-01-E-2**（用户卡）：本地启 server-next dev → `npx playwright test --project=admin-visual --update-snapshots` → 12 张 baseline 入库
+- **PRE-01-F**（用户卡）：复用同次 `--update-snapshots` 跑出 7 张 moderation 真截图（替换占位 PNG）
+- **未来**：admin-ui 新增下沉组件时同模式扩展 component-registry + 加 visual.spec.ts spec
+- **回溯校验**（DEBT-SN-4-A Y4）：baseline 入库后，对 M-SN-4 期 5 件组件改动跑一次 visual diff，确认无视觉回归
+
+#### 3.3 Non-Goals（明列防扩张）
+
+- ❌ 引入 `@playwright/experimental-ct-react`（路径 A 排除）
+- ❌ 引入 Storybook（项目级 BLOCKER 触发 — 新依赖体量大）
+- ❌ 引入 vite-runtime（同上）
+- ❌ 视觉对比 ML / AI 模型（YAGNI）
+- ❌ 跨浏览器 baseline（v1 仅 Desktop Chrome；Firefox/Safari 留 future）
+- ❌ 移动端 viewport baseline（admin 是 desktop-only 应用，无移动端需求）
+- ❌ `dev/visual/` 路由暴露给生产 / staging（生产 notFound 双层守卫，仅 dev 可访问）
+
+#### 3.4 风险与回滚
+
+- **风险 1**：dev-only 路由生产泄露 → 缓解：(a) layout + 单页双层 `process.env.NODE_ENV === 'production'` notFound 守卫；(b) middleware 现有 admin 鉴权对 dev/visual 仍生效（无 token / user role 直接 redirect /login）；(c) Next.js build 期 `process.env.NODE_ENV === 'production'` 是常量 — Webpack tree-shake 会消除 dev-only 渲染路径，生产 bundle 不含组件代码；(d) ESLint 规则后续可加（如发现泄露案例）
+- **风险 2**：component-registry props 表与组件 Props 接口漂移 → 缓解：registry 内 `as const` + 严格 TypeScript 类型推断；组件 Props 变更时 typecheck 立即报错
+- **风险 3**：Playwright Chrome 版本变化导致截图 sub-pixel 差异 → 缓解：`toHaveScreenshot { maxDiffPixelRatio: 0.02, threshold: 0.1 }`（rev2 调整后的容差，Y-3 修订）；CI 锁 Playwright 版本（package-lock 已锁）
+- **风险 4（rev2 + OBS-1 修订）**：跨平台截图差异（macOS dev 跑出的 baseline 与 Linux CI 比 → 不一致）→ 缓解：v1 baseline 由开发者本地（macOS）生成，CI 暂不跑 visual project（package.json npm scripts 不含 admin-visual project）；**CI 接入 future 触发条件**：(1) CI runner 上重新 `--update-snapshots` 生成 Linux baseline（与 macOS baseline 共存，按 platform 后缀区分；Playwright 默认 `<test>-1-<browser>-<platform>.png` 已含 platform 段），或 (2) Playwright 配置 `snapshotPathTemplate` 加入 `{platform}` 显式段。CI 接入前必须先确认 baseline 双平台覆盖；否则 admin-visual project 仅本地开发者运行。
+- **回滚**：dev-only 路由可独立删除（不影响业务路由）；playwright.config.ts admin-visual project 可禁用（其它 project 不受影响）
+
+### 4. 与现有约束的对齐
+
+| 约束 | 状态 |
+|---|---|
+| ADR-100 依赖白名单 | ✅ 通过（无新依赖；用既有 @playwright/test 已在 devDeps）|
+| ADR-103a packages/admin-ui Shell 公开 API | ✅ 通过（仅消费 admin-ui 组件展示，不修改契约） |
+| CLAUDE.md "引入技术栈以外的新依赖" 禁止 | ✅ 通过 |
+| CLAUDE.md "不得跨层调用" | ✅ 通过（component-registry 在 server-next 应用层消费 admin-ui） |
+| CLAUDE.md "接口设计先于实现" | ✅ 通过（本 ADR 即接口设计，PASS 后才起实施） |
+| CLAUDE.md "硬编码颜色" 禁止 | ✅ 通过（demo 容器用 var(--bg-surface)） |
+| 演练前置（ADR-101 cutover 协议） | ✅ 对齐（visual baseline 是 cutover 前 visual regression 守门，与 cookie 演练同性质 cutover-blocker） |
+| Risk-PRE-01-A-1（SameSite=Strict）| 无关（dev/visual 路由 dev-only，不涉及生产 cookie） |
+| 零业务视图消费（C 段历史强约束）| **本卡范围允许**（路径 C 决议明确 dev-only 视图 ≠ 业务视图，与 C 段原 "零业务视图消费" 约束语义不冲突 — 业务视图指 admin 主路由，dev/visual 是测试基础设施；rev2 OBS-2 补强约束 "组件必须纯 props 驱动、零服务端数据依赖"）|
+| Next.js App Router 路由约定 | ✅ 通过（rev2 R-1 修订：从 `_visual/`（不可路由的私有文件夹）改为 `dev/visual/`，复用 admin/dev/components 先例） |
+
+### 5. 关联
+
+- **关联 ADR**：ADR-100（依赖白名单）/ ADR-101（cutover 协议；visual baseline 是 cutover 前 regression 守门）/ ADR-103a（admin-ui Shell 公开 API；本 ADR 消费方）/ ADR-115（Popover 通用原语；同 sub-ADR 模式参照）
+- **关联组件**：BarSignal / StaffNoteBar / LineHealthDrawer / RejectModal / DecisionCard（5 件下沉组件展厅注册）
+- **关联 plan**：§6 M-SN-5.5 A 段第 3 件 cutover-blocker / §9 ADR 索引追加 ADR-116
+- **关联 task-queue**：SEQ-20260506-02 子卡 PRE-01-E（拆分为 -E-1 基础设施 + -E-2 真截图）/ PRE-01-F（moderation 7 张占位 PNG 替换）
+- **关联 audit**：M-SN-4-milestone-audit-2026-05-05.md §6 DEBT-SN-4-A 触发条件（建立 Playwright visual harness 基础设施 + 跑 ~12 张组件状态 baseline）

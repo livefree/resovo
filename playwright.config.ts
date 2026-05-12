@@ -9,6 +9,10 @@ const ADMIN_NEXT_URL = process.env.ADMIN_NEXT_APP_URL   ?? 'http://localhost:300
 const ADMIN_SPECS      = ['**/e2e/admin.spec.ts', '**/e2e/admin-source-and-video-flows.spec.ts', '**/e2e/video-governance.spec.ts', '**/e2e/publish-flow.spec.ts']
 // server-next 后台 E2E（apps/server-next:3003）
 const ADMIN_NEXT_SPECS = ['**/e2e/admin/**/*.spec.ts']
+// ── admin-visual project (ADR-116 / CHG-SN-5-PRE-01-E-1) ──────────────────
+// 隔离 testDir + testMatch，不与上述 e2e specs 混跑
+const ADMIN_VISUAL_TEST_DIR = './tests/visual'
+const ADMIN_VISUAL_TEST_MATCH = '**/*.visual.spec.ts'
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -46,6 +50,21 @@ export default defineConfig({
       name: 'web-mobile',
       testDir: './tests/e2e-next',
       use: { ...devices['iPhone 14'], baseURL: WEB_URL },
+    },
+    // ── admin-visual project (ADR-116 / CHG-SN-5-PRE-01-E-1) ─────────────
+    // Playwright visual baseline 跑 admin-ui 5 件下沉组件 ~12 状态 + moderation 7 张整页
+    // 复用 admin-next-chromium 的 webServer 条目（server-next dev :3003），不新增 webServer
+    {
+      name: 'admin-visual',
+      use: { ...devices['Desktop Chrome'], baseURL: ADMIN_NEXT_URL },
+      testDir: ADMIN_VISUAL_TEST_DIR,
+      testMatch: ADMIN_VISUAL_TEST_MATCH,
+      expect: {
+        // v1 经验初始容差（ADR-116 §2.5 / Y-3 修订）；PRE-01-E-2 真截图入库后据实际 flaky 率调整
+        // maxDiffPixelRatio: 2% 像素差异容忍（防抗锯齿 flake）
+        // threshold: 10% per-pixel 颜色差异容忍（catches color regression，比 20% 严）
+        toHaveScreenshot: { maxDiffPixelRatio: 0.02, threshold: 0.1 },
+      },
     },
   ],
 
