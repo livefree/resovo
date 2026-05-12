@@ -36,15 +36,16 @@ export default function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname
 
   // admin 鉴权拦截（ADR-010）
-  // dev/visual 路由豁免（ADR-116 §2.3）：dev-only 视觉测试 harness，不暴露业务数据；
-  // 生产模式由 layout + 单页双层 notFound() 守卫直接 404（middleware 之后），所以本路径
-  // 在生产永远不可达；dev 模式下 Playwright visual baseline 自动化跑无需登录态。
-  // 双重防御不变：layout notFound + page notFound 是生产防泄露主防线，middleware 鉴权
-  // 是业务路由（非 dev-only）的真正鉴权层。
-  const isDevVisual =
-    process.env.NODE_ENV !== 'production' && pathname.startsWith('/admin/dev/visual')
+  // dev/visual 路由统一豁免（ADR-116 §2.3 / followup-6）：layout/page 的 NODE_ENV
+  // 守卫成为唯一守门，契约统一：
+  //   - 生产：layout `notFound()` 第一行直接 404（无 redirect 中转）
+  //   - dev：layout 不 notFound，进入 demo 容器，Playwright visual baseline 跑通
+  // 不再依赖"未登录用户 → middleware redirect /login"作为生产防御（rev2 → rev3 修订），
+  // 因为 redirect /login 不等于 404，违反"任何 /admin/dev/visual/* 请求直接 404"契约；
+  // 且 dev/visual 组件展厅是纯 props 驱动 mock 数据（OBS-2 强约束），无业务数据可泄露。
+  const isDevVisualPath = pathname.startsWith('/admin/dev/visual')
 
-  if (pathname.startsWith('/admin') && !isDevVisual) {
+  if (pathname.startsWith('/admin') && !isDevVisualPath) {
     const refreshToken = req.cookies.get(COOKIE_REFRESH_TOKEN)?.value
     const role = parseUserRole(req.cookies.get(COOKIE_USER_ROLE)?.value)
 
