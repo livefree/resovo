@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * /admin/dev/visual/[component] — 动态分发：从 registry 取注册项渲染
  * 真源：ADR-116 §2.2 / §2.4（CHG-SN-5-PRE-01-E-1）
@@ -6,8 +8,14 @@
  * 默认 state：第一个 registry.states[0].slug
  *
  * 双层生产守卫第 2 层：单页防御性兜底（layout 已第 1 层，此处保险）。
+ *
+ * **followup-8（RSC 边界修订）**：必须是 Client Component — 5 件组件中 StaffNoteBar /
+ * LineHealthDrawer / RejectModal 接收 onClose / onSubmit / onEdit 等 handler props，
+ * registry render() 会注入 noop handlers；这些 handler 不可序列化跨 server→client 边界，
+ * 必须在 client 端执行 render()。React 19 用 `use()` 解 promise params/searchParams。
  */
 
+import { use } from 'react'
 import { notFound } from 'next/navigation'
 import { getEntry } from '../_lib/component-registry'
 
@@ -49,11 +57,11 @@ const DEMO_AREA_STYLE: React.CSSProperties = {
   minHeight: 200,
 }
 
-export default async function VisualComponentPage({ params, searchParams }: PageProps) {
+export default function VisualComponentPage({ params, searchParams }: PageProps) {
   if (process.env.NODE_ENV === 'production') notFound()
 
-  const { component } = await params
-  const { state: stateParam } = await searchParams
+  const { component } = use(params)
+  const { state: stateParam } = use(searchParams)
 
   const entry = getEntry(component)
   if (!entry) notFound()
