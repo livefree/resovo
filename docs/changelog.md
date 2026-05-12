@@ -5946,3 +5946,48 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 演练时本地 .env.local 须设 `NEXT_PUBLIC_ASSET_PREFIX=/admin`（用户本地配置，git 忽略；apps/server v1 + server-next 共用该 env）
   - 加 env 后直连 :3001 / :3003 端口会挂（HTML 输出 /admin/_next/...）— 演练期间必须始终走 caddy :8080
   - SameSite=Strict 风险仅在跨子域 cutover 场景生效，对当前开发期 + 同域 cutover 无影响
+
+## [CHG-SN-5-PRE-01-B] DEBT-SN-3-C M-SN-3 milestone 阶段审计完成 — B+ PASS 无条件
+
+- **完成时间**：2026-05-12
+- **记录时间**：2026-05-12 06:55
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮独立复评 → **B+ PASS 无条件** / 0 红线 / 3 黄线维持原分类 / 4 OBS 信息级
+- **关联序列**：SEQ-20260506-02（M-SN-5.5 A 段第 2 件 cutover-blocker）— 进度 11/13 → **12/13**（A 段剩 PRE-01-E/-F 2 子卡）
+- **真源**：plan §5.3 milestone 阶段审计强制 Opus + CHG-SN-3-13 审计重点 5 项 + SEQ-20260429-01 完成标准 7 项
+- **审计文档**：`docs/M-SN-3-milestone-audit-2026-05-12.md`（193 行 9 章节）
+- **5 项审计重点结果**：
+  1. ✅ 视频库可作为模板（server_next_view_template.md 272 行 8 章节齐全 + M-SN-4 实战参照成功）
+  2. ✅ VideoStatusIndicator 下沉（CHG-SN-3-02 落地）→ CHG-DESIGN-08 8A 删除（视觉对齐演进，不影响 milestone 闭环判定，带 caveat）
+  3. ✅ apps/server videos 100% parity（CHG-SN-3-01..-07 + e2e 5 场景全绿，VideoListClient 697 行实战 + 14 columns + 5 filter 维度 + 12 行操作 + 批量动作 + 14 字段 Edit Drawer）
+  4. ✅ e2e 演练通过（PRE-01-A 2026-05-12 闭环，5 步金票路径全绿 + 4 不变量验收）
+  5. ✅ DataTable v2 真实场景检验（一体化消费 DataTable + useTableQuery + useTableRouterAdapter + FilterChipBar + bulkActions + pagination）
+- **7 项完成标准**：7/7 全达
+- **黄线 3 条**（process observation 非 quality defect，无需升红线）：
+  - Y1 VideoStatusIndicator 下沉-删除 30 天内两次决策：揭示"原子组件下沉前未对齐设计真源"程序问题
+  - Y2 Risk-PRE-01-A-1（refresh_token SameSite=Strict 跨子域）：cutover-pre 卡（M-SN-7 启动前）评估并出 ADR
+  - Y3 milestone audit 延迟 11 天补做：教训登记入 workflow-rules 修订建议（SLA ≤ 7 天）
+- **arch-reviewer 4 OBS（信息级，本卡不修）**：
+  - OBS-1 VideoListClient.tsx 697 行（非声明性约 327）接近 CLAUDE.md 500 行约束边界
+  - OBS-2 line 510 `.catch(() => {/* 注释 */})` 注释式空 catch borderline 合规
+  - OBS-3 line 439 isAdmin=false 硬编码（CHG-SN-3-12 TODO）
+  - OBS-4 PRE-01-A 演练本地 Caddy 替代 staging nginx；cutover 时仍需真 staging 验证
+- **修改文件**：
+  - `docs/M-SN-3-milestone-audit-2026-05-12.md`（新建，193 行 9 章节，体例参 M-SN-4-milestone-audit-2026-05-05.md）
+  - `docs/task-queue.md` — PRE-01-B 状态 ⬜ → ✅ + 欠账段 DEBT-SN-3-C 标关闭
+  - `docs/changelog.md` — 本条目
+  - `docs/tasks.md` — 清空进行中
+- **新增依赖**：无
+- **数据库变更**：无
+- **质量门禁**：
+  - typecheck 全绿（8 workspaces）
+  - lint 全绿
+  - unit test 261 文件 / 3434 tests 全绿（commit 前严格三件套）
+  - arch-reviewer Opus 独立 PASS（评审独立 grep + 文件阅读核实 5 项审计重点证据链）
+- **后续触发**：
+  - **M-SN-5.5 A 段剩 2 子卡**：PRE-01-E（5 件下沉组件 ~12 张 Playwright visual baseline 🟠）+ PRE-01-F（7 张占位 PNG 替换真截图 🟠）
+  - Risk-PRE-01-A-1（SameSite=Strict）待 cutover-pre 卡评估
+  - Y3 workflow-rules 修订建议（milestone audit SLA ≤ 7 天）后续 rules 更新卡纳入
+- **注意事项**：
+  - M-SN-3 milestone 自此正式闭环（B+ PASS），不再有 cutover-blocker 阻塞 cutover（M-SN-7）— M-SN-3 范畴
+  - 剩余 PRE-01-E/-F 均涉及 Playwright visual harness + 真截图，需本地启 dev server，非纯 AI 自动卡
