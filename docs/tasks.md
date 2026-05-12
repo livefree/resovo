@@ -6,4 +6,32 @@
 
 ## 进行中任务
 
-<!-- 当前无进行中任务；CHG-SN-5-PRE-01-E-1 已闭环（2026-05-12，ADR-116 admin-ui Playwright visual harness 协议采纳 / 2 轮 arch-reviewer Opus 评审 → A- PASS 无条件 / 1 红线（路径修正）+ 4 黄线 + 4 OBS 全闭环 / harness 基础设施全就位：dev/visual 路由 + 5 件组件 12 状态展厅 + playwright admin-visual project + 6 个 visual.spec.ts 骨架 + .gitignore tests/visual/.auth/）；后续 PRE-01-E-2（12 张 baseline 真截图）+ PRE-01-F（7 张 moderation 整页截图替换占位）均需用户本地启 server-next + 跑 `--update-snapshots`；SEQ-20260506-02 进度 12/13 → 13/13（-E-1 计入 SEQ 完成 / -E-2 + -F 实施工作另起独立用户卡） -->
+### CHG-SN-5-PRE-01-F · moderation 7 张占位 PNG 替换真截图（PRE-01-E-2 harness 复用）
+
+- **建议模型**：opus（spec selector 适配 + 整页 fullPage screenshot 协议）
+- **执行模型**：claude-opus-4-7
+- **关联序列**：SEQ-20260506-02（M-SN-5.5 A 段第 5 件 cutover-blocker / DEBT-SN-4-07-A 关闭）
+- **真源**：
+  - task-queue.md line 2001（DEBT-SN-4-07-A：moderation 7 张占位 PNG 69-byte 单像素）
+  - ADR-116 §2.7（PRE-01-F 前置数据协议：storageState + seed + click+waitForSelector）
+- **依赖**：CHG-SN-5-PRE-01-E-1 ✅（harness 基础设施）+ CHG-SN-5-PRE-01-E-2 ✅（5 件组件 baseline 入库实例验证）
+
+#### 问题理解
+PRE-01-E-2 完成后 5 件组件 baseline 已入库 + harness 已验证可工作。PRE-01-F 是同一 harness 在 admin/moderation 真实页面跑 7 张整页截图，替换现有 `tests/visual/moderation/*.png` 7 张 69-byte 占位 PNG（DEBT-SN-4-07-A）。
+
+#### 涉及文件
+- `tests/visual/admin-moderation.visual.spec.ts`（已存在骨架，需调整 selector 适配实际 moderation page DOM）
+- `tests/visual/admin-moderation.visual.spec.ts-snapshots/`（新生成 7 张 baseline PNG）
+- `tests/visual/moderation/*.png`（删除 7 张 69-byte 占位）
+- `tests/visual/.auth/admin.json`（user 本地生成；已 gitignored）
+
+#### 前置准备（user 操作）
+1. **生成 admin storageState**（解决 codegen 登录失败 + ASSET_PREFIX 冲突）
+2. **dev DB seed**：moderation 至少有 pending / rejected / staging 各 1+ 视频
+3. **spec selector 适配**：本卡 AI 任务，预先 grep moderation page DOM 调整 spec（避免 user 跑后 fix）
+
+#### 工时估算
+~0.2w（spec selector 适配 + user 跑 update-snapshots + commit 入库）
+
+#### 子代理调用
+无（spec 适配 + baseline 入库，非 ADR/契约设计）
