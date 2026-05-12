@@ -6138,3 +6138,47 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - LineHealthDrawer 实际渲染含 "加载失败" — 后续若修复 dev 数据后 baseline 视觉变更，需 `npm run test:visual:update -- tests/visual/admin-moderation.visual.spec.ts` 重新生成
   - `tests/visual/.auth/admin.json` git ignored（含有效 refresh_token JWT，禁入库）；每个开发者本地生成（生成方式见 `scripts/visual-auth-setup.mjs`）
   - moderation spec 默认走 dark theme（admin shell html data-theme="dark"）；切 light theme 渲染需独立 baseline（future PRE-01-E-3 卡）
+
+---
+
+## CHG-SN-5.5-AUDIT · M-SN-5.5 milestone 阶段审计（A- PASS 无条件）— 2026-05-12
+
+- **任务 ID**：CHG-SN-5.5-AUDIT（SEQ-20260512-01 第 1 张子卡）
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — milestone 阶段审计强制 Opus（CLAUDE.md 模型路由 + plan §5.3）
+- **变更内容**：
+  - 新建 `docs/M-SN-5.5-milestone-audit-2026-05-12.md`（独立 arch-reviewer Opus 评级文档 / 9 节完整结构）
+  - 更新 `docs/task-queue.md` SEQ-20260512-01 段落 + 子卡 1/2 状态 ⬜ → ✅ + 完整完成备注
+  - 更新 `docs/tasks.md` 清空进行中卡（CHG-SN-5.5-AUDIT 闭环）
+- **文件范围**：
+  - `docs/M-SN-5.5-milestone-audit-2026-05-12.md`（新建）
+  - `docs/task-queue.md`（SEQ-20260512-01 段更新）
+  - `docs/tasks.md`（清空）
+  - `docs/changelog.md`（本条目）
+- **新增依赖**：无
+- **数据库变更**：无
+- **质量门禁**：
+  - typecheck 全绿（8 workspaces）
+  - lint 全绿（1 pre-existing useEffect deps warning 非本卡引入）
+  - unit baseline 由前置 commit 9720e219 承继：3434/3434 全绿（仅 docs 改动 → 不影响测试结果）
+- **审计结论**（plan §5.3 协议）：
+  - **评级 A-**（接近 A 满分，扣 0.5 等级因 visual baseline 单平台 + Storybook 缺失）
+  - 偏差报告：0 必须回滚 / 0 需追溯 ADR / 13 合理（13/13 子卡分类）
+  - 红线项：0
+  - 黄线项：5（Y1 visual baseline 单平台 / Y2 admin-ui 视觉债 STORYBOOK+BUTTON-HOVER+FOCUS-PSEUDO / Y3 Risk-PRE-01-A-1 SameSite=Strict / Y4 fullPage 截图 flake / Y5 6 原语 0 业务集成测试）
+  - 人工 checklist：6 项开放项（M-SN-5 视图首批消费 / Popover v1 够用性 / visual harness 复用 / Storybook spike / SameSite 决策 / demo 页 visual baseline）
+  - 准入判定：**M-SN-5 主体启动准入 PASS 无条件**
+  - arch-reviewer 建议：M-SN-5 第一张视图卡选 `/admin/submissions`（依赖 0 个新原语 + 6 件原语全消费机会，比 `/admin/sources` 风险低）
+- **关键发现**：
+  - **零业务视图消费硬约束 100% 满足**：审计独立 grep `apps/server-next/src/app/admin` 全路径，6 原语消费仅在 `dev/components` + `dev/visual` 两条 demo / harness 路径，业务视图（videos / moderation / dashboard / system / analytics）零 import
+  - **A 段 2🟠 超额完成**：plan §6 完成标准仅要求"显式标 M-SN-7 final 前 close"，实际 PRE-01-E / PRE-01-F 直接 close（plan v2.6 软上限协议下的工时压缩成果）
+  - **PRIMARY contrast 修复沉淀**：4 轮 followup 暴露 design-tokens semantic 层缺槽位（`stateFgOnSoft`），沉淀为 theme-aware token + tailwind-preset 同步 — CLAUDE.md 价值排序 #2「边界与复用」满足
+  - **数字一致性 100%**：task-queue 声明的 13 子卡 commit hash 与实际 git log 100% 一致；3434 unit tests 递增轨迹（3236 → 3253 → 3283 → 3310 → 3339 → 3370 → 3434）自洽
+- **后续触发**：
+  - **SEQ-20260512-01 推进至子卡 2/2**：CHG-PLAN-03 ⬜ 待开始（M-SN-5 主体 SEQ 起草）
+  - **M-SN-5.5 milestone 阶段审计闭环** — plan §5.3 强制审计协议第 5 次完整执行（M-SN-1 / M-SN-2 / M-SN-3 / M-SN-4 / M-SN-5.5）
+  - **解锁 M-SN-5 主体启动条件齐**（6 视图 + 9-10 端点 + ADR-104/105）
+- **注意事项**：
+  - 5 项黄线全部转登记到 cutover-pre 卡 / M-SN-5 主体首批视图卡监控清单 / DEBT 段（task-queue.md 欠账段已有对应条目）
+  - M-SN-5 第一张视图卡 ADR-104 / ADR-105 sub-ADR 起草前必须先完成 CHG-PLAN-03 SEQ 规划 + Opus 评审 + 用户 sign-off（§5.2 BLOCKER 8 条 ADR-端点先后协议预备工作硬约束）
+  - DOC-03 整理批次（commit 28959ab3）由本审计判定归属 M-SN-5.5 收尾（清理 docs/ Tier 1+2+3+4+5a+8a，属 milestone 完成态清理）
