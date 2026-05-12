@@ -5907,3 +5907,42 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **后续触发**：
   - 解锁 PRE-01-A 5 步金票路径演练（cookie 跨 server ↔ server-next 切换）
   - 演练完成后回到 PRE-01-A 主卡完成判定
+
+## [CHG-SN-5-PRE-01-A] DEBT-SN-3-B staging cookie + nginx e2e 演练完成 — 5 步金票路径全绿
+
+- **完成时间**：2026-05-12
+- **记录时间**：2026-05-12 06:30
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：无（人工演练 + 落盘，非 ADR/契约设计）
+- **关联序列**：SEQ-20260506-02（M-SN-5.5 A 段第 1 件 cutover-blocker）— 进度 10/13 → **11/13**（A 段剩 PRE-01-B/-E/-F 3 子卡）
+- **真源**：ADR-101 §数据兼容性 line 2176（cookie + nginx e2e 演练硬约束）+ plan §4.2 line 150
+- **演练环境**：本地 macOS Caddy 2.x 替代 staging nginx；Caddyfile 路由规则与 docker/nginx.conf 等价（reverse_proxy /v1/* :4000 / /admin/* :3001↔:3003 切换 / /* :3000）
+- **演练前置 bugfix**：CHG-SN-5-PRE-01-A-pre（commit d00c33c3）— server-next next.config.ts 补 NEXT_PUBLIC_ASSET_PREFIX env 支持，落实 architecture.md line 101 文档承诺
+- **5 步金票路径实测**（详见 docs/server_next_PRE-01-A-drill-2026-05-12.md）：
+  - ① 登录 server :3001 → refresh_token HS256 JWT 拿到（userId/type=refresh/iat/exp 完整；Domain=localhost / Path=/ / **SameSite=Strict** 观察项）
+  - ② Caddy reload 切 upstream → :3003 → 日志正常无报错、hot reload < 100ms
+  - ③ F5 刷新 → 不弹重新登录 + /admin/videos 200 + /admin/_next/* 静态资源 200
+  - ④ server-next 业务操作 → /v1/* API 200/204 + cookie 正确携带
+  - ⑤ Caddy reload 切回 :3001 + F5 → session 保留 + 业务状态完整（回滚预案验证）
+- **4 个不变量全验收**：cookie 跨服务共享 ✅ / JWT 签发源唯一（apps/api）✅ / nginx hot reload 不丢连接 ✅ / 回滚预案可用 ✅
+- **修改文件**：
+  - `docs/server_next_PRE-01-A-drill-2026-05-12.md`（新建，完整演练记录文档作为 PRE-01-A 完成判定依据）
+  - `docs/task-queue.md` — PRE-01-A 状态 ⬜ → ✅ + 欠账段 DEBT-SN-3-B 标关闭 + 新增 Risk-PRE-01-A-1 cutover 风险登记
+  - `docs/changelog.md` — 本条目
+  - `docs/tasks.md` — 清空进行中
+- **新增依赖**：无
+- **数据库变更**：无
+- **质量门禁**：
+  - typecheck 全绿（8 workspaces）
+  - lint 全绿
+  - unit test 261 文件 / 3434 tests 全绿（commit 前严格三件套，吸取 CHG-SN-5-PRE-01-A-pre 流程违规教训）
+  - 演练实测：5 步金票路径全绿
+- **风险登记**（cutover 前必须评估）：
+  - **Risk-PRE-01-A-1**：refresh_token SameSite=Strict 跨子域风险。当前 same-origin localhost:8080 切换不受影响；若 cutover 后域名涉及跨子域（admin.xxx → app.xxx），Strict 阻挡 cookie 跨子域携带 → 跨子域请求无 cookie → 业务挂。缓解候选：(a) 调 SameSite=Lax + HttpOnly/Secure 兜底 (b) 保持同域名结构。已登记入 task-queue 欠账段 + PRE-01-B 审计材料显式声明
+- **后续触发**：
+  - 解锁 **CHG-SN-5-PRE-01-B**（DEBT-SN-3-C / M-SN-3 milestone 阶段审计 + Opus arch-reviewer A/B/C 评级，纯文档卡 AI 全自动）
+  - SameSite=Strict 跨子域风险待 PRE-01-B 审计材料 + cutover-pre 卡（M-SN-7 启动前）评估
+- **注意事项**：
+  - 演练时本地 .env.local 须设 `NEXT_PUBLIC_ASSET_PREFIX=/admin`（用户本地配置，git 忽略；apps/server v1 + server-next 共用该 env）
+  - 加 env 后直连 :3001 / :3003 端口会挂（HTML 输出 /admin/_next/...）— 演练期间必须始终走 caddy :8080
+  - SameSite=Strict 风险仅在跨子域 cutover 场景生效，对当前开发期 + 同域 cutover 无影响
