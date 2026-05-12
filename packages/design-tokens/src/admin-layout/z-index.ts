@@ -26,17 +26,23 @@ export const adminShellZIndex = {
 export type AdminShellZIndexToken = keyof typeof adminShellZIndex
 
 /**
- * 业务 Drawer / Modal / AdminDropdown z-index（ADR-103 §4.6）
+ * 业务 Drawer / Modal / AdminDropdown / AdminPopover z-index（ADR-103 §4.6 + ADR-115 §2.5）
  *
- * 层级关系（完整 4 级）：
- *   AdminDropdown 980 < Drawer/Modal 1000 < Shell 抽屉 1100 < CmdK 1200 < Toast 1300
+ * 层级关系（5 级扩展，ADR-103a §4.3 4 级在 Modal 与 Shell drawer 之间插入 admin-popover）：
+ *   AdminDropdown 980 < Modal 1000 < admin-popover 1050 < Shell 抽屉 1100 < CmdK 1200 < Toast 1300
  *
- * 分离原因：Shell 编排层 z-shell-* 与业务组件层 z-modal / z-admin-dropdown 属不同语义边界；
+ * admin-popover 1050 的设计意图（ADR-115 §2.5）：
+ *   - 让 Popover 在 Modal 内消费（如 Modal 内表单字段帮助 popover）能自然覆盖 Modal
+ *   - 1050 < Shell drawer 1100：Shell 抽屉打开时仍覆盖业务 Popover（Shell 操作优先级高于业务）
+ *   - admin-dropdown 980 不动（行操作菜单与 Modal 对话框不应同时出现，980 在 Modal 之下不会冲突）
+ *
+ * 分离原因：Shell 编排层 z-shell-* 与业务组件层 z-modal / z-admin-dropdown / z-admin-popover 属不同语义边界；
  * 单独导出便于消费方按用途 import 而非打包同一常量对象。
  */
 export const adminLayoutZIndexBusiness = {
   'z-modal': '1000',
   'z-admin-dropdown': '980',
+  'z-admin-popover': '1050',
 } as const
 
 export type AdminLayoutZIndexBusinessToken = keyof typeof adminLayoutZIndexBusiness

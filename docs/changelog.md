@@ -5825,3 +5825,53 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - **trigger React.ReactElement + cloneElement 注入**：明确机制 + forwardRef 约束 + ref 注入失败 console.warn 降级
 - **新增依赖**：无 / **数据库变更**：无 / **测试**：N/A（纯文档 ADR 卡）
 - **后续触发（不在本 ADR 范围）**：起 **PRE-03-F 实施卡**（packages/admin-ui/src/components/popover/* + compute-position.ts 拆分 + tests + design-tokens `--z-admin-popover: 1050`，估算 0.25-0.40w）；该实施卡不在 SEQ-20260506-02 范围内，独立后续卡承担
+
+
+## [CHG-SN-5-PRE-03-F] admin-ui Popover 通用原语下沉（实施卡）— ADR-115 v1 落地
+
+- **完成时间**：2026-05-11
+- **记录时间**：2026-05-11 17:46
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮独立评审 → A- PASS / 0 红线 / 2 黄线全部同卡修复 / 2 OBS 不需修
+- **关联 ADR**：ADR-115（Popover 通用原语 API 契约 / 2026-05-07 已采纳）
+- **关联序列**：SEQ-20260506-02（M-SN-5.5 启动准入门 / C 段第 6/6 件原语）— 进度 9/13 → **10/13**（C 段全部完成；剩 A 段 PRE-01-A/B/E/F 4 子卡）
+- **修改文件**：
+  - `packages/admin-ui/src/components/popover/popover.tsx`（新建，326 行）— 主组件：trigger cloneElement 注入（onClick toggle + ref + ARIA） / 5 类 dismiss（trigger toggle + ESC + outside click + programmatic + Tab out @experimental）/ portal to document.body / hasPopup 5 值仅 ARIA / @experimental 4 props dev warn 不阻塞行为
+  - `packages/admin-ui/src/components/popover/compute-position.ts`（新建，171 行）— 手写 placement 算法独立文件：6 v1 placement + flip + shift；不引入 floating-ui（ADR-100 依赖白名单约束）
+  - `packages/admin-ui/src/components/popover/index.ts`（新建，3 行）— barrel export
+  - `packages/admin-ui/src/index.ts` — 加 `export * from './components/popover'`
+  - `packages/design-tokens/src/admin-layout/z-index.ts` — `adminLayoutZIndexBusiness` 加 `'z-admin-popover': '1050'`（5 级扩展：Modal 1000 < admin-popover 1050 < Shell drawer 1100；ADR-115 §2.5）
+  - `packages/design-tokens/dist/{tokens.css,tokens.d.ts,tokens.js}` — auto-generated 重新构建
+  - `scripts/verify-token-isolation.mjs` — `FORBIDDEN_TOKENS` 加 `'--z-admin-popover'`（admin 专属前台跨域守卫）+ 注释段同步
+  - `tests/unit/components/admin-ui/popover/compute-position.test.ts`（新建，22 tests）— flipPlacement 7 / 6 placement × center 6 / flip 触发 5 / shift 夹紧 2 / V1_PLACEMENTS 常量 2
+  - `tests/unit/components/admin-ui/popover/popover.test.tsx`（新建，27 tests）— trigger 注入 / 受控+非受控 / consumer onClick 包装（含异常吞掉）/ ESC / outside click / hasPopup ARIA / aria-expanded+aria-controls / portal+z-index / @experimental warn 不阻塞 / data-testid+aria-label
+  - `docs/tasks.md` / `docs/task-queue.md` / `docs/changelog.md` — 任务流水
+- **新增依赖**：无（手写 placement 算法，零 floating-ui 引入）
+- **数据库变更**：无
+- **质量门禁**：
+  - typecheck 全绿（8 workspaces）
+  - lint 全绿（warnings 是预存 next/image 等非本卡问题）
+  - unit test 261 文件 / **3470 tests** 全绿（本卡新增 49 tests，前序 3421 → 3470，零回归）
+  - verify-token-isolation OK（apps/web-next/src 152 文件零跨域；新增 `--z-admin-popover` 守卫已生效）
+  - 文件大小：popover.tsx 326 行 / compute-position.ts 171 行（CLAUDE.md < 500 行约束 OK）
+- **零业务视图消费验证**：grep apps/server-next + apps/web-next + apps/server 零 popover 消费方导入（C 段强约束达成）
+- **arch-reviewer 评审摘要**（1 轮即 PASS，无 CONDITIONAL）：
+  - 评级：**A- PASS**
+  - 0 红线
+  - Y-1（死代码 hiddenMeasureRef + HIDDEN_MEASURE_STYLE）→ 同卡删除（精简 ~10 行）
+  - Y-2（ref 注入失败 warn 在 callback 内不可达）→ 同卡迁移到 open useEffect 中（dev 模式诊断真实可触发）
+  - 2 OBS（useLayoutEffect 时机依赖 / experimentalWarned HMR 重置）— 行为正确，无需修
+- **ADR-115 v1 minimum viable subset 严格匹配**（§3.1 第 4 条）：
+  - 6 placement 实施：top / bottom / left / right / bottom-start / bottom-end（V1_PLACEMENTS 常量确证）
+  - 9 props 实施：trigger / content / open / onOpenChange / defaultOpen / placement / offset / closeOnEscape / closeOnOutsideClick / hasPopup / aria-label / data-testid
+  - 4 props 标 @experimental（dev warn 不阻塞）：modal / closeOnTabOut / portalContainer / arrow
+  - hasPopup 仅注入 trigger aria-haspopup + content role（不介入内部键盘，§2.7）
+  - 不复用 useOverlay（避开 body.style.overflow scroll lock 副作用，§2.3 R-1）
+- **后续触发**：
+  - SEQ-20260506-02 还剩 A 段 4 子卡（PRE-01-A / -B / -E / -F），全部完成后 M-SN-5.5 启动准入门可结案，M-SN-5 主体启动条件齐
+  - M-SN-6 filter popover 等业务消费可基于本 Popover 原语，零 inline portal 重复
+  - 后续独立卡可 refactor AdminDropdown / AdminSelect / HiddenColumnsMenu 三处既有 inline portal 模式（消除 ~900 行重复，留 M-SN-5 后期或 M-SN-6 处理）
+- **注意事项**：
+  - v1 placement 仅支持 6 方位；需 12 方位 / arrow / modal focus-trap / portalContainer / Tab out 关闭场景须先升 ADR-115a 再实施
+  - 自定义函数组件作 trigger 必须用 React.forwardRef 暴露 ref，否则 popover 定位回落到 viewport (0, 0)；dev 模式 console.warn 提示
+  - z-index 1050 已纳入 verify-token-isolation 守卫，前台 apps/web-next 任何字符串引用 `--z-admin-popover` 会触发跨域报错

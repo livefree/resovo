@@ -49,5 +49,8 @@ export * from './components/admin-card'
 // AdminSelect 后台选择器通用原语（CHG-SN-5-PRE-03-D）
 export * from './components/admin-select'
 
+// Popover 通用弹层原语（CHG-SN-5-PRE-03-F / SEQ-20260506-02 / ADR-115）
+export * from './components/popover'
+
 // Feedback 共享组件（CHG-SN-4-04 D-14：StaffNoteBar / LineHealthDrawer / RejectModal）
 export * from './components/feedback'
