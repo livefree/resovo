@@ -6093,3 +6093,48 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **注意事项**：
   - baseline PNG 入库后，未来跑 `npm run test:visual` 会做 visual diff 校验（无 --update-snapshots，仅 compare）；若 5 件组件视觉变更，须显式跑 `npm run test:visual:update -- <spec-path>` 重新生成 baseline 入库
   - admin-visual project 仍 env-gated（`PLAYWRIGHT_VISUAL=1` 触发；npm scripts 已带），默认 e2e gate 不会拉 — followup-1 双重防御
+
+## [CHG-SN-5-PRE-01-F] moderation 7 张占位 PNG 替换真截图 — DEBT-SN-4-07-A 关闭 + M-SN-5.5 A 段全清零
+
+- **完成时间**：2026-05-12
+- **记录时间**：2026-05-12 14:50
+- **执行模型**：claude-opus-4-7（主循环 / spec 适配 + 落盘）+ 用户本地（手动登录 storageState + 跑 update-snapshots）
+- **子代理**：无
+- **关联序列**：SEQ-20260506-02（M-SN-5.5 A 段第 5 件 cutover-blocker / **A 段全清零，准入门关闭**）
+- **依赖**：CHG-SN-5-PRE-01-E-1 ✅（harness 基础设施）+ CHG-SN-5-PRE-01-E-2 ✅（5 件组件 baseline）
+- **修改文件**：
+  - 新建 `tests/visual/admin-moderation.visual.spec.ts-snapshots/`（7 张 baseline，85-206KB）：
+    - `moderation-pending-list-admin-visual-darwin.png`（206KB）— 三栏布局：list 680 条 + 中栏视频预览 + 右栏 detail tab
+    - `moderation-pending-detail-admin-visual-darwin.png`（206KB）— 同上含点击 row 后 detail 状态
+    - `moderation-lines-panel-admin-visual-darwin.png`（206KB）— 中栏切到 LinesPanel
+    - `moderation-rejected-admin-visual-darwin.png`（85KB）— 已拒绝 tab
+    - `moderation-staging-admin-visual-darwin.png`（87KB）— 已审 tab
+    - `moderation-reject-modal-admin-visual-darwin.png`（178KB）— RejectModal 打开（8 ReviewLabel + textarea + 确认拒绝按钮 contrast AA pass）
+    - `moderation-line-health-drawer-admin-visual-darwin.png`（156KB）— LineHealthDrawer 打开（"加载失败" 错误态 + 重试按钮）
+  - 删 `tests/visual/moderation/*.png`（7 张 69-byte 占位 PNG，DEBT-SN-4-07-A 关闭）
+  - `tests/visual/admin-moderation.visual.spec.ts` — spec 已 commit 38643cd4 适配实际 moderation page DOM selector + `.catch(() => {})` 防御性 wait
+  - `scripts/visual-auth-setup.mjs` — 已 commit 38643cd4（admin storageState 生成器）
+  - `docs/task-queue.md` PRE-01-F 状态 ⬜ → ✅ + 欠账段 DEBT-SN-4-07-A 关闭
+- **新增依赖**：无
+- **数据库变更**：无
+- **质量门禁**：
+  - typecheck 全绿（8 workspaces）
+  - lint 全绿
+  - unit test 3434/3434 全绿
+  - visual baseline 7/7 生成 + 抽检 3 张（pending-list / reject-modal / line-health-drawer）视觉规范合格
+- **执行过程**：
+  - AI 端（已 commit 38643cd4）：spec selector 适配实际 moderation page DOM（grep apps/server-next/src/app/admin/moderation 找 6 个 selector + 键盘 'r' shortcut + aria-label 触发）+ 创建 admin auth setup 脚本（避开 codegen 浏览器扩展 hydration mismatch warning）
+  - User 端：(1) 首跑 codegen 登录失败 — 诊断 .env.local `NEXT_PUBLIC_ASSET_PREFIX=/admin` 让 `/login` HTML 输出 `/admin/_next/...` 资源 404 + apps/api :4000 未启 → (2) 注释 ASSET_PREFIX + `npm run dev` 起全 4 服务 → (3) `node scripts/visual-auth-setup.mjs` 手动登录拿到 storageState（1150 bytes refresh_token cookie 完整）→ (4) `npm run test:visual:update -- tests/visual/admin-moderation.visual.spec.ts` 跑 7 张 baseline
+- **关键发现**：
+  - **`--state-fg-on-soft-error` token 工作正确**：reject-modal 截图中 "确认拒绝" 按钮文字（浅红 dark theme variant on 软红底）清晰可读，验证 PRE-01-E-2-followup-4 theme-aware token 修复有效
+  - **spec defensive selector pattern**：每个 click/wait `.catch(() => {})` + timeout，line-health-drawer 即使 events 加载失败（"加载失败" 错误状态）也能截到 Drawer 状态
+- **风险登记**（cutover 前评估）：
+  - LineHealthDrawer events 加载失败截图反映 `/admin/moderation/:id/line-health/:sourceId` 端点在 dev 环境异常 — 与 PRE-01-F 范围无关，但 cutover 前需排查（独立 bug 调查卡）
+- **后续触发**：
+  - **M-SN-5.5 启动准入门全部清零** — A 段 5 件 cutover-blocker + B 段 line_key 决策 + C 段 6 件原语全部完成
+  - **解锁 M-SN-5 主体启动**（6 视图 + 9-10 端点）
+  - **解锁 Step 7B 视频库 DataTable 一体化消费切换**（M-SN-5 主体范围）
+- **注意事项**：
+  - LineHealthDrawer 实际渲染含 "加载失败" — 后续若修复 dev 数据后 baseline 视觉变更，需 `npm run test:visual:update -- tests/visual/admin-moderation.visual.spec.ts` 重新生成
+  - `tests/visual/.auth/admin.json` git ignored（含有效 refresh_token JWT，禁入库）；每个开发者本地生成（生成方式见 `scripts/visual-auth-setup.mjs`）
+  - moderation spec 默认走 dark theme（admin shell html data-theme="dark"）；切 light theme 渲染需独立 baseline（future PRE-01-E-3 卡）
