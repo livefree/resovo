@@ -4984,8 +4984,10 @@ test('moderation — reject-modal', async ({ page }) => {
 
 #### 3.2 后续触发
 
-- **PRE-01-E-2**（用户卡）：本地启 server-next dev → `npx playwright test --project=admin-visual --update-snapshots` → 12 张 baseline 入库
-- **PRE-01-F**（用户卡）：复用同次 `--update-snapshots` 跑出 7 张 moderation 真截图（替换占位 PNG）
+- **PRE-01-E-2**（用户卡）：本地启 server-next dev → `npm run test:visual:update -- --grep "admin-ui"` → 12 张 baseline 入库（5 件组件）
+- **PRE-01-F**（用户卡）：复用 harness → `npm run test:visual:update -- --grep "admin-moderation"` → 7 张 moderation 真截图（替换占位 PNG）
+
+> **Playwright CLI 注意**：`--update-snapshots` 接收可选 mode 参数（`all` / `changed` / `missing` / `none`）；不能在其后直接跟 spec 名（会被误识为 mode）。正确语法用 `--grep` 过滤，或把 spec 路径放在 `--update-snapshots` **之前**（positional argument）。npm scripts 已配齐 `test:visual` / `test:visual:update`，env gate `PLAYWRIGHT_VISUAL=1` 自动设。
 - **未来**：admin-ui 新增下沉组件时同模式扩展 component-registry + 加 visual.spec.ts spec
 - **回溯校验**（DEBT-SN-4-A Y4）：baseline 入库后，对 M-SN-4 期 5 件组件改动跑一次 visual diff，确认无视觉回归
 
