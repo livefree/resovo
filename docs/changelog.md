@@ -5875,3 +5875,31 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - v1 placement 仅支持 6 方位；需 12 方位 / arrow / modal focus-trap / portalContainer / Tab out 关闭场景须先升 ADR-115a 再实施
   - 自定义函数组件作 trigger 必须用 React.forwardRef 暴露 ref，否则 popover 定位回落到 viewport (0, 0)；dev 模式 console.warn 提示
   - z-index 1050 已纳入 verify-token-isolation 守卫，前台 apps/web-next 任何字符串引用 `--z-admin-popover` 会触发跨域报错
+
+## [CHG-SN-5-PRE-01-A-pre] server-next 补 NEXT_PUBLIC_ASSET_PREFIX env 支持（PRE-01-A 演练前置）
+
+- **完成时间**：2026-05-12
+- **记录时间**：2026-05-12 05:40
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：无
+- **关联序列**：SEQ-20260506-02 / M-SN-5.5 A 段 PRE-01-A 演练前置 bugfix
+- **触发**：用户准备本地 Caddy 反代演练 PRE-01-A 时发现 `apps/server-next/next.config.ts` 零 assetPrefix 支持，nginx/Caddy 切到 :3003 后 HTML 输出 `/_next/...` 而非 `/admin/_next/...`，静态资源 404 → 演练第 ③ 步刷新页面立即崩
+- **真源依据**：
+  - `docs/architecture.md` line 101：声明 "server-next（v2，cutover 后）继承同一 assetPrefix=/admin"（但 next.config.ts 未实现 → 文档/实现偏离）
+  - `apps/server/next.config.ts` line 3-9：既有实现（NEXT_PUBLIC_ASSET_PREFIX env 注入）
+- **修改文件**：
+  - `apps/server-next/next.config.ts` — 加 NEXT_PUBLIC_ASSET_PREFIX env 注入（与 apps/server v1 完全一致）；保留既有 reactStrictMode + optimizePackageImports 配置不动
+  - `docs/tasks.md` / `docs/changelog.md` — 任务流水
+- **新增依赖**：无
+- **数据库变更**：无
+- **质量门禁**：
+  - typecheck 全绿（8 workspaces）
+  - lint 全绿
+  - 测试：N/A（纯 next.config.ts 配置改动，运行时验证由 PRE-01-A 演练承担）
+- **使用方式**：
+  - dev 直连访问 :3003：不设 env，行为不变
+  - PRE-01-A 演练（nginx/Caddy 反代 /admin/* → :3003）：`NEXT_PUBLIC_ASSET_PREFIX=/admin npm --workspace @resovo/server-next run dev`
+  - cutover 后生产：与 apps/server v1 相同的 env 配置，no-switch
+- **后续触发**：
+  - 解锁 PRE-01-A 5 步金票路径演练（cookie 跨 server ↔ server-next 切换）
+  - 演练完成后回到 PRE-01-A 主卡完成判定
