@@ -6039,12 +6039,12 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - CI 接入触发条件（OBS-1）：Linux baseline 双平台覆盖 / snapshotPathTemplate {platform}
   - "纯 props 驱动" 强约束（OBS-2）：dev/visual 组件零服务端依赖
 - **后续触发**：
-  - **CHG-SN-5-PRE-01-E-2**（用户卡）：本地启 server-next dev → `NEXT_PUBLIC_ASSET_PREFIX="" npm --workspace @resovo/server-next run dev` → `npx playwright test --project=admin-visual --update-snapshots admin-ui` → 12 张 baseline 入库
+  - **CHG-SN-5-PRE-01-E-2**（用户卡）：本地启 server-next dev → `NEXT_PUBLIC_ASSET_PREFIX="" npm --workspace @resovo/server-next run dev` → `npm run test:visual:update -- tests/visual/admin-ui` → 12 张 baseline 入库（命令语法见 CHG-SN-5-PRE-01-E-1-followup-3 修订）
   - **CHG-SN-5-PRE-01-F**（用户卡 / 复用 -E-1 harness）：
     1. 生成 admin storageState：`npx playwright codegen --save-storage tests/visual/.auth/admin.json http://localhost:3003/login`
     2. 准备 seed 数据：dev DB 至少有 pending/rejected/staging 视频各 1+ 条
     3. PRE-01-F 实施时按 moderation 页面 DOM 调整 spec selectors（[data-row] / 拒绝按钮 / 线路健康指示器）+ click+waitForSelector 触发 modal/drawer 状态
-    4. 跑 `npx playwright test --project=admin-visual --update-snapshots admin-moderation` → 7 张真截图入库替换 69-byte 占位 PNG
+    4. 跑 `npm run test:visual:update -- tests/visual/admin-moderation.visual.spec.ts` → 7 张真截图入库替换 69-byte 占位 PNG
 - **注意事项**：
   - dev/visual 路由 dev-only：生产 build 自动 notFound（3 重防御）；演练或开发期访问 http://localhost:8080/admin/dev/visual（走 Caddy）或 http://localhost:3003/admin/dev/visual（直连，需 NEXT_PUBLIC_ASSET_PREFIX 空）
   - admin-visual project 不在 CI 跑（package.json 默认 npm test:e2e 不含 admin-visual project；future CI 接入需 Linux runner 重新 --update-snapshots 生成 Linux baseline，详见 ADR-116 §3.4 风险 4）

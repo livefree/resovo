@@ -10,8 +10,10 @@
  *      （后续若需稳定 seed，独立卡 scripts/seed-moderation-visual-test-data.ts）
  *   3. modal/drawer 截图：spec 含 page.click + waitForSelector 才能截到打开状态
  *
- * 用户跑法（PRE-01-F）：
- *   `npx playwright test --project=admin-visual --update-snapshots admin-moderation`
+ * 用户跑法（PRE-01-F，CHG-SN-5-PRE-01-E-1-followup-3 修订）：
+ *   `npm run test:visual:update -- tests/visual/admin-moderation.visual.spec.ts`
+ *   （PLAYWRIGHT_VISUAL=1 env gate + --update-snapshots=all 已在 npm script 中带；
+ *   用 positional 路径过滤，避免 --update-snapshots 后跟 positional 被误识为 mode）
  *
  * 注：fixture data 隔离 — visual spec 只读不 mutate；reject 操作放 test.afterEach 清理
  *      或在隔离测试数据集外操作。
