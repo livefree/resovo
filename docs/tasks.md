@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 当前无进行中任务；CHG-SN-5-02 `/admin/subtitles` 已闭环（2026-05-12，arch-reviewer Opus PASS / 4 原语消费 / 18 unit 用例全绿 / DEBT-ADMIN-UI-TOAST-MISSING 缓解）；SEQ-20260512-02 推进至 2/14 卡 → 下一卡 CHG-SN-5-03 `/admin/users` -->
+<!-- 当前无进行中任务；CHG-SN-5-03 `/admin/users` 已闭环（2026-05-12，5 原语消费 PASS / 9 unit 用例全绿 / 3483 全套全绿）；SEQ-20260512-02 推进至 3/14 卡 → 下一卡 CHG-SN-5-04 ADR-104 起草 (opus) -->

@@ -6343,3 +6343,29 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **注意事项**：
   - CHG-SN-5-03 `/admin/users` 启动前须独立 grep `apps/api/src/routes/admin/users.ts` 端点全集 + 在卡内登记证据（R1 普适化要求）
   - RejectPopover 下沉触发线 = 第 3 处消费方（当前已有 2 处：submissions + subtitles）
+
+---
+
+## CHG-SN-5-03 · `/admin/users` 用户管理视图
+
+- **日期**：2026-05-12
+- **序列**：SEQ-20260512-02（3/14 卡）
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **改动摘要**：`/admin/users` PlaceholderPage → 真实用户管理视图，消费 5 个 admin-ui 原语，9 单元用例全绿
+- **涉及文件**：
+  - `apps/server-next/src/lib/users/types.ts` — 新建：UserRow / UserListResult / UserListFilter 类型契约
+  - `apps/server-next/src/lib/users/api.ts` — 新建：listUsers / banUser / unbanUser / updateUserRole 封装
+  - `apps/server-next/src/app/admin/users/_client/columns.tsx` — 新建：列定义（username/email/role/status/created_at/actions）+ UserRolePopover 行操作
+  - `apps/server-next/src/app/admin/users/_client/UserRolePopover.tsx` — 新建：角色变更弹层（Popover + AdminSelect + AdminButton）
+  - `apps/server-next/src/app/admin/users/_client/UsersListClient.tsx` — 新建：主视图（DataTable 一体化 + PageHeader + AdminInput 搜索 + AdminSelect 筛选 + useToast 错误反馈）
+  - `apps/server-next/src/app/admin/users/page.tsx` — 修改：PlaceholderPage → Suspense + UsersListClient
+  - `tests/unit/components/server-next/admin/users/UserRolePopover.test.tsx` — 新建：9 用例覆盖触发/disabled 保护/pending 防重/角色变更全路径
+- **新增依赖**：无
+- **数据库变更**：无
+- **质量门禁**：
+  - typecheck PASS / lint PASS / 9 新增 unit 用例全绿
+  - 5 原语消费：PageHeader / AdminButton / AdminInput / AdminSelect / Popover（5/6 件）
+  - DataTable 一体化：toolbar.search + hideFilterChips + pagination.pageSizeOptions 内置模式
+  - 端点核验：7 端点全在位（list/detail/ban/unban/role/delete/reset-password），无缺位，维持零新端点
+  - 零 admin-ui props 反向扩展 / 零新建通用组件 / 零 any / 零空 catch / 零硬编码颜色

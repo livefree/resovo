@@ -1,5 +1,16 @@
-import { PlaceholderPage } from '@/components/PlaceholderPage'
+import { Suspense } from 'react'
+import type { Metadata } from 'next'
+import { LoadingState } from '@resovo/admin-ui'
+import { UsersListClient } from './_client/UsersListClient'
+
+export const metadata: Metadata = {
+  title: '用户管理 | Resovo Admin',
+}
 
 export default function UsersPage() {
-  return <PlaceholderPage title="用户管理" milestone="M-SN-5（P1 视图）" />
+  return (
+    <Suspense fallback={<LoadingState variant="skeleton" />}>
+      <UsersListClient />
+    </Suspense>
+  )
 }
