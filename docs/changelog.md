@@ -6430,3 +6430,22 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **注意事项**：
   - CHG-SN-5-06 接手时在同一文件追加 3 端点（DELETE / POST reorder / POST publish-toggle），Service 追加 delete / reorder / publishToggle 方法；ReorderSchema + PublishToggleSchema 已在 ADR-104 锁定
   - admin-moderation.types.ts 扩枚举（5+1）已落地，CHG-SN-5-06 不需重复扩枚举
+
+## [CHG-SN-5-06] home_modules 端点实施第 2 批（delete + reorder + publish-toggle）
+- **完成时间**：2026-05-12
+- **记录时间**：2026-05-12 19:47
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无（按 ADR-104 既定协议直接落地）
+- **修改文件**：
+  - `apps/api/src/services/HomeModulesService.ts` — 追加 delete / reorder / publishToggle 方法 + ReorderSchema / PublishToggleSchema 导出
+  - `apps/api/src/routes/admin/home-modules.ts` — 追加 DELETE/:id / POST /reorder / POST /:id/publish-toggle 3 端点（6 端点 ADR-104 契约全部落地）
+  - `tests/unit/api/admin-home-modules.test.ts` — 追加 11 测试（delete 3 + reorder 4 + publish-toggle 4，总计 26/26 全绿）
+- **新增依赖**：无
+- **数据库变更**：无（publish-toggle 复用 updateHomeModule queries 层，reorder 复用 reorderHomeModules 事务实现）
+- **实施要点**：
+  - reorder audit log：beforeJsonb/afterJsonb 存 `{ items: [{id, ordering}] }` 前后对比（批量动作 targetId=null）
+  - publish-toggle audit log：beforeJsonb `{ enabled: oldVal }` / afterJsonb `{ enabled: newVal }`（精确快照，ADR-104 audit 协议表）
+  - reorder 静态路由（`/admin/home-modules/reorder`）须先于动态路由（`/:id`）注册（Fastify 路由优先级保证 'reorder' 不被当作 id 参数）
+- **注意事项**：
+  - CHG-SN-5-07（`/admin/home` 视图）依赖 -05 + -06 全部完成，现在可以开始
+  - 6 端点均通过 `requireRole(['admin'])` 保护，moderator 无权访问（ADR-104 DISCUSS-6 闭合）

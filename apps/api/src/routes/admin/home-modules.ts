@@ -1,15 +1,25 @@
 /**
- * admin/home-modules.ts — 首页运营位编辑 API 第 1 批（CHG-SN-5-05）
+ * admin/home-modules.ts — 首页运营位编辑 API（CHG-SN-5-05/-06）
  * ADR-104：/admin/home-modules（hyphen 形式；admin only）
  *
- * GET   /admin/home-modules       — 列表（含禁用 + 过期）
- * POST  /admin/home-modules       — 创建
- * PATCH /admin/home-modules/:id   — 部分更新（禁止修改 enabled，走 publish-toggle）
+ * GET    /admin/home-modules              — 列表（含禁用 + 过期）
+ * POST   /admin/home-modules              — 创建
+ * PATCH  /admin/home-modules/:id          — 部分更新（禁止修改 enabled，走 publish-toggle）
+ * DELETE /admin/home-modules/:id          — 硬删除
+ * POST   /admin/home-modules/reorder      — 批量更新 ordering（事务）
+ * POST   /admin/home-modules/:id/publish-toggle — 切换 enabled（显式传值）
  */
 
 import type { FastifyInstance } from 'fastify'
 import { db } from '@/api/lib/postgres'
-import { HomeModulesService, ListSchema, CreateSchema, UpdateSchema } from '@/api/services/HomeModulesService'
+import {
+  HomeModulesService,
+  ListSchema,
+  CreateSchema,
+  UpdateSchema,
+  ReorderSchema,
+  PublishToggleSchema,
+} from '@/api/services/HomeModulesService'
 import { isAppError } from '@/api/lib/errors'
 
 export async function adminHomeModulesRoutes(fastify: FastifyInstance) {
@@ -81,6 +91,53 @@ export async function adminHomeModulesRoutes(fastify: FastifyInstance) {
       request.log.error({ err }, '[admin/home-modules] update unexpected error')
       return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
     }
+  })
+
+  // ── DELETE /admin/home-modules/:id ───────────────────────────────────────
+
+  fastify.delete('/admin/home-modules/:id', { preHandler: adminOnly }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const deleted = await svc.delete(id, request.user!.userId, request.id)
+    if (!deleted) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: `home_module ${id} 不存在`, status: 404 } })
+    }
+    return reply.code(204).send()
+  })
+
+  // ── POST /admin/home-modules/reorder ─────────────────────────────────────
+  // reorder 静态路由须先于 /:id 动态路由注册（Fastify 路由优先级保证）
+
+  fastify.post('/admin/home-modules/reorder', { preHandler: adminOnly }, async (request, reply) => {
+    const parsed = ReorderSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+      })
+    }
+    try {
+      const result = await svc.reorder(parsed.data, request.user!.userId, request.id)
+      return reply.send({ data: result })
+    } catch (err) {
+      request.log.error({ err }, '[admin/home-modules] reorder unexpected error')
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
+    }
+  })
+
+  // ── POST /admin/home-modules/:id/publish-toggle ───────────────────────────
+
+  fastify.post('/admin/home-modules/:id/publish-toggle', { preHandler: adminOnly }, async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const parsed = PublishToggleSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+      })
+    }
+    const module = await svc.publishToggle(id, parsed.data, request.user!.userId, request.id)
+    if (!module) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: `home_module ${id} 不存在`, status: 404 } })
+    }
+    return reply.send({ data: module })
   })
 }
 

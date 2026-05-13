@@ -27,14 +27,16 @@ const mockListAdmin = vi.fn()
 const mockFindById = vi.fn()
 const mockCreate = vi.fn()
 const mockUpdate = vi.fn()
+const mockDelete = vi.fn()
+const mockReorder = vi.fn()
 
 vi.mock('@/api/db/queries/home-modules', () => ({
   listAdminHomeModules: (...args: unknown[]) => mockListAdmin(...args),
   findHomeModuleById: (...args: unknown[]) => mockFindById(...args),
   createHomeModule: (...args: unknown[]) => mockCreate(...args),
   updateHomeModule: (...args: unknown[]) => mockUpdate(...args),
-  deleteHomeModule: vi.fn(),
-  reorderHomeModules: vi.fn(),
+  deleteHomeModule: (...args: unknown[]) => mockDelete(...args),
+  reorderHomeModules: (...args: unknown[]) => mockReorder(...args),
 }))
 
 const mockAuditWrite = vi.fn()
@@ -250,7 +252,7 @@ describe('POST /admin/home-modules', () => {
 describe('PATCH /admin/home-modules/:id', () => {
   let app: Awaited<ReturnType<typeof buildApp>>
 
-  beforeEach(async () => {
+    beforeEach(async () => {
     vi.clearAllMocks()
     mockFindById.mockResolvedValue(MODULE)
     mockUpdate.mockResolvedValue({ ...MODULE, ordering: 5 })
@@ -317,5 +319,190 @@ describe('PATCH /admin/home-modules/:id', () => {
     })
     expect(res.statusCode).toBe(422)
     expect(res.json().error.message).toContain('至少一字段')
+  })
+})
+
+// ── DELETE /admin/home-modules/:id ────────────────────────────────────────
+
+describe('DELETE /admin/home-modules/:id', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    app = await buildApp()
+  })
+
+  it('删除成功返回 204', async () => {
+    mockFindById.mockResolvedValue(MODULE)
+    mockDelete.mockResolvedValue(true)
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/v1/admin/home-modules/${MODULE.id}`,
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(204)
+    expect(res.body).toBe('')
+  })
+
+  it('audit log fire-and-forget 调用一次（delete）', async () => {
+    mockFindById.mockResolvedValue(MODULE)
+    mockDelete.mockResolvedValue(true)
+    await app.inject({
+      method: 'DELETE',
+      url: `/v1/admin/home-modules/${MODULE.id}`,
+      headers: { authorization: await adminToken() },
+    })
+    expect(mockAuditWrite).toHaveBeenCalledOnce()
+    expect(mockAuditWrite).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'home_module.delete',
+      targetKind: 'home_module',
+      targetId: MODULE.id,
+      afterJsonb: null,
+    }))
+  })
+
+  it('id 不存在返回 404', async () => {
+    mockFindById.mockResolvedValue(null)
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/v1/admin/home-modules/nonexistent-id',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe('NOT_FOUND')
+  })
+})
+
+// ── POST /admin/home-modules/reorder ──────────────────────────────────────
+
+describe('POST /admin/home-modules/reorder', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockReorder.mockResolvedValue(2)
+    app = await buildApp()
+  })
+
+  it('批量排序成功返回 200 + { updated }', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home-modules/reorder',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({
+        items: [
+          { id: 'a0000000-0000-0000-0000-000000000001', ordering: 0 },
+          { id: 'a0000000-0000-0000-0000-000000000002', ordering: 1 },
+        ],
+      }),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual({ updated: 2 })
+  })
+
+  it('audit log fire-and-forget 调用一次（reorder）', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home-modules/reorder',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({
+        items: [{ id: 'a0000000-0000-0000-0000-000000000001', ordering: 0 }],
+      }),
+    })
+    expect(mockAuditWrite).toHaveBeenCalledOnce()
+    expect(mockAuditWrite).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'home_module.reorder',
+      targetKind: 'home_module',
+      targetId: null,
+    }))
+  })
+
+  it('空 items 返回 422', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home-modules/reorder',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ items: [] }),
+    })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('items 超 200 返回 422', async () => {
+    const items = Array.from({ length: 201 }, (_, i) => ({
+      id: `a0000000-0000-0000-0000-${String(i).padStart(12, '0')}`,
+      ordering: i,
+    }))
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home-modules/reorder',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ items }),
+    })
+    expect(res.statusCode).toBe(422)
+  })
+})
+
+// ── POST /admin/home-modules/:id/publish-toggle ───────────────────────────
+
+describe('POST /admin/home-modules/:id/publish-toggle', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockFindById.mockResolvedValue(MODULE)
+    mockUpdate.mockResolvedValue({ ...MODULE, enabled: false })
+    app = await buildApp()
+  })
+
+  it('切换 enabled 成功返回 200 + data（含新 enabled 值）', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/admin/home-modules/${MODULE.id}/publish-toggle`,
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled: false }),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.enabled).toBe(false)
+  })
+
+  it('audit log fire-and-forget 调用一次（publish_toggle）', async () => {
+    await app.inject({
+      method: 'POST',
+      url: `/v1/admin/home-modules/${MODULE.id}/publish-toggle`,
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled: false }),
+    })
+    expect(mockAuditWrite).toHaveBeenCalledOnce()
+    expect(mockAuditWrite).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'home_module.publish_toggle',
+      targetKind: 'home_module',
+      targetId: MODULE.id,
+      beforeJsonb: { enabled: true },
+      afterJsonb: { enabled: false },
+    }))
+  })
+
+  it('id 不存在返回 404', async () => {
+    mockFindById.mockResolvedValue(null)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home-modules/nonexistent-id/publish-toggle',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled: true }),
+    })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe('NOT_FOUND')
+  })
+
+  it('body 缺少 enabled 字段返回 422', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/admin/home-modules/${MODULE.id}/publish-toggle`,
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.code).toBe('VALIDATION_ERROR')
   })
 })

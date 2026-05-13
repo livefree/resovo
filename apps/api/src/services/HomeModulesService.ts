@@ -19,6 +19,8 @@ import {
   findHomeModuleById,
   createHomeModule,
   updateHomeModule,
+  deleteHomeModule,
+  reorderHomeModules,
 } from '@/api/db/queries/home-modules'
 import { AuditLogService } from '@/api/services/AuditLogService'
 import { AppError, ERRORS } from '@/api/lib/errors'
@@ -89,9 +91,22 @@ export const CreateSchema = applyBusinessRules(CreateBase)
 export const UpdateSchema = applyBusinessRules(CreateBase.omit({ enabled: true }).partial().strict())
   .refine((v) => Object.keys(v as object).length > 0, { message: '至少一字段' })
 
+export const ReorderSchema = z.object({
+  items: z.array(z.object({
+    id: z.string().uuid(),
+    ordering: z.number().int().min(0),
+  })).min(1).max(200),
+})
+
+export const PublishToggleSchema = z.object({
+  enabled: z.boolean(),
+})
+
 export type ListParams = z.infer<typeof ListSchema>
 export type CreateParams = z.infer<typeof CreateSchema>
 export type UpdateParams = z.infer<typeof UpdateSchema>
+export type ReorderParams = z.infer<typeof ReorderSchema>
+export type PublishToggleParams = z.infer<typeof PublishToggleSchema>
 
 // ── Service ──────────────────────────────────────────────────────────────────
 
@@ -148,6 +163,72 @@ export class HomeModulesService {
       targetId: id,
       beforeJsonb: before as unknown as Record<string, unknown>,
       afterJsonb: after as unknown as Record<string, unknown>,
+      requestId: requestId ?? null,
+    })
+
+    return after
+  }
+
+  async delete(id: string, actorId: string, requestId?: string): Promise<boolean> {
+    const before = await findHomeModuleById(this.db, id)
+    if (!before) return false
+
+    const deleted = await deleteHomeModule(this.db, id)
+    if (!deleted) return false
+
+    this.auditSvc.write({
+      actorId,
+      actionType: 'home_module.delete',
+      targetKind: 'home_module',
+      targetId: id,
+      beforeJsonb: before as unknown as Record<string, unknown>,
+      afterJsonb: null,
+      requestId: requestId ?? null,
+    })
+
+    return true
+  }
+
+  async reorder(
+    params: ReorderParams,
+    actorId: string,
+    requestId?: string,
+  ): Promise<{ updated: number }> {
+    const beforeItems = params.items.map((item) => ({ id: item.id, ordering: item.ordering }))
+    const updated = await reorderHomeModules(this.db, params.items)
+
+    this.auditSvc.write({
+      actorId,
+      actionType: 'home_module.reorder',
+      targetKind: 'home_module',
+      targetId: null,
+      beforeJsonb: { items: beforeItems },
+      afterJsonb: { items: params.items },
+      requestId: requestId ?? null,
+    })
+
+    return { updated }
+  }
+
+  async publishToggle(
+    id: string,
+    params: PublishToggleParams,
+    actorId: string,
+    requestId?: string,
+  ): Promise<HomeModule | null> {
+    const before = await findHomeModuleById(this.db, id)
+    if (!before) return null
+
+    const after = await updateHomeModule(this.db, id, { enabled: params.enabled })
+    if (!after) return null
+
+    this.auditSvc.write({
+      actorId,
+      actionType: 'home_module.publish_toggle',
+      targetKind: 'home_module',
+      targetId: id,
+      beforeJsonb: { enabled: before.enabled },
+      afterJsonb: { enabled: after.enabled },
       requestId: requestId ?? null,
     })
 
