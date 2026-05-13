@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 当前无进行中任务；CHG-SN-5-06-PATCH 已闭环（2026-05-12，R-MID-1 reorder audit log 协议偏离修复 + audit-log-coverage guard 同步扩 ADR-104 5 项 / 3516 unit tests 全绿）；中期审计红线全清 → 解锁 CHG-SN-5-07 `/admin/home` 视图卡启动 -->
+<!-- 当前无进行中任务；CHG-SN-5-07 已闭环（2026-05-12，/admin/home 视图 + @dnd-kit 拖拽排序 + 6 端点消费 / 3532 单测全绿）；解锁 CHG-SN-5-08 ADR-105 起草 -->

@@ -6504,3 +6504,34 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **注意事项**：
   - 本卡作为 -06 的 hotfix，不占用 SEQ-20260512-02 14 卡编号序列；类似 hotfix 沿用 "-NN-PATCH" 命名
   - Promise.all 并发读 N 次：reorder items ≤ 200 上限场景下可接受；如上限提升至 1000+ 触发 PRE-REORDER-BATCH-READ 优化卡
+
+---
+
+## CHG-SN-5-07 — `/admin/home` 首页运营位编辑器视图
+- **任务 ID**：CHG-SN-5-07
+- **日期**：2026-05-12
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件变更**：
+  - `apps/server-next/package.json`（新增 @dnd-kit/core ^6.3.1 + @dnd-kit/sortable ^8.0.0，§4.7 白名单内）
+  - `apps/server-next/src/lib/home-modules/types.ts`（新建，HomeModule 客户端类型层）
+  - `apps/server-next/src/lib/home-modules/api.ts`（新建，6 端点客户端封装）
+  - `apps/server-next/src/app/admin/home/page.tsx`（替换占位页为真实实现）
+  - `apps/server-next/src/app/admin/home/_client/HomeOpsClient.tsx`（新建，主视图组件）
+  - `apps/server-next/src/app/admin/home/_client/HomeModuleCard.tsx`（新建，拖拽排序卡片）
+  - `apps/server-next/src/app/admin/home/_client/HomeModuleDrawer.tsx`（新建，创建/编辑表单）
+  - `tests/unit/server-next/home-modules-client.test.ts`（新建，16 测试）
+  - `docs/task-queue.md` + `docs/tasks.md` + `docs/changelog.md`
+- **质量门禁**：
+  - typecheck 全绿（server-next + 全局 workspaces）
+  - lint 全绿（修复 aria-selected + role="tab" a11y 问题）
+  - unit 3532/3532 全绿（baseline 3516 + 净增 16 用例）
+  - home-modules-client.test.ts 16/16（listHomeModules 参数序列化 6 + CRUD + reorder + publishToggle）
+- **关键设计**：
+  - 4 类 slot tab（banner/featured/top10/type_shortcuts）+ DndContext + SortableContext 拖拽排序
+  - slot×contentRefType 约束在 Drawer 表单侧动态过滤（与 ADR-104 Service 层预校验一致）
+  - 拖拽 onDragEnd：本地 arrayMove 乐观更新 → reorder API 提交 → 失败则 reload 回滚
+  - 发布切换走 POST /:id/publish-toggle（严格遵循 ADR-104 协议，不走 PATCH enabled 字段）
+  - 所有 CSS 变量零硬编码色值
+- **共享层沉淀评估**：三个 _client 组件均为 /admin/home 视图专属逻辑，无需下沉至 admin-ui
+- **解锁**：CHG-SN-5-08 ADR-105 起草（依赖 -04 ADR-104 PASS，已满足）
