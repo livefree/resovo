@@ -6312,3 +6312,34 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - CHG-SN-5-02 `/admin/subtitles` 启动前主循环须独立 grep `apps/api/src/routes/admin/content.ts:269-296` 三端点（GET / approve / reject）核验 + 在卡内登记证据（R1 普适化要求）
   - CHG-SN-5-02 启动前评估 Y3 Toast / 操作错误反馈方案（避免静默失败致运营重复点击）
   - 主循环模型偏离记录：建议 sonnet → 实际 opus（用户 sign-off 未要求切会话，未触发 BLOCKER §5.2 中途升级硬约束 — 因 sonnet 已经"启动后未发现复杂度高于预期"，主循环 opus 是用户上游选择延续）；CHG-SN-5-02 应正常切回 sonnet
+
+## [CHG-SN-5-02] `/admin/subtitles` 字幕审核队列视图
+- **完成时间**：2026-05-12
+- **记录时间**：2026-05-12 17:50
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-7)
+- **修改文件**：
+  - `apps/server-next/src/lib/subtitles/types.ts` — 新建：SubtitleRow / SubtitleListResult / SubtitleListFilter 类型契约
+  - `apps/server-next/src/lib/subtitles/api.ts` — 新建：listSubtitles / approveSubtitle / rejectSubtitle API 客户端封装
+  - `apps/server-next/src/app/admin/subtitles/_client/SubtitleRejectPopover.tsx` — 新建：拒绝原因弹层（Popover + AdminInput + AdminButton 消费）
+  - `apps/server-next/src/app/admin/subtitles/_client/columns.tsx` — 新建：5 列定义（video/language/format/created_at/actions）
+  - `apps/server-next/src/app/admin/subtitles/_client/SubtitlesListClient.tsx` — 新建：主视图（DataTable 一体化 + PageHeader + useToast 错误反馈）
+  - `apps/server-next/src/app/admin/subtitles/page.tsx` — 修改：PlaceholderPage → Suspense + SubtitlesListClient
+  - `tests/unit/server-next/subtitles/subtitles-api.test.ts` — 新建：8 用例覆盖 API 参数序列化 + 端点契约
+  - `tests/unit/components/server-next/admin/subtitles/SubtitleRejectPopover.test.tsx` — 新建：10 用例覆盖触发/模板/确认/防重全路径
+- **新增依赖**：无
+- **数据库变更**：无
+- **arch-reviewer 结论**：PASS（claude-opus-4-7）— 无红线；Y-2（拒绝 trigger disabled 缺失）当场修复；Y-1/Y-3/A-2 转 DEBT 登记
+- **质量门禁**：
+  - typecheck PASS / lint PASS / 18 新增 unit 用例全绿
+  - 6 原语消费：PageHeader / AdminButton / AdminInput / Popover（4/6 件，满足"至少 3 件"门槛）
+  - DataTable 一体化：toolbar.hideFilterChips + pagination.pageSizeOptions 内置模式
+  - 零 admin-ui props 反向扩展 / 零新建通用组件 / 零 any / 零空 catch / 零硬编码颜色
+  - DEBT-ADMIN-UI-TOAST-MISSING：通过 useToast().push({ level: 'danger' }) 在本卡缓解（approve/reject catch 均有 Toast 反馈）
+- **DEBT 登记**（不阻塞）：
+  - Y-1：CHG-SN-5-01 approve/reject catch 未 Toast 回填（CHG-SN-5-01-PATCH 候选，M-SN-5 完结前处理）
+  - Y-3：query.filters/columns `new Map()` 字面量每次渲染新建，建议模块顶常量（CHG-SN-5-01/02 共性，下一批次统一回填）
+  - A-2：SubtitleRejectPopover 与 SubmissionRejectPopover 高度同构，第 3 处消费触发下沉 admin-ui RejectPopover 通用原语（PRE-04-CANDIDATES 已登记）
+- **注意事项**：
+  - CHG-SN-5-03 `/admin/users` 启动前须独立 grep `apps/api/src/routes/admin/users.ts` 端点全集 + 在卡内登记证据（R1 普适化要求）
+  - RejectPopover 下沉触发线 = 第 3 处消费方（当前已有 2 处：submissions + subtitles）

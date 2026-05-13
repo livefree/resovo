@@ -1,5 +1,16 @@
-import { PlaceholderPage } from '@/components/PlaceholderPage'
+import { Suspense } from 'react'
+import type { Metadata } from 'next'
+import { LoadingState } from '@resovo/admin-ui'
+import { SubtitlesListClient } from './_client/SubtitlesListClient'
+
+export const metadata: Metadata = {
+  title: '字幕审核 | Resovo Admin',
+}
 
 export default function SubtitlesPage() {
-  return <PlaceholderPage title="字幕管理" milestone="M-SN-5（P1 视图）" />
+  return (
+    <Suspense fallback={<LoadingState variant="skeleton" />}>
+      <SubtitlesListClient />
+    </Suspense>
+  )
 }

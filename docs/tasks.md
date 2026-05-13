@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 当前无进行中任务；CHG-SN-5-01 `/admin/submissions` 已闭环（2026-05-12，arch-reviewer Opus PASS / 6 原语 API 稳定性零反向扩展 / 22 新增 unit 用例全绿 / total 3456/3456 unit tests）；SEQ-20260512-02 推进至 1/14 卡 → 下一卡 CHG-SN-5-02 `/admin/subtitles` -->
+<!-- 当前无进行中任务；CHG-SN-5-02 `/admin/subtitles` 已闭环（2026-05-12，arch-reviewer Opus PASS / 4 原语消费 / 18 unit 用例全绿 / DEBT-ADMIN-UI-TOAST-MISSING 缓解）；SEQ-20260512-02 推进至 2/14 卡 → 下一卡 CHG-SN-5-03 `/admin/users` -->
