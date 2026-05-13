@@ -235,6 +235,39 @@ describe('VideoMergesService.listCandidates', () => {
     expect(res.limit).toBe(10)
     expect(res.total).toBe(25)
   })
+
+  it('sort tiebreaker：同 score 候选组按 groupKey 升序稳定（CHG-SN-5-10-PATCH P2）', async () => {
+    // 两组同 score（都共享 1 个 site key / 2 总 key → 0.5），groupKey 不同
+    const groupB = {
+      title_normalized: 'b_title',
+      year: 2020,
+      type: 'movie' as const,
+      video_ids: ['vid-b1', 'vid-b2'],
+      video_count: '2',
+    }
+    const groupA = {
+      title_normalized: 'a_title',
+      year: 2020,
+      type: 'movie' as const,
+      video_ids: ['vid-a1', 'vid-a2'],
+      video_count: '2',
+    }
+    mockQuery
+      .mockResolvedValueOnce({ rows: [groupB, groupA] }) // DB 初排可能给 B 在 A 前（COUNT 相同 + title_normalized 顺序未稳定）
+      .mockResolvedValueOnce({ rows: [{ total: '2' }] })
+      .mockResolvedValueOnce({ rows: [
+        { ...makeVideoRow('vid-a1', ['iqiyi', 'youku'], 2), title_normalized: 'a_title' },
+        { ...makeVideoRow('vid-a2', ['iqiyi', 'bilibili'], 2), title_normalized: 'a_title' },
+        { ...makeVideoRow('vid-b1', ['iqiyi', 'youku'], 2), title_normalized: 'b_title' },
+        { ...makeVideoRow('vid-b2', ['iqiyi', 'bilibili'], 2), title_normalized: 'b_title' },
+      ] })
+    const res = await svc.listCandidates({ type: undefined, minScore: 0, limit: 20, page: 1 })
+    expect(res.data).toHaveLength(2)
+    // 同 score → 按 groupKey 升序：'a_title|2020|movie' < 'b_title|2020|movie'
+    expect(res.data[0]?.groupKey).toBe('a_title|2020|movie')
+    expect(res.data[1]?.groupKey).toBe('b_title|2020|movie')
+    expect(res.data[0]?.score).toBe(res.data[1]?.score)
+  })
 })
 
 // ── ListCandidatesSchema ──────────────────────────────────────────

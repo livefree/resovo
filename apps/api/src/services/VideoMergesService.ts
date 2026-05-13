@@ -41,6 +41,7 @@ import {
   markAuditReverted,
   insertNewVideo,
   assignSourcesToVideo,
+  updateAuditTargetIds,
 } from '@/api/db/queries/video-merge-mutations'
 import { AuditLogService } from '@/api/services/AuditLogService'
 import { AppError } from '@/api/lib/errors'
@@ -191,8 +192,9 @@ export class VideoMergesService {
       })
     }
 
-    // 按 score 降序排列（同 DB 已按 COUNT DESC 初排，此处用 score 覆盖）
-    groups.sort((a, b) => b.score - a.score)
+    // 按 score 降序 + groupKey 升序（tiebreaker，CHG-SN-5-10-PATCH P2）：
+    // 保证 score 相同时分页幂等，不依赖 V8 stable sort + DB 初排两层默认
+    groups.sort((a, b) => (b.score - a.score) || a.groupKey.localeCompare(b.groupKey))
 
     return { data: groups, total, page, limit }
   }
@@ -213,20 +215,22 @@ export class VideoMergesService {
       }
     }
 
-    const targetVideo = videoMap.get(targetVideoId)!
-    if (targetVideo.deleted_at !== null) {
+    const targetVideoRow = videoMap.get(targetVideoId)!
+    if (targetVideoRow.deleted_at !== null) {
       throw new AppError('STATE_CONFLICT', 'targetVideoId 已被合并到其他视频（不可作为合并目标）', 409)
     }
 
     for (const id of sourceVideoIds) {
       const v = videoMap.get(id)!
       if (v.deleted_at !== null) {
-        throw new AppError('STATE_CONFLICT', `targetVideoId 已被合并到其他视频（不可作为合并目标）`, 409)
+        throw new AppError('STATE_CONFLICT', `sourceVideoId ${id} 已被合并到其他视频（无法作为合并源）`, 409)
       }
     }
 
     // 2. 前置冲突探测（uq_sources_video_episode_url）
-    const conflictCount = await detectMergeConflicts(this.db, sourceVideoIds, targetVideoId)
+    // ADR-105 R-105-1 + CHG-SN-5-10-PATCH P0-2：探测合并后集合内任意两点冲突
+    // （覆盖 source-vs-source + source-vs-target 全部路径）
+    const conflictCount = await detectMergeConflicts(this.db, [...sourceVideoIds, targetVideoId])
     if (conflictCount > 0) {
       throw new AppError(
         'STATE_CONFLICT',
@@ -268,7 +272,16 @@ export class VideoMergesService {
       client.release()
     }
 
-    // 5. fire-and-forget admin_audit_log（COMMIT 后才写，防虚假记录）
+    // 5. 拼装合并后 target 摘要（ADR-105 §端点契约 row 2：targetVideo: VideoSummary）
+    // CHG-SN-5-10-PATCH P0-1：COMMIT 后查 target 详情反映合并后 sourceCount/sourceSiteKeys 新状态
+    const [targetDetail] = await fetchVideoDetailsForCandidates(this.db, [targetVideoId])
+    if (!targetDetail) {
+      // 理论不可达：COMMIT 已完成 + targetVideo 未被删除（前置校验通过）
+      throw new AppError('NOT_FOUND', `target video ${targetVideoId} 在合并后不可用`, 404)
+    }
+    const targetVideo = mapVideoRow(targetDetail)
+
+    // 6. fire-and-forget admin_audit_log（COMMIT 后才写，防虚假记录）
     this.auditSvc.write({
       actorId,
       actionType: 'video.merge',
@@ -278,7 +291,7 @@ export class VideoMergesService {
       afterJsonb: { auditId, targetVideoId },
     })
 
-    return { auditId, targetVideoId }
+    return { auditId, targetVideo }
   }
 
   // ── unmerge ───────────────────────────────────────────────────────
@@ -359,7 +372,8 @@ export class VideoMergesService {
   // ── split ─────────────────────────────────────────────────────────
 
   async split(params: SplitParams, actorId: string): Promise<SplitResult> {
-    const { videoId, groups, reason } = params
+    // CHG-SN-5-10-PATCH P2：SplitParams 不含 reason（ADR §端点契约 Body 不含）
+    const { videoId, groups } = params
 
     // 1. 校验原 video 存在
     const videos = await fetchVideosByIds(this.db, [videoId])
@@ -425,7 +439,7 @@ export class VideoMergesService {
         targetVideoIds: [],
         snapshotJsonb,
         performedBy: actorId,
-        reason: reason ?? null,
+        reason: null,
       })
 
       for (const group of groups) {
@@ -441,11 +455,8 @@ export class VideoMergesService {
         await assignSourcesToVideo(client, group.sourceIds, newVideoId)
       }
 
-      // 回填 target_video_ids
-      await client.query(
-        `UPDATE video_merge_audit SET target_video_ids = $1::uuid[] WHERE id = $2`,
-        [newVideoIds, auditId],
-      )
+      // 回填 target_video_ids（CHG-SN-5-10-PATCH P2：抽出到 mutations.updateAuditTargetIds）
+      await updateAuditTargetIds(client, auditId, newVideoIds)
 
       await softDeleteVideos(client, [videoId])
 

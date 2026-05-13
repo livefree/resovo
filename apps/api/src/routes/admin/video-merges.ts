@@ -101,7 +101,7 @@ export async function adminVideoMergesRoutes(fastify: FastifyInstance) {
     }
     try {
       const result = await svc.split(
-        { videoId, groups: parsed.data.groups, reason: undefined },
+        { videoId, groups: parsed.data.groups },
         request.user!.userId,
       )
       return reply.send({ data: result })

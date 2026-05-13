@@ -29,6 +29,7 @@ vi.mock('@/api/db/queries/video-merge-mutations', () => ({
   markAuditReverted: vi.fn(),
   insertNewVideo: vi.fn(),
   assignSourcesToVideo: vi.fn(),
+  updateAuditTargetIds: vi.fn(),  // CHG-SN-5-10-PATCH P2
 }))
 
 vi.mock('@/api/db/queries/video-merge-candidates', () => ({
@@ -48,6 +49,7 @@ vi.mock('@/api/services/TitleNormalizer', () => ({
 }))
 
 import * as mutations from '@/api/db/queries/video-merge-mutations'
+import * as candidates from '@/api/db/queries/video-merge-candidates'
 import { AuditLogService } from '@/api/services/AuditLogService'
 
 // ── helpers ──────────────────────────────────────────────────────
@@ -156,7 +158,7 @@ beforeEach(() => {
 // ── merge ─────────────────────────────────────────────────────────
 
 describe('VideoMergesService.merge', () => {
-  it('happy path：返回 auditId + targetVideoId，调用正确的 DB 函数', async () => {
+  it('happy path：返回 auditId + targetVideo（ADR-105 §端点契约 row 2 / CHG-SN-5-10-PATCH P0-1），调用正确的 DB 函数', async () => {
     const mockClient = makeMockClient()
     const mockPool = makeMockPool(mockClient)
     const svc = new VideoMergesService(mockPool)
@@ -175,6 +177,17 @@ describe('VideoMergesService.merge', () => {
     vi.mocked(mutations.insertMergeAudit).mockResolvedValueOnce(AUDIT_ID)
     vi.mocked(mutations.transferSourcesToTarget).mockResolvedValueOnce()
     vi.mocked(mutations.softDeleteVideos).mockResolvedValueOnce()
+    // COMMIT 后查 target 详情拼装 VideoSummaryForMerge（CHG-SN-5-10-PATCH P0-1）
+    vi.mocked(candidates.fetchVideoDetailsForCandidates).mockResolvedValueOnce([{
+      id: TARGET_ID,
+      title: `Video ${TARGET_ID}`,
+      title_normalized: `video ${TARGET_ID}`,
+      year: 2020,
+      type: 'movie',
+      created_at: '2026-01-01T00:00:00Z',
+      source_count: '5',
+      site_keys: ['iqiyi', 'youku'],
+    }])
 
     const result = await svc.merge(
       { sourceVideoIds: [SOURCE_ID_1, SOURCE_ID_2], targetVideoId: TARGET_ID },
@@ -182,7 +195,20 @@ describe('VideoMergesService.merge', () => {
     )
 
     expect(result.auditId).toBe(AUDIT_ID)
-    expect(result.targetVideoId).toBe(TARGET_ID)
+    // P0-1：返回完整 VideoSummaryForMerge 而非仅 ID
+    expect(result.targetVideo).toEqual(expect.objectContaining({
+      id: TARGET_ID,
+      title: `Video ${TARGET_ID}`,
+      year: 2020,
+      type: 'movie',
+      sourceCount: 5,
+      sourceSiteKeys: ['iqiyi', 'youku'],
+    }))
+
+    // P0-2：detectMergeConflicts 接收合并后集合 [...sources, target]
+    expect(mutations.detectMergeConflicts).toHaveBeenCalledWith(
+      mockPool, [SOURCE_ID_1, SOURCE_ID_2, TARGET_ID],
+    )
 
     // 事务正确开始和提交
     expect(mockClient.query).toHaveBeenCalledWith('BEGIN')
@@ -235,7 +261,7 @@ describe('VideoMergesService.merge', () => {
     ).rejects.toMatchObject({ code: 'STATE_CONFLICT', httpStatus: 409 })
   })
 
-  it('STATE_CONFLICT：source video 已删除（已被合并）', async () => {
+  it('STATE_CONFLICT：source video 已删除（已被合并）→ message 文案为 sourceVideoId 专用（CHG-SN-5-10-PATCH P1-3）', async () => {
     const mockPool = makeMockPool(makeMockClient())
     const svc = new VideoMergesService(mockPool)
 
@@ -244,12 +270,17 @@ describe('VideoMergesService.merge', () => {
       makeVideoRow(TARGET_ID),
     ])
 
+    // P1-3：单次拒绝同时匹配 sourceVideoId 前缀 + 无法作为合并源 后缀，避免 copy-paste targetVideoId 文案
     await expect(
       svc.merge({ sourceVideoIds: [SOURCE_ID_1], targetVideoId: TARGET_ID }, ACTOR_ID),
-    ).rejects.toMatchObject({ code: 'STATE_CONFLICT', httpStatus: 409 })
+    ).rejects.toMatchObject({
+      code: 'STATE_CONFLICT',
+      httpStatus: 409,
+      message: expect.stringMatching(/sourceVideoId.*无法作为合并源/),
+    })
   })
 
-  it('STATE_CONFLICT：uq_sources_video_episode_url 冲突（冲突数 > 0）', async () => {
+  it('STATE_CONFLICT：uq_sources_video_episode_url 冲突（冲突数 > 0）+ 合并后集合传参（P0-2）', async () => {
     const mockPool = makeMockPool(makeMockClient())
     const svc = new VideoMergesService(mockPool)
 
@@ -262,6 +293,36 @@ describe('VideoMergesService.merge', () => {
     await expect(
       svc.merge({ sourceVideoIds: [SOURCE_ID_1], targetVideoId: TARGET_ID }, ACTOR_ID),
     ).rejects.toMatchObject({ code: 'STATE_CONFLICT', httpStatus: 409, message: expect.stringContaining('3 条') })
+
+    // P0-2：探测调用接收合并后集合 [source, target]，覆盖 source-vs-source + source-vs-target
+    expect(mutations.detectMergeConflicts).toHaveBeenCalledWith(
+      mockPool, [SOURCE_ID_1, TARGET_ID],
+    )
+  })
+
+  it('STATE_CONFLICT：source-vs-source 内部冲突（CHG-SN-5-10-PATCH P0-2，R-105-1 漏检修复）', async () => {
+    const mockPool = makeMockPool(makeMockClient())
+    const svc = new VideoMergesService(mockPool)
+
+    vi.mocked(mutations.fetchVideosByIds).mockResolvedValueOnce([
+      makeVideoRow(SOURCE_ID_1),
+      makeVideoRow(SOURCE_ID_2),
+      makeVideoRow(TARGET_ID),
+    ])
+    // 假设两 source video 内部含相同 (episode_number, source_url) 行 → detectMergeConflicts > 0
+    vi.mocked(mutations.detectMergeConflicts).mockResolvedValueOnce(2)
+
+    await expect(
+      svc.merge(
+        { sourceVideoIds: [SOURCE_ID_1, SOURCE_ID_2], targetVideoId: TARGET_ID },
+        ACTOR_ID,
+      ),
+    ).rejects.toMatchObject({ code: 'STATE_CONFLICT', httpStatus: 409, message: expect.stringContaining('2 条') })
+
+    // 探测调用接收合并后集合 [...sources, target] 完整 3 ID
+    expect(mutations.detectMergeConflicts).toHaveBeenCalledWith(
+      mockPool, [SOURCE_ID_1, SOURCE_ID_2, TARGET_ID],
+    )
   })
 
   it('事务失败时 ROLLBACK 且不写 admin_audit_log', async () => {

@@ -6723,3 +6723,66 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - unit 3596/3596 全绿（净增 33；baseline 3563）
 - **后续触发**：
   - **解锁**：CHG-SN-5-11 `/admin/sources` 视图 + CHG-SN-5-12 `/admin/merge` 视图（均依赖 CHG-SN-5-09 + CHG-SN-5-10 完成）
+
+---
+
+## CHG-SN-5-10-PATCH — merge response + 冲突探测 + 清债 5 项
+- **任务 ID**：CHG-SN-5-10-PATCH
+- **日期**：2026-05-12
+- **执行模型**：claude-opus-4-7（建议 sonnet；用户独立评审会话内延续 opus 续推，偏离建议模型记录）
+- **子代理**：无（修复路径清晰 + 单测驱动 + 不涉新架构决策）
+- **来源**：用户独立评审 CHG-SN-5-10（评级 A−）— 2 项 P0 协议偏离 + 3 项 P1/P2 清债；与 CHG-SN-5-06-PATCH R-MID-1 / CHG-SN-5-09-PATCH 同型号"ADR 明示但 commit 静默跳过"偏离
+- **缺陷描述**：
+  - **P0-1 Response 字段偏离**：ADR-105 §端点契约 row 2（`decisions.md:5397`）要求 `{ data: { auditId, targetVideo: VideoSummary } }`，CHG-SN-5-10 commit `1a899b31` 落地 `{ auditId, targetVideoId: string }` 仅 ID — `/admin/merge` 视图（CHG-SN-5-12）按 ADR 期望拿到完整对象用于刷新展示，实际需二次请求补全
+  - **P0-2 冲突探测漏检**：`detectMergeConflicts` SQL（`video-merge-mutations.ts:130-140`）仅覆盖 source-vs-target；source 集合内部冲突（A 和 B 各含相同 `(episode, url)`）transfer 中途撞 `uq_sources_video_episode_url` 致 ROLLBACK + 用户得 INTERNAL_ERROR 500 而非 STATE_CONFLICT 409 友好引导
+  - **P1-3 copy-paste bug**：`VideoMergesService.ts:224` source 删除分支误用 "targetVideoId 已被合并..." 文案，应专属 sourceVideoId
+  - **P2 sort 缺 tiebreaker**：`VideoMergesService.ts:195` `groups.sort((a, b) => b.score - a.score)` 同 score 无显式 tiebreaker，分页幂等依赖 V8 stable sort + DB 初排两层默认（脆弱）
+  - **P2 越层倾向**：split 流程 `VideoMergesService.ts:445-448` raw SQL UPDATE 回填 target_video_ids，违反 Route → Service → DB queries 分层
+  - **P2 dead field**：`SplitParams.reason` 字段，但 SplitSchema 不解析、route 硬编码 undefined / ADR §端点契约 Body 不含 reason
+- **修复内容**：
+  - `packages/types/src/video-merge.types.ts`：`MergeResult.targetVideoId` → `targetVideo: VideoSummaryForMerge`（重用 -09 既有类型）+ 删 `SplitParams.reason` 字段
+  - `apps/api/src/db/queries/video-merge-mutations.ts`：
+    - `detectMergeConflicts` 签名改单数组 `videoIds: string[]`，SQL 自连接 `s1.id < s2.id AND s1.video_id = ANY AND s2.video_id = ANY` 覆盖合并后集合内任意两点冲突
+    - 新增 `updateAuditTargetIds(client, auditId, ids)` helper 替代 split raw SQL
+  - `apps/api/src/services/VideoMergesService.ts`：
+    - merge() COMMIT 后 `fetchVideoDetailsForCandidates([targetVideoId])` + `mapVideoRow` 拼装 targetVideo 返回（反映合并后 sourceCount/sourceSiteKeys 新状态）
+    - `detectMergeConflicts(this.db, [...sourceVideoIds, targetVideoId])` 传合并后集合
+    - source 删除分支 message 改 `sourceVideoId ${id} 已被合并到其他视频（无法作为合并源）`
+    - `groups.sort((a, b) => (b.score - a.score) || a.groupKey.localeCompare(b.groupKey))` 显式 tiebreaker
+    - split() 用 `updateAuditTargetIds(client, auditId, newVideoIds)` 替代 raw SQL
+    - split() 去 reason 解构（SplitParams 不再含此字段）
+    - merge() 局部变量 `targetVideo` → `targetVideoRow` 避免与返回字段命名冲突
+  - `apps/api/src/routes/admin/video-merges.ts`：split 路由去 `reason: undefined` 硬编码
+  - `tests/unit/api/video-merge-mutations.test.ts`：
+    - merge happy path 断言 `result.targetVideo.{id,title,year,type,sourceCount,sourceSiteKeys}` 替代 `result.targetVideoId`
+    - merge happy path + 冲突测试新增 `detectMergeConflicts` 调用 args 含合并后集合断言
+    - 新增 "source-vs-source 内部冲突（P0-2 R-105-1 漏检修复）" 测试用例
+    - source 删除测试改用 `stringMatching(/sourceVideoId.*无法作为合并源/)` 双锚断言
+    - vi.mock 工厂补 `updateAuditTargetIds: vi.fn()`
+  - `tests/unit/api/video-merge-candidates.test.ts`：新增 "sort tiebreaker：同 score 候选组按 groupKey 升序稳定（P2）" 测试用例
+- **文件范围**：
+  - `packages/types/src/video-merge.types.ts`
+  - `apps/api/src/db/queries/video-merge-mutations.ts`
+  - `apps/api/src/services/VideoMergesService.ts`
+  - `apps/api/src/routes/admin/video-merges.ts`
+  - `tests/unit/api/video-merge-mutations.test.ts`
+  - `tests/unit/api/video-merge-candidates.test.ts`
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`
+- **质量门禁**：
+  - typecheck 全绿（全 workspaces）/ lint 全绿（仅遗留 web-next 2 react-hooks/exhaustive-deps 警告，与本卡无关）
+  - unit 3598/3598 全绿（baseline 3596 + 净增 2：mutations 30→31 含 source-vs-source 用例 + candidates 26→27 含 tiebreaker 用例）
+  - video-merge-mutations.test.ts 31/31 + video-merge-candidates.test.ts 27/27
+- **不在范围**（CLAUDE.md 改动收敛 5 + 价值排序 4 一致性）：
+  - **P1-4 short_id 撞库**：`Math.random().toString(36).slice(2, 10)` 理论撞库风险独立 PATCH 卡承担 — 涉及 nanoid 引入 / 重试机制决策
+  - **P1-5 VideoTypeEnum DRY**：全代码库 5+ 处内联 `z.enum([...11 types...])`（search/videos/admin/staging/moderation），本卡内单独清理打破代码一致性 — 转后续 cleanup 卡专项 5+ 处一起整理
+  - **P1-6 unmerge 半还原语义**：需 arch-reviewer Opus 子代理裁定（"snapshot 价值最大化 vs ADR R-ADR-105-2 缓解措施"决策点）
+  - **ADR §端点契约 checklist 化勾对**：CHG-SN-5-13 milestone 审计承担
+- **关键发现**：
+  - **同型号偏离连续 3 次**：CHG-SN-5-06-PATCH R-MID-1 (audit payload) + CHG-SN-5-09-PATCH (perf baseline) + 本卡 (response 字段)，均"ADR 明示但 commit 静默跳过"。结构性 checklist 缺失需在 CHG-SN-5-13 milestone 审计强制纳入"ADR §端点契约逐 row + §错误码 message 模板逐 row + §验证段判据逐条勾对"3 类 checklist
+  - **R-105-1 SQL 表述歧义**：ADR 文本"探测 source 集合 与 target 冲突"字面化为二元自连接漏 source 内部 — 后续 ADR 文本应用集合论严格表述（如"合并后集合 = sources ∪ {target}，探测任意两点 (episode, url) 冲突"）
+  - **VideoSummaryForMerge 复用合理性**：-09 定义的类型同时满足 -10 merge response 需求（id/title/year/type/sourceCount/sourceSiteKeys），ADR-105 §端点契约 `VideoSummary` 语义自然映射 — 类型层零新增
+- **后续触发**：
+  - **解锁**：CHG-SN-5-11 / CHG-SN-5-12 视图卡可正式启动（端点契约 100% 对齐 ADR-105）
+- **注意事项**：
+  - 主循环模型 claude-opus-4-7 偏离任务卡建议 sonnet（用户延续 opus 会话指令）
+  - 本 PATCH 卡示范"ADR §端点契约 Response 字段 + §错误码探测协议偏离回写"模式，与 06-PATCH/09-PATCH 同型号

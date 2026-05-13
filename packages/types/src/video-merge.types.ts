@@ -61,7 +61,8 @@ export interface MergeParams {
 
 export interface MergeResult {
   readonly auditId: string
-  readonly targetVideoId: string
+  // ADR-105 §端点契约 row 2：返回合并后 target 完整摘要（含 sourceCount/sourceSiteKeys 反映新状态）
+  readonly targetVideo: VideoSummaryForMerge
 }
 
 export interface UnmergeParams {
@@ -83,10 +84,10 @@ export interface SplitGroup {
   }
 }
 
+// ADR-105 §端点契约 row 4 Body 仅 { groups }，无 reason；保持类型与协议一致
 export interface SplitParams {
   readonly videoId: string
   readonly groups: readonly SplitGroup[]
-  readonly reason?: string
 }
 
 export interface SplitResult {

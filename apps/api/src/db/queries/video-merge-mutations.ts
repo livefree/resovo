@@ -118,26 +118,30 @@ export async function fetchSourcesByVideoIds(
 }
 
 /**
- * 前置冲突探测（ADR-105 R-105-1）：
- * 检测 source videos 与 target video 是否存在相同 (episode_number, source_url) 组合。
- * 返回冲突数量；>0 时 Service 层返回 STATE_CONFLICT 409。
+ * 前置冲突探测（ADR-105 R-105-1 + CHG-SN-5-10-PATCH P0-2）：
+ * 检测合并后集合内任意两点是否存在相同 (episode_number, source_url) 组合，
+ * 覆盖 source-vs-target + source-vs-source 全部冲突路径。
+ *
+ * @param videoIds 合并后集合 = [...sourceVideoIds, targetVideoId]，Service 层负责拼装
+ * @returns 冲突对数（s1.id < s2.id 自连接 dedupe，避免镜像重复计）
  */
 export async function detectMergeConflicts(
   db: Pool | PoolClient,
-  sourceVideoIds: string[],
-  targetVideoId: string,
+  videoIds: string[],
 ): Promise<number> {
+  if (videoIds.length < 2) return 0
   const result = await db.query<{ conflict_count: string }>(
     `SELECT COUNT(*)::text AS conflict_count
        FROM video_sources s1
        JOIN video_sources s2
          ON s1.episode_number IS NOT DISTINCT FROM s2.episode_number
         AND s1.source_url = s2.source_url
+        AND s1.id < s2.id
       WHERE s1.video_id = ANY($1::uuid[])
-        AND s2.video_id = $2
+        AND s2.video_id = ANY($1::uuid[])
         AND s1.deleted_at IS NULL
         AND s2.deleted_at IS NULL`,
-    [sourceVideoIds, targetVideoId],
+    [videoIds],
   )
   return parseInt(result.rows[0]?.conflict_count ?? '0', 10)
 }
@@ -299,6 +303,21 @@ export async function insertNewVideo(
     ],
   )
   return result.rows[0]!.id
+}
+
+/**
+ * 回填 audit 行的 target_video_ids（split 流程：先 INSERT 占位空数组，创建完新 videos 后回填）。
+ * CHG-SN-5-10-PATCH P2：原 Service 层 raw SQL UPDATE 抽出，避免越层。
+ */
+export async function updateAuditTargetIds(
+  client: PoolClient,
+  auditId: string,
+  targetVideoIds: string[],
+): Promise<void> {
+  await client.query(
+    `UPDATE video_merge_audit SET target_video_ids = $1::uuid[] WHERE id = $2`,
+    [targetVideoIds, auditId],
+  )
 }
 
 /** 将指定 source IDs 归属到新 videoId（split 中分配 sources 到新 video） */
