@@ -6535,3 +6535,37 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 所有 CSS 变量零硬编码色值
 - **共享层沉淀评估**：三个 _client 组件均为 /admin/home 视图专属逻辑，无需下沉至 admin-ui
 - **解锁**：CHG-SN-5-08 ADR-105 起草（依赖 -04 ADR-104 PASS，已满足）
+
+---
+
+## CHG-SN-5-07-PATCH · 中期审计 Y-MID-4 + Y-MID-2 + DEBT-DEAD-CODE 三项清债 — 2026-05-12
+
+- **任务 ID**：CHG-SN-5-07-PATCH（CHG-SN-5-07 卡级审核黄线/债务清债，独立 hotfix）
+- **执行模型**：claude-opus-4-7（用户"现在就进行修复"延续 opus 会话；偏离建议模型 sonnet 记录）
+- **子代理**：无（修复路径清晰 + 测试断言驱动）
+- **审计触发**：CHG-SN-5-07 卡级 arch-reviewer Opus 审核 A-（3 黄线清债 1/3 = 33%，2 黄线 + 1 死代码留遗）
+- **变更内容**：
+  - **Y-MID-4 修复（-01 Toast PATCH 回填）**：SubmissionsListClient.tsx 添加 useToast import + 4 处异步 handler `try/finally` → `try/catch/finally`，catch 块调用 `toast.push({ level: 'danger' })` 提示错误（复用 -02/-03 同模式）
+  - **Y-MID-2 修复（HomeOpsClient 集成测试）**：新建 `tests/unit/components/server-next/admin/home/HomeOpsClient.test.tsx` 5 用例覆盖 loading / error+retry / list（4 tab + AdminCard）/ handlePublishToggle 端点契约 / slot tab 切换触发新 list 请求；mock @dnd-kit + home-modules API；作为后续视图卡集成测试模板
+  - **DEBT-DEAD-CODE 修复**：HomeModuleCard.tsx:151 `variant={enabled ? 'default' : 'default'}` 死三元 → `variant={enabled ? 'default' : 'primary'}`（隐藏状态用 primary 强调"点击发布"动作）
+- **文件范围**：
+  - `apps/server-next/src/app/admin/submissions/_client/SubmissionsListClient.tsx`（+1 import + 1 hook + 4 catch 块）
+  - `apps/server-next/src/app/admin/home/_client/HomeModuleCard.tsx`（1 行 variant 修复）
+  - `tests/unit/components/server-next/admin/home/HomeOpsClient.test.tsx`（新建，5 用例）
+  - `docs/task-queue.md` + `docs/tasks.md` + `docs/changelog.md`
+- **质量门禁**：typecheck + lint + unit 3537/3537 全绿（baseline 3532 + 净增 5 用例）
+- **关键发现**：
+  - vitest 配置 jsdom 环境仅匹配 `tests/unit/components/**`，集成测试需放对应路径
+  - `mockRejectedValueOnce` 对 React useEffect 多次调用失效，需用 `mockRejectedValue`（持久 reject）
+  - SLOT_LABEL 中文映射真源（`轮播广告 / 精选推荐 / TOP 10 / 类型快捷`），测试断言对齐
+  - banner subtitle 与 tab 文案冲突需用 `getAllByText`
+- **后续触发**：
+  - **解锁 CHG-SN-5-08 ADR-105 起草**（中期审计黄线/债务清债大幅推进）
+  - DEBT-Y-MID-4-CONTINUED 闭环
+  - DEBT-Y-MID-2 部分闭环（HomeOpsClient 模板已立；-01/-02/-03/-11/-12 集成测试可后续批量 PATCH 回灌）
+  - DEBT-DEAD-CODE 闭环
+  - 剩余 4 项债务（Y-MID-1 ADR `.strict()` 注释 / DEBT-DRAWER-METADATA / DEBT-DND-SENSORS / DEBT-TEST-NAMING）不阻塞 -08
+- **注意事项**：
+  - 主循环模型偏离记录（opus vs 建议 sonnet）：用户指令延续会话；未触发"主循环中途升级"硬约束因启动即 opus
+  - HomeOpsClient.test.tsx 不覆盖 DndContext onDragEnd（@dnd-kit sensors 复杂度高）— 作为 Y-MID-2 模板基础，留 -08+ 或独立 DND-INTEGRATION-TEST 卡
+  - mock @dnd-kit 策略可作为后续拖拽视图卡的复用模板

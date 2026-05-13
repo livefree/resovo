@@ -30,6 +30,7 @@ import {
   PageHeader,
   AdminButton,
   AdminSelect,
+  useToast,
   type AdminSelectOption,
   type TableSelectionState,
   type TableSortState,
@@ -152,6 +153,7 @@ export function SubmissionsListClient() {
   const [selection, setSelection] = useState<TableSelectionState>({ selectedKeys: new Set(), mode: 'page' })
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [batchPending, setBatchPending] = useState(false)
+  const toast = useToast()
 
   // 加载站点列表
   useEffect(() => {
@@ -201,25 +203,39 @@ export function SubmissionsListClient() {
     setRetryKey((k) => k + 1)
   }, [clearSelection])
 
+  // Y-MID-4 修复（中期审计 2026-05-12 CHG-SN-5-07-PATCH）：4 处异步操作补 catch + useToast
+  // 复用 SubtitlesListClient (-02) / UsersListClient (-03) 同款 Toast 错误反馈模式
   const handleApprove = useCallback(async (id: string) => {
     setPendingId(id)
     try {
       await approveSubmission(id)
       refresh()
+    } catch (err: unknown) {
+      toast.push({
+        title: '通过失败',
+        description: err instanceof Error ? err.message : '操作失败，请稍后重试',
+        level: 'danger',
+      })
     } finally {
       setPendingId(null)
     }
-  }, [refresh])
+  }, [refresh, toast])
 
   const handleReject = useCallback(async (id: string, reason: string | undefined) => {
     setPendingId(id)
     try {
       await rejectSubmission(id, reason)
       refresh()
+    } catch (err: unknown) {
+      toast.push({
+        title: '拒绝失败',
+        description: err instanceof Error ? err.message : '操作失败，请稍后重试',
+        level: 'danger',
+      })
     } finally {
       setPendingId(null)
     }
-  }, [refresh])
+  }, [refresh, toast])
 
   const handleBatchApprove = useCallback(async () => {
     if (selection.selectedKeys.size === 0) return
@@ -227,10 +243,16 @@ export function SubmissionsListClient() {
     try {
       await batchApproveSubmissions(Array.from(selection.selectedKeys))
       refresh()
+    } catch (err: unknown) {
+      toast.push({
+        title: '批量通过失败',
+        description: err instanceof Error ? err.message : '操作失败，请稍后重试',
+        level: 'danger',
+      })
     } finally {
       setBatchPending(false)
     }
-  }, [selection.selectedKeys, refresh])
+  }, [selection.selectedKeys, refresh, toast])
 
   const handleBatchReject = useCallback(async (reason: string | undefined) => {
     if (selection.selectedKeys.size === 0) return
@@ -238,10 +260,16 @@ export function SubmissionsListClient() {
     try {
       await batchRejectSubmissions(Array.from(selection.selectedKeys), reason)
       refresh()
+    } catch (err: unknown) {
+      toast.push({
+        title: '批量拒绝失败',
+        description: err instanceof Error ? err.message : '操作失败，请稍后重试',
+        level: 'danger',
+      })
     } finally {
       setBatchPending(false)
     }
-  }, [selection.selectedKeys, refresh])
+  }, [selection.selectedKeys, refresh, toast])
 
   const columns = useMemo(
     () => buildSubmissionColumns({

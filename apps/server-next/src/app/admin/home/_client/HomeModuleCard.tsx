@@ -148,7 +148,7 @@ export function HomeModuleCard({ module, pendingId, onEdit, onDelete, onPublishT
 
       <div style={ACTIONS_STYLE}>
         <AdminButton
-          variant={module.enabled ? 'default' : 'default'}
+          variant={module.enabled ? 'default' : 'primary'}
           size="sm"
           loading={isPending}
           onClick={() => onPublishToggle(module.id, !module.enabled)}
