@@ -95,9 +95,11 @@ const TAB_BAR_STYLE: CSSProperties = {
 }
 
 function tabStyle(active: boolean): CSSProperties {
+  // CHG-SN-5-13-PATCH-2：删 `font: 'inherit'` shorthand（与 fontWeight longhand 冲突；React 警告）
   return {
     padding: '8px 16px',
     fontSize: 'var(--font-size-sm)',
+    fontFamily: 'inherit',
     fontWeight: active ? 600 : 400,
     color: active ? 'var(--fg-default)' : 'var(--fg-muted)',
     background: 'none',
@@ -105,7 +107,6 @@ function tabStyle(active: boolean): CSSProperties {
     borderBottom: active ? '2px solid var(--accent-default)' : '2px solid transparent',
     cursor: 'pointer',
     whiteSpace: 'nowrap',
-    font: 'inherit',
   }
 }
 

@@ -44,21 +44,23 @@ export async function fetchRawCandidateGroups(
   params: { type: VideoType | null; offset: number; limit: number },
 ): Promise<RawCandidateGroupRow[]> {
   const { type, offset, limit } = params
-  // 使用 idx_videos_normalized_year_type 部分索引（deleted_at IS NULL 已含）
+  // CHG-SN-5-13-PATCH-2: title_normalized + year 已 migration 029 迁移到 media_catalog
+  // 需 JOIN media_catalog（参 videos.ts:169 VIDEO_JOIN 标准范式）
   const result = await db.query<RawCandidateGroupRow>(
     `SELECT
-       title_normalized,
-       year,
-       type,
-       ARRAY_AGG(id ORDER BY created_at ASC) AS video_ids,
+       mc.title_normalized,
+       mc.year,
+       v.type,
+       ARRAY_AGG(v.id ORDER BY v.created_at ASC) AS video_ids,
        COUNT(*)::text AS video_count
-     FROM videos
-     WHERE deleted_at IS NULL
-       AND title_normalized IS NOT NULL
-       AND ($1::text IS NULL OR type = $1)
-     GROUP BY title_normalized, year, type
+     FROM videos v
+     JOIN media_catalog mc ON mc.id = v.catalog_id
+     WHERE v.deleted_at IS NULL
+       AND mc.title_normalized IS NOT NULL
+       AND ($1::text IS NULL OR v.type = $1)
+     GROUP BY mc.title_normalized, mc.year, v.type
      HAVING COUNT(*) > 1
-     ORDER BY COUNT(*) DESC, title_normalized ASC
+     ORDER BY COUNT(*) DESC, mc.title_normalized ASC
      LIMIT $2 OFFSET $3`,
     [type ?? null, limit, offset],
   )
@@ -78,11 +80,12 @@ export async function countRawCandidateGroups(
     `SELECT COUNT(*)::text AS total
      FROM (
        SELECT 1
-       FROM videos
-       WHERE deleted_at IS NULL
-         AND title_normalized IS NOT NULL
-         AND ($1::text IS NULL OR type = $1)
-       GROUP BY title_normalized, year, type
+       FROM videos v
+       JOIN media_catalog mc ON mc.id = v.catalog_id
+       WHERE v.deleted_at IS NULL
+         AND mc.title_normalized IS NOT NULL
+         AND ($1::text IS NULL OR v.type = $1)
+       GROUP BY mc.title_normalized, mc.year, v.type
        HAVING COUNT(*) > 1
      ) sub`,
     [type ?? null],
@@ -103,8 +106,8 @@ export async function fetchVideoDetailsForCandidates(
     `SELECT
        v.id,
        v.title,
-       v.title_normalized,
-       v.year,
+       mc.title_normalized,
+       mc.year,
        v.type,
        v.created_at::text AS created_at,
        COUNT(vs.id)::text AS source_count,
@@ -113,9 +116,10 @@ export async function fetchVideoDetailsForCandidates(
          '{}'::text[]
        ) AS site_keys
      FROM videos v
+     JOIN media_catalog mc ON mc.id = v.catalog_id
      LEFT JOIN video_sources vs ON vs.video_id = v.id AND vs.deleted_at IS NULL
      WHERE v.id = ANY($1::uuid[])
-     GROUP BY v.id`,
+     GROUP BY v.id, mc.title_normalized, mc.year`,
     [videoIds],
   )
   return result.rows

@@ -64,19 +64,25 @@ export interface RawAuditRow {
 
 // ── 只读辅助查询 ──────────────────────────────────────────────────
 
-/** 批量拉取 video 完整行（含软删除标记，用于状态校验） */
+/** 批量拉取 video 完整行（含软删除标记，用于状态校验）
+ *  CHG-SN-5-13-PATCH-2: migration 029 删 videos 15 列迁至 media_catalog；
+ *  JOIN media_catalog 取 mc.* 兼容既有 RawVideoRow 消费方（merge snapshot_jsonb）。
+ */
 export async function fetchVideosByIds(
   db: Pool | PoolClient,
   ids: string[],
 ): Promise<RawVideoRow[]> {
   if (ids.length === 0) return []
   const result = await db.query<RawVideoRow>(
-    `SELECT id, short_id, slug, title, title_en, description, cover_url,
-            type, category, rating, year, country, episode_count, status,
-            director, "cast", writers, is_published, title_normalized,
-            catalog_id, deleted_at, created_at::text, updated_at::text
-       FROM videos
-      WHERE id = ANY($1::uuid[])`,
+    `SELECT v.id, v.short_id, v.slug, v.title,
+            mc.title_en, mc.description, mc.cover_url,
+            v.type, v.source_category AS category, mc.rating, mc.year, mc.country,
+            v.episode_count, mc.status,
+            mc.director, mc."cast", mc.writers, v.is_published, mc.title_normalized,
+            v.catalog_id, v.deleted_at, v.created_at::text, v.updated_at::text
+       FROM videos v
+       JOIN media_catalog mc ON mc.id = v.catalog_id
+      WHERE v.id = ANY($1::uuid[])`,
     [ids],
   )
   return result.rows

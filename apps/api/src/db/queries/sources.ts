@@ -443,7 +443,7 @@ export async function listSubmissions(
               u.username AS submitted_by_username
        FROM video_sources s
        LEFT JOIN videos v ON s.video_id = v.id
-       LEFT JOIN users u ON s.submitted_by = u.id::text
+       LEFT JOIN users u ON s.submitted_by = u.id
        WHERE ${whereSQL}
        ORDER BY ${orderCol} ${orderDir}
        LIMIT $${filterParams.length + 1} OFFSET $${filterParams.length + 2}`,

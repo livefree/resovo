@@ -7268,3 +7268,59 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 主循环模型 claude-opus-4-7（符合 milestone 审计强制 Opus）
   - 自动化循环模式实测：spawn arch-reviewer Opus 1 轮 → 评级 B+ → 主循环立即起 -PATCH → 落地 3 项 → 3659 全绿 → 无需第 2 轮评审（隐式通过）→ 总耗时 ~30 分钟
   - **M-SN-5 整体闭环数据**：13 子卡 + 7 PATCH/AUDIT = 20 commits；6 视图 + 15 端点 + 3 ADR（104/105/117）+ ADR-103 AMENDMENT；3645 → 3659 测试基线（+ 14）；CHECKLIST-AUDIT 3 核心脚本就位（防 M-SN-6 重蹈覆辙）
+
+---
+
+## CHG-SN-5-13-PATCH-2 — schema 偏离修复（migration 029 后未迁移 mc JOIN + uuid cast bug + migration 061/062/063 dev DB 未应用）
+- **任务 ID**：CHG-SN-5-13-PATCH-2
+- **日期**：2026-05-13
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（修复路径清晰）
+- **来源**：用户报告"播放线路 / 合并拆分页面视频数据加载失败"
+- **诊断**：
+  - 实际 API logs 显示 3 类 P0 500 错误 + 1 类 dev DB migration 滞后：
+    1. `column "title_normalized" does not exist`（/admin/video-merges/candidates）
+    2. `column v.year does not exist`（/admin/sources/video-groups）
+    3. `column vs.updated_at does not exist`（同上，第二阶段）
+    4. `operator does not exist: uuid = text`（/admin/submissions，顺手发现）
+  - **根因**：
+    - **migration 029** 删 `videos` 表 15 列（title_normalized / year / cover_url / 等）迁移到 `media_catalog`；ADR-105 (CHG-SN-5-08) + ADR-117 (CHG-SN-5-11) 起草时未核 migration 029，SQL 直接用 `v.column`
+    - **migration 061/062/063 dev DB 未应用**：CHG-SN-5-PRE-01-C 的 061 video_sources.updated_at + ADR-105 落地的 062 video_merge_audit + ADR-117 落地的 063 source_line_aliases 全部未在 dev DB 跑 migrate
+    - **listSubmissions** `u.id::text` 是历史遗留 cast（submitted_by UUID = users.id UUID，无需 cast）
+- **修复内容（5 处 schema 偏离 + 1 次 migration 应用）**：
+  - **P0-1** `apps/api/src/db/queries/video-merge-candidates.ts`：3 个 query 全部 JOIN `media_catalog`（`v.title_normalized` → `mc.title_normalized` / `v.year` → `mc.year`）；参 `apps/api/src/db/queries/videos.ts:169` VIDEO_JOIN 标准范式
+  - **P0-2** `apps/api/src/db/queries/sources-matrix.ts:170` listVideoGroups query：JOIN `media_catalog` 取 `mc.year` / `mc.cover_url`；GROUP BY 同步含 mc 字段
+  - **P0-3** `apps/api/src/db/queries/sources.ts:447` listSubmissions：删 `u.id::text` cast（submitted_by UUID = users.id UUID 自然相等）
+  - **P1-4** `apps/api/src/db/queries/watchHistory.ts:60` 顺手清债：`v.cover_url` → `mc.cover_url` + JOIN media_catalog（用户未报告但同源 schema 偏离）
+  - **运维-5** 跑 `npm run migrate`：应用 dev DB 滞后的 4 个 migration（058a / 061 / 062 / 063）→ 解锁 video_sources.updated_at + video_merge_audit + source_line_aliases 三表/列
+- **文件范围**：
+  - `apps/api/src/db/queries/video-merge-candidates.ts`（3 query mc JOIN）
+  - `apps/api/src/db/queries/sources-matrix.ts`（listVideoGroups mc JOIN）
+  - `apps/api/src/db/queries/sources.ts`（listSubmissions 删 ::text）
+  - `apps/api/src/db/queries/watchHistory.ts`（顺手 mc JOIN）
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`
+- **质量门禁**：
+  - typecheck 全绿 / 3659 全绿（mock pg.Pool.query 不验真 SQL — 见 §结构性发现）
+  - dev server reload 已生效（tsx --watch / "Restarting 'src/server.ts'"）
+  - migration 060 → 063 dev DB 状态同步
+- **结构性发现 — CHECKLIST-AUDIT 漏检根因**：
+  - **3 个核心 verify 脚本（endpoint-adr / error-message / adr-d-numbers）核协议合规但不跑真实 SQL** → schema 偏离绕过所有自动化守卫
+  - **unit test mock `pg.Pool.query` 不验真 SQL** → 即使 column 不存在 mock 也返回设定 rows，测试 PASS 但生产 500
+  - **dev DB migration 滞后不在 CI 流水线** → migrate.ts 不在 preflight / CI 强制环节
+- **不在范围**：
+  - **e2e / integration 测试套件**：跑真实 PG 子集覆盖 admin route happy path SQL（M-SN-6 RETRO 卡承担）
+  - **`verify:sql-schema-alignment` 脚本**：扫 queries `v.column` 字面量比对 migration 全集后的 schema（CHG-SN-6-CHECKLIST-AUDIT-3 承担）
+  - **migration 顺序 / 跨开发机同步**：dev DB migration 滞后是个例 vs 系统问题，CI 加 `npm run migrate` 干跑核验列入 RETRO-5
+- **关键发现**：
+  - **本卡示范"用户验证发现 vs CHECKLIST-AUDIT 漏检"层级**：自动化机制 1 层（协议合规）+ 单元测试 1 层（mock 不验真）= 2 层都 PASS，但实际 SQL 在生产报错 → e2e 是必需 3 层
+  - **5 处 schema 偏离 + migration 滞后**：M-SN-5 全 milestone 累积 5 个 SQL bug 才暴露 — 因 ADR-105/-117 起草卡未核 migration 029 全集 + dev DB 与代码不同步
+  - **快速修复路径有效**：用户报告 → API logs grep → 定位 4 文件 + migration → 修 4 + 跑 migrate → 15 分钟全闭环
+- **后续触发**：
+  - **解锁 M-SN-5 真闭环**：本卡修复 -13 milestone 审计未发现的 schema 偏离实际生产 bug
+  - **M-SN-6 期 RETRO 卡新增**：
+    - **RETRO-5**：CI 流水线加 `npm run migrate --dry-run` 干跑核验列入 preflight
+    - **RETRO-6**：tests/integration/api/admin-*.test.ts 集成测试套件（跑真实 PG）
+    - **CHG-SN-6-CHECKLIST-AUDIT-3 扩**：verify:sql-schema-alignment + 跨 ADR vs migration 全集核验
+- **注意事项**：
+  - migration 029 是 M-SN-3 末期落地的 schema 改造（CHG-361），ADR-105/-117 起草卡（M-SN-5 中期）应核但漏检 — CHECKLIST-AUDIT 应在"新 ADR 起草前 grep migration 删列清单"
+  - 用户 dev DB 是本卡修复 migration 滞后才追平 060 → 063；其他开发机 / CI / 生产环境可能同样滞后，部署前必跑 migrate

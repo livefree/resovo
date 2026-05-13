@@ -55,11 +55,13 @@ export async function getUserHistory(
 
   const [rows, countResult] = await Promise.all([
     db.query<WatchHistoryRow>(
+      // CHG-SN-5-13-PATCH-2: cover_url 已 migration 029 迁移到 media_catalog；需 JOIN
       `SELECT wh.video_id, wh.season_number, wh.episode_number, wh.progress_seconds, wh.watched_at,
               v.short_id AS video_short_id, v.title AS video_title,
-              v.cover_url AS video_cover_url, v.type AS video_type
+              mc.cover_url AS video_cover_url, v.type AS video_type
        FROM watch_history wh
        JOIN videos v ON wh.video_id = v.id
+       JOIN media_catalog mc ON mc.id = v.catalog_id
        WHERE wh.user_id = $1
        ORDER BY wh.watched_at DESC
        LIMIT $2 OFFSET $3`,

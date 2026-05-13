@@ -14,6 +14,14 @@ const nextConfig: NextConfig = {
     // ADR-103b §4.6：lucide-react named import 优化（dev 启动加速；不影响生产 tree-shake）
     optimizePackageImports: ['lucide-react'],
   },
+  // CHG-SN-5-13-PATCH-2：cover_url 来自爬虫任意 hostname（xinlangtupian.com / 豆瓣 / 等）
+  // 与 web-next 同范式：通配所有 hostname；future 接入 Cloudflare Images 可改 loader
+  images: {
+    remotePatterns: [
+      { protocol: 'https', hostname: '**' },
+      { protocol: 'http', hostname: '**' },
+    ],
+  },
 }
 
 export default nextConfig

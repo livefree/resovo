@@ -45,12 +45,12 @@ const DEFAULT_PAGE_SIZE = 20
 // ── 样式 ─────────────────────────────────────────────────────────
 
 const PAGE_STYLE: CSSProperties = {
+  // CHG-SN-5-13-PATCH-2：删 height:100% / minHeight:0；让 AdminShell main `overflow: auto` 整页滚动
+  // 底部 padding-y 撑出 pagination footer 可达
   display: 'flex',
   flexDirection: 'column',
-  height: '100%',
-  minHeight: 0,
   gap: 'var(--section-gap)',
-  padding: 'var(--page-padding-y) var(--page-padding-x) 0',
+  padding: 'var(--page-padding-y) var(--page-padding-x)',
 }
 
 const KPI_GRID_STYLE: CSSProperties = {
@@ -67,9 +67,11 @@ const TAB_BAR_STYLE: CSSProperties = {
 }
 
 function tabStyle(active: boolean): CSSProperties {
+  // CHG-SN-5-13-PATCH-2：删 `font: 'inherit'` shorthand（与 fontWeight longhand 冲突；React 警告）
   return {
     padding: '8px 16px',
     fontSize: 'var(--font-size-sm)',
+    fontFamily: 'inherit',
     fontWeight: active ? 600 : 400,
     color: active ? 'var(--fg-default)' : 'var(--fg-muted)',
     background: 'none',
@@ -77,7 +79,6 @@ function tabStyle(active: boolean): CSSProperties {
     borderBottom: active ? '2px solid var(--accent-default)' : '2px solid transparent',
     cursor: 'pointer',
     whiteSpace: 'nowrap',
-    font: 'inherit',
   }
 }
 
@@ -390,8 +391,8 @@ export function SourcesClient() {
         />
       </div>
 
-      {/* 主体视图切换 */}
-      <AdminCard style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+      {/* 主体视图切换（自然高度；main 整页滚动）*/}
+      <AdminCard style={{ display: 'flex', flexDirection: 'column' }}>
         {/* 顶部 Tab */}
         <div style={{ display: 'flex', gap: '0', borderBottom: '1px solid var(--border-subtle)', padding: '0 16px' }}>
           <button type="button" style={tabStyle(activeTab === 'matrix')} onClick={() => setActiveTab('matrix')}>
@@ -407,7 +408,7 @@ export function SourcesClient() {
             <SourceLineAliasPanel />
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
             {/* Segment tabs */}
             <div style={{ padding: '12px 16px 0' }}>
               <div style={TAB_BAR_STYLE}>
@@ -424,7 +425,8 @@ export function SourcesClient() {
               </div>
             </div>
 
-            {/* DataTable 一体化（P1-5）*/}
+            {/* DataTable 一体化（P1-5）— main 整页滚动模式（body 独立滚动留 M-SN-6 增强）*/}
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
             {loading && rows.length === 0
               ? <div style={{ padding: '16px' }}><LoadingState variant="skeleton" skeletonRows={8} /></div>
               : error
@@ -470,6 +472,7 @@ export function SourcesClient() {
                     />
                   )
             }
+            </div>
           </div>
         )}
       </AdminCard>

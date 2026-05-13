@@ -166,23 +166,25 @@ export async function listVideoGroups(
   )
   const total = parseInt(countResult.rows[0]?.cnt ?? '0', 10)
 
+  // CHG-SN-5-13-PATCH-2: year + cover_url 已 migration 029 迁移到 media_catalog；需 JOIN（参 videos.ts VIDEO_JOIN）
   const rowsResult = await db.query<DbVideoGroupRow>(
     `SELECT
        v.id AS video_id,
        v.title,
        v.short_id,
        v.type,
-       v.year,
-       v.cover_url,
+       mc.year,
+       mc.cover_url,
        COUNT(DISTINCT (COALESCE(vs.source_site_key, v.site_key), vs.source_name))::TEXT AS line_count,
        COUNT(vs.id)::TEXT AS source_count,
        STRING_AGG(DISTINCT vs.probe_status, ',') AS probe_status,
        STRING_AGG(DISTINCT vs.render_status, ',') AS render_status,
        MAX(vs.updated_at)::TEXT AS updated_at
      FROM videos v
+     JOIN media_catalog mc ON mc.id = v.catalog_id
      JOIN video_sources vs ON vs.video_id = v.id AND vs.deleted_at IS NULL
      WHERE ${whereClause}
-     GROUP BY v.id
+     GROUP BY v.id, mc.year, mc.cover_url
      ORDER BY MAX(vs.updated_at) DESC NULLS LAST
      LIMIT $${idx++} OFFSET $${idx++}`,
     [...paramValues, limit, offset],
