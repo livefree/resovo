@@ -1,75 +1,55 @@
 /**
- * sources-matrix.ts — /admin/sources 线路矩阵聚合查询（CHG-SN-5-11）
+ * sources-matrix.ts — /admin/sources 线路矩阵聚合查询（ADR-117 / CHG-SN-5-11-PATCH-2）
  *
- * 查询按 ADR-114-NEGATED 复合键约束：(source_site_key, source_name) 是线路的唯一标识
+ * D-117-7 / -3 修订（2026-05-13 CHG-SN-5-11-PATCH-2）：类型契约迁移至 `@resovo/types`
+ * `sources-matrix.types.ts`（共享层），本文件仅 re-export + 提供 DB 查询。
+ *
+ * 查询按 ADR-114-NEGATED 复合键约束：(source_site_key, source_name) 是线路的唯一标识。
+ * 聚合业务逻辑（aggregateSignal）已迁至 Service 层（SourcesMatrixService），不在 DB 查询层。
  */
 
 import type { Pool } from 'pg'
+import type {
+  DualSignalState,
+  SourceSegment,
+  VideoGroupRow,
+  VideoGroupListResult,
+  VideoGroupListParams,
+  VideoGroupStats,
+  EpisodeCell,
+  LineMatrixRow,
+  SourceLineAlias,
+} from '@resovo/types'
 
-// ── 外部类型契约 ──────────────────────────────────────────────────
-
-export type SourceSegment = 'grouped' | 'dead' | 'correction' | 'orphan'
-export type SignalStatus = 'ok' | 'partial' | 'dead' | 'pending'
-
-export interface VideoGroupRow {
-  videoId: string
-  title: string
-  shortId: string
-  type: string
-  year: number | null
-  coverUrl: string | null
-  lineCount: number
-  sourceCount: number
-  probeStatus: SignalStatus
-  renderStatus: SignalStatus
-  updatedAt: string
+// re-export 共享类型，保持向后兼容（apps/api 内部消费方）
+export type {
+  DualSignalState,
+  SourceSegment,
+  VideoGroupRow,
+  VideoGroupListResult,
+  VideoGroupListParams,
+  VideoGroupStats,
+  EpisodeCell,
+  LineMatrixRow,
+  SourceLineAlias,
 }
 
-export interface VideoGroupListResult {
-  data: VideoGroupRow[]
-  total: number
-  page: number
-  limit: number
+/**
+ * VideoGroupRowRaw — DB 查询层中间形态：probeStatuses/renderStatuses 是原始状态数组，
+ * 由 Service 层（SourcesMatrixService）通过 aggregateSignal 派生 VideoGroupRow.probeStatus/renderStatus。
+ *
+ * CHG-SN-5-11-PATCH-2 P0-2 完成 Service 抽出：DB 查询层不持有业务规则。
+ */
+export interface VideoGroupRowRaw extends Omit<VideoGroupRow, 'probeStatus' | 'renderStatus'> {
+  readonly probeStatuses: readonly string[]
+  readonly renderStatuses: readonly string[]
 }
 
-export interface VideoGroupListParams {
-  page?: number
-  limit?: number
-  keyword?: string
-  segment?: SourceSegment
-  siteKey?: string
-  probeStatus?: string
-  renderStatus?: string
-}
-
-export interface VideoGroupStats {
-  total: number
-  active: number
-  dead: number
-  orphan: number
-}
-
-export interface EpisodeCell {
-  episodeNumber: number
-  sourceId: string
-  sourceUrl: string
-  probeStatus: SignalStatus
-  renderStatus: SignalStatus
-  isActive: boolean
-}
-
-export interface LineMatrixRow {
-  sourceSiteKey: string
-  sourceName: string
-  displayName: string | null
-  episodes: EpisodeCell[]
-}
-
-export interface SourceLineAlias {
-  sourceSiteKey: string
-  sourceName: string
-  displayName: string
-  updatedAt: string
+export interface VideoGroupListRawResult {
+  readonly data: readonly VideoGroupRowRaw[]
+  readonly total: number
+  readonly page: number
+  readonly limit: number
 }
 
 // ── 内部 DB 行类型 ────────────────────────────────────────────────
@@ -107,16 +87,6 @@ interface DbAliasRow {
   updated_at: string
 }
 
-// ── 聚合信号状态推导 ──────────────────────────────────────────────
-
-function aggregateSignal(statuses: string[]): SignalStatus {
-  if (statuses.length === 0) return 'pending'
-  if (statuses.every((s) => s === 'ok')) return 'ok'
-  if (statuses.every((s) => s === 'dead')) return 'dead'
-  if (statuses.some((s) => s === 'ok' || s === 'partial')) return 'partial'
-  return 'pending'
-}
-
 // ── 查询：视频分组 KPI 统计 ───────────────────────────────────────
 
 export async function getVideoGroupStats(db: Pool): Promise<VideoGroupStats> {
@@ -152,7 +122,7 @@ export async function getVideoGroupStats(db: Pool): Promise<VideoGroupStats> {
 export async function listVideoGroups(
   db: Pool,
   params: VideoGroupListParams,
-): Promise<VideoGroupListResult> {
+): Promise<VideoGroupListRawResult> {
   const page = Math.max(1, params.page ?? 1)
   const limit = Math.min(100, Math.max(1, params.limit ?? 20))
   const offset = (page - 1) * limit
@@ -218,23 +188,21 @@ export async function listVideoGroups(
     [...paramValues, limit, offset],
   )
 
-  const data: VideoGroupRow[] = rowsResult.rows.map((row) => {
-    const probeStatuses = (row.probe_status ?? '').split(',').filter(Boolean)
-    const renderStatuses = (row.render_status ?? '').split(',').filter(Boolean)
-    return {
-      videoId: row.video_id,
-      title: row.title,
-      shortId: row.short_id,
-      type: row.type,
-      year: row.year,
-      coverUrl: row.cover_url,
-      lineCount: parseInt(row.line_count, 10),
-      sourceCount: parseInt(row.source_count, 10),
-      probeStatus: aggregateSignal(probeStatuses),
-      renderStatus: aggregateSignal(renderStatuses),
-      updatedAt: row.updated_at,
-    }
-  })
+  // 返回 raw 状态数组；Service 层负责 aggregateSignal 派生最终 probeStatus/renderStatus
+  // CHG-SN-5-11-PATCH-2 P0-2：业务规则归口 Service，DB 查询层不持有
+  const data: VideoGroupRowRaw[] = rowsResult.rows.map((row) => ({
+    videoId: row.video_id,
+    title: row.title,
+    shortId: row.short_id,
+    type: row.type,
+    year: row.year,
+    coverUrl: row.cover_url,
+    lineCount: parseInt(row.line_count, 10),
+    sourceCount: parseInt(row.source_count, 10),
+    probeStatuses: (row.probe_status ?? '').split(',').filter(Boolean),
+    renderStatuses: (row.render_status ?? '').split(',').filter(Boolean),
+    updatedAt: row.updated_at,
+  }))
 
   return { data, total, page, limit }
 }
@@ -267,29 +235,35 @@ export async function getVideoMatrix(
     [videoId],
   )
 
-  const linesMap = new Map<string, LineMatrixRow>()
+  // 中间形态：episodes 为 mutable 数组便于 push，最后通过 readonly cast 返回符合共享类型
+  type LineMatrixRowMutable = {
+    sourceSiteKey: string
+    sourceName: string
+    displayName: string | null
+    episodes: EpisodeCell[]
+  }
+  const linesMap = new Map<string, LineMatrixRowMutable>()
   for (const row of rows.rows) {
     const key = `${row.source_site_key ?? ''}::${row.source_name}`
-    if (!linesMap.has(key)) {
-      linesMap.set(key, {
+    let line = linesMap.get(key)
+    if (!line) {
+      line = {
         sourceSiteKey: row.source_site_key ?? '',
         sourceName: row.source_name,
         displayName: row.display_name,
         episodes: [],
-      })
-    } else if (row.display_name !== null) {
-      // 取第一个非 null 别名（LEFT JOIN 同线路各行应相同，但防御性取最新非空值）
-      const existing = linesMap.get(key)!
-      if (existing.displayName === null) {
-        linesMap.set(key, { ...existing, displayName: row.display_name })
       }
+      linesMap.set(key, line)
+    } else if (row.display_name !== null && line.displayName === null) {
+      // 取第一个非 null 别名（LEFT JOIN 同线路各行应相同，但防御性取最新非空值）
+      line.displayName = row.display_name
     }
-    linesMap.get(key)!.episodes.push({
+    line.episodes.push({
       episodeNumber: row.episode_number,
       sourceId: row.source_id,
       sourceUrl: row.source_url,
-      probeStatus: row.probe_status as SignalStatus,
-      renderStatus: row.render_status as SignalStatus,
+      probeStatus: row.probe_status as DualSignalState,
+      renderStatus: row.render_status as DualSignalState,
       isActive: row.is_active,
     })
   }

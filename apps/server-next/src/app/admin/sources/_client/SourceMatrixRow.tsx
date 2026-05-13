@@ -2,26 +2,27 @@
 
 import { useState, type CSSProperties } from 'react'
 import Image from 'next/image'
-import type { VideoGroupRow, LineMatrixRow, SignalStatus } from '@/lib/sources/types'
+import type { DualSignalState } from '@resovo/types'
+import type { VideoGroupRow, LineMatrixRow } from '@resovo/types'
 import { getVideoMatrix } from '@/lib/sources/api'
 
-// ── 信号色映射 ────────────────────────────────────────────────────
+// ── 信号色映射（DualSignalState 复用 admin-moderation.types.ts:39，ADR-117 Y-117-3）─
 
-const SIGNAL_COLOR: Record<SignalStatus, string> = {
+const SIGNAL_COLOR: Record<DualSignalState, string> = {
   ok:      'var(--state-success-bg)',
   partial: 'var(--state-warning-bg)',
   dead:    'var(--state-error-bg)',
   pending: 'var(--bg-surface-elevated)',
 }
 
-const SIGNAL_BORDER: Record<SignalStatus, string> = {
+const SIGNAL_BORDER: Record<DualSignalState, string> = {
   ok:      'var(--state-success-border)',
   partial: 'var(--state-warning-border)',
   dead:    'var(--state-error-border)',
   pending: 'var(--border-subtle)',
 }
 
-const SIGNAL_LABEL: Record<SignalStatus, string> = {
+const SIGNAL_LABEL: Record<DualSignalState, string> = {
   ok: '✓', partial: '!', dead: '✕', pending: '…',
 }
 
@@ -58,14 +59,14 @@ const EXPAND_GRID_STYLE: CSSProperties = {
 // ── 单集色块 ──────────────────────────────────────────────────────
 
 interface EpisodeCellProps {
-  probeStatus: SignalStatus
-  renderStatus: SignalStatus
+  probeStatus: DualSignalState
+  renderStatus: DualSignalState
   episodeNumber: number
   isActive: boolean
 }
 
 function EpisodeCellBlock({ probeStatus, renderStatus, episodeNumber, isActive }: EpisodeCellProps) {
-  const combined: SignalStatus = !isActive ? 'dead'
+  const combined: DualSignalState = !isActive ? 'dead'
     : probeStatus === 'ok' && renderStatus === 'ok' ? 'ok'
     : probeStatus === 'dead' || renderStatus === 'dead' ? 'dead'
     : probeStatus === 'partial' || renderStatus === 'partial' ? 'partial'
@@ -94,21 +95,21 @@ function EpisodeCellBlock({ probeStatus, renderStatus, episodeNumber, isActive }
 
 // ── 聚合 pill ─────────────────────────────────────────────────────
 
-const PILL_VARIANT: Record<SignalStatus, string> = {
+const PILL_VARIANT: Record<DualSignalState, string> = {
   ok:      'ok',
   partial: 'warn',
   dead:    'danger',
   pending: 'default',
 }
 
-const PILL_LABEL: Record<SignalStatus, string> = {
+const PILL_LABEL: Record<DualSignalState, string> = {
   ok:      '全部可达',
   partial: '部分',
   dead:    '全失效',
   pending: '未测',
 }
 
-export function SignalPill({ status }: { status: SignalStatus }) {
+export function SignalPill({ status }: { status: DualSignalState }) {
   const variant = PILL_VARIANT[status]
   const label = PILL_LABEL[status]
   const color = status === 'ok' ? 'var(--state-success-fg)'

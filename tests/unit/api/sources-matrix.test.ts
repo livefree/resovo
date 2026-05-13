@@ -71,7 +71,10 @@ describe('listVideoGroups', () => {
     updated_at: '2026-01-01T00:00:00Z',
   }
 
-  it('returns paginated data with default params', async () => {
+  // CHG-SN-5-11-PATCH-2 P0-2：queries 层不再 aggregate，返回 raw status 数组；
+  // aggregateSignal 业务逻辑由 Service 层执行（sources-matrix-service.test.ts 覆盖）。
+
+  it('returns paginated raw data with default params', async () => {
     const db = makePool([{ cnt: '1' }], [VIDEO_ROW])
     const result = await listVideoGroups(db, {})
     expect(result.total).toBe(1)
@@ -83,30 +86,18 @@ describe('listVideoGroups', () => {
     expect(result.data[0].sourceCount).toBe(5)
   })
 
-  it('aggregates probe_status correctly — all ok → ok', async () => {
-    const db = makePool([{ cnt: '1' }], [{ ...VIDEO_ROW, probe_status: 'ok,ok', render_status: 'ok' }])
+  it('splits comma-joined probe_status into raw array (queries 层不 aggregate)', async () => {
+    const db = makePool([{ cnt: '1' }], [{ ...VIDEO_ROW, probe_status: 'ok,dead,partial', render_status: 'ok' }])
     const result = await listVideoGroups(db, {})
-    expect(result.data[0].probeStatus).toBe('ok')
-    expect(result.data[0].renderStatus).toBe('ok')
+    expect(result.data[0].probeStatuses).toEqual(['ok', 'dead', 'partial'])
+    expect(result.data[0].renderStatuses).toEqual(['ok'])
   })
 
-  it('aggregates probe_status correctly — mixed → partial', async () => {
-    const db = makePool([{ cnt: '1' }], [{ ...VIDEO_ROW, probe_status: 'ok,dead', render_status: 'ok' }])
-    const result = await listVideoGroups(db, {})
-    expect(result.data[0].probeStatus).toBe('partial')
-  })
-
-  it('aggregates probe_status correctly — all dead → dead', async () => {
-    const db = makePool([{ cnt: '1' }], [{ ...VIDEO_ROW, probe_status: 'dead', render_status: 'dead' }])
-    const result = await listVideoGroups(db, {})
-    expect(result.data[0].probeStatus).toBe('dead')
-    expect(result.data[0].renderStatus).toBe('dead')
-  })
-
-  it('aggregates empty probe_status → pending', async () => {
+  it('empty probe_status → empty raw array', async () => {
     const db = makePool([{ cnt: '1' }], [{ ...VIDEO_ROW, probe_status: '', render_status: '' }])
     const result = await listVideoGroups(db, {})
-    expect(result.data[0].probeStatus).toBe('pending')
+    expect(result.data[0].probeStatuses).toEqual([])
+    expect(result.data[0].renderStatuses).toEqual([])
   })
 
   it('respects page + limit params', async () => {

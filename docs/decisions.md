@@ -3214,6 +3214,31 @@ DataTable v2 + useTableQuery 一次性收编。本 ADR 是 CHG-SN-2-13（DataTab
 > 路径**，但**不再作为新模块的实现模板**。落地路径以 reference.md §4.4 +
 > task-queue.md SEQ-20260429-02 CHG-DESIGN-02 为准。
 
+> **AMENDMENT 2026-05-13（CHG-SN-5-11-PATCH / CHG-SN-5-11-PATCH-2）**：
+>
+> 新增 2 个 **行展开 Props**（additive，向前兼容；零既有消费方破坏）：
+>
+> - `renderExpandedRow?: (row: T) => ReactNode` —— 行展开 panel 内容渲染器；提供时 DataTable 在每行之后按需渲染展开 panel；panel 占满 `.dt__scroll` 容器宽度，不占用列 cell
+> - `expandedKeys?: ReadonlySet<string>` —— 当前展开行的 `rowKey` 集合；**消费方持有状态** + `onRowClick` 切换 key，DataTable 不持有展开状态（与既有 `flashRowKeys` / `selection.selectedKeys` 同一哲学）
+>
+> **设计理据**（事后追溯 arch-reviewer Opus 评审 PASS / 2026-05-13）：
+> 1. 命名与业界范式对齐：`renderExpandedRow` 同 antd `expandable.expandedRowRender` / MUI DataGrid `getDetailPanelContent` / TanStack `getRowCanExpand` 同源
+> 2. 复数 Set 模式 `expandedKeys` 与既有 `flashRowKeys` / `selectedKeys` 三者命名对称
+> 3. controlled-only（无 uncontrolled 默认）匹配 ADR-103 §4.1 "DataTable 不持有状态"主线
+> 4. 签名仅接 `row` 不接 index/isExpanded：消费方已能从 row + 闭包推出全部上下文，YAGNI
+> 5. 与 ADR-103 §4.1 不持有数据 / 不持久化任何状态原则一致：DataTable 仅渲染当前 expandedKeys 集合命中行的 panel，时序由消费方
+>
+> **起源任务卡**：CHG-SN-5-11-PATCH（落地，commit `f7c8485f`）→ CHG-SN-5-11-PATCH-2（追溯审计 + 本 AMENDMENT）
+>
+> **背书**：ADR-117 §决策要点 8 / D-117-5（`/admin/sources` 视频分组 outer 列表 + matrix 展开 panel 一体化）
+>
+> **流程教训**：CHG-SN-5-11-PATCH commit 由 sonnet 主循环直接落地未走 Opus 子代理评审，违反 CLAUDE.md §模型路由"定义新的共享组件 API 契约强制升 Opus"红线。事后追溯 Opus 评审验证 API 内容质量合格（4 维度全过：命名 / 对称性 / 状态职责 / 扩展性），NEW-P0 流程违规降级为"过程教训"，由 CHG-SN-5-CHECKLIST-AUDIT 卡纳入自动化检测机制（diff `packages/admin-ui/src/**/types.ts` 强制 Opus 子代理评审 trailer 存在性核验）。
+>
+> **未来扩展占位**（YAGNI / 当前不动）：
+> - 展开/收起动画 prop（`expandTransition` / `expandDuration`）：当前 panel 即开即合无动画诉求
+> - 多级嵌套展开：sources matrix 单级足够
+> - `expandIconColumn` / `expandRowByClick`：当前整行 `onRowClick` 触发与 antd `expandRowByClick: true` 等价；未来如需区分点击 icon vs 点击行其他位置再加 `expandIconColumn` slot（增量增 prop 不破坏当前签名）
+
 #### 4.1 DataTable v2 — 表格基座
 
 - **文件**：`packages/admin-ui/src/components/data-table/data-table.tsx`

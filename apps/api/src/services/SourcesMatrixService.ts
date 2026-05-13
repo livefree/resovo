@@ -12,19 +12,25 @@
 import { z } from 'zod'
 import type { Pool } from 'pg'
 import {
-  listVideoGroups,
+  listVideoGroups as listVideoGroupsRaw,
   getVideoGroupStats,
   getVideoMatrix,
   listLineAliases,
   upsertLineAlias,
   findLineAlias,
-  type VideoGroupListParams,
-  type VideoGroupListResult,
-  type VideoGroupStats,
-  type LineMatrixRow,
-  type SourceLineAlias,
 } from '@/api/db/queries/sources-matrix'
+import type {
+  DualSignalState,
+  VideoGroupListParams,
+  VideoGroupListResult,
+  VideoGroupRow,
+  VideoGroupStats,
+  LineMatrixRow,
+  SourceLineAlias,
+} from '@resovo/types'
+import { fetchVideosByIds } from '@/api/db/queries/video-merge-mutations'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import { AppError } from '@/api/lib/errors'
 
 // ── Zod schema（ADR-117 §端点契约）──────────────────────────────────
 
@@ -44,6 +50,24 @@ export const UpsertAliasSchema = z.object({
 
 export type { VideoGroupListParams, VideoGroupListResult, VideoGroupStats, LineMatrixRow, SourceLineAlias }
 
+// ── 聚合信号状态推导（ADR-117 §决策要点 2 / CHG-SN-5-11-PATCH-2 P0-2 业务逻辑归口 Service）─
+
+/**
+ * 派生行级聚合信号：
+ * - 空 → 'pending'
+ * - 全 ok → 'ok'
+ * - 全 dead → 'dead'
+ * - 含 ok/partial → 'partial'
+ * - 其他 → 'pending'
+ */
+export function aggregateSignal(statuses: readonly string[]): DualSignalState {
+  if (statuses.length === 0) return 'pending'
+  if (statuses.every((s) => s === 'ok')) return 'ok'
+  if (statuses.every((s) => s === 'dead')) return 'dead'
+  if (statuses.some((s) => s === 'ok' || s === 'partial')) return 'partial'
+  return 'pending'
+}
+
 // ── Service ─────────────────────────────────────────────────────────
 
 export class SourcesMatrixService {
@@ -53,15 +77,42 @@ export class SourcesMatrixService {
     this.auditSvc = new AuditLogService(db)
   }
 
-  listVideoGroups(params: VideoGroupListParams): Promise<VideoGroupListResult> {
-    return listVideoGroups(this.db, params)
+  /**
+   * 列出视频分组：DB 查询返回 raw 状态数组，Service 派生 probeStatus / renderStatus
+   * 聚合状态（ADR-117 §决策要点 2 业务规则归口 Service）。
+   */
+  async listVideoGroups(params: VideoGroupListParams): Promise<VideoGroupListResult> {
+    const raw = await listVideoGroupsRaw(this.db, params)
+    const data: VideoGroupRow[] = raw.data.map((r) => ({
+      videoId: r.videoId,
+      title: r.title,
+      shortId: r.shortId,
+      type: r.type,
+      year: r.year,
+      coverUrl: r.coverUrl,
+      lineCount: r.lineCount,
+      sourceCount: r.sourceCount,
+      probeStatus: aggregateSignal(r.probeStatuses),
+      renderStatus: aggregateSignal(r.renderStatuses),
+      updatedAt: r.updatedAt,
+    }))
+    return { data, total: raw.total, page: raw.page, limit: raw.limit }
   }
 
   getVideoGroupStats(): Promise<VideoGroupStats> {
     return getVideoGroupStats(this.db)
   }
 
-  getVideoMatrix(videoId: string): Promise<LineMatrixRow[]> {
+  /**
+   * 获取单视频线路×集数矩阵；video 不存在或已软删除时抛 NOT_FOUND 404
+   * （ADR-117 §错误码 + D-117-9 修订）
+   */
+  async getVideoMatrix(videoId: string): Promise<LineMatrixRow[]> {
+    const videos = await fetchVideosByIds(this.db, [videoId])
+    const video = videos[0]
+    if (!video || video.deleted_at !== null) {
+      throw new AppError('NOT_FOUND', `video ${videoId} 不存在`, 404)
+    }
     return getVideoMatrix(this.db, videoId)
   }
 

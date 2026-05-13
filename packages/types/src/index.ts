@@ -15,5 +15,6 @@ export type * from './external.types'
 
 export type * from './admin-moderation.types'
 export type * from './video-merge.types'
+export type * from './sources-matrix.types'
 
 export { DEFAULT_INGEST_POLICY } from './system.types'

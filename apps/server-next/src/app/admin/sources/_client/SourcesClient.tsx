@@ -26,7 +26,7 @@ import {
   type TableColumn,
   type TableSortState,
 } from '@resovo/admin-ui'
-import type { VideoGroupRow, VideoGroupStats, SourceSegment, SignalStatus } from '@/lib/sources/types'
+import type { VideoGroupRow, VideoGroupStats, SourceSegment } from '@/lib/sources/types'
 import { listVideoGroups, getVideoGroupStats } from '@/lib/sources/api'
 import { SignalPill, MatrixExpand } from './SourceMatrixRow'
 import { SourceLineAliasPanel } from './SourceLineAliasPanel'

@@ -18,6 +18,7 @@ import {
   VideoGroupsQuerySchema,
   UpsertAliasSchema,
 } from '@/api/services/SourcesMatrixService'
+import { isAppError } from '@/api/lib/errors'
 
 export async function adminSourcesMatrixRoutes(fastify: FastifyInstance) {
   const svc = new SourcesMatrixService(db)
@@ -60,8 +61,16 @@ export async function adminSourcesMatrixRoutes(fastify: FastifyInstance) {
         error: { code: 'VALIDATION_ERROR', message: 'videoId 格式无效', status: 422 },
       })
     }
-    const lines = await svc.getVideoMatrix(parsed.data.videoId)
-    return reply.send({ data: lines })
+    try {
+      const lines = await svc.getVideoMatrix(parsed.data.videoId)
+      return reply.send({ data: lines })
+    } catch (err) {
+      if (isAppError(err, 'NOT_FOUND')) {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: err.message, status: 404 } })
+      }
+      request.log.error({ err }, '[admin/sources/video-groups/matrix] unexpected error')
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
+    }
   })
 
   // ── GET /admin/source-line-aliases ───────────────────────────────

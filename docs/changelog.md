@@ -6903,3 +6903,69 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - `apps/server-next/src/app/admin/sources/_client/SourceMatrixRow.tsx`（hex fallback 删除 + img→Image + 导出 SignalPill/MatrixExpand）
   - `apps/server-next/src/app/admin/sources/_client/SourcesClient.tsx`（DataTable 迁移完整重写）
   - `tests/unit/api/audit-log-coverage.test.ts`（guard +1）
+
+---
+
+## CHG-SN-5-11-PATCH-2 — -11-PATCH 清债残留 + NEW-P0 模型路由追溯
+- **任务 ID**：CHG-SN-5-11-PATCH-2
+- **日期**：2026-05-13
+- **执行模型**：claude-opus-4-7（延续 opus 会话；偏离建议 sonnet 因含 spawn Opus 子代理决策性）
+- **子代理**：arch-reviewer (claude-opus-4-7) × 1 轮（DataTable renderExpandedRow API 追溯审计 → CONDITIONAL PASS / NEW-P0 降级 + ADR-103 patch / 1 黄线 + 2 advisory）
+- **来源**：用户独立评审 CHG-SN-5-11-PATCH（评级 B）— ADR-117 D-117 偏离 10 项中 65% 完成度 + 1 项 NEW-P0 模型路由红线
+- **缺陷描述**：
+  - **NEW-P0**：sonnet 主循环在 CHG-SN-5-11-PATCH 直接落地 packages/admin-ui DataTable `renderExpandedRow` + `expandedKeys` 公开 Props（共享组件 API 契约），未走 Opus 子代理评审 — 违反 CLAUDE.md §模型路由"强制升 Opus：定义新的共享组件 API 契约"红线
+  - **D-117-2 半修**：Service 层抽出形式化，aggregateSignal 业务逻辑仍在 queries 层
+  - **D-117-3 + Y-117-3 未修**：apps/server-next/src/lib/sources/types.ts 仍定义 SignalStatus 同值重复 DualSignalState
+  - **D-117-7 未修**：类型未迁移到 packages/types 共享层
+  - **D-117-9 未修**：matrix 端点 video 不存在返回 200 + 空数组（应 404 NOT_FOUND）
+  - **R-MID-1 第 5 次失守**：Service 层零单测 + audit payload 内容断言缺失
+- **修复内容**：
+  - **NEW-P0 追溯审计**：spawn arch-reviewer Opus 子代理评审 DataTable `renderExpandedRow` / `expandedKeys` API（4 维度：命名 / 对称性 / 状态职责 / 扩展性）→ 内容质量合格，PASS；NEW-P0 流程违规**降级为"过程教训"**，由 CHG-SN-5-CHECKLIST-AUDIT 卡纳入自动化检测机制
+  - **ADR-103 patch（Y-1 黄线必修）**：`docs/decisions.md` ADR-103 追加 AMENDMENT 2026-05-13 — `renderExpandedRow` + `expandedKeys` API 沉淀记录 + 5 项设计理据 + 起源任务卡 + 背书 ADR + 流程教训 + 未来扩展占位
+  - **D-117-7 类型迁移**：新建 `packages/types/src/sources-matrix.types.ts`（8 type/interface，引用 DualSignalState 共享层），`packages/types/src/index.ts` 加 `export type * from './sources-matrix.types'`；`apps/server-next/src/lib/sources/types.ts` 删空内容改纯 re-export 桥接（保持现有 `@/lib/sources/types` import path 不破坏）；`apps/api/src/db/queries/sources-matrix.ts` 顶部 import + re-export `@resovo/types` 共享类型
+  - **D-117-3 + Y-117-3**：4 处 `SignalStatus` 替换为 `DualSignalState`（SourceMatrixRow.tsx 全文 + SourcesClient.tsx import 清理）；queries 层 2 处 `as SignalStatus` 转 `as DualSignalState`；types.ts 桥接文件不再 export SignalStatus
+  - **D-117-9 matrix 404**：`SourcesMatrixService.getVideoMatrix` 前置 `fetchVideosByIds([videoId])` 校验，video 不存在或 deleted_at 非 null → `throw new AppError('NOT_FOUND', ..., 404)`；Route 层 catch `isAppError(err, 'NOT_FOUND')` 映射 404
+  - **P0-2 完成 Service 抽出**：`aggregateSignal` 从 queries 层迁至 SourcesMatrixService.ts 作为顶层 export 函数（便于单测）；queries.`listVideoGroups` 返回类型从 `VideoGroupListResult` 改为新 `VideoGroupListRawResult`（含 `probeStatuses: readonly string[]` / `renderStatuses: readonly string[]` raw 数组）；Service.`listVideoGroups` map raw → VideoGroupRow 通过 aggregateSignal 派生 probeStatus/renderStatus；queries.getVideoMatrix 内部用 LineMatrixRowMutable 中间类型避免 readonly episodes.push 类型错误
+  - **R-MID-1 教训第 5 次应用**：新建 `tests/unit/api/sources-matrix-service.test.ts`（14 测试），覆盖：
+    - aggregateSignal 6 路径（empty / 全 ok / 全 dead / 含 partial / 含 ok 不全 / 全 pending）
+    - listVideoGroups raw → aggregated map 行为
+    - getVideoMatrix happy + NOT_FOUND（不存在）+ NOT_FOUND（软删除）3 路径
+    - upsertLineAlias INSERT/UPDATE 双路径 audit payload **内容显式断言**（beforeJsonb null vs 既有 / afterJsonb 含 displayName 新值 / targetId 复合键 ${siteKey}/${sourceName} / actionType / targetKind / requestId 全字段断言）
+- **文件范围**：
+  - `packages/types/src/sources-matrix.types.ts`（新建）+ `packages/types/src/index.ts`（追加 re-export）
+  - `apps/server-next/src/lib/sources/types.ts`（删空改 re-export 桥接）
+  - `apps/server-next/src/app/admin/sources/_client/SourceMatrixRow.tsx`（SignalStatus → DualSignalState 全文替换）
+  - `apps/server-next/src/app/admin/sources/_client/SourcesClient.tsx`（删 unused SignalStatus import）
+  - `apps/api/src/services/SourcesMatrixService.ts`（aggregateSignal export + listVideoGroups map raw → aggregated + getVideoMatrix 404 前置校验 + fetchVideosByIds import）
+  - `apps/api/src/db/queries/sources-matrix.ts`（删 aggregateSignal + 类型 re-export + listVideoGroups 返回 raw + episodes 中间 mutable 类型）
+  - `apps/api/src/routes/admin/sources-matrix.ts`（matrix 端点 try/catch + isAppError NOT_FOUND 404 映射）
+  - `tests/unit/api/sources-matrix-service.test.ts`（新建，14 测试）
+  - `tests/unit/api/sources-matrix.test.ts`（queries 层旧 4 项 aggregate tests 调整为 raw arrays 断言）
+  - `docs/decisions.md`（ADR-103 AMENDMENT 2026-05-13）
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`
+- **质量门禁**：
+  - typecheck + lint 全绿（仅 web-next 既有 react-hooks/exhaustive-deps 警告，与本卡无关）
+  - unit 3626/3626 全绿（baseline 3614 + 净增 12：service 14 新 - queries 旧 2 减）
+  - sources-matrix-service.test.ts 14/14 + sources-matrix.test.ts 13/13
+- **不在范围**（CLAUDE.md 改动收敛 5）：
+  - CHG-SN-5-CHECKLIST-AUDIT 机制设计：独立卡承担（已在 queue）
+  - Service 4 method 纯转发精简：转发本身合理（Service 层契约统一入口），不在范围
+  - VideoTypeEnum / 跨 5+ 处 zod helper DRY 沉淀：独立 cleanup 卡
+- **arch-reviewer Opus 评审结论**（DataTable API 追溯审计）：
+  - **PASS (CONDITIONAL)** — API 内容质量合格（4 维度全过：命名对齐业界范式 antd/MUI/TanStack / 复数 Set 模式与既有 flashRowKeys/selectedKeys 对称 / controlled-only 状态归属合理 / 签名收敛 YAGNI）
+  - **建议撤回 NEW-P0**：流程违规真实但 API 内容合格 → 降级为"过程教训"由 CHECKLIST-AUDIT 卡纳入；不视为复合 P0
+  - **必修 Y-1**：ADR-103 patch 追加 API 沉淀记录（已落地 AMENDMENT 2026-05-13）
+  - **2 advisory**：未来扩展空间（动画 prop / 多级嵌套 / expandIconColumn）当前 YAGNI；与 ADR-103 既有契约无冲突，属 additive 非破坏性扩展
+- **关键发现**：
+  - **PATCH 卡范围 ≥ 5 项 → 完成度从 100% 降至 65%（CHG-SN-5-11-PATCH 7 项 + D-117 10 项 = 17 项）**：连续 5 次 PATCH 完成度趋势 06-PATCH (1 项) A / 09-PATCH (1 项) A / 10-PATCH (6 项) A− / 11-PATCH (17 项) B / **11-PATCH-2 (6 项) 待评估**。CHECKLIST-AUDIT 卡必须纳入"PATCH 范围软上限 ≤ 5 项；超 5 项自动拆 -A/-B 子卡"
+  - **NEW-P0 处理范式**：spawn 子代理事后审计 + 内容合格 → 降级"过程教训" + ADR patch；内容破缺 → 升复合 P0 + 必 redesign。本次走前者，与 ADR-117 RETROACTIVE 路径同源（CHG-SN-5-11 跳 ADR → 追溯起草 ADR-117 + PATCH 卡清债）
+  - **R-MID-1 教训终于在 5 次后系统化应用**：sources-matrix-service.test.ts 14 测试中 3 项专门覆盖 audit payload 内容断言（beforeJsonb / afterJsonb / targetId / actionType / targetKind / requestId 全字段断言），首次以测试集形式落地 R-MID-1 教训而非散落断言
+  - **DualSignalState 复用**：删 SignalStatus 后跨 4 处（VideoGroupRow.probeStatus/renderStatus + EpisodeCell.probeStatus/renderStatus）统一用 DualSignalState；与 VideoQueueRow / VideoSourceLine 既有 DualSignalState 消费方完全对齐，无重复类型，跨应用层一致
+- **后续触发**：
+  - **CHG-SN-5-CHECKLIST-AUDIT** 自动化机制设计（必做）：3 类核验 + "PATCH 范围软上限" + "共享组件 API 改动检测 → 强制 Opus trailer 核验" + "R-MID-1 教训 audit payload 断言自动检测"
+  - **解锁 CHG-SN-5-12** `/admin/merge` 视图卡（依赖 -11-PATCH 系列完成 + ADR-117 PASS）
+  - 评估 -11-PATCH-2 自身完成度（用户独立评审决定是否升 -PATCH-3 或闭合 M-SN-5 Phase C）
+- **注意事项**：
+  - 主循环模型 claude-opus-4-7（偏离建议 sonnet）— 含 spawn Opus 子代理决策性，opus 主循环合理
+  - 本卡示范"NEW-P0 流程违规 → 事后追溯 Opus 评审 → 内容合格则降级过程教训 + ADR patch + CHECKLIST-AUDIT 纳入"范式；与 ADR-117 RETROACTIVE 起草 + PATCH 卡清债同源
+  - ADR-103 AMENDMENT 2026-05-13 是 DataTable v2 公开 API 契约首个事后追溯 patch，未来类似流程违规可复用此模式
