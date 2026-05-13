@@ -6369,3 +6369,43 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - DataTable 一体化：toolbar.search + hideFilterChips + pagination.pageSizeOptions 内置模式
   - 端点核验：7 端点全在位（list/detail/ban/unban/role/delete/reset-password），无缺位，维持零新端点
   - 零 admin-ui props 反向扩展 / 零新建通用组件 / 零 any / 零空 catch / 零硬编码颜色
+
+---
+
+## CHG-SN-5-04 · ADR-104 home_modules admin API 协议起草（Candidate → Accepted）— 2026-05-12
+
+- **任务 ID**：CHG-SN-5-04（SEQ-20260512-02 Phase B 第 1/4 张子卡）
+- **执行模型**：claude-opus-4-7（ADR 起草强制 Opus，CLAUDE.md 模型路由 + plan §4.5 ADR-端点先后协议）
+- **子代理**：arch-reviewer (claude-opus-4-7) × 2 轮 → CONDITIONAL → **PASS 无条件**
+- **变更内容**：
+  - 新建 ADR-104 章节落 `docs/decisions.md`（9 节：背景 / 决策要点 / 端点契约 / audit log / 错误码 / 备选方案 / 后果 / 验证 / 关联）
+  - 修改 `docs/server_next_plan_20260427.md` §9 ADR 索引（ADR-104 状态推进 + 解锁条件标注）
+  - 修改 `docs/task-queue.md` SEQ-20260512-02 Phase B CHG-SN-5-04 状态闭环
+  - 修改 `docs/tasks.md` 清空进行中卡
+- **文件范围**：
+  - `docs/decisions.md`（新增 ADR-104 章节 ~270 行）
+  - `docs/server_next_plan_20260427.md` §9 行 784（ADR-104 索引推进）
+  - `docs/task-queue.md`（SEQ-20260512-02 Phase B 子卡 4 状态）
+  - `docs/tasks.md`（清空）
+  - `docs/changelog.md`（本条目）
+- **ADR-104 决策摘要**：
+  - **6 端点契约**：list / create / update / delete / reorder / publish-toggle（admin only `requireRole(['admin'])`，与既有 banners/crawler-sites/siteConfig/analytics 同类运营位编辑路由对齐；草稿/发布双态鉴权同级，DISCUSS-6 闭合）
+  - **zod schema 设计**：`CreateBase` 纯 ZodObject + `applyBusinessRules` helper（4 条业务规则 partial undefined 短路：brand_scope 互斥 / 时间窗 / slot×contentRefType 兼容）；CreateSchema = helper(CreateBase)；UpdateSchema = helper(CreateBase.omit({enabled:true}).partial()).refine(at-least-one)（协议层禁止 PATCH 改 enabled，admin UI 强制走 publish-toggle 唯一上下线入口）
+  - **错误码零新增**：复用 ADR-110 14 码（VALIDATION_ERROR 422 / NOT_FOUND 404 / STATE_CONFLICT 409 兜底 / UNAUTHORIZED 401 / FORBIDDEN 403）；message 模板表覆盖 8 场景（中文友好提示，DB CHECK 兜底携带具体约束名）
+  - **audit log 扩枚举**：AdminAuditActionType 扩 5（home_module.create / update / delete / reorder / publish_toggle）+ AdminAuditTargetKind 扩 1（home_module）；沿用 CHG-SN-4-05 AuditLogService fire-and-forget 模式
+  - **缓存协议首版零引入**：grep 公开 `/home/modules` 零 Redis 缓存，依赖 PG query cache + home_modules_slot_brand_idx 部分索引；未来触发条件 3 条（p95 > 100ms / 写读比 < 1:100 / DB CPU > 30%）锁定
+  - **reorder 事务性**：复用既有 `queries/home-modules.ts:249-274` BEGIN/COMMIT/ROLLBACK 实现，items 上限 200 防长事务
+- **arch-reviewer 评审轨迹**：
+  - **第 1 轮 CONDITIONAL**：1 红线 R1（UpdateSchema zod API 误用）+ 3 黄线（Y1 DISCUSS-6 / Y2 publish-toggle 双路径 / Y3 message 模板）+ 3 advisory（A1 metadata 不校验声明 / A2 PATCH 422 vs 404 路径 / A3 reorder 200 上限理由）
+  - **主循环修订**：R1 重写为 CreateBase 纯 ZodObject + applyBusinessRules helper（4 条规则 partial undefined 短路）+ UpdateSchema `.omit({enabled:true}).partial()`；Y1 决策要点 1 改 admin only + DISCUSS-6 闭合；Y2 协议层禁止 PATCH 改 enabled；Y3 补 8 场景 message 模板表；A1-A3 全实施 + helper 类型签名收紧（Partial<z.input> 替代 any）
+  - **第 2 轮 PASS 无条件**：R1/Y1/Y2/Y3/A1/A2/A3 全 PASS，无新破缺
+- **质量门禁**：typecheck + lint 全绿（仅 docs 改动，不动代码）
+- **后续触发**：
+  - **解锁 CHG-SN-5-05**（home_modules 端点实施第 1 批：list+create+update，建议 sonnet）
+  - **解锁 CHG-SN-5-06**（home_modules 端点实施第 2 批：delete+reorder+publish-toggle，建议 sonnet）
+  - **解锁 CHG-SN-5-07**（`/admin/home` 视图卡，依赖 -05/-06 端点就位）
+- **端点实施卡 -05 启动指南**：直接复制 ADR-104 §端点契约 zod schema 代码块（CreateBase / applyBusinessRules / CreateSchema / UpdateSchema / ListSchema / ReorderSchema / PublishToggleSchema）+ 落地 admin-moderation.types.ts 扩枚举（5 actionType + 1 targetKind）+ 新建 `apps/api/src/services/HomeModuleService.ts`（业务规则 + DB query 调用）+ 新建 `apps/api/src/routes/admin/home-modules.ts`（路由层 6 端点 preHandler 链）+ AuditLogService.write fire-and-forget 写入位点（5 端点表对齐）
+- **注意事项**：
+  - 端点实施卡 -05/-06 必须严格按 ADR-104 §端点契约表 6 端点契约落地，零设计自由度
+  - audit log 扩枚举属 closed enum 扩张（admin-moderation.types.ts:112 注释约束），plan §9 ADR-104 推进路径已满足前者，types 落地由 -05/-06 同 commit 完成
+  - PATCH UpdateSchema `.omit({ enabled: true })` 是 Y2 协议层闭合关键 — 端点实施卡不得反向扩出 enabled（违反即 §4.5 ADR-端点先后协议回流 ADR-104a 修订路径）

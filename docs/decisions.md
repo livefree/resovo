@@ -5070,3 +5070,264 @@ test('moderation — reject-modal', async ({ page }) => {
 - **关联 plan**：§6 M-SN-5.5 A 段第 3 件 cutover-blocker / §9 ADR 索引追加 ADR-116
 - **关联 task-queue**：SEQ-20260506-02 子卡 PRE-01-E（拆分为 -E-1 基础设施 + -E-2 真截图）/ PRE-01-F（moderation 7 张占位 PNG 替换）
 - **关联 audit**：M-SN-4-milestone-audit-2026-05-05.md §6 DEBT-SN-4-A 触发条件（建立 Playwright visual harness 基础设施 + 跑 ~12 张组件状态 baseline）
+
+---
+
+## ADR-104：home_modules admin API 协议（CHG-SN-5-04）
+
+- **日期**：2026-05-12
+- **状态**：**Accepted**（arch-reviewer Opus 第 2 轮 PASS 无条件 — 第 1 轮 CONDITIONAL 1 红线 R1 + 3 黄线 Y1/Y2/Y3 + 3 advisory A1/A2/A3 全部修订到位）
+- **决策者**：主循环 claude-opus-4-7 / arch-reviewer (claude-opus-4-7) × 2 轮
+- **关联**：ADR-052（home_modules schema，Accepted）/ ADR-046（多品牌 brand_scope 协议）/ ADR-110（ApiResponse 信封 + ErrorCode 真源）/ CHG-SN-4-05（AuditLogService fire-and-forget 模式）/ plan §4.5（ADR-端点先后协议）
+- **对应交付**：SEQ-20260512-02 Phase B（CHG-SN-5-04 起草 → CHG-SN-5-05/-06 端点实施 → CHG-SN-5-07 `/admin/home` 视图）
+- **触发**：plan §6 M-SN-5 推荐 3（首页运营位编辑器）+ §4.5 "ADR-104/105 必须先于对应端点首个任务卡完成 Opus PASS；同 ADR 下多端点复用评审；不允许端点 PR 与 ADR 同卡"
+
+### 背景
+
+home_modules 表（migration 050 + ADR-052）+ DB 查询层（`apps/api/src/db/queries/home-modules.ts` 8 函数：listActive / listAdmin / findById / create / update / delete / reorder / listByContentRef）已就绪；公开端点 `apps/api/src/routes/home.ts` 提供前台 `GET /home/modules`（带 brand 协议过滤）+ `GET /home/top10`。**当前缺失**：admin 命名空间下的运营位编辑端点集（CRUD + reorder + publish toggle），导致 `/admin/home` 视图无端点支撑。
+
+plan §4.5 ADR-端点先后协议硬约束：admin API 协议须先 ADR + Opus PASS，再起 -05/-06 端点实施卡。本 ADR 锁定 6 端点契约 + 鉴权 + 错误码 + audit log 扩枚举 + 缓存协议 + 验证策略 + publish toggle 决策，使端点实施卡（CHG-SN-5-05/-06）按本协议直接落地，零设计自由度。
+
+### 决策要点
+
+1. **6 端点 + admin 命名空间**：`/admin/home-modules` 资源前缀（hyphen 形式与既有 admin/crawler-sites / admin/video-sources 等路由一致）；HTTP 方法语义化（GET 列表 / POST 创建 / PATCH 部分更新 / DELETE 硬删除 / POST 子动作 reorder + publish-toggle）；6 端点全部走 `preHandler: [fastify.authenticate, fastify.requireRole(['admin'])]`（**admin only**，与既有 banners / crawler-sites / siteConfig / analytics 同类运营位编辑路由 grep 验证一致；moderator 不放权 — 投稿/视频审核不等同于首页运营位编辑权限）；草稿态 `enabled=false` 与发布态 `enabled=true` 鉴权同级（DISCUSS-6 此处闭合：plan §4.5 末段 "草稿/发布双态等鉴权粒度" 决议为同级 admin only）。
+2. **publish toggle 选独立端点而非 PATCH `{ enabled }`** + **UpdateSchema 显式禁止 enabled 字段**：详见"备选方案 A"；独立 `POST /admin/home-modules/:id/publish-toggle` 强语义 + audit log actionType 更明确 + 显式传 enabled 防 toggle 并发竞态。**UpdateSchema 必须 `.omit({ enabled: true })`**（从协议层禁止 PATCH 修 enabled），从根本消除"双路径模糊"风险（Y2 闭合：协议层单一路径 → admin UI 与 audit log actionType 一对一映射）。
+3. **响应包络对齐 ADR-110**：列表 `{ data: HomeModule[], total, page, limit }`；单条 `{ data: HomeModule }`；reorder `{ data: { updated: number } }`；publish-toggle `{ data: HomeModule }`（含 enabled 新值便于前端乐观更新）；DELETE 返回 204 No Content。
+4. **错误码全部复用 ADR-110 既有 14 码，零新增**：VALIDATION_ERROR 422 / NOT_FOUND 404 / STATE_CONFLICT 409（DB CHECK 违反兜底）/ UNAUTHORIZED 401 / FORBIDDEN 403。message 字段携带具体约束名以表达细节，避免 ErrorCode 真源扩张。
+5. **audit log 扩枚举**：`AdminAuditActionType` 增 5 项（home_module.create / update / delete / reorder / publish_toggle）；`AdminAuditTargetKind` 增 1 项（home_module）。沿用 CHG-SN-4-05 AuditLogService fire-and-forget 模式（写失败 log warn 不阻塞主操作）。审计载荷：beforeJsonb / afterJsonb 存 HomeModule 完整快照（reorder 批量动作存 ordering 数组前后对比）。
+6. **缓存协议首版不引入**：grep 确证 `apps/api/src/routes/home.ts` 公开 `/home/modules` 零 Redis 缓存（直接 DB 查询，依赖 home_modules_slot_brand_idx 部分索引覆盖前台主路径）；首版 admin 端点也不引入缓存。**未来触发条件**（任一命中即起 PRE-CACHE-HOME 卡）：(a) 公开 `/home/modules` p95 > 100ms 持续 1 周；(b) 写读比 < 1:100；(c) DB CPU 因 home_modules 单端点占比 > 30%。
+7. **验证策略双层**：(a) Service 层 zod 预校验覆盖所有可恢复违例（brand_scope 互斥 / 时间窗 start < end / slot × contentRefType 兼容性），抛 VALIDATION_ERROR 422 含字段名；(b) DB CHECK 兜底（ADR-052 5 约束）抛 STATE_CONFLICT 409 仅在并发竞争或迁移漂移时触发（罕见路径）。
+8. **reorder 事务性约束**：复用既有 `queries/home-modules.ts:249-274` `reorderHomeModules` BEGIN/COMMIT/ROLLBACK 实现；端点不引入额外事务边界；items 中不存在的 id 静默忽略（已有行为），返回实际更新行数。
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 错误码 |
+|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/home-modules` | 列表（含禁用 + 过期） | Query: `slot?` / `brandScope?` / `brandSlug?` / `enabled?` / `page?=1` / `limit?=20` | 200 `{ data: HomeModule[], total, page, limit }` | 422 VALIDATION_ERROR |
+| 2 | POST | `/admin/home-modules` | 创建 | Body: `CreateHomeModuleInput` | 201 `{ data: HomeModule }` | 422 VALIDATION_ERROR / 409 STATE_CONFLICT |
+| 3 | PATCH | `/admin/home-modules/:id` | 部分更新 | Body: `UpdateHomeModuleInput`（至少一字段） | 200 `{ data: HomeModule }` | 404 NOT_FOUND / 422 / 409 |
+| 4 | DELETE | `/admin/home-modules/:id` | 硬删除 | — | 204 No Content | 404 NOT_FOUND |
+| 5 | POST | `/admin/home-modules/reorder` | 批量更新 ordering | Body: `{ items: ReorderHomeModuleItem[] }`（≥1，≤200） | 200 `{ data: { updated: number } }` | 422 VALIDATION_ERROR |
+| 6 | POST | `/admin/home-modules/:id/publish-toggle` | 切换 enabled | Body: `{ enabled: boolean }`（显式传值，禁止 toggle 隐式） | 200 `{ data: HomeModule }` | 404 NOT_FOUND / 422 |
+
+**zod request schema（Service 层 + Route 层共享，端点实施卡 -05/-06 落地）**：
+
+> **R1 修订（arch-reviewer 第 1 轮）**：抽出 `CreateBase` 纯 ZodObject + `applyBusinessRules` helper，避免 `ZodEffects.partial()` zod API 误用 + 防止 UpdateSchema 丢失 refine 规则（4 条业务规则必须同时适用 Create + Update）。
+
+```ts
+const SlotEnum = z.enum(['banner', 'featured', 'top10', 'type_shortcuts'])
+const BrandScopeEnum = z.enum(['all-brands', 'brand-specific'])
+const ContentRefTypeEnum = z.enum(['video', 'external_url', 'custom_html', 'video_type'])
+
+const ListSchema = z.object({
+  slot: SlotEnum.optional(),
+  brandScope: BrandScopeEnum.optional(),
+  brandSlug: z.string().min(1).max(100).optional(),
+  enabled: z.coerce.boolean().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+})
+
+// 纯 ZodObject base —— 不挂 .refine，便于 .partial() 派生 UpdateSchema
+const CreateBase = z.object({
+  slot: SlotEnum,
+  brandScope: BrandScopeEnum,
+  brandSlug: z.string().min(1).max(100).nullable().optional(),
+  ordering: z.number().int().min(0).default(0),
+  contentRefType: ContentRefTypeEnum,
+  contentRefId: z.string().min(1).max(2048),
+  startAt: z.string().datetime().nullable().optional(),
+  endAt: z.string().datetime().nullable().optional(),
+  enabled: z.boolean().default(true),
+  metadata: z.record(z.unknown()).default({}),
+})
+
+// 4 条业务规则 helper —— Create + Update 复用，保证规则不漂移
+// 设计：refine 在 partial 字段为 undefined 时短路放行（仅当字段提供时校验）
+// 类型：(v: Partial<z.input<typeof CreateBase>>) 收紧避免 CLAUDE.md 禁 any 红线
+type CreateInput = Partial<z.input<typeof CreateBase>>
+
+function applyBusinessRules<T extends z.ZodTypeAny>(schema: T): z.ZodTypeAny {
+  return schema
+    .refine((v: CreateInput) => v.brandScope === undefined || !(v.brandScope === 'brand-specific' && !v.brandSlug),
+      { message: 'brand-specific 必须指定 brandSlug', path: ['brandSlug'] })
+    .refine((v: CreateInput) => v.brandScope === undefined || !(v.brandScope === 'all-brands' && v.brandSlug),
+      { message: 'all-brands 不得指定 brandSlug', path: ['brandSlug'] })
+    .refine((v: CreateInput) => !(v.startAt && v.endAt && new Date(v.startAt) >= new Date(v.endAt)),
+      { message: 'startAt 必须早于 endAt', path: ['startAt'] })
+    .refine((v: CreateInput) => {
+      if (v.slot === undefined || v.contentRefType === undefined) return true  // partial 场景短路
+      const compat: Record<string, readonly string[]> = {
+        banner: ['video', 'external_url', 'custom_html'],
+        featured: ['video'],
+        top10: ['video'],
+        type_shortcuts: ['video_type'],
+      }
+      return compat[v.slot]?.includes(v.contentRefType) ?? false
+    }, { message: 'slot × contentRefType 组合不被允许', path: ['contentRefType'] })
+}
+
+const CreateSchema = applyBusinessRules(CreateBase)
+
+// UpdateSchema：omit enabled（强制走 publish-toggle 专用端点；Y2 闭合）
+// + partial 派生 + applyBusinessRules（4 条规则在 partial 字段 undefined 时短路）
+// + 至少一字段校验
+const UpdateSchema = applyBusinessRules(CreateBase.omit({ enabled: true }).partial())
+  .refine((v) => Object.keys(v).length > 0, { message: '至少一字段' })
+
+const ReorderSchema = z.object({
+  items: z.array(z.object({
+    id: z.string().uuid(),
+    ordering: z.number().int().min(0),
+  })).min(1).max(200),  // 上限 200：防 BEGIN/COMMIT 长事务（A3 advisory）
+})
+
+const PublishToggleSchema = z.object({
+  enabled: z.boolean(),
+})
+```
+
+**关键约束**：
+- `metadata: z.record(z.unknown())` 不做 schema 校验，由消费端自管（ADR-052 §metadata 使用守则已锁定；本 ADR 不收紧）
+- UpdateSchema 禁止 enabled 字段：admin UI 必须走 `POST /:id/publish-toggle` 上下线，PATCH 仅改业务字段（Y2 协议层闭合）
+- PATCH 422 出现路径：`body 空 → "至少一字段"` 或 `body 含 enabled → "Unrecognized key 'enabled'"`；`id 不存在 → 404`
+
+**路径常量**：`/admin/home-modules`（hyphen 形式；与 DB 表名 `home_modules` 下划线区分）。
+
+### audit log 协议
+
+**新增 AdminAuditActionType 5 项**（`packages/types/src/admin-moderation.types.ts:114`）：
+
+```ts
+export type AdminAuditActionType =
+  | ...既有 11 项
+  | 'home_module.create'
+  | 'home_module.update'
+  | 'home_module.delete'
+  | 'home_module.reorder'
+  | 'home_module.publish_toggle'
+```
+
+**新增 AdminAuditTargetKind 1 项**：
+
+```ts
+export type AdminAuditTargetKind =
+  | ...既有 6 项
+  | 'home_module'
+```
+
+**写入位点（Service 层，由端点实施卡 -05/-06 落地）**：
+
+| 端点 | actionType | targetId | beforeJsonb | afterJsonb |
+|---|---|---|---|---|
+| POST `/admin/home-modules` | home_module.create | created.id | null | full HomeModule |
+| PATCH `/admin/home-modules/:id` | home_module.update | id | before HomeModule | after HomeModule |
+| DELETE `/admin/home-modules/:id` | home_module.delete | id | before HomeModule | null |
+| POST `/admin/home-modules/reorder` | home_module.reorder | null（批量动作） | `{ items: [{ id, ordering: oldOrdering }] }` | `{ items: [{ id, ordering: newOrdering }] }` |
+| POST `/admin/home-modules/:id/publish-toggle` | home_module.publish_toggle | id | `{ enabled: oldVal }` | `{ enabled: newVal }` |
+
+**fire-and-forget 模式**（CHG-SN-4-05）：`auditSvc.write(...)` 不 await，失败 log warn 不阻塞主操作。
+
+### 错误码
+
+复用 ADR-110 14 码，零新增：
+
+| 场景 | code | status |
+|---|---|---|
+| zod schema 失败 | VALIDATION_ERROR | 422 |
+| Service 层业务规则校验（brand_scope 互斥 / 时间窗 / slot×content_ref_type） | VALIDATION_ERROR | 422 |
+| 找不到 id | NOT_FOUND | 404 |
+| DB CHECK 违反兜底（Service 漏校验或并发漂移） | STATE_CONFLICT | 409 |
+| 未登录 | UNAUTHORIZED | 401 |
+| 非 admin role | FORBIDDEN | 403 |
+
+**错误响应统一格式**：
+
+```json
+{ "error": { "code": "VALIDATION_ERROR", "message": "brand-specific 必须指定 brandSlug", "status": 422 } }
+```
+
+**message 模板（Y3 闭合）**：
+
+| 场景 | message 模板 |
+|---|---|
+| zod schema 失败（字段名） | `"<字段名> 必须 <规则>"`（zod 自动生成中文 message 或 refine 显式 message） |
+| brand_scope 互斥违反 | `"brand-specific 必须指定 brandSlug"` / `"all-brands 不得指定 brandSlug"` |
+| 时间窗违反 | `"startAt 必须早于 endAt"` |
+| slot × contentRefType 违反 | `"slot × contentRefType 组合不被允许"` |
+| UpdateSchema 含 enabled | `"Unrecognized key 'enabled'（请使用 POST /:id/publish-toggle）"` |
+| PATCH body 空 | `"至少一字段"` |
+| DB CHECK 兜底（仅并发场景） | `"DB CHECK <约束名> 触发"`（如 `home_modules_ref_type_slot_compat` / `home_modules_time_window_valid`） |
+| NOT_FOUND | `"home_module <id> 不存在"` |
+
+### 备选方案
+
+**A. publish toggle 选择**：
+- ✗ 方案 1：PATCH `{ enabled: true/false }`（与 UpdateSchema 重叠） — 弱语义 / audit log actionType 混淆（home_module.update vs publish_toggle 难区分）/ PATCH 多字段时易误操作整 row / 运营场景需要"上下线"按钮强语义反馈
+- ✗ 方案 2：POST `/publish` + POST `/unpublish` 双端点 — 端点数增至 7 超 plan §6 "9-10 端点" 约束上限
+- ✅ **方案 3（采纳）**：POST `/:id/publish-toggle` 显式传 enabled boolean — 端点数 6 符合约束 / audit actionType 独立 / 显式传值禁止 toggle 隐式（避免并发竞态）
+
+**B. 缓存策略**：
+- ✗ Redis cache + write invalidation — 引入新依赖（Redis client）且多 admin 并发写时易出现 cache invalidation race；首版不引入
+- ✅ **方案（采纳）**：首版零缓存，依赖 PG query cache + home_modules_slot_brand_idx 部分索引（ADR-052 §索引策略已优化）；触发条件锁定（决策要点 6 三条）后再起 PRE-CACHE-HOME 卡
+
+**C. 错误码扩展**：
+- ✗ 新增 `INVALID_TIME_WINDOW` / `BRAND_SCOPE_MISMATCH` 等业务专属码 — 违反 ADR-110 ErrorCode 关闭真源（CHG-SN-4-05 已固化）/ 增加客户端 error code 处理复杂度
+- ✅ **方案（采纳）**：复用 VALIDATION_ERROR，错误细节通过 `message` 字段携带（前端可直接展示）
+
+**D. 路径命名**：
+- ✗ `/admin/home_modules`（下划线，与 DB 表名一致） — 违反 REST 路径 hyphen 约定
+- ✗ `/admin/homemodules`（无分隔） — 可读性差
+- ✅ **方案（采纳）**：`/admin/home-modules`（hyphen，与既有 admin 路由风格一致）
+
+**E. reorder 端点设计**：
+- ✗ PATCH 单条 `/admin/home-modules/:id` 客户端循环调用 — N 次 HTTP 往返；非事务性
+- ✅ **方案（采纳）**：POST `/admin/home-modules/reorder` 批量 + Service 层事务（BEGIN/COMMIT/ROLLBACK，已在 queries 实现）
+
+### 后果
+
+**正面**：
+1. -05/-06 端点实施卡（CHG-SN-5-05 list+create+update / CHG-SN-5-06 delete+reorder+publish-toggle）按本 ADR 直接落地，零设计自由度，§4.5 ADR-端点先后协议硬约束满足
+2. -07 `/admin/home` 视图卡有明确端点契约可消费，避免视图开发期反复回流端点 schema 调整
+3. 错误码零新增、audit log 类型有限扩枚举（5 + 1）、缓存首版零引入 — 与 plan §10 "新增端点不得修改邻近现有端点（隔离原则）" 一致
+4. zod 双层校验（Service + DB CHECK）双保险，前后端类型一致（zod schema 可由 server-next 复用）
+
+**负面 / 风险**：
+1. **R-ADR-104-1**：DB CHECK 违反兜底使用 STATE_CONFLICT 409 语义略不贴合（"状态被其他操作更新"），但 ADR-110 关闭真源不引入新码 — 缓解：Service 层 zod 预校验覆盖所有可恢复违例，STATE_CONFLICT 仅在并发竞争或迁移漂移时触发（罕见路径），message 字段携带具体约束名以表达细节
+2. **R-ADR-104-2（已收口，Y2 闭合）**：~~publish-toggle 与 PATCH `{ enabled }` 双重路径风险~~ → arch-reviewer 第 1 轮 Y2 强制收口：UpdateSchema 协议层 `.omit({ enabled: true })` 禁止 PATCH 修 enabled，从根本消除双路径。admin UI 唯一上下线入口为 `POST /:id/publish-toggle`；audit log actionType 一对一映射（PATCH → home_module.update / publish-toggle → home_module.publish_toggle，无歧义）。运营场景如需"批量切换上下线"亦由 publish-toggle 端点循环承担（不引入批量 publish-toggle 端点，因 Phase B 6 端点约束已满 + 批量上下线非高频运营路径，触发条件：3+ 运营反馈高频需求 → 起 PRE-PUBLISH-BATCH 卡）
+3. **R-ADR-104-3**：缓存首版零引入可能成为公开 `/home/modules` p95 瓶颈 — 缓解：触发条件已锁定（决策要点 6 三条），命中即起 PRE-CACHE-HOME 卡；不在本 ADR 范围
+4. **R-ADR-104-4**：audit log AdminAuditActionType 扩枚举为 closed enum（admin-moderation.types.ts:111 注释 "新增前必须先改 plan + 本枚举"）— 缓解：本 ADR 即满足该约束（plan §9 ADR-104 推进 + 枚举同步落地由 -05/-06 端点实施卡承担，本 ADR 起草卡不动代码）
+
+### 验证
+
+**起草卡（CHG-SN-5-04）完成判据**：
+- arch-reviewer Opus PASS（≤ 3 轮 CONDITIONAL 闭环；REJECT = BLOCKER §5.2）
+- 落 `docs/decisions.md` ADR-104 章节完整（9 节：背景 / 决策要点 / 端点契约 / audit log / 错误码 / 备选方案 / 后果 / 验证 / 关联）
+- plan §9 ADR 索引推进 ADR-104 状态 候选 → Accepted
+
+**端点实施卡（CHG-SN-5-05/-06）落地判据**：
+- 6 端点契约 100% 与本 ADR §端点契约表对齐
+- audit log 5 actionType + 1 targetKind 扩枚举落地（admin-moderation.types.ts）
+- Service 层 zod 预校验覆盖所有 brand_scope / 时间窗 / slot×content_ref_type 违例
+- unit test 覆盖 6 端点 happy path + 错误码全集 + audit log 写入
+- typecheck + lint 全绿
+
+**视图实施卡（CHG-SN-5-07）落地判据**：
+- 6 端点全部被 `/admin/home` 视图消费（list 用于初始化 + 刷新；create / update / delete / publish-toggle 用于运营操作；reorder 用于拖拽排序）
+- 与既有视图卡（CHG-SN-5-01/-02/-03）DataTable 一体化范式一致
+
+### 关联
+
+- **关联 ADR**：ADR-052（home_modules schema，本 ADR 协议层兄弟）/ ADR-046（多品牌 brand_scope 协议，本 ADR brand_scope 互斥校验真源）/ ADR-110（ApiResponse 信封 + ErrorCode 关闭真源，本 ADR 错误码零新增依据）/ ADR-100（依赖白名单，本 ADR 零新依赖）
+- **关联 plan §**：§4.5 ADR-端点先后协议（本 ADR 是 -05/-06/-07 三卡硬前置）/ §6 M-SN-5 推荐 3（首页运营位编辑器）/ §9 ADR 索引 ADR-104 / §10 风险段 R-M-SN-5-A（6 原语 API 稳定性，本 ADR 不引入新原语）
+- **关联 task-queue**：SEQ-20260512-02 子卡 CHG-SN-5-04（本卡） → CHG-SN-5-05（list+create+update 端点） → CHG-SN-5-06（delete+reorder+publish-toggle 端点） → CHG-SN-5-07（`/admin/home` 视图消费 6 端点）
+- **关联代码（既有，本 ADR 引用不修改）**：
+  - `apps/api/src/db/migrations/050_create_home_modules.sql`（schema 由 ADR-052 决策）
+  - `apps/api/src/db/queries/home-modules.ts`（DB 查询层 8 函数）
+  - `packages/types/src/home-module.types.ts`（HomeModule / HomeModuleSlot / CreateHomeModuleInput / UpdateHomeModuleInput / ReorderHomeModuleItem 5 类型）
+  - `apps/api/src/routes/home.ts`（公开端点，本 ADR 范围外）
+  - `apps/api/src/services/AuditLogService.ts`（fire-and-forget 模式，本 ADR 复用）
+  - `apps/api/src/lib/auth.ts`（admin role gate `preHandler: auth`，本 ADR 复用）
+- **关联触发条件（未来）**：
+  - PRE-CACHE-HOME（缓存层引入）：决策要点 6 三条触发条件任一命中
+  - PRE-HOME-MODULE-V2（端点 v2 / break change）：运营场景出现 plan §6 范围外新需求
