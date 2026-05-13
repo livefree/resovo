@@ -6569,3 +6569,55 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 主循环模型偏离记录（opus vs 建议 sonnet）：用户指令延续会话；未触发"主循环中途升级"硬约束因启动即 opus
   - HomeOpsClient.test.tsx 不覆盖 DndContext onDragEnd（@dnd-kit sensors 复杂度高）— 作为 Y-MID-2 模板基础，留 -08+ 或独立 DND-INTEGRATION-TEST 卡
   - mock @dnd-kit 策略可作为后续拖拽视图卡的复用模板
+
+---
+
+## CHG-SN-5-08 · ADR-105 video merge / split / unmerge admin API 协议起草（Candidate → Accepted）— 2026-05-12
+
+- **任务 ID**：CHG-SN-5-08（SEQ-20260512-02 Phase C 第 1/4 张子卡）
+- **执行模型**：claude-opus-4-7（ADR 起草强制 Opus）
+- **子代理**：arch-reviewer (claude-opus-4-7) × 3 轮（第 1 轮 CONDITIONAL → 第 2 轮 CONDITIONAL → 第 3 轮 **PASS** 最终轮）
+- **变更内容**：
+  - 新建 ADR-105 章节落 `docs/decisions.md`（9 节：背景 / 决策要点 / 端点契约（4 端点 + zod schema） / video_merge_audit schema migration 062 SQL 草案 / audit log 协议（3 actionType 扩枚举 + 写入位点 + 时序）/ 错误码 + message 模板 / 备选方案 A-E / 后果（4 风险 R-ADR-105-1..4） / 验证 / 关联）
+  - 修改 `docs/server_next_plan_20260427.md` §9 ADR-105 索引推进 Candidate → Accepted + 解锁条件标注
+  - 修改 `docs/task-queue.md` SEQ-20260512-02：CHG-SN-5-08 状态闭环 + CHG-SN-5-10 卡名同步修订为 "merge + split + unmerge 端点实施" + 工时上调 0.25w → 0.3w
+  - 顺手清 Y-MID-1（中期审计黄线）：ADR-104 §端点契约 zod block 补 `.strict()` 实施强化注释（双层协议：ADR 文本 + 实施强化）
+- **文件范围**：
+  - `docs/decisions.md`（新增 ADR-105 ~320 行 + ADR-104 zod block `.strict()` 注释）
+  - `docs/server_next_plan_20260427.md` §9 行 785（ADR-105 索引推进）
+  - `docs/task-queue.md`（SEQ-20260512-02 子卡 8 状态 + 子卡 10 卡名同步）
+  - `docs/tasks.md`（清空）
+  - `docs/changelog.md`（本条目）
+- **ADR-105 决策摘要**：
+  - **4 端点契约**：candidates 预览（GET）+ merge 执行（POST）+ unmerge（POST `/:auditId/unmerge`）+ split（POST `/admin/videos/:id/split`）；admin only `requireRole(['admin'])`（与 ADR-104 同级）
+  - **zod schema 设计**：ListCandidatesSchema + MergeSchema（sourceVideoIds 自身去重 + targetVideoId 不在 sources）+ UnmergeSchema + SplitSchema（≥2 组 ≤20，Service 层校验 sources 完整划分）
+  - **新 schema `video_merge_audit`**（migration 062）：UUID PK + action 枚举 + 双数组 source/target_video_ids + JSONB snapshot + UUID performed_by/reverted_by REFERENCES users + revert consistency CHECK + 部分索引 + 2 GIN 索引
+  - **candidate 算法 v1**（R-105-3 修订）：因 GROUP BY title_normalized + year + type 已严格匹配三元组，单维 `score = source_overlap_ratio ∈ [0,1]`；minScore 默认 0.6 实质过滤 "source 重合度低于 60% 的候选组"；性能 p95 ≤ 200ms / N=100 依赖 idx_videos_normalized_year_type 部分索引
+  - **错误码零新增**：复用 ADR-110 14 码（VALIDATION_ERROR / NOT_FOUND / STATE_CONFLICT 合并冲突 / FORBIDDEN admin only / UNAUTHORIZED）；message 模板表覆盖 9 场景
+  - **audit log 扩枚举**：AdminAuditActionType 增 3 项（video.merge / video.unmerge / video.split）；AdminAuditTargetKind 已含 'video' 无需扩
+  - **双层 audit 时序**（Y-105-5 修订）：video_merge_audit 写入事务内（强一致，BEGIN..COMMIT）+ admin_audit_log COMMIT 之后 fire-and-forget（避免 ROLLBACK 虚假记录）
+  - **ADR-114-NEGATED 兼容性**（R-105-1 修订）：merge Service 层前置探测 uq_sources_video_episode_url 冲突 → STATE_CONFLICT 409 拒绝转移 + 引导运营 /admin/sources 视图预 resolve
+- **arch-reviewer 评审轨迹**：
+  - **第 1 轮 CONDITIONAL**：3 红线（R-105-1 ADR-114 复合键 uq_sources_video_episode_url 冲突未处理 / R-105-2 performed_by TEXT vs admin_audit_log.actor_id UUID 类型不一致 / R-105-3 评分公式 GROUP BY 后前 3 项恒为常量致 minScore 失效）+ 5 黄线（Y-105-1 merge 端点归属未明 / Y-105-2 MergeSchema 自身去重缺 / Y-105-3 SplitSchema 完整划分缺 / Y-105-4 unmerge audit targetId 语义错位 / Y-105-5 fire-and-forget 在事务内虚假记录）+ 3 advisory
+  - **主循环修订**：R-105-1 决策要点 1 补冲突探测 SQL + STATE_CONFLICT 409；R-105-2 schema 改 UUID + REFERENCES users；R-105-3 评分公式简化为单维；Y-105-1 task-queue CHG-SN-5-10 卡名同步；Y-105-2/3 zod schema refine + 注释 + message 模板；Y-105-4 audit 协议表 targetId 改 restoredVideoIds[0]；Y-105-5 §audit log 协议段补"事务内 vs COMMIT 后"时序 + Service 层模式代码
+  - **第 2 轮 CONDITIONAL**：3 残留（Y-105-1 task-queue 卡名未实际同步 + R-105-1 §关联 ADR 行仍写 "100% 兼容" + §验证段建议措辞与 §关联段不一致）
+  - **第 3 轮 PASS**：3 残留全部修订（task-queue.md CHG-SN-5-10 卡名 + 范围 + 工时同步 / §关联 ADR 行去 100% 兼容措辞 / §验证段陈述句化 / §关联 task-queue 行统一新卡名）；零新破缺
+- **质量门禁**：typecheck + lint 全绿（仅 docs 改动，零代码）
+- **关键发现**：
+  - **R-105-1 ADR-114 兼容性破缺根因**：ADR-114-NEGATED 决议保持复合键不动，但忽略了 video_sources `uq_sources_video_episode_url UNIQUE (video_id, episode_number, source_url)` 约束在 merge 转移 video_id 时的潜在冲突——需 Service 层前置探测保护事务
+  - **R-105-2 类型不一致根因**：performed_by TEXT 是惯性写法，但既有 admin_audit_log 已用 UUID + REFERENCES users 严格约束；本 ADR 与现有 audit 同源应统一类型 + 外键
+  - **R-105-3 评分公式失效根因**：评分公式设计套用 ADR-104 风格但未注意到主路径 GROUP BY 已 enforce 三元组完全匹配，导致前 3 维度退化为常量；v1 简化为单维 source_overlap_ratio 业务语义反而更清晰
+  - **3 轮评审顶到 ≤ 3 轮上限**（§5.1）：第 3 轮全部是文档措辞 + task-queue 同步类残留，无架构破缺；如第 3 轮仍未 PASS 即触发 BLOCKER §5.2，本卡险闭环
+- **后续触发**：
+  - **解锁 CHG-SN-5-09** candidates 预览端点（sonnet，0.25w）
+  - **解锁 CHG-SN-5-10** merge + split + unmerge 端点 + migration 062 落地（sonnet，0.3w）
+  - **解锁 CHG-SN-5-11** `/admin/sources` 视图（依赖 -09/-10 端点 + ADR-114-NEGATED 复合键 + merge 冲突 resolve UI）
+  - **解锁 CHG-SN-5-12** `/admin/merge` 视图（依赖 -09/-10 端点）
+- **端点实施卡 -09/-10 启动指南**：
+  - **CHG-SN-5-09 candidates**：直接复制 ADR-105 §端点契约 ListCandidatesSchema + candidate 算法主路径 SQL + 评分函数 v1（source_overlap_ratio）+ 性能基线 unit test（mock 100 候选数据集 p95 ≤200ms 断言）
+  - **CHG-SN-5-10 merge + split + unmerge**：直接复制 ADR-105 §migration 062 SQL 草案落地 video_merge_audit 表 + 3 mutation Service 层（BEGIN/COMMIT/ROLLBACK + uq_sources_video_episode_url 冲突探测 + COMMIT 后 fire-and-forget admin_audit_log）+ admin-moderation.types.ts 扩 3 actionType + unit test 覆盖 3 端点 happy + 错误码全集 + audit payload 内容断言（参 R-MID-1 教训）
+- **注意事项**：
+  - 主循环模型 claude-opus-4-7 与建议 opus 一致（ADR 起草强制 Opus）
+  - 端点实施卡 -09/-10 必须严格按 ADR-105 §端点契约表落地，零设计自由度；audit log 写入位点表 actionType / targetId / before|afterJsonb 不得偏离（R-MID-1 教训）
+  - migration 062 落地由 -10 卡承担（非本起草卡）；admin-moderation.types.ts 扩 3 actionType 同步 -10 commit
+  - ADR-114-NEGATED 复合键约束 100% 维持；本 ADR 通过 Service 层前置冲突探测保持兼容，不修改 video_sources schema

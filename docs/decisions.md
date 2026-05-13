@@ -5172,6 +5172,10 @@ const CreateSchema = applyBusinessRules(CreateBase)
 // UpdateSchema：omit enabled（强制走 publish-toggle 专用端点；Y2 闭合）
 // + partial 派生 + applyBusinessRules（4 条规则在 partial 字段 undefined 时短路）
 // + 至少一字段校验
+// **实施强化（M-SN-5 中期审计 Y-MID-1 补注，2026-05-12）**：实施时建议在
+// .partial() 后链 .strict() — body 含 enabled 字段会直接返回 422 "Unrecognized key"，
+// 与 Y2 协议层闭合形成双重防御（schema 类型 + runtime 校验）。-05/-06 实施卡已落地
+// `.partial().strict()` 写法，与本 ADR 文本协议等价（强化非违反）。
 const UpdateSchema = applyBusinessRules(CreateBase.omit({ enabled: true }).partial())
   .refine((v) => Object.keys(v).length > 0, { message: '至少一字段' })
 
@@ -5331,3 +5335,321 @@ export type AdminAuditTargetKind =
 - **关联触发条件（未来）**：
   - PRE-CACHE-HOME（缓存层引入）：决策要点 6 三条触发条件任一命中
   - PRE-HOME-MODULE-V2（端点 v2 / break change）：运营场景出现 plan §6 范围外新需求
+
+---
+
+## ADR-105：video merge / split / unmerge admin API 协议（CHG-SN-5-08）
+
+- **日期**：2026-05-12
+- **状态**：**Accepted**（arch-reviewer Opus × 3 轮：第 1 轮 CONDITIONAL 3 红线 + 5 黄线 → 第 2 轮 CONDITIONAL 3 残留 → 第 3 轮 PASS 最终轮）
+- **决策者**：主循环 claude-opus-4-7 / arch-reviewer (claude-opus-4-7) × 3 轮
+- **关联**：ADR-104（home_modules 协议同模式）/ ADR-110（ApiResponse 信封 + ErrorCode 真源）/ ADR-114-NEGATED（video_sources `(source_site_key, source_name)` 复合键约束，跨站不合并）/ CHG-SN-4-05（AuditLogService fire-and-forget）/ migration 007（video_merge：title_normalized + video_aliases）/ migration 026（media_catalog 作品元数据层）/ plan §4.5（ADR-端点先后协议）
+- **对应交付**：SEQ-20260512-02 Phase C（CHG-SN-5-08 起草 → CHG-SN-5-09/-10 端点实施 → CHG-SN-5-11 `/admin/sources` + CHG-SN-5-12 `/admin/merge` 视图）
+- **触发**：plan §6 M-SN-5 推荐 5（合并 candidate 预览 + 拆分工作台）+ §4.5 ADR-端点先后协议硬约束
+
+### 背景
+
+videos 表已含 `title_normalized` 字段（migration 007）+ TitleNormalizer Service 提供 `normalizeTitle()` / `buildMatchKey()` 函数，DB 层有 `idx_videos_normalized_year_type ON videos(title_normalized, year, type) WHERE deleted_at IS NULL` 部分索引（migration 007:40）覆盖按 normalized 三元组聚合的主路径。media_catalog 层（migration 026）+ media_catalog_aliases（migration 030）承载作品元数据 + 别名。爬虫归并由 CrawlerService 内部 buildMatchKey 自动执行（规则 A：title_normalized + year + type 三元组完全相同才合并）。
+
+**当前缺失**：
+- admin 手工合并工作台端点（场景：爬虫规则保守 → 同作品多 video 行残留 → 运营手工合并）
+- admin 手工拆分端点（场景：爬虫激进合并 → 错误归并 → 运营拆回）
+- 合并/拆分历史审计日志（支持 unmerge 撤销 + 运营复盘）
+- 合并候选预览端点（pre-flight 让运营在执行前看到 N 条候选 + 评分）
+
+plan §4.5 ADR-端点先后协议硬约束：admin API 协议须先 ADR + Opus PASS，再起 -09/-10 端点实施卡。本 ADR 锁定 4 端点契约 + 新 `video_merge_audit` schema（migration 062 SQL 草案）+ candidate 算法基线 + 性能基线 + audit log 扩枚举 + 错误码 + 鉴权。
+
+### 决策要点
+
+1. **范围澄清 — video 层合并，不是 video_source/line 层**：ADR-114-NEGATED 决议保持 video_sources `(source_site_key, source_name)` 复合键 + 跨站不合并；本 ADR 在 **video 层**操作（同作品的多个 video 行合并），video_sources 数据**整体转移**至 target video（不修改 source_site_key / source_name 字段，仅 UPDATE video_id 字段指向 target）。
+   - **复合键约束兼容性**（R-105-1 修订，arch-reviewer 第 1 轮）：video_sources 既有约束 `uq_sources_video_episode_url UNIQUE NULLS NOT DISTINCT (video_id, episode_number, source_url)`（migration 007:64-65）— 当 source video 与 target video **各自含相同 `(episode_number, source_url)` 组合**时，转移 UPDATE 会触发唯一约束违反整体 ROLLBACK。
+   - **冲突处理策略（采纳方案 A）**：merge Service 层前置探测冲突 — `SELECT COUNT(*) FROM video_sources s1 JOIN video_sources s2 ON s1.episode_number IS NOT DISTINCT FROM s2.episode_number AND s1.source_url = s2.source_url WHERE s1.video_id = ANY($sources) AND s2.video_id = $target` > 0 → 返回 **STATE_CONFLICT 409** message `'source 与 target 视频存在重复 (episode_number, source_url) 组合 N 条，请先在 /admin/sources 视图处理（保留其一删除其余）后再合并'`，整体不转移。运营预 resolve 责任在 `/admin/sources` 视图（CHG-SN-5-11 范围）。
+2. **新 schema `video_merge_audit`**（migration 062，与 home_modules audit 沿用 admin_audit_log 的协议层不同，本表是 **业务级 audit + restore snapshot**，admin_audit_log 仍写 video.merge/unmerge/split 三 actionType 供运营审计）：
+   - `action`：'merge' | 'split'
+   - `source_video_ids[]`：合并场景=被合并的 video ids / 拆分场景=拆分前的单个 video id
+   - `target_video_ids[]`：合并场景=合并后的 target video / 拆分场景=拆分后的多个 video ids
+   - `snapshot_jsonb`：完整 video + sources + aliases 备份（unmerge 还原数据源）
+   - `performed_by` / `performed_at` / `reverted_at`（null = 未撤销）
+3. **4 端点**：
+   - `GET /admin/video-merges/candidates` — candidate 列表 + 评分（运营 pre-flight）
+   - `POST /admin/video-merges` — 执行合并（事务内转移 sources/aliases + soft delete source videos + 写 audit）
+   - `POST /admin/video-merges/:auditId/unmerge` — 按 audit 撤销合并（还原 source videos + 解绑 sources，置 audit.reverted_at）
+   - `POST /admin/videos/:id/split` — 按 source 分组拆分（每组新建 video + 移交 sources + 写 audit）
+4. **candidate 算法基线 v1**（R-105-3 修订，arch-reviewer 第 1 轮）：
+   - 主路径：`SELECT title_normalized, year, type, ARRAY_AGG(id) AS video_ids, COUNT(*) FROM videos WHERE deleted_at IS NULL GROUP BY 1,2,3 HAVING COUNT(*) > 1 LIMIT N`（依赖 idx_videos_normalized_year_type 部分索引，p95 ≤ 200ms / N=100）
+   - **评分函数 v1（简化为 source_overlap_ratio 单维）**：因 GROUP BY 已严格保证 title_normalized + year + type 三元组完全匹配，title/year/type 三项贡献恒为常量；v1 评分单维 `score = source_overlap_ratio ∈ [0, 1]`（两 video 共享的 source_site_key 占比 / 并集大小）。**minScore 默认 0.6** 实质过滤"source 重合度低于 60% 的候选组"（如 video A 仅含 'iqiyi' / video B 仅含 'youku'，source_overlap=0 必被过滤）— 业务语义明确。
+   - **未来扩展**：fuzzy match 需求出现 → ADR-105a 引入 pg_trgm 索引 + 多维加权评分公式（title_similarity 0.4 + year_diff 0.2 + type_match 0.2 + source_overlap 0.2）；v1 严格三元组匹配先满足保守 false-positive 低需求
+   - 返回 top-N 候选组（默认 N=20，最大 100），每组含 video 概要 + 评分 + 推荐 target（首播时间最早 OR source 最多的 video）
+5. **鉴权 admin only**：与 ADR-104 同级 `preHandler: [authenticate, requireRole(['admin'])]`，moderator 不放权（合并/拆分破坏性操作 + 审计敏感）
+6. **错误码零新增**：复用 ADR-110 14 码 — VALIDATION_ERROR 422 / NOT_FOUND 404 / STATE_CONFLICT 409（已撤销 audit / target video 已删 / source video 互相引用） / FORBIDDEN 403 / UNAUTHORIZED 401
+7. **audit log 扩 admin_audit_log 枚举 3 项**：AdminAuditActionType 增 `video.merge` / `video.unmerge` / `video.split`；AdminAuditTargetKind 已含 'video'（无需扩）。Service 层 fire-and-forget 写入位点见 §audit log 协议表
+8. **响应包络对齐 ADR-110**：列表 `{ data, total, page, limit }`；执行操作 `{ data: { auditId, ... } }`；DELETE 类操作不适用本 ADR（合并不删 audit，撤销仅置 reverted_at）
+9. **事务性约束**：merge / split / unmerge 三 mutation 端点必须在 BEGIN/COMMIT 内执行（涉及多表更新：videos / video_sources / media_catalog_aliases / video_merge_audit）；失败 ROLLBACK 不留半完成态
+10. **性能 + 触发条件**（plan §10 R-M-SN-5-B 关联）：
+    - candidate p95 ≤ 200ms / N=100（首版基线）
+    - 触发优化卡 PRE-MERGE-CACHE：(a) p95 > 200ms 持续 1 周；(b) candidates 总数 > 10000 拒绝服务；(c) 用户实测 candidate 列表加载明显慢
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 错误码 |
+|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/video-merges/candidates` | 列出 video 合并候选 + 评分 | Query: `type?` / `minScore?=0.6` / `limit?=20` / `page?=1` | 200 `{ data: CandidateGroup[], total, page, limit }` | 422 VALIDATION_ERROR |
+| 2 | POST | `/admin/video-merges` | 执行合并 | Body: `{ sourceVideoIds: string[], targetVideoId: string, reason?: string }` | 200 `{ data: { auditId, targetVideo: VideoSummary } }` | 422 / 404（任一 video 不存在）/ 409（target 已被合并到他处） |
+| 3 | POST | `/admin/video-merges/:auditId/unmerge` | 撤销合并 | Body: `{ reason?: string }` | 200 `{ data: { restoredVideoIds: string[] } }` | 404 / 409（audit 已撤销 / target video 已删） |
+| 4 | POST | `/admin/videos/:id/split` | 按 source 分组拆分 | Body: `{ groups: [{ sourceIds: string[], newVideoMeta: { title, year?, type } }] }`（≥2 组） | 200 `{ data: { auditId, newVideoIds: string[] } }` | 422 / 404 / 409（id 已被合并/拆分） |
+
+**zod request schema（Service 层 + Route 层共享，端点实施卡 -09/-10 落地）**：
+
+```ts
+const ListCandidatesSchema = z.object({
+  type: VideoTypeEnum.optional(),
+  minScore: z.coerce.number().min(0).max(1).default(0.6),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  page: z.coerce.number().int().min(1).default(1),
+})
+
+const MergeSchema = z.object({
+  sourceVideoIds: z.array(z.string().uuid()).min(1).max(10),
+  targetVideoId: z.string().uuid(),
+  reason: z.string().max(500).optional(),
+})
+  .refine((v) => !v.sourceVideoIds.includes(v.targetVideoId),
+    { message: 'targetVideoId 不得在 sourceVideoIds 中', path: ['targetVideoId'] })
+  // Y-105-2 修订（arch-reviewer 第 1 轮）：sourceVideoIds 自身去重，避免 audit snapshot 数组重复值
+  .refine((v) => new Set(v.sourceVideoIds).size === v.sourceVideoIds.length,
+    { message: 'sourceVideoIds 不得含重复值', path: ['sourceVideoIds'] })
+
+const UnmergeSchema = z.object({
+  reason: z.string().max(500).optional(),
+})
+
+const SplitSchema = z.object({
+  groups: z.array(z.object({
+    sourceIds: z.array(z.string().uuid()).min(1),
+    newVideoMeta: z.object({
+      title: z.string().min(1).max(500),
+      year: z.number().int().min(1800).max(2100).optional(),
+      type: VideoTypeEnum,
+    }),
+  })).min(2).max(20),  // 至少拆 2 组；上限 20 防滥用
+})
+// Y-105-3 修订（arch-reviewer 第 1 轮）：sourceIds 完整划分约束 — Service 层前置校验
+// UNION(groups[*].sourceIds) ≡ video_sources WHERE video_id=:id 全集（不相交划分，
+// 无孤儿、无重复）；违反 VALIDATION_ERROR 422。zod schema 不可表达跨 group 唯一性 +
+// DB 状态依赖，Service 层落地。
+```
+
+**路径常量**：`/admin/video-merges`（hyphen，名词复数，与既有 `/admin/home-modules` / `/admin/crawler-sites` 风格一致）+ `/admin/videos/:id/split`（split 作为 video 资源的子动作，挂在 videos 命名空间下）。
+
+### video_merge_audit schema（migration 062 草案，由 -09 端点实施卡承担落地）
+
+```sql
+-- 062_create_video_merge_audit.sql
+-- 描述：video 层合并/拆分历史审计 + restore snapshot
+-- 日期：2026-05-12
+-- ADR：ADR-105
+-- 幂等：是（CREATE TABLE IF NOT EXISTS）
+
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS video_merge_audit (
+  id                UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  action            TEXT         NOT NULL CHECK (action IN ('merge', 'split')),
+  source_video_ids  UUID[]       NOT NULL,
+  target_video_ids  UUID[]       NOT NULL,
+  -- merge: source_video_ids = 被合并的 [v1,v2,...] / target_video_ids = [target]
+  -- split: source_video_ids = [拆分前 video] / target_video_ids = 拆分后 [v1,v2,...]
+  snapshot_jsonb    JSONB        NOT NULL,
+  -- 完整备份：{ videos: [{...}], sources: [{...}], aliases: [{...}] }
+  -- unmerge / split 撤销时基于 snapshot 还原；JSONB 而非外键避免 cascade 删除丢历史
+  performed_by      UUID         NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  -- admin user id（R-105-2 修订：UUID + 外键约束，与 admin_audit_log.actor_id 同类型同语义；migration 052:26 对照）
+  reason            TEXT         NULL,
+  -- 运营备注（可选；从 endpoint body.reason 透传）
+  performed_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  reverted_at       TIMESTAMPTZ  NULL,
+  -- unmerge / split 撤销时设此字段；非 NULL = 该次操作已被撤销
+  reverted_by       UUID         NULL REFERENCES users(id) ON DELETE RESTRICT,
+  reverted_reason   TEXT         NULL,
+  CONSTRAINT video_merge_audit_revert_consistency
+    CHECK ((reverted_at IS NULL AND reverted_by IS NULL AND reverted_reason IS NULL)
+        OR (reverted_at IS NOT NULL AND reverted_by IS NOT NULL))
+);
+
+CREATE INDEX IF NOT EXISTS video_merge_audit_action_idx
+  ON video_merge_audit (action, performed_at DESC)
+  WHERE reverted_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS video_merge_audit_source_videos_gin
+  ON video_merge_audit USING GIN (source_video_ids);
+
+CREATE INDEX IF NOT EXISTS video_merge_audit_target_videos_gin
+  ON video_merge_audit USING GIN (target_video_ids);
+
+COMMIT;
+
+-- ── down 路径（注释保留，运维手动） ─────────────────────────────────
+-- BEGIN;
+-- DROP INDEX IF EXISTS video_merge_audit_target_videos_gin;
+-- DROP INDEX IF EXISTS video_merge_audit_source_videos_gin;
+-- DROP INDEX IF EXISTS video_merge_audit_action_idx;
+-- DROP TABLE IF EXISTS video_merge_audit;
+-- COMMIT;
+```
+
+**索引设计理由**：
+- `(action, performed_at DESC) WHERE reverted_at IS NULL` 部分索引：覆盖"列出未撤销的合并历史"主路径
+- GIN 索引：支持 `WHERE source_video_ids @> ARRAY['<id>']` 反查（运营查询"某 video 是否被合并过"）
+
+### audit log 协议
+
+**新增 AdminAuditActionType 3 项**：
+
+```ts
+export type AdminAuditActionType =
+  | ...既有 16 项（含 ADR-104 扩 5 项）
+  | 'video.merge'
+  | 'video.unmerge'
+  | 'video.split'
+```
+
+AdminAuditTargetKind 已含 'video'（admin-moderation.types.ts:127 既有），无需扩。
+
+**写入位点**（Service 层，由 -09/-10 端点实施卡落地）：
+
+| 端点 | actionType | targetId | beforeJsonb | afterJsonb |
+|---|---|---|---|---|
+| POST `/admin/video-merges` | video.merge | targetVideoId | `{ sourceVideoIds, snapshot }` | `{ auditId, targetVideoId }` |
+| POST `/admin/video-merges/:auditId/unmerge` | video.unmerge | restoredVideoIds[0]（**Y-105-4 修订**：targetKind='video' 期望 targetId 是 videos.id，原稿用 auditId 语义错位破坏 idx_admin_audit_log_target 反查；改为 unmerge 还原后的首个 videoId） | `{ auditId, action: 'merge', revertedFromTargetVideoId }` | `{ restoredVideoIds }` |
+| POST `/admin/videos/:id/split` | video.split | id（拆分前 video） | `{ originalVideoId: id, snapshot }` | `{ auditId, newVideoIds }` |
+
+**fire-and-forget 模式**（CHG-SN-4-05）：`auditSvc.write(...)` 不 await，写失败 log warn 不阻塞主操作。**双层 audit**：`video_merge_audit` 表存 restore snapshot（业务级），`admin_audit_log` 存 actionType + 引用 video_merge_audit.id（管理审计级）。
+
+**写入时序（Y-105-5 修订，arch-reviewer 第 1 轮）**：
+- **video_merge_audit 写入在事务内**（BEGIN ... INSERT video_merge_audit ... UPDATE videos/video_sources ... COMMIT）— 强一致，失败 ROLLBACK 全回滚
+- **admin_audit_log 写入在 COMMIT 之后**（fire-and-forget）— 避免业务 ROLLBACK 后 admin_audit_log 仍写入虚假成功记录；COMMIT 失败 → 直接抛错给路由层，不写管理审计
+- Service 层模式：
+  ```ts
+  async merge(params, actorId) {
+    const client = await db.connect()
+    try {
+      await client.query('BEGIN')
+      // ... 业务 + video_merge_audit INSERT ...
+      await client.query('COMMIT')
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err  // 不写 admin_audit_log
+    } finally { client.release() }
+    // COMMIT 成功后才 fire-and-forget admin_audit_log
+    this.auditSvc.write({ actionType: 'video.merge', ... })
+  }
+  ```
+
+### 错误码
+
+复用 ADR-110 14 码，零新增：
+
+| 场景 | code | status |
+|---|---|---|
+| zod schema 失败 | VALIDATION_ERROR | 422 |
+| targetVideoId ∈ sourceVideoIds 等业务规则违反 | VALIDATION_ERROR | 422 |
+| video / audit 不存在 | NOT_FOUND | 404 |
+| audit 已被撤销 / target video 已被合并到他处 / split 视频已被合并 | STATE_CONFLICT | 409 |
+| 非 admin 角色 | FORBIDDEN | 403 |
+| 未登录 | UNAUTHORIZED | 401 |
+
+**message 模板（与 ADR-104 同范式）**：
+
+| 场景 | message 模板 |
+|---|---|
+| sourceVideoIds 含 targetVideoId | `'targetVideoId 不得在 sourceVideoIds 中'` |
+| sourceVideoIds 含重复值（Y-105-2） | `'sourceVideoIds 不得含重复值'` |
+| split groups < 2 | `'groups 必须 ≥ 2 组（少于 2 组不构成拆分）'` |
+| split groups[*].sourceIds 不是完整划分（Y-105-3） | `'groups.sourceIds 必须覆盖且仅覆盖拆分前 video 的全部 sources（不允许孤儿或重复）'` |
+| merge 转移触发 uq_sources_video_episode_url 冲突（R-105-1） | `'source 与 target 视频存在重复 (episode_number, source_url) 组合 N 条，请先在 /admin/sources 视图处理（保留其一删除其余）后再合并'`（status=409 STATE_CONFLICT） |
+| audit 已撤销 | `'该合并/拆分已被撤销（reverted_at IS NOT NULL）'` |
+| target video 已合并 | `'targetVideoId 已被合并到其他视频（不可作为合并目标）'` |
+| split 视频已合并 | `'该视频已被合并，请先 unmerge 后再 split'` |
+| video / audit 不存在 | `'<resource> <id> 不存在'` |
+
+### 备选方案
+
+**A. video_merge_audit vs 共用 admin_audit_log**：
+- ✗ 方案 1：仅用 admin_audit_log + jsonb 字段存 snapshot — admin_audit_log.before_jsonb 字段未约束大小，但混入业务级 restore 数据后查询性能下降 + audit 表膨胀；且 audit log 是 fire-and-forget，写失败可丢，不能承担"unmerge 必须能还原"的承诺
+- ✗ 方案 2：merge / split 各自独立表 — 数据模型不对称（merge N→1 / split 1→N），但 schema 几乎相同；维护成本高
+- ✅ **方案 3（采纳）**：单表 video_merge_audit + `action` 字段区分 + 双数组字段（source/target）适配 N→1 + 1→N 两方向 + JSONB snapshot 业务级强一致写入；admin_audit_log 仅引用 audit.id 做管理级审计
+
+**B. unmerge 实现策略**：
+- ✗ 方案 1：仅恢复 video 记录 + 不恢复 sources / aliases — 数据不完整（合并时转移的 sources 留在 target，撤销后 target 仍含）
+- ✅ **方案 2（采纳）**：基于 snapshot_jsonb 完整还原 — videos restore + sources 解绑（DELETE WHERE video_id IN restored AND id IN snapshot.sources）+ 别名 / catalog 同步重置；reverted_at 置当前时间，audit 记录保留（不删，便于复盘）
+
+**C. split 端点路径**：
+- ✗ 方案 1：`POST /admin/video-splits` 独立资源 — 与 merge 端点风格不对称（merge 是 N→1 操作 + N→1 资源；split 是 1→N 操作但落在哪个资源上？）
+- ✅ **方案 2（采纳）**：`POST /admin/videos/:id/split` 作为 video 资源的子动作 — split 的"主体"是被拆分的视频，挂在 videos 命名空间下符合 REST 子资源动作语义
+
+**D. candidate 算法**：
+- ✗ 方案 1：fuzzy match（Levenshtein 距离 / pg_trgm 模糊匹配）— 性能不可控（pg_trgm 索引未在 migration 中创建），且 false positive 多
+- ✅ **方案 2（采纳）**：严格 title_normalized + year + type 三元组完全匹配（依赖既有 idx_videos_normalized_year_type 索引）+ source 重合度评分 — 性能 p95 ≤ 200ms 可承诺，false positive 低；如未来 fuzzy 需求出现 → ADR-105a 修订引入 pg_trgm 索引
+
+**E. 错误码 STATE_CONFLICT 语义复用**：
+- ADR-110 STATE_CONFLICT message "状态已被其他操作更新，请刷新后重试" 与本 ADR "audit 已撤销 / target 已被合并到他处" 场景虽语义不完全贴合但仍属"状态冲突"范畴，不引入新码（ADR-110 关闭真源）；前端通过 message 字段携带具体原因展示给用户
+
+### 后果
+
+**正面**：
+1. -09 candidates 预览端点（CHG-SN-5-09）+ -10 merge + split + unmerge 端点（CHG-SN-5-10，Y-105-1 范围修订后）按本 ADR 直接落地，零设计自由度
+2. -11 `/admin/sources` 视图 + -12 `/admin/merge` 视图（CHG-SN-5-11/-12）有明确端点契约可消费
+3. 错误码零新增、audit log 类型有限扩枚举（3 项）、新 schema 仅 1 表 — 与 plan §10 "新增端点不得修改邻近现有端点（隔离原则）" 一致
+4. video_merge_audit + admin_audit_log 双层 audit 设计：业务级 restore（不可丢，强一致）+ 管理级审计（fire-and-forget，可丢）分离 + 写入时序严格（事务内 vs COMMIT 后）防虚假记录（Y-105-5 修订）
+5. ADR-114-NEGATED 复合键约束兼容（video_sources 整体转移仅 UPDATE video_id 字段，零 source_site_key/source_name 修改；merge 前置冲突探测 + STATE_CONFLICT 409 拒绝转移避免 uq_sources_video_episode_url 触发 ROLLBACK；R-105-1 修订）
+
+**负面 / 风险**：
+1. **R-ADR-105-1**：snapshot_jsonb 列无上限约束 — 极端场景（被合并 video 含 100+ sources + 1000+ aliases）单 audit 行可能 > 100KB。**缓解**：sourceVideoIds 上限 10（zod schema 约束）+ 业务规则 video.source_count ≤ 100 监控（已在 plan §10 R-M-SN-5-B 隐含）；如未来命中 → 起 PRE-MERGE-AUDIT-SHARD 卡评估分表
+2. **R-ADR-105-2**：unmerge 撤销窗口无 TTL — audit 永久保留，1 年前的合并仍可撤销（但期间业务状态可能已大变）。**缓解**：本 ADR 不引入 TTL；如未来命中"撤销后业务状态崩坏"案例 → 起 PRE-MERGE-TTL 卡引入"7 天内可撤销"约束 + 过期标记
+3. **R-ADR-105-3**：candidate 算法严格 title_normalized 三元组完全匹配 — 漏掉 fuzzy 场景（如 "复仇者联盟" vs "复仇者联盟 4"，标题差异但同作品）。**缓解**：v1 严格保守优先；fuzzy 需求出现 → ADR-105a 引入 pg_trgm（不在本 ADR 范围）
+4. **R-ADR-105-4**：split 端点 newVideoMeta 仅含 title/year/type 三字段 — 拆分后新 video 缺少 description / cover_url / tags 等运营字段。**缓解**：split 后运营需手工补全（admin/videos 视图编辑）；这是有意的"先拆后补"设计，避免 split 端点过度膨胀
+
+### 验证
+
+**起草卡（CHG-SN-5-08）完成判据**：
+- arch-reviewer Opus PASS（≤ 3 轮 CONDITIONAL 闭环；REJECT = BLOCKER §5.2）
+- 落 `docs/decisions.md` ADR-105 章节完整（9 节）
+- plan §9 ADR 索引推进 ADR-105 状态 Candidate → Accepted
+
+**端点归属（Y-105-1 已闭合，task-queue.md 同步修订）**：本 ADR §端点契约表列出 4 端点（candidates / merge / unmerge / split），task-queue.md SEQ-20260512-02 子卡 CHG-SN-5-10 **卡名已同步修订**为 **"merge + split + unmerge 端点实施"**，范围明确含 3 mutation 端点（POST `/admin/video-merges` merge 执行 + POST `/:auditId/unmerge` + POST `/admin/videos/:id/split`）+ migration 062 落地；与 CHG-SN-5-09 candidates 预览端点分卡清晰。
+
+**端点实施卡（CHG-SN-5-09 candidates 预览 / CHG-SN-5-10 merge + split + unmerge）落地判据**：
+- migration 062 落地（video_merge_audit 表 + 3 索引）
+- 4 端点契约 100% 与本 ADR §端点契约表对齐
+- audit log 3 actionType 扩枚举落地 admin-moderation.types.ts
+- Service 层 zod 双层校验覆盖所有业务规则
+- candidate p95 ≤ 200ms / N=100 性能基线达成（unit test 跑 100 候选 mock 数据集断言）
+- merge / unmerge / split 三 mutation 事务性约束（unit test 模拟中途失败 → 全 rollback）
+- unit test 覆盖 4 端点 happy path + 错误码全集 + audit log 写入 + audit payload 内容断言（参 CHG-SN-5-06-PATCH R-MID-1 教训：必须显式断言 before/afterJsonb）
+
+**视图实施卡（CHG-SN-5-11/-12）落地判据**：
+- `/admin/merge` 视图消费 4 端点（candidates 预览 + merge 执行 + unmerge 撤销 + split 拆分）
+- `/admin/sources` 视图消费 candidates 端点 + 视频维度分组（与 ADR-114-NEGATED 复合键约束一致）
+- 与既有视图卡（-01/-02/-03/-07）DataTable 一体化 + 6 原语消费范式一致
+
+### 关联
+
+- **关联 ADR**：ADR-104（home_modules 协议同模式 — 双 ADR 锁定 M-SN-5 admin API 协议层完整）/ ADR-110（ApiResponse 信封 + ErrorCode 关闭真源）/ ADR-114-NEGATED（复合键约束，**本 ADR 通过 merge Service 层前置冲突探测 + STATE_CONFLICT 409 拒绝转移保持兼容**，详见 §决策要点 1）/ ADR-052（home_modules schema 兄弟）/ ADR-100（依赖白名单，本 ADR 零新依赖）
+- **关联 plan §**：§4.5 ADR-端点先后协议（本 ADR 是 -09/-10/-11/-12 四卡硬前置）/ §6 M-SN-5 推荐 5（合并 candidate 预览 + 拆分工作台）/ §9 ADR 索引 ADR-105 / §10 风险段 R-M-SN-5-B（candidate-preview 算法跨视频性能不达标，本 ADR 性能基线锁定）
+- **关联 task-queue**：SEQ-20260512-02 子卡 CHG-SN-5-08（本卡）→ CHG-SN-5-09（candidates 预览端点）→ CHG-SN-5-10（merge + split + unmerge 端点 + migration 062）→ CHG-SN-5-11（`/admin/sources` 视图）+ CHG-SN-5-12（`/admin/merge` 视图）
+- **关联代码（既有，本 ADR 引用不修改）**：
+  - `apps/api/src/db/migrations/007_video_merge.sql`（title_normalized + idx_videos_normalized_year_type 部分索引）
+  - `apps/api/src/db/migrations/026_create_media_catalog.sql`（媒体元数据层）
+  - `apps/api/src/services/TitleNormalizer.ts`（normalizeTitle / buildMatchKey）
+  - `apps/api/src/services/AuditLogService.ts`（fire-and-forget 模式，本 ADR 复用）
+  - `apps/api/src/lib/auth.ts`（admin role gate `requireRole(['admin'])`）
+- **关联代码（本 ADR 触发新增，由 -09/-10 端点实施卡落地）**：
+  - `apps/api/src/db/migrations/062_create_video_merge_audit.sql`（schema 草案见上）
+  - `apps/api/src/db/queries/video-merges.ts`（CRUD + GIN 反查）
+  - `apps/api/src/services/VideoMergeService.ts`（业务规则 + 事务性 merge/unmerge/split + 双层 audit 写入）
+  - `apps/api/src/routes/admin/video-merges.ts`（4 端点 + admin only 鉴权）
+- **关联触发条件（未来）**：
+  - PRE-MERGE-CACHE（candidate 缓存层引入）：决策要点 10 三条触发条件任一命中
+  - PRE-MERGE-AUDIT-SHARD（snapshot_jsonb 分表）：R-ADR-105-1 极端场景命中
+  - PRE-MERGE-TTL（撤销 TTL 约束）：R-ADR-105-2 业务案例命中
+  - ADR-105a fuzzy match（pg_trgm 引入）：R-ADR-105-3 fuzzy 需求命中
