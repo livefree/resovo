@@ -6649,3 +6649,41 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - minScore 过滤在 Service 层（Application 层过滤是 v1 有意设计，≤100 候选可接受）
   - admin only 鉴权（ADR-105 §5）
 - **解锁**：CHG-SN-5-10 merge + split + unmerge 端点 + migration 062
+
+---
+
+## CHG-SN-5-09-PATCH — candidate perf baseline 协议偏离补齐
+- **任务 ID**：CHG-SN-5-09-PATCH
+- **日期**：2026-05-12
+- **执行模型**：claude-opus-4-7（建议 sonnet；用户独立评审会话内延续 opus 续推，偏离建议模型记录）
+- **子代理**：无（修复路径清晰 + 增量单测驱动 + 不涉新架构决策）
+- **来源**：用户独立评审 CHG-SN-5-09（评级 B+）发现 ADR-105 §验证段 perf baseline 判据 commit `cd049b53` 静默跳过；与 CHG-SN-5-06-PATCH R-MID-1（"ADR 明示但 commit 静默跳过"）同型号偏离
+- **缺陷描述**：
+  - ADR-105 §验证段（`docs/decisions.md:5631`）端点实施卡落地判据明文："candidate p95 ≤ 200ms / N=100 性能基线达成（unit test 跑 100 候选 mock 数据集断言）"
+  - CHG-SN-5-08 起草卡 §端点实施卡启动指南（changelog.md:6612）亦明确传 -09 需含"性能基线 unit test（mock 100 候选数据集 p95 ≤200ms 断言）"
+  - 实际 CHG-SN-5-09 commit `cd049b53` 25 测试覆盖参数传递 / 评分边界 / minScore / 推荐 target / 分页 / zod，**无 perf baseline 断言**
+- **修复内容**：
+  - `tests/unit/api/video-merge-candidates.test.ts` 追加 `describe('perf baseline')` 区块 + 1 测试：mock 100 候选组 × 5 video × 10 site_keys（site_key 池 15 个含跨组共享），跑 20 iterations 调 `listCandidates`，断言 p95 < 200ms；实测整文件 26 测试 57ms（含 20 次迭代）远低于硬指标
+  - `docs/decisions.md` ADR-105 §关联代码 Service 文件名 `VideoMergeService.ts`（单数）→ `VideoMergesService.ts`（复数，与端点 `/admin/video-merges` 一致）+ 注明 CHG-SN-5-09 落地复数名 + CHG-SN-5-09-PATCH 同步修订
+- **文件范围**：
+  - `tests/unit/api/video-merge-candidates.test.ts`（perf baseline 区块 +1 测试）
+  - `docs/decisions.md`（ADR-105 §关联代码 1 行修订）
+  - `docs/tasks.md`（本卡卡片 + 完成后清空）
+  - `docs/task-queue.md`（新增 9-P 条目 + 状态闭环）
+  - `docs/changelog.md`（本条目）
+- **质量门禁**：
+  - typecheck 全绿（全 workspaces）/ lint 全绿（仅遗留 web-next 2 react-hooks/exhaustive-deps 警告，与本卡无关）
+  - unit 3563/3563 全绿（baseline 3562 + 净增 1 perf baseline 用例）
+  - video-merge-candidates.test.ts 26/26
+- **不在范围**（CLAUDE.md 改动收敛 5）：
+  - 评估时标 P1 的 sort tiebreaker 补强 → V8 stable sort 保证幂等，延后到 CHG-SN-5-10 或 -13 顺手做
+  - 评估时标 P2 的解构默认值冗余 / 双 fallback 简化 → 不影响正确性
+  - DB 集成测试 → e2e 范畴，CHG-SN-5-13 milestone 审计承担
+- **关键发现**：
+  - **R-MID-1 同源风险点**：主循环逐条勾对 ADR §端点契约表落地，但 §验证段判据未做 checklist 化勾对 → 静默漏项是结构性风险，建议 CHG-SN-5-13 milestone 审计将"ADR §验证段 checklist 化勾对"列入审计入口
+  - **perf 测试设计要点**：mock pg.Pool.query 返回 100 候选组 detailRows，跑 20 iterations 取 p95，避免单次抖动；20 次容差取 18 位（floor(20×0.95)-1=18）作 p95 索引
+- **后续触发**：
+  - **解锁**：CHG-SN-5-10 merge + split + unmerge 端点 + migration 062（依然依赖 CHG-SN-5-08 ADR-105 PASS，本 PATCH 无影响）
+- **注意事项**：
+  - 主循环模型 claude-opus-4-7 偏离任务卡建议 sonnet（用户延续 opus 会话指令）
+  - 本 PATCH 卡示范"ADR §验证段协议偏离回写"模式，与 CHG-SN-5-06-PATCH R-MID-1 修复同型号

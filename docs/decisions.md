@@ -5646,7 +5646,7 @@ AdminAuditTargetKind 已含 'video'（admin-moderation.types.ts:127 既有），
 - **关联代码（本 ADR 触发新增，由 -09/-10 端点实施卡落地）**：
   - `apps/api/src/db/migrations/062_create_video_merge_audit.sql`（schema 草案见上）
   - `apps/api/src/db/queries/video-merges.ts`（CRUD + GIN 反查）
-  - `apps/api/src/services/VideoMergeService.ts`（业务规则 + 事务性 merge/unmerge/split + 双层 audit 写入）
+  - `apps/api/src/services/VideoMergesService.ts`（业务规则 + 事务性 merge/unmerge/split + 双层 audit 写入；CHG-SN-5-09 落地复数名 与端点 `/admin/video-merges` 一致，CHG-SN-5-09-PATCH 同步修订）
   - `apps/api/src/routes/admin/video-merges.ts`（4 端点 + admin only 鉴权）
 - **关联触发条件（未来）**：
   - PRE-MERGE-CACHE（candidate 缓存层引入）：决策要点 10 三条触发条件任一命中

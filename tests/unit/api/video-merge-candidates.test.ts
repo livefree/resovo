@@ -274,3 +274,65 @@ describe('ListCandidatesSchema', () => {
     expect(result.type).toBe('anime')
   })
 })
+
+// ── perf baseline（ADR-105 §验证段：N=100 / p95 ≤ 200ms）─────────────
+// CHG-SN-5-09-PATCH 补 ADR-105 §验证段协议偏离（commit cd049b53 静默跳过判据）。
+// 仅断言 Service 层评分 + 组装计算（DB query 已 mock 直返），覆盖 §10 R-M-SN-5-B 风险。
+
+describe('VideoMergesService.listCandidates · perf baseline (ADR-105 §验证)', () => {
+  it('N=100 候选组 × 5 video × 10 site_keys：p95 < 200ms（20 iterations）', async () => {
+    const SITE_KEY_POOL = [
+      'iqiyi', 'youku', 'bilibili', 'tencent', 'mgtv',
+      'sohu', 'pptv', 'wasu', 'letv', 'cntv',
+      'netflix', 'youtube', 'vimeo', 'dailymotion', 'twitch',
+    ]
+    const GROUP_COUNT = 100
+    const VIDEOS_PER_GROUP = 5
+    const KEYS_PER_VIDEO = 10
+
+    const groupRows = Array.from({ length: GROUP_COUNT }, (_, gi) => ({
+      title_normalized: `mock_title_${gi}`,
+      year: 2000 + (gi % 30),
+      type: 'movie' as const,
+      video_ids: Array.from({ length: VIDEOS_PER_GROUP }, (_, vi) => `vid-${gi}-${vi}`),
+      video_count: String(VIDEOS_PER_GROUP),
+    }))
+
+    const detailRows = groupRows.flatMap(g =>
+      g.video_ids.map((id, vi) => ({
+        id,
+        title: `Video ${id}`,
+        title_normalized: g.title_normalized,
+        year: g.year,
+        type: g.type,
+        created_at: `2026-01-${String((vi % 28) + 1).padStart(2, '0')}T00:00:00Z`,
+        source_count: String(KEYS_PER_VIDEO),
+        site_keys: Array.from({ length: KEYS_PER_VIDEO }, (_, ki) =>
+          SITE_KEY_POOL[(vi + ki) % SITE_KEY_POOL.length]!,
+        ),
+      })),
+    )
+
+    const ITERATIONS = 20
+    const durations: number[] = []
+
+    for (let i = 0; i < ITERATIONS; i++) {
+      mockQuery.mockReset()
+      mockQuery
+        .mockResolvedValueOnce({ rows: groupRows })
+        .mockResolvedValueOnce({ rows: [{ total: String(GROUP_COUNT) }] })
+        .mockResolvedValueOnce({ rows: detailRows })
+
+      const svc = new VideoMergesService(mockDb)
+      const t0 = performance.now()
+      const res = await svc.listCandidates({ type: undefined, minScore: 0, limit: 100, page: 1 })
+      durations.push(performance.now() - t0)
+      expect(res.data.length).toBe(GROUP_COUNT)
+    }
+
+    const sorted = [...durations].sort((a, b) => a - b)
+    const p95Index = Math.floor(ITERATIONS * 0.95) - 1   // 0-indexed 第 19 位 → 容差取 18
+    const p95 = sorted[Math.max(p95Index, 0)]!
+    expect(p95).toBeLessThan(200)
+  })
+})
