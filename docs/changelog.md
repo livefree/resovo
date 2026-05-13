@@ -6786,3 +6786,44 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **注意事项**：
   - 主循环模型 claude-opus-4-7 偏离任务卡建议 sonnet（用户延续 opus 会话指令）
   - 本 PATCH 卡示范"ADR §端点契约 Response 字段 + §错误码探测协议偏离回写"模式，与 06-PATCH/09-PATCH 同型号
+
+
+---
+
+## CHG-SN-5-11 · /admin/sources 线路矩阵 + 视频维度分组 + 全局别名表
+
+- **完成时间**：2026-05-12
+- **执行模型**：claude-sonnet-4-6（符合任务卡建议）
+- **子代理调用**：无
+- **变更文件**：
+  - `apps/api/src/db/migrations/063_source_line_aliases.sql`（新建）
+  - `apps/api/src/db/queries/sources-matrix.ts`（新建）
+  - `apps/api/src/routes/admin/sources-matrix.ts`（新建）
+  - `apps/api/src/server.ts`（注册 adminSourcesMatrixRoutes）
+  - `apps/server-next/src/lib/sources/types.ts`（新建）
+  - `apps/server-next/src/lib/sources/api.ts`（新建）
+  - `apps/server-next/src/app/admin/sources/page.tsx`（替换占位页）
+  - `apps/server-next/src/app/admin/sources/_client/SourcesClient.tsx`（新建）
+  - `apps/server-next/src/app/admin/sources/_client/SourceMatrixRow.tsx`（新建）
+  - `apps/server-next/src/app/admin/sources/_client/SourceLineAliasPanel.tsx`（新建）
+  - `tests/unit/api/sources-matrix.test.ts`（新建，15 测试）
+  - `docs/architecture.md`（新增 §5.13 M-SN-5 线路矩阵 schema）
+- **新增端点**：
+  - `GET /admin/sources/video-groups` — 分页视频分组列表（4 segment：grouped/dead/correction/orphan + keyword 搜索）
+  - `GET /admin/sources/video-groups/stats` — KPI 统计（total/active/dead/orphan）
+  - `GET /admin/sources/video-groups/:videoId/matrix` — 单视频线路×集数矩阵（含 source_line_aliases 别名合并）
+  - `GET /admin/source-line-aliases` — 全局别名列表
+  - `PUT /admin/source-line-aliases/:siteKey/:sourceName` — 别名 UPSERT
+- **新增 DB 表**：`source_line_aliases`（PK `(source_site_key, source_name)`，Migration 063，同步 architecture.md §5.13）
+- **前台实现**：KPI 4 卡 + Segment 4 tabs + 自定义可展开视频分组表格（线路×集数矩阵 grid）+ 全局别名面板（inline 编辑）
+- **质量门禁**：
+  - typecheck 全绿（全 workspaces）/ lint 全绿（warning：`<img>` 与 TabImages.tsx 同等，不阻塞）
+  - unit 3613/3613 全绿（净增 15：sources-matrix.test.ts）
+- **设计一致性**：
+  - 矩阵信号色：CSS 变量 `--state-success-bg/border/fg` 等，零硬编码
+  - 矩阵 grid：`100px repeat(8, 1fr) 80px`（对齐 reference.md §6.2）
+  - aggregateSignal 函数：all-ok→ok / any-ok-or-partial→partial / all-dead→dead / empty→pending（对齐 §6.2 pill 逻辑）
+- **不在范围**：
+  - `<img>` 优化为 next/image：admin 后台封面图 LCP 不在关键路径，视频库已有同等 warning，留 CHG-DESIGN-12 统一处理
+  - 矩阵行内"复制线路 / 重验全部 / 删除全失效"按钮实际 API 调用：UI 骨架已落地，端点复用现有 content.ts，优先级 P2 留 CHG-SN-5-12 工作台统一接入
+  - 别名列表仅展示现有已配置条目：新增场景（首次为某线路配置别名）需前端表单，视图层复杂度留后续 UX 卡
