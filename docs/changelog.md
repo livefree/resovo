@@ -6621,3 +6621,31 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 端点实施卡 -09/-10 必须严格按 ADR-105 §端点契约表落地，零设计自由度；audit log 写入位点表 actionType / targetId / before|afterJsonb 不得偏离（R-MID-1 教训）
   - migration 062 落地由 -10 卡承担（非本起草卡）；admin-moderation.types.ts 扩 3 actionType 同步 -10 commit
   - ADR-114-NEGATED 复合键约束 100% 维持；本 ADR 通过 Service 层前置冲突探测保持兼容，不修改 video_sources schema
+
+---
+
+## CHG-SN-5-09 — candidate-preview 端点实施
+- **任务 ID**：CHG-SN-5-09
+- **日期**：2026-05-12
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **文件变更**：
+  - `packages/types/src/video-merge.types.ts`（新建，CandidateGroup / VideoSummaryForMerge / ListCandidatesParams / ListCandidatesResult）
+  - `packages/types/src/index.ts`（修改，导出 video-merge.types）
+  - `apps/api/src/db/queries/video-merge-candidates.ts`（新建，3 原子查询函数）
+  - `apps/api/src/services/VideoMergesService.ts`（新建，ListCandidatesSchema + 评分算法 v1）
+  - `apps/api/src/routes/admin/video-merges.ts`（新建，GET /admin/video-merges/candidates）
+  - `apps/api/src/server.ts`（修改，注册 adminVideoMergesRoutes）
+  - `tests/unit/api/video-merge-candidates.test.ts`（新建，25 测试）
+  - `docs/task-queue.md` + `docs/tasks.md` + `docs/changelog.md`
+- **质量门禁**：
+  - typecheck 全绿（全 workspaces）/ lint 全绿
+  - unit 3562/3562 全绿（baseline 3532 + 净增 30 用例 [含 25 新 + 16 CHG-SN-5-07]）
+  - video-merge-candidates.test.ts 25/25（DB 查询参数 + 评分算法 + minScore 过滤 + 推荐 target + 分页 + zod schema）
+- **关键设计**：
+  - 候选组：`idx_videos_normalized_year_type` 部分索引覆盖 GROUP BY + HAVING COUNT > 1（migration 007）
+  - 评分 v1：source_overlap_ratio = shared_site_keys / union_site_keys（ADR-105 §4 基线）
+  - 两步查询：fetchRawCandidateGroups（分页取组）+ fetchVideoDetailsForCandidates（批量取 video+source 摘要）
+  - minScore 过滤在 Service 层（Application 层过滤是 v1 有意设计，≤100 候选可接受）
+  - admin only 鉴权（ADR-105 §5）
+- **解锁**：CHG-SN-5-10 merge + split + unmerge 端点 + migration 062

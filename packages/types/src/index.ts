@@ -14,5 +14,6 @@ export type * from './system.types'
 export type * from './external.types'
 
 export type * from './admin-moderation.types'
+export type * from './video-merge.types'
 
 export { DEFAULT_INGEST_POLICY } from './system.types'
