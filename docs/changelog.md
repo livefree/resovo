@@ -7159,3 +7159,49 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 主循环模型 claude-opus-4-7 偏离任务卡建议 sonnet（延续 opus 会话节省 spawn 成本 + 含 CHECKLIST-AUDIT 首次触发裁决路径决策性，opus 主循环可接受）
   - 本卡示范 "CHECKLIST-AUDIT 拦截 → 用户裁定 → 缩范围 + 转独立卡" 完整路径，未来类似 over-claim 场景可复用
   - Split 工作台用 select 而非 @dnd-kit 拖拽是 YAGNI 决策（M-SN-5 推荐 5 未明示拖拽需求；UX 升级留用户反馈后）
+
+---
+
+## CHG-SN-5-12-PATCH — STATE_CONFLICT 引导 / 视图单测 / 错误码差异化 / type 选择 / 推荐 label
+- **任务 ID**：CHG-SN-5-12-PATCH
+- **日期**：2026-05-13
+- **执行模型**：claude-opus-4-7（偏离建议 sonnet — 延续 opus 会话）
+- **子代理**：无（实施类，5 项均无新架构决策）
+- **来源**：用户独立评审 CHG-SN-5-12（评级 B+ / 合格但 1 项 P0 + 1 项 P1 + 3 项 P2）
+- **缺陷修复（5 项，PATCH 范围 ≤ 5 项软上限内）**：
+  - **P0 STATE_CONFLICT 引导逻辑修真**：`msg.includes('STATE_CONFLICT')` 改 `err instanceof ApiClientError && err.code === 'STATE_CONFLICT'`；root cause：err.message 是中文文案 "source 与 target 视频存在重复..." 不含 'STATE_CONFLICT' 字符串 → 原引导逻辑根本不触发；ADR-105 §决策要点 1 + R-105-1 修订核心 UX（"引导运营 /admin/sources 视图预 resolve"）从失效到生效
+  - **P1 视图单测补齐**：新建 `tests/unit/components/server-next/admin/merge/MergeClient.test.tsx`（9 测试，恢复既有视图卡范式 -07 16 / -11 29 / **-12 0 → 9**）：渲染基础 + tab 切换 + Loading/Empty/Error state + candidate 行展开 + 推荐 badge + handleMerge STATE_CONFLICT 引导（P0 验证）+ 撤销 toast action + split type select 11 选项（P2 验证）
+  - **P2 split error code 差异化**：新增 `describeError(err, context)` helper 按 ApiClientError.code 分支构造 description（STATE_CONFLICT / NOT_FOUND / VALIDATION_ERROR 三档），handleMerge + handleSplit catch 复用
+  - **P2 SplitSection type select UI**：state `titles: string[]` → `groupMetas: { title, type }[]`；每组追加 `<select>` 11 VideoType（movie/series/anime/variety/documentary/short/sports/music/news/kids/other）；split groups 构造时 `newVideoMeta.type` 来自 `groupMetas[i].type` 而非硬编码 'movie'
+  - **P2 recommendedTargetVideoId "推荐" badge**：CandidateExpand 行内显式添加 `<span>推荐</span>` badge（state-success-* token），保留 bg 颜色视觉提示
+- **ADR §验证段逐条勾对**（quality-gates §1 第 5 项强制）：
+  - ✅ `/admin/merge` 视图消费 4 端点（-12 主体已落地）
+  - ✅ DataTable 一体化 + ≥ 6 原语范式一致（-12 主体 9 原语已落地）
+  - ✅ 与既有视图卡（-01/-02/-03/-07/-11）范式一致 — **本卡修复测试覆盖维度**：视图单测 0 → 9
+- **文件范围**：
+  - `apps/server-next/src/app/admin/merge/_client/MergeClient.tsx`（P0 describeError helper + P2 type select + P2 推荐 badge + P2 split error code 差异化）
+  - `tests/unit/components/server-next/admin/merge/MergeClient.test.tsx`（新建，9 测试）
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`
+- **质量门禁**：
+  - typecheck 全绿（全 workspaces）
+  - lint 全绿（5 packages，缓存命中 4 + 仅本卡 1 包改动）
+  - verify:adr-contracts 全 PASS（endpoint-adr ✅ 144 路由对齐 / adr-d-numbers ✅ 10/10）
+  - 3636 → 3645 全绿（净增 9 测试）
+  - 零硬编码颜色（grep 命中 0）
+- **不在范围**：
+  - unmerge 独立入口 / audit timeline 完整视图：M-SN-6 CHG-SN-6-AUDIT-TIMELINE 卡
+  - e2e 测试：CHG-SN-5-13 milestone 阶段审计统一承担
+  - @dnd-kit 拖拽升级：用户反馈后决策
+- **关键发现**：
+  - **P0 STATE_CONFLICT 修复 = 评估机制有效性首次验证**：独立评审发现 "代码内逻辑 bug 但 CHECKLIST-AUDIT 未拦截"（脚本只覆盖协议合规层非内容正确性）→ 用户独立评审 + arch-reviewer + 单元测试三层互补
+  - **R-MID-1 教训第 7 次系统化扩展**：本卡视图单测 9 测试中 7 项含 mock toast.push + 验证 description / level / action 等内容显式断言（参 R-MID-1 模板从 audit payload 扩展到 toast notification payload）
+  - **测试范式回归**：CHG-SN-5-12 主体卡破坏视图单测范式（0 测试 vs -07 16 / -11 29），本 PATCH 卡补齐 9 测试恢复范式；CHG-SN-5-13 milestone 审计应将"视图卡单测覆盖率 ≥ N"列入硬指标
+  - **PATCH 范围 ≤ 5 项软上限验证（连续 3 次）**：CHG-SN-5-09-PATCH (1) / -10-PATCH (6 边界) / -11-PATCH-2 (6 边界) / -CHECKLIST-AUDIT-2 (4) / 本 -12-PATCH (5) — 100% 完成度趋势保持
+  - **DescribeError helper 沉淀**：跨 merge / split 复用 ApiClientError.code 分支模式，未来视图卡可复用为通用错误描述工具（建议沉淀到 `@/lib/error-helpers` 或 packages/admin-ui）
+- **后续触发**：
+  - **解锁 CHG-SN-5-13** M-SN-5 milestone 阶段审计（Opus arch-reviewer）— 5 视图 + 9 端点 + ADR-104/-105/-117 完成度复盘
+  - CHG-SN-5-12 评级 B+ → -12-PATCH 修后预期 A−
+- **注意事项**：
+  - 主循环模型 claude-opus-4-7 偏离任务卡建议 sonnet（延续 opus 会话节省 spawn 成本，5 项均实施类不涉决策性，可接受）
+  - 测试位置：`tests/unit/components/server-next/admin/merge/`（server-next alias 命中条件 `/tests/unit/components/server-next/`），vitest customResolver 上下文敏感解析
+  - vi.mock api-client 时 inline `MockApiClientError` class（vi.mock hoisted，不能引用文件外 class）

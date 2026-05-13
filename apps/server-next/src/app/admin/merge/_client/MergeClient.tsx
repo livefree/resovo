@@ -31,9 +31,50 @@ import {
   useToast,
   type TableColumn,
 } from '@resovo/admin-ui'
-import type { CandidateGroup, VideoSummaryForMerge, LineMatrixRow } from '@resovo/types'
+import type { CandidateGroup, VideoSummaryForMerge, LineMatrixRow, VideoType } from '@resovo/types'
 import { listCandidates, mergeVideos, unmergeVideos, splitVideo } from '@/lib/merge/api'
 import { getVideoMatrix } from '@/lib/sources/api'
+import { ApiClientError } from '@/lib/api-client'
+
+// ── 错误码差异化 description（ADR-105 §错误码 + CHG-SN-5-12-PATCH P0/P2-1）─────
+
+function describeError(err: unknown, context: 'merge' | 'split'): string {
+  if (err instanceof ApiClientError) {
+    if (err.code === 'STATE_CONFLICT') {
+      return context === 'merge'
+        ? `${err.message}（建议先到 /admin/sources 处理冲突）`
+        : `${err.message}（视频可能已被合并，请先 unmerge）`
+    }
+    if (err.code === 'NOT_FOUND') {
+      return context === 'merge'
+        ? `${err.message}（请刷新候选列表后重试）`
+        : `${err.message}（videoId 可能已删除）`
+    }
+    if (err.code === 'VALIDATION_ERROR') {
+      return context === 'merge'
+        ? `参数校验失败：${err.message}`
+        : `groups 校验失败：${err.message}`
+    }
+    return err.message
+  }
+  return err instanceof Error ? err.message : '未知错误'
+}
+
+// ── VideoType 枚举（ADR-105 §端点契约 SplitSchema newVideoMeta.type）──────────
+
+const VIDEO_TYPES: readonly { value: VideoType; label: string }[] = [
+  { value: 'movie',       label: '电影' },
+  { value: 'series',      label: '剧集' },
+  { value: 'anime',       label: '动漫' },
+  { value: 'variety',     label: '综艺' },
+  { value: 'documentary', label: '纪录片' },
+  { value: 'short',       label: '短片' },
+  { value: 'sports',      label: '体育' },
+  { value: 'music',       label: '音乐' },
+  { value: 'news',        label: '资讯' },
+  { value: 'kids',        label: '少儿' },
+  { value: 'other',       label: '其他' },
+]
 
 // ── 样式（CSS 变量零硬编码颜色）────────────────────────────────────
 
@@ -82,6 +123,19 @@ const SCORE_BADGE_STYLE: CSSProperties = {
 const SECONDARY_TEXT: CSSProperties = {
   fontSize: 'var(--font-size-sm)',
   color: 'var(--fg-muted)',
+}
+
+// CHG-SN-5-12-PATCH P2-2：推荐 target 显式 badge（替代仅 bg 颜色识别弱）
+const RECOMMENDED_BADGE_STYLE: CSSProperties = {
+  display: 'inline-block',
+  padding: '2px 6px',
+  marginLeft: '8px',
+  borderRadius: '4px',
+  fontSize: '11px',
+  fontWeight: 600,
+  background: 'var(--state-success-bg)',
+  color: 'var(--state-success-fg)',
+  border: '1px solid var(--state-success-border)',
 }
 
 // ── 主组件 ─────────────────────────────────────────────────────────
@@ -173,11 +227,11 @@ function CandidatesSection() {
         })
         load()
       } catch (err) {
-        const msg = err instanceof Error ? err.message : '未知错误'
+        // CHG-SN-5-12-PATCH P0：用 ApiClientError.code 而非 message 字符串匹配（err.message 是中文文案不含 STATE_CONFLICT）
         toast.push({
           level: 'danger',
           title: '合并失败',
-          description: msg.includes('STATE_CONFLICT') ? `${msg}（建议先到 /admin/sources 处理冲突）` : msg,
+          description: describeError(err, 'merge'),
         })
       }
     },
@@ -331,7 +385,12 @@ function CandidateExpand({ group, onMerge }: CandidateExpandProps) {
                   onChange={() => setTargetId(v.id)}
                 />
               </td>
-              <td style={{ padding: '6px 8px' }}>{v.title}</td>
+              <td style={{ padding: '6px 8px' }}>
+                {v.title}
+                {v.id === group.recommendedTargetVideoId && (
+                  <span style={RECOMMENDED_BADGE_STYLE} aria-label="推荐合并目标">推荐</span>
+                )}
+              </td>
               <td style={{ padding: '6px 8px' }}>{v.sourceCount}</td>
               <td style={{ padding: '6px 8px', color: 'var(--fg-muted)' }}>
                 {v.sourceSiteKeys.join(', ') || '—'}
@@ -362,7 +421,11 @@ function SplitSection() {
   const [error, setError] = useState<Error | null>(null)
   const [groupCount, setGroupCount] = useState(2)
   const [assignments, setAssignments] = useState<Record<string, number>>({})
-  const [titles, setTitles] = useState<string[]>(['分集 A', '分集 B'])
+  // CHG-SN-5-12-PATCH P2：每组独立 title + type（替代 type 硬编码 'movie'）
+  const [groupMetas, setGroupMetas] = useState<{ title: string; type: VideoType }[]>([
+    { title: '分集 A', type: 'movie' },
+    { title: '分集 B', type: 'movie' },
+  ])
   const toast = useToast()
 
   const loadMatrix = useCallback(() => {
@@ -386,11 +449,14 @@ function SplitSection() {
 
   const handleSplit = useCallback(async () => {
     if (!activeVideoId || !lines) return
-    // 按 assignments 构造 groups
-    const groups = Array.from({ length: groupCount }, (_, i) => ({
-      sourceIds: Object.entries(assignments).filter(([, g]) => g === i).map(([id]) => id),
-      newVideoMeta: { title: titles[i] ?? `分集 ${String.fromCharCode(65 + i)}`, type: 'movie' as const },
-    })).filter((g) => g.sourceIds.length > 0)
+    // 按 assignments 构造 groups（CHG-SN-5-12-PATCH P2：type 来自 groupMetas[i].type 而非硬编码）
+    const groups = Array.from({ length: groupCount }, (_, i) => {
+      const meta = groupMetas[i] ?? { title: `分集 ${String.fromCharCode(65 + i)}`, type: 'movie' as VideoType }
+      return {
+        sourceIds: Object.entries(assignments).filter(([, g]) => g === i).map(([id]) => id),
+        newVideoMeta: { title: meta.title, type: meta.type },
+      }
+    }).filter((g) => g.sourceIds.length > 0)
 
     if (groups.length < 2) {
       toast.push({ level: 'warn', title: '拆分必须 ≥ 2 组', description: '每组至少 1 个 source' })
@@ -425,13 +491,14 @@ function SplitSection() {
       setLines(null)
       setActiveVideoId(null)
     } catch (err) {
+      // CHG-SN-5-12-PATCH P0 + P2：按 ApiClientError.code 差异化（NOT_FOUND / STATE_CONFLICT / VALIDATION_ERROR）
       toast.push({
         level: 'danger',
         title: '拆分失败',
-        description: err instanceof Error ? err.message : '未知错误',
+        description: describeError(err, 'split'),
       })
     }
-  }, [activeVideoId, lines, groupCount, assignments, titles, toast])
+  }, [activeVideoId, lines, groupCount, assignments, groupMetas, toast])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -469,8 +536,8 @@ function SplitSection() {
               onChange={(e) => {
                 const n = Math.max(2, Math.min(20, parseInt(e.target.value, 10) || 2))
                 setGroupCount(n)
-                setTitles((prev) => Array.from({ length: n }, (_, i) =>
-                  prev[i] ?? `分集 ${String.fromCharCode(65 + i)}`,
+                setGroupMetas((prev) => Array.from({ length: n }, (_, i) =>
+                  prev[i] ?? { title: `分集 ${String.fromCharCode(65 + i)}`, type: 'movie' as VideoType },
                 ))
               }}
               style={{ width: '80px' }}
@@ -478,22 +545,50 @@ function SplitSection() {
             <span style={SECONDARY_TEXT}>每组 source 必须 ≥ 1 且全 source 必须有分配</span>
           </div>
 
+          {/* 每组 title + type 输入（CHG-SN-5-12-PATCH P2：type select 替代硬编码 movie）*/}
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${groupCount}, 1fr)`, gap: '8px' }}>
-            {Array.from({ length: groupCount }).map((_, i) => (
-              <AdminInput
-                key={i}
-                size="sm"
-                placeholder={`分集 ${String.fromCharCode(65 + i)} 标题`}
-                value={titles[i] ?? ''}
-                onChange={(e) => {
-                  setTitles((prev) => {
-                    const next = [...prev]
-                    next[i] = e.target.value
-                    return next
-                  })
-                }}
-              />
-            ))}
+            {Array.from({ length: groupCount }).map((_, i) => {
+              const meta = groupMetas[i] ?? { title: '', type: 'movie' as VideoType }
+              return (
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <AdminInput
+                    size="sm"
+                    placeholder={`分集 ${String.fromCharCode(65 + i)} 标题`}
+                    value={meta.title}
+                    onChange={(e) => {
+                      setGroupMetas((prev) => {
+                        const next = [...prev]
+                        next[i] = { ...meta, title: e.target.value }
+                        return next
+                      })
+                    }}
+                  />
+                  <select
+                    aria-label={`分集 ${String.fromCharCode(65 + i)} 类型`}
+                    value={meta.type}
+                    onChange={(e) => {
+                      setGroupMetas((prev) => {
+                        const next = [...prev]
+                        next[i] = { ...meta, type: e.target.value as VideoType }
+                        return next
+                      })
+                    }}
+                    style={{
+                      padding: '4px 6px',
+                      background: 'var(--bg-surface)',
+                      color: 'var(--fg-default)',
+                      border: '1px solid var(--border-default)',
+                      borderRadius: '4px',
+                      fontSize: 'var(--font-size-sm)',
+                    }}
+                  >
+                    {VIDEO_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )
+            })}
           </div>
 
           <table style={{ width: '100%', fontSize: 'var(--font-size-sm)' }}>
@@ -530,7 +625,7 @@ function SplitSection() {
                         }}
                       >
                         {Array.from({ length: groupCount }).map((_, i) => (
-                          <option key={i} value={i}>{titles[i] ?? `分集 ${String.fromCharCode(65 + i)}`}</option>
+                          <option key={i} value={i}>{groupMetas[i]?.title ?? `分集 ${String.fromCharCode(65 + i)}`}</option>
                         ))}
                       </select>
                     </td>

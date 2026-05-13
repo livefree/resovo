@@ -1,0 +1,252 @@
+/**
+ * MergeClient.test.tsx — /admin/merge 视图单元测试（CHG-SN-5-12-PATCH P1）
+ *
+ * 覆盖：
+ *   - 渲染基础 + 2 tab 切换
+ *   - candidates Loading / Empty / Error state
+ *   - candidates 列表渲染 + 行展开 + 推荐 badge（P2-2）
+ *   - handleMerge mock api + 成功 toast + STATE_CONFLICT 引导（P0 修复验证）
+ *   - handleMerge 成功 + 撤销 action 调 unmergeVideos
+ *   - split tab：videoId 输入 → 加载 sources 失败 toast
+ *   - split tab：type select 11 选项（P2-3）
+ *
+ * 路径策略：用相对路径 import（与 HomeOpsClient.test.tsx 同范式）避免 @ alias 在测试环境内的解析歧义。
+ */
+
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+
+// ── mock api（相对路径与 vi.mock target 一致）─────────────────────
+
+const listCandidatesMock = vi.fn()
+const mergeVideosMock = vi.fn()
+const unmergeVideosMock = vi.fn()
+const splitVideoMock = vi.fn()
+const getVideoMatrixMock = vi.fn()
+const toastPushMock = vi.fn()
+
+vi.mock('../../../../../../apps/server-next/src/lib/merge/api', () => ({
+  listCandidates: (...args: unknown[]) => listCandidatesMock(...args),
+  mergeVideos: (...args: unknown[]) => mergeVideosMock(...args),
+  unmergeVideos: (...args: unknown[]) => unmergeVideosMock(...args),
+  splitVideo: (...args: unknown[]) => splitVideoMock(...args),
+}))
+
+vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({
+  getVideoMatrix: (...args: unknown[]) => getVideoMatrixMock(...args),
+  listVideoGroups: vi.fn(),
+  getVideoGroupStats: vi.fn(),
+  listLineAliases: vi.fn(),
+  upsertLineAlias: vi.fn(),
+}))
+
+vi.mock('@resovo/admin-ui', async () => {
+  const actual = await vi.importActual<typeof import('@resovo/admin-ui')>('@resovo/admin-ui')
+  return {
+    ...actual,
+    useToast: () => ({
+      push: (input: unknown) => { toastPushMock(input); return 'test-toast-id' },
+      dismiss: vi.fn(),
+      dismissAll: vi.fn(),
+    }),
+  }
+})
+
+// mock api-client（避免 @/stores/authStore @-alias 解析；保留 ApiClientError class 供 instanceof）
+// vi.mock 是 hoisted，inline class 定义避免 ReferenceError
+vi.mock('../../../../../../apps/server-next/src/lib/api-client', () => {
+  class MockApiClientError extends Error {
+    public readonly code: string
+    public readonly status: number
+    constructor(code: string, message: string, status: number) {
+      super(message)
+      this.code = code
+      this.status = status
+      this.name = 'ApiClientError'
+    }
+  }
+  return {
+    ApiClientError: MockApiClientError,
+    apiClient: {
+      get: vi.fn(),
+      post: vi.fn(),
+      put: vi.fn(),
+      patch: vi.fn(),
+      delete: vi.fn(),
+    },
+  }
+})
+
+import { MergeClient } from '../../../../../../apps/server-next/src/app/admin/merge/_client/MergeClient'
+import { ApiClientError } from '../../../../../../apps/server-next/src/lib/api-client'
+
+// ── fixtures ──────────────────────────────────────────────────────
+
+const CANDIDATE_GROUP = {
+  groupKey: '復仇者聯盟|2019|movie',
+  titleNormalized: '復仇者聯盟',
+  year: 2019,
+  type: 'movie' as const,
+  score: 0.85,
+  recommendedTargetVideoId: 'vid-b',
+  videos: [
+    { id: 'vid-a', title: 'Avengers A', titleNormalized: '復仇者聯盟', year: 2019, type: 'movie' as const,
+      createdAt: '2025-01-01T00:00:00Z', sourceCount: 3, sourceSiteKeys: ['iqiyi', 'youku'] },
+    { id: 'vid-b', title: 'Avengers B', titleNormalized: '復仇者聯盟', year: 2019, type: 'movie' as const,
+      createdAt: '2025-02-01T00:00:00Z', sourceCount: 5, sourceSiteKeys: ['iqiyi', 'bilibili'] },
+  ],
+}
+
+const EMPTY_RES = { data: [], total: 0, page: 1, limit: 20 }
+const ONE_GROUP_RES = { data: [CANDIDATE_GROUP], total: 1, page: 1, limit: 20 }
+
+beforeEach(() => {
+  listCandidatesMock.mockReset()
+  mergeVideosMock.mockReset()
+  unmergeVideosMock.mockReset()
+  splitVideoMock.mockReset()
+  getVideoMatrixMock.mockReset()
+  toastPushMock.mockReset()
+})
+
+// ── 测试 ──────────────────────────────────────────────────────────
+
+describe('MergeClient', () => {
+  it('渲染基础：PageHeader + 2 tab', async () => {
+    listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
+    render(<MergeClient />)
+    expect(screen.getByText('合并 / 拆分工作台')).not.toBeNull()
+    expect(screen.getByRole('button', { name: '合并候选' })).not.toBeNull()
+    expect(screen.getByRole('button', { name: '拆分工作台' })).not.toBeNull()
+  })
+
+  it('Empty state：listCandidates 返回空 data', async () => {
+    listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
+    render(<MergeClient />)
+    await waitFor(() => {
+      expect(screen.getByText('无合并候选')).not.toBeNull()
+    })
+  })
+
+  it('Error state：listCandidates 抛错时显示 ErrorState', async () => {
+    listCandidatesMock.mockRejectedValueOnce(new Error('Network down'))
+    render(<MergeClient />)
+    await waitFor(() => {
+      expect(screen.getAllByText(/Network down|加载失败/).length).toBeGreaterThan(0)
+    })
+  })
+
+  it('tab 切换：candidates → split tab', async () => {
+    listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
+    render(<MergeClient />)
+    await waitFor(() => screen.getByText('无合并候选'))
+    fireEvent.click(screen.getByRole('button', { name: '拆分工作台' }))
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('输入要拆分的 videoId (uuid)')).not.toBeNull()
+    })
+  })
+
+  it('candidate 列表渲染 + 行展开 + 推荐 badge（P2-2 修复验证）', async () => {
+    listCandidatesMock.mockResolvedValueOnce(ONE_GROUP_RES)
+    render(<MergeClient />)
+    await waitFor(() => {
+      expect(screen.getByText('復仇者聯盟')).not.toBeNull()
+      expect(screen.getByText('85.0%')).not.toBeNull()
+    })
+    fireEvent.click(screen.getByText('復仇者聯盟'))
+    await waitFor(() => {
+      expect(screen.getByText('推荐')).not.toBeNull()
+      expect(screen.getByText('Avengers B')).not.toBeNull()
+    })
+  })
+
+  it('handleMerge STATE_CONFLICT 引导（P0 修复验证 — 用 err.code 而非 message 匹配）', async () => {
+    listCandidatesMock.mockResolvedValue(ONE_GROUP_RES)
+    const conflictErr = new ApiClientError('STATE_CONFLICT', 'source 与 target 视频存在重复 3 条', 409)
+    mergeVideosMock.mockRejectedValueOnce(conflictErr)
+
+    render(<MergeClient />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.click(screen.getByText('復仇者聯盟'))
+    await waitFor(() => screen.getByRole('button', { name: /执行合并/ }))
+    fireEvent.click(screen.getByRole('button', { name: /执行合并/ }))
+
+    await waitFor(() => {
+      expect(toastPushMock).toHaveBeenCalledWith(expect.objectContaining({
+        level: 'danger',
+        title: '合并失败',
+        description: expect.stringContaining('建议先到 /admin/sources'),
+      }))
+    })
+  })
+
+  it('handleMerge 成功 toast + 撤销 action 调 unmergeVideos', async () => {
+    listCandidatesMock.mockResolvedValue(ONE_GROUP_RES)
+    mergeVideosMock.mockResolvedValueOnce({
+      auditId: 'audit-123',
+      targetVideo: { id: 'vid-b', title: 'Avengers B', titleNormalized: '復仇者聯盟',
+        year: 2019, type: 'movie', createdAt: '2025-02-01T00:00:00Z',
+        sourceCount: 8, sourceSiteKeys: ['iqiyi', 'youku', 'bilibili'] },
+    })
+    unmergeVideosMock.mockResolvedValueOnce({ restoredVideoIds: ['vid-a'] })
+
+    render(<MergeClient />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.click(screen.getByText('復仇者聯盟'))
+    await waitFor(() => screen.getByRole('button', { name: /执行合并/ }))
+    fireEvent.click(screen.getByRole('button', { name: /执行合并/ }))
+
+    await waitFor(() => {
+      expect(toastPushMock).toHaveBeenCalledWith(expect.objectContaining({
+        level: 'success',
+        title: '合并成功',
+        action: expect.objectContaining({ label: '撤销' }),
+      }))
+    })
+    const lastCall = toastPushMock.mock.calls.at(-1)![0] as { action: { onClick: () => void } }
+    lastCall.action.onClick()
+    await waitFor(() => {
+      expect(unmergeVideosMock).toHaveBeenCalledWith('audit-123', '用户撤销')
+    })
+  })
+
+  it('split tab：videoId 输入 → 加载 sources 失败时 ErrorState 渲染', async () => {
+    listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
+    render(<MergeClient />)
+    await waitFor(() => screen.getByText('无合并候选'))
+    fireEvent.click(screen.getByRole('button', { name: '拆分工作台' }))
+
+    const input = await screen.findByPlaceholderText('输入要拆分的 videoId (uuid)')
+    fireEvent.change(input, { target: { value: '00000000-0000-0000-0000-000000000001' } })
+
+    getVideoMatrixMock.mockRejectedValueOnce(new Error('video 不存在'))
+    fireEvent.click(screen.getByRole('button', { name: '加载 sources' }))
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/video 不存在|加载失败/).length).toBeGreaterThan(0)
+    })
+  })
+
+  it('split tab：含 type select 11 选项（P2-3 修复验证 — 替代硬编码 movie）', async () => {
+    listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
+    getVideoMatrixMock.mockResolvedValueOnce([
+      { sourceSiteKey: 'iqiyi', sourceName: '线路1', displayName: null,
+        episodes: [{ episodeNumber: 1, sourceId: 's1', sourceUrl: 'https://x.com/1',
+          probeStatus: 'ok' as const, renderStatus: 'ok' as const, isActive: true }] },
+    ])
+    render(<MergeClient />)
+    await waitFor(() => screen.getByText('无合并候选'))
+    fireEvent.click(screen.getByRole('button', { name: '拆分工作台' }))
+
+    const input = await screen.findByPlaceholderText('输入要拆分的 videoId (uuid)')
+    fireEvent.change(input, { target: { value: '00000000-0000-0000-0000-000000000001' } })
+    fireEvent.click(screen.getByRole('button', { name: '加载 sources' }))
+
+    await waitFor(() => {
+      const typeSelects = screen.getAllByLabelText(/类型/)
+      expect(typeSelects.length).toBe(2)
+      const firstSelect = typeSelects[0] as HTMLSelectElement
+      expect(firstSelect.querySelectorAll('option').length).toBe(11)
+    })
+  })
+})
