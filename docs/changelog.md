@@ -6245,3 +6245,70 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 用户 sign-off 之前 SEQ-20260512-02 状态保持 🟡 规划中；首张代码改动卡 CHG-SN-5-01 不得在 sign-off 前启动
   - 如用户长时间未 sign-off 且无修订意见，主循环不得擅自推进；属 CLAUDE.md "Carefully consider reversibility" + "Authorization stands for the scope specified" 约束
   - 第 3 轮 Opus 评审若被触发但仍 CONDITIONAL → REJECT → BLOCKER §5.2（M-SN-5 整体规划返工）
+
+---
+
+## CHG-SN-5-01 · `/admin/submissions` 用户投稿视图（Phase A 1/14，6 原语首次业务消费验证 PASS）— 2026-05-12
+
+- **任务 ID**：CHG-SN-5-01（SEQ-20260512-02 Phase A 第 1 张视图卡）
+- **执行模型**：claude-opus-4-7（建议 sonnet；偏离原因：用户 sign-off "批准.可以自动启动 M-SN-5" 未要求会话切换，连续 opus 主循环 — 后续 -02/-03 视图卡按 SEQ 串行可正常切回 sonnet）
+- **子代理**：arch-reviewer (claude-opus-4-7) × 1 轮 → **PASS** 无条件
+- **变更内容**：
+  - 新建 `apps/server-next/src/lib/submissions/{types.ts,api.ts}` — 5 端点 fetch 客户端封装（GET list / approve / reject / batch-approve / batch-reject）
+  - 修改 `apps/server-next/src/app/admin/submissions/page.tsx` — PlaceholderPage → SubmissionsListClient（Suspense 包裹）
+  - 新建 `apps/server-next/src/app/admin/submissions/_client/SubmissionsListClient.tsx`（373 行）— 主组件：DataTable v2 一体化 + AdminSelect 双筛选 + 行操作 + 批量操作 + PageHeader
+  - 新建 `apps/server-next/src/app/admin/submissions/_client/SubmissionRejectPopover.tsx`（133 行）— Popover + AdminInput + AdminButton + 4 模板 chip 业务专属 helper
+  - 新建 `apps/server-next/src/app/admin/submissions/_client/columns.tsx`（152 行，arch-reviewer Y1 同卡修：拆出 buildSubmissionColumns 满足 ≤500 行硬约束）
+  - 新建 `tests/unit/server-next/submissions/submissions-api.test.ts`（12 用例 — 5 端点参数序列化 + 返回结构 + 空/含 reason 路径 + 批量计数）
+  - 新建 `tests/unit/components/server-next/admin/submissions/SubmissionRejectPopover.test.tsx`（10 用例 — trigger toggle + 模板填入 + 受控输入 + 确认回调 4 路径 + 关闭）
+- **文件范围**：
+  - `apps/server-next/src/lib/submissions/types.ts`（新建）
+  - `apps/server-next/src/lib/submissions/api.ts`（新建）
+  - `apps/server-next/src/app/admin/submissions/page.tsx`（修改）
+  - `apps/server-next/src/app/admin/submissions/_client/SubmissionsListClient.tsx`（新建）
+  - `apps/server-next/src/app/admin/submissions/_client/SubmissionRejectPopover.tsx`（新建）
+  - `apps/server-next/src/app/admin/submissions/_client/columns.tsx`（新建）
+  - `tests/unit/server-next/submissions/submissions-api.test.ts`（新建）
+  - `tests/unit/components/server-next/admin/submissions/SubmissionRejectPopover.test.tsx`（新建）
+  - `docs/task-queue.md` + `docs/tasks.md` + `docs/changelog.md`（状态推进）
+- **新增依赖**：无（DataTable / Popover / 6 原语全部消费 admin-ui 已下沉公开 API）
+- **数据库变更**：无（消费现成 admin API 端点 `apps/api/src/routes/admin/content.ts:183-256`）
+- **质量门禁**：
+  - typecheck 全绿（8 workspaces）
+  - lint 全绿（1 pre-existing useEffect deps warning 非本卡引入）
+  - unit 3456/3456 全绿（baseline 3434 + 22 新增）
+  - server-next workspace 独立 typecheck / lint 全绿
+- **arch-reviewer 评审产出**：
+  - **评级 PASS 无条件**
+  - 维度 1 · 6 原语 API 稳定性（最高优先级，M-SN-5.5 audit Y5 缓解关键验证点）：**100% 满足**
+    - PageHeader：消费 title/subtitle/actions/data-testid — 全官方
+    - AdminButton 9 处：消费 variant/size/loading/disabled/onClick/data-testid/children — 全官方
+    - AdminInput：消费 value/onChange/placeholder/maxLength/size/data-testid — 全官方
+    - AdminSelect 2 实例：消费 options/value/onChange/placeholder/size/searchable/disabled/data-testid/aria-label — 全官方
+    - Popover：消费 open/onOpenChange/placement/trigger/content — 全官方，**零 @experimental props 消费**（modal/closeOnTabOut/portalContainer/arrow 4 项全未传）
+    - AdminCard：未消费（注释已说明）
+  - 维度 2 · 零本地新建通用组件：PASS（SubmissionRejectPopover 是业务专属 helper，命名前缀 + 模板硬编码业务文本）
+  - 维度 3 · DataTable 一体化：PASS（toolbar.search slot + bulkActions 直传 + pagination 内置；grep ModernDataTable/PaginationV2/SelectionActionBar 零违规 import）
+  - 维度 4 · 后端分层：PASS（仅 apiClient 封装，零 DB 直访）
+  - 维度 5 · ADR-114-NEGATED 复合键：PASS（grep line_key 零命中）
+  - 维度 6 · 测试覆盖：PASS（22 用例覆盖 5 端点 + Popover 主路径 + AdminButton loading 防重 + AdminInput 受控 + 模板填入）
+  - 维度 7 · 代码质量：PASS（拆 columns.tsx 后主文件 373 行 / 零硬编码颜色 / 零 any / 零空 catch）
+- **5 黄线（全部转登记，不阻塞）**：
+  - Y1 文件 503 → 373 行（同卡修拆 columns.tsx 解决）
+  - Y2 主函数 ~229 行（建议后续 -02/-03 共性后下沉 useSubmissionsQuery hook）
+  - Y3 异步操作 catch 缺失（无 Toast 反馈）— CHG-SN-5-02 之前评估
+  - Y4 模板 chip inline button 自绘（AdminButton 最小 sm:24px 超过 chip 20px 设计）
+  - Y5 Popover ESC/outside click 关闭未在视图侧验证（admin-ui Popover 单测覆盖）
+- **关键发现**：
+  - **6 通用原语首次业务消费 API 稳定性 100% 满足** — M-SN-5.5 audit Y5 缓解关键验证点通过，无需触发 §5.2 BLOCKER 第 6 条 / sub-ADR 修订路径
+  - **零 @experimental props 消费** — Popover ADR-115 v1 minimum viable subset 在投稿审核场景够用（无 modal / focus-trap / 内部滚动容器需求）
+  - **business 命名空间 helper 模式落地** — SubmissionRejectPopover 在 `_client/` 业务命名空间组合 3 原语（Popover + AdminInput + AdminButton），不污染 admin-ui 桶导出，未来下沉触发点在 3 视图复现后（PRE-04 候选）
+  - **DataTable 一体化范式可作 M-SN-5 模板** — toolbar.search slot + bulkActions 直传 + pagination 内置三件套替代外置 PaginationV2/SelectionActionBar/Toolbar，arch-reviewer 已建议后续视图卡参考
+- **后续触发型 follow-up**（不阻塞）：
+  - PRE-04-CANDIDATES：3 视图复现后下沉候选 — (a) `ReasonInputPopover` 模板+文本+确认；(b) `useListWithFilters` hook；(c) `TwoLineTitleCell` cell helper
+  - DEBT-ADMIN-UI-TOAST-MISSING：admin-ui 缺 Toast 原语，导致异步操作失败提示缺失（CHG-SN-5-02 启动前评估）
+  - DEBT-ADMIN-UI-CHIP-MISSING：AdminButton 最小 sm:24px 超过 chip 20px 设计意图 — 触发条件：3+ 视图需要 chip
+- **注意事项**：
+  - CHG-SN-5-02 `/admin/subtitles` 启动前主循环须独立 grep `apps/api/src/routes/admin/content.ts:269-296` 三端点（GET / approve / reject）核验 + 在卡内登记证据（R1 普适化要求）
+  - CHG-SN-5-02 启动前评估 Y3 Toast / 操作错误反馈方案（避免静默失败致运营重复点击）
+  - 主循环模型偏离记录：建议 sonnet → 实际 opus（用户 sign-off 未要求切会话，未触发 BLOCKER §5.2 中途升级硬约束 — 因 sonnet 已经"启动后未发现复杂度高于预期"，主循环 opus 是用户上游选择延续）；CHG-SN-5-02 应正常切回 sonnet

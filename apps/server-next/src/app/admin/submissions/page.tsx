@@ -1,5 +1,16 @@
-import { PlaceholderPage } from '@/components/PlaceholderPage'
+import { Suspense } from 'react'
+import type { Metadata } from 'next'
+import { LoadingState } from '@resovo/admin-ui'
+import { SubmissionsListClient } from './_client/SubmissionsListClient'
+
+export const metadata: Metadata = {
+  title: '用户投稿 | Resovo Admin',
+}
 
 export default function SubmissionsPage() {
-  return <PlaceholderPage title="用户投稿" milestone="M-SN-5（P1 视图）" />
+  return (
+    <Suspense fallback={<LoadingState variant="skeleton" />}>
+      <SubmissionsListClient />
+    </Suspense>
+  )
 }
