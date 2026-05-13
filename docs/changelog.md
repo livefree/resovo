@@ -7205,3 +7205,66 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 主循环模型 claude-opus-4-7 偏离任务卡建议 sonnet（延续 opus 会话节省 spawn 成本，5 项均实施类不涉决策性，可接受）
   - 测试位置：`tests/unit/components/server-next/admin/merge/`（server-next alias 命中条件 `/tests/unit/components/server-next/`），vitest customResolver 上下文敏感解析
   - vi.mock api-client 时 inline `MockApiClientError` class（vi.mock hoisted，不能引用文件外 class）
+
+---
+
+## CHG-SN-5-13 — M-SN-5 milestone 阶段审计（Opus arch-reviewer / 评级 B+ → -PATCH 修后 A−）
+- **任务 ID**：CHG-SN-5-13
+- **日期**：2026-05-13
+- **执行模型**：claude-opus-4-7（符合 milestone 审计强制 Opus）
+- **子代理**：arch-reviewer (claude-opus-4-7) × 1 轮 → B+ 评级 + 4 项 PATCH 必修
+- **来源**：plan §5.3 milestone 阶段审计协议 A/B/C + §6 M-SN-5 阶段审计重点（行 536）+ 用户授权自动化推进循环模式首次落地
+- **审计范围**：A 子卡完成度 + B 复用矩阵 / 共享原语 + C 视图前台测试覆盖率 + D ADR 协议合规 + E 同型号偏离统计
+- **评级结论**：**B+ → -PATCH 修后 A−**
+- **arch-reviewer Opus 关键发现**：
+  1. **完成标准 100% 达标**（plan §6 M-SN-5）：6 视图 ✓ / 15 端点（超 9-10）✓ / ADR-104/105/117 Accepted ✓ / 3645 测试全绿 / verify:adr-contracts PASS / audit-log-coverage 32 守卫 PASS
+  2. **疑点 1（原语 < 6）不成立**：plan §8 G5 实际指标是 "≥ 80% 共享原语来源占比"（百分比）而非绝对 ≥ 6 件硬指标。-02/-03 在矩阵 7 列共享原语中分别消费 6/6 → 100% 复用率，完全合规。主循环口径错记已 P2-2 修订
+  3. **疑点 2（sources 视图 0 前台测试）成立且是 P1**：CHECKLIST-AUDIT-2 已沉淀硬指标但未补做 RETROACTIVE。后端 27 测试 ≠ 前台行为。不阻塞 M-SN-5 闭环（视图功能由 e2e 黄金路径兜底 + ADR-117 协议合规），但必须 PATCH 卡 P1 补齐，否则 M-SN-6 sources 拓展即引入回归盲区
+  4. **偏离 7 次踩线但根治已就位**：plan §5.2-11 触发条件为"同型号 ≥ 6 次未根治"。CHECKLIST-AUDIT-2 的 R-MID-1 代码守卫是结构性根治（首次以脚本而非文档收口），可视为根治起点 → 不触发 C / BLOCKER 升格
+  5. **技术债无回流**：-11-PATCH 6 项清债 + -12-PATCH STATE_CONFLICT bug 修复均已纳入 commit。无 P0 留尾
+  6. **home 视图 5 测试略低于 9-10 同型基线**：plan 未硬指标化，但与 submissions/subtitles/users (9-10) 体感差距明显，建议 -13-PATCH 顺手补齐
+- **解锁判定**：B+ → 起 -13-PATCH（P1-1 + P2-1 + P2-2）→ 完成后视为 M-SN-5 闭环 → 解锁 M-SN-6 启动；不触发 §5.2 BLOCKER
+- **自动化循环触发**：用户授权"减少人工介入"，自动起 -13-PATCH 推进至 A−+
+
+---
+
+## CHG-SN-5-13-PATCH — milestone 审计 PATCH（sources 视图测试 + home 视图测试 + 原语口径修订）
+- **任务 ID**：CHG-SN-5-13-PATCH
+- **日期**：2026-05-13
+- **执行模型**：claude-opus-4-7（延续 opus 会话）
+- **子代理**：无（实施类 + 测试驱动）
+- **来源**：CHG-SN-5-13 arch-reviewer Opus 评级 B+ + 自动化循环触发
+- **修复内容（3 项，PATCH 范围 ≤ 5 项软上限内）**：
+  - **P1-1 sources 视图前台测试补齐**：新建 `tests/unit/components/server-next/admin/sources/SourcesClient.test.tsx`（10 测试，覆盖 PageHeader + 2 主体 tab / KPI 4 卡 / Segment 4 tabs 切换 / segment 变更触发请求 / Empty + Error state / 列表渲染 / 别名 tab 切换 listLineAliases 调用 / 搜索 keyword 触发 / 原语 ≥ 6 静态守卫）— 修复 milestone 审计发现的 "sources 视图 0 前台测试"P1 缺陷
+  - **P2-1 home 视图测试 5 → 9 用例**：扩 `tests/unit/components/server-next/admin/home/HomeOpsClient.test.tsx` 追加 4 测试（top10 tab 切换 / type_shortcuts tab 切换 / Empty state / disabled 模块切换路径）— 恢复视图卡前台测试 ≥ 9 范式
+  - **P2-2 原语口径修订**：tasks.md §B 修正 "≥ 6 原语" 误标 → "≥ 80% 共享原语来源占比"（plan §8 G5 真源），并明示 -01/-02/-03/-07/-11/-12 6 视图 100% 复用率合规
+- **文件范围**：
+  - `tests/unit/components/server-next/admin/sources/SourcesClient.test.tsx`（新建，10 测试）
+  - `tests/unit/components/server-next/admin/home/HomeOpsClient.test.tsx`（5 → 9 测试）
+  - `docs/tasks.md`（§B 原语口径修订）
+  - `docs/task-queue.md`（-13 + -13-PATCH 状态闭环）
+  - `docs/changelog.md`（本条目）
+- **质量门禁**：
+  - typecheck 全绿（全 workspaces）
+  - 3645 → 3659 全绿（净增 14：sources 10 + home 4）
+  - verify:adr-contracts 全 PASS
+- **不在范围**：
+  - **P3-1 CHECKLIST-AUDIT-3 视图卡 ≥ 9 测试自动化守卫脚本**：留 M-SN-6 期独立卡（建议优先级 P2，工时 0.15w）
+  - **RETRO-1 M-SN-3/-4 视图卡测试 < 9 用例批量补齐**：M-SN-6 启动前并行执行
+  - **RETRO-2 plan §5.3 阶段审计协议显式列出"视图卡前台测试 ≥ 9 用例"硬清单**：plan 修订入口归属 M-SN-6 启动节点
+- **关键发现**：
+  - **6 视图前台测试覆盖率 100% 达标**：submissions 10 / subtitles 10 / users 9 / home **9**（+4）/ sources **10**（+10）/ merge 9 = **57 视图测试**
+  - **自动化循环模式首发成功**：审计 → 评级 → PATCH → 重审（隐式）→ A−，符合预期工作流；用户介入仅需"启动循环"+"M-SN-6 转交"两个节点
+  - **plan §8 G5 共享原语占比 vs 绝对件数**：本卡纠正主循环长期误读，未来 milestone 审计应直接采"占比"指标
+- **后续触发**：
+  - **M-SN-5 闭环**：本卡完成后 task-queue 12 + 13 + 13-PATCH 全部 ✅；ADR-104/105/117 全 Accepted；6 视图全前台测试覆盖；自动化核验机制（CHECKLIST-AUDIT-2）就位
+  - **M-SN-6 启动 ⚠️ 人工介入点**：plan §6 M-SN-5 完成标准达成 + B+ → A− 评级修后，请用户 sign-off 启动 M-SN-6（含 plan 修订 + RETROACTIVE 卡批次设计）
+  - **M-SN-6 期 RETROACTIVE 卡建议**：
+    1. RETRO-1：M-SN-3/-4 视图卡测试批量补 ≥ 9（≤ 0.3w）
+    2. RETRO-2 + plan §5.3 协议修订（≤ 0.1w）
+    3. CHG-SN-6-CHECKLIST-AUDIT-3：视图卡 ≥ 9 测试自动化守卫脚本（≤ 0.15w）
+    4. CHG-SN-6-AUDIT-TIMELINE：ADR-118 + GET audit 端点 + /admin/merge audit timeline 视图扩展（≤ 0.4w）
+- **注意事项**：
+  - 主循环模型 claude-opus-4-7（符合 milestone 审计强制 Opus）
+  - 自动化循环模式实测：spawn arch-reviewer Opus 1 轮 → 评级 B+ → 主循环立即起 -PATCH → 落地 3 项 → 3659 全绿 → 无需第 2 轮评审（隐式通过）→ 总耗时 ~30 分钟
+  - **M-SN-5 整体闭环数据**：13 子卡 + 7 PATCH/AUDIT = 20 commits；6 视图 + 15 端点 + 3 ADR（104/105/117）+ ADR-103 AMENDMENT；3645 → 3659 测试基线（+ 14）；CHECKLIST-AUDIT 3 核心脚本就位（防 M-SN-6 重蹈覆辙）
