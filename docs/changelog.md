@@ -6886,10 +6886,10 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **子代理**：无
 - **缺陷落地**：
   - **P0-2**：新建 `apps/api/src/services/SourcesMatrixService.ts`（Route → Service → queries 分层；包含 upsertLineAlias + fire-and-forget audit）
-  - **P0-3**：`SourceMatrixRow.tsx` 删 6 处 hex fallback（`--state-*-bg` token 已确认存在于 design-tokens dist）
+  - **P0-3 / D-117-6**：`SourceMatrixRow.tsx` 删 6 处 hex fallback（`--state-*-bg` token 已确认存在于 design-tokens dist）
   - **P0-4**：`source_line_alias.upsert` 写入 AdminAuditActionType + source_line_alias 写入 AdminAuditTargetKind（packages/types）；PUT 端点鉴权收紧为 admin only（D-117-1）
-  - **P1-5**：DataTable 新增 `renderExpandedRow` / `expandedKeys` props（packages/admin-ui）；SourcesClient.tsx 迁移为 DataTable 一体化（toolbar.search + bulkActions + pagination + row 展开 slot）
-  - **P1-6**：`getVideoGroupStats` orphan SQL 修正（`submitted_by IS NOT NULL` → `all_dead AND is_published = false`）；KPI label "孤岛 / 用户纠错" → "孤岛"
+  - **P1-5 / D-117-5**：DataTable 新增 `renderExpandedRow` / `expandedKeys` props（packages/admin-ui）；SourcesClient.tsx 迁移为 DataTable 一体化（toolbar.search + bulkActions + pagination + row 展开 slot）
+  - **P1-6 / D-117-4**：`getVideoGroupStats` orphan SQL 修正（`submitted_by IS NOT NULL` → `all_dead AND is_published = false`）；KPI label "孤岛 / 用户纠错" → "孤岛"
   - **P1-7**：`SourceMatrixRow.tsx` `<img>` → `next/image`（含 width/height/sizes 必填属性）
   - **P1-8**：`sources-matrix.ts` 路由 videoId path 参数 regex → `z.string().uuid()`
 - **测试**：audit-log-coverage guard 19 → 20；typecheck 全绿；3614 tests PASS（净增 1）
@@ -6969,3 +6969,73 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 主循环模型 claude-opus-4-7（偏离建议 sonnet）— 含 spawn Opus 子代理决策性，opus 主循环合理
   - 本卡示范"NEW-P0 流程违规 → 事后追溯 Opus 评审 → 内容合格则降级过程教训 + ADR patch + CHECKLIST-AUDIT 纳入"范式；与 ADR-117 RETROACTIVE 起草 + PATCH 卡清债同源
   - ADR-103 AMENDMENT 2026-05-13 是 DataTable v2 公开 API 契约首个事后追溯 patch，未来类似流程违规可复用此模式
+
+---
+
+## CHG-SN-5-CHECKLIST-AUDIT — ADR 协议合规自动核验机制（3 类核心脚本 + 4 类文档强制 + preflight 集成）
+- **任务 ID**：CHG-SN-5-CHECKLIST-AUDIT
+- **日期**：2026-05-13
+- **执行模型**：claude-opus-4-7（符合建议；机制设计性强制 Opus）
+- **子代理**：arch-reviewer (claude-opus-4-7) × 2 轮（第 1 轮 CONDITIONAL 2 红 + 3 黄 + 3 advisory → 主循环升核心 5 类 + 落地 7 修订 → 第 2 轮 PASS / 7/7 教训覆盖 + 3 非阻塞 follow-up 建议）
+- **来源**：M-SN-5 Phase B/C 累计 5 次同型号"ADR 明示但 commit 静默跳过"偏离（06-PATCH R-MID-1 / 09-PATCH perf baseline / 10-PATCH response 字段 / 11 整卡 ADR 缺失 / 11-PATCH NEW-P0 + D-117 65% 完成度）→ 已成结构性问题
+- **机制设计**：
+  - **核心 3 类脚本**（arch-reviewer 第 1 轮 R-CHECKLIST-1 修订：A 扩 response 字段对照 / R-CHECKLIST-2 修订：升核心 D 类纯文档 / Y-CHECKLIST-3 修订：升核心 E 类同卡落地）
+    - **A. `scripts/verify-endpoint-adr.mjs`**（FAIL fast 阻塞 CI）：扫 `apps/api/src/routes/admin/*.ts` 内 `fastify.{get,post,put,patch,delete}` 调用，提取 (method, path)；解析 `docs/decisions.md` ADR §端点契约 markdown table 比对；不在 ADR 表中 → 失败 + 提示起 ADR 卡；legacy 路由通过 `scripts/lib/admin-routes-allowlist.json` 显式豁免（150 条 M-SN-5 之前存量基线，**新增端点不进白名单**）
+    - **B. `scripts/verify-error-message.mjs`**（advisory，不阻塞）：扫 `apps/api/src/services + routes/admin` 内 `new AppError(...)` + `reply.code(...).send` message 字面量；比对 ADR §错误码 message 模板表；不在模板 → 警告（milestone 审计前应清零）
+    - **C. `scripts/verify-adr-d-numbers.mjs`**（advisory）：解析 ADR §决策要点 D-NNN-N 编号；**权威源 changelog.md 显式 D-N 闭环**（Y-CHECKLIST-1 修订）；ADR 列出但 changelog 未闭环 → 警告 + 产物 `docs/audit/adr-d-status.json` 给 milestone 审计消费
+  - **共享 `scripts/lib/adr-parser.mjs`**（A-CHECKLIST-2 修订）：解析 ADR 章节 / §端点契约表 / §错误码表 / §决策要点 D-N 编号，A/B/C 共用；含 `parseDeviationNumbers(adrBody, adrId)` 仅返回 own ADR 的 D-N（避免 ADR-103 body 引用 D-117-N 误归属）；`findSubsection` 用 `(?:\\s|$|（)` lookahead 替代 `\\b`（Chinese boundary 不匹配修复）
+  - **聚合命令 `npm run verify:adr-contracts`**（Y-CHECKLIST-2 修订）：串行执行 A + B + C（A 失败即阻塞，B/C advisory 不阻塞）；preflight 单步骤 `[5f/6]` 集成
+  - **4 类文档强制**（quality-gates.md / workflow-rules.md / CLAUDE.md 修订）：
+    - **§1 开发前五项**（新增第 5 项 "ADR §验证段逐条勾对清单"，R-CHECKLIST-2 修复 09-PATCH 类教训）
+    - **§2 开发后七问**（新增第 7 问 "audit 写入位点对应 service test payload 内容显式断言"，Y-CHECKLIST-3 修复 R-MID-1 教训第 5 次失守）
+    - **§3 偏离检测七项**（新增第 6 "ADR §验证段未勾项" + 第 7 "D-N 编号 changelog 闭环"）
+    - **§6 协议合规自动核验**（新增独立段，3 类脚本 + 4 类文档强制汇总，引用对应教训来源）
+    - **PATCH 卡范围软上限**（workflow-rules.md 新增段；> 5 项必拆 -A/-B 子卡，6 次 PATCH 完成度统计数据依据）
+    - **共享组件 API trailer**（workflow-rules.md 新增段；触发条件 + 约束 + 事后追溯路径参 11-PATCH-2 范式）
+    - **必跑命令 + 绝对禁止**（CLAUDE.md 修订；必跑命令加 verify:adr-contracts；绝对禁止扩 3 条：新增 admin route 未起 ADR / 共享组件 API 缺 Opus trailer / PATCH > 5 项未拆）
+  - **changelog D-N 编号回填合规**（arch-reviewer 第 2 轮建议 3）：CHG-SN-5-11-PATCH 当时使用 P-编号闭环（plan §4.5 范式合规），本卡引入 verify-adr-d-numbers 后明确 changelog 为权威源 → 历史条目补 D-117-4/-5/-6 D-N 编号是 schema 对齐而非事实改写（修复内容与 commit 一致）；属"协议引入后的对齐回填"非 ex-post facto 篡改
+- **文件范围**：
+  - `scripts/lib/adr-parser.mjs`（新建，共享 ADR markdown 解析）
+  - `scripts/verify-endpoint-adr.mjs`（新建，核心 A）
+  - `scripts/verify-error-message.mjs`（新建，核心 B）
+  - `scripts/verify-adr-d-numbers.mjs`（新建，核心 C）
+  - `scripts/lib/admin-routes-allowlist.json`（新建，150 条 legacy 路由白名单）
+  - `docs/audit/adr-d-status.json`（新建，verify-adr-d-numbers 产物）
+  - `package.json`（追加 4 scripts：verify:endpoint-adr / verify:error-message / verify:adr-d-numbers / verify:adr-contracts 聚合）
+  - `scripts/preflight.sh`（追加 [5f/6] ADR 协议合规自动核验步骤）
+  - `docs/rules/quality-gates.md`（§1 五项 + §2 七问 + §3 偏离 6/7 + 新增 §6 协议合规自动核验段）
+  - `docs/rules/workflow-rules.md`（PATCH 范围软上限 + 共享组件 API trailer 两段）
+  - `CLAUDE.md`（必跑命令加 verify:adr-contracts + 绝对禁止扩 3 条）
+  - `docs/changelog.md`（D-117-4/-5/-6 D-N 编号回填合规 + 本条目）
+- **手测结果**：
+  - verify:endpoint-adr → ✅ 144 admin 路由对齐（15 ADR 端点 + 144 白名单）
+  - verify:error-message → ⚠️ 30+ legacy admin 路由 message 不在 ADR 模板（advisory 警告，不阻塞 CI）
+  - verify:adr-d-numbers → ✅ 7 条 D-N 偏离编号全闭环（changelog 补齐后）
+  - npm run verify:adr-contracts 聚合命令 exit 0
+- **质量门禁**：
+  - typecheck + lint 全绿（仅 docs/scripts 改动）
+  - 3 新脚本本机执行成功
+  - preflight 集成验证（手动跑通新增 [5f/6] 步骤）
+- **arch-reviewer Opus 评审轨迹**：
+  - 第 1 轮 CONDITIONAL：2 红线 R-CHECKLIST-1（A 扩 response 字段）/ R-CHECKLIST-2（升核心 D 类） + 3 黄线 Y-CHECKLIST-1（changelog 权威源） / Y-CHECKLIST-2（preflight 聚合并行） / Y-CHECKLIST-3（升核心 E 类同卡落地） + 3 advisory（A-CHECKLIST-1 markdown 解析脆弱 / A-CHECKLIST-2 抽 adr-parser / A-CHECKLIST-3 不在范围补 last_reviewed + 跨 ADR code 冲突）
+  - 主循环升级 3+4 → 5+4 + 工时 0.25w → 0.4w
+  - 第 2 轮 PASS：7/7 教训覆盖 + 3 档分级合理 + 白名单 150 项非逃生口 + §6 衔接干净 + PATCH 软上限完整 + D-N 编号回填合规
+  - 3 非阻塞 follow-up 建议（已落地 1 项；2 项留作下卡）：
+    - ✅ verify-error-message.mjs:122 `exitCode = 0` 注释明示 advisory 模式（避免后续误读为死代码）
+    - ⏭ parseErrorMessages 跳过含 `:` message 规则放宽 + 记入 `audit/error-message-skipped.json`（下卡 CHG-SN-5-CHECKLIST-AUDIT-2 或并入 milestone 审计）
+    - ✅ changelog 显式注脚"D-N 编号回填合规性"（本条目已含）
+- **关键发现**：
+  - **5+4 双层设计 vs 3+4**：核心扩为 5 类（含纯文档 D 类验证段 + 同卡落地 E 类 audit payload）使覆盖度从 5/7 → 7/7
+  - **白名单 150 项非逃生口**：CLAUDE.md §绝对禁止第 19 条 + workflow-rules.md §PATCH 软上限 + verify-endpoint-adr "修复路径 1/2" 三重提示"新增端点不进白名单"
+  - **changelog 作为 D-N 权威源**：Y-CHECKLIST-1 修订路径选 changelog 而非 commit message（commit message 易缺漏；changelog 是任务卡完成时的结构化条目，单一真源）
+  - **共享组件 API trailer 当前文档化合理**：脚本化（staged-diff Props AST + commit trailer 解析）工程量等同独立小卡，留作 M-SN-6 补强
+  - **D-N 编号回填合规性**：协议引入后历史条目对齐回填是常见模式（vs ex-post facto 篡改），明示注脚闭环审计链
+- **后续触发**：
+  - **解锁 CHG-SN-5-12** `/admin/merge` 视图卡（M-SN-5 Phase C 推进；本卡完成后 -12 起卡前必跑 verify:adr-contracts 校验合规）
+  - **M-SN-6 / milestone 收尾**：消费 `docs/audit/adr-d-status.json` 给 -13 milestone 审计 + 起 150 legacy 路由 RETROACTIVE 补齐 / cleanup 卡
+  - **建议 1 已闭环**；建议 2 留下卡（parseErrorMessages 规则放宽）；建议 3 已闭环（本条目注脚）
+  - **同型号偏离自动化拦截首次落地**：CHG-SN-5-12 起将由 verify-endpoint-adr 自动核验，根治"零 ADR 落地"型 P0 协议违规
+- **注意事项**：
+  - 主循环模型 claude-opus-4-7（符合机制设计强制 Opus）
+  - 本卡示范"5 次教训沉淀 → 自动化机制设计 → arch-reviewer 评审 → 落地"完整路径
+  - 50 legacy 路由 message 不在 ADR 模板（verify-error-message advisory 警告）是 M-SN-5 前债务，由 M-SN-6 收尾卡承担 RETROACTIVE 补齐

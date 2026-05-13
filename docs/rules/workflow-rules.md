@@ -50,6 +50,35 @@ npm run preflight   # 环境 + 迁移 + 类型 + lint + 单测基线
 
 ---
 
+## PATCH 卡范围软上限（CHG-SN-5-CHECKLIST-AUDIT 新增）
+
+针对 M-SN-5 累计观察"PATCH 范围 ≥ 5 项 → 完成度反比"现象（06/09-PATCH 1 项 A / 10-PATCH 6 项 A− / 11-PATCH 17 项 B），落硬约束：
+
+- **PATCH 卡范围 > 5 项**：起卡前必须自动建议拆 `-A/-B/-C` 子卡，工时同步上调（≤ 5 项保证 100% 完成度）
+- **PATCH 卡范围 ≤ 5 项**：可单卡推进，预期 100% 完成度
+- 若强行单卡 > 5 项：commit message 必含 `Subagents: arch-reviewer (...)` trailer + changelog 显式标注 "范围超 5 项接受完成度风险"
+
+数据依据：CHG-SN-5-CHECKLIST-AUDIT 沉淀的 6 次 PATCH 完成度统计。
+
+---
+
+## 共享组件 API 改动 → Opus trailer 核验（CHG-SN-5-CHECKLIST-AUDIT 新增）
+
+CLAUDE.md §模型路由"强制升 Opus 子代理"第 1 项："定义新的共享组件 API 契约（Props 类型、事件签名、生命周期）"。
+
+**触发条件**：commit diff 含 `packages/admin-ui/src/**/types.ts` 或 `packages/admin-ui/src/**/*.tsx` 公开 Props 接口字段新增 / 修改。
+
+**约束**：
+- commit message 必含 `Subagents: arch-reviewer (claude-opus-...)` trailer
+- 缺 trailer → CI 警告（advisory）+ commit 应立即起追溯审计卡（参 CHG-SN-5-11-PATCH-2 DataTable API NEW-P0 处理范式）
+
+**事后追溯路径**（如已落地未走 Opus）：
+1. spawn arch-reviewer Opus 审 4 维度（命名 / 对称性 / 状态职责 / 扩展性）
+2. 内容合格 → 降级"过程教训"+ ADR-103 patch 追加 API 沉淀记录
+3. 内容破缺 → 升复合 P0 + 必 redesign API
+
+---
+
 ## Phase 基线测试条款（每次重写启动必走）
 
 凡进入 Phase 0 类型的「重写启动」里程碑，BASELINE 类任务必须遵守以下五条协议，否则 PHASE COMPLETE 通知不得发出：

@@ -45,6 +45,12 @@ npm run verify:token-references
 echo "[5e/6] 浮层透明遮罩守卫（SEQ-20260501-01 / CHG-DESIGN-17）"
 npm run verify:no-bare-backdrop
 
+echo "[5f/6] ADR 协议合规自动核验（CHG-SN-5-CHECKLIST-AUDIT）"
+echo "  - verify:endpoint-adr   — 新增端点 → ADR §端点契约存在性"
+echo "  - verify:error-message  — ADR §错误码 message 模板对齐 (advisory)"
+echo "  - verify:adr-d-numbers  — ADR D-N 偏离清单完成度 (advisory)"
+npm run verify:adr-contracts
+
 echo "[6/6] 单元测试"
 npm run test:run
 

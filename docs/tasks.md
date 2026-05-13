@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 当前无进行中任务；CHG-SN-5-11-PATCH-2 已闭环（2026-05-13，NEW-P0 追溯 + 6 项 D-117 全修 / ADR-103 AMENDMENT 2026-05-13 / Service 单测 + audit payload 内容断言 R-MID-1 教训系统化 / 3626 PASS）；下一卡 CHG-SN-5-CHECKLIST-AUDIT（机制设计）或 CHG-SN-5-12 /admin/merge -->
+<!-- 当前无进行中任务；CHG-SN-5-CHECKLIST-AUDIT 已闭环（2026-05-13，3 核心脚本 + 4 文档强制 + 7/7 教训覆盖 / 2 轮 arch-reviewer Opus PASS / preflight 集成 + CLAUDE.md 必跑命令 + 绝对禁止扩 3 条）；下一卡 CHG-SN-5-12 /admin/merge 视图（建议享受新自动核验机制） -->

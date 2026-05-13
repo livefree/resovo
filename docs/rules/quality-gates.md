@@ -9,7 +9,7 @@
 
 ---
 
-## 1. 开发前四项输出（强制）
+## 1. 开发前五项输出（强制 — CHG-SN-5-CHECKLIST-AUDIT 修订）
 
 在进行任何代码修改前，必须先输出：
 
@@ -17,12 +17,15 @@
 2. 根因判断
 3. 最小改动方案（在满足价值排序 1–4 的前提下）
 4. 涉及文件
+5. **若任务卡范围含 ADR 实施 / PATCH 修复 → ADR §验证段逐条勾对清单**（贴出 ADR §验证段原文，每条标 ✅/❌ 状态）
 
-未完成上述四项，不允许进行任何代码修改。
+未完成上述五项，不允许进行任何代码修改。
+
+> 第 5 项修复 CHG-SN-5-09 perf baseline 类"验证段判据被跳过"教训（R-CHECKLIST-2）。验证段语义自由度高难以自动化，依赖文档强制 + AI-CHECK 人工核验。
 
 ---
 
-## 2. 开发后六问自检
+## 2. 开发后七问自检（CHG-SN-5-CHECKLIST-AUDIT 修订）
 
 每次代码修改完成后，必须逐项回答（是/否 + 简要说明）：
 
@@ -32,10 +35,11 @@
 4. 是否破坏现有分层（Route/Service/DB queries 越层调用）或复用结构？
 5. 是否存在需拆分的函数（多逻辑阶段 / 3 层嵌套 / 超 80 行非声明性结构）或需拆分的文件（多主要概念 / 超 400 行且无法一句话描述唯一职责）？
 6. 是否引入潜在技术债？
+7. **若任务含 audit log 写入位点（`auditSvc.write(...)`）→ 对应 service test 是否有 `expect(...write).toHaveBeenCalledWith(expect.objectContaining({ actionType, targetKind, targetId, beforeJsonb, afterJsonb }))` 等 payload 内容显式断言**？（参 `tests/unit/api/sources-matrix-service.test.ts` 模板；R-MID-1 教训第 5 次系统化）
 
 ---
 
-## 3. 偏离检测
+## 3. 偏离检测（CHG-SN-5-CHECKLIST-AUDIT 修订扩 6/7）
 
 每次任务结束后，逐项判断：
 
@@ -44,6 +48,8 @@
 3. 状态或数据流是否开始不清晰（多来源、重复）
 4. 组件职责是否膨胀（展示 + 逻辑 + 请求混合）
 5. 修改同一功能时是否持续触及无关代码
+6. **ADR §验证段是否有未勾项**？（R-CHECKLIST-2 修订；若任务卡含 ADR 实施则必检）
+7. **ADR §决策要点 D-NNN-N 偏离编号是否在 changelog 显式闭环**？（参 ADR-117 D-117-1..10 模式；npm run verify:adr-d-numbers 核验）
 
 命中任意 1 条，必须追加：
 - 当前属于"结构开始劣化"信号
@@ -112,3 +118,30 @@
 2. 超过 500 行，且不属于**纯声明性文件**（类型定义文件、静态映射数据文件）
 
 **400 行触发门禁**：向已超过 400 行的文件继续写入前，必须先声明：「本文件的唯一职责是 ___」。能完成且职责单一 → 可继续；无法用一句话表达 → 必须立即拆分。
+
+---
+
+## 6. 协议合规自动核验（CHG-SN-5-CHECKLIST-AUDIT 新增）
+
+针对 M-SN-5 累计 5 次同型号"ADR 明示但 commit 静默跳过"偏离（06-PATCH R-MID-1 / 09-PATCH perf baseline / 10-PATCH response 字段 / 11 整卡 ADR 缺失 / 11-PATCH NEW-P0），引入 3 类自动化脚本 + 4 类文档强制规则。
+
+### 3 类核心脚本（preflight 集成，npm run verify:adr-contracts 聚合）
+
+1. **`npm run verify:endpoint-adr`**（FAIL fast 阻塞 CI）：扫 `apps/api/src/routes/admin/*.ts` 内 `fastify.{get,post,put,patch,delete}` 调用，提取 (method, path)，比对 `docs/decisions.md` 各 ADR §端点契约 markdown table；不在 ADR 表中的 admin 路由 → 失败 + 提示起 ADR 卡（参 ADR-104/-105/-117 模式）；legacy 路由通过 `scripts/lib/admin-routes-allowlist.json` 显式豁免
+
+2. **`npm run verify:error-message`**（advisory，不阻塞）：扫 `apps/api/src/services + routes/admin` 内 `new AppError(...)` + `reply.code().send({error:{...message:...}})` 抛出 message 字面量；比对 ADR §错误码 message 模板表；不在模板中 → 警告（milestone 审计前应清零）
+
+3. **`npm run verify:adr-d-numbers`**（advisory）：解析 ADR §决策要点 D-NNN-N 编号，**权威源 changelog.md 显式 D-N 闭环**；ADR 列出但 changelog 未闭环的 D 编号 → 警告 + 产物 `docs/audit/adr-d-status.json` 给 milestone 审计消费
+
+### 4 类文档强制规则（修订 §1/§2/§3 已落地）
+
+4. **§1 第 5 项** "ADR §验证段逐条勾对清单"（R-CHECKLIST-2 修复 09-PATCH 类教训）
+5. **§2 第 7 问** "audit 写入位点对应 service test payload 内容显式断言"（修复 R-MID-1 教训第 5 次失守）
+6. **§3 第 6 项** "ADR §验证段未勾项"+ **第 7 项** "D-N 编号 changelog 闭环"
+7. **共享组件 API 改动 Opus trailer**（详见 `docs/rules/workflow-rules.md`）+ **PATCH 卡范围软上限 ≤ 5 项**（详见 `docs/rules/workflow-rules.md`）
+
+### 不在范围（独立卡）
+
+- 跨应用层同值 type alias 重复检测（CHG-SN-5-VIDEOTYPE-DRY-CLEANUP）
+- ESLint plugin 落地（与 no-hardcoded-color 同类，独立 R&D）
+- ADR message 模板长期迁移结构化 YAML/JSON（A-CHECKLIST-1，当前 markdown 容忍）
