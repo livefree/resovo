@@ -1,9 +1,9 @@
 # Resovo（流光） — 任务看板
 
-> last_reviewed: 2026-05-12
+> last_reviewed: 2026-05-13
 
 ---
 
 ## 进行中任务
 
-<!-- 当前无进行中任务；CHG-SN-5-11 已闭环（2026-05-12，Migration 063 + 5 端点 + 可展开矩阵表 + 全局别名面板 / 3613 PASS）；下一卡 CHG-SN-5-12 /admin/merge 合并工作台 -->
+<!-- 当前无进行中任务；CHG-SN-5-11-ADR 已闭环（2026-05-13，ADR-117 RETROACTIVE 追溯起草 / 2 轮 Opus 评审 / 0 红线 + 4 黄 + 2 advisory 全闭环 / Accepted）；下一卡 CHG-SN-5-11-PATCH 架构清债 6 项（解锁条件已满足） -->

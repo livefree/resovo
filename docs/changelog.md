@@ -6827,3 +6827,54 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - `<img>` 优化为 next/image：admin 后台封面图 LCP 不在关键路径，视频库已有同等 warning，留 CHG-DESIGN-12 统一处理
   - 矩阵行内"复制线路 / 重验全部 / 删除全失效"按钮实际 API 调用：UI 骨架已落地，端点复用现有 content.ts，优先级 P2 留 CHG-SN-5-12 工作台统一接入
   - 别名列表仅展示现有已配置条目：新增场景（首次为某线路配置别名）需前端表单，视图层复杂度留后续 UX 卡
+
+---
+
+## CHG-SN-5-11-ADR — ADR-117 RETROACTIVE 追溯起草（sources-matrix / source-line-aliases admin API 协议）
+- **任务 ID**：CHG-SN-5-11-ADR
+- **日期**：2026-05-13
+- **执行模型**：claude-opus-4-7（符合建议；ADR 起草强制 Opus，CLAUDE.md §模型路由）
+- **子代理**：arch-reviewer (claude-opus-4-7) × 2 轮
+- **来源**：用户独立评审 CHG-SN-5-11（评级 C / 不合格）— plan §4.5 R7 MUST-8 ADR-端点先后协议硬约束违反（CHG-SN-5-11 commit `e6434abc` 落地 5 新端点 + Migration 063 但跳过 ADR 起草环节）
+- **缺陷描述**：
+  - **plan §4.5 R7 MUST-8 违反**：5 新增 admin 端点（GET video-groups / video-groups/stats / video-groups/:id/matrix / source-line-aliases / PUT source-line-aliases）未先起独立 ADR + Opus PASS
+  - precedent：CHG-SN-5-04 起 ADR-104（home_modules） → 才起 -05/-06 端点实施；CHG-SN-5-08 起 ADR-105（merge） → 才起 -09/-10 端点实施；本卡完全跳过此环节
+  - 连续第 4 次"ADR 明示但 commit 静默跳过"型偏离（06-PATCH R-MID-1 / 09-PATCH perf baseline / 10-PATCH response 字段 / 11 整卡 ADR 缺失），但本次最严重：ADR 不存在
+- **修复内容**：
+  - 落 `docs/decisions.md` 新建 ADR-117 章节（9 节标准结构 ~328 行，对齐 ADR-104/-105 范式）：
+    1. **背景**：M-SN-5 §6 推荐 4 + ADR-114-NEGATED 复合键约束 + sources / aliases 运营需求
+    2. **决策要点 11 项**：5 端点分级鉴权（4 读 moderator+admin / PUT admin only）/ Service 层强制 / ApiResponse 信封 / 错误码零新增 / audit 扩 1 actionType + 1 targetKind / Migration 063 schema 锁定 / segment 4 语义统一 / DataTable 一体化 / 硬编码颜色红线 / `<img>` → `next/image` / 缓存协议
+    3. **端点契约表**：5 行（method / path / Request / Response / 鉴权 / 错误码）
+    4. **zod request schema**：4 个 schema 全部 `.strict()`（吸取 ADR-104 Y-MID-1 教训）
+    5. **Migration 063 schema 追溯锁定**（与 commit SQL 100% 一致）
+    6. **audit log 协议**：扩 `source_line_alias.upsert` actionType + `source_line_alias` targetKind；fire-and-forget 模式 + 单 SQL implicit commit 边界说明（A-117-1）
+    7. **错误码 + message 模板**：复用 ADR-110 14 码零新增；5 场景模板
+    8. **备选方案 A-D**：Service 层 vs Route 直连 / 单表 vs 拆表别名 / PUT vs POST / DataTable 一体化 vs handrolled
+    9. **后果**：4 风险（R-ADR-117-1..4）+ 验证段（含 -11-PATCH 落地判据）+ 关联（ADR-103/-104/-105/-110/-114-NEGATED + plan §4.5）
+  - **D-117-1..10 偏离清单**：10 项当前 commit 与 ADR 协议偏离显式标注（PUT 鉴权 / Service 层 / audit / segment 语义 / DataTable / 硬编码色 / 类型迁移 / zod uuid / matrix 404 / `<img>` → `next/image`），由 -11-PATCH 卡逐条修复
+  - 修订 `docs/server_next_plan_20260427.md` §9 ADR 索引追加 ADR-117 行（状态 Accepted + RETROACTIVE 注明）
+  - 修订 `docs/task-queue.md` 11-ADR 状态闭环 + 11-P 解锁条件标注满足
+- **文件范围**：
+  - `docs/decisions.md`（新增 ADR-117 ~328 行）
+  - `docs/server_next_plan_20260427.md` §9 ADR 索引行 788+
+  - `docs/task-queue.md`（11-ADR 闭环 + 11-P 解锁）
+  - `docs/tasks.md`（清空）
+  - `docs/changelog.md`（本条目）
+- **arch-reviewer Opus 评审轨迹**：
+  - **第 1 轮 CONDITIONAL**：0 红线 + 4 黄线（Y-117-1 `<img>` 偏离未独立锚点 / Y-117-2 决策要点 5 audit targetKind 措辞带问号过程性词 / Y-117-3 自定义 `SignalStatus` 与既有 `DualSignalState` 同值重复 / Y-117-4 §关联 ADR 缺 ADR-103）+ 2 advisory（A-117-1 单 SQL implicit commit 与 ADR-105 显式事务范式边界 / A-117-2 migration ADR 引用追溯说明）
+  - **主循环修订**：Y-117-1 追加决策要点 10 独立编号 D-117-10 `<img>` → `next/image`；Y-117-2 决策要点 5 改终态断言（增 1 项 actionType + 1 项 targetKind）；Y-117-3 删 `SignalStatus`，4 处类型字段（VideoGroupRow / EpisodeCell × 2）改用既有 `DualSignalState`；Y-117-4 §关联首位补 ADR-103；A-117-1 §audit log 协议追加单 SQL autocommit 边界说明；A-117-2 §关联代码追加 migration vs 新建文件 ADR 引用追溯约束
+  - **第 2 轮 PASS**：6 项修订全部到位（4 处类型替换全命中 / 措辞完全终态化 / D-117-10 独立成项 / ADR-103 插入位置正确 / implicit commit 边界与 ADR-105 互不矛盾 / migration 引用约束清晰）；零新破缺；推荐直接晋升 Accepted 无需第 3 轮
+- **质量门禁**：typecheck + lint 维持基线（仅 docs 改动，零代码）
+- **关键发现**：
+  - **追溯起草模式**：本 ADR 是仓库内首个 RETROACTIVE 类 ADR（先 commit 后追溯起草），开创了"违反 §4.5 R7 MUST-8 → 评级 C → 起 -ADR 追溯卡 + -PATCH 清债卡"两段式修复路径。CHG-SN-5-CHECKLIST-AUDIT 卡将设计自动化机制根治此类偏离
+  - **D 编号偏离清单设计**：10 项 D-117-N 编号偏离在 ADR §决策要点中显式标注，与独立评审报告 7 项 P0/P1 完整映射 + 追加 3 项（D-117-7 类型迁移 / D-117-9 matrix 404 / D-117-10 `<img>`），-11-PATCH 卡按清单逐条勾对实施
+  - **DualSignalState 复用决策**：Y-117-3 揭示前端类型常 4-shape 与既有共享层重名同值的隐患，提示 CHG-SN-5-CHECKLIST-AUDIT 应纳入"跨应用层 type alias 重复定义"自动检测
+  - **2 轮 PASS 效率**：参 ADR-104 = 2 轮 / ADR-105 = 3 轮，本 ADR 修订到位率高（4 黄全单点修订无连锁影响）+ advisory 与黄线一并处理 = 1 轮 CONDITIONAL → 1 轮 PASS 闭环
+- **后续触发**：
+  - **解锁 CHG-SN-5-11-PATCH** 架构清债 6 项 + D-117-1..10 偏离修复（sonnet，0.3w）
+  - **平行可起 CHG-SN-5-CHECKLIST-AUDIT** ADR 存在性 + Response/Error/Audit 3 类 checklist 自动化核验机制设计（opus，0.25w）
+  - CHG-SN-5-12 `/admin/merge` 视图卡依赖 -11-PATCH 完成
+- **注意事项**：
+  - ADR 编号 ADR-117（ADR-106 已被 M-SN-4 admin-ui 下沉清单占用；ADR-115 / ADR-116 已存在；ADR-117 = 当前最高 ADR-116 后顺位无冲突）
+  - migration 063 一旦应用不得修改 ADR 引用行（保留 `ADR-114-NEGATED`）；-11-PATCH 新建 / 改动文件头部统一引用 `ADR-117 + ADR-114-NEGATED` 双 ADR（A-117-2 约束）
+  - 本卡示范"ADR 协议追溯 + PATCH 代码清债"两段式修复路径，与 06-PATCH/09-PATCH/10-PATCH 三连 PATCH 模式同源升级

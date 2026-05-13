@@ -5653,3 +5653,336 @@ AdminAuditTargetKind 已含 'video'（admin-moderation.types.ts:127 既有），
   - PRE-MERGE-AUDIT-SHARD（snapshot_jsonb 分表）：R-ADR-105-1 极端场景命中
   - PRE-MERGE-TTL（撤销 TTL 约束）：R-ADR-105-2 业务案例命中
   - ADR-105a fuzzy match（pg_trgm 引入）：R-ADR-105-3 fuzzy 需求命中
+
+---
+
+## ADR-117：sources-matrix / source-line-aliases admin API 协议（CHG-SN-5-11，**RETROACTIVE 追溯起草**）
+
+- **日期**：2026-05-12
+- **状态**：**Accepted**（arch-reviewer Opus × 2 轮：第 1 轮 CONDITIONAL 4 黄 Y-117-1..4 + 2 advisory A-117-1/-2 全部修订 → 第 2 轮 PASS 无残留）
+- **决策者**：主循环 claude-opus-4-7 / arch-reviewer (claude-opus-4-7) × 2 轮
+- **关联**：ADR-104（home_modules 协议同模式，端点契约 + audit 扩枚举）/ ADR-105（merge 协议同模式，audit 双层时序）/ ADR-110（ApiResponse 信封 + ErrorCode 真源）/ ADR-114-NEGATED（video_sources `(source_site_key, source_name)` 复合键约束，跨站不合并）/ CHG-SN-4-05（AuditLogService fire-and-forget）/ plan §4.5（ADR-端点先后协议）
+- **对应交付**：SEQ-20260512-02 Phase C（CHG-SN-5-08 ADR-105 → -09/-10 端点 → **本 ADR-117 追溯** → CHG-SN-5-11-PATCH 架构清债 → CHG-SN-5-12 `/admin/merge` 视图）
+- **触发**：CHG-SN-5-11 commit `e6434abc` 落地 5 端点 + Migration 063 但**跳过 §4.5 R7 MUST-8 ADR 起草环节**（独立评审评级 C / 不合格）→ 本 ADR 追溯合规
+
+### 背景
+
+`/admin/sources` 视图（plan §6 M-SN-5 推荐 4 行 526）承载运营对**线路矩阵 + 视频维度分组 + 全局别名表**三大块的管理诉求。ADR-114-NEGATED 决议保持 `video_sources (source_site_key, source_name)` 复合键 + 跨站不合并，意味着同一作品在不同站点的播放线路在 DB 层是 N 行 video_sources 记录，运营在矩阵视图中按 video × line（线路）× episode（集数）三维查看，并按 `(source_site_key, source_name)` 复合键维护可读别名。
+
+**当前缺失（CHG-SN-5-11 之前）**：
+- 视频分组列表端点（4 segment：grouped / dead / correction / orphan + keyword 搜索 + 聚合信号状态）
+- 视频分组 KPI 统计端点（total / active / dead / orphan 4 指标）
+- 单视频线路×集数矩阵端点（含别名合并）
+- 全局别名表 CRUD 端点（`source_line_aliases` 复合 PK 表）
+
+CHG-SN-5-11 commit `e6434abc`（执行模型 claude-sonnet-4-6）已落地：
+- `apps/api/src/db/migrations/063_source_line_aliases.sql`（复合 PK + FK SET NULL + 注释 + 索引 + 幂等）
+- `apps/api/src/db/queries/sources-matrix.ts`（5 查询 + `aggregateSignal` 业务逻辑，348 行）
+- `apps/api/src/routes/admin/sources-matrix.ts`（5 端点，moderator+admin 鉴权，110 行）
+- `apps/server-next/src/app/admin/sources/_client/{SourcesClient,SourceMatrixRow,SourceLineAliasPanel}.tsx`（前端视图）
+- `tests/unit/api/sources-matrix.test.ts`（15 单测全绿）
+- `docs/architecture.md` §5.13（schema 同步）
+
+**plan §4.5 ADR-端点先后协议硬约束**违反：5 个新增端点未先起独立 ADR + Opus PASS。本 ADR 追溯整理协议，并对 CHG-SN-5-11 已存在的偏离（缺 Service 层 / 缺 audit log / 硬编码颜色 / segment 语义不一致 / 未消费 DataTable 一体化 / `<img>` / videoId regex）逐项标注，由 **CHG-SN-5-11-PATCH** 卡承担代码改造。
+
+### 决策要点
+
+1. **5 端点分级鉴权**：4 个读端点（list / stats / matrix / aliases list）`requireRole(['moderator', 'admin'])`（与既有 content / videos / moderation 视图读路由一致）；**PUT 写端点 source-line-aliases upsert 收紧为 `admin only`**（与 home-modules / video-merges 写端点一致，全局别名修改是运营级写，moderator 不放权）。
+
+   **当前实施偏离（D-117-1）**：CHG-SN-5-11 commit 中 PUT 端点亦用 `moderator+admin`；由 -11-PATCH 改为 admin only。
+
+2. **Service 层强制（CLAUDE.md 后端分层红线）**：所有端点必须经 `SourcesMatrixService.ts` 而非 Route 直接调 `db/queries/sources-matrix.ts`；业务逻辑 `aggregateSignal` 三色规则 + KPI 拼装 + listVideoGroups 复杂条件拼装 + upsertLineAlias 调用 + fire-and-forget audit 全部归口 Service。
+
+   **当前实施偏离（D-117-2）**：CHG-SN-5-11 commit 缺 Service 层文件，Route 直连 queries；由 -11-PATCH 抽出 `apps/api/src/services/SourcesMatrixService.ts`。
+
+3. **响应包络对齐 ADR-110**：
+   - 列表 `{ data: VideoGroupRow[], total, page, limit }`
+   - 单值 `{ data: VideoGroupStats }` / `{ data: LineMatrixRow[] }` / `{ data: SourceLineAlias[] }` / `{ data: SourceLineAlias }`（PUT 返回新值）
+   - 错误信封 `{ error: { code, message, status } }`
+
+4. **错误码全部复用 ADR-110 既有 14 码，零新增**：VALIDATION_ERROR 422 / NOT_FOUND 404（matrix 端点 video 不存在）/ FORBIDDEN 403 / UNAUTHORIZED 401 / INTERNAL_ERROR 500（DB upsert 失败兜底）。
+
+5. **audit log 扩枚举**：`AdminAuditActionType` 增 1 项 `source_line_alias.upsert`；`AdminAuditTargetKind` 增 1 项 `source_line_alias`。targetId 是复合键 `${siteKey}/${sourceName}` 而非 UUID，独立 targetKind 便于 admin_audit_log 反查时按 kind 过滤；与 ADR-104 home_module 新增 targetKind 同源理由。
+
+   - **audit 写入位点**：PUT `/admin/source-line-aliases/:siteKey/:sourceName` upsert 成功后 fire-and-forget `auditSvc.write(...)`（**COMMIT 后**，参 ADR-105 Y-105-5 时序协议）
+   - **payload**：`beforeJsonb` = 既有别名行（如 INSERT 则为 null）；`afterJsonb` = 新别名行 `{ sourceSiteKey, sourceName, displayName, updatedAt }`；`targetKind = 'source_line_alias'`；`targetId = ${sourceSiteKey}/${sourceName}`（slash 分隔的复合标识）
+   - **READ 端点不写 audit**：4 个读端点零 audit 写入（仅写操作纳入审计）
+
+   **当前实施偏离（D-117-3）**：CHG-SN-5-11 PUT 端点零 audit log 写入 — R-MID-1 模式重现（连续第 4 次）；由 -11-PATCH 落地。
+
+6. **Migration 063 schema 已落地**：`source_line_aliases (source_site_key VARCHAR(100), source_name TEXT, display_name TEXT, updated_by UUID FK users(id) SET NULL, created_at, updated_at) PRIMARY KEY (source_site_key, source_name)` + `idx_source_line_aliases_site_key` 索引。已 commit `e6434abc` + architecture.md §5.13 同步。本 ADR 仅追溯锁定不再修订。
+
+7. **segment 语义统一（D-117-4）**：当前 4 个 segment 在 KPI vs filter 定义不一致（评级 P1-6）。本 ADR 锁定**最终语义**：
+   - `grouped`：全部含活跃 source 的 video（默认）
+   - `dead`：`v.source_check_status = 'all_dead'`
+   - `correction`：含 `submitted_by IS NOT NULL` 的活跃 source（即用户提交 / 纠错源）
+   - `orphan`：`v.source_check_status = 'all_dead' AND v.is_published = false`（孤岛 = 失效且未发布）
+   - **KPI stats 4 指标**应严格对应 segment 4 定义：total / active=(grouped \\ dead) / dead / orphan（与 segment='orphan' 同 SQL）；当前 `stats.orphan` 用 submitted_by 定义 = correction 语义，**KPI label 同步改为 4 卡：总播放源 / 有效 / 失效 / 孤岛**（删除 KPI 中的"用户纠错"混合表述；用户纠错通过 segment tab 进入而非顶部 KPI）
+
+   **当前实施偏离（D-117-4）**：CHG-SN-5-11 KPI stats.orphan 与 filter segment='orphan' 定义不一致 + KPI label 混合 "孤岛 / 用户纠错"；由 -11-PATCH 落地 ADR 锁定的统一语义。
+
+8. **DataTable 一体化偏离已知（D-117-5）**：CHG-SN-5-11 视频分组 outer 列表用 handrolled CSS grid 表格替代 `packages/admin-ui` `DataTable` 一体化（CLAUDE.md 后端表格段红线）。本 ADR 锁定**最终方案**：
+   - outer 视频分组列表**必须使用 DataTable**（toolbar.search + bulkActions + pagination 内置 + row 展开 slot）
+   - inner 矩阵展开行（线路×集数）属于 row 展开 slot 自定义渲染，无 DataTable 责任 — 沿用 CHG-SN-5-11 既有 `SourceMatrixRow` 展开实现（可拆 cell 复合组件，但不阻塞 -11-PATCH，可由 CHG-DESIGN-12 cell 沉淀卡承担）
+   - 由 -11-PATCH 落地 outer 列表迁移
+
+9. **硬编码颜色红线（D-117-6）**：CHG-SN-5-11 `SourceMatrixRow.tsx` 6 处 `var(--state-*-bg, #hex)` fallback 违反 CLAUDE.md "硬编码颜色值（必须用 CSS 变量）"。本 ADR 锁定：
+   - 删全部 hex fallback；确认 design-tokens `--state-success-bg` / `--state-warning-bg` / `--state-error-bg` 已定义（如未定义则补 token，本 ADR 不预决细节，由 -11-PATCH 实施时勘察）
+   - 由 -11-PATCH 落地
+
+10. **`<img>` → `next/image`（D-117-10）**：前端文件 `SourceMatrixRow.tsx` 使用原生 `<img>` 加载封面，与 server-next 既有规范（next/image 性能优化 + LCP）不一致；由 -11-PATCH 改为 `import Image from 'next/image'` + 含 width/height/sizes 必填属性。
+
+11. **缓存协议首版不引入**：5 端点全部直接 DB 查询，零 Redis 缓存。**未来触发条件**（任一命中即起 PRE-CACHE-SOURCES 卡）：(a) `GET /admin/sources/video-groups` p95 > 200ms 持续 1 周；(b) DB CPU 因本组端点占比 > 20%；(c) 视频总数 > 100k（聚合 SQL 性能拐点）。
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 鉴权 | 错误码 |
+|---|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/sources/video-groups` | 视频分组列表 + 聚合信号状态 + 分页 | Query: `page?=1` / `limit?=20` / `keyword?` / `segment?='grouped'` / `siteKey?` / `probeStatus?` / `renderStatus?` | 200 `{ data: VideoGroupRow[], total, page, limit }` | moderator+admin | 422 VALIDATION_ERROR |
+| 2 | GET | `/admin/sources/video-groups/stats` | KPI 4 指标 | — | 200 `{ data: { total, active, dead, orphan } }` | moderator+admin | — |
+| 3 | GET | `/admin/sources/video-groups/:videoId/matrix` | 单视频线路×集数矩阵（含别名合并） | Path: `videoId: uuid` | 200 `{ data: LineMatrixRow[] }` | moderator+admin | 422 VALIDATION_ERROR（videoId 非 uuid） |
+| 4 | GET | `/admin/source-line-aliases` | 全局别名列表（不分页，预期 ≤ 1000 行） | — | 200 `{ data: SourceLineAlias[] }` | moderator+admin | — |
+| 5 | PUT | `/admin/source-line-aliases/:siteKey/:sourceName` | upsert 全局别名 + 写 audit | Path: `siteKey` / `sourceName`（URL encoded）；Body: `{ displayName: string(1..100) }` | 200 `{ data: SourceLineAlias }` | **admin only**（D-117-1）| 422 VALIDATION_ERROR / 500 INTERNAL_ERROR（DB upsert 失败） |
+
+**类型契约（packages/types/src/admin-moderation.types.ts 扩展，由 -11-PATCH 落地）**：
+
+```ts
+export interface VideoGroupRow {
+  readonly videoId: string
+  readonly title: string
+  readonly shortId: string
+  readonly type: string
+  readonly year: number | null
+  readonly coverUrl: string | null
+  readonly lineCount: number
+  readonly sourceCount: number
+  readonly probeStatus: DualSignalState  // 复用既有 'pending' | 'ok' | 'partial' | 'dead'
+  readonly renderStatus: DualSignalState
+  readonly updatedAt: string
+}
+
+export interface VideoGroupStats {
+  readonly total: number
+  readonly active: number
+  readonly dead: number
+  readonly orphan: number
+}
+
+export interface EpisodeCell {
+  readonly episodeNumber: number
+  readonly sourceId: string
+  readonly sourceUrl: string
+  readonly probeStatus: DualSignalState
+  readonly renderStatus: DualSignalState
+  readonly isActive: boolean
+}
+
+export interface LineMatrixRow {
+  readonly sourceSiteKey: string
+  readonly sourceName: string
+  readonly displayName: string | null
+  readonly episodes: readonly EpisodeCell[]
+}
+
+export interface SourceLineAlias {
+  readonly sourceSiteKey: string
+  readonly sourceName: string
+  readonly displayName: string
+  readonly updatedAt: string
+}
+
+export type SourceSegment = 'grouped' | 'dead' | 'correction' | 'orphan'
+// SignalStatus 复用既有 DualSignalState（admin-moderation.types.ts:39，Y-117-3 修订采纳）：
+//   'pending' | 'ok' | 'partial' | 'dead'，跨 VideoQueueRow / VideoSourceLine / VideoGroupRow 共享
+```
+
+**当前实施偏离（D-117-7）**：CHG-SN-5-11 类型定义在 `apps/server-next/src/lib/sources/types.ts` 内联，而非 `packages/types/src/` 共享；由 -11-PATCH 迁移到 packages/types 统一入口（CLAUDE.md "统一类型入口"）。
+
+**zod request schema（Service 层 + Route 层共享）**：
+
+```ts
+const SourceSegmentEnum = z.enum(['grouped', 'dead', 'correction', 'orphan'])
+
+const VideoGroupsQuerySchema = z.object({
+  page:         z.coerce.number().int().min(1).default(1),
+  limit:        z.coerce.number().int().min(1).max(100).default(20),
+  keyword:      z.string().max(200).optional(),
+  segment:      SourceSegmentEnum.default('grouped'),
+  siteKey:      z.string().max(100).optional(),
+  probeStatus:  z.string().max(20).optional(),
+  renderStatus: z.string().max(20).optional(),
+}).strict()  // 协议层 .strict() 拒绝未识别字段（参 ADR-104 Y-MID-1 教训）
+
+const VideoMatrixParamsSchema = z.object({
+  videoId: z.string().uuid(),  // D-117-8：替代 CHG-SN-5-11 当前 regex 校验
+}).strict()
+
+const UpsertAliasParamsSchema = z.object({
+  siteKey:    z.string().min(1).max(100),
+  sourceName: z.string().min(1).max(200),
+}).strict()
+
+const UpsertAliasBodySchema = z.object({
+  displayName: z.string().min(1, '别名不能为空').max(100, '别名过长'),
+}).strict()
+```
+
+**当前实施偏离（D-117-8）**：CHG-SN-5-11 `routes/admin/sources-matrix.ts:70` videoId 用手写 regex `^[0-9a-f-]{36}$/i`；由 -11-PATCH 改 `z.string().uuid()` 与同模块 home-modules / video-merges 一致。
+
+### Migration 063 schema（已落地，CHG-SN-5-11 commit `e6434abc`，本 ADR 仅追溯锁定）
+
+```sql
+-- 063_source_line_aliases.sql（已 commit，不修改）
+CREATE TABLE IF NOT EXISTS source_line_aliases (
+  source_site_key VARCHAR(100) NOT NULL,
+  source_name     TEXT         NOT NULL,
+  display_name    TEXT         NOT NULL,
+  updated_by      UUID         NULL REFERENCES users(id) ON DELETE SET NULL,
+  created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (source_site_key, source_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_source_line_aliases_site_key
+  ON source_line_aliases (source_site_key);
+```
+
+**Schema 设计要点**：
+- 复合 PK `(source_site_key, source_name)` 严格对齐 ADR-114-NEGATED `video_sources` 复合键约束（**线路标识同源**）
+- `updated_by` FK `SET NULL`（用户删除不级联删除别名行，保留历史）
+- 索引 `(source_site_key)` 支持按站点过滤的二级查询路径
+- 写操作走 `INSERT ... ON CONFLICT (source_site_key, source_name) DO UPDATE`（upsert 模式）
+
+### audit log 协议
+
+**扩枚举**：
+- `AdminAuditActionType` 增 `source_line_alias.upsert`（1 项；删除不暴露 API 因此不需扩 `.delete` actionType）
+- `AdminAuditTargetKind` 增 `source_line_alias`（1 项；区别于 video / staging / home_module 既有 7 项）
+
+**写入位点 + payload**：
+
+| 端点 | actionType | targetKind | targetId | beforeJsonb | afterJsonb |
+|---|---|---|---|---|---|
+| PUT `/admin/source-line-aliases/:siteKey/:sourceName` | `source_line_alias.upsert` | `source_line_alias` | `${sourceSiteKey}/${sourceName}` | 既有 `SourceLineAlias` 行（INSERT 路径为 null）| 新 `SourceLineAlias` 行 |
+
+**fire-and-forget 模式**（CHG-SN-4-05）：
+- Service 层 upsert 成功后写 audit；写失败 log warn 不阻塞主操作
+- 时序：DB upsert COMMIT 之后 → `auditSvc.write(...)` 不 await
+- **单 SQL implicit commit 说明（A-117-1）**：`upsertLineAlias` 走单条 `INSERT ... ON CONFLICT DO UPDATE` autocommit，无需显式 `BEGIN/COMMIT` 事务块；如未来扩需多表事务（如 audit 表 + 别名表跨表更新），切换 ADR-105 显式 `client.connect()` + `BEGIN/COMMIT` 范式（参 ADR-105 §audit log 协议 Service 层模式代码）
+- Service 层模式（参 ADR-105 Y-105-5）：
+
+```ts
+// SourcesMatrixService.upsertLineAlias (由 -11-PATCH 落地)
+async upsertLineAlias(params: UpsertAliasParams, actorId: string): Promise<SourceLineAlias> {
+  const before = await this.fetchExistingAlias(params.sourceSiteKey, params.sourceName)
+  const after  = await upsertLineAliasQuery(this.db, params, actorId)  // DB COMMIT 内部完成
+  // COMMIT 后才写 audit（防 ROLLBACK 虚假记录）
+  this.auditSvc.write({
+    actorId,
+    actionType: 'source_line_alias.upsert',
+    targetKind: 'source_line_alias',
+    targetId: `${params.sourceSiteKey}/${params.sourceName}`,
+    beforeJsonb: before,
+    afterJsonb: after,
+  })
+  return after
+}
+```
+
+**audit-log-coverage 守卫**：tests/unit/api/audit-log-coverage.test.ts `REQUIRED_ACTION_TYPES` 从 19 → 20（由 -11-PATCH 同步扩）。
+
+### 错误码
+
+复用 ADR-110 既有 14 码，零新增：
+
+| 场景 | code | status |
+|---|---|---|
+| zod schema 失败 / videoId 非 uuid / displayName 超长或空 | VALIDATION_ERROR | 422 |
+| matrix 端点 video 不存在（可选实施：当前 commit 未校验，返回空数组）| NOT_FOUND | 404 |
+| 非 admin role 调 PUT | FORBIDDEN | 403 |
+| 未登录 | UNAUTHORIZED | 401 |
+| DB upsert 异常 | INTERNAL_ERROR | 500 |
+
+**message 模板**：
+
+| 场景 | message 模板 |
+|---|---|
+| zod 字段失败 | zod 默认 issue message（或自定义如 `'别名不能为空' / '别名过长'`） |
+| videoId 非 uuid | `'videoId 格式无效'` |
+| displayName 空 | `'别名不能为空'` |
+| displayName 超长 | `'别名过长'` |
+| DB upsert 异常 | `'服务器内部错误'` |
+
+**当前实施偏离（D-117-9）**：matrix 端点 video 不存在场景当前返回 200 + 空数组；本 ADR 锁定为 `404 NOT_FOUND`（与 home-modules / video-merges 模式一致），由 -11-PATCH 落地（Service 层 `fetchVideosByIds([videoId])` 前置校验存在性）。
+
+### 备选方案
+
+**A. Service 层 vs Route 直连 queries**：
+- ✗ 方案 1：Route 直连 queries（CHG-SN-5-11 当前实施）— 简单但违反 CLAUDE.md 后端分层红线；业务逻辑（aggregateSignal / KPI 拼装）混在 queries 层
+- ✅ **方案 2（采纳）**：强制 Service 层 + Route 仅 zod parse + 异常映射 — 与 home-modules / video-merges 一致，业务逻辑归口，便于 unit test 测 Service 而非 DB mock
+
+**B. 单表 `source_line_aliases` vs site 拆表**：
+- ✗ 方案 1：每站点独立别名表（`source_line_aliases_<site_key>`）— 表数膨胀，跨站查询需 UNION，运维负担高
+- ✅ **方案 2（采纳）**：单表复合 PK `(source_site_key, source_name)` — 与 video_sources 复合键同源，跨站查询直接，索引 `(source_site_key)` 覆盖按站点过滤
+
+**C. PUT vs POST 写端点**：
+- ✗ 方案 1：POST `/admin/source-line-aliases` body `{ siteKey, sourceName, displayName }` — RESTful 语义偏弱（无幂等）
+- ✅ **方案 2（采纳）**：PUT `/admin/source-line-aliases/:siteKey/:sourceName` body `{ displayName }` — 幂等 + 路径含完整资源标识（运营 URL 可分享）+ upsert 语义清晰
+
+**D. DataTable 一体化 vs handrolled 表格**：
+- ✗ 方案 1：handrolled CSS grid 表格（CHG-SN-5-11 当前实施）— 违反 CLAUDE.md "后台表格"段；样式 / 排序 / 分页 / 选择全部手撸 + 复用率为 0
+- ✅ **方案 2（采纳）**：`packages/admin-ui` DataTable 一体化 outer 列表 + row 展开 slot 自定义 matrix 渲染 — 复用 toolbar/pagination/selection + 矩阵展开作为 cell 复合组件未来沉淀点（CHG-DESIGN-12）
+
+### 后果
+
+**正面**：
+1. CHG-SN-5-11-PATCH 卡按本 ADR §端点契约 + §audit log 协议 + §决策要点 D-117-1..9 偏离清单逐条落地，零设计自由度
+2. `/admin/sources` 与 `/admin/home` / `/admin/merge` 协议范式一致（鉴权 / Service 层 / audit / 错误码 / DataTable）— 视图卡复用率最大化
+3. 错误码零新增 + audit 类型有限扩枚举（1 项）+ 单表设计 — 与 plan §10 "新增端点不得修改邻近现有端点（隔离原则）" 一致
+4. 复合键 PK 设计 100% 兼容 ADR-114-NEGATED 复合键约束 — 跨站不合并语义在别名表层延续
+5. 追溯起草 + 偏离显式清单 → CHG-SN-5-13 milestone 审计有明确清单可勾对
+
+**负面 / 风险**：
+1. **R-ADR-117-1 — 追溯起草滞后偏离**：CHG-SN-5-11 commit `e6434abc` 已落地代码与本 ADR §端点契约存在 9 项偏离（D-117-1..9），需 -11-PATCH 卡承担全部代码改造。**缓解**：本 ADR §决策要点逐项标注当前偏离 + -11-PATCH 卡范围明确含 6 项 P0/P1 + 3 项 D 编号偏离修复
+2. **R-ADR-117-2 — 别名表无 TTL / 软删除**：`source_line_aliases` 表无 deleted_at 字段，删除走硬删除（当前未暴露删除 API，未来扩展时需起 PRE-ALIAS-SOFT-DELETE 卡决策）。**缓解**：当前 API 不含 DELETE 端点；未来如需删除别名 → 触发 PRE-ALIAS-SOFT-DELETE 卡
+3. **R-ADR-117-3 — KPI stats SQL 性能**：`getVideoGroupStats` 全表 4 FILTER 子查询 + 嵌套 EXISTS — 视频总数 > 100k 时 p95 可能超 200ms（决策要点 10 触发条件 c）。**缓解**：首版接受；触发条件命中起 PRE-CACHE-SOURCES 卡引入 Redis 缓存（5 分钟 TTL 足够 KPI 场景）
+4. **R-ADR-117-4 — listVideoGroups SQL 动态拼装注入面**：当前 `idx` 索引计数手动维护拼参数化 SQL（`db/queries/sources-matrix.ts:166-225`），增删 segment / 过滤条件时易出现 idx 错位。**缓解**：-11-PATCH Service 层抽出后用 SQL builder 库（如 knex 子集 / drizzle-orm 子集）替代，或加单测覆盖每种 segment × 过滤组合（参 audit-log-coverage 守卫模式）
+
+### 验证
+
+**起草卡（CHG-SN-5-11-ADR）完成判据**：
+- arch-reviewer Opus PASS（≤ 3 轮 CONDITIONAL 闭环；REJECT = BLOCKER §5.2）
+- 落 `docs/decisions.md` ADR-117 章节完整（9 节）
+- plan §9 ADR 索引推进 ADR-117 状态 Candidate → Accepted
+
+**PATCH 卡（CHG-SN-5-11-PATCH）落地判据**：
+- 9 项 D 编号偏离（D-117-1..9）全部修复
+- 6 项 P0/P1 评审缺陷（P0-2 Service 层 / P0-3 硬编码色 / P0-4 audit log / P1-5 DataTable / P1-7 img / P1-8 zod uuid）+ P1-6 segment 语义统一全部落地
+- `apps/api/src/services/SourcesMatrixService.ts` 新建
+- `packages/types/src/admin-moderation.types.ts` 扩 `source_line_alias.upsert` + `source_line_alias` targetKind
+- `audit-log-coverage.test.ts` 守卫从 19 → 20
+- Service 单测覆盖 5 端点 happy path + audit payload 内容断言（参 R-MID-1 教训）+ segment 4 路径 SQL
+- ADR-117 §端点契约 / §audit log 协议 100% 对齐
+
+**未来视图扩展（CHG-SN-5-12 `/admin/merge` 视图）**：
+- 不依赖本 ADR；但 `SourcesMatrixService` 中的 `aggregateSignal` 三色逻辑可被复用
+
+### 关联
+
+- **关联 ADR**：ADR-103（DataTable v2 公开 API 契约 — 决策要点 8 outer 列表消费）/ ADR-104（home_modules 协议同模式 — 鉴权 / Service / audit / 错误码 / response 信封）/ ADR-105（merge 协议同模式 — audit 双层时序 / fire-and-forget）/ ADR-110（ApiResponse 信封 + ErrorCode 真源）/ ADR-114-NEGATED（复合键约束，本 ADR 别名表 PK 同源）/ ADR-100（依赖白名单，本 ADR 零新依赖）
+- **关联 plan §**：§4.5 ADR-端点先后协议（本 ADR 是 CHG-SN-5-11 追溯合规，§4.5 R7 MUST-8 硬约束）/ §6 M-SN-5 推荐 4（/admin/sources 视图）/ §9 ADR 索引 ADR-117 / §10 风险段（KPI SQL 性能）
+- **关联 task-queue**：SEQ-20260512-02 子卡 CHG-SN-5-11（已 commit `e6434abc` 触发本 ADR 追溯需求）→ CHG-SN-5-11-ADR（本卡）→ CHG-SN-5-11-PATCH（架构清债，依赖本 ADR PASS）→ CHG-SN-5-CHECKLIST-AUDIT（机制设计，独立并行）→ CHG-SN-5-12（`/admin/merge` 视图）
+- **关联代码（已落地，本 ADR 追溯锁定）**：
+  - `apps/api/src/db/migrations/063_source_line_aliases.sql`
+  - `apps/api/src/db/queries/sources-matrix.ts`（348 行；含 `aggregateSignal` — 由 -11-PATCH 迁移到 Service 层）
+  - `apps/api/src/routes/admin/sources-matrix.ts`（110 行；由 -11-PATCH 改为调 Service）
+  - `apps/server-next/src/app/admin/sources/_client/{SourcesClient,SourceMatrixRow,SourceLineAliasPanel}.tsx`（前端；由 -11-PATCH 改为 DataTable 一体化 + 删硬编码色 + img→Image）
+  - `tests/unit/api/sources-matrix.test.ts`（15 单测；由 -11-PATCH 扩 Service 层测试 + audit payload 断言）
+  - `docs/architecture.md` §5.13（schema 已同步）
+- **关联代码（本 ADR 触发新增，由 -11-PATCH 落地）**：
+  - `apps/api/src/services/SourcesMatrixService.ts`（Service 层抽出）
+  - `packages/types/src/admin-moderation.types.ts`（扩 actionType + targetKind + 视频分组/矩阵类型迁移到共享层）
+- **ADR 引用追溯说明（A-117-2）**：`apps/api/src/db/migrations/063_source_line_aliases.sql:5` 头部仅引用 `ADR-114-NEGATED`（commit 时本 ADR-117 不存在）；migration 文件一旦应用不得修改，引用保留原状；本 ADR 起草后**新建 / 改动文件头部 ADR 引用行写**：`ADR-117（admin API 协议追溯） + ADR-114-NEGATED（复合键约束）`，由 -11-PATCH 实施时统一落地
+- **关联触发条件（未来）**：
+  - PRE-CACHE-SOURCES（KPI 缓存层）：决策要点 10 三条触发条件任一命中
+  - PRE-ALIAS-SOFT-DELETE（别名软删除）：R-ADR-117-2 删除需求命中
