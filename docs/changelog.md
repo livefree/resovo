@@ -6449,3 +6449,58 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **注意事项**：
   - CHG-SN-5-07（`/admin/home` 视图）依赖 -05 + -06 全部完成，现在可以开始
   - 6 端点均通过 `requireRole(['admin'])` 保护，moderator 无权访问（ADR-104 DISCUSS-6 闭合）
+
+---
+
+## M-SN-5 主体 6/14 中期审计（arch-reviewer Opus，A- CONDITIONAL）+ CHG-SN-5-06-PATCH（R-MID-1 修复）— 2026-05-12
+
+**审计触发**：用户"审核 sn-5 迄今的开发"
+
+**审计范围**：SEQ-20260512-02 已完成 6/14 卡（CHG-SN-5-01..06 + ADR-104）+ 前置 CHG-SN-5.5-AUDIT + CHG-PLAN-03
+
+**审计方式**：独立 arch-reviewer Opus 子代理（不继承主循环上下文），Read + Grep 11 个真源文件 + ADR-104 全文 + plan §6/§10 + M-SN-5.5 audit + changelog 6 卡完整备注
+
+**9 维度评级**：1 ✅A（6 原语 API 稳定性零反向扩展）/ 2 🟡A-（R-MID-1）/ 3 ✅A（后端分层）/ 4 ✅A（隔离原则）/ 5 🟡B+（测试盲区）/ 6 ✅A（模型路由合规）/ 7 ✅A-（工时健康 1.5w / 38%）/ 8 ✅B+（污染 streak=2 未达 3 阈值）/ 9 🟡B（R-MID-1 + reorder 视图首次端到端消费）
+
+**红线 1 项 R-MID-1**：`HomeModulesService.reorder` beforeItems 从入参 newOrdering 投影而非 DB oldOrdering → audit log beforeJsonb ≡ afterJsonb，违反 ADR-104 §audit log 协议表硬契约。测试盲区：admin-home-modules.test.ts 仅断言 actionType 未断言 payload 内容。
+
+**黄线 4 项**（建议 -07 同卡清债）：Y-MID-1 UpdateSchema `.strict()` 与 ADR-104 文本偏离 / Y-MID-2 ListClient 零集成测试 / Y-MID-3 AdminCard 仍 0 业务消费 / Y-MID-4 -01 操作错误反馈 PATCH 已登记 1 周未启动
+
+**累积债务 6 项**：DEBT-RejectPopover-Dedup（streak=2）/ DEBT-DataTable-query-MapLiteral / DEBT-Audit-Test-Payload / DEBT-Integration-Test-Missing / DEBT-AdminCard-Zero-Consumer / DEBT-isDbCheckViolation-Location
+
+**修复路径**：CHG-SN-5-06-PATCH（本卡）修 R-MID-1；-07 同卡清 Y-MID-2/3/4
+
+---
+
+### CHG-SN-5-06-PATCH 修复细节
+
+- **任务 ID**：CHG-SN-5-06-PATCH（中期审计红线修复，独立于 SEQ-20260512-02 编号序列，作为 -06 的 hotfix）
+- **执行模型**：claude-opus-4-7（用户"在这里修即可"指令延续当前 opus 会话；建议模型 sonnet 但用户上游选择延续；未触发"主循环中途升级"硬约束因启动即 opus）
+- **子代理**：无（修复路径清晰 + 测试断言驱动 + 同卡 typecheck/lint/3516 测试全绿）
+- **变更内容**：
+  - `apps/api/src/services/HomeModulesService.ts` reorder() 入口先 `Promise.all(items.map(item => findHomeModuleById(db, item.id)))` 并发读 oldOrdering → beforeItems 过滤 null（与 reorderHomeModules 静默忽略行为一致）→ audit beforeJsonb 含 oldOrdering，afterJsonb 显式 map items 含 newOrdering
+  - `tests/unit/api/admin-home-modules.test.ts` 新增 2 用例：
+    - (a) "beforeJsonb 含 oldOrdering / afterJsonb 含 newOrdering（R-MID-1）" 显式断言 audit payload 内容 + `beforeJsonb !== afterJsonb`
+    - (b) "audit log 跳过不存在的 id" 验证 null 过滤逻辑
+  - `tests/unit/api/audit-log-coverage.test.ts` REQUIRED_ACTION_TYPES 扩 5 项（home_module.create/update/delete/reorder/publish_toggle）— 解决 -05/-06 落地 audit enum 时未同步 guard 的同源债务（**DEBT-Audit-Test-Payload 同时闭环**）
+- **文件范围**：
+  - `apps/api/src/services/HomeModulesService.ts`（reorder 方法重写）
+  - `tests/unit/api/admin-home-modules.test.ts`（+2 用例）
+  - `tests/unit/api/audit-log-coverage.test.ts`（REQUIRED_ACTION_TYPES 扩 5 项）
+  - `docs/task-queue.md` + `docs/tasks.md` + `docs/changelog.md`
+- **质量门禁**：
+  - typecheck 全绿（8 workspaces）/ lint 全绿
+  - unit 3516/3516 全绿（baseline 3510 + 净增 6 用例）
+  - admin-home-modules.test.ts 28/28（原 26 + 2 reorder audit payload）
+  - audit-log-coverage.test.ts 18/18（11 plan + 5 ADR-104 + 2 coverage 自身）
+- **关键发现**：
+  - **R-MID-1 根因**：ADR-104 协议本身正确（§audit log 协议表清晰要求 oldOrdering），-06 实施时未读 DB 取 oldOrdering 直接复用入参；测试盲区（仅断言 actionType/targetKind 未断言 payload 内容）让协议偏离溜过 QG
+  - **顺手发现 audit-log-coverage 同源债务**：-05 落地 audit enum 时未同步 guard 测试，导致全套测试失败但单跑 admin-home-modules 时未暴露（测试运行隔离的盲区）
+  - **测试覆盖度提升模板**：本卡新增的 "audit payload 内容断言" 模式可作为后续 audit log 写入位点的回归模板（建议 -07 拖拽重排场景沿用）
+- **后续触发**：
+  - **解锁 CHG-SN-5-07** `/admin/home` 视图卡启动（中期审计红线全清）
+  - **DEBT-Audit-Test-Payload 同时闭环**
+  - 4 黄线建议 -07 同卡清债 3 项（Y-MID-2/3/4）+ Y-MID-1 ADR 修订时同 commit 顺手补
+- **注意事项**：
+  - 本卡作为 -06 的 hotfix，不占用 SEQ-20260512-02 14 卡编号序列；类似 hotfix 沿用 "-NN-PATCH" 命名
+  - Promise.all 并发读 N 次：reorder items ≤ 200 上限场景下可接受；如上限提升至 1000+ 触发 PRE-REORDER-BATCH-READ 优化卡

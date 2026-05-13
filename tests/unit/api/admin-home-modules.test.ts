@@ -381,6 +381,8 @@ describe('POST /admin/home-modules/reorder', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     mockReorder.mockResolvedValue(2)
+    // R-MID-1 修复：reorder 先并发读 oldOrdering，默认 mock 返回原模块（与 newOrdering 不同）
+    mockFindById.mockResolvedValue(MODULE)
     app = await buildApp()
   })
 
@@ -415,6 +417,71 @@ describe('POST /admin/home-modules/reorder', () => {
       targetKind: 'home_module',
       targetId: null,
     }))
+  })
+
+  // R-MID-1 修复（中期审计 2026-05-12）：ADR-104 §audit log 协议表第 4 行
+  // beforeJsonb 必须含 oldOrdering（DB 原值）/ afterJsonb 必须含 newOrdering（入参）
+  it('audit log beforeJsonb 含 oldOrdering / afterJsonb 含 newOrdering（R-MID-1）', async () => {
+    // 模拟 DB 原值 ordering=10（与入参 newOrdering=0/1 不同）
+    mockFindById.mockResolvedValue({ ...MODULE, ordering: 10 })
+
+    await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home-modules/reorder',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({
+        items: [
+          { id: 'a0000000-0000-0000-0000-000000000001', ordering: 0 },
+          { id: 'a0000000-0000-0000-0000-000000000002', ordering: 1 },
+        ],
+      }),
+    })
+
+    const auditCall = mockAuditWrite.mock.calls[0]?.[0]
+    expect(auditCall).toBeDefined()
+    // beforeJsonb.items[*].ordering === oldOrdering（10，DB 原值，mock 返回）
+    expect(auditCall.beforeJsonb).toEqual({
+      items: [
+        { id: MODULE.id, ordering: 10 },
+        { id: MODULE.id, ordering: 10 },
+      ],
+    })
+    // afterJsonb.items[*].ordering === newOrdering（入参）
+    expect(auditCall.afterJsonb).toEqual({
+      items: [
+        { id: 'a0000000-0000-0000-0000-000000000001', ordering: 0 },
+        { id: 'a0000000-0000-0000-0000-000000000002', ordering: 1 },
+      ],
+    })
+    // 关键：beforeJsonb !== afterJsonb（修复前两者等价，是 R-MID-1 缺陷信号）
+    expect(auditCall.beforeJsonb).not.toEqual(auditCall.afterJsonb)
+  })
+
+  it('audit log 跳过不存在的 id（findById 返回 null 不进 beforeItems）', async () => {
+    // 第 1 条 id 返回原模块（ordering=5），第 2 条 id 返回 null（已被删除 / 不存在）
+    mockFindById
+      .mockResolvedValueOnce({ ...MODULE, ordering: 5 })
+      .mockResolvedValueOnce(null)
+
+    await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home-modules/reorder',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({
+        items: [
+          { id: 'a0000000-0000-0000-0000-000000000001', ordering: 0 },
+          { id: 'a0000000-0000-0000-0000-000000000099', ordering: 1 },
+        ],
+      }),
+    })
+
+    const auditCall = mockAuditWrite.mock.calls[0]?.[0]
+    // beforeJsonb 仅含找到的那条（与 reorderHomeModules 静默忽略行为一致）
+    expect(auditCall.beforeJsonb).toEqual({
+      items: [{ id: MODULE.id, ordering: 5 }],
+    })
+    // afterJsonb 含全部入参 items（无论是否找到 oldOrdering）
+    expect(auditCall.afterJsonb.items).toHaveLength(2)
   })
 
   it('空 items 返回 422', async () => {

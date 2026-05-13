@@ -16,8 +16,10 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
-// plan v1.4 §3.0.5 真源（与 packages/types AdminAuditActionType union 对齐）
+// plan v1.4 §3.0.5 真源 + ADR-104（home_module.* 5 项扩枚举，CHG-SN-5-05/-06 落地，
+// 中期审计 2026-05-12 CHG-SN-5-06-PATCH 同卡补 guard）— 与 packages/types AdminAuditActionType union 对齐
 const REQUIRED_ACTION_TYPES = [
+  // plan v1.4 §3.0.5（11 项）
   'video.approve',
   'video.reject_labeled',
   'video.staff_note',
@@ -29,6 +31,12 @@ const REQUIRED_ACTION_TYPES = [
   'staging.revert',
   'staging.publish',
   'staging.batch_publish',
+  // ADR-104 扩枚举（5 项，home_modules admin API 协议，CHG-SN-5-05/-06 落地）
+  'home_module.create',
+  'home_module.update',
+  'home_module.delete',
+  'home_module.reorder',
+  'home_module.publish_toggle',
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g

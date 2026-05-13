@@ -194,7 +194,18 @@ export class HomeModulesService {
     actorId: string,
     requestId?: string,
   ): Promise<{ updated: number }> {
-    const beforeItems = params.items.map((item) => ({ id: item.id, ordering: item.ordering }))
+    // R-MID-1 修复（中期审计 2026-05-12）：ADR-104 §audit log 协议表 reorder 行要求
+    // beforeJsonb 含 oldOrdering（DB 原值），afterJsonb 含 newOrdering（入参）。
+    // 之前实现 beforeItems = params.items.map(...) 取的是入参 newOrdering，导致 audit log
+    // before ≡ after 失去取证价值；改为先并发读 DB 取 oldOrdering，items 中不存在的 id
+    // 在 audit 中跳过（与 reorderHomeModules 静默忽略行为一致）。
+    const beforeRows = await Promise.all(
+      params.items.map((item) => findHomeModuleById(this.db, item.id)),
+    )
+    const beforeItems = beforeRows
+      .filter((r): r is HomeModule => r !== null)
+      .map((r) => ({ id: r.id, ordering: r.ordering }))
+
     const updated = await reorderHomeModules(this.db, params.items)
 
     this.auditSvc.write({
@@ -203,7 +214,7 @@ export class HomeModulesService {
       targetKind: 'home_module',
       targetId: null,
       beforeJsonb: { items: beforeItems },
-      afterJsonb: { items: params.items },
+      afterJsonb: { items: params.items.map((item) => ({ id: item.id, ordering: item.ordering })) },
       requestId: requestId ?? null,
     })
 

@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 当前无进行中任务；CHG-SN-5-06 home_modules 端点第 2 批已闭环（2026-05-12，6 端点 ADR-104 全落地 + 26 测试全绿）；下一卡 CHG-SN-5-07（`/admin/home` 视图，依赖 -05 + -06 ✅，建议 sonnet） -->
+<!-- 当前无进行中任务；CHG-SN-5-06-PATCH 已闭环（2026-05-12，R-MID-1 reorder audit log 协议偏离修复 + audit-log-coverage guard 同步扩 ADR-104 5 项 / 3516 unit tests 全绿）；中期审计红线全清 → 解锁 CHG-SN-5-07 `/admin/home` 视图卡启动 -->
