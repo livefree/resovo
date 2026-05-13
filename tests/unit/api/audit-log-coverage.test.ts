@@ -54,6 +54,42 @@ const SCAN_ROOTS = [
   join(__dirname, '../../../apps/api/src/routes/admin'),
 ]
 
+// CHG-SN-5-CHECKLIST-AUDIT-2 P0-1：R-MID-1 教训第 6 次系统化首次以代码守卫形式落地
+// ADR 后新增 9 项 actionType（home_module.* 5 + video.merge/split/unmerge 3 + source_line_alias.upsert 1）
+// 强制要求对应 service test 含 audit payload 内容显式断言（参 sources-matrix-service.test.ts 模板）。
+// M-SN-4 legacy 11 项（plan v1.4 §3.0.5）advisory 豁免，由 M-SN-6 收尾卡 RETROACTIVE 承担补齐。
+const PAYLOAD_ASSERTION_REQUIRED = [
+  // ADR-104 home_modules
+  'home_module.create',
+  'home_module.update',
+  'home_module.delete',
+  'home_module.reorder',
+  'home_module.publish_toggle',
+  // ADR-105 video merge/split/unmerge
+  'video.merge',
+  'video.unmerge',
+  'video.split',
+  // ADR-117 source_line_alias
+  'source_line_alias.upsert',
+] as const
+
+const PAYLOAD_ASSERTION_EXEMPT = [
+  // plan v1.4 §3.0.5 M-SN-4 legacy 11 项 — 由 M-SN-6 收尾 RETROACTIVE 卡补齐
+  'video.approve',
+  'video.reject_labeled',
+  'video.staff_note',
+  'video.visibility_patch',
+  'video.reopen',
+  'video.refetch_sources',
+  'video_source.toggle',
+  'video_source.disable_dead_batch',
+  'staging.revert',
+  'staging.publish',
+  'staging.batch_publish',
+] as const
+
+const TEST_DIRS = [join(__dirname, '..')]
+
 function* walk(dir: string): Generator<string> {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry)
@@ -102,5 +138,70 @@ describe('admin_audit_log 覆盖率守卫（plan v1.4 §3.0.5）', () => {
   it('总覆盖：plan §3.0.5 + ADR-104 + ADR-105 + ADR-117 20 个 action_type 全部就位', () => {
     expect(found.size).toBeGreaterThanOrEqual(REQUIRED_ACTION_TYPES.length)
     for (const t of REQUIRED_ACTION_TYPES) expect(found.has(t)).toBe(true)
+  })
+
+  // CHG-SN-5-CHECKLIST-AUDIT-2 P0-1：R-MID-1 教训第 6 次系统化（首次代码守卫形式）
+  // 扫 tests/unit/api 内所有 .test.ts 内 audit payload 内容断言模式：
+  //   expect(...write).toHaveBeenCalledWith(expect.objectContaining({
+  //     actionType: '<actionType>', targetKind, targetId, beforeJsonb?, afterJsonb?, ...
+  //   }))
+  // ADR 后新增 9 项 actionType 强制；M-SN-4 legacy 11 项豁免（PAYLOAD_ASSERTION_EXEMPT）
+  describe('R-MID-1 audit payload 内容断言守卫（CHG-SN-5-CHECKLIST-AUDIT-2 P0-1）', () => {
+    function* walkTests(dir: string): Generator<string> {
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry)
+        if (statSync(full).isDirectory()) yield* walkTests(full)
+        else if (full.endsWith('.test.ts')) yield full
+      }
+    }
+
+    function collectAssertedActionTypes(): Set<string> {
+      const asserted = new Set<string>()
+      for (const root of TEST_DIRS) {
+        for (const file of walkTests(root)) {
+          const content = readFileSync(file, 'utf-8')
+          // 文件内含 expect.objectContaining + actionType: 'xxx' 即认为有断言。
+          // 严格的 AST 比对工程量大，对 grep 守卫"是否在同一 expect.objectContaining 块内"
+          // 用启发式：actionType 字面量在文件内必须距离最近的 `expect.objectContaining` 调用 ≤ 500 字符（同行或紧邻行）。
+          // 误报代价低（只会要求消费方补断言）；漏报代价高（让 R-MID-1 教训失守）→ 选择倾向不漏报。
+          const objContainingRe = /expect\.objectContaining\(/g
+          const actionTypeRe = /actionType:\s*['"]([a-z_.]+)['"]/g
+          const objContainingPositions: number[] = []
+          for (const m of content.matchAll(objContainingRe)) {
+            objContainingPositions.push(m.index!)
+          }
+          for (const m of content.matchAll(actionTypeRe)) {
+            const pos = m.index!
+            // 同一 expect.objectContaining 块内：actionType 在 objectContaining 之后 ≤ 500 字符
+            for (const ocPos of objContainingPositions) {
+              if (pos >= ocPos && pos - ocPos <= 500) {
+                asserted.add(m[1])
+                break
+              }
+            }
+          }
+        }
+      }
+      return asserted
+    }
+
+    const asserted = collectAssertedActionTypes()
+
+    it.each(PAYLOAD_ASSERTION_REQUIRED)(
+      'actionType %s 必有对应 service test 含 audit payload 内容断言（R-MID-1 教训）',
+      (actionType) => {
+        expect(
+          asserted.has(actionType),
+          `R-MID-1 教训：actionType '${actionType}' 缺 service test audit payload 内容断言。\n` +
+          `修复：在对应 service test 内加 \`expect(...auditSvc.write).toHaveBeenCalledWith(expect.objectContaining({ actionType: '${actionType}', targetKind, targetId, beforeJsonb, afterJsonb }))\`\n` +
+          `参 \`tests/unit/api/sources-matrix-service.test.ts\` upsertLineAlias INSERT/UPDATE 双路径模板。`,
+        ).toBe(true)
+      },
+    )
+
+    it('M-SN-4 legacy 11 项 actionType advisory 豁免（M-SN-6 收尾卡承担 RETROACTIVE 补齐）', () => {
+      // 该 it 仅占位记录豁免清单；不强制断言，让 M-SN-6 RETROACTIVE 卡决策。
+      expect(PAYLOAD_ASSERTION_EXEMPT.length).toBe(11)
+    })
   })
 })

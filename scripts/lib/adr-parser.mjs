@@ -100,15 +100,17 @@ export function parseErrorMessages(adrBody) {
 }
 
 /**
- * 解析 §决策要点 D-NNN-N 偏离编号
- * 匹配 "D-117-1 PUT 鉴权" / "（D-117-2）" 等
+ * 解析 ADR 内 D-NNN-N 偏离编号（搜全 ADR body，覆盖 §决策要点 / §端点契约 / §错误码 等多段）
+ * 匹配 "D-117-1 PUT 鉴权" / "（D-117-2）" / "**当前实施偏离（D-117-7）**" 等
+ *
+ * CHG-SN-5-CHECKLIST-AUDIT-2 P0-2 修订：原仅搜 §决策要点 段，但 ADR 写作时 D 编号
+ * 散布多段（如 ADR-117 D-117-7/-8/-9 写在 §端点契约 / §错误码 段），改全 body 搜。
  *
  * @param adrBody ADR 章节正文
  * @param adrId    ADR 标识（如 'ADR-117'）；若提供，仅返回 D-NNN-N 中 NNN 与 ADR 编号匹配的项
  *                 （避免 ADR-103 body 引用 D-117-N 时误归属为 ADR-103 own 偏离）
  */
 export function parseDeviationNumbers(adrBody, adrId) {
-  const section = findSubsection(adrBody, '决策要点') || adrBody
   const numbers = new Set()
   // 提取 ADR 数字编号（如 'ADR-117' → '117'）
   let ownNumber = null
@@ -116,7 +118,7 @@ export function parseDeviationNumbers(adrBody, adrId) {
     const m = adrId.match(/^ADR-(\d+)/)
     if (m) ownNumber = m[1]
   }
-  for (const m of section.matchAll(/D-(\d+)-(\d+)/g)) {
+  for (const m of adrBody.matchAll(/D-(\d+)-(\d+)/g)) {
     if (ownNumber && m[1] !== ownNumber) continue  // 跳过非本 ADR own 的 D 编号
     numbers.add(`D-${m[1]}-${m[2]}`)
   }

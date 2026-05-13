@@ -58,7 +58,7 @@ npm run preflight   # 环境 + 迁移 + 类型 + lint + 单测基线
 - **PATCH 卡范围 ≤ 5 项**：可单卡推进，预期 100% 完成度
 - 若强行单卡 > 5 项：commit message 必含 `Subagents: arch-reviewer (...)` trailer + changelog 显式标注 "范围超 5 项接受完成度风险"
 
-数据依据：CHG-SN-5-CHECKLIST-AUDIT 沉淀的 6 次 PATCH 完成度统计。
+数据依据：CHG-SN-5-CHECKLIST-AUDIT 沉淀的 5 次 PATCH 完成度统计（06-PATCH / 09-PATCH / 10-PATCH / 11-PATCH / 11-PATCH-2；11 整卡视图卡非 PATCH 不计入）。
 
 ---
 

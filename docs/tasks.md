@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 当前无进行中任务；CHG-SN-5-CHECKLIST-AUDIT 已闭环（2026-05-13，3 核心脚本 + 4 文档强制 + 7/7 教训覆盖 / 2 轮 arch-reviewer Opus PASS / preflight 集成 + CLAUDE.md 必跑命令 + 绝对禁止扩 3 条）；下一卡 CHG-SN-5-12 /admin/merge 视图（建议享受新自动核验机制） -->
+<!-- 当前无进行中任务；CHG-SN-5-CHECKLIST-AUDIT-2 已闭环（2026-05-13，4 项 P0/P1 全落地 / R-MID-1 教训第 6 次系统化首次代码守卫形式 / parser bug 修 / allowlist 144→129 清理 / 数字纠正 / 3636 PASS）；下一卡 CHG-SN-5-12 /admin/merge 视图 -->
