@@ -6687,3 +6687,39 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **注意事项**：
   - 主循环模型 claude-opus-4-7 偏离任务卡建议 sonnet（用户延续 opus 会话指令）
   - 本 PATCH 卡示范"ADR §验证段协议偏离回写"模式，与 CHG-SN-5-06-PATCH R-MID-1 修复同型号
+
+## CHG-SN-5-10 — merge + split + unmerge 端点实施（ADR-105）— 2026-05-12
+- **任务 ID**：CHG-SN-5-10
+- **日期**：2026-05-12
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无（ADR-105 已 Opus 3 轮 PASS，端点实施无新架构决策）
+- **来源**：SEQ-20260512-02 Phase C 子卡 10（CHG-SN-5-08 ADR-105 Accepted → CHG-SN-5-10 mutation 端点落地）
+- **实现内容**：
+  - **migration 062** `apps/api/src/db/migrations/062_create_video_merge_audit.sql`：CREATE TABLE video_merge_audit（action / source_video_ids[] / target_video_ids[] / snapshot_jsonb / performed_by / reason / reverted_at / reverted_by / reverted_reason + CHECK 约束）+ 3 索引（action + performed_at 部分索引 / source GIN / target GIN）
+  - **AdminAuditActionType 扩枚举**（`packages/types/src/admin-moderation.types.ts`）：+3 项（`video.merge` / `video.unmerge` / `video.split`）
+  - **video-merge.types.ts mutation 类型**（`packages/types/src/video-merge.types.ts`）：MergeParams/MergeResult / UnmergeParams/UnmergeResult / SplitGroup/SplitParams/SplitResult / VideoMergeAuditRow
+  - **DB 层查询**（新建 `apps/api/src/db/queries/video-merge-mutations.ts`）：14 函数（fetchVideosByIds / fetchSourcesByVideoId / fetchSourcesByVideoIds / detectMergeConflicts / fetchAuditById / insertMergeAudit / transferSourcesToTarget / softDeleteVideos / restoreVideos / reassignSourcesToOriginal / markAuditReverted / insertNewVideo / assignSourcesToVideo）
+  - **VideoMergesService 扩展**（`apps/api/src/services/VideoMergesService.ts`）：merge() / unmerge() / split() 三方法 + MergeSchema / UnmergeSchema / SplitSchema 三 zod schema；事务内 video_merge_audit INSERT + 业务操作 + COMMIT 后 fire-and-forget admin_audit_log
+  - **Route 扩展**（`apps/api/src/routes/admin/video-merges.ts`）：POST /admin/video-merges + POST /admin/video-merges/:auditId/unmerge + POST /admin/videos/:id/split
+  - **unit tests**（新建 `tests/unit/api/video-merge-mutations.test.ts`）：30 测试（merge 5 + unmerge 5 + split 6 + MergeSchema 5 + SplitSchema 5 + UnmergeSchema 2）+ 完整 audit payload 内容断言 + 事务 ROLLBACK + fire-and-forget 不写两项
+  - **audit-log-coverage 守卫同步**（`tests/unit/api/audit-log-coverage.test.ts`）：REQUIRED_ACTION_TYPES +3 项 + 总覆盖断言更新为 19 项
+- **关键设计决策（严格遵循 ADR-105）**：
+  - uq_sources_video_episode_url 冲突前置探测 → STATE_CONFLICT 409（R-105-1）
+  - video_merge_audit 在事务内写（强一致）/ admin_audit_log 在 COMMIT 后 fire-and-forget（Y-105-5）
+  - split Y-105-3 完整划分约束在 Service 层前置校验（无孤儿、无重复、覆盖全集）
+  - unmerge 同时处理 merge（还原 source videos + 归还 sources）和 split（还原原始 + 软删新 videos）两种 action
+- **文件范围**：
+  - 新建：`apps/api/src/db/migrations/062_create_video_merge_audit.sql`
+  - 修改：`packages/types/src/admin-moderation.types.ts`
+  - 修改：`packages/types/src/video-merge.types.ts`
+  - 新建：`apps/api/src/db/queries/video-merge-mutations.ts`
+  - 修改：`apps/api/src/services/VideoMergesService.ts`
+  - 修改：`apps/api/src/routes/admin/video-merges.ts`
+  - 新建：`tests/unit/api/video-merge-mutations.test.ts`
+  - 修改：`tests/unit/api/audit-log-coverage.test.ts`
+- **质量门禁**：
+  - typecheck 全绿（全 workspaces）
+  - lint 全绿（遗留 web-next 2 react-hooks 警告与本卡无关）
+  - unit 3596/3596 全绿（净增 33；baseline 3563）
+- **后续触发**：
+  - **解锁**：CHG-SN-5-11 `/admin/sources` 视图 + CHG-SN-5-12 `/admin/merge` 视图（均依赖 CHG-SN-5-09 + CHG-SN-5-10 完成）

@@ -128,6 +128,9 @@ export type AdminAuditActionType =
   | 'home_module.delete'
   | 'home_module.reorder'
   | 'home_module.publish_toggle'
+  | 'video.merge'
+  | 'video.unmerge'
+  | 'video.split'
 
 export type AdminAuditTargetKind =
   | 'video'

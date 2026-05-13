@@ -1,11 +1,11 @@
 /**
- * VideoMergesService.ts — video 合并候选预览业务层（ADR-105 / CHG-SN-5-09）
+ * VideoMergesService.ts — video 合并/拆分/撤销业务层（ADR-105 / CHG-SN-5-09/-10）
  *
- * 职责（本卡范围）：
+ * 职责：
  *   - listCandidates(): 查询候选组 + 计算 source_overlap_ratio 评分 + minScore 过滤 + 分页
- *
- * CHG-SN-5-10 范围（不在本卡）：
- *   - merge() / unmerge() / split() mutation 端点业务逻辑
+ *   - merge(): 执行合并（事务内）+ fire-and-forget admin_audit_log
+ *   - unmerge(): 撤销合并/拆分（事务内）+ fire-and-forget admin_audit_log
+ *   - split(): 拆分 video（事务内）+ fire-and-forget admin_audit_log
  */
 
 import { z } from 'zod'
@@ -15,6 +15,11 @@ import type {
   ListCandidatesResult,
   CandidateGroup,
   VideoSummaryForMerge,
+  MergeParams,
+  MergeResult,
+  UnmergeResult,
+  SplitParams,
+  SplitResult,
 } from '@resovo/types'
 import {
   fetchRawCandidateGroups,
@@ -22,10 +27,28 @@ import {
   fetchVideoDetailsForCandidates,
   type RawVideoDetailRow,
 } from '@/api/db/queries/video-merge-candidates'
+import {
+  fetchVideosByIds,
+  fetchSourcesByVideoId,
+  fetchSourcesByVideoIds,
+  detectMergeConflicts,
+  fetchAuditById,
+  insertMergeAudit,
+  transferSourcesToTarget,
+  softDeleteVideos,
+  restoreVideos,
+  reassignSourcesToOriginal,
+  markAuditReverted,
+  insertNewVideo,
+  assignSourcesToVideo,
+} from '@/api/db/queries/video-merge-mutations'
+import { AuditLogService } from '@/api/services/AuditLogService'
+import { AppError } from '@/api/lib/errors'
+import { normalizeTitle } from '@/api/services/TitleNormalizer'
 
 // ── zod schema（ADR-105 §端点契约）────────────────────────────────
 
-const VideoTypeEnum = z.enum([
+export const VideoTypeEnum = z.enum([
   'movie', 'series', 'anime', 'variety', 'documentary',
   'short', 'sports', 'music', 'news', 'kids', 'other',
 ])
@@ -35,6 +58,33 @@ export const ListCandidatesSchema = z.object({
   minScore: z.coerce.number().min(0).max(1).default(0.6),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   page: z.coerce.number().int().min(1).default(1),
+})
+
+export const MergeSchema = z.object({
+  sourceVideoIds: z.array(z.string().uuid()).min(1).max(10),
+  targetVideoId: z.string().uuid(),
+  reason: z.string().max(500).optional(),
+}).refine(
+  v => !v.sourceVideoIds.includes(v.targetVideoId),
+  { message: 'targetVideoId 不得在 sourceVideoIds 中', path: ['targetVideoId'] },
+).refine(
+  v => new Set(v.sourceVideoIds).size === v.sourceVideoIds.length,
+  { message: 'sourceVideoIds 不得含重复值', path: ['sourceVideoIds'] },
+)
+
+export const UnmergeSchema = z.object({
+  reason: z.string().max(500).optional(),
+})
+
+export const SplitSchema = z.object({
+  groups: z.array(z.object({
+    sourceIds: z.array(z.string().uuid()).min(1),
+    newVideoMeta: z.object({
+      title: z.string().min(1).max(500),
+      year: z.number().int().min(1800).max(2100).optional(),
+      type: VideoTypeEnum,
+    }),
+  })).min(2).max(20),
 })
 
 // ── 评分算法 v1（ADR-105 §4）──────────────────────────────────────
@@ -92,7 +142,11 @@ function mapVideoRow(row: RawVideoDetailRow): VideoSummaryForMerge {
 // ── Service ──────────────────────────────────────────────────────
 
 export class VideoMergesService {
-  constructor(private db: Pool) {}
+  private auditSvc: AuditLogService
+
+  constructor(private db: Pool) {
+    this.auditSvc = new AuditLogService(db)
+  }
 
   async listCandidates(params: ListCandidatesParams): Promise<ListCandidatesResult> {
     const { type = null, minScore, limit, page } = params
@@ -141,5 +195,278 @@ export class VideoMergesService {
     groups.sort((a, b) => b.score - a.score)
 
     return { data: groups, total, page, limit }
+  }
+
+  // ── merge ─────────────────────────────────────────────────────────
+
+  async merge(params: MergeParams, actorId: string): Promise<MergeResult> {
+    const { sourceVideoIds, targetVideoId, reason } = params
+    const allIds = [...sourceVideoIds, targetVideoId]
+
+    // 1. 校验所有 video 存在且未删除
+    const videos = await fetchVideosByIds(this.db, allIds)
+    const videoMap = new Map(videos.map(v => [v.id, v]))
+
+    for (const id of allIds) {
+      if (!videoMap.has(id)) {
+        throw new AppError('NOT_FOUND', `video ${id} 不存在`, 404)
+      }
+    }
+
+    const targetVideo = videoMap.get(targetVideoId)!
+    if (targetVideo.deleted_at !== null) {
+      throw new AppError('STATE_CONFLICT', 'targetVideoId 已被合并到其他视频（不可作为合并目标）', 409)
+    }
+
+    for (const id of sourceVideoIds) {
+      const v = videoMap.get(id)!
+      if (v.deleted_at !== null) {
+        throw new AppError('STATE_CONFLICT', `targetVideoId 已被合并到其他视频（不可作为合并目标）`, 409)
+      }
+    }
+
+    // 2. 前置冲突探测（uq_sources_video_episode_url）
+    const conflictCount = await detectMergeConflicts(this.db, sourceVideoIds, targetVideoId)
+    if (conflictCount > 0) {
+      throw new AppError(
+        'STATE_CONFLICT',
+        `source 与 target 视频存在重复 (episode_number, source_url) 组合 ${conflictCount} 条，请先在 /admin/sources 视图处理（保留其一删除其余）后再合并`,
+        409,
+      )
+    }
+
+    // 3. 构建 snapshot（source videos 完整数据 + 它们的 sources）
+    const sourcesOfSources = await fetchSourcesByVideoIds(this.db, sourceVideoIds)
+    const snapshotJsonb = {
+      videos: sourceVideoIds.map(id => videoMap.get(id)),
+      sources: sourcesOfSources.map(s => ({ id: s.id, video_id: s.video_id })),
+    }
+
+    // 4. 事务：INSERT audit + 转移 sources + 软删除 source videos
+    const client = await this.db.connect()
+    let auditId: string
+    try {
+      await client.query('BEGIN')
+
+      auditId = await insertMergeAudit(client, {
+        action: 'merge',
+        sourceVideoIds,
+        targetVideoIds: [targetVideoId],
+        snapshotJsonb,
+        performedBy: actorId,
+        reason: reason ?? null,
+      })
+
+      await transferSourcesToTarget(client, sourceVideoIds, targetVideoId)
+      await softDeleteVideos(client, sourceVideoIds)
+
+      await client.query('COMMIT')
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    } finally {
+      client.release()
+    }
+
+    // 5. fire-and-forget admin_audit_log（COMMIT 后才写，防虚假记录）
+    this.auditSvc.write({
+      actorId,
+      actionType: 'video.merge',
+      targetKind: 'video',
+      targetId: targetVideoId,
+      beforeJsonb: { sourceVideoIds, snapshot: snapshotJsonb },
+      afterJsonb: { auditId, targetVideoId },
+    })
+
+    return { auditId, targetVideoId }
+  }
+
+  // ── unmerge ───────────────────────────────────────────────────────
+
+  async unmerge(
+    auditId: string,
+    actorId: string,
+    reason?: string,
+  ): Promise<UnmergeResult> {
+    // 1. 拉取 audit 记录
+    const audit = await fetchAuditById(this.db, auditId)
+    if (!audit) {
+      throw new AppError('NOT_FOUND', `audit ${auditId} 不存在`, 404)
+    }
+    if (audit.reverted_at !== null) {
+      throw new AppError('STATE_CONFLICT', '该合并/拆分已被撤销（reverted_at IS NOT NULL）', 409)
+    }
+
+    const snapshotSources = (
+      (audit.snapshot_jsonb as { sources?: Array<{ id: string; video_id: string }> }).sources ?? []
+    )
+
+    let restoredVideoIds: string[]
+
+    if (audit.action === 'merge') {
+      // 撤销合并：还原 source videos + 归还 sources
+      restoredVideoIds = audit.source_video_ids
+
+      const client = await this.db.connect()
+      try {
+        await client.query('BEGIN')
+        await restoreVideos(client, restoredVideoIds)
+        await reassignSourcesToOriginal(client, snapshotSources)
+        await markAuditReverted(client, auditId, actorId, reason ?? null)
+        await client.query('COMMIT')
+      } catch (err) {
+        await client.query('ROLLBACK')
+        throw err
+      } finally {
+        client.release()
+      }
+    } else {
+      // 撤销拆分：还原原始 video + 归还 sources + 软删除拆分后 new videos
+      restoredVideoIds = audit.source_video_ids
+      const newVideoIds = audit.target_video_ids
+
+      const client = await this.db.connect()
+      try {
+        await client.query('BEGIN')
+        await restoreVideos(client, restoredVideoIds)
+        await reassignSourcesToOriginal(client, snapshotSources)
+        await softDeleteVideos(client, newVideoIds)
+        await markAuditReverted(client, auditId, actorId, reason ?? null)
+        await client.query('COMMIT')
+      } catch (err) {
+        await client.query('ROLLBACK')
+        throw err
+      } finally {
+        client.release()
+      }
+    }
+
+    // fire-and-forget admin_audit_log
+    const firstRestoredId = restoredVideoIds[0] ?? auditId
+    const revertedFromTargetVideoId = audit.action === 'merge' ? audit.target_video_ids[0] : undefined
+    this.auditSvc.write({
+      actorId,
+      actionType: 'video.unmerge',
+      targetKind: 'video',
+      targetId: firstRestoredId,
+      beforeJsonb: { auditId, action: audit.action, revertedFromTargetVideoId },
+      afterJsonb: { restoredVideoIds },
+    })
+
+    return { restoredVideoIds }
+  }
+
+  // ── split ─────────────────────────────────────────────────────────
+
+  async split(params: SplitParams, actorId: string): Promise<SplitResult> {
+    const { videoId, groups, reason } = params
+
+    // 1. 校验原 video 存在
+    const videos = await fetchVideosByIds(this.db, [videoId])
+    const video = videos[0]
+    if (!video) {
+      throw new AppError('NOT_FOUND', `video ${videoId} 不存在`, 404)
+    }
+    if (video.deleted_at !== null) {
+      throw new AppError('STATE_CONFLICT', '该视频已被合并，请先 unmerge 后再 split', 409)
+    }
+
+    // 2. 拉取全部 sources + 校验完整划分（Y-105-3）
+    const currentSources = await fetchSourcesByVideoId(this.db, videoId)
+    const currentSourceIdSet = new Set(currentSources.map(s => s.id))
+    const groupSourceIds = groups.flatMap(g => g.sourceIds)
+    const groupSourceIdSet = new Set(groupSourceIds)
+
+    if (groupSourceIds.length !== groupSourceIdSet.size) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        'groups.sourceIds 必须覆盖且仅覆盖拆分前 video 的全部 sources（不允许孤儿或重复）',
+        422,
+      )
+    }
+
+    for (const id of groupSourceIdSet) {
+      if (!currentSourceIdSet.has(id)) {
+        throw new AppError(
+          'VALIDATION_ERROR',
+          'groups.sourceIds 必须覆盖且仅覆盖拆分前 video 的全部 sources（不允许孤儿或重复）',
+          422,
+        )
+      }
+    }
+
+    if (groupSourceIdSet.size !== currentSourceIdSet.size) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        'groups.sourceIds 必须覆盖且仅覆盖拆分前 video 的全部 sources（不允许孤儿或重复）',
+        422,
+      )
+    }
+
+    // 3. 构建 snapshot（原始 video + 全部 sources）
+    const snapshotJsonb = {
+      videos: [video],
+      sources: currentSources.map(s => ({ id: s.id, video_id: s.video_id })),
+    }
+
+    // 4. 事务：INSERT audit + 创建新 videos + 分配 sources + 软删除原 video
+    const client = await this.db.connect()
+    let auditId: string
+    const newVideoIds: string[] = []
+
+    try {
+      await client.query('BEGIN')
+
+      // 先 INSERT audit（source_video_ids 已知；target_video_ids 待拆分后补）
+      // 使用空数组占位，后续 UPDATE 填入真实新 video ids
+      auditId = await insertMergeAudit(client, {
+        action: 'split',
+        sourceVideoIds: [videoId],
+        targetVideoIds: [],
+        snapshotJsonb,
+        performedBy: actorId,
+        reason: reason ?? null,
+      })
+
+      for (const group of groups) {
+        const shortId = Math.random().toString(36).slice(2, 10)
+        const newVideoId = await insertNewVideo(client, {
+          shortId,
+          title: group.newVideoMeta.title,
+          year: group.newVideoMeta.year ?? null,
+          type: group.newVideoMeta.type,
+          titleNormalized: normalizeTitle(group.newVideoMeta.title),
+        })
+        newVideoIds.push(newVideoId)
+        await assignSourcesToVideo(client, group.sourceIds, newVideoId)
+      }
+
+      // 回填 target_video_ids
+      await client.query(
+        `UPDATE video_merge_audit SET target_video_ids = $1::uuid[] WHERE id = $2`,
+        [newVideoIds, auditId],
+      )
+
+      await softDeleteVideos(client, [videoId])
+
+      await client.query('COMMIT')
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    } finally {
+      client.release()
+    }
+
+    // fire-and-forget admin_audit_log
+    this.auditSvc.write({
+      actorId,
+      actionType: 'video.split',
+      targetKind: 'video',
+      targetId: videoId,
+      beforeJsonb: { originalVideoId: videoId, snapshot: snapshotJsonb },
+      afterJsonb: { auditId, newVideoIds },
+    })
+
+    return { auditId, newVideoIds }
   }
 }

@@ -1,7 +1,5 @@
 /**
- * video-merge.types.ts — video 合并/拆分业务类型（ADR-105 / CHG-SN-5-09）
- *
- * 仅 candidate 预览相关类型；merge/split/unmerge mutation 类型在 CHG-SN-5-10 补齐。
+ * video-merge.types.ts — video 合并/拆分业务类型（ADR-105 / CHG-SN-5-09/-10）
  */
 
 import type { VideoType } from './video.types'
@@ -51,4 +49,62 @@ export interface ListCandidatesResult {
   readonly total: number
   readonly page: number
   readonly limit: number
+}
+
+// ── CHG-SN-5-10：mutation 端点类型 ───────────────────────────────────
+
+export interface MergeParams {
+  readonly sourceVideoIds: string[]
+  readonly targetVideoId: string
+  readonly reason?: string
+}
+
+export interface MergeResult {
+  readonly auditId: string
+  readonly targetVideoId: string
+}
+
+export interface UnmergeParams {
+  readonly auditId: string
+  readonly actorId: string
+  readonly reason?: string
+}
+
+export interface UnmergeResult {
+  readonly restoredVideoIds: string[]
+}
+
+export interface SplitGroup {
+  readonly sourceIds: string[]
+  readonly newVideoMeta: {
+    readonly title: string
+    readonly year?: number
+    readonly type: VideoType
+  }
+}
+
+export interface SplitParams {
+  readonly videoId: string
+  readonly groups: readonly SplitGroup[]
+  readonly reason?: string
+}
+
+export interface SplitResult {
+  readonly auditId: string
+  readonly newVideoIds: string[]
+}
+
+/** video_merge_audit 行（Service 层内部用） */
+export interface VideoMergeAuditRow {
+  readonly id: string
+  readonly action: 'merge' | 'split'
+  readonly sourceVideoIds: string[]
+  readonly targetVideoIds: string[]
+  readonly snapshotJsonb: Record<string, unknown>
+  readonly performedBy: string
+  readonly reason: string | null
+  readonly performedAt: string
+  readonly revertedAt: string | null
+  readonly revertedBy: string | null
+  readonly revertedReason: string | null
 }
