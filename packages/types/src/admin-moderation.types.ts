@@ -131,6 +131,7 @@ export type AdminAuditActionType =
   | 'video.merge'
   | 'video.unmerge'
   | 'video.split'
+  | 'source_line_alias.upsert'
 
 export type AdminAuditTargetKind =
   | 'video'
@@ -140,6 +141,7 @@ export type AdminAuditTargetKind =
   | 'crawler_site'
   | 'system'
   | 'home_module'
+  | 'source_line_alias'
 
 export interface AdminAuditLog {
   readonly id: string  // bigserial → string（避免 JS 大数精度）

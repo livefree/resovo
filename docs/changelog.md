@@ -6878,3 +6878,28 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - ADR 编号 ADR-117（ADR-106 已被 M-SN-4 admin-ui 下沉清单占用；ADR-115 / ADR-116 已存在；ADR-117 = 当前最高 ADR-116 后顺位无冲突）
   - migration 063 一旦应用不得修改 ADR 引用行（保留 `ADR-114-NEGATED`）；-11-PATCH 新建 / 改动文件头部统一引用 `ADR-117 + ADR-114-NEGATED` 双 ADR（A-117-2 约束）
   - 本卡示范"ADR 协议追溯 + PATCH 代码清债"两段式修复路径，与 06-PATCH/09-PATCH/10-PATCH 三连 PATCH 模式同源升级
+
+## CHG-SN-5-11-PATCH — 架构清债 7 项（Service 层 + audit + 硬编码色 + segment 语义 + img + zod uuid + DataTable 一体化）— 2026-05-13
+- **任务 ID**：CHG-SN-5-11-PATCH
+- **日期**：2026-05-13
+- **执行模型**：claude-sonnet-4-6（符合建议；实施类任务，ADR-117 已锁协议）
+- **子代理**：无
+- **缺陷落地**：
+  - **P0-2**：新建 `apps/api/src/services/SourcesMatrixService.ts`（Route → Service → queries 分层；包含 upsertLineAlias + fire-and-forget audit）
+  - **P0-3**：`SourceMatrixRow.tsx` 删 6 处 hex fallback（`--state-*-bg` token 已确认存在于 design-tokens dist）
+  - **P0-4**：`source_line_alias.upsert` 写入 AdminAuditActionType + source_line_alias 写入 AdminAuditTargetKind（packages/types）；PUT 端点鉴权收紧为 admin only（D-117-1）
+  - **P1-5**：DataTable 新增 `renderExpandedRow` / `expandedKeys` props（packages/admin-ui）；SourcesClient.tsx 迁移为 DataTable 一体化（toolbar.search + bulkActions + pagination + row 展开 slot）
+  - **P1-6**：`getVideoGroupStats` orphan SQL 修正（`submitted_by IS NOT NULL` → `all_dead AND is_published = false`）；KPI label "孤岛 / 用户纠错" → "孤岛"
+  - **P1-7**：`SourceMatrixRow.tsx` `<img>` → `next/image`（含 width/height/sizes 必填属性）
+  - **P1-8**：`sources-matrix.ts` 路由 videoId path 参数 regex → `z.string().uuid()`
+- **测试**：audit-log-coverage guard 19 → 20；typecheck 全绿；3614 tests PASS（净增 1）
+- **影响文件**：
+  - `apps/api/src/services/SourcesMatrixService.ts`（新建）
+  - `apps/api/src/routes/admin/sources-matrix.ts`（重构）
+  - `apps/api/src/db/queries/sources-matrix.ts`（orphan SQL 修正 + findLineAlias 辅助函数）
+  - `packages/types/src/admin-moderation.types.ts`（AdminAuditActionType + AdminAuditTargetKind 扩展）
+  - `packages/admin-ui/src/components/data-table/types.ts`（renderExpandedRow + expandedKeys props）
+  - `packages/admin-ui/src/components/data-table/data-table.tsx`（展开行渲染实现）
+  - `apps/server-next/src/app/admin/sources/_client/SourceMatrixRow.tsx`（hex fallback 删除 + img→Image + 导出 SignalPill/MatrixExpand）
+  - `apps/server-next/src/app/admin/sources/_client/SourcesClient.tsx`（DataTable 迁移完整重写）
+  - `tests/unit/api/audit-log-coverage.test.ts`（guard +1）

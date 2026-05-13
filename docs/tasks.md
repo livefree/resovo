@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 当前无进行中任务；CHG-SN-5-11-ADR 已闭环（2026-05-13，ADR-117 RETROACTIVE 追溯起草 / 2 轮 Opus 评审 / 0 红线 + 4 黄 + 2 advisory 全闭环 / Accepted）；下一卡 CHG-SN-5-11-PATCH 架构清债 6 项（解锁条件已满足） -->
+<!-- 当前无进行中任务；CHG-SN-5-11-PATCH 已闭环（2026-05-13，7 项缺陷全落地 / typecheck 全绿 / 3614 tests PASS / audit guard 19→20 / DataTable renderExpandedRow API 沉淀 packages/admin-ui）-->

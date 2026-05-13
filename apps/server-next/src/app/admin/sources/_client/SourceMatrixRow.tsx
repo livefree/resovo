@@ -1,15 +1,16 @@
 'use client'
 
 import { useState, type CSSProperties } from 'react'
+import Image from 'next/image'
 import type { VideoGroupRow, LineMatrixRow, SignalStatus } from '@/lib/sources/types'
 import { getVideoMatrix } from '@/lib/sources/api'
 
 // ── 信号色映射 ────────────────────────────────────────────────────
 
 const SIGNAL_COLOR: Record<SignalStatus, string> = {
-  ok:      'var(--state-success-bg, #d1fae5)',
-  partial: 'var(--state-warning-bg, #fef3c7)',
-  dead:    'var(--state-error-bg, #fee2e2)',
+  ok:      'var(--state-success-bg)',
+  partial: 'var(--state-warning-bg)',
+  dead:    'var(--state-error-bg)',
   pending: 'var(--bg-surface-elevated)',
 }
 
@@ -107,16 +108,16 @@ const PILL_LABEL: Record<SignalStatus, string> = {
   pending: '未测',
 }
 
-function SignalPill({ status }: { status: SignalStatus }) {
+export function SignalPill({ status }: { status: SignalStatus }) {
   const variant = PILL_VARIANT[status]
   const label = PILL_LABEL[status]
   const color = status === 'ok' ? 'var(--state-success-fg)'
     : status === 'partial' ? 'var(--state-warning-fg)'
     : status === 'dead' ? 'var(--state-error-fg)'
     : 'var(--fg-muted)'
-  const bg = status === 'ok' ? 'var(--state-success-bg, #d1fae5)'
-    : status === 'partial' ? 'var(--state-warning-bg, #fef3c7)'
-    : status === 'dead' ? 'var(--state-error-bg, #fee2e2)'
+  const bg = status === 'ok' ? 'var(--state-success-bg)'
+    : status === 'partial' ? 'var(--state-warning-bg)'
+    : status === 'dead' ? 'var(--state-error-bg)'
     : 'var(--bg-surface-elevated)'
   const border = status === 'ok' ? 'var(--state-success-border)'
     : status === 'partial' ? 'var(--state-warning-border)'
@@ -154,7 +155,7 @@ interface MatrixExpandProps {
   videoId: string
 }
 
-function MatrixExpand({ videoId }: MatrixExpandProps) {
+export function MatrixExpand({ videoId }: MatrixExpandProps) {
   const [lines, setLines] = useState<LineMatrixRow[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -361,11 +362,12 @@ export function SourceMatrixRow({ row, selected, onSelect }: SourceMatrixRowProp
             ›
           </span>
           {row.coverUrl && (
-            <img
+            <Image
               src={row.coverUrl}
               alt=""
               width={32}
               height={44}
+              sizes="32px"
               style={{ objectFit: 'cover', borderRadius: '3px', flexShrink: 0 }}
             />
           )}

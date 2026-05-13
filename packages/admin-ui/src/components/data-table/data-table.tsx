@@ -177,6 +177,8 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
     bulkActions,
     flashRowKeys,
     pagination,
+    renderExpandedRow,
+    expandedKeys,
   } = props
 
   // CHG-DESIGN-02 Step 4：toolbar 渲染门控
@@ -495,47 +497,55 @@ export function DataTable<T>(props: DataTableProps<T>): React.ReactElement {
         {!loading && !error && pageRows.map((row, idx) => {
           const key = rowKey(row)
           const isFlashing = flashRowKeys?.has(key) ?? false
+          const isExpanded = expandedKeys?.has(key) ?? false
           return (
-            <div
-              key={key}
-              role="row"
-              aria-selected={selection?.selectedKeys.has(key)}
-              data-flash={isFlashing ? 'true' : undefined}
-              style={rowStyle(key)}
-              onMouseEnter={() => setHoveredKey(key)}
-              onMouseLeave={() => setHoveredKey(null)}
-              onClick={() => onRowClick?.(row, idx)}
-            >
-              {hasSelection && (
-                <div role="cell" style={{ ...TD_STYLE, justifyContent: 'center' }}>
-                  <input
-                    type="checkbox"
-                    checked={selection?.selectedKeys.has(key) ?? false}
-                    onChange={() => handleSelectRow(key)}
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label={`选择行 ${key}`}
-                  />
+            <React.Fragment key={key}>
+              <div
+                role="row"
+                aria-selected={selection?.selectedKeys.has(key)}
+                aria-expanded={renderExpandedRow ? isExpanded : undefined}
+                data-flash={isFlashing ? 'true' : undefined}
+                style={rowStyle(key)}
+                onMouseEnter={() => setHoveredKey(key)}
+                onMouseLeave={() => setHoveredKey(null)}
+                onClick={() => onRowClick?.(row, idx)}
+              >
+                {hasSelection && (
+                  <div role="cell" style={{ ...TD_STYLE, justifyContent: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={selection?.selectedKeys.has(key) ?? false}
+                      onChange={() => handleSelectRow(key)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`选择行 ${key}`}
+                    />
+                  </div>
+                )}
+                {visibleColumns.map((col) => {
+                  const value = col.accessor(row)
+                  const content = col.cell
+                    ? col.cell({ row, value, rowIndex: idx })
+                    : String(value ?? '')
+                  return (
+                    <div
+                      key={col.id}
+                      role="cell"
+                      style={{
+                        ...TD_STYLE,
+                        ...(col.overflowVisible ? { overflow: 'visible' } : {}),
+                      }}
+                    >
+                      {content}
+                    </div>
+                  )
+                })}
+              </div>
+              {isExpanded && renderExpandedRow && (
+                <div data-table-expand-panel role="region" aria-label={`展开行 ${key}`}>
+                  {renderExpandedRow(row)}
                 </div>
               )}
-              {visibleColumns.map((col) => {
-                const value = col.accessor(row)
-                const content = col.cell
-                  ? col.cell({ row, value, rowIndex: idx })
-                  : String(value ?? '')
-                return (
-                  <div
-                    key={col.id}
-                    role="cell"
-                    style={{
-                      ...TD_STYLE,
-                      ...(col.overflowVisible ? { overflow: 'visible' } : {}),
-                    }}
-                  >
-                    {content}
-                  </div>
-                )
-              })}
-            </div>
+            </React.Fragment>
           )
         })}
       </div>

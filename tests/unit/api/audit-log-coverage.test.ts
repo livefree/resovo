@@ -19,6 +19,7 @@ import { join } from 'node:path'
 // plan v1.4 §3.0.5 真源 + ADR-104（home_module.* 5 项扩枚举，CHG-SN-5-05/-06 落地，
 // 中期审计 2026-05-12 CHG-SN-5-06-PATCH 同卡补 guard）
 // + ADR-105（video.merge / video.unmerge / video.split 3 项扩枚举，CHG-SN-5-10 落地）
+// + ADR-117（source_line_alias.upsert 1 项，CHG-SN-5-11-PATCH 落地）
 // — 与 packages/types AdminAuditActionType union 对齐
 const REQUIRED_ACTION_TYPES = [
   // plan v1.4 §3.0.5（11 项）
@@ -43,6 +44,8 @@ const REQUIRED_ACTION_TYPES = [
   'video.merge',
   'video.unmerge',
   'video.split',
+  // ADR-117 扩枚举（1 项，source_line_alias upsert 协议，CHG-SN-5-11-PATCH 落地）
+  'source_line_alias.upsert',
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -96,7 +99,7 @@ describe('admin_audit_log 覆盖率守卫（plan v1.4 §3.0.5）', () => {
     ).toEqual([])
   })
 
-  it('总覆盖：plan §3.0.5 + ADR-104 + ADR-105 19 个 action_type 全部就位', () => {
+  it('总覆盖：plan §3.0.5 + ADR-104 + ADR-105 + ADR-117 20 个 action_type 全部就位', () => {
     expect(found.size).toBeGreaterThanOrEqual(REQUIRED_ACTION_TYPES.length)
     for (const t of REQUIRED_ACTION_TYPES) expect(found.has(t)).toBe(true)
   })

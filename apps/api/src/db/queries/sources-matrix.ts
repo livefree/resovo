@@ -130,13 +130,7 @@ export async function getVideoGroupStats(db: Pool): Promise<VideoGroupStats> {
        COUNT(DISTINCT v.id)::TEXT AS total,
        COUNT(DISTINCT v.id) FILTER (WHERE v.source_check_status IN ('ok', 'partial'))::TEXT AS active,
        COUNT(DISTINCT v.id) FILTER (WHERE v.source_check_status = 'all_dead')::TEXT AS dead,
-       COUNT(DISTINCT v.id) FILTER (
-         WHERE EXISTS (
-           SELECT 1 FROM video_sources vs2
-           WHERE vs2.video_id = v.id AND vs2.submitted_by IS NOT NULL
-             AND vs2.deleted_at IS NULL
-         )
-       )::TEXT AS orphan
+       COUNT(DISTINCT v.id) FILTER (WHERE v.source_check_status = 'all_dead' AND v.is_published = false)::TEXT AS orphan
      FROM videos v
      WHERE v.deleted_at IS NULL
        AND EXISTS (
@@ -317,6 +311,29 @@ export async function listLineAliases(db: Pool): Promise<SourceLineAlias[]> {
     displayName: r.display_name,
     updatedAt: r.updated_at,
   }))
+}
+
+// ── 查询：单条别名（Service 层 audit before 状态）────────────────────
+
+export async function findLineAlias(
+  db: Pool,
+  sourceSiteKey: string,
+  sourceName: string,
+): Promise<SourceLineAlias | null> {
+  const result = await db.query<DbAliasRow>(
+    `SELECT source_site_key, source_name, display_name, updated_at
+     FROM source_line_aliases
+     WHERE source_site_key = $1 AND source_name = $2`,
+    [sourceSiteKey, sourceName],
+  )
+  const r = result.rows[0]
+  if (!r) return null
+  return {
+    sourceSiteKey: r.source_site_key,
+    sourceName: r.source_name,
+    displayName: r.display_name,
+    updatedAt: r.updated_at,
+  }
 }
 
 // ── 写操作：upsert 别名 ───────────────────────────────────────────

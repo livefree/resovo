@@ -52,6 +52,20 @@ export interface DataTableProps<T> {
   readonly bulkActions?: React.ReactNode
 
   /**
+   * 行展开内容渲染器（可展开行场景，如 sources matrix 线路×集数）。
+   * 提供时，DataTable 在每行之后按需渲染展开 panel；
+   * 展开状态由消费方通过 expandedKeys + onRowClick 管理（DataTable 不持有展开状态）。
+   * 展开 panel 不占用任何列 cell，宽度与 .dt__scroll 容器一致（ADR-117 D-117-5）。
+   */
+  readonly renderExpandedRow?: (row: T) => React.ReactNode
+
+  /**
+   * 当前展开行的 rowKey 集合。配合 renderExpandedRow 使用；
+   * 消费方在 onRowClick 中切换 key，DataTable 只负责渲染展开内容。
+   */
+  readonly expandedKeys?: ReadonlySet<string>
+
+  /**
    * 行 flash 动画触发集合（乐观更新场景，CHG-DESIGN-02 Step 5）。
    * 集合中的 rowKey 命中行会接收 data-flash="true"，触发 1.5s ease-out 高亮动画。
    * 时序所有权在消费方：DataTable 仅按当前 prop 渲染；1.5s 后清空集合由消费方
