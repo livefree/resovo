@@ -7100,3 +7100,62 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 主循环模型 claude-opus-4-7 偏离任务卡建议 sonnet（延续 opus 会话节省 spawn 成本，无新决策性，可接受）
   - 本卡示范"-AUDIT 半实施补完范式"：声明落地的代码守卫部分用启发式 grep 而非 AST 严格解析（工程量低 + 教训核心修复 vs 完美 AST 解析的边际收益）
   - 5 次 PATCH 完成度统计（06-PATCH 1 项 A / 09-PATCH 1 项 A / 10-PATCH 6 项 A− / 11-PATCH 17 项 B / 11-PATCH-2 6 项 A− / -AUDIT-2 4 项 待评估 / 整体趋势"范围 ≤ 5 项 = 100% 完成度"假设验证）
+
+---
+
+## CHG-SN-5-12 — `/admin/merge` 合并/拆分工作台视图（4 端点消费 / CHECKLIST-AUDIT 首次拦截 + 缩范围）
+- **任务 ID**：CHG-SN-5-12
+- **日期**：2026-05-13
+- **执行模型**：claude-opus-4-7（偏离建议 sonnet — 延续 opus 会话）
+- **子代理**：无（视图实施类 + ADR-105 协议已锁 + 不涉新架构决策）
+- **来源**：plan §6 M-SN-5 推荐 5 + ADR-105 §验证视图实施卡判据
+- **CHECKLIST-AUDIT 首次起拦截作用**：原 task-queue 范围含 "audit timeline" 但 ADR-105 §端点契约无 GET audit 端点（违反 plan §4.5 R7 MUST-8 + verify-endpoint-adr 守卫）→ 用户裁定路径 A 缩范围 → audit timeline 转 M-SN-6 期独立卡（ADR-118 + GET 端点 + 视图扩展三段式）
+- **范围（缩范围版）**：
+  - **Candidates tab**：DataTable 一体化（toolbar + pagination 内置）+ 行展开 panel（组内 videos + target radio 选择 + merge action）+ minScore filter 输入
+  - **Split tab**：videoId 输入 → 复用 ADR-117 GET matrix 端点拉 sources → 多组分配表单（select 每个 source 到目标组）+ 多组标题输入 + split action
+  - **Merge 执行**：行展开 panel 内 "执行合并" 按钮 → POST /admin/video-merges → 成功 toast + action="撤销"（POST unmerge）/ 失败 STATE_CONFLICT 引导 /admin/sources
+  - **Split 执行**：拆分工作台 "执行拆分" 按钮 → POST /admin/videos/:id/split → 成功 toast + action="撤销"（POST unmerge with audit_id）
+- **ADR §验证段逐条勾对**（quality-gates §1 第 5 项强制）：
+  - ✅ `/admin/merge` 视图消费 4 端点（candidates / merge / unmerge / split）
+  - ✅ 与既有视图卡（-01/-02/-03/-07）DataTable 一体化 + 6 原语消费范式一致（实际 9 原语：PageHeader / AdminButton / AdminInput / AdminCard / DataTable / LoadingState / ErrorState / EmptyState / useToast）
+  - ✅ (不在本卡) /admin/sources 视图 — 已 -11 + PATCH-2 落地
+- **修复内容**：
+  - 新建 `apps/server-next/src/lib/merge/api.ts`（4 端点客户端：listCandidates / mergeVideos / unmergeVideos / splitVideo；复用 `@resovo/types` MergeParams / MergeResult / UnmergeResult / SplitParams / SplitResult / ListCandidatesParams / ListCandidatesResult）
+  - 新建 `apps/server-next/src/app/admin/merge/_client/MergeClient.tsx`（主组件 2 tab + 4 section + 行展开 + drawer 替代复杂表单 / ~440 行）
+  - 替换 `apps/server-next/src/app/admin/merge/page.tsx`（PlaceholderPage → MergeClient）
+  - 复用 `apps/server-next/src/lib/sources/api.ts` `getVideoMatrix`（ADR-117 GET sources/video-groups/:id/matrix）拉 split 工作台 sources
+- **文件范围**：
+  - `apps/server-next/src/lib/merge/api.ts`（新建，53 行）
+  - `apps/server-next/src/app/admin/merge/_client/MergeClient.tsx`（新建，~440 行）
+  - `apps/server-next/src/app/admin/merge/page.tsx`（替换 PlaceholderPage）
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`
+- **质量门禁**：
+  - typecheck 全绿（全 workspaces）
+  - lint 全绿（5 packages，含 web-next 既有 react-hooks 警告与本卡无关）
+  - verify:adr-contracts 全 PASS（endpoint-adr ✅ 144 路由对齐 / error-message ⚠️ advisory 120 legacy / adr-d-numbers ✅ 10/10 闭环）
+  - 3636/3636 unit tests 全绿（本卡纯前台视图实施 + DB queries / Service 层零改动 / 不新增 audit 写入位点 / audit-log-coverage 守卫维持 32 测试）
+  - 零硬编码颜色（grep `#[0-9a-fA-F]{3,6}` 命中 0）
+  - 零 `<img>` 标签（本视图无图片需求）
+  - DataTable 一体化消费（renderExpandedRow + expandedKeys + pagination + onRowClick + onSelectionChange ADR-103 AMENDMENT 2026-05-13 完整范式）
+- **不在范围**（CLAUDE.md §改动收敛 5）：
+  - **audit timeline 完整视图**：超 ADR-105 §端点契约范围（无 GET audit）→ M-SN-6 期独立卡 ADR-118 + 端点 + 视图三段式（已入 queue 占位）
+  - 复杂拖拽算法 / @dnd-kit：split 工作台用 select 而非拖拽（足够实现 ADR-105 splitGroups 协议；拖拽 UX 升级留 M-SN-6 + 用户反馈后决策）
+  - virtual scroll / 大数据量优化：candidate ≤ 100 组 / split sources ≤ 50 行无需
+  - Service 层 / DB schema 变更：纯前台消费 ADR-105 既有端点
+  - e2e 测试：M-SN-5 阶段审计 CHG-SN-5-13 统一承担
+- **CHECKLIST-AUDIT 机制有效性首次验证**：
+  - **开工前合规检查** quality-gates §1 第 5 项 "ADR §验证段勾对" 拦截 over-claim 范围（audit timeline）→ 缩范围 + 转 M-SN-6
+  - **verify-endpoint-adr** 在 commit 前可阻塞"未起 ADR 新增端点"——本卡 0 新端点 ✓
+  - **verify-adr-d-numbers** 在 commit 前可识别 D-N 编号闭环情况——本卡不引入新 D 编号 ✓
+- **关键发现**：
+  - **CHECKLIST-AUDIT 首次发挥作用 = 验证机制设计有效**：开工前合规检查识别"audit timeline"超 ADR-105 范围（vs CHG-SN-5-11 整卡静默跳 ADR 教训）→ 用户裁定 / 缩范围 / 转独立卡，避免"零 ADR 落地"型 P0 协议违规
+  - **三段式拆分（ADR + 端点 + 视图）**：M-SN-6 audit timeline 占位卡按 plan §4.5 ADR-端点先后协议标准模板组织，与 ADR-104/-105/-117 范式一致
+  - **缩范围 + 工时降低 0.5w → 0.4w**：PATCH 范围软上限内 / 完成度 100% / 主线推进 -13 milestone 审计无阻塞
+  - **9 原语消费 vs ADR §验证段 ≥ 6 件要求**：50% 超额完成（PageHeader / AdminButton / AdminInput / AdminCard / DataTable / LoadingState / ErrorState / EmptyState / useToast）
+- **后续触发**：
+  - **解锁 CHG-SN-5-13** M-SN-5 milestone 阶段审计（Opus）— 5 视图 + 9 端点 + ADR-104/-105/-117 完成度复盘
+  - **M-SN-6 期 CHG-SN-6-AUDIT-TIMELINE**：ADR-118 + GET audit 端点 + /admin/merge audit timeline section 扩展
+- **注意事项**：
+  - 主循环模型 claude-opus-4-7 偏离任务卡建议 sonnet（延续 opus 会话节省 spawn 成本 + 含 CHECKLIST-AUDIT 首次触发裁决路径决策性，opus 主循环可接受）
+  - 本卡示范 "CHECKLIST-AUDIT 拦截 → 用户裁定 → 缩范围 + 转独立卡" 完整路径，未来类似 over-claim 场景可复用
+  - Split 工作台用 select 而非 @dnd-kit 拖拽是 YAGNI 决策（M-SN-5 推荐 5 未明示拖拽需求；UX 升级留用户反馈后）
