@@ -6409,3 +6409,24 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 端点实施卡 -05/-06 必须严格按 ADR-104 §端点契约表 6 端点契约落地，零设计自由度
   - audit log 扩枚举属 closed enum 扩张（admin-moderation.types.ts:112 注释约束），plan §9 ADR-104 推进路径已满足前者，types 落地由 -05/-06 同 commit 完成
   - PATCH UpdateSchema `.omit({ enabled: true })` 是 Y2 协议层闭合关键 — 端点实施卡不得反向扩出 enabled（违反即 §4.5 ADR-端点先后协议回流 ADR-104a 修订路径）
+
+## [CHG-SN-5-05] home_modules 端点实施第 1 批（list + create + update）
+- **完成时间**：2026-05-12
+- **记录时间**：2026-05-12 19:21
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无（按 ADR-104 既定协议直接落地，零设计自由度）
+- **修改文件**：
+  - `packages/types/src/admin-moderation.types.ts` — AdminAuditActionType 扩 5 项（home_module.create / update / delete / reorder / publish_toggle）+ AdminAuditTargetKind 扩 1 项（home_module）
+  - `apps/api/src/services/HomeModulesService.ts` — 新建（list / create / update + ADR-104 zod schema：CreateBase / applyBusinessRules / CreateSchema / UpdateSchema / ListSchema）
+  - `apps/api/src/routes/admin/home-modules.ts` — 新建（3 端点：GET list / POST create / PATCH update；admin only；DB CHECK 违反 → STATE_CONFLICT 409 兜底）
+  - `apps/api/src/server.ts` — 注册 adminHomeModulesRoutes
+  - `tests/unit/api/admin-home-modules.test.ts` — 新建（15 测试：3 端点 happy path + 错误码全集 + audit log 写入验证）
+- **新增依赖**：无
+- **数据库变更**：无（复用 migration 050 + queries/home-modules.ts 既有 8 函数）
+- **实施要点**：
+  - UpdateSchema 使用 `.strict()` 确保 `enabled` 字段被协议层显式拒绝（unrecognized_keys 而非静默剥离后报"至少一字段"）；ADR-104 Y2 闭合精确实现
+  - AuditLogService.write fire-and-forget 模式（CHG-SN-4-05）：create → home_module.create（afterJsonb = 完整 HomeModule）；update → home_module.update（beforeJsonb + afterJsonb = 完整快照）
+  - 路由层 DB CHECK 违反兜底：PostgreSQL error code 23514 → STATE_CONFLICT 409 + 约束名透出
+- **注意事项**：
+  - CHG-SN-5-06 接手时在同一文件追加 3 端点（DELETE / POST reorder / POST publish-toggle），Service 追加 delete / reorder / publishToggle 方法；ReorderSchema + PublishToggleSchema 已在 ADR-104 锁定
+  - admin-moderation.types.ts 扩枚举（5+1）已落地，CHG-SN-5-06 不需重复扩枚举

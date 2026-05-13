@@ -123,6 +123,11 @@ export type AdminAuditActionType =
   | 'staging.revert'
   | 'staging.publish'
   | 'staging.batch_publish'
+  | 'home_module.create'
+  | 'home_module.update'
+  | 'home_module.delete'
+  | 'home_module.reorder'
+  | 'home_module.publish_toggle'
 
 export type AdminAuditTargetKind =
   | 'video'
@@ -131,6 +136,7 @@ export type AdminAuditTargetKind =
   | 'review_label'
   | 'crawler_site'
   | 'system'
+  | 'home_module'
 
 export interface AdminAuditLog {
   readonly id: string  // bigserial → string（避免 JS 大数精度）

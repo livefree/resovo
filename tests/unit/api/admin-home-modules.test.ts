@@ -1,0 +1,321 @@
+/**
+ * admin-home-modules.test.ts — CHG-SN-5-05
+ *
+ * 覆盖：
+ *   - GET  /admin/home-modules        happy path + 参数验证
+ *   - POST /admin/home-modules        happy path + 业务规则校验 + audit log
+ *   - PATCH /admin/home-modules/:id   happy path + NOT_FOUND + enabled 禁止 + audit log
+ */
+
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import Fastify from 'fastify'
+import cookie from '@fastify/cookie'
+import { setupAuthenticate } from '@/api/plugins/authenticate'
+import { signAccessToken } from '@/api/lib/auth'
+
+// ── Mocks ──────────────────────────────────────────────────────────────────
+
+vi.mock('@/api/lib/redis', () => ({
+  redis: {
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue('OK'),
+  },
+}))
+vi.mock('@/api/lib/postgres', () => ({ db: {} }))
+
+const mockListAdmin = vi.fn()
+const mockFindById = vi.fn()
+const mockCreate = vi.fn()
+const mockUpdate = vi.fn()
+
+vi.mock('@/api/db/queries/home-modules', () => ({
+  listAdminHomeModules: (...args: unknown[]) => mockListAdmin(...args),
+  findHomeModuleById: (...args: unknown[]) => mockFindById(...args),
+  createHomeModule: (...args: unknown[]) => mockCreate(...args),
+  updateHomeModule: (...args: unknown[]) => mockUpdate(...args),
+  deleteHomeModule: vi.fn(),
+  reorderHomeModules: vi.fn(),
+}))
+
+const mockAuditWrite = vi.fn()
+vi.mock('@/api/services/AuditLogService', () => ({
+  AuditLogService: class {
+    write = mockAuditWrite
+  },
+}))
+
+// ── Test Fixtures ──────────────────────────────────────────────────────────
+
+const MODULE = {
+  id: 'a0000000-0000-0000-0000-000000000001',
+  slot: 'featured' as const,
+  brandScope: 'all-brands' as const,
+  brandSlug: null,
+  ordering: 0,
+  contentRefType: 'video' as const,
+  contentRefId: 'vid-001',
+  startAt: null,
+  endAt: null,
+  enabled: true,
+  metadata: {},
+  createdAt: '2026-05-12T00:00:00Z',
+  updatedAt: '2026-05-12T00:00:00Z',
+}
+
+async function buildApp() {
+  const { adminHomeModulesRoutes } = await import('@/api/routes/admin/home-modules')
+  const app = Fastify({ logger: false })
+  await app.register(cookie, { secret: 'test-secret' })
+  setupAuthenticate(app)
+  await app.register(adminHomeModulesRoutes, { prefix: '/v1' })
+  await app.ready()
+  return app
+}
+
+async function adminToken() {
+  return `Bearer ${await signAccessToken({ userId: 'u-admin', role: 'admin' })}`
+}
+
+// ── GET /admin/home-modules ────────────────────────────────────────────────
+
+describe('GET /admin/home-modules', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockListAdmin.mockResolvedValue({ rows: [MODULE], total: 1 })
+    app = await buildApp()
+  })
+
+  it('返回分页列表 200', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home-modules',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data).toHaveLength(1)
+    expect(body.total).toBe(1)
+    expect(body.page).toBe(1)
+    expect(body.limit).toBe(20)
+  })
+
+  it('slot 过滤参数传入 query 层', async () => {
+    await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home-modules?slot=featured&enabled=true',
+      headers: { authorization: await adminToken() },
+    })
+    expect(mockListAdmin).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ slot: 'featured', enabled: true }),
+    )
+  })
+
+  it('invalid slot 返回 422', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/admin/home-modules?slot=invalid',
+      headers: { authorization: await adminToken() },
+    })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.code).toBe('VALIDATION_ERROR')
+  })
+
+  it('未认证返回 401', async () => {
+    const res = await app.inject({ method: 'GET', url: '/v1/admin/home-modules' })
+    expect(res.statusCode).toBe(401)
+  })
+})
+
+// ── POST /admin/home-modules ───────────────────────────────────────────────
+
+describe('POST /admin/home-modules', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockCreate.mockResolvedValue(MODULE)
+    app = await buildApp()
+  })
+
+  it('创建成功返回 201 + data', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home-modules',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({
+        slot: 'featured',
+        brandScope: 'all-brands',
+        contentRefType: 'video',
+        contentRefId: 'vid-001',
+      }),
+    })
+    expect(res.statusCode).toBe(201)
+    expect(res.json().data.id).toBe(MODULE.id)
+  })
+
+  it('audit log fire-and-forget 调用一次', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home-modules',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({
+        slot: 'featured',
+        brandScope: 'all-brands',
+        contentRefType: 'video',
+        contentRefId: 'vid-001',
+      }),
+    })
+    expect(mockAuditWrite).toHaveBeenCalledOnce()
+    expect(mockAuditWrite).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'home_module.create',
+      targetKind: 'home_module',
+      targetId: MODULE.id,
+    }))
+  })
+
+  it('brand-specific 无 brandSlug 返回 422', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home-modules',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({
+        slot: 'featured',
+        brandScope: 'brand-specific',
+        contentRefType: 'video',
+        contentRefId: 'vid-001',
+      }),
+    })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.code).toBe('VALIDATION_ERROR')
+    expect(res.json().error.message).toContain('brand-specific')
+  })
+
+  it('all-brands 有 brandSlug 返回 422', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home-modules',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({
+        slot: 'featured',
+        brandScope: 'all-brands',
+        brandSlug: 'alpha',
+        contentRefType: 'video',
+        contentRefId: 'vid-001',
+      }),
+    })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.message).toContain('all-brands')
+  })
+
+  it('startAt >= endAt 返回 422', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home-modules',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({
+        slot: 'featured',
+        brandScope: 'all-brands',
+        contentRefType: 'video',
+        contentRefId: 'vid-001',
+        startAt: '2026-06-01T00:00:00Z',
+        endAt: '2026-05-01T00:00:00Z',
+      }),
+    })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.message).toContain('startAt')
+  })
+
+  it('slot × contentRefType 不兼容返回 422（type_shortcuts + video）', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/home-modules',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({
+        slot: 'type_shortcuts',
+        brandScope: 'all-brands',
+        contentRefType: 'video',
+        contentRefId: 'vid-001',
+      }),
+    })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.message).toContain('slot × contentRefType')
+  })
+})
+
+// ── PATCH /admin/home-modules/:id ─────────────────────────────────────────
+
+describe('PATCH /admin/home-modules/:id', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockFindById.mockResolvedValue(MODULE)
+    mockUpdate.mockResolvedValue({ ...MODULE, ordering: 5 })
+    app = await buildApp()
+  })
+
+  it('部分更新成功返回 200 + data', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/v1/admin/home-modules/${MODULE.id}`,
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ ordering: 5 }),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.ordering).toBe(5)
+  })
+
+  it('audit log fire-and-forget 调用一次（update）', async () => {
+    await app.inject({
+      method: 'PATCH',
+      url: `/v1/admin/home-modules/${MODULE.id}`,
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ ordering: 5 }),
+    })
+    expect(mockAuditWrite).toHaveBeenCalledOnce()
+    expect(mockAuditWrite).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'home_module.update',
+      targetKind: 'home_module',
+      targetId: MODULE.id,
+    }))
+  })
+
+  it('id 不存在返回 404', async () => {
+    mockFindById.mockResolvedValue(null)
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/admin/home-modules/nonexistent-id',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ ordering: 1 }),
+    })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe('NOT_FOUND')
+  })
+
+  it('body 含 enabled 返回 422（协议层禁止，走 publish-toggle）', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/v1/admin/home-modules/${MODULE.id}`,
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled: false }),
+    })
+    expect(res.statusCode).toBe(422)
+    const body = res.json()
+    expect(body.error.code).toBe('VALIDATION_ERROR')
+    expect(body.error.message).toContain('publish-toggle')
+  })
+
+  it('空 body 返回 422（至少一字段）', async () => {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/v1/admin/home-modules/${MODULE.id}`,
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error.message).toContain('至少一字段')
+  })
+})
