@@ -7594,3 +7594,43 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - **解锁 RETRO 6/7 CHG-SN-6-RETRO-2**：plan §5.3 阶段审计协议修订列入"视图测试 ≥ 9 / 共享原语 ≥ 80%"硬清单
 - **注意事项**：
   - 本卡是 MVP RETRO：完整覆盖率梳理需 verify:view-test-coverage 脚本，CHG-SN-6-CHECKLIST-AUDIT-3 期可加；未来视图新增需主循环遵守 ≥ 9 测试（quality-gates §6 §1 第 5 项 ADR 验证段勾对清单已含）
+
+---
+
+## CHG-SN-6-RETRO-2 — plan §5.3 阶段审计协议修订（M-SN-6 RETRO 6/7）
+- **任务 ID**：CHG-SN-6-RETRO-2
+- **日期**：2026-05-14
+- **执行模型**：claude-opus-4-7（延续会话；建议 sonnet）
+- **子代理**：无（文档协议修订实施类）
+- **来源**：CHG-SN-5-13 milestone arch-reviewer B+ → CHG-SN-5-13-PATCH A− 数据沉淀首批硬指标试点 → RETRO 6/7 正式协议化
+- **问题理解**：plan §5.3 阶段审计原 A/B/C 评级仅判完成标准 / 偏差报告 / e2e / 工时 / a11y，未含 M-SN-5 累计 5 次同型号偏离暴露的 5 项硬清单（视图测试覆盖 / 共享原语占比 / audit payload 断言 / schema 三层防护 / PATCH 范围）；阶段审计判据缺位让"R-MID-1 5 次失守"+"M-SN-3/-4 视图测试 < 9"+"migration 029 schema 偏离"等系统性问题反复发生
+- **修复内容（3 文档协议修订）**：
+  1. **plan §5.3 §Milestone 阶段审计协议**：A/B/C 评级表追加"5 项硬清单 100% / ≥ 80% / < 80%"条件 + 新增"阶段审计硬清单（MUST）"子章节列出 5 项判据 + 自动化脚本映射 + 沉淀来源
+  2. **quality-gates §7 阶段审计硬清单**：mirror plan §5.3，详细表格（# / 硬指标 / 判据 / 自动化脚本 / 触发卡）+ 评级联动 A/B/C + 自动化 vs 手工核验状态
+  3. **workflow-rules §阶段审计硬清单 5 项**：简版引用，主循环可快速查阅；详细判据引到 quality-gates §7
+- **5 项硬清单具体内容**：
+  1. 视图测试 ≥ 9 用例 / 视图卡（advisory + CHG-SN-6-CHECKLIST-AUDIT-3 后续自动化）
+  2. 共享原语占比 ≥ 80%（手工 review + 后续 `verify:primitive-usage-ratio` 脚本）
+  3. R-MID-1 audit payload 内容断言（已强制：`tests/unit/api/audit-log-coverage.test.ts` 白名单 9+11）
+  4. schema 三层防护（已强制：`verify:adr-contracts` 4 类 + `test:integration` + `migrate:check`）
+  5. PATCH 卡范围 ≤ 5 项（手工统计；workflow-rules 已沉淀软上限）
+- **文件范围**：
+  - `docs/server_next_plan_20260427.md`（§5.3 评级表 + 硬清单子章节 +30 行）
+  - `docs/rules/quality-gates.md`（§7 阶段审计硬清单 + 表格 + 评级联动 +35 行）
+  - `docs/rules/workflow-rules.md`（§阶段审计硬清单 5 项简版 +20 行）
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`
+- **质量门禁**：
+  - lint 全绿（doc-only，无 typecheck / unit test 影响）
+  - 3 文档交叉引用一致（plan 权威源 / quality-gates §7 详细判据 / workflow-rules 简版）
+- **不在范围**：
+  - `verify:view-test-coverage` / `verify:primitive-usage-ratio` 自动化脚本（M-SN-6 完善后落地）
+  - CI 集成"阶段审计硬清单"自动核验（当前 advisory + 手工 grep）
+  - 历史 milestone（M-SN-1 ~ M-SN-4）追溯审计（仅 M-SN-5 起作为试点 / M-SN-6 起正式生效）
+- **关键发现**：
+  - **plan §5.3 协议先行**：5 项硬清单先沉淀到 plan 权威源，后续 CI 自动化（M-SN-6 完善期）+ ESLint 规则有依据；防"约束未落到文档先实施"反复
+  - **mirror over inline**：plan §5.3 单一权威源 + quality-gates §7 详细表格 mirror + workflow-rules 简版引用，避免文档分裂（quality-gates 仅描述判据 / workflow-rules 提供执行入口）
+  - **评级联动**：A = 5/5 / B = 4/5 / C ≤ 3/5 直接挂钩 plan §5.3 评级，让 arch-reviewer 阶段审计输出 100% 标准化（5 行检查表强制）
+- **自动化循环验证**：执行 → 自评通过 → 无 PATCH → 下一卡（RETRO 7/7 CHG-SN-6-DATATABLE-STICKY-SCROLL）
+- **后续触发**：
+  - **解锁 RETRO 7/7 CHG-SN-6-DATATABLE-STICKY-SCROLL**：DataTable body 独立滚动 UX 增强 + ADR-103 AMENDMENT 续
+  - **M-SN-6 完善期**：扩 `verify:view-test-coverage` + `verify:primitive-usage-ratio` 自动化脚本；advisory → FAIL fast 升级

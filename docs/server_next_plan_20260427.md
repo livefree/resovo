@@ -365,11 +365,23 @@ M-SN-7 final 审计必须人工 sign-off（PR 描述显式签字）
 
 | 评级 | 客观条件（全部满足） | 处理 |
 |:-:|---|---|
-| **A** | 完成标准 100% + 偏差报告 0 项"必须回滚" + e2e 黄金路径全绿 + 工时未超 +10% + a11y 无 critical 项 | 直接进入下一 milestone |
-| **B** | 完成标准 ≥90% + 偏差报告 ≤2 项"需追溯 ADR" + e2e 全绿 + 工时未超 +30% | 补齐 ADR 后进入下一 milestone |
-| **C** | 任一不满足 B：完成标准 <90% / 偏差报告含"必须回滚" / e2e 出红 / 工时超 +30% | 整 milestone 返工；BLOCKER §5.2 第 11 条 |
+| **A** | 完成标准 100% + 偏差报告 0 项"必须回滚" + e2e 黄金路径全绿 + 工时未超 +10% + a11y 无 critical 项 + **下方 5 项硬清单 100% 命中** | 直接进入下一 milestone |
+| **B** | 完成标准 ≥90% + 偏差报告 ≤2 项"需追溯 ADR" + e2e 全绿 + 工时未超 +30% + **下方 5 项硬清单 ≥ 80%** | 补齐 ADR 后进入下一 milestone |
+| **C** | 任一不满足 B：完成标准 <90% / 偏差报告含"必须回滚" / e2e 出红 / 工时超 +30% / **5 项硬清单 < 80%** | 整 milestone 返工；BLOCKER §5.2 第 11 条 |
 
 **两层评级体系**：任务级 §5.1 PASS/CONDITIONAL/REJECT 与 milestone 级 A/B/C 独立。任务级评审检查 diff 局部质量；milestone 级评审检查全 milestone 战略对齐与完成度。
+
+#### 阶段审计硬清单（MUST，CHG-SN-6-RETRO-2 沉淀 / 2026-05-14）
+
+主循环 + arch-reviewer 阶段审计必须 **逐项核验** 并写入审计输出：
+
+1. **视图测试 ≥ 9 用例 / 视图卡**：每个 milestone 内新增 / 修改的 `apps/server-next/src/app/admin/<view>/_client/*Client.tsx` 与 `apps/web-next/src/**/*.tsx`（含 admin 视图 + 前台关键视图）对应的 `tests/unit/components/<area>/<view>.test.tsx` 累计 `it()` 数 **必须 ≥ 9**。MVP RETROACTIVE 范围（CHG-SN-5-13-PATCH P2-2）。CI 自动化由 `verify:view-test-coverage` 脚本承担（CHG-SN-6-CHECKLIST-AUDIT-3 advisory；M-SN-6 完善后扩展强制）。
+2. **共享原语占比 ≥ 80%**：每个 milestone 新增视图的 JSX 节点中，引用 `packages/admin-ui/src/components/**` 或 `apps/web-next/src/components/primitives/**` 共享原语的节点 / 总自定义节点 ≥ 80%。手工 review 时统计 `import { ... } from '@resovo/admin-ui'` 与本地 inline `<div className="...">` 比例；自动化由后续 `verify:primitive-usage-ratio` 脚本承担。
+3. **R-MID-1 audit payload 内容断言**：所有写操作（POST/PATCH/DELETE）的测试必须不仅断言 `audit_logs` 行数 +1，**还须断言 payload 关键字段非空**（如 source_video_ids / target_video_id / version 等）。`tests/unit/api/audit-log-coverage.test.ts` 的 PAYLOAD_REQUIRED 白名单（9 端点）由 R-MID-1 强制守卫；新增写端点自动加入白名单或 EXEMPT 列表。
+4. **schema 三层防护**：`npm run verify:adr-contracts` 4 类核验全绿（端点 / 错误码 / D-N 偏离 / **sql-schema-alignment**）；`tests/integration/api/**` 真实 PG 覆盖关键查询；`npm run migrate:check` 在 CI / preflight 头部前置（CHG-SN-6-CI-MIGRATE-DRY-RUN）。
+5. **PATCH 卡范围 ≤ 5 项**：milestone 内单张 PATCH 卡修复点 > 5 项必须强制拆 `-A/-B` 子卡（M-SN-5 数据观察："PATCH 范围 ≥ 5 项 → 完成度反比"）。审计时统计 milestone 内 PATCH 卡平均范围，> 5 项的 PATCH 卡数 / 总 PATCH 卡数 ≥ 20% → 阶段评级降一档。
+
+**沉淀来源**：CHG-SN-5-13 milestone 阶段审计 arch-reviewer B+ → CHG-SN-5-13-PATCH 自动化循环 PATCH 修后 A−（首批硬指标试点）；M-SN-6 起作为正式协议规约执行。
 
 ### 5.4 任务卡 / changelog / commit 模板
 

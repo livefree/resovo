@@ -151,3 +151,32 @@
 - 跨应用层同值 type alias 重复检测（CHG-SN-5-VIDEOTYPE-DRY-CLEANUP）
 - ESLint plugin 落地（与 no-hardcoded-color 同类，独立 R&D）
 - ADR message 模板长期迁移结构化 YAML/JSON（A-CHECKLIST-1，当前 markdown 容忍）
+
+---
+
+## 7. 阶段审计硬清单（CHG-SN-6-RETRO-2 沉淀 / 2026-05-14）
+
+> **权威源**：`docs/server_next_plan_20260427.md` §5.3 "阶段审计硬清单"
+> 本节为 plan §5.3 在 quality-gates 内的镜像，主循环 + arch-reviewer 在 milestone 审计时逐项核验。
+
+每个 milestone 阶段审计时主循环 spawn arch-reviewer (Opus) 必须输出 **5 项硬清单核验表**：
+
+| # | 硬指标 | 判据 | 自动化脚本（CI 强制 / advisory） | 触发卡 |
+|---|---|---|---|---|
+| 1 | 视图测试 ≥ 9 用例 / 视图卡 | `apps/server-next/src/app/admin/<view>/_client/*Client.tsx` + `apps/web-next/src/**/*Client.tsx` 对应 `tests/unit/components/<area>/<view>.test.tsx` `it()` 数 ≥ 9 | `verify:view-test-coverage`（M-SN-6 完善后落地，当前手工 grep） | CHG-SN-5-13-PATCH P2-2（沉淀指标）+ CHG-SN-6-RETRO-1（RETROACTIVE 补齐） |
+| 2 | 共享原语占比 ≥ 80% | 新增视图 JSX 节点中 `import from '@resovo/admin-ui'` / 共享 primitives 与 inline `<div>` 比例 ≥ 80% | `verify:primitive-usage-ratio`（M-SN-6 完善后落地，当前手工 review） | CHG-SN-5-12 DataTable 一体化（共享原语试点）|
+| 3 | R-MID-1 audit payload 内容断言 | 所有写操作测试断言 `audit_logs` 行数 + payload 关键字段非空（`expect.objectContaining({actionType, targetKind, targetId, beforeJsonb, afterJsonb})`）；新增写端点自动加入 `tests/unit/api/audit-log-coverage.test.ts` 白名单 | `tests/unit/api/audit-log-coverage.test.ts` PAYLOAD_REQUIRED + EXEMPT（已强制 9+11） | CHG-SN-5-CHECKLIST-AUDIT-2 R-MID-1 5 次系统化 |
+| 4 | schema 三层防护 | `npm run verify:adr-contracts` 4 类核验全绿（端点 + 错误码 + D-N + sql-schema-alignment）+ `tests/integration/api/**` 真实 PG 覆盖核心查询 + `npm run migrate:check` preflight 头部前置 | `verify:adr-contracts` + `test:integration` + `migrate:check` | CHG-SN-5-CHECKLIST-AUDIT + AUDIT-3 + CHG-SN-6-INTEGRATION-TEST + CI-MIGRATE-DRY-RUN |
+| 5 | PATCH 卡范围 ≤ 5 项 | 单张 PATCH 卡修复点 > 5 → 强制拆 `-A/-B`；milestone 内 PATCH 卡范围 > 5 项数 / 总 PATCH 卡数 ≥ 20% → 阶段评级降一档 | 手工统计（commit message 关键词 grep）| M-SN-5 数据观察 "PATCH 范围 ≥ 5 项 → 完成度反比"（workflow-rules 已沉淀）|
+
+**评级联动**（plan §5.3 A / B / C 修订）：
+- **A 级**：5 项硬清单 100% 命中
+- **B 级**：5 项硬清单 ≥ 80%（4/5 命中 + 1 项 advisory 警告，补齐计划写入 milestone 后续卡）
+- **C 级**：< 80% 命中（≤ 3/5） → 整 milestone 返工（BLOCKER §5.2 第 11 条）
+
+**自动化 vs 手工**：
+- 第 3 项 / 第 4 项已自动化（CI / preflight 强制）
+- 第 1 项 / 第 2 项当前 advisory + 手工 grep；CHG-SN-6-CHECKLIST-AUDIT-3 advisory 模式
+- 第 5 项当前手工统计，无自动化（PATCH 卡 commit message 已含范围数）
+
+**沉淀来源**：CHG-SN-5-13 milestone 阶段审计 arch-reviewer B+ → CHG-SN-5-13-PATCH 自动化循环修后 A−（首批硬指标试点）；M-SN-6 起作为正式协议规约。
