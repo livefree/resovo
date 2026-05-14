@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 当前无进行中任务；CHG-SN-6-CHECKLIST-AUDIT-3 已闭环（2026-05-13，verify:sql-schema-alignment 静态扫描守卫 / 41 表 5 核心表对齐 / 3659 PASS）；M-SN-6 RETRO 1/7 完成，下一卡 CHG-SN-6-INTEGRATION-TEST -->
+<!-- 当前无进行中任务；CHG-SN-6-INTEGRATION-TEST 已闭环（2026-05-13 MVP，17 集成测试 PASS / 三层闭环防护落地）；M-SN-6 RETRO 2/7 完成，下一卡 CHG-SN-6-CI-MIGRATE-DRY-RUN -->

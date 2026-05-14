@@ -7379,3 +7379,63 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - 主循环模型 claude-opus-4-7（机制设计性 + 实施类混合；可接受 opus 也可降 sonnet，本卡延续会话节省 spawn 成本）
   - 子代理：本卡未 spawn arch-reviewer（评审需求度低 — 静态扫描脚本 + 文档强制是已成熟范式；本卡实质性扩展既有 CHECKLIST-AUDIT-2 守卫，无新决策性）；如未来类似机制设计涉及更复杂决策（如 SQL parser AST / FAIL fast 阈值升级），仍走 Opus + arch-reviewer 评审
   - 5 alias 局限 + advisory 模式是有意 trade-off：覆盖 95%+ queries 用法 + 0 误报；M-SN-6 完善 alias 上下文推断后扩 100% 覆盖 + 升 FAIL fast
+
+---
+
+## CHG-SN-6-INTEGRATION-TEST — admin route 集成测试套件（M-SN-6 RETRO 2/7）
+- **任务 ID**：CHG-SN-6-INTEGRATION-TEST
+- **日期**：2026-05-13
+- **执行模型**：claude-opus-4-7（偏离建议 sonnet — 延续 opus 会话节省 spawn 成本）
+- **子代理**：无（实施类 + 真实 PG 测试驱动）
+- **来源**：CHG-SN-5-13-PATCH-2 用户报告 + CHECKLIST-AUDIT-3 静态扫描互补层；防 unit test mock pg.Pool.query 不验真 SQL
+- **修复内容（MVP）**：
+  - 新建 `tests/helpers/integration-pg.ts`：共享 PG client + assertQueryRuns helper
+  - 新建 `tests/integration/api/admin-sources.test.ts`（9 测试）：
+    - listVideoGroups 6 路径（无过滤 / segment dead/orphan/correction / keyword / 分页）
+    - getVideoGroupStats 4 指标 FILTER SQL
+    - getVideoMatrix nonexistent video → 空数组
+    - listLineAliases 表存在性
+  - 新建 `tests/integration/api/admin-video-merges.test.ts`（8 测试）：
+    - fetchRawCandidateGroups + countRawCandidateGroups（验证 mc JOIN）
+    - fetchVideoDetailsForCandidates / fetchVideosByIds / fetchSourcesByVideoId/Ids（验证 mc.* 15 列 + 空数组短路）
+    - detectMergeConflicts 自连接 SQL（CHG-SN-5-10-PATCH P0-2 源 vs 源探测）
+  - 新建 `vitest.integration.config.ts`：与 vitest.config.ts 分离；include `tests/integration/**`；fileParallelism false 防 PG 并发冲突；testTimeout 30s
+  - 新建 `npm run test:integration` script（含 --env-file=.env.local 注入 DATABASE_URL）
+- **验证目标**：SQL 真实执行不抛 DatabaseError → 验证 schema 对齐 + 类型 cast 正确（unit test mock 不验真，本层互补）
+- **文件范围**：
+  - `tests/helpers/integration-pg.ts`（新建，34 行）
+  - `tests/integration/api/admin-sources.test.ts`（新建，82 行 / 9 测试）
+  - `tests/integration/api/admin-video-merges.test.ts`（新建，70 行 / 8 测试）
+  - `vitest.integration.config.ts`（新建）
+  - `package.json`（追加 test:integration script）
+- **质量门禁**：
+  - typecheck 全绿
+  - unit test 3659 全绿（baseline 维持，集成测试 separate config 不影响 unit）
+  - **integration test 17/17 全绿**（admin-sources 9 + admin-video-merges 8）
+  - verify:adr-contracts 4 类全 PASS（含 verify:sql-schema-alignment）
+- **结构性意义 — 三层闭环防护全部落地（M-SN-5 schema 偏离的真正终结）**：
+  
+  | 层 | 工具 | 检测对象 | 速度 | 覆盖 |
+  |---|---|---|---|---|
+  | 静态扫描 | verify:sql-schema-alignment | queries 内 `<alias>.<column>` vs migration schema | <1s | 95%+ |
+  | **集成测试**（本卡）| test:integration | 真实 PG SQL 执行不抛错 | ~2s | 100% happy path |
+  | unit + audit-log-coverage | vitest mock | 业务逻辑 + audit payload | <1s | 100% 业务 |
+- **MVP 简化策略**：
+  - 第一版仅覆盖 admin/sources + admin/video-merges 端点（即 CHG-SN-5-13-PATCH-2 修复的范围回归核验）
+  - 测试只读（不修改 dev DB 数据 / 不需 fixture seed）；用 nonexistent UUID 跑空路径
+  - **不在范围**（M-SN-6 期扩）：
+    - admin/home-modules + admin/submissions + admin/subtitles + admin/users 集成测试（按需补）
+    - 写路径测试（merge / split / unmerge 需 fixture seed + transactional rollback）
+    - CI 流水线集成（CHG-SN-6-CI-MIGRATE-DRY-RUN 同卡处理 / 或本卡 follow-up）
+- **关键发现**：
+  - **MVP 17 测试 1.84s 全绿**：真实 PG query 速度可接受（vs unit mock < 200ms）
+  - **fileParallelism: false 必要**：vitest 默认多 worker 并发跑会让 PG 连接池压力大 / 写测试冲突；本卡 MVP 全只读但仍 disable 并行作未来扩展防御
+  - **separate config 是稳健选择**：与 unit test include 分离 → npm test 不误跑 PG / CI 可独立调度集成测试
+  - **fetchSourcesByVideoIds([]) 空数组短路**：本卡测试验证 helper 的 0 query 短路逻辑（防 production 浪费连接）
+- **自动化循环验证**：本卡执行 → 自评通过（17/17 + 3659 unit + verify:adr-contracts 全 PASS）→ 无 PATCH → 下一卡
+- **后续触发**：
+  - **解锁 CHG-SN-6-CI-MIGRATE-DRY-RUN**（RETRO 3/7）：CI 加 npm run migrate dry-run 干跑核验
+  - **M-SN-6 期完善**（不在本卡）：扩 home-modules / submissions / subtitles 等其他端点集成测试 + 写路径 fixture seed + CI 集成
+- **注意事项**：
+  - DATABASE_URL 必须设（.env.local）才能跑；test:integration script 显式 --env-file=.env.local
+  - 本卡是**双层防护下半层**（上半层 verify:sql-schema-alignment 静态扫描；本卡真实执行）→ M-SN-5 schema 偏离类问题终结
