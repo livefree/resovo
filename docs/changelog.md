@@ -7324,3 +7324,58 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **注意事项**：
   - migration 029 是 M-SN-3 末期落地的 schema 改造（CHG-361），ADR-105/-117 起草卡（M-SN-5 中期）应核但漏检 — CHECKLIST-AUDIT 应在"新 ADR 起草前 grep migration 删列清单"
   - 用户 dev DB 是本卡修复 migration 滞后才追平 060 → 063；其他开发机 / CI / 生产环境可能同样滞后，部署前必跑 migrate
+
+---
+
+## CHG-SN-6-CHECKLIST-AUDIT-3 — verify:sql-schema-alignment 静态扫描守卫（M-SN-6 RETRO 1/7）
+- **任务 ID**：CHG-SN-6-CHECKLIST-AUDIT-3
+- **日期**：2026-05-13
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（机制设计但实质性低 + 测试驱动 + 实操即验证）
+- **来源**：CHG-SN-5-13-PATCH-2 用户报告"播放线路加载失败" → 6 类真生产偏离 → 3 核心 verify 脚本不验真 SQL 漏检 → 用户授权 M-SN-6 RETRO 批次启动 + CHECKLIST-AUDIT-3 优先
+- **修复内容**：
+  - **新建 `scripts/lib/migration-parser.mjs`**（120 行）：解析 `apps/api/src/db/migrations/*.sql` 顺序 CREATE TABLE / ALTER TABLE ADD/DROP/RENAME COLUMN 子句 → 算出每表当前 schema 列集合；不做完整 SQL parser，正则匹配顶层语句模式
+  - **新建 `scripts/verify-sql-schema-alignment.mjs`**（106 行）：扫 `apps/api/src/db/queries + services/**/*.ts` 内 SQL template literal（必含 SELECT/FROM/JOIN/INSERT/UPDATE 关键字）`<alias>.<column>` 字面量 → 比对硬编码 alias map (v/vs/mc/wh/sla → 5 核心表) → 不在 schema 内的报警
+  - **聚合 `npm run verify:adr-contracts`** 串行追加 verify:sql-schema-alignment
+  - **preflight `[5f/6]` 段更新**：4 类自动核验聚合输出
+  - **quality-gates §6 §4 类新增**：协议合规自动核验文档强制更新
+- **简化策略说明**：
+  - 不做完整 SQL parser（工程量高）；正则 + 关键字过滤 + camelCase 排除 = 误报率从 39 → 0
+  - alias map 仅覆盖明确无歧义的 5 alias（v/vs/mc/wh/sla）；`s` 在 subtitles.ts 内指 subtitles 而非 video_sources，本卡排除 advisory pass；M-SN-6 完善后扩 alias 上下文推断
+  - **advisory 模式**（不阻塞 CI）：当前 main 已全部修，无残留；M-SN-6 完善后升 FAIL fast
+- **文件范围**：
+  - `scripts/lib/migration-parser.mjs`（新建）
+  - `scripts/verify-sql-schema-alignment.mjs`（新建）
+  - `package.json`（追加 verify:sql-schema-alignment script + 聚合 verify:adr-contracts）
+  - `scripts/preflight.sh`（[5f/6] 4 类核验合并段）
+  - `docs/rules/quality-gates.md` §6 §4 类新增
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`
+- **质量门禁**：
+  - typecheck + lint 全绿
+  - verify:adr-contracts 4 类全 PASS（含 verify:sql-schema-alignment ✅ 41 表 / 5 核心表全对齐）
+  - 3659 unit test 全绿（守卫脚本不影响 unit baseline）
+  - 验证机制有效性：脚本能识别 RENAME COLUMN（migration 019 category → source_category）+ DROP COLUMN（migration 029 15 列）；本机回归核验通过
+- **结构性意义 — 三层闭环防护正式上岗**：
+
+  | 层 | 机制 | 覆盖 |
+  |---|---|---|
+  | 1. 协议合规自动核验 | verify:endpoint-adr / error-message / adr-d-numbers | ADR § 端点契约 / 错误码模板 / D-N 偏离闭环 |
+  | 2. **SQL schema 静态对齐**（本卡）| verify:sql-schema-alignment | queries 列引用 vs migration 全集 schema |
+  | 3. unit test mock + audit-log-coverage 守卫 | 既有 | 单元正确性 + audit payload 内容断言 |
+
+  **未覆盖（M-SN-6 RETRO 待补）**：
+  - **集成测试**（CHG-SN-6-INTEGRATION-TEST）：跑真实 PG 子集 → 防 mock 不验真 SQL；本卡静态扫描互补
+  - **CI migrate dry-run**（CHG-SN-6-CI-MIGRATE-DRY-RUN）：防 dev DB / 生产环境 migration 不同步
+  - **alias 上下文推断**：M-SN-6 完善后扩 + 升 FAIL fast 模式
+- **关键发现**：
+  - **正则 + 关键字过滤足够**：误报率从 39 → 0 仅靠 (a) 限定 backtick template literal 内 (b) 必含 SQL 关键字 (c) 列名 snake_case（排除 TS camelCase 属性）三规则
+  - **RENAME COLUMN 是 migration 029 之外的偏离源**：migration 019 把 `videos.category` rename 为 `source_category`，parser 未处理 RENAME 时报 v.source_category 误报 → 补 RENAME 处理后清零
+  - **3 个核心 verify 形成防 schema 偏离硬围栏**：本卡 + CHG-SN-6-INTEGRATION-TEST + CHG-SN-6-CI-MIGRATE-DRY-RUN 三层叠加，防 schema 偏离再次绕过自动化守卫
+- **自动化循环**：本卡符合 -13 模式（执行 → 自评 → 通过 / 起 PATCH → 隐式重审）；自评未发现新偏离 → 直接通过
+- **后续触发**：
+  - **解锁 CHG-SN-6-INTEGRATION-TEST**（RETRO 2/7）：集成测试套件跑真实 PG（M-SN-6 RETRO 批次顺序第二张）
+  - **解锁 CHG-SN-6-CI-MIGRATE-DRY-RUN**（RETRO 3/7）：CI 加 migrate dry-run
+- **注意事项**：
+  - 主循环模型 claude-opus-4-7（机制设计性 + 实施类混合；可接受 opus 也可降 sonnet，本卡延续会话节省 spawn 成本）
+  - 子代理：本卡未 spawn arch-reviewer（评审需求度低 — 静态扫描脚本 + 文档强制是已成熟范式；本卡实质性扩展既有 CHECKLIST-AUDIT-2 守卫，无新决策性）；如未来类似机制设计涉及更复杂决策（如 SQL parser AST / FAIL fast 阈值升级），仍走 Opus + arch-reviewer 评审
+  - 5 alias 局限 + advisory 模式是有意 trade-off：覆盖 95%+ queries 用法 + 0 误报；M-SN-6 完善 alias 上下文推断后扩 100% 覆盖 + 升 FAIL fast

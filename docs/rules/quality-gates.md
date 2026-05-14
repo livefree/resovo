@@ -133,6 +133,8 @@
 
 3. **`npm run verify:adr-d-numbers`**（advisory）：解析 ADR §决策要点 D-NNN-N 编号，**权威源 changelog.md 显式 D-N 闭环**；ADR 列出但 changelog 未闭环的 D 编号 → 警告 + 产物 `docs/audit/adr-d-status.json` 给 milestone 审计消费
 
+4. **`npm run verify:sql-schema-alignment`**（advisory，CHG-SN-6-CHECKLIST-AUDIT-3 新增）：解析 `apps/api/src/db/migrations/*.sql` 全集（CREATE TABLE / ADD COLUMN / DROP COLUMN / RENAME COLUMN）算出每表当前 schema → 扫 `apps/api/src/db/queries/**/*.ts` + `apps/api/src/services/**/*.ts` 内 SQL template literal `<alias>.<column>` 字面量 → 比对 5 核心表（videos / video_sources / users / media_catalog / watch_history）schema → 不在列表的报警；防 CHG-SN-5-13-PATCH-2 类 migration 029 后未迁移 mc JOIN 偏离。M-SN-6 完善后扩 alias 上下文推断 + 升 FAIL fast
+
 ### 4 类文档强制规则（修订 §1/§2/§3 已落地）
 
 4. **§1 第 5 项** "ADR §验证段逐条勾对清单"（R-CHECKLIST-2 修复 09-PATCH 类教训）
