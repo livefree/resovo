@@ -86,6 +86,44 @@ module/
 > 完整体验"body 独立滚动"需父级提供 height 约束；否则走 `min-height: 240px` 防御性兜底。后续 Step 7B（视频库消费切换）/ CHG-DESIGN-08（视频库视觉对齐）/ CHG-DESIGN-12（cell 复合组件沉淀）。
 >
 > 即：本节规范仅约束 apps/server v1 时代的现存模块；server-next 新增模块禁止套用本节"v1 ModernDataTable"语义。
+>
+> **2026-05-14 修订（CHG-SN-6-DATATABLE-STICKY-SCROLL / RETRO 7/7，ADR-103 AMENDMENT 2026-05-14）**：
+>
+> server-next DataTable 一体化的 **两种高度消费模式**显式规范（API 零变更 / 消费方选择）：
+>
+> **模式 A — 整页滚动（默认 / 推荐）**：消费方不设父级 height；`AdminShell main` 提供整页滚动；toolbar + filters + table + foot 整体随 main 滚动。**适用**：标准列表页 / CRUD 视图（M-SN-5 全部视图卡走此模式 / CHG-SN-5-13-PATCH-2 修复后定型）。**消费方 zero work**：
+>
+> ```tsx
+> // ✅ 推荐：直接渲染，不设外层 height
+> export default function FooPage() {
+>   return (
+>     <div>
+>       <PageHeader title="..." />
+>       <DataTable rows={...} columns={...} pagination={{...}} />
+>     </div>
+>   )
+> }
+> ```
+>
+> **模式 B — body 独立滚动（增强 / 嵌入场景）**：父级提供显式 height + 父链 `min-height: 0` 穿透；table body 单轴滚动 / thead sticky / foot 固定底部。**适用**：dashboard 半屏 widget / dialog 内表格 / 强调"foot pagination 始终可见"。**约束**：父链全部 `min-height: 0`（flex item 默认 auto 阻断压缩），最外层 height 来自 `vh` / 父 calc / grid row。
+>
+> ```tsx
+> // ⚠️ 模式 B：父级 height + 父链 min-height: 0
+> export default function FooDashboardWidget() {
+>   return (
+>     <div style={{ height: 'calc(100vh - var(--admin-chrome-h))', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+>       <DataTable rows={...} columns={...} pagination={{...}} />
+>     </div>
+>   )
+> }
+> ```
+>
+> **失败模式**（已观察 / 必避免）：
+> 1. 父链中间 div 缺 `min-height: 0` → DataTable 高度被内容撑爆 → 等价模式 A 但额外消耗高度（CHG-SN-5-13-PATCH-2 教训）
+> 2. 父级用 `height: 100%` 但 viewport ancestor 无显式高度 → DataTable 塌至 240px 兜底
+> 3. 同页面切换模式 A → B（动态 height）→ scroll position 不保留（已知限制，非缺陷）
+>
+> 详细判据 + 不变内容 + 已否决方案（`bodyScrollMode` prop）见 ADR-103 AMENDMENT 2026-05-14。
 
 所有 **apps/server v1** 后台数据表格必须同时满足以下 6 项（每项均为硬约束，不允许部分完成却标记已完成）：
 

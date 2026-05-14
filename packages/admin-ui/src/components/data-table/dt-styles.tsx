@@ -39,8 +39,13 @@ const DT_CSS = `
   width: 100%;
   /* CHG-DESIGN-02 Step 7A：防御性兜底
    * 消费方未提供 height 约束（如父容器无 height: calc(...)）时，
-   * 至少保留 240px 可视高度，避免 flex 链下塌成 0；正确"body 独立滚动"
-   * 体验仍需消费方在父级提供 height 约束（视频库 / 审核台等独立 height 路径）。
+   * 至少保留 240px 可视高度，避免 flex 链下塌成 0。
+   *
+   * 两种高度消费模式（ADR-103 AMENDMENT 2026-05-14 / CHG-SN-6-DATATABLE-STICKY-SCROLL）：
+   *   A. 整页滚动（默认）：消费方不设 height，AdminShell main 整页滚动；本变量 240px 兜底
+   *   B. body 独立滚动（增强）：消费方父级 height: calc(100vh - ...) + min-height: 0 穿透；
+   *      table body 单轴滚动 / thead sticky / foot 固定底部
+   * 详见 docs/rules/admin-module-template.md 2026-05-14 修订。
    */
   min-height: 240px;
   /* min-width: 0 打破 grid/flex 父链 auto 阻断，确保 frame 自身不被宽内容撑大 */

@@ -22,6 +22,7 @@ DataTable 一体化契约的当前阶段（截至 2026-04-30）：
   - **Step 7A**（骨架完整化）：`pagination?: PaginationConfig` / `.dt__body` 独立滚动（thead sticky + tbody overflow-y + 防御性 min-height: 240px） / 隐藏列 chip + popover（`countHiddenColumns` + `HiddenColumnsMenu`，`toolbar.hideHiddenColumnsChip` 兜底） / filter chips slot（6 种 FilterValue.kind 默认 formatter + `column.renderFilterChip` 逃生口，`toolbar.hideFilterChips` 兜底） / `column-visibility.ts` 共享工具
   - 全部内置 props 在 `packages/admin-ui/src/components/data-table/types.ts` 已暴露并可调用，覆盖率 35 用例（step-7a-pagination-foot.test.tsx / step-7a-hidden-cols.test.tsx / step-7a-filter-chips.test.tsx / step-7a-body-scroll.test.tsx）
 - 📋 **后续阶段**（CHG-DESIGN-02 Step 7B）：视频库消费切换（删除外置 PaginationV2 / FilterToolbar / SelectionActionBar 编排，改用 DataTable 一体化 props）；Step 7C cell 沉淀已拆分到独立卡 CHG-DESIGN-12。完整体验"body 独立滚动"需消费方在父级提供 height 约束（如 `calc(100vh - topbar-h - footer-h)`），未提供时 DataTable 走 `min-height: 240px` 防御性兜底。
+- 📐 **两种高度消费模式**（CHG-SN-6-DATATABLE-STICKY-SCROLL / RETRO 7/7 / ADR-103 AMENDMENT 2026-05-14）：**模式 A 整页滚动（默认 / 推荐）** = 消费方不设父级 height，AdminShell main 整页 overflow-y: auto；**模式 B body 独立滚动（增强）** = 消费方父级 `height: calc(100vh - ...) + min-height: 0` 穿透，thead sticky + foot 固定底部。M-SN-5 视图卡全走模式 A（CHG-SN-5-13-PATCH-2 修复后定型）。详见 `docs/rules/admin-module-template.md` 2026-05-14 修订 + ADR-103 AMENDMENT 2026-05-14。
 
 凡是引用本文件的工程文档（CLAUDE.md / ADR-103 §4.1 / `docs/rules/admin-module-template.md` / `docs/rules/ui-rules.md` / `docs/server_next_plan_20260427.md`）均已同步该两阶段标注。
 

@@ -3239,6 +3239,43 @@ DataTable v2 + useTableQuery 一次性收编。本 ADR 是 CHG-SN-2-13（DataTab
 > - 多级嵌套展开：sources matrix 单级足够
 > - `expandIconColumn` / `expandRowByClick`：当前整行 `onRowClick` 触发与 antd `expandRowByClick: true` 等价；未来如需区分点击 icon vs 点击行其他位置再加 `expandIconColumn` slot（增量增 prop 不破坏当前签名）
 
+> **AMENDMENT 2026-05-14（CHG-SN-6-DATATABLE-STICKY-SCROLL / RETRO 7/7）**：
+>
+> 显式规范 DataTable 的 **两种高度消费模式**（API 零变更 / 文档级修订；解决 M-SN-5 CHG-SN-5-13-PATCH-2 暴露的"表格底部被截断"反复事故）：
+>
+> **模式 A — 整页滚动（推荐 / 默认）**：
+> - 消费方不提供 height 约束 → DataTable 自然撑高至内容高度 + `min-height: 240px` 防御兜底
+> - 由 `AdminShell main` 提供整页 `overflow-y: auto`，整张页面（toolbar + filters + table + foot）随 main 滚动
+> - **适用**：列表页 / 标准 admin CRUD 视图（默认；M-SN-5 全部视图卡走此模式）
+> - **消费方 zero work**：直接 `<DataTable .../>` 即可
+>
+> **模式 B — body 独立滚动（增强）**：
+> - 消费方在父级提供显式 height 约束（如 `height: calc(100vh - <chrome>)` 或 flex chain min-height: 0）
+> - DataTable frame 撑满父高 → `[data-table-scroll]` flex:1 自适应 → table body 单轴独立滚动 / thead sticky / foot 固定底部
+> - **适用**：嵌入 dashboard 半屏 widget / dialog 内表格 / 强调"foot pagination 始终可见"的视图
+> - **消费方约束**：父链全部需 `min-height: 0`（flex item 默认 auto 会阻断压缩），最外层 height 约束源（vh / 父 calc / grid row）必须穿透
+>
+> **失败模式**（已观察）：
+> 1. 父链中间 div 缺 `min-height: 0` → DataTable 高度被内容撑爆 → 等价模式 A 但额外消耗高度（CHG-SN-5-13-PATCH-2 sources 页 PAGE_STYLE 残留教训）
+> 2. 父级用 `height: 100%` 但 viewport ancestor 无显式高度 → DataTable 塌至 240px 兜底
+> 3. 同一页面切换模式 A → B（动态 height）→ scroll position 不保留（已知限制；非缺陷）
+>
+> **不变内容**（仍保持）：
+> - `min-height: 240px` 防御兜底（消费方未提供 height 时不塌至 0）
+> - `[data-table-scroll]` 单 scrollport（横向 + 纵向同源，sticky thead / bulk 不漂移）
+> - `[data-table-body] { display: contents }` 语义 marker（不重复设 overflow）
+> - 公共 Props API 零变更（无新增 prop）
+>
+> **API 不变 vs prop 模式**（已否决）：
+> 评审过 `bodyScrollMode?: 'page' | 'self'` prop 但驳回：
+> 1. 模式仅取决于父链 height 约束链，与 DataTable 自身行为无关（同代码两个父容器即两种模式）
+> 2. 加 prop 让消费方 "决定"实际由 CSS 决定的属性 → API 与实际行为脱钩易误判
+> 3. 现状 zero-prop "约定" + 文档规范更准确反映责任分配（消费方负责 height chain / DataTable 负责自适应）
+>
+> **起源任务卡**：CHG-SN-5-13-PATCH-2（生产 bug 修复 / sources / merge 页表格底部截断）→ CHG-SN-6-DATATABLE-STICKY-SCROLL（本 AMENDMENT 协议化两种模式）
+>
+> **背书**：CHG-DESIGN-02 Step 7A 防御兜底落地 + Step 7B fix#2 单 scrollport 设计；arch-reviewer R-3 short data thead/foot 重叠保护
+
 #### 4.1 DataTable v2 — 表格基座
 
 - **文件**：`packages/admin-ui/src/components/data-table/data-table.tsx`

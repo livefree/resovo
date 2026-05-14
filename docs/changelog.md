@@ -7634,3 +7634,45 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **后续触发**：
   - **解锁 RETRO 7/7 CHG-SN-6-DATATABLE-STICKY-SCROLL**：DataTable body 独立滚动 UX 增强 + ADR-103 AMENDMENT 续
   - **M-SN-6 完善期**：扩 `verify:view-test-coverage` + `verify:primitive-usage-ratio` 自动化脚本；advisory → FAIL fast 升级
+
+---
+
+## CHG-SN-6-DATATABLE-STICKY-SCROLL — DataTable 两种高度消费模式协议化（M-SN-6 RETRO 7/7 闭环）
+- **任务 ID**：CHG-SN-6-DATATABLE-STICKY-SCROLL
+- **日期**：2026-05-14
+- **执行模型**：claude-opus-4-7（延续会话；建议 sonnet）
+- **子代理**：无（ADR AMENDMENT 文档级修订，沿用既有事后追溯范式 / NEW-P0 流程；当前 DataTable 公共 Props API 零变更，本卡仅协议化两种已存在的高度消费模式 + 文档同步）
+- **来源**：CHG-SN-5-13-PATCH-2 生产 bug（"表格底部被截断" / sources / merge 页）→ 修复后定型为模式 A（整页滚动）→ RETRO 7/7 协议化两种模式以防同类反复
+- **问题理解**：DataTable 一体化 Step 7A 已落地"body 独立滚动 + min-height: 240px 防御兜底"，但缺**消费方选择两种高度模式**显式规范；M-SN-5 全部视图卡走"整页滚动"（默认），偶有消费方误用 `height: 100%` + 父链缺 `min-height: 0` 反复触发"塌至 240px"或"高度被内容撑爆"事故
+- **修复内容（4 文档 + 1 注释，无 API 变更）**：
+  1. **ADR-103 AMENDMENT 2026-05-14**（`docs/decisions.md`）：模式 A 整页滚动（默认 / 推荐）+ 模式 B body 独立滚动（增强）显式判据 + 3 类失败模式 + 已否决 `bodyScrollMode` prop（API zero-prop 约定 + 文档规范更准确反映父链 height 责任分配）
+  2. **admin-module-template.md §2026-05-14 修订**：DataTable 一体化两种高度消费模式说明 + 模式 A / B 代码示例 + 父链 `min-height: 0` 穿透约束 + 失败模式枚举
+  3. **reference.md §DataTable 当前阶段**：两种高度消费模式简要 bullet + 引用 ADR-103 AMENDMENT 2026-05-14
+  4. **dt-styles.tsx `min-height: 240px` 兜底注释**：两种模式 + 文档引用
+- **API 变更**：无（公共 Props 零变更；模式选择由父链 CSS 决定）
+- **已否决方案**：`bodyScrollMode?: 'page' | 'self'` prop —— 评审驳回：
+  1. 模式仅取决于父链 height 约束链，与 DataTable 自身行为无关（同代码两个父容器即两种模式）
+  2. 加 prop 让消费方"决定"实际由 CSS 决定的属性 → API 与实际行为脱钩易误判
+  3. 现状 zero-prop "约定" + 文档规范更准确反映责任分配
+- **文件范围**：
+  - `docs/decisions.md`（ADR-103 AMENDMENT 2026-05-14 +33 行）
+  - `docs/rules/admin-module-template.md`（DataTable 两种模式 +33 行）
+  - `docs/designs/backend_design_v2.1/reference.md`（两种模式 bullet +1 行）
+  - `packages/admin-ui/src/components/data-table/dt-styles.tsx`（兜底注释 +6 行）
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`
+- **质量门禁**：
+  - typecheck + lint 全绿（FULL TURBO cache hit）
+  - 单元 / 集成测试 baseline 不变（注释级修订无影响）
+  - 4 文档交叉引用一致（decisions 权威源 / admin-module-template 详细示例 / reference 简版 / dt-styles 代码就近）
+- **不在范围**：
+  - DataTable 公共 Props API 变更（zero-prop 约定 / API contract 不动）
+  - 视图卡迁模式 A → B（M-SN-5 全走模式 A 已稳态）
+  - dialog / drawer 嵌入场景 DataTable 适配（M-SN-7 player 等场景）
+- **关键发现**：
+  - **zero-prop + 文档协议化优于 API prop**：模式由父链 CSS 决定，加 prop 让消费方"决定"已经存在的物理属性 → 误用源
+  - **失败模式 #1 高发**：`height: 100%` 但父链中间 div 缺 `min-height: 0` → CHG-SN-5-13-PATCH-2 实际 root cause；文档化"父链 min-height: 0 必须穿透"为 must-have 约束
+  - **arch-reviewer NEW-P0 trailer 不强制**：本卡为公共 Props 零变更（仅文档 + 兼容注释），workflow-rules §共享组件 API 改动 trailer 触发条件未命中（`packages/admin-ui/src/**/types.ts` 未改）
+- **自动化循环验证**：执行 → 自评通过 → 无 PATCH → **M-SN-6 RETRO 7/7 全闭环**
+- **后续触发**：
+  - **M-SN-6 RETRO 批次全闭环（1-7/7 完整）**：CHECKLIST-AUDIT-3 ✅ / INTEGRATION-TEST ✅ / CI-MIGRATE-DRY-RUN ✅ / AUDIT-TIMELINE-A+B ✅ / RETRO-1 ✅ / RETRO-2 ✅ / DATATABLE-STICKY-SCROLL ✅
+  - **解锁人工介入节点**：用户 sign-off 启动 M-SN-6 主体卡（plan §6 沿用现描述）
