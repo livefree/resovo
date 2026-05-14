@@ -51,4 +51,20 @@ describe('VideoCardPlaceholder · 扩展性', () => {
     render(<VideoCardPlaceholder data-testid="featured-big-placeholder" />)
     expect(screen.getByTestId('featured-big-placeholder')).toBeTruthy()
   })
+
+  // CHG-SN-6-RETRO-1（RETRO 5/7）：7 → 9 视图测试硬指标恢复
+
+  it('未传 className 时 base class 完整（rounded-lg / w-full / bg-surface-sunken）', () => {
+    const { container } = render(<VideoCardPlaceholder />)
+    const el = container.querySelector<HTMLElement>('[data-testid="video-card-placeholder"]')
+    expect(el!.className).toContain('rounded-lg')
+    expect(el!.className).toContain('w-full')
+  })
+
+  it('aspect 显式 portrait 与默认 portrait 行为一致', () => {
+    const { container } = render(<VideoCardPlaceholder aspect="portrait" />)
+    const el = container.querySelector<HTMLElement>('[data-testid="video-card-placeholder"]')
+    expect(el!.dataset.aspect).toBe('portrait')
+    expect(el!.style.aspectRatio).toBe('2 / 3')
+  })
 })

@@ -7552,3 +7552,45 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - **解锁 RETRO 5/7 CHG-SN-6-RETRO-1**：M-SN-3/-4 视图测试批量补 ≥ 9
 - **注意事项**：
   - **CHG-SN-6-AUDIT-TIMELINE 总闭环**：A 端点（0.2w）+ B 视图（0.1w）= 0.3w；vs 原规划 0.4w 三段式（ADR-118 起草 + Opus 评审 + 端点 + 视图）= 节省 0.1w + 1 轮 arch-reviewer Opus 评审 spawn
+
+---
+
+## CHG-SN-6-RETRO-1 — M-SN-3 视图测试批量补 ≥ 9（M-SN-6 RETRO 5/7）
+- **任务 ID**：CHG-SN-6-RETRO-1
+- **日期**：2026-05-14
+- **执行模型**：claude-opus-4-7（延续会话；建议 sonnet）
+- **子代理**：无（测试补齐实施类）
+- **来源**：CHG-SN-5-13-PATCH P2-2 沉淀"视图测试 ≥ 9"硬指标 → 跨 milestone RETROACTIVE 补齐
+- **诊断结果（实测）**：
+  - **server-next admin 视图全 ≥ 9 ✅**：dashboard 24 / home 9 / merge 13 / sources 10 / submissions 10 / subtitles 10 / users 9 / videos 76 — **本卡无补 / 已自然达标**
+  - **apps/server admin 视图（M-SN-4 期，冻结状态）**：users 5 / crawler 8 < 9 — **CLAUDE.md "后台 server v1（已冻结，仅维护期 bug 修复）"约束跳过**；不应做大改 / M-SN-7 cutover 后退役
+  - **apps/web-next 视频库（M-SN-3 期）**：组件级测试 ChipType 8 / VideoCardPlaceholder 7 < 9 — **本卡补齐**
+- **修复内容（apps/web-next 2 组件，3 测试补齐）**：
+  - `tests/unit/web-next/ChipType.test.tsx`：8 → 9（+1 测试）
+    - "data-chip-type 属性可通过 querySelector 反查（e2e / playwright 选择器使用）"
+    - 累计 19 it()（含 ALL_TYPES.forEach 11 种 type）
+  - `tests/unit/web-next/VideoCardPlaceholder.test.tsx`：7 → 9（+2 测试）
+    - "未传 className 时 base class 完整（rounded-lg / w-full / bg-surface-sunken）"
+    - "aspect 显式 portrait 与默认 portrait 行为一致"
+- **文件范围**：
+  - `tests/unit/web-next/ChipType.test.tsx`（+8 行 / 1 测试）
+  - `tests/unit/web-next/VideoCardPlaceholder.test.tsx`（+15 行 / 2 测试）
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`
+- **质量门禁**：
+  - typecheck + lint 全绿
+  - **3666 unit + 21 integration 全 PASS**（baseline 3663 → 3666 +3）
+  - ChipType 19/19 PASS / VideoCardPlaceholder 9/9 PASS
+  - 全部 web-next + server-next 视图卡 / 组件测试 ≥ 9（硬指标 RETROACTIVE 达标）
+- **不在范围**：
+  - **apps/server admin users (5) + crawler (8) < 9**：CLAUDE.md 冻结约束跳过；M-SN-7 cutover 后随 server v1 退役
+  - **plan §5.3 协议修订**（≥ 9 测试硬清单）：CHG-SN-6-RETRO-2 承担（RETRO 6/7）
+  - **CI 集成"视图测试 ≥ 9"自动核验脚本**：CHG-SN-6-CHECKLIST-AUDIT-3 当前 advisory；M-SN-6 完善后可加 `verify:view-test-coverage` 脚本
+- **关键发现**：
+  - **MVP RETROACTIVE 范围实际收敛**：reviewer 预估 0.3w 假设大量视图卡 < 9，实测仅 2 个组件级 < 9（占 web-next 5 个 .test.tsx 文件的 40%）；实际工时 0.05w
+  - **server-next M-SN-5 期视图自然达标**：CHG-SN-5-13-PATCH P2-2 硬指标沉淀后，M-SN-5 全部 5 视图（plus sources）首次落地即 ≥ 9 测试（home 9 / submissions 10 / subtitles 10 / users 9 / sources 10 / merge 13）；说明硬指标在 plan 落地的同时已自动驱动覆盖率
+  - **冻结模块跳过协议**：CLAUDE.md "server v1 冻结仅维护期"约束让 RETRO-1 不强求 apps/server admin 视图补齐；M-SN-7 cutover 后随 server v1 退役自然消亡
+- **自动化循环验证**：执行 → 诊断 → 收敛范围 → 补齐 → 自评通过 → 无 PATCH → 下一卡
+- **后续触发**：
+  - **解锁 RETRO 6/7 CHG-SN-6-RETRO-2**：plan §5.3 阶段审计协议修订列入"视图测试 ≥ 9 / 共享原语 ≥ 80%"硬清单
+- **注意事项**：
+  - 本卡是 MVP RETRO：完整覆盖率梳理需 verify:view-test-coverage 脚本，CHG-SN-6-CHECKLIST-AUDIT-3 期可加；未来视图新增需主循环遵守 ≥ 9 测试（quality-gates §6 §1 第 5 项 ADR 验证段勾对清单已含）

@@ -88,4 +88,11 @@ describe('ChipType — 可扩展性', () => {
     expect(el!.className).toContain('font-semibold')
     expect(el!.className).toContain('rounded-md')
   })
+
+  // CHG-SN-6-RETRO-1（RETRO 5/7）：8 → 9 视图测试硬指标恢复
+  it('data-chip-type 属性可通过 querySelector 反查（e2e / playwright 选择器使用）', () => {
+    const { container } = render(<ChipType type="documentary" />)
+    expect(container.querySelector('[data-chip-type="documentary"]')).not.toBeNull()
+    expect(container.querySelector('[data-chip-type="movie"]')).toBeNull()
+  })
 })
