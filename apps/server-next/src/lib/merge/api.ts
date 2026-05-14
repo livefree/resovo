@@ -17,6 +17,8 @@ import type {
   UnmergeResult,
   SplitParams,
   SplitResult,
+  ListAuditParams,
+  ListAuditResult,
 } from '@resovo/types'
 
 export async function listCandidates(params: ListCandidatesParams): Promise<ListCandidatesResult> {
@@ -49,4 +51,14 @@ export async function splitVideo(params: SplitParams): Promise<SplitResult> {
     { groups },
   )
   return result.data
+}
+
+// CHG-SN-6-AUDIT-TIMELINE-B — GET /admin/video-merges/audit
+export async function listAudit(params: ListAuditParams): Promise<ListAuditResult> {
+  const qs = new URLSearchParams()
+  if (params.action) qs.set('action', params.action)
+  if (params.videoId) qs.set('videoId', params.videoId)
+  qs.set('limit', String(params.limit))
+  qs.set('page', String(params.page))
+  return apiClient.get<ListAuditResult>(`/admin/video-merges/audit?${qs.toString()}`)
 }

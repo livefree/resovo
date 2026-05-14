@@ -7511,3 +7511,44 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **注意事项**：
   - **AMENDMENT 范式**未来 plan §6 M-SN-X 起若涉及"既有 ADR 同源端点扩展"应优先 AMENDMENT，节省 ADR 起草 + Opus 评审工时
   - 集成测试 4 路径覆盖 happy + 3 过滤模式（action / videoId / count）；写路径（merge/split 写入后查 audit）未覆盖 — 留 M-SN-6 完善 fixture seed
+
+---
+
+## CHG-SN-6-AUDIT-TIMELINE-B — /admin/merge audit timeline section 视图扩展（M-SN-6 RETRO 4/7-B）
+- **任务 ID**：CHG-SN-6-AUDIT-TIMELINE-B
+- **日期**：2026-05-14
+- **执行模型**：claude-opus-4-7（延续会话；建议 sonnet）
+- **子代理**：无（视图实施类）
+- **来源**：CHG-SN-6-AUDIT-TIMELINE-A 端点就位 → 视图卡消费（plan §4.5 端点先于视图协议）
+- **修复内容**：
+  - **lib/merge/api.ts** 加 `listAudit(params)` API 客户端
+  - **MergeClient.tsx** 加第 3 tab `'audit'`（审计历史）+ `AuditSection` 组件
+    - action filter（all / merge / split）AdminButton 切换
+    - 表格展示 5 列：操作 / 操作人（performedByUsername 优先；fallback performedBy.slice(0,8)）/ 涉及 video 数 / 时间 / 状态（已撤销 / 有效 badge）
+    - 分页（PAGE_SIZE 20；total > 20 显示上一页/下一页）
+    - LoadingState / ErrorState / EmptyState 标准三态
+  - **MergeClient.test.tsx** 新增 4 audit tab 单元测试：
+    - 3 tab 渲染 + 切换触发 listAudit 调用
+    - Empty state 渲染（total=0）
+    - merge 过滤按钮 → listAudit({action: 'merge'}) 调用
+    - 审计行渲染（performedByUsername + 已撤销 badge）
+- **文件范围**：
+  - `apps/server-next/src/lib/merge/api.ts`（+10 行）
+  - `apps/server-next/src/app/admin/merge/_client/MergeClient.tsx`（+100 行 / AuditSection + tab 切换扩 3）
+  - `tests/unit/components/server-next/admin/merge/MergeClient.test.tsx`（+60 行 / 4 audit tests）
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`
+- **质量门禁**：
+  - typecheck + lint 全绿
+  - **3663 unit + 21 integration 全 PASS**（baseline 3659 → 3663 +4 audit tab tests / merge view: 9 → 13 测试）
+  - 视图卡前台测试 ≥ 9 硬指标维持（merge 13 测试，超出基线）
+- **关键发现**：
+  - **5 端点消费完整**：candidates / merge / unmerge action / split / **audit timeline**（GET /admin/video-merges/audit）= 5/5 端点 ADR-105 视图卡判据 100% 达标
+  - **subtitle 同步更新**："5 端点消费"反映 audit timeline 加入；与 CHG-SN-5-12 缩范围"4 端点消费"对比 — CHECKLIST-AUDIT 拦截 audit timeline 转 M-SN-6 RETRO 后**真正闭环**
+- **不在范围**：
+  - 审计行展开（snapshot_jsonb 详情查看）：留 M-SN-6 后续 UX 增强
+  - 撤销已存在审计的 UI（按 auditId）：可消费 unmerge 端点 + audit row action button；留 RETRO 4/7-C 或独立 UX 卡
+- **自动化循环验证**：执行 → 自评通过（typecheck + lint + 3663 + 21 integration 全 PASS）→ 无 PATCH → 下一卡
+- **后续触发**：
+  - **解锁 RETRO 5/7 CHG-SN-6-RETRO-1**：M-SN-3/-4 视图测试批量补 ≥ 9
+- **注意事项**：
+  - **CHG-SN-6-AUDIT-TIMELINE 总闭环**：A 端点（0.2w）+ B 视图（0.1w）= 0.3w；vs 原规划 0.4w 三段式（ADR-118 起草 + Opus 评审 + 端点 + 视图）= 节省 0.1w + 1 轮 arch-reviewer Opus 评审 spawn

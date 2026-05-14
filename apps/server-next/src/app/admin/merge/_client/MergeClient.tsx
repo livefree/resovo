@@ -31,8 +31,8 @@ import {
   useToast,
   type TableColumn,
 } from '@resovo/admin-ui'
-import type { CandidateGroup, VideoSummaryForMerge, LineMatrixRow, VideoType } from '@resovo/types'
-import { listCandidates, mergeVideos, unmergeVideos, splitVideo } from '@/lib/merge/api'
+import type { CandidateGroup, VideoSummaryForMerge, LineMatrixRow, VideoType, MergeAuditRow } from '@resovo/types'
+import { listCandidates, mergeVideos, unmergeVideos, splitVideo, listAudit } from '@/lib/merge/api'
 import { getVideoMatrix } from '@/lib/sources/api'
 import { ApiClientError } from '@/lib/api-client'
 
@@ -141,7 +141,8 @@ const RECOMMENDED_BADGE_STYLE: CSSProperties = {
 
 // ── 主组件 ─────────────────────────────────────────────────────────
 
-type Tab = 'candidates' | 'split'
+// CHG-SN-6-AUDIT-TIMELINE-B (RETRO 4/7-B)：加 audit timeline tab
+type Tab = 'candidates' | 'split' | 'audit'
 
 export function MergeClient() {
   const [tab, setTab] = useState<Tab>('candidates')
@@ -150,7 +151,7 @@ export function MergeClient() {
     <div style={PAGE_STYLE}>
       <PageHeader
         title="合并 / 拆分工作台"
-        subtitle="ADR-105 视图卡：candidate 预览 + merge / unmerge / split 4 端点消费"
+        subtitle="ADR-105 视图卡：candidate 预览 + merge / unmerge / split + audit timeline 5 端点消费"
       />
 
       <AdminCard style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
@@ -161,10 +162,15 @@ export function MergeClient() {
           <button type="button" style={tabStyle(tab === 'split')} onClick={() => setTab('split')}>
             拆分工作台
           </button>
+          <button type="button" style={tabStyle(tab === 'audit')} onClick={() => setTab('audit')}>
+            审计历史
+          </button>
         </div>
 
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '16px' }}>
-          {tab === 'candidates' ? <CandidatesSection /> : <SplitSection />}
+          {tab === 'candidates' ? <CandidatesSection />
+            : tab === 'split' ? <SplitSection />
+            : <AuditSection />}
         </div>
       </AdminCard>
     </div>
@@ -642,6 +648,106 @@ function SplitSection() {
             </AdminButton>
           </div>
         </>
+      )}
+    </div>
+  )
+}
+
+// ── Audit timeline section（CHG-SN-6-AUDIT-TIMELINE-B / RETRO 4/7-B）─────────
+
+function AuditSection() {
+  const [actionFilter, setActionFilter] = useState<'all' | 'merge' | 'split'>('all')
+  const [rows, setRows] = useState<readonly MergeAuditRow[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 20
+
+  const load = useCallback(() => {
+    setLoading(true)
+    setError(null)
+    listAudit({
+      action: actionFilter === 'all' ? undefined : actionFilter,
+      limit: PAGE_SIZE,
+      page,
+    })
+      .then((res) => {
+        setRows(res.data)
+        setTotal(res.total)
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e : new Error('加载失败')))
+      .finally(() => setLoading(false))
+  }, [actionFilter, page])
+
+  useEffect(() => { load() }, [load])
+
+  if (loading && rows.length === 0) return <LoadingState variant="skeleton" skeletonRows={6} />
+  if (error) return <ErrorState error={error} onRetry={load} />
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <span style={SECONDARY_TEXT}>过滤：</span>
+        {(['all', 'merge', 'split'] as const).map((a) => (
+          <AdminButton
+            key={a}
+            size="sm"
+            variant={actionFilter === a ? 'primary' : 'secondary'}
+            onClick={() => { setActionFilter(a); setPage(1) }}
+          >
+            {a === 'all' ? '全部' : a === 'merge' ? '合并' : '拆分'}
+          </AdminButton>
+        ))}
+        <span style={{ ...SECONDARY_TEXT, marginLeft: 'auto' }}>共 {total} 条</span>
+      </div>
+
+      {rows.length === 0 ? (
+        <EmptyState title="无审计记录" description="当前过滤无匹配；切换过滤或清空数据库后无 merge/split 操作。" />
+      ) : (
+        <table style={{ width: '100%', fontSize: 'var(--font-size-sm)' }}>
+          <thead>
+            <tr style={{ textAlign: 'left', color: 'var(--fg-muted)', borderBottom: '1px solid var(--border-subtle)' }}>
+              <th style={{ padding: '6px 8px', width: '80px' }}>操作</th>
+              <th style={{ padding: '6px 8px', width: '100px' }}>操作人</th>
+              <th style={{ padding: '6px 8px' }}>涉及 video</th>
+              <th style={{ padding: '6px 8px', width: '160px' }}>时间</th>
+              <th style={{ padding: '6px 8px', width: '100px' }}>状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <td style={{ padding: '6px 8px', fontWeight: 600, color: row.action === 'merge' ? 'var(--state-info-fg)' : 'var(--state-warning-fg)' }}>
+                  {row.action === 'merge' ? '合并' : '拆分'}
+                </td>
+                <td style={{ padding: '6px 8px' }}>{row.performedByUsername ?? row.performedBy.slice(0, 8)}</td>
+                <td style={{ padding: '6px 8px', color: 'var(--fg-muted)', fontSize: '11px' }}>
+                  {row.action === 'merge'
+                    ? `${row.sourceVideoIds.length} → ${row.targetVideoIds.length}`
+                    : `${row.sourceVideoIds.length} → ${row.targetVideoIds.length}（拆分）`}
+                </td>
+                <td style={{ padding: '6px 8px', color: 'var(--fg-muted)' }}>
+                  {row.performedAt.slice(0, 19).replace('T', ' ')}
+                </td>
+                <td style={{ padding: '6px 8px' }}>
+                  {row.revertedAt
+                    ? <span style={SCORE_BADGE_STYLE}>已撤销</span>
+                    : <span style={SECONDARY_TEXT}>有效</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {/* 分页 */}
+      {total > PAGE_SIZE && (
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
+          <span style={SECONDARY_TEXT}>第 {page} / {Math.ceil(total / PAGE_SIZE)} 页</span>
+          <AdminButton size="sm" variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>上一页</AdminButton>
+          <AdminButton size="sm" variant="secondary" disabled={page >= Math.ceil(total / PAGE_SIZE)} onClick={() => setPage((p) => p + 1)}>下一页</AdminButton>
+        </div>
       )}
     </div>
   )

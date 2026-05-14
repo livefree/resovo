@@ -25,11 +25,14 @@ const splitVideoMock = vi.fn()
 const getVideoMatrixMock = vi.fn()
 const toastPushMock = vi.fn()
 
+const listAuditMock = vi.fn()
+
 vi.mock('../../../../../../apps/server-next/src/lib/merge/api', () => ({
   listCandidates: (...args: unknown[]) => listCandidatesMock(...args),
   mergeVideos: (...args: unknown[]) => mergeVideosMock(...args),
   unmergeVideos: (...args: unknown[]) => unmergeVideosMock(...args),
   splitVideo: (...args: unknown[]) => splitVideoMock(...args),
+  listAudit: (...args: unknown[]) => listAuditMock(...args),
 }))
 
 vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({
@@ -107,6 +110,7 @@ beforeEach(() => {
   splitVideoMock.mockReset()
   getVideoMatrixMock.mockReset()
   toastPushMock.mockReset()
+  listAuditMock.mockReset()
 })
 
 // ── 测试 ──────────────────────────────────────────────────────────
@@ -247,6 +251,73 @@ describe('MergeClient', () => {
       expect(typeSelects.length).toBe(2)
       const firstSelect = typeSelects[0] as HTMLSelectElement
       expect(firstSelect.querySelectorAll('option').length).toBe(11)
+    })
+  })
+
+  // ── CHG-SN-6-AUDIT-TIMELINE-B (RETRO 4/7-B) audit tab 测试 ─────────────
+
+  it('audit tab：3 tab 渲染 + 切换触发 listAudit 调用', async () => {
+    listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
+    listAuditMock.mockResolvedValueOnce({ data: [], total: 0, page: 1, limit: 20 })
+    render(<MergeClient />)
+    await waitFor(() => screen.getByText('无合并候选'))
+    expect(screen.getByRole('button', { name: '审计历史' })).not.toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '审计历史' }))
+    await waitFor(() => {
+      expect(listAuditMock).toHaveBeenCalledWith(expect.objectContaining({ limit: 20, page: 1 }))
+    })
+  })
+
+  it('audit tab：Empty state 渲染（total=0）', async () => {
+    listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
+    listAuditMock.mockResolvedValueOnce({ data: [], total: 0, page: 1, limit: 20 })
+    render(<MergeClient />)
+    await waitFor(() => screen.getByText('无合并候选'))
+    fireEvent.click(screen.getByRole('button', { name: '审计历史' }))
+    await waitFor(() => {
+      expect(screen.getByText('无审计记录')).not.toBeNull()
+    })
+  })
+
+  it('audit tab：merge 过滤 → listAudit({action: merge}) 调用', async () => {
+    listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
+    listAuditMock.mockResolvedValue({ data: [], total: 0, page: 1, limit: 20 })
+    render(<MergeClient />)
+    await waitFor(() => screen.getByText('无合并候选'))
+    fireEvent.click(screen.getByRole('button', { name: '审计历史' }))
+    await waitFor(() => expect(listAuditMock).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByRole('button', { name: '合并' }))
+    await waitFor(() => {
+      expect(listAuditMock).toHaveBeenCalledWith(expect.objectContaining({ action: 'merge' }))
+    })
+  })
+
+  it('audit tab：渲染审计行（merge + revertedAt = 已撤销 badge）', async () => {
+    listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
+    listAuditMock.mockResolvedValueOnce({
+      data: [
+        {
+          id: 'audit-1', action: 'merge',
+          sourceVideoIds: ['v1', 'v2'], targetVideoIds: ['v3'],
+          performedBy: '00000000-0000-0000-0000-000000000001',
+          performedByUsername: 'admin1',
+          reason: null,
+          performedAt: '2026-05-13T10:00:00Z',
+          revertedAt: '2026-05-13T11:00:00Z',
+          revertedBy: '00000000-0000-0000-0000-000000000001',
+          revertedReason: '测试撤销',
+        },
+      ],
+      total: 1, page: 1, limit: 20,
+    })
+    render(<MergeClient />)
+    await waitFor(() => screen.getByText('无合并候选'))
+    fireEvent.click(screen.getByRole('button', { name: '审计历史' }))
+    await waitFor(() => {
+      expect(screen.getByText('admin1')).not.toBeNull()
+      expect(screen.getByText('已撤销')).not.toBeNull()
     })
   })
 })
