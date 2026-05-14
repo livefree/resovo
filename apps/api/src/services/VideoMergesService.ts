@@ -42,7 +42,14 @@ import {
   insertNewVideo,
   assignSourcesToVideo,
   updateAuditTargetIds,
+  listAuditTimeline,
+  countAuditTimeline,
 } from '@/api/db/queries/video-merge-mutations'
+import type {
+  ListAuditParams,
+  ListAuditResult,
+  MergeAuditRow,
+} from '@resovo/types'
 import { AuditLogService } from '@/api/services/AuditLogService'
 import { AppError } from '@/api/lib/errors'
 import { normalizeTitle } from '@/api/services/TitleNormalizer'
@@ -87,6 +94,14 @@ export const SplitSchema = z.object({
     }),
   })).min(2).max(20),
 })
+
+// CHG-SN-6-AUDIT-TIMELINE (RETRO 4/7) — ADR-105 AMENDMENT 2026-05-14
+export const ListAuditSchema = z.object({
+  action: z.enum(['merge', 'split']).optional(),
+  videoId: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  page: z.coerce.number().int().min(1).default(1),
+}).strict()
 
 // ── 评分算法 v1（ADR-105 §4）──────────────────────────────────────
 
@@ -479,5 +494,30 @@ export class VideoMergesService {
     })
 
     return { auditId, newVideoIds }
+  }
+
+  // ── audit timeline (CHG-SN-6-AUDIT-TIMELINE / RETRO 4/7) ──────────
+
+  async listAudit(params: ListAuditParams): Promise<ListAuditResult> {
+    const { action = null, videoId = null, limit, page } = params
+    const offset = (page - 1) * limit
+    const [rows, total] = await Promise.all([
+      listAuditTimeline(this.db, { action, videoId, offset, limit }),
+      countAuditTimeline(this.db, { action, videoId }),
+    ])
+    const data: MergeAuditRow[] = rows.map((r) => ({
+      id: r.id,
+      action: r.action,
+      sourceVideoIds: r.source_video_ids,
+      targetVideoIds: r.target_video_ids,
+      performedBy: r.performed_by,
+      performedByUsername: r.performed_by_username,
+      reason: r.reason,
+      performedAt: r.performed_at,
+      revertedAt: r.reverted_at,
+      revertedBy: r.reverted_by,
+      revertedReason: r.reverted_reason,
+    }))
+    return { data, total, page, limit }
   }
 }

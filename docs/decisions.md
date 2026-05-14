@@ -5422,6 +5422,7 @@ plan §4.5 ADR-端点先后协议硬约束：admin API 协议须先 ADR + Opus P
 | 2 | POST | `/admin/video-merges` | 执行合并 | Body: `{ sourceVideoIds: string[], targetVideoId: string, reason?: string }` | 200 `{ data: { auditId, targetVideo: VideoSummary } }` | 422 / 404（任一 video 不存在）/ 409（target 已被合并到他处） |
 | 3 | POST | `/admin/video-merges/:auditId/unmerge` | 撤销合并 | Body: `{ reason?: string }` | 200 `{ data: { restoredVideoIds: string[] } }` | 404 / 409（audit 已撤销 / target video 已删） |
 | 4 | POST | `/admin/videos/:id/split` | 按 source 分组拆分 | Body: `{ groups: [{ sourceIds: string[], newVideoMeta: { title, year?, type } }] }`（≥2 组） | 200 `{ data: { auditId, newVideoIds: string[] } }` | 422 / 404 / 409（id 已被合并/拆分） |
+| 5 | GET | `/admin/video-merges/audit` | 列出 merge/split/unmerge 历史 audit timeline（**ADR-105 AMENDMENT 2026-05-14 / CHG-SN-6-AUDIT-TIMELINE / RETRO 4/7**）| Query: `action?='merge'\|'split'` / `videoId?` / `limit?=20` / `page?=1` | 200 `{ data: MergeAuditRow[], total, page, limit }` | 422 VALIDATION_ERROR |
 
 **zod request schema（Service 层 + Route 层共享，端点实施卡 -09/-10 落地）**：
 
@@ -6011,3 +6012,97 @@ async upsertLineAlias(params: UpsertAliasParams, actorId: string): Promise<Sourc
 - **关联触发条件（未来）**：
   - PRE-CACHE-SOURCES（KPI 缓存层）：决策要点 10 三条触发条件任一命中
   - PRE-ALIAS-SOFT-DELETE（别名软删除）：R-ADR-117-2 删除需求命中
+
+---
+
+### ADR-105 AMENDMENT 2026-05-14（CHG-SN-6-AUDIT-TIMELINE / RETRO 4/7）— GET audit timeline 端点
+
+**触发**：CHG-SN-5-12 范围声明含"audit timeline"但 ADR-105 §端点契约原 4 端点无 GET audit → CHECKLIST-AUDIT 拦截 + 用户裁定路径 A 缩范围 + 转 M-SN-6 RETRO 占位（参 changelog CHG-SN-5-12 + M-SN-6 SEQ）。
+
+**范围**：扩 §端点契约 row 5（GET `/admin/video-merges/audit`），复用 ADR-105 既有协议层（鉴权 / 错误码 / response 信封），**零新协议决策**。
+
+**端点契约（row 5 完整规格）**：
+
+- **方法 / 路径**：`GET /admin/video-merges/audit`
+- **鉴权**：`requireRole(['admin'])`（与 row 2-4 mutation 端点一致；audit 含敏感写历史）
+- **Query**：
+  - `action?: 'merge' | 'split'`（可选过滤；默认全部）
+  - `videoId?: string (uuid)`（可选过滤；GIN 索引 source_video_ids / target_video_ids 覆盖）
+  - `limit?: number(1..100, default 20)`
+  - `page?: number(>=1, default 1)`
+- **Response**：`200 { data: MergeAuditRow[], total, page, limit }`
+- **错误码**：`422 VALIDATION_ERROR`（zod 失败）/ `401 UNAUTHORIZED` / `403 FORBIDDEN`（既有 ADR-110 复用）
+
+**MergeAuditRow 类型契约**（packages/types/src/video-merge.types.ts，复用 `VideoMergeAuditRow` 既有定义；端点返回 camelCase 转换层）：
+
+```ts
+export interface MergeAuditRow {
+  readonly id: string
+  readonly action: 'merge' | 'split'
+  readonly sourceVideoIds: readonly string[]
+  readonly targetVideoIds: readonly string[]
+  readonly performedBy: string
+  readonly performedByUsername: string | null  // LEFT JOIN users.username
+  readonly reason: string | null
+  readonly performedAt: string
+  readonly revertedAt: string | null
+  readonly revertedBy: string | null
+  readonly revertedReason: string | null
+}
+```
+
+**zod request schema**：
+
+```ts
+const ListAuditSchema = z.object({
+  action: z.enum(['merge', 'split']).optional(),
+  videoId: z.string().uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  page: z.coerce.number().int().min(1).default(1),
+}).strict()
+```
+
+**SQL 设计**（DB queries 层）：
+
+```sql
+SELECT
+  vma.id, vma.action, vma.source_video_ids, vma.target_video_ids,
+  vma.performed_by, u.username AS performed_by_username,
+  vma.reason, vma.performed_at::text, vma.reverted_at::text,
+  vma.reverted_by, vma.reverted_reason
+FROM video_merge_audit vma
+LEFT JOIN users u ON u.id = vma.performed_by
+WHERE ($1::text IS NULL OR vma.action = $1)
+  AND ($2::uuid IS NULL OR $2 = ANY(vma.source_video_ids) OR $2 = ANY(vma.target_video_ids))
+ORDER BY vma.performed_at DESC
+LIMIT $3 OFFSET $4
+```
+
+- `videoId` 过滤通过 `= ANY(source_video_ids)` / `= ANY(target_video_ids)` 走 GIN 索引（migration 062 line 39/42 已建）
+- ORDER BY performed_at DESC 取最新；分页 LIMIT/OFFSET
+- `LEFT JOIN users` 取 username（不影响主路径性能；audit ≤ 1k 行预期）
+
+**audit log 协议**：
+
+- **本端点为只读 GET**：不写 admin_audit_log（避免"看 audit 列表本身也写 audit"无限叠加）
+- 与 row 2-4 写端点（merge/unmerge/split）的 admin_audit_log fire-and-forget 写入不冲突
+
+**性能 + 缓存**：
+
+- 无缓存（audit 数据小 + 写读比 1:N）；GIN 索引 + ORDER BY performed_at DESC 性能可承诺 p95 ≤ 100ms / N ≤ 1k
+- 未来 audit 行 > 10k → 起 PRE-AUDIT-CACHE 卡引入 Redis 5min TTL
+
+**Service 层 / DB queries / 视图实施分卡**：
+
+- **CHG-SN-6-AUDIT-TIMELINE-A**（端点实施）：apps/api Service / Route / queries / 单测 / 集成测试 / packages/types `MergeAuditRow` 扩
+- **CHG-SN-6-AUDIT-TIMELINE-B**（视图扩展）：apps/server-next /admin/merge 加 audit timeline tab 或独立 section 消费本端点
+- 本 AMENDMENT 仅 ADR 协议层；不写代码
+
+**关联**：
+- ADR-105 §决策要点 5 audit log 协议（既有 fire-and-forget 模式不变）
+- migration 062 video_merge_audit schema（GIN 索引利用）
+- CHG-SN-5-12 缩范围转入本 RETRO（参 changelog CHG-SN-5-12 §CHECKLIST-AUDIT 拦截）
+- plan §4.5 同 ADR 多端点复用范式（AMENDMENT 优于新起 ADR-118）
+
+**关键发现**：本 AMENDMENT 验证 plan §4.5 "同一 ADR 下多个端点复用同一 ADR，不重复评审"机制；CHG-SN-6-AUDIT-TIMELINE 工时从规划 0.4w（ADR-118 起草 + Opus 评审 + 端点 + 视图三段式）降至 0.2w（AMENDMENT + 端点 + 视图两段式），节省 0.2w。
+

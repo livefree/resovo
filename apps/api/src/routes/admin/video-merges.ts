@@ -17,6 +17,7 @@ import {
   MergeSchema,
   UnmergeSchema,
   SplitSchema,
+  ListAuditSchema,
 } from '@/api/services/VideoMergesService'
 import { isAppError } from '@/api/lib/errors'
 
@@ -118,5 +119,23 @@ export async function adminVideoMergesRoutes(fastify: FastifyInstance) {
       request.log.error({ err }, '[admin/video-merges] split unexpected error')
       return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
     }
+  })
+
+  // ── GET /admin/video-merges/audit (CHG-SN-6-AUDIT-TIMELINE / RETRO 4/7) ──────
+
+  fastify.get('/admin/video-merges/audit', { preHandler: adminOnly }, async (request, reply) => {
+    const parsed = ListAuditSchema.safeParse(request.query)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+      })
+    }
+    const result = await svc.listAudit(parsed.data)
+    return reply.send({
+      data: result.data,
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+    })
   })
 }

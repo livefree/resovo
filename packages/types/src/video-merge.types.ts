@@ -109,3 +109,34 @@ export interface VideoMergeAuditRow {
   readonly revertedBy: string | null
   readonly revertedReason: string | null
 }
+
+// ── CHG-SN-6-AUDIT-TIMELINE (RETRO 4/7) — GET /admin/video-merges/audit ─────────
+
+/** audit timeline row（GET 端点返回；ADR-105 AMENDMENT 2026-05-14）*/
+export interface MergeAuditRow {
+  readonly id: string
+  readonly action: 'merge' | 'split'
+  readonly sourceVideoIds: readonly string[]
+  readonly targetVideoIds: readonly string[]
+  readonly performedBy: string
+  readonly performedByUsername: string | null  // LEFT JOIN users.username
+  readonly reason: string | null
+  readonly performedAt: string
+  readonly revertedAt: string | null
+  readonly revertedBy: string | null
+  readonly revertedReason: string | null
+}
+
+export interface ListAuditParams {
+  readonly action?: 'merge' | 'split'
+  readonly videoId?: string
+  readonly limit: number
+  readonly page: number
+}
+
+export interface ListAuditResult {
+  readonly data: readonly MergeAuditRow[]
+  readonly total: number
+  readonly page: number
+  readonly limit: number
+}

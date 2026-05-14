@@ -7467,3 +7467,47 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **注意事项**：
   - **CI workflow 集成**不在本卡（仓库 .github/workflows 配置归属另一卡 / 用户主导）；本卡仅在 preflight 内集成 + script 就绪供 CI yaml 调用
   - migrate:check 退出码 1 是 "需用户决策" 信号，CI 应将其判为 build 警告而非 fail
+
+---
+
+## CHG-SN-6-AUDIT-TIMELINE-A — ADR-105 AMENDMENT + GET /admin/video-merges/audit 端点（M-SN-6 RETRO 4/7-A）
+- **任务 ID**：CHG-SN-6-AUDIT-TIMELINE-A
+- **日期**：2026-05-14
+- **执行模型**：claude-opus-4-7（含 ADR AMENDMENT 决策性）
+- **子代理**：无（AMENDMENT 简化 — 复用 ADR-105 既有协议层，零新决策）
+- **来源**：CHG-SN-5-12 CHECKLIST-AUDIT 拦截 audit timeline 转 M-SN-6；用户授权 7 RETRO 卡全启动
+- **简化路径**：原规划 ADR-118 起草（0.4w）→ **ADR-105 AMENDMENT**（0.2w）— 利用 plan §4.5"同一 ADR 下多个端点复用同一 ADR，不重复评审"机制；节省 0.2w
+- **修复内容**：
+  - **ADR-105 AMENDMENT 2026-05-14**（docs/decisions.md）：扩 §端点契约 row 5（GET /admin/video-merges/audit）+ 完整端点规格段（Query / Response / zod schema / SQL 设计 / audit log 协议 / 关联）
+  - **packages/types/video-merge.types.ts**：扩 `MergeAuditRow` + `ListAuditParams` + `ListAuditResult` 3 类型
+  - **apps/api/src/db/queries/video-merge-mutations.ts**：新增 `listAuditTimeline` + `countAuditTimeline` 2 query（LEFT JOIN users.username + GIN 索引 source_video_ids/target_video_ids ANY 过滤）
+  - **apps/api/src/services/VideoMergesService.ts**：扩 `ListAuditSchema` zod + `listAudit()` method + raw → MergeAuditRow camelCase 映射
+  - **apps/api/src/routes/admin/video-merges.ts**：扩 `GET /admin/video-merges/audit` route + adminOnly 鉴权
+  - **tests/integration/api/admin-video-merges.test.ts**：新增 4 集成测试（无过滤 / action filter / videoId filter / count）
+- **文件范围**：
+  - `docs/decisions.md`（ADR-105 row 5 + AMENDMENT 段，~60 行）
+  - `packages/types/src/video-merge.types.ts`（+30 行 / 3 类型）
+  - `apps/api/src/db/queries/video-merge-mutations.ts`（+50 行 / 2 query）
+  - `apps/api/src/services/VideoMergesService.ts`（+25 行 / ListAuditSchema + listAudit method）
+  - `apps/api/src/routes/admin/video-merges.ts`（+15 行 / route）
+  - `tests/integration/api/admin-video-merges.test.ts`（+25 行 / 4 测试）
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`
+- **质量门禁**：
+  - typecheck + lint 全绿
+  - **verify:adr-contracts 4 类全 PASS**（含 verify-endpoint-adr ✅ 145 admin 路由 / **16 ADR 端点**（15 + 1 新 audit）/ 129 allowlist — CHECKLIST-AUDIT 自动核验机制识别新端点已在 ADR table，无需起 ADR-118 起草卡）
+  - 3659 unit + 21 integration 全 PASS（17 + 4 新 audit timeline）
+  - **CHECKLIST-AUDIT 机制有效性验证**：本卡是首次在 M-SN-6 RETRO 阶段触发 verify-endpoint-adr 识别"新 ADR 端点已添加" → 自动核验机制按预期工作
+- **关键发现 + 范式沉淀**：
+  - **AMENDMENT vs 起新 ADR**：plan §4.5 R7 MUST-8 允许同 ADR 多端点复用；audit timeline 协议层与 ADR-105 既有 4 端点同源（鉴权 / 错误码 / response 信封 / SQL JOIN video_merge_audit）→ AMENDMENT 是更轻量正确选择
+  - **GIN 索引利用**：videoId 过滤通过 `= ANY(source_video_ids) OR = ANY(target_video_ids)` 走 migration 062 既有 GIN 索引；零新索引
+  - **LEFT JOIN users.username**：避免 audit 因用户已删除返回空（performed_by FK ON DELETE RESTRICT 保证 audit 列不空但反查 username 可能 NULL）
+- **不在范围**（拆 -B 卡）：
+  - **CHG-SN-6-AUDIT-TIMELINE-B**：apps/server-next /admin/merge 视图加 audit timeline section / tab 消费本端点；前端单元测试 ≥ 4（视图卡 ≥ 9 测试硬指标对齐）
+  - **CI workflow yaml 集成**：CI 配置归属其他卡 / 用户主导
+- **自动化循环验证**：执行 → 自评通过（typecheck + lint + verify + 3659 unit + 21 integration 全 PASS）→ 无 PATCH → 拆 -B 子卡入队
+- **后续触发**：
+  - **CHG-SN-6-AUDIT-TIMELINE-B**：视图扩展（M-SN-6 RETRO 4/7-B，0.1w）
+  - **解锁 RETRO 5/7 CHG-SN-6-RETRO-1**：M-SN-3/-4 视图测试批量补 ≥ 9（独立）
+- **注意事项**：
+  - **AMENDMENT 范式**未来 plan §6 M-SN-X 起若涉及"既有 ADR 同源端点扩展"应优先 AMENDMENT，节省 ADR 起草 + Opus 评审工时
+  - 集成测试 4 路径覆盖 happy + 3 过滤模式（action / videoId / count）；写路径（merge/split 写入后查 audit）未覆盖 — 留 M-SN-6 完善 fixture seed

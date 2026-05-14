@@ -341,3 +341,61 @@ export async function assignSourcesToVideo(
     [targetVideoId, sourceIds],
   )
 }
+
+// ── CHG-SN-6-AUDIT-TIMELINE (RETRO 4/7) — GET /admin/video-merges/audit ─────────
+
+interface RawAuditTimelineRow {
+  readonly id: string
+  readonly action: 'merge' | 'split'
+  readonly source_video_ids: string[]
+  readonly target_video_ids: string[]
+  readonly performed_by: string
+  readonly performed_by_username: string | null
+  readonly reason: string | null
+  readonly performed_at: string
+  readonly reverted_at: string | null
+  readonly reverted_by: string | null
+  readonly reverted_reason: string | null
+}
+
+/** 列出 audit timeline + LEFT JOIN users.username（ADR-105 AMENDMENT 2026-05-14）*/
+export async function listAuditTimeline(
+  db: Pool,
+  params: { action: 'merge' | 'split' | null; videoId: string | null; offset: number; limit: number },
+): Promise<RawAuditTimelineRow[]> {
+  const { action, videoId, offset, limit } = params
+  const result = await db.query<RawAuditTimelineRow>(
+    `SELECT
+       vma.id, vma.action,
+       vma.source_video_ids, vma.target_video_ids,
+       vma.performed_by, u.username AS performed_by_username,
+       vma.reason,
+       vma.performed_at::text AS performed_at,
+       vma.reverted_at::text AS reverted_at,
+       vma.reverted_by, vma.reverted_reason
+     FROM video_merge_audit vma
+     LEFT JOIN users u ON u.id = vma.performed_by
+     WHERE ($1::text IS NULL OR vma.action = $1)
+       AND ($2::uuid IS NULL OR $2 = ANY(vma.source_video_ids) OR $2 = ANY(vma.target_video_ids))
+     ORDER BY vma.performed_at DESC
+     LIMIT $3 OFFSET $4`,
+    [action, videoId, limit, offset],
+  )
+  return result.rows
+}
+
+/** audit timeline 总数（同过滤条件）*/
+export async function countAuditTimeline(
+  db: Pool,
+  params: { action: 'merge' | 'split' | null; videoId: string | null },
+): Promise<number> {
+  const { action, videoId } = params
+  const result = await db.query<{ total: string }>(
+    `SELECT COUNT(*)::text AS total
+     FROM video_merge_audit vma
+     WHERE ($1::text IS NULL OR vma.action = $1)
+       AND ($2::uuid IS NULL OR $2 = ANY(vma.source_video_ids) OR $2 = ANY(vma.target_video_ids))`,
+    [action, videoId],
+  )
+  return parseInt(result.rows[0]?.total ?? '0', 10)
+}

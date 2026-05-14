@@ -19,6 +19,8 @@ import {
   fetchSourcesByVideoId,
   fetchSourcesByVideoIds,
   detectMergeConflicts,
+  listAuditTimeline,
+  countAuditTimeline,
 } from '../../../apps/api/src/db/queries/video-merge-mutations'
 
 let db: Pool
@@ -75,5 +77,32 @@ describe('video-merge-mutations SQL 集成', () => {
       '00000000-0000-0000-0000-000000000001',
     ])
     expect(conflicts).toBe(0)
+  })
+})
+
+describe('GET /admin/video-merges/audit SQL 集成（CHG-SN-6-AUDIT-TIMELINE / RETRO 4/7）', () => {
+  it('listAuditTimeline 无过滤跑通（LEFT JOIN users 取 username）', async () => {
+    const rows = await listAuditTimeline(db, { action: null, videoId: null, offset: 0, limit: 20 })
+    expect(rows).toBeInstanceOf(Array)
+  })
+
+  it('listAuditTimeline action=merge 过滤跑通', async () => {
+    const rows = await listAuditTimeline(db, { action: 'merge', videoId: null, offset: 0, limit: 20 })
+    expect(rows).toBeInstanceOf(Array)
+  })
+
+  it('listAuditTimeline videoId 过滤跑通（GIN 索引 source_video_ids/target_video_ids ANY）', async () => {
+    const rows = await listAuditTimeline(db, {
+      action: null,
+      videoId: '00000000-0000-0000-0000-000000000000',
+      offset: 0,
+      limit: 20,
+    })
+    expect(rows).toEqual([])
+  })
+
+  it('countAuditTimeline 同过滤跑通', async () => {
+    const total = await countAuditTimeline(db, { action: null, videoId: null })
+    expect(total).toBeGreaterThanOrEqual(0)
   })
 })

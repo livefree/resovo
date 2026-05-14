@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 无进行中任务；CHG-SN-6-CI-MIGRATE-DRY-RUN 已闭环（M-SN-6 RETRO 3/7）；下一卡 RETRO 4/7 CHG-SN-6-AUDIT-TIMELINE — ADR-118 起草 + GET 端点 + 视图三段式 -->
+<!-- 无进行中任务；CHG-SN-6-AUDIT-TIMELINE-A 闭环（M-SN-6 RETRO 4/7-A，ADR-105 AMENDMENT + GET audit 端点）；下一卡 -B 视图扩展 / 或 RETRO 5/7 RETRO-1 -->
