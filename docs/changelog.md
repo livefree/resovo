@@ -7439,3 +7439,31 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **注意事项**：
   - DATABASE_URL 必须设（.env.local）才能跑；test:integration script 显式 --env-file=.env.local
   - 本卡是**双层防护下半层**（上半层 verify:sql-schema-alignment 静态扫描；本卡真实执行）→ M-SN-5 schema 偏离类问题终结
+
+---
+
+## CHG-SN-6-CI-MIGRATE-DRY-RUN — migrate:check 干跑核验（M-SN-6 RETRO 3/7）
+- **任务 ID**：CHG-SN-6-CI-MIGRATE-DRY-RUN
+- **日期**：2026-05-14
+- **执行模型**：claude-opus-4-7（延续会话；建议 sonnet）
+- **子代理**：无
+- **来源**：CHG-SN-5-13-PATCH-2 dev DB 滞后 migration 061/062/063 教训 → 防 CI / 部署前 schema 不同步
+- **修复内容**：
+  - `scripts/migrate.ts` 加 `--dry-run` flag：仅报告 pending migration 列表 + 退出码 1（有 pending）/ 0（全 applied）
+  - `package.json` 加 `npm run migrate:check`（dry-run 别名）
+  - `scripts/preflight.sh` `[3/6]` 头部前置 `migrate:check`，先报告 pending 再实际 migrate
+  - `docs/rules/quality-gates.md` §6 §5 + §6 类新增（含 INTEGRATION-TEST 同步登记）
+- **质量门禁**：
+  - typecheck + lint 全绿
+  - migrate:check 本机跑通：当前 dev DB 已是最新 → exit 0 ✅
+  - preflight 头部干跑核验生效
+- **关键发现**：
+  - 极简实现（< 15 行 .ts 代码 + 1 line script + 4 line preflight）；与既有 migrate.ts 同进程共享 DB 连接 + sql files 读取
+  - **退出码语义**：dry-run mode 有 pending 时 exit 1 → CI 部署阶段可识别需手动决策；preflight 内 `|| echo` 兜底允许继续
+  - **三层 schema 防护**进入"实施 + 干跑"双向：静态扫描（CHECKLIST-AUDIT-3）+ 集成测试（INTEGRATION-TEST）+ 干跑核验（本卡）= 上线前阻断 + 上线后兜底
+- **自动化循环**：执行 → 自评通过（migrate:check exit 0 + typecheck PASS + preflight integration）→ 无 PATCH → 下一卡
+- **后续触发**：
+  - **解锁 CHG-SN-6-AUDIT-TIMELINE**（RETRO 4/7）：ADR-118 起草 + GET audit 端点 + /admin/merge audit timeline 视图扩展三段式
+- **注意事项**：
+  - **CI workflow 集成**不在本卡（仓库 .github/workflows 配置归属另一卡 / 用户主导）；本卡仅在 preflight 内集成 + script 就绪供 CI yaml 调用
+  - migrate:check 退出码 1 是 "需用户决策" 信号，CI 应将其判为 build 警告而非 fail

@@ -135,6 +135,10 @@
 
 4. **`npm run verify:sql-schema-alignment`**（advisory，CHG-SN-6-CHECKLIST-AUDIT-3 新增）：解析 `apps/api/src/db/migrations/*.sql` 全集（CREATE TABLE / ADD COLUMN / DROP COLUMN / RENAME COLUMN）算出每表当前 schema → 扫 `apps/api/src/db/queries/**/*.ts` + `apps/api/src/services/**/*.ts` 内 SQL template literal `<alias>.<column>` 字面量 → 比对 5 核心表（videos / video_sources / users / media_catalog / watch_history）schema → 不在列表的报警；防 CHG-SN-5-13-PATCH-2 类 migration 029 后未迁移 mc JOIN 偏离。M-SN-6 完善后扩 alias 上下文推断 + 升 FAIL fast
 
+5. **`npm run migrate:check`**（CHG-SN-6-CI-MIGRATE-DRY-RUN / RETRO 3/7）：迁移干跑核验，不执行只报告 pending 数量 + 文件列表；退出码 1 = 有 pending（CI 部署前必须 migration 已应用）/ 0 = 全 applied；preflight `[3/6]` 头部前置（参 CHG-SN-5-13-PATCH-2 dev DB 滞后 migration 061/062/063 教训）
+
+6. **`npm run test:integration`**（CHG-SN-6-INTEGRATION-TEST / RETRO 2/7）：跑真实 PG 子集集成测试（vitest.integration.config.ts），验证 admin route SQL 执行不抛 DatabaseError；与 unit mock 互补；与 verify:sql-schema-alignment 互补（静态扫描 + 真实执行双层）；CI 可独立调度（preflight 不集成；本地按需运行）
+
 ### 4 类文档强制规则（修订 §1/§2/§3 已落地）
 
 4. **§1 第 5 项** "ADR §验证段逐条勾对清单"（R-CHECKLIST-2 修复 09-PATCH 类教训）

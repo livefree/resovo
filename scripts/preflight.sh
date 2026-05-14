@@ -25,6 +25,9 @@ echo "[2/6] 校验环境变量与基础服务连通性"
 bash scripts/verify-env.sh
 
 echo "[3/6] 执行数据库迁移（幂等）"
+# CHG-SN-6-CI-MIGRATE-DRY-RUN：先 dry-run 报告 pending 数量（防部署前 schema 滞后）
+# 退出码 1 = 有 pending → 提示后继续实际 migrate；退出码 0 = 无 pending 直接通过
+npm run migrate:check || echo "  ↑ 上述 pending 迁移将由下一步实际执行"
 npm run migrate
 
 echo "[4/6] TypeScript 类型检查"
