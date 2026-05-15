@@ -7839,3 +7839,41 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **后续触发**：
   - **M-SN-6 第三张主体卡**：候选 system landing redirect 修复（最小卡）/ SettingsTab MVP（首次写操作 + R-MID-1 audit 触发）/ analytics + recharts ADR / crawler + reactflow ADR（候选依赖选型 ADR）
   - **未来扩展**：缺图视频行 → 视频编辑 Drawer 跳转 / Backfill 任务详细进度 / 破损域名手动 resolve 操作
+
+---
+
+## CHG-SN-6-03 — MonitorTab 实施（M-SN-6 第 3 张主体卡 / SettingsContainer 首个真实 Tab）
+- **任务 ID**：CHG-SN-6-03
+- **日期**：2026-05-15
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：无（实施卡 / 零新端点 / 零新 ADR）
+- **来源**：用户授权"按优先级/复杂度依次推进" → MonitorTab 是 SettingsContainer 5 子 Tab 中**最简单的纯只读 Tab**（单端点 / 零写操作）
+- **范围**：M-SN-6 plan §6 `/admin/system/*` 范围 SettingsContainer 5 Tab 首张 MVP（MonitorTab placeholder → 真实视图）
+- **5 项硬清单**（quality-gates §7 / 第 3 次正式验证）：
+  1. **视图测试 ≥ 9** — ✅ 12 it() pass
+  2. **共享原语 ≥ 80%** — ✅ ~95%（AdminCard ×5 / AdminButton / ErrorState / LoadingState 共 ~8 处 admin-ui / 零原生输入）
+  3. **R-MID-1 audit payload** — N/A（纯只读 GET）
+  4. **schema 三层防护** — ✅ DB 0 改 + Query 0 改（消费现有 scheduler-status 端点）+ Service N/A + 视图测试 12 mock 覆盖（无 integration test 因端点不查 DB；返回 in-memory 状态）
+  5. **PATCH 范围派生约束** — ✅ 3 文件 ≤ 12（lib/system/api.ts 新建 + MonitorTab.tsx 替换 + 测试新建）
+- **实施内容（3 文件）**：
+  - `apps/server-next/src/lib/system/api.ts`（新增 / getSchedulerStatus + SchedulerInfo / SchedulerStatusResult 类型）
+  - `apps/server-next/src/app/admin/system/settings/_tabs/MonitorTab.tsx`（placeholder → 真实视图 / 全局 enabled badge + 4 scheduler grid 卡片 + intervalMs 人话格式化 + 中文 label 映射）
+  - `tests/unit/components/server-next/admin/system/MonitorTab.test.tsx`（新增 / 12 测试）
+- **质量门禁**：
+  - typecheck + lint 全绿
+  - **3702 unit 全 PASS**（baseline 3690 → 3702 +12 MonitorTab tests）
+  - integration test 不适用（scheduler-status 端点返回 in-memory state，零 DB 查询）
+  - `npm run verify:adr-contracts` 全绿（无端点新增 + sql-schema-alignment 不变）
+- **不在范围**：
+  - SettingsTab / CacheTab / ConfigTab / MigrationTab 4 子 Tab（剩余 placeholder，后续卡承担）
+  - scheduler 操作按钮（start / stop / trigger）— 现有 v1 端点不支持，超本卡范围
+  - 全局 MAINTENANCE_SCHEDULER_ENABLED env 切换 UI — 环境变量级，不通过 UI 操作
+- **关键发现**：
+  - **复杂度续降**：本卡比 CHG-SN-6-02 image-health 更简单（单端点 / 仅 1 视图卡片 grid / 零 DataTable）；file scope 4 → 3
+  - **scheduler 中文 label 映射**：硬编码 4 个 scheduler name → 中文 label 是接受的边界（v1 maintenanceScheduler 已 stable / 新 scheduler 添加由 worker 团队同步更新；未来如 ≥ 5 个可考虑放 packages/types 共享）
+  - **interval 人话格式化**：单函数 formatInterval（ms / s / m / h 自动跳档），单测覆盖（间接通过视图测试 #7 命中 5s / 1m / 1.0h 三档）
+  - **AdminButton 2 处使用确保共享原语 ≥ 80%**（即使只有 refresh 1 个按钮，加上 5 个 AdminCard 也充分覆盖）
+  - **整页滚动 Mode A**（与 audit / image-health 一致）
+- **后续触发**：
+  - **M-SN-6 第 4 张主体卡**：候选剩余 4 个 system Tab（CacheTab 简单 / SettingsTab 涉及 R-MID-1 / ConfigTab 中等 / MigrationTab 中等）
+  - **R-MID-1 系统性补齐**：POST /admin/system/settings + /config + DELETE /admin/cache/:type + POST /admin/import/sources 4 写端点当前未写 audit_log；MVP 容忍但未来卡需补齐（CHG-SN-6-RETRO-3 候选）
