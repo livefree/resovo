@@ -7877,3 +7877,39 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **后续触发**：
   - **M-SN-6 第 4 张主体卡**：候选剩余 4 个 system Tab（CacheTab 简单 / SettingsTab 涉及 R-MID-1 / ConfigTab 中等 / MigrationTab 中等）
   - **R-MID-1 系统性补齐**：POST /admin/system/settings + /config + DELETE /admin/cache/:type + POST /admin/import/sources 4 写端点当前未写 audit_log；MVP 容忍但未来卡需补齐（CHG-SN-6-RETRO-3 候选）
+
+---
+
+## CHG-SN-6-04 — CacheTab 实施（M-SN-6 第 4 张主体卡）
+- **任务 ID**：CHG-SN-6-04
+- **日期**：2026-05-15
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：无（实施卡 / 零新端点 / 零新 ADR）
+- **来源**：用户授权"按优先级/复杂度依次推进" → CacheTab 是 SettingsContainer 5 Tab 中**第二简单的 Tab**（GET + DELETE 两端点 / 写操作 audit 豁免）
+- **范围**：M-SN-6 plan §6 `/admin/system/*` 范围 SettingsContainer CacheTab placeholder → 真实视图
+- **5 项硬清单**（quality-gates §7 / 第 4 次正式验证）：
+  1. **视图测试 ≥ 9** — ✅ 12 it() pass
+  2. **共享原语 ≥ 80%** — ✅ ~95%（AdminCard ×5 / AdminButton ×7（顶栏 2 + 单卡 5）/ ErrorState / LoadingState / useToast）
+  3. **R-MID-1 audit payload** — N/A（cache 清理是运维动作非业务数据；与 image-health backfill 同模式 / CHG-SN-6-02 已沉淀豁免协议）
+  4. **schema 三层防护** — ✅ DB 0 改（cache 不查 DB）+ 12 mock 测试覆盖（端点零 DB）
+  5. **PATCH 范围派生约束** — ✅ 3 文件 ≤ 12（lib/system/api.ts 扩展 + CacheTab.tsx 替换 + 测试新建）
+- **实施内容（3 文件）**：
+  - `apps/server-next/src/lib/system/api.ts`（追加 getCacheStats / clearCache + CacheType / CacheStat inline 类型镜像 contracts；packages/types/contracts 未在 @resovo/types 顶层 re-export，inline 兜底）
+  - `apps/server-next/src/app/admin/system/settings/_tabs/CacheTab.tsx`（placeholder → 真实视图 / 5 业务前缀 KPI 卡片 + 全部清空按钮 + 单卡清空按钮 + count=0 disabled）
+  - `tests/unit/components/server-next/admin/system/CacheTab.test.tsx`（新增 / 12 测试）
+- **质量门禁**：
+  - typecheck + lint 全绿
+  - **3714 unit 全 PASS**（baseline 3702 → 3714 +12 CacheTab tests）
+  - `npm run verify:adr-contracts` 全绿
+- **不在范围**：
+  - SettingsTab / ConfigTab / MigrationTab 3 子 Tab（剩余 placeholder）
+  - cache TTL 配置 UI（reference §5.11 提及；MVP 不含 — TTL 由 CACHE_PREFIXES 编码常量，需后端先支持）
+  - 受保护前缀展示（PROTECTED_PREFIXES system key / Bull queue / token 黑名单等；MVP 不暴露）
+- **关键发现**：
+  - **types 镜像策略**：packages/types/src/contracts/v1/admin.ts 的 CacheType / CacheStat 未在 @resovo/types 顶层 re-export；inline 镜像（同款 / 字段命名 100% 对齐）避免修改 contracts re-export 链导致回归
+  - **复杂度续降**：本卡 3 文件（与 CHG-SN-6-03 同款）/ 端点零开发；M-SN-6 视图卡平均 file scope 缩至 3-4
+  - **count=0 卡片 disabled**：UX 细节，防止误点空类型
+  - **cache 清理 audit 豁免**：与 image-health backfill 同模式（运维动作非业务数据，5 项硬清单第 3 项 N/A）
+- **后续触发**：
+  - **M-SN-6 第 5 张主体卡**：剩余候选 ConfigTab（中等 / JSON 编辑器 + crawler_sites 同步）/ MigrationTab（导入导出 sources）/ SettingsTab（R-MID-1 触发 / 表单复杂）
+  - **R-MID-1 系统性补齐**：CHG-SN-6-RETRO-3 候选（POST settings / config / DELETE cache / POST import 4 写端点 audit_log 扩展）— 当前 cache delete 豁免不应妨碍其他需要 audit 的端点补齐
