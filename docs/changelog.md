@@ -7913,3 +7913,41 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **后续触发**：
   - **M-SN-6 第 5 张主体卡**：剩余候选 ConfigTab（中等 / JSON 编辑器 + crawler_sites 同步）/ MigrationTab（导入导出 sources）/ SettingsTab（R-MID-1 触发 / 表单复杂）
   - **R-MID-1 系统性补齐**：CHG-SN-6-RETRO-3 候选（POST settings / config / DELETE cache / POST import 4 写端点 audit_log 扩展）— 当前 cache delete 豁免不应妨碍其他需要 audit 的端点补齐
+
+---
+
+## CHG-SN-6-05 — ConfigTab 实施（M-SN-6 第 5 张主体卡）
+- **任务 ID**：CHG-SN-6-05
+- **日期**：2026-05-15
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：无（实施卡 / 零新端点 / 零新 ADR）
+- **来源**：用户授权"按优先级/复杂度依次推进" → MigrationTab multipart 上传需扩展 apiClient（跨边界）暂避；ConfigTab 中等复杂度（JSON 编辑器 + 4 错误码差异化）作为更合适首选
+- **范围**：SettingsContainer ConfigTab placeholder → 真实视图（GET/POST /admin/system/config）
+- **5 项硬清单**（quality-gates §7 / 第 5 次正式验证）：
+  1. **视图测试 ≥ 9** — ✅ 13 it() pass
+  2. **共享原语 ≥ 80%** — ✅ ~85%（AdminCard ×2 / AdminButton ×2 / AdminInput / ErrorState / LoadingState / useToast 共 ~8 处 admin-ui / 1 原生 textarea — admin-ui 无 AdminTextarea 原语）
+  3. **R-MID-1 audit payload** — N/A（view 层不调 auditSvc.write；POST /admin/system/config v1 端点本身未 audit，留 RETRO-3 系统性补齐 — 不阻塞本卡）
+  4. **schema 三层防护** — ✅ 13 mock 测试覆盖（API client mock + 4 错误码差异化）/ DB 不查
+  5. **PATCH 范围派生约束** — ✅ 3 文件 ≤ 12（lib/system/api.ts 扩展 + ConfigTab.tsx 替换 + 测试新建）
+- **实施内容（3 文件）**：
+  - `apps/server-next/src/lib/system/api.ts`（追加 getSystemConfig / saveSystemConfig + SystemConfig / SystemConfigSaveResult 类型）
+  - `apps/server-next/src/app/admin/system/settings/_tabs/ConfigTab.tsx`（placeholder → 真实视图 / JSON textarea + 订阅 URL input + dirty 标识 + 4 错误码差异化 toast）
+  - `tests/unit/components/server-next/admin/system/ConfigTab.test.tsx`（新增 / 13 测试）
+- **质量门禁**：
+  - typecheck + lint 全绿
+  - **3727 unit 全 PASS**（baseline 3714 → 3727 +13 ConfigTab tests）
+  - `npm run verify:adr-contracts` 全绿
+- **不在范围**：
+  - SettingsTab / MigrationTab（剩余 placeholder）
+  - JSON schema 校验前置（前端 jsonlint 类）— 后端 JSON.parse 已守卫
+  - configFile diff 展示（实际工作流 = export → 编辑 → 上传，diff 是 future）
+  - POST /admin/system/config audit_log 扩展（v1 端点未 audit，RETRO-3 系统性补齐）
+- **关键发现**：
+  - **AdminInput testid 在 wrapper 不在内部 input**：访问 input.value 需 container.querySelector by aria-label / fireEvent.change 不能用 AdminInput wrapper（"does not have a value setter"）；test 8 改走 textarea 触发 dirty + 后台返回错误模拟
+  - **错误码差异化的 describeApiError 单函数**：统一 INVALID_JSON / INVALID_SUBSCRIPTION_URL / VALIDATION_ERROR / 通用 4 档；类似 CHG-SN-5-12 STATE_CONFLICT 引导模式（err.code 而非 message）
+  - **dirty state 设计**：初始 dirty=false（GET 加载后），用户修改任一字段 dirty=true，保存成功后 dirty 重置；保存按钮 disabled 直到 dirty=true（防误点）
+  - **复杂度回升但仍 ≤ 12 文件**：CHG-SN-6-04 → 6-05 同样 3 文件（保持轻量）；测试用例 12 → 13 反映错误码差异化复杂度
+  - **原生 textarea 兜底**：admin-ui 无 AdminTextarea 原语；本卡使用原生 textarea + token CSS 变量 + spellCheck=false；如未来 ≥ 3 处用到可沉淀 AdminTextarea 原语（共享原语 ≥ 80% 仍达标）
+- **后续触发**：
+  - **M-SN-6 第 6 张主体卡**：剩余候选 SettingsTab（13 字段表单 + R-MID-1 触发）/ MigrationTab（multipart 上传需扩 apiClient）
+  - **R-MID-1 系统性补齐**：CHG-SN-6-RETRO-3 候选（POST settings / config / DELETE cache / POST import 4 写端点 audit_log 扩展 + audit-log-coverage.test.ts EXEMPT → PAYLOAD_REQUIRED 迁移）

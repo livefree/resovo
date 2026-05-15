@@ -51,3 +51,29 @@ export async function clearCache(type: CacheType): Promise<{ deleted: number }> 
   )
   return result.data
 }
+
+// ── Config（运行时 JSON 配置；CHG-SN-6-05） ──────────────────────
+
+export interface SystemConfig {
+  readonly configFile: string
+  readonly subscriptionUrl: string
+}
+
+export interface SystemConfigSaveResult {
+  readonly ok: true
+  readonly synced: number
+  readonly skipped: number
+}
+
+export async function getSystemConfig(): Promise<SystemConfig> {
+  const result = await apiClient.get<{ data: SystemConfig }>('/admin/system/config')
+  return result.data
+}
+
+export async function saveSystemConfig(input: {
+  configFile: string
+  subscriptionUrl?: string
+}): Promise<SystemConfigSaveResult> {
+  const result = await apiClient.post<{ data: SystemConfigSaveResult }>('/admin/system/config', input)
+  return result.data
+}
