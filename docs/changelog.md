@@ -7799,3 +7799,43 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
   - **M-SN-6 第二张主体卡**：等用户授权选定（候选：system landing / image-health / settings 8 Tab）
   - **CI 集成 verify:view-test-coverage**（advisory → FAIL fast 升级）：M-SN-6 完善期独立卡
   - **未来扩展**：ADR-118a stats / ADR-118b GIN q / ADR-118c batch targets 解析（YAGNI）
+
+---
+
+## CHG-SN-6-02 — /admin/image-health 图片健康视图实施（M-SN-6 第 2 张主体卡）
+- **任务 ID**：CHG-SN-6-02
+- **日期**：2026-05-15
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：无（实施卡，零新端点 / 零新 ADR）
+- **来源**：用户授权"按优先级/复杂度依次自动推进" → 选定 /admin/image-health（复用既有 4 端点 / IMG-05 allowlist 豁免 / 中等复杂度仪表盘 + 列表混合）
+- **范围**：M-SN-6 plan §6 "/admin/image-health" 范围首次实施；零新端点；零新 ADR
+- **5 项硬清单**（quality-gates §7 / 第 2 次正式验证）：
+  1. **视图测试 ≥ 9 用例** — ✅ 实测 12 it() pass（与 CHG-SN-6-01 一致 150% over）
+  2. **共享原语 ≥ 80%** — ✅ 实测 ~90%（DataTable ×2 / AdminCard ×3 / PageHeader / AdminButton ×2 / EmptyState ×2 / ErrorState ×3 / LoadingState ×2 / useToast 共 ~15 处使用 admin-ui，零原生输入）
+  3. **R-MID-1 audit payload 内容断言** — N/A（视图仅 1 写操作 backfill 触发后台 job 非业务数据修改；不强制 audit_log；YAGNI 不在本卡范围扩展）
+  4. **schema 三层防护** — ✅ DB（052/IMG schema 0 改）+ Query camelCase mapping + Service 无（直接调 query）+ Integration test 9 用例真实 PG PASS
+  5. **PATCH 范围派生约束** — ✅ 实测 4 文件 ≤ 12（image-health.ts allowlist 已含端点，零 api 改动；纯前端 + 测试）
+- **实施内容（4 文件）**：
+  - `apps/server-next/src/lib/image-health/api.ts`（新增 / 4 API 客户端函数 + ImageHealthStats / BrokenDomainRow / MissingVideoRow 类型）
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthClient.tsx`（新增 / KPI 4 卡片 + 破损域名 TOP 表 + 缺图视频分页表 + backfill 按钮）
+  - `apps/server-next/src/app/admin/image-health/page.tsx`（PlaceholderPage → ImageHealthClient 接入）
+  - `tests/unit/components/server-next/admin/image-health/ImageHealthClient.test.tsx`（新增 / 12 视图测试）
+  - `tests/integration/api/admin-image-health.test.ts`（新增 / 9 PG 集成测试）
+- **质量门禁**：
+  - typecheck + lint 全绿
+  - **3690 unit 全 PASS**（baseline 3678 → 3690 +12 image-health view tests）
+  - **40 integration 全 PASS**（baseline 31 → 40 +9 image-health SQL tests）
+  - `npm run verify:adr-contracts` 4 类核验：endpoint-adr ✅ / error-message ⚠ baseline / adr-d-numbers ✅ 20 闭环 / sql-schema-alignment ✅
+- **不在范围**：
+  - 破损域名表的 client mode 排序 / 筛选（DataTable 默认提供，未实际测试自定义）
+  - 缺图视频行点击 → 跳转视频编辑（YAGNI，未来卡）
+  - backfill 任务进度展示（仅"已入队"提示，详细进度 worker 监控位由 CrawlerJobsClient 类视图承担）
+  - 写操作 audit_log 扩展（backfill 是后台 job 触发，非直接数据写入）
+- **关键发现**：
+  - **Promise.allSettled 模式**：3 端点（stats / domains / missing）并行加载，单端点失败不阻塞其他；3 ErrorState 独立显示，与 admin-ui ErrorState 设计契合
+  - **复杂度差异**：本卡比 CHG-SN-6-01 audit 视图更简单（无详情抽屉 / 无多维 filter / 仅触发按钮）；file scope 11 → 4（缩减 64%）
+  - **MissingVideoRow posterStatus badge**：3 状态 badge（缺失 / 破损 / 待复核）+ 兜底（未识别状态）使用 token CSS 变量，零硬编码颜色
+  - **整页滚动 Mode A 默认**（CHG-SN-5-13-PATCH-2 + ADR-103 AMENDMENT 2026-05-14 协议）：与 audit 视图保持一致
+- **后续触发**：
+  - **M-SN-6 第三张主体卡**：候选 system landing redirect 修复（最小卡）/ SettingsTab MVP（首次写操作 + R-MID-1 audit 触发）/ analytics + recharts ADR / crawler + reactflow ADR（候选依赖选型 ADR）
+  - **未来扩展**：缺图视频行 → 视频编辑 Drawer 跳转 / Backfill 任务详细进度 / 破损域名手动 resolve 操作

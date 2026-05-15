@@ -1,5 +1,16 @@
-import { PlaceholderPage } from '@/components/PlaceholderPage'
+import { Suspense } from 'react'
+import type { Metadata } from 'next'
+import { LoadingState } from '@resovo/admin-ui'
+import { ImageHealthClient } from './_client/ImageHealthClient'
+
+export const metadata: Metadata = {
+  title: '图片健康 | Resovo Admin',
+}
 
 export default function ImageHealthPage() {
-  return <PlaceholderPage title="图片健康" milestone="M-SN-6（周边视图）" />
+  return (
+    <Suspense fallback={<LoadingState variant="skeleton" />}>
+      <ImageHealthClient />
+    </Suspense>
+  )
 }
