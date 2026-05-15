@@ -112,7 +112,7 @@ const ROW_ACTION_STYLE: React.CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   background: 'var(--bg-surface)',
   color: 'var(--fg-muted)',
-  font: 'inherit',
+  fontFamily: 'inherit',
   fontSize: 'var(--font-size-xxs)',
   cursor: 'pointer',
   flexShrink: 0,

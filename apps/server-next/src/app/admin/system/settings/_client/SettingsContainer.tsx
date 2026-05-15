@@ -77,7 +77,7 @@ const HEAD_BUTTON_STYLE: React.CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   background: 'var(--bg-surface)',
   color: 'var(--fg-default)',
-  font: 'inherit',
+  fontFamily: 'inherit',
   fontSize: 'var(--font-size-xs)',
   cursor: 'pointer',
 }
@@ -128,7 +128,7 @@ function tabBtnStyle(active: boolean): React.CSSProperties {
     fontSize: 'var(--font-size-sm-tight)',
     cursor: 'pointer',
     textAlign: 'left',
-    font: 'inherit',
+    fontFamily: 'inherit',
     display: 'flex',
     flexDirection: 'column',
     gap: '2px',

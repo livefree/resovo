@@ -108,7 +108,7 @@ const FOOT_BTN_BASE_STYLE: React.CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   background: 'var(--bg-surface)',
   color: 'var(--fg-default)',
-  font: 'inherit',
+  fontFamily: 'inherit',
   fontSize: 'var(--font-size-xs)',
   cursor: 'pointer',
 }

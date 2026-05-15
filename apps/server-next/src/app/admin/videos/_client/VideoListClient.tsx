@@ -85,7 +85,7 @@ const BATCH_BTN_BASE_STYLE: CSSProperties = {
   color: 'var(--fg-default)',
   fontSize: 'var(--font-size-xs)',
   cursor: 'pointer',
-  font: 'inherit',
+  fontFamily: 'inherit',
 }
 const BATCH_BTN_DANGER_STYLE: CSSProperties = {
   ...BATCH_BTN_BASE_STYLE,
@@ -416,7 +416,7 @@ const HEAD_BTN_STYLE: CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   background: 'var(--bg-surface)',
   color: 'var(--fg-default)',
-  font: 'inherit',
+  fontFamily: 'inherit',
   fontSize: 'var(--font-size-xs)',
   cursor: 'pointer',
 }

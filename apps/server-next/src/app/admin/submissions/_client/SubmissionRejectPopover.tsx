@@ -40,7 +40,7 @@ const TEMPLATE_BTN_STYLE: CSSProperties = {
   color: 'var(--fg-muted)',
   fontSize: 'var(--font-size-2xs)',
   cursor: 'pointer',
-  font: 'inherit',
+  fontFamily: 'inherit',
 }
 
 const FOOTER_STYLE: CSSProperties = {
