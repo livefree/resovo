@@ -7676,3 +7676,64 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **后续触发**：
   - **M-SN-6 RETRO 批次全闭环（1-7/7 完整）**：CHECKLIST-AUDIT-3 ✅ / INTEGRATION-TEST ✅ / CI-MIGRATE-DRY-RUN ✅ / AUDIT-TIMELINE-A+B ✅ / RETRO-1 ✅ / RETRO-2 ✅ / DATATABLE-STICKY-SCROLL ✅
   - **解锁人工介入节点**：用户 sign-off 启动 M-SN-6 主体卡（plan §6 沿用现描述）
+
+---
+
+## CHG-SN-6-01-ADR — ADR-118 /admin/audit 全局审计日志视图端点契约起草（M-SN-6 首张视图卡 ADR 前置）
+- **任务 ID**：CHG-SN-6-01-ADR
+- **日期**：2026-05-15
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮 PASS 起草（CLAUDE.md §强制升 Opus 第 3 项"撰写即将成为 ADR 的决策文档"）
+- **来源**：M-SN-6 RETRO 7/7 全闭环 + 用户 sign-off 启动 M-SN-6 主体；用户选定首张卡 `/admin/audit` 全局审计日志视图（vs system landing / image-health / 候选依赖 ADR）
+- **问题理解**：plan §4.5 R7 MUST-8 ADR-端点先后协议要求新增 admin route 必须先起独立 ADR + Opus PASS；`verify:endpoint-adr` 自动核验；ADR-118 编号已预留（M-SN-6 RETRO 4 原计划起 ADR-118 audit timeline 但用 ADR-105 AMENDMENT 替代，ADR-118 编号空闲）
+- **关键决策（D-118-1 ~ D-118-10）**：
+  - **3 端点 MVP**：GET /admin/audit/logs（列表）+ GET /admin/audit/logs/:id（详情）+ GET /admin/audit/enums（枚举）；不含 stats / GIN 全文 q（详见替代方案 A/B）
+  - **列表行 payload 裁剪**：列表行带 payloadSummary（≤ 256 字符 Service 提取），详情端点带完整 before/after_jsonb + ipHash；防 100 行 × KB jsonb 撑爆响应
+  - **listAdminAuditLog 独立函数**：不复用 listAuditLogByTarget（参数必填性 / 索引选择 / 排序稳定性不同，强合并违反单一职责 R-ADR-117-4）
+  - **camelCase 100% 对齐**：字段命名 + query params 与 AdminAuditLogQueryRow / ADR-105 / ADR-117 / ADR-104 全对称
+  - **ErrorCode 零新增**（ADR-110 关闭真源保持）：VALIDATION_ERROR / NOT_FOUND / UNAUTHORIZED / FORBIDDEN
+  - **batch action 协议**：target_id NULL 行 payloadSummary = "批量 N 项 (action_type)"；详情完整 jsonb 由 UI 抽屉渲染
+  - **video_merge_audit 解耦边界**：本 ADR 与 ADR-105 video_merge_audit 互不消费，未来 timeline 合并由 view 层拼装
+- **5 项硬清单首次正式验证（实施卡 CHG-SN-6-01 完成判据）**：
+  1. 视图测试 ≥ 9 用例（不可豁免，BLOCKER 触发）
+  2. 共享原语 ≥ 80%（DataTable + Drawer + DateRangePicker + cell 复合）
+  3. R-MID-1 audit payload N/A（只读端点）+ 替代守卫（integration 断言 jsonb 透传）
+  4. schema 三层防护（DB CHECK + Query camelCase alias + Service zod + Integration test ≥ 6）
+  5. PATCH 范围派生约束（实施卡 file scope ≤ 12 文件）
+- **4 维度 Opus 自评 PASS**：命名 / 对称性 / 状态职责 / 扩展性 全 PASS
+- **文件范围**：
+  - `docs/decisions.md`（追加 ADR-118 章节，~370 行 markdown，10 节完整）
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`
+- **质量门禁**：
+  - ADR 4 维度评审 PASS（arch-reviewer Opus 1 轮）
+  - 关联段说明 video_merge_audit 与 admin_audit_log 解耦边界明确
+  - 4 类已知风险（R-ADR-118-1 ~ R-ADR-118-4）显式记录 + 缓解路径
+- **不在范围**：
+  - 实施代码（CHG-SN-6-01 承担：route + service + queries + view + tests）
+  - 候选依赖选型（recharts / reactflow / virtual scroll）— 本 ADR 不触发
+  - GIN 全文检索 / stats 端点 / 多选数组 / 冷归档（YAGNI，未来扩展占位 ADR-118a/b/c）
+- **关键发现**：
+  - **ADR-118 编号回收使用**：M-SN-6 RETRO 4 原计划起 ADR-118 audit timeline 但选 ADR-105 AMENDMENT 替代，ADR-118 空闲编号正好用于本 ADR；体现 plan §4.5"同 ADR 多端点复用"机制（RETRO 4 节省 0.2w）+ 本 ADR 独立起草解耦（新业务表新 ADR）的双范式
+  - **R-MID-1 N/A 替代守卫**：只读视图无写操作 → 第 3 项硬清单不适用，但通过 integration test 断言 jsonb 透传 + 至少 3 target_kind × 3 action_type 覆盖，将硬清单精神延伸到只读场景
+  - **MVP 最小化 + 未来扩展占位**：3 端点 MVP + 4 类未来扩展（stats / GIN / 多选 / batch targets）全部预留 ADR-118a/b/c 占位，不破坏当前签名
+- **自动化循环验证**：起 ADR → spawn Opus 起草 → 4 维度自评 PASS → 主循环采纳落盘 → 下一卡 CHG-SN-6-01 实施
+- **后续触发**：
+  - **CHG-SN-6-01** 实施卡启动（5 项硬清单首次正式验证）
+  - **未来扩展占位**（YAGNI）：ADR-118a stats / ADR-118b GIN q / ADR-118c batch targets 解析
+
+### ADR-118 D-N 闭环状态（advisory verify-adr-d-numbers 守卫）
+
+本 ADR 决策要点 D-118-1 ~ D-118-10 闭环状态（M-SN-6 CHECKLIST-AUDIT-3 verify:adr-d-numbers 自动核验源）：
+
+- **D-118-1** 3 端点 MVP（list / detail / enums）— ⏳ 协议落地（实施卡 CHG-SN-6-01 闭环）
+- **D-118-2** 列表行 payload 裁剪（payloadSummary ≤ 256 字符）— ⏳ 协议落地
+- **D-118-3** 列表查询参数集（7 维 filter MVP）— ⏳ 协议落地
+- **D-118-4** 索引匹配契约（4 索引覆盖 + COUNT(*) exact）— ⏳ 协议落地
+- **D-118-5** listAdminAuditLog 独立函数（不复用 listAuditLogByTarget）— ⏳ 协议落地
+- **D-118-6** camelCase 命名 100% 对齐 — ⏳ 协议落地
+- **D-118-7** ApiResponse 信封形状（ADR-110 对齐）— ⏳ 协议落地
+- **D-118-8** ErrorCode 零新增（ADR-110 真源关闭）— ⏳ 协议落地
+- **D-118-9** Service actorUsername JOIN 在 query 层 — ⏳ 协议落地
+- **D-118-10** batch action targetId NULL payloadSummary 协议 — ⏳ 协议落地
+
+**闭环规则**（quality-gates §6 verify:adr-d-numbers）：本 ADR 起草卡（CHG-SN-6-01-ADR）落地后状态全 ⏳；实施卡（CHG-SN-6-01）完成时主循环逐条勾对 ✅ + 更新本 changelog 段（参 ADR-104 D-104-1~14 闭环范式）。

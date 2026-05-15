@@ -6143,3 +6143,280 @@ LIMIT $3 OFFSET $4
 
 **关键发现**：本 AMENDMENT 验证 plan §4.5 "同一 ADR 下多个端点复用同一 ADR，不重复评审"机制；CHG-SN-6-AUDIT-TIMELINE 工时从规划 0.4w（ADR-118 起草 + Opus 评审 + 端点 + 视图三段式）降至 0.2w（AMENDMENT + 端点 + 视图两段式），节省 0.2w。
 
+
+---
+
+## ADR-118：/admin/audit 全局审计日志视图 admin API 协议（CHG-SN-6-01）
+
+- **日期**：2026-05-15
+- **状态**：Accepted（主循环 sonnet 采纳 arch-reviewer Opus 单轮 PASS 起草版；本 ADR 由 claude-opus-4-7 子代理起草，主循环 claude-opus-4-7 采纳落盘）
+- **决策者**：主循环 claude-opus-4-7（延续会话；建议 sonnet）/ arch-reviewer (claude-opus-4-7) — 1 轮 PASS
+- **关联**：ADR-109（admin_audit_log schema 前置补建，本 ADR 消费侧）/ ADR-110（ApiResponse 信封 + ErrorCode 关闭真源，错误码零新增依据）/ ADR-105 AMENDMENT 2026-05-14（video_merge_audit `/admin/video-merges/audit` 端点 — 独立事件源，**本 ADR 不消费 merge audit**）/ ADR-117（sources-matrix 端点契约风格，camelCase + 信封 + idx 拼装风格对称参考）/ ADR-104（home_modules 协议同模式）/ CHG-SN-4-05（AuditLogService fire-and-forget 写入位点）/ plan v1.4 §3.0.5（action_type 写入位点真源表）/ plan §4.5 R7 MUST-8（ADR-端点先后协议）
+- **对应交付**：SEQ-20260513-M-SN-6 / M-SN-6 首张视图卡 CHG-SN-6-01（`/admin/audit` 全局审计日志视图）
+
+### 背景
+
+M-SN-6 admin IA v0 §系统管理组首张视图卡，需要将 `admin_audit_log` 表（ADR-109 落地 / 052 migration / M-SN-4 起所有 admin 写端点已挂 `insertAuditLog` fire-and-forget 写入）暴露为只读全局审计视图，覆盖以下能力：
+
+- **跨 target 全局浏览**：现有 `listAuditLogByTarget(targetKind, targetId, ...)` 仅服务审核台 RightPane.History（已知 target 反查），不支持跨视频/跨线路的运营审计全景。
+- **运维事故定位**：按 `actorId` / `actionType` / 时间窗 / `requestId` 多维筛选回溯异常突发（plan §3.0.5 写入位点表覆盖 20 个 action_type）。
+- **batch action 解析**：`target_id IS NULL` 行（如 `staging.batch_publish` / `video_source.disable_dead_batch`）在 `before/after_jsonb` 携带 ids 数组，列表 UI 需展示"影响 N 个对象"摘要。
+
+**为何独立 ADR 而非沿用 ADR-105 协议**：
+- `video_merge_audit`（ADR-105 / migration 062）是**独立事件源**，含 `snapshot_jsonb` + `reverted_at` + auto-incrementing audit id，专为 merge 撤销窗口设计，已有自己的 `/admin/video-merges/audit` 端点（ADR-105 AMENDMENT 2026-05-14）。
+- `admin_audit_log`（migration 052）是**通用写操作流水**，schema 形态、索引策略、消费场景完全不同（无撤销窗口 / 多 action_type 枚举 / batch ids 协议）。
+- 两源解耦后，未来 timeline 合并视图（如某 video 详情页"完整审计轴"）由 view 层拼装两源，不在 backend 协议层耦合。
+
+**plan §4.5 R7 MUST-8 触发**：新增 admin route（`apps/api/src/routes/admin/audit.ts`）必须先起独立 ADR + Opus PASS 才能起实施卡（`npm run verify:endpoint-adr` 自动核验）。
+
+### 决策要点
+
+**D-118-1 端点集合最小化（3 端点 MVP）**：
+- `GET /admin/audit/logs` — 列表（多维筛选 + 分页）
+- `GET /admin/audit/logs/:id` — 单条详情（携带完整 before/after_jsonb，列表行裁剪）
+- `GET /admin/audit/enums` — 一次性返回 `actionTypes` + `targetKinds` 枚举（由 `@resovo/types` 反射，不查 DB）
+- **不含 stats** 端点（详见替代方案 A）
+- **不含 GIN 全文 `q`** 参数（详见替代方案 B）
+
+**D-118-2 列表行 payload 裁剪策略**：
+- 列表端点返回 `AdminAuditLogListRow`：含 `id` / `actorId` / `actorUsername` / `actionType` / `targetKind` / `targetId` / `requestId` / `createdAt` + **`payloadSummary`**（Service 层从 before/after_jsonb 提取摘要，最大 256 字符），**不带完整 `beforeJsonb` / `afterJsonb`**。
+- 详情端点返回 `AdminAuditLogDetail`：含全部列表字段 + 完整 `beforeJsonb` / `afterJsonb` + `ipHash`。
+- **理由**：list payload 控制在 KB 级以下避免 100 行 × 多 KB jsonb 撑爆响应；详情按需获取（UI 点击行展开抽屉）。
+
+**D-118-3 列表查询参数集（MVP）**：
+- `page?` (default 1) / `limit?` (default 20, max 100)
+- `actorId?` (UUID，单选)
+- `actionType?` (AdminAuditActionType 枚举，单选)
+- `targetKind?` (AdminAuditTargetKind 枚举，单选)
+- `targetId?` (UUID，配合 `targetKind` 联用，单独传 422)
+- `requestId?` (TEXT，精确匹配，命中部分索引 idx_admin_audit_log_request_id)
+- `from?` / `to?` (ISO 8601 timestamptz，闭区间)
+
+不含：`q` 全文 / `actorIds[]` 数组多选 / `actionTypes[]` 数组多选（详见替代方案 B / E）。
+
+**D-118-4 索引匹配契约**：
+- 单 `actorId` → idx_admin_audit_log_actor_created（覆盖）
+- 单 `actionType` → idx_admin_audit_log_action_created（覆盖）
+- `targetKind + targetId` → idx_admin_audit_log_target（覆盖；与 `listAuditLogByTarget` 同索引复用）
+- `requestId` → idx_admin_audit_log_request_id 部分索引（覆盖）
+- 多维交叉（如 actorId + actionType + from/to）→ 选择性最高的索引（actor_created 一般胜出）+ filter；planner 自决，不强制 hint
+- **COUNT(\*) 与列表同筛选条件**：MVP 走 exact count（多维交叉极端场景 p95 可能超 200ms → 后续触发 PRE-AUDIT-APPROX-COUNT 卡降级 approximate count，见后果段 R-ADR-118-2）
+
+**D-118-5 listAdminAuditLog query 与 listAuditLogByTarget 关系**：
+- **新增** `listAdminAuditLog(db, filters)` 独立函数，**不复用 / 不重写** `listAuditLogByTarget`。
+- 理由：`listAuditLogByTarget` 强约束 `(targetKind, targetId)` 必填 + 索引选择确定；`listAdminAuditLog` 全可选 + 动态 WHERE/idx 拼装风格不同（参 ADR-117 sources-matrix 同款模式），强制合并会引入 8+ 分支判断违反单一职责。
+- 两函数 row 类型 `AdminAuditLogQueryRow` **复用**（已在 `auditLog.ts` 导出，camelCase 对齐）。
+- `listAuditLogByTarget` 维持不变（审核台 RightPane.History 在用，零回归风险）。
+
+**D-118-6 字段命名与 camelCase 一致性**：
+- 沿用现有 `AdminAuditLogQueryRow` 字段命名（PG 双引号 alias 保留大小写）：`id` / `actorId` / `actorUsername` / `actionType` / `targetKind` / `targetId` / `beforeJsonb` / `afterJsonb` / `requestId` / `createdAt`。
+- 新增 `ipHash` (string | null，仅详情端点) / `payloadSummary` (string | null，仅列表端点)。
+- query params **全部 camelCase**（与 ADR-105 / ADR-117 / ADR-104 对称）：`actorId` 非 `actor_id`，`actionType` 非 `action_type`。
+
+**D-118-7 ApiResponse 信封形状（对齐 ADR-110）**：
+- 列表：`{ data: AdminAuditLogListRow[], total: number, page: number, limit: number }`
+- 详情：`{ data: AdminAuditLogDetail }`
+- enums：`{ data: { actionTypes: AdminAuditActionType[], targetKinds: AdminAuditTargetKind[] } }`
+- 错误：`{ error: { code: ErrorCode, message: string, status: number } }`（ADR-110 `ApiErrorBody`）
+
+**D-118-8 ErrorCode 零新增（对齐 ADR-110 关闭真源）**：
+- `VALIDATION_ERROR` 422 — query 参数 zod 失败（`targetId` 无 `targetKind` 配套 / `from > to` / UUID 格式错 / limit > 100）
+- `NOT_FOUND` 404 — 详情端点 id 不存在
+- `UNAUTHORIZED` 401 / `FORBIDDEN` 403 — adminOnly middleware 兜底
+- **不新增** `AUDIT_LOG_RETENTION_EXCEEDED` 等业务专属码（YAGNI；冷归档未来需求触发时另起 ADR）
+
+**D-118-9 Service 层 actorUsername JOIN 归属**：
+- `LEFT JOIN users u ON u.id = al.actor_id` 在 **query 层**（与 `listAuditLogByTarget` 同模式，PG 端一次 JOIN 优于应用层 N+1）。
+- Service 层职责：zod 校验 + payloadSummary 提取（从 jsonb 抽 1-3 个关键字段 + batch ids count）+ 信封包装。
+- Route 层职责：参数解析 + adminOnly 中间件 + Service 调用 + `reply.send`，**零业务逻辑**。
+
+**D-118-10 batch action（targetId NULL）协议**：
+- 列表行 `targetId: null` 时，`payloadSummary` 由 Service 层从 `afterJsonb.ids` 或 `beforeJsonb.ids` 数组提取 — 形式："批量 N 项 (action_type)"，UI 渲染时不展开 ids 数组（避免长列表撑爆 cell）。
+- 详情端点完整返回 jsonb，前端可在抽屉内展开 ids 数组（虚拟列表 / clipboard 复制）。
+- **未来扩展占位**（YAGNI）：`GET /admin/audit/logs/:id/targets` 解析 ids 数组对应的 target 当前状态 — 当前不实现，UI 内 ids 可点击跳转到 video/staging 详情即可。
+
+### 端点契约
+
+| # | Method | Path | Req | Resp 200 | ErrorCodes | Auth |
+|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/audit/logs` | Query: `page?=1` / `limit?=20`(max 100) / `actorId?` / `actionType?` / `targetKind?` / `targetId?` / `requestId?` / `from?` / `to?` | `{ data: AdminAuditLogListRow[], total, page, limit }` | 422 VALIDATION_ERROR / 401 UNAUTHORIZED / 403 FORBIDDEN | adminOnly |
+| 2 | GET | `/admin/audit/logs/:id` | Path: `id` (bigserial string) | `{ data: AdminAuditLogDetail }` | 404 NOT_FOUND / 422 VALIDATION_ERROR / 401 / 403 | adminOnly |
+| 3 | GET | `/admin/audit/enums` | — | `{ data: { actionTypes: AdminAuditActionType[], targetKinds: AdminAuditTargetKind[] } }` | 401 / 403 | adminOnly |
+
+**类型补充**（落 `packages/types/src/admin-audit.types.ts` 新文件，从 admin-moderation.types.ts 不外迁，仅新增）：
+
+```ts
+export interface AdminAuditLogListRow {
+  readonly id: string
+  readonly actorId: string
+  readonly actorUsername: string | null
+  readonly actionType: AdminAuditActionType
+  readonly targetKind: AdminAuditTargetKind
+  readonly targetId: string | null
+  readonly requestId: string | null
+  readonly createdAt: string
+  readonly payloadSummary: string | null  // Service 层提取，最长 256 字符
+}
+
+export interface AdminAuditLogDetail extends AdminAuditLogListRow {
+  readonly beforeJsonb: Readonly<Record<string, unknown>> | null
+  readonly afterJsonb: Readonly<Record<string, unknown>> | null
+  readonly ipHash: string | null
+}
+```
+
+### Service / queries 边界
+
+**Route 层** (`apps/api/src/routes/admin/audit.ts`)：
+- 注册 3 个 fastify GET 路由 + adminOnly preHandler
+- zod schema 解析 query / params（schema 真源 `apps/api/src/schemas/admin-audit.ts`）
+- 调用 Service 方法 → `reply.send` ApiResponse 信封
+- **零 DB 查询 / 零业务字段提取**
+
+**Service 层** (`apps/api/src/services/auditLogService.ts` — 已存在 `writeAudit` fire-and-forget，**新增** read 方法)：
+- `listAdminAuditLogs(filters): Promise<{ rows: AdminAuditLogListRow[], total }>` — 调用 query 层 + 提取 `payloadSummary`（最长 256 字符，截断尾部加 `…`）
+- `getAdminAuditLogDetail(id): Promise<AdminAuditLogDetail | null>` — 调用 query 层 + 直接透传 jsonb
+- `getAdminAuditEnums(): { actionTypes, targetKinds }` — 静态返回 `@resovo/types` 导出的两个 union 枚举（编译时反射，零 DB 调用）
+
+**DB queries 层** (`apps/api/src/db/queries/auditLog.ts` — 已存在 `insertAuditLog` / `listAuditLogByTarget`，**新增** 2 方法)：
+- `listAdminAuditLog(db, filters): Promise<{ rows: AdminAuditLogQueryRow[], total }>` — 动态 WHERE 拼装（参 ADR-117 sources-matrix `idx` 计数模式），LEFT JOIN users 取 actorUsername，COUNT(\*) 同筛选并行
+- `getAdminAuditLogById(db, id): Promise<AdminAuditLogQueryRow | null>` — 单条 PK 查询 + LEFT JOIN users
+
+**SQL 注入面缓解**（呼应 R-ADR-117-4）：
+- `listAdminAuditLog` 动态 WHERE 拼装采用**参数化数组 push 模式**，索引由 `params.length` 自动得出，禁止手动维护 `idx` 计数（避免 ADR-117 同款 idx 错位风险）。
+- 集成测试覆盖每种单维 / 双维 / 三维 filter 组合（≥ 6 用例）。
+
+### 字段命名与 ApiResponse 形状
+
+| 维度 | 决策 | 依据 |
+|---|---|---|
+| 字段命名 | camelCase（`actorId` / `actionType` / `targetKind` / `payloadSummary`） | 与 `AdminAuditLogQueryRow` 既有命名一致 + ADR-105 / ADR-117 对称 |
+| Query 参数命名 | camelCase（`actorId` 非 `actor_id`） | ADR-110 信封 + ADR-105 / ADR-117 对称 |
+| 列表信封 | `{ data: Row[], total, page, limit }` | ADR-110 形状 + ADR-104/-105/-117 对称 |
+| 详情信封 | `{ data: Detail }` | ADR-110 形状 |
+| 错误信封 | `{ error: { code, message, status } }` | ADR-110 `ApiErrorBody` |
+| id 类型 | `string`（bigserial → text） | 现有 `AdminAuditLogQueryRow` 已 `id::text`，避免 JS 大数精度 |
+| 时间格式 | ISO 8601 字符串（`createdAt` / `from` / `to`） | ADR-110 默认序列化 |
+| jsonb readonly | `Readonly<Record<string, unknown>>` | 与 `AdminAuditLog` 既有定义对齐 |
+
+### 验证段
+
+**起草卡（CHG-SN-6-01-ADR，本 ADR 落地卡）完成判据**：
+- arch-reviewer Opus PASS（≤ 3 轮 CONDITIONAL 闭环；REJECT = BLOCKER §5.2）— ✅ 1 轮 PASS（2026-05-15）
+- 落 `docs/decisions.md` ADR-118 章节完整（10 节）— ✅
+- plan §9 ADR 索引推进 ADR-118 状态 Candidate → Accepted（主循环采纳后）— ✅
+
+**实施卡（CHG-SN-6-01，端点 + 视图）完成判据**（M-SN-6 RETRO 6/7 沉淀的 5 项硬清单逐项勾对）：
+
+1. **视图测试 ≥ 9 用例 / 视图卡**（quality-gates §7 第 1 项）：
+   - 视图层（apps/server-next）≥ 9 用例：列表渲染 / 空态 / 错误态 / 单维筛选（actor）/ 多维筛选 / 详情抽屉 / batch 行摘要 / 分页 / 时间窗筛选
+   - **不可豁免**，未达 9 用例 → BLOCKER
+
+2. **共享原语占比 ≥ 80%**（quality-gates §7 第 2 项）：
+   - 表格使用 `packages/admin-ui` 一体化 DataTable（含 toolbar / pagination / filter chips）
+   - 抽屉使用 admin-ui Drawer / 时间选择使用 admin-ui DateRangePicker
+   - 列 cell 复合组件（actor cell / action type cell / target cell）优先复用 CHG-DESIGN-12 沉淀
+   - 视图本地 primitive 占比 ≤ 20%，超额触发"是否应沉淀"评估
+
+3. **R-MID-1 audit payload 内容断言**（quality-gates §7 第 3 项）：
+   - **标记 N/A**（不适用） — 本视图为**只读**端点（GET only），不产生新 audit 写入；视图本身不触发 `insertAuditLog`，故 audit payload 断言无对象。
+   - **替代守卫**：集成测试断言 `listAdminAuditLog` 对已有 audit 行（M-SN-4 / M-SN-5 写端点产生）的读取**完整透传** before/after_jsonb 字段（非裁剪 / 非脏数据），覆盖至少 3 种 target_kind × 3 种 action_type。
+
+4. **schema 三层防护**（quality-gates §7 第 4 项）：
+   - DB 层：052 migration CHECK 约束 + 4 索引已就位（无新增 migration）
+   - Query 层：`AdminAuditLogQueryRow` 显式 camelCase alias + `id::text` 转换
+   - Service 层：zod schema 校验 query params + ApiResponse 信封定型 + payloadSummary 长度截断守卫
+   - Integration test 真实 PG 覆盖 ≥ 6 用例（每种单维/双维筛选 + 详情 + enums）
+
+5. **PATCH 卡范围 ≤ 5 项**（M-SN-5 数据观察 / CLAUDE.md 绝对禁止项）：
+   - 本卡为新增视图卡（非 PATCH），不直接适用
+   - **派生约束**：实施卡内 file scope ≤ 12 文件（route 1 + service 1 + query 2 + types 1 + schema 1 + view 1 + 4 cell components + 1 test）；超额拆 `-A/-B` 子卡
+
+**测试覆盖最低标准**：
+- 单元测试 ≥ 12 用例（视图 9 + service 3）
+- Integration test 真实 PG ≥ 6 用例（每种 filter 组合 + 详情 NOT_FOUND + adminOnly 拒绝）
+- typecheck / lint / `npm run verify:adr-contracts` / `npm run verify:endpoint-adr` 全绿
+- p95 延迟基线：单维 filter ≤ 100ms / 多维交叉 ≤ 300ms（PG localhost）
+
+### 替代方案（已否决）
+
+**A. MVP 含 stats 端点**（`GET /admin/audit/stats` 按 action_type / actor / 时段聚合）
+- ❌ **否决理由**：admin IA v0 §系统管理组未列 stats 需求；当前 4 索引足以支撑明细回溯，stats 是次级派生视图。聚合查询（GROUP BY action_type WHERE created_at BETWEEN ...）在 1M+ 行时 p95 易超 1s，需独立性能评估 + 物化视图设计。
+- **未来触发**：admin 用户提需求"看一周内谁操作最多 / 哪个 action_type 异常"时 → 起 ADR-118a 引入 stats 端点 + 物化视图（每小时刷新）。
+
+**B. MVP 含 GIN 全文 `q` 检索**（before/after_jsonb 全文匹配）
+- ❌ **否决理由**：
+  - 需新增 migration 069（CREATE INDEX ... USING gin (before_jsonb jsonb_path_ops) + after_jsonb 同款）— 跨边界改动违反"先 ADR 再 schema"惯例；
+  - jsonb GIN 索引写放大显著（每次 admin 写操作 audit insert 触发 GIN 维护），影响 fire-and-forget 性能契约（CHG-SN-4-05 写入位点表 20 个 action_type 高频写入）；
+  - 视图本身已提供 7 维 filter（actor/action/target/request/time），运维场景 90% 命中索引精确查询，全文是低优先级补足。
+- **未来触发**：审计回溯命中"知道某关键词但不知道哪个字段"的高频场景 → 起 ADR-118b 引入 GIN + 评估写放大基线。
+
+**C. 列表行携带完整 before/after_jsonb（无详情端点）**
+- ❌ **否决理由**：100 行 × 平均 2KB jsonb = 200KB+ 响应，N+1 batch action 行可能 > 1MB；移动端 / 弱网络下不可接受。详情端点点击展开是标准模式（ADR-105 video_merge_audit 同款 snapshot_jsonb 也走详情拆分）。
+
+**D. enums 走前端硬编码 `@resovo/types` 直接 import**
+- ⚠️ **部分采纳**：类型层确实由 `@resovo/types` 反射（编译时确定）；但**额外提供** `/admin/audit/enums` 端点是因为前端可能动态需要 i18n 显示名（未来 `actionTypeLabel` 映射放后端 + i18n 服务侧渲染场景），且端点统一了"枚举真源消费协议"避免前后端各自硬编码漂移。**取舍**：MVP 端点只返回 union 枚举（无 label），label 由前端本地 i18n 字典渲染；未来 i18n 服务化后 label 透明加入。
+
+**E. actorIds[] / actionTypes[] 数组多选**
+- ❌ **否决理由**：MVP 单值筛选已覆盖运维 90% 场景；多选 IN (...) 索引匹配复杂度高 + UI 多选体验需 admin-ui MultiSelect 原语（M-SN-6 后续卡才沉淀）。未来触发 → 增量加 `actorIds[]` 不破坏当前签名。
+
+**F. listAdminAuditLog 合并复用 listAuditLogByTarget**
+- ❌ **否决理由**：见 D-118-5；两者参数必填性 / 索引选择 / 排序稳定性约束不同，强合并引入 8+ 分支违反单一职责（ADR-117 R-ADR-117-4 教训）。
+
+### 后果
+
+**正面**：
+- ✅ M-SN-6 首张视图卡端点契约稳定 + Route → Service → Query 三层职责清晰
+- ✅ 字段命名 100% 与 ADR-109 schema + ADR-105 / ADR-117 / ADR-104 对称（零迁移成本）
+- ✅ ErrorCode 零新增（ADR-110 关闭真源保持）
+- ✅ MVP 最小化（3 端点）+ 未来扩展路径明确（stats / GIN / 多选 / batch targets 解析全部预留 ADR-118a/b/c 占位）
+- ✅ schema 三层防护 + 视图 ≥ 9 测试用例 + integration test 真实 PG 覆盖三条 M-SN-6 RETRO 硬清单显式勾对
+- ✅ video_merge_audit 与 admin_audit_log 解耦边界明确（关联段说明清楚），未来 timeline 合并由 view 层承担不污染 backend 契约
+
+**负面 / 已知风险**：
+
+1. **R-ADR-118-1 — payloadSummary 提取规则不在协议层**：Service 层从 jsonb 抽 1-3 个关键字段 + batch ids count 的具体规则散落在 service 实现内，未来 action_type 扩枚举时（如 plan §3.0.5 新增写入位点）summary 形态需手工维护。**缓解**：实施卡内建立 `extractAuditPayloadSummary(actionType, jsonb)` 单函数 + 单测覆盖所有 20 个 action_type 各一例；新增 action_type 时同步加 case + 测试（CI 守卫"测试 case 数 = action_type 枚举数"）。
+
+2. **R-ADR-118-2 — COUNT(\*) 多维交叉 p95 风险**：1M+ 行场景下 `WHERE actorId=? AND actionType=? AND created_at BETWEEN ?` exact count 可能超 200ms（PG planner 无法用单索引覆盖 count）。**缓解**：MVP 接受 + 监控；命中 → 起 PRE-AUDIT-APPROX-COUNT 卡引入 `EXPLAIN (FORMAT JSON)` 估算行数（PG 12+ planner 估算可用）+ "≈ N 条" UI 标识。
+
+3. **R-ADR-118-3 — ipHash 字段仅详情端点暴露**：列表行不带 ipHash 出于 payload 大小考虑，但运维场景"按 IP 段排查"诉求无法在列表 filter 满足。**缓解**：当前 PII 红线（ADR-109）+ ipHash 8 字节哈希精度有限，不支持 IP 段查询是有意约束；未来命中"按 ipHash 精确匹配"诉求 → 增量加 `ipHash?` query 参数 + idx_admin_audit_log_ip_hash 部分索引（增量改动不破坏当前契约）。
+
+4. **R-ADR-118-4 — enums 端点反射 `@resovo/types` 编译时枚举**：枚举扩展时（plan §3.0.5 新增 action_type）需重新构建 + 部署才生效。**缓解**：可接受（admin 工具迭代周期与后端发版同节奏）；未来需求动态枚举时 → 改为查 `admin_audit_log` GROUP BY DISTINCT 动态返回（不破坏端点签名）。
+
+### 影响文件
+
+**新增**：
+- `apps/api/src/routes/admin/audit.ts` — 3 端点 route 注册（GET logs / logs/:id / enums）
+- `apps/api/src/services/auditLogService.ts` — **追加** `listAdminAuditLogs` / `getAdminAuditLogDetail` / `getAdminAuditEnums` 三方法（文件已存在 `writeAudit` fire-and-forget，保持不变）
+- `apps/api/src/schemas/admin-audit.ts` — zod schemas（listQuery / detailParams / enums response）
+- `packages/types/src/admin-audit.types.ts` — `AdminAuditLogListRow` / `AdminAuditLogDetail` 接口（**不复用** admin-moderation.types.ts，独立文件避免该文件膨胀）
+- `apps/server-next/src/app/admin/audit/page.tsx` — 视图入口（admin-ui Shell + DataTable 一体化）
+- `apps/server-next/src/app/admin/audit/components/` — 4 cell 复合组件（actor / actionType / target / payloadSummary）+ DetailDrawer
+- `apps/api/test/integration/admin-audit.spec.ts` — 真实 PG integration test（≥ 6 用例）
+- `apps/server-next/src/app/admin/audit/__tests__/page.test.tsx` — 视图测试（≥ 9 用例）
+
+**修改**：
+- `apps/api/src/db/queries/auditLog.ts` — **追加** `listAdminAuditLog` / `getAdminAuditLogById`（保留 `insertAuditLog` / `listAuditLogByTarget` 不变）
+- `apps/api/src/routes/admin/index.ts` — 注册新 route plugin
+- `packages/types/src/index.ts` — re-export `admin-audit.types`
+
+**docs**：
+- `docs/decisions.md` — 追加本 ADR-118 章节
+- `docs/changelog.md` — CHG-SN-6-01-ADR + CHG-SN-6-01 双条目
+- `docs/server_next_plan_20260427.md` §7 / §9 — ADR 索引推进 ADR-118 状态
+
+**不动**：
+- `apps/api/src/db/migrations/052_admin_audit_log.sql`（schema 完整无需改）
+- `packages/types/src/admin-moderation.types.ts`（`AdminAuditLog` / `AdminAuditActionType` / `AdminAuditTargetKind` 保留原位）
+- `video_merge_audit` 表 / `/admin/video-merges/audit` 端点（独立事件源，零交叉）
+
+### 关联
+
+- **ADR-109**（admin_audit_log schema 前置补建）：本 ADR 消费侧，schema 完全沿用 052 migration，无任何变更
+- **ADR-110**（ApiResponse 信封 + ErrorCode 关闭真源）：本 ADR 信封形状 + 错误码零新增的依据
+- **ADR-105 + 2026-05-14 AMENDMENT**（video merge / split / unmerge admin API）：**独立事件源 `video_merge_audit`，与本 ADR 互不消费**。`/admin/video-merges/audit` 端点专服务 merge 撤销窗口场景（含 snapshot_jsonb + reverted_at），`/admin/audit/logs` 服务全局 admin 写操作流水（admin_audit_log 表）。未来 timeline 合并视图（如 video 详情页"完整审计轴"）由 view 层调两个端点并视图侧合并，不在 backend 协议层耦合
+- **ADR-117**（sources-matrix 端点契约）：本 ADR 风格对称参考（camelCase / ApiResponse 信封 / 动态 WHERE 拼装）+ R-ADR-117-4 idx 拼装教训缓解（D-118-4 + Service / queries 边界段说明）
+- **ADR-104**（home_modules 协议同模式）：端点契约 + 错误码零新增模式对齐
+- **CHG-SN-4-05**（AuditLogService fire-and-forget 写入位点）：本 ADR 在同一 service 文件内追加 read 方法，保持 write 路径零回归
+- **plan v1.4 §3.0.5**（action_type 写入位点真源表）：enums 端点反射枚举的真源依据
+- **plan §4.5 R7 MUST-8**（ADR-端点先后协议）：本 ADR 起草的触发依据（`npm run verify:endpoint-adr` 自动核验）
