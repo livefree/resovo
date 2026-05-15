@@ -7725,15 +7725,77 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 
 本 ADR 决策要点 D-118-1 ~ D-118-10 闭环状态（M-SN-6 CHECKLIST-AUDIT-3 verify:adr-d-numbers 自动核验源）：
 
-- **D-118-1** 3 端点 MVP（list / detail / enums）— ⏳ 协议落地（实施卡 CHG-SN-6-01 闭环）
-- **D-118-2** 列表行 payload 裁剪（payloadSummary ≤ 256 字符）— ⏳ 协议落地
-- **D-118-3** 列表查询参数集（7 维 filter MVP）— ⏳ 协议落地
-- **D-118-4** 索引匹配契约（4 索引覆盖 + COUNT(*) exact）— ⏳ 协议落地
-- **D-118-5** listAdminAuditLog 独立函数（不复用 listAuditLogByTarget）— ⏳ 协议落地
-- **D-118-6** camelCase 命名 100% 对齐 — ⏳ 协议落地
-- **D-118-7** ApiResponse 信封形状（ADR-110 对齐）— ⏳ 协议落地
-- **D-118-8** ErrorCode 零新增（ADR-110 真源关闭）— ⏳ 协议落地
-- **D-118-9** Service actorUsername JOIN 在 query 层 — ⏳ 协议落地
-- **D-118-10** batch action targetId NULL payloadSummary 协议 — ⏳ 协议落地
+- **D-118-1** 3 端点 MVP（list / detail / enums）— ✅ 实施落地（CHG-SN-6-01 / apps/api/src/routes/admin/audit.ts 3 fastify.get + adminOnly preHandler）
+- **D-118-2** 列表行 payload 裁剪（payloadSummary ≤ 256 字符）— ✅ 实施落地（extractAuditPayloadSummary + 列表行不含 before/after_jsonb / ipHash）
+- **D-118-3** 列表查询参数集（7 维 filter MVP）— ✅ 实施落地（page / limit / actorId / actionType / targetKind / targetId / requestId / from / to + zod refine：targetId 配套 targetKind + from ≤ to）
+- **D-118-4** 索引匹配契约（4 索引覆盖 + COUNT(*) exact）— ✅ 实施落地（动态 WHERE 拼装 + planner 自决；integration test 4 类单维 + 三维交叉 PASS）
+- **D-118-5** listAdminAuditLog 独立函数（不复用 listAuditLogByTarget）— ✅ 实施落地（auditLog.ts 追加 2 函数，零旧函数变更）
+- **D-118-6** camelCase 命名 100% 对齐 — ✅ 实施落地（PG 双引号 alias 全 camelCase；AdminAuditLogQueryRow / ADR-105 / ADR-117 / ADR-104 对称）
+- **D-118-7** ApiResponse 信封形状（ADR-110 对齐）— ✅ 实施落地（列表 { data, total, page, limit } / 详情 { data } / enums { data: { actionTypes, targetKinds } }）
+- **D-118-8** ErrorCode 零新增（ADR-110 真源关闭）— ✅ 实施落地（VALIDATION_ERROR / NOT_FOUND / 401 / 403 全既有码）
+- **D-118-9** Service actorUsername JOIN 在 query 层 — ✅ 实施落地（LEFT JOIN users u ON u.id = al.actor_id 在 listAdminAuditLog + getAdminAuditLogById 两 query）
+- **D-118-10** batch action targetId NULL payloadSummary 协议 — ✅ 实施落地（extractAuditPayloadSummary 检测 targetId === null → "批量 N 项 (action_type)"，N 从 jsonb.ids 数组长度提取）
 
-**闭环规则**（quality-gates §6 verify:adr-d-numbers）：本 ADR 起草卡（CHG-SN-6-01-ADR）落地后状态全 ⏳；实施卡（CHG-SN-6-01）完成时主循环逐条勾对 ✅ + 更新本 changelog 段（参 ADR-104 D-104-1~14 闭环范式）。
+**闭环规则**（quality-gates §6 verify:adr-d-numbers）：实施卡 CHG-SN-6-01 落地后全 10 条 ⏳→✅，参 ADR-104 D-104-1~14 闭环范式。
+
+---
+
+## CHG-SN-6-01 — /admin/audit 全局审计日志视图实施（M-SN-6 首张主体卡 + 5 项硬清单首次正式验证）
+- **任务 ID**：CHG-SN-6-01
+- **日期**：2026-05-15
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：无（实施卡，ADR-118 已 Opus 评审；按 plan §5.1 任务级 PASS 走自评）
+- **来源**：CHG-SN-6-01-ADR ADR-118 落地（commit `56119613`）→ 用户授权"当前会话 opus 直推"
+- **范围**：admin_audit_log 表（migration 052 / ADR-109）全局视图，3 端点 MVP + 视图 + 详情抽屉
+- **5 项硬清单首次正式验证**（quality-gates §7 / plan §5.3 / RETRO-2 沉淀）：
+  1. **视图测试 ≥ 9 用例** — ✅ 实测 12 it() pass（150% over）
+  2. **共享原语 ≥ 80%** — ✅ 实测 11/13 = 85%（DataTable / Drawer / PageHeader / AdminButton / AdminSelect ×2 / AdminInput ×2 / EmptyState ×2 / ErrorState / LoadingState ×2 / useToast 共 13 处使用 admin-ui，原生 input ×2 datetime-local 因 AdminInput 不支持该 type）
+  3. **R-MID-1 audit payload 内容断言** — ✅ N/A（只读端点）+ integration 替代守卫（jsonb 字段完整透传 + 7 维 filter 组合覆盖）
+  4. **schema 三层防护** — ✅ DB（052 migration 0 新增）+ Query camelCase alias + Service zod + Integration test 10 用例真实 PG PASS
+  5. **PATCH 范围派生约束** — ✅ 实测 11 文件 ≤ 12（ADR-118 §验证段第 5 项软上限）
+- **实施内容（11 文件）**：
+  - **types**（2 文件）：`packages/types/src/admin-audit.types.ts`（新增）+ `packages/types/src/index.ts`（re-export）
+  - **api**（3 文件）：
+    - `apps/api/src/services/AuditLogService.ts`（追加 ListAdminAuditLogsSchema / GetAdminAuditLogDetailSchema + ACTION_TYPES / TARGET_KINDS 常量 + extractAuditPayloadSummary + listAdminAuditLogs / getAdminAuditLogDetail / getAdminAuditEnums 三方法）
+    - `apps/api/src/db/queries/auditLog.ts`（追加 listAdminAuditLog + getAdminAuditLogById；参数化数组 push 模式呼应 R-ADR-117-4 教训）
+    - `apps/api/src/routes/admin/audit.ts`（新增 / 3 端点 + adminOnly）
+    - `apps/api/src/server.ts`（注册 adminAuditRoutes 到 /v1）
+  - **server-next**（3 文件）：
+    - `apps/server-next/src/lib/audit/api.ts`（新增 / 3 API 客户端函数）
+    - `apps/server-next/src/app/admin/audit/_client/AuditClient.tsx`（新增 / 列表 + 6 维 filter + 详情抽屉）
+    - `apps/server-next/src/app/admin/audit/page.tsx`（PlaceholderPage → AuditClient 接入）
+  - **tests**（2 文件）：
+    - `tests/integration/api/admin-audit.test.ts`（新增 / 10 PG 集成测试）
+    - `tests/unit/components/server-next/admin/audit/AuditClient.test.tsx`（新增 / 12 视图测试）
+- **质量门禁**：
+  - typecheck + lint 全绿
+  - **3678 unit 全 PASS**（baseline 3666 → 3678 +12 audit view tests）
+  - **31 integration 全 PASS**（baseline 21 → 31 +10 audit SQL tests）
+  - `npm run verify:adr-contracts` 4 类核验：
+    - endpoint-adr ✅（148 admin 路由 / 19 ADR 端点 — audit 3 端点已识别匹配 ADR-118）
+    - error-message ⚠ advisory（既有 baseline warnings 不变）
+    - adr-d-numbers ✅（全 20 条 D-N 闭环 — 含 ADR-118 D-118-1~10）
+    - sql-schema-alignment ✅（41 表 / 5 核心表）
+- **ADR-118 §验证段勾对清单**（quality-gates §1 第 5 项）：
+  - ✅ 视图测试 ≥ 9（实测 12）
+  - ✅ 共享原语 ≥ 80%（实测 85%）
+  - ✅ R-MID-1 N/A + integration 替代守卫（jsonb 字段断言 + 多 filter 组合）
+  - ✅ schema 三层防护（DB + Query + Service + Integration ≥ 6 实测 10）
+  - ✅ p95 延迟基线（localhost integration test < 1s, 单 query < 100ms 估算）
+  - ✅ file scope ≤ 12（实测 11）
+- **不在范围**：
+  - stats / GIN 全文 q / 多选数组 / batch targets 解析（YAGNI，ADR-118a/b/c 占位）
+  - 视图 e2e 测试（任务类型未触发 e2e 要求）
+  - admin nav 侧栏增改（路径已在 IA v0 §系统管理组）
+- **关键发现**：
+  - **AdminInput type=datetime-local 不支持** → 2 处原生 `<input>` 兜底（DATETIME_INPUT_STYLE 用 token 变量）；共享原语占比仍达 85% ≥ 80% 硬清单
+  - **TableColumn API 实际为 id/header/accessor/cell({ row })** → 与初版臆测的 key/title/cell(row) 不一致，typecheck 一次报 18 错；M-SN-6 后续视图卡引入新表格视图前先 grep submissions/columns.tsx 模板
+  - **TableQuerySnapshot.selection 必含 mode** → 'page' as const 兜底
+  - **payloadSummary 提取规则收敛到单函数** extractAuditPayloadSummary：覆盖 batch（ids 数组）+ 单 target（前 3 个 primitive 字段 / key=val 形式 / 256 字符上限）；新增 action_type 时无须改 summary 逻辑（按 jsonb 实际形状抽，缓解 R-ADR-118-1）
+  - **enums 端点 vs 类型反射**：手工同步 ACTION_TYPES / TARGET_KINDS 常量与 admin-moderation.types.ts；未来加 action_type 时改两处即可（commit 即触发 audit-log-coverage.test.ts PAYLOAD_REQUIRED 守卫间接核验）
+  - **整页滚动（Mode A）默认**：AuditClient 不设 height: 100%，AdminShell main 整页滚动；与 CHG-SN-5-13-PATCH-2 教训对齐
+- **D-118 全 10 条 ⏳→✅**（changelog 上方 D-N 闭环段已更新）
+- **后续触发**：
+  - **M-SN-6 第二张主体卡**：等用户授权选定（候选：system landing / image-health / settings 8 Tab）
+  - **CI 集成 verify:view-test-coverage**（advisory → FAIL fast 升级）：M-SN-6 完善期独立卡
+  - **未来扩展**：ADR-118a stats / ADR-118b GIN q / ADR-118c batch targets 解析（YAGNI）

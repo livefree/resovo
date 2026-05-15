@@ -50,6 +50,7 @@ import { adminMediaRoutes } from '@/api/routes/admin/media'
 import { adminHomeModulesRoutes } from '@/api/routes/admin/home-modules'
 import { adminVideoMergesRoutes } from '@/api/routes/admin/video-merges'
 import { adminSourcesMatrixRoutes } from '@/api/routes/admin/sources-matrix'
+import { adminAuditRoutes } from '@/api/routes/admin/audit'
 import { VerifyService } from '@/api/services/VerifyService'
 import { db } from '@/api/lib/postgres'
 
@@ -163,6 +164,7 @@ async function start() {
   await fastify.register(adminHomeModulesRoutes, { prefix: '/v1' })
   await fastify.register(adminVideoMergesRoutes, { prefix: '/v1' })
   await fastify.register(adminSourcesMatrixRoutes, { prefix: '/v1' })
+  await fastify.register(adminAuditRoutes, { prefix: '/v1' })
 
   registerVerifyWorker()
   registerCrawlerWorker()

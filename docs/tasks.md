@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 无进行中任务；**M-SN-6 主体启动**：CHG-SN-6-01-ADR 已闭环（ADR-118 `/admin/audit` 全局审计日志视图端点契约，Opus 1 轮 PASS，3 端点 MVP）；下一卡 CHG-SN-6-01（实施视图 + 5 项硬清单首次正式验证） -->
+<!-- 无进行中任务；**M-SN-6 首张主体卡 CHG-SN-6-01 闭环**（/admin/audit 全局审计日志视图 / 5 项硬清单首次正式验证全 PASS / D-118 全 10 条 ✅ / 3678 unit + 31 integration PASS）；下一卡：用户授权选定 M-SN-6 第二张主体卡（候选：system landing / image-health / settings 8 Tab） -->
