@@ -30,6 +30,12 @@ export interface MissingVideoRow {
   readonly videoId: string
   readonly title: string
   readonly posterStatus: 'missing' | 'broken' | 'pending_review' | string
+  // CHG-SN-6-RETRO-3-B / ultrareview P2-7：列扩展
+  readonly posterUrl: string | null
+  readonly posterSource: string | null
+  readonly lastSeenBrokenAt: string | null
+  readonly brokenDomain: string | null
+  readonly occurrenceCount: number
 }
 
 export interface ListMissingVideosParams {

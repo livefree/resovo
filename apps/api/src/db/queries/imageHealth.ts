@@ -273,18 +273,53 @@ export async function listMissingPosterVideos(
   offset = 0,
   sortField: MissingVideoSortField = 'created_at',
   sortDir: SortDir = 'desc'
-): Promise<{ videoId: string; title: string; posterStatus: string }[]> {
+): Promise<{
+  videoId: string
+  title: string
+  posterStatus: string
+  posterUrl: string | null
+  posterSource: string | null
+  lastSeenBrokenAt: string | null
+  brokenDomain: string | null
+  occurrenceCount: number
+}[]> {
   const orderCol = MISSING_VIDEO_SORT_SQL[sortField] ?? 'v.created_at'
   const dir = sortDir === 'asc' ? 'ASC' : 'DESC'
 
+  // CHG-SN-6-RETRO-3-B / ultrareview P2-7：列扩展
+  // LEFT JOIN LATERAL 聚合 broken_image_events 最近未解决事件 → last_seen / domain / occurrence
+  // 注：media_catalog 历史字段名为 cover_url（不是 poster_url；poster_status / poster_source
+  //     等 048_image_pipeline 新增字段独立）
   const result = await db.query<{
     id: string
     title: string
     poster_status: string
+    cover_url: string | null
+    poster_source: string | null
+    last_seen_broken_at: string | null
+    broken_url: string | null
+    occurrence_count: string | null
   }>(
-    `SELECT v.id, v.title, mc.poster_status
+    `SELECT
+       v.id,
+       v.title,
+       mc.poster_status,
+       mc.cover_url,
+       mc.poster_source,
+       evt.last_seen_at::text AS last_seen_broken_at,
+       evt.url               AS broken_url,
+       evt.occurrence_count  AS occurrence_count
      FROM videos v
      JOIN media_catalog mc ON mc.id = v.catalog_id
+     LEFT JOIN LATERAL (
+       SELECT last_seen_at, url, occurrence_count
+       FROM broken_image_events
+       WHERE video_id = v.id
+         AND image_kind = 'poster'
+         AND resolved_at IS NULL
+       ORDER BY last_seen_at DESC
+       LIMIT 1
+     ) evt ON TRUE
      WHERE v.deleted_at IS NULL
        AND mc.poster_status IN ('missing','broken','pending_review')
      ORDER BY ${orderCol} ${dir}
@@ -295,6 +330,13 @@ export async function listMissingPosterVideos(
     videoId: r.id,
     title: r.title,
     posterStatus: r.poster_status,
+    posterUrl: r.cover_url,
+    posterSource: r.poster_source,
+    lastSeenBrokenAt: r.last_seen_broken_at,
+    brokenDomain: r.broken_url
+      ? r.broken_url.replace(/^https?:\/\/([^/]+).*/, '$1')
+      : null,
+    occurrenceCount: r.occurrence_count ? parseInt(r.occurrence_count, 10) : 0,
   }))
 }
 

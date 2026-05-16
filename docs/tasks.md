@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 无进行中任务；**CHG-SN-6-RETRO-3-A 闭环**（ultrareview P0-3 / 4 写端点 audit_log 系统补齐 / R-MID-1 第 6 次系统化 / 11 文件 / 3743 unit PASS）；剩余 P1-1 + P2-6/7/8 拆 CHG-SN-6-RETRO-3-B 入 queue；下一卡候选：RETRO-3-B（stylelint guard + cell 拆 + 缺图列扩 + AdminButton）/ SettingsTab / MigrationTab -->
+<!-- 无进行中任务；**CHG-SN-6-RETRO-3-B 闭环**（stylelint guard + ImageHealth 列扩 + SettingsContainer button → AdminButton / 3 项 / 10 文件 / 3747 unit + 40 integration PASS / 17 处 advisory 命中留 RETRO-4）；P2-6 跨包 cell 拆 → CHG-SN-6-RETRO-3-C 入 queue；下一卡候选：RETRO-3-C（AuditClient cell 拆 + Opus 评审）/ SettingsTab / MigrationTab -->

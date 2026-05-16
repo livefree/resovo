@@ -8103,3 +8103,69 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 
 - **CHG-SN-6-RETRO-3-B**：stylelint guard + P2 治理（独立卡）
 - **未来 RETRO-4**：legacy 11 项 PAYLOAD_ASSERTION_EXEMPT 收尾补齐（视图卡完整覆盖后 RETROACTIVE）
+
+---
+
+## CHG-SN-6-RETRO-3-B — stylelint guard + ImageHealth 列扩展 + SettingsContainer 共享原语（ultrareview P1-1 + P2-7 + P2-8）
+- **任务 ID**：CHG-SN-6-RETRO-3-B
+- **日期**：2026-05-16
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：无（stylelint guard 静态扫描 + ImageHealth 列扩展 SQL + button 替换均无跨包契约）
+- **来源**：CHG-SN-6-AUDIT-DEBOUNCE-FIX 父卡 RETRO-3 拆 -B；P2-6 AuditClient 拆 cell 触发跨包 Opus 评审拆独立 -C 卡
+- **范围**：3 项 ≤ 5 软上限
+
+### 实施内容
+
+**P1-1 — verify:style-shorthand-conflict.mjs（CSS shorthand+longhand 自动核验）**：
+- `scripts/verify-style-shorthand-conflict.mjs`（新增 ~150 行）：扫 `apps/server-next/src` + `apps/web-next/src` + `packages/admin-ui/src` 内 `.tsx` 文件，正则提取 `: React.CSSProperties = {...}` / `style={{...}}` style 对象块，对照 9 类 SHORTHAND_LONGHAND_MAP（font / border / background / margin / padding / overflow / borderRadius / inset / flex）检测冲突
+- `package.json` scripts：`verify:style-shorthand-conflict`（单跑）+ 集成进 `verify:adr-contracts` 聚合（5 → 6 类核心脚本）
+- `docs/rules/quality-gates.md §6`：3 类核心脚本 → 6 类（落地 verify:style-shorthand-conflict advisory 模式）
+- 初次扫描结果：17 处命中（server-next 已清零；packages/admin-ui 13 + apps/web-next 2 + 1 admin-select）— **advisory 不阻塞 CI**，milestone 审计前应清零，留下卡治理
+
+**P2-7 — ImageHealthClient 缺图列扩展**：
+- `apps/api/src/db/queries/imageHealth.ts` `listMissingPosterVideos`：query 改写 LEFT JOIN LATERAL（broken_image_events 取最近未解决事件，image_kind=poster + resolved_at IS NULL + ORDER BY last_seen_at DESC LIMIT 1）；返回 `posterUrl` / `posterSource` / `lastSeenBrokenAt` / `brokenDomain` / `occurrenceCount` 5 新字段；**字段命名修正**：mc.cover_url（不是 poster_url，verify:sql-schema-alignment 守卫触发后修正）
+- `apps/server-next/src/lib/image-health/api.ts` `MissingVideoRow`：5 字段类型扩展（readonly）
+- `apps/server-next/src/app/admin/image-health/_client/ImageHealthClient.tsx`：4 新列 cell（posterSource code / brokenDomain code / occurrenceCount 千分位 + > 10 加粗 / lastSeenBrokenAt 相对时间 m/h/d 前 + 原值 title）+ formatRelativeTime helper
+- 测试：16 unit（baseline 12 + 4 新列断言）/ 9 integration（query schema 字段对齐验证）
+
+**P2-8 — SettingsContainer 顶部 button → AdminButton**：
+- `apps/server-next/src/app/admin/system/settings/_client/SettingsContainer.tsx`："审计日志"原生 button + inline HEAD_BUTTON_STYLE → AdminButton variant="default" size="sm"
+- HEAD_BUTTON_STYLE 已无引用 → 删除（10 行清理）
+- 共享原语率与"自报口径 85%"对齐
+
+### 质量门禁
+
+- typecheck + lint 全绿
+- **3743 → 3747 unit PASS**（+4：image-health 16 ← 12，stylelint guard 不含测试）
+- **40 integration PASS**（image-health 9 中 4 个原失败已修：cover_url 字段名）
+- `verify:adr-contracts` 4 类 + 新增 verify:style-shorthand-conflict（advisory 17 处既有命中）
+- `verify:sql-schema-alignment` ✅（cover_url 正确）
+
+### 不在范围（拆 -C 独立卡）
+
+- **P2-6 AuditClient.tsx 521 行拆 cell** — 跨包改 packages/admin-ui Props 契约（CHG-DESIGN-12 沉淀范围），触发 CLAUDE.md §强制升 Opus 第 1 项"定义新的共享组件 API 契约"，拆 CHG-SN-6-RETRO-3-C 独立成卡
+- **17 处既有 shorthand+longhand 命中清零** — packages/admin-ui 13 / web-next 2 / admin-select 1 + 等待 admin-ui 子代理评估治理路径（不在视图层范围）
+
+### 文件范围（10 文件 ≤ 12）
+
+- `scripts/verify-style-shorthand-conflict.mjs`（新增）
+- `package.json`（scripts 集成）
+- `docs/rules/quality-gates.md`（§6 6 类核心脚本）
+- `apps/api/src/db/queries/imageHealth.ts`（listMissingPosterVideos query 重写）
+- `apps/server-next/src/lib/image-health/api.ts`（MissingVideoRow 类型扩展）
+- `apps/server-next/src/app/admin/image-health/_client/ImageHealthClient.tsx`（4 新列 + formatRelativeTime）
+- `apps/server-next/src/app/admin/system/settings/_client/SettingsContainer.tsx`（button → AdminButton + HEAD_BUTTON_STYLE 删除）
+- `tests/unit/components/server-next/admin/image-health/ImageHealthClient.test.tsx`（fixture 扩展 + 4 新测试 → 16 it）
+- `docs/changelog.md` + `docs/task-queue.md`
+
+### 关键发现
+
+- **字段名修正：mc.cover_url 不是 mc.poster_url**：media_catalog 历史命名（CHG-SN-5 之前）`cover_url`；`poster_status` / `poster_source` 等独立字段由 048_image_pipeline 加入，但 url 本身仍叫 `cover_url`；本卡初版误用 poster_url 被 integration test + verify:sql-schema-alignment 双层捕获 → 修正
+- **stylelint guard 17 处既有命中**：admin-ui 13 + web-next 2 + admin-select 1，**advisory 不阻塞**；server-next 已是 0（db3b7a48 + 9e592df3 + 32392a80 三次清零生效）；防回归核心目的达成
+- **R-MID-1 PATCH 范围 ≤ 5 项收益再现**：本卡 3 项 / 10 文件，每项独立可测；P2-6 跨包改 admin-ui 必拆独立 -C 卡（CHG-DESIGN-12 沉淀范围 + Opus 评审）
+- **LATERAL 优化**：broken_image_events 聚合用 LEFT JOIN LATERAL + ORDER BY LIMIT 1 子查询（每行取最近未解决事件）；比 GROUP BY 性能更优 + 字段独立可投影
+
+### 后续触发
+
+- **CHG-SN-6-RETRO-3-C**：AuditClient 521 行拆 cell（CHG-DESIGN-12 沉淀路径）+ spawn arch-reviewer Opus 评 4 cell Props 契约（actor / actionType / target / payloadSummary）
+- **CHG-SN-6-RETRO-4 候选**：清零 verify:style-shorthand-conflict 17 处既有命中（admin-ui + web-next）+ 视 milestone 审计前进度

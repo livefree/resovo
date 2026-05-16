@@ -66,9 +66,36 @@ const DOMAINS_FIXTURE = [
 
 const MISSING_VIDEOS_FIXTURE = {
   data: [
-    { videoId: '00000000-0000-0000-0000-000000000001', title: 'Missing Poster Movie 1', posterStatus: 'missing' as const },
-    { videoId: '00000000-0000-0000-0000-000000000002', title: 'Broken Poster Series', posterStatus: 'broken' as const },
-    { videoId: '00000000-0000-0000-0000-000000000003', title: 'Pending Review Anime', posterStatus: 'pending_review' as const },
+    {
+      videoId: '00000000-0000-0000-0000-000000000001',
+      title: 'Missing Poster Movie 1',
+      posterStatus: 'missing' as const,
+      posterUrl: null,
+      posterSource: 'crawler',
+      lastSeenBrokenAt: null,
+      brokenDomain: null,
+      occurrenceCount: 0,
+    },
+    {
+      videoId: '00000000-0000-0000-0000-000000000002',
+      title: 'Broken Poster Series',
+      posterStatus: 'broken' as const,
+      posterUrl: 'https://cdn-broken.example.com/p.jpg',
+      posterSource: 'tmdb',
+      lastSeenBrokenAt: new Date(Date.now() - 2 * 3600_000).toISOString(),  // 2h ago
+      brokenDomain: 'cdn-broken.example.com',
+      occurrenceCount: 15,
+    },
+    {
+      videoId: '00000000-0000-0000-0000-000000000003',
+      title: 'Pending Review Anime',
+      posterStatus: 'pending_review' as const,
+      posterUrl: 'https://images.test.com/p.jpg',
+      posterSource: 'douban',
+      lastSeenBrokenAt: null,
+      brokenDomain: null,
+      occurrenceCount: 0,
+    },
   ],
   total: 3,
 }
@@ -233,6 +260,65 @@ describe('ImageHealthClient', () => {
     fireEvent.click(screen.getByTestId('image-health-refresh'))
     await waitFor(() => {
       expect(getImageHealthStatsMock.mock.calls.length).toBeGreaterThan(initialCalls)
+    })
+  })
+
+  // ── CHG-SN-6-RETRO-3-B / ultrareview P2-7：列扩展测试 ──
+
+  it('13. 缺图视频表扩展列：posterSource 显示', async () => {
+    getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
+    getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
+    listMissingVideosMock.mockResolvedValueOnce(MISSING_VIDEOS_FIXTURE)
+    render(<ImageHealthClient />)
+    await waitFor(() => {
+      expect(screen.getByText('crawler')).not.toBeNull()
+      expect(screen.getByText('tmdb')).not.toBeNull()
+      expect(screen.getByText('douban')).not.toBeNull()
+    })
+  })
+
+  it('14. 缺图视频表扩展列：brokenDomain 显示 + null 兜底', async () => {
+    getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
+    getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
+    listMissingVideosMock.mockResolvedValueOnce(MISSING_VIDEOS_FIXTURE)
+    const { container } = render(<ImageHealthClient />)
+    await waitFor(() => {
+      expect(screen.getByText('cdn-broken.example.com')).not.toBeNull()
+      // null domain 显示"—"占位
+      expect(container.querySelectorAll('[data-broken-domain]').length).toBe(3)
+    })
+  })
+
+  it('15. 缺图视频表扩展列：occurrenceCount 千分位 + 加粗（> 10）', async () => {
+    getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
+    getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
+    listMissingVideosMock.mockResolvedValueOnce(MISSING_VIDEOS_FIXTURE)
+    const { container } = render(<ImageHealthClient />)
+    await waitFor(() => {
+      // occurrenceCount=15 > 10 → fontWeight 600（加粗）
+      const occurrenceCells = container.querySelectorAll('[data-occurrence-count]')
+      expect(occurrenceCells.length).toBe(3)
+      // 含 15 的 cell
+      const fifteenCell = Array.from(occurrenceCells).find((el) => el.textContent === '15')
+      expect(fifteenCell).not.toBeUndefined()
+      // 0 occurrence → "—"
+      const dashCells = Array.from(occurrenceCells).filter((el) => el.textContent === '—')
+      expect(dashCells.length).toBe(2)
+    })
+  })
+
+  it('16. 缺图视频表扩展列：lastSeenBrokenAt 相对时间格式（h 前）+ null 兜底"—"', async () => {
+    getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
+    getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
+    listMissingVideosMock.mockResolvedValueOnce(MISSING_VIDEOS_FIXTURE)
+    const { container } = render(<ImageHealthClient />)
+    await waitFor(() => {
+      const lastSeenCells = container.querySelectorAll('[data-last-seen-broken]')
+      expect(lastSeenCells.length).toBe(3)
+      // 2h 前的事件 → 显示 "2h 前"
+      expect(Array.from(lastSeenCells).some((el) => /\dh 前/.test(el.textContent ?? ''))).toBe(true)
+      // null → "—"
+      expect(Array.from(lastSeenCells).filter((el) => el.textContent === '—').length).toBe(2)
     })
   })
 })

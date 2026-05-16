@@ -100,13 +100,25 @@ function KpiCard({ label, value, sub, 'data-testid': testId }: KpiCardProps) {
 
 // ── 列定义 ────────────────────────────────────────────────────────
 
+function formatRelativeTime(iso: string | null): string {
+  if (!iso) return '—'
+  const ms = Date.now() - new Date(iso).getTime()
+  if (ms < 0) return '—'
+  const min = Math.floor(ms / 60000)
+  if (min < 60) return `${min}m 前`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h 前`
+  const day = Math.floor(hr / 24)
+  return `${day}d 前`
+}
+
 function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow>[] {
   return [
     {
       id: 'title',
       header: '视频标题',
       accessor: (r) => r.title,
-      minWidth: 280,
+      minWidth: 240,
       enableSorting: true,
       defaultVisible: true,
       pinned: true,
@@ -123,7 +135,7 @@ function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow>[] {
       id: 'posterStatus',
       header: '海报状态',
       accessor: (r) => r.posterStatus,
-      width: 160,
+      width: 130,
       enableSorting: true,
       defaultVisible: true,
       cell: ({ row }) => {
@@ -149,6 +161,67 @@ function buildMissingVideoColumns(): readonly TableColumn<MissingVideoRow>[] {
           </span>
         )
       },
+    },
+    // CHG-SN-6-RETRO-3-B / ultrareview P2-7：列扩展（运维定位）
+    {
+      id: 'posterSource',
+      header: '海报来源',
+      accessor: (r) => r.posterSource ?? '—',
+      width: 110,
+      defaultVisible: true,
+      cell: ({ row }) => (
+        <code style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }} data-poster-source>
+          {row.posterSource ?? '—'}
+        </code>
+      ),
+    },
+    {
+      id: 'brokenDomain',
+      header: '破损域名',
+      accessor: (r) => r.brokenDomain ?? '',
+      minWidth: 200,
+      defaultVisible: true,
+      cell: ({ row }) => (
+        <code style={{ fontSize: 'var(--font-size-xs)' }} data-broken-domain>
+          {row.brokenDomain ?? <span style={{ color: 'var(--fg-muted)' }}>—</span>}
+        </code>
+      ),
+    },
+    {
+      id: 'occurrenceCount',
+      header: '破损次数',
+      accessor: (r) => r.occurrenceCount,
+      width: 100,
+      enableSorting: false,
+      defaultVisible: true,
+      cell: ({ row }) => (
+        <span
+          style={{
+            fontSize: 'var(--font-size-xs)',
+            color: row.occurrenceCount > 0 ? 'var(--state-danger-fg)' : 'var(--fg-muted)',
+            fontWeight: row.occurrenceCount > 10 ? 600 : 400,
+          }}
+          data-occurrence-count
+        >
+          {row.occurrenceCount > 0 ? row.occurrenceCount.toLocaleString() : '—'}
+        </span>
+      ),
+    },
+    {
+      id: 'lastSeenBrokenAt',
+      header: '最近破损',
+      accessor: (r) => r.lastSeenBrokenAt ?? '',
+      width: 130,
+      defaultVisible: true,
+      cell: ({ row }) => (
+        <span
+          style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}
+          title={row.lastSeenBrokenAt ?? undefined}
+          data-last-seen-broken
+        >
+          {formatRelativeTime(row.lastSeenBrokenAt)}
+        </span>
+      ),
     },
   ]
 }

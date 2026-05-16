@@ -125,7 +125,7 @@
 
 针对 M-SN-5 累计 5 次同型号"ADR 明示但 commit 静默跳过"偏离（06-PATCH R-MID-1 / 09-PATCH perf baseline / 10-PATCH response 字段 / 11 整卡 ADR 缺失 / 11-PATCH NEW-P0），引入 3 类自动化脚本 + 4 类文档强制规则。
 
-### 3 类核心脚本（preflight 集成，npm run verify:adr-contracts 聚合）
+### 6 类核心脚本（preflight 集成，npm run verify:adr-contracts 聚合）
 
 1. **`npm run verify:endpoint-adr`**（FAIL fast 阻塞 CI）：扫 `apps/api/src/routes/admin/*.ts` 内 `fastify.{get,post,put,patch,delete}` 调用，提取 (method, path)，比对 `docs/decisions.md` 各 ADR §端点契约 markdown table；不在 ADR 表中的 admin 路由 → 失败 + 提示起 ADR 卡（参 ADR-104/-105/-117 模式）；legacy 路由通过 `scripts/lib/admin-routes-allowlist.json` 显式豁免
 
@@ -138,6 +138,8 @@
 5. **`npm run migrate:check`**（CHG-SN-6-CI-MIGRATE-DRY-RUN / RETRO 3/7）：迁移干跑核验，不执行只报告 pending 数量 + 文件列表；退出码 1 = 有 pending（CI 部署前必须 migration 已应用）/ 0 = 全 applied；preflight `[3/6]` 头部前置（参 CHG-SN-5-13-PATCH-2 dev DB 滞后 migration 061/062/063 教训）
 
 6. **`npm run test:integration`**（CHG-SN-6-INTEGRATION-TEST / RETRO 2/7）：跑真实 PG 子集集成测试（vitest.integration.config.ts），验证 admin route SQL 执行不抛 DatabaseError；与 unit mock 互补；与 verify:sql-schema-alignment 互补（静态扫描 + 真实执行双层）；CI 可独立调度（preflight 不集成；本地按需运行）
+
+7. **`npm run verify:style-shorthand-conflict`**（CHG-SN-6-RETRO-3-B / ultrareview P1-1，advisory）：静态扫描 `apps/server-next/src` + `apps/web-next/src` + `packages/admin-ui/src` 的 `.tsx` 文件内 `: React.CSSProperties = {...}` / `style={{...}}` 块，检测 9 类 shorthand（`font` / `border` / `background` / `margin` / `padding` / `overflow` / `borderRadius` / `inset` / `flex`）与对应 longhand 同存 → React rerender 警告 "Updating a style property during rerender ... when a conflicting property is set ..."；db3b7a48 + 9e592df3 两次 14 处清零后落地，防回归；milestone 审计前应清零 17 处既有 advisory 命中
 
 ### 4 类文档强制规则（修订 §1/§2/§3 已落地）
 

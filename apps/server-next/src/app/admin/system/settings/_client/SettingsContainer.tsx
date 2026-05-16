@@ -19,6 +19,7 @@
  */
 import React from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import { AdminButton } from '@resovo/admin-ui'
 import { SettingsTab } from '../_tabs/SettingsTab'
 import { CacheTab } from '../_tabs/CacheTab'
 import { MonitorTab } from '../_tabs/MonitorTab'
@@ -68,18 +69,6 @@ const HEAD_ACTIONS_STYLE: React.CSSProperties = {
   alignItems: 'center',
   gap: '8px',
   flexShrink: 0,
-}
-
-const HEAD_BUTTON_STYLE: React.CSSProperties = {
-  height: '28px',
-  padding: '0 12px',
-  border: '1px solid var(--border-default)',
-  borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg-surface)',
-  color: 'var(--fg-default)',
-  fontFamily: 'inherit',
-  fontSize: 'var(--font-size-xs)',
-  cursor: 'pointer',
 }
 
 const GRID_STYLE: React.CSSProperties = {
@@ -155,17 +144,18 @@ export function SettingsContainer() {
           <p style={HEAD_SUB_STYLE}>统一配置中心 · 5 类设置面板（M-SN-6 起逐步实装）</p>
         </div>
         <div style={HEAD_ACTIONS_STYLE} data-settings-head-actions>
-          {/* CHG-SN-6-AUDIT-DEBOUNCE-FIX / ultrareview P0-2：
-              "审计日志"快捷入口 wire 到 /admin/audit（CHG-SN-6-01 已落地）；
-              "保存所有更改"删除（5 Tab 各自保存模型下无合理语义） */}
-          <button
-            type="button"
-            style={HEAD_BUTTON_STYLE}
-            data-settings-action="audit"
+          {/* CHG-SN-6-RETRO-3-B / ultrareview P2-8：
+              原生 button + inline style → AdminButton（共享原语率与自报口径 85% 对齐）；
+              "保存所有更改"已删（CHG-SN-6-AUDIT-DEBOUNCE-FIX，5 Tab 各自保存模型下无语义） */}
+          <AdminButton
+            variant="default"
+            size="sm"
             onClick={() => router.push('/admin/audit')}
+            data-settings-action="audit"
+            data-testid="settings-action-audit"
           >
             审计日志
-          </button>
+          </AdminButton>
         </div>
       </header>
       <div style={GRID_STYLE}>
