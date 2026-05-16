@@ -10,6 +10,7 @@ import { motion } from '../src/primitives/motion.js'
 import { shadow } from '../src/primitives/shadow.js'
 import { zIndex } from '../src/primitives/z-index.js'
 import { bg, fg, border, accent, surface, state, dualSignal, tag, pattern, routeTransition, layout, interactive } from '../src/semantic/index.js'
+import { stateFgOnSoft } from '../src/semantic/state-fg-on-soft.js'
 import { adminShell, adminTable, adminDensity, adminShellZIndex, adminLayoutZIndexBusiness, adminShellSurfaces, adminSpacing, adminCover } from '../src/admin-layout/index.js'
 import { player } from '../src/components/player.js'
 import { defaultBrandOverrides, DEFAULT_BRAND_SLUG } from '../src/brands/default.js'
@@ -113,6 +114,10 @@ function buildSemanticVars(theme: ThemeKey): Array<[string, string]> {
     ...buildSemanticGroup('accent', accent as SemanticGroup, theme),
     ...buildSemanticGroup('surface', surface as SemanticGroup, theme),
     ...buildSemanticGroup('state', state as SemanticGroup, theme),
+    // state-fg-on-soft：theme-aware text on alpha-soft 软底（reject-modal / staff-note-bar 消费）
+    // 真源 packages/design-tokens/src/semantic/state-fg-on-soft.ts
+    // 形态：{ light: {kind: value}, dark: {kind: value} }，buildSemanticGroup 按 theme 分支
+    ...buildSemanticGroup('state-fg-on-soft', stateFgOnSoft as unknown as SemanticGroup, theme),
     ...buildSemanticGroup('dual-signal', dualSignal as SemanticGroup, theme),
     ...buildSemanticGroup('tag', tag as SemanticGroup, theme),
     ...buildSemanticGroup('pattern', pattern as unknown as SemanticGroup, theme),

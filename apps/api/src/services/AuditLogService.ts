@@ -34,8 +34,11 @@ export type { WriteAuditLogInput }
 
 // ── enums 端点真源（编译时反射；ADR-118 D-118-1 + R-ADR-118-4） ─────
 // 与 packages/types/admin-moderation.types.ts 真源**手工对齐**；新增 action_type
-// 时必须同步更新此处（CI 守卫由 audit-log-coverage.test.ts PAYLOAD_REQUIRED 间接覆盖）
-const ACTION_TYPES: readonly AdminAuditActionType[] = [
+// 时必须同步更新此处（CI 守卫：
+//   - audit-log-coverage.test.ts PAYLOAD_REQUIRED / EXEMPT 间接覆盖；
+//   - audit-log-service-enums-set-equal.test.ts 直接 set-equal 守卫
+//     （ultrareview P1-2 / CHG-SN-6-AUDIT-DEBOUNCE-FIX 沉淀））
+export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   'video.approve',
   'video.reject_labeled',
   'video.staff_note',
@@ -57,7 +60,7 @@ const ACTION_TYPES: readonly AdminAuditActionType[] = [
   'video.split',
   'source_line_alias.upsert',
 ]
-const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
+export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',
   'video_source',
   'staging',

@@ -7951,3 +7951,74 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 - **后续触发**：
   - **M-SN-6 第 6 张主体卡**：剩余候选 SettingsTab（13 字段表单 + R-MID-1 触发）/ MigrationTab（multipart 上传需扩 apiClient）
   - **R-MID-1 系统性补齐**：CHG-SN-6-RETRO-3 候选（POST settings / config / DELETE cache / POST import 4 写端点 audit_log 扩展 + audit-log-coverage.test.ts EXEMPT → PAYLOAD_REQUIRED 迁移）
+
+---
+
+## CHG-SN-6-AUDIT-DEBOUNCE-FIX — ultrareview P0/P1 修复批量卡（P0-1 / P0-2 / P1-2 + tokens.css 修补 + RETRO-3 起卡）
+- **任务 ID**：CHG-SN-6-AUDIT-DEBOUNCE-FIX
+- **日期**：2026-05-15
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：无（ultrareview 已给出诊断，主循环按优先级实施）
+- **来源**：用户 ultrareview 输入（P0/P1/P2 分级清单）+ tokens.css 未提交治理
+- **范围**：PATCH 范围 5 项（≤ 5 软上限）— P0-1 + P0-2 + P1-2 + tokens.css + RETRO-3 起卡
+
+### 修复内容
+
+**P0-1 — AuditClient filter 缺 debounce**（`apps/server-next/src/app/admin/audit/_client/AuditClient.tsx`）：
+- 问题：actorIdInput / requestIdInput 直接进 useEffect 依赖，UUID 36 字符 → 36 次 listAdminAuditLogs API 调用；onBlur=setPage(1) 是死代码（page 已被键入触发重置）；R-ADR-118-2 COUNT(*) p95 风险被前端放大
+- 修复：增加 `actorIdDebounced` / `requestIdDebounced` 双 state + 300ms setTimeout debounce；useEffect 依赖改 debounced 值；移除 onBlur 死代码
+- 效果：UUID 整段输入只触发 1 次 API（300ms 后单次执行）
+
+**P0-2 — SettingsContainer 顶部 2 个 dead button**（`apps/server-next/src/app/admin/system/settings/_client/SettingsContainer.tsx`）：
+- 问题：data-settings-action="audit" / "save-all" 原生 button 无 onClick、无功能
+- 修复："审计日志" wire onClick={() => router.push('/admin/audit')}（CHG-SN-6-01 已落地）；"保存所有更改" **删除**（5 Tab 各自保存模型下无合理语义）；HEAD_BUTTON_PRIMARY_STYLE 同步删除（无引用）
+
+**P1-2 — AuditLogService ACTION_TYPES / TARGET_KINDS 双真源 set-equal 单测**（`tests/unit/api/audit-log-service-enums-set-equal.test.ts` 新增 / `apps/api/src/services/AuditLogService.ts` 导出常量）：
+- 问题：R-ADR-118-1 / R-ADR-118-4 自承"audit-log-coverage.test.ts 间接覆盖"，缺直接守卫
+- 修复：AuditLogService.ts 把 ACTION_TYPES / TARGET_KINDS 改 export；新增 4 测试直接 set-equal 与 admin-moderation.types.ts union 镜像断言（含无重复守卫）
+- 效果：新增 action_type / target_kind 时 4 处同步缺一即 fail（types.ts union + Service 常量 + audit-log-coverage 白名单 + 本测试 EXPECTED_*）
+
+**tokens.css build-css 修补**（`packages/design-tokens/scripts/build-css.ts` + `packages/design-tokens/src/css/tokens.css` 重新生成）：
+- 问题：reject-modal / staff-note-bar 消费的 `--state-fg-on-soft-*` 4 vars 不在 build-css.ts 处理列表，重跑 build 即丢失；uncommitted diff 显示删除这 4 vars（运行时回退默认色 bug）
+- 修复：build-css.ts 第 12-13 行加 `import { stateFgOnSoft }`；buildSemanticVars 加 `buildSemanticGroup('state-fg-on-soft', stateFgOnSoft, theme)`；重跑 build → tokens.css 恢复 fg-on-soft 4 vars × 2 theme
+- 效果：tokens.css 现已与 HEAD 一致（git diff 干净）；未来 build 不再丢失
+
+### 不在本卡范围（拆 RETRO-3）
+
+**P0-3 cache + config audit_log 系统补齐**（v1 写端点 audit 缺失）：
+- DELETE /admin/cache/:type / POST /admin/system/config / POST /admin/system/settings / POST /admin/import/sources 4 写端点 v1 实现未写 admin_audit_log
+- 跨边界（修 apps/api/src/routes/admin/*.ts + 扩 AdminAuditActionType union + audit-log-coverage PAYLOAD_REQUIRED 名单）
+- R-MID-1 plan §5.3 协议级 ≠ 单 PATCH 卡能承载；拆 **CHG-SN-6-RETRO-3** 独立卡
+- 在 task-queue 已登记
+
+**P1-1 CSS shorthand+longhand stylelint guard**：
+- db3b7a48 + 9e592df3 两次集中清零共 14 处暴露系统性问题
+- 缺自动化检查；建议 admin-module-template 加规则 + `scripts/verify-style-shorthand-conflict.mjs`
+- 工作量类似 verify:sql-schema-alignment（CHECKLIST-AUDIT-3 落地范式）
+- 同入 RETRO-3 范围
+
+**P2-6 AuditClient.tsx 521 行越红线 21 行 / P2-7 ImageHealthClient 列偏简 / P2-8 SettingsContainer 顶部按钮原生**：
+- 全部 P2 后续机会，纳入 RETRO-3 / 后续 CHG-DESIGN-12 cell 沉淀
+
+### 质量门禁
+
+- typecheck 全绿
+- lint 全绿（FULL TURBO cache hit）
+- 单测：3731 PASS / 7 fail（**全部 apps/server v1 已冻结模块 flaky** — 隔离重跑 46/46 PASS；VideoImageSection 在 CHG-SN-6-01 commit message 已记录同款 flaky）
+- 隔离重跑 audit + system + types 相关测试全 PASS（12 + 4 + 13 + 12 + 12 + 12 = 65 测试）
+- tokens.css `git diff` 干净
+
+### 文件范围
+
+- `apps/server-next/src/app/admin/audit/_client/AuditClient.tsx`（P0-1 debounce）
+- `apps/server-next/src/app/admin/system/settings/_client/SettingsContainer.tsx`（P0-2 dead button）
+- `apps/api/src/services/AuditLogService.ts`（P1-2 导出 ACTION_TYPES / TARGET_KINDS）
+- `tests/unit/api/audit-log-service-enums-set-equal.test.ts`（P1-2 set-equal 单测，新增）
+- `packages/design-tokens/scripts/build-css.ts`（tokens.css 修补：加 stateFgOnSoft 处理）
+- `packages/design-tokens/src/css/tokens.css`（重新生成，diff 干净）
+- `docs/changelog.md` + `docs/task-queue.md`
+
+### 后续触发
+
+- **CHG-SN-6-RETRO-3** 起卡（task-queue 登记，未实施）— P0-3 audit_log 系统补齐 + P1-1 stylelint guard + P2 多项治理
+- R-MID-1 5 次系统化 → CHG-SN-6-RETRO-3 闭环后升级为 6 次

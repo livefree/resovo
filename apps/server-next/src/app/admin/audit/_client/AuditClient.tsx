@@ -294,6 +294,26 @@ export function AuditClient() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
 
+  // ── debounced filter（CHG-SN-6-AUDIT-DEBOUNCE-FIX / ultrareview P0-1）──
+  // UUID 36 字符按键即触发 36 次 API → 改为 300ms debounce 单次触发
+  // R-ADR-118-2 COUNT(*) p95 风险防前端放大
+  const [actorIdDebounced, setActorIdDebounced] = useState('')
+  const [requestIdDebounced, setRequestIdDebounced] = useState('')
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setActorIdDebounced(actorIdInput.trim())
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [actorIdInput])
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setRequestIdDebounced(requestIdInput.trim())
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [requestIdInput])
+
   // ── 枚举 + 详情 ──
   const [enums, setEnums] = useState<AdminAuditLogEnumsResult | null>(null)
   const [detail, setDetail] = useState<AdminAuditLogDetail | null>(null)
@@ -319,8 +339,8 @@ export function AuditClient() {
       limit: pageSize,
       ...(actionType ? { actionType } : {}),
       ...(targetKind ? { targetKind } : {}),
-      ...(actorIdInput.trim() ? { actorId: actorIdInput.trim() } : {}),
-      ...(requestIdInput.trim() ? { requestId: requestIdInput.trim() } : {}),
+      ...(actorIdDebounced ? { actorId: actorIdDebounced } : {}),
+      ...(requestIdDebounced ? { requestId: requestIdDebounced } : {}),
       ...(from ? { from } : {}),
       ...(to ? { to } : {}),
     }
@@ -338,7 +358,7 @@ export function AuditClient() {
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [page, pageSize, actionType, targetKind, actorIdInput, requestIdInput, from, to, retryKey])
+  }, [page, pageSize, actionType, targetKind, actorIdDebounced, requestIdDebounced, from, to, retryKey])
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
 
@@ -398,7 +418,6 @@ export function AuditClient() {
       <AdminInput
         value={actorIdInput}
         onChange={(e) => setActorIdInput(e.target.value)}
-        onBlur={() => setPage(1)}
         placeholder="actor_id (UUID)"
         size="sm"
         data-testid="audit-filter-actor"
@@ -407,7 +426,6 @@ export function AuditClient() {
       <AdminInput
         value={requestIdInput}
         onChange={(e) => setRequestIdInput(e.target.value)}
-        onBlur={() => setPage(1)}
         placeholder="request_id"
         size="sm"
         data-testid="audit-filter-request"

@@ -82,14 +82,6 @@ const HEAD_BUTTON_STYLE: React.CSSProperties = {
   cursor: 'pointer',
 }
 
-const HEAD_BUTTON_PRIMARY_STYLE: React.CSSProperties = {
-  ...HEAD_BUTTON_STYLE,
-  background: 'var(--accent-default)',
-  color: 'var(--fg-on-accent)',
-  border: '1px solid var(--accent-default)',
-  fontWeight: 500,
-}
-
 const GRID_STYLE: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: '180px 1fr',
@@ -163,8 +155,17 @@ export function SettingsContainer() {
           <p style={HEAD_SUB_STYLE}>统一配置中心 · 5 类设置面板（M-SN-6 起逐步实装）</p>
         </div>
         <div style={HEAD_ACTIONS_STYLE} data-settings-head-actions>
-          <button type="button" style={HEAD_BUTTON_STYLE} data-settings-action="audit">审计日志</button>
-          <button type="button" style={HEAD_BUTTON_PRIMARY_STYLE} data-settings-action="save-all">保存所有更改</button>
+          {/* CHG-SN-6-AUDIT-DEBOUNCE-FIX / ultrareview P0-2：
+              "审计日志"快捷入口 wire 到 /admin/audit（CHG-SN-6-01 已落地）；
+              "保存所有更改"删除（5 Tab 各自保存模型下无合理语义） */}
+          <button
+            type="button"
+            style={HEAD_BUTTON_STYLE}
+            data-settings-action="audit"
+            onClick={() => router.push('/admin/audit')}
+          >
+            审计日志
+          </button>
         </div>
       </header>
       <div style={GRID_STYLE}>
