@@ -81,3 +81,19 @@ export type {
   InlineRowActionsProps,
   InlineRowAction,
 } from './inline-row-actions.types'
+
+// ── UserRef / CodeText / IdRef / MutedText（CHG-SN-6-RETRO-3-C / arch-reviewer Opus PASS）
+// 4 audit / history / 通用列共享 cell；零业务下沉，primitive Props，i18n 不下沉
+// 沉淀阈值：每个 cell ≥ 3 消费方场景（详见各 .types.ts 头部注释）
+
+export { UserRef } from './user-ref'
+export type { UserRefProps } from './user-ref.types'
+
+export { CodeText } from './code-text'
+export type { CodeTextProps } from './code-text.types'
+
+export { IdRef } from './id-ref'
+export type { IdRefProps } from './id-ref.types'
+
+export { MutedText } from './muted-text'
+export type { MutedTextProps } from './muted-text.types'

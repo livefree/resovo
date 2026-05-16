@@ -29,6 +29,10 @@ import {
   AdminSelect,
   AdminInput,
   useToast,
+  UserRef,
+  CodeText,
+  IdRef,
+  MutedText,
   type AdminSelectOption,
   type TableColumn,
   type TableSortState,
@@ -112,6 +116,7 @@ const JSONB_BLOCK_STYLE: CSSProperties = {
 
 // ── 列定义 ────────────────────────────────────────────────────────
 
+// CHG-SN-6-RETRO-3-C / ultrareview P2-6：4 cell 沉淀到 admin-ui，AuditClient 消费切换
 function buildAuditColumns(): readonly TableColumn<AdminAuditLogListRow>[] {
   return [
     {
@@ -122,6 +127,7 @@ function buildAuditColumns(): readonly TableColumn<AdminAuditLogListRow>[] {
       defaultVisible: true,
       pinned: true,
       cell: ({ row }) => new Date(row.createdAt).toLocaleString('zh-CN', { hour12: false }),
+      // 时间格式化保留视图层（locale 是视图 concern，不下沉 admin-ui）
     },
     {
       id: 'actor',
@@ -130,9 +136,7 @@ function buildAuditColumns(): readonly TableColumn<AdminAuditLogListRow>[] {
       width: 160,
       defaultVisible: true,
       cell: ({ row }) => (
-        <span data-actor-cell={row.actorId}>
-          {row.actorUsername ?? <span style={{ color: 'var(--fg-muted)' }}>(已删除)</span>}
-        </span>
+        <UserRef id={row.actorId} username={row.actorUsername} deletedFallback="(已删除)" />
       ),
     },
     {
@@ -142,9 +146,7 @@ function buildAuditColumns(): readonly TableColumn<AdminAuditLogListRow>[] {
       width: 200,
       defaultVisible: true,
       cell: ({ row }) => (
-        <code style={{ fontSize: 'var(--font-size-xs)' }} data-action-type={row.actionType}>
-          {row.actionType}
-        </code>
+        <CodeText value={row.actionType} dataAttr={{ 'data-action-type': row.actionType }} />
       ),
     },
     {
@@ -154,16 +156,7 @@ function buildAuditColumns(): readonly TableColumn<AdminAuditLogListRow>[] {
       width: 220,
       defaultVisible: true,
       cell: ({ row }) => (
-        <span style={{ display: 'inline-flex', gap: '6px', alignItems: 'baseline' }}>
-          <code style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
-            {row.targetKind}
-          </code>
-          <span style={{ fontSize: 'var(--font-size-xs)' }}>
-            {row.targetId
-              ? `${row.targetId.slice(0, 8)}…`
-              : <span style={{ color: 'var(--fg-muted)' }}>批量</span>}
-          </span>
-        </span>
+        <IdRef kind={row.targetKind} id={row.targetId} batchFallback="批量" />
       ),
     },
     {
@@ -173,9 +166,7 @@ function buildAuditColumns(): readonly TableColumn<AdminAuditLogListRow>[] {
       minWidth: 240,
       defaultVisible: true,
       cell: ({ row }) => (
-        <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }} data-payload-summary>
-          {row.payloadSummary ?? '—'}
-        </span>
+        <MutedText value={row.payloadSummary} dataAttr={{ 'data-payload-summary': '' }} />
       ),
     },
     {
@@ -185,9 +176,7 @@ function buildAuditColumns(): readonly TableColumn<AdminAuditLogListRow>[] {
       width: 160,
       defaultVisible: true,
       cell: ({ row }) => (
-        <code style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
-          {row.requestId ?? '—'}
-        </code>
+        <CodeText value={row.requestId} muted dataAttr={{ 'data-request-id': row.requestId ?? '' }} />
       ),
     },
   ]

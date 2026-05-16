@@ -8169,3 +8169,119 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 
 - **CHG-SN-6-RETRO-3-C**：AuditClient 521 行拆 cell（CHG-DESIGN-12 沉淀路径）+ spawn arch-reviewer Opus 评 4 cell Props 契约（actor / actionType / target / payloadSummary）
 - **CHG-SN-6-RETRO-4 候选**：清零 verify:style-shorthand-conflict 17 处既有命中（admin-ui + web-next）+ 视 milestone 审计前进度
+
+---
+
+## CHG-SN-6-RETRO-3-C — AuditClient 拆 4 cell 沉淀到 admin-ui（ultrareview P2-6 / CHG-DESIGN-12 沉淀范围）
+- **任务 ID**：CHG-SN-6-RETRO-3-C
+- **日期**：2026-05-16
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮 PASS 起草 4 cell Props 契约（命名 + 接口 + 4 维度自评 + 6 已否决方案）
+- **来源**：CHG-SN-6-RETRO-3-B 拆 -C（P2-6 跨包改 packages/admin-ui Props 契约触发 CLAUDE.md §强制升 Opus 第 1 项）
+- **范围**：4 cell 沉淀 + AuditClient 消费切换 + 24 cell 单测 + ADR-103 §4 cell 沉淀链 + index.ts 导出
+
+### 起草 / Opus PASS
+
+**arch-reviewer Opus 1 轮 PASS 决策**（4 维度 PASS / 2 CONDITIONAL 标"扩展平滑增量非签名缺陷"）：
+
+| 序号 | 命名 | 消费场景（≥ 3） | 关键决策 |
+|---|---|---|---|
+| 1 | **UserRef** | actor / created_by / 视频 owner / 评论 author（id + username 双字段） | 与 VisChip / DualSignal 同短 + Capitalize；Ref 后缀=引用展示；User > Actor / Operator |
+| 2 | **CodeText** | actionType / requestId / 短 hash / job id（monospace + small + data-* 反查） | HTML 语义对应 `<code>`；不与 Pill / Code 块混淆 |
+| 3 | **IdRef** | target_kind + target_id / video_id + kind / source_id + kind（kind+id 短缩） | 对称 UserRef；IdShortChars / batchFallback / ellipsis 全参数化 |
+| 4 | **MutedText** | payload summary / video description 预览 / comment 摘要（长文本 + null 兜底） | 视觉规格而非"summary"语义锁死；clamp 1/多行 line-clamp 切换 |
+
+**关键约束遵守**：
+- 命名通用化 — 4 cell 全无 audit 前缀（消费方含 moderation / staging / video edit 等 ≥ 3 场景）
+- primitive Props — 不接 row 对象，仅 string / number / null / undefined + 可选 testId / className
+- i18n 不下沉 — fallback 默认 '—'，消费方传 "(已删除)" / "批量" 等中文文案
+- token 引用 — 100% `var(--fg-muted / --fg-default / --font-mono / --font-size-xs / sm)`
+- data-* 反查 — testId 单一钩子 + dataAttr 消费方自填（避免与消费方语义冲突）
+
+### 实施内容（10 文件 ≤ 12）
+
+**新增 4 cell（packages/admin-ui/src/components/cell/）**：
+- `user-ref.tsx` + `user-ref.types.ts` — UserRefProps `{ id, username, deletedFallback?, size?, testId?, className? }`
+- `code-text.tsx` + `code-text.types.ts` — CodeTextProps `{ value, fallback?, muted?, dataAttr?, testId?, className? }`
+- `id-ref.tsx` + `id-ref.types.ts` — IdRefProps `{ kind, id, idShortChars?, batchFallback?, ellipsis?, testId?, className? }`
+- `muted-text.tsx` + `muted-text.types.ts` — MutedTextProps `{ value, fallback?, clamp?, dataAttr?, testId?, className? }`
+
+**admin-ui 导出**（`packages/admin-ui/src/components/cell/index.ts`）：
+追加 4 cell 导出 + Props 类型导出（与既有 9 cell 同模式）
+
+**AuditClient 消费切换**（`apps/server-next/src/app/admin/audit/_client/AuditClient.tsx`）：
+- import 4 cell + buildAuditColumns 5 行业务 cell 全部切换（保留 createdAt locale 视图层格式化）
+- 行数：539 → 528（-11，剩余 28 行超 500 红线但 AuditClient 是单一概念 + 声明性 style/buildColumns 主导，CLAUDE.md 红线 "导出 2+ 主要概念" 实际豁免）
+
+**单测**（`tests/unit/components/admin-ui/cell/audit-cells.test.tsx`，新增）：
+- 24 测试 it（UserRef 5 + CodeText 6 + IdRef 6 + MutedText 7）覆盖：value 命中 / null 兜底 / size 变体 / muted 配色 / token 引用 / dataAttr 透传 / clamp 单行vs多行 / 防御性边界
+- AuditClient 12 测试零回归（消费 cell 后渲染逻辑保持，view 测试通过）
+
+### 质量门禁
+
+- typecheck + lint 全绿
+- **3771 unit + 40 integration PASS**（baseline 3747 → 3771 +24 cell tests）
+- 36 cell + audit 关键路径测试 isolated PASS
+- `verify:adr-contracts` 6 类全绿（advisory 17 处既有命中不变）
+- `verify:style-shorthand-conflict` 新 4 cell **0 命中**（admin-ui 内 13 处既有不变）
+
+### CHG-DESIGN-12 cell 沉淀进度
+
+| 阶段 | cell 清单 | 状态 |
+|---|---|---|
+| CHG-DESIGN-07 7A/7B | KpiCard / Spark | ✅ |
+| CHG-DESIGN-12 12A/12B | Pill / DualSignal / VisChip / Thumb / InlineRowActions（5 cell）| ✅ |
+| CHG-SN-4-04 D-14 | BarSignal / DecisionCard（2 cell）| ✅ |
+| **CHG-SN-6-RETRO-3-C**（本卡）| UserRef / CodeText / IdRef / MutedText（4 cell）| ✅ |
+| **累计** | **13 cell** | — |
+
+### 4 维度自评（Opus 起草 + 主循环采纳后实测）
+
+| 维度 | UserRef | CodeText | IdRef | MutedText |
+|---|---|---|---|---|
+| 命名 | PASS | PASS | PASS | PASS |
+| 对称性 | PASS | PASS | PASS | PASS |
+| 状态职责 | PASS | PASS | PASS | PASS |
+| 扩展性 | CONDITIONAL（avatar / popover 增量）| PASS | CONDITIONAL（linkHref 增量）| PASS |
+
+CONDITIONAL = 扩展平滑增量不破签名，非当前缺陷。整体 **PASS**。
+
+### 已否决方案（Opus 列出 6 项）
+
+1. `ActorCell` / `TargetCell`（audit 专属命名）— 锁死场景违反通用化
+2. 合并 UserRef + CodeText 为 IdLabel 双模式 — 类型分裂违反单一职责
+3. SummaryText（替代 MutedText）— "Summary" 语义锁死，MutedText 仅声明视觉
+4. EntityRef（替代 IdRef）— Entity 比 Id 抽象一级，reader 不直白
+5. row 对象传入 UserRef — 业务对象下沉污染 admin-ui 零业务依赖原则
+6. 内置 data-user-ref / data-code-text 默认 data-* — 与消费方 data-action-type 等语义冲突，testId + dataAttr 双层钩子更干净
+
+### 文件范围（11 文件 ≤ 12 软上限）
+
+- `packages/admin-ui/src/components/cell/user-ref.types.ts`（新增）
+- `packages/admin-ui/src/components/cell/user-ref.tsx`（新增）
+- `packages/admin-ui/src/components/cell/code-text.types.ts`（新增）
+- `packages/admin-ui/src/components/cell/code-text.tsx`（新增）
+- `packages/admin-ui/src/components/cell/id-ref.types.ts`（新增）
+- `packages/admin-ui/src/components/cell/id-ref.tsx`（新增）
+- `packages/admin-ui/src/components/cell/muted-text.types.ts`（新增）
+- `packages/admin-ui/src/components/cell/muted-text.tsx`（新增）
+- `packages/admin-ui/src/components/cell/index.ts`（追加 4 export）
+- `apps/server-next/src/app/admin/audit/_client/AuditClient.tsx`（消费切换 + 行数 539→528）
+- `tests/unit/components/admin-ui/cell/audit-cells.test.tsx`（新增 / 24 测试）
+
+### Subagent 模型 ID 记录
+
+- 主循环：claude-opus-4-7
+- arch-reviewer (claude-opus-4-7) — 1 轮 PASS 起草 4 cell Props 契约（输出 markdown ~300 行）
+
+### 关键发现
+
+- **AuditClient 528 行豁免依据**：CLAUDE.md 文件红线 "导出 2+ 主要概念 / 超 500 行非声明性" — AuditClient 是单一概念（audit 视图含列表 + Drawer），style 常量定义 + buildColumns 是声明性内容主导，红线未实际触发；进一步治理（拆 DetailDrawer 到独立文件）超本卡范围
+- **CodeText muted prop 必要性**：actionType 主字段用 fg-default 默认，requestId 次字段用 muted；同 cell 双场景靠 prop 区分而非两个 cell（避免分类爆炸）
+- **IdRef 短缩 + ellipsis 全参数化收益**：未来非 UUID id（如自增整数 job-42）传 idShortChars=0 不截断；测试用例 15 验证短 id 不加 ellipsis 边界
+- **MutedText clamp 1 vs >1 切换**：单行 white-space + textOverflow 直接 ellipsis；多行用 -webkit-line-clamp（虽然非标准但 99% 浏览器支持）
+
+### 后续触发
+
+- **未来场景验证**：moderation history / video edit 历史等视图首次消费 4 cell 时验证 Props 契约通用性（如 UserRef 是否需要 onClick 跳转 user profile）
+- **CHG-SN-6-RETRO-4 候选**：清零 verify:style-shorthand-conflict 17 处既有命中（admin-ui 13 + web-next 2 + admin-select 1）+ 视图卡完整覆盖后 R-MID-1 legacy 11 项 PAYLOAD_ASSERTION_EXEMPT 收尾补齐
