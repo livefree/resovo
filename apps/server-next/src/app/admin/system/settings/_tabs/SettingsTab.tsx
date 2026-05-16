@@ -1,7 +1,382 @@
-import React from 'react'
+'use client'
 
-const PLACEHOLDER_STYLE: React.CSSProperties = { color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm)', padding: '24px 0' }
+/**
+ * SettingsTab — 站点基础设置 Tab（CHG-SN-6-07 / M-SN-6 第 6 张主体卡）
+ *
+ * 范围：GET/POST /admin/system/settings（v1 CHG-34 端点 + RETRO-3-A audit_log 已补）
+ *
+ * 13 字段表单分 4 section card（reference §5.11）：
+ *   - 基础信息（siteName / siteAnnouncement）
+ *   - 豆瓣（doubanProxy / doubanCookie）
+ *   - 内容过滤（showAdultContent / contentFilterEnabled）
+ *   - 视频代理（videoProxyEnabled / videoProxyUrl）
+ *   - 自动采集（autoCrawlEnabled / autoCrawlMaxPerRun / autoCrawlRecentOnly / autoCrawlRecentDays）
+ *
+ * 共享原语（≥ 80%）：
+ *   AdminCard / AdminButton / AdminInput / ErrorState / LoadingState / useToast
+ *
+ * 注：原生 <input type="checkbox"> 兜底（admin-ui 暂无 AdminCheckbox 原语）
+ */
+
+import React, { useState, useEffect, useCallback, type CSSProperties } from 'react'
+import {
+  AdminCard,
+  AdminButton,
+  AdminInput,
+  ErrorState,
+  LoadingState,
+  useToast,
+} from '@resovo/admin-ui'
+import {
+  getSiteSettings,
+  saveSiteSettings,
+  type SiteSettings,
+  type SiteSettingsPatch,
+} from '@/lib/system/api'
+import { ApiClientError } from '@/lib/api-client'
+
+const SECTION_STYLE: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '16px',
+  padding: '12px 0',
+}
+
+const FIELD_GRID_STYLE: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '180px 1fr',
+  gap: '12px 16px',
+  alignItems: 'center',
+}
+
+const FIELD_LABEL_STYLE: CSSProperties = {
+  fontSize: 'var(--font-size-xs)',
+  color: 'var(--fg-muted)',
+}
+
+const FIELD_HINT_STYLE: CSSProperties = {
+  fontSize: 'var(--font-size-xs)',
+  color: 'var(--fg-muted)',
+  gridColumn: '2 / 3',
+  marginTop: '-6px',
+}
+
+const CHECKBOX_LABEL_STYLE: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '8px',
+  fontSize: 'var(--font-size-sm)',
+  color: 'var(--fg-default)',
+  cursor: 'pointer',
+}
+
+const ACTION_ROW_STYLE: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '12px',
+  paddingTop: '8px',
+}
+
+const SYNC_RESULT_STYLE: CSSProperties = {
+  fontSize: 'var(--font-size-xs)',
+  color: 'var(--fg-muted)',
+}
+
+const TEXTAREA_STYLE: CSSProperties = {
+  width: '100%',
+  minHeight: '72px',
+  padding: '8px 10px',
+  fontSize: 'var(--font-size-sm)',
+  fontFamily: 'inherit',
+  color: 'var(--fg-default)',
+  background: 'var(--bg-surface)',
+  border: '1px solid var(--border-default)',
+  borderRadius: 'var(--radius-sm)',
+  resize: 'vertical',
+}
+
+function describeApiError(err: unknown): { title: string; description: string } {
+  if (err instanceof ApiClientError) {
+    if (err.code === 'VALIDATION_ERROR') {
+      return { title: '参数校验失败', description: err.message }
+    }
+    return { title: '保存失败', description: err.message }
+  }
+  return { title: '保存失败', description: err instanceof Error ? err.message : '请稍后重试' }
+}
 
 export function SettingsTab() {
-  return <div style={PLACEHOLDER_STYLE}>站点配置功能正在迁移中，将于 M-SN-6 全功能实装。</div>
+  const toast = useToast()
+  const [settings, setSettings] = useState<SiteSettings | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<Error | null>(null)
+  const [dirty, setDirty] = useState(false)
+  const [retryKey, setRetryKey] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    getSiteSettings()
+      .then((res) => {
+        if (cancelled) return
+        setSettings(res)
+        setDirty(false)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setError(err instanceof Error ? err : new Error('设置加载失败'))
+      })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [retryKey])
+
+  const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
+
+  const update = useCallback(<K extends keyof SiteSettings>(key: K, value: SiteSettings[K]) => {
+    setSettings((prev) => (prev ? { ...prev, [key]: value } : prev))
+    setDirty(true)
+  }, [])
+
+  const handleSave = useCallback(async () => {
+    if (!settings) return
+    setSaving(true)
+    try {
+      const patch: SiteSettingsPatch = settings
+      await saveSiteSettings(patch)
+      toast.push({
+        title: '已保存',
+        description: '站点设置已更新；audit_log 已写入',
+        level: 'success',
+      })
+      setDirty(false)
+    } catch (err: unknown) {
+      const { title, description } = describeApiError(err)
+      toast.push({ title, description, level: 'danger' })
+    } finally {
+      setSaving(false)
+    }
+  }, [settings, toast])
+
+  if (loading && !settings) {
+    return (
+      <div style={SECTION_STYLE} data-testid="settings-tab">
+        <LoadingState variant="skeleton" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div style={SECTION_STYLE} data-testid="settings-tab">
+        <ErrorState error={error} title="加载失败" onRetry={refresh} />
+      </div>
+    )
+  }
+
+  if (!settings) return null
+
+  return (
+    <div style={SECTION_STYLE} data-testid="settings-tab">
+      {/* ── 基础信息 ── */}
+      <AdminCard
+        surface="plain"
+        padding="md"
+        header={{ title: '基础信息', subtitle: '站点名称 / 公告' }}
+        data-testid="settings-card-basic"
+      >
+        <div style={FIELD_GRID_STYLE}>
+          <label style={FIELD_LABEL_STYLE} htmlFor="setting-siteName">站点名称</label>
+          <AdminInput
+            value={settings.siteName}
+            onChange={(e) => update('siteName', e.target.value)}
+            placeholder="Resovo"
+            data-testid="setting-siteName"
+            aria-label="站点名称"
+          />
+          <label style={FIELD_LABEL_STYLE} htmlFor="setting-siteAnnouncement">站点公告</label>
+          <textarea
+            id="setting-siteAnnouncement"
+            value={settings.siteAnnouncement}
+            onChange={(e) => update('siteAnnouncement', e.target.value)}
+            placeholder="可选 · 显示在首页顶部"
+            style={TEXTAREA_STYLE}
+            data-testid="setting-siteAnnouncement"
+            aria-label="站点公告"
+          />
+        </div>
+      </AdminCard>
+
+      {/* ── 豆瓣 ── */}
+      <AdminCard
+        surface="plain"
+        padding="md"
+        header={{ title: '豆瓣集成', subtitle: '代理 URL + Cookie（外部元数据爬取）' }}
+        data-testid="settings-card-douban"
+      >
+        <div style={FIELD_GRID_STYLE}>
+          <label style={FIELD_LABEL_STYLE}>豆瓣代理 URL</label>
+          <AdminInput
+            value={settings.doubanProxy}
+            onChange={(e) => update('doubanProxy', e.target.value)}
+            placeholder="http(s)://..."
+            data-testid="setting-doubanProxy"
+            aria-label="豆瓣代理 URL"
+          />
+          <label style={FIELD_LABEL_STYLE}>豆瓣 Cookie</label>
+          <textarea
+            value={settings.doubanCookie}
+            onChange={(e) => update('doubanCookie', e.target.value)}
+            placeholder="ll=...; bid=...; ..."
+            style={TEXTAREA_STYLE}
+            data-testid="setting-doubanCookie"
+            aria-label="豆瓣 Cookie"
+          />
+        </div>
+      </AdminCard>
+
+      {/* ── 内容过滤 ── */}
+      <AdminCard
+        surface="plain"
+        padding="md"
+        header={{ title: '内容过滤', subtitle: '成人内容 / 内容过滤开关' }}
+        data-testid="settings-card-filter"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <label style={CHECKBOX_LABEL_STYLE}>
+            <input
+              type="checkbox"
+              checked={settings.showAdultContent}
+              onChange={(e) => update('showAdultContent', e.target.checked)}
+              data-testid="setting-showAdultContent"
+            />
+            显示成人内容
+          </label>
+          <label style={CHECKBOX_LABEL_STYLE}>
+            <input
+              type="checkbox"
+              checked={settings.contentFilterEnabled}
+              onChange={(e) => update('contentFilterEnabled', e.target.checked)}
+              data-testid="setting-contentFilterEnabled"
+            />
+            启用内容过滤（敏感词 / 元数据）
+          </label>
+        </div>
+      </AdminCard>
+
+      {/* ── 视频代理 ── */}
+      <AdminCard
+        surface="plain"
+        padding="md"
+        header={{ title: '视频代理', subtitle: '反向代理外链视频源（绕过 CDN 屏蔽）' }}
+        data-testid="settings-card-video-proxy"
+      >
+        <div style={FIELD_GRID_STYLE}>
+          <label style={FIELD_LABEL_STYLE}>启用</label>
+          <label style={CHECKBOX_LABEL_STYLE}>
+            <input
+              type="checkbox"
+              checked={settings.videoProxyEnabled}
+              onChange={(e) => update('videoProxyEnabled', e.target.checked)}
+              data-testid="setting-videoProxyEnabled"
+            />
+            启用视频代理
+          </label>
+          <label style={FIELD_LABEL_STYLE}>代理 URL</label>
+          <AdminInput
+            value={settings.videoProxyUrl}
+            onChange={(e) => update('videoProxyUrl', e.target.value)}
+            placeholder="https://proxy.example.com"
+            disabled={!settings.videoProxyEnabled}
+            data-testid="setting-videoProxyUrl"
+            aria-label="视频代理 URL"
+          />
+        </div>
+      </AdminCard>
+
+      {/* ── 自动采集 ── */}
+      <AdminCard
+        surface="plain"
+        padding="md"
+        header={{ title: '自动采集', subtitle: '定时任务调度 + 限流' }}
+        data-testid="settings-card-auto-crawl"
+      >
+        <div style={FIELD_GRID_STYLE}>
+          <label style={FIELD_LABEL_STYLE}>启用</label>
+          <label style={CHECKBOX_LABEL_STYLE}>
+            <input
+              type="checkbox"
+              checked={settings.autoCrawlEnabled}
+              onChange={(e) => update('autoCrawlEnabled', e.target.checked)}
+              data-testid="setting-autoCrawlEnabled"
+            />
+            启用自动采集
+          </label>
+
+          <label style={FIELD_LABEL_STYLE}>每次最大数量</label>
+          <AdminInput
+            type="number"
+            value={String(settings.autoCrawlMaxPerRun)}
+            onChange={(e) => update('autoCrawlMaxPerRun', Number(e.target.value) || 0)}
+            placeholder="1-1000"
+            data-testid="setting-autoCrawlMaxPerRun"
+            aria-label="每次最大数量"
+          />
+          <div style={FIELD_HINT_STYLE}>范围 1-1000；超出由后端 zod 校验拒绝</div>
+
+          <label style={FIELD_LABEL_STYLE}>仅采近期</label>
+          <label style={CHECKBOX_LABEL_STYLE}>
+            <input
+              type="checkbox"
+              checked={settings.autoCrawlRecentOnly}
+              onChange={(e) => update('autoCrawlRecentOnly', e.target.checked)}
+              data-testid="setting-autoCrawlRecentOnly"
+            />
+            仅采集最近视频（reduce 已存量）
+          </label>
+
+          <label style={FIELD_LABEL_STYLE}>近期天数</label>
+          <AdminInput
+            type="number"
+            value={String(settings.autoCrawlRecentDays)}
+            onChange={(e) => update('autoCrawlRecentDays', Number(e.target.value) || 0)}
+            placeholder="1-365"
+            disabled={!settings.autoCrawlRecentOnly}
+            data-testid="setting-autoCrawlRecentDays"
+            aria-label="近期天数"
+          />
+        </div>
+      </AdminCard>
+
+      {/* ── 保存 ── */}
+      <div style={ACTION_ROW_STYLE}>
+        <span style={SYNC_RESULT_STYLE} data-testid="settings-dirty-indicator">
+          {dirty ? '有未保存的修改' : '无未保存修改'}
+        </span>
+        <span style={{ display: 'inline-flex', gap: '8px' }}>
+          <AdminButton
+            variant="default"
+            size="sm"
+            disabled={saving}
+            onClick={refresh}
+            data-testid="settings-reload"
+          >
+            重新加载
+          </AdminButton>
+          <AdminButton
+            variant="primary"
+            size="sm"
+            loading={saving}
+            disabled={!dirty}
+            onClick={() => void handleSave()}
+            data-testid="settings-save"
+          >
+            保存设置
+          </AdminButton>
+        </span>
+      </div>
+    </div>
+  )
 }

@@ -52,6 +52,24 @@ export async function clearCache(type: CacheType): Promise<{ deleted: number }> 
   return result.data
 }
 
+// ── Settings（站点设置 13 字段；CHG-SN-6-07） ────────────────────
+
+import type { SiteSettings } from '@resovo/types'
+export type { SiteSettings }
+
+/** 写入 payload — 全字段 optional（部分更新） */
+export type SiteSettingsPatch = Partial<SiteSettings>
+
+export async function getSiteSettings(): Promise<SiteSettings> {
+  const result = await apiClient.get<{ data: SiteSettings }>('/admin/system/settings')
+  return result.data
+}
+
+export async function saveSiteSettings(patch: SiteSettingsPatch): Promise<{ ok: true }> {
+  const result = await apiClient.post<{ data: { ok: true } }>('/admin/system/settings', patch)
+  return result.data
+}
+
 // ── Config（运行时 JSON 配置；CHG-SN-6-05） ──────────────────────
 
 export interface SystemConfig {

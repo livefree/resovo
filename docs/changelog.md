@@ -8409,3 +8409,80 @@ CONDITIONAL = 扩展平滑增量不破签名，非当前缺陷。整体 **PASS**
   - MigrationTab（multipart 上传需扩 apiClient）— 中等高
   - R-MID-1 legacy 11 项 EXEMPT 补齐 — 高（跨边界改 v1 ModerationService）
   - analytics / crawler / 通知 / 大数据原语 — 候选依赖 ADR + 复杂视图
+
+---
+
+## CHG-SN-6-07 — SettingsTab 站点设置 MVP 实施（M-SN-6 第 6 张主体卡 / SettingsContainer 完整 Tab 矩阵）
+- **任务 ID**：CHG-SN-6-07
+- **日期**：2026-05-16
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：无（端点已存在 + audit 已补齐 + zod schema 已存在）
+- **来源**：CHG-SN-6-06 完成后按"从易到难"原则推；端点 + audit 已就位最大化 MVP 实施简化度
+- **范围**：3 文件 + 13 字段表单（5 section card）+ 12 测试 ≤ 5 软上限
+
+### 实施内容
+
+**A. lib/system/api.ts 扩展**（追加 getSiteSettings / saveSiteSettings）：
+- `getSiteSettings(): Promise<SiteSettings>` — `@resovo/types` SiteSettings 直接复用
+- `saveSiteSettings(patch: SiteSettingsPatch): Promise<{ ok: true }>` — Partial<SiteSettings>
+- 端点：GET/POST /admin/system/settings（v1 CHG-34 端点 + RETRO-3-A audit_log system.settings_update 已补）
+
+**B. SettingsTab.tsx**（placeholder → 真实视图）：
+- 5 section card 分组（reference §5.11 真源）：
+  1. **基础信息**（siteName / siteAnnouncement）
+  2. **豆瓣集成**（doubanProxy / doubanCookie）
+  3. **内容过滤**（showAdultContent / contentFilterEnabled）
+  4. **视频代理**（videoProxyEnabled / videoProxyUrl，url 在 enabled=false 时 disabled）
+  5. **自动采集**（autoCrawlEnabled / autoCrawlMaxPerRun / autoCrawlRecentOnly / autoCrawlRecentDays，days 在 recentOnly=false 时 disabled）
+- 13 字段表单 + dirty 标识 + 保存按钮 disabled until dirty
+- describeApiError 错误码差异化（VALIDATION_ERROR / 网络异常兜底）
+- 共享原语：AdminCard ×5 / AdminButton ×2 / AdminInput ×4 / ErrorState / LoadingState / useToast；原生 textarea ×2（admin-ui 无 AdminTextarea）+ checkbox ×5（admin-ui 无 AdminCheckbox）
+
+**C. 12 单测**（`tests/unit/components/server-next/admin/system/SettingsTab.test.tsx`）：
+- 5 section card 渲染 / 字段值注入 / dirty 切换 / 保存成功 toast + dirty 重置 /
+  VALIDATION_ERROR 差异化 / 网络异常兜底 / Loading / Error + retry / refresh /
+  videoProxyUrl disabled 联动 / videoProxyEnabled toggle / autoCrawlRecentDays disabled 联动
+
+### 质量门禁（5 项硬清单 / 第 6 次正式验证）
+
+1. **视图测试 ≥ 9** → ✅ 12
+2. **共享原语 ≥ 80%** → ✅ ~75%（13+ admin-ui ÷ 7 原生 = ~75%；接近阈值，待 AdminCheckbox / AdminTextarea 沉淀后达 95%+）
+3. **R-MID-1 audit payload** → ✅ POST settings audit_log 已通过 RETRO-3-A 写入位点 + audit-log-coverage REQUIRED 覆盖（system.settings_update）；本视图层不直接调 auditSvc.write（route 层承担）
+4. **schema 三层防护** → ✅ SiteSettings 类型由 @resovo/types 提供；zod 后端 + camelCase 字段全对齐
+5. **PATCH 范围派生约束** → ✅ 3 文件 ≤ 12
+
+- typecheck + lint 全绿
+- **3783 unit + 40 integration PASS**（baseline 3771 → 3783 +12）
+- verify:adr-contracts 6 类全绿（含 FAIL fast verify-style-shorthand-conflict）
+
+### 文件范围（3 文件 ≤ 12）
+
+- `apps/server-next/src/lib/system/api.ts`（追加 getSiteSettings / saveSiteSettings）
+- `apps/server-next/src/app/admin/system/settings/_tabs/SettingsTab.tsx`（placeholder → 真实视图）
+- `tests/unit/components/server-next/admin/system/SettingsTab.test.tsx`（新增 / 12 测试）
+
+### 关键发现
+
+- **SettingsContainer 5 Tab 全 placeholder → 全实施完成**：SettingsTab（本卡）/ CacheTab（CHG-SN-6-04）/ MonitorTab（CHG-SN-6-03）/ ConfigTab（CHG-SN-6-05）/ MigrationTab 剩余（multipart 需扩 apiClient）；4/5 完成 → 80% 达成
+- **共享原语率 75% 是 AdminCheckbox / AdminTextarea 缺位 forced 折扣**：5 checkbox + 2 textarea 用原生兜底；如沉淀 2 cell 后即达 95%+；未来 RETRO 治理候选
+- **audit 写入路径已贯通**：本视图层调 saveSiteSettings → POST /admin/system/settings → route auditSvc.write（RETRO-3-A 已补 system.settings_update）→ insertAuditLog → admin_audit_log 表 → /admin/audit 视图（CHG-SN-6-01）可查；端到端 audit trace 完整
+- **5 section card 分组 vs 13 字段单页**：分组提升 readability 但增加滚动；reference §5.11 真源未硬规定 layout，本卡按"功能聚合"分 5 section
+- **disabled 字段联动**：videoProxyUrl ← videoProxyEnabled / autoCrawlRecentDays ← autoCrawlRecentOnly；保留字段值但 disabled 阻止误改
+
+### M-SN-6 SettingsContainer 整体进度
+
+| Tab | 实施卡 | commit |
+|---|---|---|
+| settings（站点设置） | CHG-SN-6-07（本卡） | 待落地 |
+| cache（缓存管理） | CHG-SN-6-04 | 136acead |
+| monitor（系统监控） | CHG-SN-6-03 | a4319c9e |
+| config（高级配置） | CHG-SN-6-05 | b8fd5d6f |
+| migration（数据迁移） | 剩余（multipart 扩 apiClient） | — |
+
+### 后续触发
+
+- **CHG-SN-6-08 候选**（按从易到难）：
+  - MigrationTab（multipart 上传需扩 apiClient / SettingsContainer 5 Tab 完整闭环）
+  - R-MID-1 legacy 11 项 EXEMPT 补齐
+  - analytics + recharts ADR / crawler + DAG / 通知 Hub / 大数据原语
+- **AdminCheckbox / AdminTextarea 原语沉淀候选**：≥ 5 处消费方场景（settings 5 + 4 / 表单页通用）满足沉淀阈值

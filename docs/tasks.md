@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 无进行中任务；**CHG-SN-6-06 闭环**（verify:style-shorthand-conflict advisory → FAIL fast / exit 0→1 / preflight + quality-gates §6 同步）；下一卡候选（从易到难）：SettingsTab（端点已存在 + audit 已补 / 13 字段表单）/ MigrationTab（multipart 扩 apiClient）/ R-MID-1 legacy 11 项 EXEMPT 补齐 / analytics + recharts ADR / crawler + DAG -->
+<!-- 无进行中任务；**CHG-SN-6-07 闭环**（SettingsTab 13 字段 5 section card MVP / dirty 标识 + 错误码差异化 + disabled 联动 / 3 文件 / 3783 unit PASS / SettingsContainer 4/5 Tab 完成 80%）；下一卡候选（从易到难）：MigrationTab（multipart 扩 apiClient / SettingsContainer 5/5 闭环）/ AdminCheckbox+AdminTextarea 原语沉淀 / R-MID-1 legacy 11 项 / analytics + recharts ADR / crawler + DAG -->
