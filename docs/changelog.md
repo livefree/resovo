@@ -8347,3 +8347,65 @@ CONDITIONAL = 扩展平滑增量不破签名，非当前缺陷。整体 **PASS**
 
 - **M-SN-6 收尾**：剩余可推卡（SettingsTab + R-MID-1 / MigrationTab + multipart 扩展 / R-MID-1 legacy 11 项 EXEMPT 补齐）
 - **verify:style-shorthand-conflict advisory → FAIL fast 升级**：M-SN-6 收尾或 RETRO-5 卡承担
+
+---
+
+## CHG-SN-6-06 — verify:style-shorthand-conflict advisory → FAIL fast 升级
+- **任务 ID**：CHG-SN-6-06
+- **日期**：2026-05-16
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：无（脚本 exit code + preflight 描述 + 文档同步）
+- **来源**：CHG-SN-6-RETRO-4 三库 0 命中防回归基线建立后；最简单的 M-SN-6 收尾卡（按"从易到难"原则首推）
+- **范围**：3 项 ≤ 5 软上限（脚本 + preflight + 文档）
+
+### 实施内容
+
+**A. 脚本 exit code 升级**（`scripts/verify-style-shorthand-conflict.mjs`）：
+- `process.exit(0)` → `process.exit(1)` 命中时 FAIL fast 阻塞 CI / preflight
+- stderr 提示 `❌ FAIL fast 模式（CHG-SN-6-06 升级后）— CI 阻塞，必须修复后再 commit`
+- 顶部 `⚠️` 改 `❌` 视觉级警示升级
+- 修复路径提示扩到 3 条（含 border:0 + longhand 拆 3 longhand 范式）+ 累计 31 处修复 commit 引用
+
+**B. preflight 描述同步**（`scripts/preflight.sh`）：
+- `[5f/6] ADR 协议合规自动核验` 段 echo 加 `verify:style-shorthand-conflict — React inline style shorthand+longhand 冲突 (FAIL fast，CHG-SN-6-06 升级)`
+
+**C. quality-gates §6 文档同步**（`docs/rules/quality-gates.md`）：
+- 7. verify:style-shorthand-conflict 描述从 "advisory" 改 "FAIL fast"
+- 累计清零 commit 链补全：db3b7a48 + 9e592df3 + 32392a80 + e4417fe5 共 31 处
+
+### 验证
+
+- **0 命中 → exit 0** ✅（当前三库基线）
+- **故意注入 1 处 font + fontSize 冲突 → exit 1 + 完整 stderr 提示** ✅
+- **完整提示文本**：
+  ```
+  ❌ verify-style-shorthand-conflict: 1 处 shorthand+longhand 冲突（FAIL fast）：
+    apps/server-next/src/__test-violation.tsx:2  font + fontSize
+  ```
+
+### 质量门禁
+
+- verify:style-shorthand-conflict ✅ 0 命中
+- verify:adr-contracts 6 类全绿（含本卡升级后的 FAIL fast）
+- 不需重跑 unit / integration（脚本改动零 runtime 影响；preflight 描述与文档纯文本）
+
+### 文件范围（3 文件 ≤ 12）
+
+- `scripts/verify-style-shorthand-conflict.mjs`（exit code + 提示升级）
+- `scripts/preflight.sh`（echo 段补 FAIL fast 标识）
+- `docs/rules/quality-gates.md`（§6 第 7 项升级描述 + 累计 commit 链）
+- `docs/changelog.md` + `docs/task-queue.md`
+
+### 关键发现
+
+- **基线建立 → 升级时机**：RETRO-3-B advisory 落地 + RETRO-4 清零 17 处 = 三库 0 命中防回归基线；本卡 FAIL fast 升级是合理的演进路径（基线稳固 → 防回归阻断成本极低）
+- **CI 阻塞模式同 verify:endpoint-adr**：plan §4.5 R7 MUST-8 已建 FAIL fast 范式（新增 admin route 未对应 ADR 即阻塞）；本卡同款模式扩到 React inline style 层
+- **未来候选 FAIL fast 升级**（按基线稳固度排序）：verify:error-message（M-SN-6 收尾后 cleanup 后）→ verify:adr-d-numbers（强制 changelog 闭环后）→ verify:sql-schema-alignment（alias 推断完善后）
+
+### 后续触发
+
+- **下一卡候选**（按从易到难）：
+  - SettingsTab MVP（端点已存在 + audit 已补 / 13 字段表单 / ≥ 9 测试）— 中等
+  - MigrationTab（multipart 上传需扩 apiClient）— 中等高
+  - R-MID-1 legacy 11 项 EXEMPT 补齐 — 高（跨边界改 v1 ModerationService）
+  - analytics / crawler / 通知 / 大数据原语 — 候选依赖 ADR + 复杂视图

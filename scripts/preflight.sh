@@ -48,11 +48,12 @@ npm run verify:token-references
 echo "[5e/6] 浮层透明遮罩守卫（SEQ-20260501-01 / CHG-DESIGN-17）"
 npm run verify:no-bare-backdrop
 
-echo "[5f/6] ADR 协议合规自动核验（CHG-SN-5-CHECKLIST-AUDIT + CHG-SN-6-CHECKLIST-AUDIT-3）"
-echo "  - verify:endpoint-adr           — 新增端点 → ADR §端点契约存在性"
-echo "  - verify:error-message          — ADR §错误码 message 模板对齐 (advisory)"
-echo "  - verify:adr-d-numbers          — ADR D-N 偏离清单完成度 (advisory)"
-echo "  - verify:sql-schema-alignment   — queries SQL 列引用 vs migration schema 核验 (advisory)"
+echo "[5f/6] ADR 协议合规自动核验（CHG-SN-5-CHECKLIST-AUDIT + CHG-SN-6-CHECKLIST-AUDIT-3 + RETRO-3-B/-4/-06）"
+echo "  - verify:endpoint-adr                 — 新增端点 → ADR §端点契约存在性"
+echo "  - verify:error-message                — ADR §错误码 message 模板对齐 (advisory)"
+echo "  - verify:adr-d-numbers                — ADR D-N 偏离清单完成度 (advisory)"
+echo "  - verify:sql-schema-alignment         — queries SQL 列引用 vs migration schema 核验 (advisory)"
+echo "  - verify:style-shorthand-conflict     — React inline style shorthand+longhand 冲突 (FAIL fast，CHG-SN-6-06 升级)"
 npm run verify:adr-contracts
 
 echo "[6/6] 单元测试"

@@ -187,12 +187,15 @@ if (totalConflicts === 0) {
   process.exit(0)
 }
 
-process.stderr.write(`⚠️ verify-style-shorthand-conflict: ${totalConflicts} 处 shorthand+longhand 冲突：\n`)
+// CHG-SN-6-06：advisory → FAIL fast 升级（CHG-SN-6-RETRO-4 三库 0 命中基线建立后开启）
+// 命中即阻塞 CI / preflight；用户须按提示修复（典型范式 font: 'inherit' → fontFamily: 'inherit'）
+process.stderr.write(`❌ verify-style-shorthand-conflict: ${totalConflicts} 处 shorthand+longhand 冲突（FAIL fast）：\n`)
 for (const r of reports) {
   process.stderr.write(`  ${r.file}:${r.line}  ${r.shorthand} + ${r.longhand}\n`)
 }
 process.stderr.write(`\n修复路径：\n`)
 process.stderr.write(`  1. 删除 shorthand（${Object.keys(SHORTHAND_LONGHAND_MAP).join(' / ')}），保留 longhand；或反之\n`)
-process.stderr.write(`  2. 典型：font: 'inherit' → fontFamily: 'inherit'（参 db3b7a48 + 9e592df3 14 处修复范式）\n`)
-process.stderr.write(`\n⚠️ 当前为 advisory 模式（不阻塞 CI），但 milestone 审计前应清零。\n`)
-process.exit(0)
+process.stderr.write(`  2. 典型：font: 'inherit' → fontFamily: 'inherit'（参 db3b7a48 + 9e592df3 / 32392a80 + e4417fe5 累计 31 处修复范式）\n`)
+process.stderr.write(`  3. border:0 + 单 longhand 拆 3 longhand（参 RETRO-4 shell/sidebar.tsx / command-palette.tsx）\n`)
+process.stderr.write(`\n❌ FAIL fast 模式（CHG-SN-6-06 升级后）— CI 阻塞，必须修复后再 commit\n`)
+process.exit(1)

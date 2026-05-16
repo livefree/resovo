@@ -139,7 +139,7 @@
 
 6. **`npm run test:integration`**（CHG-SN-6-INTEGRATION-TEST / RETRO 2/7）：跑真实 PG 子集集成测试（vitest.integration.config.ts），验证 admin route SQL 执行不抛 DatabaseError；与 unit mock 互补；与 verify:sql-schema-alignment 互补（静态扫描 + 真实执行双层）；CI 可独立调度（preflight 不集成；本地按需运行）
 
-7. **`npm run verify:style-shorthand-conflict`**（CHG-SN-6-RETRO-3-B / ultrareview P1-1，advisory）：静态扫描 `apps/server-next/src` + `apps/web-next/src` + `packages/admin-ui/src` 的 `.tsx` 文件内 `: React.CSSProperties = {...}` / `style={{...}}` 块，检测 9 类 shorthand（`font` / `border` / `background` / `margin` / `padding` / `overflow` / `borderRadius` / `inset` / `flex`）与对应 longhand 同存 → React rerender 警告 "Updating a style property during rerender ... when a conflicting property is set ..."；db3b7a48 + 9e592df3 两次 14 处清零后落地，防回归；milestone 审计前应清零 17 处既有 advisory 命中
+7. **`npm run verify:style-shorthand-conflict`**（CHG-SN-6-RETRO-3-B 落地 advisory / CHG-SN-6-RETRO-4 清零 17 处 / **CHG-SN-6-06 升级 FAIL fast**）：静态扫描 `apps/server-next/src` + `apps/web-next/src` + `packages/admin-ui/src` 的 `.tsx` 文件内 `: React.CSSProperties = {...}` / `style={{...}}` 块，检测 9 类 shorthand（`font` / `border` / `background` / `margin` / `padding` / `overflow` / `borderRadius` / `inset` / `flex`）与对应 longhand 同存 → React rerender 警告 "Updating a style property during rerender ... when a conflicting property is set ..."；db3b7a48 + 9e592df3 + 32392a80 + e4417fe5 累计 31 处清零后落地 FAIL fast 防回归；命中即 CI 阻塞，按提示拆 longhand 或改 fontFamily 范式修复
 
 ### 4 类文档强制规则（修订 §1/§2/§3 已落地）
 
