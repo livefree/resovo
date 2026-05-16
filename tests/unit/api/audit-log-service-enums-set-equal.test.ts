@@ -44,6 +44,11 @@ const EXPECTED_ACTION_TYPES = [
   'video.unmerge',
   'video.split',
   'source_line_alias.upsert',
+  // CHG-SN-6-RETRO-3-A
+  'system.cache_clear',
+  'system.settings_update',
+  'system.config_update',
+  'system.sources_import',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [

@@ -46,6 +46,11 @@ const REQUIRED_ACTION_TYPES = [
   'video.split',
   // ADR-117 扩枚举（1 项，source_line_alias upsert 协议，CHG-SN-5-11-PATCH 落地）
   'source_line_alias.upsert',
+  // CHG-SN-6-RETRO-3-A：v1 写端点 audit 补齐（ultrareview P0-3 / R-MID-1 系统化第 6 次）
+  'system.cache_clear',         // DELETE /admin/cache/:type
+  'system.settings_update',     // POST /admin/system/settings
+  'system.config_update',       // POST /admin/system/config
+  'system.sources_import',      // POST /admin/import/sources
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -71,6 +76,11 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'video.split',
   // ADR-117 source_line_alias
   'source_line_alias.upsert',
+  // CHG-SN-6-RETRO-3-A：v1 写端点 audit 补齐（route-level test 含 payload 内容断言）
+  'system.cache_clear',
+  'system.settings_update',
+  'system.config_update',
+  'system.sources_import',
 ] as const
 
 const PAYLOAD_ASSERTION_EXEMPT = [

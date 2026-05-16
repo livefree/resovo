@@ -11,6 +11,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const mockDbQuery = vi.fn()
 vi.mock('@/api/lib/postgres', () => ({ db: { query: mockDbQuery, connect: vi.fn() } }))
 
+// CHG-SN-6-RETRO-3-A：audit_log mock 用于 R-MID-1 payload 内容断言
+const insertAuditLogMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+vi.mock('@/api/db/queries/auditLog', () => ({
+  insertAuditLog: insertAuditLogMock,
+  listAuditLogByTarget: vi.fn(),
+  listAdminAuditLog: vi.fn(),
+  getAdminAuditLogById: vi.fn(),
+}))
+
 vi.mock('@/api/lib/redis', () => ({
   redis: { get: vi.fn().mockResolvedValue(null), set: vi.fn(), del: vi.fn() },
 }))
@@ -123,6 +132,30 @@ describe('POST /admin/system/settings', () => {
     })
     expect(res.statusCode).toBe(400)
   })
+
+  // CHG-SN-6-RETRO-3-A / R-MID-1 第 3 项硬清单 strict
+  it('写 admin_audit_log（system.settings_update payload 内容断言）', async () => {
+    const mockConnect = { query: vi.fn().mockResolvedValue({}), release: vi.fn() }
+    const db = await import('@/api/lib/postgres')
+    ;(db.db as unknown as { connect: ReturnType<typeof vi.fn> }).connect = vi.fn().mockResolvedValue(mockConnect)
+    const app = await buildApp()
+    await app.inject({
+      method: 'POST', url: '/admin/system/settings',
+      headers: { ...authHeader('admin'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ siteName: 'NewName' }),
+    })
+    await new Promise((r) => setImmediate(r))
+    expect(insertAuditLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actionType: 'system.settings_update',
+        targetKind: 'system',
+        targetId: null,
+        beforeJsonb: expect.any(Object),
+        afterJsonb: expect.objectContaining({ site_name: 'NewName' }),
+      }),
+    )
+  })
 })
 
 // ── 配置文件 ──────────────────────────────────────────────────────
@@ -234,6 +267,35 @@ describe('POST /admin/system/config', () => {
     })
     expect(res.statusCode).toBe(400)
     expect(res.json<{ error: { code: string } }>().error.code).toBe('INVALID_SUBSCRIPTION_URL')
+  })
+
+  // CHG-SN-6-RETRO-3-A / R-MID-1 第 3 项硬清单 strict
+  it('写 admin_audit_log（system.config_update payload 内容断言）', async () => {
+    const mockConnect = { query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }), release: vi.fn() }
+    const db = await import('@/api/lib/postgres')
+    ;(db.db as unknown as { connect: ReturnType<typeof vi.fn> }).connect = vi.fn().mockResolvedValue(mockConnect)
+    mockDbQuery.mockResolvedValue({ rows: [], rowCount: 0 })
+    const app = await buildApp()
+    await app.inject({
+      method: 'POST', url: '/admin/system/config',
+      headers: { ...authHeader('admin'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ configFile: '{"crawler_sites": {}}' }),
+    })
+    await new Promise((r) => setImmediate(r))
+    expect(insertAuditLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actionType: 'system.config_update',
+        targetKind: 'system',
+        targetId: null,
+        beforeJsonb: expect.objectContaining({ configFileLength: expect.any(Number) }),
+        afterJsonb: expect.objectContaining({
+          configFileLength: expect.any(Number),
+          crawlerSitesSynced: expect.any(Number),
+          crawlerSitesSkipped: expect.any(Number),
+        }),
+      }),
+    )
   })
 })
 

@@ -9,6 +9,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 // ── Mock 依赖 ─────────────────────────────────────────────────────
 
 vi.mock('@/api/lib/postgres', () => ({ db: { query: vi.fn() } }))
+
+// CHG-SN-6-RETRO-3-A：audit_log mock 用于 R-MID-1 payload 内容断言
+const insertAuditLogMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+vi.mock('@/api/db/queries/auditLog', () => ({
+  insertAuditLog: insertAuditLogMock,
+  listAuditLogByTarget: vi.fn(),
+  listAdminAuditLog: vi.fn(),
+  getAdminAuditLogById: vi.fn(),
+}))
 const { mockRedisGet } = vi.hoisted(() => ({
   mockRedisGet: vi.fn().mockResolvedValue(null),
 }))
@@ -213,6 +222,32 @@ describe('POST /admin/import/sources (CHG-31)', () => {
     expect(body.data.imported).toBe(1)
     expect(body.data.skipped).toBe(0)
     expect(body.data.errors).toHaveLength(0)
+  })
+
+  // CHG-SN-6-RETRO-3-A / R-MID-1 第 3 项硬清单 strict
+  it('写 admin_audit_log（system.sources_import payload 内容断言）', async () => {
+    mockFindVideoId.mockResolvedValue('video-uuid-1')
+    const records = [
+      { shortId: 'abc123', sourceName: 'src', sourceUrl: 'https://example.com/v.m3u8' },
+    ]
+    const app = await buildApp(makeMultipartFile(JSON.stringify(records)))
+    await app.inject({
+      method: 'POST',
+      url: '/admin/import/sources',
+      headers: { ...authHeader('admin'), 'Content-Type': 'multipart/form-data' },
+    })
+    await app.close()
+    await new Promise((r) => setImmediate(r))
+    expect(insertAuditLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actionType: 'system.sources_import',
+        targetKind: 'system',
+        targetId: null,
+        beforeJsonb: expect.objectContaining({ inputRecordCount: 1 }),
+        afterJsonb: expect.any(Object),
+      }),
+    )
   })
 
   it('单条 Zod 校验失败不中断（其他记录继续导入）', async () => {

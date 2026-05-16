@@ -132,6 +132,11 @@ export type AdminAuditActionType =
   | 'video.unmerge'
   | 'video.split'
   | 'source_line_alias.upsert'
+  // CHG-SN-6-RETRO-3-A：v1 写端点 audit 补齐（ultrareview P0-3 / R-MID-1 系统化第 6 次）
+  | 'system.cache_clear'         // DELETE /admin/cache/:type
+  | 'system.settings_update'     // POST /admin/system/settings
+  | 'system.config_update'       // POST /admin/system/config
+  | 'system.sources_import'      // POST /admin/import/sources
 
 export type AdminAuditTargetKind =
   | 'video'

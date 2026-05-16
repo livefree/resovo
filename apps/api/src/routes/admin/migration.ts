@@ -10,10 +10,12 @@ import type { FastifyInstance } from 'fastify'
 import type { MultipartFile } from '@fastify/multipart'
 import { db } from '@/api/lib/postgres'
 import { MigrationService } from '@/api/services/MigrationService'
+import { AuditLogService } from '@/api/services/AuditLogService'
 
 export async function adminMigrationRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
   const migrationService = new MigrationService(db)
+  const auditSvc = new AuditLogService(db)  // CHG-SN-6-RETRO-3-A
 
   // GET /admin/export/sources — 导出为 JSON 附件
   fastify.get('/admin/export/sources', { preHandler: auth }, async (_request, reply) => {
@@ -57,6 +59,19 @@ export async function adminMigrationRoutes(fastify: FastifyInstance) {
     }
 
     const result = await migrationService.importSources(rawRecords)
+
+    // CHG-SN-6-RETRO-3-A：审计 — 写 admin_audit_log（system.sources_import / ultrareview P0-3）
+    // beforeJsonb: 输入记录数；afterJsonb: 实际导入 / 跳过 / 失败统计
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'system.sources_import',
+      targetKind: 'system',
+      targetId: null,
+      beforeJsonb: { inputRecordCount: rawRecords.length },
+      afterJsonb: result as unknown as Record<string, unknown>,
+      requestId: request.id,
+    })
+
     return reply.send({ data: result })
   })
 }

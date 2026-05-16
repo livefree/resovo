@@ -10,6 +10,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/api/lib/postgres', () => ({ db: { query: vi.fn() } }))
 
+// CHG-SN-6-RETRO-3-A：audit_log mock 用于 R-MID-1 payload 内容断言
+const insertAuditLogMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+vi.mock('@/api/db/queries/auditLog', () => ({
+  insertAuditLog: insertAuditLogMock,
+  listAuditLogByTarget: vi.fn(),
+  listAdminAuditLog: vi.fn(),
+  getAdminAuditLogById: vi.fn(),
+}))
+
 // Use vi.hoisted so variables are available when vi.mock factory runs (hoisted to top)
 const { mockScan, mockUnlink, mockPipeline, mockRedisGet } = vi.hoisted(() => ({
   mockScan: vi.fn(),
@@ -226,5 +235,28 @@ describe('DELETE /admin/cache/:type (CHG-30)', () => {
     const body = res.json<{ data: { deleted: number } }>()
     expect(body.data.deleted).toBe(0)
     expect(mockUnlink).not.toHaveBeenCalled()
+  })
+
+  // CHG-SN-6-RETRO-3-A / R-MID-1 第 3 项硬清单 strict：audit payload 内容断言
+  it('写 admin_audit_log（system.cache_clear payload 内容断言 / R-MID-1）', async () => {
+    mockScanWithKeys(['search:k1'])
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/admin/cache/search',
+      headers: authHeader('admin'),
+    })
+    expect(res.statusCode).toBe(200)
+    // fire-and-forget：等 microtask 队列释放
+    await new Promise((r) => setImmediate(r))
+    expect(insertAuditLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actionType: 'system.cache_clear',
+        targetKind: 'system',
+        targetId: null,
+        beforeJsonb: expect.objectContaining({ cacheType: 'search' }),
+        afterJsonb: expect.objectContaining({ cacheType: 'search', deletedKeys: expect.any(Number) }),
+      }),
+    )
   })
 })

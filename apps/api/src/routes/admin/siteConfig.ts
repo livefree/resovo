@@ -14,6 +14,7 @@ import { db } from '@/api/lib/postgres'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import { getSchedulerStatus } from '@/api/workers/maintenanceScheduler'
+import { AuditLogService } from '@/api/services/AuditLogService'
 import type { SystemSettingKey } from '@/types'
 
 const SiteSettingsBodySchema = z.object({
@@ -68,6 +69,7 @@ function isValidHttpUrl(input: string): boolean {
 
 export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
+  const auditSvc = new AuditLogService(db)  // CHG-SN-6-RETRO-3-A
 
   // ── GET /admin/system/settings ──────────────────────────────
 
@@ -102,7 +104,27 @@ export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
     if (d.autoCrawlRecentOnly !== undefined)  pairs.auto_crawl_recent_only = String(d.autoCrawlRecentOnly)
     if (d.autoCrawlRecentDays !== undefined)  pairs.auto_crawl_recent_days = String(d.autoCrawlRecentDays)
 
+    // CHG-SN-6-RETRO-3-A：审计 — 写 admin_audit_log（system.settings_update / ultrareview P0-3）
+    // beforeJsonb: 当前 settings 子集（仅本次更新的 key 旧值）；afterJsonb: 新值（zod 校验后子集）
+    const updatedKeys = Object.keys(pairs)
+    let beforeSubset: Record<string, string | null> = {}
+    if (updatedKeys.length > 0) {
+      const currentRaw = await systemSettingsQueries.getAllSettings(db)
+      beforeSubset = Object.fromEntries(updatedKeys.map((k) => [k, currentRaw[k as SystemSettingKey] ?? null]))
+    }
+
     await systemSettingsQueries.setManySettings(db, pairs)
+
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'system.settings_update',
+      targetKind: 'system',
+      targetId: null,
+      beforeJsonb: beforeSubset,
+      afterJsonb: pairs as Record<string, unknown>,
+      requestId: request.id,
+    })
+
     return reply.send({ data: { ok: true } })
   })
 
@@ -176,6 +198,23 @@ export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
       })
       synced++
     }
+
+    // CHG-SN-6-RETRO-3-A：审计 — 写 admin_audit_log（system.config_update / ultrareview P0-3）
+    // beforeJsonb: configFile 长度 + 当前 subscriptionUrl；afterJsonb: 新长度 + sites 同步统计
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'system.config_update',
+      targetKind: 'system',
+      targetId: null,
+      beforeJsonb: { configFileLength: configFile.length },
+      afterJsonb: {
+        configFileLength: configFile.length,
+        subscriptionUrl: subscriptionUrl ?? null,
+        crawlerSitesSynced: synced,
+        crawlerSitesSkipped: skipped,
+      },
+      requestId: request.id,
+    })
 
     return reply.send({ data: { ok: true, synced, skipped } })
   })

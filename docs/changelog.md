@@ -8022,3 +8022,84 @@ URL 同步策略保留（CHG-SN-3-09 既有逻辑）：
 
 - **CHG-SN-6-RETRO-3** 起卡（task-queue 登记，未实施）— P0-3 audit_log 系统补齐 + P1-1 stylelint guard + P2 多项治理
 - R-MID-1 5 次系统化 → CHG-SN-6-RETRO-3 闭环后升级为 6 次
+
+---
+
+## CHG-SN-6-RETRO-3-A — 4 写端点 audit_log 系统补齐（ultrareview P0-3 / R-MID-1 系统化第 6 次）
+- **任务 ID**：CHG-SN-6-RETRO-3-A
+- **日期**：2026-05-15
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：无（扩 union + 既有 service 范式直接复用）
+- **来源**：CHG-SN-6-AUDIT-DEBOUNCE-FIX 已起 RETRO-3 父卡；按 PATCH 范围 ≤ 5 项软上限拆 -A（audit 补齐）+ -B（stylelint guard + P2 治理）
+- **范围**：5 项 ≤ 5 软上限内
+  - P0-3 4 端点 audit_log（cache.clear / settings.update / config.update / sources.import）
+  - AdminAuditActionType union 扩 4 项 + ACTION_TYPES 常量同步
+  - audit-log-coverage REQUIRED + PAYLOAD_ASSERTION_REQUIRED 名单各加 4
+  - audit-log-service-enums-set-equal EXPECTED 加 4
+  - 3 路由测试文件加 R-MID-1 payload 内容断言（cache + system-config × 2 + migration）
+- **R-MID-1 系统化进展**：第 5 次（CHG-SN-5-CHECKLIST-AUDIT-2）→ 第 6 次（本卡）；首次扩 plan v1.4 §3.0.5 11 项 + ADR 9 项之外的 4 项 system 域 audit
+
+### 实施内容
+
+**1. types union 扩 4 项**（`packages/types/src/admin-moderation.types.ts`）：
+```ts
+| 'system.cache_clear'         // DELETE /admin/cache/:type
+| 'system.settings_update'     // POST /admin/system/settings
+| 'system.config_update'       // POST /admin/system/config
+| 'system.sources_import'      // POST /admin/import/sources
+```
+
+**2. ACTION_TYPES 常量同步**（`apps/api/src/services/AuditLogService.ts`）+ EXPECTED_* 镜像同步（`tests/unit/api/audit-log-service-enums-set-equal.test.ts`）+ REQUIRED_ACTION_TYPES + PAYLOAD_ASSERTION_REQUIRED（`tests/unit/api/audit-log-coverage.test.ts`）。
+4 套真源全同步，set-equal 守卫确保未来缺一即 fail。
+
+**3. 4 端点 auditSvc.write 接入**：
+- `apps/api/src/routes/admin/cache.ts`：DELETE /admin/cache/:type — 加 AuditLogService import + new instance + write（before: cacheType / after: cacheType + deletedKeys / requestId 透传）
+- `apps/api/src/routes/admin/siteConfig.ts`：POST /admin/system/settings — 加 import + instance；写入前先 query 当前值得到 beforeSubset；POST /admin/system/config — 写入后包含 configFileLength + subscriptionUrl + crawlerSitesSynced/Skipped 4 字段
+- `apps/api/src/routes/admin/migration.ts`：POST /admin/import/sources — before: inputRecordCount / after: result 透传
+
+**4. R-MID-1 payload 内容断言（3 测试文件加守卫）**：
+- `tests/unit/api/cache.test.ts`：DELETE describe 加 `it('写 admin_audit_log（system.cache_clear payload 内容断言）')`
+- `tests/unit/api/system-config.test.ts`：POST settings 与 POST config 各加 R-MID-1 it
+- `tests/unit/api/migration.test.ts`：POST import sources 加 R-MID-1 it
+- 模式：mock `@/api/db/queries/auditLog` insertAuditLog → 端点请求后 await setImmediate（fire-and-forget tick 释放）→ expect.objectContaining 断言
+
+### 质量门禁
+
+- typecheck + lint 全绿
+- **3743 unit 全 PASS**（baseline 3727 → 3743 +16：cache +1 + system-config +2 + migration +1 + audit-log-coverage +4×新 action_type +4×PAYLOAD_ASSERTION_REQUIRED + 4 set-equal +1 总 +1 it.each 扩展）
+- audit-log-coverage REQUIRED_ACTION_TYPES 总 24 项（20 + 4 新）覆盖率守卫全过
+- audit-log-coverage PAYLOAD_ASSERTION_REQUIRED 13 项（9 + 4 新）全过
+- `verify:adr-contracts` 4 类全绿
+
+### 不在范围（拆 RETRO-3-B）
+
+- **P1-1 CSS shorthand+longhand stylelint guard** — `scripts/verify-style-shorthand-conflict.mjs` 静态扫描 + admin-module-template 硬规则
+- **P2-6 AuditClient.tsx 521 行拆 cell**（CHG-DESIGN-12 沉淀范围）
+- **P2-7 ImageHealthClient 缺图列扩展**（last_seen_broken_at / 域名等）
+- **P2-8 SettingsContainer 顶部按钮原生 → AdminButton**（共享原语率提升）
+
+### 文件范围（11 文件 ≤ 12）
+
+- `packages/types/src/admin-moderation.types.ts`（union 扩 4 项）
+- `apps/api/src/services/AuditLogService.ts`（ACTION_TYPES 同步）
+- `apps/api/src/routes/admin/cache.ts`（DELETE audit 写入）
+- `apps/api/src/routes/admin/siteConfig.ts`（settings + config 2 端点 audit 写入）
+- `apps/api/src/routes/admin/migration.ts`（import 端点 audit 写入）
+- `tests/unit/api/audit-log-coverage.test.ts`（REQUIRED + PAYLOAD_ASSERTION_REQUIRED 扩 4）
+- `tests/unit/api/audit-log-service-enums-set-equal.test.ts`（EXPECTED 扩 4）
+- `tests/unit/api/cache.test.ts`（audit assertion）
+- `tests/unit/api/system-config.test.ts`（audit assertion × 2）
+- `tests/unit/api/migration.test.ts`（audit assertion）
+- `docs/changelog.md` + `docs/task-queue.md`
+
+### 关键发现
+
+- **既有路由直接 in-route 实现**（不走 service 层）：cache / siteConfig / migration 是 v1 时代落地，未走 Route → Service → DB 三层；本卡按现状最小改动加 audit，**不重构成 service**（跨边界风险更高）；未来 v1 → v2 cutover 时统一治理
+- **fire-and-forget 测试模式**：`await new Promise((r) => setImmediate(r))` 确保 promise tick 释放 + insertAuditLog mock 被调（之前 video-merges 同款模式）
+- **beforeJsonb 真实快照**：POST settings 测试发现 — 写入前需先 query 当前值（updatedKeys 子集），避免空 before；这是 R-MID-1 完整 payload 的硬要求
+- **R-MID-1 第 6 次系统化**：CHG-SN-5-CHECKLIST-AUDIT-2 P0-1 落地"代码守卫形式"后首次"用户主动 ultrareview 触发 PAYLOAD_REQUIRED 名单扩"；audit-log-coverage 13 项 strict 9 项 EXEMPT 11 项 → 13+4=17 strict / 11 EXEMPT（未来 RETRO-4 收尾 legacy 11 项）
+
+### 后续触发
+
+- **CHG-SN-6-RETRO-3-B**：stylelint guard + P2 治理（独立卡）
+- **未来 RETRO-4**：legacy 11 项 PAYLOAD_ASSERTION_EXEMPT 收尾补齐（视图卡完整覆盖后 RETROACTIVE）

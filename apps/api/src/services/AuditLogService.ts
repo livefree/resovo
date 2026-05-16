@@ -59,6 +59,11 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   'video.unmerge',
   'video.split',
   'source_line_alias.upsert',
+  // CHG-SN-6-RETRO-3-A：v1 写端点 audit 补齐
+  'system.cache_clear',
+  'system.settings_update',
+  'system.config_update',
+  'system.sources_import',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',
