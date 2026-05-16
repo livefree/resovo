@@ -88,7 +88,7 @@ const SEARCH_TRIGGER_STYLE: CSSProperties = {
   borderRadius: 'var(--admin-input-radius)',
   color: 'var(--fg-muted)',
   cursor: 'pointer',
-  font: 'inherit',
+  fontFamily: 'inherit',
   textAlign: 'left',
 }
 
@@ -123,7 +123,7 @@ const ICON_BTN_STYLE: CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   cursor: 'pointer',
   color: 'var(--fg-muted)',
-  font: 'inherit',
+  fontFamily: 'inherit',
 }
 
 export function Topbar({

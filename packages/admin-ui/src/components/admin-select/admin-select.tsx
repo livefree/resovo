@@ -95,7 +95,7 @@ const TRIGGER_BASE: React.CSSProperties = {
   cursor: 'pointer',
   width: '100%',
   textAlign: 'left',
-  font: 'inherit',
+  fontFamily: 'inherit',
   color: 'var(--fg-default)',
   transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
 }
@@ -127,7 +127,7 @@ const SEARCH_INPUT_STYLE: React.CSSProperties = {
   background: 'var(--bg-surface)',
   color: 'var(--fg-default)',
   outline: 'none',
-  font: 'inherit',
+  fontFamily: 'inherit',
   fontSize: 'var(--font-size-xs)',
 }
 

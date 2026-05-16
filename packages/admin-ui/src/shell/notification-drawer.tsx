@@ -43,7 +43,7 @@ const MARK_ALL_READ_BTN_STYLE: CSSProperties = {
   padding: 'var(--space-1) var(--space-2)',
   color: 'var(--accent-default)',
   cursor: 'pointer',
-  font: 'inherit',
+  fontFamily: 'inherit',
   fontSize: 'var(--font-size-xs)',
   borderRadius: 'var(--radius-sm)',
   flexShrink: 0,
@@ -54,12 +54,15 @@ const ITEM_STYLE: CSSProperties = {
   gap: 'var(--space-3)',
   padding: 'var(--space-3) var(--space-4)',
   background: 'transparent',
-  border: 0,
+  // CHG-SN-6-RETRO-4：拆 border:0 + borderBottom 冲突
+  borderTop: 0,
+  borderLeft: 0,
+  borderRight: 0,
   borderBottom: '1px solid var(--border-subtle)',
   width: '100%',
   textAlign: 'left',
   cursor: 'pointer',
-  font: 'inherit',
+  fontFamily: 'inherit',
   color: 'var(--fg-default)',
 }
 

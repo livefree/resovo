@@ -36,7 +36,7 @@ const TRIGGER_STYLE: React.CSSProperties = {
   color: 'var(--fg-default)',
   fontSize: 'var(--font-size-xs)',
   cursor: 'pointer',
-  font: 'inherit',
+  fontFamily: 'inherit',
 }
 
 const TRIGGER_LABEL_PREFIX_STYLE: React.CSSProperties = {
@@ -80,7 +80,7 @@ const ROW_STYLE: React.CSSProperties = {
   border: 0,
   width: '100%',
   textAlign: 'left',
-  font: 'inherit',
+  fontFamily: 'inherit',
 }
 
 const ACTIVE_ROW_STYLE: React.CSSProperties = {

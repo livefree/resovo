@@ -49,7 +49,7 @@ const LINK_STYLE: CSSProperties = {
   background: 'transparent',
   border: 0,
   padding: 0,
-  font: 'inherit',
+  fontFamily: 'inherit',
   color: 'var(--fg-muted)',
   cursor: 'pointer',
   textDecoration: 'none',

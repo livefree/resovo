@@ -94,7 +94,7 @@ const BASE_STYLE: React.CSSProperties = {
   gap: '6px',
   padding: '0 var(--button-padding-x)',
   borderRadius: 'var(--radius-sm)',
-  font: 'inherit',
+  fontFamily: 'inherit',
   cursor: 'pointer',
   whiteSpace: 'nowrap',
   userSelect: 'none',

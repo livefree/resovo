@@ -54,7 +54,7 @@ const ITEM_STYLE: React.CSSProperties = {
   border: 0,
   width: '100%',
   textAlign: 'left',
-  font: 'inherit',
+  fontFamily: 'inherit',
 }
 
 const LOCKED_TAG_STYLE: React.CSSProperties = {

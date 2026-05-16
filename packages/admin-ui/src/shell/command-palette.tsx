@@ -75,10 +75,13 @@ const PANEL_WRAPPER_STYLE: CSSProperties = {
 const INPUT_STYLE: CSSProperties = {
   padding: 'var(--space-3) var(--space-4)',
   background: 'transparent',
-  border: 0,
+  // CHG-SN-6-RETRO-4：拆 border:0 + borderBottom 冲突
+  borderTop: 0,
+  borderLeft: 0,
+  borderRight: 0,
   borderBottom: '1px solid var(--border-subtle)',
   color: 'var(--fg-default)',
-  font: 'inherit',
+  fontFamily: 'inherit',
   // outline 由 InteractionStyles §5 focus-visible 兜底（CHG-UX-06）
   flexShrink: 0,
 }
@@ -109,7 +112,7 @@ const ROW_STYLE_BASE: CSSProperties = {
   width: '100%',
   textAlign: 'left',
   cursor: 'pointer',
-  font: 'inherit',
+  fontFamily: 'inherit',
   color: 'var(--fg-default)',
 }
 

@@ -8285,3 +8285,65 @@ CONDITIONAL = 扩展平滑增量不破签名，非当前缺陷。整体 **PASS**
 
 - **未来场景验证**：moderation history / video edit 历史等视图首次消费 4 cell 时验证 Props 契约通用性（如 UserRef 是否需要 onClick 跳转 user profile）
 - **CHG-SN-6-RETRO-4 候选**：清零 verify:style-shorthand-conflict 17 处既有命中（admin-ui 13 + web-next 2 + admin-select 1）+ 视图卡完整覆盖后 R-MID-1 legacy 11 项 PAYLOAD_ASSERTION_EXEMPT 收尾补齐
+
+---
+
+## CHG-SN-6-RETRO-4 — 清零 verify:style-shorthand-conflict 17 处 advisory
+- **任务 ID**：CHG-SN-6-RETRO-4
+- **日期**：2026-05-16
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：无（机械批量清零 + 注释剥离 verify 脚本鲁棒性提升）
+- **来源**：CHG-SN-6-RETRO-3-B 落地 verify:style-shorthand-conflict 后 17 处既有 advisory 命中（packages/admin-ui 13 + apps/web-next 2 + admin-select 1）；本卡清零
+- **范围**：1 项机械清零（17 位置 / 同 pattern）+ 1 项 verify 脚本鲁棒性提升（注释字面量误命中 → 剥离 // 与 /* */ 注释）≤ 5 项软上限
+
+### 实施内容
+
+**A. font 批量替换**（16 文件 / sed 批处理）：
+- 全 admin-ui `font: 'inherit'` → `fontFamily: 'inherit'`（与 db3b7a48 + 9e592df3 + 32392a80 三次清零同款 pattern）
+- 涵盖文件：shell/{notification-drawer / task-drawer / topbar / breadcrumbs / command-palette / sidebar / drawer-shell / user-menu} + components/{admin-input / cell/inline-row-actions / cell/kpi-card / admin-select / admin-button / data-table/views-menu / hidden-columns-menu / header-menu}
+- 17 → 4 命中（font 相关消除）
+
+**B. border 拆 longhand**（4 处手动修复 / 命中冲突的）：
+- `packages/admin-ui/src/shell/command-palette.tsx:75` INPUT_STYLE — `border: 0` + `borderBottom: 1px` → 拆 borderTop/Left/Right: 0 + borderBottom: 1px
+- `packages/admin-ui/src/shell/notification-drawer.tsx:52` ITEM_STYLE — 同款
+- `packages/admin-ui/src/shell/sidebar.tsx:170` COLLAPSE_BTN_STYLE — `border: 0` + `borderTop: 1px` → 拆 borderBottom/Left/Right: 0 + borderTop: 1px
+- `packages/admin-ui/src/shell/sidebar.tsx:496` footerStyle — 同款
+
+**C. background / border 拆**（web-next 2 处）：
+- `apps/web-next/src/components/detail/DetailHero.tsx:329` — `border: '1px solid'` + `borderColor` longhand → 拆 borderWidth + borderStyle longhand（删 border shorthand）
+- `apps/web-next/src/components/primitives/feedback/Skeleton.tsx:38` — `background: linear-gradient(...)` + `backgroundSize` longhand → 改 `backgroundImage`（保留 gradient + 与 backgroundSize 共存零冲突）
+
+**D. verify 脚本鲁棒性提升**（`scripts/verify-style-shorthand-conflict.mjs`）：
+- 修复 bug：注释字面量 `// 拆 border:0 + borderBottom 冲突` 被识别为 `border` shorthand 使用，导致 false positive
+- 修复：detectConflicts 前剥离 `/* ... */` 块注释 + `// ...` 行注释，仅扫真实代码
+- 副作用：未来注释中讨论 shorthand 不再误命中
+
+### 质量门禁
+
+- typecheck + lint 全绿
+- **verify:style-shorthand-conflict ✅ 0 命中（3 扫描根：server-next + admin-ui + web-next）**
+- verify:adr-contracts 6 类全绿
+- 3771 unit + 40 integration PASS（baseline 不变，机械重命名零业务影响）
+- isolated 验证：admin-ui 改 17 位置后 cell + shell 既有单测零回归
+
+### 文件范围
+
+- `packages/admin-ui/src/shell/*.tsx`（8 文件 sed font + 4 文件手动 border）
+- `packages/admin-ui/src/components/{admin-input, admin-button, admin-select, data-table/*, cell/*}/*.tsx`（8 文件 sed font）
+- `apps/web-next/src/components/detail/DetailHero.tsx`（border 拆）
+- `apps/web-next/src/components/primitives/feedback/Skeleton.tsx`（background → backgroundImage）
+- `scripts/verify-style-shorthand-conflict.mjs`（注释剥离）
+- `docs/changelog.md` + `docs/task-queue.md`
+
+### 关键发现
+
+- **font 批量替换占 13/17（76%）**：admin-ui 内 16 个文件存在 `font: 'inherit'`，仅 13 处实际命中 fontSize/fontWeight 冲突；sed 全替换覆盖未来潜在冲突
+- **border:0 + 单 longhand 是另一类高频 pattern**：CSS 上 `border: 0` 是 reset 风格但 React rerender 警告对所有 shorthand+longhand 共存生效，无视语义。拆 longhand 是唯一干净路径
+- **comment 字面量误命中是 verify 脚本鲁棒性 bug**：第一次商业落地 verify 静态扫描脚本必须前置注释剥离（学到的教训）
+- **三库 0 命中实现** = 防回归基线建立：未来新视图代码若引入 shorthand+longhand 冲突 advisory 即触发，可作为 milestone 审计 PASS 硬指标
+- **建议**：CHG-SN-6-RETRO-5 或 M-SN-6 收尾时考虑把 advisory 升级为 FAIL fast（阻塞 CI）— 现在防回归地基已稳固
+
+### 后续触发
+
+- **M-SN-6 收尾**：剩余可推卡（SettingsTab + R-MID-1 / MigrationTab + multipart 扩展 / R-MID-1 legacy 11 项 EXEMPT 补齐）
+- **verify:style-shorthand-conflict advisory → FAIL fast 升级**：M-SN-6 收尾或 RETRO-5 卡承担

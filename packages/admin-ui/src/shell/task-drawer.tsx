@@ -120,7 +120,7 @@ const ACTION_BTN_STYLE: CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   color: 'var(--fg-default)',
   cursor: 'pointer',
-  font: 'inherit',
+  fontFamily: 'inherit',
   fontSize: 'var(--font-size-xs)',
 }
 

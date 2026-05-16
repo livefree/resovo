@@ -121,7 +121,7 @@ const ITEM_STYLE: CSSProperties = {
   background: 'transparent',
   border: 0,
   padding: 'var(--space-2) var(--space-3)',
-  font: 'inherit',
+  fontFamily: 'inherit',
   color: 'var(--fg-default)',
   textAlign: 'left',
   cursor: 'pointer',

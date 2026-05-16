@@ -169,13 +169,15 @@ const SECTION_TITLE_STYLE: CSSProperties = {
 
 const COLLAPSE_BTN_STYLE: CSSProperties = {
   background: 'transparent',
-  border: 0,
-  // borderTop 在 border: 0 后声明，确保 shorthand 不覆盖 longhand
+  // CHG-SN-6-RETRO-4：拆 border:0 + borderTop 冲突（之前依赖声明顺序覆盖 → React rerender 警告）
+  borderBottom: 0,
+  borderLeft: 0,
+  borderRight: 0,
   borderTop: '1px solid var(--border-subtle)',
   padding: 0,
   color: 'var(--fg-muted)',
   cursor: 'pointer',
-  font: 'inherit',
+  fontFamily: 'inherit',
   textAlign: 'left',
   fontSize: 'var(--font-size-xs)',
   flexShrink: 0,
@@ -381,7 +383,7 @@ function NavItem({ item, active, collapsed, runtimeCount, onNavigate, onHover, o
     border: 0,
     width: '100%',
     cursor: 'pointer',
-    font: 'inherit',
+    fontFamily: 'inherit',
     textAlign: 'left',
     minHeight: '36px',
   }
@@ -499,13 +501,15 @@ function Footer({ user, collapsed, userActions }: FooterProps) {
     alignItems: 'center',
     gap: 0,
     padding: 'var(--space-3) 0',
-    // border: 0 必须在 borderTop 前声明（CSS shorthand 在 longhand 之前）
-    border: 0,
+    // CHG-SN-6-RETRO-4：拆 border:0 + borderTop 冲突（之前依赖声明顺序覆盖 → React rerender 警告）
+    borderBottom: 0,
+    borderLeft: 0,
+    borderRight: 0,
     borderTop: '1px solid var(--border-subtle)',
     background: 'transparent',
     width: '100%',
     cursor: 'pointer',
-    font: 'inherit',
+    fontFamily: 'inherit',
     textAlign: 'left',
     color: 'var(--fg-default)',
     flexShrink: 0,

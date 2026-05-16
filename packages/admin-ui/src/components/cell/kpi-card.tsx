@@ -35,7 +35,7 @@ const CONTAINER_BASE_STYLE: React.CSSProperties = {
   borderRadius: 'var(--radius-md)',
   border: '1px solid var(--border-default)',
   boxSizing: 'border-box',
-  font: 'inherit',
+  fontFamily: 'inherit',
   color: 'var(--fg-default)',
   textAlign: 'left',
   width: '100%',

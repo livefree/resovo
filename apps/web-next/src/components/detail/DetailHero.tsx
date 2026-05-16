@@ -330,7 +330,9 @@ export function DetailHero({ video, episode = 1, sources = [], activeSourceId, o
                         padding: '4px 10px',
                         borderRadius: '6px',
                         fontSize: '12px',
-                        border: '1px solid',
+                        // CHG-SN-6-RETRO-4：拆 border shorthand 避免与 borderColor longhand 冲突
+                        borderWidth: '1px',
+                        borderStyle: 'solid',
                         cursor: 'pointer',
                         transition: 'background 0.15s, color 0.15s',
                         ...(isActive

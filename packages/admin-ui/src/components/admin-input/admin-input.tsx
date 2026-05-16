@@ -80,7 +80,7 @@ const INPUT_BASE: React.CSSProperties = {
   outline: 'none',
   background: 'transparent',
   color: 'var(--fg-default)',
-  font: 'inherit',
+  fontFamily: 'inherit',
   padding: 0,
 }
 

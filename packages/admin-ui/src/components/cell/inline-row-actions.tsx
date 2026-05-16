@@ -40,7 +40,7 @@ const BTN_BASE_STYLE: React.CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   background: 'var(--bg-surface)',
   color: 'var(--fg-default)',
-  font: 'inherit',
+  fontFamily: 'inherit',
   fontSize: 'var(--font-size-xxs)',
   cursor: 'pointer',
   display: 'inline-flex',

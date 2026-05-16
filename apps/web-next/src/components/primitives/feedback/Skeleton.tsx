@@ -38,7 +38,8 @@ export function Skeleton({
       style={{
         width,
         height,
-        background: 'linear-gradient(90deg, var(--skeleton-bg-base) 25%, var(--skeleton-bg-highlight) 50%, var(--skeleton-bg-base) 75%)',
+        // CHG-SN-6-RETRO-4：拆 background shorthand 避免与 backgroundSize longhand 冲突
+        backgroundImage: 'linear-gradient(90deg, var(--skeleton-bg-base) 25%, var(--skeleton-bg-highlight) 50%, var(--skeleton-bg-base) 75%)',
         backgroundSize: '200% 100%',
         animation: `skeleton-shimmer var(--skeleton-shimmer-duration) linear infinite`,
         animationDelay,

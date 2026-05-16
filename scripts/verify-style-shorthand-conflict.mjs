@@ -138,15 +138,20 @@ function extractStyleObjects(content) {
  * 返回命中清单 [{ shorthand, longhand }]
  */
 function detectConflicts(body) {
+  // CHG-SN-6-RETRO-4：剥离 // 行注释 + /* */ 块注释，避免注释字面量误命中
+  // （如 `// 拆 border:0 冲突` 不应被识别为 border shorthand 使用）
+  const stripped = body
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '')
   const hits = []
   for (const [shorthand, longhands] of Object.entries(SHORTHAND_LONGHAND_MAP)) {
     // 匹配 `  shorthand:` 或 `\n  shorthand:` 顶层（不含 fontFamily 等 longhand 误命中）
     // 用单词边界 + 后接 `:`
     const shortRe = new RegExp(`(^|[\\s,{])${shorthand}\\s*:`)
-    if (!shortRe.test(body)) continue
+    if (!shortRe.test(stripped)) continue
     for (const longhand of longhands) {
       const longRe = new RegExp(`(^|[\\s,{])${longhand}\\s*:`)
-      if (longRe.test(body)) {
+      if (longRe.test(stripped)) {
         hits.push({ shorthand, longhand })
       }
     }

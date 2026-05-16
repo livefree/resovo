@@ -65,7 +65,7 @@ const ITEM_STYLE: React.CSSProperties = {
   border: 0,
   width: '100%',
   textAlign: 'left',
-  font: 'inherit',
+  fontFamily: 'inherit',
 }
 
 const ACTIVE_ITEM_STYLE: React.CSSProperties = {
