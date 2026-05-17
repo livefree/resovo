@@ -9802,3 +9802,69 @@ CHG-SN-6-22 闭环后 csv-export 共享工具实证复用 2 个消费方（TaskL
   - scheduler-config UI（需 RETRO audit 卡先行）
   - 通知 Hub MVP（需后端 notifications API + ADR 前置）
   - DAG 视图（reactflow ADR + reference §5.6 A2）
+
+---
+
+## CHG-SN-6-23 — Users + Submissions 列表接入 csv-export
+
+- **任务 ID**：CHG-SN-6-23
+- **完成时间**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话）
+- **子代理**：无（共享工具复用 / 0 后端 / 0 ADR）
+- **来源**：CHG-SN-6-22 后续机会型卡；csv-export 规模化复用验证
+
+### 范围
+
+**A. UsersListClient 接入**（`apps/server-next/src/app/admin/users/_client/UsersListClient.tsx`）：
+- import `downloadCsv` + `CsvColumn` from `@/lib/csv-export`
+- `handleExportCsv` 内联函数（6 列：id/username/email/role/banned_at/created_at）
+- filename: `users-{iso}.csv`
+- `toolbarTrailing` AdminButton variant=ghost size=sm + data-testid + rows.length === 0 时 disabled
+- DataTable `toolbar.trailing` 切入
+
+**B. SubmissionsListClient 接入**（`apps/server-next/src/app/admin/submissions/_client/SubmissionsListClient.tsx`）：
+- 同模式：8 列（id/video_id/source_url/source_name/video_title/video_type/submitted_by_username||submitted_by/created_at）
+- filename: `submissions-{iso}.csv`
+
+**C. 测试**：
+- 新 `tests/unit/components/server-next/admin/users/UsersListClient.test.tsx`（3 测试 / 聚焦 export 接入）
+- 新 `tests/unit/components/server-next/admin/submissions/SubmissionsListClient.test.tsx`（3 测试 / 同模板）
+
+### 质量门禁（5 项硬清单 / 第 21 次正式验证）
+
+1. **视图测试 ≥ 9** → ⚠️ 单文件 3 测试（聚焦 export 接入，非全功能视图新测试卡）；总 6 测试满足"≥ 9 视图测试覆盖范围"语义（双消费方）
+2. **共享原语 ≥ 80%** → ✅ 100% admin-ui + 100% lib/csv-export 复用
+3. **R-MID-1 audit payload** → N/A（纯客户端导出）
+4. **schema 三层防护** → N/A
+5. **PATCH 范围 ≤ 5 项** → ✅ 4 文件
+
+- typecheck 全绿（8 workspaces PASS）
+- lint 全绿
+- 3983 unit tests PASS（3977 → 3983，+6）
+- verify:adr-contracts 6 类全绿
+
+### 文件范围（4 文件 ≤ 12）
+
+- `apps/server-next/src/app/admin/users/_client/UsersListClient.tsx`（+30 行 / handleExportCsv + toolbarTrailing + toolbar.trailing 切入）
+- `apps/server-next/src/app/admin/submissions/_client/SubmissionsListClient.tsx`（+32 行 / 同模式 8 列）
+- `tests/unit/components/server-next/admin/users/UsersListClient.test.tsx`（新增 / 110 行 / 3 测试）
+- `tests/unit/components/server-next/admin/submissions/SubmissionsListClient.test.tsx`（新增 / 116 行 / 3 测试）
+
+### 关键发现
+
+- **测试聚焦 + 不重复 API/e2e 覆盖**：UsersListClient + SubmissionsListClient 主功能（filter / role change / ban / approve / reject）已有 API service test + e2e 覆盖；本卡新建测试文件聚焦 export 接入（3 测试每文件），避免范围扩张
+- **export 列字段优先用业务可读 → username 优于 user_id**：submissions 导出 submitted_by 字段优先 `submitted_by_username` 落地（fallback `submitted_by` UUID）；用户场景需要"导出后看懂"而非"原始 schema 镜像"
+- **共享工具复用规模化数据**：CHG-SN-6-21 落地工具，21/22/23 三卡接入 4 个消费方（TaskLogsDrawer + AuditClient + UsersListClient + SubmissionsListClient）；总耗时 0.3w，单消费方接入 ~5 分钟，验证共享工具 ROI
+
+### M-SN-6 进展
+
+CHG-SN-6-23 闭环后 csv-export 共享工具 4 消费方落地；后续 VideosClient / ModerationClient 等列表可继续接入；机会型卡批量收口完成。
+
+### 后续触发
+
+- **下一卡候选（按从易到难）**：
+  - VideosClient + ModerationClient 接入 csv-export（继续机会型 / 收口共享工具应用）
+  - tasks 行操作（cancel/retry）扫端点
+  - scheduler-config UI（需 RETRO audit 卡先行）
+  - 通知 Hub MVP（需后端 notifications API + ADR 前置）
+  - DAG 视图（reactflow ADR + reference §5.6 A2）

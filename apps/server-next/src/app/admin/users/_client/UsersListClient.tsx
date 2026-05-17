@@ -43,6 +43,7 @@ import {
 } from '@/lib/users/api'
 import type { UserRow, UserRole } from '@/lib/users/types'
 import { buildUserColumns } from './columns'
+import { downloadCsv, type CsvColumn } from '@/lib/csv-export'
 
 // ── 常量 ──────────────────────────────────────────────────────────
 
@@ -207,6 +208,33 @@ export function UsersListClient() {
 
   const hasFilter = searchInput || roleFilter || bannedFilter
 
+  // CHG-SN-6-23：导出当前页 rows 为 CSV
+  const handleExportCsv = () => {
+    if (rows.length === 0) return
+    const columns: readonly CsvColumn<UserRow>[] = [
+      { header: 'id',         accessor: (r) => r.id },
+      { header: 'username',   accessor: (r) => r.username },
+      { header: 'email',      accessor: (r) => r.email },
+      { header: 'role',       accessor: (r) => r.role },
+      { header: 'banned_at',  accessor: (r) => r.banned_at },
+      { header: 'created_at', accessor: (r) => r.created_at },
+    ]
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    downloadCsv(rows, columns, `users-${ts}.csv`)
+  }
+
+  const toolbarTrailing = (
+    <AdminButton
+      variant="ghost"
+      size="sm"
+      onClick={handleExportCsv}
+      disabled={rows.length === 0}
+      data-testid="users-export-csv"
+    >
+      导出 CSV
+    </AdminButton>
+  )
+
   const toolbarSearch = (
     <span style={TOOLBAR_LEFT_STYLE} data-testid="users-toolbar-filters">
       <AdminInput
@@ -299,6 +327,7 @@ export function UsersListClient() {
                 enableHeaderMenu
                 toolbar={{
                   search: toolbarSearch,
+                  trailing: toolbarTrailing,
                   hideFilterChips: true,
                 }}
                 pagination={{ pageSizeOptions: [10, 20, 50] }}

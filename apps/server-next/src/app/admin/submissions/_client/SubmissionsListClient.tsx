@@ -47,6 +47,7 @@ import { listCrawlerSites } from '@/lib/crawler/api'
 import type { CrawlerSite } from '@/lib/videos/types'
 import { SubmissionRejectPopover } from './SubmissionRejectPopover'
 import { buildSubmissionColumns } from './columns'
+import { downloadCsv, type CsvColumn } from '@/lib/csv-export'
 
 // ── 常量 ──────────────────────────────────────────────────────────
 
@@ -285,6 +286,35 @@ export function SubmissionsListClient() {
     [sites],
   )
 
+  // CHG-SN-6-23：导出当前页 rows 为 CSV
+  const handleExportCsv = () => {
+    if (rows.length === 0) return
+    const columns: readonly CsvColumn<SubmissionRow>[] = [
+      { header: 'id',           accessor: (r) => r.id },
+      { header: 'video_id',     accessor: (r) => r.video_id },
+      { header: 'source_url',   accessor: (r) => r.source_url },
+      { header: 'source_name',  accessor: (r) => r.source_name },
+      { header: 'video_title',  accessor: (r) => r.video_title ?? null },
+      { header: 'video_type',   accessor: (r) => r.video_type ?? null },
+      { header: 'submitted_by', accessor: (r) => r.submitted_by_username ?? r.submitted_by },
+      { header: 'created_at',   accessor: (r) => r.created_at },
+    ]
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    downloadCsv(rows, columns, `submissions-${ts}.csv`)
+  }
+
+  const toolbarTrailing = (
+    <AdminButton
+      variant="ghost"
+      size="sm"
+      onClick={handleExportCsv}
+      disabled={rows.length === 0}
+      data-testid="submissions-export-csv"
+    >
+      导出 CSV
+    </AdminButton>
+  )
+
   const toolbarSearch = (
     <span style={TOOLBAR_LEFT_STYLE} data-testid="submission-toolbar-filters">
       <AdminSelect
@@ -389,6 +419,7 @@ export function SubmissionsListClient() {
                 enableHeaderMenu
                 toolbar={{
                   search: toolbarSearch,
+                  trailing: toolbarTrailing,
                   hideFilterChips: true,
                 }}
                 bulkActions={bulkActionsNode}
