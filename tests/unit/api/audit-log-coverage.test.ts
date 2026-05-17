@@ -60,6 +60,8 @@ const REQUIRED_ACTION_TYPES = [
   'crawler_run.cancel',         // POST /admin/crawler/runs/:id/cancel
   'crawler_run.pause',          // POST /admin/crawler/runs/:id/pause
   'crawler_run.resume',         // POST /admin/crawler/runs/:id/resume
+  // CHG-SN-6-20-A：全局采集冻结开关 audit 补齐（R-MID-1 系统化第 10 次）
+  'crawler.freeze',             // POST /admin/crawler/freeze
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -111,6 +113,8 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'crawler_run.cancel',
   'crawler_run.pause',
   'crawler_run.resume',
+  // CHG-SN-6-20-A：R-MID-1 第 10 次系统化（全局采集冻结开关）
+  'crawler.freeze',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

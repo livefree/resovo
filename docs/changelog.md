@@ -9486,3 +9486,99 @@ CHG-SN-6-19 闭环后 TaskLogsDrawer 体验完整：详情 + 日志（含过滤 
   - tasks 行操作（cancel/retry）扫端点 + 可能 ADR 前置
   - 通知 Hub MVP（需后端 notifications API + ADR 前置）
   - DAG 视图（reactflow ADR + reference §5.6 A2）
+
+---
+
+## CHG-SN-6-20-A — freeze 端点 audit 补齐（R-MID-1 第 10 次系统化）
+
+- **任务 ID**：CHG-SN-6-20-A
+- **完成时间**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话）
+- **子代理**：无（与 CHG-SN-6-14/16-A 同框架 / 沿用范式）
+- **来源**：CHG-SN-6-19 后续；CHG-SN-6-20 freeze 控制 UI 前置卡（先 audit 后 UI 双子卡）
+
+### 范围
+
+**A. 类型层 union 扩展**（`packages/types/src/admin-moderation.types.ts`）：
+- 新增 `'crawler.freeze'` union 分支（注释绑定 POST /admin/crawler/freeze）
+
+**B. AuditLogService ACTION_TYPES 常量同步**（`apps/api/src/services/AuditLogService.ts`）：
+- ACTION_TYPES 数组追加 `'crawler.freeze'`
+
+**C. POST /admin/crawler/freeze auditSvc.write**（`apps/api/src/routes/admin/crawler.ts`）：
+- 端点内 setSetting 前读取 beforeFreeze；setSetting 后读取 after（refresh + orphanTaskCount + schedulerEnabled）
+- auditSvc.write payload：
+  - actionType: 'crawler.freeze'
+  - targetKind: 'system'（052 CHECK 内 / 运维域语义）
+  - targetId: 'crawler_global_freeze'（setting key 字面量）
+  - beforeJsonb: `{ freezeEnabled: bool }`
+  - afterJsonb: `{ freezeEnabled, schedulerEnabled, orphanTaskCount }`
+
+**D. R-MID-1 payload 内容断言**（`tests/unit/api/crawler-freeze-audit.test.ts` 新增 4 测试）：
+- enabled=true：before=false → after=true 完整 payload 断言
+- enabled=false：before=true → after=false 切换
+- 422 body 校验失败 → 不写 audit 守卫
+- orphanTaskCount > 0 → afterJsonb 含正确计数
+
+**E. 4 真源同步**：
+- audit-log-coverage.test.ts：REQUIRED_ACTION_TYPES 扩 1 + PAYLOAD_ASSERTION_REQUIRED 扩 1
+- audit-log-service-enums-set-equal.test.ts：EXPECTED_ACTION_TYPES 扩 1
+
+### 质量门禁（5 项硬清单 / 第 17 次正式验证）
+
+1. **视图测试 ≥ 9** → N/A（route-level audit 补齐 / 非视图卡）
+2. **共享原语 ≥ 80%** → N/A
+3. **R-MID-1 audit payload** → ✅ **新 action_type PAYLOAD_REQUIRED（31 → 32 项 strict）**
+4. **schema 三层防护** → ✅ 052 migration CHECK 已含 'system' target_kind + 类型 union + service 常量 + 4 test
+5. **PATCH 范围 ≤ 5 项** → ⚠️ 6 文件，沿用 CHG-SN-6-16-A 同框架（R-MID-1 audit 补齐固定 4 真源 + 1 路由 + 1 新测试 = 6 文件无法压缩，与 16-A 范式一致）
+
+- typecheck 全绿（8 workspaces PASS）
+- lint 全绿
+- 3956 unit tests PASS（3950 → 3956，+6：4 freeze-audit + 2 coverage REQUIRED/PAYLOAD it.each 自动扩展）
+- audit-log-coverage REQUIRED **32 项全 PASS**（it.each 强制守卫）
+- verify:adr-contracts 6 类全绿（adr-d-numbers 32 条 / verify:endpoint-adr 148+ 路由）
+
+### R-MID-1 系统化进展（第 1→10 次）
+
+| 次 | 卡 | 范围 | strict 总数 |
+|---|---|---|---|
+| 1-5 | M-SN-4 多卡 | ADR-104 + 多视图 service test | 9 |
+| 6 | CHG-SN-5-CHECKLIST-AUDIT-2 P0-1 | 代码守卫落地 | 9 |
+| 6.5 | CHG-SN-6-RETRO-3-A | system v1 4 端点 | 13 |
+| 7 | CHG-SN-6-10 | legacy 11 项 EXEMPT 清零 | 24 |
+| 8 | CHG-SN-6-14 | CrawlerSite v1 4 端点 | 28 |
+| 9 | CHG-SN-6-16-A | CrawlerRun 3 行操作 | 31 |
+| **10** | **CHG-SN-6-20-A（本卡）** | **crawler.freeze 全局开关** | **32** |
+
+### 文件范围（6 文件）
+
+- `packages/types/src/admin-moderation.types.ts`（union 扩 1）
+- `apps/api/src/services/AuditLogService.ts`（ACTION_TYPES 同步）
+- `apps/api/src/routes/admin/crawler.ts`（1 端点 auditSvc.write）
+- `tests/unit/api/audit-log-coverage.test.ts`（REQUIRED + PAYLOAD_ASSERTION_REQUIRED 扩 1）
+- `tests/unit/api/audit-log-service-enums-set-equal.test.ts`（EXPECTED 扩 1）
+- `tests/unit/api/crawler-freeze-audit.test.ts`（新增 / 4 测试）
+
+### 关键发现
+
+- **target_id='crawler_global_freeze' 用 setting key 字面量**：与 16-A 的 targetId=runId UUID 不同，本端点是 setting key 命名空间内的 boolean 开关，没有 UUID 对象；用 setting key 作 target_id 更具语义（"哪条 setting 被改"）；052 CHECK 仅约束 target_kind 不约束 target_id 长度，安全
+- **before/after 读取顺序很关键**：必须在 setSetting 前读 before（取旧值），setSetting 后读 after（取新值 + 副作用 orphanTaskCount）；颠倒会导致 before=after
+- **systemSettings.setSetting 参数顺序**：第一个参数是 db pool（mock 中是 `{}`），第二个是 key，第三个是 value 字符串 'true'/'false'；mock 测试中需匹配 `expect.objectContaining` 或精确 `{}, 'crawler_global_freeze', 'true'`
+- **PATCH 6 文件沿用框架**：R-MID-1 协议固定 4 真源 + 1 端点 + 1 新测试 = 6 文件，与 16-A/14 同范式；CLAUDE.md 5 项硬清单 5 软上限本属 advisory，audit 补齐卡为唯一豁免框架
+- **mock 链 5 层依赖**：crawler.ts import 链含 config/redis/es/queue + systemSettings + crawlerTasks + crawlerRuns + CrawlerRunService + auditLog；本卡只触 systemSettings/crawlerTasks（用于 orphanTaskCount）+ auditLog，但全链 mock 仍需
+
+### M-SN-6 进展
+
+CHG-SN-6-20-A 闭环后 R-MID-1 系统化推进到第 10 次（32 PAYLOAD_REQUIRED strict）。
+crawler 域 v1 写端点 audit 覆盖：CrawlerSite 4 + CrawlerRun 3 + crawler.freeze 1 = 8 端点全覆盖。
+剩余无 audit 写端点：POST /admin/crawler/tasks（手动触发采集）+ POST /admin/crawler/runs（统一触发入口）+ POST /admin/crawler/scheduler-config（调度配置）—— 后续可继续 RETRO 卡补齐。
+
+### 后续触发
+
+- **CHG-SN-6-20-B**（独立卡）：CrawlerClient freeze UI 控制区块 + lib/crawler/api setCrawlerFreeze + 测试
+- **下一卡候选（按从易到难）**：
+  - CHG-SN-6-20-B（freeze UI）
+  - 日志导出 CSV
+  - tasks 行操作扫端点
+  - 通知 Hub MVP（ADR 前置）
+  - DAG 视图（ADR 前置）

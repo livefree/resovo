@@ -355,10 +355,28 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
       return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
     }
 
+    // CHG-SN-6-20-A：审计 — crawler.freeze（before 取当前状态）
+    const beforeFreeze = await systemSettingsQueries.getSetting(db, 'crawler_global_freeze')
+
     await systemSettingsQueries.setSetting(db, 'crawler_global_freeze', parsed.data.enabled ? 'true' : 'false')
     const freeze = await systemSettingsQueries.getSetting(db, 'crawler_global_freeze')
     const orphanTaskCount = await countOrphanActiveTasks(db)
     const schedulerEnabled = process.env.CRAWLER_SCHEDULER_ENABLED === 'true'
+
+    // CHG-SN-6-20-A：审计写入（targetKind='system' 复用 052 CHECK 内值，targetId 用 setting key 字面量）
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'crawler.freeze',
+      targetKind: 'system',
+      targetId: 'crawler_global_freeze',
+      beforeJsonb: { freezeEnabled: beforeFreeze === 'true' },
+      afterJsonb: {
+        freezeEnabled: freeze === 'true',
+        schedulerEnabled,
+        orphanTaskCount,
+      },
+      requestId: request.id,
+    })
 
     return reply.send({
       data: {

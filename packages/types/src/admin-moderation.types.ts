@@ -147,6 +147,9 @@ export type AdminAuditActionType =
   | 'crawler_run.pause'          // POST /admin/crawler/runs/:id/pause
   | 'crawler_run.resume'         // POST /admin/crawler/runs/:id/resume
 
+  // CHG-SN-6-20-A：全局采集冻结开关 audit 补齐（R-MID-1 系统化第 10 次）
+  | 'crawler.freeze'             // POST /admin/crawler/freeze
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'
