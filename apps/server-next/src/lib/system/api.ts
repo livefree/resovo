@@ -95,3 +95,51 @@ export async function saveSystemConfig(input: {
   const result = await apiClient.post<{ data: SystemConfigSaveResult }>('/admin/system/config', input)
   return result.data
 }
+
+// ── Migration（数据导出 / 导入；CHG-SN-6-08） ───────────────────
+
+export interface ImportSourcesResult {
+  readonly imported: number
+  readonly skipped: number
+  readonly errors: ReadonlyArray<{ readonly index: number; readonly shortId?: string; readonly error: string }>
+}
+
+/**
+ * 触发浏览器下载 sources JSON 文件（GET /admin/export/sources）
+ *
+ * 策略：fetch 带 Bearer token 拿响应 → blob URL → `<a download>` 触发；
+ * 不能直接 `window.location =` 端点因 Authorization header 无法注入
+ */
+export async function exportSourcesDownload(): Promise<void> {
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/v1'
+  const token = (await import('@/stores/authStore')).useAuthStore.getState().accessToken
+  const response = await fetch(`${baseUrl}/admin/export/sources`, {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
+  })
+  if (!response.ok) {
+    throw new Error(`导出失败 (${response.status})`)
+  }
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = response.headers.get('Content-Disposition')?.match(/filename=([^;]+)/)?.[1]?.replace(/"/g, '') ?? `sources-${new Date().toISOString().slice(0, 10)}.json`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * 上传 sources JSON 文件导入（POST /admin/import/sources，multipart）
+ *
+ * RETRO-3-A audit_log system.sources_import 已写入位点（route 层 auditSvc.write）
+ */
+export async function importSourcesUpload(file: File): Promise<ImportSourcesResult> {
+  const fd = new FormData()
+  fd.append('file', file)
+  const result = await apiClient.postMultipart<{ data: ImportSourcesResult }>('/admin/import/sources', fd)
+  return result.data
+}

@@ -8486,3 +8486,79 @@ CONDITIONAL = 扩展平滑增量不破签名，非当前缺陷。整体 **PASS**
   - R-MID-1 legacy 11 项 EXEMPT 补齐
   - analytics + recharts ADR / crawler + DAG / 通知 Hub / 大数据原语
 - **AdminCheckbox / AdminTextarea 原语沉淀候选**：≥ 5 处消费方场景（settings 5 + 4 / 表单页通用）满足沉淀阈值
+
+---
+
+## CHG-SN-6-08 — MigrationTab + apiClient multipart 扩展（SettingsContainer 5/5 闭环 / M-SN-6 第 7 张主体卡）
+- **任务 ID**：CHG-SN-6-08
+- **日期**：2026-05-16
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：无（multipart 扩展是 apiClient 既有 request 函数的并列分支；audit + 端点已就位）
+- **来源**：CHG-SN-6-07 完成后按"从易到难"原则推；SettingsContainer 5/5 闭环的最后一片
+- **范围**：4 文件（apiClient + lib/system/api + MigrationTab + 测试）≤ 5 软上限
+
+### 实施内容
+
+**A. apiClient multipart 扩展**（`apps/server-next/src/lib/api-client.ts`）：
+- 新增 `requestMultipart<T>()` 内部函数：fetch + FormData body（不强制 Content-Type，让浏览器自动设置 boundary）+ 复用 BASE_URL + Bearer token + 401 refresh 流程
+- 新增 `apiClient.postMultipart<T>(path, formData)` 公开方法（与 post 并列）
+- 零影响：现有 GET/POST/PUT/PATCH/DELETE 路径不变
+
+**B. lib/system/api.ts 扩展**（追加 2 函数）：
+- `exportSourcesDownload(): Promise<void>` — fetch GET /admin/export/sources 带 Bearer token → blob → `<a download>` 触发；不能直接 `window.location =` 端点因 Authorization header 无法注入
+- `importSourcesUpload(file: File): Promise<ImportSourcesResult>` — FormData append('file', file) → apiClient.postMultipart → 返回 `{ imported, skipped, errors }`
+
+**C. MigrationTab 实施**（placeholder → 真实视图）：
+- 双 section card：导出（单按钮）+ 导入（隐藏 input + 显式按钮）
+- 错误结果块：成功 / 跳过 / 失败计数 + 前 10 条错误详情 + "还有 X 条"省略提示
+- 重复上传支持：finally block 清 input.value（同一文件可再次 change）
+- describeApiError 错误码差异化（VALIDATION_ERROR / 网络异常兜底）
+- toast 反馈：导出 success / 导入 success / 导入有错误 warn / 网络 danger
+
+**D. 12 单测**：导出成功 / 失败 / 文件选择按钮 / 上传成功+结果展示 / 上传含错误 warn / VALIDATION_ERROR / 网络兜底 / 错误 > 10 条省略 / input.value 清空 / 无文件选择不调 API / data-testid 钩子
+
+### 质量门禁（5 项硬清单 / 第 7 次正式验证）
+
+1. **视图测试 ≥ 9** → ✅ 12
+2. **共享原语 ≥ 80%** → ✅ ~90%（AdminCard ×2 / AdminButton ×2 / useToast / ApiClientError；原生 input file 1 处无 admin-ui 等价原语）
+3. **R-MID-1 audit payload** → ✅ POST import sources audit_log 已通过 RETRO-3-A 写入（system.sources_import / route auditSvc.write）
+4. **schema 三层防护** → ✅ ImportSourcesResult 形状与后端 MigrationService.importSources 严格对齐
+5. **PATCH 范围 ≤ 5 项** → ✅ 4 文件
+
+- typecheck + lint 全绿（含一处 ToastLevel 'warning' → 'warn' typo 修正）
+- **3795 unit + 40 integration PASS**（baseline 3783 → 3795 +12）
+- verify:adr-contracts 6 类全绿（含 FAIL fast verify-style-shorthand-conflict）
+
+### 文件范围（4 文件 ≤ 12）
+
+- `apps/server-next/src/lib/api-client.ts`（追加 requestMultipart + apiClient.postMultipart）
+- `apps/server-next/src/lib/system/api.ts`（追加 exportSourcesDownload + importSourcesUpload + ImportSourcesResult 类型）
+- `apps/server-next/src/app/admin/system/settings/_tabs/MigrationTab.tsx`（placeholder → 真实视图）
+- `tests/unit/components/server-next/admin/system/MigrationTab.test.tsx`（新增 / 12 测试）
+
+### M-SN-6 SettingsContainer 5/5 全闭环
+
+| Tab | 实施卡 | commit |
+|---|---|---|
+| settings（站点设置） | CHG-SN-6-07 | 414df647 |
+| cache（缓存管理） | CHG-SN-6-04 | 136acead |
+| monitor（系统监控） | CHG-SN-6-03 | a4319c9e |
+| config（高级配置） | CHG-SN-6-05 | b8fd5d6f |
+| **migration（数据迁移）** | **CHG-SN-6-08（本卡）** | **待落地** |
+
+**SettingsContainer 全 5 Tab 实施完成（100%）**；audit_log 端到端 trace 完整（4 写端点 RETRO-3-A 已补 audit）。
+
+### 关键发现
+
+- **apiClient multipart 复用 401 refresh 流程**：requestMultipart 通过 tryRefreshToken + 单层 retry 标志（_isRetry）保证 token 过期不丢上传；与 request<T> 同模式
+- **`window.location =` 不能用于鉴权端点**：浏览器导航不带 Authorization header；改 fetch + blob + `<a download>` 实现等价 UX + 鉴权
+- **重复上传 input.value 清空机制**：finally block 主动 `input.value = ''`（JSDOM 不允许设置非空，但允许设空字符串 — 浏览器同款行为）
+- **ToastLevel union 'warn' 不是 'warning'**：typecheck 一次捕获 typo，避免运行时 toast 不显示
+
+### 后续触发
+
+- **M-SN-6 SettingsContainer 完整闭环**（5/5 Tab）+ SettingsContainer 总 Tab 测试覆盖 ≥ 45（settings 12 + cache 12 + monitor 12 + config 13 + migration 12 = 61）
+- **下一卡候选**（按从易到难）：
+  - AdminCheckbox + AdminTextarea 原语沉淀（≥ 5 处消费方）
+  - R-MID-1 legacy 11 项 EXEMPT 补齐
+  - analytics + recharts ADR / crawler + DAG / 通知 Hub / 大数据原语

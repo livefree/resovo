@@ -141,12 +141,59 @@ async function tryRefreshToken(): Promise<boolean> {
   return refreshPromise
 }
 
+// ── multipart upload helper（CHG-SN-6-08）─────────────────────────
+//
+// 原因：JSON `request<T>` 路径强制 Content-Type: application/json + JSON.stringify body；
+// 文件上传需 FormData + 浏览器自动设置 Content-Type 带 boundary。
+// 复用 BASE_URL + 鉴权 + 401 refresh 流程，仅替换 body 形态。
+async function requestMultipart<T>(
+  path: string,
+  formData: FormData,
+  options: { _isRetry?: boolean } = {},
+): Promise<T> {
+  const { _isRetry = false } = options
+  const reqHeaders: Record<string, string> = {}
+  const token = useAuthStore.getState().accessToken
+  if (token) reqHeaders['Authorization'] = `Bearer ${token}`
+
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: reqHeaders,
+    body: formData,
+    credentials: 'include',
+  })
+
+  if (response.status === 401 && !_isRetry) {
+    const refreshed = await tryRefreshToken()
+    if (refreshed) return requestMultipart<T>(path, formData, { _isRetry: true })
+    handleUnauthorized()
+    throw new ApiClientError('UNAUTHORIZED', '登录已过期，请重新登录', 401)
+  }
+
+  if (response.status === 204) return undefined as T
+
+  const data = await response.json()
+  if (!response.ok) {
+    const err = data as ApiError
+    if (response.status === 401) handleUnauthorized()
+    throw new ApiClientError(
+      err.error?.code ?? 'INTERNAL_ERROR',
+      err.error?.message ?? '上传失败',
+      response.status,
+    )
+  }
+  return data as T
+}
+
 export const apiClient = {
   get<T>(path: string, options?: Omit<RequestOptions, 'method' | 'body'>): Promise<T> {
     return request<T>(path, { ...options, method: 'GET' })
   },
   post<T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'method' | 'body'>): Promise<T> {
     return request<T>(path, { ...options, method: 'POST', body })
+  },
+  postMultipart<T>(path: string, formData: FormData): Promise<T> {
+    return requestMultipart<T>(path, formData)
   },
   put<T>(path: string, body?: unknown, options?: Omit<RequestOptions, 'method' | 'body'>): Promise<T> {
     return request<T>(path, { ...options, method: 'PUT', body })
