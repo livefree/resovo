@@ -8,11 +8,12 @@
  *   GET /admin/crawler/tasks/:id/logs   — 日志列表
  */
 
-import React, { useEffect, useState, type CSSProperties } from 'react'
+import React, { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   Drawer,
   AdminCard,
   AdminButton,
+  AdminInput,
   CodeText,
   EmptyState,
   ErrorState,
@@ -98,6 +99,48 @@ export function TaskLogsDrawer({ open, taskId, onClose }: TaskLogsDrawerProps) {
   const [logsError, setLogsError] = useState<Error | null>(null)
 
   const [retryKey, setRetryKey] = useState(0)
+
+  // ── 客户端 filter（CHG-SN-6-19）─────────────────────────────────
+  // null = 显示该 level；从集合移除 = 隐藏。默认全部显示。
+  const [hiddenLevels, setHiddenLevels] = useState<ReadonlySet<CrawlerTaskLogLevel>>(() => new Set())
+  const [stageQuery, setStageQuery] = useState('')
+
+  const levelCounts = useMemo(() => {
+    const counts: Record<CrawlerTaskLogLevel, number> = { info: 0, warn: 0, error: 0 }
+    for (const log of logs) counts[log.level] += 1
+    return counts
+  }, [logs])
+
+  const filteredLogs = useMemo(() => {
+    const q = stageQuery.trim().toLowerCase()
+    return logs.filter((log) => {
+      if (hiddenLevels.has(log.level)) return false
+      if (q && !log.stage.toLowerCase().includes(q) && !log.message.toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [logs, hiddenLevels, stageQuery])
+
+  const toggleLevel = (level: CrawlerTaskLogLevel) => {
+    setHiddenLevels((prev) => {
+      const next = new Set(prev)
+      if (next.has(level)) next.delete(level)
+      else next.add(level)
+      return next
+    })
+  }
+
+  const clearFilters = () => {
+    setHiddenLevels(new Set())
+    setStageQuery('')
+  }
+
+  // 当 taskId 切换时，重置过滤器，避免跨任务残留状态
+  useEffect(() => {
+    setHiddenLevels(new Set())
+    setStageQuery('')
+  }, [taskId])
+
+  const hasActiveFilter = hiddenLevels.size > 0 || stageQuery.trim().length > 0
 
   useEffect(() => {
     if (!open || !taskId) return
@@ -265,7 +308,16 @@ export function TaskLogsDrawer({ open, taskId, onClose }: TaskLogsDrawerProps) {
         <AdminCard
           surface="elevated"
           padding="md"
-          header={{ title: `日志（${logs.length}）` }}
+          header={{
+            title: hasActiveFilter
+              ? `日志（${filteredLogs.length} / ${logs.length}）`
+              : `日志（${logs.length}）`,
+            actions: hasActiveFilter ? (
+              <AdminButton variant="ghost" size="sm" onClick={clearFilters} data-testid="task-logs-filter-clear">
+                清空筛选
+              </AdminButton>
+            ) : null,
+          }}
           data-testid="task-logs-card"
         >
           {logsLoading && logs.length === 0 ? (
@@ -275,8 +327,63 @@ export function TaskLogsDrawer({ open, taskId, onClose }: TaskLogsDrawerProps) {
           ) : logs.length === 0 ? (
             <EmptyState title="暂无日志" description="该任务未产生日志记录" />
           ) : (
-            <div style={LOGS_LIST_STYLE} role="list" data-testid="task-logs-list">
-              {logs.map((log) => {
+            <>
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                  alignItems: 'center',
+                  marginBottom: '10px',
+                }}
+                data-testid="task-logs-filters"
+              >
+                {(['info', 'warn', 'error'] as const).map((level) => {
+                  const cfg = LOG_LEVEL_BADGE[level]
+                  const hidden = hiddenLevels.has(level)
+                  return (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => toggleLevel(level)}
+                      data-testid={`task-logs-level-${level}`}
+                      data-active={!hidden}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '2px 8px',
+                        borderRadius: 'var(--radius-pill, 12px)',
+                        fontSize: 'var(--font-size-xs)',
+                        background: hidden ? 'var(--bg-surface-sunken)' : cfg.bg,
+                        color: hidden ? 'var(--fg-muted)' : cfg.color,
+                        border: `1px solid ${hidden ? 'var(--border-subtle)' : cfg.border}`,
+                        cursor: 'pointer',
+                        opacity: hidden ? 0.6 : 1,
+                      }}
+                    >
+                      <span>{level}</span>
+                      <span style={{ fontWeight: 600 }}>{levelCounts[level]}</span>
+                    </button>
+                  )
+                })}
+                <AdminInput
+                  value={stageQuery}
+                  onChange={(e) => setStageQuery(e.target.value)}
+                  placeholder="搜索 stage / message"
+                  size="sm"
+                  data-testid="task-logs-stage-search"
+                  aria-label="搜索 stage 或 message"
+                />
+              </div>
+              {filteredLogs.length === 0 ? (
+                <EmptyState
+                  title="无匹配日志"
+                  description={`当前过滤条件无匹配，共 ${logs.length} 条日志`}
+                />
+              ) : (
+                <div style={LOGS_LIST_STYLE} role="list" data-testid="task-logs-list">
+                  {filteredLogs.map((log) => {
                 const cfg = LOG_LEVEL_BADGE[log.level]
                 return (
                   <div
@@ -342,7 +449,9 @@ export function TaskLogsDrawer({ open, taskId, onClose }: TaskLogsDrawerProps) {
                   </div>
                 )
               })}
-            </div>
+                </div>
+              )}
+            </>
           )}
         </AdminCard>
       </div>

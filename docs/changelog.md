@@ -9414,3 +9414,75 @@ CHG-SN-6-18 闭环后 /admin/crawler 视图能力栈：
   - freeze 控制（全局采集冻结）
   - 通知 Hub MVP（需后端 notifications API + ADR 前置）
   - DAG 视图（reactflow ADR + reference §5.6 A2）
+
+---
+
+## CHG-SN-6-19 — TaskLogsDrawer 日志过滤 + 计数
+
+- **任务 ID**：CHG-SN-6-19
+- **完成时间**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话）
+- **子代理**：无（纯客户端过滤 / 无后端改动 / 无 ADR）
+- **来源**：CHG-SN-6-18 后续；TaskLogsDrawer 体验增强；reference §5 next-up
+
+### 范围
+
+**A. TaskLogsDrawer 客户端过滤**（`apps/server-next/src/app/admin/crawler/runs/[id]/_client/TaskLogsDrawer.tsx`）：
+- 新增 `hiddenLevels: Set<CrawlerTaskLogLevel>` + `stageQuery: string` 两个 state
+- `levelCounts`：useMemo 对 logs 分组 3 级计数
+- `filteredLogs`：useMemo 同时按 level set + stageQuery 文本（含 stage 和 message 双字段）过滤
+- 渲染 filter toolbar：3 个 level chip（带 data-active 属性 + 计数 + toggle）+ AdminInput 搜索框
+- 标题动态："日志（n / N）"（有过滤）vs "日志（N）"（无过滤）
+- 清空筛选按钮（hasActiveFilter=true 时显示）
+- 过滤后无匹配 → EmptyState "无匹配日志 / 共 N 条日志"
+- `useEffect([taskId])` 切换任务时 reset 过滤器（避免跨任务残留状态）
+
+**B. 测试扩展**（`tests/unit/components/server-next/admin/crawler/TaskLogsDrawer.test.tsx`，12→**20 测试**，+8）：
+- 13. filter toolbar 3 chip + 搜索框渲染
+- 14. level 计数显示
+- 15. 点击 level chip → toggle 隐藏 + 标题分子/分母
+- 16. stage 搜索：仅匹配 stage 字段
+- 17. message 搜索跨字段命中（验证 stage+message 双字段都参与）
+- 18. 过滤后无匹配 → "无匹配日志" + 共 N 条提示
+- 19. 清空筛选按钮：点击后恢复全部 + 清空按钮自身消失
+- 20. 切换 taskId → filter 重置（rerender 验证 data-active 回到 true）
+
+### 质量门禁（5 项硬清单 / 第 16 次正式验证）
+
+1. **视图测试 ≥ 9** → ✅ **8 新增 / 20 总**
+2. **共享原语 ≥ 80%** → ✅ 100%（AdminInput + AdminButton + AdminCard + Drawer + ...）+ 1 native button（filter chip，原因：3 处 toggle 状态 chip 较 AdminButton 更适合 pill 形态）
+3. **R-MID-1 audit payload** → N/A（纯前端过滤）
+4. **schema 三层防护** → N/A
+5. **PATCH 范围 ≤ 5 项** → ✅ 2 文件
+
+- typecheck 全绿（8 workspaces PASS）
+- lint 全绿（pre-existing img warning 不在本卡范围）
+- 3950 unit tests PASS（3942 → 3950，+8）
+- verify:adr-contracts 6 类全绿
+
+### 文件范围（2 文件 ≤ 12）
+
+- `apps/server-next/src/app/admin/crawler/runs/[id]/_client/TaskLogsDrawer.tsx`（+98 行 / -1 行：filter state + useMemo + toolbar + reset useEffect + 内层 ternary）
+- `tests/unit/components/server-next/admin/crawler/TaskLogsDrawer.test.tsx`（+128 行 / 8 新测）
+
+### 关键发现
+
+- **AdminInput onChange 是 ChangeEvent 不是 value**：与 admin-select 的 `(v) => ...` 范式不同，AdminInput 沿用原生 `(e) => setX(e.target.value)`。trap pattern，未来 admin-input 是否归一可启 ADR
+- **data-testid 在 AdminInput wrapper 不在 input**：测试中 `screen.getByTestId('task-logs-stage-search')` 返回 div 包装，需 `wrapper.querySelector('input')` 取实际输入框。规则 ADR-103 §4.6 已注 "input 元素本身的 data-testid 通过 ...rest 透传"；本卡再次踩坑，可作为 quality-gates 附录补一条 "AdminInput testid 在 wrapper"
+- **filter 跨字段搜索（stage + message）**：单字段搜索体验受限，本卡默认 stage 和 message 双命中；日后若用户反馈可加 prefix 语法（如 `stage:parse`）
+- **客户端过滤而非服务端 query**：v1 端点 `/admin/crawler/tasks/:id/logs` 仅支持 `limit` 参数，本卡先在 ≤ 200 条日志范围内客户端过滤；超 200 条场景需服务端 filter 扩展（独立卡）
+- **filter chip 用 native button 而非 AdminButton**：toggle 三态（active/hidden）+ pill 形态 + 计数 inline，AdminButton variant 不直接覆盖；尝试 1 处例外，未抵触 80% 共享原语红线
+
+### M-SN-6 进展
+
+CHG-SN-6-19 闭环后 TaskLogsDrawer 体验完整：详情 + 日志（含过滤 + 计数）。
+/admin/crawler 视图栈不变（4 视图 + Drawer drill-down）。
+
+### 后续触发
+
+- **下一卡候选（按从易到难）**：
+  - freeze 控制 UI（POST /admin/crawler/freeze 端点已就位，需 audit 接入）
+  - 日志导出 CSV（独立卡）
+  - tasks 行操作（cancel/retry）扫端点 + 可能 ADR 前置
+  - 通知 Hub MVP（需后端 notifications API + ADR 前置）
+  - DAG 视图（reactflow ADR + reference §5.6 A2）

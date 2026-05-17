@@ -230,7 +230,127 @@ describe('TaskLogsDrawer', () => {
     })
   })
 
-  it('12. 刷新按钮 → 重新调 2 个 API', async () => {
+  // ── 客户端过滤（CHG-SN-6-19）─────────────────────────────────
+
+  it('13. filter toolbar：3 个 level chip + stage 搜索框', async () => {
+    getCrawlerTaskDetailMock.mockResolvedValueOnce(DETAIL_SUCCESS_NO_CTX)
+    listCrawlerTaskLogsMock.mockResolvedValueOnce([LOG_INFO, LOG_WARN, LOG_ERROR])
+    render(<TaskLogsDrawer open={true} taskId={TASK_ID} onClose={() => {}} />)
+    await waitFor(() => {
+      expect(screen.getByTestId('task-logs-filters')).not.toBeNull()
+      expect(screen.getByTestId('task-logs-level-info')).not.toBeNull()
+      expect(screen.getByTestId('task-logs-level-warn')).not.toBeNull()
+      expect(screen.getByTestId('task-logs-level-error')).not.toBeNull()
+      expect(screen.getByTestId('task-logs-stage-search')).not.toBeNull()
+    })
+  })
+
+  it('14. level chip 计数：3 级各显示 1', async () => {
+    getCrawlerTaskDetailMock.mockResolvedValueOnce(DETAIL_SUCCESS_NO_CTX)
+    listCrawlerTaskLogsMock.mockResolvedValueOnce([LOG_INFO, LOG_WARN, LOG_ERROR])
+    render(<TaskLogsDrawer open={true} taskId={TASK_ID} onClose={() => {}} />)
+    await waitFor(() => {
+      const info = screen.getByTestId('task-logs-level-info')
+      const warn = screen.getByTestId('task-logs-level-warn')
+      const error = screen.getByTestId('task-logs-level-error')
+      expect(info.textContent).toContain('1')
+      expect(warn.textContent).toContain('1')
+      expect(error.textContent).toContain('1')
+    })
+  })
+
+  it('15. 点击 level chip → toggle 隐藏对应级别 + 标题显示分子/分母', async () => {
+    getCrawlerTaskDetailMock.mockResolvedValueOnce(DETAIL_SUCCESS_NO_CTX)
+    listCrawlerTaskLogsMock.mockResolvedValueOnce([LOG_INFO, LOG_WARN, LOG_ERROR])
+    render(<TaskLogsDrawer open={true} taskId={TASK_ID} onClose={() => {}} />)
+    const infoChip = await waitFor(() => screen.getByTestId('task-logs-level-info'))
+    fireEvent.click(infoChip)
+    await waitFor(() => {
+      // info hidden
+      expect(infoChip.getAttribute('data-active')).toBe('false')
+      // info 行消失
+      expect(document.querySelector('[data-log-level="info"]')).toBeNull()
+      // 标题显示 2 / 3
+      expect(screen.getByText('日志（2 / 3）')).not.toBeNull()
+    })
+  })
+
+  it('16. stage 搜索 → 仅显示匹配 stage 的日志', async () => {
+    getCrawlerTaskDetailMock.mockResolvedValueOnce(DETAIL_SUCCESS_NO_CTX)
+    listCrawlerTaskLogsMock.mockResolvedValueOnce([LOG_INFO, LOG_WARN, LOG_ERROR])
+    render(<TaskLogsDrawer open={true} taskId={TASK_ID} onClose={() => {}} />)
+    const wrapper = await waitFor(() => screen.getByTestId('task-logs-stage-search'))
+    const search = wrapper.querySelector('input') as HTMLInputElement
+    fireEvent.change(search, { target: { value: 'parse' } })
+    await waitFor(() => {
+      // LOG_ERROR stage='parse'
+      expect(document.querySelector('[data-log-level="error"]')).not.toBeNull()
+      expect(document.querySelector('[data-log-level="info"]')).toBeNull()
+      expect(document.querySelector('[data-log-level="warn"]')).toBeNull()
+      expect(screen.getByText('日志（1 / 3）')).not.toBeNull()
+    })
+  })
+
+  it('17. message 搜索：跨字段命中', async () => {
+    getCrawlerTaskDetailMock.mockResolvedValueOnce(DETAIL_SUCCESS_NO_CTX)
+    listCrawlerTaskLogsMock.mockResolvedValueOnce([LOG_INFO, LOG_WARN, LOG_ERROR])
+    render(<TaskLogsDrawer open={true} taskId={TASK_ID} onClose={() => {}} />)
+    const wrapper = await waitFor(() => screen.getByTestId('task-logs-stage-search'))
+    const search = wrapper.querySelector('input') as HTMLInputElement
+    // LOG_INFO.message='task started'
+    fireEvent.change(search, { target: { value: 'started' } })
+    await waitFor(() => {
+      expect(document.querySelector('[data-log-level="info"]')).not.toBeNull()
+      expect(document.querySelector('[data-log-level="warn"]')).toBeNull()
+    })
+  })
+
+  it('18. 过滤后无匹配 → "无匹配日志" + 共 n 条提示', async () => {
+    getCrawlerTaskDetailMock.mockResolvedValueOnce(DETAIL_SUCCESS_NO_CTX)
+    listCrawlerTaskLogsMock.mockResolvedValueOnce([LOG_INFO, LOG_WARN, LOG_ERROR])
+    render(<TaskLogsDrawer open={true} taskId={TASK_ID} onClose={() => {}} />)
+    const wrapper = await waitFor(() => screen.getByTestId('task-logs-stage-search'))
+    const search = wrapper.querySelector('input') as HTMLInputElement
+    fireEvent.change(search, { target: { value: 'no-match-xyz' } })
+    await waitFor(() => {
+      expect(screen.getByText('无匹配日志')).not.toBeNull()
+      expect(screen.getByText(/共 3 条日志/)).not.toBeNull()
+    })
+  })
+
+  it('19. 清空筛选按钮：hasActiveFilter=true 时显示，点击恢复全部', async () => {
+    getCrawlerTaskDetailMock.mockResolvedValueOnce(DETAIL_SUCCESS_NO_CTX)
+    listCrawlerTaskLogsMock.mockResolvedValueOnce([LOG_INFO, LOG_WARN, LOG_ERROR])
+    render(<TaskLogsDrawer open={true} taskId={TASK_ID} onClose={() => {}} />)
+    const infoChip = await waitFor(() => screen.getByTestId('task-logs-level-info'))
+    fireEvent.click(infoChip)
+    const clear = await waitFor(() => screen.getByTestId('task-logs-filter-clear'))
+    fireEvent.click(clear)
+    await waitFor(() => {
+      expect(document.querySelector('[data-log-level="info"]')).not.toBeNull()
+      expect(screen.getByText('日志（3）')).not.toBeNull()
+      expect(screen.queryByTestId('task-logs-filter-clear')).toBeNull()
+    })
+  })
+
+  it('20. 切换 taskId → filter 重置', async () => {
+    getCrawlerTaskDetailMock.mockResolvedValue(DETAIL_SUCCESS_NO_CTX)
+    listCrawlerTaskLogsMock.mockResolvedValue([LOG_INFO, LOG_WARN])
+    const { rerender } = render(<TaskLogsDrawer open={true} taskId={TASK_ID} onClose={() => {}} />)
+    const infoChip = await waitFor(() => screen.getByTestId('task-logs-level-info'))
+    fireEvent.click(infoChip)
+    await waitFor(() => {
+      expect(infoChip.getAttribute('data-active')).toBe('false')
+    })
+    // 切换 taskId
+    rerender(<TaskLogsDrawer open={true} taskId="55555555-eeee-ffff-aaaa-bbbbbbbbbbbb" onClose={() => {}} />)
+    await waitFor(() => {
+      const nextInfoChip = screen.getByTestId('task-logs-level-info')
+      expect(nextInfoChip.getAttribute('data-active')).toBe('true')
+    })
+  })
+
+  it('21. 刷新按钮 → 重新调 2 个 API', async () => {
     getCrawlerTaskDetailMock.mockResolvedValue(DETAIL_SUCCESS_NO_CTX)
     listCrawlerTaskLogsMock.mockResolvedValue([])
     render(<TaskLogsDrawer open={true} taskId={TASK_ID} onClose={() => {}} />)
