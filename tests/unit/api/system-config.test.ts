@@ -388,6 +388,42 @@ describe('POST /admin/crawler/sites', () => {
     expect(res.statusCode).toBe(409)
     expect(res.json<{ error: { code: string } }>().error.code).toBe('DUPLICATE_API_URL')
   })
+
+  // CHG-SN-6-14 / R-MID-1 第 8 次系统化 strict
+  it('写 admin_audit_log（crawler_site.create payload 内容断言）', async () => {
+    const NEW_SITE = {
+      key: 'newkey', name: '新站', api_url: 'https://api.new.com', detail: null,
+      source_type: 'vod', format: 'json', weight: 60, is_adult: false,
+      disabled: false, from_config: false, created_at: '', updated_at: '',
+    }
+    mockDbQuery
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })  // find by key (not exists)
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })  // find by api_url (not exists)
+      .mockResolvedValueOnce({ rows: [NEW_SITE], rowCount: 1 })  // upsert
+
+    const app = await buildApp()
+    await app.inject({
+      method: 'POST', url: '/admin/crawler/sites',
+      headers: { ...authHeader('admin'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'newkey', name: '新站', apiUrl: 'https://api.new.com', weight: 60 }),
+    })
+    await new Promise((r) => setImmediate(r))
+    expect(insertAuditLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actionType: 'crawler_site.create',
+        targetKind: 'crawler_site',
+        targetId: null,
+        beforeJsonb: null,
+        afterJsonb: expect.objectContaining({
+          key: 'newkey',
+          name: '新站',
+          apiUrl: 'https://api.new.com',
+          weight: 60,
+        }),
+      }),
+    )
+  })
 })
 
 describe('DELETE /admin/crawler/sites/:key', () => {
@@ -417,6 +453,34 @@ describe('DELETE /admin/crawler/sites/:key', () => {
     })
     expect(res.statusCode).toBe(404)
   })
+
+  // CHG-SN-6-14 / R-MID-1 第 8 次系统化
+  it('写 admin_audit_log（crawler_site.delete payload 内容断言）', async () => {
+    const EXISTING = {
+      key: 'jsm3u8', name: '晶石', api_url: 'https://api.test.com', detail: null,
+      source_type: 'vod', format: 'json', weight: 50, is_adult: false,
+      disabled: false, from_config: false, created_at: '', updated_at: '',
+    }
+    mockDbQuery
+      .mockResolvedValueOnce({ rows: [EXISTING], rowCount: 1 }) // find
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })          // delete
+    const app = await buildApp()
+    await app.inject({
+      method: 'DELETE', url: '/admin/crawler/sites/jsm3u8',
+      headers: authHeader('admin'),
+    })
+    await new Promise((r) => setImmediate(r))
+    expect(insertAuditLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actionType: 'crawler_site.delete',
+        targetKind: 'crawler_site',
+        targetId: null,
+        beforeJsonb: expect.objectContaining({ key: 'jsm3u8', name: '晶石' }),
+        afterJsonb: null,
+      }),
+    )
+  })
 })
 
 describe('POST /admin/crawler/sites/batch', () => {
@@ -440,5 +504,71 @@ describe('POST /admin/crawler/sites/batch', () => {
     })
     expect(res.statusCode).toBe(200)
     expect(res.json<{ data: { affected: number } }>().data.affected).toBe(2)
+  })
+
+  // CHG-SN-6-14 / R-MID-1 第 8 次系统化
+  it('写 admin_audit_log（crawler_site.batch payload 内容断言）', async () => {
+    mockDbQuery.mockResolvedValue({ rows: [], rowCount: 3 })
+    const app = await buildApp()
+    await app.inject({
+      method: 'POST', url: '/admin/crawler/sites/batch',
+      headers: { ...authHeader('admin'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys: ['k1', 'k2', 'k3'], action: 'mark_adult' }),
+    })
+    await new Promise((r) => setImmediate(r))
+    expect(insertAuditLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actionType: 'crawler_site.batch',
+        targetKind: 'crawler_site',
+        targetId: null,
+        beforeJsonb: expect.objectContaining({
+          keys: expect.arrayContaining(['k1', 'k2', 'k3']),
+          action: 'mark_adult',
+        }),
+        afterJsonb: expect.objectContaining({
+          keys: expect.arrayContaining(['k1']),
+          action: 'mark_adult',
+          affected: 3,
+        }),
+      }),
+    )
+  })
+})
+
+// CHG-SN-6-14：PATCH update test 单独 describe（既有文件未含 PATCH 测试）
+describe('PATCH /admin/crawler/sites/:key — audit', () => {
+  it('写 admin_audit_log（crawler_site.update payload 内容断言）', async () => {
+    const EXISTING = {
+      key: 'jsm3u8', name: '旧名', api_url: 'https://api.old.com', detail: null,
+      source_type: 'vod', format: 'json', weight: 40, is_adult: false,
+      disabled: false, from_config: false, created_at: '', updated_at: '',
+    }
+    const UPDATED = { ...EXISTING, name: '新名', weight: 80 }
+    mockDbQuery
+      .mockResolvedValueOnce({ rows: [EXISTING], rowCount: 1 }) // find before
+      .mockResolvedValueOnce({ rows: [UPDATED], rowCount: 1 })  // update
+    const app = await buildApp()
+    await app.inject({
+      method: 'PATCH', url: '/admin/crawler/sites/jsm3u8',
+      headers: { ...authHeader('admin'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: '新名', weight: 80 }),
+    })
+    await new Promise((r) => setImmediate(r))
+    expect(insertAuditLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actionType: 'crawler_site.update',
+        targetKind: 'crawler_site',
+        targetId: null,
+        beforeJsonb: expect.objectContaining({ name: '旧名', weight: 40 }),
+        afterJsonb: expect.objectContaining({
+          key: 'jsm3u8',
+          updatedFields: expect.arrayContaining(['name', 'weight']),
+          name: '新名',
+          weight: 80,
+        }),
+      }),
+    )
   })
 })

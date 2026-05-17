@@ -64,6 +64,11 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   'system.settings_update',
   'system.config_update',
   'system.sources_import',
+  // CHG-SN-6-14：CrawlerSite v1 写端点 audit 补齐
+  'crawler_site.create',
+  'crawler_site.update',
+  'crawler_site.delete',
+  'crawler_site.batch',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',

@@ -137,6 +137,11 @@ export type AdminAuditActionType =
   | 'system.settings_update'     // POST /admin/system/settings
   | 'system.config_update'       // POST /admin/system/config
   | 'system.sources_import'      // POST /admin/import/sources
+  // CHG-SN-6-14：CrawlerSite v1 写端点 audit 补齐（R-MID-1 系统化第 8 次）
+  | 'crawler_site.create'        // POST /admin/crawler/sites
+  | 'crawler_site.update'        // PATCH /admin/crawler/sites/:key
+  | 'crawler_site.delete'        // DELETE /admin/crawler/sites/:key
+  | 'crawler_site.batch'         // POST /admin/crawler/sites/batch
 
 export type AdminAuditTargetKind =
   | 'video'

@@ -14,6 +14,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
+import { AuditLogService } from '@/api/services/AuditLogService'
 import type { CrawlerSiteBatchAction } from '@/types'
 
 const SourceTypeSchema = z.enum(['vod', 'shortdrama'])
@@ -53,6 +54,7 @@ const ValidateSchema = z.object({
 
 export async function adminCrawlerSitesRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
+  const auditSvc = new AuditLogService(db)  // CHG-SN-6-14
 
   // ── GET /admin/crawler/sites ──────────────────────────────
 
@@ -89,6 +91,25 @@ export async function adminCrawlerSitesRoutes(fastify: FastifyInstance) {
       ...parsed.data,
       fromConfig: false,
     })
+
+    // CHG-SN-6-14：审计 — crawler_site.create
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'crawler_site.create',
+      targetKind: 'crawler_site',
+      targetId: null,  // crawler_sites.id 是 SERIAL int 不是 UUID，targetId 留 null + key 在 afterJsonb
+      beforeJsonb: null,
+      afterJsonb: {
+        key: site.key,
+        name: site.name,
+        apiUrl: site.apiUrl,
+        sourceType: site.sourceType,
+        format: site.format,
+        weight: site.weight,
+      },
+      requestId: request.id,
+    })
+
     return reply.code(201).send({ data: site })
   })
 
@@ -112,12 +133,46 @@ export async function adminCrawlerSitesRoutes(fastify: FastifyInstance) {
       }
     }
 
+    // CHG-SN-6-14：audit — 写入前先查 before 快照（仅更新字段子集）
+    const beforeSite = await crawlerSitesQueries.findCrawlerSite(db, key)
+
     const site = await crawlerSitesQueries.updateCrawlerSite(db, key, parsed.data)
     if (!site) {
       return reply.code(404).send({
         error: { code: 'NOT_FOUND', message: '源站不存在', status: 404 },
       })
     }
+
+    // CHG-SN-6-14：审计 — crawler_site.update
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'crawler_site.update',
+      targetKind: 'crawler_site',
+      targetId: null,
+      beforeJsonb: beforeSite
+        ? {
+            key: beforeSite.key,
+            name: beforeSite.name,
+            apiUrl: beforeSite.apiUrl,
+            sourceType: beforeSite.sourceType,
+            format: beforeSite.format,
+            weight: beforeSite.weight,
+            disabled: beforeSite.disabled,
+          }
+        : null,
+      afterJsonb: {
+        key: site.key,
+        updatedFields: Object.keys(parsed.data),
+        name: site.name,
+        apiUrl: site.apiUrl,
+        sourceType: site.sourceType,
+        format: site.format,
+        weight: site.weight,
+        disabled: site.disabled,
+      },
+      requestId: request.id,
+    })
+
     return reply.send({ data: site })
   })
 
@@ -139,6 +194,23 @@ export async function adminCrawlerSitesRoutes(fastify: FastifyInstance) {
     }
 
     await crawlerSitesQueries.deleteCrawlerSite(db, key)
+
+    // CHG-SN-6-14：审计 — crawler_site.delete
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'crawler_site.delete',
+      targetKind: 'crawler_site',
+      targetId: null,
+      beforeJsonb: {
+        key: existing.key,
+        name: existing.name,
+        apiUrl: existing.apiUrl,
+        sourceType: existing.sourceType,
+      },
+      afterJsonb: null,
+      requestId: request.id,
+    })
+
     return reply.code(204).send()
   })
 
@@ -157,6 +229,18 @@ export async function adminCrawlerSitesRoutes(fastify: FastifyInstance) {
       parsed.data.keys,
       parsed.data.action as CrawlerSiteBatchAction,
     )
+
+    // CHG-SN-6-14：审计 — crawler_site.batch
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'crawler_site.batch',
+      targetKind: 'crawler_site',
+      targetId: null,
+      beforeJsonb: { keys: parsed.data.keys, action: parsed.data.action },
+      afterJsonb: { keys: parsed.data.keys, action: parsed.data.action, affected },
+      requestId: request.id,
+    })
+
     return reply.send({ data: { affected } })
   })
 

@@ -51,6 +51,11 @@ const REQUIRED_ACTION_TYPES = [
   'system.settings_update',     // POST /admin/system/settings
   'system.config_update',       // POST /admin/system/config
   'system.sources_import',      // POST /admin/import/sources
+  // CHG-SN-6-14：CrawlerSite v1 写端点 audit 补齐（R-MID-1 系统化第 8 次）
+  'crawler_site.create',        // POST /admin/crawler/sites
+  'crawler_site.update',        // PATCH /admin/crawler/sites/:key
+  'crawler_site.delete',        // DELETE /admin/crawler/sites/:key
+  'crawler_site.batch',         // POST /admin/crawler/sites/batch
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -93,6 +98,11 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'staging.revert',
   'staging.publish',
   'staging.batch_publish',
+  // CHG-SN-6-14：R-MID-1 第 8 次系统化（CrawlerSite v1 端点）
+  'crawler_site.create',
+  'crawler_site.update',
+  'crawler_site.delete',
+  'crawler_site.batch',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

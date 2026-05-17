@@ -8957,3 +8957,80 @@ expect(auditSvc.write).toHaveBeenCalledWith(expect.objectContaining({
   - 通知 Hub（admin-ui NotificationDrawer + TaskDrawer 已存在 / 需后端 notifications + tasks 列表端点 + 视图层接入）
   - CrawlerJobs 视图（tasks + runs + freeze 等剩余 30+ 端点）
   - CrawlerSite audit 补齐（v1 端点未写 audit / RETRO-5 候选 / 系统化第 8 次）
+
+---
+
+## CHG-SN-6-14 — CrawlerSite v1 端点 audit 补齐（R-MID-1 第 8 次系统化）
+- **任务 ID**：CHG-SN-6-14
+- **日期**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：无（与 CHG-SN-6-RETRO-3-A 同款模式 / 沿用范式 / 既有 service 模板复用）
+- **来源**：CHG-SN-6-13 crawler 视图 MVP 闭环时标"v1 CrawlerSite 端点未含 audit / RETRO-5 候选"；本卡承担收尾
+- **范围**：5 文件 ≤ 5 软上限（types / service / route / coverage test / system-config test 扩展）
+
+### 实施内容
+
+**A. types union + ACTION_TYPES + 镜像四套真源同步（4 项 action_type）**：
+- `packages/types/src/admin-moderation.types.ts`：union 扩 4（crawler_site.create / update / delete / batch）
+- `apps/api/src/services/AuditLogService.ts`：ACTION_TYPES 常量同步
+- `tests/unit/api/audit-log-service-enums-set-equal.test.ts`：EXPECTED_* 镜像同步
+- `tests/unit/api/audit-log-coverage.test.ts`：REQUIRED + PAYLOAD_ASSERTION_REQUIRED 各扩 4（24 → 28 项 strict）
+
+**B. 4 v1 写端点 auditSvc.write 接入**（`apps/api/src/routes/admin/crawlerSites.ts`）：
+- POST /admin/crawler/sites — afterJsonb: { key, name, apiUrl, sourceType, format, weight }
+- PATCH /admin/crawler/sites/:key — beforeJsonb 写入前查 site / afterJsonb: + updatedFields 字段列表
+- DELETE /admin/crawler/sites/:key — beforeJsonb: 既有 site 快照 / afterJsonb: null
+- POST /admin/crawler/sites/batch — beforeJsonb: { keys, action } / afterJsonb: + affected 计数
+- targetKind = 'crawler_site'（052 migration CHECK 约束已含）/ targetId = null（crawler_sites.id 是 SERIAL int 非 UUID，key 在 jsonb）
+
+**C. R-MID-1 payload 内容断言**（`tests/unit/api/system-config.test.ts` 追加 4 it）：
+- POST sites → crawler_site.create 断言 afterJsonb { key, name, apiUrl, weight }
+- DELETE sites → crawler_site.delete 断言 beforeJsonb { key, name } + afterJsonb null
+- POST sites/batch → crawler_site.batch 断言 before { keys, action } + after { keys, action, affected }
+- PATCH sites/:key → crawler_site.update 断言 before { name, weight 旧值 } + after { updatedFields, name, weight 新值 }
+- 模式：mock `@/api/db/queries/auditLog` insertAuditLog → setImmediate tick → expect.objectContaining
+
+### 质量门禁（5 项硬清单 / 第 10 次正式验证）
+
+1. **视图测试 ≥ 9** → N/A（本卡为 route-level audit 断言补齐，非视图卡）
+2. **共享原语 ≥ 80%** → N/A
+3. **R-MID-1 audit payload** → ✅ **CrawlerSite 4 新 action_type 全 PAYLOAD_REQUIRED**（28 项 strict）
+4. **schema 三层防护** → ✅ 052 migration CHECK 约束已含 'crawler_site'（DB 层已守卫）+ 类型 union + service 常量 + 4 test
+5. **PATCH 范围 ≤ 5 项** → ✅ 5 文件
+
+- typecheck + lint 全绿
+- **3877 unit + 40 integration PASS**（baseline 3873 → 3877 +4：4 audit assertion it；audit-log-coverage REQUIRED 24 → 28 自动 it.each 扩展计入既有 file 增量）
+- audit-log-coverage REQUIRED **28 项全 PASS**（it.each 强制守卫）
+- verify:adr-contracts 6 类全绿（adr-d-numbers 32 条全闭环 / verify:endpoint-adr 148+ 路由全过）
+
+### R-MID-1 系统化进展
+
+| 次 | 卡 | 范围 | strict 总数 |
+|---|---|---|---|
+| 1-5 | CHG-SN-5-06-PATCH ~ M-SN-4 多卡 | ADR-104 + 多视图 service test 补齐 | — |
+| 6 | CHG-SN-5-CHECKLIST-AUDIT-2 P0-1 | 代码守卫 audit-log-coverage.test.ts | 9 PAYLOAD_REQUIRED |
+| 6.5 | CHG-SN-6-RETRO-3-A | system v1 4 端点 + REQUIRED 名单扩 4 | 13 |
+| 7 | CHG-SN-6-10 | legacy 11 项 EXEMPT 清零 → REQUIRED | 24 |
+| **8** | **CHG-SN-6-14（本卡）** | **CrawlerSite v1 4 端点 + REQUIRED 名单扩 4** | **28** |
+
+### 文件范围（5 文件 ≤ 12）
+
+- `packages/types/src/admin-moderation.types.ts`（union 扩 4）
+- `apps/api/src/services/AuditLogService.ts`（ACTION_TYPES 常量同步）
+- `apps/api/src/routes/admin/crawlerSites.ts`（4 端点 auditSvc.write）
+- `tests/unit/api/audit-log-coverage.test.ts`（REQUIRED + PAYLOAD_ASSERTION_REQUIRED 扩 4）
+- `tests/unit/api/audit-log-service-enums-set-equal.test.ts`（EXPECTED 扩 4）
+- `tests/unit/api/system-config.test.ts`（追加 4 audit assertion it）
+
+### 关键发现
+
+- **crawler_site target_kind 052 已就位**：052 migration CHECK 约束含 'crawler_site' / 'system' 等 6 类，无需 DB 改动；本卡仅在应用层补 audit 写入
+- **PATCH update 写入前查 before 快照**：与 system.settings_update 同款 R-MID-1 完整 payload 要求（防 audit 仅记 after 缺失变更对比）
+- **batch action 的 beforeJsonb 是输入 / afterJsonb 是结果**：keys + action 作输入快照 + affected 作执行结果，与 system.sources_import 同款语义
+- **路由层 in-route audit vs service 层 audit**：crawlerSites.ts 直接 in-route（不重构成 service）与 RETRO-3-A 同款模式；v1 → v2 cutover 时统一治理（M-SN-7）
+
+### 后续触发
+
+- **下一卡候选（按从易到难）**：
+  - 通知 Hub（admin-ui NotificationDrawer + TaskDrawer 已存在 / 需后端 notifications API + ADR 前置）
+  - CrawlerJobs（tasks + runs + freeze 30+ 端点 / 复杂运维操作面）

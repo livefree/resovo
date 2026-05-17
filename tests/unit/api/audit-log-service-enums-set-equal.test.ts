@@ -49,6 +49,11 @@ const EXPECTED_ACTION_TYPES = [
   'system.settings_update',
   'system.config_update',
   'system.sources_import',
+  // CHG-SN-6-14
+  'crawler_site.create',
+  'crawler_site.update',
+  'crawler_site.delete',
+  'crawler_site.batch',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [
