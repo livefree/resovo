@@ -45,6 +45,7 @@ import {
   batchCrawlerSites,
   validateCrawlerSite,
   getCrawlerSystemStatus,
+  setCrawlerFreeze,
   type CrawlerSite,
   type CrawlerSiteBatchAction,
   type CrawlerSystemStatus,
@@ -256,6 +257,9 @@ export function CrawlerClient() {
   const [error, setError] = useState<Error | null>(null)
   const [retryKey, setRetryKey] = useState(0)
 
+  // CHG-SN-6-20-B：freeze 切换 pending（点击防抖 + 视觉反馈）
+  const [freezePending, setFreezePending] = useState(false)
+
   // selection
   const [selection, setSelection] = useState<TableSelectionState>({
     selectedKeys: new Set(),
@@ -413,6 +417,33 @@ export function CrawlerClient() {
     }
   }, [batchAction, selection, refresh, toast])
 
+  // CHG-SN-6-20-B：freeze 切换 handler（confirm + audit 已就位 + toast 反馈）
+  const handleToggleFreeze = useCallback(async () => {
+    const currentEnabled = status?.freezeEnabled === true
+    const nextEnabled = !currentEnabled
+    const confirmMsg = nextEnabled
+      ? '确定开启全局冻结？开启后将停止所有自动采集任务。'
+      : '确定关闭全局冻结，恢复自动采集？'
+    if (typeof window !== 'undefined' && !window.confirm(confirmMsg)) return
+    setFreezePending(true)
+    try {
+      const next = await setCrawlerFreeze(nextEnabled)
+      setStatus((prev) => ({ ...(prev ?? {}), ...next }))
+      toast.push({
+        title: nextEnabled ? '已开启全局冻结' : '已关闭全局冻结',
+        description: nextEnabled
+          ? `游离任务 ${next.orphanTaskCount ?? 0} 个`
+          : '自动采集已恢复',
+        level: 'success',
+      })
+    } catch (err: unknown) {
+      const { title, description } = describeApiError(err)
+      toast.push({ title, description, level: 'danger' })
+    } finally {
+      setFreezePending(false)
+    }
+  }, [status, toast])
+
   const columns = useMemo(() => buildColumns(), [])
 
   const query = useMemo(
@@ -517,6 +548,41 @@ export function CrawlerClient() {
                 </div>
               </div>
             ))}
+          </div>
+        </AdminCard>
+      ) : null}
+
+      {/* CHG-SN-6-20-B：freeze 全局开关 */}
+      {status && status.freezeEnabled !== undefined ? (
+        <AdminCard
+          surface="plain"
+          padding="md"
+          header={{
+            title: '全局采集开关',
+            subtitle: status.freezeEnabled
+              ? `● 已冻结（游离任务 ${status.orphanTaskCount ?? 0} 个）`
+              : '○ 正常运行',
+            actions: (
+              <AdminButton
+                variant={status.freezeEnabled ? 'primary' : 'danger'}
+                size="sm"
+                loading={freezePending}
+                disabled={freezePending}
+                onClick={() => void handleToggleFreeze()}
+                data-testid="crawler-freeze-toggle"
+                data-freeze-enabled={status.freezeEnabled ? 'true' : 'false'}
+              >
+                {status.freezeEnabled ? '解除冻结' : '开启冻结'}
+              </AdminButton>
+            ),
+          }}
+          status={status.freezeEnabled ? 'warn' : 'ok'}
+          data-testid="crawler-freeze-card"
+        >
+          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
+            {status.freezeEnabled
+              ? '已停止所有自动采集；手动触发不受影响。解除后调度器恢复。'
+              : '调度器与手动采集均可触发。开启冻结后将停止自动采集 tick。'}
           </div>
         </AdminCard>
       ) : null}

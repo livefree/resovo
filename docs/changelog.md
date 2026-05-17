@@ -9582,3 +9582,83 @@ crawler 域 v1 写端点 audit 覆盖：CrawlerSite 4 + CrawlerRun 3 + crawler.f
   - tasks 行操作扫端点
   - 通知 Hub MVP（ADR 前置）
   - DAG 视图（ADR 前置）
+
+---
+
+## CHG-SN-6-20-B — freeze UI 接入 CrawlerClient
+
+- **任务 ID**：CHG-SN-6-20-B
+- **完成时间**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话）
+- **子代理**：无（纯前端消费 / -A audit 已就位 / 无 ADR）
+- **来源**：CHG-SN-6-20-A 后续；CHG-SN-6-20 双子卡 -A/-B 收口
+
+### 范围
+
+**A. lib/crawler/api 扩展**（`apps/server-next/src/lib/crawler/api.ts`）：
+- `CrawlerSystemStatus` 显式新增 freezeEnabled / orphanTaskCount / schedulerEnabled 三字段（保留 `[key: string]: unknown` 向后兼容）
+- 新函数：`setCrawlerFreeze(enabled): Promise<CrawlerSystemStatus>` → POST /admin/crawler/freeze
+
+**B. CrawlerClient freeze 卡片**（`apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`）：
+- 新增 `freezePending` state 控制按钮 loading/disable
+- `handleToggleFreeze` useCallback：confirm 守卫（开启 / 关闭文案差异化）→ setCrawlerFreeze → 状态合并（setStatus(prev) spread next）→ toast success/danger + 错误码差异化
+- system-status 区块下方新增 freeze AdminCard：
+  - subtitle 状态指示（"● 已冻结（游离任务 N 个）" vs "○ 正常运行"）
+  - actions slot 内含按钮（variant primary/danger 切换 / data-freeze-enabled / loading + disabled）
+  - status warn / ok 切换（AdminCard surface 状态色）
+  - body 描述切换（冻结后影响 / 解除后影响）
+  - **向后兼容守卫**：`status.freezeEnabled !== undefined` 才渲染（旧端点不返回此字段不破坏）
+
+**C. 测试**（`tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx`，13 → **19 测试**，+6）：
+- 14. freezeEnabled=false → "开启冻结"按钮 + 正常运行文案
+- 15. freezeEnabled=true → "解除冻结" + 游离任务计数 + warn 卡
+- 16. 点击开启冻结：confirm 通过 → API + 成功 toast + 状态合并切到"解除冻结"
+- 17. 点击开启 + confirm 拒绝 → 不调 API（守卫验证）
+- 18. 点击解除冻结 → API enabled=false + success toast
+- 19. status 无 freezeEnabled → 不渲染 freeze 卡（向后兼容）
+
+### 质量门禁（5 项硬清单 / 第 18 次正式验证）
+
+1. **视图测试 ≥ 9** → ✅ CrawlerClient 19 测试（13 既有 + 6 新增）
+2. **共享原语 ≥ 80%** → ✅ 100% admin-ui（AdminCard status + AdminButton variant + useToast + describeApiError）
+3. **R-MID-1 audit payload** → N/A（audit 在 -A 子卡已落地，本卡纯前端消费）
+4. **schema 三层防护** → N/A（前端类型扩展不属 schema）
+5. **PATCH 范围 ≤ 5 项** → ✅ 3 文件
+
+- typecheck 全绿（8 workspaces PASS）
+- lint 全绿（pre-existing img warning 不在本卡范围）
+- 3962 unit tests PASS（3956 → 3962，+6）
+- verify:adr-contracts 6 类全绿
+
+### 文件范围（3 文件 ≤ 12）
+
+- `apps/server-next/src/lib/crawler/api.ts`（+19 行 / 1 函数 + 3 类型字段）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（+62 行 / state + handler + freeze card）
+- `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx`（+95 行 / 6 测试）
+
+### 关键发现
+
+- **状态合并 spread 替代 refresh**：`setStatus((prev) => ({...prev, ...next}))` 而非 `refresh()`，避免 toast 后整页 loading 抖动；后端返回完整 status 即时同步本地
+- **AdminCard status='warn' 自动状态色边框**：复用 admin-card 内置状态修饰（warn/ok/danger），freeze 启用时 warn 红黄边框，关闭时 ok 灰边框；无需手写颜色（CSS 变量 token）
+- **向后兼容守卫 status.freezeEnabled !== undefined**：旧端点不返回此字段，UI 静默隐藏；避免 falsy `!status.freezeEnabled` 把"已关闭"判定为"不渲染"
+- **confirm 文案双向差异化**：开启冻结 "停止所有自动采集" / 关闭冻结 "恢复自动采集" — 与 audit before/after 字段语义一致，便于用户对照
+- **data-freeze-enabled 双值字符串属性**：'true'/'false' 而非 boolean attribute；e2e 选择器可用 `[data-freeze-enabled="true"]` 精确匹配，且 React 自动序列化
+
+### M-SN-6 进展
+
+CHG-SN-6-20 -A/-B 双子卡闭环 → /admin/crawler 完整能力栈：
+- sites（CRUD + system-status + **freeze 控制**）
+- runs 列表（filter + 行操作 cancel/pause/resume）
+- run detail（基础信息 + tasks 子表 + Run ID 链接）
+- task logs Drawer（详情卡 + 日志列表 + 客户端过滤）
+
+R-MID-1 系统化第 10 次（32 strict）+ crawler 域 v1 写端点 audit 覆盖 8/11。
+
+### 后续触发
+
+- **下一卡候选（按从易到难）**：
+  - 日志导出 CSV（独立卡）
+  - scheduler-config UI（需 RETRO audit 卡先行：POST /admin/crawler/scheduler-config 当前无 audit）
+  - tasks 行操作（cancel/retry）扫端点
+  - 通知 Hub MVP（需后端 notifications API + ADR 前置）
+  - DAG 视图（reactflow ADR + reference §5.6 A2）

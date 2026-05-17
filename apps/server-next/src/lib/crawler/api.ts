@@ -56,6 +56,12 @@ export interface ValidateApiResult {
 export interface CrawlerSystemStatus {
   readonly enabled?: boolean
   readonly schedulers?: ReadonlyArray<{ readonly name: string; readonly enabled: boolean; readonly intervalMs: number }>
+  /** CHG-SN-6-20-B：全局采集冻结开关 */
+  readonly freezeEnabled?: boolean
+  /** CHG-SN-6-20-B：游离任务计数（无关联 run 的活跃 task） */
+  readonly orphanTaskCount?: number
+  /** CHG-SN-6-20-B：env CRAWLER_SCHEDULER_ENABLED */
+  readonly schedulerEnabled?: boolean
   readonly [key: string]: unknown
 }
 
@@ -95,6 +101,15 @@ export async function validateCrawlerSite(apiUrl: string): Promise<ValidateApiRe
 
 export async function getCrawlerSystemStatus(): Promise<CrawlerSystemStatus> {
   const res = await apiClient.get<{ data: CrawlerSystemStatus }>('/admin/crawler/system-status')
+  return res.data
+}
+
+// CHG-SN-6-20-B：全局采集冻结开关（audit 已在 -A 补齐）
+export async function setCrawlerFreeze(enabled: boolean): Promise<CrawlerSystemStatus> {
+  const res = await apiClient.post<{ data: CrawlerSystemStatus }>(
+    '/admin/crawler/freeze',
+    { enabled },
+  )
   return res.data
 }
 

@@ -25,6 +25,7 @@ const deleteCrawlerSiteMock = vi.fn()
 const batchCrawlerSitesMock = vi.fn()
 const validateCrawlerSiteMock = vi.fn()
 const getCrawlerSystemStatusMock = vi.fn()
+const setCrawlerFreezeMock = vi.fn()
 const toastPushMock = vi.fn()
 const confirmSpy = vi.fn().mockReturnValue(true)
 
@@ -36,6 +37,7 @@ vi.mock('../../../../../../apps/server-next/src/lib/crawler/api', () => ({
   batchCrawlerSites: (...args: unknown[]) => batchCrawlerSitesMock(...args),
   validateCrawlerSite: (...args: unknown[]) => validateCrawlerSiteMock(...args),
   getCrawlerSystemStatus: (...args: unknown[]) => getCrawlerSystemStatusMock(...args),
+  setCrawlerFreeze: (...args: unknown[]) => setCrawlerFreezeMock(...args),
 }))
 
 vi.mock('@resovo/admin-ui', async () => {
@@ -116,6 +118,7 @@ beforeEach(() => {
   batchCrawlerSitesMock.mockReset()
   validateCrawlerSiteMock.mockReset()
   getCrawlerSystemStatusMock.mockReset()
+  setCrawlerFreezeMock.mockReset()
   toastPushMock.mockReset()
   confirmSpy.mockReset().mockReturnValue(true)
   ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
@@ -277,5 +280,111 @@ describe('CrawlerClient', () => {
       expect(container.querySelector('[data-site-status="enabled"]')).not.toBeNull()
       expect(container.querySelector('[data-site-status="disabled"]')).not.toBeNull()
     })
+  })
+
+  // ── freeze 控制（CHG-SN-6-20-B）──────────────────────────────
+
+  it('14. freezeEnabled=false → 显示"开启冻结"按钮', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    getCrawlerSystemStatusMock.mockResolvedValueOnce({
+      freezeEnabled: false,
+      schedulerEnabled: true,
+      orphanTaskCount: 0,
+    })
+    render(<CrawlerClient />)
+    const btn = await waitFor(() => screen.getByTestId('crawler-freeze-toggle'))
+    expect(btn.textContent).toContain('开启冻结')
+    expect(btn.getAttribute('data-freeze-enabled')).toBe('false')
+    expect(screen.getByText(/正常运行/)).not.toBeNull()
+  })
+
+  it('15. freezeEnabled=true → 显示"解除冻结" + 游离任务计数 + warn 卡', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    getCrawlerSystemStatusMock.mockResolvedValueOnce({
+      freezeEnabled: true,
+      schedulerEnabled: true,
+      orphanTaskCount: 3,
+    })
+    render(<CrawlerClient />)
+    const btn = await waitFor(() => screen.getByTestId('crawler-freeze-toggle'))
+    expect(btn.textContent).toContain('解除冻结')
+    expect(btn.getAttribute('data-freeze-enabled')).toBe('true')
+    expect(screen.getByText(/已冻结（游离任务 3 个）/)).not.toBeNull()
+  })
+
+  it('16. 点击"开启冻结" → confirm + API + 成功 toast + 状态更新', async () => {
+    listCrawlerSitesMock.mockResolvedValue([SITE_1])
+    getCrawlerSystemStatusMock.mockResolvedValue({
+      freezeEnabled: false,
+      schedulerEnabled: true,
+      orphanTaskCount: 0,
+    })
+    setCrawlerFreezeMock.mockResolvedValueOnce({
+      freezeEnabled: true,
+      schedulerEnabled: true,
+      orphanTaskCount: 2,
+    })
+    render(<CrawlerClient />)
+    const btn = await waitFor(() => screen.getByTestId('crawler-freeze-toggle'))
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(setCrawlerFreezeMock).toHaveBeenCalledWith(true)
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: '已开启全局冻结' }),
+      )
+      // 状态已合并，UI 切到"解除冻结"
+      const updated = screen.getByTestId('crawler-freeze-toggle')
+      expect(updated.textContent).toContain('解除冻结')
+    })
+  })
+
+  it('17. 点击"开启冻结" + confirm 拒绝 → 不调 API', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    getCrawlerSystemStatusMock.mockResolvedValueOnce({
+      freezeEnabled: false,
+      schedulerEnabled: true,
+      orphanTaskCount: 0,
+    })
+    confirmSpy.mockReset().mockReturnValue(false)
+    ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
+    render(<CrawlerClient />)
+    const btn = await waitFor(() => screen.getByTestId('crawler-freeze-toggle'))
+    fireEvent.click(btn)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(setCrawlerFreezeMock).not.toHaveBeenCalled()
+  })
+
+  it('18. 点击"解除冻结" → API 调用 enabled=false', async () => {
+    listCrawlerSitesMock.mockResolvedValue([SITE_1])
+    getCrawlerSystemStatusMock.mockResolvedValue({
+      freezeEnabled: true,
+      schedulerEnabled: true,
+      orphanTaskCount: 1,
+    })
+    setCrawlerFreezeMock.mockResolvedValueOnce({
+      freezeEnabled: false,
+      schedulerEnabled: true,
+      orphanTaskCount: 0,
+    })
+    render(<CrawlerClient />)
+    const btn = await waitFor(() => screen.getByTestId('crawler-freeze-toggle'))
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(setCrawlerFreezeMock).toHaveBeenCalledWith(false)
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: '已关闭全局冻结' }),
+      )
+    })
+  })
+
+  it('19. status 无 freezeEnabled → 不渲染 freeze 卡（向后兼容）', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    getCrawlerSystemStatusMock.mockResolvedValueOnce({})
+    const { container } = render(<CrawlerClient />)
+    await waitFor(() => {
+      expect(container.querySelector('[data-crawler-client]')).not.toBeNull()
+    })
+    expect(screen.queryByTestId('crawler-freeze-card')).toBeNull()
+    expect(screen.queryByTestId('crawler-freeze-toggle')).toBeNull()
   })
 })
