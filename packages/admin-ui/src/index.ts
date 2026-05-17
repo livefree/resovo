@@ -43,6 +43,12 @@ export * from './components/admin-button'
 // AdminInput 后台输入框通用原语（CHG-SN-5-PRE-03-C）
 export * from './components/admin-input'
 
+// AdminCheckbox boolean toggle 通用原语（CHG-SN-6-09 / arch-reviewer Opus PASS）
+export * from './components/admin-checkbox'
+
+// AdminTextarea 长文本通用原语（CHG-SN-6-09 / arch-reviewer Opus PASS）
+export * from './components/admin-textarea'
+
 // AdminCard 后台卡片通用原语（CHG-SN-5-PRE-03-E）
 export * from './components/admin-card'
 

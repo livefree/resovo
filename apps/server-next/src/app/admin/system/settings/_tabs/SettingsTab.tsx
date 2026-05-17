@@ -23,6 +23,8 @@ import {
   AdminCard,
   AdminButton,
   AdminInput,
+  AdminCheckbox,
+  AdminTextarea,
   ErrorState,
   LoadingState,
   useToast,
@@ -61,15 +63,6 @@ const FIELD_HINT_STYLE: CSSProperties = {
   marginTop: '-6px',
 }
 
-const CHECKBOX_LABEL_STYLE: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '8px',
-  fontSize: 'var(--font-size-sm)',
-  color: 'var(--fg-default)',
-  cursor: 'pointer',
-}
-
 const ACTION_ROW_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -81,19 +74,6 @@ const ACTION_ROW_STYLE: CSSProperties = {
 const SYNC_RESULT_STYLE: CSSProperties = {
   fontSize: 'var(--font-size-xs)',
   color: 'var(--fg-muted)',
-}
-
-const TEXTAREA_STYLE: CSSProperties = {
-  width: '100%',
-  minHeight: '72px',
-  padding: '8px 10px',
-  fontSize: 'var(--font-size-sm)',
-  fontFamily: 'inherit',
-  color: 'var(--fg-default)',
-  background: 'var(--bg-surface)',
-  border: '1px solid var(--border-default)',
-  borderRadius: 'var(--radius-sm)',
-  resize: 'vertical',
 }
 
 function describeApiError(err: unknown): { title: string; description: string } {
@@ -197,12 +177,12 @@ export function SettingsTab() {
             aria-label="站点名称"
           />
           <label style={FIELD_LABEL_STYLE} htmlFor="setting-siteAnnouncement">站点公告</label>
-          <textarea
+          <AdminTextarea
             id="setting-siteAnnouncement"
             value={settings.siteAnnouncement}
             onChange={(e) => update('siteAnnouncement', e.target.value)}
             placeholder="可选 · 显示在首页顶部"
-            style={TEXTAREA_STYLE}
+            rows={3}
             data-testid="setting-siteAnnouncement"
             aria-label="站点公告"
           />
@@ -226,11 +206,11 @@ export function SettingsTab() {
             aria-label="豆瓣代理 URL"
           />
           <label style={FIELD_LABEL_STYLE}>豆瓣 Cookie</label>
-          <textarea
+          <AdminTextarea
             value={settings.doubanCookie}
             onChange={(e) => update('doubanCookie', e.target.value)}
             placeholder="ll=...; bid=...; ..."
-            style={TEXTAREA_STYLE}
+            rows={3}
             data-testid="setting-doubanCookie"
             aria-label="豆瓣 Cookie"
           />
@@ -245,24 +225,18 @@ export function SettingsTab() {
         data-testid="settings-card-filter"
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <label style={CHECKBOX_LABEL_STYLE}>
-            <input
-              type="checkbox"
-              checked={settings.showAdultContent}
-              onChange={(e) => update('showAdultContent', e.target.checked)}
-              data-testid="setting-showAdultContent"
-            />
-            显示成人内容
-          </label>
-          <label style={CHECKBOX_LABEL_STYLE}>
-            <input
-              type="checkbox"
-              checked={settings.contentFilterEnabled}
-              onChange={(e) => update('contentFilterEnabled', e.target.checked)}
-              data-testid="setting-contentFilterEnabled"
-            />
-            启用内容过滤（敏感词 / 元数据）
-          </label>
+          <AdminCheckbox
+            label="显示成人内容"
+            checked={settings.showAdultContent}
+            onChange={(e) => update('showAdultContent', e.target.checked)}
+            data-testid="setting-showAdultContent"
+          />
+          <AdminCheckbox
+            label="启用内容过滤（敏感词 / 元数据）"
+            checked={settings.contentFilterEnabled}
+            onChange={(e) => update('contentFilterEnabled', e.target.checked)}
+            data-testid="setting-contentFilterEnabled"
+          />
         </div>
       </AdminCard>
 
@@ -275,15 +249,12 @@ export function SettingsTab() {
       >
         <div style={FIELD_GRID_STYLE}>
           <label style={FIELD_LABEL_STYLE}>启用</label>
-          <label style={CHECKBOX_LABEL_STYLE}>
-            <input
-              type="checkbox"
-              checked={settings.videoProxyEnabled}
-              onChange={(e) => update('videoProxyEnabled', e.target.checked)}
-              data-testid="setting-videoProxyEnabled"
-            />
-            启用视频代理
-          </label>
+          <AdminCheckbox
+            label="启用视频代理"
+            checked={settings.videoProxyEnabled}
+            onChange={(e) => update('videoProxyEnabled', e.target.checked)}
+            data-testid="setting-videoProxyEnabled"
+          />
           <label style={FIELD_LABEL_STYLE}>代理 URL</label>
           <AdminInput
             value={settings.videoProxyUrl}
@@ -305,15 +276,12 @@ export function SettingsTab() {
       >
         <div style={FIELD_GRID_STYLE}>
           <label style={FIELD_LABEL_STYLE}>启用</label>
-          <label style={CHECKBOX_LABEL_STYLE}>
-            <input
-              type="checkbox"
-              checked={settings.autoCrawlEnabled}
-              onChange={(e) => update('autoCrawlEnabled', e.target.checked)}
-              data-testid="setting-autoCrawlEnabled"
-            />
-            启用自动采集
-          </label>
+          <AdminCheckbox
+            label="启用自动采集"
+            checked={settings.autoCrawlEnabled}
+            onChange={(e) => update('autoCrawlEnabled', e.target.checked)}
+            data-testid="setting-autoCrawlEnabled"
+          />
 
           <label style={FIELD_LABEL_STYLE}>每次最大数量</label>
           <AdminInput
@@ -327,15 +295,12 @@ export function SettingsTab() {
           <div style={FIELD_HINT_STYLE}>范围 1-1000；超出由后端 zod 校验拒绝</div>
 
           <label style={FIELD_LABEL_STYLE}>仅采近期</label>
-          <label style={CHECKBOX_LABEL_STYLE}>
-            <input
-              type="checkbox"
-              checked={settings.autoCrawlRecentOnly}
-              onChange={(e) => update('autoCrawlRecentOnly', e.target.checked)}
-              data-testid="setting-autoCrawlRecentOnly"
-            />
-            仅采集最近视频（reduce 已存量）
-          </label>
+          <AdminCheckbox
+            label="仅采集最近视频（reduce 已存量）"
+            checked={settings.autoCrawlRecentOnly}
+            onChange={(e) => update('autoCrawlRecentOnly', e.target.checked)}
+            data-testid="setting-autoCrawlRecentOnly"
+          />
 
           <label style={FIELD_LABEL_STYLE}>近期天数</label>
           <AdminInput

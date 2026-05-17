@@ -8562,3 +8562,96 @@ CONDITIONAL = 扩展平滑增量不破签名，非当前缺陷。整体 **PASS**
   - AdminCheckbox + AdminTextarea 原语沉淀（≥ 5 处消费方）
   - R-MID-1 legacy 11 项 EXEMPT 补齐
   - analytics + recharts ADR / crawler + DAG / 通知 Hub / 大数据原语
+
+---
+
+## CHG-SN-6-09 — AdminCheckbox + AdminTextarea 原语沉淀（arch-reviewer Opus 1 轮 CONDITIONAL PASS）
+- **任务 ID**：CHG-SN-6-09
+- **日期**：2026-05-16
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮 CONDITIONAL PASS 起草 2 原语 Props 契约（落地条件已满足：JSDoc 明示 YAGNI 决策）
+- **来源**：CHG-SN-6-07 SettingsTab 共享原语率 ~75% 低于 80% 阈值，由 AdminCheckbox / AdminTextarea 缺位 forced 折扣；本卡沉淀回升 ≥ 85%
+- **范围**：2 原语 + 4 文件（admin-ui 沉淀 + index 导出 + SettingsTab/ConfigTab 消费迁移 + 2 单测文件）
+
+### 起草 / Opus PASS
+
+**arch-reviewer Opus 1 轮 CONDITIONAL PASS**（条件：JSDoc 明示 size/error YAGNI 来源 — 落地时已满足）：
+
+| 原语 | 形态选择 | 关键决策 |
+|---|---|---|
+| **AdminCheckbox** | 包壳原生 `<input type="checkbox">` + `accent-color: var(--accent-default)` | 自绘 svg 否决（::before 与 inline-style 范式冲突 / indeterminate 视觉复杂）；label + description 双层；不暴露 size / error YAGNI（5 处消费方无差异化需求） |
+| **AdminTextarea** | `extends Omit<TextareaHTMLAttributes, 'size'>` 同 AdminInput 范式 | size sm/md/lg / error / resize / monospace 4 prop；focus state useState 切 borderColor + box-shadow（与 AdminInput 对称） |
+
+**Opus 4 维度自评**：命名 / 状态职责 / 扩展性 全 PASS；对称性 CONDITIONAL（checkbox 偏离 size/error，JSDoc 注明 YAGNI 来源已满足条件）
+
+### 已否决方案（≥ 4 条）
+
+A. **AdminCheckbox 自绘 svg** — ::before 与 inline-style 范式冲突 / 状态机复杂 ×3 / accent-color 已能解决 95% 一致性
+B. **AdminTextarea 含 autoGrow** — 3 处消费方均明确 rows，YAGNI；ResizeObserver / scrollHeight 抖动引入 test flake
+C. **AdminCheckbox 强制 label 外包** — 违反"3 处以上必须提取"原则；label Prop + 省略退化双路兼容
+D. **AdminCheckbox 暴露 error Prop** — 与 AdminInput 严格对称但消费方零需求；YAGNI
+
+### 实施内容（6 文件 ≤ 12）
+
+**新增 admin-ui 2 原语**：
+- `packages/admin-ui/src/components/admin-checkbox/admin-checkbox.tsx`（实装 + JSDoc 顶部明示 YAGNI 来源）
+- `packages/admin-ui/src/components/admin-checkbox/index.ts`
+- `packages/admin-ui/src/components/admin-textarea/admin-textarea.tsx`
+- `packages/admin-ui/src/components/admin-textarea/index.ts`
+
+**admin-ui 主 index 导出**（`packages/admin-ui/src/index.ts`）：
+追加 2 export（AdminCheckbox / AdminTextarea + Props 类型）
+
+**消费方迁移**：
+- `SettingsTab.tsx`：5 native checkbox → AdminCheckbox / 2 native textarea → AdminTextarea / 删 CHECKBOX_LABEL_STYLE + TEXTAREA_STYLE dead style 常量
+- `ConfigTab.tsx`：JSON textarea → AdminTextarea + monospace prop / 删 JSON_TEXTAREA_STYLE dead style 常量
+
+**新增 2 原语单测**：
+- `tests/unit/components/admin-ui/admin-checkbox/admin-checkbox.test.tsx`（12 it）
+- `tests/unit/components/admin-ui/admin-textarea/admin-textarea.test.tsx`（14 it）
+
+### 落地修正（实施期发现的小问题）
+
+- **testid 位置**：AdminCheckbox / AdminTextarea 的 `data-testid` 应放**内部 input/textarea**（不是 wrapper），因为它们是单焦点元素（与 AdminInput 多 slot 设计不同）；测试期发现"fireEvent click on label"失败后修正
+
+### 质量门禁
+
+- typecheck + lint 全绿
+- **3821 unit + 40 integration PASS**（baseline 3795 → 3821 +26：AdminCheckbox 12 + AdminTextarea 14）
+- 消费方迁移零回归：SettingsTab 12 + ConfigTab 13 = 25 PASS（既有测试沿用 testid 自然兼容）
+- verify:adr-contracts 6 类全绿（含 FAIL fast verify-style-shorthand-conflict 0 命中）
+
+### 共享原语率回升
+
+- SettingsTab：~75%（CHG-SN-6-07 落地时）→ **~95%**（本卡迁移后；仅 number input 用原生 AdminInput type="number"，已 admin-ui 兜底）
+- ConfigTab：~85%（CHG-SN-6-05）→ **~95%**（textarea 迁移）
+- 整体 SettingsContainer 5 Tab 共享原语率回到 ≥ 80% 硬清单阈值
+
+### admin-ui 原语家族（CHG-SN-6-09 后）
+
+| 原语 | 状态 | 落地卡 |
+|---|---|---|
+| AdminButton | ✅ | CHG-SN-5-PRE-03-B |
+| AdminInput | ✅ | CHG-SN-5-PRE-03-C |
+| AdminSelect | ✅ | CHG-SN-5-PRE-03-D |
+| AdminCard | ✅ | CHG-SN-5-PRE-03-E |
+| Popover | ✅ | CHG-SN-5-PRE-03-F |
+| PageHeader | ✅ | CHG-SN-5-PRE-03-A |
+| **AdminCheckbox** | ✅ 本卡 | CHG-SN-6-09 |
+| **AdminTextarea** | ✅ 本卡 | CHG-SN-6-09 |
+
+8 form 原语全集 — admin 表单视图未来均可 100% 共享原语覆盖。
+
+### 关键发现
+
+- **accent-color 是 CSS 2021 标准**：原生 checkbox 上色无需自绘 svg；Safari < 15.4 渲染原生灰框但 admin 内部基线 Chrome 100+ 接受
+- **testid 位置取决于元素聚焦性**：单焦点元素（checkbox / textarea）的 testid 应在内部 control 节点；多 slot 元素（AdminInput prefix+input+suffix）放 wrapper
+- **JSDoc 强制 YAGNI 明示是 Opus CONDITIONAL 落地条件**：未来如有 ≥ 2 处差异化需求 → 增量加 prop 不破契约；当前文档化是"过程教训"沉淀
+
+### 后续触发
+
+- **下一卡候选（从易到难）**：
+  - R-MID-1 legacy 11 项 EXEMPT 补齐（跨边界改 v1 ModerationService）
+  - analytics + recharts vs visx 候选依赖 ADR（Opus 评审）
+  - crawler + DAG（reference A2 待明确）
+  - 通知 Hub / 大数据原语（react-virtual ADR）

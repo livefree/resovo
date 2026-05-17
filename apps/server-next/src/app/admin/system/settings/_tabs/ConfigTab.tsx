@@ -24,6 +24,7 @@ import {
   AdminCard,
   AdminButton,
   AdminInput,
+  AdminTextarea,
   ErrorState,
   LoadingState,
   useToast,
@@ -54,22 +55,6 @@ const FIELD_HINT_STYLE: CSSProperties = {
   fontSize: 'var(--font-size-xs)',
   color: 'var(--fg-muted)',
   marginTop: '4px',
-}
-
-const JSON_TEXTAREA_STYLE: CSSProperties = {
-  width: '100%',
-  minHeight: '300px',
-  padding: '12px',
-  fontSize: 'var(--font-size-xs)',
-  fontFamily: 'var(--font-mono, ui-monospace, monospace)',
-  background: 'var(--bg-surface-sunken)',
-  color: 'var(--fg-default)',
-  border: '1px solid var(--border-default)',
-  borderRadius: 'var(--radius-sm)',
-  resize: 'vertical',
-  whiteSpace: 'pre',
-  overflowWrap: 'normal',
-  overflowX: 'auto',
 }
 
 const ACTION_ROW_STYLE: CSSProperties = {
@@ -192,11 +177,12 @@ export function ConfigTab() {
         <label style={FIELD_LABEL_STYLE} htmlFor="config-file-textarea">
           configFile (JSON)
         </label>
-        <textarea
+        <AdminTextarea
           id="config-file-textarea"
           value={configFile}
           onChange={(e) => { setConfigFile(e.target.value); setDirty(true) }}
-          style={JSON_TEXTAREA_STYLE}
+          rows={14}
+          monospace
           spellCheck={false}
           data-testid="config-file-textarea"
           aria-label="configFile JSON"
