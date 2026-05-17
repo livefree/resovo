@@ -6420,3 +6420,110 @@ export interface AdminAuditLogDetail extends AdminAuditLogListRow {
 - **CHG-SN-4-05**（AuditLogService fire-and-forget 写入位点）：本 ADR 在同一 service 文件内追加 read 方法，保持 write 路径零回归
 - **plan v1.4 §3.0.5**（action_type 写入位点真源表）：enums 端点反射枚举的真源依据
 - **plan §4.5 R7 MUST-8**（ADR-端点先后协议）：本 ADR 起草的触发依据（`npm run verify:endpoint-adr` 自动核验）
+
+---
+
+## ADR-119-NEGATED：Analytics 图表库选型暂不引入 — recharts/visx 双候选 NEGATED
+
+- **日期**：2026-05-16
+- **状态**：Accepted（NEGATED 决策）
+- **决策者**：主循环 claude-opus-4-7 / arch-reviewer (claude-opus-4-7) — 1 轮 PASS A 级
+- **关联**：ADR-100 §4.7 候选依赖 / ADR-114-NEGATED line_key NEGATED 范式 / ADR-102 design-tokens 三层 / ADR-103a admin-ui Spark 契约 / CHG-DESIGN-09 AnalyticsView 落地 / CHG-DESIGN-07 7A Spark 沉淀
+- **对应交付**：CHG-SN-6-11（M-SN-6 plan §4.7 候选依赖触发评审）
+
+### 议题
+
+`/admin/analytics`（IA v1 已 redirect 到 `/admin?tab=analytics`，ADR-100 IA-2）的 analytics 视图首次落地前，按 ADR-100 §4.7 候选依赖协议须在 `recharts` 与 `visx` 之间二选一：
+- **方案 A（采纳，NEGATED 当前候选）**：暂不引入第三方图表库；沿用 CHG-DESIGN-09 已落地的 self-rendered SVG + admin-ui Spark + CSS grid
+- **方案 B（否定）**：引入 `recharts`（~80KB gz）— React 优先 / API 友好 / declarative
+- **方案 C（否定）**：引入 `visx`（~50KB gz / 按需 tree-shake）— D3 lower-level / 自由度高 / bundle 更紧
+
+### 决策
+
+**方案 A 采纳；方案 B / C 同时否定（NEGATED）**。ADR-100 §4.7 候选依赖中"图表：recharts vs visx"条目状态：候选 → **NEGATED（CHG-SN-6-11 / 2026-05-16）**；候选位置保留占位，未来重启走 ADR-119a。
+
+### 决策要点
+
+- **D-119-1（替代方案 = 既成事实）**：CHG-DESIGN-09 已落地 AnalyticsView（419 行）满足 MVP 6 可视化场景：4 KpiCard（含 60×18 sparkline）+ 1 面积折线图（700×200 inline SVG）+ 1 数据源分布（progress bar 列表）+ 1 爬虫任务表。**零图表库依赖**
+- **D-119-2（Spark 已沉淀为通用原语）**：packages/admin-ui Spark（CHG-DESIGN-07 7A 落地 / 113 行 contract）— line/area 双 variant / CSS 变量色板 / 0/1/N 数据点三态 / a11y `role="img"` / Edge Runtime 兼容；trend mini chart 类需求全部由 Spark 接管
+- **D-119-3（AreaChart 内联实现可控）**：AnalyticsView.AreaChart（36 行 SVG）以 `<polyline>` + `<linearGradient>` + 4 grid line 实现；100% token 化（`var(--accent-default)` / `var(--border-subtle)`）；零硬编码颜色
+- **D-119-4（bundle 收益）**：方案 B (recharts) ~80KB gz / 方案 C (visx) ~50KB gz；方案 A 增量 **0 KB**。M-SN-7 cutover 前 bundle budget 仍在评估窗口，过早承诺图表库属于过度投入
+- **D-119-5（维护边界守恒）**：方案 B/C 引入后 admin-ui Spark 与图表库的语义边界（"何时用 Spark / 何时用 recharts"）会出现 2 套 API 共存；NEGATED 路径在"复杂图表需求出现"前保持唯一答案 = Spark + inline SVG
+- **D-119-6（ADR-100 候选清单关系）**：本 ADR 仅 NEGATE"图表"一项；§4.7 候选清单另外两组（DAG / 虚拟滚动）独立保留候选位置，分别在 M-SN-6 DAG 视图与大数据列表首次落地前再各自走 arch-reviewer
+
+### 未来"重新评审"触发条件（避免决策永久性遗忘）
+
+以下任一触发，必须重新评估方案 B/C 必要性（重启 ADR-119a 决策卡或起 PRE 评估 SEQ）：
+
+1. **图表类型超出 mini sparkline + area chart 能力域**：散点图 / 桑基图 / 堆叠柱状图 / 热力图 / treemap / boxplot / radar 任一需求，且不属于 Spark line/area 双 variant 可覆盖范围
+2. **交互性需求出现**：zoom / pan / brush / hover-tooltip-coord-lookup / cross-chart linked highlight / animated transition 中任一真实业务交互能力，且无法用 ≤ 50 行手写 SVG event handler 完成
+3. **复杂图表 ≥ 5 处场景同时存在**：AnalyticsView + 其他视图累计 ≥ 5 处独立复杂图表（每处 > 200 行 SVG）→ 触发 DRY 阈值
+4. **设计稿引入图表库专属视觉风格**：reference 后续版本出现明确依赖 recharts/visx 视觉范式的设计
+5. **M-SN-7 cutover bundle budget 重定义**：cutover 后稳态运营，bundle budget 重新评估若允许 50-100KB gz 增量
+6. **A11y / i18n 复杂度反超**：自实现 SVG chart 的 a11y / i18n 维护成本被图表库内置能力显著超越
+
+### 后果
+
+**正面**：
+1. 零 bundle 增量（server-next initial JS 不受影响）
+2. 零外部维护成本（无版本升级 / breaking change / peer dep 约束）
+3. token 一致性 100%（Spark + inline SVG 全部走 design-tokens 三层）
+4. 可控性最大（每像素直接由消费方控制）
+5. 可逆性强（未来引入图表库零迁移成本）
+6. 与 admin-ui Spark 协同（dual-tier 图表能力）
+
+**负面**：
+1. 复杂图表手写成本高（触发条件 1 激活时首次实施 200-500 行 SVG + 单测）
+2. 交互能力天花板低（zoom/pan/brush/animation 等需 event 协议）
+3. a11y 自维护（无 recharts/visx 内置 default）
+4. 知识沉淀依赖代码注释（no library docs）
+5. 设计稿迁移摩擦（触发条件 4 激活时需重审）
+
+### 替代方案对比
+
+| 维度 | 方案 A（NEGATED 当前候选）| 方案 B（recharts）| 方案 C（visx）|
+|---|---|---|---|
+| Bundle 增量 (gz) | **0 KB** | ~80 KB | ~50 KB（按需 tree-shake）|
+| React 集成度 | 原生 SVG / 无 wrapper | 高 / declarative | 中 / 需手动组合 primitive |
+| Token 一致性 | **100%** | 需 theme 桥接 + 防漂移 | 需 theme 桥接 + 防漂移 |
+| 交互能力 | 低（手写）| 高（内置 tooltip/brush）| 高（D3 完整）|
+| 图表类型覆盖 | line/area/bar/progress（手写）| 全 | 全 |
+| 维护成本（增量）| 0 | 版本/peer/breaking | 6 sub-package 协调 |
+| 学习曲线 | 仅 SVG 标准 | 中 | 陡（D3 + visx primitive）|
+| a11y | 消费方自维护 | 内置基础 + data table | 消费方自维护 |
+| 可逆性 | 高（零迁移成本）| 中（迁出需重写）| 中（迁出需重写）|
+
+**结论**：当前业务复杂度（4 KPI + 1 area + 1 progress + 1 table）下，方案 A 是 Pareto 最优；方案 B/C 等待 §未来触发条件中任一项激活。
+
+### 不在本 ADR 范围（明列防扩张）
+
+- ❌ DAG 候选（reactflow vs dagre-d3）— ADR-100 §4.7 候选清单第 2 组，独立走
+- ❌ 虚拟滚动候选（react-virtual vs react-window）— 独立走
+- ❌ AnalyticsView 真数据接入（STATS-EXTEND-ANALYTICS follow-up）— 数据源切换不改变图表实现范式
+- ❌ Spark 组件契约扩展 — 走 CHG-DESIGN-07 / admin-ui 公开 API 契约 ADR 路径
+- ❌ apps/api / packages/types 代码改动 — 本 ADR 纯文档 governance 决策，0 代码
+
+### 影响文件
+
+仅文档与索引层（0 代码改动）：
+- `docs/decisions.md`：追加本 ADR-119-NEGATED 段
+- `docs/changelog.md`：CHG-SN-6-11 条目
+- `docs/server_next_plan_20260427.md` §4.7 候选清单：标注"图表组 → ADR-119-NEGATED"
+
+### 关联
+
+- **ADR-100**（server-next milestone 总览 §依赖白名单候选清单 — 本 ADR NEGATE "图表组"）
+- **ADR-114-NEGATED**（line_key NEGATED 范式 — 重新评审触发条件结构 / 候选位置占位语义）
+- **ADR-102**（packages/design-tokens 三层 — 方案 A token 一致性背书）
+- **ADR-103a**（packages/admin-ui Shell 公开 API 契约 — Spark 作为通用原语契约背书 / CHG-DESIGN-07 7A）
+- **CHG-DESIGN-09**（AnalyticsView 落地 — 方案 A 既成事实证据）
+- **CHG-DESIGN-07 7A**（Spark 共享原语下沉 — 方案 A 能力底座）
+
+### 4 维度自评
+
+- **命名**：A — ADR-119-NEGATED 对齐 ADR-114-NEGATED 范式；标题明示否定对象 + 否定状态
+- **对称性**：A — 段落结构 7+1 段与 ADR-114-NEGATED 完全对齐；正面/负面后果对称；3 替代方案对比表 9 维度对称
+- **状态职责**：A− — NEGATED 状态明确；ADR-100 §4.7 候选清单只 NEGATE 第 1 组（防止决策范围漂移）；6 条触发条件分布业务/工程/性能/设计四轴
+- **扩展性**：A — 6 条重新评审判据多轴覆盖；future ADR-119a 重启路径清晰；不在范围段明列 DAG / 虚拟滚动两组独立处理
+
+**综合**：A（建议 PASS 一轮，无 CONDITIONAL）

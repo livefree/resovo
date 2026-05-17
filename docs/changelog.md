@@ -8754,3 +8754,68 @@ expect(auditSvc.write).toHaveBeenCalledWith(expect.objectContaining({
   - analytics + recharts vs visx 候选依赖 ADR（Opus 评审 + 视图实施）
   - crawler + DAG（reference A2 待明确）
   - 通知 Hub / 大数据原语（react-virtual ADR）
+
+---
+
+## CHG-SN-6-11 — ADR-119-NEGATED analytics 图表库选型 + AnalyticsView 单测补齐
+- **任务 ID**：CHG-SN-6-11
+- **日期**：2026-05-16
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮 PASS A 级（NEGATED 决策起草）
+- **来源**：plan §4.7 候选依赖白名单图表组（recharts vs visx）M-SN-6 首次落地前评审；现状 AnalyticsView 已用 self-rendered SVG + admin-ui Spark 完成 MVP，零图表库依赖 → 起 NEGATED 决策
+- **范围**：1 ADR + 1 单测文件 ≤ 5 软上限
+
+### 实施内容
+
+**A. ADR-119-NEGATED 决策落盘**（`docs/decisions.md`）：
+- 状态：Accepted（NEGATED）/ 1 轮 PASS A 级
+- 决策：方案 A（NEGATED 当前候选 = self-rendered SVG + admin-ui Spark）采纳 / 方案 B（recharts ~80KB gz）+ 方案 C（visx ~50KB gz）同时否定
+- 决策依据：CHG-DESIGN-09 已落地 AnalyticsView（419 行）+ admin-ui Spark（CHG-DESIGN-07 7A 已沉淀）满足 MVP 6 可视化场景；bundle 增量 0 KB；token 一致性 100%；可逆性强
+- 6 条未来"重新评审"触发条件（防永久遗忘）：图表类型超出 sparkline/area 能力 / 交互需求 / ≥ 5 处复杂图表 / 设计稿引入图表库专属风格 / M-SN-7 cutover bundle budget 松动 / a11y i18n 复杂度反超
+- 3 替代方案对比表 9 维度（bundle / React 集成 / token 一致性 / 交互 / 类型覆盖 / 维护成本 / 学习曲线 / a11y / 可逆性）
+- 4 维度自评 A 级（命名 A / 对称性 A / 状态职责 A− / 扩展性 A）
+
+**B. AnalyticsView 单测补齐**（`tests/unit/components/server-next/admin/dashboard/AnalyticsView.test.tsx`）：
+- 13 测试覆盖：data-analytics-view 根 / 页头 / 4 KPI / period 切换 7d↔30d↔90d / SVG polyline + linearGradient + 4 grid lines / 3 张 card / 源类型分布 / 爬虫任务表 + 实时标识 / 导出报表 disabled + STATS-EXTEND-ANALYTICS title
+- ADR-119-NEGATED 决策守卫：测试断言 SVG polyline 存在（不依赖 recharts / visx）
+
+### D-N 闭环状态（ADR-119-NEGATED 决策要点）
+
+- **D-119-1** 替代方案 = CHG-DESIGN-09 既成事实（zero dependency）— ✅ AnalyticsView 419 行实现 self-rendered SVG + admin-ui Spark；本卡测试覆盖
+- **D-119-2** Spark 已沉淀为通用原语（CHG-DESIGN-07 7A）— ✅ packages/admin-ui Spark 113 行 contract，line/area 双 variant
+- **D-119-3** AreaChart 内联实现 100% token 化 — ✅ AnalyticsView.AreaChart 36 行 SVG，零硬编码颜色
+- **D-119-4** bundle 收益 0 KB 增量 — ✅ 验证 npm 依赖白名单未引入 recharts/visx
+- **D-119-5** 维护边界守恒（避免 Spark vs 图表库语义混乱）— ✅ NEGATED 路径保持单一答案
+- **D-119-6** ADR-100 §4.7 候选清单关系（仅 NEGATE 图表组，DAG / 虚拟滚动独立）— ✅ 不在范围段明列
+
+### 质量门禁（5 项硬清单）
+
+1. **视图测试 ≥ 9** → ✅ 13
+2. **共享原语 ≥ 80%** → ✅ AnalyticsView 消费 KpiCard / Spark / Pill 已是 admin-ui 共享原语（CHG-DESIGN-09 落地时验证）
+3. **R-MID-1 audit payload** → N/A（纯只读视图 + ADR 决策）
+4. **schema 三层防护** → N/A（本卡无 DB 改动）
+5. **PATCH 范围 ≤ 5 项** → ✅ 2 文件
+
+- typecheck + lint 全绿
+- **3860 unit + 40 integration PASS**（baseline 3847 → 3860 +13）
+- verify:adr-contracts 6 类全绿（含 adr-d-numbers ADR-119-NEGATED 6 项闭环）
+
+### 文件范围（2 文件 ≤ 12）
+
+- `docs/decisions.md`（追加 ADR-119-NEGATED 章节）
+- `tests/unit/components/server-next/admin/dashboard/AnalyticsView.test.tsx`（新增 / 13 测试）
+- `docs/changelog.md` + `docs/task-queue.md` + `docs/tasks.md`
+
+### 关键发现
+
+- **plan §4.7 候选依赖白名单首次 NEGATED**：ADR-114-NEGATED line_key 是业务层 NEGATED；本 ADR-119-NEGATED 是技术栈候选 NEGATED（依据 = CHG-DESIGN-09 既成事实 + bundle 收益 + token 一致性）；ADR-100 §4.7 协议明确"候选首次落地前 spawn 评审"，**未实施 = 未触发**自然解决
+- **ADR-114-NEGATED 范式复用**：决策状态 / 重新评审触发条件 / 候选位置占位 / 影响文件明列 / 不在范围段 5 段结构对齐
+- **CHG-DESIGN-09 既成事实成为决策依据**：实施先于评审的"既成事实"在 NEGATED 决策中合法（前提：CHG-DESIGN-09 当时未引入候选依赖白名单内组件，符合 plan §4.7 协议）
+
+### 后续触发
+
+- **ADR-100 §4.7 候选清单更新**（建议本卡 follow-up 或 milestone 收尾时）：line 2048 旁加交叉引用 `→ ADR-119-NEGATED`；§9 ADR 索引追加条目避免后续误判"图表候选未决"
+- **下一卡候选（按从易到难，剩余 M-SN-6 范围）**：
+  - crawler + DAG（reference A2 待明确 / reactflow vs dagre-d3 ADR — 等待 reference 补完，本期可起 NEGATED 占位卡或推迟）
+  - 通知 Hub
+  - 大数据原语（react-virtual ADR — 同样未触发首次落地）
