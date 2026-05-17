@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 无进行中任务；**CHG-SN-6-23 闭环**（Users + Submissions 列表接入 csv-export / 4 文件（2 source + 2 new test）/ users 导出 6 列、submissions 导出 8 列 / +6 测试 / 3983 unit PASS / csv-export 现 4 消费方接入）；下一卡候选（从易到难）：tasks 行操作扫端点 / scheduler-config UI（RETRO audit）/ videos 列表 csv-export 接入 / 通知 Hub / DAG（ADR 前置） -->
+<!-- 无进行中任务；**CHG-SN-6-24 闭环**（VideoListClient 接入 csv-export / trailingNode 与 FilterChipBar Fragment 共存 / 导出 10 列 / filename videos-{iso}.csv / 2 文件 + 1 新测试文件 / +3 测试 / 3986 unit PASS / csv-export 现 5 消费方实证）；下一卡候选（从易到难）：scheduler-config UI RETRO audit / tasks 行操作扫端点 / 通知 Hub / DAG（ADR 前置） -->

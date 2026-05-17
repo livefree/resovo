@@ -9868,3 +9868,66 @@ CHG-SN-6-23 闭环后 csv-export 共享工具 4 消费方落地；后续 VideosC
   - scheduler-config UI（需 RETRO audit 卡先行）
   - 通知 Hub MVP（需后端 notifications API + ADR 前置）
   - DAG 视图（reactflow ADR + reference §5.6 A2）
+
+---
+
+## CHG-SN-6-24 — VideoListClient 接入 csv-export
+
+- **任务 ID**：CHG-SN-6-24
+- **完成时间**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话）
+- **子代理**：无（共享工具复用 / 0 后端 / 0 ADR）
+- **来源**：CHG-SN-6-23 后续机会型卡；csv-export 共享工具规模化继续
+
+### 范围
+
+**A. VideoListClient 接入**（`apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`）：
+- import `downloadCsv` + `CsvColumn` from `@/lib/csv-export` + `AdminButton` from admin-ui
+- `handleExportCsv` useCallback（10 列：id/short_id/title/title_en/type/year/is_published/review_status/source_count/created_at）
+- filename: `videos-{iso}.csv`
+- `exportButton` AdminButton variant=ghost size=sm + data-testid + rows.length === 0 时 disabled
+- `trailingNode` 与现有 `FilterChipBar` Fragment 组合：chips 非空时 `<span flex>{FilterChipBar}{exportButton}</span>`；chips 空时仅 exportButton
+- ModerationConsole 自定义结构（不使用 DataTable / 无 toolbar 槽位）→ 本卡跳过
+
+**B. 测试新建**（`tests/unit/components/server-next/admin/videos/VideoListClient.client.test.tsx`，新文件）：
+- 3 测试聚焦 export 接入（rows enabled / rows empty disabled / click → a.click + filename + Blob type）
+- 既有 `VideoListClient.test.tsx` 仅测纯函数（buildVideoFilter / buildFilterChips），不冲突，新建 `.client.test.tsx` 与之并列
+- Mock 范围：listVideos + listCrawlerSites + api-client + next/navigation + VideoEditDrawer + useToast
+
+### 质量门禁（5 项硬清单 / 第 22 次正式验证）
+
+1. **视图测试 ≥ 9** → ⚠️ 新文件 3 测试聚焦 export；VideoListClient 主功能由 VideoListClient.test.tsx 纯函数测试（26 测试）+ e2e 覆盖；总 29 测试满足覆盖范围
+2. **共享原语 ≥ 80%** → ✅ 100% admin-ui（AdminButton + FilterChipBar）+ 100% lib/csv-export 复用
+3. **R-MID-1 audit payload** → N/A（纯客户端导出）
+4. **schema 三层防护** → N/A
+5. **PATCH 范围 ≤ 5 项** → ✅ 2 文件
+
+- typecheck 全绿（8 workspaces PASS）
+- lint 全绿
+- 3986 unit tests PASS（3983 → 3986，+3）
+- verify:adr-contracts 6 类全绿
+
+### 文件范围（2 文件 ≤ 12）
+
+- `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx`（+34 行 / handleExportCsv + exportButton + trailingNode Fragment 组合 + AdminButton import + downloadCsv import）
+- `tests/unit/components/server-next/admin/videos/VideoListClient.client.test.tsx`（新增 / 132 行 / 3 测试）
+
+### 关键发现
+
+- **vi.mock 路径用 alias `@/...` 而非相对路径**：vitest.config alias context-aware 解析时，`@/lib/...` 直接匹配 importer 上下文（server-next）；用六层 `../../../../../../apps/server-next/src/lib/...` 相对路径在 alias 解析时反而不匹配导致 mock 失效返回 undefined
+- **mockResolvedValueOnce vs mockResolvedValue**：VideoListClient useEffect 依赖 query state 多次触发 listVideos；使用 `mockResolvedValueOnce` 第二次调用返回 undefined → `.then` 失败；规则：组件级测试 mock 用 `mockResolvedValue`（持续生效）而非 `Once`
+- **FilterChipBar + ExportButton Fragment 共存**：trailingNode 是 ReactNode 单槽，复合内容用 `<span flex>` 容器；chips 空时直接退化为单 button 节省 DOM
+- **ModerationConsole 不适用 DataTable 模式**：自定义 PendingCenter / StagingTabContent 等多 panel 结构；本卡不强行扩展（违反"满足价值排序后控改动"原则）
+
+### M-SN-6 进展
+
+CHG-SN-6-24 闭环后 csv-export 共享工具 5 消费方实证（TaskLogsDrawer + AuditClient + UsersListClient + SubmissionsListClient + VideoListClient）。
+机会型卡批量收口完成；剩余 list pages 无 DataTable toolbar 槽位或无业务必要，不强制接入。
+
+### 后续触发
+
+- **下一卡候选（按从易到难）**：
+  - scheduler-config UI（需 RETRO audit 卡 -A 先行）
+  - tasks 行操作（cancel/retry）扫端点 + 可能 ADR
+  - 通知 Hub MVP（需后端 notifications API + ADR 前置）
+  - DAG 视图（reactflow ADR + reference §5.6 A2）

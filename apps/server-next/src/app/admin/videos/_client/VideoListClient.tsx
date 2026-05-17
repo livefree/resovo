@@ -5,12 +5,13 @@ import type { CSSProperties } from 'react'
 import {
   DataTable, FilterChipBar,
   EmptyState, ErrorState, LoadingState, useTableQuery,
-  Pill, VisChip, Thumb, DualSignal,
+  Pill, VisChip, Thumb, DualSignal, AdminButton,
   type TableColumn, type TableQueryPatch, type TableSelectionState, type TableView, type ViewScope,
 } from '@resovo/admin-ui'
 import { useTableRouterAdapter } from '@/lib/table-router-adapter'
 import { VIDEO_COLUMN_DESCRIPTORS } from '@/lib/videos/columns'
 import { listVideos, batchPublish, batchUnpublish, reviewVideo } from '@/lib/videos/api'
+import { downloadCsv, type CsvColumn } from '@/lib/csv-export'
 import { listCrawlerSites } from '@/lib/crawler/api'
 import type { VideoAdminRow, CrawlerSite, VideoType } from '@/lib/videos'
 import {
@@ -551,9 +552,45 @@ export function VideoListClient() {
   // CHG-DESIGN-02 Step 7B：业务 filter chips（key 命名空间为 q/type/status/...，
   // 与 column.id 不一致）保留外置 FilterChipBar 走 toolbar.trailing；DataTable
   // 内置 filter chips 显式关闭（hideFilterChips: true）避免重复渲染空集
+  // CHG-SN-6-24：与 export 按钮共存（Fragment 组合）
+  const handleExportCsv = useCallback(() => {
+    if (rows.length === 0) return
+    const columns: readonly CsvColumn<VideoAdminRow>[] = [
+      { header: 'id',            accessor: (r) => r.id },
+      { header: 'short_id',      accessor: (r) => r.short_id },
+      { header: 'title',         accessor: (r) => r.title },
+      { header: 'title_en',      accessor: (r) => r.title_en },
+      { header: 'type',          accessor: (r) => r.type },
+      { header: 'year',          accessor: (r) => r.year },
+      { header: 'is_published',  accessor: (r) => r.is_published },
+      { header: 'review_status', accessor: (r) => r.review_status ?? null },
+      { header: 'source_count',  accessor: (r) => r.source_count },
+      { header: 'created_at',    accessor: (r) => r.created_at },
+    ]
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    downloadCsv(rows, columns, `videos-${ts}.csv`)
+  }, [rows])
+
+  const exportButton = (
+    <AdminButton
+      variant="ghost"
+      size="sm"
+      onClick={handleExportCsv}
+      disabled={rows.length === 0}
+      data-testid="videos-export-csv"
+    >
+      导出 CSV
+    </AdminButton>
+  )
+
   const trailingNode = chips.length > 0
-    ? <FilterChipBar items={chips} onClearAll={() => patch({ filters: new Map() })} />
-    : undefined
+    ? (
+        <span style={{ display: 'inline-flex', gap: '8px', alignItems: 'center' }}>
+          <FilterChipBar items={chips} onClearAll={() => patch({ filters: new Map() })} />
+          {exportButton}
+        </span>
+      )
+    : exportButton
 
   // ── CHG-DESIGN-08 8B saved views handlers ─────────────────────
   // viewsConfig 切换：activeId 同步到 query state（不含 selection — view scope 与选区无关）
