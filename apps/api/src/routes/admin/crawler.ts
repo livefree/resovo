@@ -491,6 +491,18 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     const signaledRunning = await requestCancelRunningTasksByRun(db, id)
     await crawlerRunsQueries.syncRunStatusFromTasks(db, id)
     const refreshed = await crawlerRunsQueries.getRunById(db, id)
+
+    // CHG-SN-6-16-A：审计 — crawler_run.cancel
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'crawler_run.cancel',
+      targetKind: 'system',
+      targetId: id,
+      beforeJsonb: { runId: id, status: run.status, controlStatus: run.controlStatus },
+      afterJsonb: { runId: id, controlStatus: 'cancelling', cancelledPending, signaledRunning },
+      requestId: request.id,
+    })
+
     return reply.send({
       data: {
         run: refreshed,
@@ -510,6 +522,18 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     const nextControlStatus = run.status === 'running' ? 'pausing' : 'paused'
     await crawlerRunsQueries.updateRunControlStatus(db, id, nextControlStatus)
     await crawlerRunsQueries.syncRunStatusFromTasks(db, id)
+
+    // CHG-SN-6-16-A：审计 — crawler_run.pause
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'crawler_run.pause',
+      targetKind: 'system',
+      targetId: id,
+      beforeJsonb: { runId: id, status: run.status, controlStatus: run.controlStatus },
+      afterJsonb: { runId: id, controlStatus: nextControlStatus },
+      requestId: request.id,
+    })
+
     return reply.send({ data: { runId: id, controlStatus: nextControlStatus } })
   })
 
@@ -522,6 +546,18 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     }
     await crawlerRunsQueries.updateRunControlStatus(db, id, 'active')
     await crawlerRunsQueries.syncRunStatusFromTasks(db, id)
+
+    // CHG-SN-6-16-A：审计 — crawler_run.resume
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'crawler_run.resume',
+      targetKind: 'system',
+      targetId: id,
+      beforeJsonb: { runId: id, status: run.status, controlStatus: run.controlStatus },
+      afterJsonb: { runId: id, controlStatus: 'active' },
+      requestId: request.id,
+    })
+
     return reply.send({ data: { runId: id, controlStatus: 'active' } })
   })
 

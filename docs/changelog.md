@@ -9106,3 +9106,78 @@ expect(auditSvc.write).toHaveBeenCalledWith(expect.objectContaining({
   - 通知 Hub MVP（需后端 notifications API + ADR 前置 / NotificationDrawer 已存在）
   - CrawlerJobs 行操作（cancel/pause/resume + detail）
   - DAG 视图（等 reference A2）
+
+---
+
+## CHG-SN-6-16-A — CrawlerRun cancel/pause/resume audit 补齐（R-MID-1 第 9 次系统化）
+- **任务 ID**：CHG-SN-6-16-A
+- **日期**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：无（与 CHG-SN-6-14 同款机械模式 / 沿用范式）
+- **来源**：CHG-SN-6-15 runs 列表 MVP 闭环；行操作 cancel/pause/resume v1 端点已存在但无 audit；本卡 -A 子卡承担 audit 补齐（-B 待视图行操作 UI 接入）
+- **范围**：5 文件 ≤ 5 软上限
+
+### 实施内容
+
+**A. 4 套真源全同步**（3 项 action_type）：
+- `packages/types/src/admin-moderation.types.ts`：union 扩 3（crawler_run.cancel / pause / resume）
+- `apps/api/src/services/AuditLogService.ts`：ACTION_TYPES 常量同步
+- `tests/unit/api/audit-log-service-enums-set-equal.test.ts`：EXPECTED_* 镜像同步
+- `tests/unit/api/audit-log-coverage.test.ts`：REQUIRED + PAYLOAD_ASSERTION_REQUIRED 各扩 3（28 → 31 项 strict）
+
+**B. 3 v1 写端点 auditSvc.write 接入**（`apps/api/src/routes/admin/crawler.ts`）：
+- POST /admin/crawler/runs/:id/cancel — beforeJsonb: { runId, status, controlStatus } / afterJsonb: { runId, controlStatus: 'cancelling', cancelledPending, signaledRunning }
+- POST /admin/crawler/runs/:id/pause — beforeJsonb: { runId, status, controlStatus } / afterJsonb: { runId, controlStatus: pausing|paused }（根据 status running vs queued 选择）
+- POST /admin/crawler/runs/:id/resume — beforeJsonb: { runId, status, controlStatus } / afterJsonb: { runId, controlStatus: 'active' }
+- **target_kind = 'system'** + **targetId = run.id UUID**（052 migration CHECK 约束内 / 运维域，避免扩 'crawler_run' DB 约束）
+
+**C. R-MID-1 payload 内容断言**（`tests/unit/api/crawler-runs-control-audit.test.ts` 新增 5 测试）：
+- cancel: payload 完整断言 + 404 path 不写 audit 守卫
+- pause: running → pausing 状态切换 + queued → paused 边界
+- resume: paused → active 状态切换
+- mock 模式：`@/api/lib/config` + redis + es + queue + crawlerRuns + crawlerTasks + insertAuditLog hoisted（5 层 mock 应对 crawler.ts import 链）
+
+### 质量门禁（5 项硬清单 / 第 12 次正式验证）
+
+1. **视图测试 ≥ 9** → N/A（route-level audit 补齐 / 非视图卡）
+2. **共享原语 ≥ 80%** → N/A
+3. **R-MID-1 audit payload** → ✅ **3 新 action_type 全 PAYLOAD_REQUIRED（28 → 31 项 strict）**
+4. **schema 三层防护** → ✅ 052 migration CHECK 已含 'system' target_kind（无需扩 DB）+ 类型 union + service 常量 + 3 test
+5. **PATCH 范围 ≤ 5 项** → ✅ 5 文件
+
+- typecheck + lint 全绿
+- audit-log-coverage REQUIRED **31 项全 PASS**（it.each 强制守卫）
+- verify:adr-contracts 6 类全绿（adr-d-numbers 32 条 / verify:endpoint-adr 148+ 路由）
+
+### R-MID-1 系统化进展（第 1→9 次）
+
+| 次 | 卡 | 范围 | strict 总数 |
+|---|---|---|---|
+| 1-5 | M-SN-4 多卡 | ADR-104 + 多视图 service test | 9 |
+| 6 | CHG-SN-5-CHECKLIST-AUDIT-2 P0-1 | 代码守卫落地 | 9 |
+| 6.5 | CHG-SN-6-RETRO-3-A | system v1 4 端点 | 13 |
+| 7 | CHG-SN-6-10 | legacy 11 项 EXEMPT 清零 | 24 |
+| 8 | CHG-SN-6-14 | CrawlerSite v1 4 端点 | 28 |
+| **9** | **CHG-SN-6-16-A（本卡）** | **CrawlerRun 3 行操作** | **31** |
+
+### 文件范围（5 文件 ≤ 12）
+
+- `packages/types/src/admin-moderation.types.ts`（union 扩 3）
+- `apps/api/src/services/AuditLogService.ts`（ACTION_TYPES 常量同步）
+- `apps/api/src/routes/admin/crawler.ts`（3 端点 auditSvc.write）
+- `tests/unit/api/audit-log-coverage.test.ts`（REQUIRED + PAYLOAD_ASSERTION_REQUIRED 扩 3）
+- `tests/unit/api/audit-log-service-enums-set-equal.test.ts`（EXPECTED 扩 3）
+- `tests/unit/api/crawler-runs-control-audit.test.ts`（新增 / 5 测试）
+
+### 关键发现
+
+- **target_kind='system' 复用避开 052 CHECK 扩展**：crawler_run 不在 052 CHECK 约束内，但 'system' 已含（运维域语义合理）；避免触发 migration + 三层防护扩展工作量
+- **mock 5 层应对 crawler.ts import 链**：config → process.exit 风险 / redis / es / queue / crawlerRuns / crawlerTasks 多依赖；首次跑测试 5 fail（process.exit unexpectedly called）→ 加 config mock 后全 PASS
+- **R-MID-1 协议持续逼近 v1 端点全覆盖**：本卡后 v1 剩余无 audit 写端点主要在 crawler tasks（POST tasks / DELETE tasks）+ moderation 边缘场景；可继续 RETRO 卡补齐
+
+### 后续触发
+
+- **CHG-SN-6-16-B**（独立卡）：CrawlerRunsView 加 cancel/pause/resume 行操作 UI + lib/crawler API 扩展 + 视图测试
+- **下一卡候选（按从易到难）**：
+  - CHG-SN-6-16-B（行操作 UI）
+  - 通知 Hub MVP（需后端 notifications API + ADR 前置）

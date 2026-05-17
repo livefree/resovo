@@ -69,6 +69,10 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   'crawler_site.update',
   'crawler_site.delete',
   'crawler_site.batch',
+  // CHG-SN-6-16-A：CrawlerRun 行操作 audit 补齐
+  'crawler_run.cancel',
+  'crawler_run.pause',
+  'crawler_run.resume',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',

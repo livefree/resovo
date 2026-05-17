@@ -142,6 +142,10 @@ export type AdminAuditActionType =
   | 'crawler_site.update'        // PATCH /admin/crawler/sites/:key
   | 'crawler_site.delete'        // DELETE /admin/crawler/sites/:key
   | 'crawler_site.batch'         // POST /admin/crawler/sites/batch
+  // CHG-SN-6-16-A：CrawlerRun 行操作 audit 补齐（R-MID-1 系统化第 9 次）
+  | 'crawler_run.cancel'         // POST /admin/crawler/runs/:id/cancel
+  | 'crawler_run.pause'          // POST /admin/crawler/runs/:id/pause
+  | 'crawler_run.resume'         // POST /admin/crawler/runs/:id/resume
 
 export type AdminAuditTargetKind =
   | 'video'

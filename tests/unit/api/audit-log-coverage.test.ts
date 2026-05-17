@@ -56,6 +56,10 @@ const REQUIRED_ACTION_TYPES = [
   'crawler_site.update',        // PATCH /admin/crawler/sites/:key
   'crawler_site.delete',        // DELETE /admin/crawler/sites/:key
   'crawler_site.batch',         // POST /admin/crawler/sites/batch
+  // CHG-SN-6-16-A：CrawlerRun 行操作 audit 补齐（R-MID-1 系统化第 9 次）
+  'crawler_run.cancel',         // POST /admin/crawler/runs/:id/cancel
+  'crawler_run.pause',          // POST /admin/crawler/runs/:id/pause
+  'crawler_run.resume',         // POST /admin/crawler/runs/:id/resume
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -103,6 +107,10 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'crawler_site.update',
   'crawler_site.delete',
   'crawler_site.batch',
+  // CHG-SN-6-16-A：R-MID-1 第 9 次系统化（CrawlerRun 行操作）
+  'crawler_run.cancel',
+  'crawler_run.pause',
+  'crawler_run.resume',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

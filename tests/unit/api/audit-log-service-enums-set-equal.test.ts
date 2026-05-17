@@ -54,6 +54,10 @@ const EXPECTED_ACTION_TYPES = [
   'crawler_site.update',
   'crawler_site.delete',
   'crawler_site.batch',
+  // CHG-SN-6-16-A
+  'crawler_run.cancel',
+  'crawler_run.pause',
+  'crawler_run.resume',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [
