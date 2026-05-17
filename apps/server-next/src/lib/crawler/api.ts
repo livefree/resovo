@@ -147,3 +147,40 @@ export async function listCrawlerRuns(params: ListCrawlerRunsParams = {}): Promi
   const q = qs.toString()
   return apiClient.get<ListCrawlerRunsResult>(`/admin/crawler/runs${q ? `?${q}` : ''}`)
 }
+
+// ── Runs 行操作（CHG-SN-6-16-B / audit 已通过 -A 补齐写入位点）───────────
+
+export interface CancelRunResult {
+  readonly run: CrawlerRun | null
+  readonly cancelledPending: number
+  readonly signaledRunning: number
+}
+
+export interface PauseResumeResult {
+  readonly runId: string
+  readonly controlStatus: string
+}
+
+export async function cancelCrawlerRun(id: string): Promise<CancelRunResult> {
+  const res = await apiClient.post<{ data: CancelRunResult }>(
+    `/admin/crawler/runs/${encodeURIComponent(id)}/cancel`,
+    {},
+  )
+  return res.data
+}
+
+export async function pauseCrawlerRun(id: string): Promise<PauseResumeResult> {
+  const res = await apiClient.post<{ data: PauseResumeResult }>(
+    `/admin/crawler/runs/${encodeURIComponent(id)}/pause`,
+    {},
+  )
+  return res.data
+}
+
+export async function resumeCrawlerRun(id: string): Promise<PauseResumeResult> {
+  const res = await apiClient.post<{ data: PauseResumeResult }>(
+    `/admin/crawler/runs/${encodeURIComponent(id)}/resume`,
+    {},
+  )
+  return res.data
+}

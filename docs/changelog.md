@@ -9181,3 +9181,77 @@ expect(auditSvc.write).toHaveBeenCalledWith(expect.objectContaining({
 - **下一卡候选（按从易到难）**：
   - CHG-SN-6-16-B（行操作 UI）
   - 通知 Hub MVP（需后端 notifications API + ADR 前置）
+
+---
+
+## CHG-SN-6-16-B — CrawlerRunsView 行操作 UI（cancel/pause/resume）
+
+- **任务 ID**：CHG-SN-6-16-B
+- **完成时间**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话）
+- **子代理**：无（CHG-SN-6-16-A audit 已就位 / 本卡纯前端消费）
+- **来源**：CHG-SN-6-16-A 后续 -B 子卡（cancel/pause/resume 行操作 UI 接入）；plan §4.5 -A/-B 拆分范式收口
+
+### 范围
+
+**A. lib/crawler/api 扩 3 函数**（`apps/server-next/src/lib/crawler/api.ts`）：
+- `cancelCrawlerRun(id)` → `POST /admin/crawler/runs/:id/cancel`，返回 `CancelRunResult { run, cancelledPending, signaledRunning }`
+- `pauseCrawlerRun(id)` → `POST /admin/crawler/runs/:id/pause`，返回 `PauseResumeResult { runId, controlStatus }`
+- `resumeCrawlerRun(id)` → `POST /admin/crawler/runs/:id/resume`
+
+**B. CrawlerRunsView 行操作 UI**（`apps/server-next/src/app/admin/crawler/_client/CrawlerRunsView.tsx`）：
+- `buildColumns` signature 重构为 `BuildColumnsOptions { onCancel, onPause, onResume, pendingRunId }`
+- 操作列：状态驱动按钮组合
+  - `running` → pause + cancel
+  - `queued` → pause + cancel
+  - `paused` → resume + cancel
+  - `success/failed/partial_failed/cancelled` → `—`
+- handlers：3 个 `useCallback`，cancel 含 `window.confirm` 守卫，三者均通过 toast 反馈 success/danger，pendingRunId 期间 disable 重复点击
+- 错误归一：`ApiClientError` instanceof 优先 message，否则 `Error` 兜底
+
+**C. 测试覆盖**（`tests/unit/components/server-next/admin/crawler/CrawlerRunsView.test.tsx`，13 → **20 测试**，+8 新增 -1 调整）：
+- 13. running 行渲染 pause + cancel 按钮，无 resume
+- 14. paused 行渲染 resume + cancel，无 pause
+- 15. success 行不渲染任何操作按钮
+- 16. cancel 按钮 confirm 通过 → 调 API + 成功 toast
+- 17. cancel 按钮 confirm 取消 → 不调 API
+- 18. pause 按钮 → API + 成功 toast
+- 19. resume 按钮 → API + 成功 toast
+- 20. cancel 失败 → toast danger
+- 复用既有 12 既有测试零回归
+
+### 质量门禁（5 项硬清单 / 第 13 次正式验证）
+
+1. **视图测试 ≥ 9** → ✅ 20 测试（CrawlerRunsView）
+2. **共享原语 ≥ 80%** → ✅ AdminButton + DataTable + ApiClientError + useToast（100% admin-ui 复用，0 native button）
+3. **R-MID-1 audit payload** → ✅ 沿用 -A 已落地 PAYLOAD_REQUIRED 31 项（本卡纯前端消费 v1 端点，audit 写入位点已在 16-A 闭环）
+4. **schema 三层防护** → N/A（前端消费卡 / 无 schema 改动）
+5. **PATCH 范围 ≤ 5 项** → ✅ 2 文件（远低于上限）
+
+- typecheck 全绿（8 个 workspace 全 PASS）
+- lint 全绿（pre-existing img warning 不在本卡范围）
+- 3916 unit tests PASS（3908 → 3916，+8）
+- verify:adr-contracts 6 类全绿
+
+### 文件范围（2 文件 ≤ 12）
+
+- `apps/server-next/src/lib/crawler/api.ts`（+37 行 / 3 函数 + 2 接口）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerRunsView.tsx`（+89 行 / 操作列 + 3 handler + buildColumns refactor）
+- `tests/unit/components/server-next/admin/crawler/CrawlerRunsView.test.tsx`（+98 行 / 8 新测 + api-client mock）
+
+### 关键发现
+
+- **api-client 路径解析**：CrawlerRunsView 引入 `ApiClientError`（自 `@/lib/api-client`）后，vitest 不解析 Next alias 的 `@/stores/authStore` import 链 → 在测试 mock `api-client` 模块（stub `ApiClientError` 类 + apiClient 方法），避免触达 authStore；与现有 CrawlerClient.test 范式一致
+- **buildColumns 签名重构**：从 `buildColumns()` → `buildColumns(opts)`，纯函数闭包消除 stale closure 风险；handlers 通过 `useMemo` 依赖 `[handleCancel, handlePause, handleResume, pendingRunId]` 重建列定义
+- **状态驱动按钮组合**：单一真源（`STATUS_BADGE` + 三个布尔 `showCancel/showPause/showResume`），未来扩 `freeze`/`retry` 等新动作只需扩展同模式
+- **toast 多 level**：success（已请求取消/已暂停/已恢复）+ danger（失败）双路径全覆盖
+
+### M-SN-6 进展
+
+CHG-SN-6-16 -A/-B 双子卡闭环 → /admin/crawler MVP 完整三视图（sites + runs 列表 + runs 行操作），剩余独立卡：runs detail / tasks per run / freeze 控制 / DAG 视图 / 通知 Hub。
+
+### 后续触发
+
+- 通知 Hub MVP（需后端 notifications API + ADR 前置）
+- DAG 视图（reactflow ADR + reference §5.6 A2）
+- runs detail 视图（路由 `/admin/crawler/runs/:id` + tasks-per-run 子表）

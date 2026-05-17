@@ -31,10 +31,14 @@ import {
 } from '@resovo/admin-ui'
 import {
   listCrawlerRuns,
+  cancelCrawlerRun,
+  pauseCrawlerRun,
+  resumeCrawlerRun,
   type CrawlerRun,
   type CrawlerRunStatus,
   type CrawlerRunTriggerType,
 } from '@/lib/crawler/api'
+import { ApiClientError } from '@/lib/api-client'
 
 const SECTION_STYLE: CSSProperties = {
   display: 'flex',
@@ -76,7 +80,14 @@ const STATUS_BADGE: Record<CrawlerRunStatus, { label: string; bg: string; color:
   cancelled:      { label: '已取消', bg: 'var(--bg-surface-sunken)', color: 'var(--fg-muted)' },
 }
 
-function buildColumns(): readonly TableColumn<CrawlerRun>[] {
+interface BuildColumnsOptions {
+  readonly onCancel: (row: CrawlerRun) => void
+  readonly onPause: (row: CrawlerRun) => void
+  readonly onResume: (row: CrawlerRun) => void
+  readonly pendingRunId: string | null
+}
+
+function buildColumns({ onCancel, onPause, onResume, pendingRunId }: BuildColumnsOptions): readonly TableColumn<CrawlerRun>[] {
   return [
     {
       id: 'id',
@@ -168,6 +179,61 @@ function buildColumns(): readonly TableColumn<CrawlerRun>[] {
         return `${min}m${sec % 60}s`
       },
     },
+    {
+      id: 'ops',
+      header: '操作',
+      accessor: (r) => r.status,
+      width: 180,
+      defaultVisible: true,
+      cell: ({ row }) => {
+        const pending = pendingRunId === row.id
+        const showCancel = row.status === 'queued' || row.status === 'running' || row.status === 'paused'
+        const showPause = row.status === 'running' || row.status === 'queued'
+        const showResume = row.status === 'paused'
+
+        if (!showCancel && !showPause && !showResume) {
+          return <span style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-xs)' }}>—</span>
+        }
+
+        return (
+          <span style={{ display: 'inline-flex', gap: '4px' }}>
+            {showPause ? (
+              <AdminButton
+                variant="ghost"
+                size="sm"
+                disabled={pending}
+                onClick={() => onPause(row)}
+                data-testid={`run-pause-${row.id}`}
+              >
+                暂停
+              </AdminButton>
+            ) : null}
+            {showResume ? (
+              <AdminButton
+                variant="ghost"
+                size="sm"
+                disabled={pending}
+                onClick={() => onResume(row)}
+                data-testid={`run-resume-${row.id}`}
+              >
+                恢复
+              </AdminButton>
+            ) : null}
+            {showCancel ? (
+              <AdminButton
+                variant="danger"
+                size="sm"
+                disabled={pending}
+                onClick={() => onCancel(row)}
+                data-testid={`run-cancel-${row.id}`}
+              >
+                取消
+              </AdminButton>
+            ) : null}
+          </span>
+        )
+      },
+    },
   ]
 }
 
@@ -208,7 +274,64 @@ export function CrawlerRunsView() {
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
 
-  const columns = useMemo(() => buildColumns(), [])
+  const [pendingRunId, setPendingRunId] = useState<string | null>(null)
+
+  const handleCancel = useCallback(async (run: CrawlerRun) => {
+    if (typeof window !== 'undefined' && !window.confirm(`确定取消 run ${run.id.slice(0, 8)}…？`)) return
+    setPendingRunId(run.id)
+    try {
+      const result = await cancelCrawlerRun(run.id)
+      toast.push({
+        title: '已请求取消',
+        description: `已取消排队 ${result.cancelledPending}，已通知运行中 ${result.signaledRunning}`,
+        level: 'success',
+      })
+      refresh()
+    } catch (err: unknown) {
+      const msg = err instanceof ApiClientError ? err.message : (err instanceof Error ? err.message : '请重试')
+      toast.push({ title: '取消失败', description: msg, level: 'danger' })
+    } finally {
+      setPendingRunId(null)
+    }
+  }, [toast, refresh])
+
+  const handlePause = useCallback(async (run: CrawlerRun) => {
+    setPendingRunId(run.id)
+    try {
+      const result = await pauseCrawlerRun(run.id)
+      toast.push({ title: '已暂停', description: `controlStatus: ${result.controlStatus}`, level: 'success' })
+      refresh()
+    } catch (err: unknown) {
+      const msg = err instanceof ApiClientError ? err.message : (err instanceof Error ? err.message : '请重试')
+      toast.push({ title: '暂停失败', description: msg, level: 'danger' })
+    } finally {
+      setPendingRunId(null)
+    }
+  }, [toast, refresh])
+
+  const handleResume = useCallback(async (run: CrawlerRun) => {
+    setPendingRunId(run.id)
+    try {
+      const result = await resumeCrawlerRun(run.id)
+      toast.push({ title: '已恢复', description: `controlStatus: ${result.controlStatus}`, level: 'success' })
+      refresh()
+    } catch (err: unknown) {
+      const msg = err instanceof ApiClientError ? err.message : (err instanceof Error ? err.message : '请重试')
+      toast.push({ title: '恢复失败', description: msg, level: 'danger' })
+    } finally {
+      setPendingRunId(null)
+    }
+  }, [toast, refresh])
+
+  const columns = useMemo(
+    () => buildColumns({
+      onCancel: handleCancel,
+      onPause: handlePause,
+      onResume: handleResume,
+      pendingRunId,
+    }),
+    [handleCancel, handlePause, handleResume, pendingRunId],
+  )
 
   const hasFilter = Boolean(statusFilter || triggerTypeFilter)
 
@@ -255,9 +378,6 @@ export function CrawlerRunsView() {
     }),
     [page, pageSize, sort],
   )
-
-  // 暴露 refresh 给 toast 错误处理 + 触发场景
-  void toast
 
   return (
     <div data-crawler-runs-view style={SECTION_STYLE}>

@@ -18,10 +18,26 @@ import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 const listCrawlerRunsMock = vi.fn()
+const cancelCrawlerRunMock = vi.fn()
+const pauseCrawlerRunMock = vi.fn()
+const resumeCrawlerRunMock = vi.fn()
 const toastPushMock = vi.fn()
 
 vi.mock('../../../../../../apps/server-next/src/lib/crawler/api', () => ({
   listCrawlerRuns: (...args: unknown[]) => listCrawlerRunsMock(...args),
+  cancelCrawlerRun: (...args: unknown[]) => cancelCrawlerRunMock(...args),
+  pauseCrawlerRun: (...args: unknown[]) => pauseCrawlerRunMock(...args),
+  resumeCrawlerRun: (...args: unknown[]) => resumeCrawlerRunMock(...args),
+}))
+
+// api-client 内部依赖 authStore（Next.js alias 在 vitest 中未解析），stub 出 ApiClientError
+vi.mock('../../../../../../apps/server-next/src/lib/api-client', () => ({
+  ApiClientError: class ApiClientError extends Error {
+    constructor(message: string, public readonly status?: number) { super(message) }
+  },
+  apiClient: {
+    get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn(), put: vi.fn(),
+  },
 }))
 
 vi.mock('@resovo/admin-ui', async () => {
@@ -76,6 +92,12 @@ const RUN_RUNNING = {
   finishedAt: null,
 }
 
+const RUN_PAUSED = {
+  ...RUN_RUNNING,
+  id: '33333333-4444-5555-6666-777777777777',
+  status: 'paused' as const,
+}
+
 const RESULT_3 = {
   data: [RUN_SUCCESS, RUN_FAILED, RUN_RUNNING],
   pagination: { total: 3, page: 1, limit: 20, hasNext: false },
@@ -85,6 +107,9 @@ const EMPTY = { data: [], pagination: { total: 0, page: 1, limit: 20, hasNext: f
 
 beforeEach(() => {
   listCrawlerRunsMock.mockReset()
+  cancelCrawlerRunMock.mockReset()
+  pauseCrawlerRunMock.mockReset()
+  resumeCrawlerRunMock.mockReset()
   toastPushMock.mockReset()
 })
 
@@ -194,5 +219,133 @@ describe('CrawlerRunsView', () => {
       expect(container.querySelector('[data-run-status="failed"]')).not.toBeNull()
       expect(container.querySelector('[data-run-status="running"]')).not.toBeNull()
     })
+  })
+
+  // ── 行操作（CHG-SN-6-16-B）─────────────────────────────────────
+
+  it('13. running 行渲染 pause + cancel 按钮，无 resume', async () => {
+    listCrawlerRunsMock.mockResolvedValueOnce({
+      data: [RUN_RUNNING], pagination: { total: 1, page: 1, limit: 20, hasNext: false },
+    })
+    render(<CrawlerRunsView />)
+    await waitFor(() => {
+      expect(screen.getByTestId(`run-pause-${RUN_RUNNING.id}`)).not.toBeNull()
+      expect(screen.getByTestId(`run-cancel-${RUN_RUNNING.id}`)).not.toBeNull()
+      expect(screen.queryByTestId(`run-resume-${RUN_RUNNING.id}`)).toBeNull()
+    })
+  })
+
+  it('14. paused 行渲染 resume + cancel，无 pause', async () => {
+    listCrawlerRunsMock.mockResolvedValueOnce({
+      data: [RUN_PAUSED], pagination: { total: 1, page: 1, limit: 20, hasNext: false },
+    })
+    render(<CrawlerRunsView />)
+    await waitFor(() => {
+      expect(screen.getByTestId(`run-resume-${RUN_PAUSED.id}`)).not.toBeNull()
+      expect(screen.getByTestId(`run-cancel-${RUN_PAUSED.id}`)).not.toBeNull()
+      expect(screen.queryByTestId(`run-pause-${RUN_PAUSED.id}`)).toBeNull()
+    })
+  })
+
+  it('15. success 行不显示任何操作按钮', async () => {
+    listCrawlerRunsMock.mockResolvedValueOnce({
+      data: [RUN_SUCCESS], pagination: { total: 1, page: 1, limit: 20, hasNext: false },
+    })
+    render(<CrawlerRunsView />)
+    await waitFor(() => {
+      expect(screen.queryByTestId(`run-cancel-${RUN_SUCCESS.id}`)).toBeNull()
+      expect(screen.queryByTestId(`run-pause-${RUN_SUCCESS.id}`)).toBeNull()
+      expect(screen.queryByTestId(`run-resume-${RUN_SUCCESS.id}`)).toBeNull()
+    })
+  })
+
+  it('16. cancel 按钮：confirm 通过 → 调 API + 成功 toast', async () => {
+    listCrawlerRunsMock.mockResolvedValue({
+      data: [RUN_RUNNING], pagination: { total: 1, page: 1, limit: 20, hasNext: false },
+    })
+    cancelCrawlerRunMock.mockResolvedValueOnce({ run: null, cancelledPending: 3, signaledRunning: 2 })
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    try {
+      render(<CrawlerRunsView />)
+      const btn = await waitFor(() => screen.getByTestId(`run-cancel-${RUN_RUNNING.id}`))
+      fireEvent.click(btn)
+      await waitFor(() => {
+        expect(cancelCrawlerRunMock).toHaveBeenCalledWith(RUN_RUNNING.id)
+        expect(toastPushMock).toHaveBeenCalledWith(
+          expect.objectContaining({ level: 'success', title: '已请求取消' }),
+        )
+      })
+    } finally {
+      confirmSpy.mockRestore()
+    }
+  })
+
+  it('17. cancel 按钮：confirm 取消 → 不调 API', async () => {
+    listCrawlerRunsMock.mockResolvedValueOnce({
+      data: [RUN_RUNNING], pagination: { total: 1, page: 1, limit: 20, hasNext: false },
+    })
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    try {
+      render(<CrawlerRunsView />)
+      const btn = await waitFor(() => screen.getByTestId(`run-cancel-${RUN_RUNNING.id}`))
+      fireEvent.click(btn)
+      // 等一个 microtask 让 handler 退出
+      await new Promise((r) => setTimeout(r, 0))
+      expect(cancelCrawlerRunMock).not.toHaveBeenCalled()
+    } finally {
+      confirmSpy.mockRestore()
+    }
+  })
+
+  it('18. pause 按钮：调 API + 成功 toast', async () => {
+    listCrawlerRunsMock.mockResolvedValue({
+      data: [RUN_RUNNING], pagination: { total: 1, page: 1, limit: 20, hasNext: false },
+    })
+    pauseCrawlerRunMock.mockResolvedValueOnce({ runId: RUN_RUNNING.id, controlStatus: 'pausing' })
+    render(<CrawlerRunsView />)
+    const btn = await waitFor(() => screen.getByTestId(`run-pause-${RUN_RUNNING.id}`))
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(pauseCrawlerRunMock).toHaveBeenCalledWith(RUN_RUNNING.id)
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: '已暂停' }),
+      )
+    })
+  })
+
+  it('19. resume 按钮：调 API + 成功 toast', async () => {
+    listCrawlerRunsMock.mockResolvedValue({
+      data: [RUN_PAUSED], pagination: { total: 1, page: 1, limit: 20, hasNext: false },
+    })
+    resumeCrawlerRunMock.mockResolvedValueOnce({ runId: RUN_PAUSED.id, controlStatus: 'active' })
+    render(<CrawlerRunsView />)
+    const btn = await waitFor(() => screen.getByTestId(`run-resume-${RUN_PAUSED.id}`))
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(resumeCrawlerRunMock).toHaveBeenCalledWith(RUN_PAUSED.id)
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: '已恢复' }),
+      )
+    })
+  })
+
+  it('20. cancel 失败：toast danger', async () => {
+    listCrawlerRunsMock.mockResolvedValue({
+      data: [RUN_RUNNING], pagination: { total: 1, page: 1, limit: 20, hasNext: false },
+    })
+    cancelCrawlerRunMock.mockRejectedValueOnce(new Error('500 cancel'))
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    try {
+      render(<CrawlerRunsView />)
+      const btn = await waitFor(() => screen.getByTestId(`run-cancel-${RUN_RUNNING.id}`))
+      fireEvent.click(btn)
+      await waitFor(() => {
+        expect(toastPushMock).toHaveBeenCalledWith(
+          expect.objectContaining({ level: 'danger', title: '取消失败' }),
+        )
+      })
+    } finally {
+      confirmSpy.mockRestore()
+    }
   })
 })
