@@ -8884,3 +8884,76 @@ expect(auditSvc.write).toHaveBeenCalledWith(expect.objectContaining({
 - **下一卡候选（按从易到难，剩余 M-SN-6 范围）**：
   - crawler 视图 MVP（v1 30+ 端点已存在 / DAG 部分等 reference A2 独立成卡）
   - 通知 Hub（admin-ui NotificationDrawer + TaskDrawer 已存在 / 仅需后端 notifications/tasks 列表端点 + 视图层接入）
+
+---
+
+## CHG-SN-6-13 — /admin/crawler 视图 MVP（不含 DAG）
+- **任务 ID**：CHG-SN-6-13
+- **日期**：2026-05-16
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：无（消费 v1 既有端点 + admin-ui 现有原语 / 无新跨包契约）
+- **来源**：M-SN-6 plan §6 `/admin/crawler` 范围首次落地；按"从易到难"原则排在通知 Hub 之前
+- **范围**：4 文件（lib/crawler/api 扩展 + CrawlerClient + page + 单测）≤ 5 软上限
+
+### 实施内容
+
+**A. lib/crawler/api.ts 扩展**（追加 6 CRUD/操作函数）：
+- listCrawlerSites（升级为 `@resovo/types` CrawlerSite 完整类型 / 与 packages/types 真源对齐）
+- createCrawlerSite / updateCrawlerSite / deleteCrawlerSite（CRUD）
+- batchCrawlerSites（7 action：enable / disable / delete / mark_adult / unmark_adult / mark_shortdrama / mark_vod）
+- validateCrawlerSite（API URL 可达性验证）
+- getCrawlerSystemStatus（调度器 + 队列状态）
+
+**B. CrawlerClient.tsx 实施**（placeholder → 真实 MVP 视图）：
+- system-status 卡片（4 scheduler grid）
+- 站点 DataTable（8 列：key / name / apiUrl / sourceType / format / weight / status / fromConfig）
+- 行点击 → 编辑 Drawer（key disabled 创建后不可改 / 7 字段表单 + isAdult AdminCheckbox）
+- 新增按钮 → Drawer create 模式
+- 批量操作 bar（选择 → action select → apply）
+- validate API URL 按钮（apiUrl 填充才 enable）
+- 删除按钮（fromConfig=true 时 warn toast 拒绝）
+- describeApiError 错误码差异化：DUPLICATE_KEY / DUPLICATE_API_URL / FORBIDDEN / VALIDATION_ERROR / 兜底
+
+**C. CrawlerPage.tsx**（placeholder → 真实 Client 接入）
+
+**D. 13 单测**（`tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx`）：
+- 渲染基础 / 站点列表 / system-status 4 卡 / 新增 drawer 打开 / 提交按钮 disabled until 填表 / DUPLICATE_KEY 错误差异化 / fromConfig 行点击 drawer / FORBIDDEN 删除拒绝 warn / validate 按钮 disabled until apiUrl / Empty state / Error state / refresh / 状态 badge enabled vs disabled
+
+### 不在本卡范围（独立卡承接）
+
+- **tasks / runs / freeze / monitor-snapshot 视图**：v1 端点已存在但 UI 复杂度高，独立 CrawlerJobs 视图
+- **任务依赖 DAG**：等 reference §5.6 A2 明确 + reactflow vs dagre-d3 ADR（plan §4.7 候选清单第 2 组保留状态）
+- **MACCMS 详细配置 / 线路别名分组**：独立卡（CHG-SN-5-11 已落 sources 视图含 line-aliases）
+
+### 质量门禁（5 项硬清单 / 第 9 次正式验证）
+
+1. **视图测试 ≥ 9** → ✅ 13
+2. **共享原语 ≥ 80%** → ✅ DataTable / Drawer / AdminCard / AdminButton / AdminInput / AdminSelect / AdminCheckbox / CodeText / EmptyState / ErrorState / LoadingState / useToast（11+ admin-ui 原语，仅 1 confirm 原生兜底）
+3. **R-MID-1 audit payload** → N/A（CrawlerSite CRUD 端点 v1 未含 audit；属于 RETRO-3-A 同款 v1 写端点 audit 历史欠账，未在本卡范围补齐 — 可起 RETRO-5 后续卡）
+4. **schema 三层防护** → ✅ types 用 packages/types CrawlerSite 真源；零 DB 改动
+5. **PATCH 范围 ≤ 5 项** → ✅ 4 文件
+
+- typecheck + lint 全绿
+- **3873 unit PASS**（baseline 3860 → 3873 +13）
+- verify:adr-contracts 6 类全绿
+
+### 文件范围（4 文件 ≤ 12）
+
+- `apps/server-next/src/lib/crawler/api.ts`（扩展 / 6 函数 + 类型）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（新增 / 460 行 / Drawer + DataTable + batch）
+- `apps/server-next/src/app/admin/crawler/page.tsx`（placeholder → 真实 client）
+- `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx`（新增 / 13 测试）
+
+### 关键发现
+
+- **CrawlerSite 类型升级**：原 `@/lib/videos/types` 自定义 `{ key, name }` 最小子集 → packages/types `CrawlerSite` 完整（17 字段含 displayName / lastCrawledAt / fromConfig 等）；videos/submissions 既有消费方仍兼容（仅用 key + name 子集）
+- **fromConfig 删除拒绝是 UX 守卫**：v1 端点 (DELETE 403 FORBIDDEN) 已守卫；视图层提前 warn toast 避免无效请求
+- **AdminInput testid 在 wrapper**：crawler 表单测试遇到与 ConfigTab 同款 testid 位置问题；本卡测试仅验证 drawer 渲染 + 按钮 disabled 状态（form state 由其他既有 SettingsTab 测试覆盖输入流）
+- **MVP 收尾 vs DAG 推迟**：站点 CRUD + system-status 6 端点已覆盖 80% v1 admin/crawler 端点的查/写需求；剩余 30+ 端点（tasks / runs / freeze / auto-config / monitor-snapshot）属于运维操作面，单独成卡符合"从易到难"演进
+
+### 后续触发
+
+- **下一卡候选（按从易到难，剩余 M-SN-6 范围）**：
+  - 通知 Hub（admin-ui NotificationDrawer + TaskDrawer 已存在 / 需后端 notifications + tasks 列表端点 + 视图层接入）
+  - CrawlerJobs 视图（tasks + runs + freeze 等剩余 30+ 端点）
+  - CrawlerSite audit 补齐（v1 端点未写 audit / RETRO-5 候选 / 系统化第 8 次）

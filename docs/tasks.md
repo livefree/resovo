@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 无进行中任务；**CHG-SN-6-12 闭环**（ADR-120-NEGATED 虚拟滚动选型 / plan §4.7 候选 react-virtual vs react-window 暂不引入 / 纯 governance 0 代码 / D-120-1~6 闭环 / Opus 1 轮 PASS A 级）；plan §4.7 候选清单总览：图表 NEGATED + 虚拟滚动 NEGATED + DAG 候选保留（等 reference A2 明确）；下一卡候选（从易到难）：crawler 视图 MVP（不含 DAG）/ 通知 Hub（NotificationDrawer 已存在 / 需后端 notifications API） -->
+<!-- 无进行中任务；**CHG-SN-6-13 闭环**（/admin/crawler 视图 MVP 站点 CRUD + system-status / 4 文件 / 13 单测 / 3873 unit PASS / 不含 tasks/runs/DAG）；下一卡候选（从易到难）：通知 Hub（NotificationDrawer 已存在 / 需后端 notifications API）/ CrawlerJobs（tasks + runs）/ CrawlerSite audit 补齐 RETRO-5 -->
