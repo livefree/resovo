@@ -97,10 +97,19 @@ function buildColumns({ onCancel, onPause, onResume, pendingRunId }: BuildColumn
       defaultVisible: true,
       pinned: true,
       cell: ({ row }) => (
-        <CodeText
-          value={`${row.id.slice(0, 8)}…`}
-          dataAttr={{ 'data-run-id': row.id }}
-        />
+        <a
+          href={`/admin/crawler/runs/${row.id}`}
+          data-run-id={row.id}
+          data-testid={`run-link-${row.id}`}
+          style={{
+            fontFamily: 'var(--font-mono, ui-monospace, monospace)',
+            fontSize: 'var(--font-size-xs)',
+            color: 'var(--fg-link, var(--fg-default))',
+            textDecoration: 'underline',
+          }}
+        >
+          {row.id.slice(0, 8)}…
+        </a>
       ),
     },
     {

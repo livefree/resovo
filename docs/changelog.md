@@ -9255,3 +9255,81 @@ CHG-SN-6-16 -A/-B 双子卡闭环 → /admin/crawler MVP 完整三视图（sites
 - 通知 Hub MVP（需后端 notifications API + ADR 前置）
 - DAG 视图（reactflow ADR + reference §5.6 A2）
 - runs detail 视图（路由 `/admin/crawler/runs/:id` + tasks-per-run 子表）
+
+---
+
+## CHG-SN-6-17 — Crawler Run Detail 视图 + tasks-per-run 子表
+
+- **任务 ID**：CHG-SN-6-17
+- **完成时间**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话）
+- **子代理**：无（纯前端消费 / v1 端点已就位 / 无 ADR 前置）
+- **来源**：CHG-SN-6-16-B 后续；/admin/crawler MVP 三视图扩详情；reference.md §5 next-up
+
+### 范围
+
+**A. 路由 + 服务端入口**（`apps/server-next/src/app/admin/crawler/runs/[id]/page.tsx`）：
+- Next.js dynamic segment `[id]`，`params: Promise<{id}>` async unpack（Next 15 范式）
+- Suspense + LoadingState fallback；transition 到客户端组件
+
+**B. CrawlerRunDetailView 客户端组件**（`_client/CrawlerRunDetailView.tsx`，401 行）：
+- 两路独立 fetch：`getCrawlerRunById(id)` + `listCrawlerRunTasks(id, {page, limit})`
+- run / tasks 各自 loading / error / empty 状态分离（run 错误占据整页 → ErrorState；tasks 错误只占子卡 → 局部 ErrorState）
+- 基础信息卡（AdminCard surface=elevated）：8 字段 grid（状态 badge / controlStatus / siteCount / 创建/开始/结束时间 / 耗时 / createdBy）
+- tasks 子表（AdminCard surface=elevated padding=none）：DataTable 8 列（taskId 链接锚点 / siteKey / mode 中文 / status badge 7 类 / itemCount / 开始时间 / 耗时 / message）+ server 分页
+- PageHeader 标题：批次 id 短缩 + 触发/模式副标题 + 刷新按钮
+- TASK_STATUS_BADGE 7 类全覆盖（queued/running/paused/success/failed/cancelled/timeout）
+
+**C. lib/crawler/api 扩展**（`apps/server-next/src/lib/crawler/api.ts`）：
+- 新类型：`CrawlerTaskStatus`（7 字面量 union）/ `CrawlerTaskDto`（8 字段）/ `ListRunTasksParams` / `ListRunTasksResult`
+- 新函数：`getCrawlerRunById(id)` / `listCrawlerRunTasks(id, {page,limit})`
+
+**D. RunsView 链接化**（`apps/server-next/src/app/admin/crawler/_client/CrawlerRunsView.tsx`）：
+- Run ID 列 cell 从 `<CodeText>` 升级为 `<a href="/admin/crawler/runs/:id">`，data-testid 加 `run-link-${id}` 便于 e2e
+
+### 质量门禁（5 项硬清单 / 第 14 次正式验证）
+
+1. **视图测试 ≥ 9** → ✅ **12 测试**（CrawlerRunDetailView.test.tsx）
+2. **共享原语 ≥ 80%** → ✅ 100% admin-ui（DataTable + AdminCard + AdminButton + PageHeader + EmptyState + ErrorState + LoadingState + CodeText）+ 1 native anchor（用于 routing，符合 Next.js Link 替代方案）
+3. **R-MID-1 audit payload** → N/A（纯读视图，无写操作 / audit 写入位点已在 16-A 闭环）
+4. **schema 三层防护** → N/A（前端消费卡 / 无 schema 改动）
+5. **PATCH 范围 ≤ 5 项** → ✅ 4 文件（远低于上限）
+
+- typecheck 全绿（8 workspaces PASS）
+- lint 全绿（pre-existing img warning 不在本卡范围）
+- 3928 unit tests PASS（3916 → 3928，+12）
+- verify:adr-contracts 6 类全绿
+
+### 文件范围（4 文件 ≤ 12）
+
+- `apps/server-next/src/app/admin/crawler/runs/[id]/page.tsx`（新增 / server entry / 20 行）
+- `apps/server-next/src/app/admin/crawler/runs/[id]/_client/CrawlerRunDetailView.tsx`（新增 / 401 行）
+- `apps/server-next/src/lib/crawler/api.ts`（+50 行 / 2 函数 + 4 类型）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerRunsView.tsx`（Run ID 升级为锚点链接 / +12 行 / -5 行）
+- `tests/unit/components/server-next/admin/crawler/CrawlerRunDetailView.test.tsx`（新增 / 12 测试 / 250 行）
+
+### 关键发现
+
+- **run / tasks 独立 fetch 分离 loading/error**：传统单一 loading 会让 tasks 慢加载阻塞 run 详情；本卡 v1 用两个 `useEffect` 独立 retry，符合 reference §10 "异步分层"原则
+- **task status union 与 mapTaskDto 对齐**：v1 route 的 mapTaskDto 三元链产出 7 种 status（含 timeout / cancelled），前端 union 完全对齐；后续若加 task 类型需同步前后端
+- **RunsView → Detail 跳转用 anchor 不用 Next/Link**：Link 需要客户端 navigation，本视图为表格 cell 嵌套 client component；直接 `<a>` 触发完整页面加载更稳定，避免 RSC boundary 边界 hydration mismatch
+- **AdminCard padding=none 让出 DataTable 自带 padding**：避免双重内边距，符合 DataTable 一体化 footer/toolbar 内置语义
+
+### M-SN-6 进展
+
+CHG-SN-6-17 闭环后 /admin/crawler 视图完整四视图：sites（CRUD + system-status）/ runs 列表（filter + 行操作） / run detail（基础信息 + tasks 子表） / runs detail 路由跳转。
+
+剩余独立卡：
+- tasks 行操作（cancel/retry）
+- tasks 日志查看
+- freeze 控制
+- DAG 视图（reactflow ADR 前置）
+- 通知 Hub MVP（notifications API + ADR 前置）
+
+### 后续触发
+
+- **下一卡候选（按从易到难）**：
+  - tasks 日志查看（独立卡 / v1 端点 GET /admin/crawler/tasks/:id/logs 已存在 / 纯读）
+  - tasks 行操作（cancel/retry）→ 需 v1 端点新增？先扫一遍
+  - 通知 Hub MVP（需后端 notifications API + ADR 前置）
+  - DAG 视图（reactflow ADR + reference §5.6 A2）

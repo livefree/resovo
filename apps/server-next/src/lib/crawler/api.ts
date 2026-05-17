@@ -184,3 +184,49 @@ export async function resumeCrawlerRun(id: string): Promise<PauseResumeResult> {
   )
   return res.data
 }
+
+// ── Run Detail + tasks 子表（CHG-SN-6-17）─────────────────────────
+
+export type CrawlerTaskStatus =
+  | 'queued' | 'running' | 'paused' | 'success' | 'failed' | 'cancelled' | 'timeout'
+
+export interface CrawlerTaskDto {
+  readonly id: string
+  readonly siteKey: string
+  readonly mode: 'incremental' | 'full'
+  readonly status: CrawlerTaskStatus
+  readonly startedAt: string | null
+  readonly finishedAt: string | null
+  readonly message: string | null
+  readonly itemCount: number | null
+}
+
+export interface ListRunTasksParams {
+  readonly page?: number
+  readonly limit?: number
+}
+
+export interface ListRunTasksResult {
+  readonly data: readonly CrawlerTaskDto[]
+  readonly pagination: { readonly total: number; readonly page: number; readonly limit: number; readonly hasNext: boolean }
+}
+
+export async function getCrawlerRunById(id: string): Promise<CrawlerRun> {
+  const res = await apiClient.get<{ data: CrawlerRun }>(
+    `/admin/crawler/runs/${encodeURIComponent(id)}`,
+  )
+  return res.data
+}
+
+export async function listCrawlerRunTasks(
+  id: string,
+  params: ListRunTasksParams = {},
+): Promise<ListRunTasksResult> {
+  const qs = new URLSearchParams()
+  if (params.page != null) qs.set('page', String(params.page))
+  if (params.limit != null) qs.set('limit', String(params.limit))
+  const q = qs.toString()
+  return apiClient.get<ListRunTasksResult>(
+    `/admin/crawler/runs/${encodeURIComponent(id)}/tasks${q ? `?${q}` : ''}`,
+  )
+}
