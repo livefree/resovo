@@ -350,6 +350,76 @@ describe('TaskLogsDrawer', () => {
     })
   })
 
+  // ── 导出 CSV（CHG-SN-6-21）─────────────────────────────────
+
+  it('22. logs 非空 → 渲染"导出 CSV"按钮', async () => {
+    getCrawlerTaskDetailMock.mockResolvedValueOnce(DETAIL_SUCCESS_NO_CTX)
+    listCrawlerTaskLogsMock.mockResolvedValueOnce([LOG_INFO])
+    render(<TaskLogsDrawer open={true} taskId={TASK_ID} onClose={() => {}} />)
+    await waitFor(() => {
+      expect(screen.getByTestId('task-logs-export-csv')).not.toBeNull()
+    })
+  })
+
+  it('23. logs 空 → 不渲染导出按钮', async () => {
+    getCrawlerTaskDetailMock.mockResolvedValueOnce(DETAIL_SUCCESS_NO_CTX)
+    listCrawlerTaskLogsMock.mockResolvedValueOnce([])
+    render(<TaskLogsDrawer open={true} taskId={TASK_ID} onClose={() => {}} />)
+    await waitFor(() => screen.getByText('暂无日志'))
+    expect(screen.queryByTestId('task-logs-export-csv')).toBeNull()
+  })
+
+  it('24. 过滤后 filteredLogs 空 → 导出按钮 disabled', async () => {
+    getCrawlerTaskDetailMock.mockResolvedValueOnce(DETAIL_SUCCESS_NO_CTX)
+    listCrawlerTaskLogsMock.mockResolvedValueOnce([LOG_INFO])
+    render(<TaskLogsDrawer open={true} taskId={TASK_ID} onClose={() => {}} />)
+    const wrapper = await waitFor(() => screen.getByTestId('task-logs-stage-search'))
+    const search = wrapper.querySelector('input') as HTMLInputElement
+    fireEvent.change(search, { target: { value: 'zzz-no-match' } })
+    await waitFor(() => {
+      const btn = screen.getByTestId('task-logs-export-csv') as HTMLButtonElement
+      expect(btn.disabled).toBe(true)
+    })
+  })
+
+  it('25. 点击导出按钮 → 触发下载（a.click + filename）', async () => {
+    getCrawlerTaskDetailMock.mockResolvedValueOnce(DETAIL_SUCCESS_NO_CTX)
+    listCrawlerTaskLogsMock.mockResolvedValueOnce([LOG_INFO, LOG_WARN])
+    const clickSpy = vi.fn()
+    const createObjectUrlSpy = vi.fn(() => 'blob:fake-url')
+    Object.defineProperty(URL, 'createObjectURL', { value: createObjectUrlSpy, configurable: true })
+    Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true })
+    const downloads: string[] = []
+    const origCreate = document.createElement.bind(document)
+    const createSpy = vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      const el = origCreate(tag) as HTMLElement
+      if (tag === 'a') {
+        const anchor = el as HTMLAnchorElement
+        anchor.click = clickSpy
+        // 用 setter spy 捕获 filename
+        Object.defineProperty(anchor, 'download', {
+          set(v: string) { downloads.push(v) },
+          configurable: true,
+        })
+      }
+      return el
+    })
+    try {
+      render(<TaskLogsDrawer open={true} taskId={TASK_ID} onClose={() => {}} />)
+      const btn = await waitFor(() => screen.getByTestId('task-logs-export-csv'))
+      fireEvent.click(btn)
+      expect(clickSpy).toHaveBeenCalledOnce()
+      expect(createObjectUrlSpy).toHaveBeenCalledOnce()
+      const blobArg = createObjectUrlSpy.mock.calls[0]?.[0] as Blob
+      expect(blobArg).toBeInstanceOf(Blob)
+      expect(blobArg.type).toContain('text/csv')
+      // filename 形如 task-11111111-logs-{ts}.csv
+      expect(downloads[0]).toMatch(/^task-11111111-logs-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.csv$/)
+    } finally {
+      createSpy.mockRestore()
+    }
+  })
+
   it('21. 刷新按钮 → 重新调 2 个 API', async () => {
     getCrawlerTaskDetailMock.mockResolvedValue(DETAIL_SUCCESS_NO_CTX)
     listCrawlerTaskLogsMock.mockResolvedValue([])

@@ -26,6 +26,7 @@ import {
   type CrawlerTaskLog,
   type CrawlerTaskLogLevel,
 } from '@/lib/crawler/api'
+import { downloadCsv, type CsvColumn } from '@/lib/csv-export'
 
 const BODY_STYLE: CSSProperties = {
   display: 'flex',
@@ -141,6 +142,21 @@ export function TaskLogsDrawer({ open, taskId, onClose }: TaskLogsDrawerProps) {
   }, [taskId])
 
   const hasActiveFilter = hiddenLevels.size > 0 || stageQuery.trim().length > 0
+
+  // CHG-SN-6-21：导出 CSV（按当前 filteredLogs，命名 task-{id8}-logs-{ts}.csv）
+  const handleExportCsv = () => {
+    if (!taskId || filteredLogs.length === 0) return
+    const columns: readonly CsvColumn<CrawlerTaskLog>[] = [
+      { header: 'time',    accessor: (l) => l.createdAt },
+      { header: 'level',   accessor: (l) => l.level },
+      { header: 'stage',   accessor: (l) => l.stage },
+      { header: 'message', accessor: (l) => l.message },
+      { header: 'details', accessor: (l) => l.details },
+    ]
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    const filename = `task-${taskId.slice(0, 8)}-logs-${ts}.csv`
+    downloadCsv(filteredLogs, columns, filename)
+  }
 
   useEffect(() => {
     if (!open || !taskId) return
@@ -312,11 +328,26 @@ export function TaskLogsDrawer({ open, taskId, onClose }: TaskLogsDrawerProps) {
             title: hasActiveFilter
               ? `日志（${filteredLogs.length} / ${logs.length}）`
               : `日志（${logs.length}）`,
-            actions: hasActiveFilter ? (
-              <AdminButton variant="ghost" size="sm" onClick={clearFilters} data-testid="task-logs-filter-clear">
-                清空筛选
-              </AdminButton>
-            ) : null,
+            actions: (
+              <span style={{ display: 'inline-flex', gap: '6px' }}>
+                {logs.length > 0 ? (
+                  <AdminButton
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleExportCsv}
+                    disabled={filteredLogs.length === 0}
+                    data-testid="task-logs-export-csv"
+                  >
+                    导出 CSV
+                  </AdminButton>
+                ) : null}
+                {hasActiveFilter ? (
+                  <AdminButton variant="ghost" size="sm" onClick={clearFilters} data-testid="task-logs-filter-clear">
+                    清空筛选
+                  </AdminButton>
+                ) : null}
+              </span>
+            ),
           }}
           data-testid="task-logs-card"
         >
