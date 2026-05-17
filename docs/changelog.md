@@ -10023,3 +10023,98 @@ v1 crawler 写端点 audit 覆盖 10/13：
   - scheduler-config UI（现 RETRO 已就位，可独立卡 -B 落地）
   - 通知 Hub MVP（需后端 notifications API + ADR 前置）
   - DAG 视图（reactflow ADR + reference §5.6 A2）
+
+---
+
+## CHG-SN-6-26-RETRO — reindex + runs 统一入口 audit 补齐（R-MID-1 第 12 次系统化）
+
+- **任务 ID**：CHG-SN-6-26-RETRO
+- **完成时间**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话）
+- **子代理**：无（沿用 16-A/20-A/25-RETRO 框架）
+- **来源**：CHG-SN-6-25-RETRO 后续；v1 crawler 写端点 audit 系统化收尾
+
+### 范围
+
+**A. 类型层 union 扩展**（`packages/types/src/admin-moderation.types.ts`）：
+- 新增 `'crawler.reindex'` + `'crawler.run_create'` 双 union 分支
+
+**B. AuditLogService ACTION_TYPES 同步**
+
+**C. 路由 audit 接入**（`apps/api/src/routes/admin/crawler.ts`）：
+- POST /admin/crawler/reindex：signature 改 `(request, reply)`，afterJsonb={result, triggeredAt}；targetKind=system / targetId='reindex'
+- POST /admin/crawler/runs（统一触发入口）：targetId=run.id（fallback 'run'）；afterJsonb={triggerType, mode, siteKeys, hoursAgo, crawlMode, keyword, targetVideoId}
+- runs audit 写在 result 返回 202 之前；422 schema 失败或 503 enqueue 异常路径**不写** audit
+
+**D. R-MID-1 payload 内容断言**（`tests/unit/api/crawler-extras-audit.test.ts` 新增 5 测试）：
+- reindex：afterJsonb.result + triggeredAt
+- runs single：targetId=runId + afterJsonb 完整
+- runs keyword crawlMode：afterJsonb.crawlMode/keyword
+- runs 422 守卫（siteKeys 缺失）
+- runs 503 enqueue 失败守卫
+
+**E. 4 真源同步**
+
+### 质量门禁（5 项硬清单 / 第 24 次正式验证）
+
+1. **视图测试 ≥ 9** → N/A（route-level audit）
+2. **共享原语 ≥ 80%** → N/A
+3. **R-MID-1 audit payload** → ✅ **新 2 action_type PAYLOAD_REQUIRED（34 → 36 项 strict）**
+4. **schema 三层防护** → ✅ 052 CHECK 已含 'system' + 类型 union + service 常量 + 5 test
+5. **PATCH 范围 ≤ 5 项** → ⚠️ 6 文件（沿用 16-A 框架，audit RETRO 补齐固定 6 文件无法压缩）
+
+- typecheck 全绿（8 workspaces PASS）
+- lint 全绿
+- 4004 unit tests PASS（3995 → 4004，+9：5 extras-audit + 2 audit-coverage REQUIRED it.each + 2 PAYLOAD it.each）
+- audit-log-coverage REQUIRED **36 项全 PASS**
+- verify:adr-contracts 6 类全绿
+
+### R-MID-1 系统化进展（第 1→12 次）
+
+| 次 | 卡 | 范围 | strict 总数 |
+|---|---|---|---|
+| 1-5 | M-SN-4 多卡 | ADR-104 + 多视图 service test | 9 |
+| 6 | CHG-SN-5-CHECKLIST-AUDIT-2 P0-1 | 代码守卫落地 | 9 |
+| 6.5 | CHG-SN-6-RETRO-3-A | system v1 4 端点 | 13 |
+| 7 | CHG-SN-6-10 | legacy 11 项 EXEMPT 清零 | 24 |
+| 8 | CHG-SN-6-14 | CrawlerSite v1 4 端点 | 28 |
+| 9 | CHG-SN-6-16-A | CrawlerRun 3 行操作 | 31 |
+| 10 | CHG-SN-6-20-A | crawler.freeze | 32 |
+| 11 | CHG-SN-6-25-RETRO | auto-config + stop-all | 34 |
+| **12** | **CHG-SN-6-26-RETRO（本卡）** | **reindex + runs 统一入口** | **36** |
+
+### 文件范围（6 文件）
+
+- `packages/types/src/admin-moderation.types.ts`（union 扩 2）
+- `apps/api/src/services/AuditLogService.ts`（ACTION_TYPES 扩 2）
+- `apps/api/src/routes/admin/crawler.ts`（2 端点 auditSvc.write + reindex signature 改 `(request, reply)`）
+- `tests/unit/api/audit-log-coverage.test.ts`（REQUIRED + PAYLOAD 扩 2）
+- `tests/unit/api/audit-log-service-enums-set-equal.test.ts`（EXPECTED 扩 2）
+- `tests/unit/api/crawler-extras-audit.test.ts`（新增 / 5 测试 / 双 describe block）
+
+### 关键发现
+
+- **reindex signature 从 `_request` 改为 `request`**：原始端点未使用 actor 上下文（前缀下划线表忽略），加 audit 需访问 request.user/.id；trade-off：函数签名变化但保持 ESLint 不报错（移除 underscore）
+- **run_create targetId 用 run.id 而非 'run' 字面量**：与 crawler.freeze='crawler_global_freeze' setting key 不同，run 是 UUID 实体；targetId 直接用 run.id 便于按 run 追溯整个生命周期 audit 链（create + cancel/pause/resume + 后续 logs / cancel_all 等）
+- **503 路径守卫**：runs enqueue 失败抛出 CrawlerQueueUnavailable 时 audit 必须不写（语义上"没创建"就没行为可审计）；test 覆盖此路径
+- **deprecated POST /tasks 排除**：v1 注释明确"sunset 2026-05-01 计划删除"；本卡明确不补齐避免对将删代码做无意义改动；audit 覆盖率 12/13 是合理上限
+
+### M-SN-6 进展
+
+v1 crawler 写端点 audit 覆盖 12/13：
+- ✅ CrawlerSite (create/update/delete/batch) 4
+- ✅ CrawlerRun (cancel/pause/resume) 3
+- ✅ crawler.freeze 1
+- ✅ crawler.auto_config 1
+- ✅ crawler.stop_all 1
+- ✅ crawler.reindex 1（新）
+- ✅ crawler.run_create 1（新）
+- ❌ POST /admin/crawler/tasks（deprecated，不补齐 / 12/12 非 deprecated 端点全覆盖）
+
+### 后续触发
+
+- **下一卡候选（按从易到难）**：
+  - scheduler-config UI（基于本 RETRO + 20-A，可独立 UI 卡落地，包含 auto-config 表单编辑 + 状态展示）
+  - 通知 Hub MVP（需后端 notifications API + ADR 前置）
+  - DAG 视图（reactflow ADR + reference §5.6 A2）
+  - M-SN-6 milestone 阶段审计 + arch-reviewer Opus 评估

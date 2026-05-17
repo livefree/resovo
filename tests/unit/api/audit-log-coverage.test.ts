@@ -65,6 +65,9 @@ const REQUIRED_ACTION_TYPES = [
   // CHG-SN-6-25-RETRO：autoCrawlConfig + stop-all audit 补齐（R-MID-1 系统化第 11 次）
   'crawler.auto_config',        // POST /admin/crawler/auto-config
   'crawler.stop_all',           // POST /admin/crawler/stop-all
+  // CHG-SN-6-26-RETRO：reindex + runs 统一入口 audit 补齐（R-MID-1 系统化第 12 次）
+  'crawler.reindex',            // POST /admin/crawler/reindex
+  'crawler.run_create',         // POST /admin/crawler/runs
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -121,6 +124,9 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   // CHG-SN-6-25-RETRO：R-MID-1 第 11 次系统化（autoCrawlConfig + stop-all）
   'crawler.auto_config',
   'crawler.stop_all',
+  // CHG-SN-6-26-RETRO：R-MID-1 第 12 次系统化（reindex + runs 统一入口）
+  'crawler.reindex',
+  'crawler.run_create',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

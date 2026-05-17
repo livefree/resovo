@@ -463,6 +463,26 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
         keyword: keyword ?? null,
         targetVideoId: targetVideoId ?? null,
       })
+
+      // CHG-SN-6-26-RETRO：审计 — crawler.run_create（统一触发入口）
+      const runResult = result as { id?: string } & Record<string, unknown>
+      auditSvc.write({
+        actorId: request.user!.userId,
+        actionType: 'crawler.run_create',
+        targetKind: 'system',
+        targetId: typeof runResult.id === 'string' ? runResult.id : 'run',
+        afterJsonb: {
+          triggerType,
+          mode,
+          siteKeys: siteKeys ?? null,
+          hoursAgo: hoursAgo ?? null,
+          crawlMode: crawlMode ?? null,
+          keyword: keyword ?? null,
+          targetVideoId: targetVideoId ?? null,
+        },
+        requestId: request.id,
+      })
+
       return reply.code(202).send({ data: result })
     } catch (err) {
       return reply.code(503).send({
@@ -922,8 +942,19 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
 
   // ── POST /admin/crawler/reindex — 重建 ES 索引 ───────────────
 
-  fastify.post('/admin/crawler/reindex', { preHandler: auth }, async (_request, reply) => {
+  fastify.post('/admin/crawler/reindex', { preHandler: auth }, async (request, reply) => {
     const result = await crawlerService.reindexAll()
+
+    // CHG-SN-6-26-RETRO：审计 — crawler.reindex（ES 重建索引 / 全局操作）
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'crawler.reindex',
+      targetKind: 'system',
+      targetId: 'reindex',
+      afterJsonb: { result, triggeredAt: new Date().toISOString() },
+      requestId: request.id,
+    })
+
     return reply.send({ data: result })
   })
 }

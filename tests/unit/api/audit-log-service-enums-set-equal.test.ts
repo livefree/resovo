@@ -63,6 +63,9 @@ const EXPECTED_ACTION_TYPES = [
   // CHG-SN-6-25-RETRO
   'crawler.auto_config',
   'crawler.stop_all',
+  // CHG-SN-6-26-RETRO
+  'crawler.reindex',
+  'crawler.run_create',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [

@@ -154,6 +154,10 @@ export type AdminAuditActionType =
   | 'crawler.auto_config'        // POST /admin/crawler/auto-config
   | 'crawler.stop_all'           // POST /admin/crawler/stop-all
 
+  // CHG-SN-6-26-RETRO：reindex + runs 统一入口 audit 补齐（R-MID-1 系统化第 12 次）
+  | 'crawler.reindex'            // POST /admin/crawler/reindex
+  | 'crawler.run_create'         // POST /admin/crawler/runs
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'

@@ -78,6 +78,9 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   // CHG-SN-6-25-RETRO：autoCrawlConfig + stop-all audit 补齐
   'crawler.auto_config',
   'crawler.stop_all',
+  // CHG-SN-6-26-RETRO：reindex + runs 统一入口 audit 补齐
+  'crawler.reindex',
+  'crawler.run_create',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',
