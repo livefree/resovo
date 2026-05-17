@@ -226,4 +226,58 @@ describe('AuditClient', () => {
       expect(screen.getByText(formatted)).not.toBeNull()
     })
   })
+
+  // ── 导出 CSV（CHG-SN-6-22）─────────────────────────────────
+
+  it('13. 导出按钮渲染：rows 非空 → enabled', async () => {
+    listAdminAuditLogsMock.mockResolvedValueOnce(ONE_ROW_RES)
+    render(<AuditClient />)
+    await waitFor(() => screen.getByText('admin-alice'))
+    const btn = screen.getByTestId('audit-export-csv') as HTMLButtonElement
+    expect(btn).not.toBeNull()
+    expect(btn.disabled).toBe(false)
+  })
+
+  it('14. 导出按钮：rows 空 → disabled', async () => {
+    listAdminAuditLogsMock.mockResolvedValueOnce(EMPTY_RES)
+    render(<AuditClient />)
+    await waitFor(() => screen.getByText('暂无审计记录'))
+    const btn = screen.getByTestId('audit-export-csv') as HTMLButtonElement
+    expect(btn.disabled).toBe(true)
+  })
+
+  it('15. 点击导出 → a.click + filename pattern + Blob 类型', async () => {
+    listAdminAuditLogsMock.mockResolvedValueOnce(ONE_ROW_RES)
+    const clickSpy = vi.fn()
+    const downloads: string[] = []
+    const createObjectUrlSpy = vi.fn(() => 'blob:fake-url')
+    Object.defineProperty(URL, 'createObjectURL', { value: createObjectUrlSpy, configurable: true })
+    Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true })
+    const origCreate = document.createElement.bind(document)
+    const createSpy = vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      const el = origCreate(tag) as HTMLElement
+      if (tag === 'a') {
+        const anchor = el as HTMLAnchorElement
+        anchor.click = clickSpy
+        Object.defineProperty(anchor, 'download', {
+          set(v: string) { downloads.push(v) },
+          configurable: true,
+        })
+      }
+      return el
+    })
+    try {
+      render(<AuditClient />)
+      const btn = await waitFor(() => screen.getByTestId('audit-export-csv'))
+      fireEvent.click(btn)
+      expect(clickSpy).toHaveBeenCalledOnce()
+      expect(createObjectUrlSpy).toHaveBeenCalledOnce()
+      const blobArg = createObjectUrlSpy.mock.calls[0]?.[0] as Blob
+      expect(blobArg).toBeInstanceOf(Blob)
+      expect(blobArg.type).toContain('text/csv')
+      expect(downloads[0]).toMatch(/^audit-logs-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.csv$/)
+    } finally {
+      createSpy.mockRestore()
+    }
+  })
 })

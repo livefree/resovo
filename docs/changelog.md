@@ -9740,3 +9740,65 @@ CHG-SN-6-21 闭环后 TaskLogsDrawer 体验完整：详情 + 日志（含过滤 
   - audit logs / submissions / users 列表接 csv-export（机会型卡 / 共享工具复用）
   - 通知 Hub MVP（需后端 notifications API + ADR 前置）
   - DAG 视图（reactflow ADR + reference §5.6 A2）
+
+---
+
+## CHG-SN-6-22 — AuditClient 接入 csv-export
+
+- **任务 ID**：CHG-SN-6-22
+- **完成时间**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话）
+- **子代理**：无（共享工具复用 / 0 后端 / 0 ADR）
+- **来源**：CHG-SN-6-21 后续机会型卡；csv-export 共享工具零成本接入证明
+
+### 范围
+
+**A. AuditClient 导出按钮接入**（`apps/server-next/src/app/admin/audit/_client/AuditClient.tsx`）：
+- import `downloadCsv` + `CsvColumn` from `@/lib/csv-export`
+- 新 `handleExportCsv` 内联函数（7 列：id/actionType/targetKind/targetId/actorId/requestId/createdAt）
+- filename: `audit-logs-{iso ts}.csv`（与 task-logs 命名范式一致）
+- 新 `toolbarTrailing` JSX：AdminButton variant=ghost size=sm + data-testid + rows.length === 0 时 disabled
+- DataTable `toolbar={{ search, trailing: toolbarTrailing, hideFilterChips: true }}` 切入 trailing slot（admin-ui DataTable 一体化 toolbar 内置支持）
+
+**B. 测试**（`tests/unit/components/server-next/admin/audit/AuditClient.test.tsx`，12 → **15 测试**，+3）：
+- 13. rows 非空 → 按钮渲染 + enabled
+- 14. rows 空 → disabled
+- 15. 点击 → a.click + filename pattern + Blob 类型 + Blob.type=text/csv
+
+### 质量门禁（5 项硬清单 / 第 20 次正式验证）
+
+1. **视图测试 ≥ 9** → ✅ 15（AuditClient 全部）
+2. **共享原语 ≥ 80%** → ✅ 100% admin-ui + 100% lib/csv-export 复用
+3. **R-MID-1 audit payload** → N/A（纯客户端导出 / 不触发 audit）
+4. **schema 三层防护** → N/A
+5. **PATCH 范围 ≤ 5 项** → ✅ 2 文件
+
+- typecheck 全绿（8 workspaces PASS）
+- lint 全绿
+- 3977 unit tests PASS（3974 → 3977，+3）
+- verify:adr-contracts 6 类全绿
+
+### 文件范围（2 文件 ≤ 12）
+
+- `apps/server-next/src/app/admin/audit/_client/AuditClient.tsx`（+30 行 / handleExportCsv + toolbarTrailing + toolbar trailing slot 配置）
+- `tests/unit/components/server-next/admin/audit/AuditClient.test.tsx`（+50 行 / 3 测试）
+
+### 关键发现
+
+- **DataTable toolbar.trailing slot 现成可用**：admin-ui DataTable 一体化 props 已内置 `toolbar.trailing`（dt-styles.tsx data-table-toolbar-trailing），消费方传 ReactNode 即可；本卡仅 1 行 prop 切入，无新原语
+- **csv-export 零成本接入证明**：CHG-SN-6-21 落地共享工具，CHG-SN-6-22 复用仅需 import + 调用，无需重新实现 escape/blob/anchor 逻辑；后续 submissions / users / videos 等列表同模式接入
+- **filename 命名范式统一**：`{资源类型}-{标识 8}-{逻辑}-{iso}.csv` 或 `{资源类型}-{逻辑}-{iso}.csv`（无标识时）；本卡 `audit-logs-{iso}.csv` 对齐
+- **timestamp 替换 `:` `.`**：ISO 时间 `2026-05-17T13:54:00.123Z` 含的 `:` 和 `.` 在 macOS/Windows filename 不友好（macOS `:` → `/`，Windows `.` 不能开头）；统一替换为 `-`
+
+### M-SN-6 进展
+
+CHG-SN-6-22 闭环后 csv-export 共享工具实证复用 2 个消费方（TaskLogsDrawer + AuditClient），新建消费方接入边际成本接近零。
+
+### 后续触发
+
+- **下一卡候选（按从易到难）**：
+  - submissions / users 列表接 csv-export（继续机会型卡）
+  - tasks 行操作（cancel/retry）扫端点
+  - scheduler-config UI（需 RETRO audit 卡先行）
+  - 通知 Hub MVP（需后端 notifications API + ADR 前置）
+  - DAG 视图（reactflow ADR + reference §5.6 A2）

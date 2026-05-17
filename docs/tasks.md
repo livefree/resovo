@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 无进行中任务；**CHG-SN-6-21 闭环**（TaskLogsDrawer 导出 CSV / 新 lib/csv-export.ts 共享工具 toCsv+downloadCsv+escapeCsvCell RFC 4180 / Drawer logs 卡 actions 加导出按钮 / filteredLogs 空时 disabled / filename task-{id8}-logs-{iso}.csv / 4 文件 / 8 csv util test + 4 drawer test = 12 新增 / 3974 unit PASS）；下一卡候选（从易到难）：tasks 行操作扫端点 / scheduler-config UI（RETRO audit 前置）/ 通知 Hub MVP（ADR 前置） / DAG 视图（reactflow ADR 前置） -->
+<!-- 无进行中任务；**CHG-SN-6-22 闭环**（AuditClient 接入 csv-export / toolbar.trailing 加导出按钮 / 导出 7 列（id/actionType/targetKind/targetId/actorId/requestId/createdAt）/ filename audit-logs-{iso}.csv / 2 文件 / +3 测试（12→15）/ 3977 unit PASS / csv-export 共享工具零成本接入证明）；下一卡候选（从易到难）：submissions/users 列表 csv-export 接入 / tasks 行操作扫端点 / scheduler-config UI（RETRO audit）/ 通知 Hub / DAG（ADR 前置） -->

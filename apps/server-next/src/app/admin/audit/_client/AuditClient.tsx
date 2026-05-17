@@ -50,6 +50,7 @@ import {
   getAdminAuditLogDetail,
   getAdminAuditEnums,
 } from '@/lib/audit/api'
+import { downloadCsv, type CsvColumn } from '@/lib/csv-export'
 
 // ── 常量 ──────────────────────────────────────────────────────────
 
@@ -383,6 +384,34 @@ export function AuditClient() {
 
   const hasFilter = Boolean(actionType || targetKind || actorIdInput.trim() || requestIdInput.trim() || from || to)
 
+  // CHG-SN-6-22：导出当前页 rows 为 CSV
+  const handleExportCsv = () => {
+    if (rows.length === 0) return
+    const columns: readonly CsvColumn<AdminAuditLogListRow>[] = [
+      { header: 'id',         accessor: (r) => r.id },
+      { header: 'actionType', accessor: (r) => r.actionType },
+      { header: 'targetKind', accessor: (r) => r.targetKind },
+      { header: 'targetId',   accessor: (r) => r.targetId },
+      { header: 'actorId',    accessor: (r) => r.actorId },
+      { header: 'requestId',  accessor: (r) => r.requestId },
+      { header: 'createdAt',  accessor: (r) => r.createdAt },
+    ]
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    downloadCsv(rows, columns, `audit-logs-${ts}.csv`)
+  }
+
+  const toolbarTrailing = (
+    <AdminButton
+      variant="ghost"
+      size="sm"
+      onClick={handleExportCsv}
+      disabled={rows.length === 0}
+      data-testid="audit-export-csv"
+    >
+      导出 CSV
+    </AdminButton>
+  )
+
   const toolbarSearch = (
     <span style={TOOLBAR_LEFT_STYLE} data-testid="audit-toolbar-filters">
       <AdminSelect
@@ -511,6 +540,7 @@ export function AuditClient() {
                 enableHeaderMenu
                 toolbar={{
                   search: toolbarSearch,
+                  trailing: toolbarTrailing,
                   hideFilterChips: true,
                 }}
                 pagination={{ pageSizeOptions: [10, 20, 50, 100] }}
