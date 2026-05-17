@@ -51,6 +51,7 @@ import {
   type CreateCrawlerSiteInput,
 } from '@/lib/crawler/api'
 import { ApiClientError } from '@/lib/api-client'
+import { CrawlerRunsView } from './CrawlerRunsView'
 
 const PAGE_STYLE: CSSProperties = {
   display: 'flex',
@@ -242,8 +243,12 @@ function buildColumns(): readonly TableColumn<CrawlerSite>[] {
 
 // ── main ─────────────────────────────────────────────────────────
 
+type CrawlerTab = 'sites' | 'runs'
+
 export function CrawlerClient() {
   const toast = useToast()
+  // CHG-SN-6-15：顶层 Tab 切换（sites / runs）
+  const [tab, setTab] = useState<CrawlerTab>('sites')
 
   const [sites, setSites] = useState<readonly CrawlerSite[]>([])
   const [status, setStatus] = useState<CrawlerSystemStatus | null>(null)
@@ -427,17 +432,19 @@ export function CrawlerClient() {
     <div data-crawler-client style={PAGE_STYLE}>
       <PageHeader
         title="采集控制"
-        subtitle={`${sites.length} 个站点 · MVP（不含 tasks / runs / DAG）`}
+        subtitle={`${sites.length} 个站点 · ${tab === 'sites' ? 'sites' : 'runs'} tab · MVP（不含 tasks / DAG）`}
         actions={
           <span style={{ display: 'inline-flex', gap: '8px' }}>
-            <AdminButton
-              variant="primary"
-              size="sm"
-              onClick={handleCreate}
-              data-testid="crawler-create-btn"
-            >
-              + 新增站点
-            </AdminButton>
+            {tab === 'sites' ? (
+              <AdminButton
+                variant="primary"
+                size="sm"
+                onClick={handleCreate}
+                data-testid="crawler-create-btn"
+              >
+                + 新增站点
+              </AdminButton>
+            ) : null}
             <AdminButton
               variant="default"
               size="sm"
@@ -451,6 +458,48 @@ export function CrawlerClient() {
         data-testid="crawler-page-header"
       />
 
+      {/* CHG-SN-6-15：顶层 Tab 切换 */}
+      <div
+        style={{ display: 'inline-flex', gap: '4px', borderBottom: '1px solid var(--border-subtle)' }}
+        data-testid="crawler-tabs"
+        role="tablist"
+      >
+        {(['sites', 'runs'] as const).map((t) => {
+          const active = tab === t
+          return (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              onClick={() => setTab(t)}
+              data-tab={t}
+              data-active={active ? '' : undefined}
+              style={{
+                padding: '8px 16px',
+                fontSize: 'var(--font-size-sm)',
+                fontFamily: 'inherit',
+                fontWeight: active ? 600 : 400,
+                color: active ? 'var(--fg-default)' : 'var(--fg-muted)',
+                background: 'transparent',
+                borderTop: 'none',
+                borderLeft: 'none',
+                borderRight: 'none',
+                borderBottom: active ? '2px solid var(--accent-default)' : '2px solid transparent',
+                cursor: 'pointer',
+                marginBottom: '-1px',
+              }}
+            >
+              {t === 'sites' ? '站点配置' : '采集批次（runs）'}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* CHG-SN-6-15：runs tab 渲染 */}
+      {tab === 'runs' ? <CrawlerRunsView /> : null}
+
+      {/* CHG-SN-6-15：sites tab 包裹既有内容 */}
+      {tab === 'sites' ? <>
       {/* system status */}
       {status?.schedulers ? (
         <AdminCard
@@ -648,6 +697,7 @@ export function CrawlerClient() {
           </AdminButton>
         </div>
       </Drawer>
+      </> : null}
     </div>
   )
 }

@@ -9034,3 +9034,75 @@ expect(auditSvc.write).toHaveBeenCalledWith(expect.objectContaining({
 - **下一卡候选（按从易到难）**：
   - 通知 Hub（admin-ui NotificationDrawer + TaskDrawer 已存在 / 需后端 notifications API + ADR 前置）
   - CrawlerJobs（tasks + runs + freeze 30+ 端点 / 复杂运维操作面）
+
+---
+
+## CHG-SN-6-15 — CrawlerClient Tab 拆分 + CrawlerRunsView（runs 列表 MVP）
+- **任务 ID**：CHG-SN-6-15
+- **日期**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：无（消费 v1 既有 GET /admin/crawler/runs 端点 / 复用 DataTable 范式）
+- **来源**：CHG-SN-6-13 crawler MVP 后剩余范围 tasks/runs 拆分；本卡先做 runs 列表 + Tab 容器 + 拆 CrawlerRunsView 独立子组件
+- **范围**：4 文件 ≤ 5 软上限
+
+### 实施内容
+
+**A. lib/crawler/api.ts 扩展**：
+- 追加 listCrawlerRuns + CrawlerRun / CrawlerRunStatus / CrawlerRunTriggerType / ListCrawlerRunsResult 类型
+- 消费 GET /admin/crawler/runs（status / triggerType / page / limit 4 query params）
+
+**B. CrawlerRunsView.tsx 新建**（独立子组件 / 270 行）：
+- DataTable mode='server' + 6 列（id 短缩 / status badge 7 类 / triggerType / siteCount 复合 / createdAt locale / duration 计算）
+- 顶栏 toolbar：status filter（7 options）+ triggerType filter（4 options）+ 清空筛选条件性显示
+- 状态 badge 7 类全 token 化（state-info/warning/success/danger/bg-surface-sunken）
+- Empty / Error / Loading 三态完整覆盖
+
+**C. CrawlerClient.tsx Tab 容器化**：
+- 顶部 CrawlerTab 状态（sites / runs）
+- Tab nav UI：role="tablist" + data-tab + 2 段 active border-bottom 切换
+- 条件渲染：`{tab === 'runs' ? <CrawlerRunsView /> : null}` + sites 内容包 `{tab === 'sites' ? <>...</> : null}`
+- PageHeader 动态：subtitle 含 tab 标识 / "新增站点" 按钮仅 sites tab 显示
+
+**D. CrawlerRunsView 单测**（12 测试）：
+- 基础渲染 / runs 列表 + id 短缩 / status badge 3 类（success/failed/running）/ siteCount 复合 / duration 计算（startedAt null 兜底）/ status + triggerType filter UI / 清空筛选条件性 / Empty / Error / 默认参数 / data-run-status e2e attribute
+
+### 质量门禁（5 项硬清单 / 第 11 次正式验证）
+
+1. **视图测试 ≥ 9** → ✅ 12（CrawlerRunsView）+ 13（CrawlerClient 零回归）= 25 PASS
+2. **共享原语 ≥ 80%** → ✅ ~95%（DataTable / AdminSelect / AdminButton / CodeText / EmptyState / ErrorState / LoadingState / useToast 全 admin-ui，零原生输入）
+3. **R-MID-1 audit payload** → N/A（runs 列表是只读 GET，无写操作）
+4. **schema 三层防护** → ✅ CrawlerRun 类型与 apps/api queries 真源对齐 / 0 DB 改动
+5. **PATCH 范围 ≤ 5 项** → ✅ 4 文件
+
+- typecheck + lint 全绿
+- **3889 unit + 40 integration PASS**（baseline 3877 → 3889 +12 CrawlerRunsView 测试）
+- verify:adr-contracts 6 类全绿
+
+### 文件范围（4 文件 ≤ 12）
+
+- `apps/server-next/src/lib/crawler/api.ts`（扩展 listCrawlerRuns）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerRunsView.tsx`（新增 / 270 行）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（Tab 容器化 / +30 行）
+- `tests/unit/components/server-next/admin/crawler/CrawlerRunsView.test.tsx`（新增 / 12 测试）
+
+### 关键发现
+
+- **不拆 CrawlerSitesView**：CrawlerClient 已 653 行，本卡仅加 Tab 容器（+30 行）+ 抽 runs 为独立文件；保留 sites 既有结构防大规模迁移引入回归（CrawlerClient.test 13 测试零改动通过验证）
+- **状态 badge 7 类全 token 化**：跳过自定义颜色硬编码，直接复用 state-* token 系列（info / warning / success / danger / bg-surface-sunken 兜底 cancelled）
+- **duration 计算 fallback**：finishedAt null 时用 `Date.now()` 计算正在运行的实时耗时；startedAt null 时显示 "—"
+- **runs 列表是只读视图**：本卡不含行操作（cancel / pause / resume）— v1 POST 端点已存在但 UI 待独立卡（防本卡范围扩大触 500 行红线）
+
+### 不在范围（独立卡承接）
+
+- runs/:id detail 视图
+- cancel / pause / resume 行操作（POST 端点已存在 / 待独立卡）
+- tasks per run / freeze 控制
+- DAG 视图（等 reference §5.6 A2 + reactflow vs dagre-d3 ADR / plan §4.7 第 2 组候选保留）
+- Audit 写入（runs 列表只读，新触发 run 操作走既有 refetch-sources audit）
+
+### 后续触发
+
+- **下一卡候选（按从易到难，剩余 M-SN-6 范围）**：
+  - 通知 Hub MVP（需后端 notifications API + ADR 前置 / NotificationDrawer 已存在）
+  - CrawlerJobs 行操作（cancel/pause/resume + detail）
+  - DAG 视图（等 reference A2）

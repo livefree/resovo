@@ -97,3 +97,53 @@ export async function getCrawlerSystemStatus(): Promise<CrawlerSystemStatus> {
   const res = await apiClient.get<{ data: CrawlerSystemStatus }>('/admin/crawler/system-status')
   return res.data
 }
+
+// ── Runs（批次列表 / CHG-SN-6-15） ────────────────────────────────
+
+export type CrawlerRunStatus =
+  | 'queued' | 'running' | 'paused' | 'success' | 'partial_failed' | 'failed' | 'cancelled'
+export type CrawlerRunTriggerType = 'single' | 'batch' | 'all' | 'schedule'
+
+export interface CrawlerRun {
+  readonly id: string
+  readonly triggerType: CrawlerRunTriggerType
+  readonly mode: string
+  readonly status: CrawlerRunStatus
+  readonly controlStatus: string
+  readonly requestedSiteCount: number
+  readonly enqueuedSiteCount: number
+  readonly skippedSiteCount: number
+  readonly timeoutSeconds: number
+  readonly createdBy: string | null
+  readonly scheduleId: string | null
+  readonly summary: Record<string, unknown> | null
+  readonly startedAt: string | null
+  readonly finishedAt: string | null
+  readonly createdAt: string
+  readonly updatedAt: string
+  readonly crawlMode: string
+  readonly keyword: string | null
+  readonly targetVideoId: string | null
+}
+
+export interface ListCrawlerRunsParams {
+  readonly status?: CrawlerRunStatus
+  readonly triggerType?: CrawlerRunTriggerType
+  readonly page?: number
+  readonly limit?: number
+}
+
+export interface ListCrawlerRunsResult {
+  readonly data: readonly CrawlerRun[]
+  readonly pagination: { readonly total: number; readonly page: number; readonly limit: number; readonly hasNext: boolean }
+}
+
+export async function listCrawlerRuns(params: ListCrawlerRunsParams = {}): Promise<ListCrawlerRunsResult> {
+  const qs = new URLSearchParams()
+  if (params.status) qs.set('status', params.status)
+  if (params.triggerType) qs.set('triggerType', params.triggerType)
+  if (params.page != null) qs.set('page', String(params.page))
+  if (params.limit != null) qs.set('limit', String(params.limit))
+  const q = qs.toString()
+  return apiClient.get<ListCrawlerRunsResult>(`/admin/crawler/runs${q ? `?${q}` : ''}`)
+}
