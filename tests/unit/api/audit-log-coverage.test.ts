@@ -81,10 +81,7 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'system.settings_update',
   'system.config_update',
   'system.sources_import',
-] as const
-
-const PAYLOAD_ASSERTION_EXEMPT = [
-  // plan v1.4 §3.0.5 M-SN-4 legacy 11 项 — 由 M-SN-6 收尾 RETROACTIVE 卡补齐
+  // CHG-SN-6-10：R-MID-1 第 7 次系统化 / plan §3.0.5 legacy 11 项 EXEMPT 补齐
   'video.approve',
   'video.reject_labeled',
   'video.staff_note',
@@ -97,6 +94,10 @@ const PAYLOAD_ASSERTION_EXEMPT = [
   'staging.publish',
   'staging.batch_publish',
 ] as const
+
+// CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED
+// （R-MID-1 第 7 次系统化 / EXEMPT → REQUIRED 收尾闭环）；EXEMPT 名单清零
+const PAYLOAD_ASSERTION_EXEMPT: readonly string[] = [] as const
 
 const TEST_DIRS = [join(__dirname, '..')]
 
@@ -209,9 +210,9 @@ describe('admin_audit_log 覆盖率守卫（plan v1.4 §3.0.5）', () => {
       },
     )
 
-    it('M-SN-4 legacy 11 项 actionType advisory 豁免（M-SN-6 收尾卡承担 RETROACTIVE 补齐）', () => {
-      // 该 it 仅占位记录豁免清单；不强制断言，让 M-SN-6 RETROACTIVE 卡决策。
-      expect(PAYLOAD_ASSERTION_EXEMPT.length).toBe(11)
+    it('M-SN-4 legacy 11 项已收尾迁移至 PAYLOAD_ASSERTION_REQUIRED（CHG-SN-6-10 / R-MID-1 第 7 次系统化）', () => {
+      // EXEMPT 清零 = R-MID-1 协议级硬清单完整闭环
+      expect(PAYLOAD_ASSERTION_EXEMPT.length).toBe(0)
     })
   })
 })

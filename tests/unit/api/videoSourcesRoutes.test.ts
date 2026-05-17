@@ -16,6 +16,15 @@ vi.mock('@/api/lib/redis', () => ({
 vi.mock('@/api/lib/postgres', () => ({ db: {} }))
 vi.mock('@/api/lib/elasticsearch', () => ({ es: {} }))
 
+// CHG-SN-6-10：mock insertAuditLog 用于 video.refetch_sources audit payload 内容断言
+const insertAuditLogMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+vi.mock('@/api/db/queries/auditLog', () => ({
+  insertAuditLog: insertAuditLogMock,
+  listAuditLogByTarget: vi.fn(),
+  listAdminAuditLog: vi.fn(),
+  getAdminAuditLogById: vi.fn(),
+}))
+
 const mockModerationSvc = {
   toggleSource: vi.fn(),
   disableDead: vi.fn(),
@@ -173,5 +182,71 @@ describe('POST /admin/videos/:id/sources/disable-dead', () => {
       url: '/v1/admin/videos/vid-1/sources/disable-dead',
     })
     expect(res.statusCode).toBe(401)
+  })
+})
+
+// ── CHG-SN-6-10 / R-MID-1 第 7 次系统化 legacy EXEMPT 补齐 ──
+describe('POST /admin/videos/:id/refetch-sources — video.refetch_sources audit payload 断言', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    app = await buildApp()
+  })
+  afterEach(() => app.close())
+
+  it('admin 触发 → 写 audit video.refetch_sources + afterJsonb { triggeredAt, siteKeys }', async () => {
+    // findAdminVideoById 返回 video 存在
+    const videoQueries = await import('@/api/db/queries/videos')
+    vi.mocked(videoQueries.findAdminVideoById).mockResolvedValueOnce({
+      id: '00000000-0000-0000-0000-000000000001',
+    } as unknown as Awaited<ReturnType<typeof videoQueries.findAdminVideoById>>)
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/videos/00000000-0000-0000-0000-000000000001/refetch-sources',
+      headers: { authorization: await tokenFor('admin'), 'content-type': 'application/json' },
+      payload: JSON.stringify({}),
+    })
+
+    // fire-and-forget tick 释放
+    await new Promise((r) => setImmediate(r))
+
+    expect([200, 202]).toContain(res.statusCode)
+    expect(insertAuditLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actionType: 'video.refetch_sources',
+        targetKind: 'video',
+        targetId: '00000000-0000-0000-0000-000000000001',
+        afterJsonb: expect.objectContaining({
+          triggeredAt: expect.any(String),
+        }),
+      }),
+    )
+  })
+
+  it('admin 带 siteKeys 触发 → afterJsonb.siteKeys 透传', async () => {
+    const videoQueries = await import('@/api/db/queries/videos')
+    vi.mocked(videoQueries.findAdminVideoById).mockResolvedValueOnce({
+      id: '00000000-0000-0000-0000-000000000002',
+    } as unknown as Awaited<ReturnType<typeof videoQueries.findAdminVideoById>>)
+
+    await app.inject({
+      method: 'POST',
+      url: '/v1/admin/videos/00000000-0000-0000-0000-000000000002/refetch-sources',
+      headers: { authorization: await tokenFor('admin'), 'content-type': 'application/json' },
+      payload: JSON.stringify({ siteKeys: ['bilibili', 'iqiyi'] }),
+    })
+    await new Promise((r) => setImmediate(r))
+
+    expect(insertAuditLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actionType: 'video.refetch_sources',
+        afterJsonb: expect.objectContaining({
+          siteKeys: expect.arrayContaining(['bilibili']),
+        }),
+      }),
+    )
   })
 })
