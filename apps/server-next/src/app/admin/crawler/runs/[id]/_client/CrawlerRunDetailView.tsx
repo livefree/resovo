@@ -34,6 +34,7 @@ import {
   type CrawlerTaskDto,
   type CrawlerTaskStatus,
 } from '@/lib/crawler/api'
+import { TaskLogsDrawer } from './TaskLogsDrawer'
 
 const SECTION_STYLE: CSSProperties = {
   display: 'flex',
@@ -98,7 +99,12 @@ function formatDuration(startedAt: string | null, finishedAt: string | null): st
   return `${min}m${sec % 60}s`
 }
 
-const TASK_COLUMNS: readonly TableColumn<CrawlerTaskDto>[] = [
+interface BuildTaskColumnsOptions {
+  readonly onViewLogs: (taskId: string) => void
+}
+
+function buildTaskColumns({ onViewLogs }: BuildTaskColumnsOptions): readonly TableColumn<CrawlerTaskDto>[] {
+  return [
   {
     id: 'id',
     header: 'Task ID',
@@ -199,7 +205,25 @@ const TASK_COLUMNS: readonly TableColumn<CrawlerTaskDto>[] = [
         ? <span data-task-message style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-default)' }}>{row.message}</span>
         : <span style={{ color: 'var(--fg-muted)' }}>—</span>,
   },
-]
+  {
+    id: 'ops',
+    header: '操作',
+    accessor: (r) => r.id,
+    width: 90,
+    defaultVisible: true,
+    cell: ({ row }) => (
+      <AdminButton
+        variant="ghost"
+        size="sm"
+        onClick={() => onViewLogs(row.id)}
+        data-testid={`task-view-logs-${row.id}`}
+      >
+        查看
+      </AdminButton>
+    ),
+  },
+  ]
+}
 
 export interface CrawlerRunDetailViewProps {
   readonly runId: string
@@ -250,6 +274,13 @@ export function CrawlerRunDetailView({ runId }: CrawlerRunDetailViewProps) {
   }, [runId, tasksPage, tasksPageSize, retryKey])
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
+
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null)
+
+  const taskColumns = useMemo(
+    () => buildTaskColumns({ onViewLogs: (id) => setOpenTaskId(id) }),
+    [],
+  )
 
   const tasksQuery = useMemo(
     () => ({
@@ -380,7 +411,7 @@ export function CrawlerRunDetailView({ runId }: CrawlerRunDetailViewProps) {
             : (
                 <DataTable<CrawlerTaskDto>
                   rows={tasks}
-                  columns={TASK_COLUMNS}
+                  columns={taskColumns}
                   rowKey={(r) => r.id}
                   mode="server"
                   query={tasksQuery}
@@ -403,6 +434,12 @@ export function CrawlerRunDetailView({ runId }: CrawlerRunDetailViewProps) {
               )
         }
       </AdminCard>
+
+      <TaskLogsDrawer
+        open={openTaskId !== null}
+        taskId={openTaskId}
+        onClose={() => setOpenTaskId(null)}
+      />
     </div>
   )
 }

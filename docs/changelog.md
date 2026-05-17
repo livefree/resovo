@@ -9333,3 +9333,84 @@ CHG-SN-6-17 闭环后 /admin/crawler 视图完整四视图：sites（CRUD + syst
   - tasks 行操作（cancel/retry）→ 需 v1 端点新增？先扫一遍
   - 通知 Hub MVP（需后端 notifications API + ADR 前置）
   - DAG 视图（reactflow ADR + reference §5.6 A2）
+
+---
+
+## CHG-SN-6-18 — Task Detail + Logs Drawer 查看
+
+- **任务 ID**：CHG-SN-6-18
+- **完成时间**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话）
+- **子代理**：无（v1 端点已就位 / 纯前端消费 / Drawer 复用 / 无 ADR 前置）
+- **来源**：CHG-SN-6-17 后续；/admin/crawler/runs/:id 第二层下钻；reference §5 next-up
+
+### 范围
+
+**A. lib/crawler/api 扩展**（`apps/server-next/src/lib/crawler/api.ts`）：
+- 新类型：`CrawlerSiteBreakdown`（6 字段）/ `CrawlerTaskRunContext` / `CrawlerTaskDetailDto`（extends CrawlerTaskDto + siteBreakdown + runContext）/ `CrawlerTaskLog` / `CrawlerTaskLogLevel`（'info'|'warn'|'error'）
+- 新函数：`getCrawlerTaskDetail(id)` → 详情含 siteBreakdown + runContext / `listCrawlerTaskLogs(id, {limit})` → 日志数组
+
+**B. TaskLogsDrawer 新组件**（`apps/server-next/src/app/admin/crawler/runs/[id]/_client/TaskLogsDrawer.tsx`，375 行）：
+- Drawer placement=right width=560 + 内 2 个 AdminCard（详情 + 日志）
+- 详情卡：6 字段 meta grid + 站点细分（6 数）+ runContext（crawlMode/keyword/targetVideoId 条件渲染）+ 错误消息 highlight 块
+- 日志卡：3 级 level badge（info/warn/error）+ stage + 时间 + message + 折叠 `<details>` 显示 `JSON.stringify(details, null, 2)`
+- 双路独立 fetch（详情 / 日志）+ 独立 loading/error/empty + 共享 retry
+- 关闭时 useEffect 早返回，不调 API
+- closeOnEscape 默认 Drawer 内置
+
+**C. RunDetailView 集成**（`apps/server-next/src/app/admin/crawler/runs/[id]/_client/CrawlerRunDetailView.tsx`）：
+- `TASK_COLUMNS` 重构为 `buildTaskColumns({ onViewLogs })` 工厂
+- tasks 子表新增"操作"列 → AdminButton "查看" testid=`task-view-logs-${id}`
+- 内部 `openTaskId` state 控制 Drawer 开关
+
+**D. 测试**：
+- 新 `TaskLogsDrawer.test.tsx` 12 测试（覆盖关闭不调 API / 双路 fetch / loading/error/empty / 详情卡 / runContext / 日志列表 3 级 / details 折叠 / 刷新按钮）
+- `CrawlerRunDetailView.test.tsx` 13→14 测试（+2 "查看"按钮 + Drawer 触发；调整 mock 加 default pending promise for 未触发 mock）
+
+### 质量门禁（5 项硬清单 / 第 15 次正式验证）
+
+1. **视图测试 ≥ 9** → ✅ **12 + 14 = 26 测试**（TaskLogsDrawer 12 + RunDetail 集成 14）
+2. **共享原语 ≥ 80%** → ✅ 100% admin-ui（Drawer + AdminCard + AdminButton + CodeText + EmptyState + ErrorState + LoadingState）
+3. **R-MID-1 audit payload** → N/A（纯读视图 / 无写）
+4. **schema 三层防护** → N/A（前端消费卡）
+5. **PATCH 范围 ≤ 5 项** → ✅ 5 文件（恰好达上限：api.ts + TaskLogsDrawer + RunDetailView + 2 test）
+
+- typecheck 全绿（8 workspaces PASS）
+- lint 全绿（pre-existing img warning 不在本卡范围）
+- 3942 unit tests PASS（3928 → 3942，+14）
+- verify:adr-contracts 6 类全绿
+
+### 文件范围（5 文件 = 上限）
+
+- `apps/server-next/src/lib/crawler/api.ts`（+58 行 / 2 函数 + 5 类型）
+- `apps/server-next/src/app/admin/crawler/runs/[id]/_client/TaskLogsDrawer.tsx`（新增 / 375 行）
+- `apps/server-next/src/app/admin/crawler/runs/[id]/_client/CrawlerRunDetailView.tsx`（操作列 + buildTaskColumns 工厂 + openTaskId state + Drawer 渲染 / +30 行）
+- `tests/unit/components/server-next/admin/crawler/CrawlerRunDetailView.test.tsx`（+30 行 / 2 集成测试）
+- `tests/unit/components/server-next/admin/crawler/TaskLogsDrawer.test.tsx`（新增 / 12 测试 / 245 行）
+
+### 关键发现
+
+- **Drawer Portal → document.querySelector**：测试中 `container.querySelector` 无法触达 Drawer 内容（createPortal 渲染到 document.body）；必须改用 `document.querySelector` 或 `screen.getByText`。这是 RTL + Portal 组合的常见陷阱，未来 Drawer 测试可作为模板
+- **`mock fn` 必须返回 promise 否则 .then 报错**：CrawlerRunDetailView 测试中 TaskLogsDrawer 依赖被 mock 时，若 `vi.fn()` 直接返回 undefined，则 useEffect 中 `.then` 会 throw `Cannot read properties of undefined (reading 'then')`；正确做法是 `vi.fn(() => new Promise(() => {}))` 给一个 pending promise
+- **buildTaskColumns 工厂模式**：对比 RunsView 同款，本卡同样从 `const TASK_COLUMNS = [...]` 升级为 `buildTaskColumns({ onViewLogs })`，支持回调注入而无闭包过期问题（useMemo deps=[]，因 setOpenTaskId 是 setState dispatcher 稳定引用）
+- **runContext 字段条件渲染**：keyword 和 targetVideoId 可能 null，仅有值时渲染，避免空字段干扰；crawlMode 必显示作为基础信息
+- **5 文件恰达 PATCH 上限**：未拆分子卡因功能高度内聚（api + drawer + 集成 + 2 test），但接近警戒线；后续若再加 row 操作（cancel/retry）应起 -B 子卡
+
+### M-SN-6 进展
+
+CHG-SN-6-18 闭环后 /admin/crawler 视图能力栈：
+- sites（CRUD + system-status）
+- runs 列表（filter + 行操作 cancel/pause/resume）
+- run detail（基础信息 + tasks 子表 + Run ID 链接跳转）
+- **task detail + logs Drawer（新）**
+
+第二层 drill-down 完整：runs 列表 → run detail → task logs。
+
+### 后续触发
+
+- **下一卡候选（按从易到难）**：
+  - tasks 日志过滤（level filter / stage filter）或日志导出 CSV
+  - tasks 行操作（cancel/retry）→ 需扫 v1 端点 + 可能 ADR 前置
+  - freeze 控制（全局采集冻结）
+  - 通知 Hub MVP（需后端 notifications API + ADR 前置）
+  - DAG 视图（reactflow ADR + reference §5.6 A2）

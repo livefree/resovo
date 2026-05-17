@@ -230,3 +230,58 @@ export async function listCrawlerRunTasks(
     `/admin/crawler/runs/${encodeURIComponent(id)}/tasks${q ? `?${q}` : ''}`,
   )
 }
+
+// ── Task Detail + Logs（CHG-SN-6-18）─────────────────────────────
+
+export interface CrawlerSiteBreakdown {
+  readonly siteKey: string
+  readonly videosUpserted: number
+  readonly sourcesUpserted: number
+  readonly sourcesKept: number
+  readonly sourcesRemoved: number
+  readonly errors: number
+}
+
+export interface CrawlerTaskRunContext {
+  readonly crawlMode: string
+  readonly keyword: string | null
+  readonly targetVideoId: string | null
+}
+
+export interface CrawlerTaskDetailDto extends CrawlerTaskDto {
+  readonly siteBreakdown: CrawlerSiteBreakdown
+  readonly runContext: CrawlerTaskRunContext | null
+}
+
+export type CrawlerTaskLogLevel = 'info' | 'warn' | 'error'
+
+export interface CrawlerTaskLog {
+  readonly id: string
+  readonly taskId: string | null
+  readonly sourceSite: string | null
+  readonly level: CrawlerTaskLogLevel
+  readonly stage: string
+  readonly message: string
+  readonly details: Record<string, unknown> | null
+  readonly createdAt: string
+}
+
+export async function getCrawlerTaskDetail(id: string): Promise<CrawlerTaskDetailDto> {
+  const res = await apiClient.get<{ data: CrawlerTaskDetailDto }>(
+    `/admin/crawler/tasks/${encodeURIComponent(id)}`,
+  )
+  return res.data
+}
+
+export async function listCrawlerTaskLogs(
+  id: string,
+  params: { limit?: number } = {},
+): Promise<readonly CrawlerTaskLog[]> {
+  const qs = new URLSearchParams()
+  if (params.limit != null) qs.set('limit', String(params.limit))
+  const q = qs.toString()
+  const res = await apiClient.get<{ data: { logs: readonly CrawlerTaskLog[] } }>(
+    `/admin/crawler/tasks/${encodeURIComponent(id)}/logs${q ? `?${q}` : ''}`,
+  )
+  return res.data.logs
+}

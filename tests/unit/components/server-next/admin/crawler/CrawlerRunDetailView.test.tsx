@@ -24,6 +24,9 @@ const listCrawlerRunTasksMock = vi.fn()
 vi.mock('../../../../../../apps/server-next/src/lib/crawler/api', () => ({
   getCrawlerRunById: (...args: unknown[]) => getCrawlerRunByIdMock(...args),
   listCrawlerRunTasks: (...args: unknown[]) => listCrawlerRunTasksMock(...args),
+  // TaskLogsDrawer 依赖：默认返回 pending promise，避免 .then(undefined) 报错
+  getCrawlerTaskDetail: vi.fn(() => new Promise(() => {})),
+  listCrawlerTaskLogs: vi.fn(() => new Promise(() => {})),
 }))
 
 vi.mock('../../../../../../apps/server-next/src/lib/api-client', () => ({
@@ -245,6 +248,30 @@ describe('CrawlerRunDetailView', () => {
     render(<CrawlerRunDetailView runId={RUN_ID} />)
     await waitFor(() => {
       expect(listCrawlerRunTasksMock).toHaveBeenCalledWith(RUN_ID, { page: 1, limit: 50 })
+    })
+  })
+
+  // ── 操作列（CHG-SN-6-18）─────────────────────────────────
+
+  it('13. tasks 行渲染"查看"按钮（每行一个 task-view-logs-* testid）', async () => {
+    getCrawlerRunByIdMock.mockResolvedValueOnce(RUN_BASE)
+    listCrawlerRunTasksMock.mockResolvedValueOnce(TASKS_RESULT)
+    render(<CrawlerRunDetailView runId={RUN_ID} />)
+    await waitFor(() => {
+      expect(screen.getByTestId(`task-view-logs-${TASK_SUCCESS.id}`)).not.toBeNull()
+      expect(screen.getByTestId(`task-view-logs-${TASK_FAILED.id}`)).not.toBeNull()
+    })
+  })
+
+  it('14. 点击"查看" → Drawer 打开（data-testid=task-logs-drawer）', async () => {
+    getCrawlerRunByIdMock.mockResolvedValueOnce(RUN_BASE)
+    listCrawlerRunTasksMock.mockResolvedValueOnce(TASKS_RESULT)
+    render(<CrawlerRunDetailView runId={RUN_ID} />)
+    const btn = await waitFor(() => screen.getByTestId(`task-view-logs-${TASK_SUCCESS.id}`))
+    fireEvent.click(btn)
+    await waitFor(() => {
+      // Drawer 标题含 task id 短缩
+      expect(screen.getByText(/任务 11111111…/)).not.toBeNull()
     })
   })
 })
