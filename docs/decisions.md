@@ -6527,3 +6527,113 @@ export interface AdminAuditLogDetail extends AdminAuditLogListRow {
 - **扩展性**：A — 6 条重新评审判据多轴覆盖；future ADR-119a 重启路径清晰；不在范围段明列 DAG / 虚拟滚动两组独立处理
 
 **综合**：A（建议 PASS 一轮，无 CONDITIONAL）
+
+---
+
+## ADR-120-NEGATED：虚拟滚动库选型暂不引入 — @tanstack/react-virtual / react-window 双候选 NEGATED
+
+- **日期**：2026-05-16
+- **状态**：Accepted（NEGATED 决策）
+- **决策者**：主循环 claude-opus-4-7 / arch-reviewer (claude-opus-4-7) — 1 轮 PASS A 级
+- **关联**：ADR-100 §4.7 候选依赖 / ADR-119-NEGATED Analytics 图表 NEGATED 范式 / ADR-114-NEGATED line_key NEGATED 首次范式 / ADR-103 admin-ui DataTable v2 / CHG-SN-3 视频库分页 + 服务端排序 / plan §6 M-SN-2 方案 A2「游标 + 虚拟滚动延迟到 M-SN-6 首次 >50k 数据时按需即建」
+- **对应交付**：CHG-SN-6-12（M-SN-6 plan §4.7 候选依赖触发评审 — 虚拟滚动组）
+
+### 议题
+
+plan §6 M-SN-2 方案 A2 明确「游标 + 虚拟滚动延迟到 M-SN-6 首次 >50k 数据时按需即建」。M-SN-3 视频库 / M-SN-5 sources & merge / M-SN-6 analytics & audit 五大 admin 视图首次落地完成后，按 ADR-100 §4.7 候选依赖协议须在 `@tanstack/react-virtual` 与 `react-window` 之间二选一或确认暂不引入：
+
+- **方案 A（采纳，NEGATED 当前候选）**：暂不引入第三方虚拟滚动库；沿用 admin-ui DataTable v2 (`mode='server'` 服务端分页 + Pagination v2)
+- **方案 B（否定）**：引入 `@tanstack/react-virtual`（~5 KB gz / hook API / framework-agnostic / 动态行高 measureElement）
+- **方案 C（否定）**：引入 `react-window`（~6 KB gz / 组件 API / FixedSizeList + VariableSizeList 双 variant / 老牌稳定）
+
+### 决策
+
+**方案 A 采纳；方案 B / C 同时否定（NEGATED）**。ADR-100 §4.7 候选依赖中"虚拟滚动：@tanstack/react-virtual vs react-window"条目状态：候选 → **NEGATED（CHG-SN-6-12 / 2026-05-16）**；候选位置保留占位，未来触发条件激活时重启走 ADR-120a。
+
+### 决策要点
+
+- **D-120-1（plan A2 触发条件未到达）**：plan §6 M-SN-2 协议触发判据为「首次 >50k **单页**渲染数据」。当前所有 admin 视图（videos / sources / submissions / subtitles / users / merge / audit / image-health / system/*）均消费 admin-ui DataTable v2 `mode='server'`，单页 pageSize 上限 100 行，**实际单页渲染 ≤ 100 行**，距 50k 阈值 500× 余量
+- **D-120-2（替代方案 = 既成事实 / 服务端分页 + DataTable v2）**：ADR-103 DataTable v2 一体化（CHG-DESIGN-02 + CHG-SN-2-13）内置 Pagination v2 三态 + 服务端 sort + filter chips + 隐藏列 chip；M-SN-3 视频库已生产验证「10k video / 50k video_sources / 100k+ audit_log」全量场景，每视图首屏 < 200ms
+- **D-120-3（bundle 收益）**：方案 B (@tanstack/react-virtual) ~5 KB gz / 方案 C (react-window) ~6 KB gz；方案 A 增量 **0 KB**。虚拟滚动单价虽小（< 图表库 1/10），但属于"按需即建"协议范畴 — 未触发即承诺等同于过早投入
+- **D-120-4（DataTable v2 兼容成本守恒）**：虚拟滚动引入需与 DataTable v2 多项能力做交叉适配：① sticky table header + 行级 sticky `.dt__bulk` bottom selection bar；② 列宽测量（measureElement 与 column resize 联动）；③ filter chips popover + 隐藏列 chip 触发的 re-measure；④ Pagination v2 三态（虚拟滚动与 server-side 分页协议互斥点）；⑤ 行 flash 动画 `flashRowKeys`；⑥ a11y `role="row"` / `aria-rowindex` 偏移修正
+- **D-120-5（服务端处理 vs 客户端虚拟化的边界区分）**：100k+ audit_log 已通过 server-side 分页 + filter 在数据库层处理（plan A2 游标已是 Phase 1 / 虚拟滚动是 Phase 2）；客户端虚拟化适用场景仅在「**单请求必须返回全量、客户端必须一次渲染**」的特殊视图（如 timeline 全量回溯 / DAG 节点 spanning view），当前零此类视图
+- **D-120-6（ADR-100 候选清单关系）**：本 ADR 仅 NEGATE"虚拟滚动"一项；§4.7 候选清单 DAG 渲染（reactflow vs dagre-d3）独立保留候选位置，等 reference A2 明确后再各自走 arch-reviewer
+
+### 未来"重新评审"触发条件（避免决策永久性遗忘）
+
+以下任一触发，必须重新评估方案 B/C 必要性（重启 ADR-120a 决策卡或起 PRE 评估 SEQ）：
+
+1. **plan A2 协议主触发判据**：单视图实际单页（或 infinite scroll 累积窗口）渲染数据集 **> 5000 行**，且业务上无法通过 server-side 分页缩窗
+2. **性能验收硬阈值反超**：DataTable v2 单页 1000+ 行场景下首屏渲染 > 200ms / 滚动 fps < 50 / TTI > 500ms（任一）
+3. **业务需求引入 infinite scroll 或 fixed-header sticky pinning 复杂场景**：DataTable v2 当前 Pagination v2 三态不覆盖 infinite scroll 协议
+4. **>50k 数据集首次单请求集成**：plan §6 M-SN-2 A2 协议明定主触发条件 — 首次 > 50k 数据单请求落到前端必须客户端展示
+5. **DAG 视图 / timeline 全量回溯 / 图谱 spanning view 落地**：非分页型可视化视图首次出现，且节点 / row 数 > 1000
+6. **DataTable v2 重构引入虚拟化作为内核**：admin-ui DataTable v3 / v4 设计决策若将虚拟化作为 mode（与 'server' / 'client' 并列），则随该 ADR 一同评估库选型
+7. **bundle budget 重定义**：M-SN-7 cutover 后稳态运营，bundle budget 允许 5-10 KB gz 增量交换性能保险
+
+### 后果
+
+**正面**：
+1. 零 bundle 增量
+2. 零外部维护成本（无版本升级 / breaking change / React 主版本兼容矩阵）
+3. DataTable v2 单一 mental model 一致性
+4. 服务端分页与数据库索引策略对齐（plan A2 Phase 1 已覆盖）
+5. 可逆性强（未来引入 DataTable v2 可在内部新增 mode='virtual' 而消费方零改动）
+6. a11y 风险低（无虚拟化引入的 aria-rowindex 偏移调试成本）
+
+**负面**：
+1. 首次真正大数据集出现时一次性引入成本（200-400 行实装 + 8-12 单测）
+2. infinite scroll 业务需求出现时存在短暂等待窗口（先起 ADR-120a，再实装）
+3. 100k+ audit_log 全量导出 / 全量回溯类边缘需求只能走 server-side 分页 + filter
+4. 知识沉淀依赖 plan A2 协议文本（无库 docs 参考）
+
+### 替代方案对比
+
+| 维度 | 方案 A（NEGATED 当前候选）| 方案 B（@tanstack/react-virtual）| 方案 C（react-window）|
+|---|---|---|---|
+| Bundle 增量 (gz) | **0 KB** | ~5 KB | ~6 KB |
+| API 范式 | DataTable v2 单一 mode='server' | hook（useVirtualizer）| 组件（FixedSizeList / VariableSizeList）|
+| 动态行高 | N/A（分页固定 pageSize）| 内置 measureElement | VariableSizeList 手动 itemSize |
+| Sticky header 兼容 | 原生 CSS sticky | 需手动布局协作 | 需手动布局协作 |
+| DataTable v2 适配成本 | 0 | 中（6 项交叉点）| 中（6 项交叉点）|
+| 服务端分页协作 | **原生**（mode='server'）| 需重新设计 fetch on scroll | 需重新设计 fetch on scroll |
+| a11y | DataTable v2 内置 | 需 aria-rowindex 偏移修正 | 需 aria-rowindex 偏移修正 |
+| 维护成本（增量）| 0 | 版本/peer/React 矩阵 | 同 B（社区活跃度低于 B）|
+| 学习曲线 | 仅 DataTable v2 文档 | 中（hook 心智）| 低（组件直读）|
+| 可逆性 | 高（零迁移成本）| 中（迁出需重写）| 中（迁出需重写）|
+| 触发场景适配 | < 5000 行（分页全覆盖）| > 5000 行 / 动态行高 / hook | > 5000 行 / 固定行高优先 |
+
+**结论**：当前业务复杂度下，方案 A 是 Pareto 最优；方案 B/C 等待 §未来触发条件中任一项激活。在两者真正二选一时，B 因动态行高 + hook 灵活性 + 社区活跃度更适合 admin-ui DataTable v3 集成（仅作前置参考，**不构成本 ADR 决策**）。
+
+### 不在本 ADR 范围（明列防扩张）
+
+- ❌ DAG 渲染候选（reactflow vs dagre-d3）— ADR-100 §4.7 候选清单第 2 组，等 reference A2 明确后独立走
+- ❌ Analytics 图表候选（recharts vs visx）— 已 ADR-119-NEGATED 处理
+- ❌ DataTable v2 内部能力扩展（infinite scroll mode / sticky pinning 强化）— 走 ADR-103 公开 API 契约路径
+- ❌ plan §6 M-SN-2 A2 协议 Phase 1（游标分页）服务端实现 — 已在 CHG-SN-3 视频库分页落地
+- ❌ audit_log / video_sources 等大表的服务端索引策略 — 走 db-rules / migration 路径
+- ❌ apps/api / packages/types / packages/admin-ui 代码改动 — 本 ADR 纯文档 governance 决策，0 代码
+
+### 影响文件
+
+仅文档与索引层（0 代码改动）：
+- `docs/decisions.md`：追加本 ADR-120-NEGATED 段
+- `docs/changelog.md`：CHG-SN-6-12 条目（含 D-120-1~6 闭环）
+
+### 关联
+
+- **ADR-100**（server-next milestone 总览 §4.7 候选清单 — 本 ADR NEGATE "虚拟滚动组"）
+- **ADR-119-NEGATED**（Analytics 图表 NEGATED 范式 — 段落结构 / 重启路径 / 候选位置占位语义对齐）
+- **ADR-114-NEGATED**（line_key NEGATED 首次范式）
+- **ADR-103 + CHG-DESIGN-02 + CHG-SN-2-13**（admin-ui DataTable v2 一体化 — 方案 A 能力底座）
+- **CHG-SN-3 视频库分页**（服务端分页 + sort + filter 生产验证 — 方案 A 既成事实证据）
+- **plan §6 M-SN-2 方案 A2**（虚拟滚动「按需即建」协议 — 本 ADR 触发判据真源）
+
+### 4 维度自评
+
+- **命名**：A — ADR-120-NEGATED 对齐 ADR-119-NEGATED / ADR-114-NEGATED 范式
+- **对称性**：A — 9 段结构与 ADR-119-NEGATED 完全对齐；正面 6 / 负面 4 后果对称；3 替代方案 11 维度（虚拟滚动 DataTable v2 适配更细）
+- **状态职责**：A — NEGATED 状态明确；ADR-100 §4.7 只 NEGATE 第 3 组（DAG 保留候选）；7 条触发条件多轴覆盖
+- **扩展性**：A — 7 触发判据 + ADR-120a 重启路径 + 不在范围明列 6 类防扩张；对比表第 12 维度显式标注未来二选一前置倾向（B 优）但不构成决策
+
+**综合**：A（建议 PASS 一轮，无 CONDITIONAL）

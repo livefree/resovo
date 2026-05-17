@@ -8819,3 +8819,68 @@ expect(auditSvc.write).toHaveBeenCalledWith(expect.objectContaining({
   - crawler + DAG（reference A2 待明确 / reactflow vs dagre-d3 ADR — 等待 reference 补完，本期可起 NEGATED 占位卡或推迟）
   - 通知 Hub
   - 大数据原语（react-virtual ADR — 同样未触发首次落地）
+
+---
+
+## CHG-SN-6-12 — ADR-120-NEGATED 虚拟滚动选型暂不引入
+- **任务 ID**：CHG-SN-6-12
+- **日期**：2026-05-16
+- **执行模型**：claude-opus-4-7（主循环延续会话；建议 sonnet）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮 PASS A 级（NEGATED 决策起草 / 沿用 ADR-119-NEGATED 范式）
+- **来源**：plan §4.7 候选依赖第 3 组虚拟滚动（@tanstack/react-virtual vs react-window）M-SN-6 评审；plan §6 M-SN-2 方案 A2「>50k 数据时按需即建」未触发 → NEGATED
+- **范围**：1 ADR 文档 ≤ 5 软上限（纯 governance 决策 / 0 代码）
+
+### 实施内容
+
+**A. ADR-120-NEGATED 落盘**（`docs/decisions.md`）：
+- 状态：Accepted（NEGATED）/ 1 轮 PASS A 级
+- 决策：方案 A（NEGATED 当前候选 = DataTable v2 mode='server' + Pagination v2）采纳 / 方案 B（@tanstack/react-virtual ~5KB gz）+ 方案 C（react-window ~6KB gz）同时否定
+- 决策依据：
+  - plan A2 协议「>50k 单页渲染」未触发；当前所有视图单页 pageSize ≤ 100，距阈值 500× 余量
+  - DataTable v2 一体化已生产验证 10k video / 50k video_sources / 100k+ audit_log 全量场景（服务端分页 + filter），首屏 < 200ms
+  - bundle 增量 0 KB / DataTable v2 6 项兼容成本守恒（sticky header / 列宽 measureElement / filter chips / Pagination v2 三态 / row flash / aria-rowindex 偏移）
+  - 客户端虚拟化适用场景仅"单请求全量铺平"（timeline 全量回溯 / DAG spanning view），当前零此类视图
+- **7 条未来"重新评审"触发条件**（防永久遗忘）：plan A2 主触发 / 性能阈值反超 / infinite scroll 需求 / >50k 集成 / DAG timeline 落地 / DataTable v3 重构 / bundle budget 重定义
+- 3 替代方案对比 11 维度（bundle / API 范式 / 动态行高 / sticky / 适配成本 / 分页协作 / a11y / 维护 / 学习曲线 / 可逆性 / 触发场景）
+- 4 维度自评 A 级（命名 / 对称性 / 状态职责 / 扩展性 全 A）
+
+### D-N 闭环状态（ADR-120-NEGATED 决策要点）
+
+- **D-120-1** plan A2 触发条件未到达（单页 ≤ 100，距 50k 500× 余量）— ✅ 协议落地
+- **D-120-2** 替代方案 = DataTable v2 既成事实（CHG-SN-3 视频库生产验证）— ✅ 协议落地
+- **D-120-3** bundle 收益 0 KB 增量 — ✅ 验证 npm 依赖白名单未引入虚拟滚动库
+- **D-120-4** DataTable v2 兼容成本守恒（6 项交叉点）— ✅ 协议落地
+- **D-120-5** 服务端处理 vs 客户端虚拟化边界区分 — ✅ 协议落地
+- **D-120-6** ADR-100 §4.7 候选清单关系（仅 NEGATE 第 3 组，DAG 第 2 组独立）— ✅ 协议落地
+
+### 质量门禁（5 项硬清单）
+
+1. **视图测试 ≥ 9** → N/A（纯文档决策）
+2. **共享原语 ≥ 80%** → N/A
+3. **R-MID-1 audit payload** → N/A
+4. **schema 三层防护** → N/A（0 DB 改动）
+5. **PATCH 范围 ≤ 5 项** → ✅ 1 文件（仅 docs/decisions.md + changelog）
+
+- verify:adr-contracts 6 类全绿（adr-d-numbers 26 → 32 条全闭环含 ADR-120 D-120-1~6）
+- 不需重跑 unit / integration（0 代码改动）
+
+### plan §4.7 候选依赖白名单状态总览（CHG-SN-6-12 后）
+
+| 候选组 | 状态 | 决策 ADR | 重启路径 |
+|---|---|---|---|
+| 图表（analytics）recharts vs visx | NEGATED | ADR-119-NEGATED（CHG-SN-6-11）| ADR-119a |
+| DAG 渲染 reactflow vs dagre-d3 | 候选保留 | — | 等 reference A2 明确 |
+| **虚拟滚动 react-virtual vs react-window** | **NEGATED** | **ADR-120-NEGATED（本卡）** | **ADR-120a** |
+
+### 关键发现
+
+- **NEGATED 范式第 3 次落地**：ADR-114-NEGATED line_key（业务）→ ADR-119-NEGATED 图表（技术栈，依据 CHG-DESIGN-09 既成事实）→ ADR-120-NEGATED 虚拟滚动（技术栈，依据 plan A2 协议未触发）；3 次 NEGATED 形成"候选位置占位 + 重启路径 + 触发条件"标准化模板
+- **DataTable v2 集成度承载**：方案 A 既成事实证据强（CHG-SN-3 视频库 + 后续 5+ 视图全消费），未来 DataTable v3 重构内置虚拟化 mode 才是最合理引入路径（决策要点 D-120-4 + 触发条件 6 锚定）
+- **对比表多 2 维度**：相比 ADR-119-NEGATED 的 9 维度，本 ADR 11 维度增加"动态行高 / 服务端分页协作 / 触发场景适配"3 个虚拟滚动特有维度；同款范式可按候选特征灵活扩
+
+### 后续触发
+
+- **ADR-100 §4.7 候选清单更新**（建议 milestone 收尾时）：line 2050 旁加交叉引用 `→ ADR-120-NEGATED`
+- **下一卡候选（按从易到难，剩余 M-SN-6 范围）**：
+  - crawler 视图 MVP（v1 30+ 端点已存在 / DAG 部分等 reference A2 独立成卡）
+  - 通知 Hub（admin-ui NotificationDrawer + TaskDrawer 已存在 / 仅需后端 notifications/tasks 列表端点 + 视图层接入）
