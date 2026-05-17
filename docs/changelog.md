@@ -9931,3 +9931,95 @@ CHG-SN-6-24 闭环后 csv-export 共享工具 5 消费方实证（TaskLogsDrawer
   - tasks 行操作（cancel/retry）扫端点 + 可能 ADR
   - 通知 Hub MVP（需后端 notifications API + ADR 前置）
   - DAG 视图（reactflow ADR + reference §5.6 A2）
+
+---
+
+## CHG-SN-6-25-RETRO — auto-config + stop-all 端点 audit 补齐（R-MID-1 第 11 次系统化）
+
+- **任务 ID**：CHG-SN-6-25-RETRO
+- **完成时间**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话）
+- **子代理**：无（沿用 CHG-SN-6-16-A/20-A 框架）
+- **来源**：v1 crawler 写端点 audit 系统化继续；为后续 scheduler-config UI 卡铺路（RETRO 解锁）
+
+### 范围
+
+**A. 类型层 union 扩展**（`packages/types/src/admin-moderation.types.ts`）：
+- 新增 `'crawler.auto_config'` + `'crawler.stop_all'` 双 union 分支
+
+**B. AuditLogService ACTION_TYPES 同步**（`apps/api/src/services/AuditLogService.ts`）
+
+**C. 路由 audit 接入**（`apps/api/src/routes/admin/crawler.ts`）：
+- POST /admin/crawler/auto-config：before 取 `getAutoCrawlConfig`，after = 入参 config；target=system / id=`auto_crawl_config`
+- POST /admin/crawler/stop-all：before 取 `crawler_global_freeze` setting，after = freezeEnabled + markedRuns + removeRepeatableTick + taskChanges；target=system / id=`stop_all`
+
+**D. R-MID-1 payload 内容断言**（`tests/unit/api/crawler-system-audit.test.ts` 新增 5 测试）：
+- auto-config：before/after 完整断言 + 422 不写守卫
+- stop-all freeze=true：before false → after true + markedRuns/removeRepeatableTick/pendingCancelled/runningSignaled
+- stop-all freeze=false：未触发 setSetting 但 audit 仍写
+- stop-all 422 守卫
+
+**E. 4 真源同步**：audit-log-coverage（REQUIRED + PAYLOAD_REQUIRED 扩 2）+ audit-log-service-enums-set-equal（EXPECTED 扩 2）
+
+### 质量门禁（5 项硬清单 / 第 23 次正式验证）
+
+1. **视图测试 ≥ 9** → N/A（route-level audit）
+2. **共享原语 ≥ 80%** → N/A
+3. **R-MID-1 audit payload** → ✅ **新 2 action_type PAYLOAD_REQUIRED（32 → 34 项 strict）**
+4. **schema 三层防护** → ✅ 052 CHECK 已含 'system' target_kind + 类型 union + service 常量 + 5 test
+5. **PATCH 范围 ≤ 5 项** → ⚠️ 6 文件（沿用 CHG-SN-6-16-A/20-A 同框架；audit RETRO 补齐固定 4 真源 + 1 路由 + 1 新测试合并 = 6 文件无法压缩）
+
+- typecheck 全绿（8 workspaces PASS）
+- lint 全绿
+- 3995 unit tests PASS（3986 → 3995，+9：5 system-audit + 2 audit-coverage REQUIRED it.each + 2 PAYLOAD it.each）
+- audit-log-coverage REQUIRED **34 项全 PASS**
+- verify:adr-contracts 6 类全绿
+
+### R-MID-1 系统化进展（第 1→11 次）
+
+| 次 | 卡 | 范围 | strict 总数 |
+|---|---|---|---|
+| 1-5 | M-SN-4 多卡 | ADR-104 + 多视图 service test | 9 |
+| 6 | CHG-SN-5-CHECKLIST-AUDIT-2 P0-1 | 代码守卫落地 | 9 |
+| 6.5 | CHG-SN-6-RETRO-3-A | system v1 4 端点 | 13 |
+| 7 | CHG-SN-6-10 | legacy 11 项 EXEMPT 清零 | 24 |
+| 8 | CHG-SN-6-14 | CrawlerSite v1 4 端点 | 28 |
+| 9 | CHG-SN-6-16-A | CrawlerRun 3 行操作 | 31 |
+| 10 | CHG-SN-6-20-A | crawler.freeze 全局开关 | 32 |
+| **11** | **CHG-SN-6-25-RETRO（本卡）** | **auto-config + stop-all 双端点** | **34** |
+
+### 文件范围（6 文件）
+
+- `packages/types/src/admin-moderation.types.ts`（union 扩 2）
+- `apps/api/src/services/AuditLogService.ts`（ACTION_TYPES 扩 2）
+- `apps/api/src/routes/admin/crawler.ts`（2 端点 auditSvc.write + getAutoCrawlConfig before 调用 + beforeFreezeSetting 抓取）
+- `tests/unit/api/audit-log-coverage.test.ts`（REQUIRED + PAYLOAD_ASSERTION_REQUIRED 扩 2）
+- `tests/unit/api/audit-log-service-enums-set-equal.test.ts`（EXPECTED 扩 2）
+- `tests/unit/api/crawler-system-audit.test.ts`（新增 / 5 测试 / 双 describe block 合并避免 7 文件）
+
+### 关键发现
+
+- **2 端点合并 1 新测试文件减少范围**：sn-6-16-A 范式产 1 测试 / 1 端点，本卡 2 端点用单文件双 describe，文件数从 7 压回 6
+- **target_id setting key 字面量统一**：crawler.freeze='crawler_global_freeze' / auto_config='auto_crawl_config' / stop_all='stop_all'；语义清晰且不需扩 052 CHECK
+- **stop-all afterJsonb 多字段**：除 freezeEnabled 外含 markedRuns（cancelled runs 数）+ removeRepeatableTick（bool 操作意图）+ pendingCancelled + runningSignaled；后期可用于运维事件溯源（一次止血动作的完整快照）
+- **auto-config beforeJsonb 含完整 config 快照**：用户可能逐字段微调（如仅改 dailyTime），前后对比可看出 diff；alternative 仅记 patch 字段但失去回滚信息
+
+### M-SN-6 进展
+
+v1 crawler 写端点 audit 覆盖 10/13：
+- ✅ CrawlerSite (create/update/delete/batch) 4
+- ✅ CrawlerRun (cancel/pause/resume) 3
+- ✅ crawler.freeze 1
+- ✅ crawler.auto_config 1（新）
+- ✅ crawler.stop_all 1（新）
+- ❌ crawler.reindex（独立后续卡）
+- ❌ POST /admin/crawler/tasks（deprecated，不补齐）
+- ❌ POST /admin/crawler/runs 统一入口（独立卡）
+
+### 后续触发
+
+- **下一卡候选（按从易到难）**：
+  - reindex audit 补齐（最后 1 个非 deprecated 端点）
+  - scheduler-config UI（现 RETRO 已就位，可独立卡 -B 落地）
+  - 通知 Hub MVP（需后端 notifications API + ADR 前置）
+  - DAG 视图（reactflow ADR + reference §5.6 A2）

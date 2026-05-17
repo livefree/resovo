@@ -75,6 +75,9 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   'crawler_run.resume',
   // CHG-SN-6-20-A：全局采集冻结开关 audit 补齐
   'crawler.freeze',
+  // CHG-SN-6-25-RETRO：autoCrawlConfig + stop-all audit 补齐
+  'crawler.auto_config',
+  'crawler.stop_all',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',

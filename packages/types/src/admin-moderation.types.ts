@@ -150,6 +150,10 @@ export type AdminAuditActionType =
   // CHG-SN-6-20-A：全局采集冻结开关 audit 补齐（R-MID-1 系统化第 10 次）
   | 'crawler.freeze'             // POST /admin/crawler/freeze
 
+  // CHG-SN-6-25-RETRO：autoCrawlConfig + stop-all audit 补齐（R-MID-1 系统化第 11 次）
+  | 'crawler.auto_config'        // POST /admin/crawler/auto-config
+  | 'crawler.stop_all'           // POST /admin/crawler/stop-all
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'

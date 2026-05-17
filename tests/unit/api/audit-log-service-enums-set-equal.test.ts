@@ -60,6 +60,9 @@ const EXPECTED_ACTION_TYPES = [
   'crawler_run.resume',
   // CHG-SN-6-20-A
   'crawler.freeze',
+  // CHG-SN-6-25-RETRO
+  'crawler.auto_config',
+  'crawler.stop_all',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [

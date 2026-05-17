@@ -132,7 +132,22 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
         error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 422 },
       })
     }
+
+    // CHG-SN-6-25-RETRO：审计 — crawler.auto_config（before 取当前 config）
+    const beforeConfig = await systemSettingsQueries.getAutoCrawlConfig(db)
+
     await systemSettingsQueries.setAutoCrawlConfig(db, parsed.data)
+
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'crawler.auto_config',
+      targetKind: 'system',
+      targetId: 'auto_crawl_config',
+      beforeJsonb: { config: beforeConfig },
+      afterJsonb: { config: parsed.data },
+      requestId: request.id,
+    })
+
     return reply.send({ data: { ok: true } })
   })
 
@@ -308,6 +323,9 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     }
     const { freeze, removeRepeatableTick } = parsed.data
 
+    // CHG-SN-6-25-RETRO：审计 — crawler.stop_all（before 取 freeze 状态）
+    const beforeFreezeSetting = await systemSettingsQueries.getSetting(db, 'crawler_global_freeze')
+
     if (freeze) {
       await systemSettingsQueries.setSetting(db, 'crawler_global_freeze', 'true')
     }
@@ -335,6 +353,22 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     }
 
     const freezeSetting = await systemSettingsQueries.getSetting(db, 'crawler_global_freeze')
+
+    // CHG-SN-6-25-RETRO：审计写入 — crawler.stop_all
+    auditSvc.write({
+      actorId: request.user!.userId,
+      actionType: 'crawler.stop_all',
+      targetKind: 'system',
+      targetId: 'stop_all',
+      beforeJsonb: { freezeEnabled: beforeFreezeSetting === 'true' },
+      afterJsonb: {
+        freezeEnabled: freezeSetting === 'true',
+        markedRuns: runMarked,
+        removeRepeatableTick,
+        ...taskChanges,
+      },
+      requestId: request.id,
+    })
 
     return reply.send({
       data: {
