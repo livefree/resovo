@@ -10264,3 +10264,69 @@ v1 crawler 写端点 audit 12/13（非 deprecated 100%）+ R-MID-1 36 strict。
   - **M-SN-6 milestone 阶段审计**（arch-reviewer Opus 评估 + 数据观察总结 + ADR 协议合规复检）— 推荐优先（crawler 域已闭环）
   - 通知 Hub MVP（需后端 notifications API + ADR 前置）
   - DAG 视图（reactflow ADR + reference §5.6 A2）
+
+---
+
+## CHG-SN-6-29-AUDIT — M-SN-6 milestone 阶段审计（arch-reviewer Opus）
+
+- **任务 ID**：CHG-SN-6-29-AUDIT
+- **完成时间**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：**arch-reviewer (claude-opus-4-7)** 独立评审 / 1 轮 / **评级 A−** / 必修 2 PATCH 后关闭
+- **来源**：M-SN-6 crawler 域 UI 闭环节点 / 上次 milestone 审计 M-SN-5（B+ → A−）
+
+### arch-reviewer 输出要点（详见上方 1500+ 字评审）
+
+**评级**：**A−**（实质交付质量极高，但 H1 暴露质量门禁系统性盲点）
+
+**数据观察核心**：
+- 44 张卡 / 3659 → 4018 PASS（+359）/ R-MID-1 6.5 → 12 次（13 → 36 strict / +23）/ csv-export 5 消费方 / v1 crawler audit 12/13
+- **绝对禁止项零违反**（无 any / 无空 catch / 无硬编码颜色 / 无越层调用 / 无 schema 不同步）
+- 5 处 audit 真源（union/ACTION_TYPES/EXPECTED/REQUIRED/PAYLOAD）全对齐 36 项 — 独立核验通过
+- 自报数据未发现虚报
+
+### 关键发现：H1 绝对禁止项违反
+
+**H1 — CrawlerClient.tsx 862 行**（实测 wc -l 确认 862）违反 CLAUDE.md 第 11 条"文件超 500 行非声明性 / 导出 2+ 主要概念不先拆分"。
+
+历史轨迹：CHG-SN-6-13 起 ≤ 500 → -15 加 runs tab → -20-B 加 freeze → -27 加 stop-all+scheduler → -28 加 reindex；**连续 5 卡线性增长无人拦截**。
+
+邻近文件接近上限：
+- `CrawlerRunDetailView.tsx` 445 行
+- `TaskLogsDrawer.tsx` 491 行
+- `CrawlerRunsView.tsx` 429 行
+
+### 关闭决策
+
+⚠️ **必修 PATCH-1 + PATCH-2 后关闭**。
+
+- **PATCH-1**（P0 必修）：CrawlerClient.tsx 拆 3 文件（CrawlerSitesTab + CrawlerControlsCard + 主 orchestrator ≤ 300 行）/ 工时 ~0.4w
+- **PATCH-2**（P0）：task-queue.md 起跟踪卡 perSiteOverrides UI + R-MID-1 ADR-121 起草 + 文件大小守卫 / 工时 ~0.05w
+
+### 中风险（M-SN-7 前修）
+
+- **M1** — crawler 3 大文件接近 500 行上限（M-SN-7 必评估拆分）
+- **M2** — R-MID-1 协议未 ADR 化（5 卡先例无规范来源）
+- **M3** — perSiteOverrides UI 债务无任务跟踪
+
+### 低风险（后续 milestone 承接）
+
+- L1：双子卡 -A/-B 范式未文档化（补 admin-module-template.md）
+- L2：NEGATED ADR 占位语义未集中说明（补 decisions.md 头部一节）
+- L3：ModerationConsole csv 豁免无追溯（补 ADR-106 或 plan 段落）
+- L4：useDoubleConfirm 第 3 处复用时提取（不急）
+
+### M-SN-7 衔接建议（5 候选）
+
+1. **CHG-SN-7-PRE-01 文件大小守卫**（verify:file-size-budget 静态扫描 → FAIL fast / preflight 集成）
+2. **CHG-SN-7-PRE-02 ADR-121 起草** R-MID-1 RETRO 协议正式化（5 真源 + 6 文件框架 + PATCH 豁免依据）
+3. **通知 Hub MVP**（ADR 前置 + 后端 notifications API）
+4. **DAG 视图 ADR**（reactflow vs SVG 决策）
+5. M-SN-6 中低风险债务承接（crawler 拆分预案 + perSiteOverrides UI + 4 范式文档化）
+
+### 后续触发
+
+- **CHG-SN-6-29-PATCH-1**（P0 必修）：CrawlerClient.tsx 拆分（独立卡 / 范围 3-4 文件）
+- **CHG-SN-6-29-PATCH-2**（P0）：task-queue.md 起 perSiteOverrides UI + ADR-121 起草 + 文件大小守卫 3 跟踪卡（合并 0.05w）
+
+PATCH-1 + -2 闭环后 M-SN-6 milestone 关闭，进入 M-SN-7。
