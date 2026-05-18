@@ -26,6 +26,7 @@ const batchCrawlerSitesMock = vi.fn()
 const validateCrawlerSiteMock = vi.fn()
 const getCrawlerSystemStatusMock = vi.fn()
 const setCrawlerFreezeMock = vi.fn()
+const stopAllCrawlerMock = vi.fn()
 const toastPushMock = vi.fn()
 const confirmSpy = vi.fn().mockReturnValue(true)
 
@@ -38,6 +39,10 @@ vi.mock('../../../../../../apps/server-next/src/lib/crawler/api', () => ({
   validateCrawlerSite: (...args: unknown[]) => validateCrawlerSiteMock(...args),
   getCrawlerSystemStatus: (...args: unknown[]) => getCrawlerSystemStatusMock(...args),
   setCrawlerFreeze: (...args: unknown[]) => setCrawlerFreezeMock(...args),
+  stopAllCrawler: (...args: unknown[]) => stopAllCrawlerMock(...args),
+  // SchedulerConfigDrawer 依赖（关闭时不会调用）
+  getAutoCrawlConfig: vi.fn(() => new Promise(() => {})),
+  setAutoCrawlConfig: vi.fn(() => new Promise(() => {})),
 }))
 
 vi.mock('@resovo/admin-ui', async () => {
@@ -119,6 +124,7 @@ beforeEach(() => {
   validateCrawlerSiteMock.mockReset()
   getCrawlerSystemStatusMock.mockReset()
   setCrawlerFreezeMock.mockReset()
+  stopAllCrawlerMock.mockReset()
   toastPushMock.mockReset()
   confirmSpy.mockReset().mockReturnValue(true)
   ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
@@ -386,5 +392,65 @@ describe('CrawlerClient', () => {
     })
     expect(screen.queryByTestId('crawler-freeze-card')).toBeNull()
     expect(screen.queryByTestId('crawler-freeze-toggle')).toBeNull()
+  })
+
+  // ── scheduler-config + stop-all（CHG-SN-6-27）─────────────────
+
+  it('20. freeze 卡渲染调度配置 + 全局止血按钮', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    getCrawlerSystemStatusMock.mockResolvedValueOnce({
+      freezeEnabled: false,
+      schedulerEnabled: true,
+      orphanTaskCount: 0,
+    })
+    render(<CrawlerClient />)
+    await waitFor(() => screen.getByTestId('crawler-freeze-toggle'))
+    expect(screen.getByTestId('crawler-scheduler-open')).not.toBeNull()
+    expect(screen.getByTestId('crawler-stop-all')).not.toBeNull()
+  })
+
+  it('21. 全局止血：confirm 双重通过 → API + 成功 toast + status 合并', async () => {
+    listCrawlerSitesMock.mockResolvedValue([SITE_1])
+    getCrawlerSystemStatusMock.mockResolvedValue({
+      freezeEnabled: false,
+      schedulerEnabled: true,
+      orphanTaskCount: 0,
+    })
+    stopAllCrawlerMock.mockResolvedValueOnce({
+      freezeEnabled: true,
+      markedRuns: 2,
+      pendingCancelled: 5,
+      runningSignaled: 3,
+    })
+    // 双重 confirm 全部通过（默认 mockReturnValue(true)）
+    render(<CrawlerClient />)
+    const btn = await waitFor(() => screen.getByTestId('crawler-stop-all'))
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(stopAllCrawlerMock).toHaveBeenCalledWith({ freeze: true, removeRepeatableTick: true })
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: '全局止血完成' }),
+      )
+    })
+  })
+
+  it('22. 全局止血：第二次 confirm 拒绝 → 不调 API', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    getCrawlerSystemStatusMock.mockResolvedValueOnce({
+      freezeEnabled: false,
+      schedulerEnabled: true,
+      orphanTaskCount: 0,
+    })
+    let callCount = 0
+    confirmSpy.mockReset().mockImplementation(() => {
+      callCount += 1
+      return callCount === 1 // 第一次通过，第二次拒绝
+    })
+    ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
+    render(<CrawlerClient />)
+    const btn = await waitFor(() => screen.getByTestId('crawler-stop-all'))
+    fireEvent.click(btn)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(stopAllCrawlerMock).not.toHaveBeenCalled()
   })
 })

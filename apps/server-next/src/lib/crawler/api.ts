@@ -113,6 +113,57 @@ export async function setCrawlerFreeze(enabled: boolean): Promise<CrawlerSystemS
   return res.data
 }
 
+// ── 自动调度配置（CHG-SN-6-27 / audit 已在 -25-RETRO 补齐）────────
+
+export type AutoCrawlMode = 'incremental' | 'full'
+export type AutoCrawlConflictPolicy = 'skip_running' | 'queue_after_running'
+
+export interface AutoCrawlSiteOverride {
+  readonly enabled: boolean
+  readonly mode: 'inherit' | AutoCrawlMode
+}
+
+export interface AutoCrawlConfig {
+  readonly globalEnabled: boolean
+  readonly scheduleType: 'daily'
+  readonly dailyTime: string
+  readonly defaultMode: AutoCrawlMode
+  readonly onlyEnabledSites: boolean
+  readonly conflictPolicy: AutoCrawlConflictPolicy
+  readonly perSiteOverrides: Record<string, AutoCrawlSiteOverride>
+}
+
+export async function getAutoCrawlConfig(): Promise<AutoCrawlConfig> {
+  const res = await apiClient.get<{ data: AutoCrawlConfig }>('/admin/crawler/auto-config')
+  return res.data
+}
+
+export async function setAutoCrawlConfig(config: AutoCrawlConfig): Promise<void> {
+  await apiClient.post('/admin/crawler/auto-config', config)
+}
+
+// ── 全局止血（stop-all / audit 已在 -25-RETRO 补齐）───────────────
+
+export interface StopAllOptions {
+  readonly freeze?: boolean
+  readonly removeRepeatableTick?: boolean
+}
+
+export interface StopAllResult {
+  readonly freezeEnabled: boolean
+  readonly markedRuns: number
+  readonly pendingCancelled?: number
+  readonly runningSignaled?: number
+}
+
+export async function stopAllCrawler(opts: StopAllOptions = {}): Promise<StopAllResult> {
+  const res = await apiClient.post<{ data: StopAllResult }>(
+    '/admin/crawler/stop-all',
+    { freeze: opts.freeze ?? true, removeRepeatableTick: opts.removeRepeatableTick ?? true },
+  )
+  return res.data
+}
+
 // ── Runs（批次列表 / CHG-SN-6-15） ────────────────────────────────
 
 export type CrawlerRunStatus =

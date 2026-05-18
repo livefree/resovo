@@ -10118,3 +10118,83 @@ v1 crawler 写端点 audit 覆盖 12/13：
   - 通知 Hub MVP（需后端 notifications API + ADR 前置）
   - DAG 视图（reactflow ADR + reference §5.6 A2）
   - M-SN-6 milestone 阶段审计 + arch-reviewer Opus 评估
+
+---
+
+## CHG-SN-6-27 — Scheduler Config Drawer + stop-all 按钮
+
+- **任务 ID**：CHG-SN-6-27
+- **完成时间**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话）
+- **子代理**：无（CHG-SN-6-25/26-RETRO audit 已就位 / 0 ADR）
+- **来源**：CHG-SN-6-25-RETRO + 26-RETRO 后续 UI 落地（双 RETRO + 单 UI 收口）
+
+### 范围
+
+**A. lib/crawler/api 扩展**（`apps/server-next/src/lib/crawler/api.ts`）：
+- 新类型：`AutoCrawlMode` / `AutoCrawlConflictPolicy` / `AutoCrawlSiteOverride` / `AutoCrawlConfig`（与 packages/types/system.types 一致）/ `StopAllOptions` / `StopAllResult`
+- 新函数：`getAutoCrawlConfig()` / `setAutoCrawlConfig(config)` / `stopAllCrawler(opts)`
+
+**B. SchedulerConfigDrawer 新组件**（`apps/server-next/src/app/admin/crawler/_client/SchedulerConfigDrawer.tsx`，220 行）：
+- 右侧 Drawer width=480 + 6 字段表单（globalEnabled / dailyTime / defaultMode / onlyEnabledSites / conflictPolicy）
+- 加载 / 错误 / 提交 / 取消 / 保存 5 状态分离 + retry
+- `updateField<K>` 范型 setter 保证字段更新类型安全
+- 不含 perSiteOverrides 编辑（独立卡 / UI 复杂 / 注明 advisory）
+- AdminCheckbox + AdminInput (text + regex pattern) + AdminSelect 全 admin-ui 原语
+
+**C. CrawlerClient 集成**（`apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`）：
+- freeze 卡 actions slot 从单按钮升级为 inline-flex 3 按钮组：调度配置 + 全局止血 + 解除/开启冻结
+- `handleStopAll` useCallback：window.confirm 双重确认（第一次 "确定执行" / 第二次 "再次确认不可逆"）→ stopAllCrawler API → toast 反馈 + status 合并刷新
+- `schedulerOpen` state 控制 Drawer 开关
+- 末层渲染 `<SchedulerConfigDrawer open onSaved={refresh} />`
+
+**D. 测试**：
+- 新 `SchedulerConfigDrawer.test.tsx`（**8 测试**）：关闭不调 API / 打开加载 / loading 占位 / error / 6 字段渲染回填 / 提交成功 + onSaved + onClose / 提交失败 toast danger / 取消按钮
+- CrawlerClient.test +3（13→22 → 22+0→**22 + 3 = 25** 总，注：序号 20-22 / freeze 卡按钮渲染 + 止血双 confirm 通过 + 第二次拒绝守卫）
+
+### 质量门禁（5 项硬清单 / 第 25 次正式验证）
+
+1. **视图测试 ≥ 9** → ✅ 8 SchedulerConfigDrawer + 3 CrawlerClient = 11 新增 / 30 双文件总
+2. **共享原语 ≥ 80%** → ✅ 100% admin-ui（Drawer + AdminCard + AdminButton + AdminInput + AdminSelect + AdminCheckbox + ErrorState + LoadingState + useToast）
+3. **R-MID-1 audit payload** → N/A（UI 卡 / audit 已在 -25/26 RETRO 落地）
+4. **schema 三层防护** → N/A
+5. **PATCH 范围 ≤ 5 项** → ✅ 5 文件 = 上限（lib/api + Drawer + Client + 2 test）
+
+- typecheck 全绿（8 workspaces PASS）
+- lint 全绿
+- 4015 unit tests PASS（4004 → 4015，+11）
+- verify:adr-contracts 6 类全绿
+
+### 文件范围（5 文件 = 上限）
+
+- `apps/server-next/src/lib/crawler/api.ts`（+52 行 / 3 函数 + 5 类型）
+- `apps/server-next/src/app/admin/crawler/_client/SchedulerConfigDrawer.tsx`（新增 / 220 行）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（+50 行 / 2 state + handleStopAll + actions 升级 3 按钮组 + Drawer 渲染）
+- `tests/unit/components/server-next/admin/crawler/SchedulerConfigDrawer.test.tsx`（新增 / 161 行 / 8 测试）
+- `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx`（+62 行 / 3 测试）
+
+### 关键发现
+
+- **AdminInput 不支持 type='time'**：AdminInputType union 仅含 text/email/password/number/search/tel/url；time 类型属于专用扩展。fallback 用 text + pattern `^\d{2}:\d{2}$` + placeholder + aria-label；用户体验可接受（浏览器无原生 time picker 但有正则提示）；如未来需要原生 time picker 应启 ADR-NNN 扩 AdminInputType
+- **stop-all 双重 confirm**：高破坏性操作（停止所有自动采集）用单次 confirm 易被快速点击穿透；本卡用 sequential 两次 confirm（不同文案）显著降低误操作概率；范式可推广到其他不可逆操作（如 reindex 后续 UI）
+- **status 合并 vs refresh**：stop-all 后 freeze 状态切换，用 `setStatus(prev => prev ? {...prev, freezeEnabled: result.freezeEnabled} : prev)` 局部合并比 refresh() 重拉 status 更快（无网络等待 + 无 loading skeleton 闪烁）；同 CHG-SN-6-20-B 范式
+- **SchedulerConfigDrawer mock 默认 pending**：CrawlerClient.test 中 Drawer 默认关闭（未触发 schedulerOpen=true），但 vi.mock 必须导出 getAutoCrawlConfig + setAutoCrawlConfig 否则 import 报错；用 `vi.fn(() => new Promise(() => {}))` pending 占位避免误触发
+
+### M-SN-6 进展
+
+CHG-SN-6-25/26-RETRO + 27 三卡收口 v1 crawler 端点 audit + UI 覆盖：
+- 12 个非 deprecated 写端点全部接 audit（R-MID-1 36 strict）
+- crawler 域 UI 完整能力栈：
+  - sites（CRUD + system-status）
+  - freeze + stop-all + scheduler-config（新）
+  - runs 列表（filter + 行操作 cancel/pause/resume）
+  - run detail（基础信息 + tasks 子表 + Run ID 链接）
+  - task logs Drawer（详情卡 + 日志列表 + 客户端过滤 + CSV 导出）
+
+### 后续触发
+
+- **下一卡候选（按从易到难）**：
+  - reindex UI 按钮（v1 端点 + audit 已就位 / 简单一次性按钮 + 双重 confirm）
+  - 通知 Hub MVP（需后端 notifications API + ADR 前置）
+  - DAG 视图（reactflow ADR + reference §5.6 A2）
+  - **M-SN-6 milestone 阶段审计**（arch-reviewer Opus 评估 + 数据观察总结）

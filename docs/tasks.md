@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 无进行中任务；**CHG-SN-6-26-RETRO 闭环**（R-MID-1 第 12 次系统化 / 双 action_type：crawler.reindex + crawler.run_create / 4 真源同步 + 2 端点 auditSvc.write + 5 audit assertion 测试 / PAYLOAD_REQUIRED 34→36 项 / target_kind=system / 6 文件 / 4004 unit PASS / v1 crawler 写端点 audit 覆盖 12/13 (剩余 POST /tasks deprecated 不补)）；下一卡候选（从易到难）：scheduler-config UI / 通知 Hub / DAG（ADR 前置） -->
+<!-- 无进行中任务；**CHG-SN-6-27 闭环**（SchedulerConfigDrawer 6 字段表单 + stop-all 危险按钮 + 调度配置按钮 / lib/crawler/api 扩 getAutoCrawlConfig + setAutoCrawlConfig + stopAllCrawler + 5 类型 / freeze 卡 actions slot 升级 3 按钮组 / 5 文件 + 11 测试（8 drawer + 3 crawler）/ 4015 unit PASS / CHG-SN-6-25/26-RETRO -B UI 落地）；下一卡候选（从易到难）：reindex UI 按钮 / 通知 Hub MVP（ADR 前置）/ DAG 视图（ADR 前置）/ M-SN-6 milestone 阶段审计 -->

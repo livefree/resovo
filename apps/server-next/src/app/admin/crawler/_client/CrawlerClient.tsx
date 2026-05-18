@@ -46,6 +46,7 @@ import {
   validateCrawlerSite,
   getCrawlerSystemStatus,
   setCrawlerFreeze,
+  stopAllCrawler,
   type CrawlerSite,
   type CrawlerSiteBatchAction,
   type CrawlerSystemStatus,
@@ -53,6 +54,7 @@ import {
 } from '@/lib/crawler/api'
 import { ApiClientError } from '@/lib/api-client'
 import { CrawlerRunsView } from './CrawlerRunsView'
+import { SchedulerConfigDrawer } from './SchedulerConfigDrawer'
 
 const PAGE_STYLE: CSSProperties = {
   display: 'flex',
@@ -260,6 +262,10 @@ export function CrawlerClient() {
   // CHG-SN-6-20-B：freeze 切换 pending（点击防抖 + 视觉反馈）
   const [freezePending, setFreezePending] = useState(false)
 
+  // CHG-SN-6-27：scheduler-config drawer + stop-all pending
+  const [schedulerOpen, setSchedulerOpen] = useState(false)
+  const [stopAllPending, setStopAllPending] = useState(false)
+
   // selection
   const [selection, setSelection] = useState<TableSelectionState>({
     selectedKeys: new Set(),
@@ -417,6 +423,29 @@ export function CrawlerClient() {
     }
   }, [batchAction, selection, refresh, toast])
 
+  // CHG-SN-6-27：全局止血 handler（confirm 双重确认 + audit 已就位）
+  const handleStopAll = useCallback(async () => {
+    if (typeof window === 'undefined') return
+    if (!window.confirm('确定执行全局止血？将取消所有运行中批次 + 冻结调度。')) return
+    if (!window.confirm('再次确认：此操作不可逆，将立即停止所有自动采集。')) return
+    setStopAllPending(true)
+    try {
+      const result = await stopAllCrawler({ freeze: true, removeRepeatableTick: true })
+      toast.push({
+        title: '全局止血完成',
+        description: `取消批次 ${result.markedRuns} 个，冻结状态 ${result.freezeEnabled ? '已开启' : '未变'}`,
+        level: 'success',
+      })
+      // 刷新 status（freezeEnabled 应已切到 true）
+      setStatus((prev) => prev ? { ...prev, freezeEnabled: result.freezeEnabled } : prev)
+    } catch (err: unknown) {
+      const { title, description } = describeApiError(err)
+      toast.push({ title, description, level: 'danger' })
+    } finally {
+      setStopAllPending(false)
+    }
+  }, [toast])
+
   // CHG-SN-6-20-B：freeze 切换 handler（confirm + audit 已就位 + toast 反馈）
   const handleToggleFreeze = useCallback(async () => {
     const currentEnabled = status?.freezeEnabled === true
@@ -563,17 +592,37 @@ export function CrawlerClient() {
               ? `● 已冻结（游离任务 ${status.orphanTaskCount ?? 0} 个）`
               : '○ 正常运行',
             actions: (
-              <AdminButton
-                variant={status.freezeEnabled ? 'primary' : 'danger'}
-                size="sm"
-                loading={freezePending}
-                disabled={freezePending}
-                onClick={() => void handleToggleFreeze()}
-                data-testid="crawler-freeze-toggle"
-                data-freeze-enabled={status.freezeEnabled ? 'true' : 'false'}
-              >
-                {status.freezeEnabled ? '解除冻结' : '开启冻结'}
-              </AdminButton>
+              <span style={{ display: 'inline-flex', gap: '6px' }}>
+                <AdminButton
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSchedulerOpen(true)}
+                  data-testid="crawler-scheduler-open"
+                >
+                  调度配置
+                </AdminButton>
+                <AdminButton
+                  variant="danger"
+                  size="sm"
+                  loading={stopAllPending}
+                  disabled={stopAllPending}
+                  onClick={() => void handleStopAll()}
+                  data-testid="crawler-stop-all"
+                >
+                  全局止血
+                </AdminButton>
+                <AdminButton
+                  variant={status.freezeEnabled ? 'primary' : 'danger'}
+                  size="sm"
+                  loading={freezePending}
+                  disabled={freezePending}
+                  onClick={() => void handleToggleFreeze()}
+                  data-testid="crawler-freeze-toggle"
+                  data-freeze-enabled={status.freezeEnabled ? 'true' : 'false'}
+                >
+                  {status.freezeEnabled ? '解除冻结' : '开启冻结'}
+                </AdminButton>
+              </span>
             ),
           }}
           status={status.freezeEnabled ? 'warn' : 'ok'}
@@ -764,6 +813,13 @@ export function CrawlerClient() {
         </div>
       </Drawer>
       </> : null}
+
+      {/* CHG-SN-6-27：调度配置 Drawer */}
+      <SchedulerConfigDrawer
+        open={schedulerOpen}
+        onClose={() => setSchedulerOpen(false)}
+        onSaved={refresh}
+      />
     </div>
   )
 }
