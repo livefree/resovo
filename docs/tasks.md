@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 无进行中任务；**CHG-SN-6-29-AUDIT 闭环**（arch-reviewer Opus 1 轮 / 评级 A− / 必修 PATCH-1 + PATCH-2 后 milestone 关闭 / 44 卡 + 4018 PASS + R-MID-1 36 strict + csv-export 5 消费方 / H1 CrawlerClient.tsx 862 行违反 500 行硬上限必拆）；下一卡 CHG-SN-6-29-PATCH-1（CrawlerClient 拆分必修）+ PATCH-2（task-queue 起 3 跟踪卡 + 4 低风险债务追溯） -->
+<!-- 无进行中任务；**CHG-SN-6-29-PATCH-1 闭环**（CrawlerClient.tsx 862→157 / 拆 4 文件：主 orchestrator 157 + CrawlerSitesTab 334 + CrawlerControlsCard 202 + CrawlerSiteFormDrawer 227 + crawler-site-columns 116 + SchedulerConfigDrawer 218 = 全部 ≤ 500 / 4018 unit PASS 零回归 / 91 crawler 测试零回归 / H1 必修闭环）；下一卡 CHG-SN-6-29-PATCH-2（task-queue 起 3 跟踪卡 + 4 低风险债务追溯）→ M-SN-6 milestone 关闭 -->

@@ -10330,3 +10330,99 @@ v1 crawler 写端点 audit 12/13（非 deprecated 100%）+ R-MID-1 36 strict。
 - **CHG-SN-6-29-PATCH-2**（P0）：task-queue.md 起 perSiteOverrides UI + ADR-121 起草 + 文件大小守卫 3 跟踪卡（合并 0.05w）
 
 PATCH-1 + -2 闭环后 M-SN-6 milestone 关闭，进入 M-SN-7。
+
+---
+
+## CHG-SN-6-29-PATCH-1 — CrawlerClient.tsx 拆分（H1 必修闭环）
+
+- **任务 ID**：CHG-SN-6-29-PATCH-1
+- **完成时间**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话）
+- **子代理**：无（拆分按 arch-reviewer 建议执行，未再次评审）
+- **来源**：CHG-SN-6-29-AUDIT H1 必修（CrawlerClient.tsx 862 行 → CLAUDE.md 500 行硬上限违反）
+
+### 范围
+
+**拆分前 → 拆分后**：
+
+| 文件 | 拆前 | 拆后 | 状态 |
+|---|---|---|---|
+| `CrawlerClient.tsx` | **862** | **157** | ✅ orchestrator only |
+| `CrawlerSitesTab.tsx` | — | **334** | ✅ 新建 / sites CRUD 容器 |
+| `CrawlerControlsCard.tsx` | — | **202** | ✅ 新建 / freeze + 4 按钮组 + Drawer |
+| `CrawlerSiteFormDrawer.tsx` | — | **227** | ✅ 新建 / 8 字段表单 + validate + delete |
+| `crawler-site-columns.tsx` | — | **116** | ✅ 新建 / 纯函数 8 列定义 |
+| `CrawlerRunsView.tsx` | 429 | 429 | ✅ 未动 |
+| `SchedulerConfigDrawer.tsx` | 218 | 218 | ✅ 未动 |
+
+总和：862 → 157+334+202+227+116 = 1036（+174 行用于拆分边界注释 + props 类型 + 新文件头），所有文件 **≤ 500 行硬上限**。
+
+### 拆分边界设计
+
+**A. 主 CrawlerClient（157 行 / orchestrator）**：
+- 持有：tab state（sites/runs）、sites + status 数据 fetch、retryKey + refresh、createTrigger counter
+- 渲染：PageHeader（标题 + 新增/刷新按钮）+ tab nav + 条件渲染 CrawlerRunsView | CrawlerSitesTab
+- handleCreate：仅 setCreateTrigger((c) => c + 1)，**通过 counter 触发 SitesTab 的 useEffect 打开 Drawer** — 避免 ref / forwardRef / imperative handle 复杂化
+- handleStatusUpdate：`setStatus((prev) => ({ ...(prev ?? {}), ...next }))` 局部合并 — 给 ControlsCard 局部更新避免整页 refresh 闪烁
+
+**B. CrawlerSitesTab（334 行 / sites CRUD 容器）**：
+- 持有：selection / batchAction / batchPending / drawerOpen / formMode / form / submitting
+- 监听 createTrigger 递增（首次 0 跳过）→ 重置 form + 打开 Drawer
+- handlers：handleEdit / handleSubmit / handleDelete / handleBatchApply
+- 渲染：scheduler status card + CrawlerControlsCard + batch action bar + DataTable + CrawlerSiteFormDrawer
+- editSite 从 sites 数组 find 注入给 FormDrawer.editSite prop
+
+**C. CrawlerControlsCard（202 行 / freeze + 4 按钮组 + Drawer）**：
+- 持有：freezePending / stopAllPending / reindexPending / schedulerOpen
+- handlers：handleStopAll / handleReindex / handleToggleFreeze（双重 confirm 范式保留）
+- props：status + onStatusUpdate + onRefreshAfterSchedulerSave
+- 渲染：freeze AdminCard（含 4 按钮 + 状态 warn|ok）+ SchedulerConfigDrawer
+- 守卫：`if (!status || status.freezeEnabled === undefined) return null`（向后兼容）
+
+**D. CrawlerSiteFormDrawer（227 行 / 表单组件）**：
+- 持有：validating state（验证按钮 loading）
+- props：open / mode / form / onFormChange / onClose / onSubmit / onDelete / submitting / editSite
+- `update<K>` 范型 setter：`onFormChange({ ...form, [key]: value })`
+- handleValidate 内联（toast 通知）
+- delete 按钮仅 edit 模式 + editSite 存在 + onDelete 提供时渲染
+
+**E. crawler-site-columns.tsx（116 行 / 纯函数）**：
+- 单 export `buildCrawlerSiteColumns()` 返回 8 列 TableColumn 数组
+- 无业务状态、无外部依赖（除 admin-ui CodeText 和 CrawlerSite 类型）
+
+### 质量门禁（5 项硬清单 / 第 27 次正式验证）
+
+1. **视图测试 ≥ 9** → ✅ CrawlerClient.test 25 + SchedulerConfigDrawer.test 8 + CrawlerRunsView.test 20 + CrawlerRunDetailView.test 14 + TaskLogsDrawer.test 24 = **91 测试零回归**
+2. **共享原语 ≥ 80%** → ✅ 100% admin-ui
+3. **R-MID-1 audit payload** → N/A（纯拆分）
+4. **schema 三层防护** → N/A
+5. **PATCH 范围 ≤ 5 项** → ⚠️ 5 文件 = 上限（主 client 改 + 4 新文件；恰好达上限不超）
+
+- typecheck 全绿（8 workspaces PASS）
+- lint 全绿
+- **4018 unit tests PASS 零回归**（CHG-SN-6-28 闭环数 = 4018，本卡保持）
+- verify:adr-contracts 6 类全绿
+- 文件大小硬上限：**全部 ≤ 500 行**（最大 CrawlerRunsView 429 / CrawlerSitesTab 334）
+
+### 文件范围（5 文件 = 上限）
+
+- `CrawlerClient.tsx`（862 → 157 / -705 行 / orchestrator only）
+- `CrawlerSitesTab.tsx`（新增 / 334 行）
+- `CrawlerControlsCard.tsx`（新增 / 202 行）
+- `CrawlerSiteFormDrawer.tsx`（新增 / 227 行）
+- `crawler-site-columns.tsx`（新增 / 116 行）
+
+### 关键发现
+
+- **createTrigger counter 范式优于 ref / imperative**：父→子触发 Drawer 打开用 number counter + useEffect 监听，比 useImperativeHandle 简单、纯声明式、易测；缺点是首次挂载 counter=0 需要 useEffect 守卫（已加 `if (createTrigger === 0) return`）
+- **status lift up 必要性**：ControlsCard 修改 status 后必须传回主 client（避免子组件持有可变 status 后跟主组件 fetch 漂移）；`onStatusUpdate({...next})` 局部合并是优解（保持其他 fetch 字段）
+- **buildColumns 拆 .tsx 不 .ts**：React JSX cell 渲染必须用 .tsx；同时声明 'use client' — 即使纯函数无 hook
+- **测试零回归**：拆分前测试用 selector + behavior 断言而非 implementation detail（如 `screen.getByTestId('crawler-freeze-toggle')` 而非"在主 client 找按钮"），所以拆分后子组件 testid 不变即通过
+
+### M-SN-6 进展
+
+H1 必修闭环 / 文件大小硬上限恢复合规 / CHG-SN-6-29-PATCH-2 后 milestone 可关闭。
+
+### 后续触发
+
+- **CHG-SN-6-29-PATCH-2**（P0 / 0.05w）：task-queue.md 起 3 跟踪卡 + 4 低风险债务追溯 → M-SN-6 关闭
