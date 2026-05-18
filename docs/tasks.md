@@ -6,4 +6,4 @@
 
 ## 进行中任务
 
-<!-- 无进行中任务；**🎉 M-SN-6 milestone 关闭（2026-05-17，评级 A−）**：47 卡 / 3659→4018 PASS (+359) / R-MID-1 36 strict / csv-export 5 消费方 / crawler 域 UI 完整闭环；M-SN-7 入口固定 3 卡：CHG-SN-7-PRE-01 文件大小守卫 → CHG-SN-7-PRE-02 ADR-121 R-MID-1 协议化 → 业务卡（PERSITE / 通知 Hub / DAG），详见 task-queue.md -->
+<!-- 无进行中任务；🎉 M-SN-6 milestone 关闭（2026-05-17 评级 A−）+ CHG-SN-6-29-FOLLOWUP 复核修正闭环（PATCH-2 "全部 ≤ 500 行"自评数据不实修正 / PRE-01 加 5 baseline 豁免 / MISC-FILE-SIZE 改名扩 2 漏检 / 新增 SETTINGS-TABS + SHELL-NOTIFICATIONS 2 跟踪卡）；M-SN-7 入口修订 6 卡顺序：PRE-01 守卫 → PRE-02 ADR-121 → MISC-FILE-SIZE / SETTINGS-TABS / SHELL-NOTIFICATIONS → 业务卡（通知 Hub / DAG / PERSITE） -->

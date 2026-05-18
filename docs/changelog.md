@@ -10496,3 +10496,85 @@ H1 必修闭环 / 文件大小硬上限恢复合规 / CHG-SN-6-29-PATCH-2 后 mi
 **✅ M-SN-6 正式关闭（2026-05-17）**：评级 A−（实质交付质量极高 + H1 系统性盲点已修 + 7 跟踪卡可见性兜底）。
 
 进入 **M-SN-7**：首卡 CHG-SN-7-PRE-01。
+
+---
+
+## CHG-SN-6-29-FOLLOWUP — M-SN-6 关闭复核 3 项修正
+
+- **任务 ID**：CHG-SN-6-29-FOLLOWUP
+- **完成时间**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话）
+- **子代理**：无（纯文档维护）
+- **来源**：独立复核报告 `docs/M-SN-6-milestone-audit-2026-05-17.md`（主循环复核 / 评级保持 A−）
+
+### 复核发现
+
+**1 项自评数据不实（M-SN-6 关闭声明事实修正）**：
+
+CHG-SN-6-29-PATCH-2 §质量门禁第 6 条声明 "全部 ≤ 500 行 / 最大 CrawlerRunsView 429" **事实不实**。
+
+**实测 7 文件超 CLAUDE.md 500 行硬上限**（M-SN-6 关闭日 2026-05-17 wc -l 实测）：
+
+| 文件 | 行数 | 引入期 |
+|---|---|---|
+| `apps/server-next/src/app/admin/audit/_client/AuditClient.tsx` | **558** | **M-SN-6 新增（CHG-SN-6-01）** |
+| `apps/server-next/src/app/admin/image-health/_client/ImageHealthClient.tsx` | **501** | **M-SN-6 新增（CHG-SN-6-02）** |
+| `apps/server-next/src/app/admin/merge/_client/MergeClient.tsx` | 756 | 历史遗留（M-SN-5） |
+| `apps/server-next/src/app/admin/videos/_client/VideoListClient.tsx` | 734 | 历史遗留（M-SN-3/4） |
+| `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx` | 583 | 历史遗留（M-SN-4） |
+| `packages/admin-ui/src/shell/sidebar.tsx` | 696 | 历史遗留 |
+| `packages/admin-ui/src/components/data-table/data-table.tsx` | 608 | 历史遗留 |
+
+**漏检根因**：CHG-SN-6-29-AUDIT arch-reviewer Opus 仅 grep 命中 CrawlerClient 862 行（H1）；CHG-SN-6-29-PATCH-2 主循环复核时仅核验 crawler 域 7 文件而未全量扫描 — 这正是 **CHG-SN-7-PRE-01 文件大小守卫**要解决的根因。
+
+**2 项漏登记债务**（复核补登）：
+1. Settings 8 类 Tab 实际只交付 5 类（缺图片 / 通知 / API·Webhook / 登录会话）— 按 plan §6 字面口径偏离
+2. `admin-shell-client.tsx` Topbar notifications/tasks 仍用 `mockNotifications` + `mockTasks` + `adminNavCountProviderStub`（line 27/28/97/98/142）— 真实端点未注入
+
+### 范围
+
+**A. 本卡 follow-up 修正声明**（即此 changelog 条目）：
+- 明确 PATCH-2 §质量门禁第 6 条事实错误 + 7 文件实测清单
+- 不撤销 M-SN-6 关闭决定（评级 A− 与原 arch-reviewer 一致，复核认可）
+- 自评数据准确性扣分（A− → B+ 边界，按"实质交付 + H1 修复 + 系统性兜底"保留 A−）
+
+**B. task-queue.md 跟踪卡修订**：
+- **CHG-SN-7-PRE-01** 文件大小守卫扩范围：加 5 文件 baseline 豁免清单（MergeClient + VideoListClient + ModerationConsole + sidebar + data-table），新增文件零容忍
+- **CHG-SN-7-MISC-CRAWLER-FILE-SIZE** → 改名 **CHG-SN-7-MISC-FILE-SIZE** + 范围扩至 5 文件主动拆分预案（crawler 3 接近上限 + AuditClient 558 + ImageHealthClient 501）
+- **新增 CHG-SN-7-MISC-SETTINGS-TABS**（P2 / 0.3-0.5w / 补 4 类缺失 Tab）
+- **新增 CHG-SN-7-MISC-SHELL-NOTIFICATIONS**（P2 / 0.2-0.3w / countProvider 注入 + Topbar 数据接入；与通知 Hub MVP 卡协同 — 后者建端点，本卡接前端）
+
+### 质量门禁
+
+- 纯文档维护（task-queue.md + changelog.md + tasks.md）
+- 0 代码改动，0 测试改动
+- 4018 unit PASS 保持
+- typecheck/lint N/A（未触代码）
+
+### 文件范围（3 文件）
+
+- `docs/changelog.md`（本条目 + 不动既有 PATCH-2 §质量门禁错误声明，保留作为审计痕迹）
+- `docs/task-queue.md`（PRE-01 扩范围 + MISC-FILE-SIZE 改名扩范围 + 新增 SETTINGS-TABS + SHELL-NOTIFICATIONS 2 卡）
+- `docs/tasks.md`（FOLLOWUP 卡片记录）
+
+### 关键发现
+
+- **"自评数据可信度"是独立质量维度**：实质交付正确不等同自评准确；M-SN-6 出现自报 vs 实测分歧 → CHG-SN-7-PRE-01 文件大小守卫 + verify:adr-contracts 类静态扫描守卫**应是 milestone 关闭前置硬条件**而非事后补救
+- **arch-reviewer 单点视角的局限**：CHG-SN-6-29-AUDIT 阶段 Opus 一轮 grep 命中 H1 后即停止扫描，未做全量 wc -l 验证。未来 milestone 审计应在 prompt 中显式要求 "全量 `find -name '*.tsx' -exec wc -l {} \; | awk '$1 > 500'`" 类机械扫描而非依赖 reviewer 抽样
+- **历史遗留 vs 新增的 baseline 处理**：5 历史超限文件均为 M-SN-5 及更早引入，强制拆分超 M-SN-7 工时预算 → baseline 豁免清单是合理工程妥协；但 M-SN-6 新增 2 文件（AuditClient/ImageHealthClient）应在 M-SN-7 主动拆分（与 crawler 3 文件预案合并为 5 文件 MISC-FILE-SIZE 卡）
+- **plan §6 Settings 8 类 vs reference §5.11 4 类示例的口径差异**：复核报告引述 reference §5.11 仅举 "Basic/Douban/Filter/Images 等" 为示例 → 严格按 reference 未硬性偏离；但 plan §6 明列 8 类 → 按 plan 口径缺 4 类。M-SN-7 SETTINGS-TABS 卡应起前先核对 plan §6 vs reference §5.11 哪个是正源
+
+### M-SN-6 关闭状态保持
+
+✅ M-SN-6 仍正式关闭（评级 A−，复核认可）。本卡为关闭后的事实修正 + 跟踪卡范围扩展，**不撤销关闭决定**。
+
+### 后续触发
+
+M-SN-7 入口 4 卡修订顺序：
+
+1. **CHG-SN-7-PRE-01** 文件大小守卫（含 5 baseline 豁免）— 仍居首卡
+2. **CHG-SN-7-PRE-02** ADR-121 R-MID-1 协议化 — 不变
+3. **CHG-SN-7-MISC-FILE-SIZE** 5 文件拆分预案（替代原 CRAWLER-FILE-SIZE）
+4. **CHG-SN-7-MISC-SETTINGS-TABS**（复核新增 / 待先核对 plan vs reference 正源）
+5. **CHG-SN-7-MISC-SHELL-NOTIFICATIONS**（复核新增 / 通知 Hub MVP 协同前端卡）
+6. 业务卡：通知 Hub MVP / DAG / PERSITE
