@@ -47,6 +47,7 @@ import {
   getCrawlerSystemStatus,
   setCrawlerFreeze,
   stopAllCrawler,
+  triggerReindex,
   type CrawlerSite,
   type CrawlerSiteBatchAction,
   type CrawlerSystemStatus,
@@ -266,6 +267,9 @@ export function CrawlerClient() {
   const [schedulerOpen, setSchedulerOpen] = useState(false)
   const [stopAllPending, setStopAllPending] = useState(false)
 
+  // CHG-SN-6-28：reindex pending
+  const [reindexPending, setReindexPending] = useState(false)
+
   // selection
   const [selection, setSelection] = useState<TableSelectionState>({
     selectedKeys: new Set(),
@@ -446,6 +450,29 @@ export function CrawlerClient() {
     }
   }, [toast])
 
+  // CHG-SN-6-28：reindex handler（双重 confirm + audit 已就位）
+  const handleReindex = useCallback(async () => {
+    if (typeof window === 'undefined') return
+    if (!window.confirm('确定重建 ES 索引？将全量同步 videos → ES，过程中查询可能短暂不一致。')) return
+    if (!window.confirm('再次确认：根据数据量可能耗时数分钟，期间不可中断。')) return
+    setReindexPending(true)
+    try {
+      const result = await triggerReindex()
+      toast.push({
+        title: 'ES 索引已重建',
+        description: result.indexed != null
+          ? `已索引 ${result.indexed} 条${result.duration_ms != null ? ` · 耗时 ${Math.round(result.duration_ms / 1000)}s` : ''}`
+          : '完成',
+        level: 'success',
+      })
+    } catch (err: unknown) {
+      const { title, description } = describeApiError(err)
+      toast.push({ title, description, level: 'danger' })
+    } finally {
+      setReindexPending(false)
+    }
+  }, [toast])
+
   // CHG-SN-6-20-B：freeze 切换 handler（confirm + audit 已就位 + toast 反馈）
   const handleToggleFreeze = useCallback(async () => {
     const currentEnabled = status?.freezeEnabled === true
@@ -600,6 +627,16 @@ export function CrawlerClient() {
                   data-testid="crawler-scheduler-open"
                 >
                   调度配置
+                </AdminButton>
+                <AdminButton
+                  variant="ghost"
+                  size="sm"
+                  loading={reindexPending}
+                  disabled={reindexPending}
+                  onClick={() => void handleReindex()}
+                  data-testid="crawler-reindex"
+                >
+                  重建索引
                 </AdminButton>
                 <AdminButton
                   variant="danger"

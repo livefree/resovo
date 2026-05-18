@@ -27,6 +27,7 @@ const validateCrawlerSiteMock = vi.fn()
 const getCrawlerSystemStatusMock = vi.fn()
 const setCrawlerFreezeMock = vi.fn()
 const stopAllCrawlerMock = vi.fn()
+const triggerReindexMock = vi.fn()
 const toastPushMock = vi.fn()
 const confirmSpy = vi.fn().mockReturnValue(true)
 
@@ -40,6 +41,7 @@ vi.mock('../../../../../../apps/server-next/src/lib/crawler/api', () => ({
   getCrawlerSystemStatus: (...args: unknown[]) => getCrawlerSystemStatusMock(...args),
   setCrawlerFreeze: (...args: unknown[]) => setCrawlerFreezeMock(...args),
   stopAllCrawler: (...args: unknown[]) => stopAllCrawlerMock(...args),
+  triggerReindex: (...args: unknown[]) => triggerReindexMock(...args),
   // SchedulerConfigDrawer 依赖（关闭时不会调用）
   getAutoCrawlConfig: vi.fn(() => new Promise(() => {})),
   setAutoCrawlConfig: vi.fn(() => new Promise(() => {})),
@@ -125,6 +127,7 @@ beforeEach(() => {
   getCrawlerSystemStatusMock.mockReset()
   setCrawlerFreezeMock.mockReset()
   stopAllCrawlerMock.mockReset()
+  triggerReindexMock.mockReset()
   toastPushMock.mockReset()
   confirmSpy.mockReset().mockReturnValue(true)
   ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
@@ -452,5 +455,60 @@ describe('CrawlerClient', () => {
     fireEvent.click(btn)
     await new Promise((r) => setTimeout(r, 0))
     expect(stopAllCrawlerMock).not.toHaveBeenCalled()
+  })
+
+  // ── reindex（CHG-SN-6-28）─────────────────────────────────────
+
+  it('23. freeze 卡渲染重建索引按钮', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    getCrawlerSystemStatusMock.mockResolvedValueOnce({
+      freezeEnabled: false,
+      schedulerEnabled: true,
+      orphanTaskCount: 0,
+    })
+    render(<CrawlerClient />)
+    await waitFor(() => screen.getByTestId('crawler-reindex'))
+    expect(screen.getByTestId('crawler-reindex').textContent).toContain('重建索引')
+  })
+
+  it('24. 重建索引：双重 confirm 通过 → API + 成功 toast', async () => {
+    listCrawlerSitesMock.mockResolvedValue([SITE_1])
+    getCrawlerSystemStatusMock.mockResolvedValue({
+      freezeEnabled: false,
+      schedulerEnabled: true,
+      orphanTaskCount: 0,
+    })
+    triggerReindexMock.mockResolvedValueOnce({ indexed: 1234, duration_ms: 5000 })
+    confirmSpy.mockReset().mockReturnValue(true)
+    ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
+    render(<CrawlerClient />)
+    const btn = await waitFor(() => screen.getByTestId('crawler-reindex'))
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(triggerReindexMock).toHaveBeenCalledOnce()
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: 'ES 索引已重建' }),
+      )
+    })
+  })
+
+  it('25. 重建索引：第二次 confirm 拒绝 → 不调 API', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    getCrawlerSystemStatusMock.mockResolvedValueOnce({
+      freezeEnabled: false,
+      schedulerEnabled: true,
+      orphanTaskCount: 0,
+    })
+    let callCount = 0
+    confirmSpy.mockReset().mockImplementation(() => {
+      callCount += 1
+      return callCount === 1
+    })
+    ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
+    render(<CrawlerClient />)
+    const btn = await waitFor(() => screen.getByTestId('crawler-reindex'))
+    fireEvent.click(btn)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(triggerReindexMock).not.toHaveBeenCalled()
   })
 })

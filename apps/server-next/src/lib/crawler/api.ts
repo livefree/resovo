@@ -164,6 +164,19 @@ export async function stopAllCrawler(opts: StopAllOptions = {}): Promise<StopAll
   return res.data
 }
 
+// ── reindex（ES 重建索引 / audit 已在 -26-RETRO 补齐）─────────────
+
+export interface ReindexResult {
+  readonly indexed?: number
+  readonly duration_ms?: number
+  readonly [key: string]: unknown
+}
+
+export async function triggerReindex(): Promise<ReindexResult> {
+  const res = await apiClient.post<{ data: ReindexResult }>('/admin/crawler/reindex', {})
+  return res.data
+}
+
 // ── Runs（批次列表 / CHG-SN-6-15） ────────────────────────────────
 
 export type CrawlerRunStatus =

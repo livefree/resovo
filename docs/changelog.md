@@ -10198,3 +10198,69 @@ CHG-SN-6-25/26-RETRO + 27 三卡收口 v1 crawler 端点 audit + UI 覆盖：
   - 通知 Hub MVP（需后端 notifications API + ADR 前置）
   - DAG 视图（reactflow ADR + reference §5.6 A2）
   - **M-SN-6 milestone 阶段审计**（arch-reviewer Opus 评估 + 数据观察总结）
+
+---
+
+## CHG-SN-6-28 — reindex UI 按钮
+
+- **任务 ID**：CHG-SN-6-28
+- **完成时间**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话）
+- **子代理**：无（CHG-SN-6-26-RETRO audit 已就位 / 0 ADR）
+- **来源**：CHG-SN-6-26-RETRO 后续 UI；crawler 域 UI 能力闭环
+
+### 范围
+
+**A. lib/crawler/api 扩展**：
+- 新类型 `ReindexResult`（含 indexed / duration_ms / 索引扩展字段）
+- 新函数 `triggerReindex(): Promise<ReindexResult>`
+
+**B. CrawlerClient 集成**：
+- 新 `reindexPending` state
+- `handleReindex` useCallback：双重 confirm 守卫（"全量同步" + "耗时数分钟"双文案不同）→ triggerReindex → toast 含 `已索引 N 条 · 耗时 Ks` 摘要
+- freeze 卡 actions slot 升级 4 按钮组：调度配置 + 重建索引 + 全局止血 + 冻结切换
+
+**C. 测试**：CrawlerClient.test +3（按钮渲染 / 双 confirm 通过 → API + toast / 第二次拒绝守卫）
+
+### 质量门禁（5 项硬清单 / 第 26 次正式验证）
+
+1. **视图测试 ≥ 9** → ✅ CrawlerClient 25 测试
+2. **共享原语 ≥ 80%** → ✅ 100% admin-ui（AdminButton variant=ghost + useToast + describeApiError 复用）
+3. **R-MID-1 audit payload** → N/A（UI / audit 在 -26-RETRO 落地）
+4. **schema 三层防护** → N/A
+5. **PATCH 范围 ≤ 5 项** → ✅ 3 文件
+
+- typecheck 全绿（8 workspaces PASS）
+- lint 全绿
+- 4018 unit tests PASS（4015 → 4018，+3）
+- verify:adr-contracts 6 类全绿
+
+### 文件范围（3 文件 ≤ 12）
+
+- `apps/server-next/src/lib/crawler/api.ts`（+14 行 / 1 函数 + 1 类型）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（+40 行 / state + handler + 按钮）
+- `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx`（+50 行 / 3 测试）
+
+### 关键发现
+
+- **双重 confirm 范式收口**：CHG-SN-6-27 (stop-all) + 本卡 (reindex) 两个不可逆操作都用双重 confirm 守卫；范式稳定可推广；如未来出现第 3 个类似操作应考虑提取 `useDoubleConfirm(msg1, msg2)` hook
+- **toast description 含进度数据**：reindex toast 用 `已索引 N 条 · 耗时 Ks`（fallback 仅 '完成'）；用户操作后能立即看到具体效果，比单纯 success 更可读
+- **AdminButton variant=ghost 用于"次要操作"**：调度配置 + 重建索引都是不破坏性的次要操作；用 ghost 视觉权重低于 danger（全局止血）+ primary（冻结开关）；视觉层级清晰
+
+### M-SN-6 进展
+
+CHG-SN-6-28 闭环后 crawler 域 UI 完整能力闭环：
+- ✅ sites CRUD + system-status
+- ✅ freeze / stop-all / scheduler-config / **reindex**（4 控制按钮全配齐）
+- ✅ runs 列表（filter + 行操作 cancel/pause/resume）
+- ✅ run detail（基础信息 + tasks 子表 + Run ID 链接）
+- ✅ task logs Drawer（详情卡 + 日志列表 + 过滤 + CSV 导出）
+
+v1 crawler 写端点 audit 12/13（非 deprecated 100%）+ R-MID-1 36 strict。
+
+### 后续触发
+
+- **下一卡候选**：
+  - **M-SN-6 milestone 阶段审计**（arch-reviewer Opus 评估 + 数据观察总结 + ADR 协议合规复检）— 推荐优先（crawler 域已闭环）
+  - 通知 Hub MVP（需后端 notifications API + ADR 前置）
+  - DAG 视图（reactflow ADR + reference §5.6 A2）
