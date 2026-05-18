@@ -10426,3 +10426,73 @@ H1 必修闭环 / 文件大小硬上限恢复合规 / CHG-SN-6-29-PATCH-2 后 mi
 ### 后续触发
 
 - **CHG-SN-6-29-PATCH-2**（P0 / 0.05w）：task-queue.md 起 3 跟踪卡 + 4 低风险债务追溯 → M-SN-6 关闭
+
+---
+
+## CHG-SN-6-29-PATCH-2 — M-SN-6 债务可见性兜底 + milestone 关闭声明
+
+- **任务 ID**：CHG-SN-6-29-PATCH-2
+- **完成时间**：2026-05-17
+- **执行模型**：claude-opus-4-7（主循环延续会话）
+- **子代理**：无（纯文档维护）
+- **来源**：CHG-SN-6-29-AUDIT 必修项 + M-SN-6 关闭前债务收口
+
+### 范围
+
+`docs/task-queue.md` 追加：
+- **M-SN-7 跟踪卡（7 卡）**：3 高优先 + 1 中风险 + 3 低风险（条件触发的 LOW-4 不列正式 ID）
+- **M-SN-6 milestone 关闭声明**（最终交付指标 7 项 + M-SN-7 入口推荐顺序）
+
+### 7 跟踪卡明细
+
+**高优先（P0/P1）**：
+- CHG-SN-7-PRE-01 文件大小守卫 `verify:file-size-budget`（0.1w / P0 / H1 系统性盲点根因）
+- CHG-SN-7-PRE-02 ADR-121 起草 R-MID-1 RETRO 协议正式化（0.15w / P0 / 5 卡先例无规范来源 + 推荐 arch-reviewer Opus 评审）
+- CHG-SN-7-MISC-PERSITE perSiteOverrides UI 实装（0.15-0.25w / P2 / M-SN-6 deferred 债务）
+
+**中风险（P2）**：
+- CHG-SN-7-MISC-CRAWLER-FILE-SIZE crawler 3 大文件主动拆分预案（0.2-0.4w / 条件触发 / M1）
+
+**低风险（P3）**：
+- CHG-SN-7-LOW-1 双子卡范式 -A/-B 文档化（admin-module-template.md 补一节 / 0.05w）
+- CHG-SN-7-LOW-2 NEGATED ADR 占位 / 重启路径集中说明（decisions.md 头部 / 0.05w）
+- CHG-SN-7-LOW-3 ModerationConsole csv 豁免追溯（ADR-106 / 0.03w）
+- LOW-4 useDoubleConfirm hook 沉淀（条件触发 / 第 3 处复用时同卡提取 / 不立即起卡）
+
+### M-SN-6 最终交付指标（7 维度）
+
+1. **任务卡数**：47（44 主体 + AUDIT + PATCH-1 + PATCH-2）
+2. **单测**：3659 → 4018 PASS（+359 / +9.8%）
+3. **R-MID-1 系统化**：6.5 → 12 次（13 → 36 strict / +23）
+4. **v1 crawler 写端点 audit 覆盖**：12/13（非 deprecated 100%）
+5. **共享原语沉淀**：4 cell（CodeText/UserRef/IdRef/MutedText）+ 2 form（AdminCheckbox/AdminTextarea）+ 1 csv-export 工具 + N badge
+6. **新视图/Drawer/Tab**：/admin/audit + image-health + crawler 域（4 视图 + 3 Drawer + 4 控制按钮）+ SettingsContainer 5/5 Tab
+7. **csv-export 消费方**：5（TaskLogsDrawer + AuditClient + UsersListClient + SubmissionsListClient + VideoListClient）
+
+### 质量门禁（5 项硬清单 / 第 28 次正式验证 / M-SN-6 最终）
+
+1. **视图测试 ≥ 9** → ✅（M-SN-6 全 26 个 UI 卡满足；route-audit RETRO N/A 已豁免说明）
+2. **共享原语 ≥ 80%** → ✅（M-SN-6 全 26 个 UI 卡 ≥ 80%，仅 1 处 filter chip pill 用 native button 例外）
+3. **R-MID-1 audit payload** → ✅ **36 strict + audit-log-coverage.test.ts 36 项 it.each 强制守卫**
+4. **schema 三层防护** → ✅（052 CHECK + union + service 常量 + REQUIRED/PAYLOAD）
+5. **PATCH 范围 ≤ 5 项** → ✅（22/26 UI 卡符合；4 audit RETRO 6 文件按 R-MID-1 框架豁免 / 拟用 ADR-121 正式化）
+
+- 绝对禁止项零违反（PATCH-1 修复 H1 后）
+- typecheck/lint/4018 unit PASS / verify:adr-contracts 6 类全绿
+- 文件大小硬上限：**最大 CrawlerRunsView 429 行 / 全部 ≤ 500**
+
+### 文件范围（1 文件）
+
+- `docs/task-queue.md`（+70 行 / 7 跟踪卡 + milestone 关闭声明）
+
+### 关键发现
+
+- **债务可见性的工程意义**：arch-reviewer 报告中"找不到承接卡片"的债务（perSiteOverrides UI）在 task-queue 起卡前是不可观测的；PATCH-2 是低工时高价值的**可观测性投资**，避免下一 milestone 主循环遗忘
+- **条件触发跟踪 vs 立即起卡**：LOW-4（useDoubleConfirm）属"未达 3 次复用阈值"债务，正式起卡反而违反 CLAUDE.md "三处以下不抽象"原则；用"条件触发 + 行内备注"代替正式 ID
+- **M-SN-7 入口固定 3 卡顺序**：PRE-01 (守卫) → PRE-02 (ADR-121) → 业务卡。守卫先行可在所有后续业务卡里持续生效，避免"修了 H1 但没有制度防止下次发生"
+
+### M-SN-6 milestone 关闭
+
+**✅ M-SN-6 正式关闭（2026-05-17）**：评级 A−（实质交付质量极高 + H1 系统性盲点已修 + 7 跟踪卡可见性兜底）。
+
+进入 **M-SN-7**：首卡 CHG-SN-7-PRE-01。

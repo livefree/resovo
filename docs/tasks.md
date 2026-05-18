@@ -1,9 +1,9 @@
 # Resovo（流光） — 任务看板
 
-> last_reviewed: 2026-05-14
+> last_reviewed: 2026-05-17
 
 ---
 
 ## 进行中任务
 
-<!-- 无进行中任务；**CHG-SN-6-29-PATCH-1 闭环**（CrawlerClient.tsx 862→157 / 拆 4 文件：主 orchestrator 157 + CrawlerSitesTab 334 + CrawlerControlsCard 202 + CrawlerSiteFormDrawer 227 + crawler-site-columns 116 + SchedulerConfigDrawer 218 = 全部 ≤ 500 / 4018 unit PASS 零回归 / 91 crawler 测试零回归 / H1 必修闭环）；下一卡 CHG-SN-6-29-PATCH-2（task-queue 起 3 跟踪卡 + 4 低风险债务追溯）→ M-SN-6 milestone 关闭 -->
+<!-- 无进行中任务；**🎉 M-SN-6 milestone 关闭（2026-05-17，评级 A−）**：47 卡 / 3659→4018 PASS (+359) / R-MID-1 36 strict / csv-export 5 消费方 / crawler 域 UI 完整闭环；M-SN-7 入口固定 3 卡：CHG-SN-7-PRE-01 文件大小守卫 → CHG-SN-7-PRE-02 ADR-121 R-MID-1 协议化 → 业务卡（PERSITE / 通知 Hub / DAG），详见 task-queue.md -->
