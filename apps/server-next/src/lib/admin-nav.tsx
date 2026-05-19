@@ -86,7 +86,18 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
   },
   {
     title: '采集中心',
-    items: [{ label: '采集控制', href: '/admin/crawler', icon: <Bug />, shortcut: 'mod+5' }],
+    items: [
+      {
+        label: '采集控制',
+        href: '/admin/crawler',
+        icon: <Bug />,
+        shortcut: 'mod+5',
+        // CHG-SN-7-REDO-01-H：runs 列表迁独立路由 + sidebar 二级菜单
+        children: [
+          { label: '采集批次', href: '/admin/crawler/runs', icon: <Bug /> },
+        ],
+      },
+    ],
   },
   {
     title: '系统管理',

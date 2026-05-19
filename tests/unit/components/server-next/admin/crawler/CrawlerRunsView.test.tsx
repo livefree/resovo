@@ -52,7 +52,8 @@ vi.mock('@resovo/admin-ui', async () => {
   }
 })
 
-import { CrawlerRunsView } from '../../../../../../apps/server-next/src/app/admin/crawler/_client/CrawlerRunsView'
+// REDO-01-H：CrawlerRunsView 已迁至 crawler/runs/_client/（独立路由 /admin/crawler/runs）
+import { CrawlerRunsView } from '../../../../../../apps/server-next/src/app/admin/crawler/runs/_client/CrawlerRunsView'
 
 const RUN_SUCCESS = {
   id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',

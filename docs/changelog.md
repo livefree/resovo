@@ -11578,3 +11578,39 @@ contract §1.6 + §2.4 裁决 A：PageHeader 第 4 槽位"高级"AdminDropdown 4
 
 - 下张可执行卡：**REDO-01-H** runs 列表迁独立路由（0.15w）
 - 累计已完成：A ✅ + B ✅ + C ✅ + D ✅ + E ✅ + E2 ✅ + F ✅ + G ✅ 共 ~2.15w / REDO-01 总 ~2.4w — 剩余 ~0.4w（H+I+J）
+
+---
+
+## [CHG-SN-7-REDO-01-H] Crawler runs 列表迁独立路由 + sidebar 二级菜单
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环（0 backend / 纯文件迁移 + nav 注册）
+
+### 起源
+
+REDO-01-A contract §2.1 + task-queue 锁定：runs 列表从 CrawlerClient sites/runs tab 迁至独立路由 `/admin/crawler/runs` + sidebar 二级菜单。REDO-01-C 重写已移除 tab，CrawlerRunsView 此前孤立未消费；本卡完成路由化 + nav 注册。
+
+### 修改文件（4 个 / 1 新 + 1 改 + 2 mv）
+
+- git mv `apps/server-next/src/app/admin/crawler/_client/CrawlerRunsView.tsx` → `apps/server-next/src/app/admin/crawler/runs/_client/CrawlerRunsView.tsx`（429 行不变 / 内部业务逻辑零改）
+- 新建 `apps/server-next/src/app/admin/crawler/runs/page.tsx`（13 行 / `'use client'` 非必需 — 在 wrapped CrawlerRunsView 内）+ `export const dynamic = 'force-dynamic'`
+- `apps/server-next/src/lib/admin-nav.tsx` 采集中心段加 `children: [{ label: '采集批次', href: '/admin/crawler/runs', icon: <Bug /> }]`（AdminShell sidebar 二级菜单注册 / `flattenAdminRoutes()` 已支持 children）
+- `tests/unit/components/server-next/admin/crawler/CrawlerRunsView.test.tsx` import 路径同步
+
+### 关键设计
+
+- **0 backend 改动**：runs 列表全部沿用既有 v1 端点（`GET /admin/crawler/runs` / cancel/pause/resume）；本卡仅前端路由 + sidebar
+- **CrawlerRunsView 文件零改**：仅 git mv 移动；内部业务逻辑（status filter / triggerType filter / pagination / 行级操作）保持
+- **sidebar children 利用现有协议**：admin-ui shell sidebar 已支持 children 嵌套（ADR-103a §4.2）+ `flattenAdminRoutes()` 已 push children 到扁平列表
+
+### 质量门禁
+
+- typecheck ✅ / lint ✅ / file-size ✅ 0 新违规
+- verify:endpoint-adr ✅ **158 admin 路由对齐 29 ADR 端点**（0 新增）
+- 全量 unit test：4117 → **4117 PASS**（0 净增 / CrawlerRunsView 20 case import 路径修订后保持）
+
+### 后续触发
+
+- **REDO-01 列表顺序 E2 → F → G → H 全部完成**
+- 剩余：REDO-01-I（删除旧文件 0.05w / 前置 `git tag pre-redo-crawler-<YYYYMMDD>`）+ REDO-01-J（视觉回归 e2e + Opus 验收 0.2w）
+- 累计已完成：A ✅ + B ✅ + C ✅ + D ✅ + E ✅ + E2 ✅ + F ✅ + G ✅ + H ✅ 共 ~2.3w / REDO-01 总 ~2.4w — 剩余 0.25w（I+J）

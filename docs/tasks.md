@@ -6,7 +6,30 @@
 
 ## 进行中任务
 
-<!-- REDO-01-G 闭环（2026-05-19）；下一卡 REDO-01-H runs 独立路由 -->
+<!-- REDO-01-H 闭环（2026-05-19）；E2 → F → G → H 4 卡列表顺序全部完成 / 累计 ~2.3w -->
+
+### CHG-SN-7-REDO-01-H ✅ runs 列表迁独立路由 + sidebar 二级菜单闭环（2026-05-19）
+
+**完成时间**：2026-05-19
+**实施**（按 task-queue / 0 backend 改动）：
+- git mv `apps/server-next/src/app/admin/crawler/_client/CrawlerRunsView.tsx` → `apps/server-next/src/app/admin/crawler/runs/_client/CrawlerRunsView.tsx`
+- 新建 `apps/server-next/src/app/admin/crawler/runs/page.tsx`（13 行 / import + render）
+- `apps/server-next/src/lib/admin-nav.tsx` 采集中心段添加 `children: [{ label: '采集批次', href: '/admin/crawler/runs', icon: <Bug /> }]`
+- `tests/unit/components/server-next/admin/crawler/CrawlerRunsView.test.tsx` import 路径同步
+
+**评级**：A（0 红线 / 0 黄线 / 0 backend / 文件迁移 + page 包装 + nav 注册）
+
+**质量门禁**：
+- typecheck ✅ / lint ✅ / file-size ✅ 0 新违规
+- verify:endpoint-adr ✅ 158 路由对齐 29 ADR 端点（0 新增）
+- 全量 unit test：4117 → **4117 PASS**（0 净增 / CrawlerRunsView 20 case 路径修订后保持通过）
+
+**执行模型**：claude-opus-4-7 主循环（纯实施 / 子代理：无）
+
+<!-- 用户列表顺序 E2 → F → G → H 全部完成；下一步等用户裁决：起 I 删除旧文件（0.05w）+ J 验收（0.2w）OR 切其他 milestone -->
+
+
+### CHG-SN-7-REDO-01-H ⏳ 已替换为闭环卡
 
 ### CHG-SN-7-REDO-01-G ✅ 高级 dropdown 4 项闭环（2026-05-19）
 
