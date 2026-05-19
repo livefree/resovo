@@ -60,3 +60,39 @@ export async function listRoutesBySite(siteKey: string): Promise<SourceRouteBySi
   )
   return result.data
 }
+
+// ── ADR-117 AMENDMENT 2 2026-05-19 / CHG-SN-7-REDO-01-E2 ──────────
+// 行级 3 mutations（admin only / freeze 守卫由后端兜底）
+
+export interface RouteTestResult {
+  readonly ok: boolean
+  readonly latencyMs: number | null
+  readonly sampleVideoId: string | null
+  readonly probeJobId: string
+}
+export interface RouteReprobeResult {
+  readonly probeJobId: string
+  readonly queuedCount: number
+}
+export interface RouteDeleteResult {
+  readonly deletedCount: number
+}
+
+function buildRoutePath(siteKey: string, sourceName: string): string {
+  return `/admin/sources/routes/by-site/${encodeURIComponent(siteKey)}/${encodeURIComponent(sourceName)}`
+}
+
+export async function testRoute(siteKey: string, sourceName: string): Promise<RouteTestResult> {
+  const result = await apiClient.post<{ data: RouteTestResult }>(`${buildRoutePath(siteKey, sourceName)}/test`, {})
+  return result.data
+}
+
+export async function reprobeRoute(siteKey: string, sourceName: string): Promise<RouteReprobeResult> {
+  const result = await apiClient.post<{ data: RouteReprobeResult }>(`${buildRoutePath(siteKey, sourceName)}/reprobe`, {})
+  return result.data
+}
+
+export async function deleteRoute(siteKey: string, sourceName: string): Promise<RouteDeleteResult> {
+  const result = await apiClient.delete<{ data: RouteDeleteResult }>(buildRoutePath(siteKey, sourceName))
+  return result.data
+}

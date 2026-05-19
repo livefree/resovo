@@ -66,6 +66,8 @@ const EXPECTED_ACTION_TYPES = [
   // CHG-SN-6-26-RETRO
   'crawler.reindex',
   'crawler.run_create',
+  // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2 / R-MID-1 系统化第 13 次
+  'sources.route_action',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [
@@ -77,6 +79,7 @@ const EXPECTED_TARGET_KINDS = [
   'system',
   'home_module',
   'source_line_alias',
+  'source_route',  // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2
 ] as const
 
 describe('AuditLogService enums set-equal 守卫（ultrareview P1-2）', () => {

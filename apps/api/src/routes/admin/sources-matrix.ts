@@ -12,7 +12,7 @@
  * 鉴权：读端点 moderator+admin；PUT 写端点 admin only（ADR-117 D-117-1）
  */
 
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyReply, FastifyBaseLogger } from 'fastify'
 import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import {
@@ -20,6 +20,7 @@ import {
   VideoGroupsQuerySchema,
   UpsertAliasSchema,
   RoutesBySiteParamsSchema,
+  RouteActionParamsSchema,
 } from '@/api/services/SourcesMatrixService'
 import { isAppError } from '@/api/lib/errors'
 
@@ -124,6 +125,74 @@ export async function adminSourcesMatrixRoutes(fastify: FastifyInstance) {
     } catch (err) {
       request.log.error({ err }, '[admin/sources/routes/by-site] query error')
       return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
+    }
+  })
+
+  // ── ADR-117 AMENDMENT 2 2026-05-19 / CHG-SN-7-REDO-01-E2 ─────────
+  // 行级 3 mutations：admin only / 复用 actionType `sources.route_action`
+
+  function parseRouteActionParams(params: unknown) {
+    const parsed = RouteActionParamsSchema.safeParse(params)
+    if (!parsed.success) {
+      return { ok: false as const, message: parsed.error.issues[0]?.message ?? '参数错误' }
+    }
+    return {
+      ok: true as const,
+      siteKey: decodeURIComponent(parsed.data.siteKey),
+      sourceName: decodeURIComponent(parsed.data.sourceName),
+    }
+  }
+
+  function handleRouteActionError(reply: FastifyReply, err: unknown, route: string, requestLog: FastifyBaseLogger): FastifyReply {
+    if (isAppError(err, 'NOT_FOUND')) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: err.message, status: 404 } })
+    }
+    if (isAppError(err, 'STATE_CONFLICT')) {
+      return reply.code(409).send({ error: { code: 'STATE_CONFLICT', message: err.message, status: 409 } })
+    }
+    requestLog.error({ err }, `${route} error`)
+    return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
+  }
+
+  // ── POST /admin/sources/routes/by-site/:siteKey/:sourceName/test ──
+  fastify.post('/admin/sources/routes/by-site/:siteKey/:sourceName/test', { preHandler: adminOnly }, async (request, reply) => {
+    const parsed = parseRouteActionParams(request.params)
+    if (!parsed.ok) {
+      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: parsed.message, status: 422 } })
+    }
+    try {
+      const result = await svc.testRoute(parsed.siteKey, parsed.sourceName, request.user!.userId, request.id)
+      return reply.send({ data: result })
+    } catch (err) {
+      return handleRouteActionError(reply, err, '[admin/sources/routes/.../test]', request.log)
+    }
+  })
+
+  // ── POST /admin/sources/routes/by-site/:siteKey/:sourceName/reprobe ──
+  fastify.post('/admin/sources/routes/by-site/:siteKey/:sourceName/reprobe', { preHandler: adminOnly }, async (request, reply) => {
+    const parsed = parseRouteActionParams(request.params)
+    if (!parsed.ok) {
+      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: parsed.message, status: 422 } })
+    }
+    try {
+      const result = await svc.reprobeRoute(parsed.siteKey, parsed.sourceName, request.user!.userId, request.id)
+      return reply.send({ data: result })
+    } catch (err) {
+      return handleRouteActionError(reply, err, '[admin/sources/routes/.../reprobe]', request.log)
+    }
+  })
+
+  // ── DELETE /admin/sources/routes/by-site/:siteKey/:sourceName ────
+  fastify.delete('/admin/sources/routes/by-site/:siteKey/:sourceName', { preHandler: adminOnly }, async (request, reply) => {
+    const parsed = parseRouteActionParams(request.params)
+    if (!parsed.ok) {
+      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: parsed.message, status: 422 } })
+    }
+    try {
+      const result = await svc.deleteRoute(parsed.siteKey, parsed.sourceName, request.user!.userId, request.id)
+      return reply.send({ data: result })
+    } catch (err) {
+      return handleRouteActionError(reply, err, '[admin/sources/routes/.../DELETE]', request.log)
     }
   })
 }

@@ -6,7 +6,107 @@
 
 ## 进行中任务
 
-<!-- REDO-01-E 闭环（2026-05-19）；下一卡 REDO-01-E2 行级 3 mutations OR REDO-01-F 分类映射 -->
+<!-- REDO-01-E2 闭环（2026-05-19）；下一卡 REDO-01-F 分类映射 collapsible -->
+
+### CHG-SN-7-REDO-01-E2 ✅ 行级 3 mutations + audit RETRO + 前端 3 actions 闭环（2026-05-19）
+
+**完成时间**：2026-05-19
+**实施**：
+- **阶段 1** spawn arch-reviewer Opus 子代理 1 轮 **PASS A**（无红线 / 3 黄线 Y1/Y2/Y3 全部已遵守 / 3 advisory）
+  - U1 路径 A：`/admin/sources/routes/by-site/:siteKey/:sourceName[/test|/reprobe]` + DELETE 同前缀
+  - U2 软删除 B：deleted_at=NOW()
+  - U3 合并 actionType A：`sources.route_action` + afterJsonb.action 区分（ADR-121 D-121-5 / 4 文件 RETRO）
+  - U4 测试播放 C：同步快探 HEAD 3s + 异步占位 jobId
+  - U5 moderator UI guard B：后端 admin only + 前端 role prop 守卫
+  - 错误码修正：Opus 初稿误用 SERVICE_UNAVAILABLE 503 → 修正为 STATE_CONFLICT 409（ADR-110 14 码零新增红线）
+- **阶段 2** 后端（5 文件 / 0 新 migration）：
+  - `packages/types/src/admin-moderation.types.ts` actionType + targetKind +1（`sources.route_action` / `source_route`）
+  - `apps/api/src/services/AuditLogService.ts` ACTION_TYPES + TARGET_KINDS +1
+  - `apps/api/src/db/queries/sources-matrix.ts` 加 `selectRouteSampleSource` / `countRouteSources` / `softDeleteRouteBySite`
+  - `apps/api/src/services/SourcesMatrixService.ts` 加 `testRoute / reprobeRoute / deleteRoute` 3 方法 + `assertNotFrozen()` 私有 + 3 result interface + `RouteActionParamsSchema` zod
+  - `apps/api/src/routes/admin/sources-matrix.ts` 加 row 7-9 3 端点（125→210 行 / admin only / `handleRouteActionError` 复用 helper）
+- **阶段 3** 前端（2 文件改）：
+  - `apps/server-next/src/lib/sources/api.ts` 加 `testRoute` / `reprobeRoute` / `deleteRoute` 3 前端 fn + 3 result interface
+  - `apps/server-next/src/app/admin/crawler/_client/CrawlerSiteExpand.tsx`：新增 `currentRole?` prop（默认 admin / Y1 守卫）+ 3 actions 从 disabled 占位 → onClick handlers + confirm（delete）+ pending state + tooltip
+- **阶段 4** audit RETRO 4 文件（ADR-121 D-121-5 复用 actionType 模式 / R-MID-1 系统化第 13 次）：
+  - 上述 types + AuditLogService（2 处真源同步）
+  - `tests/unit/api/audit-log-coverage.test.ts` REQUIRED_ACTION_TYPES + PAYLOAD_ASSERTION_REQUIRED +1
+  - `tests/unit/api/audit-log-service-enums-set-equal.test.ts` EXPECTED_ACTION_TYPES + EXPECTED_TARGET_KINDS +1
+  - 新建 `tests/unit/api/sources-routes-mutations-audit.test.ts`（**10 case PASS** / payload 内容断言 `expect.objectContaining`）
+- **阶段 5** 单测扩展：`CrawlerClient.test.tsx` 加 5 新 case（38-42 mutations 接入 + confirm + 失败 toast / 37 → **42 case PASS**）
+- **阶段 6** ADR-117 AMENDMENT 2 2026-05-19 段追加 `docs/decisions.md`（约 180 行 / 完整 7 节）
+
+**评级**：**A**（0 红线 / 3 黄线全部遵守 / Opus PASS / R-MID-1 第 13 次系统化）
+
+**质量门禁**：
+- typecheck ✅ 全 7 workspace
+- lint ✅（0 error / 0 warning）
+- file-size-budget ✅ 0 新违规
+- verify:endpoint-adr ✅ **156 admin 路由对齐 27 ADR 端点**（+3 端点）
+- 全量 unit test：4078 → **4095 PASS**（+17 净增：+10 mutation audit + +5 frontend + +2 audit it.each）
+
+**执行模型**：claude-opus-4-7 主循环 + arch-reviewer (claude-opus-4-7) ADR-117 AMENDMENT 2 评审 1 轮 PASS
+
+<!-- 下张：REDO-01-F 分类映射 collapsible（0.2w / ADR-123 已通过 / migration 064 schema + GET/PUT 端点 + UI collapsible 三段实施路径） -->
+
+
+### CHG-SN-7-REDO-01-E2 ⏳ 已替换为闭环卡（保留备注）
+
+**SEQ**：M-SN-7 / REDO-01 第 7 子卡（E2 阶段 0.35w / E 拆分后第 2 段）
+
+**问题理解**：REDO-01-E 已落地行级 3 actions UI 占位 disabled（CrawlerSiteExpand L262-275）。本卡完成：
+1. spawn arch-reviewer Opus 设计 ADR-117 AMENDMENT 2（mutations）或新 ADR — 含 URL 路径 / 删除语义粒度 / actionType 合并 vs 拆分裁决
+2. 后端 3 mutations：测试播放 / 重新探测 / 删除线路（线路 = (siteKey, sourceName) 聚合）
+3. audit RETRO 4 或 7 文件框架（按 Opus 裁决）
+4. 前端 CrawlerSiteExpand 3 actions 从 disabled 占位 → 真实 onClick + confirm + freeze 守卫 + moderator UI guard（Y1）
+
+**方案**（按 Opus 评审 5 要点）：
+
+**阶段 1：spawn arch-reviewer Opus 评审 5 要点**
+- **U1 URL 路径**：`/admin/sources/routes/by-site/:siteKey/:sourceName/{test,reprobe}` + DELETE 同前缀 vs 其他形态
+- **U2 删除语义粒度**：删除线路 = DELETE 所有 (siteKey, sourceName) 下 video_sources 行（硬删 vs 软删 vs 仅 is_active=false）
+- **U3 actionType 策略**：合并 `sources.route_action` + afterJsonb.action 区分（4 文件 RETRO）vs 3 独立 actionType `sources.route_test / .reprobe / .delete`（7 文件 RETRO）— Opus advisory A 推荐前者
+- **U4 测试播放语义**：test 是否真发起 HTTP 探测（同步 / 异步队列）还是仅 enqueue reprobe job + 标记 manual_trigger
+- **U5 Y1 moderator UI guard**：路由 admin only vs moderator+admin / 前端何时读 cookie 守卫
+
+**阶段 2：后端实施**
+- 扩 `apps/api/src/db/queries/sources-matrix.ts`：3 函数（`testRouteByLine` / `reprobeRouteByLine` / `deleteRouteByLine`）
+- 扩 `apps/api/src/services/SourcesMatrixService.ts`：3 方法（或 1 router 方法 with action 参数）+ audit fire-and-forget
+- 扩 `apps/api/src/routes/admin/sources-matrix.ts`：3 端点（125 → 预估 ~180 行）
+- 扩 `packages/types/src/admin-moderation.types.ts`：union 扩 1 项 OR 3 项 actionType + targetKind 复用 `source_line_alias` 或新 `source_route`
+- 扩 `apps/api/src/services/AuditLogService.ts` ACTION_TYPES 常量数组（同步 union）
+- 扩 `tests/unit/api/audit-log-coverage.test.ts` REQUIRED + PAYLOAD it.each
+- 扩 `tests/unit/api/audit-log-service-enums-set-equal.test.ts`（保 set-equal 守卫）
+- 新建 `tests/unit/api/sources-routes-mutations-audit.test.ts`（payload 内容断言）
+
+**阶段 3：前端实施**
+- 扩 `apps/server-next/src/lib/sources/api.ts`：3 前端 fn（`testRouteByLine` / `reprobeRouteByLine` / `deleteRouteByLine`）
+- 修改 `CrawlerSiteExpand.tsx`：3 actions disabled 移除 + onClick 接入 + confirm（删除）+ freeze 守卫 + moderator UI guard（Y1）
+- 修改 `CrawlerClient.tsx` 或 `CrawlerSiteExpand.tsx`：cookie role 读取（参考 admin/layout.tsx 路径）
+
+**阶段 4：单测扩展**
+- `CrawlerClient.test.tsx`：加 6+ 新 case（test 接入 / reprobe / delete confirm / freeze 守卫 / moderator UI guard）
+
+**阶段 5：全质量门禁**
+- typecheck + lint + file-size + unit test + verify:endpoint-adr + verify:adr-contracts
+
+**涉及文件**（预估 12 文件）：
+- ADR 起草：`docs/decisions.md`（ADR-117 AMENDMENT 2 OR 新 ADR）
+- 后端 5 改 + 1 新测试：queries + service + route + types + AuditLogService + 2 audit test 扩 + 1 新 audit test
+- 前端 1 改 + 1 改：lib/sources/api.ts + CrawlerSiteExpand.tsx + 可能 CrawlerClient.tsx
+- 测试 1 改：CrawlerClient.test.tsx
+
+**严格约束**：
+- ❌ 3 mutations 未先起 ADR（plan §4.5 R7 MUST-8 + verify:endpoint-adr）
+- ❌ ADR 主循环直接落（撰写 ADR 强制 Opus 评审）
+- ❌ audit RETRO 4 真源同步漏一项（ADR-121 5 先例）
+- ❌ CrawlerClient.tsx > 500 行（当前 465 接近天花板；如本卡再加状态 → 主动拆 hook）
+- ❌ moderator role 仍能看到 enabled 删除按钮（Y1 强制守卫）
+
+**执行模型**：spawn arch-reviewer (claude-opus-4-7) ADR + audit 策略评审 + claude-opus-4-7 主循环实施
+
+**估时**：0.35w
+
 
 ### CHG-SN-7-REDO-01-E ✅ 前端行展开 + 线路 sub-table 闭环（2026-05-19）
 

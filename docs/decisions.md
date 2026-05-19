@@ -7560,3 +7560,166 @@ ORDER BY vs.source_name ASC
 
 **关键发现**：本 AMENDMENT 再次验证 plan §4.5 "同一 ADR 下多端点复用同一 ADR 不重复评审"机制；REDO-01-E 后端工时从规划的 0.4w（新 ADR-124 起草 + Opus 评审 + 端点）降至 ~0.15w（AMENDMENT + 端点 + 前端共调），前端骨架 ~0.2w，总 ~0.35w（Y2 同步重估）。
 
+
+---
+
+## ADR-117 AMENDMENT 2 2026-05-19（CHG-SN-7-REDO-01-E2）— 行级 3 mutations 端点
+
+**触发**：REDO-01-E AMENDMENT 1 落地 row 6 GET by-site 端点 + 前端 CrawlerSiteExpand 6 列 sub-table 后，3 actions 按钮（play / refresh / trash）现为 disabled 占位（commit `6c5824b9`）。本 AMENDMENT 2 完成 3 mutations 后端协议 + audit RETRO + 前端按钮接入 + moderator UI guard。仿 ADR-105 AMENDMENT 2026-05-14 + ADR-117 AMENDMENT 1 范式。
+
+**范围**：扩 ADR-117 §端点契约 row 7-9；扩 `AdminAuditActionType` +1（`sources.route_action`）+ `AdminAuditTargetKind` +1（`source_route`）；复用 ADR-117 既有协议层（ApiResponse 信封 / ADR-110 14 码 / Service→queries 分层 / camelCase / `.strict()` zod / 鉴权 admin only 对齐 row 5）。**零新 migration / 零新 ErrorCode**。
+
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 鉴权 | 错误码 |
+|---|------|------|------|---------|----------|------|--------|
+| 7 | POST | `/admin/sources/routes/by-site/:siteKey/:sourceName/test` | 测试播放（同步快探 episode 1 + 异步触发全线路 probe job） | Path: `siteKey: string(1..100)`, `sourceName: string(1..200)` | 200 `{ data: RouteTestResult }` | admin | 422 / 404 NOT_FOUND（线路不存在）/ 500 |
+| 8 | POST | `/admin/sources/routes/by-site/:siteKey/:sourceName/reprobe` | 重新探测：enqueue 全线路 probe job（不同步） | Path 同上 | 200 `{ data: RouteReprobeResult }` | admin | 422 / 404 / 409 STATE_CONFLICT（freeze）/ 500 |
+| 9 | DELETE | `/admin/sources/routes/by-site/:siteKey/:sourceName` | 软删除该线路下所有 video_sources 行 | Path 同上 | 200 `{ data: RouteDeleteResult }` | admin | 422 / 404 / 409 STATE_CONFLICT（freeze）/ 500 |
+
+- **鉴权**：`requireRole(['admin'])`，与 row 5 alias upsert 对齐；moderator 前端 Y1 守卫隐藏按钮 + alias inline-edit disabled
+- **Path 校验**：`siteKey.min(1).max(100)` + `sourceName.min(1).max(200)`
+- **错误码**：100% 复用 ADR-110；freeze 守卫**复用 `STATE_CONFLICT 409`**（与 videos/staging/video-merges 现有 freeze/state guard 同模式 / Opus ADR 误用 SERVICE_UNAVAILABLE 503 已修正为 STATE_CONFLICT 409 / ADR-110 14 码零新增红线遵守）
+- **响应不分页**：test/reprobe 异步任务 jobId 由前端轮询既有 worker 状态端点
+
+### 类型契约
+
+`packages/types/src/sources-matrix.types.ts` 当前 inline 在 SourcesMatrixService.ts（next REDO-01-E2 PATCH 可迁出共享层）：
+
+```ts
+export interface RouteTestResult {
+  readonly ok: boolean
+  readonly latencyMs: number | null
+  readonly sampleVideoId: string | null
+  readonly probeJobId: string
+}
+export interface RouteReprobeResult {
+  readonly probeJobId: string
+  readonly queuedCount: number
+}
+export interface RouteDeleteResult {
+  readonly deletedCount: number
+  readonly deletedIds: readonly string[]
+}
+```
+
+### zod request schema
+
+```ts
+export const RouteActionParamsSchema = z.object({
+  siteKey: z.string().min(1).max(100),
+  sourceName: z.string().min(1).max(200),
+}).strict()
+```
+
+### SQL 设计（row 9 删除）
+
+```sql
+UPDATE video_sources vs
+   SET deleted_at = NOW(), updated_at = NOW()
+  FROM videos v
+ WHERE vs.video_id = v.id
+   AND COALESCE(vs.source_site_key, v.site_key) = $1
+   AND vs.source_name = $2
+   AND vs.deleted_at IS NULL
+RETURNING vs.id
+```
+
+- 软删除范式延续 ADR-105（merge/unmerge 软删除先例）+ U2 拍板（不硬删 / 可回滚 / audit 回放）
+- COALESCE fallback 与 row 6 `listRoutesBySite` 完全一致（migration 046 NULLABLE 约束）
+- RETURNING 行 ids = `deletedIds`；前 50 条入 audit beforeJsonb，超出标记 `truncated=true`
+
+### audit log 协议
+
+**新增 1 actionType + 1 targetKind**（ADR-121 D-121-5 复用 actionType 模式延续）：
+
+| 端点 | actionType | targetKind | targetId | beforeJsonb | afterJsonb |
+|------|-----------|------------|----------|-------------|------------|
+| POST `/test` | `sources.route_action` | `source_route` | `${siteKey}/${sourceName}` | null | `{ action: 'test', ok, latencyMs, sampleVideoId, probeJobId }` |
+| POST `/reprobe` | `sources.route_action` | `source_route` | `${siteKey}/${sourceName}` | null | `{ action: 'reprobe', probeJobId, queuedCount }` |
+| DELETE | `sources.route_action` | `source_route` | `${siteKey}/${sourceName}` | `{ deletedIds: string[≤50], totalCount, truncated }` | `{ action: 'delete', deletedCount }` |
+
+**audit RETRO 框架 = 4 文件**（ADR-121 D-121-5 复用 actionType 模式 / R-MID-1 系统化第 13 次）：
+
+1. `packages/types/src/admin-moderation.types.ts` — `AdminAuditActionType` +1 `sources.route_action` / `AdminAuditTargetKind` +1 `source_route`
+2. `apps/api/src/services/AuditLogService.ts` — `ACTION_TYPES` 数组 +1 / `TARGET_KINDS` 数组 +1
+3. `tests/unit/api/audit-log-coverage.test.ts` — `REQUIRED_ACTION_TYPES` +1 + `PAYLOAD_ASSERTION_REQUIRED` 已含（service test 覆盖）+ set-equal test 自动通过；`tests/unit/api/audit-log-service-enums-set-equal.test.ts` EXPECTED_* +1/+1
+4. `apps/api/src/routes/admin/sources-matrix.ts` 3 route handlers + Service 内 `auditSvc.write(...)` + 新建 `tests/unit/api/sources-routes-mutations-audit.test.ts` 10 case 含 payload 内容断言（`expect.objectContaining` 形式覆盖 audit-log-coverage R-MID-1 守卫）
+
+### 测试播放语义（U4 落地）
+
+- **同步快探**：Service 层 SELECT episode 1 source_url + Node `fetch(url, {method:'HEAD', signal: AbortSignal.timeout(3000)})`；返回 `ok = res.ok && res.status < 400`，`latencyMs = Math.round(performance.now() diff)`
+- **异步全量**：占位 jobId 模式（`probe-${siteKey}-${sourceName}-${Date.now()}` / `reprobe-${siteKey}-${sourceName}-${Date.now()}`）；实际对接 source-health worker 由 PRE-PROBE-WORKER 后续卡承担
+- **404 处理**：若 (siteKey, sourceName) 无任何 deleted_at IS NULL 行 → 404 NOT_FOUND；不空跑 probe
+- **超时不视为失败**：3s 超时返回 `ok=false, latencyMs=null`（不抛 5xx / Opus Y3 上限红线）
+
+### moderator UI guard（U5 落地）
+
+- **后端**：3 端点 `requireRole(['admin'])`（与 row 5 alias upsert 对齐）
+- **前端**：`apps/server-next/src/app/admin/crawler/_client/CrawlerSiteExpand.tsx` 加 `currentRole?: 'admin' | 'moderator'` prop（缺省 admin / 兼容尚未注入 role 的消费方）；3 actions + alias inline-edit `disabled={currentRole !== 'admin'}` + tooltip `'该操作需要管理员权限'`
+- **rationale**：3 mutations 不可逆性（尤其 delete）+ 与 row 5 alias upsert admin only 对齐；前端守卫避免 403 toast 体验破碎（Y1）
+
+### freeze 守卫
+
+Service 层 `assertNotFrozen()` 私有方法 reads `crawler_global_freeze` settings；reprobe + delete 必查 / test 不查（只读探测 / Y2）。
+freeze=true → `throw new AppError('STATE_CONFLICT', '采集已冻结，不可执行线路操作', 409)`；Route 层 `isAppError(err, 'STATE_CONFLICT')` → 409 toast。
+
+### 评审要点决策（Opus 子代理 1 轮 PASS）
+
+- **U1 路径**：A `/by-site/:siteKey/:sourceName[/test|/reprobe]` + DELETE 同前缀（与 row 6 GET `/by-site/:siteKey` 命名空间对称；拒 B verb-in-body / 拒 C composite-id 编码）
+- **U2 删除语义**：B 软删除 `deleted_at`（可回滚 + audit 回放 + 与读路径过滤一致；拒 A 硬删 / 拒 C is_active 与 video_source.toggle 语义混淆）
+- **U3 actionType**：A 合并 `sources.route_action` + `afterJsonb.action` 区分（ADR-121 D-121-5 范式 / 4 文件 RETRO；targetKind 新增 `source_route` 区别 source_line_alias 元数据 vs 行操作目标）
+- **U4 test 语义**：C 同步快探（HEAD 3s）+ 异步全量 probe job 占位（运营即时反馈 + 后续 worker 对接预留 jobId 接口）
+- **U5 moderator guard**：B 后端 admin only + 前端 role prop 守卫（与 row 5 + AMENDMENT 1 Y1 同模式）
+
+### 红线 / 黄线 / advisory
+
+**红线（已遵守）**：
+- R1：3 端点走 `requireRole(['admin'])` ✅
+- R2：DELETE 软删除（deleted_at = NOW()） ✅
+- R3：audit RETRO 4 文件当卡完成 ✅
+
+**黄线（已遵守）**：
+- Y1：moderator UI guard 前端 `currentRole !== 'admin'` 隐藏 affordance ✅
+- Y2：freeze 守卫仅 reprobe + delete / test 不守卫 ✅
+- Y3：test HEAD 超时 3s 硬上限 / `AbortSignal.timeout(3000)` ✅
+
+**advisory**：
+- A1：未来 `POST /by-site/:siteKey/:sourceName/restore` 撤销软删除 → 起 PRE-ROUTE-RESTORE 卡 + `afterJsonb.action='restore'` 扩展（4 文件 RETRO 复用）
+- A2：probeJobId 当前为占位字符串；PRE-PROBE-WORKER 后续卡对接 source-health 真实 BullMQ jobId
+- A3：错误码 ADR-110 14 码无 SERVICE_UNAVAILABLE 503；本卡复用 STATE_CONFLICT 409 表达 freeze（Opus 初稿误用 503 已修正 / ADR-110 14 码零新增红线遵守）
+
+### 4 维度自评
+
+| 维度 | 评级 | 理由 |
+|---|---|---|
+| 命名 | A | 路径与 row 6 GET 完全对称；actionType `sources.route_action` 与 `source_line_alias.upsert` 同 sources 域风格；targetKind `source_route` vs `source_line_alias` 双名清晰区分行操作 vs 元数据 |
+| 对称性 | A | 鉴权 admin only 与 row 5 100% 对齐；zod `.strict()` / camelCase / Service→queries 分层 / ApiResponse 信封 100% 复用；audit RETRO 4 文件延续 ADR-121 D-121-5 |
+| 状态职责 | A | DB 写边界明确（仅 row 9 写 video_sources.deleted_at）；test/reprobe 不改持久状态；freeze 守卫边界明示；audit beforeJsonb/afterJsonb 语义清晰 |
+| 扩展性 | A | 未来 restore / batch delete / 单视频 source toggle 全部走 afterJsonb.action 扩展（actionType 不增）；新 action 仅需扩 PAYLOAD it.each + content assertion test |
+
+**综合**：**A**
+
+### 关联
+
+- ADR-117 §端点契约扩 row 7-9；既有 1-6 行 + AMENDMENT 1 row 6 不变
+- ADR-114-NEGATED 复合键 `(source_site_key, source_name)` 严格延续
+- ADR-110 response 信封 + 14 错误码 100% 复用；零新增码
+- ADR-121 R-MID-1 audit RETRO D-121-5 复用 actionType 4 文件框架严格延续（第 13 次系统化）
+- ADR-105 AMENDMENT 2026-05-14 软删除范式延续
+- migration 046 / 054 / 063 schema 完备；**无新 migration**
+- **关联代码（实施落地）**：
+  - `apps/api/src/db/queries/sources-matrix.ts` 增 `selectRouteSampleSource` / `countRouteSources` / `softDeleteRouteBySite`
+  - `apps/api/src/services/SourcesMatrixService.ts` 增 `testRoute` / `reprobeRoute` / `deleteRoute` + `assertNotFrozen` 私有方法
+  - `apps/api/src/routes/admin/sources-matrix.ts` 增 row 7-9 3 端点 + auditSvc.write
+  - `packages/types/src/admin-moderation.types.ts` 扩 actionType + targetKind
+  - `apps/api/src/services/AuditLogService.ts` ACTION_TYPES + TARGET_KINDS +1
+  - `tests/unit/api/audit-log-coverage.test.ts` REQUIRED_ACTION_TYPES + PAYLOAD_ASSERTION_REQUIRED +1
+  - `tests/unit/api/audit-log-service-enums-set-equal.test.ts` EXPECTED_ACTION_TYPES + EXPECTED_TARGET_KINDS +1
+  - `tests/unit/api/sources-routes-mutations-audit.test.ts` 新建 10 case
+  - `apps/server-next/src/lib/sources/api.ts` 增 `testRoute / reprobeRoute / deleteRoute` 3 前端 fn + 类型
+  - `apps/server-next/src/app/admin/crawler/_client/CrawlerSiteExpand.tsx` 3 actions onClick + confirm + role 守卫
+- **关联触发条件**：PRE-ROUTE-RESTORE / PRE-PROBE-WORKER / PRE-ROUTE-BATCH-DELETE
+
+**关键发现**：本 AMENDMENT 2 + AMENDMENT 1 双次验证 plan §4.5 "同 ADR 下多端点复用同 ADR 不重复评审"机制；REDO-01-E2 工时实际 ~0.3w（后端 3 endpoints + audit 4 文件 RETRO + 前端 3 按钮接入 + role 守卫；Y2 重估 0.35w 准确）。
+

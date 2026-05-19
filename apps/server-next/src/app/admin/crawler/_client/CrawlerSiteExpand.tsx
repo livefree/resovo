@@ -20,13 +20,25 @@
 
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { AdminButton, AdminInput, useToast } from '@resovo/admin-ui'
-import { listRoutesBySite, upsertLineAlias } from '@/lib/sources/api'
+import {
+  listRoutesBySite,
+  upsertLineAlias,
+  testRoute,
+  reprobeRoute,
+  deleteRoute,
+} from '@/lib/sources/api'
 import type { SourceRouteBySite } from '@/lib/sources/types'
 import { ApiClientError } from '@/lib/api-client'
 
 export interface CrawlerSiteExpandProps {
   readonly siteKey: string
   readonly siteName: string
+  /**
+   * 当前用户角色（ADR-117 AMENDMENT 2 / Y1 moderator UI guard）。
+   * 缺省视为 'admin'（兼容尚未注入 role 的消费方；后端 admin only 兜底）。
+   * 'moderator' 时：3 actions + alias inline-edit disabled + tooltip 提示
+   */
+  readonly currentRole?: 'admin' | 'moderator'
 }
 
 const WRAPPER_STYLE: CSSProperties = {
@@ -132,11 +144,13 @@ function SignalPill({ signal, testId }: { signal: SignalState; testId?: string }
   )
 }
 
-export function CrawlerSiteExpand({ siteKey, siteName }: CrawlerSiteExpandProps) {
+export function CrawlerSiteExpand({ siteKey, siteName, currentRole = 'admin' }: CrawlerSiteExpandProps) {
   const toast = useToast()
   const [rows, setRows] = useState<readonly SourceRouteBySite[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pendingAction, setPendingAction] = useState<string | null>(null)
+  const isAdmin = currentRole === 'admin'
 
   const load = useCallback(() => {
     setLoading(true)
@@ -173,6 +187,75 @@ export function CrawlerSiteExpand({ siteKey, siteName }: CrawlerSiteExpandProps)
     },
     [siteKey, toast],
   )
+
+  // ── ADR-117 AMENDMENT 2 / CHG-SN-7-REDO-01-E2 行级 3 actions ──
+  const describeApiError = (err: unknown): { title: string; description: string } => {
+    if (err instanceof ApiClientError) {
+      if (err.code === 'STATE_CONFLICT') return { title: '采集已冻结', description: err.message }
+      if (err.code === 'NOT_FOUND') return { title: '线路不存在', description: err.message }
+      if (err.code === 'FORBIDDEN') return { title: '禁止操作', description: '该操作仅 admin 角色可执行' }
+      return { title: '操作失败', description: err.message }
+    }
+    return { title: '操作失败', description: err instanceof Error ? err.message : '请稍后重试' }
+  }
+
+  const handleTest = useCallback(async (sourceName: string) => {
+    setPendingAction(`test:${sourceName}`)
+    try {
+      const result = await testRoute(siteKey, sourceName)
+      toast.push({
+        title: result.ok ? '测试通过' : '测试未通过',
+        description: result.ok
+          ? `${result.latencyMs ?? '?'}ms · 样本 ${result.sampleVideoId?.slice(0, 8) ?? '—'}`
+          : '快探未通过 / 异步全量已发起',
+        level: result.ok ? 'success' : 'warn',
+      })
+    } catch (err: unknown) {
+      const { title, description } = describeApiError(err)
+      toast.push({ title, description, level: 'danger' })
+    } finally {
+      setPendingAction(null)
+    }
+  }, [siteKey, toast])
+
+  const handleReprobe = useCallback(async (sourceName: string) => {
+    setPendingAction(`reprobe:${sourceName}`)
+    try {
+      const result = await reprobeRoute(siteKey, sourceName)
+      toast.push({
+        title: '已发起重新探测',
+        description: `${siteKey} / ${sourceName} · 入队 ${result.queuedCount} 行`,
+        level: 'success',
+      })
+    } catch (err: unknown) {
+      const { title, description } = describeApiError(err)
+      toast.push({ title, description, level: 'danger' })
+    } finally {
+      setPendingAction(null)
+    }
+  }, [siteKey, toast])
+
+  const handleDelete = useCallback(async (sourceName: string) => {
+    if (!confirm(`确定删除线路「${sourceName}」？将软删除该线路下所有 video_source 行（可由后台数据恢复）。`)) {
+      return
+    }
+    setPendingAction(`delete:${sourceName}`)
+    try {
+      const result = await deleteRoute(siteKey, sourceName)
+      toast.push({
+        title: '已删除线路',
+        description: `${siteKey} / ${sourceName} · ${result.deletedCount} 行`,
+        level: 'success',
+      })
+      // 删除后从本地状态移除该行
+      setRows((prev) => (prev ? prev.filter((r) => r.sourceName !== sourceName) : prev))
+    } catch (err: unknown) {
+      const { title, description } = describeApiError(err)
+      toast.push({ title, description, level: 'danger' })
+    } finally {
+      setPendingAction(null)
+    }
+  }, [siteKey, toast])
 
   if (loading && !rows) {
     return (
@@ -227,7 +310,12 @@ export function CrawlerSiteExpand({ siteKey, siteName }: CrawlerSiteExpandProps)
             <RouteRow
               key={`${row.sourceSiteKey}::${row.sourceName}`}
               row={row}
+              isAdmin={isAdmin}
+              pendingAction={pendingAction}
               onAliasSave={handleAliasSave}
+              onTest={handleTest}
+              onReprobe={handleReprobe}
+              onDelete={handleDelete}
             />
           ))}
         </tbody>
@@ -238,10 +326,20 @@ export function CrawlerSiteExpand({ siteKey, siteName }: CrawlerSiteExpandProps)
 
 function RouteRow({
   row,
+  isAdmin,
+  pendingAction,
   onAliasSave,
+  onTest,
+  onReprobe,
+  onDelete,
 }: {
   readonly row: SourceRouteBySite
+  readonly isAdmin: boolean
+  readonly pendingAction: string | null
   readonly onAliasSave: (sourceName: string, displayName: string) => Promise<void>
+  readonly onTest: (sourceName: string) => void
+  readonly onReprobe: (sourceName: string) => void
+  readonly onDelete: (sourceName: string) => void
 }) {
   const [draft, setDraft] = useState<string>(row.displayName ?? '')
   const [saving, setSaving] = useState(false)
@@ -264,6 +362,14 @@ function RouteRow({
     }
   }
 
+  // Y1 moderator UI guard：3 actions + alias inline-edit disabled
+  // tooltip 'admin only'；后端 PUT line-aliases + 3 mutations 均 admin only 兜底
+  const adminGuardTitle = isAdmin ? undefined : '该操作需要管理员权限'
+  const testPending = pendingAction === `test:${row.sourceName}`
+  const reprobePending = pendingAction === `reprobe:${row.sourceName}`
+  const deletePending = pendingAction === `delete:${row.sourceName}`
+  const anyPending = testPending || reprobePending || deletePending
+
   return (
     <tr data-source-name={row.sourceName}>
       <td style={TD_STYLE}>
@@ -278,9 +384,10 @@ function RouteRow({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={handleBlur}
-          disabled={saving}
+          disabled={saving || !isAdmin}
           placeholder="（未设置）"
           aria-label={`${row.sourceName} 别名`}
+          title={adminGuardTitle}
           data-testid={`crawler-route-alias-${row.sourceName}`}
         />
       </td>
@@ -296,14 +403,41 @@ function RouteRow({
         </span>
       </td>
       <td style={TD_STYLE}>
-        <span style={ACTIONS_CELL_STYLE} data-actions-placeholder title="REDO-01-E2 实装">
-          <AdminButton size="sm" variant="default" disabled aria-label={`测试播放 ${row.sourceName}`}>
+        <span style={ACTIONS_CELL_STYLE} data-actions-cell>
+          <AdminButton
+            size="sm"
+            variant="default"
+            disabled={!isAdmin || anyPending}
+            loading={testPending}
+            onClick={() => onTest(row.sourceName)}
+            aria-label={`测试播放 ${row.sourceName}`}
+            title={adminGuardTitle}
+            data-testid={`crawler-route-test-${row.sourceName}`}
+          >
             ▷
           </AdminButton>
-          <AdminButton size="sm" variant="default" disabled aria-label={`重新探测 ${row.sourceName}`}>
+          <AdminButton
+            size="sm"
+            variant="default"
+            disabled={!isAdmin || anyPending}
+            loading={reprobePending}
+            onClick={() => onReprobe(row.sourceName)}
+            aria-label={`重新探测 ${row.sourceName}`}
+            title={adminGuardTitle}
+            data-testid={`crawler-route-reprobe-${row.sourceName}`}
+          >
             ↻
           </AdminButton>
-          <AdminButton size="sm" variant="danger" disabled aria-label={`删除 ${row.sourceName}`}>
+          <AdminButton
+            size="sm"
+            variant="danger"
+            disabled={!isAdmin || anyPending}
+            loading={deletePending}
+            onClick={() => onDelete(row.sourceName)}
+            aria-label={`删除 ${row.sourceName}`}
+            title={adminGuardTitle}
+            data-testid={`crawler-route-delete-${row.sourceName}`}
+          >
             🗑
           </AdminButton>
         </span>

@@ -157,6 +157,8 @@ export type AdminAuditActionType =
   // CHG-SN-6-26-RETRO：reindex + runs 统一入口 audit 补齐（R-MID-1 系统化第 12 次）
   | 'crawler.reindex'            // POST /admin/crawler/reindex
   | 'crawler.run_create'         // POST /admin/crawler/runs
+  // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2 2026-05-19：sources 域行级 3 mutations 合并 actionType
+  | 'sources.route_action'       // POST/DELETE /admin/sources/routes/by-site/:siteKey/:sourceName[/test|/reprobe]
 
 export type AdminAuditTargetKind =
   | 'video'
@@ -167,6 +169,7 @@ export type AdminAuditTargetKind =
   | 'system'
   | 'home_module'
   | 'source_line_alias'
+  | 'source_route'  // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2：sources 行级操作目标
 
 export interface AdminAuditLog {
   readonly id: string  // bigserial → string（避免 JS 大数精度）

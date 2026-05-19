@@ -33,6 +33,10 @@ const validateCrawlerSiteMock = vi.fn()
 // REDO-01-E：sources 域跨调 mocks
 const listRoutesBySiteMock = vi.fn()
 const upsertLineAliasMock = vi.fn()
+// REDO-01-E2：sources 域行级 mutations mocks
+const testRouteMock = vi.fn()
+const reprobeRouteMock = vi.fn()
+const deleteRouteMock = vi.fn()
 const toastPushMock = vi.fn()
 const confirmSpy = vi.fn().mockReturnValue(true)
 
@@ -52,6 +56,9 @@ vi.mock('../../../../../../apps/server-next/src/lib/crawler/api', () => ({
 vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({
   listRoutesBySite: (...args: unknown[]) => listRoutesBySiteMock(...args),
   upsertLineAlias: (...args: unknown[]) => upsertLineAliasMock(...args),
+  testRoute: (...args: unknown[]) => testRouteMock(...args),
+  reprobeRoute: (...args: unknown[]) => reprobeRouteMock(...args),
+  deleteRoute: (...args: unknown[]) => deleteRouteMock(...args),
 }))
 
 vi.mock('@resovo/admin-ui', async () => {
@@ -86,6 +93,7 @@ vi.mock('../../../../../../apps/server-next/src/lib/api-client', () => {
 })
 
 import { CrawlerClient } from '../../../../../../apps/server-next/src/app/admin/crawler/_client/CrawlerClient'
+import { ApiClientError } from '../../../../../../apps/server-next/src/lib/api-client'
 
 const SITE_1 = {
   key: 'jszyapi',
@@ -149,6 +157,9 @@ beforeEach(() => {
   runCrawlerSiteMock.mockReset()
   listRoutesBySiteMock.mockReset()
   upsertLineAliasMock.mockReset()
+  testRouteMock.mockReset()
+  reprobeRouteMock.mockReset()
+  deleteRouteMock.mockReset()
   toastPushMock.mockReset()
   confirmSpy.mockReset().mockReturnValue(true)
   ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
@@ -636,6 +647,99 @@ describe('CrawlerClient (REDO-01-E 行展开 + 线路 sub-table)', () => {
     fireEvent.click(await waitFor(() => screen.getByTestId('crawler-row-expand-jszyapi')))
     await waitFor(() => {
       expect(screen.getByTestId('crawler-expand-empty-jszyapi')).not.toBeNull()
+    })
+  })
+})
+
+describe('CrawlerClient (REDO-01-E2 行级 3 mutations + role 守卫)', () => {
+  const ROUTE_1 = {
+    sourceSiteKey: 'jszyapi',
+    sourceName: '线路1',
+    displayName: 'JSZY 主线',
+    probeStatus: 'ok' as const,
+    renderStatus: 'partial' as const,
+    avgLatencyMs: 120,
+    sourceCount: 5,
+    activeCount: 4,
+    lastProbedAt: '2026-05-19T10:00:00Z',
+  }
+
+  it('38. test 按钮渲染（admin role 默认）+ click → testRoute + 成功 toast (ok=true)', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    listRoutesBySiteMock.mockResolvedValueOnce([ROUTE_1])
+    testRouteMock.mockResolvedValueOnce({ ok: true, latencyMs: 110, sampleVideoId: 'vid-abc12345', probeJobId: 'probe-1' })
+    render(<CrawlerClient />)
+    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-row-expand-jszyapi')))
+    const btn = await waitFor(() => screen.getByTestId('crawler-route-test-线路1') as HTMLButtonElement)
+    expect(btn.disabled).toBe(false)
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(testRouteMock).toHaveBeenCalledWith('jszyapi', '线路1')
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: '测试通过' }),
+      )
+    })
+  })
+
+  it('39. reprobe 按钮：click → reprobeRoute + 成功 toast', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    listRoutesBySiteMock.mockResolvedValueOnce([ROUTE_1])
+    reprobeRouteMock.mockResolvedValueOnce({ probeJobId: 'reprobe-1', queuedCount: 5 })
+    render(<CrawlerClient />)
+    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-row-expand-jszyapi')))
+    const btn = await waitFor(() => screen.getByTestId('crawler-route-reprobe-线路1'))
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(reprobeRouteMock).toHaveBeenCalledWith('jszyapi', '线路1')
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: '已发起重新探测' }),
+      )
+    })
+  })
+
+  it('40. delete 按钮：confirm 通过 → deleteRoute + 成功 toast + 行移除', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    listRoutesBySiteMock.mockResolvedValueOnce([ROUTE_1])
+    deleteRouteMock.mockResolvedValueOnce({ deletedCount: 5 })
+    render(<CrawlerClient />)
+    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-row-expand-jszyapi')))
+    const btn = await waitFor(() => screen.getByTestId('crawler-route-delete-线路1'))
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(deleteRouteMock).toHaveBeenCalledWith('jszyapi', '线路1')
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: '已删除线路' }),
+      )
+      // 删除后线路行从 sub-table 消失
+      expect(screen.queryByTestId('crawler-route-delete-线路1')).toBeNull()
+    })
+  })
+
+  it('41. delete 按钮：confirm 拒绝 → 不调 API', async () => {
+    confirmSpy.mockReset().mockReturnValue(false)
+    ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    listRoutesBySiteMock.mockResolvedValueOnce([ROUTE_1])
+    render(<CrawlerClient />)
+    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-row-expand-jszyapi')))
+    const btn = await waitFor(() => screen.getByTestId('crawler-route-delete-线路1'))
+    fireEvent.click(btn)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(deleteRouteMock).not.toHaveBeenCalled()
+  })
+
+  it('42. reprobe 失败 STATE_CONFLICT → 冻结 toast', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    listRoutesBySiteMock.mockResolvedValueOnce([ROUTE_1])
+    // 用 mock 模块同款 ApiClientError class，instanceof 才能命中
+    reprobeRouteMock.mockRejectedValueOnce(new ApiClientError('STATE_CONFLICT', '采集已冻结', 409))
+    render(<CrawlerClient />)
+    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-row-expand-jszyapi')))
+    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-route-reprobe-线路1')))
+    await waitFor(() => {
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'danger', title: '采集已冻结' }),
+      )
     })
   })
 })

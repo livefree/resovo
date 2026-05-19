@@ -68,6 +68,8 @@ const REQUIRED_ACTION_TYPES = [
   // CHG-SN-6-26-RETRO：reindex + runs 统一入口 audit 补齐（R-MID-1 系统化第 12 次）
   'crawler.reindex',            // POST /admin/crawler/reindex
   'crawler.run_create',         // POST /admin/crawler/runs
+  // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2：sources 域行级 3 mutations 合并 actionType
+  'sources.route_action',       // POST/DELETE /admin/sources/routes/by-site/:siteKey/:sourceName[/test|/reprobe]
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -127,6 +129,8 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   // CHG-SN-6-26-RETRO：R-MID-1 第 12 次系统化（reindex + runs 统一入口）
   'crawler.reindex',
   'crawler.run_create',
+  // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2：sources 行级 3 mutations 合并 actionType
+  'sources.route_action',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

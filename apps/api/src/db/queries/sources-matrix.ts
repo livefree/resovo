@@ -414,3 +414,75 @@ export async function listRoutesBySite(
     lastProbedAt: r.last_probed_at,
   }))
 }
+
+// ── ADR-117 AMENDMENT 2 2026-05-19 / CHG-SN-7-REDO-01-E2 ──────────
+// 行级 3 mutations 支撑 queries（test 样本 / 软删除）
+
+/**
+ * 取 (siteKey, sourceName) 线路下的代表性样本（episode 最小、is_active、未删除的一行 source_url + videoId）
+ * 用于 row 7 POST test 端点同步快探。
+ */
+export async function selectRouteSampleSource(
+  db: Pool,
+  siteKey: string,
+  sourceName: string,
+): Promise<{ readonly videoId: string; readonly sourceUrl: string } | null> {
+  const result = await db.query<{ video_id: string; source_url: string }>(
+    `SELECT vs.video_id, vs.source_url
+       FROM video_sources vs
+       JOIN videos v ON v.id = vs.video_id
+      WHERE COALESCE(vs.source_site_key, v.site_key) = $1
+        AND vs.source_name = $2
+        AND vs.deleted_at IS NULL
+        AND vs.is_active = true
+      ORDER BY vs.episode_number ASC NULLS LAST
+      LIMIT 1`,
+    [siteKey, sourceName],
+  )
+  if (result.rows.length === 0) return null
+  return { videoId: result.rows[0].video_id, sourceUrl: result.rows[0].source_url }
+}
+
+/**
+ * 统计 (siteKey, sourceName) 线路下未删除 video_sources 行数（用于 reprobe queuedCount + 404 判定）
+ */
+export async function countRouteSources(
+  db: Pool,
+  siteKey: string,
+  sourceName: string,
+): Promise<number> {
+  const result = await db.query<{ count: string }>(
+    `SELECT COUNT(*) AS count
+       FROM video_sources vs
+       JOIN videos v ON v.id = vs.video_id
+      WHERE COALESCE(vs.source_site_key, v.site_key) = $1
+        AND vs.source_name = $2
+        AND vs.deleted_at IS NULL`,
+    [siteKey, sourceName],
+  )
+  return Number(result.rows[0]?.count ?? 0)
+}
+
+/**
+ * 软删除 (siteKey, sourceName) 线路下所有未删除的 video_sources 行；
+ * 返回被删行的 id 列表（供 audit beforeJsonb 引用）。
+ * ADR-105 软删除范式（deleted_at = NOW()）+ ADR-117 AMENDMENT 2 §SQL 设计。
+ */
+export async function softDeleteRouteBySite(
+  db: Pool,
+  siteKey: string,
+  sourceName: string,
+): Promise<readonly string[]> {
+  const result = await db.query<{ id: string }>(
+    `UPDATE video_sources vs
+        SET deleted_at = NOW(), updated_at = NOW()
+       FROM videos v
+      WHERE vs.video_id = v.id
+        AND COALESCE(vs.source_site_key, v.site_key) = $1
+        AND vs.source_name = $2
+        AND vs.deleted_at IS NULL
+      RETURNING vs.id`,
+    [siteKey, sourceName],
+  )
+  return result.rows.map((r) => r.id)
+}

@@ -81,6 +81,8 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   // CHG-SN-6-26-RETRO：reindex + runs 统一入口 audit 补齐
   'crawler.reindex',
   'crawler.run_create',
+  // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2：sources 域行级 3 mutations 合并 actionType
+  'sources.route_action',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',
@@ -91,6 +93,7 @@ export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'system',
   'home_module',
   'source_line_alias',
+  'source_route',  // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2
 ]
 
 // ── zod schema（ADR-118 §端点契约 + D-118-3） ────────────────────────

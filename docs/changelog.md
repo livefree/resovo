@@ -11393,3 +11393,77 @@ REDO-01-A contract §1.5 留 API 缺口：「线路数据按 siteKey 查询的 A
 - 下张可执行卡：**CHG-SN-7-REDO-01-E2**（0.35w 行级 3 mutations + ADR + audit + 前端按钮接入）OR **REDO-01-F**（0.2w 分类映射 collapsible / ADR-123 已通过）
 - REDO-01-E 完成后 DAG 图：C ✅ → D ✅ → E ✅ → {E2, F, G, H} 可并行；I 依赖 E2/F/G/H 全 ✅；J 依赖 I ✅
 - 累计已完成：A ✅ + B ✅ + C ✅ + D ✅ + E ✅ 共 ~1.55w / REDO-01 总 ~2.4w（含 E2 拆分后微调） — 剩余 ~0.85w
+
+---
+
+## [CHG-SN-7-REDO-01-E2] Crawler 行级 3 mutations + audit RETRO + 前端按钮接入
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环 / 实施
+- **子代理**：arch-reviewer (claude-opus-4-7) ADR-117 AMENDMENT 2 2026-05-19 起草 1 轮 PASS A（0 红线 / 3 黄线全部遵守 / 3 advisory）
+
+### 起源
+
+REDO-01-E 已落地 GET row 6 + CrawlerSiteExpand 6 列 sub-table + 3 actions disabled 占位（commit `6c5824b9`）。本卡 E2 完成行级 3 mutations 后端 + audit RETRO + 前端按钮接入。
+
+### 修改文件（13 个 / 2 新 + 11 改）
+
+**ADR（1 改）**：
+- 追加 `docs/decisions.md` ADR-117 AMENDMENT 2 2026-05-19（约 180 行 / 7 节 / 5 决策 U1-U5 / 4 维度自评 A）
+
+**后端核心（5 改）**：
+- `packages/types/src/admin-moderation.types.ts` actionType `sources.route_action` + targetKind `source_route` +1
+- `apps/api/src/services/AuditLogService.ts` ACTION_TYPES + TARGET_KINDS +1
+- `apps/api/src/db/queries/sources-matrix.ts` 加 `selectRouteSampleSource` / `countRouteSources` / `softDeleteRouteBySite` 3 query
+- `apps/api/src/services/SourcesMatrixService.ts` 加 `testRoute / reprobeRoute / deleteRoute` 3 方法 + `assertNotFrozen()` 私有 + 3 result interface + RouteActionParamsSchema zod
+- `apps/api/src/routes/admin/sources-matrix.ts`（125 → 210 行）加 row 7-9 3 端点 + `handleRouteActionError` 复用 helper
+
+**audit RETRO（2 改 + 1 新）**：
+- `tests/unit/api/audit-log-coverage.test.ts` REQUIRED_ACTION_TYPES + PAYLOAD_ASSERTION_REQUIRED +1
+- `tests/unit/api/audit-log-service-enums-set-equal.test.ts` EXPECTED_ACTION_TYPES + EXPECTED_TARGET_KINDS +1
+- 新建 `tests/unit/api/sources-routes-mutations-audit.test.ts`（10 case PASS / payload `expect.objectContaining` 内容断言 / freeze 守卫 / 404 边界 / truncated 边界）
+
+**前端（2 改）**：
+- `apps/server-next/src/lib/sources/api.ts` 加 `testRoute / reprobeRoute / deleteRoute` 3 前端 fn + 3 result interface
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerSiteExpand.tsx`：加 `currentRole?: 'admin' | 'moderator'` prop（默认 admin / Y1 守卫）+ 3 actions 从 disabled 占位 → onClick handlers + delete confirm + pending state + tooltip + describeApiError 4 码（STATE_CONFLICT/NOT_FOUND/FORBIDDEN/default）
+
+**测试（1 改）**：
+- `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx` 顶层 `vi.mock` 加 3 mutation mocks + describe 加 5 新 case（38-42：test 成功 / reprobe 成功 / delete confirm 通过 + 行移除 / delete confirm 拒绝 / reprobe STATE_CONFLICT 失败）
+
+### 关键决策（Opus U1-U5 + 主循环修正）
+
+1. **U1 路径 A**：`/admin/sources/routes/by-site/:siteKey/:sourceName[/test|/reprobe]` + DELETE 同前缀（与 row 6 GET 命名空间对称 / 复合键完整 URL；拒 B verb-in-body / 拒 C composite-id 编码）
+2. **U2 软删除 B**：`UPDATE deleted_at=NOW()` 可回滚 + audit 回放（U2 红线 R2）；与 ADR-105 软删除范式延续 / row 3 + row 6 读路径已过滤 deleted_at IS NULL
+3. **U3 合并 actionType A**：`sources.route_action` + afterJsonb.action ∈ {'test','reprobe','delete'}（ADR-121 D-121-5 / 4 文件 RETRO；targetKind 新增 `source_route` 区别 `source_line_alias` 元数据 vs 行操作目标）
+4. **U4 测试播放 C**：同步快探 HEAD 3s 超时 + 异步占位 jobId（运营即时反馈 + Y3 上限 / PRE-PROBE-WORKER 后续卡对接 source-health 真实 BullMQ）
+5. **U5 moderator UI guard B**：后端 admin only（与 row 5 alias upsert 100% 对齐）+ 前端 `currentRole !== 'admin'` 隐藏 affordance（Y1 / 避免 403 toast 体验破碎）
+6. **错误码修正（advisory A3）**：Opus 初稿 freeze 守卫用 SERVICE_UNAVAILABLE 503，但 ADR-110 14 码无 503 → 修正为 STATE_CONFLICT 409（与 videos/staging/video-merges 既有 freeze/state guard 同模式）
+
+### 不在范围（保留至后续）
+
+- probeJobId 真实接对 source-health worker（PRE-PROBE-WORKER）
+- 软删除回滚端点 `POST .../restore`（PRE-ROUTE-RESTORE / afterJsonb.action='restore' 扩展 4 文件 RETRO 复用）
+- 批量删除（PRE-ROUTE-BATCH-DELETE）
+
+### 质量门禁
+
+- typecheck ✅ 全 7 workspace
+- lint ✅ 0 error / 0 warning
+- verify:file-size-budget ✅ 0 新违规
+- verify:endpoint-adr ✅ **156 admin 路由对齐 27 ADR 端点**（+3 端点）
+- 全量 unit test：4078 → **4095 PASS / 0 failed**（+17 净增：+10 mutation audit + +5 frontend + +2 audit it.each）
+
+### 关键自省
+
+1. **ADR 起草跨 Opus subagent / 主循环修正必要**：Opus 初稿误用 SERVICE_UNAVAILABLE 503 但 ADR-110 14 码无 503；主循环复审时拦截 + 修正为 STATE_CONFLICT 409（与现有 freeze guard 同模式）。ADR-110 14 码硬约束需主循环对照 ERRORS 字典逐项校验 — 不能完全信任 Opus 摸底结论
+2. **`vi.mock` 必须 module top-level**：本卡内层 describe 用 `vi.doMock` 不生效（动态 mock 路径在测试运行时不会重新解析模块）；正确做法是顶层 `vi.mock` 一次性注册全部 5 个 sources/api fn（list/upsert/test/reprobe/delete），各 mockFn 在 `beforeEach` 单独 reset
+3. **ApiClientError instanceof 跨 mock 边界**：测试内 `new MockApiClientError(...)` 无法被 `describeApiError` 内 `instanceof ApiClientError` 识别；正确做法是 `import { ApiClientError } from '../path'` 直接消费 mock 模块导出的 class
+4. **audit-log-coverage 守卫 `expect.objectContaining` 启发式**：必须用 `expect(...).toHaveBeenCalledWith(expect.objectContaining({ actionType: 'xxx', ... }))` 形式，否则 grep 守卫漏报 → 测试失败；本卡 1 处修订 `expect(payload.actionType).toBe(...)` → `expect.objectContaining` 形式
+5. **AMENDMENT 范式延续节省 0.25w**：本 AMENDMENT 2 与 AMENDMENT 1 双次验证 plan §4.5 节省机制；E2 实际工时 ~0.3w（vs 新 ADR-124 ~0.55w）
+
+### 后续触发
+
+- 下张可执行卡：**REDO-01-F**（0.2w 分类映射 collapsible / ADR-123 已通过）
+- DAG: C ✅ → D ✅ → E ✅ → E2 ✅ → {F, G, H} 可并行；I 依赖 F/G/H 全 ✅；J 依赖 I ✅
+- 累计已完成：A ✅ + B ✅ + C ✅ + D ✅ + E ✅ + E2 ✅ 共 ~1.85w / REDO-01 总 ~2.4w — 剩余 ~0.55w（F 0.2 + G 0.1 + H 0.15 + I 0.05 + J 0.2 = 0.7w 但 G/I 工时偏小）
+
