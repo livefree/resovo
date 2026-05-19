@@ -8,7 +8,56 @@
 
 <!-- ✅ PRE-04 全 16 子卡闭环（2026-05-18，连续推进 #2–#16 用户授权）；总览：5 ✅ A 级（dashboard/moderation/videos/sources/analytics）+ 8 ⚠️ S 级（merge/subtitles/home/image-health/users/audit/login/dashboard MISC）+ 4 ❌（staging/submissions/crawler/settings）+ 16 MISC + 4 REDO（01/02/03/04）+ SHARED-03 取消；详见 docs/M-SN-7-design-realign-audit-FULL.md；下一步等用户拍板 PRE-04 收尾 + 启动 SHARED-01/02 milestone -->
 
-### CHG-SN-7-PRE-01 文件大小守卫 ✅ 已闭环（2026-05-18）
+### CHG-SN-7-PRE-02 ADR-121 R-MID-1 RETRO 协议正式化 ✅ 已闭环（2026-05-18）
+
+**完成时间**：2026-05-18
+**实施**：`docs/decisions.md` 追加 ADR-121 段（约 240 行）
+**评审**：arch-reviewer Opus 1 轮 **A- CONDITIONAL** → 红线 1（6 文件 → 7 文件，漏 audit-log-service-enums-set-equal）+ 黄线 3（D-121-5 与 R7 MUST-8 关系 / 替代方案缺 D / 自评对称性 A → A-）全部修订后 PASS
+**重大发现**：原起草"6 文件固定框架"实际遗漏 `tests/unit/api/audit-log-service-enums-set-equal.test.ts`（service 层 enum 一致性独立守卫），5 先例均触及；评审拦截修订为 **7 文件框架**
+**质量门禁**：typecheck ✅ / file-size-budget ✅ 0 新违规 / **4018 unit PASS 保持**
+**执行模型**：claude-opus-4-7（主循环起草）+ arch-reviewer (claude-opus-4-7) 1 轮评审
+
+<!-- 下张：CHG-SN-7-PRE-05 ADR-123 分类映射 schema 起草（0.1w）— REDO-01-F 依赖 -->
+
+
+**SEQ**：M-SN-7 / PRE 阶段第 3 张（M-SN-6 关闭挂账）
+
+**问题理解**：M-SN-6 期间产生 12 次 R-MID-1 RETRO 实践（5 卡先例 CHG-SN-6-14/16-A/20-A/25-RETRO/26-RETRO；共补齐 crawler 域 v1 写端点 audit 13/13），但范式无 ADR 规范背书。下游若有人偏离范式，无规范可援引拒绝。
+
+**根因判断**：R-MID-1（reorder before=after）首次发现于 CHG-SN-5-06 audit；之后 12 次实践全部沿用同框架（4 真源同步 + 6 文件固定 + PATCH ≤ 5 豁免依据），但范式未沉淀为 ADR 文档。
+
+**方案**：撰写 `docs/decisions.md` 追加 `ADR-121: R-MID-1 audit RETRO 协议正式化`，9 段结构：
+1. Context（R-MID-1 起源 + 12 次实践累积）
+2. Decision（4 真源同步范式 + 6 文件固定框架 + PATCH ≤ 5 豁免依据）
+3. Status（Accepted）
+4. Consequences（正面 + 负面）
+5. Alternatives Considered
+6. Compliance & Verification（如何核验范式合规）
+7. References（5 先例 changelog 链接 + ADR-100 / ADR-109）
+8. 4 维度自评（命名 / 对称性 / 状态职责 / 扩展性）
+9. spawn arch-reviewer Opus 评审起草质量
+
+**4 真源同步范式**（从 5 先例提炼）：
+- (1) `packages/types/src/admin-moderation.types.ts` union 新增分支
+- (2) `apps/api/src/services/AuditLogService.ts` ACTION_TYPES 常量数组追加
+- (3) `tests/unit/api/audit-log-coverage.test.ts` EXPECTED set-equal 测试同步
+- (4) `tests/unit/api/audit-log-coverage.test.ts` REQUIRED / PAYLOAD_ASSERTION_REQUIRED 数组同步
+
+**6 文件固定框架**（PATCH ≤ 5 豁免依据）：
+1-4 上述 4 真源 + 5 端点 route auditSvc.write + 6 端点 payload 内容断言新测试
+
+**涉及文件**：
+- 修改：`docs/decisions.md`（追加 ADR-121 段）
+
+**严格约束**：
+- ❌ 不改业务代码 / 测试代码
+- ❌ 不动 5 先例 changelog（保留作 audit trail）
+- ADR 起草必经 spawn arch-reviewer Opus 评审（CLAUDE.md §模型路由强制项）
+
+**执行模型**：claude-opus-4-7 主循环起草 + spawn arch-reviewer (claude-opus-4-7) 评审
+
+**估时**：0.15w
+
 
 **完成时间**：2026-05-18
 **实施**：`scripts/verify-file-size-budget.mjs`（210 行）+ package.json 集成 + preflight.sh 5e2/6 步骤

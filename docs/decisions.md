@@ -6637,3 +6637,233 @@ plan §6 M-SN-2 方案 A2 明确「游标 + 虚拟滚动延迟到 M-SN-6 首次 
 - **扩展性**：A — 7 触发判据 + ADR-120a 重启路径 + 不在范围明列 6 类防扩张；对比表第 12 维度显式标注未来二选一前置倾向（B 优）但不构成决策
 
 **综合**：A（建议 PASS 一轮，无 CONDITIONAL）
+
+---
+
+## ADR-121：R-MID-1 audit RETRO 协议正式化（4 真源同步 + 6 文件固定框架）
+
+- **日期**：2026-05-18
+- **状态**：Accepted
+- **决策者**：主循环 claude-opus-4-7 / arch-reviewer (claude-opus-4-7) — 评审待补
+- **关联**：ADR-100 §4.5 R7 MUST-8（admin route ADR 前置）/ ADR-109（M-SN-4 admin_audit_log schema 前置）/ ADR-104/105/115/117/118（5 个 admin API ADR §audit log 协议表）/ CHG-SN-5-06-PATCH（R-MID-1 起源） / CHG-SN-6-14/16-A/20-A/25-RETRO/26-RETRO（5 个 RETRO 先例）
+- **对应交付**：CHG-SN-7-PRE-02（本卡）
+
+### 议题
+
+`R-MID-1` 红线起源于 CHG-SN-5-06（M-SN-5 主体 6/14 中期审计，arch-reviewer Opus 评级 A− CONDITIONAL）：`HomeModulesService.reorder` 的 `beforeJsonb` 从入参 newOrdering 投影而非读 DB 取 oldOrdering，导致 audit log `beforeJsonb ≡ afterJsonb`，违反 ADR-104 §audit log 协议表硬契约。
+
+修复路径在 CHG-SN-5-06-PATCH 落地后，被发现是**系统性盲点**：测试盲区仅断言 actionType 未断言 payload 内容，让任何后续 admin route 写 audit 都可能重复此偏离。M-SN-6 期间随 crawler 域 v1 写端点 audit 补齐工作，**12 次 RETRO 实践**沉淀出固定范式：
+
+- **CHG-SN-6-14**：CrawlerSite v1 4 写端点（R-MID-1 第 8 次系统化）
+- **CHG-SN-6-16-A**：CrawlerRun cancel/pause/resume（第 9 次）
+- **CHG-SN-6-20-A**：crawler.freeze（第 10 次）
+- **CHG-SN-6-25-RETRO**：auto-config + stop-all（第 11 次）
+- **CHG-SN-6-26-RETRO**：reindex + runs 统一入口（第 12 次）
+
+5 次先例全部采用同一框架（4 真源同步 + 6 文件固定 + PATCH ≤ 5 上限豁免），但**范式未沉淀为 ADR 文档**——下游若有人偏离范式，无规范可援引拒绝。
+
+### 决策
+
+正式化 R-MID-1 audit RETRO 协议为本 ADR-121。所有 admin 写端点（含运维 / 灾备 / 配置类）audit log 实施必须遵守以下**两段硬契约**：
+
+1. **4 真源同步范式**（types / service / coverage test set-equal / coverage test REQUIRED）
+2. **6 文件固定框架**（4 真源 + 1 端点 route + 1 端点 payload 内容断言新测试），构成 PATCH ≤ 5 上限的**唯一已认证豁免依据**
+
+未遵守 4 真源同步范式的 admin route audit 实施直接 FAIL（CI 阻断方式见 §合规与核验段）。
+
+### 决策要点
+
+**D-121-1（4 真源同步范式 = 类型 + 常量 + 双 set-equal 测试 + 内容断言）**：每新增一个 audit actionType 必须同步以下 4 真源相同方向修改（其中真源 (3) 跨 2 物理文件）：
+
+| 真源 | 文件（物理） | 改动语义 |
+|---|---|---|
+| **(1) Type union** | `packages/types/src/admin-moderation.types.ts` | `AdminAuditActionType` union 追加新分支，注释绑定 HTTP 端点 |
+| **(2) Service constant** | `apps/api/src/services/AuditLogService.ts` | `ACTION_TYPES` 数组追加同名字符串字面量；运行时使用此数组作 white-list |
+| **(3a) Service enums set-equal** | `tests/unit/api/audit-log-service-enums-set-equal.test.ts` | `EXPECTED_ACTION_TYPES` Set 同步；断言 `ACTION_TYPES ≡ EXPECTED_ACTION_TYPES`（service 层 enum 一致性视角） |
+| **(3b) Coverage set-equal** | `tests/unit/api/audit-log-coverage.test.ts` | 同 (3a) 镜像断言，coverage 视角；二者守卫层级不同（service vs coverage），均必须同步 |
+| **(4) Coverage REQUIRED + PAYLOAD it.each** | `tests/unit/api/audit-log-coverage.test.ts` | `REQUIRED_ACTION_TYPES` / `PAYLOAD_ASSERTION_REQUIRED` 数组扩项；`it.each` 强制每项端点必须有对应单测 + payload 内容断言 |
+
+**D-121-2（7 文件固定框架 = 4 真源 + route + audit-test + changelog）**：完整 RETRO 卡的最小且充分文件集（arch-reviewer Opus 评审修订 2026-05-18，原 6 文件遗漏 `audit-log-service-enums-set-equal.test.ts`）：
+
+| # | 文件 | 角色 |
+|---|---|---|
+| 1 | `packages/types/src/admin-moderation.types.ts` | (1) union |
+| 2 | `apps/api/src/services/AuditLogService.ts` | (2) ACTION_TYPES |
+| 3 | `tests/unit/api/audit-log-service-enums-set-equal.test.ts` | (3a) Service enums set-equal（service 层 enum 一致性视角）|
+| 4 | `tests/unit/api/audit-log-coverage.test.ts` | (3b) Coverage set-equal 镜像 + (4) REQUIRED / PAYLOAD it.each |
+| 5 | `apps/api/src/routes/admin/<domain>.ts` | 端点内 `auditSvc.write({...})` 调用 + before/after 取数 |
+| 6 | `tests/unit/api/<domain>-<action>-audit.test.ts` | payload 内容断言新测试文件（覆盖 happy path + 422 校验失败不写 audit + 边缘条件分支） |
+| 7 | `docs/changelog.md` | 本卡完成备注（含 R-MID-1 第 N 次系统化 + 测试 PASS 数累计） |
+
+注：真源 (3) 在物理上分布在 2 个测试文件（(3a) + (3b)）。(3a) 视角是 service 层 enum 一致性守卫，(3b) 视角是 coverage 维度集合一致性守卫；两文件镜像但守卫层级不同，**均必须同步**（5 先例 CHG-SN-6-14/16-A/20-A/25-RETRO/26-RETRO 全部触及该 2 测试文件）。7 文件中第 4 文件承担 (3b)+(4) 两子真源。
+
+**D-121-3（PATCH ≤ 5 上限豁免依据）**：CLAUDE.md §绝对禁止「PATCH 卡范围 > 5 项未拆 -A/-B 子卡」对 RETRO 7 文件框架不适用——固定 7 文件无法逻辑拆分（types/service/(3a)/(3b) 必须原子提交，否则两个 set-equal 测试任一失败；route/audit-test/changelog 必须随同提交否则 REQUIRED it.each 失败 / 完成备注缺失）。本 ADR 是 RETRO 7 文件**已认证豁免依据**（仅约束 RETRO 框架，不阻塞独立 ADR 起新豁免；新增其他 N 文件框架豁免必须独立起 ADR）。
+
+**D-121-4（auditSvc.write payload 协议要求）**：
+
+- `actionType`：必须匹配 (2) ACTION_TYPES 字面量
+- `targetKind`：受 migration 052 CHECK 约束（`'video' | 'source' | 'site' | 'home_module' | 'merge_group' | 'system'`）；运维 / 灾备 / 配置类 actionType 复用 `'system'` 避免 052 CHECK 扩展
+- `targetId`：业务实体 ID（如 site key / run UUID / setting key 字面量）
+- `beforeJsonb`：**必须从 DB 实际读取**（不得从入参投影），即使是 `null` / 不存在也要 explicit；**这是 R-MID-1 的根因修复点**
+- `afterJsonb`：操作完成后再次从 DB 读 / 或服务返回值派生
+- `actorId / actorRole`：来自 auth context（admin / moderator / editor）
+- `ip / userAgent`：来自 request header
+- 422 / 403 / 404 等校验失败路径**必须不写 audit**（覆盖率测试断言 negative case）
+
+**D-121-5（设计稿对齐重做的延伸要求 — 与 ADR-100 R7 MUST-8 增量补充关系）**：M-SN-7 设计稿对齐重做（CHG-SN-7-REDO-01/02/03/04）涉及任何新增 admin 写端点（如 `POST /admin/crawler/sites/:key/run` / `POST /admin/crawler/run-all` 等）：
+
+- ADR-100 R7 MUST-8 + `npm run verify:endpoint-adr` 已约束"端点必须先起独立 ADR 文档化契约"
+- **本 D-121-5 是 R7 MUST-8 的增量补充（仅 audit 部分）**：实施卡内必须**同步落 4 真源 + 7 文件框架**，不得"先实施 route 再补 audit RETRO"
+
+D-121-5 不替代 R7 MUST-8，是其在 audit 实施层面的细化。
+
+**D-121-6（与 ADR-100 / ADR-109 关系）**：
+
+- ADR-100 §4.5 R7 MUST-8 + `verify:endpoint-adr` 守门 admin route 必须有 ADR 文档化的端点契约
+- ADR-109 落地 admin_audit_log schema（M-SN-2 欠账）并给出 §audit log 协议表样板
+- 本 ADR-121 在 ADR-109 协议表样板基础上**正式化执行框架**——即「实施时必须如何同步 4 真源 + 走 6 文件框架」
+
+ADR-121 与 ADR-100 / 109 不冲突且向后兼容；ADR-104/105/115/117/118 5 个 admin API ADR 的 §audit log 协议表已是本 ADR 范式的早期实例。
+
+### 4 真源同步范式细节
+
+#### 真源 (1) Type union
+
+```ts
+// packages/types/src/admin-moderation.types.ts
+export type AdminAuditActionType =
+  | 'video.review_approve'
+  | 'video.review_reject'
+  // ... existing 28 actionTypes
+  | 'crawler.freeze'              // POST /admin/crawler/freeze
+  | 'crawler.auto_config_update'  // POST /admin/crawler/auto-config
+  | 'crawler.stop_all'            // POST /admin/crawler/stop-all
+  | 'crawler.reindex'             // POST /admin/crawler/reindex
+  | 'crawler.run_create'          // POST /admin/crawler/runs
+```
+
+#### 真源 (2) Service constant
+
+```ts
+// apps/api/src/services/AuditLogService.ts
+export const ACTION_TYPES: readonly AdminAuditActionType[] = [
+  'video.review_approve',
+  // ... 与 union 严格同序
+  'crawler.freeze',
+  'crawler.auto_config_update',
+  'crawler.stop_all',
+  'crawler.reindex',
+  'crawler.run_create',
+] as const
+```
+
+#### 真源 (3) Coverage set-equal test
+
+```ts
+// tests/unit/api/audit-log-coverage.test.ts
+const EXPECTED = new Set<AdminAuditActionType>([...]) // 与 union 完全一致
+
+it('AdminAuditActionType union ≡ ACTION_TYPES const ≡ EXPECTED set', () => {
+  expect(new Set(ACTION_TYPES)).toEqual(EXPECTED)
+  // union 通过 TS exhaustive check 在编译期断言
+})
+```
+
+#### 真源 (4) Coverage REQUIRED + PAYLOAD test
+
+```ts
+const REQUIRED_ACTION_TYPES: readonly AdminAuditActionType[] = [...] // 已实施端点全集
+const PAYLOAD_ASSERTION_REQUIRED: readonly AdminAuditActionType[] = [...] // 含 R-MID-1 payload 内容断言子集
+
+it.each(REQUIRED_ACTION_TYPES)('%s has happy path audit test', async (action) => {
+  // 自动断言每个 action 都有对应单测
+})
+
+it.each(PAYLOAD_ASSERTION_REQUIRED)('%s has payload content assertion', async (action) => {
+  // 断言 beforeJsonb !== afterJsonb（R-MID-1 守卫）
+  // 断言 beforeJsonb / afterJsonb 关键字段匹配 ADR 协议表
+})
+```
+
+### 合规与核验
+
+- **静态扫描**（编译期）：TS exhaustive check 保证 union 与 service 消费方匹配
+- **set-equal 测试**（CI 单测）：真源 (3) `EXPECTED ≡ ACTION_TYPES ≡ union` 三者精确相等
+- **REQUIRED it.each**（CI 单测）：真源 (4) 强制每端点必有单测
+- **PAYLOAD it.each**（CI 单测）：真源 (4) 强制 R-MID-1 payload 内容断言
+- **`npm run verify:endpoint-adr`**：admin route 新增必有 ADR 文档化
+- **arch-reviewer Opus milestone 审计**：每 milestone 关闭强制核验 R-MID-1 系统化次数 + payload assertion 覆盖（M-SN-5 6/14 中期审计首次拦截 R-MID-1 / M-SN-6 12 次累计验证）
+
+### 后果
+
+**正面**：
+1. **规范化**：12 次 RETRO 实践沉淀为可援引规范；下游偏离范式可直接拒绝
+2. **守卫底座**：4 真源同步 + 测试断言三层守卫，杜绝 R-MID-1 再次发生
+3. **PATCH ≤ 5 豁免清晰**：6 文件框架的豁免依据正式化，避免"看起来超限但实际框架不可压缩"的边界判定争议
+4. **跨 milestone 一致性**：M-SN-7 / 后续 milestone 新增 admin route audit 直接套用，零设计自由度
+5. **审计追溯链清晰**：ADR-121 + 5 先例 changelog 链 + audit-log-coverage 测试链三段验收闭环
+6. **零代码改动**：本 ADR 仅形式化已有实践；不引入新依赖、不改 schema、不动测试数
+
+**负面**：
+1. **下游灵活性受限**：未来若 audit log 设计演进（如分布式 audit / event sourcing 改造），ADR-121 范式需同步重做或起 ADR-121a
+2. **6 文件固定框架不适用纯只读端点**：本 ADR 适用范围仅 admin **写**端点；只读端点 audit（如登录、查询日志）不在范围（plan §未来扩展）
+3. **PATCH ≤ 5 豁免依据**强绑定 6 文件框架的物理结构；若未来 audit-log-coverage.test.ts 因测试基础设施重构拆分为多文件，需起 ADR-121 修订
+4. **跨域 actionType 命名约束**：D-121-4 复用 `'system'` targetKind 避免 052 CHECK 扩展；若未来引入更多运维域 actionType（如分布式调度 / 跨服务事务），可能需 052 CHECK 扩展或起 053 migration
+
+### 替代方案对比
+
+| 维度 | 方案 A（采纳：本 ADR-121 正式化）| 方案 B（保持现状不起 ADR）| 方案 C（重构 audit log 为 event sourcing）| 方案 D（CI 脚本守卫不起 ADR） |
+|---|---|---|---|---|
+| **规范效力** | 强：可援引拒绝偏离 | 弱：仅靠 changelog 链 + 编译期检查 | 强但激进：重写底座 | 中：脚本可绕但报警可追溯 |
+| **实施成本** | 0（仅 ADR 起草）| 0 | 高（schema 改造 + 全 audit 端点重写）| 低（~0.1w 写 verify-audit-retro.mjs 守卫）|
+| **下游约束** | 7 文件固定 + 测试断言 | 无 | 完全不同的协议 | 7 文件固定（脚本核验）|
+| **R-MID-1 守卫** | 三层（type + test + ADR）| 二层（type + test）| 协议层面避免（不存在 before/after 模型）| 三层（type + test + 脚本 CI）|
+| **PATCH ≤ 5 豁免** | 范式认证 | 每次需协商 | 不适用 | 脚本输出可作豁免依据 |
+| **可逆性** | 高：废除 ADR 即可 | N/A | 极低 | 高：删脚本即可 |
+| **演进路径** | ADR-121a / 121b | 持续 ad-hoc | 推翻重做 | 脚本升级 + 可演进为 ADR |
+| **适用范围** | admin 写端点 audit | 同 A | 全量 audit log | admin 写端点 audit |
+| **跨 milestone 一致性** | 强 | 弱 | 强但成本高 | 强（脚本 CI 阻断） |
+| **arch-reviewer 友好性** | 高（明确 checklist）| 中（需逐卡 grep 范式）| 高（协议自然约束）| 高（脚本报告可对照） |
+| **未来争议空间** | 低（ADR 显式裁决） | 高（每次新端点重新讨论） | 低（协议层面消除） | 中（脚本规则需独立维护） |
+
+方案 D 否定原因：CI 脚本无法承载 ADR 含的"为什么"语义（如 D-121-3 PATCH ≤ 5 豁免依据 / D-121-5 与 R7 MUST-8 关系 / D-121-4 targetKind 复用 system 策略）；仅靠脚本守卫"如何"无法替代规范层"为什么"。但方案 D 与方案 A **不互斥**——未来可在 ADR-121 基础上叠加 `verify:audit-retro.mjs` CI 守卫脚本作为机械补强（类似 PRE-01 守卫之于 CLAUDE.md §第 11 条）。
+
+### 未来"重新评估"触发条件
+
+1. **audit log schema 重大改造**（如引入分布式追踪 / event sourcing / 跨服务 audit aggregation）→ 重启 ADR-121a
+2. **migration 052 CHECK 扩展**（targetKind 新增枚举）→ D-121-4 复用 'system' 策略需重评
+3. **单测基础设施重构**（audit-log-coverage.test.ts 拆为多文件 / 接入 contract testing 框架）→ 6 文件固定框架需重评
+4. **跨 app audit log**（apps/api 之外的服务也写 audit）→ 4 真源同步范式需扩展定义
+5. **arch-reviewer milestone 审计连续 3 次 R-MID-1 复现** → 范式有效性受质疑，起 ADR-121a / 重启决策
+
+### 文件范围（本 ADR 起草卡）
+
+- `docs/decisions.md`：追加本 ADR-121 段
+- `docs/changelog.md`：CHG-SN-7-PRE-02 条目（含 ADR-121 闭环）
+
+### 关联
+
+- **ADR-100** §4.5 R7 MUST-8（admin route ADR 前置）
+- **ADR-109**（M-SN-4 admin_audit_log schema 前置）
+- **ADR-104 / 105 / 115 / 117 / 118**（5 个 admin API ADR §audit log 协议表，本 ADR 是其执行框架正式化）
+- **CHG-SN-5-06-PATCH**（R-MID-1 起源 / 5 卡先例 0）
+- **CHG-SN-6-14 / 16-A / 20-A / 25-RETRO / 26-RETRO**（5 RETRO 先例，构成本 ADR 范式取证基础）
+- **CHG-SN-7-PRE-02**（本 ADR 起草卡）
+
+### 4 维度自评（arch-reviewer Opus 评审修订 2026-05-18）
+
+- **命名**：A — `R-MID-1 audit RETRO 协议正式化` 准确（R-MID-1 起源 + RETRO 范式 + 正式化语义）；编号 121 接续 120-NEGATED 系列
+- **对称性**：**A-**（评审降级）— 9 段结构对齐 ADR-120-NEGATED 但未含"不在范围"段；4 真源对齐 7 文件框架；PATCH ≤ 5 豁免对齐"7 文件固定不可压缩"硬约束；正面 6 / 负面 4 后果对称；原起草 6 文件偏差经评审修订为 7 文件
+- **状态职责**：A — Accepted 状态明确；ADR-100 §4.5 R7 / ADR-109 / 5 实施 ADR 关系清晰；5 触发重评条件多轴覆盖（schema / migration / 测试基建 / 跨 app / 复现频率）
+- **扩展性**：A — D-121-5 显式纳入 M-SN-7 设计稿对齐重做的新增 admin 端点并明确为 R7 MUST-8 增量补充关系；D-121-6 显式说明与 ADR-100/109 不冲突向后兼容；4 替代方案 11 维度对比（含评审建议的方案 D CI 脚本守卫）；ADR-121a 重启路径占位
+
+**综合**：**A-**（arch-reviewer Opus 2026-05-18 评审：A- CONDITIONAL → 红线 + 3 黄线全部修订后 PASS）
+
+### Opus 评审修订记录（2026-05-18）
+
+arch-reviewer Opus 评审输出（A- CONDITIONAL）：
+
+- **红线 1 已修订**：D-121-1 真源 (3) 拆为 (3a)+(3b) 双物理文件；D-121-2 6 文件 → 7 文件；D-121-3 豁免依据同步修订
+- **黄线 1 已修订**：D-121-5 标题加"与 ADR-100 R7 MUST-8 增量补充关系"+ 段尾明确"不替代 R7 MUST-8"
+- **黄线 2 已修订**：替代方案增加方案 D（CI 脚本守卫不起 ADR）+ 与方案 A 不互斥的兜底叠加路径
+- **黄线 3 已修订**：4 维度自评对称性 A → A-；综合自评 A → A-
