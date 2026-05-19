@@ -81,7 +81,7 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
     title: '首页运营',
     items: [
       { label: '首页编辑', href: '/admin/home', icon: <Megaphone /> },
-      { label: '用户投稿', href: '/admin/submissions', icon: <Flag />, count: 12, badge: 'info' },
+      { label: '用户投稿', href: '/admin/user-submissions', icon: <Flag />, count: 12, badge: 'info' },
     ],
   },
   {

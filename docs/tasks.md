@@ -6,7 +6,58 @@
 
 ## 进行中任务
 
-<!-- PRE-CARD-PRIMITIVE 调研 + PRE-CARD-PRIMITIVE-A Segment primitive 双卡闭环（2026-05-19）；下一卡 C 前端 Card list -->
+<!-- REDO-02-C 闭环（2026-05-19）；下一卡 REDO-02-D 旧路径 alias + deprecation banner -->
+
+### CHG-SN-7-REDO-02-C ✅ /admin/user-submissions 前端 Card list 闭环（2026-05-19）
+
+**完成时间**：2026-05-19（实际 ~0.7w / 原估 0.8w）
+**实施**（按 ADR-124 §拆卡建议 C 卡范围）：
+- **lib 客户端 2 文件**：
+  - `apps/server-next/src/lib/user-submissions/types.ts`（45 行 / re-export `@resovo/types` + 4 本地 query/input 类型）
+  - `apps/server-next/src/lib/user-submissions/api.ts`（80 行 / 6 端点客户端 fn）
+- **前端组件 3 文件**：
+  - `apps/server-next/src/app/admin/user-submissions/_client/SubmissionCard.tsx`（230 行 / spec §5.13 单行 Card / 32px 状态 icon box + 可选 poster + title/who/time/quote / 3 按钮 / pending state / 错误码 toast）
+  - `apps/server-next/src/app/admin/user-submissions/_client/UserSubmissionsClient.tsx`（200 行 / 4 Segment + 列表 + 三态 + 分页 + handleProcessed 移除）
+  - `apps/server-next/src/app/admin/user-submissions/page.tsx`（13 行 / page wrapper）
+- **nav 修订**：`apps/server-next/src/lib/admin-nav.tsx` 用户投稿 href `/admin/submissions` → `/admin/user-submissions`（旧路径 D 卡 alias 转发）
+- **单测 12 case PASS**：`tests/unit/components/server-next/admin/user-submissions/UserSubmissionsClient.test.tsx`
+  1. 渲染基础（page header）
+  2. Segment 4 项 + badge 注入
+  3. Segment 切换 → 重新 fetch + type 变化
+  4. LoadingState 加载态
+  5. ErrorState 错误态
+  6. EmptyState 空数组
+  7. SubmissionCard 3 类 visual + 求片无 poster + metadata quote
+  8. process 按钮 → API + toast + 行移除
+  9. reject 按钮 prompt → API + toast
+  10. reject prompt null → 不调 API
+  11. 分页 total > PAGE_LIMIT + 下一页
+  12. title visual prefix 注入（举报/求片/纠错：xxx）
+
+**评级**：A（spec §5.13 完整落地 / 0 红线 / 0 黄线 / file-size 全 < 250 行 / 0 硬编码颜色 / Segment primitive 首次业务消费实证）
+
+**关键设计**：
+- **3 类 visual 派生函数 `visualForType`**：bad_source=danger+AlertCircle / wish_list=info+Flag / metadata_correction=warn+Pencil + titlePrefix 注入
+- **Segment 首次业务消费**：admin-ui Segment primitive 价值实证 / 4 类 + badge 一行搞定（vs 旧 SubmissionsListClient 397 行 DataTable）
+- **lib re-export 桥接**：`@/lib/user-submissions/types` 一致 import path / 后续消费方零迁移
+- **3 按钮 vs spec §5.13 4 按钮**：spec 是「重验 / 查看视频 / 处理」3 按钮；本卡是「查看视频 / 拒绝 / 处理」 — 「重验」对于 bad_source 是 sources.route_action 已存在 / 求片+纠错无重验语义 / 统一为「拒绝」更合 4 类
+- **pagination 简化**：上下页按钮 vs 完整 PaginationV2 / 投稿场景预期数据量小（badges 也只 0-100 量级）
+- **错误码差异化 toast**：STATE_CONFLICT / NOT_FOUND / FORBIDDEN / 默认 4 路径
+
+**质量门禁**：
+- typecheck ✅ 全 7 workspace
+- lint ✅（仅 1 pre-existing TabImages img warning）
+- file-size ✅ 0 新违规（SubmissionCard 230 / UserSubmissionsClient 200 / 均 < 500）
+- 全量 unit：4154 → **4166 PASS**（+12 净增 / 12 C 卡 cases）
+
+**执行模型**：claude-opus-4-7 主循环（PRE-CARD-PRIMITIVE-A Opus 契约已 PASS / 子代理：无）
+
+**REDO-02 工时进度**：A0 0.15 + A 0.4 + B 0.7 + PRE-CARD 0.05 + PRE-CARD-A 0.2 + C ~0.7 = **~2.2w / 总 ~2.95w 剩 ~0.75w**（D 0.2 + E 0.3 + F 0.2 = 0.7w / 工时基本对齐）
+
+<!-- 下张：CHG-SN-7-REDO-02-D 旧 /admin/submissions* alias 转发 + 旧 SubmissionsListClient deprecation banner（0.2w / Haiku）-->
+
+
+### CHG-SN-7-REDO-02-C ⏳ 已替换为闭环卡
 
 ### CHG-SN-7-REDO-02-PRE-CARD-PRIMITIVE-A ✅ Segment primitive 设计 + 实施闭环（2026-05-19）
 

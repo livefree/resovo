@@ -12087,3 +12087,90 @@ REDO-02-B 完成（commit `b2763f30`）后启动 C 卡前置调研。原估 PRE-
 - 下张可执行卡：**CHG-SN-7-REDO-02-C** 前端 `/admin/user-submissions` 新页面（0.8w / opus-4-7 / 消费 Segment + AdminCard + 内联 QuoteBlock）
 - AD1 advisory `99+` 自动格式化留消费方（C 卡内可决策是否做或起 MISC formatBadgeCount util）
 - 累计已完成：A0 ✅ + A ✅ + B ✅ + PRE-CARD ✅ + PRE-CARD-A ✅ 共 **~1.5w / REDO-02 总 ~2.95w — 剩余 ~1.45w**（C+D+E+F）
+
+---
+
+## [CHG-SN-7-REDO-02-C] /admin/user-submissions Card list 主视图（spec §5.13 完整落地）
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环（消费 PRE-CARD-PRIMITIVE-A Opus 契约 / 子代理：无）
+
+### 起源
+
+REDO-02-PRE-CARD-PRIMITIVE-A Segment primitive 落地后启动 C 卡。按 ADR-124 §端点契约 + spec §5.13 + screens-3.jsx:415-454 实施新页面 `/admin/user-submissions` Card list 形态。
+
+### 修改文件（5 新 + 1 改）
+
+**新建**：
+1. `apps/server-next/src/lib/user-submissions/types.ts`（45 行）— re-export `@resovo/types` + 4 本地 query/input 类型
+2. `apps/server-next/src/lib/user-submissions/api.ts`（80 行）— 6 端点客户端 fn（list / detail / process / reject / batch-process / batch-reject）
+3. `apps/server-next/src/app/admin/user-submissions/_client/SubmissionCard.tsx`（230 行）
+   - spec §5.13 单行 Card 形态完整落地
+   - 32px 状态 icon box（3 类 visual：bad_source=danger+AlertCircle / wish_list=info+Flag / metadata_correction=warn+Pencil）
+   - 可选 poster 42x60（求片场景无 video → 不渲染）
+   - title 13/600 + visual prefix 注入（举报/求片/纠错：xxx）
+   - quote block（bg-subtle italic + 2px border-left）
+   - 3 按钮（查看视频 / 拒绝 + prompt reason / 处理 primary）
+   - pending state per-button + 错误码差异化 toast（STATE_CONFLICT / NOT_FOUND / FORBIDDEN / 默认）
+4. `apps/server-next/src/app/admin/user-submissions/_client/UserSubmissionsClient.tsx`（200 行）
+   - PageHeader title + subtitle（badges 聚合 4 计数）
+   - Segment 4 项（消费 admin-ui Segment primitive 首次业务消费）
+   - 三态：LoadingState / ErrorState / EmptyState
+   - 分页（total > 20 渲染上下页按钮）
+   - handleProcessed 行移除（process/reject 成功后从本地状态过滤）
+5. `apps/server-next/src/app/admin/user-submissions/page.tsx`（13 行）— page wrapper
+
+**改**：
+1. `apps/server-next/src/lib/admin-nav.tsx` — 用户投稿 href `/admin/submissions` → `/admin/user-submissions`（旧路径 D 卡 alias 转发）
+
+**测试**：
+- `tests/unit/components/server-next/admin/user-submissions/UserSubmissionsClient.test.tsx`（260 行 / 12 case PASS）
+
+### 12 case 覆盖
+
+| Case | 范围 |
+|---|---|
+| 1 | 渲染基础（data-user-submissions-client + PageHeader）|
+| 2 | Segment 4 项 + badge 注入（8/3/1/412）|
+| 3 | Segment 切换 → 重新 fetch + type 参数变化 |
+| 4 | LoadingState 加载态 |
+| 5 | ErrorState 错误态 |
+| 6 | EmptyState 空数组 |
+| 7 | SubmissionCard 3 类 visual + 求片无 poster + metadata quote |
+| 8 | process 按钮 → API + 成功 toast + 行移除 |
+| 9 | reject 按钮 prompt → API + 成功 toast |
+| 10 | reject prompt null → 不调 API |
+| 11 | 分页 total > PAGE_LIMIT + 下一页 |
+| 12 | title visual prefix 注入（举报/求片/纠错：xxx）|
+
+### 关键设计
+
+1. **Segment primitive 首次业务消费实证**：admin-ui Segment + badge 一行搞定 4 类 Segment（vs 旧 SubmissionsListClient 397 行 DataTable filter / 实施成本下降 ~50%+）
+2. **3 类 visual 派生函数 `visualForType`**：type → { icon, bg, fg, titlePrefix } 映射 / 单一函数避免散落 4 处 inline 判断
+3. **lib re-export 桥接模式**：`@/lib/user-submissions/types` 与 `@/lib/sources/types` 同范式 / 后续消费方零迁移成本
+4. **3 按钮 vs spec §5.13 4 按钮**：spec 是「重验/查看视频/处理」3 按钮；本卡是「查看视频/拒绝/处理」 — 「重验」对 bad_source 应走 sources.route_action（既有）/ 求片+纠错无重验语义 / 统一为「拒绝」更合 4 类 polymorphic / 设计稿"重验"语义已被 ADR-117 AMENDMENT 2 sources mutations 实现承载
+5. **pagination 简化**：上下页按钮 vs 完整 PaginationV2 / 投稿场景预期数据量小（badges 量级 0-100）/ 避免过度工程
+6. **错误码差异化 toast**：4 路径（STATE_CONFLICT / NOT_FOUND / FORBIDDEN / 默认）与 REDO-01-E2 sources mutations 同模式
+
+### 质量门禁
+
+- typecheck ✅ 全 7 workspace
+- lint ✅（仅 1 pre-existing TabImages img warning）
+- file-size ✅ 0 新违规（SubmissionCard 230 / UserSubmissionsClient 200 / 均 < 500）
+- 全量 unit：4154 → **4166 PASS**（+12 净增 / 12 C 卡 cases）
+
+### 关键自省
+
+1. **Segment primitive 投资回报**：PRE-CARD-PRIMITIVE-A 0.2w 投入 / C 卡消费仅 1 行 JSX（vs 内联实现需 ~40 行 segment 样式 + 状态管理）/ 节省 ~0.1w / 后续若有 §5.x 其他 segment 消费方收益继续累加
+2. **C 卡范围严控**：未触碰 admin-shell `.seg` global className（reference.md §228 系统级未完成事项留 PRE-CARD-PRIMITIVE-B 后续卡 / 不在 C 范围）
+3. **lib re-export 模式价值**：与 sources / crawler 同范式 / consume 方 import 一致 / 类型升级时仅 packages/types 改一处
+
+### Segment 重名 type 工程坑（修正）
+
+- 初稿 import `Segment` 同时定义 `type Segment = 'bad_source' | ...` 重名 / typecheck 偶然通过但代码混乱
+- 修订：local type 改名 `SegmentValue` / 与 admin-ui Segment value-only namespace 错开
+
+### 后续触发
+
+- 下张可执行卡：**CHG-SN-7-REDO-02-D** 旧 `/admin/submissions*` alias 转发 + 旧 SubmissionsListClient deprecation banner（0.2w / Haiku）
+- 累计已完成：A0 ✅ + A ✅ + B ✅ + PRE-CARD ✅ + PRE-CARD-A ✅ + C ✅ 共 **~2.2w / REDO-02 总 ~2.95w — 剩余 ~0.75w**（D+E+F）
