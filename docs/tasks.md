@@ -8,7 +8,60 @@
 
 <!-- ✅ PRE-04 全 16 子卡闭环（2026-05-18，连续推进 #2–#16 用户授权）；总览：5 ✅ A 级（dashboard/moderation/videos/sources/analytics）+ 8 ⚠️ S 级（merge/subtitles/home/image-health/users/audit/login/dashboard MISC）+ 4 ❌（staging/submissions/crawler/settings）+ 16 MISC + 4 REDO（01/02/03/04）+ SHARED-03 取消；详见 docs/M-SN-7-design-realign-audit-FULL.md；下一步等用户拍板 PRE-04 收尾 + 启动 SHARED-01/02 milestone -->
 
-### CHG-SN-SHARED-01 KpiCard `progress?` prop 扩展 ✅ 已闭环（2026-05-18）
+### CHG-SN-SHARED-02 ExpandableTable 新建 ❌ 已取消（2026-05-18）
+
+**取消时间**：2026-05-18（实施前发现）
+**取消理由**：实施前读取 DataTable v2 types.ts 发现已支持 `renderExpandedRow` + `expandedKeys` props（ADR-117 + CHG-DESIGN-02 Step 5），data-table.tsx L500/506/543-545 真实渲染逻辑齐全，Sources MatrixExpand 已生产消费验证。同时 DataTable v2 支持 selection + pagination 三态，"selection + expand 兼容裁决"已被实证。
+**与 SHARED-01 / SHARED-03 同模式**：M-SN-7 SHARED milestone 3 张卡的"admin-ui 缺这些原语"假设 3/3 全部错误（KpiCard / Spark / DataTable v2 行展开 admin-ui 全部已入库）
+**M-SN-SHARED milestone 收尾**：仅 SHARED-01 完成 0.1w（KpiCard progress? prop 扩展）
+**M-SN-7 全 milestone 累计下调**：~12–16w → **~11.0–15.0w**（PRE-04 dashboard 实测下调 0.4w + SHARED-02 实测下调 0.4w = 0.8w）
+**REDO-01 实施路径**：直接消费 DataTable v2 `renderExpandedRow` + `expandedKeys`；REDO-01-C 前端骨架可参考 Sources MatrixExpand 范式（`apps/server-next/src/app/admin/sources/_client/SourcesClient.tsx:269/328/464`）
+
+<!-- M-SN-SHARED milestone 全部收尾 — 下张：CHG-SN-7-REDO-01-A Crawler 重做 Opus 子代理契约设计 -->
+
+
+**SEQ**：M-SN-7 / SHARED milestone 第 2 张（**最大单卡 0.4w**）
+
+**问题理解**：M-SN-7 设计稿对齐重做需要 3+ 页消费"行可展开表格"形态：
+- §5.6 Crawler 站点表（每站点行展开线路 sub-table + 分类映射 collapsible）
+- §5.4 Sources 视频聚合表（行展开线路矩阵 — 现有 MatrixExpand 参考形态）
+- §5.8 Image Health 破损样本网格（候选消费）
+
+**根因判断**：admin-ui 当前 `DataTable` 是 v2 一体化（支持 toolbar / saved views / bulk bar / filter chips / 隐藏列 chip / pagination 三态），但**不支持行级 expand 形态**（设计稿要求 chevron + accent-soft active row + expanded content slot）。设计稿明示 §5.6 Crawler 为"非标准 DataTable"，§5.4 Sources 的 MatrixExpand 是页内私有实现。需抽 admin-ui 共享原语。
+
+**方案**：
+1. spawn arch-reviewer Opus 子代理设计 `ExpandableTable` API 契约（独立设计任务），含：
+   - Props 类型（rows / columns / expandRow / rowKey / pagination? / selection?）
+   - **selection 能力契约裁决**（与"是否启用"分离）—是否原生支持 selection 列 vs ExpandableTable + selection 是否兼容
+   - 渲染契约（chevron + accent-soft active row + expand transition + table-level pagination）
+   - 与 DataTable 的关系（独立组件 vs 共享底座 hook）
+   - 边缘 case（空 rows / loading / error / 单页 vs 多页）
+2. 主循环按契约实施：
+   - 新建 `packages/admin-ui/src/components/data-table/expandable-table.tsx`（业务实装）
+   - 新建 `packages/admin-ui/src/components/data-table/expandable-table.types.ts`（Props 契约）
+   - 更新 `packages/admin-ui/src/index.ts` 入口导出
+   - 新建 `tests/unit/components/admin-ui/data-table/expandable-table.test.tsx`（多 case 单测）
+   - dev/components-demo 加 ExpandableTable 形态展示
+3. arch-reviewer Opus 评审实施一致性
+4. 视觉 baseline（如有 Playwright harness 支持）
+
+**涉及文件**：
+- 新建：`packages/admin-ui/src/components/data-table/expandable-table.types.ts`
+- 新建：`packages/admin-ui/src/components/data-table/expandable-table.tsx`
+- 修改：`packages/admin-ui/src/index.ts` + `packages/admin-ui/src/components/data-table/index.ts`（如有）
+- 新建：`tests/unit/components/admin-ui/data-table/expandable-table.test.tsx`
+- 修改：`apps/server-next/src/app/admin/dev/components/components-demo.tsx`（demo 新增形态）
+
+**严格约束**：
+- ❌ 不破坏现有 DataTable v2 / MatrixExpand（Sources 模块继续消费私有 MatrixExpand 直到 REDO-01-E）
+- ❌ 颜色硬编码（必须 CSS 变量 token）
+- ❌ 单文件 > 500 行（PRE-01 守卫；如超线立即拆 expand-row.tsx / use-expand-state.ts 等）
+- 一旦实施中发现 selection + expand 冲突无解 → 立即汇报
+
+**执行模型**：arch-reviewer (claude-opus-4-7) 子代理设计契约 + claude-opus-4-7 主循环实施 + arch-reviewer 评审实施
+
+**估时**：0.4w
+
 
 **完成时间**：2026-05-18
 **实施**：

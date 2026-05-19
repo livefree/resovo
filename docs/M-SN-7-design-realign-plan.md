@@ -326,10 +326,12 @@ REDO-XX-I 删除旧文件前必须满足：
 | 卡 ID | 范围 | 估时 | 前置 | 模型 |
 |---|---|---|---|---|
 | **SHARED-01** | **KpiCard `progress?` prop 扩展**（PRE-04 dashboard 子卡 #1 实测重大发现：admin-ui 已入库 `packages/admin-ui/src/components/cell/kpi-card.tsx` + `kpi-card.types.ts`；原"新建 KpiCard"假设错误，改为对现有原语 props 增量扩展以承载 WorkflowCard 4 段 progress 形态）：扩展 props（含 `progress?: { value, total, color }`）+ 现有消费方零破坏验证（MetricKpiCardRow + WorkflowCard 双签）+ 单测 + 视觉 baseline 更新；**Opus 契约阶段必须以 §5.1 / §5.6 / §5.8 / §5.10 / §5.14 / §5.15 七页 KPI 全文为输入**；**验收阶段必须同时落地 ≥ 2 个消费页 demo**；扩展 prop 必须向后兼容（不破坏 dashboard / videos 等现有消费） | **0.1w**（原 0.35w，PRE-04 实测下调） | 无 | Opus（契约）+ Sonnet（实施） |
-| **SHARED-02** | `<ExpandableTable rows columns expandRow rowKey? pagination?>`：API 契约（**含 `pagination?: { pageSize, pageSizeOptions }` 显式入口**，承载站点 100+ / sources 矩阵分页需求）+ 实施 + admin-ui 入库 + demo + 单测；**Opus 必须裁决组件能力**：ExpandableTable 是否原生支持 selection 列（能力契约，与"是否启用"分离） | 0.4w | 无 | Opus（契约）+ Sonnet（实施） |
+| ~~**SHARED-02**~~ | ❌ **取消**（SHARED-02 实施前实测发现 DataTable v2 已支持 `renderExpandedRow` + `expandedKeys` + selection + pagination 三态；ADR-117 + CHG-DESIGN-02 Step 5 已落地；Sources MatrixExpand 生产消费已验证）→ REDO-01 Crawler 重做直接消费 DataTable v2 | 0w（原 0.4w） | — | — |
 | **SHARED-03** | ⏸️ **待评估**（PRE-04 dashboard 子卡 #1 实测：admin-ui 已入库 `Spark` `packages/admin-ui/src/components/cell/spark.tsx`；可能完全取消本卡或仅做 props 微调）。**触发条件**：等 PRE-04 子卡审计 §5.6 Crawler / §5.15 Analytics / §5.1.2 SiteHealthCard.spark 三处消费形态对照确认后再裁决。 | 0w（或 0.05w 微调） | 子卡 #10 Crawler + #12 Analytics 审计完成 | Sonnet |
 
-**M-SN-SHARED 总估时**：**~0.5w**（SHARED-01 0.1 + SHARED-02 0.4 + SHARED-03 0–0.05）；原 0.9w，PRE-04 dashboard 实测下调 ~0.4w
+**M-SN-SHARED 总估时**：**0.1w**（仅 SHARED-01 0.1w）；原 0.9w → ~0.5w（PRE-04 dashboard 实测下调 SHARED-01/03） → **0.1w**（SHARED-02 实施前实测 DataTable v2 已具备能力，整张卡取消）。
+
+**关键自省**：M-SN-7 SHARED milestone 3 张卡（SHARED-01 KpiCard / SHARED-02 ExpandableTable / SHARED-03 Spark）的核心假设"admin-ui 缺这些原语"在 3/3 处全部出错——admin-ui 实际已入库 KpiCard / Spark / DataTable v2 行展开。原因：M-SN-7 计划文档起草时未先做"admin-ui 现状盘点"。**未来 milestone 起步前必须先全量盘点 packages/admin-ui 现有能力**，避免重复假设。
 
 落地后下列页面可一致消费：Dashboard / Analytics / Sources / Image Health / Users / Subtitles / Crawler 共 7 页的 KPI 区；Crawler + Sources + Image Health 共 3 页的 ExpandableTable；Dashboard + Analytics + Crawler 站点健康卡的 Spark。
 
@@ -416,11 +418,11 @@ REDO-01-B (后端 ADR-122 + 4 endpoints)                                        
 **M-SN-7 总估时初估**（待 PRE-04 完成后修订）：
 
 - PRE 阶段：PRE-01 0.12 + PRE-02 0.15 + PRE-04 0.9 + PRE-05 0.1 = **1.27w**
-- SHARED milestone：**~0.5w**（PRE-04 dashboard 实测下调 0.4w；admin-ui KpiCard + Spark 已入库）
+- SHARED milestone：**0.1w**（仅 SHARED-01；SHARED-02/03 实测 admin-ui 已具备能力全部取消）
 - REDO-01（采集）：**2.55w**
 - REDO-02（Submissions）：**~1w**
 - REDO-03+（其他 14 路由，按 ⚠️/❌ 等级数）：**~6–10w**（PRE-04 后细化；dashboard 已审 ⚠️ S 级仅 3 MISC 不入 REDO）
-- **M-SN-7 全 milestone 估时**：**~11.5–15.5w**（PRE-04 实测下调 0.4w）
+- **M-SN-7 全 milestone 估时**：**~11.0–15.0w**（PRE-04 + SHARED-02 实测累计下调 0.8w）
 
 ---
 

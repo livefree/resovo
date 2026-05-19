@@ -10938,3 +10938,56 @@ M-SN-7 SHARED milestone 第 1 张。PRE-04 子卡 #1 dashboard 实测发现 admi
 
 - 下张可执行卡：**CHG-SN-SHARED-02** ExpandableTable 新建（0.4w / Opus 契约 + Sonnet 实施 / 含 selection 能力契约裁决）
 - SHARED milestone 收尾后启动 **CHG-SN-7-REDO-01-A** Crawler 重做契约设计
+
+---
+
+## [CHG-SN-SHARED-02 取消 / M-SN-SHARED milestone 收尾]
+
+- **取消时间**：2026-05-18（实施前发现）
+- **记录时间**：2026-05-18
+- **执行模型**：claude-opus-4-7（主循环，实施前读现状识别）
+- **子代理**：无
+
+### 取消理由
+
+CHG-SN-SHARED-02 卡片描述"新建 ExpandableTable 共享原语"，但实施前读取 admin-ui DataTable v2 现状：
+
+| 能力 | 实现位置 |
+|---|---|
+| `renderExpandedRow: (row: T) => ReactNode` 行展开渲染器 | `packages/admin-ui/src/components/data-table/types.ts:55-66` |
+| `expandedKeys: ReadonlySet<string>` 展开行状态 | 同上 |
+| 实际渲染逻辑（含 a11y `aria-expanded` / `role="region"` / data-table-expand-panel） | `packages/admin-ui/src/components/data-table/data-table.tsx:180/181/500/506/543-545` |
+| selection + 行展开并存 | data-table.tsx 同文件同时承载（实证）|
+| pagination 三态 | DataTable v2 内置（CHG-DESIGN-02 Step 7A） |
+| 生产消费验证 | `apps/server-next/src/app/admin/sources/_client/SourcesClient.tsx:269/328/464` Sources MatrixExpand |
+
+→ 原 SHARED-02 卡片 4 项内容（新建 / pagination? 显式入口 / selection 能力裁决 / Sources 矩阵分页需求）**全部已被 DataTable v2 实证覆盖**。
+
+### M-SN-7 SHARED milestone 3 张卡命运
+
+| 卡 | 原计划估时 | 实际 | 原因 |
+|---|---|---|---|
+| **SHARED-01** KpiCard | 0.35w → 0.1w | ✅ 完成 0.1w | KpiCard 已入库 → 改 `progress?` prop 扩展 |
+| **SHARED-02** ExpandableTable | 0.4w → 0w | ❌ 取消 | DataTable v2 已支持行展开 |
+| **SHARED-03** Spark | 0.15w → 0w | ❌ 取消（PRE-04 决策） | Spark 已入库 |
+
+**M-SN-SHARED milestone 总计**：原 0.9w → **0.1w**（仅 SHARED-01）
+
+### 修改文件（4 个）
+
+- `docs/M-SN-7-design-realign-plan.md` — §3.5 SHARED-02 取消 + 关键自省段（admin-ui 现状未盘点导致 3/3 假设错误）+ §4 总估时下调
+- `docs/task-queue.md` — SHARED-02 row 取消 + 估时汇总 + 总 milestone 估时下调
+- `docs/tasks.md` — SHARED-02 卡片关闭 + 取消理由
+- `docs/changelog.md` — 本条目
+
+### 关键自省
+
+1. **M-SN-7 SHARED milestone 是 3/3 假设错误的典型案例**：所有 3 张卡的核心假设"admin-ui 缺这些原语"全部出错。原因是 M-SN-7 计划文档起草时**未先做 packages/admin-ui 现状盘点**，仅凭"设计稿要求 X" + 主循环记忆推断"admin-ui 需要 X 但没有"
+2. **规范优化建议**：未来 milestone 起步前必须先全量盘点 `packages/admin-ui/src/components/` + `packages/admin-ui/src/index.ts` 现有导出能力；planning 阶段引入 `verify:admin-ui-inventory.mjs` 守卫脚本（候选 PRE 卡）
+3. **"实施前实测"的高 ROI**：3 次"实施前停下来汇报"（dashboard / SHARED-01 progress 形态 / SHARED-02 整卡取消）累计避免 ~0.9w 重复工作。即"停下来汇报"规则的实际价值已被多次验证
+4. **DataTable v2 完成度评级（实测）**：能力 = framed table + toolbar 一体化 + saved views + bulk bar + filter chips + 隐藏列 chip + pagination 三态 + 行展开 + flash 动画 + 列设置面板 + a11y 一体化；**实际是 admin-ui 最重型 + 最完整的共享组件**
+
+### 后续触发
+
+- 下张可执行卡：**CHG-SN-7-REDO-01-A** Crawler 重做 Opus 子代理契约设计（依赖 M-SN-SHARED 完成 ✅；本卡已 spawn Opus 设计本页 props/state/事件契约 + 业务策略"是否启用 selection"）
+- M-SN-SHARED milestone 正式收尾，进入 REDO 阶段
