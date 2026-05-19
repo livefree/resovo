@@ -10872,3 +10872,69 @@ PRE 阶段全部 4 张 ✅ 闭环。下张 **M-SN-SHARED milestone 启动**：
 - ~~CHG-SN-SHARED-03~~ 已取消（PRE-04 实测 admin-ui Spark 已入库，3 处消费形态全对齐设计稿）
 
 SHARED-01 / 02 可并行；总估时 **~0.5w**。完成后启动 **CHG-SN-7-REDO-01-A** Crawler 重做（依赖 SHARED）。
+
+---
+
+## [CHG-SN-SHARED-01] KpiCard `progress?` prop 扩展（footer spark/progress 互斥拓展）
+
+- **完成时间**：2026-05-18
+- **记录时间**：2026-05-18
+- **执行模型**：claude-opus-4-7（主循环 / 契约 + 实施）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮评审 A− 无红线 / 3 黄线（采纳黄线 1+2）
+
+### 起源
+
+M-SN-7 SHARED milestone 第 1 张。PRE-04 子卡 #1 dashboard 实测发现 admin-ui 已入库 KpiCard + Spark；本卡对现有原语增量扩展。
+
+### 修改文件（4 个）
+
+- `packages/admin-ui/src/components/cell/kpi-card.types.ts` — 新增 `KpiCardProgress` interface + `progress?` 字段 + JSDoc
+- `packages/admin-ui/src/components/cell/kpi-card.tsx` — 新增 progress slot 样式 + `variantProgressColor()` + `deriveProgress()` + footer 互斥渲染 + 4 dev warn 防御
+- `tests/unit/components/admin-ui/cell/kpi-card.test.tsx` — 新增 17 case（12 主流程 + 5 黄线修订）
+- `docs/task-queue.md` + `docs/tasks.md` + `docs/changelog.md` — 闭环标记
+
+### 重大决策（执行中识别 + 用户裁决）
+
+**执行偏离汇报**：原计划 §3.5 SHARED-01 描述"扩 progress 承载 WorkflowCard 4 段 progress 形态"。主循环读 KpiCard 实装 + reference §5.1.2 后识别该假设错误 — KpiCard 单卡（14px×16px padding + border + 3 行布局）与 WorkflowCard 子区域（card 内紧凑 1 行 + 6px bar）形态完全不匹配。
+
+**用户裁决方案 A**：footer spark/progress **互斥拓展**（progress 渲染于 footer 右侧 60×18 区域，与 spark 同位互斥；不动 WorkflowCard 保持其作为独立组件）。
+
+### Opus 评审结论（A− / 0 红线）
+
+| 等级 | 项 | 处置 |
+|---|---|---|
+| ✅ 绿线 | 互斥设计 progress > spark 优先级合理 / `deriveProgress` 纯函数 / 12 case 覆盖度高 / 向后兼容无风险 / 颜色零硬编码 | 保留 |
+| 🟡 黄线 1 | color 字段缺运行时防御（JSDoc 声明禁止 hex/rgb 但运行时无校验） | **采纳** → 加 dev warn for `!color.startsWith('var(')` + 1 新测试 case |
+| 🟡 黄线 2 | progress aria-hidden 但缺 a11y 替代（屏幕阅读器无法获取进度语义） | **采纳** → 修订 `derivedAriaLabel` 追加 `(81.1%)` + 3 新测试 case |
+| 🟡 黄线 3 | value=0+total>0 渲染空 track 视觉无意义 | **跳过**（value=0 是合法状态如"批量未开始"；触发 warn 反而 noisy）|
+
+### 关键设计
+
+| 设计点 | 决策 |
+|---|---|
+| 互斥优先级 | progress > spark（progress 是数据级展示无 opacity；spark 是装饰级 opacity 0.4）|
+| 边缘 case 防御 | `value<0 \|\| total<=0` 不渲染 + dev warn；`value>total` 视觉 clamp 100% |
+| 颜色派生 | `color` 未传时按 variant 派生（accent/warning-fg/error-fg/success-fg）|
+| 颜色防御 | `color` 必须 `var(...)` 开头（dev warn 拒绝 hex/rgb 硬编码）|
+| a11y | progress 有效时 `aria-label` 追加 ` (xx.x%)` |
+| showLabel | `true` 时 bar 上方插 10px text `value/total` |
+| 视觉对齐 | footer slot 60×18 与 spark 同位，整体 minHeight 18px 保持 4 KPI 横向对齐 |
+
+### 质量门禁
+
+- ✅ KpiCard 单测：49 → **54 PASS**（+5：黄线 1+2 修订测试）
+- ✅ `typecheck` — 5 tasks PASS
+- ✅ `verify:file-size-budget` — 0 新违规
+- ✅ `lint` — 5 tasks PASS（FULL TURBO cached）
+- ✅ 全量 unit test：4018 → 4030 → **4035 PASS** 保持（待最终跑完确认）
+
+### 关键自省
+
+1. **计划文档的"假设"必须在实施前实测验证**：原计划假设 KpiCard 能承载 WorkflowCard 4 段形态，主循环读 KpiCard 实装 + WorkflowCard spec 后识别错误并停下来汇报（按"严格依照规范，一旦偏离就要停下来"原则）— 验证"停下来汇报"规则的实际价值
+2. **Opus 评审在共享原语契约扩展场景的高 ROI**：1 轮独立评审发现 2 个生产相关黄线（a11y + 运行时防御），均低成本采纳；评审消耗 token 远低于"上线后发现 a11y 缺陷重做"的成本
+3. **黄线 3 的取舍**：评审建议 value=0 dev warn 但被跳过 — 因为 value=0 是合法业务状态（"批量未开始 / 等待启动"），添加 warn 反而干扰消费方。这是"评审建议 vs 业务语义"权衡的典型案例
+
+### 后续触发
+
+- 下张可执行卡：**CHG-SN-SHARED-02** ExpandableTable 新建（0.4w / Opus 契约 + Sonnet 实施 / 含 selection 能力契约裁决）
+- SHARED milestone 收尾后启动 **CHG-SN-7-REDO-01-A** Crawler 重做契约设计

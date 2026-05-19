@@ -22,7 +22,12 @@
  * 7B SHOULD：value 为非 string ReactNode 且 ariaLabel 未传时 dev 环境 console.warn 提示。
  */
 import React, { useMemo } from 'react'
-import type { KpiCardProps, KpiCardVariant, KpiDeltaDirection } from './kpi-card.types'
+import type {
+  KpiCardProps,
+  KpiCardProgress,
+  KpiCardVariant,
+  KpiDeltaDirection,
+} from './kpi-card.types'
 
 // ── styles ─────────────────────────────────────────────────────
 
@@ -108,6 +113,36 @@ const SPARK_SLOT_STYLE: React.CSSProperties = {
   justifyContent: 'flex-end',
 }
 
+// CHG-SN-SHARED-01：progress slot 与 spark 同位 60×18，无 opacity（progress 是数据级展示而非装饰）
+const PROGRESS_SLOT_STYLE: React.CSSProperties = {
+  width: '60px',
+  height: '18px',
+  flexShrink: 0,
+  overflow: 'hidden',
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'flex-end',
+  alignItems: 'stretch',
+  gap: '2px',
+}
+
+const PROGRESS_LABEL_STYLE: React.CSSProperties = {
+  fontSize: '10px',
+  color: 'var(--fg-muted)',
+  lineHeight: 1,
+  fontVariantNumeric: 'tabular-nums',
+  textAlign: 'right',
+}
+
+const PROGRESS_TRACK_STYLE: React.CSSProperties = {
+  width: '100%',
+  height: '6px',
+  background: 'var(--bg-surface)',
+  border: '1px solid var(--border-default)',
+  borderRadius: '999px',
+  overflow: 'hidden',
+}
+
 // ── variant → token 映射 ───────────────────────────────────────
 
 function variantBorderStyle(variant: KpiCardVariant): string {
@@ -137,6 +172,31 @@ function deltaDirectionColor(direction: KpiDeltaDirection | undefined): string {
   }
 }
 
+// CHG-SN-SHARED-01：progress bar 默认颜色按 variant 派生（color 未传时）
+function variantProgressColor(variant: KpiCardVariant): string {
+  switch (variant) {
+    case 'is-warn': return 'var(--state-warning-fg)'
+    case 'is-danger': return 'var(--state-error-fg)'
+    case 'is-ok': return 'var(--state-success-fg)'
+    default: return 'var(--accent-default)'
+  }
+}
+
+// CHG-SN-SHARED-01：派生 progress 渲染数据（防御边缘 case）
+interface ProgressDerived {
+  readonly pct: number       // 0..100，clamp 后
+  readonly invalid: boolean  // value<0 / total<=0 时为 true（不渲染 + dev warn）
+}
+
+function deriveProgress(progress: KpiCardProgress): ProgressDerived {
+  const { value, total } = progress
+  if (value < 0 || total <= 0) {
+    return { pct: 0, invalid: true }
+  }
+  const pct = Math.min(100, Math.max(0, (value / total) * 100))
+  return { pct, invalid: false }
+}
+
 // ── component ──────────────────────────────────────────────────
 
 export function KpiCard({
@@ -145,6 +205,7 @@ export function KpiCard({
   delta,
   variant = 'default',
   spark,
+  progress,
   icon,
   onClick,
   dataSource,
@@ -166,6 +227,43 @@ export function KpiCard({
     )
   }
 
+  // CHG-SN-SHARED-01：progress + spark 同时传 → spark 被忽略 + dev warn
+  if (process.env.NODE_ENV !== 'production' && progress && spark) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[KpiCard] 'progress' and 'spark' are mutually exclusive in footer slot; ` +
+      `'spark' is ignored when 'progress' is provided (label="${label}").`,
+    )
+  }
+
+  // CHG-SN-SHARED-01：派生 progress（边缘 case 不渲染 + dev warn）
+  const progressDerived = progress ? deriveProgress(progress) : null
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    progressDerived &&
+    progressDerived.invalid
+  ) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[KpiCard] 'progress' has invalid value/total ` +
+      `(value=${progress!.value}, total=${progress!.total}); ` +
+      `progress bar is not rendered (label="${label}").`,
+    )
+  }
+
+  // CHG-SN-SHARED-01：color 必须 CSS 变量（运行时防御 / 评审黄线 1）
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    progress?.color &&
+    !progress.color.startsWith('var(')
+  ) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[KpiCard] 'progress.color' must be a CSS variable (e.g. 'var(--accent-default)'); ` +
+      `got "${progress.color}" — hardcoded colors are forbidden (label="${label}").`,
+    )
+  }
+
   const containerStyle = useMemo<React.CSSProperties>(() => {
     const base = onClick ? CONTAINER_BUTTON_STYLE : CONTAINER_BASE_STYLE
     return { ...base, border: variantBorderStyle(variant) }
@@ -182,11 +280,15 @@ export function KpiCard({
   )
 
   // 派生 aria-label：未传时由 label + value 拼（仅 string/number value 路径，避免 SSR ReactNode 派生）
-  const derivedAriaLabel = ariaLabel ?? (
+  // CHG-SN-SHARED-01：评审黄线 2 — 含 progress 时追加百分比，使屏幕阅读器可获取进度语义
+  const baseAriaLabel = ariaLabel ?? (
     typeof value === 'string' || typeof value === 'number'
       ? `${label}: ${value}`
       : label
   )
+  const derivedAriaLabel = progressDerived && !progressDerived.invalid
+    ? `${baseAriaLabel} (${progressDerived.pct.toFixed(1)}%)`
+    : baseAriaLabel
 
   // 共享 inner 渲染体（button / div 路径复用）
   const inner = (
@@ -210,10 +312,38 @@ export function KpiCard({
             {delta.text}
           </span>
         )}
-        {spark && (
-          <span style={SPARK_SLOT_STYLE} data-kpi-card-spark aria-hidden="true">
-            {spark}
+        {/* CHG-SN-SHARED-01：progress 与 spark footer slot 互斥（progress 优先）*/}
+        {progressDerived && !progressDerived.invalid ? (
+          <span
+            style={PROGRESS_SLOT_STYLE}
+            data-kpi-card-progress
+            data-progress-pct={progressDerived.pct.toFixed(1)}
+            aria-hidden="true"
+          >
+            {progress!.showLabel && (
+              <span style={PROGRESS_LABEL_STYLE} data-kpi-card-progress-label>
+                {progress!.value}/{progress!.total}
+              </span>
+            )}
+            <span style={PROGRESS_TRACK_STYLE} data-kpi-card-progress-track>
+              <span
+                style={{
+                  display: 'block',
+                  height: '100%',
+                  width: `${progressDerived.pct}%`,
+                  background: progress!.color ?? variantProgressColor(variant),
+                  transition: 'width 200ms ease-out',
+                }}
+                data-kpi-card-progress-fill
+              />
+            </span>
           </span>
+        ) : (
+          spark && (
+            <span style={SPARK_SLOT_STYLE} data-kpi-card-spark aria-hidden="true">
+              {spark}
+            </span>
+          )
         )}
       </div>
     </>

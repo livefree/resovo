@@ -8,7 +8,56 @@
 
 <!-- ✅ PRE-04 全 16 子卡闭环（2026-05-18，连续推进 #2–#16 用户授权）；总览：5 ✅ A 级（dashboard/moderation/videos/sources/analytics）+ 8 ⚠️ S 级（merge/subtitles/home/image-health/users/audit/login/dashboard MISC）+ 4 ❌（staging/submissions/crawler/settings）+ 16 MISC + 4 REDO（01/02/03/04）+ SHARED-03 取消；详见 docs/M-SN-7-design-realign-audit-FULL.md；下一步等用户拍板 PRE-04 收尾 + 启动 SHARED-01/02 milestone -->
 
-### CHG-SN-7-PRE-05 ADR-123 分类映射 schema 起草 ✅ 已闭环（2026-05-18）
+### CHG-SN-SHARED-01 KpiCard `progress?` prop 扩展 ✅ 已闭环（2026-05-18）
+
+**完成时间**：2026-05-18
+**实施**：
+- `kpi-card.types.ts` 新增 `KpiCardProgress` interface + `progress?` 字段 + 完整 JSDoc
+- `kpi-card.tsx` 新增 `PROGRESS_SLOT_STYLE` / `PROGRESS_LABEL_STYLE` / `PROGRESS_TRACK_STYLE` / `variantProgressColor()` / `deriveProgress()` + footer 渲染 progress 与 spark 互斥逻辑 + 4 dev warn 防御
+- `kpi-card.test.tsx` 新增 17 case（12 主流程 + 5 黄线修订）
+**评级**：A−（arch-reviewer Opus 1 轮，**0 红线** + 3 黄线）→ 采纳黄线 1（color CSS 变量运行时防御）+ 黄线 2（a11y aria-label 追加百分比），跳过黄线 3（value=0 dev warn 争议）
+**重大决策（执行中）**：原假设"扩 progress 承载 WorkflowCard 4 段形态"被识别为错误（KpiCard 单卡 vs WorkflowCard 子区域形态不匹配），用户裁决方案 A：footer spark/progress 互斥拓展；WorkflowCard 不动
+**质量门禁**：KpiCard 单测 49 → **54 PASS**；待跑全量
+**执行模型**：claude-opus-4-7 主循环（契约 + 实施）+ arch-reviewer (claude-opus-4-7) 1 轮评审
+
+<!-- 下张：CHG-SN-SHARED-02 ExpandableTable 新建（0.4w）— SHARED milestone 收尾后启动 REDO-01-A -->
+
+
+**SEQ**：M-SN-7 / SHARED milestone 第 1 张 / WorkflowCard 4 段 progress 形态承载
+
+**问题理解**：PRE-04 dashboard 子卡 #1 实测发现 admin-ui 已入库 `KpiCard`（`packages/admin-ui/src/components/cell/kpi-card.tsx`），但当前消费方为 MetricKpiCardRow（dashboard 4 KPI）和 AnalyticsView（4 KPI + Spark）。**WorkflowCard 4 段 progress** 形态（采集入库 / 待审核 / 暂存待发布 / 已上架）目前是 dashboard 内独立组件，未消费 KpiCard。设计稿 reference §5.1.2 + §5.6（Crawler KPI 5 列）要求 KpiCard 能承载 progress 视觉。
+
+**根因判断**：KpiCard 现有 props（label / value / delta / variant / spark / icon / onClick / dataSource）覆盖 4/4 + Spark 形态，但不支持"progress bar + n/total + label/color"组合（设计稿 §5.1.2 WorkflowCard 4 段每段 6px progress track）。
+
+**方案**：
+1. 主循环 opus-4-7 设计 `progress?: { value, total, color?, showLabel? }` prop API 契约
+2. spawn arch-reviewer Opus 子代理评审契约（覆盖：渲染契约 / footer slot 与 spark/delta 共存规则 / 向后兼容硬约束 / 7 页消费扩展性）
+3. 按评审落地实施：
+   - 扩 `KpiCardProps` interface
+   - 扩 KpiCard 组件渲染逻辑（progress 与 spark 互斥位置 footer / 与 delta 同行）
+   - 单测：6 case（progress=undefined / value=0 / value=total / partial / value>total 边缘 / color 自定义）
+   - 视觉 baseline 更新（admin-ui Playwright visual harness）
+4. 现有消费方零破坏验证（MetricKpiCardRow + AnalyticsView 全量回归）
+5. WorkflowCard 选项性消费 progress prop（dashboard 内部重构，本卡可选 stretch goal）
+
+**涉及文件**：
+- 修改：`packages/admin-ui/src/components/cell/kpi-card.types.ts`
+- 修改：`packages/admin-ui/src/components/cell/kpi-card.tsx`
+- 修改：`packages/admin-ui/src/components/cell/kpi-card.test.tsx`（如存在）+ 新增 progress test cases
+- 修改：`apps/server-next/src/app/admin/dev/components/components-demo.tsx`（demo 新增 progress 形态展示）
+- baseline 更新：`packages/admin-ui/playwright-baselines/kpi-card/` 视觉 baseline（如有）
+- WorkflowCard 消费（可选 stretch）：`apps/server-next/src/components/admin/dashboard/WorkflowCard.tsx`
+
+**严格约束**：
+- ❌ 向后破坏（现有 MetricKpiCardRow + AnalyticsView 不得改动消费方）
+- ❌ 颜色硬编码（progress.color 必须 CSS 变量 token）
+- ❌ progress 与 spark **同时**渲染（footer 互斥；设计稿不要求二者并存）
+- 一旦实施中发现 KpiCard 现有 footer 布局无法容纳 progress → 立即汇报
+
+**执行模型**：claude-opus-4-7 主循环（契约 + 实施）+ arch-reviewer (claude-opus-4-7) 评审契约
+
+**估时**：0.1w
+
 
 **完成时间**：2026-05-18
 **实施**：spawn arch-reviewer Opus 子代理 1 轮独立起草 → 主循环落 `docs/decisions.md`（追加 ~310 行）

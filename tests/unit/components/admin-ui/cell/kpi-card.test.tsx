@@ -330,3 +330,205 @@ describe('KpiCard — dev warn（non-primitive value + missing ariaLabel）', ()
     warn.mockRestore()
   })
 })
+
+
+// ── CHG-SN-SHARED-01：progress prop 扩展测试 ─────────────────────
+
+describe('KpiCard — progress prop (CHG-SN-SHARED-01)', () => {
+  it('progress=undefined 时不渲染 progress slot（行为与现有相同）', () => {
+    const { container } = render(<KpiCard label="L" value="42" />)
+    expect(container.querySelector('[data-kpi-card-progress]')).toBeNull()
+  })
+
+  it('progress value=0 → bar 0% width', () => {
+    const { container } = render(
+      <KpiCard label="L" value="0" progress={{ value: 0, total: 500 }} />,
+    )
+    const slot = container.querySelector('[data-kpi-card-progress]')
+    expect(slot).toBeTruthy()
+    expect(slot?.getAttribute('data-progress-pct')).toBe('0.0')
+    const fill = container.querySelector('[data-kpi-card-progress-fill]') as HTMLElement
+    expect(fill?.style.width).toBe('0%')
+  })
+
+  it('progress value=total → bar 100% width', () => {
+    const { container } = render(
+      <KpiCard label="L" value="500" progress={{ value: 500, total: 500 }} />,
+    )
+    expect(
+      container.querySelector('[data-kpi-card-progress]')?.getAttribute('data-progress-pct'),
+    ).toBe('100.0')
+  })
+
+  it('progress partial (value=350, total=500) → bar 70% width', () => {
+    const { container } = render(
+      <KpiCard label="L" value="350" progress={{ value: 350, total: 500 }} />,
+    )
+    const fill = container.querySelector('[data-kpi-card-progress-fill]') as HTMLElement
+    expect(fill?.style.width).toBe('70%')
+  })
+
+  it('progress value>total → 视觉满槽 100%（不溢出）', () => {
+    const { container } = render(
+      <KpiCard label="L" value="600" progress={{ value: 600, total: 500 }} />,
+    )
+    const fill = container.querySelector('[data-kpi-card-progress-fill]') as HTMLElement
+    expect(fill?.style.width).toBe('100%')
+  })
+
+  it('progress.color 自定义 → fill background 使用传入 token', () => {
+    const { container } = render(
+      <KpiCard
+        label="L"
+        value="42"
+        progress={{ value: 42, total: 100, color: 'var(--accent-default)' }}
+      />,
+    )
+    const fill = container.querySelector('[data-kpi-card-progress-fill]') as HTMLElement
+    expect(fill?.style.background).toMatch(/accent-default/)
+  })
+
+  it('progress 未传 color + variant=is-warn → fill 派生 warning fg', () => {
+    const { container } = render(
+      <KpiCard
+        label="L"
+        value="42"
+        variant="is-warn"
+        progress={{ value: 42, total: 100 }}
+      />,
+    )
+    const fill = container.querySelector('[data-kpi-card-progress-fill]') as HTMLElement
+    expect(fill?.style.background).toMatch(/state-warning-fg/)
+  })
+
+  it('progress.showLabel=true → bar 上方插 value/total label', () => {
+    const { container } = render(
+      <KpiCard
+        label="L"
+        value="350"
+        progress={{ value: 350, total: 500, showLabel: true }}
+      />,
+    )
+    const lbl = container.querySelector('[data-kpi-card-progress-label]')
+    expect(lbl?.textContent).toBe('350/500')
+  })
+
+  it('progress.showLabel 缺省 → bar 上方无 label', () => {
+    const { container } = render(
+      <KpiCard label="L" value="350" progress={{ value: 350, total: 500 }} />,
+    )
+    expect(container.querySelector('[data-kpi-card-progress-label]')).toBeNull()
+  })
+
+  it('progress value<0 → 不渲染 progress + dev warn', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { container } = render(
+      <KpiCard label="L" value="42" progress={{ value: -1, total: 500 }} />,
+    )
+    expect(container.querySelector('[data-kpi-card-progress]')).toBeNull()
+    expect(warn).toHaveBeenCalled()
+    expect(warn.mock.calls.some((c) => /invalid value\/total/.test(String(c[0])))).toBe(true)
+    warn.mockRestore()
+  })
+
+  it('progress total<=0 → 不渲染 progress + dev warn', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { container } = render(
+      <KpiCard label="L" value="42" progress={{ value: 42, total: 0 }} />,
+    )
+    expect(container.querySelector('[data-kpi-card-progress]')).toBeNull()
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('progress + spark 同时传 → spark 被忽略 + dev warn', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { container } = render(
+      <KpiCard
+        label="L"
+        value="42"
+        progress={{ value: 42, total: 100 }}
+        spark={<Spark data={[1, 2, 3]} color="var(--accent-default)" />}
+      />,
+    )
+    // progress 渲染 ✓
+    expect(container.querySelector('[data-kpi-card-progress]')).toBeTruthy()
+    // spark 不渲染 ✓
+    expect(container.querySelector('[data-kpi-card-spark]')).toBeNull()
+    // dev warn ✓
+    expect(warn.mock.calls.some((c) => /mutually exclusive/.test(String(c[0])))).toBe(true)
+    warn.mockRestore()
+  })
+})
+
+describe('KpiCard — SHARED-01 评审黄线修订', () => {
+  it('progress.color 非 CSS 变量 → dev warn（黄线 1 防御）', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    render(
+      <KpiCard
+        label="L"
+        value="42"
+        progress={{ value: 42, total: 100, color: '#ff0000' }}
+      />,
+    )
+    expect(
+      warn.mock.calls.some((c) => /must be a CSS variable/.test(String(c[0]))),
+    ).toBe(true)
+    warn.mockRestore()
+  })
+
+  it('progress.color 是 CSS 变量 → 不 warn', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    render(
+      <KpiCard
+        label="L"
+        value="42"
+        progress={{ value: 42, total: 100, color: 'var(--accent-default)' }}
+      />,
+    )
+    expect(
+      warn.mock.calls.some((c) => /must be a CSS variable/.test(String(c[0]))),
+    ).toBe(false)
+    warn.mockRestore()
+  })
+
+  it('progress 有效时 aria-label 追加百分比（黄线 2 a11y）', () => {
+    const { container } = render(
+      <KpiCard
+        label="本批视频量"
+        value="649"
+        progress={{ value: 649, total: 800 }}
+      />,
+    )
+    const card = container.querySelector('[data-kpi-card]')
+    // 649/800 = 81.125%
+    expect(card?.getAttribute('aria-label')).toBe('本批视频量: 649 (81.1%)')
+  })
+
+  it('progress 无效（value<0）时 aria-label 不追加百分比', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { container } = render(
+      <KpiCard
+        label="L"
+        value="42"
+        progress={{ value: -1, total: 100 }}
+      />,
+    )
+    const card = container.querySelector('[data-kpi-card]')
+    expect(card?.getAttribute('aria-label')).toBe('L: 42')
+    warn.mockRestore()
+  })
+
+  it('显式 ariaLabel + progress 有效 → 追加百分比到显式 label', () => {
+    const { container } = render(
+      <KpiCard
+        label="本批"
+        value={<span>649</span>}
+        ariaLabel="本批视频量 649 条"
+        progress={{ value: 649, total: 800 }}
+      />,
+    )
+    const card = container.querySelector('[data-kpi-card]')
+    expect(card?.getAttribute('aria-label')).toBe('本批视频量 649 条 (81.1%)')
+  })
+})

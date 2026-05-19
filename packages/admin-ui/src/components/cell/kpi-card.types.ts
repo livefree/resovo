@@ -75,6 +75,51 @@ export type KpiCardVariant = 'default' | 'is-warn' | 'is-danger' | 'is-ok'
 export type KpiDeltaDirection = 'up' | 'down' | 'flat'
 
 /**
+ * KpiCard.progress 子结构（CHG-SN-SHARED-01 新增 / 与 spark **互斥**）
+ *
+ * 设计稿来源：reference.md §5.6 Crawler KPI「本批视频量 649 / +47 今日」隐含的"目标进度"语义；
+ * §5.1.2 WorkflowCard 4 段 progress 形态启发但非直接消费（WorkflowCard 4 段是 card 内子区域、
+ * 非 KpiCard 形态——见 SHARED-01 卡片"问题分析"段）。
+ *
+ * 渲染契约（与 spark 互斥）：
+ * - progress 与 spark 同时传 → spark **被忽略** + dev 环境 `console.warn`
+ * - progress 渲染于 footer 右侧 60×18 区域（与 spark 同位 slot；不破坏 4 张 KPI 横向对齐）
+ * - 进度比 = `min(value / total, 1)`；`value > total` 视觉满槽 100%（不算溢出）
+ * - `value < 0` 或 `total <= 0` → 不渲染 progress + dev warn（边缘 case 防御）
+ * - bar 高度固定 6px，颜色按 `color` 或 variant 自动派生（详见 color 字段 JSDoc）
+ * - `showLabel=true` 时 bar 上方插 10px text "value/total"，整体高度仍 ≤ 18px
+ *
+ * 颜色派生（color 未传时）：
+ * - variant='default' → `var(--accent-default)`
+ * - variant='is-warn' → `var(--state-warning-fg)`
+ * - variant='is-danger' → `var(--state-error-fg)`
+ * - variant='is-ok' → `var(--state-success-fg)`
+ */
+export interface KpiCardProgress {
+  /** 当前进度值（0 ≤ value，允许 > total 但视觉满槽 100%）*/
+  readonly value: number
+
+  /** 目标值（必须 > 0；≤ 0 时不渲染 progress + dev warn）*/
+  readonly total: number
+
+  /**
+   * progress bar 颜色 token（CSS 变量），默认按 variant 自动派生
+   *
+   * 必须传 CSS 变量字符串如 `'var(--accent-default)'`；不接受 hex / rgb 等硬编码（与 KpiCard
+   * 整体颜色 token 化约束一致）
+   */
+  readonly color?: string
+
+  /**
+   * 是否显示 `value/total` 数值 label（默认 false）
+   *
+   * - false：仅 progress bar
+   * - true：bar 上方显示 10px text `"{value}/{total}"`（fg-muted），整体高度仍 ≤ 18px
+   */
+  readonly showLabel?: boolean
+}
+
+/**
  * KpiCard delta 子结构
  *
  * 设计稿示例（reference §5.1.2 4 张 KPI delta 列）：
@@ -158,6 +203,26 @@ export interface KpiCardProps {
    * - spark 容器区域固定 60×18，overflow hidden（消费方传超出尺寸的节点会被裁剪）
    */
   readonly spark?: ReactNode
+
+  /**
+   * Progress bar slot（可选 / CHG-SN-SHARED-01）— 与 spark **互斥**
+   *
+   * 渲染于 footer 右下 60×18 区域（与 spark 同位）；传 `progress` 时 spark prop 被忽略
+   * + dev 环境 `console.warn` 提示消费方。
+   *
+   * 详细渲染契约见 `KpiCardProgress` 顶部 JSDoc。
+   *
+   * 典型用法：
+   * ```tsx
+   * <KpiCard
+   *   label="本批视频量"
+   *   value="649"
+   *   variant="is-ok"
+   *   progress={{ value: 649, total: 800, showLabel: true }}
+   * />
+   * ```
+   */
+  readonly progress?: KpiCardProgress
 
   /** 标题前的 icon slot（可选；reference 4 张 KPI 默认无 icon） */
   readonly icon?: ReactNode
