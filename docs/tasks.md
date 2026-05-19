@@ -8,7 +8,75 @@
 
 <!-- ✅ PRE-04 全 16 子卡闭环（2026-05-18，连续推进 #2–#16 用户授权）；总览：5 ✅ A 级（dashboard/moderation/videos/sources/analytics）+ 8 ⚠️ S 级（merge/subtitles/home/image-health/users/audit/login/dashboard MISC）+ 4 ❌（staging/submissions/crawler/settings）+ 16 MISC + 4 REDO（01/02/03/04）+ SHARED-03 取消；详见 docs/M-SN-7-design-realign-audit-FULL.md；下一步等用户拍板 PRE-04 收尾 + 启动 SHARED-01/02 milestone -->
 
-### CHG-SN-7-REDO-01-A Crawler 重做契约设计 ✅ 已闭环（2026-05-18）
+### CHG-SN-7-REDO-01-B 阶段 1 ✅ ADR-122 已起草（2026-05-18）
+
+**阶段 1 完成时间**：2026-05-18
+**实施**：spawn arch-reviewer Opus 子代理 1 轮独立起草 → 主循环落 `docs/decisions.md` ADR-122 段（约 280 行）
+**评级**：Accepted **A**（综合自评 / Opus 1 轮 PASS 无红线无黄线）
+**关键决策**：
+- 文件归属：方案 A 单文件 `crawlerDashboard.ts`（不追加 crawler.ts 960 行 baseline）
+- POST 复用：方案 A alias 委托 `runService.createAndEnqueueRun`
+- timeline SQL：DB 窗口函数 `ROW_NUMBER() OVER (PARTITION BY source_site)` + fallback `DISTINCT ON`
+- audit 协议：复用 `crawler.run_create` actionType + afterJsonb.triggerType 区分 → **ADR-121 7 文件框架降为 4 文件框架**（不扩 types union / ACTION_TYPES / 两 set-equal 测试）
+
+### CHG-SN-7-REDO-01-B 阶段 2/3/4 ⏳ 待续推（~0.45w）
+
+**剩余工作**：
+- **阶段 2 实施**：新建 crawlerDashboard.ts（< 200 行）+ 2 queries 文件（crawlerKpi.ts + crawlerTimeline.ts）+ service + 前端 api.ts 扩展 + sources.ts JOIN（siteStats routeCount）
+- **阶段 3 audit RETRO 4 文件框架**：1 route 内 auditSvc.write + 2 payload 内容断言 test + 3 coverage.test 扩 PAYLOAD it.each + 4 changelog
+- **阶段 4 质量门禁**：typecheck + lint + file-size + unit + verify:adr-contracts + verify:endpoint-adr
+
+**已识别风险**：
+- timeline SQL 性能（benchmark > 200ms 时降级 DISTINCT ON）
+- crawlerDashboard.ts 控制 < 200 行（4 端点 + auditSvc.write + zod 校验）
+
+**等待用户**：是否单会话续推 vs 切分到下次会话承接
+
+<!-- 阶段 1 ADR-122 已 commit；阶段 2-4 待续 -->
+
+
+**SEQ**：M-SN-7 / REDO-01 第 2 子卡（B 阶段 0.6w / 实际后端代码改动）
+
+**问题理解**：REDO-01-A 契约已锁定 4 新端点提纲（GET /kpi + GET /timeline + POST /sites/:key/run + POST /run-all）。本卡完成：
+1. ADR-122 起草（Opus 必须 / 与现有 analytics + dashboard + monitor-snapshot 端点重叠评估）
+2. 4 端点实施
+3. DB queries + service 层
+4. 2 写端点同步落 ADR-121 7 文件 RETRO 框架（actionType `crawler.run_create` 复用）
+
+**方案**（分 4 阶段）：
+1. **阶段 1 ADR-122 起草**：spawn arch-reviewer Opus 子代理起 ADR-122，含：
+   - 4 端点契约表（method + path + req + resp + errors + audit）
+   - §"与现有端点关系"：核查 `/admin/crawler/overview` + `/system-status` + `/monitor-snapshot` 是否字段重叠，明示 `/kpi` 不替代 monitor-snapshot
+   - SQL 聚合策略（timeline 按 site_key 聚合 task 时间窗 / kpi 聚合 healthy/running/failed/batch）
+2. **阶段 2 实施**：
+   - `apps/api/src/db/queries/crawlerKpi.ts`（新建）+ `crawlerTimeline.ts`（新建）— DB 聚合 query
+   - `apps/api/src/services/CrawlerKpiService.ts`（新建）/ 复用 `CrawlerRunService` 派生 run-all
+   - `apps/api/src/routes/admin/crawler.ts` 扩 4 endpoint（注：crawler.ts 已 960 行 baseline，不可超 → 拆分独立路由文件 `crawler-kpi.ts` 或路径合理 grouping）
+3. **阶段 3 audit RETRO**（ADR-121 7 文件框架，仅写端点 sites/:key/run + run-all）：
+   - actionType `crawler.run_create` 已存在 → EXPECTED set + REQUIRED + PAYLOAD it.each 已覆盖
+   - 新增 payload 内容断言测试（`crawler-run-create-redo-audit.test.ts` 或扩展现有 audit test）
+4. **阶段 4 质量门禁**：typecheck + lint + file-size + unit test 全 PASS + verify:adr-contracts + verify:endpoint-adr
+
+**涉及文件**（预估 ~10 文件）：
+- 新建：`docs/decisions.md` ADR-122 段
+- 新建：`apps/api/src/db/queries/crawlerKpi.ts` / `crawlerTimeline.ts`
+- 新建：`apps/api/src/services/CrawlerKpiService.ts`
+- 修改：`apps/api/src/routes/admin/crawler.ts`（4 新 endpoint / 注意 file-size 守卫 / **可能需拆**）
+- 修改：`apps/server-next/src/lib/crawler/api.ts`（4 新前端函数）
+- 修改：`packages/types/src/admin-moderation.types.ts`（不需要 — actionType 复用）
+- 新建：`tests/unit/api/crawler-kpi.test.ts` / `crawler-timeline.test.ts` / `crawler-run-create-redo-audit.test.ts`
+- 修改：`docs/changelog.md`
+
+**严格约束**：
+- ❌ 不破坏现有 `POST /admin/crawler/runs`（4 新端点是 alias，内部委托 runService）
+- ❌ crawler.ts 不得超 500 行（已 960 baseline；不得追加，必须拆分独立路由文件）
+- ❌ 写端点不落 audit RETRO 7 文件框架（ADR-121 强制）
+- ❌ ADR-122 起草未经 Opus 评审就 commit（CLAUDE.md §模型路由强制项）
+
+**执行模型**：arch-reviewer (claude-opus-4-7) ADR-122 起草 + claude-opus-4-7 主循环实施 + arch-reviewer 评审 ADR
+
+**估时**：0.6w
+
 
 **完成时间**：2026-05-18
 **实施**：spawn arch-reviewer Opus 子代理 1 轮独立设计 → 主循环落 `docs/M-SN-7-redo-01-contract.md`（约 580 行）

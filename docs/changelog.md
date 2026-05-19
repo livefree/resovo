@@ -11055,3 +11055,47 @@ M-SN-7 SHARED milestone 收尾（仅 SHARED-01 闭环 / SHARED-02 + 03 取消）
 
 - 下张可执行卡：**CHG-SN-7-REDO-01-B** 后端 ADR-122 + 4 新端点实施（0.6w）
 - REDO-01-B 起卡条件（§5.4 已内化）：Opus 子代理先对照 `apps/api/src/routes/admin/analytics/*.ts` + `dashboard/*.ts` 评估端点合并 / 命名空间冲突，写入 ADR-122 §"与现有端点关系"
+
+---
+
+## [CHG-SN-7-REDO-01-B 阶段 1] ADR-122 Crawler 4 新端点协议设计起草
+
+- **完成时间**：2026-05-18（阶段 1 / 完整 REDO-01-B 待续阶段 2-4）
+- **记录时间**：2026-05-18
+- **执行模型**：claude-opus-4-7（主循环 / 整理落 ADR）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮独立起草直接 A 评级 PASS
+
+### 起源
+
+REDO-01-A 契约设计闭环（commit fa8293ae）锁定 4 新端点提纲。REDO-01-B 阶段 1：ADR 前置（plan §4.5 R7 MUST-8 + verify:endpoint-adr 守门）。
+
+### 修改文件（3 个）
+
+- `docs/decisions.md` — 追加 ADR-122 段（约 280 行 / 含 SQL 草案）
+- `docs/task-queue.md` — REDO-01-B 阶段 1 标记
+- `docs/tasks.md` — 阶段 1 闭环 + 阶段 2-4 待续状态
+
+### ADR-122 核心决策
+
+| 决策点 | 选定方案 | 关键理由 |
+|---|---|---|
+| 文件归属 | A 单文件 crawlerDashboard.ts | crawler.ts 960 行 baseline 不可追加；遵循 crawlerSites.ts 命名先例 |
+| POST 复用 | A alias 委托 runService | createAndEnqueueRun 已 battle-tested 三入口消费；零重复逻辑 |
+| timeline SQL | DB 窗口函数 + fallback | crawler_tasks 日 < 2000 行；窗口函数 < 50ms 预期 |
+| audit 协议 | 复用 crawler.run_create + afterJsonb.triggerType | CHG-SN-6-26-RETRO 落地时已携带；ADR-121 7→4 文件框架 |
+| ADR 状态 | Accepted A | Opus 1 轮 PASS 无红线 |
+
+### 与现有端点关系评估（D-122-2）
+
+- `/kpi` vs `/overview`：**部分重叠不替代**（v1 monitor-snapshot 保持 / `/kpi` 服务 server-next Crawler 页）
+- `/timeline` vs `/monitor-snapshot`：**不冗余**（数据模型完全不同）
+- POST 端点：**alias 语法糖**，内部委托 `POST /admin/crawler/runs`
+
+### 后续触发
+
+REDO-01-B 阶段 2-4 待续推（~0.45w）：
+- 阶段 2 实施 4 端点（crawlerDashboard.ts + 2 queries + service + 前端 api.ts）
+- 阶段 3 audit RETRO 4 文件框架（复用 actionType 降为 4 文件）
+- 阶段 4 质量门禁 + commit
+
+阶段 1 已 commit；阶段 2-4 等待用户决定单会话续推还是切分会话承接。

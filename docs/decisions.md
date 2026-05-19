@@ -7161,3 +7161,251 @@ const PutCategoryMappingSchema = z.object({
 - **扩展性**：**A-** — VideoGenre 枚举扩展需同步 CHECK 约束（有成本但路径明确）；单对多映射需架构改动（已列为重评触发条件）；5 条重评触发条件多轴覆盖
 
 **综合**：**A-**（arch-reviewer Opus 1 轮独立起草直接 PASS；待主循环落 `docs/decisions.md` 后跑 `verify:adr-d-numbers` + `verify:endpoint-adr`）
+
+---
+
+## ADR-122：Crawler 重做新增 4 端点协议设计
+
+- **日期**：2026-05-18
+- **状态**：Accepted
+- **决策者**：arch-reviewer (claude-opus-4-7) — 1 轮独立起草
+- **关联**：ADR-014（采集域导航收归）/ ADR-015（采集监控轮询策略）/ ADR-019（Ingest Policy）/ ADR-100 §4.5 R7 MUST-8（admin route ADR 前置）/ ADR-117（source_line_alias admin API）/ ADR-121（R-MID-1 audit RETRO 7 文件框架）
+- **对应交付**：CHG-SN-7-REDO-01-B（本卡）
+
+### 议题
+
+`docs/M-SN-7-redo-01-contract.md` §3 锁定了 Crawler 重做页面所需的 4 个新后端端点：
+
+1. `GET /admin/crawler/kpi` — 5 张 KPI 卡数据 + siteStats 补充
+2. `GET /admin/crawler/timeline` — 时间轴可视化聚合
+3. `POST /admin/crawler/sites/:key/run` — 单站触发采集（RESTful alias）
+4. `POST /admin/crawler/run-all` — 全站触发采集（RESTful alias）
+
+触发原因：ADR-100 §4.5 R7 MUST-8 硬约束要求新增 admin route 必须先起独立 ADR + Opus PASS；`npm run verify:endpoint-adr` 自动核验。
+
+**现状盘点**：
+- `apps/api/src/routes/admin/crawler.ts` 已 960 行（baseline 豁免），承载 18+ 端点
+- `GET /admin/crawler/overview` 返回 `CrawlerOverview`（siteTotal / connected / running / paused / failed / todayVideos / todayDurationMs）
+- `GET /admin/crawler/system-status` 返回 schedulerEnabled / freezeEnabled / orphanTaskCount
+- `GET /admin/crawler/monitor-snapshot` 聚合 overview + runs(20) + systemStatus
+- `POST /admin/crawler/runs` 统一触发入口（triggerType='single'|'batch'|'all'，已有 audit `crawler.run_create`）
+- `apps/api/src/routes/admin/crawlerSites.ts`（独立文件，sites CRUD 6 端点）
+
+### 决策
+
+新增 4 端点，文件归属采用**方案 A（单文件 `crawlerDashboard.ts`）**，POST 端点采用 **alias 委托模式复用 `CrawlerRunService.createAndEnqueueRun`**，audit 协议复用现有 `crawler.run_create` actionType 通过 `afterJsonb.triggerType` 区分。**ADR-121 7 文件框架降为 4 文件框架**（不扩 actionType union / ACTION_TYPES / 两 set-equal 测试）。
+
+### 决策要点
+
+**D-122-1（文件归属 — 方案 A：单文件 `crawlerDashboard.ts`）**
+
+| 方案 | 描述 | 优 | 劣 |
+|---|---|---|---|
+| A | `apps/api/src/routes/admin/crawlerDashboard.ts`（4 端点） | 域内语义清晰；crawler.ts 不膨胀；单文件 < 200 行 | 新文件 |
+| B | `crawler-redo.ts`（按 REDO 命名空间） | 开发期语义直白 | "redo" 是临时概念，cutover 后命名无意义 |
+| C | 分 2 文件（kpi+timeline / sites-run+run-all） | 粒度最细 | overhead 不合理；触发端点与 KPI 共享查询上下文 |
+
+裁决 A。理由：(1) crawler.ts（960 行）已 baseline 豁免、禁止追加；(2) 4 端点均为 Crawler 重做 dashboard 专用，语义统一；(3) `crawlerDashboard.ts` 遵循 `crawlerSites.ts` 同级先例。
+
+**D-122-2（与现有端点关系评估）**
+
+| 新端点 | 现有端点 | 关系 |
+|---|---|---|
+| `GET /kpi` | `GET /overview` | **部分重叠不替代** — `/overview` 7 字段服务 v1 monitor-snapshot；`/kpi` 7 字段 + `siteStats[]` 服务 server-next Crawler 页 |
+| `GET /kpi` | `GET /system-status` | 不重叠（运维 vs 业务）|
+| `GET /kpi siteStats` | `/admin/analytics/content-quality` | 不重叠（维度不同：site.key vs source_name 内容质量）|
+| `GET /timeline` | `GET /monitor-snapshot` | 不冗余（数据模型完全不同）|
+| `POST /sites/:key/run` + `POST /run-all` | `POST /runs` | alias（语法糖）|
+
+结论：无端点需替代或 unify。`/overview` / `/system-status` / `/monitor-snapshot` v1 cutover 前保留；之后可考虑 DEPRECATED。
+
+**D-122-3（POST run alias 复用 — 方案 A：alias 委托）**
+
+`createAndEnqueueRun` 已 battle-tested（scheduler + 手动触发 + source-refetch 三入口消费），新增 2 RESTful alias 仅参数预设（triggerType + siteKeys），无独立实施必要。REDO-01-A 契约 §3.3/3.4 原文明确"内部委托 runService"。
+
+**D-122-4（timeline SQL 聚合 — DB 窗口函数）**
+
+`ROW_NUMBER() OVER (PARTITION BY source_site ORDER BY started_at DESC)`。`crawler_tasks` 日 < 2000 行；DB 侧 limit 8 比拉全量高效。回退：若 benchmark > 200ms，降级 `DISTINCT ON (source_site)`（PG 扩展语法等价）。
+
+**D-122-5（audit 协议 — 复用 `crawler.run_create` + afterJsonb 区分）**
+
+`crawler.run_create` 在 CHG-SN-6-26-RETRO 落地时 afterJsonb 已携带 `triggerType` / `mode` / `siteKeys`；审计 UI 可通过 afterJsonb 精确区分 single/all。
+
+**ADR-121 7 文件框架降为 4 文件**（不扩 types union / ACTION_TYPES / 两 set-equal 测试）：
+- 1 route 文件（`crawlerDashboard.ts` 含 4 端点 + auditSvc.write）
+- 2 payload 内容断言新测试（`crawlerDashboard-run-audit.test.ts`）
+- 3 audit-log-coverage.test.ts 仅扩 PAYLOAD it.each 中新增 site-run 子 case（不扩 REQUIRED 数组）
+- 4 changelog 完成备注
+
+**D-122-6（ADR 重叠核查表）**
+
+| ADR | 冲突? | 说明 |
+|---|---|---|
+| ADR-014（采集域导航） | 无 | 4 端点均在 `/admin/crawler/*` |
+| ADR-015（轮询不 SSE） | 无 | useQuery 轮询 |
+| ADR-019（Ingest Policy） | 无 | 不修改 ingest_policy |
+| ADR-100 R7 MUST-8 | 本 ADR 即合规产出 | |
+| ADR-117 | 无 | 不涉及 source_line_aliases |
+| ADR-121 | 无 | D-122-5 复用 actionType 合规 |
+
+### 端点契约表
+
+#### 3.1 GET /admin/crawler/kpi
+
+| 字段 | 值 |
+|---|---|
+| Method + Path | `GET /admin/crawler/kpi` |
+| Auth | adminOnly |
+| Request | 无参数 |
+| Response 200 | `{ data: CrawlerKpiResponse }` |
+| Error codes | 401 / 403 |
+| Audit | 不需要（只读） |
+
+```ts
+interface CrawlerKpiResponse {
+  totalSites: number
+  healthySites: number
+  runningSites: number
+  failedSites: number
+  batchVideoCount: number
+  batchVideoDelta: number
+  avgDurationSeconds: number
+  siteStats: Array<{ key: string; routeCount: number; health: number }>
+}
+```
+
+#### 3.2 GET /admin/crawler/timeline
+
+| 字段 | 值 |
+|---|---|
+| Method + Path | `GET /admin/crawler/timeline` |
+| Auth | adminOnly |
+| Request query | `range: '30m'\|'1h'\|'2h'\|'6h'`（默认 `'1h'`）；`limit`（默认 8，max 20） |
+| Response 200 | `{ data: CrawlerTimelineResponse }` |
+| Error codes | 401 / 403 / 422 |
+| Audit | 不需要（只读） |
+
+```ts
+interface CrawlerTimelineResponse {
+  rangeStart: string
+  rangeEnd: string
+  ticks: string[]
+  rows: Array<{
+    siteKey: string
+    siteName: string
+    health: number
+    startPct: number
+    widthPct: number
+    durationSeconds: number
+    videoCount: number
+    status: 'ok' | 'warn' | 'danger'
+    last: string
+  }>
+}
+```
+
+#### 3.3 POST /admin/crawler/sites/:key/run
+
+| 字段 | 值 |
+|---|---|
+| Method + Path | `POST /admin/crawler/sites/:key/run` |
+| Auth | adminOnly |
+| Request | path `key`; body `{ mode?: 'incremental'\|'full' }`（默认 `incremental`）|
+| Response 202 | `{ data: { runId, taskIds, enqueuedSiteKeys, skippedSiteKeys } }` |
+| Error codes | 401 / 403 / 404 / 409 CONFLICT / 422 / 503 |
+| Audit | `crawler.run_create`（复用）|
+
+audit payload：`{ actionType: 'crawler.run_create', targetKind: 'crawler_site', targetId: key, afterJsonb: { triggerType: 'single', mode, siteKeys: [key] } }`
+
+#### 3.4 POST /admin/crawler/run-all
+
+| 字段 | 值 |
+|---|---|
+| Method + Path | `POST /admin/crawler/run-all` |
+| Auth | adminOnly |
+| Request | body `{ mode?: 'incremental'\|'full' }`（默认 `full`）|
+| Response 202 | `{ data: { runId, taskIds, enqueuedSiteKeys, skippedSiteKeys } }` |
+| Error codes | 401 / 403 / 409 / 503 |
+| Audit | `crawler.run_create`（复用）|
+
+audit payload：`{ actionType: 'crawler.run_create', targetKind: 'system', targetId: run.runId, afterJsonb: { triggerType: 'all', mode } }`
+
+### SQL 聚合策略
+
+#### /kpi SQL（CTE 单次往返）
+
+主查询使用 `WITH site_counts AS (...), running_count AS (...), today_tasks AS (...), yesterday_tasks AS (...)` 4 个 CTE + 主 SELECT，单次往返。siteStats 独立子查询避免主查询膨胀。
+
+**性能预期**：< 100ms。**索引建议**：crawler_tasks 已有 `(source_site, scheduled_at)`；如 siteStats > 100ms 追加 covering index。
+
+#### /timeline SQL（窗口函数 + range）
+
+```sql
+WITH ranked_tasks AS (
+  SELECT ct.source_site, cs.name, ct.started_at, ct.finished_at, ct.status, ct.result,
+         ROW_NUMBER() OVER (PARTITION BY ct.source_site ORDER BY ct.started_at DESC) AS rn
+  FROM crawler_tasks ct JOIN crawler_sites cs ON cs.key = ct.source_site
+  WHERE ct.type IN ('full-crawl','incremental-crawl')
+    AND ct.scheduled_at >= NOW() - $1::interval
+    AND ct.status IN ('running','done','failed')
+)
+SELECT * FROM ranked_tasks WHERE rn = 1
+ORDER BY CASE WHEN status='running' THEN 0 ELSE 1 END, started_at DESC
+LIMIT $2;
+```
+
+百分比（startPct / widthPct）Node.js 层算术。**性能预期**：< 50ms。**fallback**：> 200ms 降级 `DISTINCT ON (source_site)`。
+
+### 后果
+
+**正面**：
+1. Crawler 重做 dashboard 获得专用 KPI + timeline 数据源
+2. RESTful alias 简化前端调用链
+3. crawlerDashboard.ts 控制 < 200 行，crawler.ts 不膨胀
+4. audit 复用 `crawler.run_create` 零 4 真源同步成本
+5. SQL 窗口函数有明确 fallback
+6. 现有 v1 端点（/overview / /system-status / /monitor-snapshot）零影响
+
+**负面**：
+1. `/kpi` 与 `/overview` 字段部分重叠（v1 cutover 前并行）
+2. crawler 域路由从 2 文件增至 3 文件
+3. timeline SQL 对 crawler_tasks 行数增长敏感（> 10k/天需重评）
+4. siteStats LEFT JOIN video_sources 依赖 `video_sources.source_name` 索引
+
+### 替代方案对比
+
+| 维度 | A: 单文件 + alias（采纳）| B: crawler-redo.ts + 独立实施 | C: 分 2 文件 + 独立实施 |
+|---|---|---|---|
+| 文件归属 | 单文件 < 200 行，命名持久 | 命名临时（cutover 后无意义）| 过度碎片化 |
+| POST 逻辑 | 复用 runService 零重复 | 100+ 行重复 | 同 B |
+| audit 成本 | 复用 actionType，4 文件 | 新增 2 actionType，7 文件 x2 | 同 B |
+| **裁决** | **选定** | 拒绝 | 拒绝 |
+
+### 未来"重新评估"触发条件
+
+1. crawler_tasks 日增 > 10,000 行 → 重评 timeline SQL；考虑物化视图
+2. v1 apps/server 退场（M-SN-7 cutover）→ 评估 `/overview` / `/system-status` / `/monitor-snapshot` DEPRECATED；`/kpi` 可吸收合并
+3. siteStats routeCount 语义从 video_sources 演进为 source_line_aliases 表 → 修改 JOIN
+4. admin 审计 UI 若需按 single/all 精确筛选 actionType（而非 afterJsonb）→ 重评拆 actionType
+5. 新增超过 2 个写端点到 crawlerDashboard.ts → 评估再拆分
+
+### 关联
+
+- `docs/M-SN-7-redo-01-contract.md` §3（4 端点契约提纲）
+- `apps/api/src/routes/admin/crawler.ts`（现有 18+ 端点不修改）
+- `apps/api/src/routes/admin/crawlerSites.ts`（命名先例）
+- `apps/api/src/services/CrawlerRunService.ts`（`createAndEnqueueRun` alias 委托目标）
+- `apps/api/src/db/queries/crawlerTasks.ts`（`getCrawlerOverview` /kpi 参考实现）
+- `apps/api/src/services/AuditLogService.ts` ACTION_TYPES（本 ADR 不扩展）
+- `tests/unit/api/audit-log-coverage.test.ts`（不修改 REQUIRED）
+- ADR-014 / 015 / 019 / 100 / 117 / 121
+
+### 4 维度自评
+
+| 维度 | 评估 |
+|---|---|
+| 命名 | `crawlerDashboard.ts` 遵循 `crawlerSites.ts` 先例；4 端点 path 对称（kpi/timeline 读；sites/:key/run 与 run-all 写） |
+| 对称性 | 读端点无 audit、无 body；写端点统一 202 + audit；请求结构对称（mode） |
+| 状态职责 | 聚合在 DB queries 层 / 触发在 Service 层 / Route 零业务逻辑 |
+| 扩展性 | timeline range 枚举可增；siteStats 字段可追加；kpi 新指标可追加 response 字段不破坏向后兼容 |
+| **综合** | **A** |
