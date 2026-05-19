@@ -10578,3 +10578,97 @@ M-SN-7 入口 4 卡修订顺序：
 4. **CHG-SN-7-MISC-SETTINGS-TABS**（复核新增 / 待先核对 plan vs reference 正源）
 5. **CHG-SN-7-MISC-SHELL-NOTIFICATIONS**（复核新增 / 通知 Hub MVP 协同前端卡）
 6. 业务卡：通知 Hub MVP / DAG / PERSITE
+
+
+---
+
+## [CHG-SN-7-PRE-04] M-SN-7 设计稿对齐审计 · 全量 16 路由闭环
+
+- **完成时间**：2026-05-18
+- **记录时间**：2026-05-18
+- **执行模型**：claude-opus-4-7（主循环，按 sonnet 模式逐路由扫描）
+- **子代理**：无（PRE-04 收尾 Opus 排序后置到 REDO 阶段执行）
+
+### 起源
+
+M-SN-6 milestone 关闭复核延伸：用户在 CHG-SN-6-29-FOLLOWUP 后发现 server-next 后台架构性偏离设计稿 v2.1（多页面 v1 风格 DataTable + Tab + 外置 SelectionActionBar，未对照 `docs/designs/backend_design_v2.1/reference.md` §5.x + screens-N.jsx 真源）。M-SN-7 主线由"清债务"转为"**设计稿对齐重做**"。
+
+PRE-04 全量审计 16 admin 路由 vs 设计稿 §5.1–§5.16，连续推进 #1–#16 一会话内闭环。
+
+### 修改文件（5 个）
+
+- **新建** `docs/M-SN-7-design-realign-plan.md`（494 行）— M-SN-7 整体重做计划：5 用户决策（Submissions 纳入 / 子卡 A–J 粒度 / SHARED 独立 milestone / runs 独立路由 / 批量动作 Opus 裁决）+ §0–§7 全文 + §8 修订追踪
+- **新建** `docs/M-SN-7-design-realign-audit-FULL.md`（547 行）— PRE-04 全量审计报告：16 路由完整 spec ↔ 现状 ↔ 偏离归属对照
+- **新建** `docs/M-SN-6-milestone-audit-2026-05-17-RECHECK.md`（用户独立复核报告，PRE-04 起源材料）
+- `docs/task-queue.md` — 新增「设计稿对齐重做」专项段：45 张卡（PRE-04 / PRE-05 / SHARED-01/02 / REDO-01-A..J / REDO-02 / REDO-03-A..D / REDO-04 / 16 MISC）
+- `docs/tasks.md` — PRE-04 闭环卡片 + 16 路由评级总表
+
+### 16 路由评级总览
+
+| 评级 | 数量 | 路由 |
+|---|---|---|
+| ✅ A 级 | 5 | dashboard / moderation / videos / sources / analytics |
+| ⚠️ S 级 | 8 | dashboard 含 / merge / subtitles / home / image-health / users / audit / login |
+| ❌ 重做 | 4 | crawler（REDO-01）/ submissions（REDO-02）/ settings（REDO-03）/ staging（REDO-04） |
+
+### 重大发现
+
+1. **admin-ui KpiCard + Spark 已入库**（CHG-DESIGN-07 7B 已实施）→ 原计划 §3.5 SHARED-01/03 "新建"假设错误 → 修订为：
+   - SHARED-01：KpiCard `progress?` prop 扩展（0.35w → 0.1w）
+   - SHARED-03 Spark：**取消**（3 处消费形态全对齐设计稿）
+   - M-SN-SHARED 总估时 0.9w → **~0.5w**
+2. **reference.md 自评段过期**（"commit 实测为准"原则触发）：
+   - §5.1.4 dashboard 自评"未复刻"→ commit CHG-DESIGN-07 7C 已完整 5 卡片 + 4 行布局
+   - §5.15.4 analytics 自评"占位"→ commit CHG-DESIGN-09 已完整 4 KPI + Spark + 图表 + 任务表
+3. **system/settings 区段架构错位**（reference §5.11 显式提醒"sidebar 不应暴露多个 system 子项"）：当前 sidebar 暴露 system/{settings,cache,config,monitor,migration} 5 子项 + plan §6 8 类 Tab 实际仅 5 类 → REDO-03 收敛 4 子卡 ~1.5w
+4. **staging 路由不存在**：reference §5.5 spec 完整定义但 server-next `/admin/staging` 目录不存在；用户裁决方案 A → REDO-04 独立路由新建 ~1.5w
+
+### M-SN-7 估时修订
+
+| 阶段 | 工时 |
+|---|---|
+| PRE 阶段（PRE-01 + 02 + 04 + 05） | 1.27w |
+| M-SN-SHARED（01 + 02，03 取消） | ~0.5w |
+| REDO-01（crawler，10 子卡） | 2.55w |
+| REDO-02（submissions） | ~1w |
+| REDO-03（settings 收敛，4 子卡） | ~1.5w |
+| REDO-04（staging 方案 A 独立路由） | ~1.5w |
+| 16 MISC（穿插推进） | ~3–4w |
+| **M-SN-7 全 milestone** | **~11–14w** |
+
+### 用户决策
+
+| Q | 决策 |
+|---|---|
+| Submissions 纳入 M-SN-7 | ✅ 纳入（REDO-02） |
+| 重做粒度 | ✅ 子卡 A–J |
+| SHARED 共享原语 | ✅ 拆独立 milestone 先做 |
+| runs 列表归属 | ✅ 独立路由 `/admin/crawler/runs` + sidebar 二级菜单 |
+| 批量动作去留 | ⏸️ 留给 REDO-01-A Opus 子代理裁决 |
+| REDO-04 staging 方案 | ✅ 方案 A（独立路由 ~1.5w） |
+| 后续推进 | ✅ 自主按 §4 调用顺序，不再问先后 |
+
+### 质量门禁
+
+- 纯规划阶段，0 代码改动，0 测试改动
+- 4018 unit PASS 保持
+- typecheck / lint N/A（未触代码）
+
+### 后续触发
+
+按 §4 调用顺序：
+
+1. **PRE-01** 文件大小守卫脚本（0.12w，M-SN-6 挂账）— 下张可执行卡
+2. **PRE-02** ADR-121 R-MID-1 协议化（0.15w，M-SN-6 挂账）
+3. **PRE-05** ADR-123 分类映射 schema 起草（0.1w，REDO-01-F 依赖）
+4. **SHARED-01 + SHARED-02** 并行（0.1w + 0.4w = 0.5w）
+5. **REDO-01-A → J** Crawler 重做（2.55w）
+6. **REDO-02 / REDO-03 / REDO-04** 后续
+7. **16 MISC** 穿插推进
+
+### 关键自省
+
+PRE-04 暴露的反 M-SN-6 关闭复核盲点：
+- "全量审计基准"必须明确（commit 实测 vs reference 自评） — 否则会被自评段误导
+- 重大原语已存在（KpiCard / Spark）的假设错误，应在 milestone 起步**先做 admin-ui 现状盘点**而非依赖记忆
+- 设计稿真源（screens-N.jsx）行号级对照是审计可重现性的硬约束 — 单凭 reference.md §5.x 文字 spec 容易遗漏视觉细节（如 staging 1.5fr/1fr / home 1fr/360px / merge 1fr/60px/1fr 等关键 grid 比例）
