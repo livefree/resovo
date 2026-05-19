@@ -42,6 +42,7 @@ import {
   type CrawlerRunMode,
 } from '@/lib/crawler/api'
 import { ApiClientError } from '@/lib/api-client'
+import { exportCrawlerSitesCsv } from '@/lib/crawler/csv-export'
 import { CrawlerKpiRow } from './CrawlerKpiRow'
 import { CrawlerTimelineCard } from './CrawlerTimelineCard'
 import { CrawlerSiteList } from './CrawlerSiteList'
@@ -253,13 +254,15 @@ export function CrawlerClient() {
     }
   }, [refresh, status?.freezeEnabled, toast])
 
+  // CHG-SN-7-MISC-CRAWLER-CSV-EXPORT：站点列表 CSV 导出（逻辑抽到 lib/crawler/csv-export.ts）
   const handleExport = useCallback(() => {
-    toast.push({
-      title: '导出功能待实施',
-      description: 'CHG-SN-7 后续子卡补齐站点列表导出',
-      level: 'warn',
-    })
-  }, [toast])
+    if (sites.length === 0) {
+      toast.push({ title: '无可导出数据', description: '当前站点列表为空', level: 'warn' })
+      return
+    }
+    const filename = exportCrawlerSitesCsv(sites)
+    toast.push({ title: '已导出', description: `${filename} · ${sites.length} 站点`, level: 'success' })
+  }, [sites, toast])
 
   // ── 行级 {more} + + 增量 / + 全量（REDO-01-D）───────────────────
   const handleRunSite = useCallback(

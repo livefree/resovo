@@ -467,4 +467,14 @@ describe('queries.listUserSubmissions + badges 聚合 (REDO-02-B)', () => {
     const [, params] = queryFn.mock.calls[0]
     expect(params).toContain('已忽略')
   })
+
+  it("24. status='processed_or_rejected' → SQL 拼 status IN ('processed', 'rejected')（CHG-SN-7-MISC-USER-SUBMISSIONS-PROCESSED-FILTER）", async () => {
+    const queryFn = vi.fn().mockResolvedValue({ rows: [] })
+    const pool = { query: queryFn } as unknown as Pool
+    await listUserSubmissions(pool, { page: 1, limit: 20, type: 'all', status: 'processed_or_rejected' })
+    const [listSql] = queryFn.mock.calls[0]
+    expect(listSql).toContain("status IN ('processed', 'rejected')")
+    // 不应出现 us.status = $N 形式（IN 走硬编码避免 $N 参数）
+    expect(listSql).not.toMatch(/us\.status = \$\d/)
+  })
 })

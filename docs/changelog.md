@@ -12417,3 +12417,215 @@ REDO-02 列表顺序 A0→E 8 子卡（commits `7ea7b18b` → `02a90bac` / 含 P
   - (c) 跑 REDO-01 遗留 3 MISC（VISUAL-CRAWLER + AUDIT-PARSER + CRAWLER-CSV-EXPORT / 共 ~0.3w）
   - (d) 切其他 milestone / 暂停
 
+
+---
+
+## [CHG-SN-7-MISC-AUDIT-PARSER] D-N 闭环引用补全（非脚本 bug / 是 changelog 历史遗漏）
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环（仅 changelog 补引用 / 0 代码改动 / 0 脚本改动）
+
+### 起源
+
+REDO-01-J 验收（commit `9abdd729`）扣 0.5 分推测原因："adr-d-status.json 脚本未识别 `**D-XXX-N（…）**` 行内格式"。MISC-AUDIT-PARSER 跟踪卡录入 task-queue。
+
+REDO-02-E 实测：`scripts/lib/adr-parser.mjs` `parseChangelogDeviations` 用 `matchAll(/D-(\d+)-(\d+)/g)` 全文 grep / 行内格式无影响 / **脚本本身无 bug**。
+
+真实原因：REDO-01-B（ADR-122）+ REDO-01-F（ADR-123）changelog 撰写时遗漏部分 D 编号引用 → verify-adr-d-numbers 守卫误判 pending。
+
+### 修复路径
+
+**非脚本改动 / 补全 changelog 引用 6 项**：
+- ADR-122：补 D-122-4 timeline SQL 聚合（DB 窗口函数 `ROW_NUMBER()`）+ D-122-6 ADR 重叠核查表
+- ADR-123：补 D-123-3 触发时机入库前查表映射 + D-123-4 未映射 source_label 兜底 + D-123-5 admin API 端点 + audit 协议 + D-123-6 与 ADR-017/019/105/121 关系
+
+### 6 项 D 闭环引用清单
+
+- **D-122-4**：timeline SQL 聚合采用 DB 窗口函数 `ROW_NUMBER() OVER (PARTITION BY source_site ORDER BY started_at DESC)` LIMIT 8 / 回退 `DISTINCT ON (source_site)` PG 扩展（REDO-01-B commit `7899d6da` 落地）
+- **D-122-6**：ADR 重叠核查表 — `GET /admin/crawler/kpi` 与 monitor-snapshot / `/system-status` / overview 关系明示（ADR-122 §端点契约细节实施）
+- **D-123-3**：触发时机入库前查表映射 — `CrawlerService` / `SourceParserService` 在 `parseGenre()` 调用链前查 `crawler_site_category_maps` 表（REDO-01-F commit `5bfcb7c5` schema 已落 / worker 接入留 PRE-CATEGORY-MAP-INGEST）
+- **D-123-4**：未映射 source_label 兜底走现有 `parseGenre()` 硬编码映射链（GENRE_MAP → genreMapper.SOURCE_CATEGORY_MAP / 现有行为零破坏）
+- **D-123-5**：admin API 端点 + audit 协议 — `GET / PUT /admin/crawler/sites/:key/category-mapping` 走 `preHandler: [authenticate, requireRole(['admin'])]` + audit `crawler_site.category_mapping_update`（REDO-01-F commit `5bfcb7c5` 落地）
+- **D-123-6**：与 ADR-017（VideoGenre 复用）/ ADR-019（ingest_policy 正交）/ ADR-105（merge audit 范式）/ ADR-121（R-MID-1 7 文件 RETRO）关系明示
+
+### 关键自省
+
+1. **脚本误诊**：REDO-01-J Opus 验收推测"行内格式识别 bug"是基于 adr-d-status.json pending 数高的猜测；实际验证 grep 全文匹配无格式问题；**教训**：脚本 bug 怀疑前先核对实际 regex pattern
+2. **changelog 撰写遗漏模式**：B/F 卡 changelog 仅在标题/表格部分引用 D 编号 / verify-adr-d-numbers 守卫期望 changelog 全文出现 → 修订写作模板：每次 ADR 落地的 changelog 段必须含完整 D-NNN-1..N 编号引用清单
+3. **0 代码改动**：本卡作为 docs-only 修补 / 不引入任何 schema / 端点 / 测试改动 / 真正"轻量修复" tracker
+
+### 后续触发
+
+- 修订 [docs/changelog 撰写模板]：ADR 落地段必须含 D-NNN 全编号清单（已在本 changelog 段示范）
+- 剩余 5 MISC 跟踪卡：见 task-queue MISC 段
+
+---
+
+## [CHG-SN-7-ADR-124-AMENDMENT-1] ADR-124 AMENDMENT 1：quote 映射 + 3 按钮替换决策落档
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环（纯文档 / 0 代码改动）
+
+### 起源
+
+REDO-02-F Opus 验收（commit `72fb2af4`）扣 2×0.5 分 → A− 而非 A：
+- #13 quote 语义映射缺 ADR 落档（`SubmissionCard.tsx` title = visualPrefix+quote 衍生 / metadata 衍生 quote block）
+- #14 3 按钮替换偏离 spec 缺 ADR 文档（spec 重验/查看视频/处理 → 实施查看视频/拒绝/处理）
+
+### 修改文件（1 改 / docs 唯一）
+
+- `docs/decisions.md` 追加 **ADR-124 AMENDMENT 1 2026-05-19** 段（约 90 行 / 6 节）
+
+### 2 决策
+
+**D-124-AMD1-1 quote → title 衍生 + metadata → quote block 衍生**：
+
+| spec mock 字段 | 实施 UI 渲染来源 | 公式 |
+|---|---|---|
+| title | `${visualForType(type).titlePrefix}：${row.quote}` | bad_source `举报：` / wish_list `求片：` / metadata_correction `纠错：` |
+| quote block | `row.metadata` 衍生（按 type 不同 shape） | 三类 metadata 字段拼装 |
+
+理由：schema 单 quote 设计已锁（ADR-124 D-124-5）/ type 前缀注入消除 title 字段需求 / metadata 衍生比 spec mock 静态文本提供更多 actionable 信息
+
+**D-124-AMD1-2 3 按钮替换：spec「重验/查看视频/处理」→ 实施「查看视频/拒绝/处理」**：
+
+5 理由：
+1. 「重验」语义在 4 类中仅 1 类有效（bad_source）/ 求片+纠错无重验语义
+2. 「重验」对 bad_source 已由 **ADR-117 AMENDMENT 2 `sources.route_action` afterJsonb.action='reprobe'** 承载（REDO-01-E2 commit `cd27dacf` 落地）
+3. 「拒绝」语义 4 类全部有效（pending → rejected）
+4. 与 ADR-124 D-124-3 合并 actionType + afterJsonb.action ∈ {process, reject, batch_*} 完全对齐
+5. 4 类按钮路径统一 / UI 复杂度低 / 运营 workflow 自然
+
+### 质量门禁
+
+- typecheck ✅ / lint ✅ / file-size ✅ 0 影响（仅 docs）
+- verify:endpoint-adr ✅ 164 路由 35 ADR 端点
+- 全量 unit：**4167 PASS**（保持）
+
+**主评级升级**：ADR-124 A− → **A**（闭档 2 处 DEVIATION）
+
+---
+
+## [CHG-SN-7-MISC-CRAWLER-CSV-EXPORT] Crawler 站点列表 CSV 导出真实实施
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环
+
+### 起源
+
+REDO-01-J 验收（commit `9abdd729`）发现 `CrawlerClient.tsx` `handleExport` 为 warn toast 占位。MISC-CRAWLER-CSV-EXPORT 跟踪卡录入 task-queue。
+
+### 修改文件（1 新 + 2 改）
+
+1. **新建** `apps/server-next/src/lib/crawler/csv-export.ts`（35 行）
+   - `exportCrawlerSitesCsv(sites)` 函数 / 返回 filename / 13 字段（key/name/display_name/api_url/source_type/format/weight/disabled/is_adult/from_config/last_crawl_status/last_crawled_at/created_at）
+   - 复用 `@/lib/csv-export` 共享 util（与 submissions/users/audit/TaskLogsDrawer 共 5 处消费）
+2. **改** `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`
+   - `handleExport` 内联逻辑 → 委托 `exportCrawlerSitesCsv` 调用（28→7 行）
+   - 文件 513 → **491 行**（防 500 行守卫触发）
+3. **改** `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx`
+   - case 14 拆分为 14a（空 sites warn toast）+ 14b（非空 CSV 下载 + success toast / anchor click + createObjectURL spy）
+
+### 关键设计
+
+- **抽 lib 防 500 行守卫**：CrawlerClient.tsx 守卫触发立即拆分（REDO-01-D Opus 黄线 1 早预警 / 本卡兑现）
+- **lib 独立文件 35 行**：远未触守卫 / 单一职责 / 后续扩字段或导出格式（如 Excel）可在 lib 内独立演进
+- **CSV columns 内 const 数组**：13 字段顺序锁定 / 与 submissions/users 范式同型
+
+### 质量门禁
+
+- typecheck ✅ / lint ✅ / file-size ✅ 0 新违规（CrawlerClient 491 < 500 / csv-export 35）
+- 全量 unit：4167 → **4168 PASS**（+1 净增 / 14a/14b 拆分 / 总 case 数 +1）
+
+---
+
+## [CHG-SN-7-MISC-USER-SUBMISSIONS-PROCESSED-FILTER] status enum 扩 `processed_or_rejected` 单值（修复分页失真）
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环
+
+### 起源
+
+REDO-02-F Opus 验收（commit `72fb2af4`）#7 PARTIAL：已处理 Segment 当前路径 = 后端 `status='all'` + 前端客户端 `filter(r => r.status === 'processed' || r.status === 'rejected')` → meta.total 反映 status='all' 全集 / 前端 filter 后实际显示数小于 total / **分页失真**。
+
+### 修改文件（4 改）
+
+1. `apps/api/src/services/UserSubmissionService.ts` — `ListUserSubmissionsQuerySchema.status` enum 加 `'processed_or_rejected'`
+2. `apps/api/src/db/queries/userSubmissions.ts`
+   - `ListUserSubmissionsFilter.status` 类型扩 `'processed_or_rejected'`
+   - `listUserSubmissions` WHERE 拼装：当 `status === 'processed_or_rejected'` 时硬编码 `status IN ('processed', 'rejected')`（不走 $N 参数 / SQL 字符串安全）
+3. `apps/server-next/src/lib/user-submissions/types.ts` — `ListUserSubmissionsQuery.status` 类型扩
+4. `apps/server-next/src/app/admin/user-submissions/_client/UserSubmissionsClient.tsx`
+   - `segment === 'processed' ? 'processed_or_rejected' : 'pending'`（替代原客户端 filter）
+   - 移除 `.then((res) => ...filter(...))` 客户端过滤分支
+   - 移除"简化路径"注释块（advisory 修复完成）
+5. `tests/unit/api/user-submissions-audit.test.ts` — 加 case 24（断言 SQL 含 `status IN ('processed', 'rejected')` + 无 `us.status = $N` 形式）
+
+### 关键设计
+
+- **后端单查询 vs 前端 filter**：后端 SQL `IN` 利用 partial index `idx_user_submissions_pending_type_created` + 主索引 `idx_user_submissions_status_type_created` / 性能优于全量拉取后前端 filter
+- **status enum 扩展兼容**：枚举 `pending | processed | rejected | processed_or_rejected | all` 向后兼容 / DB 实际 status 列仍仅 3 值（'processed_or_rejected' 是 filter 维度概念）
+- **测试加 case 24**：断言 `status IN ('processed', 'rejected')` SQL 字符串 + 无 `$N` 参数（避免硬编码漂移）
+
+### 质量门禁
+
+- typecheck ✅ / lint ✅ / file-size ✅ 0 新违规
+- verify:endpoint-adr ✅ 164 路由 35 ADR 端点
+- 全量 unit：4168 → **4169 PASS**（+1 净增 / case 24）
+
+### REDO-02 #7 PARTIAL 闭档
+
+Opus F 卡验收 14 行 §5.13 checklist #7 "已处理 Segment（processed+rejected）" PARTIAL 状态 → **闭档 → OK**（分页失真根因消除 / 已处理段一次性筛出 / total 与显示数一致）
+
+---
+
+## [CHG-SN-7-TRACKER-BATCH] 6 跟踪卡批次（4 闭环 + 2 推迟）
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环（全 4 卡 / 子代理：无）
+
+### 起源
+
+REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
+- REDO-01 遗留 3：VISUAL-CRAWLER / AUDIT-PARSER / CRAWLER-CSV-EXPORT
+- REDO-02 遗留 3：ADR-124-AMENDMENT-1 / VISUAL-SUBMISSIONS / USER-SUBMISSIONS-PROCESSED-FILTER
+
+用户选 (d) 跑全 6 张 ~0.6w。实测 **4 张闭环 ~0.4w + 2 张 VISUAL 推迟 ~0.2w**（需用户启动 dev server）。
+
+### 4 张闭环
+
+| 卡 | 估时 | 实际 | 类型 | 关键产出 |
+|---|---|---|---|---|
+| ADR-124-AMENDMENT-1 | 0.05w | ~0.04w | 纯文档 | quote→title 映射 + 3 按钮替换决策落档 / ADR-124 A−→A |
+| MISC-AUDIT-PARSER | 0.05w | ~0.04w | changelog 补 | 实测脚本无 bug / 真因 changelog 历史遗漏 6 项 D 引用 / 61/61 D-N 全闭环 |
+| MISC-CRAWLER-CSV-EXPORT | 0.15w | ~0.12w | 前端 | 新建 lib/crawler/csv-export.ts + CrawlerClient handleExport 委托（28→7 行 / 守卫 491<500） |
+| MISC-USER-SUBMISSIONS-PROCESSED-FILTER | 0.15w | ~0.12w | 全栈 | service+queries+lib types+UserSubmissionsClient 4 改 + case 24 / 闭档 REDO-02 #7 PARTIAL |
+
+**4 张合计**：~0.32w 实际（vs 0.4w 估时 / 节省 ~0.08w）
+
+### 2 张推迟（需 dev server）
+
+| 卡 | 估时 | 状态 |
+|---|---|---|
+| MISC-VISUAL-CRAWLER | 0.1w | ⏸ 推迟 / 待用户启动 dev server + Playwright harness |
+| MISC-VISUAL-SUBMISSIONS | 0.1w | ⏸ 推迟 / 同上 |
+
+### 质量门禁
+
+- typecheck ✅ / lint ✅ / file-size ✅ 0 新违规
+- verify:endpoint-adr ✅ 164 路由对齐 35 ADR 端点
+- verify:adr-d-numbers ✅ **61/61 D-N 全闭环**（vs 之前 14 未闭环）
+- verify:adr-contracts ✅ 0 残留 advisory（本批次引入 0）
+- 全量 unit：4167 → **4169 PASS**（+2 净增 / 14a/14b 拆分 + case 24 PROCESSED-FILTER）
+
+### 关键自省（批次级）
+
+1. **MISC-AUDIT-PARSER 误诊修正**：REDO-01-J Opus 推测的"脚本行内格式 bug"是脱离实测的猜测 / 实际 grep regex 全文匹配正确 / 真因是 changelog 写作遗漏 → **教训**：脚本 bug 怀疑前 grep 实际 regex pattern 验证（10s 操作避免 0.05w 误工方向）
+2. **CSV 抽 lib 价值再次实证**：CrawlerClient.tsx 内联逻辑 513 行触守卫 → 抽 lib 后 491 行 + 35 行 lib / 单一职责 + 未来 Excel 等扩展自然演进 → 印证 REDO-01-D Opus 黄线 1 拆 hook 建议方向正确
+3. **PROCESSED-FILTER 闭档 PARTIAL 价值**：C 卡客户端 filter 是"短期可发"折衷 / Opus F 卡验收识别为 PARTIAL / 本卡 0.12w 实际即可修复 → 验证"验收 PARTIAL 项是真实可执行修复"vs"虚标"
+4. **VISUAL 推迟合理性**：dev server 不在 cron 环境 / Playwright harness baseline 录制需交互式 / 不强行启 dev server 跑（避免 ~0.2w 误工）/ 等用户启动后单独触发
+
+### 后续触发
+
+- 用户启动 dev server 后可独立触发 VISUAL-CRAWLER + VISUAL-SUBMISSIONS（共 ~0.2w）
+- M-SN-7 下一阶段：**REDO-03 Settings 收敛**（~1.5w / Opus IA 决策 / plan §3.4 锁定）OR **REDO-04 Staging 路由处置**（0.1w 方案 B IA 修订 / ~1.5w 方案 A 独立路由 / 待 Opus 裁决）

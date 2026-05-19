@@ -84,22 +84,13 @@ export function UserSubmissionsClient() {
       page,
       limit: PAGE_LIMIT,
       type: typeForSegment(segment),
-      status: segment === 'processed' ? 'all' : 'pending',
+      // CHG-SN-7-MISC-USER-SUBMISSIONS-PROCESSED-FILTER：
+      // segment='processed' → 后端 status='processed_or_rejected' 一次性筛出（修复分页失真 / 移除客户端 filter）
+      status: segment === 'processed' ? 'processed_or_rejected' : 'pending',
     })
       .then((res) => {
         if (cancelled) return
-        // segment='processed' 时只显示 processed/rejected（status='all' + 后端默认按 created_at DESC）
-        // 当前后端 status='all' 含 pending，需前端再过滤一道（简化：直接 segment=processed 时 status 切 processed/rejected）
-        if (segment === 'processed') {
-          // 后端无 'processed_or_rejected' 单值，分两次或前端过滤；这里改 mock 切 'processed' 单值
-          // 简化路径：用 status=processed 主，rejected 延后单 segment 卡（advisory）
-          setData({
-            ...res,
-            data: res.data.filter((r) => r.status === 'processed' || r.status === 'rejected'),
-          })
-        } else {
-          setData(res)
-        }
+        setData(res)
       })
       .catch((err: unknown) => {
         if (cancelled) return

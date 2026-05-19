@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-05-19T20:55:44.995Z",
+  "generatedAt": "2026-05-19T21:12:12.815Z",
   "summary": {
-    "closedTotal": 52,
-    "pendingTotal": 6
+    "closedTotal": 61,
+    "pendingTotal": 0
   },
   "perAdr": [
     {
@@ -38,27 +38,25 @@
     {
       "adrId": "ADR-123",
       "total": 6,
-      "closed": 2,
-      "pending": [
-        "D-123-3",
-        "D-123-4",
-        "D-123-5",
-        "D-123-6"
-      ]
+      "closed": 6,
+      "pending": []
     },
     {
       "adrId": "ADR-122",
       "total": 6,
-      "closed": 4,
-      "pending": [
-        "D-122-4",
-        "D-122-6"
-      ]
+      "closed": 6,
+      "pending": []
     },
     {
       "adrId": "ADR-124",
       "total": 8,
       "closed": 8,
+      "pending": []
+    },
+    {
+      "adrId": "ADR-124",
+      "total": 3,
+      "closed": 3,
       "pending": []
     }
   ]

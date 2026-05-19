@@ -4069,11 +4069,11 @@ PRE-04 16 子卡全部闭环：5 ✅ A 级 + 8 ⚠️ S 级（16 项 MISC 跟踪
 | **CHG-SN-7-MISC-WEB-NEXT-SIZE** | apps/web-next/components/layout/Nav.tsx 580 主动拆分 | 🟢 P3 | 0.15w | PRE-01 全量扩 |
 | **CHG-SN-7-MISC-PLAYER-CORE-SIZE** | packages/player + player-core 4 文件主动拆分（Player.tsx ×2 1091/1085 / useLayoutDecision ×2 526/526；播放器核心改动属高风险，需 arch-reviewer Opus 前置） | 🟠 P1 | 1.5–2.5w | PRE-01 全量扩 |
 | **CHG-SN-7-MISC-VISUAL-CRAWLER** | Crawler 视觉回归（dev server + Playwright harness baseline + diff ≤ 2%）—— REDO-01-J 软门 | 🟡 P2 | 0.1w | REDO-01-J 验收 |
-| **CHG-SN-7-MISC-AUDIT-PARSER** | adr-d-status.json 生成脚本：识别 `**D-XXX-N（…）**` 行内格式（避免误标 pending） | 🟢 P3 | 0.05w | REDO-01-J 验收 |
-| **CHG-SN-7-MISC-CRAWLER-CSV-EXPORT** | crawler-export-btn warn toast → 真实 CSV 下载（消费 `csv-export.ts` 共享 util） | 🟡 P2 | 0.15w | REDO-01-J 验收 |
-| **CHG-SN-7-ADR-124-AMENDMENT-1** | ADR-124 AMENDMENT 1：quote → title 映射 + 3 按钮替换决策落档（spec §5.13 vs 实施偏离） | 🟡 P2 | 0.05w | REDO-02-F 验收 |
+| ✅ **CHG-SN-7-MISC-AUDIT-PARSER** 已完成（2026-05-19）| 实测脚本本身无 bug / 真因是 changelog 历史遗漏 6 项 D 编号引用 → changelog 补全 / 61/61 D-N 全闭环 | 🟢 P3 | 0.05w | REDO-01-J 验收 ✅ |
+| ✅ **CHG-SN-7-MISC-CRAWLER-CSV-EXPORT** 已完成（2026-05-19）| 新建 lib/crawler/csv-export.ts (35 行 / exportCrawlerSitesCsv) + CrawlerClient handleExport 委托调用（28→7 行 / 守卫 491<500）+ 14a/14b 测试拆分 | 🟡 P2 | 0.15w | REDO-01-J 验收 ✅ |
+| ✅ **CHG-SN-7-ADR-124-AMENDMENT-1** 已完成（2026-05-19）| 在 decisions.md 追加 AMENDMENT 1 段 / D-124-AMD1-1 quote→title 衍生 + metadata→quote block 映射 + D-124-AMD1-2 3 按钮替换决策 + 5 理由（重验语义由 sources.route_action 承载等）/ ADR-124 主评级 A−→**A**（闭档 2 处 DEVIATION） | 🟡 P2 | 0.05w | REDO-02-F 验收 ✅ |
 | **CHG-SN-7-MISC-VISUAL-SUBMISSIONS** | /admin/user-submissions 视觉回归（dev server + Playwright baseline + pixel diff ≤ 2%） | 🟡 P2 | 0.1w | REDO-02-F 验收 |
-| **CHG-SN-7-MISC-USER-SUBMISSIONS-PROCESSED-FILTER** | 后端 status enum 加 `processed_or_rejected` 单值（避免已处理段客户端 filter 分页失真） | 🟡 P2 | 0.15w | REDO-02-F 验收 |
+| ✅ **CHG-SN-7-MISC-USER-SUBMISSIONS-PROCESSED-FILTER** 已完成（2026-05-19）| service ListUserSubmissionsQuerySchema 加 `processed_or_rejected` 枚举 + queries WHERE 拼 `status IN ('processed','rejected')` + 前端 lib/types 扩 + UserSubmissionsClient 改为 segment='processed' 时 status='processed_or_rejected'（移除客户端 filter / 修复分页失真 / 闭档 spec §5.13 #7 PARTIAL）| 🟡 P2 | 0.15w | REDO-02-F 验收 ✅ |
 
 ---
 

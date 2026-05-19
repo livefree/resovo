@@ -8034,3 +8034,93 @@ export interface UserSubmissionListResp {
 
 **advisory**：A 卡启动前先 0.1w 调研 admin-ui Card / Segment / QuoteBlock primitive；缺则起 `PRE-CARD-PRIMITIVE`（Opus）— 否则 C 卡可能膨胀至 1.2w。
 
+
+---
+
+## ADR-124 AMENDMENT 1 2026-05-19（CHG-SN-7-ADR-124-AMENDMENT-1）— quote 语义映射 + 3 按钮替换决策落档
+
+**触发**：REDO-02-F Opus 验收（commit `72fb2af4`）扣 2×0.5 分（A− 而非 A）：
+- 14 行 §5.13 checklist #13：quote→title 衍生 + metadata→quote block 衍生映射缺 ADR 落档
+- #14：3 按钮 spec「重验/查看视频/处理」→ 实施「查看视频/拒绝/处理」替换决策缺文档
+
+ADR-124 主文档未明文规定 UI 层 quote/metadata 渲染映射 + 3 按钮替换；commit 备注非正式落档。本 AMENDMENT 显式落档以闭合 spec ↔ 实施 之间的解释空间。
+
+**范围**：零代码改动 / 仅文档 / 锁定 UI 层 quote-metadata 映射规则 + 3 按钮替换理由。
+
+### 决策要点
+
+**D-124-AMD1-1 UI 层 quote → title 衍生 + metadata → quote block 衍生**
+
+ADR-124 §5 类型契约 `UserSubmissionRow.quote` 是自然语言主体（spec §5.13 设计稿用例：`"换了线路也是一样的，估计是源挂了"` / `"应该是 Simon Mirren，不是 Simon Mirran"`）。schema 仅单 quote 字段（vs spec mock 设计含 `title + quote` 双概念）。
+
+**实施层 UI 渲染规则**（`SubmissionCard.tsx`）：
+
+| spec mock 字段 | UI 渲染来源 | 公式 |
+|---|---|---|
+| title（如 "举报：危险关系 EP3 线路 2 黑屏"） | `${visualForType(type).titlePrefix}：${row.quote}` | type=bad_source → `举报：${quote}` / type=wish_list → `求片：${quote}` / type=metadata_correction → `纠错：${quote}` |
+| quote block（如 "换了线路也是一样的"） | `row.metadata` 衍生（按 type 不同 shape） | bad_source: `source_url + last_played_at` 拼装 / wish_list: `title_zh / year / douban_id / type` 拼装 / metadata_correction: `字段「${field}」→ ${suggested_value}` |
+| who / time | `@${submittedByName ?? submittedBy.slice(0,8)} · ${formatRelativeTime(createdAt)}` + 视频标题（如有） | 直接字段映射 |
+
+**理由**：
+1. **schema 单 quote 设计已锁**（ADR-124 §Schema 设计 / D-124-5）— 不为 UI 双字段加列 / 避免 schema 膨胀
+2. **type 前缀注入消除 title 字段需求**：3 类各自 prefix 即可承载 spec mock title 语义层
+3. **metadata 衍生展示** vs spec mock 静态 quote：实际 metadata 含结构化字段（source_url / douban_id / suggested_value）/ 比 spec mock 静态文本提供更多 actionable 信息
+
+**D-124-AMD1-2 3 按钮替换：spec 「重验/查看视频/处理 primary」 → 实施「查看视频/拒绝/处理 primary」**
+
+**spec §5.13 / screens-3.jsx:445-448 mock 3 按钮**：
+```jsx
+<button className="btn btn--sm">{I.refresh} 重验</button>
+<button className="btn btn--sm">查看视频</button>
+<button className="btn btn--sm btn--primary">{I.check} 处理</button>
+```
+
+**实施 3 按钮（`SubmissionCard.tsx:230-265`）**：
+```tsx
+<AdminButton variant="default" size="sm">查看视频</AdminButton>
+<AdminButton variant="default" size="sm">拒绝</AdminButton>
+<AdminButton variant="primary" size="sm">处理</AdminButton>
+```
+
+**替换决策（重验 → 拒绝）理由**：
+
+1. **「重验」语义在 4 类中仅 1 类有效**：
+   - bad_source（失效源举报）：重验 = 重新 probe source → 已由 **ADR-117 AMENDMENT 2 `sources.route_action` afterJsonb.action='reprobe'** 承载（REDO-01-E2 commit `cd27dacf` 落地）
+   - wish_list（求片）：无 source → 无重验语义
+   - metadata_correction（元数据纠错）：纠错对象是 metadata 字段 → 无重验语义
+2. **「拒绝」语义在 4 类全部有效**：4 类投稿都可被拒绝（不通过 / 标记 rejected / 状态机 pending → rejected）
+3. **统一「拒绝」覆盖 4 类 polymorphic**：与 ADR-124 §D-124-3 合并 actionType `user_submission.action` + afterJsonb.action ∈ {process, reject, batch_process, batch_reject} 完全对齐
+4. **重验跨域调用复杂度**：若 SubmissionCard 内嵌「重验」按钮 → 需跨调 `sources.route_action` 端点 + 仅对 bad_source 启用 + 求片/纠错 disabled / tooltip → UI 复杂度高 / 用户认知负担大；vs 「拒绝」4 类按钮路径统一 / 简化运营操作
+5. **运营 workflow 自然**：bad_source 进入 user_submissions 是用户主动报告 / 运营审核场景下「处理 / 拒绝」是审核员决策动作 / 重验是后续 actionable / 通过 sub-table 单独路径走（C 卡可后续扩 ContextMenu 提供「重验该 source」入口）
+
+### 关联
+
+- ADR-124（本卡 AMENDMENT 1 / 11 节 + D-124-1..8 全 closed）
+- ADR-117 AMENDMENT 2（`sources.route_action` reprobe 路径 / 承载重验语义）
+- spec §5.13（设计稿 mock 形态 / 本 AMENDMENT 落档 spec ↔ 实施偏离）
+- REDO-02-F Opus 验收（commit `72fb2af4` / 14 行 checklist #13 + #14 扣分项）
+- 实施代码：`apps/server-next/src/app/admin/user-submissions/_client/SubmissionCard.tsx`（230 行 / visualForType + 3 按钮）
+
+### 后果
+
+**正面**：
+1. spec ↔ 实施偏离明文落档 / 后续 visual 回归 / Opus 二次验收 / RECHECK 卡可援引本 AMENDMENT 拒绝伪偏离指控
+2. 重验语义跨域链路（user_submissions ↔ sources.route_action）明示 / 避免后续运营误读"重验缺失"
+
+**负面 / 风险**：
+1. 运营若期望 SubmissionCard 内嵌「重验」按钮 → 需用户教育 / 跳转到 sources 域路径（轻微 UX 摩擦 / 留 advisory）
+2. metadata 衍生 quote block 在 wish_list 全字段缺失时显示空字符串 → 已在 `SubmissionCard.tsx:225-237` 加 `Object.keys(row.metadata).length > 0` 守卫
+
+### 4 维度自评
+
+| 维度 | 评级 | 理由 |
+|---|---|---|
+| 命名 | A | quote / metadata 字段命名清晰 / 3 按钮 variant=default/primary 与 admin-ui 全家桶一致 |
+| 对称性 | A | 4 类 polymorphic 路径统一（process / reject 双路径覆盖 4 类）/ 与 sources.route_action 范式同源 |
+| 状态职责 | A | UI 层衍生规则明示 / schema 层零膨胀 / 跨域职责（user_submissions vs sources）清晰 |
+| 扩展性 | A | 未来加第 4 类（如 "组织申请"）/ 只需扩 visualForType + 0 schema 改动 / quote 字段语义通用 |
+
+**综合**：**A**
+
+升级 ADR-124 主评级 A− → **A**（本 AMENDMENT 1 闭档两处 DEVIATION）
+

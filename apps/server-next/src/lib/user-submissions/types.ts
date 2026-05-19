@@ -20,7 +20,11 @@ export interface ListUserSubmissionsQuery {
   readonly page?: number
   readonly limit?: number
   readonly type?: 'bad_source' | 'wish_list' | 'metadata_correction' | 'all'
-  readonly status?: 'pending' | 'processed' | 'rejected' | 'all'
+  /**
+   * 'processed_or_rejected' 单值（CHG-SN-7-MISC-USER-SUBMISSIONS-PROCESSED-FILTER）：
+   * 服务端 status IN ('processed', 'rejected') 一次性筛出 / 替代前端客户端 filter
+   */
+  readonly status?: 'pending' | 'processed' | 'rejected' | 'processed_or_rejected' | 'all'
   readonly sortField?: 'created_at' | 'processed_at'
   readonly sortDir?: 'asc' | 'desc'
 }

@@ -27,7 +27,12 @@ import type {
 
 export interface ListUserSubmissionsFilter {
   readonly type?: UserSubmissionType | 'all'
-  readonly status?: UserSubmissionStatus | 'all'
+  /**
+   * 'processed_or_rejected' 单值（CHG-SN-7-MISC-USER-SUBMISSIONS-PROCESSED-FILTER）：
+   * 后端 SQL WHERE 拼 `status IN ('processed', 'rejected')`；
+   * 用于 spec §5.13 "已处理" Segment 一次性筛出 / 替代前端客户端 filter / 修复分页失真
+   */
+  readonly status?: UserSubmissionStatus | 'all' | 'processed_or_rejected'
   readonly page: number
   readonly limit: number
   readonly sortField?: 'created_at' | 'processed_at'
@@ -112,7 +117,10 @@ export async function listUserSubmissions(
     params.push(type)
     where.push(`us.type = $${params.length}`)
   }
-  if (status && status !== 'all') {
+  if (status === 'processed_or_rejected') {
+    // CHG-SN-7-MISC-USER-SUBMISSIONS-PROCESSED-FILTER：单查询拼 IN
+    where.push(`us.status IN ('processed', 'rejected')`)
+  } else if (status && status !== 'all') {
     params.push(status)
     where.push(`us.status = $${params.length}`)
   }

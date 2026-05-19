@@ -6,7 +6,57 @@
 
 ## 进行中任务
 
-<!-- REDO-02 milestone 全闭环（2026-05-19）—— A0→F 7 子卡完整 / Opus 验收 A− / 等用户拍板下一卡 -->
+<!-- 6 跟踪卡批次闭环 4/6（2026-05-19）：AMENDMENT-1 + AUDIT-PARSER + CSV-EXPORT + PROCESSED-FILTER；VISUAL 2 张留用户启 dev server 单独跑 -->
+
+### CHG-SN-7-TRACKER-BATCH 4 跟踪卡批次闭环（2026-05-19）
+
+**完成时间**：2026-05-19（实际 ~0.4w / 原估 6 卡 ~0.6w / 其中 VISUAL 2 张 ~0.2w 推迟）
+
+**实施 4 张 / 推迟 2 张**：
+
+1. **ADR-124-AMENDMENT-1**（纯文档 / 0.05w）：在 decisions.md 追加 AMENDMENT 1 段
+   - D-124-AMD1-1 quote→title 衍生 + metadata→quote block 衍生映射规则锁定
+   - D-124-AMD1-2 3 按钮替换（重验→拒绝）决策落档 + 5 理由（重验语义已由 sources.route_action 承载等）
+   - ADR-124 主评级 A− → **A**（闭档两处 DEVIATION）
+
+2. **MISC-AUDIT-PARSER**（changelog 补引用 / 0.05w）：实测脚本本身无 bug
+   - 真因：REDO-01-B/F changelog 历史遗漏 6 项 D 编号引用（D-122-4/6 + D-123-3..6）
+   - 修复路径：changelog 补全引用（非脚本改）
+   - 结果：verify:adr-d-numbers **61/61 D-N 全闭环**（vs 之前 14 未闭环 / 6 残留）
+
+3. **MISC-CRAWLER-CSV-EXPORT**（前端 / 0.15w）：crawler-export-btn warn toast → 真实 CSV 下载
+   - 新建 `apps/server-next/src/lib/crawler/csv-export.ts`（35 行 / exportCrawlerSitesCsv 函数 / 13 字段）
+   - CrawlerClient.tsx handleExport 从 28 行内联逻辑 → 7 行委托调用（保 < 500 行守卫）
+   - 测试 14 拆分为 14a 空 sites warn + 14b 非空 CSV 下载 + success toast
+
+4. **MISC-USER-SUBMISSIONS-PROCESSED-FILTER**（后端 + 前端 / 0.15w）：status enum 加 `processed_or_rejected` 单值
+   - service `ListUserSubmissionsQuerySchema` 加 `'processed_or_rejected'` 枚举
+   - queries `listUserSubmissions` WHERE 拼 `status IN ('processed', 'rejected')`（避免 $N 参数）
+   - 前端 lib/types 扩 + UserSubmissionsClient.tsx 改 `segment === 'processed' ? 'processed_or_rejected' : 'pending'`
+   - 移除 C 卡客户端 filter（修复 spec §5.13 #7 PARTIAL 分页失真）
+   - 测试加 case 24（SQL IN 字符串断言 + 无 $N 参数）
+
+**推迟 2 张 VISUAL（需 dev server）**：
+- **CHG-SN-7-MISC-VISUAL-CRAWLER**（0.1w）：留 task-queue MISC 段 / 等用户启动 dev server 单独触发
+- **CHG-SN-7-MISC-VISUAL-SUBMISSIONS**（0.1w）：同上
+
+**质量门禁**：
+- typecheck ✅ / lint ✅ / file-size ✅ 0 新违规（CrawlerClient 抽 CSV 后 491 < 500）
+- verify:endpoint-adr ✅ 164 路由 35 ADR 端点
+- verify:adr-d-numbers ✅ **61/61 全闭环**（vs 之前 14 未闭环）
+- 全量 unit：4167 → **4169 PASS**（+2 净增 / 14a 拆 14b + case 24 PROCESSED-FILTER）
+
+**执行模型**：claude-opus-4-7 主循环（纯实施 / 子代理：无）
+
+**关键自省**：
+1. **MISC-AUDIT-PARSER 误诊**：REDO-01-J Opus 推测"行内格式识别 bug"是脱离实测的猜测 / 实际 grep regex 正确 / 真因是 changelog 历史遗漏 → 教训：脚本 bug 怀疑前 grep 实际 regex pattern
+2. **CSV 抽 lib 防 500 行守卫**：CrawlerClient.tsx 513→491 行（守卫触发立即拆分 / 与 REDO-01-D Opus 黄线 1 早预警一致）
+3. **PROCESSED-FILTER 闭档 C 卡 PARTIAL**：spec §5.13 #7 已处理段从客户端 filter 改后端 IN 查询 / 分页失真根因消除 / Opus 验收 PARTIAL 项实质修复
+
+<!-- 6 跟踪卡批次 4/6 闭环；VISUAL 2 张推迟 / 等用户拍板下一路径 -->
+
+
+### CHG-SN-7-TRACKER-BATCH ⏳ 已替换为闭环卡
 
 ### CHG-SN-7-REDO-02-F ✅ Opus 验收 A− 闭环 / REDO-02 milestone 闭环（2026-05-19）
 

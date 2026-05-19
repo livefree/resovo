@@ -316,13 +316,43 @@ describe('CrawlerClient (REDO-01-C 骨架)', () => {
     })
   })
 
-  it('14. 导出按钮：点击触发 warn toast 占位', async () => {
+  it('14a. 导出按钮：空 sites → warn toast "无可导出数据"', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([])
     render(<CrawlerClient />)
     const btn = await waitFor(() => screen.getByTestId('crawler-export-btn'))
     fireEvent.click(btn)
     expect(toastPushMock).toHaveBeenCalledWith(
-      expect.objectContaining({ level: 'warn', title: '导出功能待实施' }),
+      expect.objectContaining({ level: 'warn', title: '无可导出数据' }),
     )
+  })
+
+  it('14b. 导出按钮：非空 sites → CSV 下载 + success toast', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    // 拦截 anchor click 与 createObjectURL（jsdom 默认不实现）
+    const clickSpy = vi.fn()
+    const createObjectUrlSpy = vi.fn().mockReturnValue('blob:fake')
+    const revokeSpy = vi.fn()
+    ;(globalThis.URL as unknown as { createObjectURL: typeof createObjectUrlSpy }).createObjectURL = createObjectUrlSpy
+    ;(globalThis.URL as unknown as { revokeObjectURL: typeof revokeSpy }).revokeObjectURL = revokeSpy
+    const origCreate = document.createElement.bind(document)
+    const createSpy = vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      const el = origCreate(tag)
+      if (tag === 'a') (el as unknown as { click: typeof clickSpy }).click = clickSpy
+      return el
+    })
+    try {
+      render(<CrawlerClient />)
+      const btn = await waitFor(() => screen.getByTestId('crawler-export-btn'))
+      fireEvent.click(btn)
+      await waitFor(() => {
+        expect(clickSpy).toHaveBeenCalledOnce()
+        expect(toastPushMock).toHaveBeenCalledWith(
+          expect.objectContaining({ level: 'success', title: '已导出' }),
+        )
+      })
+    } finally {
+      createSpy.mockRestore()
+    }
   })
 
   it('15. siteStats 注入 health + routeCount 列', async () => {

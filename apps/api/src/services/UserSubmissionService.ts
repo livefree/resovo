@@ -276,7 +276,9 @@ export const ListUserSubmissionsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
   type: z.enum(['bad_source', 'wish_list', 'metadata_correction', 'all']).optional().default('all'),
-  status: z.enum(['pending', 'processed', 'rejected', 'all']).optional().default('pending'),
+  // CHG-SN-7-MISC-USER-SUBMISSIONS-PROCESSED-FILTER：加 'processed_or_rejected' 单值
+  // 避免前端 UserSubmissionsClient 客户端 filter 导致分页失真（spec §5.13 已处理 Segment）
+  status: z.enum(['pending', 'processed', 'rejected', 'processed_or_rejected', 'all']).optional().default('pending'),
   sortField: z.enum(['created_at', 'processed_at']).optional(),
   sortDir: z.enum(['asc', 'desc']).optional(),
 })
