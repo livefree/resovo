@@ -1,33 +1,34 @@
 /**
- * CrawlerClient.test.tsx — /admin/crawler MVP 单测（CHG-SN-6-13）
+ * CrawlerClient.test.tsx — REDO-01-C 重写后骨架单测
  *
- * 覆盖（≥ 9 用例硬清单）：
- *   1. 渲染基础：PageHeader + table 容器
- *   2. 站点列表加载：渲染 key / name / apiUrl 列
- *   3. system-status 4 scheduler 卡显示
- *   4. 新增按钮触发 drawer 打开（drawer-testid）
- *   5. 编辑（行点击）→ drawer 携带既有 key（disabled）+ form 字段注入
- *   6. 创建提交成功 toast + drawer 关闭
- *   7. DUPLICATE_KEY 错误码差异化 toast
- *   8. fromConfig=true 删除被拒（FORBIDDEN warn toast）
- *   9. 批量操作 enable + 影响数 toast
- *   10. validateCrawlerSite 通过 toast success
- *   11. Empty state（零站点）
- *   12. Error state + retry
+ * 真源：M-SN-7-redo-01-contract.md §1（6 组件契约）
+ *
+ * 范围（REDO-01-C 骨架）：
+ *   - PageHeader title + 3 actions（导出 / + 新增站点 / 全站全量）
+ *   - CrawlerKpiRow 5 张 KpiCard 数据绑定
+ *   - CrawlerTimelineCard 框架 + pause toggle + 冻结 pill
+ *   - CrawlerSiteList 9 列骨架 + empty / error 三态
+ *   - + 新增站点 drawer 触发
+ *   - 全站全量 confirm + API + toast
+ *
+ * 不在本卡范围（暂不覆盖）：
+ *   - 行级 {more} 菜单（REDO-01-D）
+ *   - 行展开（REDO-01-E + F）
+ *   - 高级 dropdown / freeze toggle / stop-all / reindex（REDO-01-G）
+ *   - runs 独立路由（REDO-01-H）
  */
 import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 const listCrawlerSitesMock = vi.fn()
+const getCrawlerSystemStatusMock = vi.fn()
+const getCrawlerKpiMock = vi.fn()
+const getCrawlerTimelineMock = vi.fn()
+const runCrawlerAllMock = vi.fn()
 const createCrawlerSiteMock = vi.fn()
 const updateCrawlerSiteMock = vi.fn()
 const deleteCrawlerSiteMock = vi.fn()
-const batchCrawlerSitesMock = vi.fn()
 const validateCrawlerSiteMock = vi.fn()
-const getCrawlerSystemStatusMock = vi.fn()
-const setCrawlerFreezeMock = vi.fn()
-const stopAllCrawlerMock = vi.fn()
-const triggerReindexMock = vi.fn()
 const toastPushMock = vi.fn()
 const confirmSpy = vi.fn().mockReturnValue(true)
 
@@ -36,15 +37,11 @@ vi.mock('../../../../../../apps/server-next/src/lib/crawler/api', () => ({
   createCrawlerSite: (...args: unknown[]) => createCrawlerSiteMock(...args),
   updateCrawlerSite: (...args: unknown[]) => updateCrawlerSiteMock(...args),
   deleteCrawlerSite: (...args: unknown[]) => deleteCrawlerSiteMock(...args),
-  batchCrawlerSites: (...args: unknown[]) => batchCrawlerSitesMock(...args),
   validateCrawlerSite: (...args: unknown[]) => validateCrawlerSiteMock(...args),
   getCrawlerSystemStatus: (...args: unknown[]) => getCrawlerSystemStatusMock(...args),
-  setCrawlerFreeze: (...args: unknown[]) => setCrawlerFreezeMock(...args),
-  stopAllCrawler: (...args: unknown[]) => stopAllCrawlerMock(...args),
-  triggerReindex: (...args: unknown[]) => triggerReindexMock(...args),
-  // SchedulerConfigDrawer 依赖（关闭时不会调用）
-  getAutoCrawlConfig: vi.fn(() => new Promise(() => {})),
-  setAutoCrawlConfig: vi.fn(() => new Promise(() => {})),
+  getCrawlerKpi: (...args: unknown[]) => getCrawlerKpiMock(...args),
+  getCrawlerTimeline: (...args: unknown[]) => getCrawlerTimelineMock(...args),
+  runCrawlerAll: (...args: unknown[]) => runCrawlerAllMock(...args),
 }))
 
 vi.mock('@resovo/admin-ui', async () => {
@@ -79,7 +76,6 @@ vi.mock('../../../../../../apps/server-next/src/lib/api-client', () => {
 })
 
 import { CrawlerClient } from '../../../../../../apps/server-next/src/app/admin/crawler/_client/CrawlerClient'
-import { ApiClientError } from '../../../../../../apps/server-next/src/lib/api-client'
 
 const SITE_1 = {
   key: 'jszyapi',
@@ -100,20 +96,33 @@ const SITE_1 = {
   updatedAt: '2026-05-16T00:00:00Z',
 }
 
-const SITE_CONFIG = {
-  ...SITE_1,
-  key: 'config-site',
-  name: 'Config 来源',
-  fromConfig: true,
+const KPI_LIVE = {
+  totalSites: 40,
+  healthySites: 33,
+  runningSites: 7,
+  failedSites: 5,
+  batchVideoCount: 649,
+  batchVideoDelta: 47,
+  avgDurationSeconds: 62,
+  siteStats: [{ key: 'jszyapi', routeCount: 3, health: 88 }],
 }
 
-const SYSTEM_STATUS = {
-  enabled: true,
-  schedulers: [
-    { name: 'auto-publish-staging', enabled: true, intervalMs: 5000 },
-    { name: 'verify-published-sources', enabled: true, intervalMs: 60000 },
-    { name: 'verify-staging-sources', enabled: true, intervalMs: 60000 },
-    { name: 'reconcile-search-index', enabled: false, intervalMs: 3600000 },
+const TIMELINE_LIVE = {
+  rangeStart: '2026-05-18T22:00:00Z',
+  rangeEnd: '2026-05-18T23:00:00Z',
+  ticks: ['2026-05-18T22:00:00Z', '2026-05-18T22:30:00Z', '2026-05-18T23:00:00Z'],
+  rows: [
+    {
+      siteKey: 'jszyapi',
+      siteName: '极速资源',
+      health: 88,
+      startPct: 0.1,
+      widthPct: 0.4,
+      durationSeconds: 60,
+      videoCount: 12,
+      status: 'ok' as const,
+      last: '2026-05-18T22:55:00Z',
+    },
   ],
 }
 
@@ -122,393 +131,181 @@ beforeEach(() => {
   createCrawlerSiteMock.mockReset()
   updateCrawlerSiteMock.mockReset()
   deleteCrawlerSiteMock.mockReset()
-  batchCrawlerSitesMock.mockReset()
   validateCrawlerSiteMock.mockReset()
   getCrawlerSystemStatusMock.mockReset()
-  setCrawlerFreezeMock.mockReset()
-  stopAllCrawlerMock.mockReset()
-  triggerReindexMock.mockReset()
+  getCrawlerKpiMock.mockReset()
+  getCrawlerTimelineMock.mockReset()
+  runCrawlerAllMock.mockReset()
   toastPushMock.mockReset()
   confirmSpy.mockReset().mockReturnValue(true)
   ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
+
+  // 默认成功 mock，便于个别用例 override
+  listCrawlerSitesMock.mockResolvedValue([])
+  getCrawlerSystemStatusMock.mockResolvedValue({})
+  getCrawlerKpiMock.mockResolvedValue(KPI_LIVE)
+  getCrawlerTimelineMock.mockResolvedValue(TIMELINE_LIVE)
 })
 
-describe('CrawlerClient', () => {
-  it('1. 渲染基础：data-crawler-client + PageHeader', async () => {
-    listCrawlerSitesMock.mockResolvedValueOnce([])
-    getCrawlerSystemStatusMock.mockResolvedValueOnce({})
+describe('CrawlerClient (REDO-01-C 骨架)', () => {
+  it('1. 渲染基础：data-crawler-client + PageHeader title', async () => {
     const { container } = render(<CrawlerClient />)
     expect(container.querySelector('[data-crawler-client]')).not.toBeNull()
     expect(screen.getByText('采集控制')).not.toBeNull()
   })
 
-  it('2. 站点列表加载：key / name / apiUrl 渲染', async () => {
-    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
-    getCrawlerSystemStatusMock.mockResolvedValueOnce({})
+  it('2. PageHeader 3 actions（导出 / + 新增 / 全站全量）渲染', async () => {
     render(<CrawlerClient />)
-    await waitFor(() => {
-      expect(screen.getByText('jszyapi')).not.toBeNull()
-      expect(screen.getByText('极速资源')).not.toBeNull()
-      expect(screen.getByText(/jszyapi.com\/api.php/)).not.toBeNull()
-    })
+    await waitFor(() => screen.getByTestId('crawler-export-btn'))
+    expect(screen.getByTestId('crawler-export-btn')).not.toBeNull()
+    expect(screen.getByTestId('crawler-create-btn')).not.toBeNull()
+    expect(screen.getByTestId('crawler-run-all-btn')).not.toBeNull()
   })
 
-  it('3. system-status 4 scheduler 卡显示', async () => {
-    listCrawlerSitesMock.mockResolvedValueOnce([])
-    getCrawlerSystemStatusMock.mockResolvedValueOnce(SYSTEM_STATUS)
+  it('3. CrawlerKpiRow 5 张 KpiCard 渲染（站点 / 运行中 / 失败 / 本批 / 平均时长）', async () => {
     const { container } = render(<CrawlerClient />)
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="crawler-system-status"]')).not.toBeNull()
-      expect(container.querySelectorAll('[data-scheduler]').length).toBe(4)
+      expect(container.querySelector('[data-crawler-kpi-row]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="crawler-kpi-total"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="crawler-kpi-running"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="crawler-kpi-failed"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="crawler-kpi-batch"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="crawler-kpi-avg-duration"]')).not.toBeNull()
     })
   })
 
-  it('4. 新增按钮触发 drawer 打开', async () => {
+  it('4. CrawlerTimelineCard 渲染时间轴框架 + status pill', async () => {
+    const { container } = render(<CrawlerClient />)
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="crawler-timeline-card"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="crawler-timeline-status-pill"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="crawler-timeline-pause-toggle"]')).not.toBeNull()
+    })
+  })
+
+  it('5. freezeEnabled=true → 时间轴 pill 显示"全局冻结"', async () => {
+    getCrawlerSystemStatusMock.mockResolvedValue({ freezeEnabled: true })
+    const { container } = render(<CrawlerClient />)
+    await waitFor(() => {
+      const pill = container.querySelector('[data-testid="crawler-timeline-status-pill"]')
+      expect(pill?.textContent).toContain('全局冻结')
+      expect(pill?.getAttribute('data-frozen')).toBe('')
+    })
+  })
+
+  it('6. 暂停切换按钮：默认"暂停刷新" → 点击后"恢复刷新"', async () => {
+    render(<CrawlerClient />)
+    const btn = await waitFor(() => screen.getByTestId('crawler-timeline-pause-toggle'))
+    expect(btn.textContent).toContain('暂停刷新')
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(screen.getByTestId('crawler-timeline-pause-toggle').textContent).toContain('恢复刷新')
+    })
+  })
+
+  it('7. 站点列表加载：渲染 key + name（时间轴 + 表格同名 → getAllByText）', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    render(<CrawlerClient />)
+    await waitFor(() => {
+      // 极速资源 在时间轴行 + 表格 site 列同时出现
+      expect(screen.getAllByText('极速资源').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText(/jszyapi/).length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  it('8. Empty state：零站点渲染"暂无站点"', async () => {
     listCrawlerSitesMock.mockResolvedValueOnce([])
-    getCrawlerSystemStatusMock.mockResolvedValueOnce({})
-    render(<CrawlerClient />)
-    await waitFor(() => screen.getByTestId('crawler-create-btn'))
-    fireEvent.click(screen.getByTestId('crawler-create-btn'))
-    await waitFor(() => {
-      expect(screen.getByTestId('crawler-drawer')).not.toBeNull()
-      expect(screen.getByText('新增采集站点')).not.toBeNull()
-    })
-  })
-
-  it('5. 创建提交成功 toast + drawer 关闭', async () => {
-    listCrawlerSitesMock.mockResolvedValue([])
-    getCrawlerSystemStatusMock.mockResolvedValue({})
-    createCrawlerSiteMock.mockResolvedValueOnce(SITE_1)
-    render(<CrawlerClient />)
-    await waitFor(() => screen.getByTestId('crawler-create-btn'))
-    fireEvent.click(screen.getByTestId('crawler-create-btn'))
-    await waitFor(() => screen.getByTestId('crawler-form-submit'))
-    // Drawer 已渲染 — 后续表单交互依赖 AdminInput wrapper（testid 在 wrapper 非内部 input）；
-    // 本测试只验证 drawer + submit 按钮存在（form state 初始空 → submit disabled）
-    expect((screen.getByTestId('crawler-form-submit') as HTMLButtonElement).disabled).toBe(true)
-  })
-
-  it('6. DUPLICATE_KEY 错误码差异化 toast', async () => {
-    listCrawlerSitesMock.mockResolvedValue([])
-    getCrawlerSystemStatusMock.mockResolvedValue({})
-    createCrawlerSiteMock.mockRejectedValueOnce(
-      new ApiClientError('DUPLICATE_KEY', 'key "x" 已存在', 409),
-    )
-    render(<CrawlerClient />)
-    await waitFor(() => screen.getByTestId('crawler-create-btn'))
-    fireEvent.click(screen.getByTestId('crawler-create-btn'))
-    await waitFor(() => screen.getByTestId('crawler-form-key'))
-
-    // 直接断言 describeApiError 错误码差异化 — mock 触发 error
-    fireEvent.click(screen.getByTestId('crawler-form-submit'))
-    await waitFor(() => {
-      // toast 推送 with DUPLICATE_KEY 差异化（虽然 submit 因 form disabled 不一定真触发 createMock，
-      // 但 toast 行为预期已建立；本测试以确认无 throw + drawer 渲染完整为目标）
-      expect(screen.getByTestId('crawler-drawer')).not.toBeNull()
-    })
-  })
-
-  it('7. fromConfig=true 行点击 → drawer 渲染（包含 delete 按钮）', async () => {
-    listCrawlerSitesMock.mockResolvedValueOnce([SITE_CONFIG])
-    getCrawlerSystemStatusMock.mockResolvedValueOnce({})
-    render(<CrawlerClient />)
-    await waitFor(() => screen.getByText('config-site'))
-    // 点击行（触发 onRowClick → handleEdit）
-    fireEvent.click(screen.getByText('Config 来源'))
-    await waitFor(() => {
-      expect(screen.getByText(/编辑站点 · config-site/)).not.toBeNull()
-      expect(screen.getByTestId('crawler-form-delete')).not.toBeNull()
-    })
-  })
-
-  it('8. fromConfig=true 删除被拒 → FORBIDDEN warn toast', async () => {
-    listCrawlerSitesMock.mockResolvedValueOnce([SITE_CONFIG])
-    getCrawlerSystemStatusMock.mockResolvedValueOnce({})
-    render(<CrawlerClient />)
-    await waitFor(() => screen.getByText('config-site'))
-    fireEvent.click(screen.getByText('Config 来源'))
-    await waitFor(() => screen.getByTestId('crawler-form-delete'))
-    fireEvent.click(screen.getByTestId('crawler-form-delete'))
-    await waitFor(() => {
-      expect(toastPushMock).toHaveBeenCalledWith(expect.objectContaining({
-        level: 'warn',
-        title: '禁止删除',
-      }))
-    })
-  })
-
-  it('9. validate 按钮渲染（依赖 apiUrl 填充才 enable）', async () => {
-    listCrawlerSitesMock.mockResolvedValueOnce([])
-    getCrawlerSystemStatusMock.mockResolvedValueOnce({})
-    render(<CrawlerClient />)
-    await waitFor(() => screen.getByTestId('crawler-create-btn'))
-    fireEvent.click(screen.getByTestId('crawler-create-btn'))
-    await waitFor(() => screen.getByTestId('crawler-form-validate'))
-    // 初始 apiUrl='' → validate 按钮 disabled
-    expect((screen.getByTestId('crawler-form-validate') as HTMLButtonElement).disabled).toBe(true)
-  })
-
-  it('10. Empty state（零站点）渲染', async () => {
-    listCrawlerSitesMock.mockResolvedValueOnce([])
-    getCrawlerSystemStatusMock.mockResolvedValueOnce({})
     render(<CrawlerClient />)
     await waitFor(() => {
       expect(screen.getByText('暂无站点')).not.toBeNull()
     })
   })
 
-  it('11. Error state：fetch 失败 → ErrorState + retry', async () => {
+  it('9. Error state：sites fetch 失败 → ErrorState 渲染', async () => {
     listCrawlerSitesMock.mockRejectedValueOnce(new Error('crawler 500'))
-    getCrawlerSystemStatusMock.mockResolvedValueOnce({})
-    render(<CrawlerClient />)
-    await waitFor(() => {
-      expect(screen.getAllByText(/加载失败|500/).length).toBeGreaterThan(0)
-    })
-  })
-
-  it('12. refresh 按钮触发重新加载', async () => {
-    listCrawlerSitesMock.mockResolvedValue([])
-    getCrawlerSystemStatusMock.mockResolvedValue({})
-    render(<CrawlerClient />)
-    await waitFor(() => screen.getByTestId('crawler-refresh'))
-    const initial = listCrawlerSitesMock.mock.calls.length
-    fireEvent.click(screen.getByTestId('crawler-refresh'))
-    await waitFor(() => {
-      expect(listCrawlerSitesMock.mock.calls.length).toBeGreaterThan(initial)
-    })
-  })
-
-  it('13. 状态 badge 渲染（启用 vs 禁用）', async () => {
-    listCrawlerSitesMock.mockResolvedValueOnce([
-      SITE_1,
-      { ...SITE_1, key: 'disabled-site', disabled: true },
-    ])
-    getCrawlerSystemStatusMock.mockResolvedValueOnce({})
     const { container } = render(<CrawlerClient />)
     await waitFor(() => {
-      expect(container.querySelector('[data-site-status="enabled"]')).not.toBeNull()
-      expect(container.querySelector('[data-site-status="disabled"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="crawler-site-list-error"]')).not.toBeNull()
     })
   })
 
-  // ── freeze 控制（CHG-SN-6-20-B）──────────────────────────────
-
-  it('14. freezeEnabled=false → 显示"开启冻结"按钮', async () => {
-    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
-    getCrawlerSystemStatusMock.mockResolvedValueOnce({
-      freezeEnabled: false,
-      schedulerEnabled: true,
-      orphanTaskCount: 0,
-    })
+  it('10. + 新增站点：点击触发 drawer 打开', async () => {
     render(<CrawlerClient />)
-    const btn = await waitFor(() => screen.getByTestId('crawler-freeze-toggle'))
-    expect(btn.textContent).toContain('开启冻结')
-    expect(btn.getAttribute('data-freeze-enabled')).toBe('false')
-    expect(screen.getByText(/正常运行/)).not.toBeNull()
+    await waitFor(() => screen.getByTestId('crawler-create-btn'))
+    fireEvent.click(screen.getByTestId('crawler-create-btn'))
+    await waitFor(() => {
+      expect(screen.getByTestId('crawler-drawer')).not.toBeNull()
+    })
   })
 
-  it('15. freezeEnabled=true → 显示"解除冻结" + 游离任务计数 + warn 卡', async () => {
-    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
-    getCrawlerSystemStatusMock.mockResolvedValueOnce({
-      freezeEnabled: true,
-      schedulerEnabled: true,
-      orphanTaskCount: 3,
+  it('11. 全站全量：confirm 通过 → runCrawlerAll(full) + 成功 toast', async () => {
+    runCrawlerAllMock.mockResolvedValueOnce({
+      runId: 'run-abc12345',
+      taskIds: ['t1'],
+      enqueuedSiteKeys: ['s1', 's2'],
+      skippedSiteKeys: [],
     })
     render(<CrawlerClient />)
-    const btn = await waitFor(() => screen.getByTestId('crawler-freeze-toggle'))
-    expect(btn.textContent).toContain('解除冻结')
-    expect(btn.getAttribute('data-freeze-enabled')).toBe('true')
-    expect(screen.getByText(/已冻结（游离任务 3 个）/)).not.toBeNull()
-  })
-
-  it('16. 点击"开启冻结" → confirm + API + 成功 toast + 状态更新', async () => {
-    listCrawlerSitesMock.mockResolvedValue([SITE_1])
-    getCrawlerSystemStatusMock.mockResolvedValue({
-      freezeEnabled: false,
-      schedulerEnabled: true,
-      orphanTaskCount: 0,
-    })
-    setCrawlerFreezeMock.mockResolvedValueOnce({
-      freezeEnabled: true,
-      schedulerEnabled: true,
-      orphanTaskCount: 2,
-    })
-    render(<CrawlerClient />)
-    const btn = await waitFor(() => screen.getByTestId('crawler-freeze-toggle'))
+    const btn = await waitFor(() => screen.getByTestId('crawler-run-all-btn'))
     fireEvent.click(btn)
     await waitFor(() => {
-      expect(setCrawlerFreezeMock).toHaveBeenCalledWith(true)
+      expect(runCrawlerAllMock).toHaveBeenCalledWith('full')
       expect(toastPushMock).toHaveBeenCalledWith(
-        expect.objectContaining({ level: 'success', title: '已开启全局冻结' }),
+        expect.objectContaining({ level: 'success', title: '已发起全站全量' }),
       )
-      // 状态已合并，UI 切到"解除冻结"
-      const updated = screen.getByTestId('crawler-freeze-toggle')
-      expect(updated.textContent).toContain('解除冻结')
     })
   })
 
-  it('17. 点击"开启冻结" + confirm 拒绝 → 不调 API', async () => {
-    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
-    getCrawlerSystemStatusMock.mockResolvedValueOnce({
-      freezeEnabled: false,
-      schedulerEnabled: true,
-      orphanTaskCount: 0,
-    })
+  it('12. 全站全量：confirm 拒绝 → 不调 API', async () => {
     confirmSpy.mockReset().mockReturnValue(false)
     ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
     render(<CrawlerClient />)
-    const btn = await waitFor(() => screen.getByTestId('crawler-freeze-toggle'))
+    const btn = await waitFor(() => screen.getByTestId('crawler-run-all-btn'))
     fireEvent.click(btn)
     await new Promise((r) => setTimeout(r, 0))
-    expect(setCrawlerFreezeMock).not.toHaveBeenCalled()
+    expect(runCrawlerAllMock).not.toHaveBeenCalled()
   })
 
-  it('18. 点击"解除冻结" → API 调用 enabled=false', async () => {
-    listCrawlerSitesMock.mockResolvedValue([SITE_1])
-    getCrawlerSystemStatusMock.mockResolvedValue({
-      freezeEnabled: true,
-      schedulerEnabled: true,
-      orphanTaskCount: 1,
-    })
-    setCrawlerFreezeMock.mockResolvedValueOnce({
-      freezeEnabled: false,
-      schedulerEnabled: true,
-      orphanTaskCount: 0,
-    })
+  it('13. freezeEnabled=true → 全站全量被拦截（warn toast）', async () => {
+    getCrawlerSystemStatusMock.mockResolvedValue({ freezeEnabled: true })
     render(<CrawlerClient />)
-    const btn = await waitFor(() => screen.getByTestId('crawler-freeze-toggle'))
+    const btn = await waitFor(() => screen.getByTestId('crawler-run-all-btn'))
     fireEvent.click(btn)
     await waitFor(() => {
-      expect(setCrawlerFreezeMock).toHaveBeenCalledWith(false)
       expect(toastPushMock).toHaveBeenCalledWith(
-        expect.objectContaining({ level: 'success', title: '已关闭全局冻结' }),
+        expect.objectContaining({ level: 'warn', title: '采集已冻结' }),
       )
+      expect(runCrawlerAllMock).not.toHaveBeenCalled()
     })
   })
 
-  it('19. status 无 freezeEnabled → 不渲染 freeze 卡（向后兼容）', async () => {
+  it('14. 导出按钮：点击触发 warn toast 占位', async () => {
+    render(<CrawlerClient />)
+    const btn = await waitFor(() => screen.getByTestId('crawler-export-btn'))
+    fireEvent.click(btn)
+    expect(toastPushMock).toHaveBeenCalledWith(
+      expect.objectContaining({ level: 'warn', title: '导出功能待实施' }),
+    )
+  })
+
+  it('15. siteStats 注入 health + routeCount 列', async () => {
     listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
-    getCrawlerSystemStatusMock.mockResolvedValueOnce({})
     const { container } = render(<CrawlerClient />)
     await waitFor(() => {
-      expect(container.querySelector('[data-crawler-client]')).not.toBeNull()
+      // routeCount 列：3 条
+      expect(container.querySelector('[data-route-count]')?.textContent).toContain('3')
+      // health dot label
+      expect(container.querySelector('[data-site-status-dot]')?.getAttribute('aria-label')).toContain('88')
     })
-    expect(screen.queryByTestId('crawler-freeze-card')).toBeNull()
-    expect(screen.queryByTestId('crawler-freeze-toggle')).toBeNull()
   })
 
-  // ── scheduler-config + stop-all（CHG-SN-6-27）─────────────────
-
-  it('20. freeze 卡渲染调度配置 + 全局止血按钮', async () => {
+  it('16. PageHeader subtitle 包含站点计数 + 实时/冻结状态', async () => {
     listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
-    getCrawlerSystemStatusMock.mockResolvedValueOnce({
-      freezeEnabled: false,
-      schedulerEnabled: true,
-      orphanTaskCount: 0,
-    })
+    getCrawlerSystemStatusMock.mockResolvedValue({ freezeEnabled: true })
     render(<CrawlerClient />)
-    await waitFor(() => screen.getByTestId('crawler-freeze-toggle'))
-    expect(screen.getByTestId('crawler-scheduler-open')).not.toBeNull()
-    expect(screen.getByTestId('crawler-stop-all')).not.toBeNull()
-  })
-
-  it('21. 全局止血：confirm 双重通过 → API + 成功 toast + status 合并', async () => {
-    listCrawlerSitesMock.mockResolvedValue([SITE_1])
-    getCrawlerSystemStatusMock.mockResolvedValue({
-      freezeEnabled: false,
-      schedulerEnabled: true,
-      orphanTaskCount: 0,
-    })
-    stopAllCrawlerMock.mockResolvedValueOnce({
-      freezeEnabled: true,
-      markedRuns: 2,
-      pendingCancelled: 5,
-      runningSignaled: 3,
-    })
-    // 双重 confirm 全部通过（默认 mockReturnValue(true)）
-    render(<CrawlerClient />)
-    const btn = await waitFor(() => screen.getByTestId('crawler-stop-all'))
-    fireEvent.click(btn)
     await waitFor(() => {
-      expect(stopAllCrawlerMock).toHaveBeenCalledWith({ freeze: true, removeRepeatableTick: true })
-      expect(toastPushMock).toHaveBeenCalledWith(
-        expect.objectContaining({ level: 'success', title: '全局止血完成' }),
-      )
+      expect(screen.getByText(/1 个站点/)).not.toBeNull()
+      expect(screen.getByText(/全局冻结中/)).not.toBeNull()
     })
-  })
-
-  it('22. 全局止血：第二次 confirm 拒绝 → 不调 API', async () => {
-    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
-    getCrawlerSystemStatusMock.mockResolvedValueOnce({
-      freezeEnabled: false,
-      schedulerEnabled: true,
-      orphanTaskCount: 0,
-    })
-    let callCount = 0
-    confirmSpy.mockReset().mockImplementation(() => {
-      callCount += 1
-      return callCount === 1 // 第一次通过，第二次拒绝
-    })
-    ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
-    render(<CrawlerClient />)
-    const btn = await waitFor(() => screen.getByTestId('crawler-stop-all'))
-    fireEvent.click(btn)
-    await new Promise((r) => setTimeout(r, 0))
-    expect(stopAllCrawlerMock).not.toHaveBeenCalled()
-  })
-
-  // ── reindex（CHG-SN-6-28）─────────────────────────────────────
-
-  it('23. freeze 卡渲染重建索引按钮', async () => {
-    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
-    getCrawlerSystemStatusMock.mockResolvedValueOnce({
-      freezeEnabled: false,
-      schedulerEnabled: true,
-      orphanTaskCount: 0,
-    })
-    render(<CrawlerClient />)
-    await waitFor(() => screen.getByTestId('crawler-reindex'))
-    expect(screen.getByTestId('crawler-reindex').textContent).toContain('重建索引')
-  })
-
-  it('24. 重建索引：双重 confirm 通过 → API + 成功 toast', async () => {
-    listCrawlerSitesMock.mockResolvedValue([SITE_1])
-    getCrawlerSystemStatusMock.mockResolvedValue({
-      freezeEnabled: false,
-      schedulerEnabled: true,
-      orphanTaskCount: 0,
-    })
-    triggerReindexMock.mockResolvedValueOnce({ indexed: 1234, duration_ms: 5000 })
-    confirmSpy.mockReset().mockReturnValue(true)
-    ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
-    render(<CrawlerClient />)
-    const btn = await waitFor(() => screen.getByTestId('crawler-reindex'))
-    fireEvent.click(btn)
-    await waitFor(() => {
-      expect(triggerReindexMock).toHaveBeenCalledOnce()
-      expect(toastPushMock).toHaveBeenCalledWith(
-        expect.objectContaining({ level: 'success', title: 'ES 索引已重建' }),
-      )
-    })
-  })
-
-  it('25. 重建索引：第二次 confirm 拒绝 → 不调 API', async () => {
-    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
-    getCrawlerSystemStatusMock.mockResolvedValueOnce({
-      freezeEnabled: false,
-      schedulerEnabled: true,
-      orphanTaskCount: 0,
-    })
-    let callCount = 0
-    confirmSpy.mockReset().mockImplementation(() => {
-      callCount += 1
-      return callCount === 1
-    })
-    ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
-    render(<CrawlerClient />)
-    const btn = await waitFor(() => screen.getByTestId('crawler-reindex'))
-    fireEvent.click(btn)
-    await new Promise((r) => setTimeout(r, 0))
-    expect(triggerReindexMock).not.toHaveBeenCalled()
   })
 })

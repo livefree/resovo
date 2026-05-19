@@ -6,9 +6,80 @@
 
 ## 进行中任务
 
-<!-- ✅ PRE-04 全 16 子卡闭环（2026-05-18，连续推进 #2–#16 用户授权）；总览：5 ✅ A 级（dashboard/moderation/videos/sources/analytics）+ 8 ⚠️ S 级（merge/subtitles/home/image-health/users/audit/login/dashboard MISC）+ 4 ❌（staging/submissions/crawler/settings）+ 16 MISC + 4 REDO（01/02/03/04）+ SHARED-03 取消；详见 docs/M-SN-7-design-realign-audit-FULL.md；下一步等用户拍板 PRE-04 收尾 + 启动 SHARED-01/02 milestone -->
+<!-- REDO-01-C 前端骨架闭环（2026-05-19）；下一卡 REDO-01-D 站点行 + {more} 菜单 -->
+
+### CHG-SN-7-REDO-01-C ✅ 前端骨架闭环（2026-05-19）
+
+**完成时间**：2026-05-19
+**实施**：
+- **5 文件新增/重写**（全部 < 500 行）：
+  - `apps/server-next/src/app/admin/crawler/_client/CrawlerKpiRow.tsx`（95 行 / 5 KpiCard variant 映射 / 消费 getCrawlerKpi）
+  - `apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx`（213 行 / AdminCard 容器 + 时间轴 CSS grid 框架 + frozen pill + pause toggle / 消费 getCrawlerTimeline / 15s auto-refresh）
+  - `apps/server-next/src/app/admin/crawler/_client/CrawlerSiteList.tsx`（152 行 / DataTable v2 mode=client + 9 列骨架 + toolbar.search + client-mode 分页 + 三态）
+  - `apps/server-next/src/app/admin/crawler/_client/crawler-site-columns-v2.tsx`（276 行 / 9 列定义函数 + 占位 callbacks + health/dot 派生 + siteStats 注入）
+  - `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（312 行 / 重写 / 单页 3 区块 + 3 PageHeader actions / 消费 4 新端点 + 沿用 CrawlerSiteFormDrawer）
+- **测试重写**：`tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx` 旧 25 case → 新 **16 case PASS**（REDO-01-C 骨架范围）
+- **旧文件保留**：CrawlerSitesTab.tsx / CrawlerControlsCard.tsx / crawler-site-columns.tsx 孤立至 REDO-01-I 删除
+
+**评级**：A（5 文件全闭环 / 0 红线 / 测试重写 16/16 PASS）
+
+**关键决策**：
+- "导出" action 接入 warn toast 占位（无 API；CHG-SN-7 后续子卡补齐）
+- "全站全量" 接入 runCrawlerAll('full') + confirm + freezeEnabled 守卫拦截
+- KpiCard 5 张：站点(default) / 运行中(is-warn) / 失败(is-danger) / 本批视频量(is-ok) / 平均时长(default) — 严格对齐契约 §1.1 映射表
+- 时间轴 15s auto-refresh（paused 或 freezeEnabled 时跳过）
+- CrawlerSiteList 不消费 selection / expandedKeys / 行级操作 — 契约 §2.2 裁决 A + 后续 D/E/F 子卡范围
+
+**质量门禁**：
+- typecheck ✅
+- lint ✅（仅 1 unrelated img warning）
+- file-size-budget ✅ 0 新违规（5 新文件全 < 500 行 / 最大 312）
+- verify:endpoint-adr ✅ 152 路由对齐 23 ADR
+- verify:adr-contracts ✅（pre-existing advisory crawlerKpi.ts video_sources.route_count 命中保持不变）
+- 全量 unit test：4053 → **4044 PASS**（-25 旧 CrawlerClient case + 16 新 case = 净 -9，符合预期）
+
+**执行模型**：claude-opus-4-7（主循环 / 实施 / 任务卡建议 Sonnet 但用户在 Opus 会话续推 — 不擅自切换）/ 子代理：无（纯实施，契约 + 后端均已锁定）
+
+<!-- 下张：CHG-SN-7-REDO-01-D 前端站点行 + {more} 菜单（0.2w / 估时下调；契约 §1.4 6 项行级 dropdown + 行级 + 增量/全量 按钮 + AdminDropdown）-->
+
 
 ### CHG-SN-7-REDO-01-B ✅ 全 4 阶段闭环（2026-05-18）
+
+**SEQ**：M-SN-7 / REDO-01 第 3 子卡（C 阶段 0.3w / 前端首张实施卡）
+
+**问题理解**：REDO-01-A 契约锁定 6 组件 + REDO-01-B 后端 4 新端点已就绪（getCrawlerKpi / getCrawlerTimeline / runCrawlerSite / runCrawlerAll API 客户端均已存在）。本卡完成新 CrawlerClient 顶层骨架重做：3 page__head actions + KPI row（5 张 KpiCard）+ 时间轴 card 框架 + 站点列表骨架（9 列 DataTable，**不含展开行**、**不含 {more} 行级菜单**）。
+
+**根因判断**：当前 CrawlerClient 是 tab 形式（sites / runs），与设计稿 §5.6 单页 3 区块布局不一致；不重写无法消费新 4 端点数据 + 装配后续 D（行）/ E（线路展开）/ F（分类映射）/ G（高级菜单）/ H（runs 路由）子卡。
+
+**方案**（按 contract §1 + §2 + §4 实施映射）：
+1. **新建** `apps/server-next/src/app/admin/crawler/_client/CrawlerKpiRow.tsx`（KpiCard x5 / 消费 `getCrawlerKpi` / 5 variant 映射）
+2. **新建** `apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx`（AdminCard 容器 + card head 包含暂停按钮 + 冻结 pill + 时间轴 CSS grid 框架 / 消费 `getCrawlerTimeline` / **本卡只渲染框架 + 行状态 dot + 时间窗 bar 基础形态**，精细化样式留给 REDO-01-J 视觉对齐）
+3. **新建** `apps/server-next/src/app/admin/crawler/_client/CrawlerSiteList.tsx`（DataTable v2 mode=client / 9 列骨架 / search toolbar / pagination / **不含 expandedKeys + renderExpandedRow** — 留给 REDO-01-E）
+4. **新建** `apps/server-next/src/app/admin/crawler/_client/crawler-site-columns-v2.tsx`（9 列定义函数 + 占位 callbacks 接口 / 操作列暂渲染占位 chip — 真实按钮/{more} 留给 REDO-01-D）
+5. **重写** `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（移除 sites/runs tab → 3 区块单页布局 + 3 actions：导出（toast 占位）/ + 新增站点（沿用 CrawlerSiteFormDrawer）/ 全站全量（消费 `runCrawlerAll` + confirm）；不挂"高级"dropdown — REDO-01-G）
+
+**涉及文件**（5 个，全部新建/重写 + 0 个删除）：
+- 新建：`CrawlerKpiRow.tsx` / `CrawlerTimelineCard.tsx` / `CrawlerSiteList.tsx` / `crawler-site-columns-v2.tsx`
+- 重写：`CrawlerClient.tsx`
+- 旧文件保留（孤立至 REDO-01-I 删除）：`CrawlerSitesTab.tsx` / `CrawlerControlsCard.tsx` / `crawler-site-columns.tsx`
+
+**严格约束**：
+- ❌ 不破坏 CrawlerSiteFormDrawer（新增/编辑 drawer 沿用）
+- ❌ 不破坏 CrawlerRunsView（保留文件，REDO-01-H 迁独立路由前不消费）
+- ❌ 不触碰 sources 跨模块 API（线路 sub-table 是 REDO-01-E 范围）
+- ❌ 不触碰 ADR-123 分类映射端点（REDO-01-F 范围）
+- ❌ 颜色硬编码 / 越层调用 / `any` 类型
+- ❌ 单文件 > 500 行（PRE-01 守卫；目标全部 < 200 行）
+- 一旦 KpiCard / DataTable / AdminCard / PageHeader 现有 API 不足 → 立即停止汇报，不擅自扩 admin-ui 类型
+
+**执行模型**：claude-opus-4-7 主循环（任务卡建议 Sonnet，但用户在 Opus 会话中连续推进；按 §模型路由"主循环不可中途切换"原则保持 Opus 不擅自降级；不 spawn Opus 子代理 — 本卡纯实施，contract 已锁定）
+
+**估时**：0.3w
+
+
+### CHG-SN-7-REDO-01-B ✅ 全 4 阶段闭环（2026-05-18）
+
+> **本卡已合并入 changelog + task-queue 标 ✅**，保留卡片副本以便阅读上下文，下一会话清理时一并移除。
 
 **完成时间**：2026-05-18（含 fa8293ae 阶段 1 + 本次会话阶段 2-4）
 **实施**：

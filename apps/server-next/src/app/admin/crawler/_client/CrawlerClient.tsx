@@ -1,30 +1,51 @@
 'use client'
 
 /**
- * CrawlerClient.tsx — `/admin/crawler` 采集控制视图主 orchestrator
+ * CrawlerClient.tsx — `/admin/crawler` 采集控制视图主 orchestrator（REDO-01-C 重写）
  *
- * 范围（CHG-SN-6-29-PATCH-1 拆分后）：
- *   - 顶层 Tab 切换（sites / runs）
- *   - 全局 data fetching（sites + system-status）
- *   - PageHeader（标题 + 新增/刷新动作）
- *   - 子组件 composition：CrawlerSitesTab / CrawlerRunsView
+ * 真源：M-SN-7-redo-01-contract.md §1 + reference.md §5.6
  *
- * 历史能力已拆出：
- *   - CrawlerSitesTab.tsx：站点表 + drawer + batch + 状态卡 + ControlsCard 嵌入
- *   - CrawlerControlsCard.tsx：freeze + stop-all + reindex + scheduler 4 按钮组
- *   - CrawlerRunsView.tsx / CrawlerRunDetailView.tsx / TaskLogsDrawer.tsx：runs 下钻链
+ * 单页三区块（**不再有 sites/runs Tab**）：
+ *   - PageHeader title + subtitle + 3 actions（导出 / + 新增站点 / 全站全量）
+ *   - CrawlerKpiRow（5 KpiCard）
+ *   - CrawlerTimelineCard（时间轴框架）
+ *   - CrawlerSiteList（DataTable 9 列骨架，不含展开行）
+ *
+ * 不在本卡（REDO-01-C）范围：
+ *   - 行级 {more} dropdown / + 增量 / + 全量（REDO-01-D）
+ *   - 行展开 sub-table（REDO-01-E + F）
+ *   - "高级"dropdown（调度/重建索引/止血/冻结）（REDO-01-G）
+ *   - /admin/crawler/runs 独立路由（REDO-01-H）
+ *
+ * 旧文件仍存（待 REDO-01-I 删除）：CrawlerSitesTab / CrawlerControlsCard / crawler-site-columns
  */
 
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
-import { AdminButton, PageHeader } from '@resovo/admin-ui'
+import { AdminButton, PageHeader, useToast } from '@resovo/admin-ui'
 import {
   listCrawlerSites,
   getCrawlerSystemStatus,
+  getCrawlerKpi,
+  getCrawlerTimeline,
+  runCrawlerAll,
+  createCrawlerSite,
+  updateCrawlerSite,
+  deleteCrawlerSite,
   type CrawlerSite,
+  type CrawlerSiteStat,
   type CrawlerSystemStatus,
+  type CrawlerKpiResponse,
+  type CrawlerTimelineResponse,
+  type CreateCrawlerSiteInput,
 } from '@/lib/crawler/api'
-import { CrawlerRunsView } from './CrawlerRunsView'
-import { CrawlerSitesTab } from './CrawlerSitesTab'
+import { ApiClientError } from '@/lib/api-client'
+import { CrawlerKpiRow } from './CrawlerKpiRow'
+import { CrawlerTimelineCard } from './CrawlerTimelineCard'
+import { CrawlerSiteList } from './CrawlerSiteList'
+import {
+  CrawlerSiteFormDrawer,
+  type CrawlerSiteFormMode,
+} from './CrawlerSiteFormDrawer'
 
 const PAGE_STYLE: CSSProperties = {
   display: 'flex',
@@ -33,125 +54,259 @@ const PAGE_STYLE: CSSProperties = {
   padding: 'var(--page-padding-y) var(--page-padding-x) 0',
 }
 
-type CrawlerTab = 'sites' | 'runs'
+const ACTIONS_STYLE: CSSProperties = {
+  display: 'inline-flex',
+  gap: '8px',
+}
+
+const EMPTY_FORM: CreateCrawlerSiteInput = {
+  key: '',
+  name: '',
+  apiUrl: '',
+  sourceType: 'vod',
+  format: 'json',
+  weight: 50,
+  isAdult: false,
+}
+
+function describeApiError(err: unknown): { title: string; description: string } {
+  if (err instanceof ApiClientError) {
+    if (err.code === 'DUPLICATE_KEY') return { title: 'key 重复', description: err.message }
+    if (err.code === 'DUPLICATE_API_URL') return { title: 'API URL 重复', description: err.message }
+    if (err.code === 'FORBIDDEN') return { title: '禁止操作', description: err.message }
+    if (err.code === 'VALIDATION_ERROR') return { title: '参数校验失败', description: err.message }
+    if (err.code === 'CONFLICT') return { title: '操作冲突', description: err.message }
+    return { title: '操作失败', description: err.message }
+  }
+  return { title: '操作失败', description: err instanceof Error ? err.message : '请稍后重试' }
+}
 
 export function CrawlerClient() {
-  const [tab, setTab] = useState<CrawlerTab>('sites')
+  const toast = useToast()
 
+  // ── data ─────────────────────────────────────────────────────────
   const [sites, setSites] = useState<readonly CrawlerSite[]>([])
   const [status, setStatus] = useState<CrawlerSystemStatus | null>(null)
+  const [kpi, setKpi] = useState<CrawlerKpiResponse | null>(null)
+  const [timeline, setTimeline] = useState<CrawlerTimelineResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [retryKey, setRetryKey] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const [runAllPending, setRunAllPending] = useState(false)
 
-  // CHG-SN-6-29-PATCH-1：使用 counter 触发子组件打开 Drawer（避免 ref / forwardRef 复杂化）
-  const [createTrigger, setCreateTrigger] = useState(0)
+  // ── drawer ───────────────────────────────────────────────────────
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [formMode, setFormMode] = useState<CrawlerSiteFormMode>({ kind: 'create' })
+  const [form, setForm] = useState<CreateCrawlerSiteInput>(EMPTY_FORM)
+  const [submitting, setSubmitting] = useState(false)
 
+  // ── initial + retry load ─────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError(null)
-    Promise.allSettled([listCrawlerSites(), getCrawlerSystemStatus()]).then(([sitesRes, statusRes]) => {
+    Promise.allSettled([
+      listCrawlerSites(),
+      getCrawlerSystemStatus(),
+      getCrawlerKpi(),
+      getCrawlerTimeline({ range: '1h', limit: 8 }),
+    ]).then(([sitesRes, statusRes, kpiRes, timelineRes]) => {
       if (cancelled) return
       if (sitesRes.status === 'fulfilled') setSites(sitesRes.value)
       else setError(sitesRes.reason instanceof Error ? sitesRes.reason : new Error('站点加载失败'))
       if (statusRes.status === 'fulfilled') setStatus(statusRes.value)
+      if (kpiRes.status === 'fulfilled') setKpi(kpiRes.value)
+      if (timelineRes.status === 'fulfilled') setTimeline(timelineRes.value)
     }).finally(() => {
       if (!cancelled) setLoading(false)
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [retryKey])
+
+  // ── timeline auto-refresh（15s；frozen / paused 时跳过） ─────────
+  useEffect(() => {
+    if (paused || status?.freezeEnabled) return
+    const tick = window.setInterval(() => {
+      getCrawlerTimeline({ range: '1h', limit: 8 })
+        .then((next) => setTimeline(next))
+        .catch(() => {
+          // silent；时间轴是软实时数据，刷新失败不打扰用户
+        })
+    }, 15_000)
+    return () => window.clearInterval(tick)
+  }, [paused, status?.freezeEnabled])
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
 
-  const handleStatusUpdate = useCallback((next: Partial<CrawlerSystemStatus>) => {
-    setStatus((prev) => ({ ...(prev ?? {}), ...next }))
+  const handlePauseToggle = useCallback(() => setPaused((p) => !p), [])
+
+  const handleOpenCreate = useCallback(() => {
+    setFormMode({ kind: 'create' })
+    setForm(EMPTY_FORM)
+    setDrawerOpen(true)
   }, [])
 
-  const handleCreate = useCallback(() => {
-    setCreateTrigger((c) => c + 1)
-  }, [])
+  const handleSubmit = useCallback(async () => {
+    setSubmitting(true)
+    try {
+      if (formMode.kind === 'create') {
+        await createCrawlerSite(form)
+        toast.push({ title: '已创建', description: `站点 ${form.key} 创建成功`, level: 'success' })
+      } else {
+        await updateCrawlerSite(formMode.key, {
+          name: form.name,
+          apiUrl: form.apiUrl,
+          detail: form.detail,
+          sourceType: form.sourceType,
+          format: form.format,
+          weight: form.weight,
+          isAdult: form.isAdult,
+        })
+        toast.push({ title: '已更新', description: `站点 ${formMode.key} 更新成功`, level: 'success' })
+      }
+      setDrawerOpen(false)
+      refresh()
+    } catch (err: unknown) {
+      const { title, description } = describeApiError(err)
+      toast.push({ title, description, level: 'danger' })
+    } finally {
+      setSubmitting(false)
+    }
+  }, [form, formMode, refresh, toast])
+
+  const handleDelete = useCallback(async (site: CrawlerSite) => {
+    if (site.fromConfig) {
+      toast.push({
+        title: '禁止删除',
+        description: 'config 文件来源站点不可删除；请在配置文件中移除后重新保存',
+        level: 'warn',
+      })
+      return
+    }
+    if (!confirm(`确定删除站点 ${site.key}（${site.name}）？`)) return
+    try {
+      await deleteCrawlerSite(site.key)
+      toast.push({ title: '已删除', description: site.key, level: 'success' })
+      setDrawerOpen(false)
+      refresh()
+    } catch (err: unknown) {
+      const { title, description } = describeApiError(err)
+      toast.push({ title, description, level: 'danger' })
+    }
+  }, [refresh, toast])
+
+  const handleRunAll = useCallback(async () => {
+    if (status?.freezeEnabled) {
+      toast.push({
+        title: '采集已冻结',
+        description: '请先在"高级 / 解除冻结"后再运行（REDO-01-G 实装）',
+        level: 'warn',
+      })
+      return
+    }
+    if (!confirm('确定对全站发起全量采集？此操作会创建多个 task。')) return
+    setRunAllPending(true)
+    try {
+      const result = await runCrawlerAll('full')
+      toast.push({
+        title: '已发起全站全量',
+        description: `runId=${result.runId.slice(0, 8)} · 入队 ${result.enqueuedSiteKeys.length} 个站点`,
+        level: 'success',
+      })
+      refresh()
+    } catch (err: unknown) {
+      const { title, description } = describeApiError(err)
+      toast.push({ title, description, level: 'danger' })
+    } finally {
+      setRunAllPending(false)
+    }
+  }, [refresh, status?.freezeEnabled, toast])
+
+  const handleExport = useCallback(() => {
+    toast.push({
+      title: '导出功能待实施',
+      description: 'CHG-SN-7 后续子卡补齐站点列表导出',
+      level: 'warn',
+    })
+  }, [toast])
+
+  // siteStats Map：用于站点表 health / routeCount 列消费
+  const siteStats: ReadonlyMap<string, CrawlerSiteStat> | undefined = kpi
+    ? new Map(kpi.siteStats.map((s) => [s.key, s]))
+    : undefined
+
+  const editSite =
+    formMode.kind === 'edit' ? sites.find((s) => s.key === formMode.key) : undefined
 
   return (
     <div data-crawler-client style={PAGE_STYLE}>
       <PageHeader
         title="采集控制"
-        subtitle={`${sites.length} 个站点 · ${tab === 'sites' ? 'sites' : 'runs'} tab · MVP（不含 tasks / DAG）`}
+        subtitle={`${sites.length} 个站点 · ${status?.freezeEnabled ? '全局冻结中' : '实时'} · MVP（REDO-01-C 骨架）`}
         actions={
-          <span style={{ display: 'inline-flex', gap: '8px' }}>
-            {tab === 'sites' ? (
-              <AdminButton
-                variant="primary"
-                size="sm"
-                onClick={handleCreate}
-                data-testid="crawler-create-btn"
-              >
-                + 新增站点
-              </AdminButton>
-            ) : null}
+          <span style={ACTIONS_STYLE}>
             <AdminButton
               variant="default"
               size="sm"
-              onClick={refresh}
-              data-testid="crawler-refresh"
+              onClick={handleExport}
+              data-testid="crawler-export-btn"
             >
-              刷新
+              导出
+            </AdminButton>
+            <AdminButton
+              variant="default"
+              size="sm"
+              onClick={handleOpenCreate}
+              data-testid="crawler-create-btn"
+            >
+              + 新增站点
+            </AdminButton>
+            <AdminButton
+              variant="primary"
+              size="sm"
+              loading={runAllPending}
+              onClick={() => void handleRunAll()}
+              data-testid="crawler-run-all-btn"
+            >
+              全站全量
             </AdminButton>
           </span>
         }
         data-testid="crawler-page-header"
       />
 
-      {/* CHG-SN-6-15：顶层 Tab 切换 */}
-      <div
-        style={{ display: 'inline-flex', gap: '4px', borderBottom: '1px solid var(--border-subtle)' }}
-        data-testid="crawler-tabs"
-        role="tablist"
-      >
-        {(['sites', 'runs'] as const).map((t) => {
-          const active = tab === t
-          return (
-            <button
-              key={t}
-              type="button"
-              role="tab"
-              onClick={() => setTab(t)}
-              data-tab={t}
-              data-active={active ? '' : undefined}
-              style={{
-                padding: '8px 16px',
-                fontSize: 'var(--font-size-sm)',
-                fontFamily: 'inherit',
-                fontWeight: active ? 600 : 400,
-                color: active ? 'var(--fg-default)' : 'var(--fg-muted)',
-                background: 'transparent',
-                borderTop: 'none',
-                borderLeft: 'none',
-                borderRight: 'none',
-                borderBottom: active ? '2px solid var(--accent-default)' : '2px solid transparent',
-                cursor: 'pointer',
-                marginBottom: '-1px',
-              }}
-            >
-              {t === 'sites' ? '站点配置' : '采集批次（runs）'}
-            </button>
-          )
-        })}
-      </div>
+      <CrawlerKpiRow kpi={kpi} />
 
-      {tab === 'runs' ? <CrawlerRunsView /> : null}
+      <CrawlerTimelineCard
+        timeline={timeline}
+        loading={loading && !timeline}
+        frozen={status?.freezeEnabled ?? false}
+        paused={paused}
+        onPauseToggle={handlePauseToggle}
+      />
 
-      {tab === 'sites' ? (
-        <CrawlerSitesTab
-          sites={sites}
-          status={status}
-          loading={loading}
-          error={error}
-          createTrigger={createTrigger}
-          onRefresh={refresh}
-          onStatusUpdate={handleStatusUpdate}
-        />
-      ) : null}
+      <CrawlerSiteList
+        sites={sites}
+        loading={loading}
+        error={error}
+        siteStats={siteStats}
+        onRefresh={refresh}
+      />
+
+      <CrawlerSiteFormDrawer
+        open={drawerOpen}
+        mode={formMode}
+        form={form}
+        onFormChange={setForm}
+        onClose={() => setDrawerOpen(false)}
+        onSubmit={handleSubmit}
+        onDelete={handleDelete}
+        submitting={submitting}
+        editSite={editSite}
+      />
     </div>
   )
 }
