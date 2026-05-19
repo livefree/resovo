@@ -93,7 +93,9 @@ export function CrawlerSiteRowActions({
     },
     {
       key: 'delete',
-      label: site.fromConfig ? '删除（config 来源不可删）' : '删除站点',
+      // CHG-SN-7-MISC-CRAWLER-CONFIG-ORPHAN-DELETE：fromConfig=true 站点指引用户走配置文件路径
+      // 后端 POST /admin/system/config 已支持同步删除配置文件移除的孤儿站点
+      label: site.fromConfig ? '删除（请在「站点设置 → 高级配置」修改配置文件）' : '删除站点',
       danger: true,
       disabled: site.fromConfig,
       separator: true,

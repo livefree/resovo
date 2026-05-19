@@ -6,7 +6,54 @@
 
 ## 进行中任务
 
-<!-- 用户反馈 2 bug 修复（2026-05-19）：时间轴本地时间 + 站点列 sort/hide 功能 -->
+<!-- 用户反馈 2 bug 修复（2026-05-19）：站点删除功能 + 配置文件同步孤儿 -->
+
+### CHG-SN-7-MISC-CRAWLER-CONFIG-ORPHAN-DELETE ✅ 配置文件同步孤儿删除（2026-05-19）
+
+**完成时间**：2026-05-19（~0.15w / 用户反馈"采集源站没有删除功能 / 站点设置-高级配置变更配置文件没和采集站点同步"）
+
+**根因诊断**：2 反馈实际是同一 bug 的两面
+- 反馈 1：现有站点几乎全部 `fromConfig=true`（配置文件导入）/ UI 删除按钮 disabled / 用户感知"无法删除"
+- 反馈 2：`POST /admin/system/config` **只 upsert / 不同步删除**配置文件中已移除的站点 → DB 残留 `fromConfig=true` 孤儿行 → 配合反馈 1 形成"无法清理"闭环
+
+**修复（后端 sync 路径 + 前端 label 指引）**：
+
+1. **后端：`apps/api/src/db/queries/crawlerSites.ts`** 加 `deleteCrawlerSitesFromConfigOrphans(db, currentKeys)` query
+   - SQL：`DELETE FROM crawler_sites WHERE from_config = true AND key NOT IN ($1, $2, ...) RETURNING key`
+   - 守卫 `from_config = true`：不影响 fromConfig=false 的 admin 手动创建行
+   - 边界：currentKeys=[] → 全删配置来源（清空配置场景）/ 非空 → NOT IN 删除孤儿
+   - 返回 deletedKeys 列表（供 audit + UI 反馈）
+
+2. **后端：`apps/api/src/routes/admin/siteConfig.ts`** `POST /admin/system/config` 集成
+   - 在 upsert 循环后收集 validKeys
+   - 调用 `deleteCrawlerSitesFromConfigOrphans(db, validKeys)`
+   - audit afterJsonb 加 `crawlerSitesOrphanDeleted + orphanDeletedKeys`
+   - response data 加 `orphanDeleted + orphanDeletedKeys`
+
+3. **前端：`CrawlerSiteRowActions.tsx`** label 更指引
+   - 旧：`'删除（config 来源不可删）'`
+   - 新：`'删除（请在「站点设置 → 高级配置」修改配置文件）'`
+   - 用户从 disabled 项 label 直接看到清理路径
+
+4. **测试**：
+   - 新建 `tests/unit/api/crawler-sites-config-orphan.test.ts`（5 case PASS / 空 currentKeys 全删 / NOT IN SQL 拼装 / fromConfig=false 守卫 / 0 行返回空数组 / 多 orphans 返回全 keys）
+   - 修订 case 26 label assertion（旧 label → 新 label）
+
+**质量门禁**：
+- typecheck ✅ / lint ✅ / file-size ✅ 0 新违规
+- 全量 unit：4172 → **4177 PASS**（+5 净增 / 5 新 crawler-sites-config-orphan）
+
+**执行模型**：claude-opus-4-7 主循环（纯 bug 修复 / 子代理：无）
+
+**关键自省**：
+1. **从用户反馈的两面看出同一根因**："无法删除"是表象 / "配置文件同步不删孤儿"是根因 / 修复根因后表象自然解决
+2. **CHG-SN-5-01 配置文件同步设计漏洞**：当时只设计 upsert / 没设计删除链路 / 长期生产运行积累 fromConfig=true 孤儿
+3. **UI label 与后端行为同步指引**：disabled label 不只显示"为什么不能做" / 应显示"应该走什么路径"
+
+<!-- 下一步等用户拍板 REDO-03 / REDO-04 / 其他 -->
+
+
+### CHG-SN-7-MISC-CRAWLER-CONFIG-ORPHAN-DELETE ⏳ 已替换为闭环卡
 
 ### CHG-SN-7-MISC-CRAWLER-TIMELINE-BUG + COLUMN-FEATURES ✅ 用户反馈 2 bug 修复（2026-05-19）
 

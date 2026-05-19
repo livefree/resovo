@@ -204,6 +204,37 @@ export async function deleteCrawlerSite(db: Pool, key: string): Promise<boolean>
   return (result.rowCount ?? 0) > 0
 }
 
+/**
+ * 同步删除配置文件中已移除的 fromConfig=true 站点（孤儿清理）。
+ *
+ * 调用时机：POST /admin/system/config 配置文件覆盖后调用，
+ * 把 DB 中 `from_config=true AND key NOT IN currentKeys` 的行硬删除。
+ *
+ * 不影响管理员手动创建的 `from_config=false` 行（用户从 UI 添加的站点）。
+ *
+ * @param currentKeys 新配置文件中的所有站点 key 集合
+ * @returns 被删除的 key 列表（供 audit beforeJsonb 引用 + UI 反馈）
+ */
+export async function deleteCrawlerSitesFromConfigOrphans(
+  db: Pool,
+  currentKeys: readonly string[],
+): Promise<readonly string[]> {
+  // 边界：currentKeys 空 → 删除所有 fromConfig=true 行
+  // currentKeys 非空 → 删除 fromConfig=true AND key NOT IN (currentKeys)
+  if (currentKeys.length === 0) {
+    const result = await db.query<{ key: string }>(
+      'DELETE FROM crawler_sites WHERE from_config = true RETURNING key',
+    )
+    return result.rows.map((r) => r.key)
+  }
+  const placeholders = currentKeys.map((_, i) => `$${i + 1}`).join(', ')
+  const result = await db.query<{ key: string }>(
+    `DELETE FROM crawler_sites WHERE from_config = true AND key NOT IN (${placeholders}) RETURNING key`,
+    Array.from(currentKeys),
+  )
+  return result.rows.map((r) => r.key)
+}
+
 // ── 采集状态 ──────────────────────────────────────────────────
 
 export async function updateCrawlStatus(

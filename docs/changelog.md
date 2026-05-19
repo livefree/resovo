@@ -12692,3 +12692,68 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 
 - M-SN-7 整体：用户反馈被快速吸收消化（~0.1w 实际 / vs 起 RECHECK 子卡 + Opus 验收 ~0.3w 路径节省 0.2w）
 - advisory：lint rule 检测 `slice(11, 16)` UTC slice pattern 可作长期 backlog（CHG-SN-N-LINT-UTC-SLICE）
+
+---
+
+## [CHG-SN-7-MISC-CRAWLER-CONFIG-ORPHAN-DELETE] 配置文件同步孤儿删除 + UI label 指引
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环（纯 bug 修复 / 子代理：无）
+
+### 起源
+
+用户反馈 2 个相关问题：
+1. 采集源站没有删除功能（实际：现有站点几乎全部 `fromConfig=true` / UI 删除按钮 disabled / 用户感知"无法删除"）
+2. 站点设置-高级配置 变更配置文件没和采集站点同步（实际：`POST /admin/system/config` 只 upsert 不 delete / DB 残留 fromConfig=true 孤儿）
+
+**根因**：CHG-SN-5-01 配置文件同步设计时只覆盖增/改路径 / 缺删除链路 / 长期生产运行积累孤儿行 → 与 UI fromConfig 守卫配合形成"无法清理"闭环
+
+### 修改文件（3 改 + 1 新 + 1 测试）
+
+1. `apps/api/src/db/queries/crawlerSites.ts`
+   - 加 `deleteCrawlerSitesFromConfigOrphans(db, currentKeys)` query
+   - SQL：`DELETE FROM crawler_sites WHERE from_config = true AND key NOT IN (...) RETURNING key`
+   - 边界：currentKeys=[] → 全删 fromConfig=true 行（清空配置场景）
+2. `apps/api/src/routes/admin/siteConfig.ts`
+   - upsert 循环后收集 validKeys
+   - 调用 `deleteCrawlerSitesFromConfigOrphans(db, validKeys)`
+   - audit afterJsonb 加 `crawlerSitesOrphanDeleted + orphanDeletedKeys`
+   - response data 加 `orphanDeleted + orphanDeletedKeys`
+3. `apps/server-next/src/app/admin/crawler/_client/CrawlerSiteRowActions.tsx`
+   - delete label 旧：`'删除（config 来源不可删）'`
+   - delete label 新：`'删除（请在「站点设置 → 高级配置」修改配置文件）'`
+4. 新建 `tests/unit/api/crawler-sites-config-orphan.test.ts`（5 case PASS）
+5. 修订 `CrawlerClient.test.tsx` case 26 label assertion
+
+### 5 case 覆盖
+
+| Case | 范围 |
+|---|---|
+| 1 | 空 currentKeys → 全删 fromConfig=true 行（SQL 无 NOT IN）|
+| 2 | 非空 currentKeys → SQL `NOT IN ($1, $2, $3)` + from_config=true 守卫 |
+| 3 | from_config=false 守卫（admin 手动创建不受影响） |
+| 4 | 0 行删除 → 返回空数组 |
+| 5 | 多 orphans → 返回全 deletedKeys 数组 |
+
+### 设计要点
+
+1. **同根因双修复**：UI label 修改解释"为何不可删" / 后端 sync 路径解决"如何清理" / 双管齐下
+2. **审计完整性**：audit afterJsonb 同时含 synced/skipped/orphanDeleted/orphanDeletedKeys 4 字段 / 运营可追溯每次配置文件操作的全部影响
+3. **守卫不变**：`from_config = true` SQL 守卫保证 admin 手动 UI 创建的站点（fromConfig=false）不受配置文件覆盖影响
+4. **边界 currentKeys=[]**：当用户提交空配置时全删 fromConfig=true 行（明确语义 / 不歧义为"保留全部"）
+
+### 质量门禁
+
+- typecheck ✅ / lint ✅ / file-size ✅ 0 新违规
+- 全量 unit：4172 → **4177 PASS**（+5 净增 / 新 crawler-sites-config-orphan 5 case）
+
+### 关键自省
+
+1. **从用户反馈两面看出同一根因**："无法删除"是表象 / "配置文件同步不删孤儿"是根因 / 修复根因后表象自然解决（vs 单独修 UI 让 fromConfig=true 可删会触发循环重建）
+2. **CHG-SN-5-01 配置文件同步设计漏洞延迟暴露**：当时只设计 upsert 路径 / 删除链路缺失 / 8 月后用户反馈才暴露 → 教训：sync 类操作必须设计完整增/改/删三链路
+3. **UI disabled label 升级为指引**：从"为何不可" → "应该走什么路径" / 提升用户自助修复能力 / 减少运营工单
+
+### 后续触发
+
+- 长期 backlog：是否需要 admin UI 提供"高级配置"路径下"预览配置文件变更影响"功能（显示 N 个 orphan 将被删除）/ 留 advisory（CHG-SN-N-CONFIG-DIFF-PREVIEW）
+- 累计 M-SN-7 用户反馈批次：3 个反馈（时间轴本地化 + 站点列功能 + 配置文件同步）全部 ~0.25w 直接 MISC 路径吸收

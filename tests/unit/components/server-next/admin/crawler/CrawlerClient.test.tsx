@@ -513,14 +513,15 @@ describe('CrawlerClient (REDO-01-D 行级操作)', () => {
     })
   })
 
-  it('26. {more} → fromConfig=true 站点的删除项 disabled label', async () => {
+  it('26. {more} → fromConfig=true 站点的删除项 disabled label + 指引用户走配置文件路径', async () => {
     const SITE_CFG = { ...SITE_1, key: 'cfg', fromConfig: true }
     listCrawlerSitesMock.mockResolvedValueOnce([SITE_CFG])
     render(<CrawlerClient />)
     const trigger = await waitFor(() => screen.getByTestId('crawler-row-actions-trigger-cfg'))
     fireEvent.click(trigger)
+    // CHG-SN-7-MISC-CRAWLER-CONFIG-ORPHAN-DELETE：label 更新为指引用户走「站点设置 → 高级配置」路径
     await waitFor(() => {
-      expect(screen.getByText('删除（config 来源不可删）')).not.toBeNull()
+      expect(screen.getByText(/删除（请在.*站点设置.*高级配置.*修改配置文件）/)).not.toBeNull()
     })
   })
 

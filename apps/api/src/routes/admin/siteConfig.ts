@@ -179,6 +179,7 @@ export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
     const sites: Record<string, ConfigFileSite> = configJson.crawler_sites ?? configJson.api_site ?? {}
     let synced = 0
     let skipped = 0
+    const validKeys: string[] = []
     for (const [key, site] of Object.entries(sites)) {
       const apiUrl = site.api ?? site.api_url ?? site.url
       if (!site.name || !apiUrl) {
@@ -197,7 +198,12 @@ export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
         fromConfig: true,
       })
       synced++
+      validKeys.push(key)
     }
+
+    // CHG-SN-7-MISC-CRAWLER-CONFIG-ORPHAN-DELETE：同步删除配置文件中已移除的 fromConfig=true 孤儿
+    // 修复用户反馈"变更配置文件没和采集站点同步" — 即移除 key 后 DB 残留无法清理
+    const orphanDeletedKeys = await crawlerSitesQueries.deleteCrawlerSitesFromConfigOrphans(db, validKeys)
 
     // CHG-SN-6-RETRO-3-A：审计 — 写 admin_audit_log（system.config_update / ultrareview P0-3）
     // beforeJsonb: configFile 长度 + 当前 subscriptionUrl；afterJsonb: 新长度 + sites 同步统计
@@ -212,11 +218,21 @@ export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
         subscriptionUrl: subscriptionUrl ?? null,
         crawlerSitesSynced: synced,
         crawlerSitesSkipped: skipped,
+        crawlerSitesOrphanDeleted: orphanDeletedKeys.length,
+        orphanDeletedKeys,
       },
       requestId: request.id,
     })
 
-    return reply.send({ data: { ok: true, synced, skipped } })
+    return reply.send({
+      data: {
+        ok: true,
+        synced,
+        skipped,
+        orphanDeleted: orphanDeletedKeys.length,
+        orphanDeletedKeys,
+      },
+    })
   })
 
   // ── GET /admin/system/scheduler-status ───────────────────────
