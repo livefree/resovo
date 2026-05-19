@@ -45,6 +45,8 @@ import { CrawlerKpiRow } from './CrawlerKpiRow'
 import { CrawlerTimelineCard } from './CrawlerTimelineCard'
 import { CrawlerSiteList } from './CrawlerSiteList'
 import { CrawlerSiteExpand } from './CrawlerSiteExpand'
+import { CrawlerAdvancedMenu } from './CrawlerAdvancedMenu'
+import { SchedulerConfigDrawer } from './SchedulerConfigDrawer'
 import {
   CrawlerSiteFormDrawer,
   type CrawlerSiteFormMode,
@@ -99,6 +101,11 @@ export function CrawlerClient() {
   const [runAllPending, setRunAllPending] = useState(false)
   // ── REDO-01-E 行展开状态 ─────────────────────────────────────────
   const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(new Set())
+  // ── REDO-01-G 高级菜单 / 调度抽屉状态 ────────────────────────────
+  const [schedulerOpen, setSchedulerOpen] = useState(false)
+  const handleStatusUpdate = useCallback((next: Partial<CrawlerSystemStatus>) => {
+    setStatus((prev) => ({ ...(prev ?? {}), ...next }))
+  }, [])
 
   // ── drawer ───────────────────────────────────────────────────────
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -406,6 +413,12 @@ export function CrawlerClient() {
             >
               全站全量
             </AdminButton>
+            <CrawlerAdvancedMenu
+              frozen={status?.freezeEnabled ?? false}
+              onSchedulerConfig={() => setSchedulerOpen(true)}
+              onStatusUpdate={handleStatusUpdate}
+              onRefresh={refresh}
+            />
           </span>
         }
         data-testid="crawler-page-header"
@@ -459,6 +472,13 @@ export function CrawlerClient() {
         onDelete={handleDelete}
         submitting={submitting}
         editSite={editSite}
+      />
+
+      {/* REDO-01-G 调度配置 drawer（CrawlerAdvancedMenu 触发） */}
+      <SchedulerConfigDrawer
+        open={schedulerOpen}
+        onClose={() => setSchedulerOpen(false)}
+        onSaved={refresh}
       />
     </div>
   )

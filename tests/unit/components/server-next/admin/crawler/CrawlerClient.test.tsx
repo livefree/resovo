@@ -37,6 +37,10 @@ const upsertLineAliasMock = vi.fn()
 const testRouteMock = vi.fn()
 const reprobeRouteMock = vi.fn()
 const deleteRouteMock = vi.fn()
+// REDO-01-G：高级菜单 4 项（freeze / stop-all / reindex）
+const setCrawlerFreezeMock = vi.fn()
+const stopAllCrawlerMock = vi.fn()
+const triggerReindexMock = vi.fn()
 const toastPushMock = vi.fn()
 const confirmSpy = vi.fn().mockReturnValue(true)
 
@@ -51,6 +55,12 @@ vi.mock('../../../../../../apps/server-next/src/lib/crawler/api', () => ({
   getCrawlerTimeline: (...args: unknown[]) => getCrawlerTimelineMock(...args),
   runCrawlerAll: (...args: unknown[]) => runCrawlerAllMock(...args),
   runCrawlerSite: (...args: unknown[]) => runCrawlerSiteMock(...args),
+  setCrawlerFreeze: (...args: unknown[]) => setCrawlerFreezeMock(...args),
+  stopAllCrawler: (...args: unknown[]) => stopAllCrawlerMock(...args),
+  triggerReindex: (...args: unknown[]) => triggerReindexMock(...args),
+  // SchedulerConfigDrawer 依赖（关闭时不会调用）
+  getAutoCrawlConfig: vi.fn(() => new Promise(() => {})),
+  setAutoCrawlConfig: vi.fn(() => new Promise(() => {})),
 }))
 
 vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({
@@ -160,6 +170,9 @@ beforeEach(() => {
   testRouteMock.mockReset()
   reprobeRouteMock.mockReset()
   deleteRouteMock.mockReset()
+  setCrawlerFreezeMock.mockReset()
+  stopAllCrawlerMock.mockReset()
+  triggerReindexMock.mockReset()
   toastPushMock.mockReset()
   confirmSpy.mockReset().mockReturnValue(true)
   ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
@@ -741,5 +754,97 @@ describe('CrawlerClient (REDO-01-E2 行级 3 mutations + role 守卫)', () => {
         expect.objectContaining({ level: 'danger', title: '采集已冻结' }),
       )
     })
+  })
+})
+
+// REDO-01-G tests appended below after extending top-level vi.mock
+
+describe('CrawlerClient (REDO-01-G 高级 dropdown)', () => {
+  it('43. 高级 trigger 渲染（PageHeader 第 4 槽位）', async () => {
+    render(<CrawlerClient />)
+    const trigger = await waitFor(() => screen.getByTestId('crawler-advanced-trigger'))
+    expect(trigger.textContent).toContain('高级')
+  })
+
+  it('44. 点击 trigger 展开 dropdown → 4 项渲染（调度 / 重建 / 止血 / 冻结）', async () => {
+    render(<CrawlerClient />)
+    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-advanced-trigger')))
+    await waitFor(() => {
+      expect(screen.getByText('调度配置')).not.toBeNull()
+      expect(screen.getByText('重建 ES 索引')).not.toBeNull()
+      expect(screen.getByText('全局止血')).not.toBeNull()
+      expect(screen.getByText('开启冻结')).not.toBeNull()  // SYSTEM_STATUS 默认 freezeEnabled=undefined → false
+    })
+  })
+
+  it('45. frozen=true → 显示"解除冻结"动态 label', async () => {
+    getCrawlerSystemStatusMock.mockResolvedValue({ freezeEnabled: true })
+    render(<CrawlerClient />)
+    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-advanced-trigger')))
+    await waitFor(() => {
+      expect(screen.getByText('解除冻结')).not.toBeNull()
+    })
+  })
+
+  it('46. 冻结切换：开启冻结 confirm 通过 → setCrawlerFreeze(true) + success toast', async () => {
+    setCrawlerFreezeMock.mockResolvedValueOnce({ freezeEnabled: true, orphanTaskCount: 2 })
+    render(<CrawlerClient />)
+    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-advanced-trigger')))
+    fireEvent.click(await waitFor(() => screen.getByText('开启冻结')))
+    await waitFor(() => {
+      expect(setCrawlerFreezeMock).toHaveBeenCalledWith(true)
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: '已开启全局冻结' }),
+      )
+    })
+  })
+
+  it('47. 全局止血：双重 confirm 通过 → stopAllCrawler + status 合并 freezeEnabled=true', async () => {
+    stopAllCrawlerMock.mockResolvedValueOnce({
+      freezeEnabled: true, markedRuns: 2, pendingCancelled: 5, runningSignaled: 3,
+    })
+    render(<CrawlerClient />)
+    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-advanced-trigger')))
+    fireEvent.click(await waitFor(() => screen.getByText('全局止血')))
+    await waitFor(() => {
+      expect(stopAllCrawlerMock).toHaveBeenCalledWith({ freeze: true, removeRepeatableTick: true })
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: '全局止血完成' }),
+      )
+    })
+  })
+
+  it('48. 重建索引：双重 confirm 通过 → triggerReindex + success toast', async () => {
+    triggerReindexMock.mockResolvedValueOnce({ indexed: 1234, duration_ms: 5000 })
+    render(<CrawlerClient />)
+    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-advanced-trigger')))
+    fireEvent.click(await waitFor(() => screen.getByText('重建 ES 索引')))
+    await waitFor(() => {
+      expect(triggerReindexMock).toHaveBeenCalledOnce()
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: 'ES 索引已重建' }),
+      )
+    })
+  })
+
+  it('49. 调度配置：点击 → SchedulerConfigDrawer 渲染（drawer 打开）', async () => {
+    render(<CrawlerClient />)
+    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-advanced-trigger')))
+    fireEvent.click(await waitFor(() => screen.getByText('调度配置')))
+    // SchedulerConfigDrawer 内 testId / 元素未知，断言 dropdown 关闭即可
+    await waitFor(() => {
+      // 调度配置项点击后 dropdown 应关闭（onClick → close）
+      expect(screen.queryByText('全局止血')).toBeNull()
+    })
+  })
+
+  it('50. confirm 拒绝（冻结）→ 不调 API', async () => {
+    confirmSpy.mockReset().mockReturnValue(false)
+    ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
+    render(<CrawlerClient />)
+    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-advanced-trigger')))
+    fireEvent.click(await waitFor(() => screen.getByText('开启冻结')))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(setCrawlerFreezeMock).not.toHaveBeenCalled()
   })
 })

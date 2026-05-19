@@ -11534,3 +11534,47 @@ ADR-123（PRE-05 / 2026-05-18 Accepted A−）锁定 schema + API + audit 协议
 
 - 下张可执行卡：**REDO-01-G** 高级 dropdown（0.1w / 4 项 / 全部复用现有 API）
 - 累计已完成：A ✅ + B ✅ + C ✅ + D ✅ + E ✅ + E2 ✅ + F ✅ 共 ~2.05w / REDO-01 总 ~2.4w — 剩余 ~0.35w（G+H+I+J）
+
+---
+
+## [CHG-SN-7-REDO-01-G] Crawler 高级 dropdown 4 项
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环（纯实施 / 0 新端点 / 子代理：无）
+
+### 起源
+
+contract §1.6 + §2.4 裁决 A：PageHeader 第 4 槽位"高级"AdminDropdown 4 项；全部复用现有 API（v1 CHG-SN-6-20-A/-25-RETRO/-26-RETRO/-27 落地的 setCrawlerFreeze / stopAllCrawler / triggerReindex / SchedulerConfigDrawer）。
+
+### 修改文件（3 个 / 1 新 + 2 改）
+
+- 新建 `apps/server-next/src/app/admin/crawler/_client/CrawlerAdvancedMenu.tsx`（175 行）— AdminDropdown trigger="高级" + 4 items + 双重 confirm + 动态 label
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（465 → 485 行）— 第 4 PageHeader action 注入 + schedulerOpen state + SchedulerConfigDrawer mount + handleStatusUpdate helper
+- `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx` 顶层 vi.mock 扩 5 mock（setCrawlerFreeze / stopAllCrawler / triggerReindex / getAutoCrawlConfig / setAutoCrawlConfig）+ 8 新 case（43-50）
+
+### 4 项 → 现有 API 映射
+
+| key | label | API | confirm |
+|---|---|---|---|
+| scheduler | 调度配置 | `<SchedulerConfigDrawer />`（CHG-SN-6-27） | 无 |
+| reindex | 重建 ES 索引 | `triggerReindex()`（CHG-SN-6-26-RETRO） | 双重 |
+| stop_all | 全局止血 | `stopAllCrawler({ freeze: true, removeRepeatableTick: true })`（CHG-SN-6-25-RETRO） | 双重 |
+| freeze | 开启/解除冻结 | `setCrawlerFreeze(next)`（CHG-SN-6-20-A） | 单次（动态 label）|
+
+### 关键设计
+
+- **0 新端点 / 0 新 ADR**：4 API 全部复用 v1 crawler 域既有端点（ADR-121 audit RETRO 已落齐 / 守卫已就位）
+- **双重 confirm 防误操作**：reindex / stop_all 操作不可撤销 → 二次 confirm（"再次确认：执行后无法中断"）
+- **动态 label**：frozen=true → "解除冻结" / frozen=false → "开启冻结"（对齐 contract §1.6 §1.4 同模式）
+- **status 合并**：stop_all 成功后 `onStatusUpdate({ freezeEnabled: true })` / freeze 操作后合并新 freezeEnabled + orphanTaskCount → 时间轴 pill 立即反映
+
+### 质量门禁
+
+- typecheck ✅ / lint ✅ / file-size ✅ 0 新违规（CrawlerClient.tsx 485<500 / CrawlerAdvancedMenu.tsx 175）
+- verify:endpoint-adr ✅ **158 admin 路由对齐 29 ADR 端点**（0 新增）
+- 全量 unit test：4109 → **4117 PASS**（+8 G case）
+
+### 后续触发
+
+- 下张可执行卡：**REDO-01-H** runs 列表迁独立路由（0.15w）
+- 累计已完成：A ✅ + B ✅ + C ✅ + D ✅ + E ✅ + E2 ✅ + F ✅ + G ✅ 共 ~2.15w / REDO-01 总 ~2.4w — 剩余 ~0.4w（H+I+J）

@@ -6,7 +6,35 @@
 
 ## 进行中任务
 
-<!-- REDO-01-F 闭环（2026-05-19）；下一卡 REDO-01-G 高级 dropdown -->
+<!-- REDO-01-G 闭环（2026-05-19）；下一卡 REDO-01-H runs 独立路由 -->
+
+### CHG-SN-7-REDO-01-G ✅ 高级 dropdown 4 项闭环（2026-05-19）
+
+**完成时间**：2026-05-19
+**实施**（按 contract §1.6 / 全部复用现有 API）：
+- 新建 `apps/server-next/src/app/admin/crawler/_client/CrawlerAdvancedMenu.tsx`（175 行 / AdminDropdown trigger 高级 + 4 items + 双重 confirm 防误删 + 动态 label）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（465 → 485 行）注入 `<CrawlerAdvancedMenu />` 第 4 PageHeader action + `schedulerOpen` state + `<SchedulerConfigDrawer />` mount + `handleStatusUpdate` helper
+- 测试扩展：CrawlerClient.test.tsx +1 vi.mock 加 freeze/stop-all/reindex/getAutoCrawlConfig/setAutoCrawlConfig 5 mock + 8 新 case（43-50）42 → **50 case PASS**
+
+**评级**：A（0 红线 / 0 黄线 / 0 新端点 / 0 新 ADR / 全部复用 ADR-121 已有 audit）
+
+**4 项菜单 + 现有 API 映射**：
+- 调度配置 → `<SchedulerConfigDrawer />`（既有 / CHG-SN-6-27）
+- 重建 ES 索引 → `triggerReindex()` 既有 + 双重 confirm
+- 全局止血 → `stopAllCrawler({ freeze: true, removeRepeatableTick: true })` 既有 + 双重 confirm + status 合并 freezeEnabled
+- 开启冻结/解除冻结 → `setCrawlerFreeze(next)` 既有 + 单次 confirm + 动态 label
+
+**质量门禁**：
+- typecheck ✅ / lint ✅ / file-size ✅ 0 新违规（CrawlerClient.tsx 485<500）
+- verify:endpoint-adr ✅ 158 路由对齐 29 ADR 端点（0 新增）
+- 全量 unit test：4109 → **4117 PASS**（+8 净增 G）
+
+**执行模型**：claude-opus-4-7 主循环（纯实施 / 子代理：无 — 0 新端点 / 0 新 ADR / 全 API 复用）
+
+<!-- 下张：REDO-01-H runs 列表迁独立路由（0.15w / 移动 CrawlerRunsView.tsx → crawler/runs/_client/ + 新建 crawler/runs/page.tsx + sidebar 二级菜单注册） -->
+
+
+### CHG-SN-7-REDO-01-G ⏳ 已替换为闭环卡
 
 ### CHG-SN-7-REDO-01-F ✅ 分类映射 collapsible 闭环（2026-05-19）
 
