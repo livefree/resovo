@@ -25,6 +25,7 @@ const getCrawlerSystemStatusMock = vi.fn()
 const getCrawlerKpiMock = vi.fn()
 const getCrawlerTimelineMock = vi.fn()
 const runCrawlerAllMock = vi.fn()
+const runCrawlerSiteMock = vi.fn()
 const createCrawlerSiteMock = vi.fn()
 const updateCrawlerSiteMock = vi.fn()
 const deleteCrawlerSiteMock = vi.fn()
@@ -42,6 +43,7 @@ vi.mock('../../../../../../apps/server-next/src/lib/crawler/api', () => ({
   getCrawlerKpi: (...args: unknown[]) => getCrawlerKpiMock(...args),
   getCrawlerTimeline: (...args: unknown[]) => getCrawlerTimelineMock(...args),
   runCrawlerAll: (...args: unknown[]) => runCrawlerAllMock(...args),
+  runCrawlerSite: (...args: unknown[]) => runCrawlerSiteMock(...args),
 }))
 
 vi.mock('@resovo/admin-ui', async () => {
@@ -136,6 +138,7 @@ beforeEach(() => {
   getCrawlerKpiMock.mockReset()
   getCrawlerTimelineMock.mockReset()
   runCrawlerAllMock.mockReset()
+  runCrawlerSiteMock.mockReset()
   toastPushMock.mockReset()
   confirmSpy.mockReset().mockReturnValue(true)
   ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
@@ -306,6 +309,186 @@ describe('CrawlerClient (REDO-01-C 骨架)', () => {
     await waitFor(() => {
       expect(screen.getByText(/1 个站点/)).not.toBeNull()
       expect(screen.getByText(/全局冻结中/)).not.toBeNull()
+    })
+  })
+})
+
+describe('CrawlerClient (REDO-01-D 行级操作)', () => {
+  it('17. 行级 + 增量：点击触发 runCrawlerSite(incremental) + 成功 toast', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    runCrawlerSiteMock.mockResolvedValueOnce({
+      runId: 'run-incr-001',
+      taskIds: ['t1'],
+      enqueuedSiteKeys: ['jszyapi'],
+      skippedSiteKeys: [],
+    })
+    render(<CrawlerClient />)
+    const btn = await waitFor(() => screen.getByTestId('crawler-row-run-incremental-jszyapi'))
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(runCrawlerSiteMock).toHaveBeenCalledWith('jszyapi', 'incremental')
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: '已发起增量' }),
+      )
+    })
+  })
+
+  it('18. 行级 + 全量：点击触发 runCrawlerSite(full) + 成功 toast', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    runCrawlerSiteMock.mockResolvedValueOnce({
+      runId: 'run-full-001',
+      taskIds: ['t1'],
+      enqueuedSiteKeys: ['jszyapi'],
+      skippedSiteKeys: [],
+    })
+    render(<CrawlerClient />)
+    const btn = await waitFor(() => screen.getByTestId('crawler-row-run-full-jszyapi'))
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(runCrawlerSiteMock).toHaveBeenCalledWith('jszyapi', 'full')
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: '已发起全量' }),
+      )
+    })
+  })
+
+  it('19. freezeEnabled=true → 行级 + 增量 被拦截（warn toast）', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    getCrawlerSystemStatusMock.mockResolvedValue({ freezeEnabled: true })
+    render(<CrawlerClient />)
+    const btn = await waitFor(() => screen.getByTestId('crawler-row-run-incremental-jszyapi'))
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'warn', title: '采集已冻结' }),
+      )
+      expect(runCrawlerSiteMock).not.toHaveBeenCalled()
+    })
+  })
+
+  it('20. disabled site → 行级 + 增量 / + 全量 按钮 disabled', async () => {
+    const SITE_DISABLED = { ...SITE_1, key: 'tmp', disabled: true }
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_DISABLED])
+    render(<CrawlerClient />)
+    await waitFor(() => {
+      const incBtn = screen.getByTestId('crawler-row-run-incremental-tmp') as HTMLButtonElement
+      const fullBtn = screen.getByTestId('crawler-row-run-full-tmp') as HTMLButtonElement
+      expect(incBtn.disabled).toBe(true)
+      expect(fullBtn.disabled).toBe(true)
+    })
+  })
+
+  it('21. {more} dropdown：点击 trigger 展开菜单（6 项渲染）', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    render(<CrawlerClient />)
+    const trigger = await waitFor(() => screen.getByTestId('crawler-row-actions-trigger-jszyapi'))
+    fireEvent.click(trigger)
+    await waitFor(() => {
+      expect(screen.getByText('编辑站点')).not.toBeNull()
+      expect(screen.getByText('禁用')).not.toBeNull() // SITE_1.disabled=false
+      expect(screen.getByText('复制 key')).not.toBeNull()
+      expect(screen.getByText('标记成人')).not.toBeNull() // SITE_1.isAdult=false
+      expect(screen.getByText('标记短剧')).not.toBeNull() // SITE_1.sourceType=vod
+      expect(screen.getByText('删除站点')).not.toBeNull() // SITE_1.fromConfig=false
+    })
+  })
+
+  it('22. {more} 启用/禁用动态 label：disabled=true → "启用"', async () => {
+    const SITE_OFF = { ...SITE_1, key: 'off', disabled: true }
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_OFF])
+    render(<CrawlerClient />)
+    const trigger = await waitFor(() => screen.getByTestId('crawler-row-actions-trigger-off'))
+    fireEvent.click(trigger)
+    await waitFor(() => {
+      expect(screen.getByText('启用')).not.toBeNull()
+    })
+  })
+
+  it('23. {more} → 启用/禁用：调 updateCrawlerSite(disabled) + 成功 toast', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    updateCrawlerSiteMock.mockResolvedValueOnce({ ...SITE_1, disabled: true })
+    render(<CrawlerClient />)
+    const trigger = await waitFor(() => screen.getByTestId('crawler-row-actions-trigger-jszyapi'))
+    fireEvent.click(trigger)
+    const toggleItem = await waitFor(() => screen.getByText('禁用'))
+    fireEvent.click(toggleItem)
+    await waitFor(() => {
+      expect(updateCrawlerSiteMock).toHaveBeenCalledWith('jszyapi', { disabled: true })
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: '已禁用' }),
+      )
+    })
+  })
+
+  it('24. {more} → 标记成人：调 updateCrawlerSite(isAdult: true) + 成功 toast', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    updateCrawlerSiteMock.mockResolvedValueOnce({ ...SITE_1, isAdult: true })
+    render(<CrawlerClient />)
+    const trigger = await waitFor(() => screen.getByTestId('crawler-row-actions-trigger-jszyapi'))
+    fireEvent.click(trigger)
+    const item = await waitFor(() => screen.getByText('标记成人'))
+    fireEvent.click(item)
+    await waitFor(() => {
+      expect(updateCrawlerSiteMock).toHaveBeenCalledWith('jszyapi', { isAdult: true })
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: '已标记成人' }),
+      )
+    })
+  })
+
+  it('25. {more} → 标记短剧：调 updateCrawlerSite(sourceType: shortdrama)', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    updateCrawlerSiteMock.mockResolvedValueOnce({ ...SITE_1, sourceType: 'shortdrama' })
+    render(<CrawlerClient />)
+    const trigger = await waitFor(() => screen.getByTestId('crawler-row-actions-trigger-jszyapi'))
+    fireEvent.click(trigger)
+    const item = await waitFor(() => screen.getByText('标记短剧'))
+    fireEvent.click(item)
+    await waitFor(() => {
+      expect(updateCrawlerSiteMock).toHaveBeenCalledWith('jszyapi', { sourceType: 'shortdrama' })
+    })
+  })
+
+  it('26. {more} → fromConfig=true 站点的删除项 disabled label', async () => {
+    const SITE_CFG = { ...SITE_1, key: 'cfg', fromConfig: true }
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_CFG])
+    render(<CrawlerClient />)
+    const trigger = await waitFor(() => screen.getByTestId('crawler-row-actions-trigger-cfg'))
+    fireEvent.click(trigger)
+    await waitFor(() => {
+      expect(screen.getByText('删除（config 来源不可删）')).not.toBeNull()
+    })
+  })
+
+  it('27. {more} → 编辑站点：打开 drawer 且填入 form', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    render(<CrawlerClient />)
+    const trigger = await waitFor(() => screen.getByTestId('crawler-row-actions-trigger-jszyapi'))
+    fireEvent.click(trigger)
+    const editItem = await waitFor(() => screen.getByText('编辑站点'))
+    fireEvent.click(editItem)
+    await waitFor(() => {
+      expect(screen.getByTestId('crawler-drawer')).not.toBeNull()
+    })
+  })
+
+  it('28. {more} → 复制 key：调 navigator.clipboard.writeText + 成功 toast', async () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      value: { writeText: writeTextMock },
+      configurable: true,
+    })
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    render(<CrawlerClient />)
+    const trigger = await waitFor(() => screen.getByTestId('crawler-row-actions-trigger-jszyapi'))
+    fireEvent.click(trigger)
+    const copyItem = await waitFor(() => screen.getByText('复制 key'))
+    fireEvent.click(copyItem)
+    await waitFor(() => {
+      expect(writeTextMock).toHaveBeenCalledWith('jszyapi')
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: '已复制' }),
+      )
     })
   })
 })

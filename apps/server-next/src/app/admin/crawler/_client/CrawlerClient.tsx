@@ -28,6 +28,7 @@ import {
   getCrawlerKpi,
   getCrawlerTimeline,
   runCrawlerAll,
+  runCrawlerSite,
   createCrawlerSite,
   updateCrawlerSite,
   deleteCrawlerSite,
@@ -37,6 +38,7 @@ import {
   type CrawlerKpiResponse,
   type CrawlerTimelineResponse,
   type CreateCrawlerSiteInput,
+  type CrawlerRunMode,
 } from '@/lib/crawler/api'
 import { ApiClientError } from '@/lib/api-client'
 import { CrawlerKpiRow } from './CrawlerKpiRow'
@@ -149,6 +151,21 @@ export function CrawlerClient() {
     setDrawerOpen(true)
   }, [])
 
+  const handleEditSite = useCallback((site: CrawlerSite) => {
+    setFormMode({ kind: 'edit', key: site.key })
+    setForm({
+      key: site.key,
+      name: site.name,
+      apiUrl: site.apiUrl,
+      detail: site.detail ?? '',
+      sourceType: site.sourceType,
+      format: site.format,
+      weight: site.weight,
+      isAdult: site.isAdult,
+    })
+    setDrawerOpen(true)
+  }, [])
+
   const handleSubmit = useCallback(async () => {
     setSubmitting(true)
     try {
@@ -233,6 +250,119 @@ export function CrawlerClient() {
     })
   }, [toast])
 
+  // ── 行级 {more} + + 增量 / + 全量（REDO-01-D）───────────────────
+  const handleRunSite = useCallback(
+    async (siteKey: string, mode: CrawlerRunMode) => {
+      if (status?.freezeEnabled) {
+        toast.push({
+          title: '采集已冻结',
+          description: '请先在"高级 / 解除冻结"后再运行（REDO-01-G 实装）',
+          level: 'warn',
+        })
+        return
+      }
+      try {
+        const result = await runCrawlerSite(siteKey, mode)
+        toast.push({
+          title: mode === 'full' ? '已发起全量' : '已发起增量',
+          description: `${siteKey} · runId=${result.runId.slice(0, 8)}`,
+          level: 'success',
+        })
+        refresh()
+      } catch (err: unknown) {
+        const { title, description } = describeApiError(err)
+        toast.push({ title, description, level: 'danger' })
+      }
+    },
+    [refresh, status?.freezeEnabled, toast],
+  )
+
+  const handleRunIncremental = useCallback(
+    (siteKey: string) => void handleRunSite(siteKey, 'incremental'),
+    [handleRunSite],
+  )
+
+  const handleRunFull = useCallback(
+    (siteKey: string) => void handleRunSite(siteKey, 'full'),
+    [handleRunSite],
+  )
+
+  const handleToggleDisable = useCallback(
+    async (site: CrawlerSite) => {
+      const nextDisabled = !site.disabled
+      try {
+        await updateCrawlerSite(site.key, { disabled: nextDisabled })
+        toast.push({
+          title: nextDisabled ? '已禁用' : '已启用',
+          description: site.key,
+          level: 'success',
+        })
+        refresh()
+      } catch (err: unknown) {
+        const { title, description } = describeApiError(err)
+        toast.push({ title, description, level: 'danger' })
+      }
+    },
+    [refresh, toast],
+  )
+
+  const handleMarkAdult = useCallback(
+    async (site: CrawlerSite) => {
+      const nextAdult = !site.isAdult
+      try {
+        await updateCrawlerSite(site.key, { isAdult: nextAdult })
+        toast.push({
+          title: nextAdult ? '已标记成人' : '已取消成人',
+          description: site.key,
+          level: 'success',
+        })
+        refresh()
+      } catch (err: unknown) {
+        const { title, description } = describeApiError(err)
+        toast.push({ title, description, level: 'danger' })
+      }
+    },
+    [refresh, toast],
+  )
+
+  const handleMarkShortdrama = useCallback(
+    async (site: CrawlerSite) => {
+      const nextType = site.sourceType === 'shortdrama' ? 'vod' : 'shortdrama'
+      try {
+        await updateCrawlerSite(site.key, { sourceType: nextType })
+        toast.push({
+          title: nextType === 'shortdrama' ? '已标记短剧' : '已标记 vod',
+          description: site.key,
+          level: 'success',
+        })
+        refresh()
+      } catch (err: unknown) {
+        const { title, description } = describeApiError(err)
+        toast.push({ title, description, level: 'danger' })
+      }
+    },
+    [refresh, toast],
+  )
+
+  const handleCopyKey = useCallback(
+    (key: string) => {
+      const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined
+      if (!clipboard) {
+        toast.push({
+          title: '复制失败',
+          description: '当前环境不支持 clipboard API',
+          level: 'warn',
+        })
+        return
+      }
+      clipboard.writeText(key).then(
+        () => toast.push({ title: '已复制', description: key, level: 'success' }),
+        () => toast.push({ title: '复制失败', description: key, level: 'danger' }),
+      )
+    },
+    [toast],
+  )
+
   // siteStats Map：用于站点表 health / routeCount 列消费
   const siteStats: ReadonlyMap<string, CrawlerSiteStat> | undefined = kpi
     ? new Map(kpi.siteStats.map((s) => [s.key, s]))
@@ -294,6 +424,14 @@ export function CrawlerClient() {
         error={error}
         siteStats={siteStats}
         onRefresh={refresh}
+        onRunIncremental={handleRunIncremental}
+        onRunFull={handleRunFull}
+        onEdit={handleEditSite}
+        onToggleDisable={handleToggleDisable}
+        onCopyKey={handleCopyKey}
+        onMarkAdult={handleMarkAdult}
+        onMarkShortdrama={handleMarkShortdrama}
+        onDelete={handleDelete}
       />
 
       <CrawlerSiteFormDrawer

@@ -11240,3 +11240,80 @@ REDO-01-B 后端 4 新端点（getCrawlerKpi / getCrawlerTimeline / runCrawlerSi
 - 下张可执行卡：**CHG-SN-7-REDO-01-D** 前端站点行 + {more} 菜单（**0.2w 下调** / 契约 §1.4 6 项行级 dropdown + 行级 + 增量/全量 按钮 + AdminDropdown 消费）
 - REDO-01-D 依赖：本卡 9 列骨架 ✅ + 旧 CrawlerSiteFormDrawer 沿用 ✅ + admin-ui AdminDropdown ✅
 - REDO-01-C → D / E / F / G / H 5 子卡可并行起步（DAG 图见 contract §6.1）
+
+---
+
+## [CHG-SN-7-REDO-01-D] Crawler 前端站点行 + `{more}` 菜单 + 行级 + 增量/全量
+
+- **完成时间**：2026-05-19
+- **记录时间**：2026-05-19
+- **执行模型**：claude-opus-4-7（主循环 / 实施 / 任务卡建议 Sonnet 但用户在 Opus 续会话直推 — 不擅自切换）
+- **子代理**：无（纯实施，REDO-01-A 契约 §1.4 已锁定 + VideoRowActions 范式可参考）
+
+### 起源
+
+REDO-01-C 已落地 9 列骨架（commit df0a0a1e），actions 列为 `（REDO-01-D 实装）` placeholder。本卡按 contract §1.4 + §2.2 裁决 A 把 6 项 `{more}` dropdown（edit / toggle / copy_key / mark_adult / mark_shortdrama / delete）+ 行级 `+ 增量 / + 全量` 按钮真实接入，CRUD + 启停 + 标记 + 删除全部通过逐行 dropdown 触发（删除批量动作）。
+
+### 修改文件（5 个：1 新 + 4 改）
+
+- **新建** `apps/server-next/src/app/admin/crawler/_client/CrawlerSiteRowActions.tsx`（127 行）— AdminDropdown 触发器 `⋯` button + 6 项菜单 props + 动态 label（启用/禁用 / 标记成人/取消成人 / 标记短剧/标记 vod / 删除（config 来源不可删）） + `fromConfig` site 删除项 `disabled: true`；testid `crawler-row-actions-trigger-${key}` + `crawler-row-actions-dropdown-${key}`
+- **改** `apps/server-next/src/app/admin/crawler/_client/crawler-site-columns-v2.tsx`（276 → 329 行）— 扩 `CrawlerSiteColumnsCallbacks` 7 新字段（onEdit / onToggleDisable / onCopyKey / onMarkAdult / onMarkShortdrama / onDelete + 已存在的 onRunIncremental / onRunFull）；actions 列 cell 替换为：AdminButton sm `+ 增量` + AdminButton sm `+ 全量` + `<CrawlerSiteRowActions />`；列宽 160→200；`onClick={e => e.stopPropagation()}` 防止 actions cell 触发 onRowClick；row.disabled → run 按钮 disabled
+- **改** `apps/server-next/src/app/admin/crawler/_client/CrawlerSiteList.tsx`（152 → 187 行）— Props 扩 8 callback（onRunIncremental / onRunFull / onEdit / onToggleDisable / onCopyKey / onMarkAdult / onMarkShortdrama / onDelete）+ 透传到 `buildCrawlerSiteColumnsV2` callbacks（含 useMemo 依赖正确性）
+- **改** `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（312 → 454 行）— 7 新 handlers：
+  - `handleEditSite` — setFormMode({kind:'edit'}) + setForm 8 字段填充 + setDrawerOpen
+  - `handleRunSite(siteKey, mode)` — freeze 守卫 + runCrawlerSite + 差异化 toast（已发起增量/全量） + refresh
+  - `handleRunIncremental` / `handleRunFull` — handleRunSite 偏函数（避免 useCallback 闭包重复）
+  - `handleToggleDisable` — updateCrawlerSite({disabled: !site.disabled}) + 动态 toast（已启用/已禁用）
+  - `handleMarkAdult` — updateCrawlerSite({isAdult: !site.isAdult}) + 动态 toast
+  - `handleMarkShortdrama` — updateCrawlerSite({sourceType: vod ↔ shortdrama}) + 动态 toast
+  - `handleCopyKey` — navigator.clipboard.writeText + SSR 安全降级（clipboard undefined 时 warn toast）
+  - 8 callback 透传 CrawlerSiteList
+- **改** `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx`（311 → 467 行）— 扩 12 新 case（17–28）：
+  - 17/18 行级 + 增量 / + 全量 → runCrawlerSite 调用 + 差异化 toast
+  - 19 freezeEnabled=true → 行级运行被拦截 + warn toast
+  - 20 disabled site → run 按钮 disabled
+  - 21 {more} dropdown 6 项渲染（默认 SITE_1 状态）
+  - 22 {more} 动态 label（disabled=true → "启用"）
+  - 23 {more} 启用/禁用 → updateCrawlerSite({disabled}) + 成功 toast
+  - 24 {more} 标记成人 → updateCrawlerSite({isAdult:true}) + 成功 toast
+  - 25 {more} 标记短剧 → updateCrawlerSite({sourceType:'shortdrama'})
+  - 26 fromConfig=true → 删除项 label "（config 来源不可删）"
+  - 27 {more} 编辑站点 → 打开 drawer
+  - 28 {more} 复制 key → navigator.clipboard.writeText + 成功 toast
+
+### 关键决策
+
+1. **AdminButton size 'xs' 不存在 → 用 'sm'**：contract §4 写"btn--xs（行/线路）"是旧 CSS 命名遗留，admin-ui v2 AdminButton 最小 size 是 sm（24px），行内尺寸等价；不为单卡新增 'xs' size enum
+2. **NOOP fallback callbacks**：buildCrawlerSiteColumnsV2 callbacks 缺省时给静默 noop（NOOP_SITE / NOOP_KEY），避免 cell 内 `?.()` 三元链；运行按钮缺 callback 时显式 disabled
+3. **actions cell stopPropagation**：行内 +增量/+全量/{more} 触发不应冒泡到 onRowClick（如未来 REDO-01-E expand toggle 接 onRowClick）
+4. **clipboard 降级**：SSR 或 unsupported 环境 navigator.clipboard 可能 undefined（非 https / 旧 webview），降级 warn toast 而非 throw
+5. **复用 handleDelete 逻辑**：CrawlerClient 已存在 `handleDelete` 含 fromConfig 守卫 + confirm + delete API + toast，本卡直接透传，不重复实现
+
+### 不在范围（保留至后续子卡）
+
+- 行展开 sub-table（线路）→ **REDO-01-E**
+- 行展开分类映射 collapsible → **REDO-01-F**
+- "高级"dropdown（调度配置 / 重建索引 / 全局止血 / 冻结切换）→ **REDO-01-G**
+- runs 独立路由 + sidebar 二级菜单 → **REDO-01-H**
+- 删除旧 3 文件（CrawlerSitesTab / CrawlerControlsCard / crawler-site-columns）→ **REDO-01-I**
+- 视觉回归 + e2e + Opus 验收 → **REDO-01-J**
+
+### 质量门禁
+
+- ✅ `typecheck` — 全 7 workspace 通过
+- ✅ `lint` — 仅 1 unrelated img warning（apps/server-next/.../TabImages.tsx 83:13）
+- ✅ `verify:file-size-budget` — 0 新违规（5 文件 / 最大 CrawlerClient.tsx 454 < 500）
+- ✅ `verify:endpoint-adr` — 152 admin 路由对齐 23 ADR（无新端点）
+- ✅ 全量 unit test — **4044 → 4056 PASS（+12 净增 / 0 failed）**
+
+### 关键自省
+
+1. **`act()` warning 累积**：CrawlerClient.test.tsx 中多个异步 useEffect 触发 React 状态更新未包 act，testing-library 输出 warning 但不影响 case PASS；后续 REDO-01-J Opus 验收时清理（不在本卡范围）
+2. **测试 SITE_1 复用模式**：12 新 case 全部基于 SITE_1 base + 局部 override（disabled / fromConfig / sourceType），减少 mock 数据膨胀；保留 SITE_1 immutable 不修改
+3. **navigator.clipboard mock 通过 defineProperty**：jsdom 默认 readonly，需 Object.defineProperty 注入测试 mock；configurable: true 允许后续 case 覆盖
+
+### 后续触发
+
+- 下张可执行卡：**CHG-SN-7-REDO-01-E** 行展开线路 sub-table（0.4w / 跨调 sources 现有 API）
+- REDO-01-D 完成后 DAG 图：C ✅ → D ✅ → {E, F, G, H} 可并行；I 依赖 E/F/G/H 全 ✅；J 依赖 I ✅
+- 累计已完成：A ✅ + B ✅ + C ✅ + D ✅ 共 1.35w / REDO-01 总 2.35w（contract §5 削减后） — 剩余 1.0w

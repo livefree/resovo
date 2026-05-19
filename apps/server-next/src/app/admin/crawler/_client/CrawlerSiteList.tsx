@@ -1,17 +1,15 @@
 'use client'
 
 /**
- * CrawlerSiteList.tsx — 采集页站点列表（DataTable v2 骨架）
+ * CrawlerSiteList.tsx — 采集页站点列表（DataTable v2 + REDO-01-D 行级操作）
  *
- * 真源：M-SN-7-redo-01-contract.md §1.3
+ * 真源：M-SN-7-redo-01-contract.md §1.3 + §1.4
  *
- * REDO-01-C 范围：
- *   - DataTable v2 mode="client" + 9 列骨架 + toolbar.search + client-mode 分页
- *   - 三态（loading / error / empty）
+ * REDO-01-C 范围：DataTable v2 mode="client" + 9 列骨架 + toolbar.search + client-mode 分页 + 三态。
+ * REDO-01-D 范围（本卡更新）：透传行级 callbacks（+ 增量 / + 全量 / {more} 6 项）。
  *
  * 不在范围（后续子卡）：
  *   - expandedKeys + renderExpandedRow（REDO-01-E 线路 sub-table / REDO-01-F 分类映射）
- *   - 行级操作回调真实接入（REDO-01-D / REDO-01-G）
  *   - selection 列（contract §2.2 裁决 A：删除批量动作）
  */
 
@@ -43,6 +41,15 @@ export interface CrawlerSiteListProps {
   readonly siteStats?: ReadonlyMap<string, CrawlerSiteStat>
   readonly onRefresh: () => void
   readonly onRowClick?: (site: CrawlerSite) => void
+  // ── REDO-01-D 行级操作 callbacks ──────────────────────────────
+  readonly onRunIncremental?: (siteKey: string) => void
+  readonly onRunFull?: (siteKey: string) => void
+  readonly onEdit?: (site: CrawlerSite) => void
+  readonly onToggleDisable?: (site: CrawlerSite) => void
+  readonly onCopyKey?: (key: string) => void
+  readonly onMarkAdult?: (site: CrawlerSite) => void
+  readonly onMarkShortdrama?: (site: CrawlerSite) => void
+  readonly onDelete?: (site: CrawlerSite) => void
 }
 
 export function CrawlerSiteList({
@@ -52,6 +59,14 @@ export function CrawlerSiteList({
   siteStats,
   onRefresh,
   onRowClick,
+  onRunIncremental,
+  onRunFull,
+  onEdit,
+  onToggleDisable,
+  onCopyKey,
+  onMarkAdult,
+  onMarkShortdrama,
+  onDelete,
 }: CrawlerSiteListProps) {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -69,8 +84,28 @@ export function CrawlerSiteList({
   }, [sites, search])
 
   const columnsCallbacks: CrawlerSiteColumnsCallbacks = useMemo(
-    () => ({ siteStats }),
-    [siteStats],
+    () => ({
+      siteStats,
+      onRunIncremental,
+      onRunFull,
+      onEdit,
+      onToggleDisable,
+      onCopyKey,
+      onMarkAdult,
+      onMarkShortdrama,
+      onDelete,
+    }),
+    [
+      siteStats,
+      onRunIncremental,
+      onRunFull,
+      onEdit,
+      onToggleDisable,
+      onCopyKey,
+      onMarkAdult,
+      onMarkShortdrama,
+      onDelete,
+    ],
   )
 
   const columns = useMemo(

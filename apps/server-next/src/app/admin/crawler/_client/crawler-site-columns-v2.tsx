@@ -1,34 +1,51 @@
 'use client'
 
 /**
- * crawler-site-columns-v2.tsx — REDO-01-C 站点表 9 列骨架定义
+ * crawler-site-columns-v2.tsx — 站点表 9 列定义（REDO-01-C 骨架 + REDO-01-D 行级操作实装）
  *
  * 真源：M-SN-7-redo-01-contract.md §1.4
  *
- * 本卡（REDO-01-C）范围：9 列结构 + 占位 cell 渲染（chevron / status dot / type pill / actions placeholder）。
- * 不含：
- *   - 真实行级 {more} dropdown 菜单（REDO-01-D）
- *   - 行级 + 增量 / 全量 按钮 onClick 联动（REDO-01-D）
- *   - 展开 chevron 与 expandedKeys 状态联动（REDO-01-E）
+ * REDO-01-D 范围（本卡更新）：
+ *   - actions 列 cell：`+ 增量` AdminButton + `+ 全量` AdminButton + <CrawlerSiteRowActions /> {more} dropdown
+ *   - 6 项 {more} 菜单回调串接（contract §1.4 menu 表）
  *
- * 设计原则：cell 内统一使用 CSS 变量；操作列 placeholder data-attr 标记便于 REDO-01-D 锚点定位。
+ * 不含：
+ *   - 展开 chevron 与 expandedKeys 状态联动 onClick toggle（REDO-01-E）
  */
 
 import { type CSSProperties } from 'react'
-import { type TableColumn } from '@resovo/admin-ui'
+import { AdminButton, type TableColumn } from '@resovo/admin-ui'
 import type { CrawlerSite, CrawlerSiteStat } from '@/lib/crawler/api'
+import { CrawlerSiteRowActions } from './CrawlerSiteRowActions'
 
 export interface CrawlerSiteColumnsCallbacks {
-  /** 行级"+ 增量"按钮 onClick（REDO-01-C 接入占位；REDO-01-D 实装） */
+  /** 行级"+ 增量"按钮 onClick */
   readonly onRunIncremental?: (siteKey: string) => void
-  /** 行级"+ 全量"按钮 onClick（REDO-01-C 接入占位；REDO-01-D 实装） */
+  /** 行级"+ 全量"按钮 onClick */
   readonly onRunFull?: (siteKey: string) => void
-  /** {more} dropdown 触发（REDO-01-D 实装；本卡仅渲染 disabled placeholder） */
-  readonly onOpenMore?: (site: CrawlerSite) => void
+  /** {more} dropdown 行项 — 编辑站点（打开 CrawlerSiteFormDrawer edit）*/
+  readonly onEdit?: (site: CrawlerSite) => void
+  /** {more} dropdown 行项 — 启用/禁用切换 */
+  readonly onToggleDisable?: (site: CrawlerSite) => void
+  /** {more} dropdown 行项 — 复制 key */
+  readonly onCopyKey?: (key: string) => void
+  /** {more} dropdown 行项 — 标记/取消成人 */
+  readonly onMarkAdult?: (site: CrawlerSite) => void
+  /** {more} dropdown 行项 — 标记短剧/标记 vod 切换 */
+  readonly onMarkShortdrama?: (site: CrawlerSite) => void
+  /** {more} dropdown 行项 — 删除站点（fromConfig 时 dropdown 内 disabled）*/
+  readonly onDelete?: (site: CrawlerSite) => void
   /** 行展开状态读（REDO-01-E 实装；本卡 chevron 静态不旋转） */
   readonly expandedKeys?: ReadonlySet<string>
   /** 站点 stats 映射（routeCount + health；来自 GET /admin/crawler/kpi siteStats） */
   readonly siteStats?: ReadonlyMap<string, CrawlerSiteStat>
+}
+
+const NOOP_SITE = (_site: CrawlerSite): void => {
+  // callbacks 缺省时静默；测试环境若需断言 — 消费方应显式传入
+}
+const NOOP_KEY = (_key: string): void => {
+  // callbacks 缺省时静默
 }
 
 const CHEVRON_STYLE: CSSProperties = {
@@ -79,11 +96,10 @@ const PROGRESS_TRACK_STYLE: CSSProperties = {
   marginRight: '6px',
 }
 
-const ACTIONS_PLACEHOLDER_STYLE: CSSProperties = {
+const ACTIONS_CELL_STYLE: CSSProperties = {
   display: 'inline-flex',
+  alignItems: 'center',
   gap: '4px',
-  fontSize: 'var(--font-size-xs)',
-  color: 'var(--fg-muted)',
 }
 
 function deriveHealthFromSite(site: CrawlerSite, stat: CrawlerSiteStat | undefined): number {
@@ -137,7 +153,18 @@ function formatRelativeTime(iso: string | null | undefined): string {
 export function buildCrawlerSiteColumnsV2(
   callbacks: CrawlerSiteColumnsCallbacks = {},
 ): readonly TableColumn<CrawlerSite>[] {
-  const { expandedKeys, siteStats } = callbacks
+  const {
+    expandedKeys,
+    siteStats,
+    onRunIncremental,
+    onRunFull,
+    onEdit = NOOP_SITE,
+    onToggleDisable = NOOP_SITE,
+    onCopyKey = NOOP_KEY,
+    onMarkAdult = NOOP_SITE,
+    onMarkShortdrama = NOOP_SITE,
+    onDelete = NOOP_SITE,
+  } = callbacks
 
   return [
     {
@@ -264,11 +291,37 @@ export function buildCrawlerSiteColumnsV2(
       id: 'actions',
       header: '操作',
       accessor: () => null,
-      width: 160,
+      width: 200,
       defaultVisible: true,
-      cell: () => (
-        <span style={ACTIONS_PLACEHOLDER_STYLE} data-actions-placeholder>
-          （REDO-01-D 实装）
+      cell: ({ row }) => (
+        <span style={ACTIONS_CELL_STYLE} data-actions-cell onClick={(e) => e.stopPropagation()}>
+          <AdminButton
+            size="sm"
+            variant="default"
+            onClick={() => onRunIncremental?.(row.key)}
+            disabled={row.disabled || !onRunIncremental}
+            data-testid={`crawler-row-run-incremental-${row.key}`}
+          >
+            + 增量
+          </AdminButton>
+          <AdminButton
+            size="sm"
+            variant="default"
+            onClick={() => onRunFull?.(row.key)}
+            disabled={row.disabled || !onRunFull}
+            data-testid={`crawler-row-run-full-${row.key}`}
+          >
+            + 全量
+          </AdminButton>
+          <CrawlerSiteRowActions
+            site={row}
+            onEdit={onEdit}
+            onToggleDisable={onToggleDisable}
+            onCopyKey={onCopyKey}
+            onMarkAdult={onMarkAdult}
+            onMarkShortdrama={onMarkShortdrama}
+            onDelete={onDelete}
+          />
         </span>
       ),
     },
