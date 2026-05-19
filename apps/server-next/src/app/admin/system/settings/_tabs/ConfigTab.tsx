@@ -133,9 +133,13 @@ export function ConfigTab() {
     setSaving(true)
     try {
       const result = await saveSystemConfig({ configFile, subscriptionUrl })
+      // CHG-SN-7-MISC-CRAWLER-CONFIG-ORPHAN-DELETE：toast 显示 orphan delete 反馈
+      const orphanSummary = result.orphanDeleted > 0
+        ? ` · 清理 ${result.orphanDeleted} 个已移除（${result.orphanDeletedKeys.slice(0, 3).join(', ')}${result.orphanDeletedKeys.length > 3 ? '…' : ''}）`
+        : ''
       toast.push({
         title: '已保存',
-        description: `crawler_sites 同步：成功 ${result.synced} 个 · 跳过 ${result.skipped} 个`,
+        description: `crawler_sites 同步：成功 ${result.synced} 个 · 跳过 ${result.skipped} 个${orphanSummary}`,
         level: 'success',
       })
       setDirty(false)

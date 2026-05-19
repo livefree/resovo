@@ -81,6 +81,9 @@ export interface SystemConfigSaveResult {
   readonly ok: true
   readonly synced: number
   readonly skipped: number
+  // CHG-SN-7-MISC-CRAWLER-CONFIG-ORPHAN-DELETE：配置文件移除的孤儿站点同步删除统计
+  readonly orphanDeleted: number
+  readonly orphanDeletedKeys: readonly string[]
 }
 
 export async function getSystemConfig(): Promise<SystemConfig> {

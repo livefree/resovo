@@ -179,8 +179,13 @@ export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
     const sites: Record<string, ConfigFileSite> = configJson.crawler_sites ?? configJson.api_site ?? {}
     let synced = 0
     let skipped = 0
-    const validKeys: string[] = []
+    // CHG-SN-7-MISC-CRAWLER-CONFIG-ORPHAN-DELETE：
+    //   1. validKeys 收集所有配置文件中**出现过的 key**（含 skipped 缺字段的）
+    //      避免 skipped 的 key 被 orphan delete 误删（语义："配置文件含此 key" ≠ "可删")
+    //   2. 仅当配置文件**完全移除** key 时才视为孤儿删除
+    const presentKeys: string[] = []  // 配置文件中所有出现过的 key（含 skipped）
     for (const [key, site] of Object.entries(sites)) {
+      presentKeys.push(key)
       const apiUrl = site.api ?? site.api_url ?? site.url
       if (!site.name || !apiUrl) {
         skipped++
@@ -198,12 +203,11 @@ export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
         fromConfig: true,
       })
       synced++
-      validKeys.push(key)
     }
 
     // CHG-SN-7-MISC-CRAWLER-CONFIG-ORPHAN-DELETE：同步删除配置文件中已移除的 fromConfig=true 孤儿
-    // 修复用户反馈"变更配置文件没和采集站点同步" — 即移除 key 后 DB 残留无法清理
-    const orphanDeletedKeys = await crawlerSitesQueries.deleteCrawlerSitesFromConfigOrphans(db, validKeys)
+    // 用 presentKeys（含 skipped）而非 validKeys（仅 synced）→ 避免 skipped 的 key 被误删
+    const orphanDeletedKeys = await crawlerSitesQueries.deleteCrawlerSitesFromConfigOrphans(db, presentKeys)
 
     // CHG-SN-6-RETRO-3-A：审计 — 写 admin_audit_log（system.config_update / ultrareview P0-3）
     // beforeJsonb: configFile 长度 + 当前 subscriptionUrl；afterJsonb: 新长度 + sites 同步统计
