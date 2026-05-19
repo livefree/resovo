@@ -88,10 +88,18 @@ export function deserializeSiteSettings(raw: Record<string, string>): SiteSettin
     contentFilterEnabled:  raw.content_filter_enabled !== 'false',
     videoProxyEnabled:     raw.video_proxy_enabled === 'true',
     videoProxyUrl:         raw.video_proxy_url ?? '',
-    autoCrawlEnabled:      raw.auto_crawl_enabled === 'true',
-    autoCrawlMaxPerRun:    Number(raw.auto_crawl_max_per_run ?? 100),
-    autoCrawlRecentOnly:   raw.auto_crawl_recent_only === 'true',
-    autoCrawlRecentDays:   Number(raw.auto_crawl_recent_days ?? 30),
+    autoCrawlEnabled:           raw.auto_crawl_enabled === 'true',
+    autoCrawlMaxPerRun:         Number(raw.auto_crawl_max_per_run ?? 100),
+    autoCrawlRecentOnly:        raw.auto_crawl_recent_only === 'true',
+    autoCrawlRecentDays:        Number(raw.auto_crawl_recent_days ?? 30),
+    notificationEmailEnabled:   raw.notification_email_enabled === 'true',
+    notificationEmailTo:        raw.notification_email_to ?? '',
+    notificationWebhookEnabled: raw.notification_webhook_enabled === 'true',
+    notificationWebhookUrl:     raw.notification_webhook_url ?? '',
+    notificationWebhookSecret:  raw.notification_webhook_secret ?? '',
+    sessionTimeoutMinutes:      Number(raw.session_timeout_minutes ?? 60),
+    sessionMaxConcurrent:       Number(raw.session_max_concurrent ?? 5),
+    sessionExtendOnActivity:    raw.session_extend_on_activity !== 'false',
   }
 }
 

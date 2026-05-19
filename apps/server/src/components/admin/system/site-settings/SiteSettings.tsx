@@ -15,18 +15,26 @@ import type { SiteSettings } from '@/types'
 // ── 默认值 ────────────────────────────────────────────────────
 
 const DEFAULT_SETTINGS: SiteSettings = {
-  siteName:             '',
-  siteAnnouncement:     '',
-  doubanProxy:          '',
-  doubanCookie:         '',
-  showAdultContent:     false,
-  contentFilterEnabled: true,
-  videoProxyEnabled:    false,
-  videoProxyUrl:        '',
-  autoCrawlEnabled:     false,
-  autoCrawlMaxPerRun:   100,
-  autoCrawlRecentOnly:  false,
-  autoCrawlRecentDays:  30,
+  siteName:                    '',
+  siteAnnouncement:            '',
+  doubanProxy:                 '',
+  doubanCookie:                '',
+  showAdultContent:            false,
+  contentFilterEnabled:        true,
+  videoProxyEnabled:           false,
+  videoProxyUrl:               '',
+  autoCrawlEnabled:            false,
+  autoCrawlMaxPerRun:          100,
+  autoCrawlRecentOnly:         false,
+  autoCrawlRecentDays:         30,
+  notificationEmailEnabled:    false,
+  notificationEmailTo:         '',
+  notificationWebhookEnabled:  false,
+  notificationWebhookUrl:      '',
+  notificationWebhookSecret:   '',
+  sessionTimeoutMinutes:       60,
+  sessionMaxConcurrent:        5,
+  sessionExtendOnActivity:     true,
 }
 
 // ── 子组件 ────────────────────────────────────────────────────

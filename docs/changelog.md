@@ -12798,3 +12798,33 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 - **改动摘要**：M-SN-7 REDO-03-B / plan §6 L626 正源 8 类 Tab。添加 3 新顶层 Tab（通知/API·Webhook/登录会话，均为占位 AdminCard 待 REDO-03-C 接入真实后端字段）+ SettingsTab 内补 图片 section 占位（消除描述虚报）。SettingsContainer 副标题更新 5→8 类。新增 9 条单测。
 - **测试结果**：typecheck 全绿 / lint PASS（既有 TabImages.tsx warning 无关）/ unit 4186 PASS（+9 新测试 / CrawlerTimelineCard 2 transient flake 已确认可重跑）
 - **价值排序自评**：正确性 A / 边界复用 A（3 新 Tab 各自独立文件 / AdminCard 共享原语）/ 扩展性 A（REDO-03-C 接真端点零改 SettingsContainer 结构）/ 一致性 A（与现有 Tab 样式/模式一致）/ 改动收敛 9 文件
+
+## [CHG-SN-7-REDO-03-C] 后端 settings 端点字段扩展 + ADR-126（8 KV 字段 / 3 Tab 真实表单）
+- **完成时间**：2026-05-19
+- **记录时间**：2026-05-19 16:45
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-7) — ADR-126 字段边界裁决（API Key 延后 ADR-127 / 活跃会话延后 ADR-128）
+- **修改文件**：
+  - `packages/types/src/system.types.ts`（SystemSettingKey +8 / SiteSettings 接口 +8 字段）
+  - `apps/api/src/db/queries/systemSettings.ts`（deserializeSiteSettings +8 字段反序列化）
+  - `apps/api/src/routes/admin/siteConfig.ts`（SiteSettingsBodySchema +8 optional / POST handler +8 pairs / webhook URL 合法性校验）
+  - 新建：`apps/api/src/db/migrations/066_system_settings_seed_notifications_session.sql`（8 行 ON CONFLICT DO NOTHING seed）
+  - `apps/server-next/src/app/admin/settings/_tabs/NotificationsTab.tsx`（占位 → 真实表单 / 3 AdminCard / email+webhook+events）
+  - `apps/server-next/src/app/admin/settings/_tabs/ApiWebhookTab.tsx`（advisory 重写 / ADR-127 延后标注）
+  - `apps/server-next/src/app/admin/settings/_tabs/LoginSessionsTab.tsx`（占位 → 真实表单 / 2 AdminCard / 会话策略+活跃列表 advisory）
+  - `apps/server/src/components/admin/system/site-settings/SiteSettings.tsx`（v1 冻结 / DEFAULT_SETTINGS 补 8 个必填字段 / typecheck PASS）
+  - `tests/unit/components/server-next/admin/system/NotificationsTab.test.tsx`（5 case / api-client mock + system/api mock）
+  - `tests/unit/components/server-next/admin/system/ApiWebhookTab.test.tsx`（3 case）
+  - `tests/unit/components/server-next/admin/system/LoginSessionsTab.test.tsx`（5 case / api-client mock + system/api mock）
+  - `docs/decisions.md`（追加 ADR-126 9 节全文 + 延后决策表 + 4 维度 A 自评）
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`（任务收尾三同步）
+- **新增依赖**：无
+- **数据库变更**：migration 066 seed INSERT 8 行（ON CONFLICT DO NOTHING / 幂等）
+- **注意事项**：
+  1. API Key 管理（生成/撤销/列表）延后 ADR-127 / M-SN-8+（需独立 api_keys 表 + 3 新端点）
+  2. 活跃会话列表 + 强制退出延后 ADR-128 / M-SN-8+（需查询 refresh_tokens + 新 GET 端点）
+  3. notification_email_enabled / notification_webhook_enabled 字段存储但发送逻辑未实装（M-SN-8+ 接入）
+  4. v1 冻结组件（apps/server）DEFAULT_SETTINGS 需保持与 SiteSettings 接口字段同步（随 v1 下线可消除）
+- **改动摘要**：M-SN-7 REDO-03-C / Opus arch-reviewer 裁决扩展边界（KV 兼容 8 字段 / API Key 实体化延后）。8 KV 字段全链路落地（types → deserialize → API schema/handler → seed migration）。3 占位 Tab 升级真实表单（NotificationsTab / LoginSessionsTab）或重写 advisory（ApiWebhookTab）。v1 冻结组件 DEFAULT_SETTINGS 同步补全防 typecheck 报错。ADR-126 落地 docs/decisions.md。
+- **测试结果**：typecheck PASS / lint PASS / unit 4190 PASS（+13 新测试 / HeroBanner + StagingEditPanel 2 个预存 flake 与本卡无关）
+- **价值排序自评**：正确性 A / 边界复用 A（AdminCard/AdminInput/AdminCheckbox 复用 / 不越层）/ 扩展性 A（ADR-127/128 扩展路径清晰 / KV 幂等 seed）/ 一致性 A（与 SettingsTab 同模式 / CSS 变量零硬编码）/ 改动收敛 14 文件

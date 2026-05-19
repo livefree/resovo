@@ -6,6 +6,36 @@
 
 ## 进行中任务
 
+<!-- REDO-03-C 完成（2026-05-19） -->
+
+### CHG-SN-7-REDO-03-C ✅ 后端 settings 端点字段扩展 + ADR-126（0.3w 实际）
+
+**SEQ**：M-SN-7 / REDO-03 第 3 子卡（C / 后端字段 / 阻塞 D）
+
+**完成摘要**：
+- 8 个新 KV 字段（通知 5 + 会话 3）全量扩展：types / deserialize / API schema / seed migration
+- 3 个占位 Tab 升级为真实表单（NotificationsTab / ApiWebhookTab / LoginSessionsTab）
+- API Key 管理 + 活跃会话列表延后至 ADR-127 / ADR-128（verify:endpoint-adr 门禁保护）
+- ADR-126 追加至 docs/decisions.md（9 节格式 / 4 维度 A 评级）
+- 13 个新单元测试全部通过 / 总计 4190 PASS
+
+**六问自检**：
+1. 是否引入回归？否 / 4190 unit PASS / lint PASS / typecheck PASS
+2. 是否越层调用？否 / Route → Service → DB 分层保持
+3. 是否使用 any / 空 catch？否
+4. 是否硬编码颜色？否 / 全部 CSS 变量
+5. 是否新增未授权端点？否 / siteConfig POST 为已有端点字段扩展 / ADR-127/128 延后
+6. 是否同步 docs？是 / ADR-126 追加 / task-queue 更新
+
+**[AI-CHECK]**：
+- ✅ 无偏离 / 8 KV 字段 = 通知 5 + 会话 3（Opus arch-reviewer 裁决边界）
+- ✅ API Key 实体化 + 活跃会话端点均明确延后（ADR-127/128 路径清晰）
+- ✅ v1 冻结组件 DEFAULT_SETTINGS 同步补全（typecheck PASS 验证）
+
+**执行模型**：arch-reviewer (claude-opus-4-7) ADR 设计 + claude-sonnet-4-6 主循环实施
+
+**子代理调用**：arch-reviewer (claude-opus-4-7) — ADR-126 字段边界裁决 + 延后决策
+
 <!-- REDO-03-B 启动（2026-05-19）：SettingsContainer 5 Tab → 8 Tab 扩展 -->
 
 ### CHG-SN-7-REDO-03-B ✅ SettingsContainer 5 Tab → 8 Tab 扩展（通知 / API·Webhook / 登录会话 + 图片 section）

@@ -1,14 +1,27 @@
 'use client'
 
 /**
- * NotificationsTab — 通知设置 Tab（CHG-SN-7-REDO-03-B）
+ * NotificationsTab — 通知设置 Tab（CHG-SN-7-REDO-03-C）
  *
- * 占位实装：计划字段待 REDO-03-C 后端字段扩展后接入。
- * 计划范围：通知渠道（邮件 / Telegram / Webhook）/ 触发事件 / 阈值配置。
+ * 范围：GET/POST /admin/system/settings（5 通知字段子集）
+ *   - notificationEmailEnabled / notificationEmailTo
+ *   - notificationWebhookEnabled / notificationWebhookUrl / notificationWebhookSecret
+ *
+ * 后续扩展（ADR-129 / M-SN-8+）：事件订阅 / 多渠道 notification_channels 表
  */
 
-import React, { type CSSProperties } from 'react'
-import { AdminCard } from '@resovo/admin-ui'
+import React, { useState, useEffect, useCallback, type CSSProperties } from 'react'
+import {
+  AdminCard,
+  AdminButton,
+  AdminInput,
+  AdminCheckbox,
+  ErrorState,
+  LoadingState,
+  useToast,
+} from '@resovo/admin-ui'
+import { getSiteSettings, saveSiteSettings } from '@/lib/system/api'
+import { ApiClientError } from '@/lib/api-client'
 
 const SECTION_STYLE: CSSProperties = {
   display: 'flex',
@@ -17,38 +30,228 @@ const SECTION_STYLE: CSSProperties = {
   padding: '12px 0',
 }
 
+const FIELD_GRID_STYLE: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '180px 1fr',
+  gap: '12px 16px',
+  alignItems: 'center',
+}
+
+const FIELD_LABEL_STYLE: CSSProperties = {
+  fontSize: 'var(--font-size-xs)',
+  color: 'var(--fg-muted)',
+}
+
+const FIELD_HINT_STYLE: CSSProperties = {
+  gridColumn: '2 / 3',
+  fontSize: 'var(--font-size-xs)',
+  color: 'var(--fg-muted)',
+  marginTop: '-6px',
+}
+
+const ACTION_ROW_STYLE: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '12px',
+  paddingTop: '8px',
+}
+
+const SYNC_RESULT_STYLE: CSSProperties = {
+  fontSize: 'var(--font-size-xs)',
+  color: 'var(--fg-muted)',
+}
+
 const ADVISORY_STYLE: CSSProperties = {
   fontSize: 'var(--font-size-xs)',
   color: 'var(--fg-muted)',
   lineHeight: 1.6,
+  padding: '8px 0',
 }
 
-const PLANNED_FIELDS: ReadonlyArray<{ title: string; fields: string }> = [
-  { title: '通知渠道', fields: '邮件地址 · Telegram Bot Token / Chat ID · 自定义 Webhook URL' },
-  { title: '触发事件', fields: '采集失败 · 存储告警 · 审核待处理超阈值 · 用户投稿新增' },
-  { title: '通知频率', fields: '即时通知 / 摘要聚合（每小时 / 每日）· 静默期配置' },
-]
+interface NotifState {
+  emailEnabled: boolean
+  emailTo: string
+  webhookEnabled: boolean
+  webhookUrl: string
+  webhookSecret: string
+}
+
+function describeError(err: unknown): { title: string; description: string } {
+  if (err instanceof ApiClientError) {
+    if (err.code === 'INVALID_WEBHOOK_URL') {
+      return { title: 'Webhook URL 不合法', description: '必须是 http:// 或 https:// 开头的完整 URL' }
+    }
+    if (err.code === 'VALIDATION_ERROR') {
+      return { title: '参数校验失败', description: err.message }
+    }
+    return { title: '保存失败', description: err.message }
+  }
+  return { title: '保存失败', description: err instanceof Error ? err.message : '请稍后重试' }
+}
 
 export function NotificationsTab() {
+  const toast = useToast()
+  const [state, setState] = useState<NotifState | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<Error | null>(null)
+  const [dirty, setDirty] = useState(false)
+  const [retryKey, setRetryKey] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    getSiteSettings()
+      .then((res) => {
+        if (cancelled) return
+        setState({
+          emailEnabled: res.notificationEmailEnabled,
+          emailTo: res.notificationEmailTo,
+          webhookEnabled: res.notificationWebhookEnabled,
+          webhookUrl: res.notificationWebhookUrl,
+          webhookSecret: res.notificationWebhookSecret,
+        })
+        setDirty(false)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setError(err instanceof Error ? err : new Error('通知设置加载失败'))
+      })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [retryKey])
+
+  const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
+
+  const update = useCallback(<K extends keyof NotifState>(key: K, value: NotifState[K]) => {
+    setState((prev) => (prev ? { ...prev, [key]: value } : prev))
+    setDirty(true)
+  }, [])
+
+  const handleSave = useCallback(async () => {
+    if (!state) return
+    setSaving(true)
+    try {
+      await saveSiteSettings({
+        notificationEmailEnabled: state.emailEnabled,
+        notificationEmailTo: state.emailTo,
+        notificationWebhookEnabled: state.webhookEnabled,
+        notificationWebhookUrl: state.webhookUrl,
+        notificationWebhookSecret: state.webhookSecret,
+      })
+      toast.push({ title: '已保存', description: '通知设置已更新', level: 'success' })
+      setDirty(false)
+    } catch (err: unknown) {
+      const { title, description } = describeError(err)
+      toast.push({ title, description, level: 'danger' })
+    } finally {
+      setSaving(false)
+    }
+  }, [state, toast])
+
+  if (loading && !state) {
+    return <div style={SECTION_STYLE} data-testid="notifications-tab"><LoadingState variant="skeleton" /></div>
+  }
+
+  if (error) {
+    return (
+      <div style={SECTION_STYLE} data-testid="notifications-tab">
+        <ErrorState error={error} title="加载失败" onRetry={refresh} />
+      </div>
+    )
+  }
+
+  if (!state) return null
+
   return (
     <div style={SECTION_STYLE} data-testid="notifications-tab">
       <AdminCard
         surface="plain"
         padding="md"
-        header={{
-          title: '通知渠道',
-          subtitle: '邮件 / Telegram / Webhook（待 REDO-03-C 后端字段扩展后接入）',
-        }}
-        data-testid="notifications-card-channels"
+        header={{ title: '邮件通知', subtitle: '系统事件通知邮件地址' }}
+        data-testid="notifications-card-email"
       >
-        <div style={ADVISORY_STYLE}>
-          {PLANNED_FIELDS.map((g) => (
-            <div key={g.title} style={{ marginBottom: '8px' }}>
-              <strong style={{ color: 'var(--fg-default)' }}>{g.title}</strong>：{g.fields}
-            </div>
-          ))}
+        <div style={FIELD_GRID_STYLE}>
+          <label style={FIELD_LABEL_STYLE}>启用邮件通知</label>
+          <AdminCheckbox
+            label="发送系统告警邮件"
+            checked={state.emailEnabled}
+            onChange={(e) => update('emailEnabled', e.target.checked)}
+            data-testid="notif-email-enabled"
+          />
+          <label style={FIELD_LABEL_STYLE}>接收邮箱</label>
+          <AdminInput
+            value={state.emailTo}
+            onChange={(e) => update('emailTo', e.target.value)}
+            placeholder="admin@example.com"
+            disabled={!state.emailEnabled}
+            data-testid="notif-email-to"
+            aria-label="接收邮箱"
+          />
         </div>
       </AdminCard>
+
+      <AdminCard
+        surface="plain"
+        padding="md"
+        header={{ title: 'Webhook 通知', subtitle: 'HTTP POST 推送系统事件' }}
+        data-testid="notifications-card-webhook"
+      >
+        <div style={FIELD_GRID_STYLE}>
+          <label style={FIELD_LABEL_STYLE}>启用 Webhook</label>
+          <AdminCheckbox
+            label="推送系统事件到 Webhook 端点"
+            checked={state.webhookEnabled}
+            onChange={(e) => update('webhookEnabled', e.target.checked)}
+            data-testid="notif-webhook-enabled"
+          />
+          <label style={FIELD_LABEL_STYLE}>Webhook URL</label>
+          <AdminInput
+            value={state.webhookUrl}
+            onChange={(e) => update('webhookUrl', e.target.value)}
+            placeholder="https://example.com/webhook"
+            disabled={!state.webhookEnabled}
+            data-testid="notif-webhook-url"
+            aria-label="Webhook URL"
+          />
+          <label style={FIELD_LABEL_STYLE}>签名密钥</label>
+          <AdminInput
+            value={state.webhookSecret}
+            onChange={(e) => update('webhookSecret', e.target.value)}
+            placeholder="HMAC-SHA256 签名密钥（可选）"
+            disabled={!state.webhookEnabled}
+            data-testid="notif-webhook-secret"
+            aria-label="签名密钥"
+          />
+        </div>
+      </AdminCard>
+
+      <AdminCard
+        surface="plain"
+        padding="md"
+        header={{ title: '事件订阅', subtitle: '待 ADR-129 / M-SN-8+ 实装' }}
+        data-testid="notifications-card-events"
+      >
+        <div style={ADVISORY_STYLE}>
+          计划支持：采集失败 · 存储告警 · 审核待处理超阈值 · 用户投稿新增（M-SN-8+ ADR-129）
+        </div>
+      </AdminCard>
+
+      <div style={ACTION_ROW_STYLE}>
+        <span style={SYNC_RESULT_STYLE} data-testid="notifications-dirty-indicator">
+          {dirty ? '有未保存的修改' : '无未保存修改'}
+        </span>
+        <span style={{ display: 'inline-flex', gap: '8px' }}>
+          <AdminButton variant="default" size="sm" disabled={saving} onClick={refresh} data-testid="notifications-reload">
+            重新加载
+          </AdminButton>
+          <AdminButton variant="primary" size="sm" loading={saving} disabled={!dirty} onClick={() => void handleSave()} data-testid="notifications-save">
+            保存设置
+          </AdminButton>
+        </span>
+      </div>
     </div>
   )
 }

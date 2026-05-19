@@ -26,10 +26,18 @@ const SiteSettingsBodySchema = z.object({
   contentFilterEnabled: z.boolean().optional(),
   videoProxyEnabled:    z.boolean().optional(),
   videoProxyUrl:        z.string().max(500).optional(),
-  autoCrawlEnabled:     z.boolean().optional(),
-  autoCrawlMaxPerRun:   z.number().int().min(1).max(1000).optional(),
-  autoCrawlRecentOnly:  z.boolean().optional(),
-  autoCrawlRecentDays:  z.number().int().min(1).max(365).optional(),
+  autoCrawlEnabled:           z.boolean().optional(),
+  autoCrawlMaxPerRun:         z.number().int().min(1).max(1000).optional(),
+  autoCrawlRecentOnly:        z.boolean().optional(),
+  autoCrawlRecentDays:        z.number().int().min(1).max(365).optional(),
+  notificationEmailEnabled:   z.boolean().optional(),
+  notificationEmailTo:        z.union([z.string().email().max(200), z.literal('')]).optional(),
+  notificationWebhookEnabled: z.boolean().optional(),
+  notificationWebhookUrl:     z.string().max(500).optional(),
+  notificationWebhookSecret:  z.string().max(200).optional(),
+  sessionTimeoutMinutes:      z.number().int().min(5).max(1440).optional(),
+  sessionMaxConcurrent:       z.number().int().min(1).max(50).optional(),
+  sessionExtendOnActivity:    z.boolean().optional(),
 })
 
 const ConfigFileBodySchema = z.object({
@@ -103,6 +111,21 @@ export async function adminSiteConfigRoutes(fastify: FastifyInstance) {
     if (d.autoCrawlMaxPerRun !== undefined)   pairs.auto_crawl_max_per_run = String(d.autoCrawlMaxPerRun)
     if (d.autoCrawlRecentOnly !== undefined)  pairs.auto_crawl_recent_only = String(d.autoCrawlRecentOnly)
     if (d.autoCrawlRecentDays !== undefined)  pairs.auto_crawl_recent_days = String(d.autoCrawlRecentDays)
+    if (d.notificationEmailEnabled !== undefined)   pairs.notification_email_enabled   = String(d.notificationEmailEnabled)
+    if (d.notificationEmailTo !== undefined)        pairs.notification_email_to        = d.notificationEmailTo
+    if (d.notificationWebhookEnabled !== undefined) pairs.notification_webhook_enabled = String(d.notificationWebhookEnabled)
+    if (d.notificationWebhookUrl !== undefined) {
+      if (d.notificationWebhookUrl.length > 0 && !isValidHttpUrl(d.notificationWebhookUrl)) {
+        return reply.code(400).send({
+          error: { code: 'INVALID_WEBHOOK_URL', message: 'Webhook URL 必须是合法的 http/https 地址', status: 400 },
+        })
+      }
+      pairs.notification_webhook_url = d.notificationWebhookUrl
+    }
+    if (d.notificationWebhookSecret !== undefined)  pairs.notification_webhook_secret  = d.notificationWebhookSecret
+    if (d.sessionTimeoutMinutes !== undefined)       pairs.session_timeout_minutes       = String(d.sessionTimeoutMinutes)
+    if (d.sessionMaxConcurrent !== undefined)        pairs.session_max_concurrent        = String(d.sessionMaxConcurrent)
+    if (d.sessionExtendOnActivity !== undefined)     pairs.session_extend_on_activity    = String(d.sessionExtendOnActivity)
 
     // CHG-SN-6-RETRO-3-A：审计 — 写 admin_audit_log（system.settings_update / ultrareview P0-3）
     // beforeJsonb: 当前 settings 子集（仅本次更新的 key 旧值）；afterJsonb: 新值（zod 校验后子集）

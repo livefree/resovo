@@ -31,6 +31,14 @@ export type SystemSettingKey =
   | 'auto_publish_staging_enabled'
   | 'auto_publish_staging_rules'
   | 'auto_publish_staging_last_run'
+  | 'notification_email_enabled'
+  | 'notification_email_to'
+  | 'notification_webhook_enabled'
+  | 'notification_webhook_url'
+  | 'notification_webhook_secret'
+  | 'session_timeout_minutes'
+  | 'session_max_concurrent'
+  | 'session_extend_on_activity'
 
 export interface SystemSetting {
   key: SystemSettingKey
@@ -52,6 +60,14 @@ export interface SiteSettings {
   autoCrawlMaxPerRun: number
   autoCrawlRecentOnly: boolean
   autoCrawlRecentDays: number
+  notificationEmailEnabled: boolean
+  notificationEmailTo: string
+  notificationWebhookEnabled: boolean
+  notificationWebhookUrl: string
+  notificationWebhookSecret: string
+  sessionTimeoutMinutes: number
+  sessionMaxConcurrent: number
+  sessionExtendOnActivity: boolean
 }
 
 export type AutoCrawlMode = 'incremental' | 'full'
