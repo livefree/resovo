@@ -8,7 +8,73 @@
 
 <!-- ✅ PRE-04 全 16 子卡闭环（2026-05-18，连续推进 #2–#16 用户授权）；总览：5 ✅ A 级（dashboard/moderation/videos/sources/analytics）+ 8 ⚠️ S 级（merge/subtitles/home/image-health/users/audit/login/dashboard MISC）+ 4 ❌（staging/submissions/crawler/settings）+ 16 MISC + 4 REDO（01/02/03/04）+ SHARED-03 取消；详见 docs/M-SN-7-design-realign-audit-FULL.md；下一步等用户拍板 PRE-04 收尾 + 启动 SHARED-01/02 milestone -->
 
-### CHG-SN-SHARED-02 ExpandableTable 新建 ❌ 已取消（2026-05-18）
+### CHG-SN-7-REDO-01-A Crawler 重做契约设计 ✅ 已闭环（2026-05-18）
+
+**完成时间**：2026-05-18
+**实施**：spawn arch-reviewer Opus 子代理 1 轮独立设计 → 主循环落 `docs/M-SN-7-redo-01-contract.md`（约 580 行）
+**评级**：通过（Opus 子代理"结论：通过"明确表态）
+**关键产出**：
+1. **6 组件 props/state/事件契约**：CrawlerKpiRow / CrawlerTimelineCard / CrawlerSiteList / buildCrawlerSiteColumns 9 列 / CrawlerSiteExpand / CrawlerAdvancedMenu
+2. **5 Open Issues 全裁决**：
+   - Q1 runs 独立路由 ✅ A
+   - **Q2 批量动作删除 ✅ A**（行 `{more}` 菜单 7 种 batch action 全覆盖）
+   - Q3 时间轴 top N + DataTable client-mode 分页
+   - Q4 PageHeader 第 4 槽位高级 dropdown
+   - Q5 时间轴 card head pill--warn 冻结
+3. **4 后端端点契约提纲**：GET /kpi + GET /timeline + POST /sites/:key/run + POST /run-all（含 audit 协议引用 ADR-121）
+4. **admin-ui 消费映射**：14 原语全部明示
+5. **削减建议**：D 0.3w→0.2w + G 0.2w→0.1w；REDO-01 总估时 **2.55w → 2.35w**
+6. **风险评估**：3 项（timeline SQL 聚合 / 线路 by-siteKey API 缺口 / health 字段缺失）+ 缓解策略
+7. **DAG 依赖图**：B→C→{D,E,F,G,H} 并行 → I → J
+
+**修订计划文档**：M-SN-7-design-realign-plan.md §2.5 标记 5 Open Issues 全部 ✅ 裁决
+**质量门禁**：文档改动 / 0 代码改动 / typecheck + file-size 不变
+**执行模型**：arch-reviewer (claude-opus-4-7) 独立设计 + claude-opus-4-7 主循环落地
+
+<!-- 下张：CHG-SN-7-REDO-01-B 后端 ADR-122 + 4 新端点实施（0.6w，依赖 A 通过 ✅）— 启动条件：先 Opus 子代理起 ADR-122 评估与现有 analytics/dashboard 端点重叠（§5.4 内化 REDO-01-B 起卡条件） -->
+
+
+**SEQ**：M-SN-7 / REDO-01 第 1 子卡（首张 / 阻塞 B–J 全部）
+
+**问题理解**：M-SN-SHARED milestone 收尾完成（DataTable v2 行展开 / KpiCard progress / Spark 全部已具备）。REDO-01-A 是 Crawler 重做的 **设计契约阶段**：基于 M-SN-7-design-realign-plan.md §2.2 设计稿 spec 完整清单 + §2.3 现有功能保留底线 + §2.5 5 项 Open Issues，spawn Opus 子代理独立设计 6 个新组件的 props / state / 事件契约。
+
+**根因判断**：Crawler 重做（REDO-01-B..J）涉及 7 新文件（KpiRow / TimelineCard / SiteList / SiteRow / SiteExpand / AdvancedMenu + runs 独立 page），无 props 契约则 B 后端 / C 前端骨架 / D 行 / E 展开 / G 高级菜单 / H runs 独立路由 各子卡无法并行起步。
+
+**方案**：spawn arch-reviewer Opus 子代理（独立设计任务）输出：
+1. **6 组件 props 契约**：
+   - `CrawlerKpiRow` 5 KPI 数据 props + KpiCard 消费方式
+   - `CrawlerTimelineCard` 时间轴 props（sites × 时间窗 × 状态 dot/pulse / 暂停按钮 / 冻结指示）
+   - `CrawlerSiteList` 站点表容器 props（消费 DataTable v2 + expandedKeys + renderExpandedRow + selection?）
+   - `CrawlerSiteRow` 9 列定义 + Pinned + 行级 `{more}` 菜单 + `+ 增量 / 全量` 按钮
+   - `CrawlerSiteExpand` 行展开内容（线路 sub-table + 分类映射 collapsible）
+   - `CrawlerAdvancedMenu` 4 操作 DropdownMenu（调度配置 / 重建索引 / 全局止血 / 冻结切换）
+2. **5 Open Issues 裁决**（M-SN-7 plan §2.5）：
+   - Q5（用户先前留给本卡）：批量动作（enable/disable/mark_*/delete）是否保留 — 与 selection 启用决策强绑定
+   - SITES mock 8 个 vs 实际站点 100+ 的时间轴分页策略
+   - 高级菜单挂在 PageHeader actions 第 4 槽 vs 二行设计
+   - 冻结状态可视化（时间轴 card head pill--warn vs 全屏 banner）
+   - 行展开默认所有行展开 vs 单行展开互斥
+3. **后端 4 新端点契约提纲**（REDO-01-B 起 ADR-122 时消费）：
+   - `GET /admin/crawler/kpi` 响应 schema
+   - `GET /admin/crawler/timeline?range=1h` 响应 schema
+   - `POST /admin/crawler/sites/:key/run?mode=incremental|full` 请求 + 响应 + audit 协议
+   - `POST /admin/crawler/run-all?mode=full` 请求 + 响应 + audit 协议
+4. **削减建议**（与 PRE-04 同模式）：识别现有可复用 / 错误假设 / 实际不需要的设计要素
+
+**涉及文件**：
+- 新建：`docs/M-SN-7-redo-01-contract.md`（Opus 输出 + 主循环整理的实施契约文档）
+- 修改：`docs/M-SN-7-design-realign-plan.md` §2.5 Open Issues 状态标 ✅ 已裁决（带 REDO-01-A 链接）
+
+**严格约束**：
+- ❌ 不动业务代码（仅契约文档）
+- ❌ 不起后端 ADR-122（留给 REDO-01-B 实施卡）
+- ❌ 不写实际 tsx 文件（留给 REDO-01-C-H）
+- 一旦发现 6 组件中某个被 DataTable v2 等现有 admin-ui 完全覆盖 → 立即汇报（与 SHARED-01/02 同模式）
+
+**执行模型**：arch-reviewer (claude-opus-4-7) 独立设计 + claude-opus-4-7 主循环整理落 `docs/M-SN-7-redo-01-contract.md`
+
+**估时**：0.15w
+
 
 **取消时间**：2026-05-18（实施前发现）
 **取消理由**：实施前读取 DataTable v2 types.ts 发现已支持 `renderExpandedRow` + `expandedKeys` props（ADR-117 + CHG-DESIGN-02 Step 5），data-table.tsx L500/506/543-545 真实渲染逻辑齐全，Sources MatrixExpand 已生产消费验证。同时 DataTable v2 支持 selection + pagination 三态，"selection + expand 兼容裁决"已被实证。

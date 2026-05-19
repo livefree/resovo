@@ -262,34 +262,15 @@ REDO-XX-I 删除旧文件前必须满足：
 | run 详情 | ✅ /admin/crawler/runs/[id] | **保留**（独立路由不变） |
 | TaskLogsDrawer | ✅ 完整 | **保留** |
 
-### 2.5 Open Issues（需用户 / Opus 裁决）
+### 2.5 Open Issues（REDO-01-A Opus 子代理 2026-05-18 全部 ✅ 裁决）
 
-1. **runs 列表去 Tab 后的归属**：
-   - 选项 A：独立路由 `/admin/crawler/runs` + sidebar 二级菜单
-   - 选项 B：时间轴 card 加"查看历史批次"link，跳新 page
-   - 选项 C：时间轴 card 行点击 → 跳 `/admin/crawler/runs/[id]`，runs 列表入口移到 page__head 隐藏菜单
-   - **推荐 A**（最清晰）
+> 全部 5 项 Issues 已由 REDO-01-A spawn 的 arch-reviewer Opus 子代理裁决，详见 `docs/M-SN-7-redo-01-contract.md` §2。
 
-2. **批量动作是否保留**：
-   - 设计稿没画批量选择；ExpandableTable 一般不带 checkbox 列
-   - 选项 A：删除批量动作，行 `{more}` 菜单逐行
-   - 选项 B：保留 selection + bulkActions 内置 sticky-bottom，但与"可展开行"冲突
-   - **推荐 A**（更贴设计稿）
-
-3. **设计稿 SITES mock 只显示 10 个，实际可能 40+**：
-   - 设计稿用 `slice(0, 8)` 取前 8 上时间轴 / 全表 SITES.map 完整列表
-   - 实际场景如果站点 100+，时间轴前 8 / 站点列表是否分页？
-   - **推荐**：时间轴前 N（N 可配，默认 8 个 `运行中` 站点优先）；站点列表用 ExpandableTable 自带分页（pageSize 25/50/100）
-
-4. **"高级菜单"挂哪**：
-   - PageHeader actions 已有 3 个按钮（导出 / 新增站点 / 全站全量）
-   - 选项 A：再加一个 `{more} 高级` 按钮 + DropdownMenu
-   - 选项 B：用 PageHeader 二行设计（actions 行 + 高级菜单 row）
-   - **推荐 A**（保持 page__head 单行）
-
-5. **冻结状态可视化**：
-   - 设计稿没画"全局冻结"指示
-   - 推荐：时间轴 card head 当冻结时插入 `pill--warn 全局冻结` 替代 `pill--ok 实时`
+1. **runs 列表去 Tab 后的归属** → ✅ **方案 A**（独立路由 `/admin/crawler/runs` + sidebar 二级菜单 / 用户已锁定）
+2. **批量动作是否保留** → ✅ **方案 A**（删除批量动作，行 `{more}` 菜单逐行操作；7 种 batch action 全部覆盖到 6 项行级菜单）
+3. **SITES mock vs 100+ 实际** → ✅ 时间轴 top N（默认 8 / running 优先）+ 站点列表 DataTable client-mode 分页（pageSize 25/50/100）
+4. **"高级菜单"挂哪** → ✅ **方案 A**（PageHeader actions 第 4 槽位 "高级" + AdminDropdown）
+5. **冻结状态可视化** → ✅ 时间轴 card head `pill--warn 全局冻结` 替代 `pill--ok 实时`，不加全屏 banner
 
 ---
 
