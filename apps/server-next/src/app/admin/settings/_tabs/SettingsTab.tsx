@@ -315,6 +315,21 @@ export function SettingsTab() {
         </div>
       </AdminCard>
 
+      {/* ── 图片配置（占位；REDO-03-C 接入真实字段）── */}
+      <AdminCard
+        surface="plain"
+        padding="md"
+        header={{
+          title: '图片配置',
+          subtitle: '封面 CDN 前缀 / 图片代理 / 降级策略（待 REDO-03-C 补齐后端字段）',
+        }}
+        data-testid="settings-card-images"
+      >
+        <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', lineHeight: 1.6 }}>
+          计划字段：封面 CDN 前缀 · 图片代理 URL · 降级封面策略 · 最大图片尺寸
+        </div>
+      </AdminCard>
+
       {/* ── 保存 ── */}
       <div style={ACTION_ROW_STYLE}>
         <span style={SYNC_RESULT_STYLE} data-testid="settings-dirty-indicator">

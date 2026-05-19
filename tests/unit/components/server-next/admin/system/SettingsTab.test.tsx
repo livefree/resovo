@@ -81,7 +81,7 @@ beforeEach(() => {
 })
 
 describe('SettingsTab', () => {
-  it('1. 渲染基础：5 section card 全部', async () => {
+  it('1. 渲染基础：6 section card 全部（含 图片占位）', async () => {
     getSiteSettingsMock.mockResolvedValueOnce(FIXTURE)
     render(<SettingsTab />)
     await waitFor(() => {
@@ -90,6 +90,7 @@ describe('SettingsTab', () => {
       expect(screen.getByTestId('settings-card-filter')).not.toBeNull()
       expect(screen.getByTestId('settings-card-video-proxy')).not.toBeNull()
       expect(screen.getByTestId('settings-card-auto-crawl')).not.toBeNull()
+      expect(screen.getByTestId('settings-card-images')).not.toBeNull()
     })
   })
 

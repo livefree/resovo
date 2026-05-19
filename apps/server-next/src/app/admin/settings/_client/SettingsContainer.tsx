@@ -25,8 +25,19 @@ import { CacheTab } from '../_tabs/CacheTab'
 import { MonitorTab } from '../_tabs/MonitorTab'
 import { ConfigTab } from '../_tabs/ConfigTab'
 import { MigrationTab } from '../_tabs/MigrationTab'
+import { NotificationsTab } from '../_tabs/NotificationsTab'
+import { ApiWebhookTab } from '../_tabs/ApiWebhookTab'
+import { LoginSessionsTab } from '../_tabs/LoginSessionsTab'
 
-type TabId = 'settings' | 'cache' | 'monitor' | 'config' | 'migration'
+type TabId =
+  | 'settings'
+  | 'cache'
+  | 'monitor'
+  | 'config'
+  | 'migration'
+  | 'notifications'
+  | 'api-webhook'
+  | 'login-sessions'
 
 const TABS: ReadonlyArray<{ id: TabId; label: string; description?: string }> = [
   { id: 'settings', label: '站点设置', description: '基础信息 / 豆瓣 / 过滤 / 图片' },
@@ -34,6 +45,9 @@ const TABS: ReadonlyArray<{ id: TabId; label: string; description?: string }> = 
   { id: 'monitor', label: '系统监控', description: '运行状态 / 资源' },
   { id: 'config', label: '高级配置', description: '环境变量 / 特性开关' },
   { id: 'migration', label: '数据迁移', description: '迁移脚本 / 任务执行' },
+  { id: 'notifications', label: '通知设置', description: '渠道 / 触发事件 / 阈值' },
+  { id: 'api-webhook', label: 'API·Webhook', description: 'API Key / Webhook 端点' },
+  { id: 'login-sessions', label: '登录会话', description: '会话超时 / 活跃会话' },
 ]
 
 const PAGE_STYLE: React.CSSProperties = {
@@ -141,7 +155,7 @@ export function SettingsContainer() {
       <header style={HEAD_STYLE} data-settings-head>
         <div>
           <h1 style={HEAD_TITLE_STYLE}>站点设置</h1>
-          <p style={HEAD_SUB_STYLE}>统一配置中心 · 5 类设置面板（M-SN-6 起逐步实装）</p>
+          <p style={HEAD_SUB_STYLE}>统一配置中心 · 8 类设置面板（M-SN-6/7 逐步实装）</p>
         </div>
         <div style={HEAD_ACTIONS_STYLE} data-settings-head-actions>
           {/* CHG-SN-6-RETRO-3-B / ultrareview P2-8：
@@ -201,6 +215,9 @@ export function SettingsContainer() {
           {activeTab === 'monitor' && <MonitorTab />}
           {activeTab === 'config' && <ConfigTab />}
           {activeTab === 'migration' && <MigrationTab />}
+          {activeTab === 'notifications' && <NotificationsTab />}
+          {activeTab === 'api-webhook' && <ApiWebhookTab />}
+          {activeTab === 'login-sessions' && <LoginSessionsTab />}
         </section>
       </div>
     </div>

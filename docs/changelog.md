@@ -12778,3 +12778,23 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 - **改动摘要**：M-SN-7 REDO-03-A / PRE-04 #14 触发 Settings 区段 IA 收敛。Opus arch-reviewer 评审锁定 D1–D8 决策（D1 整目录顶级化 / D2-D4 6 旧 URL 308 永久 redirect / D5 nav entry href 同步 / D6 全部 permanentRedirect / D7 SettingsContainer router.push 同步 / D8 后端 API 端点不变）。落 ADR-125 + reference.md 同步。
 - **测试结果**：typecheck 6 包 PASS / lint PASS（既有 TabImages.tsx warning 与本卡无关）/ unit 4177 PASS（CrawlerClient.test.tsx 1 transient flake 单独重跑 54/54 PASS）/ verify:adr-contracts D-N 61/61 闭环
 - **价值排序自评**：正确性 A / 边界复用 A / 扩展性 A（REDO-03-B 5→8 Tab 无障碍）/ 一致性 A（与 ADR-100 IA-2 同源）/ 改动收敛 16 处
+
+## [CHG-SN-7-REDO-03-B] SettingsContainer 5 Tab → 8 Tab 扩展（通知 / API·Webhook / 登录会话 + 图片占位 section）
+- **完成时间**：2026-05-19
+- **记录时间**：2026-05-19 16:20
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/settings/_client/SettingsContainer.tsx`（TabId 扩展 +3 / TABS +3 / imports +3 / render +3 分支 / 副标题 5→8 类）
+  - `apps/server-next/src/app/admin/settings/_tabs/SettingsTab.tsx`（追加 图片 section 占位 AdminCard / settings-card-images testid）
+  - 新建：`apps/server-next/src/app/admin/settings/_tabs/NotificationsTab.tsx`（占位 / 通知渠道+触发事件+频率）
+  - 新建：`apps/server-next/src/app/admin/settings/_tabs/ApiWebhookTab.tsx`（占位 / API Key+Webhook端点+事件订阅）
+  - 新建：`apps/server-next/src/app/admin/settings/_tabs/LoginSessionsTab.tsx`（占位 / 会话超时+活跃会话+多设备策略）
+  - `tests/unit/components/server-next/admin/system/SettingsTab.test.tsx`（断言更新 5→6 section card）
+  - 新建：`tests/unit/components/server-next/admin/system/NotificationsTab.test.tsx`（3 case）
+  - 新建：`tests/unit/components/server-next/admin/system/ApiWebhookTab.test.tsx`（3 case）
+  - 新建：`tests/unit/components/server-next/admin/system/LoginSessionsTab.test.tsx`（3 case）
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`（任务收尾三同步）
+- **改动摘要**：M-SN-7 REDO-03-B / plan §6 L626 正源 8 类 Tab。添加 3 新顶层 Tab（通知/API·Webhook/登录会话，均为占位 AdminCard 待 REDO-03-C 接入真实后端字段）+ SettingsTab 内补 图片 section 占位（消除描述虚报）。SettingsContainer 副标题更新 5→8 类。新增 9 条单测。
+- **测试结果**：typecheck 全绿 / lint PASS（既有 TabImages.tsx warning 无关）/ unit 4186 PASS（+9 新测试 / CrawlerTimelineCard 2 transient flake 已确认可重跑）
+- **价值排序自评**：正确性 A / 边界复用 A（3 新 Tab 各自独立文件 / AdminCard 共享原语）/ 扩展性 A（REDO-03-C 接真端点零改 SettingsContainer 结构）/ 一致性 A（与现有 Tab 样式/模式一致）/ 改动收敛 9 文件

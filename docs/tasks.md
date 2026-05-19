@@ -6,6 +6,52 @@
 
 ## 进行中任务
 
+<!-- REDO-03-B 启动（2026-05-19）：SettingsContainer 5 Tab → 8 Tab 扩展 -->
+
+### CHG-SN-7-REDO-03-B ✅ SettingsContainer 5 Tab → 8 Tab 扩展（通知 / API·Webhook / 登录会话 + 图片 section）
+
+**SEQ**：M-SN-7 / REDO-03 第 2 子卡（B / UI 扩展 / 阻塞 C/D）
+
+**问题理解**：plan §6 M-SN-6 L626 明列 Settings 8 类 Tab 终态（基础 / 豆瓣 / 过滤 / 图片 / 通知 / API·Webhook / 缓存·CDN / 登录会话）。当前 SettingsContainer 仅有 5 Tab（settings/cache/monitor/config/migration），缺 通知 / API·Webhook / 登录会话 3 个新 Tab，且现有 settings Tab 描述含"图片"但 SettingsTab.tsx 内无 图片 section（虚报）。
+
+**正源裁定**：plan §6 L626 > reference §5.11（§5.11 仅举"等"字）。"5 Tab → 8 Tab" = 加 3 个新顶层 Tab（通知 / API·Webhook / 登录会话）+ SettingsTab.tsx 内补 图片 section（占位，REDO-03-C 接真端点）。
+
+**根因判断**：M-SN-6 CHG-SN-6-07 SettingsTab 只实装了 13 个字段（基础/豆瓣/过滤/代理/采集），描述写"图片"但无对应 section；通知/API·Webhook/登录会话 3 类 Tab 未起卡。
+
+**方案**：
+1. **SettingsTab.tsx 内** 追加 图片 section card（占位 / 标注 REDO-03-C 后扩字段 / 典型字段展示：图片代理 URL / 封面降级策略 / CDN 前缀）
+2. **新建 3 Tab 文件**：
+   - `_tabs/NotificationsTab.tsx`：通知设置占位（通知渠道 / 触发事件阈值）
+   - `_tabs/ApiWebhookTab.tsx`：API Key 管理 + Webhook 端点配置占位
+   - `_tabs/LoginSessionsTab.tsx`：登录会话管理占位（会话超时 / 活跃会话列表）
+3. **SettingsContainer.tsx**：
+   - TabId 扩展至 `'settings' | 'cache' | 'monitor' | 'config' | 'migration' | 'notifications' | 'api-webhook' | 'login-sessions'`
+   - TABS 数组追加 3 条（含 label + description）
+   - import 3 新 Tab 组件
+   - 渲染 3 新 Tab 分支
+4. **占位 Tab 规范**：使用 AdminCard + 明确"待 REDO-03-C 接入真实端点"advisory；样式与现有 Tab 一致（SECTION_STYLE + CSS 变量）
+5. **单测更新**：
+   - SettingsContainer 测试：断言 3 新 Tab label + ?tab= URL 切换
+   - 新 Tab 文件各有基础 render 单测
+
+**涉及文件**（8 文件）：
+- 改：`apps/server-next/src/app/admin/settings/_client/SettingsContainer.tsx`（TabId + TABS + render）
+- 改：`apps/server-next/src/app/admin/settings/_tabs/SettingsTab.tsx`（补 图片 section）
+- 新建：`apps/server-next/src/app/admin/settings/_tabs/NotificationsTab.tsx`
+- 新建：`apps/server-next/src/app/admin/settings/_tabs/ApiWebhookTab.tsx`
+- 新建：`apps/server-next/src/app/admin/settings/_tabs/LoginSessionsTab.tsx`
+- 改/新建：单测 3 文件（SettingsContainer + 3 新 Tab）
+
+**严格约束**：
+- ❌ 新 Tab 引入新后端端点（REDO-03-C 范围 / 本卡仅 UI 占位）
+- ❌ 修改现有 Tab 内容（仅追加 SettingsTab 图片 section）
+- ❌ 硬编码颜色（CSS 变量）/ any 类型 / 空 catch
+- ❌ 文件超 500 行（SettingsTab.tsx 当前行数需核查）
+
+**执行模型**：claude-sonnet-4-6（主循环）/ 无强制 Opus 条件（无新 ADR / 无新共享组件 API / 无 schema 设计）
+
+**估时**：0.6w（含 3 新 Tab 实现 + 图片 section + 单测）
+
 <!-- REDO-03-A 完成（2026-05-19）：sidebar IA 重构 + 旧路由 308 redirect + ADR-125 -->
 
 ### CHG-SN-7-REDO-03-A ✅ Settings sidebar IA 重构 + 路由收敛 + ADR-125（0.3w 实际 / 0.4w 预估）
