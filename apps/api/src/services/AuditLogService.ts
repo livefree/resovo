@@ -83,6 +83,8 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   'crawler.run_create',
   // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2：sources 域行级 3 mutations 合并 actionType
   'sources.route_action',
+  // CHG-SN-7-REDO-01-F / ADR-123：站点分类映射 PUT 全量替换
+  'crawler_site.category_mapping_update',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',

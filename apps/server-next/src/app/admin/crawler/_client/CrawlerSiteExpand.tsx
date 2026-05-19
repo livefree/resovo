@@ -29,6 +29,7 @@ import {
 } from '@/lib/sources/api'
 import type { SourceRouteBySite } from '@/lib/sources/types'
 import { ApiClientError } from '@/lib/api-client'
+import { CategoryMappingCollapsible } from './CategoryMappingCollapsible'
 
 export interface CrawlerSiteExpandProps {
   readonly siteKey: string
@@ -320,6 +321,9 @@ export function CrawlerSiteExpand({ siteKey, siteName, currentRole = 'admin' }: 
           ))}
         </tbody>
       </table>
+
+      {/* ADR-123 / CHG-SN-7-REDO-01-F：分类映射 collapsible */}
+      <CategoryMappingCollapsible siteKey={siteKey} currentRole={currentRole} />
     </div>
   )
 }

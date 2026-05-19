@@ -12,9 +12,14 @@
  */
 
 import { apiClient } from '@/lib/api-client'
-import type { CrawlerSite as CrawlerSiteFull } from '@resovo/types'
+import type {
+  CrawlerSite as CrawlerSiteFull,
+  CategoryMappingRow,
+  CategoryMappingInput,
+} from '@resovo/types'
 
 export type { CrawlerSiteFull as CrawlerSite }
+export type { CategoryMappingRow, CategoryMappingInput }
 
 export type CrawlerSourceType = 'vod' | 'shortdrama'
 export type CrawlerSiteFormat = 'json' | 'xml'
@@ -449,6 +454,26 @@ export async function runCrawlerAll(
   const res = await apiClient.post<{ data: CrawlerRunCreateResult }>(
     '/admin/crawler/run-all',
     { mode },
+  )
+  return res.data
+}
+
+// ── ADR-123 / CHG-SN-7-REDO-01-F：站点分类映射 GET / PUT ──────────
+
+export async function getCrawlerSiteCategoryMapping(siteKey: string): Promise<CategoryMappingRow[]> {
+  const res = await apiClient.get<{ data: CategoryMappingRow[] }>(
+    `/admin/crawler/sites/${encodeURIComponent(siteKey)}/category-mapping`,
+  )
+  return res.data
+}
+
+export async function putCrawlerSiteCategoryMapping(
+  siteKey: string,
+  mappings: readonly CategoryMappingInput[],
+): Promise<{ written: number }> {
+  const res = await apiClient.put<{ data: { written: number } }>(
+    `/admin/crawler/sites/${encodeURIComponent(siteKey)}/category-mapping`,
+    { mappings },
   )
   return res.data
 }

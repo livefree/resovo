@@ -2,12 +2,14 @@
  * admin/crawlerSites.ts — 爬虫源站配置 CRUD API
  * CHG-34: admin only
  *
- * GET    /admin/crawler/sites             — 列表
- * POST   /admin/crawler/sites             — 新增
- * PATCH  /admin/crawler/sites/:key        — 更新
- * DELETE /admin/crawler/sites/:key        — 删除（from_config=true 不可删）
- * POST   /admin/crawler/sites/batch       — 批量操作
- * POST   /admin/crawler/sites/validate    — 验证 API 可达性
+ * GET    /admin/crawler/sites                            — 列表
+ * POST   /admin/crawler/sites                            — 新增
+ * PATCH  /admin/crawler/sites/:key                       — 更新
+ * DELETE /admin/crawler/sites/:key                       — 删除（from_config=true 不可删）
+ * POST   /admin/crawler/sites/batch                      — 批量操作
+ * POST   /admin/crawler/sites/validate                   — 验证 API 可达性
+ * GET    /admin/crawler/sites/:key/category-mapping      — 站点分类映射列表（ADR-123 / CHG-SN-7-REDO-01-F）
+ * PUT    /admin/crawler/sites/:key/category-mapping      — 站点分类映射全量替换（ADR-123）
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -15,6 +17,12 @@ import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import {
+  CrawlerSiteCategoryMapService,
+  PutCategoryMappingSchema,
+  CategoryMappingParamsSchema,
+} from '@/api/services/CrawlerSiteCategoryMapService'
+import { isAppError } from '@/api/lib/errors'
 import type { CrawlerSiteBatchAction } from '@/types'
 
 const SourceTypeSchema = z.enum(['vod', 'shortdrama'])
@@ -55,6 +63,7 @@ const ValidateSchema = z.object({
 export async function adminCrawlerSitesRoutes(fastify: FastifyInstance) {
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
   const auditSvc = new AuditLogService(db)  // CHG-SN-6-14
+  const categoryMapSvc = new CrawlerSiteCategoryMapService(db)  // CHG-SN-7-REDO-01-F / ADR-123
 
   // ── GET /admin/crawler/sites ──────────────────────────────
 
@@ -280,5 +289,56 @@ export async function adminCrawlerSitesRoutes(fastify: FastifyInstance) {
     }
 
     return reply.send({ data: { status, httpStatus, latencyMs } })
+  })
+
+  // ── ADR-123 / CHG-SN-7-REDO-01-F：站点分类映射 GET / PUT ──────────
+
+  fastify.get('/admin/crawler/sites/:key/category-mapping', { preHandler: auth }, async (request, reply) => {
+    const parsed = CategoryMappingParamsSchema.safeParse(request.params)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+      })
+    }
+    try {
+      const rows = await categoryMapSvc.listMappingsBySiteKey(parsed.data.key)
+      return reply.send({ data: rows })
+    } catch (err) {
+      if (isAppError(err, 'NOT_FOUND')) {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: err.message, status: 404 } })
+      }
+      request.log.error({ err }, '[admin/crawler/sites/.../category-mapping GET] error')
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
+    }
+  })
+
+  fastify.put('/admin/crawler/sites/:key/category-mapping', { preHandler: auth }, async (request, reply) => {
+    const paramsParsed = CategoryMappingParamsSchema.safeParse(request.params)
+    if (!paramsParsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: paramsParsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+      })
+    }
+    const bodyParsed = PutCategoryMappingSchema.safeParse(request.body)
+    if (!bodyParsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: bodyParsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+      })
+    }
+    try {
+      const result = await categoryMapSvc.replaceMappingsBySiteKey(
+        paramsParsed.data.key,
+        bodyParsed.data.mappings,
+        request.user!.userId,
+        request.id,
+      )
+      return reply.send({ data: result })
+    } catch (err) {
+      if (isAppError(err, 'NOT_FOUND')) {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: err.message, status: 404 } })
+      }
+      request.log.error({ err }, '[admin/crawler/sites/.../category-mapping PUT] error')
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
+    }
   })
 }

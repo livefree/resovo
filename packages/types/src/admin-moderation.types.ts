@@ -159,6 +159,8 @@ export type AdminAuditActionType =
   | 'crawler.run_create'         // POST /admin/crawler/runs
   // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2 2026-05-19：sources 域行级 3 mutations 合并 actionType
   | 'sources.route_action'       // POST/DELETE /admin/sources/routes/by-site/:siteKey/:sourceName[/test|/reprobe]
+  // CHG-SN-7-REDO-01-F / ADR-123 2026-05-19：站点分类映射 PUT 全量替换 audit
+  | 'crawler_site.category_mapping_update' // PUT /admin/crawler/sites/:key/category-mapping
 
 export type AdminAuditTargetKind =
   | 'video'

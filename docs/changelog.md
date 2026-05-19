@@ -11467,3 +11467,70 @@ REDO-01-E 已落地 GET row 6 + CrawlerSiteExpand 6 列 sub-table + 3 actions di
 - DAG: C ✅ → D ✅ → E ✅ → E2 ✅ → {F, G, H} 可并行；I 依赖 F/G/H 全 ✅；J 依赖 I ✅
 - 累计已完成：A ✅ + B ✅ + C ✅ + D ✅ + E ✅ + E2 ✅ 共 ~1.85w / REDO-01 总 ~2.4w — 剩余 ~0.55w（F 0.2 + G 0.1 + H 0.15 + I 0.05 + J 0.2 = 0.7w 但 G/I 工时偏小）
 
+
+---
+
+## [CHG-SN-7-REDO-01-F] Crawler 分类映射 collapsible（migration + 2 endpoints + UI）
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环（纯实施 / ADR-123 已 PRE-05 阶段 Opus 1 轮 A−）
+- **子代理**：无（ADR-123 spec 完整 / 11 文件文件范围已锁定）
+
+### 起源
+
+ADR-123（PRE-05 / 2026-05-18 Accepted A−）锁定 schema + API + audit 协议。本卡按 ADR-123 §文件范围 11 文件实施。
+
+### 修改文件（11 个 / 4 新 + 7 改）
+
+**Migration 1 新**：
+- `apps/api/src/db/migrations/064_crawler_site_category_maps.sql` — 复合 PK + FK ON DELETE CASCADE + CHECK 22 值 + updated_at trigger + ROLLBACK 段
+
+**后端 5 改 + 2 新**：
+- 新建 `apps/api/src/db/queries/crawlerSiteCategoryMaps.ts` — `listMappingsBySiteKey` + `replaceMappingsBySiteKey` 事务全量替换 + `siteKeyExists`
+- 新建 `apps/api/src/services/CrawlerSiteCategoryMapService.ts` — Service 层 + `PutCategoryMappingSchema` zod refine（sourceLabel 重复守卫）+ `CategoryMappingParamsSchema`
+- `packages/types/src/crawler.types.ts` 加 `CategoryMappingTargetGenre` (22 值) + `CategoryMappingRow` + `CategoryMappingInput`
+- `apps/api/src/routes/admin/crawlerSites.ts`（284 → 340 行）加 GET / PUT 2 endpoints + 404 守卫
+- `packages/types/src/admin-moderation.types.ts` `AdminAuditActionType` +1 `crawler_site.category_mapping_update`
+- `apps/api/src/services/AuditLogService.ts` ACTION_TYPES +1
+- `docs/decisions.md` ADR-123 加 `### 端点契约` 段（6 列 verify:endpoint-adr 格式）
+
+**audit RETRO 7 文件框架（R-MID-1 第 14 次）**：
+- types actionType +1（同上）
+- AuditLogService ACTION_TYPES +1（同上）
+- `tests/unit/api/audit-log-coverage.test.ts` REQUIRED_ACTION_TYPES + PAYLOAD_ASSERTION_REQUIRED +1
+- `tests/unit/api/audit-log-service-enums-set-equal.test.ts` EXPECTED_ACTION_TYPES +1
+- route auditSvc.write 已在 Service 内（PUT 全量替换 + fire-and-forget）
+- 新建 `tests/unit/api/crawler-site-category-mapping-audit.test.ts` （12 case PASS / query + service + zod 三段覆盖 / before-after `expect.objectContaining` 内容断言）
+
+**前端 1 改 + 1 新**：
+- `apps/server-next/src/lib/crawler/api.ts` 加 `getCrawlerSiteCategoryMapping` + `putCrawlerSiteCategoryMapping` 2 fn + 类型 re-export
+- 新建 `apps/server-next/src/app/admin/crawler/_client/CategoryMappingCollapsible.tsx`（230 行）— lazy fetch + draft state + 本地预校验（空 / 重复 sourceLabel）+ AdminInput 源 + AdminSelect 22 选项 + 新增/移除/保存按钮 + Y1 currentRole 守卫（admin only / moderator disabled + tooltip）
+- `apps/server-next/src/app/admin/crawler/_client/CrawlerSiteExpand.tsx` 末尾嵌入 `<CategoryMappingCollapsible ... />`
+
+### 关键决策
+
+1. **migration 064 幂等**：IF NOT EXISTS + CREATE OR REPLACE FUNCTION + DROP TRIGGER IF EXISTS / ROLLBACK 段在末尾注释
+2. **PUT 全量替换走显式事务**：PoolClient + BEGIN/COMMIT + ROLLBACK（参 ADR-105 模式 / 失败回滚保证原子性）
+3. **audit payload 简化形态**：beforeJsonb / afterJsonb 仅持 (sourceLabel, targetGenre) — 去掉 createdAt/updatedAt 噪声（ADR-123 §audit log 协议表）
+4. **collapsible 独立组件拆分**：CategoryMappingCollapsible.tsx 230 行 vs 嵌入 CrawlerSiteExpand 会撑超 500 行；拆分后 CrawlerSiteExpand 449 < 500 安全
+5. **Y1 守卫范式沿用 E2**：currentRole prop / 后端 admin only / 前端隐藏 affordance + tooltip
+6. **ADR-123 加 `### 端点契约` 段**：原 §API 协议表是设计文档形态（7 列）；verify:endpoint-adr 期望 6 列 `### 端点契约`；本卡补加标准格式（保留原 §API 协议表作详细说明）
+
+### 不在范围（后续）
+
+- 入库前查表映射（worker `parseGenre()` 兜底逻辑接入）→ PRE-CATEGORY-MAP-INGEST
+- 批量重分类已入库视频 genres 回填 → 异步 job 卡
+- 进程内缓存（site_key → Map 5min TTL）→ 性能拐点触发起卡
+
+### 质量门禁
+
+- typecheck ✅ 全 7 workspace
+- lint ✅（修 1 处 react/no-unescaped-entities：`"+ 新增"` → `「+ 新增」`中文引号）
+- verify:file-size-budget ✅ 0 新违规
+- verify:endpoint-adr ✅ **158 admin 路由对齐 29 ADR 端点**（+2 端点）
+- 全量 unit test：4095 → **4109 PASS**（+14 净增：+12 audit + +2 audit it.each）
+
+### 后续触发
+
+- 下张可执行卡：**REDO-01-G** 高级 dropdown（0.1w / 4 项 / 全部复用现有 API）
+- 累计已完成：A ✅ + B ✅ + C ✅ + D ✅ + E ✅ + E2 ✅ + F ✅ 共 ~2.05w / REDO-01 总 ~2.4w — 剩余 ~0.35w（G+H+I+J）

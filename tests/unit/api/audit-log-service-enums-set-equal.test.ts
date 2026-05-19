@@ -68,6 +68,8 @@ const EXPECTED_ACTION_TYPES = [
   'crawler.run_create',
   // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2 / R-MID-1 系统化第 13 次
   'sources.route_action',
+  // CHG-SN-7-REDO-01-F / ADR-123 / R-MID-1 系统化第 14 次
+  'crawler_site.category_mapping_update',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [

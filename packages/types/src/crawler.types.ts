@@ -112,3 +112,32 @@ export interface VerifyResult {
   latencyMs: number | null
   checkedAt: string
 }
+
+// ── ADR-123 / CHG-SN-7-REDO-01-F：站点级分类映射 ──────────────
+
+/**
+ * VideoGenre 复用 ADR-017 20 值 + 特殊值。
+ * source_label → target_genre 单值映射；_unmapped/_discard 特殊处理。
+ */
+export type CategoryMappingTargetGenre =
+  | 'action' | 'comedy' | 'romance' | 'thriller' | 'horror'
+  | 'sci_fi' | 'fantasy' | 'history' | 'crime' | 'mystery'
+  | 'war' | 'family' | 'biography' | 'martial_arts'
+  | 'adventure' | 'disaster' | 'musical' | 'western'
+  | 'sport' | 'other'
+  | '_unmapped' | '_discard'
+
+/** GET /admin/crawler/sites/:key/category-mapping 行 */
+export interface CategoryMappingRow {
+  readonly siteKey: string
+  readonly sourceLabel: string
+  readonly targetGenre: CategoryMappingTargetGenre
+  readonly createdAt: string
+  readonly updatedAt: string
+}
+
+/** PUT body 输入项（全量替换语义）*/
+export interface CategoryMappingInput {
+  readonly sourceLabel: string
+  readonly targetGenre: CategoryMappingTargetGenre
+}

@@ -7025,6 +7025,15 @@ CREATE TRIGGER crawler_site_category_maps_updated_at_trg
 | 1 | GET | `/admin/crawler/sites/:key/category-mapping` | Path: `key` (VARCHAR(100)) | `{ data: CategoryMappingRow[] }` | 404 NOT_FOUND (site key 不存在) / 401 / 403 | adminOnly |
 | 2 | PUT | `/admin/crawler/sites/:key/category-mapping` | Path: `key`; Body: `{ mappings: CategoryMappingInput[] }` | `{ data: { updated: number } }` | 404 NOT_FOUND / 422 VALIDATION_ERROR / 401 / 403 | adminOnly |
 
+### 端点契约
+
+> 上方"API 协议表"是设计文档形态；本段是 verify:endpoint-adr 守门所需的标准 6 列表格式（plan §4.5 R7 MUST-8）。
+
+| # | 方法 | 路径 | 用途 | Request | Response | 错误码 |
+|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/crawler/sites/:key/category-mapping` | 站点分类映射列表 | Path: `key` | 200 `{ data: CategoryMappingRow[] }` | 404 NOT_FOUND / 401 / 403 |
+| 2 | PUT | `/admin/crawler/sites/:key/category-mapping` | 站点分类映射全量替换 + audit | Path: `key`; Body: `{ mappings: CategoryMappingInput[] }` | 200 `{ data: { written: number } }` | 422 / 404 / 401 / 403 |
+
 **类型定义**（落 `packages/types/src/crawler.types.ts` 或追加到既有 crawler 类型文件）：
 
 ```ts

@@ -70,6 +70,8 @@ const REQUIRED_ACTION_TYPES = [
   'crawler.run_create',         // POST /admin/crawler/runs
   // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2：sources 域行级 3 mutations 合并 actionType
   'sources.route_action',       // POST/DELETE /admin/sources/routes/by-site/:siteKey/:sourceName[/test|/reprobe]
+  // CHG-SN-7-REDO-01-F / ADR-123：站点分类映射 PUT 全量替换
+  'crawler_site.category_mapping_update',
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -131,6 +133,8 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'crawler.run_create',
   // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2：sources 行级 3 mutations 合并 actionType
   'sources.route_action',
+  // CHG-SN-7-REDO-01-F / ADR-123：站点分类映射 PUT 全量替换 audit 内容断言
+  'crawler_site.category_mapping_update',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

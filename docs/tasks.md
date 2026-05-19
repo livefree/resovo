@@ -6,7 +6,54 @@
 
 ## 进行中任务
 
-<!-- REDO-01-E2 闭环（2026-05-19）；下一卡 REDO-01-F 分类映射 collapsible -->
+<!-- REDO-01-F 闭环（2026-05-19）；下一卡 REDO-01-G 高级 dropdown -->
+
+### CHG-SN-7-REDO-01-F ✅ 分类映射 collapsible 闭环（2026-05-19）
+
+**完成时间**：2026-05-19
+**实施**（按 ADR-123 §文件范围 11 文件落地）：
+- **migration**：`apps/api/src/db/migrations/064_crawler_site_category_maps.sql`（70 行 / 复合 PK + FK ON DELETE CASCADE + CHECK 22 值 + updated_at trigger + ROLLBACK 段）
+- **后端 5 文件 / 3 新 + 2 改**：
+  - 新建 `apps/api/src/db/queries/crawlerSiteCategoryMaps.ts`（90 行 / `listMappingsBySiteKey` + `replaceMappingsBySiteKey` 事务全量替换 + `siteKeyExists`）
+  - 新建 `apps/api/src/services/CrawlerSiteCategoryMapService.ts`（103 行 / 复用 `aggregateSignal` 无需 / before-after audit fire-and-forget + `PutCategoryMappingSchema` zod refine 重复守卫 + 22 enum）
+  - `packages/types/src/crawler.types.ts` +1 type union `CategoryMappingTargetGenre` + 2 interface（CategoryMappingRow / CategoryMappingInput）
+  - `apps/api/src/routes/admin/crawlerSites.ts`（284 → 340 行）扩 2 endpoints（GET + PUT category-mapping / admin only / 404 守卫）
+  - `docs/decisions.md` ADR-123 加 `### 端点契约` 段（6 列 verify:endpoint-adr 格式 / 原 §API 协议表保留作详细说明）
+- **audit RETRO 7 文件框架（R-MID-1 系统化第 14 次 / ADR-121）**：
+  - types `AdminAuditActionType` +1 `crawler_site.category_mapping_update`
+  - AuditLogService ACTION_TYPES +1
+  - audit-log-coverage REQUIRED + PAYLOAD_ASSERTION_REQUIRED +1
+  - audit-log-service-enums-set-equal EXPECTED +1
+  - route auditSvc.write 已在 Service 内（PUT 内 fire-and-forget）
+  - 新建 `tests/unit/api/crawler-site-category-mapping-audit.test.ts`（**12 case PASS** / query/service/zod 三段覆盖 / before-after audit payload `expect.objectContaining`）
+- **前端 3 文件 / 1 新 + 2 改**：
+  - `apps/server-next/src/lib/crawler/api.ts` 加 `getCrawlerSiteCategoryMapping` + `putCrawlerSiteCategoryMapping` 2 前端 fn + 类型 re-export
+  - 新建 `apps/server-next/src/app/admin/crawler/_client/CategoryMappingCollapsible.tsx`（230 行 / lazy fetch + draft state + 本地预校验空/重复 + AdminInput 源 + AdminSelect 22 选项目标 + 移除/新增/保存 / Y1 currentRole 守卫）
+  - `apps/server-next/src/app/admin/crawler/_client/CrawlerSiteExpand.tsx` 末尾嵌入 `<CategoryMappingCollapsible ... />`
+
+**评级**：**A**（0 红线 / 0 黄线 / ADR-123 严格 spec 落地 / 7 文件 audit RETRO 完整闭环 / R-MID-1 第 14 次）
+
+**关键决策**：
+- ADR-123 已通过（PRE-05 阶段 Opus 1 轮 A−）→ 本卡纯实施，不 spawn Opus（contract 已锁）
+- migration 064 IF NOT EXISTS + ROLLBACK 段（幂等）
+- PUT 全量替换走显式 `BEGIN/COMMIT` PoolClient 事务（参 ADR-105 模式）
+- audit beforeJsonb / afterJsonb 仅持 (sourceLabel, targetGenre) 简化形态（去掉 createdAt/updatedAt 噪声 / ADR-123 §audit log 协议表）
+- Y1 守卫沿用 E2 范式（currentRole prop / 路由 admin only / 前端隐藏 affordance）
+- collapsible 独立组件避免 CrawlerSiteExpand 撑超 500 行（拆分后 CrawlerSiteExpand 449 < 500 / CategoryMappingCollapsible 230）
+
+**质量门禁**：
+- typecheck ✅ 全 7 workspace
+- lint ✅（修 1 处 react/no-unescaped-entities：`"+ 新增"` → `「+ 新增」`）
+- file-size-budget ✅ 0 新违规
+- verify:endpoint-adr ✅ **158 admin 路由对齐 29 ADR 端点**（+2 端点）
+- 全量 unit test：4095 → **4109 PASS**（+14 净增：+12 category mapping audit + +2 audit it.each）
+
+**执行模型**：claude-opus-4-7 主循环（纯实施 / ADR-123 PRE-05 阶段已 Opus 1 轮 A−）/ 子代理：无（contract 已锁定 / spec 完整）
+
+<!-- 下张：REDO-01-G 高级 dropdown（0.1w / 4 项：调度配置 / 重建索引 / 全局止血 / 冻结切换；全部复用现有 API） -->
+
+
+### CHG-SN-7-REDO-01-F ⏳ 已替换为闭环卡
 
 ### CHG-SN-7-REDO-01-E2 ✅ 行级 3 mutations + audit RETRO + 前端 3 actions 闭环（2026-05-19）
 
