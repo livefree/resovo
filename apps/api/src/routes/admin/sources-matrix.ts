@@ -1,11 +1,13 @@
 /**
- * admin/sources-matrix.ts — /admin/sources 线路矩阵视图端点（ADR-117 / CHG-SN-5-11）
+ * admin/sources-matrix.ts — /admin/sources 线路矩阵视图端点（ADR-117 / CHG-SN-5-11
+ *                                                + AMENDMENT 2026-05-19 / REDO-01-E）
  *
- * GET  /admin/sources/video-groups           — 视频分组列表（含聚合信号状态）
- * GET  /admin/sources/video-groups/stats     — KPI 统计（total / active / dead / orphan）
- * GET  /admin/sources/video-groups/:videoId/matrix — 单视频线路×集数矩阵
- * GET  /admin/source-line-aliases            — 全局别名列表
- * PUT  /admin/source-line-aliases/:siteKey/:sourceName — 新建/更新别名（admin only）
+ * GET  /admin/sources/video-groups                       — 视频分组列表（含聚合信号状态）
+ * GET  /admin/sources/video-groups/stats                 — KPI 统计（total / active / dead / orphan）
+ * GET  /admin/sources/video-groups/:videoId/matrix       — 单视频线路×集数矩阵
+ * GET  /admin/source-line-aliases                        — 全局别名列表
+ * PUT  /admin/source-line-aliases/:siteKey/:sourceName   — 新建/更新别名（admin only）
+ * GET  /admin/sources/routes/by-site/:siteKey            — 按站点聚合线路明细（AMENDMENT row 6）
  *
  * 鉴权：读端点 moderator+admin；PUT 写端点 admin only（ADR-117 D-117-1）
  */
@@ -17,6 +19,7 @@ import {
   SourcesMatrixService,
   VideoGroupsQuerySchema,
   UpsertAliasSchema,
+  RoutesBySiteParamsSchema,
 } from '@/api/services/SourcesMatrixService'
 import { isAppError } from '@/api/lib/errors'
 
@@ -101,6 +104,25 @@ export async function adminSourcesMatrixRoutes(fastify: FastifyInstance) {
       return reply.send({ data: alias })
     } catch (err) {
       request.log.error({ err }, '[admin/source-line-aliases] upsert error')
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
+    }
+  })
+
+  // ── GET /admin/sources/routes/by-site/:siteKey ──────────────────
+  // ADR-117 AMENDMENT 2026-05-19 / CHG-SN-7-REDO-01-E
+
+  fastify.get('/admin/sources/routes/by-site/:siteKey', { preHandler: readAuth }, async (request, reply) => {
+    const parsed = RoutesBySiteParamsSchema.safeParse(request.params)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+      })
+    }
+    try {
+      const rows = await svc.listRoutesBySite(decodeURIComponent(parsed.data.siteKey))
+      return reply.send({ data: rows })
+    } catch (err) {
+      request.log.error({ err }, '[admin/sources/routes/by-site] query error')
       return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
     }
   })

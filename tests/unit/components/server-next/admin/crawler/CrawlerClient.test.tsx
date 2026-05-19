@@ -30,6 +30,9 @@ const createCrawlerSiteMock = vi.fn()
 const updateCrawlerSiteMock = vi.fn()
 const deleteCrawlerSiteMock = vi.fn()
 const validateCrawlerSiteMock = vi.fn()
+// REDO-01-E：sources 域跨调 mocks
+const listRoutesBySiteMock = vi.fn()
+const upsertLineAliasMock = vi.fn()
 const toastPushMock = vi.fn()
 const confirmSpy = vi.fn().mockReturnValue(true)
 
@@ -44,6 +47,11 @@ vi.mock('../../../../../../apps/server-next/src/lib/crawler/api', () => ({
   getCrawlerTimeline: (...args: unknown[]) => getCrawlerTimelineMock(...args),
   runCrawlerAll: (...args: unknown[]) => runCrawlerAllMock(...args),
   runCrawlerSite: (...args: unknown[]) => runCrawlerSiteMock(...args),
+}))
+
+vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({
+  listRoutesBySite: (...args: unknown[]) => listRoutesBySiteMock(...args),
+  upsertLineAlias: (...args: unknown[]) => upsertLineAliasMock(...args),
 }))
 
 vi.mock('@resovo/admin-ui', async () => {
@@ -139,6 +147,8 @@ beforeEach(() => {
   getCrawlerTimelineMock.mockReset()
   runCrawlerAllMock.mockReset()
   runCrawlerSiteMock.mockReset()
+  listRoutesBySiteMock.mockReset()
+  upsertLineAliasMock.mockReset()
   toastPushMock.mockReset()
   confirmSpy.mockReset().mockReturnValue(true)
   ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
@@ -489,6 +499,143 @@ describe('CrawlerClient (REDO-01-D 行级操作)', () => {
       expect(toastPushMock).toHaveBeenCalledWith(
         expect.objectContaining({ level: 'success', title: '已复制' }),
       )
+    })
+  })
+})
+
+describe('CrawlerClient (REDO-01-E 行展开 + 线路 sub-table)', () => {
+  const ROUTE_1 = {
+    sourceSiteKey: 'jszyapi',
+    sourceName: '线路1',
+    displayName: 'JSZY 主线',
+    probeStatus: 'ok' as const,
+    renderStatus: 'partial' as const,
+    avgLatencyMs: 120,
+    sourceCount: 5,
+    activeCount: 4,
+    lastProbedAt: '2026-05-19T10:00:00Z',
+  }
+
+  it('29. 默认不展开：CrawlerSiteExpand 不渲染', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    render(<CrawlerClient />)
+    await waitFor(() => screen.getAllByText('极速资源'))
+    expect(screen.queryByTestId('crawler-expand-jszyapi')).toBeNull()
+    expect(listRoutesBySiteMock).not.toHaveBeenCalled()
+  })
+
+  it('30. 点击 chevron 触发 expand → lazy fetch listRoutesBySite + 渲染线路明细', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    listRoutesBySiteMock.mockResolvedValueOnce([ROUTE_1])
+    render(<CrawlerClient />)
+    const chevron = await waitFor(() => screen.getByTestId('crawler-row-expand-jszyapi'))
+    fireEvent.click(chevron)
+    await waitFor(() => {
+      expect(listRoutesBySiteMock).toHaveBeenCalledWith('jszyapi')
+      expect(screen.getByTestId('crawler-expand-jszyapi')).not.toBeNull()
+      expect(screen.getByText('线路1')).not.toBeNull()
+    })
+  })
+
+  it('31. chevron 二次点击折叠：expandedKeys 移除 + expand 区消失', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    listRoutesBySiteMock.mockResolvedValueOnce([ROUTE_1])
+    render(<CrawlerClient />)
+    const chevron = await waitFor(() => screen.getByTestId('crawler-row-expand-jszyapi'))
+    fireEvent.click(chevron)
+    await waitFor(() => screen.getByTestId('crawler-expand-jszyapi'))
+    fireEvent.click(chevron)
+    await waitFor(() => {
+      expect(screen.queryByTestId('crawler-expand-jszyapi')).toBeNull()
+    })
+  })
+
+  it('32. chevron 旋转：expanded 时 data-expanded 属性 + aria-label 切换', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    listRoutesBySiteMock.mockResolvedValueOnce([ROUTE_1])
+    render(<CrawlerClient />)
+    const chevron = await waitFor(() => screen.getByTestId('crawler-row-expand-jszyapi'))
+    expect(chevron.getAttribute('data-expanded')).toBeNull()
+    expect(chevron.getAttribute('aria-label')).toContain('展开')
+    fireEvent.click(chevron)
+    await waitFor(() => {
+      const updated = screen.getByTestId('crawler-row-expand-jszyapi')
+      expect(updated.getAttribute('data-expanded')).toBe('')
+      expect(updated.getAttribute('aria-label')).toContain('折叠')
+    })
+  })
+
+  it('33. 线路 sub-table 渲染 6 列内容（线路名 / 别名 input / 探测 pill / 播放 pill / 延迟 / 操作占位）', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    listRoutesBySiteMock.mockResolvedValueOnce([ROUTE_1])
+    render(<CrawlerClient />)
+    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-row-expand-jszyapi')))
+    await waitFor(() => {
+      expect(screen.getByText('线路1')).not.toBeNull()
+      // AdminInput data-testid 在 wrapper div；取内部真实 input
+      const aliasWrap = screen.getByTestId('crawler-route-alias-线路1')
+      const aliasInput = aliasWrap.querySelector('input[data-admin-input-control]') as HTMLInputElement
+      expect(aliasInput.value).toBe('JSZY 主线')
+      const probe = screen.getByTestId('crawler-route-probe-线路1')
+      expect(probe.getAttribute('data-signal')).toBe('ok')
+      const renderPill = screen.getByTestId('crawler-route-render-线路1')
+      expect(renderPill.getAttribute('data-signal')).toBe('partial')
+      expect(screen.getByTestId('crawler-route-latency-线路1').textContent).toBe('120ms')
+    })
+  })
+
+  it('34. 别名 inline-edit：onBlur 调 upsertLineAlias + 成功 toast + 行内 displayName 更新', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    listRoutesBySiteMock.mockResolvedValueOnce([ROUTE_1])
+    upsertLineAliasMock.mockResolvedValueOnce({
+      sourceSiteKey: 'jszyapi',
+      sourceName: '线路1',
+      displayName: 'JSZY 新别名',
+      updatedAt: '2026-05-19T11:00:00Z',
+    })
+    render(<CrawlerClient />)
+    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-row-expand-jszyapi')))
+    const wrap = await waitFor(() => screen.getByTestId('crawler-route-alias-线路1'))
+    const input = wrap.querySelector('input[data-admin-input-control]') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'JSZY 新别名' } })
+    fireEvent.blur(input)
+    await waitFor(() => {
+      expect(upsertLineAliasMock).toHaveBeenCalledWith('jszyapi', '线路1', 'JSZY 新别名')
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: '别名已更新' }),
+      )
+    })
+  })
+
+  it('35. 别名 inline-edit 同值 onBlur → 不调 API', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    listRoutesBySiteMock.mockResolvedValueOnce([ROUTE_1])
+    render(<CrawlerClient />)
+    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-row-expand-jszyapi')))
+    const wrap = await waitFor(() => screen.getByTestId('crawler-route-alias-线路1'))
+    const input = wrap.querySelector('input[data-admin-input-control]') as HTMLInputElement
+    fireEvent.blur(input)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(upsertLineAliasMock).not.toHaveBeenCalled()
+  })
+
+  it('36. listRoutesBySite 失败 → 渲染 expand error 块 + 不抛错', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    listRoutesBySiteMock.mockRejectedValueOnce(new Error('routes 500'))
+    render(<CrawlerClient />)
+    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-row-expand-jszyapi')))
+    await waitFor(() => {
+      expect(screen.getByTestId('crawler-expand-error-jszyapi')).not.toBeNull()
+    })
+  })
+
+  it('37. 空线路 → 渲染 "暂无线路数据" 占位', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    listRoutesBySiteMock.mockResolvedValueOnce([])
+    render(<CrawlerClient />)
+    fireEvent.click(await waitFor(() => screen.getByTestId('crawler-row-expand-jszyapi')))
+    await waitFor(() => {
+      expect(screen.getByTestId('crawler-expand-empty-jszyapi')).not.toBeNull()
     })
   })
 })

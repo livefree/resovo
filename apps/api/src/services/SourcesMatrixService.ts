@@ -18,6 +18,7 @@ import {
   listLineAliases,
   upsertLineAlias,
   findLineAlias,
+  listRoutesBySite as listRoutesBySiteRaw,
 } from '@/api/db/queries/sources-matrix'
 import type {
   DualSignalState,
@@ -27,6 +28,7 @@ import type {
   VideoGroupStats,
   LineMatrixRow,
   SourceLineAlias,
+  SourceRouteBySite,
 } from '@resovo/types'
 import { fetchVideosByIds } from '@/api/db/queries/video-merge-mutations'
 import { AuditLogService } from '@/api/services/AuditLogService'
@@ -48,7 +50,12 @@ export const UpsertAliasSchema = z.object({
   displayName: z.string().min(1, '别名不能为空').max(100, '别名过长'),
 })
 
-export type { VideoGroupListParams, VideoGroupListResult, VideoGroupStats, LineMatrixRow, SourceLineAlias }
+// ADR-117 AMENDMENT 2026-05-19：path 校验同 UpsertAliasParamsSchema siteKey 字段
+export const RoutesBySiteParamsSchema = z.object({
+  siteKey: z.string().min(1).max(100),
+}).strict()
+
+export type { VideoGroupListParams, VideoGroupListResult, VideoGroupStats, LineMatrixRow, SourceLineAlias, SourceRouteBySite }
 
 // ── 聚合信号状态推导（ADR-117 §决策要点 2 / CHG-SN-5-11-PATCH-2 P0-2 业务逻辑归口 Service）─
 
@@ -118,6 +125,26 @@ export class SourcesMatrixService {
 
   listLineAliases(): Promise<SourceLineAlias[]> {
     return listLineAliases(this.db)
+  }
+
+  /**
+   * 按 siteKey 聚合线路明细（ADR-117 AMENDMENT 2026-05-19）。
+   * DB 仅返回 raw 状态数组；Service 派生 probeStatus/renderStatus via aggregateSignal
+   * （与 listVideoGroups 100% 对称 / 零新业务逻辑）。
+   */
+  async listRoutesBySite(siteKey: string): Promise<SourceRouteBySite[]> {
+    const raw = await listRoutesBySiteRaw(this.db, siteKey)
+    return raw.map((r): SourceRouteBySite => ({
+      sourceSiteKey: r.sourceSiteKey,
+      sourceName: r.sourceName,
+      displayName: r.displayName,
+      probeStatus: aggregateSignal(r.probeStatuses),
+      renderStatus: aggregateSignal(r.renderStatuses),
+      avgLatencyMs: r.avgLatencyMs,
+      sourceCount: r.sourceCount,
+      activeCount: r.activeCount,
+      lastProbedAt: r.lastProbedAt,
+    }))
   }
 
   async upsertLineAlias(

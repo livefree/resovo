@@ -78,3 +78,20 @@ export interface SourceLineAlias {
   readonly displayName: string
   readonly updatedAt: string
 }
+
+/**
+ * ADR-117 AMENDMENT 2026-05-19 / CHG-SN-7-REDO-01-E：
+ * GET /admin/sources/routes/by-site/:siteKey 行。
+ * 单站点聚合一条线路（sourceName）跨 N 个 video_sources 行的 worst 状态 + 平均延迟 + 别名。
+ */
+export interface SourceRouteBySite {
+  readonly sourceSiteKey: string
+  readonly sourceName: string
+  readonly displayName: string | null
+  readonly probeStatus: DualSignalState
+  readonly renderStatus: DualSignalState
+  readonly avgLatencyMs: number | null
+  readonly sourceCount: number
+  readonly activeCount: number
+  readonly lastProbedAt: string | null
+}

@@ -15,4 +15,5 @@ export type {
   EpisodeCell,
   LineMatrixRow,
   SourceLineAlias,
+  SourceRouteBySite,
 } from '@resovo/types'

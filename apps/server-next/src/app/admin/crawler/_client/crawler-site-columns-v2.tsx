@@ -35,8 +35,10 @@ export interface CrawlerSiteColumnsCallbacks {
   readonly onMarkShortdrama?: (site: CrawlerSite) => void
   /** {more} dropdown 行项 — 删除站点（fromConfig 时 dropdown 内 disabled）*/
   readonly onDelete?: (site: CrawlerSite) => void
-  /** 行展开状态读（REDO-01-E 实装；本卡 chevron 静态不旋转） */
+  /** 行展开状态读（REDO-01-E 实装：chevron 旋转 + 行点击 toggle） */
   readonly expandedKeys?: ReadonlySet<string>
+  /** 行展开 toggle 回调（REDO-01-E）*/
+  readonly onToggleExpand?: (siteKey: string) => void
   /** 站点 stats 映射（routeCount + health；来自 GET /admin/crawler/kpi siteStats） */
   readonly siteStats?: ReadonlyMap<string, CrawlerSiteStat>
 }
@@ -155,6 +157,7 @@ export function buildCrawlerSiteColumnsV2(
 ): readonly TableColumn<CrawlerSite>[] {
   const {
     expandedKeys,
+    onToggleExpand,
     siteStats,
     onRunIncremental,
     onRunFull,
@@ -177,16 +180,27 @@ export function buildCrawlerSiteColumnsV2(
       cell: ({ row }) => {
         const expanded = expandedKeys?.has(row.key) ?? false
         return (
-          <span
+          <button
+            type="button"
             style={{
+              background: 'transparent',
+              border: 'none',
+              padding: '4px',
+              cursor: onToggleExpand ? 'pointer' : 'default',
               ...CHEVRON_STYLE,
               transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
             }}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleExpand?.(row.key)
+            }}
             data-chevron
-            aria-hidden
+            data-expanded={expanded ? '' : undefined}
+            aria-label={expanded ? `折叠 ${row.name}` : `展开 ${row.name}`}
+            data-testid={`crawler-row-expand-${row.key}`}
           >
             ›
-          </span>
+          </button>
         )
       },
     },

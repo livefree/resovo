@@ -44,6 +44,7 @@ import { ApiClientError } from '@/lib/api-client'
 import { CrawlerKpiRow } from './CrawlerKpiRow'
 import { CrawlerTimelineCard } from './CrawlerTimelineCard'
 import { CrawlerSiteList } from './CrawlerSiteList'
+import { CrawlerSiteExpand } from './CrawlerSiteExpand'
 import {
   CrawlerSiteFormDrawer,
   type CrawlerSiteFormMode,
@@ -96,6 +97,8 @@ export function CrawlerClient() {
   const [retryKey, setRetryKey] = useState(0)
   const [paused, setPaused] = useState(false)
   const [runAllPending, setRunAllPending] = useState(false)
+  // ── REDO-01-E 行展开状态 ─────────────────────────────────────────
+  const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(new Set())
 
   // ── drawer ───────────────────────────────────────────────────────
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -432,6 +435,18 @@ export function CrawlerClient() {
         onMarkAdult={handleMarkAdult}
         onMarkShortdrama={handleMarkShortdrama}
         onDelete={handleDelete}
+        expandedKeys={expandedKeys}
+        onToggleExpand={(siteKey) => {
+          setExpandedKeys((prev) => {
+            const next = new Set(prev)
+            if (next.has(siteKey)) next.delete(siteKey)
+            else next.add(siteKey)
+            return next
+          })
+        }}
+        renderExpandedRow={(site) => (
+          <CrawlerSiteExpand siteKey={site.key} siteName={site.name} />
+        )}
       />
 
       <CrawlerSiteFormDrawer

@@ -6,7 +6,131 @@
 
 ## 进行中任务
 
-<!-- REDO-01-D 闭环（2026-05-19）；下一卡 REDO-01-E 行展开线路 sub-table -->
+<!-- REDO-01-E 闭环（2026-05-19）；下一卡 REDO-01-E2 行级 3 mutations OR REDO-01-F 分类映射 -->
+
+### CHG-SN-7-REDO-01-E ✅ 前端行展开 + 线路 sub-table 闭环（2026-05-19）
+
+**完成时间**：2026-05-19
+**实施**：
+- **阶段 1** ADR-117 AMENDMENT 2026-05-19 起草（Opus 子代理 1 轮 **PASS** 无红线 / 2 黄线均为实施建议而非起草缺陷 / 4 维度自评 A）
+- **阶段 2** 后端（5 文件 / 0 新 migration）：
+  - 扩 `packages/types/src/sources-matrix.types.ts` 加 `SourceRouteBySite` interface
+  - 扩 `apps/api/src/db/queries/sources-matrix.ts` 加 `listRoutesBySite()` query（STRING_AGG DISTINCT + LEFT JOIN aliases + AVG latency + COALESCE site_key fallback + 软删除过滤）
+  - 扩 `apps/api/src/services/SourcesMatrixService.ts` 加 `listRoutesBySite(siteKey)` 方法（复用 `aggregateSignal()` 派生 worst 状态）
+  - 扩 `apps/api/src/routes/admin/sources-matrix.ts`（107 → 125 行）追 `GET /admin/sources/routes/by-site/:siteKey` 端点 + `RoutesBySiteParamsSchema` zod
+  - 新建 `tests/unit/api/sources-routes-by-site.test.ts`（**13 case PASS** / query + aggregateSignal + Service 三段覆盖）
+- **阶段 3** 前端（4 文件 / 1 新 + 3 改）：
+  - 新建 `apps/server-next/src/app/admin/crawler/_client/CrawlerSiteExpand.tsx`（313 行 / lazy fetch + 6 列 sub-table + SignalPill + 别名 inline-edit + 3 actions UI 占位 disabled）
+  - 扩 `apps/server-next/src/lib/sources/api.ts` 加 `listRoutesBySite()` 前端 fn（按域归属 / E2 决策）
+  - 扩 `apps/server-next/src/lib/sources/types.ts` re-export `SourceRouteBySite`
+  - 修改 `crawler-site-columns-v2.tsx`：chevron 改 `<button>` + onClick → onToggleExpand + data-expanded attr + 旋转动画 + a11y aria-label
+  - 修改 `CrawlerSiteList.tsx` Props 扩 `expandedKeys / onToggleExpand / renderExpandedRow` 透传 DataTable v2
+  - 修改 `CrawlerClient.tsx`（450 → 465 行）：新增 `expandedKeys` state + onToggleExpand handler + `renderExpandedRow={(site) => <CrawlerSiteExpand .../>}` JSX
+- **阶段 4** contract §1.5 修订（D4 / 本卡内）：
+  - line 191：`PATCH /admin/sources/routes/:id` → `PUT /admin/source-line-aliases/:siteKey/:sourceName`（admin only / moderator UI 守卫由 E2 或 MISC 跟踪）
+  - line 195：API 缺口段标记**已闭环** + 加 ADR-117 AMENDMENT 引用
+  - §6.1 DAG：拆 E → E + E2 (新增子卡)
+  - §6.2 风险 row 2 标记**已闭环**
+- **阶段 5** 单测扩展：`CrawlerClient.test.tsx` 28 → **37 case PASS**（+9 REDO-01-E：默认不展开 / chevron toggle / 折叠 / chevron 旋转 attr / 6 列内容 / alias onBlur PUT / 同值不调 API / fetch 失败 ErrorState / 空线路 EmptyState）
+
+**评级**：**A**（0 红线 / 2 黄线均为后续子卡实施建议 / Opus PASS / contract misalignment 已修订）
+
+**关键决策（Opus E1-E5）**：
+- E1 路径：`GET /admin/sources/routes/by-site/:siteKey`（routes 子资源命名空间纯净 / by-site 习语 RESTful）
+- E2 跨域：前端 fn 放 `lib/sources/api.ts`（按域归属，不按消费方）
+- E3 别名 inline-edit：复用 row 5 PUT line-aliases 不动 admin only / Y1 moderator UI 守卫由 E2 实装
+- E4 拆 E + E2 合理（本 E 0.35w + E2 0.35w / 总 0.7w 反映 D2 拆分真实成本）
+- E5 worst 状态：**复用 ADR-117 既有 `aggregateSignal()`** 零新业务逻辑
+
+**质量门禁**：
+- typecheck ✅ 全 7 workspace
+- lint ✅（0 error / 0 warning）
+- file-size-budget ✅ 0 新违规（CrawlerClient 465<500 / CrawlerSiteExpand 313<500）
+- verify:endpoint-adr ✅ **153 admin 路由对齐 24 ADR 端点**（+1 端点 + 1 ADR row）
+- 全量 unit test：4056 → **4078 PASS**（+22 净增：+13 backend + +9 frontend）
+
+**执行模型**：claude-opus-4-7 主循环 + arch-reviewer (claude-opus-4-7) ADR-117 AMENDMENT 子代理 1 轮 PASS
+
+<!-- 下张可选：REDO-01-E2 行级 3 mutations + audit RETRO（0.35w / Opus advisory A 建议合并 actionType `sources.route_action` + ADR-121 D-121-5 4 文件框架）OR REDO-01-F 分类映射 collapsible（ADR-123 已通过 / 0.2w） -->
+
+
+### CHG-SN-7-REDO-01-E ⏳ 已替换为闭环卡（保留备注）
+
+**SEQ**：M-SN-7 / REDO-01 第 5 子卡（E 阶段 0.4w / 前端展开行首张）
+
+**用户 4 项拍板**（API 缺口诊断后）：
+- **D1**：路线 **C**（sources 域新端点 `GET /admin/sources/routes/by-site/:siteKey`）
+- **D2**：拆 E + E2（本卡只做 GET + 前端骨架；行级 3 mutations play/refresh/trash 留 REDO-01-E2）
+- **D3**：**spawn arch-reviewer Opus 子代理评审** ADR-117 AMENDMENT（撰写 ADR 强制项）
+- **D4**：contract §1.5 misalignment **本卡内修订**（`PATCH /admin/sources/routes/:id` → 复用 PUT line-aliases）
+
+**问题理解**：REDO-01-A contract §1.5 留口：「线路数据按 siteKey 查询的 API 待 REDO-01-E 子卡内细化」+「事件: 别名 inline-edit 走 `PATCH /admin/sources/routes/:id`（不存在）」。本卡完成：
+1. 后端：ADR-117 AMENDMENT（仿 ADR-105 AMENDMENT 2026-05-14 范式 / 5→6 端点 / 无新协议决策）
+2. 后端：新 query + service 方法 + GET 端点（只读 / 无 audit RETRO）
+3. 前端：CrawlerSiteExpand.tsx 新建 + 6 列 sub-table + 别名 inline-edit（复用 PUT line-aliases）+ chevron 与 expandedKeys 联动
+4. contract §1.5 §6.1 §4 修订（misalignment 纠正 + DAG 同步）
+
+**方案**（按 contract §1.5 + ADR-117 AMENDMENT 双轨）：
+
+**阶段 1：ADR-117 AMENDMENT 起草（Opus 子代理 1 轮）**
+- spawn arch-reviewer (claude-opus-4-7) 独立设计 ADR-117 AMENDMENT 2026-05-19
+- 范围：端点契约表 row 6 追加 + AMENDMENT 段（参 ADR-105 AMENDMENT 模板）
+- Opus 评审 5 要点：路径命名 / 跨域查询边界 / 别名 inline-edit 路径修正 / E vs E2 拆分合理性 / probe_status worst 算法
+- 评级 PASS 后主循环落 `docs/decisions.md`
+
+**阶段 2：后端实施**
+- 新建 `apps/api/src/db/queries/sourcesRoutesBySite.ts`（GROUP BY (source_site_key, source_name) + worst_status 聚合 + LEFT JOIN source_line_aliases display_name）
+- 扩 `apps/api/src/services/SourcesMatrixService.ts` 加 `listRoutesBySite(siteKey)` 方法
+- 扩 `apps/api/src/routes/admin/sources-matrix.ts`（107→~140 行）追 `GET /admin/sources/routes/by-site/:siteKey` 端点
+- 扩 `packages/types/src/admin-moderation.types.ts` 加 `SourceRouteBySite` interface
+- 新建 `apps/server-next/src/lib/crawler/routes-api.ts`（OR 复用 `apps/server-next/src/lib/sources/api.ts`）暴露 `listRoutesBySite(siteKey)` 前端函数
+- 新建 / 扩展单测：`tests/unit/api/sources-routes-by-site.test.ts`（聚合算法 + worst 排序 + 别名 LEFT JOIN）
+
+**阶段 3：前端实施**
+- 新建 `apps/server-next/src/app/admin/crawler/_client/CrawlerSiteExpand.tsx`（lazy fetch + 6 列 sub-table + 别名 inline-edit + 3 actions UI 占位 disabled）
+- 修改 `crawler-site-columns-v2.tsx`：chevron onClick toggle expandedKeys（去掉 REDO-01-D 的"不联动"备注）
+- 修改 `CrawlerSiteList.tsx`：透传 `expandedKeys + renderExpandedRow={(row) => <CrawlerSiteExpand siteKey={row.key} ... />}`
+- 修改 `CrawlerClient.tsx`：注入 expandedKeys state + onToggleExpand handler
+- 扩展测试：CrawlerClient.test.tsx 加 6 case（行展开 toggle / 线路渲染 / 别名 inline-edit / 3 actions disabled placeholder）
+
+**阶段 4：contract §1.5 修订（D4）**
+- `docs/M-SN-7-redo-01-contract.md` §1.5 修订：
+  - "PATCH /admin/sources/routes/:id" → "PUT /admin/source-line-aliases/:siteKey/:sourceName"（移到事件段）
+  - 加 §1.5 注：「3 actions play/refresh/trash 留 REDO-01-E2」
+- `docs/M-SN-7-redo-01-contract.md` §4 admin-ui 消费映射：加 1 行 sources-matrix 跨调
+- `docs/M-SN-7-redo-01-contract.md` §6.1 DAG：拆 E → E + E2
+
+**阶段 5：全质量门禁**
+- typecheck + lint + file-size + unit test + verify:endpoint-adr + verify:adr-contracts
+- file-size 监控：CrawlerClient.tsx 当前 450 行（接近 500）— 本卡新增 expandedKeys handlers 预计 +30 行 → 接近天花板；如超 → 主动拆 use-crawler-expand.ts hook
+
+**涉及文件**（预估 8 文件）：
+- 修改：`docs/decisions.md`（ADR-117 AMENDMENT 2026-05-19 追加）
+- 修改：`docs/M-SN-7-redo-01-contract.md`（§1.5 + §4 + §6.1 修订）
+- 新建：`apps/api/src/db/queries/sourcesRoutesBySite.ts`
+- 修改：`apps/api/src/services/SourcesMatrixService.ts`
+- 修改：`apps/api/src/routes/admin/sources-matrix.ts`
+- 修改：`packages/types/src/admin-moderation.types.ts`
+- 修改：`apps/server-next/src/lib/sources/api.ts` (or new file)
+- 新建：`apps/server-next/src/app/admin/crawler/_client/CrawlerSiteExpand.tsx`
+- 修改：`apps/server-next/src/app/admin/crawler/_client/crawler-site-columns-v2.tsx`
+- 修改：`apps/server-next/src/app/admin/crawler/_client/CrawlerSiteList.tsx`
+- 修改：`apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`
+- 新建：`tests/unit/api/sources-routes-by-site.test.ts`
+- 修改：`tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx`
+
+**严格约束**：
+- ❌ 新 GET 端点未先起 ADR（plan §4.5 R7 MUST-8 + verify:endpoint-adr 守门）
+- ❌ ADR-117 AMENDMENT 主循环直接落（D3 拍板 spawn Opus 评审）
+- ❌ 跨域 mutation（crawler 模块写 video_sources / source_line_aliases）— 仅复用现有 PUT line-aliases
+- ❌ 行级 3 actions play/refresh/trash 接入真实 API（留 E2 / 本卡 UI 占位 disabled）
+- ❌ 颜色硬编码 / 越层调用 / `any` 类型
+- ❌ CrawlerClient.tsx 超 500 行（接近 480 时主动拆 hook）
+
+**执行模型**：spawn arch-reviewer (claude-opus-4-7) ADR AMENDMENT 评审 + claude-opus-4-7 主循环实施
+
+**估时**：0.4w
+
 
 ### CHG-SN-7-REDO-01-C ✅ 前端骨架闭环（2026-05-19）
 

@@ -11317,3 +11317,79 @@ REDO-01-C 已落地 9 列骨架（commit df0a0a1e），actions 列为 `（REDO-0
 - 下张可执行卡：**CHG-SN-7-REDO-01-E** 行展开线路 sub-table（0.4w / 跨调 sources 现有 API）
 - REDO-01-D 完成后 DAG 图：C ✅ → D ✅ → {E, F, G, H} 可并行；I 依赖 E/F/G/H 全 ✅；J 依赖 I ✅
 - 累计已完成：A ✅ + B ✅ + C ✅ + D ✅ 共 1.35w / REDO-01 总 2.35w（contract §5 削减后） — 剩余 1.0w
+
+---
+
+## [CHG-SN-7-REDO-01-E] Crawler 行展开 + 线路 sub-table（只读）+ ADR-117 AMENDMENT
+
+- **完成时间**：2026-05-19
+- **记录时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环 / 实施
+- **子代理**：arch-reviewer (claude-opus-4-7) ADR-117 AMENDMENT 2026-05-19 起草 1 轮 PASS（0 红线 / 2 黄线均为实施建议）
+
+### 起源
+
+REDO-01-A contract §1.5 留 API 缺口：「线路数据按 siteKey 查询的 API 待 REDO-01-E 子卡内细化」+ "PATCH /admin/sources/routes/:id" misalignment（实际不存在）。诊断后用户 4 项拍板：D1=C / D2=拆 / D3=spawn Opus / D4=本卡内修订。
+
+### 修改文件（11 个 / 2 新 + 9 改）
+
+**ADR + 文档（3 个）**：
+- 追加 `docs/decisions.md` — ADR-117 AMENDMENT 2026-05-19（约 200 行 / 端点契约 row 6 + 类型契约 + zod + SQL 设计 + Opus 评审 5 要点决策 E1-E5 + 4 维度自评 A + 黄线 Y1/Y2）
+- 修订 `docs/M-SN-7-redo-01-contract.md` §1.5（line 191/195 misalignment）+ §6.1 DAG（拆 E + E2）+ §6.2 风险 row 2 闭环
+- 追加本 changelog 段
+
+**后端（4 个 / 1 新测试 + 3 改）**：
+- 扩 `packages/types/src/sources-matrix.types.ts` 加 `SourceRouteBySite` interface（9 字段 / DualSignalState 复用）
+- 扩 `apps/api/src/db/queries/sources-matrix.ts` 加 `listRoutesBySite(db, siteKey)` query（STRING_AGG DISTINCT raw 状态 + AVG latency + COUNT FILTER active + LEFT JOIN aliases + COALESCE site_key fallback + 软删除过滤）+ `SourceRouteBySiteRaw` 中间类型 + types re-export 扩
+- 扩 `apps/api/src/services/SourcesMatrixService.ts` 加 `listRoutesBySite(siteKey)` 方法（复用既有 `aggregateSignal()` 派生 worst probe/render）+ `RoutesBySiteParamsSchema` zod
+- 扩 `apps/api/src/routes/admin/sources-matrix.ts`（107 → 125 行）追 `GET /admin/sources/routes/by-site/:siteKey` 端点（readAuth moderator+admin / 422 validation + 500 internal）
+- 新建 `tests/unit/api/sources-routes-by-site.test.ts`（**13 case PASS** / query STRING_AGG + null 边界 + aggregateSignal worst 规则 + Service 派生 + 软删除 SQL 断言 + AVG 整数化 + 多行 GROUP BY）
+
+**前端（4 个 / 1 新 + 3 改）**：
+- 扩 `apps/server-next/src/lib/sources/api.ts` 加 `listRoutesBySite(siteKey)` 前端 fn（按域归属 / Opus E2 决策）
+- 扩 `apps/server-next/src/lib/sources/types.ts` re-export `SourceRouteBySite`
+- 新建 `apps/server-next/src/app/admin/crawler/_client/CrawlerSiteExpand.tsx`（313 行 / lazy fetch + 6 列 sub-table + SignalPill（ok/partial/dead/pending 4 色）+ AdminInput 别名 inline-edit + 3 actions UI 占位 disabled with title="REDO-01-E2 实装"）
+- 修改 `apps/server-next/src/app/admin/crawler/_client/crawler-site-columns-v2.tsx`：chevron 改 `<button type="button">` + onClick → onToggleExpand + data-expanded attr + 旋转动画 + a11y aria-label
+- 修改 `apps/server-next/src/app/admin/crawler/_client/CrawlerSiteList.tsx` Props 扩 `expandedKeys / onToggleExpand / renderExpandedRow` 透传 DataTable v2
+- 修改 `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`（450 → 465 行）注入 expandedKeys state + onToggleExpand handler + `renderExpandedRow={(site) => <CrawlerSiteExpand .../>}` JSX
+
+**测试扩展（1 个）**：
+- `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx` 加 9 新 case（29–37 REDO-01-E 行展开范围）+ sources/api mock 模块 + listRoutesBySite/upsertLineAlias mock 重置；28 → **37 case PASS**
+
+### 不在范围（保留至后续子卡）
+
+- 行级 3 actions（play/refresh/trash）真实 onClick + API 接入 → **REDO-01-E2**
+- moderator role 时 alias inline-edit 隐藏/禁用 affordance（Y1）→ REDO-01-E2 OR 独立 MISC 卡
+- 分类映射 collapsible（ADR-123）→ **REDO-01-F**
+- 高级 dropdown（4 项）→ **REDO-01-G**
+- /admin/crawler/runs 独立路由 → **REDO-01-H**
+- 删除旧文件（CrawlerSitesTab / CrawlerControlsCard / crawler-site-columns）→ **REDO-01-I**
+
+### 关键决策（Opus E1-E5）
+
+1. **E1 路径**：`GET /admin/sources/routes/by-site/:siteKey`（routes 子资源命名空间纯净 / by-site 习语 RESTful / 未来 by-video/:videoId 完全对称）
+2. **E2 跨域查询边界**：前端 fn 放 `apps/server-next/src/lib/sources/api.ts`（**按域归属，不按消费方**）/ lib 共享层互通走 plan §4.6 既有规则 / 不需新豁免
+3. **E3 别名 inline-edit 路径修正**：保持 ADR-117 row 5 PUT line-aliases admin only 不变；contract §1.5 line 191 misalignment 本卡内修订；Y1 moderator UI 守卫由 E2 实装（PUT 403 兜底已工作 / UI 隐藏 affordance 为优化点）
+4. **E4 E vs E2 拆分合理**：本 E 0.35w + E2 0.35w / 总 0.7w（vs 原 0.4w + 0.3w / Opus Y2 重估反映 D2 拆分真实成本）
+5. **E5 worst_status 聚合**：**复用 ADR-117 既有 `aggregateSignal()`**（SourcesMatrixService.ts:63 / 4 值规则 pending/ok/partial/dead / 与 row 1 by-videoId matrix 100% 对称 / 零新业务逻辑）
+
+### 质量门禁
+
+- ✅ `typecheck` — 全 7 workspace 通过
+- ✅ `lint` — 0 error / 0 warning
+- ✅ `verify:file-size-budget` — 0 新违规（CrawlerClient 465<500 / CrawlerSiteExpand 313<500 / sources-matrix.ts route 125<500）
+- ✅ `verify:endpoint-adr` — **153 admin 路由对齐 24 ADR 端点**（+1 端点 + 1 ADR row）
+- ✅ 全量 unit test — **4078 PASS / 0 failed**（4056 → 4078 / +22 净增：+13 backend + +9 frontend）
+
+### 关键自省
+
+1. **ADR-105 AMENDMENT 范式再次验证有效**：本次落地工时 ~0.35w，远低于"新起 ADR-124 + Opus 2-3 轮评审 + 端点"的 ~0.6w；plan §4.5 "同 ADR 多端点不重复评审"机制再次节省 ~0.25w
+2. **D2 拆 E + E2 决策正确**：如不拆，3 mutations 后端会引入 actionType 扩枚举 + audit RETRO 4/7 文件框架 + 前端 3 onClick 实施，整体 0.7w 一次性卡风险高（contract Mistake of REDO-01-B 阶段 4 全闭环单 commit 教训）
+3. **Opus advisory A（合并 actionType）**：E2 实施前应先评估"复用 actionType + afterJsonb.action 区分" vs "3 独立 actionType" — 前者 4 文件 RETRO 框架后者 7 文件；ADR-121 D-121-5 已锁先例；E2 ADR 起草时强制评审
+4. **`aggregateSignal()` 复用价值**：DB 层只 STRING_AGG raw 状态，Service 层派生 worst — 同一聚合逻辑 100% 对称跨 row 1 / row 6（by-video vs by-site）+ 未来 row 7 by-video-route 等扩展，避免"同概念多实现"漂移
+
+### 后续触发
+
+- 下张可执行卡：**CHG-SN-7-REDO-01-E2**（0.35w 行级 3 mutations + ADR + audit + 前端按钮接入）OR **REDO-01-F**（0.2w 分类映射 collapsible / ADR-123 已通过）
+- REDO-01-E 完成后 DAG 图：C ✅ → D ✅ → E ✅ → {E2, F, G, H} 可并行；I 依赖 E2/F/G/H 全 ✅；J 依赖 I ✅
+- 累计已完成：A ✅ + B ✅ + C ✅ + D ✅ + E ✅ 共 ~1.55w / REDO-01 总 ~2.4w（含 E2 拆分后微调） — 剩余 ~0.85w

@@ -187,12 +187,12 @@ export interface CrawlerSiteExpandProps {
 
 **分类映射 collapsible**：消费 ADR-123 `GET / PUT /admin/crawler/sites/:key/category-mapping`；展开后渲染 `sourceLabel → targetGenre` 映射行（mono 80px + 箭头 + AdminSelect）。
 
-**事件**：
-- 别名 inline-edit：`PATCH /admin/sources/routes/:id`（现有跨模块 API）
+**事件**（REDO-01-E AMENDMENT 2026-05-19 修订 / D4）：
+- 别名 inline-edit：**`PUT /admin/source-line-aliases/:siteKey/:sourceName`**（ADR-117 row 5；**admin only** — moderator 角色 UI 应隐藏/禁用 affordance / Opus 评审 Y1）
 - 分类映射 save：`PUT /admin/crawler/sites/:key/category-mapping`（ADR-123）
-- 线路操作按钮（play/refresh/trash）：测试播放 / 重新探测 / 删除线路
+- 线路操作按钮（play/refresh/trash）：测试播放 / 重新探测 / 删除线路 — **本 E 卡 UI 占位 disabled，留 REDO-01-E2 实施**
 
-**API 缺口**：线路数据按 siteKey 查询的 API 待 REDO-01-E 子卡内细化（现有仅 by-videoId matrix 查询，sources 模块需扩 by-siteKey 查询或复用现有 endpoint 加 query param；非新 route，复用现有 sources route）。
+**API 缺口已闭环**（REDO-01-E AMENDMENT 2026-05-19）：sources 域扩 row 6 `GET /admin/sources/routes/by-site/:siteKey` 聚合端点（ADR-117 AMENDMENT 落地 / Opus 1 轮 PASS A）。`COALESCE(vs.source_site_key, v.site_key)` GROUP BY + LEFT JOIN aliases + `aggregateSignal()` 复用。
 
 ### 1.6 CrawlerAdvancedMenu
 
@@ -395,26 +395,30 @@ A (本契约) ──────────────────────
                                                      ↓
 B (后端 ADR-122 + 4 端点) ─────────────────────────→ C (前端骨架)
                                                      │
-                                             ┌───────┼───────┬───────┬───────┐
-                                             ↓       ↓       ↓       ↓       ↓
-                                             D       E       F       G       H
-                                          (行+菜单)(线路) (映射) (高级) (runs迁)
-                                             │       │       │       │       │
-                                             └───────┴───────┴───────┴───────┘
+                                             ┌───────┼───────┬───────┬───────┬────────┐
+                                             ↓       ↓       ↓       ↓       ↓        ↓
+                                             D       E       F       G       H        E2
+                                          (行+菜单)(展开-读)(映射) (高级) (runs迁) (线路-写)
+                                             │       │       │       │       │        │
+                                             └───────┴───────┴───────┴───────┴────────┘
                                                              ↓
                                                        I (删除旧文件)
                                                              ↓
                                                        J (验收)
 ```
 
-D/E/F/G/H 之间无相互依赖，均仅依赖 C；E 额外依赖"线路按 siteKey 查询 API 确认"；F 依赖 ADR-123（已通过）。
+D/E/E2/F/G/H 之间无相互依赖，均仅依赖 C；E 拆分（REDO-01-A AMENDMENT 2026-05-19 / D2 拍板）：
+- **E**：sources 域 GET 端点（ADR-117 AMENDMENT 已 PASS）+ 前端骨架 + alias inline-edit（复用 row 5 PUT）+ 3 actions UI 占位 disabled — 工时 **~0.35w**（Opus Y2 重估）
+- **E2**：3 mutations 后端（POST .../test / POST .../reprobe / DELETE .../routes/:id）+ ADR 起草（或合并 actionType `sources.route_action` 走 ADR-121 D-121-5 4 文件框架）+ 前端 3 actions 接入 — 工时 **~0.35w**
+
+F 依赖 ADR-123（已通过）。
 
 ### 6.2 已识别风险
 
 | # | 风险 | 严重度 | 缓解 |
 |---|---|---|---|
 | 1 | timeline SQL 聚合复杂度（按 site_key 聚合时间窗口 + 百分比计算） | 中 | B 子卡先做 timeline 端点原型 + benchmark；如性能不达标降级为"最近 8 个 running task"静态列表 |
-| 2 | 线路数据 API 缺口（SiteExpandRow 需按 siteKey 查线路，现有仅 by-videoId） | 中 | E 子卡前先确认；如缺则 E 子卡内新增（非新 route，复用现有 sources route 加 query param）|
+| 2 | ~~线路数据 API 缺口（SiteExpandRow 需按 siteKey 查线路，现有仅 by-videoId）~~ **已闭环 2026-05-19 / REDO-01-E AMENDMENT** | ~~中~~ | ADR-117 AMENDMENT 落地 row 6 `GET /admin/sources/routes/by-site/:siteKey`（Opus 1 轮 PASS A）|
 | 3 | health 字段缺失（CrawlerSite 类型无 health） | 低 | 已裁决前端派生；后续精确 health 由 kpi 端点 siteStats 补充 |
 
 ### 6.3 与 PRE / SHARED / ADR 的关系

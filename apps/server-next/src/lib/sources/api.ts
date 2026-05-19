@@ -9,6 +9,7 @@ import type {
   VideoGroupStats,
   LineMatrixRow,
   SourceLineAlias,
+  SourceRouteBySite,
 } from './types'
 
 export async function listVideoGroups(params: VideoGroupListParams = {}): Promise<VideoGroupListResult> {
@@ -45,6 +46,17 @@ export async function upsertLineAlias(
   const result = await apiClient.put<{ data: SourceLineAlias }>(
     `/admin/source-line-aliases/${encodeURIComponent(siteKey)}/${encodeURIComponent(sourceName)}`,
     { displayName },
+  )
+  return result.data
+}
+
+/**
+ * 按 siteKey 聚合查线路明细（ADR-117 AMENDMENT 2026-05-19 / CHG-SN-7-REDO-01-E）。
+ * 由 crawler 模块 CrawlerSiteExpand 跨域消费 — 前端 fn 真源单一入口在 sources/api.ts。
+ */
+export async function listRoutesBySite(siteKey: string): Promise<SourceRouteBySite[]> {
+  const result = await apiClient.get<{ data: SourceRouteBySite[] }>(
+    `/admin/sources/routes/by-site/${encodeURIComponent(siteKey)}`,
   )
   return result.data
 }

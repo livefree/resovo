@@ -19,6 +19,7 @@ import type {
   EpisodeCell,
   LineMatrixRow,
   SourceLineAlias,
+  SourceRouteBySite,
 } from '@resovo/types'
 
 // re-export 共享类型，保持向后兼容（apps/api 内部消费方）
@@ -32,6 +33,7 @@ export type {
   EpisodeCell,
   LineMatrixRow,
   SourceLineAlias,
+  SourceRouteBySite,
 }
 
 /**
@@ -338,4 +340,77 @@ export async function upsertLineAlias(
     displayName: r.display_name,
     updatedAt: r.updated_at,
   }
+}
+
+// ── 查询：按 siteKey 聚合线路明细（ADR-117 AMENDMENT 2026-05-19）─────
+
+/**
+ * DB 中间形态：probe/render statuses 是 STRING_AGG 拼接的逗号分隔字符串
+ * （DISTINCT 已在 SQL 层去重）；Service 层 split + 调用 aggregateSignal 派生 worst。
+ */
+export interface SourceRouteBySiteRaw extends Omit<SourceRouteBySite, 'probeStatus' | 'renderStatus'> {
+  readonly probeStatuses: readonly string[]
+  readonly renderStatuses: readonly string[]
+}
+
+interface DbRouteBySiteRow {
+  source_site_key: string
+  source_name: string
+  display_name: string | null
+  probe_statuses: string | null
+  render_statuses: string | null
+  avg_latency_ms: string | null
+  source_count: string
+  active_count: string
+  last_probed_at: string | null
+}
+
+/**
+ * 按 siteKey 聚合 video_sources 行 → 单站点线路明细列表
+ * （ADR-117 AMENDMENT 2026-05-19 / CHG-SN-7-REDO-01-E）。
+ *
+ * 业务规则归口 Service 层：
+ *   - SQL 仅 STRING_AGG DISTINCT 拼 raw 状态；Service split + aggregateSignal 派生 worst
+ *   - latency 选 AVG 不选 p95（Y2 评估 / 单站点 < 200 线路 / PG percentile_disc 性能受限）
+ *   - 软删除过滤 vs.deleted_at IS NULL（与 row 3 getVideoMatrix 一致）
+ *   - COALESCE(vs.source_site_key, v.site_key) fallback（migration 046 NULLABLE）
+ */
+export async function listRoutesBySite(
+  db: Pool,
+  siteKey: string,
+): Promise<readonly SourceRouteBySiteRaw[]> {
+  const result = await db.query<DbRouteBySiteRow>(
+    `SELECT
+       COALESCE(vs.source_site_key, v.site_key)     AS source_site_key,
+       vs.source_name                                AS source_name,
+       sla.display_name                              AS display_name,
+       STRING_AGG(DISTINCT vs.probe_status, ',')     AS probe_statuses,
+       STRING_AGG(DISTINCT vs.render_status, ',')    AS render_statuses,
+       AVG(vs.latency_ms) FILTER (WHERE vs.latency_ms IS NOT NULL) AS avg_latency_ms,
+       COUNT(*)                                      AS source_count,
+       COUNT(*) FILTER (WHERE vs.is_active = true)   AS active_count,
+       MAX(vs.last_probed_at)                        AS last_probed_at
+     FROM video_sources vs
+     JOIN videos v ON v.id = vs.video_id
+     LEFT JOIN source_line_aliases sla
+       ON sla.source_site_key = COALESCE(vs.source_site_key, v.site_key)
+      AND sla.source_name     = vs.source_name
+     WHERE COALESCE(vs.source_site_key, v.site_key) = $1
+       AND vs.deleted_at IS NULL
+     GROUP BY COALESCE(vs.source_site_key, v.site_key), vs.source_name, sla.display_name
+     ORDER BY vs.source_name ASC`,
+    [siteKey],
+  )
+
+  return result.rows.map((r): SourceRouteBySiteRaw => ({
+    sourceSiteKey: r.source_site_key,
+    sourceName: r.source_name,
+    displayName: r.display_name,
+    probeStatuses: r.probe_statuses ? r.probe_statuses.split(',') : [],
+    renderStatuses: r.render_statuses ? r.render_statuses.split(',') : [],
+    avgLatencyMs: r.avg_latency_ms != null ? Math.round(Number(r.avg_latency_ms)) : null,
+    sourceCount: Number(r.source_count),
+    activeCount: Number(r.active_count),
+    lastProbedAt: r.last_probed_at,
+  }))
 }

@@ -7418,3 +7418,145 @@ LIMIT $2;
 | 状态职责 | 聚合在 DB queries 层 / 触发在 Service 层 / Route 零业务逻辑 |
 | 扩展性 | timeline range 枚举可增；siteStats 字段可追加；kpi 新指标可追加 response 字段不破坏向后兼容 |
 | **综合** | **A** |
+
+---
+
+## ADR-117 AMENDMENT 2026-05-19（CHG-SN-7-REDO-01-E）— GET routes by-site 端点
+
+**触发**：CHG-SN-7-REDO-01-A 锁定的 contract §1.5 `CrawlerSiteExpand` 行展开 sub-table 需按 `siteKey` 维度聚合渲染线路明细 6 列（线路名 / 别名 / 探测 / 播放 / 延迟 / 操作）。ADR-117 既有 5 端点全部按 `videoId` 或全局 alias 维度，无 by-siteKey 聚合路径。前置裁决 D1=C 拍板"在 sources 域加新端点（不在 crawler 域加，不改造现有端点）"。本 AMENDMENT 仿 ADR-105 AMENDMENT 2026-05-14 范式扩 row 6，零新协议决策。
+
+**范围**：扩 ADR-117 §端点契约 row 6（GET `/admin/sources/routes/by-site/:siteKey`），复用 ADR-117 既有协议层（鉴权分级 / ApiResponse 信封 / ADR-110 14 码 / Service→queries 分层 / camelCase 转换 / `.strict()` zod）。**零新协议决策**。同时修订 contract §1.5 别名 inline-edit 路径（D4）。
+
+### 端点契约（row 6 完整规格）
+
+| # | 方法 | 路径 | 用途 | Request | Response | 鉴权 | 错误码 |
+|---|---|---|---|---|---|---|---|
+| 6 | GET | `/admin/sources/routes/by-site/:siteKey` | 按站点聚合线路明细（含别名 LEFT JOIN + worst 状态聚合 + 平均延迟） | Path: `siteKey: string(1..100)` | 200 `{ data: SourceRouteBySite[] }` | moderator+admin | 422 VALIDATION_ERROR / 500 INTERNAL_ERROR |
+
+- **鉴权**：`requireRole(['moderator', 'admin'])`，对齐 ADR-117 既有 4 个读端点（row 1-4）；moderator 可查询不可写（写仍走 row 5 admin only / Y1）
+- **Path 校验**：`siteKey` `min(1).max(100)`，与 migration 046 `source_site_key VARCHAR(100)` + ADR-117 既有 `UpsertAliasParamsSchema` 同形态
+- **Query**：无（首版不支持过滤；未来如需 `probeStatus?` / `isActive?` 经第二次 AMENDMENT 扩）
+- **Response 信封**：`{ data: SourceRouteBySite[] }`（不分页，单站点线路数预期 ≤ 200）
+- **错误码**：100% 复用 ADR-110 既有 14 码；零新增
+
+### 类型契约
+
+`packages/types/src/sources-matrix.types.ts` 追加：
+
+```ts
+/**
+ * /admin/sources/routes/by-site/:siteKey 行（ADR-117 AMENDMENT 2026-05-19）
+ * 单站点聚合一条线路（sourceName）跨 N 个 video_sources 行的状态 + 平均延迟 + 别名
+ */
+export interface SourceRouteBySite {
+  readonly sourceSiteKey: string
+  readonly sourceName: string
+  readonly displayName: string | null            // LEFT JOIN source_line_aliases
+  readonly probeStatus: DualSignalState          // worst across rows（aggregateSignal 复用）
+  readonly renderStatus: DualSignalState         // worst across rows
+  readonly avgLatencyMs: number | null           // AVG(latency_ms) WHERE latency_ms IS NOT NULL；全 NULL → null
+  readonly sourceCount: number                   // 该 (siteKey, sourceName) 下的 video_sources 行数
+  readonly activeCount: number                   // 其中 is_active = true 的行数
+  readonly lastProbedAt: string | null           // MAX(last_probed_at)
+}
+```
+
+类型复用：`DualSignalState`（既有 admin-moderation.types.ts:39，4 值）；`aggregateSignal()` Service 层既有函数 100% 复用（SourcesMatrixService.ts:63）。
+
+### zod request schema
+
+```ts
+const RoutesBySiteParamsSchema = z.object({
+  siteKey: z.string().min(1).max(100),
+}).strict()
+```
+
+与 ADR-117 §zod 既有 `UpsertAliasParamsSchema` 的 siteKey 字段同形态。
+
+### SQL 设计
+
+`apps/api/src/db/queries/sources-matrix.ts` 追加 `listRoutesBySite(db, siteKey)`：
+
+```sql
+SELECT
+  COALESCE(vs.source_site_key, v.site_key)        AS source_site_key,
+  vs.source_name                                  AS source_name,
+  sla.display_name                                AS display_name,
+  STRING_AGG(DISTINCT vs.probe_status, ',')       AS probe_statuses,
+  STRING_AGG(DISTINCT vs.render_status, ',')      AS render_statuses,
+  AVG(vs.latency_ms) FILTER (WHERE vs.latency_ms IS NOT NULL) AS avg_latency_ms,
+  COUNT(*)                                        AS source_count,
+  COUNT(*) FILTER (WHERE vs.is_active = true)     AS active_count,
+  MAX(vs.last_probed_at)                          AS last_probed_at
+FROM video_sources vs
+JOIN videos v ON v.id = vs.video_id
+LEFT JOIN source_line_aliases sla
+  ON sla.source_site_key = COALESCE(vs.source_site_key, v.site_key)
+ AND sla.source_name     = vs.source_name
+WHERE COALESCE(vs.source_site_key, v.site_key) = $1
+  AND vs.deleted_at IS NULL
+GROUP BY COALESCE(vs.source_site_key, v.site_key), vs.source_name, sla.display_name
+ORDER BY vs.source_name ASC
+```
+
+**设计要点**：
+- `COALESCE(vs.source_site_key, v.site_key)` fallback 至 `videos.site_key`（migration 046 决定 vs 列 NULLABLE）
+- **worst 聚合走 Service 层既有 `aggregateSignal()`**：DB 仅 `STRING_AGG(DISTINCT ...)` 拼 raw 状态，Service split + 调函数；与 row 1 `listVideoGroups` 100% 对称（**零新业务逻辑**）
+- **平均延迟选 AVG 不选 p95**：单站点单线路样本预期 < 50，PG 无原生 percentile_disc 高性能实现；未来需 p95 起 PRE-ROUTES-BY-SITE-P95 卡
+- LEFT JOIN aliases 与 row 3 `getVideoMatrix` 既有别名合并模式同源
+- `vs.deleted_at IS NULL` 软删除过滤与 row 3 一致
+- 索引利用 migration 046 + `videos.site_key` 既有索引联合覆盖 WHERE；GROUP BY 走 HashAggregate
+
+### audit log 协议
+
+**只读 GET 不写 admin_audit_log**（与 ADR-117 既有 4 读端点 + ADR-105 AMENDMENT 2026-05-14 audit 端点同语义）。`AdminAuditActionType` / `AdminAuditTargetKind` **零扩枚举**。`audit-log-coverage.test.ts` `REQUIRED_ACTION_TYPES` 保持不变。
+
+### 性能 + 缓存
+
+- **首版无缓存**：单站点线路数 ≤ 200，GROUP BY + LEFT JOIN 单表 + 既有索引，p95 预估 ≤ 80ms
+- **触发条件**（任一命中起 PRE-CACHE-SOURCES-BY-SITE 卡）：(a) p95 > 200ms 持续 1 周；(b) 单站点 video_sources 行数 > 5000；(c) 前端 expand 触发频次 > 100/min
+
+### 评审要点决策（Opus 子代理 1 轮 PASS）
+
+- **E1 路径命名**：选 A `/admin/sources/routes/by-site/:siteKey`（`routes` 子资源首次命名、`by-site` 习语明示聚合查询；不与 row 1-5 既有路径产生 prefix 歧义；未来 `by-video/:videoId` 完全对称）
+- **E2 跨域查询边界**：前端 fn 放 `apps/server-next/src/lib/sources/api.ts`（按域归属 / lib 共享层互通走 plan §4.6 既有规则，不需新豁免）；后端 sources-matrix.ts 107→~130 行不超 500 行红线
+- **E3 别名 inline-edit 路径修正**：保持 ADR-117 row 5 `PUT /admin/source-line-aliases/:siteKey/:sourceName` admin only 不变；contract §1.5 line 191 misalignment 修订条款见下方
+- **E4 E vs E2 拆分合理**：本 E 卡（GET + 骨架 + alias inline-edit）+ E2 卡（3 mutations + ADR + audit RETRO）总和 ~0.7w，反映 D2=拆决策真实成本
+- **E5 worst_status 聚合算法**：**复用 ADR-117 既有 `aggregateSignal()`**（零新业务逻辑；与 row 1 by-videoId matrix 视图状态色一致）
+
+### 黄线（实施建议）
+
+- **Y1**：REDO-01-E 前端代码必须实现 moderator 角色时 alias inline-edit **隐藏/禁用** affordance（避免 PUT 403 时 UI 体验破碎）
+- **Y2**：E 卡估时 0.4w / E2 卡估时 0.3w 偏紧；建议主循环同步 task-queue 重估为 **0.35w + 0.35w**（总和 0.7w）反映 D2 拆分真实成本
+
+### 4 维度自评（Opus 子代理）
+
+| 维度 | 评级 | 理由 |
+|---|---|---|
+| 命名 | A | 路径 + 类型 + 字段 100% 对齐 ADR-117 既有 row 1-5；`by-site` 习语 RESTful |
+| 对称性 | A | response 信封 / 错误码 / 鉴权 / zod `.strict()` / camelCase / Service→queries 分层 100% 复用；零设计自由度 / 零新 actionType / 零新 targetKind / 零新 ErrorCode / 零新 migration |
+| 状态职责 | A | 只读 + 无 audit + 无缓存 + 无 mutation；缓存触发条件明示三条；E vs E2 边界明示 |
+| 扩展性 | A- | 未来 `by-video/:videoId` 单线路读端点完全对称；E2 mutations 路径前缀同 `/sources/routes/` 命名空间一致；扣 A- 是 `:id` 子路径与 `by-site/:siteKey` 并列时 E2 ADR 需显式说明三类子路径区分 |
+
+**综合**：**A**
+
+### 关联
+
+- ADR-117 §端点契约扩 row 6；既有 5 行不变
+- ADR-114-NEGATED 复合键 `(source_site_key, source_name)` 严格延续；GROUP BY 同键
+- ADR-110 response 信封 + 14 错误码 100% 复用
+- migration 046 / 054 / 063 schema 完备；**无新 migration**
+- **contract §1.5 misalignment 修订条款**（D4 / 本卡内修订）：
+  - 原文（M-SN-7-redo-01-contract.md line 191）："别名 inline-edit：`PATCH /admin/sources/routes/:id`（现有跨模块 API）"
+  - **正确写法**："别名 inline-edit：`PUT /admin/source-line-aliases/:siteKey/:sourceName`（ADR-117 row 5；admin only — moderator UI 隐藏/禁用 / Y1）"
+  - 原文（line 195）"API 缺口"段：保留为"sources 域扩 row 6 by-site 端点（本 AMENDMENT 落地）"
+- **关联代码（由 REDO-01-E 实施卡落地）**：
+  - `apps/api/src/db/queries/sources-matrix.ts` 增 `listRoutesBySite`
+  - `apps/api/src/services/SourcesMatrixService.ts` 增 `listRoutesBySite(siteKey)` 方法（复用 `aggregateSignal`）
+  - `apps/api/src/routes/admin/sources-matrix.ts` 增 `GET /admin/sources/routes/by-site/:siteKey`
+  - `packages/types/src/sources-matrix.types.ts` 增 `SourceRouteBySite`
+  - `apps/server-next/src/lib/sources/api.ts` 增 `listRoutesBySite(siteKey)` 前端 fn
+- **关联触发条件**：PRE-ROUTES-BY-SITE-PAGINATION / PRE-ROUTES-BY-SITE-P95 / PRE-CACHE-SOURCES-BY-SITE
+
+**关键发现**：本 AMENDMENT 再次验证 plan §4.5 "同一 ADR 下多端点复用同一 ADR 不重复评审"机制；REDO-01-E 后端工时从规划的 0.4w（新 ADR-124 起草 + Opus 评审 + 端点）降至 ~0.15w（AMENDMENT + 端点 + 前端共调），前端骨架 ~0.2w，总 ~0.35w（Y2 同步重估）。
+

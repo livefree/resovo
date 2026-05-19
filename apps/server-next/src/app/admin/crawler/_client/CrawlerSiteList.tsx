@@ -50,6 +50,10 @@ export interface CrawlerSiteListProps {
   readonly onMarkAdult?: (site: CrawlerSite) => void
   readonly onMarkShortdrama?: (site: CrawlerSite) => void
   readonly onDelete?: (site: CrawlerSite) => void
+  // ── REDO-01-E 行展开 ──────────────────────────────────────────
+  readonly expandedKeys?: ReadonlySet<string>
+  readonly onToggleExpand?: (siteKey: string) => void
+  readonly renderExpandedRow?: (site: CrawlerSite) => React.ReactNode
 }
 
 export function CrawlerSiteList({
@@ -67,6 +71,9 @@ export function CrawlerSiteList({
   onMarkAdult,
   onMarkShortdrama,
   onDelete,
+  expandedKeys,
+  onToggleExpand,
+  renderExpandedRow,
 }: CrawlerSiteListProps) {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -94,6 +101,8 @@ export function CrawlerSiteList({
       onMarkAdult,
       onMarkShortdrama,
       onDelete,
+      expandedKeys,
+      onToggleExpand,
     }),
     [
       siteStats,
@@ -105,6 +114,8 @@ export function CrawlerSiteList({
       onMarkAdult,
       onMarkShortdrama,
       onDelete,
+      expandedKeys,
+      onToggleExpand,
     ],
   )
 
@@ -159,6 +170,8 @@ export function CrawlerSiteList({
         }}
         onRowClick={onRowClick}
         loading={loading}
+        expandedKeys={expandedKeys}
+        renderExpandedRow={renderExpandedRow}
         toolbar={{
           search: (
             <AdminInput
