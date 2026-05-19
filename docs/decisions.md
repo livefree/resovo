@@ -8331,5 +8331,3 @@ REDO-03-B 将 SettingsContainer 从 5 个 Tab 扩展到 8 个 Tab，新增了「
 | 扩展性 | A | ON CONFLICT DO NOTHING seed 幂等 / 新 KV 字段增量扩展无 DDL 风险 / ADR-127/128 扩展路径清晰 |
 
 **综合**：**A**
-
-**综合**：**A**

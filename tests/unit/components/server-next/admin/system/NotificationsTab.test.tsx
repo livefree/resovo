@@ -93,16 +93,12 @@ describe('NotificationsTab', () => {
     getSiteSettingsMock.mockResolvedValueOnce(FIXTURE)
     const { container } = render(<NotificationsTab />)
     await waitFor(() => expect(screen.getByTestId('notifications-card-email')).not.toBeNull())
-    const emailInput = container.querySelector('[data-testid="notif-email-to"] input') as HTMLInputElement | null
-    if (emailInput) {
-      fireEvent.change(emailInput, { target: { value: 'new@example.com' } })
-      await waitFor(() => {
-        expect(screen.getByTestId('notifications-dirty-indicator').textContent).toContain('有未保存的修改')
-      })
-    } else {
-      // 若 AdminInput 未渲染 input 子元素（mock 环境），验证 card 存在即可
-      expect(screen.getByTestId('notifications-card-email')).not.toBeNull()
-    }
+    const emailInput = container.querySelector('[data-testid="notif-email-to"] input') as HTMLInputElement
+    expect(emailInput).not.toBeNull()
+    fireEvent.change(emailInput, { target: { value: 'new@example.com' } })
+    await waitFor(() => {
+      expect(screen.getByTestId('notifications-dirty-indicator').textContent).toContain('有未保存的修改')
+    })
   })
 
   it('4. 保存成功 toast', async () => {
@@ -110,16 +106,13 @@ describe('NotificationsTab', () => {
     saveSiteSettingsMock.mockResolvedValueOnce({ ok: true })
     render(<NotificationsTab />)
     await waitFor(() => expect(screen.getByTestId('notifications-save')).not.toBeNull())
-    // 先制造 dirty
-    const webhookCheckbox = screen.queryByTestId('notif-webhook-enabled')
-    if (webhookCheckbox) {
-      fireEvent.click(webhookCheckbox)
-      const saveBtn = screen.getByTestId('notifications-save')
-      fireEvent.click(saveBtn)
-      await waitFor(() => {
-        expect(toastPushMock).toHaveBeenCalledWith(expect.objectContaining({ level: 'success' }))
-      })
-    }
+    const webhookCheckbox = screen.getByTestId('notif-webhook-enabled')
+    fireEvent.click(webhookCheckbox)
+    const saveBtn = screen.getByTestId('notifications-save')
+    fireEvent.click(saveBtn)
+    await waitFor(() => {
+      expect(toastPushMock).toHaveBeenCalledWith(expect.objectContaining({ level: 'success' }))
+    })
   })
 
   it('5. 加载失败 ErrorState', async () => {

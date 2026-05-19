@@ -42,13 +42,6 @@ const FIELD_LABEL_STYLE: CSSProperties = {
   color: 'var(--fg-muted)',
 }
 
-const FIELD_HINT_STYLE: CSSProperties = {
-  gridColumn: '2 / 3',
-  fontSize: 'var(--font-size-xs)',
-  color: 'var(--fg-muted)',
-  marginTop: '-6px',
-}
-
 const ACTION_ROW_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',

@@ -321,7 +321,7 @@ export function SettingsTab() {
         padding="md"
         header={{
           title: '图片配置',
-          subtitle: '封面 CDN 前缀 / 图片代理 / 降级策略（待 REDO-03-C 补齐后端字段）',
+          subtitle: '封面 CDN 前缀 / 图片代理 / 降级策略（待 ADR-130 / M-SN-8+ 实装）',
         }}
         data-testid="settings-card-images"
       >
