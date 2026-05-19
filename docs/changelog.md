@@ -11614,3 +11614,43 @@ REDO-01-A contract §2.1 + task-queue 锁定：runs 列表从 CrawlerClient site
 - **REDO-01 列表顺序 E2 → F → G → H 全部完成**
 - 剩余：REDO-01-I（删除旧文件 0.05w / 前置 `git tag pre-redo-crawler-<YYYYMMDD>`）+ REDO-01-J（视觉回归 e2e + Opus 验收 0.2w）
 - 累计已完成：A ✅ + B ✅ + C ✅ + D ✅ + E ✅ + E2 ✅ + F ✅ + G ✅ + H ✅ 共 ~2.3w / REDO-01 总 ~2.4w — 剩余 0.25w（I+J）
+
+---
+
+## [CHG-SN-7-REDO-01-I] 删除旧 crawler 文件 + git tag 回滚锚点
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环（纯删除 / 0 backend / 0 测试改动）
+
+### 起源
+
+REDO-01 重写自 C 阶段起 5 文件孤立未消费（CrawlerSitesTab / CrawlerControlsCard / crawler-site-columns）；本卡按 task-queue 锁定路径删除 + 加 git tag 回滚锚点。
+
+### 修改文件（3 删 + 1 改）
+
+- `git tag pre-redo-crawler-20260519` — Rollback 锚点（指向 H commit 6204c108）
+- `git rm apps/server-next/src/app/admin/crawler/_client/CrawlerSitesTab.tsx`（334 行）
+- `git rm apps/server-next/src/app/admin/crawler/_client/CrawlerControlsCard.tsx`（202 行）
+- `git rm apps/server-next/src/app/admin/crawler/_client/crawler-site-columns.tsx`（116 行）
+- `CrawlerClient.tsx` 文件头注释修订（旧文件已删除 + git tag 引用）
+
+**共清理 652 行**。
+
+### 回滚命令
+
+```bash
+git checkout pre-redo-crawler-20260519 -- \
+  apps/server-next/src/app/admin/crawler/_client/CrawlerSitesTab.tsx \
+  apps/server-next/src/app/admin/crawler/_client/CrawlerControlsCard.tsx \
+  apps/server-next/src/app/admin/crawler/_client/crawler-site-columns.tsx
+```
+
+### 质量门禁
+
+- typecheck ✅ / file-size ✅ 0 新违规
+- 全量 unit：**4117 PASS**（保持 / 0 测试引用旧文件 / CrawlerRunsView 已在 H 卡迁移）
+
+### 后续触发
+
+- 下张：**REDO-01-J** 视觉回归 + e2e + Opus 验收（0.2w / §2.4 全 22 行 checklist + pixel diff ≤ 2%）
+- 累计已完成：A ✅ + B ✅ + C ✅ + D ✅ + E ✅ + E2 ✅ + F ✅ + G ✅ + H ✅ + I ✅ 共 ~2.35w / REDO-01 总 ~2.4w — 剩余 0.2w（J）

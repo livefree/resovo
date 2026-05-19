@@ -17,7 +17,8 @@
  *   - "高级"dropdown（调度/重建索引/止血/冻结）（REDO-01-G）
  *   - /admin/crawler/runs 独立路由（REDO-01-H）
  *
- * 旧文件仍存（待 REDO-01-I 删除）：CrawlerSitesTab / CrawlerControlsCard / crawler-site-columns
+ * 旧文件已删除（REDO-01-I 2026-05-19 / commit pre-redo-crawler-20260519 tag 回滚锚点）：
+ *   - CrawlerSitesTab.tsx / CrawlerControlsCard.tsx / crawler-site-columns.tsx
  */
 
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'

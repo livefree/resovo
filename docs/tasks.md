@@ -6,7 +6,39 @@
 
 ## 进行中任务
 
-<!-- REDO-01-H 闭环（2026-05-19）；E2 → F → G → H 4 卡列表顺序全部完成 / 累计 ~2.3w -->
+<!-- REDO-01-I 闭环（2026-05-19）；剩 J 视觉回归 + Opus 验收 0.2w -->
+
+### CHG-SN-7-REDO-01-I ✅ 删除旧文件 + git tag 回滚锚点（2026-05-19）
+
+**完成时间**：2026-05-19
+**实施**：
+- 前置：`git tag pre-redo-crawler-20260519`（回滚锚点 / Rollback 区 commit 6204c108 之前）
+- `git rm` 3 文件：
+  - `apps/server-next/src/app/admin/crawler/_client/CrawlerSitesTab.tsx`（334 行 / 已孤立 5 commits）
+  - `apps/server-next/src/app/admin/crawler/_client/CrawlerControlsCard.tsx`（202 行 / 已孤立 5 commits）
+  - `apps/server-next/src/app/admin/crawler/_client/crawler-site-columns.tsx`（116 行 / 旧 8 列定义 / 已被 v2 9 列骨架替代）
+- 修订 CrawlerClient.tsx 文件头注释「旧文件仍存」→「旧文件已删除」+ git tag 引用
+
+**回滚命令**（如需恢复 3 文件）：
+```bash
+git checkout pre-redo-crawler-20260519 -- \
+  apps/server-next/src/app/admin/crawler/_client/CrawlerSitesTab.tsx \
+  apps/server-next/src/app/admin/crawler/_client/CrawlerControlsCard.tsx \
+  apps/server-next/src/app/admin/crawler/_client/crawler-site-columns.tsx
+```
+
+**评级**：A（0 红线 / 0 黄线 / 0 测试净增 / 0 backend 改动）
+
+**质量门禁**：
+- typecheck ✅ / file-size ✅ 0 新违规
+- 全量 unit：**4117 PASS**（保持 / 0 orphan test 引用旧文件）
+
+**执行模型**：claude-opus-4-7 主循环（纯文件删除）
+
+<!-- 下张：REDO-01-J 视觉回归 e2e + Opus 验收（0.2w / §2.4 全 22 行 checklist + pixel diff ≤ 2% + Opus PASS） -->
+
+
+### CHG-SN-7-REDO-01-I ⏳ 已替换为闭环卡
 
 ### CHG-SN-7-REDO-01-H ✅ runs 列表迁独立路由 + sidebar 二级菜单闭环（2026-05-19）
 
