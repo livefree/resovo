@@ -6,7 +6,139 @@
 
 ## 进行中任务
 
-<!-- REDO-02-B 闭环（2026-05-19）；下一卡 PRE-CARD-PRIMITIVE 调研（C 前置）或直接 C -->
+<!-- PRE-CARD-PRIMITIVE 调研 + PRE-CARD-PRIMITIVE-A Segment primitive 双卡闭环（2026-05-19）；下一卡 C 前端 Card list -->
+
+### CHG-SN-7-REDO-02-PRE-CARD-PRIMITIVE-A ✅ Segment primitive 设计 + 实施闭环（2026-05-19）
+
+**完成时间**：2026-05-19（实际 ~0.2w / 原估 0.25w / Y2 焦点逻辑实施略快）
+**实施**：
+- **阶段 1** spawn arch-reviewer Opus 子代理 1 轮 **PASS A**（D1-D6 全决策清晰 / 0 红线 / 2 黄线 Y1+Y2 全部实施 / 2 advisory 留消费方）
+- **阶段 2** 主循环按 Opus 契约落地 5 文件（admin-ui 新增 18 export）：
+  - `packages/admin-ui/src/components/segment/segment.types.ts`（38 行 / SegmentItem + SegmentProps + SegmentSize）
+  - `packages/admin-ui/src/components/segment/segment.tsx`（203 行 / 完整实施 / 0 硬编码颜色 / WAI-ARIA tabs / roving tabIndex / Y2 focusOnNextRender ref）
+  - `packages/admin-ui/src/components/segment/index.ts`（barrel）
+  - `packages/admin-ui/src/index.ts` 加入 export
+  - `tests/unit/components/admin-ui/segment/segment.test.tsx`（200 行 / **12 case PASS**）
+
+**Opus 6 决策落地（D1-D6）**：
+- **D1c 仅受控**：`value + onChange` 与 AdminSelect 单选范式 100% 对齐
+- **D2 badge: number | string + disabled 单 + 容器双层**：spec §5.13 数字 + server `'99+'` 字符串双兼容
+- **D3a size 'sm' | 'md' | 'lg'**：admin-ui 全家桶一致
+- **D4a inline styles + tokens**：与 admin-card/button/select/input 同模式 / 0 admin-shell-styles 全局类依赖
+- **D5 WAI-ARIA tabs activate-on-focus**：role=tablist + roving tabIndex + ←→/Home/End 键盘 + aria-selected 唯一
+- **D6a 仅 pill 形态**：bottom-border tab 后续起独立 Tabs primitive 卡（不耦合 / 5 处现有视图不动）
+
+**视觉契约（0 硬编码颜色 / Y1 badge 反转）**：
+- 容器 `.seg`：inline-flex / 2px gap / 2px padding / bg-subtle / radius-md / border-subtle
+- `.seg__btn` active：bg-surface-elevated + fg-default + shadow-xs
+- `.seg__badge` active 反转：bg-accent-default + accent-on（inactive 是 accent-soft + accent-default 软态）
+
+**12 case 覆盖**：
+1. 基础渲染（4 items + 默认 md + aria-label）
+2. badge 数字 / 字符串 / 省略三态
+3. 受控 click + 切换后 aria-selected
+4. item.disabled + aria-disabled
+5. 容器 disabled 全禁用
+6. 键盘 ArrowRight 循环 + 跳过 disabled
+7. 键盘 Home / End
+8. a11y：role=tablist + 唯一 aria-selected=true
+9. 边界：0 items + 1 item 键盘 no-op
+10. roving tabIndex（active 0 / 其余 -1）
+11. badge active 颜色反转（Y1 视觉契约校验）
+12. 受控同值 click 防重复触发
+
+**评级**：**A**（Opus PASS / 0 红线 / 2 黄线全实施 / 2 advisory 留消费方 / 4 维度自评全 A）
+
+**advisory 留消费方**：
+- AD1：`99+` 自动格式化（消费方自管 / 或 formatBadgeCount util 独立卡）
+- AD2：container disabled 时保留 tablist 语义已实施
+
+**质量门禁**：
+- typecheck ✅ 全 7 workspace
+- lint ✅ 0 error / 0 warning
+- file-size ✅ 0 新违规（segment.tsx 203 < 500 / test 200 < 500）
+- 全量 unit：4142 → **4154 PASS**（+12 净增 / 12 Segment cases）
+
+**执行模型**：spawn arch-reviewer (claude-opus-4-7) Props 契约设计 + claude-opus-4-7 主循环实施
+
+**REDO-02 工时进度**：A0 0.15 + A 0.4 + B 0.7 + PRE-CARD 0.05 + PRE-CARD-A ~0.2 = **~1.5w / 总 ~2.95w 剩 ~1.45w**（C 0.8 + D 0.2 + E 0.3 + F 0.2 = 1.5w / 工时基本对齐）
+
+<!-- 下张：CHG-SN-7-REDO-02-C 前端 /admin/user-submissions 新页面（0.8w / opus-4-7 / 消费 Segment + AdminCard + 内联 QuoteBlock）-->
+
+
+### CHG-SN-7-REDO-02-PRE-CARD-PRIMITIVE-A ⏳ 已替换为闭环卡
+
+### CHG-SN-7-REDO-02-PRE-CARD-PRIMITIVE ✅ admin-ui Card/Segment/QuoteBlock 调研闭环（2026-05-19）
+
+**完成时间**：2026-05-19（实际 0.05w / 原估 0.1w）
+**实施**（纯静态扫描）：
+- grep packages/admin-ui/src/ 17 export 段
+- grep apps/server-next/src/ 5 处视图（home/dashboard/merge/sources/moderation）segment 形态实现
+- 对照 spec §5.13 + screens-3.jsx:423-427 `.seg__btn` + `.badge` pill-style 形态
+- 对照 reference.md §228 + §886 "`.seg / .fchip / .pill` 需 React 组件封装"系统级未完成事项
+
+**3 primitives 调研结论**：
+
+| primitive | admin-ui 现状 | 决策 |
+|---|---|---|
+| **Card** | ✅ AdminCard `surface='plain' padding='sm'` 直接承载 | C 卡复用 / 0 改动 |
+| **Segment** | ❌ 17 export 全无 / 5 处视图手撸 bottom-border 形态但 spec 是 pill-style + badge 不同 | **起 PRE-CARD-PRIMITIVE-A 新卡**（plan §3 处以上提取硬触发） |
+| **QuoteBlock** | ❌ 完全无 / spec §5.13 唯一消费 / 简单形态 | C 卡内联实现 / 后续 3+ 消费方时再提取 |
+
+**REDO-02 工时影响**：~2.75w → **~2.95w**（+0.2w / 新增 PRE-CARD-PRIMITIVE-A 0.25w + 调研节省 0.05w）
+
+**评级**：A（纯调研 / 0 代码 / 调研结论清晰 / 决策路径明示）
+
+<!-- 下张：PRE-CARD-PRIMITIVE-A Segment primitive 设计 + 实施（0.25w / Opus 必须）-->
+
+
+### CHG-SN-7-REDO-02-PRE-CARD-PRIMITIVE-A ⏳ Segment primitive 设计 + 实施（0.25w）
+
+**SEQ**：M-SN-7 / REDO-02 第 4 子卡（C 卡前置 / 强制升 Opus 子代理 — CLAUDE.md §模型路由第 1 条"定义新的共享组件 API 契约"）
+
+**问题理解**：PRE-CARD-PRIMITIVE 调研确认 admin-ui 缺 Segment primitive；spec §5.13 + reference.md §228/§886 系统级未完成事项；5 处视图手撸但形态与 spec pill-style + badge 不一致。
+
+**根因判断**：admin-ui 自 CHG-SN-2 起仅 17 export，`.seg / .fchip / .pill` 等 reference.md 提及的"需 React 组件封装"项未补齐 — REDO-02 C 卡是首个真正消费 spec §5.13 pill-style + badge 的视图。
+
+**方案**：
+1. **阶段 1 spawn Opus 子代理设计 Props 契约**（强制 Opus / CLAUDE.md §模型路由）：
+   - Props 类型（items / value / onChange / size? / disabled? / 'aria-label'? 等）
+   - badge count 字段（数字徽章 / 可选 / variant 派生）
+   - 受控 vs 非受控（参 AdminSelect 范式）
+   - 鼠标 / 键盘交互（左右箭头 / Home / End / 与 AdminButton 一致）
+   - 形态 pill-style（reference.md §4.x `.seg__btn` + `.badge` 子元素）
+   - tokens 引用（`var(--accent-default)` / `var(--bg-surface-elevated)` / `var(--fg-default)` / `var(--fg-muted)`）
+   - 与 admin-shell-styles `.seg__btn` className 关系（utility class vs 完整 React 组件 — Opus 决策）
+
+2. **阶段 2 主循环按评审实施**：
+   - 新建 `packages/admin-ui/src/components/segment/segment.tsx`
+   - 新建 `packages/admin-ui/src/components/segment/segment.types.ts`
+   - `packages/admin-ui/src/components/segment/index.ts`
+   - `packages/admin-ui/src/index.ts` 加入 `export * from './components/segment'`
+   - 单测 `tests/unit/components/admin-ui/segment/segment.test.tsx`（≥ 8 case：基础渲染 / 受控变化 / badge / disabled / keyboard / a11y / 0-1 项边界）
+   - dev/components-demo 展示（已具 demo harness）
+
+3. **阶段 3 验收**：
+   - typecheck + lint + file-size + unit + verify
+   - Opus 子代理评审 Props 契约一致性（CONDITIONAL ≤ 3 轮）
+
+**涉及文件**（5 新 + 1 改）：
+- 新建：`packages/admin-ui/src/components/segment/{segment.tsx, segment.types.ts, index.ts}`
+- 新建：`tests/unit/components/admin-ui/segment/segment.test.tsx`
+- 改：`packages/admin-ui/src/index.ts` 加入 segment 导出
+- 改：`apps/server-next/src/app/admin/dev/components/components-demo.tsx`（如存在 dev harness）
+
+**严格约束**：
+- ❌ 跳过 Opus 子代理直接落 Props（强制升触发条件 1）
+- ❌ 颜色硬编码（必须 CSS 变量）
+- ❌ 单文件 > 500 行（pre-existing 守卫）
+- ❌ admin-ui 引入 BrandProvider / ThemeProvider 依赖
+- ❌ 模仿 5 处现有视图 bottom-border 形态（spec 是 pill-style）
+
+**执行模型**：spawn arch-reviewer (claude-opus-4-7) Props 契约设计 + claude-opus-4-7 主循环实施 + arch-reviewer 评审
+
+**估时**：0.25w
+
 
 ### CHG-SN-7-REDO-02-B ✅ 6 端点 + service + queries + audit 写入闭环（2026-05-19）
 

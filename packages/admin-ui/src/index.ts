@@ -60,3 +60,6 @@ export * from './components/popover'
 
 // Feedback 共享组件（CHG-SN-4-04 D-14：StaffNoteBar / LineHealthDrawer / RejectModal）
 export * from './components/feedback'
+
+// Segment pill-style 分段控件 + badge count（CHG-SN-7-REDO-02-PRE-CARD-PRIMITIVE-A / ADR-124 / spec §5.13）
+export * from './components/segment'

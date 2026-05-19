@@ -11999,3 +11999,91 @@ REDO-02-A migration + types + audit 4 真源同步 stub 落地（commit `9012aa4
 
 - 下张可执行卡：**CHG-SN-7-REDO-02-PRE-CARD-PRIMITIVE**（0.1w / Opus / admin-ui Card/Segment/Quote primitive 调研 / C 卡前置）
 - 累计已完成：A0 ✅ + A ✅ + B ✅ 共 ~1.25w / REDO-02 总 ~2.75w — 剩余 ~1.5w（PRE-CARD + C + D + E + F）
+
+---
+
+## [CHG-SN-7-REDO-02-PRE-CARD-PRIMITIVE + PRE-CARD-PRIMITIVE-A] admin-ui Segment primitive 设计 + 实施
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环（调研 + 实施）+ spawn arch-reviewer (claude-opus-4-7) Segment Props 契约设计 1 轮 PASS A
+
+### 起源
+
+REDO-02-B 完成（commit `b2763f30`）后启动 C 卡前置调研。原估 PRE-CARD-PRIMITIVE 0.1w（仅调研），实测发现 admin-ui Segment 真空，触发 plan §"3 处以上提取"硬阈值（5 处视图手撸但 bottom-border 形态 ≠ spec pill-style），新起 PRE-A 子卡 0.25w 设计 + 实施 Segment primitive。
+
+### 调研结论（PRE-CARD-PRIMITIVE / 0.05w 实际）
+
+| primitive | admin-ui 现状 | 决策 |
+|---|---|---|
+| Card | ✅ AdminCard 已具 / surface='plain' padding='sm' 直接承载 | C 卡复用 / 0 改动 |
+| **Segment** | ❌ 17 export 全无 / 5 处视图手撸但形态与 spec 不一致 / reference.md §228+§886 系统级未完成事项 | **起 PRE-CARD-PRIMITIVE-A 新卡**（plan §3 处共享原语提取硬触发）|
+| QuoteBlock | ❌ 完全无 / spec §5.13 唯一消费 / 简单 | C 卡内联实现 / 后续 3+ 消费方时再提取 |
+
+### Segment Props 契约（PRE-CARD-PRIMITIVE-A / Opus 子代理 1 轮 PASS A）
+
+**6 决策（D1-D6）**：
+1. **D1c 仅受控**：`value + onChange` 与 AdminSelect 单选范式一致
+2. **D2 badge: number | string**：spec §5.13 数字 + server `'99+'` 字符串兼容
+3. **D3a size 'sm'/'md'/'lg'**：admin-ui 全家桶一致性
+4. **D4a inline styles + tokens**：与 admin-card/button/select 同模式 / 0 admin-shell-styles 全局类依赖
+5. **D5 WAI-ARIA tabs activate-on-focus**：role=tablist + roving tabIndex + ←→/Home/End + 跳过 disabled
+6. **D6a 仅 pill 形态**：bottom-border tab 后续起独立 Tabs primitive（不耦合 / 5 处视图不动）
+
+**视觉契约（0 硬编码颜色）**：
+- 容器 `.seg`：inline-flex / 2px gap+padding / bg-subtle / radius-md / border-subtle
+- `.seg__btn` active：bg-surface-elevated + fg-default + shadow-xs
+- **Y1 badge active 反转**：active=accent-default+accent-on / inactive=accent-soft+accent-default
+- **Y2 roving tabIndex**：useEffect + focusOnNextRender ref / 仅键盘触发 focus 不偷页面初始焦点
+
+### 修改文件（5 新 + 1 改）
+
+**新建**（admin-ui Segment）：
+1. `packages/admin-ui/src/components/segment/segment.types.ts`（38 行）
+   - SegmentItem / SegmentProps / SegmentSize 类型契约
+2. `packages/admin-ui/src/components/segment/segment.tsx`（203 行）
+   - WAI-ARIA tabs 完整实施 / roving tabIndex / activate-on-focus
+   - findEnabledIndex / findFirstEnabled / findLastEnabled 工具函数
+   - badge active 颜色反转（Y1）
+3. `packages/admin-ui/src/components/segment/index.ts`（barrel）
+4. `tests/unit/components/admin-ui/segment/segment.test.tsx`（200 行 / 12 case PASS）
+
+**改**：
+1. `packages/admin-ui/src/index.ts` 加入 `export * from './components/segment'`（17→**18 export 段**）
+
+### 12 case 覆盖
+
+| Case | 范围 |
+|---|---|
+| 1 | 基础渲染（4 items + 默认 md + aria-label）|
+| 2 | badge 数字 / 字符串 / 省略三态 |
+| 3 | 受控 click + 切换后 aria-selected |
+| 4 | item.disabled + aria-disabled |
+| 5 | 容器 disabled 全禁用 |
+| 6 | 键盘 ArrowRight 循环 + 跳过 disabled |
+| 7 | 键盘 Home / End |
+| 8 | a11y：role=tablist + 唯一 aria-selected=true |
+| 9 | 边界：0 items + 1 item 键盘 no-op |
+| 10 | roving tabIndex（active 0 / 其余 -1）|
+| 11 | badge active 颜色反转视觉契约校验 |
+| 12 | 同值 click 防重复触发 |
+
+### 关键设计
+
+1. **plan §3 处共享原语提取硬触发**：5 处视图手撸 tab + spec §5.13 形态不同 + reference.md §228 系统级未完成事项 / 三重证据触发提取
+2. **Opus 强制升级**：CLAUDE.md §模型路由第 1 条"定义新的共享组件 API 契约"强制 Opus 子代理设计
+3. **形态决策（D6a）**：bottom-border vs pill 是不同 UI 信息密度 + 交互定位（导航 vs 筛选）→ 不能强行 variant 联合 / Opus 评 9/10 对称性
+4. **Y2 roving tabIndex 实施细节**：useRef + useEffect + focusOnNextRender 标记 / 仅键盘触发 focus / 不偷页面初始焦点
+5. **0 admin-shell-styles 依赖**：与 admin-card/button/select 同模式 inline styles + tokens（D4a / grep 确认 admin-shell-styles 无 .seg 全局类冲突）
+
+### 质量门禁
+
+- typecheck ✅ 全 7 workspace
+- lint ✅ 0 error / 0 warning
+- file-size ✅ 0 新违规（segment.tsx 203 < 500 / test 200 < 500）
+- 全量 unit：4142 → **4154 PASS**（+12 净增 / 12 Segment cases）
+
+### 后续触发
+
+- 下张可执行卡：**CHG-SN-7-REDO-02-C** 前端 `/admin/user-submissions` 新页面（0.8w / opus-4-7 / 消费 Segment + AdminCard + 内联 QuoteBlock）
+- AD1 advisory `99+` 自动格式化留消费方（C 卡内可决策是否做或起 MISC formatBadgeCount util）
+- 累计已完成：A0 ✅ + A ✅ + B ✅ + PRE-CARD ✅ + PRE-CARD-A ✅ 共 **~1.5w / REDO-02 总 ~2.95w — 剩余 ~1.45w**（C+D+E+F）
