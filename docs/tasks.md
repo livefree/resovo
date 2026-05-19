@@ -8,7 +8,38 @@
 
 <!-- ✅ PRE-04 全 16 子卡闭环（2026-05-18，连续推进 #2–#16 用户授权）；总览：5 ✅ A 级（dashboard/moderation/videos/sources/analytics）+ 8 ⚠️ S 级（merge/subtitles/home/image-health/users/audit/login/dashboard MISC）+ 4 ❌（staging/submissions/crawler/settings）+ 16 MISC + 4 REDO（01/02/03/04）+ SHARED-03 取消；详见 docs/M-SN-7-design-realign-audit-FULL.md；下一步等用户拍板 PRE-04 收尾 + 启动 SHARED-01/02 milestone -->
 
-### CHG-SN-7-REDO-01-B 阶段 1 ✅ ADR-122 已起草（2026-05-18）
+### CHG-SN-7-REDO-01-B ✅ 全 4 阶段闭环（2026-05-18）
+
+**完成时间**：2026-05-18（含 fa8293ae 阶段 1 + 本次会话阶段 2-4）
+**实施**：
+- **阶段 1** ADR-122 起草（Opus 1 轮 A，commit 24606c47）
+- **阶段 2** 4 文件实施：
+  - `apps/api/src/db/queries/crawlerKpi.ts`（177 行 / 4 CTE + siteStats LATERAL JOIN）
+  - `apps/api/src/db/queries/crawlerTimeline.ts`（171 行 / ROW_NUMBER 窗口函数 + JS 算术派生 pct）
+  - `apps/api/src/routes/admin/crawlerDashboard.ts`（178 行 / 4 端点 + zod 校验 + auditSvc.write）
+  - `apps/server-next/src/lib/crawler/api.ts`（+75 行 / 4 前端函数 + 4 type interface）
+  - `apps/api/src/server.ts`（注册 adminCrawlerDashboardRoutes）
+- **阶段 3** audit RETRO 4 文件框架（ADR-121 D-122-5 复用 actionType 降级）：
+  - route 含 auditSvc.write（actionType=crawler.run_create 复用 / targetKind=crawler_site / system 区分 / afterJsonb.triggerType=single / all）
+  - 新建 `tests/unit/api/crawler-dashboard-audit.test.ts`（**18 case PASS**）
+  - audit-log-coverage.test REQUIRED + PAYLOAD 已含 crawler.run_create 无需扩
+  - changelog 本条目
+- **阶段 4** 全质量门禁：
+  - typecheck ✅
+  - lint ✅
+  - file-size-budget ✅（0 新违规 / 4 新文件全 < 200 行）
+  - **verify:endpoint-adr ✅ 152 路由对齐 23 ADR**（ADR-122 §端点契约表格式按脚本期望 6 列 4 行修订）
+  - 全量 unit test：4035 → **预期 4053 PASS**（+18 新测试，待最终验证）
+
+**评级**：A（4 阶段全闭环 / 0 红线 / 仅 §端点契约表格式 1 项格式纠错）
+
+**关键发现**：
+- ADR-122 起草时使用了 `### 端点契约表` 标题 + 嵌套 `#### 3.x` 子段，与 `scripts/lib/adr-parser.mjs` `findSubsection('端点契约')` 期望的 `### 端点契约`（无"表"后缀） + 平铺 6 列表格式不一致 → 阶段 4 修订加统一 6 列 4 行主表 + 保留下方子段作详细说明（命名为 `### 端点契约细节`）
+
+**执行模型**：claude-opus-4-7（主循环 / 实施）+ arch-reviewer (claude-opus-4-7) 阶段 1 ADR 起草
+
+<!-- REDO-01-B 闭环 / 下张：CHG-SN-7-REDO-01-C 前端骨架（0.3w / CrawlerClient page__head 3 actions + KPI row + 时间轴 card 框架 + 站点列表骨架） -->
+
 
 **阶段 1 完成时间**：2026-05-18
 **实施**：spawn arch-reviewer Opus 子代理 1 轮独立起草 → 主循环落 `docs/decisions.md` ADR-122 段（约 280 行）

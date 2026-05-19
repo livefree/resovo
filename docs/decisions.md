@@ -7248,7 +7248,16 @@ const PutCategoryMappingSchema = z.object({
 | ADR-117 | 无 | 不涉及 source_line_aliases |
 | ADR-121 | 无 | D-122-5 复用 actionType 合规 |
 
-### 端点契约表
+### 端点契约
+
+| # | 方法 | 路径 | 用途 | Request | Response | 错误码 |
+|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/crawler/kpi` | 5 KPI + siteStats（dashboard 头部聚合） | — | 200 `{ data: CrawlerKpiResponse }`（含 totalSites / healthySites / runningSites / failedSites / batchVideoCount / batchVideoDelta / avgDurationSeconds / siteStats[]） | 401 / 403 |
+| 2 | GET | `/admin/crawler/timeline` | 实时任务时间轴聚合 | Query: `range?='1h'` (`'30m'\|'1h'\|'2h'\|'6h'`) / `limit?=8` (max 20) | 200 `{ data: CrawlerTimelineResponse }`（rangeStart / rangeEnd / ticks / rows[]） | 401 / 403 / 422 VALIDATION_ERROR |
+| 3 | POST | `/admin/crawler/sites/:key/run` | 单站触发采集（runService alias） | Body: `{ mode?: 'incremental'\|'full' }`（默认 incremental） | 202 `{ data: { runId, taskIds, enqueuedSiteKeys, skippedSiteKeys } }` | 401 / 403 / 404 NOT_FOUND / 422 / 503 CRAWLER_QUEUE_UNAVAILABLE |
+| 4 | POST | `/admin/crawler/run-all` | 全站触发采集（runService alias） | Body: `{ mode?: 'incremental'\|'full' }`（默认 full） | 202 `{ data: { runId, taskIds, enqueuedSiteKeys, skippedSiteKeys } }` | 401 / 403 / 422 / 503 CRAWLER_QUEUE_UNAVAILABLE |
+
+### 端点契约细节（按端点逐一展开）
 
 #### 3.1 GET /admin/crawler/kpi
 

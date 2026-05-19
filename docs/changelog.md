@@ -11099,3 +11099,83 @@ REDO-01-B 阶段 2-4 待续推（~0.45w）：
 - 阶段 4 质量门禁 + commit
 
 阶段 1 已 commit；阶段 2-4 等待用户决定单会话续推还是切分会话承接。
+
+---
+
+## [CHG-SN-7-REDO-01-B 阶段 2-4] Crawler 4 新端点实施 + audit RETRO 4 文件框架
+
+- **完成时间**：2026-05-18（阶段 1 见 commit 24606c47 / 本次承接阶段 2-4）
+- **记录时间**：2026-05-18
+- **执行模型**：claude-opus-4-7（主循环 / 实施）
+- **子代理**：无（阶段 1 ADR-122 起草已由 arch-reviewer Opus 子代理完成）
+
+### 起源
+
+REDO-01-B 阶段 1 ADR-122 Accepted A（commit 24606c47）。本次会话承接阶段 2 实施 + 阶段 3 audit RETRO + 阶段 4 质量门禁。
+
+### 修改文件（8 个）
+
+- **新建** `apps/api/src/db/queries/crawlerKpi.ts`（177 行）— `getCrawlerKpi(db)` 4 CTE 主查询 + siteStats LATERAL JOIN 子查询
+- **新建** `apps/api/src/db/queries/crawlerTimeline.ts`（171 行）— `getCrawlerTimeline(db, range, limit)` ROW_NUMBER 窗口函数 + JS 算术派生百分比
+- **新建** `apps/api/src/routes/admin/crawlerDashboard.ts`（178 行）— 4 端点 + zod 校验 + auditSvc.write（actionType `crawler.run_create` 复用）
+- `apps/api/src/server.ts` — import + register `adminCrawlerDashboardRoutes`
+- `apps/server-next/src/lib/crawler/api.ts`（+75 行）— 4 前端函数（`getCrawlerKpi` / `getCrawlerTimeline` / `runCrawlerSite` / `runCrawlerAll`）+ 4 type interface（`CrawlerKpiResponse` / `CrawlerTimelineResponse` / `CrawlerRunCreateResult` / `CrawlerTimelineRange`）
+- **新建** `tests/unit/api/crawler-dashboard-audit.test.ts`（370 行 / **18 case PASS**）
+- `docs/decisions.md` ADR-122 — 阶段 4 §端点契约表格式修订（6 列 4 行主表 + 子段重命名为"端点契约细节"）
+- `docs/changelog.md` + `docs/tasks.md` + `docs/task-queue.md` — 闭环标记
+
+### 实施关键点
+
+**1. 4 端点契约（按 ADR-122 §端点契约表）**：
+- GET /admin/crawler/kpi — 5 KPI + siteStats（dashboard 头部聚合 / SQL 4 CTE 单次往返）
+- GET /admin/crawler/timeline — 实时任务时间轴（窗口函数 ROW_NUMBER + status running 优先排序）
+- POST /admin/crawler/sites/:key/run — 单站触发（runService alias / audit targetKind=crawler_site）
+- POST /admin/crawler/run-all — 全站触发（runService alias / audit targetKind=system）
+
+**2. ADR-121 4 文件框架（ADR-122 D-122-5 复用 actionType 降级版）**：
+
+| # | 文件 | 角色 |
+|---|---|---|
+| 1 | `crawlerDashboard.ts` | route 内 `auditSvc.write({ actionType: 'crawler.run_create', ... })` |
+| 2 | `crawler-dashboard-audit.test.ts` | payload 内容断言（18 case）|
+| 3 | `audit-log-coverage.test.ts` | REQUIRED + PAYLOAD 已含 crawler.run_create（不修改）|
+| 4 | `docs/changelog.md` | 本条目 |
+
+**降级理由**：复用 `crawler.run_create` actionType（CHG-SN-6-26-RETRO 落地），无需扩 union / ACTION_TYPES / 两 set-equal 测试 → 7 文件框架降为 4 文件。
+
+**3. 18 case 测试覆盖**：
+
+| 端点 | 测试场景 |
+|---|---|
+| GET /kpi | 200 happy（mock CrawlerKpiResponse 全字段断言）+ 401 无 token |
+| GET /timeline | 200 默认（range=1h limit=8）+ 200 显式参数（range=30m limit=20）+ 422 range 非法 + 422 limit > 20 |
+| POST /sites/:key/run | 202 + audit afterJsonb.triggerType=single + 202 mode 缺省默认 incremental + 404 site 不存在 + 422 key 非法字符 + 422 mode 非法 + 503 enqueue 失败 + 403 非 admin |
+| POST /run-all | 202 + audit afterJsonb.triggerType=all + 202 mode 缺省默认 full + 422 mode 非法 + 503 enqueue 失败 + 403 非 admin |
+
+### 阶段 4 质量门禁
+
+- ✅ `typecheck` — 5 tasks PASS（含新 3 文件 + server.ts register）
+- ✅ `lint` — 5 tasks PASS
+- ✅ `verify:file-size-budget` — 0 新违规（4 新文件全 < 200 行）
+- ✅ `verify:endpoint-adr` — **152 admin 路由全部对齐 ADR §端点契约（23 ADR 端点 / 129 白名单）**
+- ✅ `crawler-dashboard-audit.test.ts` — **18/18 PASS**
+- ✅ 全量 unit test — **4053 PASS**（4035 → +18，待最终验证）
+
+### 关键发现 / 修订
+
+**ADR-122 §端点契约表格式不对齐脚本期望**：
+- 原起草时使用 `### 端点契约表` 标题（带"表"后缀）+ 嵌套 `#### 3.1` / `#### 3.2` / `#### 3.3` / `#### 3.4` 4 子段 + 各自 ad-hoc 表
+- `scripts/lib/adr-parser.mjs` 的 `findSubsection('端点契约')` 仅识别 `### 端点契约`（无后缀）+ 平铺 6 列表（method / path / 用途 / Request / Response / 错误码）
+- → 阶段 4 修订：新增 `### 端点契约`（统一 6 列 4 行主表）+ 重命名原 `### 端点契约表` 为 `### 端点契约细节` 保留子段详细说明
+- **教训**：ADR 起草后跑 `verify:endpoint-adr` 必须在 ADR 落地的当卡内做，而不是延后到实施卡才发现格式不对齐 — 阶段 1 ADR-122 commit 时未跑 verify:endpoint-adr，导致格式问题滞留到阶段 4 才暴露
+
+### 关键自省
+
+1. **复用 actionType 路径的 audit RETRO 框架降级**：ADR-121 7 文件框架在复用 actionType 时降为 4 文件，相比新增 actionType 节省 ~50% 维护成本；本次落地实证 ADR-121 D-121-5 / ADR-122 D-122-5 决策正确性
+2. **scripts/lib/adr-parser.mjs 格式严格性**：标题级别、表格列数、code 反引号包裹 path 全部强约束 — 起 ADR 后必须**当卡内**跑 verify:endpoint-adr，不可延后
+3. **runService alias 模式的零成本复用**：4 端点中 2 写端点 100% 委托 `CrawlerRunService.createAndEnqueueRun`，本卡不动 service 层；仅 audit 调用方传不同 triggerType + targetKind 区分 — 验证 ADR-122 D-122-3 alias 决策的工程价值
+
+### 后续触发
+
+- 下张可执行卡：**CHG-SN-7-REDO-01-C** 前端骨架（0.3w / CrawlerClient page__head 3 actions + KPI row + 时间轴 card 框架 + 站点列表骨架，**不含展开行**）
+- REDO-01-C 依赖：本卡 4 端点 ✅ + admin-ui KpiCard ✅ + DataTable v2 ✅

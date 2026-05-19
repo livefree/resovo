@@ -364,3 +364,91 @@ export async function listCrawlerTaskLogs(
   )
   return res.data.logs
 }
+
+// ── CHG-SN-7-REDO-01-B / ADR-122: Crawler 重做 4 新端点 ────────
+
+export interface CrawlerSiteStat {
+  readonly key: string
+  readonly routeCount: number
+  readonly health: number
+}
+
+export interface CrawlerKpiResponse {
+  readonly totalSites: number
+  readonly healthySites: number
+  readonly runningSites: number
+  readonly failedSites: number
+  readonly batchVideoCount: number
+  readonly batchVideoDelta: number
+  readonly avgDurationSeconds: number
+  readonly siteStats: readonly CrawlerSiteStat[]
+}
+
+export type CrawlerTimelineRange = '30m' | '1h' | '2h' | '6h'
+
+export interface CrawlerTimelineRow {
+  readonly siteKey: string
+  readonly siteName: string
+  readonly health: number
+  readonly startPct: number
+  readonly widthPct: number
+  readonly durationSeconds: number
+  readonly videoCount: number
+  readonly status: 'ok' | 'warn' | 'danger'
+  readonly last: string
+}
+
+export interface CrawlerTimelineResponse {
+  readonly rangeStart: string
+  readonly rangeEnd: string
+  readonly ticks: readonly string[]
+  readonly rows: readonly CrawlerTimelineRow[]
+}
+
+export interface CrawlerRunCreateResult {
+  readonly runId: string
+  readonly taskIds: readonly string[]
+  readonly enqueuedSiteKeys: readonly string[]
+  readonly skippedSiteKeys: readonly string[]
+}
+
+export type CrawlerRunMode = 'incremental' | 'full'
+
+export async function getCrawlerKpi(): Promise<CrawlerKpiResponse> {
+  const res = await apiClient.get<{ data: CrawlerKpiResponse }>('/admin/crawler/kpi')
+  return res.data
+}
+
+export async function getCrawlerTimeline(
+  params: { range?: CrawlerTimelineRange; limit?: number } = {},
+): Promise<CrawlerTimelineResponse> {
+  const qs = new URLSearchParams()
+  if (params.range) qs.set('range', params.range)
+  if (params.limit != null) qs.set('limit', String(params.limit))
+  const q = qs.toString()
+  const res = await apiClient.get<{ data: CrawlerTimelineResponse }>(
+    `/admin/crawler/timeline${q ? `?${q}` : ''}`,
+  )
+  return res.data
+}
+
+export async function runCrawlerSite(
+  siteKey: string,
+  mode: CrawlerRunMode = 'incremental',
+): Promise<CrawlerRunCreateResult> {
+  const res = await apiClient.post<{ data: CrawlerRunCreateResult }>(
+    `/admin/crawler/sites/${encodeURIComponent(siteKey)}/run`,
+    { mode },
+  )
+  return res.data
+}
+
+export async function runCrawlerAll(
+  mode: CrawlerRunMode = 'full',
+): Promise<CrawlerRunCreateResult> {
+  const res = await apiClient.post<{ data: CrawlerRunCreateResult }>(
+    '/admin/crawler/run-all',
+    { mode },
+  )
+  return res.data
+}
