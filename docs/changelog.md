@@ -11741,3 +11741,97 @@ REDO-01 列表顺序 A→I 9 子卡（commits `fa8293ae` → `ef0a30f4` / 含 E2
   - (b) **REDO-03 Settings 收敛**（~1.5w / Opus IA 决策）
   - (c) 跑 3 MISC 跟踪卡（共 ~0.3w）
   - (d) 切换其他 milestone（暂无明确候选）
+
+---
+
+## [CHG-SN-7-REDO-02-A0] ADR-124 user_submissions schema 起草
+
+- **完成时间**：2026-05-19
+- **执行模型**：spawn arch-reviewer (claude-opus-4-7) 起草 + claude-opus-4-7 主循环修订 Y1+Y2 黄线 + 修正 RETRO 4 文件理解后落地
+- **子代理**：arch-reviewer (claude-opus-4-7) 1 轮 PASS A 综合（4 维度全 A / 2 黄线 / 3 advisory）
+
+### 起源
+
+REDO-01 闭环（commit `9abdd729`）后启动 REDO-02（PRE-04 #9 锁定 Submissions §5.13 Card list 重做 ~1w）。**实测启动时发现深度架构错位远超原估**：
+
+- 设计稿 §5.13 要求 4 类 Segment（失效源举报 / 求片 / 元数据纠错 / 已处理）
+- 当前后端：`video_sources` 表 `is_active=false AND submitted_by IS NOT NULL` 子集仅支持 1/4 类
+- 求片（无 video_id）/ 元数据纠错（与 source 无关）在当前 schema 完全无法表达
+- PRE-04 #9 审计仅识别 UI 层错位（DataTable → Card list）/ 未深入数据模型
+
+**触发强制升 Opus（CLAUDE.md §模型路由）**：
+- ✅ 设计跨 3+ 消费方 schema/migration 字段
+- ✅ 撰写新 ADR
+- ✅ 跨域语义（求片 = 无 video / 纠错 = 元数据 / 与 video_sources 分离）
+
+### 修改文件（1 个）
+
+- `docs/decisions.md` 追加 ADR-124 段（约 350 行 / 11 节 / 8 决策要点 / 6 端点契约 / migration 065 SQL 草案 / 3 类 metadata zod 锁定 / 替代方案对比表 / 7 子卡拆分）
+
+### 8 关键决策（D-124-1..8）
+
+1. **D1 schema 方案 → A 新独立表 `user_submissions`**（polymorphic / type discriminator）
+   - 否定 B（扩 video_sources / 违反 ADR-114 复合键 / video_id NOT NULL 矛盾求片）
+   - 否定 C（拆 3 表 / 跨表 UNION 过度复杂）
+2. **D2 迁移路径 → D2b 迁移 + alias 过渡**（Y1 修订：alias 退役 milestone 锁定 M-SN-9）
+3. **D3 actionType → D3a 合并 `user_submission.action`** + afterJsonb.action ∈ {process, reject, batch_process, batch_reject}（ADR-117 AMENDMENT 2 + ADR-123 同构范式）
+4. **D4 targetKind → 新增 `user_submission`**（10 个 / 不复用 video_source / 求片无 source targetId）
+5. **D5 quote 字段 → D5c 混合**（quote TEXT 1-2000 字符 + metadata_jsonb 按 type 不同 shape / Y2 修订：3 shape zod 在 ADR 内锁定）
+6. **D6 错误码 → 复用 ADR-110 14 码**（零新增 / STATE_CONFLICT 409 状态机非法）
+7. **D7 audit RETRO → 4 真源同步**（D-121-5 范式 / R-MID-1 第 15 次 / **主循环修正 Opus 误解 — 不是 docs/audit/ 4 markdown 是源代码 4 真源**）
+8. **D8 backfill → INSERT 历史失效源举报到 user_submissions(type='bad_source')**（保留 video_sources 行避免破坏 P1 链路）
+
+### 主循环修订（采纳 Opus 黄线 + 修正误解）
+
+- **Y1 alias 退役锁定 M-SN-9**（旧 `/admin/submissions*` 在 2 milestone 周期内 thin alias）
+- **Y2 metadata_jsonb 3 类 shape 用 zod 在 ADR §Schema 设计末尾锁定**（不另立 docs / 避免单卡产出 8+ 文档）
+- **RETRO 4 文件修正**：Opus 子代理误解为 `docs/audit/CHG-SN-7-REDO-02/` 4 markdown；主循环修正为源代码 4 真源同步（types union + ACTION_TYPES + audit-log-coverage REQUIRED + set-equal EXPECTED / 参 ADR-121 D-121-5 + REDO-01-E2 落地实例）
+
+### REDO-02 后续 7 子卡（A-F）拆分
+
+| 卡 | 范围 | 估时 | 模型 |
+|---|---|---|---|
+| **A** | migration 065 + types + actionType + targetKind + 4 真源同步 + audit 单测 | 0.4w | opus-4-7 |
+| **B** | 6 端点 + service + queries + audit 写入 + ≥10 case 单测 | 0.7w | opus-4-7 |
+| **PRE-CARD-PRIMITIVE** | admin-ui Card/Segment/QuoteBlock primitive 调研 | 0.1w | Opus |
+| **C** | 前端 `/admin/user-submissions` 新页面 + Card list spec §5.13 | 0.8w | opus-4-7 |
+| **D** | 旧路径 alias + deprecation banner | 0.2w | Haiku |
+| **E** | RETRO 验证 + verify + e2e | 0.3w | Sonnet |
+| **F** | Opus 验收（≥ A−）| 0.2w | Opus |
+
+**REDO-02 总估时**：**~2.75w**（含 A0 / 原 ~1w 严重低估 / 规模与 REDO-01 2.6w 相当）
+
+### 6 端点契约（ADR-124）
+
+| # | 方法 | 路径 | 用途 | 错误码 |
+|---|---|---|---|---|
+| 1 | GET | `/admin/user-submissions` | 4 类 + status 过滤 + badges 聚合 | 422 |
+| 2 | GET | `/admin/user-submissions/:id` | 详情 | 404/422 |
+| 3 | POST | `/admin/user-submissions/:id/process` | 标记处理 + audit | 404/409/422 |
+| 4 | POST | `/admin/user-submissions/:id/reject` | 拒绝 + audit | 404/409/422 |
+| 5 | POST | `/admin/user-submissions/batch-process` | 批量 + audit | 422 |
+| 6 | POST | `/admin/user-submissions/batch-reject` | 批量 + audit | 422 |
+
+### 质量门禁
+
+- verify:endpoint-adr ✅ **158 admin 路由对齐 35 ADR 端点**（+6 ADR-124 新端点 / 待 REDO-02-B 落代码）
+- 0 backend 改动 / 0 测试净增 / 0 file-size 影响（纯 ADR 起草）
+
+### 关键自省
+
+1. **PRE-04 #9 审计深度不足**：仅识别 UI 层错位（DataTable → Card list）/ 未发现数据模型层 4 类 Segment 完全无 schema 承载 → A0 卡实测才暴露 ~1.75w 隐藏成本
+2. **Opus 子代理与主循环的协同价值再次验证**：Opus 起草 8 决策 + 3 schema 候选裁决 + 7 子卡拆分（节省主循环 0.3w 设计成本）；主循环对 Y1/Y2 黄线 + RETRO 4 文件误解的修订（节省 0.2w 实施误工）
+3. **ADR-117 AMENDMENT 2 + ADR-123 范式高度复用**：合并 actionType + afterJsonb.type 区分 + 4 真源同步框架 — 本卡第 3 次 R-MID-1 系统化实战（13/14/15 次连贯）
+4. **estimate revision 是规范行为**：实测发现原估严重低估时立即停下 + spawn Opus 重估 + 用户拍板 + 文档化重估 — 这套流程在本卡跑通 / 避免 ~1.75w 误工
+
+### 3 advisory 待 REDO-02-A 实施承担
+
+- **AD1**：metadata_jsonb 加 `jsonb_typeof = 'object'` CHECK 弱校验（DB 防御层）
+- **AD2**：badges 聚合查询走 partial index `WHERE status='pending'`（性能优化）
+- **AD3**：补 ADR-114-NEGATED 文档脚注"video_sources 不承载用户投稿语义"（设计意图固化）
+
+### 后续触发
+
+- 下张可执行卡：**CHG-SN-7-REDO-02-A** migration + types + audit RETRO 4 真源同步（0.4w / opus-4-7）
+- M-SN-9 触发：CHG-SN-9-XX-SUBMISSIONS-DEPRECATE 退役旧 alias
+- C 卡前置：CHG-SN-7-REDO-02-PRE-CARD-PRIMITIVE admin-ui primitive 调研（0.1w / Opus）

@@ -6,7 +6,95 @@
 
 ## 进行中任务
 
-<!-- REDO-01 milestone 全闭环（2026-05-19）—— A→J 10 子卡完整 / Opus 验收 A− / 等待用户拍板下一卡 -->
+<!-- REDO-02-A0 闭环（2026-05-19）；下一卡 REDO-02-A migration + types + audit 4 真源 -->
+
+### CHG-SN-7-REDO-02-A0 ✅ ADR-124 user_submissions schema 起草闭环（2026-05-19）
+
+**完成时间**：2026-05-19
+**实施**：
+- spawn arch-reviewer (claude-opus-4-7) 子代理 1 轮 PASS A 综合（4 维度自评全 A / 2 黄线 Y1+Y2 / 3 advisory）
+- 主循环采纳并修订 2 黄线：
+  - **Y1 alias 退役 milestone 锁定 M-SN-9**（旧 `/admin/submissions*` 在 2 milestone 周期内为 thin alias）
+  - **Y2 metadata_jsonb 3 类 shape 用 zod schema 在 ADR 内锁定**（不另立 docs / 避免单卡产出 8+ 文档）
+- 修正 Opus 子代理对"RETRO 4 文件"的误解：
+  - Opus 起草版以为是 `docs/audit/CHG-SN-7-REDO-02/` 下 4 markdown
+  - 实际为 **源代码 4 真源同步**（types union + ACTION_TYPES + audit-log-coverage REQUIRED + set-equal EXPECTED）
+  - 参 ADR-121 D-121-5 + REDO-01-E2 落地实例（R-MID-1 第 13/14 次系统化）
+- 落 `docs/decisions.md` ADR-124 段（约 350 行 / 11 节结构 + 6 端点契约 + migration 065 SQL 草案 + 3 类 metadata zod + 7 子卡拆分）
+- 状态：**Accepted**
+
+**评级**：**A**（Opus 起草 + 主循环修订 Y1+Y2 + RETRO 4 文件修正后落地 / 严格对齐 ADR-117 AMENDMENT 2 + ADR-121 + ADR-123 同构范式）
+
+**8 关键决策（D-124-1..8）**：
+- D1：选 A 新独立表 `user_submissions`（polymorphic / type discriminator / 3 类）
+- D2：选 D2b（迁移 + alias 过渡 / Y1 锁定 M-SN-9 退役）
+- D3：选 D3a 合并 `user_submission.action` + afterJsonb.action 区分（4 路径）
+- D4：新增 `user_submission` targetKind（10 个 / 不复用 video_source）
+- D5：选 D5c 混合（quote TEXT + metadata_jsonb / Y2 zod 锁定 3 shape）
+- D6：复用 ADR-110 14 码（零新增 / STATE_CONFLICT 409 status 状态机非法）
+- D7：4 真源同步 RETRO 框架（D-121-5 范式 / R-MID-1 第 15 次）
+- D8：backfill 历史失效源举报 → bad_source（video_sources 行保留 / 双轨）
+
+**REDO-02 后续子卡拆分**（Opus 建议 / 主循环采纳）：
+- **A** 0.4w：migration 065 + types + actionType + targetKind + 4 真源 + audit 单测（opus-4-7）
+- **B** 0.7w：6 端点 + service + queries + audit + ≥10 case 单测（opus-4-7）
+- **C** 0.8w：前端 Card list 新页面 `/admin/user-submissions`（opus-4-7 / 前置 PRE-CARD-PRIMITIVE 调研 admin-ui 0.1w）
+- **D** 0.2w：旧 `/admin/submissions*` 改 alias + deprecation banner（Haiku）
+- **E** 0.3w：RETRO 验证 + verify + e2e（Sonnet）
+- **F** 0.2w：Opus 验收（spec §5.13 100% 覆盖 + ADR-124 9 节闭环）
+
+**REDO-02 总估时**：**~2.75w**（含 A0 / 实测原 ~1w 严重低估 / Opus 修正后规模与 REDO-01 2.6w 相当）
+
+**质量门禁**：
+- verify:endpoint-adr ✅ **158 admin 路由对齐 35 ADR 端点**（+6 ADR-124 端点 / 待 REDO-02-B 落代码 / 现 0 admin route 实施）
+- 0 backend 改动 / 0 测试净增 / 0 file-size 影响
+
+**执行模型**：spawn arch-reviewer (claude-opus-4-7) 起草 + claude-opus-4-7 主循环修订 Y1/Y2/RETRO 后落地
+
+**3 advisory 待 REDO-02-A 实施时承担**：
+- AD1：metadata_jsonb 可加 `jsonb_typeof = 'object'` CHECK 弱校验
+- AD2：badges 聚合查询走 partial index `WHERE status='pending'`
+- AD3：补 ADR-114-NEGATED 文档脚注"video_sources 不承载用户投稿语义"
+
+<!-- 下张：CHG-SN-7-REDO-02-A migration + types + audit RETRO 4 真源同步（0.4w / opus-4-7） -->
+
+
+### CHG-SN-7-REDO-02-A0 ⏳ 已替换为闭环卡
+
+**SEQ**：M-SN-7 / REDO-02 第 1 子卡（A0 / ADR 前置 / 阻塞 A-F 全部）
+
+**问题理解**：REDO-01 闭环后启动 REDO-02 Submissions §5.13 Card list 重做时实测发现**架构错位深度远超原估**：
+- 设计稿 §5.13 要求 4 类 Segment（失效源举报 / 求片 / 元数据纠错 / 已处理）
+- 当前后端数据模型仅支持失效源举报（`video_sources` 表 `is_active=false AND submitted_by IS NOT NULL`）— 单一类型
+- 求片（无 video）/ 元数据纠错（修元数据字段）在当前 schema 下无法表达
+- 原估 ~1w 严重低估真实工作量
+
+**根因判断**：REDO-02 立项时 PRE-04 子卡 #9 审计仅识别"DataTable → Card list 架构错位"（UI 层），未深入到数据模型层。Opus 必须设计新 schema。
+
+**方案**：spawn arch-reviewer (claude-opus-4-7) 独立设计任务：
+1. **ADR-124 起草**：user_submissions schema + 4 类 type 字段 + API 协议表
+2. **3 候选方案对比裁决**：
+   - A. 新独立表 `user_submissions`（polymorphic / type discriminator）— 预判推荐
+   - B. 扩 `video_sources` 加 type 字段 — 违反 ADR-114 复合键语义
+   - C. 拆 3 表（reports / wishlists / corrections）— 过度拆分
+3. **migration SQL 草案**（含 ROLLBACK 段）
+4. **2 端点契约提纲**（GET list 含 segment filter + POST process/approve/reject + 写端点 audit RETRO）
+5. **REDO-02 后续子卡拆分**（A-F 估时含 migration + service + route + audit + frontend Card list + Opus 验收）
+6. **关联 ADR**：ADR-017（VideoGenre）/ ADR-110（ApiResponse 信封）/ ADR-114-NEGATED（复合键）/ ADR-121（R-MID-1 audit RETRO）/ CHG-SN-5-01（现 submissions 实现）
+
+**严格约束**：
+- ❌ 直接落实施代码（A0 仅 ADR 文档）
+- ❌ migration 落地（待 ADR-124 PASS 后 REDO-02-B 实施）
+- ❌ 主循环直接落 ADR（撰写 ADR 强制 Opus 触发）
+- ❌ 推荐方案 B（污染 video_sources / 违反 ADR-114）
+
+**涉及文件**（仅 1 个）：
+- `docs/decisions.md` 追加 ADR-124 段
+
+**执行模型**：spawn arch-reviewer (claude-opus-4-7) 独立设计起 ADR-124 + 主循环 opus-4-7 落地
+
+**估时**：0.15w
+
 
 ### CHG-SN-7-REDO-01-J ✅ 视觉回归 + e2e + Opus 验收闭环（2026-05-19）
 
