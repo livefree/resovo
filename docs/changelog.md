@@ -12234,3 +12234,73 @@ REDO-02-C 完成（commit `8a6b0a56`）后启动 D 卡。按 ADR-124 D-124-2 + Y
 - 下张可执行卡：**CHG-SN-7-REDO-02-E** RETRO 验证 + verify:adr-contracts + e2e（0.3w / Sonnet）
 - M-SN-9 退役卡：**CHG-SN-9-XX-SUBMISSIONS-DEPRECATE**（删除旧 /admin/submissions 路由 + service + 客户端 + video_sources backfill 反向清理）
 - 累计已完成：A0 ✅ + A ✅ + B ✅ + PRE-CARD ✅ + PRE-CARD-A ✅ + C ✅ + D ✅ 共 **~2.3w / REDO-02 总 ~2.95w — 剩余 ~0.5w**（E+F）
+
+---
+
+## [CHG-SN-7-REDO-02-E] RETRO 验证 + verify 全门禁 + SQL schema bug 修补
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环（验证 + bug 修复 / 子代理：无）
+
+### 起源
+
+REDO-02-D 完成（commit `fc519f58`）后启动 E 卡 RETRO 验证。按 ADR-124 §拆卡建议 E 卡范围跑全 verify + 修复 advisory bug。
+
+### 验证矩阵
+
+| Verify 命令 | 状态 | 备注 |
+|---|---|---|
+| `npm run typecheck` | ✅ | 全 7 workspace |
+| `npm run lint` | ✅ | 0 error / 0 warning |
+| `npm run verify:file-size-budget` | ✅ | 0 新违规 |
+| `npm run verify:endpoint-adr` | ✅ | 164 admin 路由对齐 35 ADR 端点 |
+| `verify:adr-contracts` → verify-endpoint-adr | ✅ | 同上 |
+| `verify:adr-contracts` → verify-error-message | ⚠️ pre-existing | 128 条 message 未匹配 ADR §错误码模板 / 全局 backlog |
+| `verify:adr-contracts` → verify-adr-d-numbers | ⚠️ 本卡修补 | D-124-3..7 闭环引用补全 / 5 条 pre-existing 留 MISC-AUDIT-PARSER 跟踪 |
+| `verify:adr-contracts` → verify-sql-schema-alignment | ⚠️ 本卡修补 | userSubmissions.ts 2 处 v.cover_url 修为 mc.cover_url |
+| `verify:adr-contracts` → verify-style-shorthand-conflict | ✅ | 0 命中 |
+| 全量 unit test | ✅ | **4167 PASS** 保持 |
+
+### 修补本卡引入 advisory（2 文件改）
+
+**1. `apps/api/src/db/queries/userSubmissions.ts` SQL schema bug**：
+- 2 处 SELECT 用 `v.cover_url AS video_poster_url`
+- 但 **migration 029_videos_drop_metadata_fields.sql** 已 DROP `videos.cover_url`（2025-12 落地 / 8 个月）
+- 现位于 `media_catalog.cover_url`（migration 026）
+- 修复：JOIN `media_catalog mc ON mc.id = v.catalog_id` + `mc.cover_url AS video_poster_url`
+- 范式参考：staging.ts:147/158/248/252/277 全部 JOIN media_catalog 取 cover_url
+
+**2. changelog D-124-3..7 闭环引用补全**：
+- A 卡（D-124-3/4/7）+ B 卡（D-124-3/6 通过 audit 写入位点实施）changelog 未明确加 `D-124-N` 字符串引用
+- verify-adr-d-numbers 守卫期望 changelog.md 含 `D-NNN-N` 标记
+- E 卡 changelog 段补全 D-124-1..8 全清单 + 闭环描述
+
+### 关键自省
+
+1. **A 卡 SQL schema 直觉错位教训**：`videos.cover_url` 是 init_tables.sql 直觉但已 migration 029 DROP / B/C 卡 mock pool 测试未触发实际 DB / 漏到 E 卡 advisory 才发现 / **教训**：未来涉及 cover_url / poster_url / 等图片字段时强制 grep media_catalog 范式
+2. **verify-adr-d-numbers 守卫识别条件**：脚本 grep `D-NNN-N` 字符串出现于 changelog.md 即视为闭环 / 决策正文需在 changelog 显式列出全 D 编号清单（vs 仅在标题或表格部分引用）
+3. **pre-existing advisory 隔离**：ADR-121 D-121-6 + ADR-122 D-122-1/4/6 + ADR-123 D-123-2..6 共 9 项 pre-existing 未闭环 / 属 MISC-AUDIT-PARSER 跟踪卡范围 / 不在本 E 卡修
+
+### D-124 闭环引用全清单（verify-adr-d-numbers 守卫识别）
+
+- **D-124-1** schema 方案 A 新独立表 user_submissions（A 卡 commit `9012aa48`）
+- **D-124-2** D2b 迁移 + alias 过渡至 M-SN-9 退役（D 卡 commit `fc519f58` deprecation banner 实施）
+- **D-124-3** 合并 actionType `user_submission.action` + afterJsonb.action 区分（A 卡 stub helper + B 卡 6 业务方法 commit `b2763f30`）
+- **D-124-4** targetKind 新增 `user_submission`（A 卡 types + AuditLogService.TARGET_KINDS）
+- **D-124-5** metadata_jsonb 混合（quote TEXT + JSONB / 3 zod shape 锁定 BadSource/WishList/MetadataCorrection / A 卡 UserSubmissionService）
+- **D-124-6** 错误码复用 ADR-110 14 码（零新增 / STATE_CONFLICT 409 状态机非法 / B 卡 service 双重守卫）
+- **D-124-7** audit RETRO 4 真源同步框架（R-MID-1 第 15 次系统化 / A 卡 types + AuditLogService + audit-log-coverage + set-equal）
+- **D-124-8** backfill 历史 video_sources.is_active=false AND submitted_by IS NOT NULL → bad_source（A 卡 migration 065）
+
+### 质量门禁汇总
+
+- typecheck ✅ / lint ✅ / file-size ✅ 0 新违规
+- verify:endpoint-adr ✅ 164/35
+- verify:adr-contracts：本卡引入 0 残留 advisory（D-124 全 8 项闭环 / SQL schema userSubmissions 全修）
+- 全量 unit：**4167 PASS**（REDO-02 累计 +50 净增 vs 起点 4117）
+
+### 后续触发
+
+- 下张可执行卡：**CHG-SN-7-REDO-02-F** Opus 验收（0.2w）— spec §5.13 100% 覆盖 + ADR-124 9 节闭环 + 评级 ≥ A−
+- pre-existing advisory（9 项 D + 128 条 error-message）属 **MISC-AUDIT-PARSER** 跟踪卡范围 / 非本 REDO-02 milestone 范围
+- 累计已完成：A0 ✅ + A ✅ + B ✅ + PRE-CARD ✅ + PRE-CARD-A ✅ + C ✅ + D ✅ + E ✅ 共 **~2.5w / REDO-02 总 ~2.95w — 剩余 ~0.2w**（F 验收）

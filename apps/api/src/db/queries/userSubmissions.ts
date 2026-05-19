@@ -124,12 +124,13 @@ export async function listUserSubmissions(
     db.query<DbRow>(
       `SELECT us.id, us.type, us.status, us.video_id, us.source_id, us.submitted_by,
               u.username AS submitted_by_name, us.quote, us.metadata_jsonb,
-              v.title AS video_title, v.cover_url AS video_poster_url,
+              v.title AS video_title, mc.cover_url AS video_poster_url,
               vs.source_name, COALESCE(vs.source_site_key, v.site_key) AS source_site_key,
               us.created_at::text, us.processed_at::text, us.processed_by, us.processed_reason
          FROM user_submissions us
          LEFT JOIN users u ON u.id = us.submitted_by
          LEFT JOIN videos v ON v.id = us.video_id
+         LEFT JOIN media_catalog mc ON mc.id = v.catalog_id
          LEFT JOIN video_sources vs ON vs.id = us.source_id
          ${whereSQL}
          ORDER BY ${orderCol} ${orderDir} NULLS LAST
@@ -176,12 +177,13 @@ export async function getUserSubmissionById(
   const res = await db.query<DbRow>(
     `SELECT us.id, us.type, us.status, us.video_id, us.source_id, us.submitted_by,
             u.username AS submitted_by_name, us.quote, us.metadata_jsonb,
-            v.title AS video_title, v.cover_url AS video_poster_url,
+            v.title AS video_title, mc.cover_url AS video_poster_url,
             vs.source_name, COALESCE(vs.source_site_key, v.site_key) AS source_site_key,
             us.created_at::text, us.processed_at::text, us.processed_by, us.processed_reason
        FROM user_submissions us
        LEFT JOIN users u ON u.id = us.submitted_by
        LEFT JOIN videos v ON v.id = us.video_id
+       LEFT JOIN media_catalog mc ON mc.id = v.catalog_id
        LEFT JOIN video_sources vs ON vs.id = us.source_id
       WHERE us.id = $1`,
     [id],

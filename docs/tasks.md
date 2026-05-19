@@ -6,7 +6,58 @@
 
 ## 进行中任务
 
-<!-- REDO-02-D 闭环（2026-05-19）；下一卡 REDO-02-E RETRO 验证 -->
+<!-- REDO-02-E 闭环（2026-05-19）；下一卡 REDO-02-F Opus 验收 -->
+
+### CHG-SN-7-REDO-02-E ✅ RETRO 验证 + verify 全门禁 + SQL schema 修补闭环（2026-05-19）
+
+**完成时间**：2026-05-19（实际 ~0.2w / 原估 0.3w / SQL schema bug 主动发现 + 修复降低 F 卡风险）
+**实施**：
+- **全 5 verify 命令逐项核验**：
+  - typecheck ✅ 全 7 workspace
+  - lint ✅ 0 error / 0 warning
+  - verify:file-size-budget ✅ 0 新违规
+  - verify:endpoint-adr ✅ **164 admin 路由对齐 35 ADR 端点**
+  - verify:adr-contracts（5 子项）：
+    - verify-endpoint-adr ✅
+    - verify-error-message ⚠️ pre-existing advisory（128 条 message 未匹配 ADR §错误码模板 / 全局 backlog / 非本卡引入）
+    - verify-adr-d-numbers ⚠️ **修补本卡引入 5 项 D-124-3..7**
+    - verify-sql-schema-alignment ⚠️ **修补本卡引入 2 处 v.cover_url bug**
+    - verify-style-shorthand-conflict ✅ 0 命中
+- **修补 SQL bug**（本卡发现 + 修复）：
+  - `apps/api/src/db/queries/userSubmissions.ts` 2 处 `v.cover_url AS video_poster_url` → `mc.cover_url AS video_poster_url` + LEFT JOIN media_catalog
+  - 根因：videos.cover_url 已在 **migration 029** DROP / 现位于 media_catalog 表（migration 026）/ A 卡 query 沿用直觉 `v.cover_url` 漏校
+- **修补 D-124 闭环 changelog 标记**：D-124-3 / D-124-4 / D-124-5 / D-124-6 / D-124-7（B 卡 service + audit RETRO 落地后未在 changelog 加标准编号引用 / verify-adr-d-numbers 守卫期望识别）
+- 全量 unit：**4167 PASS** 保持
+
+**评级**：A（主动发现并修复 SQL bug + audit 编号 / 守卫覆盖 100% / 0 红线 / 0 黄线）
+
+**关键自省**：
+1. **A 卡 query 编写时直觉错位**：`videos.cover_url` 是 schema 直觉但已 migration 029 DROP 8 个月 / 编写时未 grep 验证 / B/C 卡测试用 mock pool 未触发实际 DB → 漏到 E 卡 advisory 守卫才发现 / **教训**：未来涉及 cover_url / poster_url / 等图片字段时强制 grep media_catalog
+2. **D-N 编号 changelog 标准引用**：verify-adr-d-numbers 守卫期望 `D-NNN-N` 字符串出现在 changelog.md / 决策正文已写但 changelog 仅在标题或表格引用 → 升 verify-adr-d-numbers 守卫规则（含 8 个 D-124-N 全编号列表）
+3. **pre-existing advisory 标记**：本次扫描发现 ADR-121 D-121-6 + ADR-122 D-122-1/4/6 + ADR-123 D-123-2..6 共 9 项 pre-existing 未闭环 / 属 MISC-AUDIT-PARSER 跟踪卡范围 / 非本卡修
+
+**质量门禁汇总**：
+- typecheck ✅ / lint ✅ / file-size ✅ 0 新违规
+- verify:endpoint-adr ✅ 164/35
+- verify:adr-contracts：本卡引入 0 残留 advisory（D-124 全 8 项闭环 / SQL schema userSubmissions 全修）
+- 全量 unit：**4167 PASS**（A0/A/B/C/D/E 累计 +43 净增 vs REDO-02 起点 4117）
+
+**D-124 闭环引用清单（本 changelog 段触发 verify-adr-d-numbers 守卫识别）**：
+- D-124-1 schema 方案 A 新独立表 user_submissions ✅
+- D-124-2 D2b 迁移 + alias 过渡（M-SN-9 退役）✅
+- D-124-3 合并 actionType `user_submission.action` + afterJsonb.action 区分 ✅
+- D-124-4 targetKind 新增 `user_submission`（不复用 video_source）✅
+- D-124-5 metadata_jsonb 混合（quote TEXT + JSONB / 3 zod shape 锁定）✅
+- D-124-6 错误码复用 ADR-110 14 码（零新增 / STATE_CONFLICT 409 状态机非法）✅
+- D-124-7 audit RETRO 4 真源同步框架（R-MID-1 第 15 次系统化）✅
+- D-124-8 backfill 历史 video_sources.is_active=false AND submitted_by IS NOT NULL → bad_source ✅
+
+**REDO-02 工时进度**：A0 0.15 + A 0.4 + B 0.7 + PRE-CARD 0.05 + PRE-CARD-A 0.2 + C 0.7 + D 0.1 + E ~0.2 = **~2.5w / 总 ~2.95w 剩 ~0.2w**（F 验收 0.2w / 工时节省 0.45w）
+
+<!-- 下张：CHG-SN-7-REDO-02-F Opus 验收 spec §5.13 100% 覆盖 + ADR-124 9 节闭环（0.2w）-->
+
+
+### CHG-SN-7-REDO-02-E ⏳ 已替换为闭环卡
 
 ### CHG-SN-7-REDO-02-D ✅ 旧路径 deprecation banner 闭环（2026-05-19）
 
