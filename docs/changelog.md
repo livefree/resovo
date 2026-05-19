@@ -10672,3 +10672,71 @@ PRE-04 暴露的反 M-SN-6 关闭复核盲点：
 - "全量审计基准"必须明确（commit 实测 vs reference 自评） — 否则会被自评段误导
 - 重大原语已存在（KpiCard / Spark）的假设错误，应在 milestone 起步**先做 admin-ui 现状盘点**而非依赖记忆
 - 设计稿真源（screens-N.jsx）行号级对照是审计可重现性的硬约束 — 单凭 reference.md §5.x 文字 spec 容易遗漏视觉细节（如 staging 1.5fr/1fr / home 1fr/360px / merge 1fr/60px/1fr 等关键 grid 比例）
+
+---
+
+## [CHG-SN-7-PRE-01] 文件大小守卫 verify:file-size-budget（M-SN-6 挂账闭环）
+
+- **完成时间**：2026-05-18
+- **记录时间**：2026-05-18
+- **执行模型**：claude-opus-4-7（主循环，按 sonnet 模式独立实施）
+- **子代理**：无
+
+### 起源
+
+M-SN-6 关闭复核（CHG-SN-6-29-FOLLOWUP, 2026-05-17）暴露"自评数据可信度"盲点。把 CLAUDE.md §绝对禁止第 11 条「文件超 500 行非声明性 / 导出 2+ 主要概念」从"软门"提升为"硬门"。
+
+### 修改文件（3 个）
+
+- **新建** `scripts/verify-file-size-budget.mjs`（210 行）— 扫描 `apps/**` + `packages/**` 的 `.ts/.tsx` 文件，按 PERMANENT / BASELINE / 新违规 三类分级；exit 0 通过 / exit 1 命中新违规 / exit 2 脚本错
+- `package.json` — 新增 `verify:file-size-budget` script（line 51）
+- `scripts/preflight.sh` — 新增 5e2/6 步骤集成
+
+### 实施成果
+
+| 类别 | 数量 | 说明 |
+|---|---|---|
+| **PERMANENT_EXEMPT** | 5 | apps/server v1 frozen 永久豁免（CLAUDE.md 明示"仅维护期 bug 修复"） |
+| **BASELINE_EXEMPT** | 23 | M-SN-6 复核 7（server-next/admin-ui）+ PRE-01 全量扩范围 16（api/queries 5 / routes 2 / services+workers 4 / web-next 1 / player core 4） |
+| **新违规** | **0 ✅** | 守卫成功上线 |
+| **GENERIC_WHITELIST** | 模式匹配 | `.types.ts` / `.schema.ts` / `index.ts` / `db/migrations/` / `i18n/messages/` / `.d.ts` 等结构性大文件 |
+
+### 关键决策（PRE-01 执行中用户裁决 2026-05-18）
+
+**A. baseline 清单严重不全的处置**：
+- 触发：PRE-01 首跑实测 28 文件超限，远超 M-SN-6 复核报告"5 baseline + 2 新增 = 7 文件"清单
+- 根因：M-SN-6 复核报告本身扫描范围只覆盖 server-next + admin-ui，未扫 apps/api / apps/server v1 / apps/web-next / packages/player*（即"复核报告本身不全"——另一层自评数据可信度盲点）
+- 用户决策：扩 BASELINE_EXEMPT 至 28 文件全量
+- 实施：分 PERMANENT（5）+ BASELINE（23）两类
+
+**B. apps/server v1 frozen 永久豁免**：
+- 用户决策：v1 已冻结，拆分违反冻结边界，永久豁免不挂拆分卡
+- 涉及 5 文件：AdminVideoForm 666 / InactiveSourceTable 614 / ModerationList 567 / VideoImageSection 559 / StagingTable 535
+
+### 新挂 5 张 MISC 拆分跟踪卡（task-queue.md）
+
+| ID | 范围 | 估时 | 优先级 |
+|---|---|---|---|
+| **CHG-SN-7-MISC-API-QUERIES-SIZE** | apps/api/db/queries 5 文件（videos.ts **1583** / sources 818 / crawlerTasks 628 / mediaCatalog 577 / imageHealth 536） | 1.0–1.5w | 🟡 P2 |
+| **CHG-SN-7-MISC-API-ROUTES-SIZE** | apps/api/routes/admin 2 文件（crawler.ts 960 / moderation.ts 533） | 0.4–0.6w | 🟡 P2 |
+| **CHG-SN-7-MISC-API-SERVICES-SIZE** | services + workers 4 文件 | 0.6–0.9w | 🟡 P2 |
+| **CHG-SN-7-MISC-WEB-NEXT-SIZE** | apps/web-next/components/layout/Nav.tsx 580 | 0.15w | 🟢 P3 |
+| **CHG-SN-7-MISC-PLAYER-CORE-SIZE** | player + player-core 4 文件（Player.tsx ×2 1091/1085 / useLayoutDecision ×2 526） | 1.5–2.5w | 🟠 P1（播放器核心改动需 arch-reviewer Opus 前置） |
+
+### 质量门禁
+
+- ✅ `typecheck` — 5 tasks PASS
+- ✅ `lint` — 5 tasks PASS
+- ✅ `test -- --run` — 303 files / **4018 tests PASS** 保持
+- ✅ `verify:file-size-budget` — 0 新违规
+
+### 关键自省
+
+1. **复核报告的"自评数据可信度"是递归问题**：M-SN-6 关闭复核（用户写的独立报告）发现 PATCH-2 自评不实；PRE-01 实施发现复核报告本身扫描范围不全 → 守卫脚本必须**用机械全量扫描**而非依赖任何层级报告的清单。
+2. **PERMANENT vs BASELINE 分类必要性**：v1 frozen 文件如果混入 BASELINE 会污染"拆分预案"语义，永久脱钩使待办清晰。
+3. **新违规零容忍是 milestone 关闭前置硬条件**：任何新提交超 500 行直接 FAIL（CI 阻断），从根本上杜绝下次 milestone 关闭再出现"自评失实"。
+
+### 后续触发
+
+- 下张可执行卡：**CHG-SN-7-PRE-02** ADR-121 R-MID-1 RETRO 协议正式化（0.15w，M-SN-6 挂账）
+- 5 MISC 拆分跟踪卡进入 M-SN-7 中后期 / PLAYER-CORE-SIZE 需先起 Opus 子代理评估播放器核心拆分风险

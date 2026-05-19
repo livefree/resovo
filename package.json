@@ -48,6 +48,7 @@
     "verify:adr-contracts": "node scripts/verify-endpoint-adr.mjs && node scripts/verify-error-message.mjs && node scripts/verify-adr-d-numbers.mjs && node scripts/verify-sql-schema-alignment.mjs && node scripts/verify-style-shorthand-conflict.mjs",
     "verify:sql-schema-alignment": "node scripts/verify-sql-schema-alignment.mjs",
     "verify:style-shorthand-conflict": "node scripts/verify-style-shorthand-conflict.mjs",
+    "verify:file-size-budget": "node scripts/verify-file-size-budget.mjs",
     "migrate": "node --env-file=.env.local --import tsx scripts/migrate.ts",
     "migrate:check": "node --env-file=.env.local --import tsx scripts/migrate.ts --dry-run",
     "clear:crawled-data": "node --env-file=.env.local --import tsx scripts/clear-crawled-data.ts",

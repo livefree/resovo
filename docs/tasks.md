@@ -8,7 +8,52 @@
 
 <!-- ✅ PRE-04 全 16 子卡闭环（2026-05-18，连续推进 #2–#16 用户授权）；总览：5 ✅ A 级（dashboard/moderation/videos/sources/analytics）+ 8 ⚠️ S 级（merge/subtitles/home/image-health/users/audit/login/dashboard MISC）+ 4 ❌（staging/submissions/crawler/settings）+ 16 MISC + 4 REDO（01/02/03/04）+ SHARED-03 取消；详见 docs/M-SN-7-design-realign-audit-FULL.md；下一步等用户拍板 PRE-04 收尾 + 启动 SHARED-01/02 milestone -->
 
-### CHG-SN-7-PRE-04 全量审计 16 路由 ✅ 已闭环（2026-05-18）
+### CHG-SN-7-PRE-01 文件大小守卫 ✅ 已闭环（2026-05-18）
+
+**完成时间**：2026-05-18
+**实施**：`scripts/verify-file-size-budget.mjs`（210 行）+ package.json 集成 + preflight.sh 5e2/6 步骤
+**实测结果**：5 PERMANENT（v1 frozen 永久豁免）+ 23 BASELINE（M-SN-6 复核 7 + PRE-01 全量扩 16）+ **0 新违规** ✅
+**关键决策**：PRE-01 执行中实测发现 baseline 清单严重不全（原 7 → 实际 28），用户裁决"扩 BASELINE_EXEMPT 至 28 文件全量" + "v1 永久豁免"，新挂 5 张 MISC 拆分跟踪卡（API-QUERIES/ROUTES/SERVICES + WEB-NEXT + PLAYER-CORE）
+**质量门禁**：typecheck ✅ / lint ✅ / 4018 unit PASS ✅ / file-size-budget ✅ 0 新违规
+**执行模型**：claude-opus-4-7 / 子代理：无
+
+<!-- 下张：CHG-SN-7-PRE-02 ADR-121 R-MID-1 协议化（0.15w，M-SN-6 挂账） -->
+
+
+**SEQ**：M-SN-7 / PRE 阶段第 2 张（M-SN-6 关闭挂账）
+
+**问题理解**：
+M-SN-6 关闭复核暴露"自评数据可信度"盲点 — PATCH-2 自评"全部 ≤ 500 行"实际 7 文件超限。需要静态扫描守卫 + preflight 集成，把 500 行约束从"软门"提升为"硬门"。
+
+**根因判断**：
+CLAUDE.md §绝对禁止第 11 条「文件超 500 行非声明性 / 导出 2+ 主要概念，不先拆分就继续写」无机制守卫；arch-reviewer 抽样无法兜底（H1 案例已证）。
+
+**方案**：
+1. 新建 `scripts/verify-file-size-budget.mjs`：
+   - 扫描 `apps/**/*.{ts,tsx}` + `packages/**/*.{ts,tsx}`
+   - 超 500 行 → 收入违规清单
+   - **5 baseline 豁免清单**（M-SN-6 复核 2026-05-17 实测）：MergeClient 756 / VideoListClient 734 / ModerationConsole 583 / sidebar 696 / data-table 608
+   - **GENERIC_WHITELIST**：`*.types.ts` / `index.ts` 等结构性大文件豁免
+   - **新增文件零容忍**：不在 baseline 清单 + 不在 whitelist = FAIL
+   - exit 0 = 通过；exit 1 = 命中违规 + 清单；exit 2 = 脚本错误
+2. `package.json` 新增 `verify:file-size-budget` script
+3. `scripts/preflight.sh` 集成（紧跟 verify:token-references 之后）
+4. 单测：脚本本身先跑通（实测当前仓库应输出 5 baseline 0 新违规）
+
+**涉及文件**：
+- 新建：`scripts/verify-file-size-budget.mjs`
+- 修改：`package.json`（scripts 段）
+- 修改：`scripts/preflight.sh`（5f/6 步骤新增）
+
+**严格约束**：
+- ❌ 不改业务代码
+- ❌ 不调整 baseline 清单（5 文件锁定 M-SN-6 复核实测数）
+- 一旦实测产出 baseline 外新违规 → 立即汇报（说明 M-SN-6 关闭至今有人新违规提交）
+
+**执行模型**：claude-opus-4-7（主循环，按 sonnet 模式独立实施，无需 Opus 子代理）
+
+**估时**：0.12w
+
 
 **完成时间**：2026-05-18（连续推进 #1–#16 一会话内闭环）
 **产出**：`docs/M-SN-7-design-realign-audit-FULL.md` 16 段完整审计
