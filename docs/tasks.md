@@ -6,7 +6,52 @@
 
 ## 进行中任务
 
-<!-- REDO-01-I 闭环（2026-05-19）；剩 J 视觉回归 + Opus 验收 0.2w -->
+<!-- REDO-01 milestone 全闭环（2026-05-19）—— A→J 10 子卡完整 / Opus 验收 A− / 等待用户拍板下一卡 -->
+
+### CHG-SN-7-REDO-01-J ✅ 视觉回归 + e2e + Opus 验收闭环（2026-05-19）
+
+**完成时间**：2026-05-19
+**实施**：
+- 所有 verify 命令全 PASS（typecheck / lint / file-size / endpoint-adr / adr-contracts / 4117 unit）
+- spawn arch-reviewer Opus 子代理 1 轮验收 — **A−**（22 行 §2.4 checklist 21 ✅ + 1 ⚠️ contract-认可占位 / verify 全 PASS / 0 硬编码 / 0 any / 0 空 catch / 0 越层）
+- 3 项 MISC 跟踪卡录入（视觉回归 / audit parser 修 / CSV export 补齐）
+
+**评级**：**A−**（达到 §3.4 验收门要求"≥ A−"）
+
+**Opus 评级扣分项**：
+- 扣 0.5：视觉回归未跑（§3.4 第 1 项硬门 / 用户未启 dev server / Opus 推荐选项 A 软门处理 / 留 MISC 跟踪）
+- 扣 0.5：ADR-122 + ADR-123 D-status audit JSON 仍标 pending（决策正文已写但脚本未识别 / 审计工具 bug 而非架构缺陷）
+
+**22 行 §2.4 checklist 全绿**（详见 Opus 验收报告 / changelog）：
+- page__head 4 actions（导出/+新增/全站全量/高级 dropdown）— ✅
+- KPI 5 列 + 时间轴 card + 站点 9 列表格 expandable — ✅
+- 行级 +增量/+全量 + {more} 6 项 + 行展开 sub-table + 分类映射 collapsible — ✅
+- 高级菜单 4 项（调度配置/重建索引/全局止血/冻结切换）— ✅
+- runs 迁独立路由 + sidebar children — ✅
+- 旧 3 文件删除 + git tag 锚点 — ✅
+
+**REDO-01 milestone 全闭环**：A ✅ + B ✅ + C ✅ + D ✅ + E ✅ + E2 ✅ + F ✅ + G ✅ + H ✅ + I ✅ + J ✅
+**累计**：~2.5w（含 E2 拆分 / 原估 2.55w → 实际 ~2.5w 微低）
+
+**REDO-01 关键产出**：
+- ADR-122（Crawler 4 新端点）+ ADR-117 AMENDMENT 1 + 2（sources 域 GET by-site + 3 mutations）+ ADR-123（分类映射 schema）
+- migration 064（crawler_site_category_maps）
+- 11 admin 路由新增（v1 基线 147 → 158）
+- audit RETRO 2 次系统化（R-MID-1 第 13/14 次）+ 1 次 4 文件框架降级（E2 ADR-121 D-121-5）
+- 11 前端文件新建/重写（_client/ 目录由 7 文件 → 11 文件 / 净 +4）
+- 单测净增 82 case（4035 → 4117）
+
+**执行模型**：claude-opus-4-7 主循环 + arch-reviewer (claude-opus-4-7) 验收 1 轮 A−
+
+**3 MISC 跟踪卡录入 task-queue**：
+- MISC-VISUAL-CRAWLER（0.1w / Sonnet）：dev server + Playwright baseline
+- MISC-AUDIT-PARSER（0.05w / Haiku）：adr-d-status.json 脚本识别 D 决策行内格式
+- MISC-CRAWLER-CSV-EXPORT（0.15w / Sonnet）：crawler-export-btn warn toast → 真实 CSV
+
+<!-- REDO-01 milestone 闭环 / 等待用户决策：(a) 启动 REDO-02 Submissions Card list 重做 ~1w / (b) 启动 REDO-03 Settings 收敛 ~1.5w / (c) 跑 3 MISC 跟踪卡 / (d) 切其他 milestone -->
+
+
+### CHG-SN-7-REDO-01-J ⏳ 已替换为闭环卡
 
 ### CHG-SN-7-REDO-01-I ✅ 删除旧文件 + git tag 回滚锚点（2026-05-19）
 

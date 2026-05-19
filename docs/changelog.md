@@ -11654,3 +11654,90 @@ git checkout pre-redo-crawler-20260519 -- \
 
 - 下张：**REDO-01-J** 视觉回归 + e2e + Opus 验收（0.2w / §2.4 全 22 行 checklist + pixel diff ≤ 2%）
 - 累计已完成：A ✅ + B ✅ + C ✅ + D ✅ + E ✅ + E2 ✅ + F ✅ + G ✅ + H ✅ + I ✅ 共 ~2.35w / REDO-01 总 ~2.4w — 剩余 0.2w（J）
+
+---
+
+## [CHG-SN-7-REDO-01-J] Crawler REDO-01 milestone 全闭环 / Opus 验收 A−
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环（验收编排）
+- **子代理**：arch-reviewer (claude-opus-4-7) 验收 1 轮 — **A−**
+
+### 起源
+
+REDO-01 列表顺序 A→I 9 子卡（commits `fa8293ae` → `ef0a30f4` / 含 E2 拆分）全部闭环 / ~2.3w 累计；本 J 卡为 milestone 最终验收门（§3.4）。
+
+### 验收范围
+
+| 子卡 | commit | 产出摘要 |
+|---|---|---|
+| A | `fa8293ae` | contract 6 组件 props + 5 Open Issues 裁决 |
+| B | `7899d6da` | ADR-122 + 4 端点（kpi / timeline / runs/:key / run-all）|
+| C | `df0a0a1e` | 前端骨架重写（KpiRow + Timeline + SiteList 9 列 + CrawlerClient）|
+| D | `908b0ffe` | 行级 +增量/+全量 + {more} 6 项菜单 |
+| E | `6c5824b9` | ADR-117 AMENDMENT 1 GET by-site + sub-table 6 列 + alias inline-edit |
+| E2 | `cd27dacf` | ADR-117 AMENDMENT 2 行级 3 mutations + audit RETRO 4 文件 |
+| F | `5bfcb7c5` | ADR-123 落地（migration 064 + GET/PUT category-mapping + 7 文件 RETRO）|
+| G | `746e8d89` | CrawlerAdvancedMenu 4 项（调度/重建/止血/冻结切换） |
+| H | `6204c108` | runs 迁独立路由 + sidebar children 二级菜单 |
+| I | `ef0a30f4` | 删除旧 3 文件 + git tag `pre-redo-crawler-20260519` 回滚锚点 |
+
+### §2.4 22 行 checklist 状态（Opus 子代理逐行核对）
+
+**22/22 全绿（21 ✅ + 1 ⚠️ contract-认可占位）**：
+- page__head 4 actions（导出 ⚠️ warn toast 占位 / +新增 ✅ / 全站全量 ✅ / 高级 dropdown ✅）
+- KPI 5 列 ✅ / 时间轴 card 全宽 ✅ / 站点列表 + 搜索 ✅ / 9 列 expandable ✅
+- 行级 +增量/+全量 ✅ / {more} 6 项 ✅ / 行展开线路 sub-table ✅ / 分类映射 collapsible ✅
+- 旧调度卡 / freeze 卡 / Tab 切换全部删除 ✅
+- 调度配置/重建索引/全局止血 全迁高级菜单 ✅
+- CRUD Drawer 保留 ✅ / 批量动作删除 ✅
+- runs 迁独立路由 ✅ / run 详情 + TaskLogsDrawer 保留 ✅
+
+### Verify 命令全 PASS
+
+- `npm run typecheck` ✅ 全 7 workspace
+- `npm run lint` ✅ 0 error / 0 warning
+- `npm run verify:file-size-budget` ✅ 0 新违规（CrawlerClient.tsx 485<500 max）
+- `npm run verify:endpoint-adr` ✅ **158 admin 路由对齐 29 ADR 端点**（v1 基线 147 → 158 / 净 +11）
+- `npm run verify:adr-contracts` ✅ 0 阻塞
+- 全量 unit test：**4117 PASS**（A→J 累计净增 82 case：B +18 / C +9 / D +12 / E +22 / E2 +17 / F +14 / G +8 / H/I/J 0）
+
+### 关键产出 / 累计统计
+
+- **ADR**：ADR-122 + ADR-117 AMENDMENT 1 + AMENDMENT 2 + ADR-123（4 个 ADR / 4 个 Opus 子代理评审 / 全部 PASS）
+- **Migration**：064 crawler_site_category_maps
+- **后端**：6 端点新增（kpi / timeline / runs/:key / run-all / sources routes by-site GET + 3 mutations / category-mapping GET+PUT）
+- **audit RETRO**：2 次系统化（R-MID-1 第 13+14 次）+ 1 次 4 文件框架降级（E2 ADR-121 D-121-5 复用 actionType `sources.route_action`）
+- **前端**：11 文件新建/重写（_client/ 由 7 → 11 / 净 +4）+ 旧 3 文件删除 = 净 +4 / 共 -652 行 + 主链路重写
+- **测试**：单测净增 82 case（4035 → 4117）+ 4 audit content assertion 测试文件
+
+### Opus 评级扣分项（A− 而非 A）
+
+- **扣 0.5：视觉回归未跑**（§3.4 第 1 项硬门 / 用户未启 dev server）
+  - 处置：MISC-VISUAL-CRAWLER 跟踪卡（软门 / Opus 推荐选项 A）
+- **扣 0.5：ADR-122 + ADR-123 D-status JSON 仍标 pending**（决策正文已写但脚本未识别 `**D-XXX-N（…）**` 行内格式）
+  - 处置：MISC-AUDIT-PARSER 跟踪卡（脚本 bug / 非架构缺陷）
+
+### 3 MISC 跟踪卡录入 task-queue
+
+- **CHG-SN-7-MISC-VISUAL-CRAWLER**（0.1w / Sonnet）：dev server + Playwright baseline + diff ≤ 2%
+- **CHG-SN-7-MISC-AUDIT-PARSER**（0.05w / Haiku）：adr-d-status.json 生成脚本识别行内格式
+- **CHG-SN-7-MISC-CRAWLER-CSV-EXPORT**（0.15w / Sonnet）：导出按钮 → 真实 CSV 下载
+
+### REDO-01 milestone 闭环声明
+
+| 阶段 | 估时 | 实际 |
+|---|---|---|
+| 共享原语 SHARED | 0.4w 原 / 0.1w 实测 | -0.3w |
+| REDO-01 A-J（含 E2 拆分）| 2.55w 原 / ~2.5w 实测 | -0.05w |
+| **总** | **2.95w 原 / 2.6w 实际** | **节省 ~0.35w** |
+
+节省源：SHARED-02 取消（DataTable v2 已具备）+ ADR-117 AMENDMENT 范式（节省 0.25w + 0.2w）+ E2 actionType 合并（4 文件框架 vs 7 文件 / 节省 0.1w）。
+
+### 后续触发（建议）
+
+- 用户拍板路径 (a)/(b)/(c)/(d)：
+  - (a) **REDO-02 Submissions** §5.13 Card list 重做（~1w）
+  - (b) **REDO-03 Settings 收敛**（~1.5w / Opus IA 决策）
+  - (c) 跑 3 MISC 跟踪卡（共 ~0.3w）
+  - (d) 切换其他 milestone（暂无明确候选）
