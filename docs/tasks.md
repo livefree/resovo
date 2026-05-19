@@ -8,7 +8,55 @@
 
 <!-- ✅ PRE-04 全 16 子卡闭环（2026-05-18，连续推进 #2–#16 用户授权）；总览：5 ✅ A 级（dashboard/moderation/videos/sources/analytics）+ 8 ⚠️ S 级（merge/subtitles/home/image-health/users/audit/login/dashboard MISC）+ 4 ❌（staging/submissions/crawler/settings）+ 16 MISC + 4 REDO（01/02/03/04）+ SHARED-03 取消；详见 docs/M-SN-7-design-realign-audit-FULL.md；下一步等用户拍板 PRE-04 收尾 + 启动 SHARED-01/02 milestone -->
 
-### CHG-SN-7-PRE-02 ADR-121 R-MID-1 RETRO 协议正式化 ✅ 已闭环（2026-05-18）
+### CHG-SN-7-PRE-05 ADR-123 分类映射 schema 起草 ✅ 已闭环（2026-05-18）
+
+**完成时间**：2026-05-18
+**实施**：spawn arch-reviewer Opus 子代理 1 轮独立起草 → 主循环落 `docs/decisions.md`（追加 ~310 行）
+**评级**：**Accepted A−**（子代理直接 PASS，无需修订）
+**决策**：方案 A（新建表 `crawler_site_category_maps`）；方案 B（JSONB）/ C（config 文件）/ D（仅扩展硬编码）全部否定
+**核心设计**：
+- 复合主键 `(site_key, source_label)` + FK `crawler_sites(key)` ON DELETE CASCADE
+- `target_genre` CHECK 约束 22 值（ADR-017 VideoGenre 20 + `_unmapped` + `_discard`）
+- `PUT /admin/crawler/sites/:key/category-mapping` 全量替换语义 + 7 文件 RETRO 框架
+- 入库前查表映射，命中即用 / 未命中走现有 `parseGenre()` 兜底（向后兼容）
+- migration 064 SQL 草案完整（含 updated_at trigger + ROLLBACK 段）
+**REDO-01-F 实施路径**：schema migration → query + service + 2 endpoints (with audit RETRO) → UI collapsible 消费 GET/PUT
+**质量门禁**：verify:adr-d-numbers ⚠️ advisory（D-121-4/6 + D-123-1..6 未闭环，后续实施卡补）/ file-size-budget ✅ / typecheck ✅
+**执行模型**：claude-opus-4-7 主循环 + arch-reviewer (claude-opus-4-7) 独立起草
+
+<!-- PRE 阶段全部 4 张闭环 ✅✅✅✅
+     下张：M-SN-SHARED milestone 启动 — SHARED-01 KpiCard progress? prop 扩展（0.1w）+ SHARED-02 ExpandableTable（0.4w）可并行；SHARED-03 已取消 -->
+
+
+**SEQ**：M-SN-7 / PRE 阶段第 4 张 / REDO-01-F 前置依赖
+
+**问题理解**：M-SN-7 设计稿对齐重做的 Crawler 重做（REDO-01）站点行展开包含"分类映射 collapsible"区块（screens-2.jsx:307-330）— 站点采集到的源分类（如「动作片」/「喜剧片」）→ 资源库类目（如 `action` / `comedy` / `drama` / `sci-fi`）的映射。当前无任何 schema / API / lib 支持。
+
+**根因判断**：M-SN-6 实现 crawler 模块时此功能未规划；设计稿 v2.1 §5.6 + §6.8 + screens-2.jsx 真源新增此需求。
+
+**方案**：
+spawn arch-reviewer Opus 子代理起草 ADR-123（独立设计任务）：
+- Context：业务必要性 + screens-2.jsx mock + 关联 ADR-017 内容类型系统
+- Decision：3 选项对比并选定
+  - 方案 A：新建表 `crawler_site_category_maps`（site_key + source_label + target_genre + 唯一约束）
+  - 方案 B：`crawler_sites` 表加 JSONB 字段 `category_map`
+  - 方案 C：写入 config 文件（与 fromConfig 站点同源 / 读写非对称）
+- 决策要点（D-123-1...）
+- 实施路径（migration + service + 端点 + UI）
+- 不在范围 / 关联 / 4 维度自评
+
+**涉及文件**：
+- 修改：`docs/decisions.md`（追加 ADR-123 段）
+
+**严格约束**：
+- ❌ 不改业务代码（仅 ADR 文档）
+- ❌ 不动 schema（迁移在 ADR 通过后由 REDO-01-F 实施）
+- Opus 子代理独立起草后主循环直接落（CLAUDE.md §模型路由"设计跨 3+ 消费方 schema"+"撰写 ADR"双重强制项）
+
+**执行模型**：spawn arch-reviewer (claude-opus-4-7) 独立起草 + 主循环 opus-4-7 落到 decisions.md
+
+**估时**：0.1w
+
 
 **完成时间**：2026-05-18
 **实施**：`docs/decisions.md` 追加 ADR-121 段（约 240 行）

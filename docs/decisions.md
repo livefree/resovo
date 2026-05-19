@@ -6867,3 +6867,297 @@ arch-reviewer Opus 评审输出（A- CONDITIONAL）：
 - **黄线 1 已修订**：D-121-5 标题加"与 ADR-100 R7 MUST-8 增量补充关系"+ 段尾明确"不替代 R7 MUST-8"
 - **黄线 2 已修订**：替代方案增加方案 D（CI 脚本守卫不起 ADR）+ 与方案 A 不互斥的兜底叠加路径
 - **黄线 3 已修订**：4 维度自评对称性 A → A-；综合自评 A → A-
+
+---
+
+## ADR-123：Crawler 站点行展开"分类映射"schema 设计
+
+- **日期**：2026-05-18
+- **状态**：Accepted
+- **决策者**：主循环 claude-opus-4-7 / arch-reviewer (claude-opus-4-7) — 1 轮独立起草
+- **关联**：ADR-017（VideoGenre 枚举 / source_category 语义）/ ADR-019（ingest_policy JSONB 站点级策略）/ ADR-100 R7 MUST-8（admin route ADR 前置）/ ADR-109（admin_audit_log schema）/ ADR-121（R-MID-1 audit RETRO 协议 4 真源 + 7 文件框架）/ ADR-104（home_modules schema 同类参考）/ ADR-118（audit 视图 API 同类参考）/ CHG-SN-7-PRE-05（本卡）/ CHG-SN-7-REDO-01-F（依赖本 ADR 决策实施）
+- **对应交付**：CHG-SN-7-PRE-05（本 ADR 起草）+ CHG-SN-7-REDO-01-F（schema + endpoint + UI 三段实施）
+
+### 议题
+
+M-SN-7 设计稿对齐重做（CHG-SN-7-REDO-01）的 Crawler 站点行展开区包含"分类映射 collapsible"区块（真源：`docs/designs/backend_design_v2.1/app/screens-2.jsx:306-328`）。设计稿语义：左侧为站点 crawler scrape 得来的原始分类标签（如「动作片」「喜剧片」），中间箭头，右侧为资源库 `VideoGenre` 下拉选择器（action / comedy / drama / sci_fi 等）。运营在此维护每站点的 source_label → target_genre 映射关系。
+
+**现状**：codebase 内无 `category_map` / `categoryMapping` 相关 schema / migration / API / lib / 类型定义。当前 crawler 入库的分类映射完全依赖硬编码在 `SourceParserService.GENRE_MAP` + `genreMapper.SOURCE_CATEGORY_MAP` 中的静态映射表，运营无法通过 admin UI 按站点维护映射规则。
+
+**关键差距**：
+1. 现有 `GENRE_MAP` / `SOURCE_CATEGORY_MAP` 是全局共享的、不区分站点的映射；不同站点相同 source_category 文本可能需要不同映射
+2. 新的 source_label 出现时需要代码部署才能补映射
+3. 设计稿要求按站点独立配置，UI 可视化编辑
+
+**触发原因**：REDO-01-F 子卡需要分类映射 collapsible 区块的数据层支撑。本 ADR 通过则按 schema + endpoint + UI 三段实施；不通过则 REDO-01-F 降级为"占位 + 跳 `/admin/system/settings` 站点设置"。
+
+### 决策
+
+**方案 A 采纳（新建独立表 `crawler_site_category_maps`）；方案 B / C / D 否定**。
+
+站点分类映射采用独立关系表存储，以 `(site_key, source_label)` 为复合主键，`target_genre` 受限于 `VideoGenre` 枚举值 + `_unmapped` / `_discard` 两个特殊值。映射仅作为运营维护的配置数据，不改变 crawler 入库时的实时处理流程；crawler 入库前查表替代/叠加现有硬编码映射。
+
+### 决策要点
+
+**D-123-1（方案选型理由 — 独立表 vs JSONB vs config 文件 vs 仅硬编码）**：
+
+- **方案 A（独立表）采纳**：独立表提供标准 SQL 查询能力、唯一约束保证（同站点同 source_label 不重复）、外键约束（site_key FK 到 crawler_sites）、单行更新不锁全站点记录、可独立索引加速按站点批量查询。符合后端分层约束（Route → Service → DB queries），schema 变更可通过 migration 管理。
+- **方案 B（JSONB 字段）否定**：在 `crawler_sites` 上加 `category_map JSONB` 虽然方便，但无法对 target_genre 值做 CHECK 约束（JSONB 内部值无 DB 级类型校验），单 key 的 INSERT/UPDATE 需读改写全量 JSONB（并发冲突风险），无 FK 约束到 crawler_sites 表（因为是同表字段），且 JSONB 字段内 key 增删不产生独立 audit 粒度。JSONB 适合 ingest_policy（ADR-019）这类结构固定、整体读写的配置，不适合行数不定、单行 CRUD 的映射关系。
+- **方案 C（config 文件）否定**：config 文件与 `from_config` 站点同源，但 DB 来源站点（`from_config = false`）无法受益；读写非对称（读文件 vs 写文件后重部署）；不支持 admin UI 实时编辑；不支持 audit log。
+- **方案 D（仅扩展硬编码映射表）否定**：不满足设计稿"按站点 UI 可视化编辑"需求，且 ADR-017 明确"映射表未覆盖的原始类型默认归入 other"，当前硬编码映射表已有 ~80 项，继续膨胀维护成本高。
+
+**D-123-2（target_genre 枚举值来源）**：
+
+直接复用 ADR-017 + Migration 031 落地的 `VideoGenre` 20 值枚举（action / comedy / romance / thriller / horror / sci_fi / fantasy / history / crime / mystery / war / family / biography / martial_arts / adventure / disaster / musical / western / sport / other），作为 CHECK 约束的合法值集合。额外新增两个特殊值：
+- `_unmapped`：标记"已识别但尚未决定映射到哪个 genre"的 source_label，保留原始字符串入库，后续人工分配
+- `_discard`：标记"确认丢弃此分类标签，不映射到任何 genre"的 source_label（如广告分类、无意义标签）
+
+不新建独立 enum — VideoGenre 枚举已经是 `packages/types/src/video.types.ts` 维护的单一真源；特殊值以下划线前缀区分，不污染 VideoGenre union type。DB CHECK 约束包含 22 个值（20 genre + 2 特殊值）。
+
+**D-123-3（触发时机 — 入库前查表映射）**：
+
+采用"入库前查表映射"策略：
+1. Crawler scrape 写入时，`CrawlerService` / `SourceParserService` 在现有 `parseGenre()` 调用链前，先查 `crawler_site_category_maps` 表按 `(site_key, source_category)` 精确匹配
+2. 命中且 target_genre 非特殊值 → 直接使用映射结果作为 genre
+3. 命中且 target_genre = `_unmapped` → 跳过映射，保留 source_category 原始值写入 `videos.source_category`，`genres` 走现有 `parseGenre()` 兜底
+4. 命中且 target_genre = `_discard` → 跳过 genre 映射，genres 设为空数组
+5. 未命中 → 走现有 `parseGenre()` / `mapSourceCategory()` 硬编码映射链（向后兼容）
+
+UI 仅维护映射表，不触发重分类回填。未来可起独立任务卡实现"批量重分类"功能（按站点 + 映射表回填已入库视频的 genres）。
+
+**D-123-4（未映射 source_label 兜底）**：
+
+当 crawler 拿到的 source_label 在 `crawler_site_category_maps` 中无对应行时：
+- 策略：走现有 `parseGenre()` 硬编码映射链（即 `SourceParserService.GENRE_MAP` → `genreMapper.SOURCE_CATEGORY_MAP`）
+- 不拒绝入库（拒绝入库影响可用性，不可接受）
+- 不标记 unknown（已有 `_unmapped` 特殊值供运营主动标记；自动标记会导致映射表膨胀）
+- 现有行为完全保留，category_map 表是增量叠加的配置层，不是替代层
+
+**D-123-5（admin API 端点 + audit 协议）**：
+
+新增 2 个端点，均走 `preHandler: [authenticate, requireRole(['admin'])]`：
+
+- `GET /admin/crawler/sites/:key/category-mapping` — 列出指定站点所有映射行
+- `PUT /admin/crawler/sites/:key/category-mapping` — 全量替换指定站点映射（幂等语义：前端整体提交映射表，后端 DELETE + INSERT 事务性替换）
+
+选 PUT 全量替换而非 PATCH 单行：设计稿 UI 是表格整体提交（映射行数通常 < 50），全量替换语义简单、幂等、无需处理单行 CRUD 的 conflict 逻辑；audit log before/after 直接对比两个快照即可。
+
+audit 协议（按 ADR-121 7 文件框架）：
+- `AdminAuditActionType` 扩 1 项：`'crawler_site.category_mapping_update'`（语义：PUT 全量替换映射表）
+- `AdminAuditTargetKind` 复用 `'crawler_site'`（已在 migration 052 CHECK 约束内）
+- `targetId`：site key 字符串（注：migration 052 target_id 类型为 UUID NULL；crawler_site key 非 UUID，复用 D-121-4 策略将 key 写入 targetId 字段，与 CHG-SN-6-14 `crawler_site.create/update/delete/batch` 已有先例一致）
+- `beforeJsonb`：替换前从 DB 读取的映射数组快照 `{ mappings: Array<{ sourceLabel, targetGenre }> }`
+- `afterJsonb`：替换后的映射数组快照（同结构）
+- 422 校验失败路径不写 audit
+
+**D-123-6（与 ADR-017 / ADR-019 / ADR-105 / ADR-121 关系）**：
+
+- **ADR-017**：本 ADR 的 target_genre 值域直接复用 ADR-017 定义的 VideoGenre 枚举；当 ADR-017 扩展 VideoGenre 时，本 ADR migration CHECK 约束需同步扩展（通过新 migration ALTER CONSTRAINT）
+- **ADR-019**：ingest_policy 是站点级整体采集策略（JSONB 固定结构），与 category_map 是正交关系 — ingest_policy 控制"是否入库 / 是否自动发布"，category_map 控制"入库时 genre 映射到什么"。两者均在 `CrawlerService` 写入路径消费，执行顺序为 ingest_policy 先（决定是否入库）→ category_map 后（决定 genre 映射）
+- **ADR-100 R7 MUST-8**：本 ADR 的 2 个端点（GET + PUT）在 `/admin/crawler/sites/:key/` 命名空间下，属于既有 `adminCrawlerSitesRoutes` 路由文件的扩展。PUT 是写端点，满足"新增 admin route 必须 ADR 前置"约束
+- **ADR-121**：PUT 写端点必须同步落 4 真源 + 7 文件 RETRO 框架。GET 只读端点不在 ADR-121 范围
+
+### Schema 设计
+
+**Migration 064_crawler_site_category_maps.sql 草案**：
+
+```sql
+-- 064_crawler_site_category_maps.sql
+-- 描述：新建 crawler_site_category_maps — 站点级分类映射表
+-- ADR：ADR-123（Crawler 站点行展开"分类映射"schema 设计）
+-- 对应交付：CHG-SN-7-REDO-01-F
+
+CREATE TABLE IF NOT EXISTS crawler_site_category_maps (
+  site_key       VARCHAR(100)  NOT NULL
+                               REFERENCES crawler_sites(key)
+                               ON DELETE CASCADE,
+  source_label   VARCHAR(200)  NOT NULL,
+  target_genre   VARCHAR(30)   NOT NULL
+                               CHECK (target_genre IN (
+                                 'action', 'comedy', 'romance', 'thriller', 'horror',
+                                 'sci_fi', 'fantasy', 'history', 'crime', 'mystery',
+                                 'war', 'family', 'biography', 'martial_arts',
+                                 'adventure', 'disaster', 'musical', 'western',
+                                 'sport', 'other',
+                                 '_unmapped', '_discard'
+                               )),
+  created_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+
+  PRIMARY KEY (site_key, source_label)
+);
+
+COMMENT ON TABLE crawler_site_category_maps
+  IS '站点级分类映射：source_label(站点原始分类) → target_genre(平台 VideoGenre)';
+COMMENT ON COLUMN crawler_site_category_maps.source_label
+  IS '站点 crawler scrape 得来的原始分类标签文本';
+COMMENT ON COLUMN crawler_site_category_maps.target_genre
+  IS '映射目标，复用 VideoGenre 枚举 + _unmapped/_discard 特殊值';
+
+-- 按 site_key 查询所有映射（主键前缀已覆盖，无需额外索引）
+
+-- updated_at trigger（与 home_modules / source_line_aliases 同模式）
+CREATE OR REPLACE FUNCTION crawler_site_category_maps_set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS crawler_site_category_maps_updated_at_trg
+  ON crawler_site_category_maps;
+CREATE TRIGGER crawler_site_category_maps_updated_at_trg
+  BEFORE UPDATE ON crawler_site_category_maps
+  FOR EACH ROW EXECUTE FUNCTION crawler_site_category_maps_set_updated_at();
+
+-- ── ROLLBACK ──
+-- DROP TRIGGER IF EXISTS crawler_site_category_maps_updated_at_trg
+--   ON crawler_site_category_maps;
+-- DROP FUNCTION IF EXISTS crawler_site_category_maps_set_updated_at();
+-- DROP TABLE IF EXISTS crawler_site_category_maps;
+```
+
+### API 协议表
+
+| # | Method | Path | Req | Resp 200 | ErrorCodes | Auth |
+|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/crawler/sites/:key/category-mapping` | Path: `key` (VARCHAR(100)) | `{ data: CategoryMappingRow[] }` | 404 NOT_FOUND (site key 不存在) / 401 / 403 | adminOnly |
+| 2 | PUT | `/admin/crawler/sites/:key/category-mapping` | Path: `key`; Body: `{ mappings: CategoryMappingInput[] }` | `{ data: { updated: number } }` | 404 NOT_FOUND / 422 VALIDATION_ERROR / 401 / 403 | adminOnly |
+
+**类型定义**（落 `packages/types/src/crawler.types.ts` 或追加到既有 crawler 类型文件）：
+
+```ts
+export interface CategoryMappingRow {
+  readonly siteKey: string
+  readonly sourceLabel: string
+  readonly targetGenre: string  // VideoGenre | '_unmapped' | '_discard'
+  readonly createdAt: string
+  readonly updatedAt: string
+}
+
+export interface CategoryMappingInput {
+  readonly sourceLabel: string        // 1-200 字符
+  readonly targetGenre: string        // VideoGenre | '_unmapped' | '_discard'
+}
+```
+
+**zod request schema（Service + Route 层共享）**：
+
+```ts
+const CategoryMappingInputSchema = z.object({
+  sourceLabel: z.string().min(1).max(200),
+  targetGenre: z.enum([
+    'action', 'comedy', 'romance', 'thriller', 'horror',
+    'sci_fi', 'fantasy', 'history', 'crime', 'mystery',
+    'war', 'family', 'biography', 'martial_arts',
+    'adventure', 'disaster', 'musical', 'western',
+    'sport', 'other',
+    '_unmapped', '_discard',
+  ]),
+})
+
+const PutCategoryMappingSchema = z.object({
+  mappings: z.array(CategoryMappingInputSchema).max(500),
+  // max 500：单站点分类标签上限；防滥用
+})
+  .refine(
+    (v) => new Set(v.mappings.map((m) => m.sourceLabel)).size === v.mappings.length,
+    { message: 'mappings 中 sourceLabel 不得重复', path: ['mappings'] },
+  )
+```
+
+**audit log 协议表**（按 ADR-121 D-121-4 规范）：
+
+| 字段 | 值 |
+|---|---|
+| `actionType` | `'crawler_site.category_mapping_update'` |
+| `targetKind` | `'crawler_site'` |
+| `targetId` | site key 字符串（非 UUID，与 CHG-SN-6-14 先例一致）|
+| `beforeJsonb` | `{ mappings: Array<{ sourceLabel, targetGenre }> }` — 从 DB 读取替换前快照 |
+| `afterJsonb` | `{ mappings: Array<{ sourceLabel, targetGenre }> }` — 替换后入参值（已校验）|
+| `actorId / actorRole` | auth context |
+| `ip / userAgent` | request header |
+
+### 后果
+
+**正面**：
+1. 运营可通过 admin UI 按站点维护分类映射，无需代码部署
+2. 复用既有 VideoGenre 枚举，与 ADR-017 / genreMapper 体系对齐，零类型扩张
+3. 独立表支持标准 SQL 查询、唯一约束、FK 级联删除，数据完整性有 DB 级保证
+4. `_unmapped` / `_discard` 特殊值覆盖"暂缓映射"和"丢弃标签"两类运营需求
+5. PUT 全量替换语义幂等，audit log before/after 直接对比快照，审计清晰
+6. 向后兼容 — 表为空时 crawler 入库行为与现有完全一致
+
+**负面**：
+1. VideoGenre 枚举扩展时需同步 ALTER 本表 CHECK 约束（新 migration）；遗忘风险存在
+2. PUT 全量替换在映射行数极大时（>500）性能不如单行 UPSERT；当前设 max 500 上限
+3. 独立表增加一次 DB 查询（入库前按 site_key 批量 SELECT）；可通过进程内缓存优化（见触发条件）
+4. `target_id UUID NULL` 列存 VARCHAR key 是类型松散使用（与 CHG-SN-6-14 先例一致但仍为技术债）
+
+### 替代方案对比
+
+| 维度 | 方案 A（独立表，采纳） | 方案 B（JSONB 字段） | 方案 C（config 文件） | 方案 D（仅扩展硬编码映射表） |
+|---|---|---|---|---|
+| **类型安全** | CHECK 约束 + FK | 无 DB 级校验 | TS 编译期类型 | TS 编译期类型 |
+| **按站点隔离** | 天然（PK 含 site_key）| 天然（每站点一个 JSONB）| 需独立文件/段 | 不支持（全局共享）|
+| **并发安全** | 行级锁 | 行级锁但全量读改写 | 文件锁 | N/A |
+| **audit 粒度** | before/after 快照对比 | 同 A（JSONB diff）| 无标准方案 | 不支持 |
+| **运营可编辑** | admin UI 实时编辑 | admin UI 实时编辑 | 需重部署 | 需代码部署 |
+| **实施成本** | 中（1 migration + 2 endpoint + 1 query 文件 + audit RETRO）| 低（1 ALTER + 改 rowToSite）| 低（改 config loader）| 极低（改映射常量）|
+| **扩展性** | 高（可加 priority / metadata 列）| 中（JSONB 无 schema 演进工具）| 低 | 极低 |
+| **向后兼容** | 表为空 = 现有行为 | 字段 NULL = 现有行为 | 文件不存在 = 现有行为 | 代码部署即生效 |
+
+### 未来"重新评估"触发条件
+
+1. **VideoGenre 枚举扩展**（如引入 VideoGenre = 'idol' / 'reality'）→ CHECK 约束需同步 migration
+2. **单站点映射行数 > 500** → PUT 全量替换性能降级，评估改为 PATCH 单行 UPSERT
+3. **crawler 入库性能**：按 site_key SELECT category_maps 增加的查询时间 > 5ms p95 → 引入进程内 LRU 缓存（site_key → Map<sourceLabel, targetGenre>，TTL 5min）
+4. **批量重分类需求出现**（如运营修改映射后要求已入库视频 genres 同步回填）→ 起独立任务卡 + 可能需要异步 job
+5. **多对多映射需求**（一个 source_label 映射到多个 genre）→ 当前设计是单值映射（target_genre 单列），如需多值需拆为关联表或改 target_genre 为 TEXT[]
+
+### 文件范围
+
+**本 ADR 起草卡（CHG-SN-7-PRE-05）**：
+- `docs/decisions.md`：追加 ADR-123 段
+- `docs/changelog.md`：CHG-SN-7-PRE-05 条目
+
+**未来 REDO-01-F 实施卡文件范围**：
+- `apps/api/src/db/migrations/064_crawler_site_category_maps.sql` — 新表
+- `apps/api/src/db/queries/crawlerSiteCategoryMaps.ts` — query 层
+- `apps/api/src/services/CrawlerSiteCategoryMapService.ts` — service 层
+- `apps/api/src/routes/admin/crawlerSites.ts` — 扩展 2 端点
+- `packages/types/src/crawler.types.ts`（或追加到既有文件）— CategoryMappingRow / CategoryMappingInput
+- `packages/types/src/admin-moderation.types.ts` — AdminAuditActionType 扩 1 项
+- `apps/api/src/services/AuditLogService.ts` — ACTION_TYPES 扩 1 项
+- `tests/unit/api/audit-log-service-enums-set-equal.test.ts` — EXPECTED set 扩 1 项
+- `tests/unit/api/audit-log-coverage.test.ts` — REQUIRED / PAYLOAD 扩 1 项
+- `tests/unit/api/crawler-site-category-mapping-audit.test.ts` — payload 内容断言新测试
+- `docs/architecture.md` — 5.3 crawler_sites 段追加 category_maps 描述
+- `docs/changelog.md` — REDO-01-F 条目
+
+**ADR 通过下的 REDO-01-F 实施路径**：schema migration → query + service + 2 endpoints (with audit RETRO 7 files) → UI collapsible 消费 GET/PUT → typecheck + lint + test 全 PASS。
+
+**ADR 不通过下的 REDO-01-F 降级路径**：不适用（本 ADR 已 Accepted）。
+
+### 关联
+
+- **ADR-017**：VideoGenre 枚举值来源（20 值）
+- **ADR-019**：ingest_policy JSONB 站点级策略（正交关系）
+- **ADR-100** R7 MUST-8：admin route ADR 前置约束
+- **ADR-104**：home_modules admin API 协议（schema 决策参考）
+- **ADR-109**：admin_audit_log schema 前置
+- **ADR-118**：audit 视图 API 协议（端点范式参考）
+- **ADR-121**：R-MID-1 audit RETRO 协议（PUT 写端点 7 文件框架约束）
+- **CHG-SN-6-14**：crawler_site audit 先例（target_id 存 site key 非 UUID）
+- **CHG-SN-7-PRE-05**：本 ADR 起草卡
+- **CHG-SN-7-REDO-01-F**：分类映射 collapsible 实施卡
+
+### 4 维度自评
+
+- **命名**：**A** — `crawler_site_category_maps` 表名清晰（crawler_site 所属域 + category_maps 映射语义）；`source_label` / `target_genre` 字段名对称（源 → 目标）；`_unmapped` / `_discard` 特殊值前缀下划线区分正常枚举值
+- **对称性**：**A-** — 9 段结构对齐 ADR-104/118 范式；GET/PUT 端点对称（读写同路径）；PUT 全量替换而非 CRUD 4 端点稍不对称但符合"映射表整体提交"的设计稿语义；替代方案 4 维度 x 4 方案对比表完整
+- **状态职责**：**A** — schema 归 DB 层（migration + queries）、映射逻辑归 service 层（入库前查表）、展示归 UI 层（collapsible）；与 ADR-017/019/121 关系显式说明；audit RETRO 框架职责明确
+- **扩展性**：**A-** — VideoGenre 枚举扩展需同步 CHECK 约束（有成本但路径明确）；单对多映射需架构改动（已列为重评触发条件）；5 条重评触发条件多轴覆盖
+
+**综合**：**A-**（arch-reviewer Opus 1 轮独立起草直接 PASS；待主循环落 `docs/decisions.md` 后跑 `verify:adr-d-numbers` + `verify:endpoint-adr`）

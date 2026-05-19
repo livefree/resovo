@@ -10807,3 +10807,68 @@ arch-reviewer Opus 评审 **A- CONDITIONAL**：
 
 - 下张可执行卡：**CHG-SN-7-PRE-05** ADR-123 分类映射 schema 起草（0.1w / Opus 必须 / REDO-01-F 依赖）
 - 未来可起 `CHG-SN-7-MISC-AUDIT-RETRO-SCRIPT`：实现方案 D 的 `verify:audit-retro.mjs` 机械守卫
+
+---
+
+## [CHG-SN-7-PRE-05] ADR-123 Crawler 站点行展开"分类映射"schema 设计起草
+
+- **完成时间**：2026-05-18
+- **记录时间**：2026-05-18
+- **执行模型**：claude-opus-4-7（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮独立起草直接 PASS
+
+### 起源
+
+CHG-SN-7-REDO-01-F（Crawler 站点行展开"分类映射 collapsible"区块）前置依赖。M-SN-7 PRE 阶段第 4 张。
+
+### 修改文件（3 个）
+
+- `docs/decisions.md` — 追加 ADR-123 段（约 310 行 / 9 段结构 / 含 migration 064 SQL 草案）
+- `docs/task-queue.md` — PRE-05 标 ✅ 已完成
+- `docs/tasks.md` — PRE-05 闭环卡片
+
+### ADR-123 核心决策
+
+**方案 A 采纳**：新建独立表 `crawler_site_category_maps`。
+
+| 设计点 | 决策 |
+|---|---|
+| 存储方式 | 独立关系表（vs B JSONB / C config 文件 / D 硬编码）|
+| 主键 | `(site_key, source_label)` 复合主键 |
+| FK | `site_key REFERENCES crawler_sites(key) ON DELETE CASCADE` |
+| target_genre 值域 | ADR-017 VideoGenre 20 值 + `_unmapped` + `_discard` 共 22 值 CHECK 约束 |
+| 端点 | `GET /admin/crawler/sites/:key/category-mapping` + `PUT /admin/crawler/sites/:key/category-mapping`（PUT 全量替换语义）|
+| audit 协议 | ADR-121 7 文件框架；`actionType = 'crawler_site.category_mapping_update'` |
+| 触发时机 | 入库前查表映射，命中即用 / 未命中走现有 `parseGenre()` 兜底 |
+| 兜底策略 | 不拒绝入库、不自动标记 unknown；运营主动用 `_unmapped` |
+| 向后兼容 | 表为空时 crawler 入库行为与现有完全一致 |
+
+### REDO-01-F 实施路径（ADR-123 通过下）
+
+1. **Schema**：migration 064（新表 + CHECK + FK + updated_at trigger）
+2. **后端**：query 文件 + service 文件 + 扩展 `crawlerSites.ts` 路由 2 端点 + ADR-121 7 文件 RETRO 框架（types union + ACTION_TYPES + service enums set-equal + coverage set-equal + REQUIRED/PAYLOAD it.each + endpoint route + payload audit test + changelog）
+3. **前端**：collapsible 区块消费 GET/PUT；右侧 select 下拉值域 22 项（VideoGenre + 2 特殊值）；表格行整体提交语义
+
+### 质量门禁
+
+- ✅ `verify:adr-d-numbers` ⚠️ advisory（D-121-4/6 + D-123-1..6 未闭环；advisory 模式不阻塞 CI；后续实施卡补）
+- ✅ `verify:file-size-budget` — 0 新违规
+- ✅ `typecheck` — 5 tasks PASS
+- ✅ `test -- --run` — **4018 tests PASS** 保持（纯文档改动）
+
+### 关键自省
+
+1. **Opus 子代理独立起草 1 轮 A− PASS**：与 PRE-02 ADR-121 起草质量评审需要主循环修订红线不同，本卡 Opus 子代理独立起草直接达 A−（schema 决策与 ADR-017/019/121 关系清晰、4 方案对比完整、9 段对称）— 验证子代理"独立设计任务"模式在中小型 ADR（200-300 行 / 单决策点）效率最高
+2. **schema CHECK 约束 vs Enum 类型权衡**：选 22 值 CHECK 约束而非新建独立 PG enum（CREATE TYPE ... AS ENUM）— 因为 VideoGenre 已在 packages/types 维护 TS 真源，PG enum 与 TS 真源同步成本 > CHECK 约束维护成本
+3. **`_unmapped` / `_discard` 特殊值 vs NULL 权衡**：选下划线前缀字符串特殊值而非 NULL — 因为 NULL 在 PostgreSQL 中不参与等值比较且无 CHECK 约束保护；特殊值显式可枚举、可查询、可 audit
+4. **PRE 阶段 4 张全部闭环**：PRE-04（审计 16 路由 0.9w）+ PRE-01（文件大小守卫 0.12w）+ PRE-02（ADR-121 R-MID-1 协议化 0.15w）+ PRE-05（ADR-123 分类映射 0.1w）= **1.27w**，与计划文档 §4 估时完全吻合
+
+### 后续触发
+
+PRE 阶段全部 4 张 ✅ 闭环。下张 **M-SN-SHARED milestone 启动**：
+
+- **CHG-SN-SHARED-01** KpiCard `progress?` prop 扩展（0.1w / Opus 契约 + Sonnet 实施）
+- **CHG-SN-SHARED-02** ExpandableTable 新建（0.4w / Opus 契约 + Sonnet 实施 / 含 selection 能力契约裁决）
+- ~~CHG-SN-SHARED-03~~ 已取消（PRE-04 实测 admin-ui Spark 已入库，3 处消费形态全对齐设计稿）
+
+SHARED-01 / 02 可并行；总估时 **~0.5w**。完成后启动 **CHG-SN-7-REDO-01-A** Crawler 重做（依赖 SHARED）。
