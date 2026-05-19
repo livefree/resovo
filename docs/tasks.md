@@ -6,7 +6,51 @@
 
 ## 进行中任务
 
-<!-- REDO-02-A 闭环（2026-05-19）；下一卡 REDO-02-B 6 端点实施 -->
+<!-- REDO-02-B 闭环（2026-05-19）；下一卡 PRE-CARD-PRIMITIVE 调研（C 前置）或直接 C -->
+
+### CHG-SN-7-REDO-02-B ✅ 6 端点 + service + queries + audit 写入闭环（2026-05-19）
+
+**完成时间**：2026-05-19
+**实施**（按 ADR-124 §拆卡建议 B 卡范围 0.7w）：
+- **queries 层**：新建 `apps/api/src/db/queries/userSubmissions.ts`（230 行 / 6 函数 / JOIN videos/users/video_sources + COALESCE site_key fallback + badges 聚合 4 计数 FILTER + AD2 partial index 利用）
+  - `listUserSubmissions` / `getUserSubmissionById` / `markUserSubmissionProcessed` / `markUserSubmissionRejected` / `batchMarkProcessed` / `batchMarkRejected`
+- **service 层**：扩 `apps/api/src/services/UserSubmissionService.ts`（98→290 行 / +6 业务方法 + 7 route zod schemas 外置）
+  - 状态机守卫：404 NOT_FOUND（id 不存在）+ 409 STATE_CONFLICT（status 非 pending）+ 竞态守卫（取行 vs UPDATE RETURNING 双重 check）
+  - audit 写入：复用 A 卡 `writeUserSubmissionAction` helper（fire-and-forget）
+  - 7 zod schemas 外置：ListUserSubmissionsQuerySchema / UserSubmissionIdParamsSchema / Process/Reject/BatchProcess/BatchReject BodySchema（route 层共享）
+- **route 层**：新建 `apps/api/src/routes/admin/userSubmissions.ts`（180 行 / 6 端点 + adminOnly+moderator+ + zod 422 + handleError helper 404/409/500 映射）
+  - GET /admin/user-submissions / :id
+  - POST /admin/user-submissions/:id/process / :id/reject / batch-process / batch-reject
+- **server.ts 注册**：`adminUserSubmissionsRoutes` 加入 `/v1` prefix
+- **单测扩展**：`tests/unit/api/user-submissions-audit.test.ts` 8→**23 case PASS**（+15 B 卡）
+  - case 9-12 processUserSubmission（404 / 409 / 成功 + audit / 竞态）
+  - case 13 rejectUserSubmission（reason + audit）
+  - case 14-15 batchProcessUserSubmissions（部分成功 + 0 行不写 audit）
+  - case 16 batchRejectUserSubmissions
+  - case 17-23 queries 层（SQL JOIN / WHERE 拼装 / 空 ids 短路 / RETURNING 字段）
+
+**评级**：A（严格按 ADR-124 §端点契约 6 端点落地 / 0 红线 / 0 黄线 / 0 file-size 新违规）
+
+**关键设计**：
+- **状态机双重守卫**：先 SELECT 行（区分 404 vs 409）→ UPDATE WHERE status='pending' RETURNING（竞态时 0 行 → 抛 409）
+- **批量静默跳过**：非 pending 行不抛 409 / 静默跳过 / count = 实际处理数（参 ADR-117 line-aliases batch 模式）
+- **audit fire-and-forget 路径**：service 层 mutation 成功后无 await 写 audit（CHG-SN-4-05 范式）
+- **handleError helper 复用**：与 REDO-01-E2 sources-matrix routes 同模式（isAppError 链式 + log + 500 兜底）
+- **moderator+admin 鉴权**：与 v1 submissions 一致（ADR-124 §端点契约第 1-6 行 / D-124-1 鉴权要点）
+
+**质量门禁**：
+- typecheck ✅ 全 7 workspace
+- lint ✅ 0 error / 0 warning
+- file-size ✅ 0 新违规
+- verify:endpoint-adr ✅ **164 admin 路由对齐 35 ADR 端点**（+6 新端点 / 154→164 / B 卡落实施完整）
+- 全量 unit test：4127 → **4142 PASS**（+15 净增 / 15 B 卡 mutation 测试）
+
+**执行模型**：claude-opus-4-7 主循环（按 ADR-124 spec 实施 / 子代理：无）
+
+<!-- 下张：CHG-SN-7-REDO-02-PRE-CARD-PRIMITIVE admin-ui Card/Segment/Quote primitive 调研（0.1w / Opus / C 卡前置）-->
+
+
+### CHG-SN-7-REDO-02-B ⏳ 已替换为闭环卡
 
 ### CHG-SN-7-REDO-02-A ✅ migration 065 + types + audit 4 真源同步闭环（2026-05-19）
 

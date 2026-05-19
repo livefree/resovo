@@ -11914,3 +11914,88 @@ REDO-02-A0 ADR-124 Accepted A（commit `7ea7b18b`）后启动 A 卡：按 ADR-12
 - B 卡前置：A 卡所有 audit 守卫已就位 / B 卡只需消费 `writeUserSubmissionAction` helper
 - C 卡前置：**CHG-SN-7-REDO-02-PRE-CARD-PRIMITIVE**（0.1w / Opus / admin-ui Card/Segment/Quote primitive 调研，可与 B 并行）
 - 累计已完成：A0 ✅ + A ✅ 共 ~0.55w / REDO-02 总 ~2.75w — 剩余 ~2.2w（B+PRE-CARD+C+D+E+F）
+
+---
+
+## [CHG-SN-7-REDO-02-B] user_submissions 6 端点 + service + queries + audit 写入
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环（按 ADR-124 spec 实施 / 子代理：无）
+
+### 起源
+
+REDO-02-A migration + types + audit 4 真源同步 stub 落地（commit `9012aa48`）。B 卡按 ADR-124 §端点契约 6 行实施完整 API + service + queries + audit 写入。
+
+### 修改文件（3 新 + 2 改）
+
+**新建**：
+1. `apps/api/src/db/queries/userSubmissions.ts`（230 行 / 6 queries）
+   - `listUserSubmissions` — 4 类 + status 过滤 + 3 个并行查询（list + count + badges 聚合）
+   - `getUserSubmissionById` — JOIN videos/users/video_sources + COALESCE site_key
+   - `markUserSubmissionProcessed` / `markUserSubmissionRejected` — UPDATE WHERE status='pending' RETURNING type（状态机守卫 + audit type 注入）
+   - `batchMarkProcessed` / `batchMarkRejected` — UPDATE WHERE id=ANY(...) AND status='pending' RETURNING id（静默跳过非 pending）
+2. `apps/api/src/routes/admin/userSubmissions.ts`（180 行 / 6 端点）
+   - GET / list + GET /:id detail / POST /:id/process / POST /:id/reject / POST batch-process / POST batch-reject
+   - handleError helper（404 / 409 / 500 映射 + log）
+3. （未新建测试文件 — 扩 A 卡 `user-submissions-audit.test.ts` 至 23 case）
+
+**改**：
+1. `apps/api/src/services/UserSubmissionService.ts`（98→290 行）
+   - +6 业务方法（listUserSubmissions / getUserSubmissionById / process / reject / batchProcess / batchReject）
+   - +7 route zod schemas（ListUserSubmissionsQuerySchema / UserSubmissionIdParamsSchema / Process/Reject/BatchProcess/BatchReject BodySchema）
+   - 状态机双重守卫：SELECT 行（区分 404 vs 409）+ UPDATE RETURNING 0 行竞态守卫（抛 409）
+2. `apps/api/src/server.ts` — import + register `adminUserSubmissionsRoutes` 加 `/v1` prefix
+3. `tests/unit/api/user-submissions-audit.test.ts` — 8 → 23 case（+15 B 卡 mutation 流程 + queries 层覆盖）
+
+### 关键设计
+
+1. **状态机双重守卫**（D-124-1 + 业务规则）：
+   - 先 `getUserSubmissionById` 区分 NOT_FOUND 404 vs STATE_CONFLICT 409
+   - 再 UPDATE WHERE status='pending' RETURNING — 若 0 行（竞态）抛 STATE_CONFLICT
+   - vs ADR-117 + ADR-123 单一 UPDATE WHERE 守卫 / 本卡因需 audit 注入 type 字段 +区分 404/409 → 双查询代价可接受
+2. **批量静默跳过非 pending 行**（参 ADR-117 line-aliases batch 模式 / spec §5.13 行为合理）：
+   - 不抛 409（前端批量操作时混入已处理行不应整体失败）
+   - count = 实际 RETURNING 数 / 0 行时 audit 不写
+3. **audit fire-and-forget**（CHG-SN-4-05 范式 + ADR-117 既有模式）：
+   - service 层 mutation 成功后无 await 写 audit
+   - 复用 A 卡 `writeUserSubmissionAction` helper（4 真源同步保障）
+4. **route 层错误映射**（handleError helper）：
+   - isAppError 'NOT_FOUND' → 404
+   - isAppError 'STATE_CONFLICT' → 409
+   - 其他 → 500 + log.error
+   - 与 REDO-01-E2 sources-matrix routes 同模式
+5. **moderator+admin 鉴权**（v1 submissions 兼容性）：
+   - ADR-124 §端点契约表第 1-6 行全部 auth = `requireRole(['moderator', 'admin'])`
+   - v1 旧 `/admin/submissions*` 鉴权一致（D 卡 alias 转发时无权限错配）
+
+### 23 case 单测覆盖
+
+| Case | 范围 |
+|---|---|
+| 1-4 | A 卡 writeUserSubmissionAction 4 路径 afterJsonb shape |
+| 5-8 | A 卡 3 类 metadata zod 锁定 |
+| 9-12 | B 卡 processUserSubmission（404 / 409 / 成功 + audit / 竞态守卫） |
+| 13 | B 卡 rejectUserSubmission |
+| 14-15 | B 卡 batchProcessUserSubmissions（部分成功 + 0 行不写 audit） |
+| 16 | B 卡 batchRejectUserSubmissions |
+| 17-18 | B 卡 listUserSubmissions SQL JOIN + WHERE 拼装 |
+| 19-23 | B 卡 queries 层（getById null / RETURNING type / 空 ids 短路 / reason 字段） |
+
+### 质量门禁
+
+- typecheck ✅ 全 7 workspace
+- lint ✅ 0 error / 0 warning
+- file-size ✅ 0 新违规（service 290 < 500 / queries 230 < 500 / route 180 < 500）
+- verify:endpoint-adr ✅ **164 admin 路由对齐 35 ADR 端点**（+6 新端点 / 158→164 / B 卡落实施完整）
+- 全量 unit test：4127 → **4142 PASS**（+15 净增 / 100% B 卡 mutation 流程覆盖）
+
+### 关键自省
+
+1. **A 卡 stub 设计的真实回报**：B 卡 6 业务方法均直接调用 A 卡 `writeUserSubmissionAction` helper / 0 重复 audit 代码 / R-MID-1 第 15 次系统化范式价值再次实证
+2. **状态机双重守卫的代价权衡**：本卡需 audit 注入 type 字段（afterJsonb.type ∈ bad_source/wish_list/metadata_correction）→ 单一 UPDATE 无法得到 type → 双查询；ADR-117 sources.route_action 不需 audit type 字段 → 单查询 OK
+3. **handleError helper 跨卡复用**：REDO-01-E2 sources-matrix routes 同款 helper 在本卡 verbatim 复用（404/409/500 映射）/ 验证了 plan §"helper 沉淀点"判断正确
+
+### 后续触发
+
+- 下张可执行卡：**CHG-SN-7-REDO-02-PRE-CARD-PRIMITIVE**（0.1w / Opus / admin-ui Card/Segment/Quote primitive 调研 / C 卡前置）
+- 累计已完成：A0 ✅ + A ✅ + B ✅ 共 ~1.25w / REDO-02 总 ~2.75w — 剩余 ~1.5w（PRE-CARD + C + D + E + F）
