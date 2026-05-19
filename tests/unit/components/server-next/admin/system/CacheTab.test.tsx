@@ -40,7 +40,7 @@ vi.mock('@resovo/admin-ui', async () => {
   }
 })
 
-import { CacheTab } from '../../../../../../apps/server-next/src/app/admin/system/settings/_tabs/CacheTab'
+import { CacheTab } from '../../../../../../apps/server-next/src/app/admin/settings/_tabs/CacheTab'
 
 const STATS_FIXTURE = [
   { type: 'search' as const,    count: 1234,  sizeKb: 512.5 },

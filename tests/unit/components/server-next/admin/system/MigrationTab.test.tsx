@@ -57,7 +57,7 @@ vi.mock('../../../../../../apps/server-next/src/lib/api-client', () => {
   }
 })
 
-import { MigrationTab } from '../../../../../../apps/server-next/src/app/admin/system/settings/_tabs/MigrationTab'
+import { MigrationTab } from '../../../../../../apps/server-next/src/app/admin/settings/_tabs/MigrationTab'
 import { ApiClientError } from '../../../../../../apps/server-next/src/lib/api-client'
 
 const SAMPLE_FILE = new File(['[]'], 'sources.json', { type: 'application/json' })

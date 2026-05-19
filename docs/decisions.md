@@ -8124,3 +8124,103 @@ ADR-124 §5 类型契约 `UserSubmissionRow.quote` 是自然语言主体（spec 
 
 升级 ADR-124 主评级 A− → **A**（本 AMENDMENT 1 闭档两处 DEVIATION）
 
+
+---
+
+## ADR-125 — Settings 区段 IA 顶级化与旧 URL 永久重定向（M-SN-7 REDO-03-A）
+
+### 1. Status
+
+**Accepted** — 2026-05-19（CHG-SN-7-REDO-03-A / Opus arch-reviewer 评审 PASS）
+
+### 2. 上下文
+
+M-SN-7 PRE-04 #14 锁定 Settings 区段 IA 收敛。`reference.md` §5.11 明示「侧栏不应暴露多个 system 子项；设计稿是设置页内部 tab」。M-SN-6 已完成第一步：sidebar 仅暴露 1 个 system 入口、4 个旧子路由（cache/config/migration/monitor）改为 `redirect()` 到 `/admin/system/settings?tab=X`、SettingsContainer 已实现 5 Tab（`?tab=` 同步逻辑就绪）。
+
+但 URL 仍寄居 `/system/` 命名空间，与 plan `task-queue.md` L4015 锁定的终态「`/admin/settings`（顶级）」+ 设计稿「Settings 顶级菜单」语义不符。本 ADR 完成第二步：URL 命名空间提升 + landing 兜底 + nav entry 同步。
+
+### 3. 决策
+
+- **D1**：Settings 主路由迁移至 `/admin/settings`（顶级 URL），整个目录（`_client/SettingsContainer.tsx` + 5 个 `_tabs/*.tsx` + `page.tsx`）从 `apps/server-next/src/app/admin/system/settings/` 整体 `git mv` 到 `apps/server-next/src/app/admin/settings/`。
+- **D2**：4 个 system 子路由（cache/config/migration/monitor）`redirect()` 目标改为 `/admin/settings?tab=<X>`（query string 协议不变 / SettingsContainer 内部逻辑零改动）。
+- **D3**：`/admin/system/page.tsx`（旧 PlaceholderPage landing）改为 `permanentRedirect('/admin/settings')`，保留文件兜底外链。
+- **D4**：旧 `/admin/system/settings/page.tsx` 重建为 5 行 `permanentRedirect('/admin/settings')`，覆盖书签 / 搜索引擎索引 / 外链。
+- **D5**：`admin-nav.tsx` L106 entry href 从 `/admin/system/settings` → `/admin/settings`（label / icon / shortcut `mod+,` 全部保留）。
+- **D6**：全部 redirect 使用 **308 永久**（Next.js `permanentRedirect()`），非 307 临时。IA 终态收敛属永久性架构决策 / 让浏览器 / 爬虫 / 书签持久更新 / 避免长期承担 redirect 链路延迟与 CDN miss。回滚成本由第 7 节撤销策略覆盖。
+- **D7**：SettingsContainer.tsx:136 `router.push('/admin/system/settings...')` 同步改为 `/admin/settings...`（前端 Tab 切换 URL 同步逻辑）。
+- **D8**：后端 v1 API 端点路径（`/admin/system/settings` + `/admin/system/config`）**不变**，仍由 `apps/api/src/routes/admin/siteConfig.ts` 提供，`apps/server-next/src/lib/system/api.ts` 客户端继续指向旧路径。本 ADR 范围仅含 Next.js 前端路由 IA / 不涉及后端 contract 变更。
+
+### 4. 影响范围（8 文件 + 1 测试 mock）
+
+1. **mv**：`apps/server-next/src/app/admin/system/settings/{_client,_tabs,page.tsx}` → `apps/server-next/src/app/admin/settings/{_client,_tabs,page.tsx}`（整目录迁移 / 7 个文件保持原文件名）
+2. **新建（兜底）**：`apps/server-next/src/app/admin/system/settings/page.tsx`（5 行 `permanentRedirect`）
+3. **改**：`apps/server-next/src/app/admin/system/page.tsx`（PlaceholderPage → `permanentRedirect`）
+4. **改**：`apps/server-next/src/app/admin/system/cache/page.tsx`（redirect → permanentRedirect + target update）
+5. **改**：`apps/server-next/src/app/admin/system/config/page.tsx`（同上）
+6. **改**：`apps/server-next/src/app/admin/system/migration/page.tsx`（同上）
+7. **改**：`apps/server-next/src/app/admin/system/monitor/page.tsx`（同上）
+8. **改**：`apps/server-next/src/lib/admin-nav.tsx` L106（href）
+9. **改**：`apps/server-next/src/app/admin/settings/_client/SettingsContainer.tsx` L136（router.push target）
+10. **测试 mock 同步**：`tests/unit/components/admin-ui/shell/infer-breadcrumbs.test.ts`（mock NAV + 断言路径 2 处）+ `tests/unit/components/server-next/admin/system/{Settings,Cache,Config,Migration,Monitor}Tab.test.tsx` 5 个文件的相对路径 import（`apps/server-next/src/app/admin/system/settings/_tabs/` → `apps/server-next/src/app/admin/settings/_tabs/`）
+
+`docs/designs/backend_design_v2.1/reference.md` §5.11 现状段（描述 sidebar 暴露 5 子项）已部分过时，本任务卡明示授权同步该规范文件。
+
+### 5. Migration 步骤
+
+1. `git mv` 整目录 → `apps/server-next/src/app/admin/settings/`（5 Tab + SettingsContainer + page 一次性迁移）
+2. 重建旧 `apps/server-next/src/app/admin/system/settings/page.tsx` 为 5 行 permanentRedirect
+3. 改写 `/admin/system/page.tsx` landing 为 `permanentRedirect('/admin/settings')`
+4. 4 个 system 子路由（cache/config/migration/monitor）改 target 为 `/admin/settings?tab=X` + 改用 `permanentRedirect`
+5. 改 `admin-nav.tsx` L106 entry href
+6. 改 SettingsContainer.tsx:136 router.push target
+7. 同步 5 Tab test 相对路径 import + breadcrumbs test mock
+8. 同步 reference.md §5.11 现状段
+9. typecheck / lint / unit / verify:adr-contracts 全绿
+
+### 6. 验收标准
+
+- **单测**：
+  - `admin-nav.tsx` 单测断言「站点设置」entry href = `/admin/settings`
+  - `infer-breadcrumbs.test.ts` `/admin/settings → [{系统管理}, {站点设置, /admin/settings}]` 通过
+  - 5 Tab test（SettingsTab / CacheTab / ConfigTab / MigrationTab / MonitorTab）通过新路径 import 全部 PASS
+- **e2e（M-SN-7 验收期）**：sidebar 点击「站点设置」→ 落地 `/admin/settings`；访问 `/admin/system/cache` → 308 → `/admin/settings?tab=cache`
+- **typecheck** / **lint** / **`npm run verify:adr-contracts`** 全绿
+- **测试套件**：≥4053 unit PASS（基线对齐 REDO-02-F 验收后基线）
+
+### 7. 撤销策略
+
+回滚 = revert 本 ADR commit。SettingsContainer 内部不变 / `?tab=` 协议不变 / 6 个 redirect 文件结构不变 / 仅 target string 与 nav href 与 mv 路径回退。无 schema / API / 状态机 / 后端 contract 变更，撤销成本 O(1)。
+
+### 8. Open Question
+
+无。i18n locale 前缀（ADR-039 middleware）已确认不注入 admin 子树（`apps/server-next/src/app/` 下无 `[locale]` 目录段），redirect target 可硬编码绝对路径。
+
+### 9. 关联
+
+- ADR-100 §IA-2（M-SN-3 dashboard IA 修订 / redirect 范式参考）
+- ADR-122 / ADR-123 / ADR-124（M-SN-7 同 milestone ADR 9 节范式）
+- plan `docs/task-queue.md` REDO-03 拆分（L4009-4020）
+- reference.md §5.11 站点设置 Settings
+- PRE-04 #14（M-SN-7 PRE-04 审计触发点 / 14 路由分散现状清单）
+
+### 后果
+
+**正面**：
+1. URL 命名空间与 IA 终态对齐 / 「Settings 顶级菜单」语义彻底打通 / 后续 REDO-03-B（5→8 Tab 扩展）落地路径统一
+2. 6 个旧 URL（含 1 主路由 + 4 子路由 + 1 landing）308 永久兜底 / 书签 / 外链 / SEO 影响最小化
+3. 改动收敛（8 文件 + 1 测试 mock）/ 无 schema 变更 / 无后端 contract 变更 / 无依赖新增 / 撤销 O(1)
+
+**负面 / 风险**：
+1. 6 个 redirect 永久存在 → 长期维护负担（轻微 / 5 行薄层 / 与 ADR-100 IA-2 范式一致）
+2. 测试相对路径 import（5 Tab test）维护需对齐目录结构 / 已在本卡同步处理
+
+### 4 维度自评
+
+| 维度 | 评级 | 理由 |
+|---|---|---|
+| 命名 | A | `/admin/settings` 顶级清晰 / `?tab=X` 协议复用既有 SettingsContainer 逻辑 / 命名空间语义对齐设计稿 |
+| 对称性 | A | 6 个 redirect 全部 308 永久 / 全部走 Next.js `permanentRedirect` 范式 / 与 ADR-100 IA-2 同源 |
+| 状态职责 | A | 前端 IA 与后端 API 端点解耦（D8）/ 撤销路径线性 / 无侵入 SettingsContainer 内部逻辑 |
+| 扩展性 | A | REDO-03-B（5→8 Tab）落地无障碍 / 未来如再次 IA 修订 / 308 → 新 308 撤销链路一致 |
+
+**综合**：**A**

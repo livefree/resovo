@@ -103,7 +103,7 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
     title: '系统管理',
     items: [
       { label: '用户管理', href: '/admin/users', icon: <Users /> },
-      { label: '站点设置', href: '/admin/system/settings', icon: <Settings />, shortcut: 'mod+,' },
+      { label: '站点设置', href: '/admin/settings', icon: <Settings />, shortcut: 'mod+,' },
       { label: '审计日志', href: '/admin/audit', icon: <FileText /> },
     ],
   },

@@ -6,7 +6,59 @@
 
 ## 进行中任务
 
-<!-- 用户反馈 2 bug 修复（2026-05-19）：站点删除功能 + 配置文件同步孤儿 -->
+<!-- REDO-03-A 完成（2026-05-19）：sidebar IA 重构 + 旧路由 308 redirect + ADR-125 -->
+
+### CHG-SN-7-REDO-03-A ✅ Settings sidebar IA 重构 + 路由收敛 + ADR-125（0.3w 实际 / 0.4w 预估）
+
+**完成时间**：2026-05-19（~0.3w / Opus arch-reviewer 评审 PASS + 主循环按 8 步 punch list 实施）
+
+**最终方案**（Opus D1–D8 全部采纳）：
+- Settings 真源路径 `/admin/system/settings` → 顶级 `/admin/settings`（git mv 整目录 / 7 文件保持原文件名）
+- 6 个旧 URL 全部 `permanentRedirect`（308 永久 / Next.js 范式）→ `/admin/settings(?tab=X)`
+- admin-nav.tsx L106 entry href / SettingsContainer router.push target / 5 Tab 测试 import / breadcrumbs mock 全部同步
+- ADR-125 9 节正文落档 + reference.md §5.11 现状段同步
+
+**实际文件改动**（8 代码 + 1 测试 mock + 5 测试 import + 2 文档 = 16 处）：
+- 改：`apps/server-next/src/lib/admin-nav.tsx`（L106 href）
+- mv：`apps/server-next/src/app/admin/system/settings/{_client,_tabs,page.tsx}` → `apps/server-next/src/app/admin/settings/{_client,_tabs,page.tsx}`
+- 新建（兜底 redirect）：`apps/server-next/src/app/admin/system/settings/page.tsx`（5 行 permanentRedirect）
+- 改（PlaceholderPage → permanentRedirect）：`apps/server-next/src/app/admin/system/page.tsx`
+- 改（redirect → permanentRedirect + target）：`apps/server-next/src/app/admin/system/{cache,config,migration,monitor}/page.tsx` 4 文件
+- 改：`apps/server-next/src/app/admin/settings/_client/SettingsContainer.tsx`（L136 router.push target）
+- 测试同步：`tests/unit/components/admin-ui/shell/infer-breadcrumbs.test.ts`（mock + 断言 2 处）+ 5 Tab test 相对路径 import（CacheTab / ConfigTab / MigrationTab / MonitorTab / SettingsTab）
+- 文档：`docs/decisions.md` 追加 ADR-125 全文（9 节 + 后果 + 4 维 A）+ `docs/designs/backend_design_v2.1/reference.md` §5.11 现状段同步
+
+**验收**：
+- ✅ typecheck 全绿（6 包）
+- ✅ lint 全绿（既有 TabImages.tsx no-img-element warning 与本卡无关）
+- ✅ 单测 4177 PASS（CrawlerClient.test.tsx 1 transient flake / 单独重跑 54/54 PASS）
+- ✅ verify:adr-contracts D-N 编号 61/61 闭环（既有 advisory 与本卡无关）
+
+**Opus 评审风险点闭档**：
+1. reference.md §5.11 同步（任务卡范围已明示授权 / D8 闭档）
+2. i18n locale 前缀（已验证 `apps/server-next/src/app/` 下无 `[locale]` 段 / 风险消除）
+3. 308 vs 307（采纳 308 永久 / Open Question 第 8 节明示）
+
+**六问自检**：
+1. 输入输出契约：`?tab=X` query string 协议保留 / SettingsContainer 零侵入 ✅
+2. 状态归属：前端 IA / 后端 API 端点解耦（D8）/ 后端 contract 不变 ✅
+3. 依赖方向：未引入新依赖 / 改动收敛 16 处 / 撤销 O(1) ✅
+4. 模块边界：sidebar 入口与路由真源对齐 / 6 个 308 redirect 薄层 ✅
+5. 测试同步：5 Tab test 相对路径 + breadcrumbs mock 全部同步 ✅
+6. 文档同步：ADR-125 + reference.md §5.11 + changelog 三处一致 ✅
+
+**偏离检测**：无（plan task-queue L4015 IA 终态 `/admin/settings` 100% 落地）
+
+**[AI-CHECK] 结论块**：
+- 价值排序：正确性 A / 边界复用 A / 扩展性 A（REDO-03-B 5→8 Tab 落地无障碍）/ 一致性 A（与 ADR-100 IA-2 同源）/ 改动收敛 ≤16 处
+- 阻塞 B/C/D：✅ 解除（B 卡可消费新顶级路径）
+- 升 Opus 后续：B 卡（Tab 扩展）Sonnet 可承接 / C 卡（端点扩展 + ADR）仍需 Opus
+
+**执行模型**：
+- 主循环：`claude-opus-4-7`
+- 子代理调用：`arch-reviewer (claude-opus-4-7)` — IA 决策 + ADR-125 9 节正文起草
+
+---
 
 ### CHG-SN-7-MISC-CRAWLER-CONFIG-ORPHAN-DELETE ✅ 配置文件同步孤儿删除（2026-05-19）
 

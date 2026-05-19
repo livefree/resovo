@@ -133,7 +133,7 @@ export function SettingsContainer() {
     const params = new URLSearchParams(searchParams.toString())
     if (tab === 'settings') params.delete('tab')
     else params.set('tab', tab)
-    router.push(`/admin/system/settings${params.size > 0 ? `?${params}` : ''}`)
+    router.push(`/admin/settings${params.size > 0 ? `?${params}` : ''}`)
   }
 
   return (

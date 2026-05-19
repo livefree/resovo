@@ -23,7 +23,7 @@ vi.mock('../../../../../../apps/server-next/src/lib/system/api', () => ({
   getSchedulerStatus: (...args: unknown[]) => getSchedulerStatusMock(...args),
 }))
 
-import { MonitorTab } from '../../../../../../apps/server-next/src/app/admin/system/settings/_tabs/MonitorTab'
+import { MonitorTab } from '../../../../../../apps/server-next/src/app/admin/settings/_tabs/MonitorTab'
 
 const STATUS_ALL_ON = {
   enabled: true,

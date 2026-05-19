@@ -1,10 +1,10 @@
-import { PlaceholderPage } from '@/components/PlaceholderPage'
+/**
+ * /admin/system — 永久重定向到顶级 `/admin/settings`（ADR-125 D3）。
+ *
+ * IA 收敛：M-SN-7 REDO-03-A 移除 system landing 占位，直接落到 Settings 顶级。
+ */
+import { permanentRedirect } from 'next/navigation'
 
 export default function SystemLandingPage() {
-  return (
-    <PlaceholderPage
-      title="系统"
-      milestone="M-SN-6（系统区段 landing；子页：站点设置 / 缓存管理 / 性能监控 / 运行时配置 / 迁移工具）"
-    />
-  )
+  permanentRedirect('/admin/settings')
 }

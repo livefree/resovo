@@ -31,7 +31,7 @@ const MOCK_NAV: readonly AdminNavSection[] = [
     title: '系统管理',
     items: [
       { label: '用户管理', href: '/admin/users' },
-      { label: '站点设置', href: '/admin/system/settings' },
+      { label: '站点设置', href: '/admin/settings' },
       { label: '审计日志', href: '/admin/audit' },
     ],
   },
@@ -53,10 +53,10 @@ describe('inferBreadcrumbs — 顶层路径命中', () => {
     ])
   })
 
-  it('/admin/system/settings → [{系统管理}, {站点设置, ...}]（嵌套路径在第 1 层即命中）', () => {
-    expect(inferBreadcrumbs('/admin/system/settings', MOCK_NAV)).toEqual<BreadcrumbItem[]>([
+  it('/admin/settings → [{系统管理}, {站点设置, ...}]（ADR-125 顶级路径命中）', () => {
+    expect(inferBreadcrumbs('/admin/settings', MOCK_NAV)).toEqual<BreadcrumbItem[]>([
       { label: '系统管理' },
-      { label: '站点设置', href: '/admin/system/settings' },
+      { label: '站点设置', href: '/admin/settings' },
     ])
   })
 })

@@ -12757,3 +12757,24 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 
 - 长期 backlog：是否需要 admin UI 提供"高级配置"路径下"预览配置文件变更影响"功能（显示 N 个 orphan 将被删除）/ 留 advisory（CHG-SN-N-CONFIG-DIFF-PREVIEW）
 - 累计 M-SN-7 用户反馈批次：3 个反馈（时间轴本地化 + 站点列功能 + 配置文件同步）全部 ~0.25w 直接 MISC 路径吸收
+
+## [CHG-SN-7-REDO-03-A] Settings 区段 IA 顶级化 + 6 旧 URL 308 永久重定向 + ADR-125
+- **完成时间**：2026-05-19
+- **记录时间**：2026-05-19 16:10
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — IA 决策 + ADR-125 9 节正文起草
+- **修改文件**：
+  - `apps/server-next/src/lib/admin-nav.tsx`（L106 entry href `/admin/system/settings` → `/admin/settings`）
+  - `git mv apps/server-next/src/app/admin/system/settings/{_client,_tabs,page.tsx}` → `apps/server-next/src/app/admin/settings/{_client,_tabs,page.tsx}`（整目录提升至顶级路由 / 7 文件保持原文件名）
+  - `apps/server-next/src/app/admin/settings/_client/SettingsContainer.tsx`（L136 router.push target 同步）
+  - `apps/server-next/src/app/admin/system/settings/page.tsx`（新建 5 行 permanentRedirect 兜底）
+  - `apps/server-next/src/app/admin/system/page.tsx`（PlaceholderPage → permanentRedirect）
+  - `apps/server-next/src/app/admin/system/{cache,config,migration,monitor}/page.tsx` 4 文件（redirect → permanentRedirect + target → `/admin/settings?tab=X`）
+  - `tests/unit/components/admin-ui/shell/infer-breadcrumbs.test.ts`（mock NAV + 断言路径 2 处同步）
+  - `tests/unit/components/server-next/admin/system/{Settings,Cache,Config,Migration,Monitor}Tab.test.tsx`（5 文件相对路径 import 同步）
+  - `docs/decisions.md`（追加 ADR-125 9 节全文 + 后果 + 4 维度 A 自评）
+  - `docs/designs/backend_design_v2.1/reference.md` §5.11（现状段同步 / ADR-125 引用）
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`（任务收尾三同步）
+- **改动摘要**：M-SN-7 REDO-03-A / PRE-04 #14 触发 Settings 区段 IA 收敛。Opus arch-reviewer 评审锁定 D1–D8 决策（D1 整目录顶级化 / D2-D4 6 旧 URL 308 永久 redirect / D5 nav entry href 同步 / D6 全部 permanentRedirect / D7 SettingsContainer router.push 同步 / D8 后端 API 端点不变）。落 ADR-125 + reference.md 同步。
+- **测试结果**：typecheck 6 包 PASS / lint PASS（既有 TabImages.tsx warning 与本卡无关）/ unit 4177 PASS（CrawlerClient.test.tsx 1 transient flake 单独重跑 54/54 PASS）/ verify:adr-contracts D-N 61/61 闭环
+- **价值排序自评**：正确性 A / 边界复用 A / 扩展性 A（REDO-03-B 5→8 Tab 无障碍）/ 一致性 A（与 ADR-100 IA-2 同源）/ 改动收敛 16 处

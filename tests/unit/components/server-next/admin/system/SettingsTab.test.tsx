@@ -56,7 +56,7 @@ vi.mock('../../../../../../apps/server-next/src/lib/api-client', () => {
   }
 })
 
-import { SettingsTab } from '../../../../../../apps/server-next/src/app/admin/system/settings/_tabs/SettingsTab'
+import { SettingsTab } from '../../../../../../apps/server-next/src/app/admin/settings/_tabs/SettingsTab'
 import { ApiClientError } from '../../../../../../apps/server-next/src/lib/api-client'
 
 const FIXTURE = {

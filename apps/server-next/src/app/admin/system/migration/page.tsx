@@ -1,5 +1,8 @@
-import { redirect } from 'next/navigation'
+/**
+ * /admin/system/migration — 永久重定向到 `/admin/settings?tab=migration`（ADR-125 D2）。
+ */
+import { permanentRedirect } from 'next/navigation'
 
 export default function SystemMigrationPage() {
-  redirect('/admin/system/settings?tab=migration')
+  permanentRedirect('/admin/settings?tab=migration')
 }
