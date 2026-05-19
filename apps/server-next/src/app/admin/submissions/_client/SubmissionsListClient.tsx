@@ -21,8 +21,10 @@
  *   - DataTable 一体化（不复用 ModernDataTable / 外置 PaginationV2 / 外置 SelectionActionBar 三件套）
  */
 
+import Link from 'next/link'
 import { useState, useEffect, useMemo, useCallback, type CSSProperties } from 'react'
 import {
+  AdminCard,
   DataTable,
   EmptyState,
   ErrorState,
@@ -130,6 +132,13 @@ const PAGE_STYLE: CSSProperties = {
   minHeight: 0,
   gap: 'var(--section-gap)',
   padding: 'var(--page-padding-y) var(--page-padding-x) 0',
+}
+
+// CHG-SN-7-REDO-02-D：deprecation banner 内部布局（标题 + 描述 + 跳转按钮）
+const DEPRECATION_BANNER_STYLE: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '12px',
 }
 
 const TOOLBAR_LEFT_STYLE: CSSProperties = {
@@ -389,6 +398,40 @@ export function SubmissionsListClient() {
         }
         data-testid="submissions-page-header"
       />
+
+      {/* CHG-SN-7-REDO-02-D / ADR-124 D-124-2 + Y1：迁移 deprecation banner
+          旧 /admin/submissions 仅服务"失效源举报"1/4 类（video_sources.is_active=false）；
+          spec §5.13 4 类 Segment（失效源举报 / 求片 / 元数据纠错 / 已处理）
+          已迁至 /admin/user-submissions（REDO-02-C / commit `8a6b0a56`）。
+          本页本身保留至 M-SN-9 退役（CHG-SN-9-XX-SUBMISSIONS-DEPRECATE 卡）。
+      */}
+      <AdminCard
+        surface="subtle"
+        padding="md"
+        status="warn"
+        data-testid="submissions-deprecation-banner"
+      >
+        <div style={DEPRECATION_BANNER_STYLE}>
+          <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+            <div style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600, color: 'var(--fg-default)' }}>
+              本页已迁移至 <code style={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)' }}>/admin/user-submissions</code>
+            </div>
+            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', marginTop: '4px' }}>
+              新页面支持完整 4 类投稿（失效源举报 / 求片 / 元数据纠错 / 已处理）。本页仅服务历史「失效源举报」读写视图，将在 M-SN-9 退役。
+            </div>
+          </div>
+          <Link href="/admin/user-submissions" passHref legacyBehavior>
+            <AdminButton
+              variant="primary"
+              size="sm"
+              data-testid="submissions-deprecation-redirect"
+            >
+              切换到新页面 →
+            </AdminButton>
+          </Link>
+        </div>
+      </AdminCard>
+
       {loading && rows.length === 0
         ? <LoadingState variant="skeleton" />
         : error

@@ -6,7 +6,39 @@
 
 ## 进行中任务
 
-<!-- REDO-02-C 闭环（2026-05-19）；下一卡 REDO-02-D 旧路径 alias + deprecation banner -->
+<!-- REDO-02-D 闭环（2026-05-19）；下一卡 REDO-02-E RETRO 验证 -->
+
+### CHG-SN-7-REDO-02-D ✅ 旧路径 deprecation banner 闭环（2026-05-19）
+
+**完成时间**：2026-05-19（实际 ~0.1w / 原估 0.2w / 选简化版 B'' 节省 0.1w）
+**实施**（ADR-124 D-124-2 + Y1 路径过渡）：
+- 旧 `/admin/submissions` SubmissionsListClient.tsx 注入 deprecation banner（顶部 / AdminCard surface='subtle' status='warn'）
+  - 标题：本页已迁移至 `/admin/user-submissions`
+  - 描述：新页面支持完整 4 类投稿（失效源举报 / 求片 / 元数据纠错 / 已处理）。本页仅服务历史「失效源举报」读写视图，将在 M-SN-9 退役
+  - 跳转按钮：Next.js `<Link>` 包 AdminButton 指向 `/admin/user-submissions`
+- 测试扩展：SubmissionsListClient.test.tsx 3→**4 case PASS**（+1 banner 渲染断言）
+
+**评级**：A（最小改动 / 后端 0 改 / 0 红线 / 0 黄线）
+
+**关键决策（B'' 简化版 vs Opus ADR-124 §D-124-2 严谨版）**：
+- **B'' 选定**：仅前端 banner + 后端旧端点不改（继续读写 video_sources）+ 数据双轨保留至 M-SN-9 一次性清理
+- **拒绝 B 严谨版**：后端旧 service 改 thin alias 转发 user_submissions 表 → 需双写 video_sources 同步 user_submissions / 维护成本高 / D 卡 0.2w 估时不允许
+- **历史数据保护**：A 卡 migration 065 已 backfill 历史失效源举报至 user_submissions（D-124-8）/ 新流量主走新页（C 卡 nav 已切）/ 旧页保留至 M-SN-9 退役避免破坏 P1 link
+
+**质量门禁**：
+- typecheck ✅
+- lint ✅（修 1 处 react/no-unescaped-entities：`"失效源举报"` → `「失效源举报」` 中文引号 / 与 F 卡 CategoryMappingCollapsible 同模式修订）
+- file-size ✅ 0 新违规（SubmissionsListClient 397→434 行 / 仍 < 500）
+- 全量 unit：4166 → **4167 PASS**（+1 净增 / banner 渲染断言）
+
+**执行模型**：claude-opus-4-7 主循环（任务卡建议 Haiku 但用户在 Opus 续会话 / 不擅自降级 / 单文件最小改动适配）
+
+**REDO-02 工时进度**：A0 0.15 + A 0.4 + B 0.7 + PRE-CARD 0.05 + PRE-CARD-A 0.2 + C 0.7 + D ~0.1 = **~2.3w / 总 ~2.95w 剩 ~0.5w**（E 0.3 + F 0.2 / 工时基本对齐 - 0.15w 节省）
+
+<!-- 下张：CHG-SN-7-REDO-02-E RETRO 验证 + verify:adr-contracts + e2e（0.3w / Sonnet）-->
+
+
+### CHG-SN-7-REDO-02-D ⏳ 已替换为闭环卡
 
 ### CHG-SN-7-REDO-02-C ✅ /admin/user-submissions 前端 Card list 闭环（2026-05-19）
 

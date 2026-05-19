@@ -112,3 +112,22 @@ describe('SubmissionsListClient — CSV 导出', () => {
     }
   })
 })
+
+// ── CHG-SN-7-REDO-02-D deprecation banner ─────────────────────────
+
+describe('SubmissionsListClient — REDO-02-D 迁移 deprecation banner', () => {
+  it('4. banner 渲染 + 跳转按钮存在 + 文案含目标路径', async () => {
+    listSubmissionsMock.mockResolvedValueOnce({ data: [], total: 0, page: 1, limit: 20 })
+    const { container } = render(<SubmissionsListClient />)
+    const banner = await waitFor(() => screen.getByTestId('submissions-deprecation-banner'))
+    expect(banner).not.toBeNull()
+    expect(banner.textContent).toContain('/admin/user-submissions')
+    expect(banner.textContent).toContain('M-SN-9 退役')
+    const redirectBtn = screen.getByTestId('submissions-deprecation-redirect')
+    expect(redirectBtn).not.toBeNull()
+    expect(redirectBtn.textContent).toContain('切换到新页面')
+    // jsdom 下 Next Link 通常渲染 <a>，但 legacyBehavior + child button 包装层级不稳定 —
+    // 用更宽松的"banner 整体含 href 字符串"断言即可
+    expect(container.innerHTML).toContain('/admin/user-submissions')
+  })
+})

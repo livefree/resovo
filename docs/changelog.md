@@ -12174,3 +12174,63 @@ REDO-02-PRE-CARD-PRIMITIVE-A Segment primitive 落地后启动 C 卡。按 ADR-1
 
 - 下张可执行卡：**CHG-SN-7-REDO-02-D** 旧 `/admin/submissions*` alias 转发 + 旧 SubmissionsListClient deprecation banner（0.2w / Haiku）
 - 累计已完成：A0 ✅ + A ✅ + B ✅ + PRE-CARD ✅ + PRE-CARD-A ✅ + C ✅ 共 **~2.2w / REDO-02 总 ~2.95w — 剩余 ~0.75w**（D+E+F）
+
+---
+
+## [CHG-SN-7-REDO-02-D] 旧 /admin/submissions deprecation banner
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环（任务卡建议 Haiku / 在 Opus 续会话不擅自降级 / 单文件最小改动适配）
+
+### 起源
+
+REDO-02-C 完成（commit `8a6b0a56`）后启动 D 卡。按 ADR-124 D-124-2 + Y1 路径过渡范式，旧 `/admin/submissions` 应作为 alias 过渡至 M-SN-9 退役。
+
+### 路径决策（B'' 简化版 vs Opus ADR-124 严谨版）
+
+**Opus 原方案 B（严谨）**：后端旧 service 改 thin alias 转发新 service / 双写 video_sources + user_submissions
+- 维护成本高（双写一致性）
+- D 卡 0.2w 估时不允许
+
+**主循环采纳 B'' 简化版**：
+- 后端旧 5 端点不改（继续读写 video_sources）
+- 前端 SubmissionsListClient 注入 deprecation banner（突出 / 显著跳转入口）
+- 历史数据：A 卡 migration 065 D-124-8 已 backfill 历史失效源举报至 user_submissions（双轨保留）
+- 新流量：C 卡 nav 已切 `/admin/user-submissions` / 旧页保留至 M-SN-9 一次性清理（CHG-SN-9-XX-SUBMISSIONS-DEPRECATE 卡）
+
+### 修改文件（2 改）
+
+1. `apps/server-next/src/app/admin/submissions/_client/SubmissionsListClient.tsx`（397→434 行）
+   - +1 import `Link from 'next/link'`
+   - +1 import `AdminCard from '@resovo/admin-ui'`
+   - +1 style const `DEPRECATION_BANNER_STYLE`
+   - +1 banner JSX 块（AdminCard surface='subtle' status='warn' + Next.js Link + AdminButton primary 跳转）
+   - 修 1 处 react/no-unescaped-entities（`"失效源举报"` → `「失效源举报」` 中文引号）
+2. `tests/unit/components/server-next/admin/submissions/SubmissionsListClient.test.tsx`（3→4 case）
+   - +1 banner 渲染断言（含跳转路径 + M-SN-9 退役提示 + 跳转按钮）
+
+### 关键设计
+
+1. **B'' 选定理由**：单文件 banner 最少改动 / 后端 0 改 / 数据双轨保留 / 与 A 卡 backfill 协同工作 / M-SN-9 一次性清理是更合理的退役时机
+2. **AdminCard surface='subtle' status='warn'**：与 admin-ui §5.16 status pill warn 形态对齐 / 醒目但不抢主视图焦点
+3. **Next.js Link + legacyBehavior**：包装 AdminButton 子节点 / 保持按钮视觉一致 + Link 路由优势
+4. **历史数据保护**：A 卡 D-124-8 backfill 已把历史 video_sources.is_active=false AND submitted_by IS NOT NULL 复制到 user_submissions（type='bad_source'）/ 新页可见旧数据 / 旧页继续可操作 video_sources 行（旧端点未改）
+
+### 质量门禁
+
+- typecheck ✅
+- lint ✅（修 1 处 react/no-unescaped-entities 中文引号）
+- file-size ✅ 0 新违规（SubmissionsListClient 434 < 500）
+- 全量 unit：4166 → **4167 PASS**（+1 净增 / banner 渲染断言）
+
+### 关键自省
+
+1. **简化版工程价值**：B'' 比 Opus 原方案 B 节省 ~0.1w 维护成本（后端双写）+ 数据一致性风险（user_submissions / video_sources 同步漂移）
+2. **react/no-unescaped-entities 教训**：本卡是连续第 3 次因英文引号失败（F 卡 + REDO-01-D 都遇过）— 写 JSX 字符串时优先使用中文引号 `「」` 或转义 `&quot;`
+3. **Next.js Link legacyBehavior 测试断言权衡**：jsdom 下 Link wrap 子按钮的 href 提取不稳定 / 改用 `container.innerHTML.includes()` 宽松断言保稳定性
+
+### 后续触发
+
+- 下张可执行卡：**CHG-SN-7-REDO-02-E** RETRO 验证 + verify:adr-contracts + e2e（0.3w / Sonnet）
+- M-SN-9 退役卡：**CHG-SN-9-XX-SUBMISSIONS-DEPRECATE**（删除旧 /admin/submissions 路由 + service + 客户端 + video_sources backfill 反向清理）
+- 累计已完成：A0 ✅ + A ✅ + B ✅ + PRE-CARD ✅ + PRE-CARD-A ✅ + C ✅ + D ✅ 共 **~2.3w / REDO-02 总 ~2.95w — 剩余 ~0.5w**（E+F）
