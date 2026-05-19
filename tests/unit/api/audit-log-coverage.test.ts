@@ -72,6 +72,8 @@ const REQUIRED_ACTION_TYPES = [
   'sources.route_action',       // POST/DELETE /admin/sources/routes/by-site/:siteKey/:sourceName[/test|/reprobe]
   // CHG-SN-7-REDO-01-F / ADR-123：站点分类映射 PUT 全量替换
   'crawler_site.category_mapping_update',
+  // CHG-SN-7-REDO-02-A / ADR-124：用户投稿 4 路径合并 actionType（R-MID-1 第 15 次）
+  'user_submission.action',
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -135,6 +137,8 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'sources.route_action',
   // CHG-SN-7-REDO-01-F / ADR-123：站点分类映射 PUT 全量替换 audit 内容断言
   'crawler_site.category_mapping_update',
+  // CHG-SN-7-REDO-02-A / ADR-124：用户投稿 4 路径 audit payload 内容断言
+  'user_submission.action',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

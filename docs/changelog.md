@@ -11835,3 +11835,82 @@ REDO-01 闭环（commit `9abdd729`）后启动 REDO-02（PRE-04 #9 锁定 Submis
 - 下张可执行卡：**CHG-SN-7-REDO-02-A** migration + types + audit RETRO 4 真源同步（0.4w / opus-4-7）
 - M-SN-9 触发：CHG-SN-9-XX-SUBMISSIONS-DEPRECATE 退役旧 alias
 - C 卡前置：CHG-SN-7-REDO-02-PRE-CARD-PRIMITIVE admin-ui primitive 调研（0.1w / Opus）
+
+---
+
+## [CHG-SN-7-REDO-02-A] migration 065 + types + audit 4 真源同步 + UserSubmissionService stub
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环（按 ADR-124 spec 实施 / 子代理：无）
+
+### 起源
+
+REDO-02-A0 ADR-124 Accepted A（commit `7ea7b18b`）后启动 A 卡：按 ADR-124 §拆卡建议落地 migration + types + audit 4 真源同步 + audit content assertion stub（R-MID-1 第 15 次系统化）。
+
+### 修改文件（4 新 + 4 改）
+
+**新建**：
+1. `apps/api/src/db/migrations/065_user_submissions.sql`（120 行）
+   - 3 CHECK 约束（chk_bad_source_has_source / chk_metadata_correction_has_video / chk_processed_consistency）
+   - 4 indexes（含 AD2 partial index `WHERE status='pending'` 优化 badges 聚合）
+   - AD1 弱校验：`chk_metadata_is_object` CHECK `jsonb_typeof='object'`
+   - updated_at trigger
+   - D-124-8 backfill：历史 video_sources.is_active=false AND submitted_by IS NOT NULL → bad_source（双轨保留）
+   - ROLLBACK 段（注释）
+2. `apps/api/src/services/UserSubmissionService.ts`（98 行 / A 卡 stub）
+   - 3 metadata zod schema（BadSourceMetadataSchema / WishListMetadataSchema / MetadataCorrectionMetadataSchema）
+   - UserSubmissionAuditAction + UserSubmissionAuditPayload + WriteUserSubmissionActionParams 类型
+   - `writeUserSubmissionAction(params)` audit helper（B 卡 6 端点共享调用入口）
+3. `tests/unit/api/user-submissions-audit.test.ts`（200 行 / 8 case PASS）
+   - 4 路径 audit shape 断言（process / reject / batch_process / batch_reject）
+   - 3 类 metadata zod 锁定测试
+
+**改**：
+1. `packages/types/src/admin-moderation.types.ts` 追加
+   - AdminAuditActionType +1 `user_submission.action`
+   - AdminAuditTargetKind +1 `user_submission`
+   - 4 新 interface（UserSubmissionType / UserSubmissionStatus / UserSubmissionRow / UserSubmissionListResp）
+2. `apps/api/src/services/AuditLogService.ts` ACTION_TYPES + TARGET_KINDS +1 / +1
+3. `tests/unit/api/audit-log-coverage.test.ts` REQUIRED_ACTION_TYPES + PAYLOAD_ASSERTION_REQUIRED +1
+4. `tests/unit/api/audit-log-service-enums-set-equal.test.ts` EXPECTED_ACTION_TYPES + EXPECTED_TARGET_KINDS +1
+
+### 关键设计
+
+1. **A 卡 stub 模式**：service 文件先建立 audit 写入 helper（满足 audit-log-coverage 守卫），实际 mutation（process/reject/batch_*）业务 logic 留 B 卡。
+   - 参 REDO-01-E2 同模式（commit `cd27dacf`）：actionType 添加到 REQUIRED 那一刻起即需 service 内写入位点 + content assertion test
+2. **R-MID-1 第 15 次系统化**：连贯 REDO-01-E2（第 13 次）+ REDO-01-F（第 14 次）+ 本卡（第 15 次）三次合并 actionType 范式实战
+3. **AD1 顺手补**：`chk_metadata_is_object` CHECK `jsonb_typeof='object'` — DB 层防御弱校验（service 层 zod 是强校验）
+4. **AD2 顺手补**：`idx_user_submissions_pending_type_created` partial index `WHERE status='pending'` — badges 聚合 4 计数查询性能优化
+5. **AD3 留 B 卡补**：ADR-114-NEGATED 脚注"video_sources 不承载用户投稿语义" — 等 B 卡 routes/services 实施时补到 architecture.md
+
+### audit 4 真源同步（R-MID-1 第 15 次）
+
+| # | 真源 | 改动 |
+|---|---|---|
+| 1 | packages/types/src/admin-moderation.types.ts | union +1 actionType + +1 targetKind |
+| 2 | apps/api/src/services/AuditLogService.ts | ACTION_TYPES + TARGET_KINDS 数组 +1 / +1 |
+| 3 | tests/unit/api/audit-log-coverage.test.ts | REQUIRED + PAYLOAD_ASSERTION_REQUIRED +1 |
+| 4 | tests/unit/api/audit-log-service-enums-set-equal.test.ts | EXPECTED_ACTION_TYPES + EXPECTED_TARGET_KINDS +1 / +1 |
+
+第 5 文件（content assertion test）：`tests/unit/api/user-submissions-audit.test.ts` 新建（8 case PASS）。
+
+### 质量门禁
+
+- typecheck ✅ 全 7 workspace
+- lint ✅（api tsc + 0 ESLint warning）
+- file-size ✅ 0 新违规
+- verify:endpoint-adr ✅ **158 admin 路由对齐 35 ADR 端点**（保持 / B 卡才落 6 端点实施）
+- 全量 unit test：4117 → **4127 PASS**（+10 净增 / 8 audit shape + 2 audit it.each）
+
+### 关键自省
+
+1. **A 卡 stub 设计避免范围扩张**：originally 担心 A 卡只做 types + audit RETRO 会让 audit-log-coverage 守卫 fail（actionType 必有 service 内写入位点）；通过建立 UserSubmissionService stub + audit helper 满足守卫，**实际 mutation 业务严格留 B 卡**（不偏离 ADR-124 §拆卡建议 0.4w 估时）
+2. **R-MID-1 范式高度复用价值**：本卡是连续第 3 次合并 actionType + 4 真源同步（13/14/15 次），实施成本几乎只剩 zod schema 设计 + audit shape 定义（migration 各异 / 4 真源同步路径相同）
+3. **AD1+AD2 顺手补 advisory**：DB 层弱校验 + partial index 在 migration 同卡内补，零成本提升 schema 质量；ADR-124 §advisory 列出的 3 项中 2 项本卡完成 / 剩 AD3 ADR-114 脚注留 B 卡
+
+### 后续触发
+
+- 下张可执行卡：**CHG-SN-7-REDO-02-B** 6 端点 + service + queries + audit 写入 + ≥10 case 单测（0.7w / opus-4-7）
+- B 卡前置：A 卡所有 audit 守卫已就位 / B 卡只需消费 `writeUserSubmissionAction` helper
+- C 卡前置：**CHG-SN-7-REDO-02-PRE-CARD-PRIMITIVE**（0.1w / Opus / admin-ui Card/Segment/Quote primitive 调研，可与 B 并行）
+- 累计已完成：A0 ✅ + A ✅ 共 ~0.55w / REDO-02 总 ~2.75w — 剩余 ~2.2w（B+PRE-CARD+C+D+E+F）

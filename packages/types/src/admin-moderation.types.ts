@@ -161,6 +161,8 @@ export type AdminAuditActionType =
   | 'sources.route_action'       // POST/DELETE /admin/sources/routes/by-site/:siteKey/:sourceName[/test|/reprobe]
   // CHG-SN-7-REDO-01-F / ADR-123 2026-05-19：站点分类映射 PUT 全量替换 audit
   | 'crawler_site.category_mapping_update' // PUT /admin/crawler/sites/:key/category-mapping
+  // CHG-SN-7-REDO-02-A / ADR-124 2026-05-19：用户投稿 4 路径合并 actionType
+  | 'user_submission.action'               // POST /admin/user-submissions/:id/{process,reject} + batch-{process,reject}
 
 export type AdminAuditTargetKind =
   | 'video'
@@ -172,6 +174,7 @@ export type AdminAuditTargetKind =
   | 'home_module'
   | 'source_line_alias'
   | 'source_route'  // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2：sources 行级操作目标
+  | 'user_submission'  // CHG-SN-7-REDO-02-A / ADR-124：用户投稿 4 类统一表
 
 export interface AdminAuditLog {
   readonly id: string  // bigserial → string（避免 JS 大数精度）
@@ -358,4 +361,68 @@ export interface PlaybackFeedbackBody {
   readonly resolutionHeight?: number
   readonly bufferingCount?: number
   readonly errorCode?: string
+}
+
+// ── ADR-124 / CHG-SN-7-REDO-02：user_submissions 4 类用户投稿 ──────
+
+/**
+ * spec §5.13 4 类 Segment 中的 3 类 type（"已处理"是 status=processed/rejected
+ * 的查询视图，非 type 字段）。
+ *   - bad_source：失效源举报（必填 source_id / 用户报告已有 source 失效）
+ *   - wish_list：求片（video_id 可 NULL / 用户请求未入库视频）
+ *   - metadata_correction：元数据纠错（必填 video_id / 用户报告视频元数据错误）
+ */
+export type UserSubmissionType = 'bad_source' | 'wish_list' | 'metadata_correction'
+
+/** 状态机：pending（初始）→ processed（已处理）/ rejected（已拒绝）；CHECK 守卫 processed_at 同步 */
+export type UserSubmissionStatus = 'pending' | 'processed' | 'rejected'
+
+/**
+ * 列表行（GET /admin/user-submissions）。
+ * 字段命名 camelCase 与 ADR-117 既有 row 1 VideoGroupRow 同风格。
+ *
+ * metadata shape 按 type 不同（ADR-124 §Schema 设计末尾 zod 锁定）：
+ *   - bad_source: { source_id, source_url?, last_played_at? }
+ *   - wish_list: { title_zh?, year?, douban_id?, type? }
+ *   - metadata_correction: { video_id, field, suggested_value }
+ *
+ * service 层 runtime 用 zod 校验 metadata 字段 shape；类型层保持 Record 兼容。
+ */
+export interface UserSubmissionRow {
+  readonly id: string
+  readonly type: UserSubmissionType
+  readonly status: UserSubmissionStatus
+  readonly videoId: string | null
+  readonly sourceId: string | null
+  readonly submittedBy: string
+  readonly submittedByName: string | null     // JOIN users.username
+  readonly quote: string                       // 1-2000 字符
+  readonly metadata: Readonly<Record<string, unknown>> | null
+  readonly videoTitle: string | null           // JOIN videos.title（求片可 NULL）
+  readonly videoPosterUrl: string | null       // JOIN videos.poster_url（求片可 NULL）
+  readonly sourceName: string | null           // JOIN video_sources.source_name（求片+纠错可 NULL）
+  readonly sourceSiteKey: string | null        // JOIN video_sources.source_site_key
+  readonly createdAt: string
+  readonly processedAt: string | null
+  readonly processedBy: string | null
+  readonly processedReason: string | null
+}
+
+/**
+ * GET /admin/user-submissions 响应信封（含 meta.badges 聚合 4 计数）。
+ * badges 用于 4 Segment 头部数量徽章（spec §5.13 + screens-3.jsx:424-427）。
+ */
+export interface UserSubmissionListResp {
+  readonly data: ReadonlyArray<UserSubmissionRow>
+  readonly meta: {
+    readonly total: number
+    readonly page: number
+    readonly limit: number
+    readonly badges: {
+      readonly bad_source: number               // status=pending AND type=bad_source
+      readonly wish_list: number                // status=pending AND type=wish_list
+      readonly metadata_correction: number      // status=pending AND type=metadata_correction
+      readonly processed: number                // status IN (processed, rejected) 全量
+    }
+  }
 }

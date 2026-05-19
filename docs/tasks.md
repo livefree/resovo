@@ -6,7 +6,53 @@
 
 ## 进行中任务
 
-<!-- REDO-02-A0 闭环（2026-05-19）；下一卡 REDO-02-A migration + types + audit 4 真源 -->
+<!-- REDO-02-A 闭环（2026-05-19）；下一卡 REDO-02-B 6 端点实施 -->
+
+### CHG-SN-7-REDO-02-A ✅ migration 065 + types + audit 4 真源同步闭环（2026-05-19）
+
+**完成时间**：2026-05-19
+**实施**（按 ADR-124 §拆卡建议 A 卡范围）：
+- **migration**：`apps/api/src/db/migrations/065_user_submissions.sql`（120 行 / 含 3 CHECK 约束 + 4 indexes + updated_at trigger + D-124-8 backfill + ROLLBACK 段）
+  - AD1 顺手补：`chk_metadata_is_object` CHECK 弱校验（jsonb_typeof='object'）
+  - AD2 顺手补：`idx_user_submissions_pending_type_created` partial index WHERE status='pending'（badges 聚合性能优化）
+- **types**：`packages/types/src/admin-moderation.types.ts` 追加
+  - `AdminAuditActionType` +1 `user_submission.action`（合并 D3a / 4 路径走 afterJsonb.action）
+  - `AdminAuditTargetKind` +1 `user_submission`（新增 / 不复用 video_source）
+  - 4 新 interface：`UserSubmissionType` / `UserSubmissionStatus` / `UserSubmissionRow` / `UserSubmissionListResp`
+- **AuditLogService**：`apps/api/src/services/AuditLogService.ts` ACTION_TYPES + TARGET_KINDS +1 / +1
+- **audit 4 真源同步**（R-MID-1 第 15 次系统化）：
+  - types union（同上）
+  - AuditLogService 数组（同上）
+  - `tests/unit/api/audit-log-coverage.test.ts` REQUIRED_ACTION_TYPES + PAYLOAD_ASSERTION_REQUIRED +1
+  - `tests/unit/api/audit-log-service-enums-set-equal.test.ts` EXPECTED_ACTION_TYPES + EXPECTED_TARGET_KINDS +1
+- **UserSubmissionService stub**：`apps/api/src/services/UserSubmissionService.ts`（98 行 / 满足 audit-log-coverage 守卫"actionType 必有写入位点"）
+  - 3 类 metadata zod schema（D-124-5 / Y2 锁定 / BadSource / WishList / MetadataCorrection）
+  - `UserSubmissionAuditAction` + `UserSubmissionAuditPayload` + `WriteUserSubmissionActionParams` 类型
+  - `writeUserSubmissionAction(params)` audit helper（B 卡 6 端点共享调用入口 / fire-and-forget audit 写入）
+- **audit content assertion test**：`tests/unit/api/user-submissions-audit.test.ts`（200 行 / 8 case PASS）
+  - 4 路径 audit shape 断言（process / reject / batch_process / batch_reject + `expect.objectContaining` 形式）
+  - 3 类 metadata zod 锁定测试（必填 / 可选 / 枚举 / 长度边界 / .strict() 未知字段）
+
+**评级**：A（严格按 ADR-124 §拆卡建议 A 卡范围 / 0 红线 / 0 黄线 / 顺手补 AD1+AD2 advisory）
+
+**关键设计**：
+- **A 卡 stub 设计模式**：service 文件先建立 audit 写入 helper（满足 audit-log-coverage 守卫），实际 mutation（process/reject/batch_*）业务 logic 留 B 卡 — 与 REDO-01-E2 同模式（先建 actionType + write helper / 后续卡逐步消费）
+- **3 类 metadata zod 锁定**：BadSourceMetadataSchema / WishListMetadataSchema / MetadataCorrectionMetadataSchema 全 `.strict()` + 字段长度/枚举守卫
+- **audit afterJsonb 4 shape**：process（type + action_taken）/ reject（type + reason）/ batch_process（ids + count + action_taken）/ batch_reject（ids + count + reason）
+
+**质量门禁**：
+- typecheck ✅ 全 7 workspace
+- lint ✅（api tsc + 0 ESLint warning）
+- file-size ✅ 0 新违规
+- verify:endpoint-adr ✅ 158 路由对齐 35 ADR 端点（保持 / B 卡才落 6 端点实施）
+- 全量 unit test：4117 → **4127 PASS**（+10 净增 / 8 audit shape + 2 audit it.each）
+
+**执行模型**：claude-opus-4-7 主循环（按 ADR-124 spec 实施 / 子代理：无）
+
+<!-- 下张：CHG-SN-7-REDO-02-B 6 端点 + service + queries + audit 写入 + ≥10 case 单测（0.7w / opus-4-7） -->
+
+
+### CHG-SN-7-REDO-02-A ⏳ 已替换为闭环卡
 
 ### CHG-SN-7-REDO-02-A0 ✅ ADR-124 user_submissions schema 起草闭环（2026-05-19）
 
