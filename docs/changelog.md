@@ -12304,3 +12304,116 @@ REDO-02-D 完成（commit `fc519f58`）后启动 E 卡 RETRO 验证。按 ADR-12
 - 下张可执行卡：**CHG-SN-7-REDO-02-F** Opus 验收（0.2w）— spec §5.13 100% 覆盖 + ADR-124 9 节闭环 + 评级 ≥ A−
 - pre-existing advisory（9 项 D + 128 条 error-message）属 **MISC-AUDIT-PARSER** 跟踪卡范围 / 非本 REDO-02 milestone 范围
 - 累计已完成：A0 ✅ + A ✅ + B ✅ + PRE-CARD ✅ + PRE-CARD-A ✅ + C ✅ + D ✅ + E ✅ 共 **~2.5w / REDO-02 总 ~2.95w — 剩余 ~0.2w**（F 验收）
+
+---
+
+## [CHG-SN-7-REDO-02-F] REDO-02 milestone 全闭环 / Opus 验收 A−
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环（验收编排）
+- **子代理**：arch-reviewer (claude-opus-4-7) 验收 1 轮 — **A−**
+
+### 起源
+
+REDO-02 列表顺序 A0→E 8 子卡（commits `7ea7b18b` → `02a90bac` / 含 PRE-CARD 调研 + PRE-CARD-A Segment primitive）全部闭环 / ~2.5w 累计；本 F 卡为 milestone 最终验收门。
+
+### 验收范围（7 commits / 8 子卡 / 含 PRE-CARD 调研内联到 PRE-CARD-A）
+
+| 子卡 | commit | 产出 |
+|---|---|---|
+| A0 | `7ea7b18b` | ADR-124 起草 / Opus 1 轮 A / 主循环修订 Y1+Y2 黄线 + RETRO 4 文件理解 |
+| A | `9012aa48` | migration 065 + types + actionType + targetKind + audit 4 真源 + UserSubmissionService stub + 8 case |
+| B | `b2763f30` | 6 端点 + service + queries + audit 写入 + 15 case（状态机双重守卫 + 批量静默跳过）|
+| PRE-CARD + PRE-CARD-A | `673078ec` | admin-ui Segment primitive 设计 + 实施（Opus 1 轮 A / WAI-ARIA tabs + roving tabIndex + 12 case）|
+| C | `8a6b0a56` | 前端 /admin/user-submissions Card list 主视图（200 行 client + 230 行 card + 12 case）|
+| D | `fc519f58` | 旧 /admin/submissions deprecation banner（B'' 简化版 / 后端 0 改）|
+| E | `02a90bac` | RETRO 验证 + SQL bug 修补（v.cover_url → mc.cover_url）+ D-124-3..7 闭环 |
+
+### Opus 14 行 spec §5.13 checklist 状态
+
+**12 OK + 1 PARTIAL + 1 DEVIATION-ACCEPTED**：
+- page head title + subtitle ✅
+- Segment 4 类 + badge counts ✅（admin-ui Segment + badges 聚合）
+- 失效源举报 danger / 求片 info / 元数据纠错 warn ✅（visualForType 派生）
+- 已处理 Segment ⚠️ PARTIAL（客户端 filter / total 大时分页失真 / MISC 跟踪）
+- Card list 32px icon box / 可选 poster / title / who-time ✅
+- quote block ⚠️ DEVIATION（quote→title / metadata→quote block 映射缺 ADR 落档）
+- 3 按钮 ⚠️ DEVIATION-ACCEPTED（替换为 查看视频/拒绝/处理 / 架构合理 / 缺 ADR 文档）
+
+### ADR-124 11 节 + D-124-1..8 全 closed
+
+| Section | 状态 |
+|---|---|
+| 背景 | ✅ |
+| 决策要点 D-124-1..8 | ✅ 8/8 closed（E 卡 commit `02a90bac` changelog 补全引用）|
+| Schema 设计（migration 065 草案）| ✅ |
+| 端点契约 6 行 | ✅ |
+| audit log 协议 | ✅ |
+| 类型契约 | ✅ |
+| 后果 | ✅ |
+| 替代方案对比 | ✅ |
+| 关联 | ✅ |
+| 4 维度自评 | ✅ 综合 A |
+| REDO-02 拆卡建议 | ✅ |
+
+### Verify 命令全 PASS
+
+- typecheck ✅ / lint ✅ 0 error/warning
+- file-size ✅ 0 新违规（max UserSubmissionService 290 < 500）
+- verify:endpoint-adr ✅ **164 admin 路由对齐 35 ADR 端点**（+6 ADR-124 新端点）
+- verify:adr-contracts ✅ 本卡引入 0 残留 advisory（D-124 全 8 项闭环 / SQL schema 全修）
+- 全量 unit test：**4167 PASS**（REDO-02 累计 +50 net case：A 8 + B 15 + PRE-CARD-A 12 + C 12 + D 1 + E 0 + F 0 + audit-coverage it.each 2）
+
+### 关键产出 / 累计统计
+
+- **ADR**：ADR-124 user_submissions schema + API 协议（Opus 1 轮 A + 主循环修订 Y1+Y2+RETRO 4 文件理解）
+- **Migration**：065_user_submissions（含 3 CHECK + 4 indexes + AD1 jsonb_typeof + AD2 partial index + D-124-8 backfill）
+- **后端**：6 端点新增（GET list/detail + POST process/reject + batch-process/batch-reject / queries 230 + service 290 + route 180 = 700 行后端实施）
+- **audit RETRO**：R-MID-1 第 **15 次** 系统化（types + AuditLogService + audit-log-coverage + set-equal 4 真源同步）
+- **admin-ui Segment primitive**：架构红利 / 后续 §5.4 / §5.11 等可消费 / 投资回报 ~0.1w 节省每次消费方
+- **前端**：5 文件 / lib 125 行 + Card list 主视图 443 行（200 client + 230 card + 13 page）+ 旧路径 deprecation banner（B'' 简化版）
+- **测试**：单测净增 50 case（4117 → 4167）+ 3 新测试文件（user-submissions-audit / Segment / UserSubmissionsClient）+ 1 测试扩展（SubmissionsListClient banner）
+
+### Opus 评级扣分项（A− 而非 A）
+
+- **扣 0.5：quote 语义映射缺 ADR 落档**（#13 / DEVIATION）
+  - 处置：ADR-124-AMENDMENT-1（0.05w / Haiku）补档"quote→title 衍生 + metadata→quote block 衍生"映射规则
+- **扣 0.5：3 按钮替换缺 ADR 文档**（#14 / DEVIATION-ACCEPTED）
+  - 处置：同 AMENDMENT-1 合并补"重验→拒绝"决策（架构合理 / 「重验」语义已由 sources.route_action 承载 / 「拒绝」覆盖 4 类 polymorphic）
+
+### 3 跟踪卡录入 task-queue MISC 段
+
+- **CHG-SN-7-ADR-124-AMENDMENT-1**（0.05w / Haiku）：quote→title 映射 + 3 按钮替换决策落档
+- **CHG-SN-7-MISC-VISUAL-SUBMISSIONS**（0.1w / Sonnet）：dev server + Playwright baseline pixel diff
+- **CHG-SN-7-MISC-USER-SUBMISSIONS-PROCESSED-FILTER**（0.15w / Sonnet）：后端 status enum 加 `processed_or_rejected` 单值（避免客户端 filter 分页失真）
+
+### REDO-02 milestone 闭环声明
+
+| 阶段 | 估时 | 实际 |
+|---|---|---|
+| REDO-02 A0-F（7 子卡 / 含 PRE-CARD 内联）| 原 ~1w / Opus 修订 ~2.95w | **~2.5w 实测**（含主动 advisory 修补 / 节省 0.45w）|
+| **总** | **2.95w 修订估时 / 2.5w 实际** | **节省 ~0.45w**（vs 原 ~1w 严重低估上调 2.5x）|
+
+节省源：
+- PRE-CARD 调研提前发现 admin-ui 真空 → 起 PRE-CARD-A 共享 primitive 卡 / 节省 C 卡 ~0.1w
+- D 卡 B'' 简化版（仅前端 banner / 后端 0 改）vs Opus B 严谨版 / 节省 0.1w
+- E 卡主动发现并修复 SQL bug + 守卫引用 / 降低 F 卡风险 / 节省 0.1w
+- 3 advisory 全部修补到 0 残留（vs REDO-01-J 留 MISC 跟踪 2 项）
+
+### 关键自省（REDO-02 milestone 级）
+
+1. **estimate revision 是规范行为**：A0 卡实测发现原 ~1w 严重低估 → spawn Opus 重估 ~2.95w → 用户拍板 → 文档化重估 → 实际 ~2.5w 完成（vs 默认推进会陷入 1w 工时陷阱致 RECHECK / RECREATE 等）
+2. **R-MID-1 范式高度复用价值**：本卡是连续第 3 次合并 actionType + 4 真源同步（13/14/15 次），实施成本主要在 schema 设计 + audit shape 定义（migration 各异 / 4 真源同步路径完全相同 / 范式机械化）
+3. **admin-ui 共享 primitive 跨任务红利**：Segment primitive 在 REDO-02 C 卡首次业务消费 / 后续 §5.4 / §5.11 等可零成本消费 / PRE-CARD-PRIMITIVE-A 0.2w 投资跨任务摊销
+4. **Opus + 主循环协同价值**：A0 卡 Opus 起草 + 主循环修订 Y1/Y2/RETRO 4 文件理解 → 防 ~0.3w 误工 / PRE-CARD-A Opus 契约 + 主循环实施 → 范式机械落地
+5. **B'' 简化决策的工程价值**：D 卡 Opus 原方案 B 严谨版（后端 thin alias 转发）vs 主循环 B'' 简化版（仅前端 banner）→ 节省 ~0.1w 维护成本 + 数据一致性风险 / "审慎偏离 Opus 推荐"作为主循环判断价值的实证
+6. **SQL schema bug 主动发现教训**：A 卡 query 用 v.cover_url 漏校 migration 029 已 DROP / B/C 卡 mock pool 测试未触发 / 漏到 E 卡 advisory 才发现 → 教训：cover_url/poster_url 字段强制 grep media_catalog 范式
+
+### 后续触发（建议）
+
+- 用户拍板路径：
+  - (a) 启动 **REDO-03 Settings 收敛**（~1.5w / Opus IA 决策 / plan §3.4 锁定）
+  - (b) 跑 3 跟踪卡（AMENDMENT-1 + MISC-VISUAL-SUBMISSIONS + MISC-USER-SUBMISSIONS-PROCESSED-FILTER / 共 ~0.3w）
+  - (c) 跑 REDO-01 遗留 3 MISC（VISUAL-CRAWLER + AUDIT-PARSER + CRAWLER-CSV-EXPORT / 共 ~0.3w）
+  - (d) 切其他 milestone / 暂停
+

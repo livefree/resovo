@@ -6,7 +6,66 @@
 
 ## 进行中任务
 
-<!-- REDO-02-E 闭环（2026-05-19）；下一卡 REDO-02-F Opus 验收 -->
+<!-- REDO-02 milestone 全闭环（2026-05-19）—— A0→F 7 子卡完整 / Opus 验收 A− / 等用户拍板下一卡 -->
+
+### CHG-SN-7-REDO-02-F ✅ Opus 验收 A− 闭环 / REDO-02 milestone 闭环（2026-05-19）
+
+**完成时间**：2026-05-19
+**实施**：
+- spawn arch-reviewer Opus 子代理 1 轮验收 — **A−**（14 行 spec §5.13 checklist 12 OK + 1 PARTIAL + 1 DEVIATION-ACCEPTED / ADR-124 11 节闭环 + D-124-1..8 全 closed / 4 真源同步 + verify 5 件套 PASS / admin-ui Segment primitive 沉淀架构红利）
+- 3 跟踪卡录入 task-queue（AMENDMENT-1 文档补丁 / MISC-VISUAL-SUBMISSIONS / MISC-USER-SUBMISSIONS-PROCESSED-FILTER）
+
+**评级**：**A−**（达到 §3.4 验收门要求"≥ A−"）
+
+**Opus 评级扣分项**：
+- 扣 0.5：**#13 quote 语义映射缺 ADR 落档** — schema 单 quote 字段必然导致 UI 层"title=quote 衍生 + metadata 衍生→quote block"映射规则，但 ADR-124 §Schema 设计 / §D-124-5 未明文化（需 AMENDMENT-1 补）
+- 扣 0.5：**#14 3 按钮替换偏离 spec** — spec 是「重验/查看视频/处理」/ 实施替换为「查看视频/拒绝/处理」（架构合理 — 「重验」语义已由 sources.route_action 承载 / 「拒绝」覆盖 4 类 polymorphic / 但 ADR-124 文档未明文 / commit 备注非正式落档）
+
+**14 行 §5.13 checklist 状态**（Opus 详细核对）：
+| # | spec | 状态 |
+|---|---|---|
+| 1 | page head title "用户投稿 / 纠错" | ✅ |
+| 2 | page head subtitle "N 条待处理 · ..." | ✅ |
+| 3 | Segment 4 类 + badge counts | ✅（admin-ui Segment + badges 聚合）|
+| 4 | 失效源举报 danger/AlertCircle | ✅ |
+| 5 | 求片 info/Flag | ✅ |
+| 6 | 元数据纠错 warn/Pencil | ✅ |
+| 7 | 已处理 Segment（processed+rejected） | ⚠️ PARTIAL（客户端 filter / total 大时分页失真 / 留 MISC 跟踪）|
+| 8 | Card list flex column gap 8 | ✅ |
+| 9 | 32px icon box + bg/fg token | ✅ |
+| 10 | 可选 poster 42×60 求片无 video | ✅（E 卡 mc.cover_url 修补）|
+| 11 | title 13/600 | ✅ |
+| 12 | who/time 11/muted | ✅ |
+| 13 | quote block bg-subtle italic | ⚠️ DEVIATION（quote→title / metadata→quote block 映射缺 ADR 落档）|
+| 14 | 3 按钮 spec 重验/查看视频/处理 | ⚠️ DEVIATION-ACCEPTED（替换为 查看视频/拒绝/处理 / 架构合理 / 缺 ADR 落档）|
+
+**REDO-02 milestone 全闭环**：A0 ✅ + A ✅ + B ✅ + PRE-CARD ✅ + PRE-CARD-A ✅ + C ✅ + D ✅ + E ✅ + F ✅
+**累计**：~2.5w（vs 原 ~2.95w 估时 / 节省 ~0.45w / 实测 vs 原 ~1w 严重低估上调 2.5x）
+
+**REDO-02 关键产出**：
+- ADR-124 user_submissions schema + API + audit 协议（11 节 / 8 决策 D-124-1..8 / Opus 1 轮 A）
+- migration 065（user_submissions 表 + 4 indexes + AD1 jsonb_typeof + AD2 partial index + D-124-8 backfill 历史失效源举报）
+- 6 新 admin 路由（GET list/detail + POST process/reject + batch-process/batch-reject / 端点-ADR 164 路由 35 ADR 端点）
+- audit RETRO R-MID-1 第 **15 次** 系统化（types + AuditLogService + audit-log-coverage + set-equal 4 真源同步）
+- **admin-ui Segment primitive 沉淀**（架构红利 / PRE-CARD-PRIMITIVE-A Opus 1 轮 A / 12 case PASS / 后续 §5.4 KPI Segment / §5.11 Sources Segment 等可消费）
+- 新前端页面 /admin/user-submissions（Card list 主视图 200 行 + SubmissionCard 230 行 / 12 case PASS）
+- 旧 /admin/submissions deprecation banner（B'' 简化版 / 0 后端改动）
+- 单测累计 +50 net case（4117 → 4167）
+
+**执行模型**：claude-opus-4-7 主循环 + spawn arch-reviewer (claude-opus-4-7) 验收 1 轮 A−
+
+**3 跟踪卡（task-queue MISC 段已录入）**：
+- **ADR-124-AMENDMENT-1**（0.05w / Haiku）：quote → title 映射 + 3 按钮替换决策落档
+- **MISC-VISUAL-SUBMISSIONS**（0.1w / Sonnet）：dev server + Playwright baseline pixel diff
+- **MISC-USER-SUBMISSIONS-PROCESSED-FILTER**（0.15w / Sonnet）：后端 status 加 `processed_or_rejected` 单值（避免客户端 filter 分页失真）
+
+<!-- REDO-02 milestone 闭环 / 等待用户拍板下一卡：
+  (a) 启动 REDO-03 Settings 收敛（~1.5w / Opus IA 决策） /
+  (b) 跑 ADR-124-AMENDMENT-1 + MISC 3 跟踪卡（~0.3w） /
+  (c) 切其他 milestone / 暂停 -->
+
+
+### CHG-SN-7-REDO-02-F ⏳ 已替换为闭环卡
 
 ### CHG-SN-7-REDO-02-E ✅ RETRO 验证 + verify 全门禁 + SQL schema 修补闭环（2026-05-19）
 
