@@ -210,6 +210,8 @@ export function buildCrawlerSiteColumnsV2(
       accessor: (r) => (r.disabled ? 'disabled' : 'enabled'),
       width: 32,
       defaultVisible: true,
+      enableSorting: true,
+      columnMenu: { canSort: true, canHide: false },  // status dot 始终显示
       cell: ({ row }) => {
         const stat = siteStats?.get(row.key)
         const health = deriveHealthFromSite(row, stat)
@@ -229,6 +231,10 @@ export function buildCrawlerSiteColumnsV2(
       accessor: (r) => r.name,
       minWidth: 200,
       defaultVisible: true,
+      pinned: true,
+      enableSorting: true,
+      enableResizing: true,
+      columnMenu: { canSort: true, canHide: false },  // site 列锁定不可隐藏
       cell: ({ row }) => (
         <span style={SITE_NAME_STYLE} data-site-cell>
           <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600 }}>{row.name}</span>
@@ -244,6 +250,9 @@ export function buildCrawlerSiteColumnsV2(
       accessor: (r) => r.sourceType,
       width: 90,
       defaultVisible: true,
+      enableSorting: true,
+      enableResizing: true,
+      columnMenu: { canSort: true, canHide: true },
       cell: ({ row }) => <span style={PILL_TYPE_STYLE}>{row.sourceType}</span>,
     },
     {
@@ -252,6 +261,9 @@ export function buildCrawlerSiteColumnsV2(
       accessor: (r) => siteStats?.get(r.key)?.routeCount ?? 0,
       width: 80,
       defaultVisible: true,
+      enableSorting: true,
+      enableResizing: true,
+      columnMenu: { canSort: true, canHide: true },
       cell: ({ row }) => {
         const stat = siteStats?.get(row.key)
         if (!stat || stat.routeCount === 0) return <span style={{ color: 'var(--fg-muted)' }}>—</span>
@@ -264,6 +276,9 @@ export function buildCrawlerSiteColumnsV2(
       accessor: (r) => deriveHealthFromSite(r, siteStats?.get(r.key)),
       width: 110,
       defaultVisible: true,
+      enableSorting: true,
+      enableResizing: true,
+      columnMenu: { canSort: true, canHide: true },
       cell: ({ row }) => {
         const stat = siteStats?.get(row.key)
         const health = deriveHealthFromSite(row, stat)
@@ -283,6 +298,9 @@ export function buildCrawlerSiteColumnsV2(
       accessor: (r) => r.weight,
       width: 80,
       defaultVisible: true,
+      enableSorting: true,
+      enableResizing: true,
+      columnMenu: { canSort: true, canHide: true },
       cell: ({ row }) => (
         <span style={{ fontSize: 'var(--font-size-xs)' }} data-weight>
           {row.weight}
@@ -295,6 +313,9 @@ export function buildCrawlerSiteColumnsV2(
       accessor: (r) => r.lastCrawledAt ?? '',
       width: 110,
       defaultVisible: true,
+      enableSorting: true,
+      enableResizing: true,
+      columnMenu: { canSort: true, canHide: true },
       cell: ({ row }) => (
         <span style={{ fontSize: '11px', color: 'var(--fg-muted)' }} data-last-crawl>
           {formatRelativeTime(row.lastCrawledAt)}
@@ -307,6 +328,8 @@ export function buildCrawlerSiteColumnsV2(
       accessor: () => null,
       width: 200,
       defaultVisible: true,
+      pinned: true,  // 操作列锁定右侧 / 不可隐藏
+      columnMenu: { canSort: false, canHide: false },
       cell: ({ row }) => (
         <span style={ACTIONS_CELL_STYLE} data-actions-cell onClick={(e) => e.stopPropagation()}>
           <AdminButton

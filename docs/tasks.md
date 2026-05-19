@@ -6,7 +6,43 @@
 
 ## 进行中任务
 
-<!-- 6 跟踪卡批次闭环 4/6（2026-05-19）：AMENDMENT-1 + AUDIT-PARSER + CSV-EXPORT + PROCESSED-FILTER；VISUAL 2 张留用户启 dev server 单独跑 -->
+<!-- 用户反馈 2 bug 修复（2026-05-19）：时间轴本地时间 + 站点列 sort/hide 功能 -->
+
+### CHG-SN-7-MISC-CRAWLER-TIMELINE-BUG + COLUMN-FEATURES ✅ 用户反馈 2 bug 修复（2026-05-19）
+
+**完成时间**：2026-05-19（~0.1w / 用户反馈"crawler 时间轴非本地时间 + 站点列表缺 sort/hide 功能"）
+
+**Bug 1：时间轴横坐标 UTC 时间**
+- 根因：`CrawlerTimelineCard.tsx` 直接 `iso.slice(11, 16)` 切 UTC ISO 字符串（subtitle + tick 共 2 处）
+- 修复：新建 `formatLocalHm(iso, fallback)` 辅助函数 + 用 `Date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })` 本地化
+- 影响：subtitle "N 站点 · HH:MM-HH:MM" + tick 标尺刻度 2 处显示本地时区时间
+
+**Bug 2：站点列表缺 sort / hide 功能**
+- 根因：`crawler-site-columns-v2.tsx` 9 列只有 `defaultVisible: true` / 无 `enableSorting` / 无 `columnMenu`
+- `CrawlerSiteList.tsx` DataTable 未启用 `enableHeaderMenu` + query.sort 是 `useMemo` 固定 `field: undefined`
+- 修复：
+  - 6 数据列（site/type/routes/health/weight/lastCrawl）加 `enableSorting: true` + `enableResizing: true` + `columnMenu: { canSort: true, canHide: true }`
+  - 2 非数据列（chevron/actions）加 `pinned: true` + `columnMenu: { canSort: false, canHide: false }`（锁定不可隐藏）
+  - status 列加 `enableSorting: true` + 锁定不可隐藏（health 信号一直显示）
+  - site 列加 `pinned: true` 锁定不可隐藏
+  - `CrawlerSiteList` 加 sort + columnPrefs + filters state + onQueryChange patch 处理
+  - DataTable 加 `enableHeaderMenu` prop
+
+**质量门禁**：
+- typecheck ✅ / lint ✅ / file-size ✅ 0 新违规
+- 全量 unit：4169 → **4172 PASS**（+3 净增 / 51→54 case：时间本地化 + enableHeaderMenu interactive th + warn toast 保持）
+
+**执行模型**：claude-opus-4-7 主循环（纯 bug 修 / 子代理：无）
+
+**关键自省**：
+1. **REDO-01-C 骨架时跳过 enableSorting / enableHeaderMenu**：当时 contract §1.3 spec 未明示 sort 行为 / 实施时假设"client-mode 自动排序"但实际 DataTable 客户端排序需 col.enableSorting 标记 + query.sort 状态联动（双重前提）
+2. **时间格式化忽略时区**：A 卡 timeline mock 与 B 卡 SQL ROW_NUMBER 均用 ISO UTC 字符串 / 前端直接 slice 漏本地化（与 video.updated_at 等字段同型陷阱）
+3. **用户反馈价值**：UI 形态层的 bug 单元测试难覆盖（time-zone 偏移 + sort UI 交互）/ 实测用户感知反馈是最有效的回归检测
+
+<!-- 用户反馈 2 bug 完成；下一步等用户拍板 REDO-03 / REDO-04 / 其他 -->
+
+
+### CHG-SN-7-MISC-CRAWLER-TIMELINE-BUG ⏳ 已替换为闭环卡
 
 ### CHG-SN-7-TRACKER-BATCH 4 跟踪卡批次闭环（2026-05-19）
 

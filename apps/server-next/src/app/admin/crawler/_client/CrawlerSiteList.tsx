@@ -20,7 +20,10 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
+  type ColumnPreference,
+  type FilterValue,
   type TableQuerySnapshot,
+  type TableSortState,
 } from '@resovo/admin-ui'
 import type { CrawlerSite, CrawlerSiteStat } from '@/lib/crawler/api'
 import {
@@ -78,6 +81,10 @@ export function CrawlerSiteList({
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
+  // CHG-SN-7-MISC-CRAWLER-COLUMN-FEATURES：sort + columns 可见性状态接入 DataTable v2 enableHeaderMenu
+  const [sort, setSort] = useState<TableSortState>({ field: undefined, direction: 'desc' })
+  const [columnPrefs, setColumnPrefs] = useState<ReadonlyMap<string, ColumnPreference>>(new Map())
+  const [filters, setFilters] = useState<ReadonlyMap<string, FilterValue>>(new Map())
 
   const filteredSites = useMemo(() => {
     const keyword = search.trim().toLowerCase()
@@ -127,12 +134,12 @@ export function CrawlerSiteList({
   const query: TableQuerySnapshot = useMemo(
     () => ({
       pagination: { page, pageSize },
-      sort: { field: undefined, direction: 'desc' as const },
-      filters: new Map(),
-      columns: new Map(),
+      sort,
+      filters,
+      columns: columnPrefs,
       selection: { selectedKeys: new Set<string>(), mode: 'page' },
     }),
-    [page, pageSize],
+    [page, pageSize, sort, filters, columnPrefs],
   )
 
   if (loading && sites.length === 0) {
@@ -167,9 +174,13 @@ export function CrawlerSiteList({
               setPage(1)
             }
           }
+          if (patch.sort) setSort(patch.sort)
+          if (patch.columns) setColumnPrefs(patch.columns)
+          if (patch.filters) setFilters(patch.filters)
         }}
         onRowClick={onRowClick}
         loading={loading}
+        enableHeaderMenu
         expandedKeys={expandedKeys}
         renderExpandedRow={renderExpandedRow}
         toolbar={{

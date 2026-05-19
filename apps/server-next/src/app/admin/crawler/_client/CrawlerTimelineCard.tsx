@@ -23,6 +23,21 @@ const HEAD_ACTIONS_STYLE: CSSProperties = {
   gap: '8px',
 }
 
+/**
+ * 把 ISO 时间字符串格式化为本地 HH:MM（CHG-SN-7-MISC-CRAWLER-TIMELINE-BUG / 用户反馈本地时间）
+ * 失败时回退 fallback（避免空字符串）。
+ */
+function formatLocalHm(iso: string | null | undefined, fallback = '—'): string {
+  if (!iso) return fallback
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return fallback
+  return date.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+}
+
 const PILL_BASE_STYLE: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -120,7 +135,7 @@ export function CrawlerTimelineCard({
       header={{
         title: '采集时间轴',
         subtitle: timeline
-          ? `${rows.length} 站点 · ${timeline.rangeStart.slice(11, 16)}–${timeline.rangeEnd.slice(11, 16)}`
+          ? `${rows.length} 站点 · ${formatLocalHm(timeline.rangeStart)}–${formatLocalHm(timeline.rangeEnd)}`
           : '加载中…',
         actions: (
           <span style={HEAD_ACTIONS_STYLE}>
@@ -166,7 +181,7 @@ export function CrawlerTimelineCard({
                   fontSize: '10px',
                 }}
               >
-                {t.length >= 16 ? t.slice(11, 16) : t}
+                {formatLocalHm(t, t)}
               </span>
             ))}
           </div>

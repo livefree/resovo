@@ -878,3 +878,39 @@ describe('CrawlerClient (REDO-01-G 高级 dropdown)', () => {
     expect(setCrawlerFreezeMock).not.toHaveBeenCalled()
   })
 })
+
+describe('CrawlerClient — CSV-EXPORT bug fixes (CHG-SN-7-MISC-CRAWLER-TIMELINE-BUG / COLUMN-FEATURES)', () => {
+  it('51. 时间轴 rangeStart/rangeEnd + ticks 使用本地时区 HH:MM（非 UTC slice）', async () => {
+    // TIMELINE_LIVE rangeStart='2026-05-18T22:00:00Z' (UTC) → 本地时区不同就会与 "22:00" 不一致
+    // 直接断言：subtitle/tick 中出现的小时与 new Date('...Z').getHours() 对齐（vs 直接 UTC slice 22）
+    render(<CrawlerClient />)
+    await waitFor(() => screen.getByTestId('crawler-timeline-card'))
+    const localStartH = new Date('2026-05-18T22:00:00Z').getHours().toString().padStart(2, '0')
+    const localEndH = new Date('2026-05-18T23:00:00Z').getHours().toString().padStart(2, '0')
+    const card = screen.getByTestId('crawler-timeline-card')
+    // subtitle 含本地化的 HH:MM（含 :00 分钟段）
+    expect(card.textContent).toContain(`${localStartH}:00`)
+    expect(card.textContent).toContain(`${localEndH}:00`)
+  })
+
+  it('52. 站点列表 enableHeaderMenu + columns enableSorting → 表头 interactive + menu icon', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([SITE_1])
+    const { container } = render(<CrawlerClient />)
+    await waitFor(() => screen.getAllByText('极速资源'))
+    // DataTable v2 enableHeaderMenu=true 时 th 含 data-th-interactive='true' + menu icon
+    const interactiveTh = container.querySelectorAll('[role="columnheader"][data-th-interactive="true"]')
+    expect(interactiveTh.length).toBeGreaterThan(0)
+    const menuIcons = container.querySelectorAll('[data-th-menu-icon]')
+    expect(menuIcons.length).toBeGreaterThan(0)
+  })
+
+  it('53. 导出按钮：空 sites → warn toast "无可导出数据"（CSV-EXPORT 重测保持）', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([])
+    render(<CrawlerClient />)
+    const btn = await waitFor(() => screen.getByTestId('crawler-export-btn'))
+    fireEvent.click(btn)
+    expect(toastPushMock).toHaveBeenCalledWith(
+      expect.objectContaining({ level: 'warn', title: '无可导出数据' }),
+    )
+  })
+})

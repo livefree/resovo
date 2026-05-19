@@ -12629,3 +12629,66 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 
 - 用户启动 dev server 后可独立触发 VISUAL-CRAWLER + VISUAL-SUBMISSIONS（共 ~0.2w）
 - M-SN-7 下一阶段：**REDO-03 Settings 收敛**（~1.5w / Opus IA 决策 / plan §3.4 锁定）OR **REDO-04 Staging 路由处置**（0.1w 方案 B IA 修订 / ~1.5w 方案 A 独立路由 / 待 Opus 裁决）
+
+---
+
+## [CHG-SN-7-MISC-CRAWLER-TIMELINE-BUG + COLUMN-FEATURES] 用户反馈 2 bug 修复
+
+- **完成时间**：2026-05-19
+- **执行模型**：claude-opus-4-7 主循环（纯 bug 修复 / 子代理：无）
+
+### 起源
+
+用户反馈 crawler 页面 2 问题：
+1. 时间轴横坐标时间非本地时间
+2. 站点列表与视频库相比，没有列排序 / 显示/隐藏等功能
+
+### 修改文件（3 改）
+
+1. `apps/server-next/src/app/admin/crawler/_client/CrawlerTimelineCard.tsx`
+   - 加 `formatLocalHm(iso, fallback)` 辅助函数（`Date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })`）
+   - subtitle: `${rangeStart.slice(11,16)}` → `${formatLocalHm(rangeStart)}`
+   - tick 标尺: `t.slice(11, 16)` → `formatLocalHm(t, t)`
+
+2. `apps/server-next/src/app/admin/crawler/_client/crawler-site-columns-v2.tsx`
+   - chevron 列：保持 `pinned: true`（已有）
+   - status 列：加 `enableSorting + columnMenu={ canSort: true, canHide: false }`
+   - site 列：加 `pinned + enableSorting + enableResizing + columnMenu={ canSort: true, canHide: false }`
+   - type/routes/health/weight/lastCrawl：加 `enableSorting + enableResizing + columnMenu={ canSort: true, canHide: true }`
+   - actions 列：加 `pinned + columnMenu={ canSort: false, canHide: false }`
+
+3. `apps/server-next/src/app/admin/crawler/_client/CrawlerSiteList.tsx`
+   - 加 `sort + columnPrefs + filters` 3 state
+   - query useMemo deps 含 sort/columnPrefs/filters
+   - onQueryChange patch 处理：if (patch.sort) setSort / if (patch.columns) setColumnPrefs / if (patch.filters) setFilters
+   - DataTable 加 `enableHeaderMenu` prop
+
+### Bug 根因
+
+**Bug 1（时间轴 UTC）**：A 卡 contract §1.2 timeline mock 用 ISO UTC 字符串 / B 卡后端 SQL ROW_NUMBER 也输出 UTC / 前端 C 卡直接 `iso.slice(11, 16)` 取 UTC HH:MM 漏本地化 → 国内 +8h 时区显示 UTC 22:00 而非本地 06:00
+
+**Bug 2（列功能缺失）**：REDO-01-C 骨架时按 contract §1.3 spec "DataTable v2 mode=client + 9 列骨架"实施 / contract 未明示 sort 与 column menu 行为 / 实施 commit `df0a0a1e` 默认所有列只 `defaultVisible: true` / DataTable v2 内部排序需双重前提（col.enableSorting=true + query.sort 状态联动）— 都没满足
+
+### 测试新增
+
+`CrawlerClient.test.tsx` describe "CSV-EXPORT bug fixes (CHG-SN-7-MISC-CRAWLER-TIMELINE-BUG / COLUMN-FEATURES)" 3 case：
+- 51: 时间轴 rangeStart/rangeEnd 使用本地时区 HH:MM（vs UTC slice）/ 通过 `new Date(iso).getHours()` 派生本地小时断言
+- 52: enableHeaderMenu + columns enableSorting → 表头 `[data-th-interactive="true"]` + `[data-th-menu-icon]` 存在
+- 53: 导出按钮空 sites warn toast（CSV-EXPORT 重测保持）
+
+### 质量门禁
+
+- typecheck ✅ / lint ✅ / file-size ✅ 0 新违规
+- 全量 unit：4169 → **4172 PASS**（+3 净增 / 51→54 CrawlerClient case）
+
+### 关键自省
+
+1. **REDO-01-C 骨架时跳过 enableSorting / enableHeaderMenu**：当时 contract §1.3 未明示 / 实施时假设"client-mode 自动排序"但实际 DataTable 客户端排序需双重前提（col.enableSorting + query.sort 联动）
+2. **时间格式化忽略时区是常见陷阱**：与 video.updated_at / source.last_checked 等 ISO 字段同型 / 全局应加 lint rule 检测 `slice(11, 16)` UTC 字符串 pattern（advisory / 后续 MISC 跟踪卡）
+3. **用户反馈是 UI bug 最有效回归检测**：单元测试覆盖 UI 形态层（time-zone + sort UI 交互）成本高 / 实测用户感知反馈是最直接的发现路径
+4. **本卡未起 REDO-01-D-FIX / 走直接 MISC 修复路径**：bug 影响范围限 CrawlerClient / 修复风险低 / 不需要 Opus 子代理 / 直接 0.1w 实施合理
+
+### 后续触发
+
+- M-SN-7 整体：用户反馈被快速吸收消化（~0.1w 实际 / vs 起 RECHECK 子卡 + Opus 验收 ~0.3w 路径节省 0.2w）
+- advisory：lint rule 检测 `slice(11, 16)` UTC slice pattern 可作长期 backlog（CHG-SN-N-LINT-UTC-SLICE）
