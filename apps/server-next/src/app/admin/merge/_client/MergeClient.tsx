@@ -1,11 +1,13 @@
 'use client'
 
 /**
- * MergeClient.tsx — `/admin/merge` 合并/拆分工作台主组件（CHG-SN-5-12 / ADR-105）
+ * MergeClient.tsx — `/admin/merge` 合并/拆分工作台主组件（CHG-SN-5-12 / ADR-105 / CHG-SN-7-MISC-MERGE-1）
  *
- * 范围：2 tab 单页
- *   1. Candidates tab — DataTable 一体化 + 行展开（组内 videos + target 选择）+ merge action
- *   2. Split tab — videoId 输入 + 拉 sources matrix + 多组分配 + split action
+ * 范围：Segment 3 视图 + PageHeader 拆分工作台入口
+ *   1. 待审候选 Segment — DataTable 一体化 + 行展开（组内 videos + target 选择）+ merge action
+ *   2. 已合并 Segment — AuditSection pre-filter action='merge'
+ *   3. 已拆分 Segment — AuditSection pre-filter action='split'
+ *   4. 拆分工作台 — PageHeader action 按钮 toggle SplitSection
  *
  * 端点消费（ADR-105 §端点契约 4 端点）：
  *   GET  /admin/video-merges/candidates   — candidate 预览
@@ -15,7 +17,7 @@
  *
  * 原语消费（≥ 6 件，ADR-105 §验证）：
  *   PageHeader / AdminButton / AdminInput / AdminCard / DataTable / LoadingState /
- *   ErrorState / EmptyState / useToast = 9 件
+ *   ErrorState / EmptyState / Segment / useToast = 10 件
  */
 
 import { useState, useEffect, useCallback, useMemo, type CSSProperties } from 'react'
@@ -28,8 +30,10 @@ import {
   ErrorState,
   EmptyState,
   DataTable,
+  Segment,
   useToast,
   type TableColumn,
+  type SegmentItem,
 } from '@resovo/admin-ui'
 import type { CandidateGroup, VideoSummaryForMerge, LineMatrixRow, VideoType, MergeAuditRow } from '@resovo/types'
 import { listCandidates, mergeVideos, unmergeVideos, splitVideo, listAudit } from '@/lib/merge/api'
@@ -87,30 +91,11 @@ const PAGE_STYLE: CSSProperties = {
   padding: 'var(--page-padding-y) var(--page-padding-x) 0',
 }
 
-const TAB_BAR_STYLE: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '4px',
-  borderBottom: '1px solid var(--border-subtle)',
-}
-
-function tabStyle(active: boolean): CSSProperties {
-  // CHG-SN-5-13-PATCH-2：删 `font: 'inherit'` shorthand（与 fontWeight longhand 冲突；React 警告）
-  return {
-    padding: '8px 16px',
-    fontSize: 'var(--font-size-sm)',
-    fontFamily: 'inherit',
-    fontWeight: active ? 600 : 400,
-    color: active ? 'var(--fg-default)' : 'var(--fg-muted)',
-    background: 'none',
-    borderTop: 'none',
-    borderLeft: 'none',
-    borderRight: 'none',
-    borderBottom: active ? '2px solid var(--accent-default)' : '2px solid transparent',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-  }
-}
+const SEGMENT_ITEMS: readonly SegmentItem[] = [
+  { value: 'candidates', label: '待审候选' },
+  { value: 'merged',     label: '已合并' },
+  { value: 'split',      label: '已拆分' },
+]
 
 const SCORE_BADGE_STYLE: CSSProperties = {
   display: 'inline-block',
@@ -143,36 +128,47 @@ const RECOMMENDED_BADGE_STYLE: CSSProperties = {
 
 // ── 主组件 ─────────────────────────────────────────────────────────
 
-// CHG-SN-6-AUDIT-TIMELINE-B (RETRO 4/7-B)：加 audit timeline tab
-type Tab = 'candidates' | 'split' | 'audit'
+type SegmentTab = 'candidates' | 'merged' | 'split'
 
 export function MergeClient() {
-  const [tab, setTab] = useState<Tab>('candidates')
+  const [tab, setTab] = useState<SegmentTab>('candidates')
+  const [showSplit, setShowSplit] = useState(false)
 
   return (
     <div style={PAGE_STYLE}>
       <PageHeader
         title="合并 / 拆分工作台"
         subtitle="ADR-105 视图卡：candidate 预览 + merge / unmerge / split + audit timeline 5 端点消费"
+        actions={
+          <AdminButton size="sm" variant="secondary" onClick={() => setShowSplit((v) => !v)}>
+            {showSplit ? '收起拆分' : '拆分工作台'}
+          </AdminButton>
+        }
       />
 
+      {showSplit && (
+        <AdminCard style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ padding: '16px' }}>
+            <SplitSection />
+          </div>
+        </AdminCard>
+      )}
+
       <AdminCard style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
-        <div style={{ ...TAB_BAR_STYLE, padding: '0 16px' }}>
-          <button type="button" style={tabStyle(tab === 'candidates')} onClick={() => setTab('candidates')}>
-            合并候选
-          </button>
-          <button type="button" style={tabStyle(tab === 'split')} onClick={() => setTab('split')}>
-            拆分工作台
-          </button>
-          <button type="button" style={tabStyle(tab === 'audit')} onClick={() => setTab('audit')}>
-            审计历史
-          </button>
+        <div style={{ padding: '12px 16px 0' }}>
+          <Segment
+            items={SEGMENT_ITEMS}
+            value={tab}
+            onChange={(v) => setTab(v as SegmentTab)}
+            size="md"
+            aria-label="合并视图"
+          />
         </div>
 
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '16px' }}>
           {tab === 'candidates' ? <CandidatesSection />
-            : tab === 'split' ? <SplitSection />
-            : <AuditSection />}
+            : tab === 'merged' ? <AuditSection initialAction="merge" />
+            : <AuditSection initialAction="split" />}
         </div>
       </AdminCard>
     </div>
@@ -655,10 +651,14 @@ function SplitSection() {
   )
 }
 
-// ── Audit timeline section（CHG-SN-6-AUDIT-TIMELINE-B / RETRO 4/7-B）─────────
+// ── Audit timeline section（CHG-SN-6-AUDIT-TIMELINE-B / RETRO 4/7-B / MISC-MERGE-1）──
 
-function AuditSection() {
-  const [actionFilter, setActionFilter] = useState<'all' | 'merge' | 'split'>('all')
+interface AuditSectionProps {
+  initialAction?: 'merge' | 'split'
+}
+
+function AuditSection({ initialAction }: AuditSectionProps) {
+  const [actionFilter, setActionFilter] = useState<'all' | 'merge' | 'split'>(initialAction ?? 'all')
   const [rows, setRows] = useState<readonly MergeAuditRow[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)

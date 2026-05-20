@@ -4046,7 +4046,7 @@ PRE-04 16 子卡全部闭环：5 ✅ A 级 + 8 ⚠️ S 级（16 项 MISC 跟踪
 | **CHG-SN-7-MISC-DASHBOARD-2** | dashboard 4 类卡片数据真实化 + 后端 3 endpoints + ADR-127（与 STATS-EXTEND-ANALYTICS 合并） | ✅ 完成 | 0.7w | #1 + #12 |
 | **CHG-SN-7-MISC-DASHBOARD-3** | dashboard 编辑态规则（拖拽 / resize / 全屏 / 卡片库）—— **延后到长期 backlog M-SN-N** | 🟢 P3 | 1.5–2w | #1 |
 | **CHG-SN-7-MISC-VIDEOS-1** | videos poster 尺寸决议固化（设计稿 32×48 vs CHG-UX2-03 升级 48×72 → 决议保留 48×72，更新 reference §5.3 + decisions.md） | 🟢 P3 | 0.05w | #4 |
-| **CHG-SN-7-MISC-MERGE-1** | merge Segment 3 类（待审候选 / 已合并 / 已拆分）补全 | 🟡 P2 | 0.15w | #6 |
+| ✅ **CHG-SN-7-MISC-MERGE-1** 已完成（2026-05-19）| merge Segment 3 类（待审候选 / 已合并 / 已拆分）补全 | ✅ | 0.15w | #6 |
 | **CHG-SN-7-MISC-MERGE-2** | merge 候选 card 形态重做（左右视频卡对比 + 影响预览 + 置信度 pill） | 🟡 P2 | 0.5–0.8w | #6 |
 | **CHG-SN-7-MISC-SUBTITLES-1** | subtitles KPI 4 列补全（消费 KpiCard + 后端 stats 端点扩展） | 🟡 P2 | 0.2w | #7 |
 | **CHG-SN-7-MISC-SUBTITLES-2** | subtitles 上传字幕 action 实装 | 🟡 P2 | 0.15w | #7 |

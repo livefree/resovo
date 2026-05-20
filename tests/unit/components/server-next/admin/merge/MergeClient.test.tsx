@@ -1,14 +1,16 @@
 /**
- * MergeClient.test.tsx — /admin/merge 视图单元测试（CHG-SN-5-12-PATCH P1）
+ * MergeClient.test.tsx — /admin/merge 视图单元测试（CHG-SN-5-12-PATCH P1 / CHG-SN-7-MISC-MERGE-1）
  *
  * 覆盖：
- *   - 渲染基础 + 2 tab 切换
+ *   - 渲染基础 + Segment 3 items（待审候选 / 已合并 / 已拆分）
  *   - candidates Loading / Empty / Error state
  *   - candidates 列表渲染 + 行展开 + 推荐 badge（P2-2）
  *   - handleMerge mock api + 成功 toast + STATE_CONFLICT 引导（P0 修复验证）
  *   - handleMerge 成功 + 撤销 action 调 unmergeVideos
- *   - split tab：videoId 输入 → 加载 sources 失败 toast
- *   - split tab：type select 11 选项（P2-3）
+ *   - 拆分工作台：PageHeader action 按钮 toggle + videoId 输入 → 加载 sources 失败
+ *   - 拆分工作台：type select 11 选项（P2-3）
+ *   - 已合并 Segment → listAudit action='merge'
+ *   - 已拆分 Segment → listAudit action='split'
  *
  * 路径策略：用相对路径 import（与 HomeOpsClient.test.tsx 同范式）避免 @ alias 在测试环境内的解析歧义。
  */
@@ -116,11 +118,13 @@ beforeEach(() => {
 // ── 测试 ──────────────────────────────────────────────────────────
 
 describe('MergeClient', () => {
-  it('渲染基础：PageHeader + 2 tab', async () => {
+  it('渲染基础：PageHeader + Segment 3 items + 拆分工作台 action 按钮', async () => {
     listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
     render(<MergeClient />)
     expect(screen.getByText('合并 / 拆分工作台')).not.toBeNull()
-    expect(screen.getByRole('button', { name: '合并候选' })).not.toBeNull()
+    expect(screen.getByRole('tab', { name: '待审候选' })).not.toBeNull()
+    expect(screen.getByRole('tab', { name: '已合并' })).not.toBeNull()
+    expect(screen.getByRole('tab', { name: '已拆分' })).not.toBeNull()
     expect(screen.getByRole('button', { name: '拆分工作台' })).not.toBeNull()
   })
 
@@ -140,13 +144,18 @@ describe('MergeClient', () => {
     })
   })
 
-  it('tab 切换：candidates → split tab', async () => {
+  it('拆分工作台 toggle：PageHeader action 按钮展开/收起 SplitSection', async () => {
     listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
     render(<MergeClient />)
     await waitFor(() => screen.getByText('无合并候选'))
     fireEvent.click(screen.getByRole('button', { name: '拆分工作台' }))
     await waitFor(() => {
       expect(screen.getByPlaceholderText('输入要拆分的 videoId (uuid)')).not.toBeNull()
+      expect(screen.getByRole('button', { name: '收起拆分' })).not.toBeNull()
+    })
+    fireEvent.click(screen.getByRole('button', { name: '收起拆分' }))
+    await waitFor(() => {
+      expect(screen.queryByPlaceholderText('输入要拆分的 videoId (uuid)')).toBeNull()
     })
   })
 
@@ -214,7 +223,7 @@ describe('MergeClient', () => {
     })
   })
 
-  it('split tab：videoId 输入 → 加载 sources 失败时 ErrorState 渲染', async () => {
+  it('拆分工作台：videoId 输入 → 加载 sources 失败时 ErrorState 渲染', async () => {
     listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
     render(<MergeClient />)
     await waitFor(() => screen.getByText('无合并候选'))
@@ -231,7 +240,7 @@ describe('MergeClient', () => {
     })
   })
 
-  it('split tab：含 type select 11 选项（P2-3 修复验证 — 替代硬编码 movie）', async () => {
+  it('拆分工作台：含 type select 11 选项（P2-3 修复验证 — 替代硬编码 movie）', async () => {
     listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
     getVideoMatrixMock.mockResolvedValueOnce([
       { sourceSiteKey: 'iqiyi', sourceName: '线路1', displayName: null,
@@ -254,47 +263,44 @@ describe('MergeClient', () => {
     })
   })
 
-  // ── CHG-SN-6-AUDIT-TIMELINE-B (RETRO 4/7-B) audit tab 测试 ─────────────
+  // ── Segment 已合并 / 已拆分 测试（CHG-SN-7-MISC-MERGE-1）─────────────────
 
-  it('audit tab：3 tab 渲染 + 切换触发 listAudit 调用', async () => {
+  it('已合并 Segment：切换后触发 listAudit({action: merge})', async () => {
     listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
     listAuditMock.mockResolvedValueOnce({ data: [], total: 0, page: 1, limit: 20 })
     render(<MergeClient />)
     await waitFor(() => screen.getByText('无合并候选'))
-    expect(screen.getByRole('button', { name: '审计历史' })).not.toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: '审计历史' }))
+    fireEvent.click(screen.getByRole('tab', { name: '已合并' }))
     await waitFor(() => {
-      expect(listAuditMock).toHaveBeenCalledWith(expect.objectContaining({ limit: 20, page: 1 }))
+      expect(listAuditMock).toHaveBeenCalledWith(expect.objectContaining({ action: 'merge', limit: 20, page: 1 }))
     })
   })
 
-  it('audit tab：Empty state 渲染（total=0）', async () => {
+  it('已拆分 Segment：切换后触发 listAudit({action: split})', async () => {
     listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
     listAuditMock.mockResolvedValueOnce({ data: [], total: 0, page: 1, limit: 20 })
     render(<MergeClient />)
     await waitFor(() => screen.getByText('无合并候选'))
-    fireEvent.click(screen.getByRole('button', { name: '审计历史' }))
+
+    fireEvent.click(screen.getByRole('tab', { name: '已拆分' }))
+    await waitFor(() => {
+      expect(listAuditMock).toHaveBeenCalledWith(expect.objectContaining({ action: 'split', limit: 20, page: 1 }))
+    })
+  })
+
+  it('已合并 Segment：Empty state 渲染（total=0）', async () => {
+    listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
+    listAuditMock.mockResolvedValueOnce({ data: [], total: 0, page: 1, limit: 20 })
+    render(<MergeClient />)
+    await waitFor(() => screen.getByText('无合并候选'))
+    fireEvent.click(screen.getByRole('tab', { name: '已合并' }))
     await waitFor(() => {
       expect(screen.getByText('无审计记录')).not.toBeNull()
     })
   })
 
-  it('audit tab：merge 过滤 → listAudit({action: merge}) 调用', async () => {
-    listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
-    listAuditMock.mockResolvedValue({ data: [], total: 0, page: 1, limit: 20 })
-    render(<MergeClient />)
-    await waitFor(() => screen.getByText('无合并候选'))
-    fireEvent.click(screen.getByRole('button', { name: '审计历史' }))
-    await waitFor(() => expect(listAuditMock).toHaveBeenCalled())
-
-    fireEvent.click(screen.getByRole('button', { name: '合并' }))
-    await waitFor(() => {
-      expect(listAuditMock).toHaveBeenCalledWith(expect.objectContaining({ action: 'merge' }))
-    })
-  })
-
-  it('audit tab：渲染审计行（merge + revertedAt = 已撤销 badge）', async () => {
+  it('已合并 Segment：渲染审计行（merge + revertedAt = 已撤销 badge）', async () => {
     listCandidatesMock.mockResolvedValueOnce(EMPTY_RES)
     listAuditMock.mockResolvedValueOnce({
       data: [
@@ -314,7 +320,7 @@ describe('MergeClient', () => {
     })
     render(<MergeClient />)
     await waitFor(() => screen.getByText('无合并候选'))
-    fireEvent.click(screen.getByRole('button', { name: '审计历史' }))
+    fireEvent.click(screen.getByRole('tab', { name: '已合并' }))
     await waitFor(() => {
       expect(screen.getByText('admin1')).not.toBeNull()
       expect(screen.getByText('已撤销')).not.toBeNull()

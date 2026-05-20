@@ -6,6 +6,32 @@
 
 ## 进行中任务
 
+### CHG-SN-7-MISC-MERGE-1 ✅ merge Segment 3 类（待审候选 / 已合并 / 已拆分）补全
+
+**完成摘要**（2026-05-19）：
+- Segment primitive 替换手写 tab bar（3 items：待审候选 / 已合并 / 已拆分）
+- 已合并 Segment → AuditSection(initialAction='merge')
+- 已拆分 Segment → AuditSection(initialAction='split')
+- 拆分工作台移至 PageHeader actions AdminButton（toggle showSplit state）
+- AuditSection 新增 `initialAction?: 'merge' | 'split'` prop
+- 删除 TAB_BAR_STYLE + tabStyle（-22 行），新增 SEGMENT_ITEMS（+5 行）
+- 测试：旧 4 audit tab 测试 → 新 4 Segment 测试（13 case 总 / +4 净增）
+
+**六问自检**：
+1. 回归？否 / 4216 PASS / typecheck / lint / verify:adr-contracts 全通
+2. 越层？否
+3. any/空 catch？否
+4. 硬编码颜色？否 / 全 CSS 变量
+5. 新增未授权端点？否 / 无新端点
+6. 同步 docs？是 / task-queue 更新
+
+**[AI-CHECK]**：
+- ✅ 拆分工作台保留功能（PageHeader toggle），不引入回归
+- ✅ Segment initialAction 正确驱动 AuditSection filter（已验证测试）
+- ✅ 756 行保持（BASELINE_EXEMPT 内）
+
+**执行模型**：claude-sonnet-4-6 / 子代理：无
+
 <!-- MISC-DASHBOARD-2 完成（2026-05-19） -->
 
 ### CHG-SN-7-MISC-DASHBOARD-1 ✅ dashboard page__head 2 按钮 onClick 绑定（0.05w）

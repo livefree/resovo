@@ -12900,3 +12900,18 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 - **改动摘要**：ADR-127 三端点全链路实装（GET /admin/dashboard/overview|spark|analytics）。共享类型层 packages/types/src/dashboard.ts 新建 8 接口。后端 3 个 DB query 文件真实 SQL 聚合。前端 AnalyticsView 从全 mock 升级为 live 数据（LoadingState / ErrorState / period 切换）。buildDashboardStats 新增 overview 优先路径（全部 live KPI + workflow）。verify:adr-contracts 合规通过。
 - **测试结果**：typecheck PASS / lint PASS / unit 4216 PASS（+15 新测试：12 路由 + 3 AnalyticsView 净增）/ verify:adr-contracts PASS
 - **价值排序自评**：正确性 A / 边界复用 A（packages/types 共享 / apiClient 复用 / 无越层调用）/ 扩展性 A（ADR-127a 扩展路径清晰 / metric 枚举可增）/ 一致性 A（Fastify 路由模式统一 / CSS 变量零硬编码）/ 改动收敛 18 文件
+
+## [CHG-SN-7-MISC-MERGE-1] merge Segment 3 类（待审候选 / 已合并 / 已拆分）补全
+- **完成时间**：2026-05-19
+- **记录时间**：2026-05-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无（Segment API 已由 arch-reviewer Opus 设计完毕，纯实施）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/merge/_client/MergeClient.tsx`（Segment 替换手写 tab / AuditSection + initialAction prop / 拆分工作台移至 PageHeader toggle / 756 行不变）
+  - `tests/unit/components/server-next/admin/merge/MergeClient.test.tsx`（4 旧 audit tab 测试 → 4 Segment 测试 / 拆分工作台 toggle 测试更新 / 13 case 总）
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`（任务收尾三同步）
+- **新增依赖**：无
+- **数据库变更**：无
+- **改动摘要**：Segment primitive（`@resovo/admin-ui`）替换手写 tab bar。3 Segment items：待审候选（→CandidatesSection）/ 已合并（→AuditSection initialAction='merge'）/ 已拆分（→AuditSection initialAction='split'）。拆分工作台移至 PageHeader actions button（toggle showSplit），功能保留。AuditSection 新增 `initialAction?` prop 接受来自 Segment 的预置 filter。删除 TAB_BAR_STYLE + tabStyle 样式函数（-22行），新增 SEGMENT_ITEMS 常量（+5行）。
+- **测试结果**：typecheck PASS / lint PASS / unit 4216 PASS（13 merge tests / 零净增：4 旧 audit tab tests → 4 新 Segment tests + 1 toggle 重写）
+- **价值排序自评**：正确性 A / 边界复用 A（Segment 原语消费无重复实现）/ 扩展性 A（Segment items 可增量扩展）/ 一致性 A（与 Submissions 页面 Segment 同范式 / CSS 变量零硬编码）/ 改动收敛 2 文件
