@@ -36,3 +36,11 @@ export interface UserListFilter {
   readonly sortField?: string
   readonly sortDir?: 'asc' | 'desc'
 }
+
+export interface UserStats {
+  readonly totalCount: number
+  readonly newTodayCount: number
+  readonly bannedCount: number
+  readonly moderatorCount: number
+  readonly generatedAt: string
+}

@@ -8687,3 +8687,82 @@ const SwitchDomainBodySchema = z.object({
 - ADR-100 R7 MUST-8（admin route ADR 前置门禁）
 - ADR-109（admin_audit_log）
 - CHG-SN-7-MISC-IMAGE-1
+
+---
+
+## ADR-136 — 用户 KPI 统计端点协议设计（CHG-SN-7-MISC-USERS-2）
+
+**状态**：Accepted（PASS — arch-reviewer Opus 2026-05-20；N1/N2 为非阻塞建议）
+**日期**：2026-05-20
+**arch-reviewer**：claude-opus-4-7
+
+### 1. 背景
+
+用户管理页面（`/admin/users`）当前只有列表，缺少顶部统计概览。需要新增 `GET /admin/users/stats` 端点，以单一 SQL 聚合查询返回 4 项 KPI 指标，前端消费 KpiCard 组件展示。
+
+### 2. 决策
+
+新增 1 个只读 GET 端点，使用单条 `COUNT(*) FILTER (WHERE ...)` SQL 获取 4 项指标，避免多轮查询。
+
+### 端点契约
+
+| # | Method | Path | 权限 | Params | Response `data` 字段 | ADR |
+|---|--------|------|------|--------|---------------------|-----|
+| 1 | GET | `/admin/users/stats` | admin | — | `{ totalCount, newTodayCount, bannedCount, moderatorCount, generatedAt }` | ADR-136 |
+
+### 3. SQL 设计
+
+```sql
+SELECT
+  COUNT(*) FILTER (WHERE deleted_at IS NULL)                                                          AS total_count,
+  COUNT(*) FILTER (WHERE deleted_at IS NULL AND created_at >= date_trunc('day', NOW()))               AS new_today_count,
+  COUNT(*) FILTER (WHERE deleted_at IS NULL AND banned_at IS NOT NULL)                                AS banned_count,
+  COUNT(*) FILTER (WHERE deleted_at IS NULL AND role = 'moderator')                                   AS moderator_count
+FROM users
+```
+
+所有计数均排除软删除用户（deleted_at IS NULL）。`new_today_count` 使用 `date_trunc('day', NOW())` 作为当天起始，与 ADR-133 同款模式。
+
+### 4. Response 结构
+
+```typescript
+interface UserStats {
+  readonly totalCount: number        // 全部有效用户（deleted_at IS NULL）
+  readonly newTodayCount: number     // 今日新注册（created_at >= today）
+  readonly bannedCount: number       // 已封账号（banned_at IS NOT NULL）
+  readonly moderatorCount: number    // 版主（role = 'moderator'）
+  readonly generatedAt: string       // ISO 8601 时间戳
+}
+```
+
+### 5. 分层约束
+
+- Route 层：`≤10 行`，零业务逻辑，直接调 `usersService.getUserStats(db)`
+- Service 层（可内联 route，与 ADR-127/133 同步）：`getUserStats()` 调 DB query，映射字段，追加 `generatedAt`
+- Query 层：`statsAdminUsers(db)` 单条 SQL，COUNT FILTER 模式，返回原始 string 类型
+
+### 6. 前端 KpiCard 映射
+
+| 序号 | label | value 字段 | variant |
+|------|-------|-----------|---------|
+| 1 | 全部用户 | totalCount | default |
+| 2 | 今日新增 | newTodayCount | is-ok |
+| 3 | 已封账号 | bannedCount | is-danger |
+| 4 | 版主 | moderatorCount | default |
+
+### 7. 权限
+
+仅 admin（与现有 `/admin/users` 列表端点对齐，users 表不向 moderator 开放）。
+
+### 8. 错误码
+
+| CODE | HTTP | 触发条件 |
+|------|------|----------|
+| `INTERNAL_ERROR` | 500 | DB 操作失败 |
+
+### 9. 关联
+
+- ADR-100 R7 MUST-8（admin route ADR 前置门禁）
+- ADR-127（Dashboard Stats 同类设计参照）
+- ADR-133（字幕 KPI stats 端点同类参照）
+- CHG-SN-7-MISC-USERS-2

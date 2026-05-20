@@ -5,7 +5,7 @@
  */
 
 import { apiClient } from '@/lib/api-client'
-import type { UserListFilter, UserListResult, UserRole } from './types'
+import type { UserListFilter, UserListResult, UserRole, UserStats } from './types'
 
 export async function listUsers(filter: UserListFilter = {}): Promise<UserListResult> {
   const params = new URLSearchParams()
@@ -29,4 +29,9 @@ export async function unbanUser(id: string): Promise<void> {
 
 export async function updateUserRole(id: string, role: Exclude<UserRole, 'admin'>): Promise<void> {
   await apiClient.patch(`/admin/users/${id}/role`, { role })
+}
+
+export async function fetchUsersStats(): Promise<UserStats> {
+  const res = await apiClient.get<{ data: UserStats }>('/admin/users/stats')
+  return res.data
 }

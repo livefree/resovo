@@ -19,6 +19,7 @@ vi.mock('../../../../../../apps/server-next/src/lib/users/api', () => ({
   banUser: vi.fn(),
   unbanUser: vi.fn(),
   updateUserRole: vi.fn(),
+  fetchUsersStats: vi.fn().mockResolvedValue(null),
 }))
 
 vi.mock('../../../../../../apps/server-next/src/lib/api-client', () => ({

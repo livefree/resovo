@@ -217,6 +217,27 @@ export async function resetUserPassword(
   return result.rows[0] ?? null
 }
 
+// ── Stats（ADR-136）────────────────────────────────────────────────
+
+export interface UserStatsRow {
+  total_count: string
+  new_today_count: string
+  banned_count: string
+  moderator_count: string
+}
+
+export async function statsAdminUsers(db: Pool): Promise<UserStatsRow> {
+  const result = await db.query<UserStatsRow>(
+    `SELECT
+       COUNT(*) FILTER (WHERE deleted_at IS NULL)                                              AS total_count,
+       COUNT(*) FILTER (WHERE deleted_at IS NULL AND created_at >= date_trunc('day', NOW()))  AS new_today_count,
+       COUNT(*) FILTER (WHERE deleted_at IS NULL AND banned_at IS NOT NULL)                   AS banned_count,
+       COUNT(*) FILTER (WHERE deleted_at IS NULL AND role = 'moderator')                      AS moderator_count
+     FROM users`
+  )
+  return result.rows[0]!
+}
+
 // UX-07: 软删除用户（设置 deleted_at，数据保留）
 export async function softDeleteUser(
   db: Pool,

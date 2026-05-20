@@ -31,6 +31,7 @@ import {
   AdminButton,
   AdminInput,
   AdminSelect,
+  KpiCard,
   useToast,
   type AdminSelectOption,
   type TableSortState,
@@ -40,8 +41,9 @@ import {
   banUser,
   unbanUser,
   updateUserRole,
+  fetchUsersStats,
 } from '@/lib/users/api'
-import type { UserRow, UserRole } from '@/lib/users/types'
+import type { UserRow, UserRole, UserStats } from '@/lib/users/types'
 import { buildUserColumns } from './columns'
 import { downloadCsv, type CsvColumn } from '@/lib/csv-export'
 import { RoleMatrixModal } from './RoleMatrixModal'
@@ -80,6 +82,12 @@ const TOOLBAR_LEFT_STYLE: CSSProperties = {
   flexWrap: 'wrap',
 }
 
+const KPI_ROW_STYLE: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(4, 1fr)',
+  gap: '12px',
+}
+
 export function UsersListClient() {
   const toast = useToast()
   const [rows, setRows] = useState<readonly UserRow[]>([])
@@ -95,9 +103,18 @@ export function UsersListClient() {
   const [roleFilter, setRoleFilter] = useState<string | null>(null)
   const [bannedFilter, setBannedFilter] = useState<string | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
+  const [stats, setStats] = useState<UserStats | null>(null)
   const [roleMatrixOpen, setRoleMatrixOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchUsersStats()
+      .then((s) => { if (!cancelled) setStats(s) })
+      .catch(() => { /* stats 加载失败不阻断主列表 */ })
+    return () => { cancelled = true }
+  }, [retryKey])
 
   // 搜索 debounce
   useEffect(() => {
@@ -337,6 +354,36 @@ export function UsersListClient() {
         }
         data-testid="users-page-header"
       />
+      <div style={KPI_ROW_STYLE} data-testid="users-kpi-row">
+        <KpiCard
+          label="全部用户"
+          value={stats ? stats.totalCount.toLocaleString('en-US') : '—'}
+          variant="default"
+          dataSource={stats ? 'live' : undefined}
+          testId="users-kpi-total"
+        />
+        <KpiCard
+          label="今日新增"
+          value={stats ? stats.newTodayCount.toLocaleString('en-US') : '—'}
+          variant="is-ok"
+          dataSource={stats ? 'live' : undefined}
+          testId="users-kpi-new-today"
+        />
+        <KpiCard
+          label="已封账号"
+          value={stats ? stats.bannedCount.toLocaleString('en-US') : '—'}
+          variant="is-danger"
+          dataSource={stats ? 'live' : undefined}
+          testId="users-kpi-banned"
+        />
+        <KpiCard
+          label="版主"
+          value={stats ? stats.moderatorCount.toLocaleString('en-US') : '—'}
+          variant="default"
+          dataSource={stats ? 'live' : undefined}
+          testId="users-kpi-moderator"
+        />
+      </div>
       {loading && rows.length === 0
         ? <LoadingState variant="skeleton" />
         : error

@@ -180,4 +180,18 @@ export async function adminUserRoutes(fastify: FastifyInstance) {
     // 明文密码一次性返回，不记录日志
     return reply.send({ data: { newPassword } })
   })
+
+  // ── GET /admin/users/stats（ADR-136）─────────────────────────────
+  fastify.get('/admin/users/stats', { preHandler: auth }, async (_request, reply) => {
+    const row = await usersQueries.statsAdminUsers(db)
+    return reply.send({
+      data: {
+        totalCount: parseInt(row.total_count),
+        newTodayCount: parseInt(row.new_today_count),
+        bannedCount: parseInt(row.banned_count),
+        moderatorCount: parseInt(row.moderator_count),
+        generatedAt: new Date().toISOString(),
+      },
+    })
+  })
 }
