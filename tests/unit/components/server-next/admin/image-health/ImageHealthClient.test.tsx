@@ -289,7 +289,8 @@ describe('ImageHealthClient', () => {
     listMissingVideosMock.mockResolvedValueOnce(MISSING_VIDEOS_FIXTURE)
     const { container } = render(<ImageHealthClient />)
     await waitFor(() => {
-      expect(screen.getByText('cdn-broken.example.com')).not.toBeNull()
+      // cdn-broken.example.com 同时出现在 DataTable 列 + BrokenSamplesGrid overlay
+      expect(screen.queryAllByText('cdn-broken.example.com').length).toBeGreaterThan(0)
       // null domain 显示"—"占位
       expect(container.querySelectorAll('[data-broken-domain]').length).toBe(3)
     })

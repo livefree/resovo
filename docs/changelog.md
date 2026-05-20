@@ -13096,3 +13096,24 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
   - 三种 slot 渲染模式：banner（横版缩略）/ type_shortcuts（pills）/ 其他（竖版 poster + rank）
   - disabled 模块：opacity 0.4 + text-decoration line-through
   - 零硬编码颜色，全 CSS 变量
+
+---
+
+## CHG-SN-7-MISC-IMAGE-2 — image-health 破损样本 grid 实装
+
+- **完成时间**：2026-05-20
+- **任务 ID**：CHG-SN-7-MISC-IMAGE-2（SEQ-20260507-01 / M-SN-7 MISC #11）
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无（UI 局部改动，无新共享组件 API 契约）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/image-health/_client/BrokenSamplesGrid.tsx`（新建，破损样本 grid 组件）
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthClient.tsx`（主体布局 1fr→1fr/1fr；引入 BrokenSamplesGrid）
+  - `tests/unit/components/server-next/admin/image-health/BrokenSamplesGrid.test.tsx`（新建，13 case）
+  - `tests/unit/components/server-next/admin/image-health/ImageHealthClient.test.tsx`（修复 test14：getByText→queryAllByText）
+- **测试结果**：4308 unit PASS（StagingTable/UserSubmissions 2 个并发 flaky，单独跑全 PASS，非本次引入）
+- **ADR**：无（纯 UI 改动，无新端点）
+- **备注**：
+  - 2:3 aspect-ratio CSS 属性；danger dashed border 用 `var(--state-danger-fg)`
+  - client-side 过滤 posterStatus==='broken'，复用已加载 missingRows，无额外请求
+  - 缺图视频 DataTable 保留全宽（主体 1fr/1fr split 下方）
+  - MAX_SAMPLES=24 截断防止 grid 过高

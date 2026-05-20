@@ -29,6 +29,7 @@ import {
   type TableSortState,
 } from '@resovo/admin-ui'
 import { SwitchDomainModal } from './SwitchDomainModal'
+import { BrokenSamplesGrid } from './BrokenSamplesGrid'
 import {
   getImageHealthStats,
   getTopBrokenDomains,
@@ -77,10 +78,11 @@ const KPI_SUB_STYLE: CSSProperties = {
   marginTop: '4px',
 }
 
-const SECTION_GRID_STYLE: CSSProperties = {
+const SECTION_SPLIT_STYLE: CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: '1fr',
+  gridTemplateColumns: '1fr 1fr',
   gap: 'var(--section-gap)',
+  alignItems: 'start',
 }
 
 // ── KPI Card ─────────────────────────────────────────────────────
@@ -496,8 +498,8 @@ export function ImageHealthClient() {
         }
       </div>
 
-      {/* ── 破损域名 TOP + 缺图视频列表 ── */}
-      <div style={SECTION_GRID_STYLE}>
+      {/* ── 主体 1fr/1fr：TOP 破损域名 + 破损样本 grid ── */}
+      <div style={SECTION_SPLIT_STYLE}>
         <AdminCard
           surface="plain"
           padding="md"
@@ -529,40 +531,59 @@ export function ImageHealthClient() {
           surface="plain"
           padding="md"
           header={{
-            title: '缺图视频治理',
-            subtitle: `${missingTotal} 条 · poster_status ∈ {missing, broken, pending_review}`,
+            title: '破损样本',
+            subtitle: '2:3 比例缩略 · 实时反映最新破损封面',
           }}
-          data-testid="image-health-missing-card"
+          data-testid="image-health-broken-samples-card"
         >
           {missingError ? (
             <ErrorState error={missingError} title="加载失败" onRetry={refresh} />
+          ) : loading && missingRows.length === 0 ? (
+            <LoadingState variant="skeleton" />
           ) : (
-            <DataTable<MissingVideoRow>
-              rows={missingRows}
-              columns={missingColumns}
-              rowKey={(r) => r.videoId}
-              mode="server"
-              query={missingQuery}
-              onQueryChange={(patch) => {
-                if (patch.pagination) {
-                  if (patch.pagination.page !== undefined) setPage(patch.pagination.page)
-                  if (patch.pagination.pageSize !== undefined) {
-                    setPageSize(patch.pagination.pageSize)
-                    setPage(1)
-                  }
-                }
-                if (patch.sort) setSort(patch.sort)
-              }}
-              totalRows={missingTotal}
-              loading={loading && missingRows.length === 0}
-              emptyState={<EmptyState title="无缺图视频" description="所有发布视频海报状态健康" />}
-              data-testid="image-health-missing-table"
-              enableHeaderMenu
-              pagination={{ pageSizeOptions: [10, 20, 50, 100] }}
-            />
+            <BrokenSamplesGrid rows={missingRows} />
           )}
         </AdminCard>
       </div>
+
+      {/* ── 缺图视频治理（全宽 DataTable）── */}
+      <AdminCard
+        surface="plain"
+        padding="md"
+        header={{
+          title: '缺图视频治理',
+          subtitle: `${missingTotal} 条 · poster_status ∈ {missing, broken, pending_review}`,
+        }}
+        data-testid="image-health-missing-card"
+      >
+        {missingError ? (
+          <ErrorState error={missingError} title="加载失败" onRetry={refresh} />
+        ) : (
+          <DataTable<MissingVideoRow>
+            rows={missingRows}
+            columns={missingColumns}
+            rowKey={(r) => r.videoId}
+            mode="server"
+            query={missingQuery}
+            onQueryChange={(patch) => {
+              if (patch.pagination) {
+                if (patch.pagination.page !== undefined) setPage(patch.pagination.page)
+                if (patch.pagination.pageSize !== undefined) {
+                  setPageSize(patch.pagination.pageSize)
+                  setPage(1)
+                }
+              }
+              if (patch.sort) setSort(patch.sort)
+            }}
+            totalRows={missingTotal}
+            loading={loading && missingRows.length === 0}
+            emptyState={<EmptyState title="无缺图视频" description="所有发布视频海报状态健康" />}
+            data-testid="image-health-missing-table"
+            enableHeaderMenu
+            pagination={{ pageSizeOptions: [10, 20, 50, 100] }}
+          />
+        )}
+      </AdminCard>
     </div>
     </>
   )
