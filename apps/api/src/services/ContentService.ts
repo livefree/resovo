@@ -4,8 +4,10 @@
  */
 
 import type { Pool } from 'pg'
+import type { Subtitle } from '@/types'
 import * as sourcesQueries from '@/api/db/queries/sources'
 import * as subtitleQueries from '@/api/db/queries/subtitles'
+import * as videoQueries from '@/api/db/queries/videos'
 import { checkUrl } from '@/api/workers/verifyWorker'
 
 const BATCH_VERIFY_CONCURRENCY = 5
@@ -183,6 +185,37 @@ export class ContentService {
   ): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
     const { rows, total } = await subtitleQueries.listAdminSubtitles(this.db, page, limit, sortField, sortDir)
     return { data: rows, total, page, limit }
+  }
+
+  async createAdminSubtitle(input: {
+    videoId: string
+    language: string
+    label: string
+    format: 'vtt' | 'srt' | 'ass'
+    fileUrl: string
+    episodeNumber?: number | null
+  }): Promise<Subtitle> {
+    const video = await videoQueries.findAdminVideoById(this.db, input.videoId)
+    if (!video) {
+      const err = new Error('VIDEO_NOT_FOUND')
+      ;(err as Error & { code: string; statusCode: number }).code = 'VIDEO_NOT_FOUND'
+      ;(err as Error & { code: string; statusCode: number }).statusCode = 404
+      throw err
+    }
+    if (video.type === 'movie' && input.episodeNumber != null) {
+      const err = new Error('EPISODE_MISMATCH')
+      ;(err as Error & { code: string; statusCode: number }).code = 'EPISODE_MISMATCH'
+      ;(err as Error & { code: string; statusCode: number }).statusCode = 422
+      throw err
+    }
+    return subtitleQueries.adminCreateSubtitle(this.db, {
+      videoId: input.videoId,
+      episodeNumber: input.episodeNumber ?? null,
+      language: input.language,
+      label: input.label,
+      fileUrl: input.fileUrl,
+      format: input.format,
+    })
   }
 
   async getSubtitleStats(): Promise<{

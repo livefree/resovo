@@ -34,6 +34,16 @@ export interface SubtitleListFilter {
   readonly sortDir?: 'asc' | 'desc'
 }
 
+/** ADR-134：POST /admin/subtitles 请求体 */
+export interface CreateAdminSubtitleInput {
+  readonly videoId: string
+  readonly language: string
+  readonly label: string
+  readonly format: 'vtt' | 'srt' | 'ass'
+  readonly fileUrl: string
+  readonly episodeNumber?: number | null
+}
+
 /** ADR-133：GET /admin/subtitles/stats 响应结构 */
 export interface SubtitleStats {
   readonly pendingCount: number

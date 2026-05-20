@@ -8551,3 +8551,60 @@ interface SubtitleStats {
 - ADR-126 §5（编号顺延：ADR-128 预留给 API Key 管理）
 - ADR-127（Dashboard Stats 同类设计参照）
 - CHG-SN-7-MISC-SUBTITLES-1
+
+## ADR-134 — 管理员手动创建字幕端点协议设计（CHG-SN-7-MISC-SUBTITLES-2）
+
+**状态**：Accepted（Conditional PASS：C1-C4 全部落地；SUBTITLE_DUPLICATE 409 注册为 DEBT-ADR-134-DUPLICATE，subtitles 表当前无 unique 约束）
+**日期**：2026-05-20
+**arch-reviewer**：claude-opus-4-7
+
+### 1. 背景
+
+管理员需要在 `/admin/subtitles` 页面手动添加字幕记录（指向已上传至 R2 的 URL），绕过用户侧 multipart 上传流程。管理员创建的字幕直接 `is_verified=true`，不进入待审队列（不影响 ADR-133 KPI 待审计数）。
+
+### 2. 决策
+
+新增 `POST /admin/subtitles` JSON 端点，接受 R2 URL 而非文件 binary。Service 层校验视频存在性 + 类型兼容（电影禁 episodeNumber），DB 层写入 is_verified=true。
+
+### 端点契约
+
+| # | Method | Path | 权限 | Params | Response `data` 字段 | ADR |
+|---|--------|------|------|--------|---------------------|-----|
+| 1 | POST | `/admin/subtitles` | moderator+admin | body: `{ videoId, language, label, format, fileUrl, episodeNumber? }` | `{ id, videoId, episodeNumber, language, label, fileUrl, format, isVerified, createdAt }` | ADR-134 |
+
+### 3. 字段验证（zod）
+
+```typescript
+const CreateAdminSubtitleSchema = z.object({
+  videoId:       z.string().uuid(),
+  language:      z.string().min(2).max(10).regex(/^[a-zA-Z]{2,3}(-[A-Za-z0-9]{2,8})?$/),
+  label:         z.string().min(1).max(50).trim(),
+  format:        z.enum(['vtt', 'srt', 'ass']),
+  fileUrl:       z.string().url().refine(
+    (u) => { const base = process.env.R2_PUBLIC_BASE_URL?.replace(/\/+$/, ''); return !base || u.startsWith(base) },
+    { message: 'fileUrl 必须指向项目 R2 存储（R2_PUBLIC_BASE_URL 未配置时跳过校验）' }
+  ),
+  episodeNumber: z.number().int().positive().nullable().optional(),
+})
+```
+
+### 4. 错误码
+
+| CODE | HTTP | 触发条件 |
+|------|------|----------|
+| `VALIDATION_ERROR` | 422 | zod 校验失败（字段缺失/格式错误/fileUrl 非 R2 域） |
+| `VIDEO_NOT_FOUND` | 404 | videoId 不存在或已软删除 |
+| `EPISODE_MISMATCH` | 422 | 视频类型为 movie 但传入了 episodeNumber |
+| `INTERNAL_ERROR` | 500 | 兜底 |
+
+### 5. DEBT 登记
+
+| DEBT-ID | 描述 | 优先级 |
+|---------|------|--------|
+| DEBT-ADR-134-DUPLICATE | SUBTITLE_DUPLICATE (409) 未实装：subtitles 表无 unique(video_id, episode_number, language) 约束，去重需 DDL 或 SELECT-before-INSERT | P3 |
+
+### 6. 关联
+
+- ADR-100 R7 MUST-8（admin route ADR 前置门禁）
+- ADR-133（字幕 KPI stats 端点 — adminCreate 不增 pendingCount）
+- CHG-SN-7-MISC-SUBTITLES-2

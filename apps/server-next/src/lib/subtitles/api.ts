@@ -5,7 +5,7 @@
  */
 
 import { apiClient } from '@/lib/api-client'
-import type { SubtitleListFilter, SubtitleListResult, SubtitleStats } from './types'
+import type { SubtitleListFilter, SubtitleListResult, SubtitleStats, CreateAdminSubtitleInput } from './types'
 
 export async function listSubtitles(filter: SubtitleListFilter = {}): Promise<SubtitleListResult> {
   const params = new URLSearchParams()
@@ -27,4 +27,8 @@ export async function rejectSubtitle(id: string, reason?: string): Promise<void>
 export async function fetchSubtitleStats(): Promise<SubtitleStats> {
   const res = await apiClient.get<{ data: SubtitleStats }>('/admin/subtitles/stats')
   return res.data
+}
+
+export async function createAdminSubtitle(input: CreateAdminSubtitleInput): Promise<void> {
+  await apiClient.post('/admin/subtitles', input)
 }

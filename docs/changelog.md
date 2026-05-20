@@ -13024,3 +13024,30 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
   - stats 加载失败不阻断主列表渲染（独立 useEffect + 静默 catch）
   - KpiCard dataSource='live' 在 stats 加载成功后设置，便于 e2e 断言区分 mock/live
 - **测试结果**：typecheck PASS / lint PASS / unit 4264 PASS（+2 新增：fetchSubtitleStats × 2）/ verify:adr-contracts PASS
+
+---
+
+## CHG-SN-7-MISC-SUBTITLES-2 — 字幕上传 action 实装
+
+- **日期**：2026-05-20
+- **任务 ID**：CHG-SN-7-MISC-SUBTITLES-2（SEQ-20260507-01 / M-SN-7 MISC）
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：arch-reviewer (claude-opus-4-7)（ADR-134 端点契约设计）
+- **arch-reviewer 评级**：Conditional PASS（C1-C4 全部落地；SUBTITLE_DUPLICATE 注册为 DEBT-ADR-134-DUPLICATE P3）
+- **修改文件**：
+  - `docs/decisions.md` — 追加 ADR-134（POST /admin/subtitles 协议 / §端点契约 + zod 验证 + 错误码）
+  - `apps/api/src/db/queries/subtitles.ts` — 新增 `adminCreateSubtitle()` query（is_verified=true 直写）
+  - `apps/api/src/services/ContentService.ts` — 新增 `createAdminSubtitle()` method（视频存在性检查 / movie+episodeNumber 校验 / videoQueries import）
+  - `apps/api/src/routes/admin/content.ts` — 新增 `POST /admin/subtitles` 路由（ADR-134 / zod + R2 whitelist + 错误码分发）
+  - `apps/server-next/src/lib/subtitles/types.ts` — 新增 `CreateAdminSubtitleInput` 接口
+  - `apps/server-next/src/lib/subtitles/api.ts` — 新增 `createAdminSubtitle()` 客户端封装
+  - `apps/server-next/src/app/admin/subtitles/_client/SubtitleUploadModal.tsx` — 新建：上传字幕 Modal（videoId / language / label / format / fileUrl / episodeNumber?）
+  - `apps/server-next/src/app/admin/subtitles/_client/SubtitlesListClient.tsx` — 新增：「上传字幕」按钮 + SubtitleUploadModal 接入 + handleUploadSubmit
+  - `tests/unit/server-next/subtitles/subtitles-api.test.ts` — 追加：createAdminSubtitle 2 case（POST 路径 / episodeNumber 传递）
+- **新增依赖**：无
+- **数据库变更**：无（adminCreateSubtitle 使用现有 subtitles 表，is_verified=true 直写）
+- **注意事项**：
+  - 管理员创建的字幕 is_verified=true，不进 ADR-133 KPI 待审池（pendingCount 不增）
+  - R2_PUBLIC_BASE_URL 未配置时 fileUrl 跳过域名白名单校验（DEBT 已记录）
+  - DEBT-ADR-134-DUPLICATE (P3)：SUBTITLE_DUPLICATE 409 未实装，subtitles 表需先加 unique 约束
+- **测试结果**：typecheck PASS / lint PASS / unit 4266 PASS（+2 新增）/ verify:adr-contracts PASS（169 路由全对齐）

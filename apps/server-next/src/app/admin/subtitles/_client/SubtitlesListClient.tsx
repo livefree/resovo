@@ -39,9 +39,11 @@ import {
   approveSubtitle,
   rejectSubtitle,
   fetchSubtitleStats,
+  createAdminSubtitle,
 } from '@/lib/subtitles/api'
 import type { SubtitleRow, SubtitleStats } from '@/lib/subtitles/types'
 import { buildSubtitleColumns } from './columns'
+import { SubtitleUploadModal } from './SubtitleUploadModal'
 
 // ── 常量 ──────────────────────────────────────────────────────────
 
@@ -76,6 +78,9 @@ export function SubtitlesListClient() {
   const [retryKey, setRetryKey] = useState(0)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [stats, setStats] = useState<SubtitleStats | null>(null)
+  const [uploadOpen, setUploadOpen] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -111,6 +116,29 @@ export function SubtitlesListClient() {
   const refresh = useCallback(() => {
     setRetryKey((k) => k + 1)
   }, [])
+
+  const handleUploadSubmit = useCallback(async (input: {
+    videoId: string
+    language: string
+    label: string
+    format: 'vtt' | 'srt' | 'ass'
+    fileUrl: string
+    episodeNumber: number | null
+  }) => {
+    setUploading(true)
+    setUploadError(null)
+    try {
+      await createAdminSubtitle(input)
+      setUploadOpen(false)
+      refresh()
+      toast.push({ title: '字幕已上传', description: '字幕已创建并自动通过审核', level: 'success' })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : '上传失败，请稍后重试'
+      setUploadError(msg)
+    } finally {
+      setUploading(false)
+    }
+  }, [refresh, toast])
 
   const handleApprove = useCallback(async (id: string) => {
     setPendingId(id)
@@ -165,19 +193,37 @@ export function SubtitlesListClient() {
   )
 
   return (
+    <>
+    <SubtitleUploadModal
+      open={uploadOpen}
+      onClose={() => setUploadOpen(false)}
+      onSubmit={(input) => void handleUploadSubmit(input)}
+      submitting={uploading}
+      submitError={uploadError}
+    />
     <div data-subtitles-list-client style={PAGE_STYLE}>
       <PageHeader
         title="字幕审核"
         subtitle={`${total} 条待审 · 通过 / 拒绝`}
         actions={
-          <AdminButton
-            variant="default"
-            size="sm"
-            onClick={refresh}
-            data-testid="subtitle-refresh"
-          >
-            刷新
-          </AdminButton>
+          <>
+            <AdminButton
+              variant="default"
+              size="sm"
+              onClick={refresh}
+              data-testid="subtitle-refresh"
+            >
+              刷新
+            </AdminButton>
+            <AdminButton
+              variant="primary"
+              size="sm"
+              onClick={() => { setUploadError(null); setUploadOpen(true) }}
+              data-testid="subtitle-upload-btn"
+            >
+              上传字幕
+            </AdminButton>
+          </>
         }
         data-testid="subtitles-page-header"
       />
@@ -243,5 +289,6 @@ export function SubtitlesListClient() {
             )
       }
     </div>
+    </>
   )
 }

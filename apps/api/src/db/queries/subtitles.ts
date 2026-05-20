@@ -91,6 +91,28 @@ export async function createSubtitle(
   return mapSubtitle(result.rows[0])
 }
 
+/** ADR-134：管理员直接创建字幕（is_verified=true，跳过审核队列） */
+export async function adminCreateSubtitle(
+  db: Pool,
+  input: CreateSubtitleInput
+): Promise<Subtitle> {
+  const result = await db.query<DbSubtitleRow>(
+    `INSERT INTO subtitles
+       (video_id, episode_number, language, label, file_url, format, is_verified)
+     VALUES ($1, $2, $3, $4, $5, $6, true)
+     RETURNING *`,
+    [
+      input.videoId,
+      input.episodeNumber,
+      input.language,
+      input.label,
+      input.fileUrl,
+      input.format,
+    ]
+  )
+  return mapSubtitle(result.rows[0])
+}
+
 // ── 查询：按 id 获取单条字幕 ─────────────────────────────────────
 
 export async function findSubtitleById(

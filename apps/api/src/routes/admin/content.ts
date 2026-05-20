@@ -307,6 +307,36 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
     return reply.code(204).send()
   })
 
+  // ── POST /admin/subtitles（ADR-134）─────────────────────────────
+  const R2Base = process.env.R2_PUBLIC_BASE_URL?.replace(/\/+$/, '')
+  const CreateAdminSubtitleSchema = z.object({
+    videoId:       z.string().uuid(),
+    language:      z.string().min(2).max(10).regex(/^[a-zA-Z]{2,3}(-[A-Za-z0-9]{2,8})?$/),
+    label:         z.string().min(1).max(50).trim(),
+    format:        z.enum(['vtt', 'srt', 'ass']),
+    fileUrl:       z.string().url().refine(
+      (u) => !R2Base || u.startsWith(R2Base),
+      { message: 'fileUrl 必须指向项目 R2 存储' }
+    ),
+    episodeNumber: z.number().int().positive().nullable().optional(),
+  })
+
+  fastify.post('/admin/subtitles', { preHandler: auth }, async (request, reply) => {
+    const parsed = CreateAdminSubtitleSchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
+    }
+    try {
+      const subtitle = await contentService.createAdminSubtitle(parsed.data)
+      return reply.code(201).send({ data: subtitle })
+    } catch (err: unknown) {
+      const e = err as { code?: string; statusCode?: number }
+      if (e.code === 'VIDEO_NOT_FOUND') return reply.code(404).send({ error: { code: 'VIDEO_NOT_FOUND', message: '视频不存在', status: 404 } })
+      if (e.code === 'EPISODE_MISMATCH') return reply.code(422).send({ error: { code: 'EPISODE_MISMATCH', message: '电影类视频不需要集数', status: 422 } })
+      throw err
+    }
+  })
+
   // ── GET /admin/subtitles/stats（ADR-133）────────────────────────
   fastify.get('/admin/subtitles/stats', { preHandler: auth }, async (_request, reply) => {
     const data = await contentService.getSubtitleStats()

@@ -21,6 +21,7 @@ import {
   approveSubtitle,
   rejectSubtitle,
   fetchSubtitleStats,
+  createAdminSubtitle,
 } from '../../../../apps/server-next/src/lib/subtitles/api'
 
 const mockedGet = vi.mocked(apiClient.get)
@@ -99,6 +100,33 @@ describe('rejectSubtitle', () => {
   it('含 reason → body 含 reason', async () => {
     await rejectSubtitle('sub-abc', '字幕语言不符')
     expect(mockedPost).toHaveBeenCalledWith('/admin/subtitles/sub-abc/reject', { reason: '字幕语言不符' })
+  })
+})
+
+describe('createAdminSubtitle', () => {
+  const INPUT = {
+    videoId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+    language: 'zh-CN',
+    label: '中文简体',
+    format: 'srt' as const,
+    fileUrl: 'https://r2.example.com/subtitles/test.srt',
+    episodeNumber: null,
+  }
+
+  beforeEach(() => {
+    mockedPost.mockReset()
+    mockedPost.mockResolvedValue(undefined)
+  })
+
+  it('POST /admin/subtitles', async () => {
+    await createAdminSubtitle(INPUT)
+    expect(mockedPost).toHaveBeenCalledWith('/admin/subtitles', INPUT)
+  })
+
+  it('含 episodeNumber → body 带 episodeNumber', async () => {
+    const withEp = { ...INPUT, episodeNumber: 3 }
+    await createAdminSubtitle(withEp)
+    expect(mockedPost).toHaveBeenCalledWith('/admin/subtitles', withEp)
   })
 })
 
