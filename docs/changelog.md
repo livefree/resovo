@@ -13117,3 +13117,24 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
   - client-side 过滤 posterStatus==='broken'，复用已加载 missingRows，无额外请求
   - 缺图视频 DataTable 保留全宽（主体 1fr/1fr split 下方）
   - MAX_SAMPLES=24 截断防止 grid 过高
+
+---
+
+## CHG-SN-7-MISC-USERS-1 — users page head actions 实装
+
+- **完成时间**：2026-05-20
+- **任务 ID**：CHG-SN-7-MISC-USERS-1（SEQ-20260507-01 / M-SN-7 MISC #13）
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无（UI 局部改动，无新共享组件 API 契约）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/users/_client/RoleMatrixModal.tsx`（新建，11 行权限矩阵只读 Modal）
+  - `apps/server-next/src/app/admin/users/_client/InviteUserModal.tsx`（新建，表单 Modal + 前端校验）
+  - `apps/server-next/src/app/admin/users/_client/UsersListClient.tsx`（PageHeader 扩「角色矩阵」+「邀请用户」2 按钮）
+  - `tests/unit/components/server-next/admin/users/RoleMatrixModal.test.tsx`（新建，7 case）
+  - `tests/unit/components/server-next/admin/users/InviteUserModal.test.tsx`（新建，8 case）
+- **测试结果**：4323 unit PASS（CrawlerClient 并发 flaky，单独跑全 PASS，非本次引入）
+- **ADR**：无（邀请用户端点待后续 ADR 起草后接入；当前 onInvite 回调触发 toast「功能待后端接入」）
+- **备注**：
+  - RoleMatrixModal 纯读展示，无 API
+  - InviteUserModal 邮箱 regex 校验 + 角色选择（user/moderator，admin 通过系统控制台）
+  - AdminInput testid 在 wrapper，测试用 getByPlaceholderText 定位内层 input

@@ -44,6 +44,8 @@ import {
 import type { UserRow, UserRole } from '@/lib/users/types'
 import { buildUserColumns } from './columns'
 import { downloadCsv, type CsvColumn } from '@/lib/csv-export'
+import { RoleMatrixModal } from './RoleMatrixModal'
+import { InviteUserModal } from './InviteUserModal'
 
 // ── 常量 ──────────────────────────────────────────────────────────
 
@@ -93,6 +95,8 @@ export function UsersListClient() {
   const [roleFilter, setRoleFilter] = useState<string | null>(null)
   const [bannedFilter, setBannedFilter] = useState<string | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
+  const [roleMatrixOpen, setRoleMatrixOpen] = useState(false)
+  const [inviteOpen, setInviteOpen] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // 搜索 debounce
@@ -184,6 +188,15 @@ export function UsersListClient() {
       setPendingId(null)
     }
   }, [refresh, toast])
+
+  const handleInvite = useCallback(async (_email: string, _role: 'user' | 'moderator') => {
+    // 邀请端点待 ADR 起草后接入（CHG-SN-7-MISC-USERS-1）
+    toast.push({
+      title: '邀请功能待后端接入',
+      description: '邀请用户端点将在下一版本实装，请直接在数据库创建账号',
+      level: 'info',
+    })
+  }, [toast])
 
   const columns = useMemo(
     () => buildUserColumns({
@@ -283,19 +296,44 @@ export function UsersListClient() {
   )
 
   return (
+    <>
+    <RoleMatrixModal open={roleMatrixOpen} onClose={() => setRoleMatrixOpen(false)} />
+    <InviteUserModal
+      open={inviteOpen}
+      onClose={() => setInviteOpen(false)}
+      onInvite={handleInvite}
+    />
     <div data-users-list-client style={PAGE_STYLE}>
       <PageHeader
         title="用户管理"
         subtitle={`共 ${total} 位用户`}
         actions={
-          <AdminButton
-            variant="default"
-            size="sm"
-            onClick={refresh}
-            data-testid="users-refresh"
-          >
-            刷新
-          </AdminButton>
+          <span style={{ display: 'inline-flex', gap: '8px' }}>
+            <AdminButton
+              variant="default"
+              size="sm"
+              onClick={() => setRoleMatrixOpen(true)}
+              data-testid="users-role-matrix-btn"
+            >
+              角色矩阵
+            </AdminButton>
+            <AdminButton
+              variant="primary"
+              size="sm"
+              onClick={() => setInviteOpen(true)}
+              data-testid="users-invite-btn"
+            >
+              邀请用户
+            </AdminButton>
+            <AdminButton
+              variant="default"
+              size="sm"
+              onClick={refresh}
+              data-testid="users-refresh"
+            >
+              刷新
+            </AdminButton>
+          </span>
         }
         data-testid="users-page-header"
       />
@@ -335,5 +373,6 @@ export function UsersListClient() {
             )
       }
     </div>
+    </>
   )
 }
