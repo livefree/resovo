@@ -11,7 +11,7 @@
  *   - 不在 [data-page-head] 内做破折号断言（合法 em dash 文案）
  */
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import React from 'react'
 
 // ── mock next/navigation ─────────────────────────────────────────
@@ -31,6 +31,36 @@ vi.mock('@/lib/videos/api', () => ({
   getModerationStats: () => mockGetStats(),
 }))
 
+// ── mock api-client（断开 authStore 依赖链）─────────────────────
+
+vi.mock('../../../../../../apps/server-next/src/lib/api-client', () => {
+  class MockApiClientError extends Error {
+    constructor(msg: string) { super(msg) }
+  }
+  return {
+    apiClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+    ApiClientError: MockApiClientError,
+  }
+})
+
+// ── mock crawler/api ─────────────────────────────────────────────
+
+const mockRunCrawlerAll = vi.fn()
+vi.mock('../../../../../../apps/server-next/src/lib/crawler/api', () => ({
+  runCrawlerAll: (...args: unknown[]) => mockRunCrawlerAll(...args),
+}))
+
+// ── mock @resovo/admin-ui useToast ───────────────────────────────
+
+const toastPushMock = vi.fn()
+vi.mock('@resovo/admin-ui', async () => {
+  const actual = await vi.importActual<typeof import('@resovo/admin-ui')>('@resovo/admin-ui')
+  return {
+    ...actual,
+    useToast: () => ({ push: (input: unknown) => { toastPushMock(input); return 'tid' }, dismiss: vi.fn() }),
+  }
+})
+
 // 注：必须 vi.mock 之后再 import DashboardClient，避免吊起的真实 module
 import { DashboardClient } from '../../../../../../apps/server-next/src/app/admin/_client/DashboardClient'
 
@@ -38,6 +68,8 @@ afterEach(() => {
   cleanup()
   mockGetStats.mockReset()
   mockPush.mockReset()
+  mockRunCrawlerAll.mockReset()
+  toastPushMock.mockReset()
 })
 
 beforeEach(() => {
@@ -193,5 +225,48 @@ describe('DashboardClient — case C：接口失败 500（ErrorState + grid 兜�
     })
     expect(container.querySelector('[data-tab="overview"]')).toBeTruthy()
     expect(container.querySelector('[data-tab="analytics"]')).toBeTruthy()
+  })
+})
+
+describe('DashboardClient — case D：page head 按钮行为（MISC-DASHBOARD-1）', () => {
+  beforeEach(() => {
+    mockGetStats.mockResolvedValue({ pendingCount: 100, todayReviewedCount: 20, interceptRate: 5.0 })
+    // confirm 默认返回 true
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('"进入审核台"按钮 → router.push("/admin/moderation")', async () => {
+    const { container } = render(<DashboardClient />)
+    await waitFor(() => expect(container.querySelector('[data-page-head]')).toBeTruthy())
+    const btn = container.querySelector('[data-page-action="enter-moderation"]') as HTMLButtonElement
+    expect(btn).toBeTruthy()
+    fireEvent.click(btn)
+    expect(mockPush).toHaveBeenCalledWith('/admin/moderation')
+  })
+
+  it('"全站全量采集"→ confirm + runCrawlerAll("full") + toast success', async () => {
+    mockRunCrawlerAll.mockResolvedValue({ runId: 'run-42' })
+    const { container } = render(<DashboardClient />)
+    await waitFor(() => expect(container.querySelector('[data-page-head]')).toBeTruthy())
+    const btn = container.querySelector('[data-page-action="full-crawl"]') as HTMLButtonElement
+    expect(btn).toBeTruthy()
+    fireEvent.click(btn)
+    await waitFor(() => expect(mockRunCrawlerAll).toHaveBeenCalledWith('full'))
+    await waitFor(() => expect(toastPushMock).toHaveBeenCalledWith(
+      expect.objectContaining({ level: 'success', title: expect.stringContaining('run-42') }),
+    ))
+  })
+
+  it('"全站全量采集"confirm 取消 → 不调用 runCrawlerAll', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const { container } = render(<DashboardClient />)
+    await waitFor(() => expect(container.querySelector('[data-page-head]')).toBeTruthy())
+    const btn = container.querySelector('[data-page-action="full-crawl"]') as HTMLButtonElement
+    fireEvent.click(btn)
+    expect(mockRunCrawlerAll).not.toHaveBeenCalled()
   })
 })

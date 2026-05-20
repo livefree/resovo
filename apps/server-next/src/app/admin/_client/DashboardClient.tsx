@@ -22,9 +22,11 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { ErrorState, LoadingState } from '@resovo/admin-ui'
+import { ErrorState, LoadingState, useToast } from '@resovo/admin-ui'
 import { getModerationStats, type ModerationStats } from '@/lib/videos/api'
 import { buildDashboardStats, type DashboardStats } from '@/lib/dashboard-data'
+import { runCrawlerAll } from '@/lib/crawler/api'
+import { ApiClientError } from '@/lib/api-client'
 import { AttentionCard } from '@/components/admin/dashboard/AttentionCard'
 import { WorkflowCard } from '@/components/admin/dashboard/WorkflowCard'
 import { MetricKpiCardRow } from '@/components/admin/dashboard/MetricKpiCardRow'
@@ -133,11 +135,13 @@ function tabBtnStyle(active: boolean): React.CSSProperties {
 export function DashboardClient() {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const toast = useToast()
   const activeTab: TabId = (searchParams.get('tab') as TabId) === 'analytics' ? 'analytics' : 'overview'
 
   const [stats, setStats] = useState<ModerationStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const [statsError, setStatsError] = useState<Error | undefined>()
+  const [fullCrawlRunning, setFullCrawlRunning] = useState(false)
 
   const loadStats = useCallback(() => {
     setStatsLoading(true)
@@ -154,6 +158,20 @@ export function DashboardClient() {
   // stats null（加载中或失败）→ buildDashboardStats(null) 返全 mock
   // stats 有效 → 部分 live 派生（pendingCount → KPI 待审/暂存 + Workflow 待审段）
   const dashboardStats: DashboardStats = useMemo(() => buildDashboardStats(stats), [stats])
+
+  const handleFullCrawl = useCallback(async () => {
+    if (!window.confirm('确认启动全站全量采集？这将触发所有站点的完整抓取任务。')) return
+    setFullCrawlRunning(true)
+    try {
+      const result = await runCrawlerAll('full')
+      toast.push({ title: `全量采集任务已启动（批次 #${result.runId}）`, level: 'success' })
+    } catch (err: unknown) {
+      const msg = err instanceof ApiClientError ? err.message : '启动采集失败，请重试'
+      toast.push({ title: '启动失败', description: msg, level: 'danger' })
+    } finally {
+      setFullCrawlRunning(false)
+    }
+  }, [toast])
 
   const switchTab = (tab: TabId) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -177,8 +195,8 @@ export function DashboardClient() {
               <p style={HEAD_SUB_STYLE} data-page-head-sub>{dashboardStats.headSub}</p>
             </div>
             <div style={HEAD_ACTIONS_STYLE} data-page-head-actions>
-              <button type="button" style={HEAD_BTN_STYLE} data-page-action="full-crawl">全站全量采集</button>
-              <button type="button" style={HEAD_BTN_PRIMARY_STYLE} data-page-action="enter-moderation">进入审核台</button>
+              <button type="button" style={HEAD_BTN_STYLE} data-page-action="full-crawl" disabled={fullCrawlRunning} onClick={() => void handleFullCrawl()}>{fullCrawlRunning ? '采集中…' : '全站全量采集'}</button>
+              <button type="button" style={HEAD_BTN_PRIMARY_STYLE} data-page-action="enter-moderation" onClick={() => router.push('/admin/moderation')}>进入审核台</button>
             </div>
           </header>
 

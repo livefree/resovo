@@ -6,38 +6,49 @@
 
 ## 进行中任务
 
-<!-- REDO-04 完成（2026-05-19） -->
+<!-- MISC-DASHBOARD-1/2 启动（2026-05-19） -->
 
-### CHG-SN-7-REDO-04 ✅ Staging 路由处置 — 独立路由方案 A（~1.5w 实际）
+### CHG-SN-7-MISC-DASHBOARD-1 ⏳ dashboard page__head 2 按钮 onClick 绑定（0.05w）
 
-**SEQ**：M-SN-7 / REDO-04（PRE-04 子卡 #3 ❌ 整页未做触发）
+**SEQ**：M-SN-7 / MISC-DASHBOARD-1（PRE-04 #1 触发）
 
-**完成摘要**：
-- Opus arch-reviewer 裁决方案 A（独立路由 `/admin/staging`），理由：Layout 上下文不兼容、状态解耦、IA 完整性
-- 后端 API 已在 M-SN-3 完整实装（staging.ts），REDO-04-A 子卡跳过
-- 新建 `apps/server-next/src/lib/staging/api.ts`（6 API 函数 / 完整类型定义）
-- 新建 `apps/server-next/src/app/admin/staging/page.tsx` + `_client/StagingPageClient.tsx`（DataTable v2 / PipelineSummaryCard / AutoPublishRulesCard / 4-segment）
-- 改 `ModerationConsole.tsx`：移除 staging tab + 添加 `/admin/staging` redirect effect
-- 改 `admin-nav.tsx`：Upload 图标 + 暂存发布导航项
-- 新建 `tests/unit/components/server-next/admin/staging/StagingPageClient.test.tsx`（8 test cases）
+**问题理解**：`DashboardClient.tsx` 第 180–181 行的"全站全量采集"与"进入审核台"两个按钮无 onClick 处理器。
 
-**六问自检**：
-1. 是否引入回归？否 / 4198 unit PASS（+8）/ lint PASS / typecheck PASS
-2. 是否越层调用？否 / lib/staging/api.ts → apiClient 标准路径
-3. 是否使用 any / 空 catch？否
-4. 是否硬编码颜色？否 / 全部 CSS 变量
-5. 是否新增未授权端点？否 / 后端端点复用 M-SN-3 已授权端点
-6. 是否同步 docs？是 / task-queue 更新 / changelog 追加
+**根因**：CHG-DESIGN-07 7C 仅实装浏览态卡片，page head 按钮交互未覆盖。
 
-**[AI-CHECK]**：
-- ✅ TableColumn v2 接口（id/header/accessor/cell）完全对齐 / DataTable v2 mode="client" + query + onQueryChange 正确接入
-- ✅ PageHeader `actions` + AdminCard header `actions`（非 trailing）
-- ✅ ModerationConsole TabId 移除 staging / redirect effect 防止旧书签失效
-- ✅ 无新 admin route（复用已授权端点）→ verify:endpoint-adr 门禁不触发
+**方案**：
+- "进入审核台"→ `router.push('/admin/moderation')`
+- "全站全量采集"→ `window.confirm` 二次确认 + `runCrawlerAll('full')` + toast success/error（模式与 CrawlerClient 一致）
 
-**执行模型**：claude-sonnet-4-6（主循环）
+**涉及文件**（1 文件）：
+- 改：`apps/server-next/src/app/admin/_client/DashboardClient.tsx`
 
-**子代理调用**：arch-reviewer (claude-opus-4-7) — A vs B 方案裁决
+**约束**：
+- ❌ 无新后端端点
+- ❌ 无新组件（复用 AdminButton / useToast / runCrawlerAll）
+- 导入 `runCrawlerAll` from `@/lib/crawler/api` + `useToast` from `@resovo/admin-ui` + `ApiClientError` from `@/lib/api-client`
+
+**执行模型**：claude-sonnet-4-6（主循环）/ 无子代理
+
+---
+
+### CHG-SN-7-MISC-DASHBOARD-2 ⏳ dashboard 4 类卡片数据真实化（ADR-127 + 6 端点，0.5–0.8w）
+
+**SEQ**：M-SN-7 / MISC-DASHBOARD-2（PRE-04 #1 + #12 触发；与 STATS-EXTEND-ANALYTICS 合并）
+
+**问题理解**：dashboard 4 类 KPI（视频总量 / 待审·暂存 / 源可达率 / 失效源）以及 WorkflowCard / SiteHealthCard / AttentionCard / RecentActivityCard 绝大部分数据为 mock。
+
+**方案**：先 Opus arch-reviewer 起草 ADR-127（Dashboard Stats 扩展端点协议），Opus PASS 后 Sonnet 主循环实施。
+
+**Opus 设计范围**（spawn 后等结论再开工）：
+1. 确定 6 端点 vs 1 聚合端点策略（/admin/dashboard/stats 聚合 OR 扩展 moderation-stats）
+2. 每个端点的 response schema + spark series 格式
+3. 与 STATS-EXTEND-ANALYTICS（§5.15 Analytics Tab）的字段复用边界
+4. 迁移 / 测试策略
+
+**子代理调用**：arch-reviewer (claude-opus-4-7) — ADR-127 端点协议设计
+
+**执行模型**：claude-sonnet-4-6（主循环）+ arch-reviewer (claude-opus-4-7)（ADR）
 
 <!-- REDO-03-D 完成（2026-05-19） -->
 
