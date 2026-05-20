@@ -13234,3 +13234,28 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
   - 零 API 路径变化（endpoint 不变）✅
   - typecheck 全绿 ✅
   - verify:adr-contracts 通过（advisory 警告均为预存在）✅
+
+---
+
+## CHG-SN-7-MISC-API-SERVICES-SIZE
+
+- **完成时间**：2026-05-20
+- **任务 ID**：CHG-SN-7-MISC-API-SERVICES-SIZE（SEQ-20260507-01 / M-SN-7 MISC PRE-01 全量扩）
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无（Service/Worker 层纯重构，无新 API 契约）
+- **修改文件**：
+  - `apps/api/src/workers/crawlerWorker.ts`（585→478 行；移除 source 工具函数 + 类型 + enqueue 函数，barrel re-export）
+  - `apps/api/src/workers/crawlerWorker.sources.ts`（新建 66 行；parseCrawlerSources / getEnabledSources / CrawlJobType / CrawlJobMode / CrawlJobData / CrawlJobResult）
+  - `apps/api/src/workers/crawlerWorker.enqueue.ts`（新建 54 行；enqueueFullCrawl / enqueueIncrementalCrawl / CRAWLER_JOB_TIMEOUT_MS）
+  - `apps/api/src/services/VideoMergesService.ts`（523→435 行；移除 6 个 zod schema + 3 个 helper 函数，barrel re-export）
+  - `apps/api/src/services/VideoMergesService.schemas.ts`（新建 111 行；VideoTypeEnum / ListCandidatesSchema / MergeSchema / UnmergeSchema / SplitSchema / ListAuditSchema / computeOverlapScore / pickRecommendedTarget / mapVideoRow）
+  - `apps/api/src/services/DoubanService.ts`（511→421 行；移除 similarity 函数族 + formatFieldValue + calcMetaScore + CandidateProposed 接口，barrel re-export）
+  - `apps/api/src/services/DoubanService.utils.ts`（新建 108 行；CandidateProposed / similarity / normalizeForMatch / parseYear / candidateScore / pickBestCandidate / formatFieldValue / calcMetaScore）
+  - `apps/api/src/services/SourceParserService.ts`（502→416 行；移除 TYPE_MAP / GENRE_MAP / ADULT_CATEGORIES / COUNTRY_MAP，barrel re-export ADULT_CATEGORIES）
+  - `apps/api/src/services/SourceParserService.maps.ts`（新建 97 行；TYPE_MAP / GENRE_MAP / ADULT_CATEGORIES / COUNTRY_MAP）
+- **测试结果**：4330 unit PASS（预存在失败 2 项：无改动时 3 项，有改动时 2 项，均为不稳定测试与本任务无关）
+- **验收**：
+  - 所有文件 ≤ 500 行 ✅（478/66/54/435/111/421/108/416/97）
+  - 所有外部 import 路径零变化（barrel re-export）✅
+  - typecheck 全绿 ✅
+  - verify:adr-contracts 通过（advisory 警告均为预存在）✅

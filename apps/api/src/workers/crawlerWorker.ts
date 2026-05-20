@@ -1,6 +1,10 @@
 /**
- * crawlerWorker.ts — 爬虫采集队列消费者
+ * crawlerWorker.ts — 爬虫采集队列消费者（主流程）
  * CHG-36: 从 crawler_sites 表读取源站；支持 siteKey 单站触发；更新采集状态
+ *
+ * 已拆分到子文件：
+ *   crawlerWorker.sources.ts — parseCrawlerSources / getEnabledSources / 类型定义
+ *   crawlerWorker.enqueue.ts — enqueueFullCrawl / enqueueIncrementalCrawl
  */
 
 import type Bull from 'bull'
@@ -8,9 +12,7 @@ import { crawlerQueue } from '@/api/lib/queue'
 import { db } from '@/api/lib/postgres'
 import { es } from '@/api/lib/elasticsearch'
 import { baseLogger, withJob } from '@/api/lib/logger'
-
-const workerLog = baseLogger.child({ worker: 'crawler-worker' })
-import { CrawlerService, type CrawlerSource } from '@/api/services/CrawlerService'
+import { CrawlerService } from '@/api/services/CrawlerService'
 import { CrawlerRefetchService } from '@/api/services/CrawlerRefetchService'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import * as crawlerTasksQueries from '@/api/db/queries/crawlerTasks'
@@ -19,76 +21,14 @@ import * as crawlerRunsQueries from '@/api/db/queries/crawlerRuns'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import * as sourcesQueries from '@/api/db/queries/sources'
 import { syncSourceCheckStatusFromSources, transitionVideoState } from '@/api/db/queries/videos'
+import { getEnabledSources, type CrawlJobData, type CrawlJobResult } from './crawlerWorker.sources'
 
-// ── 资源站工具函数（从 CrawlerService 迁入，worker 是唯一调用方） ───
+const workerLog = baseLogger.child({ worker: 'crawler-worker' })
 
-/** 从 CRAWLER_SOURCES 环境变量解析资源站配置（降级用） */
-export function parseCrawlerSources(env?: string): CrawlerSource[] {
-  if (!env) return []
-  try {
-    return JSON.parse(env) as CrawlerSource[]
-  } catch {
-    return []
-  }
-}
-
-/**
- * 获取启用的资源站列表：
- * 优先从 crawler_sites 表读取，若表为空则降级到 CRAWLER_SOURCES 环境变量
- */
-export async function getEnabledSources(db: import('pg').Pool): Promise<CrawlerSource[]> {
-  const dbSites = await crawlerSitesQueries.listEnabledCrawlerSites(db)
-  if (dbSites.length > 0) {
-    return dbSites.map((s) => ({
-      name:   s.key,
-      base:   s.apiUrl,
-      format: s.format,
-      ingestPolicy: {
-        allow_auto_publish: s.ingestPolicy.allow_auto_publish,
-        source_update: s.ingestPolicy.source_update,
-      },
-    }))
-  }
-  return parseCrawlerSources(process.env.CRAWLER_SOURCES)
-}
-
-// ── 任务类型 ──────────────────────────────────────────────────────
-
-export type CrawlJobType = 'full-crawl' | 'incremental-crawl'
-
-/** CRAWLER-01: 采集模式（batch=批量/定时，keyword=关键词搜索，source-refetch=单视频补源） */
-export type CrawlJobMode = 'batch' | 'keyword' | 'source-refetch'
-
-export interface CrawlJobData {
-  type: CrawlJobType
-  /** 单站任务对应的源站 key（run/task 模型下必填） */
-  siteKey: string
-  /** 已创建的任务 ID（run/task 模型下必填） */
-  taskId: string
-  /** 批次 ID（run/task 模型下必填） */
-  runId: string
-  /** 增量模式：只采集最近 N 小时更新的内容 */
-  hoursAgo?: number
-  /** CRAWLER-01: 采集模式 */
-  crawlMode?: CrawlJobMode
-  /** CRAWLER-01: 关键词搜索采集的搜索词（crawlMode='keyword' 时使用） */
-  keyword?: string
-  /** CRAWLER-01: 单视频补源目标视频 ID（crawlMode='source-refetch' 时使用） */
-  targetVideoId?: string
-  /** CRAWLER-01: 是否预览模式（不写库，只返回结果） */
-  previewOnly?: boolean
-  /** CRAWLER-01: 限定采集的站点 key 列表（为空时采集所有启用站点） */
-  targetSiteKeys?: string[]
-}
-
-export interface CrawlJobResult {
-  type: CrawlJobType
-  sites: string[]
-  videosUpserted: number
-  sourcesUpserted: number
-  errors: number
-  durationMs: number
-}
+// ── 公开 re-export（外部 import 路径保持不变）──────────────────
+export { parseCrawlerSources, getEnabledSources } from './crawlerWorker.sources'
+export type { CrawlJobType, CrawlJobMode, CrawlJobData, CrawlJobResult } from './crawlerWorker.sources'
+export { enqueueFullCrawl, enqueueIncrementalCrawl } from './crawlerWorker.enqueue'
 
 // ── Worker 处理函数 ───────────────────────────────────────────────
 
@@ -536,50 +476,3 @@ export function registerCrawlerWorker(concurrency = 1): void {
   })
 }
 
-// ── 便捷入队函数 ──────────────────────────────────────────────────
-
-// Bull job 超时上界：单个采集任务最长允许运行 30 分钟。
-// 超时后 Bull 将 job 标记为 failed，worker 可在 failed 事件中更新 DB 状态。
-// 这是硬性保障层，与 crawler_tasks.timeout_at 的软性 watchdog 互补。
-const CRAWLER_JOB_TIMEOUT_MS = 30 * 60 * 1000
-
-interface EnqueueExtras {
-  crawlMode?: CrawlJobMode
-  keyword?: string | null
-  targetVideoId?: string | null
-}
-
-/** 添加全量采集任务到队列（可选指定单站 key） */
-export async function enqueueFullCrawl(
-  siteKey: string,
-  taskId: string,
-  runId: string,
-  extras?: EnqueueExtras,
-): Promise<Bull.Job<CrawlJobData>> {
-  if (!siteKey || !taskId || !runId) {
-    throw new Error('CRAWL_JOB_CONTRACT_INVALID: enqueueFullCrawl requires siteKey/taskId/runId')
-  }
-  const data: CrawlJobData = { type: 'full-crawl', siteKey, taskId, runId }
-  if (extras?.crawlMode) data.crawlMode = extras.crawlMode
-  if (extras?.keyword) data.keyword = extras.keyword
-  if (extras?.targetVideoId) data.targetVideoId = extras.targetVideoId
-  return crawlerQueue.add(data, { timeout: CRAWLER_JOB_TIMEOUT_MS })
-}
-
-/** 添加增量采集任务到队列（默认最近 24 小时，可选指定单站 key） */
-export async function enqueueIncrementalCrawl(
-  siteKey: string,
-  hoursAgo = 24,
-  taskId: string,
-  runId: string,
-  extras?: EnqueueExtras,
-): Promise<Bull.Job<CrawlJobData>> {
-  if (!siteKey || !taskId || !runId) {
-    throw new Error('CRAWL_JOB_CONTRACT_INVALID: enqueueIncrementalCrawl requires siteKey/taskId/runId')
-  }
-  const data: CrawlJobData = { type: 'incremental-crawl', siteKey, taskId, runId, hoursAgo }
-  if (extras?.crawlMode) data.crawlMode = extras.crawlMode
-  if (extras?.keyword) data.keyword = extras.keyword
-  if (extras?.targetVideoId) data.targetVideoId = extras.targetVideoId
-  return crawlerQueue.add(data, { timeout: CRAWLER_JOB_TIMEOUT_MS })
-}
