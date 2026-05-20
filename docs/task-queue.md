@@ -4082,7 +4082,7 @@ PRE-04 16 子卡全部闭环：5 ✅ A 级 + 8 ⚠️ S 级（16 项 MISC 跟踪
 | **CHG-SN-7-MISC-MERGE-2** | merge 候选 card 形态重做（左右视频卡对比 + 影响预览 + 置信度 pill） | 🟡 P2 | 0.5–0.8w | #6 |
 | ✅ **CHG-SN-7-MISC-SUBTITLES-1** 已完成（2026-05-20）| subtitles KPI 4 列补全（消费 KpiCard + 后端 stats 端点扩展 / ADR-133 / 4264 unit PASS） | ✅ | 0.2w | #7 |
 | ✅ **CHG-SN-7-MISC-SUBTITLES-2** 已完成（2026-05-20）| subtitles 上传字幕 action 实装（POST /admin/subtitles / ADR-134 / SubtitleUploadModal / 4266 unit PASS） | ✅ | 0.15w | #7 |
-| **CHG-SN-7-MISC-HOME-1** | home sticky 前台预览实装（1fr/360px 布局 + 右侧 sticky 预览卡） | 🟡 P2 | 0.4–0.6w | #8 |
+| ✅ **CHG-SN-7-MISC-HOME-1** 已完成（2026-05-20）| home sticky 前台预览实装（1fr/360px 布局 + 右侧 sticky 预览卡 / HomePreviewPanel / 4295 unit PASS） | ✅ | 0.4w | #8 |
 | **CHG-SN-7-MISC-HOME-2** | home page__head actions 完整性核实 | 🟢 P3 | 0.05w | #8 |
 | ✅ **CHG-SN-7-MISC-IMAGE-1** 已完成（2026-05-20）| image-health page__head 2 actions（重扫所有封面 / 批量切 fallback 域）+ ADR-135 / SwitchDomainModal / 4279 unit PASS | ✅ | 0.2w | #11 |
 | **CHG-SN-7-MISC-IMAGE-2** | image-health 破损样本 grid 实装（2:3 ratio + danger dashed border + 错误 overlay） | 🟡 P2 | 0.3–0.5w | #11 |

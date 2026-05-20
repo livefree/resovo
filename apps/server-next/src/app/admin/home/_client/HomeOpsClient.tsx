@@ -46,6 +46,7 @@ import type {
 } from '@/lib/home-modules/types'
 import { HomeModuleCard } from './HomeModuleCard'
 import { HomeModuleDrawer } from './HomeModuleDrawer'
+import { HomePreviewPanel } from './HomePreviewPanel'
 
 // ── 常量 ─────────────────────────────────────────────────────────
 
@@ -92,8 +93,16 @@ function tabStyle(active: boolean): CSSProperties {
   }
 }
 
-const SLOT_SECTION_STYLE: CSSProperties = {
+const BODY_SPLIT_STYLE: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '1fr 360px',
+  gap: '12px',
   flex: '1 1 auto',
+  minHeight: 0,
+  alignItems: 'start',
+}
+
+const SLOT_SECTION_STYLE: CSSProperties = {
   overflowY: 'auto',
   minHeight: 0,
 }
@@ -261,70 +270,73 @@ export function HomeOpsClient() {
         ))}
       </nav>
 
-      <div style={SLOT_SECTION_STYLE}>
-        {loading
-          ? <LoadingState variant="skeleton" />
-          : error
-            ? (
-                <ErrorState
-                  error={error}
-                  title="加载失败"
-                  onRetry={() => void loadSlot(activeSlot)}
-                />
-              )
-            : (
-                <AdminCard
-                  surface="plain"
-                  padding="md"
-                  header={{
-                    title: SLOT_LABEL[activeSlot],
-                    subtitle: `${modules.length} 个模块 · 拖拽调整排序`,
-                    actions: (
-                      <AdminButton
-                        variant="default"
-                        size="sm"
-                        onClick={() => void loadSlot(activeSlot)}
-                        data-testid="home-refresh-btn"
-                      >
-                        刷新
-                      </AdminButton>
-                    ),
-                  }}
-                  data-testid={`home-slot-card-${activeSlot}`}
-                >
-                  {modules.length === 0
-                    ? (
-                        <EmptyState
-                          title="暂无模块"
-                          description="点击「新建模块」添加首个运营位"
-                        />
-                      )
-                    : (
-                        <DndContext
-                          collisionDetection={closestCenter}
-                          onDragEnd={(event) => void handleDragEnd(event)}
+      <div style={BODY_SPLIT_STYLE}>
+        <div style={SLOT_SECTION_STYLE}>
+          {loading
+            ? <LoadingState variant="skeleton" />
+            : error
+              ? (
+                  <ErrorState
+                    error={error}
+                    title="加载失败"
+                    onRetry={() => void loadSlot(activeSlot)}
+                  />
+                )
+              : (
+                  <AdminCard
+                    surface="plain"
+                    padding="md"
+                    header={{
+                      title: SLOT_LABEL[activeSlot],
+                      subtitle: `${modules.length} 个模块 · 拖拽调整排序`,
+                      actions: (
+                        <AdminButton
+                          variant="default"
+                          size="sm"
+                          onClick={() => void loadSlot(activeSlot)}
+                          data-testid="home-refresh-btn"
                         >
-                          <SortableContext
-                            items={modules.map(m => m.id)}
-                            strategy={verticalListSortingStrategy}
+                          刷新
+                        </AdminButton>
+                      ),
+                    }}
+                    data-testid={`home-slot-card-${activeSlot}`}
+                  >
+                    {modules.length === 0
+                      ? (
+                          <EmptyState
+                            title="暂无模块"
+                            description="点击「新建模块」添加首个运营位"
+                          />
+                        )
+                      : (
+                          <DndContext
+                            collisionDetection={closestCenter}
+                            onDragEnd={(event) => void handleDragEnd(event)}
                           >
-                            {modules.map(module => (
-                              <HomeModuleCard
-                                key={module.id}
-                                module={module}
-                                pendingId={pendingId}
-                                onEdit={(m) => { setEditingModule(m); setDrawerOpen(true) }}
-                                onDelete={(id) => void handleDelete(id)}
-                                onPublishToggle={(id, enabled) => void handlePublishToggle(id, enabled)}
-                              />
-                            ))}
-                          </SortableContext>
-                        </DndContext>
-                      )
-                  }
-                </AdminCard>
-              )
-        }
+                            <SortableContext
+                              items={modules.map(m => m.id)}
+                              strategy={verticalListSortingStrategy}
+                            >
+                              {modules.map(module => (
+                                <HomeModuleCard
+                                  key={module.id}
+                                  module={module}
+                                  pendingId={pendingId}
+                                  onEdit={(m) => { setEditingModule(m); setDrawerOpen(true) }}
+                                  onDelete={(id) => void handleDelete(id)}
+                                  onPublishToggle={(id, enabled) => void handlePublishToggle(id, enabled)}
+                                />
+                              ))}
+                            </SortableContext>
+                          </DndContext>
+                        )
+                    }
+                  </AdminCard>
+                )
+          }
+        </div>
+        <HomePreviewPanel slot={activeSlot} modules={modules} />
       </div>
 
       <HomeModuleDrawer

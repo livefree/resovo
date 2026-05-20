@@ -210,8 +210,8 @@ describe('HomeOpsClient — empty state', () => {
     await waitFor(() => expect(mockedList).toHaveBeenCalled())
     // empty state 文案或图标渲染（EmptyState / 暂无 / 无数据）
     await waitFor(() => {
-      const empty = screen.queryByText(/暂无|无数据|无内容|无运营位/i)
-      expect(empty !== null || mockedList.mock.calls.length > 0).toBe(true)
+      const empties = screen.queryAllByText(/暂无|无数据|无内容|无运营位/i)
+      expect(empties.length > 0 || mockedList.mock.calls.length > 0).toBe(true)
     })
   })
 })

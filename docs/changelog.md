@@ -13075,3 +13075,24 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
   - dryRun=true（默认）仅 COUNT 不写 audit；dryRun=false 执行写入并记录 audit log
   - SwitchDomainModal 独立文件拆分（ImageHealthClient.tsx 原已 501 行，防超限）
   - rescan scope='all' 重置 broken+missing（不重置 ok，防止无谓全量重扫）
+
+---
+
+## CHG-SN-7-MISC-HOME-1 — home sticky 前台预览实装
+
+- **完成时间**：2026-05-20
+- **任务 ID**：CHG-SN-7-MISC-HOME-1（SEQ-20260507-01 / M-SN-7 MISC #8）
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无（UI 局部改动，无新共享组件 API 契约）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/home/_client/HomeOpsClient.tsx`（布局改为 1fr/360px grid，引入 HomePreviewPanel）
+  - `apps/server-next/src/app/admin/home/_client/HomePreviewPanel.tsx`（新建，sticky 前台预览面板）
+  - `tests/unit/components/server-next/admin/home/HomePreviewPanel.test.tsx`（新建，16 case）
+  - `tests/unit/components/server-next/admin/home/HomeOpsClient.test.tsx`（修复 queryByText → queryAllByText 双匹配）
+- **测试结果**：4295 unit PASS（全量）
+- **ADR**：无（纯 UI 改动，无新端点）
+- **备注**：
+  - HomePreviewPanel 仅消费已加载 modules，无额外 API 调用
+  - 三种 slot 渲染模式：banner（横版缩略）/ type_shortcuts（pills）/ 其他（竖版 poster + rank）
+  - disabled 模块：opacity 0.4 + text-decoration line-through
+  - 零硬编码颜色，全 CSS 变量
