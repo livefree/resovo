@@ -13179,3 +13179,37 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
   - COUNT FILTER 4 项单 SQL，与 ADR-127/133 同模式
   - stats 加载失败不阻断主列表（静默处理，显示「—」占位）
   - KpiCard 使用 @resovo/admin-ui 共享组件，零本地实现
+
+---
+
+## [CHG-SN-7-MISC-PLAYER-CORE-SIZE] Player.tsx + useLayoutDecision 拆分（两包同步）
+
+- **完成时间**：2026-05-20
+- **任务 ID**：CHG-SN-7-MISC-PLAYER-CORE-SIZE（SEQ-20260507-01 / M-SN-7 MISC PRE-01 全量扩）
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-7) — 拆分方案前置审计（PASS）
+- **修改文件（step-1 useLayoutDecision）**：
+  - `packages/player-core/src/hooks/useLayoutDecision.ts`（526→16 行 barrel）
+  - `packages/player-core/src/hooks/useLayoutDecision/index.ts`（主 hook）
+  - `packages/player-core/src/hooks/useLayoutDecision/types.ts`（类型 + 常量）
+  - `packages/player-core/src/hooks/useLayoutDecision/slotFactories.ts`（5 工厂函数）
+  - `packages/player-core/src/hooks/useLayoutDecision/collapsePolicy.ts`（桌面折叠策略）
+  - `packages/player-core/src/hooks/useLayoutDecision/useViewportSignals.ts`（视口信号 hook）
+  - （以上 6 文件同步到 packages/player/src/core/hooks/useLayoutDecision/）
+- **修改文件（step-2 Player.tsx）**：
+  - `packages/player-core/src/Player.tsx`（1091→437 行）
+  - `packages/player-core/src/types.ts`（新增 LoadingState 导出）
+  - `packages/player-core/src/Player/usePlayerState.ts`（新建：所有 useState/useRef/useId）
+  - `packages/player-core/src/Player/usePlayerEffects.ts`（新建：10 个 DOM sync effects）
+  - `packages/player-core/src/Player/usePlayerOrchestration.ts`（新建：全部 hook 编排）
+  - `packages/player-core/src/Player/buildControlContext.ts`（新建：纯函数，controlCtx 组装）
+  - `packages/player-core/src/Player/PlayerOverlays.tsx`（新建：层 2/4/5 子组件）
+  - `packages/player-core/src/Player/PlayerChromeBottom.tsx`（新建：层 9 子组件）
+  - （以上 8 文件同步到 packages/player/src/core/Player/，Player.tsx 对应改为 YTPlayer）
+- **测试结果**：4332 unit PASS（+0，纯重构）
+- **验收**：
+  - 所有文件 ≤ 500 行 ✅
+  - 对外 API 零变化（barrel 保持原有 export）✅
+  - typecheck 全绿 ✅
+  - 14 个导入点零改动 ✅
+  - doSeekRef.current 赋值顺序严格保留（usePlayerOrchestration 中 usePlayerActions 后、useGestureControls 前）✅

@@ -4094,7 +4094,7 @@ PRE-04 16 子卡全部闭环：5 ✅ A 级 + 8 ⚠️ S 级（16 项 MISC 跟踪
 | **CHG-SN-7-MISC-API-ROUTES-SIZE** | apps/api/routes/admin 2 文件主动拆分（crawler.ts 960 / moderation.ts 533） | 🟡 P2 | 0.4–0.6w | PRE-01 全量扩 |
 | **CHG-SN-7-MISC-API-SERVICES-SIZE** | apps/api services + workers 4 文件主动拆分（crawlerWorker 585 / VideoMergesService 523 / DoubanService 511 / SourceParserService 502） | 🟡 P2 | 0.6–0.9w | PRE-01 全量扩 |
 | **CHG-SN-7-MISC-WEB-NEXT-SIZE** | apps/web-next/components/layout/Nav.tsx 580 主动拆分 | 🟢 P3 | 0.15w | PRE-01 全量扩 |
-| **CHG-SN-7-MISC-PLAYER-CORE-SIZE** | packages/player + player-core 4 文件主动拆分（Player.tsx ×2 1091/1085 / useLayoutDecision ×2 526/526；播放器核心改动属高风险，需 arch-reviewer Opus 前置） | 🟠 P1 | 1.5–2.5w | PRE-01 全量扩 |
+| ✅ **CHG-SN-7-MISC-PLAYER-CORE-SIZE** 已完成（2026-05-20）| packages/player + player-core 4 文件主动拆分：step-1 useLayoutDecision（526→16 行 barrel + 5 子文件 ×2 包）/ step-2 Player.tsx（1091→437 / 1085→430；Player/目录 6 子文件：usePlayerState + usePlayerEffects + usePlayerOrchestration + buildControlContext + PlayerOverlays + PlayerChromeBottom）/ 4332 unit PASS / typecheck 全绿 | ✅ | 1.5–2.5w | PRE-01 全量扩 ✅ |
 | **CHG-SN-7-MISC-VISUAL-CRAWLER** | Crawler 视觉回归（dev server + Playwright harness baseline + diff ≤ 2%）—— REDO-01-J 软门 | 🟡 P2 | 0.1w | REDO-01-J 验收 |
 | ✅ **CHG-SN-7-MISC-AUDIT-PARSER** 已完成（2026-05-19）| 实测脚本本身无 bug / 真因是 changelog 历史遗漏 6 项 D 编号引用 → changelog 补全 / 61/61 D-N 全闭环 | 🟢 P3 | 0.05w | REDO-01-J 验收 ✅ |
 | ✅ **CHG-SN-7-MISC-CRAWLER-CSV-EXPORT** 已完成（2026-05-19）| 新建 lib/crawler/csv-export.ts (35 行 / exportCrawlerSitesCsv) + CrawlerClient handleExport 委托调用（28→7 行 / 守卫 491<500）+ 14a/14b 测试拆分 | 🟡 P2 | 0.15w | REDO-01-J 验收 ✅ |
