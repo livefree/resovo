@@ -12828,3 +12828,26 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 - **改动摘要**：M-SN-7 REDO-03-C / Opus arch-reviewer 裁决扩展边界（KV 兼容 8 字段 / API Key 实体化延后）。8 KV 字段全链路落地（types → deserialize → API schema/handler → seed migration）。3 占位 Tab 升级真实表单（NotificationsTab / LoginSessionsTab）或重写 advisory（ApiWebhookTab）。v1 冻结组件 DEFAULT_SETTINGS 同步补全防 typecheck 报错。ADR-126 落地 docs/decisions.md。
 - **测试结果**：typecheck PASS / lint PASS / unit 4190 PASS（+13 新测试 / HeroBanner + StagingEditPanel 2 个预存 flake 与本卡无关）
 - **价值排序自评**：正确性 A / 边界复用 A（AdminCard/AdminInput/AdminCheckbox 复用 / 不越层）/ 扩展性 A（ADR-127/128 扩展路径清晰 / KV 幂等 seed）/ 一致性 A（与 SettingsTab 同模式 / CSS 变量零硬编码）/ 改动收敛 14 文件
+
+## [CHG-SN-7-REDO-04] Staging 路由处置 — 独立路由方案 A（新页面 + ModerationConsole 清理）
+- **完成时间**：2026-05-19
+- **记录时间**：2026-05-19 17:28
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-7) — A vs B 方案裁决（独立路由 vs IA 修订）
+- **修改文件**：
+  - 新建：`apps/server-next/src/lib/staging/api.ts`（6 API 函数 + 完整类型定义 / StagingRow / StagingRules / StagingReadinessSummary）
+  - 新建：`apps/server-next/src/app/admin/staging/page.tsx`（Suspense + Metadata）
+  - 新建：`apps/server-next/src/app/admin/staging/_client/StagingPageClient.tsx`（DataTable v2 / PipelineSummaryCard / AutoPublishRulesCard / 4-segment / 批量发布）
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`（移除 staging tab + redirect effect）
+  - `apps/server-next/src/lib/admin-nav.tsx`（Upload 图标 + 暂存发布导航项）
+  - 新建：`tests/unit/components/server-next/admin/staging/StagingPageClient.test.tsx`（8 test cases / case A-E）
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`（任务收尾三同步）
+- **新增依赖**：无
+- **数据库变更**：无（复用 M-SN-3 已存 staging 端点）
+- **注意事项**：
+  1. 后端 API（apps/api/src/routes/admin/staging.ts）来自 M-SN-3，已完整实装，本卡仅新建前端 lib 封装
+  2. `/admin/moderation?tab=staging` 旧书签通过 redirect effect 自动跳转至 `/admin/staging`
+  3. DataTable v2 使用 mode="client" + 静态 TableQuerySnapshot（无持久化 URL 状态）；如需 URL 状态持久化，使用 useTableQuery 后续扩展
+- **改动摘要**：Opus 裁决方案 A（独立路由）。新建完整 `/admin/staging` 页：PipelineSummaryCard + AutoPublishRulesCard + 4-segment DataTable v2（6 列）。ModerationConsole 移除 staging tab（TabId / tabDefs / render）并添加旧路由 redirect。admin-nav 追加"暂存发布"条目。
+- **测试结果**：typecheck PASS / lint PASS / unit 4198 PASS（+8 新测试）
+- **价值排序自评**：正确性 A / 边界复用 A（DataTable v2 / AdminCard / Segment 复用，无重复实现）/ 扩展性 A（segment filter / DataTable query patch 路径开放）/ 一致性 A（DataTable v2 模式与 CrawlerSiteList 一致 / CSS 变量零硬编码）/ 改动收敛 7 文件

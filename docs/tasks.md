@@ -6,7 +6,40 @@
 
 ## 进行中任务
 
-<!-- REDO-03-C 完成（2026-05-19） -->
+<!-- REDO-04 完成（2026-05-19） -->
+
+### CHG-SN-7-REDO-04 ✅ Staging 路由处置 — 独立路由方案 A（~1.5w 实际）
+
+**SEQ**：M-SN-7 / REDO-04（PRE-04 子卡 #3 ❌ 整页未做触发）
+
+**完成摘要**：
+- Opus arch-reviewer 裁决方案 A（独立路由 `/admin/staging`），理由：Layout 上下文不兼容、状态解耦、IA 完整性
+- 后端 API 已在 M-SN-3 完整实装（staging.ts），REDO-04-A 子卡跳过
+- 新建 `apps/server-next/src/lib/staging/api.ts`（6 API 函数 / 完整类型定义）
+- 新建 `apps/server-next/src/app/admin/staging/page.tsx` + `_client/StagingPageClient.tsx`（DataTable v2 / PipelineSummaryCard / AutoPublishRulesCard / 4-segment）
+- 改 `ModerationConsole.tsx`：移除 staging tab + 添加 `/admin/staging` redirect effect
+- 改 `admin-nav.tsx`：Upload 图标 + 暂存发布导航项
+- 新建 `tests/unit/components/server-next/admin/staging/StagingPageClient.test.tsx`（8 test cases）
+
+**六问自检**：
+1. 是否引入回归？否 / 4198 unit PASS（+8）/ lint PASS / typecheck PASS
+2. 是否越层调用？否 / lib/staging/api.ts → apiClient 标准路径
+3. 是否使用 any / 空 catch？否
+4. 是否硬编码颜色？否 / 全部 CSS 变量
+5. 是否新增未授权端点？否 / 后端端点复用 M-SN-3 已授权端点
+6. 是否同步 docs？是 / task-queue 更新 / changelog 追加
+
+**[AI-CHECK]**：
+- ✅ TableColumn v2 接口（id/header/accessor/cell）完全对齐 / DataTable v2 mode="client" + query + onQueryChange 正确接入
+- ✅ PageHeader `actions` + AdminCard header `actions`（非 trailing）
+- ✅ ModerationConsole TabId 移除 staging / redirect effect 防止旧书签失效
+- ✅ 无新 admin route（复用已授权端点）→ verify:endpoint-adr 门禁不触发
+
+**执行模型**：claude-sonnet-4-6（主循环）
+
+**子代理调用**：arch-reviewer (claude-opus-4-7) — A vs B 方案裁决
+
+<!-- REDO-03-D 完成（2026-05-19） -->
 
 ### CHG-SN-7-REDO-03-C ✅ 后端 settings 端点字段扩展 + ADR-126（0.3w 实际）
 

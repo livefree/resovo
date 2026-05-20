@@ -7,7 +7,6 @@ import type { RejectModalSubmitPayload } from '@resovo/admin-ui'
 import type { VideoQueueRow, ReviewLabel } from '@resovo/types'
 import { ModListRow } from './ModListRow'
 import { PendingCenter } from './PendingCenter'
-import { StagingTabContent } from './StagingTabContent'
 import { RejectedTabContent } from './RejectedTabContent'
 import { RightPane } from './RightPane'
 import { FilterPresetPopover } from './FilterPresetPopover'
@@ -20,10 +19,10 @@ import type { FilterPreset, FilterPresetQuery, FilterPresetTab } from '@/lib/mod
 
 // ── Types & constants ──────────────────────────────────────────────
 
-type TabId = 'pending' | 'staging' | 'rejected'
+type TabId = 'pending' | 'rejected'
 
 const PAGE_HEIGHT = 'calc(100vh - var(--topbar-h) - 32px)'
-const VALID_TABS: readonly TabId[] = ['pending', 'staging', 'rejected']
+const VALID_TABS: readonly TabId[] = ['pending', 'rejected']
 
 // ── Styles ────────────────────────────────────────────────────────
 
@@ -99,6 +98,10 @@ export function ModerationConsole(): React.ReactElement {
   const searchParams = useSearchParams()
   const router = useRouter()
   const rawTab = searchParams.get('tab') ?? 'pending'
+  // staging tab 已迁移至独立路由 /admin/staging（REDO-04-C）
+  useEffect(() => {
+    if (rawTab === 'staging') router.replace('/admin/staging')
+  }, [rawTab, router])
   const tab = (VALID_TABS as readonly string[]).includes(rawTab) ? (rawTab as TabId) : 'pending'
 
   const [pendingVideos, setPendingVideos] = useState<VideoQueueRow[]>([])
@@ -121,7 +124,7 @@ export function ModerationConsole(): React.ReactElement {
   const [savePresetOpen, setSavePresetOpen] = useState(false)
   const [toast, setToast] = useState<{ message: string; undo?: () => void; key: number } | null>(null)
   const presetAnchorRef = useRef<HTMLDivElement>(null)
-  const presetTab: FilterPresetTab = tab === 'pending' || tab === 'staging' || tab === 'rejected' ? tab : 'pending'
+  const presetTab: FilterPresetTab = tab === 'pending' || tab === 'rejected' ? tab : 'pending'
   const { applicablePresets, defaultPreset, save: savePreset, remove: removePreset, restore: restorePreset, setDefault: setPresetDefault, update: updatePreset } = useFilterPresets(presetTab)
 
   const tabRef = useRef<TabId>(tab)
@@ -341,10 +344,9 @@ export function ModerationConsole(): React.ReactElement {
     return () => window.removeEventListener('keydown', handleKey)
   }, [handleKey])
 
-  const tabCounts = { pending: totalPending, staging: 0, rejected: 0 }
+  const tabCounts = { pending: totalPending, rejected: 0 }
   const tabDefs: readonly { id: TabId; label: string; danger?: boolean }[] = [
     { id: 'pending', label: M.tabs.pending },
-    { id: 'staging', label: M.tabs.staging },
     { id: 'rejected', label: M.tabs.rejected, danger: true },
   ]
 
@@ -501,7 +503,6 @@ export function ModerationConsole(): React.ReactElement {
             />
           )
         )}
-        {tab === 'staging' && <StagingTabContent />}
         {tab === 'rejected' && <RejectedTabContent />}
       </div>
 

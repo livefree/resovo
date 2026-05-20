@@ -42,6 +42,7 @@
 import {
   Layers,
   Inbox,
+  Upload,
   Film,
   Link2,
   Merge,
@@ -65,6 +66,7 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
     items: [
       { label: '管理台站', href: '/admin', icon: <Layers />, shortcut: 'mod+1' },
       { label: '内容审核', href: '/admin/moderation', icon: <Inbox />, count: 484, badge: 'warn', shortcut: 'mod+2' },
+      { label: '暂存发布', href: '/admin/staging', icon: <Upload /> },
     ],
   },
   {
