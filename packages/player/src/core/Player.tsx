@@ -11,60 +11,19 @@
  *   5  popup-panels               settings / speed / episodes / subtitles
  *   6  settings-menu              sub-panel of (5)
  *   9  gradient-bottom + chrome-bottom  progress-bar + controls
- *
- * Global tooltip singleton mirrors ytp-tooltip (single div, data-attribute driven).
- * Controls split into ytp-left-controls / ytp-right-controls-left / ytp-right-controls-right.
- * Progress bar has three sub-systems: normal track, hover preview, fine-scrubbing.
- * Seek animation uses two independent divs: ytp-seek-overlay-animation-back / forward.
  */
 
-import {
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useMemo } from "react";
 import s from "./Player.module.css";
-import { type PlayerProps, type SeekDirection, type Panel } from "./types";
-import {
-  clamp,
-  formatTime,
-  qualityBadgeLabel,
-  resolveQualityHeight,
-  SEEK_STEP,
-} from "./utils/format";
-import { useThumbnails } from "./hooks/useThumbnails";
-import { useSourceLoader } from "./hooks/useSourceLoader";
-import { useProgressInteractions } from "./hooks/useProgressInteractions";
-import { useGestureControls } from "./hooks/useGestureControls";
-import { useChromeVisibility } from "./hooks/useChromeVisibility";
-import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
-import { useSystemIntegrations } from "./hooks/useSystemIntegrations";
-import { useLayoutDecision } from "./hooks/useLayoutDecision";
-import {
-  buildOverlayEntries,
-  useOverlayManager,
-} from "./hooks/useOverlayManager";
-import { useInputRouter } from "./hooks/useInputRouter";
-import { usePlayerActions } from "./hooks/usePlayerActions";
-import {
-  renderControl,
-  type ControlRenderContext,
-} from "./controls/ControlRenderer";
-import { Spinner } from "./components/Spinner";
-import { SeekOverlay } from "./components/SeekOverlay";
-import { Bezel } from "./components/Bezel";
-import { EpisodesPanel } from "./components/EpisodesPanel";
-import { SettingsPanel } from "./components/SettingsPanel";
-import { SpeedPanel } from "./components/SpeedPanel";
-import { ProgressBar } from "./components/ProgressBar";
+import { type PlayerProps } from "./types";
+import { resolveQualityHeight } from "./utils/format";
+import { usePlayerState } from "./Player/usePlayerState";
+import { usePlayerEffects } from "./Player/usePlayerEffects";
+import { usePlayerOrchestration } from "./Player/usePlayerOrchestration";
+import { buildControlContext } from "./Player/buildControlContext";
+import { PlayerOverlays } from "./Player/PlayerOverlays";
+import { PlayerChromeBottom } from "./Player/PlayerChromeBottom";
 import { ControlSlot } from "./components/ControlSlot";
-import { MuteIcon, PlayIcon, PauseIcon, NextIcon } from "./components/icons";
-
-type LoadingState = "idle" | "initial" | "buffering";
-
-// ─── Main Component ───────────────────────────────────────────────────────────
 
 export function YTPlayer({
   src,
@@ -91,288 +50,75 @@ export function YTPlayer({
   keepControlsVisible = false,
   thumbnailTrack,
 }: PlayerProps) {
-  const playerRef = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const autoplayContextRef = useRef<"implicit" | "user-initiated">("implicit");
-  const settingsButtonRef = useRef<HTMLButtonElement>(null);
-  const speedButtonRef = useRef<HTMLButtonElement>(null);
-  const episodesButtonRef = useRef<HTMLButtonElement>(null);
-  const prevOpenPanelRef = useRef<Panel | null>(null);
-  const prevEpisodesOpenRef = useRef(false);
+  const state = usePlayerState({
+    initialVolume,
+    startTime,
+    defaultTheaterMode,
+    activeEpisodeIndex,
+    subtitles,
+    thumbnailTrack,
+  });
 
-  // ── Panels ─────────────────────────────────────────────────────────────────
-  const [openPanel, setOpenPanel] = useState<Panel>(null);
-  const settingsPanelRef = useRef<HTMLDivElement>(null);
-  const speedPanelRef = useRef<HTMLDivElement>(null);
-
-  // ── Playback state ─────────────────────────────────────────────────────────
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(startTime ?? 0);
-  const [duration, setDuration] = useState(0);
-  const [buffered, setBuffered] = useState(0);
-  const [loadingState, setLoadingState] = useState<LoadingState>("idle");
-  const [error, setError] = useState<string | null>(null);
-
-  // ── Volume ─────────────────────────────────────────────────────────────────
-  const [volume, setVolume] = useState(initialVolume);
-  const [prevVolume, setPrevVolume] = useState(initialVolume);
-  const [isMuted, setIsMuted] = useState(false);
-  const [volumeVisible, setVolumeVisible] = useState(false);
-  const volumeTimeoutRef = useRef<number | null>(null);
-
-  // ── Speed ──────────────────────────────────────────────────────────────────
-  const [playbackRate, setPlaybackRate] = useState(1);
-
-  // ── Subtitles ──────────────────────────────────────────────────────────────
-  const [activeSubId, setActiveSubId] = useState<string | null>(
-    subtitles.find((sub) => sub.default)?.id ?? null,
-  );
-  const [subtitleCue, setSubtitleCue] = useState("");
-
-  // ── UI state ───────────────────────────────────────────────────────────────
-  const [isTheater, setIsTheater] = useState(defaultTheaterMode);
-
-  // ── Seek animation (layer 4) ───────────────────────────────────────────────
-  const [seekDir, setSeekDir] = useState<SeekDirection>(null);
-  const seekTimerRef = useRef<number | null>(null);
-
-  // ── Bezel (center play/pause flash) ───────────────────────────────────────
-  const [bezelVisible, setBezelVisible] = useState(false);
-  const [bezelPaused, setBezelPaused] = useState(true);
-  const bezelTimerRef = useRef<number | null>(null);
-
-  // ── Muted-autoplay state ───────────────────────────────────────────────────
-  const [showUnmute, setShowUnmute] = useState(false);
-
-  // ── Video intrinsic size (for auto/adaptive quality display) ──────────────
-  const [videoHeight, setVideoHeight] = useState(0);
-
-  const progressRailRef = useRef<HTMLDivElement>(null);
-  const progressContainerRef = useRef<HTMLDivElement>(null);
-  const { getThumbnailAt } = useThumbnails(thumbnailTrack);
-
-  // ── Episodes panel ─────────────────────────────────────────────────────────
-  const [isEpisodesOpen, setIsEpisodesOpen] = useState(false);
-  const [focusedEpisodeIndex, setFocusedEpisodeIndex] =
-    useState(activeEpisodeIndex);
-  const episodesPanelRef = useRef<HTMLDivElement>(null);
-
-  const [showRemaining, setShowRemaining] = useState(false);
-
-  const sliderId = useId();
-  const settingsPanelId = useId();
-  const speedPanelId = useId();
-  const episodesPanelId = useId();
-
-  // ── doSeek ref: breaks circular dep between useSystemIntegrations and
-  //    usePlayerActions (useSystemIntegrations receives a stable wrapper that
-  //    always delegates to the latest doSeek produced by usePlayerActions).
-  const doSeekRef = useRef<(delta: number, dir?: SeekDirection) => void>(
-    () => {},
+  const orch = usePlayerOrchestration(
+    {
+      src, qualities, activeQualityId, onQualityChange,
+      subtitles, title, author, poster, chapters, onNext,
+      episodes, activeEpisodeIndex, onEpisodeChange, onTheaterChange,
+      startTime, autoplay, keepControlsVisible, thumbnailTrack,
+    },
+    state,
   );
 
-  const { isFullscreen, airPlayAvailable } = useSystemIntegrations({
-    videoRef,
-    title,
-    author,
-    poster,
-    onNext,
-    isPlaying,
-    duration,
-    playbackRate,
-    currentTime,
-    setCurrentTime,
-    doSeek: (delta, dir) => doSeekRef.current(delta, dir),
-    setIsPlaying,
-  });
-
-  const hasEpisodes = (episodes?.length ?? 0) > 0;
-  const hasNext = !!onNext;
-  const hasSettingsContent =
-    qualities.length > 0 ||
-    subtitles.length > 0 ||
-    resolveQualityHeight(
-      qualities.find((q) => q.id === activeQualityId)?.label ?? null,
-      videoHeight,
-    ) !== null;
-  const layoutDecision = useLayoutDecision({
-    playerRef,
-    isFullscreen,
-    isTheater,
-    episodesCount: episodes?.length ?? 0,
-    hasEpisodes,
-    hasNext,
-  });
-
-  const { chromeVisible, cursorHidden, revealChrome } = useChromeVisibility({
-    chromeVisibilityPolicy: layoutDecision.chromeVisibilityPolicy,
-    isPlaying,
-    openPanel,
-    isEpisodesOpen,
-    keepControlsVisible,
-  });
+  usePlayerEffects(state, subtitles, orch.hasSettingsContent);
 
   const {
-    hoverTime,
-    hoverX,
-    isProgressScrubbing,
-    progressScrubActiveRef,
-    handleProgressHover,
-    handleProgressTouchStart,
-    handleProgressTouchMove,
-    handleProgressTouchEnd,
-    handleProgressPointerDown,
-    handleProgressPointerMove,
-    handleProgressPointerUp,
-    handleProgressMouseLeave,
-  } = useProgressInteractions({
-    duration,
-    videoRef,
-    progressRailRef,
-    revealChrome,
-    setCurrentTime,
-  });
+    playerRef, videoRef,
+    currentTime, setCurrentTime, duration, setDuration,
+    buffered, setBuffered, loadingState, setLoadingState,
+    error, setError, isPlaying, setIsPlaying,
+    isMuted, setIsMuted, setShowUnmute,
+    videoHeight, setVideoHeight,
+    seekDir, bezelPaused, showUnmute,
+    openPanel, setOpenPanel,
+    isEpisodesOpen, setIsEpisodesOpen,
+    episodesPanelRef, settingsPanelRef, speedPanelRef,
+    episodesPanelId, settingsPanelId, speedPanelId,
+    activeSubId, setActiveSubId,
+    subtitleCue, showRemaining, setShowRemaining,
+    sliderId, volume, playbackRate,
+    volumeVisible, setPlaybackRate,
+    focusedEpisodeIndex, setFocusedEpisodeIndex,
+    progressRailRef, progressContainerRef,
+    getThumbnailAt,
+    settingsButtonRef, speedButtonRef, episodesButtonRef,
+  } = state;
 
-  const { retrySourceLoad } = useSourceLoader({
-    videoRef,
-    autoplayContextRef,
-    src,
-    startTime,
-    autoplay,
-    setError,
-    setLoadingState,
-    setCurrentTime,
-    setDuration,
-    setBuffered,
-    setIsPlaying,
-    setIsMuted,
-    setShowUnmute,
-  });
+  const {
+    isFullscreen, airPlayAvailable,
+    hasEpisodes, hasNext, hasSettingsContent,
+    layoutDecision, chromeVisible, cursorHidden, revealChrome,
+    hoverTime, hoverX, isProgressScrubbing, progressScrubActiveRef,
+    handleProgressHover, handleProgressTouchStart, handleProgressTouchMove,
+    handleProgressTouchEnd, handleProgressPointerDown, handleProgressPointerMove,
+    handleProgressPointerUp, handleProgressMouseLeave,
+    retrySourceLoad, togglePlay, doSeek, changeVolume, toggleMute,
+    revealVolumeSlider, toggleFullscreen, toggleTheater, cycleSubtitles,
+    handleProgressClick, togglePip, triggerAirPlay, handleEpisodeChange,
+    touchSeekDelta, handleTouchStart, handleTouchMove, handleTouchEnd, handleGestureClick,
+    blocksGestures, overlayLayout, topOverlay, isOverlayVisible, inputRouter,
+  } = orch;
 
-  // ─── Volume & rate sync ────────────────────────────────────────────────────
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    v.volume = volume;
-    v.muted = isMuted;
-  }, [volume, isMuted]);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const syncVolumeState = () => {
-      setVolume(video.volume);
-      setIsMuted(video.muted);
-      if (!video.muted) setShowUnmute(false);
-    };
-
-    video.addEventListener("volumechange", syncVolumeState);
-    return () => video.removeEventListener("volumechange", syncVolumeState);
-  }, []);
-
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    v.playbackRate = playbackRate;
-  }, [playbackRate]);
-
-  // ─── Subtitles ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const cleanups: (() => void)[] = [];
-    Array.from(video.textTracks).forEach((track) => {
-      const sub = subtitles.find((st) => st.srclang === track.language);
-      if (sub && sub.id === activeSubId) {
-        track.mode = "hidden";
-        const onCue = () => {
-          const cue = track.activeCues?.[0] as VTTCue | undefined;
-          setSubtitleCue(cue?.text ?? "");
-        };
-        track.addEventListener("cuechange", onCue);
-        cleanups.push(() => track.removeEventListener("cuechange", onCue));
-      } else {
-        track.mode = "disabled";
-      }
-    });
-    return () => cleanups.forEach((fn) => fn());
-  }, [activeSubId, subtitles]);
-
-  // ─── Outside-click to close panels ────────────────────────────────────────
-  useEffect(() => {
-    if (!openPanel) return;
-    const onDown = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (
-        !settingsPanelRef.current?.contains(target) &&
-        !speedPanelRef.current?.contains(target) &&
-        !target.closest('[data-ytp-component="settings-btn"]') &&
-        !target.closest('[data-ytp-component="speed-btn"]')
-      ) {
-        setOpenPanel(null);
-      }
-    };
-    window.addEventListener("mousedown", onDown);
-    return () => window.removeEventListener("mousedown", onDown);
-  }, [openPanel]);
-
-  useEffect(() => {
-    if (!hasSettingsContent && openPanel === "settings") {
-      setOpenPanel(null);
-    }
-  }, [hasSettingsContent, openPanel]);
-
-  // ─── Outside-click to close episodes panel ─────────────────────────────────
-  useEffect(() => {
-    if (!isEpisodesOpen) return;
-    const onDown = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (
-        !episodesPanelRef.current?.contains(target) &&
-        !target.closest('[data-ytp-component="episodes-btn"]')
-      )
-        setIsEpisodesOpen(false);
-    };
-    window.addEventListener("mousedown", onDown);
-    return () => window.removeEventListener("mousedown", onDown);
-  }, [isEpisodesOpen]);
-
-  // ─── Scroll focused episode cell into view ─────────────────────────────────
-  useEffect(() => {
-    if (!isEpisodesOpen) return;
-    episodesPanelRef.current
-      ?.querySelector<HTMLElement>("[data-ep-focused]")
-      ?.scrollIntoView({ block: "nearest" });
-  }, [focusedEpisodeIndex, isEpisodesOpen]);
-
-  useEffect(() => {
-    if (prevOpenPanelRef.current && !openPanel) {
-      if (prevOpenPanelRef.current === "speed") {
-        speedButtonRef.current?.focus();
-      } else {
-        settingsButtonRef.current?.focus();
-      }
-    }
-    prevOpenPanelRef.current = openPanel;
-  }, [openPanel]);
-
-  useEffect(() => {
-    if (prevEpisodesOpenRef.current && !isEpisodesOpen) {
-      episodesButtonRef.current?.focus();
-    }
-    prevEpisodesOpenRef.current = isEpisodesOpen;
-  }, [isEpisodesOpen]);
-
-  // ─── Computed values ───────────────────────────────────────────────────────
-  const progressPct = duration > 0 ? (currentTime / duration) * 100 : 0;
-  const activeQualityLabel =
-    qualities.find((q) => q.id === activeQualityId)?.label ?? null;
+  const activeQualityLabel = qualities.find((q) => q.id === activeQualityId)?.label ?? null;
   const resolvedQualityHeight = resolveQualityHeight(activeQualityLabel, videoHeight);
   const showQualityBadge =
-    resolvedQualityHeight !== null &&
-    layoutDecision.panels.sizingMode === "stable";
+    resolvedQualityHeight !== null && layoutDecision.panels.sizingMode === "stable";
+  const progressPct = duration > 0 ? (currentTime / duration) * 100 : 0;
   const bufferedPct = duration > 0 ? (buffered / duration) * 100 : 0;
+  const displayPct =
+    isProgressScrubbing && hoverTime !== null && duration > 0
+      ? (hoverTime / duration) * 100
+      : progressPct;
+
   const activeChapter = useMemo(() => {
     if (!chapters.length) return null;
     for (let i = chapters.length - 1; i >= 0; i--) {
@@ -391,145 +137,6 @@ export function YTPlayer({
     return null;
   }, [chapters, hoverTime]);
 
-  // ─── Gesture blocking pre-computation ─────────────────────────────────────
-  const gestureBlockingOverlayVisible = buildOverlayEntries({
-    chromeVisible,
-    loadingState,
-    error,
-    hasTopChrome:
-      (layoutDecision.slots["top-left"].includes("title") && !!(title || author)) ||
-      layoutDecision.slots["top-right"].length > 0,
-    showBezel: bezelVisible,
-    seekVisible: seekDir !== null,
-    showTouchSeekIndicator: false,
-    showCaptions: !!subtitleCue && !!activeSubId,
-    showUnmute,
-    openPanel: !!openPanel,
-    isEpisodesOpen,
-    settingsPlacement: layoutDecision.placements.settingsPanel,
-    episodesPlacement: layoutDecision.placements.episodesPanel,
-  }).some((entry) => entry.visible && entry.blocksGestures);
-
-  // ─── Actions ───────────────────────────────────────────────────────────────
-  const {
-    togglePlay,
-    doSeek,
-    changeVolume,
-    toggleMute,
-    revealVolumeSlider,
-    toggleFullscreen,
-    toggleTheater,
-    cycleSubtitles,
-    handleProgressClick,
-    togglePip,
-    triggerAirPlay,
-    handleEpisodeChange,
-  } = usePlayerActions({
-    videoRef,
-    playerRef,
-    progressRailRef,
-    volumeTimeoutRef,
-    seekTimerRef,
-    bezelTimerRef,
-    autoplayContextRef,
-    isTheater,
-    volume,
-    prevVolume,
-    isMuted,
-    subtitles,
-    activeSubId,
-    setIsPlaying,
-    setCurrentTime,
-    setVolume,
-    setPrevVolume,
-    setIsMuted,
-    setVolumeVisible,
-    setIsTheater,
-    setOpenPanel,
-    setSeekDir,
-    setBezelVisible,
-    setBezelPaused,
-    setShowUnmute,
-    setActiveSubId,
-    onTheaterChange,
-    onEpisodeChange,
-    revealChrome,
-  });
-
-  // Update the doSeek ref so useSystemIntegrations always delegates to the
-  // latest doSeek implementation without recreating its effect.
-  doSeekRef.current = doSeek;
-
-  const {
-    touchSeekDelta,
-    handleTouchStart,
-    handleTouchMove,
-    handleTouchEnd,
-    handleGestureClick,
-  } = useGestureControls({
-    allowVolumeGesture: !layoutDecision.mode.startsWith("mobile"),
-    playerRef,
-    gesturesBlocked: gestureBlockingOverlayVisible,
-    revealChrome,
-    togglePlay,
-    changeVolume,
-    doSeek,
-    volume,
-  });
-
-  const {
-    blocksGestures,
-    overlayLayout,
-    topOverlay,
-    isVisible: isOverlayVisible,
-  } = useOverlayManager({
-    chromeVisible,
-    loadingState,
-    error,
-    hasTopChrome:
-      (layoutDecision.slots["top-left"].includes("title") && !!(title || author)) ||
-      layoutDecision.slots["top-right"].length > 0,
-    showBezel: bezelVisible,
-    seekVisible: seekDir !== null,
-    showTouchSeekIndicator: touchSeekDelta !== null,
-    showCaptions: !!subtitleCue && !!activeSubId,
-    showUnmute,
-    openPanel: !!openPanel,
-    isEpisodesOpen,
-    settingsPlacement: layoutDecision.placements.settingsPanel,
-    episodesPlacement: layoutDecision.placements.episodesPanel,
-  });
-
-  const inputRouter = useInputRouter({
-    blocksGestures,
-    chromeVisible,
-    interactionPolicy: layoutDecision.interactionPolicy,
-    keepControlsVisible,
-  });
-
-  useKeyboardShortcuts({
-    volume,
-    isEpisodesOpen,
-    focusedEpisodeIndex,
-    episodes,
-    episodesCols: layoutDecision.panels.episodes.cols,
-    activeEpisodeIndex,
-    hasEpisodes,
-    onEpisodeChange,
-    onNext,
-    togglePlay,
-    doSeek: (delta) => doSeek(delta),
-    changeVolume,
-    toggleMute,
-    toggleFullscreen,
-    toggleTheater,
-    cycleSubtitles,
-    setPlaybackRate,
-    setFocusedEpisodeIndex,
-    setIsEpisodesOpen,
-  });
-
-  // ─── Chapter markers ──────────────────────────────────────────────────────
   const chapterMarkers = useMemo(() => {
     if (!chapters.length || !duration) return [];
     return chapters.slice(1).map((ch) => ({
@@ -538,124 +145,39 @@ export function YTPlayer({
     }));
   }, [chapters, duration]);
 
-  // ─── Scrubber display position ────────────────────────────────────────────
-  const displayPct =
-    isProgressScrubbing && hoverTime !== null && duration > 0
-      ? (hoverTime / duration) * 100
-      : progressPct;
-
-  // ─── Render helpers ────────────────────────────────────────────────────────
-  const effectiveVolume = isMuted ? 0 : volume;
-
   const toggleEpisodes = () =>
     setIsEpisodesOpen((value) => {
       if (!value) setFocusedEpisodeIndex(activeEpisodeIndex);
       return !value;
     });
 
-  const topControlsGap =
-    layoutDecision.viewportBand === "compact" ||
-    layoutDecision.viewportBand === "narrow" ||
-    layoutDecision.viewportBand === "phone-portrait"
-      ? "10"
-      : "8";
+  const {
+    controlCtx, topControlsGap, topRightControls,
+    playControl, showTimeAboveProgress, bottomLeftControls,
+    bottomRightControls, centerOverlayControls, edgeRightControls,
+    showCenterTouchControls, hasTopInteractiveControls,
+    showNextEpisodesGroup, nextControl, episodesControl,
+  } = buildControlContext({
+    isPlaying, isFullscreen, isTheater: state.isTheater,
+    currentTime, duration, showRemaining, setShowRemaining,
+    isMuted, volume, volumeVisible, sliderId, playbackRate,
+    openPanel, setOpenPanel, settingsPanelId, speedPanelId, episodesPanelId,
+    hasSettingsContent, subtitles, activeSubId, activeChapter,
+    hasEpisodes, hasNext, isEpisodesOpen, airPlayAvailable,
+    settingsButtonRef, speedButtonRef, episodesButtonRef,
+    layoutDecision,
+    togglePlay, toggleMute, changeVolume, toggleFullscreen,
+    toggleTheater: () => toggleTheater(), toggleEpisodes,
+    togglePip, cycleSubtitles, triggerAirPlay, revealVolumeSlider,
+    handleProgressClick, onNext,
+  });
 
-  // ─── Control render context ────────────────────────────────────────────────
-  const controlCtx: ControlRenderContext = {
-    isPlaying,
-    isFullscreen,
-    isTheater,
-    currentTime,
-    duration,
-    showRemaining,
-    setShowRemaining,
-    isMuted,
-    volume,
-    effectiveVolume,
-    volumeVisible,
-    sliderId,
-    playbackRate,
-    showSpeedIcon: layoutDecision.panels.speed.showButtonIcon,
-    openPanel,
-    setOpenPanel,
-    settingsPanelId,
-    speedPanelId,
-    episodesPanelId,
-    hasSettingsContent,
-    subtitles,
-    activeSubId,
-    activeChapter,
-    hasEpisodes,
-    hasNext,
-    isEpisodesOpen,
-    airPlayAvailable,
-    settingsButtonRef,
-    speedButtonRef,
-    episodesButtonRef,
-    slots: layoutDecision.slots,
-    togglePlay,
-    toggleMute,
-    toggleFullscreen,
-    toggleTheater,
-    toggleEpisodes,
-    togglePip,
-    cycleSubtitles,
-    triggerAirPlay,
-    revealVolumeSlider,
-    changeVolume,
-    handleProgressClick,
-    onNext,
-  };
-
-  // ─── Slot renders ──────────────────────────────────────────────────────────
-  const topRightControls = layoutDecision.slots["top-right"]
-    .map((c) => renderControl(c, controlCtx))
-    .filter(Boolean);
-  const bottomLeftSlot = layoutDecision.slots["bottom-left"];
-  const playControl = bottomLeftSlot.includes("play")
-    ? renderControl("play", controlCtx)
-    : null;
-  const showTimeAboveProgress =
-    layoutDecision.interactionPolicy === "phone-touch" &&
-    bottomLeftSlot.includes("time");
-  const bottomLeftControls = bottomLeftSlot
-    .filter(
-      (control) =>
-        control !== "play" &&
-        control !== "next" &&
-        control !== "episodes" &&
-        !(showTimeAboveProgress && control === "time"),
-    )
-    .map((c) => renderControl(c, controlCtx))
-    .filter(Boolean);
-  const bottomRightControls = layoutDecision.slots["bottom-right"]
-    .map((c) => renderControl(c, controlCtx))
-    .filter(Boolean);
-  const centerOverlayControls = layoutDecision.slots["center-overlay"]
-    .map((c) => renderControl(c, controlCtx))
-    .filter(Boolean);
-  const edgeRightControls = layoutDecision.slots["edge-right"]
-    .map((c) => renderControl(c, controlCtx))
-    .filter(Boolean);
-  const showCenterTouchControls =
-    layoutDecision.interactionPolicy !== "desktop-pointer";
-  const hasTopInteractiveControls = topRightControls.length > 0;
-  const showNextEpisodesGroup =
-    bottomLeftSlot.includes("next") || bottomLeftSlot.includes("episodes");
-  const nextControl = bottomLeftSlot.includes("next")
-    ? renderControl("next", controlCtx)
-    : null;
-  const episodesControl = bottomLeftSlot.includes("episodes")
-    ? renderControl("episodes", controlCtx)
-    : null;
-
-  // ─── Player class ─────────────────────────────────────────────────────────
   const playerClass = [
     s.moviePlayer,
     s.ytpTransparent,
     isPlaying ? s.playingMode : s.pausedMode,
     chromeVisible || keepControlsVisible ? "" : s.ytpAutohide,
-    isTheater ? s.ytpTheater : "",
+    state.isTheater ? s.ytpTheater : "",
     isFullscreen ? s.ytpFullscreen : "",
     cursorHidden ? s.ytpCursorHidden : "",
     openPanel || isEpisodesOpen ? s.ytpAnyPanelOpen : "",
@@ -668,7 +190,6 @@ export function YTPlayer({
     src.includes(".m3u8") &&
     videoRef.current?.canPlayType("application/vnd.apple.mpegurl") === "";
 
-  // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div
       ref={playerRef}
@@ -683,12 +204,8 @@ export function YTPlayer({
       data-top-controls-gap={topControlsGap}
       data-interaction-policy={layoutDecision.interactionPolicy}
       data-chrome-policy={layoutDecision.chromePolicy}
-      data-chrome-pause-behavior={
-        layoutDecision.chromeVisibilityPolicy.pausedBehavior
-      }
-      data-chrome-hide-delay={String(
-        layoutDecision.chromeVisibilityPolicy.hideDelayMs,
-      )}
+      data-chrome-pause-behavior={layoutDecision.chromeVisibilityPolicy.pausedBehavior}
+      data-chrome-hide-delay={String(layoutDecision.chromeVisibilityPolicy.hideDelayMs)}
       data-layout-width={layoutDecision.constraints.width}
       data-layout-height={layoutDecision.constraints.height}
       data-loading-state={loadingState}
@@ -742,9 +259,7 @@ export function YTPlayer({
             if (b.length > 0) setBuffered(b.end(b.length - 1));
           }}
           onWaiting={() =>
-            setLoadingState((value) =>
-              value === "initial" ? value : "buffering",
-            )
+            setLoadingState((value) => (value === "initial" ? value : "buffering"))
           }
           onCanPlay={() => setLoadingState("idle")}
           onError={() => {
@@ -792,201 +307,55 @@ export function YTPlayer({
         </div>
       ) : null}
 
-      {/* ── Layer 5: muted-autoplay unmute prompt ─────────────────────────── */}
-      {isOverlayVisible("unmute-prompt") && (
-        <div
-          className={[
-            s.ytpUnmutePrompt,
-            overlayLayout.promptPlacement === "below-top-chrome-right"
-              ? s.ytpUnmutePromptBelowTopChrome
-              : "",
-            overlayLayout.promptPlacement === "below-top-chrome-left"
-              ? s.ytpUnmutePromptBelowTopChromeLeft
-              : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          data-layer="5"
-        >
-          <button
-            className={s.ytpUnmuteButton}
-            aria-label="Unmute"
-            onClick={() => {
-              const v = videoRef.current;
-              if (!v) return;
-              v.muted = false;
-              setIsMuted(false);
-              setShowUnmute(false);
-            }}
-          >
-            <MuteIcon />
-            <span className={s.ytpUnmuteLabel}>Tap to unmute</span>
-          </button>
-        </div>
-      )}
-
-      {/* ── Layer 4: spinner ──────────────────────────────────────────────── */}
-      <Spinner visible={isOverlayVisible("spinner")} state={loadingState} />
-
-      {/* ── Layer 4: seek overlay animation ──────────────────────────────── */}
-      <SeekOverlay
-        direction={isOverlayVisible("seek-indicator") ? seekDir : null}
-        seconds={SEEK_STEP}
-      />
-
-      {/* ── Layer 4: bezel (center flash) ────────────────────────────────── */}
-      <Bezel visible={isOverlayVisible("bezel")} paused={bezelPaused} />
-
-      {/* ── Layer 4: touch seek indicator ────────────────────────────────── */}
-      {isOverlayVisible("touch-seek") && touchSeekDelta !== null && (
-        <div
-          className={s.ytpTouchSeekIndicator}
-          data-layer="4"
-          aria-hidden="true"
-        >
-          <span className={s.ytpTouchSeekDelta}>
-            {touchSeekDelta >= 0 ? "+" : ""}
-            {Math.round(touchSeekDelta)}s
-          </span>
-          <span className={s.ytpTouchSeekTarget}>
-            → {formatTime(clamp(currentTime + touchSeekDelta, 0, duration))}
-          </span>
-        </div>
-      )}
-
-      {/* ── Layer 4: error banner ─────────────────────────────────────────── */}
-      {isOverlayVisible("error") && error && (
-        <div className={s.ytpErrorDisplay} data-layer="4" role="alert">
-          <div className={s.ytpErrorContent}>
-            <svg viewBox="0 0 24 24" width="48" height="48" aria-hidden="true">
-              <path
-                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
-                fill="white"
-              />
-            </svg>
-            <p>{error}</p>
-            <button
-              className={s.ytpErrorRetry}
-              onClick={() => {
-                retrySourceLoad();
-              }}
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Layer 4: subtitle cue ─────────────────────────────────────────── */}
-      {isOverlayVisible("captions") && subtitleCue && activeSubId && (
-        <div
-          className={[
-            s.ytpCaptionsWindow,
-            overlayLayout.captionPlacement === "above-chrome"
-              ? s.ytpCaptionsWindowAbove
-              : "",
-            overlayLayout.captionPlacement === "raised-for-bottom-overlay"
-              ? s.ytpCaptionsWindowRaised
-              : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          data-layer="4"
-          aria-live="polite"
-        >
-          <span
-            className={s.ytpCaptionSegment}
-            dangerouslySetInnerHTML={{ __html: subtitleCue }}
-          />
-        </div>
-      )}
-
-      {/* ── Layer 5: episodes panel ───────────────────────────────────────── */}
-      <EpisodesPanel
-        panelRef={episodesPanelRef}
-        panelId={episodesPanelId}
+      {/* ── Layers 4 + 5: overlays, panels, touch controls ───────────────── */}
+      <PlayerOverlays
+        layoutDecision={layoutDecision}
+        overlayLayout={overlayLayout}
+        isOverlayVisible={isOverlayVisible}
+        seekDir={seekDir}
+        touchSeekDelta={touchSeekDelta}
+        bezelPaused={bezelPaused}
+        loadingState={loadingState}
+        currentTime={currentTime}
+        duration={duration}
+        error={error}
+        retrySourceLoad={retrySourceLoad}
+        subtitleCue={subtitleCue}
+        activeSubId={activeSubId}
+        videoRef={videoRef}
+        setIsMuted={setIsMuted}
+        setShowUnmute={setShowUnmute}
+        episodesPanelRef={episodesPanelRef}
+        episodesPanelId={episodesPanelId}
         episodes={episodes}
-        isOpen={isEpisodesOpen}
-        placement={layoutDecision.placements.episodesPanel}
-        viewportBand={layoutDecision.viewportBand}
-        panelSizingMode={layoutDecision.panels.sizingMode}
-        episodesCols={layoutDecision.panels.episodes.cols}
-        maxHeight={layoutDecision.panels.episodes.maxHeight}
+        isEpisodesOpen={isEpisodesOpen}
         activeEpisodeIndex={activeEpisodeIndex}
         focusedEpisodeIndex={focusedEpisodeIndex}
-        onEpisodeChange={handleEpisodeChange}
-        onFocusEpisode={setFocusedEpisodeIndex}
-        onClose={() => setIsEpisodesOpen(false)}
-      />
-
-      {/* ── Layer 5: settings panel ───────────────────────────────────────── */}
-      <SettingsPanel
-        panelRef={settingsPanelRef}
-        panelId={settingsPanelId}
+        handleEpisodeChange={handleEpisodeChange}
+        setFocusedEpisodeIndex={setFocusedEpisodeIndex}
+        setIsEpisodesOpen={setIsEpisodesOpen}
+        settingsPanelRef={settingsPanelRef}
+        settingsPanelId={settingsPanelId}
         openPanel={openPanel}
-        placement={layoutDecision.placements.settingsPanel}
-        viewportBand={layoutDecision.viewportBand}
-        panelSizingMode={layoutDecision.panels.sizingMode}
+        setOpenPanel={setOpenPanel}
         qualities={qualities}
         activeQualityId={activeQualityId}
         onQualityChange={onQualityChange}
         subtitles={subtitles}
-        activeSubId={activeSubId}
-        onSubtitleChange={setActiveSubId}
-        onOpenPanel={setOpenPanel}
-        onRequestClose={() => setOpenPanel(null)}
+        setActiveSubId={setActiveSubId}
         resolvedQualityHeight={resolvedQualityHeight}
+        speedPanelRef={speedPanelRef}
+        speedPanelId={speedPanelId}
+        playbackRate={playbackRate}
+        setPlaybackRate={setPlaybackRate}
+        centerOverlayControls={centerOverlayControls}
+        edgeRightControls={edgeRightControls}
+        showCenterTouchControls={showCenterTouchControls}
+        isPlaying={isPlaying}
+        hasNext={hasNext}
+        togglePlay={togglePlay}
+        onNext={onNext}
       />
-
-      {openPanel === "speed" && (
-        <SpeedPanel
-          panelRef={speedPanelRef}
-          panelId={speedPanelId}
-          placement={layoutDecision.placements.speedPanel}
-          playbackRate={playbackRate}
-          viewportBand={layoutDecision.viewportBand}
-          panelSizingMode={layoutDecision.panels.sizingMode}
-          onPlaybackRateChange={setPlaybackRate}
-          onRequestClose={() => setOpenPanel(null)}
-        />
-      )}
-
-      {centerOverlayControls.length > 0 && (
-        <div className={s.ytpCenterControls} data-layer="9">
-          <ControlSlot slot="center-overlay">{centerOverlayControls}</ControlSlot>
-        </div>
-      )}
-
-      {/* ── Mobile: center play/next overlay (circular, no tooltip) ──── */}
-      {showCenterTouchControls && (
-        <div className={s.ytpCenterTouchArea} aria-hidden="true">
-          <button
-            className={`${s.ytpCenterTouchBtn} ${s.ytpCenterTouchPlay}`}
-            tabIndex={-1}
-            onClick={togglePlay}
-          >
-            {isPlaying ? <PauseIcon /> : <PlayIcon />}
-          </button>
-          {hasNext && (
-            <button
-              className={`${s.ytpCenterTouchBtn} ${s.ytpCenterTouchNext}`}
-              tabIndex={-1}
-              onClick={onNext}
-            >
-              <NextIcon />
-            </button>
-          )}
-        </div>
-      )}
-
-      {edgeRightControls.length > 0 && (
-        <div className={s.ytpEdgeRight} data-layer="9">
-          <ControlSlot slot="edge-right">{edgeRightControls}</ControlSlot>
-        </div>
-      )}
-
-      {/* ── Layer 9: gradient bottom ──────────────────────────────────────── */}
-      <div className={s.ytpGradientBottom} data-layer="9" aria-hidden="true" />
 
       {/* ── Layer 3: gesture layer (click / touch) ────────────────────────── */}
       <div
@@ -1017,69 +386,45 @@ export function YTPlayer({
         ))}
       </div>
 
+      {/* ── Layer 9: gradient bottom ──────────────────────────────────────── */}
+      <div className={s.ytpGradientBottom} data-layer="9" aria-hidden="true" />
+
       {/* ── Layer 9: chrome bottom ────────────────────────────────────────── */}
-      <div className={s.ytpChromeBottom} data-layer="9">
-        {/* ── Touch: time display above progress bar ───────────────────────── */}
-        {showTimeAboveProgress && (
-          <div className={s.ytpTimeAboveProgress}>
-            {renderControl("time", controlCtx)}
-          </div>
-        )}
-        {/* ── Progress bar container ──────────────────────────────────────── */}
-        <ProgressBar
-          progressContainerRef={progressContainerRef}
-          progressRailRef={progressRailRef}
-          progressScrubActiveRef={progressScrubActiveRef}
-          isScrubbing={isProgressScrubbing}
-          duration={duration}
-          currentTime={currentTime}
-          bufferedPct={bufferedPct}
-          displayPct={displayPct}
-          hoverTime={hoverTime}
-          hoverX={hoverX}
-          hoverChapterTitle={hoverChapter?.title}
-          chapterMarkers={chapterMarkers}
-          getThumbnailAt={getThumbnailAt}
-          handlePointerDown={handleProgressPointerDown}
-          handlePointerMove={handleProgressPointerMove}
-          handlePointerUp={handleProgressPointerUp}
-          handleProgressHover={handleProgressHover}
-          handleMouseLeave={handleProgressMouseLeave}
-          handleProgressTouchStart={handleProgressTouchStart}
-          handleProgressTouchMove={handleProgressTouchMove}
-          handleProgressTouchEnd={handleProgressTouchEnd}
-          handleProgressClick={handleProgressClick}
-          onSeekStep={doSeek}
-        />
-
-        {/* ── Controls ───────────────────────────────────────────────────── */}
-        <div className={s.ytpChromeControls}>
-          <ControlSlot className={s.ytpLeftControls} slot="bottom-left">
-            {playControl}
-            {showNextEpisodesGroup && (
-              <div
-                className={s.ytpNextEpisodesGroup}
-                data-ytp-component="next-episodes-group"
-              >
-                {nextControl}
-                {episodesControl}
-              </div>
-            )}
-            {bottomLeftControls}
-          </ControlSlot>
-
-          <div className={s.ytpChromeControlsRight}>
-            {showQualityBadge && resolvedQualityHeight !== null && (
-              <div className={s.ytpQualityBadge} aria-hidden="true">
-                {qualityBadgeLabel(resolvedQualityHeight)}
-              </div>
-            )}
-            <ControlSlot className={s.ytpRightControls} slot="bottom-right">
-              {bottomRightControls}
-            </ControlSlot>
-          </div>
-        </div>
-      </div>
+      <PlayerChromeBottom
+        showTimeAboveProgress={showTimeAboveProgress}
+        controlCtx={controlCtx}
+        progressContainerRef={progressContainerRef}
+        progressRailRef={progressRailRef}
+        progressScrubActiveRef={progressScrubActiveRef}
+        isProgressScrubbing={isProgressScrubbing}
+        duration={duration}
+        currentTime={currentTime}
+        bufferedPct={bufferedPct}
+        displayPct={displayPct}
+        hoverTime={hoverTime}
+        hoverX={hoverX}
+        hoverChapterTitle={hoverChapter?.title}
+        chapterMarkers={chapterMarkers}
+        getThumbnailAt={getThumbnailAt}
+        handleProgressPointerDown={handleProgressPointerDown}
+        handleProgressPointerMove={handleProgressPointerMove}
+        handleProgressPointerUp={handleProgressPointerUp}
+        handleProgressHover={handleProgressHover}
+        handleProgressMouseLeave={handleProgressMouseLeave}
+        handleProgressTouchStart={handleProgressTouchStart}
+        handleProgressTouchMove={handleProgressTouchMove}
+        handleProgressTouchEnd={handleProgressTouchEnd}
+        handleProgressClick={handleProgressClick}
+        doSeek={doSeek}
+        playControl={playControl}
+        showNextEpisodesGroup={showNextEpisodesGroup}
+        nextControl={nextControl}
+        episodesControl={episodesControl}
+        bottomLeftControls={bottomLeftControls}
+        showQualityBadge={showQualityBadge}
+        resolvedQualityHeight={resolvedQualityHeight}
+        bottomRightControls={bottomRightControls}
+      />
     </div>
   );
 }

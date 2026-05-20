@@ -88,3 +88,4 @@ export interface PlayerProps {
 
 export type SeekDirection = "forward" | "back" | null;
 export type Panel = "settings" | "quality" | "subtitles" | "speed" | null;
+export type LoadingState = "idle" | "initial" | "buffering";
