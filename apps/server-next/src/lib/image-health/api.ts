@@ -55,6 +55,25 @@ export interface BackfillResult {
   readonly message: string
 }
 
+export type RescanScope = 'all' | 'broken_only' | 'missing_only'
+
+export interface RescanResult {
+  readonly updatedCount: number
+  readonly enqueued: boolean
+  readonly scope: RescanScope
+}
+
+export interface SwitchDomainResult {
+  readonly dryRun: boolean
+  readonly affectedRows: number
+  readonly affectedColumns: number
+  readonly breakdown: {
+    readonly cover_url: number
+    readonly backdrop_url: number
+    readonly banner_backdrop_url: number
+  }
+}
+
 export async function getImageHealthStats(): Promise<ImageHealthStats> {
   const result = await apiClient.get<{ data: ImageHealthStats }>('/admin/image-health/stats')
   return result.data
@@ -83,5 +102,22 @@ export async function listMissingVideos(
 
 export async function triggerImageBackfill(): Promise<BackfillResult> {
   const result = await apiClient.post<{ data: BackfillResult }>('/admin/image-health/backfill', {})
+  return result.data
+}
+
+export async function triggerImageRescan(scope: RescanScope = 'broken_only'): Promise<RescanResult> {
+  const result = await apiClient.post<{ data: RescanResult }>('/admin/image-health/rescan', { scope })
+  return result.data
+}
+
+export async function switchImageFallbackDomain(
+  fromDomain: string,
+  toDomain: string,
+  dryRun: boolean,
+): Promise<SwitchDomainResult> {
+  const result = await apiClient.post<{ data: SwitchDomainResult }>(
+    '/admin/image-health/switch-fallback-domain',
+    { fromDomain, toDomain, dryRun },
+  )
   return result.data
 }

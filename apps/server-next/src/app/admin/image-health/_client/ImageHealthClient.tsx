@@ -28,14 +28,18 @@ import {
   type TableColumn,
   type TableSortState,
 } from '@resovo/admin-ui'
+import { SwitchDomainModal } from './SwitchDomainModal'
 import {
   getImageHealthStats,
   getTopBrokenDomains,
   listMissingVideos,
   triggerImageBackfill,
+  triggerImageRescan,
+  switchImageFallbackDomain,
   type ImageHealthStats,
   type BrokenDomainRow,
   type MissingVideoRow,
+  type SwitchDomainResult,
 } from '@/lib/image-health/api'
 
 // ── 常量 ──────────────────────────────────────────────────────────
@@ -276,6 +280,9 @@ export function ImageHealthClient() {
   const [loading, setLoading] = useState(true)
   const [backfillPending, setBackfillPending] = useState(false)
 
+  const [rescanPending, setRescanPending] = useState(false)
+  const [switchDomainOpen, setSwitchDomainOpen] = useState(false)
+
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [sort, setSort] = useState<TableSortState>({ field: 'created_at', direction: 'desc' })
@@ -318,6 +325,42 @@ export function ImageHealthClient() {
   }, [page, pageSize, sort, retryKey])
 
   const refresh = useCallback(() => setRetryKey((k) => k + 1), [])
+
+  const handleRescan = useCallback(async () => {
+    setRescanPending(true)
+    try {
+      const result = await triggerImageRescan('broken_only')
+      toast.push({
+        title: '重扫已触发',
+        description: `已重置 ${result.updatedCount} 条封面，backfill 任务已入队`,
+        level: 'success',
+      })
+      refresh()
+    } catch (err: unknown) {
+      toast.push({
+        title: '重扫触发失败',
+        description: err instanceof Error ? err.message : '请稍后重试',
+        level: 'danger',
+      })
+    } finally {
+      setRescanPending(false)
+    }
+  }, [toast, refresh])
+
+  const handleSwitchDomainPreview = useCallback(async (fromDomain: string, toDomain: string) => {
+    return switchImageFallbackDomain(fromDomain, toDomain, true)
+  }, [])
+
+  const handleSwitchDomainConfirm = useCallback(async (fromDomain: string, toDomain: string) => {
+    await switchImageFallbackDomain(fromDomain, toDomain, false)
+    setSwitchDomainOpen(false)
+    toast.push({
+      title: '域名切换完成',
+      description: `已将 ${fromDomain} 替换为 ${toDomain}`,
+      level: 'success',
+    })
+    refresh()
+  }, [toast, refresh])
 
   const handleBackfill = useCallback(async () => {
     setBackfillPending(true)
@@ -365,6 +408,13 @@ export function ImageHealthClient() {
   )
 
   return (
+    <>
+    <SwitchDomainModal
+      open={switchDomainOpen}
+      onClose={() => setSwitchDomainOpen(false)}
+      onPreview={handleSwitchDomainPreview}
+      onConfirm={handleSwitchDomainConfirm}
+    />
     <div data-image-health-client style={PAGE_STYLE}>
       <PageHeader
         title="图片健康"
@@ -379,6 +429,23 @@ export function ImageHealthClient() {
               data-testid="image-health-backfill"
             >
               触发 Backfill
+            </AdminButton>
+            <AdminButton
+              variant="default"
+              size="sm"
+              loading={rescanPending}
+              onClick={() => void handleRescan()}
+              data-testid="image-health-rescan"
+            >
+              重扫所有封面
+            </AdminButton>
+            <AdminButton
+              variant="default"
+              size="sm"
+              onClick={() => setSwitchDomainOpen(true)}
+              data-testid="image-health-switch-domain"
+            >
+              批量切 fallback 域
             </AdminButton>
             <AdminButton
               variant="default"
@@ -497,5 +564,6 @@ export function ImageHealthClient() {
         </AdminCard>
       </div>
     </div>
+    </>
   )
 }

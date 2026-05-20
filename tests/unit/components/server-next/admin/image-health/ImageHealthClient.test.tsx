@@ -25,6 +25,8 @@ const getImageHealthStatsMock = vi.fn()
 const getTopBrokenDomainsMock = vi.fn()
 const listMissingVideosMock = vi.fn()
 const triggerImageBackfillMock = vi.fn()
+const triggerImageRescanMock = vi.fn()
+const switchImageFallbackDomainMock = vi.fn()
 const toastPushMock = vi.fn()
 
 vi.mock('../../../../../../apps/server-next/src/lib/image-health/api', () => ({
@@ -32,6 +34,8 @@ vi.mock('../../../../../../apps/server-next/src/lib/image-health/api', () => ({
   getTopBrokenDomains: (...args: unknown[]) => getTopBrokenDomainsMock(...args),
   listMissingVideos: (...args: unknown[]) => listMissingVideosMock(...args),
   triggerImageBackfill: (...args: unknown[]) => triggerImageBackfillMock(...args),
+  triggerImageRescan: (...args: unknown[]) => triggerImageRescanMock(...args),
+  switchImageFallbackDomain: (...args: unknown[]) => switchImageFallbackDomainMock(...args),
 }))
 
 vi.mock('@resovo/admin-ui', async () => {
@@ -108,6 +112,8 @@ beforeEach(() => {
   getTopBrokenDomainsMock.mockReset()
   listMissingVideosMock.mockReset()
   triggerImageBackfillMock.mockReset()
+  triggerImageRescanMock.mockReset()
+  switchImageFallbackDomainMock.mockReset()
   toastPushMock.mockReset()
 })
 
@@ -319,6 +325,32 @@ describe('ImageHealthClient', () => {
       expect(Array.from(lastSeenCells).some((el) => /\dh 前/.test(el.textContent ?? ''))).toBe(true)
       // null → "—"
       expect(Array.from(lastSeenCells).filter((el) => el.textContent === '—').length).toBe(2)
+    })
+  })
+
+  it('17. 重扫封面按钮点击 → toast success（ADR-135）', async () => {
+    getImageHealthStatsMock.mockResolvedValue(STATS_FIXTURE)
+    getTopBrokenDomainsMock.mockResolvedValue(EMPTY_DOMAINS)
+    listMissingVideosMock.mockResolvedValue(EMPTY_MISSING)
+    triggerImageRescanMock.mockResolvedValueOnce({ updatedCount: 12, enqueued: true, scope: 'broken_only' })
+    render(<ImageHealthClient />)
+    await waitFor(() => screen.getByTestId('image-health-rescan'))
+    fireEvent.click(screen.getByTestId('image-health-rescan'))
+    await waitFor(() => {
+      expect(triggerImageRescanMock).toHaveBeenCalledWith('broken_only')
+      expect(toastPushMock).toHaveBeenCalledWith(expect.objectContaining({ level: 'success', title: '重扫已触发' }))
+    })
+  })
+
+  it('18. 批量切 fallback 域按钮 → 打开 SwitchDomainModal', async () => {
+    getImageHealthStatsMock.mockResolvedValue(STATS_FIXTURE)
+    getTopBrokenDomainsMock.mockResolvedValue(EMPTY_DOMAINS)
+    listMissingVideosMock.mockResolvedValue(EMPTY_MISSING)
+    render(<ImageHealthClient />)
+    await waitFor(() => screen.getByTestId('image-health-switch-domain'))
+    fireEvent.click(screen.getByTestId('image-health-switch-domain'))
+    await waitFor(() => {
+      expect(screen.getByTestId('switch-domain-modal')).not.toBeNull()
     })
   })
 })

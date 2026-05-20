@@ -520,6 +520,118 @@ export async function getBrokenEventsTrend(
   return points
 }
 
+// ── 运营 Action：重扫封面 + 切换 fallback 域（ADR-135）────────────
+
+export type RescanScope = 'all' | 'broken_only' | 'missing_only'
+
+export interface RescanPostersResult {
+  updatedCount: number
+}
+
+/**
+ * 将指定 scope 的 poster_status 重置为 pending_review，供 backfill worker 重新入队。
+ * 'broken_only' → 仅 broken；'missing_only' → 仅 missing；'all' → broken + missing。
+ * 不重置已为 pending_review 或 ok 的记录。
+ */
+export async function rescanPosters(
+  db: Pool,
+  scope: RescanScope = 'broken_only',
+): Promise<RescanPostersResult> {
+  const statusFilter: string[] =
+    scope === 'broken_only'  ? ['broken'] :
+    scope === 'missing_only' ? ['missing'] :
+    ['broken', 'missing']
+
+  const result = await db.query(
+    `UPDATE media_catalog
+     SET poster_status = 'pending_review', updated_at = NOW()
+     WHERE poster_status = ANY($1::text[])
+       AND cover_url IS NOT NULL`,
+    [statusFilter],
+  )
+  return { updatedCount: result.rowCount ?? 0 }
+}
+
+export interface SwitchFallbackDomainResult {
+  dryRun: boolean
+  affectedRows: number
+  affectedColumns: number
+  breakdown: {
+    cover_url: number
+    backdrop_url: number
+    banner_backdrop_url: number
+  }
+}
+
+/**
+ * 批量替换 media_catalog 三列中的 CDN 域名。
+ * 使用 '://' || domain || '/' 精确匹配，避免子域或部分域名误替换。
+ * dryRun=true：仅 COUNT，不写入；dryRun=false：执行 UPDATE。
+ */
+export async function switchFallbackDomain(
+  db: Pool,
+  fromDomain: string,
+  toDomain: string,
+  dryRun: boolean,
+): Promise<SwitchFallbackDomainResult> {
+  const countResult = await db.query<{
+    total_rows: string
+    cover_url_count: string
+    backdrop_url_count: string
+    banner_backdrop_url_count: string
+  }>(
+    `SELECT
+       COUNT(*) FILTER (
+         WHERE strpos(cover_url, '://' || $1 || '/') > 0
+            OR strpos(backdrop_url, '://' || $1 || '/') > 0
+            OR strpos(banner_backdrop_url, '://' || $1 || '/') > 0
+       )::int AS total_rows,
+       COUNT(*) FILTER (WHERE strpos(cover_url, '://' || $1 || '/') > 0)::int AS cover_url_count,
+       COUNT(*) FILTER (WHERE strpos(backdrop_url, '://' || $1 || '/') > 0)::int AS backdrop_url_count,
+       COUNT(*) FILTER (WHERE strpos(banner_backdrop_url, '://' || $1 || '/') > 0)::int AS banner_backdrop_url_count
+     FROM media_catalog`,
+    [fromDomain],
+  )
+
+  const row = countResult.rows[0]
+  const breakdown = {
+    cover_url:          parseInt(row?.cover_url_count ?? '0'),
+    backdrop_url:       parseInt(row?.backdrop_url_count ?? '0'),
+    banner_backdrop_url: parseInt(row?.banner_backdrop_url_count ?? '0'),
+  }
+  const affectedRows = parseInt(row?.total_rows ?? '0')
+  const affectedColumns = Object.values(breakdown).filter((c) => c > 0).length
+
+  if (!dryRun && affectedRows > 0) {
+    await db.query(
+      `UPDATE media_catalog
+       SET
+         cover_url = CASE
+           WHEN strpos(cover_url, '://' || $1 || '/') > 0
+           THEN REPLACE(cover_url, '://' || $1 || '/', '://' || $2 || '/')
+           ELSE cover_url
+         END,
+         backdrop_url = CASE
+           WHEN strpos(backdrop_url, '://' || $1 || '/') > 0
+           THEN REPLACE(backdrop_url, '://' || $1 || '/', '://' || $2 || '/')
+           ELSE backdrop_url
+         END,
+         banner_backdrop_url = CASE
+           WHEN strpos(banner_backdrop_url, '://' || $1 || '/') > 0
+           THEN REPLACE(banner_backdrop_url, '://' || $1 || '/', '://' || $2 || '/')
+           ELSE banner_backdrop_url
+         END,
+         updated_at = NOW()
+       WHERE strpos(cover_url, '://' || $1 || '/') > 0
+          OR strpos(backdrop_url, '://' || $1 || '/') > 0
+          OR strpos(banner_backdrop_url, '://' || $1 || '/') > 0`,
+      [fromDomain, toDomain],
+    )
+  }
+
+  return { dryRun, affectedRows, affectedColumns, breakdown }
+}
+
 /** 标记事件为已处理 */
 export async function resolveImageEvents(
   db: Pool | PoolClient,

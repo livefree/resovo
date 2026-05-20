@@ -74,6 +74,9 @@ const REQUIRED_ACTION_TYPES = [
   'crawler_site.category_mapping_update',
   // CHG-SN-7-REDO-02-A / ADR-124：用户投稿 4 路径合并 actionType（R-MID-1 第 15 次）
   'user_submission.action',
+  // CHG-SN-7-MISC-IMAGE-1 / ADR-135：图片健康 rescan + domain 切换 audit（R-MID-1 第 16 次）
+  'image_health.rescan',
+  'image_health.switch_domain',
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -139,6 +142,9 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   'crawler_site.category_mapping_update',
   // CHG-SN-7-REDO-02-A / ADR-124：用户投稿 4 路径 audit payload 内容断言
   'user_submission.action',
+  // CHG-SN-7-MISC-IMAGE-1 / ADR-135：图片健康 rescan + domain 切换（R-MID-1 第 16 次）
+  'image_health.rescan',
+  'image_health.switch_domain',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

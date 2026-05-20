@@ -8608,3 +8608,82 @@ const CreateAdminSubtitleSchema = z.object({
 - ADR-100 R7 MUST-8（admin route ADR 前置门禁）
 - ADR-133（字幕 KPI stats 端点 — adminCreate 不增 pendingCount）
 - CHG-SN-7-MISC-SUBTITLES-2
+
+---
+
+## ADR-135：图片健康运营 Actions（rescan + switch-fallback-domain）
+
+**状态**：已通过（Opus CONDITIONAL PASS 2026-05-20 / CHG-SN-7-MISC-IMAGE-1）
+**日期**：2026-05-20
+**关联任务**：CHG-SN-7-MISC-IMAGE-1（SEQ-20260507-01 / M-SN-7 MISC）
+
+### 1. 问题背景
+
+`/admin/image-health` 页面 PageHeader 仅有「触发 Backfill」「刷新」2 个按钮，缺少：
+
+1. 将 broken/missing 封面**重新入队健康检查**的快速触发操作
+2. 批量将某 CDN 域名替换为备用域名（fallback 切换）的运营工具
+
+### 2. 决策
+
+新增 2 个 POST 端点（admin 权限），补全运营 actions：
+
+- `POST /admin/image-health/rescan`：按 scope 将 poster_status 重置为 `pending_review` 后触发 backfill 入队
+- `POST /admin/image-health/switch-fallback-domain`：dryRun 模式返回影响行数预览，实际执行时批量 REPLACE 域名
+
+### 端点契约
+
+| # | Method | Path | 权限 | Body 参数 | Response `data` 字段 | ADR |
+|---|--------|------|------|-----------|---------------------|-----|
+| 1 | POST | `/admin/image-health/rescan` | admin | `scope: 'all'\|'broken_only'\|'missing_only'`（default `broken_only`） | `{ updatedCount: number, enqueued: boolean, scope: string }` | ADR-135 |
+| 2 | POST | `/admin/image-health/switch-fallback-domain` | admin | `fromDomain: string, toDomain: string, dryRun: boolean`（default `true`） | `{ dryRun: boolean, affectedRows: number, affectedColumns: number, breakdown: { cover_url: number, backdrop_url: number, banner_backdrop_url: number } }` | ADR-135 |
+
+### 4. Zod Schema
+
+```typescript
+// rescan
+const RescanBodySchema = z.object({
+  scope: z.enum(['all', 'broken_only', 'missing_only']).default('broken_only'),
+})
+
+// switch-fallback-domain
+const SwitchDomainBodySchema = z.object({
+  fromDomain: z.string().min(3).max(253),
+  toDomain:   z.string().min(3).max(253),
+  dryRun:     z.boolean().default(true),
+})
+```
+
+### 5. scope 语义
+
+| scope | 重置目标 poster_status |
+|-------|----------------------|
+| `broken_only` | `'broken'` |
+| `missing_only` | `'missing'` |
+| `all` | `'broken'` 或 `'missing'`（不重置 'ok'/'pending_review'） |
+
+### 6. 域名替换安全性
+
+使用 `REPLACE(col, '://' || fromDomain || '/', '://' || toDomain || '/')` 精确匹配 `://domain/` 前缀，避免子域或部分域名误替换。同时 `dryRun=true`（默认）仅 COUNT 不写入，操作者二次确认后以 `dryRun=false` 执行。
+
+### 7. Audit Log
+
+两端点均写 `admin_audit_log`：
+
+| 端点 | actionType | targetKind | afterJsonb |
+|------|-----------|-----------|-----------|
+| rescan | `image_health.rescan` | `image_health` | `{ scope, updatedCount, enqueued }` |
+| switch-fallback-domain | `image_health.switch_domain` | `image_health` | `{ fromDomain, toDomain, dryRun, affectedRows }` |
+
+### 8. 错误码
+
+| CODE | HTTP | 触发条件 |
+|------|------|----------|
+| `VALIDATION_ERROR` | 400 | zod 校验失败 |
+| `INTERNAL_ERROR` | 500 | DB 操作失败 / worker 入队失败 |
+
+### 9. 关联
+
+- ADR-100 R7 MUST-8（admin route ADR 前置门禁）
+- ADR-109（admin_audit_log）
+- CHG-SN-7-MISC-IMAGE-1

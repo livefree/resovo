@@ -2,10 +2,12 @@
  * admin/image-health.ts — 图片健康监控 API
  * IMG-05: admin only
  *
- * GET  /admin/image-health/stats          — 总览统计
- * GET  /admin/image-health/broken-domains — TOP 破损域名
- * GET  /admin/image-health/missing-videos — 缺图视频列表（分页）
- * POST /admin/image-health/backfill       — 手动触发存量 pending_review 回填（CHORE-09）
+ * GET  /admin/image-health/stats                  — 总览统计
+ * GET  /admin/image-health/broken-domains         — TOP 破损域名
+ * GET  /admin/image-health/missing-videos         — 缺图视频列表（分页）
+ * POST /admin/image-health/backfill               — 手动触发存量 pending_review 回填（CHORE-09）
+ * POST /admin/image-health/rescan                 — 重扫封面（ADR-135）
+ * POST /admin/image-health/switch-fallback-domain — 批量切 fallback 域（ADR-135）
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -16,9 +18,12 @@ import {
   getTopBrokenDomains,
   listMissingPosterVideos,
   getBrokenEventsTrend,
+  rescanPosters,
+  switchFallbackDomain,
 } from '@/api/db/queries/imageHealth'
 import type { MissingVideoSortField, SortDir } from '@/api/db/queries/imageHealth'
 import { enqueueBackfillJob } from '@/api/workers/imageBackfillWorker'
+import { insertAuditLog } from '@/api/db/queries/auditLog'
 
 const BrokenDomainsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
@@ -101,6 +106,77 @@ export async function adminImageHealthRoutes(fastify: FastifyInstance) {
       process.stderr.write(`[POST /admin/image-health/backfill] 500: ${msg}\n`)
       return reply.code(500).send({
         error: { code: 'INTERNAL_ERROR', message: `触发失败：${msg}`, status: 500 },
+      })
+    }
+  })
+
+  // ── POST /admin/image-health/rescan（ADR-135）──────────────────
+  const RescanBodySchema = z.object({
+    scope: z.enum(['all', 'broken_only', 'missing_only']).default('broken_only'),
+  })
+
+  fastify.post('/admin/image-health/rescan', { preHandler: auth }, async (request, reply) => {
+    const parsed = RescanBodySchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Invalid body', status: 400 },
+      })
+    }
+    const { scope } = parsed.data
+    try {
+      const rescanResult = await rescanPosters(db, scope)
+      await enqueueBackfillJob()
+      await insertAuditLog(db, {
+        actorId: request.user!.userId,
+        actionType: 'image_health.rescan',
+        targetKind: 'image_health',
+        afterJsonb: { scope, updatedCount: rescanResult.updatedCount, enqueued: true },
+        requestId: request.id,
+      })
+      return reply.send({
+        data: { updatedCount: rescanResult.updatedCount, enqueued: true, scope },
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[POST /admin/image-health/rescan] 500: ${msg}\n`)
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: `操作失败：${msg}`, status: 500 },
+      })
+    }
+  })
+
+  // ── POST /admin/image-health/switch-fallback-domain（ADR-135）──
+  const SwitchDomainBodySchema = z.object({
+    fromDomain: z.string().min(3).max(253),
+    toDomain:   z.string().min(3).max(253),
+    dryRun:     z.boolean().default(true),
+  })
+
+  fastify.post('/admin/image-health/switch-fallback-domain', { preHandler: auth }, async (request, reply) => {
+    const parsed = SwitchDomainBodySchema.safeParse(request.body)
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Invalid body', status: 400 },
+      })
+    }
+    const { fromDomain, toDomain, dryRun } = parsed.data
+    try {
+      const switchResult = await switchFallbackDomain(db, fromDomain, toDomain, dryRun)
+      if (!dryRun) {
+        await insertAuditLog(db, {
+          actorId: request.user!.userId,
+          actionType: 'image_health.switch_domain',
+          targetKind: 'image_health',
+          afterJsonb: { fromDomain, toDomain, dryRun, affectedRows: switchResult.affectedRows },
+          requestId: request.id,
+        })
+      }
+      return reply.send({ data: switchResult })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      process.stderr.write(`[POST /admin/image-health/switch-fallback-domain] 500: ${msg}\n`)
+      return reply.code(500).send({
+        error: { code: 'INTERNAL_ERROR', message: `操作失败：${msg}`, status: 500 },
       })
     }
   })

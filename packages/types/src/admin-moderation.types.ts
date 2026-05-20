@@ -164,6 +164,10 @@ export type AdminAuditActionType =
   // CHG-SN-7-REDO-02-A / ADR-124 2026-05-19：用户投稿 4 路径合并 actionType
   | 'user_submission.action'               // POST /admin/user-submissions/:id/{process,reject} + batch-{process,reject}
 
+  // CHG-SN-7-MISC-IMAGE-1 / ADR-135：图片健康 rescan + domain 切换 audit
+  | 'image_health.rescan'         // POST /admin/image-health/rescan
+  | 'image_health.switch_domain'  // POST /admin/image-health/switch-fallback-domain
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'
@@ -175,6 +179,7 @@ export type AdminAuditTargetKind =
   | 'source_line_alias'
   | 'source_route'  // CHG-SN-7-REDO-01-E2 / ADR-117 AMENDMENT 2：sources 行级操作目标
   | 'user_submission'  // CHG-SN-7-REDO-02-A / ADR-124：用户投稿 4 类统一表
+  | 'image_health'  // CHG-SN-7-MISC-IMAGE-1 / ADR-135：图片健康操作目标
 
 export interface AdminAuditLog {
   readonly id: string  // bigserial → string（避免 JS 大数精度）

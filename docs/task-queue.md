@@ -4084,7 +4084,7 @@ PRE-04 16 子卡全部闭环：5 ✅ A 级 + 8 ⚠️ S 级（16 项 MISC 跟踪
 | ✅ **CHG-SN-7-MISC-SUBTITLES-2** 已完成（2026-05-20）| subtitles 上传字幕 action 实装（POST /admin/subtitles / ADR-134 / SubtitleUploadModal / 4266 unit PASS） | ✅ | 0.15w | #7 |
 | **CHG-SN-7-MISC-HOME-1** | home sticky 前台预览实装（1fr/360px 布局 + 右侧 sticky 预览卡） | 🟡 P2 | 0.4–0.6w | #8 |
 | **CHG-SN-7-MISC-HOME-2** | home page__head actions 完整性核实 | 🟢 P3 | 0.05w | #8 |
-| **CHG-SN-7-MISC-IMAGE-1** | image-health page__head 2 actions（重扫所有封面 / 批量切 fallback 域）+ 后端 endpoints | 🟡 P2 | 0.2w | #11 |
+| ✅ **CHG-SN-7-MISC-IMAGE-1** 已完成（2026-05-20）| image-health page__head 2 actions（重扫所有封面 / 批量切 fallback 域）+ ADR-135 / SwitchDomainModal / 4279 unit PASS | ✅ | 0.2w | #11 |
 | **CHG-SN-7-MISC-IMAGE-2** | image-health 破损样本 grid 实装（2:3 ratio + danger dashed border + 错误 overlay） | 🟡 P2 | 0.3–0.5w | #11 |
 | **CHG-SN-7-MISC-USERS-1** | users page head actions（角色矩阵 Modal + 邀请用户 Modal） | 🟡 P2 | 0.3–0.5w | #13 |
 | **CHG-SN-7-MISC-USERS-2** | users KPI 4 列（消费 KpiCard + 后端 users-stats 端点） | 🟡 P2 | 0.2w | #13 |

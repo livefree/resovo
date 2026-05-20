@@ -13051,3 +13051,27 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
   - R2_PUBLIC_BASE_URL 未配置时 fileUrl 跳过域名白名单校验（DEBT 已记录）
   - DEBT-ADR-134-DUPLICATE (P3)：SUBTITLE_DUPLICATE 409 未实装，subtitles 表需先加 unique 约束
 - **测试结果**：typecheck PASS / lint PASS / unit 4266 PASS（+2 新增）/ verify:adr-contracts PASS（169 路由全对齐）
+
+## [CHG-SN-7-MISC-IMAGE-1] image-health PageHeader 2 actions 实装
+- **完成时间**：2026-05-20
+- **记录时间**：2026-05-20 03:20
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-7)（ADR-135 端点契约设计）
+- **修改文件**：
+  - `docs/decisions.md`（追加 ADR-135）
+  - `packages/types/src/admin-moderation.types.ts`（AdminAuditActionType + AdminAuditTargetKind 扩枚举）
+  - `apps/api/src/db/queries/imageHealth.ts`（新增 rescanPosters / switchFallbackDomain query）
+  - `apps/api/src/routes/admin/image-health.ts`（新增 POST /rescan + POST /switch-fallback-domain 2 端点）
+  - `apps/server-next/src/lib/image-health/api.ts`（新增 triggerImageRescan / switchImageFallbackDomain client 函数）
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthClient.tsx`（新增「重扫所有封面」+「批量切 fallback 域」按钮 + SwitchDomainModal）
+  - `apps/server-next/src/app/admin/image-health/_client/SwitchDomainModal.tsx`（新建，dryRun 预览 + 确认执行）
+  - `tests/unit/api/image-health-actions.test.ts`（新建，7 case route 级测试含 audit payload 断言）
+  - `tests/unit/api/audit-log-coverage.test.ts`（REQUIRED_ACTION_TYPES + PAYLOAD_ASSERTION_REQUIRED 扩 2 项）
+  - `tests/unit/components/server-next/admin/image-health/ImageHealthClient.test.tsx`（扩 case 17-18：rescan / switch-domain）
+- **测试结果**：4279 unit PASS（CrawlerClient.test.tsx#51 时区 flaky 预存，非本次引入）
+- **ADR**：ADR-135（arch-reviewer CONDITIONAL PASS → 3 条件全实装）
+- **备注**：
+  - 域名替换使用 `strpos(col, '://' || domain || '/')` 精确匹配，避免子域误替换
+  - dryRun=true（默认）仅 COUNT 不写 audit；dryRun=false 执行写入并记录 audit log
+  - SwitchDomainModal 独立文件拆分（ImageHealthClient.tsx 原已 501 行，防超限）
+  - rescan scope='all' 重置 broken+missing（不重置 ok，防止无谓全量重扫）
