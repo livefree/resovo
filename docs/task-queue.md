@@ -4087,7 +4087,7 @@ PRE-04 16 子卡全部闭环：5 ✅ A 级 + 8 ⚠️ S 级（16 项 MISC 跟踪
 | ✅ **CHG-SN-7-MISC-IMAGE-1** 已完成（2026-05-20）| image-health page__head 2 actions（重扫所有封面 / 批量切 fallback 域）+ ADR-135 / SwitchDomainModal / 4279 unit PASS | ✅ | 0.2w | #11 |
 | ✅ **CHG-SN-7-MISC-IMAGE-2** 已完成（2026-05-20）| image-health 破损样本 grid 实装（2:3 ratio + danger dashed border + 错误 overlay / BrokenSamplesGrid / 1fr/1fr split / 4308 unit PASS） | ✅ | 0.3w | #11 |
 | ✅ **CHG-SN-7-MISC-USERS-1** 已完成（2026-05-20）| users page head actions（RoleMatrixModal 只读 + InviteUserModal 表单 / 4323 unit PASS） | ✅ | 0.3w | #13 |
-| **CHG-SN-7-MISC-USERS-2** | users KPI 4 列（消费 KpiCard + 后端 users-stats 端点） | 🟡 P2 | 0.2w | #13 |
+| ✅ **CHG-SN-7-MISC-USERS-2** 已完成（2026-05-20）| users KPI 4 列（消费 KpiCard + 后端 users-stats 端点 / ADR-136 Opus PASS / 4332 unit PASS）| ✅ | 0.2w | #13 |
 | **CHG-SN-7-MISC-AUDIT-1** | audit 时间穿梭 action（指定时间点状态回放）—— 功能需求待用户确认 | 🟢 P3 | 0.4–0.6w | #15 |
 | **CHG-SN-7-MISC-LOGIN-1** | login card 视觉对齐（400×padding 40 / brand row / remember / SSO / 审计提示） | 🟢 P3 | 0.2–0.3w | #16 |
 | **CHG-SN-7-MISC-API-QUERIES-SIZE** | apps/api/db/queries 5 文件主动拆分（videos.ts **1583** / sources 818 / crawlerTasks 628 / mediaCatalog 577 / imageHealth 536） | 🟡 P2 | 1.0–1.5w | PRE-01 全量扩 |

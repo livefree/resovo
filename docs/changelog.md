@@ -13138,3 +13138,44 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
   - RoleMatrixModal 纯读展示，无 API
   - InviteUserModal 邮箱 regex 校验 + 角色选择（user/moderator，admin 通过系统控制台）
   - AdminInput testid 在 wrapper，测试用 getByPlaceholderText 定位内层 input
+
+---
+
+## CHG-SN-7-MISC-MOD-SYNC — 审核台切换视频卡时播放器同步切换（hotfix）
+
+- **完成时间**：2026-05-20
+- **触发**：用户反馈（非队列任务，紧急 hotfix）
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx`（v.id 变更时 clearSelection）
+  - `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx`（fetch 成功后自动选中第一条活跃线路）
+- **测试结果**：4323 unit PASS（全量）
+- **备注**：
+  - PendingCenter：useEffect([v.id, clearSelection]) 清除上一视频残留的线路状态
+  - LinesPanel：fetchVideoSources.then 后检查 onLineSelect 并自动调用第一条活跃线路
+
+---
+
+## CHG-SN-7-MISC-USERS-2 — users KPI 4 列实装
+
+- **完成时间**：2026-05-20
+- **任务 ID**：CHG-SN-7-MISC-USERS-2（SEQ-20260507-01 / M-SN-7 MISC #13）
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-7) — ADR-136 评审（PASS，2 条非阻塞建议）
+- **修改文件**：
+  - `apps/api/src/db/queries/users.ts`（新增 statsAdminUsers + UserStatsRow 类型）
+  - `apps/api/src/routes/admin/users.ts`（追加 GET /admin/users/stats 端点）
+  - `apps/server-next/src/lib/users/types.ts`（新增 UserStats 接口）
+  - `apps/server-next/src/lib/users/api.ts`（新增 fetchUsersStats 函数）
+  - `apps/server-next/src/app/admin/users/_client/UsersListClient.tsx`（KpiCard 4 列行）
+  - `tests/unit/components/server-next/admin/users/UsersKpiRow.test.tsx`（新建，9 case）
+  - `tests/unit/components/server-next/admin/users/UsersListClient.test.tsx`（修复 mock 遗漏 fetchUsersStats）
+  - `docs/decisions.md`（ADR-136 新增）
+- **测试结果**：4332 unit PASS（+9 净增）
+- **ADR**：ADR-136（users KPI stats 端点协议 / Opus arch-reviewer PASS）
+- **verify:endpoint-adr**：171→172 路由 / 42→43 ADR 端点
+- **备注**：
+  - COUNT FILTER 4 项单 SQL，与 ADR-127/133 同模式
+  - stats 加载失败不阻断主列表（静默处理，显示「—」占位）
+  - KpiCard 使用 @resovo/admin-ui 共享组件，零本地实现
