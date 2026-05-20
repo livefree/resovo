@@ -12900,6 +12900,12 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 - **改动摘要**：ADR-127 三端点全链路实装（GET /admin/dashboard/overview|spark|analytics）。共享类型层 packages/types/src/dashboard.ts 新建 8 接口。后端 3 个 DB query 文件真实 SQL 聚合。前端 AnalyticsView 从全 mock 升级为 live 数据（LoadingState / ErrorState / period 切换）。buildDashboardStats 新增 overview 优先路径（全部 live KPI + workflow）。verify:adr-contracts 合规通过。
 - **测试结果**：typecheck PASS / lint PASS / unit 4216 PASS（+15 新测试：12 路由 + 3 AnalyticsView 净增）/ verify:adr-contracts PASS
 - **价值排序自评**：正确性 A / 边界复用 A（packages/types 共享 / apiClient 复用 / 无越层调用）/ 扩展性 A（ADR-127a 扩展路径清晰 / metric 枚举可增）/ 一致性 A（Fastify 路由模式统一 / CSS 变量零硬编码）/ 改动收敛 18 文件
+- **ADR-127 决策要点闭环**（D-127-1..5 全 closed）：
+  - **D-127-1** 端点策略混合方案 D（3 新端点 overview/spark/analytics + getModerationStats 扩展 interceptDelta）✅
+  - **D-127-2** Spark 历史数据策略：实时 SQL 聚合，触发 ADR-127a 条件预设为 spark P95 > 200ms ✅
+  - **D-127-3** 范围收敛：WorkflowCard.staging/approved 4 字段 + MetricKpiCard pendingCount 全部 live 化 ✅
+  - **D-127-4** 端点数量：3 新端点（overview/spark/analytics）+ 1 扩展（videos.ts interceptDelta）✅
+  - **D-127-5** Analytics Tab 字段复用策略：DashboardKpiSnapshot 类型两端点共享（packages/types 层） ✅
 
 ## [CHG-SN-7-MISC-MERGE-1] merge Segment 3 类（待审候选 / 已合并 / 已拆分）补全
 - **完成时间**：2026-05-19
@@ -12915,3 +12921,31 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 - **改动摘要**：Segment primitive（`@resovo/admin-ui`）替换手写 tab bar。3 Segment items：待审候选（→CandidatesSection）/ 已合并（→AuditSection initialAction='merge'）/ 已拆分（→AuditSection initialAction='split'）。拆分工作台移至 PageHeader actions button（toggle showSplit），功能保留。AuditSection 新增 `initialAction?` prop 接受来自 Segment 的预置 filter。删除 TAB_BAR_STYLE + tabStyle 样式函数（-22行），新增 SEGMENT_ITEMS 常量（+5行）。
 - **测试结果**：typecheck PASS / lint PASS / unit 4216 PASS（13 merge tests / 零净增：4 旧 audit tab tests → 4 新 Segment tests + 1 toggle 重写）
 - **价值排序自评**：正确性 A / 边界复用 A（Segment 原语消费无重复实现）/ 扩展性 A（Segment items 可增量扩展）/ 一致性 A（与 Submissions 页面 Segment 同范式 / CSS 变量零硬编码）/ 改动收敛 2 文件
+
+## [CHG-SN-7-MISC-MOD-PLAYER / FIX-B] LinesPanel 共享复合组件提取 + 消费方迁移
+
+- **完成时间**：2026-05-19
+- **记录时间**：2026-05-19 22:55
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-7)（API 契约阶段 A，上次 session 已完成）
+- **修改文件**：
+  - `packages/admin-ui/src/components/composite/lines-panel/lines-panel.types.ts` — 新建：LineAggregate / EpisodeMini / RawSourceRow / LinesPanelProps 完整契约（arch-reviewer Opus PASS）
+  - `packages/admin-ui/src/components/composite/lines-panel/aggregate.ts` — 新建：groupSourcesByLine 纯函数（聚合键 / 状态规则 / 中位延迟 / 质量等级 / hostname 解析 / 默认排序）
+  - `packages/admin-ui/src/components/composite/lines-panel/lines-panel.tsx` — 新建：LinesPanel 共享复合组件（compact/regular/comfortable 三密度 / WAI-ARIA / 展开集数 / 受控选中）
+  - `packages/admin-ui/src/components/composite/lines-panel/index.ts` — 新建：barrel export
+  - `packages/admin-ui/src/components/cell/signal-chip.types.ts` — 新建：SignalChipProps 契约（probe/render × 5 状态）
+  - `packages/admin-ui/src/components/cell/signal-chip.tsx` — 新建：SignalChip atom（复用 Pill probe/render variant）
+  - `packages/admin-ui/src/components/cell/index.ts` — 追加 SignalChip 导出
+  - `packages/admin-ui/src/index.ts` — 追加 composite/lines-panel 导出
+  - `apps/server-next/src/app/admin/moderation/_client/LinesPanel.tsx` — 迁移：消费共享 LinesPanel（compact density / 暴露 selectedKey+onLineSelect 给 FIX-D AdminPlayer 桥接 / 保留 LineHealthDrawer 本地）
+  - `apps/server-next/src/app/admin/videos/_client/_videoEdit/TabLines.tsx` — 迁移：消费共享 LinesPanel（regular density / 无选中态 / 保留 useVideoSources + LineHealthDrawer）
+  - `tests/unit/components/admin-ui/composite/lines-panel/aggregate.test.ts` — 新建：23 case（空输入/单行/null siteKey/状态规则×6/排序/中位数×4/质量×3/hostname×3/自定义排序）
+  - `tests/unit/components/admin-ui/cell/signal-chip.test.tsx` — 新建：15 case（data attributes / 5 状态文案 × probe / render variant / Pill variant / label 覆盖 / a11y / testId）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - FIX-D 解锁：`moderation/LinesPanel.tsx` 已暴露 `selectedKey` + `onLineSelect` 接口，PendingCenter 只需传入这两个 props
+  - `groupSourcesByLine` 是纯函数，可在 useMemo 中安全使用
+  - 两个消费方的 `onToggleLine` 均未传入（无线路级批量 toggle），共享组件隐藏该按钮
+- **测试结果**：typecheck PASS / lint PASS / unit 4254 PASS（+38 新增：23 aggregate + 15 signal-chip）
+- **价值排序自评**：正确性 A（乐观锁/状态规则/类型安全全覆盖）/ 边界复用 A（admin-ui composite 共享，双消费方迁移完成）/ 扩展性 A（density 三档 / onToggleLine / onLineSelect 全可选）/ 一致性 A（CSS 变量 / Pill 复用 / DualSignal 复用）/ 改动收敛 12 文件（任务既定范围）

@@ -1,10 +1,24 @@
 'use client'
 
-import React from 'react'
-import { LoadingState, ErrorState, BarSignal, DualSignal, LineHealthDrawer } from '@resovo/admin-ui'
+/**
+ * TabLines.tsx — 视频编辑抽屉线路标签页（FIX-B Stage C 消费方迁移）
+ *
+ * 变更：原 per-row 表格视图 → 消费共享 LinesPanel 组件（regular density）
+ *   - 聚合键：(source_site_key, source_name)  → LineAggregate[]
+ *   - 无选中态（VideoEditDrawer 不需要 AdminPlayer 桥接）
+ *   - useVideoSources hook 保留原有 toggle / disableDead / refetch / health 逻辑
+ *   - LineHealthDrawer 保留本地
+ */
+import React, { useMemo } from 'react'
+import {
+  LinesPanel,
+  groupSourcesByLine,
+  LoadingState,
+  ErrorState,
+  LineHealthDrawer,
+} from '@resovo/admin-ui'
 import { VE } from '@/i18n/messages/zh-CN/videos-edit'
 import { useVideoSources, toDisplayState } from '@/lib/videos/use-sources'
-import type { VideoSource } from '@/lib/videos/use-sources'
 
 function getApiCode(e: unknown): string | null {
   if (e !== null && typeof e === 'object' && 'code' in e && typeof (e as { code: unknown }).code === 'string') {
@@ -13,103 +27,21 @@ function getApiCode(e: unknown): string | null {
   return null
 }
 
-// ── styles ──────────────────────────────────────────────────────────
-
-const TABLE_WRAP: React.CSSProperties = {
-  border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', overflow: 'hidden',
-}
-const TABLE_HEAD: React.CSSProperties = {
-  display: 'grid', gridTemplateColumns: '24px 1fr 80px 72px 60px 48px',
-  padding: '6px 12px', background: 'var(--bg-surface-raised)',
-  fontSize: 'var(--font-size-2xs)', fontWeight: 600, color: 'var(--fg-muted)',
-  letterSpacing: '.5px', textTransform: 'uppercase',
-  borderBottom: '1px solid var(--border-subtle)',
-}
-const BTN_XS: React.CSSProperties = {
-  padding: '2px 8px', fontSize: 'var(--font-size-xxs)', border: '1px solid var(--border-subtle)',
-  borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface)', color: 'var(--fg-muted)',
-  cursor: 'pointer',
-}
-const BTN_DANGER: React.CSSProperties = {
-  ...BTN_XS, borderColor: 'var(--state-error-border)', color: 'var(--state-error-fg)',
-}
-
-// ── props ────────────────────────────────────────────────────────────
-
 export interface TabLinesProps {
   readonly videoId: string
 }
-
-// ── sub-component ──────────────────────────────────────────────────
-
-function SourceRow({
-  source, idx, total, pending, onToggle, onHealth,
-}: {
-  source: VideoSource
-  idx: number
-  total: number
-  pending: boolean
-  onToggle: (id: string, active: boolean) => void
-  onHealth: (id: string) => void
-}): React.ReactElement {
-  const m = VE.lines
-  const probeState = toDisplayState(source.probe_status)
-  const renderState = toDisplayState(source.render_status)
-  const siteName = source.source_site_key ?? source.site_key ?? source.source_name
-  const qualityTag = source.quality_detected ? ` ${m.qualityDetected(source.quality_detected)}` : ''
-  const latencyTag = source.latency_ms != null ? ` ${m.latencyMs(source.latency_ms)}` : ''
-
-  return (
-    <div
-      style={{
-        display: 'grid', gridTemplateColumns: '24px 1fr 80px 72px 60px 48px',
-        padding: '8px 12px', alignItems: 'center',
-        borderBottom: idx < total - 1 ? '1px solid var(--border-subtle)' : 'none',
-        opacity: source.is_active ? 1 : 0.45, transition: 'opacity .1s',
-      }}
-    >
-      <span style={{ color: 'var(--fg-muted)', fontSize: 'var(--font-size-sm-tight)', userSelect: 'none' }}>⠿</span>
-      <div>
-        <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {siteName}{qualityTag}{latencyTag}
-        </div>
-        <div style={{ fontSize: 'var(--font-size-2xs)', color: 'var(--fg-muted)', fontFamily: 'monospace' }}>
-          {source.source_url.slice(0, 40)}{source.source_url.length > 40 ? '…' : ''}
-        </div>
-      </div>
-      <DualSignal probe={probeState} render="unknown" />
-      <DualSignal probe="unknown" render={renderState} />
-      <span style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>{m.episodes(source.episode_number)}</span>
-      <div style={{ display: 'flex', gap: '4px' }}>
-        <button
-          type="button" style={BTN_XS} disabled={pending}
-          onClick={() => onToggle(source.id, !source.is_active)}
-          title={source.is_active ? m.toggle.disable : m.toggle.enable}
-          aria-label={source.is_active ? m.toggle.disable : m.toggle.enable}
-        >
-          {source.is_active ? m.toggle.disable : m.toggle.enable}
-        </button>
-        <button
-          type="button" style={BTN_XS}
-          onClick={() => onHealth(source.id)}
-          aria-label={m.actions.viewHealth}
-        >
-          {m.actions.viewHealth}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ── main component ────────────────────────────────────────────────
 
 export function TabLines({ videoId }: TabLinesProps): React.ReactElement {
   const [state, actions] = useVideoSources(videoId)
   const m = VE.lines
 
-  const handleToggle = async (sourceId: string, isActive: boolean) => {
+  const aggregatedLines = useMemo(() => groupSourcesByLine(state.sources), [state.sources])
+
+  const handleToggleEpisode = async ({
+    episodeId, nextActive,
+  }: { lineKey: string; episodeId: string; nextActive: boolean; updatedAt: string }) => {
     try {
-      await actions.toggle(sourceId, isActive)
+      await actions.toggle(episodeId, nextActive)
     } catch (e: unknown) {
       const code = getApiCode(e)
       const msg = code === 'REVIEW_RACE' ? m.errors.reviewRace
@@ -127,12 +59,18 @@ export function TabLines({ videoId }: TabLinesProps): React.ReactElement {
     try { await actions.refetch() } catch { alert(m.errors.refetchFailed) }
   }
 
-  const healthSource = state.health
+  const handleHealthOpen = ({ episodeId }: { lineKey: string; episodeId: string }) => {
+    actions.openHealth(episodeId)
+  }
+
   const healthSrc = state.healthSourceId
     ? state.sources.find((s) => s.id === state.healthSourceId)
     : null
   const healthTitle = healthSrc
-    ? m.healthDrawer.title(healthSrc.source_site_key ?? healthSrc.site_key ?? healthSrc.source_name, m.episodes(healthSrc.episode_number))
+    ? m.healthDrawer.title(
+        healthSrc.source_site_key ?? healthSrc.site_key ?? healthSrc.source_name,
+        m.episodes(healthSrc.episode_number),
+      )
     : ''
 
   if (state.loading && state.sources.length === 0) return <LoadingState variant="spinner" />
@@ -140,56 +78,23 @@ export function TabLines({ videoId }: TabLinesProps): React.ReactElement {
     <ErrorState error={state.error} title={m.errors.loadFailed} onRetry={actions.reload} />
   )
 
-  const enabled = state.sources.filter((s) => s.is_active).length
-  const okProbe = state.sources.filter((s) => s.probe_status === 'ok').length
-  const okRender = state.sources.filter((s) => s.render_status === 'ok').length
-  const total = state.sources.length
-  const aggProbe = total === 0 ? 'unknown' : okProbe === total ? 'ok' : okProbe === 0 ? 'dead' : 'partial'
-  const aggRender = total === 0 ? 'unknown' : okRender === total ? 'ok' : okRender === 0 ? 'dead' : 'partial'
-
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-        <BarSignal
-          probeState={aggProbe}
-          renderState={aggRender}
-          size="sm"
-          ariaLabel={m.barSignalAriaLabel(aggProbe, aggRender)}
-        />
-        <span style={{ fontSize: 'var(--font-size-sm-tight)', fontWeight: 600 }}>{m.title}</span>
-        <span style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>{m.enabledCount(enabled, total)}</span>
-        <span style={{ flex: 1 }} />
-        <button type="button" style={BTN_XS} disabled={state.refetchPending} onClick={handleRefetch}>
-          {state.refetchPending ? '…' : m.actions.refetch}
-        </button>
-        <button type="button" style={BTN_DANGER} disabled={state.bulkPending} onClick={handleDisableDead}>
-          {state.bulkPending ? '…' : m.actions.disableDead}
-        </button>
-      </div>
+      <LinesPanel
+        lines={aggregatedLines}
+        density="regular"
+        onToggleEpisode={handleToggleEpisode}
+        onDisableDead={handleDisableDead}
+        onRefetch={handleRefetch}
+        onHealthOpen={handleHealthOpen}
+        toggling={state.togglePending}
+        loading={state.loading && state.sources.length === 0}
+        aria-label={m.title}
+      />
 
-      {state.sources.length === 0 ? (
-        <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>暂无线路数据。</p>
-      ) : (
-        <div style={TABLE_WRAP}>
-          <div style={TABLE_HEAD} aria-hidden="true">
-            <span /><span>{m.colLine}</span><span>{m.colProbe}</span>
-            <span>{m.colRender}</span><span>{m.colEpisodes}</span><span>{m.colAction}</span>
-          </div>
-          {state.sources.map((src, idx) => (
-            <SourceRow
-              key={src.id}
-              source={src}
-              idx={idx}
-              total={state.sources.length}
-              pending={state.togglePending.has(src.id)}
-              onToggle={handleToggle}
-              onHealth={actions.openHealth}
-            />
-          ))}
-        </div>
-      )}
-
-      <p style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)', marginTop: '8px' }}>{m.hints.dragHint}</p>
+      <p style={{ fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)', marginTop: '8px' }}>
+        {m.hints.dragHint}
+      </p>
 
       <LineHealthDrawer
         open={state.healthSourceId !== null}
@@ -197,14 +102,14 @@ export function TabLines({ videoId }: TabLinesProps): React.ReactElement {
         title={healthTitle}
         probeState={healthSrc ? toDisplayState(healthSrc.probe_status) : 'unknown'}
         renderState={healthSrc ? toDisplayState(healthSrc.render_status) : 'unknown'}
-        events={healthSource?.data ?? []}
+        events={state.health?.data ?? []}
         loading={state.healthLoading}
         emptyText={m.healthDrawer.empty}
         loadingText={m.healthDrawer.loading}
-        pagination={healthSource ? {
+        pagination={state.health ? {
           page: state.healthPage,
-          total: healthSource.pagination.total,
-          limit: healthSource.pagination.limit,
+          total: state.health.pagination.total,
+          limit: state.health.pagination.limit,
           onPageChange: actions.loadHealthPage,
         } : undefined}
         testId="data-line-health-drawer"

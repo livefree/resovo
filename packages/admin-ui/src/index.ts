@@ -63,3 +63,7 @@ export * from './components/feedback'
 
 // Segment pill-style 分段控件 + badge count（CHG-SN-7-REDO-02-PRE-CARD-PRIMITIVE-A / ADR-124 / spec §5.13）
 export * from './components/segment'
+
+// LinesPanel 复合组件（FIX-B / CHG-SN-7-MISC-MOD-PLAYER；arch-reviewer Opus PASS）
+// 视频线路聚合展示 + 单集 toggle + 线路 toggle + AdminPlayer 切源回调
+export * from './components/composite/lines-panel'

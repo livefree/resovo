@@ -97,3 +97,13 @@ export type { IdRefProps } from './id-ref.types'
 
 export { MutedText } from './muted-text'
 export type { MutedTextProps } from './muted-text.types'
+
+// ── SignalChip（FIX-B / CHG-SN-7-MISC-MOD-PLAYER；arch-reviewer Opus PASS）
+// 单路信号 Chip（probe / render）；供 LinesPanel EpisodeRow 展开后集数级可视化
+
+export { SignalChip } from './signal-chip'
+export type {
+  SignalChipProps,
+  SignalChipVariant,
+  SignalChipSize,
+} from './signal-chip.types'
