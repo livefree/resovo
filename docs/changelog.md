@@ -12948,4 +12948,26 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
   - `groupSourcesByLine` 是纯函数，可在 useMemo 中安全使用
   - 两个消费方的 `onToggleLine` 均未传入（无线路级批量 toggle），共享组件隐藏该按钮
 - **测试结果**：typecheck PASS / lint PASS / unit 4254 PASS（+38 新增：23 aggregate + 15 signal-chip）
+
+---
+
+## CHG-SN-7-MISC-MOD-PLAYER / FIX-D — 极简 AdminPlayer 接入（审核台播放器）
+
+- **日期**：2026-05-19
+- **任务 ID**：CHG-SN-7-MISC-MOD-PLAYER / FIX-D（SEQ-20260502-01 阶段 3）
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无（player-core 已有 Player export，无新契约）
+- **修改文件**：
+  - `apps/server-next/src/lib/moderation/use-selected-line.ts` — 新建：LinesPanel ↔ AdminPlayer 桥接 hook（onLineSelect → {lineKey, sourceUrl, sourceId} / clearSelection）
+  - `apps/server-next/src/app/admin/moderation/_client/AdminPlayer.tsx` — 新建：极简 admin 播放器（idle 占位 / ready 状态 / onPlay feedback 去抖上报 / sourceId 变更自动重置 reportedRef）
+  - `apps/server-next/src/app/admin/moderation/_client/PendingCenter.tsx` — 改：替换静态 ▶ 占位为 `<AdminPlayer>`；接入 useSelectedLine；LinesPanel 传入 selectedKey + onLineSelect
+  - `tests/unit/admin-moderation/admin-player.test.tsx` — 新建：8 case（idle 占位 / ready 渲染 / feedback POST / 同 sourceId 去抖 / sourceId 变更重置 / useSelectedLine 活跃集 / 无活跃集 / clearSelection）
+  - `vitest.config.ts` — 追加 `tests/unit/admin-moderation/**` jsdom 环境映射 + isServerNext alias resolver 同步
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - DEBT-FIX-D-ERROR：player-core 未暴露 onError 外部回调，错误 feedback 上报待 FIX-CLOSE 阶段评估扩展 PlayerProps
+  - feedback 路径：`apiClient.post('/feedback/playback', ...)` → `/v1/feedback/playback`，fire-and-forget，失败不阻断播放
+  - reportedRef 用 useRef 实现每 sourceId 仅上报一次，sourceId prop 变更通过 useEffect 重置（通过 key 变化自动 unmount/remount 处理）
+- **测试结果**：typecheck PASS / lint PASS / unit 4262 PASS（+8 新增：8 admin-player）
 - **价值排序自评**：正确性 A（乐观锁/状态规则/类型安全全覆盖）/ 边界复用 A（admin-ui composite 共享，双消费方迁移完成）/ 扩展性 A（density 三档 / onToggleLine / onLineSelect 全可选）/ 一致性 A（CSS 变量 / Pill 复用 / DualSignal 复用）/ 改动收敛 12 文件（任务既定范围）

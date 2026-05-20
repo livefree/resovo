@@ -20,9 +20,10 @@ export default defineConfig({
     include: ['tests/unit/**/*.{test,spec}.{ts,tsx}'],  // 只运行 unit 测试，排除 e2e
     environment: 'node',          // API 测试用 node 环境
     environmentMatchGlobs: [
-      ['tests/unit/components/**', 'jsdom'],  // 组件测试用 jsdom
-      ['tests/unit/hooks/**', 'jsdom'],        // hook 测试用 jsdom（依赖 window/sessionStorage）
-      ['tests/unit/web-next/**', 'jsdom'],    // web-next 组件测试
+      ['tests/unit/components/**', 'jsdom'],       // 组件测试用 jsdom
+      ['tests/unit/hooks/**', 'jsdom'],             // hook 测试用 jsdom（依赖 window/sessionStorage）
+      ['tests/unit/web-next/**', 'jsdom'],         // web-next 组件测试
+      ['tests/unit/admin-moderation/**', 'jsdom'], // 审核台组件/hook 测试（FIX-D+）
     ],
     setupFiles: ['./tests/helpers/setup.ts'],
     coverage: {
@@ -56,7 +57,7 @@ export default defineConfig({
         replacement: '$1',
         customResolver(replacedId: string, importer: string | undefined) {
           const isServerNext =
-            importer?.includes('/apps/server-next/') || importer?.includes('/tests/unit/components/server-next/')
+            importer?.includes('/apps/server-next/') || importer?.includes('/tests/unit/components/server-next/') || importer?.includes('/tests/unit/admin-moderation/')
           const base = isServerNext
             ? path.resolve(__dirname, './apps/server-next/src/components/admin')
             : path.resolve(__dirname, './apps/server/src/components/admin')
@@ -69,7 +70,7 @@ export default defineConfig({
         replacement: '$1',
         customResolver(replacedId: string, importer: string | undefined) {
           const isServerNext =
-            importer?.includes('/apps/server-next/') || importer?.includes('/tests/unit/components/server-next/')
+            importer?.includes('/apps/server-next/') || importer?.includes('/tests/unit/components/server-next/') || importer?.includes('/tests/unit/admin-moderation/')
           const base = isServerNext
             ? path.resolve(__dirname, './apps/server-next/src/components/shared')
             : path.resolve(__dirname, './apps/server/src/components/shared')
@@ -111,7 +112,7 @@ export default defineConfig({
         replacement: '$1',
         customResolver(replacedId: string, importer: string | undefined) {
           const isServerNext =
-            importer?.includes('/apps/server-next/') || importer?.includes('/tests/unit/components/server-next/')
+            importer?.includes('/apps/server-next/') || importer?.includes('/tests/unit/components/server-next/') || importer?.includes('/tests/unit/admin-moderation/')
           const isServer =
             importer?.includes('/apps/server/') || importer?.includes('/tests/unit/components/admin/')
           const srcBase = isServerNext

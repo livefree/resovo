@@ -5,6 +5,8 @@ import { VisChip, DecisionCard, StaffNoteBar, Thumb } from '@resovo/admin-ui'
 import type { VideoQueueRow } from '@resovo/types'
 import { EpisodeSelector } from './EpisodeSelector'
 import { LinesPanel } from './LinesPanel'
+import { AdminPlayer } from './AdminPlayer'
+import { useSelectedLine } from '@/lib/moderation/use-selected-line'
 import * as api from '@/lib/moderation/api'
 import { M } from '@/i18n/messages/zh-CN/moderation'
 
@@ -34,6 +36,7 @@ const SECTION: React.CSSProperties = {
 export function PendingCenter({ v, onStaffNoteChange, onEditVideo }: PendingCenterProps): React.ReactElement {
   const [currentEp, setCurrentEp] = useState(1)
   const [noteEditing, setNoteEditing] = useState(false)
+  const { selected, onLineSelect } = useSelectedLine()
   const [noteSubmitting, setNoteSubmitting] = useState(false)
 
   const handleNoteSubmit = async (note: string | null) => {
@@ -70,38 +73,14 @@ export function PendingCenter({ v, onStaffNoteChange, onEditVideo }: PendingCent
         />
       </div>
 
-      {/* Video player placeholder */}
-      <div
-        style={{
-          background: 'var(--player-full-bg)',
-          borderRadius: 6,
-          aspectRatio: '16/9',
-          position: 'relative',
-          overflow: 'hidden',
-          marginBottom: 14,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <div
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: '50%',
-            background: 'var(--player-full-progress-track)',
-            border: '1px solid var(--player-full-buffer-fill)',
-            display: 'grid',
-            placeItems: 'center',
-          }}
-        >
-          <span style={{ color: 'white', fontSize: 'var(--font-size-lg)' }}>▶</span>
-        </div>
-        <div style={{ position: 'absolute', bottom: 8, left: 10, right: 10, display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: 'var(--font-size-2xs)', color: 'white', background: 'var(--player-mini-overlay)', padding: '2px 6px', borderRadius: 4 }}>
-            EP{currentEp}
-          </span>
-        </div>
+      {/* AdminPlayer（FIX-D）：替换静态占位；通过 useSelectedLine 受控 */}
+      <div style={{ marginBottom: 14 }}>
+        <AdminPlayer
+          videoId={v.id}
+          sourceUrl={selected?.sourceUrl ?? null}
+          sourceId={selected?.sourceId ?? null}
+          title={v.title}
+        />
       </div>
 
       {/* Video info */}
@@ -147,7 +126,11 @@ export function PendingCenter({ v, onStaffNoteChange, onEditVideo }: PendingCent
 
       {/* Lines panel */}
       <div style={SECTION}>
-        <LinesPanel videoId={v.id} />
+        <LinesPanel
+          videoId={v.id}
+          selectedKey={selected?.lineKey ?? null}
+          onLineSelect={onLineSelect}
+        />
       </div>
     </>
   )
