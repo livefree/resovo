@@ -4091,7 +4091,7 @@ PRE-04 16 子卡全部闭环：5 ✅ A 级 + 8 ⚠️ S 级（16 项 MISC 跟踪
 | **CHG-SN-7-MISC-AUDIT-1** | audit 时间穿梭 action（指定时间点状态回放）—— 功能需求待用户确认 | 🟢 P3 | 0.4–0.6w | #15 |
 | **CHG-SN-7-MISC-LOGIN-1** | login card 视觉对齐（400×padding 40 / brand row / remember / SSO / 审计提示） | 🟢 P3 | 0.2–0.3w | #16 |
 | **CHG-SN-7-MISC-API-QUERIES-SIZE** | apps/api/db/queries 5 文件主动拆分（videos.ts **1583** / sources 818 / crawlerTasks 628 / mediaCatalog 577 / imageHealth 536） | 🟡 P2 | 1.0–1.5w | PRE-01 全量扩 |
-| **CHG-SN-7-MISC-API-ROUTES-SIZE** | apps/api/routes/admin 2 文件主动拆分（crawler.ts 960 / moderation.ts 533） | 🟡 P2 | 0.4–0.6w | PRE-01 全量扩 |
+| ✅ **CHG-SN-7-MISC-API-ROUTES-SIZE** 已完成（2026-05-20）| apps/api/routes/admin 2 文件主动拆分：crawler.ts(960→323) + crawler.tasks.ts(443) + crawler.runs.ts(216) / moderation.ts(533→390) + moderation.douban.ts(161) / 5 文件全部 ≤ 500 行 / typecheck 全绿 / ADR 合规通过 | ✅ | 0.4–0.6w | PRE-01 全量扩 ✅ |
 | **CHG-SN-7-MISC-API-SERVICES-SIZE** | apps/api services + workers 4 文件主动拆分（crawlerWorker 585 / VideoMergesService 523 / DoubanService 511 / SourceParserService 502） | 🟡 P2 | 0.6–0.9w | PRE-01 全量扩 |
 | **CHG-SN-7-MISC-WEB-NEXT-SIZE** | apps/web-next/components/layout/Nav.tsx 580 主动拆分 | 🟢 P3 | 0.15w | PRE-01 全量扩 |
 | ✅ **CHG-SN-7-MISC-PLAYER-CORE-SIZE** 已完成（2026-05-20）| packages/player + player-core 4 文件主动拆分：step-1 useLayoutDecision（526→16 行 barrel + 5 子文件 ×2 包）/ step-2 Player.tsx（1091→437 / 1085→430；Player/目录 6 子文件：usePlayerState + usePlayerEffects + usePlayerOrchestration + buildControlContext + PlayerOverlays + PlayerChromeBottom）/ 4332 unit PASS / typecheck 全绿 | ✅ | 1.5–2.5w | PRE-01 全量扩 ✅ |

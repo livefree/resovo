@@ -13213,3 +13213,24 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
   - typecheck 全绿 ✅
   - 14 个导入点零改动 ✅
   - doSeekRef.current 赋值顺序严格保留（usePlayerOrchestration 中 usePlayerActions 后、useGestureControls 前）✅
+
+---
+
+## CHG-SN-7-MISC-API-ROUTES-SIZE
+
+- **完成时间**：2026-05-20
+- **任务 ID**：CHG-SN-7-MISC-API-ROUTES-SIZE（SEQ-20260507-01 / M-SN-7 MISC PRE-01 全量扩）
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无（Route 层拆分，无新 API 契约）
+- **修改文件**：
+  - `apps/api/src/routes/admin/crawler.ts`（960→323 行，主聚合；移除任务/批次路由，保留 auto-config/sites-status/overview/system-status/monitor-snapshot/sources-verify/batch-verify/keyword-preview/refetch-sources/reindex）
+  - `apps/api/src/routes/admin/crawler.tasks.ts`（新建 443 行；registerCrawlerTaskRoutes：GET/POST /tasks、/stop-all、/freeze、/tasks/:id、/tasks/:id/logs、/tasks/latest、/sites/:key/latest-task；导出 mapTaskDto）
+  - `apps/api/src/routes/admin/crawler.runs.ts`（新建 216 行；registerCrawlerRunRoutes：POST/GET /runs、/runs/:id、/runs/:id/tasks、/cancel、/pause、/resume）
+  - `apps/api/src/routes/admin/moderation.ts`（533→390 行；移除豆瓣路由，调用 registerModerationDoubanRoutes）
+  - `apps/api/src/routes/admin/moderation.douban.ts`（新建 161 行；registerModerationDoubanRoutes：douban-search/confirm/ignore/candidate/confirm-fields）
+- **测试结果**：4331 unit PASS（预存在失败 1 项 StagingEditPanel 与本任务无关）
+- **验收**：
+  - 所有文件 ≤ 500 行 ✅（323/443/216/390/161）
+  - 零 API 路径变化（endpoint 不变）✅
+  - typecheck 全绿 ✅
+  - verify:adr-contracts 通过（advisory 警告均为预存在）✅

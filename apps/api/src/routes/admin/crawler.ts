@@ -1,12 +1,10 @@
 /**
- * admin/crawler.ts — 爬虫任务管理后台接口
+ * admin/crawler.ts — 爬虫任务管理后台接口（主路由聚合）
  * CHG-36: 支持 siteKey 参数；新增 GET /admin/crawler/sites-status
  *
- * GET  /admin/crawler/tasks           — 任务列表（需 admin）
- * POST /admin/crawler/tasks           — 手动触发采集（需 admin）
- * GET  /admin/crawler/sites-status    — 各源站采集状态（需 admin）
- * POST /admin/sources/:id/verify      — 手动触发单条同步验证（需 moderator+）
- * POST /admin/sources/batch-verify    — 按范围批量验证播放源（需 moderator+）
+ * 任务/批次路由已拆分到子文件：
+ *   crawler.tasks.ts — GET/POST /tasks, /stop-all, /freeze, /tasks/:id, /tasks/latest
+ *   crawler.runs.ts  — POST/GET /runs, /runs/:id, /runs/:id/cancel, /pause, /resume
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -17,73 +15,19 @@ import { CrawlerPreviewService } from '@/api/services/CrawlerPreviewService'
 import { CrawlerRefetchService } from '@/api/services/CrawlerRefetchService'
 import { ContentService } from '@/api/services/ContentService'
 import { AuditLogService } from '@/api/services/AuditLogService'
+import { CrawlerRunService } from '@/api/services/CrawlerRunService'
 import { getEnabledSources } from '@/api/workers/crawlerWorker'
 import {
-  listTasks,
-  listTasksByRunId,
-  findTaskById,
-  cancelPendingTasksByRun,
-  requestCancelRunningTasksByRun,
-  cancelAllActiveTasks,
-  findActiveTaskBySite,
-  getLatestTaskBySite,
-  getLatestTasksBySites,
   getCrawlerOverview,
   countOrphanActiveTasks,
-  markStalePendingTasks,
-  type CrawlerTask,
 } from '@/api/db/queries/crawlerTasks'
 import * as crawlerSitesQueries from '@/api/db/queries/crawlerSites'
 import * as crawlerRunsQueries from '@/api/db/queries/crawlerRuns'
 import { es } from '@/api/lib/elasticsearch'
-import { crawlerQueue } from '@/api/lib/queue'
-import { createCrawlerTaskLog, listCrawlerTaskLogs } from '@/api/db/queries/crawlerTaskLogs'
-import { CrawlerRunService } from '@/api/services/CrawlerRunService'
 import * as systemSettingsQueries from '@/api/db/queries/systemSettings'
 import { findAdminVideoById } from '@/api/db/queries/videos'
-
-function mapTaskDto(task: CrawlerTask) {
-  const mode = task.type === 'incremental-crawl' ? 'incremental' : 'full'
-  const status =
-    task.status === 'pending'
-      ? 'queued'
-      : task.status === 'running'
-        ? 'running'
-        : task.status === 'paused'
-          ? 'paused'
-        : task.status === 'done'
-          ? 'success'
-          : task.status === 'cancelled'
-            ? 'cancelled'
-            : task.status === 'timeout'
-              ? 'timeout'
-          : 'failed'
-
-  const result = task.result ?? {}
-  const message =
-    typeof result.error === 'string'
-      ? result.error
-      : task.status === 'failed'
-        ? '任务执行失败'
-        : null
-  const itemCount =
-    typeof result.videosUpserted === 'number'
-      ? result.videosUpserted
-      : typeof result.sourcesUpserted === 'number'
-        ? result.sourcesUpserted
-        : null
-
-  return {
-    id: task.id,
-    siteKey: task.sourceSite,
-    mode,
-    status,
-    startedAt: task.startedAt,
-    finishedAt: task.finishedAt,
-    message,
-    itemCount,
-  }
-}
+import { registerCrawlerTaskRoutes } from './crawler.tasks'
+import { registerCrawlerRunRoutes } from './crawler.runs'
 
 export async function adminCrawlerRoutes(fastify: FastifyInstance) {
   const crawlerService = new CrawlerService(db, es)
@@ -91,16 +35,8 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
   const refetchService = new CrawlerRefetchService(db, es)
   const contentService = new ContentService(db)
   const runService = new CrawlerRunService(db)
-  const auditSvc = new AuditLogService(db)  // CHG-SN-4-10-A2：refetch-sources 入队 audit
+  const auditSvc = new AuditLogService(db)
   const auth = [fastify.authenticate, fastify.requireRole(['admin'])]
-  const logTask = async (input: Parameters<typeof createCrawlerTaskLog>[1]) => {
-    try {
-      await createCrawlerTaskLog(db, input)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      fastify.log.warn({ err: message, input }, 'failed to persist crawler task log')
-    }
-  }
 
   const AutoCrawlConfigSchema = z.object({
     globalEnabled: z.boolean(),
@@ -151,546 +87,6 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     return reply.send({ data: { ok: true } })
   })
 
-  // ── GET /admin/crawler/tasks ──────────────────────────────────
-
-  fastify.get('/admin/crawler/tasks', { preHandler: auth }, async (request, reply) => {
-    const QuerySchema = z.object({
-      status: z.enum(['pending', 'running', 'paused', 'done', 'failed', 'cancelled', 'timeout']).optional(),
-      triggerType: z.enum(['single', 'batch', 'all', 'schedule']).optional(),
-      runId: z.string().uuid().optional(),
-      sortField: z.enum(['runId', 'type', 'site', 'triggerType', 'status', 'startedAt', 'finishedAt', 'error']).optional(),
-      sortDir: z.enum(['asc', 'desc']).optional(),
-      page:   z.coerce.number().int().min(1).default(1),
-      limit:  z.coerce.number().int().min(1).max(100).default(20),
-    })
-
-    const parsed = QuerySchema.safeParse(request.query)
-    if (!parsed.success) {
-      return reply.code(422).send({
-        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
-      })
-    }
-
-    const { status, triggerType, runId, sortField, sortDir, page, limit } = parsed.data
-    const { rows, total } = await listTasks(db, {
-      status,
-      triggerType,
-      runId,
-      sortField,
-      sortDir,
-      limit,
-      offset: (page - 1) * limit,
-    })
-
-    return reply.send({
-      data: rows,
-      pagination: { total, page, limit, hasNext: page * limit < total },
-    })
-  })
-
-  // ── POST /admin/crawler/tasks — 手动触发采集 ─────────────────
-  // @deprecated 使用 POST /admin/crawler/runs 替代（triggerType: 'single' | 'all'）
-  // 保留此路由以向后兼容；计划在 CHG-163 正式删除（sunset: 2026-05-01）
-  // 所有新调用方请迁移到 POST /admin/crawler/runs
-
-  fastify.post('/admin/crawler/tasks', { preHandler: auth }, async (request, reply) => {
-    void reply.header('Deprecation', 'true')
-    void reply.header('Sunset', 'Thu, 01 May 2026 00:00:00 GMT')
-    void reply.header('Link', '</admin/crawler/runs>; rel="successor-version"')
-
-    const BodySchema = z.object({
-      type:    z.enum(['full-crawl', 'incremental-crawl']).default('incremental-crawl'),
-      siteKey: z.string().min(1).optional(),
-      hoursAgo: z.number().int().min(1).max(720).optional(),
-    })
-
-    const parsed = BodySchema.safeParse(request.body)
-    if (!parsed.success) {
-      return reply.code(422).send({
-        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
-      })
-    }
-
-    const { type, siteKey, hoursAgo } = parsed.data
-
-    if (siteKey) {
-      await markStalePendingTasks(db, { siteKey, staleMinutes: 10 })
-
-      const site = await crawlerSitesQueries.findCrawlerSite(db, siteKey)
-      if (!site || site.disabled) {
-        return reply.code(404).send({
-          error: {
-            code: 'SITE_NOT_FOUND',
-            message: `源站 ${siteKey} 不存在或已停用`,
-            status: 404,
-          },
-        })
-      }
-
-      const active = await findActiveTaskBySite(db, siteKey)
-      if (active) {
-        return reply.code(409).send({
-          error: {
-            code: 'CRAWL_TASK_CONFLICT',
-            message: `源站 ${siteKey} 已存在进行中的采集任务`,
-            status: 409,
-          },
-          data: {
-            activeTaskId: active.id,
-            activeTaskType: active.type,
-            activeTaskStatus: active.status,
-          },
-        })
-      }
-
-      try {
-        const createdBy = (request.user as { userId?: string } | undefined)?.userId ?? null
-        const result = await runService.createAndEnqueueRun({
-          triggerType: 'single',
-          mode: type === 'full-crawl' ? 'full' : 'incremental',
-          siteKeys: [siteKey],
-          hoursAgo: hoursAgo ?? 24,
-          createdBy,
-        })
-        return reply.code(202).send({
-          data: {
-            runId: result.runId,
-            taskId: result.taskIds[0] ?? null,
-            type,
-            siteKey,
-            enqueuedSiteKeys: result.enqueuedSiteKeys,
-            skippedSiteKeys: result.skippedSiteKeys,
-          },
-        })
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        await logTask({
-          sourceSite: siteKey,
-          level: 'error',
-          stage: 'api.run.enqueue_failed',
-          message: '单站批次创建失败',
-          details: { error: message },
-        })
-        return reply.code(503).send({
-          error: {
-            code: 'CRAWLER_QUEUE_UNAVAILABLE',
-            message: '任务入队失败，请检查 Redis/worker',
-            status: 503,
-          },
-          data: { taskId: null },
-        })
-      }
-    }
-
-    try {
-      const createdBy = (request.user as { userId?: string } | undefined)?.userId ?? null
-      const result = await runService.createAndEnqueueRun({
-        triggerType: 'all',
-        mode: type === 'full-crawl' ? 'full' : 'incremental',
-        hoursAgo: hoursAgo ?? 24,
-        createdBy,
-      })
-      return reply.code(202).send({
-        data: {
-          runId: result.runId,
-          taskIds: result.taskIds,
-          type,
-          siteKey: null,
-          enqueuedSiteKeys: result.enqueuedSiteKeys,
-          skippedSiteKeys: result.skippedSiteKeys,
-        },
-      })
-    } catch (err) {
-      return reply.code(503).send({
-        error: {
-          code: 'CRAWLER_QUEUE_UNAVAILABLE',
-          message: err instanceof Error ? err.message : 'crawler queue unavailable',
-          status: 503,
-        },
-      })
-    }
-  })
-
-  // ── POST /admin/crawler/stop-all — 全局止血 ────────────────
-  fastify.post('/admin/crawler/stop-all', { preHandler: auth }, async (request, reply) => {
-    const BodySchema = z.object({
-      freeze: z.boolean().default(true),
-      removeRepeatableTick: z.boolean().default(true),
-    })
-    const parsed = BodySchema.safeParse(request.body ?? {})
-    if (!parsed.success) {
-      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
-    }
-    const { freeze, removeRepeatableTick } = parsed.data
-
-    // CHG-SN-6-25-RETRO：审计 — crawler.stop_all（before 取 freeze 状态）
-    const beforeFreezeSetting = await systemSettingsQueries.getSetting(db, 'crawler_global_freeze')
-
-    if (freeze) {
-      await systemSettingsQueries.setSetting(db, 'crawler_global_freeze', 'true')
-    }
-
-    const { count: runMarked, runIds: cancelledRunIds } = await crawlerRunsQueries.requestCancelAllActiveRuns(db)
-    const taskChanges = await cancelAllActiveTasks(db)
-
-    // Sync run status immediately so control_status transitions from 'cancelling' → 'cancelled'
-    // without waiting for the next watchdog tick (up to 60 seconds).
-    for (const runId of cancelledRunIds) {
-      await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
-    }
-
-    if (removeRepeatableTick) {
-      try {
-        const repeatables = await crawlerQueue.getRepeatableJobs()
-        for (const repeat of repeatables) {
-          if (repeat.id === 'auto-crawl-tick' || repeat.key.includes('auto-crawl-tick')) {
-            await crawlerQueue.removeRepeatableByKey(repeat.key)
-          }
-        }
-      } catch (err) {
-        fastify.log.warn({ err }, 'failed to remove crawler repeatable tick')
-      }
-    }
-
-    const freezeSetting = await systemSettingsQueries.getSetting(db, 'crawler_global_freeze')
-
-    // CHG-SN-6-25-RETRO：审计写入 — crawler.stop_all
-    auditSvc.write({
-      actorId: request.user!.userId,
-      actionType: 'crawler.stop_all',
-      targetKind: 'system',
-      targetId: 'stop_all',
-      beforeJsonb: { freezeEnabled: beforeFreezeSetting === 'true' },
-      afterJsonb: {
-        freezeEnabled: freezeSetting === 'true',
-        markedRuns: runMarked,
-        removeRepeatableTick,
-        ...taskChanges,
-      },
-      requestId: request.id,
-    })
-
-    return reply.send({
-      data: {
-        freezeEnabled: freezeSetting === 'true',
-        markedRuns: runMarked,
-        ...taskChanges,
-      },
-    })
-  })
-
-  // ── POST /admin/crawler/freeze — 全局冻结开关 ───────────────
-  fastify.post('/admin/crawler/freeze', { preHandler: auth }, async (request, reply) => {
-    const BodySchema = z.object({
-      enabled: z.boolean(),
-    })
-    const parsed = BodySchema.safeParse(request.body ?? {})
-    if (!parsed.success) {
-      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
-    }
-
-    // CHG-SN-6-20-A：审计 — crawler.freeze（before 取当前状态）
-    const beforeFreeze = await systemSettingsQueries.getSetting(db, 'crawler_global_freeze')
-
-    await systemSettingsQueries.setSetting(db, 'crawler_global_freeze', parsed.data.enabled ? 'true' : 'false')
-    const freeze = await systemSettingsQueries.getSetting(db, 'crawler_global_freeze')
-    const orphanTaskCount = await countOrphanActiveTasks(db)
-    const schedulerEnabled = process.env.CRAWLER_SCHEDULER_ENABLED === 'true'
-
-    // CHG-SN-6-20-A：审计写入（targetKind='system' 复用 052 CHECK 内值，targetId 用 setting key 字面量）
-    auditSvc.write({
-      actorId: request.user!.userId,
-      actionType: 'crawler.freeze',
-      targetKind: 'system',
-      targetId: 'crawler_global_freeze',
-      beforeJsonb: { freezeEnabled: beforeFreeze === 'true' },
-      afterJsonb: {
-        freezeEnabled: freeze === 'true',
-        schedulerEnabled,
-        orphanTaskCount,
-      },
-      requestId: request.id,
-    })
-
-    return reply.send({
-      data: {
-        schedulerEnabled,
-        freezeEnabled: freeze === 'true',
-        orphanTaskCount,
-      },
-    })
-  })
-
-  // ── POST /admin/crawler/runs — 统一触发入口 ────────────────
-  fastify.post('/admin/crawler/runs', { preHandler: auth }, async (request, reply) => {
-    const BodySchema = z.object({
-      triggerType: z.enum(['single', 'batch', 'all']).default('single'),
-      mode: z.enum(['incremental', 'full']).default('incremental'),
-      siteKeys: z.array(z.string().min(1)).optional(),
-      hoursAgo: z.number().int().min(1).max(720).optional(),
-      timeoutSeconds: z.number().int().min(60).max(7200).optional(),
-      /** CRAWLER-01: 采集模式（batch=批量，keyword=关键词，source-refetch=单视频补源） */
-      crawlMode: z.enum(['batch', 'keyword', 'source-refetch']).optional(),
-      /** CRAWLER-01: 关键词搜索词（crawlMode='keyword' 时必填） */
-      keyword: z.string().min(1).max(100).optional(),
-      /** CRAWLER-01: 目标视频 ID（crawlMode='source-refetch' 时必填） */
-      targetVideoId: z.string().uuid().optional(),
-    })
-    const parsed = BodySchema.safeParse(request.body)
-    if (!parsed.success) {
-      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
-    }
-    const { triggerType, mode, siteKeys, hoursAgo, timeoutSeconds, crawlMode, keyword, targetVideoId } = parsed.data
-    if ((triggerType === 'single' || triggerType === 'batch') && (!siteKeys || siteKeys.length === 0)) {
-      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: 'siteKeys 不能为空', status: 422 } })
-    }
-    if (crawlMode === 'keyword' && !keyword) {
-      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: 'crawlMode=keyword 时 keyword 必填', status: 422 } })
-    }
-    if (crawlMode === 'source-refetch' && !targetVideoId) {
-      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: 'crawlMode=source-refetch 时 targetVideoId 必填', status: 422 } })
-    }
-    try {
-      const createdBy = (request.user as { userId?: string } | undefined)?.userId ?? null
-      const result = await runService.createAndEnqueueRun({
-        triggerType,
-        mode,
-        siteKeys,
-        hoursAgo,
-        timeoutSeconds,
-        createdBy,
-        crawlMode: crawlMode as 'batch' | 'keyword' | 'source-refetch' | undefined,
-        keyword: keyword ?? null,
-        targetVideoId: targetVideoId ?? null,
-      })
-
-      // CHG-SN-6-26-RETRO：审计 — crawler.run_create（统一触发入口）
-      const runResult = result as { id?: string } & Record<string, unknown>
-      auditSvc.write({
-        actorId: request.user!.userId,
-        actionType: 'crawler.run_create',
-        targetKind: 'system',
-        targetId: typeof runResult.id === 'string' ? runResult.id : 'run',
-        afterJsonb: {
-          triggerType,
-          mode,
-          siteKeys: siteKeys ?? null,
-          hoursAgo: hoursAgo ?? null,
-          crawlMode: crawlMode ?? null,
-          keyword: keyword ?? null,
-          targetVideoId: targetVideoId ?? null,
-        },
-        requestId: request.id,
-      })
-
-      return reply.code(202).send({ data: result })
-    } catch (err) {
-      return reply.code(503).send({
-        error: {
-          code: 'CRAWLER_QUEUE_UNAVAILABLE',
-          message: err instanceof Error ? err.message : 'run enqueue failed',
-          status: 503,
-        },
-      })
-    }
-  })
-
-  // ── GET /admin/crawler/runs ────────────────────────────────
-  fastify.get('/admin/crawler/runs', { preHandler: auth }, async (request, reply) => {
-    const QuerySchema = z.object({
-      status: z.enum(['queued', 'running', 'paused', 'success', 'partial_failed', 'failed', 'cancelled']).optional(),
-      triggerType: z.enum(['single', 'batch', 'all', 'schedule']).optional(),
-      page: z.coerce.number().int().min(1).default(1),
-      limit: z.coerce.number().int().min(1).max(100).default(20),
-    })
-    const parsed = QuerySchema.safeParse(request.query)
-    if (!parsed.success) {
-      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
-    }
-    const { status, triggerType, page, limit } = parsed.data
-    const { rows, total } = await crawlerRunsQueries.listRuns(db, {
-      status,
-      triggerType,
-      limit,
-      offset: (page - 1) * limit,
-    })
-    return reply.send({ data: rows, pagination: { total, page, limit, hasNext: page * limit < total } })
-  })
-
-  // ── GET /admin/crawler/runs/:id ────────────────────────────
-  fastify.get('/admin/crawler/runs/:id', { preHandler: auth }, async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const run = await crawlerRunsQueries.getRunById(db, id)
-    if (!run) {
-      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '批次不存在', status: 404 } })
-    }
-    await crawlerRunsQueries.syncRunStatusFromTasks(db, id)
-    const refreshed = await crawlerRunsQueries.getRunById(db, id)
-    return reply.send({ data: refreshed })
-  })
-
-  // ── GET /admin/crawler/runs/:id/tasks ──────────────────────
-  fastify.get('/admin/crawler/runs/:id/tasks', { preHandler: auth }, async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const QuerySchema = z.object({
-      page: z.coerce.number().int().min(1).default(1),
-      limit: z.coerce.number().int().min(1).max(500).default(200),
-    })
-    const parsed = QuerySchema.safeParse(request.query)
-    if (!parsed.success) {
-      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
-    }
-    const { page, limit } = parsed.data
-    const { rows, total } = await listTasksByRunId(db, id, {
-      limit,
-      offset: (page - 1) * limit,
-    })
-    return reply.send({
-      data: rows.map(mapTaskDto),
-      pagination: { total, page, limit, hasNext: page * limit < total },
-    })
-  })
-
-  // ── POST /admin/crawler/runs/:id/cancel ────────────────────
-  fastify.post('/admin/crawler/runs/:id/cancel', { preHandler: auth }, async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const run = await crawlerRunsQueries.getRunById(db, id)
-    if (!run) {
-      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '批次不存在', status: 404 } })
-    }
-    await crawlerRunsQueries.updateRunControlStatus(db, id, 'cancelling')
-    const cancelledPending = await cancelPendingTasksByRun(db, id)
-    const signaledRunning = await requestCancelRunningTasksByRun(db, id)
-    await crawlerRunsQueries.syncRunStatusFromTasks(db, id)
-    const refreshed = await crawlerRunsQueries.getRunById(db, id)
-
-    // CHG-SN-6-16-A：审计 — crawler_run.cancel
-    auditSvc.write({
-      actorId: request.user!.userId,
-      actionType: 'crawler_run.cancel',
-      targetKind: 'system',
-      targetId: id,
-      beforeJsonb: { runId: id, status: run.status, controlStatus: run.controlStatus },
-      afterJsonb: { runId: id, controlStatus: 'cancelling', cancelledPending, signaledRunning },
-      requestId: request.id,
-    })
-
-    return reply.send({
-      data: {
-        run: refreshed,
-        cancelledPending,
-        signaledRunning,
-      },
-    })
-  })
-
-  // ── POST /admin/crawler/runs/:id/pause ─────────────────────
-  fastify.post('/admin/crawler/runs/:id/pause', { preHandler: auth }, async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const run = await crawlerRunsQueries.getRunById(db, id)
-    if (!run) {
-      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '批次不存在', status: 404 } })
-    }
-    const nextControlStatus = run.status === 'running' ? 'pausing' : 'paused'
-    await crawlerRunsQueries.updateRunControlStatus(db, id, nextControlStatus)
-    await crawlerRunsQueries.syncRunStatusFromTasks(db, id)
-
-    // CHG-SN-6-16-A：审计 — crawler_run.pause
-    auditSvc.write({
-      actorId: request.user!.userId,
-      actionType: 'crawler_run.pause',
-      targetKind: 'system',
-      targetId: id,
-      beforeJsonb: { runId: id, status: run.status, controlStatus: run.controlStatus },
-      afterJsonb: { runId: id, controlStatus: nextControlStatus },
-      requestId: request.id,
-    })
-
-    return reply.send({ data: { runId: id, controlStatus: nextControlStatus } })
-  })
-
-  // ── POST /admin/crawler/runs/:id/resume ────────────────────
-  fastify.post('/admin/crawler/runs/:id/resume', { preHandler: auth }, async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const run = await crawlerRunsQueries.getRunById(db, id)
-    if (!run) {
-      return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '批次不存在', status: 404 } })
-    }
-    await crawlerRunsQueries.updateRunControlStatus(db, id, 'active')
-    await crawlerRunsQueries.syncRunStatusFromTasks(db, id)
-
-    // CHG-SN-6-16-A：审计 — crawler_run.resume
-    auditSvc.write({
-      actorId: request.user!.userId,
-      actionType: 'crawler_run.resume',
-      targetKind: 'system',
-      targetId: id,
-      beforeJsonb: { runId: id, status: run.status, controlStatus: run.controlStatus },
-      afterJsonb: { runId: id, controlStatus: 'active' },
-      requestId: request.id,
-    })
-
-    return reply.send({ data: { runId: id, controlStatus: 'active' } })
-  })
-
-  // ── GET /admin/crawler/tasks/:id ─────────────────────────────
-  // UX-09: 任务详情（含运行上下文 crawlMode / keyword / targetVideoId）
-
-  fastify.get('/admin/crawler/tasks/:id', { preHandler: auth }, async (request, reply) => {
-    const ParamsSchema = z.object({ id: z.string().uuid() })
-    const p = ParamsSchema.safeParse(request.params)
-    if (!p.success) {
-      return reply.code(422).send({
-        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
-      })
-    }
-
-    const task = await findTaskById(db, p.data.id)
-    if (!task) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: '任务不存在', status: 404 },
-      })
-    }
-
-    const run = task.runId ? await crawlerRunsQueries.getRunById(db, task.runId) : null
-    const runContext = run
-      ? { crawlMode: run.crawlMode, keyword: run.keyword, targetVideoId: run.targetVideoId }
-      : null
-
-    return reply.send({
-      data: {
-        ...mapTaskDto(task),
-        siteBreakdown: {
-          siteKey: task.sourceSite,
-          videosUpserted: (task.result?.videosUpserted as number | undefined) ?? 0,
-          sourcesUpserted: (task.result?.sourcesUpserted as number | undefined) ?? 0,
-          sourcesKept: (task.result?.sourcesKept as number | undefined) ?? 0,
-          sourcesRemoved: (task.result?.sourcesRemoved as number | undefined) ?? 0,
-          errors: (task.result?.errors as number | undefined) ?? 0,
-        },
-        runContext,
-      },
-    })
-  })
-
-  // ── GET /admin/crawler/tasks/:id/logs ───────────────────────
-
-  fastify.get('/admin/crawler/tasks/:id/logs', { preHandler: auth }, async (request, reply) => {
-    const ParamsSchema = z.object({ id: z.string().uuid() })
-    const QuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(500).default(200) })
-
-    const p = ParamsSchema.safeParse(request.params)
-    const q = QuerySchema.safeParse(request.query)
-    if (!p.success || !q.success) {
-      return reply.code(422).send({
-        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
-      })
-    }
-
-    const logs = await listCrawlerTaskLogs(db, { taskId: p.data.id, limit: q.data.limit })
-    return reply.send({ data: { logs } })
-  })
-
   // ── GET /admin/crawler/sites-status ──────────────────────────
 
   fastify.get('/admin/crawler/sites-status', { preHandler: auth }, async (_request, reply) => {
@@ -733,7 +129,6 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
   // 聚合接口：一次返回 overview + runs（最近 20 条）+ systemStatus
   // 供 useCrawlerMonitor 使用，将 3 个独立轮询请求合并为 1 个
   fastify.get('/admin/crawler/monitor-snapshot', { preHandler: auth }, async (_request, reply) => {
-    // 实时同步所有活跃状态的任务批次数据，确保前台能准确实时获取到 item-level 数据(包含进度和统计信息)
     const activeRunIds = await crawlerRunsQueries.listActiveRunIds(db)
     for (const runId of activeRunIds) {
       await crawlerRunsQueries.syncRunStatusFromTasks(db, runId)
@@ -759,41 +154,6 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
         systemStatus: systemStatusData,
       },
     })
-  })
-
-  // ── GET /admin/crawler/tasks/latest?siteKeys=a,b ───────────
-
-  fastify.get('/admin/crawler/tasks/latest', { preHandler: auth }, async (request, reply) => {
-    const QuerySchema = z.object({
-      siteKeys: z.string().min(1),
-    })
-
-    const parsed = QuerySchema.safeParse(request.query)
-    if (!parsed.success) {
-      return reply.code(422).send({
-        error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 },
-      })
-    }
-
-    const siteKeys = parsed.data.siteKeys
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-
-    if (siteKeys.length === 0) {
-      return reply.send({ data: { tasks: [] } })
-    }
-
-    const tasks = await getLatestTasksBySites(db, siteKeys)
-    return reply.send({ data: { tasks: tasks.map(mapTaskDto) } })
-  })
-
-  // ── GET /admin/crawler/sites/:key/latest-task ──────────────
-
-  fastify.get('/admin/crawler/sites/:key/latest-task', { preHandler: auth }, async (request, reply) => {
-    const { key } = request.params as { key: string }
-    const task = await getLatestTaskBySite(db, key)
-    return reply.send({ data: { task: task ? mapTaskDto(task) : null } })
   })
 
   // ── POST /admin/sources/:id/verify — 管理员触发单条验证 ──────
@@ -881,7 +241,6 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
     }
     const { keyword, siteKeys, type } = parsed.data
 
-    // 获取目标站点列表（指定 siteKeys 则过滤，否则使用所有启用站点）
     let sources = await getEnabledSources(db)
     if (siteKeys && siteKeys.length > 0) {
       sources = sources.filter((s) => siteKeys.includes(s.name))
@@ -957,4 +316,8 @@ export async function adminCrawlerRoutes(fastify: FastifyInstance) {
 
     return reply.send({ data: result })
   })
+
+  // ── 子路由注册 ──────────────────────────────────────────────
+  await registerCrawlerTaskRoutes(fastify)
+  await registerCrawlerRunRoutes(fastify)
 }
