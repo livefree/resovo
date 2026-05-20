@@ -22,6 +22,7 @@
 
 import type { ReactNode } from 'react'
 import type { ModerationStats } from './videos/api'
+import type { DashboardOverviewPayload, DashboardWorkflowSegment as ApiWorkflowSegment } from '@resovo/types'
 
 // ── 数据形态（DashboardStats）────────────────────────────────────
 
@@ -38,7 +39,7 @@ export interface DashboardKpi {
   readonly dataSource: 'mock' | 'live'
 }
 
-/** WorkflowCard 单段进度 */
+/** WorkflowCard 单段进度（UI 扩展型，含 color / dataSource） */
 export interface DashboardWorkflowSegment {
   readonly key: 'collected' | 'pendingReview' | 'staging' | 'published'
   readonly label: string
@@ -153,19 +154,81 @@ const MOCK_STAGING_COUNT = 23
 // ── 派生 helper（live + mock 混合） ─────────────────────────────
 
 /**
- * 从 ModerationStats（live，可能 null / 部分字段缺失）派生 DashboardStats（5 类卡片完整数据）
+ * 从 overview（live 全量）或 ModerationStats（live 部分）派生 DashboardStats（5 类卡片完整数据）
  *
- * live 路径：仅 ModerationStats.pendingCount 直接驱动 KPI「待审/暂存」+ WorkflowCard「待审」段；
- *           todayReviewedCount + interceptRate 用于 page head 副标题文案
- * mock 路径：其他字段（视频总量 / 源可达率 / 失效源 / 已上架 / 采集入库 / 暂存 / 5 类卡片其他形态）全部走 mock
+ * 优先路径（overview 不为 null）：
+ *   - 4 张 KPI 卡片数据直接来自 overview.kpis（全 live）
+ *   - 4 段 workflow 数据直接来自 overview.workflow（全 live）
  *
- * fallback 规则（reference §5.1.4 教训）：
- *   - moderationStats === null → 全卡 dataSource='mock'
- *   - moderationStats.pendingCount 缺失（!== number）→ KPI/Workflow live 字段降级为 mock
+ * fallback 路径（overview 为 null，使用 moderationStats）：
+ *   - 仅 pendingCount 驱动 KPI「待审/暂存」+ WorkflowCard「待审」段（live）
+ *   - 其他字段全部 mock
  *
  * **绝不**渲染破折号 `'—'`：所有 KpiCard.value 始终是 string / number 或非 null ReactNode。
  */
-export function buildDashboardStats(moderationStats: ModerationStats | null): DashboardStats {
+export function buildDashboardStats(
+  moderationStats: ModerationStats | null,
+  overview?: DashboardOverviewPayload | null,
+): DashboardStats {
+  // ── 优先使用 overview（全 live）────────────────────────────────
+  if (overview != null) {
+    const workflowMap: Record<ApiWorkflowSegment['key'], { label: string; color: string }> = {
+      collected:     { label: '采集入库',   color: 'var(--accent-default)' },
+      pendingReview: { label: '待审核',     color: 'var(--state-warning-fg)' },
+      staging:       { label: '暂存待发布', color: 'var(--state-info-fg)' },
+      published:     { label: '已上架',     color: 'var(--state-success-fg)' },
+    }
+
+    const sparkMap: Record<string, { sparkData: readonly number[]; sparkColor: string }> = {
+      videoTotal:          MOCK_KPIS_BASE.videoTotal,
+      pendingStaging:      MOCK_KPIS_BASE.pendingStaging,
+      sourceReachableRate: MOCK_KPIS_BASE.sourceReachableRate,
+      inactiveSources:     MOCK_KPIS_BASE.inactiveSources,
+    }
+
+    const kpis = overview.kpis.map((k) => ({
+      key: k.key,
+      label: MOCK_KPIS_BASE[k.key].label,
+      value: k.value,
+      deltaText: k.deltaText,
+      deltaDirection: k.deltaDirection,
+      variant: k.variant,
+      sparkData: sparkMap[k.key]?.sparkData ?? [],
+      sparkColor: sparkMap[k.key]?.sparkColor ?? 'var(--accent-default)',
+      dataSource: 'live' as const,
+    })) as unknown as DashboardStats['kpis']
+
+    const workflow = overview.workflow.map((w) => ({
+      key: w.key,
+      label: workflowMap[w.key]?.label ?? w.key,
+      current: w.current,
+      total: w.total,
+      color: workflowMap[w.key]?.color ?? 'var(--accent-default)',
+      dataSource: 'live' as const,
+    })) as unknown as DashboardStats['workflow']
+
+    const todayReviewed = moderationStats && typeof moderationStats.todayReviewedCount === 'number'
+      ? moderationStats.todayReviewedCount
+      : null
+    const interceptRate = moderationStats && typeof moderationStats.interceptRate === 'number'
+      ? moderationStats.interceptRate
+      : null
+    const headSub = todayReviewed !== null
+      ? `今日已审 ${todayReviewed} 条${interceptRate !== null ? ` · 拦截率 ${interceptRate.toFixed(1)}%` : ''}`
+      : '数据实时更新中'
+
+    return {
+      kpis,
+      workflow,
+      attentions: MOCK_ATTENTIONS,
+      activities: MOCK_ACTIVITIES,
+      sites: MOCK_SITES,
+      headSub,
+    }
+  }
+
+  // ── fallback：仅 ModerationStats（部分 live）────────────────────
+
   const pendingLive = moderationStats && typeof moderationStats.pendingCount === 'number'
     ? moderationStats.pendingCount
     : null

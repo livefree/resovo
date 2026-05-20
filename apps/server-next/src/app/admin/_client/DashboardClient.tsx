@@ -25,6 +25,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { ErrorState, LoadingState, useToast } from '@resovo/admin-ui'
 import { getModerationStats, type ModerationStats } from '@/lib/videos/api'
 import { buildDashboardStats, type DashboardStats } from '@/lib/dashboard-data'
+import { getDashboardOverview, type DashboardOverviewPayload } from '@/lib/dashboard/api'
 import { runCrawlerAll } from '@/lib/crawler/api'
 import { ApiClientError } from '@/lib/api-client'
 import { AttentionCard } from '@/components/admin/dashboard/AttentionCard'
@@ -141,23 +142,31 @@ export function DashboardClient() {
   const [stats, setStats] = useState<ModerationStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const [statsError, setStatsError] = useState<Error | undefined>()
+  const [overview, setOverview] = useState<DashboardOverviewPayload | null>(null)
   const [fullCrawlRunning, setFullCrawlRunning] = useState(false)
 
   const loadStats = useCallback(() => {
     setStatsLoading(true)
     setStatsError(undefined)
-    getModerationStats()
-      .then(setStats)
+    Promise.all([
+      getModerationStats(),
+      getDashboardOverview().catch(() => null),
+    ])
+      .then(([s, ov]) => {
+        setStats(s)
+        setOverview(ov)
+      })
       .catch((e: unknown) => setStatsError(e instanceof Error ? e : new Error(String(e))))
       .finally(() => setStatsLoading(false))
   }, [])
 
   useEffect(() => { loadStats() }, [loadStats])
 
-  // 派生 DashboardStats（live + mock 混合）
-  // stats null（加载中或失败）→ buildDashboardStats(null) 返全 mock
-  // stats 有效 → 部分 live 派生（pendingCount → KPI 待审/暂存 + Workflow 待审段）
-  const dashboardStats: DashboardStats = useMemo(() => buildDashboardStats(stats), [stats])
+  // 派生 DashboardStats：overview 优先（全 live），overview 失败则 fallback 到 moderationStats（部分 live）
+  const dashboardStats: DashboardStats = useMemo(
+    () => buildDashboardStats(stats, overview),
+    [stats, overview],
+  )
 
   const handleFullCrawl = useCallback(async () => {
     if (!window.confirm('确认启动全站全量采集？这将触发所有站点的完整抓取任务。')) return

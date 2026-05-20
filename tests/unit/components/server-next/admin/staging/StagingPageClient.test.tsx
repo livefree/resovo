@@ -126,8 +126,9 @@ describe('case A：接口成功', () => {
 
   it('流水线统计卡标题渲染', async () => {
     render(<StagingPageClient />)
-    await waitFor(() => expect(screen.getByText('发布流水线')).toBeTruthy())
-    expect(screen.getByText('当前暂存队列就绪分布')).toBeTruthy()
+    // 等数据加载完：subtitle '当前暂存队列就绪分布' 仅在 loading 结束后渲染
+    await waitFor(() => expect(screen.getByText('当前暂存队列就绪分布')).toBeTruthy())
+    expect(screen.getByText('发布流水线')).toBeTruthy()
     // 全部/就绪/警告/阻塞 标签均可见
     expect(screen.getAllByText('全部').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('就绪').length).toBeGreaterThanOrEqual(1)
@@ -147,8 +148,9 @@ describe('case B：接口失败', () => {
   it('渲染 ErrorState 兜底，不渲染表格', async () => {
     listStagingVideosMock.mockRejectedValue(new Error('网络错误'))
     render(<StagingPageClient />)
-    await waitFor(() => expect(screen.queryByTestId('staging-table')).toBeNull())
-    expect(screen.getByText('加载失败')).toBeTruthy()
+    // 等错误态：'加载失败' 出现后再断言 table 不存在
+    await waitFor(() => expect(screen.getByText('加载失败')).toBeTruthy())
+    expect(screen.queryByTestId('staging-table')).toBeNull()
   })
 })
 

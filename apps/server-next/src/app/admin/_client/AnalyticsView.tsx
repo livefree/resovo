@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * AnalyticsView.tsx — Dashboard Analytics tab 内容（CHG-DESIGN-09）
+ * AnalyticsView.tsx — Dashboard Analytics tab 内容（CHG-DESIGN-09 / CHG-SN-7-MISC-DASHBOARD-2）
  *
  * 真源：docs/designs/backend_design_v2.1/app/screens-3.jsx:499-569 AnalyticsView
  *   - page__head：标题 + sub + period select + 导出报表 btn
@@ -9,106 +9,26 @@
  *   - 2fr/1fr：采集任务量折线面积图（SVG）+ 源类型分布（进度条列表）
  *   - 爬虫最近任务 card + table（§6.9 7 列）
  *
- * 数据策略：全 mock（deterministic）；follow-up `STATS-EXTEND-ANALYTICS` 接入真端点
+ * 数据策略（MISC-DASHBOARD-2）：
+ *   - KPI / collectTimeline / sourceTypeDistribution / recentTasks 来自 /admin/dashboard/analytics
+ *   - 加载中/失败 → LoadingState / ErrorState（不渲染假数据）
+ *   - KPI sparkData 仍用静态 mock（历史序列 ADR-127a 阶段再接真端点）
  * 图表：SVG inline，无外部图表库
  */
 
-import React, { useState, useId } from 'react'
-import { KpiCard, Spark, Pill } from '@resovo/admin-ui'
+import React, { useState, useEffect, useCallback, useId } from 'react'
+import { KpiCard, Spark, Pill, LoadingState, ErrorState } from '@resovo/admin-ui'
+import { getDashboardAnalytics } from '@/lib/dashboard/api'
+import type { DashboardAnalyticsPayload, DashboardCrawlerRunBrief, DashboardKpiSnapshot, DashboardSourceTypeStat, DashboardTimelinePoint } from '@resovo/types'
 
-// ── local types ────────────────────────────────────────────────────
+// ── static spark mock（ADR-127a 后替换为真端点）────────────────────
 
-interface AnalyticsKpi {
-  readonly id: string
-  readonly label: string
-  readonly value: string
-  readonly deltaText: string
-  readonly deltaDir: 'up' | 'down' | 'flat'
-  readonly variant: 'default' | 'is-ok' | 'is-warn' | 'is-danger'
-  readonly sparkData: readonly number[]
-  readonly sparkColor: string
+const SPARK_MAP: Record<DashboardKpiSnapshot['key'], { data: readonly number[]; color: string }> = {
+  videoTotal:          { data: [620, 638, 651, 662, 670, 680, 695], color: 'var(--accent-default)' },
+  pendingStaging:      { data: [430, 450, 462, 470, 478, 480, 484], color: 'var(--state-warning-fg)' },
+  sourceReachableRate: { data: [98.4, 98.5, 98.6, 98.5, 98.7, 98.6, 98.7], color: 'var(--state-success-fg)' },
+  inactiveSources:     { data: [2050, 2030, 2010, 1990, 1980, 1967, 1939], color: 'var(--state-error-fg)' },
 }
-
-interface SourceType {
-  readonly label: string
-  readonly pct: number
-  readonly color: string
-}
-
-interface CrawlerTask {
-  readonly id: string
-  readonly site: string
-  readonly status: 'ok' | 'danger' | 'warn'
-  readonly statusLabel: string
-  readonly start: string
-  readonly end: string
-  readonly videos: number
-  readonly sources: number
-  readonly dur: number
-}
-
-// ── mock data (deterministic) ──────────────────────────────────────
-
-interface KpiBase {
-  readonly id: string
-  readonly label: string
-  readonly value: string
-  readonly variant: AnalyticsKpi['variant']
-  readonly sparkData: readonly number[]
-  readonly sparkColor: string
-}
-
-const KPI_BASES: readonly KpiBase[] = [
-  { id: 'video-total',    label: '视频总数',    value: '695',      variant: 'default', sparkData: [620, 638, 651, 662, 670, 680, 695], sparkColor: 'var(--accent-default)' },
-  { id: 'published',      label: '已上架',      value: '13',       variant: 'is-ok',   sparkData: [8, 9, 10, 10, 11, 12, 13],           sparkColor: 'var(--state-success-fg)' },
-  { id: 'pending-staging', label: '待审 / 暂存', value: '484 / 23', variant: 'is-warn', sparkData: [430, 450, 462, 470, 478, 480, 484],  sparkColor: 'var(--state-warning-fg)' },
-  { id: 'source-rate',    label: '源可达率',    value: '98.7%',    variant: 'is-ok',   sparkData: [98.4, 98.5, 98.6, 98.5, 98.7, 98.6, 98.7], sparkColor: 'var(--state-success-fg)' },
-] as const
-
-// delta 文案按 period 独立，避免与 period select 产生跨组件矛盾
-const KPI_DELTAS: Record<Period, readonly Pick<AnalyticsKpi, 'deltaText' | 'deltaDir'>[]> = {
-  '7d':  [
-    { deltaText: '↑ +47 近 7d',   deltaDir: 'up'   },
-    { deltaText: '↑ +3 近 7d',    deltaDir: 'up'   },
-    { deltaText: '近 7d +18',     deltaDir: 'flat' },
-    { deltaText: '↑ 0.3pt 近 7d', deltaDir: 'up'   },
-  ],
-  '30d': [
-    { deltaText: '↑ +183 近 30d',  deltaDir: 'up'   },
-    { deltaText: '↑ +12 近 30d',   deltaDir: 'up'   },
-    { deltaText: '近 30d +72',     deltaDir: 'flat' },
-    { deltaText: '↑ 1.1pt 近 30d', deltaDir: 'up'   },
-  ],
-  '90d': [
-    { deltaText: '↑ +521 近 90d',  deltaDir: 'up'   },
-    { deltaText: '↑ +34 近 90d',   deltaDir: 'up'   },
-    { deltaText: '近 90d +215',    deltaDir: 'flat' },
-    { deltaText: '↑ 3.0pt 近 90d', deltaDir: 'up'   },
-  ],
-}
-
-// 28 点 deterministic wave（对应设计稿 wave(120, 40, 28)）
-const CHART_POINTS: readonly number[] = [
-  120, 135, 148, 158, 155, 143, 130, 119, 113, 118,
-  130, 145, 157, 161, 156, 145, 133, 122, 114, 110,
-  115, 127, 142, 155, 161, 158, 148, 138,
-] as const
-
-const SOURCE_TYPES: readonly SourceType[] = [
-  { label: 'm3u8 (HLS)', pct: 78, color: 'var(--state-success-fg)' },
-  { label: 'mp4',        pct: 12, color: 'var(--state-info-fg)' },
-  { label: 'embed iframe', pct: 7, color: 'var(--state-warning-fg)' },
-  { label: '其他',        pct: 3,  color: 'var(--fg-disabled)' },
-] as const
-
-const CRAWLER_TASKS: readonly CrawlerTask[] = [
-  { id: 'ct-1', site: 'iyf.tv',     status: 'ok',     statusLabel: '成功',   start: '2 分钟前',  end: '1 分钟前',  videos: 55, sources: 138, dur: 53 },
-  { id: 'ct-2', site: 'agedm.org',  status: 'ok',     statusLabel: '成功',   start: '9 分钟前',  end: '8 分钟前',  videos: 51, sources: 129, dur: 61 },
-  { id: 'ct-3', site: 'mxdm5.com',  status: 'ok',     statusLabel: '成功',   start: '16 分钟前', end: '15 分钟前', videos: 46, sources: 117, dur: 69 },
-  { id: 'ct-4', site: 'btnull.org', status: 'warn',   statusLabel: '运行中', start: '23 分钟前', end: '—',          videos: 38, sources: 95,  dur: 0 },
-  { id: 'ct-5', site: 'mokit.tv',   status: 'danger', statusLabel: '失败',   start: '44 分钟前', end: '43 分钟前', videos: 0,  sources: 0,   dur: 90 },
-  { id: 'ct-6', site: 'voflix.cc',  status: 'ok',     statusLabel: '成功',   start: '51 分钟前', end: '50 分钟前', videos: 23, sources: 57,  dur: 77 },
-] as const
 
 // ── styles ────────────────────────────────────────────────────────
 
@@ -202,14 +122,61 @@ const CARD_BODY: React.CSSProperties = {
   flex: 1,
 }
 
+// ── KPI label 映射（后端不返回 label，本地定义）─────────────────────
+
+const KPI_LABELS: Record<DashboardKpiSnapshot['key'], string> = {
+  videoTotal:          '视频总数',
+  pendingStaging:      '待审 / 暂存',
+  sourceReachableRate: '源可达率',
+  inactiveSources:     '失效源',
+}
+
+// ── 时间格式化（ISO → 本地相对显示）─────────────────────────────────
+
+function fmtTime(iso: string | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  const diff = Date.now() - d.getTime()
+  const mins = Math.round(diff / 60000)
+  if (mins < 1) return '刚刚'
+  if (mins < 60) return `${mins} 分钟前`
+  const hours = Math.round(mins / 60)
+  if (hours < 24) return `${hours} 小时前`
+  return `${Math.round(hours / 24)} 天前`
+}
+
+// ── 源类型颜色映射 ────────────────────────────────────────────────
+
+const SOURCE_COLOR_MAP: Record<string, string> = {
+  'm3u8':   'var(--state-success-fg)',
+  'mp4':    'var(--state-info-fg)',
+  'embed':  'var(--state-warning-fg)',
+  'iframe': 'var(--state-warning-fg)',
+}
+
+function sourceColor(type: string): string {
+  return SOURCE_COLOR_MAP[type.toLowerCase()] ?? 'var(--fg-disabled)'
+}
+
 // ── sub-renderers ─────────────────────────────────────────────────
 
-function AreaChart({ gradientId, periodLabel }: { readonly gradientId: string; readonly periodLabel: string }) {
+function AreaChart({
+  gradientId,
+  periodLabel,
+  points,
+}: {
+  readonly gradientId: string
+  readonly periodLabel: string
+  readonly points: readonly DashboardTimelinePoint[]
+}) {
   const w = 700
   const h = 200
-  const n = CHART_POINTS.length
-  const pts = CHART_POINTS
-    .map((v, i) => `${i * (w / (n - 1))},${h - v}`)
+
+  const values = points.map((p) => p.count)
+  const maxVal = Math.max(...values, 1)
+
+  const pts = values
+    .map((v, i) => `${i * (w / Math.max(values.length - 1, 1))},${h - (v / maxVal) * (h - 20)}`)
     .join(' ')
 
   return (
@@ -217,6 +184,7 @@ function AreaChart({ gradientId, periodLabel }: { readonly gradientId: string; r
       viewBox={`0 0 ${w} ${h}`}
       style={{ width: '100%', height: 200, display: 'block' }}
       aria-label={`采集任务量折线面积图（${periodLabel}）`}
+      data-analytics-chart="timeline"
     >
       <defs>
         <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
@@ -227,31 +195,35 @@ function AreaChart({ gradientId, periodLabel }: { readonly gradientId: string; r
       {[40, 80, 120, 160].map((y) => (
         <line key={y} x1="0" x2={w} y1={y} y2={y} stroke="var(--border-subtle)" strokeWidth="1" />
       ))}
-      <polyline
-        points={`0,${h} ${pts} ${w},${h}`}
-        fill={`url(#${gradientId})`}
-      />
-      <polyline
-        points={pts}
-        fill="none"
-        stroke="var(--accent-default)"
-        strokeWidth="2"
-      />
+      {values.length > 1 && (
+        <>
+          <polyline
+            points={`0,${h} ${pts} ${w},${h}`}
+            fill={`url(#${gradientId})`}
+          />
+          <polyline
+            points={pts}
+            fill="none"
+            stroke="var(--accent-default)"
+            strokeWidth="2"
+          />
+        </>
+      )}
     </svg>
   )
 }
 
-function SourceDistribution() {
+function SourceDistribution({ items }: { readonly items: readonly DashboardSourceTypeStat[] }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      {SOURCE_TYPES.map(({ label, pct, color }) => (
-        <div key={label}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }} data-analytics-section="source-types">
+      {items.map(({ type, pct }) => (
+        <div key={type}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-size-xs)', marginBottom: '3px' }}>
-            <span style={{ color: 'var(--fg-default)' }}>{label}</span>
-            <span style={{ fontWeight: 600, color: 'var(--fg-default)' }}>{pct}%</span>
+            <span style={{ color: 'var(--fg-default)' }}>{type}</span>
+            <span style={{ fontWeight: 600, color: 'var(--fg-default)' }}>{pct.toFixed(1)}%</span>
           </div>
           <div style={{ height: '8px', background: 'var(--bg-surface-elevated)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
-            <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 'inherit' }} />
+            <div style={{ width: `${pct}%`, height: '100%', background: sourceColor(type), borderRadius: 'inherit' }} />
           </div>
         </div>
       ))}
@@ -259,7 +231,7 @@ function SourceDistribution() {
   )
 }
 
-function CrawlerTaskTable() {
+function CrawlerTaskTable({ tasks }: { readonly tasks: readonly DashboardCrawlerRunBrief[] }) {
   const TH: React.CSSProperties = {
     padding: '6px 10px',
     fontSize: 'var(--font-size-xxs)',
@@ -281,7 +253,7 @@ function CrawlerTaskTable() {
   }
 
   return (
-    <div style={{ overflowX: 'auto' }}>
+    <div style={{ overflowX: 'auto' }} data-analytics-section="crawler-tasks">
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>
@@ -295,24 +267,24 @@ function CrawlerTaskTable() {
           </tr>
         </thead>
         <tbody>
-          {CRAWLER_TASKS.map((task) => (
+          {tasks.map((task) => (
             <tr key={task.id}>
               <td style={TD}><strong style={{ fontWeight: 600 }}>{task.site}</strong></td>
               <td style={TD}><Pill variant={task.status}>{task.statusLabel}</Pill></td>
-              <td style={{ ...TD, color: 'var(--fg-muted)', fontSize: 'var(--font-size-xxs)' }}>{task.start}</td>
-              <td style={{ ...TD, color: 'var(--fg-muted)', fontSize: 'var(--font-size-xxs)' }}>{task.end}</td>
+              <td style={{ ...TD, color: 'var(--fg-muted)', fontSize: 'var(--font-size-xxs)' }}>{fmtTime(task.startedAt)}</td>
+              <td style={{ ...TD, color: 'var(--fg-muted)', fontSize: 'var(--font-size-xxs)' }}>{fmtTime(task.finishedAt)}</td>
               <td style={{ ...TD, textAlign: 'right' }}>
-                {task.videos > 0
-                  ? <strong style={{ color: 'var(--state-success-fg)', fontWeight: 600 }}>+{task.videos}</strong>
+                {task.videosUpserted > 0
+                  ? <strong style={{ color: 'var(--state-success-fg)', fontWeight: 600 }}>+{task.videosUpserted}</strong>
                   : <span style={{ color: 'var(--fg-disabled)' }}>—</span>}
               </td>
               <td style={{ ...TD, textAlign: 'right' }}>
-                {task.sources > 0
-                  ? <strong style={{ color: 'var(--accent-default)', fontWeight: 600 }}>+{task.sources}</strong>
+                {task.sourcesUpserted > 0
+                  ? <strong style={{ color: 'var(--accent-default)', fontWeight: 600 }}>+{task.sourcesUpserted}</strong>
                   : <span style={{ color: 'var(--fg-disabled)' }}>—</span>}
               </td>
               <td style={{ ...TD, textAlign: 'right', color: 'var(--fg-muted)' }}>
-                {task.dur > 0 ? `${task.dur}s` : '—'}
+                {task.durationSeconds !== null && task.durationSeconds > 0 ? `${task.durationSeconds}s` : '—'}
               </td>
             </tr>
           ))}
@@ -334,12 +306,26 @@ const PERIOD_LABEL: Record<Period, string> = {
 
 export function AnalyticsView() {
   const [period, setPeriod] = useState<Period>('7d')
+  const [analyticsData, setAnalyticsData] = useState<DashboardAnalyticsPayload | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<Error | undefined>()
   const gradientId = useId().replace(/:/g, '-')
   const periodLabel = PERIOD_LABEL[period]
-  const kpis: readonly AnalyticsKpi[] = KPI_BASES.map((base, i) => ({
-    ...base,
-    ...KPI_DELTAS[period][i],
-  }))
+
+  const loadData = useCallback((p: Period) => {
+    setLoading(true)
+    setError(undefined)
+    getDashboardAnalytics(p)
+      .then(setAnalyticsData)
+      .catch((e: unknown) => setError(e instanceof Error ? e : new Error(String(e))))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => { loadData(period) }, [loadData, period])
+
+  const handlePeriodChange = (p: Period) => {
+    setPeriod(p)
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }} data-analytics-view>
@@ -352,8 +338,9 @@ export function AnalyticsView() {
           <select
             style={SELECT_STYLE}
             value={period}
-            onChange={(e) => setPeriod(e.target.value as Period)}
+            onChange={(e) => handlePeriodChange(e.target.value as Period)}
             aria-label="时间范围"
+            data-analytics-period-select
           >
             <option value="7d">7 天</option>
             <option value="30d">30 天</option>
@@ -365,55 +352,71 @@ export function AnalyticsView() {
         </div>
       </header>
 
-      <div style={KPI_GRID} data-analytics-kpi-grid>
-        {kpis.map((kpi) => (
-          <KpiCard
-            key={kpi.id}
-            label={kpi.label}
-            value={kpi.value}
-            variant={kpi.variant}
-            dataSource="mock"
-            delta={{ text: kpi.deltaText, direction: kpi.deltaDir }}
-            spark={
-              <Spark
-                data={kpi.sparkData}
-                color={kpi.sparkColor}
-                variant="line"
-                width={60}
-                height={18}
-              />
-            }
-          />
-        ))}
-      </div>
+      {loading && <LoadingState variant="skeleton" />}
+      {!loading && error && (
+        <ErrorState error={error} title="加载分析数据失败" onRetry={() => loadData(period)} data-analytics-error />
+      )}
 
-      <div style={CHARTS_GRID}>
-        <div style={CARD} data-analytics-card="chart">
-          <header style={CARD_HEAD}>
-            <h2 style={CARD_TITLE}>采集任务量 · {periodLabel}</h2>
-          </header>
-          <div style={CARD_BODY}>
-            <AreaChart gradientId={gradientId} periodLabel={periodLabel} />
+      {!loading && !error && analyticsData && (
+        <>
+          <div style={KPI_GRID} data-analytics-kpi-grid>
+            {analyticsData.kpis.map((kpi) => {
+              const spark = SPARK_MAP[kpi.key]
+              return (
+                <KpiCard
+                  key={kpi.key}
+                  label={KPI_LABELS[kpi.key] ?? kpi.key}
+                  value={kpi.value}
+                  variant={kpi.variant}
+                  dataSource="live"
+                  delta={{ text: kpi.deltaText, direction: kpi.deltaDirection }}
+                  spark={
+                    <Spark
+                      data={spark?.data ?? []}
+                      color={spark?.color ?? 'var(--accent-default)'}
+                      variant="line"
+                      width={60}
+                      height={18}
+                    />
+                  }
+                />
+              )
+            })}
           </div>
-        </div>
 
-        <div style={CARD} data-analytics-card="source-types">
-          <header style={CARD_HEAD}>
-            <h2 style={CARD_TITLE}>源类型分布</h2>
-          </header>
-          <div style={CARD_BODY}>
-            <SourceDistribution />
+          <div style={CHARTS_GRID}>
+            <div style={CARD} data-analytics-card="chart">
+              <header style={CARD_HEAD}>
+                <h2 style={CARD_TITLE}>采集任务量 · {periodLabel}</h2>
+              </header>
+              <div style={CARD_BODY}>
+                <AreaChart
+                  gradientId={gradientId}
+                  periodLabel={periodLabel}
+                  points={analyticsData.collectTimeline}
+                />
+              </div>
+            </div>
+
+            <div style={CARD} data-analytics-card="source-types">
+              <header style={CARD_HEAD}>
+                <h2 style={CARD_TITLE}>源类型分布</h2>
+              </header>
+              <div style={CARD_BODY}>
+                <SourceDistribution items={analyticsData.sourceTypeDistribution} />
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      <div style={CARD} data-analytics-card="crawler-tasks">
-        <header style={CARD_HEAD}>
-          <h2 style={CARD_TITLE}>爬虫最近任务</h2>
-          <span style={{ marginLeft: 'auto', fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>实时</span>
-        </header>
-        <CrawlerTaskTable />
-      </div>
+          <div style={CARD} data-analytics-card="crawler-tasks">
+            <header style={CARD_HEAD}>
+              <h2 style={CARD_TITLE}>爬虫最近任务</h2>
+              <span style={{ marginLeft: 'auto', fontSize: 'var(--font-size-xxs)', color: 'var(--fg-muted)' }}>实时</span>
+            </header>
+            <CrawlerTaskTable tasks={analyticsData.recentTasks} />
+          </div>
+        </>
+      )}
     </div>
   )
 }

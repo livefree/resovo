@@ -8241,8 +8241,8 @@ REDO-03-B 将 SettingsContainer 从 5 个 Tab 扩展到 8 个 Tab，新增了「
 **约束**：
 - `system_settings` 为纯 KV 表（key + value TEXT），扩展无需 migration DDL，仅需 seed INSERT
 - `verify:endpoint-adr` 门禁：siteConfig POST 端点已有 ADR（本卡范围内扩展字段不触发新端点 ADR）
-- API Key 管理需要独立 `api_keys` 表 + 新 GET/POST/DELETE 端点 → 必须延后至 ADR-127/M-SN-8+
-- 活跃会话列表需要查询 `refresh_tokens` 表 + 新 GET 端点 → 必须延后至 ADR-128/M-SN-8+
+- API Key 管理需要独立 `api_keys` 表 + 新 GET/POST/DELETE 端点 → 必须延后至 ADR-128/M-SN-8+
+- 活跃会话列表需要查询 `refresh_tokens` 表 + 新 GET 端点 → 必须延后至 ADR-129/M-SN-8+
 
 ### 2. 决策
 
@@ -8264,9 +8264,9 @@ REDO-03-B 将 SettingsContainer 从 5 个 Tab 扩展到 8 个 Tab，新增了「
 
 **选 KV 扩展而非独立表**：8 个字段均为单值全局配置，与现有 `system_settings` 语义完全一致（全局站点设置），不属于实体列表，不需要独立表结构。KV 扩展代价最小：不涉及 schema migration DDL、不引入新 JOIN、撤销 O(1)。
 
-**延后 API Key 管理**：`api_keys` 表需要独立实体（id/name/secret_hash/created_at/last_used_at/scopes）+ 新 GET `/admin/api-keys` + POST `/admin/api-keys` + DELETE `/admin/api-keys/:id` 三个端点，必须先起独立 ADR-127（`verify:endpoint-adr` 强制门禁），不得在本卡内实施。ApiWebhookTab 当前以 advisory 形式标注延后计划。
+**延后 API Key 管理**：`api_keys` 表需要独立实体（id/name/secret_hash/created_at/last_used_at/scopes）+ 新 GET `/admin/api-keys` + POST `/admin/api-keys` + DELETE `/admin/api-keys/:id` 三个端点，必须先起独立 ADR-128（`verify:endpoint-adr` 强制门禁），不得在本卡内实施。ApiWebhookTab 当前以 advisory 形式标注延后计划。
 
-**延后活跃会话列表**：需要 `refresh_tokens` 表的 SELECT 查询 + 新 GET 端点，同样需要独立 ADR-128。LoginSessionsTab 会话策略配置字段为纯 KV，可在本卡落地；活跃会话列表部分以 advisory 卡标注。
+**延后活跃会话列表**：需要 `refresh_tokens` 表的 SELECT 查询 + 新 GET 端点，同样需要独立 ADR-129。LoginSessionsTab 会话策略配置字段为纯 KV，可在本卡落地；活跃会话列表部分以 advisory 卡标注。
 
 ### 4. 实施范围
 
@@ -8277,17 +8277,17 @@ REDO-03-B 将 SettingsContainer 从 5 个 Tab 扩展到 8 个 Tab，新增了「
 | `apps/api/src/routes/admin/siteConfig.ts` | 扩展 | POST body schema + handler 新增 8 个字段（含 webhook URL 合法性校验）|
 | `apps/api/src/db/migrations/066_system_settings_seed_notifications_session.sql` | 新增 | ON CONFLICT DO NOTHING seed（幂等）|
 | `apps/server-next/src/app/admin/settings/_tabs/NotificationsTab.tsx` | 重写 | 3 AdminCard 真实表单（email / webhook / events advisory）|
-| `apps/server-next/src/app/admin/settings/_tabs/ApiWebhookTab.tsx` | 重写 | Webhook 指引 + API Key advisory（延后 ADR-127）|
-| `apps/server-next/src/app/admin/settings/_tabs/LoginSessionsTab.tsx` | 重写 | 2 AdminCard：会话策略真实表单 + 活跃会话 advisory（延后 ADR-128）|
+| `apps/server-next/src/app/admin/settings/_tabs/ApiWebhookTab.tsx` | 重写 | Webhook 指引 + API Key advisory（延后 ADR-128）|
+| `apps/server-next/src/app/admin/settings/_tabs/LoginSessionsTab.tsx` | 重写 | 2 AdminCard：会话策略真实表单 + 活跃会话 advisory（延后 ADR-129）|
 | `apps/server/src/components/admin/system/site-settings/SiteSettings.tsx` | 修复 | v1 冻结组件 DEFAULT_SETTINGS 补齐 8 个新 SiteSettings 必填字段 |
 
 ### 5. 延后决策记录
 
 | 功能 | 延后原因 | 目标 ADR |
 |---|---|---|
-| API Key 管理（生成/撤销/列表）| 需独立表 + 3 新端点（触发 verify:endpoint-adr 门禁）| ADR-127 / M-SN-8+ |
-| 活跃会话列表 + 强制退出 | 需查询 refresh_tokens + 新 GET 端点 | ADR-128 / M-SN-8+ |
-| 通知多渠道扩展（Slack/企业微信）| 通道模型需评估后单独 ADR | ADR-129 / M-SN-8+ |
+| API Key 管理（生成/撤销/列表）| 需独立表 + 3 新端点（触发 verify:endpoint-adr 门禁）| ADR-128 / M-SN-8+ |
+| 活跃会话列表 + 强制退出 | 需查询 refresh_tokens + 新 GET 端点 | ADR-129 / M-SN-8+ |
+| 通知多渠道扩展（Slack/企业微信）| 通道模型需评估后单独 ADR | ADR-130 / M-SN-8+ |
 
 ### 6. 错误码
 
@@ -8299,7 +8299,7 @@ REDO-03-B 将 SettingsContainer 从 5 个 Tab 扩展到 8 个 Tab，新增了「
 ### 7. 测试覆盖
 
 - `LoginSessionsTab.test.tsx`（5 用例）：渲染 / 初始值注入 / dirty 状态 / advisory 卡 / 加载失败 ErrorState
-- `ApiWebhookTab.test.tsx`（3 用例）：渲染 / 两 card testid / ADR-127 advisory 文字
+- `ApiWebhookTab.test.tsx`（3 用例）：渲染 / 两 card testid / ADR-128 advisory 文字
 - `NotificationsTab.test.tsx`（5 用例）：渲染 / Webhook URL 初始值注入 / dirty 指示器 / 保存 toast / 加载失败 ErrorState
 
 ### 8. 关联
@@ -8307,8 +8307,9 @@ REDO-03-B 将 SettingsContainer 从 5 个 Tab 扩展到 8 个 Tab，新增了「
 - ADR-125（REDO-03-A Settings IA 顶级化）
 - ADR-122 / ADR-123 / ADR-124（M-SN-7 同 milestone）
 - plan `docs/task-queue.md` REDO-03-C（当前卡）
-- ADR-127（API Key 管理 / 待起草）
-- ADR-128（活跃会话列表 / 待起草）
+- ADR-127（Dashboard Stats 端点协议 / CHG-SN-7-MISC-DASHBOARD-2）
+- ADR-128（API Key 管理 / 待起草）
+- ADR-129（活跃会话列表 / 待起草）
 
 ### 9. 后果
 
@@ -8328,6 +8329,167 @@ REDO-03-B 将 SettingsContainer 从 5 个 Tab 扩展到 8 个 Tab，新增了「
 | 命名 | A | snake_case KV key 与现有 24 个 key 风格一致 / camelCase SiteSettings 字段与接口规范对齐 |
 | 对称性 | A | 8 个字段在类型 / 序列化 / API schema / seed 四处全量对齐 / 无遗漏 |
 | 状态职责 | A | KV 全局配置归 system_settings / 实体列表（api_keys）明确延后 / 无越层 |
-| 扩展性 | A | ON CONFLICT DO NOTHING seed 幂等 / 新 KV 字段增量扩展无 DDL 风险 / ADR-127/128 扩展路径清晰 |
+| 扩展性 | A | ON CONFLICT DO NOTHING seed 幂等 / 新 KV 字段增量扩展无 DDL 风险 / ADR-128/129 扩展路径清晰 |
 
 **综合**：**A**
+
+## ADR-127 — Dashboard Stats 扩展端点协议设计（CHG-SN-7-MISC-DASHBOARD-2）
+
+**状态**：Accepted（Conditional PASS：C1 ADR-126 §5 编号顺延已修正，C2 任务卡端点数已更正）
+**日期**：2026-05-19
+**决策者**：arch-reviewer (claude-opus-4-7)
+**消费方**：apps/api · packages/types · apps/server-next（DashboardClient + AnalyticsView）
+
+### 1. 背景
+
+`/admin` Dashboard（overview tab）当前仅 `pendingCount` 走 live 路径，其余 4 张 MetricKpiCard / WorkflowCard 4 段 / AttentionCard / RecentActivityCard / SiteHealthCard 全量 deterministic mock（`apps/server-next/src/lib/dashboard-data.ts`）。
+
+`/admin?tab=analytics`（reference §5.15）KPI 字段与 dashboard 高度重叠（视频总数 / 已上架 / 待审·暂存 / 源可达率），目前也是占位。
+
+任务 CHG-SN-7-MISC-DASHBOARD-2 目标：将 4 个 MetricKpiCard + WorkflowCard 4 段真实化，并与 §5.15 Analytics Tab 的 KPI 字段统一设计。AttentionCard / RecentActivityCard / SiteHealthCard 暂维持 mock（ADR-130/131/132 延后）。
+
+### 2. 决策
+
+**D-127-1（端点策略）：混合策略（方案 D）**
+
+- 扩展现有 `/admin/videos/moderation-stats`：追加 `interceptDelta`（今日-昨日拦截率差值，pt单位），向后兼容
+- 新增 `/admin/dashboard/overview`：一次返回 4 KPI + 4 workflow 段，不含 spark
+- 新增 `/admin/dashboard/spark`：按 metric + days 参数按需返回 7 天序列
+- 新增 `/admin/dashboard/analytics`：§5.15 Analytics Tab 专用（4 KPI + 采集时间线 + 源类型分布 + 近期任务列表）
+
+否决理由（B 单聚合全包）：spark 数据膨胀响应体；analytics 与 overview 关注点不同。
+否决理由（C 细粒度多端点）：首屏多次往返，用户体验差。
+否决理由（A 仅扩展 moderation-stats）：端点语义污染（名称暗示"审核"却返回源健康数据）。
+
+**D-127-2（Spark 历史数据策略）：实时聚合，预留快照演进路径**
+
+当前阶段：`/admin/dashboard/spark` 对每个 metric 执行 `GROUP BY date_trunc('day', ...) LIMIT days` 查询，单表 + 索引扫描，预估 P95 < 50ms。
+
+触发 ADR-127a（新建 `dashboard_kpi_snapshots` 表 + 每日 cron）的条件：
+1. spark 端点 P95 > 200ms 或 daily QPS > 1000
+2. 引入 30d/90d 长窗口需求
+3. 引入历史回看 / time-travel 需求
+
+否决方案 B（随机波动 mock）：违反"live 字段不得伪造"语义（ADR-126 / reference §5.1.4 教训）。
+
+**D-127-3（范围收敛）**
+
+| 卡片 | 范围 | 数据源 |
+|---|---|---|
+| MetricKpiCard 视频总量 | 真实化 | `videos` 按 approved+public+not deleted 计数 |
+| MetricKpiCard 待审/暂存 | 真实化 | pendingCount（已 live）+ `videos WHERE review_status='staging'` count |
+| MetricKpiCard 源可达率 | 真实化 | `video_sources` active/total 百分比 |
+| MetricKpiCard 失效源 | 真实化 | `video_sources` inactive count |
+| WorkflowCard 采集入库 | 真实化 | `crawler_run_tasks.result.videosUpserted` 今日累计 |
+| WorkflowCard 待审核 | 维持 live | moderation-stats.pendingCount |
+| WorkflowCard 暂存待发布 | 真实化 | `videos WHERE review_status='staging'` count |
+| WorkflowCard 已上架 | 真实化 | `videos WHERE review_status='approved' AND visibility='public'` count |
+| AttentionCard | 维持 mock | 跨 3 域聚合复杂度高 → ADR-130 |
+| RecentActivityCard | 维持 mock | 需 audit_log 跨 targetKind + 用户名 JOIN → ADR-131 |
+| SiteHealthCard | 维持 mock | health score 口径需统一（与 crawlerKpi 协调）→ ADR-132 |
+
+**D-127-4（端点数量）：3 个新端点 + 1 个扩展**
+
+- workflow-counts 独立端点（Opus 初稿包含）在实施期移除：WorkflowCard 无独立 refresh 按钮，workflow 数据直接由 overview 端点下发，不需要双暴露。任务卡描述"6 endpoints"更正为"3 新端点 + 1 扩展"。
+
+**D-127-5（Analytics Tab 字段复用策略）**
+
+- 共享 `DashboardKpiSnapshot` 类型（`packages/types/src/dashboard.ts`），不共享端点
+- overview 与 analytics 各自一个端点，payload 形状不同（analytics 额外含 timeline / sourceTypeDistribution / recentTasks）
+
+### 端点契约
+
+| # | 方法 | 路径 | 认证 | 请求参数 | 响应 schema 要点 | ADR |
+|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/dashboard/overview` | admin | — | `{ data: { kpis: DashboardKpiSnapshot[], workflow: DashboardWorkflowSegment[], generatedAt: string } }` | ADR-127 |
+| 2 | GET | `/admin/dashboard/spark` | admin | `metric` (z.enum 4 值, 必填)；`days` (z.coerce.number, 1-30, default 7) | `{ data: { metric: string, points: DashboardSparkPoint[] } }` | ADR-127 |
+| 3 | GET | `/admin/dashboard/analytics` | admin | `period?: '7d'\|'30d'\|'90d'` (default '7d') | `{ data: { kpis: DashboardKpiSnapshot[], collectTimeline: DashboardTimelinePoint[], sourceTypeDistribution: DashboardSourceTypeStat[], recentTasks: DashboardCrawlerRunBrief[] } }` | ADR-127 |
+
+（注：`GET /admin/videos/moderation-stats` +interceptDelta 扩展不新增端点，已在白名单存量豁免范围，不单独列入此表。）
+
+### 3. 端点契约表（旧格式备查）
+
+本节保留原始 Opus 设计的表格格式，正式 verify 版本见 §端点契约 节。
+
+**错误码**（新增）：
+- `VALIDATION_ERROR` (422)：query 参数 zod 校验失败（metric 不在枚举 / days 超范围）
+- `INTERNAL_ERROR` (500)：聚合 query 失败兜底
+
+**audit log**：3 个新端点均为 GET 只读，按 ADR-121 §"GET 只读不在范围"，无需 audit RETRO 7 文件框架。
+
+### 4. 文件范围
+
+**新建**（后端）：
+- `apps/api/src/routes/admin/dashboard.ts`（3 端点容器；类比 `crawlerDashboard.ts` 结构）
+- `apps/api/src/services/DashboardStatsService.ts`（聚合编排；调 queries，不写 SQL）
+- `apps/api/src/db/queries/dashboardOverview.ts`（KPI + workflow 聚合 SQL）
+- `apps/api/src/db/queries/dashboardSpark.ts`（7 天 day-grain 聚合 × 4 metric）
+- `apps/api/src/db/queries/dashboardAnalytics.ts`（period 聚合 + timeline + 源类型分布）
+
+**新建**（类型 + 前端）：
+- `packages/types/src/dashboard.ts`（`DashboardKpiSnapshot` / `DashboardWorkflowSegment` / `DashboardSparkPoint` / `DashboardTimelinePoint` / `DashboardSourceTypeStat` / `DashboardCrawlerRunBrief` / `DashboardAnalyticsPayload`）
+- `apps/server-next/src/lib/dashboard/api.ts`（fetcher：`getDashboardOverview` / `getDashboardSpark` / `getDashboardAnalytics`）
+
+**修改**（后端）：
+- `apps/api/src/routes/admin/videos.ts`（moderation-stats 追加 `interceptDelta`）
+- `apps/api/src/db/queries/videos.ts`（`getModerationStats` 追加昨日拦截率聚合）
+- `apps/api/src/app.ts`（注册 `adminDashboardRoutes`）
+
+**修改**（前端）：
+- `apps/server-next/src/lib/dashboard-data.ts`（`buildDashboardStats` 入参扩为 `{ moderationStats, overview } | null`；live 路径覆盖 4 KPI + 4 workflow 段）
+- `apps/server-next/src/app/admin/_client/DashboardClient.tsx`（并行拉 2 端点：moderation-stats + overview；spark 按需）
+- `apps/server-next/src/app/admin/_client/AnalyticsView.tsx`（消费 `/admin/dashboard/analytics`；从占位升级为真实视图）
+
+**测试**（新增）：
+- `tests/unit/api/routes/admin/dashboard.test.ts`（3 端点 happy path + 422 + auth）
+- `tests/unit/components/server-next/admin/dashboard/AnalyticsView.test.tsx`（live + 占位两态）
+
+### 5. 替代方案
+
+| 方案 | 端点数 | 优劣 | 否决原因 |
+|---|---|---|---|
+| A 扩展 moderation-stats | 0 新端点 | 最小改动 | 语义污染；不适合视频总量/源数据 |
+| B 单聚合全包 | 1 新端点 | 请求数最少 | spark 膨胀响应；analytics 与 overview 形状不同 |
+| C 细粒度多端点 | 8+ | 解耦清晰 | 首屏 8 次往返；维护成本高 |
+| D 混合（采纳） | 3 新 + 1 扩展 | 请求数与语义平衡 | — |
+
+### 6. 后果
+
+**正面**：
+1. Dashboard 4 KPI + WorkflowCard 4 段全量真实化，`data-source="mock"` 标记清零（除 3 个延后卡片）
+2. Analytics Tab 从占位升级为真实视图，与 dashboard KPI 类型对齐
+3. spark 按需调用，不阻塞首屏
+4. moderation-stats 向后兼容（仅 append `interceptDelta` 字段）
+
+**负面 / 风险**：
+1. spark 实时聚合性能未量化，触发 ADR-127a 条件预设为监控指标
+2. WorkflowCard"采集入库"与 crawlerKpi 语义近似但口径独立（dashboard 当日 / crawlerKpi 批次粒度），端点 jsdoc 需明确口径
+
+### 7. 延后决策
+
+| 功能 | 延后原因 | 目标 ADR |
+|---|---|---|
+| AttentionCard 真实化 | 跨 crawler / image-health / merge 3 域聚合 | ADR-130 |
+| RecentActivityCard 真实化 | audit_log 跨 targetKind + 用户名 JOIN | ADR-131 |
+| SiteHealthCard 真实化 | health score 口径统一（与 crawlerKpi 协调） | ADR-132 |
+| dashboard_kpi_snapshots time-series 表 | 实时聚合优先，未达触发条件 | ADR-127a |
+| spark 30d/90d 长窗口 | 当前仅 7d 需求 | ADR-127a |
+
+### 8. 关联
+
+- ADR-100 R7 MUST-8（admin route ADR 前置门禁）
+- ADR-121（GET 只读端点不在 audit RETRO 范围）
+- ADR-122（crawlerDashboard 路由结构参照）
+- ADR-126 §5（编号冲突已修正：API Key 顺延至 ADR-128，活跃会话 ADR-129）
+- CHG-SN-7-MISC-DASHBOARD-2
+
+### 9. 自评
+
+| 维度 | 评级 | 理由 |
+|---|---|---|
+| 正确性 | A | 3 端点 GET 全只读 / 不触发 audit / 不破坏分层 / moderation-stats 向后兼容 |
+| 边界 | A- | dashboard 路由独立文件与 crawlerDashboard 对称；analytics 与 overview 解耦；workflow-counts 双暴露风险已在实施期决议移除 |
+| 扩展性 | A | spark 实时→快照演进 ADR-127a 预留 / 3 个延后卡片路径明列 / DashboardKpiSnapshot 类型两端点共享 |
+| 一致性 | A | 认证 `requireRole(['admin'])` / 错误码 VALIDATION_ERROR + INTERNAL_ERROR / fetcher 命名 getDashboard* 与 getModerationStats 风格统一 |
+
+**综合**：**A-**（arch-reviewer claude-opus-4-7 裁决）

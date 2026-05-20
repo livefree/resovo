@@ -12851,3 +12851,52 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 - **改动摘要**：Opus 裁决方案 A（独立路由）。新建完整 `/admin/staging` 页：PipelineSummaryCard + AutoPublishRulesCard + 4-segment DataTable v2（6 列）。ModerationConsole 移除 staging tab（TabId / tabDefs / render）并添加旧路由 redirect。admin-nav 追加"暂存发布"条目。
 - **测试结果**：typecheck PASS / lint PASS / unit 4198 PASS（+8 新测试）
 - **价值排序自评**：正确性 A / 边界复用 A（DataTable v2 / AdminCard / Segment 复用，无重复实现）/ 扩展性 A（segment filter / DataTable query patch 路径开放）/ 一致性 A（DataTable v2 模式与 CrawlerSiteList 一致 / CSS 变量零硬编码）/ 改动收敛 7 文件
+
+## [CHG-SN-7-MISC-DASHBOARD-1] Dashboard page__head 2 按钮 onClick 绑定
+- **完成时间**：2026-05-19
+- **记录时间**：2026-05-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/_client/DashboardClient.tsx`（Export 按钮 onClick + AnalyticsView period 切换 Handler 绑定）
+  - `tests/unit/components/server-next/admin/dashboard/DashboardClient.test.tsx`（+3 测试：Export / Period-change / AnalyticsView 渲染）
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`（任务收尾三同步）
+- **新增依赖**：无
+- **数据库变更**：无
+- **改动摘要**：page__head Export 导出按钮绑定 onClick 触发 CSV 下载（API stub），Period 选择器变更时正确传递 period 到 AnalyticsView 组件，AnalyticsView 接收并响应 period prop。
+- **测试结果**：typecheck PASS / lint PASS / unit 4201 PASS（+3 新测试）
+- **价值排序自评**：正确性 A / 边界复用 A / 扩展性 A / 一致性 A / 改动收敛 3 文件
+
+## [CHG-SN-7-MISC-DASHBOARD-2] Dashboard 数据真实化（ADR-127 实装）
+- **完成时间**：2026-05-19
+- **记录时间**：2026-05-19
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-7) — ADR-127 Dashboard Stats 端点协议设计（Conditional A−，条件全部已解决）
+- **修改文件**：
+  - 新建：`packages/types/src/dashboard.ts`（8 共享类型：DashboardKpiSnapshot / DashboardWorkflowSegment / DashboardSparkPoint / DashboardTimelinePoint / DashboardSourceTypeStat / DashboardCrawlerRunBrief / DashboardAnalyticsPayload / DashboardOverviewPayload）
+  - `packages/types/src/index.ts`（export type * from './dashboard'）
+  - 新建：`apps/api/src/db/queries/dashboardOverview.ts`（getDashboardOverview — 4 KPI + 4 workflow 真实聚合 SQL）
+  - 新建：`apps/api/src/db/queries/dashboardSpark.ts`（getDashboardSpark — 4 metric 时序 SQL）
+  - 新建：`apps/api/src/db/queries/dashboardAnalytics.ts`（getDashboardAnalyticsData — timeline + sourceType + recentTasks）
+  - 新建：`apps/api/src/routes/admin/dashboard.ts`（3 端点：overview / spark / analytics，requireRole admin）
+  - `apps/api/src/server.ts`（注册 adminDashboardRoutes）
+  - `apps/api/src/db/queries/videos.ts`（getModerationStats 新增 interceptDelta 字段）
+  - 新建：`apps/server-next/src/lib/dashboard/api.ts`（3 前端 API fetcher 函数）
+  - `apps/server-next/src/lib/dashboard-data.ts`（buildDashboardStats 支持 overview 优先路径）
+  - `apps/server-next/src/app/admin/_client/DashboardClient.tsx`（并发加载 overview + moderationStats）
+  - `apps/server-next/src/app/admin/_client/AnalyticsView.tsx`（全面重写：mock → live 数据 + LoadingState + ErrorState）
+  - `docs/decisions.md`（ADR-127 端点契约表格式修正，verify:adr-contracts 合规）
+  - 新建：`tests/unit/api/admin-dashboard.test.ts`（12 路由测试 / 3 端点 × 200+401+422+403）
+  - `tests/unit/components/server-next/admin/dashboard/AnalyticsView.test.tsx`（全面重写 16 测试 / live 数据 mock 覆盖）
+  - `tests/unit/components/server-next/admin/staging/StagingPageClient.test.tsx`（修复 2 个预存 waitFor 时序 bug）
+  - `docs/tasks.md` + `docs/task-queue.md` + `docs/changelog.md`（任务收尾三同步）
+- **新增依赖**：无
+- **数据库变更**：无（复用现有表 videos / video_sources / crawler_tasks）
+- **注意事项**：
+  1. ADR-127a（dashboard_kpi_snapshots 预聚合表）延后，触发条件为 spark P95 > 200ms
+  2. spark 端点当前为即时聚合 SQL，高并发场景需关注性能
+  3. sourceReachableRate spark 当前返回当前值重复（无历史时序数据，符合 ADR-127 §D-127-9 说明）
+  4. DashboardClient 并发加载时 overview 失败降级为 null（moderationStats 部分 live 路径继续工作）
+- **改动摘要**：ADR-127 三端点全链路实装（GET /admin/dashboard/overview|spark|analytics）。共享类型层 packages/types/src/dashboard.ts 新建 8 接口。后端 3 个 DB query 文件真实 SQL 聚合。前端 AnalyticsView 从全 mock 升级为 live 数据（LoadingState / ErrorState / period 切换）。buildDashboardStats 新增 overview 优先路径（全部 live KPI + workflow）。verify:adr-contracts 合规通过。
+- **测试结果**：typecheck PASS / lint PASS / unit 4216 PASS（+15 新测试：12 路由 + 3 AnalyticsView 净增）/ verify:adr-contracts PASS
+- **价值排序自评**：正确性 A / 边界复用 A（packages/types 共享 / apiClient 复用 / 无越层调用）/ 扩展性 A（ADR-127a 扩展路径清晰 / metric 枚举可增）/ 一致性 A（Fastify 路由模式统一 / CSS 变量零硬编码）/ 改动收敛 18 文件

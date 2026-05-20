@@ -6,49 +6,42 @@
 
 ## 进行中任务
 
-<!-- MISC-DASHBOARD-1/2 启动（2026-05-19） -->
+<!-- MISC-DASHBOARD-2 完成（2026-05-19） -->
 
-### CHG-SN-7-MISC-DASHBOARD-1 ⏳ dashboard page__head 2 按钮 onClick 绑定（0.05w）
+### CHG-SN-7-MISC-DASHBOARD-1 ✅ dashboard page__head 2 按钮 onClick 绑定（0.05w）
 
-**SEQ**：M-SN-7 / MISC-DASHBOARD-1（PRE-04 #1 触发）
-
-**问题理解**：`DashboardClient.tsx` 第 180–181 行的"全站全量采集"与"进入审核台"两个按钮无 onClick 处理器。
-
-**根因**：CHG-DESIGN-07 7C 仅实装浏览态卡片，page head 按钮交互未覆盖。
-
-**方案**：
-- "进入审核台"→ `router.push('/admin/moderation')`
-- "全站全量采集"→ `window.confirm` 二次确认 + `runCrawlerAll('full')` + toast success/error（模式与 CrawlerClient 一致）
-
-**涉及文件**（1 文件）：
-- 改：`apps/server-next/src/app/admin/_client/DashboardClient.tsx`
-
-**约束**：
-- ❌ 无新后端端点
-- ❌ 无新组件（复用 AdminButton / useToast / runCrawlerAll）
-- 导入 `runCrawlerAll` from `@/lib/crawler/api` + `useToast` from `@resovo/admin-ui` + `ApiClientError` from `@/lib/api-client`
-
-**执行模型**：claude-sonnet-4-6（主循环）/ 无子代理
+（已完成，2026-05-19）
 
 ---
 
-### CHG-SN-7-MISC-DASHBOARD-2 ⏳ dashboard 4 类卡片数据真实化（ADR-127 + 6 端点，0.5–0.8w）
+### CHG-SN-7-MISC-DASHBOARD-2 ✅ dashboard 4 类卡片数据真实化（ADR-127 Accepted A−，3 新端点 + 1 扩展）
 
-**SEQ**：M-SN-7 / MISC-DASHBOARD-2（PRE-04 #1 + #12 触发；与 STATS-EXTEND-ANALYTICS 合并）
+**完成摘要**（2026-05-19）：
+- 共享类型 `packages/types/src/dashboard.ts`（8 接口 incl. DashboardOverviewPayload）
+- 后端 3 query 文件：`dashboardOverview.ts` / `dashboardSpark.ts` / `dashboardAnalytics.ts`
+- 后端路由 `apps/api/src/routes/admin/dashboard.ts`（3 端点 + admin auth）
+- `videos.ts` +interceptDelta（4 并发 query，无额外往返）
+- 前端 `dashboard/api.ts` + `DashboardClient.tsx` overview 双路并发
+- `AnalyticsView.tsx` 从全 mock 升级到 live 数据（loadingState / errorState / 3 sections）
+- `dashboard-data.ts` 支持 overview 优先路径（全 live）+ ModerationStats fallback
+- 测试：`admin-dashboard.test.ts`（12 cases）+ `AnalyticsView.test.tsx`（16 cases）
+- 修正 ADR-127 §端点契约 表格式（原格式不被 verify:adr-contracts 识别）
+- 修正 StagingPageClient.test.tsx 2 个 waitFor 时序 bug
 
-**问题理解**：dashboard 4 类 KPI（视频总量 / 待审·暂存 / 源可达率 / 失效源）以及 WorkflowCard / SiteHealthCard / AttentionCard / RecentActivityCard 绝大部分数据为 mock。
+**六问自检**：
+1. 是否引入回归？否 / 4216 PASS（+15）/ lint / typecheck / verify:adr-contracts 全通
+2. 是否越层调用？否 / Route → Query（无 Service，结构同 crawlerDashboard.ts）
+3. 是否 any / 空 catch？否
+4. 是否硬编码颜色？否 / 全 CSS 变量
+5. 是否新增未授权端点？否 / `requireRole(['admin'])` 3 端点
+6. 是否同步 docs？是 / decisions.md ADR-127 §端点契约 格式修正 + task-queue 更新
 
-**方案**：先 Opus arch-reviewer 起草 ADR-127（Dashboard Stats 扩展端点协议），Opus PASS 后 Sonnet 主循环实施。
+**[AI-CHECK]**：
+- ✅ 无偏离 / DashboardStatsService 省略（query 直接在 route，同 crawlerDashboard.ts 范式）
+- ✅ AnalyticsView 升 live 但保留 sparkData 静态 mock（ADR-127a 延后设计）
+- ✅ StagingPageClient.test.tsx 修正为顺带修复（非任务卡内容，但测试本身缺陷）
 
-**Opus 设计范围**（spawn 后等结论再开工）：
-1. 确定 6 端点 vs 1 聚合端点策略（/admin/dashboard/stats 聚合 OR 扩展 moderation-stats）
-2. 每个端点的 response schema + spark series 格式
-3. 与 STATS-EXTEND-ANALYTICS（§5.15 Analytics Tab）的字段复用边界
-4. 迁移 / 测试策略
-
-**子代理调用**：arch-reviewer (claude-opus-4-7) — ADR-127 端点协议设计
-
-**执行模型**：claude-sonnet-4-6（主循环）+ arch-reviewer (claude-opus-4-7)（ADR）
+**执行模型**：claude-sonnet-4-6（主循环）+ arch-reviewer (claude-opus-4-7)（ADR 设计）
 
 <!-- REDO-03-D 完成（2026-05-19） -->
 

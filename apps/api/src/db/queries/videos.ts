@@ -1155,16 +1155,21 @@ export interface ModerationStats {
    * 即 ratio × 100 后保留 1 位小数。例如 rejected=12 / total7d=100 → 12.0（表示 12.0%）。
    *
    * **消费方使用约定**：直接拼 "%"，**不要再乘以 100**（典型坑：CHG-DESIGN-07 7C
-   * 曾误乘 100 致 server-next Dashboard 显示 1230.0% 假数据，Codex stop-time fix#1 闭环；
+   * 曾误乘 100 致 server-next Dashboard 显示 1230.0% 假数据，Codex stop-time fix#1 闭围；
    * fix#2 同步生产方 jsdoc 防再误读）。
    *
    * 任何持有此字段类型的生产方 / 消费方 / 镜像类型必须保持本契约同步。
    */
   interceptRate: number | null
+  /**
+   * 今日 vs 昨日拦截率差值（百分点；可为 null）
+   * ADR-127 §扩展：interceptDelta = 今日 7d 窗口拦截率 - 昨日 7d 窗口拦截率
+   */
+  interceptDelta?: number | null
 }
 
 export async function getModerationStats(db: Pool): Promise<ModerationStats> {
-  const [pending, todayReviewed, recent] = await Promise.all([
+  const [pending, todayReviewed, recent, yesterday] = await Promise.all([
     db.query<{ count: string }>(
       `SELECT COUNT(*) FROM videos
        WHERE review_status = 'pending_review' AND deleted_at IS NULL`
@@ -1184,16 +1189,37 @@ export async function getModerationStats(db: Pool): Promise<ModerationStats> {
          AND reviewed_at >= NOW() - INTERVAL '7 days'
          AND deleted_at IS NULL`
     ),
+    db.query<{ approved: string; rejected: string }>(
+      `SELECT
+         COUNT(*) FILTER (WHERE review_status = 'approved') AS approved,
+         COUNT(*) FILTER (WHERE review_status = 'rejected') AS rejected
+       FROM videos
+       WHERE review_status IN ('approved','rejected')
+         AND reviewed_at >= NOW() - INTERVAL '8 days'
+         AND reviewed_at <  NOW() - INTERVAL '1 day'
+         AND deleted_at IS NULL`
+    ),
   ])
 
   const approved = parseInt(recent.rows[0]?.approved ?? '0')
   const rejected = parseInt(recent.rows[0]?.rejected ?? '0')
   const total7d = approved + rejected
 
+  const approvedY = parseInt(yesterday.rows[0]?.approved ?? '0')
+  const rejectedY = parseInt(yesterday.rows[0]?.rejected ?? '0')
+  const total7dY = approvedY + rejectedY
+
+  const todayRate = total7d > 0 ? Math.round((rejected / total7d) * 1000) / 10 : null
+  const yesterdayRate = total7dY > 0 ? Math.round((rejectedY / total7dY) * 1000) / 10 : null
+  const interceptDelta = todayRate !== null && yesterdayRate !== null
+    ? Math.round((todayRate - yesterdayRate) * 10) / 10
+    : null
+
   return {
     pendingCount: parseInt(pending.rows[0]?.count ?? '0'),
     todayReviewedCount: parseInt(todayReviewed.rows[0]?.count ?? '0'),
-    interceptRate: total7d > 0 ? Math.round((rejected / total7d) * 1000) / 10 : null,
+    interceptRate: todayRate,
+    interceptDelta,
   }
 }
 

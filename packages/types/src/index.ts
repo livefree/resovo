@@ -17,5 +17,6 @@ export type * from './admin-moderation.types'
 export type * from './video-merge.types'
 export type * from './sources-matrix.types'
 export type * from './admin-audit.types'
+export type * from './dashboard'
 
 export { DEFAULT_INGEST_POLICY } from './system.types'
