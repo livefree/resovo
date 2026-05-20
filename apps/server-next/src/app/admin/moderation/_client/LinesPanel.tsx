@@ -70,10 +70,22 @@ export function LinesPanel({ videoId, selectedKey, onLineSelect }: LinesPanelPro
     setLoading(true)
     setError(null)
     api.fetchVideoSources(videoId)
-      .then(setLines)
+      .then(data => {
+        setLines(data)
+        if (onLineSelect) {
+          const agg = groupSourcesByLine(data)
+          const firstLine = agg[0]
+          if (firstLine) {
+            const firstActiveEp = firstLine.episodes.find(e => e.isActive)
+            if (firstActiveEp) {
+              onLineSelect({ lineKey: firstLine.key, line: firstLine, firstActiveUrl: firstActiveEp.sourceUrl })
+            }
+          }
+        }
+      })
       .catch(() => setError(M.errors.loadFailed))
       .finally(() => setLoading(false))
-  }, [videoId])
+  }, [videoId, onLineSelect])
 
   const aggregatedLines = useMemo(() => groupSourcesByLine(lines), [lines])
 

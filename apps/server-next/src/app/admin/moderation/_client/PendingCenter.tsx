@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { VisChip, DecisionCard, StaffNoteBar, Thumb } from '@resovo/admin-ui'
 import type { VideoQueueRow } from '@resovo/types'
 import { EpisodeSelector } from './EpisodeSelector'
@@ -36,8 +36,12 @@ const SECTION: React.CSSProperties = {
 export function PendingCenter({ v, onStaffNoteChange, onEditVideo }: PendingCenterProps): React.ReactElement {
   const [currentEp, setCurrentEp] = useState(1)
   const [noteEditing, setNoteEditing] = useState(false)
-  const { selected, onLineSelect } = useSelectedLine()
+  const { selected, onLineSelect, clearSelection } = useSelectedLine()
   const [noteSubmitting, setNoteSubmitting] = useState(false)
+
+  useEffect(() => {
+    clearSelection()
+  }, [v.id, clearSelection])
 
   const handleNoteSubmit = async (note: string | null) => {
     setNoteSubmitting(true)
