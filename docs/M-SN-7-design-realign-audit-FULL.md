@@ -527,21 +527,86 @@
 
 ## PRE-04 收尾：REDO-NN 优先级排序
 
-> **2026-05-18 完成所有 16 路由审计**。本节是 PRE-04 末尾 Opus 排序的占位—— Opus 子代理执行后填充正式优先级（计划文档 §1.2 模型路由）。
->
-> 当前主循环（Opus）预排（待 spawn arch-reviewer 子代理正式裁决）：
+> **2026-05-20 PRE-04 正式闭环**。本节由 arch-reviewer Opus 子代理（claude-opus-4-7）基于 16 路由审计结果产出最终归类与收尾裁决，覆盖原占位段。
 
-| 优先级 | REDO 卡 | 路由 | 估时 | 触发原因 |
-|---|---|---|---|---|
-| P0-1 | **REDO-01** | `/admin/crawler` | 2.55w | 架构错位（Tab + DataTable + 仅 4 按钮） |
-| P0-2 | **REDO-02** | `/admin/submissions` | ~1w | 架构错位（DataTable vs Card list） |
-| P0-3 | **REDO-03** | `/admin/settings`（system 收敛） | ~1.5w | 架构错位（5 子路由分散违反 §5.11） |
-| P0-4 | **REDO-04** | `/admin/staging` | ~1.5w 或 0.1w | 整页未做 / 待 Opus 裁决 IA 修订 vs 独立路由 |
+### 1. 正式 REDO-NN 归类表（4 项，全部已完成）
 
-**MISC 跟踪卡** 16 项（按路由分组）：DASHBOARD-1/2/3 + VIDEOS-1 + MERGE-1/2 + SUBTITLES-1/2 + HOME-1/2 + IMAGE-1/2 + USERS-1/2 + AUDIT-1 + LOGIN-1 = **16 项**（与 §进度表 MISC 列对齐）。
+| 优先级 | REDO 卡 | 路由 | 触发原因 | 原估时 | 完成日期 | 验收 |
+|---|---|---|---|---|---|---|
+| **P0-1** | **REDO-01**（A→J 10 子卡） | `/admin/crawler` | 架构错位：Tab + DataTable + 仅 4 按钮，违反 §5.6 + §6.8 设计稿 6 区段编排 | 2.55w | 2026-05-19 | arch-reviewer A− |
+| **P0-2** | **REDO-02**（A0→F 7 子卡） | `/admin/submissions` | 架构错位：通体 DataTable，违反 §5.13 Card list（status icon box + quote block + 3 按钮）形态 | ~1.0w | 2026-05-19 | arch-reviewer A− |
+| **P0-3** | **REDO-03**（A→D 4 子卡） | `/admin/settings`（system 区段收敛） | 架构错位：sidebar 暴露 5 个 system 子项 + Tab 数量 5/8 不足，违反 §5.11 显式提醒 | ~1.5w | 2026-05-19 | arch-reviewer A− |
+| **P0-4** | **REDO-04** | `/admin/staging` | 整页未做：原仅作为 `/admin/moderation?tab=staging` 嵌入。Opus 裁决（2026-05-20）：采用「独立路由」方案，与 §5.5 设计稿一致 | ~1.5w | 2026-05-20 | 独立路由实装完成 |
 
-**SHARED milestone** 范围确认：
-- SHARED-01 KpiCard `progress?` 扩展（dashboard 已有消费）→ **保留**
-- SHARED-02 ExpandableTable → **保留**（REDO-01 + sources 矩阵参考形态）
+**裁决要点（REDO-04 IA 分歧最终结论）**：选择「独立路由实装」而非「redirect 合并」。理由：
+- §5.5 设计稿明示 staging 是独立 page__head + 上部 1.5fr/1fr 双 card（发布流水线 + 自动发布规则）+ Segment 4 类的完整页态，无法在 moderation tab 内承载
+- 与 §5.15 analytics → dashboard tab 的 IA 修订不同：analytics 是「KPI + 图表」可嵌入双 Tab，staging 是「流水线 + 规则编辑」需要独立路由承载 actions
+- moderation 内 `StagingTabContent.tsx` 保留为「审核台快速暂存视角」，与 `/admin/staging` 独立路由「发布运营视角」并存，职责分离清晰
+
+### 2. MISC 跟踪卡完成快照（16 项，按路由分组）
+
+| 路由 | MISC 卡 | 当前状态 | 备注 |
+|---|---|---|---|
+| `/admin/dashboard` | MISC-DASHBOARD-1 | ✅ 完成（2026-05-20） | page__head 2 按钮 onClick 绑定 |
+|  | MISC-DASHBOARD-2 | ✅ 完成（2026-05-20） | Dashboard 数据真实化 ADR-127 / 3 端点实装 |
+|  | MISC-DASHBOARD-3 | 🟢 P3 延后 | 编辑态规则（拖拽/resize/全屏/卡片库）→ M-SN-N long-term backlog |
+| `/admin/videos` | MISC-VIDEOS-1 | 🟢 P3 待处理（0.05w） | poster 32×48 vs 48×72 设计升级决议文档化 |
+| `/admin/merge` | MISC-MERGE-1 | ✅ 完成 | Segment 3 类补全 |
+|  | MISC-MERGE-2 | 🟡 P2 待处理（0.5–0.8w） | 候选 card 形态重做（左右视频对比 + 影响预览） |
+| `/admin/subtitles` | MISC-SUBTITLES-1 | ✅ 完成 | KPI 4 列补全 |
+|  | MISC-SUBTITLES-2 | ✅ 完成 | 上传字幕 action 实装 |
+| `/admin/home` | MISC-HOME-1 | ✅ 完成 | sticky 前台预览实装（1fr/360px） |
+|  | MISC-HOME-2 | 🟢 P3 待处理（0.05w） | page__head actions 完整性核实 |
+| `/admin/image-health` | MISC-IMAGE-1 | ✅ 完成 | page__head 2 actions 实装 |
+|  | MISC-IMAGE-2 | ✅ 完成 | 破损样本 grid（2:3 ratio + danger dashed border） |
+| `/admin/users` | MISC-USERS-1 | ✅ 完成 | page head actions（角色矩阵 / 邀请用户） |
+|  | MISC-USERS-2 | ✅ 完成 | KPI 4 列 + users-stats 端点 |
+| `/admin/audit` | MISC-AUDIT-1 | 🟢 P3 待处理 | 时间穿梭 action（功能需求待确认） |
+| `/admin/login` | MISC-LOGIN-1 | 🟢 P3 待处理（0.2–0.3w） | 登录 card 视觉对齐（400×40 / brand row / remember / SSO） |
+
+**完成度统计**：16 项中 9 项 ✅ 完成 + 1 项 🟡 P2 待处理（MERGE-2）+ 6 项 🟢 P3 待处理或延后（DASHBOARD-3 / VIDEOS-1 / HOME-2 / AUDIT-1 / LOGIN-1）
+
+### 3. PRE-04 闭环结论
+
+**PRE-04 使命完成**：
+
+- ✅ 16/16 路由全量审计完成（2026-05-18）
+- ✅ REDO-01/02/03/04 四项 P0 主线全部完成（最末 REDO-04 于 2026-05-20 闭环）
+- ✅ 架构错位 4 项（crawler / submissions / settings / staging）100% 收敛
+- ✅ MISC 跟踪卡 ✅ 完成 9 项 + 🟡 P2 跟进 1 项 + 🟢 P3 backlog 6 项
+
+**SHARED milestone 范围确认**：
+- SHARED-01 KpiCard `progress?` 扩展 → **保留**（已完成 CHG-SN-SHARED-01）
+- SHARED-02 ExpandableTable → **保留**（REDO-01 + sources 矩阵已参考）
 - SHARED-03 Spark → **取消**（analytics + dashboard + MetricKpiCardRow 已消费现有 admin-ui Spark；本审计未发现新形态需求）
+
+**尚未完成的 MISC 跟踪卡**（不阻塞 PRE-04 闭环，独立排期）：
+
+| 优先级 | 卡 | 估时 | 建议归属 |
+|---|---|---|---|
+| 🟡 P2 | MISC-MERGE-2 | 0.5–0.8w | M-SN-7 内择机或 M-SN-8 |
+| 🟢 P3 | MISC-DASHBOARD-3 | 1.5–2w | M-SN-N long-term backlog |
+| 🟢 P3 | MISC-VIDEOS-1 | 0.05w | 文档决议固化（`docs/decisions.md` 补丁） |
+| 🟢 P3 | MISC-HOME-2 | 0.05w | 顺手清单 |
+| 🟢 P3 | MISC-AUDIT-1 | 0.4–0.6w | 功能需求待用户确认 |
+| 🟢 P3 | MISC-LOGIN-1 | 0.2–0.3w | M-SN-8 |
+
+**PRE-04 评级：A−**
+
+评级理由：
+- ✅ A 级要素：16 路由审计 100% 覆盖；4 项架构错位（REDO-01/02/03/04）全部 P0 主线收敛；SHARED 范围基于实测修订（SHARED-03 取消省 ~0.4w）；reference §5.x.4 过期自评按"commit 实测为准"原则纠偏（dashboard / analytics 2 处）
+- − 扣分要素：REDO-04 IA 方案在审计期遗留分歧（独立路由 vs redirect 合并），直到 PRE-04 收尾才裁决；MISC-MERGE-2（0.5–0.8w 形态级重做）未在 PRE-04 内闭环，下放 M-SN-7 后期 / M-SN-8
+
+**与 ADR / 规范对齐情况**：
+- ✅ 对齐 ADR-127（Dashboard 数据真实化）
+- ✅ 对齐 `docs/designs/backend_design_v2.1/reference.md` §5.1–§5.16 + `app/screens-{1,2,3}.jsx` 真源
+- ✅ 对齐 CLAUDE.md "后端分层 Route → Service → Queries"（REDO-01/02/03 子卡均在分层内落地）
+- ✅ 对齐 CLAUDE.md "新增 admin route 须先起独立 ADR"（REDO-01-B / DASHBOARD-2 端点均通过 ADR-127 等核验）
+- ✅ 对齐 "server-next 新模块禁止复用 ModernDataTable 三件套"（REDO-02 改造为 Card list；REDO-03 settings Tab 容器非 DataTable）
+
+---
+
+**收尾时间戳**：2026-05-20
+**收尾子代理**：arch-reviewer（claude-opus-4-7）
+**主循环模型**：claude-sonnet-4-6（PRE-04 收尾会话）
 

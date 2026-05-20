@@ -13259,3 +13259,26 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
   - 所有外部 import 路径零变化（barrel re-export）✅
   - typecheck 全绿 ✅
   - verify:adr-contracts 通过（advisory 警告均为预存在）✅
+
+---
+
+## CHG-SN-7-PRE-04
+
+- **完成时间**：2026-05-20
+- **任务 ID**：CHG-SN-7-PRE-04（M-SN-7 PRE 阶段全量审计收尾闭环）
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：arch-reviewer (claude-opus-4-7) — PRE-04 最终 REDO 裁决 + 收尾评级
+- **修改文件**：
+  - `docs/M-SN-7-design-realign-audit-FULL.md`（收尾节替换：从占位段 → arch-reviewer Opus 正式裁决内容；REDO-04 IA 方案最终裁决「独立路由」；MISC 16 项完成快照；评级 A−）
+  - `docs/task-queue.md`（PRE-04 状态 🔴 P0 → ✅；实际工时 0.9w）
+  - `docs/tasks.md`（清空 PRE-04 任务卡片）
+- **新增依赖**：无
+- **数据库变更**：无
+- **验收**：
+  - 16/16 路由全量审计 ✅（2026-05-18 完成）
+  - REDO-01/02/03/04 四项 P0 主线全部完成 + arch-reviewer 验收 ✅
+  - 架构错位 4 项 100% 收敛 ✅
+  - MISC 跟踪 16 项（9 ✅ / 1 🟡P2 MERGE-2 / 6 🟢P3 backlog）
+  - REDO-04 IA 分歧正式裁决（独立路由 vs redirect 合并 → 独立路由）✅
+  - PRE-04 评级：**A−** ✅
+- **注意事项**：剩余 🟡P2 MISC 卡为 MERGE-2（候选 card 形态重做 0.5–0.8w），下个高优任务为 CHG-SN-7-MISC-API-QUERIES-SIZE（queries 5 文件拆分 1.0–1.5w）
