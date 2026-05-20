@@ -64,7 +64,7 @@ export function AdminPlayer({
   title,
   testId,
 }: AdminPlayerProps): React.ReactElement {
-  // 每个 sourceId 仅上报一次，src 变更时自动重置
+  // per-session, last-active-sourceId 去抖：A→B→A 切换会再次上报（反映"该 source 被再次验证"，非严格 Set 语义）
   const reportedRef = useRef<string | null>(null)
 
   const handlePlay = () => {

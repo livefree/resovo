@@ -12971,3 +12971,30 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
   - reportedRef 用 useRef 实现每 sourceId 仅上报一次，sourceId prop 变更通过 useEffect 重置（通过 key 变化自动 unmount/remount 处理）
 - **测试结果**：typecheck PASS / lint PASS / unit 4262 PASS（+8 新增：8 admin-player）
 - **价值排序自评**：正确性 A（乐观锁/状态规则/类型安全全覆盖）/ 边界复用 A（admin-ui composite 共享，双消费方迁移完成）/ 扩展性 A（density 三档 / onToggleLine / onLineSelect 全可选）/ 一致性 A（CSS 变量 / Pill 复用 / DualSignal 复用）/ 改动收敛 12 文件（任务既定范围）
+
+---
+
+## CHG-SN-7-MISC-MOD-PLAYER / FIX-CLOSE — 投产对齐收口（SEQ-20260502-01 终章）
+
+- **日期**：2026-05-20
+- **任务 ID**：CHG-SN-4-FIX-CLOSE（SEQ-20260502-01 阶段 4 / Phase 3）
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：arch-reviewer (claude-opus-4-7)（全序列 milestone 复评级）
+- **arch-reviewer 评级**：**A−**（实质 A，具备直升 M-SN-5 资格；1 项已记录 P2 DEBT 不构成阻塞）
+- **修改文件**：
+  - `tests/e2e/admin/moderation/edit-drawer-open.spec.ts` — 新建：FIX-A 黄金路径（Drawer 打开 + 关闭 / GET /admin/videos/:id mock）
+  - `tests/e2e/admin/moderation/lines-aggregate-display.spec.ts` — 新建：FIX-B 黄金路径（3 源→2 线聚合 / data-line-key / 集数展开）
+  - `tests/e2e/admin/moderation/right-pane-tabs.spec.ts` — 新建：FIX-C 黄金路径（三 Tab 切换 / audit-log mock / sessionStorage 持久化）
+  - `tests/e2e/admin/moderation/filter-presets.spec.ts` — 新建：FIX-F 黄金路径（CRUD 全路径 / localStorage 验证 / Toast 断言）
+  - `tests/e2e/admin/moderation/player-integration.spec.ts` — 新建：FIX-D 黄金路径（idle→ready 状态切换 / feedback mock）
+  - `tests/visual/moderation/moderation.visual.spec.ts` — 新建：visual baseline 9 张占位（需 PLAYWRIGHT_VISUAL=1 + dev server capture）
+  - `docs/M-SN-4-milestone-audit-2026-05-20.md` — 新建：arch-reviewer 评级文档（7 维度 / DEBT 登记 / 后续行动）
+  - `apps/server-next/src/app/admin/moderation/_client/AdminPlayer.tsx` — 修：reportedRef 注释补充去抖语义说明（arch-reviewer 建议）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - e2e 5 spec 需 `npm run test:e2e` + apps/server-next dev server (:3003) 运行；API 全 mock，无需真实 DB
+  - visual 9 张 baseline 需 `npm run test:visual:update` + storageState + dev 数据库 seed
+  - 5 条新 DEBT 已录入 M-SN-4-milestone-audit 文档；P2 DEBT-FIX-D-ERROR 规划 M-SN-7 前处理
+- **SEQ-20260502-01 全序列收口**：FIX-A/B/C/D/E/F + FIX-CLOSE 全部完成 / 4262 unit PASS / arch-reviewer A−
+- **测试结果**：typecheck PASS / lint PASS / unit 4262 PASS（e2e spec 已写，执行需 dev server）
