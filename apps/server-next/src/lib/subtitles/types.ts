@@ -33,3 +33,13 @@ export interface SubtitleListFilter {
   readonly sortField?: string
   readonly sortDir?: 'asc' | 'desc'
 }
+
+/** ADR-133：GET /admin/subtitles/stats 响应结构 */
+export interface SubtitleStats {
+  readonly pendingCount: number
+  readonly approvedTodayCount: number
+  readonly rejectedTodayCount: number
+  readonly totalVerifiedCount: number
+  /** ISO 8601 时间戳 */
+  readonly generatedAt: string
+}

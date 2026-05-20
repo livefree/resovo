@@ -8493,3 +8493,61 @@ REDO-03-B 将 SettingsContainer 从 5 个 Tab 扩展到 8 个 Tab，新增了「
 | 一致性 | A | 认证 `requireRole(['admin'])` / 错误码 VALIDATION_ERROR + INTERNAL_ERROR / fetcher 命名 getDashboard* 与 getModerationStats 风格统一 |
 
 **综合**：**A-**（arch-reviewer claude-opus-4-7 裁决）
+
+## ADR-133 — 字幕 KPI 统计端点协议设计（CHG-SN-7-MISC-SUBTITLES-1）
+
+**状态**：Accepted（Conditional PASS：C1 ADR-128 编号已修正为 ADR-133；C3 approved_today_count 标签修正为「今日新增并通过」）
+**日期**：2026-05-20
+**arch-reviewer**：claude-opus-4-7
+
+### 1. 背景
+
+字幕审核页面（`/admin/subtitles`）当前只有列表，缺少顶部统计概览。需要新增 `GET /admin/subtitles/stats` 端点，以单一 SQL 聚合查询返回 4 项 KPI 指标，前端消费 KpiCard 组件展示。
+
+### 2. 决策
+
+新增 1 个只读 GET 端点，使用单条 `COUNT(*) FILTER (WHERE ...)` SQL 获取 4 项指标，避免多轮查询。
+
+### 端点契约
+
+| # | Method | Path | 权限 | Params | Response `data` 字段 | ADR |
+|---|--------|------|------|--------|---------------------|-----|
+| 1 | GET | `/admin/subtitles/stats` | moderator+admin | — | `{ pendingCount, approvedTodayCount, rejectedTodayCount, totalVerifiedCount, generatedAt }` | ADR-133 |
+
+### 3. SQL 设计
+
+```sql
+SELECT
+  COUNT(*) FILTER (WHERE is_verified = false AND deleted_at IS NULL)                                              AS pending_count,
+  COUNT(*) FILTER (WHERE is_verified = true  AND deleted_at IS NULL AND created_at >= date_trunc('day', NOW())) AS approved_today_count,
+  COUNT(*) FILTER (WHERE deleted_at IS NOT NULL AND deleted_at >= date_trunc('day', NOW()))                     AS rejected_today_count,
+  COUNT(*) FILTER (WHERE is_verified = true  AND deleted_at IS NULL)                                            AS total_verified_count
+FROM subtitles
+```
+
+**已知限制（C3）**：`approved_today_count` 使用 `created_at` 而非 `verified_at` 作为「今日」代理（subtitles 表无 verified_at 列）。语义为「今日新增并通过」，前端标签需对应修正，不得写「今日通过」。
+
+### 4. Response 结构
+
+```typescript
+interface SubtitleStats {
+  readonly pendingCount: number          // 待审核（is_verified=false, deleted_at IS NULL）
+  readonly approvedTodayCount: number    // 今日新增并通过（created_at >= today, is_verified=true）
+  readonly rejectedTodayCount: number    // 今日已拒绝（deleted_at >= today）
+  readonly totalVerifiedCount: number    // 累计通过（is_verified=true, deleted_at IS NULL）
+  readonly generatedAt: string           // ISO 8601 时间戳
+}
+```
+
+### 5. 分层约束
+
+- Route 层：`≤10 行`，零业务逻辑，直接调 `contentService.getSubtitleStats()`
+- Service 层：`getSubtitleStats()` 调 DB query，映射字段（snake_case → camelCase），追加 `generatedAt`
+- Query 层：单条 SQL，COUNT FILTER 模式，返回原始 string 类型（pg 返回 bigint 字符串）
+
+### 6. 关联
+
+- ADR-100 R7 MUST-8（admin route ADR 前置门禁）
+- ADR-126 §5（编号顺延：ADR-128 预留给 API Key 管理）
+- ADR-127（Dashboard Stats 同类设计参照）
+- CHG-SN-7-MISC-SUBTITLES-1

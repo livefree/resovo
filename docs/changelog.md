@@ -12998,3 +12998,29 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
   - 5 条新 DEBT 已录入 M-SN-4-milestone-audit 文档；P2 DEBT-FIX-D-ERROR 规划 M-SN-7 前处理
 - **SEQ-20260502-01 全序列收口**：FIX-A/B/C/D/E/F + FIX-CLOSE 全部完成 / 4262 unit PASS / arch-reviewer A−
 - **测试结果**：typecheck PASS / lint PASS / unit 4262 PASS（e2e spec 已写，执行需 dev server）
+
+---
+
+## CHG-SN-7-MISC-SUBTITLES-1 — 字幕审核 KPI 4 列补全
+
+- **日期**：2026-05-20
+- **任务 ID**：CHG-SN-7-MISC-SUBTITLES-1（SEQ-20260507-01 / M-SN-7 MISC）
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：arch-reviewer (claude-opus-4-7)（ADR-133 端点契约设计审核）
+- **arch-reviewer 评级**：Conditional PASS（C1 ADR 编号修正 ADR-128→ADR-133；C3 今日标签修正为「今日新增并通过」）
+- **修改文件**：
+  - `docs/decisions.md` — 追加 ADR-133（字幕 KPI 统计端点协议 / §端点契约 + SQL 设计 + Response 结构）
+  - `apps/api/src/db/queries/subtitles.ts` — 新增 `getSubtitleStats(db)` query（单条 COUNT FILTER SQL / 4 聚合一次往返）
+  - `apps/api/src/services/ContentService.ts` — 新增 `getSubtitleStats()` method（snake_case→camelCase 映射 + generatedAt 追加）
+  - `apps/api/src/routes/admin/content.ts` — 新增 `GET /admin/subtitles/stats` 路由（ADR-133 / ≤10 行 / 零业务逻辑）
+  - `apps/server-next/src/lib/subtitles/types.ts` — 新增 `SubtitleStats` 接口（5 字段 / ADR-133 response 结构）
+  - `apps/server-next/src/lib/subtitles/api.ts` — 新增 `fetchSubtitleStats()` 客户端封装（GET /admin/subtitles/stats）
+  - `apps/server-next/src/app/admin/subtitles/_client/SubtitlesListClient.tsx` — 新增：stats useEffect / 4 张 KpiCard（待审核 is-warn / 今日新增并通过 is-ok / 今日已拒绝 is-danger / 累计通过 default）
+  - `tests/unit/server-next/subtitles/subtitles-api.test.ts` — 追加：fetchSubtitleStats 2 case（GET 端点路径 / SubtitleStats 结构返回）
+- **新增依赖**：无
+- **数据库变更**：无（纯聚合 SELECT，零 DDL）
+- **注意事项**：
+  - approvedTodayCount 使用 created_at 作为「今日」代理（subtitles 表无 verified_at 列），标签定为「今日新增并通过」
+  - stats 加载失败不阻断主列表渲染（独立 useEffect + 静默 catch）
+  - KpiCard dataSource='live' 在 stats 加载成功后设置，便于 e2e 断言区分 mock/live
+- **测试结果**：typecheck PASS / lint PASS / unit 4264 PASS（+2 新增：fetchSubtitleStats × 2）/ verify:adr-contracts PASS

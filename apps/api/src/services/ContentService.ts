@@ -185,6 +185,23 @@ export class ContentService {
     return { data: rows, total, page, limit }
   }
 
+  async getSubtitleStats(): Promise<{
+    pendingCount: number
+    approvedTodayCount: number
+    rejectedTodayCount: number
+    totalVerifiedCount: number
+    generatedAt: string
+  }> {
+    const row = await subtitleQueries.getSubtitleStats(this.db)
+    return {
+      pendingCount: parseInt(row.pending_count),
+      approvedTodayCount: parseInt(row.approved_today_count),
+      rejectedTodayCount: parseInt(row.rejected_today_count),
+      totalVerifiedCount: parseInt(row.total_verified_count),
+      generatedAt: new Date().toISOString(),
+    }
+  }
+
   async approveSubtitle(id: string): Promise<boolean> {
     return subtitleQueries.approveSubtitle(this.db, id)
   }

@@ -30,6 +30,7 @@ import {
   LoadingState,
   PageHeader,
   AdminButton,
+  KpiCard,
   useToast,
   type TableSortState,
 } from '@resovo/admin-ui'
@@ -37,13 +38,20 @@ import {
   listSubtitles,
   approveSubtitle,
   rejectSubtitle,
+  fetchSubtitleStats,
 } from '@/lib/subtitles/api'
-import type { SubtitleRow } from '@/lib/subtitles/types'
+import type { SubtitleRow, SubtitleStats } from '@/lib/subtitles/types'
 import { buildSubtitleColumns } from './columns'
 
 // ── 常量 ──────────────────────────────────────────────────────────
 
 const DEFAULT_PAGE_SIZE = 20
+
+const KPI_ROW_STYLE: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(4, 1fr)',
+  gap: '12px',
+}
 
 // ── 主组件 ────────────────────────────────────────────────────────
 
@@ -67,6 +75,15 @@ export function SubtitlesListClient() {
   const [error, setError] = useState<Error | undefined>()
   const [retryKey, setRetryKey] = useState(0)
   const [pendingId, setPendingId] = useState<string | null>(null)
+  const [stats, setStats] = useState<SubtitleStats | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetchSubtitleStats()
+      .then((s) => { if (!cancelled) setStats(s) })
+      .catch(() => { /* stats 加载失败不阻断主列表 */ })
+    return () => { cancelled = true }
+  }, [retryKey])
 
   useEffect(() => {
     let cancelled = false
@@ -164,6 +181,36 @@ export function SubtitlesListClient() {
         }
         data-testid="subtitles-page-header"
       />
+      <div style={KPI_ROW_STYLE} data-testid="subtitle-kpi-row">
+        <KpiCard
+          label="待审核"
+          value={stats ? stats.pendingCount.toLocaleString('en-US') : '—'}
+          variant="is-warn"
+          dataSource={stats ? 'live' : undefined}
+          testId="subtitle-kpi-pending"
+        />
+        <KpiCard
+          label="今日新增并通过"
+          value={stats ? stats.approvedTodayCount.toLocaleString('en-US') : '—'}
+          variant="is-ok"
+          dataSource={stats ? 'live' : undefined}
+          testId="subtitle-kpi-approved-today"
+        />
+        <KpiCard
+          label="今日已拒绝"
+          value={stats ? stats.rejectedTodayCount.toLocaleString('en-US') : '—'}
+          variant="is-danger"
+          dataSource={stats ? 'live' : undefined}
+          testId="subtitle-kpi-rejected-today"
+        />
+        <KpiCard
+          label="累计通过"
+          value={stats ? stats.totalVerifiedCount.toLocaleString('en-US') : '—'}
+          variant="default"
+          dataSource={stats ? 'live' : undefined}
+          testId="subtitle-kpi-total-verified"
+        />
+      </div>
       {loading && rows.length === 0
         ? <LoadingState variant="skeleton" />
         : error

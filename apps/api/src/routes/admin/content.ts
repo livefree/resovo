@@ -307,6 +307,12 @@ export async function adminContentRoutes(fastify: FastifyInstance) {
     return reply.code(204).send()
   })
 
+  // ── GET /admin/subtitles/stats（ADR-133）────────────────────────
+  fastify.get('/admin/subtitles/stats', { preHandler: auth }, async (_request, reply) => {
+    const data = await contentService.getSubtitleStats()
+    return reply.send({ data })
+  })
+
   // ════════════════════════════════════════════════════════════════
   // 孤岛视频（ADMIN-12: CHG-388 自动下架后补源仍失败的视频）
   // ════════════════════════════════════════════════════════════════

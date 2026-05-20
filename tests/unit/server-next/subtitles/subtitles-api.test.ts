@@ -20,6 +20,7 @@ import {
   listSubtitles,
   approveSubtitle,
   rejectSubtitle,
+  fetchSubtitleStats,
 } from '../../../../apps/server-next/src/lib/subtitles/api'
 
 const mockedGet = vi.mocked(apiClient.get)
@@ -98,5 +99,34 @@ describe('rejectSubtitle', () => {
   it('含 reason → body 含 reason', async () => {
     await rejectSubtitle('sub-abc', '字幕语言不符')
     expect(mockedPost).toHaveBeenCalledWith('/admin/subtitles/sub-abc/reject', { reason: '字幕语言不符' })
+  })
+})
+
+describe('fetchSubtitleStats', () => {
+  const MOCK_STATS = {
+    pendingCount: 42,
+    approvedTodayCount: 7,
+    rejectedTodayCount: 3,
+    totalVerifiedCount: 198,
+    generatedAt: '2026-05-20T10:00:00.000Z',
+  }
+
+  beforeEach(() => {
+    mockedGet.mockReset()
+    mockedGet.mockResolvedValue({ data: MOCK_STATS })
+  })
+
+  it('GET /admin/subtitles/stats', async () => {
+    await fetchSubtitleStats()
+    expect(mockedGet).toHaveBeenCalledWith('/admin/subtitles/stats')
+  })
+
+  it('返回 data 字段中的 SubtitleStats 结构', async () => {
+    const result = await fetchSubtitleStats()
+    expect(result.pendingCount).toBe(42)
+    expect(result.approvedTodayCount).toBe(7)
+    expect(result.rejectedTodayCount).toBe(3)
+    expect(result.totalVerifiedCount).toBe(198)
+    expect(result.generatedAt).toBe('2026-05-20T10:00:00.000Z')
   })
 })

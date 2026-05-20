@@ -153,6 +153,27 @@ export async function listAdminSubtitles(
   }
 }
 
+// ── Admin 统计 ────────────────────────────────────────────────────
+
+export interface SubtitleStatsRow {
+  pending_count: string
+  approved_today_count: string
+  rejected_today_count: string
+  total_verified_count: string
+}
+
+export async function getSubtitleStats(db: Pool): Promise<SubtitleStatsRow> {
+  const result = await db.query<SubtitleStatsRow>(
+    `SELECT
+       COUNT(*) FILTER (WHERE is_verified = false AND deleted_at IS NULL)                                              AS pending_count,
+       COUNT(*) FILTER (WHERE is_verified = true  AND deleted_at IS NULL AND created_at >= date_trunc('day', NOW())) AS approved_today_count,
+       COUNT(*) FILTER (WHERE deleted_at IS NOT NULL AND deleted_at >= date_trunc('day', NOW()))                     AS rejected_today_count,
+       COUNT(*) FILTER (WHERE is_verified = true  AND deleted_at IS NULL)                                            AS total_verified_count
+     FROM subtitles`
+  )
+  return result.rows[0]!
+}
+
 export async function approveSubtitle(
   db: Pool,
   id: string
