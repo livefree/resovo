@@ -13387,3 +13387,22 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 - typecheck 全部通过（全工作区 7 个包）✅
 - file-size-budget：0 新违规（MergeClient.tsx 不再出现）✅
 - 单元测试 15/15 PASS（单独运行）/ 全量 4337 通过（1 pre-existing flaky StagingEditPanel 单独运行 12/12 PASS）✅
+
+---
+
+## CHG-SN-7-MISC-WEB-NEXT-SIZE — Nav.tsx 主动拆分
+
+- **完成时间**：2026-05-20
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+
+### 变更内容
+
+- 提取 `MoreMenu`（+ MORE_CATS / MORE_KEYS 常量）→ `NavMoreMenu.tsx`（188L）
+  - Nav.tsx 580→404L，移出 Baseline 豁免列表（从 5 文件降为 4 文件）
+  - NavMoreMenu.tsx 含：MORE_CATS/MORE_KEYS 常量 + MoreMenuProps interface + MoreMenu component
+  - hover/click 展开逻辑、ESC 关闭、menuitem link 全部保留
+- Nav.tsx 调整：移除 MoreMenu 实现，改为 `import { MoreMenu } from '@/components/layout/NavMoreMenu'`；保留 NavSkeleton / NavLinkItem / MAIN_CATS + Nav 主组件
+- typecheck 全部通过（全工作区）✅
+- file-size-budget：Baseline 豁免 5→4，✅ 通过：0 新违规 ✅
+- 单元测试 4337/4337 全部通过 ✅

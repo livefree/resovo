@@ -10,7 +10,8 @@ import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import { SearchOverlay } from '@/components/search/SearchOverlay'
 import { SettingsDrawer } from '@/components/layout/SettingsDrawer'
-import { ALL_CATEGORIES, MAIN_TYPE_PARAMS, MORE_TYPE_PARAMS } from '@/lib/categories'
+import { ALL_CATEGORIES, MAIN_TYPE_PARAMS } from '@/lib/categories'
+import { MoreMenu } from '@/components/layout/NavMoreMenu'
 
 /**
  * Nav — HANDOFF-21 对齐 docs/frontend_design_spec_20260423.md §8
@@ -32,13 +33,6 @@ import { ALL_CATEGORIES, MAIN_TYPE_PARAMS, MORE_TYPE_PARAMS } from '@/lib/catego
 const MAIN_CATS = ALL_CATEGORIES.filter((c) =>
   (MAIN_TYPE_PARAMS as readonly string[]).includes(c.typeParam)
 )
-
-// 扩展分类（6 种，"更多 ▼" 下拉内），单源 lib/categories.ts（I-6）
-const MORE_CATS = ALL_CATEGORIES.filter((c) =>
-  (MORE_TYPE_PARAMS as readonly string[]).includes(c.typeParam)
-)
-
-const MORE_KEYS = new Set<string>(MORE_TYPE_PARAMS)
 
 // ── Nav.Skeleton ──────────────────────────────────────────────────────────────
 
@@ -123,176 +117,6 @@ function NavLinkItem({ href, active, label, testId }: NavLinkItemProps) {
         />
       )}
     </Link>
-  )
-}
-
-// ── MoreMenu "更多 ▼" 下拉（I-5：hover 展开桌面 / click 展开触屏）────────────
-
-interface MoreMenuProps {
-  readonly locale: string
-  readonly currentType: string | null
-  readonly label: string
-}
-
-function MoreMenu({ locale, currentType, label }: MoreMenuProps) {
-  const t = useTranslations('nav')
-  const [open, setOpen] = useState(false)
-  const wrapperRef = useRef<HTMLDivElement | null>(null)
-
-  const active = currentType !== null && MORE_KEYS.has(currentType)
-
-  // 点击外部 + ESC 关闭（touch 模式下需要）
-  useEffect(() => {
-    if (!open) return
-    function handleClickOutside(e: MouseEvent) {
-      if (wrapperRef.current?.contains(e.target as Node)) return
-      setOpen(false)
-    }
-    function handleEsc(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    document.addEventListener('keydown', handleEsc)
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleEsc)
-    }
-  }, [open])
-
-  function handleMouseEnter() {
-    // hover 展开仅用于 pointer: fine（桌面鼠标）设备（I-5）
-    if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
-      setOpen(true)
-    }
-  }
-
-  function handleMouseLeave() {
-    if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
-      setOpen(false)
-    }
-  }
-
-  return (
-    <div
-      ref={wrapperRef}
-      className="relative"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      <button
-        type="button"
-        data-testid="nav-more-trigger"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((p) => !p)}
-        className="relative flex items-center gap-1 transition-colors shrink-0 whitespace-nowrap"
-        style={{
-          padding: 'var(--header-nav-padding)',
-          fontSize: '14px',
-          fontWeight: 600,
-          borderRadius: '8px',
-          background: 'transparent',
-          border: 'none',
-          textDecoration: 'none',
-          cursor: 'pointer',
-          color: active ? 'var(--accent-default)' : 'var(--fg-muted)',
-        }}
-        onMouseEnter={(e) => {
-          if (!active) {
-            e.currentTarget.style.color = 'var(--fg-default)'
-            e.currentTarget.style.background = 'var(--bg-surface-sunken)'
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!active) {
-            e.currentTarget.style.color = 'var(--fg-muted)'
-            e.currentTarget.style.background = 'transparent'
-          }
-        }}
-      >
-        {label}
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-          style={{
-            transition: 'transform 160ms ease-out',
-            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-            opacity: 0.7,
-          }}
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-        {active && (
-          <span
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              left: '14px',
-              right: '14px',
-              bottom: 'calc(-1 * var(--header-underline-offset))',
-              height: '2px',
-              background: 'var(--accent-default)',
-              borderRadius: '1px',
-            }}
-          />
-        )}
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          data-testid="nav-more-menu"
-          className="absolute z-50 top-full mt-2"
-          style={{
-            left: 0,
-            minWidth: '180px',
-            borderRadius: '10px',
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border-default)',
-            boxShadow: '0 8px 24px color-mix(in oklch, var(--color-gray-1000) 12%, transparent)',
-            padding: '6px',
-          }}
-        >
-          {MORE_CATS.map((cat) => {
-            const isActive = currentType === cat.typeParam
-            return (
-              <Link
-                key={cat.typeParam}
-                href={`/${locale}/${cat.typeParam}`}
-                role="menuitem"
-                data-testid={`nav-more-${cat.typeParam}`}
-                onClick={() => setOpen(false)}
-                className="block transition-colors"
-                style={{
-                  padding: '8px 12px',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  borderRadius: '6px',
-                  textDecoration: 'none',
-                  color: isActive ? 'var(--accent-default)' : 'var(--fg-default)',
-                  background: isActive ? 'var(--accent-muted)' : 'transparent',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive) e.currentTarget.style.background = 'var(--bg-surface-sunken)'
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) e.currentTarget.style.background = 'transparent'
-                }}
-              >
-                {t(cat.labelKey)}
-              </Link>
-            )
-          })}
-        </div>
-      )}
-    </div>
   )
 }
 
