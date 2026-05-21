@@ -22,6 +22,7 @@
  */
 
 import { useCallback, useEffect, useState, type CSSProperties } from 'react'
+import { useRouter } from 'next/navigation'
 import { AdminButton, PageHeader, useToast } from '@resovo/admin-ui'
 import {
   listCrawlerSites,
@@ -90,6 +91,7 @@ function describeApiError(err: unknown): { title: string; description: string } 
 
 export function CrawlerClient() {
   const toast = useToast()
+  const router = useRouter()
 
   // ── data ─────────────────────────────────────────────────────────
   const [sites, setSites] = useState<readonly CrawlerSite[]>([])
@@ -228,6 +230,17 @@ export function CrawlerClient() {
     }
   }, [refresh, toast])
 
+  // CHG-SN-8-03：W1 金票 ② 软深链 — toast action 跳 /admin/moderation?run_id=<id>
+  const buildModerationDeepLinkAction = useCallback(
+    (runId: string) => ({
+      label: '查看本次新增视频',
+      onClick: () => {
+        router.push(`/admin/moderation?run_id=${encodeURIComponent(runId)}`)
+      },
+    }),
+    [router],
+  )
+
   // CHG-SN-8-01：主按钮高频路径——全站增量（单次 confirm）
   const handleRunAllIncremental = useCallback(async () => {
     if (status?.freezeEnabled) {
@@ -246,6 +259,7 @@ export function CrawlerClient() {
         title: '已发起全站增量',
         description: `runId=${result.runId.slice(0, 8)} · 入队 ${result.enqueuedSiteKeys.length} 个站点`,
         level: 'success',
+        action: buildModerationDeepLinkAction(result.runId),
       })
       refresh()
     } catch (err: unknown) {
@@ -254,7 +268,7 @@ export function CrawlerClient() {
     } finally {
       setRunAllIncrementalPending(false)
     }
-  }, [refresh, status?.freezeEnabled, toast])
+  }, [refresh, status?.freezeEnabled, toast, buildModerationDeepLinkAction])
 
   // CHG-SN-8-01：危险低频路径——全站全量（双重 confirm + 输入"全量"二字防误触；advanced dropdown 入口）
   const handleRunAllFull = useCallback(async () => {
@@ -279,6 +293,7 @@ export function CrawlerClient() {
         title: '已发起全站全量',
         description: `runId=${result.runId.slice(0, 8)} · 入队 ${result.enqueuedSiteKeys.length} 个站点`,
         level: 'success',
+        action: buildModerationDeepLinkAction(result.runId),
       })
       refresh()
     } catch (err: unknown) {
@@ -287,7 +302,7 @@ export function CrawlerClient() {
     } finally {
       setRunAllFullPending(false)
     }
-  }, [refresh, status?.freezeEnabled, toast])
+  }, [refresh, status?.freezeEnabled, toast, buildModerationDeepLinkAction])
 
   // CHG-SN-7-MISC-CRAWLER-CSV-EXPORT：站点列表 CSV 导出（逻辑抽到 lib/crawler/csv-export.ts）
   const handleExport = useCallback(() => {

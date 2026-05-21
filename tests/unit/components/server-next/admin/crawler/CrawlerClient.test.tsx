@@ -43,6 +43,8 @@ const stopAllCrawlerMock = vi.fn()
 const triggerReindexMock = vi.fn()
 const toastPushMock = vi.fn()
 const confirmSpy = vi.fn().mockReturnValue(true)
+// CHG-SN-8-03：next/navigation router.push 用于 toast action 深链
+const routerPushMock = vi.fn()
 
 vi.mock('../../../../../../apps/server-next/src/lib/crawler/api', () => ({
   listCrawlerSites: (...args: unknown[]) => listCrawlerSitesMock(...args),
@@ -69,6 +71,20 @@ vi.mock('../../../../../../apps/server-next/src/lib/sources/api', () => ({
   testRoute: (...args: unknown[]) => testRouteMock(...args),
   reprobeRoute: (...args: unknown[]) => reprobeRouteMock(...args),
   deleteRoute: (...args: unknown[]) => deleteRouteMock(...args),
+}))
+
+// CHG-SN-8-03：mock next/navigation for router.push 验证（深链 toast action）
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: (...args: unknown[]) => routerPushMock(...args),
+    replace: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+    prefetch: vi.fn(),
+  }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/admin/crawler',
 }))
 
 vi.mock('@resovo/admin-ui', async () => {
@@ -174,6 +190,7 @@ beforeEach(() => {
   stopAllCrawlerMock.mockReset()
   triggerReindexMock.mockReset()
   toastPushMock.mockReset()
+  routerPushMock.mockReset()
   confirmSpy.mockReset().mockReturnValue(true)
   ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
 
@@ -409,6 +426,38 @@ describe('CrawlerClient (REDO-01-C 骨架)', () => {
     })
     expect(promptSpy).not.toHaveBeenCalled()
     expect(runCrawlerAllMock).not.toHaveBeenCalled()
+  })
+
+  it('13h. 全站增量 toast 含 action「查看本次新增视频」并跳 /admin/moderation?run_id=... [CHG-SN-8-03]', async () => {
+    runCrawlerAllMock.mockResolvedValueOnce({
+      runId: 'run-abcdef1234567890',
+      taskIds: [],
+      enqueuedSiteKeys: ['s1'],
+      skippedSiteKeys: [],
+    })
+
+    render(<CrawlerClient />)
+    const btn = await waitFor(() => screen.getByTestId('crawler-run-all-incremental-btn'))
+    fireEvent.click(btn)
+
+    await waitFor(() => {
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          level: 'success',
+          title: '已发起全站增量',
+          action: expect.objectContaining({
+            label: '查看本次新增视频',
+            onClick: expect.any(Function),
+          }),
+        }),
+      )
+    })
+
+    // 触发 action onClick → router.push
+    const lastCall = toastPushMock.mock.calls[toastPushMock.mock.calls.length - 1]
+    const toastInput = lastCall[0] as { action?: { onClick: () => void } }
+    toastInput.action?.onClick()
+    expect(routerPushMock).toHaveBeenCalledWith('/admin/moderation?run_id=run-abcdef1234567890')
   })
 
   it('13e. 最近采集列：lastCrawlStatus=ok → 渲染"成功" pill + 时间 [CHG-SN-8-02]', async () => {

@@ -9,6 +9,7 @@ import { ModListRow } from './ModListRow'
 import { PendingCenter } from './PendingCenter'
 import { RejectedTabContent } from './RejectedTabContent'
 import { RightPane } from './RightPane'
+import { RunInfoBanner } from './RunInfoBanner'
 import { FilterPresetPopover } from './FilterPresetPopover'
 import { SavePresetModal } from './SavePresetModal'
 import { VideoEditDrawer } from '../../videos/_client/VideoEditDrawer'
@@ -134,6 +135,15 @@ export function ModerationConsole(): React.ReactElement {
     const p = new URLSearchParams(searchParams.toString())
     p.set('tab', t)
     router.replace(`?${p}`, { scroll: false })
+  }, [router, searchParams])
+
+  // CHG-SN-8-03：W1 金票 ② 软深链 — 读 run_id query 显示 banner，清除时移除该 param
+  const runIdParam = searchParams.get('run_id')
+  const dismissRunBanner = useCallback(() => {
+    const p = new URLSearchParams(searchParams.toString())
+    p.delete('run_id')
+    const qs = p.toString()
+    router.replace(qs ? `?${qs}` : '?', { scroll: false })
   }, [router, searchParams])
 
   const setActiveIdx = useCallback((updater: number | ((prev: number) => number)) => {
@@ -402,6 +412,9 @@ export function ModerationConsole(): React.ReactElement {
           <button style={{ ...BTN_SM, fontSize: 'var(--font-size-xxs)', padding: '2px 8px' }} onClick={() => setError(null)}>✕</button>
         </div>
       )}
+
+      {/* CHG-SN-8-03：来自采集 run 软深链 banner */}
+      {runIdParam && <RunInfoBanner runId={runIdParam} onDismiss={dismissRunBanner} />}
 
       {/* Segment tabs */}
       <div style={{ display: 'flex', gap: 1, marginBottom: 10, flexShrink: 0 }}>

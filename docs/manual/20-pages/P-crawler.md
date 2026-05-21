@@ -95,11 +95,13 @@
 - 点击行首 chevron `›` 展开 → 显示线路矩阵（来自 sources 域）+ 分类映射
 - 二次点击折叠
 
-### 3.3 采集完成深链至审核台（待 CHG-SN-8-03 填写）
-- toast 含「查看本次新增视频」action → 跳 `/admin/moderation?run_id=<runId>` 直接定位
+### 3.3 采集完成深链至审核台（CHG-SN-8-03 / W1 ②）
 
-### 3.3 采集完成深链至审核台（待 CHG-SN-8-03 填写）
-- toast 含「查看本次新增视频」action → 跳 `/admin/moderation?run_id=<runId>` 直接定位
+- 触发「全站增量」或「全站全量采集」成功后，toast 上方除了基本信息（runId + 入队站点数）外，**右侧含「查看本次新增视频」action 按钮**
+- 点击 → 自动跳 `/admin/moderation?run_id=<runId>`
+- 进审核台后顶部显示 banner「来自采集 run xxxxxxxx · 新增视频按创建时间排在队列顶部；逐条 J/K 翻页处理」
+- 「清除筛选」按钮可移除该 run_id 参数（保留其它过滤）
+- **软深链说明**：本期未在后端按 runId 严格过滤队列（后端 schema 修订属 ADR 协议范围，推迟到 CHG-SN-8-03-B）；banner 是 UI 提示，提醒运营来自哪次 run；新增视频自然按 `createdAt desc` 排在队列顶部
 
 ## 4. 进阶操作（低频 / 危险）
 

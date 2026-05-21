@@ -13723,3 +13723,55 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 
 ### Follow-up
 - CHG-SN-8-02-B 调度列（先评估 type 扩展 vs cross-fetch / 决策后再起实施卡）
+
+## [CHG-SN-8-03] 采集 toast → /admin/moderation?run_id 软深链（W1 金票 ② 反例修复）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **关联 SEQ**：SEQ-20260521-02（3/9 卡）
+- **方案选型**：**软深链**（前端 toast action + URL banner，不改后端）；硬过滤需起 ADR-端点先后协议 → 推迟 CHG-SN-8-03-B
+- **修改文件**：
+  - `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`：
+    - import `useRouter` from 'next/navigation'
+    - 增 helper `buildModerationDeepLinkAction(runId)` 返回 Toast `action: { label, onClick }`
+    - handleRunAllIncremental + handleRunAllFull 两个 success toast 加 `action: buildModerationDeepLinkAction(result.runId)`
+    - useCallback deps 同步追加 `buildModerationDeepLinkAction`
+  - `apps/server-next/src/app/admin/moderation/_client/RunInfoBanner.tsx` 新建：
+    - 视觉：AdminCard surface='subtle' status='ok' + 标题 "来自采集 run <short>" + 副标题 "新增视频按创建时间排在队列顶部" + 「清除筛选」按钮
+    - data-testid: `moderation-run-info-banner` + `moderation-run-info-clear`
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`：
+    - import RunInfoBanner
+    - 增 `runIdParam = searchParams.get('run_id')` + `dismissRunBanner` callback（移除 run_id 保留其它 param）
+    - 条件渲染：`{runIdParam && <RunInfoBanner runId={runIdParam} onDismiss={dismissRunBanner} />}`（位置：Error banner 之后 / Segment tabs 之前）
+  - `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx`：
+    - 顶层 mock `next/navigation`（routerPushMock 共享）
+    - 补 1 用例 #13h（action 存在 + onClick 触发 router.push 跳转 `/admin/moderation?run_id=...`）
+    - 62/62 PASS（+1）
+  - `tests/unit/components/server-next/admin/moderation/RunInfoBanner.test.tsx` 新建：
+    - 4 用例：runId 短 ID 渲染 / 软深链说明文案 / 「清除筛选」触发 onDismiss / data-testid 完整
+    - 4/4 PASS
+  - `docs/manual/20-pages/P-crawler.md` §3.3 完整填写（CHG-SN-8-03 软深链说明 + 未来增强）
+  - `docs/manual/20-pages/P-moderation.md` §0/§1/§2/§3.0/§8 填写（接收采集深链）
+  - `docs/manual/10-workflows/W1-crawl-to-publish.md` §3 反例段：#1 + #2 标记 ✅ 已修复
+  - `docs/task-queue.md`（CHG-SN-8-03 状态推进 ✅ + SEQ 进度 3/9）
+  - `docs/changelog.md`（本条目追加）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - **软深链 vs 硬深链权衡**：本期是 UI 提示型「软深链」；queue 仍返回全部 pending（无 backend filter）；新增视频按 `createdAt desc` 自然在顶部
+  - **AdminCard status 类型约束**：仅 ok/warn/danger 三态（无 info）— 实施中遇 type error 已修正 RunInfoBanner 用 status='ok'
+  - **next/navigation mock 隔离**：测试顶层 `vi.mock('next/navigation', ...)` + `routerPushMock` 共享变量；避免 vi.doMock 跨用例污染
+  - **dismissRunBanner 逻辑**：保留其它 query params（如 tab=pending / 筛选条件），仅 delete run_id
+
+### DoD 全勾
+- [x] CrawlerClient.tsx 2 toast 加 action 跳转
+- [x] RunInfoBanner.tsx 新建
+- [x] ModerationConsole 接 run_id query
+- [x] CrawlerClient.test 补 1 用例 + RunInfoBanner.test 新建 4 用例
+- [x] typecheck + lint + verify:manual-coverage PASS
+- [x] P-crawler §3.3 + P-moderation 草稿 + W1 反例段更新
+
+### Follow-up
+- CHG-SN-8-03-B 后端 pending-queue 加 ?runId= filter（先起 ADR-NN + Opus PASS 再起实施卡 / R-MID-1 同步）
