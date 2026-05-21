@@ -163,3 +163,38 @@ interface SortableListProps<T extends { id: string }> {
   'data-testid'?: string
 }
 ```
+
+---
+
+## 写端点 + UI 拆卡决策树（双子卡 -A/-B 范式，CHG-SN-7-LOW-1）
+
+> 来源：CHG-SN-6-16/20/25/26 实践总结（2026-05-20 追加）
+
+### 拆卡规则
+
+当一个功能同时涉及**新后端端点**和**前端 UI 接入**时，拆为两个子卡：
+
+| 子卡 | 职责 | 典型优先级 | 依赖 |
+|------|------|-----------|------|
+| **-A**（端点 + Audit） | 端点实装 + `auditSvc.write` 补齐 + 4 套真源（union / ACTION_TYPES / EXPECTED / REQUIRED）验证 | P0（R-MID-1 协议级） | 无 |
+| **-B**（UI 接入） | 前端 `lib/xxx/api` 扩函数 + 组件交互 + toast 反馈 + 测试 | P1/P2 | -A 子卡 PASS 后 |
+
+**原则**：-A 先行合并后，-B 才能消费端点；避免 -A/-B 同 PR 造成"端点未合并但 UI 已上线"的竞态。
+
+### 决策树
+
+```
+功能需要新端点？
+├── YES → 端点涉及审计（audit）补齐？
+│         ├── YES → 拆 -A（端点 + audit）+ -B（UI）
+│         └── NO  → 可单卡，或按端点/UI 工作量评估是否拆
+└── NO  → 纯前端状态改动？ → 单卡
+           端点已存在仅未被前端消费？ → 仅 -B（无需 -A）
+```
+
+### 先例
+
+- **CHG-SN-6-16-A/B**：CrawlerRun cancel/pause/resume audit + UI（cancel 三态按钮）
+- **CHG-SN-6-20-A/B**：freeze 端点 audit + CrawlerClient freeze 卡片
+- **CHG-SN-6-25-RETRO**：auto-config + stop-all 端点 audit（RETRO 补齐，无 -B）
+- **CHG-SN-6-26-RETRO**：reindex + runs 统一入口 audit（RETRO 补齐，无 -B）

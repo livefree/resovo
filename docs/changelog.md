@@ -13406,3 +13406,25 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 - typecheck 全部通过（全工作区）✅
 - file-size-budget：Baseline 豁免 5→4，✅ 通过：0 新违规 ✅
 - 单元测试 4337/4337 全部通过 ✅
+
+---
+
+## CHG-SN-7-LOW-1/2/3 — 文档规范三连（批量）
+
+- **完成时间**：2026-05-20
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+
+### 变更内容
+
+**LOW-1**（`docs/rules/admin-module-template.md`）：
+- 追加"写端点 + UI 拆卡决策树（双子卡 -A/-B 范式）"节
+- 内容：拆卡规则（-A 端点+Audit / -B UI 接入）、决策树（文本流程图）、先例表（CHG-SN-6-16/20/25/26）
+
+**LOW-2**（`docs/decisions.md` 头部）：
+- 追加"NEGATED ADR 占位语义（ADR-NNN-NEGATED）"节（在 ADR-001 之前）
+- 内容：5 条规则（编号保留 / plan 候选标注 / 内容要求 / 重启路径 ADR-NNNa / AI 行为约束）+ 先例表（ADR-114/119/120-NEGATED）
+
+**LOW-3**（`docs/decisions.md` ADR-106 末尾）：
+- 追加"toolbar-less 视图豁免 csv-export"小节
+- 内容：决策 + 范围（ModerationConsole 等）+ 理由 + 2 条规则（toolbar-less 自定义按钮 / 有 toolbar 不豁免）

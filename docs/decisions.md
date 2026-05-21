@@ -13,6 +13,30 @@
 
 ---
 
+## NEGATED ADR 占位语义（ADR-NNN-NEGATED，CHG-SN-7-LOW-2）
+
+> 2026-05-20 追加
+
+当一个架构候选方案**经过评估后被否定、不实施**时，使用 `ADR-NNN-NEGATED` 范式记录。
+
+### 规则
+
+1. **原 ADR 编号保留**：`ADR-NNN-NEGATED` 占用该编号；原编号不再用于其他决策。
+2. **plan §4.7 候选清单**：对应条目状态标注为 `候选 → NEGATED（CHG-SN-X-XX / YYYY-MM-DD）`，保留占位不删除。
+3. **内容要求**：NEGATED 条目需包含：否定对象 / 否定理由（为何不实施）/ 触发重评估的条件。
+4. **未来重启路径**：如未来条件满足需重新评估，使用 `ADR-NNNa`（例：ADR-119a），**不复用**原 `ADR-NNN` 编号。
+5. **AI 行为约束**：遇到 NEGATED 标记时，不得将该方案作为"当前技术栈选型"推荐；需主动提示该方案已被否定及重启条件。
+
+### 已有先例
+
+| ADR | 否定对象 | 否定依据 | 重启条件 |
+|-----|---------|---------|---------|
+| **ADR-114-NEGATED** | line_key 一级建模 + 跨站合并 | 复合键 `(source_site_key, source_name)` 更稳定，无强烈跨站合并需求 | 明确的跨站合并业务需求 + 数据量规模 |
+| **ADR-119-NEGATED** | Analytics 图表库（recharts / visx） | 内联 SVG / CSS 覆盖当前需求；引入图表库成本 > 收益 | 超过 3 处复杂图表组件且 SVG 方案维护成本过高 |
+| **ADR-120-NEGATED** | 虚拟滚动库（@tanstack/react-virtual / react-window） | 当前数据量 < 50k，DataTable 原生分页已满足性能要求 | 单列表数据量 > 50k 且首屏渲染 > 200ms |
+
+---
+
 ## ADR-001 视频播放采用直链模式，不做服务端代理
 
 - **日期**：2025-03
@@ -3942,6 +3966,20 @@ export interface LoadingStateProps {
 - **关联 plan**：M-SN-4 plan v1.4 §1 D-14 / §7 / §8.1
 - **关联任务卡**：CHG-SN-4-03（本卡草拟）/ CHG-SN-4-04（落地 + 正式 PASS）
 - **关联序列**：SEQ-20260501-01
+
+### toolbar-less 视图豁免 csv-export（2026-05-20 追加，CHG-SN-7-LOW-3）
+
+**决策**：无 DataTable toolbar 的视图（toolbar-less views）不强制接入 DataTable 共享 csv-export 工具。
+
+**范围**：
+- ModerationConsole（审核台）：layout 卡片管理内容，无 DataTable toolbar。
+- 后续新建的"无 DataTable 作为主体"视图（如控制面板 / 播放器接入视图等）。
+
+**理由**：DataTable 共享 csv-export 工具依赖 `toolbar.trailing` slot 注入；toolbar-less 视图若强制接入需额外封装，成本 > 收益。
+
+**规则**：
+1. toolbar-less 视图如需导出，在 `PageHeader actions` 中实现独立按钮 + 自定义函数，无需复用共享工具。
+2. 使用 DataTable 且有 toolbar 的视图，**不豁免**；csv-export 共享方案仍为强制（ADR-106 原有规则不变）。
 
 ---
 
