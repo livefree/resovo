@@ -13775,3 +13775,47 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 
 ### Follow-up
 - CHG-SN-8-03-B 后端 pending-queue 加 ?runId= filter（先起 ADR-NN + Opus PASS 再起实施卡 / R-MID-1 同步）
+
+## [M-SN-SHARED-04-A] VideoPicker 业务原语沉淀 — 消灭 UUID 输入的钥匙
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7（opus xhigh 续会话）
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮 A− PASS（D1-D11 11 维度契约 / 0 红线 / 2 风险登记）
+- **关联 SEQ**：SEQ-20260521-02（4/9 卡）
+- **修改文件**：
+  - **新增 6 文件 packages/admin-ui/src/components/pickers/**：
+    - `video-picker.types.ts`（9 公开类型 + 内部 DialogState 联合）
+    - `picker-result-row.tsx`（单行渲染：Thumb + 标题 + meta + type pill + multi 选中 ✓）
+    - `picker-trigger.tsx`（触发器：占位 / 单选 thumb 回显 / 多选 chip / 清除 / error 底文 / a11y combobox）
+    - `picker-dialog.tsx`（Modal + 搜索 + 列表 + 状态机 5 态 + AbortSignal + 键盘 + debounce 300ms + multi staging）
+    - `video-picker.tsx`（编排：discriminated union single/multi 分两路）
+    - `index.ts`（桶导出 9 公开 export）
+  - `packages/admin-ui/src/index.ts`（加 `export * from './components/pickers'`）
+  - **新增 1 测试文件**：`tests/unit/components/admin-ui/pickers/video-picker.test.tsx`（14 用例 全 PASS）
+  - `docs/manual/30-pickers/VideoPicker.md`（8 章节定稿 + 消费方 fetcher 注入示例）
+  - `docs/task-queue.md` + `docs/changelog.md`
+- **新增依赖**：无
+- **数据库变更**：无
+- **API 契约（公开 export）**：
+  - `VideoPicker`（组件）
+  - `VideoPickerProps` / `SingleVideoPickerProps` / `MultipleVideoPickerProps`（discriminated union）
+  - `PickerVideoItem`（id / shortId / title / titleEn / type / year / coverUrl / isPublished 8 字段）
+  - `VideoPickerFilter`（type? / status? 外部锁定过滤）
+  - `VideoPickerFetcher` 函数类型 + `VideoPickerFetchParams` + `VideoPickerFetchResult`
+- **隔离实现**：admin-ui 零 import apps/** 业务路径（ADR-103b）；fetcher 注入由消费方实现 PickerVideoItem 字段映射
+- **注意事项**：
+  - **arch-reviewer Opus A− 评级理由**：v1 不公开 PickerDialog 子件（最小公开面）；未来 SourceLinePicker / UserPicker 复用 dialog 骨架时再提升 export
+  - **实施偏离 Opus 建议 1 处（已记录）**：AdminInput 不 forwardRef → 用 dialog body `querySelector('input')` 替代 ref-based focus；不污染 AdminInput 公开 API；功能等效
+  - **类型 adjust 1 处**：EmptyState Props 不接受 data-testid → wrap 在外层 `<div data-testid>` 内传递；不修改 EmptyState 公开 API
+  - **测试 14 用例覆盖 D10 全部场景**：触发器渲染（占位 / 单选回显 / 多选 chip）/ Dialog（打开 / 搜索 debounce / 结果渲染 / 空结果 / 网络错误）/ 单选确认 / 多选 staging / 多选取消 / 键盘 ArrowDown+Enter / disabled / 触发器清除
+  - **debounce 300ms**：测试用 `vi.useFakeTimers({ shouldAdvanceTime: true })` + `vi.advanceTimersByTimeAsync(350)`
+  - **后续消费方接入**：CHG-SN-8-08 视频库合并入口；后续 follow-up：字幕上传 Modal（用户问题 #8）+ 首页模块 ContentRefPicker（用户问题 #10）独立改造
+
+### DoD 全勾
+- [x] arch-reviewer Opus PASS（A−，0 红线）
+- [x] packages/admin-ui VideoPicker 落地 + types.ts + export
+- [x] 30-pickers/VideoPicker.md 8 字段全填
+- [x] admin-ui 单元测试 14 用例 PASS（≥ 8 要求超额）
+- [x] typecheck + lint + verify:manual-coverage PASS
+- [x] commit trailer 含 `Subagents: arch-reviewer (claude-opus-4-7)`
