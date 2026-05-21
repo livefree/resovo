@@ -6,61 +6,117 @@
 > source_of_truth: yes
 > supersedes: none
 > superseded_by: none
-> last_reviewed: 2026-04-30
+> last_reviewed: 2026-05-21
 
 本文件用于快速定位"当前生效文档"。执行约束仍以仓库根目录 `CLAUDE.md` 为准。
 
 ## 1. 权威文档（Source of Truth）
 
-> 2026-04-30 修订（CHG-DESIGN-11）：server-next 时代真源切换。前台 Web 设计稿已归档至 `docs/archive/m0-m6/frontend_design_spec_20260423.md`，不再作为根目录入口；后台重开发当前真源加入 server-next plan / backend design reference / SEQ-20260429 系列。
+> 2026-05-21 修订（CHG-SN-7-CLEANUP-01-B）：M-SN-3..6 milestone audit / M-SN-7 重做产物 / admin v1 设计 brief / 视图模板 / 设计稿迭代 plan 全部归档至 `docs/archive/2026Q2/`；新开发不再以这些文件作为参考。
 
-1. `CLAUDE.md`（仓库根目录）：执行规范唯一准则。
-2. `docs/architecture.md`：系统架构与模块边界。
-3. `docs/decisions.md`：架构决策记录（ADR）。
-4. `docs/server_next_plan_20260427.md`：**server-next 重开发当前主计划（M-SN-1～7）**；ADR-103a/103b 落地路径。
-5. `docs/designs/backend_design_v2.1/reference.md`：**后台重开发当前设计真源**（合并稿 §0 七条裁决 + §11 修复顺序）；CHG-DESIGN 系列任务卡的设计基准。
-6. `docs/task-queue.md`：任务序列池与状态追踪（当前活跃 SEQ：SEQ-20260428-01 ~ SEQ-20260429-02）。
-7. `docs/tasks.md`：单任务工作台。
-8. `docs/changelog.md`：完成任务变更历史。
-9. `docs/run-logs.md`：运行日志与 BLOCKER 记录。
-10. `docs/logging_system_proposal_20260425.md`：日志系统方案（与 `docs/rules/logging-rules.md` 配对）。
+1. **`CLAUDE.md`**（仓库根目录）：执行规范唯一准则。
+2. **`docs/architecture.md`**：系统架构与模块边界。
+3. **`docs/decisions.md`**：架构决策记录（ADR-100..136，含 NEGATED）。
+4. **`docs/server_next_plan_20260427.md`**：**server-next 主计划 v2.6**（M-SN-1..7）；ADR-103a/103b 落地路径。
+5. **`docs/designs/backend_design_v2.1/reference.md`**：**后台设计真源**（合并稿 §0 七条裁决 + §11 修复顺序）；新视图必读。
+6. **`docs/task-queue.md`**：任务序列池（活跃 SEQ：SEQ-20260521-01 docs 清理 + manual 工程地基）。
+7. **`docs/tasks.md`**：单任务工作台。
+8. **`docs/changelog.md`**：完成任务变更历史（追加型）。
+9. **`docs/tracks.md`**：并行 track 历史记录（用户决策保留顶层）。
 
 ## 2. 当前执行上下文（Current Context）
 
-1. `docs/designs/backend_design_v2.1/reference.md`：后台 admin 重开发设计真源（CHG-DESIGN-01 起所有任务卡的设计依据）。设计稿源在同目录 index.html / Wireframes.html / styles/ / app/。
-2. `docs/server_next_plan_20260427.md`：server-next 工程主计划（已含 ADR-103a Shell + ADR-103b admin-ui 边界落地）。
+1. `docs/designs/backend_design_v2.1/reference.md`：后台 admin 视图开发设计真源（CHG-SN-* 系列任务卡的设计依据）。设计稿源在同目录 `index.html` / `Wireframes.html` / `styles/` / `app/` / `design-canvas.jsx` / `info.md`。
+2. `docs/server_next_plan_20260427.md`：server-next 工程主计划（含 ADR-103a Shell + ADR-103b admin-ui 边界）。
+3. **`docs/manual/`**：M-SN-8 起的"用户使用说明书"工程目录（开发卡前置草稿、完工后定稿；详见 §6）。
 
-## 3. 保留参考（References）
+## 3. 已归档参考（Archived References）
 
-1. `docs/archive/m0-m6/frontend_design_spec_20260423.md`：前台设计 spec（M0-M6 时代真源，已归档；当前前台 Web 仍有部分执行价值，但作为历史输入）。
-2. `docs/admin_design_brief_20260426.md`：后台 v1 设计 brief（**仅作历史输入，不作 server-next 实现模板**；ModernDataTable / apps/server shared 引用已被 reference.md / SEQ-20260429-02 取代）。
-3. `docs/admin_audit_20260426.md`：后台 v1 审计报告（历史）。
-4. `docs/M-SN-3-milestone-audit-2026-05-12.md`：M-SN-3 milestone 阶段审计报告（B+ PASS / CHG-SN-5-PRE-01-B 完成判定依据）。
-5. `docs/M-SN-4-milestone-audit-2026-05-05.md`：M-SN-4 milestone 阶段审计报告（B+ PASS / CHG-SN-4-10-D 闭环依据）。
-6. `docs/server_next_PRE-01-A-drill-2026-05-12.md`：staging cookie + nginx e2e 演练记录（CHG-SN-5-PRE-01-A 完成判定依据）。
-7. `docs/server_next_view_template.md`：server-next 视图开发模板（DEBT-SN-3-A 交付物 / M-SN-5 视图卡参考）。
-8. `docs/archive/`：早期归档文件（含 frontend_redesign / design_system_plan / stability_fix 等）。
-9. `docs/baseline_20260418/`：2026-04-18 基线测试与截图产物。
-10. `docs/handoff_20260422/`：前端设计交接、token 包与人工 QA 产物。
+> 以下文件**仅作历史输入，不作 server-next 新开发参考模板**。所有归档于 2026-05-21 大清理（CHG-SN-7-CLEANUP-01-A）落地。
+
+### 3.1 milestone 阶段审计（`docs/archive/2026Q2/milestone-audits/`）
+- `M-SN-3-milestone-audit-2026-05-12.md`（B+ PASS）
+- `M-SN-4-milestone-audit-2026-05-05.md` + `M-SN-4-milestone-audit-2026-05-20.md`
+- `M-SN-5.5-milestone-audit-2026-05-12.md`
+- `M-SN-6-milestone-audit-2026-05-17.md` + `M-SN-6-milestone-audit-2026-05-17-RECHECK.md`（A−）
+
+### 3.2 M-SN-7 设计对齐重做产物（`docs/archive/2026Q2/m-sn-7-redo/`）
+- `M-SN-7-design-realign-plan.md`（REDO-01..04 总规划）
+- `M-SN-7-design-realign-audit-FULL.md`（PRE-04 16 路由全量审计输出，A−）
+- `M-SN-7-redo-01-contract.md`（Crawler 重做契约）
+
+### 3.3 设计稿迭代产物（`docs/archive/2026Q2/design-iterations/`）
+SEQ-20260429-02 / M-SN-4 阶段的 plan / audit / walkthrough 共 11 份；**新设计修订一律更新 `reference.md` 真源**。
+
+### 3.4 admin v1 历史输入（`docs/archive/2026Q2/admin-v1/`）
+- `admin_audit_20260426.md`（v1 全面审计 9 大痛点）
+- `admin_design_brief_20260426.md`（v1 设计 brief 5 推荐）
+- `logging_system_proposal_20260425.md`（已正式化为 `docs/rules/logging-rules.md`）
+- `run-logs.md`（M0–M6 BLOCKER 记录；后续以 `docs/changelog.md` 为准）
+
+### 3.5 其它归档
+- `docs/archive/2026Q2/server_next_view_template.md`（被 `docs/rules/admin-module-template.md` 取代）
+- `docs/archive/2026Q2/server_next_PRE-01-A-drill-2026-05-12.md`（staging cookie + nginx e2e 演练记录）
+- `docs/archive/m0-m6/frontend_design_spec_20260423.md`（M0-M6 前台设计 spec；前台 web-next 部分内容仍有参考价值）
+- `docs/archive/2026Q1/README.md` / `docs/archive/2026Q2/README.md` / `docs/archive/changelog/changelog_m0-m6.md`
 
 ## 4. 规则文档（Rules）
+
+CLAUDE.md「规范文件索引」节强引用，新开发按任务类型读取对应规范：
 
 1. `docs/rules/code-style.md`
 2. `docs/rules/ui-rules.md`
 3. `docs/rules/api-rules.md`
 4. `docs/rules/db-rules.md`
 5. `docs/rules/test-rules.md`
-6. `docs/rules/admin-module-template.md`
+6. `docs/rules/admin-module-template.md`（含 v1 冻结章 + v2 server-next 真源章，单文件双章节）
 7. `docs/rules/git-rules.md`
 8. `docs/rules/lint-rules.md`
-9. `docs/rules/quality-gates.md`
-10. `docs/rules/workflow-rules.md`
+9. `docs/rules/parallel-dev-rules.md`
+10. `docs/rules/quality-gates.md`
+11. `docs/rules/workflow-rules.md`
+12. `docs/rules/logging-rules.md`
 
-## 5. 冲突与归档
+## 5. 冲突与归档约定
 
-1. 同主题冲突清单已归档：`docs/archive/docs_topic_conflicts_20260327.md`。
-2. 被替代文档统一维护 `superseded_by`，并归档到 `docs/archive/<quarter>/`。
+1. 同主题冲突清单历史归档：`docs/archive/docs_topic_conflicts_20260327.md`。
+2. 被替代文档统一维护 `superseded_by` header，并归档到 `docs/archive/<quarter>/<topic>/`。
 3. 新增方案文档必须带日期后缀：`*_YYYYMMDD.md`。
-4. 2026Q1 归档索引见 `docs/archive/2026Q1/README.md`。
-5. 2026Q2 归档索引见 `docs/archive/2026Q2/README.md`（DOC-01，2026-04-22；DOC-02，2026-04-24；DOC-03，2026-05-12 — docs 整理：9 单文件 + 3 目录归档 + 4 项 stub 保留）。
-6. `docs/archive/` 根目录仍保留早期归档文件；新增归档应优先进入季度目录。
+4. 季度归档索引：
+   - `docs/archive/2026Q1/README.md`
+   - `docs/archive/2026Q2/README.md`（含 milestone-audits / m-sn-7-redo / design-iterations / admin-v1 子索引）
+
+## 6. M-SN-8 · 后台使用说明书工程（manual/）
+
+> **背景**：2026-05-21 用户复核 server-next 实际可用性发现 13 个 UX 缺口（mock 视图 / 死按钮 / 断链 / UUID 输入 / dashboard 模板等）。开发模式调整为「实现 + 说明书双轨」：每个页面对应一份手册，开发卡前置草稿、完工后定稿。
+>
+> **状态**：本节为 M-SN-8 启动前占位段，骨架由 `CHG-SN-7-CLEANUP-01-C` 落地后回填具体路径。
+
+### 6.1 目录结构（待落地）
+```
+docs/manual/
+├── README.md                              总览 + 角色矩阵 + 高频任务索引
+├── _template/                             PAGE / WORKFLOW 模板（开发卡复制起手）
+├── 00-roles-and-permissions.md
+├── 01-getting-started.md
+├── 10-workflows/                          跨页面端到端工作流
+│   ├── W1-crawl-to-publish.md             ★ 金票（采集 → 审核 → 上架）
+│   ├── W2-source-repair.md
+│   ├── W3-image-fallback.md
+│   ├── W4-merge-split.md
+│   └── W5-home-curation.md
+├── 20-pages/                              每个 /admin/* 路由一份
+├── 30-pickers/                            业务级选择器（VideoPicker / SourceLinePicker 等）
+└── 90-glossary.md
+```
+
+### 6.2 4 条硬约束（M-SN-8 完结态）
+1. **H1 零 mock 视图**：所有数字 / 列表 / 卡片必须 live 数据
+2. **H2 零死按钮**：每个按钮 onClick 接通端点 + Toast 反馈；危险操作二次确认
+3. **H3 零断链**：任意业务链路可从入口走到完成态，零 URL 编辑
+4. **H4 零 ID 输入**：所有"选别的资源"必须用业务级 Picker，禁止 UUID/DB 主键直接暴露
+
+### 6.3 开发双轨流
+- **开发卡起草时**：DoD §0 先建 `docs/manual/20-pages/P-<slug>.md` 草稿（§1/§2/§3/§4 填空）
+- **开发实施中**：完成一个交互即回填 §3/§4 步骤
+- **开发卡 PASS 前**：手册定稿，非工程师走读 ≥ 1 次；`verify:manual-coverage` 守门

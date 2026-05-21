@@ -489,7 +489,7 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
 
 ### M-SN-3 · 标杆页：视频库 · **1 周** ✅ 核心实现闭合（2026-05-01）
 
-> **执行实证（v2.5 沉淀）**：M-SN-3 核心实现通过 SEQ-20260429-01（CHG-SN-3-01 ~ CHG-SN-3-10 视频库基座）+ SEQ-20260429-02（CHG-DESIGN-01 ~ CHG-DESIGN-12 共 12 张设计对齐卡）闭合。实际完成范围超出原 M-SN-3 边界：DataTable 一体化骨架（toolbar / saved views / header menu / bulk bar / pagination / filter chips / flash row）、Dashboard StatCard 浏览态（8 卡 + KpiCard/Spark）、Analytics 分析视图（KPI×4 + SVG 图表 + 爬虫任务表）、Settings 容器（双栏布局）、Cell 共享组件层（DualSignal / VisChip / Pill / Thumb / InlineRowActions）均已落地。详见 `docs/designs/backend_design_v2.1/implementation-gap-report-2026-04-30.md`（更新版，2026-05-01 重新评估）。
+> **执行实证（v2.5 沉淀）**：M-SN-3 核心实现通过 SEQ-20260429-01（CHG-SN-3-01 ~ CHG-SN-3-10 视频库基座）+ SEQ-20260429-02（CHG-DESIGN-01 ~ CHG-DESIGN-12 共 12 张设计对齐卡）闭合。实际完成范围超出原 M-SN-3 边界：DataTable 一体化骨架（toolbar / saved views / header menu / bulk bar / pagination / filter chips / flash row）、Dashboard StatCard 浏览态（8 卡 + KpiCard/Spark）、Analytics 分析视图（KPI×4 + SVG 图表 + 爬虫任务表）、Settings 容器（双栏布局）、Cell 共享组件层（DualSignal / VisChip / Pill / Thumb / InlineRowActions）均已落地。详见 `docs/archive/2026Q2/design-iterations/implementation-gap-report-2026-04-30.md`（更新版，2026-05-01 重新评估）。
 >
 > **残余 3 张卡 ⏸ 暂停**（已于 2026-04-29 暂停，优先 SEQ-20260429-02）：CHG-SN-3-11（server_next_view_template.md 模板文档）/ CHG-SN-3-12（staging 环境 cookie + nginx 反代 e2e 演练，需人工参与）/ CHG-SN-3-13（M-SN-3 milestone 阶段审计，Opus arch-reviewer）。进入 M-SN-4 须用户就上述残余卡写入豁免声明或恢复执行（CHG-SN-3-12 参见 `staging-waiver:` 协议）。
 
@@ -502,7 +502,7 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
   - **末尾：staging 环境 cookie + nginx 反代 e2e 演练（DISCUSS-3）**
 - **完成标准**：
   - 与 apps/server 现 `/admin/videos` 功能 100% 对齐
-  - 可作为后续视图的"模板"（任务卡复用其文件结构 — 模板路径写入 `docs/server_next_view_template.md`）
+  - 可作为后续视图的"模板"（任务卡复用其文件结构 — 模板路径写入 `docs/archive/2026Q2/server_next_view_template.md`）
 - **关联 brief**：推荐 4 实战、痛点 5
 - **阶段审计重点**：是否真正可作为模板（结构清晰度 + 复用矩阵达标）+ e2e 演练通过
 
@@ -555,7 +555,7 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
 
 **A. cutover-blocker（6 子卡，每卡独立 Opus 评审）**
 
-按 `docs/M-SN-4-milestone-audit-2026-05-05.md` §6 严格核对：4🔴 + 2🟠 共 6 项强制；🟡 DEBT-SN-4-09c-A 不计入本 milestone（cutover 前可选）。
+按 `docs/archive/2026Q2/milestone-audits/M-SN-4-milestone-audit-2026-05-05.md` §6 严格核对：4🔴 + 2🟠 共 6 项强制；🟡 DEBT-SN-4-09c-A 不计入本 milestone（cutover 前可选）。
 
 - **CHG-SN-5-PRE-01-A** · DEBT-SN-3-B（staging cookie + nginx e2e 演练，需人工，🔴）
 - **CHG-SN-5-PRE-01-B** · DEBT-SN-3-C（M-SN-3 milestone 阶段审计，🔴；依赖 -A 完成或 staging-waiver）
@@ -565,7 +565,7 @@ trailer 与 `docs/rules/git-rules.md` 当前格式兼容（已核：`Refs:` 与 
 - **CHG-SN-5-PRE-01-F** · DEBT-SN-4-07-A（visual baseline 7 张占位 PNG（69-byte 单像素）替换为真截图，🟠）
 - **staging-waiver 协议**（Y8 采纳）：DEBT-SN-3-B 如人工演练受阻可走 staging-waiver（由用户 sign-off 触发，登记到 task-queue 欠账段，不阻塞 -B 关闭判定但触发 DEBT-SN-3-C 审计材料中显式声明）
 - 工时估算：1.0–1.5w（人工演练 ~0.3w + 4 项 bug fix ~0.3w + 2 张 baseline ~0.4–0.7w）
-- 真源：`docs/M-SN-4-milestone-audit-2026-05-05.md` §6
+- 真源：`docs/archive/2026Q2/milestone-audits/M-SN-4-milestone-audit-2026-05-05.md` §6
 
 **B. DEBT-LINE-KEY-01 决策（CHG-SN-5-PRE-02，单卡）— ✅ 已决议（2026-05-06，方案 A）**
 
@@ -1169,7 +1169,7 @@ M-SN-0 完成 = 三批全部 PASS + 三份 ADR 进入 `docs/decisions.md` + 本 
 - 子代理：无（前置依赖追加不涉及新 API 契约定义或 ADR 撰写；CLAUDE.md 强制 Opus 六情形均未命中；§0 arch-reviewer 要求以用户人工 sign-off 代替，详见上方 §5.2 BLOCKER #12 处理段）
 - 人工 sign-off：用户指令（"这一步先修订 docs/server_next_plan_20260427.md"，2026-05-01）+ 用户反馈 5 处问题并指定修正方向，已全部采纳（v2.5 第二轮修正，同日）+ stop-hook 一致性反馈 3 处（§10.2 DAG / §7 旧说明 / §12 总周期），已全部采纳（v2.5 第三轮修正，同日）
 - 关联任务：CHG-PLAN-01
-- 关联文档：`docs/designs/backend_design_v2.1/implementation-gap-report-2026-04-30.md`（更新版）
+- 关联文档：`docs/archive/2026Q2/design-iterations/implementation-gap-report-2026-04-30.md`（更新版）
 - 工时影响：0（无功能范围变更）
 - 重大修订标记：是（M-SN-4/M-SN-6 新增前置依赖约束属范围类修订）；按 §0 plan 版本协议须人工 sign-off — 已取得（三轮修正均由用户指令触发并确认）
 
@@ -1177,7 +1177,7 @@ M-SN-0 完成 = 三批全部 PASS + 三份 ADR 进入 `docs/decisions.md` + 本 
 
 ### v2.5 → v2.6（2026-05-06）
 
-由 CHG-PLAN-02（SEQ-20260505-02）触发：M-SN-4 milestone B+ PASS 闭环后（2026-05-05），主循环对 M-SN-5（原 4w / 6 视图 + 9-10 端点）启动前置评估。M-SN-4 audit §6 cutover 前必清欠账（按 `docs/M-SN-4-milestone-audit-2026-05-05.md` §6 严格核对：**4🔴 + 2🟠 + 1🟡**，🟡 DEBT-SN-4-09c-A 不计入本期）+ DEBT-LINE-KEY-01（SEQ-20260502-01 推迟项）+ implementation-gap-report §3.2 admin-ui 通用原语缺口 共三类前置工作叠加，原 4w 不再适配。
+由 CHG-PLAN-02（SEQ-20260505-02）触发：M-SN-4 milestone B+ PASS 闭环后（2026-05-05），主循环对 M-SN-5（原 4w / 6 视图 + 9-10 端点）启动前置评估。M-SN-4 audit §6 cutover 前必清欠账（按 `docs/archive/2026Q2/milestone-audits/M-SN-4-milestone-audit-2026-05-05.md` §6 严格核对：**4🔴 + 2🟠 + 1🟡**，🟡 DEBT-SN-4-09c-A 不计入本期）+ DEBT-LINE-KEY-01（SEQ-20260502-01 推迟项）+ implementation-gap-report §3.2 admin-ui 通用原语缺口 共三类前置工作叠加，原 4w 不再适配。
 
 **修订内容（rev3，按 3 轮 Opus 评审 + 用户 sign-off 5 项偏差全采修复 + Y7 润色采纳 + Y8 staging-waiver 注记采纳）**：
 - §1 文件头：version v2.5 → v2.6 + generated_at 追加 2026-05-06
@@ -1215,7 +1215,7 @@ M-SN-0 完成 = 三批全部 PASS + 三份 ADR 进入 `docs/decisions.md` + 本 
 - 子代理：arch-reviewer (claude-opus-4-7) — 第 1 轮 verdict CONDITIONAL（4 红+6 黄+卡链 3 项）；第 2 轮 verdict PASS（建议 Y7 润色不阻塞）；第 3 轮 verdict PASS（建议 Y8 staging-waiver 注记不阻塞）
 - 人工 sign-off：用户 2026-05-06 选定方案 B'（cutover-blocker 进 M-SN-5.5）+ 全采 5 项偏差修复 + Y7 + Y8 全采纳 + 跑第 3 轮复评 + 落盘指令（CHG-PLAN-02 决策回合 2 + 落盘回合 3）
 - 关联任务：CHG-PLAN-02（SEQ-20260505-02）
-- 关联文档：`docs/M-SN-4-milestone-audit-2026-05-05.md` / `docs/designs/backend_design_v2.1/implementation-gap-report-2026-04-30.md` / SEQ-20260502-01
+- 关联文档：`docs/archive/2026Q2/milestone-audits/M-SN-4-milestone-audit-2026-05-05.md` / `docs/archive/2026Q2/design-iterations/implementation-gap-report-2026-04-30.md` / SEQ-20260502-01
 - 工时影响：M-SN-5 主体 4w 不变 + 新增 M-SN-5.5 2.0w（软上限 3.0w）；总周期 18.0w → 20.0w（软上限 21.0w）；v1 16w → v2.6 20w = +25% < +50% 阈值
 - 重大修订标记：是（影响 §6 范围 + 总周期 + 新增 milestone + 新增 ADR 候选 + §3 决策表 + ADR 编号修正）；按 §0 plan 版本协议须人工 sign-off — 已取得
 

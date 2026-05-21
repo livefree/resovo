@@ -353,5 +353,5 @@ INFRA-10 完成时用 `curl http://localhost:4000/v1/internal/client-log` 直连
 | Web-next 服务端 logger | `apps/web-next/src/lib/logger.server.ts`（INFRA-10 预备入口） |
 | Client log 接收端点 | `apps/api/src/routes/internal/client-log.ts` |
 | Dev 落盘编排 | `scripts/dev.mjs` |
-| 规则原文 | `docs/logging_system_proposal_20260425.md`（提案 + 评审 + 决策原文） |
+| 规则原文 | `docs/archive/2026Q2/admin-v1/logging_system_proposal_20260425.md`（提案 + 评审 + 决策原文） |
 | 实施 changelog | `docs/changelog.md`（搜 `INFRA-07` ~ `INFRA-16`） |

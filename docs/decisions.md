@@ -2048,7 +2048,7 @@ landing_plan_v1 §HANDOFF-03 验收清单第 5 项要求"主视图 ⇄ 浮窗切
 - **状态**：已采纳（2026-04-30 修订：路由切分语义见下方 amendment block）
 - **子代理**：arch-reviewer (claude-opus-4-6)
 - **编号说明**：plan v2 §9 原分配 ADR-046/047/048，落盘前核对 `docs/decisions.md` 发现 046–054 全部已被前期 ADR 占用。用户裁定 B 方案（跳号至 100+ 区段，避开历史冲突，并使 server-next 系列 ADR 编号连续可识别）。
-- **背景**：apps/server（旧后台）累积 9 大痛点（详见 `docs/admin_audit_20260426.md` §7），ModernDataTable 采纳率 58%，22 admin 模块/122 端点工程债务深；继续在 apps/server 内增量修复 ROI 低、风险高。Claude Design 已输出 v2.1 后台设计稿（IA 重排 + 16 视图 mock，详见 `docs/designs/backend_design_v2.1/`）。立项 apps/server-next 独立壳承接重写。
+- **背景**：apps/server（旧后台）累积 9 大痛点（详见 `docs/archive/2026Q2/admin-v1/admin_audit_20260426.md` §7），ModernDataTable 采纳率 58%，22 admin 模块/122 端点工程债务深；继续在 apps/server 内增量修复 ROI 低、风险高。Claude Design 已输出 v2.1 后台设计稿（IA 重排 + 16 视图 mock，详见 `docs/designs/backend_design_v2.1/`）。立项 apps/server-next 独立壳承接重写。
 - **决策**：立项 apps/server-next 作为 admin 重写主体，沿用 ADR-031（重写期代码共存）+ ADR-037（里程碑对齐）模式；M-SN-7 cutover 后 apps/server 整体退场（详见 ADR-101）。
 
 > **AMENDMENT 2026-04-30（CHG-DESIGN-11）**：
@@ -3938,7 +3938,7 @@ export interface LoadingStateProps {
 > 状态：accepted（CHG-SN-4-04 实装 PASS + 5 件下沉全部就位，2026-05-02）
 > 日期：2026-05-01（草拟）/ 2026-05-02（CHG-SN-4-04 评审反馈补反向兜底 + 实装 PASS 转 accepted）
 > 任务卡：CHG-SN-4-03 / CHG-SN-4-04 / SEQ-20260501-01
-> 关联 plan：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.4 §1 D-14 + §7
+> 关联 plan：`docs/archive/2026Q2/design-iterations/M-SN-4-moderation-console-plan.md` v1.4 §1 D-14 + §7
 
 ### 上下文
 
@@ -4144,7 +4144,7 @@ CHG-SN-4-05 任务卡范围声明 `packages/types/src/api/**`（信封 / errorCo
 > 状态：accepted（CHG-UI-04 完成 + arch-reviewer (claude-opus-4-7) PASS CONDITIONAL；CHG-UI-05/06 收口前可能补订增量）
 > 日期：2026-05-03
 > 任务卡：SEQ-20260503-01（CHG-UI-01..06）
-> 关联：`docs/designs/backend_design_v2.1/ui-token-alignment-plan.md`（方案真源）/ `docs/designs/backend_design_v2.1/styles/tokens.css`（设计真源）/ `packages/design-tokens/src/{primitives,semantic}/*.ts`（实现真源）
+> 关联：`docs/archive/2026Q2/design-iterations/ui-token-alignment-plan.md`（方案真源）/ `docs/designs/backend_design_v2.1/styles/tokens.css`（设计真源）/ `packages/design-tokens/src/{primitives,semantic}/*.ts`（实现真源）
 
 ### 上下文
 
@@ -4235,9 +4235,9 @@ CHG-SN-4-05 任务卡范围声明 `packages/types/src/api/**`（信封 / errorCo
   - CHG-UI-01（占位）✅ / CHG-UI-02（surfaces & border）✅ / CHG-UI-02a（gray ramp 校准）✅ / CHG-UI-03（fg）✅ / CHG-UI-04（state pill；强制 opus + arch-reviewer）✅ PASS (CONDITIONAL) / CHG-UI-05（消费方 token 槽位全栈审计 + 修正 + 行分割线）✅ / CHG-UI-05a（DataTable 表头 + Trigger 槽位精修）✅ / CHG-UI-06（视觉走查 + 序列收口；arch-reviewer 全序列 B+ PASS CONDITIONAL）✅
 - **关联序列**：SEQ-20260503-01
 - **关联文档**：
-  - `docs/designs/backend_design_v2.1/ui-token-alignment-plan.md`（方案真源）
-  - `docs/designs/backend_design_v2.1/state-pill-soft-walkthrough_20260503.md`（CHG-UI-04 走查清单）
-  - `docs/designs/backend_design_v2.1/token-slot-audit-report-20260503.md`（CHG-UI-05/05a 审计报告）
+  - `docs/archive/2026Q2/design-iterations/ui-token-alignment-plan.md`（方案真源）
+  - `docs/archive/2026Q2/design-iterations/state-pill-soft-walkthrough_20260503.md`（CHG-UI-04 走查清单）
+  - `docs/archive/2026Q2/design-iterations/token-slot-audit-report-20260503.md`（CHG-UI-05/05a 审计报告）
   - `docs/audit_seq_20260503_01_20260503.md`（CHG-UI-06 arch-reviewer 全序列评级）
 - **关联规范**：`docs/rules/ui-rules.md`（CSS 变量使用约束）/ CLAUDE.md §"绝对禁止"硬编码颜色值条款
 
@@ -4247,7 +4247,7 @@ CHG-SN-4-05 任务卡范围声明 `packages/types/src/api/**`（信封 / errorCo
 > 状态：accepted（CHG-UX-01..07 全部完成 + arch-reviewer 待评级；评级 PASS 后正式收口）
 > 日期：2026-05-03
 > 任务卡：SEQ-20260504-01（CHG-UX-01..07）
-> 关联：`docs/designs/backend_design_v2.1/ux-interactive-feedback-plan.md`（方案真源）
+> 关联：`docs/archive/2026Q2/design-iterations/ux-interactive-feedback-plan.md`（方案真源）
 
 ### 上下文
 
@@ -4349,7 +4349,7 @@ React inline `style={{ background: ... }}` 的 CSS specificity 高于任何 styl
 - **关联任务卡**：CHG-UX-01..07（含 05b 回滚 / 05c / 05d / 05d hotfix；详见 SEQ-20260504-01）
 - **关联序列**：SEQ-20260504-01
 - **关联文档**：
-  - `docs/designs/backend_design_v2.1/ux-interactive-feedback-plan.md`（方案真源）
+  - `docs/archive/2026Q2/design-iterations/ux-interactive-feedback-plan.md`（方案真源）
   - `docs/audit_seq_20260504_01_20260503.md`（CHG-UX-06 arch-reviewer 全序列评级）
 - **关联规范**：`docs/rules/ui-rules.md`（CSS 变量使用约束）/ CLAUDE.md §"绝对禁止" 硬编码颜色值条款
 
@@ -4361,7 +4361,7 @@ React inline `style={{ background: ... }}` 的 CSS specificity 高于任何 styl
 > 状态：accepted（CHG-UX2-01..06 全部完成 + arch-reviewer A- / PASS）
 > 日期：2026-05-05
 > 任务卡：SEQ-20260505-01（CHG-UX2-01..06）
-> 关联：`docs/designs/backend_design_v2.1/density-spacing-cover-alignment-plan.md`（方案真源）
+> 关联：`docs/archive/2026Q2/design-iterations/density-spacing-cover-alignment-plan.md`（方案真源）
 >       `docs/archive/2026Q2/video-table-cell-compression-debug-20260504.md`（cover bug 调试归档）
 
 ### 上下文
@@ -4502,7 +4502,7 @@ CHG-UX-06 收口阶段用户反馈 4 项痛点 + 一审遗留闭环项：
 ### 关联
 
 - **关联 ADR**：ADR-111（后台 token 颜色对齐 — admin token 体系前序）/ ADR-112（后台交互反馈语义槽位 — 同期 SEQ-20260504-01 收口）
-- **关联方案**：`docs/designs/backend_design_v2.1/density-spacing-cover-alignment-plan.md`（过程文档；ADR-113 是结论）
+- **关联方案**：`docs/archive/2026Q2/design-iterations/density-spacing-cover-alignment-plan.md`（过程文档；ADR-113 是结论）
 - **关联归档**：`docs/archive/2026Q2/video-table-cell-compression-debug-20260504.md`（cover bug 真因调试链路全记录 + §10 教训）
 - **关联规范**：`docs/rules/ui-rules.md`（CSS 变量使用约束）/ `CLAUDE.md` §"绝对禁止" 硬编码颜色 / 越层调用 / 任何裸 fontSize/padding 条款
 
@@ -7221,7 +7221,7 @@ const PutCategoryMappingSchema = z.object({
 
 ### 议题
 
-`docs/M-SN-7-redo-01-contract.md` §3 锁定了 Crawler 重做页面所需的 4 个新后端端点：
+`docs/archive/2026Q2/m-sn-7-redo/M-SN-7-redo-01-contract.md` §3 锁定了 Crawler 重做页面所需的 4 个新后端端点：
 
 1. `GET /admin/crawler/kpi` — 5 张 KPI 卡数据 + siteStats 补充
 2. `GET /admin/crawler/timeline` — 时间轴可视化聚合
@@ -7447,7 +7447,7 @@ LIMIT $2;
 
 ### 关联
 
-- `docs/M-SN-7-redo-01-contract.md` §3（4 端点契约提纲）
+- `docs/archive/2026Q2/m-sn-7-redo/M-SN-7-redo-01-contract.md` §3（4 端点契约提纲）
 - `apps/api/src/routes/admin/crawler.ts`（现有 18+ 端点不修改）
 - `apps/api/src/routes/admin/crawlerSites.ts`（命名先例）
 - `apps/api/src/services/CrawlerRunService.ts`（`createAndEnqueueRun` alias 委托目标）

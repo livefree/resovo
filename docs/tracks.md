@@ -45,7 +45,7 @@
 - **创建时间**：2026-05-02
 - **集成时间**：2026-05-02
 - **建议模型**：`claude-sonnet-4-6`（plan §8.1）
-- **执行真源**：`docs/designs/backend_design_v2.1/M-SN-4-05-api-endpoints-plan_20260502.md` v1.1
+- **执行真源**：`docs/archive/2026Q2/design-iterations/M-SN-4-05-api-endpoints-plan_20260502.md` v1.1
 - **说明**：CHG-SN-4-05 后端 API（8 新端点 + 4 改端点 + 058a schema patch + ApiResponse 信封 + RBAC + audit log + 并发保护）。关键路径：解锁 CHG-SN-4-07 / -08 前端卡。
 - **集成评级**：A 级（arch-reviewer claude-opus-4-7 复核 2 轮 PASS；237 文件 / 2998 测试全绿；DEBT-SN-4-05-A/B/C 已登记）
 
@@ -68,7 +68,7 @@
 - **创建时间**：2026-05-02
 - **集成时间**：2026-05-02
 - **建议模型**：`claude-sonnet-4-6`（plan §8.1）
-- **执行真源**：`docs/designs/backend_design_v2.1/M-SN-4-06-worker-source-health-plan_20260502.md` v1.1
+- **执行真源**：`docs/archive/2026Q2/design-iterations/M-SN-4-06-worker-source-health-plan_20260502.md` v1.1
 - **说明**：CHG-SN-4-06 `apps/worker` 新建 + SourceHealthWorker Level 1+2 + 分辨率采集 + advisory lock 视频级聚合 + 站点熔断 + pino 可观测。Step 1–9 与 -05 完全并行；Step 10（feedback-driven-recheck）依赖 058a migration（CHG-SN-4-05 已落地）；R-1 修复保证 058a 缺失时优雅降级不崩溃。
 - **集成评级**：A− 级（arch-reviewer claude-opus-4-7 复核 2 轮 PASS；246 文件 / 3045 测试全绿；唯一扣分：R-1 catch 路径无 unit）
 
@@ -124,7 +124,7 @@
 - **创建时间**：2026-05-02
 - **集成时间**：2026-05-02
 - **建议模型**：`claude-sonnet-4-6`（plan §8.1 - 4 工作日）
-- **执行真源**：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.4 §5（六项前端共性约束 + 三 Tab 操作流程）
+- **执行真源**：`docs/archive/2026Q2/design-iterations/M-SN-4-moderation-console-plan.md` v1.4 §5（六项前端共性约束 + 三 Tab 操作流程）
 - **说明**：CHG-SN-4-07 审核台前端接入：URL Tab 状态 + sessionStorage activeIdx + 光标分页 + 键盘 J/K/A/R/S + RejectModal 接线 + 真实 staging/rejected/lines API + LineHealthDrawer + StaffNoteBar；新建 lib/moderation/api.ts + i18n keys + 12 cases；250 文件 / 3076 测试全绿。
 - **集成评级**：B+ 级（arch-reviewer claude-opus-4-7 复核 1 轮 PASS；零越界 + 共享层冻结全遵守 + 共性约束完整；扣分项：硬编码中文 ~15 处违反 plan §5.0.5 → 转 CHG-SN-4-09a 单独修复 + DEBT-SN-4-07-A/B 已登记）
 
@@ -143,7 +143,7 @@
 - **创建时间**：2026-05-02
 - **集成时间**：2026-05-02
 - **建议模型**：`claude-sonnet-4-6`（plan §8.1 - 4 工作日）
-- **执行真源**：`docs/designs/backend_design_v2.1/M-SN-4-moderation-console-plan.md` v1.4 §6（VideoEditDrawer 三 Tab 真实 API）
+- **执行真源**：`docs/archive/2026Q2/design-iterations/M-SN-4-moderation-console-plan.md` v1.4 §6（VideoEditDrawer 三 Tab 真实 API）
 - **说明**：CHG-SN-4-08 完成。VideoEditDrawer 三 Tab 真实 API（线路/图片/豆瓣）全部接入，249 文件 / 3064 测试全绿。
 - **集成评级**：A− 级（arch-reviewer claude-opus-4-7 复核 1 轮 PASS；零越界 + 共享层冻结全遵守 + 乐观更新+回滚正确；扣分项：DEBT-SN-4-08-A/B 已登记）
 
