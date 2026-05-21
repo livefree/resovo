@@ -10,8 +10,8 @@
 
 ## 1. 入口（多入口设计）
 - 主入口：侧栏 → 合并拆分
-- 从审核台进入：右栏「类似」Tab → 「发起合并」按钮 → 带 candidate_a 深链
-- 从视频库进入：行 inline action「发起合并」→ 深链
+- 从审核台进入：右栏「类似」Tab → 「发起合并」按钮 → 带 candidate_a 深链（CHG-SN-8-04 待启动）
+- ✅ 从视频库进入（CHG-SN-8-08 已实施）：视频库某行「⋯」dropdown → 「发起合并」→ 跳 `/admin/merge?candidate_a=<id>&from=videos` → Merge 页顶部 banner「已锁定候选 A: <短 ID>」+「清除」按钮
 
 ## 2. 端到端步骤
 ```

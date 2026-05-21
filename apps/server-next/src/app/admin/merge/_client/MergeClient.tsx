@@ -21,6 +21,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, type CSSProperties } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   PageHeader,
   AdminButton,
@@ -171,6 +172,19 @@ export function MergeClient() {
   const [tab, setTab] = useState<SegmentTab>('candidates')
   const [showSplit, setShowSplit] = useState(false)
 
+  // CHG-SN-8-08：接收来自视频库的 ?candidate_a 深链
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const candidateAParam = searchParams.get('candidate_a')
+  const fromParam = searchParams.get('from')
+  const dismissCandidateBanner = useCallback(() => {
+    const p = new URLSearchParams(searchParams.toString())
+    p.delete('candidate_a')
+    p.delete('from')
+    const qs = p.toString()
+    router.replace(qs ? `?${qs}` : '?', { scroll: false })
+  }, [router, searchParams])
+
   return (
     <div style={PAGE_STYLE}>
       <PageHeader
@@ -182,6 +196,28 @@ export function MergeClient() {
           </AdminButton>
         }
       />
+
+      {/* CHG-SN-8-08：来自视频库行级「发起合并」深链 banner */}
+      {candidateAParam && (
+        <AdminCard
+          surface="subtle"
+          status="ok"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 14px' }}
+          data-testid="merge-candidate-a-banner"
+        >
+          <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 'var(--font-size-sm)', fontWeight: 600 }}>
+              已锁定候选 A：<code style={{ fontFamily: 'var(--font-mono, ui-monospace, monospace)', fontSize: '11px' }}>{candidateAParam.slice(0, 8)}</code>
+            </span>
+            <span style={{ fontSize: '11px', color: 'var(--fg-muted)' }}>
+              {fromParam === 'videos' ? '来自视频库行级操作；' : ''}请在下方候选列表中选择 B 完成合并（或在拆分工作台内手动操作）
+            </span>
+          </span>
+          <AdminButton size="sm" variant="default" onClick={dismissCandidateBanner} data-testid="merge-candidate-a-clear">
+            清除
+          </AdminButton>
+        </AdminCard>
+      )}
 
       {showSplit && (
         <AdminCard style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>

@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { AdminDropdown, type AdminDropdownItem } from '@resovo/admin-ui'
 import type { VideoAdminRow, VisibilityStatus } from '@/lib/videos'
 import { updateVisibility, stateTransition, doubanSync, refetchSources } from '@/lib/videos/api'
@@ -37,6 +38,7 @@ function buildItems(
   onDouban: () => void,
   onRefetch: () => void,
   onViewDetail: () => void,
+  onMerge: () => void,
 ): readonly AdminDropdownItem[] {
   const items: AdminDropdownItem[] = [
     { key: 'edit', label: '编辑基础信息', onClick: onEdit },
@@ -69,6 +71,7 @@ function buildItems(
   items.push(
     { key: 'douban-sync', label: '豆瓣同步', disabled: !isAdmin, onClick: onDouban },
     { key: 'refetch', label: '重新采集', onClick: onRefetch },
+    { key: 'merge', label: '发起合并', separator: true, onClick: onMerge },
     { key: 'view-detail', label: '查看详情（前台）', onClick: onViewDetail },
   )
 
@@ -89,6 +92,7 @@ const TRIGGER_STYLE: React.CSSProperties = {
 }
 
 export function VideoRowActions({ row, isAdmin, onRowUpdate, onEditRequest }: VideoRowActionsProps) {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState(false)
 
@@ -143,6 +147,11 @@ export function VideoRowActions({ row, isAdmin, onRowUpdate, onEditRequest }: Vi
     () => withSimple(() => doubanSync(row.id)),
     () => withSimple(() => refetchSources(row.id)),
     () => { setOpen(false); window.open(getDetailHref(row), '_blank') },
+    // CHG-SN-8-08：发起合并 → 深链 /admin/merge?candidate_a=<id>&from=videos
+    () => {
+      setOpen(false)
+      router.push(`/admin/merge?candidate_a=${encodeURIComponent(row.id)}&from=videos`)
+    },
   )
 
   return (

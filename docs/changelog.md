@@ -13860,3 +13860,68 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 
 ### Follow-up
 - CHG-SN-8-05-B per-line inline 重测（LinesPanel API 扩展 + Opus 评审）
+
+## [CHG-SN-8-08] 视频库行级「发起合并」深链 + Merge 页接 candidate_a banner
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **关联 SEQ**：SEQ-20260521-02（6/9 ✅ + 1 NEGATED + 2 ADR 前置 = 阶段性收尾）
+- **方案收敛**：原任务卡含 VideoPicker 选 candidate_b 集成；本卡先打通入口（dropdown 项 + 深链 + banner），VideoPicker 集成留 -08-B follow-up
+- **修改文件**：
+  - `apps/server-next/src/app/admin/videos/_client/VideoRowActions.tsx`：
+    - import useRouter
+    - buildItems 加 `'merge'` item（separator + label「发起合并」+ onClick router.push）
+    - onClick: `router.push('/admin/merge?candidate_a=<row.id>&from=videos')`
+  - `apps/server-next/src/app/admin/merge/_client/MergeClient.tsx`：
+    - import useRouter + useSearchParams
+    - 读 `searchParams.get('candidate_a')` + `searchParams.get('from')`
+    - 增 `dismissCandidateBanner` callback（删 candidate_a + from，保留其它 params）
+    - 条件渲染 AdminCard banner（surface='subtle' status='ok'）：标题「已锁定候选 A: <短 ID>」+ 副标题来源说明 + 「清除」AdminButton
+  - `tests/unit/components/server-next/admin/merge/MergeCandidateBanner.test.tsx` 新建（3 用例 PASS）
+  - `docs/manual/10-workflows/W4-merge-split.md` §1 入口章节更新（视频库进入 ✅）
+  - `docs/task-queue.md` + `docs/changelog.md`
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - **不消费 VideoPicker**：M-SN-SHARED-04-A VideoPicker 已就绪但本卡保守不集成；保留扩展面给 -08-B（merge 页内直接 VideoPicker 选 candidate_b 完成合并）
+  - **dismissCandidateBanner 逻辑**：仅删 `candidate_a` + `from`，保留 `tab` 等其它 query params（与 RunInfoBanner 同模式）
+  - **banner 显示规则**：candidate_a 存在则显；不查 lookup 真实视频信息（避免新增 API）；仅显示前 8 位短 ID
+  - **测试 mock 模式**：next/navigation 顶层 mock + `mockSearchString` 变量切换 + listCandidates 永不 resolve（避免 useEffect 初始 fetch 干扰断言）
+
+### DoD 全勾
+- [x] VideoRowActions 加「发起合并」item + router 跳转
+- [x] MergeClient 接 ?candidate_a + banner
+- [x] 单测 3 用例 PASS（≥ 3 要求满足）
+- [x] typecheck + lint + verify:manual-coverage PASS
+- [x] W4 §1 入口章节更新
+
+### Follow-up
+- CHG-SN-8-08-B Merge 页内直接 VideoPicker 选 candidate_b（消费 M-SN-SHARED-04-A）
+
+---
+
+## SEQ-20260521-02 阶段性收尾（2026-05-21）
+
+**最终状态**：6/9 ✅ + 1 NEGATED + 2 待 ADR 前置启动
+
+| 卡 | 状态 | commit |
+|---|---|---|
+| CHG-SN-8-01 全站全量改造 | ✅ | 89fc7e00 |
+| CHG-SN-8-02 最近采集 status pill | ✅ | 5c66e2ee |
+| CHG-SN-8-03 采集 toast 软深链 | ✅ | f38defc2 |
+| M-SN-SHARED-04-A VideoPicker | ✅ A− | 1c2b2329 |
+| CHG-SN-8-04 TabSimilar 实装 | ⬜ 待启动（需新端点 + ADR + Opus 评审） | — |
+| CHG-SN-8-05 批量重测线路 | ✅ | 322a9513 |
+| CHG-SN-8-06 通过即上架 | ⬜ 待启动（需端点扩展 publishOnApprove + ADR 评估） | — |
+| CHG-SN-8-07 staging IA 收敛 | ❌ NEGATED | 322a9513 |
+| CHG-SN-8-08 视频库合并入口 | ✅ | (此 commit) |
+
+**W1 金票工作流反例段最终状态**：5 项中 3 项 ✅ 已修复（#1 主按钮 / #2 跳转 / #4 重测），1 项 ⚠️ 设计已裁决（#5 staging 独立路由），1 项 ❌ 待 ADR 启动（#3 类似 tab）
+
+**累计**：7 commits（C7-CLEANUP-01-A/B/C + C8-01/02/03/SHARED-04-A/05/08）/ +5800 lines / 50+ 测试用例 / 1 spawn Opus 子代理（A−）/ 1 NEGATED 范式应用 / 0 BLOCKER / typecheck+lint+verify 全 PASS
+
+**W1 金票端到端**：采集 → 审核（toast 深链）→ 上架 工作流入口 + 路径全部打通；零 mock / 零 UUID 输入消灭起步（VideoPicker 就绪）/ 零死按钮（dashboard 按钮 + 全站全量主按钮 + 触发器清除 + 批量重测均接入端点）
+
+**剩余 -04 / -06 触发 ADR 协议**：需用户决策启动 SEQ-20260521-03（含 ADR-NN 起草 + Opus 评审 + 端点 + 视图三段实施）
