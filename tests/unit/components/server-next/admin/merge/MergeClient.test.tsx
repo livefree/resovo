@@ -1,5 +1,5 @@
 /**
- * MergeClient.test.tsx — /admin/merge 视图单元测试（CHG-SN-5-12-PATCH P1 / CHG-SN-7-MISC-MERGE-1）
+ * MergeClient.test.tsx — /admin/merge 视图单元测试（CHG-SN-5-12-PATCH P1 / CHG-SN-7-MISC-MERGE-1/2）
  *
  * 覆盖：
  *   - 渲染基础 + Segment 3 items（待审候选 / 已合并 / 已拆分）
@@ -11,6 +11,8 @@
  *   - 拆分工作台：type select 11 选项（P2-3）
  *   - 已合并 Segment → listAudit action='merge'
  *   - 已拆分 Segment → listAudit action='split'
+ *   - 置信度 pill：展开后显示 "85.0% 置信度"（MERGE-2）
+ *   - 影响预览：展开后显示源视频预览区块（MERGE-2）
  *
  * 路径策略：用相对路径 import（与 HomeOpsClient.test.tsx 同范式）避免 @ alias 在测试环境内的解析歧义。
  */
@@ -297,6 +299,34 @@ describe('MergeClient', () => {
     fireEvent.click(screen.getByRole('tab', { name: '已合并' }))
     await waitFor(() => {
       expect(screen.getByText('无审计记录')).not.toBeNull()
+    })
+  })
+
+  // ── MERGE-2：card 形态 + 置信度 pill + 影响预览 ──────────────────
+
+  it('MERGE-2：置信度 pill — 展开后显示 "85.0% 置信度"', async () => {
+    listCandidatesMock.mockResolvedValueOnce(ONE_GROUP_RES)
+    render(<MergeClient />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.click(screen.getByText('復仇者聯盟'))
+    await waitFor(() => {
+      expect(screen.getByTestId('confidence-pill').textContent).toContain('85.0%')
+      expect(screen.getByTestId('confidence-pill').textContent).toContain('置信度')
+    })
+  })
+
+  it('MERGE-2：影响预览 — 展开后渲染源视频预览区块', async () => {
+    listCandidatesMock.mockResolvedValueOnce(ONE_GROUP_RES)
+    render(<MergeClient />)
+    await waitFor(() => screen.getByText('復仇者聯盟'))
+    fireEvent.click(screen.getByText('復仇者聯盟'))
+    await waitFor(() => {
+      // 影响预览区块存在
+      expect(screen.getByTestId('impact-preview')).not.toBeNull()
+      // 源视频 Avengers A 出现在影响预览列表中
+      expect(screen.getByTestId('impact-preview').textContent).toContain('Avengers A')
+      // 目标视频 Avengers B 出现在"将合并到"文字中（推荐 target）
+      expect(screen.getByTestId('impact-preview').textContent).toContain('Avengers B')
     })
   })
 

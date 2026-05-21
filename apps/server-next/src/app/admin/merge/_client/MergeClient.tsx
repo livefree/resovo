@@ -1,10 +1,10 @@
 'use client'
 
 /**
- * MergeClient.tsx — `/admin/merge` 合并/拆分工作台主组件（CHG-SN-5-12 / ADR-105 / CHG-SN-7-MISC-MERGE-1）
+ * MergeClient.tsx — `/admin/merge` 合并/拆分工作台主组件（CHG-SN-5-12 / ADR-105 / CHG-SN-7-MISC-MERGE-1/2）
  *
  * 范围：Segment 3 视图 + PageHeader 拆分工作台入口
- *   1. 待审候选 Segment — DataTable 一体化 + 行展开（组内 videos + target 选择）+ merge action
+ *   1. 待审候选 Segment — DataTable 一体化 + 行展开（card 形态左右对比 + 影响预览 + 置信度 pill）+ merge action
  *   2. 已合并 Segment — AuditSection pre-filter action='merge'
  *   3. 已拆分 Segment — AuditSection pre-filter action='split'
  *   4. 拆分工作台 — PageHeader action 按钮 toggle SplitSection
@@ -35,14 +35,15 @@ import {
   type TableColumn,
   type SegmentItem,
 } from '@resovo/admin-ui'
-import type { CandidateGroup, VideoSummaryForMerge, LineMatrixRow, VideoType, MergeAuditRow } from '@resovo/types'
-import { listCandidates, mergeVideos, unmergeVideos, splitVideo, listAudit } from '@/lib/merge/api'
-import { getVideoMatrix } from '@/lib/sources/api'
+import type { CandidateGroup, VideoSummaryForMerge } from '@resovo/types'
+import { listCandidates, mergeVideos, unmergeVideos } from '@/lib/merge/api'
 import { ApiClientError } from '@/lib/api-client'
+import { SplitSection } from './MergeSplitSection'
+import { AuditSection } from './MergeAuditSection'
 
 // ── 错误码差异化 description（ADR-105 §错误码 + CHG-SN-5-12-PATCH P0/P2-1）─────
 
-function describeError(err: unknown, context: 'merge' | 'split'): string {
+export function describeError(err: unknown, context: 'merge' | 'split'): string {
   if (err instanceof ApiClientError) {
     if (err.code === 'STATE_CONFLICT') {
       return context === 'merge'
@@ -63,22 +64,6 @@ function describeError(err: unknown, context: 'merge' | 'split'): string {
   }
   return err instanceof Error ? err.message : '未知错误'
 }
-
-// ── VideoType 枚举（ADR-105 §端点契约 SplitSchema newVideoMeta.type）──────────
-
-const VIDEO_TYPES: readonly { value: VideoType; label: string }[] = [
-  { value: 'movie',       label: '电影' },
-  { value: 'series',      label: '剧集' },
-  { value: 'anime',       label: '动漫' },
-  { value: 'variety',     label: '综艺' },
-  { value: 'documentary', label: '纪录片' },
-  { value: 'short',       label: '短片' },
-  { value: 'sports',      label: '体育' },
-  { value: 'music',       label: '音乐' },
-  { value: 'news',        label: '资讯' },
-  { value: 'kids',        label: '少儿' },
-  { value: 'other',       label: '其他' },
-]
 
 // ── 样式（CSS 变量零硬编码颜色）────────────────────────────────────
 
@@ -113,17 +98,69 @@ const SECONDARY_TEXT: CSSProperties = {
   color: 'var(--fg-muted)',
 }
 
-// CHG-SN-5-12-PATCH P2-2：推荐 target 显式 badge（替代仅 bg 颜色识别弱）
+// CHG-SN-5-12-PATCH P2-2：推荐 target 显式 badge
 const RECOMMENDED_BADGE_STYLE: CSSProperties = {
   display: 'inline-block',
   padding: '2px 6px',
-  marginLeft: '8px',
+  marginLeft: '6px',
   borderRadius: '4px',
   fontSize: '11px',
   fontWeight: 600,
   background: 'var(--state-success-bg)',
   color: 'var(--state-success-fg)',
   border: '1px solid var(--state-success-border)',
+}
+
+// CHG-SN-7-MISC-MERGE-2：CandidateExpand card 形态样式
+const EXPAND_PANEL_STYLE: CSSProperties = {
+  padding: '12px 16px',
+  background: 'var(--bg-surface-elevated)',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '12px',
+}
+
+const CONFIDENCE_PILL_STYLE: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  padding: '2px 10px',
+  borderRadius: '999px',
+  fontSize: '12px',
+  fontWeight: 700,
+  background: 'var(--state-success-bg)',
+  color: 'var(--state-success-fg)',
+  border: '1px solid var(--state-success-border)',
+}
+
+const VIDEO_CARD_STYLE: CSSProperties = {
+  border: '1px solid var(--border-subtle)',
+  borderRadius: '8px',
+  padding: '10px 12px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+  cursor: 'pointer',
+}
+
+const VIDEO_CARD_SELECTED_STYLE: CSSProperties = {
+  border: '1px solid var(--state-success-border)',
+  borderRadius: '8px',
+  padding: '10px 12px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+  cursor: 'pointer',
+  background: 'var(--state-success-bg)',
+}
+
+const IMPACT_PREVIEW_STYLE: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+  padding: '8px 10px',
+  borderRadius: '6px',
+  background: 'var(--bg-surface)',
+  border: '1px solid var(--border-subtle)',
 }
 
 // ── 主组件 ─────────────────────────────────────────────────────────
@@ -232,7 +269,7 @@ function CandidatesSection() {
         })
         load()
       } catch (err) {
-        // CHG-SN-5-12-PATCH P0：用 ApiClientError.code 而非 message 字符串匹配（err.message 是中文文案不含 STATE_CONFLICT）
+        // CHG-SN-5-12-PATCH P0：用 ApiClientError.code 而非 message 字符串匹配
         toast.push({
           level: 'danger',
           title: '合并失败',
@@ -350,7 +387,7 @@ function CandidatesSection() {
   )
 }
 
-// ── Candidate 行展开 panel ────────────────────────────────────────
+// ── Candidate 行展开 panel（card 形态，CHG-SN-7-MISC-MERGE-2）─────
 
 interface CandidateExpandProps {
   group: CandidateGroup
@@ -359,398 +396,72 @@ interface CandidateExpandProps {
 
 function CandidateExpand({ group, onMerge }: CandidateExpandProps) {
   const [targetId, setTargetId] = useState(group.recommendedTargetVideoId)
+  const targetVideo = group.videos.find((v) => v.id === targetId)
+  const sourceVideos = group.videos.filter((v) => v.id !== targetId)
 
   return (
-    <div style={{ padding: '12px 16px', background: 'var(--bg-surface-elevated)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-      <div style={SECONDARY_TEXT}>选择 合并目标（target video）：推荐 source 最多的 video。</div>
-      <table style={{ width: '100%', fontSize: 'var(--font-size-sm)' }}>
-        <thead>
-          <tr style={{ textAlign: 'left', color: 'var(--fg-muted)' }}>
-            <th style={{ padding: '4px 8px', width: '40px' }}>选</th>
-            <th style={{ padding: '4px 8px' }}>title</th>
-            <th style={{ padding: '4px 8px', width: '80px' }}>sources</th>
-            <th style={{ padding: '4px 8px' }}>site keys</th>
-            <th style={{ padding: '4px 8px', width: '140px' }}>created at</th>
-          </tr>
-        </thead>
-        <tbody>
-          {group.videos.map((v: VideoSummaryForMerge) => (
-            <tr
-              key={v.id}
-              style={{
-                borderTop: '1px solid var(--border-subtle)',
-                background: v.id === group.recommendedTargetVideoId ? 'var(--state-success-bg)' : undefined,
-              }}
-            >
-              <td style={{ padding: '6px 8px' }}>
-                <input
-                  type="radio"
-                  name={`target-${group.groupKey}`}
-                  checked={targetId === v.id}
-                  onChange={() => setTargetId(v.id)}
-                />
-              </td>
-              <td style={{ padding: '6px 8px' }}>
-                {v.title}
-                {v.id === group.recommendedTargetVideoId && (
-                  <span style={RECOMMENDED_BADGE_STYLE} aria-label="推荐合并目标">推荐</span>
-                )}
-              </td>
-              <td style={{ padding: '6px 8px' }}>{v.sourceCount}</td>
-              <td style={{ padding: '6px 8px', color: 'var(--fg-muted)' }}>
-                {v.sourceSiteKeys.join(', ') || '—'}
-              </td>
-              <td style={{ padding: '6px 8px', color: 'var(--fg-muted)' }}>
-                {v.createdAt.slice(0, 10)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+    <div style={EXPAND_PANEL_STYLE}>
+      {/* 置信度 pill + 候选数 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={CONFIDENCE_PILL_STYLE} data-testid="confidence-pill">
+          {(group.score * 100).toFixed(1)}% 置信度
+        </span>
+        <span style={SECONDARY_TEXT}>{group.videos.length} 个候选视频</span>
+      </div>
+
+      {/* 视频卡片网格（左右对比） */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
+        {group.videos.map((v: VideoSummaryForMerge) => (
+          <div
+            key={v.id}
+            style={v.id === targetId ? VIDEO_CARD_SELECTED_STYLE : VIDEO_CARD_STYLE}
+            onClick={() => setTargetId(v.id)}
+            data-testid={`candidate-card-${v.id}`}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              <input
+                type="radio"
+                name={`target-${group.groupKey}`}
+                checked={targetId === v.id}
+                onChange={() => setTargetId(v.id)}
+                onClick={(e) => e.stopPropagation()}
+                aria-label={`选择 ${v.title} 为合并目标`}
+              />
+              <span style={{ fontWeight: 600, fontSize: 'var(--font-size-sm)' }}>{v.title}</span>
+              {v.id === group.recommendedTargetVideoId && (
+                <span style={RECOMMENDED_BADGE_STYLE} aria-label="推荐合并目标">推荐</span>
+              )}
+            </div>
+            <div style={SECONDARY_TEXT}>{v.sourceCount} 个源</div>
+            <div style={{ ...SECONDARY_TEXT, fontSize: '11px' }}>
+              {v.sourceSiteKeys.join(' · ') || '—'}
+            </div>
+            <div style={{ ...SECONDARY_TEXT, fontSize: '11px' }}>{v.createdAt.slice(0, 10)}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* 影响预览 */}
+      {sourceVideos.length > 0 && (
+        <div style={IMPACT_PREVIEW_STYLE} data-testid="impact-preview">
+          <span style={{ fontWeight: 600, fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
+            影响预览：{sourceVideos.length} 个源视频将合并到 {targetVideo?.title ?? '—'}
+          </span>
+          <ul style={{ margin: 0, padding: '0 0 0 16px', fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
+            {sourceVideos.map((v) => (
+              <li key={v.id}>
+                {v.title}（{v.sourceCount} 个源{v.sourceSiteKeys.length > 0 ? `，${v.sourceSiteKeys.join('、')}` : ''}）
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <AdminButton size="sm" variant="primary" onClick={() => onMerge(targetId)}>
           执行合并（{group.videos.length - 1} → target）
         </AdminButton>
       </div>
-    </div>
-  )
-}
-
-// ── Split section ─────────────────────────────────────────────────
-
-function SplitSection() {
-  const [videoIdInput, setVideoIdInput] = useState('')
-  const [activeVideoId, setActiveVideoId] = useState<string | null>(null)
-  const [lines, setLines] = useState<LineMatrixRow[] | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<Error | null>(null)
-  const [groupCount, setGroupCount] = useState(2)
-  const [assignments, setAssignments] = useState<Record<string, number>>({})
-  // CHG-SN-5-12-PATCH P2：每组独立 title + type（替代 type 硬编码 'movie'）
-  const [groupMetas, setGroupMetas] = useState<{ title: string; type: VideoType }[]>([
-    { title: '分集 A', type: 'movie' },
-    { title: '分集 B', type: 'movie' },
-  ])
-  const toast = useToast()
-
-  const loadMatrix = useCallback(() => {
-    if (!videoIdInput.trim()) return
-    setLoading(true)
-    setError(null)
-    setActiveVideoId(videoIdInput.trim())
-    getVideoMatrix(videoIdInput.trim())
-      .then((data) => {
-        setLines(data)
-        // 初始化 assignments：默认所有 sources → group 0
-        const init: Record<string, number> = {}
-        for (const line of data) {
-          for (const ep of line.episodes) init[ep.sourceId] = 0
-        }
-        setAssignments(init)
-      })
-      .catch((e: unknown) => setError(e instanceof Error ? e : new Error('加载失败')))
-      .finally(() => setLoading(false))
-  }, [videoIdInput])
-
-  const handleSplit = useCallback(async () => {
-    if (!activeVideoId || !lines) return
-    // 按 assignments 构造 groups（CHG-SN-5-12-PATCH P2：type 来自 groupMetas[i].type 而非硬编码）
-    const groups = Array.from({ length: groupCount }, (_, i) => {
-      const meta = groupMetas[i] ?? { title: `分集 ${String.fromCharCode(65 + i)}`, type: 'movie' as VideoType }
-      return {
-        sourceIds: Object.entries(assignments).filter(([, g]) => g === i).map(([id]) => id),
-        newVideoMeta: { title: meta.title, type: meta.type },
-      }
-    }).filter((g) => g.sourceIds.length > 0)
-
-    if (groups.length < 2) {
-      toast.push({ level: 'warn', title: '拆分必须 ≥ 2 组', description: '每组至少 1 个 source' })
-      return
-    }
-
-    try {
-      const result = await splitVideo({ videoId: activeVideoId, groups })
-      toast.push({
-        level: 'success',
-        title: '拆分成功',
-        description: `已创建 ${result.newVideoIds.length} 个新 video（auditId: ${result.auditId.slice(0, 8)}）`,
-        action: {
-          label: '撤销',
-          onClick: () => {
-            unmergeVideos(result.auditId, '用户撤销拆分')
-              .then(() => {
-                toast.push({ level: 'success', title: '已撤销拆分' })
-                setLines(null)
-                setActiveVideoId(null)
-              })
-              .catch((err: unknown) => {
-                toast.push({
-                  level: 'danger',
-                  title: '撤销失败',
-                  description: err instanceof Error ? err.message : '未知错误',
-                })
-              })
-          },
-        },
-      })
-      setLines(null)
-      setActiveVideoId(null)
-    } catch (err) {
-      // CHG-SN-5-12-PATCH P0 + P2：按 ApiClientError.code 差异化（NOT_FOUND / STATE_CONFLICT / VALIDATION_ERROR）
-      toast.push({
-        level: 'danger',
-        title: '拆分失败',
-        description: describeError(err, 'split'),
-      })
-    }
-  }, [activeVideoId, lines, groupCount, assignments, groupMetas, toast])
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-        <AdminInput
-          size="sm"
-          placeholder="输入要拆分的 videoId (uuid)"
-          value={videoIdInput}
-          onChange={(e) => setVideoIdInput(e.target.value)}
-          style={{ width: '320px' }}
-        />
-        <AdminButton size="sm" variant="primary" onClick={loadMatrix} disabled={!videoIdInput.trim()}>
-          加载 sources
-        </AdminButton>
-      </div>
-
-      {loading ? (
-        <LoadingState variant="skeleton" skeletonRows={6} />
-      ) : error ? (
-        <ErrorState error={error} onRetry={loadMatrix} />
-      ) : !lines ? (
-        <EmptyState title="尚未加载" description="输入 videoId 后点击 '加载 sources'" />
-      ) : lines.length === 0 ? (
-        <EmptyState title="无 sources" description="该视频暂无播放线路" />
-      ) : (
-        <>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <span style={SECONDARY_TEXT}>组数：</span>
-            <AdminInput
-              size="sm"
-              type="number"
-              min="2"
-              max="20"
-              value={String(groupCount)}
-              onChange={(e) => {
-                const n = Math.max(2, Math.min(20, parseInt(e.target.value, 10) || 2))
-                setGroupCount(n)
-                setGroupMetas((prev) => Array.from({ length: n }, (_, i) =>
-                  prev[i] ?? { title: `分集 ${String.fromCharCode(65 + i)}`, type: 'movie' as VideoType },
-                ))
-              }}
-              style={{ width: '80px' }}
-            />
-            <span style={SECONDARY_TEXT}>每组 source 必须 ≥ 1 且全 source 必须有分配</span>
-          </div>
-
-          {/* 每组 title + type 输入（CHG-SN-5-12-PATCH P2：type select 替代硬编码 movie）*/}
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${groupCount}, 1fr)`, gap: '8px' }}>
-            {Array.from({ length: groupCount }).map((_, i) => {
-              const meta = groupMetas[i] ?? { title: '', type: 'movie' as VideoType }
-              return (
-                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <AdminInput
-                    size="sm"
-                    placeholder={`分集 ${String.fromCharCode(65 + i)} 标题`}
-                    value={meta.title}
-                    onChange={(e) => {
-                      setGroupMetas((prev) => {
-                        const next = [...prev]
-                        next[i] = { ...meta, title: e.target.value }
-                        return next
-                      })
-                    }}
-                  />
-                  <select
-                    aria-label={`分集 ${String.fromCharCode(65 + i)} 类型`}
-                    value={meta.type}
-                    onChange={(e) => {
-                      setGroupMetas((prev) => {
-                        const next = [...prev]
-                        next[i] = { ...meta, type: e.target.value as VideoType }
-                        return next
-                      })
-                    }}
-                    style={{
-                      padding: '4px 6px',
-                      background: 'var(--bg-surface)',
-                      color: 'var(--fg-default)',
-                      border: '1px solid var(--border-default)',
-                      borderRadius: '4px',
-                      fontSize: 'var(--font-size-sm)',
-                    }}
-                  >
-                    {VIDEO_TYPES.map((t) => (
-                      <option key={t.value} value={t.value}>{t.label}</option>
-                    ))}
-                  </select>
-                </div>
-              )
-            })}
-          </div>
-
-          <table style={{ width: '100%', fontSize: 'var(--font-size-sm)' }}>
-            <thead>
-              <tr style={{ textAlign: 'left', color: 'var(--fg-muted)' }}>
-                <th style={{ padding: '4px 8px' }}>线路</th>
-                <th style={{ padding: '4px 8px' }}>集</th>
-                <th style={{ padding: '4px 8px' }}>URL</th>
-                <th style={{ padding: '4px 8px', width: '120px' }}>分配到</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.flatMap((line) =>
-                line.episodes.map((ep) => (
-                  <tr key={ep.sourceId} style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                    <td style={{ padding: '6px 8px' }}>{line.displayName ?? line.sourceName}</td>
-                    <td style={{ padding: '6px 8px' }}>E{ep.episodeNumber}</td>
-                    <td style={{ padding: '6px 8px', color: 'var(--fg-muted)', fontSize: '11px', wordBreak: 'break-all' }}>
-                      {ep.sourceUrl.slice(0, 60)}{ep.sourceUrl.length > 60 ? '…' : ''}
-                    </td>
-                    <td style={{ padding: '6px 8px' }}>
-                      <select
-                        value={assignments[ep.sourceId] ?? 0}
-                        onChange={(e) =>
-                          setAssignments((prev) => ({ ...prev, [ep.sourceId]: parseInt(e.target.value, 10) }))
-                        }
-                        style={{
-                          padding: '2px 6px',
-                          background: 'var(--bg-surface)',
-                          color: 'var(--fg-default)',
-                          border: '1px solid var(--border-default)',
-                          borderRadius: '4px',
-                          fontSize: 'var(--font-size-sm)',
-                        }}
-                      >
-                        {Array.from({ length: groupCount }).map((_, i) => (
-                          <option key={i} value={i}>{groupMetas[i]?.title ?? `分集 ${String.fromCharCode(65 + i)}`}</option>
-                        ))}
-                      </select>
-                    </td>
-                  </tr>
-                )),
-              )}
-            </tbody>
-          </table>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-            <AdminButton size="sm" variant="primary" onClick={handleSplit}>
-              执行拆分（{groupCount} 组）
-            </AdminButton>
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-// ── Audit timeline section（CHG-SN-6-AUDIT-TIMELINE-B / RETRO 4/7-B / MISC-MERGE-1）──
-
-interface AuditSectionProps {
-  initialAction?: 'merge' | 'split'
-}
-
-function AuditSection({ initialAction }: AuditSectionProps) {
-  const [actionFilter, setActionFilter] = useState<'all' | 'merge' | 'split'>(initialAction ?? 'all')
-  const [rows, setRows] = useState<readonly MergeAuditRow[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-  const [page, setPage] = useState(1)
-  const PAGE_SIZE = 20
-
-  const load = useCallback(() => {
-    setLoading(true)
-    setError(null)
-    listAudit({
-      action: actionFilter === 'all' ? undefined : actionFilter,
-      limit: PAGE_SIZE,
-      page,
-    })
-      .then((res) => {
-        setRows(res.data)
-        setTotal(res.total)
-      })
-      .catch((e: unknown) => setError(e instanceof Error ? e : new Error('加载失败')))
-      .finally(() => setLoading(false))
-  }, [actionFilter, page])
-
-  useEffect(() => { load() }, [load])
-
-  if (loading && rows.length === 0) return <LoadingState variant="skeleton" skeletonRows={6} />
-  if (error) return <ErrorState error={error} onRetry={load} />
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-        <span style={SECONDARY_TEXT}>过滤：</span>
-        {(['all', 'merge', 'split'] as const).map((a) => (
-          <AdminButton
-            key={a}
-            size="sm"
-            variant={actionFilter === a ? 'primary' : 'secondary'}
-            onClick={() => { setActionFilter(a); setPage(1) }}
-          >
-            {a === 'all' ? '全部' : a === 'merge' ? '合并' : '拆分'}
-          </AdminButton>
-        ))}
-        <span style={{ ...SECONDARY_TEXT, marginLeft: 'auto' }}>共 {total} 条</span>
-      </div>
-
-      {rows.length === 0 ? (
-        <EmptyState title="无审计记录" description="当前过滤无匹配；切换过滤或清空数据库后无 merge/split 操作。" />
-      ) : (
-        <table style={{ width: '100%', fontSize: 'var(--font-size-sm)' }}>
-          <thead>
-            <tr style={{ textAlign: 'left', color: 'var(--fg-muted)', borderBottom: '1px solid var(--border-subtle)' }}>
-              <th style={{ padding: '6px 8px', width: '80px' }}>操作</th>
-              <th style={{ padding: '6px 8px', width: '100px' }}>操作人</th>
-              <th style={{ padding: '6px 8px' }}>涉及 video</th>
-              <th style={{ padding: '6px 8px', width: '160px' }}>时间</th>
-              <th style={{ padding: '6px 8px', width: '100px' }}>状态</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                <td style={{ padding: '6px 8px', fontWeight: 600, color: row.action === 'merge' ? 'var(--state-info-fg)' : 'var(--state-warning-fg)' }}>
-                  {row.action === 'merge' ? '合并' : '拆分'}
-                </td>
-                <td style={{ padding: '6px 8px' }}>{row.performedByUsername ?? row.performedBy.slice(0, 8)}</td>
-                <td style={{ padding: '6px 8px', color: 'var(--fg-muted)', fontSize: '11px' }}>
-                  {row.action === 'merge'
-                    ? `${row.sourceVideoIds.length} → ${row.targetVideoIds.length}`
-                    : `${row.sourceVideoIds.length} → ${row.targetVideoIds.length}（拆分）`}
-                </td>
-                <td style={{ padding: '6px 8px', color: 'var(--fg-muted)' }}>
-                  {row.performedAt.slice(0, 19).replace('T', ' ')}
-                </td>
-                <td style={{ padding: '6px 8px' }}>
-                  {row.revertedAt
-                    ? <span style={SCORE_BADGE_STYLE}>已撤销</span>
-                    : <span style={SECONDARY_TEXT}>有效</span>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      {/* 分页 */}
-      {total > PAGE_SIZE && (
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
-          <span style={SECONDARY_TEXT}>第 {page} / {Math.ceil(total / PAGE_SIZE)} 页</span>
-          <AdminButton size="sm" variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>上一页</AdminButton>
-          <AdminButton size="sm" variant="secondary" disabled={page >= Math.ceil(total / PAGE_SIZE)} onClick={() => setPage((p) => p + 1)}>下一页</AdminButton>
-        </div>
-      )}
     </div>
   )
 }

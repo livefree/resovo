@@ -13361,3 +13361,29 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
   - setAutoCrawlConfig 提交时 perSiteOverrides 数据正确传递 ✅
   - typecheck 全部通过（全工作区 7 个包）✅
   - 单元测试 11/11 PASS（单独运行）/ 全量 4334 通过（2 pre-existing flaky 单独运行均 PASS）✅
+
+---
+
+## CHG-SN-7-MISC-MERGE-2 — merge 候选 card 形态重做
+
+- **完成时间**：2026-05-20
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+
+### 变更内容
+
+- **CandidateExpand 重设计**（`MergeClient.tsx`）：从 HTML `<table>` 布局升级为 card 网格形态
+  - 置信度 pill（`data-testid="confidence-pill"`）：`85.0% 置信度` 圆角标签，`border-radius: 999px`
+  - 视频卡片网格（`grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))`）：左右对比展示，选中卡高亮 `var(--state-success-bg)`
+  - 影响预览区块（`data-testid="impact-preview"`）：显示"N 个源视频将合并到 [target]"+ 源视频列表
+  - 推荐 badge、radio 选择逻辑、执行合并按钮均保留
+- **文件拆分**（MergeClient.tsx 756→467L，消除超限）：
+  - 新建 `MergeSplitSection.tsx`（261L）：SplitSection + VIDEO_TYPES 提取
+  - 新建 `MergeAuditSection.tsx`（133L）：AuditSection 提取
+  - `describeError` export，MergeSplitSection 引用
+- **测试**（+2）：`MergeClient.test.tsx` 15 tests（13 既有 + 2 新增）
+  - 置信度 pill：展开后显示 `85.0% 置信度`
+  - 影响预览：展开后 `impact-preview` 区块包含源/目标视频名称
+- typecheck 全部通过（全工作区 7 个包）✅
+- file-size-budget：0 新违规（MergeClient.tsx 不再出现）✅
+- 单元测试 15/15 PASS（单独运行）/ 全量 4337 通过（1 pre-existing flaky StagingEditPanel 单独运行 12/12 PASS）✅
