@@ -13317,3 +13317,27 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
   - typecheck 全部通过（全工作区 7 个包）✅
   - lint 通过 ✅
   - ADR 合规：无新违规 ✅
+
+## [CHG-SN-7-MISC-FILE-SIZE] server-next 组件 2 文件主动拆分
+- **完成时间**：2026-05-20
+- **记录时间**：2026-05-20 18:35
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/audit/_client/AuditClient.tsx`（558→374L；移除 buildAuditColumns / DetailDrawer / 详情样式常量，改为从子文件导入）
+  - `apps/server-next/src/app/admin/audit/_client/AuditColumns.tsx`（新建 74L；buildAuditColumns 函数 + 列定义，消费 UserRef / CodeText / IdRef / MutedText）
+  - `apps/server-next/src/app/admin/audit/_client/AuditDetailDrawer.tsx`（新建 117L；DetailDrawer 组件 + DETAIL_* / JSONB_BLOCK 样式常量）
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthClient.tsx`（590→392L；移除 KpiCard / buildMissingVideoColumns / buildBrokenDomainColumns / formatRelativeTime / KPI 样式常量，改为从子文件导入）
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthKpiCard.tsx`（新建 37L；KpiCard 组件 + KPI_LABEL/VALUE/SUB_STYLE）
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthColumns.tsx`（新建 162L；buildMissingVideoColumns / buildBrokenDomainColumns / formatRelativeTime）
+  - `docs/task-queue.md`（FILE-SIZE 状态 🔄 → ✅）
+  - `docs/tasks.md`（清空任务卡片）
+- **新增依赖**：无
+- **数据库变更**：无
+- **验收**：
+  - AuditClient 558→374L ✅ / ImageHealthClient 590→392L ✅ 均满足 ≤ 500 行约束
+  - 4 个新建子文件全部 ≤ 200L ✅
+  - 拆分范式：内部 hook/子组件提取 + 主文件直接 import，零外部 import 路径变化 ✅
+  - typecheck 全部通过（全工作区 7 个包）✅
+  - lint 通过 ✅
+  - 单元测试 4331/4332 通过（1 个 CrawlerClient flaky 为预存，单独运行 54/54 PASS）✅
