@@ -5,9 +5,13 @@
  *
  * 字段：videoId / language / label / format / fileUrl / episodeNumber?
  * 管理员直接指定 R2 URL，无 multipart。创建后 is_verified=true，不进待审队列。
+ *
+ * CHG-SN-8-FUP-SUB（2026-05-21）：用 VideoPicker 替代「视频 ID（UUID）」输入框
+ *   消灭用户问题 #8 反人类 UUID 校验（删除 ^[0-9a-f-]{36}$/i 正则）。
  */
 import React, { useState, useEffect } from 'react'
-import { Modal } from '@resovo/admin-ui'
+import { Modal, VideoPicker, type PickerVideoItem } from '@resovo/admin-ui'
+import { videoPickerFetcher } from '@/lib/videos/picker-fetcher'
 
 const FIELD_STYLE: React.CSSProperties = {
   display: 'flex',
@@ -99,7 +103,7 @@ export function SubtitleUploadModal({
   submitting = false,
   submitError,
 }: SubtitleUploadModalProps): React.ReactElement {
-  const [videoId, setVideoId] = useState('')
+  const [video, setVideo] = useState<PickerVideoItem | null>(null)
   const [language, setLanguage] = useState('zh-CN')
   const [label, setLabel] = useState('')
   const [format, setFormat] = useState<'vtt' | 'srt' | 'ass'>('srt')
@@ -109,7 +113,7 @@ export function SubtitleUploadModal({
 
   useEffect(() => {
     if (open) {
-      setVideoId('')
+      setVideo(null)
       setLanguage('zh-CN')
       setLabel('')
       setFormat('srt')
@@ -128,8 +132,7 @@ export function SubtitleUploadModal({
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {}
-    if (!videoId.trim()) errs.videoId = '必填'
-    else if (!/^[0-9a-f-]{36}$/i.test(videoId.trim())) errs.videoId = '必须是有效 UUID'
+    if (!video) errs.video = '必选'
     if (!label.trim()) errs.label = '必填'
     if (!fileUrl.trim()) errs.fileUrl = '必填'
     else {
@@ -143,9 +146,9 @@ export function SubtitleUploadModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!validate()) return
+    if (!validate() || !video) return
     onSubmit({
-      videoId: videoId.trim(),
+      videoId: video.id,
       language,
       label: label.trim(),
       format,
@@ -158,17 +161,16 @@ export function SubtitleUploadModal({
     <Modal open={open} onClose={onClose} title="上传字幕" size="sm" data-testid="subtitle-upload-modal">
       <form onSubmit={handleSubmit} noValidate data-subtitle-upload-form>
         <div style={FIELD_STYLE}>
-          <label style={LABEL_STYLE} htmlFor="sub-video-id">视频 ID（UUID）</label>
-          <input
-            id="sub-video-id"
-            type="text"
-            value={videoId}
-            onChange={(e) => { setVideoId(e.target.value); setErrors((prev) => ({ ...prev, videoId: undefined })) }}
-            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-            style={{ ...INPUT_STYLE, borderColor: errors.videoId ? 'var(--state-error-border)' : 'var(--border-default)' }}
-            autoFocus
+          {/* CHG-SN-8-FUP-SUB：用 VideoPicker 替代原 UUID 输入框 */}
+          <VideoPicker
+            label="视频"
+            value={video}
+            onChange={(v) => { setVideo(v); setErrors((prev) => ({ ...prev, video: undefined })) }}
+            fetcher={videoPickerFetcher}
+            required
+            error={errors.video}
+            data-testid="sub-video-picker"
           />
-          {errors.videoId && <span style={ERROR_STYLE}>{errors.videoId}</span>}
         </div>
 
         <div style={FIELD_STYLE}>

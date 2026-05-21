@@ -14145,3 +14145,41 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 | **总计** | **15** | **13** | **1** | 14 commits / +7160 lines / 78 测试用例 / 2 spawn Opus 子代理 / 2 NEGATED 范式（C8-07 + 之前的 ADR-114）|
 
 **W1 金票端到端 100% 闭合**（5 反例全 ✅）。下一步：M-SN-8 后续 follow-up 卡（CHG-SN-8-N1 fallback / -02-B 调度列 / -03-B 后端 runId filter / -05-B per-line 重测 / -08-B Merge 页 VideoPicker）+ M-SN-6.5 非功能验收门 + M-SN-7 cutover 终段。
+
+## [CHG-SN-8-FUP-SUB] 字幕上传 Modal 接 VideoPicker（用户问题 #8 闭合 / H4 硬约束起步）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（VideoPicker 已在 M-SN-SHARED-04-A 走过 Opus 评审）
+- **关联 SEQ**：SEQ-20260521-04（1/3 卡）
+- **修改文件**：
+  - `apps/server-next/src/lib/videos/picker-fetcher.ts` 新建：导出 `videoPickerFetcher` 函数（VideoPickerFetcher 类型，调 listVideos + 字段映射 VideoAdminRow → PickerVideoItem）
+  - `apps/server-next/src/app/admin/subtitles/_client/SubtitleUploadModal.tsx`：
+    - import VideoPicker + PickerVideoItem + videoPickerFetcher
+    - state `videoId: string` → `video: PickerVideoItem | null`
+    - 删除 UUID 正则校验 `^[0-9a-f-]{36}$/i`
+    - UI 「视频 ID（UUID）」 `<input>` → `<VideoPicker label="视频" required>`
+    - onSubmit 传 `videoId: video.id`
+    - useEffect open 复位 setVideo(null)
+  - `tests/unit/components/server-next/admin/subtitles/SubtitleUploadModalPicker.test.tsx` 新建（4 用例 PASS）
+  - `docs/manual/20-pages/P-subtitles.md` §3.1 完整填写
+  - `docs/manual/30-pickers/VideoPicker.md` 受害方表标 ✅
+  - `docs/task-queue.md` + `docs/changelog.md`
+- **新增依赖**：无
+- **数据库变更**：无
+- **API 行为**：无变化（仍调 POST /admin/subtitles 携带 videoId UUID）
+- **注意事项**：
+  - **VideoPicker fetcher 隔离**：`videoPickerFetcher` 在 apps/server-next 侧，映射 VideoListFilter ↔ VideoPickerFetchParams + VideoAdminRow ↔ PickerVideoItem；admin-ui 零 import apps/**（ADR-103b）
+  - **listVideos 分页限制**：当前是 page-based 不是 cursor；PickerDialog v1 不消费 nextCursor 翻页（仅展示首页 20 条），后续 follow-up 升级
+  - **测试 Portal 隔离**：Modal 用 Portal 渲染到 document.body，container.querySelector 找不到内部元素 → 改用 document.querySelector 兜底（与 PickerDialog 同模式）
+
+### DoD 全勾
+- [x] videoPickerFetcher 导出
+- [x] SubtitleUploadModal VideoPicker 集成 + UUID 校验删除
+- [x] 测试 4 用例 PASS（≥ 3 要求超额）
+- [x] typecheck + lint + verify:manual-coverage PASS
+- [x] P-subtitles §3.1 + VideoPicker.md 受害方表更新
+
+### 用户问题 #8 闭合状态
+✅ 「上传字幕通过视频 ID（UUID）的设计方案需要彻底重写」— 反人类 UUID 输入完全废除；改为搜索式 Picker（搜标题 / shortId / 年份）+ 触发器回显视频缩略图 + 标题 + meta

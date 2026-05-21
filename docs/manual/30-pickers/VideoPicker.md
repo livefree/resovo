@@ -11,7 +11,7 @@
 
 | 受害方（CHG 修复中）| 旧反人类 | 新接入方式 |
 |---|---|---|
-| 字幕上传 Modal | `<input>` 36 位 UUID 校验 | `<VideoPicker value={v} onChange={setV} fetcher={...} />` 单选 |
+| ✅ 字幕上传 Modal（CHG-SN-8-FUP-SUB 2026-05-21 已接入）| ~~`<input>` 36 位 UUID 校验~~（已废） | `<VideoPicker value={v} onChange={setV} fetcher={videoPickerFetcher} required label="视频" />` 单选 |
 | 首页模块 Drawer「内容引用 ID」 | 单 input 四种类型混填 | 配合 ContentRefPicker，video 类型走 VideoPicker |
 | 合并发起（CHG-SN-8-08）| — | 单/多选 |
 
