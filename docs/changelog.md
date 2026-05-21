@@ -13341,3 +13341,23 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
   - typecheck 全部通过（全工作区 7 个包）✅
   - lint 通过 ✅
   - 单元测试 4331/4332 通过（1 个 CrawlerClient flaky 为预存，单独运行 54/54 PASS）✅
+
+## [CHG-SN-7-MISC-PERSITE] SchedulerConfigDrawer perSiteOverrides UI 实装
+- **完成时间**：2026-05-20
+- **记录时间**：2026-05-20 18:58
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/app/admin/crawler/_client/SchedulerConfigDrawer.tsx`（219→361L；加 listCrawlerSites 加载 + sites 状态 + removeSiteOverride / updateSiteOverride / handleAddSite 3 个 helper + 站点覆盖列表 UI + 添加站点 Select；移除 perSiteOverrides 占位注释）
+  - `tests/unit/components/server-next/admin/crawler/SchedulerConfigDrawer.test.tsx`（8→11 测试；补 listCrawlerSitesMock；新增 T9 空覆盖提示 / T10 覆盖行渲染 / T11 移除覆盖后提交验证）
+  - `docs/task-queue.md`（PERSITE 状态 🔄 → ✅）
+  - `docs/tasks.md`（清空任务卡片）
+- **新增依赖**：无
+- **数据库变更**：无
+- **验收**：
+  - SchedulerConfigDrawer 满足 ≤ 500 行（361L）✅
+  - perSiteOverrides 编辑 UI：覆盖列表（max-h 220px 滚动）+ 每行 enabled / mode / 移除 + 底部 searchable 站点选择器 ✅
+  - AutoCrawlSiteOverride：enabled（boolean）+ mode（inherit / incremental / full）全部可编辑 ✅
+  - setAutoCrawlConfig 提交时 perSiteOverrides 数据正确传递 ✅
+  - typecheck 全部通过（全工作区 7 个包）✅
+  - 单元测试 11/11 PASS（单独运行）/ 全量 4334 通过（2 pre-existing flaky 单独运行均 PASS）✅

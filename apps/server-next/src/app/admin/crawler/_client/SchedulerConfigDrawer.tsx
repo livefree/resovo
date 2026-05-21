@@ -1,17 +1,17 @@
 'use client'
 
 /**
- * SchedulerConfigDrawer.tsx — 调度配置编辑（CHG-SN-6-27）
+ * SchedulerConfigDrawer.tsx — 调度配置编辑（CHG-SN-6-27 / CHG-SN-7-MISC-PERSITE）
  *
  * 消费：
  *   GET  /admin/crawler/auto-config  — 当前配置
  *   POST /admin/crawler/auto-config  — 提交（audit 已在 -25-RETRO 补齐）
+ *   GET  /admin/crawler/sites        — 站点列表（perSiteOverrides 选择器用）
  *
- * 范围：6 顶级字段（不含 perSiteOverrides 编辑 / 后续独立卡）
- *   globalEnabled / scheduleType=daily / dailyTime / defaultMode / onlyEnabledSites / conflictPolicy
+ * 范围：6 顶级字段 + perSiteOverrides 每站点覆盖编辑（enabled / mode）
  */
 
-import React, { useEffect, useState, type CSSProperties } from 'react'
+import React, { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   Drawer,
   AdminButton,
@@ -26,9 +26,12 @@ import {
 import {
   getAutoCrawlConfig,
   setAutoCrawlConfig,
+  listCrawlerSites,
   type AutoCrawlConfig,
   type AutoCrawlMode,
   type AutoCrawlConflictPolicy,
+  type AutoCrawlSiteOverride,
+  type CrawlerSite,
 } from '@/lib/crawler/api'
 import { ApiClientError } from '@/lib/api-client'
 
@@ -65,7 +68,52 @@ const FOOTER_STYLE: CSSProperties = {
   marginTop: '8px',
 }
 
+const SECTION_DIVIDER_STYLE: CSSProperties = {
+  fontSize: 'var(--font-size-xs)',
+  fontWeight: 600,
+  color: 'var(--fg-muted)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.04em',
+  paddingTop: '4px',
+  borderTop: '1px solid var(--border-subtle)',
+}
+
+const OVERRIDE_LIST_STYLE: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+  maxHeight: '220px',
+  overflowY: 'auto',
+}
+
+const OVERRIDE_ROW_STYLE: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '1fr auto auto auto',
+  alignItems: 'center',
+  gap: '8px',
+  padding: '4px 2px',
+}
+
+const SITE_NAME_STYLE: CSSProperties = {
+  fontSize: 'var(--font-size-sm)',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+}
+
+const OVERRIDE_EMPTY_STYLE: CSSProperties = {
+  fontSize: 'var(--font-size-xs)',
+  color: 'var(--fg-muted)',
+  padding: '8px 2px',
+}
+
 const MODE_OPTIONS: readonly AdminSelectOption[] = [
+  { value: 'incremental', label: '增量' },
+  { value: 'full',        label: '全量' },
+]
+
+const SITE_MODE_OPTIONS: readonly AdminSelectOption[] = [
+  { value: 'inherit',     label: '继承全局' },
   { value: 'incremental', label: '增量' },
   { value: 'full',        label: '全量' },
 ]
@@ -88,6 +136,7 @@ export function SchedulerConfigDrawer({ open, onClose, onSaved }: SchedulerConfi
   const [error, setError] = useState<Error | null>(null)
   const [saving, setSaving] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
+  const [sites, setSites] = useState<readonly CrawlerSite[]>([])
 
   useEffect(() => {
     if (!open) return
@@ -104,8 +153,40 @@ export function SchedulerConfigDrawer({ open, onClose, onSaved }: SchedulerConfi
     return () => { cancelled = true }
   }, [open, retryKey])
 
+  useEffect(() => {
+    if (!open) return
+    listCrawlerSites()
+      .then((data) => setSites(data))
+      .catch(() => { /* 非关键，选择器列表为空时降级为手动输入 */ })
+  }, [open])
+
   const updateField = <K extends keyof AutoCrawlConfig>(key: K, value: AutoCrawlConfig[K]) => {
     setConfig((prev) => (prev ? { ...prev, [key]: value } : prev))
+  }
+
+  const removeSiteOverride = (siteKey: string) => {
+    if (!config) return
+    const next = { ...config.perSiteOverrides }
+    delete next[siteKey]
+    updateField('perSiteOverrides', next)
+  }
+
+  const updateSiteOverride = (siteKey: string, patch: Partial<AutoCrawlSiteOverride>) => {
+    if (!config) return
+    const current = config.perSiteOverrides[siteKey] ?? { enabled: true, mode: 'inherit' as const }
+    updateField('perSiteOverrides', {
+      ...config.perSiteOverrides,
+      [siteKey]: { ...current, ...patch },
+    })
+  }
+
+  const handleAddSite = (siteKey: string | null) => {
+    if (!siteKey || !config) return
+    if (siteKey in config.perSiteOverrides) return
+    updateField('perSiteOverrides', {
+      ...config.perSiteOverrides,
+      [siteKey]: { enabled: true, mode: 'inherit' },
+    })
   }
 
   const handleSubmit = async () => {
@@ -125,6 +206,15 @@ export function SchedulerConfigDrawer({ open, onClose, onSaved }: SchedulerConfi
   }
 
   const refresh = () => setRetryKey((k) => k + 1)
+
+  const siteNameMap = useMemo<Record<string, string>>(
+    () => Object.fromEntries(sites.map((s) => [s.key, s.displayName ?? s.name])),
+    [sites],
+  )
+
+  const overrideEntries = config ? Object.entries(config.perSiteOverrides) : []
+  const overrideKeys = overrideEntries.map(([k]) => k)
+  const addableSites = sites.filter((s) => !overrideKeys.includes(s.key))
 
   return (
     <Drawer
@@ -193,9 +283,62 @@ export function SchedulerConfigDrawer({ open, onClose, onSaved }: SchedulerConfi
             />
           </div>
 
-          <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', paddingTop: '4px' }}>
-            ⓘ 单站点覆盖（perSiteOverrides）暂未在 UI 编辑；如需修改请使用 API 或后续独立面板。
+          {/* ── 站点调度覆盖 ──────────────────────────────────── */}
+          <div style={SECTION_DIVIDER_STYLE}>
+            站点调度覆盖（{overrideEntries.length} 已配置）
           </div>
+
+          {overrideEntries.length > 0 ? (
+            <div style={OVERRIDE_LIST_STYLE} data-testid="scheduler-overrides-list">
+              {overrideEntries.map(([siteKey, override]) => (
+                <div key={siteKey} style={OVERRIDE_ROW_STYLE} data-testid={`override-row-${siteKey}`}>
+                  <span style={SITE_NAME_STYLE} title={siteKey}>
+                    {siteNameMap[siteKey] ?? siteKey}
+                  </span>
+                  <AdminCheckbox
+                    checked={override.enabled}
+                    onChange={(e) => updateSiteOverride(siteKey, { enabled: e.target.checked })}
+                    aria-label={`${siteKey} 启用采集`}
+                    data-testid={`override-enabled-${siteKey}`}
+                  />
+                  <AdminSelect
+                    options={SITE_MODE_OPTIONS}
+                    value={override.mode}
+                    onChange={(v) => updateSiteOverride(siteKey, { mode: (v ?? 'inherit') as 'inherit' | AutoCrawlMode })}
+                    size="sm"
+                    aria-label={`${siteKey} 采集模式`}
+                    data-testid={`override-mode-${siteKey}`}
+                  />
+                  <AdminButton
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeSiteOverride(siteKey)}
+                    aria-label={`移除 ${siteKey} 覆盖`}
+                    data-testid={`override-remove-${siteKey}`}
+                  >
+                    ×
+                  </AdminButton>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={OVERRIDE_EMPTY_STYLE} data-testid="scheduler-overrides-empty">
+              暂无站点覆盖，所有站点使用全局配置
+            </div>
+          )}
+
+          {addableSites.length > 0 && (
+            <AdminSelect
+              options={addableSites.map((s) => ({ value: s.key, label: s.displayName ?? s.name }))}
+              value={null}
+              onChange={(v) => handleAddSite(v)}
+              placeholder="添加站点覆盖..."
+              size="sm"
+              searchable
+              data-testid="scheduler-add-site"
+              aria-label="添加站点调度覆盖"
+            />
+          )}
 
           <div style={FOOTER_STYLE}>
             <AdminButton variant="ghost" onClick={onClose} disabled={saving} data-testid="scheduler-cancel">
