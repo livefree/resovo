@@ -13428,3 +13428,30 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 **LOW-3**（`docs/decisions.md` ADR-106 末尾）：
 - 追加"toolbar-less 视图豁免 csv-export"小节
 - 内容：决策 + 范围（ModerationConsole 等）+ 理由 + 2 条规则（toolbar-less 自定义按钮 / 有 toolbar 不豁免）
+
+---
+
+## CHG-SN-7-MISC-HOME-2 — home page__head actions 完整性核实
+
+- **完成时间**：2026-05-20
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+
+### 变更内容
+
+**`apps/server-next/src/app/admin/home/_client/HomeOpsClient.tsx`**：
+- PageHeader actions 新增「预览前台」ghost 按钮（data-testid="home-preview-frontend-btn"）
+- 点击调用 `window.open(NEXT_PUBLIC_APP_URL ?? '/', '_blank', 'noopener,noreferrer')`
+- 按钮位于「+ 新建模块」左侧，符合 spec §5.7「预览前台、新建编排」顺序
+
+**`tests/unit/components/server-next/admin/home/HomeOpsClient.test.tsx`**：
+- 新增 describe「HOME-2 page head actions」2 条测试：
+  - 渲染「预览前台」按钮存在性 + 文案
+  - 渲染「+ 新建模块」按钮存在性 + 文案
+- 11/11 PASS
+
+### 质量门禁
+
+- [x] typecheck 全绿
+- [x] 单元测试 11/11 PASS（4338 total，CrawlerClient 1 pre-existing flaky 无关）
+- [x] 无跨层调用、无硬编码颜色、无 any 类型

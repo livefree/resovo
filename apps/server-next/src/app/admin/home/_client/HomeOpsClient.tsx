@@ -242,14 +242,24 @@ export function HomeOpsClient() {
         title="首页运营位"
         subtitle={`共 ${modules.length} 个模块`}
         actions={
-          <AdminButton
-            variant="primary"
-            size="sm"
-            onClick={() => { setEditingModule(null); setDrawerOpen(true) }}
-            data-testid="home-module-create-btn"
-          >
-            + 新建模块
-          </AdminButton>
+          <>
+            <AdminButton
+              variant="ghost"
+              size="sm"
+              onClick={() => window.open(process.env.NEXT_PUBLIC_APP_URL ?? '/', '_blank', 'noopener,noreferrer')}
+              data-testid="home-preview-frontend-btn"
+            >
+              预览前台
+            </AdminButton>
+            <AdminButton
+              variant="primary"
+              size="sm"
+              onClick={() => { setEditingModule(null); setDrawerOpen(true) }}
+              data-testid="home-module-create-btn"
+            >
+              + 新建模块
+            </AdminButton>
+          </>
         }
         data-testid="home-ops-page-header"
       />

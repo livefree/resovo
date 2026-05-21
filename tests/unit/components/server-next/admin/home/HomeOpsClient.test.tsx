@@ -227,3 +227,20 @@ describe('HomeOpsClient — publish toggle 反向（enabled=false → 启用）'
     expect(mockedList).toHaveBeenCalled()
   })
 })
+
+describe('HomeOpsClient — HOME-2 page head actions', () => {
+  it('渲染「预览前台」按钮（data-testid="home-preview-frontend-btn"）', async () => {
+    mockedList.mockResolvedValue({ data: [], total: 0, page: 1, limit: 100 })
+    render(<HomeOpsClient />)
+    // PageHeader 挂载时即渲染 actions（无需等待列表加载完成）
+    expect(screen.getByTestId('home-preview-frontend-btn')).not.toBeNull()
+    expect(screen.getByTestId('home-preview-frontend-btn').textContent).toContain('预览前台')
+  })
+
+  it('渲染「+ 新建模块」按钮（data-testid="home-module-create-btn"）', () => {
+    mockedList.mockResolvedValue({ data: [], total: 0, page: 1, limit: 100 })
+    render(<HomeOpsClient />)
+    expect(screen.getByTestId('home-module-create-btn')).not.toBeNull()
+    expect(screen.getByTestId('home-module-create-btn').textContent).toContain('新建模块')
+  })
+})
