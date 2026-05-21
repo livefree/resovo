@@ -13510,3 +13510,42 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 - [x] typecheck 全绿
 - [x] 8/8 新测试 PASS / 4347 total PASS
 - [x] vitest.config @/stores 修复不影响已有 server-v1 / web-next 测试（全 PASS 验证）
+
+## [CHG-SN-7-CLEANUP-01-A] docs 归档（26 mv + 4 rm 纯归档不改引用）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7（用户 opus xhigh 续会话；CLAUDE.md §模型路由 Haiku 适用情形 #2 文档归档 — 主循环未擅自降级，保留连贯上下文）
+- **子代理**：无
+- **关联 SEQ**：SEQ-20260521-01「docs 大清理 + manual 工程地基」
+- **修改文件**：
+  - **新增**（4 archive 子目录 README）：
+    - `docs/archive/2026Q2/milestone-audits/README.md`
+    - `docs/archive/2026Q2/m-sn-7-redo/README.md`
+    - `docs/archive/2026Q2/design-iterations/README.md`
+    - `docs/archive/2026Q2/admin-v1/README.md`
+  - **git mv 26 文件**：
+    - 6 milestone-audits → `docs/archive/2026Q2/milestone-audits/`
+    - 3 m-sn-7-redo → `docs/archive/2026Q2/m-sn-7-redo/`
+    - 2 视图模板+drill → `docs/archive/2026Q2/`
+    - 11 design-iterations → `docs/archive/2026Q2/design-iterations/`
+    - 4 admin-v1（含 logging_system_proposal 109KB + run-logs；tracks.md 用户决策保留顶层）→ `docs/archive/2026Q2/admin-v1/`
+  - **git rm 4 项**：2 audit_seq stub + `baseline_20260418/` 空壳 + `handoff_20260422/` 空壳
+  - **任务文件**：`docs/tasks.md` + `docs/task-queue.md`（SEQ-20260521-01 序列）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - **未改任何文档内引用**（按 CHG-SN-7-CLEANUP-01-B 子卡承担）；现有 docs/decisions.md / changelog.md / task-queue.md / server_next_plan / rules/ / CLAUDE.md 内对归档文件路径的引用全部仍指向旧路径
+  - C2 子卡启动时必须先做 `grep -rln "<file>" docs/ CLAUDE.md` 评估引用面，并用 sed 批量改写
+  - tracks.md 39 处引用未动；用户决策保留顶层
+  - admin-module-template.md 决策 3 保持单文件含 v1+v2 双章节
+  - verify:adr-contracts pre-existing 红线（apps/server-next/src/app/login/page.tsx:7 background+backgroundColor）为 CHG-SN-7-MISC-LOGIN-1 commit fe53f289 引入，与本卡无关 — 已 stash 验证
+  - typecheck + lint 全绿；FULL TURBO 缓存命中（仅 docs 改动）
+
+### DoD 全勾
+- [x] 26 文件 git mv 完成（实际 26，原估 27 含 tracks.md 已修正）+ 4 项 git rm 完成
+- [x] 4 个新 archive 子目录各含 README.md 索引
+- [x] `git status` 显示纯 rename（R100）+ delete + 4 add README + 2 task 文件
+- [x] `npm run typecheck` PASS
+- [x] `npm run lint` PASS（仅 pre-existing img 警告）
+- [x] `npm run verify:adr-contracts` pre-existing 红线保持（非本卡引入）
