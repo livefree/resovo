@@ -276,3 +276,120 @@ export async function listPendingQueue(
     todayStats: { reviewed, approveRate },
   }
 }
+
+// ── CHG-SN-8-04-EP · ADR-137 类似视频召回 query ──────────────────
+
+export interface VideoFeatures {
+  readonly id: string
+  readonly type: string
+  readonly year: number | null
+  readonly country: string | null
+  readonly genres: readonly string[]
+}
+
+/**
+ * findVideoFeatures：查目标视频特征用于相似度计算（ADR-137 §9 Service 层先 lookup）
+ * - 返回 null 时 Service 层抛 NOT_FOUND
+ * - JOIN media_catalog 获取 year/country/genres（migration 029 后字段位置）
+ */
+export async function findVideoFeatures(
+  db: Pool,
+  id: string,
+): Promise<VideoFeatures | null> {
+  const sql = `
+    SELECT
+      v.id,
+      v.type,
+      mc.year,
+      mc.country,
+      COALESCE(mc.genres, ARRAY[]::text[]) AS genres
+    FROM videos v
+    LEFT JOIN media_catalog mc ON mc.id = v.catalog_id
+    WHERE v.id = $1 AND v.deleted_at IS NULL
+    LIMIT 1
+  `
+  const result = await db.query(sql, [id])
+  const row = result.rows[0]
+  if (!row) return null
+  return {
+    id: row.id,
+    type: row.type,
+    year: row.year == null ? null : Number(row.year),
+    country: row.country ?? null,
+    genres: Array.isArray(row.genres) ? row.genres : [],
+  }
+}
+
+export interface SimilarCandidateRow {
+  readonly id: string
+  readonly title: string
+  readonly type: string
+  readonly year: number | null
+  readonly country: string | null
+  readonly genres: readonly string[]
+  readonly cover_url: string | null
+  readonly meta_score: number
+  readonly review_status: string
+  readonly is_published: boolean
+}
+
+export interface SimilarCandidatesQuery {
+  readonly excludeId: string
+  readonly type: string
+  readonly year: number | null
+  readonly yearRange: number
+  /** 粗筛上限，默认 50（ADR-137 §5 性能保底）*/
+  readonly limit?: number
+}
+
+/**
+ * listSimilarCandidates：SQL 粗筛（ADR-137 §5 SQL 设计）
+ * - WHERE: deleted_at IS NULL + 排除自身 + type 严格相等 + year 区间（year 为 null 时不卡）
+ * - ORDER: meta_score DESC（启发式高质量优先）
+ * - LIMIT: 50（Service 层算 score 截断 top-N）
+ */
+export async function listSimilarCandidates(
+  db: Pool,
+  query: SimilarCandidatesQuery,
+): Promise<readonly SimilarCandidateRow[]> {
+  const sql = `
+    SELECT
+      v.id,
+      v.title,
+      v.type,
+      mc.year,
+      mc.country,
+      COALESCE(mc.genres, ARRAY[]::text[]) AS genres,
+      mc.cover_url,
+      v.meta_score,
+      v.review_status,
+      v.is_published
+    FROM videos v
+    LEFT JOIN media_catalog mc ON mc.id = v.catalog_id
+    WHERE v.deleted_at IS NULL
+      AND v.id != $1
+      AND v.type = $2
+      AND ($3::int IS NULL OR mc.year IS NULL OR mc.year BETWEEN $3 - $4 AND $3 + $4)
+    ORDER BY v.meta_score DESC NULLS LAST
+    LIMIT $5
+  `
+  const result = await db.query(sql, [
+    query.excludeId,
+    query.type,
+    query.year,
+    query.yearRange,
+    query.limit ?? 50,
+  ])
+  return result.rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    type: row.type,
+    year: row.year == null ? null : Number(row.year),
+    country: row.country ?? null,
+    genres: Array.isArray(row.genres) ? row.genres : [],
+    cover_url: row.cover_url ?? null,
+    meta_score: Number(row.meta_score ?? 0),
+    review_status: row.review_status,
+    is_published: Boolean(row.is_published),
+  }))
+}

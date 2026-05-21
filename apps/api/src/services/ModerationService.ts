@@ -10,6 +10,12 @@ import { AuditLogService } from '@/api/services/AuditLogService'
 import { VideoIndexSyncService } from '@/api/services/VideoIndexSyncService'
 import { findReviewLabelByKey } from '@/api/db/queries/reviewLabels'
 import { toggleVideoSource, disableDeadSources } from '@/api/db/queries/video_sources'
+import {
+  findVideoFeatures,
+  listSimilarCandidates,
+  type VideoFeatures,
+  type SimilarCandidateRow,
+} from '@/api/db/queries/moderation'
 import { AppError, ERRORS } from '@/api/lib/errors'
 import { baseLogger } from '@/api/lib/logger'
 
@@ -241,4 +247,107 @@ export class ModerationService {
     })
     return result
   }
+
+  /**
+   * CHG-SN-8-04-EP · ADR-137：类似视频召回
+   *
+   * 流程：findVideoFeatures（404 if null）→ listSimilarCandidates（粗筛 LIMIT 50）
+   *       → Service 层 4 维加权 similarityScore（D-137-2 公式）→ minScore=10 过滤
+   *       → score desc 排序 + 截断 top-N → camelCase 映射
+   */
+  async listSimilar(
+    videoId: string,
+    opts: { readonly limit: number; readonly yearRange: number },
+  ): Promise<readonly SimilarVideoItem[]> {
+    const target = await findVideoFeatures(this.db, videoId)
+    if (!target) {
+      throw new AppError('NOT_FOUND', ERRORS.NOT_FOUND.message, ERRORS.NOT_FOUND.status)
+    }
+    const candidates = await listSimilarCandidates(this.db, {
+      excludeId: target.id,
+      type: target.type,
+      year: target.year,
+      yearRange: opts.yearRange,
+    })
+    const scored = candidates
+      .map((row) => ({ row, score: computeSimilarityScore(target, row, opts.yearRange) }))
+      .filter((entry) => entry.score >= MIN_SCORE)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, opts.limit)
+    return scored.map(({ row, score }) => ({
+      id: row.id,
+      title: row.title,
+      type: row.type,
+      year: row.year,
+      country: row.country,
+      genres: row.genres,
+      coverUrl: row.cover_url,
+      metaScore: row.meta_score,
+      reviewStatus: row.review_status,
+      isPublished: row.is_published,
+      similarityScore: score,
+    }))
+  }
+}
+
+// ── CHG-SN-8-04-EP · ADR-137 similarity 评分 ─────────────────────
+
+/** 内部过滤下限（ADR-137 §3 D-137-4）：score < 10 视为噪声不返回 */
+const MIN_SCORE = 10
+
+/** 4 维加权 0-100（ADR-137 §3 D-137-2 公式） */
+export function computeSimilarityScore(
+  target: VideoFeatures,
+  row: Pick<SimilarCandidateRow, 'type' | 'year' | 'country' | 'genres'>,
+  yearRange: number,
+): number {
+  let score = 0
+
+  // 维度 1：type 匹配 +40（SQL 已强约束 type 相等，理论上始终命中；保留逻辑兼容未来 fallback 路径 N1）
+  if (row.type === target.type) {
+    score += 40
+  }
+
+  // 维度 2：year 接近 +25 × (1 - delta/yearRange)；任一为 null 不得分
+  if (target.year != null && row.year != null && yearRange > 0) {
+    const delta = Math.abs(row.year - target.year)
+    if (delta <= yearRange) {
+      score += Math.round(25 * (1 - delta / yearRange))
+    }
+  }
+
+  // 维度 3：country 匹配 +15（双方均非 NULL 且相等）
+  if (target.country && row.country && target.country === row.country) {
+    score += 15
+  }
+
+  // 维度 4：genres Jaccard 相似度 ×20
+  const targetGenres = new Set(target.genres)
+  const rowGenres = new Set(row.genres)
+  if (targetGenres.size > 0 && rowGenres.size > 0) {
+    let intersection = 0
+    for (const g of rowGenres) {
+      if (targetGenres.has(g)) intersection++
+    }
+    const union = targetGenres.size + rowGenres.size - intersection
+    if (union > 0) {
+      score += Math.round(20 * (intersection / union))
+    }
+  }
+
+  return Math.min(100, Math.max(0, score))
+}
+
+export interface SimilarVideoItem {
+  readonly id: string
+  readonly title: string
+  readonly type: string
+  readonly year: number | null
+  readonly country: string | null
+  readonly genres: readonly string[]
+  readonly coverUrl: string | null
+  readonly metaScore: number
+  readonly reviewStatus: string
+  readonly isPublished: boolean
+  readonly similarityScore: number
 }

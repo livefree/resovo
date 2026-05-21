@@ -9,9 +9,9 @@ export default function LoginPage() {
         placeItems: 'center',
         minHeight: '100vh',
         padding: '40px 16px',
-        background:
-          'radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in oklch, var(--accent-default) 12%, transparent), transparent)',
         backgroundColor: 'var(--bg-canvas)',
+        backgroundImage:
+          'radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in oklch, var(--accent-default) 12%, transparent), transparent)',
       }}
     >
       <Suspense fallback={null}>

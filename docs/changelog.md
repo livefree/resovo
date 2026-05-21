@@ -14023,3 +14023,50 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 - [x] plan §9 ADR 索引推进至 Accepted
 - [x] verify:adr-d-numbers advisory 闭环（D-137-1..6 通过本 changelog 条目闭环）
 - [x] commit trailer 含 `ADR: ADR-137` + `Subagents: arch-reviewer (claude-opus-4-7)`
+
+## [CHG-SN-8-04-EP] ADR-137 端点实施 — GET /admin/moderation/:id/similar
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（按 ADR-137 直接实施）
+- **关联 SEQ**：SEQ-20260521-03（2/3 卡 / 解锁 -VIEW）
+- **修改文件**（按 ADR-137 §10 R-MID-1 GET 简化版 4 文件）：
+  - `apps/api/src/db/queries/moderation.ts` (+ ~110 行)：
+    - 新增 `VideoFeatures` interface + `findVideoFeatures` query（JOIN media_catalog）
+    - 新增 `SimilarCandidateRow` interface + `SimilarCandidatesQuery` + `listSimilarCandidates` query（ADR §5 SQL：粗筛 type 严格 + year ±range + LIMIT 50 + ORDER meta_score DESC）
+  - `apps/api/src/services/ModerationService.ts` (+ ~95 行)：
+    - 新增 `listSimilar(videoId, opts)` 方法（404 NOT_FOUND if target null → candidates → score → minScore=10 过滤 → top-N 截断 → camelCase）
+    - 新增 `computeSimilarityScore(target, row, yearRange)` 纯函数（ADR §3 D-137-2 公式：type +40 / year +25×(1-delta/range) / country +15 / genres Jaccard ×20）
+    - 新增 `SimilarVideoItem` interface + `MIN_SCORE = 10`
+  - `apps/api/src/routes/admin/moderation.ts` (+ ~25 行)：
+    - 新增 `SimilarPathParams` + `SimilarQueryParams` zod schema
+    - 新增 `GET /admin/moderation/:id/similar` handler（≤ 25 行 / 双 zod 校验 422 / AppError NOT_FOUND → 404 / 500 兜底）
+  - `tests/unit/api/moderation-similar.test.ts` 新建（13 用例 PASS）：
+    - ModerationService.listSimilar 6 用例（happy path / NOT_FOUND / 空 / limit / yearRange 透传 / minScore 过滤）
+    - computeSimilarityScore 7 用例（全匹配 100 / 仅 type 40 / type+country 55 / Jaccard 0.5 / year delta 边界 / 超 range 0 / country 不等）
+  - `apps/server-next/src/app/login/page.tsx`：**顺手修 pre-existing 红线**（CHG-SN-7-MISC-LOGIN-1 引入）— `background:` shorthand 改 `backgroundImage:`（保留 backgroundColor）
+  - `docs/decisions.md` ADR-137 §4 标题从 `### 4. 端点契约` 改为 `### 端点契约`（去掉编号匹配 adr-parser.mjs 正则）
+  - `docs/task-queue.md` + `docs/changelog.md`
+- **新增依赖**：无
+- **数据库变更**：无（复用既有 media_catalog 索引）
+- **API 变更**：新增 1 个 admin 路由 `GET /admin/moderation/:id/similar`（moderator+admin 权限）
+- **验收**：
+  - `npm run typecheck` PASS
+  - `npm run lint` PASS（仅 pre-existing img warning）
+  - `npm run verify:adr-contracts` PASS（端点 173 路由对齐 44 ADR 端点；style-shorthand-conflict 0 命中 — 顺手修复）
+  - `npm run verify:manual-coverage` PASS
+  - `moderation-similar.test` 13/13 PASS
+- **注意事项**：
+  - **媒体元数据 JOIN**：year/country/genres 不在 videos 表（migration 029 后），统一通过 `JOIN media_catalog ON mc.id = v.catalog_id` 获取
+  - **降级处理**：catalog 缺失（如 LEFT JOIN 命中 null）时返回 year=null + country=null + genres=[]；评分公式跳过这些维度
+  - **SQL 性能**：粗筛 LIMIT 50 + nullsLast 排序；利用 `idx_videos_type` + `idx_catalog_type_year` + `idx_catalog_genres GIN` 既有索引，零 migration
+  - **adr-parser.mjs 兼容**：§端点契约 子标题不能含 "N. " 编号前缀（正则 `^###\s+端点契约` 严格匹配）；本卡顺手统一 ADR-137 标题与 ADR-136 等保持一致
+  - **顺手修 LOGIN-1 红线**：5 commit 前已识别 pre-existing 红线但未修；本卡 commit hook 阻塞触发 → 顺手 backgroundColor + backgroundImage 拆分，与原 LOGIN-1 视觉等价
+
+### DoD 全勾
+- [x] 4 文件落地（queries + service + route + test）
+- [x] 测试 13 用例 PASS（≥ 5 要求超额）
+- [x] typecheck + lint + verify:adr-contracts + verify:manual-coverage PASS
+- [x] verify:endpoint-adr 173/44 对齐（含 ADR-137 新端点）
+- [x] commit trailer 含 `ADR: ADR-137`

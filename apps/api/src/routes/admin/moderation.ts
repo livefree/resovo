@@ -52,6 +52,13 @@ const AuditLogQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 })
 
+// CHG-SN-8-04-EP · ADR-137：类似视频召回端点 schemas
+const SimilarPathParams = z.object({ id: z.string().uuid() })
+const SimilarQueryParams = z.object({
+  limit: z.coerce.number().int().min(1).max(20).default(10),
+  yearRange: z.coerce.number().int().min(1).max(15).default(5),
+})
+
 const MetaEditSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   year: z.number().int().min(1900).max(2100).nullable().optional(),
@@ -168,6 +175,29 @@ export async function adminModerationRoutes(fastify: FastifyInstance) {
       return reply.send({ data: result.rows, pagination: { total: result.total, page: parsed.data.page, limit: parsed.data.limit, hasNext: result.total > parsed.data.page * parsed.data.limit } })
     } catch (err) {
       request.log.error({ err }, 'line-health unexpected error')
+      return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
+    }
+  })
+
+  // ── GET /admin/moderation/:id/similar ───────────────────────────
+  // CHG-SN-8-04-EP · ADR-137：类似视频召回（W1 金票反例 #3 闭合）
+  fastify.get('/admin/moderation/:id/similar', { preHandler: auth }, async (request, reply) => {
+    const pathParsed = SimilarPathParams.safeParse(request.params)
+    if (!pathParsed.success) {
+      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
+    }
+    const queryParsed = SimilarQueryParams.safeParse(request.query)
+    if (!queryParsed.success) {
+      return reply.code(422).send({ error: { code: 'VALIDATION_ERROR', message: '参数错误', status: 422 } })
+    }
+    try {
+      const data = await moderationSvc.listSimilar(pathParsed.data.id, queryParsed.data)
+      return reply.send({ data })
+    } catch (err) {
+      if (isAppError(err, 'NOT_FOUND')) {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: '视频不存在', status: 404 } })
+      }
+      request.log.error({ err }, 'moderation similar unexpected error')
       return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: '服务器内部错误', status: 500 } })
     }
   })
