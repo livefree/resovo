@@ -14232,3 +14232,67 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 
 ### 用户问题 #10 闭合状态
 ✅ 「首页编辑页面添加功能完全不符合人机交互」— 反人类「视频 ID / URL / HTML ID / 类型枚举值」单 input 混填彻底废除；改为根据 contentRefType 自动切换的复合 Picker（video 走 VideoPicker 搜索 / external_url URL 校验 / custom_html 文本 / video_type 下拉枚举）
+
+## [CHG-SN-8-FUP-USER-MENU] 用户菜单 4 noop action 反馈 Modal/Toast（用户问题 #13 闭合 / H2 修复）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **关联 SEQ**：SEQ-20260521-04（3/3 卡 收尾）
+- **修改文件**：
+  - 新建 `apps/server-next/src/app/admin/_client/UserMenuActionModal.tsx`（~210 行）：
+    - 单组件 + UserMenuActionModalType union（profile / preferences / help）
+    - profile：当前用户信息 4 字段（displayName / email / role / id）+ 「编辑（筹备中）」disabled
+    - preferences：复用 ThemeProvider 主题切换 + 3 项筹备中占位
+    - help：W1-W5 5 工作流速查 + 9 快捷键速查（⌘1-5 + ⌘, + ⌘K + J/K/A/R/S）+ docs/manual 入口
+  - `apps/server-next/src/app/admin/admin-shell-client.tsx`：
+    - import useToast + UserMenuActionModal + UserMenuActionModalType
+    - 增 actionModalType state
+    - handleUserMenuAction: profile/preferences/help 3 case → setActionModalType；switchAccount → toast 反馈
+    - 渲染 UserMenuActionModal 在 AdminShell children 内
+  - 新建 `tests/unit/components/server-next/admin/UserMenuActionModal.test.tsx`（5 用例 PASS）
+  - `docs/manual/00-roles-and-permissions.md` §4 新增「用户菜单 6 项 action」矩阵
+  - `docs/task-queue.md` + `docs/changelog.md`
+- **新增依赖**：无
+- **数据库变更**：无
+- **API 变更**：无（前端 UI 反馈，不动 admin-ui 公开 API）
+- **设计要点**：
+  - **单 Modal 多视图**：根据 type prop 渲染 3 种视图，避免建 3 个独立 Modal 文件
+  - **switchAccount 走 toast**：不需要 Modal（信息量小 + 频次低）；info level toast 解释「在 M-SN-N 实装」
+  - **profile 字段顺序与 AdminShellUser 对齐**：displayName / email / role / id；id 用 mono font 11px（运营复述用）
+  - **help 工作流链接**：当前仅文字列名（M-SN-N 升级为 router.push 跳 docs viewer）；快捷键速查表用 KBD style 突出
+  - **preferences theme**：复用现有 ThemeContext 不增新依赖
+- **注意事项**：
+  - **AdminShellUser.id 类型**：现有 mock 已含 id；如未来真接 /me 端点需保证 id 字段返回
+  - **switchAccount 真实功能推迟**：当前一个浏览器一个登录态；多账号切换需 cookie 命名空间 + 切换 API，属 M-SN-N 范围
+  - **快捷键 modal 内仅展示不绑定**：实际快捷键绑定在 AdminShell 内部（keyboard-shortcuts.tsx），本卡仅文档化
+  - **profile 编辑按钮 disabled**：标 「编辑（筹备中）」+ 注释 CHG-SN-8-FUP-USER-MENU 后续 follow-up
+
+### DoD 全勾
+- [x] UserMenuActionModal 新建
+- [x] admin-shell-client handleUserMenuAction 改造
+- [x] 测试 5 用例 PASS（≥ 4 要求超额）
+- [x] typecheck + lint + verify:manual-coverage PASS
+- [x] 00-roles-and-permissions.md §4 矩阵填写
+
+### 用户问题 #13 闭合状态
+✅ 「用户菜单项目多不可用」— 6 个 action 全部有反馈：
+- theme / logout / profile / preferences / help → 直接生效或 Modal
+- switchAccount → Toast 明确告知「筹备中 + M-SN-N 实装」
+
+H2 硬约束（零死按钮）在用户菜单维度起步完成。
+
+---
+
+## SEQ-20260521-04 完结声明（2026-05-21）
+
+3/3 卡全 PASS：FUP-SUB（#8）+ FUP-HOME（#10）+ FUP-USER-MENU（#13）
+
+| 卡 | commit | 用户问题 |
+|---|---|---|
+| CHG-SN-8-FUP-SUB | d2545d64 | #8 字幕 UUID ✅ |
+| CHG-SN-8-FUP-HOME | 49999fd4 | #10 首页添加 ✅ |
+| CHG-SN-8-FUP-USER-MENU | (此 commit) | #13 用户菜单 ✅ |
+
+**累计本会话 19 commits / 用户问题闭合 8/13**（原 6/13 → +#8 + #10 + #13 = 8/13；接近 62%）

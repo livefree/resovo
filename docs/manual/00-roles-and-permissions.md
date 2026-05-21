@@ -35,3 +35,14 @@
 - 入口：[P-users · 角色矩阵](./20-pages/P-users.md#41-改角色)
 - 仅 `admin` 可改其他用户角色
 - 改角色操作会写入审计日志
+
+## 4. 用户菜单 6 项 action（CHG-SN-8-FUP-USER-MENU 已实装）
+
+| Action | 行为 | 状态 |
+|---|---|---|
+| 个人信息（profile）| Modal 显示当前 user.displayName / email / role / id；编辑按钮筹备中 | ✅ |
+| 偏好设置（preferences）| Modal 含主题切换 + 「品牌 / 语言 / 密度」筹备中占位 | ✅ |
+| 主题切换（theme）| 直接切换 light/dark（复用 ThemeProvider） | ✅ |
+| 帮助（help）| Modal 含 W1-W5 工作流速查 + 高频快捷键 + manual 入口 | ✅ |
+| 切换账号（switchAccount）| Toast「多账号切换在 M-SN-N 实装」 | ⚠️ 反馈 |
+| 登出（logout）| 跳 `/login` | ✅ |

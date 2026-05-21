@@ -16,8 +16,9 @@
 import { useCallback, useContext, useMemo, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
-import { AdminShell, inferBreadcrumbs } from '@resovo/admin-ui'
+import { AdminShell, inferBreadcrumbs, useToast } from '@resovo/admin-ui'
 import type { AdminShellUser, NotificationItem, TaskItem, UserMenuAction } from '@resovo/admin-ui'
+import { UserMenuActionModal, type UserMenuActionModalType } from './_client/UserMenuActionModal'
 import { ThemeContext } from '@/contexts/BrandProvider'
 import { ADMIN_NAV } from '@/lib/admin-nav'
 import {
@@ -68,6 +69,10 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
     themeContext?.setTheme(theme === 'dark' ? 'light' : 'dark')
   }, [theme, themeContext])
 
+  // CHG-SN-8-FUP-USER-MENU：4 noop action → Modal/Toast 反馈
+  const [actionModalType, setActionModalType] = useState<UserMenuActionModalType | null>(null)
+  const toast = useToast()
+
   const handleUserMenuAction = useCallback((action: UserMenuAction) => {
     switch (action) {
       case 'theme':
@@ -79,11 +84,17 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
       case 'profile':
       case 'preferences':
       case 'help':
+        setActionModalType(action as UserMenuActionModalType)
+        break
       case 'switchAccount':
-        // M-SN-2 stub：noop（M-SN-3+ 接入真实端点）
+        toast.push({
+          title: '多账号切换筹备中',
+          description: '当前一个浏览器仅支持一个登录态；多账号切换功能在 M-SN-N 实装',
+          level: 'info',
+        })
         break
     }
-  }, [handleThemeToggle, router])
+  }, [handleThemeToggle, router, toast])
 
   const handleCollapsedChange = useCallback((next: boolean) => {
     document.cookie = `${COOKIE_COLLAPSED}=${next}; path=/; max-age=31536000; SameSite=Lax`
@@ -155,6 +166,14 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
       onRetryTask={handleRetryTask}
     >
       {children}
+      {/* CHG-SN-8-FUP-USER-MENU：4 noop action 反馈 Modal */}
+      <UserMenuActionModal
+        type={actionModalType}
+        user={user}
+        theme={theme}
+        onThemeToggle={handleThemeToggle}
+        onClose={() => setActionModalType(null)}
+      />
     </AdminShell>
   )
 }
