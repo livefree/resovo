@@ -81,7 +81,19 @@
 
 ### 3.3 查看历史 / 类似 / 详情（右栏 tabs）
 
-（待 CHG-SN-8-04 TabSimilar 实装后填写）
+#### 3.3.1 详情 Tab（默认）
+- 显示视频元数据 + 「重测此视频线路」批量按钮（CHG-SN-8-05）
+
+#### 3.3.2 历史 Tab
+- 调 `/admin/moderation/:id/audit-log` → 渲染审核动作时间线
+
+#### 3.3.3 类似 Tab（CHG-SN-8-04-VIEW / ADR-137 已实装）
+- 切到 Tab 时自动调 `GET /admin/moderation/:id/similar?limit=10`
+- 召回算法：同 type 严格 + year ±5 + country 加权 + genres Jaccard（ADR-137 §3 公式）
+- 列表行：标题 + meta（type · 年 · 国家）+ similarityScore pill 0-100 + 「发起合并」按钮
+- 「发起合并」→ 跳 `/admin/merge?candidate_a=<当前视频>&candidate_b=<选中相似>&from=moderation` → Merge 页顶部显示 candidate_a banner（CHG-SN-8-08）
+- 空召回 → EmptyState「未找到类似视频」（说明该视频在同类型/年份范围无相似项；可考虑直接审核或检查元数据完整性）
+- 网络错误 → ErrorState + 「重试」按钮（refetch）
 
 ## 8. 与其他页面的关系
 

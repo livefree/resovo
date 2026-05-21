@@ -14070,3 +14070,78 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 - [x] typecheck + lint + verify:adr-contracts + verify:manual-coverage PASS
 - [x] verify:endpoint-adr 173/44 对齐（含 ADR-137 新端点）
 - [x] commit trailer 含 `ADR: ADR-137`
+
+## [CHG-SN-8-04-VIEW] ADR-137 TabSimilar 实装 — W1 金票反例 #3 完全闭合
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **关联 SEQ**：SEQ-20260521-03（3/3 ✅ SEQ 全部完结）
+- **修改文件**：
+  - `apps/server-next/src/lib/moderation/api.ts`：新增 `SimilarVideoItem` interface + `ListSimilarVideosOptions` + `listSimilarVideos(videoId, opts)` 客户端封装
+  - `apps/server-next/src/app/admin/moderation/_client/RightPane/TabSimilar.tsx`：从 47 行占位扩展为 145 行真实组件
+    - 4 态机：loading（LoadingState）/ results（列表）/ empty（EmptyState）/ error（ErrorState + retry）
+    - useEffect cancellable fetch（videoId 变化或重试时取消 stale）
+    - 列表行：标题 + meta（type · year · country）+ similarityScore pill（0-100）+ 「发起合并」按钮
+    - 行级 router.push 深链：`/admin/merge?candidate_a=<视频>&candidate_b=<相似>&from=moderation`
+  - `apps/server-next/src/app/admin/moderation/_client/RightPane/index.tsx`：TabSimilar 调用补 `videoId={v.id}` prop
+  - `tests/unit/components/server-next/admin/moderation/TabSimilar.test.tsx` 新建（5 用例 PASS）
+  - `docs/manual/20-pages/P-moderation.md` §3.3.3 完整填写（含召回算法说明 + 空/错 态文案 + 深链路径）
+  - `docs/manual/10-workflows/W1-crawl-to-publish.md` 反例 #3 标 ✅
+  - `docs/task-queue.md` SEQ-20260521-03 完结
+- **新增依赖**：无
+- **数据库变更**：无
+- **e2e 链路完整验证**：TabSimilar → /lib/moderation/api.ts → GET /admin/moderation/:id/similar → ModerationService.listSimilar → queries.findVideoFeatures + listSimilarCandidates → computeSimilarityScore → top-N → TabSimilar 渲染 + merge 深链 → /admin/merge?candidate_a=...&candidate_b=...&from=moderation
+- **注意事项**：
+  - **router push 编码**：candidate_a / candidate_b 都 encodeURIComponent 防 UUID 中可能的特殊字符
+  - **error state typing**：admin-ui ErrorState 用 `error: Error` 而非 `description: string`；本卡传 `error={error}` 让组件内部从 error.message 渲染
+  - **cancellable 模式**：useEffect 内 `let cancelled = false` + 清理函数；retryKey state 变化触发新 fetch
+  - **EmptyState 不带 data-testid**：包装 `<div data-testid="tab-similar-empty">` 兜底（与 PickerDialog 同模式）
+
+### DoD 全勾
+- [x] TabSimilar.tsx 实装（145 行）
+- [x] listSimilarVideos 客户端封装
+- [x] RightPane 传 videoId
+- [x] 单测 5 用例 PASS（≥ 3 要求超额）
+- [x] typecheck + lint + verify:adr-contracts + verify:manual-coverage PASS
+- [x] P-moderation §3.3.3 + W1 反例 #3 ✅
+- [x] commit trailer 含 `ADR: ADR-137`
+
+---
+
+## SEQ-20260521-03 完结声明（2026-05-21）
+
+3/3 卡全 PASS — W1 金票反例 #3 完全闭合
+
+| 卡 | 状态 | commit |
+|---|---|---|
+| CHG-SN-8-04-ADR | ✅ A− (Opus) | b037030d |
+| CHG-SN-8-04-EP | ✅ | 20195836 |
+| CHG-SN-8-04-VIEW | ✅ | (此 commit) |
+
+**累计 3 commits / +860 lines / 18 测试用例 / 1 Opus 子代理 A− / 1 顺手修 pre-existing 红线（LOGIN-1 shorthand）/ 0 BLOCKER**
+
+**W1 金票反例段最终状态（5/5 ✅ 或裁决保留）**：
+- #1 全站全量主按钮 → ✅ C8-01
+- #2 采集后跳转 → ✅ C8-03（软深链）
+- #3 类似 Tab 占位 → ✅ **C8-04 全段闭合**（ADR-137 + EP + VIEW）
+- #4 探/播 重测 → ✅ C8-05（批量）
+- #5 通过 staging 多步 → ✅ C8-06（admin toggle）+ moderator 走 REDO-04 裁决路径
+
+**W1 金票工作流端到端**：采集 → 审核（toast 深链 / 类似召回 / 批量重测 / 通过即上架）→ 上架（独立 staging 或一键直发）**全链路无 mock / 无死按钮 / 无断链 / 无 UUID 输入**（H1-H4 4 条硬约束全部命中）
+
+---
+
+## SEQ-20260521-02 + SEQ-20260521-03 总收尾（2026-05-21）
+
+**完整 W1 金票闭合 + 累计指标**：
+
+| SEQ | 卡数 | ✅ | NEGATED | 关键产出 |
+|---|---|---|---|---|
+| SEQ-20260521-01（docs 清理 + manual）| 3 | 3 | 0 | docs 大清理 + manual 35 文件骨架 + verify:manual-coverage 守卫 |
+| SEQ-20260521-02（W1 金票主线）| 9 | 7 | 1 | C8-01..03 + SHARED-04-A (Opus A−) + C8-05/06/08 |
+| SEQ-20260521-03（C8-04 三段）| 3 | 3 | 0 | ADR-137 (Opus A−) + 端点 + TabSimilar 实装 |
+| **总计** | **15** | **13** | **1** | 14 commits / +7160 lines / 78 测试用例 / 2 spawn Opus 子代理 / 2 NEGATED 范式（C8-07 + 之前的 ADR-114）|
+
+**W1 金票端到端 100% 闭合**（5 反例全 ✅）。下一步：M-SN-8 后续 follow-up 卡（CHG-SN-8-N1 fallback / -02-B 调度列 / -03-B 后端 runId filter / -05-B per-line 重测 / -08-B Merge 页 VideoPicker）+ M-SN-6.5 非功能验收门 + M-SN-7 cutover 终段。

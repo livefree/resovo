@@ -104,7 +104,7 @@ export function RightPane({ v }: RightPaneProps): React.ReactElement {
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
         {tab === 'detail' && <TabDetail v={v} />}
         {tab === 'history' && <TabHistory videoId={v.id} />}
-        {tab === 'similar' && <TabSimilar />}
+        {tab === 'similar' && <TabSimilar videoId={v.id} />}
       </div>
     </div>
   )

@@ -267,3 +267,37 @@ export function toDisplayState(status: string): DualSignalDisplayState {
   }
   return 'unknown'
 }
+
+// ── CHG-SN-8-04-VIEW · ADR-137：类似视频召回（GET /admin/moderation/:id/similar）
+
+export interface SimilarVideoItem {
+  readonly id: string
+  readonly title: string
+  readonly type: string
+  readonly year: number | null
+  readonly country: string | null
+  readonly genres: readonly string[]
+  readonly coverUrl: string | null
+  readonly metaScore: number
+  readonly reviewStatus: string
+  readonly isPublished: boolean
+  readonly similarityScore: number
+}
+
+export interface ListSimilarVideosOptions {
+  readonly limit?: number
+  readonly yearRange?: number
+}
+
+export async function listSimilarVideos(
+  videoId: string,
+  opts: ListSimilarVideosOptions = {},
+): Promise<readonly SimilarVideoItem[]> {
+  const params = new URLSearchParams()
+  if (opts.limit != null) params.set('limit', String(opts.limit))
+  if (opts.yearRange != null) params.set('yearRange', String(opts.yearRange))
+  const qs = params.toString()
+  const path = `/admin/moderation/${encodeURIComponent(videoId)}/similar${qs ? `?${qs}` : ''}`
+  const res = await apiClient.get<{ data: readonly SimilarVideoItem[] }>(path)
+  return res.data
+}
