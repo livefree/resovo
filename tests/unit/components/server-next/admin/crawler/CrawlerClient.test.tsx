@@ -411,6 +411,44 @@ describe('CrawlerClient (REDO-01-C 骨架)', () => {
     expect(runCrawlerAllMock).not.toHaveBeenCalled()
   })
 
+  it('13e. 最近采集列：lastCrawlStatus=ok → 渲染"成功" pill + 时间 [CHG-SN-8-02]', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([
+      { ...SITE_1, lastCrawlStatus: 'ok', lastCrawledAt: new Date(Date.now() - 5 * 60_000).toISOString() },
+    ])
+    const { container } = render(<CrawlerClient />)
+    await waitFor(() => {
+      const pill = container.querySelector('[data-last-crawl-status="ok"]')
+      expect(pill).not.toBeNull()
+      expect(pill?.textContent).toContain('成功')
+      const time = container.querySelector('[data-last-crawl-time]')
+      expect(time?.textContent).toMatch(/分钟前|刚刚/)
+    })
+  })
+
+  it('13f. 最近采集列：lastCrawlStatus=failed → 渲染"失败" pill [CHG-SN-8-02]', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([
+      { ...SITE_1, lastCrawlStatus: 'failed', lastCrawledAt: '2026-05-20T00:00:00Z' },
+    ])
+    const { container } = render(<CrawlerClient />)
+    await waitFor(() => {
+      const pill = container.querySelector('[data-last-crawl-status="failed"]')
+      expect(pill).not.toBeNull()
+      expect(pill?.textContent).toContain('失败')
+    })
+  })
+
+  it('13g. 最近采集列：lastCrawlStatus=null → 渲染"未采集" pill [CHG-SN-8-02]', async () => {
+    listCrawlerSitesMock.mockResolvedValueOnce([
+      { ...SITE_1, lastCrawlStatus: null, lastCrawledAt: null },
+    ])
+    const { container } = render(<CrawlerClient />)
+    await waitFor(() => {
+      const pill = container.querySelector('[data-last-crawl-status="none"]')
+      expect(pill).not.toBeNull()
+      expect(pill?.textContent).toContain('未采集')
+    })
+  })
+
   it('14a. 导出按钮：空 sites → warn toast "无可导出数据"', async () => {
     listCrawlerSitesMock.mockResolvedValueOnce([])
     render(<CrawlerClient />)

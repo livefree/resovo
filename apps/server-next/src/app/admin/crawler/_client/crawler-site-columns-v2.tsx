@@ -87,6 +87,64 @@ const PILL_TYPE_STYLE: CSSProperties = {
   color: 'var(--fg-default)',
 }
 
+// CHG-SN-8-02：last-crawl-status pill + schedule pill 共用基础样式
+const PILL_BASE_STYLE: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '2px 8px',
+  borderRadius: 'var(--radius-pill, 12px)',
+  fontSize: '11px',
+  fontWeight: 500,
+  lineHeight: 1.4,
+}
+
+const LAST_CRAWL_CELL_STYLE: CSSProperties = {
+  display: 'inline-flex',
+  flexDirection: 'column',
+  gap: '2px',
+  alignItems: 'flex-start',
+}
+
+function lastCrawlStatusPillStyle(status: string | null | undefined): CSSProperties {
+  if (status === 'ok') {
+    return {
+      ...PILL_BASE_STYLE,
+      background: 'var(--state-success-bg, var(--state-ok-soft))',
+      color: 'var(--state-success-fg, var(--state-ok))',
+    }
+  }
+  if (status === 'failed') {
+    return {
+      ...PILL_BASE_STYLE,
+      background: 'var(--state-danger-bg, var(--state-danger-soft))',
+      color: 'var(--state-danger-fg, var(--state-danger))',
+    }
+  }
+  if (status === 'running') {
+    return {
+      ...PILL_BASE_STYLE,
+      background: 'var(--state-info-bg, var(--state-info-soft))',
+      color: 'var(--state-info-fg, var(--state-info))',
+    }
+  }
+  // null / unknown
+  return {
+    ...PILL_BASE_STYLE,
+    background: 'var(--bg-subtle, var(--bg-surface))',
+    color: 'var(--fg-muted)',
+  }
+}
+
+function lastCrawlStatusLabel(status: string | null | undefined): string {
+  if (status === 'ok') return '成功'
+  if (status === 'failed') return '失败'
+  if (status === 'running') return '运行中'
+  return '未采集'
+}
+
+// 注：调度列推迟到 CHG-SN-8-02-B（需 cross-fetch AutoCrawlConfig.perSiteOverrides）
+
 const PROGRESS_TRACK_STYLE: CSSProperties = {
   display: 'inline-block',
   width: 40,
@@ -311,14 +369,23 @@ export function buildCrawlerSiteColumnsV2(
       id: 'lastCrawl',
       header: '最近采集',
       accessor: (r) => r.lastCrawledAt ?? '',
-      width: 110,
+      width: 130,
       defaultVisible: true,
       enableSorting: true,
       enableResizing: true,
       columnMenu: { canSort: true, canHide: true },
+      // CHG-SN-8-02：原来只有相对时间，补 status pill 显式表达上次采集成功/失败/运行中
       cell: ({ row }) => (
-        <span style={{ fontSize: '11px', color: 'var(--fg-muted)' }} data-last-crawl>
-          {formatRelativeTime(row.lastCrawledAt)}
+        <span style={LAST_CRAWL_CELL_STYLE} data-last-crawl>
+          <span
+            style={lastCrawlStatusPillStyle(row.lastCrawlStatus)}
+            data-last-crawl-status={row.lastCrawlStatus ?? 'none'}
+          >
+            {lastCrawlStatusLabel(row.lastCrawlStatus)}
+          </span>
+          <span style={{ fontSize: '11px', color: 'var(--fg-muted)' }} data-last-crawl-time>
+            {formatRelativeTime(row.lastCrawledAt)}
+          </span>
         </span>
       ),
     },

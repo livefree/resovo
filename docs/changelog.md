@@ -13679,3 +13679,47 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 - [x] verify:manual-coverage PASS（15 admin 路由 ↔ 15 P-* manual）
 - [x] P-crawler.md §1/§2/§3.1/§4.1 填写完整
 - [x] commit 含 SEQ + Cleanup-Audit trailer
+
+## [CHG-SN-8-02] Crawler「最近采集」列升级 status pill（用户问题 #11 关键修复）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **关联 SEQ**：SEQ-20260521-02（2/9 卡）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/crawler/_client/crawler-site-columns-v2.tsx`：
+    - 新增 PILL_BASE_STYLE / LAST_CRAWL_CELL_STYLE / lastCrawlStatusPillStyle / lastCrawlStatusLabel 4 个样式工具
+    - `lastCrawl` cell 升级：原仅相对时间 → status pill（成功 ok / 失败 failed / 运行中 running / 未采集 null）+ 相对时间双行视觉
+    - 列宽 110 → 130
+  - `docs/manual/20-pages/P-crawler.md`：
+    - §3.2 完整填写（站点级触发 / 读懂最近采集列 / 行展开）
+    - §3.3 占位待 CHG-SN-8-03
+    - §5 字段含义表（9 字段：站点 / key / format / 类型 / 线路数 / 健康度 / 权重 / 最近采集 status / 最近采集 time）
+    - §6 状态颜色矩阵（4 状态 pill 颜色映射）
+    - §7 FAQ 4 行（采集冻结 / 409 冲突 / failed 排查 / disabled）
+  - `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx`：
+    - 补 3 用例 #13e/#13f/#13g（ok pill / failed pill / null pill 渲染）
+    - 总 61/61 PASS（增 3）
+  - `docs/task-queue.md`（CHG-SN-8-02 状态推进 ✅ + SEQ 进度 2/9）
+  - `docs/changelog.md`（本条目追加）
+- **新增依赖**：无
+- **数据库变更**：无
+- **范围收敛说明**：
+  - **删除"调度列"范围**：实施前评估发现 `CrawlerSite` 类型**无 schedulers 字段**（schedulers 在 `CrawlerSystemStatus` 是全局，per-site mode 在 `AutoCrawlConfig.perSiteOverrides` 需 cross-fetch admin only 端点）→ 工时会爆 0.15w 上限
+  - 已立 follow-up **CHG-SN-8-02-B**（调度列需先评估 type 扩展 vs cross-fetch 路径）
+  - **删除"行尾增量/全量 inline btn"范围**：CHG-SN-7-REDO-01-D 已落地（actions 列内 AdminButton size="sm" 「+ 增量」「+ 全量」+ {⋯} dropdown）
+- **注意事项**：
+  - **W1 金票反例无新影响**：本卡修复属于「列信息完整性」非反例修复
+  - **lastCrawl status pill 视觉规范**：4 个 status 对应 4 套 state token（success / danger / info / muted）；CSS 变量化无硬编码颜色（CLAUDE.md §绝对禁止第 6 条）
+  - **测试用 `data-last-crawl-status` 属性**：值为 'ok' / 'failed' / 'running' / 'none'（注意 null 落地为字符串 'none' 以兼容 DOM attribute）
+
+### DoD 全勾
+- [x] crawler-site-columns-v2.tsx lastCrawl 列升级（pill + 时间）
+- [x] CrawlerClient.test 补 ≥ 2 用例（实际 +3）
+- [x] typecheck + lint PASS
+- [x] verify:manual-coverage PASS
+- [x] P-crawler.md §3.2 / §5 / §6 / §7 填写完整
+
+### Follow-up
+- CHG-SN-8-02-B 调度列（先评估 type 扩展 vs cross-fetch / 决策后再起实施卡）
