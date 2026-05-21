@@ -191,12 +191,17 @@ describe('CrawlerClient (REDO-01-C 骨架)', () => {
     expect(screen.getByText('采集控制')).not.toBeNull()
   })
 
-  it('2. PageHeader 3 actions（导出 / + 新增 / 全站全量）渲染', async () => {
+  it('2. PageHeader 3 actions（导出 / + 新增 / 全站增量 primary）渲染 [CHG-SN-8-01]', async () => {
     render(<CrawlerClient />)
     await waitFor(() => screen.getByTestId('crawler-export-btn'))
     expect(screen.getByTestId('crawler-export-btn')).not.toBeNull()
     expect(screen.getByTestId('crawler-create-btn')).not.toBeNull()
-    expect(screen.getByTestId('crawler-run-all-btn')).not.toBeNull()
+    // CHG-SN-8-01：主按钮从「全站全量」改为「全站增量」（incremental，更高频）
+    const primaryBtn = screen.getByTestId('crawler-run-all-incremental-btn')
+    expect(primaryBtn).not.toBeNull()
+    expect(primaryBtn.textContent).toContain('全站增量')
+    // 旧 testid 已下线
+    expect(screen.queryByTestId('crawler-run-all-btn')).toBeNull()
   })
 
   it('3. CrawlerKpiRow 5 张 KpiCard 渲染（站点 / 运行中 / 失败 / 本批 / 平均时长）', async () => {
@@ -275,7 +280,7 @@ describe('CrawlerClient (REDO-01-C 骨架)', () => {
     })
   })
 
-  it('11. 全站全量：confirm 通过 → runCrawlerAll(full) + 成功 toast', async () => {
+  it('11. 全站增量：单次 confirm 通过 → runCrawlerAll(incremental) + 成功 toast [CHG-SN-8-01]', async () => {
     runCrawlerAllMock.mockResolvedValueOnce({
       runId: 'run-abc12345',
       taskIds: ['t1'],
@@ -283,30 +288,30 @@ describe('CrawlerClient (REDO-01-C 骨架)', () => {
       skippedSiteKeys: [],
     })
     render(<CrawlerClient />)
-    const btn = await waitFor(() => screen.getByTestId('crawler-run-all-btn'))
+    const btn = await waitFor(() => screen.getByTestId('crawler-run-all-incremental-btn'))
     fireEvent.click(btn)
     await waitFor(() => {
-      expect(runCrawlerAllMock).toHaveBeenCalledWith('full')
+      expect(runCrawlerAllMock).toHaveBeenCalledWith('incremental')
       expect(toastPushMock).toHaveBeenCalledWith(
-        expect.objectContaining({ level: 'success', title: '已发起全站全量' }),
+        expect.objectContaining({ level: 'success', title: '已发起全站增量' }),
       )
     })
   })
 
-  it('12. 全站全量：confirm 拒绝 → 不调 API', async () => {
+  it('12. 全站增量：confirm 拒绝 → 不调 API [CHG-SN-8-01]', async () => {
     confirmSpy.mockReset().mockReturnValue(false)
     ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
     render(<CrawlerClient />)
-    const btn = await waitFor(() => screen.getByTestId('crawler-run-all-btn'))
+    const btn = await waitFor(() => screen.getByTestId('crawler-run-all-incremental-btn'))
     fireEvent.click(btn)
     await new Promise((r) => setTimeout(r, 0))
     expect(runCrawlerAllMock).not.toHaveBeenCalled()
   })
 
-  it('13. freezeEnabled=true → 全站全量被拦截（warn toast）', async () => {
+  it('13. freezeEnabled=true → 全站增量被拦截（warn toast）[CHG-SN-8-01]', async () => {
     getCrawlerSystemStatusMock.mockResolvedValue({ freezeEnabled: true })
     render(<CrawlerClient />)
-    const btn = await waitFor(() => screen.getByTestId('crawler-run-all-btn'))
+    const btn = await waitFor(() => screen.getByTestId('crawler-run-all-incremental-btn'))
     fireEvent.click(btn)
     await waitFor(() => {
       expect(toastPushMock).toHaveBeenCalledWith(
@@ -314,6 +319,96 @@ describe('CrawlerClient (REDO-01-C 骨架)', () => {
       )
       expect(runCrawlerAllMock).not.toHaveBeenCalled()
     })
+  })
+
+  it('13a. 全站全量（advanced menu）：双重 confirm 通过 → runCrawlerAll(full) + 成功 toast [CHG-SN-8-01]', async () => {
+    // 第一次 confirm 通过 + prompt 输入"全量"
+    confirmSpy.mockReset().mockReturnValue(true)
+    ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
+    const promptSpy = vi.fn(() => '全量')
+    ;(globalThis as unknown as { prompt: typeof promptSpy }).prompt = promptSpy
+
+    runCrawlerAllMock.mockResolvedValueOnce({
+      runId: 'run-full999',
+      taskIds: [],
+      enqueuedSiteKeys: ['s1'],
+      skippedSiteKeys: [],
+    })
+
+    render(<CrawlerClient />)
+    const trigger = await waitFor(() => screen.getByTestId('crawler-advanced-trigger'))
+    fireEvent.click(trigger)
+    const fullItem = await waitFor(() => screen.getByText('全站全量采集'))
+    fireEvent.click(fullItem)
+
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalled()
+      expect(promptSpy).toHaveBeenCalled()
+      expect(runCrawlerAllMock).toHaveBeenCalledWith('full')
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'success', title: '已发起全站全量' }),
+      )
+    })
+  })
+
+  it('13b. 全站全量（advanced menu）：prompt 输错文字 → 静默中止 [CHG-SN-8-01]', async () => {
+    confirmSpy.mockReset().mockReturnValue(true)
+    ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
+    const promptSpy = vi.fn(() => '错的')
+    ;(globalThis as unknown as { prompt: typeof promptSpy }).prompt = promptSpy
+
+    render(<CrawlerClient />)
+    const trigger = await waitFor(() => screen.getByTestId('crawler-advanced-trigger'))
+    fireEvent.click(trigger)
+    const fullItem = await waitFor(() => screen.getByText('全站全量采集'))
+    fireEvent.click(fullItem)
+
+    await new Promise((r) => setTimeout(r, 0))
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(promptSpy).toHaveBeenCalled()
+    expect(runCrawlerAllMock).not.toHaveBeenCalled()
+    // 不应出现失败 toast（静默中止）
+    expect(toastPushMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ level: 'danger' }),
+    )
+  })
+
+  it('13c. 全站全量（advanced menu）：第一次 confirm 取消 → 不调 prompt 也不调 API [CHG-SN-8-01]', async () => {
+    confirmSpy.mockReset().mockReturnValue(false)
+    ;(globalThis as unknown as { confirm: typeof confirmSpy }).confirm = confirmSpy
+    const promptSpy = vi.fn()
+    ;(globalThis as unknown as { prompt: typeof promptSpy }).prompt = promptSpy
+
+    render(<CrawlerClient />)
+    const trigger = await waitFor(() => screen.getByTestId('crawler-advanced-trigger'))
+    fireEvent.click(trigger)
+    const fullItem = await waitFor(() => screen.getByText('全站全量采集'))
+    fireEvent.click(fullItem)
+
+    await new Promise((r) => setTimeout(r, 0))
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(promptSpy).not.toHaveBeenCalled()
+    expect(runCrawlerAllMock).not.toHaveBeenCalled()
+  })
+
+  it('13d. 全站全量（advanced menu）：freezeEnabled=true → 不弹 confirm 直接 warn toast [CHG-SN-8-01]', async () => {
+    getCrawlerSystemStatusMock.mockResolvedValue({ freezeEnabled: true })
+    const promptSpy = vi.fn()
+    ;(globalThis as unknown as { prompt: typeof promptSpy }).prompt = promptSpy
+
+    render(<CrawlerClient />)
+    const trigger = await waitFor(() => screen.getByTestId('crawler-advanced-trigger'))
+    fireEvent.click(trigger)
+    const fullItem = await waitFor(() => screen.getByText('全站全量采集'))
+    fireEvent.click(fullItem)
+
+    await waitFor(() => {
+      expect(toastPushMock).toHaveBeenCalledWith(
+        expect.objectContaining({ level: 'warn', title: '采集已冻结' }),
+      )
+    })
+    expect(promptSpy).not.toHaveBeenCalled()
+    expect(runCrawlerAllMock).not.toHaveBeenCalled()
   })
 
   it('14a. 导出按钮：空 sites → warn toast "无可导出数据"', async () => {

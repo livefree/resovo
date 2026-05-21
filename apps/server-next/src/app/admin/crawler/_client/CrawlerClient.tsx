@@ -100,7 +100,8 @@ export function CrawlerClient() {
   const [error, setError] = useState<Error | null>(null)
   const [retryKey, setRetryKey] = useState(0)
   const [paused, setPaused] = useState(false)
-  const [runAllPending, setRunAllPending] = useState(false)
+  const [runAllIncrementalPending, setRunAllIncrementalPending] = useState(false)
+  const [runAllFullPending, setRunAllFullPending] = useState(false)
   // ── REDO-01-E 行展开状态 ─────────────────────────────────────────
   const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(new Set())
   // ── REDO-01-G 高级菜单 / 调度抽屉状态 ────────────────────────────
@@ -227,17 +228,51 @@ export function CrawlerClient() {
     }
   }, [refresh, toast])
 
-  const handleRunAll = useCallback(async () => {
+  // CHG-SN-8-01：主按钮高频路径——全站增量（单次 confirm）
+  const handleRunAllIncremental = useCallback(async () => {
     if (status?.freezeEnabled) {
       toast.push({
         title: '采集已冻结',
-        description: '请先在"高级 / 解除冻结"后再运行（REDO-01-G 实装）',
+        description: '请先在"高级 / 解除冻结"后再运行',
         level: 'warn',
       })
       return
     }
-    if (!confirm('确定对全站发起全量采集？此操作会创建多个 task。')) return
-    setRunAllPending(true)
+    if (!confirm('确定对全站发起增量采集？')) return
+    setRunAllIncrementalPending(true)
+    try {
+      const result = await runCrawlerAll('incremental')
+      toast.push({
+        title: '已发起全站增量',
+        description: `runId=${result.runId.slice(0, 8)} · 入队 ${result.enqueuedSiteKeys.length} 个站点`,
+        level: 'success',
+      })
+      refresh()
+    } catch (err: unknown) {
+      const { title, description } = describeApiError(err)
+      toast.push({ title, description, level: 'danger' })
+    } finally {
+      setRunAllIncrementalPending(false)
+    }
+  }, [refresh, status?.freezeEnabled, toast])
+
+  // CHG-SN-8-01：危险低频路径——全站全量（双重 confirm + 输入"全量"二字防误触；advanced dropdown 入口）
+  const handleRunAllFull = useCallback(async () => {
+    if (status?.freezeEnabled) {
+      toast.push({
+        title: '采集已冻结',
+        description: '请先在"高级 / 解除冻结"后再运行',
+        level: 'warn',
+      })
+      return
+    }
+    if (!confirm('确定对全站发起【全量】采集？此操作会创建多个 task，且耗时较长。')) return
+    const second = prompt('再次确认：请输入"全量"二字以继续；输入其它内容将中止。')
+    if (second?.trim() !== '全量') {
+      // 静默中止：用户输错或取消，等同未发起
+      return
+    }
+    setRunAllFullPending(true)
     try {
       const result = await runCrawlerAll('full')
       toast.push({
@@ -250,7 +285,7 @@ export function CrawlerClient() {
       const { title, description } = describeApiError(err)
       toast.push({ title, description, level: 'danger' })
     } finally {
-      setRunAllPending(false)
+      setRunAllFullPending(false)
     }
   }, [refresh, status?.freezeEnabled, toast])
 
@@ -411,17 +446,19 @@ export function CrawlerClient() {
             <AdminButton
               variant="primary"
               size="sm"
-              loading={runAllPending}
-              onClick={() => void handleRunAll()}
-              data-testid="crawler-run-all-btn"
+              loading={runAllIncrementalPending}
+              onClick={() => void handleRunAllIncremental()}
+              data-testid="crawler-run-all-incremental-btn"
             >
-              全站全量
+              全站增量
             </AdminButton>
             <CrawlerAdvancedMenu
               frozen={status?.freezeEnabled ?? false}
               onSchedulerConfig={() => setSchedulerOpen(true)}
               onStatusUpdate={handleStatusUpdate}
               onRefresh={refresh}
+              onRunAllFull={() => void handleRunAllFull()}
+              runAllFullPending={runAllFullPending}
             />
           </span>
         }

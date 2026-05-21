@@ -4,12 +4,14 @@
  * CrawlerAdvancedMenu.tsx — PageHeader 第 4 槽位"高级" dropdown
  *
  * 真源：M-SN-7-redo-01-contract.md §1.6 + §2.4 裁决 A
+ *      + CHG-SN-8-01（W1 金票 §3 反例 #1：全站全量从主按钮移入高级 dropdown 并双重 confirm）
  *
- * 4 项菜单（全部复用现有 API，无新端点）：
- *   - scheduler  调度配置        → 打开 SchedulerConfigDrawer
- *   - reindex    重建 ES 索引     → triggerReindex() + 双重 confirm
- *   - stop_all   全局止血         → stopAllCrawler({ freeze: true }) + 双重 confirm
- *   - freeze     开启冻结/解除冻结 → setCrawlerFreeze(next) + 单次 confirm（动态 label）
+ * 5 项菜单（全部复用现有 API，无新端点）：
+ *   - run_all_full 全站全量采集    → 委托 props.onRunAllFull（client 内含双重 confirm）
+ *   - scheduler    调度配置        → 打开 SchedulerConfigDrawer
+ *   - reindex      重建 ES 索引     → triggerReindex() + 双重 confirm
+ *   - stop_all     全局止血         → stopAllCrawler({ freeze: true }) + 双重 confirm
+ *   - freeze       开启冻结/解除冻结 → setCrawlerFreeze(next) + 单次 confirm（动态 label）
  */
 
 import { useCallback, useState, type CSSProperties } from 'react'
@@ -23,6 +25,9 @@ export interface CrawlerAdvancedMenuProps {
   readonly onSchedulerConfig: () => void
   readonly onStatusUpdate: (next: Partial<CrawlerSystemStatus>) => void
   readonly onRefresh: () => void
+  /** CHG-SN-8-01：全站全量采集委托回调（双重 confirm 在 client 内）；pending 由 client 管 */
+  readonly onRunAllFull: () => void
+  readonly runAllFullPending: boolean
 }
 
 const TRIGGER_STYLE: CSSProperties = {
@@ -45,11 +50,18 @@ export function CrawlerAdvancedMenu({
   onSchedulerConfig,
   onStatusUpdate,
   onRefresh,
+  onRunAllFull,
+  runAllFullPending,
 }: CrawlerAdvancedMenuProps) {
   const toast = useToast()
   const [open, setOpen] = useState(false)
   const [pendingKey, setPendingKey] = useState<string | null>(null)
   const close = useCallback(() => setOpen(false), [])
+
+  const handleRunAllFull = useCallback(() => {
+    close()
+    onRunAllFull()
+  }, [close, onRunAllFull])
 
   const handleScheduler = useCallback(() => {
     close()
@@ -121,6 +133,14 @@ export function CrawlerAdvancedMenu({
   }, [close, frozen, onStatusUpdate, toast])
 
   const items: readonly AdminDropdownItem[] = [
+    {
+      key: 'run_all_full',
+      label: runAllFullPending ? '全站全量采集 …' : '全站全量采集',
+      danger: true,
+      separator: true,
+      disabled: runAllFullPending,
+      onClick: handleRunAllFull,
+    },
     {
       key: 'scheduler',
       label: '调度配置',

@@ -13634,3 +13634,48 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 | C | (待 commit) | 35 manual 骨架 + verify 脚本 + package.json |
 
 **SEQ 收尾**：docs 大清理 + manual 工程地基已就位。下一步：M-SN-8 Critical Path Hardening 各 CHG 卡按金票工作流 + 4 条硬约束 H1-H4 推进。
+
+## [CHG-SN-8-01] Crawler「全站全量」改非主操作 + 双重确认（W1 金票反例 #1 修复）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7（opus 续会话）
+- **子代理**：无
+- **关联 SEQ**：SEQ-20260521-02「M-SN-8 Critical Path Hardening」（1/9 卡）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/crawler/_client/CrawlerClient.tsx`
+    - 拆 `handleRunAll` → `handleRunAllIncremental`（主按钮路径，单次 confirm + `runCrawlerAll('incremental')`）+ `handleRunAllFull`（advanced menu 路径，双重 confirm 含 prompt 输入"全量"防误触 + `runCrawlerAll('full')`）
+    - 拆 state：`runAllPending` → `runAllIncrementalPending` + `runAllFullPending`
+    - 主按钮 testid `crawler-run-all-btn` → `crawler-run-all-incremental-btn`；label「全站全量」→「全站增量」
+    - 透传 CrawlerAdvancedMenu 新 props `onRunAllFull` + `runAllFullPending`
+  - `apps/server-next/src/app/admin/crawler/_client/CrawlerAdvancedMenu.tsx`
+    - props 扩 2 字段（`onRunAllFull` / `runAllFullPending`）
+    - items 顶部加 `run_all_full` 项（danger + separator + 动态 pending label）；现 5 items
+    - 文件头注释更新到 5 项菜单
+  - `docs/manual/20-pages/P-crawler.md`
+    - DoD §0 填写：§1 业务定义 / §2 ASCII 布局 / §3.1.1+§3.1.2 增量与全量操作 / §4.1+§4.2+§4.3 进阶 / §8 关系（指向 W1 + P-moderation + P-sources）
+    - §3.2 / §3.3 留待后续 CHG-SN-8-02 / -03 填
+  - `tests/unit/components/server-next/admin/crawler/CrawlerClient.test.tsx`
+    - 用例 #2/#11/#12/#13 更新（适配 incremental + 新 testid）
+    - 补 4 新用例 #13a/#13b/#13c/#13d（advanced menu 双重 confirm / 输错中止 / 第一次取消 / freeze 拦截）
+    - 总 58 用例 全 PASS（增 4）
+  - `docs/task-queue.md`（CHG-SN-8-01 状态推进 ✅ + SEQ-20260521-02 进度 1/9）
+  - `docs/changelog.md`（本条目追加）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - **W1 金票反例 #1 修复落地**：`docs/manual/10-workflows/W1-crawl-to-publish.md` §3 反例段第 1 行可以勾掉
+  - **API 行为变更**：主按钮触发模式由 `'full'` → `'incremental'`；不熟悉新流程的运营会有学习成本（已在 P-crawler §3.1 标注 2026-05-21 修订）
+  - **双重 confirm 设计**：① confirm dialog 标准 ② prompt 输入"全量"二字（trim 后严格匹配）；输错静默中止（不弹 toast 错误），降低误触损失
+  - **CrawlerAdvancedMenu items 现 5 项**：测试用例 21（{more} dropdown 6 项渲染）针对 site row 不变，但 advanced menu 顶层 trigger 测试若有 items 计数断言需更新（本次未触发）
+  - **pre-existing flaky 现象**：全 unit 并跑时 VideoImageSection / StagingEditPanel 偶发 fail；单跑均 PASS；已经 stash 验证非本卡引入
+
+### DoD 全勾
+- [x] CrawlerClient.tsx 双 handler 拆分 + 主按钮文案改
+- [x] CrawlerAdvancedMenu 加 run-all-full item + 双重 confirm 实现
+- [x] 补 ≥ 4 unit test 用例（实际 +4: #13a-d）
+- [x] typecheck + lint PASS
+- [x] verify:adr-contracts pre-existing 红线不增（仍是 LOGIN-1 引入的 background+backgroundColor）
+- [x] verify:manual-coverage PASS（15 admin 路由 ↔ 15 P-* manual）
+- [x] P-crawler.md §1/§2/§3.1/§4.1 填写完整
+- [x] commit 含 SEQ + Cleanup-Audit trailer
