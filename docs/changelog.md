@@ -13282,3 +13282,38 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
   - REDO-04 IA 分歧正式裁决（独立路由 vs redirect 合并 → 独立路由）✅
   - PRE-04 评级：**A−** ✅
 - **注意事项**：剩余 🟡P2 MISC 卡为 MERGE-2（候选 card 形态重做 0.5–0.8w），下个高优任务为 CHG-SN-7-MISC-API-QUERIES-SIZE（queries 5 文件拆分 1.0–1.5w）
+
+## CHG-SN-7-MISC-API-QUERIES-SIZE
+
+- **完成时间**：2026-05-20
+- **任务 ID**：CHG-SN-7-MISC-API-QUERIES-SIZE（db/queries 5 文件主动拆分）
+- **执行模型**：claude-sonnet-4-6
+- **子代理**：无
+- **修改文件**：
+  - `apps/api/src/db/queries/imageHealth.ts`（648→485L；移出 4 个 scan 函数 + barrel re-export）
+  - `apps/api/src/db/queries/imageHealth.scan.ts`（新建 173L；getBrokenEventsTrend / rescanPosters / switchFallbackDomain / resolveImageEvents）
+  - `apps/api/src/db/queries/mediaCatalog.ts`（577→91L；保留 6 个 findBy 查询 + barrel re-export）
+  - `apps/api/src/db/queries/mediaCatalog.internal.ts`（新建 280L；DbMediaCatalogRow / mapCatalogRow / CATALOG_SELECT / 公开类型）
+  - `apps/api/src/db/queries/mediaCatalog.mutations.ts`（新建 235L；insertCatalog / updateCatalogFields / addLockedFields / setLockedFields / linkVideoToCatalog）
+  - `apps/api/src/db/queries/crawlerTasks.ts`（628→261L；保留 12 个写入函数 + barrel re-export）
+  - `apps/api/src/db/queries/crawlerTasks.types.ts`（新建 78L；CrawlerTaskStatus / CrawlerTaskType / CrawlerTask / CrawlerOverview / DbCrawlerTaskRow / mapTask）
+  - `apps/api/src/db/queries/crawlerTasks.queries.ts`（新建 324L；findTaskById / listTasks / listTasksByRunId / findActiveTaskBySite / markStalePendingTasks / getLatestTaskBySite / getTaskById / getLatestTasksBySites / getCrawlerOverview / countOrphanActiveTasks）
+  - `apps/api/src/db/queries/sources.ts`（818→405L；保留核心函数 + barrel re-export）
+  - `apps/api/src/db/queries/sources.types.ts`（新建 16L；UpsertSourceInput）
+  - `apps/api/src/db/queries/sources.maintenance.ts`（新建 434L；投稿审核 / exportAllSources / replaceSourcesForSite / 孤岛视频 / replaceSourceUrl）
+  - `apps/api/src/db/queries/videos.ts`（1609→313L；保留公共列表/admin 查询 + barrel re-export）
+  - `apps/api/src/db/queries/videos.internal.ts`（新建 193L；DbVideoRow / mapVideoRow / mapVideoCard / SQL 常量）
+  - `apps/api/src/db/queries/videos.mutations.ts`（新建 437L；createVideo / updateVideoMeta / publishVideo / transitionVideoState / batchPublishVideos / updateVisibility / reviewVideo / findVideoIdByShortId）
+  - `apps/api/src/db/queries/videos.crawler.ts`（新建 278L；METADATA_SOURCE_PRIORITY / findVideoByNormalizedKey / updateDoubanData / insertCrawledVideo / bumpEpisodeCountIfHigher / upsertVideoAliases）
+  - `apps/api/src/db/queries/videos.status.ts`（新建 478L；getModerationStats / listPendingReviewVideos / updateVideoEnrichStatus / bulkSyncSourceCheckStatus / trending / home 查询）
+  - `docs/task-queue.md`（API-QUERIES-SIZE 状态 🔄 → ✅）
+  - `docs/tasks.md`（清空任务卡片）
+- **新增依赖**：无
+- **数据库变更**：无
+- **验收**：
+  - 5 个超 500 行文件全部拆分完成 ✅
+  - 共 13 个新建子文件，全部 ≤ 500 行 ✅
+  - barrel re-export：所有外部 import 路径零变化 ✅
+  - typecheck 全部通过（全工作区 7 个包）✅
+  - lint 通过 ✅
+  - ADR 合规：无新违规 ✅
