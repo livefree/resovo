@@ -13819,3 +13819,44 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 - [x] admin-ui 单元测试 14 用例 PASS（≥ 8 要求超额）
 - [x] typecheck + lint + verify:manual-coverage PASS
 - [x] commit trailer 含 `Subagents: arch-reviewer (claude-opus-4-7)`
+
+## [CHG-SN-8-07] NEGATED · staging→moderation tab 合并（与 REDO-04 已闭合裁决冲突）
+
+- **状态**：❌ NEGATED（2026-05-21）
+- **执行模型**：claude-opus-4-7
+- **关联 SEQ**：SEQ-20260521-02（占用编号但不实施）
+- **NEGATED 理由**：与 **CHG-SN-7-REDO-04 Opus arch-reviewer 已闭合裁决「独立路由 /admin/staging」** 直接冲突。SEQ-20260521-02 草拟时未识别 REDO-04 裁决；按 CLAUDE.md「主循环不得直接改写架构决策 / 必须先 spawn Opus 子代理出具方案」原则 NEGATED 不实施
+- **重启路径**：未来如需反转，必须 ① 起新 ADR 修订 REDO-04 → ② Opus 评审 → ③ 落 decisions.md NEGATED-ADR 范式 → ④ 起新实施卡
+
+## [CHG-SN-8-05] 审核台 RightPane 批量「重测此视频线路」按钮（W1 反例 #4 修复）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **关联 SEQ**：SEQ-20260521-02（6/9 含 NEGATED）
+- **方案收敛**：原任务卡 per-line inline 重测 → 需改 LinesPanel API 触发 Opus 评审；收敛为审核台 TabDetail 顶部批量按钮（不动 admin-ui 公开 API，零 ADR）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/moderation/_client/RightPane/TabDetail.tsx`：
+    - 顶部 actions row + AdminButton「重测此视频线路」+ loading state
+    - handleReprobeAll：listVideoSources → Map 去重 (siteKey, sourceName) → Promise.allSettled 循环 reprobeRoute → 汇总 toast（成功/部分失败/全失败/空 4 态）
+  - `tests/unit/components/server-next/admin/moderation/TabDetailReprobe.test.tsx` 新建（4 用例 PASS）
+  - `docs/manual/20-pages/P-moderation.md` §3.1a 完整填写
+  - `docs/manual/10-workflows/W1-crawl-to-publish.md` 反例 #4 标 ✅
+  - `docs/task-queue.md` + `docs/changelog.md`
+- **新增依赖**：无
+- **数据库变更**：无
+- **API 复用**：listVideoSources / reprobeRoute 均现成（零新端点 / 零 ADR）
+- **注意事项**：
+  - **去重逻辑**：一个视频常有多集对应同一 (siteKey, sourceName) 线路；用 Map key `${siteKey}::${sourceName}` 去重，每条线路只 reprobe 一次
+  - **并发限制未加**：Promise.allSettled 全并发；视频集数多时可能压力大；若实测有问题立 follow-up 加 concurrency cap
+  - **per-line 入口推迟到 -05-B**：要扩 LinesPanel.tsx props 加 onReprobeLine → 共享组件 API 契约 → Opus 评审
+
+### DoD 全勾
+- [x] TabDetail.tsx 加批量重测按钮 + handler
+- [x] 单元测试 4 用例 PASS
+- [x] typecheck + lint + verify:manual-coverage PASS
+- [x] P-moderation.md §3.1a + W1 反例段更新
+
+### Follow-up
+- CHG-SN-8-05-B per-line inline 重测（LinesPanel API 扩展 + Opus 评审）

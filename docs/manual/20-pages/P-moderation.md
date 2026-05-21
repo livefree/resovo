@@ -53,7 +53,18 @@
 
 ### 3.1 处理待审视频（J/K 翻页）
 
-（待 CHG-SN-8-04/05/06 填写键盘流 + 探/播 测试 + 通过即上架开关）
+（待 CHG-SN-8-04/06 填写键盘流 + 通过即上架开关）
+
+### 3.1a 重测此视频所有线路（CHG-SN-8-05 / W1 反例 #4 部分修复）
+
+- **位置**：右栏 → 详情 Tab 顶部 actions row「重测此视频线路」按钮
+- **行为**：拉取该视频所有 source_site_key + source_name 组合（去重）→ 并行调 `/admin/sources/:siteKey/:sourceName/reprobe` 触发线路重测
+- **结果 toast**：
+  - 全成功："已重测全部线路 · N 条 · 成功 N / 失败 0"（success）
+  - 部分失败："部分重测失败 · N 条 · 成功 X / 失败 Y"（warn）
+  - 无可重测："此视频暂未关联任何 (site_key, source_name) 线路"（warn）
+  - fetch 失败："重测失败 · ${错误}"（danger）
+- **未来增强**（CHG-SN-8-05-B follow-up）：LinesPanel 每行 inline「重测」xs btn 触发单线路重测；需 admin-ui API 扩展 + Opus 评审
 
 ### 3.2 拒绝视频（带 label）
 
