@@ -13584,3 +13584,53 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 - [x] `npm run typecheck` PASS
 - [x] `npm run lint` PASS（FULL TURBO 缓存命中）
 - [x] commit 含 Cleanup-Audit trailer
+
+## [CHG-SN-7-CLEANUP-01-C] docs/manual 35 文件骨架 + verify:manual-coverage 守卫
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7（opus xhigh 续会话；CLAUDE.md §模型路由 — 建议 sonnet 但保留连贯上下文）
+- **子代理**：无
+- **关联 SEQ**：SEQ-20260521-01「docs 大清理 + manual 工程地基」（**3/3 卡全部 PASS，SEQ 收尾**）
+- **修改文件**：
+  - **新增 35 manual 文件**：
+    - `docs/manual/README.md`（总览 + 4 条硬约束 H1-H4 + 双轨流 + 维护协议 + 高频任务索引 7 项）
+    - `docs/manual/_template/PAGE_TEMPLATE.md`（8 章节模板：元信息/做什么/布局/常用/进阶/字段/状态/FAQ/关系）
+    - `docs/manual/_template/WORKFLOW_TEMPLATE.md`
+    - `docs/manual/00-roles-and-permissions.md`（5 角色 + 11 操作权限矩阵）
+    - `docs/manual/01-getting-started.md`（含 10 快捷键速查）
+    - `docs/manual/10-workflows/README.md` + 5 W*（W1 金票为完整骨架含反例 + 失败处理；W2-W5 简骨架）
+    - `docs/manual/20-pages/README.md` + 15 P-* page 骨架（按 server-next admin 路由 1:1）
+    - `docs/manual/30-pickers/README.md` + 5 picker 骨架（VideoPicker / SourceLinePicker / ContentRefPicker / UserPicker / SitePicker）
+    - `docs/manual/90-glossary.md`（20 术语 + 7 缩写）
+  - **新增脚本**：`scripts/verify-manual-coverage.mjs`
+  - **修改**：`package.json`（加 `"verify:manual-coverage"` 行）
+  - `docs/task-queue.md`（SEQ-20260521-01 状态推进至 3/3 ✅ 全 PASS）
+  - `docs/changelog.md`（本条目追加）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - **manual 骨架是 M-SN-8 起手依赖**：所有后续 UX 修复卡（CHG-SN-8-01..08）DoD §0 必须先填对应 P-*.md 草稿
+  - **KNOWN_NO_MANUAL 豁免清单 4 项**：dev / system / analytics / staging — 同步注释在 docs/manual/20-pages/README.md
+  - **SPECIAL_MAP**：`/admin/submissions` → `P-submissions-deprecated.md`（deprecation banner 视图）
+  - **守卫实测**：15 admin 路由 ↔ 15 P-* manual = 1:1 PASS
+  - **preflight.sh 集成推迟**：独立 follow-up 卡 CHG-SN-7-MISC-PREFLIGHT-MANUAL，按需启动
+  - M-SN-8 后续 UX 修复主线已在 `docs/manual/10-workflows/W1-crawl-to-publish.md` 反例段明示 5 个修复点（对应 CHG-SN-8-01..08）
+
+### DoD 全勾
+- [x] manual/ 骨架 35 文件全部新建（超预估 30，实际 35）
+- [x] PAGE_TEMPLATE.md 含 8 章节字段
+- [x] WORKFLOW_TEMPLATE.md 含端到端步骤字段
+- [x] verify:manual-coverage 跑通 → 15 业务 admin + 1 login = 16 expected vs 15 P-* (login 顶层 + P-login 列入)
+- [x] typecheck + lint PASS（FULL TURBO 缓存命中）
+- [x] commit 含 Cleanup-Audit trailer
+
+### SEQ-20260521-01 总结（3/3 卡 全 PASS）
+
+| 卡 | commit | diff |
+|---|---|---|
+| A | `67bb4db6` | 37 files +200/-27（26 R100 + 4 D + 4 add README）|
+| B | `b6f8fefe` | 9 files +235/-143（111 sed 路径 + README 重写）|
+| C | (待 commit) | 35 manual 骨架 + verify 脚本 + package.json |
+
+**SEQ 收尾**：docs 大清理 + manual 工程地基已就位。下一步：M-SN-8 Critical Path Hardening 各 CHG 卡按金票工作流 + 4 条硬约束 H1-H4 推进。
