@@ -14183,3 +14183,52 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 
 ### 用户问题 #8 闭合状态
 ✅ 「上传字幕通过视频 ID（UUID）的设计方案需要彻底重写」— 反人类 UUID 输入完全废除；改为搜索式 Picker（搜标题 / shortId / 年份）+ 触发器回显视频缩略图 + 标题 + meta
+
+## [CHG-SN-8-FUP-HOME] ContentRefPicker 复合原语 + HomeModuleDrawer 接入（用户问题 #10 闭合）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮 A− PASS（D1-D11 11 维度契约 + 3 关键实施建议）
+- **关联 SEQ**：SEQ-20260521-04（2/3 卡）
+- **修改文件**：
+  - 新建 `packages/admin-ui/src/components/pickers/content-ref-picker.types.ts`（ContentRefType union + ContentRefPickerProps）
+  - 新建 `packages/admin-ui/src/components/pickers/content-ref-picker.tsx`（~225 行 / 外部受控 / 4 类型条件渲染 / video 适配层含 AbortController fetch 恢复）
+  - `packages/admin-ui/src/components/pickers/index.ts`：export ContentRefPicker + 2 类型
+  - `apps/server-next/src/app/admin/home/_client/HomeModuleDrawer.tsx`：
+    - import ContentRefPicker + videoPickerFetcher
+    - 新增 VIDEO_TYPE_OPTIONS（11 项 VideoType 枚举映射）
+    - setField: type 切换时同步 reset contentRefId 为 ''（Opus 建议 2）
+    - 替换 contentRefId AdminInput + 4 hint 反人类填法 → `<ContentRefPicker>` 单组件
+  - 新建 `tests/unit/components/admin-ui/pickers/content-ref-picker.test.tsx`（10 用例 PASS）
+  - `docs/manual/30-pickers/ContentRefPicker.md` 完整定稿（8 章节）
+  - `docs/task-queue.md` + `docs/changelog.md`
+- **新增依赖**：无
+- **数据库变更**：无
+- **API 设计要点（arch-reviewer Opus A−）**：
+  - **D1 外部受控**：不内置 type tab；消费方用 AdminSelect 控制 type；ContentRefPicker 仅根据 type 渲染对应子输入器（避免业务领域知识泄漏）
+  - **D2-D4 4 类型子输入器**：video → VideoPicker / external_url → AdminInput type='url' + 内联 URL.parse 校验 / custom_html → AdminInput / video_type → AdminSelect
+  - **D5 video 适配层**：内部 resolvedVideo state 桥接 PickerVideoItem ↔ string id；编辑态 value 已有 UUID 时调 fetcher 恢复（AbortController cleanup）
+  - **D6 type 切换 reset**：由消费方负责（避免组件自己调自己的 onChange 副作用）
+  - **D7 缺失 prop 降级**：videoFetcher / videoTypeOptions 未传 → console.error + fallback（不 throw）
+  - **D8 公开 export**：ContentRefPicker / ContentRefPickerProps / ContentRefType
+- **隔离保证**：admin-ui 零 import apps/** + 零 @resovo/types import；ContentRefType 与 HomeModuleContentRefType 字符串值对齐但物理解耦（ADR-103b 同范式）
+- **测试覆盖**（10/10 PASS）：
+  - 4 核心路径（video / external_url / custom_html / video_type）
+  - URL 内联校验
+  - type 切换 DOM 替换
+  - 降级 fallback（fetcher 缺失）
+  - disabled 透传
+  - 编辑态 fetcher 恢复
+  - error prop 显示
+
+### DoD 全勾
+- [x] arch-reviewer Opus 1 轮 A− PASS
+- [x] ContentRefPicker 落地（types + 主组件 + index export）
+- [x] HomeModuleDrawer 集成（替换 input + setField reset）
+- [x] 测试 10 用例 PASS（≥ 6 要求超额）
+- [x] typecheck + lint + verify:manual-coverage + verify:adr-contracts PASS
+- [x] commit trailer 含 `Subagents: arch-reviewer (claude-opus-4-7)`
+
+### 用户问题 #10 闭合状态
+✅ 「首页编辑页面添加功能完全不符合人机交互」— 反人类「视频 ID / URL / HTML ID / 类型枚举值」单 input 混填彻底废除；改为根据 contentRefType 自动切换的复合 Picker（video 走 VideoPicker 搜索 / external_url URL 校验 / custom_html 文本 / video_type 下拉枚举）

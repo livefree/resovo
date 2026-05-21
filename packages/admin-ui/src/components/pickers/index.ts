@@ -9,3 +9,9 @@ export type {
   VideoPickerFetchParams,
   VideoPickerFetchResult,
 } from './video-picker.types'
+
+export { ContentRefPicker } from './content-ref-picker'
+export type {
+  ContentRefPickerProps,
+  ContentRefType,
+} from './content-ref-picker.types'

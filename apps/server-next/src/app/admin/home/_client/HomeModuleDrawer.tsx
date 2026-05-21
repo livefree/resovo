@@ -7,7 +7,15 @@
  */
 
 import { useState, useEffect, type CSSProperties, type ChangeEvent, type FormEvent } from 'react'
-import { Drawer, AdminButton, AdminInput, AdminSelect, type AdminSelectOption } from '@resovo/admin-ui'
+import {
+  Drawer,
+  AdminButton,
+  AdminInput,
+  AdminSelect,
+  ContentRefPicker,
+  type AdminSelectOption,
+} from '@resovo/admin-ui'
+import { videoPickerFetcher } from '@/lib/videos/picker-fetcher'
 import type {
   HomeModule,
   HomeModuleSlot,
@@ -44,6 +52,21 @@ const CONTENT_REF_TYPE_LABELS: Record<HomeModuleContentRefType, string> = {
   custom_html: '自定义 HTML (custom_html)',
   video_type: '视频类型 (video_type)',
 }
+
+// CHG-SN-8-FUP-HOME：注入给 ContentRefPicker 当 type='video_type' 时使用
+const VIDEO_TYPE_OPTIONS: readonly AdminSelectOption[] = [
+  { value: 'movie', label: '电影 (movie)' },
+  { value: 'series', label: '连续剧 (series)' },
+  { value: 'anime', label: '动画 (anime)' },
+  { value: 'variety', label: '综艺 (variety)' },
+  { value: 'documentary', label: '纪录片 (documentary)' },
+  { value: 'short', label: '短剧/短片 (short)' },
+  { value: 'sports', label: '体育 (sports)' },
+  { value: 'music', label: '音乐 (music)' },
+  { value: 'news', label: '新闻 (news)' },
+  { value: 'kids', label: '儿童 (kids)' },
+  { value: 'other', label: '其他 (other)' },
+]
 
 const FORM_STYLE: CSSProperties = {
   display: 'flex',
@@ -165,7 +188,13 @@ export function HomeModuleDrawer({ open, module, defaultSlot, onClose, onSave }:
         const allowedTypes = SLOT_CONTENT_REF_TYPES[value as HomeModuleSlot]
         if (!allowedTypes.includes(next.contentRefType)) {
           next.contentRefType = allowedTypes[0]
+          // CHG-SN-8-FUP-HOME：type 切换时同步 reset contentRefId（Opus 评审建议 2）
+          next.contentRefId = ''
         }
+      }
+      if (key === 'contentRefType') {
+        // CHG-SN-8-FUP-HOME：type 切换时同步 reset contentRefId（Opus 评审建议 2）
+        next.contentRefId = ''
       }
       return next
     })
@@ -263,23 +292,17 @@ export function HomeModuleDrawer({ open, module, defaultSlot, onClose, onSave }:
         </div>
 
         <div style={FIELD_STYLE}>
-          <label style={LABEL_STYLE}>内容引用 ID *</label>
-          <AdminInput
-            type="text"
+          {/* CHG-SN-8-FUP-HOME：用 ContentRefPicker 替代原单 input + 4 类型 hint 反人类填法 */}
+          <ContentRefPicker
+            label="内容引用 *"
+            type={form.contentRefType}
             value={form.contentRefId}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setField('contentRefId', e.target.value)}
-            placeholder="视频 ID / URL / HTML ID / 类型枚举值"
-            size="md"
+            onChange={(next) => setField('contentRefId', next)}
+            videoFetcher={videoPickerFetcher}
+            videoTypeOptions={VIDEO_TYPE_OPTIONS}
             required
             data-testid="drawer-content-ref-id"
-            aria-label="内容引用 ID"
           />
-          <span style={HINT_STYLE}>
-            {form.contentRefType === 'video' && '填写 videos.id'}
-            {form.contentRefType === 'external_url' && '填写完整 URL'}
-            {form.contentRefType === 'custom_html' && '填写 sanitized HTML 片段 ID'}
-            {form.contentRefType === 'video_type' && '填写 VideoType 枚举值（如 movie）'}
-          </span>
         </div>
 
         <div style={FIELD_STYLE}>
