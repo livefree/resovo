@@ -800,6 +800,7 @@ cutover 验收按上表 21 路由占位逐项 diff（路由文件物理存在）
 | ADR-116 | admin-ui Playwright visual harness 协议（dev-only `/admin/dev/visual/` 路由 + props 注入 query param + component-registry + admin-visual project）— **2026-05-12 PRE-01-E-1 已采纳（A- PASS / 2 轮 Opus 评审 / 1 红线 + 4 黄线 + 4 OBS 全闭环）** | PRE-01-E-1 实施卡解锁条件 = ADR-116 PASS（已满足）；PRE-01-E-2 + PRE-01-F 依赖 PRE-01-E-1 完成 | PRE-01-E-1 实施卡（dev/visual 路由 + playwright admin-visual project + visual.spec.ts 骨架，估算 ~0.2w）|
 | ADR-117 | sources-matrix / source-line-aliases admin API 协议（5 端点 + Migration 063 + audit 扩 source_line_alias.upsert / source_line_alias targetKind + 错误码复用 ADR-110）— **2026-05-13 CHG-SN-5-11-ADR 已采纳（RETROACTIVE 追溯起草 / PASS / 2 轮 Opus 评审 / 0 红线 + 4 黄线 Y-117-1..4 + 2 advisory A-117-1/-2 全闭环）**；触发：CHG-SN-5-11 commit `e6434abc` 跳过 §4.5 R7 MUST-8 ADR 起草环节，独立评审评级 C / 不合格后追溯 | CHG-SN-5-11-PATCH 架构清债 6 项（Service 层 + audit + 硬编码色 + segment 语义 + img / zod uuid）解锁条件 = ADR-117 PASS（已满足）；CHG-SN-5-12 依赖 -11-PATCH 完成 | CHG-SN-5-11-PATCH 实施卡（estim 0.3w） |
 | ADR-候选 | 大数据原语依赖选型（react-virtual / reactflow / recharts 二选一三组）| Q-MUST-5 候选清单决议 | M-SN-6 首次落地前 |
+| ADR-137 | 类似视频召回端点协议（GET /admin/moderation/:id/similar）— **2026-05-21 CHG-SN-8-04-ADR 已采纳（A− PASS / 1 轮 Opus 评审 / 0 红线 + 1 非阻塞建议 N1 登记 follow-up）** | 方案 A 纯字段过滤（type + year ±5 + country + genres Jaccard）+ Service 层 4 维加权 similarityScore + 粗筛 LIMIT 50 + top-N 截断 + 复用现有索引 + 零新依赖 + GET 只读不写 audit + 复用 ADR-110 错误码 + 4 文件 R-MID-1 GET 简化版 | CHG-SN-8-04-EP 端点实施卡解锁条件 = ADR-137 PASS（已满足）；CHG-SN-8-04-VIEW 视图卡依赖 -EP 完成 |
 
 ---
 

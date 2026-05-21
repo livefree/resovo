@@ -13987,3 +13987,39 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 - #5 通过 staging 多步 → ✅ C8-06（admin toggle）+ moderator IA 保留
 
 **累计 8 commits**（C7-CLEANUP-01-A/B/C + C8-01/02/03/SHARED-04-A/05/06/08）/ +6300 lines / 55+ 测试用例 / 1 Opus 子代理 A− / 1 NEGATED 范式应用 / 0 BLOCKER
+
+## [CHG-SN-8-04-ADR] ADR-137 起草 — 类似视频召回端点协议（GET /admin/moderation/:id/similar）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：arch-reviewer (claude-opus-4-7) — 1 轮 A− PASS（0 红线 / 1 非阻塞建议 N1）
+- **关联 SEQ**：SEQ-20260521-03（1/3 卡 / 解锁 -EP 实施）
+- **修改文件**：
+  - `docs/decisions.md`：新增 ADR-137 完整章节（§1-§11，~140 行）
+  - `docs/server_next_plan_20260427.md` §9 ADR 索引：追加 ADR-137 行
+  - `docs/task-queue.md`（SEQ-20260521-03 + CHG-SN-8-04-ADR 状态推进）
+  - `docs/changelog.md`（本条目追加）
+- **新增依赖**：无
+- **数据库变更**：无（ADR 起草卡）
+- **关键决策**（D-137-1..6 闭环）：
+  - **D-137-1 Accepted**：召回算法采纳**方案 A 纯字段过滤**（type 严格 + year ±5 + country + genres Jaccard）；零新依赖、零 pgvector；方案 B（豆瓣 API）+ C（embedding）推迟 M6+
+  - **D-137-2 Accepted**：4 维加权 similarityScore 0-100（type +40 / year delta +25 / country +15 / genres Jaccard +20）；SQL 粗筛 LIMIT 50 + Service 层计算 + top-N 截断
+  - **D-137-3 Accepted**：权限 moderator+admin（与 pending-queue 同守卫）
+  - **D-137-4 Accepted**：query params `?limit=1-20 default 10` + `?yearRange=1-15 default 5`；minScore 内部硬编码 10
+  - **D-137-5 Accepted**：GET 只读不写 audit → R-MID-1 7 文件框架降级为 **4 文件**（route + service + queries + 端点测试，无 audit RETRO）
+  - **D-137-6 Accepted**：p95 ≤ 200ms / 粗筛 LIMIT 50 / 空结果 200 OK / 目标视频 404 NOT_FOUND
+- **重要发现 + 实施注意**：
+  - 年份/国家/genres 字段已迁移到 `media_catalog`（migration 029 从 videos 表删除）→ 实施时需 JOIN `media_catalog ON mc.id = v.catalog_id`
+  - 可复用既有索引 `idx_videos_type`（btree）/ `idx_catalog_type_year`（复合 + WHERE year IS NOT NULL）/ `idx_catalog_genres`（GIN）→ 无需新建 migration
+- **N1 非阻塞建议**（登记 follow-up）：跨类型相似（如同名电影 anime 改编）永远不召回；如未来用户反馈漏召回明显，立独立 CHG-SN-8-04-N1 follow-up 卡补 type 不限的 fallback 二次查询
+- **解锁卡**：
+  - **CHG-SN-8-04-EP**（端点 + Service + Query + 4 文件 + ≥ 5 测试用例）
+  - **CHG-SN-8-04-VIEW**（TabSimilar.tsx 实装 + 列表渲染 + 合并深链）
+
+### DoD 全勾
+- [x] arch-reviewer Opus 1 轮 A− PASS
+- [x] decisions.md ADR-137 完整章节落盘
+- [x] plan §9 ADR 索引推进至 Accepted
+- [x] verify:adr-d-numbers advisory 闭环（D-137-1..6 通过本 changelog 条目闭环）
+- [x] commit trailer 含 `ADR: ADR-137` + `Subagents: arch-reviewer (claude-opus-4-7)`
