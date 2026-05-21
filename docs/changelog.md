@@ -13455,3 +13455,23 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 - [x] typecheck 全绿
 - [x] 单元测试 11/11 PASS（4338 total，CrawlerClient 1 pre-existing flaky 无关）
 - [x] 无跨层调用、无硬编码颜色、无 any 类型
+
+---
+
+## CHG-SN-7-MISC-VIDEOS-1 — videos poster 尺寸决议固化
+
+- **完成时间**：2026-05-20
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+
+### 变更内容
+
+**`docs/designs/backend_design_v2.1/reference.md`**（4 处 32×48 → 48×72）：
+- §5.3 当前实现：`设计稿是 32x48 竖版` → `设计稿是 48×72 竖版（CHG-UX2-03 升级，原 32×48 废弃）`
+- §6.1 thumb 列定义：`32×48 竖版 radius 4` → `48×72 竖版 radius 4`
+- §8 差异追踪表：`Poster 32×48 竖版` → `Poster 48×72 竖版` + 升级说明
+- §9 通用语言第 4 条：`竖版 32×48 poster` → `竖版 48×72 poster（CHG-UX2-03 固化，原 32×48 废弃）`
+
+**`docs/decisions.md`**（追加末尾）：
+- 新增"后台视频竖版 Poster 尺寸固化（CHG-SN-7-MISC-VIDEOS-1）"条目
+- 决议：保留 48×72，32×48 废弃；影响范围表 + 更新位置索引 + 关联 ADR

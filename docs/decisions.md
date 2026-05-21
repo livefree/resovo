@@ -8804,3 +8804,40 @@ interface UserStats {
 - ADR-127（Dashboard Stats 同类设计参照）
 - ADR-133（字幕 KPI stats 端点同类参照）
 - CHG-SN-7-MISC-USERS-2
+
+---
+
+## 后台视频竖版 Poster 尺寸固化（CHG-SN-7-MISC-VIDEOS-1）
+
+**决策日期**：2026-05-20  
+**决策来源**：CHG-UX2-03（后台交互改造）+ CHG-SN-7-MISC-VIDEOS-1  
+**状态**：✅ 固化
+
+### 背景
+
+后台 reference.md v2.1 初版以 32×48 作为视频竖版 poster 尺寸规格。
+CHG-UX2-03 将后台视频卡竖版封面尺寸升级到 48×72，以改善视觉识别度。
+Thumb 组件（CHG-DESIGN-08，`size="poster-sm"`）已按 48×72 实装并消费于视频库。
+
+### 决议
+
+**保留 48×72**。旧的 32×48 规格从所有设计规范文档中废弃。
+
+### 影响范围
+
+| 场景 | 规格 |
+|------|------|
+| 视频库 `thumb` 列封面 | 48×72 竖版，radius 4 |
+| VideoEditDrawer 封面预览 | 48×72 竖版 |
+| 其他后台列表 poster 位置 | 48×72 竖版（统一） |
+| Home Ops banner / 前台横向运营位 | 维持横图，不受此决议影响 |
+
+### 更新位置
+
+- `docs/designs/backend_design_v2.1/reference.md` §5.3 / §6.1 / §8 / §9 共 4 处
+- 本 decisions.md 条目（CHG-SN-7-MISC-VIDEOS-1）
+
+### 关联
+
+- CHG-UX2-03（原始升级决策）
+- CHG-DESIGN-08（Thumb 组件实装，已按 48×72 落地）
