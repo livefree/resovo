@@ -78,17 +78,21 @@ export default defineConfig({
           return resolveWithExtensions(path.resolve(base, subPath))
         },
       },
-      // @/stores is context-aware: web-next → apps/web-next/src/stores; server/admin → apps/server/src/stores
-      // （CUTOVER 2026-04-23 后 apps/web 已退役，apps/web 分支移除）
+      // @/stores is context-aware: server-next → apps/server-next/src/stores; server/admin → apps/server/src/stores; default → apps/web-next/src/stores
+      // （CUTOVER 2026-04-23 后 apps/web 已退役，apps/web 分支移除；server-next 2026-05-20 补入）
       {
         find: /^@\/stores(\/.*)?$/,
         replacement: '$1',
         customResolver(replacedId: string, importer: string | undefined) {
+          const isServerNext =
+            importer?.includes('/apps/server-next/') || importer?.includes('/tests/unit/components/server-next/') || importer?.includes('/tests/unit/admin-moderation/')
           const isServer =
             importer?.includes('/apps/server/') || importer?.includes('/tests/unit/components/admin/')
-          const storesBase = isServer
-            ? path.resolve(__dirname, './apps/server/src/stores')
-            : path.resolve(__dirname, './apps/web-next/src/stores')
+          const storesBase = isServerNext
+            ? path.resolve(__dirname, './apps/server-next/src/stores')
+            : isServer
+              ? path.resolve(__dirname, './apps/server/src/stores')
+              : path.resolve(__dirname, './apps/web-next/src/stores')
           const subPath = replacedId.replace(/^\//, '') || 'index'
           return resolveWithExtensions(path.resolve(storesBase, subPath))
         },

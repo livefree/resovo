@@ -13475,3 +13475,38 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 **`docs/decisions.md`**（追加末尾）：
 - 新增"后台视频竖版 Poster 尺寸固化（CHG-SN-7-MISC-VIDEOS-1）"条目
 - 决议：保留 48×72，32×48 废弃；影响范围表 + 更新位置索引 + 关联 ADR
+
+---
+
+## CHG-SN-7-MISC-LOGIN-1 — login card 视觉对齐
+
+- **完成时间**：2026-05-20
+- **执行模型**：claude-sonnet-4-6
+- **子代理调用**：无
+
+### 变更内容
+
+**`apps/server-next/src/app/login/LoginForm.tsx`**（全量重写，视觉对齐 reference.md §5.16）：
+- card 宽 400px / padding 40px（原 320px / var(--space-5)）
+- 顶部 Brand row：36px 渐变方块 logo + 18px 品牌名 + 11px "管理后台" subtitle（消费 BrandContext）
+- remember checkbox "记住我"（`data-testid="login-remember"`）
+- 分隔线"或通过 SSO 登录" + SSO disabled 占位按钮（`data-testid="login-sso-btn"`）
+- 审计提示"所有登录操作均受监控并记录于审计日志"（`data-testid="login-audit-notice"`）
+- 所有颜色零硬编码，全部使用 CSS 变量
+
+**`apps/server-next/src/app/login/page.tsx`**：
+- 添加 radial accent overlay 背景（`radial-gradient` + `color-mix` 12% accent）
+
+**`vitest.config.ts`**：
+- `@/stores` 别名 customResolver 补入 `isServerNext` 分支
+- server-next 文件（apps/server-next/ + tests/unit/components/server-next/ + admin-moderation/）的 @/stores 现在正确解析到 apps/server-next/src/stores
+
+**`tests/unit/components/server-next/login/LoginForm.test.tsx`**（新建，8 tests）：
+- 结构渲染 5 tests：form/identifier/password/submit testid + Brand row + remember + SSO disabled + 审计提示
+- 表单交互 3 tests：空表单 → serverError / 填写提交 → apiClient.post 调用 / 失败 → 错误文案
+
+### 质量门禁
+
+- [x] typecheck 全绿
+- [x] 8/8 新测试 PASS / 4347 total PASS
+- [x] vitest.config @/stores 修复不影响已有 server-v1 / web-next 测试（全 PASS 验证）
