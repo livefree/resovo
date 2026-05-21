@@ -69,3 +69,33 @@ describe('moderation/api — M（i18n）', () => {
     expect(M.rejected.listHeader(3)).toContain('3')
   })
 })
+
+// CHG-SN-8-06：approveVideo 双模式
+describe('moderation/api — approveVideo (CHG-SN-8-06)', () => {
+  it('默认 andPublish=false → action: approve', async () => {
+    const { apiClient } = await import('../../../../apps/server-next/src/lib/api-client')
+    const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValue(undefined as never)
+    const { approveVideo } = await import('../../../../apps/server-next/src/lib/moderation/api')
+    await approveVideo('vid-1')
+    expect(postSpy).toHaveBeenCalledWith('/admin/videos/vid-1/review', { action: 'approve' })
+    postSpy.mockRestore()
+  })
+
+  it('显式 andPublish=false → action: approve', async () => {
+    const { apiClient } = await import('../../../../apps/server-next/src/lib/api-client')
+    const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValue(undefined as never)
+    const { approveVideo } = await import('../../../../apps/server-next/src/lib/moderation/api')
+    await approveVideo('vid-2', false)
+    expect(postSpy).toHaveBeenCalledWith('/admin/videos/vid-2/review', { action: 'approve' })
+    postSpy.mockRestore()
+  })
+
+  it('andPublish=true → action: approve_and_publish', async () => {
+    const { apiClient } = await import('../../../../apps/server-next/src/lib/api-client')
+    const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValue(undefined as never)
+    const { approveVideo } = await import('../../../../apps/server-next/src/lib/moderation/api')
+    await approveVideo('vid-3', true)
+    expect(postSpy).toHaveBeenCalledWith('/admin/videos/vid-3/review', { action: 'approve_and_publish' })
+    postSpy.mockRestore()
+  })
+})

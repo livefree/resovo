@@ -215,6 +215,19 @@ export function ModerationConsole(): React.ReactElement {
 
   const v = pendingVideos[activeIdx] ?? null
 
+  // CHG-SN-8-06：「通过即上架」开关 — sessionStorage 持久化
+  const [approveAndPublishOn, setApproveAndPublishOnRaw] = useState(false)
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('admin.moderation.approveAndPublishOn.v1')
+      if (stored === 'true') setApproveAndPublishOnRaw(true)
+    } catch { /* ignore */ }
+  }, [])
+  const setApproveAndPublishOn = useCallback((next: boolean) => {
+    setApproveAndPublishOnRaw(next)
+    try { sessionStorage.setItem('admin.moderation.approveAndPublishOn.v1', String(next)) } catch { /* ignore */ }
+  }, [])
+
   const handleApprove = useCallback(async () => {
     const current = pendingVideos[activeIdx]
     if (!current) return
@@ -225,13 +238,13 @@ export function ModerationConsole(): React.ReactElement {
     setTotalPending(t => Math.max(0, t - 1))
     setActiveIdx(Math.min(savedIdx, Math.max(0, newVideos.length - 1)))
     try {
-      await api.approveVideo(savedV.id)
+      await api.approveVideo(savedV.id, approveAndPublishOn)
     } catch {
       setPendingVideos(prev => { const next = [...prev]; next.splice(savedIdx, 0, savedV); return next })
       setTotalPending(t => t + 1)
       setError(M.errors.approveFailed)
     }
-  }, [pendingVideos, activeIdx, setActiveIdx])
+  }, [pendingVideos, activeIdx, setActiveIdx, approveAndPublishOn])
 
   const handleRejectSubmit = useCallback(async (payload: RejectModalSubmitPayload) => {
     const current = pendingVideos[activeIdx]
@@ -416,8 +429,8 @@ export function ModerationConsole(): React.ReactElement {
       {/* CHG-SN-8-03：来自采集 run 软深链 banner */}
       {runIdParam && <RunInfoBanner runId={runIdParam} onDismiss={dismissRunBanner} />}
 
-      {/* Segment tabs */}
-      <div style={{ display: 'flex', gap: 1, marginBottom: 10, flexShrink: 0 }}>
+      {/* Segment tabs + 通过即上架 toggle（CHG-SN-8-06）*/}
+      <div style={{ display: 'flex', gap: 1, marginBottom: 10, flexShrink: 0, alignItems: 'center' }}>
         {tabDefs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={segBtnStyle(tab === t.id, t.danger)} aria-pressed={tab === t.id}>
             {t.label}
@@ -429,6 +442,34 @@ export function ModerationConsole(): React.ReactElement {
             )}
           </button>
         ))}
+        {tab === 'pending' && (
+          <label
+            style={{
+              marginLeft: 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              fontSize: 'var(--font-size-xs)',
+              color: 'var(--fg-default)',
+              cursor: 'pointer',
+              userSelect: 'none',
+            }}
+            data-testid="moderation-approve-publish-toggle"
+            title={approveAndPublishOn
+              ? '通过后将直接发布到前台（跳过暂存）；A 键 / 通过 按钮 同步生效'
+              : '通过后入暂存（staging），需 admin 在暂存页二次发布'}
+          >
+            <input
+              type="checkbox"
+              checked={approveAndPublishOn}
+              onChange={(e) => setApproveAndPublishOn(e.target.checked)}
+              data-testid="moderation-approve-publish-toggle-input"
+              aria-label="通过即上架"
+            />
+            <span>{approveAndPublishOn ? '✓ 通过即上架' : '通过 → 暂存'}</span>
+          </label>
+        )}
       </div>
 
       {/* Tab content */}

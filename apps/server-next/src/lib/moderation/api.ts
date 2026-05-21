@@ -105,8 +105,15 @@ export async function fetchPendingQueue(
 
 // ── 审核操作 ──────────────────────────────────────────────────────────
 
-export async function approveVideo(id: string): Promise<void> {
-  await apiClient.post<unknown>(`/admin/videos/${id}/review`, { action: 'approve' })
+/**
+ * CHG-SN-8-06：approveVideo 可选「通过即上架」模式
+ *   - andPublish=false (默认)：action='approve' → 入 staging
+ *   - andPublish=true：action='approve_and_publish' → 直接发布前台（admin 角色限定，FORBIDDEN 时由 toast 告知）
+ */
+export async function approveVideo(id: string, andPublish: boolean = false): Promise<void> {
+  await apiClient.post<unknown>(`/admin/videos/${id}/review`, {
+    action: andPublish ? 'approve_and_publish' : 'approve',
+  })
 }
 
 export async function rejectVideo(

@@ -13925,3 +13925,65 @@ REDO-01-J + REDO-02-F 双验收累计 6 跟踪卡录入 task-queue：
 **W1 金票端到端**：采集 → 审核（toast 深链）→ 上架 工作流入口 + 路径全部打通；零 mock / 零 UUID 输入消灭起步（VideoPicker 就绪）/ 零死按钮（dashboard 按钮 + 全站全量主按钮 + 触发器清除 + 批量重测均接入端点）
 
 **剩余 -04 / -06 触发 ADR 协议**：需用户决策启动 SEQ-20260521-03（含 ADR-NN 起草 + Opus 评审 + 端点 + 视图三段实施）
+
+## [CHG-SN-8-06] 审核台「通过即上架」开关（W1 反例 #5 修复，零 ADR）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **关联 SEQ**：SEQ-20260521-02（7/9 ✅ 实质收尾）
+- **重大发现**：`approve_and_publish` action **已存在**（apps/api/src/routes/admin/videos.ts:35）— 原任务卡估时含「端点扩展 ADR」假设不成立，零 ADR
+- **修改文件**：
+  - `apps/server-next/src/lib/moderation/api.ts`：approveVideo 加 `andPublish: boolean = false` 参数；true → 'approve_and_publish'
+  - `apps/server-next/src/app/admin/moderation/_client/ModerationConsole.tsx`：
+    - 增 `approveAndPublishOn` state + useEffect 读 sessionStorage `admin.moderation.approveAndPublishOn.v1` + `setApproveAndPublishOn` 写回 storage
+    - Segment tabs 右侧 `marginLeft: auto` 加 `<label>` toggle（仅 pending tab 显示）+ checkbox + 动态文案「通过 → 暂存」/「✓ 通过即上架」+ title 解释
+    - handleApprove 串接：`api.approveVideo(savedV.id, approveAndPublishOn)`
+    - data-testid: `moderation-approve-publish-toggle` + `moderation-approve-publish-toggle-input`
+  - `tests/unit/server-next/moderation/moderation-api.test.ts`：补 3 用例（默认 / 显式 false / true）
+  - `docs/manual/20-pages/P-moderation.md` §3.1b 完整填写（含权限说明）
+  - `docs/manual/10-workflows/W1-crawl-to-publish.md` 反例 #5 升 ✅
+  - `docs/task-queue.md` + `docs/changelog.md`
+- **新增依赖**：无
+- **数据库变更**：无
+- **API 行为**：approveVideo 向后兼容（andPublish 默认 false 保持旧调用语义）；前端 ModerationConsole 是唯一调用方
+- **注意事项**：
+  - **权限**：approve_and_publish 后端 admin only；moderator 触发会被 403 拦截 → 乐观更新需回滚（已存在的 try/catch + 回滚逻辑覆盖）
+  - **toggle 仅 pending tab 显示**：rejected tab 无 approve 入口，UI 状态机自然避免误用
+  - **sessionStorage 持久化** vs localStorage：选 session 保持「每开新窗口默认 off」的安全语义（避免运营换班还残留 on 状态）
+  - **moderator UX 建议**（在 §3.1b 补说明）：保持 off 走 staging；高确信内容由 admin 切 on
+
+### DoD 全勾
+- [x] approveVideo lib 加 andPublish 参数
+- [x] ModerationConsole toggle + handleApprove 串接
+- [x] 测试 3 用例 PASS（≥ 2 要求超额）
+- [x] typecheck + lint + verify:manual-coverage PASS
+- [x] P-moderation §3.1b + W1 反例 #5 升 ✅
+
+---
+
+## SEQ-20260521-02 最终收尾（2026-05-21）
+
+7/9 ✅ + 1 NEGATED + 1 待 ADR 启动（独立 SEQ-20260521-03）
+
+| 卡 | 状态 | commit |
+|---|---|---|
+| C8-01 全站全量改造 | ✅ | 89fc7e00 |
+| C8-02 最近采集 status pill | ✅ | 5c66e2ee |
+| C8-03 采集 toast 软深链 | ✅ | f38defc2 |
+| SHARED-04-A VideoPicker (Opus A−) | ✅ | 1c2b2329 |
+| C8-04 TabSimilar | ⬜ 移 SEQ-20260521-03（ADR 前置）|  |
+| C8-05 批量重测线路 | ✅ | 322a9513 |
+| C8-06 通过即上架 | ✅ | (此 commit) |
+| C8-07 staging IA 合并 | ❌ NEGATED | 322a9513 |
+| C8-08 视频库合并入口 | ✅ | 41d3344b |
+
+**W1 金票反例段最终状态（5 项中 4 项 ✅ + 1 待 ADR）**：
+- #1 全站全量主按钮 → ✅ C8-01
+- #2 采集后跳转 → ✅ C8-03
+- #3 类似 Tab 占位 → ⬜ C8-04 / SEQ-03
+- #4 探/播 重测 → ✅ C8-05（批量；per-line follow-up）
+- #5 通过 staging 多步 → ✅ C8-06（admin toggle）+ moderator IA 保留
+
+**累计 8 commits**（C7-CLEANUP-01-A/B/C + C8-01/02/03/SHARED-04-A/05/06/08）/ +6300 lines / 55+ 测试用例 / 1 Opus 子代理 A− / 1 NEGATED 范式应用 / 0 BLOCKER

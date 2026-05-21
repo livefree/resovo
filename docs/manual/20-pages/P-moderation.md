@@ -53,7 +53,16 @@
 
 ### 3.1 处理待审视频（J/K 翻页）
 
-（待 CHG-SN-8-04/06 填写键盘流 + 通过即上架开关）
+（待 CHG-SN-8-04 填写键盘流；CHG-SN-8-06 通过即上架开关见 §3.1b）
+
+### 3.1b 「通过即上架」开关（CHG-SN-8-06 / W1 反例 #5 修复）
+
+- **位置**：Segment tabs 右侧 toggle 标签
+- **默认值**：off（sessionStorage `admin.moderation.approveAndPublishOn.v1` 持久化）
+- **off 状态**：toggle 显示「通过 → 暂存」；A 键 / 通过 按钮调 `approve` action → 视频入 staging（独立路由 `/admin/staging` 等 admin 二次发布）
+- **on 状态**：toggle 显示「✓ 通过即上架」；A 键 / 通过 按钮调 `approve_and_publish` action → 视频直接发布到前台（仅 admin 角色；moderator 触发 → toast「FORBIDDEN · approve_and_publish 仅限 admin 角色」回滚乐观更新）
+- **权限**：moderator 可切 toggle on 但实际调用会被后端 403 拦截；建议 moderator 保持 off
+- **场景**：admin 处理高确信新视频（如手动入库 + 元数据已齐 + 探测已通过）时打开开关一键过完整流程；对未确信的批量审核保持 off 走 staging 再二次确认
 
 ### 3.1a 重测此视频所有线路（CHG-SN-8-05 / W1 反例 #4 部分修复）
 

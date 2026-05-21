@@ -48,7 +48,7 @@
 | 采集完成后没有跳转入口 | 用户要手动开 moderation | ✅ 软深链已修复（CHG-SN-8-03，硬过滤 -03-B follow-up）|
 | 审核台右栏「类似」是占位 | 无法找重复视频 | ❌ 需修复（CHG-SN-8-04）|
 | 审核台「探/播 待测」无测试入口 | 用户无法手动重测线路 | ✅ 批量重测已修复（CHG-SN-8-05）；per-line inline 重测推 -05-B follow-up |
-| 通过后还要去 staging 再点一次 | 多走一步 | ⚠️ IA 已由 CHG-SN-7-REDO-04 裁决「staging 独立路由」；通过后跳独立 /admin/staging（设计决策保留，不再视为反例）|
+| 通过后还要去 staging 再点一次 | 多走一步 | ✅ CHG-SN-8-06 提供「通过即上架」toggle（admin 限定）；moderator 走 staging 路径（REDO-04 裁决保留）|
 
 ## 4. 失败 / 中断 处理
 
