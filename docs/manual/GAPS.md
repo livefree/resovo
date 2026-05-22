@@ -31,12 +31,12 @@
 ### #G-dashboard-activities-mock · RecentActivityCard 仍 mock（视觉警示已加，真端点 follow-up 待立）
 
 - **页面**：P-dashboard §3 / §7 FAQ
-- **状态**：⚠️ + 🔄 已部分实装 + ADR 已起草（CHG-SN-8-GAPS-DASH-ACTIVITY 视觉警示 ✅ / ADR-141 A PASS / 实施 follow-up CHG-SN-8-FUP-DASH-ACTIVITY-LIVE 待立）
+- **状态**：✅ **完全闭合**（2026-05-22 / 消费层 + ADR-141 + EP 全 PASS）
 - **优先级**：P2
-- **闭环路径（3/3）**：
-  - **1/3 消费层视觉警示**：CHG-SN-8-GAPS-DASH-ACTIVITY — DashboardStats 加 `activitiesDataSource: 'mock' | 'live'` + RecentActivityCard 头部 mock 时显「示例数据」warn chip（tooltip 指 follow-up）
-  - **2/3 ADR**：CHG-SN-8-FUP-DASH-ACTIVITY-ADR — ADR-141 **A PASS**（D-141-1..6 + 3 方案 trade-off + 5 文件 R-MID-1 降级清单 + 10 测试 surface + 4 风险 + 2 N1）；决策：方案 C（admin_audit_log 直接派生 + Service 层 60s TTL 缓存）/ 新 migration `idx_admin_audit_log_created` (created_at DESC) / actionType 中文 label 由前端 i18n 承担（37 项全集，扩展现有 11 项 M.history.action）/ admin only + 单 limit 参数（max 50 default 10）/ 零新 ErrorCode（复用 ADR-110）
-  - **3/3 实施 follow-up**：CHG-SN-8-FUP-DASH-ACTIVITY-LIVE — 按 ADR-141 落 5 文件（migration + query + route + types + 单测）+ 前端 dashboard-data.ts mock → live 切换 + i18n 37 项 actionLabels 扩展；工时 ~0.3w
+- **闭环路径（3/3 全 ✅）**：
+  - **1/3 消费层视觉警示**：CHG-SN-8-GAPS-DASH-ACTIVITY — DashboardStats 加 `activitiesDataSource` + RecentActivityCard 头部 mock 时显「示例数据」warn chip
+  - **2/3 ADR**：CHG-SN-8-FUP-DASH-ACTIVITY-ADR（commit 4de065f4）— ADR-141 **A PASS**
+  - **3/3 实施 EP**：CHG-SN-8-FUP-DASH-ACTIVITY-LIVE — 7 文件（migration 070 idx_admin_audit_log_created + DashboardActivityRow 类型 + listDashboardActivities query + GET /admin/dashboard/activities route + 60s TTL Map cache + 10 单测 + 前端 dashboard-data.ts mock→live + i18n audit-action-labels.ts 37 项全集 + deriveActivitySeverity + formatRelative helpers + DashboardClient 拉 activities 真端点 fallback null → mock）；warn chip 真后端接入后自动消失
 - **N1 follow-up**：N1-141-1（targetDisplayName 扩展）→ CHG-SN-8-FUP-DASH-ACTIVITY-DISPLAY-NAME 按需 / N1-141-2（severity 后端化）→ 按需评估不立卡
 
 ### #G-videos-add · 视频库「+ 添加视频」按钮

@@ -22,7 +22,8 @@
 
 import type { ReactNode } from 'react'
 import type { ModerationStats } from './videos/api'
-import type { DashboardOverviewPayload, DashboardWorkflowSegment as ApiWorkflowSegment } from '@resovo/types'
+import type { DashboardOverviewPayload, DashboardWorkflowSegment as ApiWorkflowSegment, DashboardActivityRow } from '@resovo/types'
+import { AUDIT_ACTION_LABELS, deriveActivitySeverity } from '@/i18n/messages/zh-CN/audit-action-labels'
 
 // ── 数据形态（DashboardStats）────────────────────────────────────
 
@@ -92,7 +93,7 @@ export interface DashboardStats {
   ]
   readonly attentions: readonly DashboardAttentionItem[]
   readonly activities: readonly DashboardActivityItem[]
-  /** CHG-SN-8-GAPS-DASH-ACTIVITY：activities 数据源标识 — 当前两路径仍 mock，待接 audit_log 端点（CHG-SN-8-FUP-DASH-ACTIVITY-LIVE follow-up）改 'live' */
+  /** CHG-SN-8-GAPS-DASH-ACTIVITY + CHG-SN-8-FUP-DASH-ACTIVITY-LIVE (ADR-141)：activities 数据源标识 — buildDashboardStats 接受 activitiesRows 参数；非空 → 'live'，否则 fallback mock */
   readonly activitiesDataSource: 'mock' | 'live'
   readonly sites: readonly DashboardSiteHealth[]
   /** Page head 副标题：基于 todayReviewedCount + interceptRate 派生（live 字段时） */
@@ -153,6 +154,43 @@ const MOCK_SITES: readonly DashboardSiteHealth[] = [
 
 const MOCK_STAGING_COUNT = 23
 
+// ── ADR-141 / CHG-SN-8-FUP-DASH-ACTIVITY-LIVE：activitiesRows → ActivityItem 映射 ──
+
+/**
+ * 相对时间格式化（"5 分钟前" / "1 小时前" / "3 天前"）
+ * 简单实现：不引入新依赖；避免和现有 formatRelativeTime utility 冲突
+ */
+function formatRelative(createdAt: string): string {
+  const created = new Date(createdAt).getTime()
+  if (Number.isNaN(created)) return createdAt
+  const diffSec = Math.max(0, Math.floor((Date.now() - created) / 1000))
+  if (diffSec < 60) return '刚刚'
+  const diffMin = Math.floor(diffSec / 60)
+  if (diffMin < 60) return `${diffMin} 分钟前`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr} 小时前`
+  const diffDay = Math.floor(diffHr / 24)
+  if (diffDay < 30) return `${diffDay} 天前`
+  return new Date(createdAt).toLocaleDateString('zh-CN')
+}
+
+/**
+ * ADR-141 §6 前端消费映射：DashboardActivityRow → DashboardActivityItem
+ *   - who = actorUsername ?? '系统'
+ *   - what = AUDIT_ACTION_LABELS[actionType] ?? actionType（fallback 展示原始 key）
+ *   - when = formatRelative(createdAt)
+ *   - severity = deriveActivitySeverity(actionType)
+ */
+function mapActivityRow(row: DashboardActivityRow): DashboardActivityItem {
+  return {
+    id: row.id,
+    severity: deriveActivitySeverity(row.actionType),
+    who: row.actorUsername ?? '系统',
+    what: AUDIT_ACTION_LABELS[row.actionType] ?? row.actionType,
+    when: formatRelative(row.createdAt),
+  }
+}
+
 // ── 派生 helper（live + mock 混合） ─────────────────────────────
 
 /**
@@ -171,7 +209,15 @@ const MOCK_STAGING_COUNT = 23
 export function buildDashboardStats(
   moderationStats: ModerationStats | null,
   overview?: DashboardOverviewPayload | null,
+  activitiesRows?: readonly DashboardActivityRow[] | null,
 ): DashboardStats {
+  // ADR-141 §6：activities 派生（非空 + 非 undefined → 'live'；null/undefined → fallback mock）
+  const liveActivities = activitiesRows && activitiesRows.length > 0
+    ? activitiesRows.map(mapActivityRow)
+    : null
+  const activities = liveActivities ?? MOCK_ACTIVITIES
+  const activitiesDataSource: 'mock' | 'live' = liveActivities ? 'live' : 'mock'
+
   // ── 优先使用 overview（全 live）────────────────────────────────
   if (overview != null) {
     const workflowMap: Record<ApiWorkflowSegment['key'], { label: string; color: string }> = {
@@ -223,8 +269,8 @@ export function buildDashboardStats(
       kpis,
       workflow,
       attentions: MOCK_ATTENTIONS,
-      activities: MOCK_ACTIVITIES,
-      activitiesDataSource: 'mock',
+      activities,
+      activitiesDataSource,
       sites: MOCK_SITES,
       headSub,
     }
@@ -324,8 +370,8 @@ export function buildDashboardStats(
     kpis,
     workflow,
     attentions: MOCK_ATTENTIONS,
-    activities: MOCK_ACTIVITIES,
-    activitiesDataSource: 'mock',
+    activities,
+    activitiesDataSource,
     sites: MOCK_SITES,
     headSub,
   }

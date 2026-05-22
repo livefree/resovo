@@ -25,7 +25,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { ErrorState, LoadingState, useToast } from '@resovo/admin-ui'
 import { getModerationStats, type ModerationStats } from '@/lib/videos/api'
 import { buildDashboardStats, type DashboardStats } from '@/lib/dashboard-data'
-import { getDashboardOverview, type DashboardOverviewPayload } from '@/lib/dashboard/api'
+import { getDashboardOverview, getDashboardActivities, type DashboardOverviewPayload, type DashboardActivityRow } from '@/lib/dashboard/api'
 import { runCrawlerAll } from '@/lib/crawler/api'
 import { ApiClientError } from '@/lib/api-client'
 import { AttentionCard } from '@/components/admin/dashboard/AttentionCard'
@@ -143,6 +143,8 @@ export function DashboardClient() {
   const [statsLoading, setStatsLoading] = useState(true)
   const [statsError, setStatsError] = useState<Error | undefined>()
   const [overview, setOverview] = useState<DashboardOverviewPayload | null>(null)
+  // ADR-141 / CHG-SN-8-FUP-DASH-ACTIVITY-LIVE：activities 真端点拉数据；失败 fallback null → buildDashboardStats 走 mock
+  const [activities, setActivities] = useState<readonly DashboardActivityRow[] | null>(null)
   const [fullCrawlRunning, setFullCrawlRunning] = useState(false)
 
   const loadStats = useCallback(() => {
@@ -151,10 +153,12 @@ export function DashboardClient() {
     Promise.all([
       getModerationStats(),
       getDashboardOverview().catch(() => null),
+      getDashboardActivities(10).catch(() => null),
     ])
-      .then(([s, ov]) => {
+      .then(([s, ov, act]) => {
         setStats(s)
         setOverview(ov)
+        setActivities(act)
       })
       .catch((e: unknown) => setStatsError(e instanceof Error ? e : new Error(String(e))))
       .finally(() => setStatsLoading(false))
@@ -162,10 +166,11 @@ export function DashboardClient() {
 
   useEffect(() => { loadStats() }, [loadStats])
 
-  // 派生 DashboardStats：overview 优先（全 live），overview 失败则 fallback 到 moderationStats（部分 live）
+  // 派生 DashboardStats：overview 优先（全 live），overview 失败则 fallback 到 moderationStats（部分 live）；
+  // activities 优先用真端点 rows（buildDashboardStats 内 mapActivityRow），失败时 fallback mock
   const dashboardStats: DashboardStats = useMemo(
-    () => buildDashboardStats(stats, overview),
-    [stats, overview],
+    () => buildDashboardStats(stats, overview, activities),
+    [stats, overview, activities],
   )
 
   // GAPS #G-dashboard-runall：跟齐 CHG-SN-8-01 范式 — 主按钮改增量 + 全量加双重 confirm（输入"全量"防误触）

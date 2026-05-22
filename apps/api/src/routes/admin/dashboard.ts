@@ -18,7 +18,8 @@ import { db } from '@/api/lib/postgres'
 import { getDashboardOverview } from '@/api/db/queries/dashboardOverview'
 import { getDashboardSpark } from '@/api/db/queries/dashboardSpark'
 import { getDashboardAnalyticsData, type AnalyticsPeriod } from '@/api/db/queries/dashboardAnalytics'
-import type { DashboardKpiSnapshot } from '@/types'
+import { listDashboardActivities } from '@/api/db/queries/dashboardActivities'
+import type { DashboardActivityRow, DashboardKpiSnapshot } from '@/types'
 
 // ── Zod Schemas ───────────────────────────────────────────────────
 
@@ -30,6 +31,16 @@ const SparkQuerySchema = z.object({
 const AnalyticsQuerySchema = z.object({
   period: z.enum(['7d', '30d', '90d']).default('7d'),
 })
+
+// ADR-141 §D-141-3：dashboard activities limit 参数（1-50 default 10）
+const ActivitiesQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+})
+
+// ADR-141 §D-141-1 方案 C：Service 层 60s TTL 内存缓存
+// key = limit 值；value = { data, expiry (ms timestamp) }
+const ACTIVITIES_CACHE_TTL_MS = 60 * 1000
+const activitiesCache = new Map<number, { data: readonly DashboardActivityRow[]; expiry: number }>()
 
 // ── 路由 ──────────────────────────────────────────────────────────
 
@@ -83,5 +94,27 @@ export async function adminDashboardRoutes(fastify: FastifyInstance) {
         recentTasks: analyticsData.recentTasks,
       },
     })
+  })
+
+  // ── GET /admin/dashboard/activities （ADR-141）──────────────────────
+  fastify.get('/admin/dashboard/activities', { preHandler: auth }, async (request, reply) => {
+    const parsed = ActivitiesQuerySchema.safeParse(request.query)
+    if (!parsed.success) {
+      return reply.code(422).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message ?? '参数错误', status: 422 },
+      })
+    }
+    const { limit } = parsed.data
+
+    // ADR-141 §D-141-5 缓存查询
+    const now = Date.now()
+    const cached = activitiesCache.get(limit)
+    if (cached && cached.expiry > now) {
+      return reply.send({ data: cached.data })
+    }
+
+    const data = await listDashboardActivities(db, limit)
+    activitiesCache.set(limit, { data, expiry: now + ACTIVITIES_CACHE_TTL_MS })
+    return reply.send({ data })
   })
 }

@@ -74,3 +74,30 @@ export interface DashboardOverviewPayload {
   readonly workflow: readonly DashboardWorkflowSegment[]
   readonly generatedAt: string
 }
+
+// ── ADR-141: dashboard activities 真端点（GET /admin/dashboard/activities）────
+
+/**
+ * dashboard activities 端点返回行（ADR-141 §6 Response 结构）。
+ *
+ * 字段集：从 admin_audit_log 派生 + LEFT JOIN users 取 actor username。
+ * 不含 beforeJsonb / afterJsonb / payloadSummary / requestId / ipHash
+ * （与 ADR-118 listAdminAuditLog 完整审计视图差异）。
+ *
+ * actionType 中文 label 映射由前端 i18n 承担（ADR-141 D-141-2 方案 B）。
+ */
+export interface DashboardActivityRow {
+  /** admin_audit_log.id（bigserial 转 string，避免 JS 大数精度） */
+  readonly id: string
+  readonly actorId: string
+  /** LEFT JOIN users.username；actor 删除兜底 null（虽 FK ON DELETE RESTRICT 实际不会发生） */
+  readonly actorUsername: string | null
+  /** AdminAuditActionType 原值；前端 i18n 映射中文 label */
+  readonly actionType: string
+  /** AdminAuditTargetKind */
+  readonly targetKind: string
+  /** batch action 时为 null */
+  readonly targetId: string | null
+  /** ISO 8601 */
+  readonly createdAt: string
+}

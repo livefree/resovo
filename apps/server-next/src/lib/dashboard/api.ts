@@ -12,9 +12,10 @@ import type {
   DashboardOverviewPayload,
   DashboardSparkPoint,
   DashboardAnalyticsPayload,
+  DashboardActivityRow,
 } from '@resovo/types'
 
-export type { DashboardOverviewPayload, DashboardSparkPoint, DashboardAnalyticsPayload }
+export type { DashboardOverviewPayload, DashboardSparkPoint, DashboardAnalyticsPayload, DashboardActivityRow }
 
 export type SparkMetric = 'videoTotal' | 'pendingStaging' | 'sourceReachableRate' | 'inactiveSources'
 export type AnalyticsPeriod = '7d' | '30d' | '90d'
@@ -39,6 +40,15 @@ export async function getDashboardAnalytics(
 ): Promise<DashboardAnalyticsPayload> {
   const res = await apiClient.get<{ data: DashboardAnalyticsPayload }>(
     `/admin/dashboard/analytics?period=${period}`,
+  )
+  return res.data
+}
+
+// ADR-141 / CHG-SN-8-FUP-DASH-ACTIVITY-LIVE：dashboard 活动时序真端点
+// 后端 60s TTL Map 缓存；前端无需自管缓存
+export async function getDashboardActivities(limit = 10): Promise<readonly DashboardActivityRow[]> {
+  const res = await apiClient.get<{ data: readonly DashboardActivityRow[] }>(
+    `/admin/dashboard/activities?limit=${limit}`,
   )
   return res.data
 }
