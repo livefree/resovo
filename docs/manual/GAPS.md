@@ -37,7 +37,7 @@
   - **1/3 消费层视觉警示**：CHG-SN-8-GAPS-DASH-ACTIVITY — DashboardStats 加 `activitiesDataSource` + RecentActivityCard 头部 mock 时显「示例数据」warn chip
   - **2/3 ADR**：CHG-SN-8-FUP-DASH-ACTIVITY-ADR（commit 4de065f4）— ADR-141 **A PASS**
   - **3/3 实施 EP**：CHG-SN-8-FUP-DASH-ACTIVITY-LIVE — 7 文件（migration 070 idx_admin_audit_log_created + DashboardActivityRow 类型 + listDashboardActivities query + GET /admin/dashboard/activities route + 60s TTL Map cache + 10 单测 + 前端 dashboard-data.ts mock→live + i18n audit-action-labels.ts 37 项全集 + deriveActivitySeverity + formatRelative helpers + DashboardClient 拉 activities 真端点 fallback null → mock）；warn chip 真后端接入后自动消失
-- **N1 follow-up**：N1-141-1（targetDisplayName 扩展）→ CHG-SN-8-FUP-DASH-ACTIVITY-DISPLAY-NAME 按需 / N1-141-2（severity 后端化）→ 按需评估不立卡
+- **N1 follow-up**：N1-141-1（targetDisplayName 扩展）✅ 已闭合（CHG-SN-8-FUP-DASH-ACTIVITY-DISPLAY-NAME / 2026-05-22）/ N1-141-2（severity 后端化）→ 按需评估不立卡
 
 ### #G-videos-add · 视频库「+ 添加视频」按钮
 

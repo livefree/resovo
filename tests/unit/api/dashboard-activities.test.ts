@@ -183,7 +183,51 @@ describe('GET /admin/dashboard/activities (ADR-141)', () => {
       method: 'GET', url: '/admin/dashboard/activities?limit=5',
       headers: adminAuth(),
     })
-    expect(dbQueryMock).toHaveBeenCalledTimes(1)  // 第 2 次走缓存
+    // 第 1 次：1 次 listDashboardActivities + 1 次 enrichTargetDisplayNames（同 target_kind 1 IN 查询）
+    // 第 2 次：cache 命中不查 DB
+    // 共 2 次 DB 调用（base SELECT + enrich SELECT）
+    expect(dbQueryMock).toHaveBeenCalledTimes(2)
+    await app.close()
+  })
+
+  // ── ADR-141 N1-141-1 / CHG-SN-8-FUP-DASH-ACTIVITY-DISPLAY-NAME ────
+
+  it('#11 targetDisplayName 拼接：video.title 通过 enrich query 注入', async () => {
+    // 第 1 次调用 listDashboardActivities：返回 1 条 video target 行
+    // 第 2 次调用 enrichTargetDisplayNames 内 SELECT：返回 video.title
+    dbQueryMock
+      .mockResolvedValueOnce({ rows: [{ ...ROW_1, actionType: 'video.approve', targetKind: 'video', targetId: 'v-aaa' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'v-aaa', display_name: '教父：第二部' }] })
+
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'GET', url: '/admin/dashboard/activities',
+      headers: adminAuth(),
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data[0].targetDisplayName).toBe('教父：第二部')
+    // enrich SQL 包含 videos 表名 + title 字段
+    const enrichCall = dbQueryMock.mock.calls[1]
+    expect(enrichCall[0]).toContain('videos')
+    expect(enrichCall[0]).toContain('title')
+    await app.close()
+  })
+
+  it('#12 target 表无对应行 → targetDisplayName 不存在 + 不阻塞返回', async () => {
+    dbQueryMock
+      .mockResolvedValueOnce({ rows: [{ ...ROW_1, actionType: 'video.approve', targetKind: 'video', targetId: 'v-missing' }] })
+      .mockResolvedValueOnce({ rows: [] })  // enrich 返回空
+
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'GET', url: '/admin/dashboard/activities',
+      headers: adminAuth(),
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data[0].targetDisplayName).toBeUndefined()  // 字段缺失而非 null
+    expect(body.data[0].targetId).toBe('v-missing')  // targetId 仍返回供前端 short-id fallback
     await app.close()
   })
 })

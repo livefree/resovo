@@ -10131,7 +10131,7 @@ export interface DashboardActivityRow {
 
 ### 11. 非阻塞建议 / N1
 
-**N1-141-1（targetDisplayName 扩展）**：当前端点不返回目标实体名称（如视频标题 / 用户名 / 站点名），RecentActivityCard 的 `what` 文案仅 action label 缺乏上下文。建议 follow-up 扩展 `targetDisplayName?: string | null` 字段（Service 层按 `targetKind` 批量查询目标实体 display name，分组 IN 查询避免 N+1）。接口向后兼容。**状态**：登记 CHG-SN-8-FUP-DASH-ACTIVITY-DISPLAY-NAME 按需启动。
+**N1-141-1（targetDisplayName 扩展）— ✅ 已闭合（CHG-SN-8-FUP-DASH-ACTIVITY-DISPLAY-NAME / 2026-05-22）**：当前端点不返回目标实体名称（如视频标题 / 用户名 / 站点名），RecentActivityCard 的 `what` 文案仅 action label 缺乏上下文。建议 follow-up 扩展 `targetDisplayName?: string | null` 字段（Service 层按 `targetKind` 批量查询目标实体 display name，分组 IN 查询避免 N+1）。接口向后兼容。**实施落地**：`DashboardActivityRow.targetDisplayName?: string | null` 类型字段；`enrichTargetDisplayNames(db, rows)` query helper 按 target_kind 分组 Promise.all 并行 IN 查询（覆盖 4 主要 target_kind: video.title / user.username / crawler_site.name / home_module.slot）；route handler 在 listDashboardActivities 后调用 enrich + 缓存对 enriched 结果；前端 mapActivityRow 文案 `${actionLabel}「${targetDisplayName ?? targetId.slice(-8) ?? ''}」`；测试 +2 用例（#11 video.title 拼接 / #12 target 不存在 fallback）；全 unit 4549 PASS（+2）。
 
 **N1-141-2（severity 后端化）**：当前 severity 由前端简单规则映射。后续如需更精确分级（如"批量删除 > 100 条"标 danger），可在后端 Service 层根据 actionType + afterJsonb 内容计算 severity。当前阶段前端规则足够。**状态**：按需评估，不登记 follow-up。
 

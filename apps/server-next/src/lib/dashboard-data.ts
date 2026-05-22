@@ -178,15 +178,24 @@ function formatRelative(createdAt: string): string {
  * ADR-141 §6 前端消费映射：DashboardActivityRow → DashboardActivityItem
  *   - who = actorUsername ?? '系统'
  *   - what = AUDIT_ACTION_LABELS[actionType] ?? actionType（fallback 展示原始 key）
+ *     + ADR-141 N1-141-1：拼接 targetDisplayName 提供上下文（如 "审核通过「教父：第二部」"）
+ *     fallback 链：targetDisplayName > targetId 末尾 8 位 short id > 不拼接
  *   - when = formatRelative(createdAt)
  *   - severity = deriveActivitySeverity(actionType)
  */
+function formatTargetSuffix(row: DashboardActivityRow): string {
+  if (row.targetDisplayName) return ` 「${row.targetDisplayName}」`
+  if (row.targetId) return ` 「${row.targetId.slice(-8)}」`
+  return ''
+}
+
 function mapActivityRow(row: DashboardActivityRow): DashboardActivityItem {
+  const actionLabel = AUDIT_ACTION_LABELS[row.actionType] ?? row.actionType
   return {
     id: row.id,
     severity: deriveActivitySeverity(row.actionType),
     who: row.actorUsername ?? '系统',
-    what: AUDIT_ACTION_LABELS[row.actionType] ?? row.actionType,
+    what: `${actionLabel}${formatTargetSuffix(row)}`,
     when: formatRelative(row.createdAt),
   }
 }

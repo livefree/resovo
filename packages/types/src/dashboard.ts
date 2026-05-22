@@ -100,4 +100,11 @@ export interface DashboardActivityRow {
   readonly targetId: string | null
   /** ISO 8601 */
   readonly createdAt: string
+  /**
+   * 目标实体的展示名称（ADR-141 N1-141-1 / CHG-SN-8-FUP-DASH-ACTIVITY-DISPLAY-NAME）
+   * 按 target_kind 派生：video.title / user.username / home_modules.slot:content_ref_type
+   * 缺失 / 不支持的 target_kind 时为 null，前端 fallback 到 targetId short
+   * 向后兼容：可选字段，旧客户端忽略即可
+   */
+  readonly targetDisplayName?: string | null
 }

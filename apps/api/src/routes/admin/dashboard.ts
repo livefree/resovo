@@ -18,7 +18,7 @@ import { db } from '@/api/lib/postgres'
 import { getDashboardOverview } from '@/api/db/queries/dashboardOverview'
 import { getDashboardSpark } from '@/api/db/queries/dashboardSpark'
 import { getDashboardAnalyticsData, type AnalyticsPeriod } from '@/api/db/queries/dashboardAnalytics'
-import { listDashboardActivities } from '@/api/db/queries/dashboardActivities'
+import { listDashboardActivities, enrichTargetDisplayNames } from '@/api/db/queries/dashboardActivities'
 import type { DashboardActivityRow, DashboardKpiSnapshot } from '@/types'
 
 // ── Zod Schemas ───────────────────────────────────────────────────
@@ -113,7 +113,9 @@ export async function adminDashboardRoutes(fastify: FastifyInstance) {
       return reply.send({ data: cached.data })
     }
 
-    const data = await listDashboardActivities(db, limit)
+    const baseRows = await listDashboardActivities(db, limit)
+    // ADR-141 N1-141-1: enrich targetDisplayName（分组 IN 查询；缓存对 enriched 结果，与 rows 一并 60s TTL）
+    const data = await enrichTargetDisplayNames(db, baseRows)
     activitiesCache.set(limit, { data, expiry: now + ACTIVITIES_CACHE_TTL_MS })
     return reply.send({ data })
   })
