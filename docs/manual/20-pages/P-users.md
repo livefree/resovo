@@ -62,15 +62,23 @@
 - **效果**：被封禁用户无法登录；session 立即失效（如已登录）
 - **回滚**：unban 恢复登录权
 
+### 3.5 重置密码
+
+- **位置**：行尾 actions 区「重置密码」ghost 按钮
+- **行为**：confirm Modal → 后端 `POST /admin/users/:id/reset-password` 生成 12 位随机密码 → success Modal 展示密码 + 复制按钮
+- **权限**：admin 可重置 user/moderator；admin 目标 disabled + tooltip（后端 403 一致）
+- **一次性警示**：「关闭后不可复看；如遗失需再次重置」— 关闭 Modal 后密码不留痕
+- **安全**：密码明文一次性返回，不入日志；需通过安全渠道告知用户
+
 ## 4. 进阶操作
 
 ### 4.1 批量封禁
 - **状态**：⬜ 未实装（无端点 + 无 UI）；登记 GAPS.md #G-users-batch-ban
 - **当前替代**：逐行操作
 
-### 4.2 改用户邮箱 / 重置密码
-- **状态**：⬜ **未实装**；GAPS.md #G-users-edit-profile
-- **当前替代**：admin 走数据库直接改
+### 4.2 改用户邮箱 / 编辑显示名
+- **状态**：⬜ **未实装**（GAPS.md #G-users-edit-profile）— 重置密码部分已闭合（§3.5）；改邮箱 + 改显示名 待 ADR follow-up CHG-SN-8-FUP-USERS-EDIT-ADR（需 Opus + 邮箱唯一性 + 验证邮件）
+- **当前替代**：admin 走数据库直接改邮箱 / displayName
 
 ## 5. 字段含义
 

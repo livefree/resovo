@@ -105,10 +105,12 @@
 
 ### #G-users-edit-profile · 改用户邮箱 / 重置密码 / 编辑显示名缺失
 
-- **页面**：P-users §4.2
-- **状态**：⬜ 未启动
+- **页面**：P-users §3.5 / §4.2
+- **状态**：⚠️ 部分实装（CHG-SN-8-FUP-USERS-RESET-PWD 闭合「重置密码」1/3；改邮箱 + 改显示名 待 ADR follow-up CHG-SN-8-FUP-USERS-EDIT-ADR）
 - **优先级**：P2
-- **现象**：admin 当前需走 DB 直改；缺前端 UI
+- **现象（已核查）**：后端 3 端点状态 — `POST /admin/users/:id/reset-password` ✅ 已存在（生成 12 位随机密码 + admin 目标 403）/ `PATCH /admin/users/:id/email` ❌ 不存在（需邮箱唯一性 + 验证流程）/ `PATCH /admin/users/:id/profile`（含 displayName）❌ 不存在
+- **消费层补齐**：CHG-SN-8-FUP-USERS-RESET-PWD — `apps/server-next/src/lib/users/api.ts` 加 `resetUserPassword(id)` lib 封装；新建 `ResetPasswordModal.tsx`（2 态：confirm + success 显示新密码 + 复制按钮 + 一次性警示「关闭后不可复看」）；columns.tsx actions 列加「重置密码」xs ghost btn（admin 目标 disabled + tooltip）；UsersListClient 接 modal state
+- **改邮箱/改显示名 follow-up**：CHG-SN-8-FUP-USERS-EDIT-ADR — 起 ADR-140 设计 `PATCH /admin/users/:id/email`（含邮箱唯一性 + 验证邮件）+ `PATCH /admin/users/:id/profile`（含 displayName / locale / 头像）协议；需 Opus arch-reviewer 评审；工时 0.2-0.3w（ADR）+ 0.3-0.5w（实施）
 
 ### #G-settings-webhook-impl · API·Webhook Tab 字段已存但回调未实装
 

@@ -89,6 +89,7 @@ export interface BuildColumnsOptions {
   readonly onBan: (id: string) => void
   readonly onUnban: (id: string) => void
   readonly onRoleChange: (id: string, role: 'user' | 'moderator') => void
+  readonly onResetPassword: (row: UserRow) => void
   readonly pendingId: string | null
 }
 
@@ -96,6 +97,7 @@ export function buildUserColumns({
   onBan,
   onUnban,
   onRoleChange,
+  onResetPassword,
   pendingId,
 }: BuildColumnsOptions): readonly TableColumn<UserRow>[] {
   return [
@@ -173,7 +175,7 @@ export function buildUserColumns({
       id: 'actions',
       header: '操作',
       accessor: () => null,
-      width: 170, minWidth: 150,
+      width: 240, minWidth: 210,
       enableResizing: false,
       enableSorting: false,
       defaultVisible: true,
@@ -224,6 +226,16 @@ export function buildUserColumns({
                 }
               />
             )}
+            <AdminButton
+              variant="ghost"
+              size="sm"
+              disabled={isPending || isAdmin}
+              onClick={() => onResetPassword(row)}
+              title={isAdmin ? 'admin 账号不可重置密码' : '为该用户生成新随机密码'}
+              data-testid={`user-reset-pwd-${row.id}`}
+            >
+              重置密码
+            </AdminButton>
           </span>
         )
       },

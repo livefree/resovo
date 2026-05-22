@@ -14871,3 +14871,42 @@ Plan-Revision: 无
 Cleanup-Audit: #G-users-role-session-invalidate 🔄（ADR 已起草 / 实施 follow-up CHG-SN-8-FUP-USERS-ROLE-INV-EP 待立）
 Plan-Revision: ADR-139 + 1（plan §9 ADR 索引若有手动表则同步推进至 139；自动索引由 verify:adr-contracts 维护）
 
+---
+
+## [CHG-SN-8-FUP-USERS-RESET-PWD] 用户管理「重置密码」前端补齐（#G-users-edit-profile 消费层 1/3）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21 23:15
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（消费层；后端 POST /admin/users/:id/reset-password 已存在）
+- **修改文件**：
+  - `apps/server-next/src/lib/users/api.ts` — 新增 `resetUserPassword(id) → Promise<{ newPassword }>` lib 封装
+  - `apps/server-next/src/app/admin/users/_client/ResetPasswordModal.tsx` — 新建 2 态 Modal（idle confirm 视图 + success 显示新密码 + 复制按钮 + 一次性警示「关闭后不可复看」；error 内联展示；admin 目标 disabled）
+  - `apps/server-next/src/app/admin/users/_client/columns.tsx` — `BuildColumnsOptions` 加 `onResetPassword` callback；actions 列加「重置密码」xs ghost btn（admin disabled + tooltip）；列宽 170 → 240
+  - `apps/server-next/src/app/admin/users/_client/UsersListClient.tsx` — import ResetPasswordModal；增 `resetPwdTarget: UserRow | null` state + `handleResetPassword` callback；columns useMemo deps 含 callback；render Modal
+  - `tests/unit/components/server-next/admin/users/ResetPasswordModal.test.tsx` — 新建 5 用例 PASS（open=false / confirm 视图 / API success → success 视图 / API error → 内联错误 / 完成按钮 → onClose）
+  - `docs/manual/GAPS.md` — #G-users-edit-profile ⬜ → ⚠️ 部分实装（reset-pwd 闭合 1/3）；改邮箱 + 改显示名 follow-up CHG-SN-8-FUP-USERS-EDIT-ADR 登记
+  - `docs/manual/20-pages/P-users.md` — §3.5 新建「重置密码」完整章节；§4.2 改名「改用户邮箱 / 编辑显示名」并标 reset-pwd 已闭合
+  - `docs/task-queue.md` SEQ-20260521-06 #21 子卡 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 改邮箱（PATCH /admin/users/:id/email）+ 改显示名（PATCH /admin/users/:id/profile）2 新端点需 ADR + Opus（含邮箱唯一性 + 验证邮件 + 头像 / locale 字段统一）；超出本卡范围；登记 CHG-SN-8-FUP-USERS-EDIT-ADR follow-up（工时 ADR ~0.25w + 实施 ~0.4w）
+  - 复制功能用 navigator.clipboard.writeText；失败时降级 toast 提示手动复制
+  - admin 目标 disabled 与后端 403（行 163-166）一致；不发起 API 请求避免误展示错误
+  - 一次性警示文案明示「关闭后不可复看」— 符合 R-MID-1 + 安全合规
+
+### 验收
+- typecheck PASS / lint PASS / verify:manual-coverage PASS
+- ResetPasswordModal 5/5 PASS / users 整组 6 files 41/41 PASS / 全 unit 4460 PASS（+5）
+- 1 isolated 已 PASS 的 CrawlerClient #14b CSV toast wait flaky 并跑偶发 fail（与 CHG-SN-8-01 / CHG-SN-8-GAPS-AUDIT-NAV-HIDE 同范式）与本卡无关
+
+### 价值
+- P2 GAPS #G-users-edit-profile 推进到 ⚠️ 部分实装（3 项中 1 项闭合）
+- admin 不再需走 DB 直改密码；UI 流畅，密码一次性展示符合安全实践
+- 改邮箱 + 改显示名 follow-up 已立独立 ADR 卡
+
+Cleanup-Audit: #G-users-edit-profile ⚠️（reset-pwd 1/3 闭合 / email + displayName follow-up CHG-SN-8-FUP-USERS-EDIT-ADR 待立）
+Plan-Revision: 无
+

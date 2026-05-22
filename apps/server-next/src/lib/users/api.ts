@@ -35,3 +35,10 @@ export async function fetchUsersStats(): Promise<UserStats> {
   const res = await apiClient.get<{ data: UserStats }>('/admin/users/stats')
   return res.data
 }
+
+// CHG-SN-8-FUP-USERS-RESET-PWD：后端 POST /admin/users/:id/reset-password 返新随机密码
+// （明文一次性返回，不入日志；admin 目标 403 FORBIDDEN）
+export async function resetUserPassword(id: string): Promise<{ newPassword: string }> {
+  const res = await apiClient.post<{ data: { newPassword: string } }>(`/admin/users/${id}/reset-password`)
+  return res.data
+}

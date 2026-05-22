@@ -48,6 +48,7 @@ import { buildUserColumns } from './columns'
 import { downloadCsv, type CsvColumn } from '@/lib/csv-export'
 import { RoleMatrixModal } from './RoleMatrixModal'
 import { InviteUserModal } from './InviteUserModal'
+import { ResetPasswordModal } from './ResetPasswordModal'
 
 // ── 常量 ──────────────────────────────────────────────────────────
 
@@ -106,6 +107,7 @@ export function UsersListClient() {
   const [stats, setStats] = useState<UserStats | null>(null)
   const [roleMatrixOpen, setRoleMatrixOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [resetPwdTarget, setResetPwdTarget] = useState<UserRow | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -215,14 +217,19 @@ export function UsersListClient() {
     })
   }, [toast])
 
+  const handleResetPassword = useCallback((row: UserRow) => {
+    setResetPwdTarget(row)
+  }, [])
+
   const columns = useMemo(
     () => buildUserColumns({
       onBan: (id) => void handleBan(id),
       onUnban: (id) => void handleUnban(id),
       onRoleChange: (id, role) => void handleRoleChange(id, role),
+      onResetPassword: handleResetPassword,
       pendingId,
     }),
-    [handleBan, handleUnban, handleRoleChange, pendingId],
+    [handleBan, handleUnban, handleRoleChange, handleResetPassword, pendingId],
   )
 
   const query = useMemo(
@@ -319,6 +326,11 @@ export function UsersListClient() {
       open={inviteOpen}
       onClose={() => setInviteOpen(false)}
       onInvite={handleInvite}
+    />
+    <ResetPasswordModal
+      open={resetPwdTarget != null}
+      onClose={() => setResetPwdTarget(null)}
+      user={resetPwdTarget}
     />
     <div data-users-list-client style={PAGE_STYLE}>
       <PageHeader
