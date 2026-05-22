@@ -15,6 +15,7 @@ import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import { apiClient } from '@/lib/api-client'
+import { useBrand } from '@/hooks/useBrand'
 import { VideoCard } from '@/components/video/VideoCard'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import type { Top10Response, Top10Item, SortStrategy } from '@resovo/types'
@@ -266,21 +267,26 @@ function Top10Track({ items }: { readonly items: Top10Item[] }) {
 
 export function TopTenRow({ title, viewAllHref, viewAllLabel }: TopTenRowProps) {
   const t = useTranslations('home')
+  const { brand } = useBrand()
   const [items, setItems] = useState<Top10Item[]>([])
   const [loading, setLoading] = useState(true)
   const [strategy, setStrategy] = useState<SortStrategy>('manual_plus_rating')
 
+  // CHG-SN-8-GAPS-HOME-BRAND-MULTI / ADR-052：按 brand 过滤 home_modules（null brandSlug 仅命中 all-brands）
   useEffect(() => {
     setLoading(true)
+    const url = brand.slug
+      ? `/home/top10?brand_slug=${encodeURIComponent(brand.slug)}`
+      : '/home/top10'
     apiClient
-      .get<{ data: Top10Response }>('/home/top10', { skipAuth: true })
+      .get<{ data: Top10Response }>(url, { skipAuth: true })
       .then((res) => {
         setItems(res.data.items)
         setStrategy(res.data.sortStrategy ?? 'manual_plus_rating')
       })
       .catch(() => setItems([]))
       .finally(() => setLoading(false))
-  }, [])
+  }, [brand.slug])
 
   const subtitle = t(SUBTITLE_KEY_MAP[strategy] as Parameters<typeof t>[0])
 

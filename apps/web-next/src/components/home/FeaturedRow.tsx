@@ -20,6 +20,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
 import { VideoCard } from '@/components/video/VideoCard'
+import { useBrand } from '@/hooks/useBrand'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import type { HomeModule, VideoCard as VideoCardType, ApiResponse } from '@resovo/types'
 
@@ -131,14 +132,18 @@ function FeaturedGrid({ videos }: { readonly videos: VideoCardType[] }) {
 // ── FeaturedRow ───────────────────────────────────────────────────────────────
 
 export function FeaturedRow({ title, viewAllHref, viewAllLabel }: FeaturedRowProps) {
+  const { brand } = useBrand()
   const [videos, setVideos] = useState<VideoCardType[]>([])
   const [loading, setLoading] = useState(true)
 
+  // CHG-SN-8-GAPS-HOME-BRAND-MULTI / ADR-052：modules 查询按 brand 过滤
   useEffect(() => {
     setLoading(true)
-    // 并行请求：模块检查 + 趋势视频（作为填位内容）
+    const modulesUrl = brand.slug
+      ? `/home/modules?slot=featured&brand_slug=${encodeURIComponent(brand.slug)}`
+      : '/home/modules?slot=featured'
     Promise.all([
-      apiClient.get<ApiResponse<HomeModule[]>>('/home/modules?slot=featured', { skipAuth: true }),
+      apiClient.get<ApiResponse<HomeModule[]>>(modulesUrl, { skipAuth: true }),
       apiClient.get<{ data: VideoCardType[] }>('/videos/trending?period=week&limit=4', { skipAuth: true }),
     ])
       .then(([_modulesRes, trendingRes]) => {
@@ -148,7 +153,7 @@ export function FeaturedRow({ title, viewAllHref, viewAllLabel }: FeaturedRowPro
       })
       .catch(() => setVideos([]))
       .finally(() => setLoading(false))
-  }, [])
+  }, [brand.slug])
 
   return (
     <section>

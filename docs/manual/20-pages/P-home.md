@@ -84,10 +84,11 @@
 
 ## 4. 进阶操作
 
-### 4.1 brand-specific 模块
+### 4.1 brand-specific 模块（✅ 已完整打通）
 
-- 与多品牌部署关联；当前**多品牌路由层面已支持**但前台消费链路待 follow-up（GAPS.md #G-home-brand-multi）
-- 仅 brandSlug 字段已存
+- 后端 `/home/top10` + `/home/modules` 支持 `?brand_slug=<slug>` query；HomeService 按 brand 过滤（null 仅命中 `brand_scope='all-brands'`）
+- 前台 `TopTenRow` + `FeaturedRow` 已消费 `useBrand().brand.slug`：URL 拼 `?brand_slug=<slug>`；useEffect deps 含 brand.slug → brand 切换自动重 fetch（CHG-SN-8-GAPS-HOME-BRAND-MULTI / GAPS #G-home-brand-multi ✅）
+- 编辑时 brand_scope = 'brand-specific' 设定单一 brand_slug；用户首次访问对应 brand 即可看到（cookie `resovo-brand` 写入后 BrandProvider 推 SSR + 客户端切换）
 
 ### 4.2 时效模块（startAt / endAt）
 

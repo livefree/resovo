@@ -152,12 +152,13 @@
 - **优先级**：P2
 - **现象**：当前 audit 端点 admin only；按设计意图 moderator/editor 应该能看自己的 audit 条目；实际后端是否支持需 grep 确认
 
-### #G-home-brand-multi · 多品牌前台消费链路待 follow-up
+### #G-home-brand-multi · 多品牌前台消费链路
 
 - **页面**：P-home §4.1
-- **状态**：⬜ 未启动
+- **状态**：✅ 已闭合（2026-05-21 / CHG-SN-8-GAPS-HOME-BRAND-MULTI）
 - **优先级**：P3
-- **现象**：brandSlug 字段已存；多品牌路由层支持但前台消费 home_modules 时是否按 brand 过滤待核
+- **现象（已核查 + 闭合）**：后端 `/home/top10` + `/home/modules` 已支持 `brand_slug` query；HomeService 按 brand 过滤；问题在前端调用未传 brand_slug 始终走 null 路径（仅命中 brand_scope='all-brands'）；CHG-SN-8-GAPS-HOME-BRAND-MULTI 在 TopTenRow + FeaturedRow 引入 useBrand → URL 拼 `?brand_slug=<slug>` + useEffect deps 加 brand.slug 实现 brand 切换重 fetch
+- **关联**：ADR-052 brand 协议消费侧补齐；H1 完整多品牌路径打通
 
 ### #G-user-menu-real-features · 用户菜单 profile 编辑 / preferences 全功能 / switchAccount 真实功能
 

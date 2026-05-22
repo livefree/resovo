@@ -14730,3 +14730,36 @@ Plan-Revision: 无
 Cleanup-Audit: #G-settings-save-all ❌ NEGATED
 Plan-Revision: 无
 
+---
+
+## [CHG-SN-8-GAPS-HOME-BRAND-MULTI] TopTen/Featured 消费 brand_slug（#G-home-brand-multi 闭合）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21 20:05
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **修改文件**：
+  - `apps/web-next/src/components/home/TopTenRow.tsx` — 引入 useBrand；URL 改 `/home/top10?brand_slug=${encodeURIComponent(brand.slug)}`（brand.slug 缺省退化为 base URL）；useEffect deps 加 brand.slug
+  - `apps/web-next/src/components/home/FeaturedRow.tsx` — 同范式 modules URL 拼 brand_slug；useEffect deps 加 brand.slug
+  - `tests/unit/web-next/HomeBrandFiltering.test.tsx` — 新建 3 用例 PASS（TopTen 带 brand_slug / TopTen brand undefined 走 base / FeaturedRow 带 brand_slug）；polyfill ResizeObserver
+  - `docs/manual/GAPS.md` — #G-home-brand-multi ⬜ → ✅
+  - `docs/manual/20-pages/P-home.md` §4.1 改写为「✅ 已完整打通」三段说明
+  - `docs/task-queue.md` SEQ-20260521-06 #17 子卡 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 后端契约早就支持（ADR-052），但前端从未消费 — 实证核查后定位问题点；本卡为消费侧补齐而非新设计
+  - useEffect deps 加 brand.slug：用户在 SettingsDrawer 切换 brand 后会自动重 fetch；BrandProvider 上下文已 SSR-safe
+
+### 验收
+- typecheck PASS / lint PASS / verify:adr-contracts PASS / verify:manual-coverage PASS
+- 全 unit 4441 PASS（+3 HomeBrandFiltering）
+
+### 价值
+- ADR-052 brand 协议消费侧补齐：多品牌部署完整路径打通
+- H1 部分缓解：brand-specific 模块用户可见
+
+Cleanup-Audit: #G-home-brand-multi ✅
+Plan-Revision: 无
+
