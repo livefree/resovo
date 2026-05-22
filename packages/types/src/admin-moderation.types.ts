@@ -175,6 +175,9 @@ export type AdminAuditActionType =
   | 'user.email_change'           // PATCH /admin/users/:id/email
   | 'user.profile_update'         // PATCH /admin/users/:id/profile
 
+  // CHG-SN-8-FUP-AUDIT-ROLLBACK-EP / ADR-138：admin 通用回滚 audit（形成 audit-of-audit 追溯链）
+  | 'system.audit_rollback'       // POST /admin/audit/logs/:id/rollback
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'

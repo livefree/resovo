@@ -92,6 +92,8 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   // CHG-SN-8-FUP-USERS-EDIT-EP / ADR-140：admin 改邮箱 + 编辑资料
   'user.email_change',
   'user.profile_update',
+  // CHG-SN-8-FUP-AUDIT-ROLLBACK-EP / ADR-138：admin 通用回滚 audit（形成 audit-of-audit 追溯链）
+  'system.audit_rollback',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',

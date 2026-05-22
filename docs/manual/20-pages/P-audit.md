@@ -74,12 +74,15 @@
   - `user_submission.action` → `/admin/user-submissions`
 - **不可回滚类型**（按钮 disabled + tooltip）：`crawler.*` / `crawler_run.*` / `crawler_site.*` / `image_health.*` / `system.*` / `sources.route_action` / `source_line_alias.upsert` / `video.refetch_sources` — 这些是采集/重扫/导入等单向只增操作，无反向语义
 - **未知 actionType**：按 targetKind fallback 跳详情页（video → /admin/videos / user → /admin/users 等）
-- **通用端点 follow-up**：CHG-SN-8-FUP-AUDIT-ROLLBACK-EP — 按 ADR-138 实施 `POST /admin/audit/logs/:id/rollback`（**ADR 已起草 A− PASS** 2026-05-22 / commit 待）
-  - **方案 D 混合策略**：JSONB diff 反向 UPDATE 通用路径（首期 ~12 个简单 UPDATE 类 actionType）+ reverse_handler 注册扩展点 + UNSUPPORTED Set 24 项不可回滚（采集/重扫/导入/缓存等单向操作 + batch 操作 + 复杂多表）
-  - **字段白名单**：防 password_hash / role 等敏感字段被 audit log 注入回滚（D-138-5）
-  - **3 新 ErrorCode**：`AUDIT_ROLLBACK_UNSUPPORTED` 422 / `AUDIT_ROLLBACK_STALE` 409（stale 检测）/ `AUDIT_ROLLBACK_SCHEMA_DRIFT` 422（schema 漂移）
-  - **R-MID-1 第 19 次系统化**：新 actionType `system.audit_rollback` 形成 audit-of-audit 追溯链
-  - **N1 follow-up**：reverse_handler 渐进注册 P1/P2/P3（CHG-SN-8-FUP-AUDIT-ROLLBACK-HANDLERS）/ `force` 强制覆盖参数（CHG-SN-8-FUP-AUDIT-ROLLBACK-FORCE）
+- **通用后端端点**：✅ **已实装**（CHG-SN-8-FUP-AUDIT-ROLLBACK-EP / ADR-138 / 2026-05-22）
+  - **端点**：`POST /admin/audit/logs/:id/rollback`（admin only）
+  - **方案 D 混合策略**：JSONB diff 反向 UPDATE 通用路径（首期 ~12 个简单 UPDATE 类 actionType）+ reverse_handler 注册扩展点（首期空 Map，N1-138-1 渐进注册）+ UNSUPPORTED Set ~32 项（含 24 项原 ADR 不可回滚 + 8 项 N1-138-1 暂入待 handler）
+  - **字段白名单**：防 password_hash / role 等敏感字段被 audit log 注入回滚（11 target_kind 各有独立白名单）
+  - **8 失败场景处理**：UNSUPPORTED（不可回滚 / target_id NULL / before_jsonb NULL / 二次回滚 4 子类）/ STALE（after_jsonb 与当前 DB 不一致 / UNIQUE 违反 23505）/ SCHEMA_DRIFT（白名单交集为空 / PG 42703 字段不存在）/ NOT_FOUND（audit_log 不存在 / 目标业务行不存在 / soft-deleted）
+  - **3 新 ErrorCode**：`AUDIT_ROLLBACK_UNSUPPORTED` 422 / `AUDIT_ROLLBACK_STALE` 409 / `AUDIT_ROLLBACK_SCHEMA_DRIFT` 422
+  - **R-MID-1 第 19 次系统化**：新 actionType `system.audit_rollback` 形成 audit-of-audit 追溯链；事务内 INSERT 保证原子性
+  - **响应**：`{ rolledBack: true, rollbackAuditLogId, warnings? }`；warnings 列出被白名单过滤的字段
+- **N1 follow-up**：reverse_handler 渐进注册 P1/P2/P3（CHG-SN-8-FUP-AUDIT-ROLLBACK-HANDLERS 按需） / `force` 强制覆盖参数（CHG-SN-8-FUP-AUDIT-ROLLBACK-FORCE 待运营反馈） / 消费层升级（rollback-routes.ts 切换为"直接调端点"）
 
 ## 4. 进阶操作
 

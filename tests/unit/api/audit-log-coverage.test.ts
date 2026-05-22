@@ -82,6 +82,8 @@ const REQUIRED_ACTION_TYPES = [
   // CHG-SN-8-FUP-USERS-EDIT-EP / ADR-140：admin 改邮箱 + 编辑资料 audit（R-MID-1 第 18 次）
   'user.email_change',
   'user.profile_update',
+  // CHG-SN-8-FUP-AUDIT-ROLLBACK-EP / ADR-138：通用回滚 audit-of-audit 追溯链（R-MID-1 第 19 次）
+  'system.audit_rollback',
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -155,6 +157,8 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   // CHG-SN-8-FUP-USERS-EDIT-EP / ADR-140：admin 改邮箱 + 编辑资料 audit payload 内容断言（R-MID-1 第 18 次）
   'user.email_change',
   'user.profile_update',
+  // CHG-SN-8-FUP-AUDIT-ROLLBACK-EP / ADR-138：通用回滚 audit-of-audit payload 内容断言（R-MID-1 第 19 次）
+  'system.audit_rollback',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

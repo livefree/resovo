@@ -1,13 +1,15 @@
 /**
  * api-errors.ts — ErrorCode 唯一真源（ADR-110）
  *
- * ERRORS 字典：15 码
+ * ERRORS 字典：18 码
  *   通用 7 码：NOT_FOUND / VALIDATION_ERROR / UNAUTHORIZED / FORBIDDEN /
  *             INTERNAL_ERROR / STATE_CONFLICT / INVALID_TRANSITION
  *   业务 6 码（CHG-SN-4-05）：STATE_INVALID / LABEL_UNKNOWN / STAGING_NOT_READY /
  *                             REVIEW_RACE / RATE_LIMITED / SOURCE_PROBE_FAILED
  *   注册冲突 1 码：CONFLICT（用户名/邮箱唯一约束违反，auth 路由）
  *   会话失效 1 码（ADR-139 / CHG-SN-8-FUP-USERS-ROLE-INV-EP）：ROLE_CHANGED（admin 改角色后已发 token 失效）
+ *   审计回滚 3 码（ADR-138 / CHG-SN-8-FUP-AUDIT-ROLLBACK-EP）：
+ *     AUDIT_ROLLBACK_UNSUPPORTED 422 / AUDIT_ROLLBACK_STALE 409 / AUDIT_ROLLBACK_SCHEMA_DRIFT 422
  *
  * AppError class 留在 apps/api（class 不可跨 workspace 共享 instanceof）。
  */
@@ -43,6 +45,14 @@ export const ERRORS = {
   // middleware / refresh 检测到 access/refresh token iat < user.role_changed_at 时返回；
   // 前端 interceptor 识别此码后跳过 silent refresh，直接 forced logout + redirect /login?reason=role_changed
   ROLE_CHANGED:       { code: 'ROLE_CHANGED',        message: '您的权限已变更，请重新登录',         status: 401 },
+
+  // ── 审计回滚 3 码（ADR-138 / CHG-SN-8-FUP-AUDIT-ROLLBACK-EP）─────────────
+  // actionType 不可回滚 / target_id NULL / before_jsonb NULL / system.audit_rollback 二次回滚
+  AUDIT_ROLLBACK_UNSUPPORTED:  { code: 'AUDIT_ROLLBACK_UNSUPPORTED',  message: '此操作类型不支持回滚',                       status: 422 },
+  // 当前 DB 值与 audit_log after_jsonb 不一致（已被后续操作覆盖）/ UNIQUE 违反 23505
+  AUDIT_ROLLBACK_STALE:        { code: 'AUDIT_ROLLBACK_STALE',        message: '目标数据已被后续操作修改，无法安全回滚',     status: 409 },
+  // before_jsonb 字段与当前 schema 白名单交集为空 / 字段已被 migration 删除
+  AUDIT_ROLLBACK_SCHEMA_DRIFT: { code: 'AUDIT_ROLLBACK_SCHEMA_DRIFT', message: '审计记录字段与当前 schema 不兼容，无法自动回滚', status: 422 },
 } as const satisfies Record<string, ApiErrorBody>
 
 export type ErrorCode = keyof typeof ERRORS

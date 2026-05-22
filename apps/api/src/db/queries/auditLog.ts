@@ -234,3 +234,104 @@ export async function getAdminAuditLogById(
   )
   return result.rows[0] ?? null
 }
+
+// ── ADR-138 / CHG-SN-8-FUP-AUDIT-ROLLBACK-EP ─────────────────────────────
+//
+// 通用 JSONB 反向 UPDATE + stale 检测。
+//
+// SQL 注入防护（ADR-138 §10 R-138-3）：
+//   - tableName / primaryKeyColumn / softDeleteColumn / fieldNames 全部从编译时
+//     白名单（AuditRollbackService TARGET_KIND_TABLE_MAP + FIELD_WHITELIST）取
+//   - 不接受用户输入，直接拼入 SQL；用 PG 双引号转义保留大小写
+
+import type { PoolClient } from 'pg'
+
+/**
+ * 引用 PG 标识符（防注入兼容白名单值）。
+ * 白名单值是编译时常量（snake_case identifiers），实际只需双引号包裹防关键字冲突。
+ */
+function quoteIdent(name: string): string {
+  // 防御性：白名单值理论上不含双引号，但 escape 双引号以防意外
+  return `"${name.replace(/"/g, '""')}"`
+}
+
+/**
+ * 通用反向 UPDATE：将 fieldsToRestore 写入业务表对应行（仅 deleted_at IS NULL 的行）。
+ * 仅供 AuditRollbackService 调用（依赖白名单校验）。
+ *
+ * @returns affectedRows: 0 = 目标行不存在或 soft-deleted；1 = 成功
+ */
+export async function rollbackAuditLogTarget(
+  client: PoolClient,
+  tableName: string,
+  primaryKeyColumn: string,
+  targetId: string,
+  fieldsToRestore: Record<string, unknown>,
+  softDeleteColumn: string | null = 'deleted_at',
+): Promise<{ affectedRows: number }> {
+  const fields = Object.keys(fieldsToRestore)
+  if (fields.length === 0) {
+    return { affectedRows: 0 }
+  }
+
+  const sets = fields.map((col, i) => `${quoteIdent(col)} = $${i + 1}`)
+  const params = fields.map((col) => fieldsToRestore[col])
+  const whereSoftDelete = softDeleteColumn ? ` AND ${quoteIdent(softDeleteColumn)} IS NULL` : ''
+  const sql =
+    `UPDATE ${quoteIdent(tableName)} SET ${sets.join(', ')} ` +
+    `WHERE ${quoteIdent(primaryKeyColumn)} = $${fields.length + 1}${whereSoftDelete}`
+
+  const result = await client.query(sql, [...params, targetId])
+  return { affectedRows: result.rowCount ?? 0 }
+}
+
+/**
+ * 读取当前 DB 行指定字段子集（stale 检测使用 — 与 audit_log.after_jsonb 比对）。
+ * @returns null = 目标行不存在或 soft-deleted
+ */
+export async function selectCurrentRowForRollback(
+  client: PoolClient,
+  tableName: string,
+  primaryKeyColumn: string,
+  targetId: string,
+  fieldNames: readonly string[],
+  softDeleteColumn: string | null = 'deleted_at',
+): Promise<Record<string, unknown> | null> {
+  if (fieldNames.length === 0) return null
+  const cols = fieldNames.map(quoteIdent).join(', ')
+  const whereSoftDelete = softDeleteColumn ? ` AND ${quoteIdent(softDeleteColumn)} IS NULL` : ''
+  const sql =
+    `SELECT ${cols} FROM ${quoteIdent(tableName)} ` +
+    `WHERE ${quoteIdent(primaryKeyColumn)} = $1${whereSoftDelete} LIMIT 1`
+  const result = await client.query<Record<string, unknown>>(sql, [targetId])
+  return result.rows[0] ?? null
+}
+
+/**
+ * 插入 audit_log 行（事务内版本 — 与 insertAuditLog 同实现但使用 PoolClient 支持事务原子性）。
+ * ADR-138 D-138-6：rollback 的 audit 写入不走 fire-and-forget，在事务内 INSERT 保证原子性。
+ *
+ * @returns 新行 id（bigserial 转 string）
+ */
+export async function insertAuditLogInTransaction(
+  client: PoolClient,
+  input: WriteAuditLogInput,
+): Promise<string> {
+  const result = await client.query<{ id: string }>(
+    `INSERT INTO admin_audit_log
+       (actor_id, action_type, target_kind, target_id, before_jsonb, after_jsonb, request_id, ip_hash)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING id::text AS id`,
+    [
+      input.actorId,
+      input.actionType,
+      input.targetKind,
+      input.targetId ?? null,
+      input.beforeJsonb ? JSON.stringify(input.beforeJsonb) : null,
+      input.afterJsonb ? JSON.stringify(input.afterJsonb) : null,
+      input.requestId ?? null,
+      input.ipHash ?? null,
+    ],
+  )
+  return result.rows[0]!.id
+}

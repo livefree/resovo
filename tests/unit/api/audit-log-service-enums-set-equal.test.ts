@@ -77,6 +77,8 @@ const EXPECTED_ACTION_TYPES = [
   // CHG-SN-8-FUP-USERS-EDIT-EP / ADR-140 / R-MID-1 系统化第 17 次（双 actionType）
   'user.email_change',
   'user.profile_update',
+  // CHG-SN-8-FUP-AUDIT-ROLLBACK-EP / ADR-138 / R-MID-1 系统化第 19 次（audit-of-audit 追溯链）
+  'system.audit_rollback',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [

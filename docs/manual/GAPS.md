@@ -146,13 +146,16 @@
 ### #G-audit-rollback-universal · 审计日志「回滚」按钮
 
 - **页面**：P-audit §3.4
-- **状态**：⚠️ + 🔄 已部分实装 + ADR 已起草（CHG-SN-8-GAPS-AUDIT-ROLLBACK 消费层 ✅ / ADR-138 A− PASS / 实施 follow-up CHG-SN-8-FUP-AUDIT-ROLLBACK-EP 待立）
+- **状态**：✅ **完全闭合**（2026-05-22 / 消费层 + ADR-138 + EP 全 PASS）
 - **优先级**：P2
-- **闭环路径（3/3）**：
-  - **1/3 消费层（跳转 / disabled）**：CHG-SN-8-GAPS-AUDIT-ROLLBACK（commit 14e6b9b7）— AuditColumns actions 列「回滚」xs danger button + rollback-routes.ts 40 actionType 映射（8 类跳转 / 22 disabled / 4 fallback）
-  - **2/3 ADR**：CHG-SN-8-FUP-AUDIT-ROLLBACK-ADR — ADR-138 A− PASS（D-138-1..6 + 4 方案 trade-off + 8 失败场景处理 + 字段白名单 3 示例 + 24 项 UNSUPPORTED + 19 测试 surface + 2 N1）；决策：方案 D 混合策略（JSONB diff 反向 UPDATE + reverse_handler 注册扩展点 + UNSUPPORTED Set 24 项）+ 字段白名单（防 password_hash/role 注入）+ 3 新 ErrorCode（AUDIT_ROLLBACK_UNSUPPORTED 422 / STALE 409 / SCHEMA_DRIFT 422）+ system.audit_rollback actionType + R-MID-1 7 文件框架
-  - **3/3 实施 follow-up**：CHG-SN-8-FUP-AUDIT-ROLLBACK-EP — 按 ADR-138 落 10 文件（R-MID-1 7 + AuditRollbackService + api-errors 3 码扩 + query 函数 + 19 测试）+ 首期 ~12 项纯 UPDATE 类自动回滚；工时 0.5-0.8w
-- **N1 follow-up**：N1-138-1（reverse_handler 渐进注册 P1/P2/P3）→ CHG-SN-8-FUP-AUDIT-ROLLBACK-HANDLERS 按需 / N1-138-2（force 强制覆盖参数）→ CHG-SN-8-FUP-AUDIT-ROLLBACK-FORCE 按需
+- **闭环路径（3/3 全 ✅）**：
+  - **1/3 消费层（跳转 / disabled）**：CHG-SN-8-GAPS-AUDIT-ROLLBACK（commit 14e6b9b7）— AuditColumns actions 列「回滚」xs danger button + rollback-routes.ts 40 actionType 映射
+  - **2/3 ADR**：CHG-SN-8-FUP-AUDIT-ROLLBACK-ADR（commit e446a17c）— ADR-138 A− PASS / 方案 D 混合策略
+  - **3/3 实施 EP**：CHG-SN-8-FUP-AUDIT-ROLLBACK-EP — 10 文件（R-MID-1 7 + AuditRollbackService + api-errors 3 码扩 + query 函数）+ POST /admin/audit/logs/:id/rollback 端点（admin only + 8 失败场景处理 + 字段白名单防注入）+ 首期 ~12 项纯 UPDATE 类自动回滚 / UNSUPPORTED Set ~32 项 + 19 单测 / R-MID-1 第 19 次系统化（system.audit_rollback actionType + 事务原子性）
+- **后续可选优化（N1 follow-up）**：
+  - **N1-138-1**：reverse_handler 渐进注册 P1/P2/P3（video.approve / home_module.create-delete / staging.publish 等复杂 actionType）→ CHG-SN-8-FUP-AUDIT-ROLLBACK-HANDLERS 按需启动
+  - **N1-138-2**：`{ force?: boolean }` 强制覆盖参数 → CHG-SN-8-FUP-AUDIT-ROLLBACK-FORCE 待运营反馈触发
+  - **消费层升级**：rollback-routes.ts 可回滚 actionType 从"跳转模式"切换为"直接调 POST 端点"（独立 follow-up）
 
 ### #G-audit-time-travel · 审计日志时间穿梭未实装
 
