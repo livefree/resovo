@@ -14629,3 +14629,43 @@ Plan-Revision: 无
 
 Cleanup-Audit: #G-moderation-batch-ui ✅；P1 主线 GAPS 闭合 3/5
 Plan-Revision: 无
+
+---
+
+## [CHG-SN-8-04-N1] ADR-137 §11 N1 跨类型相似召回 fallback
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21 19:50
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（按 ADR-137 §11 N1 既定建议直接实施，未触动公开 API）
+- **修改文件**：
+  - `apps/api/src/db/queries/moderation.ts` — `listSimilarCandidates` 新增 `relaxType?: boolean` + `excludeIds?: readonly string[]` 参数；动态 WHERE（relaxType=true 去除 type 严格约束 / excludeIds 非空时增 `v.id != ALL($6::uuid[])`）
+  - `apps/api/src/services/ModerationService.ts` — `listSimilar` 加 fallback：strict 通过 minScore 后 < limit 时发起第二次 relaxType 查询（excludeIds 排除首次 ids 避免重复）；合并 strict+fallback scored 整体 score desc 排序 + slice top-N；computeSimilarityScore 公式不变（跨类型自然 type 维度 +0）
+  - `tests/unit/api/moderation-similar.test.ts` — 新增 #8 fallback 命中（strict 1 + fallback 1 异 type → 合并 2 条 score 排序）+ #9 strict ≥ limit 不触发 fallback 用例；旧 #1 #6 用例改 `mockResolvedValueOnce + 第二次返空数组` 适配新行为；总 15 PASS
+  - `docs/decisions.md` — ADR-137 §11 N1 状态从「非阻塞建议（待 follow-up）」改为「✅ 已闭合（CHG-SN-8-04-N1）」+ 实施落地详情
+  - `tests/unit/components/server-next/admin/merge/MergeClient.test.tsx` — **顺手修 pre-existing 红线**：补 `vi.mock('next/navigation', ...)` stub（CHG-SN-8-08 引入 useRouter/useSearchParams 未补 mock，导致 15 测试预存红）
+  - `tests/unit/components/server-next/admin/videos/VideoRowActions.test.tsx` — 同上补 `vi.mock('next/navigation', ...)` stub（CHG-SN-8-08 在 VideoRowActions 加「发起合并」深链 useRouter.push 未补 mock，15 测试预存红）
+  - `docs/task-queue.md` — SEQ-20260521-06 #14 子卡 CHG-SN-8-04-N1 ✅ 完成备注
+  - `docs/tasks.md` — 清卡片
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - fallback 路径性能：strict 触发 fallback 时多 1 次 query 调用，但每次仍走 idx_catalog_type_year（fallback 因放宽 type 不再受益 type 索引但 LIMIT 仍兜底）；ADR-137 §6 p95 ≤ 200ms 性能 baseline 仍在该实现下保持（fallback 仅在 strict 不足才触发）
+  - computeSimilarityScore 公式保持不变；跨类型候选 type 维度自然 +0，仅 year + country + genres 三维评分（理论 max 60 分，与 strict-type 候选 100 分天花板自然区分）
+  - 测试用例 #1 #6 旧改动确保旧断言行为不变；本卡同时清除 30 测试预存红（CHG-SN-8-08 + CHG-SN-8-GAPS-MOD-BATCH 引入但未补 mock 的连环回归）
+
+### 验收
+- typecheck PASS
+- lint PASS
+- verify:adr-contracts PASS（173 路由 ↔ 44 ADR 端点；endpoint-adr/adr-d-numbers/style-shorthand-conflict 全 PASS；error-message/sql-schema-alignment advisory 不阻塞）
+- verify:manual-coverage PASS
+- 全 unit 测试 4435 PASS（含 moderation-similar 15 PASS / MergeClient 15 PASS / VideoRowActions 15 PASS）
+
+### 价值
+- ADR-137 §11 N1 非阻塞建议闭合：覆盖电影同名 anime 改编版等跨类型相似召回场景
+- 预存 30 测试红清零（CHG-SN-8-08 → MergeClient + VideoRowActions 缺 next/navigation mock 的连环回归）
+- 4347 → 4435（增量 +88 含本卡 +2 + 之前批次累计）
+
+Cleanup-Audit: ADR-137 §11 N1 ✅；预存红 30 测试清零
+Plan-Revision: 无
+

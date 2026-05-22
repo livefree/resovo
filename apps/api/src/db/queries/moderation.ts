@@ -340,11 +340,15 @@ export interface SimilarCandidatesQuery {
   readonly yearRange: number
   /** 粗筛上限，默认 50（ADR-137 §5 性能保底）*/
   readonly limit?: number
+  /** ADR-137 N1 fallback：true 时去除 type 严格相等条件，允许跨类型召回（CHG-SN-8-04-N1）*/
+  readonly relaxType?: boolean
+  /** ADR-137 N1 fallback：额外排除的 video ids（避免与首次 strict 查询结果重复）*/
+  readonly excludeIds?: readonly string[]
 }
 
 /**
- * listSimilarCandidates：SQL 粗筛（ADR-137 §5 SQL 设计）
- * - WHERE: deleted_at IS NULL + 排除自身 + type 严格相等 + year 区间（year 为 null 时不卡）
+ * listSimilarCandidates：SQL 粗筛（ADR-137 §5 SQL 设计 + N1 fallback CHG-SN-8-04-N1）
+ * - WHERE: deleted_at IS NULL + 排除自身 + 排除已查过 + [可选 type 严格相等] + year 区间
  * - ORDER: meta_score DESC（启发式高质量优先）
  * - LIMIT: 50（Service 层算 score 截断 top-N）
  */
@@ -352,6 +356,24 @@ export async function listSimilarCandidates(
   db: Pool,
   query: SimilarCandidatesQuery,
 ): Promise<readonly SimilarCandidateRow[]> {
+  const relaxType = query.relaxType === true
+  const excludeIds = query.excludeIds ?? []
+  const params: unknown[] = [
+    query.excludeId,
+    query.type,
+    query.year,
+    query.yearRange,
+    query.limit ?? 50,
+  ]
+  // $6+: excludeIds 数组展开（如有）
+  const excludeListClause = excludeIds.length > 0
+    ? `AND v.id != ALL($6::uuid[])`
+    : ''
+  if (excludeIds.length > 0) params.push(excludeIds)
+
+  const typeClause = relaxType ? '' : 'AND v.type = $2'
+  // 当 relaxType=true 时 $2 不用于 WHERE 但仍为占位（pg 不允许跳过）— 保留以维持参数索引稳定
+
   const sql = `
     SELECT
       v.id,
@@ -368,18 +390,13 @@ export async function listSimilarCandidates(
     LEFT JOIN media_catalog mc ON mc.id = v.catalog_id
     WHERE v.deleted_at IS NULL
       AND v.id != $1
-      AND v.type = $2
+      ${typeClause}
       AND ($3::int IS NULL OR mc.year IS NULL OR mc.year BETWEEN $3 - $4 AND $3 + $4)
+      ${excludeListClause}
     ORDER BY v.meta_score DESC NULLS LAST
     LIMIT $5
   `
-  const result = await db.query(sql, [
-    query.excludeId,
-    query.type,
-    query.year,
-    query.yearRange,
-    query.limit ?? 50,
-  ])
+  const result = await db.query(sql, params)
   return result.rows.map((row) => ({
     id: row.id,
     title: row.title,

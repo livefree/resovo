@@ -251,9 +251,12 @@ export class ModerationService {
   /**
    * CHG-SN-8-04-EP · ADR-137：类似视频召回
    *
-   * 流程：findVideoFeatures（404 if null）→ listSimilarCandidates（粗筛 LIMIT 50）
-   *       → Service 层 4 维加权 similarityScore（D-137-2 公式）→ minScore=10 过滤
-   *       → score desc 排序 + 截断 top-N → camelCase 映射
+   * 流程：findVideoFeatures（404 if null）→ listSimilarCandidates strict 粗筛（LIMIT 50）
+   *       → 4 维加权 similarityScore → minScore=10 过滤 → score desc top-N
+   *
+   * CHG-SN-8-04-N1（ADR-137 §11 N1 闭合）：strict 候选 < limit 时发起 fallback relaxType 查询补足
+   *   - fallback 查询排除首次结果 ids
+   *   - 跨类型候选 type 维度 +0（公式自然），合并后整体 score 排序
    */
   async listSimilar(
     videoId: string,
@@ -263,18 +266,45 @@ export class ModerationService {
     if (!target) {
       throw new AppError('NOT_FOUND', ERRORS.NOT_FOUND.message, ERRORS.NOT_FOUND.status)
     }
-    const candidates = await listSimilarCandidates(this.db, {
+
+    // strict 查询：type 严格相等
+    const strictCandidates = await listSimilarCandidates(this.db, {
       excludeId: target.id,
       type: target.type,
       year: target.year,
       yearRange: opts.yearRange,
     })
-    const scored = candidates
+
+    // 评分 + minScore 过滤
+    const strictScored = strictCandidates
       .map((row) => ({ row, score: computeSimilarityScore(target, row, opts.yearRange) }))
       .filter((entry) => entry.score >= MIN_SCORE)
+
+    let allScored = strictScored
+
+    // ADR-137 N1 fallback：strict 通过 minScore 后 < limit 时跨类型补足
+    if (strictScored.length < opts.limit) {
+      const strictIds = strictCandidates.map((row) => row.id)
+      const fallbackCandidates = await listSimilarCandidates(this.db, {
+        excludeId: target.id,
+        type: target.type, // 占位（relaxType=true 时不参与 WHERE）
+        year: target.year,
+        yearRange: opts.yearRange,
+        relaxType: true,
+        excludeIds: strictIds,
+        limit: Math.max(50 - strictCandidates.length, 10), // 留余度但保 LIMIT
+      })
+      const fallbackScored = fallbackCandidates
+        .map((row) => ({ row, score: computeSimilarityScore(target, row, opts.yearRange) }))
+        .filter((entry) => entry.score >= MIN_SCORE)
+      allScored = [...strictScored, ...fallbackScored]
+    }
+
+    const finalScored = allScored
       .sort((a, b) => b.score - a.score)
       .slice(0, opts.limit)
-    return scored.map(({ row, score }) => ({
+
+    return finalScored.map(({ row, score }) => ({
       id: row.id,
       title: row.title,
       type: row.type,

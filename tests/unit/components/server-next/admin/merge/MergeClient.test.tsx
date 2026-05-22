@@ -31,6 +31,19 @@ const toastPushMock = vi.fn()
 
 const listAuditMock = vi.fn()
 
+// CHG-SN-8-04-N1 顺手修 pre-existing：CHG-SN-8-08 在 MergeClient 引入 useRouter/useSearchParams 但未补 mock
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+    prefetch: vi.fn(),
+  }),
+  useSearchParams: () => new URLSearchParams(),
+}))
+
 vi.mock('../../../../../../apps/server-next/src/lib/merge/api', () => ({
   listCandidates: (...args: unknown[]) => listCandidatesMock(...args),
   mergeVideos: (...args: unknown[]) => mergeVideosMock(...args),

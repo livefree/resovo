@@ -9011,5 +9011,5 @@ const SimilarQueryParams = z.object({
 - **CHG-SN-8-04-EP**：按本 ADR 实施端点 + Service + Query + 测试
 - **CHG-SN-8-04-VIEW**：TabSimilar.tsx 改造消费端点 + 渲染列表 + 合并深链按钮
 
-**N1 非阻塞建议**（arch-reviewer Opus 标注，登记 follow-up）：评分公式中 `type` 维度占 40 分且作为 SQL WHERE 严格相等条件，意味着跨类型相似视频（如同名电影的 anime 改编版）永远不会被召回。建议在实施时考虑：当 type 严格匹配候选 < limit 时，可 fallback 到 type 不限的二次查询补足。**非红线，不阻塞 ADR 采纳**；如未来用户反馈漏召回明显，立独立 follow-up 卡（CHG-SN-8-04-N1）补 fallback 逻辑。
+**N1 非阻塞建议 — ✅ 已闭合（CHG-SN-8-04-N1 / 2026-05-21）**：评分公式中 `type` 维度占 40 分且作为 SQL WHERE 严格相等条件，意味着跨类型相似视频（如同名电影的 anime 改编版）永远不会被召回。建议在实施时考虑：当 type 严格匹配候选 < limit 时，可 fallback 到 type 不限的二次查询补足。**实施落地**：`listSimilarCandidates` 新增 `relaxType?: boolean` + `excludeIds?: readonly string[]` 参数；`ModerationService.listSimilar` strict 通过 minScore 后 < limit 时发起 fallback relaxType 查询（excludeIds 排除首次结果避免重复）；跨类型候选 `computeSimilarityScore` 自然在 type 维度 +0（不变公式）；合并后整体 score 排序 + slice top-N。测试新增 2 用例（fallback 命中 + strict ≥ limit 不触发），全 15 PASS。
 

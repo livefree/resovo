@@ -15,6 +15,18 @@ import type { VideoAdminRow } from '../../../../../../apps/server-next/src/lib/v
 
 // ── mock API ──────────────────────────────────────────────────────
 
+// CHG-SN-8-04-N1 顺手修 pre-existing：CHG-SN-8-08 在 VideoRowActions 引入 useRouter（行级「发起合并」深链）但未补 mock
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+    prefetch: vi.fn(),
+  }),
+}))
+
 vi.mock('../../../../../../apps/server-next/src/lib/videos/api', () => ({
   updateVisibility: vi.fn(() => Promise.resolve()),
   stateTransition: vi.fn(() => Promise.resolve()),
