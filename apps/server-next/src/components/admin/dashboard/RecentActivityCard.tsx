@@ -111,9 +111,23 @@ function actorIcon(who: string, severity: AttentionSeverity) {
 
 export interface RecentActivityCardProps {
   readonly items: readonly DashboardActivityItem[]
+  /** CHG-SN-8-GAPS-DASH-ACTIVITY：mock 时头部右侧渲染「示例数据」chip 警示；缺省 'live' 不渲染 */
+  readonly dataSource?: 'mock' | 'live'
 }
 
-export function RecentActivityCard({ items }: RecentActivityCardProps) {
+const MOCK_CHIP_STYLE: React.CSSProperties = {
+  marginLeft: 'auto',
+  padding: '2px 8px',
+  borderRadius: 'var(--radius-sm)',
+  background: 'var(--state-warning-bg)',
+  color: 'var(--state-warning-fg)',
+  fontSize: 'var(--font-size-xxs)',
+  fontWeight: 600,
+  whiteSpace: 'nowrap',
+  cursor: 'help',
+}
+
+export function RecentActivityCard({ items, dataSource = 'live' }: RecentActivityCardProps) {
   return (
     <section style={CARD_STYLE} data-card="recent-activity" aria-label="最近活动">
       <header style={HEAD_STYLE} data-card-head>
@@ -121,6 +135,15 @@ export function RecentActivityCard({ items }: RecentActivityCardProps) {
           <Clock size={18} />
         </span>
         <h3 style={HEAD_TITLE_STYLE}>最近活动</h3>
+        {dataSource === 'mock' && (
+          <span
+            style={MOCK_CHIP_STYLE}
+            title="此卡片为示例数据；接通 audit_log 端点的 follow-up：CHG-SN-8-FUP-DASH-ACTIVITY-LIVE"
+            data-mock-chip="activities"
+          >
+            示例数据
+          </span>
+        )}
       </header>
       <div style={BODY_STYLE} data-card-body>
         {items.map((item, idx) => (

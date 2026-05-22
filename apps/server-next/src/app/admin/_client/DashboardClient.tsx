@@ -244,7 +244,7 @@ export function DashboardClient() {
               <MetricKpiCardRow kpis={dashboardStats.kpis} />
 
               <div style={ROW3_STYLE} data-dashboard-row="3">
-                <RecentActivityCard items={dashboardStats.activities} />
+                <RecentActivityCard items={dashboardStats.activities} dataSource={dashboardStats.activitiesDataSource} />
                 <SiteHealthCard sites={dashboardStats.sites} />
               </div>
             </>

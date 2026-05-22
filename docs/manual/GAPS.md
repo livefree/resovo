@@ -28,13 +28,13 @@
 - **现象**：plan §6.1.3 / reference §5.1.3 设计意图含拖拽 + resize + 全屏 + 卡片库；当前仅浏览态
 - **关联**：CHG-SN-7-MISC-DASHBOARD-3 已登记长期 backlog
 
-### #G-dashboard-activities-mock · RecentActivityCard 部分子卡可能仍 mock
+### #G-dashboard-activities-mock · RecentActivityCard 仍 mock（视觉警示已加，真端点 follow-up 待立）
 
 - **页面**：P-dashboard §3 / §7 FAQ
-- **状态**：⬜ 待复核
+- **状态**：⚠️ 已部分实装（CHG-SN-8-GAPS-DASH-ACTIVITY 加视觉警示；真后端接入立 CHG-SN-8-FUP-DASH-ACTIVITY-LIVE follow-up）
 - **优先级**：P2
-- **现象**：CHG-SN-DASHBOARD-2 接通 stats 3 endpoints 含 activities，但具体子项是否全 live 未在 manual 编写时确认；可能存在 mock fallback
-- **建议**：grep `RecentActivityCard` 调用点 + sample data 引用；如有 mock 立 follow-up 接真端点
+- **现象（已核查）**：`apps/server-next/src/lib/dashboard-data.ts` 两 return 路径（live 全量 + ModerationStats fallback）的 `activities` 字段均为 `MOCK_ACTIVITIES` 全 mock；CHG-SN-8-GAPS-DASH-ACTIVITY 在 DashboardStats 加 `activitiesDataSource: 'mock' | 'live'` + RecentActivityCard 头部 mock 时显「示例数据」warn chip（tooltip 指 follow-up 卡号）。审核员视觉上能立即识别非真数据
+- **真端点 follow-up**：CHG-SN-8-FUP-DASH-ACTIVITY-LIVE — 需起 ADR 设计 `GET /admin/dashboard/activities` 端点（消费 audit_log 表派生 actor + action + time）；ADR + 端点实施完成后 dashboard-data.ts 两路径改 'live'
 
 ### #G-videos-add · 视频库「+ 添加视频」按钮
 

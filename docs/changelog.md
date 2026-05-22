@@ -14669,3 +14669,37 @@ Plan-Revision: 无
 Cleanup-Audit: ADR-137 §11 N1 ✅；预存红 30 测试清零
 Plan-Revision: 无
 
+---
+
+## [CHG-SN-8-GAPS-DASH-ACTIVITY] RecentActivityCard mock 视觉警示（#G-dashboard-activities-mock）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21 19:57
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **修改文件**：
+  - `apps/server-next/src/lib/dashboard-data.ts` — `DashboardStats` 加 `activitiesDataSource: 'mock' | 'live'`；两 return 路径设 'mock'（live 全量 + ModerationStats fallback；待 audit_log 端点 follow-up 改 'live'）
+  - `apps/server-next/src/components/admin/dashboard/RecentActivityCard.tsx` — Props 加 `dataSource?: 'mock' | 'live'`（默认 'live'）；mock 时头部右侧渲染「示例数据」warn chip（state-warning-bg/fg + tooltip 指向 follow-up 卡号 + cursor: help）
+  - `apps/server-next/src/app/admin/_client/DashboardClient.tsx` — 传 `dataSource={dashboardStats.activitiesDataSource}`
+  - `tests/unit/components/server-next/admin/dashboard/RecentActivityCard.test.tsx` — 新建 3 用例（mock 显 chip / live 不显 / 缺省默认 live）
+  - `docs/manual/GAPS.md` — #G-dashboard-activities-mock 状态 ⬜ → ⚠️；登记真端点 follow-up CHG-SN-8-FUP-DASH-ACTIVITY-LIVE
+  - `docs/manual/20-pages/P-dashboard.md` §7 FAQ 一行更新
+  - `docs/task-queue.md` — SEQ-20260521-06 #15 子卡 ✅
+  - `docs/tasks.md` — 清卡片
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 视觉警示是 H1 硬约束的部分缓解 — 用户能立即识别非真数据；真后端接入仍需立 CHG-SN-8-FUP-DASH-ACTIVITY-LIVE（需起 ADR 设计 `GET /admin/dashboard/activities` 端点 + audit_log 派生）
+  - chip 用 `data-mock-chip="activities"` 属性便于测试与 follow-up 时 grep 验证
+
+### 验收
+- typecheck PASS / lint PASS / verify:adr-contracts PASS / verify:manual-coverage PASS
+- 全 unit 4438 PASS（+3 RecentActivityCard）
+
+### 价值
+- H1 硬约束「零 mock 视图」部分缓解：mock 数据视觉可识别（不再误导）
+- GAPS P2 #G-dashboard-activities-mock 从「⬜ 待复核」推进到「⚠️ 已部分实装」
+
+Cleanup-Audit: #G-dashboard-activities-mock ⚠️（视觉警示完成 / 真端点 follow-up CHG-SN-8-FUP-DASH-ACTIVITY-LIVE 待立）
+Plan-Revision: 无
+

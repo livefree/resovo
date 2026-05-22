@@ -92,6 +92,8 @@ export interface DashboardStats {
   ]
   readonly attentions: readonly DashboardAttentionItem[]
   readonly activities: readonly DashboardActivityItem[]
+  /** CHG-SN-8-GAPS-DASH-ACTIVITY：activities 数据源标识 — 当前两路径仍 mock，待接 audit_log 端点（CHG-SN-8-FUP-DASH-ACTIVITY-LIVE follow-up）改 'live' */
+  readonly activitiesDataSource: 'mock' | 'live'
   readonly sites: readonly DashboardSiteHealth[]
   /** Page head 副标题：基于 todayReviewedCount + interceptRate 派生（live 字段时） */
   readonly headSub: string
@@ -222,6 +224,7 @@ export function buildDashboardStats(
       workflow,
       attentions: MOCK_ATTENTIONS,
       activities: MOCK_ACTIVITIES,
+      activitiesDataSource: 'mock',
       sites: MOCK_SITES,
       headSub,
     }
@@ -322,6 +325,7 @@ export function buildDashboardStats(
     workflow,
     attentions: MOCK_ATTENTIONS,
     activities: MOCK_ACTIVITIES,
+    activitiesDataSource: 'mock',
     sites: MOCK_SITES,
     headSub,
   }

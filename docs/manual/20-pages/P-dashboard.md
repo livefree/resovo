@@ -114,7 +114,7 @@
 | 「全站全量采集」按钮点击没二次确认 | 该按钮未跟进 CHG-SN-8-01 改造 | GAPS.md #G-dashboard-runall follow-up |
 | 数据更新延迟 | dashboard stats 后端 cron 周期触发 | 等下一周期 / 强制 refresh |
 | 编辑态拖拽卡片 | 未实装 | GAPS.md #G-dashboard-edit-mode |
-| RecentActivity 内容是 mock | 部分子卡可能仍 mock | GAPS.md #G-dashboard-activities-mock |
+| RecentActivity 头部「示例数据」warn chip | 卡数据仍 mock（dashboardStats.activitiesDataSource='mock'） | 接 audit_log 端点 follow-up：CHG-SN-8-FUP-DASH-ACTIVITY-LIVE / GAPS.md #G-dashboard-activities-mock |
 
 ## 8. 与其他页面的关系
 
