@@ -1,36 +1,140 @@
 # P-image-health · 图片健康
 
-> status: 🟡 骨架（M-SN-8 业务卡 DoD §0 起手填充 §1-§4，PASS 前定稿）
-> **使用本骨架开发卡时**：复制 [_template/PAGE_TEMPLATE.md](../_template/PAGE_TEMPLATE.md) 内容覆盖，再回填 §0 元信息。
+> status: 🟢 完整定稿（CHG-SN-8-FUP-IMAGE 2026-05-21）
 
-## 0. 元信息（骨架默认值）
+## 0. 元信息
 
 | 字段 | 值 |
 |---|---|
 | 真源页面路径 | `/admin/image-health` |
 | 设计稿引用 | reference.md §5.8 |
-| 主任务卡 | (待 M-SN-8 各卡填充) |
-| 涉及端点 | (待填) |
-| 适用角色 | editor+ |
-| 最近更新 | 2026-05-21 (骨架创建) |
+| 主任务卡 | CHG-SN-6-02（页面骨架）+ CHG-SN-7-MISC-IMAGE-1（重扫 + 切 fallback 域）+ CHG-SN-7-MISC-IMAGE-2（破损样本 grid）+ CHG-SN-8-FUP-IMAGE（手册定稿） |
+| 涉及端点 | `GET /admin/images/health` / `GET /admin/images/top-broken-domains` / `GET /admin/images/missing` / `POST /admin/images/rescan` / `POST /admin/images/backfill` / `POST /admin/images/switch-fallback-domain` |
+| 适用角色 | editor + admin（破坏性 action 需 admin） |
+| 最近更新 | 2026-05-21 (CHG-SN-8-FUP-IMAGE) |
 | 同事走读签字 | (未走读) |
+
+---
 
 ## 1. 这个页面是做什么的
 
-(待填，1-2 句业务定义)
+集中治理后台所有视频的封面（poster P0）和背景图（backdrop P1）健康度。
+通过 KPI 看覆盖率，通过 TOP 破损域名定位"哪个 CDN 域出问题"，通过破损样本 grid 直观看坏图，通过 4 个 action 实施治理动作（重扫 / backfill / 切 fallback 域）。
 
 ## 2. 页面布局
 
-(待填，ASCII + 区域名)
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ PageHeader: 图片健康                          ┌─────────────────┐│
+│ 副标题：poster/backdrop 覆盖率 · 破损 TOP · 缺│ 4 actions       ││
+│ 图视频治理                                     │  backfill /     ││
+│                                                │  重扫所有封面 / ││
+│                                                │  切 fallback 域 ││
+│                                                │  / 刷新         ││
+└──────────────────────────────────────────────────────────────────┘
+┌─ KPI 4 列 ────────────────────────────────────────────────────┐
+│ 已上架 · P0 失效 · P1 失效 · 7 天新增破损                       │
+└────────────────────────────────────────────────────────────────┘
+┌─ 主体 1fr / 1fr ──────────────────────────────────────────────┐
+│ TOP 破损域名（条形图列表）│ 破损样本 Grid（2:3 ratio + 错误 overlay）│
+└────────────────────────────────────────────────────────────────┘
+┌─ 缺图视频表 ──────────────────────────────────────────────────┐
+│ DataTable: 视频 + 缺哪类图（poster/backdrop）+ 操作            │
+└────────────────────────────────────────────────────────────────┘
+```
 
 ## 3. 常用操作
 
-(待填，按使用频率排序，每个操作必须含 前置/步骤/期望/失败处理)
+### 3.1 重扫所有封面（CHG-SN-7-MISC-IMAGE-1）
+
+- **位置**：PageHeader 右上 「重扫所有封面」按钮
+- **行为**：调 `POST /admin/images/rescan` with `mode='broken_only'`（只重置已标 broken 的封面状态，让 backfill worker 重新探测）
+- **前置**：editor+ 角色
+- **期望结果**：toast「重扫已触发 · 已重置 N 条封面，backfill 任务已入队」+ 列表 refresh
+- **失败处理**：toast danger 显示错误信息
+
+### 3.2 手动触发 backfill
+
+- **位置**：PageHeader 「backfill」按钮
+- **行为**：调 `POST /admin/images/backfill` → worker 重新下载所有 broken 封面到 fallback CDN
+- **前置**：editor+ 角色；建议先用 3.1 重扫
+- **期望结果**：toast「backfill 已入队」
+- **何时用**：3.1 重扫后；或 fallback 域已切但旧图仍有缓存时强制重下
+
+### 3.3 批量切 fallback 域（CHG-SN-7-MISC-IMAGE-1 + ADR-135）
+
+> ⚠️ **批量改写已上架视频的封面 URL**；需 admin 角色 + 二次确认
+
+- **位置**：PageHeader 「切 fallback 域」按钮
+- **行为**：打开 SwitchDomainModal → 输入 from / to 域 → 预览影响条数 → 确认 → 批量改写
+- **操作步骤**：
+  1. 点击「切 fallback 域」
+  2. Modal 内填「源域 from」（如失效的 img3.doubanio.com）+「目标域 to」（fallback CDN）
+  3. 点击「预览」→ 显示「将影响 N 条 video 封面」
+  4. 点击「确认」→ 批量改写 + audit log + toast 成功
+- **回滚**：通过 audit log 找到本次 actionType=`image.switch_fallback_domain` 条目 → 手动反向操作
+- **失败处理**：from/to 域为空 → 校验错误；500 → toast danger
+
+### 3.4 看破损 TOP 域名
+
+- **位置**：主体左侧 card「TOP 破损域名」
+- **行为**：调 `GET /admin/images/top-broken-domains` → 显示域名 + 破损数量条形图
+- **用途**：定位"哪个 CDN 域是主要问题源"，决策是否 3.3 切 fallback
+
+### 3.5 看破损样本（CHG-SN-7-MISC-IMAGE-2）
+
+- **位置**：主体右侧 grid「破损样本」
+- **行为**：渲染 N 张 2:3 ratio 占位（danger dashed border + 底部错误信息 overlay）
+- **用途**：直观看坏图样式（404 / 5xx / dns error / timeout 等分类）
+
+### 3.6 缺图视频表
+
+- **位置**：页面底部 DataTable
+- **行为**：调 `GET /admin/images/missing` → 列出缺 poster 或 backdrop 的视频
+- **列定义**：视频标题 + 缺哪类（poster / backdrop / 两者）+ 操作（去视频库编辑 / 触发 backfill）
 
 ## 4. 进阶操作
 
-(待填，含二次确认 + 可回滚)
+### 4.1 批量切 fallback 域（已在 §3.3 详述，本节强调危险）
 
-## 5. 字段含义 / 6. 状态颜色 / 7. FAQ / 8. 关系
+- **影响范围**：所有匹配源域的视频封面 URL（可能数千条）
+- **不可逆**：URL 改写后无自动反向回滚（仅 audit log 可追溯）
+- **建议**：先用预览看影响范围 → 小范围验证（在 3-5 个视频上人工 spot-check 新 URL 是否可达）→ 再批量执行
 
-(待填)
+## 5. 字段含义
+
+| KPI | 含义 |
+|---|---|
+| 已上架视频 | is_published=true AND visibility=public 的视频总数 |
+| P0 封面失效 | poster_status='dead' 的视频数 |
+| P1 背景图失效 | backdrop_status='dead' 的视频数 |
+| 7 天新增破损 | 最近 7 天内首次标 dead 的封面数 |
+
+| 破损样本字段 | 含义 |
+|---|---|
+| 缩略图 (2:3) | 原 URL 的快照（danger dashed border 标记是坏图）|
+| 错误信息 overlay | 底部黄色 overlay 显示「404 not_found」/「dns_failure」等错误码 |
+
+## 6. 状态颜色
+
+| pill / dot | 含义 |
+|---|---|
+| 绿（ok）| 探测通过，封面可用 |
+| 黄（warn）| 部分集 / 部分尺寸失效 |
+| 红（danger）| 完全失效（poster_status=dead）|
+| 灰（muted）| 待探测 |
+
+## 7. FAQ
+
+| 现象 | 原因 | 解决 |
+|---|---|---|
+| 切 fallback 域 → toast 403 | 非 admin 角色 | 联系 admin 操作 |
+| 重扫后 P0 失效数量没变 | broken_only 只重置探测状态，不替换 URL；需 3.3 切 fallback 域才会真改 URL | 流程：重扫 → 切 fallback → 验证 |
+| TOP 破损域名列表为空 | 无破损 / 数据尚未跑出 | 查 cron job 状态 |
+| 破损样本 grid 全是占位 | sample 量未达阈值 | 等 worker 跑出更多数据 |
+
+## 8. 与其他页面的关系
+
+- → 跳出到 [P-videos](./P-videos.md)：缺图视频行操作「去编辑」跳视频库
+- ← 跳入自 [P-dashboard](./P-dashboard.md)：管理台站 AttentionCard 显示 P0 失效数 + 「全部解决」深链
+- ↔ 相关工作流：[W3 封面失效 → 切 fallback 域](../10-workflows/W3-image-fallback.md)

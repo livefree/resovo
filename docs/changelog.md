@@ -14332,3 +14332,44 @@ H2 硬约束（零死按钮）在用户菜单维度起步完成。
 
 ### 用户问题 #6 闭合状态
 ✅ 部分闭合：H2 零死按钮 ✅；别名 displayName 已消费 ✅；实际算法实装推 follow-up
+
+## [CHG-SN-8-FUP-IMAGE] 图片健康功能阐明（手册定稿 / 用户问题 #9 闭合）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **关联 SEQ**：SEQ-20260521-04（额外子卡）
+- **修改文件**：
+  - `docs/manual/20-pages/P-image-health.md`：从 36 行骨架扩展为完整定稿（8 章节，~140 行）
+  - `docs/task-queue.md` + `docs/changelog.md`
+- **新增依赖**：无
+- **数据库变更**：无
+- **API 变更**：无（纯文档卡）
+- **根因分析**：用户问题 #9「功能实现不详」实证查代码后发现 — ImageHealthClient 4 actions + KPI 4 + TOP 域名 + 破损样本 grid + 缺图视频表 **全部功能已实装**（M-SN-6 + M-SN-7 多卡累计落地）。问题不在功能缺失，而在手册空 → 用户不知道每个 action 干啥、何时用
+- **手册章节**：
+  - §1 业务定义（集中治理 poster/backdrop 健康度）
+  - §2 ASCII 布局（PageHeader + 4 actions + KPI 4 + 主体 1fr/1fr + 缺图视频表）
+  - §3.1 重扫所有封面（rescan mode=broken_only）
+  - §3.2 手动 backfill
+  - §3.3 批量切 fallback 域（admin only，含 4 步操作流程 + 回滚说明）
+  - §3.4 看 TOP 破损域名
+  - §3.5 看破损样本 grid
+  - §3.6 缺图视频表
+  - §4 进阶 — 强调切 fallback 域的不可逆 + 3 步建议（预览/spot-check/批量）
+  - §5 KPI 字段含义 + 破损样本字段
+  - §6 状态颜色（ok/warn/danger/muted）
+  - §7 FAQ 4 行（403 / 重扫不变 / TOP 空 / sample 占位）
+  - §8 关系（→ P-videos / ← P-dashboard / ↔ W3）
+
+### DoD 全勾
+- [x] P-image-health.md 完整定稿（8 章节）
+- [x] verify:manual-coverage PASS
+- [x] 实证 4 actions + 端点 6 个 + KPI 4 个全在位
+
+### 用户问题 #9 闭合状态
+✅ 「图片健康功能实现不详」— 实证功能全在，本卡完整手册化让用户知道：
+- 4 actions 每个干啥、何时用
+- 切 fallback 域 4 步操作流程
+- KPI 4 字段 SQL 含义
+- 4 个 FAQ 解决常见疑惑
