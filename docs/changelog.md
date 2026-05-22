@@ -14800,3 +14800,37 @@ Plan-Revision: 无
 Cleanup-Audit: #G-audit-rollback-universal ⚠️（消费层完成 / 通用端点 follow-up CHG-SN-8-FUP-AUDIT-ROLLBACK-EP 待立）
 Plan-Revision: 无
 
+---
+
+## [CHG-SN-8-GAPS-AUDIT-NAV-HIDE] 系统管理组对 moderator 消费层 nav 过滤（#G-audit-self-scope 消费层补齐）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21 22:30
+- **执行模型**：claude-opus-4-7
+- **子代理**：无（不动 admin-ui 公开 API；server-next 消费层 nav 过滤）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/admin-shell-client.tsx` — 新增 `filterNavForRole(nav, role)` helper + `ADMIN_ONLY_HREFS` Set（含 `/admin/users` + `/admin/settings` + `/admin/audit`）；useMemo navForRole；`<AdminShell nav={...}>` 切换到过滤后引用
+  - `tests/unit/components/server-next/admin/admin-shell-client.test.tsx` — renderClient 支持 initialRole 选项；新增 3 用例（admin 看见全部 / moderator 看不见 3 admin-only / moderator 仍可见业务 nav）
+  - `docs/manual/GAPS.md` — #G-audit-self-scope ⬜ 待复核 → ⚠️ 已部分实装；补完整 self-scope follow-up CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP 登记
+  - `docs/manual/20-pages/P-audit.md` §0 适用角色字段重写（注明 moderator nav 已隐藏 + 完整 self-scope follow-up）
+  - `docs/task-queue.md` SEQ-20260521-06 #19 子卡 ✅
+  - `docs/tasks.md` 清卡片
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 后端 `/admin/audit/*` + `/admin/users` + `/admin/system/settings` 全 `adminOnly`；moderator 进任一 href → API 403 → 死链。本卡仅消费层 nav 过滤，直接 URL 访问残留 403（消费层正常用户路径已修，URL 直接拼接是少数路径）
+  - 完整 self-scope（admin 看全量 + moderator 看自己 audit）需起新 ADR + 后端 endpoint scope 修订（admin only → role-aware filter）+ 前端 role 感知 view，触发 Opus arch-reviewer，工时 0.4-0.6w，超出本卡；登记 CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP follow-up
+  - admin-ui `AdminNavItem` contract 不变（无 `requiredRole` 字段）；过滤逻辑放在 server-next 消费层符合"shell 通用 / 业务过滤消费方注入"分层
+
+### 验收
+- typecheck PASS / lint PASS（pre-existing img warning 与本卡无关）/ verify:manual-coverage PASS / verify:adr-contracts PASS（pre-existing crawlerKpi advisory 与本卡无关）
+- 全 unit 4456 PASS（+3 nav role 过滤用例；isolated CrawlerClient 62/62 PASS，并跑偶发 flaky 与本卡无关）
+
+### 价值
+- P2 GAPS #G-audit-self-scope 推进到 ⚠️ 消费层闭合（moderator 不再点击「审计日志」死链 403）
+- 顺带消除「用户管理 + 站点设置」对 moderator 的同类死链
+- 完整 self-scope 后端 follow-up 登记，等未来用户反馈或 ADR 排期
+
+Cleanup-Audit: #G-audit-self-scope ⚠️（消费层完成 / 后端 self-scope follow-up CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP 待立）
+Plan-Revision: 无
+

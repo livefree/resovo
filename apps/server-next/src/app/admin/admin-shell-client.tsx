@@ -17,10 +17,28 @@ import { useCallback, useContext, useMemo, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { AdminShell, inferBreadcrumbs, useToast } from '@resovo/admin-ui'
-import type { AdminShellUser, NotificationItem, TaskItem, UserMenuAction } from '@resovo/admin-ui'
+import type { AdminNavSection, AdminShellUser, NotificationItem, TaskItem, UserMenuAction } from '@resovo/admin-ui'
 import { UserMenuActionModal, type UserMenuActionModalType } from './_client/UserMenuActionModal'
 import { ThemeContext } from '@/contexts/BrandProvider'
 import { ADMIN_NAV } from '@/lib/admin-nav'
+
+// CHG-SN-8-GAPS-AUDIT-NAV-HIDE：后端 /admin/users + /admin/system/settings + /admin/audit/* 全 adminOnly；
+// moderator 进这些 href 点击 → API 403 → 死链。Path A 消费层过滤；完整 self-scope 走 follow-up
+// CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP（新增 ADR + 后端 role-aware filter + 前端 role 感知 view）。
+const ADMIN_ONLY_HREFS: ReadonlySet<string> = new Set(['/admin/users', '/admin/settings', '/admin/audit'])
+
+function filterNavForRole(
+  nav: readonly AdminNavSection[],
+  role: AdminShellUser['role'],
+): readonly AdminNavSection[] {
+  if (role === 'admin') return nav
+  return nav
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !ADMIN_ONLY_HREFS.has(item.href)),
+    }))
+    .filter((section) => section.items.length > 0)
+}
 import {
   adminNavCountProviderStub,
   buildTopbarIconsStub,
@@ -56,6 +74,8 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
     ...MOCK_USER_BASE,
     role: initialRole,
   }), [initialRole])
+
+  const navForRole = useMemo(() => filterNavForRole(ADMIN_NAV, initialRole), [initialRole])
 
   const crumbs = useMemo(() => inferBreadcrumbs(pathname, ADMIN_NAV), [pathname])
 
@@ -145,7 +165,7 @@ export function AdminShellClient({ defaultCollapsed, initialTheme, initialRole, 
 
   return (
     <AdminShell
-      nav={ADMIN_NAV}
+      nav={navForRole}
       activeHref={pathname}
       crumbs={crumbs.length > 0 ? crumbs : undefined}
       topbarIcons={topbarIcons}

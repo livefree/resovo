@@ -10,7 +10,7 @@
 | 设计稿引用 | reference.md §5.12 + §6.5 列规范 |
 | 主任务卡 | CHG-SN-6-01（视图基座）+ CHG-SN-7-MISC-FILE-SIZE（AuditClient 拆分 → AuditDetailDrawer + AuditColumns）+ CHG-SN-8-MANUAL-BATCH-2（手册定稿）|
 | 涉及端点 | `GET /admin/audit/logs`（含 filter）/ `GET /admin/audit/logs/:id`（详情）/ `GET /admin/audit/enums`（actionType + targetKind 枚举元数据）|
-| 适用角色 | **admin only**（查看完整审计日志）；moderator/editor 仅可看自己的 audit 条目（GAPS.md #G-audit-self-scope 待核） |
+| 适用角色 | **admin only**（查看完整审计日志）；moderator 在 sidebar「系统管理」组已隐藏本入口（CHG-SN-8-GAPS-AUDIT-NAV-HIDE 消费层 nav 过滤）；moderator/editor 看自己 audit 条目的 self-scope 端点 follow-up：CHG-SN-8-FUP-AUDIT-SELF-SCOPE-EP（GAPS.md #G-audit-self-scope） |
 | 最近更新 | 2026-05-21（CHG-SN-8-MANUAL-BATCH-2）|
 
 ---
