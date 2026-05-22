@@ -1,7 +1,6 @@
 # P-sources · 播放线路
 
-> status: 🟡 骨架（M-SN-8 业务卡 DoD §0 起手填充 §1-§4，PASS 前定稿）
-> **使用本骨架开发卡时**：复制 [_template/PAGE_TEMPLATE.md](../_template/PAGE_TEMPLATE.md) 内容覆盖，再回填 §0 元信息。
+> status: 🟡 §3.1/§3.2 已填写（CHG-SN-8-FUP-SOURCES-DEAD-BTN）；其它章节待 follow-up
 
 ## 0. 元信息（骨架默认值）
 
@@ -25,7 +24,21 @@
 
 ## 3. 常用操作
 
-(待填，按使用频率排序，每个操作必须含 前置/步骤/期望/失败处理)
+### 3.1 「一键替换最相似 URL」按钮（CHG-SN-8-FUP-SOURCES-DEAD-BTN 部分修复）
+
+- **位置**：PageHeader 右上 primary 按钮
+- **当前状态**：⚠️ **算法未实装**（M-SN-N follow-up 起 ADR）；按钮点击会弹出 Modal 解释功能筹备 + 替代路径
+- **预期行为（设计稿原意）**：扫描全部失效线路 → 在同一视频内寻找与失效 URL 最相似的活跃 URL → 自动替换 + audit
+- **替代路径**：
+  1. 「按视频分组」segment 选某视频 → 展开行 → 「线路矩阵」逐条线路操作（重测 / 替换 / 删除）
+  2. 失效线路批量删除：行级「全失效」筛选 + 批量动作
+- **如需求该算法批量替换**：登记 follow-up CHG-SN-8-FUP-SOURCES-REPLACE-ADR
+
+### 3.2 线路别名 displayName
+
+- 在「全局别名表」segment 编辑：`(source_site_key, source_name)` → `displayName`（运营可识别中文代号，如「线路 A · 1080P」）
+- 编辑后矩阵自动消费：SourceMatrixRow 行展示 `displayName ?? sourceName` fallback
+- 设计意图：让运营按代号引用线路，不用记住 source_name 原始 ID
 
 ## 4. 进阶操作
 

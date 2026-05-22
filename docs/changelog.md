@@ -14296,3 +14296,39 @@ H2 硬约束（零死按钮）在用户菜单维度起步完成。
 | CHG-SN-8-FUP-USER-MENU | (此 commit) | #13 用户菜单 ✅ |
 
 **累计本会话 19 commits / 用户问题闭合 8/13**（原 6/13 → +#8 + #10 + #13 = 8/13；接近 62%）
+
+## [CHG-SN-8-FUP-SOURCES-DEAD-BTN] sources「一键替换最相似 URL」死按钮修复（用户问题 #6 部分）
+
+- **完成时间**：2026-05-21
+- **记录时间**：2026-05-21
+- **执行模型**：claude-opus-4-7
+- **子代理**：无
+- **关联 SEQ**：SEQ-20260521-04（额外子卡）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/sources/_client/SourcesClient.tsx`：
+    - import Modal
+    - 增 `replaceTipOpen` state
+    - 按钮 onClick → setReplaceTipOpen(true)
+    - 新增 Modal「批量一键替换 URL · 筹备中」（4 节内容：预期行为 / 未实装说明 / 3 步替代路径 / follow-up 登记入口）
+  - 新建 `tests/unit/components/server-next/admin/sources/SourcesReplaceTip.test.tsx`（2 用例 PASS）
+  - `docs/manual/20-pages/P-sources.md` §3.1 完整填写 + §3.2 别名 displayName 消费实证（SourceMatrixRow:234 fallback）
+- **新增依赖**：无
+- **数据库变更**：无
+- **API 变更**：无（前端 UI 反馈，无后端调用）
+- **用户问题 #6 闭合矩阵**：
+  - ✅ 死按钮修复（点击有反馈 + 解释 + 替代路径）
+  - ✅ 别名 displayName 显示（SourceMatrixRow:234 已用 `displayName ?? sourceName` fallback 消费，本卡实证未补改）
+  - ⬜ 实际「一键替换最相似 URL」算法实装（推 follow-up CHG-SN-8-FUP-SOURCES-REPLACE-ADR；需要后端 URL 相似度算法 + 批量改写 + audit + 回滚 + ADR-端点先后协议）
+- **注意事项**：
+  - **替代路径 3 步**：(1) 按视频分组逐线路操作 (2) 失效线路批量删除 (3) follow-up 登记
+  - **modal 设计**：保留按钮显示符合设计稿（用户明确点过此功能），但点击行为改为透明提示（避免误以为是 bug）
+  - **测试 mock 范围**：next/navigation + listVideoGroups（永不 resolve 避免初始 fetch 干扰）+ useToast stub
+
+### DoD 全勾
+- [x] 按钮 onClick 接通 + Modal 渲染
+- [x] 测试 2 用例 PASS
+- [x] typecheck + lint + verify:manual-coverage PASS
+- [x] P-sources §3.1 / §3.2 填写
+
+### 用户问题 #6 闭合状态
+✅ 部分闭合：H2 零死按钮 ✅；别名 displayName 已消费 ✅；实际算法实装推 follow-up
